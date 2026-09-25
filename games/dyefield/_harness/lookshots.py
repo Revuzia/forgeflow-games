@@ -5,7 +5,8 @@
     python _harness/lookshots.py --prefix int    # shot-name prefix (default "int")
 
 Writes into _shots/:
-  <p>_spawn.png       third-person at spawn A (after a REAL click → pointer lock)
+  <p>_countdown.png   the 3 · 2 · 1 countdown right after the REAL click (phases 3–5 match flow)
+  <p>_spawn.png       third-person at spawn A once the match is live (bots out on the court)
   <p>_dye_close.png   after a ~6 m trail painted with REAL W + LMB input, camera behind the runner
   <p>_debug.png       the F1 panel (a REAL F1 press) over the painted trail
   <p>_midcourt.png    standing mid-court (buoy block top) looking toward the GULF base   [dev teleport]
@@ -26,7 +27,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (SHOTS, Session, add_common_args, build_url, diag_problems, ensure_server,  # noqa: E402
-                    preflight_chromes, print_diagnostics, save_report, stop_server)
+                    preflight_chromes, print_diagnostics, save_report, stop_server, wait_alive, wait_match_phase)
 
 DEG = 3.141592653589793 / 180.0
 
@@ -63,6 +64,14 @@ def enter_play(s, notes):
     s.df("start")
     ok, _ = s.wait_phase("play", 4.0)
     return "__DF__.start() fallback" if ok else None
+
+
+def wait_live(s, notes, where):
+    """phases 3–5: play opens on the 3 · 2 · 1 countdown (inputs frozen) — wait for 'live'."""
+    ok, ph = wait_match_phase(s, ("live",), 8.0)
+    if not ok:
+        notes.append("%s: the match did not go live (phase %r)" % (where, ph))
+    return ok
 
 
 def ensure_play(s, notes, where, problems):
@@ -110,7 +119,8 @@ def debug_fps(s):
 
 
 def paint_trail(s, walk_first_s, paint_s):
-    """REAL input: W to leave the pad, then W + LMB held for paint_s (≈ 5.2 m/s)."""
+    """REAL input: W to leave the pad, then W + LMB held for paint_s (the MIST-RASP sprays the floor ahead)."""
+    wait_alive(s, 6.0)
     kb, ms = s.page.keyboard, s.page.mouse
     p0 = (s.state() or {}).get("player") or {}
     if walk_first_s > 0:
@@ -163,7 +173,10 @@ def run(args, P, shot, rep, problems) -> int:
         rep["entered"] = enter_play(s, rep["notes"])
         if not rep["entered"]:
             raise RuntimeError("could not enter play")
-        time.sleep(1.5)
+        time.sleep(0.6)
+        rep["shots"]["countdown"] = s.screenshot(shot("countdown"))
+        wait_live(s, rep["notes"], "noon")
+        time.sleep(0.8)
         rep["shots"]["spawn"] = s.screenshot(shot("spawn"))
 
         # fps at spawn from the F1 panel: early, then warm. Only samples taken IN PLAY count (a
@@ -234,6 +247,7 @@ def run(args, P, shot, rep, problems) -> int:
         time.sleep(0.5)
         if not enter_play(s, rep["notes"]):
             raise RuntimeError("golden: could not enter play")
+        wait_live(s, rep["notes"], "golden")
         time.sleep(1.0)
         ensure_play(s, rep["notes"], "golden: before the trail", problems)
         wait_warm(s, rep["notes"], "golden trail")

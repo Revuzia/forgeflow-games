@@ -18,13 +18,20 @@
 // show 60 fps, so it must not drive the scale to the floor — the dev box's only display is 50 Hz).
 // Frame intervals cannot tell a vsync-capped 50 Hz display from an uncapped GPU that happens to run
 // at a steady 50 fps; the latter only exists with dev flags (--disable-gpu-vsync). Hysteresis:
-//   * over   p90 > 1.2 × target        → step down (∝ √(target / p90), 5–20 % per step)
-//   * spare  p90 < 0.8 × target        → step up 8 % (headroom is visible: uncapped / high-Hz display)
+//   * over   p90 > 1.2 × target        → step down (∝ √(target / p90), 5–20 % per step) — on the
+//                                         SECOND consecutive over-window (one noisy window is not a
+//                                         trend), or at once when p90 > 1.8 × target
+//   * spare  p90 < 0.8 × target        → step up 8 % after two consecutive spare windows (headroom is
+//                                         visible: uncapped / high-Hz display)
 //   * hold   p90 ≤ 1.1 × target        → after `probeAfter` held seconds, probe up 5 %; a probe that
 //                                         turns into 'over' within 2 windows is undone and the next
-//                                         probe waits twice as long (4 s → 32 s max)
+//                                         probe waits twice as long (8 s → 128 s max)
 //   * between 1.1× and 1.2×            → no change (the dead band)
-// Nothing scales during the first 2 s of play, nor in the window right after a change.
+// Nothing scales during the first 2 s of play, nor in the 2 windows right after a change.
+// Why so conservative (phase 5, 8 runners): a scale change reallocates the drawing buffer, and on
+// the dev box's shared Intel iGPU (dwm + a display-driver host hold 30–45 % of its 3D engine) that
+// reallocation measured 257–383 ms in one frame. A governor that reacts to every noisy window pays
+// that hitch over and over; one that changes rarely pays it once.
 // quality 'high' pins the cap, 'low' pins the floor (Settings hook; no UI this phase).
 
 import * as THREE from 'three';
@@ -134,7 +141,9 @@ export class ResolutionGovernor {
   private grace = 2.0;
   private cooldown = 0;
   private held = 0;
-  private probeAfter = 4;
+  private probeAfter = 8;
+  private overRun = 0;
+  private spareRun = 0;
   private probeFrom = 0;          // scale before the pending probe (0 = none)
   private probeWindows = 0;
   private readonly clocks: number[] = [];
@@ -155,7 +164,7 @@ export class ResolutionGovernor {
     this.quality = q;
     const p = this.pinned();
     if (p !== null) { this.scale = p; this.last = `quality ${q}`; }
-    else { this.scale = this.max; this.last = 'quality auto'; this.resetWindow(); this.probeAfter = 4; }
+    else { this.scale = this.max; this.last = 'quality auto'; this.resetWindow(); this.probeAfter = 8; }
   }
 
   private pinned(): number | null {
@@ -179,7 +188,9 @@ export class ResolutionGovernor {
     this.scale = nv;
     this.changes++;
     this.last = why;
-    this.cooldown = 1;          // skip the window that contains the buffer reallocation
+    this.cooldown = 2;          // skip the window that contains the buffer reallocation, and the next
+    this.overRun = 0;
+    this.spareRun = 0;
     this.held = 0;
     return true;
   }
@@ -217,19 +228,26 @@ export class ResolutionGovernor {
       if (r > 1.2) {                          // the probe cost frames: undo it, back off
         const back = this.probeFrom;
         this.probeFrom = 0;
-        this.probeAfter = Math.min(32, this.probeAfter * 2);
+        this.probeAfter = Math.min(128, this.probeAfter * 2);
         return this.set(back, `probe undone (p90 ${this.p90.toFixed(1)} ms)`);
       }
-      if (this.probeWindows >= 2) { this.probeFrom = 0; this.probeAfter = 4; }
+      if (this.probeWindows >= 2) { this.probeFrom = 0; this.probeAfter = 8; }
     }
     if (r > 1.2) {
+      this.overRun++;
+      this.spareRun = 0;
+      this.held = 0;
+      if (this.overRun < 2 && r <= 1.8) return false;   // one noisy window is not a trend
       const f = Math.min(0.95, Math.max(0.8, Math.sqrt(this.targetMs / this.p90)));
       return this.set(this.scale * f, `down (p90 ${this.p90.toFixed(1)} ms > ${(1.2 * this.targetMs).toFixed(1)})`);
     }
+    this.overRun = 0;
     if (r < 0.8) {
       if (this.scale >= this.max) return false;
+      if (++this.spareRun < 2) return false;
       return this.set(this.scale * 1.08, `up (p90 ${this.p90.toFixed(1)} ms, headroom)`);
     }
+    this.spareRun = 0;
     if (r <= 1.1) {
       this.held += WINDOW_S;
       if (this.held >= this.probeAfter && this.scale < this.max && this.probeFrom === 0) {

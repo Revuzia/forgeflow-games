@@ -6,7 +6,7 @@
 //   node _harness/probe_move.ts --verbose     # per-leg traces
 //
 // The runner is driven the way a player drives it: a PlayerIntent per 60 Hz tick (camera yaw +
-// stick), through Player.step → Rapier KCC. Waypoint legs steer the camera yaw toward a target and
+// stick), through Runner.step (core/runner.ts, the phase-3 state machine) → Rapier KCC. Waypoint legs steer the camera yaw toward a target and
 // push the stick forward; nothing is teleported except the explicit respawns between legs.
 //
 // Checks (G2): walk forward 3 s from spawn A (> 12 m, never in the water); walk down a base ramp to
@@ -20,7 +20,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadRapier, PhysicsWorld } from '../runtime/src/core/physics.ts';
-import { Player, type SpawnPoint } from '../runtime/src/core/player.ts';
+import { Runner, type SpawnPoint } from '../runtime/src/core/runner.ts';
 import { MOVE, TICK, DEV_BRUSH } from '../runtime/src/core/config.ts';
 import { mapById, type MapDef, type V3 } from '../runtime/src/core/data.ts';
 import { DEG, emptyIntent, type PlayerIntent, type TeamId } from '../runtime/src/core/types.ts';
@@ -126,14 +126,17 @@ function synthGeometry(def: MapDef): MapGeometry {
   };
 }
 
+/** no-op painter for the synthetic smoke run (no paint soup): nothing is dyed, nothing reads back */
+const STUB_PAINTER = { splat: () => 0, teamUnder: () => null, surfaceAt: () => null, weighted: () => 0 } as unknown as Painter;
+
 // ───────────────────────────── driving helpers ─────────────────────────────
 interface Trace { ticks: number; minY: number; maxY: number; groundedTicks: number; respawns: number; path: Array<[number, number, number]> }
 
-function newTrace(p: Player): Trace {
+function newTrace(p: Runner): Trace {
   return { ticks: 0, minY: p.y, maxY: p.y, groundedTicks: 0, respawns: 0, path: [[p.x, p.y, p.z]] };
 }
 
-function tick(p: Player, it: PlayerIntent, painter: Painter, tr: Trace): void {
+function tick(p: Runner, it: PlayerIntent, painter: Painter, tr: Trace): void {
   const r0 = p.respawns;
   p.step(TICK, it, painter);
   tr.ticks++;
@@ -145,7 +148,7 @@ function tick(p: Player, it: PlayerIntent, painter: Painter, tr: Trace): void {
 }
 
 /** Steer toward (tx, tz) with the stick forward until within tol (or maxS elapses). */
-function driveTo(p: Player, painter: Painter, tx: number, tz: number, maxS: number, tol = 0.35, tr?: Trace, stopOnRespawn = false): { ok: boolean; trace: Trace } {
+function driveTo(p: Runner, painter: Painter, tx: number, tz: number, maxS: number, tol = 0.35, tr?: Trace, stopOnRespawn = false): { ok: boolean; trace: Trace } {
   const trace = tr ?? newTrace(p);
   const it = emptyIntent();
   const n = Math.ceil(maxS / TICK);
@@ -166,7 +169,7 @@ function driveTo(p: Player, painter: Painter, tx: number, tz: number, maxS: numb
   return { ok: false, trace };
 }
 
-function settle(p: Player, painter: Painter, tr: Trace, s: number): void {
+function settle(p: Runner, painter: Painter, tr: Trace, s: number): void {
   const it = emptyIntent();
   it.yaw = p.yaw;
   const n = Math.ceil(s / TICK);
@@ -215,10 +218,10 @@ async function main(): Promise<number> {
       console.log(`painter: real (atlas ${atlas.size}² · ${atlas.count} texels · overlaps ${atlas.overlaps})`);
     } catch (e) {
       console.log(`painter: stub (PAINT lane modules unavailable: ${(e as Error).message ?? e})`);
-      painter = { splat: () => 0 } as unknown as Painter;
+      painter = STUB_PAINTER;
     }
   } else {
-    painter = { splat: () => 0 } as unknown as Painter;
+    painter = STUB_PAINTER;
     console.log('painter: stub (no paint soup)');
   }
 
@@ -226,7 +229,8 @@ async function main(): Promise<number> {
   const body = pw.createCharacter(MOVE.radius, MOVE.halfHeight);
   const spawnA: SpawnPoint = { ...geo.spawns.A };
   const team: TeamId = 1;
-  const p = new Player(team, body, spawnA, { killY });
+  const p = new Runner({ id: 0, name: 'probe', team, kit: 'mist-rasp', bot: false }, body, spawnA,
+    { killY, physics: pw, devBrush: true, autoRespawn: true });
   console.log(`spawn A: (${f2(spawnA.x)}, ${f2(spawnA.y)}, ${f2(spawnA.z)}) yaw ${f2(spawnA.yaw / DEG)}°  · killY ${killY} · physics ${pw.triangles} tris · setup ${((tGeo - t0) / 1000).toFixed(2)} s`);
   console.log('-'.repeat(96));
 
@@ -410,7 +414,7 @@ async function main(): Promise<number> {
     const cov = painter.coverage();
     check('dev brush: HOLD fire 1.2 s → teamUnder(feet) === SUNCREW, coverage.sun > 0',
       under === 1 && cov.sun > 0 && p.splats >= Math.floor(1.2 * DEV_BRUSH.perSecond),
-      `under before ${before} → after ${under}; splats ${p.splats}, texels flipped ${p.painted}; coverage sun ${(cov.sun * 100).toFixed(3)} %; ${f2(ms)} ms for ${Math.round(1.2 / TICK)} ticks`);
+      `under before ${before} → after ${under}; splats ${p.splats}, painted ${f3(p.painted)} weighted m²; coverage sun ${(cov.sun * 100).toFixed(3)} %; ${f2(ms)} ms for ${Math.round(1.2 / TICK)} ticks`);
   } else {
     console.log('SKIP  dev brush check (no real painter in this run)');
   }

@@ -42,10 +42,16 @@ HERO_BONES = [
     "tank",
 ]
 HERO_CLIPS_REQUIRED = ["idle", "run", "jump", "fall", "land", "aim", "brush"]
-HERO_CLIPS_WANTED = ["slick_dive", "washed", "victory", "lobby_idle", "strafe_l", "strafe_r", "back"]
+HERO_CLIPS_WANTED = ["slick_dive", "washed", "victory", "lobby_idle", "strafe_l", "strafe_r", "back",
+                     # phase 6 (CONTRACT_ART_P6_8 §17) — reported until the KITS lane lands, then promoted to required
+                     "roll", "flick", "charge", "blast", "throw", "special_throw", "slam", "hold_two"]
 HERO_MATERIALS_TEAM = ["M_crest", "M_top_trim", "M_shorts_stripe", "M_sole", "M_tank_dye", "M_band"]
 HERO_NODES = ["rig", "socket_weapon", "tank_dye", "slick_fin"]
-MAP_PREFIXES = ("paint_", "solid_", "deco_", "col_", "water_")
+MAP_PREFIXES = ("paint_", "solid_", "deco_", "col_", "water_", "grate_", "conveyor_", "spring_", "oob_")  # §14.2 adds the last four
+# phase 6 art (CONTRACT_ART_P6_8 §17): checked when present, listed as missing otherwise (not failing until promoted)
+KIT_FILES = ["kit_mist_rasp.glb", "kit_sheet_drum.glb", "kit_needle_glint.glb", "kit_pop_well.glb"]
+EXTRA_FILES = {"sub_jelly_charge.glb": ["jelly_puddle"], "special_cloudburst.glb": ["rain", "core"]}
+KITS_REQUIRED = ["kit_mist_rasp.glb"]
 
 
 def blender_exe() -> str:
@@ -141,7 +147,7 @@ def check_map(path: str, map_id: str) -> list[str]:
             if not nm.startswith(MAP_PREFIXES):
                 errs.append(f"mesh node '{nm}' has no contract prefix {MAP_PREFIXES}")
             for key in ("translation", "rotation", "scale", "matrix"):
-                if key in n and nm.startswith(("paint_", "solid_", "col_")):
+                if key in n and nm.startswith(("paint_", "solid_", "col_", "grate_", "conveyor_", "spring_", "oob_")):
                     v = n[key]
                     ident = {"translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [1, 1, 1]}.get(key)
                     if key == "matrix" or (ident is not None and any(abs(a - b) > 1e-5 for a, b in zip(v, ident))):
@@ -191,8 +197,21 @@ def cmd_check() -> int:
     targets: list[tuple[str, list[str]]] = []
     hero = os.path.join(GLTF_DIR, "tide_runner.glb")
     targets.append(("tide_runner.glb", check_hero(hero) if os.path.isfile(hero) else ["missing file"]))
-    kit = os.path.join(GLTF_DIR, "kit_mist_rasp.glb")
-    targets.append(("kit_mist_rasp.glb", check_kit(kit) if os.path.isfile(kit) else ["missing file"]))
+    for kf in KIT_FILES:
+        kp = os.path.join(GLTF_DIR, kf)
+        if os.path.isfile(kp):
+            targets.append((kf, check_kit(kp)))
+        elif kf in KITS_REQUIRED:
+            targets.append((kf, ["missing file"]))
+        else:
+            print(f"[check] (phase 6, not yet required) missing {kf}")
+    for ef, nodes in EXTRA_FILES.items():
+        ep = os.path.join(GLTF_DIR, ef)
+        if os.path.isfile(ep):
+            names = [n.get("name", "") for n in read_glb_json(ep).get("nodes", [])]
+            targets.append((ef, [f"missing node {n}" for n in nodes if n not in names]))
+        else:
+            print(f"[check] (phase 6, not yet required) missing {ef}")
     for mid in built_maps():
         p = os.path.join(GLTF_DIR, f"map_{mid}.glb")
         targets.append((f"map_{mid}.glb", check_map(p, mid) if os.path.isfile(p) else ["missing file"]))

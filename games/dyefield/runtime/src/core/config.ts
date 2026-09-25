@@ -65,3 +65,81 @@ export const DEV_BRUSH = {
   perSecond: 12,
   minFacing: 0.3,      // only texels facing up (dot(n, +Y) > 0.3): floors and ramps, never walls
 };
+
+// ───────────────────────── phases 3–5 (lane SIM, CONTRACT §10 / §10.4) ─────────────────────────
+
+/** SLICK / WALL-SLICK (DESIGN §4, CONTRACT §10.1). Speeds live in MOVE. */
+export const SLICK = {
+  accel: 64,           // ground accel in SLICK (m/s²): 0 → 8.4 in ≈ 0.13 s
+  surfaceTime: 0.12,   // releasing SHIFT (or leaving own dye) surfaces in this long; firing blocked meanwhile
+  edgeGrace: 0.05,     // s a slicker may cross NEUTRAL texels (organic dye edges) before surfacing; enemy dye is instant
+  hiddenSpeed: 1.5,    // SLICK not faster than this (m/s) → hidden…
+  hiddenRange: 3,      // …from enemies beyond this range (m)
+  // wall contact probe: a short sphere cast from the capsule centre along the push direction
+  wallCastRadius: 0.28,   // < MOVE.radius so the cast never starts inside the wall the capsule touches
+  wallCastDist: 0.25,     // m beyond the start (capsule radius − cast radius + skin ≈ 0.06 is the resting gap)
+  wallMaxNy: 0.5,         // |normal.y| below this is a wall (steeper than 60°)
+  wallPushDot: 0.5,       // stick · (−wall normal) above this = "pushing into the wall" (enter)
+  wallHoldDot: -0.3,      // below this = pulling away (detach)
+  wallTexelDist: 0.5,     // painter.surfaceAt(contact, 0.5, 'wall') — the dye at the contact
+  wallPush: 1.0,          // m/s pressed into the wall while attached (keeps contact)
+  wallStrafe: 0.5,        // sideways crawl speed factor (× MOVE.wallSlick)
+  ledgePopVy: 4.5,        // m/s up when the wall ends under a climbing runner (pops onto the ledge)
+  ledgePopForward: 3.0,   // m/s over the lip
+  wallJumpVy: 6.0,        // jump off a wall: up …
+  wallJumpOut: 4.5,       // … and away from it
+  headroomMargin: 0.02,   // m extra clearance required before the capsule grows back
+};
+
+/** Tank economy (0–100, DESIGN §4). There is NO passive regen. */
+export const TANK = {
+  max: 100,
+  refillPerSecond: 36, // only while SLICK on own dye / own pad: empty → full ≈ 2.78 s
+  low: 20,             // tank ≤ this → 'tankLow' (once per dip)…
+  lowRearm: 25,        // …re-armed when the tank climbs back above this
+  dryCooldown: 0.25,   // s between dry clicks while fire is held with too little tank
+};
+
+/** HP (weapons.json has hp + respawnSeconds). */
+export const HEALTH = {
+  regenDelay: 1.2,     // s after the last hit with no regen
+  regenPerSecond: 40,
+};
+
+/** Runner hit volume for projectiles (CONTRACT §10.1) — separate from the KCC capsule. */
+export const HITBOX = {
+  radius: 0.42,
+  height: 1.2,
+  slickHeight: 0.5,
+  hitPuddleRadius: 0.55, // a hit splats a small puddle of the attacker's dye under the victim
+  washBurstRadius: 1.5,  // a dye wash bursts the attacker's dye where the victim stood
+};
+
+/** Firing / projectiles. Kit numbers live in data/weapons.json. */
+export const COMBAT = {
+  muzzleHeight: 0.9,      // shots start on the capsule axis at this height above the feet
+  poolCapacity: 512,
+  maxLife: 2.5,           // s — a droplet older than this is dropped
+  verticalSpreadScale: 0.4, // the spread disc is squashed vertically (a flat fan)
+  minAimDist: 0.6,        // an aim point closer than this to the muzzle is ignored (aim along yaw/pitch)
+  eyeHeight: 1.0,         // canSee: viewer eye height above the feet (tall form)…
+  slickEyeHeight: 0.35,   // …and in slick form
+  wallClampPad: 0.3,      // floor impact radius ≤ distance to a wall ahead + this (no bleed through thin walls)
+  wallFloorPush: 0.45,    // wall impact: the companion floor splat sits this far out along the wall normal…
+  wallFloorScale: 0.7,    // …with this fraction of the impact radius
+  wallMinFacing: 0.35,    // wall impact paints only texels facing like the wall
+  dripMaxDrop: 40,        // m — drip raycast length
+};
+
+/** Match flow (CONTRACT §10.1). */
+export const MATCH = {
+  durationS: 180,
+  countdownS: 3,
+  minuteHornS: 60,       // 'minute' horn when this many seconds are left
+  finalHornS: 10,        // 'final10' horn
+  padRadiusFallback: 2.2,
+  padPushSpeed: 6,       // m/s an enemy inside your pad is shoved outward (plus its inward velocity is cancelled)
+  spawnSlots: [-0.45, 0.45, -1.35, 1.35], // lateral offsets (m, along the pad's right vector) per team slot
+  eventCap: 8192,        // queued events beyond this are dropped (counted in stats.eventsDropped)
+  hardLandingSpeed: 9,   // m/s fall speed at touch-down that makes a 'land' event hard
+};

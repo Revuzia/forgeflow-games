@@ -870,3 +870,196 @@ def diag_problems(d):
         if n:
             out.append("%d %s(s)" % (n, label))
     return out
+
+
+# ─────────────────────────────── match helpers (phases 3–5, CONTRACT §11) ───────────────────────────────
+CAM_SENSITIVITY = 0.0022          # core/config.ts CAMERA.sensitivity (radians per pointer-lock pixel)
+
+
+def match_info(sess):
+    """__DF__.match() (phase, timeLeft, runners[], result, coverage, event counts) or None."""
+    return sess.safe_js("() => { try { return window.__DF__ && __DF__.match ? __DF__.match() : null; }"
+                        " catch (e) { return { __error: String(e && e.stack || e) }; } }")
+
+
+def hud_info(sess):
+    """__DF__.hud(): the visible HUD text (timer, toast, kill feed, slates, crests)."""
+    return sess.safe_js("() => { try { return window.__DF__ && __DF__.hud ? __DF__.hud() : null; } catch (e) { return null; } }")
+
+
+def events_tail(sess, n=200):
+    return sess.safe_js("(n) => { try { return __DF__.events(n); } catch (e) { return []; } }", n, default=[]) or []
+
+
+def wait_match_phase(sess, phases, timeout_s=30.0, poll=0.1):
+    """Poll __DF__.match().phase until it is one of `phases` → (ok, last_phase)."""
+    if isinstance(phases, str):
+        phases = (phases,)
+    deadline = time.time() + timeout_s
+    last = None
+    while time.time() < deadline:
+        m = match_info(sess) or {}
+        last = m.get("phase")
+        if last in phases:
+            return True, last
+        if sess.phase() == "error":
+            return False, "error"
+        time.sleep(poll)
+    return False, last
+
+
+def wait_alive(sess, timeout_s=8.0):
+    """Wait until the human runner is alive (respawned) → True/False."""
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        p = (sess.state() or {}).get("player") or {}
+        if p.get("alive"):
+            return True
+        time.sleep(0.15)
+    return False
+
+
+def aim_info(sess):
+    return sess.safe_js("() => { try { return __DF__.aim(); } catch (e) { return null; } }")
+
+
+def mouse_turn(sess, dyaw, dpitch, step_px=40, step_s=0.008):
+    """Turn the follow camera with REAL mouse motion under pointer lock (camera: yaw -= dx·s,
+    pitch -= dy·s, s = CAM_SENSITIVITY). Measured in Chrome 153: under pointer lock a Playwright
+    mouse.move reports movementX/Y = the delta from the previous Playwright position, and positions
+    are not clamped to the viewport (clientX stays at the lock point), so a turn is a walk of the
+    virtual pointer by (−dyaw/s, −dpitch/s) px in `step_px` chunks (a smooth, human-speed sweep).
+    The virtual position is tracked on the session. Returns __DF__.aim() after the turn."""
+    dx_total = -dyaw / CAM_SENSITIVITY
+    dy_total = -dpitch / CAM_SENSITIVITY
+    x0 = getattr(sess, "_mx", None)
+    y0 = getattr(sess, "_my", None)
+    if x0 is None or y0 is None:
+        x0, y0 = sess.args.width / 2.0, sess.args.height / 2.0
+        sess.page.mouse.move(x0, y0)
+    n = max(1, int(max(abs(dx_total), abs(dy_total)) / max(1, step_px)))
+    for i in range(1, n + 1):
+        sess.page.mouse.move(x0 + dx_total * i / n, y0 + dy_total * i / n)
+        if step_s > 0:
+            time.sleep(step_s)
+    sess._mx, sess._my = x0 + dx_total, y0 + dy_total
+    return aim_info(sess)
+
+
+def mouse_home(sess):
+    """Forget the tracked virtual pointer (after a real click elsewhere moved it)."""
+    sess._mx = sess._my = None
+
+
+def yaw_to(ax, az, bx, bz):
+    """CONTRACT §2 yaw (0 faces +Z, forward = (sin, 0, cos)) from a toward b."""
+    return math.atan2(bx - ax, bz - az)
+
+
+def angle_delta(a, b):
+    d = (b - a) % (2 * math.pi)
+    if d > math.pi:
+        d -= 2 * math.pi
+    return d
+
+
+# ─────────────────────────────── GPU contention evidence (Windows) ───────────────────────────────
+_GPU_PS = r"""
+[Console]::OutputEncoding=[Text.Encoding]::UTF8
+$acc = @{}; $n = 0
+$samples = Get-Counter '\GPU Engine(*engtype_3D)\Utilization Percentage' -SampleInterval 1 -MaxSamples %d -ErrorAction SilentlyContinue
+foreach ($s in $samples) {
+  $n++
+  foreach ($c in $s.CounterSamples) {
+    if ($c.InstanceName -match '^pid_(\d+)_luid_(0x[0-9a-f]+_0x[0-9a-f]+)_') { $k = $Matches[1] + '|' + $Matches[2]; $acc[$k] = ($acc[$k] + $c.CookedValue) }
+  }
+}
+$out = @()
+foreach ($k in $acc.Keys) {
+  $parts = $k.Split('|'); $procId = [int]$parts[0]
+  $pr = Get-Process -Id $procId -ErrorAction SilentlyContinue
+  $name = if ($pr) { $pr.ProcessName } else { 'pid' + $procId }
+  $out += [pscustomobject]@{ pid = $procId; luid = $parts[1]; name = $name; pct = [math]::Round($acc[$k] / [math]::Max(1, $n), 1) }
+}
+@{ samples = $n; procs = @($out | Sort-Object pct -Descending) } | ConvertTo-Json -Compress -Depth 3
+"""
+
+
+class GpuShare:
+    """Samples the Windows 'GPU Engine(*engtype_3D) / Utilization Percentage' counters once a second
+    for `seconds` in a background PowerShell, then reports the average 3D-engine share per process.
+    Frame times on the dev box's shared Intel iGPU depend on what else draws (dwm, a display-driver
+    host, other apps); this makes a perf window's number interpretable. Windows only; None elsewhere."""
+
+    def __init__(self, seconds):
+        self.proc = None
+        if os.name != "nt":
+            return
+        n = max(1, int(round(seconds)))
+        try:
+            self.proc = subprocess.Popen(["powershell", "-NoProfile", "-NonInteractive", "-Command", _GPU_PS % n],
+                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                                         encoding="utf-8", errors="replace")
+        except Exception:
+            self.proc = None
+
+    def result(self, own_pids=(), timeout=30):
+        if not self.proc:
+            return None
+        try:
+            out, _ = self.proc.communicate(timeout=timeout)
+            data = json.loads((out or "").strip() or "{}")
+        except Exception as e:
+            try:
+                self.proc.kill()
+            except Exception:
+                pass
+            return {"error": str(e).splitlines()[0][:200]}
+        procs = data.get("procs") or []
+        if isinstance(procs, dict):
+            procs = [procs]
+        own = set(own_pids or ())
+        # the adapter our Chrome draws on = the LUID holding most of our GPU processes' time
+        by_luid = {}
+        for p in procs:
+            if p.get("pid") in own:
+                by_luid[p.get("luid")] = by_luid.get(p.get("luid"), 0) + (p.get("pct") or 0)
+        luid = max(by_luid, key=by_luid.get) if by_luid else None
+        same = [p for p in procs if luid is None or p.get("luid") == luid]
+        ours = sum(p.get("pct") or 0 for p in same if p.get("pid") in own)
+        others = [p for p in same if p.get("pid") not in own]
+        return {"samples": data.get("samples"), "luid": luid, "ours": round(ours, 1),
+                "others": round(sum(p.get("pct") or 0 for p in others), 1),
+                "top": [(p.get("name"), p.get("pct")) for p in others[:4]]}
+
+
+def chrome_gpu_pids():
+    """PIDs of chrome.exe GPU processes (--type=gpu-process) — the GPU work of any Chrome, ours included."""
+    if os.name != "nt":
+        return set()
+    cmd = ("@(Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { ([string]$_.CommandLine) -match "
+           "'--type=gpu-process' } | ForEach-Object { $_.ProcessId }) -join ','")
+    try:
+        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd], capture_output=True,
+                           text=True, encoding="utf-8", errors="replace", timeout=60)
+        return {int(x) for x in (r.stdout or "").strip().split(",") if x.strip().isdigit()}
+    except Exception:
+        return set()
+
+
+def wait_warm(sess, notes, where, min_fps=24.0, budget_s=30.0):
+    """Timed real input needs a warm page: the sim runs at most 5 ticks per frame, so below ~12 fps a
+    held key or a timed hold moves the sim slower than real time. On this dev box the shared iGPU can
+    starve the page (dwm + the DisplayLink host have been measured at 30-98 % of its 3D engine):
+    wait for the game's own fps, and SAY so in `notes` when it took more than a second."""
+    t0 = time.time()
+    f = None
+    while time.time() - t0 < budget_s:
+        f = (sess.state() or {}).get("fps")
+        if isinstance(f, (int, float)) and f >= min_fps:
+            break
+        time.sleep(0.5)
+    waited = time.time() - t0
+    if waited > 1.0:
+        notes.append("%s: waited %.1f s for the page to warm to %.0f fps (now %s)" % (where, waited, min_fps, f))
+    return f

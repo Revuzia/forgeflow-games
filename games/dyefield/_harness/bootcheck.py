@@ -10,11 +10,14 @@ Flow (real input at the player's layer):
   2. a REAL mouse click on the page centre (the CLICK TO PLAY button over the canvas) → pointer lock
      → phase 'play'. If Chrome refuses pointer lock under automation, fall back to __DF__.start()
      (dev) and SAY so in the output;
-  3. screenshot _shots/boot_spawn.png;
+  3. the match countdown (3 · 2 · 1, inputs frozen) runs out → match phase 'live' (phases 3–5 flow);
+     screenshot _shots/boot_spawn.png;
   4. hold a REAL KeyW for 1.5 s (page.keyboard.down/up) → the runner must move > 3 m;
-  5. a REAL left-button hold (page.mouse.down/up) for 1.2 s while standing → teamUnderFeet() === 1
-     (SUNCREW), coverage.sun > 0, and the DOM minimap canvas pixel under the runner is SUNCREW;
-  6. a short brushed strafe (LMB + A) for the picture, then _shots/boot_painted.png;
+  5. REAL mouse motion tilts the aim down to the floor at the feet, then a REAL left-button hold
+     (page.mouse.down/up) for 1.2 s fires the MIST-RASP → teamUnderFeet() === 1 (SUNCREW),
+     coverage.sun > 0, and the DOM minimap canvas pixel under the runner is SUNCREW (one short W
+     nudge + re-fire if the first spray landed just ahead of the feet);
+  6. a short firing strafe (LMB + A/D) for the picture, then _shots/boot_painted.png;
   7. F1 → _shots/boot_debug.png (debug panel on), F1 again.
 Pointer lock (strict about the game, tolerant of the environment): another session's headed Chrome
 opening a window takes OS activation and drops the lock (the game then pauses by design). Every lock
@@ -37,8 +40,11 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import (SHOTS, HarnessError, Session, add_common_args, build_url, diag_problems,  # noqa: E402
-                    fmt, preflight_chromes, print_diagnostics, save_report)
+from common import (SHOTS, HarnessError, Session, add_common_args, aim_info, build_url, diag_problems,  # noqa: E402
+                    fmt, match_info, mouse_home, mouse_turn, preflight_chromes, print_diagnostics, save_report,
+                    wait_match_phase, wait_warm)
+
+DEG = math.pi / 180.0
 
 
 def dist_xz(a, b):
@@ -99,6 +105,7 @@ def main() -> int:
     df_shot = None
     shots = {}
     st_final = None
+    countdown = None
 
     others, scan_err = preflight_chromes("pre-flight")
     report["otherAutomatedChrome"] = others
@@ -169,8 +176,16 @@ def main() -> int:
                 if not ok:
                     fatal = "could not enter play (click and __DF__.start() both failed: %s; phase %r)" % (v, ph)
 
+        countdown = None
         if not fatal:
-            time.sleep(1.0)
+            mouse_home(sess)
+            m0 = match_info(sess) or {}
+            ok, ph = wait_match_phase(sess, "live", 8.0)
+            countdown = "match %r → %r" % (m0.get("phase"), ph)
+            if not ok:
+                fatal = "the match countdown never ended (match phase %r)" % ph
+        if not fatal:
+            time.sleep(0.6)
             s0 = sess.state() or {}
             tick_a = s0.get("tick")
             shots["spawn"] = sess.screenshot(shot_spawn)
@@ -188,6 +203,7 @@ def main() -> int:
                 return {"from": p0, "to": p1, "metres": d, "phaseAfter": sess.phase()}
 
             for attempt in range(2):
+                wait_warm(sess, notes, "before the W hold")
                 sess.lock_guard("before the W hold", notes, problems)
                 walk = do_walk()
                 g = sess.lock_guard("during the W hold", notes, problems)
@@ -203,21 +219,35 @@ def main() -> int:
             def do_brush():
                 before_under = sess.df("teamUnderFeet")[1]
                 flips0 = sess.df("flips")[1]
+                mouse_home(sess)
+                a0 = aim_info(sess) or {}
+                mouse_turn(sess, 0.0, (-64 * DEG) - (a0.get("pitch") or 0))
                 sess.page.mouse.down(button="left")
                 time.sleep(1.2)
                 sess.page.mouse.up(button="left")
                 time.sleep(0.35)
-                st = sess.state() or {}
                 under = sess.df("teamUnderFeet")[1]
+                nudged = False
+                if under != 1:
+                    nudged = True
+                    sess.page.keyboard.down("KeyW"); time.sleep(0.25); sess.page.keyboard.up("KeyW")
+                    sess.page.mouse.down(button="left"); time.sleep(0.7); sess.page.mouse.up(button="left")
+                    time.sleep(0.35)
+                    under = sess.df("teamUnderFeet")[1]
+                a1 = aim_info(sess) or {}
+                mouse_turn(sess, 0.0, (-14 * DEG) - (a1.get("pitch") or 0))
+                st = sess.state() or {}
                 flips1 = sess.df("flips")[1]
                 cov = st.get("coverage") or {}
                 ok_px, px = sess.df("minimapPixel")
                 label, px_detail = classify_minimap(px if ok_px else None)
-                return {"underBefore": before_under, "underAfter": under, "coverage": cov, "flips": [flips0, flips1],
+                return {"underBefore": before_under, "underAfter": under, "nudged": nudged, "coverage": cov, "flips": [flips0, flips1],
                         "minimap": px, "minimapLabel": label, "minimapDetail": px_detail, "player": st.get("player")}
 
             for attempt in range(2):
+                wait_warm(sess, notes, "before the LMB hold")
                 sess.lock_guard("before the LMB hold", notes, problems)
+                mouse_home(sess)
                 brush = do_brush()
                 g = sess.lock_guard("during the LMB hold", notes, problems)
                 if g == "relocked" and attempt == 0:
@@ -226,13 +256,13 @@ def main() -> int:
                 break
             under, cov, label = brush["underAfter"], brush["coverage"], brush["minimapLabel"]
             if under != 1:
-                problems.append("after a real 1.2 s LMB hold teamUnderFeet() = %r (want 1 = SUNCREW)" % (under,))
+                problems.append("after a real LMB hold aimed at the feet teamUnderFeet() = %r (want 1 = SUNCREW)" % (under,))
             if not (isinstance(cov.get("sun"), (int, float)) and cov["sun"] > 0):
                 problems.append("coverage.sun = %r after the brush (want > 0)" % (cov.get("sun"),))
             if label != "sun":
                 problems.append("minimap pixel under the runner is %s, not SUNCREW (%s)" % (label, brush["minimapDetail"]))
 
-            # ── 6. a brushed strafe for the picture, then the painted shot
+            # ── 6. a firing strafe for the picture, then the painted shot
             sess.page.mouse.down(button="left")
             sess.page.keyboard.down("KeyA")
             time.sleep(0.6)
@@ -274,14 +304,15 @@ def main() -> int:
     print("mode         : %s" % ("headless Chrome (d3d11)" if args.headless else "headed Chrome (d3d11)"))
     print("boot → ready : %s" % ("%.1f s" % t_ready if t_ready is not None else "—"))
     print("entered play : %s" % (entered or "NO"))
+    print("countdown    : %s" % (countdown or "—"))
     if walk:
         a, b = walk["from"], walk["to"]
         print("W hold 1.5 s : %.2f m  (%s, %s, %s) → (%s, %s, %s)" % (
             walk["metres"], fmt(a.get("x")), fmt(a.get("y")), fmt(a.get("z")), fmt(b.get("x")), fmt(b.get("y")), fmt(b.get("z"))))
     if brush:
         cov = brush.get("coverage") or {}
-        print("LMB hold 1.2s: teamUnderFeet %r → %r · coverage sun %s %% · flips %s → %s" % (
-            brush.get("underBefore"), brush.get("underAfter"),
+        print("LMB (aim down): teamUnderFeet %r → %r%s · coverage sun %s %% · flips %s → %s" % (
+            brush.get("underBefore"), brush.get("underAfter"), " (after one W nudge + re-fire)" if brush.get("nudged") else "",
             fmt((cov.get("sun") or 0) * 100, 3), brush["flips"][0], brush["flips"][1]))
         print("minimap      : %s — %s" % (brush.get("minimapLabel"), brush.get("minimapDetail")))
     print("frames       : %s → %s  (%s)" % (adv[1], adv[2], "advancing" if adv[0] else "STALLED"))
@@ -300,7 +331,7 @@ def main() -> int:
     print_diagnostics(diag)
     print("=" * 84)
 
-    report.update({"readyS": t_ready, "entered": entered, "walk": walk, "brush": brush, "framesAdvancing": adv[0],
+    report.update({"readyS": t_ready, "entered": entered, "countdown": countdown, "walk": walk, "brush": brush, "framesAdvancing": adv[0],
                    "simAdvancing": sim_adv, "render": render, "diagnostics": diag, "fatal": fatal, "notes": notes,
                    "shots": shots, "dfShot": df_shot, "final": st_final, "timeline": tl})
     if fatal:

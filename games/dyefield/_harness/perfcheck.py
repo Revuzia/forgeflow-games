@@ -12,9 +12,11 @@ scan). A second automated Chrome shares the GPU (the numbers are contaminated) a
 OS focus. --wait-clear N polls for up to N seconds for it to exit first.
 
 Flow: load /?map=pier18&dev=1 at 1600x900, wait for 'ready', __DF__.start() (dev: play without pointer
-lock), let it settle 8 s, then two sampling windows:
+lock), wait out the match countdown (the 7 bots start painting and fighting), let it settle 8 s, then
+three sampling windows (8 runners + all FX live in every one):
     stand  10 s at spawn, no input
     walk   10 s holding a REAL KeyW (page.keyboard.down/up → the game's Input → the sim)
+    fire   10 s holding REAL KeyW + LMB (the MIST-RASP: droplets, splats, muzzle mist)
 A page-side recorder stores EVERY requestAnimationFrame delta and samples the renderer counters
 (__DF__.render(): draw calls, triangles, adaptive render scale, drawing-buffer size) every 250 ms.
 Prints per window: frames, avg fps, frame-time p50 / p90 / p99 / max, the share of frames over 20 ms,
@@ -31,8 +33,9 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import (HarnessError, Session, add_common_args, automated_chromes, build_url,  # noqa: E402
-                    describe_chromes, diag_problems, fmt, own_browser_pids, print_diagnostics, save_report)
+from common import (GpuShare, HarnessError, Session, add_common_args, automated_chromes, build_url,  # noqa: E402
+                    chrome_gpu_pids, describe_chromes, diag_problems, fmt, match_info, own_browser_pids, print_diagnostics,
+                    save_report, wait_match_phase)
 
 RECORDER_JS = r"""() => {
   if (window.__PF__) return true;
@@ -120,13 +123,21 @@ def summarize(win):
     q = [x.get("quality") for x in st if x.get("quality")]
     out["quality"] = q[-1] if q else None
     out["stateErrors"] = [x["error"] for x in (win.get("stats") or []) if isinstance(x, dict) and "error" in x][:3]
+    out["gpuShare"] = win.get("gpuShare")
     return out
 
 
+GPU_PIDS = set()
+
+
 def record(sess, seconds):
+    """one sampling window; also samples the OS GPU 3D-engine share (ours vs other processes)"""
+    share = GpuShare(seconds)
     sess.js("() => { const P = window.__PF__; P.dts = []; P.stats = []; P.last = -1; P.on = true; }")
     time.sleep(seconds)
-    return sess.js("() => { const P = window.__PF__; P.on = false; return { dts: P.dts.slice(), stats: P.stats.slice() }; }")
+    w = sess.js("() => { const P = window.__PF__; P.on = false; return { dts: P.dts.slice(), stats: P.stats.slice() }; }")
+    w["gpuShare"] = share.result(GPU_PIDS)
+    return w
 
 
 def wait_clear(max_s):
@@ -144,12 +155,15 @@ def line(label, w):
     scale_txt = ("%s → %s (min %s, max %s)" % (fmt(sc["start"], 3), fmt(sc["end"], 3), fmt(sc["min"], 3), fmt(sc["max"], 3))
                  if sc["start"] is not None else "—")
     buf = w["buffer"]
+    g = w.get("gpuShare") or {}
+    gl = ("\n       OS GPU 3D engine: Chrome %s%% · other processes %s%% (%s)" % (
+        g.get("ours"), g.get("others"), ", ".join("%s %s%%" % t for t in (g.get("top") or []))) if g and "error" not in g else "")
     return ("%-5s: %4d frames / %5.2f s · avg %5.1f fps · frame ms p50 %5.2f  p90 %5.2f  p99 %5.2f  max %6.2f · "
             ">20 ms %4.1f%% · >33 ms %4.1f%%\n       draw calls %s (max %s) · triangles %s (max %s) · scale %s · buffer %s → %s" % (
                 label, w["frames"], w["seconds"], w["avgFps"] or 0, w["p50"] or 0, w["p90"] or 0, w["p99"] or 0, w["max"] or 0,
                 100 * (w["over20"] or 0), 100 * (w["over33"] or 0),
                 fmt(w["calls"]["median"], 0), w["calls"]["max"], fmt(w["triangles"]["median"], 0), w["triangles"]["max"],
-                scale_txt, buf["start"], buf["end"]))
+                scale_txt, buf["start"], buf["end"])) + gl
 
 
 def main() -> int:
@@ -159,6 +173,8 @@ def main() -> int:
     ap.add_argument("--settle", type=float, default=8.0, help="seconds in play before sampling")
     ap.add_argument("--stand", type=float, default=10.0, help="sampling window standing at spawn")
     ap.add_argument("--walk", type=float, default=10.0, help="sampling window walking forward (real KeyW)")
+    ap.add_argument("--fire", type=float, default=10.0, help="sampling window walking + firing (real KeyW + LMB); 0 = skip")
+    ap.add_argument("--gate-p99", type=float, default=None, help="exit 1 when any window's frame-time p99 (ms) is above this")
     ap.add_argument("--query", action="append", default=[], metavar="K=V",
                     help="extra URL query parameter (repeatable), e.g. --query quality=high")
     ap.add_argument("--label", default="", help="report name suffix: _harness/_reports/perfcheck_<label>.json")
@@ -237,7 +253,13 @@ def main() -> int:
             ok, ph = sess.wait_phase("play", 5.0)
             if not ok:
                 fatal = "__DF__.start() did not enter play (%s; phase %r)" % (v, ph)
+            else:
+                okm, mph = wait_match_phase(sess, ("live", "ended"), 20.0)
+                rep["matchPhase"] = mph
+                if not okm:
+                    fatal = "the match never went live (phase %r)" % mph
         if not fatal:
+            GPU_PIDS.update(chrome_gpu_pids())
             sess.js(RECORDER_JS)
             rep["probe"] = sess.safe_js(PROBE_JS, default=None)
             time.sleep(max(0.0, args.settle))
@@ -254,6 +276,19 @@ def main() -> int:
             intruder_scan("after the walk window")
             time.sleep(0.3)
             p2 = (sess.state() or {}).get("player") or {}
+            if args.fire > 0:
+                sess.page.mouse.move(args.width / 2, args.height / 2)
+                sess.page.keyboard.down("KeyW")
+                sess.page.mouse.down(button="left")
+                try:
+                    rep["fire"] = summarize(record(sess, args.fire))
+                finally:
+                    sess.page.mouse.up(button="left")
+                    sess.page.keyboard.up("KeyW")
+                intruder_scan("after the fire window")
+            m = match_info(sess) or {}
+            rep["match"] = {"phase": m.get("phase"), "timeLeft": m.get("timeLeft"), "events": m.get("events"),
+                            "alive": sum(1 for r in (m.get("runners") or []) if r.get("alive")), "coverage": m.get("coverage")}
             rep["walkMetres"] = ((p2.get("x", 0) - p1.get("x", 0)) ** 2 + (p2.get("z", 0) - p1.get("z", 0)) ** 2) ** 0.5 if p1 and p2 else None
             rep["positions"] = {"settled": p0, "walkFrom": p1, "walkTo": p2}
             rep["standDrift"] = ((p1.get("x", 0) - p0.get("x", 0)) ** 2 + (p1.get("z", 0) - p0.get("z", 0)) ** 2) ** 0.5 if p0 and p1 else None
@@ -288,6 +323,10 @@ def main() -> int:
                 p5, 1000.0 / p5, " — vsync-capped: fps can never exceed this in this mode" if not args.uncapped else " (uncapped)"))
         print(line("stand", rep["stand"]))
         print(line("walk", rep["walk"]))
+        if "fire" in rep:
+            print(line("fire", rep["fire"]))
+        if rep.get("match"):
+            print("match        : %s" % json.dumps(rep["match"], default=str)[:600])
         print("walked       : %s m with a real 10 s KeyW hold (stand drift %s m) · phase after %s" % (
             fmt(rep.get("walkMetres")), fmt(rep.get("standDrift")), rep.get("phaseAfter")))
         if isinstance(r, dict) and "quality" in r:
@@ -311,8 +350,15 @@ def main() -> int:
     probs = diag_problems(diag)
     for p in probs:
         print("   X %s" % p)
+    wins = [k for k in ("stand", "walk", "fire") if k in rep]
+    if args.gate_p99 is not None:
+        high = [k for k in wins if (rep[k]["p99"] or 1e9) > args.gate_p99]
+        if high:
+            print("RESULT: FAIL — frame-time p99 above %.1f ms in %s" % (args.gate_p99, ", ".join(
+                "%s (%.2f ms)" % (k, rep[k]["p99"] or 0) for k in high)))
+            return 1
     if args.gate_fps is not None:
-        low = [k for k in ("stand", "walk") if (rep[k]["avgFps"] or 0) < args.gate_fps]
+        low = [k for k in wins if (rep[k]["avgFps"] or 0) < args.gate_fps]
         if low:
             print("RESULT: FAIL — avg fps below %.0f in %s" % (args.gate_fps, ", ".join(low)))
             return 1

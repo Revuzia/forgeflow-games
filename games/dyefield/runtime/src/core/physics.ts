@@ -103,7 +103,7 @@ class Character implements CharacterBody {
   setShape(radius: number, halfHeight: number): void {
     if (radius === this.radius && halfHeight === this.halfHeight) return;
     const f = this.feet();
-    this.collider.setShape(new this.R.Capsule(halfHeight, radius));
+    this.collider.setShape(this.pw.capsuleShape(radius, halfHeight));
     this.radius = radius;
     this.halfHeight = halfHeight;
     this.setFeet(f.x, f.y, f.z);
@@ -136,7 +136,13 @@ export class PhysicsWorld {
     // Rapier keeps its own copy; pass typed arrays of the exact element types it expects
     const verts = pos instanceof Float32Array ? pos : new Float32Array(pos);
     const inds = idx instanceof Uint32Array ? idx : new Uint32Array(idx);
-    this.map = this.world.createCollider(R.ColliderDesc.trimesh(verts, inds).setCollisionGroups(MAP_GROUPS).setFriction(0));
+    // FIX_INTERNAL_EDGES (implies MERGE_DUPLICATE_VERTICES): contact normals on the internal edges of
+    // the Blender-triangulated faces are corrected from the adjacent triangles. Without it a capsule
+    // pressed against a fan-triangulated wall got a ghost "ground" normal from a diagonal edge and hung
+    // mid-wall with grounded = true (measured: a dropped wall-slicker stuck at y 0.624 on the x = −20
+    // side-deck wall of Pier 18; with the flag it falls). G2 is unchanged either way.
+    this.map = this.world.createCollider(R.ColliderDesc.trimesh(verts, inds, R.TriMeshFlags.FIX_INTERNAL_EDGES)
+      .setCollisionGroups(MAP_GROUPS).setFriction(0));
     this.ray = new R.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
     this.refresh();
   }
@@ -151,6 +157,16 @@ export class PhysicsWorld {
     this.chars.push(c);
     this.refresh();
     return c;
+  }
+
+  private readonly capsules = new Map<number, InstanceType<Rapier['Capsule']>>();
+
+  /** @internal cached capsule shape descriptors (SLICK toggles the shape often; no per-toggle allocation) */
+  capsuleShape(radius: number, halfHeight: number): InstanceType<Rapier['Capsule']> {
+    const key = Math.round(radius * 1000) * 100000 + Math.round(halfHeight * 1000);
+    let s = this.capsules.get(key);
+    if (!s) { s = new this.R.Capsule(halfHeight, radius); this.capsules.set(key, s); }
+    return s;
   }
 
   /** @internal */

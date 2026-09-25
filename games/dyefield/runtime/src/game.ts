@@ -1,36 +1,49 @@
-// DYEFIELD — the running game: fixed 60 Hz sim + interpolated rendering (CONTRACT §2, §5.1).
+// DYEFIELD — the running game: a MatchWorld (the 8-runner sim) + a BotDirector, a fixed 60 Hz step
+// and an interpolated render (CONTRACT §2, §5.1, §11).
 //
 //   * frame(now): accumulate real time, run at most MAX_STEPS_PER_FRAME ticks, drop the rest of the
 //     debt, render interpolated between the last two ticks (alpha = acc / TICK).
-//   * pause gates simStep() itself (doctrine §5): a paused game cannot advance no matter who calls
-//     it, and the accumulator is discarded so resume never fast-forwards the paused time.
-//   * window.__PAUSE__ = { pause, resume, toggle } (doctrine §6). ESC pauses; losing pointer lock
-//     pauses; RESUME re-captures the mouse.
-//   * the view reads the sim, never writes gameplay: paint flows sim → Painter → (dirty rows) →
-//     PaintTexture.upload → GPU, and Painter.onFlip → MinimapRaster.apply → HUD canvas.
-//   * adaptive render resolution: every frame interval is fed to the renderer rig's governor while
-//     in play (view/renderer.ts); entering play (re)starts its 2 s no-scaling grace. Settings hook:
-//     settings.quality 'auto' | 'high' | 'low' → setQuality() (no UI this phase; ?quality= sets it).
+//   * one tick: the human's intent is intents[0] (Input → camera-relative move + camera yaw/pitch, SHIFT
+//     = slick, LMB = the MIST-RASP) with the aim point from a camera ray through the reticle
+//     (physics.raycast, 60 m, plus a ray-vs-capsule pick of seen enemies); the BotDirector fills the
+//     other seven; MatchWorld.step(intents). The phase-2 DEV_BRUSH is retired from normal play and
+//     lives only behind ?dev=1&brush=1.
+//   * events drain every frame into fx.ts (splats, muzzle mist, dry puffs, sparks, washed bursts, the
+//     tide-spout), players.ts (hit flash, washed pop, respawn drop) and the HUD (kill feed, toasts,
+//     death slate, victory slate). The view reads the sim and never writes gameplay.
+//   * pause gates simStep() itself (doctrine §5); window.__PAUSE__ = { pause, resume, toggle }.
+//     ESC pauses; losing pointer lock pauses (except after the final horn, when the mouse is freed
+//     on purpose for the victory slate's PLAY AGAIN).
+//   * PLAY AGAIN rebuilds the match: painter.reset(), a new MatchWorld + BotDirector over the same
+//     PhysicsWorld, NavGraph and views. The PhysicsWorld is kept on purpose: the NavGraph queries it
+//     (bots string-pull their paths with sphere casts), and the previous match's character capsules
+//     are in the character collision group, which map-only queries and the KCC never see.
 
 import * as THREE from 'three';
-import { TICK, MAX_STEPS_PER_FRAME, MOVE } from './core/config.ts';
-import { emptyIntent, type PlayerIntent } from './core/types.ts';
-import type { MapDef } from './core/data.ts';
+import { TICK, MAX_STEPS_PER_FRAME, DEV_BRUSH } from './core/config.ts';
+import { emptyIntent, type PlayerIntent, type TeamId } from './core/types.ts';
+import { WEAPONS, type MapDef } from './core/data.ts';
 import type { MapGeometry } from './core/mapgeo.ts';
 import type { PaintAtlas } from './core/paint/atlas.ts';
 import type { Painter } from './core/paint/painter.ts';
 import type { MinimapRaster } from './core/paint/minimap.ts';
-import type { PhysicsWorld } from './core/physics.ts';
-import { angleDelta, type Player } from './core/player.ts';
+import type { PhysicsWorld, Rapier } from './core/physics.ts';
+import { MatchWorld } from './core/match/world.ts';
+import type { SimEvent } from './core/match/events.ts';
+import type { RosterEntry, BotSkill } from './core/match/roster.ts';
+import { BotDirector } from './core/bots/director.ts';
+import type { NavGraph } from './core/bots/nav.ts';
+import type { Runner } from './core/runner.ts';
 import type { RendererRig, RenderQuality } from './view/renderer.ts';
 import type { FollowCamera } from './view/camera.ts';
 import type { SkyRig } from './view/sky.ts';
 import type { WaterRig } from './view/water.ts';
-import type { PaintTexture, } from './view/paintlayer.ts';
+import type { PaintTexture } from './view/paintlayer.ts';
 import type { DyeUniforms } from './view/surfaces.ts';
 import type { MapView } from './view/mapview.ts';
-import type { HeroView } from './view/heroview.ts';
-import type { Hud, HudDebug } from './ui/hud.ts';
+import type { PlayerViews, PlayersFrameOpts } from './view/players.ts';
+import type { Fx } from './view/fx.ts';
+import type { Hud, HudDebug, CrestInfo, DotInfo, HudFrame } from './ui/hud.ts';
 import type { BootUI } from './ui/boot.ts';
 import type { Input } from './input.ts';
 
@@ -44,10 +57,22 @@ export interface AppStatus {
   error?: string;
   version: string;
   game: Game | null;
-  /** how play was entered: 'pointerlock' (real click) | 'dev-start' (__DF__.start, no lock) */
+  /** how play was entered: 'pointerlock' (real click) | 'dev-start' (__DF__.start / ?autostart, no lock yet) */
   startedBy: 'pointerlock' | 'dev-start' | null;
   lockErrors: number;
   lockSuccesses: number;
+}
+
+/** match settings from the query (CONTRACT §11): ?kit ?bots ?seed ?matchSeconds (dev) ?autostart */
+export interface MatchConfig {
+  kit: string;
+  skill: BotSkill;
+  seed: number;
+  /** null = the MatchWorld default (180 s) */
+  durationS: number | null;
+  humanName?: string;
+  /** ?dev=1&brush=1: LMB is the phase-2 DEV_BRUSH instead of the kit */
+  devBrush: boolean;
 }
 
 export interface GameParts {
@@ -66,12 +91,16 @@ export interface GameParts {
   minimap: MinimapRaster;
   paint: PaintTexture;
   dye: DyeUniforms;
+  R: Rapier;
   physics: PhysicsWorld;
-  player: Player;
-  hero: HeroView;
+  nav: NavGraph;
+  roster: RosterEntry[];
+  players: PlayerViews;
+  fx: Fx;
   hud: Hud;
   boot: BootUI;
   input: Input;
+  config: MatchConfig;
 }
 
 /** player-facing settings (hooks only this phase — no settings UI yet) */
@@ -79,37 +108,88 @@ export interface GameSettings {
   quality: RenderQuality;
 }
 
+/** a logged event with the sim tick it was drained on (the __DF__.events(n) read-back) */
+export type LoggedEvent = SimEvent & { tick: number };
+
+const EVENT_LOG = 512;
+const HUMAN = 0;
+
 export class Game {
   readonly p: GameParts;
   readonly settings: GameSettings;
+  world: MatchWorld;
+  director: BotDirector;
+  physics: PhysicsWorld;
   tick = 0;
   fps = 0;
   frames = 0;
+  matchNo = 1;
   private acc = 0;
   private last = -1;
   private fpsClock = 0;
   private fpsFrames = 0;
   private time = 0;
   private raf = 0;
-  private readonly intent: PlayerIntent = emptyIntent();
-  private readonly focus = new THREE.Vector3();
+  private readonly intents: PlayerIntent[] = [];
   private readonly feet = { x: 0, y: 0, z: 0 };
-  private lastYaw = 0;
-  private yawRate = 0;
-  private visY = NaN;
+  private readonly focus = new THREE.Vector3();
   private stepping = false;
-  /** id of the outstanding pointer-lock request (0 = none) */
   private lockReq = 0;
   private lockSeq = 0;
+  /** pointer lock was held at some point of this play session (a later loss pauses) */
+  private lockedThisPlay = false;
+  // events
+  private readonly drained: SimEvent[] = [];
+  private readonly log: LoggedEvent[] = [];
+  readonly counts: Record<string, number> = {};
+  // aim
+  private readonly camPos = new THREE.Vector3();
+  private readonly camDir = new THREE.Vector3();
+  private readonly muzzle = new THREE.Vector3();
+  private aimOk = false;
+  private aim = { x: 0, y: 0, z: 0 };
+  // team vision (dots, tags)
+  private readonly seen: boolean[] = [];
+  private seenClock = 0;
+  private readonly crests: CrestInfo[] = [];
+  private readonly dots: DotInfo[] = [];
+  private readonly hudFrame: HudFrame;
+  private readonly seenFn = (id: number): boolean => this.seen[id] === true;
+  private readonly frameOpts: PlayersFrameOpts;
+  // match end
+  private endT = -1;
+  private victoryShown = false;
+  // dev brush
+  private brushClock = 0;
+  private brushSplats = 0;
 
   constructor(parts: GameParts, settings: Partial<GameSettings> = {}) {
     this.p = parts;
     this.settings = { quality: settings.quality ?? parts.rig.adaptive().quality };
+    this.physics = parts.physics;
+    for (let i = 0; i < parts.roster.length; i++) {
+      this.intents.push(emptyIntent());
+      this.seen.push(false);
+      const r = parts.roster[i];
+      this.crests.push({ id: r.id, name: r.name, team: r.team, alive: true, respawnIn: 0, special: 0, you: r.id === HUMAN });
+      this.dots.push({ x: 0, z: 0, team: r.team, show: false });
+    }
+    this.world = this.makeWorld();
+    this.director = new BotDirector(this.world, parts.nav, parts.config.seed ^ 0x9e3779b9);
+    this.frameOpts = {
+      alpha: 1, camera: parts.cam.camera, viewerTeam: 1, viewerId: HUMAN, seen: this.seenFn, width: 1, height: 1, winner: null,
+    };
+    this.hudFrame = {
+      phase: 'countdown', timeLeft: this.world.timeLeft, countdown: this.world.countdown, coverage: { sun: 0, gulf: 0, neutral: 1 },
+      tank: 100, hp: 100, alive: true, slick: false, firing: false, x: 0, z: 0, yaw: 0, special: 0,
+      crests: this.crests, dots: this.dots, respawnIn: 0,
+    };
+
     const { input, hud, canvas } = parts;
     input.onUi((a) => {
       if (a === 'debug') hud.toggleDebug();
       else if (a === 'pause') {
-        if (this.phase === 'play') this.pause('esc');
+        if (this.phase === 'play' && !this.matchOver) this.pause('esc');
         else if (this.phase === 'paused') this.resume();
       }
     });
@@ -119,22 +199,36 @@ export class Game {
       if (locked) {
         this.lockReq = 0;
         parts.app.lockSuccesses++;
+        this.lockedThisPlay = true;
         if (this.phase === 'ready' || this.phase === 'paused') this.enterPlay('pointerlock');
-      } else if (this.phase === 'play' && parts.app.startedBy === 'pointerlock') {
+      } else if (this.phase === 'play' && this.lockedThisPlay && !this.matchOver) {
         this.pause('pointer lock lost');
       }
     });
     document.addEventListener('pointerlockerror', () => this.lockFailed(this.lockReq, 'pointerlockerror'));
+    // a play session entered without the lock (?autostart / __DF__.start): a click on the view captures the mouse
+    canvas.addEventListener('mousedown', () => {
+      if (this.phase === 'play' && !this.matchOver && document.pointerLockElement !== canvas && this.lockReq === 0) this.requestLock();
+    });
     (window as unknown as { __PAUSE__: unknown }).__PAUSE__ = {
       pause: () => this.pause('api'),
       resume: () => this.resume(),
       toggle: () => (this.phase === 'paused' ? this.resume() : this.pause('api')),
     };
-    this.lastYaw = parts.player.yaw;
   }
 
   get phase(): Phase { return this.p.app.phase; }
   private set phase(v: Phase) { this.p.app.phase = v; }
+  get matchOver(): boolean { return this.world.phase === 'ended'; }
+  get human(): Runner { return this.world.runners[HUMAN]; }
+
+  private makeWorld(): MatchWorld {
+    const p = this.p;
+    return new MatchWorld({
+      def: p.def, geo: p.geo, physics: this.physics, painter: p.painter, roster: p.roster,
+      seed: p.config.seed, ...(p.config.durationS ? { durationS: p.config.durationS } : {}),
+    });
+  }
 
   /** start the render loop (the scene renders behind the CLICK TO PLAY card) */
   run(): void {
@@ -163,8 +257,12 @@ export class Game {
   /** CLICK TO PLAY: ask for pointer lock; play begins on pointerlockchange. */
   requestPlay(): void {
     if (this.phase !== 'ready' && this.phase !== 'paused') return;
+    if (document.pointerLockElement === this.p.canvas) { this.enterPlay('pointerlock'); return; }
+    this.requestLock();
+  }
+
+  private requestLock(): void {
     const c = this.p.canvas;
-    if (document.pointerLockElement === c) { this.enterPlay('pointerlock'); return; }
     const id = ++this.lockSeq;
     this.lockReq = id;
     try {
@@ -203,13 +301,14 @@ export class Game {
     if (this.phase === 'play') this.p.rig.graceFor(2);
   }
 
-  /** dev-only (__DF__.start): enter play without pointer lock */
+  /** dev (__DF__.start) / ?autostart=1: enter play without pointer lock (a click on the view captures it later) */
   devStart(): void {
     if (this.phase === 'ready' || this.phase === 'paused') this.enterPlay('dev-start');
   }
 
   private enterPlay(by: 'pointerlock' | 'dev-start'): void {
     this.p.app.startedBy = by;
+    if (by === 'dev-start') this.lockedThisPlay = document.pointerLockElement === this.p.canvas;
     this.acc = 0;
     this.last = -1;
     this.p.input.releaseAll();
@@ -229,7 +328,6 @@ export class Game {
     this.p.input.live = false;
     this.p.input.releaseAll();
     this.p.hud.setPaused(true, reason === 'pointer lock lost' ? 'Mouse released.' : '');
-    // phase is already 'paused', so the pointerlockchange this causes is a no-op
     if (document.pointerLockElement === this.p.canvas) document.exitPointerLock();
   }
 
@@ -239,19 +337,94 @@ export class Game {
     else this.enterPlay('dev-start');
   }
 
+  /** PLAY AGAIN: a fresh match on the same map (a proper lobby arrives in phase 9). */
+  restart(): void {
+    const p = this.p;
+    p.painter.reset();
+    p.paint.rebuildAll();
+    p.minimap.rebuild();
+    this.world = this.makeWorld();
+    this.director = new BotDirector(this.world, p.nav, (p.config.seed + this.matchNo * 7919) ^ 0x9e3779b9);
+    this.matchNo++;
+    this.tick = 0;
+    this.acc = 0;
+    this.endT = -1;
+    this.victoryShown = false;
+    this.drained.length = 0;
+    for (const k of Object.keys(this.counts)) delete this.counts[k];
+    for (const it of this.intents) Object.assign(it, emptyIntent());
+    p.players.reset();
+    p.fx.clear();
+    p.hud.reset();
+    const h = this.human;
+    p.cam.reset(h.yaw);
+    this.feet.x = h.x; this.feet.y = h.y; this.feet.z = h.z;
+    p.cam.update(0, this.feet, this.physics);
+    if (this.phase === 'play') {
+      p.input.releaseAll();
+      p.input.live = true;
+      if (document.pointerLockElement !== p.canvas) this.requestLock();
+    }
+  }
+
+  // ───────────────────────────── the sim tick ─────────────────────────────
   /** One fixed sim tick — gated: nothing advances unless the game is in play. */
   simStep(): boolean {
     if (this.phase !== 'play' || this.stepping) return false;
     this.stepping = true;
     try {
-      const { input, cam, player, painter } = this.p;
-      input.intent(cam.yaw, cam.pitch, this.intent);
-      player.step(TICK, this.intent, painter);
+      const { input, cam, config } = this.p;
+      const me = this.intents[HUMAN];
+      input.intent(cam.yaw, cam.pitch, me);
+      me.hasAim = this.aimOk;
+      me.aimX = this.aim.x; me.aimY = this.aim.y; me.aimZ = this.aim.z;
+      const brush = config.devBrush && me.fire;
+      if (config.devBrush) me.fire = false;
+      this.director.think(this.intents);
+      this.world.step(this.intents);
+      if (brush) this.devBrushStep();
       this.tick++;
     } finally {
       this.stepping = false;
     }
     return true;
+  }
+
+  /** ?dev=1&brush=1 — the phase-2 DEV_BRUSH (a splat under the feet at DEV_BRUSH.perSecond) */
+  private devBrushStep(): void {
+    const h = this.human;
+    if (!h.alive || this.world.phase !== 'live') return;
+    this.brushClock -= TICK;
+    if (this.brushClock > 1e-9) return;
+    this.brushClock += 1 / DEV_BRUSH.perSecond;
+    this.brushSplats++;
+    this.p.painter.splat(h.x, h.y, h.z, {
+      radius: DEV_BRUSH.radius, team: h.team, nx: 0, ny: 1, nz: 0, minFacing: DEV_BRUSH.minFacing,
+      seed: (this.brushSplats * 2654435761) >>> 0,
+    });
+  }
+
+  /** the reticle's world point: a camera ray (60 m) against the map, then against seen enemy capsules */
+  private updateAim(): void {
+    const cam = this.p.cam;
+    this.camPos.setFromMatrixPosition(cam.camera.matrixWorld);
+    cam.forward(this.camDir);
+    const o = this.camPos, d = this.camDir;
+    let best = 60;
+    const hit = this.physics.raycast(o.x, o.y, o.z, d.x, d.y, d.z, 60);
+    if (hit) best = hit.toi;
+    // enemy capsules (vertical cylinder r 0.42, 1.2 m tall) the crew can see
+    const me = this.human;
+    for (const r of this.world.runners) {
+      if (r.team === me.team || !r.alive || !this.seen[r.id]) continue;
+      const t = rayCylinder(o.x, o.y, o.z, d.x, d.y, d.z, r.x, r.y, r.z, 0.42, r.slickForm ? 0.5 : 1.2);
+      if (t > 0 && t < best) best = t;
+    }
+    // ignore hits between the camera and the runner (a pulled-in boom can graze a rail)
+    const toRunner = cam.boom * 0.9;
+    if (best < toRunner) best = 60;
+    this.aim.x = o.x + d.x * best; this.aim.y = o.y + d.y * best; this.aim.z = o.z + d.z * best;
+    this.aimOk = true;
   }
 
   frame(now: number): void {
@@ -270,7 +443,8 @@ export class Game {
     const playing = this.phase === 'play';
     if (playing) {
       const m = p.input.takeMouse();
-      p.cam.addMouse(m.dx, m.dy);
+      if (!this.matchOver) p.cam.addMouse(m.dx, m.dy);
+      this.updateAim();
       this.acc += dt;
       let steps = 0;
       while (this.acc >= TICK && steps < MAX_STEPS_PER_FRAME) {
@@ -283,76 +457,249 @@ export class Game {
       this.acc = 0;
       p.input.takeMouse();
     }
+    this.drainEvents();
     // visuals (water, dye sparkle, idle animation) stay alive behind the CLICK TO PLAY card and
     // freeze with the sim while paused
     const vdt = this.phase === 'paused' || this.phase === 'error' ? 0 : dt;
     this.time += vdt;
     const alpha = playing ? Math.min(1, this.acc / TICK) : 1;
+    this.matchFlow(vdt);
     this.render(vdt, alpha);
   }
 
+  // ───────────────────────────── events → view ─────────────────────────────
+  private drainEvents(): void {
+    const out = this.drained;
+    out.length = 0;
+    this.world.drainEvents(out);
+    if (!out.length) return;
+    const { fx, players, hud, cam } = this.p;
+    const rs = this.world.runners;
+    const me = HUMAN;
+    for (const e of out) {
+      this.counts[e.t] = (this.counts[e.t] ?? 0) + 1;
+      const le = e as LoggedEvent;
+      le.tick = this.tick;
+      if (this.log.length >= EVENT_LOG) this.log.shift();
+      this.log.push(le);
+      switch (e.t) {
+        case 'shot': {
+          const r = rs[e.pid];
+          if (players.muzzle(e.pid, this.muzzle)) fx.muzzle(this.muzzle.x, this.muzzle.y, this.muzzle.z, e.dx, e.dy, e.dz, r?.team ?? 1);
+          else fx.muzzle(e.x, e.y, e.z, e.dx, e.dy, e.dz, r?.team ?? 1);
+          break;
+        }
+        case 'dry': {
+          if (players.muzzle(e.pid, this.muzzle)) fx.dryPuff(this.muzzle.x, this.muzzle.y, this.muzzle.z);
+          if (e.pid === me) hud.dry();
+          break;
+        }
+        case 'splat':
+          fx.splat(e.x, e.y, e.z, e.nx, e.ny, e.nz, e.r, e.team);
+          break;
+        case 'hit': {
+          const by = rs[e.by];
+          fx.hitSparks(e.x, e.y, e.z, by?.team ?? 1);
+          players.onHit(e.victim);
+          if (e.victim === me) { hud.damaged(by?.team ?? 2); cam.shake = Math.min(1, cam.shake + 0.35); }
+          if (e.by === me) hud.hitMarker(false);
+          break;
+        }
+        case 'washed': {
+          const v = rs[e.victim];
+          const by = e.by !== null && e.by >= 0 ? rs[e.by] : null;
+          if (v) {
+            const burstTeam: TeamId = by ? by.team : (v.team === 1 ? 2 : 1);
+            if (e.cause !== 'sea') fx.washedBurst(v.x, v.y, v.z, burstTeam);
+            players.onWashed(e.victim);
+            hud.killFeed(e.cause === 'sea' || !by ? null : { name: by.name, team: by.team }, { name: v.name, team: v.team });
+          }
+          if (e.victim === me) {
+            hud.showDeath(e.cause === 'sea' || !by ? null : by.name, by ? by.team : null, WEAPONS.respawnSeconds);
+            cam.shake = 1;
+          }
+          if (e.by === me && e.victim !== me) hud.hitMarker(true);
+          break;
+        }
+        case 'respawn': {
+          const r = rs[e.pid];
+          players.onRespawn(e.pid);
+          if (r) fx.spout(r.x, r.y, r.z, r.team);
+          if (e.pid === me) {
+            hud.hideDeath();
+            if (r) cam.reset(r.yaw);
+          }
+          break;
+        }
+        case 'land':
+          if (e.pid === me && e.hard) cam.shake = Math.min(1, cam.shake + 0.25);
+          break;
+        case 'tankLow':
+          if (e.pid === me) hud.lowTank();
+          break;
+        case 'phase':
+          if (e.phase === 'ended') this.endT = 0;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  /** after the final horn: 1.6 s of victory poses, then the slate + a free mouse for PLAY AGAIN */
+  private matchFlow(dt: number): void {
+    if (this.world.phase !== 'ended') return;
+    if (this.endT < 0) this.endT = 0;
+    this.endT += dt;
+    if (!this.victoryShown && this.endT >= 1.6) {
+      this.victoryShown = true;
+      const res = this.world.result ?? { ...this.p.painter.coverage(), winner: 0 as TeamId };
+      this.p.hud.hideDeath();
+      this.p.hud.showVictory({ sun: res.sun, gulf: res.gulf, neutral: res.neutral, winner: res.winner }, () => this.playAgain());
+      this.p.input.releaseAll();
+      if (document.pointerLockElement === this.p.canvas) document.exitPointerLock();
+    }
+  }
+
+  private playAgain(): void {
+    if (this.phase !== 'play' && this.phase !== 'paused') return;
+    if (this.phase === 'paused') { this.phase = 'play'; this.p.hud.setPaused(false); }
+    this.restart();
+  }
+
+  // ───────────────────────────── render ─────────────────────────────
   /** interpolated render of the current state (also used by __DF__.shot) */
   render(dt: number, alpha = 1): void {
     const p = this.p;
-    const pl = p.player;
-    const x = pl.px + (pl.x - pl.px) * alpha;
-    const y = pl.py + (pl.y - pl.py) * alpha;
-    const z = pl.pz + (pl.z - pl.pz) * alpha;
-    const yaw = pl.pyaw + angleDelta(pl.pyaw, pl.yaw) * alpha;
-
-    // visual feet: sit on the ground under the capsule when grounded (the KCC keeps a 2 cm skin)
-    let vy = y - MOVE.skin;
-    if (pl.grounded) {
-      const h = p.physics.raycast(x, y + 0.4, z, 0, -1, 0, 0.8);
-      if (h && Math.abs(h.y - y) < 0.12) vy = h.y;
-    }
-    if (!Number.isFinite(this.visY) || Math.abs(vy - this.visY) > 0.5 || !pl.grounded) this.visY = vy;
-    else this.visY += (vy - this.visY) * (1 - Math.exp(-30 * Math.max(dt, 1 / 120)));
-
-    if (dt > 0) {
-      const d = angleDelta(this.lastYaw, yaw);
-      this.yawRate += (d / dt - this.yawRate) * (1 - Math.exp(-10 * dt));
-    }
-    this.lastYaw = yaw;
-
-    p.hero.setPose(x, this.visY, z, yaw);
-    p.hero.animate(dt, {
-      speed: pl.speed, vy: pl.vy, grounded: pl.grounded, brushing: pl.brushing && this.phase === 'play',
-      jumps: pl.jumps, landings: pl.landings, airTime: pl.airTime, yawRate: this.yawRate,
-    });
-
-    this.feet.x = x; this.feet.y = y; this.feet.z = z;
-    p.cam.update(dt, this.feet, p.physics);
-    this.focus.set(x, y + 0.6, z);
+    const w = this.world;
+    const me = this.human;
+    this.updateSeen(dt);
+    const fo = this.frameOpts;
+    fo.alpha = alpha;
+    fo.viewerTeam = me.team;
+    fo.width = p.canvas.clientWidth || window.innerWidth;
+    fo.height = p.canvas.clientHeight || window.innerHeight;
+    fo.winner = w.phase === 'ended' && w.result ? w.result.winner : null;
+    p.players.update(dt, w.runners, fo);
+    const f = p.players.frame(HUMAN);
+    this.feet.x = f.x; this.feet.y = f.y + p.players.dropOffset(HUMAN); this.feet.z = f.z;
+    p.cam.slickTarget = me.alive && me.slickForm ? 1 : 0;
+    p.cam.update(dt, this.feet, this.physics);
+    this.focus.set(f.x, f.y + 0.6, f.z);
     p.sky.update(dt, p.cam.camera, this.focus);
     p.water.update(this.time, p.cam.camera);
     const ut = p.dye.uTime;
     if (ut) ut.value = this.time;
     p.paint.upload(p.painter);
+    p.fx.update(dt, p.cam.camera, this.phase === 'play' || this.phase === 'paused' ? w.projectiles : null, alpha);
 
     p.rig.resize(p.cam.camera);
     p.rig.beginFrame();
     p.rig.renderer.render(p.scene, p.cam.camera);
 
-    p.hud.update(dt, {
-      coverage: p.painter.coverage(), tank: pl.tank, x, z, yaw, brushing: pl.brushing && this.phase === 'play',
-    }, () => this.debugInfo());
+    // HUD
+    const hf = this.hudFrame;
+    hf.phase = w.phase;
+    hf.timeLeft = w.timeLeft;
+    hf.countdown = w.countdown;
+    hf.coverage = p.painter.coverage();
+    hf.tank = me.tank; hf.hp = me.hp; hf.alive = me.alive;
+    hf.slick = me.slickForm; hf.firing = me.firing && this.phase === 'play';
+    hf.x = f.x; hf.z = f.z; hf.yaw = f.yaw;
+    hf.special = me.special;
+    hf.respawnIn = me.alive ? 0 : Math.max(0, me.respawnT);
+    for (let i = 0; i < w.runners.length && i < this.crests.length; i++) {
+      const r = w.runners[i];
+      const c = this.crests[i];
+      c.alive = r.alive; c.respawnIn = r.respawnT; c.special = r.special;
+      const d = this.dots[i];
+      const fr = p.players.frame(i);
+      d.x = fr.x; d.z = fr.z;
+      d.show = i !== HUMAN && r.alive && (r.team === me.team || this.seen[i] === true);
+    }
+    p.hud.update(dt, hf, () => this.debugInfo());
+  }
+
+  /** team vision at 5 Hz: an enemy is seen when any living crewmate can see it (world.canSee) */
+  private updateSeen(dt: number): void {
+    this.seenClock -= dt;
+    if (this.seenClock > 0) return;
+    this.seenClock = 0.2;
+    const rs = this.world.runners;
+    const myTeam = this.human.team;
+    for (const t of rs) {
+      if (t.team === myTeam) { this.seen[t.id] = true; continue; }
+      let s = false;
+      if (t.alive) {
+        for (const v of rs) {
+          if (v.team !== myTeam || !v.alive) continue;
+          if (this.world.canSee(v, t)) { s = true; break; }
+        }
+      }
+      this.seen[t.id] = s;
+    }
+  }
+
+  /** match summary for __DF__.match() */
+  matchInfo(): Record<string, unknown> {
+    const w = this.world;
+    return {
+      phase: w.phase, timeLeft: w.timeLeft, countdown: w.countdown, tick: w.tick, result: w.result,
+      coverage: this.p.painter.coverage(), matchNo: this.matchNo, victoryShown: this.victoryShown,
+      runners: w.runners.map((r) => ({
+        id: r.id, name: r.name, team: r.team, bot: r.bot, state: r.state, hp: r.hp, tank: r.tank, alive: r.alive,
+        x: r.x, y: r.y, z: r.z, hidden: r.hidden, slickForm: r.slickForm, special: r.special, respawnT: r.respawnT,
+        washes: r.washes, washedCount: r.washedCount, painted: r.painted, firing: r.firing, seen: this.seen[r.id] === true,
+      })),
+      events: { ...this.counts },
+      projectiles: w.projectiles.count,
+    };
+  }
+
+  /** the last n drained events (oldest first) */
+  events(n = 50): LoggedEvent[] {
+    const k = Math.max(0, Math.min(this.log.length, n | 0));
+    return this.log.slice(this.log.length - k);
   }
 
   debugInfo(): HudDebug {
     const p = this.p;
-    const pl = p.player;
+    const me = this.human;
     const st = p.rig.stats();
     const ad = p.rig.adaptive();
+    const rv = p.players.view(HUMAN);
+    const alive = this.world.runners.filter((r) => r.alive).length;
     return {
-      coverage: p.painter.coverage(), tank: pl.tank, mapId: p.def.id, fps: this.fps, state: pl.state, grounded: pl.grounded,
+      coverage: p.painter.coverage(), tank: me.tank, mapId: p.def.id, fps: this.fps, state: me.state, grounded: me.grounded,
       atlasSize: p.atlas.size, atlasCount: p.atlas.count, overlaps: p.atlas.overlaps,
       calls: st.calls, triangles: st.triangles, programs: st.programs, tick: this.tick,
-      x: pl.x, y: pl.y, z: pl.z, flips: p.painter.flips, speed: pl.speed,
-      anim: `${p.hero.baseRole}${p.hero.brushWeight > 0.05 ? ` + brush ${(p.hero.brushWeight * 100).toFixed(0)}%` : ''}`,
+      x: me.x, y: me.y, z: me.z, flips: p.painter.flips, speed: me.speed,
+      anim: `${rv?.baseRole ?? '—'}${rv && rv.aimW > 0.05 ? ` + aim ${(rv.aimW * 100).toFixed(0)}%` : ''}`,
       pointerLock: document.pointerLockElement === p.canvas,
       scale: ad.scale, scaleMin: ad.min, scaleMax: ad.max, quality: ad.quality,
       buffer: [p.canvas.width, p.canvas.height], p90: ad.p90, targetMs: ad.targetMs,
+      match: `${this.world.phase} · ${this.world.timeLeft.toFixed(1)} s · #${this.matchNo}`,
+      hp: me.hp, projectiles: this.world.projectiles.count, particles: p.fx.emitted,
+      runners: `${alive}/${this.world.runners.length} alive`,
     };
   }
+}
+
+/** ray (o + t·d, |d| = 1) vs a vertical cylinder (feet at (cx, cy, cz), radius r, height h) → t or −1 */
+function rayCylinder(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number,
+  cx: number, cy: number, cz: number, r: number, h: number): number {
+  const fx = ox - cx, fz = oz - cz;
+  const a = dx * dx + dz * dz;
+  if (a < 1e-9) return -1;
+  const b = 2 * (fx * dx + fz * dz);
+  const c = fx * fx + fz * fz - r * r;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return -1;
+  const s = Math.sqrt(disc);
+  for (const t of [(-b - s) / (2 * a), (-b + s) / (2 * a)]) {
+    if (t <= 0) continue;
+    const y = oy + dy * t;
+    if (y >= cy && y <= cy + h) return t;
+  }
+  return -1;
 }

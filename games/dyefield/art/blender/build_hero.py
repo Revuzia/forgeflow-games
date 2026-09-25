@@ -15,6 +15,13 @@ about a joint's local X is a pitch (+ = bend forward), about local Y a yaw (+ = 
 Poses are authored as rotations in world axes relative to the parent (W), solved with our own
 FK/IK in world space, and keyed as pose-bone quaternions q = R0^-1 W R0 (R0 = bone rest basis).
 build_kits.py imports this module for its mesh/material/render helpers (main() only runs as a script).
+
+Phase 6 (CONTRACT_ART_P6_8 section 17) adds the clips roll, flick, charge, blast, throw, special_throw, slam and
+hold_two (every phase 0-2 clip, node, bone, material and the mesh are unchanged). The shared kit geometry
+(GRIP_L_KIT, KIT_BAR_Z, DRUM_*, ROLL_PITCH, NEEDLE_TIP) lives here and build_kits.py builds from it; build kits
+first, because p6_check() re-measures every keyed frame against the exported kit GLBs (left hand on grip_L < 3 cm,
+drum on the floor while rolling, no kit through the floor or the head). Extra QA sheets: hero_clips_p6.png,
+kit_held_<kit>.png, kit_all.png, kit_gamecam.png (the exact follow camera).
 """
 import bpy
 import math
@@ -2110,6 +2117,314 @@ def clip_victory(t, T):
     return p
 
 
+# ================================================================================ phase 6 (CONTRACT_ART_P6_8 s17)
+# Shared kit geometry, in kit space (= socket_weapon space: the grip at the origin, barrel -Y, +Z up).
+# build_kits.py builds SHEET-DRUM / NEEDLE-GLINT from these numbers and the clips below hold the kits by them, so
+# hand placement and kit shape cannot drift apart. fk_check re-measures against the exported kit GLBs.
+KIT_BAR_Z = 0.078                                 # shaft / barrel axis height of the two-handed kits over the grip
+GRIP_L_KIT = Vector((0.0, -0.092, KIT_BAR_Z))     # 'grip_L': the left hand's hold on SHEET-DRUM and NEEDLE-GLINT
+GRIP_L_BAR = Vector((0.0, -1.0, 0.0))             # the bar that runs through the left fist at grip_L
+HAND_PT = 0.023          # the left hand's grip point: from the hand.L joint along the hand, midway to the fist centre
+DRUM_C = Vector((0.060, -0.600, 0.030))           # SHEET-DRUM drum centre (the 'drum' empty; spin axis +X)
+DRUM_R = 0.160                                    # drum radius
+DRUM_HALF = 0.550                                 # half the drum width (a 1.10 m drum)
+ROLL_PITCH = -32.0                                # kit pitch while rolling (deg, nose down)
+NEEDLE_TIP = -0.782                               # NEEDLE-GLINT muzzle y
+CHARGE_SOCK = Vector((-0.145, -0.105, 0.620))     # socket_weapon in 'charge' (butt in the right shoulder pocket)
+ROLL_SPEED = 4.4                                  # data/weapons.json sheet-drum fire.rollSpeed
+FLICK_RELEASE = 0.28                              # s: the dye leaves the drum (weapons.json flick.windup)
+THROW_RELEASE = 0.24                              # s: the jelly leaves the left hand
+SPECIAL_RELEASE = 0.40                            # s: the rain cell leaves both hands
+SLAM_TAKEOFF = 0.24                               # s: feet leave the ground in 'slam'
+SLAM_IMPACT = 0.76                                # s: the slam lands
+
+
+def kf(t, keys):
+    """piecewise smoothstep through (time, tuple) keys (no overshoot; holds the end values)."""
+    if t <= keys[0][0]:
+        return keys[0][1]
+    for (t0, a), (t1, b) in zip(keys, keys[1:]):
+        if t <= t1:
+            s = sstep(t0, t1, t)
+            return tuple(lerp(x, y, s) for x, y in zip(a, b))
+    return keys[-1][1]
+
+
+def hand_q(side, d1, f1):
+    """world rotation taking the rest frame of hand 'side' onto d1 (wrist -> knuckles) / f1 (thumb side)."""
+    d0, f0, _ = hand_frame(side)
+    d1 = d1.normalized()
+    f1 = (f1 - d1 * d1.dot(f1)).normalized()
+    M0 = Matrix((d0, f0, d0.cross(f0))).transposed()
+    M1 = Matrix((d1, f1, d1.cross(f1))).transposed()
+    return (M1 @ M0.transposed()).to_quaternion()
+
+
+def hold_kit(p, sock, kq, pole=Vector((-0.40, 0.20, 0.30))):
+    """right arm IK: put socket_weapon (the kit grip) at world 'sock' with the kit rotated by kq."""
+    p.arm["R"] = dict(kind="ik", target=sock - (kq @ GRIP_Q) @ (ARM_DIR["R"] * FIST_OFF), pole=pole)
+    p.hand["R"] = ("kit", kq)
+    return p
+
+
+def left_on_grip(p, pole, thumb=1.0, iters=5):
+    """left arm IK onto the two-handed kit's grip_L: the hand's grip point (HAND_PT along the hand from the
+    wrist) sits on grip_L, the bar runs through the fist (thumb along +/-bar) and the knuckles continue the
+    forearm (least wrist bend). Iterated because the wrist target depends on the solved forearm."""
+    for it in range(iters):
+        W, Wt, P = evaluate(p)
+        sp, sq = socket_world(Wt, P)
+        g = sp + sq @ GRIP_L_KIT
+        b = (sq @ GRIP_L_BAR).normalized()
+        fa = (g - P["upper_arm.L"]) if it == 0 else (P["hand.L"] - P["forearm.L"])
+        d = fa - b * fa.dot(b)
+        d.normalize()
+        p.hand["L"] = ("world", hand_q("L", d, b * thumb))
+        p.arm["L"] = dict(kind="ik", target=g - d * HAND_PT, pole=pole)
+    return p
+
+
+def roll_socket(y=-0.190):
+    """socket_weapon + kit rotation while rolling: the drum centred on the runner and resting on the floor."""
+    kq = kitq(ROLL_PITCH, 0, 0)
+    c = kq @ DRUM_C
+    return Vector((-DRUM_C.x, y, DRUM_R - c.z)), kq
+
+
+def crest_follow(p, wind, ph, amp=1.0):
+    for k, b in enumerate(("crest_1", "crest_2", "crest_3")):
+        lag = 0.08 + 0.07 * k
+        p.e[b] = (wind * (0.5 + 0.35 * k) - amp * (3 + 2.5 * k) * cos(4 * pi * (ph - 0.48 - lag)),
+                  amp * (2 + 1.5 * k) * syc(ph - lag), 0)
+
+
+HOLD2 = dict(pitch=-26.0, yaw=-38.0, sock=Vector((0.000, -0.140, 0.490)))    # kit forward-right: the follow cam sees it
+
+
+def hold_two_upper(p, br=0.0):
+    """the shared two-handed low-ready: torso turned a little right (left shoulder forward), kit across the body."""
+    p.e["spine"] = (8, 0, -13)
+    p.e["chest"] = (-1 + 1.0 * br, 0, -12)
+    p.e["neck"] = (0, 0, 11)
+    p.e["head"] = (-5, 0, 12)
+    p.e["shoulder.L"] = (0, 0, -24)
+    p.e["shoulder.R"] = (0, 0, 3)
+
+
+def clip_hold_two(t, T):
+    """upper body: two-handed idle hold for SHEET-DRUM / NEEDLE-GLINT. Kit low and across the body (the drum rides
+    ~9 cm off the floor, the needle points down-forward), left hand on grip_L; a slow breathing sway."""
+    ph = t / T
+    br = syc(2 * ph)
+    p = Pose()
+    hold_two_upper(p, br)
+    p.e["head"] = (-5 + 1.5 * syc(2 * ph - 0.1), 1.5 * syc(ph + 0.15), 12)
+    hold_kit(p, HOLD2["sock"] + Vector((0, 0, 0.004 * br)), kitq(HOLD2["pitch"] + 1.2 * br, HOLD2["yaw"], 0))
+    left_on_grip(p, pole=Vector((0.40, 0.10, 0.30)))
+    return p
+
+
+def clip_roll(t, T):
+    """full body: the SHEET-DRUM push-run (loop, authored for ROLL_SPEED; rig extras df_roll_stride). The kit is
+    fixed in the clip frame - drum centred, resting on the floor, spun by the runtime through the 'drum' node - and
+    the arms absorb the bob: a low, leaning, driving jog with both hands on the handle."""
+    ph = t / T
+    p = Pose()
+    p.off = Vector((0, 0, -0.040 + 0.013 * cos(4 * pi * (ph - 0.40))))
+    p.e["hips"] = (9, 2.0 * syc(ph), -7 * cyc(ph))
+    p.e["spine"] = (9, -1.0 * syc(ph), -9 + 3 * cyc(ph))
+    p.e["chest"] = (4 + 1.2 * cos(4 * pi * (ph - 0.45)), 0, -10 + 4 * cyc(ph))
+    p.e["neck"] = (-4, 0, 5)
+    p.e["head"] = (-18 + 2.5 * cos(4 * pi * (ph - 0.48)), 1.0 * syc(ph), 6 - 3 * cyc(ph))
+    crest_follow(p, -6, ph)
+    p.e["tank"] = (2.5 * cos(4 * pi * (ph - 0.55)), 0, 0)
+    p.e["shoulder.L"] = (0, 0, -20)
+    p.e["shoulder.R"] = (0, 0, 4)
+    for side, off in (("L", 0.0), ("R", 0.5)):
+        q = (ph + off) % 1.0
+        s = 1 if side == "L" else -1
+        thigh = -36 * cos(2 * pi * q) - 2
+        knee = 34 + 70 * bump(q, 0.66, 0.16) + 10 * bump(q, 0.10, 0.08)
+        foot = -(thigh + knee) * 0.55 + 20 * bump(q, 0.47, 0.10) - 10 * bump(q, 0.92, 0.08)
+        p.leg[side] = dict(kind="fk", thigh=(thigh, -3 * s, 0), knee=knee, foot=(foot, 0, 0))
+        p.toe[side] = 16 * bump(q, 0.44, 0.08)
+    sock, kq = roll_socket()
+    hold_kit(p, sock, kq)
+    left_on_grip(p, pole=Vector((0.40, 0.10, 0.30)))
+    return p
+
+
+# flick keys: t, (kit pitch, kit yaw, socket x, y, z, spine x, spine z, chest x, chest z, head x, shoulder.L z)
+FLICK_KEYS = [
+    (0.00, (-26.0, -38.0, 0.000, -0.140, 0.490, 8, -13, -1, -12, -5, -24)),
+    (0.20, (56.0, 5.0, -0.060, -0.150, 0.630, -8, -8, -8, -6, -12, -14)),
+    (0.25, (60.0, 4.0, -0.060, -0.150, 0.640, -9, -8, -9, -6, -13, -14)),
+    (0.34, (-30.0, 0.0, -0.045, -0.200, 0.490, 14, -10, 8, -10, 2, -24)),
+    (0.42, (-26.0, 4.0, -0.045, -0.195, 0.485, 11, -10, 6, -10, 0, -22)),
+    (0.60, (-26.0, -38.0, 0.000, -0.140, 0.490, 8, -13, -1, -12, -5, -24)),
+]
+
+
+def clip_flick(t, T):
+    """upper body: overhead roller fling (SHEET-DRUM tap). From hold_two the drum is wound up high in front
+    (0 -> 0.25 s), whipped over and down (the dye leaves at FLICK_RELEASE), followed through, and settles back
+    into hold_two. Both hands stay on the handle."""
+    k = kf(t, FLICK_KEYS)
+    p = Pose()
+    hold_two_upper(p)
+    p.e["spine"] = (k[5], 0, k[6])
+    p.e["chest"] = (k[7], 0, k[8])
+    p.e["head"] = (k[9], 0, 12)
+    p.e["shoulder.L"] = (0, 0, k[10])
+    hold_kit(p, Vector(k[2:5]), kitq(k[0], k[1], 0))
+    left_on_grip(p, pole=Vector((0.40, 0.10, 0.30)))
+    return p
+
+
+def clip_charge(t, T):
+    """upper body: NEEDLE-GLINT shouldered, a steady hold - kit level, butt against the right chest, head leaning
+    toward the scope line, left hand on grip_L; only a breath of sway."""
+    ph = t / T
+    br = syc(ph)
+    p = Pose()
+    p.e["spine"] = (5, 0, -14)
+    p.e["chest"] = (-3 + 0.5 * br, 0, -13)
+    p.e["neck"] = (3, 0, 11)
+    p.e["head"] = (5, 6, 14)
+    p.e["shoulder.L"] = (0, 0, -24)
+    p.e["shoulder.R"] = (0, 0, 6)
+    hold_kit(p, CHARGE_SOCK + Vector((0, 0, 0.002 * br)), kitq(0.3 * br, -6, 0))
+    left_on_grip(p, pole=Vector((0.40, 0.25, 0.20)))
+    return p
+
+
+def clip_blast(t, T):
+    """upper body: POP-WELL recoil out of the aim hold - a hard kick up and back (0 -> 0.05 s), a small forward
+    overshoot, and back to the exact 'aim' pose by 0.55 s (first and last frames == aim at t = 0)."""
+    k = sstep(0.0, 0.05, t) - 1.15 * sstep(0.05, 0.32, t) + 0.15 * sstep(0.32, 0.55, t)
+    p = Pose()
+    aim_base(p, 0.0)
+    p.e["spine"] = (4 - 7 * k, 0, -4 + 2 * k)
+    p.e["chest"] = (-2 - 5 * k, 0, -6)
+    p.e["head"] = (-2 - 5 * k, 0, 5)
+    kq = kitq(24 * k, 0, 0)
+    sock = AIM_FIST + Vector((0, 0.045 * k, 0.030 * k))
+    hold_kit(p, sock, kq, pole=Vector((-0.30, 0.20, 0.30)))
+    p.arm["L"] = dict(kind="ik", target=sock + kq @ (AIM_LEFT - AIM_FIST), pole=Vector((0.40, 0.15, 0.35)))
+    p.hand["L"] = ("e", (-60, 0, -40))
+    return p
+
+
+NEUTRAL_L = Vector((0.205, -0.040, 0.410))       # left wrist at ease (close to 'idle')
+THROW_KEYS = [   # t, (left wrist x, y, z, spine z, chest z, spine x, head z, left elbow pole x)
+    (0.00, (0.205, -0.040, 0.410, 0, 0, 3, 0, 0.40)),
+    (0.16, (0.215, 0.090, 0.850, 16, 12, -3, -14, 0.55)),
+    (0.24, (0.090, -0.170, 0.840, -8, -10, 6, 6, 0.45)),
+    (0.34, (0.000, -0.230, 0.520, -16, -14, 12, 12, 0.35)),
+    (0.5667, (0.205, -0.040, 0.410, 0, 0, 3, 0, 0.40)),
+]
+
+
+def clip_throw(t, T):
+    """upper body: overhand JELLY CHARGE throw with the free left arm - wind-up behind the ear (0 -> 0.16 s),
+    whip over the top, release at THROW_RELEASE (hand.L leads), follow-through across, back to ease. The kit stays
+    in the right hand, low and near level so a SHEET-DRUM drum stays clear of the floor."""
+    k = kf(t, THROW_KEYS)
+    p = Pose()
+    p.e["spine"] = (k[5], 0, k[3])
+    p.e["chest"] = (-2, 0, k[4])
+    p.e["neck"] = (0, 0, 0)
+    p.e["head"] = (-3, 0, k[6])
+    p.e["shoulder.L"] = (0, 0, -6 * sstep(0.16, 0.30, t) * (1 - sstep(0.34, 0.56, t)))
+    p.arm["L"] = dict(kind="ik", target=Vector(k[0:3]), pole=Vector((k[7], 0.25, 0.35)))
+    whip = sstep(0.16, 0.24, t) * (1 - sstep(0.26, 0.40, t))
+    p.hand["L"] = ("e", (-10 - 40 * whip, 0, 0))
+    p.arm["R"] = dict(kind="fk", abd=18, swing=16, elbow=52)
+    p.hand["R"] = ("kit", kitq(-16, 4, 0))
+    return p
+
+
+SPECIAL_KEYS = [  # t, (socket x, y, z, kit pitch, spine x, chest x, head x)
+    (0.00, (-0.090, -0.170, 0.470, -14, 3, -2, -2)),
+    (0.26, (-0.060, -0.160, 0.380, -8, 26, 12, -12)),
+    (0.40, (-0.070, -0.130, 0.760, 62, -10, -8, -16)),
+    (0.50, (-0.070, -0.120, 0.740, 58, -8, -6, -10)),
+    (0.80, (-0.090, -0.170, 0.470, -14, 3, -2, -2)),
+]
+
+
+def clip_special_throw(t, T):
+    """upper body: the big two-handed CLOUDBURST toss - scoop low (0 -> 0.26 s), heave it up and out with both
+    hands together (release at SPECIAL_RELEASE), arms high, then back down."""
+    k = kf(t, SPECIAL_KEYS)
+    p = Pose()
+    p.e["spine"] = (k[4], 0, -4)
+    p.e["chest"] = (k[5], 0, -4)
+    p.e["neck"] = (0, 0, 2)
+    p.e["head"] = (k[6], 0, 3)
+    p.e["shoulder.L"] = (0, 0, -8)
+    p.e["shoulder.R"] = (0, 0, 6)
+    sock = Vector(k[0:3])
+    kq = kitq(k[3], 4, 0)
+    hold_kit(p, sock, kq, pole=Vector((-0.45, 0.15, 0.30)))
+    # the left hand beside the right one, palms together on the rain cell
+    p.arm["L"] = dict(kind="ik", target=sock + Vector((0.100, 0.000, 0.020)), pole=Vector((0.45, 0.15, 0.30)))
+    p.hand["L"] = ("e", (-20, 0, -30))
+    return p
+
+
+SLAM_T = 1.1
+# slam arm keys, body-relative (the hips offset is added): t, (socket x, y, z, kit pitch, left wrist x, y, z)
+SLAM_ARM_KEYS = [
+    (0.00, (-0.090, -0.170, 0.470, -16, 0.205, -0.040, 0.410)),
+    (0.14, (-0.140, 0.010, 0.450, -10, 0.185, 0.020, 0.450)),
+    (0.26, (-0.170, -0.150, 0.790, 40, 0.190, -0.140, 0.790)),
+    (0.40, (-0.320, 0.000, 0.840, 75, 0.300, 0.000, 0.830)),
+    (0.60, (-0.190, -0.080, 0.830, 80, 0.170, -0.080, 0.830)),
+    (SLAM_IMPACT, (-0.060, -0.300, 0.460, -16, 0.070, -0.300, 0.450)),
+    (0.90, (-0.060, -0.290, 0.460, -16, 0.070, -0.290, 0.450)),
+    (SLAM_T, (-0.090, -0.170, 0.470, -16, 0.205, -0.040, 0.410)),
+]
+
+
+def clip_slam(t, T):
+    """full body: WELLSPRING leap + ground slam (~1.1 s; the runtime owns the 3.2 m of flight): crouch, spring
+    (feet leave at SLAM_TAKEOFF), arms flung up and out in the air, then a whole-body slam - kit and fists driven
+    down in front at SLAM_IMPACT (a SHEET-DRUM drum just touches the floor) in a wide deep crouch - and recover
+    to a stand. Arms and legs are IK on animated targets, so there is no FK/IK switch pop."""
+    c = sstep(0.00, 0.14, t) * (1 - sstep(0.14, 0.24, t))              # anticipation crouch
+    l = sstep(0.14, 0.24, t) * (1 - sstep(0.26, 0.40, t))              # launch stretch
+    air = sstep(0.24, 0.40, t) * (1 - sstep(0.60, 0.72, t))            # airborne
+    tuck = sstep(0.24, 0.38, t) * (1 - sstep(0.58, 0.70, t))           # feet drawn up in the air
+    s = sstep(0.60, SLAM_IMPACT, t) * (1 - sstep(0.92, SLAM_T, t))     # slam (down) and hold
+    imp = sstep(0.70, SLAM_IMPACT, t) * (1 - sstep(0.86, SLAM_T, t))   # impact crouch
+    p = Pose()
+    p.off = Vector((0, 0, -0.090 * c + 0.030 * l - 0.010 * air - 0.150 * imp))
+    p.e["hips"] = (12 * c - 5 * l + 16 * imp, 0, 0)
+    p.e["spine"] = (10 * c - 8 * l - 10 * air + 22 * s, 0, 0)
+    p.e["chest"] = (6 * c - 6 * l - 8 * air + 12 * s, 0, 0)
+    p.e["neck"] = (0, 0, 0)
+    p.e["head"] = (-4 * c - 10 * l - 6 * air - 26 * s, 0, 0)
+    for k, b in enumerate(("crest_1", "crest_2", "crest_3")):
+        p.e[b] = ((8 + 3 * k) * c - (12 + 5 * k) * l - (6 + 2 * k) * air + (16 + 8 * k) * s, 0, 0)
+    p.e["tank"] = (4 * c - 6 * l + 8 * imp, 0, 0)
+    p.e["shoulder.L"] = (0, 0, -10 * s)
+    p.e["shoulder.R"] = (0, 0, 10 * s)
+    k = kf(t, SLAM_ARM_KEYS)
+    up = Vector((0, 0, p.off.z))
+    hold_kit(p, Vector(k[0:3]) + up, kitq(k[3], 0, 0), pole=Vector((-0.50, 0.25, 0.30)))
+    p.arm["L"] = dict(kind="ik", target=Vector(k[4:7]) + up, pole=Vector((0.50, 0.25, 0.30)))
+    p.hand["L"] = ("e", (-10 - 30 * s, 0, 0))
+    # legs: planted IK; heels rise in the launch; drawn up in the air; wide and deep at the impact
+    stand_legs(p, spread=0.012 + 0.050 * imp + 0.02 * tuck)
+    for side in ("L", "R"):
+        leg = p.leg[side]
+        leg["ankle"] = leg["ankle"] + Vector((0, -0.030 * tuck, 0.035 * l + 0.012 * air + 0.110 * tuck))
+        leg["foot_q"] = qe(30 * l + 26 * tuck, 0, 0)
+        p.toe[side] = -18 * l
+    return p
+
+
 # name, fn, duration (s), loop, key-set ('full' | 'upper'), sheet time (fraction)
 CLIPS = [
     ("idle", clip_idle, 2.0, True, "full", 0.25),
@@ -2126,7 +2441,18 @@ CLIPS = [
     ("strafe_l", clip_strafe_l, 0.40, True, "full", 0.30),
     ("strafe_r", clip_strafe_r, 0.40, True, "full", 0.30),
     ("back", clip_back, 14 / 30, True, "full", 0.20),      # whole frames at 30 fps
+    # phase 6 (CONTRACT_ART_P6_8 section 17); whole frames at 30 fps
+    ("roll", clip_roll, 14 / 30, True, "full", 0.25),
+    ("flick", clip_flick, 0.60, False, "upper", 0.40),
+    ("charge", clip_charge, 1.0, True, "upper", 0.0),
+    ("blast", clip_blast, 22 / 30, False, "upper", 0.05),
+    ("throw", clip_throw, 17 / 30, False, "upper", 0.30),
+    ("special_throw", clip_special_throw, 0.80, False, "upper", 0.45),
+    ("slam", clip_slam, SLAM_T, False, "full", 0.70),
+    ("hold_two", clip_hold_two, 2.0, True, "upper", 0.25),
 ]
+P6_CLIPS = ["roll", "flick", "charge", "blast", "throw", "special_throw", "slam", "hold_two"]
+BASE_CLIPS = [c[0] for c in CLIPS if c[0] not in P6_CLIPS]
 FPS = 30
 RUN_SPEED = 5.2
 AIM_D = None
@@ -2270,6 +2596,141 @@ def fk_check(arm):
         checks.append("%s %.2f" % (name, bz))
         assert (want == 0 and abs(bz) < 0.02) or (want != 0 and bz * want > 0.3), "barrel %s z=%.2f" % (name, bz)
     log("barrel z (down<0<up):", ", ".join(checks))
+    p6_check()
+
+
+# ---------------------------------------------------------------------------------------- phase 6 checks
+KIT_IDS = ["mist_rasp", "sheet_drum", "needle_glint", "pop_well"]
+TWO_HANDED = ["sheet_drum", "needle_glint"]
+TWO_HAND_CLIPS = {"hold_two": TWO_HANDED, "roll": ["sheet_drum"], "flick": ["sheet_drum"], "charge": ["needle_glint"]}
+
+
+def kit_nodes(kid):
+    """{node: position in kit (Blender) space} for the exported kit GLB (parent chains composed), or None."""
+    path = os.path.join(GLTF_DIR, "kit_%s.glb" % kid)
+    if not os.path.isfile(path):
+        return None
+    g = Glb(path)
+    nodes = g.j["nodes"]
+    parent = {c: k for k, n in enumerate(nodes) for c in n.get("children", [])}
+
+    def world(k):
+        n = nodes[k]
+        t, q = Vector(n.get("translation", [0, 0, 0])), tuple(n.get("rotation", [0, 0, 0, 1]))
+        if k in parent:
+            pt, pq = world(parent[k])
+            return pt + _qrot(pq, t), _qmul(pq, q)
+        return t, q
+    out = {}
+    for k, n in enumerate(nodes):
+        p, _ = world(k)
+        out[n.get("name", "")] = Vector((p.x, -p.z, p.y))          # glTF (x, y, z) -> Blender (x, -z, y)
+    return out
+
+
+def clip_frames(name):
+    spec = next(c for c in CLIPS if c[0] == name)
+    _, fn, dur, loop, keyset, _ = spec
+    n = int(round(dur * FPS))
+    for fi in range(n + 1):
+        t = dur * fi / n
+        if loop and fi == n:
+            t = 0.0
+        yield fi, t, fn(t, dur)
+
+
+def drum_low(sp, sq, c_kit=None):
+    """lowest world z of the SHEET-DRUM drum (a cylinder along kit X) for socket position/rotation sp, sq."""
+    c = sp + sq @ (c_kit if c_kit is not None else DRUM_C)
+    a = sq @ Vector((1, 0, 0))
+    return c.z - DRUM_R * sqrt(max(0.0, 1.0 - a.z * a.z)) - DRUM_HALF * abs(a.z)
+
+
+def head_e(Wt, P, p):
+    """normalised head-ellipsoid distance of world point p in an evaluated pose (< 1 = inside the head)."""
+    hc = P["head"] + Wt["head"] @ (HEAD_C - REST["head"])
+    d = Wt["head"].inverted() @ (p - hc)
+    ry = HRY_F if d.y < 0 else HRY_B
+    rz = HRZ_T if d.z > 0 else HRZ_B
+    return (d.x / HRX) ** 2 + (d.y / ry) ** 2 + (d.z / rz) ** 2
+
+
+def p6_check():
+    """falsifiers for the phase-6 clips, measured on every keyed frame (upper clips with the hips at rest):
+    - left hand on grip_L (joint and fist centre < 3 cm) in hold_two / roll / flick / charge, for the grip_L
+      that build_kits exported (and for GRIP_L_KIT when a kit GLB is missing);
+    - arm IK reached its target (< 5 mm);
+    - roll: the drum rests on the floor (|lowest point| < 5 mm) and the exported muzzle (floor contact) is at z 0;
+    - no kit through the floor: the drum stays >= -5 mm (full-body clips) or >= +30 mm (upper clips, which the
+      runtime layers over bobbing locomotion) and the needle tip above 5 cm, in every clip."""
+    kn = {k: kit_nodes(k) for k in KIT_IDS}
+    rows = []
+    bad = []
+    for name in P6_CLIPS + ["idle", "aim"]:
+        spec = next(c for c in CLIPS if c[0] == name)
+        keyset = spec[4]
+        worst_j = worst_f = 0.0
+        ik_res = 0.0
+        dlow = nlow = 9.0
+        mlow = 9.0
+        head_gap = 9.0
+        scope_e = 9.0
+        for fi, t, p in clip_frames(name):
+            W, Wt, P = evaluate(p)
+            sp, sq = socket_world(Wt, P)
+            for side in ("L", "R"):
+                spec_a = p.arm.get(side)
+                if spec_a and spec_a["kind"] == "ik":
+                    ik_res = max(ik_res, (P["hand." + side] - spec_a["target"]).length)
+            for kid in TWO_HAND_CLIPS.get(name, []):
+                gk = kn[kid]["grip_L"] if kn[kid] and "grip_L" in kn[kid] else GRIP_L_KIT
+                g = sp + sq @ gk
+                dL = Wt["hand.L"] @ ARM_DIR["L"]
+                worst_j = max(worst_j, (P["hand.L"] - g).length)
+                worst_f = max(worst_f, (P["hand.L"] + dL * FIST_OFF - g).length)
+            dc = (kn["sheet_drum"]["drum"] if kn["sheet_drum"] and "drum" in kn["sheet_drum"] else DRUM_C)
+            dlow = min(dlow, drum_low(sp, sq, dc))
+            nt = kn["needle_glint"]["muzzle"] if kn["needle_glint"] else Vector((0, NEEDLE_TIP, KIT_BAR_Z))
+            nlow = min(nlow, (sp + sq @ nt).z)
+            if name == "roll" and kn["sheet_drum"]:
+                mlow = min(mlow, abs((sp + sq @ kn["sheet_drum"]["muzzle"]).z))
+            if name == "charge" and kn["needle_glint"]:
+                sc = kn["needle_glint"]["scope"]
+                for k in (sc, sc + Vector((0, 0.050, 0)), sc + Vector((0, 0.107, 0)), Vector((0, 0.07, 0.13))):
+                    scope_e = min(scope_e, head_e(Wt, P, sp + sq @ k))
+            hc = P["head"] + Wt["head"] @ (HEAD_C - REST["head"])
+            for side in ("L", "R"):
+                fc = P["hand." + side] + Wt["hand." + side] @ (ARM_DIR[side] * FIST_OFF)
+                head_gap = min(head_gap, (fc - hc).length)
+        rows.append("%-13s grip_L joint %.4f fist %.4f | ik %.4f | drum low %+.3f needle low %+.3f | fist-head %.3f%s"
+                    % (name, worst_j, worst_f, ik_res, dlow, nlow, head_gap,
+                       ((" | roll muzzle |z| %.4f" % mlow) if name == "roll" and mlow < 9 else "") +
+                       ((" | scope-head e_min %.3f" % scope_e) if scope_e < 9 else "")))
+        if scope_e < 1.2:
+            bad.append("%s: NEEDLE-GLINT scope/receiver inside the head margin (e_min %.3f < 1.2)" % (name, scope_e))
+        if name in TWO_HAND_CLIPS and max(worst_j, worst_f) >= 0.03:
+            bad.append("%s: left hand %.4f / %.4f m from grip_L" % (name, worst_j, worst_f))
+        if name in P6_CLIPS and ik_res > 0.005:
+            bad.append("%s: IK residual %.4f m" % (name, ik_res))
+        if name == "roll" and abs(dlow) > 0.005:
+            bad.append("roll: drum lowest point %.4f m (want 0)" % dlow)
+        if name == "roll" and mlow < 9 and mlow > 0.01:
+            bad.append("roll: exported muzzle %.4f m off the floor" % mlow)
+        drum_kits_use = name in ("hold_two", "roll", "flick", "throw", "slam")     # clips a roller plays
+        floor = -0.005 if keyset == "full" else 0.030
+        if drum_kits_use and name != "roll" and dlow < floor:
+            bad.append("%s: drum %.3f m below the %.3f floor margin" % (name, dlow, floor))
+        needle_use = name in ("hold_two", "charge", "throw", "special_throw")          # clips a charger plays
+        if needle_use and nlow < 0.05:
+            bad.append("%s: needle tip %.3f m (floor)" % (name, nlow))
+    for r in rows:
+        log("P6", r)
+    log("P6 kit GLBs measured:", [k for k in KIT_IDS if kn[k]])
+    if bad:
+        for b in bad:
+            log("P6 FAIL", b)
+        raise RuntimeError("phase-6 clip check failed: %s" % "; ".join(bad))
+    log("P6 check OK")
 
 
 # ================================================================================ export + verify
@@ -2417,7 +2878,9 @@ def verify_glb(path, meta):
         log("VERIFY FAIL aim socket position", sp, "want", want)
     # exported animation == our FK (joint world positions, glTF frame) on sample frames
     fk_err = 0.0
-    for cname, frame in (("run", 3), ("aim", 0), ("brush", 9), ("jump", 4)):
+    for cname, frame in (("run", 3), ("aim", 0), ("brush", 9), ("jump", 4), ("roll", 5), ("flick", 9),
+                         ("charge", 7), ("blast", 2), ("throw", 7), ("special_throw", 12), ("slam", 23),
+                         ("hold_two", 17)):
         an = anims[cname]
         spec = next(c for c in CLIPS if c[0] == cname)
         W_, Wt_, P_ = evaluate(spec[1](spec[2] * frame / meta[cname]["frames"], spec[2]))
@@ -2684,11 +3147,15 @@ def do_renders(arm, meta, which, socket, extra_hide, body_objs=()):
     cache = {}
     for o in extra_hide:
         o.hide_render = True
-    kit_objs = import_kit(socket) if any(w in which for w in ("clips", "strip", "kit", "gamecam")) else []
+    need = ("clips", "strip", "kit", "gamecam", "p6clips", "held", "kitall", "kitgame")
+    kits = import_kits(socket) if any(w in which for w in need) else {}
+    kit_objs = kits.get("mist_rasp", [])
 
     def show_kit(flag):
-        for o in kit_objs:
-            o.hide_render = not flag
+        for kid, objs in kits.items():
+            for o in objs:
+                o.hide_render = not (flag and kid == "mist_rasp")
+    show_kit(False)
     tgt = Vector((0, 0.02, 0.63))
     if "turntable" in which:
         show_kit(False)
@@ -2711,6 +3178,8 @@ def do_renders(arm, meta, which, socket, extra_hide, body_objs=()):
         render_materials(1, cache)
         paths = []
         for name, fn, dur, loop, keyset, sheet in CLIPS:
+            if name in P6_CLIPS:
+                continue
             fr = int(round(sheet * meta[name]["frames"]))
             set_clip(arm, name, fr)
             aim_camera(cam, Vector((0, 0.0, 0.58)), 35, 8, 6.0, ortho=1.55)
@@ -2778,6 +3247,9 @@ def do_renders(arm, meta, which, socket, extra_hide, body_objs=()):
         compose(paths, 4, os.path.join(REN_DIR, "hero_with_kit.png"))
     if "gamecam" in which:
         render_gamecam(arm, meta, show_kit, cache)
+    p6 = [w for w in ("p6clips", "held", "kitall", "kitgame") if w in which]
+    if p6:
+        render_p6(arm, kits, p6, cache, body_objs)
     try:
         os.rmdir(tmp)
     except Exception:
@@ -2788,14 +3260,10 @@ def do_renders(arm, meta, which, socket, extra_hide, body_objs=()):
 GAMECAM = dict(fov_y_deg=68.0, pivot=1.35, boom=4.3, shoulder=0.42, pitch_deg=-14.0, res=(1600, 900))
 
 
-def render_gamecam(arm, meta, show_kit, cache):
-    """art/renders/hero_gamecam.png: the hero exactly as the player sees it in play - the follow camera
-    at rest behind the runner (pivot over the feet, right-shoulder offset, boom back along the look
-    direction), 16:9, vertical FOV 68 deg; 'idle' holding the kit, on a light court-tile floor with
-    1 m grout lines. SUNCREW (left) and GULF CREW (right) panels share the exact same camera."""
-    scn = bpy.context.scene
+def gamecam_place(cam):
+    """the follow camera at rest behind the runner (pivot over the feet, right-shoulder offset, boom back along the
+    look direction, vertical FOV 68 deg). Returns the look direction."""
     g = GAMECAM
-    cam = scn.camera
     fwd = Vector((0.0, -1.0, 0.0))                 # the runner faces Blender -Y (glTF +Z)
     right = Vector((-1.0, 0.0, 0.0))               # character right = -X
     p = radians(g["pitch_deg"])
@@ -2808,12 +3276,11 @@ def render_gamecam(arm, meta, show_kit, cache):
     cam.data.clip_end = 200.0
     cam.location = shoulder - look * g["boom"]
     cam.rotation_euler = look.to_track_quat('-Z', 'Y').to_euler()
-    lb = bpy.data.objects.get("QA_label")
-    if lb:
-        lb.hide_render = True
-    floor = bpy.data.objects.get("QA_floor")
-    if floor:
-        floor.hide_render = True
+    return look
+
+
+def ensure_tiles():
+    """a light court-tile floor with 1 m grout lines (the gamecam ground)."""
     tile = bpy.data.objects.get("QA_tiles")
     if tile is None:
         me = bpy.data.meshes.new("QA_tiles")
@@ -2839,6 +3306,25 @@ def render_gamecam(arm, meta, show_kit, cache):
         me.materials.append(m)
         tile = bpy.data.objects.new("QA_tiles", me)
         bpy.data.collections["QA"].objects.link(tile)
+    return tile
+
+
+def render_gamecam(arm, meta, show_kit, cache):
+    """art/renders/hero_gamecam.png: the hero exactly as the player sees it in play - the follow camera
+    at rest behind the runner (pivot over the feet, right-shoulder offset, boom back along the look
+    direction), 16:9, vertical FOV 68 deg; 'idle' holding the kit, on a light court-tile floor with
+    1 m grout lines. SUNCREW (left) and GULF CREW (right) panels share the exact same camera."""
+    scn = bpy.context.scene
+    g = GAMECAM
+    cam = scn.camera
+    look = gamecam_place(cam)
+    lb = bpy.data.objects.get("QA_label")
+    if lb:
+        lb.hide_render = True
+    floor = bpy.data.objects.get("QA_floor")
+    if floor:
+        floor.hide_render = True
+    tile = ensure_tiles()
     tile.hide_render = False
     show_kit(True)
     fr = int(round(0.25 * meta["idle"]["frames"]))
@@ -2863,6 +3349,328 @@ def render_gamecam(arm, meta, show_kit, cache):
     scn.render.resolution_x, scn.render.resolution_y = res_old
     log("gamecam: camera at", tuple(round(c, 3) for c in cam.location), "look", tuple(round(c, 4) for c in look),
         "fov_y 68, idle frame", fr)
+
+
+# ---------------------------------------------------------------------------------------- phase 6 renders
+KIT_NAME = {"mist_rasp": "MIST-RASP", "sheet_drum": "SHEET-DRUM", "needle_glint": "NEEDLE-GLINT",
+            "pop_well": "POP-WELL"}
+# per kit: its hold pose (base clip, t, upper clip or None, t) and its aim / action pose
+KIT_POSES = {
+    "mist_rasp": (("idle", 0.5, None, 0.0), ("idle", 0.5, "aim", 0.0)),
+    "sheet_drum": (("idle", 0.5, "hold_two", 0.5), ("roll", 0.0, None, 0.0)),
+    "needle_glint": (("idle", 0.5, "hold_two", 0.5), ("idle", 0.5, "charge", 0.0)),
+    "pop_well": (("idle", 0.5, None, 0.0), ("idle", 0.5, "aim", 0.0)),
+}
+
+
+def import_kits(socket):
+    """import every kit GLB present and parent it to socket_weapon with an identity transform (as the runtime
+    does). Returns {kit id: [objects]}."""
+    out = {}
+    for kid in KIT_IDS:
+        path = os.path.join(GLTF_DIR, "kit_%s.glb" % kid)
+        if not os.path.isfile(path):
+            log("WARN kit GLB missing, not rendered:", path)
+            continue
+        before = set(bpy.data.objects)
+        bpy.ops.import_scene.gltf(filepath=path)
+        new = [o for o in bpy.data.objects if o not in before]
+        for o in new:
+            if o.type == 'MESH':
+                me = o.data
+                if me.color_attributes and "Col" not in me.color_attributes:
+                    me.color_attributes[0].name = "Col"
+                if "Col" not in me.color_attributes:
+                    ca = me.color_attributes.new("Col", 'FLOAT_COLOR', 'POINT')
+                    ca.data.foreach_set("color", [1.0] * (4 * len(me.vertices)))
+        for o in new:
+            if o.parent is None:
+                mw = o.matrix_basis.copy()
+                o.parent = socket
+                o.matrix_parent_inverse = Matrix.Identity(4)
+                o.matrix_basis = mw
+        out[kid] = new
+        log("kit imported:", kid, [o.name for o in new])
+    return out
+
+
+def clip_spec(name):
+    return next(c for c in CLIPS if c[0] == name)
+
+
+def pose_layered(arm, base, t_base, upper=None, t_upper=0.0):
+    """pose the rig the way the runtime layers clips: 'base' keys the whole body at t_base, 'upper' (an upper-body
+    clip) overrides the local rotations of the UPPER bones at t_upper."""
+    ad = arm.animation_data
+    ad.action = None
+    ad.use_nla = False
+    sb = clip_spec(base)
+    Wb, _, Pb = evaluate(sb[1](t_base, sb[2]))
+    Wu = None
+    if upper:
+        su = clip_spec(upper)
+        Wu = evaluate(su[1](t_upper, su[2]))[0]
+    pbs = arm.pose.bones
+    for b in BONES:
+        W = Wu[b] if (Wu is not None and b in UPPER) else Wb[b]
+        q = QR0i @ W @ QR0
+        q.normalize()
+        pbs[b].rotation_quaternion = q
+        pbs[b].location = (0, 0, 0)
+    pbs["hips"].location = QR0i @ (Pb["hips"] - REST["hips"])
+    bpy.context.view_layer.update()
+
+
+def show_only(kits, kid):
+    for k, objs in kits.items():
+        for o in objs:
+            o.hide_render = (k != kid)
+
+
+def compose_rows(rows, out):
+    """stack already-composed row images (equal widths) top to bottom."""
+    import numpy as np
+    ims = []
+    for p in rows:
+        im = bpy.data.images.load(p, check_existing=False)
+        w, h = im.size
+        a = np.empty(w * h * 4, dtype=np.float32)
+        im.pixels.foreach_get(a)
+        ims.append(a.reshape(h, w, 4))
+        bpy.data.images.remove(im)
+    W = max(a.shape[1] for a in ims)
+    H_ = sum(a.shape[0] for a in ims)
+    canvas = np.ones((H_, W, 4), dtype=np.float32)
+    y = H_
+    for a in ims:
+        h, w = a.shape[:2]
+        canvas[y - h:y, 0:w, :] = a
+        y -= h
+    img = bpy.data.images.new("QA_rows", W, H_, alpha=False)
+    img.pixels.foreach_set(canvas.ravel())
+    img.filepath_raw = out
+    img.file_format = 'PNG'
+    img.save()
+    bpy.data.images.remove(img)
+    for p in rows:
+        try:
+            os.remove(p)
+        except Exception:
+            pass
+    log("sheet", out)
+
+
+def label_persp(cam, text, size=0.042):
+    """a label pinned to the top-left of a perspective camera's frame."""
+    lb = label_obj(text)
+    lb.hide_render = False
+    scn = bpy.context.scene
+    rx, ry = scn.render.resolution_x, scn.render.resolution_y
+    hh = math.tan(cam.data.angle_y / 2) if cam.data.sensor_fit == 'VERTICAL' else math.tan(cam.data.angle / 2) * ry / rx
+    hw = hh * rx / ry
+    lb.parent = cam
+    lb.matrix_parent_inverse = Matrix.Identity(4)
+    lb.location = (-hw + 0.03, hh - 0.075, -1.0)
+    lb.rotation_euler = (0, 0, 0)
+    lb.scale = (1, 1, 1)
+    lb.data.size = size
+    return lb
+
+
+def gamecam_crop_box(cam, pts, pad=0.03):
+    """normalised render-border box around world points as seen by cam (for crops of the exact game frame)."""
+    from bpy_extras.object_utils import world_to_camera_view
+    scn = bpy.context.scene
+    cs = [world_to_camera_view(scn, cam, p) for p in pts]
+    x0, x1 = min(c.x for c in cs) - pad, max(c.x for c in cs) + pad
+    y0, y1 = min(c.y for c in cs) - pad, max(c.y for c in cs) + pad
+    return max(0.0, x0), min(1.0, x1), max(0.0, y0), min(1.0, y1)
+
+
+def render_p6(arm, kits, which, cache, body_objs):
+    """CONTRACT_ART_P6_8 section 17 QA sheets: hero_clips_p6.png, kit_held_<id>.png, kit_all.png, kit_gamecam.png."""
+    scn = bpy.context.scene
+    tmp = os.path.join(REN_DIR, "_tmp_p6")
+    os.makedirs(tmp, exist_ok=True)
+    cam = setup_render()
+    tile = ensure_tiles()
+    floor = bpy.data.objects["QA_floor"]
+    lb = bpy.data.objects.get("QA_label")
+
+    def ortho_setup(res):
+        scn.render.resolution_x, scn.render.resolution_y = res
+        scn.render.use_border = False
+        cam.data.sensor_fit = 'AUTO'
+        tile.hide_render = True
+        floor.hide_render = False
+
+    def shot(path, az, el, tgt, ortho, text):
+        aim_camera(cam, tgt, az, el, 6.0, ortho=ortho)
+        lab = label_obj(text)
+        lab.hide_render = False
+        lab.data.size = 0.07
+        place_label(lab, cam)
+        render_to(path)
+        return path
+
+    def pose_for(spec):
+        base, tb, up, tu = spec
+        pose_layered(arm, base, tb, up, tu)
+
+    if "p6clips" in which:
+        # every new clip at four moments, each with the kit it is played with (upper clips layered over idle)
+        rows = [("roll", "sheet_drum", [0.0, 4 / 30, 7 / 30, 11 / 30]),
+                ("flick", "sheet_drum", [0.0, 0.25, 0.30, 0.42]),
+                ("charge", "needle_glint", [0.0, 0.0, 0.0, 0.5]),
+                ("blast", "pop_well", [0.0, 0.05, 0.20, 0.50]),
+                ("throw", "mist_rasp", [0.0, 0.16, 0.24, 0.34]),
+                ("special_throw", "needle_glint", [0.0, 0.26, 0.40, 0.60]),
+                ("slam", "sheet_drum", [0.12, 0.40, 0.62, SLAM_IMPACT]),
+                ("hold_two", "sheet_drum", [0.0, 1.0, 0.0, 1.0])]
+        ortho_setup((400, 520))
+        render_materials(1, cache)
+        paths = []
+        for name, kid, ts in rows:
+            spec = clip_spec(name)
+            for k, t in enumerate(ts):
+                kk = "needle_glint" if (name == "hold_two" and k >= 2) else kid
+                show_only(kits, kk)
+                if spec[4] == "full":
+                    pose_layered(arm, name, t)
+                else:
+                    pose_layered(arm, "idle", 0.5, name, t)
+                wide = kk == "sheet_drum" or name == "slam"
+                az = 90 if (name == "charge" and k == 1) else (160 if (name == "charge" and k == 2) else 38)
+                view = {90: "  side", 160: "  rear"}.get(az, "")
+                paths.append(shot(os.path.join(tmp, "c_%s_%d.png" % (name, k)), az, 8,
+                                  Vector((0.10, -0.30, 0.55)) if wide else Vector((0, -0.06, 0.55)),
+                                  2.35 if wide else 1.6, "%s  %.2fs%s  %s" % (name, t, view, KIT_NAME[kk])))
+        compose(paths, 8, os.path.join(REN_DIR, "hero_clips_p6.png"))
+    if "held" in which:
+        for kid in kits:
+            show_only(kits, kid)
+            hold, act = KIT_POSES[kid]
+            wide = kid == "sheet_drum"
+            ortho_setup((520, 620))
+            render_materials(2 if kid in ("needle_glint", "pop_well") else 1, cache)
+            paths = []
+            tgt = Vector((0.10, -0.30, 0.55)) if wide else Vector((0, -0.08, 0.55))
+            o = 2.35 if wide else 1.5
+            pose_for(act)
+            aname = act[2] or act[0]
+            paths.append(shot(os.path.join(tmp, "h_%s_0.png" % kid), 38, 10, tgt, o, "%s  %s  3/4" % (KIT_NAME[kid], aname)))
+            paths.append(shot(os.path.join(tmp, "h_%s_1.png" % kid), 90, 4, tgt, o, "%s  side" % aname))
+            paths.append(shot(os.path.join(tmp, "h_%s_2.png" % kid), 155, 24, tgt, o, "%s  rear" % aname))
+            pose_for(hold)
+            hname = hold[2] or hold[0]
+            paths.append(shot(os.path.join(tmp, "h_%s_3.png" % kid), 30, 10, tgt, o, "hold: %s" % hname))
+            compose(paths, 4, os.path.join(REN_DIR, "kit_held_%s.png" % kid))
+    if "kitall" in which or "kitgame" in which:
+        # the exact follow camera (hero_gamecam), crops of it for kit_all and full frames for kit_gamecam
+        gres = (1280, 720)
+        cam.data.sensor_fit = 'VERTICAL'
+        floor.hide_render = True
+        tile.hide_render = False
+        if lb:
+            lb.hide_render = True
+        gamecam_place(cam)
+        scn.render.resolution_x, scn.render.resolution_y = gres
+        bpy.context.view_layer.update()
+        box = gamecam_crop_box(cam, [Vector((x, y, z)) for x in (-0.65, 0.65) for y in (-1.0, 0.3) for z in (0.0, 1.30)])
+        log("gamecam crop box (normalised x0 x1 y0 y1):", tuple(round(c, 3) for c in box))
+    if "kitall" in which:
+        rows = []
+        # row 1: the four kits alone, same 3/4 camera and scale (honest relative size), panels the crop size
+        cres = (1920, 1080)
+        cw, ch = int(round((box[1] - box[0]) * cres[0])), int(round((box[3] - box[2]) * cres[1]))
+        ortho_setup((cw, ch))
+        floor.hide_render = True
+        for o in body_objs:
+            o.hide_render = True
+        paths = []
+        for kid in KIT_IDS:
+            if kid not in kits:
+                continue
+            show_only(kits, kid)
+            render_materials(1, cache)
+            roots = [o for o in kits[kid] if o.parent is not None and o.parent.name == "socket_weapon"]
+            saved = [(o, o.parent, o.matrix_basis.copy()) for o in roots]
+            for o in roots:
+                o.parent = None
+                o.matrix_world = Matrix.Identity(4)
+            bpy.context.view_layer.update()
+            paths.append(shot(os.path.join(tmp, "a_%s.png" % kid), -52, 24, Vector((0.04, -0.30, 0.03)), 1.30,
+                              KIT_NAME[kid]))
+            for o, par, mb in saved:
+                o.parent = par
+                o.matrix_parent_inverse = Matrix.Identity(4)
+                o.matrix_basis = mb
+            bpy.context.view_layer.update()
+        row = os.path.join(tmp, "row_a.png")
+        compose(paths, len(paths), row)
+        rows.append(row)
+        for o in body_objs:
+            o.hide_render = False
+        # rows 2-3: the follow camera (crops of the exact game frame): hold poses, then aim / action poses
+        for which_pose, tag in ((0, "hold"), (1, "aim")):
+            paths = []
+            for kid in KIT_IDS:
+                if kid not in kits:
+                    continue
+                show_only(kits, kid)
+                render_materials(1 if kid in ("mist_rasp", "sheet_drum") else 2, cache)
+                pose_for(KIT_POSES[kid][which_pose])
+                gamecam_place(cam)
+                cam.data.sensor_fit = 'VERTICAL'
+                tile.hide_render = False
+                floor.hide_render = True
+                scn.render.resolution_x, scn.render.resolution_y = cres
+                scn.render.use_border = True
+                scn.render.use_crop_to_border = True
+                scn.render.border_min_x, scn.render.border_max_x, scn.render.border_min_y, scn.render.border_max_y = box
+                lab = label_persp(cam, "%s  %s  (follow cam)" % (KIT_NAME[kid], tag), 0.020)
+                th = math.tan(cam.data.angle_y / 2)
+                lab.location.x = (box[0] * 2 - 1) * th * cres[0] / cres[1] + 0.012
+                lab.location.y = (box[3] * 2 - 1) * th - 0.03
+                pth = os.path.join(tmp, "g_%s_%s.png" % (kid, tag))
+                render_to(pth)
+                paths.append(pth)
+            scn.render.use_border = False
+            row = os.path.join(tmp, "row_%s.png" % tag)
+            compose(paths, len(paths), row)
+            rows.append(row)
+        compose_rows(rows, os.path.join(REN_DIR, "kit_all.png"))
+    if "kitgame" in which:
+        paths = []
+        scn.render.use_border = False
+        for kid in KIT_IDS:
+            if kid not in kits:
+                continue
+            show_only(kits, kid)
+            render_materials(1 if kid in ("mist_rasp", "sheet_drum") else 2, cache)
+            for which_pose, tag in ((0, "hold"), (1, "aim / action")):
+                pose_for(KIT_POSES[kid][which_pose])
+                gamecam_place(cam)
+                cam.data.sensor_fit = 'VERTICAL'
+                tile.hide_render = False
+                floor.hide_render = True
+                scn.render.resolution_x, scn.render.resolution_y = gres
+                label_persp(cam, "%s  -  %s  (follow cam, 4.3 m, 68 deg)" % (KIT_NAME[kid], tag), 0.040)
+                pth = os.path.join(tmp, "f_%s_%d.png" % (kid, which_pose))
+                render_to(pth)
+                paths.append(pth)
+        compose(paths, 2, os.path.join(REN_DIR, "kit_gamecam.png"))
+    # restore
+    scn.render.use_border = False
+    tile.hide_render = True
+    floor.hide_render = False
+    cam.data.sensor_fit = 'AUTO'
+    scn.render.resolution_x, scn.render.resolution_y = 560, 820
+    show_only(kits, "mist_rasp")
+    try:
+        os.rmdir(tmp)
+    except Exception:
+        pass
 
 
 # ================================================================================ main
@@ -2922,6 +3730,14 @@ def main():
     arm = build_armature(coll, crest_joints)
     arm["df_run_stride"] = round(RUN_SPEED * 0.4, 4)
     arm["df_run_speed"] = RUN_SPEED
+    # phase 6 timing hooks for the runtime (seconds into each clip; roll stride in metres per loop)
+    arm["df_roll_stride"] = round(ROLL_SPEED * clip_spec("roll")[2], 4)
+    arm["df_roll_speed"] = ROLL_SPEED
+    arm["df_flick_release"] = FLICK_RELEASE
+    arm["df_throw_release"] = THROW_RELEASE
+    arm["df_special_release"] = SPECIAL_RELEASE
+    arm["df_slam_takeoff"] = SLAM_TAKEOFF
+    arm["df_slam_impact"] = SLAM_IMPACT
     order = list(HERO_MATS.keys())
     objs = []
     for mb in (body, dye, fin):
@@ -2960,7 +3776,7 @@ def main():
         raise SystemExit(1)
     if arg_flag("--no-render"):
         return
-    which = (arg_val("--only") or "turntable,clips,strip,slick,kit,gamecam").split(",")
+    which = (arg_val("--only") or "turntable,clips,strip,slick,kit,gamecam,p6clips,held,kitall,kitgame").split(",")
     do_renders(arm, meta, which, sock, [fin_ob], body_objs=[body_ob, dye_ob])
 
 

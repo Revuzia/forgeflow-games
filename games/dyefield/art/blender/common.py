@@ -130,10 +130,22 @@ MATERIALS: dict[str, tuple[str, float, float, float, bool]] = {
 }
 
 
+def define_material(name: str, hexc: str, rough: float = 0.7, metal: float = 0.0, emis: float = 0.0,
+                    double: bool = False) -> None:
+    """Register an extra M_* material (e.g. a map module's M_steel / M_basalt, CONTRACT_ART_P6_8
+    §15/§16). Call it BEFORE the first get_material(name); redefining an already-created material
+    is an error (its colour would silently not change)."""
+    if not name.startswith("M_"):
+        raise ValueError(f"material {name!r} must be prefixed M_")
+    if bpy.data.materials.get(name) is not None and MATERIALS.get(name) != (hexc, rough, metal, emis, double):
+        raise RuntimeError(f"{name} already created with {MATERIALS.get(name)}; define it before first use")
+    MATERIALS[name] = (hexc, rough, metal, emis, double)
+
+
 def get_material(name: str, override_hex: str | None = None):
     """Create (once) an M_* material with a plain Principled BSDF — exports cleanly to glTF."""
     if name not in MATERIALS:
-        raise KeyError(f"{name} is not in the CONTRACT §3.1 material set")
+        raise KeyError(f"{name} is not in the CONTRACT §3.1 material set (map modules: define_material first)")
     mat = bpy.data.materials.get(name)
     if mat is not None:
         return mat
@@ -548,3 +560,23 @@ def uv_box_metres(me, layer_name: str = "UVMap"):
 
 def face_area_sum(me) -> float:
     return sum(p.area for p in me.polygons)
+
+
+# ── images ───────────────────────────────────────────────────────────────────────────────────────
+def write_png_gray(path: str, rows_top_down) -> None:
+    """Write an 8-bit greyscale PNG (no colour management, byte-exact, deterministic).
+    `rows_top_down` is an (H, W) uint8 numpy array whose row 0 is the TOP of the image. A Blender
+    image buffer is bottom-up, so pass buf[::-1] (that is the orientation Blender itself saves, and
+    the standard glTF texture orientation for the exported UVs)."""
+    import struct as _st
+    import numpy as np
+    a = np.ascontiguousarray(rows_top_down, dtype=np.uint8)
+    h, w = a.shape
+    raw = b"".join(b"\x00" + a[y].tobytes() for y in range(h))
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return _st.pack(">I", len(data)) + tag + data + _st.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", _st.pack(">IIBBBBB", w, h, 8, 0, 0, 0, 0)) + \
+        chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
+    with open(path, "wb") as f:
+        f.write(png)

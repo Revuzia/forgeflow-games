@@ -16,8 +16,12 @@ export class FollowCamera {
   yaw = 0;
   /** radians; + looks up */
   pitch = CAMERA.restPitchDeg * DEG;
-  /** 0 = walk framing, 1 = slick framing (phase 3 blends this) */
+  /** 0 = walk framing, 1 = slick framing — eased toward slickTarget every update (≈ 0.15 s) */
   slickBlend = 0;
+  /** 1 while the runner is in SLICK / WALL-SLICK (game.ts sets it each frame) */
+  slickTarget = 0;
+  /** screen shake energy (hits taken, the WASHED pop); decays ~6/s */
+  shake = 0;
   /** current boom length after collision (m) */
   boom = CAMERA.distance;
   /** true when the last update pulled the boom in */
@@ -26,6 +30,7 @@ export class FollowCamera {
   private readonly pivot = new THREE.Vector3();
   private pivotYs = NaN;
   private readonly tmp = new THREE.Vector3();
+  private shakeT = 0;
 
   constructor(aspect = 16 / 9) {
     this.camera = new THREE.PerspectiveCamera(CAMERA.fovDeg, aspect, 0.08, 2400);
@@ -38,6 +43,9 @@ export class FollowCamera {
     this.pitch = CAMERA.restPitchDeg * DEG;
     this.pivotYs = NaN;
     this.boom = CAMERA.distance;
+    this.slickBlend = 0;
+    this.slickTarget = 0;
+    this.shake = 0;
   }
 
   addMouse(dx: number, dy: number): void {
@@ -61,6 +69,10 @@ export class FollowCamera {
    * @param physics  collision for the boom pull-in (null = no collision)
    */
   update(dt: number, feet: { x: number; y: number; z: number }, physics: PhysicsWorld | null): void {
+    // SLICK tuck: pivot down + boom in, smoothly both ways (CONTRACT §11)
+    const kb = 1 - Math.exp(-Math.max(0, dt) * 11);
+    this.slickBlend += (this.slickTarget - this.slickBlend) * kb;
+    if (Math.abs(this.slickTarget - this.slickBlend) < 1e-3) this.slickBlend = this.slickTarget;
     const s = this.slickBlend;
     const pivotY = CAMERA.pivotY + (CAMERA.slickPivotY - CAMERA.pivotY) * s;
     const dist = CAMERA.distance + (CAMERA.slickDistance - CAMERA.distance) * s;
@@ -95,7 +107,16 @@ export class FollowCamera {
     else this.boom = Math.min(want, this.boom + CAMERA.easeOutSpeed * dt);
 
     this.camera.position.set(sxp - dir.x * this.boom, syp - dir.y * this.boom, szp - dir.z * this.boom);
-    this.camera.rotation.set(this.pitch, this.yaw + Math.PI, 0, 'YXZ');
+    let roll = 0;
+    if (this.shake > 1e-3) {
+      const a = Math.min(1, this.shake);
+      this.shakeT += Math.max(0, dt) * 38;
+      this.camera.position.x += Math.sin(this.shakeT * 1.3) * 0.05 * a;
+      this.camera.position.y += Math.sin(this.shakeT * 1.7 + 1.1) * 0.04 * a;
+      roll = Math.sin(this.shakeT * 0.9 + 2.3) * 0.015 * a;
+      this.shake = Math.max(0, this.shake - Math.max(0, dt) * 6 * Math.max(0.35, this.shake));
+    } else this.shake = 0;
+    this.camera.rotation.set(this.pitch, this.yaw + Math.PI, roll, 'YXZ');
     this.camera.updateMatrixWorld();
   }
 

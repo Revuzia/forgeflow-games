@@ -1,0 +1,170 @@
+{
+  "id": "cinder",
+  "_doc": "CINDER REEF layout (CONTRACT_ART_P6_8 §16), built by art/blender/map_cinder.py through the shared pipeline. glTF coordinates (Y-up, metres; SUNCREW = side A at -Z). Brushes with \"mirror\": true get their rot180 partner (x,y,z)->(-x,y,-z) (ids '<id>_m'); the Mid Isle features are authored rot180-symmetric and are not mirrored. Terrain kinds (land / sandbar / dune / flat) feed the wet-sand heightfield (art/blender/cinder_terrain.py); shelf / column / outcrop / coral are basalt and coral solids unioned into it; bridge / spring / channel / wreck are Cinder kinds. Every number here is the source of truth; the module derives spring launch velocities from pos + target + apex.",
+  "meta": {
+    "symmetry": "rot180",
+    "bounds": { "min": [-36, -4, -48], "max": [36, 14, 48] },
+    "killY": -3.5,
+    "waterY": -0.6,
+    "paint": { "texelsPerMeter": 10, "atlasMax": 2048 },
+    "scoring": { "wallWeight": 0.35, "floorMinNy": 0.45 },
+    "minimap": { "min": [-38, -50], "max": [38, 50] },
+    "spawns": {
+      "A": { "pos": [0, 1.2, -40.5], "yaw": 0 },
+      "B": { "pos": [0, 1.2, 40.5], "yaw": 180 }
+    },
+    "courtLines": null,
+    "lighting": {
+      "default": "reef",
+      "presets": {
+        "reef": {
+          "kind": "outdoor",
+          "sunElevationDeg": 28, "sunAzimuthDeg": 255, "sunColor": "#FFC37E", "sunIntensity": 3.2,
+          "hemiSky": "#F0D2B8", "hemiGround": "#6E5A48", "hemiIntensity": 1.35,
+          "skyZenith": "#8E86B8", "skyHorizon": "#FFC58E",
+          "fogColor": "#F0D3B6", "fogDensity": 0.009, "exposure": 1.0,
+          "waterDeep": "#0E6E78", "waterShallow": "#5FD8C0"
+        },
+        "ember": {
+          "kind": "outdoor",
+          "sunElevationDeg": 8, "sunAzimuthDeg": 250, "sunColor": "#FF8E5A", "sunIntensity": 2.4,
+          "hemiSky": "#F0A07A", "hemiGround": "#4A3048", "hemiIntensity": 1.0,
+          "skyZenith": "#5A3F7A", "skyHorizon": "#FF8F5E",
+          "fogColor": "#E89A7C", "fogDensity": 0.014, "exposure": 1.05,
+          "waterDeep": "#2A2553", "waterShallow": "#D0786A"
+        }
+      }
+    },
+    "mist": { "hideRange": 25, "density": 0.012, "color": "#EED6C0" }
+  },
+  "props": {
+    "terrain": { "halfX": 40, "halfZ": 52, "step": 0.8, "bedY": -2.6, "bottomY": -6.0, "ripple": 0.07 },
+    "wreck": {
+      "center": [0, 0, 0], "yaw": 0, "halfLength": 11.0, "beam": 7.2, "deckY": 3.5, "keelY": -1.2,
+      "bulwark": { "height": 0.9, "thick": 0.22, "sheer": 1.1 },
+      "gaps": [ { "side": "-z", "x": [-7.1, -3.7] }, { "side": "+z", "x": [3.7, 7.1] } ],
+      "tunnel": { "halfX": 1.8, "sill": 0.97, "top": 2.85 },
+      "house": { "halfX": 2.2, "halfZ": 1.8, "wall": 0.25, "height": 2.3, "door": 0.75 },
+      "masts": [ { "x": -3.4, "height": 7.2 }, { "x": 3.4, "height": 7.2 } ]
+    }
+  },
+  "brushes": [
+    { "kind": "land", "id": "beach", "mirror": true, "coastNoise": 0.7, "wIn": 3.2, "wOut": 3.6,
+      "pos": [0, 0.3, -33], "dir": [0, 0, -0.045], "clamp": [0.22, 0.95],
+      "points": [[-34.2, 0, -31.0], [-31.0, 0, -29.8], [-27.5, 0, -29.8], [-23.5, 0, -29.6], [-19.0, 0, -30.2], [-14.0, 0, -30.8],
+                 [-8.0, 0, -30.4], [-3.0, 0, -29.4], [0.0, 0, -29.0], [3.0, 0, -29.4], [8.0, 0, -30.4], [14.0, 0, -30.8],
+                 [18.0, 0, -30.2], [22.0, 0, -29.9], [26.0, 0, -30.2], [30.0, 0, -30.6], [34.2, 0, -31.2],
+                 [35.2, 0, -35.5], [35.0, 0, -44.5], [31.0, 0, -47.6], [-31.0, 0, -47.6], [-35.0, 0, -44.5], [-35.2, 0, -35.5]] },
+
+    { "kind": "land", "id": "west_isle", "mirror": true, "coastNoise": 0.8, "wIn": 2.6, "wOut": 3.2,
+      "pos": [-25, 0.45, 0], "dir": [0, 0, 0], "clamp": [0.3, 0.6],
+      "points": [[-17.3, 0, -17.0], [-18.2, 0, -20.2], [-21.5, 0, -21.6], [-26.0, 0, -21.4], [-30.0, 0, -20.6], [-32.4, 0, -18.0],
+                 [-33.2, 0, -12.0], [-32.6, 0, -5.0], [-33.4, 0, 2.0], [-33.0, 0, 9.0], [-32.2, 0, 15.0], [-30.0, 0, 19.8],
+                 [-26.0, 0, 21.4], [-21.5, 0, 21.6], [-18.4, 0, 20.4], [-17.4, 0, 16.0], [-17.8, 0, 10.0], [-17.2, 0, 4.0],
+                 [-17.4, 0, -3.0], [-17.2, 0, -10.0]] },
+
+    { "kind": "land", "id": "mid_isle", "mirror": false, "coastNoise": 0.6, "wIn": 3.0, "wOut": 3.4,
+      "pos": [0, 0.85, 0], "dir": [0, 0, 0],
+      "points": [[9.6, 0, 0.0], [9.2, 0, 4.0], [8.2, 0, 7.4], [4.6, 0, 10.2], [0.0, 0, 11.2], [-4.6, 0, 10.2], [-8.2, 0, 7.4], [-9.2, 0, 4.0],
+                 [-9.6, 0, 0.0], [-9.2, 0, -4.0], [-8.2, 0, -7.4], [-4.6, 0, -10.2], [0.0, 0, -11.2], [4.6, 0, -10.2], [8.2, 0, -7.4], [9.2, 0, -4.0]] },
+
+    { "kind": "sandbar", "id": "shoal_e", "mirror": true, "hw": 1.35, "coastW": 0.8, "wOut": 3.0,
+      "points": [[17.2, -0.28, -31.6], [18.2, -0.29, -27.6], [19.6, -0.27, -24.2], [21.2, -0.29, -20.4]] },
+    { "kind": "sandbar", "id": "bar_w", "mirror": true, "hw": 1.35, "coastW": 0.8, "wOut": 3.0,
+      "points": [[-31.6, -0.28, -31.8], [-33.6, -0.29, -28.2], [-34.0, -0.27, -24.6], [-32.6, -0.29, -20.2]] },
+
+    { "kind": "flat", "id": "head_bw_beach", "mirror": true, "over": true, "pos": [-25.2, 0.28, -32.4], "r": 1.8, "fall": 1.4 },
+    { "kind": "flat", "id": "head_bw_isle", "mirror": true, "over": true, "pos": [-25.2, 0.45, -18.6], "r": 1.8, "fall": 1.4 },
+    { "kind": "flat", "id": "head_bm_isle", "mirror": true, "over": true, "pos": [-20.6, 0.45, 6.0], "r": 1.6, "fall": 1.2 },
+    { "kind": "flat", "id": "head_bm_mid", "mirror": true, "over": true, "pos": [-6.2, 0.85, 6.0], "r": 1.6, "fall": 1.2 },
+    { "kind": "flat", "id": "pad_beach", "mirror": true, "over": true, "pos": [26.5, 0.25, -33.0], "r": 1.9, "fall": 1.4 },
+    { "kind": "flat", "id": "pad_mid", "mirror": true, "over": true, "pos": [-20.5, 0.45, -1.8], "r": 1.9, "fall": 1.2 },
+    { "kind": "flat", "id": "wreck_bed", "mirror": false, "H": 0.85, "fall": 1.0,
+      "points": [[-11.2, 0, -1.2], [-8.0, 0, -3.1], [-4.0, 0, -3.9], [0.0, 0, -4.1], [4.0, 0, -3.9], [8.0, 0, -3.1], [11.2, 0, -1.2],
+                 [11.2, 0, 1.2], [8.0, 0, 3.1], [4.0, 0, 3.9], [0.0, 0, 4.1], [-4.0, 0, 3.9], [-8.0, 0, 3.1], [-11.2, 0, 1.2]] },
+
+    { "kind": "dune", "id": "dune_spawn_w", "mirror": true, "hw": 1.7, "side": 32, "points": [[-12.2, 0.42, -33.2], [-7.9, 1.18, -37.2]] },
+    { "kind": "dune", "id": "dune_spawn_e", "mirror": true, "hw": 1.7, "side": 32, "points": [[12.2, 0.42, -33.2], [7.9, 1.18, -37.2]] },
+    { "kind": "dune", "id": "dune_wi_s", "mirror": true, "hw": 1.6, "side": 32, "points": [[-24.0, 0.45, -19.2], [-24.6, 1.48, -14.2]] },
+    { "kind": "dune", "id": "dune_wi_n", "mirror": true, "hw": 1.6, "side": 32, "points": [[-24.2, 0.45, 18.8], [-24.6, 1.48, 14.0]] },
+    { "kind": "dune", "id": "dune_wi_e", "mirror": true, "hw": 1.5, "side": 32, "points": [[-19.0, 0.45, 11.8], [-21.9, 1.48, 8.6]] },
+    { "kind": "dune", "id": "dune_crown", "mirror": true, "hw": 1.4, "side": 34, "points": [[-22.2, 1.48, 9.4], [-24.6, 2.86, 5.4]] },
+    { "kind": "dune", "id": "dune_wreck", "mirror": true, "hw": 1.6, "side": 38, "points": [[1.4, 0.85, -8.4], [-5.3, 3.47, -2.9]] },
+
+    { "kind": "shelf", "id": "spawn_shelf", "mirror": true, "top": 1.2, "bottom": -1.8, "seg": 1.4, "jitter": 0.18,
+      "points": [[-8.6, 0, -36.2], [-3.0, 0, -35.3], [3.0, 0, -35.3], [8.6, 0, -36.2], [10.2, 0, -39.6], [9.4, 0, -44.8],
+                 [-9.4, 0, -44.8], [-10.2, 0, -39.6]] },
+    { "kind": "shelf", "id": "wi_shelf", "mirror": true, "top": 1.5, "bottom": -1.8, "seg": 1.4, "jitter": 0.22,
+      "points": [[-29.6, 0, -14.2], [-24.0, 0, -14.8], [-21.2, 0, -12.4], [-21.0, 0, -7.0], [-22.4, 0, -4.8], [-22.4, 0, 1.6],
+                 [-21.4, 0, 3.6], [-21.2, 0, 9.6], [-23.0, 0, 13.8], [-28.0, 0, 14.4], [-30.6, 0, 10.0], [-30.2, 0, 2.0], [-30.8, 0, -6.0]] },
+    { "kind": "shelf", "id": "wi_crown", "mirror": true, "top": 2.9, "bottom": 0.0, "seg": 1.2, "jitter": 0.2,
+      "points": [[-29.0, 0, -3.6], [-25.6, 0, -4.2], [-23.4, 0, -1.6], [-23.6, 0, 4.0], [-25.4, 0, 6.2], [-28.8, 0, 5.6], [-29.6, 0, 1.0]] },
+
+    { "kind": "column", "id": "crown_steps", "mirror": true, "r": 0.78, "bottom": 0.0,
+      "points": [[-26.9, 1.78, -8.1], [-25.5, 1.78, -8.1], [-26.9, 2.06, -7.2], [-25.5, 2.06, -7.2], [-26.9, 2.34, -6.3], [-25.5, 2.34, -6.3],
+                 [-26.9, 2.62, -5.4], [-25.5, 2.62, -5.4], [-26.9, 2.88, -4.6], [-25.5, 2.88, -4.6]] },
+    { "kind": "column", "id": "cliff_cols", "mirror": true, "paint": false, "r": 0.8, "bottom": -1.5,
+      "points": [[-13.6, 2.4, -46.2], [-12.2, 3.1, -46.8], [-10.8, 3.7, -46.4], [-9.4, 4.3, -46.9], [-8.0, 3.9, -46.3], [-6.6, 4.6, -46.9],
+                 [-5.2, 4.1, -46.4], [-3.8, 4.8, -46.9], [-2.4, 4.4, -46.3], [-1.0, 5.0, -46.9], [0.4, 4.6, -46.4], [1.8, 5.1, -46.9],
+                 [3.2, 4.5, -46.3], [4.6, 4.9, -46.9], [6.0, 4.2, -46.4], [7.4, 4.7, -46.9], [8.8, 4.0, -46.3], [10.2, 4.4, -46.9],
+                 [11.6, 3.5, -46.4], [13.0, 2.8, -46.9], [14.4, 2.2, -46.3],
+                 [-11.5, 2.2, -45.2], [-7.3, 2.6, -45.3], [-2.9, 2.9, -45.2], [2.5, 2.7, -45.3], [6.8, 2.5, -45.2], [11.0, 2.1, -45.3]] },
+
+    { "kind": "outcrop", "id": "rock_beach_w", "mirror": true, "pos": [-18.5, 0, -38.5], "radius": 1.6, "top": 2.6, "verts": 9, "tilt": [0.08, 0, 0.05] },
+    { "kind": "outcrop", "id": "rock_beach_e", "mirror": true, "pos": [18.0, 0, -37.0], "radius": 1.5, "top": 2.3, "verts": 9, "tilt": [-0.06, 0, 0.07] },
+    { "kind": "outcrop", "id": "rock_beach_c", "mirror": true, "pos": [-6.5, 0, -32.2], "radius": 1.1, "top": 1.4, "verts": 9, "tilt": [0.05, 0, -0.04] },
+    { "kind": "outcrop", "id": "rock_beach_back_w", "mirror": true, "pos": [-27.5, 0, -43.5], "radius": 2.0, "top": 3.4, "verts": 9, "tilt": [0.05, 0, 0.06] },
+    { "kind": "outcrop", "id": "rock_beach_back_e", "mirror": true, "pos": [27.0, 0, -44.0], "radius": 2.2, "top": 3.1, "verts": 9, "tilt": [-0.05, 0, 0.05] },
+    { "kind": "outcrop", "id": "rock_wi_pillar_s", "mirror": true, "pos": [-28.6, 0, -10.5], "radius": 1.3, "top": 4.4, "verts": 9, "tilt": [0.04, 0, 0.03] },
+    { "kind": "outcrop", "id": "rock_wi_pillar_n", "mirror": true, "pos": [-27.2, 0, 10.2], "radius": 1.2, "top": 4.1, "verts": 9, "tilt": [0.03, 0, -0.04] },
+    { "kind": "outcrop", "id": "rock_wi_sand_e", "mirror": true, "pos": [-19.2, 0, -12.5], "radius": 1.0, "top": 1.6, "verts": 9, "tilt": [0.05, 0, 0.05] },
+    { "kind": "outcrop", "id": "rock_mid_sw", "mirror": true, "pos": [-6.8, 0, -7.0], "radius": 0.95, "top": 1.95, "verts": 9, "tilt": [0.05, 0, -0.05] },
+    { "kind": "outcrop", "id": "rock_mid_se", "mirror": true, "pos": [5.6, 0, -8.4], "radius": 0.9, "top": 1.7, "verts": 9, "tilt": [-0.05, 0, -0.04] },
+
+    { "kind": "coral", "id": "coral_beach_1", "mirror": true, "pos": [-12.0, 0, -30.6], "size": [1.6, 0.8, 1.3], "yaw": 20 },
+    { "kind": "coral", "id": "coral_beach_2", "mirror": true, "pos": [10.5, 0, -31.2], "size": [1.4, 0.7, 1.2], "yaw": -35 },
+    { "kind": "coral", "id": "coral_wi_1", "mirror": true, "pos": [-31.6, 0, -15.5], "size": [1.5, 0.8, 1.2], "yaw": 60 },
+    { "kind": "coral", "id": "coral_wi_2", "mirror": true, "pos": [-18.6, 0, 14.5], "size": [1.3, 0.7, 1.1], "yaw": 10 },
+    { "kind": "coral", "id": "coral_mid_1", "mirror": true, "pos": [-8.4, 0, 2.6], "size": [1.4, 0.8, 1.1], "yaw": 40 },
+    { "kind": "coral", "id": "coral_mid_2", "mirror": true, "pos": [3.2, 0, -10.0], "size": [1.2, 0.6, 1.0], "yaw": -20 },
+
+    { "kind": "bridge", "id": "bridge_w", "mirror": true, "width": 2.5, "arch": 0.5, "points": [[-25.2, null, -31.6], [-25.2, null, -19.4]] },
+    { "kind": "bridge", "id": "bridge_mid", "mirror": true, "width": 2.5, "arch": 0.45, "points": [[-19.8, null, 6.0], [-7.0, null, 6.0]] },
+
+    { "kind": "spring", "id": "spring_beach", "mirror": true, "pos": [26.5, 0, -33.0], "target": [29.5, 0.45, -16.8], "apex": 4.9 },
+    { "kind": "spring", "id": "spring_mid", "mirror": true, "pos": [-20.5, 0, -1.8], "target": [-7.0, 3.5, 0.0], "apex": 7.0 },
+
+    { "kind": "channel", "id": "chan_lagoon", "mirror": true, "min": [-17.5, -8, -30.5], "max": [17.5, -0.8, -10.5] },
+    { "kind": "channel", "id": "chan_west", "mirror": true, "min": [-38, -8, -30.5], "max": [-17.5, -0.8, -20.5] },
+    { "kind": "channel", "id": "chan_east", "mirror": true, "min": [17.5, -8, -30.5], "max": [38, -0.8, -20.5] },
+    { "kind": "channel", "id": "chan_mid_w", "mirror": true, "min": [-17.5, -8, -10.5], "max": [-8.0, -0.8, 21.0] },
+
+    { "kind": "spawnpad", "id": "pad", "mirror": true, "center": [0, 1.2, -40.5], "radius": 2.2, "team": "A" },
+
+    { "kind": "crate", "id": "cr_beach_1", "mirror": true, "snap": true, "center": [-14.5, 0, -35.5], "size": 1.2, "yaw": 14 },
+    { "kind": "crate", "id": "cr_beach_3", "mirror": true, "snap": true, "center": [14.0, 0, -34.0], "size": 1.1, "yaw": 31 },
+    { "kind": "crate", "id": "cr_beach_5", "mirror": true, "snap": true, "center": [22.2, 0, -39.5], "size": 1.2, "yaw": 5 },
+    { "kind": "crate", "id": "cr_wi_1", "mirror": true, "snap": true, "center": [-20.0, 0, -16.8], "size": 1.1, "yaw": 25 },
+    { "kind": "crate", "id": "cr_mid_1", "mirror": true, "snap": true, "center": [6.8, 0, -5.4], "size": 1.1, "yaw": 18 },
+
+    { "kind": "deco", "id": "palm_wi_1", "asset": "palm", "mirror": true, "pos": [-31.2, 0, -8.5], "yaw": 0 },
+    { "kind": "deco", "id": "palm_wi_2", "asset": "palm", "mirror": true, "pos": [-19.4, 0, 17.2], "yaw": 0 },
+    { "kind": "deco", "id": "palm_beach_1", "asset": "palm", "mirror": true, "pos": [-31.5, 0, -40.0], "yaw": 0 },
+    { "kind": "deco", "id": "palm_beach_2", "asset": "palm", "mirror": true, "pos": [30.4, 0, -38.2], "yaw": 0 },
+    { "kind": "deco", "id": "log_beach_1", "asset": "driftwood", "mirror": true, "pos": [-8.8, 0, -33.4], "yaw": 72, "length": 4.2, "collide": true },
+    { "kind": "deco", "id": "log_beach_2", "asset": "driftwood", "mirror": true, "pos": [20.8, 0, -34.2], "yaw": -18, "length": 3.6, "collide": true },
+    { "kind": "deco", "id": "log_wi_1", "asset": "driftwood", "mirror": true, "pos": [-21.6, 0, -16.4], "yaw": 100, "length": 3.2, "collide": true },
+    { "kind": "deco", "id": "log_mid_1", "asset": "driftwood", "mirror": true, "pos": [7.4, 0, -2.0], "yaw": 8, "length": 2.6, "collide": true },
+    { "kind": "deco", "id": "kelp_beach_1", "asset": "kelp", "mirror": true, "pos": [-2.0, 0, -31.2], "yaw": 10, "scale": 1.0 },
+    { "kind": "deco", "id": "kelp_beach_2", "asset": "kelp", "mirror": true, "pos": [16.4, 0, -32.2], "yaw": -40, "scale": 0.9 },
+    { "kind": "deco", "id": "kelp_wi_1", "asset": "kelp", "mirror": true, "pos": [-23.0, 0, -20.2], "yaw": 70, "scale": 0.8 },
+    { "kind": "deco", "id": "kelp_mid_1", "asset": "kelp", "mirror": true, "pos": [-3.6, 0, -10.2], "yaw": -15, "scale": 0.9 },
+    { "kind": "deco", "id": "buoy_1", "asset": "buoy", "mirror": true, "pos": [-12.5, -0.6, -24.0], "variant": "red" },
+    { "kind": "deco", "id": "buoy_2", "asset": "buoy", "mirror": true, "pos": [12.5, -0.6, -18.0], "variant": "yellow" },
+    { "kind": "deco", "id": "flag_w", "asset": "pennant", "mirror": true, "pos": [-11.6, 0, -37.2], "team": "A" },
+    { "kind": "deco", "id": "flag_e", "asset": "pennant", "mirror": true, "pos": [11.6, 0, -37.2], "team": "A", "yaw": 180 },
+    { "kind": "deco", "id": "banner_spawn", "asset": "banner", "mirror": true, "pos": [0, 1.2, -44.4], "yaw": 0, "text": "HARBOR CUP" },
+    { "kind": "deco", "id": "seastacks", "asset": "seastacks", "mirror": true, "pos": [0, -0.6, 0] },
+    { "kind": "deco", "id": "horizon", "asset": "horizon", "mirror": false, "pos": [0, -0.6, 0] }
+  ]
+}

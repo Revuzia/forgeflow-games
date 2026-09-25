@@ -1,0 +1,170 @@
+{
+ "map": "lockwell",
+ "glb": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\dyefield\\art\\gltf\\map_lockwell.glb",
+ "glb_mb": 4.851,
+ "tris_total": 68491,
+ "tris_paint": 24322,
+ "objects": [
+  "col_stairs",
+  "conveyor_ramp_A",
+  "conveyor_ramp_B",
+  "deco_canopy",
+  "deco_clerestory",
+  "deco_conveyor",
+  "deco_crane",
+  "deco_doors",
+  "deco_flags",
+  "deco_hangers",
+  "deco_lamps",
+  "deco_office_trim",
+  "deco_pipes",
+  "deco_press",
+  "deco_signs",
+  "deco_skylights",
+  "deco_strips",
+  "deco_trusses",
+  "deco_wallband",
+  "grate_catwalks",
+  "paint_chevron",
+  "paint_concrete",
+  "paint_crate",
+  "paint_dock",
+  "paint_hazard",
+  "paint_office",
+  "paint_press",
+  "paint_steel",
+  "solid_canopy",
+  "solid_catwalk_frame",
+  "solid_columns",
+  "solid_conveyor",
+  "solid_conveyor_skirt",
+  "solid_crane",
+  "solid_office_furn",
+  "solid_pad_A",
+  "solid_pad_B",
+  "solid_pallets",
+  "solid_press_frame",
+  "solid_rails",
+  "solid_shell_roof",
+  "solid_shell_wall_e",
+  "solid_shell_wall_n",
+  "solid_shell_wall_s",
+  "solid_shell_wall_w",
+  "solid_undersides"
+ ],
+ "atlas": {
+  "size": 1024,
+  "tris": 24322,
+  "islands": 1760,
+  "paint_area": 4679.310344350025,
+  "uv_fraction": 0.3902999598618989,
+  "texels_per_meter": 9.352081547412034,
+  "texels_claimed": 409768,
+  "overlap_texels": 0,
+  "fold_texels": 0,
+  "margin_violation_texels": 0,
+  "border_violation_texels": 0,
+  "uv_min": [
+   0.003906231140717864,
+   0.003906198078766465
+  ],
+  "uv_max": [
+   0.9923042058944702,
+   0.9931545853614807
+  ],
+  "density_min": 9.345478581387328,
+  "density_max": 9.357686553439766,
+  "density_mean": 9.352081547262783,
+  "islands_outside_15pct": 0,
+  "area_outside_15pct": 0,
+  "blender_select_overlap_faces": 30
+ },
+ "fixups": [],
+ "version": 1,
+ "layout": "data/layouts/lockwell.json",
+ "conveyors": {
+  "conveyor_ramp_A": {
+   "brush": "conveyor",
+   "df_conveyor": [
+    0.0,
+    0.6732,
+    2.0945
+   ],
+   "speed": 2.2,
+   "from": [
+    11.25,
+    0,
+    -24.0
+   ],
+   "to": [
+    11.25,
+    4.5,
+    -10.0
+   ]
+  },
+  "conveyor_ramp_B": {
+   "brush": "conveyor_m",
+   "df_conveyor": [
+    0.0,
+    0.6732,
+    -2.0945
+   ],
+   "speed": 2.2,
+   "from": [
+    -11.25,
+    0,
+    24.0
+   ],
+   "to": [
+    -11.25,
+    4.5,
+    10.0
+   ]
+  }
+ },
+ "practical_lights": 12,
+ "floors": {
+  "press_hall": 0.0,
+  "docks": 1.0,
+  "mezzanine": 4.5,
+  "crane_walk": 9.0
+ },
+ "ao": {
+  "file": "map_lockwell_ao.png",
+  "size": 1024,
+  "samples": 64,
+  "distance": 2.0,
+  "device": "GPU OPTIX (NVIDIA RTX A2000 Laptop GPU)",
+  "seconds": 8.6,
+  "baked_texels": 409681,
+  "dilated_texels": 597984,
+  "mean": 0.8062,
+  "std": 0.232,
+  "min": 0.0,
+  "p05": 0.375,
+  "p50": 0.9062,
+  "p95": 1.0,
+  "max": 1.0,
+  "hist10": [
+   10335,
+   1963,
+   3076,
+   6826,
+   14992,
+   41190,
+   35810,
+   43646,
+   44838,
+   207005
+  ],
+  "crate_side_base_mean": 0.5017,
+  "crate_side_upper_mean": 0.6201,
+  "floor_by_crate_mean": 0.6757,
+  "floor_open_mean": 0.9899,
+  "floor_samples": [
+   344,
+   376
+  ],
+  "sane": true
+ }
+}

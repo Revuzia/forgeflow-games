@@ -649,6 +649,103 @@ export class BotDirector {
     seeds;
   - the whole match simulates in < 20 s of wall time.
 
+### §10.4 `CHANGED(SIM)`: additive SIM details (no §10.2 signature removed or changed)
+§10.2 fixes the fields; this section fixes what it left open. Other lanes may depend on all of it.
+```ts
+// core/runner.ts
+export interface SpawnPoint { x: number; y: number; z: number; yaw: number }
+export interface PadZone { x: number; y: number; z: number; r: number }        // pad top-centre + radius
+export interface RunnerIdentity { id: number; name: string; team: TeamId; kit: string; bot: boolean }
+export interface RunnerOptions {
+  killY?: number;                  // default -1
+  physics?: PhysicsWorld | null;   // wall-slick casts + head clearance (null: no wall-slick)
+  ownPad?: PadZone | null;         // counts as own dye (slick + refill)
+  enemyPad?: PadZone | null;       // this runner is pushed out of it
+  autoRespawn?: boolean;           // standalone default true: below killY → respawn at once. MatchWorld passes false (sea wash)
+  devBrush?: boolean;              // phase-2 DEV_BRUSH under the feet while fire is held (Player shim, probe_move)
+  fireMoveMul?: number;            // speed factor while firing (kit moveSpeedWhileFiring)
+}
+export function angleDelta(a: number, b: number): number;   // shortest signed a → b (moved here from player.ts)
+export class Runner {                                        // + every §10.2 field
+  constructor(who: RunnerIdentity, body: CharacterBody, spawn: SpawnPoint, opts?: RunnerOptions);
+  /** one tick of movement + slick/slog/wall-slick + tank refill + pad rules + hidden. No firing (MatchWorld does it). */
+  step(dt: number, intent: PlayerIntent, painter: Painter, events?: SimEvent[] | null): void;
+  respawn(spawn?: SpawnPoint): void;       // full reset: hp 100, tank 100, alive, tall capsule
+  teleport(x: number, y: number, z: number, yaw?: number): void;
+  canFire(): boolean;                       // alive, tall form, surfaced, not wall-slicking
+  onPad(p: PadZone | null): boolean;
+  // extra read-outs (view / bots / HUD):
+  slickForm: boolean;       // submerged form (fin shown) — also true in the air after a slick jump / ledge pop
+  surfacing: number;        // s left of the 0.12 s surfacing (firing blocked while > 0)
+  speed: number;            // horizontal m/s after collision
+  airTime: number; respawns: number; brushing: boolean;
+  wallNx: number; wallNz: number;           // horizontal wall normal while wall-slicking
+  inSea: boolean;           // fell below killY this tick (MatchWorld washes it, cause 'sea')
+  shots: number; dries: number; slicks: number; refillsFromLow: number;   // counters (probes / bots gate)
+}
+// core/player.ts is now a shim: `class Player extends Runner` with the old (team, body, spawn, {killY}) constructor
+// and devBrush on, plus re-exports of angleDelta / SpawnPoint. Delete it once main.ts/game.ts use MatchWorld.
+
+// core/combat/projectiles.ts — ProjectilePool also carries vx vy vz age drip (Float32Array), seed (Uint32Array),
+// capacity, dropped; spawn(...) → index | -1; remove(i) swap-removes (px/x of a slot stay paired, so the view
+// can draw slot i from (px,py,pz) → (x,y,z) with the frame alpha).
+
+// core/match/world.ts — MatchWorld extras
+readonly pads: Record<Side, PadZone>;  readonly durationS: number; readonly countdownS: number;
+spawnFor(r: Runner): SpawnPoint;               // the runner's own slot on its team pad
+stats: { shots; dry; splats; hits; washes; seaWashes; slicks; projectilesDropped; eventsDropped };
+devSetTimeLeft(s: number): void; devDamage(pid: number, n: number, by?: number): void;
+devSetTank(pid: number, v: number): void; devTeleport(pid: number, x: number, y: number, z: number, yaw?: number): void;
+```
+Rules fixed here: 
+- **Impact paint does not bleed through thin walls.** A floor hit clamps its radius to the distance to a wall ahead
+  (horizontal raycast) + 0.3 m. A wall hit paints the wall with `minFacing 0.35`, plus a floor splat (0.7 r) that is
+  pushed 0.45 m out along the wall normal onto the near-side floor.
+- **Range:** after `straightTime` the droplet falls with `gravity` and its horizontal speed decays with
+  drag = projectileSpeed / (maxRange − projectileSpeed·straightTime), so `maxRange` is the asymptotic reach.
+- **Spread:** uniform in a disc of half-angle `spreadDeg` (airborne `jumpSpreadDeg`), with the vertical axis ×0.4
+  (a flat fan paints the floor). Shots start on the runner's capsule axis at `COMBAT.muzzleHeight`, never at a
+  muzzle outside the capsule, so a shot at point blank cannot start behind a wall.
+- `tankLow` fires when the tank drops to ≤ 20 and re-arms above 25. The `slick` event fires on every change of
+  `slickForm` and on every wall attach/detach (`wall` = attached). `special` `ready` fires when the meter reaches 1.
+- The countdown steps runners with neutral intents (gravity only). `ended` clears the projectile pool and
+  steps runners with neutral intents, with no damage and no paint.
+- Numbers: `config.ts` `SLICK`, `TANK`, `HEALTH`, `HITBOX`, `COMBAT` and `MATCH`, plus `weapons.json`.
+- **`physics.ts`: the map trimesh is built with `TriMeshFlags.FIX_INTERNAL_EDGES`** (this includes merging
+  duplicate vertices). Without the flag, a capsule pressed against the fan-triangulated x = −20 side-deck wall
+  got a ghost ground normal from a diagonal internal edge. A dropped wall-slicker then hung at y 0.624 with
+  `grounded = true`; with the flag it falls. G2 (`probe_move`) passes with identical numbers either way.
+  Every lane's casts see the same corrected contacts.
+- Surfacing lasts whole ticks: round(0.12 / TICK) = 7 ticks = 0.117 s, counted from the release tick.
+- The horn freezes the court: `end()` zeroes every runner's horizontal velocity, so nobody coasts
+  after the end (gravity still lands anyone who is airborne).
+- `core/player.ts` is a shim: `Player` is a standalone Runner with the dev brush. As of the SIM
+  hand-off nothing imports it (`game.ts` runs `MatchWorld`), so the integrator may delete it.
+
+### §10.5 `CHANGED(BOTS)`: additive bot/nav details (no §10.2 signature removed or changed)
+```ts
+// core/bots/nav.ts — NavGraph gains (all additive):
+path(from: number, to: number, out: number[], extraCost?: (edge: number) => number): boolean;
+//   optional per-edge extra cost (Infinity forbids the edge); the 3-arg call is unchanged
+edgeClimb: Int32Array;                 // edge → index into climbs (kind 3), else −1
+climbs: NavClimb[];                    // { cx, cz: wall contact; nx, nz: face normal (toward the base node); y0, y1: base/top floor y }
+ground(x: number, z: number, yLo: number, yHi: number): number;   // highest walkable floor in [yLo, yHi] at (x, z), or NaN
+walkable(ax, ay, az, bx, by, bz): boolean;                         // continuous footing + no wall at knee/chest height
+stats: { buildMs; columns; nudged; edgesByKind: [walk, drop, jump, climb]; nodeMs; open };
+export const EDGE_WALK = 0, EDGE_DROP = 1, EDGE_JUMP = 2, EDGE_CLIMB = 3;
+// core/bots/director.ts — BotDirector gains:
+constructor(world: MatchWorld, nav: NavGraph, seed: number, skill?: BotSkill | readonly BotSkill[]);  // default 'fresh'; an array is per runner id
+holding(i: number): boolean;           // bot i is deliberately stationary (refilling, holding cover, painting a wall to climb)
+info(i: number): { mode: string; goal: number; target: number; holding: boolean };                   // debug / HUD / probes
+```
+Nav nodes stand only on paintable floors (`paint_*`) and on the two spawn pads, never on unpaintable set dressing
+(planter soil, bollard caps). A node needs 1.25 m of headroom for the real capsule (`MOVE.radius` + skin), footing
+under it, and it must not be inside a solid (floors come from the collision triangles' true normals, not ray normals,
+because Rapier flips a ray's normal toward the ray origin). Climb edges (kind 3) exist only up paintable walls
+1.05–3.0 m tall, onto a flat top with ≥ 4 walk links (decks, the buoy block; not crate lids or ramp sides).
+`game.ts` should build the graph once per map (`buildNav(geo, physics, def)`, ≈ 0.5 s on Pier 18 in node) and
+reuse it across matches: it depends only on the map, never on paint.
+
 ## §11 View / app for phases 3–5 (`three` + DOM)
 
 - `view/players.ts` shows 8 runners from one `HeroAssets`. The runtime **merges each hero's

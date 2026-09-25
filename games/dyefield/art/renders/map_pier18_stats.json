@@ -62,6 +62,7 @@
  },
  "fixups": [],
  "version": 1,
+ "layout": "data/maps.json (inline brushes)",
  "plate_bottom": -0.6,
  "pennant_clearance": {
   "deco_board_cup": {
@@ -98,5 +99,43 @@
     -37.6
    ]
   }
+ },
+ "ao": {
+  "file": "map_pier18_ao.png",
+  "size": 1024,
+  "samples": 64,
+  "distance": 2.0,
+  "device": "GPU OPTIX (NVIDIA RTX A2000 Laptop GPU)",
+  "seconds": 6.1,
+  "baked_texels": 622782,
+  "dilated_texels": 358520,
+  "mean": 0.9033,
+  "std": 0.1743,
+  "min": 0.0,
+  "p05": 0.5469,
+  "p50": 1.0,
+  "p95": 1.0,
+  "max": 1.0,
+  "hist10": [
+   5380,
+   298,
+   985,
+   3367,
+   6978,
+   36729,
+   33360,
+   40506,
+   39765,
+   455414
+  ],
+  "crate_side_base_mean": 0.5639,
+  "crate_side_upper_mean": 0.7112,
+  "floor_by_crate_mean": 0.7034,
+  "floor_open_mean": 0.9997,
+  "floor_samples": [
+   264,
+   15814
+  ],
+  "sane": true
  }
 }

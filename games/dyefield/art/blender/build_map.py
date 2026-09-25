@@ -1,39 +1,49 @@
-"""DYEFIELD — build an arena GLB from data/maps.json (CONTRACT §3.1, lane MAP).
+"""DYEFIELD — the SHARED map pipeline (CONTRACT §3.1, CONTRACT_ART_P6_8 §14.1–§14.3).
 
-    python art/build.py map pier18            (= blender --background --factory-startup
-                                                 --python art/blender/build_map.py -- --map pier18)
-    extra flags after the map id:  --no-render   --samples N   --quick-render
+    python art/build.py map <id> [flags]      (= blender --background --factory-startup
+                                                  --python art/blender/build_map.py -- --map <id> [flags])
+    flags:  --layout <path>   build from this layout file (a map lane's data/layouts/<id>.json before
+                              the orchestrator merged maps.json; its "meta" block OVERRIDES maps.json)
+            --no-render  --quick-render  --samples N      (EEVEE QA renders)
+            --no-ao  --ao-samples N  --ao-distance M     (§14.3 AO bake; default 64 samples, 2.0 m)
+            --out-dir <dir>   write GLB / AO / stats / renders there (experiments; nothing committed)
 
-Pipeline (deterministic, idempotent — every run starts from an empty factory scene):
-  1. read the map's brushes, apply fix-ups (logged) and the mirror rule (rot180),
-  2. ARCHITECTURE: every axis-aligned solid (plate, decks, walls, ramps, blocks, curbs) is unioned
-     with the EXACT boolean solver (contact faces vanish, touching faces split), spawn-pad
-     pockets are subtracted, convex edges > 30 deg get a 0.045 m two-segment bevel, deck ledges get
-     hazard nosing, the court floor is cut on a 4 m grid, and faces are classified:
-     pier skirt / bottoms -> solid_pier_skirt, everything else -> paint_<material>,
-  3. PROPS: crates (paint_crate), planters (paint_planter + solid soil), palms (solid trunks,
-     deco fronds), spawn pads (solid_pad_A/B), lamps + bollards (solid), pilings, billboards,
-     banners, lighthouse + breakwater, cranes/port, islands, sailboats (deco),
-  4. UVs: 'UVMap' = metres (box projection per face); 'Atlas' = one shared paint atlas across
-     ALL paint_* objects in one multi-object edit-mode session: smart project 60 deg (each crate
-     instance in its own pass) -> average island scale -> pack islands (margin fraction, 90-degree
-     rotations, pre-pack at 2x margin then two final passes, best clean result kept); the atlas
-     size is the smallest that can reach >= 80 % of paint.texelsPerMeter (CONTRACT §3.1),
-  5. verification: own rasteriser (texel centres, same rule as core/paint/atlas.ts) counts
-     cross-island overlaps, margin violations (< 3 px), border violations and per-island density
-     spread; bpy.ops.uv.select_overlap is run as a second opinion,
-  6. empties spawn_A / spawn_B / mapinfo (extras), export GLB (Y-up, extras, modifiers applied),
-  7. EEVEE QA renders (after export, with render-only preview shading that mirrors what the
-     runtime LOOK shaders draw: tile grout + court lines, chevrons, hazard stripes, planks).
+Nothing map-specific lives here. Per map, `art/blender/map_<id>.py` exposes
+`build(mdef, layout, ctx) -> None` and authors the geometry through `ctx` (the helper API is
+MapCtx below; how to write a module: art/blender/MAPS_README.md). Pipeline (deterministic,
+idempotent — every run starts from an empty factory scene):
+  1. load data/maps.json -> mdef and the map's layout: inline 'brushes' (legacy, pier18), or
+     data/<maps.json 'layout'> ("layouts/<id>.json"), or --layout <path>; the layout's "meta"
+     block fills (or with --layout overrides) the runtime metadata (spawns, bounds, lighting...),
+  2. expand the brushes (module FIXUPS, then the symmetry mirror rule), warn on AABB overlaps,
+  3. import map_<id> and call build(mdef, layout, ctx): geometry goes into ctx.geos buckets
+     (common.Geo, world space) or ctx.add_object(); empties / lights / extras / cameras via ctx,
+  4. realise every bucket as ONE object, ordered by prefix (paint_, solid_, grate_, conveyor_,
+     spring_, col_, oob_, deco_, water_) then name; module objects get their transforms applied
+     (§3.1 / §14.2); §14.2 extras attached and validated; UVMap (UV0) = metres box projection,
+  5. ATLAS (UV2 'Atlas') over ALL paint_* objects: smart project 60 deg (each df_group instance in
+     its own pass) -> average island scale -> pack (pre-pack at 2x margin, two final passes, best
+     clean result kept); atlas size = the smallest reaching >= 80 % of paint.texelsPerMeter;
+     verification with our own texel-centre rasteriser (overlaps, margins < 3 px, border, density)
+     plus bpy.ops.uv.select_overlap as a second opinion,
+  6. AO BAKE (§14.3): Cycles (GPU via OptiX/CUDA when present, else CPU, <= 64 samples) bakes
+     ambient occlusion of every paint_* surface into Atlas space -> art/gltf/map_<id>_ao.png
+     (8-bit grey, atlas-sized up to 1024 else half, dilated into the gutters), mapinfo df_ao,
+  7. empties (mapinfo + df_* extras, spawn_A/B, module empties), GLB export (Y-up, extras),
+     art/renders/map_<id>_stats.json,
+  8. EEVEE QA renders (after export, render-only preview shading that mirrors the runtime LOOK
+     shaders) at the camera stations: top, persp (SUNCREW spawn), aerial + module stations.
 """
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import math
 import os
 import sys
 import time
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -45,35 +55,16 @@ import common as C  # noqa: E402
 import deco_assets as D  # noqa: E402
 
 DF_VERSION = 1
-# The pier slab underside (fascia depth) is the plate brush's min.y in data/maps.json - the data is
-# the single truth (plate_bottom() below); the pilings carry it down to the sea.
-ARCH_BEVEL = 0.045
-PAD_POCKET = 0.3
-ARCH_MATS = ["M_tile", "M_concrete", "M_boardwalk", "M_chevron", "M_hazard"]
-# Floating channel buoys around the pier (deco only, in the out-of-bounds water; glTF x, z).
-BUOYS = {"pier18": [("red", -39.0, -24.0), ("red", 40.0, 30.0), ("yellow", -41.0, 22.0),
-                    ("yellow", 45.0, -47.0), ("red", -22.0, 61.0), ("red", 20.0, -62.0)]}
-
-# Hazard nosing: a 0.35 m hazard band on the top edge of every deck ledge that drops to a lower
-# level (same visual language as the ramp lips). Directions are in the brush's own frame; the
-# rot180 mirror flips them.
-NOSING = {"base_deck": ("+z", "-x", "+x"), "side_deck": ("+x", "-z", "+z"), "buoy_block": ("+z", "-z", "+x", "-x")}
-NOSING_W = 0.35
-GRID = 4                     # court floor tessellation (m)
-# Team pennants flank each base end (deco only; not in maps.json, no gameplay effect). They stand
-# this far outboard of the base backwall ends, on the back edge of the pier, and the flag streams
-# outboard, so from the court they sit beside - not in front of - the over-water billboard
-# lettering behind that end (pennant_clearance() measures it on every build).
-PENNANT_OUTSET = 10.0
-ARCH_IDX = {"tile": 0, "concrete": 1, "boardwalk": 2, "chevron": 3, "hazard": 4}
-
-# Geometry fix-ups applied to brushes BEFORE mirroring. Each one is reported with the exact
-# maps.json change recommended to the orchestrator (data/maps.json is orchestrator-owned).
-# (pier18 crate_a3 was fixed here as center [-18.6, 1.2, -27.5]; the integrator moved that fix
-#  into data/maps.json, CONTRACT CHANGED(integrator), so the data is the single truth again)
-FIXUPS: dict = {
-    "pier18": {},
-}
+# Export / realisation order of node prefixes (CONTRACT §3.1 + CONTRACT_ART_P6_8 §14.2).
+PREFIX_ORDER = ["paint_", "solid_", "grate_", "conveyor_", "spring_", "col_", "oob_", "deco_", "water_"]
+# Prefixes whose nodes must carry identity transforms (vertices in world space).
+APPLY_PREFIXES = ("paint_", "solid_", "col_", "grate_", "conveyor_", "spring_", "oob_")
+# Prefixes never drawn in the QA renders (runtime-invisible volumes).
+HIDDEN_PREFIXES = ("col_", "oob_")
+# Brush kinds that are solid volumes (AABB overlap validation).
+SOLID_KINDS = ("box", "ramp", "stairs", "curb", "crate", "planter")
+# Brush vector fields that the mirror rule rotates with the map (glTF [x, y, z]).
+MIRROR_VECTOR_KEYS = ("vel", "launch", "conveyor", "dir", "target", "land")
 
 T0 = time.time()
 
@@ -84,6 +75,7 @@ def log(*a):
 
 # ── brushes ──────────────────────────────────────────────────────────────────────────────────────
 def mirror_brush(b: dict, symmetry: str) -> dict:
+    """The symmetry partner of a brush. rot180: (x, y, z) -> (-x, y, -z), yaw + 180, team A<->B."""
     if symmetry != "rot180":
         raise ValueError(f"unsupported symmetry {symmetry!r}")
     m = json.loads(json.dumps(b))
@@ -99,22 +91,29 @@ def mirror_brush(b: dict, symmetry: str) -> dict:
         if key in b:
             p = b[key]
             m[key] = [-p[0], p[1], -p[2]]
-    if b["kind"] in ("crate", "planter", "deco"):
+    for key in MIRROR_VECTOR_KEYS:
+        v = b.get(key)
+        if isinstance(v, list) and len(v) == 3 and all(isinstance(c, (int, float)) for c in v):
+            m[key] = [-v[0], v[1], -v[2]]
+    if isinstance(b.get("points"), list):
+        m["points"] = [[-p[0], p[1], -p[2]] for p in b["points"]]
+    if b["kind"] in ("crate", "planter", "deco") or "yaw" in b:
         m["yaw"] = (b.get("yaw", 0.0) + 180.0)
-    if b["kind"] == "spawnpad":
+    if "team" in b:
         m["team"] = "B" if b["team"] == "A" else "A"
     return m
 
 
-def expand_brushes(mdef: dict) -> tuple[list[dict], list[str]]:
+def expand_brushes(mdef: dict, brushes_in: list[dict], fixups: dict) -> tuple[list[dict], list[str]]:
+    """Apply the module's FIXUPS (logged) then the mirror rule. Every brush gets `_base` = the id it
+    was authored under (a mirrored copy has id '<id>_m' and _base '<id>')."""
     notes = []
-    fix = FIXUPS.get(mdef["id"], {})
     out = []
-    for b in mdef["brushes"]:
+    for b in brushes_in:
         b = dict(b)
         b["_base"] = b["id"]
-        if b["id"] in fix:
-            f = fix[b["id"]]
+        if b["id"] in fixups:
+            f = fixups[b["id"]]
             for k, v in f.items():
                 if k != "why":
                     notes.append(f"FIXUP {b['id']}.{k}: {b.get(k)} -> {v}  ({f['why']})")
@@ -122,20 +121,15 @@ def expand_brushes(mdef: dict) -> tuple[list[dict], list[str]]:
         out.append(b)
         if b.get("mirror"):
             out.append(mirror_brush(b, mdef["symmetry"]))
+    ids = [b["id"] for b in out]
+    dup = sorted({i for i in ids if ids.count(i) > 1})
+    if dup:
+        raise ValueError(f"duplicate brush ids after mirroring: {dup}")
     return out, notes
 
 
-def plate_bottom(brushes: list[dict]) -> float:
-    """Pier slab underside = the plate brush's min.y (data/maps.json is the single truth)."""
-    plate = next(b for b in brushes if b["id"] == "plate")
-    y0, y1 = float(plate["min"][1]), float(plate["max"][1])
-    if not y0 < y1:
-        raise ValueError(f"plate brush min.y {y0} must be below its top {y1} (it is the slab underside)")
-    return y0
-
-
 def ground_y(brushes: list[dict], x: float, z: float) -> float:
-    """Top of the highest axis-aligned box/curb brush over (x, z) (the plate counts); ramps ignored."""
+    """Top of the highest axis-aligned box/curb brush over (x, z); ramps/stairs ignored; 0 if none."""
     y = None
     for b in brushes:
         if b["kind"] in ("box", "curb") and "min" in b:
@@ -159,10 +153,18 @@ def aabb_of(b: dict):
     return None
 
 
-def validate_brushes(brushes: list[dict]) -> list[str]:
-    """Positive-volume AABB overlaps between solid brushes (touching is fine)."""
+def overlap_exempt(b: dict, overlap_ok=()) -> bool:
+    """A slab/floor other solids stand in: "overlapOk": true on the brush, or its authored id listed
+    in the module's OVERLAP_OK."""
+    return bool(b.get("overlapOk")) or b.get("_base", b["id"]) in overlap_ok
+
+
+def validate_brushes(brushes: list[dict], overlap_ok=()) -> list[str]:
+    """Positive-volume AABB overlaps between solid brushes (touching is fine); overlap_exempt()
+    brushes are skipped."""
     warn = []
-    solids = [b for b in brushes if b["kind"] in ("box", "ramp", "curb", "crate", "planter") and b["id"] != "plate"]
+    solids = [b for b in brushes if b["kind"] in SOLID_KINDS and not overlap_exempt(b, overlap_ok)
+              and aabb_of(b) is not None]
     eps = 1e-3
     for i in range(len(solids)):
         a0, a1 = aabb_of(solids[i])
@@ -174,352 +176,474 @@ def validate_brushes(brushes: list[dict]) -> list[str]:
     return warn
 
 
-# ── architecture ─────────────────────────────────────────────────────────────────────────────────
-def _box_bm(b, plate=False):
-    mn, mx = b["min"], b["max"]
-    y0 = mn[1]                   # the plate's min.y IS the slab underside (plate_bottom())
-    bm = bmesh.new()
-    faces = C.bm_box(bm, (mn[0], -mx[2], y0), (mx[0], -mn[2], mx[1]), ARCH_IDX[b.get("mat", "concrete")])
-    bm.normal_update()
-    if plate:
-        for f in faces:
-            f.material_index = ARCH_IDX["tile"] if f.normal.z > 0.5 else ARCH_IDX["concrete"]
-    return bm
+# ── architecture helpers (ctx.arch) ─────────────────────────────────────────────────────────────
+_FLIP = {"+x": "-x", "-x": "+x", "+z": "-z", "-z": "+z"}
 
 
-def _ramp_bm(b):
-    (x0, y0, z0), (x1, y1, z1) = b["min"], b["max"]
-    rise = b["rise"]
-    sign = 1 if rise[0] == "+" else -1
-    if rise[1] == "z":
-        across = (x0, x1)
-        lo_r, hi_r = (z0, z1) if sign > 0 else (z1, z0)
+class Arch:
+    """Bevelled-solid architecture kit bound to one material list (bmesh material_index = position
+    in `mats`). Brush materials are short names ('concrete' -> 'M_concrete'). Typical use:
 
-        def P(a, r, y):
-            return C.g2b(a, y, r)
-    else:
-        across = (z0, z1)
-        lo_r, hi_r = (x0, x1) if sign > 0 else (x1, x0)
+        arch = ctx.arch(["M_concrete", "M_hazard", ...])
+        ops = [(f"_op_{b['id']}", arch.box_bm(b)) for b in ctx.brushes_of("box")]
+        bm = arch.union(arch.box_bm(floor), ops, arch.pad_pockets(ctx.brushes_of("spawnpad")))
+        arch.bevel_convex(bm, 0.045)
+        ctx.geos.update(arch.to_geos(bm, arch.default_classify()))
+    """
 
-        def P(a, r, y):
-            return C.g2b(r, y, a)
-    run = abs(hi_r - lo_r)
-    lip = min(0.55, run * 0.12)
-    lr = lo_r + (hi_r - lo_r) * lip / run
-    ly = y0 + (y1 - y0) * lip / run
-    bm = bmesh.new()
-    V = lambda a, r, y: bm.verts.new(P(a, r, y))  # noqa: E731
-    A0, A1 = V(across[0], lo_r, y0), V(across[1], lo_r, y0)
-    L0, L1 = V(across[0], lr, ly), V(across[1], lr, ly)
-    T0_, T1_ = V(across[0], hi_r, y1), V(across[1], hi_r, y1)
-    B0, B1 = V(across[0], hi_r, y0), V(across[1], hi_r, y0)
-    mi = ARCH_IDX[b.get("mat", "concrete")]
-    for vs, m in (((A0, A1, L1, L0), ARCH_IDX["hazard"]), ((L0, L1, T1_, T0_), mi), ((T0_, T1_, B1, B0), mi),
-                  ((A0, B0, B1, A1), mi), ((A0, L0, T0_, B0), mi), ((A1, B1, T1_, L1), mi)):
-        f = bm.faces.new(vs)
-        f.material_index = m
-    return bm
+    def __init__(self, ctx, mats, default="concrete", lip="hazard"):
+        self.ctx = ctx
+        self.mats = list(mats)
+        self.default = default
+        self.lip = lip
 
+    def idx(self, short: str) -> int:
+        name = short if short.startswith("M_") else "M_" + short
+        if name not in self.mats:
+            raise KeyError(f"material {name} is not in this Arch's list {self.mats}")
+        return self.mats.index(name)
 
-def _nosed_box_bms(b):
-    """Split a deck box into a core + hazard-topped nosing strips along its ledge edges."""
-    base = b["_base"]
-    dirs = NOSING.get(base)
-    if not dirs:
-        return [_box_bm(b)]
-    if b["id"] != base:
-        dirs = tuple({"+x": "-x", "-x": "+x", "+z": "-z", "-z": "+z"}[d] for d in dirs)
-    (x0, y0, z0), (x1, y1, z1) = b["min"], b["max"]
-    cx0, cx1, cz0, cz1 = x0, x1, z0, z1
-    strips = []
-    w = NOSING_W
-    if "+x" in dirs:
-        cx1 = x1 - w
-        strips.append(([x1 - w, y0, z0], [x1, y1, z1]))
-    if "-x" in dirs:
-        cx0 = x0 + w
-        strips.append(([x0, y0, z0], [x0 + w, y1, z1]))
-    if "+z" in dirs:
-        cz1 = z1 - w
-        strips.append(([x0, y0, z1 - w], [x1, y1, z1]))
-    if "-z" in dirs:
-        cz0 = z0 + w
-        strips.append(([x0, y0, z0], [x1, y1, z0 + w]))
-    out = [_box_bm(dict(b, min=[cx0, y0, cz0], max=[cx1, y1, cz1]))]
-    for (mn, mx) in strips:
-        bm = _box_bm(dict(b, min=mn, max=mx))
-        for f in bm.faces:
-            if f.normal.z > 0.5:
-                f.material_index = ARCH_IDX["hazard"]
-        out.append(bm)
-    return out
-
-
-def build_architecture(brushes, mdef):
-    log("architecture: building solids")
-    plate = next(b for b in brushes if b["id"] == "plate")
-    log(f"architecture: pier slab underside y = {plate_bottom(brushes)} (plate brush min.y, data/maps.json)")
-    base = C.mesh_object_from_bm("arch", _box_bm(plate, plate=True), ARCH_MATS)
-    ops = []
-    for b in brushes:
-        if b["id"] == "plate":
-            continue
-        if b["kind"] in ("box", "curb"):
-            bms = _nosed_box_bms(b)
-        elif b["kind"] == "ramp":
-            bms = [_ramp_bm(b)]
-        else:
-            continue
-        for k, bm in enumerate(bms):
-            ops.append(C.mesh_object_from_bm(f"_op_{b['id']}_{k}", bm, ARCH_MATS))
-            bm.free()
-    pockets = []
-    pads = [b for b in brushes if b["kind"] == "spawnpad"]
-    for b in pads:
-        c = C.g2b(*b["center"])
+    # solids (all return a fresh bmesh in Blender space) ───────────────────────────────────────
+    def box_bm(self, b, top: str | None = None, side: str | None = None):
+        """Axis-aligned box brush (min/max). top/side override the material of up-facing / other
+        faces (e.g. a slab whose top is tile and whose sides are concrete)."""
+        mn, mx = b["min"], b["max"]
         bm = bmesh.new()
-        C.bm_cylinder(bm, b["radius"], b["radius"], c.z - PAD_POCKET, c.z + 0.6, seg=64, center=(c.x, c.y))
-        pockets.append(C.mesh_object_from_bm(f"_pocket_{b['id']}", bm, ARCH_MATS))
-        bm.free()
-    log(f"architecture: EXACT union of {len(ops) + 1} solids, {len(pockets)} pad pockets")
-    me = C.boolean_chain(base, [("UNION", ops), ("DIFFERENCE", pockets)])
-    bpy.data.objects.remove(base)
-    bm = bmesh.new()
-    bm.from_mesh(me)
-    bpy.data.meshes.remove(me)
-    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
-    bmesh.ops.dissolve_degenerate(bm, dist=1e-5, edges=bm.edges)
-    edges = C.sharp_convex_edges(bm, 30.0)
-    log(f"architecture: {len(bm.faces)} faces after booleans; bevelling {len(edges)} convex edges")
-    C.bevel_edges(bm, edges, ARCH_BEVEL, segments=2, profile=0.5)
-    nbad = C.cleanup_degenerate(bm)
-    log(f"architecture: removed {nbad} zero-area faces after bevel")
-    # Cut the flat court floor on a 4 m grid: the boolean leaves a few huge concave n-gons whose
-    # triangulation is long slivers (bad for the Rapier trimesh + per-vertex effects).
-    (px0, _, pz0), (px1, _, pz1) = next(b for b in brushes if b["id"] == "plate")["min"],         next(b for b in brushes if b["id"] == "plate")["max"]
-    cuts = [(Vector((x, 0, 0)), Vector((1, 0, 0))) for x in range(int(px0) + GRID, int(px1), GRID)] +            [(Vector((0, -z, 0)), Vector((0, 1, 0))) for z in range(int(pz0) + GRID, int(pz1), GRID)]
-    for co, no in cuts:
-        floor = [f for f in bm.faces if f.material_index == ARCH_IDX["tile"] and f.normal.z > 0.999]
-        # order-preserving de-dup: iterating a set of BMesh elements is address-ordered (non-deterministic)
-        geom = list(dict.fromkeys(e for f in floor for e in f.edges)) + floor +             list(dict.fromkeys(v for f in floor for v in f.verts))
-        bmesh.ops.bisect_plane(bm, geom=geom, plane_co=co, plane_no=no, dist=1e-5)
-    log(f"architecture: court floor cut on a {GRID} m grid -> "
-        f"{sum(1 for f in bm.faces if f.material_index == ARCH_IDX['tile'])} tile faces")
-    bm.faces.ensure_lookup_table()
+        faces = C.bm_box(bm, (mn[0], -mx[2], mn[1]), (mx[0], -mn[2], mx[1]), self.idx(b.get("mat", self.default)))
+        bm.normal_update()
+        if top or side:
+            for f in faces:
+                if f.normal.z > 0.5:
+                    if top:
+                        f.material_index = self.idx(top)
+                elif side:
+                    f.material_index = self.idx(side)
+        return bm
 
-    (bx0, _, bz0), (bx1, _, bz1) = plate["min"], plate["max"]
-    buckets = {n: [] for n in ("tile", "concrete", "boardwalk", "chevron", "hazard", "skirt")}
-    dropped = 0
-    for f in bm.faces:
-        c = f.calc_center_median()
-        n = f.normal
-        gx, gy, gz = C.b2g(c)
-        # pad pocket interior (hidden under the pad)
-        pocket = False
+    def nosed_box_bms(self, b, dirs, width: float = 0.35, nose: str = "hazard"):
+        """Split a deck box into a core + nosing strips (top faces in `nose` material) along the
+        ledge edges `dirs` (subset of '+x', '-x', '+z', '-z', in the AUTHORED brush's frame — a
+        mirrored copy flips them)."""
+        if not dirs:
+            return [self.box_bm(b)]
+        if b["id"] != b.get("_base", b["id"]):
+            dirs = tuple(_FLIP[d] for d in dirs)
+        (x0, y0, z0), (x1, y1, z1) = b["min"], b["max"]
+        cx0, cx1, cz0, cz1 = x0, x1, z0, z1
+        strips = []
+        w = width
+        if "+x" in dirs:
+            cx1 = x1 - w
+            strips.append(([x1 - w, y0, z0], [x1, y1, z1]))
+        if "-x" in dirs:
+            cx0 = x0 + w
+            strips.append(([x0, y0, z0], [x0 + w, y1, z1]))
+        if "+z" in dirs:
+            cz1 = z1 - w
+            strips.append(([x0, y0, z1 - w], [x1, y1, z1]))
+        if "-z" in dirs:
+            cz0 = z0 + w
+            strips.append(([x0, y0, z0], [x1, y1, z0 + w]))
+        out = [self.box_bm(dict(b, min=[cx0, y0, cz0], max=[cx1, y1, cz1]))]
+        for (mn, mx) in strips:
+            bm = self.box_bm(dict(b, min=mn, max=mx))
+            for f in bm.faces:
+                if f.normal.z > 0.5:
+                    f.material_index = self.idx(nose)
+            out.append(bm)
+        return out
+
+    def _run_frame(self, b):
+        """(across range, lo_r, hi_r, P(a, r, y) -> Blender Vector) for a brush with 'rise'."""
+        (x0, y0, z0), (x1, y1, z1) = b["min"], b["max"]
+        rise = b["rise"]
+        sign = 1 if rise[0] == "+" else -1
+        if rise[1] == "z":
+            across = (x0, x1)
+            lo_r, hi_r = (z0, z1) if sign > 0 else (z1, z0)
+
+            def P(a, r, y):
+                return C.g2b(a, y, r)
+        else:
+            across = (z0, z1)
+            lo_r, hi_r = (x0, x1) if sign > 0 else (x1, x0)
+
+            def P(a, r, y):
+                return C.g2b(r, y, a)
+        return across, lo_r, hi_r, P
+
+    def ramp_bm(self, b):
+        """Solid wedge inside min/max rising toward 'rise'; the low edge gets a lip strip in
+        b.get('lip', <Arch lip>) material (hazard on Pier 18)."""
+        (x0, y0, z0), (x1, y1, z1) = b["min"], b["max"]
+        across, lo_r, hi_r, P = self._run_frame(b)
+        run = abs(hi_r - lo_r)
+        lip = min(0.55, run * 0.12)
+        lr = lo_r + (hi_r - lo_r) * lip / run
+        ly = y0 + (y1 - y0) * lip / run
+        bm = bmesh.new()
+        V = lambda a, r, y: bm.verts.new(P(a, r, y))  # noqa: E731
+        A0, A1 = V(across[0], lo_r, y0), V(across[1], lo_r, y0)
+        L0, L1 = V(across[0], lr, ly), V(across[1], lr, ly)
+        T0_, T1_ = V(across[0], hi_r, y1), V(across[1], hi_r, y1)
+        B0, B1 = V(across[0], hi_r, y0), V(across[1], hi_r, y0)
+        mi = self.idx(b.get("mat", self.default))
+        li = self.idx(b.get("lip", self.lip)) if b.get("lip", self.lip) else mi
+        for vs, m in (((A0, A1, L1, L0), li), ((L0, L1, T1_, T0_), mi), ((T0_, T1_, B1, B0), mi),
+                      ((A0, B0, B1, A1), mi), ((A0, L0, T0_, B0), mi), ((A1, B1, T1_, L1), mi)):
+            f = bm.faces.new(vs)
+            f.material_index = m
+        return bm
+
+    def stairs_bms(self, b):
+        """Stairs brush: min/max, 'rise' (+x|-x|+z|-z), optional 'steps' (default: 0.25 m risers),
+        'mat', 'nose' (material of a 0.12 m strip on each tread's front edge; default the Arch lip,
+        '' for none). Each step is a full-depth block to the high end, so the union is a solid
+        staircase. Pair with stairs_col_bm() for a smooth invisible collider."""
+        (x0, y0, z0), (x1, y1, z1) = b["min"], b["max"]
+        across, lo_r, hi_r, _ = self._run_frame(b)
+        n = int(b.get("steps") or max(1, round((y1 - y0) / 0.25)))
+        d = (hi_r - lo_r) / n
+        nose = b.get("nose", self.lip)
+        nd = (min(0.12, abs(d) * 0.4) * (1 if d > 0 else -1)) if nose else 0.0
+
+        def block(ra, rb, top):
+            ra, rb = sorted((ra, rb))
+            if b["rise"][1] == "z":
+                return self.box_bm(dict(b, min=[across[0], y0, ra], max=[across[1], top, rb]))
+            return self.box_bm(dict(b, min=[ra, y0, across[0]], max=[rb, top, across[1]]))
+        out = []
+        for i in range(n):
+            r0 = lo_r + d * i
+            top = y0 + (y1 - y0) * (i + 1) / n
+            out.append(block(r0 + nd, hi_r, top))
+            if nose:                       # the tread's front strip: same solid, nose-coloured top
+                nbm = block(r0, r0 + nd, top)
+                for f in nbm.faces:
+                    if f.normal.z > 0.5:
+                        f.material_index = self.idx(nose)
+                out.append(nbm)
+        return out
+
+    def stairs_col_bm(self, b):
+        """Invisible collider for a stairs brush: a wedge through the step nosings (foot one tread
+        in front of the first riser, top at the landing). Put it in a col_ bucket."""
+        (x0, y0, z0), (x1, y1, z1) = b["min"], b["max"]
+        across, lo_r, hi_r, P = self._run_frame(b)
+        n = int(b.get("steps") or max(1, round((y1 - y0) / 0.25)))
+        d = (hi_r - lo_r) / n
+        bm = bmesh.new()
+        V = lambda a, r, y: bm.verts.new(P(a, r, y))  # noqa: E731
+        A0, A1 = V(across[0], lo_r - d, y0), V(across[1], lo_r - d, y0)
+        T0_, T1_ = V(across[0], hi_r - d, y1), V(across[1], hi_r - d, y1)
+        E0, E1 = V(across[0], hi_r, y1), V(across[1], hi_r, y1)
+        B0, B1 = V(across[0], hi_r, y0), V(across[1], hi_r, y0)
+        for vs in ((A0, A1, T1_, T0_), (T0_, T1_, E1, E0), (E0, E1, B1, B0), (A0, B0, B1, A1),
+                   (A0, T0_, E0, B0), (A1, B1, E1, T1_)):
+            bm.faces.new(vs)
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        return bm
+
+    def pad_pockets(self, pads, depth: float = 0.3, seg: int = 64):
+        """Cylindrical pockets (subtract in union()) so a spawn pad disc sits flush in the deck."""
+        out = []
         for b in pads:
-            pc = b["center"]
-            if math.hypot(gx - pc[0], gz - pc[2]) < b["radius"] + 0.06 and gy < pc[1] - ARCH_BEVEL - 0.005:
-                pocket = True
-        if pocket:
-            dropped += 1
-            continue
-        nx, ny, nz = C.b2g(n)
-        on_edge = (abs(gx - bx0) < 0.02 and nx < -0.85) or (abs(gx - bx1) < 0.02 and nx > 0.85) or \
-                  (abs(gz - bz0) < 0.02 and nz < -0.85) or (abs(gz - bz1) < 0.02 and nz > 0.85)
-        if ny < -0.5 or on_edge:
-            buckets["skirt"].append(f)
-        else:
-            buckets[ARCH_MATS[f.material_index][2:]].append(f)
-    geos = {}
-    for key, faces in buckets.items():
-        name = "solid_pier_skirt" if key == "skirt" else f"paint_{key}"
-        g = C.Geo(name)
-        vmap = {}
-        for f in faces:
-            idx = []
-            for v in f.verts:
-                if v not in vmap:
-                    vmap[v] = len(g.verts)
-                    g.verts.append(v.co.copy())
-                idx.append(vmap[v])
-            g.faces.append(tuple(idx))
-            g.fmat.append(ARCH_MATS[f.material_index])
-            g.fsmooth.append(False)
-        geos[name] = g
-        log(f"architecture: {name}: {len(faces)} faces")
-    log(f"architecture: dropped {dropped} pad-pocket faces")
-    bm.free()
-    return geos
+            c = C.g2b(*b["center"])
+            bm = bmesh.new()
+            C.bm_cylinder(bm, b["radius"], b["radius"], c.z - depth, c.z + 0.6, seg=seg, center=(c.x, c.y))
+            out.append((f"_pocket_{b['id']}", bm))
+        return out
+
+    # boolean + finishing ─────────────────────────────────────────────────────────────────────
+    def union(self, base_bm, ops, pockets=(), base_name: str = "arch"):
+        """EXACT-solver union of base_bm with every (name, bm) in ops, minus every (name, bm) in
+        pockets; merged verts + degenerate cleanup. Frees the input bmeshes; returns a new bmesh."""
+        base = C.mesh_object_from_bm(base_name, base_bm, self.mats)
+        base_bm.free()
+        op_objs, pocket_objs = [], []
+        for lst, dst in ((ops, op_objs), (pockets, pocket_objs)):
+            for name, bm in lst:
+                dst.append(C.mesh_object_from_bm(name, bm, self.mats))
+                bm.free()
+        log(f"architecture: EXACT union of {len(op_objs) + 1} solids, {len(pocket_objs)} pockets")
+        steps = [("UNION", op_objs)] + ([("DIFFERENCE", pocket_objs)] if pocket_objs else [])
+        me = C.boolean_chain(base, steps)
+        bpy.data.objects.remove(base)
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        bpy.data.meshes.remove(me)
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+        bmesh.ops.dissolve_degenerate(bm, dist=1e-5, edges=bm.edges)
+        return bm
+
+    def bevel_convex(self, bm, width: float = 0.045, angle: float = 30.0, segments: int = 2, profile: float = 0.5):
+        """Bevel every convex edge sharper than `angle` deg, then drop zero-area slivers."""
+        edges = C.sharp_convex_edges(bm, angle)
+        log(f"architecture: {len(bm.faces)} faces after booleans; bevelling {len(edges)} convex edges")
+        C.bevel_edges(bm, edges, width, segments=segments, profile=profile)
+        nbad = C.cleanup_degenerate(bm)
+        log(f"architecture: removed {nbad} zero-area faces after bevel")
+
+    def grid_cut(self, bm, mat: str, x0: float, x1: float, z0: float, z1: float, grid: int = 4):
+        """Cut the flat up-facing faces of material `mat` on a `grid` m lattice over the glTF (x, z)
+        rectangle: the boolean leaves huge concave n-gons whose triangulation is long slivers (bad
+        for the Rapier trimesh and per-vertex effects)."""
+        mi = self.idx(mat)
+        cuts = [(Vector((x, 0, 0)), Vector((1, 0, 0))) for x in range(int(x0) + grid, int(x1), grid)] + \
+               [(Vector((0, -z, 0)), Vector((0, 1, 0))) for z in range(int(z0) + grid, int(z1), grid)]
+        for co, no in cuts:
+            floor = [f for f in bm.faces if f.material_index == mi and f.normal.z > 0.999]
+            # order-preserving de-dup: iterating a set of BMesh elements is address-ordered (non-deterministic)
+            geom = list(dict.fromkeys(e for f in floor for e in f.edges)) + floor + \
+                list(dict.fromkeys(v for f in floor for v in f.verts))
+            bmesh.ops.bisect_plane(bm, geom=geom, plane_co=co, plane_no=no, dist=1e-5)
+        log(f"architecture: {mat} floor cut on a {grid} m grid -> "
+            f"{sum(1 for f in bm.faces if f.material_index == mi)} {mat} faces")
+        bm.faces.ensure_lookup_table()
+
+    def default_classify(self, bottoms: str = "solid_undersides"):
+        """Faces facing down -> `bottoms` (not paintable, CONTRACT §3.1); the rest -> paint_<mat>."""
+        def classify(f):
+            if C.b2g(f.normal)[1] < -0.5:
+                return bottoms
+            return "paint_" + self.mats[f.material_index][2:]
+        return classify
+
+    def to_geos(self, bm, classify) -> dict:
+        """Split a bmesh into Geo buckets: classify(face) -> bucket name, or None to drop the face."""
+        buckets: dict[str, list] = {}
+        dropped = 0
+        for f in bm.faces:
+            name = classify(f)
+            if name is None:
+                dropped += 1
+                continue
+            buckets.setdefault(name, []).append(f)
+        geos = {}
+        for name, faces in buckets.items():
+            g = C.Geo(name)
+            vmap = {}
+            for f in faces:
+                idx = []
+                for v in f.verts:
+                    if v not in vmap:
+                        vmap[v] = len(g.verts)
+                        g.verts.append(v.co.copy())
+                    idx.append(vmap[v])
+                g.faces.append(tuple(idx))
+                g.fmat.append(self.mats[f.material_index])
+                g.fsmooth.append(False)
+            geos[name] = g
+            log(f"architecture: {name}: {len(faces)} faces")
+        log(f"architecture: dropped {dropped} faces")
+        return geos
 
 
-# ── props + scenery ─────────────────────────────────────────────────────────────────────────────
-def build_props(brushes, mdef, geos):
-    def bucket(name):
-        if name not in geos:
-            geos[name] = C.Geo(name)
-        return geos[name]
+# ── deco asset handlers (ctx.build_deco; modules add/override with ctx.register_deco) ──────────────
+def _solid_or_deco(b, solid, deco):
+    return b.get("bucket") or (solid if b.get("collide") else deco)
 
-    water_z = mdef["waterY"]
+
+def _deco_bollard(ctx, b, m):
+    """Bollard; on a waterfront map (mdef has waterY) 2 of 3 bollards (seeded; 'rope': true/false
+    forces it) get a coiled mooring line running out over the nearest bounds edge into the water."""
+    ctx.bucket(_solid_or_deco(b, "solid_bollards", "deco_bollards")).extend(D.bollard(), m)
+    water_z = ctx.mdef.get("waterY")
+    rope = b.get("rope", C.seed_of(b["_base"]) % 3 != 2)
+    if water_z is None or not rope:
+        return
+    pos = b["pos"]
+    (bx0, _, bz0), (bx1, _, bz1) = ctx.mdef["bounds"]["min"], ctx.mdef["bounds"]["max"]
+    gx, gz = pos[0], pos[2]
+    dists = [(gx - bx0, (-1, 0)), (bx1 - gx, (1, 0)), (gz - bz0, (0, -1)), (bz1 - gz, (0, 1))]
+    _, (ox, oz) = min(dists, key=lambda t: t[0])
+    out_b = C.g2b(ox, 0, oz)
+    neck = C.g2b(pos[0], pos[1] + 0.47, pos[2])
+    ctx.bucket("deco_ropes").extend(D.rope_coil_and_line(neck, out_b, water_z, b["id"]))
+
+
+DECO_HANDLERS = {
+    "lamp": lambda ctx, b, m: ctx.bucket(_solid_or_deco(b, "solid_lamps", "deco_lamps")).extend(D.lamp(), m),
+    "bollard": _deco_bollard,
+    "billboard": lambda ctx, b, m: ctx.bucket(b.get("bucket") or f"deco_{b['_base']}").extend(D.billboard(b["text"]), m),
+    "banner": lambda ctx, b, m: ctx.bucket(b.get("bucket") or "deco_banners").extend(D.banner(b["text"]), m),
+    "lighthouse": lambda ctx, b, m: ctx.bucket(b.get("bucket") or "deco_lighthouse").extend(D.lighthouse(b["id"]), m),
+    "cranes": lambda ctx, b, m: ctx.bucket(b.get("bucket") or "deco_cranes").extend(D.cranes(b["id"]), m),
+    "islands": lambda ctx, b, m: ctx.bucket(b.get("bucket") or "deco_islands").extend(D.islands(b["id"]), m),
+    "sailboat": lambda ctx, b, m: ctx.bucket(b.get("bucket") or "deco_sailboats").extend(D.sailboat(b["id"]), m),
+    "buoy": lambda ctx, b, m: ctx.bucket(b.get("bucket") or "deco_buoys").extend(D.buoy(b.get("variant", "red"), b["id"]), m),
+    "pennant": lambda ctx, b, m: ctx.bucket(b.get("bucket") or "deco_flags").extend(D.pennant(b["team"], b["id"]), m),
+}
+
+
+# ── the ctx handed to map_<id>.build() ────────────────────────────────────────────────────────────
+class MapCtx:
+    """Shared helpers for a map module. See MAPS_README.md for the full contract. Coordinates in
+    brushes / pos / eye / look / extras are runtime glTF (Y-up); Geo buckets hold Blender space
+    (use ctx.g2b / ctx.place)."""
+
+    def __init__(self, mdef, layout, brushes, notes, team_hex, coll, args):
+        self.mdef = mdef
+        self.layout = layout
+        self.brushes = brushes          # expanded: FIXUPS + mirror applied, each with _base
+        self.notes = notes
+        self.overlap_ok: set = set()    # the module's OVERLAP_OK (authored ids exempt from overlap checks)
+        self.map_id = mdef["id"]
+        self.team_hex = team_hex        # {'M_pad_A': '#..', 'M_pad_B': '#..'} from data/teams.json
+        self.coll = coll
+        self.args = args
+        self.C, self.D, self.log = C, D, log
+        self.g2b, self.b2g = C.g2b, C.b2g
+        self.seed, self.rng = C.seed_of, C.rng
+        self.geos: dict[str, C.Geo] = {}
+        self.objects: list = []         # module-made bpy mesh objects (ctx.add_object)
+        self.extras: dict[str, dict] = {}
+        self.empties: list = []
+        self.info: dict = {}            # extra mapinfo extras (after the pipeline's df_* keys)
+        self.summary: dict = {}         # extra keys for art/renders/map_<id>_stats.json
+        self.cameras: dict[str, dict] = default_cameras(mdef)
+        self.preview_shaders: dict = {}
+        self.render_hooks: list = []
+        self.deco_handlers = dict(DECO_HANDLERS)
+        self.ao = {"enabled": not args.no_ao, "samples": min(64, args.ao_samples), "distance": args.ao_distance,
+                   "size": None, "exclude_prefixes": ("col_", "oob_", "water_"), "dilate_px": 16}
+        self.render_light_scale = 60.0  # Blender W per df_light intensity unit (QA renders only)
+        self.sh = SimpleNamespace(sock=_sock, math=_math, mix=_mix, uv=_uv, pos=_pos, edge_dist=_edge_dist,
+                                  white=_white)
+
+    # data ────────────────────────────────────────────────────────────────────────────────────
+    def brush(self, bid: str) -> dict:
+        return next(b for b in self.brushes if b["id"] == bid)
+
+    def brushes_of(self, *kinds) -> list[dict]:
+        return [b for b in self.brushes if b["kind"] in kinds]
+
+    def ground_y(self, x: float, z: float) -> float:
+        return ground_y(self.brushes, x, z)
+
+    def place(self, pos, yaw: float = 0.0, scale=1.0) -> Matrix:
+        return C.place_matrix(pos, yaw, scale)
+
+    # materials ───────────────────────────────────────────────────────────────────────────────
+    def mat(self, name: str, hexc: str | None = None):
+        return C.get_material(name, hexc if hexc else self.team_hex.get(name))
+
+    def define_material(self, name, hexc, rough=0.7, metal=0.0, emis=0.0, double=False):
+        C.define_material(name, hexc, rough, metal, emis, double)
+
+    # geometry ────────────────────────────────────────────────────────────────────────────────
+    def bucket(self, name: str) -> C.Geo:
+        if name not in self.geos:
+            self.geos[name] = C.Geo(name)
+        return self.geos[name]
+
+    def arch(self, mats, default: str = "concrete", lip: str = "hazard") -> Arch:
+        return Arch(self, mats, default, lip)
+
+    def add_object(self, ob, extras: dict | None = None):
+        """A mesh object the module built itself (name = node name, contract prefix required). It
+        is (re)linked into the map collection in prefix order; transforms are applied for
+        APPLY_PREFIXES; UVMap (metres) is added when missing; no modifiers on paint_ objects."""
+        self.objects.append(ob)
+        if extras:
+            self.extras.setdefault(ob.name, {}).update(extras)
+        return ob
+
+    def set_extras(self, node: str, **kv):
+        """Node extras (glTF coordinates), e.g. set_extras('conveyor_ramp_A', df_conveyor=[0, 0.9, 2.0])."""
+        self.extras.setdefault(node, {}).update(kv)
+
+    def add_empty(self, name: str, pos, yaw: float = 0.0, extras: dict | None = None, display: str = "PLAIN_AXES"):
+        e = bpy.data.objects.new(name, None)
+        e.empty_display_type = display
+        e.location = C.g2b(*pos)
+        e.rotation_euler = (0.0, 0.0, math.radians(yaw))
+        for k, v in (extras or {}).items():
+            e[k] = v
+        self.empties.append(e)
+        return e
+
+    def add_light(self, name: str, pos, color: str, intensity: float, range_m: float):
+        """§14.2 light_* empty: df_light {color:'#RRGGBB', intensity, range}."""
+        if not name.startswith("light_"):
+            raise ValueError(f"light empty {name!r} must be prefixed light_")
+        return self.add_empty(name, pos, extras={"df_light": {"color": color, "intensity": float(intensity),
+                                                               "range": float(range_m)}}, display="SPHERE")
+
+    # props from generic brush kinds ──────────────────────────────────────────────────────────
+    def build_crates(self, bucket: str = "paint_crate"):
+        """kind 'crate': center (bottom-centre), size (edge), yaw. One df_group per instance."""
+        n = 0
+        for b in self.brushes_of("crate"):
+            unit = D.crate_unit(C.seed_of(b["_base"]) % 3)
+            self.bucket(b.get("bucket", bucket)).extend(unit, C.place_matrix(b["center"], b.get("yaw", 0.0), b["size"]),
+                                                        group=True)
+            n += 1
+        log(f"props: {n} crates")
+
+    def build_planters(self, shell="paint_planter", soil="solid_planter_soil", trunks="solid_palm_trunks",
+                       fronds="deco_palm_fronds"):
+        """kind 'planter': center, size [w, h, d], yaw, palm (bool)."""
+        for b in self.brushes_of("planter"):
+            w, h, d = b["size"]
+            pl = D.planter(w, h, d)
+            m = C.place_matrix(b["center"], b.get("yaw", 0.0))
+            self.bucket(shell).extend(pl["shell"], m)
+            self.bucket(soil).extend(pl["soil"], m)
+            if b.get("palm"):
+                p = D.palm(b["_base"], pl["soil_z"])
+                self.bucket(trunks).extend(p["trunk"], m)
+                self.bucket(fronds).extend(p["fronds"], m)
+
+    def build_spawnpads(self, depth: float = 0.32):
+        """kind 'spawnpad': center (top-centre), radius, team -> solid_pad_<team> (yaw from spawns)."""
+        for b in self.brushes_of("spawnpad"):
+            team = b["team"]
+            g = D.spawn_pad(team, b["radius"], depth)
+            self.bucket(f"solid_pad_{team}").extend(g, C.place_matrix(b["center"], self.mdef["spawns"][team]["yaw"]))
+
+    def register_deco(self, asset: str, fn):
+        """fn(ctx, brush, matrix) for kind 'deco' brushes with this asset id (overrides built-ins)."""
+        self.deco_handlers[asset] = fn
+
+    def build_deco(self):
+        """kind 'deco': asset, pos, yaw, scale, collide, optional text / bucket, in brush order."""
+        for b in self.brushes_of("deco"):
+            fn = self.deco_handlers.get(b["asset"])
+            if fn is None:
+                raise ValueError(f"unknown deco asset {b['asset']!r} ({b['id']}); known: {sorted(self.deco_handlers)}")
+            fn(self, b, C.place_matrix(b["pos"], b.get("yaw", 0.0), b.get("scale", 1.0)))
+
+    # QA ──────────────────────────────────────────────────────────────────────────────────────
+    def add_camera(self, name: str, eye, look, fov: float = 56.0, res=(1600, 900), clip_start: float = 0.1,
+                   before=None, after=None):
+        """Extra QA render station -> art/renders/map_<id>_<name>.png. eye/look in glTF metres.
+        before(ctx, scene) / after(ctx, scene) may hide/show objects for this shot."""
+        self.cameras[name] = {"kind": "persp", "eye": list(eye), "look": list(look), "fov": fov, "res": tuple(res),
+                              "clip_start": clip_start, "before": before, "after": after}
+
+    def add_preview_shader(self, mat: str, fn):
+        """fn(ctx, nt, bsdf, base_rgb) -> colour socket (or None) for material `mat` in QA renders."""
+        self.preview_shaders[mat] = fn
+
+
+def default_cameras(mdef) -> dict:
+    """top (ortho, SUNCREW at the bottom, screen-right = -X like the minimap), persp (player's eye
+    from the SUNCREW spawn looking at mid), aerial (3/4 lobby view), all derived from bounds/spawns."""
     (bx0, _, bz0), (bx1, _, bz1) = mdef["bounds"]["min"], mdef["bounds"]["max"]
-    spawns = mdef["spawns"]
-    # crates
-    n = 0
-    for b in brushes:
-        if b["kind"] != "crate":
-            continue
-        variant = C.seed_of(b["_base"]) % 3
-        unit = D.crate_unit(variant)
-        m = C.place_matrix(b["center"], b.get("yaw", 0.0), b["size"])
-        bucket("paint_crate").extend(unit, m, group=True)
-        n += 1
-    log(f"props: {n} crates")
-    # planters + palms
-    for b in brushes:
-        if b["kind"] != "planter":
-            continue
-        w, h, d = b["size"]
-        pl = D.planter(w, h, d)
-        m = C.place_matrix(b["center"], b.get("yaw", 0.0))
-        bucket("paint_planter").extend(pl["shell"], m)
-        bucket("solid_planter_soil").extend(pl["soil"], m)
-        if b.get("palm"):
-            p = D.palm(b["_base"], pl["soil_z"])
-            bucket("solid_palm_trunks").extend(p["trunk"], m)
-            bucket("deco_palm_fronds").extend(p["fronds"], m)
-    # spawn pads
-    for b in brushes:
-        if b["kind"] != "spawnpad":
-            continue
-        team = b["team"]
-        g = D.spawn_pad(team, b["radius"], PAD_POCKET + 0.02)
-        bucket(f"solid_pad_{team}").extend(g, C.place_matrix(b["center"], spawns[team]["yaw"]))
-    # team pennants flanking each base end, PENNANT_OUTSET outboard of the backwall ends, flags
-    # streaming outboard (pennant() streams toward local +X: yaw 0 -> +x, yaw 180 -> -x)
-    for b in brushes:
-        if b["_base"] == "base_backwall":
-            (x0, y0, z0), (x1, y1, z1) = b["min"], b["max"]
-            team = "A" if (z0 + z1) < 0 else "B"
-            zc = (z0 + z1) / 2
-            for tag, x, yaw in (("w", x0 - PENNANT_OUTSET, 180.0), ("e", x1 + PENNANT_OUTSET, 0.0)):
-                pos = [x, ground_y(brushes, x, zc), zc]
-                bucket("deco_flags").extend(D.pennant(team, f"{b['id']}_{tag}"), C.place_matrix(pos, yaw))
-    for k, (kind, x, z) in enumerate(BUOYS.get(mdef["id"], [])):
-        bucket("deco_buoys").extend(D.buoy(kind, f"{mdef['id']}_{k}"), C.place_matrix([x, water_z, z], 0.0))
-    # deco assets
-    lighthouse_pos = next((b["pos"] for b in brushes if b["kind"] == "deco" and b["asset"] == "lighthouse"), None)
-    for b in brushes:
-        if b["kind"] != "deco":
-            continue
-        a = b["asset"]
-        pos, yaw = b["pos"], b.get("yaw", 0.0)
-        m = C.place_matrix(pos, yaw, b.get("scale", 1.0))
-        if a == "lamp":
-            bucket("solid_lamps" if b.get("collide") else "deco_lamps").extend(D.lamp(), m)
-        elif a == "bollard":
-            bucket("solid_bollards" if b.get("collide") else "deco_bollards").extend(D.bollard(), m)
-            if C.seed_of(b["_base"]) % 3 != 2:
-                gx, gz = pos[0], pos[2]
-                dists = [(gx - bx0, (-1, 0)), (bx1 - gx, (1, 0)), (gz - bz0, (0, -1)), (bz1 - gz, (0, 1))]
-                _, (ox, oz) = min(dists, key=lambda t: t[0])
-                out_b = C.g2b(ox, 0, oz)
-                neck = C.g2b(pos[0], pos[1] + 0.47, pos[2])
-                bucket("deco_ropes").extend(D.rope_coil_and_line(neck, out_b, water_z, b["id"]))
-        elif a == "pilings":
-            hx, hy = (bx1 - bx0) / 2, (bz1 - bz0) / 2
-            bucket("deco_pilings").extend(D.pilings(hx, hy, plate_bottom(brushes), water_z),
-                                          Matrix.Translation(C.g2b((bx0 + bx1) / 2, 0, (bz0 + bz1) / 2)))
-        elif a == "billboard":
-            key = "deco_board_" + ("cup" if "CUP" in b["text"] else "tide")
-            bucket(key).extend(D.billboard(b["text"]), m)
-        elif a == "banner":
-            bucket("deco_banners").extend(D.banner(b["text"]), m)
-        elif a == "lighthouse":
-            bucket("deco_lighthouse").extend(D.lighthouse(b["id"]), m)
-        elif a == "breakwater":
-            pb = C.g2b(*pos)
-            axis = Matrix.Rotation(math.radians(yaw), 3, "Z") @ Vector((1, 0, 0))
-            pts = [pb - axis * 26.0, pb.copy()]
-            if lighthouse_pos is not None:
-                lb = C.g2b(*lighthouse_pos)
-                pts.append(lb + (pb - lb).normalized() * 3.5)
-            for p in pts:
-                p.z = water_z
-            bucket("deco_breakwater").extend(D.breakwater(pts, b["id"]))
-        elif a == "cranes":
-            bucket("deco_cranes").extend(D.cranes(b["id"]), m)
-        elif a == "islands":
-            bucket("deco_islands").extend(D.islands(b["id"]), m)
-        elif a == "sailboat":
-            bucket("deco_sailboats").extend(D.sailboat(b["id"]), m)
-        else:
-            raise ValueError(f"unknown deco asset {a!r} ({b['id']})")
-    return geos
-
-
-def pennant_clearance(geos, brushes, mdef, step: float = 2.0) -> dict:
-    """QA: do the team pennant flags cover a billboard's lettering from the player's camera?
-
-    Follow-camera poses (config.ts CAMERA: pivot 1.35 m, boom 4.3 m, 0.42 m right shoulder) are
-    sampled over the walkable pier on a `step` grid, aimed at each billboard at four pitches
-    (-24, -14, -6, +2 deg). Every flag vertex in front of the camera is projected onto the
-    lettering's front plane; a sample counts when one lands inside the lettering box (+0.3 m).
-    Uses the built geometry (M_sign_text faces of deco_board_*, M_pad_* faces of deco_flags)."""
-    def verts_of(g, pred):
-        idx = {i for f, m in zip(g.faces, g.fmat) if pred(m) for i in f}
-        return [C.b2g(g.verts[i]) for i in sorted(idx)]
-    flags = verts_of(geos["deco_flags"], lambda m: m.startswith("M_pad_")) if "deco_flags" in geos else []
-    (bx0, _, bz0), (bx1, _, bz1) = next(b for b in brushes if b["id"] == "plate")["min"], \
-        next(b for b in brushes if b["id"] == "plate")["max"]
-    feet = []
-    x = bx0 + step / 2
-    while x < bx1:
-        z = bz0 + step / 2
-        while z < bz1:
-            feet.append((x, ground_y(brushes, x, z), z))
-            z += step
-        x += step
-    out = {}
-    for key in sorted(k for k in geos if k.startswith("deco_board_")):
-        let = verts_of(geos[key], lambda m: m == "M_sign_text")
-        if not let:
-            continue
-        lx0, lx1 = min(v[0] for v in let), max(v[0] for v in let)
-        ly0, ly1 = min(v[1] for v in let), max(v[1] for v in let)
-        zs = [v[2] for v in let]
-        zc = sum(zs) / len(zs)
-        zf = min(zs) if zc > 0 else max(zs)            # the lettering's court-facing plane
-        tx = (lx0 + lx1) / 2
-        ty = (ly0 + ly1) / 2
-        n = hit = 0
-        worst = None
-        for (fx, fy, fz) in feet:
-            yaw = math.atan2(tx - fx, zc - fz)
-            for pd in (-24.0, -14.0, -6.0, 2.0):
-                p = math.radians(pd)
-                d = (math.sin(yaw) * math.cos(p), math.sin(p), math.cos(yaw) * math.cos(p))
-                rx, rz = -math.cos(yaw), math.sin(yaw)
-                cx = fx + rx * 0.42 - d[0] * 4.3
-                cy = max(fy + 0.3, fy + 1.35 - d[1] * 4.3)
-                cz = fz + rz * 0.42 - d[2] * 4.3
-                n += 1
-                for (vx, vy, vz) in flags:
-                    a, bpl = vz - cz, zf - cz
-                    if abs(a) < 1e-6 or a * bpl <= 0 or abs(bpl) < abs(a):
-                        continue                      # flag behind the camera or beyond the board
-                    t = bpl / a
-                    X, Y = cx + (vx - cx) * t, cy + (vy - cy) * t
-                    if lx0 - 0.3 <= X <= lx1 + 0.3 and ly0 - 0.3 <= Y <= ly1 + 0.3:
-                        hit += 1
-                        worst = (round(cx, 1), round(cy, 1), round(cz, 1))
-                        break
-        out[key] = {"lettering_box": [round(lx0, 2), round(lx1, 2), round(ly0, 2), round(ly1, 2), round(zf, 2)],
-                    "camera_samples": n, "flag_over_lettering": hit,
-                    "pct": round(100.0 * hit / max(n, 1), 2), "example_camera": worst}
-        log(f"pennant clearance {key}: flags over the lettering from {hit}/{n} camera samples "
-            f"({out[key]['pct']}%)" + (f", e.g. camera at {worst}" if worst else ""))
-        if out[key]["pct"] > 2.0:
-            log(f"WARN pennant clearance {key}: {out[key]['pct']}% > 2% - move the pennants clear of the lettering")
-    return out
+    cx, cz, hx, hz = (bx0 + bx1) / 2, (bz0 + bz1) / 2, (bx1 - bx0) / 2, (bz1 - bz0) / 2
+    sa = mdef["spawns"]["A"]["pos"]
+    s = 1.0 if sa[2] < cz else -1.0
+    return {
+        "top": {"kind": "top", "center": [cx, cz], "ortho_scale": float(round(2 * max(hx, hz) * 1.4)),
+                "res": (1600, 1600), "before": None, "after": None},
+        "persp": {"kind": "persp", "eye": [sa[0] + 1.2, sa[1] + 1.6, sa[2] + 3.0 * s],
+                  "look": [cx, sa[1] - 1.0, cz + 4.0 * s], "fov": 56.0, "res": (1600, 900), "clip_start": 0.1,
+                  "before": None, "after": None},
+        "aerial": {"kind": "persp", "eye": [cx + 3.5 * hx, 0.81 * hz, cz - 1.5714 * hz],
+                   "look": [cx + hx / 7.0, -2.0, cz + hz / 10.5], "fov": 56.0, "res": (1600, 900), "clip_start": 0.1,
+                   "before": None, "after": None},
+    }
 
 
 # ── atlas ────────────────────────────────────────────────────────────────────────────────────────
@@ -862,16 +986,24 @@ def _white(nt, a, b, c=0.0):
     return w.outputs["Value"]
 
 
-def apply_preview_shading(mdef):
+
+def apply_preview_shading(ctx):
+    """Render-only procedural looks for the QA renders (mirrors the runtime LOOK shaders). A module
+    shader (ctx.add_preview_shader) wins over the built-in one for the same material."""
+    mdef = ctx.mdef
     lin = C.hex_to_linear
     for mat in bpy.data.materials:
         if not mat.name.startswith("M_"):
             continue
         nt = mat.node_tree
-        bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+        bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if bsdf is None:
+            continue
         base = tuple(bsdf.inputs["Base Color"].default_value)[:3]
         col = None
-        if mat.name == "M_tile":
+        if mat.name in ctx.preview_shaders:
+            col = ctx.preview_shaders[mat.name](ctx, nt, bsdf, base)
+        elif mat.name == "M_tile":
             u, v = _uv(nt)
             grout = _math(nt, "LESS_THAN", _math(nt, "MINIMUM", _edge_dist(nt, u, 1.0), _edge_dist(nt, v, 1.0)), 0.018)
             tint = _math(nt, "ADD", 0.95, _math(nt, "MULTIPLY", _white(nt, _math(nt, "FLOOR", u), _math(nt, "FLOOR", v)), 0.08))
@@ -935,7 +1067,10 @@ def apply_preview_shading(mdef):
             nt.links.new(col, bsdf.inputs["Base Color"])
 
 
-def setup_render_world(mdef, samples):
+def setup_render_world(ctx, samples):
+    """EEVEE + AgX grade, sky/ambient world, key light, render-only sea (outdoor maps with waterY),
+    point lights at light_* empties, then the module's ctx.render_hooks."""
+    mdef = ctx.mdef
     sc = bpy.context.scene
     try:
         sc.render.engine = "BLENDER_EEVEE"
@@ -959,129 +1094,493 @@ def setup_render_world(mdef, samples):
         except TypeError:
             continue
     log(f"render grade: {vs.view_transform} / {vs.look}, exposure {vs.exposure}")
-    preset = mdef["lighting"]["presets"][mdef["lighting"]["default"]]
+    lighting = mdef["lighting"]
+    preset = lighting["presets"][lighting["default"]]
+    kind = preset.get("kind", "outdoor")
     lin = C.hex_to_linear
     world = bpy.data.worlds.new("qa_world")
     sc.world = world
     nt = world.node_tree
     bg = next(n for n in nt.nodes if n.type == "BACKGROUND")
-    tc = nt.nodes.new("ShaderNodeTexCoord")
-    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
-    nt.links.new(tc.outputs["Generated"], sep.inputs[0])
-    t = _math(nt, "POWER", _math(nt, "MINIMUM", _math(nt, "DIVIDE", _math(nt, "MAXIMUM", sep.outputs["Z"], 0.0), 0.42), 1.0), 0.65)
-    col = _mix(nt, t, lin(preset["skyHorizon"]), lin(preset["skyZenith"]))
-    nt.links.new(col, bg.inputs["Color"])
-    bg.inputs["Strength"].default_value = 1.0
-    # sun
-    el, az = math.radians(preset["sunElevationDeg"]), math.radians(preset["sunAzimuthDeg"])
-    to_sun = C.g2b(math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el)).normalized()
+    if kind == "interior":
+        bg.inputs["Color"].default_value = (*lin(preset.get("ambient", "#40485A")), 1.0)
+        bg.inputs["Strength"].default_value = float(preset.get("ambientIntensity", 0.6))
+    else:
+        tc = nt.nodes.new("ShaderNodeTexCoord")
+        sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+        nt.links.new(tc.outputs["Generated"], sep.inputs[0])
+        t = _math(nt, "POWER", _math(nt, "MINIMUM", _math(nt, "DIVIDE", _math(nt, "MAXIMUM", sep.outputs["Z"], 0.0), 0.42), 1.0), 0.65)
+        col = _mix(nt, t, lin(preset["skyHorizon"]), lin(preset["skyZenith"]))
+        nt.links.new(col, bg.inputs["Color"])
+        bg.inputs["Strength"].default_value = 1.0
+    # key light (outdoor sun from elevation/azimuth; interior: keyDir = direction the light travels)
+    if kind == "interior":
+        kd = preset.get("keyDir", [0.2, -1.0, 0.3])
+        to_sun = C.g2b(-kd[0], -kd[1], -kd[2]).normalized()
+        energy, color = 1.6 * float(preset.get("keyIntensity", 1.5)), preset.get("keyColor", "#DDE6F2")
+    else:
+        el, az = math.radians(preset["sunElevationDeg"]), math.radians(preset["sunAzimuthDeg"])
+        to_sun = C.g2b(math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el)).normalized()
+        energy, color = 4.8, preset["sunColor"]
     ld = bpy.data.lights.new("qa_sun", "SUN")
-    ld.energy = 4.8
-    ld.color = lin(preset["sunColor"])
+    ld.energy = energy
+    ld.color = lin(color)
     ld.angle = math.radians(1.2)
     sun = bpy.data.objects.new("qa_sun", ld)
     C.link(sun)
     sun.rotation_euler = to_sun.to_track_quat("Z", "Y").to_euler()
     # sea (render only)
-    wm = bpy.data.materials.new("qa_water")
-    wn = wm.node_tree
-    wb = next(n for n in wn.nodes if n.type == "BSDF_PRINCIPLED")
-    wb.inputs["Base Color"].default_value = (*lin(preset["waterDeep"]), 1.0)
-    wb.inputs["Roughness"].default_value = 0.06
-    nz = wn.nodes.new("ShaderNodeTexNoise")
-    nz.inputs["Scale"].default_value = 0.35
-    nz.inputs["Detail"].default_value = 4.0
-    bump = wn.nodes.new("ShaderNodeBump")
-    bump.inputs["Strength"].default_value = 0.12
-    nt2 = wn
-    nt2.links.new(nz.outputs["Fac"], bump.inputs["Height"])
-    nt2.links.new(bump.outputs["Normal"], wb.inputs["Normal"])
-    # shallow tint near the pier
-    geo = wn.nodes.new("ShaderNodeNewGeometry")
-    sep2 = wn.nodes.new("ShaderNodeSeparateXYZ")
-    wn.links.new(geo.outputs["Position"], sep2.inputs[0])
-    dx = _math(wn, "MAXIMUM", _math(wn, "SUBTRACT", _math(wn, "ABSOLUTE", sep2.outputs["X"]), 28.0), 0.0)
-    dy = _math(wn, "MAXIMUM", _math(wn, "SUBTRACT", _math(wn, "ABSOLUTE", sep2.outputs["Y"]), 42.0), 0.0)
-    d = _math(wn, "SQRT", _math(wn, "ADD", _math(wn, "MULTIPLY", dx, dx), _math(wn, "MULTIPLY", dy, dy)))
-    f = _math(wn, "EXPONENT", _math(wn, "MULTIPLY", d, -0.09))
-    wcol = _mix(wn, f, lin(preset["waterDeep"]), lin(preset["waterShallow"]))
-    wn.links.new(wcol, wb.inputs["Base Color"])
-    me = bpy.data.meshes.new("qa_sea")
-    R = 3000.0
-    me.from_pydata([(-R, -R, 0), (R, -R, 0), (R, R, 0), (-R, R, 0)], [], [(0, 1, 2, 3)])
-    me.materials.append(wm)
-    sea = bpy.data.objects.new("qa_sea", me)
-    sea.location.z = mdef["waterY"]
-    C.link(sea)
-    # distance haze
+    if kind != "interior" and mdef.get("waterY") is not None and "waterDeep" in preset:
+        (bx0, _, bz0), (bx1, _, bz1) = mdef["bounds"]["min"], mdef["bounds"]["max"]
+        cx, cz, hx, hz = (bx0 + bx1) / 2, (bz0 + bz1) / 2, (bx1 - bx0) / 2, (bz1 - bz0) / 2
+        wm = bpy.data.materials.new("qa_water")
+        wn = wm.node_tree
+        wb = next(n for n in wn.nodes if n.type == "BSDF_PRINCIPLED")
+        wb.inputs["Base Color"].default_value = (*lin(preset["waterDeep"]), 1.0)
+        wb.inputs["Roughness"].default_value = 0.06
+        nz = wn.nodes.new("ShaderNodeTexNoise")
+        nz.inputs["Scale"].default_value = 0.35
+        nz.inputs["Detail"].default_value = 4.0
+        bump = wn.nodes.new("ShaderNodeBump")
+        bump.inputs["Strength"].default_value = 0.12
+        wn.links.new(nz.outputs["Fac"], bump.inputs["Height"])
+        wn.links.new(bump.outputs["Normal"], wb.inputs["Normal"])
+        # shallow tint near the play-space bounds (Blender Y = -glTF z)
+        geo = wn.nodes.new("ShaderNodeNewGeometry")
+        sep2 = wn.nodes.new("ShaderNodeSeparateXYZ")
+        wn.links.new(geo.outputs["Position"], sep2.inputs[0])
+        px = _math(wn, "SUBTRACT", sep2.outputs["X"], cx) if cx else sep2.outputs["X"]
+        py = _math(wn, "ADD", sep2.outputs["Y"], cz) if cz else sep2.outputs["Y"]
+        dx = _math(wn, "MAXIMUM", _math(wn, "SUBTRACT", _math(wn, "ABSOLUTE", px), hx), 0.0)
+        dy = _math(wn, "MAXIMUM", _math(wn, "SUBTRACT", _math(wn, "ABSOLUTE", py), hz), 0.0)
+        d = _math(wn, "SQRT", _math(wn, "ADD", _math(wn, "MULTIPLY", dx, dx), _math(wn, "MULTIPLY", dy, dy)))
+        f = _math(wn, "EXPONENT", _math(wn, "MULTIPLY", d, -0.09))
+        wcol = _mix(wn, f, lin(preset["waterDeep"]), lin(preset["waterShallow"]))
+        wn.links.new(wcol, wb.inputs["Base Color"])
+        me = bpy.data.meshes.new("qa_sea")
+        R = 3000.0
+        me.from_pydata([(-R, -R, 0), (R, -R, 0), (R, R, 0), (-R, R, 0)], [], [(0, 1, 2, 3)])
+        me.materials.append(wm)
+        sea = bpy.data.objects.new("qa_sea", me)
+        sea.location.z = mdef["waterY"]
+        C.link(sea)
+    # light_* empties -> point lights (QA only; the runtime picks <= 6 real ones)
+    for e in ctx.empties:
+        dl = e.get("df_light") if e.name.startswith("light_") else None
+        if dl is None:
+            continue
+        pl = bpy.data.lights.new(f"qa_{e.name}", "POINT")
+        pl.color = lin(dl["color"])
+        pl.energy = float(dl["intensity"]) * ctx.render_light_scale
+        pl.shadow_soft_size = 0.15
+        if hasattr(pl, "use_custom_distance"):
+            pl.use_custom_distance = True
+            pl.cutoff_distance = float(dl["range"])
+        po = bpy.data.objects.new(f"qa_{e.name}", pl)
+        po.location = e.location
+        C.link(po)
     sc.render.film_transparent = False
+    for hook in ctx.render_hooks:
+        hook(ctx, sc)
     return sun
 
 
-def render_views(mdef, out_top, out_persp, out_aerial, out_props=None, quick=False):
+def render_views(ctx, quick=False):
     sc = bpy.context.scene
     sc.render.image_settings.file_format = "PNG"
     sc.render.image_settings.color_mode = "RGB"
-    # top (orthographic): SUNCREW (-Z) at the bottom, screen-right = -X (the minimap orientation)
-    cd = bpy.data.cameras.new("qa_top")
-    cd.type = "ORTHO"
-    cd.ortho_scale = 118.0
-    cd.clip_end = 1000.0
-    cam = bpy.data.objects.new("qa_top", cd)
-    C.link(cam)
-    cam.location = (0.0, 0.0, 300.0)
-    cam.rotation_euler = (0.0, 0.0, math.pi)
-    sc.camera = cam
-    sc.render.resolution_x = sc.render.resolution_y = 800 if quick else 1600
-    sc.render.filepath = out_top
-    log("render: top ->", out_top)
-    bpy.ops.render.render(write_still=True)
-    # player's-eye from the SUNCREW base, looking +Z
-    sa = mdef["spawns"]["A"]["pos"]
-    cd2 = bpy.data.cameras.new("qa_persp")
-    cd2.sensor_fit = "VERTICAL"
-    cd2.angle_y = math.radians(56.0)
-    cd2.clip_start = 0.1
-    cd2.clip_end = 3000.0
-    cam2 = bpy.data.objects.new("qa_persp", cd2)
-    C.link(cam2)
-    eye = C.g2b(sa[0] + 1.2, sa[1] + 1.6, sa[2] + 3.0)
-    look = C.g2b(0.0, 0.2, 4.0)
-    cam2.location = eye
-    cam2.rotation_euler = (look - eye).to_track_quat("-Z", "Y").to_euler()
-    sc.camera = cam2
-    sc.render.resolution_x, sc.render.resolution_y = (800, 450) if quick else (1600, 900)
-    sc.render.filepath = out_persp
-    log("render: persp ->", out_persp)
-    bpy.ops.render.render(write_still=True)
-    # 3/4 aerial (lobby-style)
-    cam3 = bpy.data.objects.new("qa_aerial", cd2.copy())
-    C.link(cam3)
-    eye3 = C.g2b(98.0, 34.0, -66.0)
-    look3 = C.g2b(4.0, -2.0, 4.0)
-    cam3.location = eye3
-    cam3.rotation_euler = (look3 - eye3).to_track_quat("-Z", "Y").to_euler()
-    sc.camera = cam3
-    sc.render.filepath = out_aerial
-    log("render: aerial ->", out_aerial)
-    bpy.ops.render.render(write_still=True)
-    if out_props:
-        # prop close-up at the SUNCREW west corner: crate stack, palm planter, curb + bollards
-        cd4 = bpy.data.cameras.new("qa_props")
-        cd4.sensor_fit = "VERTICAL"
-        cd4.angle_y = math.radians(46.0)
-        cd4.clip_start = 0.05
-        cd4.clip_end = 3000.0
-        cam4 = bpy.data.objects.new("qa_props", cd4)
-        C.link(cam4)
-        eye4 = C.g2b(-13.8, 2.3, -22.6)
-        look4 = C.g2b(-20.2, 0.9, -29.0)
-        cam4.location = eye4
-        cam4.rotation_euler = (look4 - eye4).to_track_quat("-Z", "Y").to_euler()
-        sc.camera = cam4
-        sc.render.filepath = out_props
-        log("render: props ->", out_props)
+    for name, st in ctx.cameras.items():
+        cd = bpy.data.cameras.new(f"qa_{name}")
+        cam = bpy.data.objects.new(f"qa_{name}", cd)
+        C.link(cam)
+        if st["kind"] == "top":
+            cd.type = "ORTHO"
+            cd.ortho_scale = st["ortho_scale"]
+            cd.clip_end = 1000.0
+            cam.location = C.g2b(st["center"][0], 300.0, st["center"][1])
+            cam.rotation_euler = (0.0, 0.0, math.pi)          # SUNCREW (-Z) at the bottom, screen-right = -X
+        else:
+            cd.sensor_fit = "VERTICAL"
+            cd.angle_y = math.radians(st.get("fov", 56.0))
+            cd.clip_start = st.get("clip_start", 0.1)
+            cd.clip_end = 3000.0
+            eye, look = C.g2b(*st["eye"]), C.g2b(*st["look"])
+            cam.location = eye
+            cam.rotation_euler = (look - eye).to_track_quat("-Z", "Y").to_euler()
+        sc.camera = cam
+        rx, ry = st.get("res", (1600, 900))
+        sc.render.resolution_x, sc.render.resolution_y = (rx // 2, ry // 2) if quick else (rx, ry)
+        out = os.path.join(C.RENDER_DIR, f"map_{ctx.map_id}_{name}.png")
+        sc.render.filepath = out
+        if st.get("before"):
+            st["before"](ctx, sc)
+        log(f"render: {name} ->", out)
         bpy.ops.render.render(write_still=True)
+        if st.get("after"):
+            st["after"](ctx, sc)
+
+
+# ── §14.3 AO bake ─────────────────────────────────────────────────────────────────────────────────
+def setup_cycles_device(sc) -> str:
+    """Cycles on the GPU (OptiX, then CUDA/HIP/oneAPI/Metal) when one is present, else the CPU."""
+    sc.render.engine = "CYCLES"
+    try:
+        prefs = bpy.context.preferences.addons["cycles"].preferences
+    except Exception:
+        prefs = None
+    if prefs is not None:
+        for dt in ("OPTIX", "CUDA", "HIP", "ONEAPI", "METAL"):
+            try:
+                prefs.compute_device_type = dt
+            except TypeError:
+                continue
+            try:
+                prefs.refresh_devices()
+            except Exception:
+                try:
+                    prefs.get_devices()
+                except Exception:
+                    pass
+            devs = [d for d in prefs.devices if d.type == dt]
+            if devs:
+                for d in prefs.devices:
+                    d.use = d.type == dt
+                sc.cycles.device = "GPU"
+                return f"GPU {dt} ({', '.join(sorted({d.name for d in devs}))})"
+        try:
+            prefs.compute_device_type = "NONE"
+        except TypeError:
+            pass
+    sc.cycles.device = "CPU"
+    return "CPU"
+
+
+def _dilate(val, mask, iters):
+    """Grow `val` from masked texels into unmasked ones (8-neighbour mean), `iters` rings."""
+    import numpy as np
+    val, mask = val.copy(), mask.copy()
+    H, W = val.shape
+    for _ in range(iters):
+        acc = np.zeros_like(val)
+        cnt = np.zeros_like(val)
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dy == 0 and dx == 0:
+                    continue
+                src = (slice(max(0, dy), H + min(0, dy)), slice(max(0, dx), W + min(0, dx)))
+                dst = (slice(max(0, -dy), H + min(0, -dy)), slice(max(0, -dx), W + min(0, -dx)))
+                m = mask[src]
+                acc[dst] += np.where(m, val[src], 0.0)
+                cnt[dst] += m
+        grow = (~mask) & (cnt > 0)
+        if not grow.any():
+            break
+        val[grow] = acc[grow] / cnt[grow]
+        mask |= grow
+    return val, mask
+
+
+def _ao_probe(ctx, paint_objs, ao, size):
+    """Sanity numbers: AO sampled on the paint surfaces (area-weighted barycentric grid) — crate
+    sides near their base vs higher up, and tile floor hugging a ground crate vs open floor."""
+    import numpy as np
+    by = {o.name: o for o in paint_objs}
+    out = {}
+
+    def samples(ob, dens=16.0):
+        me = ob.data
+        me.calc_loop_triangles()
+        uvl = me.uv_layers["Atlas"].data
+        grp = me.attributes.get("df_group")
+        gvals = None
+        if grp is not None:
+            gvals = [0] * len(me.polygons)
+            grp.data.foreach_get("value", gvals)
+        pts = []
+        for lt in me.loop_triangles:
+            vs = [me.vertices[i].co for i in lt.vertices]
+            uvs = [uvl[li].uv for li in lt.loops]
+            n = max(1, min(40, math.ceil(math.sqrt(lt.area * dens))))
+            for i in range(n):
+                for j in range(n - i):
+                    a, b = (i + 1.0 / 3.0) / n, (j + 1.0 / 3.0) / n
+                    c = 1.0 - a - b
+                    p = vs[0] * a + vs[1] * b + vs[2] * c
+                    u = uvs[0][0] * a + uvs[1][0] * b + uvs[2][0] * c
+                    v = uvs[0][1] * a + uvs[1][1] * b + uvs[2][1] * c
+                    x = min(size - 1, max(0, int(u * size)))
+                    y = min(size - 1, max(0, int(v * size)))
+                    pts.append((p.x, p.y, p.z, lt.normal.z, float(ao[y, x]),
+                                gvals[lt.polygon_index] if gvals else -1))
+        return np.array(pts, np.float64)
+
+    if "paint_crate" in by:
+        s = samples(by["paint_crate"])
+        base = {}
+        for g in np.unique(s[:, 5]):
+            base[g] = s[s[:, 5] == g, 2].min()
+        h = s[:, 2] - np.array([base[g] for g in s[:, 5]])
+        side = np.abs(s[:, 3]) < 0.5
+        lo, hi = side & (h < 0.2), side & (h > 0.5)
+        if lo.any() and hi.any():
+            out["crate_side_base_mean"] = round(float(s[lo, 4].mean()), 4)
+            out["crate_side_upper_mean"] = round(float(s[hi, 4].mean()), 4)
+    floor_name = next((n for n in ("paint_tile", "paint_floor", "paint_concrete") if n in by), None)
+    crates = [b for b in ctx.brushes if b["kind"] == "crate"]
+    if floor_name and crates:
+        s = samples(by[floor_name], dens=24.0)
+        s = s[s[:, 3] > 0.9]
+        gx, gz, gy = s[:, 0], -s[:, 1], s[:, 2]
+
+        def dist_to(bs):
+            d = np.full(len(s), 1e9)
+            for b in bs:
+                (x0, y0, z0), (x1, y1, z1) = aabb_of(b)
+                dx = np.maximum(np.maximum(x0 - gx, gx - x1), 0.0)
+                dz = np.maximum(np.maximum(z0 - gz, gz - z1), 0.0)
+                on = np.abs(gy - y0) < 0.05
+                d = np.where(on, np.minimum(d, np.hypot(dx, dz)), d)
+            return d
+        dc = dist_to(crates)
+        solids = [b for b in ctx.brushes if b["kind"] in SOLID_KINDS and not overlap_exempt(b, ctx.overlap_ok)
+                  and aabb_of(b) is not None]
+        dall = np.full(len(s), 1e9)
+        for b in solids:
+            (x0, y0, z0), (x1, y1, z1) = aabb_of(b)
+            dx = np.maximum(np.maximum(x0 - gx, gx - x1), 0.0)
+            dz = np.maximum(np.maximum(z0 - gz, gz - z1), 0.0)
+            dall = np.minimum(dall, np.hypot(dx, dz))
+        near = (dc > 0.0) & (dc < 0.3)
+        far = dall > 3.0
+        if near.any() and far.any():
+            out["floor_by_crate_mean"] = round(float(s[near, 4].mean()), 4)
+            out["floor_open_mean"] = round(float(s[far, 4].mean()), 4)
+            out["floor_samples"] = [int(near.sum()), int(far.sum())]
+    return out
+
+
+def bake_ao(ctx, objs, paint_objs, S):
+    """§14.3: Cycles AO of every paint_* surface baked into the shared Atlas UV space ->
+    art/gltf/map_<id>_ao.png (8-bit grey, dilated into the gutters). Meshes are not modified; the
+    temporary image nodes / world are removed before export. Returns (file name, stats)."""
+    import numpy as np
+    cfg = ctx.ao
+    size = int(cfg["size"] or (S if S <= 1024 else S // 2))
+    sc = bpy.context.scene
+    prev_engine = sc.render.engine
+    t0 = time.time()
+    dev = setup_cycles_device(sc)
+    sc.cycles.samples = int(cfg["samples"])
+    for attr, val in (("use_denoising", False), ("seed", 0), ("use_animated_seed", False)):
+        if hasattr(sc.cycles, attr):
+            setattr(sc.cycles, attr, val)
+    world = bpy.data.worlds.new("ao_bake_world")
+    sc.world = world
+    world.light_settings.distance = float(cfg["distance"])
+    img = bpy.data.images.new("ao_bake", size, size, alpha=True, float_buffer=True)
+    img.colorspace_settings.name = "Non-Color"
+    fill = np.zeros((size * size, 4), np.float32)
+    fill[:, :3] = 1.0                                # unbaked = white with alpha 0 (the bake mask)
+    img.pixels.foreach_set(fill.ravel())
+    hidden = []
+    for ob in list(objs.values()) + ctx.empties:
+        if ob.name.startswith(tuple(cfg["exclude_prefixes"])) and not ob.hide_render:
+            ob.hide_render = True
+            hidden.append(ob)
+    mats = []
+    for ob in paint_objs:
+        for slot in ob.material_slots:
+            if slot.material is not None and slot.material not in mats:
+                mats.append(slot.material)
+    added = []
+    for mat in mats:
+        nt = mat.node_tree
+        prev = nt.nodes.active
+        n = nt.nodes.new("ShaderNodeTexImage")
+        n.image = img
+        nt.nodes.active = n
+        added.append((mat, n, prev))
+    bpy.ops.object.select_all(action="DESELECT")
+    for ob in paint_objs:
+        ob.select_set(True)
+    bpy.context.view_layer.objects.active = paint_objs[0]
+    log(f"ao: baking {len(paint_objs)} paint objects at {size}px, {sc.cycles.samples} samples, "
+        f"distance {cfg['distance']} m on {dev}")
+    try:
+        bpy.ops.object.bake(type="AO", uv_layer="Atlas", margin=0, use_clear=False, target="IMAGE_TEXTURES",
+                            use_selected_to_active=False)
+    except RuntimeError as e:
+        if sc.cycles.device != "GPU":
+            raise
+        log(f"ao: GPU bake failed ({e}); retrying on the CPU")
+        sc.cycles.device = "CPU"
+        dev = "CPU (GPU failed)"
+        img.pixels.foreach_set(fill.ravel())
+        bpy.ops.object.bake(type="AO", uv_layer="Atlas", margin=0, use_clear=False, target="IMAGE_TEXTURES",
+                            use_selected_to_active=False)
+    px = np.zeros(size * size * 4, np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(size, size, 4)                   # Blender buffer: row 0 = v 0 (bottom)
+    mask = px[..., 3] > 0.5
+    raw = px[..., 0].astype(np.float64)
+    ao, filled = _dilate(raw, mask, int(cfg["dilate_px"]))
+    ao[~filled] = 1.0
+    ao = np.clip(ao, 0.0, 1.0)
+    u8 = np.round(ao * 255.0).astype(np.uint8)
+    fname = f"map_{ctx.map_id}_ao.png"
+    C.write_png_gray(os.path.join(C.GLTF_DIR, fname), u8[::-1])
+    # cleanup (nothing of the bake may reach the export)
+    for mat, n, prev in added:
+        mat.node_tree.nodes.remove(n)
+        if prev is not None:
+            mat.node_tree.nodes.active = prev
+    for ob in hidden:
+        ob.hide_render = False
+    bpy.data.images.remove(img)
+    sc.world = None
+    bpy.data.worlds.remove(world)
+    sc.render.engine = prev_engine
+    vals = raw[mask]
+    q = u8[mask].astype(np.float64) / 255.0
+    hist = np.histogram(q, bins=10, range=(0.0, 1.0))[0]
+    stats = {
+        "file": fname, "size": size, "samples": int(cfg["samples"]), "distance": float(cfg["distance"]), "device": dev,
+        "seconds": round(time.time() - t0, 1), "baked_texels": int(mask.sum()),
+        "dilated_texels": int((filled & ~mask).sum()),
+        "mean": round(float(vals.mean()), 4), "std": round(float(vals.std()), 4),
+        "min": round(float(vals.min()), 4), "p05": round(float(np.percentile(vals, 5)), 4),
+        "p50": round(float(np.percentile(vals, 50)), 4), "p95": round(float(np.percentile(vals, 95)), 4),
+        "max": round(float(vals.max()), 4), "hist10": [int(h) for h in hist],
+    }
+    stats.update(_ao_probe(ctx, paint_objs, ao, size))
+    flat = stats["std"] < 0.02 or (stats["p95"] - stats["p05"]) < 0.08
+    stats["sane"] = (not flat) and stats.get("crate_side_base_mean", 0) < stats.get("crate_side_upper_mean", 1) and \
+        stats.get("floor_by_crate_mean", 0) < stats.get("floor_open_mean", 1)
+    log("ao stats:", json.dumps(stats))
+    if not stats["sane"]:
+        log("WARN ao: the bake looks flat or contact areas are not darker - inspect", fname)
+    return fname, stats
+
+
+# ── layout + module loading ──────────────────────────────────────────────────────────────────────
+def load_map(map_id: str, layout_arg: str | None):
+    """-> (mdef, layout). mdef = the maps.json entry (a copy) with the layout's "meta" merged in:
+    missing keys are filled from meta; with --layout meta OVERRIDES (the lane's newest proposal)."""
+    maps = C.load_json("maps.json")
+    entry = next((m for m in maps["maps"] if m["id"] == map_id), None)
+    mdef = json.loads(json.dumps(entry)) if entry else {"id": map_id}
+    src = None
+    if layout_arg:
+        cands = [layout_arg, os.path.join(C.ROOT, layout_arg), os.path.join(C.DATA_DIR, layout_arg)]
+        path = next((p for p in cands if os.path.isfile(p)), None)
+        if path is None:
+            raise SystemExit(f"--layout {layout_arg!r} not found (tried {cands})")
+        src = path
+    elif mdef.get("layout"):
+        src = os.path.join(C.DATA_DIR, mdef["layout"])
+        if not os.path.isfile(src):
+            raise SystemExit(f"maps.json {map_id}.layout -> {src} does not exist")
+    if src:
+        with open(src, encoding="utf-8") as f:
+            layout = json.load(f)
+        log(f"layout: {os.path.relpath(src, C.ROOT)}")
+    elif mdef.get("brushes"):
+        layout = {"brushes": mdef["brushes"]}
+        src = "data/maps.json (inline brushes)"
+        log("layout: inline brushes in data/maps.json (legacy)")
+    else:
+        raise SystemExit(f"map {map_id!r}: no layout (no inline brushes, no maps.json 'layout', no --layout); "
+                         f"status {mdef.get('status')!r}")
+    meta = layout.get("meta") or {}
+    over, filled = [], []
+    for k, v in meta.items():
+        if k == "id":
+            continue
+        if layout_arg and k in mdef and mdef[k] != v:
+            over.append(k)
+            mdef[k] = v
+        elif k not in mdef:
+            filled.append(k)
+            mdef[k] = v
+    if over:
+        log(f"layout meta OVERRIDES maps.json keys: {over}")
+    if filled:
+        log(f"layout meta fills keys missing from maps.json: {filled}")
+    if mdef.get("status") != "built":
+        log(f"NOTE map status is {mdef.get('status')!r} in maps.json (building from the layout anyway)")
+    missing = [k for k in ("symmetry", "bounds", "spawns", "lighting") if k not in mdef]
+    if missing:
+        raise SystemExit(f"map {map_id!r}: metadata missing {missing} (put them in the layout's \"meta\" block)")
+    layout["_source"] = src
+    return mdef, layout
+
+
+def realise_objects(ctx, coll):
+    """Geo buckets + module objects -> objects in PREFIX_ORDER, transforms applied, UVMap, extras."""
+    entries = [(n, g) for n, g in ctx.geos.items() if not g.empty()]
+    entries += [(ob.name, ob) for ob in ctx.objects]
+    names = [n for n, _ in entries]
+    dup = sorted({n for n in names if names.count(n) > 1})
+    if dup:
+        raise ValueError(f"duplicate node names: {dup}")
+
+    def order(n):
+        p = next((p for p in PREFIX_ORDER if n.startswith(p)), None)
+        if p is None:
+            raise ValueError(f"mesh node {n!r} has no contract prefix {PREFIX_ORDER}")
+        return (PREFIX_ORDER.index(p), n)
+    objs = {}
+    for name, src in sorted(entries, key=lambda e: order(e[0])):
+        if isinstance(src, C.Geo):
+            ob = src.to_object(coll, team_hex=ctx.team_hex)
+            C.uv_box_metres(ob.data, "UVMap")
+        else:
+            ob = src
+            if ob.type != "MESH":
+                raise ValueError(f"ctx.add_object({name!r}): not a mesh object")
+            for c in list(ob.users_collection):
+                c.objects.unlink(ob)
+            coll.objects.link(ob)
+            bpy.context.view_layer.update()             # matrix_world of a fresh object is stale until now
+            mw = ob.matrix_world.copy()
+            if name.startswith(APPLY_PREFIXES) and mw != Matrix.Identity(4):
+                if ob.data.users > 1:
+                    ob.data = ob.data.copy()
+                ob.data.transform(mw)
+                if mw.determinant() < 0 and hasattr(ob.data, "flip_normals"):
+                    ob.data.flip_normals()        # a mirrored transform turned the faces inside out
+                ob.parent = None
+                ob.matrix_basis = Matrix.Identity(4)
+                ob.data.update()
+            if name.startswith("paint_") and ob.modifiers:
+                raise ValueError(f"{name}: paint_ objects may not carry modifiers (the atlas is unwrapped on the base mesh)")
+            if "UVMap" not in ob.data.uv_layers:
+                C.uv_box_metres(ob.data, "UVMap")
+        objs[name] = ob
+    for name, props in ctx.extras.items():
+        ob = objs.get(name) or next((e for e in ctx.empties if e.name == name), None)
+        if ob is None:
+            raise ValueError(f"extras for unknown node {name!r}")
+        for k, v in props.items():
+            ob[k] = v
+    # §14.2 contract checks
+    for name, ob in objs.items():
+        if name.startswith("conveyor_") and "df_conveyor" not in ob.keys():
+            raise ValueError(f"{name}: conveyor_ nodes need extras df_conveyor [vx, vy, vz]")
+        if name.startswith("spring_") and "df_launch" not in ob.keys():
+            raise ValueError(f"{name}: spring_ nodes need extras df_launch [vx, vy, vz]")
+        if name.startswith("oob_"):
+            me = ob.data
+            cnt: dict = {}
+            for p in me.polygons:
+                for ek in p.edge_keys:
+                    cnt[ek] = cnt.get(ek, 0) + 1
+            if any(c != 2 for c in cnt.values()):
+                log(f"WARN {name}: oob_ volume is not a closed mesh")
+    for e in ctx.empties:
+        if e.name.startswith("light_") and "df_light" not in e.keys():
+            raise ValueError(f"{e.name}: light_ empties need extras df_light")
+    return objs
 
 
 # ── main ─────────────────────────────────────────────────────────────────────────────────────────
@@ -1089,44 +1588,49 @@ def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser()
     ap.add_argument("--map", required=True)
+    ap.add_argument("--layout", default=None, help="layout json (lane override; its meta overrides maps.json)")
     ap.add_argument("--no-render", action="store_true")
     ap.add_argument("--quick-render", action="store_true")
     ap.add_argument("--samples", type=int, default=64)
+    ap.add_argument("--no-ao", action="store_true")
+    ap.add_argument("--ao-samples", type=int, default=64)
+    ap.add_argument("--ao-distance", type=float, default=2.0)
+    ap.add_argument("--out-dir", default=None, help="write GLB/AO/stats/renders here instead of art/gltf + art/renders")
     args = ap.parse_args(argv)
+    if args.out_dir:
+        C.GLTF_DIR = C.RENDER_DIR = os.path.abspath(args.out_dir)
+        log(f"out-dir: {C.GLTF_DIR} (committed art/gltf + art/renders untouched)")
 
     C.reset_scene()
-    maps = C.load_json("maps.json")
+    mdef, layout = load_map(args.map, args.layout)
     teams = C.load_json("teams.json")
-    mdef = next((m for m in maps["maps"] if m["id"] == args.map), None)
-    if mdef is None:
-        raise SystemExit(f"map {args.map!r} not in data/maps.json")
-    if mdef.get("status") != "built" or not mdef.get("brushes"):
-        raise SystemExit(f"map {args.map!r} has no brushes (status {mdef.get('status')!r})")
     team_hex = {f"M_pad_{t['side']}": t["dye"] for t in teams["teams"]}
     for k, v in team_hex.items():
         C.get_material(k, v)
+    try:
+        mod = importlib.import_module(f"map_{mdef['id']}")
+    except ModuleNotFoundError as e:
+        raise SystemExit(f"no builder module art/blender/map_{mdef['id']}.py ({e}); see art/blender/MAPS_README.md")
+    if not callable(getattr(mod, "build", None)):
+        raise SystemExit(f"map_{mdef['id']}.py has no build(mdef, layout, ctx)")
 
-    brushes, notes = expand_brushes(mdef)
+    brushes, notes = expand_brushes(mdef, layout.get("brushes", []), getattr(mod, "FIXUPS", {}) or {})
     for n in notes:
         log(n)
-    for w in validate_brushes(brushes):
+    overlap_ok = set(getattr(mod, "OVERLAP_OK", ()) or ())
+    for w in validate_brushes(brushes, overlap_ok):
         log("WARN", w)
     log(f"{len(brushes)} brushes after mirror ({mdef['symmetry']})")
 
-    geos = build_architecture(brushes, mdef)
-    geos = build_props(brushes, mdef, geos)
-    clearance = pennant_clearance(geos, brushes, mdef)
-
     coll = C.new_collection("map_" + mdef["id"])
-    objs = {}
-    for name in sorted(geos, key=lambda n: (["paint_", "solid_", "col_", "deco_", "water_"].index(n[:n.index("_") + 1]), n)):
-        g = geos[name]
-        if g.empty():
-            continue
-        ob = g.to_object(coll, team_hex=team_hex)
-        C.uv_box_metres(ob.data, "UVMap")
-        objs[name] = ob
+    ctx = MapCtx(mdef, layout, brushes, notes, team_hex, coll, args)
+    ctx.overlap_ok = overlap_ok
+    mod.build(mdef, layout, ctx)
+
+    objs = realise_objects(ctx, coll)
     paint_objs = [o for n, o in objs.items() if n.startswith("paint_")]
+    if not paint_objs:
+        raise RuntimeError("the module produced no paint_* objects")
     log("objects:", ", ".join(f"{n}({len(o.data.polygons)}f)" for n, o in objs.items()))
 
     # ── atlas ────────────────────────────────────────────────────────────────────────────────
@@ -1137,6 +1641,7 @@ def main():
     paint_area = sum(p.area for o in paint_objs for p in o.data.polygons)
     chosen = None
     margin_px = 4
+    margin_used = margin_px
     for S in (512, 1024, 2048):
         if S > amax:
             break
@@ -1165,14 +1670,25 @@ def main():
         chosen = (S, st)
         if st["texels_per_meter"] >= 0.8 * target:
             break
+    if chosen is None:
+        raise RuntimeError(f"no atlas size <= atlasMax {amax} was tried")
     S, st = chosen
     png = os.path.join(C.RENDER_DIR, f"map_{mdef['id']}_atlas.png")
+    os.makedirs(C.RENDER_DIR, exist_ok=True)
     st = atlas_stats(paint_objs, S, 3, png_path=png)
     st["blender_select_overlap_faces"] = blender_overlap_count(paint_objs)
     log("atlas stats:", json.dumps(st))
     for ob in paint_objs:
         ob.data.uv_layers.active_index = 0
         ob.data.uv_layers["UVMap"].active_render = True
+
+    # ── §14.3 AO bake into Atlas space ─────────────────────────────────────────────────────────
+    os.makedirs(C.GLTF_DIR, exist_ok=True)
+    ao_file, ao_stats = (None, None)
+    if ctx.ao["enabled"]:
+        ao_file, ao_stats = bake_ao(ctx, objs, paint_objs, S)
+    else:
+        log("ao: skipped (--no-ao); mapinfo carries no df_ao")
 
     # ── empties ──────────────────────────────────────────────────────────────────────────────
     info = bpy.data.objects.new("mapinfo", None)
@@ -1186,7 +1702,11 @@ def main():
     info["df_atlas_margin_px"] = int(margin_used)
     info["df_atlas_overlap_texels"] = int(st["overlap_texels"])
     info["df_paint_tris"] = int(st["tris"])
-    info["df_plate_bottom"] = plate_bottom(brushes)
+    for k, v in ctx.info.items():
+        info[k] = v
+    if ao_file:
+        info["df_ao"] = ao_file
+    spawns = []
     for side in ("A", "B"):
         sp = mdef["spawns"][side]
         e = bpy.data.objects.new(f"spawn_{side}", None)
@@ -1194,33 +1714,34 @@ def main():
         e.location = C.g2b(*sp["pos"])
         e.rotation_euler = (0.0, 0.0, math.radians(sp["yaw"]))
         C.link(e, coll)
+        spawns.append(e)
+    for e in ctx.empties:
+        C.link(e, coll)
 
     # ── export ───────────────────────────────────────────────────────────────────────────────
-    os.makedirs(C.GLTF_DIR, exist_ok=True)
-    os.makedirs(C.RENDER_DIR, exist_ok=True)
     out = os.path.join(C.GLTF_DIR, f"map_{mdef['id']}.glb")
-    export_objs = list(objs.values()) + [info] + [o for o in coll.objects if o.name.startswith("spawn_")]
+    export_objs = list(objs.values()) + [info] + spawns + list(ctx.empties)
     export_glb(export_objs, out)
     tri_total = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in objs.values())
     tri_paint = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in paint_objs)
     summary = {
         "map": mdef["id"], "glb": out, "glb_mb": round(os.path.getsize(out) / 1e6, 3),
         "tris_total": tri_total, "tris_paint": tri_paint, "objects": sorted(objs),
-        "atlas": st, "fixups": notes, "version": DF_VERSION,
-        "plate_bottom": plate_bottom(brushes), "pennant_clearance": clearance,
+        "atlas": st, "fixups": notes, "version": DF_VERSION, "layout": layout.get("_source"),
     }
+    summary.update(ctx.summary)
+    summary["ao"] = ao_stats
     with open(os.path.join(C.RENDER_DIR, f"map_{mdef['id']}_stats.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=1)
     log(f"exported {out} ({summary['glb_mb']} MB, {tri_total} tris, {tri_paint} paint tris)")
 
     if not args.no_render:
-        apply_preview_shading(mdef)
-        setup_render_world(mdef, 16 if args.quick_render else args.samples)
-        render_views(mdef,
-                     os.path.join(C.RENDER_DIR, f"map_{mdef['id']}_top.png"),
-                     os.path.join(C.RENDER_DIR, f"map_{mdef['id']}_persp.png"),
-                     os.path.join(C.RENDER_DIR, f"map_{mdef['id']}_aerial.png"),
-                     os.path.join(C.RENDER_DIR, f"map_{mdef['id']}_props.png"), quick=args.quick_render)
+        for ob in objs.values():
+            if ob.name.startswith(HIDDEN_PREFIXES):
+                ob.hide_render = True
+        apply_preview_shading(ctx)
+        setup_render_world(ctx, 16 if args.quick_render else args.samples)
+        render_views(ctx, quick=args.quick_render)
     log("done")
 
 
