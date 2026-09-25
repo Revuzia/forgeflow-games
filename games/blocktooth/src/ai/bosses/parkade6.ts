@@ -41,10 +41,14 @@
 // JAM (the meter): the standard rule — dealt × strainMul / (0.45 × maxHp) — so it builds mostly on the OPEN
 //   till (×4), a little on the booth (×1.5) and legs (×0.8); + 0.10/s resisting the tow; UPROAR +0.30
 //   (bossUltHit). Full → JAMMED (bosses/index.ts: 5 s, ×2 damage); the till is forced OPEN for the stagger.
+//   JAM HOLDS while the till is shut (syncTill keeps index.ts's meter-idle clock at 0): the standard bleed
+//   (4 s without a gain, then 0.03/s) only runs while the drawer is out and being ignored — so JAM built on one
+//   opening carries to the next (Gate F fix: a key-driven bot never JAMMED the rig in 160 s).
 //   Phases at 66 % / 33 % (index.ts).
 // Telemetry (probe_boss3): b.data.part_till / part_booth / part_body / part_legs = titan damage per part group
 //   (after part hpMul; the arm counts as body); open_* = the same, only while the till is open; tillOpens =
-//   till openings; ramps = rampLaunch casts; jams = JAMMED count.
+//   till openings (closed → open edges; before Gate F it only counted stagger openings); ramps = rampLaunch
+//   casts; jams = JAMMED count.
 //
 // Measured 2026-09-24 (HEAD 5731402c + L0 + the concurrent C1 lanes' working tree), node _harness/probe_boss3.ts:
 //   open-till window (findTarget picks the till): ±34° at the Size V wall (71 m) · ±37° at 90 m · ±41° at 130 m
@@ -131,7 +135,7 @@ export function create(w: World): BossState {
   b.data.tillOpen = 0; b.data.tow = 0; b.data.deckTilt = 0; b.data.reversing = 0;
   b.data.part_till = 0; b.data.part_booth = 0; b.data.part_body = 0; b.data.part_legs = 0;
   b.data.open_till = 0; b.data.open_booth = 0; b.data.open_body = 0; b.data.open_legs = 0;
-  b.data.tillOpens = 0; b.data.ramps = 0; b.data.jams = 0; b.data.tillTick = -1; b.data.wasStag = 0;
+  b.data.tillOpens = 0; b.data.ramps = 0; b.data.jams = 0; b.data.tillTick = -1; b.data.wasStag = 0; b.data.tillWas = 0;
   return b;
 }
 
@@ -196,7 +200,6 @@ export function tillIsOpen(b: BossState): boolean {
 function syncTill(w: World, b: BossState): void {
   if (b.data.tillTick === w.tick) return;
   b.data.tillTick = w.tick;
-  const was = (b.data.tillOpen ?? 0) > 0;
   let t = Math.max(0, (b.data.tillOpen ?? 0) - w.dt);
   if (t < 1e-6) t = 0;
   if (b.staggerT > 0) {
@@ -205,7 +208,14 @@ function syncTill(w: World, b: BossState): void {
   } else b.data.wasStag = 0;
   if (!b.alive) t = 0;
   b.data.tillOpen = t;
-  if (t > 0 && !was) b.data.tillOpens = (b.data.tillOpens ?? 0) + 1;
+  // count an opening against the state this function LAST wrote (b.data.tillWas): openTill() raises tillOpen
+  // earlier in the same tick, so comparing against the incoming tillOpen never saw a closed → open edge
+  if (t > 0 && !(b.data.tillWas > 0)) b.data.tillOpens = (b.data.tillOpens ?? 0) + 1;
+  b.data.tillWas = t > 0 ? 1 : 0;
+  // JAM holds while the drawer is shut: bosses/index.ts bleeds the meter after METER_IDLE_S (4 s) without a
+  // gain, and between till windows a player has nothing high-strain to hit — the bleed ate the JAM built on
+  // the last opening before the next one came round. The idle clock only runs while the till is out.
+  if (t === 0 && b.staggerT <= 0) b.data.meterIdle = 0;
   const g = t > 0 ? TILL_OPEN : TILL_CLOSED;
   for (let i = 0; i < b.parts.length; i++) {
     const p = b.parts[i];

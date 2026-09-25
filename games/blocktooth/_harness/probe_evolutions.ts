@@ -1,6 +1,11 @@
 // BLOCKTOOTH v2 — lane L2 probe: evolutions, banish, lock, v2 draft rules (FEATURES_V2 §7, §15.3).
 // Run: node _harness/probe_evolutions.ts   (Node 22+ strips types). THREE-free. Exit 0 ok, 1 failure.
 //
+//   F1 (2026-09-25): READY = owned[base] ≥ min(EVO_READY_STACKS, base maxStacks) AND owned[with] ≥ 1 (was: base
+//   maxed). Every recipe below is readied at exactly that threshold, and the stat check compares the evolution
+//   taken EARLY against the MAXED base (stronger than before: evolving early is never a downgrade).
+//   1b. F1 draft nudge for the MISSING half of a started recipe (in-rarity weight; rarity split + draw count untouched;
+//       a base never nudges itself), recipe hints (recipeHint / evolutionProgress)
 //   1. every recipe: ready → offered (chest: slot 0, or slot 1 behind a held card, no extra draw;
 //      level-up: exactly ONE extra rng.loot draw, evo in slot 2 exactly when that draw < evoDraftChance)
 //   2. taking it: evo replaces the base (owned + order), companion kept, every base stat ≥ its maxed-base
@@ -25,12 +30,12 @@ const WM = await import('../src/core/world.ts');
 const DR = await import('../src/upgrades/draft.ts');
 const EN = await import('../src/upgrades/engine.ts');
 const { UPGRADES, UPGRADE_BY_ID } = await import('../src/data/upgrades.ts');
-const { EVOLUTIONS } = await import('../src/data/evolutions.ts');
+const { EVOLUTIONS, EVO_NUDGE, EVO_READY_STACKS, evoReadyStacks } = await import('../src/data/evolutions.ts');
 const { DRAFT_V2 } = await import('../src/core/config.ts');
 const { TITAN_IDS } = await import('../src/core/types.ts');
 const { STAT_KEYS } = await import('../src/upgrades/stats.ts');
 
-const { rollOffer, rerollOffer, pickUpgrade, hasPendingDraft, isEligible, banishCard, lockCard, evolutionsReady, deliveredHold } = DR;
+const { rollOffer, rerollOffer, pickUpgrade, hasPendingDraft, isEligible, banishCard, lockCard, evolutionsReady, deliveredHold, recipeNudge, recipeHint, evolutionProgress } = DR;
 const { applyUpgrade } = EN;
 
 let fails = 0, passes = 0;
@@ -62,9 +67,13 @@ function maxOut(w: World, id: string): void {
   const u = UPGRADE_BY_ID[id];
   for (let i = 0; i < u.maxStacks; i++) applyUpgrade(w, id);
 }
+/** F1: base stacks that make the recipe ready (min(EVO_READY_STACKS, base maxStacks)). */
+const needOf = (base: string): number => evoReadyStacks(UPGRADE_BY_ID[base].maxStacks);
+/** F1: ready the recipe at EXACTLY the readiness threshold (base to `need` stacks + one companion). */
 function setRecipe(w: World, evoId: string): void {
   const e = UPGRADE_BY_ID[evoId];
-  maxOut(w, e.evo!.base);
+  const need = needOf(e.evo!.base);
+  while ((w.upgrades.owned[e.evo!.base] ?? 0) < need) applyUpgrade(w, e.evo!.base);
   if ((w.upgrades.owned[e.evo!.with] ?? 0) < 1) applyUpgrade(w, e.evo!.with);
 }
 const titanOf = (u: UpgradeDef): TitanId => u.titan ?? 'molo';
@@ -83,9 +92,16 @@ section('1-3. EVOLUTIONS: ready → offered → taken → never again');
     // not ready before the recipe; locked evo not ready on a fresh profile even with the recipe
     {
       const w = fresh(tid, 31, full);
+      const need = needOf(r.base);
+      ok(need === Math.min(EVO_READY_STACKS, UPGRADE_BY_ID[r.base].maxStacks) && need >= 1, `${r.id}: ready threshold = min(${EVO_READY_STACKS}, ${UPGRADE_BY_ID[r.base].maxStacks}) = ${need}`);
       ok(!evolutionsReady(w).includes(r.id), `${r.id}: not ready on an empty build`);
-      maxOut(w, r.base);
-      ok(!evolutionsReady(w).includes(r.id), `${r.id}: not ready without the companion ${r.with}`);
+      applyUpgrade(w, r.with);
+      ok(!evolutionsReady(w).includes(r.id), `${r.id}: not ready with the companion alone`);
+      for (let i = 1; i < need; i++) applyUpgrade(w, r.base);
+      ok(!evolutionsReady(w).includes(r.id), `${r.id}: not ready at ${need - 1} base stack(s) + companion (one short)`);
+      const wb = fresh(tid, 31, full);
+      maxOut(wb, r.base);
+      ok(!evolutionsReady(wb).includes(r.id), `${r.id}: not ready without the companion ${r.with} (base maxed)`);
       if (e.locked) {
         const wf = fresh(tid, 31, false);
         setRecipe(wf, r.id);
@@ -97,7 +113,7 @@ section('1-3. EVOLUTIONS: ready → offered → taken → never again');
     {
       const w = fresh(tid, 41, full);
       setRecipe(w, r.id);
-      ok(evolutionsReady(w)[0] === r.id, `${r.id}: ready once ${r.base} is maxed and ${r.with} owned`);
+      ok(evolutionsReady(w)[0] === r.id && (w.upgrades.owned[r.base] ?? 0) === needOf(r.base), `${r.id}: ready at exactly ${needOf(r.base)} ${r.base} + ${r.with} owned`);
       w.upgrades.chestDrafts = 1;
       const c = countLoot(w);
       const o = rollOffer(w, true);
@@ -109,6 +125,12 @@ section('1-3. EVOLUTIONS: ready → offered → taken → never again');
       const baseDef = UPGRADE_BY_ID[r.base];
       const baseStats = [...new Set(baseDef.effects.filter((x) => !!x.stat).map((x) => x.stat!))];
       for (const k of STAT_KEYS) beforeStats[k] = T.stats[k];
+      // F1 reference: the same build with the base MAXED (the pre-F1 evolve point) — the early evolution must match it
+      const wm = fresh(tid, 41, full);
+      maxOut(wm, r.base);
+      applyUpgrade(wm, r.with);
+      const maxedStats: Record<string, number> = {};
+      for (const k of STAT_KEYS) maxedStats[k] = wm.titan.stats[k];
       const orderIdx = w.upgrades.order.indexOf(r.base);
       const ev0 = w.tally.evolutions;
       pickUpgrade(w, r.id);
@@ -118,10 +140,10 @@ section('1-3. EVOLUTIONS: ready → offered → taken → never again');
       ok((w.upgrades.owned[r.with] ?? 0) >= 1, `${r.id}: companion ${r.with} kept`);
       ok(w.tally.evolutions === ev0 + 1, `${r.id}: tally.evolutions +1`);
       ok(w.upgrades.chestDrafts === 0 && w.upgrades.offer === null, `${r.id}: the pick consumed the chest draft`);
-      const worse = baseStats.filter((k) => T.stats[k] < beforeStats[k] - 1e-9);
-      ok(worse.length === 0, `${r.id}: every base stat ≥ maxed base (${baseStats.map((k) => `${k} ${beforeStats[k].toFixed(2)}→${T.stats[k].toFixed(2)}`).join(', ')})`);
+      const worse = baseStats.filter((k) => T.stats[k] < beforeStats[k] - 1e-9 || T.stats[k] < maxedStats[k] - 1e-9);
+      ok(worse.length === 0, `${r.id}: evolved at ${needOf(r.base)} stacks, every base stat ≥ the MAXED base (${baseStats.map((k) => `${k} ready ${beforeStats[k].toFixed(2)} / maxed ${maxedStats[k].toFixed(2)} → ${T.stats[k].toFixed(2)}`).join(', ')})`);
       ok(T.hp > 0 && T.hp <= T.maxHp && Number.isFinite(T.hp), `${r.id}: HP sane after evolving (${T.hp.toFixed(1)}/${T.maxHp.toFixed(1)})`);
-      lines.push(`${r.id.padEnd(28)} ${tid.padEnd(10)} ${baseStats.map((k) => `${k} ${beforeStats[k].toFixed(2)}→${T.stats[k].toFixed(2)}`).join(', ') || '(trigger-only base)'}`);
+      lines.push(`${r.id.padEnd(28)} ${tid.padEnd(10)} @${needOf(r.base)}/${baseDef.maxStacks} ${baseStats.map((k) => `${k} ${beforeStats[k].toFixed(2)} (max ${maxedStats[k].toFixed(2)})→${T.stats[k].toFixed(2)}`).join(', ') || '(trigger-only base)'}`);
 
       // 3. re-take cases
       ok(!isEligible(w, UPGRADE_BY_ID[r.base]), `${r.id}: base ${r.base} no longer eligible`);
@@ -180,6 +202,69 @@ section('1-3. EVOLUTIONS: ready → offered → taken → never again');
   const share = lvHits / lvTrials;
   console.log(`level-up drafts with an evolution ready: evo offered in ${lvHits}/${lvTrials} = ${(100 * share).toFixed(1)} % (evoDraftChance ${DRAFT_V2.evoDraftChance})`);
   ok(Math.abs(share - DRAFT_V2.evoDraftChance) < 0.06, `level-up evo share ≈ evoDraftChance (${(100 * share).toFixed(1)} %)`);
+}
+
+// ═══════════════════════════════ 1b. F1 NUDGE + HINTS ═══════════════════════════════
+section('1b. F1: draft nudge toward a started recipe, recipe hints');
+{
+  // recipeNudge: 1 until a recipe is started; then EVO_NUDGE for its missing half; 1 again once ready
+  for (const r of EVOLUTIONS) {
+    const e = UPGRADE_BY_ID[r.id];
+    const tid = titanOf(e);
+    const full = !!e.locked;
+    const w = fresh(tid, 71, full);
+    ok(recipeNudge(w, r.base) === 1 && recipeNudge(w, r.with) === 1, `${r.id}: no half owned → no nudge`);
+    applyUpgrade(w, r.base);
+    const need = needOf(r.base);
+    ok(recipeNudge(w, r.with) === EVO_NUDGE, `${r.id}: base owned → companion ${r.with} nudged ×${recipeNudge(w, r.with)}`);
+    ok(recipeNudge(w, r.base) === 1 || EVOLUTIONS.some((x) => x.with === r.base), `${r.id}: a base never nudges itself (×${recipeNudge(w, r.base)} with only the base owned)`);
+    const h = recipeHint(w, r.with);
+    ok(!!h && h.evo === r.id && h.completes === (need <= 1), `${r.id}: hint on ${r.with} = TOWARD/COMPLETES ${h ? h.evo + ' ' + h.completes : 'null'}`);
+    ok(recipeHint(w, 'no_such_card') === null, `${r.id}: an unrelated id has no hint`);
+    const p0 = evolutionProgress(w).find((p) => p.evo === r.id);
+    ok(!!p0 && p0.baseHave === 1 && p0.baseNeed === need && !p0.withHave && !p0.ready, `${r.id}: progress row 1/${need}, companion missing`);
+    applyUpgrade(w, r.with);
+    ok(recipeNudge(w, r.base) === (need > 1 ? EVO_NUDGE : 1), `${r.id}: companion owned, base ${w.upgrades.owned[r.base]}/${need} → base nudged ×${recipeNudge(w, r.base)}`);
+    while ((w.upgrades.owned[r.base] ?? 0) < need - 1) applyUpgrade(w, r.base);
+    if (need > 1) {
+      const hb = recipeHint(w, r.base);
+      ok(!!hb && hb.evo === r.id && hb.completes, `${r.id}: one base stack short → hint on ${r.base} = COMPLETES`);
+    }
+    while ((w.upgrades.owned[r.base] ?? 0) < need) applyUpgrade(w, r.base);
+    // other recipes sharing a part may still be started — only this recipe's own contribution must be gone
+    const onlyThis = (id: string) => EVOLUTIONS.filter((x) => x.base === id || x.with === id).length === 1;
+    if (onlyThis(r.base)) ok(recipeNudge(w, r.base) === 1, `${r.id}: ready → base no longer nudged`);
+    if (onlyThis(r.with)) ok(recipeNudge(w, r.with) === 1 && recipeHint(w, r.with) === null, `${r.id}: ready → companion no longer nudged / hinted`);
+    const pr = evolutionProgress(w);
+    ok(pr.length > 0 && pr[0].ready && evolutionsReady(w).includes(pr[0].evo), `${r.id}: progress lists a READY recipe first (${pr[0] ? pr[0].evo : '-'})`);
+  }
+  // the nudge raises the missing half's share inside its rarity; the rarity split and the draw count are untouched
+  const R = 3000;
+  let nudged = 0, control = 0, drawsN = 0, drawsC = 0, cardsN = 0, cardsC = 0;
+  const rarN: Record<string, number> = { common: 0, rare: 0, epic: 0, legendary: 0 };
+  const rarC: Record<string, number> = { common: 0, rare: 0, epic: 0, legendary: 0 };
+  const wn = fresh('molo', 81), wc = fresh('molo', 81);
+  applyUpgrade(wn, 'wrecking_permit');                     // base of evo_bulldozer_clause → wide_load nudged
+  applyUpgrade(wc, 'express_lane');                        // control: one other common owned, no recipe touching wide_load
+  (wn.titan as { rank: number }).rank = 2; (wc.titan as { rank: number }).rank = 2;
+  ok(recipeNudge(wn, 'wide_load') === EVO_NUDGE && recipeNudge(wc, 'wide_load') === 1, 'nudge set up: wide_load nudged in one world only');
+  const cn = countLoot(wn), cc = countLoot(wc);
+  for (let i = 0; i < R; i++) {
+    wn.upgrades.offer = null; wc.upgrades.offer = null;
+    const a = cn.n, b = cc.n;
+    const on = rollOffer(wn, false), oc = rollOffer(wc, false);
+    drawsN += cn.n - a; drawsC += cc.n - b; cardsN += on.length; cardsC += oc.length;
+    if (on.includes('wide_load')) nudged++;
+    if (oc.includes('wide_load')) control++;
+    for (const id of on) rarN[UPGRADE_BY_ID[id].rarity]++;
+    for (const id of oc) rarC[UPGRADE_BY_ID[id].rarity]++;
+  }
+  const ratio = nudged / Math.max(1, control);
+  console.log(`nudge ×${EVO_NUDGE}: wide_load offered in ${nudged}/${R} drafts with its base owned vs ${control}/${R} without (×${ratio.toFixed(2)}); rarity shares nudged ${Object.values(rarN).map((x) => (100 * x / cardsN).toFixed(1)).join('/')} vs control ${Object.values(rarC).map((x) => (100 * x / cardsC).toFixed(1)).join('/')} %`);
+  ok(ratio >= 2.5, `a started recipe's missing half is offered clearly more often (×${ratio.toFixed(2)} ≥ ×2.5)`);
+  ok(drawsN === cardsN && drawsC === cardsC, `the nudge adds no rng.loot draw (${drawsN} draws / ${cardsN} cards; control ${drawsC} / ${cardsC})`);
+  const dCommon = Math.abs(rarN.common / cardsN - rarC.common / cardsC), dRare = Math.abs(rarN.rare / cardsN - rarC.rare / cardsC);
+  ok(dCommon < 0.03 && dRare < 0.03, `the rarity split is untouched by the nudge (common Δ ${(100 * dCommon).toFixed(1)} pt, rare Δ ${(100 * dRare).toFixed(1)} pt < 3)`);
 }
 
 // several ready at once: the FIRST in catalogue order is offered
@@ -440,10 +525,11 @@ section('9. DETERMINISM (scripted session: banish · lock · reroll · evolve)')
 // A draft-only model of one run (40 level-up drafts at Size I→V + 2 chest drafts, fresh profile, 120 seeds per
 // titan) under two players: CHASE (takes an offered evolution, else the best recipe card — a base it already
 // stacks, a base whose companion it owns, any recipe card — rerolls an offer with no recipe card, LOCKs the
-// runner-up recipe base) and NONE (takes an offered evolution, else slot 0). The gate bot is closer to NONE
-// (its generic scoring spreads picks), so GATE 2 rarely sees an evolution; the numbers are printed for the
-// owner / orchestrator. Guard: a chasing player completes a recipe in ≥ 25 % of runs (evolutions are
-// reachable at all under the §7.4 rules).
+// runner-up recipe base) and NONE (takes an offered evolution, else slot 0). Pre-F1 (base had to be maxed):
+// CHASE 59–65/120, NONE 0/120 — the guard then was CHASE ≥ 25 %. F1 guards (stronger): CHASE ≥ 90 % of runs;
+// NONE — a player who ignores recipes entirely — still meets an evolution in ≥ 40 % of runs, but averages
+// ≤ 2 per run (evolutions are part of a run, not a given). The GATE 2 bot's own rate (≥ 1 evolution in most
+// of the 12-run matrix) is measured with the real sim by _harness/scratch/f1/evo_matrix.ts (too slow here).
 section('10. REACHABILITY (draft-only model)');
 {
   const DRAFTS = 40, CHESTS = 2, N = 120;
@@ -489,8 +575,10 @@ section('10. REACHABILITY (draft-only model)');
   for (const tid of TITAN_IDS) {
     const c = model(tid, true), n = model(tid, false);
     const med = (a: number[]) => (a.length ? String(a[a.length >> 1] + 1) : '-');
-    console.log(`${tid.padEnd(10)} CHASE: ≥1 evolution in ${c.runs}/${N} runs (${(c.evos / N).toFixed(2)}/run, median first at draft ${med(c.first)} of ${DRAFTS + CHESTS}) · NONE: ${n.runs}/${N}`);
-    ok(c.runs >= 0.25 * N, `${tid}: a recipe-chasing player completes an evolution in ≥ 25 % of runs (${c.runs}/${N})`);
+    console.log(`${tid.padEnd(10)} CHASE: ≥1 evolution in ${c.runs}/${N} runs (${(c.evos / N).toFixed(2)}/run, median first at draft ${med(c.first)} of ${DRAFTS + CHESTS}) · NONE: ${n.runs}/${N} (${(n.evos / N).toFixed(2)}/run, median first at draft ${med(n.first)})`);
+    ok(c.runs >= 0.9 * N, `${tid}: a recipe-chasing player completes an evolution in ≥ 90 % of runs (${c.runs}/${N})`);
+    ok(n.runs >= 0.4 * N, `${tid}: a player ignoring recipes still meets an evolution in ≥ 40 % of runs (${n.runs}/${N})`);
+    ok(n.evos / N <= 2, `${tid}: ... but not a given: ≤ 2 evolutions per run on average (${(n.evos / N).toFixed(2)})`);
   }
 }
 

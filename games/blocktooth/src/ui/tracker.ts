@@ -34,7 +34,7 @@ const STEP_S = 0.1;
 export const OBJECTIVE_GLYPH: Record<ObjectiveKind, GlyphId> = { overloadSite: 'overload', reliefDepot: 'bandage', recordsAnnex: 'annex' };
 export const OBJECTIVE_COLOR: Record<ObjectiveKind, string> = { overloadSite: '#ffd166', reliefDepot: '#4fb3b0', recordsAnnex: '#ff6f5e' };
 export const POWERUP_GLYPH: Record<PowerUpKind, GlyphId> = { cleanup: 'magnet', demolition: 'notice', redLight: 'trafficLight', rushHour: 'rush', backPay: 'coin' };
-export const POWERUP_COLOR: Record<PowerUpKind, string> = { cleanup: '#4fb3b0', demolition: '#ff6f5e', redLight: '#e63946', rushHour: '#ffd166', backPay: '#f4ecd8' };
+export const POWERUP_COLOR: Record<PowerUpKind, string> = { cleanup: '#4fb3b0', demolition: '#ff8a3d', redLight: '#e63946', rushHour: '#ffd166', backPay: '#7bd389' };
 
 interface Row {
   root: HTMLDivElement;

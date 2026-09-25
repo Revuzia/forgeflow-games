@@ -8,7 +8,11 @@
 // tags[0] / tags[1] value used by UPGRADES maps to a family colour (evolutions read tags[1]); the
 // rarity frame class; the §4.2 bar ordering rule on synthetic owned sets (≤ 10 all in pick order,
 // > 10 top-9 by score in pick order + `+N`, ties by pick order, perk cards and duplicates excluded);
-// the §4.3 badge rule. Exits non-zero on any failure.
+// the §4.3 badge rule. F4 adds: (6) bar glyphs — every card has ≥ 10 distinct candidates, and barGlyphs
+// never repeats a glyph across 10 slots (every pick-order window of the card list + 400 seeded random
+// sets, titan kits included); every card's bar fill separates from the cream slot face (contrast ≥
+// SLOT_MIN_CONTRAST) without going dark (luminance ≥ 0.12); (7) the HP readout never shows hp > max.
+// Exits non-zero on any failure.
 
 import type { StatKey, TriggerAction, UpgradeDef } from '../src/core/types.ts';
 import type { GlyphId } from '../src/v2types.ts';
@@ -17,7 +21,9 @@ import { STAT_KEYS } from '../src/upgrades/stats.ts';
 import {
   BAR_SLOTS, FAMILY_COLORS, GLYPHS, GLYPH_DETAIL, GLYPH_IDS, ICON_TABLES, badgeFor, barScore, barSlots,
   familyColor, glyphSvg, iconFor, rarityFrameClass,
+  SLOT_BG, SLOT_MIN_CONTRAST, barFill, barGlyphs, contrast, glyphCandidates, luminance,
 } from '../src/ui/icons.ts';
+import { hpReadout } from '../src/data/strings_hud.ts';
 
 let fails = 0, checks = 0;
 function ok(cond: boolean, msg: string): void {
@@ -192,6 +198,58 @@ const look = (id: string): UpgradeDef | undefined => defs.get(id);
   ok(badgeFor(lg, 1) === 'MAX', 'badge: 1-stack card → MAX');
   ok(badgeFor(ev, 1) === 'EVO', 'badge: evolution → EVO');
   ok(!/★|\*/.test(badgeFor(c, 3)), 'badge: no star glyph');
+}
+
+// ── 6. bar glyphs: distinct per bar + fill contrast (F4) ──
+{
+  const cards = UPGRADES.filter((u) => !u.perk);
+  let minCand = 99, worst = '';
+  for (const u of cards) { const c = glyphCandidates(u); if (c.length < minCand) { minCand = c.length; worst = u.id; } ok(c[0] === iconFor(u), `${u.id}: first bar candidate is iconFor (§4.3)`); }
+  ok(minCand >= BAR_SLOTS, `every card has ≥ ${BAR_SLOTS} glyph candidates (min ${minCand}, ${worst})`);
+  const distinct = (ids: string[], label: string) => {
+    const g = barGlyphs(ids);
+    ok(new Set(g).size === g.length && g.every((x) => !!x), `${label}: ${ids.length} slots, ${new Set(g).size} distinct glyphs`);
+  };
+  // every pick-order window of 10 over the whole list, per titan (kit cards only with their titan)
+  for (const t of ['molo', 'voltkite', 'hearthback', 'briarwick']) {
+    const pool = cards.filter((u) => !u.titan || u.titan === t).map((u) => u.id);
+    for (let i = 0; i + BAR_SLOTS <= pool.length; i += 3) distinct(pool.slice(i, i + BAR_SLOTS), `${t} window ${i}`);
+    // seeded random bars
+    let seed = 1337 + t.length;
+    const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296);
+    for (let k = 0; k < 100; k++) {
+      const bag = pool.slice(); const pick: string[] = [];
+      while (pick.length < BAR_SLOTS && bag.length) pick.push(bag.splice(Math.floor(rnd() * bag.length), 1)[0]);
+      distinct(pick, `${t} random ${k}`);
+    }
+  }
+  // the before-F4 worst case: the 10 most common primary glyph (ripple) cards together
+  const ripple = cards.filter((u) => iconFor(u) === 'ripple').slice(0, BAR_SLOTS).map((u) => u.id);
+  distinct(ripple, 'ten RIPPLE-primary cards');
+  let minC = 99, minL = 1, wc = '', wl = '';
+  for (const u of cards) {
+    const f = barFill(u), c = contrast(f, SLOT_BG), l = luminance(f);
+    if (c < minC) { minC = c; wc = `${u.id} ${f}`; }
+    if (l < minL) { minL = l; wl = `${u.id} ${f}`; }
+  }
+  ok(minC >= SLOT_MIN_CONTRAST, `bar fill vs slot face: min contrast ${minC.toFixed(2)} ≥ ${SLOT_MIN_CONTRAST} (${wc})`);
+  ok(minL >= 0.12, `bar fill never dark-on-dark: min luminance ${minL.toFixed(3)} ≥ 0.12 (${wl})`);
+  console.log(`probe_icons: bar glyphs — min candidates ${minCand} · fill contrast min ${minC.toFixed(2)} (${wc}) · luminance min ${minL.toFixed(3)} (${wl})`);
+}
+
+// ── 7. HP readout (F4: never hp > max) ──
+{
+  const cases: [number, number, string][] = [
+    [157.9, 157.4, '157 / 157'], [157.4, 157.4, '157 / 157'], [100, 100, '100 / 100'], [0.2, 157.4, '1 / 157'],
+    [0, 100, '0 / 100'], [-5, 100, '0 / 100'], [250, 157.4, '157 / 157'], [NaN, 100, '0 / 100'], [50, NaN, '1 / 1'], [99.5, 100, '100 / 100'],
+  ];
+  for (const [h, m, want] of cases) ok(hpReadout(h, m) === want, `hpReadout(${h}, ${m}) → '${hpReadout(h, m)}' (want '${want}')`);
+  for (let i = 0; i < 2000; i++) {
+    const m = 20 + i * 0.731, h = (i % 7 === 0 ? 1.2 : (i % 13) / 12) * m;
+    const [a, b] = hpReadout(h, m).split(' / ').map(Number);
+    if (!(a <= b)) { ok(false, `hpReadout(${h}, ${m}) = ${a} / ${b}: hp side above max`); break; }
+  }
+  checks++;
 }
 
 const top = Object.entries(histo).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([g, n]) => `${g} ${n}`).join(' · ');

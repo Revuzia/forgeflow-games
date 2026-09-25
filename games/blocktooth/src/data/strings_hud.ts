@@ -45,4 +45,22 @@ export const HUD2 = {
   reviveKicker: 'STAY OF DEMOLITION',
   reviveTitle: 'DEMOLITION POSTPONED',
   reviveSub: 'THE SUBJECT IS BACK ON ITS FEET — ONE APPEAL PER RUN',
+  // Gate F: a recipe just became ready (upgrades/draft.ts evolutionProgress)
+  evoReadyKicker: 'RESTRUCTURING APPROVED',
+  evoReadyTitle: 'EVOLUTION READY',
+  evoReadySub: 'WATCH THE NEXT REPORTS FOR THE RESTRUCTURED FILE',
 } as const;
+
+/**
+ * The status card's `hp / max` text. maxHp is fractional (base × card multipliers × RANKS[rank].hpMul),
+ * and the old readout rounded the two sides differently (ceil(hp) vs round(maxHp)): at full HP a max
+ * of e.g. 157.4 read `158 / 157`. Both sides now use the same integer max, and the HP side is clamped
+ * into [1, max] while alive (ceil keeps a sliver of HP from reading 0), 0 only when it is really 0.
+ * Pure (node probe: probe_icons). Lives here, not in ui/hud.ts, so node can import it without the CSS.
+ */
+export function hpReadout(hp: number, maxHp: number): string {
+  const max = Math.max(1, Math.round(Number.isFinite(maxHp) ? maxHp : 1));
+  const h = Number.isFinite(hp) ? hp : 0;
+  const cur = h <= 0 ? 0 : Math.max(1, Math.min(max, Math.ceil(h - 1e-6)));
+  return `${cur} / ${max}`;
+}

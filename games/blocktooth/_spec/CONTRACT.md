@@ -177,9 +177,20 @@ frame  = frameDistance(w) = max(D*, director.data.bossFrameD while a boss is ali
          (D* … 2·D*) and look-target offset (frameOffset) that keep the boss rig, every live boss-owned
          telegraph and the titan inside the default-zoom frame — below ndc y 0.58 (the boss nameplate),
          × 1.12 margin elsewhere — projected exactly through the rig's camera; the offset slides toward
-         the fight's centre only when the curve's view centred on the titan cannot hold it. Held 1.6 s,
-         released at 1/s; the offset eases at 3.5/s (and the rig smooths it at 5/s).
+         the fight's centre only when the curve's view centred on the titan cannot hold it. HELD with
+         hysteresis (config stepFrameHold — generic, gatekeepers/minibosses reuse it; a post-kill floor
+         rides its `floor` argument): widened at once; shrunk only after holdS 3.5 s in which no need used
+         ≥ 20 % of the extra width (each re-widen that interrupts a shrink adds 4 s to the hold, ≤ 20 s;
+         a full release resets it), then slowly (≤ 2.5 % of D per second, eased in / out); the offset
+         eases toward the need's at 3.5/s while the width is needed, holds through the hold, eases home
+         at 0.8/s after it (and the rig smooths it at 5/s).
 D     ← critically-damped spring toward frame, ω = 4/s   // x'' = ω²(frame−x) − 2ω x'
+         while a boss is alive: widening at ω = 9/s (CAMERA.widenOmega), and never under the boss HARD
+         FLOOR (config bossFrameFloorAt): the boss rig, every live boss tell and the titan inside |ndc|
+         0.95 around the look target the rig actually has, refitted every rendered frame — a tell never
+         leaves the frame, not even on the frame it spawns (the view steps out on that frame instead).
+         The floor also binds the drawn D through a punch at the default zoom (not a player zoom-in).
+         The director's replica of the rig (camD, for spawnView) mirrors the widen rate and the floor.
 zoom   : player multiplier on D (view-only; the sim never reads it): wheel notch ±0.12 ln, '=' / '-'
          (numpad + / −) held 1.35 ln/s, gamepad right stick 1.5 ln/s, Z / R3 reset; ln-smoothed
          ω = CAMERA_ZOOM.omega 11/s; clamped to CAMERA_ZOOM.min 0.55 … max 2.0 and to

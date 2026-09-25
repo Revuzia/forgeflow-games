@@ -20,6 +20,7 @@ import { OBJECTIVE_NAMES } from '../data/objectives.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from './viewtypes.ts';
 import type { MarkerFrame, MarkerItem, MarkerKind, MarkerViewApi } from '../v2types.ts';
 import { OBJ_ANCHOR } from './objectiveview.ts';
+import { TOKEN_TOP, tokenSize } from './powerupview.ts';
 
 const MAX = 12;
 /** candidates considered per frame before the 12-cap (objectives ≤ 8 + power-ups ≤ 3 + till 1 + slack) */
@@ -82,9 +83,10 @@ export class MarkerView implements ViewModule, MarkerViewApi {
       const p = pus[i];
       if (!p.alive) continue;
       const d = Math.hypot(p.x - T.x, p.z - T.z);
-      // anchored on the token's top; the chip is lifted clear of the token (the DOM chip hangs under its anchor)
-      const s = 0.5 * Math.max(0.3, p.h > 0 ? p.h : H);
-      this.push('powerup', p.kind, p.x, s * 1.6, p.z, d, 2, false, puR, 34);
+      // anchored on the token's top — the SAME size powerupview draws (incl. its on-screen floor, which is
+      // what a Size I token actually is) — and lifted clear of it (the DOM chip hangs under its anchor)
+      const s = tokenSize(Math.max(0.3, p.h > 0 ? p.h : H), _f.camDist);
+      this.push('powerup', p.kind, p.x, s * TOKEN_TOP, p.z, d, 2, false, puR, 30);
     }
     if (this.nCand === 0) return;
 

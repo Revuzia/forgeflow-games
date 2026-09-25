@@ -315,6 +315,13 @@ export const CAMERA = {
   targetYFrac: 0.45,
   /** critically-damped spring rate for distance (1/s) */
   zoomOmega: 4,
+  /** the same spring's rate while a live boss fight needs MORE width than the rig shows (1/s): the
+   *  director widens its held framing at once, the rig catches up this fast (≈ 0.4 s) instead of ≈ 1 s */
+  widenOmega: 9,
+  /** hard floor of the rig while a boss is alive: every boss-framing point (rig, live tells, titan) stays
+   *  inside this |ndc| of the drawn frame around the rig's ACTUAL look target (lead + slide included) —
+   *  the frame a tell spawns on included (bossFrameFloorAt). < 1 covers the 8-point circle sampling. */
+  floorNdc: 0.95,
   /** smoothing rate (1/s) of the boss-framing look-target offset in the rig (frameOffset) */
   frameOffOmega: 5,
   /** rank-up punch: distance dips by this fraction then eases out over punchS */
@@ -446,10 +453,73 @@ export function viewFootprint(pitchDeg: number, aspect = 16 / 9): { n: number; f
  *  topNdc — nothing framed above this height of the frame (ndc y): the boss nameplate + hint bar sit
  *           across the top ~20 % of the screen and hid the titan's head in a paw-slam shot
  *  maxMul — never wider than this × the curve (a boss walking in from 230 m, a far chase)
- *  holdS / releaseOmega — the director holds a widening this long after it is no longer needed,
- *  then eases back at this rate (1/s), so the camera does not pump in and out with every attack
- *  offsetOmega — the director eases the look-target offset toward its target at this rate (1/s). */
-export const BOSS_FRAME = { margin: 1.12, topNdc: 0.58, maxMul: 2.0, holdS: 1.6, releaseOmega: 1.0, offsetOmega: 3.5 } as const;
+ *  The widening is HELD with hysteresis (stepFrameHold — generic, the gatekeeper / miniboss fights
+ *  reuse it with the same constants): it widens at once to whatever the fight needs (the rig follows at
+ *  CAMERA.widenOmega and never under its hard floor, bossFrameFloorAt — a live tell never leaves the
+ *  frame), and it shrinks only after holdS s in which nothing needed more than (1 − keepFrac) of the
+ *  extra width — then slowly: the shrink speed eases in over releaseRampS, is capped at releaseRate × D
+ *  per second and eases out at releaseOmega (1/s); any need that uses that much of the extra width stops
+ *  a shrink where it is and restarts the hold. Every re-widen that interrupts a shrink lengthens the hold
+ *  by holdStepS (≤ holdMaxS) — the hold learns the boss's attack cadence, so a rhythm of tells settles
+ *  at one width instead of pumping; a full release back to the curve resets it.
+ *  (Round 1 held 1.6 s then released at 1/s all the way down: in real Chrome at LV 37 PARKADE-6 swung
+ *  617 ↔ 694 m and IRON GULLY 617 ↔ 840 m, 2–3 in-out pumps per 30 s — _harness/scratch/view/framepump.py;
+ *  node replay over 3 bosses × 2 titans × 2 seeds × 60 s: 230 pumps round 1 → 14 with these constants,
+ *  _harness/scratch/view/framehold_sim.ts.)
+ *  offsetOmega — the director eases the look-target offset toward the need's at this rate (1/s) while
+ *  the width is needed; during the hold the offset holds too, and after it eases home at
+ *  offsetReleaseOmega (1/s) — the view does not pan back and forth between tells either. */
+export const BOSS_FRAME = {
+  margin: 1.12, topNdc: 0.58, maxMul: 2.0,
+  holdS: 3.5, holdStepS: 4.0, holdMaxS: 20.0, keepFrac: 0.8,
+  releaseOmega: 0.6, releaseRate: 0.025, releaseRampS: 1.5,
+  offsetOmega: 3.5, offsetReleaseOmega: 0.8,
+} as const;
+
+/** The hysteresis constants stepFrameHold reads (BOSS_FRAME satisfies it; a caller may pass its own). */
+export interface FrameHoldParams {
+  readonly holdS: number; readonly holdStepS: number; readonly holdMaxS: number; readonly keepFrac: number;
+  readonly releaseOmega: number; readonly releaseRate: number; readonly releaseRampS: number;
+}
+/** State of one held framing (plain numbers — the director keeps it in director.data; held 0 = fresh).
+ *  held: the distance shown (m) · quietT: s since the width was last needed · holdS: the current
+ *  (adaptive) hold · relT: s since the shrink began (< 0 = not shrinking) · relD: held when it began. */
+export interface FrameHold { held: number; quietT: number; holdS: number; relT: number; relD: number }
+
+/** FRAME HOLD — one tick of the widen-fast / shrink-late-and-slow hysteresis on a framing distance.
+ *  `need` = the distance this tick's content needs (m), `floor` = the distance it may never go under (the
+ *  curve; a post-kill floor rides here too). Returns true while the width is NEEDED this tick (widening,
+ *  or the need within keepFrac of the extra width) — the caller holds its look-target offset on false.
+ *  Guarantees h.held ≥ max(need, floor) after every call. Deterministic; allocation-free. */
+export function stepFrameHold(h: FrameHold, need: number, floor: number, dt: number, P: FrameHoldParams = BOSS_FRAME): boolean {
+  const fl = Number.isFinite(floor) && floor > 0 ? floor : 0;
+  const nd = Math.max(fl, Number.isFinite(need) ? need : 0);
+  if (!(h.holdS >= P.holdS)) h.holdS = P.holdS;
+  if (!(h.held > 0) || !Number.isFinite(h.held)) { h.held = nd; h.quietT = 0; h.relT = -1; h.relD = nd; return true; }
+  if (h.held < fl) h.held = fl;
+  if (nd > h.held) {
+    // widen at once; a widen that interrupts a shrink means the hold was shorter than the attack rhythm
+    if (h.relT >= 0 && h.relD - h.held > 1e-3 * h.relD) h.holdS = Math.min(P.holdMaxS, h.holdS + P.holdStepS);
+    h.held = nd; h.quietT = 0; h.relT = -1;
+    return true;
+  }
+  const extra = h.held - fl;
+  if (nd >= h.held - P.keepFrac * extra) {
+    // still using most of the extra width: hold (a live shrink stops here and waits a full hold again)
+    h.quietT = 0; h.relT = -1;
+    return true;
+  }
+  h.quietT += dt;
+  if (h.quietT < h.holdS) return false;
+  if (h.relT < 0) { h.relT = 0; h.relD = h.held; }
+  h.relT += dt;
+  const ramp = Math.min(1, h.relT / Math.max(1e-3, P.releaseRampS));
+  const ease = ramp * ramp * (3 - 2 * ramp);
+  const vExp = (h.held - nd) * P.releaseOmega, vCap = P.releaseRate * h.held;
+  h.held = Math.max(nd, h.held - Math.min(vExp, vCap) * ease * dt);
+  if (h.held - fl <= 1e-3 * fl) { h.held = fl; h.holdS = P.holdS; }
+  return false;
+}
 
 /** scratch for bossFrameNeed: the framed points relative to the titan (world dx, dz, height y) and the
  *  same points in screen-aligned ground metres (u across, v toward the top of the screen, v including
@@ -487,6 +557,21 @@ function bfNdc(D: number, ox: number, oz: number): number {
     const sx = Math.abs((dx * BF.rx + dz * BF.rz) / depth) / (BF_TAN * BF_ASPECT) * BOSS_FRAME.margin;
     const syr = (dx * BF.ux + dy * BF.uy + dz * BF.uz) / depth / BF_TAN;
     const sy = syr > 0 ? syr / BOSS_FRAME.topNdc : -syr * BOSS_FRAME.margin;
+    if (sx > m) m = sx; if (sy > m) m = sy;
+  }
+  return m;
+}
+/** Plain |ndc| reach (max over |x|, |y|, no margin / nameplate allowance) of the scratch points at
+ *  distance D around the offset — what the drawn frame shows (> 1 = off screen). */
+function bfNdcRaw(D: number, ox: number, oz: number, aspect: number): number {
+  const cx = ox + D * BF.ox, cy = BF.ty + D * BF.oy, cz = oz + D * BF.oz;
+  let m = 0;
+  for (let i = 0; i < BF.n; i++) {
+    const dx = BF_X[i] - cx, dy = BF_Y[i] - cy, dz = BF_Z[i] - cz;
+    const depth = -(dx * BF.ox + dy * BF.oy + dz * BF.oz);
+    if (!(depth > 0.1)) return Infinity;
+    const sx = Math.abs((dx * BF.rx + dz * BF.rz) / depth) / (BF_TAN * aspect);
+    const sy = Math.abs((dx * BF.ux + dy * BF.uy + dz * BF.uz) / depth / BF_TAN);
     if (sx > m) m = sx; if (sy > m) m = sy;
   }
   return m;
@@ -601,6 +686,26 @@ export function bossFrameNeed(w: World): { d: number; ox: number; oz: number } {
 export function bossFrameFitAt(ox: number, oz: number): number {
   if (BF.n <= 0) return 0;
   return bfFit(ox, oz);
+}
+
+/** HARD FLOOR of a boss framing (m): the smallest distance at which every point of the LAST
+ *  bossFrameNeed call sits inside |ndc| ≤ lim (CAMERA.floorNdc) of the plain frame around a look target
+ *  offset (ox, oz) from the titan at the view's aspect (width / height; default 16:9) — no margin, no
+ *  nameplate allowance: the least the view may show so no
+ *  live tell leaves it. 0 when that call had no boss or the points already fit at half the curve; ≤ the
+ *  maxMul cap. The rig clamps its distance to it (a tell that spawns outside the frame widens the view
+ *  on that very frame) and the director's replica of the rig mirrors it. Deterministic. */
+export function bossFrameFloorAt(ox: number, oz: number, aspect: number = BF_ASPECT, lim: number = CAMERA.floorNdc): number {
+  if (BF.n <= 0) return 0;
+  const a = Number.isFinite(aspect) && aspect > 0.2 ? aspect : BF_ASPECT;
+  let lo = 0.5 * BF.dLo, hi = BF.dHi;
+  if (bfNdcRaw(lo, ox, oz, a) <= lim) return 0;
+  if (bfNdcRaw(hi, ox, oz, a) > lim) return hi;
+  for (let it = 0; it < 16; it++) {
+    const mid = (lo + hi) / 2;
+    if (bfNdcRaw(mid, ox, oz, a) <= lim) hi = mid; else lo = mid;
+  }
+  return hi;
 }
 
 /** The framing distance everything default-zoom follows (m): the curve, widened while a boss is alive

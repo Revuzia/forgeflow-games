@@ -23,7 +23,7 @@ import { UPGRADE_BY_ID } from '../data/upgrades.ts';
 import { TITANS } from '../data/titans.ts';
 import { STR } from '../data/strings.ts';
 import { SCREENS } from '../data/strings_screens.ts';
-import { deliveredHold } from '../upgrades/draft.ts';
+import { deliveredHold, recipeHint } from '../upgrades/draft.ts';
 import { familyColor, glyphSvg, iconFor } from './icons.ts';
 import {
   type ModalSession, type UiPress, clearEl, div, el, fmt, keyChip, onTap, pulse, runModal, wrapIndex, flashesReduced,
@@ -354,6 +354,15 @@ export class DraftScreen {
     if (owned === 0 && !isNew && !evo) flags.appendChild(el('span', 'bt-flag new', STR.draft.newTag));
     if (next >= max && max > 1) flags.appendChild(el('span', 'bt-flag final', STR.draft.maxTag));
     if (def && def.titan) flags.appendChild(el('span', 'bt-flag locked', STR.draft.locked));
+    // Gate F: this card advances a started evolution recipe (COMPLETES = taking it makes the recipe ready)
+    const hint = evo ? null : recipeHint(w, id);
+    if (hint) {
+      const ed = UPGRADE_BY_ID[hint.evo];
+      const nm = ed ? ed.name.toUpperCase() : hint.evo.toUpperCase();
+      const f = el('span', `bt-flag evo${hint.completes ? ' ready' : ''}`, fmt(hint.completes ? SCREENS.draft.evoCompletes : SCREENS.draft.evoToward, { evo: nm }));
+      f.dataset.v2 = 'evo-hint';
+      flags.appendChild(f);
+    }
 
     if (evo) {
       // EVOLVES <BASE>: base glyph → evo glyph

@@ -219,6 +219,94 @@ export function iconFor(u: UpgradeDef): GlyphId {
   return ownGlyph(u);
 }
 
+// ─────────────────────────────── bar glyphs: distinct per slot (F4) ───────────────────────────────
+/** What set a trigger off → a glyph (a trigger card's second-choice glyph on the bar). */
+const ON_GLYPH: Record<string, GlyphId> = {
+  hurt: 'exclaim', dash: 'boot', hit: 'fist', kill: 'fang', crit: 'bullseye', collapse: 'wreck', floorBreak: 'brick',
+  rankUp: 'arrowUp', levelUp: 'star', pickup: 'reach', crush: 'foot', interval: 'hourglass', ability: 'hook',
+};
+/** last-resort glyphs by family, then a shared tail of glyphs few cards lead with */
+const FAMILY_SPARE: Record<string, readonly GlyphId[]> = {
+  survival: ['heart', 'plate', 'drip', 'halo', 'bandage'], mobility: ['boot', 'dash', 'tempo', 'reach'],
+  growth: ['arrowUp', 'star', 'dice', 'cycle'], offense: ['claw', 'burst', 'reticle', 'bullseye', 'exclaim'],
+  smash: ['wreck', 'brick', 'fist', 'chunk'], mutation: ['spore', 'vortex', 'fang'], ult: ['megaphone'],
+};
+const SPARE_TAIL: readonly GlyphId[] = ['halo', 'cycle', 'reticle', 'burst', 'exclaim', 'links', 'hourglass', 'fang', 'brick', 'dice',
+  'tempo', 'fist', 'wreck', 'claw', 'bullseye', 'reach', 'boot', 'drip', 'thorn', 'chunk', 'meteor', 'snow', 'spore', 'vortex'];
+
+/**
+ * A card's glyph candidates, best first: iconFor (§4.3) · its other effects' action / stat glyphs ·
+ * what triggers it · its family's spares · a shared tail. Pure; the bar picks the first one that no
+ * earlier slot already shows (barGlyphs), so ten slots never repeat a glyph.
+ */
+export function glyphCandidates(u: UpgradeDef): GlyphId[] {
+  const out: GlyphId[] = [];
+  const add = (g: GlyphId | undefined) => { if (g && GLYPHS[g] && !out.includes(g)) out.push(g); };
+  add(iconFor(u));
+  const src = u.evo ? [byId(u.evo.base), u] : [u];
+  for (const d of src) {
+    if (!d) continue;
+    for (const e of d.effects) {
+      if (e.trigger) { add(ACTION_GLYPH[e.trigger.action]); add(ON_GLYPH[e.trigger.on]); }
+      if (e.stat) add(STAT_GLYPH[e.stat]);
+    }
+  }
+  const fam = u.tags[0] === 'evolution' ? u.tags[1] : u.tags[0];
+  for (const t of [fam, ...u.tags]) for (const g of FAMILY_SPARE[t ?? ''] ?? []) add(g);
+  for (const g of SPARE_TAIL) add(g);
+  return out;
+}
+
+/** The glyph of each bar slot (null for the `+N` slot): in slot order, each card's first candidate no earlier slot uses. */
+export function barGlyphs(ids: readonly (string | null)[], defOf: DefLookup = byId): (GlyphId | null)[] {
+  const used = new Set<GlyphId>();
+  return ids.map((id) => {
+    const d = id ? defOf(id) : undefined;
+    if (!d) return null;
+    const c = glyphCandidates(d);
+    const g = c.find((x) => !used.has(x)) ?? c[0];
+    used.add(g);
+    return g;
+  });
+}
+
+/** WCAG relative luminance of a #rrggbb colour. */
+export function luminance(hex: string): number {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return 0;
+  const n = parseInt(m[1], 16);
+  const ch = (v: number) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * ch((n >> 16) & 255) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255);
+}
+export function contrast(a: string, b: string): number {
+  const la = luminance(a), lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+function mix(a: string, b: string, t: number): string {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const c = (s: number) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
+  return '#' + ((c(16) << 16) | (c(8) << 8) | c(0)).toString(16).padStart(6, '0');
+}
+/** The ability-bar slot face (hud_v2.css .bt-slot centre) and the minimum fill contrast against it. */
+export const SLOT_BG = '#fbf5e6';
+export const SLOT_MIN_CONTRAST = 1.9;
+/**
+ * The bar's glyph fill: the family colour, deepened toward a saturated mid-tone until it separates
+ * from the cream slot face (MOLO's cream kit accent, the cream ult family, pale tan / gold would
+ * otherwise read as an ink outline on nothing); never darker than the ink-stroke's own weight, so it
+ * never goes dark-on-dark either (luminance kept ≥ 0.12).
+ */
+export function barFill(u: UpgradeDef): string {
+  let c = familyColor(u);
+  const deep = DEEPEN[c.toLowerCase()] ?? '#b0612a';
+  for (let i = 0; i < 12 && contrast(c, SLOT_BG) < SLOT_MIN_CONTRAST; i++) c = mix(c, deep, 0.2);
+  return luminance(c) < 0.12 ? mix(c, '#ffffff', 0.35) : c;
+}
+/** hue-keeping deep targets for the pale family colours */
+const DEEPEN: Record<string, string> = {
+  '#ffd166': '#d9901a', '#f4ecd8': '#c98a2e', '#f1e4c8': '#3fae7f', '#c9a47a': '#9a6a3a', '#ff9ec7': '#d6457f', '#6ff3ff': '#1f9fb8',
+};
+
 // ─────────────────────────────── family colour + rarity frame ───────────────────────────────
 export const FAMILY_COLORS: Readonly<Record<string, string>> = {
   survival: '#ff6f5e', mobility: '#4fb3b0', growth: '#ffd166', offense: '#e63946', smash: '#c9a47a',

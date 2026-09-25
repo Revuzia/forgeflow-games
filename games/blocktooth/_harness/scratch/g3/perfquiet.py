@@ -19,7 +19,7 @@ import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 
 PS_SAMPLE = r"""
 $pids = @(Get-Process chrome -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })

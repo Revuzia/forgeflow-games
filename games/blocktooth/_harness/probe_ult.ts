@@ -20,6 +20,20 @@
 //      per rank band; time to first readiness (reported; tuning target 45–75 s); median boss-fight length
 //      70–170 s with UPROAR in use, per boss id (clears only)
 //   I. determinism: the same seed run twice ⇒ identical UPROAR + titan digests at every 30 s checkpoint
+//   J. (critic F2-a) BACK PAY respects the lockout: collected mid-roar, mid-blast and mid-lockout it BANKS the
+//      charge (full meter, not ready, no ultCharged) and UPROAR cannot fire again until ULT.lockoutS after the
+//      fire (ultimate held every tick); the ready edge lands on the tick the lockout ends; with a boss in reach and
+//      BACK PAY re-dropped through every lockout, 14 s hold exactly 3 fires ≥ 6 s apart and 3 × 6 % of the boss
+//   K. (critic F2-b) boss-framed coverage: a boss whose body centre is ON SCREEN in the settled boss framing
+//      (config bossFrameNeed → the director's framing state; projected through the default-zoom camera by this
+//      probe's own math) is hit by one UPROAR — exactly −6 % / +0.30 — at Size III / IV / V, 3 bosses, 16
+//      headings × 8 distances; no boss → R is exactly the spec formula; and in the full runs every fire with an
+//      on-screen boss has its body centre inside R + part r
+//   L. (critic F2-c) a fire on a tick that ends with a draft granted that tick (a level-up) is taken back: no ultFire
+//      left in the tick's events, phase idle, meter full + READY, no lockout; after the draft the next press fires.
+//      The fire STANDS when the tick also ranks up (game.ts plays on through the MASS BREACH sting) or a draft was
+//      already owed at the press (the app running on). Full runs: no tick ends with an ultFire and a freezing
+//      draft; level-ups mid-UPROAR are reported
 
 import type { BiomeId, BossId, EnemyKind, RankIndex, SimEvent, TitanId, TitanInput, World } from '../src/core/types.ts';
 import { BIOME_IDS, TITAN_IDS } from '../src/core/types.ts';
@@ -51,6 +65,9 @@ let M: {
   rollOffer: typeof import('../src/upgrades/draft.ts')['rollOffer'];
   botInput: typeof import('./bot.ts')['botInput'];
   botPickUpgrade: typeof import('./bot.ts')['botPickUpgrade'];
+  spawnPowerup: typeof import('../src/meta/powerups.ts')['spawnPowerup'];
+  spawnPickup: typeof import('../src/combat/pickups.ts')['spawnPickup'];
+  cfg: typeof import('../src/core/config.ts');
 };
 
 async function load(): Promise<string | null> {
@@ -80,6 +97,9 @@ async function load(): Promise<string | null> {
       ENEMIES: de.ENEMIES, ULTS: du.ULTS, BIOMES: db.BIOMES,
       hasPendingDraft: dr.hasPendingDraft, pickUpgrade: dr.pickUpgrade, rollOffer: dr.rollOffer,
       botInput: bot.botInput, botPickUpgrade: bot.botPickUpgrade,
+      spawnPowerup: (await import('../src/meta/powerups.ts')).spawnPowerup,
+      spawnPickup: (await import('../src/combat/pickups.ts')).spawnPickup,
+      cfg: await import('../src/core/config.ts'),
     };
     return null;
   } catch (e) { return (e as Error)?.stack ?? String(e); }
@@ -157,7 +177,7 @@ function partA(): void {
       const w = worldAt('molo', r, lv);
       const H = w.titan.height;
       const R = M.ultRadius(w);
-      const want = Math.max(ULT.rFloorH * H, ULT.rFrac * M.spawnRing(w));
+      const want = Math.max(ULT.rFloorH * H, ULT.rFrac * M.spawnRing(w));   // no boss: the spec formula exactly
       check(Math.abs(R - want) < 1e-9, `A: R formula at Size ${ROMAN[r]} LV ${lv}: ${R} vs ${want}`);
       check(R >= ULT.rFloorH * H - 1e-9, `A: R < 3 H at Size ${ROMAN[r]} LV ${lv}`);
       cells.push(`LV ${String(lv).padStart(2)} ${H.toFixed(2).padStart(6)} m → ${R.toFixed(1).padStart(6)} m (${(R / H).toFixed(1).padStart(4)} H)`);
@@ -347,6 +367,8 @@ interface Run {
   bossId: string | null; bossT: number; fight: number;
   capViol: string[]; unbanked: number; midKills: number;
   digests: string[];
+  bossFires: number; bossOnScreen: number; bossOnScreenMiss: string[];
+  unfired: number; fireWithDraft: number; fireRankTick: number; lvlMidUlt: number;
 }
 
 function digest(w: World): string {
@@ -357,7 +379,8 @@ function digest(w: World): string {
 
 function fullRun(titan: TitanId, biome: BiomeId, seed: number, maxS: number): Run {
   const w = M.createWorld({ titan, biome, seed });
-  const r: Run = { titan, biome, result: 'timeout', endT: 0, edges: [], fires: 0, firstReady: NaN, bossId: null, bossT: NaN, fight: NaN, capViol: [], unbanked: 0, midKills: 0, digests: [] };
+  const r: Run = { titan, biome, result: 'timeout', endT: 0, edges: [], fires: 0, firstReady: NaN, bossId: null, bossT: NaN, fight: NaN, capViol: [], unbanked: 0, midKills: 0, digests: [],
+    bossFires: 0, bossOnScreen: 0, bossOnScreenMiss: [], unfired: 0, fireWithDraft: 0, fireRankTick: 0, lvlMidUlt: 0 };
   let fireXp0 = 0, fireCap = 0, inFire = false;
   const maxTicks = Math.round(maxS * 30);
   for (let i = 0; i < maxTicks && !w.run.result; i++) {
@@ -371,8 +394,30 @@ function fullRun(titan: TitanId, biome: BiomeId, seed: number, maxS: number): Ru
     const phase0 = w.ult.phase;
     const xpBefore = w.ult.xpTotal;
     const kills0 = w.ult.kills;
-    M.stepWorld(w, M.botInput(w));
+    const ready0 = w.ult.ready;
+    const inp = M.botInput(w);
+    M.stepWorld(w, inp);
     const evs: readonly SimEvent[] = w.events;
+    // L: a press on READY that left the ult idle + READY with no ultFire and a draft owed = a fire taken back
+    const firedNow = evs.some((e) => e.type === 'ultFire');
+    const owed = M.hasPendingDraft(w);
+    const rankTick = evs.some((e) => e.type === 'rankUp');
+    if (inp.ultimate && ready0 && phase0 === 'idle' && !firedNow && w.ult.ready && w.ult.phase === 'idle' && owed) r.unfired++;
+    // the bot resolves every draft before it steps, so a draft owed here was granted THIS tick: it freezes the app
+    // on this tick unless the tick also ranked up (game.ts plays on through the MASS BREACH sting)
+    if (firedNow && owed && !rankTick) r.fireWithDraft++;
+    if (firedNow && owed && rankTick) r.fireRankTick++;
+    if (phase0 !== 'idle' && evs.some((e) => e.type === 'levelUp')) r.lvlMidUlt++;
+    // K (full runs): every fire with a live, entered boss whose body centre is on screen reaches it
+    if (firedNow && w.boss && w.boss.alive && w.boss.introT <= 0 && w.boss.parts.length > 0) {
+      r.bossFires++;
+      const bp = w.boss.parts[0];
+      if (onScreenNdc(w, bp.x, bp.z) <= 1) {
+        r.bossOnScreen++;
+        const d = Math.hypot(bp.x - w.ult.x, bp.z - w.ult.z);
+        if (d > w.ult.r + bp.r + 1e-6) r.bossOnScreenMiss.push(`@${w.t.toFixed(1)}s boss ${d.toFixed(0)} m > R ${w.ult.r.toFixed(0)} + ${bp.r.toFixed(0)}`);
+      }
+    }
     for (const e of evs) {
       if (e.type === 'ultCharged') { r.edges.push({ t: w.t, rank: w.titan.rank }); if (Number.isNaN(r.firstReady)) r.firstReady = w.t; }
       else if (e.type === 'ultFire') {
@@ -442,6 +487,15 @@ function partH(seed: number): void {
   const expected = new Set(BIOME_IDS.map((b) => M.BIOMES[b].boss as string));
   for (const id of expected) check(bossesSeen.has(id), `H: boss ${id} (a biome's boss) never spawned in the full runs`);
   for (const id of expected) check((byBoss[id]?.length ?? 0) > 0, `H: boss ${id}: no clear to measure a fight length`);
+  // K + L over the full runs
+  const bf = runs.reduce((a, r) => a + r.bossFires, 0), bos = runs.reduce((a, r) => a + r.bossOnScreen, 0);
+  const miss = runs.flatMap((r) => r.bossOnScreenMiss.map((m) => `${r.titan}/${r.biome} ${m}`));
+  for (const m of miss) check(false, `K: an UPROAR missed an ON-SCREEN boss: ${m}`);
+  console.log(`  K (full runs): fires with an entered boss ${bf}, boss body on screen ${bos}, on-screen boss outside R + r ${miss.length}`);
+  const unf = runs.reduce((a, r) => a + r.unfired, 0), fwd = runs.reduce((a, r) => a + r.fireWithDraft, 0), lmu = runs.reduce((a, r) => a + r.lvlMidUlt, 0);
+  const frt = runs.reduce((a, r) => a + r.fireRankTick, 0);
+  check(fwd === 0, `L: ${fwd} tick(s) ended with an ultFire AND a draft granted that tick without a rankUp (the roar would play behind the draft)`);
+  console.log(`  L (full runs): fires taken back for a same-tick draft ${unf} · ticks ending with ultFire + a freezing draft ${fwd} (want 0) · fires standing on a rankUp tick (sting defers the draft) ${frt} · level-ups while an UPROAR is in flight ${lmu} (reported: that draft pauses the ult — view wire)`);
   const fires = runs.reduce((a, r) => a + r.fires, 0);
   console.log(`  fires ${fires} over ${runs.length} runs · per-fire XP cap violations ${runs.reduce((a, r) => a + r.capViol.length, 0)} · kills mid-UPROAR ${runs.reduce((a, r) => a + r.midKills, 0)}, unbanked ${runs.reduce((a, r) => a + r.unbanked, 0)}`);
   // I. determinism: rerun two configs, compare digests
@@ -455,6 +509,213 @@ function partH(seed: number): void {
   }
 }
 
+// ─────────────────────────────── shared: default-zoom projection (this probe's own math) ───────────────────────────────
+/** max(|ndc x|, |ndc y|) of the ground point (x, z) through the default-zoom camera the sim frames (config
+ *  spawnView: distance + look-target offset from the titan; the rank's pitch, CAMERA yaw / fov, 16:9, target at
+ *  CAMERA.targetYFrac · H; the velocity lead ignored). ≤ 1 = on screen; Infinity = behind the camera. */
+function onScreenNdc(w: World, x: number, z: number): number {
+  const C = M.cfg, T = w.titan;
+  const V = C.spawnView(w);
+  const p = (C.RANKS[T.rank].pitchDeg * Math.PI) / 180, yaw = (C.CAMERA.yawDeg * Math.PI) / 180;
+  const o = [Math.cos(p) * Math.sin(yaw), Math.sin(p), Math.cos(p) * Math.cos(yaw)];
+  const up = [-Math.sin(p) * Math.sin(yaw), Math.cos(p), -Math.sin(p) * Math.cos(yaw)];
+  const rt = [Math.cos(yaw), 0, -Math.sin(yaw)];
+  const cam = [T.x + V.ox + V.d * o[0], T.height * C.CAMERA.targetYFrac + V.d * o[1], T.z + V.oz + V.d * o[2]];
+  const d = [x - cam[0], -cam[1], z - cam[2]];
+  const depth = -(d[0] * o[0] + d[1] * o[1] + d[2] * o[2]);
+  if (!(depth > 0.1)) return Infinity;
+  const tv = Math.tan((C.CAMERA.fovDeg * Math.PI) / 360);
+  const sx = (d[0] * rt[0] + d[2] * rt[2]) / depth / (tv * 16 / 9);
+  const sy = (d[0] * up[0] + d[1] * up[1] + d[2] * up[2]) / depth / tv;
+  return Math.max(Math.abs(sx), Math.abs(sy));
+}
+
+/** Settle the director's boss framing on what bossFrameNeed asks for right now (held distance, eased offset and the
+ *  rig replica all AT the need — the state the director converges to while the boss holds still). */
+function settleBossFrame(w: World): void {
+  const need = M.cfg.bossFrameNeed(w);
+  const dat = w.director.data as Record<string, number>;
+  const curve = M.cfg.cameraDistance(w.titan.height);
+  const d = Math.max(curve, need.d);
+  dat.bossFrameHeld = d; dat.bossFrameD = d; dat.bossFrameHoldT = 0;
+  dat.bossFrameOx = need.ox; dat.bossFrameOz = need.oz;
+  dat.camOx = need.ox; dat.camOz = need.oz; dat.camD = d; dat.camDv = 0;
+}
+
+// ─────────────────────────────── J. BACK PAY respects the lockout ───────────────────────────────
+function partJ(): void {
+  console.log(`\n── J. BACK PAY vs the ${ULT.lockoutS}s lockout (ultimate held every tick): banked, never a double fire ──`);
+  const lockTicks = Math.round(ULT.lockoutS * 30);
+  for (const titan of TITAN_IDS) {
+    for (const when of ['roar', 'blast', 'lockout'] as const) {
+      const w = worldAt(titan, 2, RANK_LEVELS[2]);
+      const T = w.titan, u = w.ult;
+      for (let i = 0; i < 5; i++) M.stepWorld(w, input());
+      M.addUproar(w, ULT.max, true);
+      const fires: number[] = [], readies: number[] = [];
+      let collectedAt = -1, bankedOk = true, pre = '';
+      for (let i = 0; i < lockTicks + 90; i++) {
+        // drop BACK PAY on the titan in the wanted phase (collected in this tick's stepPowerups)
+        if (collectedAt < 0 && fires.length === 1 && (when === 'lockout' ? u.phase === 'idle' && u.lockT > 0 && u.lockT < ULT.lockoutS - 2 : u.phase === when)) {
+          M.spawnPowerup(w, 'backPay', T.x, T.z, true);
+          collectedAt = w.tick + 1;
+          pre = `${u.phase} lockT ${u.lockT.toFixed(2)}`;
+        }
+        M.stepWorld(w, input({ ultimate: true }));
+        for (const e of w.events) {
+          if (e.type === 'ultFire') fires.push(w.tick);
+          if (e.type === 'ultCharged') readies.push(w.tick);
+        }
+        if (collectedAt === w.tick) {
+          const got = w.events.some((e) => e.type === 'powerup' && e.kind === 'backPay');
+          if (!got || u.ready || u.charge !== ULT.max || w.events.some((e) => e.type === 'ultCharged')) bankedOk = false;
+        }
+        if (fires.length >= 2) break;
+      }
+      const gap = fires.length >= 2 ? (fires[1] - fires[0]) / 30 : NaN;
+      const readyTick = readies.length ? readies[readies.length - 1] : -1;
+      const ok = check(collectedAt > 0 && bankedOk && fires.length === 2 && gap >= ULT.lockoutS - 1e-6 && gap <= ULT.lockoutS + 2 / 30 && readyTick >= fires[0] + lockTicks - 1,
+        `J: ${titan} BACK PAY in ${when} (${pre}): banked ${bankedOk}, fires at ticks [${fires}] (gap ${gap.toFixed(3)} s, want ≥ ${ULT.lockoutS} s and at most 2 ticks more), ready edge tick ${readyTick}`);
+      console.log(`  ${titan.padEnd(10)} BACK PAY in ${when.padEnd(7)} (${pre}): banked (full, not ready) ${bankedOk ? 'ok' : 'FAIL'} · 2nd fire ${gap.toFixed(2)} s after the 1st ${ok ? 'ok' : 'FAIL'}`);
+    }
+  }
+  // boss in reach, BACK PAY re-dropped through every flight + lockout, ultimate held: 6 % per fire, fires ≥ 6 s apart
+  {
+    const w = worldAt('hearthback', 3, RANK_LEVELS[3]);
+    const T = w.titan, u = w.ult;
+    M.spawnBoss(w, 'caisson4');
+    const b = w.boss!;
+    b.x = T.x + 0.3 * M.ultRadius(w); b.z = T.z; b.introT = 0; M.refreshParts(b);
+    b.hp = b.maxHp; b.meter = 0;
+    M.addUproar(w, ULT.max, true);
+    const fireT: number[] = [];
+    let lost = 0, tokens = 0;
+    for (let i = 0; i < Math.round(14 * 30); i++) {
+      const hp0 = b.hp;
+      w.events.length = 0;
+      w.input = input({ ultimate: true });
+      M.rebuildEnemyGrid(w);
+      M.stepUltimate(w);
+      lost += (hp0 - b.hp) / b.maxHp;
+      if (w.events.some((e) => e.type === 'ultFire')) fireT.push(i / 30);
+      // BACK PAY collected while the ult is in flight or locked (what stepPowerups' collect does: addUproar raw)
+      if (u.phase !== 'idle' || u.lockT > 0) { M.addUproar(w, ULT.max, true); tokens++; }
+    }
+    const gaps = fireT.slice(1).map((t, i) => t - fireT[i]);
+    const ok = check(fireT.length === 3 && gaps.every((g) => g >= ULT.lockoutS - 1e-6) && Math.abs(lost - fireT.length * ULT.bossCapFrac) < 1e-9,
+      `J: BACK PAY spam vs CAISSON-4 over 14 s: ${fireT.length} fires (want 3), gaps [${gaps.map((g) => g.toFixed(2))}] s, boss lost ${(100 * lost).toFixed(3)} % (want ${(100 * fireT.length * ULT.bossCapFrac).toFixed(1)} %)`);
+    console.log(`  BACK PAY on every locked tick (${tokens} fills) vs CAISSON-4, 14 s, ultimate held: ${fireT.length} fires, gaps ${gaps.map((g) => g.toFixed(2)).join(' / ')} s, boss −${(100 * lost).toFixed(2)} % ${ok ? 'ok' : 'FAIL'}`);
+  }
+}
+
+// ─────────────────────────────── K. boss-framed coverage ───────────────────────────────
+function partK(): void {
+  console.log('\n── K. boss framing: an ON-SCREEN boss (settled framing, default zoom) is always inside UPROAR ──');
+  const bosses: BossId[] = ['caisson4', 'irongully', 'parkade6'];
+  const K = 2 * Math.tan((M.cfg.CAMERA.fovDeg * Math.PI) / 360);
+  for (const rank of [2, 3, 4] as RankIndex[]) {
+    const row: string[] = [];
+    for (const id of bosses) {
+      let onScreen = 0, hit = 0, exact = 0, maxRatio = 0, geoMiss = 0, maxFrame = 0;
+      for (let hi = 0; hi < 16; hi++) {
+        for (const f of [0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.2, 2.8]) {
+          const w = worldAt('molo', rank, RANK_LEVELS[rank], id === 'irongully' ? 'whitestacks' : 'grideast');
+          const T = w.titan;
+          M.spawnBoss(w, id);
+          const b = w.boss!;
+          const a = (hi * Math.PI * 2) / 16;
+          const dist = f * M.cfg.cameraDistance(T.height) * K;
+          b.x = T.x + Math.sin(a) * dist; b.z = T.z + Math.cos(a) * dist; b.heading = a + Math.PI;
+          b.introT = 0; b.meter = 0; b.staggerT = 0;
+          M.refreshParts(b);
+          settleBossFrame(w);
+          const bp = b.parts[0];
+          if (!(onScreenNdc(w, bp.x, bp.z) <= 1)) continue;
+          onScreen++;
+          maxFrame = Math.max(maxFrame, M.cfg.spawnView(w).d / M.cfg.cameraDistance(T.height));
+          const R = M.ultRadius(w);
+          const dd = Math.hypot(bp.x - T.x, bp.z - T.z);
+          if (dd > R + bp.r) geoMiss++;
+          maxRatio = Math.max(maxRatio, dd / R);
+          const hp0 = b.hp, m0 = b.meter;
+          isolatedFire(w);
+          const lost = (hp0 - b.hp) / b.maxHp;
+          if (lost > 0) hit++;
+          if (Math.abs(lost - ULT.bossCapFrac) < 1e-9 && Math.abs(b.meter - m0 - ULT.bossMeter) < 1e-9) exact++;
+        }
+      }
+      const ok = check(onScreen >= 20 && hit === onScreen && exact === onScreen && geoMiss === 0,
+        `K: Size ${ROMAN[rank]} vs ${id}: ${onScreen} on-screen boss placements, hit ${hit}, exact −${100 * ULT.bossCapFrac} % / +${ULT.bossMeter} ${exact}, outside R + r ${geoMiss}`);
+      row.push(`${id} on-screen ${onScreen} hit ${hit} exact ${exact} (frame ≤ ${maxFrame.toFixed(2)}× curve, boss dist ≤ ${maxRatio.toFixed(2)} R) ${ok ? 'ok' : 'FAIL'}`);
+    }
+    console.log(`  Size ${ROMAN[rank].padEnd(3)} ${row.join(' · ')}`);
+  }
+  // no boss: R is exactly the spec formula (the framed-view term applies only while a boss is alive)
+  const w = worldAt('molo', 4, RANK_LEVELS[4]);
+  const want = Math.max(ULT.rFloorH * w.titan.height, ULT.rFrac * M.spawnRing(w));
+  const okNb = check(Math.abs(M.ultRadius(w) - want) < 1e-9, `K: no boss: R ${M.ultRadius(w)} ≠ the spec formula ${want}`);
+  console.log(`  no boss (Size V LV ${RANK_LEVELS[4]}): R ${M.ultRadius(w).toFixed(1)} m = max(3 H, 0.95 × spawnRing) ${okNb ? 'ok' : 'FAIL'}`);
+}
+
+// ─────────────────────────────── L. a fire on a draft tick is taken back ───────────────────────────────
+function partL(): void {
+  console.log('\n── L. UPROAR pressed on the tick a level-up is granted: taken back (no ultFire behind the draft) ──');
+  for (const titan of TITAN_IDS) {
+    for (const mode of ['level', 'control', 'rankUp', 'owed'] as const) {
+      // a scrap pickup worth one level dropped on the titan is collected after MIN_COLLECT_AGE: a dry run finds
+      // the tick of that level-up, the identical (deterministic) second world presses UPROAR on exactly that tick.
+      // rankUp: the level reached is the next Size's threshold (game.ts plays on through the MASS BREACH sting and
+      // opens the draft after it — the fire must stand). owed: a draft already owed when UPROAR is pressed (the
+      // app running on through that sting) — the fire must stand too.
+      const lv = mode === 'rankUp' ? RANK_LEVELS[2] - 1 : RANK_LEVELS[1] + 1;
+      const make = (): World => {
+        const w = worldAt(titan, 1, lv);
+        for (let i = 0; i < 5; i++) M.stepWorld(w, input());
+        M.addUproar(w, ULT.max, true);
+        if (mode === 'level' || mode === 'rankUp') M.spawnPickup(w, 'scrap', w.titan.x, w.titan.z, Math.max(1, w.titan.xpToNext - w.titan.xp) + 1, 0);
+        return w;
+      };
+      let at = 0;
+      if (mode === 'level' || mode === 'rankUp') {
+        const dry = make();
+        for (let i = 0; i < 90; i++) { M.stepWorld(dry, input()); if (dry.events.some((e) => e.type === 'levelUp')) { at = i; break; } }
+      }
+      const w = make();
+      const T = w.titan, u = w.ult;
+      for (let i = 0; i < at; i++) M.stepWorld(w, input());
+      if (mode === 'owed') w.upgrades.pendingDrafts = 1;
+      const owed0 = M.hasPendingDraft(w);
+      const fired0 = u.fired, lv0 = T.level, rk0 = T.rank;
+      M.stepWorld(w, input({ ultimate: true }));
+      const ev = w.events;
+      const levelled = T.level > lv0 && ev.some((e) => e.type === 'levelUp');
+      const ranked = T.rank > rk0 && ev.some((e) => e.type === 'rankUp');
+      const draft = M.hasPendingDraft(w);
+      const hasFire = ev.some((e) => e.type === 'ultFire');
+      const fires = hasFire && u.phase === 'roar' && u.fired === fired0 + 1;
+      if (mode === 'level') {
+        const ok1 = check(levelled && !ranked && draft && !hasFire && u.phase === 'idle' && u.ready && u.charge === ULT.max && u.lockT === 0 && u.fired === fired0,
+          `L: ${titan}: level-up tick — levelled ${levelled}, rankUp ${ranked}, draft ${draft}, ultFire ${hasFire}, phase ${u.phase}, ready ${u.ready}, charge ${u.charge}, lockT ${u.lockT}, fired ${u.fired} (was ${fired0})`);
+        // resolve the draft like the app, then the next press fires
+        let g = 0;
+        while (M.hasPendingDraft(w) && g++ < 20) { const off = M.rollOffer(w, w.upgrades.chestDrafts > 0); if (!off || !off.length) break; M.pickUpgrade(w, M.botPickUpgrade(w, off)); }
+        M.stepWorld(w, input({ ultimate: true }));
+        const ok2 = check(w.events.some((e) => e.type === 'ultFire') && u.phase === 'roar' && u.fired === fired0 + 1, `L: ${titan}: the press after the draft did not fire (phase ${u.phase})`);
+        console.log(`  ${titan.padEnd(10)} level-up tick: fire taken back (idle, READY, no lockout, no ultFire) ${ok1 ? 'ok' : 'FAIL'} · next press after the draft fires ${ok2 ? 'ok' : 'FAIL'}`);
+      } else if (mode === 'control') {
+        const ok = check(!draft && fires, `L: ${titan}: control (no level-up) did not fire (phase ${u.phase}, draft ${draft})`);
+        console.log(`  ${titan.padEnd(10)} control (no level-up): fires ${ok ? 'ok' : 'FAIL'}`);
+      } else if (mode === 'rankUp') {
+        const ok = check(levelled && ranked && draft && fires, `L: ${titan}: rank-up tick (sting, app plays on) — levelled ${levelled}, rankUp ${ranked}, draft ${draft}, fired ${fires} (phase ${u.phase})`);
+        console.log(`  ${titan.padEnd(10)} level-up + rankUp tick (MASS BREACH sting defers the draft): fire stands ${ok ? 'ok' : 'FAIL'}`);
+      } else {
+        const ok = check(owed0 && draft && fires, `L: ${titan}: draft already owed at the press — owed ${owed0}, fired ${fires} (phase ${u.phase})`);
+        console.log(`  ${titan.padEnd(10)} draft already owed at the press (app running on): fire stands ${ok ? 'ok' : 'FAIL'}`);
+      }
+    }
+  }
+}
+
 // ─────────────────────────────── main ───────────────────────────────
 async function main(): Promise<number> {
   const argv = process.argv.slice(2);
@@ -464,7 +725,7 @@ async function main(): Promise<number> {
   const err = await load();
   if (err) { console.log('probe_ult: FAIL — could not load the sim:\n' + err); return 2; }
   console.log(`BLOCKTOOTH probe_ult — UPROAR (FEATURES_V2 §3) · ULT max ${ULT.max}, lockout ${ULT.lockoutS}s, R = max(${ULT.rFloorH} H, ${ULT.rFrac} × spawnRing), xpCap ${ULT.xpCapLevelFrac} × level need, bank ≤ ${ULT.bankPickupsPerTick}/tick, boss ${100 * ULT.bossCapFrac} % + ${ULT.bossMeter}`);
-  const parts: [string, () => void][] = [['A', partA], ['B', partB], ['C', partC], ['D', partD], ['E', partE]];
+  const parts: [string, () => void][] = [['A', partA], ['B', partB], ['C', partC], ['D', partD], ['E', partE], ['J', partJ], ['K', partK], ['L', partL]];
   for (const [name, fn] of parts) {
     try { fn(); } catch (e) { check(false, `${name}: threw ${(e as Error)?.stack ?? e}`); }
   }

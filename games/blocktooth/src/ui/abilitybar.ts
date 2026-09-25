@@ -23,14 +23,16 @@ import { ULTS } from '../data/ultimates.ts';
 import { HUD2 } from '../data/strings_hud.ts';
 import { loadProfile } from '../core/save.ts';
 import { ClassSlot, TextSlot, VarSlot, div, el, flashesReduced, keyChip, pulse } from './dom.ts';
-import { BAR_SLOTS, badgeFor, barSlots, familyColor, glyphSvg, iconFor, rarityFrameClass } from './icons.ts';
-import { pushHudToast } from './toast.ts';
+import { BAR_SLOTS, badgeFor, barFill, barGlyphs, barSlots, glyphSvg, rarityFrameClass } from './icons.ts';
+import { dismissHudToast, pushHudToast } from './toast.ts';
+import { evolutionProgress } from '../upgrades/draft.ts';
 
 const SLOT_REFRESH_S = 0.25;
 const PROC_GAP_MS = 250;          // ≤ 4 Hz per slot (§4.2.5)
 const DEVICE_POLL_S = 0.25;
 const WIRE_CAP = 6;               // VOLT-KITE live-wire cap (CONTRACT §8)
 const BURST_MS = 1300;
+const HINT_KEY = 'uproarHint';
 
 interface SlotNode {
   root: HTMLDivElement;
@@ -42,6 +44,7 @@ interface SlotNode {
   flag: HTMLDivElement;
   id: string | null;        // card shown ('' = none; null = the +N slot)
   sig: string;              // id|stacks|more
+  gl: string;               // glyph|fill drawn (F4: bar glyphs are assigned per bar, so a slot's can change)
   lastProc: number;
 }
 
@@ -99,6 +102,8 @@ export class AbilityBar implements AbilityBarApi {
   private device: Device = 'keyboard';
   private devAcc = 0;
   private hintArmed = false;
+  /** Gate F: evolution recipes already announced as ready this run */
+  private evoSeen = new Set<string>();
 
   constructor(root: HTMLElement) {
     const L = this.layer = div('bt-layer bt-v2hud bt-hidden', root);
@@ -141,7 +146,7 @@ export class AbilityBar implements AbilityBarApi {
       const proc = div('bt-slot-proc', r);
       const burst = div('bt-slot-burst', r);
       burst.innerHTML = glyphSvg('evo', '#ffd166');
-      this.slots.push({ root: r, glyph, badge, more, proc, burst, flag, id: '', sig: '', lastProc: 0 });
+      this.slots.push({ root: r, glyph, badge, more, proc, burst, flag, id: '', sig: '', gl: '', lastProc: 0 });
     }
 
     // ── ACTIVE panel (hook)
@@ -215,10 +220,14 @@ export class AbilityBar implements AbilityBarApi {
           if (this.shown) pulse(this.meter, [{ transform: 'scale(1.06)' }, { transform: 'scale(1)' }], 360);
           if (this.hintArmed && w.titan.rank === 0) {
             this.hintArmed = false;
-            pushHudToast({ kicker: HUD2.hintKicker, title: this.device === 'gamepad' ? HUD2.hintTitlePad : HUD2.hintTitleKb, sub: HUD2.hintSub, glyph: 'megaphone' }, 4.5);
+            // F4: shown at once (front of the queue, no 3 s gap) and only while the meter really reads
+            // READY: it slides out the moment UPROAR fires (ON AIR) or the meter is otherwise not ready
+            const ww = w;
+            pushHudToast({ kicker: HUD2.hintKicker, title: this.device === 'gamepad' ? HUD2.hintTitlePad : HUD2.hintTitleKb, sub: HUD2.hintSub, glyph: 'megaphone' }, 6,
+              { key: HINT_KEY, front: true, alive: () => this.world === ww && !!ww.ult && ww.ult.ready && ww.ult.phase === 'idle' && !ww.run.result });
           }
           break;
-        case 'ultFire': this.onUltFire(w, e.titan); break;
+        case 'ultFire': dismissHudToast(HINT_KEY); this.onUltFire(w, e.titan); break;
         case 'ability':
           if (this.shown) pulse(this.active, [{ transform: 'scale(1.05)' }, { transform: 'scale(1)' }], 260);
           break;
@@ -246,8 +255,9 @@ export class AbilityBar implements AbilityBarApi {
     this.lines.style.opacity = '0';
     this.burst.style.opacity = '0';
     this.slotSig = '#';
+    this.evoSeen.clear();
     for (const s of this.slots) {           // a new run starts from an empty bar (no slot leaks from the last run)
-      s.id = ''; s.sig = '';
+      s.id = ''; s.sig = ''; s.gl = '';
       s.root.className = 'bt-slot empty';
       delete s.root.dataset.v2;
       this.setBadge(s, '');
@@ -258,6 +268,23 @@ export class AbilityBar implements AbilityBarApi {
     try { first = loadProfile().life.runs === 0; } catch { first = false; }
     this.hintArmed = first && !hintShownThisSession;
     if (this.hintArmed) hintShownThisSession = true;
+  }
+
+  /**
+   * Gate F: EVOLUTION READY toast when a recipe first becomes ready (the upgrade set only changes on a
+   * pick, so this runs from refreshSlots' change-only path). Queued behind the draft screen by the toast
+   * modal gate; slides out if the evolution is taken or stops being ready.
+   */
+  private checkEvoReady(w: World, silent: boolean): void {
+    for (const p of evolutionProgress(w)) {
+      if (!p.ready || this.evoSeen.has(p.evo)) continue;
+      this.evoSeen.add(p.evo);
+      if (silent) continue;
+      const def = UPGRADE_BY_ID[p.evo];
+      const ww = w, id = p.evo;
+      pushHudToast({ kicker: HUD2.evoReadyKicker, title: HUD2.evoReadyTitle + ' — ' + (def ? def.name.toUpperCase() : id.toUpperCase()), sub: HUD2.evoReadySub, glyph: 'evo' }, 4.5,
+        { key: 'evoReady:' + id, alive: () => this.world === ww && !ww.run.result && evolutionProgress(ww).some((q) => q.evo === id && q.ready) });
+    }
   }
 
   private pollPad(): void {
@@ -279,12 +306,14 @@ export class AbilityBar implements AbilityBarApi {
     if (!force && sig === this.slotSig) return;
     const first = this.slotSig === '#';
     this.slotSig = sig;
+    this.checkEvoReady(w, first);
     const layout = barSlots(U.order, U.owned);
+    const glyphs = barGlyphs(layout.map((l) => l.id));   // F4: no two slots show the same glyph
     for (let i = 0; i < BAR_SLOTS; i++) {
       const s = this.slots[i];
       const want = layout[i];
       if (!want) {
-        if (s.id !== '') { s.id = ''; s.sig = ''; s.root.className = 'bt-slot empty'; delete s.root.dataset.v2; this.setBadge(s, ''); s.glyph.innerHTML = ''; s.more.classList.add('off'); }
+        if (s.id !== '') { s.id = ''; s.sig = ''; s.gl = ''; s.root.className = 'bt-slot empty'; delete s.root.dataset.v2; this.setBadge(s, ''); s.glyph.innerHTML = ''; s.more.classList.add('off'); }
         continue;
       }
       if (want.id === null) {
@@ -294,7 +323,7 @@ export class AbilityBar implements AbilityBarApi {
         s.id = null; s.sig = sg;
         s.root.className = 'bt-slot more bt-frame-common';
         s.root.dataset.v2 = 'bar-slot';
-        s.glyph.innerHTML = glyphSvg('plus', '#f4ecd8');
+        s.gl = 'plus'; s.glyph.innerHTML = glyphSvg('plus', '#f4ecd8');
         s.more.textContent = '+' + want.more;
         s.more.classList.remove('off');
         s.root.title = '';
@@ -305,6 +334,8 @@ export class AbilityBar implements AbilityBarApi {
       const u = UPGRADE_BY_ID[want.id];
       if (!u) continue;
       const stacks = U.owned[want.id] ?? 0;
+      const gl = (glyphs[i] ?? 'star') + '|' + barFill(u);
+      if (s.gl !== gl && s.id === want.id) { s.gl = gl; s.glyph.innerHTML = glyphSvg(glyphs[i] ?? 'star', barFill(u)); }
       const sg = want.id + '|' + stacks;
       if (s.sig === sg) continue;
       const prevId = s.id;
@@ -313,7 +344,7 @@ export class AbilityBar implements AbilityBarApi {
       s.root.dataset.v2 = 'bar-slot';
       s.more.classList.add('off');
       s.root.title = u.name;
-      if (prevId !== want.id) s.glyph.innerHTML = glyphSvg(iconFor(u), familyColor(u));
+      if (prevId !== want.id) { s.gl = gl; s.glyph.innerHTML = glyphSvg(glyphs[i] ?? 'star', barFill(u)); }
       this.setBadge(s, badgeFor(u, stacks));
       if (first || force) continue;
       if (u.evo && prevId === u.evo.base) this.evoBurst(s);

@@ -1,11 +1,16 @@
-// BLOCKTOOTH v2 — the DOM marker layer: on-screen label chips and off-screen edge arrows for objectives,
-// power-ups and the TILL (FEATURES_V2 §5.4). Lane L8. UI.
-//
-// Input: render/markerview.ts (L6) `frame()` → ≤ 12 MarkerItems in CSS px (`dist` in blocks). This layer
-// draws them: on-screen → a label chip under the anchor (`OVERLOAD SITE  2.4 BLK`); off-screen → a disc
-// with the kind's glyph + a pointer toward the target + the distance, clamped to a 3u inset of the
-// screen edge (clamped here too, so the arrow never leaves the view whatever the projector returns).
-// HUD keep-out (F4 critic fix): markers never sit on a HUD panel. The panels' boxes are known in `u`
+import sys
+p = 'src/ui/markers.ts'
+s = open(p, encoding='utf-8').read()
+def rep(a, b):
+    global s
+    if a not in s:
+        print('MISSING:', a[:80]); sys.exit(1)
+    s = s.replace(a, b)
+
+rep("""// The bottom inset is 15u, not 3u: the bottom HUD band (status card, ability bar, UPROAR meter, ACTIVE
+// panel) reaches 14.7u up and draws over this layer, so an arrow clamped at 3u would be hidden under it
+// (seen at 1920×1080: a RELIEF DEPOT arrow behind the status card).
+""", """// HUD keep-out (F4 critic fix): markers never sit on a HUD panel. The panels' boxes are known in `u`
 // from their CSS anchors (styles.css / hud_v2.css, measured in Chrome at 1280×720 by
 // _harness/scratch/l8/hudcheck.py): WARD-7 bug, top-right counters + the live objective-tracker rows,
 // the boss nameplate while it is up, the status card, the bottom-centre UPROAR meter + ability bar, the
@@ -13,23 +18,12 @@
 // count / boss plate changes (class-only DOM queries at 4 Hz, never a layout read). Every marker box
 // (edge arrow: disc + pointer + distance; on-screen: the label chip, width estimated from its text) that
 // meets a panel is moved by the smallest displacement that clears every panel and stays in view.
-// `angle` is read as RADIANS in screen space (0 = +x / right, +π/2 = down: Math.atan2(dy, dx) in CSS px).
-// 12 nodes pooled at mount; each frame writes one transform per live node (only when it moved ≥ 0.5 px)
-// and text at ≤ 4 Hz per node. No layout reads (the viewport size is cached on resize).
-// Test hook (§13.3): [data-v2="marker"] on visible markers.
-
-import './hud_v2.css';
-import type { PowerUpKind } from '../core/types.ts';
-import { POWERUP_KINDS } from '../core/types.ts';
-import type { GlyphId, MarkerFrame, MarkerItem, MarkerKind, MarkersApi } from '../v2types.ts';
-import { OBJECTIVE_NAMES } from '../data/objectives.ts';
-import { POWERUP_NAMES } from '../data/powerups.ts';
-import { HUD2 } from '../data/strings_hud.ts';
-import { div } from './dom.ts';
-import { glyphSvg } from './icons.ts';
-import { OBJECTIVE_COLOR, OBJECTIVE_GLYPH, POWERUP_COLOR, POWERUP_GLYPH } from './tracker.ts';
-
-const MAX = 12;
+""")
+rep("""const MAX = 12;
+const INSET_U = 3;
+const INSET_BOTTOM_U = 15;
+const TEXT_PERIOD_MS = 250;
+""", """const MAX = 12;
 const INSET_U = 3;
 const INSET_BOTTOM_U = 4.6;       // clear of the ticker (2.35u); the panels above it are keep-out boxes
 const TEXT_PERIOD_MS = 250;
@@ -88,53 +82,17 @@ export function keepOut(x: number, y: number, l: number, t: number, r: number, b
   return out;
 }
 const _ko = { x: 0, y: 0 };
-
-interface MNode {
-  root: HTMLDivElement;
-  chipN: HTMLDivElement;
-  chipD: HTMLDivElement;
-  disc: HTMLDivElement;
-  ptr: HTMLDivElement;
-  ad: HTMLDivElement;
-  on: boolean;
-  edge: boolean;
-  lookKind: string;         // kind + sub whose glyph / colour / name are written
-  lookSub: string;
-  x: number; y: number; r: number;
-  textT: number;
+""")
+rep("""  textT: number;
+  distTxt: string;
+}""", """  textT: number;
   distTxt: string;
   nameLen: number;          // label length (chars) for the chip-width estimate
-}
+}""")
+rep("""  private u = unitPx();
 
-function unitPx(): number { return Math.max(8, Math.min(window.innerWidth / 100, (window.innerHeight * 1.7778) / 100)); }
-
-function powerupOf(sub: string): PowerUpKind | null {
-  const s = sub.toUpperCase();
-  for (const k of POWERUP_KINDS) if (s.includes(POWERUP_NAMES[k])) return k;
-  for (const k of POWERUP_KINDS) if (sub === k) return k;
-  return null;
-}
-
-function lookOf(it: MarkerItem): { glyph: GlyphId; color: string; name: string } {
-  switch (it.kind as MarkerKind) {
-    case 'overloadSite': case 'reliefDepot': case 'recordsAnnex':
-      return { glyph: OBJECTIVE_GLYPH[it.kind as 'overloadSite'], color: OBJECTIVE_COLOR[it.kind as 'overloadSite'], name: it.sub || OBJECTIVE_NAMES[it.kind as 'overloadSite'] };
-    case 'till':
-      return { glyph: 'till', color: '#ffc53d', name: it.sub || 'HIT THE TILL' };
-    case 'powerup': default: {
-      const k = powerupOf(it.sub);
-      return { glyph: k ? POWERUP_GLYPH[k] : 'star', color: k ? POWERUP_COLOR[k] : '#f4ecd8', name: k ? POWERUP_NAMES[k] : (it.sub || '') };
-    }
-  }
-}
-
-export class ScreenMarkers implements MarkersApi {
-  private readonly layer: HTMLDivElement;
-  private readonly nodes: MNode[] = [];
-  private shown = false;
-  private vw = window.innerWidth;
-  private vh = window.innerHeight;
-  private u = unitPx();
+  constructor(root: HTMLElement) {
+    const L = this.layer""", """  private u = unitPx();
   private readonly root: HTMLElement;
   private rects: number[][] = [];
   private hudT = -1e9;
@@ -143,19 +101,11 @@ export class ScreenMarkers implements MarkersApi {
 
   constructor(root: HTMLElement) {
     this.root = root;
-    const L = this.layer = div('bt-layer bt-v2marks bt-hidden', root);
-    for (let i = 0; i < MAX; i++) {
-      const r = div('bt-mk off', L);
-      const chip = div('bt-mk-chip', r);
-      const chipN = div('bt-mk-n', chip);
-      const chipD = div('bt-mk-d', chip);
-      const arrow = div('bt-mk-arrow', r);
-      const ptr = div('bt-mk-ptr', arrow);
-      const disc = div('bt-mk-disc', arrow);
-      const ad = div('bt-mk-ad', arrow);
-      // cream face (not the CSS navy): a red / coral / teal glyph on navy read dark-on-dark (F4 critic)
-      disc.style.background = '#f4ecd8';
-      this.nodes.push({ root: r, chipN, chipD, disc, ptr, ad, on: false, edge: false, lookKind: '', lookSub: '', x: NaN, y: NaN, r: NaN, textT: 0, distTxt: '', nameLen: 8 });
+    const L = this.layer""")
+rep("""textT: 0, distTxt: '' });
+    }
+    window.addEventListener('resize', () => { this.vw = window.innerWidth; this.vh = window.innerHeight; this.u = unitPx(); });
+  }""", """textT: 0, distTxt: '', nameLen: 8 });
     }
     window.addEventListener('resize', () => { this.vw = window.innerWidth; this.vh = window.innerHeight; this.u = unitPx(); this.rects = []; this.hudT = -1e9; });
   }
@@ -186,40 +136,23 @@ export class ScreenMarkers implements MarkersApi {
   }
 
   /** The keep-out rects in px (test hook: window.__BT__ can read them through the app). */
-  hudRects(): readonly (readonly number[])[] { return this.rects; }
-
-  show(on: boolean): void {
-    this.shown = on;
-    this.layer.classList.toggle('bt-hidden', !on);
-    if (!on) for (const n of this.nodes) this.hide(n);
-  }
-
-  update(f: MarkerFrame): void {
-    if (!this.shown) return;
-    const items = f && f.items ? f.items : [];
-    const now = performance.now();
+  hudRects(): readonly (readonly number[])[] { return this.rects; }""")
+rep("""    const now = performance.now();
+    const inset = INSET_U * this.u;""", """    const now = performance.now();
     this.refreshHud(now);
     const u = this.u;
     const inset = INSET_U * u;
-    const minY = inset, maxY = this.vh - INSET_BOTTOM_U * u;
-    const n = Math.min(MAX, items.length);
-    for (let i = 0; i < n; i++) {
-      const it = items[i], m = this.nodes[i];
-      if (!Number.isFinite(it.x) || !Number.isFinite(it.y)) { this.hide(m); continue; }
-      if (m.lookKind !== it.kind || m.lookSub !== it.sub) {
-        m.lookKind = it.kind; m.lookSub = it.sub;
-        const L = lookOf(it);
-        m.root.style.setProperty('--kc', L.color);
-        m.disc.innerHTML = glyphSvg(L.glyph, L.color);
-        m.chipN.textContent = L.name;
+    const minY = inset, maxY = this.vh - INSET_BOTTOM_U * u;""")
+rep("""        m.chipN.textContent = L.name;
+        m.textT = 0;""", """        m.chipN.textContent = L.name;
         m.nameLen = L.name.length;
-        m.textT = 0;
-      }
-      if (!m.on) { m.on = true; m.root.classList.remove('off'); m.root.dataset.v2 = 'marker'; }
-      const edge = !it.onScreen;
-      if (edge !== m.edge) { m.edge = edge; m.root.classList.toggle('edge', edge); m.x = NaN; }
-      let x = it.x, y = it.y;
-      if (edge) {
+        m.textT = 0;""")
+rep("""      if (edge) {
+        x = Math.max(inset, Math.min(this.vw - inset, x));
+        y = Math.max(inset, Math.min(this.vh - INSET_BOTTOM_U * this.u, y));
+        const a = Number.isFinite(it.angle) ? it.angle : 0;
+        if (Math.abs(a - m.r) > 0.01 || !Number.isFinite(m.r)) { m.r = a; m.ptr.style.transform = `rotate(${a.toFixed(3)}rad)`; }
+      }""", """      if (edge) {
         x = Math.max(inset, Math.min(this.vw - inset, x));
         y = Math.max(minY, Math.min(maxY, y));
         const a = Number.isFinite(it.angle) ? it.angle : 0;
@@ -232,24 +165,6 @@ export class ScreenMarkers implements MarkersApi {
         const hw = 0.5 * (m.nameLen * 0.62 + 7.5) * u;
         keepOut(x, y, hw, 0, hw, 2.7 * u, this.rects, hw, this.vw - hw, 0, this.vh - 2.7 * u, _ko);
         x = _ko.x; y = _ko.y;
-      }
-      if (!(Math.abs(x - m.x) < 0.5 && Math.abs(y - m.y) < 0.5)) {
-        m.x = x; m.y = y;
-        m.root.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
-      }
-      if (now - m.textT >= TEXT_PERIOD_MS) {
-        m.textT = now;
-        const d = Number.isFinite(it.dist) ? Math.max(0, it.dist).toFixed(1) + ' ' + HUD2.blk : '';
-        if (d !== m.distTxt) { m.distTxt = d; m.chipD.textContent = d; m.ad.textContent = d; }
-      }
-    }
-    for (let i = n; i < MAX; i++) this.hide(this.nodes[i]);
-  }
-
-  private hide(m: MNode): void {
-    if (!m.on) return;
-    m.on = false;
-    m.root.classList.add('off');
-    delete m.root.dataset.v2;
-  }
-}
+      }""")
+open(p, 'w', encoding='utf-8').write(s)
+print('ok')

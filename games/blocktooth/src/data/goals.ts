@@ -2,7 +2,16 @@
 //
 // 15 general · 16 titan · 9 city. Every unlock item (24 locked cards, 6 locked evolutions, 6 perks,
 // 8 palettes = 44) is referenced by exactly one goal (asserted by _harness/probe_meta.ts).
-// `desc` is the condition text of §8.2. A goal with `titan` / `biome` only counts runs that match; a
+// `desc` is the condition text of §8.2.
+//
+// F4 retune (critic LOW: a first run met ~1/3 of all goals): the run-scope thresholds that the gate bot
+// overshot on its FIRST run (CROWD CONTROL 1.4×, LIVE COVERAGE 1.4×, URBAN RENEWAL 3.4×, CURBSIDE 10×,
+// CURB APPEAL 13×, SHIPPING 6.5×, POWER OUTAGE 1.4×, … — _harness/scratch/f4/firstrun.ts, seed 1337) now
+// sit near the bot's best run. CROWD CONTROL / LIVE COVERAGE / SIGNAL BOOST keep their §8.2 targets:
+// they are SUPPLY-capped — probe_meta G(a) requires every run-scope target ≤ the foes fielded / UPROAR
+// charges / power-ups dropped in the quickest gate-bot run (min 1 179 / 13 / 8 on the 11:18 baseline),
+// so they cannot be raised. A clean first CLEAR still files the 7–8 milestone goals (finish, SIZE III,
+// SIZE V, a clear, the titan's clear, the city boss, ONE TAKE, an evolution) — structural, not a threshold. A goal with `titan` / `biome` only counts runs that match; a
 // `boss` filter narrows boss metrics (bossKillsLife, staggersBestFight). How each metric is measured is
 // in meta/goals.ts (metricValue).
 
@@ -30,8 +39,8 @@ export const GOALS: GoalDef[] = [
     metric: 'ults', target: 10, scope: 'run', unlocks: [card('u_psa')] },
   { id: 'g_paperwork', name: 'PAPERWORK', desc: 'Banish 5 cards', group: 'general',
     metric: 'banishesLife', target: 5, scope: 'life', unlocks: [{ kind: 'perk', id: 'perk_red_tape' }] },
-  { id: 'g_urban_renewal', name: 'URBAN RENEWAL', desc: 'Level 25 blocks in one run', group: 'general',
-    metric: 'blocks', target: 25, scope: 'run', unlocks: [card('u_bulk_trash_day')] },
+  { id: 'g_urban_renewal', name: 'URBAN RENEWAL', desc: 'Level 130 blocks in one run', group: 'general',
+    metric: 'blocks', target: 130, scope: 'run', unlocks: [card('u_bulk_trash_day')] },
   { id: 'g_still_on_air', name: 'STILL ON AIR', desc: 'Survive 5:00 of extended coverage', group: 'general',
     metric: 'endlessS', target: 300, scope: 'run', unlocks: [card('u_utility_bill')] },
   { id: 'g_double_feature', name: 'DOUBLE FEATURE', desc: 'Defeat 2 containment bosses in one run', group: 'general',
@@ -40,12 +49,12 @@ export const GOALS: GoalDef[] = [
     metric: 'evolutionsLife', target: 1, scope: 'life', unlocks: [{ kind: 'perk', id: 'perk_tip_line' }] },
   { id: 'g_signal_boost', name: 'SIGNAL BOOST', desc: 'Collect 8 power-ups in one run', group: 'general',
     metric: 'powerups', target: 8, scope: 'run', unlocks: [card('u_night_market')] },
-  { id: 'g_running_errands', name: 'RUNNING ERRANDS', desc: 'Complete 10 objectives in one run', group: 'general',
-    metric: 'objectives', target: 10, scope: 'run', unlocks: [{ kind: 'perk', id: 'perk_warm_mic' }] },
+  { id: 'g_running_errands', name: 'RUNNING ERRANDS', desc: 'Complete 14 objectives in one run', group: 'general',
+    metric: 'objectives', target: 14, scope: 'run', unlocks: [{ kind: 'perk', id: 'perk_warm_mic' }] },
 
   // ─────────────────────────────── titan (16) ───────────────────────────────
-  { id: 'g_molo_curbside_pickup', name: 'CURBSIDE PICKUP', desc: 'MOLO: 60 pickups from one GULLET VACUUM', group: 'titan', titan: 'molo',
-    metric: 'vacuumBest', target: 60, scope: 'run', unlocks: [{ kind: 'palette', titan: 'molo', index: 1 }] },
+  { id: 'g_molo_curbside_pickup', name: 'CURBSIDE PICKUP', desc: 'MOLO: 750 pickups from one GULLET VACUUM', group: 'titan', titan: 'molo',
+    metric: 'vacuumBest', target: 750, scope: 'run', unlocks: [{ kind: 'palette', titan: 'molo', index: 1 }] },
   { id: 'g_molo_speed_bump', name: 'SPEED BUMP', desc: 'MOLO: crush 300 foes in one run', group: 'titan', titan: 'molo',
     metric: 'crushed', target: 300, scope: 'run', unlocks: [card('molo_u_manhole_lid')] },
   { id: 'g_molo_bite_sized', name: 'BITE-SIZED CITY', desc: 'Clear any city with MOLO', group: 'titan', titan: 'molo',
@@ -56,8 +65,8 @@ export const GOALS: GoalDef[] = [
 
   { id: 'g_vk_six_way_splice', name: 'SIX-WAY SPLICE', desc: 'VOLT-KITE: detonate 6 LIVE WIRES at once (GRIDLOCK SURGE wires do not count)', group: 'titan', titan: 'voltkite',
     metric: 'wiresBest', target: 6, scope: 'run', unlocks: [{ kind: 'palette', titan: 'voltkite', index: 1 }] },
-  { id: 'g_vk_power_outage', name: 'POWER OUTAGE', desc: 'VOLT-KITE: 25 kills from one HOOK', group: 'titan', titan: 'voltkite',
-    metric: 'hookKillsBest', target: 25, scope: 'run', unlocks: [card('vk_u_lineman_gloves')] },
+  { id: 'g_vk_power_outage', name: 'POWER OUTAGE', desc: 'VOLT-KITE: 45 kills from one HOOK', group: 'titan', titan: 'voltkite',
+    metric: 'hookKillsBest', target: 45, scope: 'run', unlocks: [card('vk_u_lineman_gloves')] },
   { id: 'g_vk_grid_down', name: 'GRID DOWN', desc: 'Clear any city with VOLT-KITE', group: 'titan', titan: 'voltkite',
     metric: 'titanClears', target: 1, scope: 'life', unlocks: [card('evo_third_rail')] },
   { id: 'g_vk_coast_to_coast', name: 'COAST-TO-COAST OUTAGE', desc: 'Clear all three cities with VOLT-KITE', group: 'titan', titan: 'voltkite',
@@ -76,8 +85,8 @@ export const GOALS: GoalDef[] = [
 
   { id: 'g_bw_full_bloom', name: 'FULL BLOOM', desc: 'BRIARWICK: 8 bloom turrets alive at once (GREENBELT DECREE blooms do not count)', group: 'titan', titan: 'briarwick',
     metric: 'bloomsBest', target: 8, scope: 'run', unlocks: [{ kind: 'palette', titan: 'briarwick', index: 1 }] },
-  { id: 'g_bw_green_thumb', name: 'GREEN THUMB', desc: 'BRIARWICK: heal 2 000 HP in one run', group: 'titan', titan: 'briarwick',
-    metric: 'healed', target: 2000, scope: 'run', unlocks: [card('bw_u_seed_catalogue')] },
+  { id: 'g_bw_green_thumb', name: 'GREEN THUMB', desc: 'BRIARWICK: heal 2 400 HP in one run', group: 'titan', titan: 'briarwick',
+    metric: 'healed', target: 2400, scope: 'run', unlocks: [card('bw_u_seed_catalogue')] },
   { id: 'g_bw_rewilded', name: 'REWILDED', desc: 'Clear any city with BRIARWICK', group: 'titan', titan: 'briarwick',
     metric: 'titanClears', target: 1, scope: 'life', unlocks: [card('evo_urban_forest_act')] },
   { id: 'g_bw_canopy_cover', name: 'CANOPY COVER', desc: 'Clear all three cities with BRIARWICK', group: 'titan', titan: 'briarwick',
@@ -85,20 +94,20 @@ export const GOALS: GoalDef[] = [
     unlocks: [{ kind: 'palette', titan: 'briarwick', index: 2 }, card('bw_u_arbor_day')] },
 
   // ─────────────────────────────── city (9) ───────────────────────────────
-  { id: 'g_ge_curb_appeal', name: 'CURB APPEAL', desc: 'GRID-EAST: flatten 400 street props in one run', group: 'city', biome: 'grideast',
-    metric: 'props', target: 400, scope: 'run', unlocks: [card('u_parking_validation')] },
+  { id: 'g_ge_curb_appeal', name: 'CURB APPEAL', desc: 'GRID-EAST: flatten 6 500 street props in one run', group: 'city', biome: 'grideast',
+    metric: 'props', target: 6500, scope: 'run', unlocks: [card('u_parking_validation')] },
   { id: 'g_ge_parking_violation', name: 'PARKING VIOLATION', desc: 'Defeat PARKADE-6', group: 'city', biome: 'grideast', boss: 'parkade6',
     metric: 'bossKillsLife', target: 1, scope: 'life', unlocks: [card('u_after_hours_permit')] },
-  { id: 'g_ge_rate_hike', name: 'RATE HIKE', desc: 'GRID-EAST: destroy 6 OVERLOAD SITES in one run', group: 'city', biome: 'grideast',
-    metric: 'overloadSites', target: 6, scope: 'run', unlocks: [card('u_citizen_hotline')] },
-  { id: 'g_ws_cold_storage', name: 'COLD STORAGE', desc: "WHITE STACKS: topple 60 % of the district's tier-4 structures in one run", group: 'city', biome: 'whitestacks',
-    metric: 'tier4CollapseFrac', target: 0.6, scope: 'run', unlocks: [card('u_rent_control')] },
+  { id: 'g_ge_rate_hike', name: 'RATE HIKE', desc: 'GRID-EAST: destroy 8 OVERLOAD SITES in one run', group: 'city', biome: 'grideast',
+    metric: 'overloadSites', target: 8, scope: 'run', unlocks: [card('u_citizen_hotline')] },
+  { id: 'g_ws_cold_storage', name: 'COLD STORAGE', desc: "WHITE STACKS: topple 90 % of the district's tier-4 structures in one run", group: 'city', biome: 'whitestacks',
+    metric: 'tier4CollapseFrac', target: 0.9, scope: 'run', unlocks: [card('u_rent_control')] },
   { id: 'g_ws_thaw', name: 'THAW', desc: 'Defeat IRON GULLY', group: 'city', biome: 'whitestacks', boss: 'irongully',
     metric: 'bossKillsLife', target: 1, scope: 'life', unlocks: [card('u_eviction_notice')] },
   { id: 'g_ws_hairline', name: 'HAIRLINE FRACTURES', desc: 'Stagger IRON GULLY 3 times in one fight (rematches do not count)', group: 'city', biome: 'whitestacks', boss: 'irongully',
     metric: 'staggersBestFight', target: 3, scope: 'run', unlocks: [{ kind: 'perk', id: 'perk_safety_inspection' }] },
-  { id: 'g_lw_shipping_delays', name: 'SHIPPING DELAYS', desc: 'LOCKWATER: sink 60 boats in one run', group: 'city', biome: 'lockwater',
-    metric: 'boats', target: 60, scope: 'run', unlocks: [card('u_street_festival')] },
+  { id: 'g_lw_shipping_delays', name: 'SHIPPING DELAYS', desc: 'LOCKWATER: sink 520 boats in one run', group: 'city', biome: 'lockwater',
+    metric: 'boats', target: 520, scope: 'run', unlocks: [card('u_street_festival')] },
   { id: 'g_lw_port_closed', name: 'PORT CLOSED', desc: 'Defeat CAISSON-4', group: 'city', biome: 'lockwater', boss: 'caisson4',
     metric: 'bossKillsLife', target: 1, scope: 'life', unlocks: [card('u_landmark_status')] },
   { id: 'g_lw_early_closing', name: 'EARLY CLOSING', desc: 'Clear LOCKWATER in under 9:00', group: 'city', biome: 'lockwater',

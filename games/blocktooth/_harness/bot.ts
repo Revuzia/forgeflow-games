@@ -29,7 +29,7 @@ import { buildingsInRect, propsInRect } from '../src/city/citysim.ts';
 import { UPGRADE_BY_ID } from '../src/data/upgrades.ts';
 // v2 bot hooks (FEATURES_V2 §2.7; L0 stubs — lanes L1 / L2 / L4 fill them)
 import { botUltimate } from './bot_ult.ts';
-import { botDraftScore } from './bot_draft.ts';
+import { botDraftScore, botRecipeBonus } from './bot_draft.ts';
 import { botDetour } from './bot_map.ts';
 
 // ─────────────────────────────── tuning ───────────────────────────────
@@ -638,7 +638,7 @@ export function botScoreUpgrade(w: World, id: string): number {
   s += RARITY_BONUS[def.rarity] ?? 0;
   if (def.titan && def.titan === w.titanId) s += 1.5;
   const owned = w.upgrades.owned[id] ?? 0;
-  return s / (1 + 0.1 * owned);
+  return s / (1 + 0.1 * owned) + botRecipeBonus(w, id);   // F1: lean toward a started evolution recipe
 }
 
 /** Pick one card from an offer (first in offer order wins ties). */

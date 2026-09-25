@@ -25,7 +25,7 @@ import { BIOMES } from '../data/biomes.ts';
 import { UPGRADE_BY_ID } from '../data/upgrades.ts';
 import { SCREENS } from '../data/strings_screens.ts';
 import { goalFrac, goalParts, goalProgress, nextUnlock, unlockLabel } from '../meta/goals.ts';
-import { familyColor, glyphSvg, iconFor } from './icons.ts';
+import { SLOT_BG, barFill, glyphSvg, iconFor } from './icons.ts';
 import {
   type ModalSession, type UiPress, clearEl, div, el, fmt, fmtInt, fmtTime, keyChip, onTap, pulse, roman, runModal, wrapIndex,
 } from './dom.ts';
@@ -59,9 +59,13 @@ export function unlockGlyphEl(u: UnlockRef, cls = ''): HTMLElement {
     }
     return box;
   }
-  if (u.kind === 'perk') { box.innerHTML = glyphSvg('key', '#ffd166'); return box; }
+  // F4 (critic: dark-on-dark glyphs): the card / perk glyphs are ink-stroked, and on the navy box their
+  // 2 px ink outline vanished and the thinner shapes (claw, ripple, links) read as dark smudges. The
+  // unlock chip is now the ability-bar slot face (cream) with the bar's contrast-checked fill.
+  box.style.background = SLOT_BG;
+  if (u.kind === 'perk') { box.innerHTML = glyphSvg('key', '#d9901a'); return box; }
   const d = UPGRADE_BY_ID[u.id];
-  box.innerHTML = d ? glyphSvg(iconFor(d), familyColor(d)) : glyphSvg('star', '#f1e4c8');
+  box.innerHTML = d ? glyphSvg(iconFor(d), barFill(d)) : glyphSvg('star', '#d9901a');
   if (d && d.evo) box.classList.add('evo');
   return box;
 }
@@ -81,6 +85,10 @@ export function goalProgressText(g: GoalDef, p: Profile): { text: string; frac: 
   const frac = goalFrac(g, v);
   if (g.lowerIsBetter) {
     return { text: fmt(SCREENS.goals.lower, { x: v > 0 ? fmtTime(v) : SCREENS.goals.none, y: fmtTime(g.target) }), frac };
+  }
+  if (g.metric === 'peakRank') {   // a Size: roman numerals, 1-based (rank 0 = SIZE I)
+    const r = Math.max(0, Math.min(g.target, Math.floor(v)));
+    return { text: `${roman(r)} / ${roman(g.target)}`, frac };
   }
   const { x, y } = goalParts(g, p, null, null);
   const show = (n: number) => (g.metric === 'tier4CollapseFrac' ? `${fmtInt(n)}%` : fmtInt(n));

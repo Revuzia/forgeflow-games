@@ -141,6 +141,9 @@ export function goalParts(g: GoalDef, p: Profile, t: RunTally | null, ctx: RunCt
     if (t && ctx && runMatches(g, ctx) && t.tier4Total > 0) return { x: t.collapsesByTier[4], y: Math.ceil(g.target * t.tier4Total) };
     return { x: Math.round(100 * v), y: Math.round(100 * g.target) };
   }
+  // peakRank is a 0-based rank index (0 = SIZE I): shown as the Size number, so "Reach SIZE III" at
+  // SIZE II reads 2 / 3, not 1 / 2 (F4 critic fix)
+  if (g.metric === 'peakRank') return { x: Math.floor(v) + 1, y: g.target + 1 };
   return { x: g.lowerIsBetter ? v : Math.floor(v), y: g.target };
 }
 

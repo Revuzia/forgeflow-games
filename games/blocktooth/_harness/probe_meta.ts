@@ -91,6 +91,8 @@ function ok(cond: boolean, what: string): boolean {
 function section(s: string): void { console.log('\n' + s); }
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
+/** a goal's target, read from the data (F4: the fixtures follow the §8.2 retune instead of hard-coding it) */
+const TG = (id: string): number => M.GOALS.find((g) => g.id === id)!.target;
 const RANK_BANDS: readonly (readonly [number, number])[] = [[0, 0], [60, 150], [150, 300], [280, 450], [400, 560]];
 const BOSS_BY_S = 560;
 const NO_INPUT: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
@@ -330,7 +332,8 @@ function checkLedger(): void {
   const w = mkWorld('molo', 'grideast');
   M.world.stepN(w, 30);
   const t = w.tally;
-  t.kills = 1200; t.banishes = 3; t.evolutions = 1; t.ults = 4; t.props = 410; t.bossDefeatedBy.parkade6 = 1; t.bossesDefeated = 1;
+  const K = TG('g_crowd_control') + 200;
+  t.kills = K; t.banishes = 3; t.evolutions = 1; t.ults = 4; t.props = TG('g_ge_curb_appeal') + 10; t.bossDefeatedBy.parkade6 = 1; t.bossesDefeated = 1;
   M.tally.tallyV2(t).peakRank = 4;
   w.run.result = 'clear'; w.run.phase = 'clear'; w.run.endT = 600;
   const p0 = M.profile.emptyProfile();
@@ -345,7 +348,7 @@ function checkLedger(): void {
   for (const id of want) ok(a.newly.includes(id), `newly met: ${id}`);
   ok(!a.newly.includes('g_live_coverage') && !a.newly.includes('g_paperwork'), 'not met: LIVE COVERAGE (4/10), PAPERWORK (3/5)');
   ok(q.newUnlocks.includes('u_block_captain') && q.newUnlocks.includes('evo_municipal_stomach') && q.newUnlocks.includes('u_after_hours_permit'), 'card unlocks queued in newUnlocks');
-  ok(q.best.g_crowd_control === 1200 && q.best.g_live_coverage === 4, 'run-goal bests filed');
+  ok(q.best.g_crowd_control === K && q.best.g_live_coverage === 4, 'run-goal bests filed');
   // idempotent
   const b = G.applyRunToProfile(q, w, 'clear');
   const strip = (p: Profile): string => JSON.stringify({ ...p, done: Object.keys(p.done).sort() });
@@ -385,7 +388,7 @@ function checkLedger(): void {
   const pl = M.profile.emptyProfile();
   const wl = mkWorld('molo', 'grideast');
   M.world.stepN(wl, 5);
-  wl.tally.kills = 1000; wl.tally.ults = 10;
+  wl.tally.kills = TG('g_crowd_control'); wl.tally.ults = TG('g_live_coverage');
   const ids = G.evalGoals(pl, wl.tally, { titan: 'molo', biome: 'grideast', result: null, endT: -1 });
   ok(deepEq(ids, ['g_crowd_control', 'g_live_coverage']), `evalGoals live → ${ids.join(',')}`);
   ok(pl.newUnlocks.includes('u_rolling_closure') && pl.newUnlocks.includes('u_psa'), 'evalGoals queues the NEW ribbon ids');
@@ -413,12 +416,12 @@ function checkNextUnlock(): void {
   section('D. nextUnlock ranking');
   const G = M.goals;
   const p = M.profile.emptyProfile();
-  p.best.g_crowd_control = 900;            // 0.9
-  p.best.g_live_coverage = 5;              // 0.5
-  p.best.g_vk_power_outage = 24;           // 0.96, VOLT-KITE only
-  p.best.g_ge_curb_appeal = 380;           // 0.95, GRID-EAST only
+  p.best.g_crowd_control = 0.9 * TG('g_crowd_control');            // 0.9
+  p.best.g_live_coverage = 0.5 * TG('g_live_coverage');              // 0.5
+  p.best.g_vk_power_outage = 0.96 * TG('g_vk_power_outage');           // 0.96, VOLT-KITE only
+  p.best.g_ge_curb_appeal = 0.95 * TG('g_ge_curb_appeal');           // 0.95, GRID-EAST only
   let n = G.nextUnlock(p, 'molo', null);
-  ok(n?.goal.id === 'g_crowd_control' && n.value === 900, `molo, no city → CROWD CONTROL (got ${n?.goal.id} ${n?.value})`);
+  ok(n?.goal.id === 'g_crowd_control' && n.value === 0.9 * TG('g_crowd_control'), `molo, no city → CROWD CONTROL (got ${n?.goal.id} ${n?.value})`);
   n = G.nextUnlock(p, 'voltkite', null);
   ok(n?.goal.id === 'g_vk_power_outage', `voltkite → POWER OUTAGE (got ${n?.goal.id})`);
   n = G.nextUnlock(p, 'molo', 'grideast');
@@ -426,12 +429,12 @@ function checkNextUnlock(): void {
   n = G.nextUnlock(p, 'molo', 'lockwater');
   ok(n?.goal.id === 'g_crowd_control', `molo + LOCKWATER → CROWD CONTROL (got ${n?.goal.id})`);
   const tie = M.profile.emptyProfile();
-  tie.best.g_crowd_control = 500; tie.best.g_live_coverage = 5;   // both 0.5
+  tie.best.g_crowd_control = 0.5 * TG('g_crowd_control'); tie.best.g_live_coverage = 0.5 * TG('g_live_coverage');   // both 0.5
   n = G.nextUnlock(tie, 'molo', null);
   ok(n?.goal.id === 'g_crowd_control', `tie → list order (got ${n?.goal.id})`);
   const lb = M.profile.emptyProfile();
   lb.best.g_lw_early_closing = 600;          // 540/600 = 0.9
-  lb.best.g_crowd_control = 800;             // 0.8
+  lb.best.g_crowd_control = 0.8 * TG('g_crowd_control');             // 0.8
   n = G.nextUnlock(lb, 'molo', 'lockwater');
   ok(n?.goal.id === 'g_lw_early_closing' && n.value === 600, `lower-is-better ranks by target / best (got ${n?.goal.id})`);
   ok(Math.abs(G.goalFrac(M.GOALS.find((g) => g.id === 'g_lw_early_closing')!, 600) - 0.9) < 1e-9, 'goalFrac(EARLY CLOSING, 600) = 0.9');
@@ -447,14 +450,14 @@ function checkNextUnlock(): void {
   ok(G.nextUnlock(all, 'molo', 'grideast') === null, 'all 40 filed → null (EVERY PERMIT ISSUED)');
   // goalProgress of a filed goal reads at least the target
   const pd = M.profile.emptyProfile(); pd.done.g_crowd_control = 1;
-  ok(G.goalProgress(M.GOALS.find((g) => g.id === 'g_crowd_control')!, pd, null, null) >= 1000, 'a filed goal reports ≥ its target');
+  ok(G.goalProgress(M.GOALS.find((g) => g.id === 'g_crowd_control')!, pd, null, null) >= TG('g_crowd_control'), 'a filed goal reports ≥ its target');
   // tier-4 display parts
   const w = mkWorld('molo', 'whitestacks');
   M.world.stepN(w, 2);
   const g4 = M.GOALS.find((g) => g.id === 'g_ws_cold_storage')!;
   w.tally.collapsesByTier[4] = 3;
   const parts = M.goals.goalParts(g4, M.profile.emptyProfile(), w.tally, { titan: 'molo', biome: 'whitestacks', result: null, endT: -1 });
-  ok(w.tally.tier4Total > 0 && parts.x === 3 && parts.y === Math.ceil(0.6 * w.tally.tier4Total), `COLD STORAGE parts ${parts.x} / ${parts.y} (tier4Total ${w.tally.tier4Total})`);
+  ok(w.tally.tier4Total > 0 && parts.x === 3 && parts.y === Math.ceil(g4.target * w.tally.tier4Total), `COLD STORAGE parts ${parts.x} / ${parts.y} (tier4Total ${w.tally.tier4Total})`);
 }
 
 // ─────────────────────────────── E. tally ───────────────────────────────

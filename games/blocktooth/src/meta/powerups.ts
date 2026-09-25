@@ -200,6 +200,8 @@ function collect(w: World, p: PowerUp): void {
       buff(w, 'smashDamage', POWERUPS.rushSmash, POWERUPS.rushHourS);
       break;
     case 'backPay':
+      // raw fill; mid-UPROAR or in the 6 s lockout it is BANKED (full meter under COOLING) and turns READY only
+      // when the lockout ends — never a second fire inside one lockout (meta/ultimate.ts addUproar, F2-a)
       addUproar(w, ULT.max, true);
       break;
   }

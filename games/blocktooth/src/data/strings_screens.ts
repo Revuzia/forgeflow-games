@@ -70,6 +70,9 @@ export const SCREENS = {
     evoStamp: 'RESTRUCTURED',
     evolves: 'EVOLVES {base}',
     evoFoot: 'REPLACES {base} · KEEPS {with}',
+    /** Gate F: a non-evolution card that advances a started recipe (upgrades/draft.ts recipeHint) */
+    evoCompletes: 'COMPLETES {evo}',
+    evoToward: 'TOWARD {evo}',
     newRibbon: 'NEW',
     noBanish: 'NO BANISH LEFT',
     noLock: 'NO LOCK LEFT',

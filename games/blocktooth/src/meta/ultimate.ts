@@ -7,13 +7,16 @@
 //   * combat/damage.ts killEnemy: `if (!ultBankKill(w, e.x, e.z, xp, mass)) { …scrap… }`;
 //   * titans/titansim.ts: hurtTitan returns 0 while w.ult.invulnT > 0; max speed × ultMoveMul(w);
 //   * upgrades/engine.ts execute 'ultCharge' → addUproar (L2's body); meta/powerups.ts (L4) BACK PAY →
-//     addUproar(w, ULT.max, true) and DEMOLITION → w.ult.bankOpen around its kill loop.
+//     addUproar(w, ULT.max, true) (banked while in flight / locked out: READY only when the lockout ends) and
+//     DEMOLITION → w.ult.bankOpen around its kill loop.
 //
 // Life of one UPROAR:
 //   idle (charging) ─ E / pad Y / RT while ready ─▶ ROAR (roarS: invulnerable, 30 % move, leash snapped)
 //     ─ roar end: hostile NON-boss projectiles + unfired enemy-owned telegraphs inside R deleted ─▶
 //   BLAST (blastS: the titan's pulses from data/ultimates.ts + its extras) ─▶ idle, meter frozen until
-//   ULT.lockoutS after the fire. Kills while phase !== 'idle' bank their XP × killXpMul (capped per fire at
+//   ULT.lockoutS after the fire (a raw BACK PAY fill in that window is stored, never a second READY: F2-a).
+//   A fire on a tick that ends with a draft owed is taken back in chargeUltimate (F2-c, see FIRE).
+//   While a boss is alive R also covers the boss-FRAMED view (ultRadius, F2-b). Kills while phase !== 'idle' bank their XP × killXpMul (capped per fire at
 //   xpCapLevelFrac × the level's XP need); the bank is flushed once per tick as ≤ bankPickupsPerTick
 //   merged scrap pickups at the first banked kill positions.
 //
@@ -40,7 +43,7 @@
 // change is recommended to the orchestrator, not made here (probe_ult reads ULT.bossCapFrac, so it follows).
 
 import type { DamageKind, DamageOpts, Enemy, Hazard, Shape, Telegraph, UltPulse, UltState, World } from '../core/types.ts';
-import { ULT } from '../core/config.ts';
+import { CAMERA, RANKS, ULT, spawnView } from '../core/config.ts';
 import { spawnRing } from '../ai/director.ts';
 import { ULTS } from '../data/ultimates.ts';
 import { ENEMIES } from '../data/enemies.ts';
@@ -53,6 +56,7 @@ import { bossUltHit, releaseLeash } from '../ai/bosses/index.ts';
 import { stat } from '../upgrades/stats.ts';
 import { VOLT } from '../titans/kits/voltkite.ts';
 import { makeRoom, titanHazards } from '../titans/kits/common.ts';
+import { hasPendingDraft } from '../upgrades/draft.ts';
 
 // ─────────────────────────────── lane-local charge tuning (FEATURES_V2 §3.2 tuning order) ───────────────────────────────
 /**
@@ -108,10 +112,60 @@ export function createUltState(): UltState {
   };
 }
 
-/** Blast radius R (m) = max(ULT.rFloorH · H, ULT.rFrac · spawnRing(w)) — covers the auto-framed view. */
+/**
+ * Blast radius R (m) = max(ULT.rFloorH · H, ULT.rFrac · spawnRing(w)) — the spec formula (FEATURES_V2 §3.1) — and,
+ * while a boss is alive, at least the reach of the FRAMED view: the farthest ground corner of the default-zoom
+ * view the camera is showing (config spawnView: the curve widened by the director's held boss framing, with the
+ * rig's own lag, and the look-target slide toward the fight), measured from the titan, + the rig's velocity lead.
+ * Boss framing pulls the camera out to BOSS_FRAME.maxMul × the curve and slides it toward the boss, so a boss the
+ * framing keeps on screen can sit far past 0.95 × the ring (critic F2-b: an on-screen boss visibly missed). The
+ * per-fire boss numbers (ULT.bossCapFrac / ULT.bossMeter spread over the pulses) do not depend on R.
+ * THREE-free and deterministic (the sim's own framing state; the view zoom is never read).
+ */
 export function ultRadius(w: World): number {
-  return Math.max(ULT.rFloorH * w.titan.height, ULT.rFrac * spawnRing(w));
+  const base = Math.max(ULT.rFloorH * w.titan.height, ULT.rFrac * spawnRing(w));
+  const b = w.boss;
+  if (!b || !b.alive) return base;
+  const v = framedViewReach(w);
+  return Number.isFinite(v) && v > base ? v : base;
 }
+
+/** Farthest ground point of the default-zoom framed view from the titan (m): the 4 frame-corner rays (16:9, the
+ *  rank's pitch, CAMERA yaw / fov) of a camera at spawnView distance d looking at titan + (ox, oz) at the rig's
+ *  target height, intersected with the ground; + the rig's velocity lead (≤ 0.22 · d · K, as ai/enemies.ts). */
+export function framedViewReach(w: World): number {
+  const T = w.titan;
+  const V = spawnView(w);
+  const D = V.d;
+  if (!(D > 0) || !Number.isFinite(D)) return 0;
+  const pitch = ((RANKS[T.rank]?.pitchDeg ?? 54) * Math.PI) / 180, yaw = (CAMERA.yawDeg * Math.PI) / 180;
+  const cp = Math.cos(pitch), sp = Math.sin(pitch), sy = Math.sin(yaw), cy = Math.cos(yaw);
+  const ox = cp * sy, oy = sp, oz = cp * cy;                 // target → camera (unit)
+  const ux = -sp * sy, uy = cp, uz = -sp * cy;               // camera up
+  const rx = cy, rz = -sy;                                   // camera right (ry = 0)
+  const tanV = Math.tan((CAMERA.fovDeg * Math.PI) / 360), tanH = tanV * VIEW_ASPECT;
+  const tx = V.ox, tz = V.oz, ty = T.height * CAMERA.targetYFrac;   // look target, relative to the titan
+  const cx = tx + D * ox, cyy = ty + D * oy, cz = tz + D * oz;       // camera position
+  let reach = 0;
+  for (let i = 0; i < 4; i++) {
+    const sx = i & 1 ? 1 : -1, syy = i & 2 ? 1 : -1;
+    const dx = -ox + sx * tanH * rx + syy * tanV * ux;
+    const dy = -oy + syy * tanV * uy;
+    const dz = -oz + sx * tanH * rz + syy * tanV * uz;
+    // a ray at or above the horizon never meets the ground: fall back to the far ground at 4 view heights (as config viewFootprint)
+    const t = dy < -1e-6 ? cyy / -dy : Infinity;
+    let gx: number, gz: number;
+    if (Number.isFinite(t)) { gx = cx + dx * t; gz = cz + dz * t; }
+    else { const m = Math.hypot(dx, dz) || 1; gx = tx + (dx / m) * 4 * D * CAM_K; gz = tz + (dz / m) * 4 * D * CAM_K; }
+    const r = Math.hypot(gx, gz);
+    if (r > reach) reach = r;
+  }
+  const lead = Math.min(Math.hypot(Number.isFinite(T.vx) ? T.vx : 0, Number.isFinite(T.vz) ? T.vz : 0) * CAMERA.leadS, LEAD_MAX_FRAC * D * CAM_K);
+  return reach + lead;
+}
+const VIEW_ASPECT = 16 / 9;                                  // the framing's aspect (config bossFrameNeed, ai/enemies.ts)
+const CAM_K = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
+const LEAD_MAX_FRAC = 0.22;                                  // = ai/enemies.ts LEAD_MAX_FRAC (the rig's lead cap)
 
 /** titansim stepTitan: max speed × this (ULT.roarMove while phase === 'roar', else 1). */
 export function ultMoveMul(w: World): number {
@@ -120,17 +174,26 @@ export function ultMoveMul(w: World): number {
 
 /**
  * Add UPROAR points (× the ultCharge stat unless `raw`). Frozen while an ultimate is in flight or during
- * the post-fire lockout, except `raw` fills (BACK PAY, dev cheat), which ignore the lockout. The rising
- * edge of `ready` emits `ultCharged`.
+ * the post-fire lockout. A `raw` fill (BACK PAY, dev cheat) arriving then is BANKED, not applied as a ready
+ * meter: the charge is stored (the HUD shows it full under COOLING) and `ready` + `ultCharged` come only when
+ * the lockout ends (stepUltimate), so UPROAR can never fire twice inside ULT.lockoutS (critic F2-a: BACK PAY
+ * used to re-arm it mid-blast and skip the per-fire boss cap). The rising edge of `ready` emits `ultCharged`.
  */
 export function addUproar(w: World, points: number, raw = false): void {
   const u = w.ult;
   if (!(points > 0) || !Number.isFinite(points)) return;
-  if (!raw && (u.phase !== 'idle' || u.lockT > 0)) return;
+  const locked = u.phase !== 'idle' || u.lockT > 0;
+  if (!raw && locked) return;
   if (!w.titan.alive || w.run.result) return;
   const mul = raw ? 1 : Math.max(0, stat(w, 'ultCharge'));
   u.charge = Math.min(ULT.max, u.charge + points * mul);
-  if (!u.ready && u.charge >= ULT.max - 1e-9) {
+  if (!locked) readyEdge(w);
+}
+
+/** `ready` rising edge once the meter is full and nothing locks it (the only place `ultCharged` is emitted). */
+function readyEdge(w: World): void {
+  const u = w.ult;
+  if (!u.ready && u.charge >= ULT.max - 1e-9 && u.phase === 'idle' && !(u.lockT > 0)) {
     u.charge = ULT.max;
     u.ready = true;
     w.events.push({ type: 'ultCharged' });
@@ -159,6 +222,9 @@ export function ultBankKill(w: World, x: number, z: number, xp: number, mass: nu
     u.bankXp += got;
     u.bankMass += mv * ULT.killXpMul;
     u.kills++;
+    if (FIRE.w === w && FIRE.tick === w.tick) {   // a kill on the fire tick: remembered in case the fire is taken back
+      FIRE.xpRaw += xv; FIRE.xpGot += got; FIRE.massRaw += mv; FIRE.massGot += mv * ULT.killXpMul;
+    }
   }
   if (u.bankPts.length < 2 * ULT.bankPickupsPerTick && Number.isFinite(x) && Number.isFinite(z)) u.bankPts.push(x, z);
   return true;
@@ -176,6 +242,8 @@ export function stepUltimate(w: World): void {
   if (u.lockT > 0) u.lockT = u.lockT - dt <= 1e-9 ? 0 : u.lockT - dt;
 
   if (u.phase !== 'idle' && !T.alive) endUlt(w);
+  // a raw fill banked during the flight / lockout (BACK PAY) becomes READY now that nothing locks the meter
+  if (!u.ready && u.phase === 'idle' && u.lockT === 0 && T.alive && !w.run.result) readyEdge(w);
 
   // ── fire ──
   if (u.phase === 'idle' && u.ready && !!w.input.ultimate && T.alive && !w.run.result) fire(w);
@@ -204,6 +272,10 @@ export function stepUltimate(w: World): void {
 export function chargeUltimate(w: World): void {
   const u = w.ult;
   const T = w.titan;
+  if (FIRE.w === w) {
+    if (FIRE.tick === w.tick && u.phase === 'roar' && u.t === 0 && !FIRE.owed && !rankUpThisTick(w) && hasPendingDraft(w)) unfire(w);
+    FIRE.w = null;
+  }
   if (u.phase !== 'idle' || u.lockT > 0 || u.ready) return;
   if (!T.alive || w.run.result) return;
   let pts = ULT_CHARGE.trickle * w.dt;
@@ -249,10 +321,57 @@ function within(ax: number, az: number, bx: number, bz: number, r: number): bool
   return dx * dx + dz * dz <= r * r;
 }
 
+/**
+ * The fire of THIS tick, kept until chargeUltimate (end of the same stepWorld) so it can be taken back
+ * (critic F2-c). A level-up / chest owed on the fire tick freezes the sim for a draft INSIDE that tick
+ * (game.ts onStep → hasPendingDraft), after the view has already been handed the `ultFire` of the tick —
+ * the roar's stamp / sfx / speed lines would play behind the draft screen while the sim is frozen. Resolved
+ * in sim ordering: when a draft is owed at the end of the fire tick, the fire is undone (meter full and
+ * READY again, no lockout, no `ultFire` left in the tick's events) and the player fires after the draft.
+ * Only a draft GRANTED on the fire tick freezes that tick, so the fire stands when
+ *   * a draft was already owed when it fired (`owed`: stepUltimate runs first in stepWorld, so this is the
+ *     state at tick start) — the app is running on with a deferred draft (the MASS BREACH sting), or
+ *   * the tick also has a `rankUp` — game.ts arms the size-up sting (sizeUpHoldT) and plays on; the draft
+ *     opens when the sting ends (with ?frozen test mode the app freezes anyway: the one case left, test-only).
+ * A draft that opens while an UPROAR is already in flight pauses it (ultview advances only unfrozen frames).
+ * Scratch, not world state: it never outlives the stepWorld call that set it (FIRE.w is cleared there).
+ */
+const FIRE = {
+  w: null as World | null, tick: -1, owed: false, invulT: 0, lockT: 0, kills: 0, charge: 0,
+  xpRaw: 0, xpGot: 0, massRaw: 0, massGot: 0,
+};
+
+function rankUpThisTick(w: World): boolean {
+  const ev = w.events;
+  for (let i = 0; i < ev.length; i++) if (ev[i].type === 'rankUp') return true;
+  return false;
+}
+
+/** Take back this tick's fire (see FIRE). Kills already banked this tick get their full XP back (they were
+ *  ordinary kills after all) and leave the UPROAR XP tally; they still flush as merged scrap next tick.
+ *  Not undone (documented): the leash / PARKADE-6 tow that snapped this tick, and this one tick of roar
+ *  invulnerability and 30 % move. */
+function unfire(w: World): void {
+  const u = w.ult;
+  u.phase = 'idle'; u.t = 0; u.pulse = 0;
+  u.charge = Math.max(FIRE.charge, ULT.max); u.ready = true;
+  u.invulnT = FIRE.invulT; u.lockT = FIRE.lockT;
+  u.fired = Math.max(0, u.fired - 1);
+  u.kills = FIRE.kills;
+  u.xpCap = 0;
+  u.bankXp += Math.max(0, FIRE.xpRaw - FIRE.xpGot);
+  u.bankMass += Math.max(0, FIRE.massRaw - FIRE.massGot);
+  u.xpTotal = Math.max(0, u.xpTotal - FIRE.xpGot);
+  const ev = w.events;
+  for (let i = ev.length - 1; i >= 0; i--) if (ev[i].type === 'ultFire') ev.splice(i, 1);
+}
+
 function fire(w: World): void {
   const u = w.ult;
   const T = w.titan;
   const def = ULTS[w.titanId];
+  FIRE.w = w; FIRE.tick = w.tick; FIRE.owed = hasPendingDraft(w); FIRE.invulT = u.invulnT; FIRE.lockT = u.lockT; FIRE.kills = u.kills; FIRE.charge = u.charge;
+  FIRE.xpRaw = 0; FIRE.xpGot = 0; FIRE.massRaw = 0; FIRE.massGot = 0;
   u.charge = 0;
   u.ready = false;
   u.phase = 'roar';

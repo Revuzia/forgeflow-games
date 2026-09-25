@@ -1023,6 +1023,8 @@
 .bt-flag.new { background: var(--teal); color: var(--cream); }
 .bt-flag.final { background: var(--red); color: var(--cream); }
 .bt-flag.locked { background: var(--navy); color: var(--gold); }
+.bt-flag.evo { background: var(--gold); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.bt-flag.evo.ready { background: linear-gradient(90deg, var(--gold), var(--coral)); }
 .bt-dossier-name { font-family: var(--f-display); font-size: calc(var(--u) * 2.1); line-height: 1.06; letter-spacing: .02em; color: var(--navy); text-transform: uppercase; }
 .bt-dossier-rule { flex: 0 0 auto; height: calc(var(--u) * .25); background: repeating-linear-gradient(90deg, var(--rc) 0 calc(var(--u) * 2), transparent calc(var(--u) * 2) calc(var(--u) * 2.4)); }
 .bt-dossier-body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }

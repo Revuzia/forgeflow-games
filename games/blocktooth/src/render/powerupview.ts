@@ -1,11 +1,12 @@
 // BLOCKTOOTH v2 — map power-up tokens + their live looks (FEATURES_V2 §6.3, lane L6). VIEW: reads
 // `w.map.powerups`, `w.map.rushHourT` and the powerup* events; never writes gameplay state.
 //
-// A floating CIVIC TOKEN: a hexagonal plate edged in cream (toon + ink), 0.5 H across (H = the titan's
-// height at spawn, `PowerUp.h`), its enamel faces in the kind colour with the kind's glyph embossed on
-// BOTH faces (CLEANUP teal magnet · DEMOLITION coral notice · RED LIGHT signal head with red, amber and
-// green lamps · RUSH HOUR gold clock · BACK PAY cream coins), bobbing and spinning over a dashed ground
-// ring; it blinks through its last 5 s. On pickup: a token pop (swell then gone) + radial streaks.
+// A floating CIVIC TOKEN, 0.5 H across (H = the titan's height at spawn, `PowerUp.h`): two enamel face
+// cards around a small ink core, each kind its own colour AND silhouette with its glyph on BOTH faces
+// (CLEANUP teal rounded square + magnet · DEMOLITION orange warning triangle + notice · RED LIGHT red
+// octagon + signal head · RUSH HOUR gold diamond + clock · BACK PAY green coin + coin stack), bobbing
+// and wobbling ±0.45 rad about facing the camera (yaw and pitch: never edge-on, never a flat sliver) over a dashed ground ring in the kind
+// colour; it blinks through its last 5 s. F4: rev 1's cream hex plates all read as cream chips at Size I. On pickup: a token pop (swell then gone) + radial streaks.
 // RUSH HOUR: speed lines streaming past the titan while it lasts. (The RED LIGHT screen tint and the
 // HUD burst / tracker row are L8's DOM.)
 // Draw calls: plate 1 + ink 1 + faces 1 + ring 1 + streaks 1 = 5. Fixed pools, no per-frame allocation.
@@ -19,35 +20,81 @@ import { K_VIEW, RibbonBatch, RingBatch, clamp01, easeOutCubic, hash01, part } f
 import { drawGlyph } from './objectiveview.ts';
 
 export const POWERUP_TINT: Record<PowerUpKind, string> = {
-  cleanup: '#4fb3b0', demolition: '#ff6f5e', redLight: '#e63946', rushHour: '#ffd166', backPay: '#f4ecd8',
+  cleanup: '#4fb3b0', demolition: '#ff8a3d', redLight: '#e63946', rushHour: '#ffd166', backPay: '#7bd389',
 };
 const GLYPH: Record<PowerUpKind, string> = { cleanup: 'magnet', demolition: 'notice', redLight: 'trafficLight', rushHour: 'rush', backPay: 'coin' };
+/**
+ * F4: each kind has its own SILHOUETTE as well as its own colour, so five Size-I tokens never read as
+ * five identical cream chips: CLEANUP a rounded square · DEMOLITION a warning triangle · RED LIGHT an
+ * octagon · RUSH HOUR a diamond · BACK PAY a round coin. The face is the kind colour edge to edge (no
+ * cream medallion), the glyph sits on it in a contrasting fill, and the plate behind is a small ink core
+ * hidden by the face from the front (the silhouette is the face's alpha cut-out).
+ */
+export const POWERUP_SHAPE: Record<PowerUpKind, 'square' | 'triangle' | 'octagon' | 'diamond' | 'circle'> = {
+  cleanup: 'square', demolition: 'triangle', redLight: 'octagon', rushHour: 'diamond', backPay: 'circle',
+};
+const GLYPH_FILL: Record<PowerUpKind, string> = {
+  cleanup: '#e63946', demolition: '#e63946', redLight: '#ffb13b', rushHour: '#3d2b6b', backPay: '#ffd166',
+};
 const CAP = 8;           // tokens drawn (sim keeps ≤ 3 alive) + pops
 const POPS = 4;
 const POP_S = 0.32;
 const BLINK_S = 5;
 const SIZE_H = 0.5;      // token width, × H at spawn (§6.3)
-const MIN_PX = 26;       // readability floor (px at a 720-px-tall view)
+const MIN_PX = 44;       // readability floor (px at a 720-px-tall view)
 const CELL = 128;
+const WOBBLE = 0.45;     // rad either side of facing the camera (the token never turns edge-on)
+
+/** A token's drawn width (m): 0.5 H at spawn, floored at MIN_PX on screen. Shared with the marker chip
+ *  (markerview) so the chip hangs above the token's real top, not over it (F4). */
+export function tokenSize(H0: number, camDist: number): number {
+  return Math.max(SIZE_H * H0, MIN_PX * (Math.max(1, camDist) * K_VIEW) / 720);
+}
+/** the token's top above the ground, × its size (bob 1.05 + 0.18, half the card) */
+export const TOKEN_TOP = 1.05 + 0.18 + 0.5;
+
+function shapePath(x: CanvasRenderingContext2D, shape: string, cx: number, cy: number, r: number): void {
+  x.beginPath();
+  const reg = (n: number, a0: number, rr: number) => {
+    for (let j = 0; j < n; j++) { const a = a0 + (j * Math.PI * 2) / n; const px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr; if (j === 0) x.moveTo(px, py); else x.lineTo(px, py); }
+    x.closePath();
+  };
+  switch (shape) {
+    case 'circle': x.arc(cx, cy, r * 0.94, 0, Math.PI * 2); break;
+    case 'triangle': { // apex up, centred on the cell (centroid lowered so the glyph sits in the fat part)
+      const R = r * 1.12, oy = r * 0.16;
+      for (let j = 0; j < 3; j++) { const a = -Math.PI / 2 + (j * Math.PI * 2) / 3; const px = cx + Math.cos(a) * R, py = cy + oy + Math.sin(a) * R; if (j === 0) x.moveTo(px, py); else x.lineTo(px, py); }
+      x.closePath();
+      break;
+    }
+    case 'octagon': reg(8, Math.PI / 8, r * 0.98); break;
+    case 'diamond': reg(4, -Math.PI / 2, r * 1.0); break;
+    default: { // rounded square
+      const h = r * 0.8, q = r * 0.22;
+      x.moveTo(cx - h + q, cy - h); x.lineTo(cx + h - q, cy - h); x.quadraticCurveTo(cx + h, cy - h, cx + h, cy - h + q);
+      x.lineTo(cx + h, cy + h - q); x.quadraticCurveTo(cx + h, cy + h, cx + h - q, cy + h);
+      x.lineTo(cx - h + q, cy + h); x.quadraticCurveTo(cx - h, cy + h, cx - h, cy + h - q);
+      x.lineTo(cx - h, cy - h + q); x.quadraticCurveTo(cx - h, cy - h, cx - h + q, cy - h);
+      x.closePath();
+    }
+  }
+}
 
 function faceAtlas(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = CELL * POWERUP_KINDS.length; c.height = CELL;
   const x = c.getContext('2d')!;
   x.clearRect(0, 0, c.width, c.height);
+  x.lineJoin = 'round';
   POWERUP_KINDS.forEach((k, i) => {
     const cx = i * CELL + CELL / 2, cy = CELL / 2;
-    const hex = (r: number) => {
-      x.beginPath();
-      for (let j = 0; j < 6; j++) { const a = Math.PI / 6 + (j * Math.PI) / 3; const px = cx + Math.cos(a) * r, py = cy + Math.sin(a) * r; if (j === 0) x.moveTo(px, py); else x.lineTo(px, py); }
-      x.closePath();
-    };
-    // enamel: kind colour with a cream keyline, then the glyph on a cream medallion
-    hex(60); x.fillStyle = INK; x.fill();
-    hex(56); x.fillStyle = POWERUP_TINT[k] === '#f4ecd8' ? '#e0a93a' : POWERUP_TINT[k]; x.fill();
-    hex(47); x.lineWidth = 4; x.strokeStyle = '#f4ecd8'; x.stroke();
-    x.beginPath(); x.arc(cx, cy, 36, 0, Math.PI * 2); x.fillStyle = '#f4ecd8'; x.fill(); x.lineWidth = 3; x.strokeStyle = INK; x.stroke();
-    drawGlyph(x, GLYPH[k], cx, cy, 56, POWERUP_TINT[k] === '#f4ecd8' ? '#ffd166' : POWERUP_TINT[k]);
+    const sh = POWERUP_SHAPE[k];
+    // ink border (the silhouette's outline), the kind colour edge to edge, a cream keyline inside
+    shapePath(x, sh, cx, cy, 58); x.fillStyle = INK; x.fill(); x.lineWidth = 6; x.strokeStyle = INK; x.stroke();
+    shapePath(x, sh, cx, cy, 52); x.fillStyle = POWERUP_TINT[k]; x.fill();
+    shapePath(x, sh, cx, cy, 44); x.lineWidth = 4; x.strokeStyle = '#f4ecd8'; x.stroke();
+    const gy = sh === 'triangle' ? cy + 14 : cy;
+    drawGlyph(x, GLYPH[k], cx, gy, sh === 'triangle' ? 44 : 60, GLYPH_FILL[k]);
   });
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -76,7 +123,8 @@ void main() {
 interface Pop { kind: PowerUpKind; x: number; y: number; z: number; s: number; t: number; on: boolean }
 
 const _m4 = new THREE.Matrix4(), _m4b = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
-const _p = new THREE.Vector3(), _s = new THREE.Vector3();
+const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _qw = new THREE.Quaternion();
+const UP = new THREE.Vector3(0, 1, 0);
 const FLIP = new THREE.Matrix4().makeRotationY(Math.PI);
 
 export class PowerupView implements ViewModule {
@@ -90,13 +138,13 @@ export class PowerupView implements ViewModule {
   private disposables: { dispose(): void }[] = [];
   private readonly pops: Pop[] = [];
   private readonly pts = new Float32Array(2 * 3);
-  /** ring / streak colour per kind, parsed once (BACK PAY's cream ring reads gold on pale streets) */
+  /** ring / streak colour per kind, parsed once */
   private readonly tint: Record<PowerUpKind, THREE.Color> = {
     cleanup: new THREE.Color(POWERUP_TINT.cleanup), demolition: new THREE.Color(POWERUP_TINT.demolition),
     redLight: new THREE.Color(POWERUP_TINT.redLight), rushHour: new THREE.Color(POWERUP_TINT.rushHour),
-    backPay: new THREE.Color('#ffd166'),
+    backPay: new THREE.Color(POWERUP_TINT.backPay),
   };
-  private plateThick = 0.16;
+  private plateThick = 0.06;
 
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
@@ -106,14 +154,15 @@ export class PowerupView implements ViewModule {
 
   mount(w: World): void {
     this.unmountParts();
-    // the plate: a hexagonal prism, unit width (flat-to-flat ≈ 0.87, point-to-point 1), standing upright
-    // (faces ±Z), a cream rim band + a darker cream bevel
-    const hexR = 0.5, th = this.plateThick;
-    const body = new THREE.CylinderGeometry(hexR, hexR, th, 6, 1, false);
+    // the plate: a small dark core standing upright (faces ±Z) between the two face cards. It is smaller
+    // than every silhouette's inscribed circle, so from the front the kind's shape (the face cut-out) is
+    // all that reads; seen at the wobble's extreme it gives the card its thickness (F4)
+    const hexR = 0.5, coreR = 0.2, th = this.plateThick;
+    const body = new THREE.CylinderGeometry(coreR, coreR, th, 12, 1, false);
     body.rotateX(Math.PI / 2);
-    const bev = new THREE.CylinderGeometry(hexR * 1.06, hexR * 1.06, th * 0.55, 6, 1, false);
+    const bev = new THREE.CylinderGeometry(coreR * 1.15, coreR * 1.15, th * 0.7, 12, 1, false);
     bev.rotateX(Math.PI / 2);
-    const g = facet(mergeTwo(part(body, '#f4ecd8'), part(bev, '#d9cba8')));
+    const g = facet(mergeTwo(part(body, '#3a3346'), part(bev, '#2b2733')));
     const mat = makeToon({ vertexColors: true });
     this.plate = this.inst(g, mat, CAP, 'powerup:plate', OUTLINE_PX.prop);
     this.plate.castShadow = true;
@@ -159,14 +208,14 @@ export class PowerupView implements ViewModule {
         if (!p.alive) continue;
         const H0 = Math.max(0.3, p.h > 0 ? p.h : w.titan.height);
         // 0.5 H across (§6.3), never smaller than MIN_PX on screen (a Size I token must still read)
-        const size = Math.max(SIZE_H * H0, MIN_PX * (Math.max(1, f.camDist) * K_VIEW) / 720);
+        const size = tokenSize(H0, f.camDist);
         const ph = hash01(p.id, 1) * 6.283;
         // blink through the last BLINK_S seconds (steady dimmer under reduce flashing)
         const left = p.life - p.t;
         if (left < BLINK_S && !calm && Math.sin(time * (left < 2 ? 22 : 12)) < -0.2) { this.ring(p.x, p.z, size, p.kind, 0.35, time, ph); continue; }
         const appear = easeOutCubic(p.t / 0.35);
         const y = size * (1.05 + 0.18 * Math.sin(time * 2.4 + ph));
-        this.token(n++, cells, p.kind, p.x, y, p.z, size * (0.3 + 0.7 * appear), time * 1.6 + ph);
+        this.token(n++, cells, p.kind, p.x, y, p.z, size * (0.3 + 0.7 * appear), WOBBLE * Math.sin(time * 1.6 + ph));
         this.ring(p.x, p.z, size, p.kind, left < BLINK_S && calm ? 0.5 : 0.9, time, ph);
       }
     }
@@ -177,7 +226,7 @@ export class PowerupView implements ViewModule {
       if (pp.t > POP_S) { pp.on = false; continue; }
       const u = pp.t / POP_S;
       const k = u < 0.35 ? 1 + 0.6 * easeOutCubic(u / 0.35) : 1.6 * (1 - (u - 0.35) / 0.65);
-      if (n < CAP && k > 0.02) this.token(n++, cells, pp.kind, pp.x, pp.y + pp.s * 0.4 * u, pp.z, pp.s * k, time * 9);
+      if (n < CAP && k > 0.02) this.token(n++, cells, pp.kind, pp.x, pp.y + pp.s * 0.4 * u, pp.z, pp.s * k, u * Math.PI * 2);
       const mpp = (Math.max(1, f.camDist) * K_VIEW) / 720;
       const c = this.tint[pp.kind];
       for (let r = 0; r < 8; r++) {
@@ -235,9 +284,15 @@ export class PowerupView implements ViewModule {
     this.root.clear();
   }
 
+  /** `spin` = the wobble about the card's own vertical axis; the card itself faces the camera (yaw AND
+   *  pitch: the iso camera looks steeply down, an upright card read as a flat sliver at Size I — F4) */
   private token(i: number, cells: Float32Array, kind: PowerUpKind, x: number, y: number, z: number, size: number, spin: number): void {
-    _e.set(0, spin, Math.sin(spin * 0.7) * 0.12); _q.setFromEuler(_e);
-    _p.set(x, y, z); _s.set(size, size, size);
+    _p.set(x, y, z);
+    _m4.lookAt(this.ctx.camera.position, _p, UP);          // +Z from the token toward the camera
+    _q.setFromRotationMatrix(_m4);
+    _e.set(0, spin, Math.sin(spin * 0.7) * 0.12); _qw.setFromEuler(_e);
+    _q.multiply(_qw);
+    _s.set(size, size, size);
     _m4.compose(_p, _q, _s);
     this.plate!.setMatrixAt(i, _m4);
     // faces: just proud of each side of the plate

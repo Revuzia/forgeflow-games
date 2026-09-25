@@ -18,7 +18,8 @@
 //     budget does not bank; timers keep running so switching it off resumes the schedule.
 
 import type { DirectorState, EnemyKind, World } from '../core/types.ts';
-import { BOSS_AT_S, BOSS_FRAME, CAMERA, CITY, DIRECTOR_BUDGET_RANK_MUL, ELITE_AT_S, bossFrameFitAt, bossFrameNeed, frameDistance } from '../core/config.ts';
+import { BOSS_AT_S, BOSS_FRAME, CAMERA, CITY, DIRECTOR_BUDGET_RANK_MUL, ELITE_AT_S, bossFrameFitAt, bossFrameFloorAt, bossFrameNeed, cameraDistance, frameDistance, stepFrameHold } from '../core/config.ts';
+import type { FrameHold } from '../core/config.ts';
 import { TAU, clamp } from '../core/math.ts';
 import { BIOMES } from '../data/biomes.ts';
 import { ENEMIES } from '../data/enemies.ts';
@@ -228,50 +229,65 @@ function spawnElite(w: World): void {
 
 // ─────────────────────────────── step ───────────────────────────────
 /** Waves, elite and boss scheduling + run.phase transitions (stepWorld, after stepTitan). */
-/** BOSS FRAMING (config BOSS_FRAME / bossFrameNeed): hold the widest distance the boss, its live
- *  telegraphs and the titan needed, release it after BOSS_FRAME.holdS at BOSS_FRAME.releaseOmega; ease
- *  the look-target offset toward the need's at BOSS_FRAME.offsetOmega. The spawn ring and the camera
- *  read the result through config frameDistance / frameOffset (never below the curve); the ring reads
- *  spawnView, which adds a replica of the rig's own smoothing (camD / camOx / camOz). */
+/** BOSS FRAMING (config BOSS_FRAME / bossFrameNeed / stepFrameHold): the distance the boss, its live
+ *  telegraphs and the titan need is HELD with hysteresis — widened at once, shrunk only after a hold
+ *  with no need for the extra width, and then slowly (never pumping with the attack rhythm). The
+ *  look-target offset eases toward the need's while the width is needed, holds through the hold and
+ *  eases home after it. The spawn ring and the camera read the result through config frameDistance /
+ *  frameOffset (never below the curve); the ring reads spawnView, which adds a replica of the rig's own
+ *  smoothing (camD / camOx / camOz). Generic: any fight in the w.boss slot gets it. */
+const BF_HOLD: FrameHold = { held: 0, quietT: 0, holdS: 0, relT: -1, relD: 0 };
 function stepBossFrame(w: World): void {
   const D = w.director, dat = D.data;
   const b = w.boss;
   if (!b || !b.alive) {
-    if (dat.bossFrameD) { dat.bossFrameD = 0; dat.bossFrameHoldT = 0; dat.bossFrameHeld = 0; dat.bossFrameOx = 0; dat.bossFrameOz = 0; }
+    if (dat.bossFrameD) {
+      dat.bossFrameD = 0; dat.bossFrameHoldT = 0; dat.bossFrameHeld = 0; dat.bossFrameOx = 0; dat.bossFrameOz = 0;
+      dat.bossFrameHoldS = 0; dat.bossFrameRelT = -1; dat.bossFrameRelD = 0;
+    }
     dat.camD = 0; dat.camDv = 0; dat.camOx = 0; dat.camOz = 0;
     return;
   }
   const dt = w.dt;
   const need = bossFrameNeed(w);
-  // the look-target offset eases toward the need's
-  const ko = 1 - Math.exp(-BOSS_FRAME.offsetOmega * dt);
+  // the look-target offset: toward the need's while the width is needed (last tick's verdict), held
+  // through the hold, home at the slower release rate after it
+  const needed = !((dat.bossFrameHoldT ?? 0) > 0);
+  const released = (dat.bossFrameHoldT ?? 0) >= (dat.bossFrameHoldS || BOSS_FRAME.holdS);
+  const om = needed ? BOSS_FRAME.offsetOmega : released ? BOSS_FRAME.offsetReleaseOmega : 0;
+  const ko = 1 - Math.exp(-om * dt);
   const ox0 = dat.bossFrameOx ?? 0, oz0 = dat.bossFrameOz ?? 0;
   const ox = ox0 + (need.ox - ox0) * ko, oz = oz0 + (need.oz - oz0) * ko;
   dat.bossFrameOx = ox; dat.bossFrameOz = oz;
-  // the distance the need asks for is HELD (no pumping between attacks), then released
-  const cur = dat.bossFrameHeld ?? 0;
-  if (need.d >= cur) { dat.bossFrameHeld = need.d; dat.bossFrameHoldT = 0; }
-  else {
-    const held = (dat.bossFrameHoldT ?? 0) + dt;
-    dat.bossFrameHoldT = held;
-    if (held > BOSS_FRAME.holdS) dat.bossFrameHeld = cur + (need.d - cur) * (1 - Math.exp(-BOSS_FRAME.releaseOmega * dt));
-  }
   // replica of the camera rig (render/camera.ts) offset smoothing: the rig's look target lags the
-  // eased offset, so what the paint needs around THAT centre is a floor on the distance (not held —
-  // it melts away as the slide lands), and the spawn ring (config spawnView) reads the same centre
+  // eased offset, so what the paint needs around THAT centre is part of the need (held like the rest),
+  // and the spawn ring (config spawnView) reads the same centre
   const kc = 1 - Math.exp(-CAMERA.frameOffOmega * dt);
   dat.camOx = (dat.camOx ?? 0) + (ox - (dat.camOx ?? 0)) * kc;
   dat.camOz = (dat.camOz ?? 0) + (oz - (dat.camOz ?? 0)) * kc;
-  dat.bossFrameD = Math.max(dat.bossFrameHeld, bossFrameFitAt(dat.camOx, dat.camOz));
+  const needD = Math.max(need.d, bossFrameFitAt(dat.camOx, dat.camOz));
+  // the distance: widen at once, shrink late and slowly (config stepFrameHold)
+  const H = BF_HOLD;
+  H.held = dat.bossFrameHeld ?? 0; H.quietT = dat.bossFrameHoldT ?? 0; H.holdS = dat.bossFrameHoldS ?? 0;
+  H.relT = dat.bossFrameRelT ?? -1; H.relD = dat.bossFrameRelD ?? 0;
+  stepFrameHold(H, needD, cameraDistance(w.titan.height), dt, BOSS_FRAME);
+  dat.bossFrameHeld = H.held; dat.bossFrameHoldT = H.quietT; dat.bossFrameHoldS = H.holdS;
+  dat.bossFrameRelT = H.relT; dat.bossFrameRelD = H.relD;
+  dat.bossFrameD = H.held;
   // replica of the rig's critically damped distance spring (spawnView keeps the ring off the view the
-  // rig is STILL showing while it releases)
+  // rig is STILL showing while it releases): widening at CAMERA.widenOmega, shrinking at zoomOmega, never
+  // under the rig's hard floor (config bossFrameFloorAt around the replica's centre — the rig's own lead
+  // is view-only, so this is the sim's best knowledge of it; wider = the ring stays safer)
   const dStar = frameDistance(w);
   if (!(dat.camD > 0)) { dat.camD = dStar; dat.camDv = 0; }
   else {
-    const om = CAMERA.zoomOmega, x0 = dat.camD - dStar, e = Math.exp(-om * dt), c = (dat.camDv ?? 0) + om * x0;
+    const omz = dStar > dat.camD ? CAMERA.widenOmega : CAMERA.zoomOmega;
+    const x0 = dat.camD - dStar, e = Math.exp(-omz * dt), c = (dat.camDv ?? 0) + omz * x0;
     dat.camD = dStar + (x0 + c * dt) * e;
-    dat.camDv = (c - om * (x0 + c * dt)) * e;
+    dat.camDv = (c - omz * (x0 + c * dt)) * e;
   }
+  const floorD = bossFrameFloorAt(dat.camOx, dat.camOz);
+  if (dat.camD < floorD) { dat.camD = floorD; if ((dat.camDv ?? 0) < 0) dat.camDv = 0; }
 }
 
 export function stepDirector(w: World): void {

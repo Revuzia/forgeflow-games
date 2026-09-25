@@ -7,12 +7,19 @@
 //            stays < 1, so the body's share of the view, H / (D*·k), RISES with every level and every
 //            MASS BREACH and the camera never moves in as the titan grows (no per-rank reset). While a boss
 //            is alive the director widens it just enough for the boss rig + every live boss telegraph
-//            + the titan (config bossFrameNeed, held + released smoothly, never below the curve, ≤ 2×
-//            it) and, when the fight is lopsided, slides the look target toward the fight's centre
-//            (frameOffset, eased by the director at 3.5/s and smoothed here at 5/s).
+//            + the titan (config bossFrameNeed, never below the curve, ≤ 2× it) and, when the fight is
+//            lopsided, slides the look target toward the fight's centre (frameOffset, eased by the
+//            director at 3.5/s and smoothed here at 5/s). Both are HELD with hysteresis (config
+//            stepFrameHold / BOSS_FRAME): widened at once, shrunk / panned home only after a hold with
+//            no need for the extra width (3.5 s, growing by 4 s per interrupted shrink up to 20 s), then
+//            slowly (≤ 2.5 % of D per second, eased in) — the view no longer pumps with every tell.
 //            The SIM's spawn ring reads the same frameDistance (zoom excluded — deterministic).
 //   D      ← critically-damped spring toward D*, ω = 4/s (solved in closed form per frame, so a
-//            long frame cannot overshoot or explode)
+//            long frame cannot overshoot or explode); while a boss is alive it WIDENS at ω = 9/s
+//            (CAMERA.widenOmega) and never goes under the boss HARD FLOOR (config bossFrameFloorAt: the
+//            boss rig, every live tell and the titan inside |ndc| 0.95 around the look target the rig
+//            actually has — refitted every frame, so a tell never leaves the frame, not even on the
+//            frame it spawns). The floor also binds the drawn D through a punch at the default zoom.
 //   zoom   : player zoom MULTIPLIER on D (wheel / = - / pad right stick; Z resets; reset on a new
 //            run). log-space target, smoothed at CAMERA_ZOOM.omega; clamped to [min, max] and
 //            to the absolute distance band [dAbsMin, dAbsMax] (perf / "the whole city fits").
@@ -36,7 +43,7 @@
 import type * as THREE from 'three';
 import type { World, SimEvent, RankIndex } from '../core/types.ts';
 import type { FrameInfo, Quality } from './viewtypes.ts';
-import { CAMERA, CAMERA_ZOOM, RANKS, cameraClip, cameraDistance, frameDistance, frameOffset } from '../core/config.ts';
+import { CAMERA, CAMERA_ZOOM, RANKS, bossFrameFloorAt, bossFrameNeed, cameraClip, cameraDistance, frameDistance, frameOffset } from '../core/config.ts';
 import { easeOutCubic } from '../core/math.ts';
 
 const DEG = Math.PI / 180;
@@ -96,6 +103,7 @@ export class CameraRig {
   private d = 17.2;          // spring state (m) — the AUTO distance, zoom not applied
   private dv = 0;            // spring velocity (m/s)
   private dRender = 17.2;    // after zoom + punch (the actual camera distance)
+  private floorD = 0;        // boss hard floor this frame (m; 0 = none) — config bossFrameFloorAt
   private zoomLog = 0;       // smoothed ln(zoom multiplier)
   private zoomLogT = 0;      // target ln(zoom multiplier)
   private pitch = RANKS[0].pitchDeg * DEG;
@@ -121,6 +129,9 @@ export class CameraRig {
 
   /** The automatic (spring) distance before the player zoom and the punch (m). */
   get autoDist(): number { return this.d; }
+
+  /** This frame's boss hard floor (m; 0 = no boss / nothing to hold) — probes. */
+  get bossFloor(): number { return this.floorD; }
 
   /** Current (smoothed) player zoom multiplier; > 1 = pulled back. */
   get zoom(): number { return Math.exp(this.zoomLog); }
@@ -202,33 +213,9 @@ export class CameraRig {
       this.lastRank = rank;
     }
 
-    // ── distance: critically damped spring toward D*, exact solution over dt ──
-    const dStar = frameDistance(w);
-    const om = CAMERA.zoomOmega;
-    if (dt > 0) {
-      const x0 = this.d - dStar;
-      const e = Math.exp(-om * dt);
-      const c = this.dv + om * x0;
-      this.d = dStar + (x0 + c * dt) * e;
-      this.dv = (c - om * (x0 + c * dt)) * e;
-    }
-    if (!Number.isFinite(this.d) || this.d <= 0) { this.d = dStar; this.dv = 0; }
-
-    let punch = 1;
-    if (this.punchT >= 0) {
-      this.punchT += dt;
-      const tau = this.punchT / this.punchS;
-      if (tau >= 1) this.punchT = -1;
-      else punch = 1 - this.punchK * (1 - easeOutCubic(tau));
-    }
-    // ── player zoom: log-space, smoothed, re-clamped every frame (the band is absolute metres,
-    //    so a rank-up can tighten the allowed multiplier) ──
-    this.zoomLogT = this.clampZoomLog(this.zoomLogT, this.d);
-    this.zoomLog += (this.zoomLogT - this.zoomLog) * (1 - Math.exp(-ZOOM_OMEGA * dt));
-    if (Math.abs(this.zoomLogT - this.zoomLog) < 1e-4) this.zoomLog = this.zoomLogT;
-    this.dRender = this.d * Math.exp(this.zoomLog) * punch;
-
-    // ── look target: interpolated titan + smoothed velocity lead + height ──
+    // ── look target: interpolated titan + smoothed velocity lead + boss-framing offset + height
+    //    (before the distance: the boss floor below is fitted around THIS target; the lead's cap reads
+    //    last frame's distance) ──
     const a = f.alpha;
     const x = T.px + (T.x - T.px) * a;
     const z = T.pz + (T.z - T.pz) * a;
@@ -246,6 +233,47 @@ export class CameraRig {
     this.tx = x + this.leadX + this.offX;
     this.tz = z + this.leadZ + this.offZ;
     this.ty = H * CAMERA.targetYFrac;
+
+    // ── distance: critically damped spring toward D*, exact solution over dt. While a boss is alive
+    //    the spring widens at CAMERA.widenOmega (the director's held framing widens at once; the rig
+    //    follows in ≈ 0.4 s, and shrinks at zoomOmega behind the director's slow release), and the
+    //    auto distance never goes under the boss HARD FLOOR (config bossFrameFloorAt: the rig, every live
+    //    tell and the titan inside |ndc| 0.95 around the target above — re-fitted on this frame's
+    //    state, so a tell that spawns off screen widens the view on the frame it appears) ──
+    const dStar = frameDistance(w);
+    const boss = w.boss !== null && w.boss !== undefined && w.boss.alive;
+    const om = boss && dStar > this.d ? CAMERA.widenOmega : CAMERA.zoomOmega;
+    if (dt > 0) {
+      const x0 = this.d - dStar;
+      const e = Math.exp(-om * dt);
+      const c = this.dv + om * x0;
+      this.d = dStar + (x0 + c * dt) * e;
+      this.dv = (c - om * (x0 + c * dt)) * e;
+    }
+    if (!Number.isFinite(this.d) || this.d <= 0) { this.d = dStar; this.dv = 0; }
+    this.floorD = 0;
+    if (boss) {
+      bossFrameNeed(w);                     // refresh the framing scratch to THIS state (pure; the director re-runs it before every read)
+      this.floorD = bossFrameFloorAt(this.tx - T.x, this.tz - T.z, this.camera.aspect);
+      if (this.d < this.floorD) { this.d = this.floorD; if (this.dv < 0) this.dv = 0; }
+    }
+
+    let punch = 1;
+    if (this.punchT >= 0) {
+      this.punchT += dt;
+      const tau = this.punchT / this.punchS;
+      if (tau >= 1) this.punchT = -1;
+      else punch = 1 - this.punchK * (1 - easeOutCubic(tau));
+    }
+    // ── player zoom: log-space, smoothed, re-clamped every frame (the band is absolute metres,
+    //    so a rank-up can tighten the allowed multiplier) ──
+    this.zoomLogT = this.clampZoomLog(this.zoomLogT, this.d);
+    this.zoomLog += (this.zoomLogT - this.zoomLog) * (1 - Math.exp(-ZOOM_OMEGA * dt));
+    if (Math.abs(this.zoomLogT - this.zoomLog) < 1e-4) this.zoomLog = this.zoomLogT;
+    this.dRender = this.d * Math.exp(this.zoomLog) * punch;
+    // the floor binds the drawn view at the default zoom (or wider) — a punch never dips a tell out;
+    // a player zoom-in is the player's choice
+    if (this.floorD > 0 && this.zoomLog >= -1e-3 && this.dRender < this.floorD) this.dRender = this.floorD;
 
     // ── pitch ──
     const pTarget = this.pitchFor(rank);

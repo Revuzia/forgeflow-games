@@ -10,7 +10,8 @@
 //    booth's facing where findTarget still picks the till) at the wall, 90 m and 130 m.
 // C. Unit checks of the module: rampLaunch opens the till; the stagger (JAMMED) forces it open with the
 //    open-till geometry (hp ×2, strain ×4); UPROAR (bossUltHit 6 %, meter +0.30) adds exactly +0.30 JAM;
-//    resisting the tow fills JAM 0.10/s; an `ultFire` snaps the tow.
+//    resisting the tow fills JAM 0.10/s; an `ultFire` snaps the tow; tillOpens counts every opening;
+//    JAM holds while the till is shut and bleeds only while it is out (Gate F).
 // D. Policy duels — the node port of fullrun.py's human-like policy used by _harness/scratch/boss_threat.ts
 //    (0.25–0.35 s reaction, 0.1 s decision loop, 8-way WASD quantised movement, escape vectors summed, dash
 //    when < 0.45 s left, the same approach/strafe distances), PLUS the one thing a competent player does on
@@ -35,7 +36,7 @@ import { BOSS_HP_SCALE, RANKS } from '../src/core/config.ts';
 import { BIOMES } from '../src/data/biomes.ts';
 import { BOSSES, BOSS_DEFAULT_SUBTITLE } from '../src/data/bosses.ts';
 import { gainGrowth } from '../src/titans/titansim.ts';
-import { bossUltHit, spawnBoss } from '../src/ai/bosses/index.ts';
+import { bossUltHit, spawnBoss, stepBoss } from '../src/ai/bosses/index.ts';
 import * as P6 from '../src/ai/bosses/parkade6.ts';
 import { findTarget } from '../src/combat/targeting.ts';
 import { resolveCircleVsCity } from '../src/city/citysim.ts';
@@ -50,6 +51,7 @@ const fmt = (n: number, d = 0) => (Number.isFinite(n) ? n.toFixed(d) : String(n)
 const NO: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
 const DEG = Math.PI / 180;
 const PIN = { x: 0, z: 0, bumpTier: -1 };
+const TILL_S1 = P6.TILL_OPEN_S[1];
 
 // ─────────────────────────────── setup helpers ───────────────────────────────
 function drafts(w: World): void {
@@ -150,6 +152,29 @@ console.log('\n══ C. module unit checks ══');
   while (b.staggerT > 0) { stepWorld(w, NO); if (b.staggerT > 0 && !(b.data.tillOpen > 0)) openAll = false; }
   check(openAll, 'the till stays open for the whole stagger');
   for (let i = 0; i < 3; i++) stepWorld(w, NO);
+  // Gate F: tillOpens counts every closed → open edge (openTill runs before the tick's sync)
+  {
+    b.attack = null; b.cd = 999;
+    b.data.tillOpen = 0; resync(w);
+    const o0 = b.data.tillOpens ?? 0;
+    b.data.tillOpen = TILL_S1; resync(w); resync(w);
+    const o1 = b.data.tillOpens ?? 0;
+    b.data.tillOpen = 0; resync(w); b.data.tillOpen = TILL_S1; resync(w);
+    check(o1 === o0 + 1 && (b.data.tillOpens ?? 0) === o0 + 2, `tillOpens counts openings: ${o0} → ${o1} (one opening, synced twice) → ${b.data.tillOpens} (closed, reopened)`);
+    // JAM holds while the till is shut, bleeds (index.ts: 4 s idle, then 0.03/s) only while it is out.
+    // stepBoss alone (a full stepWorld would add the titan's own hits on the open till to the meter)
+    const bossTick = () => { w.tick++; w.t += w.dt; stepBoss(w); };
+    const far = P6.keepOutM(w) + 220;
+    const park = () => { T.x = b.x + Math.sin(b.heading) * far; T.z = b.z + Math.cos(b.heading) * far; };
+    park(); b.data.tillOpen = 0; resync(w); b.meter = 0.5;
+    for (let i = 0; i < 8 * 30; i++) { b.cd = 999; b.attack = null; b.data.tillOpen = 0; park(); bossTick(); }
+    const shut = b.meter;
+    b.meter = 0.5;
+    for (let i = 0; i < 8 * 30; i++) { b.cd = 999; b.attack = null; b.data.tillOpen = 1; park(); bossTick(); }
+    const out = b.meter;
+    check(Math.abs(shut - 0.5) < 1e-9 && out < 0.45, `JAM 0.50 after 8 s idle: till shut → ${fmt(shut, 3)} (holds) · till out → ${fmt(out, 3)} (bleeds)`);
+    b.data.tillOpen = 0; resync(w);
+  }
   // tow: resist fills JAM 0.10/s; ultFire snaps it
   b.meter = 0; b.attack = null; b.cd = 999;
   const far = P6.keepOutM(w) + 60;

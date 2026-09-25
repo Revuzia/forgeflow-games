@@ -12,6 +12,7 @@
 // update() is change-only: every DOM write goes through TextSlot / VarSlot / ClassSlot.
 
 import type { SimEvent, World } from '../core/types.ts';
+import { hpReadout } from '../data/strings_hud.ts';
 import { RANK_LEVELS, sizeProgress } from '../core/config.ts';
 import { TITANS } from '../data/titans.ts';
 import { BOSSES } from '../data/bosses.ts';
@@ -268,7 +269,7 @@ export class Hud {
     this.hpFill.set(hpF);
     this.hpTrail.set(this.trail);
     this.hpShield.set(Math.max(0, Math.min(1, (w.upgrades.shield || 0) / maxHp)));
-    this.hpVal.set(`${Math.ceil(Math.max(0, T.hp))} / ${Math.round(maxHp)}`);
+    this.hpVal.set(hpReadout(T.hp, T.maxHp));
     this.lowHpOn.set(T.alive && hpF < LOW_HP);
     this.cardLow.set(T.alive && hpF < LOW_HP);
 
