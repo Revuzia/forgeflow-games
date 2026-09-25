@@ -28,6 +28,7 @@ def main():
     ap.add_argument("--quiet", type=float, default=12)
     ap.add_argument("--budget", type=float, default=2400)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--base", default=None, help="dev server root passed to perfcheck (default: perfcheck's own)")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     t_end = time.time() + a.budget
@@ -53,7 +54,9 @@ def main():
         th = threading.Thread(target=watch, daemon=True)
         log = os.path.join(a.out, "%s_try%d.txt" % (a.zoom, tries))
         with open(log, "w", encoding="utf-8") as fh:
-            p = subprocess.Popen([sys.executable, os.path.join(ROOT, "_harness", "perfcheck.py"), "--no-serve", "--zoom", a.zoom],
+            cmd = [sys.executable, os.path.join(ROOT, "_harness", "perfcheck.py"), "--no-serve", "--zoom", a.zoom]
+            if a.base: cmd += ["--base", a.base]
+            p = subprocess.Popen(cmd,
                                  cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT)
             time.sleep(4)               # let OUR chrome start, then any NEW pid beyond ours is foreign
             ours = autochromes() - before

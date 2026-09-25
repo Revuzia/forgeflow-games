@@ -19,7 +19,7 @@
 // out of every standing building (resolveCircleVsCity with canFlatten −1).
 
 import type { CityLayout, Enemy, EnemyDef, EnemyKind, Telegraph, Tier, World } from '../core/types.ts';
-import { CAMERA, CITY, ENEMY_AIM_LEAD, ENEMY_DMG_RANK_MUL, ENEMY_HP_PER_MIN, ENEMY_HP_RANK_MUL, ENEMY_REACH_H, RANKS, cameraDistance, titanSpeed } from '../core/config.ts';
+import { CAMERA, CITY, ENEMY_AIM_LEAD, ENEMY_DMG_RANK_MUL, ENEMY_HP_PER_MIN, ENEMY_HP_RANK_MUL, ENEMY_REACH_H, RANKS, spawnView, titanSpeed } from '../core/config.ts';
 import { TAU, clamp, dist, easeInCubic, headingOf, lerp, turnToward, wrapAngle } from '../core/math.ts';
 import { newId } from '../core/world.ts';
 import { ENEMIES } from '../data/enemies.ts';
@@ -116,18 +116,21 @@ function leadPt(w: World, windup: number): { x: number; z: number } {
 }
 
 // ─────────────────────────────── spawn ring + street helpers ───────────────────────────────
-/** Spawn ring radius (m): one view height D·k at the AUTO camera distance (config cameraDistance —
- *  the view's framing, zoom excluded so the sim stays deterministic), min 14 m. This is the nominal
- *  ring (director HUD data, recycle distance × RECYCLE_MUL); ringPoint shapes it to the screen. */
+/** Spawn ring radius (m): one view height D·k at the default-zoom view the camera shows (config
+ *  spawnView — the run-long curve, widened + slid while a boss is alive, with the rig's own lag; zoom
+ *  excluded so the sim stays deterministic), min 14 m. This is the nominal ring (director HUD data, recycle distance ×
+ *  RECYCLE_MUL); ringPoint shapes it to the screen. */
 export function ringRadius(w: World): number {
-  const T = w.titan;
-  const r = RING_VIEW_MUL * cameraDistance(T.height, T.rank) * CAM_K;
+  const r = RING_VIEW_MUL * spawnView(w).d * CAM_K;
   return Number.isFinite(r) ? Math.max(14, r) : 14;
 }
 const CAM_K = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
 const RING_VIEW_MUL = 1.0;
-/** margin (× D·k) added past the screen edge: covers the camera's velocity lead (≤ 0.22 D·k) */
-const RING_EDGE_MARGIN = 0.12;
+/** margin (× D·k) added past the screen edge before the street snap. Small on purpose (was 0.12 with a
+ *  ×1.02–1.2 radius): ringPoint now CHECKS each snapped candidate through the default-zoom camera
+ *  (screenOut, the velocity lead included), so the ring only needs to start just past the edge — a
+ *  further ring slowed the Size I economy (enemies walk in later). */
+const RING_EDGE_MARGIN = 0.04;
 const FP = { rank: -1, n: 0, f: 0, hn: 0, hf: 0, s: 0 };
 /** Distance (in units of D·k) from the look target to the edge of the visible ground along world
  *  heading `a`, for the rank's camera pitch at a 16:9 screen (config RANKS.pitchDeg, CAMERA yaw) —
@@ -151,6 +154,42 @@ function footprintEdge(rank: number, a: number): number {
   if (den > 1e-6) t = Math.min(t, (FP.hn + FP.s * FP.n) / den);
   return Number.isFinite(t) ? t : FP.f;
 }
+
+/** Off-screen measure of a ground point for the DEFAULT-ZOOM camera (spawnView, the rank's pitch,
+ *  fixed yaw, 16:9, the look target at CAMERA.targetYFrac·H plus the velocity lead the rig adds):
+ *  max(|ndc x|, |ndc y|) of its projection — > 1 = off-screen (Infinity behind the camera). */
+const SO = { rank: -1, ox: 0, oy: 0, oz: 0, ux: 0, uy: 0, uz: 0 };
+const RIGHT_X = Math.cos((CAMERA.yawDeg * Math.PI) / 180), RIGHT_Z = -Math.sin((CAMERA.yawDeg * Math.PI) / 180);
+const TAN_HALF_FOV = Math.tan((CAMERA.fovDeg * Math.PI) / 360);
+const SCREEN_ASPECT = 16 / 9;
+const LEAD_MAX_FRAC = 0.22;
+function screenOut(w: World, D: number, x: number, z: number): number {
+  const T = w.titan;
+  if (SO.rank !== T.rank) {
+    const p = (RANKS[T.rank].pitchDeg * Math.PI) / 180, yaw = (CAMERA.yawDeg * Math.PI) / 180;
+    const cp = Math.cos(p), sp = Math.sin(p);
+    SO.ox = cp * Math.sin(yaw); SO.oy = sp; SO.oz = cp * Math.cos(yaw);   // target → camera (unit)
+    SO.ux = -sp * Math.sin(yaw); SO.uy = cp; SO.uz = -sp * Math.cos(yaw); // camera up
+    SO.rank = T.rank;
+  }
+  let lx = (Number.isFinite(T.vx) ? T.vx : 0) * CAMERA.leadS, lz = (Number.isFinite(T.vz) ? T.vz : 0) * CAMERA.leadS;
+  const lm = Math.hypot(lx, lz), lmax = LEAD_MAX_FRAC * D * CAM_K;
+  if (lm > lmax) { lx *= lmax / lm; lz *= lmax / lm; }
+  const ty = T.height * CAMERA.targetYFrac;
+  const off = spawnView(w);
+  const dx = x - (T.x + off.ox + lx + D * SO.ox), dy = -(ty + D * SO.oy), dz = z - (T.z + off.oz + lz + D * SO.oz);
+  const depth = -(dx * SO.ox + dy * SO.oy + dz * SO.oz);
+  if (!(depth > 0.1)) return Infinity;
+  const sx = (dx * RIGHT_X + dz * RIGHT_Z) / depth, sy = (dx * SO.ux + dy * SO.uy + dz * SO.uz) / depth;
+  return Math.max(Math.abs(sx) / (TAN_HALF_FOV * SCREEN_ASPECT), Math.abs(sy) / TAN_HALF_FOV);
+}
+/** a spawn point counts as off-screen when it is still past the edge after being pulled this far
+ *  toward the titan (m): body radius + the director's cluster scatter (≤ 5 m) + slack */
+const OFFSCREEN_PAD = 7;
+/** ... and by at least this much in NDC (the camera eases; the frame edge is not a hard line) */
+const OFFSCREEN_MIN = 1.03;
+/** candidate spawn points per ringPoint call (all are judged; the nearest off-screen one wins) */
+const SPAWN_TRIES = 8;
 
 function roadIdx(v: number, origin: number, pitch: number, n: number): number {
   const i = Math.round((v - origin) / pitch);
@@ -179,27 +218,56 @@ function snapToStreet(c: CityLayout, x: number, z: number, vehicle: boolean, r01
 export function ringPoint(w: World, kind: EnemyKind, out: { x: number; z: number }): boolean {
   const T = w.titan, c = w.city, B = c.bounds, def = ENEMIES[kind];
   const R = ringRadius(w), rs = w.rng.spawn;
-  const Dk = cameraDistance(T.height, T.rank) * CAM_K;
+  const view = spawnView(w);
+  const Dk = view.d * CAM_K;
   const vehicle = isVehicle(kind);
   const moving = T.speed > 0.5;
   const vh = headingOf(T.vx, T.vz);
   const m = def.radius + 1;
-  let bestX = NaN, bestZ = NaN, bestD = -1;
-  let ok = false;
-  for (let tries = 0; tries < 12 && !ok; tries++) {
+  const D = Dk / CAM_K;
+  // the ring is centred on the view (the titan, or the boss-framing look target while a boss is alive)
+  const fcx = T.x + view.ox, fcz = T.z + view.oz;
+  let bestX = NaN, bestZ = NaN, bestD = -1, bestR01 = 0.5;
+  let ok = false, okX = 0, okZ = 0, okD = Infinity;
+  // every candidate is tried; the NEAREST one that is off-screen wins (the street snap can throw a
+  // point well past the edge — taking the first that clears the frame made Size I foes walk in late)
+  for (let tries = 0; tries < SPAWN_TRIES; tries++) {
     const a = moving && rs() < 0.35 ? vh + (rs() - 0.5) * 2.2 : rs() * TAU;
-    // just past the screen edge in this direction (§9 "spawn off-screen"), at least the 14 m ring
-    const edge = Math.max(14, (footprintEdge(T.rank, a) + RING_EDGE_MARGIN) * Dk);
-    const rr = edge * (1.02 + 0.18 * rs());
-    let x = T.x + Math.sin(a) * rr, z = T.z + Math.cos(a) * rr;
-    if (!def.flies) { snapToStreet(c, x, z, vehicle, rs(), out); x = out.x; z = out.z; }
+    // just past the screen edge in this direction (§9 "spawn off-screen"), at least the 14 m ring; a
+    // flier is not street-snapped, so its candidate also clears the pad the off-screen check pulls it
+    // back by (else it never passes and falls back to a point on the frame edge)
+    const edge = Math.max(14, (footprintEdge(T.rank, a) + RING_EDGE_MARGIN) * Dk + (def.flies ? OFFSCREEN_PAD : 0));
+    const rr = edge * (1.0 + 0.08 * rs());
+    let x = fcx + Math.sin(a) * rr, z = fcz + Math.cos(a) * rr;
+    const r01 = def.flies ? 0.5 : rs();
+    if (!def.flies) { snapToStreet(c, x, z, vehicle, r01, out); x = out.x; z = out.z; }
     if (x < B.minX + m || x > B.maxX - m || z < B.minZ + m || z > B.maxZ - m) {
       if (bestD < 0) { bestX = clamp(x, B.minX + m, B.maxX - m); bestZ = clamp(z, B.minZ + m, B.maxZ - m); bestD = 0; }
       continue;
     }
+    // the street snap can pull a point back on-screen: judge the SNAPPED point through the
+    // default-zoom camera (pulled OFFSCREEN_PAD toward the titan), not by its radius
     const d = dist(x, z, T.x, T.z);
-    if (d > bestD) { bestD = d; bestX = x; bestZ = z; }
-    if (d >= edge * 0.75) ok = true;
+    const k = d > OFFSCREEN_PAD ? 1 - OFFSCREEN_PAD / d : 0;
+    const o = screenOut(w, D, T.x + (x - T.x) * k, T.z + (z - T.z) * k);
+    const score = Math.min(o, 50);
+    if (score > bestD) { bestD = score; bestX = x; bestZ = z; bestR01 = r01; }
+    if (o >= OFFSCREEN_MIN && d < okD) { ok = true; okD = d; okX = x; okZ = z; }
+  }
+  if (ok) { bestX = okX; bestZ = okZ; }
+  else if (bestD > 0 && Number.isFinite(bestX)) {
+    // no candidate cleared the frame (the snap pulled them all back on-screen): walk the least-visible
+    // one outward from the view centre, re-snapping onto the same street lane, until it does (no RNG)
+    const ux = bestX - fcx, uz = bestZ - fcz, ul = Math.hypot(ux, uz) || 1;
+    for (let step = 1; step <= 8; step++) {
+      const rr = ul + step * 0.12 * Dk;
+      let x = fcx + (ux / ul) * rr, z = fcz + (uz / ul) * rr;
+      if (!def.flies) { snapToStreet(c, x, z, vehicle, bestR01, out); x = out.x; z = out.z; }
+      if (x < B.minX + m || x > B.maxX - m || z < B.minZ + m || z > B.maxZ - m) break;
+      const d = dist(x, z, T.x, T.z);
+      const k = d > OFFSCREEN_PAD ? 1 - OFFSCREEN_PAD / d : 0;
+      if (screenOut(w, D, T.x + (x - T.x) * k, T.z + (z - T.z) * k) >= OFFSCREEN_MIN) { bestX = x; bestZ = z; ok = true; break; }
+    }
   }
   if (!Number.isFinite(bestX)) { bestX = clamp(T.x, B.minX + m, B.maxX - m); bestZ = clamp(T.z, B.minZ + m, B.maxZ - m); }
   out.x = bestX; out.z = bestZ;

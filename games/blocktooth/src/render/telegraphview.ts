@@ -55,7 +55,8 @@ const FADE_S = 0.16;
 const POP_S = 0.14;
 /** run end: every telegraph fades out over this long (the tabloid photo is taken ~2.5 s later) */
 const END_FADE_S = 0.6;
-/** a hostile shape counts as COVERED (tooth crown + strong x-ray) below this × titan radius */
+/** a hostile shape counts as COVERED (tooth crown; through the titan's body the x-ray keeps only a
+ *  thin dim rim, so a rocket circle under the titan never paints over it) below this × titan radius */
 const COVER_LO = 1.2, COVER_HI = 1.8;
 /** lanes are never drawn narrower than this many CSS px (visual pad only; the hit lane is unchanged) */
 const LANE_MIN_PX = 18;
@@ -68,6 +69,9 @@ const PULL0 = 0.3;
 const PULL_PER_M = 0.0022;
 /** x-ray pass (rim through buildings / bodies) */
 const XRAY = true;
+/** the titan body volume that masks the x-ray pass = its bind-pose box grown by this × its largest
+ *  extent (walk / attack poses swing the neck, tail and limbs past the bind pose) */
+const TITAN_XRAY_POSE_MARGIN = 0.1;
 /** hatch spacing in CSS pixels at the look target */
 const HATCH_PX = 14;
 /** fallback telegraph pink (palette.telegraph is identical across biomes) */
@@ -94,11 +98,12 @@ varying vec4 vD;
 varying vec4 vE;
 varying vec4 vF;
 varying float vShape;
+varying vec3 vW;
 void main() {
   vec2 L = vec2(mix(iC.x, iC.y, position.x), mix(iC.z, iC.w, position.z));
   float c = cos(iA.z), s = sin(iA.z);
   vec3 wp = vec3(iA.x + L.x * c + L.y * s, uY, iA.y - L.x * s + L.y * c);
-  vL = L; vB = iB; vD = iD; vE = iE; vF = iF; vShape = iA.w;
+  vL = L; vB = iB; vD = iD; vE = iE; vF = iF; vShape = iA.w; vW = wp;
   // slide the vertex toward the eye along its view ray: identical pixels, nearer depth — the decal
   // wins against curbs / sidewalks / flood water within uPull of the ground, but anything taller
   // (buildings, titans, vehicles) still occludes it (and the x-ray pass shows the rim through them)
@@ -117,6 +122,12 @@ uniform vec3 uHBase; uniform vec3 uHFill; uniform vec3 uHRim; uniform vec3 uHFro
 uniform vec3 uWBase; uniform vec3 uWFill; uniform vec3 uWRim; uniform vec3 uWFront;
 uniform vec3 uInk;
 uniform float uHatchInk;   // 0 dark ground (light hatch lines) .. 1 bright ground (ink hatch lines)
+uniform vec4 uTitan;       // titan x, z, radius, how far past its centre (away from the camera) its body hides the ground (m)
+uniform vec2 uAway;        // unit XZ direction away from the camera (toward the top of the screen)
+// the titan's own body volume (x-ray pass): world → titan-root-local matrix and the body's bind-pose
+// box in that space (+ a pose margin); uTOn 0 = no titan model found (fall back to the footprint patch)
+uniform mat4 uTInv; uniform vec3 uTBMin; uniform vec3 uTBMax; uniform float uTOn;
+varying vec3 vW;
 varying vec2 vL;
 varying vec4 vB;
 varying vec4 vD;
@@ -345,6 +356,34 @@ void main() {
   xc = mix(xc, vec3(1.0), flash); xa = max(xa, flash * inside * 0.6);
   xc = mix(xc, uInk, inkM); xa = max(xa, inkM * 0.85);
   xc = mix(xc, toothCol, toothM); xa = max(xa, toothM * 0.9);
+  // COVERED zones (a rocket / mortar circle the titan stands in): through buildings only a thin, dimmer
+  // rim (+ the teeth and a faint fire flash) is kept — the ground decal + tooth crown say "get out".
+  float xaCov = max(max(rimM * dashes * 0.42, inkM * 0.3), max(toothM * 0.45, flash * inside * 0.22));
+  xa = mix(xa, xaCov, cover);
+  // THROUGH THE TITAN'S OWN BODY: nothing. Hostile paint whose view ray passes through the titan's
+  // body volume (its bind-pose box in root space + a pose margin, tested exactly per fragment) is not
+  // x-rayed at all — overlapping rocket circles under a Size II MOLO read as a pink swirl over its head
+  // and torso (a rim-only footprint patch 1.0–1.3 R wide missed MOLO's head and tail). The ground decal
+  // around the feet still draws (depth-tested), so the zone stays readable.
+  if (uTOn > 0.5) {
+    vec3 o = (uTInv * vec4(cameraPosition, 1.0)).xyz;
+    vec3 d = (uTInv * vec4(vW, 1.0)).xyz - o;
+    vec3 dd = vec3(abs(d.x) < 1e-6 ? 1e-6 : d.x, abs(d.y) < 1e-6 ? 1e-6 : d.y, abs(d.z) < 1e-6 ? 1e-6 : d.z);
+    vec3 t0 = (uTBMin - o) / dd, t1 = (uTBMax - o) / dd;
+    vec3 tn = min(t0, t1), tf = max(t0, t1);
+    float tin = max(max(max(tn.x, tn.y), tn.z), 0.0), tout = min(min(min(tf.x, tf.y), tf.z), 1.0);
+    // chord through the box in body heights (the model is normalised to height 1): soft silhouette edge
+    xa *= 1.0 - smoothstep(0.0, 0.05, (tout - tin) * length(d));
+  } else {
+    // fallback (no model yet): the footprint circle stretched away from the camera by the body height
+    vec2 dT = vW.xz - uTitan.xy;
+    float alongT = dot(dT, uAway);
+    float latT = abs(dT.x * uAway.y - dT.y * uAway.x);
+    float rT = uTitan.z * 1.6;
+    float bodyM = (1.0 - smoothstep(rT * 1.0, rT * 1.3, latT))
+      * smoothstep(-rT * 1.3, -rT * 1.0, alongT) * (1.0 - smoothstep(uTitan.w, uTitan.w + rT * 0.3, alongT));
+    xa *= 1.0 - bodyM;
+  }
   col = xc;
   a = xa * (1.0 - warm) * (1.0 - 0.5 * joint);
 #endif
@@ -518,6 +557,17 @@ export class TelegraphView implements ViewModule {
   private endAt = -1;
   /** titan circle this frame (cover test) */
   private tx = 0; private tz = 0; private tr = 1;
+  /** the titan model (scene child 'titan:<id>', read-only) whose body volume masks the x-ray pass, its
+   *  bind-pose box in root-local space (+ TITAN_XRAY_POSE_MARGIN), when that box was last rebuilt */
+  private titanRoot: THREE.Object3D | null = null;
+  private titanId = '';
+  private readonly tBox = new THREE.Box3();
+  private tBoxAt = -1e9;
+  private tAlive = false;
+  private xrayFrame = -1;
+  private readonly tInv = new THREE.Matrix4();
+  private readonly tmpM = new THREE.Matrix4();
+  private readonly tmpB = new THREE.Box3();
 
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
@@ -531,7 +581,71 @@ export class TelegraphView implements ViewModule {
       const b = new DecalBatch(mat, xm, st === 'circle' ? 64 : 24, 'tg:' + st);
       this.batches.set(st, b);
       this.root.add(b.mesh);
-      if (b.xray) this.root.add(b.xray);
+      if (b.xray) {
+        this.root.add(b.xray);
+        // the titan's pose is final only once the renderer has updated world matrices
+        b.xray.onBeforeRender = () => this.syncTitanXray();
+      }
+    }
+  }
+
+  /** find the titan model (a direct scene child named 'titan:<id>'; titanview owns it — read-only) */
+  private findTitanRoot(): THREE.Object3D | null {
+    const want = 'titan:' + this.titanId;
+    const r = this.titanRoot;
+    if (r && r.parent === this.ctx.scene && r.name === want) return r;
+    this.titanRoot = null;
+    const ch = this.ctx.scene.children;
+    for (let i = 0; i < ch.length; i++) if (ch[i].name === want) { this.titanRoot = ch[i]; break; }
+    this.tBoxAt = -1e9;
+    return this.titanRoot;
+  }
+
+  /** x-ray uniforms for the titan body volume, once per rendered frame (from the first visible x-ray
+   *  batch's onBeforeRender, after the renderer's updateMatrixWorld — the pose drawn this frame) */
+  private syncTitanXray(): void {
+    const frame = this.ctx.renderer.info.render.frame;
+    if (frame === this.xrayFrame) return;
+    this.xrayFrame = frame;
+    const root = this.tAlive ? this.findTitanRoot() : null;
+    let on = 0;
+    if (root && root.visible) {
+      const now = performance.now();
+      if (now - this.tBoxAt > 500) {
+        // bind-pose bounds of every visible mesh, in root-local space (the model is normalised to height 1)
+        this.tBoxAt = now;
+        this.tBox.makeEmpty();
+        this.tInv.copy(root.matrixWorld).invert();
+        root.traverseVisible((o) => {
+          const m = o as THREE.Mesh;
+          if (!m.isMesh || !m.geometry) return;
+          if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+          const bb = m.geometry.boundingBox;
+          if (!bb || bb.isEmpty()) return;
+          this.tmpM.multiplyMatrices(this.tInv, m.matrixWorld);
+          this.tmpB.copy(bb).applyMatrix4(this.tmpM);
+          this.tBox.union(this.tmpB);
+        });
+        if (!this.tBox.isEmpty()) {
+          const sx = this.tBox.max.x - this.tBox.min.x, sy = this.tBox.max.y - this.tBox.min.y, sz = this.tBox.max.z - this.tBox.min.z;
+          const m = TITAN_XRAY_POSE_MARGIN * Math.max(sx, sy, sz);
+          this.tBox.min.x -= m; this.tBox.min.z -= m; this.tBox.max.x += m; this.tBox.max.z += m;
+          this.tBox.max.y += m; this.tBox.min.y = Math.min(this.tBox.min.y, 0) - m;
+        }
+      }
+      if (!this.tBox.isEmpty()) {
+        on = 1;
+        this.tInv.copy(root.matrixWorld).invert();
+      }
+    }
+    for (const m of this.xmats.values()) {
+      const u = m.uniforms;
+      u.uTOn.value = on;
+      if (on) {
+        (u.uTInv.value as THREE.Matrix4).copy(this.tInv);
+        (u.uTBMin.value as THREE.Vector3).copy(this.tBox.min);
+        (u.uTBMax.value as THREE.Vector3).copy(this.tBox.max);
+      }
     }
   }
 
@@ -556,6 +670,12 @@ export class TelegraphView implements ViewModule {
         uWFront: { value: new THREE.Color('#fff3c4') },
         uInk: { value: new THREE.Color(INK) },
         uHatchInk: { value: 0 },
+        uTitan: { value: new THREE.Vector4(0, 0, 0, 0) },
+        uAway: { value: new THREE.Vector2(-Math.SQRT1_2, -Math.SQRT1_2) },
+        uTInv: { value: new THREE.Matrix4() },
+        uTBMin: { value: new THREE.Vector3() },
+        uTBMax: { value: new THREE.Vector3() },
+        uTOn: { value: 0 },
       },
       vertexShader: VERT,
       fragmentShader: FRAG_COMMON + PATTERN[style] + FRAG_MAIN,
@@ -649,6 +769,20 @@ export class TelegraphView implements ViewModule {
     for (const r of this.recs.values()) r.seen = false;
     const T = w.titan;
     this.tx = T.x; this.tz = T.z; this.tr = Math.max(0.1, T.radius);
+    this.titanId = T.id; this.tAlive = T.alive;
+    // the ground patch the titan's body hides (x-ray there is rim-only): its footprint stretched away
+    // from the camera by the height it covers at this camera pitch
+    {
+      const cam = this.ctx.camera, ix = T.px + (T.x - T.px) * f.alpha, iz = T.pz + (T.z - T.pz) * f.alpha;
+      let ax = ix - cam.position.x, az = iz - cam.position.z;
+      const al = Math.hypot(ax, az) || 1; ax /= al; az /= al;
+      const elev = Math.atan2(Math.max(0.01, cam.position.y), al);
+      const far = this.tr + Math.max(0, T.height) / Math.tan(Math.max(0.2, elev));
+      for (const m of this.xmats.values()) {
+        (m.uniforms.uTitan.value as THREE.Vector4).set(ix, iz, T.alive ? this.tr : 0, T.alive ? far : 0);
+        (m.uniforms.uAway.value as THREE.Vector2).set(ax, az);
+      }
+    }
 
     // fire events first (a telegraph can fire and be compacted between two frames)
     const ev = f.events;
@@ -819,7 +953,7 @@ export class TelegraphView implements ViewModule {
     }
   }
 
-  /** 0..1: how much a hostile shape is a small zone the titan stands in (tooth crown + strong x-ray) */
+  /** 0..1: how much a hostile shape is a small zone the titan stands in (tooth crown + rim-only x-ray) */
   private cover(r: TgRec, warm: number): number {
     if (warm > 0.5 || r.style === 'chain') return 0;
     let ext = 0, cx = r.x, cz = r.z;

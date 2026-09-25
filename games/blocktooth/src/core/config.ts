@@ -87,7 +87,7 @@
 //     HEARTHBACK 0/9 (BRIARWICK died 2–4/9 in neighbouring tunings — single-seed outcomes are noisy).
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════════
 
-import type { DamageKind, RankIndex, Tier } from './types.ts';
+import type { DamageKind, RankIndex, Shape, Tier, World } from './types.ts';
 
 // ─────────────────────────────── time ───────────────────────────────
 export const SIM_HZ = 30;
@@ -315,36 +315,61 @@ export const CAMERA = {
   targetYFrac: 0.45,
   /** critically-damped spring rate for distance (1/s) */
   zoomOmega: 4,
+  /** smoothing rate (1/s) of the boss-framing look-target offset in the rig (frameOffset) */
+  frameOffOmega: 5,
   /** rank-up punch: distance dips by this fraction then eases out over punchS */
   punchFrac: 0.08, punchS: 1.2,
   /** shake amplitude per metre of titan height on a heavy stomp */
   shakePerH: 0.02,
 } as const;
 
-// ── auto framing: the titan GROWS INTO THE FRAME level by level (2026-09-24, owner feedback) ──
+// ── auto framing: ONE run-long curve — the titan grows on screen level by level (2026-09-24) ──
 /**
- * Auto framing per Size rank, as SCREEN FRACTIONS of one body height H (vertical extent D·k):
- *   startFrac[r] — on entering the rank (H0 = titanHeightAt(r, RANK_LEVELS[r]) = RANKS[r].height)
- *   endFrac[r]   — at the rank's last level before the next breach (Size V: its growth cap)
- * D*(H, r) = H0 / (startFrac·k) · (H/H0)^kr, with kr solved at module load from the sim's own growth
- * curve (titanHeightAt at the rank's first and last level), so the body grows on screen whatever
- * per-level step RANK_LEVELS / BREACH_JUMP give; each breach resets to the next rank's small startFrac
- * — the camera pulls back so the new, bigger world fits. kr comes out NEGATIVE on the current curve (I −0.33 · II −0.30 · III −0.37 · IV −0.29 · V +0.39)
- * (an in-rank height ratio of 1.1–2.2× cannot reach 4.5–8.5 % → 13–19 % with any 0 < k < 1): the camera eases
- * in slightly while the body grows. Late ranks start bigger on purpose: Size IV–V framing is bounded by
- * the perf gate (Size V + 250 enemies at p99 ≤ 22 ms); Size V keeps the old 533 m distance.
- *   D (m) / body share of the view height at a rank's first → last level (framing_table.ts prints every level):
- *   I LV 1→6 49.8 → 38.2 m, 4.5 → 13 % · II LV 7→15 133 → 109 m, 7 → 17 % · III LV 16→26 307 → 251 m,
- *   8.5 → 18 % · IV LV 27→34 519 → 464 m, 11.5 → 19 % · V LV 35→37 533 → 557 m, 21 → 22.5 %.
- *   Size I starts WIDE (a whole intersection, the titan tiny on its zebra — the reference's opening).
+ * Auto camera distance is ONE smooth, non-decreasing function of body height for the whole run — a
+ * power law whose log-log slope eases up gently with size (x = ln(H / h1), H ≥ h1):
+ *   ln D*(H) = ln D1 + k1·x + c·x²,   D1 = h1 / (frac1·K),   c solved so D*(hV) = hV / (fracV·K)
+ * (K = 2·tan(fov/2)). The local exponent k(H) = k1 + 2c·x stays inside (0, 1) over the whole growth
+ * range (0.57 at LV 1 → 0.86 at Size V, asserted at load), so the body's share of the view height,
+ * H / (D*·K), RISES with every level and every MASS BREACH (the body jumps × BREACH_JUMP, the camera
+ * follows the same curve and pulls back LESS than the body grew) and the camera never moves in as the
+ * titan grows. There is no per-rank reset (the old per-rank framing made each breach a sawtooth: the
+ * camera pulled back 2.9–3.5× while the body grew 1.3–1.9×, so the monster looked SMALLER after the
+ * three biggest growth moments).
+ * Why the slope eases up instead of one fixed k: Size I is pinned (k1 = the round-1 single-k curve, so
+ * LV 1–6 and the off-screen spawn ring — GATE 2's Size II band — are unchanged within 2 %), while the
+ * late game had to open up: with one k the Size V silhouette (every body vertex projected, 4 headings)
+ * filled ~47 % of the screen height for VOLT-KITE (~70 % for MOLO's long body) — far more monster than
+ * the reference's late frames — and hid most of the map behind the body.
+ * Two on-screen measures (growthseq.py projects both through the live camera):
+ *   foot→head — the titan's base-to-crown segment (≈ 0.59 × H / (D·K) at the 54° pitch)
+ *   silhouette — the vertical extent of the whole posed body (long bodies read 2.4–3.4× foot→head)
+ * Current curve (frac1 0.066, fracV 0.20) — D / foot→head share on screen (framing_table.ts prints
+ * every level; the README camera table has the measured silhouette shares):
+ *   LV  1  H 1.2  D  34 m  3.9 % (a whole intersection, the baby titan on its zebra)
+ *   LV  6  H 2.7  D  55 m  5.3 %  → LV  7 (Size II)  H  5.0  D  83 m  6.6 %
+ *   LV 15  H 9.9  D 134 m  8.1 %  → LV 16 (Size III) H 14    D 173 m  8.9 %
+ *   LV 26  H 24   D 265 m 10.0 %  → LV 27 (Size IV)  H 32    D 331 m 10.6 %
+ *   LV 34  H 47   D 457 m 11.3 %  → LV 35 (Size V)   H 60    D 560 m 11.8 %  · LV 37+ H 67 D 617 m 11.9 %
+ * frac1 0.066 (was 0.062): this working tree's Size I economy sat at the top of GATE 2's 60–150 s
+ * Size II band (seed 1337 at the old 0.062: two runs at 152 / 167 s); a 6 % tighter Size I view puts
+ * the off-screen spawn ring nearer and brings seeds 1337 / 7 / 99 / 11 / 23 / 41 to a 139–146 s worst.
+ * The spawn ring (ai/enemies.ts) reads the same curve; while a boss is alive the director widens it
+ * (bossFrameNeed / BOSS_FRAME, never below the curve) and the camera follows that widening too.
  */
 export const FRAMING = {
-  startFrac: [0.045, 0.070, 0.085, 0.115, 0.210] as readonly number[],
-  endFrac:   [0.130, 0.170, 0.180, 0.190, 0.225] as readonly number[],
+  /** reference body height (m, Size I at LV 1) and its analytic share H / (D·K) there */
+  h1: 1.2, frac1: 0.066,
+  /** log-log slope of D*(H) at LV 1 (= the round-1 single-k curve through Size I) */
+  k1: 0.573,
+  /** Size V entry body height (m) and its analytic share there */
+  hV: 60, fracV: 0.20,
 } as const;
 /** Player zoom (view-only; the sim never reads it): a multiplier on the auto distance, clamped to
- *  [ZOOM_MIN, ZOOM_MAX] and to the absolute band D_ABS_MIN ≤ D ≤ D_ABS_MAX (m). The far end is where
- *  the whole city already fits and the frame budget still holds (perfcheck --zoom max). */
+ *  [ZOOM_MIN, ZOOM_MAX] and to the absolute band D_ABS_MIN ≤ D ≤ D_ABS_MAX (m). The far cap binds
+ *  from LV 34 on (the curve passes 440 m there and is 560–617 m at Size V, so the zoom-out tops out
+ *  at 880 m ≈ 1.4–1.6×): at 880 m the whole district (≤ 14 × 72 m blocks) already fits the view, the
+ *  sun's shadow box (render/lighting.ts) is sized to cover exactly that view (half-size ≤ 860 m), and the
+ *  frame budget is measured there (perfcheck --zoom max). LV 1–33 keep the full 2×. */
 export const CAMERA_ZOOM = {
   min: 0.55, max: 2.0,
   dAbsMin: 12, dAbsMax: 880,
@@ -353,37 +378,310 @@ export const CAMERA_ZOOM = {
 } as const;
 
 const CAM_K = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
-/** in-rank framing exponent limits (k < 0 = the camera eases IN while the body grows) */
-const FRAME_K_MIN = -1.2, FRAME_K_MAX = 1;
-/** Per-rank {H0, k} derived from FRAMING and the sim's growth curve (see FRAMING). */
-const RANK_FRAME: readonly { H0: number; k: number }[] = RANKS.map((R, r) => {
-  const L0 = RANK_LEVELS[r] ?? 1;
-  const L1 = r < 4 ? (RANK_LEVELS[r + 1] ?? L0 + 1) - 1 : L0 + RANK_V_GROWTH_LEVELS;
-  const H0 = titanHeightAt(r as RankIndex, L0) || R.height;
-  const H1 = titanHeightAt(r as RankIndex, Math.max(L0, L1)) || H0;
-  const g = H1 / H0;
-  const f = FRAMING.endFrac[r] / FRAMING.startFrac[r];
-  const k = g > 1.02 ? 1 - Math.log(f) / Math.log(g) : 1;
-  return { H0, k: Math.max(FRAME_K_MIN, Math.min(FRAME_K_MAX, k)) };
-});
-
-/** AUTO camera distance D* (m) from the look target for a body height at a rank (no player zoom, no
- *  punch) — see FRAMING. The camera rig springs toward it; the SIM's enemy spawn ring reads it too
- *  (ai/enemies.ts ringRadius), so foes still walk in from off-screen at the default zoom. */
-export function cameraDistance(height: number, rank: RankIndex): number {
-  const r = Math.max(0, Math.min(RANKS.length - 1, rank | 0));
-  const F = RANK_FRAME[r];
-  const H = Math.max(0.05, Number.isFinite(height) ? height : F.H0);
-  return F.H0 / (FRAMING.startFrac[r] * CAM_K) * Math.pow(H / F.H0, F.k);
+/** the run-long framing curve's constants, derived from FRAMING: LV 1 distance, the slope at LV 1 and
+ *  the slope's growth (see FRAMING) */
+const FRAME_D1 = FRAMING.h1 / (FRAMING.frac1 * CAM_K);
+const FRAME_XV = Math.log(FRAMING.hV / FRAMING.h1);
+const FRAME_C = (Math.log(FRAMING.hV / (FRAMING.fracV * CAM_K) / FRAME_D1) - FRAMING.k1 * FRAME_XV) / (FRAME_XV * FRAME_XV);
+/** local log-log slope of the curve at body height H (0 < k < 1 keeps the share rising) */
+function frameSlope(H: number): number {
+  return FRAMING.k1 + 2 * FRAME_C * Math.max(0, Math.log(Math.max(1e-6, H) / FRAMING.h1));
+}
+// the whole growth range (≤ Size V's cap, with room for rank-V growth tuning) must keep 0 < k < 1
+{
+  const kHi = frameSlope(FRAMING.hV * 1.5);
+  if (!(FRAMING.k1 > 0 && FRAME_C >= 0 && kHi < 1)) {
+    throw new Error(`FRAMING: slope must stay in (0, 1) — k1 ${FRAMING.k1} c ${FRAME_C} k(1.5·hV) ${kHi}`);
+  }
 }
 
-/** Screen-height fraction a body height H occupies at the AUTO distance (no zoom, no punch). */
-export function autoFrameFrac(height: number, rank: RankIndex): number {
-  return height / (cameraDistance(height, rank) * CAM_K);
+/** AUTO camera distance D* (m) from the look target for a body height (no player zoom, no punch, no
+ *  boss widening) — see FRAMING. Smooth and non-decreasing in H for the whole run; `rank` is accepted
+ *  for old callers and ignored. The camera rig springs toward it; the SIM's spawn ring reads it too
+ *  (ai/enemies.ts frameDistance), so foes walk in from off-screen at the default zoom. */
+export function cameraDistance(height: number, _rank?: RankIndex): number {
+  const H = Math.max(0.05, Number.isFinite(height) ? height : FRAMING.h1);
+  const x = Math.log(H / FRAMING.h1);
+  const xp = x > 0 ? x : 0;
+  return FRAME_D1 * Math.exp(FRAMING.k1 * x + FRAME_C * xp * xp);
 }
 
-/** The derived per-rank framing (H0, k) — for probes / the debug overlay. */
-export function framingTable(): readonly { H0: number; k: number }[] { return RANK_FRAME; }
+/** Analytic share of the view height a body height H occupies at the AUTO distance (H / (D*·K)). */
+export function autoFrameFrac(height: number, _rank?: RankIndex): number {
+  return height / (cameraDistance(height) * CAM_K);
+}
+
+/** The framing curve's constants (for probes / the debug overlay): D1, h1, the LV 1 slope k (= k1),
+ *  the slope growth c, and the local slope at Size V entry (kV). */
+export function framingCurve(): { D1: number; h1: number; k: number; c: number; kV: number } {
+  return { D1: FRAME_D1, h1: FRAMING.h1, k: FRAMING.k1, c: FRAME_C, kV: frameSlope(FRAMING.hV) };
+}
+/** @deprecated per-rank view of the single curve (H0 = RANKS[r].height, k = the curve's local slope there). */
+export function framingTable(): readonly { H0: number; k: number }[] {
+  return RANKS.map((R) => ({ H0: R.height, k: frameSlope(R.height) }));
+}
+
+/** Visible ground footprint around the look target in units of D·K (a trapezoid at the camera
+ *  pitch): n = near (bottom) edge, f = far (top) edge, hn / hf = half-widths at those edges,
+ *  s = (hf − hn) / (n + f). Aspect = width / height of the view. */
+export function viewFootprint(pitchDeg: number, aspect = 16 / 9): { n: number; f: number; hn: number; hf: number; s: number } {
+  const al = (CAMERA.fovDeg * Math.PI) / 360, p = (pitchDeg * Math.PI) / 180;
+  const h = Math.sin(p), b = Math.cos(p), tw = Math.max(0.3, aspect) * Math.tan(al) * Math.cos(al);
+  const n = (b - h / Math.tan(p + al)) / CAM_K;
+  const f = (p - al > 0.05 ? h / Math.tan(p - al) - b : 4) / CAM_K;
+  const hn = (h / Math.sin(p + al)) * tw / CAM_K;
+  const hf = (p - al > 0.05 ? (h / Math.sin(p - al)) * tw : 4) / CAM_K;
+  return { n, f, hn, hf, s: (hf - hn) / (n + f) };
+}
+
+/** BOSS FRAMING: while a boss is alive the default-zoom view keeps the boss rig, every live boss
+ *  telegraph AND the titan in frame (16:9): first by widening the auto distance (never below the
+ *  curve); when the fight is lopsided (a paw-slam ring 2 H around a boss 60 m away, a 3 H breath cone)
+ *  the look target also slides toward the fight's centre, which frames the same paint from far closer
+ *  than widening alone (a paw slam needed the 2× cap without the slide). Measured at LV 37, curve 617 m
+ *  (_harness/scratch/view/bossframe.py, tell 70–92 % through its windup, every framed point in view):
+ *  paw slam 659 m · breath cone 618 m · boom sweep, leg stomp, winch, ridge charge 617 m (the curve).
+ *  (At the round-1 362 m curve the same attacks needed 428–647 m.)
+ *  margin — × the tightest fit (screen-edge breathing room + the corner HUD panels + the camera's lead)
+ *  topNdc — nothing framed above this height of the frame (ndc y): the boss nameplate + hint bar sit
+ *           across the top ~20 % of the screen and hid the titan's head in a paw-slam shot
+ *  maxMul — never wider than this × the curve (a boss walking in from 230 m, a far chase)
+ *  holdS / releaseOmega — the director holds a widening this long after it is no longer needed,
+ *  then eases back at this rate (1/s), so the camera does not pump in and out with every attack
+ *  offsetOmega — the director eases the look-target offset toward its target at this rate (1/s). */
+export const BOSS_FRAME = { margin: 1.12, topNdc: 0.58, maxMul: 2.0, holdS: 1.6, releaseOmega: 1.0, offsetOmega: 3.5 } as const;
+
+/** scratch for bossFrameNeed: the framed points relative to the titan (world dx, dz, height y) and the
+ *  same points in screen-aligned ground metres (u across, v toward the top of the screen, v including
+ *  the height lift y·cot(pitch)) for the cheap footprint estimate that picks the look-target offset */
+const BF_X: number[] = [], BF_Z: number[] = [], BF_Y: number[] = [];
+const BF_U: number[] = [], BF_V: number[] = [];
+const BF_OUT = { d: 0, ox: 0, oz: 0 };
+const BF = { n: 0, dLo: 0, dHi: 0, ty: 0, ox: 0, oy: 0, oz: 0, ux: 0, uy: 0, uz: 0, rx: 0, rz: 0 };
+const BF_TAN = Math.tan((CAMERA.fovDeg * Math.PI) / 360), BF_ASPECT = 16 / 9;
+/** Tightest framing need (in units of D·K) of the scratch points around the screen-space centre (u0, v0)
+ *  from the ground-footprint trapezoid (an estimate — picks the offset; the distance is fitted exactly). */
+function bfNeed(n: number, u0: number, v0: number, FP: { n: number; f: number; hn: number; s: number }): number {
+  let need = 0;
+  const den = FP.hn + FP.s * FP.n;
+  for (let i = 0; i < n; i++) {
+    const v = BF_V[i] - v0, u = Math.abs(BF_U[i] - u0);
+    let k = v > 0 ? v / FP.f : -v / FP.n;
+    const kw = (u - FP.s * v) / den;
+    if (kw > k) k = kw;
+    if (k > need) need = k;
+  }
+  return need;
+}
+/** How far the scratch points reach toward the frame edges for the default-zoom camera (the rank's
+ *  pitch, fixed yaw, 16:9) at distance D looking at the titan + (ox, oz) at the rig's target height — the
+ *  projection the spawn ring uses (ai/enemies.ts screenOut) — as a fraction of the usable frame:
+ *  |ndc x| and the bottom × BOSS_FRAME.margin, the top against BOSS_FRAME.topNdc. ≤ 1 = framed. */
+function bfNdc(D: number, ox: number, oz: number): number {
+  const cx = ox + D * BF.ox, cy = BF.ty + D * BF.oy, cz = oz + D * BF.oz;
+  let m = 0;
+  for (let i = 0; i < BF.n; i++) {
+    const dx = BF_X[i] - cx, dy = BF_Y[i] - cy, dz = BF_Z[i] - cz;
+    const depth = -(dx * BF.ox + dy * BF.oy + dz * BF.oz);
+    if (!(depth > 0.1)) return Infinity;
+    const sx = Math.abs((dx * BF.rx + dz * BF.rz) / depth) / (BF_TAN * BF_ASPECT) * BOSS_FRAME.margin;
+    const syr = (dx * BF.ux + dy * BF.uy + dz * BF.uz) / depth / BF_TAN;
+    const sy = syr > 0 ? syr / BOSS_FRAME.topNdc : -syr * BOSS_FRAME.margin;
+    if (sx > m) m = sx; if (sy > m) m = sy;
+  }
+  return m;
+}
+/** Smallest distance in [dLo, dHi] (the curve … maxMul × the curve) at which every scratch point sits
+ *  inside the usable frame around the offset (bfNdc ≤ 1; bisection; dHi when even that fails). */
+function bfFit(ox: number, oz: number): number {
+  const lim = 1;
+  if (bfNdc(BF.dLo, ox, oz) <= lim) return BF.dLo;
+  let lo = BF.dLo, hi = BF.dHi;
+  if (bfNdc(hi, ox, oz) > lim) return hi;
+  for (let it = 0; it < 16; it++) {
+    const mid = (lo + hi) / 2;
+    if (bfNdc(mid, ox, oz) <= lim) hi = mid; else lo = mid;
+  }
+  return hi;
+}
+
+/** What the boss framing needs this tick (d = 0 when no boss): the smallest distance d and look-target
+ *  offset (ox, oz from the titan, world metres) that keep the boss rig (every part's ground circle and
+ *  its top), every live boss-owned telegraph and the titan itself inside the default-zoom frame with
+ *  BOSS_FRAME.margin to spare (projected exactly through the rig's camera), d between the curve and
+ *  maxMul × it. No offset while the curve's own view (centred on the titan) already holds everything;
+ *  otherwise the smallest shift toward the fight's centre that does (or the full centring, widened).
+ *  THREE-free and deterministic: the director eases/holds it (director.data.bossFrameD / bossFrameOx /
+ *  bossFrameOz) for the spawn ring AND the camera. The returned object is reused. */
+export function bossFrameNeed(w: World): { d: number; ox: number; oz: number } {
+  BF_OUT.d = 0; BF_OUT.ox = 0; BF_OUT.oz = 0;
+  BF.n = 0;
+  const b = w.boss;
+  if (!b || !b.alive) return BF_OUT;
+  const T = w.titan;
+  const pitch = RANKS[T.rank]?.pitchDeg ?? 54;
+  const FP = viewFootprint(pitch);
+  const pr = (pitch * Math.PI) / 180, cot = 1 / Math.tan(pr);
+  const yaw = (CAMERA.yawDeg * Math.PI) / 180, sy = Math.sin(yaw), cy = Math.cos(yaw);
+  const cp = Math.cos(pr), sp = Math.sin(pr);
+  BF.ox = cp * sy; BF.oy = sp; BF.oz = cp * cy;          // target → camera (unit)
+  BF.ux = -sp * sy; BF.uy = cp; BF.uz = -sp * cy;        // camera up
+  BF.rx = cy; BF.rz = -sy;                                // camera right
+  BF.ty = T.height * CAMERA.targetYFrac;
+  const cx = T.x, cz = T.z;
+  let n = 0;
+  const pt = (x: number, z: number, y: number): void => {
+    const dx = x - cx, dz = z - cz;
+    if (!Number.isFinite(dx) || !Number.isFinite(dz)) return;
+    const yy = Math.max(0, Number.isFinite(y) ? y : 0);
+    BF_X[n] = dx; BF_Z[n] = dz; BF_Y[n] = yy;
+    BF_U[n] = dx * cy - dz * sy;                          // across the screen
+    BF_V[n] = -(dx * sy + dz * cy) + yy * cot;            // + = toward the top of the screen
+    n++;
+  };
+  const R = Math.max(0.5, T.radius || T.height * TITAN_RADIUS_PER_H);
+  pt(cx + R, cz, 0); pt(cx - R, cz, 0); pt(cx, cz + R, 0); pt(cx, cz - R, 0); pt(cx, cz, T.height);
+  for (let i = 0; i < b.parts.length; i++) {
+    const p = b.parts[i];
+    pt(p.x + p.r, p.z, 0); pt(p.x - p.r, p.z, 0); pt(p.x, p.z + p.r, 0); pt(p.x, p.z - p.r, 0);
+    pt(p.x, p.z, p.y1);
+  }
+  for (let i = 0; i < w.telegraphs.length; i++) {
+    const tg = w.telegraphs[i];
+    if (!tg.alive || tg.owner !== 'boss') continue;
+    shapePoints(tg.shape, pt);
+  }
+  BF.n = n;
+  const dCurve = cameraDistance(T.height);
+  BF.dLo = dCurve; BF.dHi = BOSS_FRAME.maxMul * dCurve;
+  const d0 = bfFit(0, 0);
+  let d = d0, ox = 0, oz = 0;
+  if (d0 > dCurve) {
+    // the fight's centre in screen terms (footprint estimate), then fitted exactly
+    let umin = Infinity, umax = -Infinity, vmin = Infinity, vmax = -Infinity;
+    for (let i = 0; i < n; i++) {
+      if (BF_U[i] < umin) umin = BF_U[i]; if (BF_U[i] > umax) umax = BF_U[i];
+      if (BF_V[i] < vmin) vmin = BF_V[i]; if (BF_V[i] > vmax) vmax = BF_V[i];
+    }
+    // usable frame: the bottom at 1 / margin, the top at topNdc (the nameplate) — as ground reach
+    const ta = Math.tan((CAMERA.fovDeg * Math.PI) / 360);
+    const bTop = Math.atan(BOSS_FRAME.topNdc * ta), bBot = Math.atan(ta / BOSS_FRAME.margin);
+    const fU = pr - bTop > 0.05 ? sp / Math.tan(pr - bTop) - cp : 4, nU = cp - sp / Math.tan(pr + bBot);
+    const uc = (umin + umax) / 2, vc0 = (fU * vmin + nU * vmax) / (nU + fU);
+    // screen (u, v) → world: u along (cos yaw, −sin yaw), v along (−sin yaw, −cos yaw)
+    let oxc = 0, ozc = 0, d1 = Infinity;
+    const span = Math.max(1, vmax - vmin);
+    for (let j = -2; j <= 2; j++) {
+      const vc = vc0 + j * 0.08 * span;
+      const x = uc * cy - vc * sy, z = -uc * sy - vc * cy;
+      const dj = bfFit(x, z);
+      if (dj < d1 - 1e-6) { d1 = dj; oxc = x; ozc = z; }
+    }
+    if (d1 < d0) {
+      if (d1 <= dCurve) {
+        // the curve's own distance suffices with part of the shift: the smallest such shift
+        const lim = 1;
+        let lo = 0, hi = 1;
+        for (let it = 0; it < 10; it++) {
+          const s = (lo + hi) / 2;
+          if (bfNdc(dCurve, oxc * s, ozc * s) <= lim) hi = s; else lo = s;
+        }
+        ox = oxc * hi; oz = ozc * hi; d = dCurve;
+      } else { ox = oxc; oz = ozc; d = d1; }
+    }
+  }
+  BF_OUT.d = d; BF_OUT.ox = ox; BF_OUT.oz = oz;
+  return BF_OUT;
+}
+
+/** Distance (m) that frames the points of the LAST bossFrameNeed call (same tick) around a given
+ *  look-target offset (world m from the titan) — the director uses it for the offset the rig actually
+ *  has while it is still sliding toward the need's, so the frame never clips mid-slide. 0 when that
+ *  call had no boss. */
+export function bossFrameFitAt(ox: number, oz: number): number {
+  if (BF.n <= 0) return 0;
+  return bfFit(ox, oz);
+}
+
+/** The framing distance everything default-zoom follows (m): the curve, widened while a boss is alive
+ *  by the director's held boss framing (director.data.bossFrameD). The sim's spawn ring and the
+ *  camera rig both read THIS, so spawns stay off-screen through a boss fight. Deterministic. */
+export function frameDistance(w: World): number {
+  const d = cameraDistance(w.titan.height);
+  const b = w.boss;
+  if (!b || !b.alive) return d;
+  const bd = w.director.data.bossFrameD;
+  return Number.isFinite(bd) && bd > d ? bd : d;
+}
+
+/** Look-target offset (world m, from the titan) of the default-zoom framing: the director's eased
+ *  boss framing offset while a boss is alive, else 0. The spawn ring and the camera read it. */
+const FO = { x: 0, z: 0 };
+export function frameOffset(w: World): { x: number; z: number } {
+  FO.x = 0; FO.z = 0;
+  const b = w.boss;
+  if (!b || !b.alive) return FO;
+  const ox = w.director.data.bossFrameOx, oz = w.director.data.bossFrameOz;
+  if (Number.isFinite(ox) && Number.isFinite(oz)) { FO.x = ox; FO.z = oz; }
+  return FO;
+}
+
+/** The default-zoom view the camera is SHOWING, as the sim can know it (m / world m from the titan):
+ *  distance = max(frameDistance, the director's replica of the rig's distance spring) and the rig's
+ *  smoothed look-target offset (director.data.camD / camOx / camOz, stepped with CAMERA.zoomOmega /
+ *  frameOffOmega while a boss is alive). The rig lags a boss-framing RELEASE (it is still wider than
+ *  frameDistance) and a slide of the offset — the spawn ring must stay off THAT view, not the target's.
+ *  Without a boss it is exactly the curve centred on the titan (the rig only lags growth, which is
+ *  narrower = safe). Deterministic; the returned object is reused. */
+const SV = { d: 0, ox: 0, oz: 0 };
+export function spawnView(w: World): { d: number; ox: number; oz: number } {
+  SV.d = frameDistance(w); SV.ox = 0; SV.oz = 0;
+  const b = w.boss;
+  if (!b || !b.alive) return SV;
+  const dat = w.director.data;
+  if (Number.isFinite(dat.camD) && dat.camD > SV.d) SV.d = dat.camD;
+  if (Number.isFinite(dat.camOx) && Number.isFinite(dat.camOz)) { SV.ox = dat.camOx; SV.oz = dat.camOz; }
+  return SV;
+}
+
+/** Outline sample points of an area shape (ground level). */
+function shapePoints(s: Shape, pt: (x: number, z: number, y: number) => void): void {
+  switch (s.k) {
+    case 'circle': case 'ring': {
+      const r = s.k === 'circle' ? s.r : s.r1;
+      for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4; pt(s.x + Math.sin(a) * r, s.z + Math.cos(a) * r, 0); }
+      break;
+    }
+    case 'cone': {
+      pt(s.x, s.z, 0);
+      for (let i = 0; i <= 6; i++) { const a = s.dir - s.half + (2 * s.half * i) / 6; pt(s.x + Math.sin(a) * s.r, s.z + Math.cos(a) * s.r, 0); }
+      break;
+    }
+    case 'lane': {
+      const fx = Math.sin(s.dir), fz = Math.cos(s.dir), h = s.w / 2;
+      const ex = s.x + fx * s.len, ez = s.z + fz * s.len;
+      pt(s.x + fz * h, s.z - fx * h, 0); pt(s.x - fz * h, s.z + fx * h, 0);
+      pt(ex + fz * h, ez - fx * h, 0); pt(ex - fz * h, ez + fx * h, 0);
+      break;
+    }
+    case 'oval': {
+      const fx = Math.sin(s.rot), fz = Math.cos(s.rot);
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4, lx = Math.sin(a) * s.rx, lz = Math.cos(a) * s.rz;
+        pt(s.x + lx * fz + lz * fx, s.z - lx * fx + lz * fz, 0);
+      }
+      break;
+    }
+    case 'capsule': {
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4, ox = Math.sin(a) * s.r, oz = Math.cos(a) * s.r;
+        pt(s.x0 + ox, s.z0 + oz, 0); pt(s.x1 + ox, s.z1 + oz, 0);
+      }
+      break;
+    }
+    default: break;
+  }
+}
 
 /** Near/far planes that keep depth precision sane across a 30× zoom range. */
 export function cameraClip(distance: number): { near: number; far: number } {

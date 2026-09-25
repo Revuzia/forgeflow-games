@@ -1,13 +1,16 @@
 // BLOCKTOOTH — camera rig (CONTRACT.md §4 + the 2026-09-24 GROW-INTO-THE-FRAME framing). render-core lane.
 //
 //   k      = 2·tan(fov/2), fov = 30°
-//   D*(H,r)= cameraDistance(H, rank)  (config.ts FRAMING — this file only springs toward it):
-//            D*(H, r) = H0[r] / (FRAMING.startFrac[r]·k) · (H / H0[r])^kr,   H0 = RANKS[r].height
-//            The distance is keyed to the rank's START height and follows H only with an exponent
-//            well below 1, so the body GROWS INTO THE FRAME level by level (screen fraction
-//            = startFrac·(H/H0)^(1−k)); a rank-up (new H0, small startFrac again) pulls the camera
-//            back so the new, bigger world fits — the "grow, then the world pulls back" rhythm.
-//            The SIM's spawn ring reads the same cameraDistance (zoom excluded — deterministic).
+//   D*     = frameDistance(w)  (config.ts FRAMING — this file only springs toward it):
+//            ONE run-long curve, ln D*(H) = ln D1 + k1·x + c·x² with x = ln(H/h1): a power law whose
+//            log-log slope eases from 0.573 at LV 1 (D1 ≈ 34 m) to ≈ 0.86 at Size V (≈ 560–617 m) and
+//            stays < 1, so the body's share of the view, H / (D*·k), RISES with every level and every
+//            MASS BREACH and the camera never moves in as the titan grows (no per-rank reset). While a boss
+//            is alive the director widens it just enough for the boss rig + every live boss telegraph
+//            + the titan (config bossFrameNeed, held + released smoothly, never below the curve, ≤ 2×
+//            it) and, when the fight is lopsided, slides the look target toward the fight's centre
+//            (frameOffset, eased by the director at 3.5/s and smoothed here at 5/s).
+//            The SIM's spawn ring reads the same frameDistance (zoom excluded — deterministic).
 //   D      ← critically-damped spring toward D*, ω = 4/s (solved in closed form per frame, so a
 //            long frame cannot overshoot or explode)
 //   zoom   : player zoom MULTIPLIER on D (wheel / = - / pad right stick; Z resets; reset on a new
@@ -31,7 +34,7 @@
 import type * as THREE from 'three';
 import type { World, SimEvent, RankIndex } from '../core/types.ts';
 import type { FrameInfo, Quality } from './viewtypes.ts';
-import { CAMERA, CAMERA_ZOOM, RANKS, cameraClip, cameraDistance } from '../core/config.ts';
+import { CAMERA, CAMERA_ZOOM, RANKS, cameraClip, cameraDistance, frameDistance, frameOffset } from '../core/config.ts';
 import { easeOutCubic } from '../core/math.ts';
 
 const DEG = Math.PI / 180;
@@ -41,6 +44,9 @@ const SIN_YAW = Math.sin(YAW), COS_YAW = Math.cos(YAW);
 
 /** smoothing rates (1/s) — CONTRACT §4 */
 const LEAD_OMEGA = 6;
+/** boss-framing look-target offset: smooths the sim's 30 Hz eased value and the release after a boss
+ *  (config CAMERA.frameOffOmega — the director replicates it for the spawn ring) */
+const FRAME_OFF_OMEGA = CAMERA.frameOffOmega;
 const PITCH_OMEGA = 3;
 /** trauma decay per second (linear), displacement = trauma² × SHAKE_MAX_H × H */
 const TRAUMA_DECAY = 1.6;
@@ -51,10 +57,11 @@ const SHAKE_MAX_ROLL = 0.018;
 const LEAD_MAX_FRAC = 0.22;
 
 // ─────────────────────────────── framing + zoom (constants live in core/config.ts) ───────────────────────────────
-/** The AUTO distance is config.ts cameraDistance (FRAMING: the body grows into the frame level by
- *  level; each breach pulls back). Re-exported under the view lane's names for the harnesses. */
+/** The AUTO distance is config.ts cameraDistance (FRAMING: one run-long curve of body height; the
+ *  rig itself follows frameDistance = the curve widened for a live boss). Re-exported under the view
+ *  lane's names for the harnesses. */
 export const autoDistance = cameraDistance;
-export { FRAMING, CAMERA_ZOOM, autoFrameFrac, framingTable } from '../core/config.ts';
+export { FRAMING, CAMERA_ZOOM, BOSS_FRAME, autoFrameFrac, framingCurve, framingTable, frameDistance, frameOffset } from '../core/config.ts';
 export const ZOOM_MIN = CAMERA_ZOOM.min;
 export const ZOOM_MAX = CAMERA_ZOOM.max;
 export const D_ABS_MIN = CAMERA_ZOOM.dAbsMin;
@@ -91,6 +98,7 @@ export class CameraRig {
   private zoomLogT = 0;      // target ln(zoom multiplier)
   private pitch = RANKS[0].pitchDeg * DEG;
   private leadX = 0; private leadZ = 0;
+  private offX = 0; private offZ = 0;   // boss-framing look-target offset (config frameOffset), smoothed
   private tx = 0; private ty = 0; private tz = 0;
   private punchT = -1;       // < 0 = inactive
   private trauma = 0;
@@ -145,13 +153,15 @@ export class CameraRig {
   reset(w: World): void {
     const T = w.titan;
     const H = Math.max(0.1, T.height);
-    this.d = autoDistance(H, T.rank);
+    this.d = frameDistance(w);
     this.dv = 0;
     this.zoomLog = this.zoomLogT = 0;            // a new run starts at the automatic framing
     this.dRender = this.d;
     this.pitch = this.pitchFor(T.rank);
     this.leadX = 0; this.leadZ = 0;
-    this.tx = T.x; this.tz = T.z; this.ty = H * CAMERA.targetYFrac;
+    const fo = frameOffset(w);
+    this.offX = fo.x; this.offZ = fo.z;
+    this.tx = T.x + fo.x; this.tz = T.z + fo.z; this.ty = H * CAMERA.targetYFrac;
     this.punchT = -1;
     this.trauma = 0;
     this.lastRank = T.rank;
@@ -173,7 +183,7 @@ export class CameraRig {
     }
 
     // ── distance: critically damped spring toward D*, exact solution over dt ──
-    const dStar = autoDistance(H, rank);
+    const dStar = frameDistance(w);
     const om = CAMERA.zoomOmega;
     if (dt > 0) {
       const x0 = this.d - dStar;
@@ -209,8 +219,12 @@ export class CameraRig {
     const kl = 1 - Math.exp(-LEAD_OMEGA * dt);
     this.leadX += (lx - this.leadX) * kl;
     this.leadZ += (lz - this.leadZ) * kl;
-    this.tx = x + this.leadX;
-    this.tz = z + this.leadZ;
+    const fo = frameOffset(w);
+    const ko = 1 - Math.exp(-FRAME_OFF_OMEGA * dt);
+    this.offX += (fo.x - this.offX) * ko;
+    this.offZ += (fo.z - this.offZ) * ko;
+    this.tx = x + this.leadX + this.offX;
+    this.tz = z + this.leadZ + this.offZ;
     this.ty = H * CAMERA.targetYFrac;
 
     // ── pitch ──

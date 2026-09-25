@@ -18,7 +18,7 @@
 //     budget does not bank; timers keep running so switching it off resumes the schedule.
 
 import type { DirectorState, EnemyKind, World } from '../core/types.ts';
-import { BOSS_AT_S, CITY, DIRECTOR_BUDGET_RANK_MUL, ELITE_AT_S } from '../core/config.ts';
+import { BOSS_AT_S, BOSS_FRAME, CAMERA, CITY, DIRECTOR_BUDGET_RANK_MUL, ELITE_AT_S, bossFrameFitAt, bossFrameNeed, frameDistance } from '../core/config.ts';
 import { TAU, clamp } from '../core/math.ts';
 import { BIOMES } from '../data/biomes.ts';
 import { ENEMIES } from '../data/enemies.ts';
@@ -225,9 +225,56 @@ function spawnElite(w: World): void {
 
 // ─────────────────────────────── step ───────────────────────────────
 /** Waves, elite and boss scheduling + run.phase transitions (stepWorld, after stepTitan). */
+/** BOSS FRAMING (config BOSS_FRAME / bossFrameNeed): hold the widest distance the boss, its live
+ *  telegraphs and the titan needed, release it after BOSS_FRAME.holdS at BOSS_FRAME.releaseOmega; ease
+ *  the look-target offset toward the need's at BOSS_FRAME.offsetOmega. The spawn ring and the camera
+ *  read the result through config frameDistance / frameOffset (never below the curve); the ring reads
+ *  spawnView, which adds a replica of the rig's own smoothing (camD / camOx / camOz). */
+function stepBossFrame(w: World): void {
+  const D = w.director, dat = D.data;
+  const b = w.boss;
+  if (!b || !b.alive) {
+    if (dat.bossFrameD) { dat.bossFrameD = 0; dat.bossFrameHoldT = 0; dat.bossFrameHeld = 0; dat.bossFrameOx = 0; dat.bossFrameOz = 0; }
+    dat.camD = 0; dat.camDv = 0; dat.camOx = 0; dat.camOz = 0;
+    return;
+  }
+  const dt = w.dt;
+  const need = bossFrameNeed(w);
+  // the look-target offset eases toward the need's
+  const ko = 1 - Math.exp(-BOSS_FRAME.offsetOmega * dt);
+  const ox0 = dat.bossFrameOx ?? 0, oz0 = dat.bossFrameOz ?? 0;
+  const ox = ox0 + (need.ox - ox0) * ko, oz = oz0 + (need.oz - oz0) * ko;
+  dat.bossFrameOx = ox; dat.bossFrameOz = oz;
+  // the distance the need asks for is HELD (no pumping between attacks), then released
+  const cur = dat.bossFrameHeld ?? 0;
+  if (need.d >= cur) { dat.bossFrameHeld = need.d; dat.bossFrameHoldT = 0; }
+  else {
+    const held = (dat.bossFrameHoldT ?? 0) + dt;
+    dat.bossFrameHoldT = held;
+    if (held > BOSS_FRAME.holdS) dat.bossFrameHeld = cur + (need.d - cur) * (1 - Math.exp(-BOSS_FRAME.releaseOmega * dt));
+  }
+  // replica of the camera rig (render/camera.ts) offset smoothing: the rig's look target lags the
+  // eased offset, so what the paint needs around THAT centre is a floor on the distance (not held —
+  // it melts away as the slide lands), and the spawn ring (config spawnView) reads the same centre
+  const kc = 1 - Math.exp(-CAMERA.frameOffOmega * dt);
+  dat.camOx = (dat.camOx ?? 0) + (ox - (dat.camOx ?? 0)) * kc;
+  dat.camOz = (dat.camOz ?? 0) + (oz - (dat.camOz ?? 0)) * kc;
+  dat.bossFrameD = Math.max(dat.bossFrameHeld, bossFrameFitAt(dat.camOx, dat.camOz));
+  // replica of the rig's critically damped distance spring (spawnView keeps the ring off the view the
+  // rig is STILL showing while it releases)
+  const dStar = frameDistance(w);
+  if (!(dat.camD > 0)) { dat.camD = dStar; dat.camDv = 0; }
+  else {
+    const om = CAMERA.zoomOmega, x0 = dat.camD - dStar, e = Math.exp(-om * dt), c = (dat.camDv ?? 0) + om * x0;
+    dat.camD = dStar + (x0 + c * dt) * e;
+    dat.camDv = (c - om * (x0 + c * dt)) * e;
+  }
+}
+
 export function stepDirector(w: World): void {
   const D = w.director, T = w.titan;
   if (w.run.result || !T.alive) return;
+  stepBossFrame(w);
 
   // schedule tightening from the titan's growth (never pushes a time later)
   if (T.rank >= 3 && D.data.rankIVT === undefined) {

@@ -159,19 +159,33 @@ table mirrors it.
 
 ```
 k      = 2·tan(fov/2),  fov = 30°
-D*(H,r)= H0[r] / (startFrac[r]·k) · (H / H0[r])^kr     // cameraDistance() in config.ts (FRAMING)
-         H0[r] = titanHeightAt(r, RANK_LEVELS[r]); startFrac = .045 .070 .085 .115 .210;
-         kr solved at load from titanHeightAt at the rank's first + last level so the body reaches
-         endFrac = .130 .170 .180 .190 .225 of the view height at the rank's last level
-         (kr = −0.33 / −0.30 / −0.37 / −0.29 / +0.39): the titan GROWS INTO THE FRAME level by level,
-         each breach resets to the small startFrac → the camera pulls back to the new, bigger world.
-D     ← critically-damped spring toward D*, ω = 4/s   // x'' = ω²(D*−x) − 2ω x'
+D*(H): ln D* = ln D1 + κ1·x + c·x², x = ln(H / h1)       // cameraDistance() in config.ts (FRAMING)
+         ONE run-long curve (no per-rank term): h1 = 1.2 m, frac1 = 0.066, κ1 = 0.573, hV = 60 m,
+         fracV = 0.20; D1 = h1 / (frac1·k) = 33.9 m; c = (ln(hV / (fracV·k) / D1) − κ1·xV) / xV² = 0.0367.
+         Local exponent κ(H) = κ1 + 2c·x: 0.573 at LV 1 → 0.86 at Size V, asserted in (0, 1) at load.
+         Analytic share H/(D*·k): 6.6 % at LV 1 → 20 % at the Size V entry. On screen (live camera,
+         zoom 1): foot→head 3.9 % → 11.9 % (12.0 % at LV 36); SILHOUETTE (every posed body vertex, 4
+         headings) VOLT-KITE 9.3 % → 28.2 %, MOLO 13.5 % → 40.7 %.
+         D* is non-decreasing in H and the share rises at every level and every MASS BREACH (the body
+         jumps × BREACH_JUMP, the camera follows the same curve and pulls back less): the camera never
+         moves in as the titan grows. (Replaced 2026-09-24: per-rank startFrac/endFrac framing made each
+         breach a sawtooth — 2.9–3.5× pull-back for a 1.3–1.9× body — and eased IN inside a rank; a
+         single κ = 0.573 then left the Size V silhouette at ~47 % (VOLT-KITE) / ~70 % (MOLO) of the
+         screen, so the slope now eases up with size while Size I — and the spawn ring — stay put.)
+frame  = frameDistance(w) = max(D*, director.data.bossFrameD while a boss is alive)
+         BOSS FRAMING (config bossFrameNeed / BOSS_FRAME, held by ai/director.ts): the smallest distance
+         (D* … 2·D*) and look-target offset (frameOffset) that keep the boss rig, every live boss-owned
+         telegraph and the titan inside the default-zoom frame — below ndc y 0.58 (the boss nameplate),
+         × 1.12 margin elsewhere — projected exactly through the rig's camera; the offset slides toward
+         the fight's centre only when the curve's view centred on the titan cannot hold it. Held 1.6 s,
+         released at 1/s; the offset eases at 3.5/s (and the rig smooths it at 5/s).
+D     ← critically-damped spring toward frame, ω = 4/s   // x'' = ω²(frame−x) − 2ω x'
 zoom   : player multiplier on D (view-only; the sim never reads it): wheel notch ±0.12 ln, '=' / '-'
          (numpad + / −) held 1.35 ln/s, gamepad right stick 1.5 ln/s, Z / R3 reset; ln-smoothed
          ω = CAMERA_ZOOM.omega 11/s; clamped to CAMERA_ZOOM.min 0.55 … max 2.0 and to
          dAbsMin 12 m ≤ D ≤ dAbsMax 880 m; kept through breaches, reset on a new run; ignored in 'ui' mode
 punch  : on rankUp, D is multiplied by (1 − 0.08·(1 − easeOutCubic(τ/1.2))) for τ∈[0,1.2] s
-target = titanPos(interp) + v·0.25 s + up·(H·0.45)   // lead along velocity, smoothed (ω = 6/s)
+target = titanPos(interp) + v·0.25 s + up·(H·0.45) + frameOffset   // lead smoothed (ω = 6/s); boss offset (ω = 5/s)
 pitch  = lerp toward RANKS[r].pitchDeg = 54° at every Size (ω = 3/s)
 yaw    = 45° fixed
 camPos = target + D·(cos pitch·sin yaw, sin pitch, cos pitch·cos yaw)
@@ -179,16 +193,25 @@ near/far = cameraClip(D)  → near = max(0.1, 0.02D), far = 6D + 400   (D = the 
 shake  : trauma model (amplitude² falloff 1.6/s); heavy footstep adds H·0.02·heavy, collapse
          adds per tier, boss slams add more; disabled by settings.screenShake
 ```
-Worked numbers (auto, first → last level of each Size): D = 49.8→38.2 / 133→109 / 307→251 / 519→464 /
-533→557 m; vertical view extent D·k = 26.7→20.5 / 71.4→58.2 / 165→135 / 278→249 / 286→299 m.
+Worked numbers (auto, first → last level of each Size): D = 33.9→54.9 / 82.8→134 / 173→265 / 331→457 /
+560→617 m; vertical view extent D·k = 18.2→29.4 / 44.4→71.7 / 92.7→142 / 177→245 / 300→331 m.
+dAbsMax 880 m binds the zoom-out from LV 34 (Size V tops out at ≈ 1.4–1.6×; the whole district fits).
+Boss framing at LV 37 (curve 617 m): only the paw slam widens (659 m); every other attack fits the curve.
+Telegraph x-ray (render/telegraphview.ts): never drawn through the titan's own body volume (bind-pose
+box in model space + 10 %, ray-tested per fragment) — the ground decal carries the warning there.
 Every LOD / fog / shadow / traffic / civilian consumer follows the ACTUAL distance (`rig.distance`,
 `FrameInfo.camDist`: zoom + punch included).
 Shadow camera (lighting.ts): orthographic box centred on the look target, half-size
 = 0.9·D·k·(aspect) clamped ≤ 860 m, depth = 3·D, re-fit every frame, texel-snapped to kill shimmer.
-**Spawn ring** (sim, `ai/enemies.ts`): reads the AUTO `cameraDistance` (zoom excluded — deterministic).
-New enemies appear just past the visible-ground edge in their direction (the 54°, 16:9 view footprint:
-near edge 0.52·D·k, far edge 0.77·D·k, half-widths 0.74 / 1.10·D·k, + 0.12·D·k for the lead) ×
-1.02–1.20; nominal ring `ringRadius` = max(14, D·k); recycled beyond 1.9 × the ring.
+**Spawn ring** (sim, `ai/enemies.ts`): reads `spawnView` (config) = `frameDistance` + the boss offset,
+with a director-side replica of the rig's distance spring and offset smoothing (a boss-framing release
+leaves the rig wider than `frame` for a moment) — zoom excluded, deterministic. Candidates sit just past
+the visible-ground edge in their direction (the 54°, 16:9 view footprint: near edge 0.52·D·k, far edge
+0.77·D·k, half-widths 0.74 / 1.10·D·k, + 0.04·D·k; fliers + 7 m) × 1.00–1.08, are street-snapped, then
+CHECKED through the default-zoom camera (`screenOut`: exact projection incl. the lead, point pulled 7 m
+toward the titan, must be ≥ 1.03 ndc); of 8 candidates the NEAREST off-screen one wins; if none is, the
+least-visible one walks outward along its street until it is. Nominal ring `ringRadius` = max(14, D·k);
+recycled beyond 1.9 × the ring. BULWARK squads are dropped where their (on-screen) APC stands.
 At the player's zoom-out the spawns are visible by design (the sim never reads the zoom): enemyview
 pops them in (0.32 s easeOutBack) and fx answers `enemySpawn` with a dust kick + a thin ground ring,
 only when the spawn point projects inside the view, at most 6 per frame.
