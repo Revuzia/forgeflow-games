@@ -6,6 +6,8 @@
 //   node _harness/probe_bots.ts --once           # a single match (no determinism runs)
 //   node _harness/probe_bots.ts --seconds 60     # shorter match (smoke; gates still printed, not a gate run)
 //   node _harness/probe_bots.ts --trace 3        # per-second trace of bot 3
+//   node _harness/probe_bots.ts --lineup mixed   # one of each kit per crew (MIST-RASP, SHEET-DRUM, NEEDLE-GLINT, POP-WELL)
+//                                                # (added by lane KITSIM for G10; roster only, bots unchanged)
 //
 // The human slot (id 0) is a bot too. Every tick: director.think(intents) → world.step(intents) →
 // world.drainEvents(). Gates (§10.3): both teams cover > 15 %, neutral < 55 %, ≥ 6 washes; no bot stuck
@@ -35,6 +37,9 @@ const ONCE = argv.includes('--once');
 const SECONDS = Number(arg('--seconds', '180'));
 const TRACE = Number(arg('--trace', '-1'));
 const QUIET = argv.includes('--quiet');
+const LINEUP = arg('--lineup', 'default');
+/** --lineup mixed: ids 0-3 SUNCREW and 4-7 GULF CREW each get mist-rasp, sheet-drum, needle-glint, pop-well */
+const MIXED_BOT_KITS = ['sheet-drum', 'needle-glint', 'pop-well', 'mist-rasp'];
 
 interface Check { name: string; pass: boolean; detail: string }
 const checks: Check[] = [];
@@ -66,7 +71,7 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
   const sc = def.scoring ?? { wallWeight: 0.35, floorMinNy: 0.45 };
   const atlas: PaintAtlas = buildAtlas(geo.paint, geo.atlasSize, { wallWeight: sc.wallWeight, floorMinNy: sc.floorMinNy });
   const painter = new Painter(atlas);
-  const roster = defaultRoster({ humanKit: 'mist-rasp', seed, skill });
+  const roster = defaultRoster({ humanKit: 'mist-rasp', seed, skill, botKits: LINEUP === 'mixed' ? MIXED_BOT_KITS : undefined });
   roster[0].bot = true;                                   // §10.3: the human slot is a bot too
   const world = new MatchWorld({ def, geo, physics, painter, roster, seed, durationS: seconds });
   const director = new BotDirector(world, nav, seed, skill);
@@ -226,6 +231,7 @@ async function main(): Promise<number> {
     const navPhysics = new PhysicsWorld(R, geo);
     nav = buildNav(geo, navPhysics, def);
     console.log(`map pier18 · nav ${nav.nodes} nodes / ${nav.edgeTo.length} edges (built in ${nav.stats.buildMs.toFixed(0)} ms) · skill ${SKILL} · seed ${SEED} · ${SECONDS} s`);
+    if (LINEUP === 'mixed') console.log(`lineup mixed: ${defaultRoster({ humanKit: 'mist-rasp', seed: SEED, skill: SKILL, botKits: MIXED_BOT_KITS }).map((e) => `${e.id}:${e.kit}`).join(' ')}`);
   } catch (e) {
     console.log('SETUP FAILED:', (e as Error).stack ?? e);
     return 2;

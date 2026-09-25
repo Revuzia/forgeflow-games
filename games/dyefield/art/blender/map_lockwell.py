@@ -511,10 +511,11 @@ def install_preview_shaders(ctx):
 
     def belt(ctx, nt, bsdf, base):
         x, z, y = sh.pos(nt)
-        # chevron arrows along the belt, pointing toward mid (conveyors carry you uphill toward z = 0)
+        # chevron arrows along the belt, pointing toward mid (conveyors carry you uphill toward z = 0):
+        # a stripe is |z| = c + 0.9 * |dx|, so its tip (dx = 0) is the end nearest mid
         ax = sh.math(nt, "ABSOLUTE", sh.math(nt, "SUBTRACT", sh.math(nt, "ABSOLUTE", x), 11.25))
         az = sh.math(nt, "ABSOLUTE", z)
-        t = sh.math(nt, "FRACT", sh.math(nt, "DIVIDE", sh.math(nt, "ADD", az, sh.math(nt, "MULTIPLY", ax, 0.9)), 1.4))
+        t = sh.math(nt, "FRACT", sh.math(nt, "DIVIDE", sh.math(nt, "SUBTRACT", az, sh.math(nt, "MULTIPLY", ax, 0.9)), 1.4))
         arrow = sh.math(nt, "MULTIPLY", sh.math(nt, "LESS_THAN", t, 0.22), sh.math(nt, "LESS_THAN", ax, 1.2))
         ribs = sh.math(nt, "LESS_THAN", sh.edge_dist(nt, az, 0.25), 0.02)
         col = sh.mix(nt, ribs, base, tuple(c * 0.6 for c in base))
@@ -645,10 +646,34 @@ def _tint_floors_off(ctx, scene):
 
 def _cutaway_on(ctx, scene):
     ctx._cut_hidden = _hide(OVERHEAD + ("solid_shell_wall_e", "solid_shell_wall_s"))
+    # the east wall is cut away, so its clerestory panes would float as bare white slabs: render the
+    # aerial with a copy of deco_clerestory that keeps only the west-wall windows (render-only; the
+    # export has already been written when the QA hooks run)
+    ob = bpy.data.objects.get("deco_clerestory")
+    ctx._cut_clere = None
+    if ob is not None and ob.type == "MESH":
+        x_cut = ctx.mdef["bounds"]["max"][0] - 1.0
+        me = ob.data.copy()
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        mw = ob.matrix_world
+        drop = [v for v in bm.verts if (mw @ v.co).x > x_cut]
+        bmesh.ops.delete(bm, geom=drop, context="VERTS")
+        bm.to_mesh(me)
+        bm.free()
+        ctx._cut_clere = (ob.name, ob.data)
+        ob.data = me
 
 
 def _cutaway_off(ctx, scene):
     _unhide(getattr(ctx, "_cut_hidden", []))
+    keep = getattr(ctx, "_cut_clere", None)
+    if keep is not None:
+        ob = bpy.data.objects.get(keep[0])
+        tmp = ob.data
+        ob.data = keep[1]
+        bpy.data.meshes.remove(tmp)
+        ctx._cut_clere = None
 
 
 def render_look(ctx, scene):
@@ -758,5 +783,6 @@ def build(mdef: dict, layout: dict, ctx) -> None:
     ae.update({"eye": [44.0, 34.0, -58.0], "look": [1.0, 1.0, 2.0], "fov": 50.0,
                "before": _cutaway_on, "after": _cutaway_off})
     ctx.add_camera("nest", eye=(0.35, 11.0, 2.95), look=(0.0, 2.2, -26.0), fov=58.0)
-    ctx.add_camera("interior", eye=(15.7, 6.3, -22.4), look=(2.0, 3.8, 1.5), fov=62.0)
+    # east gallery, beside (not behind) crate_g1 so the gallery floor, the conveyor head and mid all read
+    ctx.add_camera("interior", eye=(14.1, 6.3, -23.3), look=(2.0, 3.8, 1.5), fov=62.0)
     ctx.add_camera("dock", eye=(5.5, 3.6, -13.5), look=(-1.0, 2.4, -30.0), fov=60.0)

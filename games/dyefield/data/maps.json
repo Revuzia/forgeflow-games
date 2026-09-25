@@ -1,5 +1,5 @@
 {
-  "_doc": "Arena definitions. SOURCE OF TRUTH for layout: art/blender/build_map.py reads the 'brushes' of a map and authors the GLB (art/gltf/map_<id>.glb) incl. the paint-atlas UV2; the runtime reads spawns/lighting/scoring/bounds from here and geometry from the GLB. Coordinates: Y-up metres, runtime/glTF axes. SUNCREW (side A) spawns at -Z, GULF CREW (side B) at +Z. Yaw: 0 faces +Z, +90 faces +X. 'mirror': true duplicates a brush under the map's symmetry ('rot180' = (x,y,z)->(-x,y,-z), yaw+180). A map with status 'planned' has its design locked but no brushes yet — it must NOT be offered in map select until status is 'built'.",
+  "_doc": "Arena definitions. SOURCE OF TRUTH for layout: art/blender/build_map.py reads the 'brushes' of a map and authors the GLB (art/gltf/map_<id>.glb) incl. the paint-atlas UV2; the runtime reads spawns/lighting/scoring/bounds from here and geometry from the GLB. Coordinates: Y-up metres, runtime/glTF axes. SUNCREW (side A) spawns at -Z, GULF CREW (side B) at +Z. Yaw: 0 faces +Z, +90 faces +X. 'mirror': true duplicates a brush under the map's symmetry ('rot180' = (x,y,z)->(-x,y,-z), yaw+180). A map with status 'planned' has its design locked but no brushes yet — it must NOT be offered in map select until status is 'built'. A map may keep its brushes in a layout file instead: \"layout\": \"layouts/<id>.json\" (see art/blender/MAPS_README.md); spawns carry padRadius for the runtime.",
   "brushKinds": {
     "box": "axis-aligned solid: min, max. paintFaces: 'all' (default, never bottoms) | 'top' | 'none'",
     "ramp": "solid wedge inside min/max; its top rises from min.y to max.y toward 'rise' (+x|-x|+z|-z). The high edge meets the platform it serves.",
@@ -7,7 +7,9 @@
     "planter": "raised planter box (rim paintable, soil not); center = bottom-centre; size [w,h,d]; palm: true adds a palm (deco, trunk collides)",
     "curb": "low hazard-striped kerb; min, max",
     "spawnpad": "team spawn pad disc (NOT paintable); center = top-centre; radius; team A|B",
-    "deco": "non-paintable set dressing: asset id, pos, yaw, scale, collide (bool), optional text"
+    "deco": "non-paintable set dressing: asset id, pos, yaw, scale, collide (bool), optional text",
+    "stairs": "solid staircase inside min/max rising toward 'rise' (+x|-x|+z|-z); optional steps (default 0.25 m risers), mat, nose",
+    "overlapOk": "(flag on any solid brush) true = exempt from the builder's AABB overlap warning"
   },
   "maps": [
     {
@@ -16,108 +18,900 @@
       "name": "PIER 18 PLAZA",
       "type": "open coastal sports court",
       "tagline": "A wide tile court on the harbor pier. Long sightlines, mid-paint wars.",
-      "favors": ["shooter", "roller"],
+      "favors": [
+        "shooter",
+        "roller"
+      ],
       "symmetry": "rot180",
-      "bounds": { "min": [-28, -1.5, -42], "max": [28, 12, 42] },
+      "bounds": {
+        "min": [
+          -28,
+          -1.5,
+          -42
+        ],
+        "max": [
+          28,
+          12,
+          42
+        ]
+      },
       "killY": -1.0,
       "waterY": -1.4,
-      "paint": { "texelsPerMeter": 10, "atlasMax": 2048 },
-      "scoring": { "wallWeight": 0.35, "floorMinNy": 0.45 },
-      "minimap": { "min": [-30, -44], "max": [30, 44] },
-      "spawns": {
-        "A": { "pos": [0, 1.2, -38.5], "yaw": 0 },
-        "B": { "pos": [0, 1.2, 38.5], "yaw": 180 }
+      "paint": {
+        "texelsPerMeter": 10,
+        "atlasMax": 2048
       },
-      "courtLines": { "centerCircleRadius": 10, "midLineZ": 0, "color": "#F4F1E8", "width": 0.14 },
+      "scoring": {
+        "wallWeight": 0.35,
+        "floorMinNy": 0.45
+      },
+      "minimap": {
+        "min": [
+          -30,
+          -44
+        ],
+        "max": [
+          30,
+          44
+        ]
+      },
+      "spawns": {
+        "A": {
+          "pos": [
+            0,
+            1.2,
+            -38.5
+          ],
+          "yaw": 0
+        },
+        "B": {
+          "pos": [
+            0,
+            1.2,
+            38.5
+          ],
+          "yaw": 180
+        }
+      },
+      "courtLines": {
+        "centerCircleRadius": 10,
+        "midLineZ": 0,
+        "color": "#F4F1E8",
+        "width": 0.14
+      },
       "lighting": {
         "default": "noon",
         "presets": {
           "noon": {
-            "sunElevationDeg": 62, "sunAzimuthDeg": 140, "sunColor": "#FFF3DE", "sunIntensity": 3.0,
-            "hemiSky": "#9CD3FF", "hemiGround": "#D9C8A4", "hemiIntensity": 1.1,
-            "skyZenith": "#2F86DC", "skyHorizon": "#CFEDFB",
-            "fogColor": "#C4E6F6", "fogDensity": 0.0032, "exposure": 1.0,
-            "waterDeep": "#0A6A8C", "waterShallow": "#3BC3CB"
+            "sunElevationDeg": 62,
+            "sunAzimuthDeg": 140,
+            "sunColor": "#FFF3DE",
+            "sunIntensity": 3.0,
+            "hemiSky": "#9CD3FF",
+            "hemiGround": "#D9C8A4",
+            "hemiIntensity": 1.1,
+            "skyZenith": "#2F86DC",
+            "skyHorizon": "#CFEDFB",
+            "fogColor": "#C4E6F6",
+            "fogDensity": 0.0032,
+            "exposure": 1.0,
+            "waterDeep": "#0A6A8C",
+            "waterShallow": "#3BC3CB"
           },
           "golden": {
-            "sunElevationDeg": 14, "sunAzimuthDeg": 250, "sunColor": "#FFB06A", "sunIntensity": 3.4,
-            "hemiSky": "#FFB894", "hemiGround": "#5B3F70", "hemiIntensity": 0.95,
-            "skyZenith": "#4F3A9E", "skyHorizon": "#FF9C6A",
-            "fogColor": "#F4A98C", "fogDensity": 0.004, "exposure": 1.05,
-            "waterDeep": "#2D2466", "waterShallow": "#E0866A"
+            "sunElevationDeg": 14,
+            "sunAzimuthDeg": 250,
+            "sunColor": "#FFB06A",
+            "sunIntensity": 3.4,
+            "hemiSky": "#FFB894",
+            "hemiGround": "#5B3F70",
+            "hemiIntensity": 0.95,
+            "skyZenith": "#4F3A9E",
+            "skyHorizon": "#FF9C6A",
+            "fogColor": "#F4A98C",
+            "fogDensity": 0.004,
+            "exposure": 1.05,
+            "waterDeep": "#2D2466",
+            "waterShallow": "#E0866A"
           }
         }
       },
       "brushes": [
-        { "kind": "box", "id": "plate", "min": [-28, -0.6, -42], "max": [28, 0, 42], "mat": "tile", "paintFaces": "top", "mirror": false },
-
-        { "kind": "box", "id": "base_deck", "min": [-14, 0, -42], "max": [14, 1.2, -33], "mat": "concrete", "mirror": true },
-        { "kind": "box", "id": "base_backwall", "min": [-14, 1.2, -42], "max": [14, 2.4, -41.4], "mat": "concrete", "mirror": true },
-        { "kind": "ramp", "id": "base_ramp_w", "min": [-11.5, 0, -33], "max": [-7.5, 1.2, -27], "rise": "-z", "mat": "concrete", "mirror": true },
-        { "kind": "ramp", "id": "base_ramp_e", "min": [7.5, 0, -33], "max": [11.5, 1.2, -27], "rise": "-z", "mat": "concrete", "mirror": true },
-        { "kind": "spawnpad", "id": "pad", "center": [0, 1.2, -38.5], "radius": 2.2, "team": "A", "mirror": true },
-
-        { "kind": "box", "id": "side_deck", "min": [-28, 0, -14], "max": [-20, 2.0, 14], "mat": "boardwalk", "mirror": true },
-        { "kind": "box", "id": "side_deck_guard", "min": [-28, 2.0, -14], "max": [-27.6, 2.9, 14], "mat": "concrete", "mirror": true },
-        { "kind": "ramp", "id": "side_ramp_s", "min": [-26, 0, -24], "max": [-22, 2.0, -14], "rise": "+z", "mat": "boardwalk", "mirror": true },
-        { "kind": "ramp", "id": "side_ramp_n", "min": [-26, 0, 14], "max": [-22, 2.0, 24], "rise": "-z", "mat": "boardwalk", "mirror": true },
-
-        { "kind": "box", "id": "buoy_block", "min": [-3.5, 0, -3.5], "max": [3.5, 1.4, 3.5], "mat": "concrete", "mirror": false },
-        { "kind": "ramp", "id": "buoy_ramp", "min": [-8.5, 0, -1.5], "max": [-3.5, 1.4, 1.5], "rise": "+x", "mat": "concrete", "mirror": true },
-
-        { "kind": "box", "id": "chevron_w", "min": [-15, 0, -10.3], "max": [-9, 1.1, -9.7], "mat": "chevron", "mirror": true },
-        { "kind": "box", "id": "chevron_e", "min": [9, 0, -10.3], "max": [15, 1.1, -9.7], "mat": "chevron", "mirror": true },
-        { "kind": "box", "id": "chevron_base", "min": [-3, 0, -22.3], "max": [3, 1.1, -21.7], "mat": "chevron", "mirror": true },
-
-        { "kind": "crate", "id": "crate_a1", "center": [-18.6, 0, -27.5], "size": 1.2, "mirror": true },
-        { "kind": "crate", "id": "crate_a2", "center": [-17.3, 0, -27.3], "size": 1.1, "yaw": 8, "mirror": true },
-        { "kind": "crate", "id": "crate_a3", "center": [-18.6, 1.2, -27.5], "size": 1.0, "yaw": -12, "mirror": true },
-        { "kind": "crate", "id": "crate_b1", "center": [15.5, 0, -19.0], "size": 1.1, "yaw": 20, "mirror": true },
-        { "kind": "crate", "id": "crate_c1", "center": [-6.0, 0, -16.5], "size": 1.0, "yaw": 5, "mirror": true },
-        { "kind": "crate", "id": "crate_d1", "center": [6.5, 0, -24.5], "size": 1.2, "mirror": true },
-        { "kind": "crate", "id": "crate_d2", "center": [6.5, 1.2, -24.5], "size": 1.0, "yaw": 15, "mirror": true },
-        { "kind": "crate", "id": "crate_e1", "center": [3.2, 0, -12.5], "size": 1.0, "yaw": -7, "mirror": true },
-        { "kind": "crate", "id": "crate_deck1", "center": [-24.0, 2.0, -6.0], "size": 1.0, "yaw": 10, "mirror": true },
-        { "kind": "crate", "id": "crate_deck2", "center": [-25.0, 2.0, 5.0], "size": 1.0, "yaw": -4, "mirror": true },
-
-        { "kind": "planter", "id": "planter_base", "center": [-21.5, 0, -30.0], "size": [2.4, 0.7, 2.4], "palm": true, "mirror": true },
-        { "kind": "planter", "id": "planter_mid", "center": [-13.0, 0, 0.0], "size": [2.2, 0.7, 2.2], "palm": true, "mirror": true },
-
-        { "kind": "curb", "id": "curb_edge_s", "min": [-28, 0, -33], "max": [-27.6, 0.35, -14], "mat": "hazard", "mirror": true },
-        { "kind": "curb", "id": "curb_edge_n", "min": [-28, 0, 14], "max": [-27.6, 0.35, 33], "mat": "hazard", "mirror": true },
-        { "kind": "curb", "id": "curb_end", "min": [-28, 0, -42], "max": [-14, 0.35, -41.6], "mat": "hazard", "mirror": true },
-
-        { "kind": "deco", "id": "lamp_1", "asset": "lamp", "pos": [-27.8, 2.9, -9.0], "yaw": 90, "collide": true, "mirror": true },
-        { "kind": "deco", "id": "lamp_2", "asset": "lamp", "pos": [-27.8, 2.9, 9.0], "yaw": 90, "collide": true, "mirror": true },
-        { "kind": "deco", "id": "bollard_1", "asset": "bollard", "pos": [-27.7, 0, -30.0], "collide": true, "mirror": true },
-        { "kind": "deco", "id": "bollard_2", "asset": "bollard", "pos": [-27.7, 0, -18.0], "collide": true, "mirror": true },
-        { "kind": "deco", "id": "bollard_3", "asset": "bollard", "pos": [-20.0, 0, -41.7], "collide": true, "mirror": true },
-        { "kind": "deco", "id": "pilings", "asset": "pilings", "pos": [0, -1.5, 0], "collide": false, "mirror": false },
-        { "kind": "deco", "id": "board_cup", "asset": "billboard", "pos": [0, -1.4, 52], "yaw": 180, "text": "HARBOR CUP", "collide": false, "mirror": false },
-        { "kind": "deco", "id": "board_tide", "asset": "billboard", "pos": [0, -1.4, -52], "yaw": 0, "text": "TIDE CO.", "collide": false, "mirror": false },
-        { "kind": "deco", "id": "banner_deck", "asset": "banner", "pos": [-27.75, 2.9, 0], "yaw": 90, "text": "HARBOR CUP", "collide": false, "mirror": false },
-        { "kind": "deco", "id": "banner_deck2", "asset": "banner", "pos": [27.75, 2.9, 0], "yaw": -90, "text": "TIDE CO.", "collide": false, "mirror": false },
-        { "kind": "deco", "id": "lighthouse", "asset": "lighthouse", "pos": [78, -1.4, -36], "collide": false, "mirror": false },
-        { "kind": "deco", "id": "breakwater", "asset": "breakwater", "pos": [62, -1.4, -20], "yaw": 25, "collide": false, "mirror": false },
-        { "kind": "deco", "id": "cranes", "asset": "cranes", "pos": [-130, -1.4, 60], "yaw": 30, "collide": false, "mirror": false },
-        { "kind": "deco", "id": "islands", "asset": "islands", "pos": [0, -1.4, 0], "collide": false, "mirror": false },
-        { "kind": "deco", "id": "sail_1", "asset": "sailboat", "pos": [46, -1.4, 96], "yaw": 70, "collide": false, "mirror": false },
-        { "kind": "deco", "id": "sail_2", "asset": "sailboat", "pos": [-64, -1.4, -118], "yaw": -40, "collide": false, "mirror": false }
+        {
+          "kind": "box",
+          "id": "plate",
+          "min": [
+            -28,
+            -0.6,
+            -42
+          ],
+          "max": [
+            28,
+            0,
+            42
+          ],
+          "mat": "tile",
+          "paintFaces": "top",
+          "mirror": false
+        },
+        {
+          "kind": "box",
+          "id": "base_deck",
+          "min": [
+            -14,
+            0,
+            -42
+          ],
+          "max": [
+            14,
+            1.2,
+            -33
+          ],
+          "mat": "concrete",
+          "mirror": true
+        },
+        {
+          "kind": "box",
+          "id": "base_backwall",
+          "min": [
+            -14,
+            1.2,
+            -42
+          ],
+          "max": [
+            14,
+            2.4,
+            -41.4
+          ],
+          "mat": "concrete",
+          "mirror": true
+        },
+        {
+          "kind": "ramp",
+          "id": "base_ramp_w",
+          "min": [
+            -11.5,
+            0,
+            -33
+          ],
+          "max": [
+            -7.5,
+            1.2,
+            -27
+          ],
+          "rise": "-z",
+          "mat": "concrete",
+          "mirror": true
+        },
+        {
+          "kind": "ramp",
+          "id": "base_ramp_e",
+          "min": [
+            7.5,
+            0,
+            -33
+          ],
+          "max": [
+            11.5,
+            1.2,
+            -27
+          ],
+          "rise": "-z",
+          "mat": "concrete",
+          "mirror": true
+        },
+        {
+          "kind": "spawnpad",
+          "id": "pad",
+          "center": [
+            0,
+            1.2,
+            -38.5
+          ],
+          "radius": 2.2,
+          "team": "A",
+          "mirror": true
+        },
+        {
+          "kind": "box",
+          "id": "side_deck",
+          "min": [
+            -28,
+            0,
+            -14
+          ],
+          "max": [
+            -20,
+            2.0,
+            14
+          ],
+          "mat": "boardwalk",
+          "mirror": true
+        },
+        {
+          "kind": "box",
+          "id": "side_deck_guard",
+          "min": [
+            -28,
+            2.0,
+            -14
+          ],
+          "max": [
+            -27.6,
+            2.9,
+            14
+          ],
+          "mat": "concrete",
+          "mirror": true
+        },
+        {
+          "kind": "ramp",
+          "id": "side_ramp_s",
+          "min": [
+            -26,
+            0,
+            -24
+          ],
+          "max": [
+            -22,
+            2.0,
+            -14
+          ],
+          "rise": "+z",
+          "mat": "boardwalk",
+          "mirror": true
+        },
+        {
+          "kind": "ramp",
+          "id": "side_ramp_n",
+          "min": [
+            -26,
+            0,
+            14
+          ],
+          "max": [
+            -22,
+            2.0,
+            24
+          ],
+          "rise": "-z",
+          "mat": "boardwalk",
+          "mirror": true
+        },
+        {
+          "kind": "box",
+          "id": "buoy_block",
+          "min": [
+            -3.5,
+            0,
+            -3.5
+          ],
+          "max": [
+            3.5,
+            1.4,
+            3.5
+          ],
+          "mat": "concrete",
+          "mirror": false
+        },
+        {
+          "kind": "ramp",
+          "id": "buoy_ramp",
+          "min": [
+            -8.5,
+            0,
+            -1.5
+          ],
+          "max": [
+            -3.5,
+            1.4,
+            1.5
+          ],
+          "rise": "+x",
+          "mat": "concrete",
+          "mirror": true
+        },
+        {
+          "kind": "box",
+          "id": "chevron_w",
+          "min": [
+            -15,
+            0,
+            -10.3
+          ],
+          "max": [
+            -9,
+            1.1,
+            -9.7
+          ],
+          "mat": "chevron",
+          "mirror": true
+        },
+        {
+          "kind": "box",
+          "id": "chevron_e",
+          "min": [
+            9,
+            0,
+            -10.3
+          ],
+          "max": [
+            15,
+            1.1,
+            -9.7
+          ],
+          "mat": "chevron",
+          "mirror": true
+        },
+        {
+          "kind": "box",
+          "id": "chevron_base",
+          "min": [
+            -3,
+            0,
+            -22.3
+          ],
+          "max": [
+            3,
+            1.1,
+            -21.7
+          ],
+          "mat": "chevron",
+          "mirror": true
+        },
+        {
+          "kind": "crate",
+          "id": "crate_a1",
+          "center": [
+            -18.6,
+            0,
+            -27.5
+          ],
+          "size": 1.2,
+          "mirror": true
+        },
+        {
+          "kind": "crate",
+          "id": "crate_a2",
+          "center": [
+            -17.3,
+            0,
+            -27.3
+          ],
+          "size": 1.1,
+          "yaw": 8,
+          "mirror": true
+        },
+        {
+          "kind": "crate",
+          "id": "crate_a3",
+          "center": [
+            -18.6,
+            1.2,
+            -27.5
+          ],
+          "size": 1.0,
+          "yaw": -12,
+          "mirror": true
+        },
+        {
+          "kind": "crate",
+          "id": "crate_b1",
+          "center": [
+            15.5,
+            0,
+            -19.0
+          ],
+          "size": 1.1,
+          "yaw": 20,
+          "mirror": true
+        },
+        {
+          "kind": "crate",
+          "id": "crate_c1",
+          "center": [
+            -6.0,
+            0,
+            -16.5
+          ],
+          "size": 1.0,
+          "yaw": 5,
+          "mirror": true
+        },
+        {
+          "kind": "crate",
+          "id": "crate_d1",
+          "center": [
+            6.5,
+            0,
+            -24.5
+          ],
+          "size": 1.2,
+          "mirror": true
+        },
+        {
+          "kind": "crate",
+          "id": "crate_d2",
+          "center": [
+            6.5,
+            1.2,
+            -24.5
+          ],
+          "size": 1.0,
+          "yaw": 15,
+          "mirror": true
+        },
+        {
+          "kind": "crate",
+          "id": "crate_e1",
+          "center": [
+            3.2,
+            0,
+            -12.5
+          ],
+          "size": 1.0,
+          "yaw": -7,
+          "mirror": true
+        },
+        {
+          "kind": "crate",
+          "id": "crate_deck1",
+          "center": [
+            -24.0,
+            2.0,
+            -6.0
+          ],
+          "size": 1.0,
+          "yaw": 10,
+          "mirror": true
+        },
+        {
+          "kind": "crate",
+          "id": "crate_deck2",
+          "center": [
+            -25.0,
+            2.0,
+            5.0
+          ],
+          "size": 1.0,
+          "yaw": -4,
+          "mirror": true
+        },
+        {
+          "kind": "planter",
+          "id": "planter_base",
+          "center": [
+            -21.5,
+            0,
+            -30.0
+          ],
+          "size": [
+            2.4,
+            0.7,
+            2.4
+          ],
+          "palm": true,
+          "mirror": true
+        },
+        {
+          "kind": "planter",
+          "id": "planter_mid",
+          "center": [
+            -13.0,
+            0,
+            0.0
+          ],
+          "size": [
+            2.2,
+            0.7,
+            2.2
+          ],
+          "palm": true,
+          "mirror": true
+        },
+        {
+          "kind": "curb",
+          "id": "curb_edge_s",
+          "min": [
+            -28,
+            0,
+            -33
+          ],
+          "max": [
+            -27.6,
+            0.35,
+            -14
+          ],
+          "mat": "hazard",
+          "mirror": true
+        },
+        {
+          "kind": "curb",
+          "id": "curb_edge_n",
+          "min": [
+            -28,
+            0,
+            14
+          ],
+          "max": [
+            -27.6,
+            0.35,
+            33
+          ],
+          "mat": "hazard",
+          "mirror": true
+        },
+        {
+          "kind": "curb",
+          "id": "curb_end",
+          "min": [
+            -28,
+            0,
+            -42
+          ],
+          "max": [
+            -14,
+            0.35,
+            -41.6
+          ],
+          "mat": "hazard",
+          "mirror": true
+        },
+        {
+          "kind": "deco",
+          "id": "lamp_1",
+          "asset": "lamp",
+          "pos": [
+            -27.8,
+            2.9,
+            -9.0
+          ],
+          "yaw": 90,
+          "collide": true,
+          "mirror": true
+        },
+        {
+          "kind": "deco",
+          "id": "lamp_2",
+          "asset": "lamp",
+          "pos": [
+            -27.8,
+            2.9,
+            9.0
+          ],
+          "yaw": 90,
+          "collide": true,
+          "mirror": true
+        },
+        {
+          "kind": "deco",
+          "id": "bollard_1",
+          "asset": "bollard",
+          "pos": [
+            -27.7,
+            0,
+            -30.0
+          ],
+          "collide": true,
+          "mirror": true
+        },
+        {
+          "kind": "deco",
+          "id": "bollard_2",
+          "asset": "bollard",
+          "pos": [
+            -27.7,
+            0,
+            -18.0
+          ],
+          "collide": true,
+          "mirror": true
+        },
+        {
+          "kind": "deco",
+          "id": "bollard_3",
+          "asset": "bollard",
+          "pos": [
+            -20.0,
+            0,
+            -41.7
+          ],
+          "collide": true,
+          "mirror": true
+        },
+        {
+          "kind": "deco",
+          "id": "pilings",
+          "asset": "pilings",
+          "pos": [
+            0,
+            -1.5,
+            0
+          ],
+          "collide": false,
+          "mirror": false
+        },
+        {
+          "kind": "deco",
+          "id": "board_cup",
+          "asset": "billboard",
+          "pos": [
+            0,
+            -1.4,
+            52
+          ],
+          "yaw": 180,
+          "text": "HARBOR CUP",
+          "collide": false,
+          "mirror": false
+        },
+        {
+          "kind": "deco",
+          "id": "board_tide",
+          "asset": "billboard",
+          "pos": [
+            0,
+            -1.4,
+            -52
+          ],
+          "yaw": 0,
+          "text": "TIDE CO.",
+          "collide": false,
+          "mirror": false
+        },
+        {
+          "kind": "deco",
+          "id": "banner_deck",
+          "asset": "banner",
+          "pos": [
+            -27.75,
+            2.9,
+            0
+          ],
+          "yaw": 90,
+          "text": "HARBOR CUP",
+          "collide": false,
+          "mirror": false
+        },
+        {
+          "kind": "deco",
+          "id": "banner_deck2",
+          "asset": "banner",
+          "pos": [
+            27.75,
+            2.9,
+            0
+          ],
+          "yaw": -90,
+          "text": "TIDE CO.",
+          "collide": false,
+          "mirror": false
+        },
+        {
+          "kind": "deco",
+          "id": "lighthouse",
+          "asset": "lighthouse",
+          "pos": [
+            78,
+            -1.4,
+            -36
+          ],
+          "collide": false,
+          "mirror": false
+        },
+        {
+          "kind": "deco",
+          "id": "breakwater",
+          "asset": "breakwater",
+          "pos": [
+            62,
+            -1.4,
+            -20
+          ],
+          "yaw": 25,
+          "collide": false,
+          "mirror": false
+        },
+        {
+          "kind": "deco",
+          "id": "cranes",
+          "asset": "cranes",
+          "pos": [
+            -130,
+            -1.4,
+            60
+          ],
+          "yaw": 30,
+          "collide": false,
+          "mirror": false
+        },
+        {
+          "kind": "deco",
+          "id": "islands",
+          "asset": "islands",
+          "pos": [
+            0,
+            -1.4,
+            0
+          ],
+          "collide": false,
+          "mirror": false
+        },
+        {
+          "kind": "deco",
+          "id": "sail_1",
+          "asset": "sailboat",
+          "pos": [
+            46,
+            -1.4,
+            96
+          ],
+          "yaw": 70,
+          "collide": false,
+          "mirror": false
+        },
+        {
+          "kind": "deco",
+          "id": "sail_2",
+          "asset": "sailboat",
+          "pos": [
+            -64,
+            -1.4,
+            -118
+          ],
+          "yaw": -40,
+          "collide": false,
+          "mirror": false
+        }
       ]
     },
     {
       "id": "lockwell",
-      "status": "planned",
+      "status": "built",
       "name": "LOCKWELL WORKS",
       "type": "vertical industrial interior",
       "tagline": "Three floors of press hall, mezzanine and crane-walk. Dye a wall, climb a shortcut.",
-      "favors": ["blaster", "charger"],
+      "favors": [
+        "blaster",
+        "charger"
+      ],
       "symmetry": "rot180",
+      "layout": "layouts/lockwell.json",
+      "bounds": {
+        "min": [
+          -22,
+          -0.5,
+          -32
+        ],
+        "max": [
+          22,
+          13,
+          32
+        ]
+      },
+      "killY": -2.0,
+      "waterY": -3.0,
+      "paint": {
+        "texelsPerMeter": 10,
+        "atlasMax": 2048
+      },
+      "scoring": {
+        "wallWeight": 0.35,
+        "floorMinNy": 0.45
+      },
+      "minimap": {
+        "min": [
+          -24,
+          -34
+        ],
+        "max": [
+          24,
+          34
+        ]
+      },
+      "spawns": {
+        "A": {
+          "pos": [
+            0,
+            1.0,
+            -28.5
+          ],
+          "yaw": 0,
+          "padRadius": 2.2
+        },
+        "B": {
+          "pos": [
+            0,
+            1.0,
+            28.5
+          ],
+          "yaw": 180,
+          "padRadius": 2.2
+        }
+      },
+      "courtLines": null,
+      "lighting": {
+        "default": "works",
+        "presets": {
+          "works": {
+            "kind": "interior",
+            "ambient": "#3C4A63",
+            "ambientIntensity": 0.62,
+            "keyDir": [
+              0.25,
+              -1.0,
+              0.35
+            ],
+            "keyColor": "#D2DEEF",
+            "keyIntensity": 1.2,
+            "fogColor": "#2A3346",
+            "fogDensity": 0.011,
+            "skyVisible": false,
+            "windowGlow": "#9DB6CF",
+            "stripColor": "#E4F2FF",
+            "sodiumColor": "#FFB35C",
+            "exposure": 1.0,
+            "sunElevationDeg": 66.7,
+            "sunAzimuthDeg": 215.5,
+            "sunColor": "#D2DEEF",
+            "sunIntensity": 1.2,
+            "hemiSky": "#8FA7C4",
+            "hemiGround": "#4A3F3A",
+            "hemiIntensity": 0.8,
+            "skyZenith": "#2A3346",
+            "skyHorizon": "#3C4A63",
+            "waterDeep": "#1C2433",
+            "waterShallow": "#2A3346"
+          },
+          "overtime": {
+            "kind": "interior",
+            "ambient": "#2E3550",
+            "ambientIntensity": 0.4,
+            "keyDir": [
+              -0.2,
+              -1.0,
+              -0.3
+            ],
+            "keyColor": "#9FB3D6",
+            "keyIntensity": 0.7,
+            "fogColor": "#1D2233",
+            "fogDensity": 0.014,
+            "skyVisible": false,
+            "windowGlow": "#4E6690",
+            "stripColor": "#DCEBFF",
+            "sodiumColor": "#FFA447",
+            "exposure": 1.05,
+            "sunElevationDeg": 68.5,
+            "sunAzimuthDeg": 33.7,
+            "sunColor": "#9FB3D6",
+            "sunIntensity": 0.7,
+            "hemiSky": "#6F82A8",
+            "hemiGround": "#4A3A30",
+            "hemiIntensity": 0.65,
+            "skyZenith": "#1D2233",
+            "skyHorizon": "#2E3550",
+            "waterDeep": "#141A26",
+            "waterShallow": "#1D2233"
+          }
+        }
+      },
       "design": {
         "floors": [
-          { "name": "PRESS HALL", "y": 0.0, "notes": "conveyor ramps (moving surfaces) carry you uphill; crate stacks; stairwells in the corners" },
-          { "name": "MEZZANINE", "y": 4.5, "notes": "offices, walkways, loading-dock lip; paintable walls are real climb shortcuts" },
-          { "name": "CRANE-WALK", "y": 9.0, "notes": "grated catwalks (dye falls through; NOT paintable, cannot slick); charger nest on the crane cab" }
+          {
+            "name": "PRESS HALL",
+            "y": 0.0,
+            "notes": "conveyor ramps (moving surfaces) carry you uphill; crate stacks; stairwells in the corners"
+          },
+          {
+            "name": "MEZZANINE",
+            "y": 4.5,
+            "notes": "offices, walkways, loading-dock lip; paintable walls are real climb shortcuts"
+          },
+          {
+            "name": "CRANE-WALK",
+            "y": 9.0,
+            "notes": "grated catwalks (dye falls through; NOT paintable, cannot slick); charger nest on the crane cab"
+          }
         ],
         "lighting": "cool fluorescent strips + sodium practicals + rain-streaked skylights; no ocean horizon",
         "camera": "tight FOV feel: low ceilings on floor 1, long lane down the hall from the nest"
@@ -125,12 +919,113 @@
     },
     {
       "id": "cinder",
-      "status": "planned",
+      "status": "built",
       "name": "CINDER REEF",
       "type": "broken atoll, land-water risk crossings",
       "tagline": "Two beaches, three isles, deep channels. Every crossing is a lane someone is watching.",
-      "favors": ["charger", "shooter"],
+      "favors": [
+        "charger",
+        "shooter"
+      ],
       "symmetry": "rot180",
+      "layout": "layouts/cinder.json",
+      "bounds": {
+        "min": [
+          -36,
+          -4,
+          -48
+        ],
+        "max": [
+          36,
+          14,
+          48
+        ]
+      },
+      "killY": -3.5,
+      "waterY": -0.6,
+      "paint": {
+        "texelsPerMeter": 10,
+        "atlasMax": 2048
+      },
+      "scoring": {
+        "wallWeight": 0.35,
+        "floorMinNy": 0.45
+      },
+      "minimap": {
+        "min": [
+          -38,
+          -50
+        ],
+        "max": [
+          38,
+          50
+        ]
+      },
+      "spawns": {
+        "A": {
+          "pos": [
+            0,
+            1.2,
+            -40.5
+          ],
+          "yaw": 0,
+          "padRadius": 2.2
+        },
+        "B": {
+          "pos": [
+            0,
+            1.2,
+            40.5
+          ],
+          "yaw": 180,
+          "padRadius": 2.2
+        }
+      },
+      "courtLines": null,
+      "lighting": {
+        "default": "reef",
+        "presets": {
+          "reef": {
+            "kind": "outdoor",
+            "sunElevationDeg": 28,
+            "sunAzimuthDeg": 255,
+            "sunColor": "#FFC37E",
+            "sunIntensity": 3.2,
+            "hemiSky": "#F0D2B8",
+            "hemiGround": "#6E5A48",
+            "hemiIntensity": 1.35,
+            "skyZenith": "#8A98CF",
+            "skyHorizon": "#FFC894",
+            "fogColor": "#F0D3B6",
+            "fogDensity": 0.009,
+            "exposure": 1.0,
+            "waterDeep": "#0F7C86",
+            "waterShallow": "#5FE3C8"
+          },
+          "ember": {
+            "kind": "outdoor",
+            "sunElevationDeg": 8,
+            "sunAzimuthDeg": 250,
+            "sunColor": "#FF8E5A",
+            "sunIntensity": 2.4,
+            "hemiSky": "#F0A07A",
+            "hemiGround": "#4A3048",
+            "hemiIntensity": 1.0,
+            "skyZenith": "#5A3F7A",
+            "skyHorizon": "#FF8F5E",
+            "fogColor": "#E89A7C",
+            "fogDensity": 0.014,
+            "exposure": 1.05,
+            "waterDeep": "#2A2553",
+            "waterShallow": "#D0786A"
+          }
+        }
+      },
+      "mist": {
+        "hideRange": 25,
+        "density": 0.012,
+        "color": "#EED6C0"
+      },
       "design": {
         "areas": [
           "SUNCREW BEACH / GULF CREW BEACH (wet sand, paintable)",

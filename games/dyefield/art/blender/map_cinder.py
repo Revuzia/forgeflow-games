@@ -54,6 +54,7 @@ MATERIALS = {
     "M_kelp":       ("#4E5A22", 0.62, 0.0, 0.0, True),
     "M_spring":     ("#3FF0D6", 0.30, 0.0, 1.2, False),   # tide-spring pad (the runtime pulses it)
     "M_cliff":      ("#45403F", 0.86, 0.0, 0.0, False),   # build-time tag only (exported as M_basalt)
+    "M_moss":       ("#7DB04E", 0.88, 0.0, 0.0, False),   # moss caps on the sea-stack plateaus (deco only)
 }
 FIXUPS: dict = {}
 OVERLAP_OK: set = set()
@@ -379,11 +380,19 @@ def _deco_pennant(ctx, b, m):
 
 
 def _deco_seastacks(ctx, b, m):
+    """Columnar-basalt mesas around the atoll: moss-capped plateaus, and a palm (or two) on the big ones."""
     W = float(ctx.mdef["waterY"])
     for k, (x, z, r, h) in enumerate(SEA_STACKS):
         if is_mirror(b):
             x, z = -x, -z
-        ctx.bucket("deco_seastacks").extend(CP.sea_stack(f"{b['_base']}_{k}", [x, W, z], r, h, W))
+        rock, moss, tops = CP.sea_stack(f"{b['_base']}_{k}", [x, W, z], r, h, W)
+        ctx.bucket("deco_seastacks").extend(rock)
+        ctx.bucket("deco_seastacks").extend(moss)
+        for j, tp in enumerate(tops[: (2 if r >= 4.0 else 1 if r >= 2.9 else 0)]):
+            p = D.palm(f"stack_{k}_{j}", 0.0)
+            pm = C.place_matrix(list(tp), 37.0 * k + 120.0 * j) @ Matrix.Diagonal((0.8, 0.8, 0.8, 1.0))
+            ctx.bucket("deco_seastacks").extend(p["trunk"], pm)
+            ctx.bucket("deco_seastacks").extend(p["fronds"], pm)
 
 
 def _deco_horizon(ctx, b, m):

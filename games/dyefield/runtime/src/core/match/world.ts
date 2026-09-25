@@ -1,30 +1,44 @@
-// DYEFIELD — the deterministic 4 v 4 match (CONTRACT §10.1 / §10.2 / §10.4). THREE-free, DOM-free.
+// DYEFIELD — the deterministic 4 v 4 match (CONTRACT §10.1 / §10.2 / §10.4 + CHANGED(KITSIM)). THREE-free, DOM-free.
 //
 // MatchWorld owns the runners, the projectile pool, the clock and the event queue. One step() is
 // exactly one TICK (1/60 s). Order inside a live tick (fixed, so a seed replays bit-for-bit):
 //   1. dead runners count down to respawn; living runners move (Runner.step: slick/slog/wall-slick,
-//      tank refill, pad rules, hidden)
+//      tank refill, pad rules, hidden); a WELLSPRING leaper that landed slams right after its move
 //   2. the sea washes runners below killY
-//   3. kits fire (combat/kits.ts) from the post-move positions
-//   4. projectiles fly, sweep, paint, drip and hit (combat/projectiles.ts)
-//   5. HP regen, then the clock and horns
-// Randomness: one mulberry32 stream per runner (spread rolls), seeded from (match seed, runner id).
-// The view drains events and never writes gameplay (doctrine §4).
+//   3. per runner: kit (combat/kits.ts: stream / roll / charge / burst), sub (combat/subs.ts), special
+//      start (combat/specials.ts), from the post-move positions
+//   4. resting slots tick: jelly puddles (fuse → pop) and CLOUDBURST cells (rise → rain → end); then flying
+//      projectiles fly, sweep, paint, drip, hit, burst and land (combat/projectiles.ts)
+//   5. HP regen and special clocks, then the clock and horns
+// Randomness: per runner one mulberry32 stream for spread rolls and one for its special (CLOUDBURST
+// drops), both seeded from (match seed, runner id). The view drains events and never writes gameplay.
 
 import type { MapDef } from '../data.ts';
 import { WEAPONS } from '../data.ts';
 import type { MapGeometry } from '../mapgeo.ts';
-import type { PhysicsWorld } from '../physics.ts';
+import type { CastHit, PhysicsWorld } from '../physics.ts';
 import type { Painter } from '../paint/painter.ts';
 import type { MoveState, PlayerIntent, Side, TeamId } from '../types.ts';
 import { emptyIntent } from '../types.ts';
 import { hash32, mulberry32 } from '../rng.ts';
-import { COMBAT, HEALTH, HITBOX, MATCH, MOVE, SLICK, TANK, TICK } from '../config.ts';
+import { COMBAT, HEALTH, HITBOX, KITS, MATCH, MOVE, SLICK, TANK, TICK } from '../config.ts';
 import { Runner, type PadZone, type SpawnPoint } from '../runner.ts';
 import type { RosterEntry } from './roster.ts';
 import type { MatchPhase, SimEvent } from './events.ts';
-import { ProjectilePool, stepProjectiles, type ProjectileHost, type ProjectileKind } from '../combat/projectiles.ts';
-import { projectileKind, specialChargePoints, stepStream, streamFire, kitDef, type KitHost, type StreamFire } from '../combat/kits.ts';
+import {
+  KIND_CLOUD, KIND_JELLY, PSTATE_FLY, PSTATE_PUDDLE, ProjectilePool, paintImpact, stepProjectiles,
+  type ProjectileHost, type ProjectileKind,
+} from '../combat/projectiles.ts';
+import {
+  axisDistance, kitFire, projectileKind, resetKit, specialChargePoints, stepKit, streamFire, kitDef,
+  type DamageCause, type KitFire, type KitHost,
+} from '../combat/kits.ts';
+import {
+  burstKind, cloudKind, flickKind, jellyDef, jellyKind, specialDef,
+  type BurstFire, type CloudDef, type JellyDef, type SpecialDef,
+} from '../combat/defs.ts';
+import { landJelly, stepSub, tickPuddle } from '../combat/subs.ts';
+import { endSpecial, landCloud, slam, stepSpecialInput, tickCloud, type SpecialHost } from '../combat/specials.ts';
 
 export interface MatchOptions {
   def: MapDef; geo: MapGeometry; physics: PhysicsWorld; painter: Painter; roster: RosterEntry[];
@@ -36,6 +50,8 @@ export interface MatchResult { sun: number; gulf: number; neutral: number; winne
 export interface MatchStats {
   shots: number; dry: number; splats: number; hits: number; washes: number; seaWashes: number;
   slicks: number; projectilesDropped: number; eventsDropped: number;
+  // CHANGED(KITSIM): counted from the events of the same name
+  flicks: number; beams: number; bursts: number; subs: number; pops: number; specials: number;
 }
 
 const STATE_INDEX: Record<MoveState, number> = { walk: 0, slog: 1, slick: 2, wallslick: 3, air: 4 };
@@ -59,7 +75,7 @@ export function padsOf(def: MapDef, geo: MapGeometry): Record<Side, PadZone> {
   return out as Record<Side, PadZone>;
 }
 
-export class MatchWorld implements ProjectileHost, KitHost {
+export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
   readonly runners: Runner[];
   readonly projectiles: ProjectilePool;
   readonly painter: Painter;
@@ -78,16 +94,28 @@ export class MatchWorld implements ProjectileHost, KitHost {
   readonly countdownS: number;
   readonly stats: MatchStats = {
     shots: 0, dry: 0, splats: 0, hits: 0, washes: 0, seaWashes: 0, slicks: 0, projectilesDropped: 0, eventsDropped: 0,
+    flicks: 0, beams: 0, bursts: 0, subs: 0, pops: 0, specials: 0,
   };
   // ProjectileHost / KitHost
   readonly killY: number;
+  /** projectile variants (index = pool.variant): 0 = MIST-RASP, then one per kit fire / sub / special in roster order */
   readonly kinds: ProjectileKind[];
   readonly seedWord: number;
   get pool(): ProjectilePool { return this.projectiles; }
 
   private readonly events: SimEvent[] = [];
   private readonly slots: SpawnPoint[];
-  private readonly fire: StreamFire[];
+  private readonly fire: KitFire[];
+  private readonly fireVariant: number[];
+  private readonly subDefs: Array<JellyDef | null>;
+  private readonly subVariant: number[];
+  private readonly specialDefs: Array<SpecialDef | null>;
+  private readonly specialVariant: number[];
+  private readonly variantBurst: Array<BurstFire | null> = [];
+  private readonly variantJelly: Array<JellyDef | null> = [];
+  private readonly variantCloud: Array<CloudDef | null> = [];
+  private readonly variantKey = new Map<string, number>();
+  private readonly specialRngs: Array<() => number>;
   private readonly rngs: Array<() => number>;
   private readonly charge: number[];
   private readonly specialId: string[];
@@ -118,14 +146,20 @@ export class MatchWorld implements ProjectileHost, KitHost {
     this.pads = padsOf(o.def, o.geo);
     this.projectiles = new ProjectilePool(COMBAT.poolCapacity);
 
-    // projectile kinds: one per kind id (phase 4: MIST-RASP only)
-    const mist = streamFire('mist-rasp');
-    this.kinds = [projectileKind(mist)];
+    // projectile variants: 0 = MIST-RASP (the fallback of every droplet), then per kit / sub / special
+    this.kinds = [];
+    this.variant('mist-rasp:stream', projectileKind(streamFire('mist-rasp')));
 
     const roster = o.roster;
     this.runners = [];
     this.slots = [];
     this.fire = [];
+    this.fireVariant = [];
+    this.subDefs = [];
+    this.subVariant = [];
+    this.specialDefs = [];
+    this.specialVariant = [];
+    this.specialRngs = [];
     this.rngs = [];
     this.charge = [];
     this.specialId = [];
@@ -140,8 +174,25 @@ export class MatchWorld implements ProjectileHost, KitHost {
       const lat = MATCH.spawnSlots[k % MATCH.spawnSlots.length];
       const slot: SpawnPoint = { x: sp.x - Math.cos(sp.yaw) * lat, y: sp.y, z: sp.z + Math.sin(sp.yaw) * lat, yaw: sp.yaw };
       this.slots.push(slot);
-      const f = streamFire(e.kit);
+      const f = kitFire(e.kit);
       this.fire.push(f);
+      let fv = 0;
+      if (f.type === 'stream') fv = this.variant(`${f.kit}:stream`, projectileKind(f));
+      else if (f.type === 'roll') fv = this.variant(`${f.kit}:flick`, flickKind(f));
+      else if (f.type === 'burst') { fv = this.variant(`${f.kit}:burst`, burstKind(f)); this.variantBurst[fv] = f; }
+      this.fireVariant.push(fv);
+      let subId = 'jelly-charge', sid = 'cloudburst';
+      try { const row = kitDef(e.kit); subId = String(row.sub); sid = String(row.special); } catch { /* unknown kit → MIST-RASP's sub + special */ }
+      const sub = jellyDef(subId);
+      this.subDefs.push(sub);
+      let sv = 0;
+      if (sub) { sv = this.variant(`sub:${sub.id}`, jellyKind(sub)); this.variantJelly[sv] = sub; }
+      this.subVariant.push(sv);
+      const spec = specialDef(sid);
+      this.specialDefs.push(spec);
+      let pv = 0;
+      if (spec && spec.type === 'cloudburst') { pv = this.variant(`special:${spec.id}`, cloudKind(spec)); this.variantCloud[pv] = spec; }
+      this.specialVariant.push(pv);
       const body = o.physics.createCharacter(MOVE.radius, MOVE.halfHeight);
       const r = new Runner({ id: e.id, name: e.name, team: e.team, kit: e.kit, bot: e.bot }, body, slot, {
         killY: this.killY,
@@ -150,12 +201,13 @@ export class MatchWorld implements ProjectileHost, KitHost {
         enemyPad: this.pads[side === 'A' ? 'B' : 'A'],
         autoRespawn: false,
         fireMoveMul: f.moveSpeedWhileFiring,
+        fireSpeedCap: f.type === 'roll' ? f.rollSpeed : undefined,
+        faceMotionWhileFiring: f.type === 'roll',
       });
       this.runners.push(r);
       this.rngs.push(mulberry32(hash32(this.seed, e.id, 0xc0b4a7)));
+      this.specialRngs.push(mulberry32(hash32(this.seed, e.id, 0x5bec1a1)));
       this.charge.push(specialChargePoints(e.kit));
-      let sid = 'cloudburst';
-      try { sid = String(kitDef(e.kit).special); } catch { /* unknown kit → MIST-RASP's special */ }
       this.specialId.push(sid);
     }
 
@@ -207,21 +259,28 @@ export class MatchWorld implements ProjectileHost, KitHost {
       const s0 = r.slicks;
       r.step(dt, intents[i] ?? this.neutral, this.painter, this.events);
       this.stats.slicks += r.slicks - s0;
+      if (r.slamPending || (r.leaping && r.leapT > KITS.leapMaxSeconds)) this.doSlam(r);
     }
     // 2. the sea
     for (let i = 0; i < R.length; i++) if (R[i].alive && R[i].inSea) this.wash(R[i], null, 'sea');
-    // 3. kits
+    // 3. kits, subs, specials
     for (let i = 0; i < R.length; i++) {
       const r = R[i];
       if (!r.alive) { r.firing = false; continue; }
-      stepStream(r, intents[i] ?? this.neutral, dt, this.fire[i], this.rngs[i], this);
+      const it = intents[i] ?? this.neutral;
+      stepKit(r, it, dt, this.fire[i], this.fireVariant[i], this.rngs[i], this);
+      stepSub(r, it, dt, this.subDefs[i], this.subVariant[i], this);
+      stepSpecialInput(r, it, this.specialDefs[i], this.specialVariant[i], this);
     }
-    // 4. projectiles
+    // 4. projectiles: resting slots (jelly puddles, CLOUDBURST cells), then flying ones — a slot that lands
+    //    this tick starts its fuse / rise on the next tick (fuse and rain last exactly their whole ticks)
+    this.stepResting();
     stepProjectiles(this.projectiles, dt, this);
     this.stats.projectilesDropped = this.projectiles.dropped;
-    // 5. regen
+    // 5. regen + special clocks
     for (let i = 0; i < R.length; i++) {
       const r = R[i];
+      if (r.specialActive !== '') r.specialT += dt;
       if (!r.alive) continue;
       r.lastHitT += dt;
       if (r.lastHitT >= HEALTH.regenDelay && r.hp < WEAPONS.hp) r.hp = Math.min(WEAPONS.hp, r.hp + HEALTH.regenPerSecond * dt);
@@ -293,19 +352,102 @@ export class MatchWorld implements ProjectileHost, KitHost {
     const P = this.painter;
     const before = P.weighted(team);
     const flips = P.splat(x, y, z, { radius: r, team, nx, ny, nz, minFacing, seed });
-    const gained = P.weighted(team) - before;
-    if (owner >= 0 && owner < this.runners.length && gained > 0) {
-      const o = this.runners[owner];
-      o.painted += gained;
-      this.addSpecial(o, gained * this.specialPts.perM2);
-    }
+    this.credit(owner, P.weighted(team) - before);
     this.stats.splats++;
     this.pushEvent({ t: 'splat', x, y, z, r, team, nx, ny, nz, flips });
     return flips;
   }
 
   hit(victim: Runner, owner: number, dmg: number, x: number, y: number, z: number): void {
-    if (!victim.alive || this.phase !== 'live') return;
+    this.damage(victim, owner, dmg, x, y, z, 'dye', true);
+  }
+
+  /** A MODE_BURST slot explodes: direct damage, line-of-sight splash with linear falloff, paint. */
+  burst(slot: number, x: number, y: number, z: number, victim: Runner | null,
+    nx: number, ny: number, nz: number, air: boolean): void {
+    const P = this.projectiles;
+    const bf = this.variantBurst[P.variant[slot]];
+    if (!bf) return;
+    const owner = P.owner[slot], team = P.team[slot] as TeamId;
+    this.emit({ t: 'burst', pid: owner, x, y, z, r: bf.splashRadius, air });
+    if (victim) this.damage(victim, owner, bf.directDamage, x, y, z, 'dye');
+    const onMap = !air && !victim;
+    const lx = onMap ? x + nx * 0.08 : x, ly = onMap ? y + ny * 0.08 : y, lz = onMap ? z + nz * 0.08 : z;
+    const R = this.runners;
+    for (let i = 0; i < R.length; i++) {
+      const v = R[i];
+      if (!v.alive || v.team === team || v === victim) continue;
+      const d = axisDistance(v, x, y, z);
+      if (d > bf.splashRadius) continue;
+      const cy = v.y + v.hitHeight() * 0.5;
+      if (!this.lineClear(lx, ly, lz, v.x, cy, v.z)) continue;
+      const dmg = bf.splashDamage * (1 - (1 - KITS.splashEdgeFactor) * (d / bf.splashRadius));
+      this.damage(v, owner, dmg, v.x, cy, v.z, 'dye');
+    }
+    const seed = P.seed[slot];
+    if (onMap) {
+      paintImpact(this, owner, team, x, y, z, nx, ny, nz, bf.impactRadius, seed, P.vx[slot], P.vz[slot]);
+    } else {
+      const g = this.physics.raycast(x, y, z, 0, -1, 0, COMBAT.dripMaxDrop);
+      if (g) this.paint(owner, team, g.x, g.y, g.z, air ? bf.airburstRadius : bf.impactRadius, g.nx, g.ny, g.nz, -0.1, seed);
+    }
+  }
+
+  /** A MODE_LANDER slot touched the map: a jelly becomes a puddle, a CLOUDBURST cell starts to rise. */
+  land(slot: number, hit: CastHit): boolean {
+    const P = this.projectiles;
+    const k = P.kind[slot], v = P.variant[slot];
+    if (k === KIND_JELLY) {
+      const j = this.variantJelly[v];
+      if (!j) return false;
+      landJelly(slot, hit, j, this);
+      return true;
+    }
+    if (k === KIND_CLOUD) {
+      const c = this.variantCloud[v];
+      if (c) { landCloud(slot, hit, c, this); return true; }
+      this.lost(slot);
+    }
+    return false;
+  }
+
+  /** A lander expired / fell into the sea: a lost CLOUDBURST cell ends its special. */
+  lost(slot: number): void {
+    const P = this.projectiles;
+    if (P.kind[slot] !== KIND_CLOUD) return;
+    const r = this.runners[P.owner[slot]];
+    if (r) endSpecial(r, P.x[slot], P.y[slot], P.z[slot], this);
+  }
+
+  // ── KitHost ───────────────────────────────────────────────────────────────────────────────
+
+  emit(e: SimEvent): void {
+    switch (e.t) {
+      case 'shot': this.stats.shots++; break;
+      case 'dry': this.stats.dry++; break;
+      case 'flick': this.stats.flicks++; break;
+      case 'beam': this.stats.beams++; break;
+      case 'burst': this.stats.bursts++; break;
+      case 'sub': if (e.phase === 'throw') this.stats.subs++; else if (e.phase === 'pop') this.stats.pops++; break;
+      case 'special': if (e.phase === 'start') this.stats.specials++; break;
+      default: break;
+    }
+    this.pushEvent(e);
+  }
+
+  paintStrip(owner: number, team: TeamId, ax: number, ay: number, az: number, bx: number, by: number, bz: number,
+    r: number, seed: number): number {
+    const P = this.painter;
+    const before = P.weighted(team);
+    const flips = P.capsule(ax, ay, az, bx, by, bz, {
+      radius: r, team, nx: 0, ny: 1, nz: 0, minFacing: KITS.rollMinFacing, edgeNoise: KITS.rollEdgeNoise, seed,
+    });
+    this.credit(owner, P.weighted(team) - before);
+    return flips;
+  }
+
+  damage(victim: Runner, owner: number, dmg: number, x: number, y: number, z: number, cause: DamageCause, puddle: boolean = true): void {
+    if (!victim.alive || this.phase !== 'live' || victim.leaping) return;   // WELLSPRING leapers can't be interrupted
     const a = owner >= 0 && owner < this.runners.length ? this.runners[owner] : null;
     if (a && a.team === victim.team) return;                         // no friendly fire
     victim.hp = Math.max(0, victim.hp - dmg);
@@ -313,19 +455,25 @@ export class MatchWorld implements ProjectileHost, KitHost {
     victim.lastAttacker = owner;
     this.stats.hits++;
     this.pushEvent({ t: 'hit', victim: victim.id, by: owner, dmg, x, y, z });
-    if (a) {
+    if (a && puddle) {
       this.paint(owner, a.team, victim.x, victim.y + 0.05, victim.z, HITBOX.hitPuddleRadius, 0, 1, 0, 0.3,
         hash32(this.seedWord, victim.id, this.tick));
     }
-    if (victim.hp <= 0) this.wash(victim, a ? owner : null, 'dye');
+    if (victim.hp <= 0) this.wash(victim, a ? owner : null, cause);
   }
 
-  // ── KitHost ───────────────────────────────────────────────────────────────────────────────
+  lineClear(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
+    const dx = bx - ax, dy = by - ay, dz = bz - az;
+    const d = Math.hypot(dx, dy, dz);
+    if (d < 1e-4) return true;
+    const h = this.physics.raycast(ax, ay, az, dx, dy, dz, d);
+    return !h || h.toi >= d - 0.05;
+  }
 
-  emit(e: SimEvent): void {
-    if (e.t === 'shot') this.stats.shots++;
-    else if (e.t === 'dry') this.stats.dry++;
-    this.pushEvent(e);
+  // ── SpecialHost ───────────────────────────────────────────────────────────────────────────
+
+  specialRng(pid: number): () => number {
+    return this.specialRngs[pid] ?? this.specialRngs[0];
   }
 
   // ── dev / probe hooks (FRONT exposes them behind ?dev=1) ─────────────────────────────────
@@ -384,6 +532,7 @@ export class MatchWorld implements ProjectileHost, KitHost {
     v.respawnT = this.respawnTicks[i] * TICK;
     v.special *= this.specialPts.keep;
     if (v.special < 1) v.specialReady = false;
+    resetKit(v, this);
     this.stats.washes++;
     if (cause === 'sea') this.stats.seaWashes++;
     this.pushEvent({ t: 'washed', victim: v.id, by, cause });
@@ -391,7 +540,7 @@ export class MatchWorld implements ProjectileHost, KitHost {
       const a = this.runners[by];
       a.washes++;
       this.addSpecial(a, this.specialPts.perWash);
-      if (cause === 'dye') {
+      if (cause !== 'sea') {
         this.paint(by, a.team, v.x, v.y + 0.05, v.z, HITBOX.washBurstRadius, 0, 1, 0, 0.3, hash32(this.seedWord, v.id, 0xb057 + this.tick));
       }
     }
@@ -403,8 +552,60 @@ export class MatchWorld implements ProjectileHost, KitHost {
     this.pushEvent({ t: 'respawn', pid: r.id });
   }
 
+  /** register a projectile variant once per key; returns its index */
+  private variant(key: string, k: ProjectileKind): number {
+    const hit = this.variantKey.get(key);
+    if (hit !== undefined) return hit;
+    const i = this.kinds.length;
+    if (i > 255) throw new Error('MatchWorld: more than 256 projectile variants');
+    this.kinds.push(k);
+    this.variantBurst[i] = null; this.variantJelly[i] = null; this.variantCloud[i] = null;
+    this.variantKey.set(key, i);
+    return i;
+  }
+
+  /** credit newly dyed weighted m² to `owner` (painted + special meter) */
+  private credit(owner: number, gained: number): void {
+    if (owner >= 0 && owner < this.runners.length && gained > 0) {
+      const o = this.runners[owner];
+      o.painted += gained;
+      this.addSpecial(o, gained * this.specialPts.perM2);
+    }
+  }
+
+  /** tick the resting slots: jelly puddles (fuse → pop) and CLOUDBURST cells (rise → rain → end) */
+  private stepResting(): void {
+    const P = this.projectiles;
+    let i = 0;
+    while (i < P.count) {
+      const st = P.state[i];
+      if (st === PSTATE_FLY) { i++; continue; }
+      P.px[i] = P.x[i]; P.py[i] = P.y[i]; P.pz[i] = P.z[i];
+      const v = P.variant[i];
+      let done: boolean;
+      if (st === PSTATE_PUDDLE) {
+        const j = this.variantJelly[v];
+        done = j ? tickPuddle(i, j, this) : true;
+      } else {
+        const c = this.variantCloud[v];
+        done = c ? tickCloud(i, c, this) : true;
+        if (!c) this.lost(i);
+      }
+      if (done) P.remove(i); else i++;
+    }
+  }
+
+  /** the WELLSPRING slam of a leaper that landed (or gave up) */
+  private doSlam(r: Runner): void {
+    const sp = this.specialDefs[r.id];
+    if (sp && sp.type === 'wellspring') { slam(r, sp, this); return; }
+    r.leaping = false; r.slamPending = false;
+    endSpecial(r, r.x, r.y, r.z, this);
+  }
+
   private addSpecial(r: Runner, points: number): void {
     if (!(points > 0)) return;
+    if (r.specialActive !== '') return;                               // no charge while the special runs
     const c = this.charge[r.id] || 190;
     r.special = Math.min(1, r.special + points / c);
     if (r.special >= 1 && !r.specialReady) {
@@ -420,8 +621,14 @@ export class MatchWorld implements ProjectileHost, KitHost {
     const c = this.painter.coverage();
     this.result = { sun: c.sun, gulf: c.gulf, neutral: c.neutral, winner: c.sun > c.gulf ? 1 : c.gulf > c.sun ? 2 : 0 };
     this.projectiles.clear();
-    // the horn freezes the court: no firing, no coasting (gravity still lands anyone airborne)
-    for (const r of this.runners) { r.firing = false; r.vx = 0; r.vz = 0; }
+    // the horn freezes the court: no firing, no coasting (gravity still lands anyone airborne); running
+    // specials end, kits reset, a leaper falls with normal gravity and never slams
+    for (const r of this.runners) {
+      if (r.specialActive !== '') endSpecial(r, r.x, r.y, r.z, this);
+      resetKit(r, this);
+      r.leaping = false; r.slamPending = false;
+      r.firing = false; r.vx = 0; r.vz = 0;
+    }
     this.pushEvent({ t: 'horn', kind: 'end' });
     this.pushEvent({ t: 'phase', phase: 'ended' });
   }

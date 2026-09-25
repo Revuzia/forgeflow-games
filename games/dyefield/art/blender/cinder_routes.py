@@ -184,26 +184,35 @@ class Grid:
         c = self.cell_of(x, z)
         return self.cols.get(c, []) if c is not None else []
 
-    def body_hit(self, x, y, z):
-        """Capsule (feet at y) intersects geometry: a surface within body height, or the feet inside a
-        closed solid (the nearest surface above faces up) - tested at the centre + 8 rim points."""
-        pts = [(x, z)] + [(x + RADIUS * math.cos(a), z + RADIUS * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 8, endpoint=False)]
-        for (px, pz) in pts:
-            above = [s for s in self.surfaces(px, pz) if s[0] > y + 0.02]
-            if not above:
-                continue
-            s = min(above, key=lambda q: q[0])
-            if s[0] < y + HEIGHT - 0.05 or s[1] > 0:
-                return s
-        return None
+    # capsule sample rings: (horizontal offset d, lift) - the capsule's lower/upper surface at offset d
+    # from its axis is `lift` = r - sqrt(r^2 - d^2) above the feet / below the head (Rapier capsule)
+    RINGS = [(0.0, 0.0)] + [(RADIUS * f, RADIUS - math.sqrt(RADIUS * RADIUS - (RADIUS * f) ** 2)) for f in (0.7, 1.0)]
+
+    def body_contacts(self, x, y, z):
+        """Surfaces touching the capsule whose feet are at y: [(surface, lift)], tested on the axis and
+        on 8 points of two rings (0.7 r and r) at the capsule's true lower/upper surface there; a
+        sample point whose nearest surface above faces up is inside a closed solid."""
+        out = []
+        for (d, lift) in self.RINGS:
+            angs = (0.0,) if d == 0.0 else np.linspace(0, 2 * math.pi, 8, endpoint=False)
+            for a in angs:
+                px, pz = x + d * math.cos(a), z + d * math.sin(a)
+                above = [s for s in self.surfaces(px, pz) if s[0] > y + lift + 0.005]
+                if not above:
+                    continue
+                s = min(above, key=lambda q: q[0])
+                if s[0] < y + HEIGHT - lift - 0.02 or s[1] > 0:
+                    out.append((s, lift))
+        return out
 
     def fly(self, start, vel, drag_no_input=False, dt=1 / 240):
-        """Integrate a spring flight. Returns dict(landed, land [x,y,z], t, hit, apex)."""
+        """Integrate a spring flight (ballistic, gravity G). Returns dict(landed, land [x,y,z], t, hit, apex).
+        Landing = the axis crosses down through a walkable top, or (descending) the lower hemisphere
+        touches a walkable top below the sphere centre. Anything else the capsule touches is a hit."""
         x, y, z = start
         vx, vy, vz = vel
         t = 0.0
         apex = y
-        prev = None
         while t < 6.0:
             v0 = vy
             vy -= G * dt
@@ -216,14 +225,18 @@ class Grid:
             t += dt
             apex = max(apex, ny_)
             if vy < 0:
-                # landing: crossing down through a walkable top in the centre column
                 for s in self.surfaces(nx_, nz_):
                     if s[2] and ny_ <= s[0] <= y + 1e-9:
                         return {"landed": True, "land": [nx_, s[0], nz_], "t": t, "hit": None, "apex": apex}
             if t > 0.12:
-                h = self.body_hit(nx_, ny_, nz_)
-                if h is not None:
-                    return {"landed": False, "land": [nx_, ny_, nz_], "t": t, "hit": self.names[h[3]], "apex": apex}
+                hits = self.body_contacts(nx_, ny_, nz_)
+                if hits:
+                    if vy < 0 and all(s[2] and s[0] <= ny_ + RADIUS for (s, lift) in hits):
+                        gy = [s[0] for s in self.surfaces(nx_, nz_) if s[2] and s[0] <= ny_ + RADIUS]
+                        top = max(gy) if gy else max(s[0] for (s, lift) in hits)
+                        return {"landed": True, "land": [nx_, top, nz_], "t": t, "hit": None, "apex": apex}
+                    s = hits[0][0]
+                    return {"landed": False, "land": [nx_, ny_, nz_], "t": t, "hit": self.names[s[3]], "apex": apex}
             if ny_ < -3.0:
                 return {"landed": False, "land": [nx_, ny_, nz_], "t": t, "hit": "fell", "apex": apex}
             x, y, z = nx_, ny_, nz_
@@ -260,8 +273,33 @@ class Grid:
 
 
 # ── areas ────────────────────────────────────────────────────────────────────────────────────────
+PERCH_NODES = {"paint_crate": "crate tops", "solid_driftwood": "driftwood logs", "solid_lanterns": "lantern posts",
+               "solid_palm_trunks": "palm trunks", "solid_bridge_posts": "bridge posts", "col_bridge_rails": "bridge rails",
+               "solid_masts": "masts", "solid_coral": "coral heads", "solid_cliff": "back-cliff columns",
+               "paint_wreck": "bulwark rail / stems"}
+
+
 def area_of(x, y, z, name):
-    """Named area of a standable cell (glTF). Side isles: WEST = x<0. Beaches: SUNCREW = z<0."""
+    """Named area of a standable cell (glTF). Side isles: WEST = x<0. Beaches: SUNCREW = z<0.
+    'perch: ...' = the top of a prop, a rock outcrop or the wheelhouse (jump / wall-slick high ground,
+    not a movement area); 'back strip' = the sand behind the back-cliff columns (reached round their ends)."""
+    if name.startswith("paint_wreck") and not name.startswith("paint_wreck_deck") and y < 2.5:
+        return "wreck tunnel (hull breach)"
+    if name in PERCH_NODES:
+        return "perch: " + PERCH_NODES[name]
+    if name.startswith("paint_basalt"):
+        if abs(x) <= 12.0 and abs(z) < 14.0 and y >= 1.4:
+            return "perch: MID rock outcrops"
+        if abs(z) >= 29.0 and y >= 1.3 and not (abs(x) <= 10.6 and abs(z) >= 35.0):
+            return "perch: beach rock outcrops"
+        if abs(x) > 12.0 and abs(z) < 29.0 and y >= 3.6:
+            return "perch: isle rock pillars"
+        if abs(x) > 12.0 and abs(z) < 29.0 and abs(z) >= 11.8 and 1.35 <= y < 2.2 and abs(x) < 21.0:
+            return "perch: isle rock outcrops"
+    if name.startswith("paint_wreck_deck") and y >= 5.4:
+        return "perch: wheelhouse roof"
+    if name.startswith("paint_sand") and abs(z) >= 45.4 and abs(x) <= 15.0:
+        return "back strip behind the cliff"
     if name.startswith("paint_plank"):
         if abs(x) > 22:
             return "bridge beach-A~WEST" if z < 0 else "bridge beach-B~EAST"
@@ -389,17 +427,69 @@ def run(g, nodes, verbose=True):
                 seq.append(area[u])
             u = par[u]
         return list(reversed(seq))
+    # walking distance (m) from each spawn to the nearest cell of every area (Dijkstra on the walk graph)
+    import heapq
+
+    def dijkstra(src):
+        dist = {src: 0.0}
+        pq = [(0.0, src)]
+        while pq:
+            d, v = heapq.heappop(pq)
+            if d > dist.get(v, 1e18):
+                continue
+            cv, yv, _ = grid.nodes[v]
+            xv, zv = grid.cell_xz(cv)
+            for w in walk_adj[v]:
+                cw, yw, _ = grid.nodes[w]
+                xw, zw = grid.cell_xz(cw)
+                nd = d + math.sqrt((xw - xv) ** 2 + (zw - zv) ** 2 + (yw - yv) ** 2)
+                if nd < dist.get(w, 1e18):
+                    dist[w] = nd
+                    heapq.heappush(pq, (nd, w))
+        return dist
+    dist = {s: dijkstra(spawn[s]) for s in spawn}
+
+    def mirror_area(a):
+        swaps = [("beach A", "beach B"), ("spawn shelf A", "spawn shelf B"), ("WEST", "EAST"), ("MID apron S", "MID apron N"),
+                 ("bridge beach-A~WEST", "bridge beach-B~EAST"), ("sandbar A~WEST (bar_w)", "sandbar B~EAST (bar_w_m)"),
+                 ("shoal A~EAST (shoal_e)", "shoal B~WEST (shoal_e_m)")]
+        for p, q in swaps:
+            if a.startswith(p) and (p not in ("WEST",) or a.split()[0] == "WEST"):
+                return q + a[len(p):]
+            if a.startswith(q) and (q not in ("EAST",) or a.split()[0] == "EAST"):
+                return p + a[len(q):]
+        if a == "bridge WEST~MID":
+            return "bridge EAST~MID"
+        if a == "bridge EAST~MID":
+            return "bridge WEST~MID"
+        if a.startswith("spring pad "):
+            return a[:-2] if a.endswith("_m") else a + "_m"
+        return a
     table = []
     for a in areas:
         if a.startswith("spring pad"):
             continue
-        row = {"area": a, "cells": sum(1 for x in area if x == a)}
+        cells = [u for u in range(N) if area[u] == a]
+        row = {"area": a, "cells": len(cells),
+               "kind": "perch" if a.startswith("perch") else "out of play" if a.startswith("out of play") else "area"}
         for s in ("A", "B"):
             r = route(reach_walk[s], a)
             row[f"walk_from_{s}"] = r
             if r is None:
                 row[f"spring_from_{s}"] = route(reach[s], a)
+            ds = [dist[s][u] for u in cells if u in dist[s]]
+            row[f"walk_m_from_{s}"] = round(min(ds), 1) if ds else None
         table.append(row)
+    by_area = {r["area"]: r for r in table}
+    fair = []
+    for r in table:
+        m = by_area.get(mirror_area(r["area"]))
+        dA, dB = r["walk_m_from_A"], (m or {}).get("walk_m_from_B")
+        fair.append({"area": r["area"], "mirror": mirror_area(r["area"]), "A_m": dA, "B_to_mirror_m": dB,
+                     "diff_m": None if dA is None or dB is None else round(abs(dA - dB), 2)})
+    areas_ok = all(r["walk_from_A"] and r["walk_from_B"] for r in table if r["kind"] == "area")
+    fair_ok = all((f["diff_m"] is not None and f["diff_m"] <= 0.5) or (f["A_m"] is None and f["B_to_mirror_m"] is None)
+                  for f in fair)
     # crossings on their own
     beachA = {"beach A", "spawn shelf A"}
     beachB = {"beach B", "spawn shelf B"}
@@ -447,6 +537,9 @@ def run(g, nodes, verbose=True):
     out = {"model": {"cell_m": CELL, "step_m": STEP, "height_m": HEIGHT, "radius_m": RADIUS, "gravity": G,
                      "walk_slope_deg": 46.0, "wall_slick": False, "jumps": False},
            "nodes": N, "spawn_nodes": spawn, "springs": springs, "route_table": table, "crossings": cross,
+           "all_areas_walk_reachable_from_both_spawns": areas_ok, "rot180_fairness": fair, "rot180_fair": fair_ok,
+           "springs_ok": all(s["ok"] for s in springs),
+           "crossings_ok": all(c["reached"] for c in cross),
            "one_way_trap_cells": len(traps), "trap_cells_by_area": trap_areas,
            "standable_cells_unreachable_from_spawns": unreached,
            "reach_counts": {s: len(reach[s]) for s in reach},
@@ -454,13 +547,16 @@ def run(g, nodes, verbose=True):
     if verbose:
         print("route table (walking + tide-springs; no wall-slick, no jumps):")
         for row in table:
-            print(f"  {row['area']:28s} cells {row['cells']:6d}")
+            print(f"  {row['area']:36s} [{row['kind']}] cells {row['cells']:6d}  walk m A {row['walk_m_from_A']}  B {row['walk_m_from_B']}")
             for s in ("A", "B"):
                 w = row[f"walk_from_{s}"]
                 sp = row.get(f"spring_from_{s}")
                 txt = " > ".join(w) if w else (("(no walking route) spring: " + " > ".join(sp)) if sp
                                                else "UNREACHED (wall-slick / jump perch only)")
                 print(f"     {s}: {txt}")
+        print("rot180 fairness (walk m from A to X vs from B to mirror(X)):",
+              "max diff", max((f["diff_m"] or 0.0) for f in fair), "m; fair =", fair_ok)
+        print("all movement areas walk-reachable from both spawns:", areas_ok)
         print("crossings on their own:")
         for c in cross:
             print(f"  {c['crossing']:44s} -> {c['reached'] or 'FAILED'}")

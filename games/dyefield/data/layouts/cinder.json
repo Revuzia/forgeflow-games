@@ -21,9 +21,9 @@
           "kind": "outdoor",
           "sunElevationDeg": 28, "sunAzimuthDeg": 255, "sunColor": "#FFC37E", "sunIntensity": 3.2,
           "hemiSky": "#F0D2B8", "hemiGround": "#6E5A48", "hemiIntensity": 1.35,
-          "skyZenith": "#8E86B8", "skyHorizon": "#FFC58E",
+          "skyZenith": "#8A98CF", "skyHorizon": "#FFC894",
           "fogColor": "#F0D3B6", "fogDensity": 0.009, "exposure": 1.0,
-          "waterDeep": "#0E6E78", "waterShallow": "#5FD8C0"
+          "waterDeep": "#0F7C86", "waterShallow": "#5FE3C8"
         },
         "ember": {
           "kind": "outdoor",
@@ -132,7 +132,7 @@
     { "kind": "bridge", "id": "bridge_mid", "mirror": true, "width": 2.5, "arch": 0.45, "points": [[-19.8, null, 6.0], [-7.0, null, 6.0]] },
 
     { "kind": "spring", "id": "spring_beach", "mirror": true, "pos": [26.5, 0, -33.0], "target": [29.5, 0.45, -16.8], "apex": 4.9 },
-    { "kind": "spring", "id": "spring_mid", "mirror": true, "pos": [-20.5, 0, -1.8], "target": [-7.0, 3.5, 0.0], "apex": 7.0 },
+    { "kind": "spring", "id": "spring_mid", "mirror": true, "pos": [-20.5, 0, -1.8], "target": [-7.0, 3.5, 0.0], "apex": 8.0 },
 
     { "kind": "channel", "id": "chan_lagoon", "mirror": true, "min": [-17.5, -8, -30.5], "max": [17.5, -0.8, -10.5] },
     { "kind": "channel", "id": "chan_west", "mirror": true, "min": [-38, -8, -30.5], "max": [-17.5, -0.8, -20.5] },

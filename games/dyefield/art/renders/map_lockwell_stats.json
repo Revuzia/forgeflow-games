@@ -135,7 +135,7 @@
   "samples": 64,
   "distance": 2.0,
   "device": "GPU OPTIX (NVIDIA RTX A2000 Laptop GPU)",
-  "seconds": 8.6,
+  "seconds": 12.2,
   "baked_texels": 409681,
   "dilated_texels": 597984,
   "mean": 0.8062,

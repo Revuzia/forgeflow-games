@@ -1,26 +1,44 @@
-// DYEFIELD — projectiles (CONTRACT §10.1 / §10.2 / §10.4). THREE-free, DOM-free, deterministic.
+// DYEFIELD — projectiles (CONTRACT §10.1 / §10.2 / §10.4 + CHANGED(KITSIM)). THREE-free, DOM-free, deterministic.
 //
 // ProjectilePool is struct-of-arrays with a fixed capacity: no per-shot allocation. Slots [0, count)
 // are live; remove() swap-removes, so a slot's (px,py,pz) → (x,y,z) pair always belongs to one droplet
 // and the view can draw slot i with the frame alpha.
 //
-// stepProjectiles advances every droplet one tick and SWEEPS its tick segment:
+// stepProjectiles advances every FLYING slot one tick and SWEEPS its tick segment:
 //   * vs the map: one Rapier raycast along the segment (nothing tunnels, whatever the speed);
 //   * vs runners: segment–capsule distance against every living runner of another crew (vertical
 //     capsule, HITBOX radius 0.42, 1.2 m tall; 0.5 m in slick form). Allies are passed through.
-// The earliest contact wins. A map contact paints an impact (thin-wall-safe rule, §10.4); a runner
-// contact deals damage (the host splats a puddle under the victim). In flight a droplet drips a small
-// splat under itself every dripEvery s (raycast down).
+// The earliest contact wins. Per ProjectileKind.mode:
+//   0 droplet (MIST-RASP, SHEET-DRUM flick): a map contact paints an impact (thin-wall-safe rule, §10.4); a
+//     runner contact deals damage (lerp damage → damageFar over falloffRange of horizontal travel when set).
+//     In flight a droplet drips a small splat under itself every dripEvery s (raycast down).
+//   1 burst (POP-WELL): explodes on a runner, on the map, or once it has travelled airburstRange → host.burst.
+//   2 lander (JELLY CHARGE, CLOUDBURST cell): ignores runners; the first map contact → host.land, which turns the
+//     slot into a resting one (state PUDDLE / HOVER) that the host ticks itself; lost to the sea → host.lost.
 
 import type { TeamId } from '../types.ts';
-import type { PhysicsWorld } from '../physics.ts';
+import type { CastHit, PhysicsWorld } from '../physics.ts';
 import type { Runner } from '../runner.ts';
 import { COMBAT, HITBOX } from '../config.ts';
 
-/** kind 0 = MIST-RASP droplet (phase 6 adds kinds) */
+/** pool.kind — the view-visible projectile type */
 export const KIND_MIST = 0;
+export const KIND_FLICK = 1;
+export const KIND_BURST = 2;
+export const KIND_JELLY = 3;
+export const KIND_CLOUD = 4;
 
-/** Per-kind flight + paint numbers (built from data/weapons.json by combat/kits.ts). */
+/** pool.state */
+export const PSTATE_FLY = 0;
+export const PSTATE_PUDDLE = 1;
+export const PSTATE_HOVER = 2;
+
+/** ProjectileKind.mode */
+export const MODE_DROPLET = 0;
+export const MODE_BURST = 1;
+export const MODE_LANDER = 2;
+
+/** Per-variant flight + paint numbers (built from data/weapons.json by combat/kits.ts / combat/defs.ts). */
 export interface ProjectileKind {
   damage: number;
   straightTime: number;   // s of straight flight before gravity + drag
@@ -30,6 +48,13 @@ export interface ProjectileKind {
   dripEvery: number;      // s (0 = no drips)
   dripRadius: number;
   maxLife: number;        // s
+  /** MODE_DROPLET (default) | MODE_BURST | MODE_LANDER */
+  mode?: number;
+  /** droplet: damage at falloffRange m of horizontal travel (linear from `damage`) */
+  damageFar?: number;
+  falloffRange?: number;
+  /** burst: explode once this far (3-D) from the launch point; 0 / undefined = never */
+  airburstRange?: number;
 }
 
 export class ProjectilePool {
@@ -46,6 +71,17 @@ export class ProjectilePool {
   readonly kind: Uint8Array;
   readonly owner: Int16Array;
   readonly seed: Uint32Array;
+  // ── CHANGED(KITSIM) ──
+  /** index into the host's ProjectileKind table (per kit); the view reads `kind` */
+  readonly variant: Uint8Array;
+  /** PSTATE_FLY | PSTATE_PUDDLE (jelly resting) | PSTATE_HOVER (CLOUDBURST cell rising / raining) */
+  readonly state: Uint8Array;
+  /** resting slots: s left (jelly fuse; CLOUDBURST rise + rain) */
+  readonly timer: Float32Array;
+  /** flying: the launch point · CLOUDBURST cell: the hover point */
+  readonly ox: Float32Array; readonly oy: Float32Array; readonly oz: Float32Array;
+  /** jelly puddle: the normal of the surface it rests on */
+  readonly nx: Float32Array; readonly ny: Float32Array; readonly nz: Float32Array;
 
   constructor(capacity: number = COMBAT.poolCapacity) {
     const n = Math.max(1, capacity | 0);
@@ -59,11 +95,19 @@ export class ProjectilePool {
     this.kind = new Uint8Array(n);
     this.owner = new Int16Array(n);
     this.seed = new Uint32Array(n);
+    this.variant = new Uint8Array(n);
+    this.state = new Uint8Array(n);
+    this.timer = new Float32Array(n);
+    this.ox = new Float32Array(n); this.oy = new Float32Array(n); this.oz = new Float32Array(n);
+    this.nx = new Float32Array(n); this.ny = new Float32Array(n); this.nz = new Float32Array(n);
   }
 
-  /** New droplet at (x, y, z) with velocity v. Returns its slot, or −1 when the pool is full. */
+  /**
+   * New projectile at (x, y, z) with velocity v. `variant` indexes the host's ProjectileKind table
+   * (default = kind). Returns its slot, or −1 when the pool is full.
+   */
   spawn(kind: number, owner: number, team: TeamId, x: number, y: number, z: number,
-    vx: number, vy: number, vz: number, seed: number, dripEvery: number): number {
+    vx: number, vy: number, vz: number, seed: number, dripEvery: number, variant: number = kind): number {
     if (this.count >= this.capacity) { this.dropped++; return -1; }
     const i = this.count++;
     this.x[i] = x; this.y[i] = y; this.z[i] = z;
@@ -75,6 +119,11 @@ export class ProjectilePool {
     this.kind[i] = kind;
     this.owner[i] = owner;
     this.seed[i] = seed >>> 0;
+    this.variant[i] = variant;
+    this.state[i] = PSTATE_FLY;
+    this.timer[i] = 0;
+    this.ox[i] = x; this.oy[i] = y; this.oz[i] = z;
+    this.nx[i] = 0; this.ny[i] = 1; this.nz[i] = 0;
     return i;
   }
 
@@ -91,6 +140,11 @@ export class ProjectilePool {
     this.kind[i] = this.kind[last];
     this.owner[i] = this.owner[last];
     this.seed[i] = this.seed[last];
+    this.variant[i] = this.variant[last];
+    this.state[i] = this.state[last];
+    this.timer[i] = this.timer[last];
+    this.ox[i] = this.ox[last]; this.oy[i] = this.oy[last]; this.oz[i] = this.oz[last];
+    this.nx[i] = this.nx[last]; this.ny[i] = this.ny[last]; this.nz[i] = this.nz[last];
   }
 
   clear(): void { this.count = 0; }
@@ -107,6 +161,14 @@ export interface ProjectileHost {
     nx: number, ny: number, nz: number, minFacing: number, seed: number): number;
   /** a droplet of `owner` touched `victim` at (x, y, z) */
   hit(victim: Runner, owner: number, dmg: number, x: number, y: number, z: number): void;
+  // ── CHANGED(KITSIM): optional so a droplet-only host still compiles ──
+  /** a MODE_BURST slot explodes at (x, y, z): on `victim` (direct hit), on the map (normal n), or in the air */
+  burst?(slot: number, x: number, y: number, z: number, victim: Runner | null,
+    nx: number, ny: number, nz: number, air: boolean): void;
+  /** a MODE_LANDER slot touched the map; returns true when the slot now rests (kept), false = remove it */
+  land?(slot: number, hit: CastHit): boolean;
+  /** a MODE_LANDER slot expired or fell into the sea before landing (it is removed right after) */
+  lost?(slot: number): void;
 }
 
 /** floor-ness threshold of an impact normal (maps.json scoring.floorMinNy on Pier 18) */
@@ -156,7 +218,7 @@ export function segVerticalCapsuleT(
  *                       wall normal onto the near-side floor (only when the hit is low enough);
  *   ceiling hit      → plain splat with the hit normal.
  */
-export function paintImpact(host: ProjectileHost, owner: number, team: TeamId,
+export function paintImpact(host: Pick<ProjectileHost, 'physics' | 'paint'>, owner: number, team: TeamId,
   hx: number, hy: number, hz: number, nx: number, ny: number, nz: number,
   r: number, seed: number, dirx: number, dirz: number): void {
   const ph = host.physics;
@@ -183,18 +245,20 @@ export function paintImpact(host: ProjectileHost, owner: number, team: TeamId,
   }
 }
 
-/** Advance every live droplet one tick: integrate, sweep, collide, paint, drip, expire. */
+/** Advance every FLYING slot one tick: integrate, sweep, collide, paint, drip, explode, land, expire. */
 export function stepProjectiles(pool: ProjectilePool, dt: number, host: ProjectileHost): void {
   const ph = host.physics;
   const runners = host.runners;
   const killY = host.killY;
   let i = 0;
   while (i < pool.count) {
-    const k = host.kinds[pool.kind[i]] ?? host.kinds[0];
-    const team = pool.team[i] as TeamId;
-    const owner = pool.owner[i];
+    if (pool.state[i] !== PSTATE_FLY) { i++; continue; }      // resting: the host ticks puddles / cells (and their px)
     const ox = pool.x[i], oy = pool.y[i], oz = pool.z[i];
     pool.px[i] = ox; pool.py[i] = oy; pool.pz[i] = oz;
+    const k = host.kinds[pool.variant[i]] ?? host.kinds[pool.kind[i]] ?? host.kinds[0];
+    const mode = k.mode ?? MODE_DROPLET;
+    const team = pool.team[i] as TeamId;
+    const owner = pool.owner[i];
     const age0 = pool.age[i];
     const age1 = age0 + dt;
     pool.age[i] = age1;
@@ -215,38 +279,73 @@ export function stepProjectiles(pool: ProjectilePool, dt: number, host: Projecti
     const sx = nx - ox, sy = ny - oy, sz = nz - oz;
     const len = Math.hypot(sx, sy, sz);
     let tMap = 2;
-    let mapHit: ReturnType<PhysicsWorld['raycast']> = null;
+    let mapHit: CastHit | null = null;
     if (len > 1e-7) {
       mapHit = ph.raycast(ox, oy, oz, sx, sy, sz, len);
       if (mapHit) tMap = mapHit.toi / len;
     }
     let tHit = 2;
     let victim: Runner | null = null;
-    for (let r = 0; r < runners.length; r++) {
-      const v = runners[r];
-      if (!v.alive || v.team === team || v.id === owner) continue;
-      const h = v.hitHeight();
-      const rad = Math.min(HITBOX.radius, h * 0.5);
-      const t = segVerticalCapsuleT(ox, oy, oz, sx, sy, sz, v.x, v.y + rad, v.z, h - 2 * rad, rad);
-      if (t >= 0 && t < tHit) { tHit = t; victim = v; }
+    if (mode !== MODE_LANDER) {
+      for (let r = 0; r < runners.length; r++) {
+        const v = runners[r];
+        if (!v.alive || v.team === team || v.id === owner) continue;
+        const h = v.hitHeight();
+        const rad = Math.min(HITBOX.radius, h * 0.5);
+        const t = segVerticalCapsuleT(ox, oy, oz, sx, sy, sz, v.x, v.y + rad, v.z, h - 2 * rad, rad);
+        if (t >= 0 && t < tHit) { tHit = t; victim = v; }
+      }
     }
 
-    if (victim && tHit <= tMap) {
-      host.hit(victim, owner, k.damage, ox + sx * tHit, oy + sy * tHit, oz + sz * tHit);
-      pool.remove(i);
-      continue;
-    }
-    if (mapHit) {
-      paintImpact(host, owner, team, mapHit.x, mapHit.y, mapHit.z, mapHit.nx, mapHit.ny, mapHit.nz,
-        k.impactRadius, pool.seed[i], vx, vz);
-      pool.remove(i);
-      continue;
+    if (mode === MODE_BURST) {
+      // airburst: the first point of the segment that is airburstRange from the launch point (straight flight)
+      let tAir = 2;
+      const R = k.airburstRange ?? 0;
+      if (R > 0) {
+        const d0 = Math.hypot(ox - pool.ox[i], oy - pool.oy[i], oz - pool.oz[i]);
+        const d1 = Math.hypot(nx - pool.ox[i], ny - pool.oy[i], nz - pool.oz[i]);
+        if (d1 >= R) tAir = d0 >= R ? 0 : (R - d0) / Math.max(1e-9, d1 - d0);
+      }
+      const t = Math.min(victim ? tHit : 2, mapHit ? tMap : 2, tAir);
+      if (t <= 1) {
+        const bx = ox + sx * t, by = oy + sy * t, bz = oz + sz * t;
+        if (victim && tHit <= t + 1e-9) host.burst?.(i, bx, by, bz, victim, 0, 0, 0, false);
+        else if (mapHit && tMap <= t + 1e-9) host.burst?.(i, mapHit.x, mapHit.y, mapHit.z, null, mapHit.nx, mapHit.ny, mapHit.nz, false);
+        else host.burst?.(i, bx, by, bz, null, 0, 0, 0, true);
+        pool.remove(i);
+        continue;
+      }
+    } else if (mode === MODE_LANDER) {
+      if (mapHit) {
+        if (host.land && host.land(i, mapHit)) { i++; continue; }
+        pool.remove(i);
+        continue;
+      }
+    } else {
+      if (victim && tHit <= tMap) {
+        const hx = ox + sx * tHit, hy = oy + sy * tHit, hz = oz + sz * tHit;
+        let dmg = k.damage;
+        if (k.damageFar !== undefined && (k.falloffRange ?? 0) > 0) {
+          const travel = Math.hypot(hx - pool.ox[i], hz - pool.oz[i]);
+          const f = Math.min(1, Math.max(0, travel / (k.falloffRange as number)));
+          dmg = k.damage + (k.damageFar - k.damage) * f;
+        }
+        host.hit(victim, owner, dmg, hx, hy, hz);
+        pool.remove(i);
+        continue;
+      }
+      if (mapHit) {
+        paintImpact(host, owner, team, mapHit.x, mapHit.y, mapHit.z, mapHit.nx, mapHit.ny, mapHit.nz,
+          k.impactRadius, pool.seed[i], vx, vz);
+        pool.remove(i);
+        continue;
+      }
     }
 
     pool.x[i] = nx; pool.y[i] = ny; pool.z[i] = nz;
 
     // ── drips under the flight path
-    if (k.dripEvery > 0) {
+    if (k.dripEvery > 0 && mode === MODE_DROPLET) {
       let d = pool.drip[i] - dt;
       if (d <= 0) {
         d += k.dripEvery;
@@ -259,7 +358,11 @@ export function stepProjectiles(pool: ProjectilePool, dt: number, host: Projecti
       pool.drip[i] = d;
     }
 
-    if (age1 > k.maxLife || ny < killY - 1) { pool.remove(i); continue; }
+    if (age1 > k.maxLife || ny < killY - 1) {
+      if (mode === MODE_LANDER) host.lost?.(i);
+      pool.remove(i);
+      continue;
+    }
     i++;
   }
 }

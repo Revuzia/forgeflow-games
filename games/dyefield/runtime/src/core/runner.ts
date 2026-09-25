@@ -18,6 +18,11 @@
 //
 // Firing is NOT here: MatchWorld runs combat/kits.ts after every runner has moved. A standalone Runner
 // (probe_move, the phase-2 Player shim) can still run the phase-2 DEV_BRUSH (opts.devBrush).
+//
+// Phase 6 (CHANGED(KITSIM)): the kit read-outs (charge, rolling, flicking, specialActive/T, subCooldown)
+// are written by combat/*; the runner itself adds the WELLSPRING leap (startLeap: intents ignored, its own
+// gravity, slamPending on landing), knock() (an impulse that lifts the runner into the air), a firing speed
+// cap (the roller's rollSpeed) and face-the-motion while firing (the roller).
 
 import type { MoveState, PlayerIntent, Side, TeamId } from './types.ts';
 import type { CharacterBody, PhysicsWorld } from './physics.ts';
@@ -46,6 +51,10 @@ export interface RunnerOptions {
   devBrush?: boolean;
   /** speed factor while firing (kit moveSpeedWhileFiring) */
   fireMoveMul?: number;
+  /** m/s speed cap while fire is held (SHEET-DRUM rollSpeed); default none */
+  fireSpeedCap?: number;
+  /** keep facing the motion (not the aim) while fire is held (SHEET-DRUM) */
+  faceMotionWhileFiring?: boolean;
 }
 
 const TAU = Math.PI * 2;
@@ -123,8 +132,54 @@ export class Runner {
   dryCd = 0;
   /** @internal tankLow may fire */
   lowArmed = true;
-  /** @internal special 'ready' already announced */
+  /** special 'ready' already announced (reset when the special starts / the meter drops below 1) */
   specialReady = false;
+
+  // ── phase-6 kit read-outs (CHANGED(KITSIM)) ──
+  /** NEEDLE-GLINT charge 0..1 (0 when not charging) */
+  charge = 0;
+  /** SHEET-DRUM drum down and painting this tick */
+  rolling = false;
+  /** SHEET-DRUM flick windup in progress */
+  flicking = false;
+  /** '' or the id of this runner's running special */
+  specialActive = '';
+  /** s since that special started */
+  specialT = 0;
+  /** s until the sub may be thrown again */
+  subCooldown = 0;
+  /** WELLSPRING leap in progress (immune to damage, intents ignored) */
+  leaping = false;
+  subs = 0; flicks = 0; beams = 0; bursts = 0; specials = 0; flattens = 0;
+  /** m rolled with the drum down (tank drain base) */
+  rollMetres = 0;
+  // ── @internal kit state (combat/*) ──
+  /** @internal fire held (and able) last kit tick */
+  prevFireHeld = false;
+  /** @internal s since the current press */
+  holdT = 0;
+  /** @internal this press already started a flick */
+  pressFlicked = false;
+  /** @internal s of flick windup left */
+  flickT = 0;
+  /** @internal s of flick cooldown left */
+  flickCd = 0;
+  /** @internal s standing still with fire held */
+  standT = 0;
+  /** @internal previous strip point of the current roll stroke */
+  rollHas = false; rollAx = 0; rollAy = 0; rollAz = 0;
+  /** @internal per-stroke paint seed + stroke counter */
+  rollSeed = 0; strokes = 0;
+  /** @internal charging (NEEDLE-GLINT) */
+  charging = false;
+  /** @internal s to the next glint event */
+  glintT = 0;
+  /** @internal the leap landed this tick: MatchWorld slams */
+  slamPending = false;
+  /** @internal s since the leap started */
+  leapT = 0;
+  /** @internal gravity during the leap */
+  leapG = 0;
 
   readonly body: CharacterBody;
   readonly physics: PhysicsWorld | null;
@@ -133,6 +188,8 @@ export class Runner {
   readonly autoRespawn: boolean;
   readonly devBrush: boolean;
   fireMoveMul: number;
+  fireSpeedCap: number;
+  faceMotion: boolean;
 
   private spawn: SpawnPoint;
   private tall = true;              // capsule at full height
@@ -146,6 +203,10 @@ export class Runner {
   private wallCd = 0;
   private refilling = false;
   private probeNx = 0; private probeNz = 0;
+  private readonly leapIntent: PlayerIntent = {
+    moveX: 0, moveZ: 0, yaw: 0, pitch: 0, jump: false, fire: false, slick: false, sub: false, special: false,
+    hasAim: false, aimX: 0, aimY: 0, aimZ: 0,
+  };
 
   constructor(who: RunnerIdentity, body: CharacterBody, spawn: SpawnPoint, opts: RunnerOptions = {}) {
     this.id = who.id;
@@ -162,6 +223,8 @@ export class Runner {
     this.autoRespawn = opts.autoRespawn ?? true;
     this.devBrush = opts.devBrush ?? false;
     this.fireMoveMul = opts.fireMoveMul ?? 1;
+    this.fireSpeedCap = opts.fireSpeedCap ?? Infinity;
+    this.faceMotion = opts.faceMotionWhileFiring ?? false;
     this.killY = opts.killY ?? -1;
     this.spawn = { ...spawn };
     this.respawn(spawn);
@@ -207,6 +270,13 @@ export class Runner {
     this.fireCd = 0;
     this.dryCd = 0;
     this.lowArmed = true;
+    // kit transients (the running special, if any, is a thrown object and outlives the runner)
+    this.charge = 0; this.charging = false; this.glintT = 0;
+    this.rolling = false; this.rollHas = false;
+    this.flicking = false; this.flickT = 0; this.flickCd = 0; this.standT = 0; this.holdT = 0;
+    this.pressFlicked = false; this.prevFireHeld = false;
+    this.subCooldown = 0;
+    this.leaping = false; this.slamPending = false; this.leapT = 0;
     this.respawns++;
   }
 
@@ -227,9 +297,32 @@ export class Runner {
 
   // ── queries ───────────────────────────────────────────────────────────────────────────────
 
-  /** alive, tall form, surfaced and not on a wall */
+  /** alive, tall form, surfaced, not on a wall and not mid-WELLSPRING */
   canFire(): boolean {
-    return this.alive && !this.slickForm && this.tall && this.surfacing <= 0 && this.state !== 'wallslick';
+    return this.alive && !this.slickForm && this.tall && this.surfacing <= 0 && this.state !== 'wallslick' && !this.leaping;
+  }
+
+  /** WELLSPRING take-off: straight up at vy with its own gravity g; intents are ignored until it lands. */
+  startLeap(vy: number, g: number): void {
+    if (this.state === 'wallslick') { this.state = 'air'; this.wallCd = 0.2; }
+    this.leaping = true;
+    this.slamPending = false;
+    this.leapT = 0;
+    this.leapG = g;
+    this.vx = 0; this.vz = 0; this.vy = vy;
+    this.grounded = false;
+    this.coyote = 0;
+    this.jumpBuf = 0;
+  }
+
+  /** An impulse (m/s): replaces the horizontal velocity, lifts the runner off the ground. Leapers ignore it. */
+  knock(vx: number, vy: number, vz: number): void {
+    if (!this.alive || this.leaping) return;
+    if (this.state === 'wallslick') { this.state = 'air'; this.wallCd = 0.2; }
+    this.vx = vx; this.vz = vz;
+    this.vy = Math.max(this.vy, vy);
+    this.grounded = false;
+    this.coyote = 0;
   }
 
   /** feet inside the pad disc (horizontal) and at its height */
@@ -254,6 +347,14 @@ export class Runner {
     this.ticks++;
     this.inSea = false;
     if (!this.alive) { this.firing = false; this.hidden = false; this.brushing = false; return; }
+    if (this.leaping) {
+      // WELLSPRING: committed — aim still tracks, nothing else is read
+      this.leapT += dt;
+      const li = this.leapIntent;
+      li.yaw = intent.yaw; li.pitch = intent.pitch; li.hasAim = intent.hasAim;
+      li.aimX = intent.aimX; li.aimY = intent.aimY; li.aimZ = intent.aimZ;
+      intent = li;
+    }
 
     // ── wish direction (camera-relative): forward = (sin yaw, 0, cos yaw), right = (−cos yaw, 0, sin yaw)
     let ix = fin(intent.moveX, 0);
@@ -389,7 +490,7 @@ export class Runner {
       if (!popped) {
         let maxSpeed = ground === 'slick' ? MOVE.slick : ground === 'slog' ? MOVE.slog : MOVE.walk;
         if (!this.grounded) maxSpeed = this.slickForm ? MOVE.slick : MOVE.walk;
-        if (firingHeld) maxSpeed *= this.fireMoveMul;
+        if (firingHeld) maxSpeed = Math.min(maxSpeed * this.fireMoveMul, this.fireSpeedCap);
         const tx = wx * maxSpeed, tz = wz * maxSpeed;
         if (this.grounded) {
           const acc = ground === 'slick' ? SLICK.accel : MOVE.accel;
@@ -420,7 +521,7 @@ export class Runner {
         dy = -MOVE.groundStick * dt;
       } else {
         const v0 = this.vy;
-        this.vy = Math.max(-MOVE.maxFall, this.vy - MOVE.gravity * dt);
+        this.vy = Math.max(-MOVE.maxFall, this.vy - (this.leaping ? this.leapG : MOVE.gravity) * dt);
         dy = 0.5 * (v0 + this.vy) * dt;          // trapezoid: exact apex for constant gravity
       }
       wantX = this.vx * dt; wantZ = this.vz * dt;
@@ -461,6 +562,7 @@ export class Runner {
           this.landings++;
           if (events) events.push({ t: 'land', pid: this.id, hard: -vyBefore > MATCH.hardLandingSpeed });
         }
+        if (this.leaping) { this.leaping = false; this.slamPending = true; }
         this.vy = 0;
         this.airTime = 0;
       } else {
@@ -484,7 +586,7 @@ export class Runner {
     this.brushing = brushing;
     let targetYaw: number | null = null;
     let rate = MOVE.turnRate;
-    if (firingHeld || brushing) { targetYaw = this.aimYaw; rate = MOVE.aimTurnRate; }
+    if ((firingHeld && !this.faceMotion) || this.flicking || brushing) { targetYaw = this.aimYaw; rate = MOVE.aimTurnRate; }
     else if (onWall) targetYaw = Math.atan2(-this.wallNx, -this.wallNz);
     else if (wlen > 0.05) targetYaw = Math.atan2(wx, wz);
     if (targetYaw !== null) {

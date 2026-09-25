@@ -641,28 +641,77 @@ def kelp_pile(seed, height_fn, pos, yaw, scale=1.0):
     return g
 
 
+def hex_prism_bm(x, z, r, top, bottom, seed):
+    """Open-bottomed hexagonal prism (deco: 6 sides + the top; the foot is under opaque water)."""
+    rnd = C.rng("hexp", seed)
+    a0 = rnd.uniform(0, math.pi / 3)
+    bm = bmesh.new()
+    ring = [(math.cos(a0 + k * math.pi / 3), math.sin(a0 + k * math.pi / 3)) for k in range(6)]
+    r_top = [bm.verts.new(C.g2b(x + c * r, top, z + s * r)) for c, s in ring]
+    r_bot = [bm.verts.new(C.g2b(x + c * r * 1.03, bottom, z + s * r * 1.03)) for c, s in ring]
+    for i in range(6):
+        j = (i + 1) % 6
+        bm.faces.new((r_bot[i], r_bot[j], r_top[j], r_top[i]))
+    bm.faces.new(r_top)
+    bm.normal_update()
+    for f in bm.faces:                                   # outward: sides away from the axis, top up
+        c = f.calc_center_median()
+        out = Vector((c.x - x, c.y + z, 0.0)) if abs(f.normal.z) < 0.5 else Vector((0.0, 0.0, 1.0))
+        if f.normal.dot(out) < 0:
+            f.normal_flip()
+    return bm
+
+
 def sea_stack(seed, pos, radius, height, water_y):
-    """Columnar-basalt sea stack (deco): a cluster of hexagonal columns stepping down from a tall core,
-    the same grammar as the spawn cliffs."""
-    g = Geo("seastack")
+    """Columnar-basalt sea stack (deco), the same grammar as the spawn cliffs: hex-packed columns
+    under an elongated, leaning plateau (a flat-topped mesa, not a stepped cone), a broken rim
+    that falls away on one side, fallen stubs at the foot, and moss caps on the plateau columns.
+    Returns (rock Geo, moss Geo, [glTF top points of the two highest plateau columns])."""
+    g, moss = Geo("seastack"), Geo("seastack_moss")
     rnd = C.rng("stack", seed)
-    r = radius * 0.34
-    pts = [(0.0, 0.0, height)]
-    for ring, (dist, hf) in enumerate(((1.7, 0.78), (3.3, 0.5), (4.8, 0.26))):
-        n = 6 * (ring + 1)
-        a0 = rnd.uniform(0, math.tau)
-        for k in range(n):
-            if rnd.random() < 0.25 * ring:
+    r = radius * 0.3
+    step = 2.0 * r * 0.97
+    ang = rnd.uniform(0, math.pi)                         # long axis of the mesa
+    ca, sa = math.cos(ang), math.sin(ang)
+    lean = (math.cos(ang + 1.3), math.sin(ang + 1.3))     # the plateau tilts down toward this side
+    Rl, Rs = radius * 1.35, radius * 0.85                 # ellipse half-axes of the footprint
+    cols = []
+    n = int(math.ceil(Rl / step)) + 1
+    for q in range(-n, n + 1):
+        for s in range(-n, n + 1):
+            x = step * (q + s * 0.5)
+            z = step * s * math.sqrt(3) / 2
+            u, v = x * ca + z * sa, -x * sa + z * ca
+            e = math.hypot(u / Rl, v / Rs)                    # 0 centre .. 1 rim
+            if e > 1.0 + rnd.uniform(-0.12, 0.05):
                 continue
-            a = a0 + math.tau * k / n
-            d = dist * r * rnd.uniform(0.92, 1.08)
-            pts.append((d * math.cos(a), d * math.sin(a), height * hf * rnd.uniform(0.8, 1.15)))
-    for k, (x, z, h) in enumerate(pts):
-        cb = column_bm(pos[0] + x, pos[2] + z, r * rnd.uniform(0.9, 1.1), water_y + h, water_y - 3.0, 0, f"{seed}_{k}",
-                       chamfer=0.14)
+            tilt = 0.14 * (x * lean[0] + z * lean[1]) / radius
+            if e < 0.62:
+                h = height * (0.96 + tilt + rnd.uniform(-0.03, 0.03))
+            else:
+                t = (e - 0.62) / 0.38
+                h = height * (0.96 + tilt) * (1.0 - 0.55 * t ** 1.5) * rnd.uniform(0.82, 1.04)
+                if rnd.random() < 0.18:
+                    h *= rnd.uniform(0.35, 0.6)                   # broken rim column
+            cols.append((x, z, h, e))
+    for k in range(int(3 + radius)):                      # fallen stubs at the foot
+        a = rnd.uniform(0, math.tau)
+        d = rnd.uniform(1.0, 1.25)
+        cols.append((Rl * d * math.cos(a) * 0.9, Rs * d * math.sin(a) * 1.1, height * rnd.uniform(0.07, 0.16), 2.0))
+    tops = []
+    for k, (x, z, h, e) in enumerate(cols):
+        rr = r * rnd.uniform(0.93, 1.03)
+        cx, cz = pos[0] + x, pos[2] + z
+        cb = hex_prism_bm(cx, cz, rr, water_y + h, water_y - 0.9, f"{seed}_{k}")
         g.add_bm(cb, "M_basalt")
         cb.free()
-    return g
+        if e < 0.62 or (e < 0.85 and h > height * 0.8):
+            mb = hex_prism_bm(cx, cz, rr * 1.06, water_y + h + 0.12, water_y + h - 0.3, f"moss_{seed}_{k}")
+            moss.add_bm(mb, "M_moss")
+            mb.free()
+            tops.append((h, (cx, water_y + h + 0.12, cz)))
+    tops.sort(key=lambda p: -p[0])
+    return g, moss, [p for _, p in tops[:2]]
 
 
 def lantern_post(ground, height=2.4):

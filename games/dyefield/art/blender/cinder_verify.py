@@ -170,6 +170,13 @@ def check_contract(g: GLB, nodes):
     info["spawns"] = {n["name"]: n.get("translation") for n in g.j["nodes"] if n.get("name") in ("spawn_A", "spawn_B")}
     mi = next((n.get("extras", {}) for n in g.j["nodes"] if n.get("name") == "mapinfo"), {})
     info["mapinfo"] = mi
+    if mi.get("df_ao") != "map_cinder_ao.png":
+        errs.append(f"mapinfo df_ao = {mi.get('df_ao')!r} (expected 'map_cinder_ao.png')")
+    if mi.get("df_atlas_overlap_texels", 1) != 0:
+        errs.append(f"mapinfo df_atlas_overlap_texels = {mi.get('df_atlas_overlap_texels')!r}")
+    for s in ("spawn_A", "spawn_B"):
+        if not any(n.get("name") == s and "translation" in n for n in g.j["nodes"]):
+            errs.append(f"{s} has no translation")
     return errs, info
 
 

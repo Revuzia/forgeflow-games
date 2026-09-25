@@ -627,6 +627,90 @@ export class BotDirector {
 }
 ```
 
+**`CHANGED(KITSIM)` (phase 6, CONTRACT_P6_11 §18.1): additive only; no signature above is removed or changed.**
+```ts
+// core/match/events.ts — new SimEvent variants
+  | { t: 'glint'; pid: number; x: number; y: number; z: number; dx: number; dy: number; dz: number; charge: number } // charger: every 0.1 s while charging (origin = muzzle, dir = aim); visible to enemies
+  | { t: 'beam'; pid: number; x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; charge: number } // charger release (hitscan muzzle → end point)
+  | { t: 'burst'; pid: number; x: number; y: number; z: number; r: number; air: boolean }  // blaster explosion (r = splashRadius; air = airburst at maxRange)
+  | { t: 'roll'; pid: number; on: boolean }        // roller drum down (rolling) / up
+  | { t: 'flick'; pid: number }                    // roller flick windup starts (droplets leave windup s later, with a 'shot')
+  | { t: 'ring'; pid: number; x: number; y: number; z: number; r: number };  // WELLSPRING slam (r = ringRadius)
+// existing variants now also fire: 'shot' once per flick release / charger beam / blaster burst; 'sub' throw/land/pop;
+// 'special' start/end (CLOUDBURST: start on the throw, end when the rain stops; WELLSPRING: start on take-off,
+// end on the slam); 'washed' cause 'sub' (jelly pop) and 'special' (CLOUDBURST rain, WELLSPRING core).
+
+// core/runner.ts — Runner read-outs (view / HUD / bots)
+charge: number;          // NEEDLE-GLINT charge 0..1 (0 when not charging)
+rolling: boolean;        // SHEET-DRUM drum down and painting this tick
+flicking: boolean;       // SHEET-DRUM flick windup in progress
+specialActive: string;   // '' or the id of this runner's running special ('cloudburst' | 'wellspring')
+specialT: number;        // s since that special started (0 when none)
+subCooldown: number;     // s until the sub may be thrown again
+leaping: boolean;        // WELLSPRING leap in progress (immune to damage, intents ignored)
+specialReady: boolean;   // the meter reached 1 and the 'ready' event fired (reset when the special starts)
+subs: number; flicks: number; beams: number; bursts: number;   // counters (probes / bots)
+
+// core/combat/projectiles.ts
+export const KIND_MIST = 0, KIND_FLICK = 1, KIND_BURST = 2, KIND_JELLY = 3, KIND_CLOUD = 4;   // pool.kind (view-visible type)
+export const PSTATE_FLY = 0, PSTATE_PUDDLE = 1, PSTATE_HOVER = 2;                               // pool.state
+// ProjectilePool also carries: variant (Uint8Array: index into MatchWorld.kinds, the per-kit ProjectileKind table), state
+// (Uint8Array), timer (Float32Array: whole TICKS left — puddle fuse / cloud rise + rain), ox oy oz (Float32Array: launch
+// point while flying; the hover point for a CLOUDBURST cell), nx ny nz (Float32Array: surface normal a jelly puddle rests on).
+// spawn(kind, owner, team, x, y, z, vx, vy, vz, seed, dripEvery, variant = kind) — the extra argument is optional.
+// A jelly puddle / CLOUDBURST cell stays in its slot (state 1 / 2, zero velocity; the cell rises, so draw px→x as usual).
+// ProjectileKind gains optional mode (0 droplet / 1 burst / 2 lander), damageFar + falloffRange, airburstRange;
+// ProjectileHost gains optional burst(...), land(...), lost(...) (MatchWorld implements them).
+
+// core/combat/kits.ts — kitFire(kitId): StreamFire | RollFire | ChargeFire | BurstFire (discriminated by `type`),
+// stepKit(r, intent, dt, fire, variant, rng, host), axisDistance(runner, x, y, z); StreamFire gains type: 'stream'.
+// core/combat/defs.ts (new) — typed weapons.json rows: RollFire, ChargeFire, BurstFire, JellyDef, CloudDef, WellDef.
+// core/combat/subs.ts (new) — stepSub / landJelly / tickPuddle.  core/combat/specials.ts (new) — stepSpecialInput,
+// landCloud / tickCloud, slam, endSpecial.
+// core/runner.ts — RunnerOptions gains fireSpeedCap?, faceMotionWhileFiring?; Runner gains startLeap(vy, g), knock(vx, vy, vz).
+
+// core/match/world.ts — MatchWorld extras
+stats: { …, flicks; beams; bursts; subs; pops; specials };   // counted from the 'flick' / 'beam' / 'burst' / 'sub' throw /
+                                                               // 'sub' pop / 'special' start events
+```
+Tick order (§10.4 amended): a WELLSPRING leaper that lands slams right after its own move (step 1); step 3 runs kit → sub →
+special start per runner; step 4 ticks RESTING slots first, then flying ones, so a jelly / cell that lands this tick starts
+its fuse / rise on the next tick (fuse = round(puddleFuse / TICK) ticks, rain = round(duration / TICK) ticks exactly).
+Rules fixed here (numbers: `weapons.json`, knobs: `config.ts KITS`):
+- The kit behaviour is chosen by `weapons.json kits[].fire.type` (`stream` / `roll` / `charge` / `burst`); the sub by
+  `kits[].sub` (`jelly-charge`), the special by `kits[].special` (`cloudburst` / `wellspring`). `streamFire(id)` keeps
+  returning MIST-RASP numbers for non-stream kits (bots' ballistic model until the bot lane re-tunes).
+- **Roll:** fire held + grounded + moving (speed ≥ 0.8 m/s or stick ≥ 0.3) paints a `painter.capsule` strip per
+  tick from the previous drum contact to the current one (0.6 m ahead of the feet along the motion, radius
+  rollWidth/2, floors and ramps only, each half clamped to a lateral wall + 0.15 m). Speed ≤ rollSpeed while held; tank
+  −tankPerMetre per metre moved. No 'splat' event for the strip (the view uses `rolling`). Flatten: an enemy whose hit
+  capsule overlaps [0, flattenReach] ahead of the drum line within ±rollWidth/2 (same level, line of sight) takes
+  flattenDamage once. Flick: a fresh press while not moving, a tap (released ≤ 0.2 s), or 0.15 s standing with fire held
+  → 'flick', windup, then `splats` droplets (kind 1) at 13 m/s, g 20, fanned in PITCH so droplet j lands at
+  reach·(j+1)/splats on level floor (aim pitch above level raises the fan); damage lerp(damageNear, damageFar,
+  horizontal travel / reach); tankCost at release (a dry click at the press if the tank is short); then cooldown.
+- **Charge:** held → charge += dt / chargeSeconds, capped by the affordable level (tankMin…tankFull); slick / wall /
+  death drops the charge without a shot. Release ≥ 0.15 → one hitscan beam from the muzzle along the aim (first enemy
+  capsule or map contact within range stops it); line splats every lineSpacing along the beam, each dropped straight down
+  onto the floor; the end splat at the map hit (thin-wall rule), else on the floor under the end / the victim.
+- **Burst:** kind 2 flies straight (no gravity) at projectileSpeed; explodes on a runner, on the map, or at maxRange
+  travelled (airburst). Splash distance = distance from the blast point to the victim's hit-capsule axis; line of sight
+  from the blast point to the capsule centre. The direct victim takes directDamage only.
+- **Jelly:** held `sub` + canFire + tank ≥ tankCost + cooldown over → kind 3, low-arc ballistic solution at throwSpeed
+  toward the aim point (out of reach / no aim point: aim pitch + 30°). It ignores runners, rests on the first map contact
+  (state 1) for puddleFuse, then pops: damage lerp(damageCenter, damageEdge, d / blastRadius) with the same distance and
+  line-of-sight rule, paintRadius splat, cause 'sub'.
+- **Special:** `intent.special` + ready + canFire + no special running → meter to 0. The meter does not fill while the
+  runner's own special runs. CLOUDBURST: kind 4 thrown at 40° pitch (speed solved) at the aim point clamped to
+  throwRange; on landing it rises in 0.5 s to hoverHeight over the floor below, then rains `duration` s: dropsPerSecond
+  drops at uniform points of the soakRadius disk from the owner's special mulberry32 stream, each a ray down → a normal
+  'splat' of dropPaintRadius; every 0.25 s enemies inside the disk, below the cell and with a clear vertical line to it
+  take damagePerSecond × 0.25 (cause 'special'). A cell lost to the sea ends the special. WELLSPRING: a vertical leap
+  (vy0 = 4h/T, gravity 8h/T², T = 0.6 s) with intents ignored and damage ignored; on landing 'ring' + ring splats of
+  radius ringWidth/2 every 0.6 m on the ringRadius circle (dropped onto the floor; points behind a wall are skipped),
+  a coreRadius floor splat, coreDamage to enemies within coreRadius (line of sight) and a knockback impulse of
+  `knockback` m/s outward + 0.45 × that upward.
+
 ### §10.3 Bot behavior (acceptance, measured by `_harness/probe_bots.ts`)
 - **Paint-hungry:** a bot picks the goals with the most neutral or enemy floor area nearby,
   sampled from the atlas, not random wandering. It sweeps fire across the floor while moving.

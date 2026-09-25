@@ -41,17 +41,17 @@ HERO_BONES = [
     "thigh.L", "shin.L", "foot.L", "toe.L", "thigh.R", "shin.R", "foot.R", "toe.R",
     "tank",
 ]
-HERO_CLIPS_REQUIRED = ["idle", "run", "jump", "fall", "land", "aim", "brush"]
-HERO_CLIPS_WANTED = ["slick_dive", "washed", "victory", "lobby_idle", "strafe_l", "strafe_r", "back",
-                     # phase 6 (CONTRACT_ART_P6_8 §17) — reported until the KITS lane lands, then promoted to required
-                     "roll", "flick", "charge", "blast", "throw", "special_throw", "slam", "hold_two"]
+HERO_CLIPS_REQUIRED = ["idle", "run", "jump", "fall", "land", "aim", "brush",
+                       # phase 6 (promoted 2026-09-25 after the KITS lane landed)
+                       "roll", "flick", "charge", "blast", "throw", "special_throw", "slam", "hold_two"]
+HERO_CLIPS_WANTED = ["slick_dive", "washed", "victory", "lobby_idle", "strafe_l", "strafe_r", "back"]
 HERO_MATERIALS_TEAM = ["M_crest", "M_top_trim", "M_shorts_stripe", "M_sole", "M_tank_dye", "M_band"]
 HERO_NODES = ["rig", "socket_weapon", "tank_dye", "slick_fin"]
 MAP_PREFIXES = ("paint_", "solid_", "deco_", "col_", "water_", "grate_", "conveyor_", "spring_", "oob_")  # §14.2 adds the last four
 # phase 6 art (CONTRACT_ART_P6_8 §17): checked when present, listed as missing otherwise (not failing until promoted)
 KIT_FILES = ["kit_mist_rasp.glb", "kit_sheet_drum.glb", "kit_needle_glint.glb", "kit_pop_well.glb"]
 EXTRA_FILES = {"sub_jelly_charge.glb": ["jelly_puddle"], "special_cloudburst.glb": ["rain", "core"]}
-KITS_REQUIRED = ["kit_mist_rasp.glb"]
+KITS_REQUIRED = list(KIT_FILES)   # all four required since phase 6
 
 
 def blender_exe() -> str:
@@ -211,7 +211,7 @@ def cmd_check() -> int:
             names = [n.get("name", "") for n in read_glb_json(ep).get("nodes", [])]
             targets.append((ef, [f"missing node {n}" for n in nodes if n not in names]))
         else:
-            print(f"[check] (phase 6, not yet required) missing {ef}")
+            targets.append((ef, ["missing file"]))
     for mid in built_maps():
         p = os.path.join(GLTF_DIR, f"map_{mid}.glb")
         targets.append((f"map_{mid}.glb", check_map(p, mid) if os.path.isfile(p) else ["missing file"]))
@@ -236,9 +236,10 @@ def main(argv: list[str]) -> int:
         return cmd_check()
     if what == "map":
         if not rest:
-            print("usage: build.py map <id>")
+            print("usage: build.py map <id> [--layout <path>] ...")
             return 1
-        return run_blender("build_map.py", ["--map", rest[0], *rest[1:]])
+        extra = [a for a in rest[1:] if a != "--"]   # tolerate `map <id> -- --layout x` (a literal '--' would end argparse options)
+        return run_blender("build_map.py", ["--map", rest[0], *extra])
     if what == "hero":
         return run_blender("build_hero.py", rest)
     if what == "kits":

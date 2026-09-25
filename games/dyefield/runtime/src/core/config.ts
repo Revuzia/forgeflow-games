@@ -131,6 +131,45 @@ export const COMBAT = {
   dripMaxDrop: 40,        // m — drip raycast length
 };
 
+/**
+ * Phase-6 kit mechanics that data/weapons.json leaves open (lane KITSIM, CONTRACT §10.2 CHANGED(KITSIM)).
+ * Every kit NUMBER (widths, damages, ranges, costs, timings) lives in weapons.json; these are the
+ * geometric / feel knobs of the same systems.
+ */
+export const KITS = {
+  // ── SHEET-DRUM (roll) ──
+  drumAhead: 0.6,          // m: the drum contact sits this far ahead of the feet, along the motion
+  rollMinSpeed: 0.8,       // m/s: grounded and at least this fast (or the stick pushed ≥ rollMinStick) = moving
+  rollMinStick: 0.3,       // stick magnitude that counts as "moving" (a press + push from rest rolls, not flicks)
+  tapSeconds: 0.2,         // fire released within this long of the press = a flick (§18.1)
+  standFlickDelay: 0.15,   // s of standing still with fire held before a held drum flicks
+  rollEdgeNoise: 0.08,     // painter edge noise of the strip (crisper than a splat's 0.18)
+  rollMinFacing: 0.5,      // the strip dyes floors and ramps only (texel normal · up > 0.5)
+  rollWallPad: 0.15,       // each strip half ≤ lateral wall distance + this (no bleed under thin walls)
+  flickSpeed: 13,          // m/s launch speed of every flick droplet (the fan is in pitch)
+  flickGravity: 20,        // m/s², no drag: droplet j lands at reach·(j+1)/splats on level floor
+  // ── NEEDLE-GLINT (charge) ──
+  glintEvery: 0.1,         // s between 'glint' events while charging (§18.1)
+  minReleaseCharge: 0.15,  // below this a release fires nothing and costs nothing (§18.1)
+  // ── POP-WELL (burst) ──
+  splashEdgeFactor: 0.4,   // splash falls off linearly to 40 % at splashRadius (§18.1)
+  burstFallGravity: 18,    // m/s² past maxRange for a burst kit WITHOUT airburstAtMaxRange (it drops, then bursts on impact)
+  // ── JELLY CHARGE (sub) ──
+  subCooldown: 0.5,        // s between throws (the 70 % tank cost is the real limiter)
+  subLoftDeg: 30,          // no aim point: throw at aim pitch + this
+  subMaxPitchDeg: 60,
+  // ── CLOUDBURST ──
+  cloudPitchDeg: 40,       // launch pitch of the thrown cell (speed solved to land on the target)
+  cloudGravity: 18,        // m/s²
+  cloudRiseSeconds: 0.5,   // s from landing to the hover height
+  cloudDamageTick: 0.25,   // damagePerSecond is dealt in ticks of this length (4 'hit' events / s)
+  // ── WELLSPRING ──
+  leapSeconds: 0.6,        // take-off to landing on level floor (§18.1 "~0.6 s"): vy0 = 4h/T, g = 8h/T²
+  leapMaxSeconds: 2.5,     // a leap still airborne after this slams wherever it is
+  knockbackUp: 0.45,       // vertical share of the knockback impulse (lifts the foe so it carries)
+  ringSpacing: 0.6,        // m between ring splats along the circle
+};
+
 /** Match flow (CONTRACT §10.1). */
 export const MATCH = {
   durationS: 180,
