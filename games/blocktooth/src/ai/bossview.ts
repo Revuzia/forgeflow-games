@@ -26,7 +26,8 @@ import type { FrameInfo, ViewCtx, ViewModule } from '../render/viewtypes.ts';
 import { addOutline, INK } from '../render/materials.ts';
 import { FOE_PAL, Facet, M, makeFoeMaterial, ngon, rect } from './foemodels.ts';
 import type { FoeMaterial } from './foemodels.ts';
-import { buildParkadeRig } from './foemodels_parkade.ts';
+import { buildParkadeRig, CHAIN_CAP, ParkadePoser } from './foemodels_parkade.ts';
+import type { ParkadeFrame, ParkadeRig } from './foemodels_parkade.ts';
 
 /** every boss rig built at mount (warmup compiles every boss program up front) — v2 adds PARKADE-6 */
 const RIG_IDS = ['caisson4', 'irongully', 'parkade6'] as const;
@@ -809,6 +810,8 @@ const CABLE_T = 1.1;            // cable thickness (m) — the 3 px hull carries
 const LEASH_CORE_PX = 5, LEASH_INK_PX = 3;
 /** hazard band length (m) along the leash and its march speed toward the boom (m/s) — the reel direction */
 const LEASH_BAND_M = 7, LEASH_FLOW = 16;
+/** PARKADE-6 TOW CHAIN: max telegraph link points cached (the sim lays 6–11) */
+const PK_CHAIN_PTS = 24;
 
 /**
  * The WINCH LEASH cable drawn as an always-visible x-ray line (depthTest off, drawn last): a taut
@@ -884,6 +887,15 @@ export class BossView implements ViewModule {
   private xray = makeLeashXray();
   /** seconds since the winch caught (thickness pop on the catch) */
   private leashT = -1;
+  // PARKADE-6 (lane L7): the poser, its frame record, the TOW CHAIN polyline cache
+  private pkPose = new ParkadePoser();
+  private pkF: ParkadeFrame = { dt: 0.5, alpha: 0.5, frozen: false, x: 0.5, z: 0.5, h: 0.5, time: 0.5 };
+  private pkChain = new Float32Array(PK_CHAIN_PTS * 2);
+  private pkChainN = 0;
+  private pkTowW = 1.5;
+  private pkLk = 2.5;
+  private pkFrac = 0.5;
+  private pkPts = new Float32Array((PK_CHAIN_PTS + 2) * 3);
 
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
@@ -900,6 +912,12 @@ export class BossView implements ViewModule {
       if (id === 'caisson4') for (const k of ['hook', 'w1', 'w2', 'cable0', 'cable1', 'cable2', 'cable3']) {
         const o = r.joints[k]; o.visible = false; this.world.add(o);
       }
+      if (id === 'parkade6') {
+        // PARKADE-6 world-space fx: tow-chain links + JAMMED steam (instanced, hidden until used)
+        const pk = (r as ParkadeRig).pk;
+        pk.chain.visible = false; pk.steam.visible = false;
+        this.world.add(pk.chain, pk.steam);
+      }
       this.rigs[id] = r;
     }
     return r;
@@ -915,6 +933,10 @@ export class BossView implements ViewModule {
         x.joints.hook.visible = on;
         x.joints.cable0.visible = on;
         if (!on) for (const k of ['w1', 'w2', 'cable1', 'cable2', 'cable3']) x.joints[k].visible = false;
+      }
+      if (id === 'parkade6' && !on) {
+        const pk = (x as ParkadeRig).pk;
+        pk.chain.visible = false; pk.chain.count = 0; pk.steam.visible = false; pk.steam.count = 0;
       }
     }
     if (!r) { this.xray.ink.visible = false; this.xray.core.visible = false; this.leashT = -1; }
@@ -965,6 +987,7 @@ export class BossView implements ViewModule {
     this.deadT = -1; this.roarT = 0; this.drumA = 0; this.attackKey = ''; this.tw.clear();
     this.hookInit = false; this.hookVel.set(0, 0, 0);
     this.drops[0] = this.drops[1] = this.drops[2] = null;
+    this.pkPose.reset(); this.pkChainN = 0; this.pkTowW = 1.5;
   }
 
   // ─────────────────────────────── frame ───────────────────────────────
@@ -984,7 +1007,7 @@ export class BossView implements ViewModule {
         const g = r.groups[ev.part] ?? r.groups.body;
         g.flash = 1;
         if (ev.part.startsWith('leg')) for (const L of r.legs) if (L.name === ev.part) L.flinch = 0.3;
-      } else if (ev.type === 'bossPhase') this.roarT = 1.6;
+      } else if (ev.type === 'bossPhase') { this.roarT = 1.6; if (b.id === 'parkade6') this.pkPose.roar(); }
       else if (ev.type === 'bossSpawn') { this.resetRun(); }
     }
     for (let gi = 0; gi < r.groupKeys.length; gi++) {
@@ -1005,8 +1028,9 @@ export class BossView implements ViewModule {
     r.root.rotation.set(0, h, 0);
     // v2 PARKADE-6 (L0 placeholder rig): its own pose path, never the IRON GULLY one (FEATURES_V2 §2.7)
     if (b.id === 'parkade6') {
-      this.poseParkade(w, b, r);
-      if (this.xray.core.visible) { this.xray.ink.visible = false; this.xray.core.visible = false; this.leashT = -1; }
+      const F = this.pkF;
+      F.dt = dt; F.alpha = a; F.frozen = f.frozen; F.x = x; F.z = z; F.h = h; F.time = this.time;
+      this.poseParkade(w, b, r as ParkadeRig);
       return;
     }
     GS.x = x; GS.z = z; GS.h = h; GS.dt = dt;
@@ -1035,8 +1059,112 @@ export class BossView implements ViewModule {
     else if (this.xray.core.visible) { this.xray.ink.visible = false; this.xray.core.visible = false; this.leashT = -1; }
   }
 
-  /** PARKADE-6 pose (L0 SKELETON STUB: the placeholder rig is not posed; lane L7 writes the real one). */
-  private poseParkade(_w: World, _b: BossState, _r: BossRig): void { /* L7 */ }
+  // ─────────────────────────────── PARKADE-6 (FEATURES_V2 §10.3, lane L7) ───────────────────────────────
+  /** PARKADE-6: the procedural pose (foemodels_parkade.ts ParkadePoser) + the TOW CHAIN links + its x-ray. */
+  private poseParkade(w: World, b: BossState, r: ParkadeRig): void {
+    this.fdt = this.pkF.dt;
+    this.pkPose.update(w, b, r, this.pkF);
+    this.parkadeChain(w, b, r);
+  }
+
+  /**
+   * TOW CHAIN, drawn as instanced 3D links from the winch under the booth: during the windup it pays out
+   * along the live telegraph's link points (Telegraph.chain) and lies in the paint; while the tow holds it
+   * runs taut from the winch to the titan (plus the always-visible x-ray line, CAISSON-4's winch rule);
+   * after a miss it reels back in.
+   */
+  private parkadeChain(w: World, b: BossState, r: ParkadeRig): void {
+    const pk = r.pk, ch = pk.chain, T = w.titan, a = this.pkF.alpha;
+    const P = this.pkPts;
+    let np = 0, frac = 0, xrayOn = false;
+    if (b.alive && b.attack === 'towChain') {
+      // cache the paint's link points while the telegraph lives (it is gone once it fires)
+      for (let i = 0; i < w.telegraphs.length; i++) {
+        const tg = w.telegraphs[i];
+        if (!tg.alive || tg.owner !== 'boss' || tg.tag !== 'towChain' || !tg.chain) continue;
+        const n = Math.min(PK_CHAIN_PTS, tg.chain.length >> 1);
+        for (let j = 0; j < n; j++) { this.pkChain[j * 2] = tg.chain[j * 2]; this.pkChain[j * 2 + 1] = tg.chain[j * 2 + 1]; }
+        this.pkChainN = n;
+        if (!tg.fired) this.pkTowW = tg.windup;
+        break;
+      }
+      const tA = b.attackT + (this.pkF.frozen ? 0 : a * SIM_DT);
+      const W = this.pkTowW;
+      const hooked = (b.data.tow ?? 0) > 0 && !!T.leash;
+      r.root.updateMatrixWorld(true);
+      pk.winchTip.getWorldPosition(_v3);
+      if (hooked) {
+        // taut: winch → the titan's back, a slight sag
+        const tx = T.px + (T.x - T.px) * a, tz = T.pz + (T.z - T.pz) * a, ty = Math.max(1, T.height * 0.55);
+        P[0] = _v3.x; P[1] = _v3.y; P[2] = _v3.z;
+        const sdx = tx - _v3.x, sdz = tz - _v3.z;
+        const sag = 0.025 * Math.sqrt(sdx * sdx + sdz * sdz);
+        P[3] = (_v3.x + tx) / 2; P[4] = (_v3.y + ty) / 2 - sag; P[5] = (_v3.z + tz) / 2;
+        P[6] = tx; P[7] = ty; P[8] = tz;
+        np = 3; frac = 1; xrayOn = true;
+        _v2.set(tx, ty, tz);
+      } else if (this.pkChainN >= 2) {
+        this.pkLink(b, T);
+        const Lk = this.pkLk;
+        P[0] = _v3.x; P[1] = _v3.y; P[2] = _v3.z;
+        np = 1;
+        for (let j = 0; j < this.pkChainN && np < PK_CHAIN_PTS + 1; j++) {
+          P[np * 3] = this.pkChain[j * 2]; P[np * 3 + 1] = Lk * 0.35; P[np * 3 + 2] = this.pkChain[j * 2 + 1];
+          np++;
+        }
+        // pays out over the first half of the windup, lies in the paint, snaps back after a miss
+        frac = tA < W ? easeOutCubic(clamp(tA / Math.max(0.2, W * 0.5), 0, 1)) : clamp(1 - (tA - W) / 0.45, 0, 1);
+      }
+    }
+    let n = 0;
+    if (np >= 2 && frac > 0) { this.pkLink(b, T); this.pkFrac = frac; n = this.pkLinks(ch, np); }
+    ch.count = n;
+    ch.visible = n > 0;
+    if (n > 0) ch.instanceMatrix.needsUpdate = true;
+    if (xrayOn) this.updateLeashXray(true, _v2, _v3);
+    else if (this.xray.core.visible || this.leashT >= 0) this.updateLeashXray(false, _v2, _v3);
+  }
+
+  /** chain link length (m) for this fight → this.pkLk: readable at every size, from the locked titan height */
+  private pkLink(b: BossState, T: World['titan']): void {
+    const H = b.data.H > 0 ? b.data.H : T.height;
+    const L = 0.075 * H;
+    this.pkLk = L < 2.4 ? 2.4 : L > 5 ? 5 : L;
+  }
+
+  /** Lay links (length this.pkLk) along the first this.pkFrac of the polyline in this.pkPts (np points). */
+  private pkLinks(ch: THREE.InstancedMesh, np: number): number {
+    const P = this.pkPts, Lk = this.pkLk, frac = this.pkFrac;
+    let total = 0;
+    for (let i = 0; i + 1 < np; i++) {
+      const ax = P[i * 3 + 3] - P[i * 3], ay = P[i * 3 + 4] - P[i * 3 + 1], az = P[i * 3 + 5] - P[i * 3 + 2];
+      total += Math.sqrt(ax * ax + ay * ay + az * az);
+    }
+    const len = total * frac, step = Lk * 0.8;
+    let n = 0, seg = 0, segS = 0;
+    for (let s = step * 0.5; s < len && n < CHAIN_CAP; s += step) {
+      // advance to the segment holding arc length s
+      let sl = 0;
+      while (seg + 1 < np) {
+        const ax = P[seg * 3 + 3] - P[seg * 3], ay = P[seg * 3 + 4] - P[seg * 3 + 1], az = P[seg * 3 + 5] - P[seg * 3 + 2];
+        sl = Math.sqrt(ax * ax + ay * ay + az * az);
+        if (s <= segS + sl || seg + 2 >= np) break;
+        segS += sl; seg++;
+      }
+      if (sl < 1e-4) continue;
+      const u = clamp((s - segS) / sl, 0, 1);
+      _z.set(P[seg * 3 + 3] - P[seg * 3], P[seg * 3 + 4] - P[seg * 3 + 1], P[seg * 3 + 5] - P[seg * 3 + 2]).multiplyScalar(1 / sl);
+      _v0.set(P[seg * 3] + _z.x * sl * u, P[seg * 3 + 1] + _z.y * sl * u, P[seg * 3 + 2] + _z.z * sl * u);
+      _x.set(_z.z, 0, -_z.x);                              // horizontal, square to the chain
+      if (_x.lengthSq() < 1e-6) _x.set(1, 0, 0);
+      _x.normalize();
+      _y.crossVectors(_z, _x);
+      if (n & 1) { _v1.copy(_x); _x.copy(_y); _y.copy(_v1).negate(); }   // every other link turned 90°
+      _m.makeBasis(_x.multiplyScalar(Lk), _y.multiplyScalar(Lk), _z.multiplyScalar(Lk)).setPosition(_v0);
+      ch.setMatrixAt(n++, _m);
+    }
+    return n;
+  }
 
   // ─────────────────────────────── windup lookup ───────────────────────────────
   /** Windup (s) of the live, unfired boss telegraph `tag` (cached for this attack), else the fallback. */

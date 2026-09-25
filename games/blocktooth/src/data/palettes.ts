@@ -1,7 +1,8 @@
 // BLOCKTOOTH v2 — alternate titan palettes (FEATURES_V2 §8.6). View-only data (w.meta.palette).
 //
-// ── L0 SKELETON STUB ── the §8.6 colour table verbatim; lane L5 owns the file, L10 renders it (the stub
-// titans/portraits.ts renderPortrait ignores the palette).
+// Lane L5 owns the data (the §8.6 colour table verbatim); lane L10 renders it (titans/models.ts palette
+// param, titans/portraits.ts renderPortrait). Index i here = RunMeta.palette i + 1 (0 = canonical).
+// Unlocked by the titan goals in data/goals.ts (palette index 1 / 2).
 
 import type { TitanId, TitanPalette } from '../core/types.ts';
 

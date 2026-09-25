@@ -1,33 +1,47 @@
-// BLOCKTOOTH — two-step select (CONTRACT.md §12). ui lane.
+// BLOCKTOOTH — two-step select (CONTRACT.md §12; v2 FEATURES_V2 §8.4, lane L9). ui lane.
 //   STEP 1 TITAN   four portrait cards (live portraits from titans/portraits.ts, passed in as data
 //                  URLs) + SUBJECT FILE lore column (name, species, role, tagline, lore, AUTO / HOOK /
-//                  DASH with names + descs, difficulty pips) + confirm bar.
+//                  DASH with names + descs, difficulty pips) + v2 COLOURWAY row under the lore column
+//                  (canonical + 2 unlockable palettes; the portrait swaps through opts.portraitFor).
 //   STEP 2 BIOME   three cards with CSS-painted mini skylines in each biome's palette + ZONE FILE
-//                  lore column + confirm bar "DROP IN".
-// ←/→ (A/D, stick, d-pad) choose · ENTER / SPACE / pad A confirm · ESC / pad B back a step
-// (step 1 → resolves null) · click a card to choose it, click it again (or the bar) to confirm.
+//                  lore column + v2 STARTING PERK row under the cards + confirm bar "DROP IN".
+//   Both steps     v2 NEXT PERMIT PENDING slip clipped to the lore column (ui/goals.ts NextUnlockPanel),
+//                  YOUR BEST ON FILE on the focused card's foot, GOALS & RECORDS [G] chip in the bar.
+// Row model (v2): ←/→ act on the focused row (cards: move the focus; palette / perk: change the value);
+// ↓ from the cards focuses the extra row, ↑ returns. ENTER / SPACE / pad A / pad Y confirm the step from
+// any row · ESC / pad B / pad Select back a step (step 1 → resolves null) · G / pad X → GOALS & RECORDS
+// (resolves {kind: 'goals', resume}; the app re-runs select with initial = resume) · click a card to
+// choose it, click it again (or the bar) to confirm; swatches and perk arrows are clickable.
 
 import type { Input } from '../core/input.ts';
-import type { BiomeDef, BiomeId, EnemyKind, TitanDef, TitanId } from '../core/types.ts';
-import { BIOME_IDS, TITAN_IDS } from '../core/types.ts';
-import type { SelectResultV2, SelectRunOpts } from '../v2types.ts';
-import { bestKey, loadBest } from '../core/save.ts';
+import type { BiomeDef, BiomeId, EnemyKind, PerkId, Profile, TitanDef, TitanId } from '../core/types.ts';
+import { BIOME_IDS, PERK_IDS, TITAN_IDS } from '../core/types.ts';
+import type { SelectResultV2, SelectResume, SelectRow, SelectRunOpts } from '../v2types.ts';
+import { bestKey } from '../core/save.ts';
 import { TITANS } from '../data/titans.ts';
 import { BIOMES } from '../data/biomes.ts';
 import { BOSSES } from '../data/bosses.ts';
 import { ENEMIES } from '../data/enemies.ts';
+import { PERKS_DEF } from '../data/perks.ts';
+import { TITAN_PALETTES } from '../data/palettes.ts';
 import { STR } from '../data/strings.ts';
+import { SCREENS } from '../data/strings_screens.ts';
+import { paletteUnlocked, perkUnlocked } from '../meta/goals.ts';
+import { glyphSvg } from './icons.ts';
 import {
   type ModalSession, type UiPress, clearEl, cosmeticRng, div, el, fmt, fmtInt, fmtTime, keyChip, onTap, pulse, roman, runModal, wrapIndex,
   flashesReduced,
 } from './dom.ts';
 import { buildBug, wallClock } from './menus.ts';
+import { NextUnlockPanel, goalUnlocking } from './goals.ts';
 
-type SelectResult = { titan: TitanId; biome: BiomeId } | null;
 type Step = 1 | 2;
 
 /** The regular HALVARD roster in escalation order (the elite RAMROD is announced separately). */
 const RESPONSE_KINDS: readonly EnemyKind[] = ['android', 'squad', 'drone', 'buggy', 'apc', 'tank', 'walker'];
+
+/** perk row values: index 0 = none, 1.. = PERK_IDS */
+const PERK_VALUES: readonly (PerkId | null)[] = [null, ...PERK_IDS];
 
 export class SelectScreen {
   private readonly input: Input;
@@ -40,15 +54,36 @@ export class SelectScreen {
   private readonly titanRow: HTMLDivElement;
   private readonly biomeRow: HTMLDivElement;
   private readonly lore: HTMLDivElement;
+  private readonly loreCol: HTMLDivElement;
+  private readonly palRow: HTMLDivElement;
+  private readonly palSwatches: HTMLElement[] = [];
+  private readonly palNote: HTMLElement;
+  private readonly deskRec: HTMLDivElement;
+  private readonly perkRow: HTMLDivElement;
+  private readonly perkVal: HTMLElement;
+  private readonly permit: NextUnlockPanel;
   private readonly confirmBtn: HTMLButtonElement;
   private readonly confirmLbl: HTMLElement;
   private readonly backBtn: HTMLButtonElement;
+  private readonly rowHint: HTMLElement;
   private titanCards: HTMLElement[] = [];
+  private titanImgs: (HTMLImageElement | null)[] = [];
+  private titanBest: HTMLElement[] = [];
   private biomeCards: HTMLElement[] = [];
+  private biomeBest: HTMLElement[] = [];
   private step: Step = 1;
   private ti = 0;
   private bi = 0;
-  private session: ModalSession<SelectResult> | null = null;
+  private row: SelectRow = 'cards';
+  /** palette cursor per titan (0 = canonical); a locked cursor shows but starts the run canonical */
+  private pal: Record<TitanId, number> = { molo: 0, voltkite: 0, hearthback: 0, briarwick: 0 };
+  private perkIx = 0;
+  private portraits: Record<TitanId, string> = {} as Record<TitanId, string>;
+  private portraitFor: SelectRunOpts['portraitFor'] | null = null;
+  private portraitReq: Record<string, number> = {};
+  private profile: Profile | null = null;
+  private bests: Record<string, number> = {};
+  private session: ModalSession<SelectResultV2> | null = null;
   /** Focus at the moment select was backed out of (ESC at step 1): the next open resumes there
    *  instead of snapping back to the app's last-run choice. Consumed by the next run(). */
   private resume: { titan: TitanId; biome: BiomeId } | null = null;
@@ -81,18 +116,62 @@ export class SelectScreen {
     this.titanRow.setAttribute('role', 'listbox');
     this.biomeRow = div('bt-sel-cards biomes', this.stage);
     this.biomeRow.setAttribute('role', 'listbox');
-    this.lore = div('bt-lore', body);
+
+    // v2 STARTING PERK row (step 2, under the biome cards)
+    const pr = this.perkRow = div('bt2-xrow bt2-perkrow', this.stage);
+    pr.dataset.row = 'perk';
+    pr.appendChild(el('span', 'bt2-xrow-lbl', SCREENS.select.perkLabel));
+    const prev = el('button', 'bt2-arrow', '◀');
+    prev.type = 'button'; prev.tabIndex = -1;
+    pr.appendChild(prev);
+    this.perkVal = div('bt2-perkval', pr);
+    const next = el('button', 'bt2-arrow', '▶');
+    next.type = 'button'; next.tabIndex = -1;
+    pr.appendChild(next);
+    onTap(prev, () => { this.focusRow('perk'); this.changePerk(-1); });
+    onTap(next, () => { this.focusRow('perk'); this.changePerk(1); });
+    pr.addEventListener('mouseenter', () => { if (this.step === 2) this.focusRow('perk'); });
+
+    // lore column; under it a band: v2 COLOURWAY row (step 1) or the zone's DESK RECORD (step 2) on the
+    // left, and the NEXT PERMIT PENDING slip clipped to the column's right edge
+    this.loreCol = div('bt2-lore-col', body);
+    this.lore = div('bt-lore', this.loreCol);
+    const band = div('bt2-lore-band', this.loreCol);
+    const pl = this.palRow = div('bt2-xrow bt2-palrow', band);
+    pl.dataset.row = 'palette';
+    pl.appendChild(el('span', 'bt2-xrow-lbl', SCREENS.select.paletteLabel));
+    const sw = div('bt2-swatches', pl);
+    for (let i = 0; i < 3; i++) {
+      const b = el('button', 'bt2-swatch');
+      b.type = 'button'; b.tabIndex = -1;
+      sw.appendChild(b);
+      this.palSwatches.push(b);
+      onTap(b, () => { this.focusRow('palette'); this.setPalette(i); });
+    }
+    this.palNote = div('bt2-palnote', pl);
+    pl.addEventListener('mouseenter', () => { if (this.step === 1) this.focusRow('palette'); });
+    this.deskRec = div('bt2-deskrec bt-lore-rec', band);
+    this.permit = new NextUnlockPanel(div('bt2-permit-slot', band));
 
     const bar = div('bt-sel-bar bt-confirmbar', L);
     const hints = div('bt-hints', bar);
     hints.appendChild(keyChip('← →'));
     hints.appendChild(el('span', 'bt-hint-txt', STR.select.choose));
     hints.appendChild(el('span', 'bt-hint-gap'));
+    hints.appendChild(keyChip('↑ ↓'));
+    this.rowHint = el('span', 'bt-hint-txt', SCREENS.select.rowHint);
+    hints.appendChild(this.rowHint);
+    hints.appendChild(el('span', 'bt-hint-gap'));
     hints.appendChild(keyChip('ENTER'));
     hints.appendChild(el('span', 'bt-hint-txt', STR.select.confirm));
-    hints.appendChild(el('span', 'bt-hint-gap'));
-    hints.appendChild(keyChip('ESC'));
-    hints.appendChild(el('span', 'bt-hint-txt', STR.select.back));
+    const goals = el('button', 'bt-btn bt-btn-ghost bt2-goals-chip');
+    goals.type = 'button';
+    goals.tabIndex = -1;
+    goals.dataset.v2 = 'goals-chip';
+    goals.appendChild(keyChip(SCREENS.goalsKey));
+    goals.appendChild(el('span', '', SCREENS.goalsChip));
+    bar.appendChild(goals);
+    onTap(goals, () => this.openGoals());
     this.backBtn = el('button', 'bt-btn bt-btn-ghost');
     this.backBtn.type = 'button';
     this.backBtn.tabIndex = -1;
@@ -112,26 +191,38 @@ export class SelectScreen {
     this.buildBiomeCards();
   }
 
-  /** v2 signature (SelectScreenApi, FEATURES_V2 §13.1). L0: today's behaviour — only `portraits` and
-   *  `initial.titan/biome` are read; resolves {kind: 'start', titan, biome, perk: null, palette: 0} or null,
-   *  never {kind: 'goals'} (lane L9 adds the palette/perk rows, NEXT PERMIT PENDING and G / pad X). */
+  /** v2 (SelectScreenApi, FEATURES_V2 §8.4 / §13.1). Resolves {kind: 'start', titan, biome, perk, palette},
+   *  {kind: 'goals', resume} (G / pad X / the chip) or null (ESC on step 1). */
   run(opts: SelectRunOpts): Promise<SelectResultV2> {
-    return this.runV1(opts.portraits, opts.initial).then((r): SelectResultV2 => (
-      r ? { kind: 'start', titan: r.titan, biome: r.biome, perk: null, palette: 0 } : null));
-  }
-
-  private runV1(portraits: Record<TitanId, string>, initial?: { titan?: TitanId; biome?: BiomeId }): Promise<SelectResult> {
     if (this.session && !this.session.done) this.session.abort();
-    this.buildTitanCards(portraits || ({} as Record<TitanId, string>));
-    const from = this.resume ?? initial;
+    this.portraits = opts.portraits || ({} as Record<TitanId, string>);
+    this.portraitFor = typeof opts.portraitFor === 'function' ? opts.portraitFor : null;
+    this.profile = opts.profile ?? null;
+    this.bests = opts.bests || {};
+    this.buildTitanCards(this.portraits);
+    const init = opts.initial ?? {};
+    const from = this.resume ?? init;
     this.resume = null;
-    this.ti = Math.max(0, TITAN_IDS.indexOf(from?.titan ?? TITAN_IDS[0]));
-    this.bi = Math.max(0, BIOME_IDS.indexOf(from?.biome ?? BIOME_IDS[0]));
+    this.ti = Math.max(0, TITAN_IDS.indexOf(from.titan ?? TITAN_IDS[0]));
+    this.bi = Math.max(0, BIOME_IDS.indexOf(from.biome ?? BIOME_IDS[0]));
+    // palette cursors: the profile's last choice per titan, the resume value for the resumed titan
+    const P = this.profile;
+    for (const t of TITAN_IDS) this.pal[t] = clampPal(P && P.palette ? P.palette[t] : 0);
+    if (init.palette !== undefined) this.pal[TITAN_IDS[this.ti]] = clampPal(init.palette);
+    const perk = init.perk !== undefined ? init.perk : (P ? P.perk : null);
+    this.perkIx = Math.max(0, PERK_VALUES.indexOf(perk ?? null));
     this.clock.textContent = wallClock();
     this.layer.classList.remove('bt-hidden');
-    this.setStep(1, false);
+    const step: Step = init.step === 2 && !this.resumeWasEsc(from, init) ? 2 : 1;
+    this.row = 'cards';
+    this.setStep(step, false);
+    const row = init.row;
+    if (row && ((row === 'palette' && step === 1) || (row === 'perk' && step === 2))) this.focusRow(row);
+    this.renderPalette();
+    this.renderPerk();
+    for (const t of TITAN_IDS) if (this.pal[t] > 0) this.swapPortrait(t);
     pulse(this.layer, [{ opacity: 0 }, { opacity: 1 }], 220);
-    const { promise, session } = runModal<SelectResult>(this.layer, this.input, (p) => this.onPress(p), {
+    const { promise, session } = runModal<SelectResultV2>(this.layer, this.input, (p) => this.onPress(p), {
       armMs: 250,
       onClose: () => { this.layer.classList.add('bt-hidden'); this.session = null; },
     });
@@ -139,12 +230,19 @@ export class SelectScreen {
     return promise;
   }
 
+  /** an ESC-resume (this.resume) always reopens on step 1, whatever `initial` says */
+  private resumeWasEsc(from: Partial<SelectResume>, init: Partial<SelectResume>): boolean { return from !== init; }
+
   // ─────────────────────────────── input ───────────────────────────────
 
   private onPress(p: UiPress): void {
+    // v2 screen bindings are read from p.key before the act switch (FEATURES_V2 §2.4)
+    if (p.key === 'g' || p.key === 'pad:2') { this.openGoals(); return; }
     switch (p.act) {
-      case 'left': case 'up': this.move(-1); break;
-      case 'right': case 'down': this.move(1); break;
+      case 'left': this.horiz(-1); break;
+      case 'right': this.horiz(1); break;
+      case 'down': if (this.row === 'cards') this.focusRow(this.step === 1 ? 'palette' : 'perk'); break;
+      case 'up': if (this.row !== 'cards') this.focusRow('cards'); break;
       case 'confirm': case 'alt': this.confirm(); break;
       case 'back': this.back(); break;
       case 'pick1': this.jump(0); break;
@@ -154,14 +252,42 @@ export class SelectScreen {
     }
   }
 
+  private horiz(d: number): void {
+    if (this.row === 'palette') { this.setPalette(wrapIndex(this.pal[TITAN_IDS[this.ti]] + d, 3)); return; }
+    if (this.row === 'perk') { this.changePerk(d); return; }
+    this.move(d);
+  }
+
   private move(d: number): void {
     if (this.step === 1) this.selectTitan(wrapIndex(this.ti + d, TITAN_IDS.length));
     else this.selectBiome(wrapIndex(this.bi + d, BIOME_IDS.length));
   }
 
   private jump(i: number): void {
+    this.focusRow('cards');
     if (this.step === 1 && i < TITAN_IDS.length) this.selectTitan(i);
     else if (this.step === 2 && i < BIOME_IDS.length) this.selectBiome(i);
+  }
+
+  private focusRow(r: SelectRow): void {
+    if (r === 'palette' && this.step !== 1) r = 'cards';
+    if (r === 'perk' && this.step !== 2) r = 'cards';
+    this.row = r;
+    this.layer.dataset.row = r;
+    this.palRow.classList.toggle('is-focus', r === 'palette');
+    this.perkRow.classList.toggle('is-focus', r === 'perk');
+    this.rowHint.textContent = r === 'cards' ? SCREENS.select.rowHint : SCREENS.select.rowHintUp;
+  }
+
+  private resumeState(): SelectResume {
+    const titan = TITAN_IDS[this.ti];
+    return { step: this.step, titan, biome: BIOME_IDS[this.bi], perk: PERK_VALUES[this.perkIx] ?? null, palette: this.pal[titan], row: this.row };
+  }
+
+  private openGoals(): void {
+    const s = this.session;
+    if (!s || s.done) return;
+    s.finish({ kind: 'goals', resume: this.resumeState() }, 0);
   }
 
   private confirm(): void {
@@ -175,7 +301,11 @@ export class SelectScreen {
     const card = this.biomeCards[this.bi];
     if (card) card.classList.add('is-picked');
     this.resume = null;
-    s.finish({ titan: TITAN_IDS[this.ti], biome: BIOME_IDS[this.bi] }, flashesReduced() ? 80 : 280);
+    const titan = TITAN_IDS[this.ti];
+    s.finish({
+      kind: 'start', titan, biome: BIOME_IDS[this.bi],
+      perk: this.perkChoice(), palette: this.palUnlocked(titan, this.pal[titan]) ? this.pal[titan] : 0,
+    }, flashesReduced() ? 80 : 280);
   }
 
   private back(): void {
@@ -189,6 +319,7 @@ export class SelectScreen {
   private setStep(step: Step, animate: boolean): void {
     this.step = step;
     this.layer.dataset.step = String(step);
+    this.focusRow('cards');
     this.tab1.classList.toggle('on', step === 1);
     this.tab2.classList.toggle('on', step === 2);
     this.tab1.classList.toggle('done', step === 2);
@@ -196,7 +327,12 @@ export class SelectScreen {
     this.confirmLbl.textContent = step === 1 ? STR.select.confirm : STR.select.dropIn;
     this.titanRow.classList.toggle('bt-hidden', step !== 1);
     this.biomeRow.classList.toggle('bt-hidden', step !== 2);
+    this.palRow.classList.toggle('bt-hidden', step !== 1);
+    this.deskRec.classList.toggle('bt-hidden', step !== 2);
+    this.perkRow.classList.toggle('bt-hidden', step !== 2);
     if (step === 1) this.selectTitan(this.ti); else this.selectBiome(this.bi);
+    if (step === 2) this.refreshBiomeBests();
+    this.refreshPermit();
     if (animate) {
       const row = step === 1 ? this.titanRow : this.biomeRow;
       const cards = step === 1 ? this.titanCards : this.biomeCards;
@@ -209,11 +345,172 @@ export class SelectScreen {
     }
   }
 
+  // ─────────────────────────────── v2 rows: palette / perk / permit / best ───────────────────────────────
+
+  private palUnlocked(t: TitanId, i: number): boolean {
+    if (i === 0) return true;
+    const P = this.profile;
+    return !!P && paletteUnlocked(P, t, i);
+  }
+
+  private perkChoice(): PerkId | null {
+    const perk = PERK_VALUES[this.perkIx] ?? null;
+    if (!perk) return null;
+    return this.profile && perkUnlocked(this.profile, perk) ? perk : null;
+  }
+
+  private setPalette(i: number): void {
+    const t = TITAN_IDS[this.ti];
+    if (this.pal[t] === i) return;
+    this.pal[t] = i;
+    this.renderPalette();
+    this.swapPortrait(t);
+    const s = this.palSwatches[i];
+    if (s) pulse(s, [{ transform: 'translateY(-12%) scale(1.08)' }, { transform: 'none' }], 200);
+  }
+
+  /** swap the focused titan's portrait for its palette (canonical when locked); stale replies are dropped */
+  private swapPortrait(t: TitanId): void {
+    const i = TITAN_IDS.indexOf(t);
+    const img = this.titanImgs[i];
+    if (!img) return;
+    const pal = this.palUnlocked(t, this.pal[t]) ? this.pal[t] : 0;
+    const req = (this.portraitReq[t] = (this.portraitReq[t] ?? 0) + 1);
+    if (pal === 0 || !this.portraitFor) { img.src = this.portraits[t] || img.src; return; }
+    this.portraitFor(t, pal).then((url) => {
+      if (req !== this.portraitReq[t] || !url) return;
+      img.src = url;
+    }).catch(() => { /* keep the current portrait */ });
+  }
+
+  private renderPalette(): void {
+    const t = TITAN_IDS[this.ti];
+    const def = TITANS[t];
+    const cur = this.pal[t];
+    this.palSwatches.forEach((b, i) => {
+      clearEl(b);
+      const pal = i === 0 ? null : TITAN_PALETTES[t][i - 1];
+      const cols = pal ? [pal.primary, pal.secondary, pal.accent] : [def.colors.primary, def.colors.secondary, def.colors.accent];
+      const chips = div('bt2-swatch-chips', b);
+      for (const c of cols) { const ch = el('i', ''); ch.style.background = c; chips.appendChild(ch); }
+      b.appendChild(el('span', 'bt2-swatch-name', pal ? pal.name : SCREENS.select.paletteCanon));
+      const open = this.palUnlocked(t, i);
+      b.classList.toggle('locked', !open);
+      b.classList.toggle('on', i === cur);
+      if (!open) div('bt2-lock', b);
+    });
+    if (!this.palUnlocked(t, cur)) {
+      const g = goalUnlocking((u) => u.kind === 'palette' && u.titan === t && u.index === cur);
+      this.palNote.textContent = fmt(SCREENS.select.lockedBy, { goal: g ? g.name : '?' });
+      this.palNote.classList.add('locked');
+    } else {
+      this.palNote.textContent = '';
+      this.palNote.classList.remove('locked');
+    }
+  }
+
+  private changePerk(d: number): void {
+    this.perkIx = wrapIndex(this.perkIx + d, PERK_VALUES.length);
+    this.renderPerk();
+    pulse(this.perkVal, [{ transform: `translateX(${d * 6}%)`, opacity: 0.3 }, { transform: 'none', opacity: 1 }], 160);
+  }
+
+  private renderPerk(): void {
+    const V = this.perkVal;
+    clearEl(V);
+    const perk = PERK_VALUES[this.perkIx] ?? null;
+    const gl = div('bt2-perkval-glyph', V);
+    const tx = div('bt2-perkval-txt', V);
+    if (!perk) {
+      gl.innerHTML = glyphSvg('key', 'rgba(244,236,216,.5)', 22);
+      tx.appendChild(el('b', '', SCREENS.select.perkNone));
+      tx.appendChild(el('span', '', SCREENS.select.perkNoneDesc));
+      V.classList.remove('locked');
+    } else {
+      const def = PERKS_DEF[perk];
+      const open = !!this.profile && perkUnlocked(this.profile, perk);
+      gl.innerHTML = glyphSvg(open ? 'key' : 'lock', '#ffd166', 22);
+      tx.appendChild(el('b', '', def ? def.name : perk));
+      if (open) tx.appendChild(el('span', '', def ? def.desc : ''));
+      else {
+        const g = goalUnlocking((u) => u.kind === 'perk' && u.id === perk);
+        tx.appendChild(el('span', 'lk', fmt(SCREENS.select.lockedBy, { goal: g ? g.name : '?' })));
+      }
+      V.classList.toggle('locked', !open);
+    }
+    V.appendChild(el('small', 'bt2-perkval-n', `${this.perkIx + 1} / ${PERK_VALUES.length}`));
+  }
+
+  private refreshPermit(): void {
+    if (!this.profile) { this.permit.show(false); return; }
+    this.permit.show(true);
+    this.permit.set(this.profile, TITAN_IDS[this.ti], this.step === 2 ? BIOME_IDS[this.bi] : null);
+  }
+
+  /** YOUR BEST ON FILE: LV n · SIZE r · m:ss over the given titan × biome pairs (bests handed in by the app). */
+  private bestLine(titans: readonly TitanId[], biomes: readonly BiomeId[]): string {
+    const B = this.bests;
+    let lv = -1, rank = -1, clear = Infinity, air = -1;
+    for (const t of titans) for (const b of biomes) {
+      const l = B[bestKey(t, b, 'level')], r = B[bestKey(t, b, 'peakRank')], c = B[bestKey(t, b, 'clearS')], s = B[bestKey(t, b, 'survivedS')];
+      if (l !== undefined) lv = Math.max(lv, l);
+      if (r !== undefined) rank = Math.max(rank, r);
+      if (c !== undefined) clear = Math.min(clear, c);
+      if (s !== undefined) air = Math.max(air, s);
+    }
+    if (lv < 0 && rank < 0) return STR.select.recordNone;
+    const time = Number.isFinite(clear) ? clear : Math.max(0, air);
+    return fmt(SCREENS.select.bestOnFile, { lv: lv >= 0 ? fmtInt(lv) : '—', size: rank >= 0 ? roman(rank) : '—', time: fmtTime(time) });
+  }
+
+  /** DESK RECORD for a zone (every titan): the band's left on step 2 (the pre-v2 lore footer, relocated). */
+  private renderDeskRecord(b: BiomeId): void {
+    const f = this.deskRec;
+    clearEl(f);
+    const B = this.bests;
+    let tons = -1, rank = -1, clear = Infinity;
+    for (const t of TITAN_IDS) {
+      const tn = B[bestKey(t, b, 'tonnage')], rk = B[bestKey(t, b, 'peakRank')], cs = B[bestKey(t, b, 'clearS')];
+      if (tn !== undefined) tons = Math.max(tons, tn);
+      if (rk !== undefined) rank = Math.max(rank, rk);
+      if (cs !== undefined) clear = Math.min(clear, cs);
+    }
+    f.appendChild(el('span', 'bt-kit-tag', STR.select.record));
+    if (tons < 0 && rank < 0) { f.appendChild(el('span', 'bt-lore-rec-none', STR.select.recordNone)); return; }
+    const cell = (k: string, v: string) => {
+      const c = div('bt-lore-rec-cell', f);
+      c.appendChild(el('small', '', k));
+      c.appendChild(el('b', '', v));
+    };
+    cell(STR.select.recTons, tons >= 0 ? `${fmtInt(tons)} T` : '—');
+    cell(STR.select.recSize, rank >= 0 ? roman(rank) : '—');
+    cell(STR.select.recClear, Number.isFinite(clear) ? fmtTime(clear) : '—');
+  }
+
+  /** The dossier column is overflow-hidden: drop flavour lines (last first, keep one) until the kit fits. */
+  private fitLore(): void {
+    const L = this.lore;
+    if (L.clientHeight <= 0) return;
+    const ul = L.querySelector('.bt-lore-lines');
+    while (L.scrollHeight > L.clientHeight + 1 && ul && ul.children.length > 1) ul.lastElementChild!.remove();
+    if (L.scrollHeight > L.clientHeight + 1) {
+      const tag = L.querySelector('.bt-lore-tagline');
+      if (tag) tag.remove();
+    }
+  }
+
+  private refreshBiomeBests(): void {
+    const t = TITAN_IDS[this.ti];
+    BIOME_IDS.forEach((b, i) => { const e = this.biomeBest[i]; if (e) e.textContent = this.bestLine([t], [b]); });
+  }
+
   // ─────────────────────────────── titans ───────────────────────────────
 
   private buildTitanCards(portraits: Record<TitanId, string>): void {
     clearEl(this.titanRow);
     this.titanCards = [];
+    this.titanImgs = [];
+    this.titanBest = [];
     TITAN_IDS.forEach((id, i) => {
       const def = TITANS[id];
       const c = el('button', `bt-tcard t-${id}`);
@@ -233,9 +530,11 @@ export class SelectScreen {
         img.src = src;
         img.draggable = false;
         c.appendChild(img);
+        this.titanImgs.push(img);
       } else {
         const np = div('bt-tcard-nophoto', c);
         np.appendChild(el('span', '', STR.select.noPortrait));
+        this.titanImgs.push(null);
       }
       div('bt-tcard-num', c, String(i + 1).padStart(2, '0'));
       const plate = div('bt-tcard-plate', c);
@@ -243,9 +542,12 @@ export class SelectScreen {
       plate.appendChild(el('span', '', def.role));
       const pips = div('bt-pips3', plate);
       for (let k = 1; k <= 3; k++) div(k <= def.difficulty ? 'on' : '', pips);
+      // v2 YOUR BEST ON FILE (shown on the focused card only): this titan over every zone
+      this.titanBest.push(div('bt2-best', plate, this.bestLine([id], BIOME_IDS)));
       div('bt-tcard-tag', c, STR.select.selected);
       onTap(c, () => {
         if (this.step !== 1) return;
+        this.focusRow('cards');
         if (this.ti === i) this.confirm(); else this.selectTitan(i);
       });
       this.titanRow.appendChild(c);
@@ -261,6 +563,8 @@ export class SelectScreen {
       c.setAttribute('aria-selected', j === i ? 'true' : 'false');
     });
     if (changed) this.renderTitanLore(TITANS[TITAN_IDS[i]], i);
+    this.renderPalette();
+    if (this.step === 1) this.refreshPermit();
   }
 
   private renderTitanLore(def: TitanDef, i: number): void {
@@ -299,7 +603,7 @@ export class SelectScreen {
     row(STR.select.auto, def.auto.name, def.auto.desc);
     row(STR.select.hook, def.hook.name, def.hook.desc, STR.hud.keyHook);
     row(STR.select.dash, def.dash.name, def.dash.desc, STR.hud.keyDash);
-    this.recordFooter(L, TITAN_IDS.map(() => def.id), BIOME_IDS.slice());
+    this.fitLore();
     pulse(L, [{ opacity: 0.2, transform: 'translateX(2%)' }, { opacity: 1, transform: 'none' }], 200);
   }
 
@@ -308,6 +612,7 @@ export class SelectScreen {
   private buildBiomeCards(): void {
     clearEl(this.biomeRow);
     this.biomeCards = [];
+    this.biomeBest = [];
     BIOME_IDS.forEach((id, i) => {
       const def = BIOMES[id];
       const c = el('button', `bt-bcard b-${id}`);
@@ -324,9 +629,11 @@ export class SelectScreen {
       const meta = div('bt-bcard-meta', plate);
       meta.appendChild(el('span', '', STR.select.time[def.time] ?? def.time.toUpperCase()));
       meta.appendChild(el('span', '', STR.select.weather[def.weather] ?? def.weather.toUpperCase()));
+      this.biomeBest.push(div('bt2-best', plate));
       div('bt-tcard-tag', c, STR.select.selected);
       onTap(c, () => {
         if (this.step !== 2) return;
+        this.focusRow('cards');
         if (this.bi === i) this.confirm(); else this.selectBiome(i);
       });
       this.biomeRow.appendChild(c);
@@ -341,7 +648,8 @@ export class SelectScreen {
       c.classList.toggle('is-sel', j === i);
       c.setAttribute('aria-selected', j === i ? 'true' : 'false');
     });
-    if (changed) this.renderBiomeLore(BIOMES[BIOME_IDS[i]], i);
+    if (changed) { this.renderBiomeLore(BIOMES[BIOME_IDS[i]], i); this.renderDeskRecord(BIOME_IDS[i]); }
+    if (this.step === 2) this.refreshPermit();
   }
 
   private renderBiomeLore(def: BiomeDef, i: number): void {
@@ -398,7 +706,7 @@ export class SelectScreen {
     const ch = div('bt-kit-head', c);
     ch.appendChild(el('span', 'bt-kit-tag', STR.select.conditions));
     ch.appendChild(el('b', 'bt-kit-name', STR.select.zoneNote[def.id] ?? ''));
-    this.recordFooter(L, TITAN_IDS.slice(), BIOME_IDS.map(() => def.id));
+    this.fitLore();
     pulse(L, [{ opacity: 0.2, transform: 'translateX(2%)' }, { opacity: 1, transform: 'none' }], 200);
   }
 
@@ -430,42 +738,8 @@ export class SelectScreen {
       for (let i = 1; i <= 5; i++) div(i <= lvl ? 'on' : '', m);
     }
   }
-
-  /**
-   * DESK RECORD footer: the personal bests (core/save.ts, written by the app at every run end)
-   * over the given titan × biome pairs — a titan's file spans every zone, a zone's file every
-   * titan. Pinned to the foot of the dossier; hidden again if it would not fit.
-   */
-  private recordFooter(L: HTMLElement, titans: readonly TitanId[], biomes: readonly BiomeId[]): void {
-    const best = loadBest();
-    let tons = -1, rank = -1, clear = Infinity;
-    const pairs = new Set<string>();
-    for (const t of titans) for (const b of biomes) pairs.add(t + '|' + b);
-    for (const pr of pairs) {
-      const [t, b] = pr.split('|');
-      const tn = best[bestKey(t, b, 'tonnage')], rk = best[bestKey(t, b, 'peakRank')], cs = best[bestKey(t, b, 'clearS')];
-      if (tn !== undefined) tons = Math.max(tons, tn);
-      if (rk !== undefined) rank = Math.max(rank, rk);
-      if (cs !== undefined) clear = Math.min(clear, cs);
-    }
-    const f = div('bt-lore-rec', L);
-    f.appendChild(el('span', 'bt-kit-tag', STR.select.record));
-    if (tons < 0 && rank < 0) {
-      f.appendChild(el('span', 'bt-lore-rec-none', STR.select.recordNone));
-    } else {
-      const cell = (k: string, v: string) => {
-        const c = div('bt-lore-rec-cell', f);
-        c.appendChild(el('small', '', k));
-        c.appendChild(el('b', '', v));
-      };
-      cell(STR.select.recTons, tons >= 0 ? `${fmtInt(tons)} T` : '—');
-      cell(STR.select.recSize, rank >= 0 ? roman(rank) : '—');
-      cell(STR.select.recClear, Number.isFinite(clear) ? fmtTime(clear) : '—');
-    }
-    // never let the footer push dossier text out of the (overflow: hidden) column
-    if (L.scrollHeight > L.clientHeight + 1) f.remove();
-  }
 }
+
 
 // ─────────────────────────────── CSS-painted biome art ───────────────────────────────
 
@@ -518,4 +792,8 @@ function paintSkyline(art: HTMLElement, b: BiomeDef, seed: number): void {
   if (b.weather === 'snow') div('bt-ba-snow', art);
   if (b.weather === 'rain') div('bt-ba-rain', art);
   if (b.time === 'night') div('bt-ba-glow', art);
+}
+
+function clampPal(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(2, Math.round(v))) : 0;
 }

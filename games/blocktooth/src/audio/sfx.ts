@@ -14,7 +14,7 @@
 // Everything no-ops before AudioEngine.unlock() and without an AudioContext.
 
 import type {
-  AlertKey, BossId, DamageKind, EnemyKind, ProjectileKind, PropKind, SimEvent, TelegraphStyle, TitanId, World,
+  AlertKey, BossId, DamageKind, EnemyKind, ObjectiveKind, PowerUpKind, ProjectileKind, PropKind, SimEvent, TelegraphStyle, TitanId, World,
 } from '../core/types.ts';
 import type { AudioEngine } from './audio.ts';
 import {
@@ -24,7 +24,9 @@ import {
 import type { Ctx, NoiseColor } from './audio.ts';
 import { shapeCenter } from '../core/math.ts';
 
-export type UiSound = 'move' | 'confirm' | 'back' | 'draft' | 'pick' | 'slate' | 'print';
+export type UiSound = 'move' | 'confirm' | 'back' | 'draft' | 'pick' | 'slate' | 'print'
+  // v2 (FEATURES_V2 §12, lane L6): draft BANISH stamp, LOCK padlock click, GOAL MET ding + typewriter
+  | 'banish' | 'lock' | 'goal';
 
 // ─────────────────────────────── build handle + tiny helpers ───────────────────────────────
 
@@ -289,6 +291,11 @@ const GAP: Record<string, number> = {
   tg_cone: 0.1, tg_oval: 0.12, tg_lane: 0.1, tg_ring: 0.12, tg_circle: 0.08, tg_chain: 0.1,
   alert: 0.6, siren: 6, phase: 1.5, lowHp: 4, elite: 2.5, chest: 0.5,
   bossAtk: 0.4, bossHit: 0.07, stagger: 1.5, bossDown: 5, leash: 0.3, proc: 0.12, end: 5,
+  pkStep: 0.25, pkBeep: 3,
+  // v2 (L6): UPROAR, objectives, power-ups, revive, endless rematch
+  ultReady: 1.5, ultFire: 0.5, ultPulse: 0.12, objSpawn: 1.2, objDone: 0.4, puSpawn: 0.6, puGet: 0.25, puEnd: 0.5,
+  revive: 2, endlessBoss: 6,
+  ui_banish: 0.15, ui_lock: 0.1, ui_goal: 0.35,
   ui_move: 0.03, ui_confirm: 0.05, ui_back: 0.05, ui_draft: 0.2, ui_pick: 0.15, ui_slate: 0.5, ui_print: 0.5,
 };
 
@@ -302,6 +309,7 @@ const STING_DUCK = {
   siren: [0.45, 2.4, 1.0],      // boss arrives (the music is crossfading to the boss track underneath)
   phase: [0.4, 1.0, 0.8],       // boss phase brass sting
   bossDown: [0.55, 2.2, 1.5],   // boss collapse
+  ult: [0.5, 1.0, 0.9],         // v2 UPROAR fire (the per-titan blast rides over the band)
 } as const;
 
 /** Low-priority (≤ 1) voices allowed per onEvents call. */
@@ -337,6 +345,8 @@ export class Sfx {
   private healAcc = 0; private healT = 0;
   private stepSide = 1;
   private tokens = LOW_BURST; private tokT = 0;
+  /** PARKADE-6 step tracker (hydraulic hiss per tripod step) */
+  private pkInit = false; private pkLx = 0; private pkLz = 0; private pkAcc = 0;
 
   constructor(engine: AudioEngine) { this.eng = engine; }
 
@@ -366,6 +376,7 @@ export class Sfx {
         this.one(w, e);
       }
       if (pickN > 0) this.pickupTicks(pickN, pickScrap > pickN / 2, pickX / pickN, pickZ / pickN);
+      if (w.boss && this.bossId === 'parkade6') this.parkadeTick(w.boss); else this.pkInit = false;
     } catch {
       // cosmetic subsystem: never let a synthesis error reach the game loop
     }
@@ -513,14 +524,20 @@ export class Sfx {
       case 'levelUp': if (this.gate('level', now)) this.levelChime(); break;
       case 'rankUp': if (this.gate('rank', now)) this.massBreach(e.rank); break;
       case 'telegraphStart': if (e.owner !== 'titan' && this.gate('tg_' + e.style, now)) this.warn(w, e.id, e.style, e.owner === 'boss'); break;
-      case 'telegraphFire': if (e.owner !== 'titan') this.telegraphImpact(w, e.id, e.x, e.z, e.owner === 'boss', now); break;
+      case 'telegraphFire':
+        if (e.owner === 'boss' && this.bossId === 'parkade6' && this.parkadeFire(w, e.id, e.x, e.z)) break;
+        if (e.owner !== 'titan') this.telegraphImpact(w, e.id, e.x, e.z, e.owner === 'boss', now);
+        break;
       case 'projectileHit': if (this.gate('pjHit', now)) this.projectileHit(e.kind, e.x, e.z); break;
       case 'explosion': this.explosion(e.kind, e.r, e.x, e.z, now); break;
       case 'waveStart': break;
       case 'alert': this.alert(e.key, now); break;
       case 'eliteSpawn': if (this.gate('elite', now)) this.eliteHorn(); break;
       case 'chest': if (this.gate('chest', now)) this.sparkle(e.x, e.z, 0.9); break;
-      case 'bossSpawn': if (this.gate('siren', now)) this.bossSiren(); break;
+      case 'bossSpawn':
+        if (this.gate('siren', now)) this.bossSiren();
+        if (e.boss === 'parkade6' && w.boss && this.gate('pkBeep', now)) this.parkadeBeeper(w.boss.x, w.boss.z);
+        break;
       case 'bossPhase': if (this.gate('phase', now)) this.phaseSting(e.phase); break;
       case 'bossAttack': if (this.gate('bossAtk', now)) this.bossAttack(e.attack, e.x, e.z); break;
       case 'bossHit': if (this.gate('bossHit', now)) this.bossHit(e.part, e.x, e.z); break;
@@ -529,6 +546,17 @@ export class Sfx {
       case 'leash': if (this.gate('leash', now)) this.leash(e.on, e.x, e.z); break;
       case 'upgradeProc': if (this.gate('proc', now)) this.proc(e.x, e.z); break;
       case 'runEnd': if (this.gate('end', now)) this.runEnd(e.result); break;
+      // ── v2 (FEATURES_V2 §12, lane L6) ──
+      case 'ultCharged': if (this.gate('ultReady', now)) this.ultReady(); break;
+      case 'ultFire': if (this.gate('ultFire', now)) this.ultFire(e.titan, e.x, e.z); break;
+      case 'ultPulse': if (this.gate('ultPulse', now)) this.ultPulse(e.titan, e.x, e.z, e.n); break;
+      case 'objectiveSpawn': if (this.gate('objSpawn', now)) this.objectiveChime(e.x, e.z); break;
+      case 'objectiveDone': if (this.gate('objDone', now)) this.objectiveDone(e.kind, e.x, e.z); break;
+      case 'powerupSpawn': if (this.gate('puSpawn', now)) this.powerupPing(e.x, e.z); break;
+      case 'powerup': if (this.gate('puGet', now)) this.powerupGet(w, e.kind); break;
+      case 'powerupEnd': if (this.gate('puEnd', now)) this.powerupEnd(e.kind); break;
+      case 'revive': if (this.gate('revive', now)) this.reviveSting(); break;
+      case 'endlessBoss': if (this.gate('endlessBoss', now) && this.gate('siren', now)) this.bossSiren(); break;
     }
   }
 
@@ -1310,6 +1338,7 @@ export class Sfx {
   // ───────────── boss ─────────────
 
   private bossAttack(attack: string, x: number, z: number): void {
+    if (this.bossId === 'parkade6' && this.parkadeAttack(attack, x, z)) return;
     const s = this.spatial(x, z);
     const g = Math.max(0.5, s.g);
     switch (attack) {
@@ -1384,6 +1413,7 @@ export class Sfx {
   }
 
   private bossHit(part: string, x: number, z: number): void {
+    if (this.bossId === 'parkade6') { this.parkadeHit(part, x, z); return; }
     const s = this.spatial(x, z);
     const b = this.voice('bossHit', 1, 0.5, Math.max(0.4, s.g) * 0.3, s.pan, 0.2); if (!b) return;
     if (this.bossId === 'irongully') {
@@ -1398,6 +1428,7 @@ export class Sfx {
   }
 
   private stagger(): void {
+    if (this.bossId === 'parkade6') { this.parkadeJam(); return; }
     const b = this.voice('stagger', 4, 2.2, 0.6, 0, 0.35); if (!b) return;
     if (this.bossId === 'irongully') {
       creature(b, b.o, b.t, 1.7, [[0, 95], [0.3, 88], [1.7, 52]], 'o', 0.85, { growl: 0.5, growlHz: 18, breath: 0.4, fscale: 0.62 });
@@ -1408,6 +1439,7 @@ export class Sfx {
   }
 
   private bossDown(x: number, z: number): void {
+    if (this.bossId === 'parkade6') { this.parkadeDown(x, z); return; }
     const s = this.spatial(x, z);
     const b = this.voice('bossDown', 4, 4.2, Math.max(0.6, s.g) * 0.8, s.pan, 0.45); if (!b) return;
     this.eng.duck(STING_DUCK.bossDown[0], STING_DUCK.bossDown[1], STING_DUCK.bossDown[2]);
@@ -1437,6 +1469,149 @@ export class Sfx {
     }
   }
 
+  // ───────────── PARKADE-6 voice (FEATURES_V2 §12, lane L7) ─────────────
+  // A walking car park: reversing beeper on the entrance, a hydraulic hiss per tripod step, the car launch
+  // clunk-whoosh (+ a car-alarm chirp), the barrier arm's ratchet and swing, the tow winch rattle, deck slams,
+  // the JAMMED grind with a stuck ticket-machine buzzer, and a domino collapse with a car-alarm chorus.
+
+  /** Per-frame poll while PARKADE-6 is up: one hydraulic hiss per tripod step (half a gait cycle of travel). */
+  private parkadeTick(b: NonNullable<World['boss']>): void {
+    if (!b.alive) { this.pkInit = false; return; }
+    if (!this.pkInit) { this.pkLx = b.x; this.pkLz = b.z; this.pkAcc = 0; this.pkInit = true; return; }
+    const d = Math.hypot(b.x - this.pkLx, b.z - this.pkLz);
+    this.pkLx = b.x; this.pkLz = b.z;
+    if (d > 60) { this.pkAcc = 0; return; }
+    this.pkAcc += d;
+    if (this.pkAcc < 3.15) return;
+    this.pkAcc = 0;
+    const now = this.eng.now;
+    if (!this.gate('pkStep', now)) return;
+    const s = this.spatial(b.x, b.z);
+    const bb = this.voice('pkStep', 1, 0.45, Math.max(0.25, s.g) * 0.3, s.pan, 0.12); if (!bb) return;
+    burst(bb, bb.o, bb.t, 'white', 'highpass', 3200, 0.7, 0.012, 0.26, 0.55);            // hydraulic hiss
+    thump(bb, bb.o, bb.t + 0.03, 62, 38, 0.22, 0.6);                                       // pad plants
+    blip(bb, bb.o, bb.t, 'square', 210, 0.08, 0.08, 150, 0.002, 900);                      // valve clack
+  }
+
+  /** The entrance: it REVERSES in, so a steady reversing beeper over a diesel idle (the sim backs it ~2.6 s). */
+  private parkadeBeeper(x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('pkBeep', 3, 3.1, Math.max(0.45, s.g) * 0.38, s.pan, 0.18); if (!b) return;
+    for (let i = 0; i < 5; i++) beep(b, b.o, b.t + i * 0.56, 'square', 1040, 0.3, 0.42, 3200);
+    rumble(b, b.o, b.t, 0.3, 2.2, 0.5, 160, 110, 0.35);
+    const o = osc(b, 'sawtooth', 38, b.t, b.t + 3.0);                                        // diesel idle
+    const a = gn(b); envAHR(a.gain, b.t, 0.18, 0.3, 2.0, 0.6);
+    wire(o, mkGrit(b.ac, 0.4), flt(b, 'lowpass', 420), a, b.o);
+  }
+
+  /** Attack wind-ups (bossAttack). Returns false for an id that is not one of PARKADE-6's. */
+  private parkadeAttack(attack: string, x: number, z: number): boolean {
+    const s = this.spatial(x, z);
+    const g = Math.max(0.5, s.g);
+    switch (attack) {
+      case 'rampLaunch': {   // the deck ram kicks: clunk, cars whoosh off the lip, one alarm chirps
+        const b = this.voice('bossAtk', 3, 1.4, g * 0.7, s.pan, 0.28); if (!b) return true;
+        thump(b, b.o, b.t, 92, 48, 0.28, 0.9);
+        clang(b, b.o, b.t + 0.01, 150, 1.41, 4, 0.35, 0.45);
+        whoosh(b, b.o, b.t + 0.08, 0.9, 380, 1900, 1.2, 0.75);
+        for (let i = 0; i < 4; i++) beep(b, b.o, b.t + 0.35 + i * 0.14, 'square', i & 1 ? 930 : 1260, 0.1, 0.22, 2600);
+        return true;
+      }
+      case 'barrierSwing': {   // ratchet up + motor whine (the swing itself lands on the fire)
+        const b = this.voice('bossAtk', 3, 1.1, g * 0.55, s.pan, 0.22); if (!b) return true;
+        crackle(b, b.o, b.t, 0.4, 9, 2200, 2.2, 0.8, true);
+        const o = osc(b, 'sawtooth', 140, b.t, b.t + 1.0); sweep(o.frequency, b.t, 140, 290, 0.5);
+        const a = gn(b); envAHR(a.gain, b.t, 0.25, 0.05, 0.35, 0.5); wire(o, flt(b, 'bandpass', 800, 2.5), a, b.o);
+        return true;
+      }
+      case 'towChain': {   // the winch pays out: a fast chain rattle over a straining motor
+        const b = this.voice('bossAtk', 3, 1.5, g * 0.6, s.pan, 0.25); if (!b) return true;
+        crackle(b, b.o, b.t, 1.2, 26, 2700, 2.2, 0.85, true);
+        const o = osc(b, 'sawtooth', 105, b.t, b.t + 1.3); sweep(o.frequency, b.t, 105, 175, 1.2);
+        const a = gn(b); envAHR(a.gain, b.t, 0.3, 0.1, 0.8, 0.4); wire(o, mkGrit(b.ac, 0.5), flt(b, 'lowpass', 1400), a, b.o);
+        return true;
+      }
+      case 'deckDrop': case 'levelCollapse': {   // the hydraulics bleed off (crouch) + the frame groans
+        const b = this.voice('bossAtk', 3, 1.4, g * 0.6, s.pan, 0.28); if (!b) return true;
+        burst(b, b.o, b.t, 'white', 'highpass', 2600, 0.7, 0.05, 0.75, 0.55, 1400);
+        this.metalGroan(b, b.t + 0.1, 1.1, attack === 'deckDrop' ? 70 : 58, 44, 0.5);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** PARKADE-6 telegraphs landing: the barrier's swing, deck slams, the three LEVEL COLLAPSE beats. */
+  private parkadeFire(w: World, id: number, x: number, z: number): boolean {
+    let tag = '';
+    for (const tg of w.telegraphs) if (tg.id === id) { tag = tg.tag; break; }
+    const s = this.spatial(x, z);
+    const g = Math.max(0.55, s.g);
+    if (tag === 'barrierSwing') {
+      const b = this.voice('impact', 3, 0.9, g * 0.7, s.pan, 0.25); if (!b) return true;
+      whoosh(b, b.o, b.t, 0.45, 260, 1400, 1.1, 0.9);
+      thump(b, b.o, b.t + 0.3, 120, 70, 0.18, 0.5);
+      clang(b, b.o, b.t + 0.3, 330, 2.1, 3, 0.3, 0.3);
+      return true;
+    }
+    if (tag === 'deckDrop' || tag.startsWith('levelCollapse:')) {
+      const big = tag === 'deckDrop' ? 1.5 : tag === 'levelCollapse:C' ? 1.3 : 1.0;
+      const b = this.voice('impact', 3, 1.5, g * (0.5 + 0.15 * big), s.pan, 0.32); if (!b) return true;
+      boom(b, b.o, b.t, big, 0.85);                                                      // slab on slab
+      burst(b, b.o, b.t, 'pink', 'bandpass', 520, 1.4, 0.002, 0.3, 0.5, 260);           // concrete body
+      crackle(b, b.o, b.t + 0.04, 0.45, 12, 1300, 1.3, 0.35);                           // grit + gravel
+      if (tag !== 'levelCollapse:A' && tag !== 'levelCollapse:B') {
+        for (let i = 0; i < 5; i++) beep(b, b.o, b.t + 0.25 + i * 0.16, 'square', i & 1 ? 880 : 1175, 0.11, 0.16, 2400);   // car alarms
+      }
+      return true;
+    }
+    return false;
+  }
+
+  private parkadeHit(part: string, x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('bossHit', 1, 0.5, Math.max(0.4, s.g) * 0.3, s.pan, 0.2); if (!b) return;
+    if (part === 'till') {                                     // the till: coins jump in the drawer
+      thump(b, b.o, b.t, 140, 80, 0.12, 0.6);
+      tinkle(b, b.o, b.t + 0.01, 4, 0.12, 2400, 4200, 0.5, 0.12);
+    } else if (part.startsWith('leg')) {                       // hydraulic strut: hollow clang + hiss
+      clang(b, b.o, b.t, rnd(150, 200), 1.41, 5, 0.3, 0.6);
+      burst(b, b.o, b.t + 0.02, 'white', 'highpass', 3400, 0.7, 0.004, 0.12, 0.35);
+    } else if (part === 'booth' || part === 'arm') {           // tin cabin + a glass tick
+      clang(b, b.o, b.t, rnd(420, 520), 2.3, 3, 0.18, 0.45);
+      tinkle(b, b.o, b.t, 2, 0.05, 3000, 5000, 0.3, 0.06);
+    } else {                                                   // concrete deck: dull thud + grit
+      thump(b, b.o, b.t, 110, 55, 0.2, 0.8);
+      burst(b, b.o, b.t, 'pink', 'bandpass', 600, 1.2, 0.001, 0.08, 0.6);
+    }
+  }
+
+  /** JAMMED: gears grind, a stuck ticket machine buzzes, the hydraulics vent. */
+  private parkadeJam(): void {
+    const b = this.voice('stagger', 4, 2.4, 0.6, 0, 0.35); if (!b) return;
+    const t = b.t;
+    const o = osc(b, 'sawtooth', 64, t, t + 1.9); sweep(o.frequency, t, 64, 41, 1.8);
+    const a = gn(b); envAHR(a.gain, t, 0.6, 0.08, 1.1, 0.6); wire(o, mkGrit(b.ac, 0.7), flt(b, 'bandpass', 380, 2), a, b.o);
+    crackle(b, b.o, t, 1.4, 34, 1500, 1.6, 0.55, true);                              // stripped teeth
+    for (let i = 0; i < 3; i++) beep(b, b.o, t + 0.3 + i * 0.42, 'square', 233, 0.26, 0.3, 1500);   // stuck buzzer
+    burst(b, b.o, t + 1.4, 'white', 'highpass', 2400, 0.7, 0.05, 0.8, 0.45);        // vent
+  }
+
+  /** Defeat: the legs buckle, four decks slam down in sequence, every parked car's alarm goes off. */
+  private parkadeDown(x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('bossDown', 4, 4.6, Math.max(0.6, s.g) * 0.8, s.pan, 0.45); if (!b) return;
+    this.eng.duck(STING_DUCK.bossDown[0], STING_DUCK.bossDown[1], STING_DUCK.bossDown[2]);
+    const t = b.t;
+    for (let i = 0; i < 6; i++) {
+      burst(b, b.o, t + i * 0.22, 'white', 'highpass', 2800, 0.7, 0.005, 0.2, 0.35);
+      clang(b, b.o, t + i * 0.22, rnd(120, 170), 1.41, 4, 0.3, 0.35);
+    }
+    for (let i = 0; i < 4; i++) boom(b, b.o, t + 1.3 + i * 0.3, 1.2 + 0.2 * i, 0.7);
+    rumble(b, b.o, t + 1.3, 0.1, 1.2, 1.6, 1300, 90, 0.7);
+    for (let i = 0; i < 10; i++) beep(b, b.o, t + 1.9 + i * 0.17, 'square', i % 3 === 0 ? 1320 : i & 1 ? 880 : 1100, 0.12, 0.14, 2600);
+  }
+
   private proc(x: number, z: number): void {
     const s = this.spatial(x, z);
     const b = this.voice('proc', 0, 0.3, Math.max(0.5, s.g) * 0.14, s.pan, 0.2); if (!b) return;
@@ -1463,6 +1638,187 @@ export class Sfx {
       thump(b, b.o, t + 1.65, 70, 30, 0.7, 0.9);
       burst(b, b.o, t + 1.65, 'brown', 'lowpass', 900, 0.8, 0.005, 0.7, 0.6, 120);
     }
+  }
+
+  // ───────────── v2: UPROAR, objectives, power-ups (FEATURES_V2 §12, lane L6) ─────────────
+
+  /** UPROAR READY: a 2-note brass stab + the titan's chuff (a short voiced exhale). */
+  private ultReady(): void {
+    const tv = TITAN_VOICE[this.titan] ?? TITAN_VOICE.molo;
+    const b = this.voice('ultReady', 4, 1.1, 0.5, 0, 0.25); if (!b) return;
+    const t = b.t;
+    brass(b, b.o, t, [55, 62, 67], 0.12, 0.5, 1.1);
+    brass(b, b.o, t + 0.15, [60, 67, 72, 76], 0.42, 0.55, 1.2);
+    const f0 = 120 * tv.mul;
+    creature(b, b.o, t + 0.05, 0.3, [[0, f0 * 1.2], [0.08, f0 * 1.35], [0.3, f0 * 0.8]], tv.vowel, 0.35,
+      { growl: tv.growl, breath: 0.9, fscale: 0.9, grit: 0.4 });
+    burst(b, b.o, t + 0.05, 'pink', 'bandpass', 900, 1.2, 0.02, 0.2, 0.35, 400);
+  }
+
+  /** UPROAR fire: the ROAR (voiced, sized by the titan) + the per-titan blast colour. */
+  private ultFire(titan: TitanId, x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const tv = TITAN_VOICE[titan] ?? TITAN_VOICE.molo;
+    const r = clampf(this.rank, 0, 4);
+    const b = this.voice('ultFire', 5, 2.6, Math.max(0.7, s.g) * 0.85, s.pan * 0.4, 0.35); if (!b) return;
+    this.eng.duck(STING_DUCK.ult[0], STING_DUCK.ult[1], STING_DUCK.ult[2]);
+    const t = b.t, o = b.o;
+    const f0 = [150, 112, 84, 63, 48][r] * tv.mul;
+    creature(b, o, t, 0.75, [[0, f0 * 0.85], [0.12, f0 * 1.2], [0.5, f0 * 1.05], [0.75, f0 * 0.7]], 'a', 0.75,
+      { growl: 0.3 + tv.growl * 0.5, growlHz: 30 - 3 * r, breath: 0.5, fscale: [1, 0.92, 0.84, 0.76, 0.68][r], grit: 0.55 });
+    const bt = t + 0.45;   // the blast lands at the end of the roar (0.4–0.6 s)
+    switch (titan) {
+      case 'molo': {       // STREET SWALLOW — a wet gulp over a rumble
+        rumble(b, o, t + 0.1, 0.3, 0.6, 1.0, 260, 60, 0.8);
+        const n = nz(b, 'pink', bt, bt + 0.9); const bp = flt(b, 'bandpass', 180, 2.2);
+        sweep(bp.frequency, bt, 180, 900, 0.8);
+        const a = gn(b); envAHR(a.gain, bt, 0.7, 0.5, 0.1, 0.3, 3); wire(n, bp, a, o);
+        thump(b, o, bt + 0.9, 170, 45, 0.35, 1);                                    // the SNAP gulp
+        burst(b, o, bt + 0.9, 'brown', 'lowpass', 700, 1.4, 0.005, 0.35, 0.8, 120);
+        break;
+      }
+      case 'voltkite': {   // GRIDLOCK SURGE — a rising buzz into a thunder crack
+        const fm = mkFM(b.ac, 90, 1.5, 4, t, bt + 0.1);
+        b.srcs.push(fm.car, fm.mod);
+        sweep(fm.car.frequency, t, 90, 420, 0.5);
+        const a = gn(b); envAHR(a.gain, t, 0.28, 0.4, 0.05, 0.08, 2); wire(fm.car, flt(b, 'lowpass', 2600, 0.9), a, o);
+        burst(b, o, bt, 'white', 'highpass', 1100, 0.7, 0.001, 0.08, 1);
+        burst(b, o, bt + 0.004, 'white', 'bandpass', 3000, 0.9, 0.001, 0.14, 0.7);
+        rumble(b, o, bt + 0.03, 0.1, 0.4, 1.3, 900, 100, 0.9);
+        break;
+      }
+      case 'hearthback': { // CALDERA BLOWOUT — a low whoomp + magma hiss
+        thump(b, o, bt, 70, 26, 0.7, 1);
+        boom(b, o, bt, 1.5, 0.75);
+        burst(b, o, bt + 0.08, 'white', 'highpass', 2600, 0.7, 0.15, 1.3, 0.28, 5200, 2);   // hiss
+        crackle(b, o, bt + 0.15, 1.2, 26, 3000, 0.9, 0.25);
+        break;
+      }
+      case 'briarwick': {  // GREENBELT DECREE — a woody creak + a rustling swell
+        const cr = osc(b, 'sawtooth', 70, t + 0.1, bt + 0.3);
+        sweep(cr.frequency, t + 0.1, 70, 48, 0.6);
+        const lfo = osc(b, 'square', 23, t + 0.1, bt + 0.3); const d = gn(b, 14); wire(lfo, d); d.connect(cr.frequency);
+        const ca = gn(b); envAHR(ca.gain, t + 0.1, 0.3, 0.2, 0.3, 0.15, 2); wire(cr, flt(b, 'bandpass', 600, 3), ca, o);
+        whoosh(b, o, bt, 1.1, 1200, 5200, 0.8, 0.8, 'pink');
+        crackle(b, o, bt + 0.1, 0.8, 18, 1700, 2, 0.35);                             // twigs
+        thump(b, o, bt + 0.3, 110, 50, 0.3, 0.6);
+        break;
+      }
+    }
+  }
+
+  /** A thud per UPROAR ring; a crackle per GRIDLOCK SURGE pulse. */
+  private ultPulse(titan: TitanId, x: number, z: number, n: number): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('ultPulse', 3, 0.7, Math.max(0.55, s.g) * 0.5, s.pan * 0.4, 0.25); if (!b) return;
+    if (titan === 'voltkite') {
+      crackle(b, b.o, b.t, 0.22, 14, 3600, 1.1, 0.6);
+      this.zapInto(b, 0.6);
+    } else {
+      const f = 90 - 10 * clampf(n, 0, 3);
+      thump(b, b.o, b.t, f * 1.6, f * 0.5, 0.35, 0.95);
+      burst(b, b.o, b.t, 'brown', 'lowpass', 900, 0.8, 0.004, 0.3, 0.6, 140);
+    }
+  }
+
+  /** objectiveSpawn: a municipal 3-note chime (the PA before an announcement). */
+  private objectiveChime(x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('objSpawn', 3, 1.4, 0.3 * Math.max(0.7, s.g), s.pan * 0.3, 0.35); if (!b) return;
+    const notes = [72, 76, 79];
+    for (let i = 0; i < notes.length; i++) bell(b, b.o, b.t + i * 0.16, mtof(notes[i]), 0.9, 0.42, 2.0, 0.6);
+  }
+
+  /** objectiveDone: cash register (OVERLOAD), crate splinter + heal chime (RELIEF), cabinet slam (ANNEX). */
+  private objectiveDone(kind: ObjectiveKind, x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('objDone', 4, 1.3, 0.45 * Math.max(0.7, s.g), s.pan * 0.4, 0.25); if (!b) return;
+    const t = b.t, o = b.o;
+    switch (kind) {
+      case 'overloadSite': {   // ka-CHING
+        clang(b, o, t, 820, 1.41, 2, 0.06, 0.45);                    // the drawer
+        burst(b, o, t, 'white', 'bandpass', 2400, 1.4, 0.001, 0.05, 0.5);
+        bell(b, o, t + 0.09, mtof(96), 0.9, 0.55, 5.4, 0.8);          // the bell
+        bell(b, o, t + 0.09, mtof(103), 0.7, 0.3, 3.01, 0.6);
+        tinkle(b, o, t + 0.12, 6, 0.3, 2000, 4500, 0.2, 0.12);       // coins
+        break;
+      }
+      case 'reliefDepot': {
+        woodCrack(b, o, t, 0.8);
+        const notes = [79, 83, 86];
+        for (let i = 0; i < notes.length; i++) bell(b, o, t + 0.12 + i * 0.07, mtof(notes[i]), 0.7, 0.35, 3.5, 1);
+        break;
+      }
+      case 'recordsAnnex': {   // a filing-cabinet slam + papers
+        clang(b, o, t, 180, 2.1, 5, 0.35, 0.7);
+        thump(b, o, t, 120, 55, 0.2, 0.9);
+        burst(b, o, t + 0.03, 'white', 'highpass', 3000, 0.7, 0.03, 0.35, 0.35, 6000);
+        clang(b, o, t + 0.2, 950, 1.8, 2, 0.1, 0.3);                  // the latch
+        break;
+      }
+    }
+  }
+
+  /** powerupSpawn: a soft ping from where the token appeared. */
+  private powerupPing(x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('puSpawn', 2, 0.8, 0.22 * Math.max(0.5, s.g), s.pan, 0.3); if (!b) return;
+    bell(b, b.o, b.t, mtof(88), 0.6, 0.5, 2.0, 0.5);
+    bell(b, b.o, b.t + 0.09, mtof(95), 0.5, 0.3, 2.0, 0.5);
+  }
+
+  /** power-up collected: one voice per kind (RED LIGHT keeps ticking for its whole window). */
+  private powerupGet(w: World, kind: PowerUpKind): void {
+    const redS = clampf(fin(w.map ? w.map.redLightT : 6, 6), 0.5, 8);
+    const dur = kind === 'redLight' ? redS + 0.4 : kind === 'rushHour' ? 1.8 : 1.2;
+    const b = this.voice('puGet', 4, dur, 0.5, 0, 0.2); if (!b) return;
+    const t = b.t, o = b.o;
+    switch (kind) {
+      case 'cleanup':         // vacuum swoosh
+        whoosh(b, o, t, 0.9, 300, 3800, 1.3, 0.9, 'pink');
+        blip(b, o, t + 0.75, 'sine', 660, 0.15, 0.4, 990);
+        break;
+      case 'demolition': {    // rubber stamp + boom
+        thump(b, o, t, 220, 90, 0.08, 1);
+        burst(b, o, t, 'pink', 'lowpass', 1400, 0.8, 0.001, 0.07, 0.8);
+        boom(b, o, t + 0.2, 1.4, 0.8);
+        break;
+      }
+      case 'redLight': {      // a pitch-down, then a ticking clock for the whole window
+        const f = osc(b, 'sawtooth', 440, t, t + 0.5);
+        sweep(f.frequency, t, 440, 110, 0.45);
+        const a = gn(b); envPerc(a.gain, t, 0.35, 0.005, 0.45, 2); wire(f, flt(b, 'lowpass', 1800, 0.8), a, o);
+        for (let k = 0; 0.5 + k * 0.5 < redS; k++) {
+          burst(b, o, t + 0.5 + k * 0.5, 'white', 'bandpass', k % 2 ? 2600 : 3300, 6, 0.001, 0.02, 0.35);
+        }
+        break;
+      }
+      case 'rushHour':        // siren swell
+        siren(b, o, t, 1.6, 520, 980, 0.35);
+        whoosh(b, o, t + 0.2, 0.8, 800, 4000, 1, 0.5, 'white');
+        break;
+      case 'backPay':         // coin cascade
+        tinkle(b, o, t, 16, 0.7, 1800, 5200, 0.35, 0.12);
+        bell(b, o, t + 0.1, mtof(91), 0.8, 0.35, 5.4, 0.8);
+        break;
+    }
+  }
+
+  /** powerupEnd (RED LIGHT / RUSH HOUR over): a soft falling blip pair. */
+  private powerupEnd(kind: 'redLight' | 'rushHour'): void {
+    const b = this.voice('puEnd', 3, 0.4, 0.25, 0, 0.15); if (!b) return;
+    const f = kind === 'redLight' ? 660 : 880;
+    blip(b, b.o, b.t, 'triangle', f, 0.1, 0.6, f * 0.75);
+    blip(b, b.o, b.t + 0.11, 'triangle', f * 0.75, 0.14, 0.5, f * 0.5);
+  }
+
+  /** STAY OF DEMOLITION revive: a rising brass sting. */
+  private reviveSting(): void {
+    const b = this.voice('revive', 5, 1.6, 0.6, 0, 0.35); if (!b) return;
+    this.eng.duck(STING_DUCK.phase[0], STING_DUCK.phase[1], STING_DUCK.phase[2]);
+    brass(b, b.o, b.t, [50, 57, 62], 0.2, 0.5, 1);
+    brass(b, b.o, b.t + 0.24, [55, 62, 67, 71], 0.9, 0.55, 1.2);
+    bell(b, b.o, b.t + 0.3, mtof(86), 1.1, 0.35, 3.5, 1);
   }
 
   // ───────────── UI ─────────────
@@ -1522,6 +1878,30 @@ export class Sfx {
           whoosh(b, b.o, tt + 0.04, 0.12, 2500, 5000, 1, 0.3, 'white');
         }
         bell(b, b.o, b.t + 0.8, mtof(93), 0.6, 0.45, 5.4, 0.6);   // carriage bell
+        return;
+      }
+      case 'banish': {  // v2: a rubber stamp slammed on the card
+        const b = this.voice('ui', 4, 0.5, 0.42, 0, 0.12); if (!b) return;
+        thump(b, b.o, b.t, 200, 70, 0.1, 1);
+        burst(b, b.o, b.t, 'pink', 'lowpass', 1500, 0.8, 0.001, 0.07, 0.9);
+        burst(b, b.o, b.t + 0.02, 'white', 'highpass', 3500, 0.7, 0.01, 0.12, 0.25, 6500);   // paper rustle
+        return;
+      }
+      case 'lock': {    // v2: a padlock shackle click
+        const b = this.voice('ui', 4, 0.3, 0.36, 0, 0.06); if (!b) return;
+        clang(b, b.o, b.t, 1400, 1.9, 2, 0.05, 0.5);
+        clang(b, b.o, b.t + 0.06, 2100, 2.3, 2, 0.04, 0.4);
+        burst(b, b.o, b.t + 0.06, 'white', 'bandpass', 4200, 2, 0.001, 0.015, 0.5);
+        return;
+      }
+      case 'goal': {    // v2 GOAL MET: a ding + a typewriter run
+        const b = this.voice('ui', 4, 1.4, 0.38, 0, 0.25); if (!b) return;
+        bell(b, b.o, b.t, mtof(88), 1.0, 0.5, 5.4, 0.7);
+        for (let i = 0; i < 6; i++) {
+          const tt = b.t + 0.25 + i * 0.075 + Math.random() * 0.02;
+          burst(b, b.o, tt, 'white', 'bandpass', rnd(2400, 3400), 2.5, 0.001, 0.02, 0.45);
+          thump(b, b.o, tt, 180, 90, 0.03, 0.3);
+        }
         return;
       }
     }

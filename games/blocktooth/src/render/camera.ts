@@ -17,7 +17,9 @@
 //            run). log-space target, smoothed at CAMERA_ZOOM.omega; clamped to [min, max] and
 //            to the absolute distance band [dAbsMin, dAbsMax] (perf / "the whole city fits").
 //            View-only: the sim never reads it.
-//   punch  : on rankUp, rendered D × (1 − 0.08·(1 − easeOutCubic(τ/1.2))), τ ∈ [0, 1.2] s
+//   punch  : on rankUp, rendered D × (1 − 0.08·(1 − easeOutCubic(τ/1.2))), τ ∈ [0, 1.2] s;
+//            punch(frac, s) (v2 UPROAR, FEATURES_V2 §3.6: 0.06 over 0.8 s) starts the same curve with its
+//            own depth / length — the stronger of a live punch and a new one wins (never stacked)
 //   target = titanPos(interp) + lead + up·(H·0.45), lead → v·0.25 s smoothed at ω = 6/s
 //   pitch  → RANKS[rank].pitchDeg (54° at every Size) at ω = 3/s; yaw fixed 45°
 //   camPos = target + D·(cos p·sin yaw, sin p, cos p·cos yaw)
@@ -101,6 +103,8 @@ export class CameraRig {
   private offX = 0; private offZ = 0;   // boss-framing look-target offset (config frameOffset), smoothed
   private tx = 0; private ty = 0; private tz = 0;
   private punchT = -1;       // < 0 = inactive
+  private punchK: number = CAMERA.punchFrac;   // depth of the live punch (fraction of D)
+  private punchS: number = CAMERA.punchS;      // length of the live punch (s)
   private trauma = 0;
   private shakeT = 0;
   private lastRank: RankIndex = 0;
@@ -149,6 +153,22 @@ export class CameraRig {
     this.trauma = Math.min(1, this.trauma + amount);
   }
 
+  /** v2 (FEATURES_V2 §3.6): a camera punch-in of `frac` × D easing back out over `s` seconds (UPROAR fires
+   *  it with 0.06 / 0.8). Reduce motion is the caller's switch (game.ts skips the call). A live punch that
+   *  is currently deeper is kept; otherwise the new one replaces it. View-only. */
+  punch(frac: number, s: number): void {
+    if (!(frac > 0) || !(s > 0) || !Number.isFinite(frac) || !Number.isFinite(s)) return;
+    const k = Math.min(0.5, frac);
+    if (this.punchT >= 0) {
+      const tau = this.punchT / this.punchS;
+      const live = tau < 1 ? this.punchK * (1 - easeOutCubic(tau)) : 0;
+      if (live >= k) return;
+    }
+    this.punchK = k;
+    this.punchS = s;
+    this.punchT = 0;
+  }
+
   /** Snap everything to the titan's current state (run start, retry, teleport cheats). */
   reset(w: World): void {
     const T = w.titan;
@@ -178,7 +198,7 @@ export class CameraRig {
     this.readEvents(w, f.events, H);
     if (rank !== this.lastRank) {
       // rank changed without us seeing the event (cheat.rank / frames dropped) — still punch
-      if (rank > this.lastRank && this.punchT < 0) this.punchT = 0;
+      if (rank > this.lastRank && this.punchT < 0) { this.punchT = 0; this.punchK = CAMERA.punchFrac; this.punchS = CAMERA.punchS; }
       this.lastRank = rank;
     }
 
@@ -197,9 +217,9 @@ export class CameraRig {
     let punch = 1;
     if (this.punchT >= 0) {
       this.punchT += dt;
-      const tau = this.punchT / CAMERA.punchS;
+      const tau = this.punchT / this.punchS;
       if (tau >= 1) this.punchT = -1;
-      else punch = 1 - CAMERA.punchFrac * (1 - easeOutCubic(tau));
+      else punch = 1 - this.punchK * (1 - easeOutCubic(tau));
     }
     // ── player zoom: log-space, smoothed, re-clamped every frame (the band is absolute metres,
     //    so a rank-up can tighten the allowed multiplier) ──
@@ -282,7 +302,7 @@ export class CameraRig {
     for (let i = 0; i < ev.length; i++) {
       const e = ev[i];
       switch (e.type) {
-        case 'rankUp': this.punchT = 0; this.lastRank = e.rank; add += TR.rankUp; break;
+        case 'rankUp': this.punchT = 0; this.punchK = CAMERA.punchFrac; this.punchS = CAMERA.punchS; this.lastRank = e.rank; add += TR.rankUp; break;
         case 'footstep': add += TR.footstep * Math.max(0, Math.min(1, e.heavy)); break;
         case 'buildingCollapse': {
           const base = TR.collapseBase + TR.collapsePerTier * e.tier - TR.collapseRankRelief * rank;

@@ -13,6 +13,7 @@ MEM_JS = r"""() => { const c = window.__BT__ && window.__BT__.debugCore; if (!c)
 def main():
     ap = argparse.ArgumentParser()
     add_common_args(ap)
+    ap.add_argument("--v2", type=int, default=1, help="1 = also exercise the v2 views each cycle (default)")
     args = ap.parse_args()
     combos = [("molo", "grideast"), ("voltkite", "lockwater"), ("hearthback", "whitestacks"),
               ("briarwick", "grideast"), ("molo", "grideast"), ("voltkite", "lockwater"),
@@ -28,11 +29,19 @@ def main():
                 print("newRun failed", v); return 2
             s.wait_screen(("play",), 60)
             s.cheat("rank", 2)
+            if args.v2:
+                # v2 views allocate too (FEATURES_V2 §15.5): an UPROAR fired by a real E, a power-up,
+                # an OVERLOAD SITE + a RELIEF DEPOT (objective / marker views)
+                s.cheat("ult", 100); time.sleep(0.3); s.press("KeyE", 80)
+                s.cheat("powerup", "cleanup"); s.cheat("objective", "overloadSite"); s.cheat("objective", "reliefDepot", 20)
             s.hold(["w", "d"]); time.sleep(4.0); s.release_all()
             time.sleep(0.5)
             m = s.js(MEM_JS)
             st = s.state()
-            rows.append({"i": i, "titan": t, "biome": b, **(m or {}), "screen": st.get("screen"), "rank": st.get("rank")})
+            v2 = st.get("v2") or {}
+            rows.append({"i": i, "titan": t, "biome": b, **(m or {}), "screen": st.get("screen"), "rank": st.get("rank"),
+                         "ultFired": (v2.get("ult") or {}).get("fired"), "objs": len(v2.get("objectives") or []),
+                         "pus": len(v2.get("powerups") or [])})
             print(json.dumps(rows[-1]), flush=True)
         errs = [c for c in s.console if c[0] == "error"] + s.page_errors
         print("errors:", len(errs), errs[:5])

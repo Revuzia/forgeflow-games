@@ -1,0 +1,28 @@
+{
+  "runs": [
+    {
+      "titan": "molo",
+      "biome": "grideast",
+      "code": 0,
+      "pass": true
+    },
+    {
+      "titan": "voltkite",
+      "biome": "whitestacks",
+      "code": 0,
+      "pass": true
+    },
+    {
+      "titan": "hearthback",
+      "biome": "lockwater",
+      "code": 0,
+      "pass": true
+    },
+    {
+      "titan": "briarwick",
+      "biome": "grideast",
+      "code": 0,
+      "pass": true
+    }
+  ]
+}

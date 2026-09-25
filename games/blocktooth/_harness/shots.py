@@ -18,6 +18,12 @@ Groups (all by default, in this order):
            --boss-shots distinct attacks frozen MID-TELEGRAPH (sim frozen via __BT__.freeze while
            the paint is 30–85 % through its windup)
   tabloid  a run-end tabloid (a Size I titan left standing in front of a boss)
+  v2fx     (FEATURES_V2 §15.4, lane L6) UPROAR per titan at Size I and V, zoom 1, fired with a real E
+           and frozen mid-BLAST (ult_<titan>_s1 / _s5); the three objectives + their markers at Size
+           I / III / V (obj_markers_s1/s3/s5); the five power-up tokens at Size III (powerups_s3)
+  v2hud    (FEATURES_V2 §4.1 / §15.4, lane L8) the v2 HUD at 1280×720 and 1920×1080 (abilitybar_1280 /
+           abilitybar_1920): a full ability bar + `+N`, UPROAR meter, ACTIVE panel, tracker rows, one
+           broadcast toast alert and one v2 GOAL MET toast live together
 
 Output: _shots/battery/<name>.png, _shots/battery/manifest.json (one entry per shot: group, kind,
 titan, biome, rank, screen, state summary, capture method, ok) and labelled contact sheets
@@ -40,7 +46,7 @@ from common import (BIOME_BOSS, BIOME_NAMES, BIOMES, ROMAN, ROOT, SHOTS, TITAN_N
                     diag_problems, ensure_play, navigate_cards, print_diagnostics, save_report, set_rank,
                     world_to_keys, xp_to_next)
 
-GROUPS = ("menus", "titans", "hud", "bosses", "tabloid")
+GROUPS = ("menus", "titans", "hud", "bosses", "tabloid", "v2fx", "v2hud")
 RANK_ARG = {"I": 0, "II": 1, "III": 2, "IV": 3, "V": 4}
 BOSS_NAMES = {"caisson4": "CAISSON-4", "irongully": "IRON GULLY"}
 
@@ -543,6 +549,157 @@ class Battery:
             return
         time.sleep(a.tabloid_delay)                      # the paper drops + prints
         self.shot("tabloid", "tabloid", run=(sess.state() or {}).get("run"))
+
+    # ─────────────────────────────── v2 views (lane L6) ───────────────────────────────
+    # Waits in the page until w.ult reaches (phase, t) and freezes the sim there: the UPROAR view runs on
+    # the sim clock, so the frozen frame IS that moment of the blast.
+    V2_ULT_WAIT_JS = r"""
+    async ([phase, t]) => {
+      const B = window.__BT__;
+      const t0 = performance.now();
+      while (performance.now() - t0 < 6000) {
+        const W = B.world;
+        if (W && W.ult && W.ult.phase === phase && W.ult.t >= t) {
+          B.freeze(true);
+          return { phase: W.ult.phase, t: W.ult.t, r: W.ult.r, H: W.titan.height };
+        }
+        await new Promise(r => requestAnimationFrame(r));
+      }
+      return null;
+    }
+    """
+    # Lay the live tokens out in a row up the −z street from the titan (runs start on an intersection; the
+    # camera sits at +x+z, so a row behind the titan along a road is never hidden by a building in front).
+    # A camera set-up, like the other cheats here.
+    V2_SPREAD_PU_JS = r"""() => {
+      const W = window.__BT__.world, T = W.titan, H = T.height;
+      const live = W.map.powerups.filter(p => p.alive);
+      live.forEach((p, i) => { p.x = T.x - 0.3 * H; p.z = T.z - (2.0 + 1.25 * i) * H; p.t = 0.5; });
+      return live.map(p => p.kind);
+    }"""
+    V2_ULT_BIOME = {"molo": "grideast", "voltkite": "lockwater", "hearthback": "whitestacks", "briarwick": "grideast"}
+
+    def g_v2fx(self):
+        self.group = "v2fx"
+        a, sess = self.args, self.sess
+        # UPROAR: real E, frozen 0.35 s into the BLAST, a mixed crowd on screen
+        for titan in a.titans:
+            for rank in (0, 4):
+                name = "ult_%s_s%d" % (titan, rank + 1)
+                ok, scr = self.start_run(titan, self.V2_ULT_BIOME[titan], a.seed + 300 + rank, False)
+                if not ok or not ensure_play(sess, 20, self.olog)[0]:
+                    self.miss(name, "run did not start (%s)" % (scr,))
+                    continue
+                self.cheats_on(True, True)
+                if rank:
+                    set_rank(sess, rank, self.log, settle_s=a.settle)
+                sess.cheat("noSpawns", False)
+                # a modest crowd: enough to show the pulses + arcs, not so many that their aim paint
+                # stacks over the titan (hostile telegraphs are drawn on top of everything)
+                for kind, n in (("android", 14), ("buggy", 4), ("drone", 4)):
+                    sess.cheat("spawn", kind, n)
+                time.sleep(2.0)
+                if not ensure_play(sess, 10, self.olog)[0]:
+                    self.miss(name, "overlay would not clear")
+                    continue
+                sess.cheat("ult", 100)
+                time.sleep(0.25)
+                sess.press("KeyE")
+                info = sess.js(self.V2_ULT_WAIT_JS, ["blast", 0.35])
+                if not info:
+                    sess.bt_call("freeze", False)
+                    self.miss(name, "UPROAR did not reach its blast after a real E (ult=%s)" % json.dumps((sess.state() or {}).get("v2", {}).get("ult")))
+                    continue
+                time.sleep(0.3)
+                self.shot(name, "uproar", ult=info)
+                sess.bt_call("freeze", False)
+        # objectives + markers at Size I / III / V
+        for rank in (0, 2, 4):
+            name = "obj_markers_s%d" % (rank + 1)
+            ok, scr = self.start_run(a.hud_titan, a.hud_biome, a.seed + 400 + rank, False)
+            if not ok or not ensure_play(sess, 20, self.olog)[0]:
+                self.miss(name, "run did not start (%s)" % (scr,))
+                continue
+            self.cheats_on(True, True)
+            sess.cheat("killAll")
+            if rank:
+                set_rank(sess, rank, self.log, settle_s=a.settle)
+            H = sess.safe_js("() => window.__BT__.world.titan.height", default=1.2) or 1.2
+            placed = {}
+            for kind, ahead in (("overloadSite", None), ("reliefDepot", 3.5 * H), ("recordsAnnex", None)):
+                okc, v = sess.cheat("objective", kind, ahead) if ahead else sess.cheat("objective", kind)
+                placed[kind] = v if okc else None
+            time.sleep(1.2)
+            if not ensure_play(sess, 10, self.olog)[0]:
+                self.miss(name, "overlay would not clear")
+                continue
+            self.shot(name, "objectives", placed=placed, dom=(sess.state() or {}).get("v2dom"))
+            # the same scene pulled back to the zoom limit (hold '-'): the sites' dressing on screen
+            sess.hold({"Minus"})
+            time.sleep(1.4)
+            sess.release_all()
+            time.sleep(0.6)
+            if ensure_play(sess, 10, self.olog)[0]:
+                self.shot(name + "_far", "objectives", zoom="max", dom=(sess.state() or {}).get("v2dom"))
+            sess.press("KeyZ")
+            time.sleep(0.8)
+            if rank == 2:
+                # sim cap: 3 tokens alive at once, so two frames cover the five kinds
+                for batch, suffix in ((("redLight", "rushHour", "backPay"), ""), (("cleanup", "demolition"), "b")):
+                    for kind in batch:
+                        sess.cheat("powerup", kind)
+                    kinds = sess.safe_js(self.V2_SPREAD_PU_JS, default=[])
+                    time.sleep(1.0)
+                    if ensure_play(sess, 10, self.olog)[0]:
+                        self.shot("powerups_s3" + suffix, "powerups", powerups=kinds)
+
+    # ─────────────────────────────── v2 HUD (lane L8) ───────────────────────────────
+    # 13 owned cards (mixed rarities / stacks) + one evolution → a full ability bar with a `+N` slot; UPROAR
+    # at ~74 %; an OVERLOAD SITE (raises the broadcast toast alert) + a RELIEF DEPOT + a RED LIGHT timer in
+    # the tracker; one v2 GOAL MET toast live next to the broadcast toast (§4.1: they must not touch).
+    V2_HUD_CARDS_JS = r"""async ([n, evo]) => {
+      const E = await import('/src/upgrades/engine.ts'), D = await import('/src/upgrades/draft.ts'), U = await import('/src/data/upgrades.ts');
+      const w = window.__BT__.world;
+      const pool = U.UPGRADES.filter((u) => !u.evo && !u.perk && !u.locked && (!u.titan || u.titan === w.titanId));
+      const pick = []; for (let i = 0; pick.length < n && i < pool.length * 7; i += 7) { const u = pool[i % pool.length]; if (!pick.includes(u)) pick.push(u); }
+      pick.forEach((u, i) => { const st = Math.min(u.maxStacks, 1 + (i % 4)); for (let k = 0; k < st; k++) E.applyUpgrade(w, u.id); });
+      const d = U.UPGRADE_BY_ID[evo];
+      if (d && d.evo && (!d.titan || d.titan === w.titanId)) {
+        for (let k = 0; k < 8; k++) E.applyUpgrade(w, d.evo.base);
+        E.applyUpgrade(w, d.evo.with); w.upgrades.offer = [evo]; D.pickUpgrade(w, evo);
+      }
+      return w.upgrades.order.length;
+    }"""
+    V2_HUD_TOAST_JS = r"""async () => { const T = await import('/src/ui/toast.ts');
+      T.pushHudToast({ kicker: 'GOAL MET', title: 'CROWD CONTROL', sub: 'UNLOCKED: Airtime Ledger — NEXT RUN', glyph: 'ribbon' }); }"""
+
+    def g_v2hud(self):
+        self.group = "v2hud"
+        a, sess = self.args, self.sess
+        base_vp = sess.page.viewport_size or {"width": a.width, "height": a.height}
+        try:
+            for (w, h) in ((1280, 720), (1920, 1080)):
+                name = "abilitybar_%d" % w
+                sess.page.set_viewport_size({"width": w, "height": h})
+                ok, scr = self.start_run("hearthback", "grideast", a.seed + 500, False)
+                if not ok or not ensure_play(sess, 20, self.olog)[0]:
+                    self.miss(name, "run did not start (%s)" % (scr,))
+                    continue
+                self.cheats_on(True, True)
+                n = sess.safe_js(self.V2_HUD_CARDS_JS, [13, "evo_supervolcano_permit"], default=0)
+                sess.cheat("ult", 74)
+                sess.cheat("objective", "overloadSite")
+                H = sess.safe_js("() => window.__BT__.world.titan.height", default=1.2) or 1.2
+                sess.cheat("objective", "reliefDepot", 6 * H)
+                sess.safe_js("() => { window.__BT__.world.map.redLightT = 4.5; }")
+                sess.safe_js(self.V2_HUD_TOAST_JS)
+                time.sleep(1.2)
+                if not ensure_play(sess, 10, self.olog)[0]:
+                    self.miss(name, "overlay would not clear")
+                    continue
+                self.shot(name, "hud_v2", cards=n, dom=(sess.state() or {}).get("v2dom"))
+        finally:
+            sess.page.set_viewport_size(base_vp)
 
     # ─────────────────────────────── contact sheets ───────────────────────────────
     def contact_sheets(self):

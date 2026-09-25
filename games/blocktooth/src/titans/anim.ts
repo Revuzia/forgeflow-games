@@ -61,6 +61,13 @@ export interface AnimState {
   popT?: number;
   /** grow-pop strength (1 = a level-up, ~1.5 = the level-up that breaches a Size) */
   popAmt?: number;
+  /** v2 UPROAR (FEATURES_V2 §3.6, lane L6): seconds since `ultFire` (undefined / < 0 = none) — the
+   *  `ultimate` clip: gather → rear + ROAR for `ultRoar` s, then the titan's BLAST pose for `ultBlast` s */
+  ultT?: number;
+  /** ROAR length (s) of the titan's ultimate (data/ultimates.ts roarS) */
+  ultRoar?: number;
+  /** BLAST length (s) of the titan's ultimate (data/ultimates.ts blastS) */
+  ultBlast?: number;
 }
 
 interface GaitCfg {
@@ -251,6 +258,7 @@ export class TitanAnimator {
   private readonly s: AnimState & { speedH: number; hurtAmt: number; deadT: number; hero: number; aim: number; downSide: number; clearT: number } = {
     speed01: 0, moving: false, turn: 0, attack: null, attackT: -1, dashT: -1, hurtT: -1, abilityT: -1, growT: -1, t: 0, kit: {},
     speedH: 0, hurtAmt: 0.6, noFlash: false, deadT: -1, hero: 0, aim: 0, downSide: 1, clearT: -1, popT: -1, popAmt: 1,
+    ultT: -1, ultRoar: 0.5, ultBlast: 0.8,
   };
   /** half the footprint width (height-1 units): the topple pivots on that foot edge */
   private readonly halfW: number;
@@ -390,6 +398,7 @@ export class TitanAnimator {
     this.attackPose(a, kit);
     this.dashPose(a);
     this.abilityPose(a, kit);
+    if (!dead && fin(a.ultT, -1) >= 0) this.ultimatePose(a);
     this.growPose(a);
     this.popPose(a);
     this.hurtPose(a);
@@ -427,6 +436,9 @@ export class TitanAnimator {
     s.aim = a.aim !== undefined && Number.isFinite(a.aim) ? a.aim : fin(s.kit.headTurn, 0);
     s.popT = timer(a.popT);
     s.popAmt = Math.max(0, Math.min(2, fin(a.popAmt, 1)));
+    s.ultT = timer(a.ultT);
+    s.ultRoar = clamp(fin(a.ultRoar, 0.5), 0.1, 2);
+    s.ultBlast = clamp(fin(a.ultBlast, 0.8), 0.1, 3);
     return s;
   }
 
@@ -631,6 +643,108 @@ export class TitanAnimator {
         c.headPitch -= 0.25 * proud - 0.2 * stamp;
         c.jaw += 0.25 * proud;
         c.neckPitch -= 0.1 * proud;
+        break;
+      }
+    }
+  }
+
+  /**
+   * v2 UPROAR `ultimate` clip (FEATURES_V2 §3.6). ROAR (0 → roar): a quick gather, then the titan rears
+   * onto its hind legs, throws the head back with the jaw wide and every crest flared, quivering — the
+   * sim holds it at 30 % speed and invulnerable for exactly this window. BLAST (roar → roar + blast): the
+   * titan's own pose, keyed to its data/ultimates.ts pulse times, then a 0.35 s settle.
+   */
+  private ultimatePose(a: AnimState): void {
+    const c = this.ch;
+    const t = a.ultT ?? -1;
+    const R = a.ultRoar ?? 0.5, Bl = a.ultBlast ?? 0.8;
+    if (t < 0 || t > R + Bl + 0.4) return;
+    // ── ROAR ──
+    const gather = env(t, 0, 0.08, 0.1, 0.2);
+    const rear = env(t, 0.1, 0.1 + R * 0.45, R, R + 0.18);
+    const quiver = t > 0.18 && t < R ? Math.sin(t * 41) * 0.5 + Math.sin(t * 27 + 1) * 0.5 : 0;
+    c.bodyY -= 0.05 * gather;
+    c.sq *= 1 - 0.08 * gather;
+    c.bodyPitch -= 0.26 * rear;
+    c.bodyY += 0.04 * rear;
+    c.frontLift += 0.2 * rear;
+    c.frontReach += 0.05 * rear;
+    c.neckPitch -= 0.3 * rear;
+    c.headPitch -= 0.45 * rear;
+    c.headRoll += 0.035 * quiver * rear;
+    c.jaw += (0.95 + 0.05 * quiver) * rear;
+    c.throat *= 1 + 0.12 * rear;
+    c.mane *= 1 + 0.9 * rear;
+    c.ruff *= 1 + 0.45 * rear;
+    c.crater *= 1 + 0.5 * rear;
+    c.wings += 0.9 * rear;
+    c.ears -= 0.9 * rear;
+    c.tailLift += 0.3 * rear;
+    c.tailStiff = Math.max(c.tailStiff, 0.6 * rear);
+    c.eyeClose = Math.max(c.eyeClose * (1 - rear), 0.4 * rear);
+    // ── BLAST (bt = seconds into the blast; the settle rides the envelopes' tails) ──
+    const bt = t - R;
+    if (bt < 0) return;
+    const out = 1 - smooth((bt - Bl) / 0.35);
+    switch (this.id) {
+      case 'molo': {       // STREET SWALLOW: head low into the sinkhole, jaw wide through the PULL, SNAP at 0.9
+        const pull = env(bt, 0, 0.1, 0.85, 0.9) * out;
+        const snap = env(bt, 0.88, 0.92, 0.98, 1.3);
+        c.bodyPitch += 0.1 * pull;
+        c.headPitch += 0.18 * pull;
+        c.neckPitch += 0.14 * pull;
+        c.neckZ += 0.05 * pull;
+        c.jaw += 1.0 * pull;
+        c.throat *= 1 + (0.22 + 0.06 * Math.sin(a.t * 30)) * pull;
+        c.feetOut += 0.06 * pull;
+        c.bodyY -= 0.04 * pull;
+        c.tailStiff = Math.max(c.tailStiff, pull);
+        c.sq *= 1 - 0.1 * snap;
+        c.throat *= 1 + 0.3 * snap;
+        c.headPitch -= 0.12 * snap;
+        break;
+      }
+      case 'voltkite': {   // GRIDLOCK SURGE: wide braced stance, the howl held, mane + fins blazing per pulse
+        const hold = env(bt, 0, 0.08, Bl - 0.1, Bl + 0.2);
+        const beat = Math.max(0, Math.sin((bt / 0.25) * Math.PI * 2)) * hold;
+        c.feetOut += 0.07 * hold;
+        c.bodyY -= 0.03 * hold;
+        c.neckPitch -= 0.25 * hold;
+        c.headPitch -= 0.3 * hold;
+        c.jaw += 0.6 * hold;
+        c.mane *= 1 + (0.8 + 0.4 * beat) * hold;
+        c.wings += (0.8 + 0.2 * beat) * hold;
+        c.ears -= 0.8 * hold;
+        c.bodyRoll += 0.03 * Math.sin(a.t * 47) * hold;
+        break;
+      }
+      case 'hearthback': { // CALDERA BLOWOUT: a squat, the shell heaves once per ring (0 / 0.3 / 0.6 s)
+        const squat = env(bt, 0, 0.06, Bl - 0.1, Bl + 0.25);
+        let heave = 0;
+        for (let k = 0; k < 3; k++) heave = Math.max(heave, env(bt, k * 0.3, k * 0.3 + 0.05, k * 0.3 + 0.08, k * 0.3 + 0.28));
+        c.bodyY -= 0.06 * squat;
+        c.sq *= 1 - 0.07 * squat - 0.04 * heave;
+        c.shellY += 0.05 * squat + 0.08 * heave;
+        c.shellScale *= 1 + 0.08 * heave;
+        c.shellRoll += 0.05 * Math.sin(a.t * 40) * heave;
+        c.crater *= 1 + 0.4 * squat + 0.5 * heave;
+        c.neckZ -= 0.1 * squat;
+        c.headPitch += 0.12 * squat;
+        c.eyeClose = Math.max(c.eyeClose, 0.6 * squat);
+        c.feetOut += 0.04 * squat;
+        break;
+      }
+      case 'briarwick': {  // GREENBELT DECREE: both forefeet stamp the wave out, ruff in full bloom, proud head
+        const stamp = env(bt, 0, 0.04, 0.08, 0.2);
+        const bloom = env(bt, 0, 0.12, Bl - 0.05, Bl + 0.3);
+        c.frontLift -= 0.04 * stamp;
+        c.sq *= 1 - 0.1 * stamp;
+        c.bodyPitch += 0.06 * stamp;
+        c.ruff *= 1 + 0.6 * bloom;
+        c.headPitch -= 0.2 * bloom;
+        c.jaw += 0.3 * bloom;
+        c.neckPitch -= 0.08 * bloom;
+        c.tailLift += 0.12 * bloom;
         break;
       }
     }

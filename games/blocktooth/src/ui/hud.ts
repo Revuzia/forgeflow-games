@@ -1,9 +1,12 @@
 // BLOCKTOOTH — in-play HUD (CONTRACT.md §12). ui lane.
 // A local-TV broadcast package first, a game HUD second:
 //   top-left   WARD-7 • LIVE bug (pulsing red dot) + broadcast clock + run timer
-//   top-right  TONNAGE / BLOCKS / CRUSHED counters, upgrade chips column below
+//   top-right  TONNAGE / BLOCKS / CRUSHED counters (v2: the objective tracker sits below, ui/tracker.ts)
 //   bottom-left cream status card: titan, HP (+damage trail, shield), LV, big roman SIZE +
-//              GROW bar (sizeProgress: levels to the next Size), XP bar, dash pips, hook cooldown dial with key hint
+//              GROW bar (sizeProgress: levels to the next Size), XP bar, dash pips
+//   v2 (FEATURES_V2 §4.1, lane L8): the upgrade chips column is retired in play (the ability bar +
+//              pause LOADOUT show the cards); the hook dial and the kit meter (SHELL / WIRES / BLOOMS)
+//              moved to the ACTIVE panel (ui/abilitybar.ts); the zoom hint moved up to 9.2u (hud_v2.css)
 //   bottom     WARD-7 WIRE ticker crawl (live items injected on big moments)
 //   overlay    low-HP vignette pulse, hurt edge flash, pickup / level flashes
 // update() is change-only: every DOM write goes through TextSlot / VarSlot / ClassSlot.
@@ -11,7 +14,6 @@
 import type { SimEvent, World } from '../core/types.ts';
 import { RANK_LEVELS, sizeProgress } from '../core/config.ts';
 import { TITANS } from '../data/titans.ts';
-import { UPGRADE_BY_ID } from '../data/upgrades.ts';
 import { BOSSES } from '../data/bosses.ts';
 import { STR, TICKER, RANK_SUBS } from '../data/strings.ts';
 import {
@@ -22,8 +24,6 @@ import {
 const LOW_HP = 0.3;
 const TRAIL_HOLD_S = 0.4;
 const TRAIL_RATE = 0.9;          // fraction of max HP per second the trail drains
-const MAX_CHIPS = 14;
-const WIRE_CAP = 6;              // VOLT-KITE live-wire cap (CONTRACT §8)
 const ZOOM_HINT_BRIGHT_S = 20;   // the zoom key hint is at full strength for this long into a run
 
 /** CSS unit (--u) in px, mirrored from styles.css: max(8px, min(1vw, 1.7778vh)). */
@@ -50,10 +50,6 @@ export class Hud {
   private tonsShown = 0;
   private lastBlocks = -1;
   private lastCrushed = -1;
-  // chips
-  private readonly chipsWrap: HTMLElement;
-  private readonly chipsList: HTMLElement;
-  private chipSig = '';
   // status card
   private readonly card: HTMLElement;
   private readonly nameT: TextSlot;
@@ -74,19 +70,9 @@ export class Hud {
   private readonly zoomDim: ClassSlot;
   private readonly xpFill: VarSlot;
   private readonly xpBar: HTMLElement;
-  private readonly shellRow: HTMLElement;
-  private readonly shellFill: VarSlot;
-  private readonly shellOn: ClassSlot;
-  private readonly shellLbl: TextSlot;
-  private readonly shellVal: TextSlot;
   private readonly cardLow: ClassSlot;
   private readonly pipsBox: HTMLElement;
   private pips: { node: HTMLElement; fill: VarSlot; full: ClassSlot }[] = [];
-  private readonly hookDial: VarSlot;
-  private readonly hookCdT: TextSlot;
-  private readonly hookReady: ClassSlot;
-  private readonly hookName: TextSlot;
-  private readonly hookBox: HTMLElement;
   private readonly lvFlash: HTMLElement;
   private readonly lowHpOn: ClassSlot;
   private readonly vignette: HTMLElement;
@@ -96,8 +82,6 @@ export class Hud {
   private trail = 1;
   private trailHold = 0;
   private lastHpFrac = 1;
-  private hookMax = 1;
-  private lastHookCd = 0;
   private lastRank = -1;
   private lastLevel = -1;
   private lastPickupFx = 0;
@@ -150,11 +134,6 @@ export class Hud {
     const b = mk(STR.hud.blocks); this.blocksBox = b.box; this.blocksVal = b.slot;
     const c = mk(STR.hud.crushed); this.crushBox = c.box; this.crushVal = c.slot;
 
-    // ── upgrade chips (right column)
-    this.chipsWrap = div('bt-chips bt-hidden', L);
-    div('bt-chips-head', this.chipsWrap, STR.hud.mutations);
-    this.chipsList = div('bt-chips-list', this.chipsWrap);
-
     // ── status card (bottom-left)
     const card = this.card = div('bt-status', L);
     const head = div('bt-status-head', card);
@@ -198,33 +177,16 @@ export class Hud {
     this.xpBar = xp.row;
     this.xpFill = new VarSlot(div('bt-bar-fill', xp.track), '--p');
     xp.val.remove();
-    const sh = bar('bt-bar-shell', STR.hud.shell);
-    this.shellRow = sh.row;
-    this.shellFill = new VarSlot(div('bt-bar-fill', sh.track), '--p');
-    this.shellLbl = new TextSlot(sh.row.firstElementChild as HTMLElement);
-    this.shellVal = new TextSlot(sh.val);
-    this.shellOn = new ClassSlot(this.shellRow, 'on');
     this.cardLow = new ClassSlot(card, 'lowhp');
 
     const foot = div('bt-status-foot', card);
-    // label line carries the key chip ("DASH [SHIFT]" over the pips, "HOOK [SPACE]" over the
-    // hook name) so a long hook name can never push a chip out of the card
+    // label line carries the key chip ("DASH [SHIFT]" over the pips); the hook moved to the v2
+    // ACTIVE panel (ui/abilitybar.ts)
     const dash = div('bt-dash', foot);
     const dl = div('bt-foot-line', dash);
     div('bt-foot-lbl', dl, STR.hud.dash);
     dl.appendChild(keyChip(STR.hud.keyDash));
     this.pipsBox = div('bt-pips', dash);
-
-    const hook = this.hookBox = div('bt-hook', foot);
-    const dial = div('bt-dial', hook);
-    this.hookDial = new VarSlot(dial, '--p', 0.005);
-    this.hookCdT = new TextSlot(div('bt-dial-cd', dial));
-    this.hookReady = new ClassSlot(hook, 'ready');
-    const htxt = div('bt-hook-txt', hook);
-    const hl = div('bt-foot-line', htxt);
-    div('bt-foot-lbl', hl, STR.hud.hook);
-    hl.appendChild(keyChip(STR.hud.keyHook));
-    this.hookName = new TextSlot(div('bt-hook-name', htxt));
 
     this.lvFlash = div('bt-lvflash', card, STR.hud.levelUp);
 
@@ -329,23 +291,8 @@ export class Hud {
     // XP
     this.xpFill.set(T.xpToNext > 0 ? Math.max(0, Math.min(1, T.xp / T.xpToNext)) : 0);
 
-    // kit meter: HEARTHBACK shell (kit.stored / kit.cap) · VOLT-KITE live wires · BRIARWICK blooms
-    this.updateKitRow(w);
-
     // dash pips
     this.updatePips(w);
-
-    // hook dial: learn the cooldown length from the value it jumps to
-    const cd = Math.max(0, T.abilityCd || 0);
-    if (cd > this.lastHookCd + 0.05) this.hookMax = Math.max(0.1, cd);
-    if (cd <= 0 && this.lastHookCd > 0) pulse(this.hookBox, [{ transform: 'scale(1.2)' }, { transform: 'scale(1)' }], 320);
-    this.lastHookCd = cd;
-    this.hookDial.set(cd <= 0 ? 1 : 1 - Math.min(1, cd / this.hookMax));
-    this.hookCdT.set(cd <= 0 ? '' : cd >= 10 ? String(Math.ceil(cd)) : cd.toFixed(1));
-    this.hookReady.set(cd <= 0);
-
-    // chips (signature changes only on drafts)
-    this.updateChips(w);
 
     // ticker crawl
     this.stepTicker(d);
@@ -412,17 +359,14 @@ export class Hud {
     const def = TITANS[w.titanId];
     this.nameT.set(def ? def.name : w.titanId.toUpperCase());
     this.roleT.set(def ? def.role : '');
-    this.hookName.set(def ? def.hook.name : STR.hud.hook);
     this.card.style.setProperty('--titan', def ? def.colors.primary : '#3fae7f');
     this.card.style.setProperty('--titan-2', def ? def.colors.secondary : '#1f6f55');
     this.trail = 1; this.trailHold = 0; this.lastHpFrac = 1;
-    this.hookMax = 1; this.lastHookCd = 0; this.kitKind = '';
     this.lastRank = -1; this.lastLevel = -1; this.lastBlocks = -1; this.lastCrushed = -1; this.tickSpan = -1;
     this.tonsShown = Math.max(0, w.run.tonnage);
-    this.chipSig = '#';
-    for (const s of [this.clock, this.runT, this.tonsVal, this.blocksVal, this.crushVal, this.lvT, this.sizeT, this.hpVal, this.massVal, this.hookCdT, this.shellLbl, this.shellVal]) s.reset();
-    for (const v of [this.hpFill, this.hpTrail, this.hpShield, this.massFill, this.xpFill, this.shellFill, this.hookDial]) v.reset();
-    for (const c of [this.lowHpOn, this.shellOn, this.hookReady, this.cardLow, this.zoomDim]) c.reset();
+    for (const s of [this.clock, this.runT, this.tonsVal, this.blocksVal, this.crushVal, this.lvT, this.sizeT, this.hpVal, this.massVal]) s.reset();
+    for (const v of [this.hpFill, this.hpTrail, this.hpShield, this.massFill, this.xpFill]) v.reset();
+    for (const c of [this.lowHpOn, this.cardLow, this.zoomDim]) c.reset();
     this.pips = [];
     clearEl(this.pipsBox);
     this.tkLive = [];
@@ -451,58 +395,6 @@ export class Hud {
       if (i < have) { p.full.set(true); p.fill.set(1); }
       else if (i === have) { p.full.set(false); p.fill.set(re > 0 ? partial : 0); }
       else { p.full.set(false); p.fill.set(0); }
-    }
-  }
-
-  private kitKind = '';
-
-  private updateKitRow(w: World): void {
-    const T = w.titan, K = T.kit || {};
-    let kind = '', frac = 0, val = '';
-    if (w.titanId === 'hearthback' && (K.cap || 0) > 0) {
-      kind = 'shell'; frac = (K.stored || 0) / K.cap; val = `${Math.floor(Math.max(0, Math.min(1, frac)) * 100)}%`;
-    } else if (w.titanId === 'voltkite') {
-      const n = Math.max(0, Math.round(K.wires || 0));
-      kind = 'wires'; frac = n / WIRE_CAP; val = `${n}/${WIRE_CAP}`;
-    } else if (w.titanId === 'briarwick') {
-      const cap = Math.max(1, Math.round(T.stats ? T.stats.turretCap : 4));
-      const n = Math.max(0, Math.round(K.turrets || 0));
-      kind = 'blooms'; frac = n / cap; val = `${n}/${cap}`;
-    }
-    this.shellOn.set(kind !== '');
-    if (!kind) return;
-    if (kind !== this.kitKind) {
-      this.kitKind = kind;
-      this.shellLbl.set(kind === 'shell' ? STR.hud.shell : kind === 'wires' ? STR.hud.wires : STR.hud.blooms);
-      this.shellRow.dataset.kit = kind;
-    }
-    this.shellFill.set(Math.max(0, Math.min(1, frac)));
-    this.shellVal.set(val);
-  }
-
-  private updateChips(w: World): void {
-    const U = w.upgrades;
-    let sig = '';
-    for (const id of U.order) sig += id + ':' + (U.owned[id] || 0) + '|';
-    if (sig === this.chipSig) return;
-    const prev = this.chipSig;
-    this.chipSig = sig;
-    clearEl(this.chipsList);
-    const ids = U.order.filter((id, i) => U.order.indexOf(id) === i);
-    this.chipsWrap.classList.toggle('bt-hidden', ids.length === 0);
-    const shown = ids.slice(-MAX_CHIPS);
-    if (ids.length > shown.length) div('bt-chip bt-chip-more', this.chipsList, `+${ids.length - shown.length}`);
-    for (const id of shown) {
-      const def = UPGRADE_BY_ID[id];
-      const name = def ? def.name : id;
-      const chip = div(`bt-chip r-${def ? def.rarity : 'common'}`, this.chipsList);
-      chip.appendChild(el('span', 'bt-chip-ab', abbrev(name)));
-      chip.appendChild(el('span', 'bt-chip-nm', name.toUpperCase()));
-      const st = U.owned[id] || 1;
-      chip.appendChild(el('span', 'bt-chip-st', st > 1 ? `×${st}` : ''));
-      if (prev !== '#' && !prev.includes(id + ':' + st + '|')) {
-        pulse(chip, [{ transform: 'translateX(40%)', opacity: 0 }, { transform: 'translateX(-6%)', opacity: 1 }, { transform: 'translateX(0)' }], 420);
-      }
     }
   }
 
@@ -565,11 +457,4 @@ export class Hud {
     }
     this.tkStrip.style.transform = `translate3d(${this.tkOffset.toFixed(1)}px,0,0)`;
   }
-}
-
-/** "Rebar Molars" → "RM"; single word → first two letters. */
-function abbrev(name: string): string {
-  const words = name.replace(/[^A-Za-z0-9 \-]/g, '').split(/[\s\-]+/).filter(Boolean);
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-  return (words[0] || '?').slice(0, 2).toUpperCase();
 }

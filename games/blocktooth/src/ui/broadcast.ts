@@ -8,7 +8,10 @@
 //              toast under the bug.
 //   tabloid    THE WARD SEVEN WITNESS front page: masthead, date line, THE CITY GOT SMALLER.,
 //              the freeze-frame photo, stats (+ NEW RECORD stamps), the record book,
-//              RETRY / CHANGE TITAN / TITLE.
+//              RETRY / CHANGE TITAN / TITLE. v2 (FEATURES_V2 §8.4 / §9, lane L9): the clear page adds
+//              KEEP GOING [K] first in the row (gold EXTENDED COVERAGE tag; focus stays on RETRY); a
+//              death after KEEP GOING prints the EXTENDED COVERAGE EDITION (IT WOULD NOT LEAVE.);
+//              a NEW ON THE RECORD clipping lists the goals this run filed (TabloidExtra.newGoals).
 //   clear      drop every banner/queue and close an open slate (resolved) or tabloid (abandoned).
 // Deferred work is guarded by an epoch (doctrine §4): a timer from a cleared run no-ops.
 
@@ -20,13 +23,14 @@ import { BIOMES } from '../data/biomes.ts';
 import { BOSSES } from '../data/bosses.ts';
 import { TITANS } from '../data/titans.ts';
 import { ALERTS, RANK_SUBS, STR } from '../data/strings.ts';
+import { SCREENS } from '../data/strings_screens.ts';
 import {
   type ModalSession, type UiPress, clearEl, div, el, fmt, fmtClock, fmtInt, fmtTime, keyChip, onTap, pickOne,
   pickSeeded, pulse, roman, runModal, wrapIndex, flashesReduced,
 } from './dom.ts';
 import { buildBug } from './menus.ts';
 
-type TabloidChoice = 'retry' | 'select' | 'title';
+type TabloidChoice = TabloidChoiceV2;
 
 const ALERT_MS = 2900;
 const TOAST_MS = 3600;          // a toast is small and carries a how-to line: it stays a little longer
@@ -37,7 +41,7 @@ const URGENT: ReadonlySet<AlertKey> = new Set<AlertKey>(['boss', 'bossPhase2', '
 const ALERT_TONE: Partial<Record<AlertKey, string>> = {
   boss: 'red', bossPhase2: 'red', bossPhase3: 'red', elite: 'red', lowHp: 'coral', chest: 'teal',
 };
-const TABLOID_ITEMS: readonly TabloidChoice[] = ['retry', 'select', 'title'];
+const TABLOID_BASE: readonly TabloidChoice[] = ['retry', 'select', 'title'];
 
 // ─────────────────────────────── run figures (one generator) ───────────────────────────────
 
@@ -106,6 +110,11 @@ export class Broadcast {
   private readonly tab: HTMLDivElement;
   private readonly paper: HTMLDivElement;
   private readonly tabButtons: HTMLButtonElement[] = [];
+  private readonly tabActs: HTMLDivElement;
+  private readonly keepBtn: HTMLButtonElement;
+  private readonly recordClip: HTMLDivElement;
+  /** the buttons shown this time, in row order (KEEP GOING first when offered) */
+  private tabItems: TabloidChoice[] = TABLOID_BASE.slice();
   private tabSel = 0;
   private tabSession: ModalSession<TabloidChoice> | null = null;
   /** Personal bests as they stood BEFORE the current run: handed over by the app at runEnd
@@ -189,24 +198,34 @@ export class Broadcast {
     T.setAttribute('aria-label', STR.tabloid.masthead);
     div('bt-tab-desk', T);
     this.paper = div('bt-paper', T);
-    const acts = div('bt-tab-actions', T);
-    const mkBtn = (id: TabloidChoice, label: string, key: string, i: number) => {
+    const acts = this.tabActs = div('bt-tab-actions', T);
+    const mkBtn = (id: TabloidChoice, label: string, key: string): HTMLButtonElement => {
       const b = el('button', `bt-tab-btn b-${id}`);
       b.type = 'button';
       b.tabIndex = -1;
+      b.dataset.choice = id;
       b.appendChild(keyChip(key));
       b.appendChild(el('span', '', label));
       acts.appendChild(b);
-      b.addEventListener('mouseenter', () => this.tabSelect(i));
-      onTap(b, () => { this.tabSelect(i); this.tabFinish(id); });
+      b.addEventListener('mouseenter', () => { const i = this.tabItems.indexOf(id); if (i >= 0) this.tabSelect(i); });
+      onTap(b, () => { const i = this.tabItems.indexOf(id); if (i < 0) return; this.tabSelect(i); this.tabFinish(id); });
       this.tabButtons.push(b);
+      return b;
     };
-    mkBtn('retry', STR.tabloid.retry, STR.tabloid.keyRetry, 0);
-    mkBtn('select', STR.tabloid.select, STR.tabloid.keySelect, 1);
-    mkBtn('title', STR.tabloid.title, STR.tabloid.keyTitle, 2);
+    // v2 KEEP GOING [K] (clear front page only): first in the row, gold EXTENDED COVERAGE tag
+    this.keepBtn = mkBtn('endless', SCREENS.tabloid.keepGoing, SCREENS.tabloid.keepGoingKey);
+    this.keepBtn.classList.add('bt2-keep');
+    this.keepBtn.dataset.v2 = 'keep-going';
+    this.keepBtn.appendChild(el('small', 'bt2-keep-tag', SCREENS.tabloid.keepGoingTag));
+    mkBtn('retry', STR.tabloid.retry, STR.tabloid.keyRetry);
+    mkBtn('select', STR.tabloid.select, STR.tabloid.keySelect);
+    mkBtn('title', STR.tabloid.title, STR.tabloid.keyTitle);
     const hint = div('bt-tab-hint', acts);
     hint.appendChild(keyChip('↑ ↓'));
     hint.appendChild(keyChip('ENTER'));
+    // v2 NEW ON THE RECORD clipping (TabloidExtra.newGoals), pinned under the buttons
+    this.recordClip = div('bt2-onrecord bt-hidden', acts);
+    this.recordClip.dataset.v2 = 'on-record';
   }
 
   // ─────────────────────────────── slate ───────────────────────────────
@@ -380,14 +399,20 @@ export class Broadcast {
 
   // ─────────────────────────────── tabloid ───────────────────────────────
 
-  /** v2 signature (BroadcastAdd, FEATURES_V2 §13.1). L0: `extra` is ignored and 'endless' is never
-   *  resolved (lane L9 adds KEEP GOING [K], the EXTENDED COVERAGE variant and NEW ON THE RECORD). */
-  tabloid(w: World, photo: string, _extra: TabloidExtra | null = null): Promise<TabloidChoiceV2> {
+  /** v2 (BroadcastAdd, FEATURES_V2 §9 / §13.1): KEEP GOING [K] on a clear when extra.canContinue (resolves
+   *  'endless'; default focus stays on RETRY); the EXTENDED COVERAGE EDITION when w.endless is set; the
+   *  NEW ON THE RECORD clipping from extra.newGoals. */
+  tabloid(w: World, photo: string, extra: TabloidExtra | null = null): Promise<TabloidChoiceV2> {
     if (this.tabSession && !this.tabSession.done) this.tabSession.abort();
     this.clearBanners();
+    const canContinue = !!(extra && extra.canContinue) && w.run.result === 'clear' && !w.endless;
+    this.tabItems = canContinue ? ['endless', ...TABLOID_BASE] : TABLOID_BASE.slice();
+    this.keepBtn.classList.toggle('bt-hidden', !canContinue);
+    this.tab.classList.toggle('endless', !!w.endless);
     this.buildPaper(w, photo);
+    this.buildRecordClip(extra ? extra.newGoals : []);
     this.tab.classList.remove('bt-hidden');
-    this.tabSelect(0);
+    this.tabSelect(this.tabItems.indexOf('retry'));
     const reduced = flashesReduced();
     pulse(this.paper, reduced
       ? [{ opacity: 0 }, { opacity: 1 }]
@@ -408,31 +433,52 @@ export class Broadcast {
   }
 
   private tabPress(p: UiPress): void {
-    if (p.act === 'reroll' || p.key === 'r') { this.tabSelect(0); this.tabFinish('retry'); return; }
-    if (p.key === 'c') { this.tabSelect(1); this.tabFinish('select'); return; }
-    if (p.key === 't') { this.tabSelect(2); this.tabFinish('title'); return; }
+    const go = (v: TabloidChoice) => { const i = this.tabItems.indexOf(v); if (i >= 0) { this.tabSelect(i); this.tabFinish(v); } };
+    // v2: K = KEEP GOING (only while it is on the page), read from p.key (FEATURES_V2 §2.4)
+    if (p.key === 'k') { go('endless'); return; }
+    if (p.act === 'reroll' || p.key === 'r') { go('retry'); return; }
+    if (p.key === 'c') { go('select'); return; }
+    if (p.key === 't') { go('title'); return; }
+    const n = this.tabItems.length;
     switch (p.act) {
-      case 'up': case 'left': this.tabSelect(wrapIndex(this.tabSel - 1, 3)); break;
-      case 'down': case 'right': this.tabSelect(wrapIndex(this.tabSel + 1, 3)); break;
-      case 'confirm': this.tabFinish(TABLOID_ITEMS[this.tabSel]); break;
-      case 'pick1': this.tabSelect(0); this.tabFinish('retry'); break;
-      case 'pick2': this.tabSelect(1); this.tabFinish('select'); break;
-      case 'pick3': this.tabSelect(2); this.tabFinish('title'); break;
+      case 'up': case 'left': this.tabSelect(wrapIndex(this.tabSel - 1, n)); break;
+      case 'down': case 'right': this.tabSelect(wrapIndex(this.tabSel + 1, n)); break;
+      case 'confirm': this.tabFinish(this.tabItems[this.tabSel]); break;
+      case 'pick1': go('retry'); break;
+      case 'pick2': go('select'); break;
+      case 'pick3': go('title'); break;
       default: break;
     }
   }
 
   private tabSelect(i: number): void {
-    this.tabSel = i;
-    this.tabButtons.forEach((b, j) => b.classList.toggle('is-sel', j === i));
+    this.tabSel = Math.max(0, i);
+    const cur = this.tabItems[this.tabSel];
+    this.tabButtons.forEach((b) => b.classList.toggle('is-sel', b.dataset.choice === cur));
   }
 
   private tabFinish(v: TabloidChoice): void {
     const s = this.tabSession;
-    if (!s || s.done) return;
-    const b = this.tabButtons[TABLOID_ITEMS.indexOf(v)];
+    if (!s || s.done || !this.tabItems.includes(v)) return;
+    const b = this.tabButtons.find((x) => x.dataset.choice === v);
     if (b) pulse(b, [{ transform: 'scale(1.08)' }, { transform: 'scale(1)' }], 160);
     s.finish(v, 140);
+  }
+
+  /** NEW ON THE RECORD: the goals this run filed, each with what it issued (names resolved by the app). */
+  private buildRecordClip(goals: readonly { goal: string; unlock: string }[]): void {
+    const C = this.recordClip;
+    clearEl(C);
+    const list = (goals || []).filter((g) => g && g.goal);
+    C.classList.toggle('bt-hidden', list.length === 0);
+    if (!list.length) return;
+    div('bt2-onrecord-head', C, SCREENS.tabloid.newRecordTitle);
+    for (const g of list.slice(0, 5)) {
+      const r = div('bt2-onrecord-row', C);
+      r.appendChild(el('b', '', g.goal));
+      if (g.unlock) r.appendChild(el('span', '', fmt(SCREENS.tabloid.newRecordUnlock, { unlock: g.unlock.toUpperCase() })));
+    }
+    if (list.length > 5) div('bt2-onrecord-more', C, `+${list.length - 5}`);
   }
 
   private buildPaper(w: World, photo: string): void {
@@ -446,7 +492,10 @@ export class Broadcast {
     const seed = (w.seed >>> 0) + w.tick;
     const endT = onAirSeconds(w);
     const boss = w.boss;
-    const bossName = boss ? (BOSSES[boss.id]?.name ?? boss.id.toUpperCase()) : (BOSSES[w.biomeId === 'whitestacks' ? 'irongully' : 'caisson4']?.name ?? '');
+    const cityBoss = BIOMES[w.biomeId]?.boss;
+    const bossName = boss ? (BOSSES[boss.id]?.name ?? boss.id.toUpperCase()) : (cityBoss ? (BOSSES[cityBoss]?.name ?? cityBoss.toUpperCase()) : '');
+    const E = w.endless;
+    const extS = E ? Math.max(0, Math.floor((w.run.endT >= 0 ? w.run.endT : w.t) - E.startT)) : 0;
     const vars = {
       name, boss: bossName, time: fmtTime(endT), tons: fmtInt(w.run.tonnage), blocks: fmtInt(w.run.blocksLeveled),
       size: roman(w.run.peakRank),
@@ -468,8 +517,17 @@ export class Broadcast {
     dl.appendChild(el('span', '', dateLine()));
     dl.appendChild(el('span', '', STR.tabloid.onlyPaper));
 
-    div('bt-np-headline', P, STR.tabloid.headline);
-    div('bt-np-subhead', P, pickSeeded(result === 'clear' ? STR.tabloid.subClear : STR.tabloid.subDead, seed));
+    if (E) {
+      // EXTENDED COVERAGE EDITION (FEATURES_V2 §9.3)
+      div('bt2-np-kicker', P, SCREENS.tabloid.endlessKicker);
+      div('bt-np-headline bt2-np-endless', P, SCREENS.tabloid.endlessHeadline);
+      div('bt-np-subhead', P, fmt(SCREENS.tabloid.endlessSubs, {
+        air: fmtTime(endT), ext: fmtTime(extS), n: fmtInt(E.rematches), score: fmtInt(E.score),
+      }));
+    } else {
+      div('bt-np-headline', P, STR.tabloid.headline);
+      div('bt-np-subhead', P, pickSeeded(result === 'clear' ? STR.tabloid.subClear : STR.tabloid.subDead, seed));
+    }
 
     const grid = div('bt-np-grid', P);
     // photo
@@ -487,7 +545,7 @@ export class Broadcast {
       div('bt-np-nophoto', frame, STR.tabloid.noPhoto);
     }
     div('bt-np-dots', frame);
-    div(`bt-np-stamp ${result}`, frame, result === 'clear' ? STR.tabloid.stampClear : STR.tabloid.stampDead);
+    div(`bt-np-stamp ${result}${E ? ' endless' : ''}`, frame, E ? SCREENS.tabloid.endlessStamp : result === 'clear' ? STR.tabloid.stampClear : STR.tabloid.stampDead);
     const cap = el('figcaption', 'bt-np-caption', fmt(STR.tabloid.caption, vars));
     fig.appendChild(cap);
 
@@ -499,6 +557,8 @@ export class Broadcast {
     if (boss) {
       const pct = boss.maxHp > 0 ? Math.max(0, Math.ceil((boss.hp / boss.maxHp) * 100)) : 0;
       bossLine = !boss.alive || boss.hp <= 0 ? fmt(STR.tabloid.bossBeaten, { boss: bossName }) : fmt(STR.tabloid.bossStanding, { boss: bossName, pct });
+    } else if (E) {
+      bossLine = fmt(STR.tabloid.bossBeaten, { boss: bossName });   // the city's boss fell before KEEP GOING
     }
     const rec = this.records(w, result);
     const rows: [string, string, string][] = [
@@ -528,10 +588,15 @@ export class Broadcast {
     bh.appendChild(el('span', '', fmt(STR.tabloid.record.sub, { name, biome: BIOMES[w.biomeId]?.name ?? w.biomeId.toUpperCase() })));
     const RR = STR.tabloid.record.rows;
     const timeKey = result === 'clear' || rec.now.clearS !== undefined ? 'clearS' : 'survivedS';
-    const bookRows: [string, string][] = [
-      ['tonnage', RR.tonnage], ['blocks', RR.blocks], ['peakRank', RR.peakRank], ['kills', RR.kills],
-      [timeKey, timeKey === 'clearS' ? RR.clearS : RR.survivedS],
-    ];
+    const bookRows: [string, string][] = E
+      ? [
+        ['tonnage', RR.tonnage], ['peakRank', RR.peakRank], ['kills', RR.kills],
+        ['endlessS', SCREENS.tabloid.recExt], ['endlessScore', SCREENS.tabloid.recScore], ['rematches', SCREENS.tabloid.recRematches],
+      ]
+      : [
+        ['tonnage', RR.tonnage], ['blocks', RR.blocks], ['peakRank', RR.peakRank], ['kills', RR.kills],
+        [timeKey, timeKey === 'clearS' ? RR.clearS : RR.survivedS],
+      ];
     for (const [key, label] of bookRows) {
       const r = div('bt-np-record-row', book);
       r.appendChild(el('span', 'k', label));
@@ -543,7 +608,7 @@ export class Broadcast {
     div('bt-np-record-note', book, rec.first ? STR.tabloid.record.first
       : rec.fell.size === 0 ? STR.tabloid.record.held
         : rec.fell.size === 1 ? STR.tabloid.record.fellOne : fmt(STR.tabloid.record.fell, { n: rec.fell.size }));
-    const bl = div(`bt-np-boss ${boss && (!boss.alive || boss.hp <= 0) ? 'beaten' : ''}`, nums);
+    const bl = div(`bt-np-boss ${(boss && (!boss.alive || boss.hp <= 0)) || (!boss && E) ? 'beaten' : ''}`, nums);
     bl.appendChild(el('small', '', L.boss));
     bl.appendChild(el('b', '', bossLine));
 
@@ -585,10 +650,18 @@ export class Broadcast {
     const known = this.bestSnap !== null;
     const prev = this.bestSnap ?? loadBest();
     const run = runFigures(w, result);
+    const E = w.endless;
+    const keys: string[] = [...BEST_STATS];
+    if (E) {
+      run.endlessS = Math.max(0, Math.floor((w.run.endT >= 0 ? w.run.endT : w.t) - E.startT));
+      run.endlessScore = Math.floor(E.score);
+      run.rematches = E.rematches;
+      keys.push('endlessS', 'endlessScore', 'rematches');
+    }
     const now: Record<string, number> = {};
     const fell = new Set<string>();
     let any = false;
-    for (const k of BEST_STATS) {
+    for (const k of keys) {
       const p = prev[bestKey(t, b, k)];
       const v = run[k];
       if (p !== undefined) any = true;
@@ -649,7 +722,7 @@ export class Broadcast {
 
 function fmtRecord(key: string, v: number): string {
   if (key === 'peakRank') return `${STR.sizeUp.size} ${roman(Math.max(0, Math.min(4, Math.round(v))))}`;
-  if (key === 'survivedS' || key === 'clearS') return fmtTime(v);
+  if (key === 'survivedS' || key === 'clearS' || key === 'endlessS') return fmtTime(v);
   if (key === 'tonnage') return `${fmtInt(v)} T`;
   return fmtInt(v);
 }

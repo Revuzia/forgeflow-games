@@ -71,6 +71,9 @@ def main() -> int:
     ap.add_argument("--warm", type=float, default=3.0, help="seconds of driving before sampling")
     ap.add_argument("--p99-ms", type=float, default=22.0)
     ap.add_argument("--draws-max", type=int, default=450)
+    ap.add_argument("--boss", default=None,
+                    help="v2 scenario (b): spawn this boss (e.g. parkade6) at Size V before the enemies, so the "
+                         "window measures a live boss fight; pair with --enemies 150 (FEATURES_V2 §15.4)")
     ap.add_argument("--shot", default=os.path.join(SHOTS, "perfcheck.png"))
     ap.add_argument("--zoom", choices=("auto", "max"), default="auto",
                     help="player camera zoom during the window: auto framing (1x) or held at the max zoom-OUT "
@@ -131,6 +134,14 @@ def main() -> int:
                 log("cheat.rank(4) → state().rank %s (the load check below will flag it)" % (r,))
         if not fatal:
             time.sleep(2.5)                                     # grow tween + camera spring to Size V
+            if args.boss:
+                ok, v = sess.cheat("bossSpawn", args.boss)
+                if not ok:
+                    fatal = "cheat.bossSpawn(%s) failed: %s" % (args.boss, v)
+                    raise HarnessError(fatal)
+                time.sleep(1.5)                                 # boss framing widens D; rig warm-up
+                s = sess.state() or {}
+                log("boss spawned: %s · boss %s" % (args.boss, json.dumps(s.get("boss"))[:200]))
             spawn_mix(sess, args.enemies, log)
             time.sleep(0.5)
             s = sess.state() or {}
@@ -177,7 +188,9 @@ def main() -> int:
                     i += 1
                     next_dir = now + 0.35
                 s = sess.state() or {}
+                bs = s.get("boss") if isinstance(s.get("boss"), dict) else None
                 samples.append({"t": round(now - t0, 2), "draws": s.get("draws"), "tris": s.get("tris"),
+                                "boss": (bs.get("id") if bs and bs.get("alive") else None),
                                 "programs": s.get("programs"), "enemies": s.get("enemies"), "fps": s.get("fps"),
                                 "rank": s.get("rank"), "screen": s.get("screen"),
                                 # the game's own frame-time ring, once a second (printed as a series)
@@ -280,6 +293,11 @@ def main() -> int:
         ze = zoom_info.get("end") or {}
         if not (isinstance(ze.get("zoom"), (int, float)) and ze["zoom"] > 1.2):
             problems.append("zoom max-out was not held through the window (%s)" % json.dumps(ze))
+    if args.boss:
+        live = sum(1 for x in samples if x.get("boss") == args.boss)
+        print("boss      : %s alive in %d / %d samples" % (args.boss, live, len(samples)))
+        if live < 0.9 * max(1, len(samples)):
+            problems.append("scenario (b) not held: %s alive in only %d / %d samples" % (args.boss, live, len(samples)))
     passed = not problems
     rep = {"url": url, "zoom": args.zoom, "zoomInfo": zoom_info, "titan": args.titan, "biome": args.biome, "seed": args.seed, "headless": args.headless,
            "frames": len(ft), "fps": fps, "p50": p50, "p99": p99, "max": mx, "over": over, "missedVsyncs": missed, "perfBT": perf_bt,

@@ -130,18 +130,33 @@ export function saveSettings(s: Settings): boolean {
 }
 
 // ─────────────────────────────── v2 profile (FEATURES_V2 §8.3) ───────────────────────────────
-// ── L0 SKELETON STUBS ── lane L5 writes the bodies (try/catch storage, in-memory fallback for the
-// session). Inert: loadProfile hands back what meta/profile.ts sanitizeProfile makes of the stored
-// blob (the L0 stub: always an empty profile); saveProfile writes nothing and reports false.
+// Lane L5. Every read and write is wrapped (readJson / writeJson never throw). When storage is missing,
+// blocked or full, the profile degrades to an IN-MEMORY copy for the session: a failed save keeps the
+// profile here and loadProfile returns it (newer than whatever storage still holds) until a save succeeds.
+// The blob is coerced field by field by meta/profile.ts sanitizeProfile on the way in AND out.
+
+let memProfile: Profile | null = null;
 
 /** The persistent goals / unlocks profile (key 'blocktooth.profile.v1'). Never throws. */
 export function loadProfile(): Profile {
-  return sanitizeProfile(readJson(PROFILE_KEY));
+  try {
+    if (memProfile) return sanitizeProfile(memProfile);
+    return sanitizeProfile(readJson(PROFILE_KEY));
+  } catch {
+    return sanitizeProfile(null);
+  }
 }
 
-/** Persist the profile. STUB: no write, false. */
-export function saveProfile(_p: Profile): boolean {
-  return false;
+/** Persist the profile (sanitised first). false = storage unavailable: kept in memory for the session. */
+export function saveProfile(p: Profile): boolean {
+  try {
+    const clean = sanitizeProfile(p);
+    if (writeJson(PROFILE_KEY, clean)) { memProfile = null; return true; }
+    memProfile = clean;
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 // ─────────────────────────────── personal bests ───────────────────────────────

@@ -43,7 +43,7 @@ import { UPGRADE_BY_ID } from './data/upgrades.ts';
 import { applyUpgrade } from './upgrades/engine.ts';
 import { bossUltHit } from './ai/bosses/index.ts';
 import { addUproar } from './meta/ultimate.ts';
-import { spawnObjective } from './meta/objectives.ts';
+import { placeObjectiveNear, spawnObjective } from './meta/objectives.ts';
 import { spawnPowerup } from './meta/powerups.ts';
 import { sanitizeRunMeta } from './meta/perks.ts';
 
@@ -124,10 +124,12 @@ export interface BtCheats {
   ult(points?: number): number;
   /** spawn a power-up of `kind` 3 H straight ahead of the titan; returns its id or null */
   powerup(kind: PowerUpKind): number | null;
-  /** place an objective now; `ahead` (m) moves a free-standing one (RELIEF DEPOT) straight ahead of the titan */
+  /** place an objective now; with `ahead` (m) it is placed near the point straight ahead of the titan
+   *  (L4 placeObjectiveNear: RELIEF DEPOT exactly there, an OVERLOAD / ANNEX on the nearest eligible prop or building) */
   objective(kind: ObjectiveKind, ahead?: number): number | null;
-  /** field + kill the city's boss so the run clears, and let the clear tabloid pick KEEP GOING */
-  endless(): boolean;
+  /** field + kill the city's boss so the run clears; the clear tabloid picks KEEP GOING itself unless
+   *  `autoPick` is false (then a real K / click on the tabloid does it — playtest_v2 step 6) */
+  endless(autoPick?: boolean): boolean;
   /** set owned stacks so the evolution's recipe is ready (base maxed, `with` ≥ 1) */
   evolveReady(evoId: string): boolean;
   /** field any boss id (incl. parkade6) */
@@ -422,20 +424,17 @@ export function installTestSurface(app: App): BtSurface {
       devOnly('objective');
       if (!(OBJECTIVE_KINDS as readonly string[]).includes(kind)) throw new Error(`cheat.objective: unknown kind '${String(kind)}' (${OBJECTIVE_KINDS.join(', ')})`);
       return app.mutate((ww) => {
-        const o = spawnObjective(ww, kind);
-        if (!o) return null;
         const a = num(ahead, NaN);
-        if (Number.isFinite(a) && o.target === 'none') {
-          const T = ww.titan;
-          o.x = T.x + Math.sin(T.heading) * a;
-          o.z = T.z + Math.cos(T.heading) * a;
-        }
-        return o.id;
+        const T = ww.titan;
+        const o = Number.isFinite(a)
+          ? placeObjectiveNear(ww, kind, T.x + Math.sin(T.heading) * a, T.z + Math.cos(T.heading) * a)
+          : spawnObjective(ww, kind);
+        return o ? o.id : null;
       });
     },
-    endless() {
+    endless(autoPick = true) {
       const w = devOnly('endless');
-      app.autoEndlessOnce = true;
+      app.autoEndlessOnce = autoPick !== false;
       app.mutate((ww) => {
         if (!ww.boss || !ww.boss.alive) spawnBoss(ww, BIOMES[ww.biomeId].boss);
         const b = ww.boss;

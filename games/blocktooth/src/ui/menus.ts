@@ -4,16 +4,24 @@
 //   PauseMenu     "WE'LL BE RIGHT BACK" test card (station-palette colour bars) — Resume / Settings /
 //                 Retry / Quit (Retry and Quit ask twice). Esc resumes.
 //   SettingsPanel "STATION ENGINEERING": master/music/sfx volume, picture quality, screen shake,
-//                 reduce flashing. Returns the edited Settings (the caller saves + applies them).
+//                 reduce flashing, v2 reduce motion + OPENING (OFF / SHORT / FULL). Returns the edited
+//                 Settings (the caller saves + applies them).
+// v2 (FEATURES_V2 §8.4 / §13.1, lane L9): the title resolves 'goals' on G / pad X or a click on the
+// GOALS & RECORDS chip; the pause menu shows a LOADOUT panel read only from PauseCtx.w.
 // Every screen: input.mode = 'ui' while open (runModal), keyboard + mouse + gamepad.
 
 import type { Input } from '../core/input.ts';
 import type { Settings } from '../core/save.ts';
+import type { UpgradeDef, World } from '../core/types.ts';
 import type { PauseCtx } from '../v2types.ts';
 import { loadSettings, saveSettings } from '../core/save.ts';
 import { STR, TICKER } from '../data/strings.ts';
+import { SCREENS } from '../data/strings_screens.ts';
+import { UPGRADE_BY_ID } from '../data/upgrades.ts';
+import { PERKS_DEF } from '../data/perks.ts';
+import { familyColor, glyphSvg, iconFor } from './icons.ts';
 import {
-  type ModalSession, type UiPress, applyUiSettings, clearEl, cosmeticRng, div, el, fmtClock, keyChip, onTap, pulse,
+  type ModalSession, type UiPress, applyUiSettings, clearEl, cosmeticRng, div, el, fmt, fmtClock, keyChip, onTap, pulse,
   runModal, wrapIndex, flashesReduced,
 } from './dom.ts';
 
@@ -112,6 +120,16 @@ export class TitleScreen {
     const press = div('bt-title-press', L);
     press.appendChild(el('span', 'bt-title-press-main', STR.title.press));
     press.appendChild(el('span', 'bt-title-press-sub', STR.title.pressSub));
+    // v2 GOALS & RECORDS [G] chip (its click must not also start the broadcast)
+    const chip = el('button', 'bt-btn bt-btn-ghost bt2-goals-chip bt2-title-chip');
+    chip.type = 'button';
+    chip.tabIndex = -1;
+    chip.dataset.v2 = 'goals-chip';
+    chip.appendChild(keyChip(SCREENS.goalsKey));
+    chip.appendChild(el('span', '', SCREENS.goalsChip));
+    chip.addEventListener('mousedown', (ev) => { ev.preventDefault(); ev.stopPropagation(); });
+    chip.addEventListener('click', (ev) => { ev.stopPropagation(); this.goals(); });
+    press.appendChild(chip);
     onTap(L, () => this.go());
 
     const lower = div('bt-title-lower', L);
@@ -124,8 +142,8 @@ export class TitleScreen {
     this.crawl = div('bt-ticker-strip bt-css-crawl', win);
   }
 
-  /** v2 signature (TitleScreenApi, FEATURES_V2 §13.1). L0: today's behaviour — never resolves 'goals'
-   *  (lane L9 adds G / pad X and the GOALS & RECORDS chip). */
+  /** v2 (TitleScreenApi, FEATURES_V2 §13.1): 'play' on ENTER / pad A / Start / click, 'goals' on G / pad X
+   *  (read from UiPress.key: pad X maps to act 'reroll', which the title otherwise ignores) or the chip. */
   run(): Promise<'play' | 'goals'> {
     if (this.session && !this.session.done) this.session.abort();
     this.clock.textContent = wallClock();
@@ -143,6 +161,7 @@ export class TitleScreen {
     this.layer.classList.remove('bt-hidden');
     this.layer.classList.remove('leaving');
     const { promise, session } = runModal<'play' | 'goals'>(this.layer, this.input, (p) => {
+      if (p.key === 'g' || p.key === 'pad:2') { this.goals(); return; }
       if (p.act === 'confirm' || p.act === 'alt' || p.key === 'pad:0' || p.key === 'pad:9') this.go();
     }, {
       armMs: 350,
@@ -157,6 +176,12 @@ export class TitleScreen {
     if (!s || s.done) return;
     this.layer.classList.add('leaving');
     s.finish('play', flashesReduced() ? 120 : 380);
+  }
+
+  private goals(): void {
+    const s = this.session;
+    if (!s || s.done) return;
+    s.finish('goals', 0);
   }
 }
 
@@ -175,6 +200,10 @@ export class PauseMenu {
   private readonly layer: HTMLDivElement;
   private readonly items: HTMLButtonElement[] = [];
   private readonly confirmLine: HTMLElement;
+  private readonly loadout: HTMLDivElement;
+  private readonly loadList: HTMLDivElement;
+  private readonly loadHead: HTMLElement;
+  private readonly loadMeta: HTMLElement;
   private settings: SettingsPanel | null = null;
   private sel = 0;
   private armed: PauseItem | null = null;
@@ -218,12 +247,27 @@ export class PauseMenu {
     });
     this.confirmLine = div('bt-pause-confirm', card);
     div('bt-pause-keys', card, STR.pause.keys);
+
+    // v2 LOADOUT (FEATURES_V2 §13.1): every owned card (glyph · name · stacks · desc), the perk and the
+    // BANISH / LOCK / REROLL charges left — read only from PauseCtx.w at open()
+    const lo = this.loadout = div('bt2-loadout bt-hidden', L);
+    lo.dataset.v2 = 'loadout';
+    const lh = div('bt2-loadout-head', lo);
+    lh.appendChild(el('b', '', SCREENS.loadout.title));
+    lh.appendChild(el('span', '', SCREENS.loadout.sub));
+    this.loadHead = el('i', '');
+    lh.appendChild(this.loadHead);
+    this.loadMeta = div('bt2-loadout-meta', lo);
+    this.loadList = div('bt2-loadout-list', lo);
   }
 
-  /** v2 signature (PauseMenuApi, FEATURES_V2 §13.1). L0: `ctx` is ignored (lane L9 adds the LOADOUT
-   *  panel read from ctx.w). */
-  open(_ctx: PauseCtx | null = null): Promise<PauseChoice> {
+  /** v2 (PauseMenuApi, FEATURES_V2 §13.1): the LOADOUT panel is read from ctx.w; null → no LOADOUT. */
+  open(ctx: PauseCtx | null = null): Promise<PauseChoice> {
     if (this.session && !this.session.done) this.session.abort();
+    const w = ctx && ctx.w ? ctx.w : null;
+    this.layer.classList.toggle('has-loadout', !!w);
+    this.loadout.classList.toggle('bt-hidden', !w);
+    if (w) this.renderLoadout(w);
     this.armed = null;
     this.busy = false;
     this.confirmLine.textContent = '';
@@ -236,6 +280,57 @@ export class PauseMenu {
     });
     this.session = session;
     return promise;
+  }
+
+  private renderLoadout(w: World): void {
+    const U = w.upgrades;
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const id of U.order) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const d = UPGRADE_BY_ID[id];
+      if (!d || d.perk || !((U.owned[id] ?? 0) > 0)) continue;
+      ids.push(id);
+    }
+    for (const id in U.owned) {            // anything owned but missing from `order` (defensive)
+      const d = UPGRADE_BY_ID[id];
+      if (!seen.has(id) && d && !d.perk && (U.owned[id] ?? 0) > 0) { seen.add(id); ids.push(id); }
+    }
+    this.loadHead.textContent = fmt(SCREENS.loadout.count, { n: ids.length });
+    const M = this.loadMeta;
+    clearEl(M);
+    const perk = w.meta && w.meta.perk ? PERKS_DEF[w.meta.perk] : null;
+    const pk = div('bt2-loadout-perk', M);
+    const pg = el('span', 'bt2-glyph');
+    pg.innerHTML = glyphSvg('key', perk ? '#ffd166' : 'rgba(244,236,216,.4)');
+    pk.appendChild(pg);
+    const pt = div('bt2-loadout-perk-txt', pk);
+    pt.appendChild(el('small', '', SCREENS.loadout.perk));
+    pt.appendChild(el('b', '', perk ? perk.name : SCREENS.loadout.perkNone));
+    if (perk) pt.appendChild(el('span', '', perk.desc));
+    div('bt2-loadout-charges', M, fmt(SCREENS.loadout.charges, {
+      b: Math.max(0, U.banishLeft | 0), l: Math.max(0, U.lockLeft | 0), r: Math.max(0, U.rerolls | 0),
+    }));
+    const Ls = this.loadList;
+    clearEl(Ls);
+    Ls.scrollTop = 0;
+    if (!ids.length) { div('bt2-loadout-empty', Ls, SCREENS.loadout.empty); return; }
+    for (const id of ids) {
+      const d = UPGRADE_BY_ID[id];
+      const n = U.owned[id] ?? 0;
+      const r = div(`bt2-lrow r-${d.rarity}${d.evo ? ' evo' : ''}`, Ls);
+      r.dataset.card = id;
+      const g = el('span', 'bt2-glyph');
+      g.innerHTML = glyphSvg(iconFor(d), familyColor(d));
+      r.appendChild(g);
+      const tx = div('bt2-lrow-txt', r);
+      const nm = div('bt2-lrow-name', tx, d.name.toUpperCase());
+      const badge = stackBadge(d, n);
+      if (badge) nm.appendChild(el('span', `bt2-badge${badge === 'MAX' ? ' max' : badge === 'EVO' ? ' evo' : ''}`, badge));
+      div('bt2-lrow-desc', tx, d.desc);
+      div('bt2-lrow-stacks', r, `${n}/${Math.max(1, d.maxStacks)}`);
+    }
   }
 
   private label(id: PauseItem): string {
@@ -310,8 +405,9 @@ export class PauseMenu {
 
 // ─────────────────────────────── SETTINGS ───────────────────────────────
 
-type RowKind = 'master' | 'music' | 'sfx' | 'quality' | 'screenShake' | 'reduceFlashing' | 'done';
-const ROWS: readonly RowKind[] = ['master', 'music', 'sfx', 'quality', 'screenShake', 'reduceFlashing', 'done'];
+type RowKind = 'master' | 'music' | 'sfx' | 'quality' | 'screenShake' | 'reduceFlashing' | 'reduceMotion' | 'cinematic' | 'done';
+const ROWS: readonly RowKind[] = ['master', 'music', 'sfx', 'quality', 'screenShake', 'reduceFlashing', 'reduceMotion', 'cinematic', 'done'];
+type BoolRow = 'screenShake' | 'reduceFlashing' | 'reduceMotion';
 const VOL_STEPS = 20;
 
 interface RowUi { row: HTMLElement; segs: HTMLElement[]; val: HTMLElement; }
@@ -366,12 +462,19 @@ export class SettingsPanel {
           segs.push(o);
           onTap(o, () => { this.select(i); this.s.quality = j as 0 | 1 | 2; this.render(); });
         });
+      } else if (k === 'cinematic') {
+        ctl.classList.add('opts');
+        SCREENS.settings.openingLevels.forEach((q, j) => {
+          const o = div('bt-set-opt', ctl, q);
+          segs.push(o);
+          onTap(o, () => { this.select(i); this.s.cinematic = j as 0 | 1 | 2; this.render(); });
+        });
       } else {
         ctl.classList.add('opts');
         [STR.settings.off, STR.settings.on].forEach((q, j) => {
           const o = div('bt-set-opt', ctl, q);
           segs.push(o);
-          onTap(o, () => { this.select(i); this.setBool(k, j === 1); });
+          onTap(o, () => { this.select(i); this.setBool(k as BoolRow, j === 1); });
         });
       }
       const val = el('span', 'bt-set-val');
@@ -407,6 +510,8 @@ export class SettingsPanel {
       case 'quality': return STR.settings.quality;
       case 'screenShake': return STR.settings.screenShake;
       case 'reduceFlashing': return STR.settings.reduceFlashing;
+      case 'reduceMotion': return SCREENS.settings.reduceMotion;
+      case 'cinematic': return SCREENS.settings.opening;
       case 'done': return STR.settings.done;
     }
   }
@@ -420,8 +525,9 @@ export class SettingsPanel {
       case 'right': this.adjust(k, 1); break;
       case 'confirm': case 'alt':
         if (k === 'done') this.done();
-        else if (k === 'screenShake' || k === 'reduceFlashing') this.setBool(k, !this.s[k]);
+        else if (k === 'screenShake' || k === 'reduceFlashing' || k === 'reduceMotion') this.setBool(k, !this.s[k]);
         else if (k === 'quality') { this.s.quality = ((this.s.quality + 1) % 3) as 0 | 1 | 2; this.render(); }
+        else if (k === 'cinematic') { this.s.cinematic = ((this.s.cinematic + 1) % 3) as 0 | 1 | 2; this.render(); }
         else this.select(ROWS.length - 1);
         break;
       case 'back': case 'pause': this.done(); break;
@@ -432,7 +538,8 @@ export class SettingsPanel {
   private adjust(k: RowKind, d: number): void {
     if (k === 'master' || k === 'music' || k === 'sfx') this.setVol(k, this.s[k] + d / VOL_STEPS);
     else if (k === 'quality') { this.s.quality = Math.max(0, Math.min(2, this.s.quality + d)) as 0 | 1 | 2; this.render(); }
-    else if (k === 'screenShake' || k === 'reduceFlashing') this.setBool(k, d > 0);
+    else if (k === 'cinematic') { this.s.cinematic = Math.max(0, Math.min(2, this.s.cinematic + d)) as 0 | 1 | 2; this.render(); }
+    else if (k === 'screenShake' || k === 'reduceFlashing' || k === 'reduceMotion') this.setBool(k, d > 0);
   }
 
   private setVol(k: 'master' | 'music' | 'sfx', v: number): void {
@@ -440,7 +547,7 @@ export class SettingsPanel {
     this.render();
   }
 
-  private setBool(k: 'screenShake' | 'reduceFlashing', v: boolean): void {
+  private setBool(k: BoolRow, v: boolean): void {
     this.s[k] = v;
     if (k === 'reduceFlashing') applyUiSettings(this.s);   // live preview of the calmer UI
     this.render();
@@ -462,6 +569,9 @@ export class SettingsPanel {
       } else if (k === 'quality') {
         r.segs.forEach((sg, j) => sg.classList.toggle('on', j === this.s.quality));
         r.val.textContent = '';
+      } else if (k === 'cinematic') {
+        r.segs.forEach((sg, j) => sg.classList.toggle('on', j === this.s.cinematic));
+        r.val.textContent = '';
       } else {
         const on = !!this.s[k];
         r.segs.forEach((sg, j) => sg.classList.toggle('on', (j === 1) === on));
@@ -475,4 +585,13 @@ export class SettingsPanel {
     if (!s || s.done) return;
     s.finish({ ...this.s }, 0);
   }
+}
+
+/** Level badge (FEATURES_V2 §4.3): L2…L5 by stacks, MAX when maxed, EVO for an evolution; '' for 1 stack. */
+export function stackBadge(d: UpgradeDef, n: number): string {
+  if (d.evo) return 'EVO';
+  const max = Math.max(1, d.maxStacks);
+  if (n >= max && max > 1) return 'MAX';
+  if (n >= 2) return 'L' + Math.min(5, n);
+  return '';
 }

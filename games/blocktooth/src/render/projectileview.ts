@@ -9,6 +9,7 @@
 //   shell       brass slug + long tracer                      (TORTOISE)
 //   mortar      olive finned round on its arc + thin smoke    (STILT MORTAR)
 //   plate       riveted scrap plate tumbling on its arc       (IRON GULLY)
+//   carLob      a parked toy car flung off the roof deck, tumbling end over end (PARKADE-6, v2 lane L7)
 //   hookDrop    hazard-striped crane hook on a cable          (CAISSON-4)
 //   seed        green spinning pods with a blossom tip        (BRIARWICK bloom turrets)
 //   rubbleShot  tumbling faceted concrete chunks              (upgrades)
@@ -29,11 +30,12 @@ import type { Projectile, ProjectileKind, World } from '../core/types.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from './viewtypes.ts';
 import { CAMERA, CITY } from '../core/config.ts';
 import { addOutline, bakeOutlineNormals, INK, makeToon } from './materials.ts';
+import { buildToyCarGeo } from '../ai/foemodels_parkade.ts';
 
 // ─────────────────────────────── constants ───────────────────────────────
 const K_VIEW = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
 const KINDS: readonly ProjectileKind[] = [
-  'pellet', 'volley', 'rocket', 'shell', 'mortar', 'plate', 'hookDrop',
+  'pellet', 'volley', 'rocket', 'shell', 'mortar', 'plate', 'carLob', 'hookDrop',
   'seed', 'rubbleShot', 'spark',
 ];
 const SHADOW_Y0 = 0.035;
@@ -485,8 +487,8 @@ const LOOK: Record<ProjectileKind, Look> = {
   shell:      { len: 0.9, minPx: 11, rMul: 0, halo: '#fff1a8', haloK: 0.55, haloA: 0.45, streak: '#fff1a8', streakK: 11, streakW: 0.12, streakA: 0.85, puff: 0, orient: 'vel' },
   mortar:     { len: 1.6, minPx: 15, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 2, orient: 'vel' },
   plate:      { len: 6.0, minPx: 20, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 0, orient: 'tumble' },
-  // v2 PARKADE-6 lobbed car (L0: a copy of the plate look; lane L7 replaces it)
-  carLob:     { len: 6.0, minPx: 20, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 0, orient: 'tumble' },
+  // v2 PARKADE-6 (lane L7): the roof deck's toy car (the rig's own car at its 2× deck scale, 8.4 m), tumbling
+  carLob:     { len: 8.4, minPx: 22, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 0, orient: 'tumble' },
   hookDrop:   { len: 12, minPx: 26, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 0, orient: 'upright' },
   seed:       { len: 0.8, minPx: 10, rMul: 2.6, halo: '#d8ff7a', haloK: 0.6, haloA: 0.28, streak: '#a8e05a', streakK: 3, streakW: 0.22, streakA: 0.5, puff: 0, orient: 'spin' },
   rubbleShot: { len: 1.2, minPx: 11, rMul: 2.0, halo: null, haloK: 0, haloA: 0, streak: '#d9d2c3', streakK: 2.2, streakW: 0.3, streakA: 0.35, puff: 0, orient: 'tumble' },
@@ -574,6 +576,7 @@ export class ProjectileView implements ViewModule {
     this.kinds.set('shell', mk('shell', shellGeo(), toon, 160, 1.6));
     this.kinds.set('mortar', mk('mortar', mortarGeo(), toon, 160, 1.8));
     this.kinds.set('plate', mk('plate', plateGeo(), toon, 64, 2.0));
+    this.kinds.set('carLob', mk('carLob', buildToyCarGeo('#ff6f5e', true), toon, 32, 2.2));
     this.kinds.set('hookDrop', mk('hookDrop', hookGeo(), toon, 16, 2.2));
     this.kinds.set('seed', mk('seed', seedGeo(), toon, 200, 1.5));
     this.kinds.set('rubbleShot', mk('rubbleShot', rubbleGeo(), toon, 200, 1.6));
@@ -714,7 +717,7 @@ export class ProjectileView implements ViewModule {
         this.q.multiply(this.q2);
         break;
       case 'tumble': {
-        const sp = p.kind === 'plate' ? 2.2 : 6;
+        const sp = p.kind === 'plate' ? 2.2 : p.kind === 'carLob' ? 2.6 : 6;
         this.e.set(time * sp * (0.7 + seed) + seed * 9, time * sp * 0.6 + seed * 4, time * sp * (1.3 - seed) * 0.5);
         this.q.setFromEuler(this.e);
         if (p.kind === 'plate') {

@@ -25,6 +25,7 @@ import { DEFEAT, TitanAnimator } from './anim.ts';
 import { addOutline, bakeOutlineNormals, makeToon } from '../render/materials.ts';
 import type { AnimState } from './anim.ts';
 import type { CineChannels, FaceAnchor } from '../v2types.ts';
+import { ULTS } from '../data/ultimates.ts';
 
 /**
  * Night look (LOCKWATER). The navy street (#0d1a26) and the #1b1426 ink leave a dark hide with no
@@ -103,6 +104,10 @@ export class TitanView implements ViewModule {
   private hCur = 1;
   // glow kicks (decay per frame)
   private kPulse = 0; private kArc = 0; private kDet = 0; private kVent = 0; private kStomp = 0; private kSpore = 0; private kAbility = 0;
+  /** v2 UPROAR glow kick (ultFire / ultPulse) — the glow parts blaze through the ultimate */
+  private kUlt = 0;
+  /** glow added on top of every glow part this frame (UPROAR ready throb / ultimate blaze) */
+  private ultBoost = 0;
   private aimT = -1;
   private glowOut = 1;
   private aimYaw = 0;
@@ -134,6 +139,8 @@ export class TitanView implements ViewModule {
     const s = this.st;
     s.attack = null; s.attackT = -1; s.dashT = -1; s.hurtT = -1; s.abilityT = -1; s.growT = -1; s.deadT = -1;
     s.clearT = -1; s.downSide = 1; s.popT = -1; s.popAmt = POP_AMT_LEVEL;
+    s.ultT = -1; s.ultRoar = ULTS[w.titanId].roarS; s.ultBlast = ULTS[w.titanId].blastS;
+    this.kUlt = 0;
     this.lift = 0; this.dustDone = false; this.dustLive = 0;
     for (const p of this.puffs) p.t = p.life;
     if (this.dust) { this.dust.count = 0; this.dust.visible = false; }
@@ -174,6 +181,7 @@ export class TitanView implements ViewModule {
     s.abilityT = advT(s.abilityT, dt);
     s.growT = advT(s.growT, dt);
     s.popT = advT(s.popT ?? -1, dt);
+    s.ultT = advT(s.ultT ?? -1, dt);
     if (!T.alive) {
       if (s.deadT! < 0) {
         // land on the flank that turns the belly to the camera (camera yaw 45°: it sits at +X+Z).
@@ -480,6 +488,14 @@ export class TitanView implements ViewModule {
         case 'vent': this.kVent = 1; break;
         case 'explosion': if (ev.kind === 'stomp') this.kStomp = 1; else if (ev.kind === 'arc' && this.id === 'voltkite') this.kDet = Math.max(this.kDet, 0.7); break;
         case 'spore': case 'bloomSpawn': this.kSpore = Math.max(this.kSpore, ev.type === 'spore' ? 1 : 0.5); break;
+        // v2 UPROAR: the `ultimate` clip + the glow parts blaze (FEATURES_V2 §3.6)
+        case 'ultFire': {
+          const d = ULTS[ev.titan] ?? ULTS[w.titanId];
+          s.ultT = 0; s.ultRoar = d.roarS; s.ultBlast = d.blastS;
+          this.kUlt = 1;
+          break;
+        }
+        case 'ultPulse': this.kUlt = Math.max(this.kUlt, 0.85); break;
         default: break;
       }
     }
@@ -495,7 +511,15 @@ export class TitanView implements ViewModule {
     this.kPulse = decay(this.kPulse, 3, dt); this.kArc = decay(this.kArc, 5, dt); this.kDet = decay(this.kDet, 1.8, dt);
     this.kVent = decay(this.kVent, 1.4, dt); this.kStomp = decay(this.kStomp, 3, dt); this.kSpore = decay(this.kSpore, 1.2, dt);
     this.kAbility = decay(this.kAbility, 1.5, dt);
+    this.kUlt = decay(this.kUlt, 0.9, dt);
     const spike = calm ? 0.5 : 1;
+    // v2 UPROAR (FEATURES_V2 §3.6): while the meter is READY the glow parts pulse (a slow 1.6 Hz throb;
+    // a steady lift under reduce flashing); through the roar + blast they blaze (kUlt)
+    const U = w.ult;
+    const readyNow = !!U && U.ready && U.phase === 'idle' && w.titan.alive && !w.run.result;
+    const throb = readyNow ? (calm ? 0.3 : 0.2 + 0.35 * (0.5 + 0.5 * Math.sin(this.st.t * Math.PI * 3.2))) : 0;
+    const blaze = U && U.phase !== 'idle' ? 0.9 : 0;
+    this.ultBoost = Math.max(throb, blaze, 0.9 * this.kUlt) * spike;
     switch (this.id) {
       case 'molo': {
         const vac = kitNum(K, 'vacuumT') > 0 ? 1 : 0;
@@ -528,7 +552,7 @@ export class TitanView implements ViewModule {
   }
 
   /** applyGlow scaled by the run-end dimmer */
-  private glow(level: number, index = -1): void { applyGlow(this.model!, level * this.glowOut, index); }
+  private glow(level: number, index = -1): void { applyGlow(this.model!, (level + this.ultBoost) * this.glowOut, index); }
 
   private applyBiomeRim(w: World): void {
     const model = this.model!;
