@@ -21,16 +21,52 @@
 //     tone mapping in the output colour space, so fogColor also lands exactly).
 //   * it also points the shared SURFACE_ENV uniforms (surfaces.ts) at the preset, so glossy dye,
 //     metal and water reflect this sky.
+//
+// Preset kinds (CONTRACT_ART_P6_8 §14.4, CONTRACT_P6_11 §19):
+//   * 'outdoor' (default): everything above.
+//   * 'interior' (Lockwell Works): NO sky dome (skyVisible false) — the background is the dark fog
+//     colour; the sun becomes the skylight KEY: a DirectionalLight along keyDir (pointing down,
+//     keyColor, keyIntensity × INTERIOR.keyGain) with the same texel-snapped shadow box, so the roof
+//     shades the hall and light falls through the skylight slots; hemisphere fill (hemi* × hemiGain)
+//     plus an AmbientLight (ambient × ambientIntensity × ambientGain); FogExp2(fogColor, fogDensity).
+//     The skylight panes (windowGlow), fluorescent strips (stripColor) and sodium practicals
+//     (sodiumColor) glow through SURFACE_ENV (surfaces.ts); the light_ empties are MapView's pool.
+//   * map-level `mist` (Cinder Reef, maps.json): the fog thickens to max(fogDensity, mist.density) and
+//     leans to the mist colour, and the dome's lower sky melts into that colour (a soft mist band over
+//     the horizon), so far detail softens into it. The mist block is found from the preset object
+//     itself (mistOf: the map that owns it), so createSky's signature is unchanged.
 
 import * as THREE from 'three';
 import type { LightingPreset } from '../core/data.ts';
-import { NOISE_GLSL, SKY_GLSL, SURFACE_ENV, setSurfaceEnvironment, sunDirection } from './surfaces.ts';
+import {
+  NOISE_GLSL, SKY_GLSL, SURFACE_ENV, setSurfaceEnvironment, sunDirection, presetKind, mistOf,
+  type AnyPreset, type MistDef,
+} from './surfaces.ts';
 
 export interface SkyRig {
   sun: THREE.DirectionalLight; hemi: THREE.HemisphereLight; sunDir: THREE.Vector3;   // sunDir = unit vector TOWARD the sun
   update(dt: number, camera: THREE.Camera, focus: THREE.Vector3): void;              // shadow camera box follows focus
   dispose(): void;
+  /** additive (LOOK-MAPS): the preset kind, the interior ambient light, the map mist in effect */
+  kind?: 'outdoor' | 'interior';
+  ambient?: THREE.AmbientLight | null;
+  mist?: MistDef | null;
 }
+
+/**
+ * Interior preset gains. The preset numbers were authored for the Blender QA renders; these map them
+ * to three's physically-based units so the hall reads toy-bright under a dark roof.
+ */
+export const INTERIOR = {
+  keyGain: 2.6,
+  hemiGain: 1.6,
+  ambientGain: 1.6,
+  /** the key keeps (1 − this) of its light in the roof's shadow (bounce off the hall) */
+  shadowIntensity: 0.6,
+};
+
+/** how far the fog colour leans to the mist colour, and the dome's mist band strength */
+export const MIST = { fogLean: 0.55, dome: 0.75 };
 
 /** Shadow tuning (exported for the bench / debug panel). */
 export const SUN_SHADOW = {
@@ -80,6 +116,8 @@ uniform float uCloudSeed[ DF_CLOUDS ];
 uniform vec3 uCloudLit;
 uniform vec3 uCloudShade;
 uniform float uSunCos;                 // cos( sun disc angular radius )
+uniform vec3 uMistCol;                 // map mist (0 strength = none)
+uniform float uMistAmt;
 varying vec3 vDfDir;
 float dfSmin( float a, float b, float k ) {
 	float h = clamp( 0.5 + 0.5 * ( b - a ) / k, 0.0, 1.0 );
@@ -119,24 +157,36 @@ void main() {
 		cc += uDfSunColor * 0.1 * smoothstep( 0.0, 0.9, dot( d, uDfSunDir ) ) * smoothstep( -0.15, 0.0, dd );
 		col = mix( col, cc, a );
 	}
+	// map mist: the lower sky melts into the mist colour (matches the thickened fog on the far sea)
+	col = mix( col, uMistCol, uMistAmt * ( 1.0 - smoothstep( -0.03, 0.34, d.y ) ) );
 	gl_FragColor = vec4( col, 1.0 );
 	#include <colorspace_fragment>
 }
 `;
 
 export function createSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer, preset: LightingPreset): SkyRig {
-  const sunDir = sunDirection(preset.sunElevationDeg, preset.sunAzimuthDeg);
+  const ip = preset as AnyPreset;
+  const kind = presetKind(preset);
+  const interior = kind === 'interior';
+  const kd = ip.keyDir;
+  // interior: the key shines DOWN along keyDir, so the vector toward it is −keyDir
+  const sunDir = interior && Array.isArray(kd) && kd.length === 3 && (kd[0] || kd[1] || kd[2])
+    ? new THREE.Vector3(-kd[0], -kd[1], -kd[2]).normalize()
+    : sunDirection(preset.sunElevationDeg, preset.sunAzimuthDeg);
   setSurfaceEnvironment(preset, sunDir);
+  const mist = interior ? null : mistOf(preset);
 
-  // ── sun ──
-  const sun = new THREE.DirectionalLight(new THREE.Color(preset.sunColor), preset.sunIntensity);
-  sun.name = 'df_sun';
+  // ── sun (interior: the skylight key) ──
+  const sunColor = interior ? (ip.keyColor ?? preset.sunColor) : preset.sunColor;
+  const sunI = interior ? (ip.keyIntensity ?? preset.sunIntensity) * INTERIOR.keyGain : preset.sunIntensity;
+  const sun = new THREE.DirectionalLight(new THREE.Color(sunColor), sunI);
+  sun.name = interior ? 'df_key' : 'df_sun';
   sun.castShadow = true;
   sun.shadow.mapSize.set(SUN_SHADOW.mapSize, SUN_SHADOW.mapSize);
   sun.shadow.radius = SUN_SHADOW.radius;
   sun.shadow.bias = SUN_SHADOW.bias;
   sun.shadow.normalBias = SUN_SHADOW.normalBias;
-  sun.shadow.intensity = SUN_SHADOW.intensity;
+  sun.shadow.intensity = interior ? INTERIOR.shadowIntensity : SUN_SHADOW.intensity;
   const sc = sun.shadow.camera;
   sc.left = -SUN_SHADOW.half; sc.right = SUN_SHADOW.half;
   sc.top = SUN_SHADOW.half; sc.bottom = -SUN_SHADOW.half;
@@ -148,15 +198,24 @@ export function createSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer, pre
   scene.add(sun.target);
 
   // ── fill ──
-  const hemi = new THREE.HemisphereLight(new THREE.Color(preset.hemiSky), new THREE.Color(preset.hemiGround), preset.hemiIntensity);
+  const hemi = new THREE.HemisphereLight(new THREE.Color(preset.hemiSky), new THREE.Color(preset.hemiGround),
+    preset.hemiIntensity * (interior ? INTERIOR.hemiGain : 1));
   hemi.name = 'df_hemi';
   hemi.position.set(0, 1, 0);
   scene.add(hemi);
+  let ambient: THREE.AmbientLight | null = null;
+  if (interior) {
+    ambient = new THREE.AmbientLight(new THREE.Color(ip.ambient ?? preset.hemiGround), (ip.ambientIntensity ?? 0.5) * INTERIOR.ambientGain);
+    ambient.name = 'df_ambient';
+    scene.add(ambient);
+  }
 
   // ── atmosphere + exposure ──
-  const fog = new THREE.FogExp2(new THREE.Color(preset.fogColor), preset.fogDensity);
+  const fogCol = new THREE.Color(preset.fogColor);
+  if (mist) fogCol.lerp(new THREE.Color(mist.color), MIST.fogLean);
+  const fog = new THREE.FogExp2(fogCol, mist ? Math.max(preset.fogDensity, mist.density) : preset.fogDensity);
   scene.fog = fog;
-  scene.background = new THREE.Color(preset.fogColor);
+  scene.background = fogCol.clone();
   renderer.toneMappingExposure = preset.exposure;
   renderer.shadowMap.enabled = true;
   // r186 warns and falls back when PCFSoftShadowMap is requested; ask for the kernel directly
@@ -198,6 +257,8 @@ export function createSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer, pre
       uCloudLit: { value: cloudLit },
       uCloudShade: { value: cloudShade },
       uSunCos: { value: Math.cos(THREE.MathUtils.degToRad(1.7)) },
+      uMistCol: { value: fogCol.clone() },
+      uMistAmt: { value: mist ? MIST.dome : 0 },
     },
     vertexShader: SKY_VERT,
     fragmentShader: SKY_FRAG,
@@ -218,7 +279,9 @@ export function createSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer, pre
   dome.matrixAutoUpdate = false;
   dome.castShadow = false;
   dome.receiveShadow = false;
-  scene.add(dome);
+  // interior: no sky dome (the roof hides the sky; the background is the dark fog colour)
+  const domeOn = !interior && ip.skyVisible !== false;
+  if (domeOn) scene.add(dome);
 
   // ── shadow-box follow with texel snapping ──
   const lz = sunDir.clone().normalize();
@@ -235,6 +298,9 @@ export function createSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer, pre
     sun,
     hemi,
     sunDir,
+    kind,
+    ambient,
+    mist,
     update(dt: number, camera: THREE.Camera, focus: THREE.Vector3): void {
       if (dt > 0 && dt < 1) {
         drift += dt * 0.0035;
@@ -257,6 +323,7 @@ export function createSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer, pre
     },
     dispose(): void {
       scene.remove(sun, sun.target, hemi, dome);
+      if (ambient) { scene.remove(ambient); ambient.dispose(); }
       dome.geometry.dispose();
       domeMat.dispose();
       sun.shadow.map?.dispose();

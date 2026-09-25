@@ -8,6 +8,10 @@
 //   node _harness/probe_bots.ts --trace 3        # per-second trace of bot 3
 //   node _harness/probe_bots.ts --lineup mixed   # one of each kit per crew (MIST-RASP, SHEET-DRUM, NEEDLE-GLINT, POP-WELL)
 //                                                # (added by lane KITSIM for G10; roster only, bots unchanged)
+//   node _harness/probe_bots.ts --map cinder     # CHANGED(MAPSIM): any built map (pier18 | lockwell | cinder)
+//   node _harness/probe_bots.ts --map lockwell --seeds 1,2,3
+//                                                # CHANGED(MAPSIM): one match per listed seed; the play gates must pass
+//                                                # on EVERY seed; determinism = the first seed replayed + distinct hashes
 //
 // The human slot (id 0) is a bot too. Every tick: director.think(intents) → world.step(intents) →
 // world.drainEvents(). Gates (§10.3): both teams cover > 15 %, neutral < 55 %, ≥ 6 washes; no bot stuck
@@ -38,6 +42,8 @@ const SECONDS = Number(arg('--seconds', '180'));
 const TRACE = Number(arg('--trace', '-1'));
 const QUIET = argv.includes('--quiet');
 const LINEUP = arg('--lineup', 'default');
+const MAP = arg('--map', 'pier18');
+const SEEDS = arg('--seeds', '').split(',').filter((x) => x.trim() !== '').map((x) => Number(x) | 0);
 /** --lineup mixed: ids 0-3 SUNCREW and 4-7 GULF CREW each get mist-rasp, sheet-drum, needle-glint, pop-well */
 const MIXED_BOT_KITS = ['sheet-drum', 'needle-glint', 'pop-well', 'mist-rasp'];
 
@@ -62,6 +68,8 @@ interface RunResult {
   maxTurn: number;
   events: Record<string, number>;
   horns: string[];
+  /** CHANGED(MAPSIM): map-feature use — spring launches, runner-seconds carried by a conveyor, runner-seconds above y 3 (upper floors) */
+  launches: number; beltS: number; upperS: number;
   result: string;
 }
 
@@ -101,7 +109,7 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
   const reversals = new Array(N).fill(0);
   let maxTurn = 0;
 
-  let thinkMs = 0, stepMs = 0;
+  let thinkMs = 0, stepMs = 0, beltTicks = 0, upperTicks = 0;
   const t0 = performance.now();
   let guard = 0;
   while (world.phase !== 'ended' && guard++ < (seconds + 10) / TICK) {
@@ -121,6 +129,8 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
     for (let i = 0; i < N; i++) {
       const r = world.runners[i];
       if (world.phase === 'live' && r.alive && r.respawnT === 0) {
+        if (r.onConveyor >= 0) beltTicks++;
+        if (r.y > 3) upperTicks++;
         dist[i] += Math.hypot(r.x - r.px, r.z - r.pz);
         liveTicks[i]++;
         const spd = Math.hypot(r.x - r.px, r.z - r.pz) / TICK;
@@ -196,6 +206,7 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
     washes: world.stats.washes, seaWashes: world.stats.seaWashes, slicks: world.stats.slicks, refills,
     shots: world.stats.shots, dry: world.stats.dry, hits: world.stats.hits,
     stuck, perBot, events: evCount, horns, maxTurn,
+    launches: world.runners.reduce((a, r) => a + r.launches, 0), beltS: beltTicks * TICK, upperS: upperTicks * TICK,
     result: world.result ? `winner ${world.result.winner === 1 ? 'SUNCREW' : world.result.winner === 2 ? 'GULF CREW' : 'draw'}` : 'no result',
   };
 }
@@ -209,6 +220,7 @@ function report(label: string, res: RunResult): void {
   const worst = (f: (b: RunResult['perBot'][number]) => number): number => res.perBot.reduce((a, b) => Math.max(a, f(b)), 0);
   console.log(`   motion: shakes/min body ${avg((b) => b.twitchBody).toFixed(2)} (worst ${worst((b) => b.twitchBody).toFixed(2)}) · aim ${avg((b) => b.twitchAim).toFixed(2)} · single snaps/min body ${avg((b) => b.snapBody).toFixed(1)} · aim ${avg((b) => b.snapAim).toFixed(1)} · heading reversals/min ${avg((b) => b.reversals).toFixed(1)} · moving ${(avg((b) => b.moving) * 100).toFixed(0)} % of live time · max body turn ${res.maxTurn.toFixed(1)} rad/s`);
   console.log(`   stuck events: ${res.stuck.length}`);
+  console.log(`   map features: spring launches ${res.launches} · on a conveyor ${res.beltS.toFixed(1)} runner-s · above y 3 ${res.upperS.toFixed(1)} runner-s`);
   if (QUIET) return;
   console.log('   id name     team  painted m²  washes washed  shots dries slicks refills jumps climbs dist m  moving   shake/min body aim  rev/min   mode share');
   for (const b of res.perBot) {
@@ -225,17 +237,19 @@ function report(label: string, res: RunResult): void {
 async function main(): Promise<number> {
   let def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typeof loadRapier>>, nav: NavGraph;
   try {
-    def = mapById('pier18');
+    def = mapById(MAP);
     R = await loadRapier();
     geo = await loadMapGeometry(def);
     const navPhysics = new PhysicsWorld(R, geo);
     nav = buildNav(geo, navPhysics, def);
-    console.log(`map pier18 · nav ${nav.nodes} nodes / ${nav.edgeTo.length} edges (built in ${nav.stats.buildMs.toFixed(0)} ms) · skill ${SKILL} · seed ${SEED} · ${SECONDS} s`);
+    console.log(`map ${MAP} · nav ${nav.nodes} nodes / ${nav.edgeTo.length} edges (built in ${nav.stats.buildMs.toFixed(0)} ms) · skill ${SKILL} · ${SEEDS.length ? `seeds ${SEEDS.join(',')}` : `seed ${SEED}`} · ${SECONDS} s`);
     if (LINEUP === 'mixed') console.log(`lineup mixed: ${defaultRoster({ humanKit: 'mist-rasp', seed: SEED, skill: SKILL, botKits: MIXED_BOT_KITS }).map((e) => `${e.id}:${e.kit}`).join(' ')}`);
   } catch (e) {
     console.log('SETUP FAILED:', (e as Error).stack ?? e);
     return 2;
   }
+
+  if (SEEDS.length) return multiSeed(def, geo, R, nav);
 
   const a = await runMatch(def, geo, R, nav, SEED, SKILL, SECONDS, TRACE);
   report(`run A (seed ${SEED})`, a);
@@ -283,6 +297,53 @@ async function main(): Promise<number> {
   const failed = checks.filter((x) => !x.pass);
   console.log('-'.repeat(100));
   console.log(failed.length ? `G8 bots: FAIL (${failed.length} of ${checks.length} checks)` : `G8 bots: PASS (${checks.length} checks)`);
+  return failed.length ? 1 : 0;
+}
+
+/** the §10.3 play gates of one run: [name, pass, detail] */
+function playGates(r: RunResult): Array<[string, boolean, string]> {
+  const n = r.perBot.length;
+  const mb = r.perBot.reduce((x, b) => x + b.twitchBody, 0) / n, ma = r.perBot.reduce((x, b) => x + b.twitchAim, 0) / n;
+  const tb = r.perBot.reduce((x, b) => Math.max(x, b.twitchBody), 0), ta = r.perBot.reduce((x, b) => Math.max(x, b.twitchAim), 0);
+  const mv = r.perBot.reduce((x, b) => Math.min(x, b.moving), 1);
+  return [
+    ['cover > 15 % each', r.coverage.sun > 0.15 && r.coverage.gulf > 0.15, `SUN ${pct(r.coverage.sun)} GULF ${pct(r.coverage.gulf)}`],
+    ['neutral < 55 %', r.coverage.neutral < 0.55, `neutral ${pct(r.coverage.neutral)}`],
+    ['≥ 6 washes', r.washes >= 6, `${r.washes} (sea ${r.seaWashes})`],
+    ['no stuck', r.stuck.length === 0, r.stuck.length ? r.stuck.slice(0, 3).map((s) => `${s.name} ${s.t0.toFixed(0)}-${s.t1.toFixed(0)} s @ (${f1(s.x)},${f1(s.y)},${f1(s.z)}) ${s.mode.slice(0, 24)}`).join('; ') : '0'],
+    ['≥ 20 slicks', r.slicks >= 20, `${r.slicks}`],
+    ['≥ 4 refills < 20 %', r.refills >= 4, `${r.refills}`],
+    ['no jitter / moving ≥ 60 %', mb <= 0.75 && ma <= 0.75 && tb <= 2.5 && ta <= 2.5 && mv >= 0.6,
+      `shakes body ${mb.toFixed(2)} (worst ${tb.toFixed(2)}) aim ${ma.toFixed(2)} (worst ${ta.toFixed(2)}) · least moving ${(mv * 100).toFixed(0)} %`],
+    ['< 20 s wall', r.wallMs < 20000, `${(r.wallMs / 1000).toFixed(2)} s`],
+  ];
+}
+
+/** CHANGED(MAPSIM): --seeds a,b,c — one match per seed; every seed must pass the play gates */
+async function multiSeed(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typeof loadRapier>>, nav: NavGraph): Promise<number> {
+  const runs: Array<{ seed: number; r: RunResult }> = [];
+  for (const sd of SEEDS) {
+    const r = await runMatch(def, geo, R, nav, sd, SKILL, SECONDS, sd === SEEDS[0] ? TRACE : -1);
+    report(`seed ${sd}`, r);
+    runs.push({ seed: sd, r });
+  }
+  const again = await runMatch(def, geo, R, nav, SEEDS[0], SKILL, SECONDS, -1);
+  console.log(`\n── seed ${SEEDS[0]} replayed: hash ${again.hash}`);
+  console.log('\n' + '-'.repeat(100));
+  if (SECONDS !== 180) console.log(`NOTE: ${SECONDS} s matches — the gates below are printed for information; G8 needs the full 180 s.`);
+  const names = playGates(runs[0].r).map((g) => g[0]);
+  for (let k = 0; k < names.length; k++) {
+    const per = runs.map(({ seed, r }) => ({ seed, g: playGates(r)[k] }));
+    const bad = per.filter((p) => !p.g[1]);
+    check(`${names[k]} on every seed (${SEEDS.length})`, bad.length === 0,
+      per.map((p) => `s${p.seed}: ${p.g[2]}${p.g[1] ? '' : ' ✗'}`).join(' · '));
+  }
+  check('same seed → identical hash', again.hash === runs[0].r.hash, `${runs[0].r.hash} vs ${again.hash}`);
+  const distinct = new Set(runs.map((x) => x.r.hash)).size;
+  check('different seeds → different hashes', distinct === runs.length, `${distinct} distinct of ${runs.length}`);
+  const failed = checks.filter((x) => !x.pass);
+  console.log('-'.repeat(100));
+  console.log(failed.length ? `G8 bots (${MAP}, seeds ${SEEDS.join(',')}): FAIL (${failed.length} of ${checks.length} checks)` : `G8 bots (${MAP}, seeds ${SEEDS.join(',')}): PASS (${checks.length} checks)`);
   return failed.length ? 1 : 0;
 }
 

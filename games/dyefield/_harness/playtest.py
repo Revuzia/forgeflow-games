@@ -23,6 +23,25 @@ turned by real pointer-lock mouse motion, never by writing its yaw):
      the slate's numbers = the sim's result);
   7. a real click on PLAY AGAIN → a second match starts (countdown) with the paint reset.
 Frame times are recorded page-side for the whole live match (every rAF delta): avg fps, p50/p90/p99.
+
+    python _harness/playtest.py --kits --headless    # phase 6 kit shots (CONTRACT_P6_11 §18.2)
+    python _harness/playtest.py --headless --map lockwell --kit sheet-drum   # G9 on any built map, any human kit
+
+--map / --kit (CHANGED(INTEGRATE)): the G9 match on any built map with any human kit (?kit=). The steps use the
+kit the way a player would: MIST-RASP / POP-WELL hold LMB; SHEET-DRUM holds LMB while walking (a roll) and taps
+to flick; NEEDLE-GLINT presses, holds ~0.8 s to charge and releases, again and again. The fire check wants the
+kit's own evidence (stream ≥ 6 shots · burst ≥ 2 · charge ≥ 1 beam · roll: rolling seen) plus the tank drop and
+coverage. Shots other than Pier 18 + MIST-RASP go to _shots/pt_<map>_<kit>_<name>.png.
+
+--kits: one fresh page per kit (?kit=mist-rasp|sheet-drum|needle-glint|pop-well, Pier 18), REAL keys and
+mouse for every action: the fire action (MIST-RASP stream; SHEET-DRUM roll + a tap flick; NEEDLE-GLINT
+hold → full charge → release; POP-WELL bursts), the JELLY CHARGE (E: throw, puddle, pop) and the special
+(Q) once ready. Dev hooks, declared in the output: setTank(0, 100) before the sub, fillSpecial(0) before
+the special, and freeze(on) — a page-side waiter freezes the sim + visual clock right after the event of
+interest so the capture shows that exact moment. Screenshots: _shots/kit_<id>_<action>.png. Checks: each
+action's sim events fired, the HUD special gauge is ready with the ACTUAL special binding as its key badge,
+the sub chip greys below the sub cost, the charger ring reads 100 at full charge, the FX read-back shows
+the action (glint line, beam flash, puddle, raining cell), and 0 console / page / shader errors.
 VERDICT "PLAYTEST PASS" only when every check holds AND 0 console errors, 0 page/window errors,
 0 shader/GL errors, 0 failed requests. Pointer-lock losses are classified like bootcheck (focus theft →
 NOTE + one real re-click; a loss with focus → FAIL).
@@ -45,8 +64,11 @@ DEG = math.pi / 180.0
 VICTORY = "THE HARBOR CHOSE A COLOR."
 
 
+SHOT_PREFIX = ["pt"]
+
+
 def shot(sess, name, shots):
-    path = os.path.join(SHOTS, "pt_%s.png" % name)
+    path = os.path.join(SHOTS, "%s_%s.png" % (SHOT_PREFIX[0], name))
     ok = sess.screenshot(path)
     shots[name] = path if ok else None
     return ok
@@ -69,6 +91,381 @@ def nearest(m, pred):
     return best, bd
 
 
+KITS = ("mist-rasp", "sheet-drum", "needle-glint", "pop-well")
+CLOUD_KITS = ("mist-rasp", "needle-glint")
+
+# page-side trigger, ARMED before the real input: every frame it scans the drained-event log for the first
+# NEW event matching `want` (t, and optionally pid / phase / id), waits `delay` ms, then freezes the sim +
+# visuals (dev hook) so the capture shows that exact moment. Several triggers can be armed at once (keyed).
+ARM_JS = """
+([key, want, delay, timeout]) => {
+  const D = window.__DF__;
+  const T = (window.__KW__ = window.__KW__ || {});
+  const log0 = D.events(512);
+  let last = log0.length ? log0[log0.length - 1] : null;
+  const st = { fired: false, done: false, ev: null, t0: performance.now(), at: -1 };
+  T[key] = st;
+  const match = (e) => e.t === want.t && (want.pid === undefined || e.pid === want.pid)
+    && (want.phase === undefined || e.phase === want.phase) && (want.id === undefined || e.id === want.id);
+  const tick = () => {
+    if (st.done) return;
+    if (performance.now() - st.t0 > timeout) { st.done = true; return; }
+    const ev = D.events(512);
+    let i = last ? ev.lastIndexOf(last) + 1 : 0;
+    if (ev.length) last = ev[ev.length - 1];
+    for (; i < ev.length; i++) {
+      if (match(ev[i])) {
+        st.ev = ev[i]; st.done = true; st.at = Math.round(performance.now() - st.t0);
+        const fire = () => { D.freeze(true); st.fired = true; };
+        if (delay > 0) setTimeout(fire, delay); else fire();
+        return;
+      }
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  return true;
+}
+"""
+
+
+def arm(sess, key, want, delay_ms=0, timeout_s=4.0):
+    try:
+        sess.page.evaluate(ARM_JS, [key, want, int(delay_ms), int(timeout_s * 1000)])
+        return True
+    except Exception:
+        return False
+
+
+def await_armed(sess, key, timeout_s=4.5):
+    """wait for an armed trigger → {ok, ev, at}; ok = it fired (the page is FROZEN until kit_capture unfreezes)"""
+    deadline = time.time() + timeout_s
+    st = None
+    while time.time() < deadline:
+        st = sess.safe_js("(k) => { const s = (window.__KW__ || {})[k]; return s ? { fired: s.fired, done: s.done, ev: s.ev, at: s.at } : null; }", key)
+        if st and st.get("fired"):
+            return {"ok": True, "ev": st.get("ev"), "at": st.get("at")}
+        if st and st.get("done") and not st.get("ev"):
+            break
+        time.sleep(0.02)
+    return {"ok": False, "ev": (st or {}).get("ev")}
+
+
+def wait_event(sess, want, delay_ms=0, timeout_s=4.0, key=None):
+    """arm + await in one go (for events that follow a real input by more than a frame or two)"""
+    k = key or ("w%d" % int(time.time() * 1000))
+    arm(sess, k, want, delay_ms, timeout_s)
+    return await_armed(sess, k, timeout_s + 0.5)
+
+
+def kit_capture(sess, kit, tag, shots, frozen):
+    """screenshot _shots/kit_<kit>_<tag>.png; unfreeze afterwards when the waiter froze the page"""
+    path = os.path.join(SHOTS, "kit_%s_%s.png" % (kit, tag))
+    ok = sess.screenshot(path)
+    if frozen:
+        sess.df("freeze", False)
+    shots["%s/%s" % (kit, tag)] = path if ok else None
+    return ok
+
+
+def wait_event(sess, want, delay_ms=0, timeout_s=4.0):
+    try:
+        r = sess.page.evaluate(WAIT_EVENT_JS, [want, int(delay_ms), int(timeout_s * 1000)])
+    except Exception as e:
+        return {"ok": False, "error": str(e).splitlines()[0][:200]}
+    return r or {"ok": False}
+
+
+def pitch_to(sess, deg):
+    a = aim_info(sess) or {}
+    mouse_turn(sess, 0.0, deg * DEG - (a.get("pitch") or 0))
+
+
+def kit_js(sess):
+    return sess.safe_js("() => { try { return __DF__.kit(); } catch (e) { return null; } }") or {}
+
+
+def fx_js(sess):
+    return sess.safe_js("() => { try { return __DF__.fx(); } catch (e) { return null; } }") or {}
+
+
+def run_kit(args, kit, shots, problems, notes, rep):
+    """one fresh page: enter play for real, then every kit action with real input"""
+    url = build_url(args.base, map=args.map, dev=1, kit=kit, seed=args.seed, matchSeconds=300, bots="chill")
+    info = {"url": url}
+    rep[kit] = info
+    sess = Session(args, "kits_%s" % kit)
+    try:
+        sess.start()
+    except Exception as e:
+        sess.close()
+        problems.append("%s: setup failed: %s" % (kit, str(e)[:300]))
+        return
+    P = lambda msg: problems.append("%s: %s" % (kit, msg))  # noqa: E731
+    try:
+        sess.goto(url)
+        if not sess.wait_df(args.wait) or not sess.wait_phase("ready", args.wait)[0]:
+            P("never reached 'ready' (%s)" % str((sess.state() or {}).get("error"))[:600])
+            return
+        entered = None
+        for attempt in range(2):
+            sess.page.mouse.move(args.width / 2, args.height / 2)
+            sess.page.mouse.click(args.width / 2, args.height / 2)
+            if sess.wait_phase("play", 4.0)[0]:
+                entered = "real click → pointer lock"
+                break
+            time.sleep(0.6)
+        if not entered:
+            notes.append("%s: pointer lock refused → __DF__.start() + a real click on the view" % kit)
+            sess.df("start")
+            if sess.wait_phase("play", 4.0)[0]:
+                sess.page.mouse.click(args.width / 2, args.height / 2)
+                entered = "__DF__.start() fallback"
+        info["entered"] = entered
+        mouse_home(sess)
+        if not entered:
+            P("could not enter play")
+            return
+        ok, ph = wait_match_phase(sess, "live", 30.0)
+        if not ok:
+            P("the match never went live (%r)" % ph)
+            return
+        time.sleep(0.3)
+        kb, ms = sess.page.keyboard, sess.page.mouse
+        k0 = kit_js(sess)
+        info["kitReadback"] = k0.get("kit")
+        if k0.get("kit") != kit:
+            P("__DF__.kit().kit = %r (want %r) — ?kit= did not pick the human kit" % (k0.get("kit"), kit))
+        lineup = [(r.get("id"), r.get("kit")) for r in ((match_info(sess) or {}).get("runners") or [])]
+        info["lineup"] = lineup
+        if len({k for (_, k) in lineup}) < 4:
+            P("the lineup does not carry all 4 kits: %s" % lineup)
+        h0 = hud_info(sess) or {}
+        info["hudStart"] = {"special": h0.get("special"), "sub": h0.get("sub"), "charge": h0.get("charge")}
+        # walk off the pad onto open floor
+        kb.down("KeyW"); time.sleep(1.1); kb.up("KeyW"); time.sleep(0.25)
+        g_idle = kit_js(sess).get("gripError")
+
+        # ── the fire action
+        act = {}
+        if kit == "mist-rasp":
+            pitch_to(sess, -18)
+            kb.down("KeyW"); ms.down(button="left")
+            time.sleep(0.9)
+            kit_capture(sess, kit, "fire", shots, bool(sess.df("freeze", True)[0]))
+            time.sleep(0.5)
+            ms.up(button="left"); kb.up("KeyW")
+            act["shots"] = kit_js(sess).get("shots")
+            if not (act["shots"] or 0) >= 6:
+                P("MIST-RASP: fewer than 6 shots in ~1.4 s of LMB (%s)" % act["shots"])
+        elif kit == "sheet-drum":
+            pitch_to(sess, -12)
+            # move first: a fresh press while standing is a flick (§18.1), a press while moving rolls
+            kb.down("KeyW"); time.sleep(0.35); ms.down(button="left")
+            rolled = False
+            t_r = time.time()
+            while time.time() - t_r < 1.5:
+                time.sleep(0.04)
+                if kit_js(sess).get("rolling"):
+                    rolled = True
+                    break
+            time.sleep(0.8)
+            k_roll = kit_js(sess)
+            act["rolling"] = k_roll.get("rolling")
+            act["rollAnim"] = k_roll.get("anim")
+            act["gripRoll"] = k_roll.get("gripError")
+            kit_capture(sess, kit, "roll", shots, bool(sess.df("freeze", True)[0]))
+            time.sleep(0.3)
+            kb.up("KeyW"); ms.up(button="left")
+            if not rolled:
+                P("SHEET-DRUM: holding LMB + W never rolled (rolling %r)" % k_roll.get("rolling"))
+            time.sleep(0.9)
+            pitch_to(sess, 2)
+            f0 = kit_js(sess).get("flicks") or 0
+            arm(sess, "flick", {"t": "shot", "pid": 0}, 25, 2.0)
+            ms.down(button="left"); time.sleep(0.08); ms.up(button="left")
+            r = await_armed(sess, "flick", 2.5)
+            act["flickShot"] = r.get("ok")
+            kit_capture(sess, kit, "flick", shots, r.get("ok"))
+            act["flicks"] = [f0, kit_js(sess).get("flicks")]
+            if not r.get("ok"):
+                P("SHEET-DRUM: a tap did not release a flick ('shot' never came)")
+        elif kit == "needle-glint":
+            pitch_to(sess, 1)
+            ms.down(button="left")
+            t_c = time.time()
+            while time.time() - t_c < 2.5 and (kit_js(sess).get("charge") or 0) < 0.999:
+                time.sleep(0.03)
+            time.sleep(0.15)
+            fr = fx_js(sess)
+            h = hud_info(sess) or {}
+            k = kit_js(sess)
+            act["charge"] = k.get("charge")
+            act["ring"] = h.get("charge")
+            act["glints"] = fr.get("glints")
+            act["chargeAnim"] = k.get("anim")
+            act["gripCharge"] = k.get("gripError")
+            kit_capture(sess, kit, "charge", shots, bool(sess.df("freeze", True)[0]))
+            if not ((k.get("charge") or 0) >= 0.999):
+                P("NEEDLE-GLINT: charge after 1.2 s held = %r (want 1)" % k.get("charge"))
+            if h.get("charge") != 100:
+                P("NEEDLE-GLINT: the HUD charge ring reads %r at full charge (want 100)" % h.get("charge"))
+            if not (fr.get("glints") or 0) >= 1:
+                P("NEEDLE-GLINT: no glint line drawn while charging (fx %s)" % fr)
+            arm(sess, "beam", {"t": "beam", "pid": 0}, 45, 2.0)
+            ms.up(button="left")
+            r = await_armed(sess, "beam", 2.5)
+            act["beam"] = r.get("ev")
+            act["flashes"] = fx_js(sess).get("flashes")
+            kit_capture(sess, kit, "beam", shots, r.get("ok"))
+            if not r.get("ok"):
+                P("NEEDLE-GLINT: releasing a full charge fired no 'beam'")
+            elif not (act["flashes"] or 0) >= 1:
+                P("NEEDLE-GLINT: the release drew no beam flash (fx %s)" % act["flashes"])
+        elif kit == "pop-well":
+            pitch_to(sess, -4)
+            arm(sess, "burst", {"t": "burst", "pid": 0}, 110, 3.0)
+            ms.down(button="left")
+            r = await_armed(sess, "burst", 3.5)
+            act["burst"] = r.get("ev")
+            kit_capture(sess, kit, "burst", shots, r.get("ok"))
+            time.sleep(0.4)
+            ms.up(button="left")
+            act["bursts"] = kit_js(sess).get("bursts")
+            if not r.get("ok"):
+                P("POP-WELL: holding LMB produced no 'burst' in 3 s")
+        info["fire"] = act
+        time.sleep(0.4)
+
+        # ── JELLY CHARGE (E): throw → puddle → pop
+        sub = {}
+        sess.df("setTank", 0, 100)
+        notes.append("%s: dev setTank(0, 100) before the sub throw (the throw needs tank ≥ its cost)" % kit)
+        time.sleep(0.25)
+        hs = hud_info(sess) or {}
+        sub["hudBefore"] = hs.get("sub")
+        pitch_to(sess, -10)
+        # CHANGED(INTEGRATE): land + pop are armed with the throw, BEFORE the key press — a jelly that hits
+        # a barrier inside the 150 ms throw-capture delay used to land before its trigger existed (a missed land)
+        arm(sess, "throw", {"t": "sub", "pid": 0, "phase": "throw"}, 150, 2.0)
+        arm(sess, "land", {"t": "sub", "pid": 0, "phase": "land"}, 380, 8.0)
+        arm(sess, "pop", {"t": "sub", "pid": 0, "phase": "pop"}, 60, 10.0)
+        kb.down("KeyE"); time.sleep(0.05); kb.up("KeyE")
+        r = await_armed(sess, "throw", 2.5)
+        sub["throw"] = r.get("ok")
+        sub["throwAnim"] = kit_js(sess).get("anim")
+        sub["fxThrow"] = fx_js(sess)
+        kit_capture(sess, kit, "sub_throw", shots, r.get("ok"))
+        r = await_armed(sess, "land", 8.5)
+        sub["land"] = r.get("ok")
+        sub["fxLand"] = fx_js(sess)
+        kit_capture(sess, kit, "sub_puddle", shots, r.get("ok"))
+        r = await_armed(sess, "pop", 10.5)
+        sub["pop"] = r.get("ok")
+        ha = hud_info(sess) or {}
+        sub["hudAfter"] = ha.get("sub")
+        kit_capture(sess, kit, "sub_pop", shots, r.get("ok"))
+        info["sub"] = sub
+        if not (sub["throw"] and sub["land"] and sub["pop"]):
+            P("JELLY CHARGE: throw/land/pop events %s/%s/%s" % (sub["throw"], sub["land"], sub["pop"]))
+        if not ((sub["fxLand"] or {}).get("puddles") or 0) >= 1:
+            P("JELLY CHARGE: no puddle model drawn after the landing (fx %s)" % sub["fxLand"])
+        if not ((sub["hudBefore"] or {}).get("ready") and not (sub["hudBefore"] or {}).get("grey")):
+            P("the sub chip was not ready at tank 100 (%s)" % sub["hudBefore"])
+        if not (sub["hudAfter"] or {}).get("grey"):
+            P("the sub chip did not grey out below the sub cost after the throw (%s)" % sub["hudAfter"])
+        time.sleep(0.5)
+
+        # ── special (Q) once ready
+        sp = {}
+        sess.df("fillSpecial", 0)
+        notes.append("%s: dev fillSpecial(0) to make the special ready" % kit)
+        time.sleep(0.5)
+        hr = hud_info(sess) or {}
+        sp["hudReady"] = hr.get("special")
+        kit_capture(sess, kit, "special_ready", shots, False)
+        spec = (hr.get("special") or {})
+        if not spec.get("ready"):
+            P("the special gauge is not in its ready state after the meter filled (%s)" % spec)
+        if spec.get("key") != "Q":
+            P("the special key badge shows %r — the special is bound to KeyQ, want 'Q'" % spec.get("key"))
+        cloud = kit in CLOUD_KITS
+        pitch_to(sess, -3 if cloud else -14)
+        arm(sess, "sp", {"t": "special", "pid": 0, "phase": "start"}, 170 if cloud else 300, 2.0)
+        kb.down("KeyQ"); time.sleep(0.05); kb.up("KeyQ")
+        if cloud:
+            r = await_armed(sess, "sp", 2.5)
+            sp["start"] = r.get("ok")
+            sp["throwAnim"] = kit_js(sess).get("anim")
+            kit_capture(sess, kit, "special_throw", shots, r.get("ok"))
+            rain = None
+            for _ in range(40):
+                time.sleep(0.1)
+                f = fx_js(sess)
+                if (f.get("raining") or 0) > 0:
+                    rain = f
+                    break
+            sp["rainFx"] = rain
+            time.sleep(0.9)
+            kit_capture(sess, kit, "special_rain", shots, bool(sess.df("freeze", True)[0]))
+            if not r.get("ok"):
+                P("CLOUDBURST: Q did not start the special")
+            if not rain:
+                P("CLOUDBURST: no raining cell drawn within 4 s of the throw")
+        else:
+            r = await_armed(sess, "sp", 2.5)
+            sp["start"] = r.get("ok")
+            sp["leapAnim"] = kit_js(sess).get("anim")
+            arm(sess, "ring", {"t": "ring", "pid": 0}, 90, 6.0)
+            kit_capture(sess, kit, "special_leap", shots, r.get("ok"))
+            r2 = await_armed(sess, "ring", 6.5)
+            sp["ring"] = r2.get("ev")
+            kit_capture(sess, kit, "special_slam", shots, r2.get("ok"))
+            if not r.get("ok"):
+                P("WELLSPRING: Q did not start the special")
+            if not r2.get("ok"):
+                P("WELLSPRING: no slam 'ring' after the leap")
+        info["special"] = sp
+        info["gripIdle"] = g_idle
+        time.sleep(0.4)
+    except Exception as e:
+        P("harness error: %s" % str(e).splitlines()[0][:400])
+    finally:
+        diag = sess.diagnostics() if sess.page else {}
+        info["diagnostics"] = diag
+        for d in diag_problems(diag):
+            P(d)
+        sess.close()
+
+
+def kits_main(args) -> int:
+    kits = [k for k in (args.kit_list.split(",") if args.kit_list else KITS) if k]
+    rep, shots, problems, notes = {"kits": kits, "headless": args.headless}, {}, [], []
+    for kit in kits:
+        run_kit(args, kit, shots, problems, notes, rep)
+    print("=" * 96)
+    for kit in kits:
+        info = rep.get(kit) or {}
+        print("%-13s: entered %s · lineup %s" % (kit, info.get("entered"), " ".join("%s:%s" % t for t in info.get("lineup") or [])))
+        for k in ("hudStart", "fire", "sub", "special", "gripIdle"):
+            if k in info:
+                print("   %-9s %s" % (k, json.dumps(info[k], default=str)[:700]))
+    for k, v in shots.items():
+        print("shot %-26s: %s" % (k, v or "NOT SAVED"))
+    for n in notes:
+        print("NOTE         : %s" % n)
+    rep.update({"shots": shots, "notes": notes, "problems": problems})
+    missing = [k for k, v in shots.items() if not v]
+    for m in missing:
+        problems.append("screenshot %s was not saved" % m)
+    print("VERDICT: %s" % ("KITS PASS" if not problems else "KITS FAIL"))
+    for p_ in problems:
+        print("   X %s" % p_)
+    print("report       : %s" % save_report("kitshots", rep, args.base))
+    print("RESULT: %s" % ("OK" if not problems else "FAIL"))
+    return 0 if not problems else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="DYEFIELD match playtest (gate G9)")
     add_common_args(ap)
@@ -77,12 +474,23 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--fight", type=float, default=14.0, help="seconds of real aim + fire toward enemies")
     ap.add_argument("--wait", type=float, default=90.0)
+    ap.add_argument("--kits", action="store_true", help="phase 6 kit shots instead of the G9 match playtest")
+    ap.add_argument("--kit-list", default="", help="--kits: comma-separated subset (default all four)")
+    ap.add_argument("--kit", default="mist-rasp", choices=KITS, help="G9: the human's kit (?kit=)")
     args = ap.parse_args()
     if args.width == 1280 and args.height == 720:
         args.width, args.height = 1600, 900
-    url = build_url(args.base, map=args.map, dev=1, matchSeconds=int(args.match_seconds), seed=args.seed)
+    if args.kits:
+        return kits_main(args)
+    kit = args.kit
+    q = {"map": args.map, "dev": 1, "matchSeconds": int(args.match_seconds), "seed": args.seed}
+    if kit != "mist-rasp":
+        q["kit"] = kit
+    url = build_url(args.base, **q)
+    if args.map != "pier18" or kit != "mist-rasp":
+        SHOT_PREFIX[0] = "pt_%s_%s" % (args.map, kit)
 
-    rep = {"url": url, "headless": args.headless, "size": [args.width, args.height]}
+    rep = {"url": url, "headless": args.headless, "size": [args.width, args.height], "kit": kit}
     problems, notes, shots = [], [], {}
     checks = {}
     fatal = None
@@ -184,14 +592,24 @@ def main() -> int:
             kb.down("KeyW"); time.sleep(0.8)
             a0 = aim_info(sess) or {}
             mouse_turn(sess, 0.0, (-30 * DEG) - (a0.get("pitch") or -14 * DEG))
-            ms.down(button="left")
-            time.sleep(1.1)
-            shot(sess, "firing", shots)
-            time.sleep(1.1)
-            kb.up("KeyW")
-            time.sleep(0.8)
-            ms.up(button="left")
-            time.sleep(0.4)
+            if kit == "needle-glint":
+                # charge → release, four times (a player's line-painting rhythm); the capture lands mid-charge
+                for k in range(4):
+                    ms.down(button="left"); time.sleep(0.85)
+                    if k == 1:
+                        shot(sess, "firing", shots)
+                    ms.up(button="left"); time.sleep(0.25)
+                kb.up("KeyW")
+                time.sleep(0.4)
+            else:
+                ms.down(button="left")
+                time.sleep(1.1)
+                shot(sess, "firing", shots)
+                time.sleep(1.1)
+                kb.up("KeyW")
+                time.sleep(0.8)
+                ms.up(button="left")
+                time.sleep(0.4)
             s1 = sess.state() or {}
             p1 = s1.get("player") or {}
             cov1 = (s1.get("coverage") or {}).get("sun", 0)
@@ -204,8 +622,13 @@ def main() -> int:
                 problems.append("firing did not drain the tank (%s → %s)" % (p0.get("tank"), p1.get("tank")))
             if not (cov1 > cov0 + 1e-5):
                 problems.append("firing did not raise coverage.sun (%s → %s)" % (cov0, cov1))
-            if not (ev.get("shot") or 0) > 5:
-                problems.append("fewer than 6 'shot' events after ~3 s of LMB (%s)" % ev.get("shot"))
+            need = {"mist-rasp": ("shot", 6), "pop-well": ("shot", 2), "needle-glint": ("beam", 1)}.get(kit)
+            if need and not (ev.get(need[0]) or 0) >= need[1]:
+                problems.append("fewer than %d '%s' events after ~3 s of %s fire (%s)" % (need[1], need[0], kit, ev.get(need[0])))
+            if kit == "sheet-drum":
+                checks["fire"]["rolled"] = walked_rolled = (p0.get("tank") or 0) - (p1.get("tank") or 0) >= 8 and cov1 > cov0
+                if not walked_rolled:
+                    problems.append("holding LMB while walking with SHEET-DRUM did not roll dye down")
             if h1.get("tank") is not None and abs((h1.get("tank") or 0) - round(p1.get("tank") or 0)) > 2:
                 problems.append("HUD tank pipette %s ≠ runner tank %s" % (h1.get("tank"), p1.get("tank")))
             if timer0 is not None and timer0 == h1.get("timer"):
@@ -220,10 +643,21 @@ def main() -> int:
             mouse_turn(sess, 0.0, (-64 * DEG) - (a0.get("pitch") or 0))
             under = None
             for attempt in range(3):
-                ms.down(button="left"); time.sleep(0.9); ms.up(button="left")
+                if kit == "sheet-drum":
+                    # a roll is a moving stroke: roll a metre forward, then back onto it
+                    ms.down(button="left"); kb.down("KeyW"); time.sleep(0.5); kb.up("KeyW")
+                    kb.down("KeyS"); time.sleep(0.45); kb.up("KeyS"); ms.up(button="left")
+                else:
+                    ms.down(button="left"); time.sleep(0.9); ms.up(button="left")
                 time.sleep(0.25)
                 under = sess.df("teamUnderFeet")[1]
                 if under == 1:
+                    break
+                # CHANGED(INTEGRATE): a wash + respawn (early contact on Lockwell) leaves the runner on its own pad,
+                # which is own dye to the sim (not an atlas surface, so teamUnderFeet() is None there)
+                if under is None and sess.safe_js("() => { const g = __DF__.dev && __DF__.dev.game; return !!g && g.world.onOwnPad(g.human); }"):
+                    under = "own pad"
+                    notes.append("slick check on the own spawn pad (the human was washed and respawned before it)")
                     break
                 kb.down("KeyW"); time.sleep(0.25); kb.up("KeyW")
             tank_before = ((sess.state() or {}).get("player") or {}).get("tank")
@@ -251,11 +685,13 @@ def main() -> int:
             refill = (max(tanks) - min(tanks)) if tanks else 0
             checks["slick"] = {"teamUnderFeet": under, "tankBefore": tank_before, "tankAfter": tank_after, "samples": samples, "refill": refill,
                                "slickBlend": (aim_info(sess) or {}).get("slickBlend")}
-            if under != 1:
+            if under not in (1, "own pad"):
                 problems.append("could not stand on own dye for the slick check (teamUnderFeet %r)" % under)
             if not slicked:
                 problems.append("holding SHIFT on own dye never entered SLICK (samples %s)" % samples[:6])
-            if not (refill >= 10 or (isinstance(tank_before, (int, float)) and tank_before >= 95 and slicked)):
+            # refilled = rose ≥ 10, or filled to the top while slicking (a cheap SHEET-DRUM stroke leaves < 10 to refill)
+            if not (refill >= 10 or (tanks and max(tanks) >= 99.5 and refill > 0 and slicked)
+                    or (isinstance(tank_before, (int, float)) and tank_before >= 95 and slicked)):
                 problems.append("no tank refill observed while slicking (tank %s → max %s; samples %s)" % (
                     tank_before, max(tanks) if tanks else None, samples[:6]))
 
@@ -307,10 +743,14 @@ def main() -> int:
                 dy = (tgt["y"] + 0.6) - (me["y"] + 1.35)
                 want_pitch = max(-0.5, min(0.35, math.atan2(dy, max(1.0, dist)) - 0.06))
                 mouse_turn(sess, angle_delta(a.get("yaw") or 0, want_yaw), want_pitch - (a.get("pitch") or 0), step_px=30, step_s=0.004)
-                should_walk = dist > 8.0
+                close_in = {"sheet-drum": 2.5, "needle-glint": 14.0, "pop-well": 7.0}.get(kit, 8.0)
+                fire_at = {"sheet-drum": 7.0, "needle-glint": 24.0, "pop-well": 11.0}.get(kit, 15.0)
+                should_walk = dist > close_in
                 if should_walk != walking:
                     (kb.down if should_walk else kb.up)("KeyW"); walking = should_walk
-                should_fire = dist < 15.0
+                should_fire = dist < fire_at
+                if kit == "needle-glint" and should_fire and firing and (me.get("charge") or 0) >= 0.95:
+                    ms.up(button="left"); firing = False; time.sleep(0.05)   # release at full charge; re-press next loop
                 if should_fire != firing:
                     (ms.down if should_fire else ms.up)(button="left"); firing = should_fire
                 if should_fire and not fight_shot and dist < 12:
@@ -370,8 +810,8 @@ def main() -> int:
             checks["bots"] = {"pairDist": bd, "moved": moved, "events": ev}
             if len(moved) < 5:
                 problems.append("only %d of 7 bots moved > 5 m since the match went live (%s)" % (len(moved), moved))
-            if not (ev.get("hit") or 0) > 0:
-                problems.append("no 'hit' events at all — the bots never fought (%s)" % ev)
+            # CHANGED(INTEGRATE): the "bots fought" check reads the whole match's counts at the final horn
+            # (step 6), not the ~33 s seen here: on Cinder first contact measured 27–41 s into a match
 
         # ── 6. the final horn → victory slate
         if not fatal:
@@ -402,6 +842,11 @@ def main() -> int:
             m = match_info(sess) or {}
             res = m.get("result") or {}
             checks["victory"] = {"text": vic, "result": res, "phase": m.get("phase"), "coverage": m.get("coverage")}
+            ev_end = m.get("events") or {}
+            checks["matchEvents"] = {"hit": ev_end.get("hit"), "washed": ev_end.get("washed"), "shot": ev_end.get("shot"),
+                                     "springLaunch": ev_end.get("springLaunch")}
+            if not (ev_end.get("hit") or 0) > 0:
+                problems.append("no 'hit' events in the whole match — the bots never fought (%s)" % ev_end)
             if not vic or VICTORY not in vic:
                 problems.append("the victory slate %r does not show %r" % (vic, VICTORY))
             s_, g_, n_ = res.get("sun"), res.get("gulf"), res.get("neutral")
@@ -462,7 +907,7 @@ def main() -> int:
     print("URL          : %s" % url)
     print("mode         : %s Chrome (d3d11) %dx%d" % ("headless" if args.headless else "headed", args.width, args.height))
     print("entered play : %s · ready after %s s" % (rep.get("entered"), fmt(rep.get("readyS"), 1)))
-    for k in ("countdownSeen", "liveHud", "fire", "slick", "fight", "deathForced", "deathSlate", "bots", "victory", "playAgain"):
+    for k in ("countdownSeen", "liveHud", "fire", "slick", "fight", "deathForced", "deathSlate", "bots", "victory", "matchEvents", "playAgain"):
         if k in checks:
             print("%-13s: %s" % (k, json.dumps(checks[k], default=str)[:900]))
     if perf:

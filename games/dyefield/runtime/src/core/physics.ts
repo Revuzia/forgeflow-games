@@ -9,10 +9,18 @@
 //     answers every ray with null — so the constructor steps once after inserting the map, and
 //     `refresh()` re-steps after colliders are added. There are no dynamic bodies, so a step is
 //     just a BVH refresh.
+//
+// CHANGED(MAPSIM) (CONTRACT_P6_11 §19), additive — collision groups:
+//   * MAP_SOLID (group 1): the `collision` soup (paint_/solid_/col_/conveyor_/spring_) — blocks everything;
+//   * GRATE (group 3): `features.grates` (grate_*) in its own trimesh — runner capsules collide with it,
+//     paint / projectile / visibility rays pass through it. raycast / sphereCast take an optional
+//     `{ grates: true }` to see it (runner-side queries and the nav builder do; the default ignores it).
+//   A map without grate_ nodes gets no second collider, so its world is exactly what it was before.
 
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { Vec3 } from './types.ts';
 import type { MapGeometry } from './mapgeo.ts';
+import { featuresOf } from './mapgeo.ts';
 import { DEG } from './types.ts';
 import { MOVE } from './config.ts';
 
@@ -34,6 +42,9 @@ export function loadRapier(): Promise<Rapier> {
 
 export interface CastHit { toi: number; x: number; y: number; z: number; nx: number; ny: number; nz: number }
 
+/** CHANGED(MAPSIM): scene-query options. grates: also hit grate_* (runner collision); default false (paint / projectiles / sight). */
+export interface QueryOpts { grates?: boolean }
+
 export interface CharacterBody {
   /** desired displacement this tick → applied displacement + grounded (Rapier KCC: autostep, snap, slope limit) */
   move(dx: number, dy: number, dz: number): { dx: number; dy: number; dz: number; grounded: boolean };
@@ -42,16 +53,21 @@ export interface CharacterBody {
   setShape(radius: number, halfHeight: number): void;
 }
 
-/** Collision membership: map geometry is group 1, characters group 2. Queries only see the map. */
+/** Collision membership: map geometry is group 1, characters group 2, grates group 3. Queries only see the map. */
 const GROUP_MAP = 0x0001;
 const GROUP_CHAR = 0x0002;
+const GROUP_GRATE = 0x0004;
 const groups = (member: number, filter: number): number => ((member & 0xffff) << 16) | (filter & 0xffff);
 /** interaction groups for map colliders (collide with everything) */
 const MAP_GROUPS = groups(GROUP_MAP, GROUP_MAP | GROUP_CHAR);
-/** interaction groups for character capsules (collide with the map only, not each other — phase 2) */
-const CHAR_GROUPS = groups(GROUP_CHAR, GROUP_MAP);
-/** filter used by raycast / sphereCast: see map colliders only (never a character) */
+/** interaction groups for grate colliders (runner capsules only) */
+const GRATE_GROUPS = groups(GROUP_GRATE, GROUP_CHAR);
+/** interaction groups for character capsules (collide with the map + grates, not each other — phase 2) */
+const CHAR_GROUPS = groups(GROUP_CHAR, GROUP_MAP | GROUP_GRATE);
+/** filter used by raycast / sphereCast: see map colliders only (never a character, never a grate) */
 const QUERY_MAP_ONLY = groups(0xffff, GROUP_MAP);
+/** filter used by the KCC and runner-side queries: map + grates */
+const QUERY_MAP_GRATES = groups(0xffff, GROUP_MAP | GROUP_GRATE);
 
 class Character implements CharacterBody {
   private readonly R: Rapier;
@@ -83,8 +99,8 @@ class Character implements CharacterBody {
   move(dx: number, dy: number, dz: number): { dx: number; dy: number; dz: number; grounded: boolean } {
     const d = this.desired;
     d.x = dx; d.y = dy; d.z = dz;
-    // obstacles = map colliders only (filterGroups), and never this capsule itself
-    this.kcc.computeColliderMovement(this.collider, d, undefined, QUERY_MAP_ONLY);
+    // obstacles = map colliders + grates (filterGroups), and never this capsule itself
+    this.kcc.computeColliderMovement(this.collider, d, undefined, QUERY_MAP_GRATES);
     const m = this.kcc.computedMovement();
     const t = this.collider.translation();
     this.collider.setTranslation({ x: t.x + m.x, y: t.y + m.y, z: t.z + m.z });
@@ -120,6 +136,8 @@ export class PhysicsWorld {
   readonly R: Rapier;
   readonly world: RWorld;
   readonly map: RCollider;
+  /** CHANGED(MAPSIM): the grate_* trimesh (runner-only), or null when the map has none */
+  readonly grate: RCollider | null;
   readonly triangles: number;
   private readonly chars: Character[] = [];
   private readonly ray: InstanceType<Rapier['Ray']>;
@@ -143,6 +161,11 @@ export class PhysicsWorld {
     // side-deck wall of Pier 18; with the flag it falls). G2 is unchanged either way.
     this.map = this.world.createCollider(R.ColliderDesc.trimesh(verts, inds, R.TriMeshFlags.FIX_INTERNAL_EDGES)
       .setCollisionGroups(MAP_GROUPS).setFriction(0));
+    const gr = featuresOf(geo).grates;
+    this.grate = gr.indices.length >= 3
+      ? this.world.createCollider(R.ColliderDesc.trimesh(new Float32Array(gr.positions), new Uint32Array(gr.indices), R.TriMeshFlags.FIX_INTERNAL_EDGES)
+        .setCollisionGroups(GRATE_GROUPS).setFriction(0))
+      : null;
     this.ray = new R.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
     this.refresh();
   }
@@ -175,13 +198,13 @@ export class PhysicsWorld {
     if (i >= 0) this.chars.splice(i, 1);
   }
 
-  raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxDist: number): CastHit | null {
+  raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxDist: number, opts?: QueryOpts): CastHit | null {
     const len = Math.hypot(dx, dy, dz);
     if (len < 1e-9 || !(maxDist > 0)) return null;
     const r = this.ray;
     r.origin.x = ox; r.origin.y = oy; r.origin.z = oz;
     r.dir.x = dx / len; r.dir.y = dy / len; r.dir.z = dz / len;
-    const hit = this.world.castRayAndGetNormal(r, maxDist, true, undefined, QUERY_MAP_ONLY);
+    const hit = this.world.castRayAndGetNormal(r, maxDist, true, undefined, opts?.grates ? QUERY_MAP_GRATES : QUERY_MAP_ONLY);
     if (!hit) return null;
     const t = hit.timeOfImpact;
     return {
@@ -195,7 +218,7 @@ export class PhysicsWorld {
    * Sweep a sphere from o along d. toi = distance travelled by the centre before first contact;
    * (x, y, z) = the sphere centre at impact; (nx, ny, nz) = the surface normal at the contact.
    */
-  sphereCast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, radius: number, maxDist: number): CastHit | null {
+  sphereCast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, radius: number, maxDist: number, opts?: QueryOpts): CastHit | null {
     const len = Math.hypot(dx, dy, dz);
     if (len < 1e-9 || !(maxDist > 0) || !(radius > 0)) return null;
     const ux = dx / len, uy = dy / len, uz = dz / len;
@@ -203,10 +226,10 @@ export class PhysicsWorld {
     let ball = this.ball.get(key);
     if (!ball) { ball = new this.R.Ball(radius); this.ball.set(key, ball); }
     const hit = this.world.castShape({ x: ox, y: oy, z: oz }, this.ident, { x: ux, y: uy, z: uz }, ball, 0, maxDist, true,
-      undefined, QUERY_MAP_ONLY);
+      undefined, opts?.grates ? QUERY_MAP_GRATES : QUERY_MAP_ONLY);
     if (!hit) return null;
     const t = hit.time_of_impact;
-    // normal1 = outward normal on the hit collider (the map is identity-transformed, so local = world)
+    // normal1 = outward normal on the hit collider (the map colliders are identity-transformed, so local = world)
     let nx = hit.normal1.x, ny = hit.normal1.y, nz = hit.normal1.z;
     const nl = Math.hypot(nx, ny, nz);
     if (nl > 1e-9) { nx /= nl; ny /= nl; nz /= nl; } else { nx = -ux; ny = -uy; nz = -uz; }

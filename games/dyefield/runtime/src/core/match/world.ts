@@ -12,10 +12,16 @@
 //   5. HP regen and special clocks, then the clock and horns
 // Randomness: per runner one mulberry32 stream for spread rolls and one for its special (CLOUDBURST
 // drops), both seeded from (match seed, runner id). The view drains events and never writes gameplay.
+//
+// CHANGED(MAPSIM) (CONTRACT_P6_11 §19): runners get the map's features (conveyors, springs, oob_ volumes:
+// feet inside one → the sea, step 2); a map-level `mist` (maps.json `mist.hideRange`) hides every SLICK
+// enemy (slick form: moving or not, floor or wall) beyond hideRange in canSee, on top of the phase-3 rule
+// (hidden = slick and slow → unseen beyond SLICK.hiddenRange).
 
 import type { MapDef } from '../data.ts';
 import { WEAPONS } from '../data.ts';
 import type { MapGeometry } from '../mapgeo.ts';
+import { featuresOf } from '../mapgeo.ts';
 import type { CastHit, PhysicsWorld } from '../physics.ts';
 import type { Painter } from '../paint/painter.ts';
 import type { MoveState, PlayerIntent, Side, TeamId } from '../types.ts';
@@ -96,6 +102,8 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
     shots: 0, dry: 0, splats: 0, hits: 0, washes: 0, seaWashes: 0, slicks: 0, projectilesDropped: 0, eventsDropped: 0,
     flicks: 0, beams: 0, bursts: 0, subs: 0, pops: 0, specials: 0,
   };
+  /** CHANGED(MAPSIM): maps.json map-level mist.hideRange (m): SLICK enemies beyond it are unseen; Infinity = no mist */
+  readonly mistRange: number;
   // ProjectileHost / KitHost
   readonly killY: number;
   /** projectile variants (index = pool.variant): 0 = MIST-RASP, then one per kit fire / sub / special in roster order */
@@ -140,6 +148,8 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
     this.timeLeft = this.durTicks * TICK;
     this.countdown = this.countTicks * TICK;
     this.killY = o.def.killY ?? -1;
+    const mist = (o.def as unknown as { mist?: { hideRange?: unknown } }).mist;
+    this.mistRange = mist && typeof mist.hideRange === 'number' && mist.hideRange > 0 ? mist.hideRange : Infinity;
     this.respawnSeconds = WEAPONS.respawnSeconds;
     const sc = WEAPONS.specialCharge;
     this.specialPts = { perM2: sc['pointsPerSquareMetre'] ?? 1, perWash: sc['pointsPerWash'] ?? 20, keep: sc['keepOnWashed'] ?? 0.5 };
@@ -203,6 +213,7 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
         fireMoveMul: f.moveSpeedWhileFiring,
         fireSpeedCap: f.type === 'roll' ? f.rollSpeed : undefined,
         faceMotionWhileFiring: f.type === 'roll',
+        features: featuresOf(o.geo),
       });
       this.runners.push(r);
       this.rngs.push(mulberry32(hash32(this.seed, e.id, 0xc0b4a7)));
@@ -316,6 +327,7 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
     const dx = target.x - viewer.x, dy = ty - ey, dz = target.z - viewer.z;
     const d = Math.hypot(dx, dy, dz);
     if (target.hidden && d > SLICK.hiddenRange) return false;
+    if (target.slickForm && d > this.mistRange) return false;          // CHANGED(MAPSIM): map mist
     if (d < 1e-3) return true;
     const hit = this.physics.raycast(viewer.x, ey, viewer.z, dx, dy, dz, d);
     return !hit || hit.toi >= d - 0.25;

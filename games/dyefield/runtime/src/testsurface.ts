@@ -10,6 +10,13 @@
 //   under the runner plus the team colors; render() — renderer counters, the adaptive render scale and
 //   the static map merge report; hud() — the visible HUD text (timer, toast, kill feed, slates, crests);
 //   aim() — the camera yaw / pitch and the reticle's world point.
+//   phase 6: kit() — the human's kit read-outs (charge, rolling, special meter, sub cooldown, layer summary,
+//   the left-hand → grip_L distance of a two-handed kit) · fx() — live FX counts (drops, jelly, puddles,
+//   cells, raining cells, glint lines, beam flashes)
+//   dev-only phase 6: fillSpecial(pid = 0) — fills the special meter and arms it (sets the Runner's public
+//   `special` = 1 and `specialReady` = true; MatchWorld has no dev hook for it, and the 'ready' event is
+//   NOT emitted) · freeze(on) — stops the sim AND the visual clock while rendering continues, so a
+//   screenshot can catch an exact moment (the harness unfreezes right after).
 
 import type { AppStatus } from './game.ts';
 import type { Coverage, MoveState, TeamId } from './core/types.ts';
@@ -126,7 +133,38 @@ export function installTestSurface(app: AppStatus): void {
       devOnly('setTank');
       need('setTank').world.devSetTank(pid, v);
     },
+    fillSpecial(pid = 0): boolean {
+      devOnly('fillSpecial');
+      const r = need('fillSpecial').world.runners[pid];
+      if (!r) return false;
+      r.special = 1;
+      r.specialReady = true;
+      return true;
+    },
+    freeze(on: boolean): boolean {
+      devOnly('freeze');
+      const game = need('freeze');
+      game.frozen = !!on;
+      return game.frozen;
+    },
     // ── harness read-backs (additive)
+    kit(): Record<string, unknown> | null {
+      const game = g();
+      if (!game) return null;
+      const r = game.human;
+      const rv = game.p.players.view(0);
+      const grip = game.p.players.gripError(0);
+      return {
+        kit: r.kit, charge: r.charge, rolling: r.rolling, flicking: r.flicking, leaping: r.leaping, special: r.special,
+        specialReady: r.specialReady, specialActive: r.specialActive, specialT: r.specialT, subCooldown: r.subCooldown, tank: r.tank,
+        subs: r.subs, flicks: r.flicks, beams: r.beams, bursts: r.bursts, shots: r.shots, firing: r.firing,
+        anim: rv ? rv.describe() : null, gripError: grip === null ? null : Math.round(grip * 1000) / 1000,
+      };
+    },
+    fx(): Record<string, unknown> | null {
+      const game = g();
+      return game ? { ...game.p.fx.live, emitted: game.p.fx.emitted } : null;
+    },
     minimapPixel(): { px: number; py: number; rgba: number[]; sun: number[]; gulf: number[] } | null {
       const game = g();
       if (!game) return null;

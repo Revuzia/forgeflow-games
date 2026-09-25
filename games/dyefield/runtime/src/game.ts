@@ -11,6 +11,13 @@
 //   * events drain every frame into fx.ts (splats, muzzle mist, dry puffs, sparks, washed bursts, the
 //     tide-spout), players.ts (hit flash, washed pop, respawn drop) and the HUD (kill feed, toasts,
 //     death slate, victory slate). The view reads the sim and never writes gameplay.
+//   * phase 6 kits (CONTRACT_P6_11 §18.2): 'shot' → the kit's muzzle FX (MIST-RASP mist, SHEET-DRUM flick
+//     fan, POP-WELL pop + the blast clip; NEEDLE-GLINT draws its 'beam' instead), 'beam' → the release
+//     flash, 'burst' → the blaster rings, 'flick' → the flick clip, 'sub' throw / land / pop → the throw
+//     clip, the jelly splat and pop, 'special' ready / start / end → the gauge pop, the special_throw or
+//     slam clip, the WELLSPRING take-off splash and the CLOUDBURST dissipate, 'ring' → the WELLSPRING wave.
+//     Every frame, each charging NEEDLE-GLINT runner (any crew: the glint is visible to enemies) gets its
+//     glint line from the scope to the point its aim ray meets within the charge's range.
 //   * pause gates simStep() itself (doctrine §5); window.__PAUSE__ = { pause, resume, toggle }.
 //     ESC pauses; losing pointer lock pauses (except after the final horn, when the mouse is freed
 //     on purpose for the victory slate's PLAY AGAIN).
@@ -20,7 +27,7 @@
 //     are in the character collision group, which map-only queries and the KCC never see.
 
 import * as THREE from 'three';
-import { TICK, MAX_STEPS_PER_FRAME, DEV_BRUSH } from './core/config.ts';
+import { TICK, MAX_STEPS_PER_FRAME, DEV_BRUSH, COMBAT } from './core/config.ts';
 import { emptyIntent, type PlayerIntent, type TeamId } from './core/types.ts';
 import { WEAPONS, type MapDef } from './core/data.ts';
 import type { MapGeometry } from './core/mapgeo.ts';
@@ -41,7 +48,7 @@ import type { WaterRig } from './view/water.ts';
 import type { PaintTexture } from './view/paintlayer.ts';
 import type { DyeUniforms } from './view/surfaces.ts';
 import type { MapView } from './view/mapview.ts';
-import type { PlayerViews, PlayersFrameOpts } from './view/players.ts';
+import { kitFireType, type KitFireType, type PlayerViews, type PlayersFrameOpts } from './view/players.ts';
 import type { Fx } from './view/fx.ts';
 import type { Hud, HudDebug, CrestInfo, DotInfo, HudFrame } from './ui/hud.ts';
 import type { BootUI } from './ui/boot.ts';
@@ -114,6 +121,19 @@ export type LoggedEvent = SimEvent & { tick: number };
 const EVENT_LOG = 512;
 const HUMAN = 0;
 
+const numField = (o: unknown, k: string, d: number): number => {
+  const v = (o as Record<string, unknown> | undefined)?.[k];
+  return typeof v === 'number' && Number.isFinite(v) ? v : d;
+};
+/** NEEDLE-GLINT range at charge c (weapons.json fire.minRange / maxRange) */
+function chargeRange(kitId: string): [number, number] {
+  const fire = WEAPONS.kits.find((k) => k.id === kitId)?.fire;
+  return [numField(fire, 'minRange', 12), numField(fire, 'maxRange', 30)];
+}
+const JELLY_ROW = WEAPONS.subs.find((s) => s.id === 'jelly-charge');
+const SUB_COST = numField(JELLY_ROW, 'tankCost', 70);
+const SUB_BLAST = numField(JELLY_ROW, 'blastRadius', 3);
+
 export class Game {
   readonly p: GameParts;
   readonly settings: GameSettings;
@@ -162,6 +182,14 @@ export class Game {
   // dev brush
   private brushClock = 0;
   private brushSplats = 0;
+  // phase 6: per-runner kit
+  private readonly fireType: KitFireType[] = [];
+  private readonly range: Array<[number, number]> = [];
+  private readonly v1 = new THREE.Vector3();
+  /** dev (harness): freeze the sim AND the visuals, keep rendering (a screenshot of an exact moment) */
+  frozen = false;
+  /** phases 7–8: runner.launches already splashed (the sim has no launch event; the view watches the counter) */
+  private readonly launchSeen: number[] = [];
 
   constructor(parts: GameParts, settings: Partial<GameSettings> = {}) {
     this.p = parts;
@@ -173,16 +201,20 @@ export class Game {
       const r = parts.roster[i];
       this.crests.push({ id: r.id, name: r.name, team: r.team, alive: true, respawnIn: 0, special: 0, you: r.id === HUMAN });
       this.dots.push({ x: 0, z: 0, team: r.team, show: false });
+      this.fireType.push(kitFireType(r.kit));
+      this.range.push(chargeRange(r.kit));
+      this.launchSeen.push(0);
     }
     this.world = this.makeWorld();
     this.director = new BotDirector(this.world, parts.nav, parts.config.seed ^ 0x9e3779b9);
     this.frameOpts = {
       alpha: 1, camera: parts.cam.camera, viewerTeam: 1, viewerId: HUMAN, seen: this.seenFn, width: 1, height: 1, winner: null,
+      mistRange: this.world.mistRange,
     };
     this.hudFrame = {
       phase: 'countdown', timeLeft: this.world.timeLeft, countdown: this.world.countdown, coverage: { sun: 0, gulf: 0, neutral: 1 },
       tank: 100, hp: 100, alive: true, slick: false, firing: false, x: 0, z: 0, yaw: 0, special: 0,
-      crests: this.crests, dots: this.dots, respawnIn: 0,
+      crests: this.crests, dots: this.dots, respawnIn: 0, charge: 0, specialReady: false, subReady: false,
     };
 
     const { input, hud, canvas } = parts;
@@ -352,6 +384,7 @@ export class Game {
     this.victoryShown = false;
     this.drained.length = 0;
     for (const k of Object.keys(this.counts)) delete this.counts[k];
+    this.launchSeen.fill(0);
     for (const it of this.intents) Object.assign(it, emptyIntent());
     p.players.reset();
     p.fx.clear();
@@ -440,7 +473,7 @@ export class Game {
     this.fpsClock += dt;
     if (this.fpsClock >= 0.5) { this.fps = this.fpsFrames / this.fpsClock; this.fpsFrames = 0; this.fpsClock = 0; }
 
-    const playing = this.phase === 'play';
+    const playing = this.phase === 'play' && !this.frozen;
     if (playing) {
       const m = p.input.takeMouse();
       if (!this.matchOver) p.cam.addMouse(m.dx, m.dy);
@@ -453,16 +486,17 @@ export class Game {
         steps++;
       }
       if (this.acc >= TICK) this.acc %= TICK;      // drop the excess debt
-    } else {
+    } else if (!this.frozen) {
       this.acc = 0;
       p.input.takeMouse();
     }
     this.drainEvents();
+    this.springLaunches();
     // visuals (water, dye sparkle, idle animation) stay alive behind the CLICK TO PLAY card and
     // freeze with the sim while paused
-    const vdt = this.phase === 'paused' || this.phase === 'error' ? 0 : dt;
+    const vdt = this.phase === 'paused' || this.phase === 'error' || this.frozen ? 0 : dt;
     this.time += vdt;
-    const alpha = playing ? Math.min(1, this.acc / TICK) : 1;
+    const alpha = playing || this.frozen ? Math.min(1, this.acc / TICK) : 1;
     this.matchFlow(vdt);
     this.render(vdt, alpha);
   }
@@ -484,9 +518,52 @@ export class Game {
       this.log.push(le);
       switch (e.t) {
         case 'shot': {
-          const r = rs[e.pid];
-          if (players.muzzle(e.pid, this.muzzle)) fx.muzzle(this.muzzle.x, this.muzzle.y, this.muzzle.z, e.dx, e.dy, e.dz, r?.team ?? 1);
-          else fx.muzzle(e.x, e.y, e.z, e.dx, e.dy, e.dz, r?.team ?? 1);
+          const team = rs[e.pid]?.team ?? 1;
+          const ft = this.fireType[e.pid] ?? 'stream';
+          if (ft === 'charge') break;                              // the 'beam' event draws the release
+          const m = players.muzzle(e.pid, this.muzzle) ? this.muzzle : this.v1.set(e.x, e.y, e.z);
+          if (ft === 'roll') fx.flickFan(m.x, m.y, m.z, e.dx, e.dy, e.dz, team);
+          else if (ft === 'burst') { fx.muzzle(m.x, m.y, m.z, e.dx, e.dy, e.dz, team, 2.2); players.onBlast(e.pid); }
+          else fx.muzzle(m.x, m.y, m.z, e.dx, e.dy, e.dz, team);
+          break;
+        }
+        case 'beam': {
+          const team = rs[e.pid]?.team ?? 1;
+          const m = players.muzzle(e.pid, this.muzzle) ? this.muzzle : this.v1.set(e.x0, e.y0, e.z0);
+          fx.beamFlash(m.x, m.y, m.z, e.x1, e.y1, e.z1, e.charge, team);
+          if (e.pid === me) cam.shake = Math.min(1, cam.shake + 0.12 + 0.2 * e.charge);
+          break;
+        }
+        case 'burst':
+          fx.burst(e.x, e.y, e.z, e.r, e.air, rs[e.pid]?.team ?? 1);
+          break;
+        case 'flick':
+          players.onFlick(e.pid);
+          break;
+        case 'ring': {
+          fx.ringWave(e.x, e.y, e.z, e.r, rs[e.pid]?.team ?? 1);
+          const h = rs[me];
+          if (h && Math.hypot(h.x - e.x, h.z - e.z) < e.r + 4) cam.shake = Math.min(1, cam.shake + (e.pid === me ? 0.6 : 0.3));
+          break;
+        }
+        case 'sub': {
+          const team = rs[e.pid]?.team ?? 1;
+          if (e.phase === 'throw') players.onThrow(e.pid);
+          else if (e.phase === 'land') fx.jellyLand(e.x, e.y, e.z, team);
+          else {
+            fx.jellyPop(e.x, e.y, e.z, SUB_BLAST, team);
+            const h = rs[me];
+            if (h && Math.hypot(h.x - e.x, h.z - e.z) < SUB_BLAST + 3) cam.shake = Math.min(1, cam.shake + 0.3);
+          }
+          break;
+        }
+        case 'special': {
+          const team = rs[e.pid]?.team ?? 1;
+          if (e.phase === 'ready') { if (e.pid === me) hud.specialReady(); }
+          else if (e.phase === 'start') {
+            players.onSpecialStart(e.pid, e.id);
+            if (e.id === 'wellspring') fx.leapBurst(e.x, e.y, e.z, team);
+          } else if (e.id === 'cloudburst') fx.cloudEnd(e.x, e.y, e.z, team);
           break;
         }
         case 'dry': {
@@ -546,6 +623,25 @@ export class Game {
     }
   }
 
+  /** spring pads (phases 7–8): a launch has no SimEvent — each growth of runner.launches splashes its pad */
+  private springLaunches(): void {
+    const springs = this.p.geo.features?.springs;
+    if (!springs || !springs.length) return;
+    const rs = this.world.runners;
+    for (let i = 0; i < rs.length && i < this.launchSeen.length; i++) {
+      const r = rs[i];
+      if (r.launches === this.launchSeen[i]) continue;
+      if (r.launches < this.launchSeen[i]) { this.launchSeen[i] = r.launches; continue; }
+      this.launchSeen[i] = r.launches;
+      const sp = springs[r.lastSpring];
+      if (!sp) continue;
+      const lh = Math.hypot(sp.launch[0], sp.launch[2]);
+      this.p.fx.springSplash(sp.x, sp.y, sp.z, Math.max(0.6, sp.r), lh > 1e-3 ? sp.launch[0] / lh : 0, lh > 1e-3 ? sp.launch[2] / lh : 0);
+      this.counts.springLaunch = (this.counts.springLaunch ?? 0) + 1;
+      if (i === HUMAN) this.p.cam.shake = Math.min(1, this.p.cam.shake + 0.2);
+    }
+  }
+
   /** after the final horn: 1.6 s of victory poses, then the slate + a free mouse for PLAY AGAIN */
   private matchFlow(dt: number): void {
     if (this.world.phase !== 'ended') return;
@@ -588,9 +684,12 @@ export class Game {
     this.focus.set(f.x, f.y + 0.6, f.z);
     p.sky.update(dt, p.cam.camera, this.focus);
     p.water.update(this.time, p.cam.camera);
+    p.map.update(dt, p.cam.camera);          // light_ pool re-assignment (0.5 s) + fades; stands the auto driver down
     const ut = p.dye.uTime;
     if (ut) ut.value = this.time;
     p.paint.upload(p.painter);
+    this.glints();
+    p.fx.viewHeight = fo.height;
     p.fx.update(dt, p.cam.camera, this.phase === 'play' || this.phase === 'paused' ? w.projectiles : null, alpha);
 
     p.rig.resize(p.cam.camera);
@@ -607,6 +706,9 @@ export class Game {
     hf.slick = me.slickForm; hf.firing = me.firing && this.phase === 'play';
     hf.x = f.x; hf.z = f.z; hf.yaw = f.yaw;
     hf.special = me.special;
+    hf.specialReady = me.specialReady && me.specialActive === '';
+    hf.charge = me.charge;
+    hf.subReady = me.alive && me.tank >= SUB_COST && me.subCooldown <= 0;
     hf.respawnIn = me.alive ? 0 : Math.max(0, me.respawnT);
     for (let i = 0; i < w.runners.length && i < this.crests.length; i++) {
       const r = w.runners[i];
@@ -618,6 +720,29 @@ export class Game {
       d.show = i !== HUMAN && r.alive && (r.team === me.team || this.seen[i] === true);
     }
     p.hud.update(dt, hf, () => this.debugInfo());
+  }
+
+  /**
+   * NEEDLE-GLINT glint lines: for every charging runner, the scope → the point where its aim ray (the sim's
+   * shot origin on the capsule axis, the sim's aim) meets the map within lerp(minRange, maxRange, charge).
+   */
+  private glints(): void {
+    const { players, fx } = this.p;
+    const rs = this.world.runners;
+    for (let i = 0; i < rs.length; i++) {
+      const r = rs[i];
+      if (this.fireType[i] !== 'charge' || !r.alive || !(r.charge > 0)) continue;
+      const f = players.frame(i);
+      const [lo, hi] = this.range[i];
+      const L = lo + (hi - lo) * r.charge;
+      const cp = Math.cos(r.aimPitch);
+      const dx = Math.sin(r.aimYaw) * cp, dy = Math.sin(r.aimPitch), dz = Math.cos(r.aimYaw) * cp;
+      const ox = f.x, oy = f.y + COMBAT.muzzleHeight, oz = f.z;
+      const hit = this.physics.raycast(ox, oy, oz, dx, dy, dz, L);
+      const t = hit ? hit.toi : L;
+      const s = players.scope(i, this.v1) ? this.v1 : this.v1.set(ox, oy, oz);
+      fx.glint(i, s.x, s.y, s.z, ox + dx * t, oy + dy * t, oz + dz * t, r.charge, r.team);
+    }
   }
 
   /** team vision at 5 Hz: an enemy is seen when any living crewmate can see it (world.canSee) */
@@ -650,6 +775,8 @@ export class Game {
         id: r.id, name: r.name, team: r.team, bot: r.bot, state: r.state, hp: r.hp, tank: r.tank, alive: r.alive,
         x: r.x, y: r.y, z: r.z, hidden: r.hidden, slickForm: r.slickForm, special: r.special, respawnT: r.respawnT,
         washes: r.washes, washedCount: r.washedCount, painted: r.painted, firing: r.firing, seen: this.seen[r.id] === true,
+        kit: r.kit, charge: r.charge, rolling: r.rolling, flicking: r.flicking, leaping: r.leaping, specialActive: r.specialActive,
+        specialReady: r.specialReady, subCooldown: r.subCooldown,
       })),
       events: { ...this.counts },
       projectiles: w.projectiles.count,
@@ -674,7 +801,7 @@ export class Game {
       atlasSize: p.atlas.size, atlasCount: p.atlas.count, overlaps: p.atlas.overlaps,
       calls: st.calls, triangles: st.triangles, programs: st.programs, tick: this.tick,
       x: me.x, y: me.y, z: me.z, flips: p.painter.flips, speed: me.speed,
-      anim: `${rv?.baseRole ?? '—'}${rv && rv.aimW > 0.05 ? ` + aim ${(rv.aimW * 100).toFixed(0)}%` : ''}`,
+      anim: rv ? rv.describe() : '—',
       pointerLock: document.pointerLockElement === p.canvas,
       scale: ad.scale, scaleMin: ad.min, scaleMax: ad.max, quality: ad.quality,
       buffer: [p.canvas.width, p.canvas.height], p90: ad.p90, targetMs: ad.targetMs,

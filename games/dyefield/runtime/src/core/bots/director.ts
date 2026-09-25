@@ -22,6 +22,16 @@
 //   REFILL  tank < 20 % (or losing a duel): run to the nearest own dye / own pad, slick, drink to ~95 %.
 // SLICK travel: whenever the bot is not firing and the floor under and ahead of it is own dye.
 // Paths cost enemy dye 2.3× (slog), own dye 0.7× (slick), and avoid the enemy pad.
+//
+// Kits (CONTRACT_P6_11 §18.1 "Bots use their kit", lane BOTKITS; numbers in bots/tactics.ts): MIST-RASP keeps the
+// phase-5 brain above unchanged. SHEET-DRUM rolls un-owned floor (fire held while moving), rolls through close
+// foes to flatten them and flicks (a tap) at 3–7 m. NEEDLE-GLINT picks goals with long sightlines over un-owned
+// floor, line-paints far floor while idle, charges on a visible enemy (full beyond 12 m) and backs off inside
+// 6 m. POP-WELL holds 5–9 m, leads with the burst's flight time, aims low, and airbursts round the corner a
+// target just ducked behind. Everyone throws JELLY CHARGE (tank ≥ 90) at clusters / behind cover / into enemy
+// dye gaps, and uses the special when ≥ 2 enemies sit in its area or enemy turf waits to be reclaimed. Those
+// sub / special opportunities are stimuli too: a reaction rolled once per opportunity (own mulberry32 stream,
+// so a MIST-RASP bot's phase-5 rolls are untouched until it actually throws).
 
 import type { PlayerIntent, TeamId } from '../types.ts';
 import type { MatchWorld } from '../match/world.ts';
@@ -30,8 +40,13 @@ import type { BotSkill } from '../match/roster.ts';
 import type { NavGraph } from './nav.ts';
 import { EDGE_CLIMB, EDGE_JUMP, EDGE_WALK } from './nav.ts';
 import { hash32, mulberry32 } from '../rng.ts';
-import { COMBAT, MOVE, TANK, TICK } from '../config.ts';
-import { streamFire, type StreamFire } from '../combat/kits.ts';
+import { COMBAT, HITBOX, KITS, MOVE, TANK, TICK } from '../config.ts';
+import { kitDef, kitFire, streamFire, type KitFire, type StreamFire } from '../combat/kits.ts';
+import { jellyDef, specialDef, type JellyDef, type SpecialDef } from '../combat/defs.ts';
+import {
+  BURST_MAX, BURST_MIN, CLUSTER, FLICK_MAX, FLICK_MIN, FLICK_TAP_TICKS, LINE_MAX, LINE_MIN, LINE_TANK, RETREAT, ROLL_AMBUSH,
+  ROLL_CLOSE, SUB_REACH, SUB_TANK, CHARGE_SETTLE, chargeCap, chargeNeed, kitTactic, lineNeed, type KitKind,
+} from './tactics.ts';
 
 // ───────────────────────────── skill ─────────────────────────────
 interface SkillProfile {
@@ -60,6 +75,8 @@ const ZONE_SAMPLES = 48;        // atlas samples per zone
 const REFILL_TO = 95;
 const CHASE_S = 2.0;
 const PAINT_MIN = 2.2, PAINT_MAX = 9.5, PAINT_BEST = 6.2;
+// a paint burst lasts ≥ 0.35 s (a stripe, not a flicker)
+const BURST_MIN_TICKS = 21;
 
 type Mode = 'wait' | 'dead' | 'paint' | 'fight' | 'cover' | 'chase' | 'refill';
 
@@ -71,7 +88,18 @@ interface Zone {
   samples: Int32Array;                  // atlas texel ids (floor)
   need: [number, number, number];       // per viewing team: un-owned share (enemy dye counts 1.5×), 0..1.5
   enemyShare: [number, number, number];
+  band: number;                         // level band (LEVEL_BAND m slices above the lowest zone)
 }
+
+// Levels (Lockwell's mezzanine + crane walk, Cinder's wreck deck): zones are banded by height; a band with
+// ≥ LEVEL_MIN_AREA m² of floor is a level. Travel time dominates goal choice, so without a pull an upper
+// floor reached by stairs / a belt stayed 96–100 % neutral all match (measured: 0.9 % of live time above
+// y 3 on Lockwell). A level whose un-owned share beats the bot's own level by > LEVEL_ADV pulls its zones up
+// by LEVEL_PULL × the advantage, shared among the allies already there or headed there.
+const LEVEL_BAND = 3;
+const LEVEL_MIN_AREA = 80;
+const LEVEL_ADV = 0.15;
+const LEVEL_PULL = 6;
 
 const TAU = Math.PI * 2;
 function wrap(a: number): number { a %= TAU; if (a > Math.PI) a -= TAU; else if (a < -Math.PI) a += TAU; return a; }
@@ -172,6 +200,27 @@ class Brain {
   stuckLevel = 0; nudgeUntil = 0; nudgeX = 0; nudgeZ = 0;
   idleT = 0; idleResets = 0;
   wantMoveAcc = 0;
+  // ── kit (lane BOTKITS) ──
+  readonly kf: KitFire;
+  readonly kind: KitKind;
+  readonly engage: number;          // m: fight within this (MIST: the skill's engage, as in phase 5)
+  readonly ink: number;             // tank one useful shot needs (MIST: tankPerShot)
+  readonly jelly: JellyDef | null;
+  readonly spec: SpecialDef | null;
+  readonly trnd: () => number;      // tactic stream (sub / special reactions)
+  seen: number[] = [];              // enemies seen at the last decide
+  // SHEET-DRUM
+  tapLeft = 0; flickNextAt = 0; rollCharge = false; rollChargeUntil = 0;
+  rollWant = false; rollCheckTick = -1000; rollOn = false; rollSince = 0; pressAt = -1000; tapPress = false;
+  // NEEDLE-GLINT
+  chHeld = false; chReadyT = 0; chRelAt = -1000; chOnT = 0;
+  readonly settle: number;          // ticks a NEEDLE-GLINT holds the aim on a runner before releasing (by skill)
+  lineOk = false; lx = 0; ly = 0; lz = 0; lineRetargetAt = 0;
+  // POP-WELL corner airburst
+  cornerOk = false; cornerYaw = 0; cornerPitch = 0; cornerDist = 8;
+  // sub / special: 0 none, 1 sub, 2 special
+  tacKind = 0; tacKey = -1; tacReactAt = 0; tacUntil = 0; tacCount = 0; tacX = 0; tacY = 0; tacZ = 0; tacGap = false;
+  gapCd = 0; readySince = -1;
   // extra cost closure
   readonly edgeExtra: (e: number) => number;
 
@@ -184,6 +233,15 @@ class Brain {
     this.rnd = mulberry32(hash32(seed, r.id, 0xb0751));
     this.fire = streamFire(r.kit);
     this.bal = ballisticOf(this.fire);
+    this.kf = kitFire(r.kit);
+    const kt = kitTactic(this.kf, SKILLS[skill] ? skill : 'fresh', this.sk.engage);
+    this.kind = kt.kind; this.engage = kt.engage; this.ink = kt.ink;
+    this.settle = Math.round(CHARGE_SETTLE[SKILLS[skill] ? skill : 'fresh'] / TICK);
+    let subId = 'jelly-charge', spId = 'cloudburst';
+    try { const row = kitDef(r.kit); subId = String(row.sub); spId = String(row.special); } catch { /* unknown kit → MIST-RASP's */ }
+    this.jelly = jellyDef(subId);
+    this.spec = specialDef(spId);
+    this.trnd = mulberry32(hash32(seed, r.id, 0x7ac71c5));
     this.phase = (r.id * 5) % THINK_EVERY;
     this.aimYaw = r.yaw; this.desYaw = r.yaw;
     this.seenRespawns = r.respawns;
@@ -212,6 +270,9 @@ class Brain {
   }
 }
 
+/** nav graph (one per map, reused across matches) → zone sightlines (BotDirector.buildZoneVis) */
+const ZONE_VIS_CACHE = new WeakMap<NavGraph, Int32Array[]>();
+
 // ───────────────────────────── the director ─────────────────────────────
 export class BotDirector {
   readonly world: MatchWorld;
@@ -238,6 +299,19 @@ export class BotDirector {
   private readonly midZ: number;
   private readonly midBand: number;
   private readonly scratch: number[] = [];
+  private readonly pullBuf: number[] = [];
+  /** zone → zones seen from it (eye height → floor) LINE_MIN..LINE_MAX m away (built only when a charger plays) */
+  private zoneVis: Int32Array[] = [];
+  /** radius → zone → zones whose centroid lies within that radius on the same level (special reclaim areas) */
+  private readonly zoneNearBy = new Map<number, Int32Array[]>();
+  /** lowest zone floor (perch height reference) */
+  private floorY0 = 0;
+  /** level bands: floor m² per band, and per team the un-owned share of each band (updateZones) */
+  private bandArea: number[] = [];
+  private readonly bandOpen: [number[], number[], number[]] = [[], [], []];
+  private bandY0 = 0;
+  private readonly mv = { x: 0, z: 0, s: 0 };
+  private readonly opp = { key: -1, kind: 0, x: 0, y: 0, z: 0, gap: false };
 
   constructor(world: MatchWorld, nav: NavGraph, seed: number, skill: BotSkill | readonly BotSkill[] = 'fresh') {
     this.world = world;
@@ -300,6 +374,58 @@ export class BotDirector {
       const sk: BotSkill = skills ? (skills[r.id] ?? 'fresh') : (skill as BotSkill);
       this.brains.push(new Brain(this, r, sk, this.seed));
     }
+    this.floorY0 = this.zones.reduce((m, z) => Math.min(m, z.cy), Infinity);
+    if (!Number.isFinite(this.floorY0)) this.floorY0 = 0;
+    if (this.brains.some((b) => b !== null && b.kind === 'charge')) this.buildZoneVis();
+  }
+
+  /** sightlines between zones (NEEDLE-GLINT goals + line targets): eye at 1.0 m over Z → floor of Y. They depend on
+   *  the map only (zones come from its atlas, rays from its collision), so they are built once per nav graph. */
+  private buildZoneVis(): void {
+    const hit = ZONE_VIS_CACHE.get(this.nav);
+    if (hit && hit.length === this.zones.length) { this.zoneVis = hit; return; }
+    const Z = this.zones, ph = this.world.physics;
+    const out: number[] = [];
+    this.zoneVis = Z.map((z, zi) => {
+      out.length = 0;
+      const ey = z.cy + 1.0;
+      for (let yi = 0; yi < Z.length; yi++) {
+        if (yi === zi) continue;
+        const y = Z[yi];
+        const dh = Math.hypot(y.cx - z.cx, y.cz - z.cz);
+        if (dh < LINE_MIN || dh > LINE_MAX || y.cy > ey + 1.5 || y.cy < z.cy - 5) continue;
+        const dy = y.cy + 0.15 - ey, d = Math.hypot(dh, dy);
+        const h = ph.raycast(z.cx, ey, z.cz, y.cx - z.cx, dy, y.cz - z.cz, d);
+        if (!h || h.toi >= d - 0.5) out.push(yi);
+      }
+      return Int32Array.from(out);
+    });
+    ZONE_VIS_CACHE.set(this.nav, this.zoneVis);
+  }
+
+  /** zones whose centroid is within `rad` m (horizontal) of zone zi's, on the same level (±1.5 m); cached per radius */
+  private zonesNear(zi: number, rad: number): Int32Array {
+    let t = this.zoneNearBy.get(rad);
+    if (!t) {
+      const Z = this.zones;
+      t = Z.map((z) => {
+        const l: number[] = [];
+        for (let k = 0; k < Z.length; k++) {
+          const o = Z[k];
+          if (Math.abs(o.cy - z.cy) <= 1.5 && Math.hypot(o.cx - z.cx, o.cz - z.cz) <= rad) l.push(k);
+        }
+        return Int32Array.from(l);
+      });
+      this.zoneNearBy.set(rad, t);
+    }
+    return t[zi];
+  }
+
+  /** m² of enemy dye (for `own`) in the zones within `rad` of zone zi (a special's reclaim value) */
+  private enemyAreaNear(zi: number, rad: number, own: TeamId): number {
+    let a = 0;
+    for (const k of this.zonesNear(zi, rad)) { const z = this.zones[k]; a += z.area * z.enemyShare[own]; }
+    return a;
   }
 
   // ── public ──────────────────────────────────────────────────────────────────────────────────
@@ -372,7 +498,7 @@ export class BotDirector {
       const samples: number[] = [];
       for (let k = Math.floor(stride / 2); k < ids.length; k += stride) samples.push(ids[k]);
       const ix = Math.floor((cx - OX) / ZONE), iz = Math.floor((cz - OZ) / ZONE);
-      const z: Zone = { cx, cy, cz, ix, iz, node, area, samples: Int32Array.from(samples), need: [1, 1, 1], enemyShare: [0, 0, 0] };
+      const z: Zone = { cx, cy, cz, ix, iz, node, area, samples: Int32Array.from(samples), need: [1, 1, 1], enemyShare: [0, 0, 0], band: 0 };
       const zi = this.zones.length;
       this.zones.push(z);
       const gk = iz * 1000 + ix;
@@ -380,7 +506,19 @@ export class BotDirector {
       if (!g) { g = []; this.zoneGrid.set(gk, g); }
       g.push(zi);
     }
+    // level bands
+    let y0 = Infinity;
+    for (const z of this.zones) y0 = Math.min(y0, z.cy);
+    this.bandY0 = Number.isFinite(y0) ? y0 : 0;
+    for (const z of this.zones) {
+      z.band = this.bandOf(z.cy);
+      while (this.bandArea.length <= z.band) this.bandArea.push(0);
+      this.bandArea[z.band] += z.area;
+    }
+    for (const t of [1, 2]) this.bandOpen[t] = this.bandArea.map(() => 1);
   }
+
+  private bandOf(y: number): number { return Math.max(0, Math.floor((y - this.bandY0 + 0.5) / LEVEL_BAND)); }
 
   private updateZones(): void {
     this.zoneStamp = this.world.tick;
@@ -396,6 +534,15 @@ export class BotDirector {
       z.enemyShare[1] = n2 / n;
       z.enemyShare[2] = n1 / n;
     }
+    // per band: the un-owned share of its floor, per team
+    const o1 = this.bandOpen[1], o2 = this.bandOpen[2];
+    o1.fill(0); o2.fill(0);
+    for (const z of this.zones) {
+      const neutral = z.need[1] - 1.5 * z.enemyShare[1];
+      o1[z.band] += z.area * (neutral + z.enemyShare[1]);
+      o2[z.band] += z.area * (neutral + z.enemyShare[2]);
+    }
+    for (let k = 0; k < this.bandArea.length; k++) { const a = this.bandArea[k] || 1; o1[k] /= a; o2[k] /= a; }
   }
 
   private zoneAt(x: number, z: number, y: number): number {
@@ -433,7 +580,9 @@ export class BotDirector {
     const tgtVisible = tgt !== null && b.lostT === 0;
     const dT = tgt ? Math.hypot(tgt.x - r.x, tgt.z - r.z) : Infinity;
 
-    if (b.mode !== 'refill' && r.tank < TANK.low + 0.5) this.enterRefill(b);
+    // REFILL below TANK.low exactly (the header's "tank < 20 %"): a +0.5 margin sent painters home at 20.0–20.5,
+    // one shot early, so their refill never counted as one from low (the runner's refillsFromLow, a §10.3 gate)
+    if (b.mode !== 'refill' && r.tank < TANK.low) this.enterRefill(b);
     if (b.mode === 'refill') {
       if (r.tank >= REFILL_TO) { b.mode = 'paint'; b.goalZone = -1; b.path.length = 0; }
       else if (tgt && reacted && tgtVisible && dT < 6.5 && r.tank >= 45) b.mode = 'fight';
@@ -442,9 +591,9 @@ export class BotDirector {
       if (tgt && reacted && (tgtVisible || b.lostT < 1.2)) {
         // losing a duel at low hp → slick away (rolled once per engagement)
         if (!b.retreatRolled) { b.retreatRolled = true; b.retreatWanted = b.rnd() < 0.6; }
-        if (b.sk.retreatHp > 0 && b.retreatWanted && r.hp < b.sk.retreatHp && tgt.hp > r.hp + 10 && dT < b.sk.engage + 2) {
+        if (b.sk.retreatHp > 0 && b.retreatWanted && r.hp < b.sk.retreatHp && tgt.hp > r.hp + 10 && dT < b.engage + 2) {
           this.enterRefill(b);
-        } else if (dT <= b.sk.engage + 1.5 || !tgtVisible) {
+        } else if (dT <= b.engage + 1.5 || !tgtVisible) {
           b.mode = 'fight';
         } else {
           if (!b.coverRolled) { b.coverRolled = true; b.coverWanted = b.rnd() < b.sk.coverBias; }
@@ -490,6 +639,8 @@ export class BotDirector {
     }
     if (b.climbPhase === 2) b.holding = true;
     this.stringPull(b);
+    if (b.kind !== 'stream') this.planKit(b, tgt, reacted, tgtVisible, dT);
+    this.scanTactics(b);
 
     // idle watchdog: not holding on purpose, not engaging, and not moving for 1.2 s → start over
     const engagedNow = b.mode === 'fight' && b.target >= 0 && b.lostT === 0;
@@ -523,11 +674,13 @@ export class BotDirector {
     const w = this.world, r = b.r;
     let best = -1, bestS = Infinity;
     let curVisible = false;
+    b.seen.length = 0;
     for (const e of w.runners) {
       if (e.team === r.team || !e.alive) continue;
       const d = Math.hypot(e.x - r.x, e.y - r.y, e.z - r.z);
       if (d > 34) continue;
       if (!w.canSee(r, e)) continue;
+      b.seen.push(e.id);
       if (e.id === b.target) curVisible = true;
       let s = d;
       if (e.id === r.lastAttacker && r.lastHitT < 3) s -= 5;
@@ -571,10 +724,12 @@ export class BotDirector {
       b.stuckLevel++;
       const now = this.world.tick;
       if (b.stuckLevel === 1 || b.stuckLevel === 3) {
-        // hop + side-step for 0.45 s
-        const a = b.rnd() * TAU;
-        b.nudgeX = Math.sin(a); b.nudgeZ = Math.cos(a);
-        b.nudgeUntil = now + 27;
+        // hop + side-step for 0.45 s — never off a ledge (a random nudge dropped a bot off Lockwell's crane walk,
+        // 9 m, onto the floor under its own path): the first of 4 rolled directions with floor ahead, else none
+        let a = b.rnd() * TAU;
+        let ok = false;
+        for (let k = 0; k < 4 && !ok; k++, a += TAU / 4) ok = this.safeStep(r, Math.sin(a), Math.cos(a));
+        if (ok) { a -= TAU / 4; b.nudgeX = Math.sin(a); b.nudgeZ = Math.cos(a); b.nudgeUntil = now + 27; }
       } else {
         // block the edge we're on, re-plan (a new goal on the 4th strike)
         if (b.pk > 0 && b.pk < b.pathEdge.length) { b.blocked.push(b.pathEdge[b.pk]); b.blockedUntil.push(now + Math.round(10 / TICK)); }
@@ -615,6 +770,18 @@ export class BotDirector {
     // paint target: re-pick every 0.3–0.6 s (the aim eases between them: sweeps)
     if (now >= b.paintRetargetAt || !b.hasPaintTarget) this.pickPaintTarget(b);
     else if (b.ptId >= 0 && this.atlasTeam[b.ptId] === b.own) this.nextPaintTarget(b);
+    else if (this.paintOffTravel(b)) this.pickPaintTarget(b);
+  }
+
+  /** the path turned away from the paint target (> 1.1 rad): the body, which faces the aim while firing, would
+   *  whip back to the travel direction when the burst ends — re-pick a target ahead instead (the aim eases over) */
+  private paintOffTravel(b: Brain): boolean {
+    if (b.kind !== 'stream' && b.kind !== 'burst') return false;
+    const r = b.r, ml = Math.hypot(b.mvx, b.mvz);
+    if (!b.hasPaintTarget || ml < 0.3) return false;
+    const dx = b.ptx - r.x, dz = b.ptz - r.z, d = Math.hypot(dx, dz);
+    if (d < 1e-3) return false;
+    return (dx * b.mvx + dz * b.mvz) / (d * ml) < Math.cos(1.1);
   }
 
   private selectGoal(b: Brain): void {
@@ -624,12 +791,31 @@ export class BotDirector {
     // allies' goals (crowding)
     const allyGoals: number[] = [];
     for (const o of this.brains) if (o && o !== b && o.own === own && o.goalZone >= 0 && o.r.alive) allyGoals.push(o.goalZone);
+    // level pull (see LEVEL_*): per band, a multiplier for zones on another level that is barer than ours
+    const BA = this.bandArea, open = this.bandOpen[own];
+    const myBand = Math.min(this.bandOf(r.y), BA.length - 1);
+    const pull = this.pullBuf; pull.length = 0;
+    for (let k = 0; k < BA.length; k++) {
+      let m = 1;
+      const adv = open[k] - open[myBand];
+      if (k !== myBand && BA[k] >= LEVEL_MIN_AREA && adv > LEVEL_ADV) {
+        // allies on / headed for that level share the pull
+        let there = 0;
+        for (const o of this.brains) {
+          if (!o || o === b || o.own !== own || !o.r.alive) continue;
+          if (this.bandOf(o.r.y) === k || (o.goalZone >= 0 && this.zones[o.goalZone].band === k)) there++;
+        }
+        m = 1 + LEVEL_PULL * adv / (1 + 1.5 * there);
+      }
+      pull.push(m);
+    }
     const top: number[] = [], topS: number[] = [];
     const K = 6;
     for (let zi = 0; zi < this.zones.length; zi++) {
       if (zi === b.goalZone) continue;
       const z = this.zones[zi];
-      const gain = z.area * z.need[own];
+      let gain = z.area * z.need[own];
+      if (b.kind === 'charge') gain = this.sightGain(zi, own, gain);
       if (gain < 2.5) continue;
       if ((z.cx - eps.x) ** 2 + (z.cz - eps.z) ** 2 < (eps.r + 4) ** 2) continue;
       const d = Math.hypot(z.cx - r.x, z.cz - r.z) + Math.abs(z.cy - r.y) * 2;
@@ -644,6 +830,7 @@ export class BotDirector {
       s *= 1 + 0.5 * z.enemyShare[own];
       // the enemy base is a trap
       if ((z.cx - eps.x) ** 2 + (z.cz - eps.z) ** 2 < 16 * 16) s *= 0.6;
+      s *= pull[z.band];
       if (!(s > 0)) continue;
       // insert into top-K (deterministic order: score desc, index asc)
       let pos = top.length;
@@ -669,16 +856,20 @@ export class BotDirector {
     const r = b.r, A = this.world.painter.atlas, T = this.atlasTeam;
     const PX = A.px, PY = A.py, PZ = A.pz;
     const now = this.world.tick;
+    // SHEET-DRUM paints by rolling (control reads the floor ahead); NEEDLE-GLINT line-paints far floor (pickLineTarget)
+    if (b.kind === 'roll') { b.hasPaintTarget = b.rollWant; b.paintRetargetAt = now + 20; return; }
+    if (b.kind === 'charge') { b.hasPaintTarget = b.lineOk; b.paintRetargetAt = now + 30; return; }
+    const PMAX = b.kind === 'burst' ? BURST_MAX - 0.5 : PAINT_MAX;
     b.paintRetargetAt = now + Math.round((0.3 + 0.3 * b.rnd()) / TICK);
     // one pass over the zone samples in range: dot products, not angles; a fixed top-3, no allocation
-    const cx0 = Math.floor((r.x - PAINT_MAX + 200) / ZONE), cx1 = Math.floor((r.x + PAINT_MAX + 200) / ZONE);
-    const cz0 = Math.floor((r.z - PAINT_MAX + 200) / ZONE), cz1 = Math.floor((r.z + PAINT_MAX + 200) / ZONE);
+    const cx0 = Math.floor((r.x - PMAX + 200) / ZONE), cx1 = Math.floor((r.x + PMAX + 200) / ZONE);
+    const cz0 = Math.floor((r.z - PMAX + 200) / ZONE), cz1 = Math.floor((r.z + PMAX + 200) / ZONE);
     const ml = Math.hypot(b.mvx, b.mvz);
     const moving = ml > 0.3;
     const adx = Math.sin(b.aimYaw), adz = Math.cos(b.aimYaw);
     const mdx = moving ? b.mvx / ml : adx, mdz = moving ? b.mvz / ml : adz;
     const minCos = Math.cos(1.0);                      // ahead / to the side of travel, never behind
-    const min2 = PAINT_MIN * PAINT_MIN, max2 = PAINT_MAX * PAINT_MAX;
+    const min2 = PAINT_MIN * PAINT_MIN, max2 = PMAX * PMAX;
     const top = this.topId, topS = this.topS;
     top[0] = top[1] = top[2] = -1; topS[0] = topS[1] = topS[2] = -Infinity;
     for (let cz = cz0; cz <= cz1; cz++) for (let cx = cx0; cx <= cx1; cx++) {
@@ -734,7 +925,7 @@ export class BotDirector {
       const id = b.ptNext[k];
       if (id < 0 || T[id] === b.own) continue;
       const d = Math.hypot(A.px[id] - r.x, A.pz[id] - r.z);
-      if (d < PAINT_MIN || d > PAINT_MAX) continue;
+      if (d < PAINT_MIN || d > (b.kind === 'burst' ? BURST_MAX - 0.5 : PAINT_MAX)) continue;
       b.ptNext[k] = -1;
       b.ptId = id; b.ptx = A.px[id]; b.pty = A.py[id]; b.ptz = A.pz[id]; b.hasPaintTarget = true;
       return;
@@ -927,7 +1118,16 @@ export class BotDirector {
     b.pk = 0; b.jumpDone = false; b.jumpTries = 0; b.climbPhase = 0;
     let start = nav.nearest(r.x, r.y, r.z);
     if (start < 0 || goal < 0) { b.path.length = 0; return false; }
-    if (!nav.path(start, goal, b.path, b.edgeExtra)) { b.path.length = 0; return false; }
+    let stranded = false;
+    if (!nav.path(start, goal, b.path, b.edgeExtra)) {
+      // stranded off the core (a fight hop landed the bot on a rock / crate top whose nodes have no way back):
+      // walk (or drop) to the nearest core node at or below the feet first — without this a Cinder bot stood on
+      // a boulder by its pad for 38 s re-picking goals it could never path to
+      if (this.nodeMain[start]) { b.path.length = 0; return false; }
+      const m = this.nearestMain(r.x, r.y, r.z);
+      if (m < 0 || !nav.path(m, goal, b.path, b.edgeExtra)) { b.path.length = 0; return false; }
+      start = m; stranded = true;
+    }
     // edge ids along the path (cheapest allowed edge between consecutive nodes)
     b.pathEdge.length = b.path.length;
     b.pathEdge[0] = -1;
@@ -944,7 +1144,7 @@ export class BotDirector {
       b.pathEdge[i] = be;
     }
     // start from the first node ahead of us (skip the start node if we are already past it)
-    b.pk = b.path.length > 1 ? 1 : 0;
+    b.pk = b.path.length > 1 && !stranded ? 1 : 0;
     if (b.path.length > 1 && nav.edgeKind[b.pathEdge[1]] !== EDGE_WALK) {
       // a special edge leaves the start node: go to the start node first
       const s = b.path[0];
@@ -968,6 +1168,18 @@ export class BotDirector {
       const n = b.path[j];
       if (nav.walkable(r.x, r.y, r.z, nav.x[n], nav.y[n], nav.z[n])) { b.pk = j; return; }
     }
+  }
+
+  /** the nearest strongly connected (nodeMain) node within 6 m whose floor is at or below the feet (+0.4 m), or −1 */
+  private nearestMain(x: number, y: number, z: number): number {
+    const nav = this.nav;
+    let best = -1, bd = Infinity;
+    for (const n of this.nodesNear(x, z, 6)) {
+      if (!this.nodeMain[n] || nav.y[n] > y + 0.4) continue;
+      const d = Math.hypot(nav.x[n] - x, nav.z[n] - z) + (y - nav.y[n]) * 0.5;
+      if (d < bd) { bd = d; best = n; }
+    }
+    return best;
   }
 
   private nodesNear(x: number, z: number, rad: number): number[] {
@@ -1026,7 +1238,10 @@ export class BotDirector {
     const tgt = b.target >= 0 ? w.runners[b.target] : null;
     const engaged = b.mode === 'fight' && tgt !== null && tgt.alive && b.lostT === 0 && now >= b.reactAt;
 
-    if (b.mode === 'fight' && engaged) {
+    if (b.mode === 'fight' && engaged && b.kind !== 'stream') {
+      const m = this.kitFightMove(b, tgt!);
+      wx = m.x; wz = m.z; speed = m.s;
+    } else if (b.mode === 'fight' && engaged) {
       const dx = tgt!.x - r.x, dz = tgt!.z - r.z;
       const d = Math.hypot(dx, dz) || 1;
       const ux = dx / d, uz = dz / d;
@@ -1084,6 +1299,24 @@ export class BotDirector {
     b.mvz += (wz * speed - b.mvz) * k;
     if (climbing) { b.mvx = wx * speed; b.mvz = wz * speed; }
 
+    // SHEET-DRUM: is there un-owned floor ahead of the drum? (three points 1.2 m ahead; every 3 ticks)
+    if (b.kind === 'roll' && (now - b.rollCheckTick >= 3 || now < b.rollCheckTick)) {
+      b.rollCheckTick = now;
+      const l = Math.hypot(b.mvx, b.mvz);
+      let want = false;
+      if (r.grounded && l > 0.3 && b.mode !== 'refill') {
+        const fx = b.mvx / l, fz = b.mvz / l;
+        let n = 0;
+        for (let s = -1; s <= 1; s++) {
+          const t = this.teamUnder(r.x + fx * 1.2 - fz * s * 0.7, r.y, r.z + fz * 1.2 + fx * s * 0.7);
+          if (t !== null && t !== b.own) n++;
+        }
+        want = n >= 1;
+      }
+      b.rollWant = want;
+      b.hasPaintTarget = want;
+    }
+
     // ── slick travel through own dye (hysteresis: ≥ 0.5 s on, ≥ 0.5 s off; never while engaging a runner) ──
     const moving = Math.hypot(b.mvx, b.mvz) > 0.3;
     let travelOwn = false;
@@ -1103,7 +1336,8 @@ export class BotDirector {
       }
       travelOwn = b.ownAhead;
     }
-    const canTravel = !engaged && b.climbPhase !== 2 && !(b.mode === 'refill' && b.holding) && !(climbing && b.climbPhase === 3);
+    const canTravel = !engaged && b.climbPhase !== 2 && !(b.mode === 'refill' && b.holding) && !(climbing && b.climbPhase === 3)
+      && !(b.kind === 'charge' && b.chHeld) && !(b.kind === 'roll' && b.fireOn) && b.tacKind === 0;
     if (b.slickTravel) {
       const lostForm = !r.slickForm && now - b.slickSince > 20;
       const wallAhead = r.grounded && Math.hypot(b.mvx, b.mvz) > 0.3 && this.wallAhead(r, b.mvx, b.mvz);
@@ -1122,7 +1356,14 @@ export class BotDirector {
     // ── aim + fire (wantFire = the brain wants a shot; fire = it can shoot this tick) ──
     let wantFire = false;
     let hardStop = false;                 // stop at once (no hysteresis): nothing to shoot, out of ink, slicking
-    if (engaged) {
+    let direct = -1;                      // SHEET-DRUM / NEEDLE-GLINT drive the trigger themselves: 1 down, 0 up
+    const selfTrigger = b.kind === 'roll' || b.kind === 'charge';
+    const tacAim = b.tacKind !== 0 && this.tacAim(b);
+    if (tacAim) {
+      // aiming a jelly / CLOUDBURST throw: the trigger rests
+      hardStop = true;
+      if (selfTrigger) direct = 0;
+    } else if (engaged && b.kind === 'stream') {
       const aimed = this.aimAtRunner(b, tgt!);
       const d = Math.hypot(tgt!.x - r.x, tgt!.z - r.z);
       const err = Math.hypot(adelta(b.aimYaw, b.desYaw), b.aimPitch - b.desPitch);
@@ -1133,11 +1374,33 @@ export class BotDirector {
       if (!aimed || !inkOk || d > b.sk.engage + 1.5) hardStop = true;
       // keep the gun up while tracking (don't dive into slick between bursts)
       if (!wantFire && d <= b.sk.engage + 1) b.slickTravel = false;
+    } else if (engaged) {
+      const d = Math.hypot(tgt!.x - r.x, tgt!.z - r.z);
+      if (b.kind === 'burst') {
+        wantFire = this.burstAim(b, tgt!, d);
+        if (r.tank < b.ink + 0.5 || d > b.engage + 1.5) hardStop = true;
+      } else if (b.kind === 'roll') direct = this.rollFight(b, tgt!, d) ? 1 : 0;
+      else direct = this.chargeFight(b, tgt!, d) ? 1 : 0;
     } else if (b.slickTravel || b.mode === 'refill' || climbing && b.climbPhase === 3) {
       this.aimAlongMove(b);
       hardStop = true;
+      if (selfTrigger) {
+        direct = b.tapLeft > 0 ? 1 : 0;
+        if (b.tapLeft > 0) b.tapLeft--;
+      }
     } else if (b.climbPhase === 2) {
       wantFire = this.aimAtClimbWall(b);
+      if (b.kind === 'charge') direct = (wantFire || b.chHeld) && this.chargeHold(b, 0.15, 0.1, 0.3) ? 1 : 0;
+    } else if (b.kind === 'burst' && b.mode === 'fight' && b.cornerOk) {
+      // airburst round the corner the target just ducked behind
+      b.desYaw = b.cornerYaw; b.desPitch = b.cornerPitch; b.aimDist = b.cornerDist;
+      const err = Math.abs(adelta(b.aimYaw, b.desYaw)) + Math.abs(b.aimPitch - b.desPitch);
+      wantFire = err < 0.06 && r.tank >= b.ink + 0.5;
+    } else if (b.kind === 'roll') {
+      this.aimAlongMove(b);
+      direct = this.rollPaint(b) ? 1 : 0;
+    } else if (b.kind === 'charge') {
+      direct = this.linePaint(b) ? 1 : 0;
     } else if (b.hasPaintTarget && r.tank >= TANK.low && (b.mode === 'paint' || b.mode === 'chase' || b.mode === 'cover' || b.mode === 'fight')) {
       this.aimToward(b, b.ptx, b.pty, b.ptz, false);
       // paint sweeps while the aim travels between targets (a stripe, the way a player paints)
@@ -1149,17 +1412,35 @@ export class BotDirector {
       hardStop = true;
     }
     this.slewAim(b, dt, engaged);
-    // teammates: droplets pass through them (no friendly fire, no ink lost), but a bot never OPENS fire
-    // through a teammate, and stops only for one at point blank (a burst doesn't flicker around allies)
-    if (wantFire && !b.fireOn && this.allyInLine(b, 12)) wantFire = false;
-    if (b.fireOn && this.allyInLine(b, 2.5)) { wantFire = false; hardStop = true; }
-    // hysteresis: a burst lasts ≥ 0.35 s and a painting pause ≥ 0.4 s, so the body (which faces the aim
-    // while firing, the travel direction otherwise) never swings back and forth; a fight opens fire at once
-    if (b.fireOn) {
-      if (!wantFire && (hardStop || now - b.fireSince >= 21)) { b.fireOn = false; b.fireSince = now; }
-    } else if (wantFire && now - b.fireSince >= (engaged ? 9 : 24)) { b.fireOn = true; b.fireSince = now; }
-    wantFire = b.fireOn && !(r.tank < b.fire.tankPerShot + 0.5);
-    let fire = wantFire && r.canFire();
+    let fire: boolean;
+    if (direct >= 0) {
+      wantFire = direct === 1;
+      if (b.kind === 'roll') {
+        // a release within KITS.tapSeconds of the press flicks: a roll stroke (not a tap) is held ≥ 14 ticks
+        if (!wantFire && b.fireOn && !b.tapPress && r.rolling && now - b.pressAt < 14) wantFire = true;
+        if (wantFire && !b.fireOn) { b.pressAt = now; b.tapPress = b.tapLeft > 0; }
+      }
+      fire = wantFire && r.canFire();
+      b.fireOn = fire;
+      if (b.kind === 'charge') {
+        if (b.chHeld && !fire) b.chRelAt = now;
+        b.chHeld = fire;
+        if (!fire) b.chReadyT = 0;
+      }
+    } else {
+      if (b.kind === 'charge') { b.chHeld = false; b.chReadyT = 0; }
+      // teammates: droplets pass through them (no friendly fire, no ink lost), but a bot never OPENS fire
+      // through a teammate, and stops only for one at point blank (a burst doesn't flicker around allies)
+      if (wantFire && !b.fireOn && this.allyInLine(b, 12)) wantFire = false;
+      if (b.fireOn && this.allyInLine(b, 2.5)) { wantFire = false; hardStop = true; }
+      // hysteresis: a burst lasts ≥ 0.35 s and a painting pause ≥ 0.4 s, so the body (which faces the aim
+      // while firing, the travel direction otherwise) never swings back and forth; a fight opens fire at once
+      if (b.fireOn) {
+        if (!wantFire && (hardStop || now - b.fireSince >= BURST_MIN_TICKS)) { b.fireOn = false; b.fireSince = now; }
+      } else if (wantFire && now - b.fireSince >= (engaged ? 9 : 24)) { b.fireOn = true; b.fireSince = now; }
+      wantFire = b.fireOn && !(r.tank < b.ink + 0.5);
+      fire = wantFire && r.canFire();
+    }
 
     // ── slick: refill in place, the wall climb, or travel ──
     let slick = false;
@@ -1171,16 +1452,26 @@ export class BotDirector {
     // a slicker that wants to shoot surfaces first (the runner blocks fire for 0.12 s)
     if (wantFire && slick && !(b.mode === 'refill' && b.holding)) slick = false;
     if (wantFire && r.slickForm && !slick) fire = false;
+    // a pending sub / special surfaces too (throws need the tall form)
+    if (b.tacKind !== 0) { slick = false; b.slickTravel = false; }
 
     it.fire = fire;
     it.slick = slick;
     it.jump = jump;
     this.emitAim(b, it);
+    if (b.tacKind !== 0) this.tacTrigger(b, it);
     // world move → camera-relative stick (forward = (sin yaw, cos yaw), right = (−cos yaw, sin yaw))
     const cy = it.yaw;
     const fx = Math.sin(cy), fz = Math.cos(cy);
     it.moveZ = b.mvx * fx + b.mvz * fz;
     it.moveX = b.mvx * -fz + b.mvz * fx;
+    // NEEDLE-GLINT between two charges in a fight: the body faces the aim only while charging, so a one-tick
+    // gap with the stick pushed would swing it toward the strafe and back (a shake): let the stick rest
+    if (b.kind === 'charge' && engaged && !fire && now - b.chRelAt <= 2) { it.moveX = 0; it.moveZ = 0; }
+    // a stick deflection under 0.2 is a bot settling (arrival, a strafe reversing through zero, a stall): the runner
+    // faces any stick > 0.05, so its wandering direction flicked the body back and forth (half the Lockwell shakes).
+    // Rest the stick instead; the runner keeps its facing. Climbs steer on purpose.
+    if (!climbing && Math.hypot(b.mvx, b.mvz) < 0.2) { it.moveX = 0; it.moveZ = 0; }
     void nav;
   }
 
@@ -1188,6 +1479,13 @@ export class BotDirector {
   private follow(b: Brain): { x: number; z: number; s: number; jump: boolean; climb: boolean } {
     const r = b.r, nav = this.nav, now = this.world.tick;
     const out = { x: 0, z: 0, s: 0, jump: false, climb: false };
+    // fell off the path (a nudge, a missed jump): both ends of the current edge are > 1.2 m ABOVE the grounded
+    // runner — steering at a node overhead spun the body in place for seconds. Drop the path; decide re-plans.
+    // (A path BELOW the runner is fine: walking off the ledge gets there.)
+    if (r.grounded && b.pk > 0 && b.pk < b.path.length) {
+      const n0 = b.path[b.pk - 1], n1 = b.path[b.pk];
+      if (nav.y[n0] - r.y > 1.2 && nav.y[n1] - r.y > 1.2) { b.path.length = 0; b.pk = 0; return out; }
+    }
     for (let guard = 0; guard < 3; guard++) {
       if (b.pk >= b.path.length) return out;
       const n = b.path[b.pk];
@@ -1212,7 +1510,7 @@ export class BotDirector {
         if (b.climbPhase === 2) {
           // paint the wall (aim handled in control); give up after 3 s or when out of ink
           if (this.climbOwned(nav.edgeClimb[e], b.own)) { b.climbPhase = 3; b.climbT = now; }
-          else if (now - b.climbT > 180 || r.tank < b.fire.tankPerShot * 2) { this.failEdge(b, e); return out; }
+          else if (now - b.climbT > 180 || r.tank < b.ink * 2) { this.failEdge(b, e); return out; }
           else return out;
         }
         if (b.climbPhase === 3) {
@@ -1257,7 +1555,9 @@ export class BotDirector {
           rem -= sl; px = nav.x[n2]; pz = nav.z[n2]; lx = px; lz = pz;
         }
         const ex = lx - r.x, ez = lz - r.z, el = Math.hypot(ex, ez);
-        if (el > 1e-3) { out.x = ex / el; out.z = ez / el; }
+        // a path that doubles back round a corner can put the look-ahead point on the runner itself: its direction
+        // is then noise (the body spun in place on Lockwell's mezzanine) — steer at the node instead
+        if (el > 0.5) { out.x = ex / el; out.z = ez / el; }
       }
       if (kind === EDGE_JUMP) {
         const from = b.path[b.pk - 1];
@@ -1310,6 +1610,426 @@ export class BotDirector {
   private onPadXZ(x: number, y: number, z: number, side: 'A' | 'B'): boolean {
     const p = this.world.pads[side];
     return (x - p.x) ** 2 + (z - p.z) ** 2 <= p.r * p.r && Math.abs(y - p.y) < 0.6;
+  }
+
+  // ── kits (lane BOTKITS; numbers in bots/tactics.ts) ─────────────────────────────────────────
+
+  /** per-decide kit planning: the SHEET-DRUM roll-through latch, the POP-WELL corner shot */
+  private planKit(b: Brain, tgt: Runner | null, reacted: boolean, visible: boolean, dT: number): void {
+    const r = b.r, now = this.world.tick;
+    if (b.kind === 'roll') {
+      if (b.mode === 'fight' && tgt && reacted && visible && r.tank > 5) {
+        // close → roll through; a little farther when it looks away, is weak, or is slicking (can't shoot back)
+        const away = Math.abs(adelta(tgt.aimYaw, Math.atan2(r.x - tgt.x, r.z - tgt.z))) > 1.1;
+        if (dT < ROLL_CLOSE || (dT < ROLL_AMBUSH && (away || tgt.hp <= 45 || tgt.slickForm))) {
+          b.rollCharge = true; b.rollChargeUntil = now + 36;
+        } else if (b.rollCharge && (now >= b.rollChargeUntil || dT > ROLL_AMBUSH + 1)) b.rollCharge = false;
+      } else b.rollCharge = false;
+    } else if (b.kind === 'burst') this.planCorner(b);
+  }
+
+  /** fight movement of a SHEET-DRUM / NEEDLE-GLINT / POP-WELL (world wish in this.mv) */
+  private kitFightMove(b: Brain, t: Runner): { x: number; z: number; s: number } {
+    const r = b.r, o = this.mv;
+    o.x = 0; o.z = 0; o.s = 0;
+    const dx = t.x - r.x, dz = t.z - r.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const ux = dx / d, uz = dz / d;
+    if (b.kind === 'roll' && b.rollCharge) {
+      // straight through them: steer at where they will be in 0.25 s (the drum sits ahead of the feet)
+      const lx = t.x + t.vx * 0.25 - r.x, lz = t.z + t.vz * 0.25 - r.z;
+      const l = Math.hypot(lx, lz) || 1;
+      if (this.safeStep(r, lx / l, lz / l)) { o.x = lx / l; o.z = lz / l; o.s = 1; } else b.holding = true;
+      return o;
+    }
+    let adv: number, st = b.sk.strafe;
+    if (b.kind === 'roll') {
+      adv = d > FLICK_MAX ? 1 : d < FLICK_MIN ? -0.5 : 0.3;    // creep in between flicks
+      st *= 0.6;
+    } else if (b.kind === 'charge') {
+      if (d < RETREAT) { adv = -1; st *= 0.4; }                  // too close: back off
+      else if (d > b.engage - 1.5) adv = 0.7;
+      else { adv = 0; st = 1; }                                  // hold the line, side-stepping (0.35× while charging)
+    } else {
+      adv = d > BURST_MAX - 0.3 ? 1 : d < BURST_MIN ? -1 : (d - 7) * 0.2;
+    }
+    const px = -uz * b.strafeSign, pz = ux * b.strafeSign;
+    let wx = ux * adv + px * st, wz = uz * adv + pz * st;
+    let l = Math.hypot(wx, wz);
+    if (l < 1e-6) return o;
+    o.s = Math.min(1, l);
+    wx /= l; wz /= l;
+    if (!this.safeStep(r, wx, wz)) {
+      b.strafeSign = -b.strafeSign;
+      wx = ux * adv - px * st; wz = uz * adv - pz * st;
+      l = Math.hypot(wx, wz);
+      if (l > 1e-6) { wx /= l; wz /= l; }
+      if (l < 1e-6 || !this.safeStep(r, wx, wz)) { o.s = 0; b.holding = true; return o; }
+    }
+    o.x = wx; o.z = wz;
+    return o;
+  }
+
+  /** aim straight at a point (hitscan beam, straight bursts, throws); aimDist = the 3-D distance */
+  private aimStraight(b: Brain, x: number, y: number, z: number): void {
+    const r = b.r, my = r.y + COMBAT.muzzleHeight;
+    const D = Math.hypot(x - r.x, z - r.z);
+    if (D > 1e-3) b.desYaw = Math.atan2(x - r.x, z - r.z);
+    b.desPitch = Math.atan2(y - my, Math.max(0.3, D));
+    b.aimDist = Math.max(2, Math.hypot(D, y - my));
+  }
+
+  // SHEET-DRUM
+
+  /** painting: drum down while moving over un-owned floor (≥ 0.4 s strokes, ≥ 0.2 s up), up over own dye */
+  private rollPaint(b: Brain): boolean {
+    const r = b.r, now = this.world.tick;
+    if (b.tapLeft > 0) { b.tapLeft--; return true; }
+    const stick = Math.hypot(b.mvx, b.mvz);
+    if (!r.grounded || stick < 0.35 || r.tank <= 1) { b.rollOn = false; b.rollSince = now; return false; }
+    if (b.rollOn) {
+      if (!b.rollWant && now - b.rollSince >= 24) { b.rollOn = false; b.rollSince = now; }
+    } else if (b.rollWant && stick > 0.5 && now - b.rollSince >= 12) { b.rollOn = true; b.rollSince = now; }
+    return b.rollOn;
+  }
+
+  /** fighting: roll through a close foe, else flick (a tap) at the lead point */
+  private rollFight(b: Brain, t: Runner, d: number): boolean {
+    const r = b.r;
+    if (b.kf.type !== 'roll') return false;
+    const f = b.kf;
+    if (b.rollCharge) {
+      b.tapLeft = 0;
+      this.aimStraight(b, t.x, t.y + 0.5, t.z);
+      return r.tank > 1;                               // held while moving = rolling (a stop flicks: fine up close)
+    }
+    const lead = b.sk.lead * Math.min(0.7, d / KITS.flickSpeed * 1.15);
+    const lx = t.x + t.vx * lead, lz = t.z + t.vz * lead;
+    const D = Math.hypot(lx - r.x, lz - r.z);
+    const my = r.y + COMBAT.muzzleHeight;
+    if (D > 1e-3) b.desYaw = Math.atan2(lx - r.x, lz - r.z);
+    b.desPitch = clamp(Math.atan2(t.y + 0.6 - my, Math.max(1, D)), 0, 0.5);   // level fan; raised for a foe above
+    b.aimDist = Math.max(2, D);
+    const cone = Math.max(b.sk.fireCone, Math.atan2(0.7, Math.max(1, d)));
+    return this.flickTap(b, d >= FLICK_MIN - 0.4 && d <= FLICK_MAX + 0.3, cone, f.windup + f.cooldown, f.flickTankCost);
+  }
+
+  /** a flick = press + release within KITS.tapSeconds; the next one after windup + cooldown */
+  private flickTap(b: Brain, want: boolean, cone: number, period: number, cost: number): boolean {
+    const r = b.r, now = this.world.tick;
+    if (b.tapLeft > 0) { b.tapLeft--; return true; }
+    if (b.fireOn) return false;                        // the trigger must come up first (a fresh press)
+    if (!want || r.flicking || now < b.flickNextAt || r.tank < cost + 0.5) return false;
+    const err = Math.hypot(adelta(b.aimYaw, b.desYaw), b.aimPitch - b.desPitch);
+    if (err > cone) return false;
+    b.tapLeft = FLICK_TAP_TICKS - 1;
+    b.flickNextAt = now + Math.round(period / TICK) + 2;
+    return true;
+  }
+
+  // NEEDLE-GLINT
+
+  /** fighting: charge on the target, release when the charge washes it (full beyond 12 m) and the aim is on */
+  private chargeFight(b: Brain, t: Runner, d: number): boolean {
+    const r = b.r;
+    if (b.kf.type !== 'charge') return false;
+    const f = b.kf;
+    const my = r.y + COMBAT.muzzleHeight, ty = t.y + t.hitHeight() * 0.55;
+    this.aimStraight(b, t.x, ty, t.z);
+    const d3 = Math.hypot(t.x - r.x, ty - my, t.z - r.z);
+    const tol = Math.max(0.01, Math.atan2(HITBOX.radius * 0.75, d3));
+    if (d < RETREAT) return b.chHeld && this.chargeHold(b, 0.15, tol, 0, b.settle);   // backing off: only a charge already up goes out
+    const cap = chargeCap(r.tank, f.tankMin, f.tankFull);
+    if (cap < 0.15 && !b.chHeld) return false;
+    const need = Math.min(Math.max(0.15, cap), chargeNeed(d3, t.hp, f.minRange, f.maxRange, f.damageMin, f.damageFull));
+    return this.chargeHold(b, need, tol, 0.5, b.settle);
+  }
+
+  /** the charge trigger: start once roughly on target, release at `need` with the aim within `tol` */
+  private chargeHold(b: Brain, need: number, tol: number, startErr: number, settle: number = 1): boolean {
+    const r = b.r;
+    const err = Math.hypot(adelta(b.aimYaw, b.desYaw), b.aimPitch - b.desPitch);
+    if (!b.chHeld) { b.chOnT = 0; return err < startErr; }
+    if (r.charge <= 1e-6) return false;               // the kit didn't take the press (dry / surfacing): let go
+    b.chOnT = err < tol ? b.chOnT + 1 : 0;            // ticks the aim has stayed on (lining the shot up)
+    if (r.charge >= need - 0.005) {
+      b.chReadyT++;
+      if (b.chOnT >= settle || b.chReadyT > 40) return false;   // release (or stop waiting for a perfect aim)
+    } else b.chReadyT = 0;
+    return true;
+  }
+
+  /** idle: charge and release a beam at far un-owned floor (the beam's floor projection is painted) */
+  private linePaint(b: Brain): boolean {
+    const r = b.r, now = this.world.tick;
+    if (b.kf.type !== 'charge') return false;
+    const f = b.kf;
+    if (!b.chHeld && (!b.lineOk || now >= b.lineRetargetAt)) this.pickLineTarget(b);
+    // below LINE_TANK the tank is kept for fights: travel (slicking through own dye refills on the move)
+    if (!b.chHeld && r.tank < LINE_TANK) b.hasPaintTarget = false;
+    if (!b.lineOk || (!b.chHeld && r.tank < LINE_TANK) || (b.mode !== 'paint' && b.mode !== 'chase' && b.mode !== 'cover' && b.mode !== 'fight')) {
+      this.aimAlongMove(b);
+      return false;
+    }
+    this.aimStraight(b, b.lx, b.ly + 0.05, b.lz);
+    // a new charge only after a 0.4 s pause and where the body already faces (it turns to the aim while charging)
+    if (!b.chHeld && (now - b.chRelAt < 24 || Math.abs(adelta(r.yaw, b.aimYaw)) > 0.9)) return false;
+    const my = r.y + COMBAT.muzzleHeight;
+    const D = Math.hypot(b.lx - r.x, b.ly - my, b.lz - r.z);
+    const need = Math.max(0.15, Math.min(chargeCap(r.tank, f.tankMin, f.tankFull), lineNeed(D, f.minRange, f.maxRange)));
+    const hold = this.chargeHold(b, need, 0.04, 0.6);
+    if (b.chHeld && !hold) b.lineOk = false;           // released: the next line
+    return hold;
+  }
+
+  /** a far floor point with un-owned dye in a zone seen from the bot's zone (the best of 3 with a clear line) */
+  private pickLineTarget(b: Brain): void {
+    const r = b.r, now = this.world.tick, A = this.world.painter.atlas, T = this.atlasTeam;
+    b.lineRetargetAt = now + Math.round((1.2 + 0.6 * b.trnd()) / TICK);
+    b.lineOk = false;
+    const zi = this.zoneAt(r.x, r.z, r.y);
+    if (zi < 0 || !this.zoneVis.length) return;
+    const vis = this.zoneVis[zi];
+    const adx = Math.sin(b.aimYaw), adz = Math.cos(b.aimYaw);
+    const top = this.topId, topS = this.topS;
+    top[0] = top[1] = top[2] = -1; topS[0] = topS[1] = topS[2] = -Infinity;
+    for (let k = 0; k < vis.length; k++) {
+      const yi = vis[k], y = this.zones[yi];
+      const need = y.need[b.own];
+      if (need < 0.3) continue;
+      const dx = y.cx - r.x, dz = y.cz - r.z;
+      const d = Math.hypot(dx, dz);
+      if (d < LINE_MIN || d > LINE_MAX) continue;
+      const ca = (dx * adx + dz * adz) / d;
+      const sc = y.area * need * (1.4 + ca) * (d < 10 ? 0.8 : 1);
+      if (sc <= topS[2]) continue;
+      let p = 2;
+      while (p > 0 && sc > topS[p - 1]) { topS[p] = topS[p - 1]; top[p] = top[p - 1]; p--; }
+      topS[p] = sc; top[p] = yi;
+    }
+    const my = r.y + COMBAT.muzzleHeight;
+    for (let k = 0; k < 3; k++) {
+      const yi = top[k];
+      if (yi < 0) break;
+      const smp = this.zones[yi].samples;
+      if (!smp.length) continue;
+      const k0 = Math.floor(b.trnd() * smp.length);
+      let id = -1;
+      for (let j = 0; j < smp.length; j++) { const c = smp[(k0 + j) % smp.length]; if (T[c] !== b.own) { id = c; break; } }
+      if (id < 0) continue;
+      const tx = A.px[id], ty = A.py[id], tz = A.pz[id];
+      const dd = Math.hypot(tx - r.x, ty + 0.05 - my, tz - r.z);
+      const hit = this.world.physics.raycast(r.x, my, r.z, tx - r.x, ty + 0.05 - my, tz - r.z, dd);
+      if (hit && hit.toi < dd - 0.4) continue;
+      b.lx = tx; b.ly = ty; b.lz = tz; b.lineOk = true;
+      b.hasPaintTarget = true;
+      return;
+    }
+  }
+
+  /** NEEDLE-GLINT goal value: its own need plus what it overlooks (need-weighted m² in sight), higher = better */
+  private sightGain(zi: number, own: TeamId, gain: number): number {
+    const vis = this.zoneVis[zi];
+    let pot = 0;
+    if (vis) for (let k = 0; k < vis.length; k++) { const y = this.zones[vis[k]]; pot += y.area * y.need[own]; }
+    const z = this.zones[zi];
+    return (gain + 0.3 * pot) * (1 + 0.2 * clamp(z.cy - this.floorY0, 0, 3));
+  }
+
+  // POP-WELL
+
+  /** aim a burst at the target's lower body, led by the flight time; true = inside the fire cone */
+  private burstAim(b: Brain, t: Runner, d: number): boolean {
+    const r = b.r;
+    if (b.kf.type !== 'burst') return false;
+    const f = b.kf;
+    const lead = b.sk.lead * Math.min(0.8, d / f.projectileSpeed);
+    const tx = t.x + t.vx * lead, tz = t.z + t.vz * lead;
+    this.aimStraight(b, tx, t.y + (t.slickForm ? 0.2 : 0.35), tz);     // low: a miss still bursts at the feet
+    const err = Math.hypot(adelta(b.aimYaw, b.desYaw), b.aimPitch - b.desPitch);
+    const cone = Math.max(b.sk.fireCone, Math.atan2(0.8, Math.max(1, d)));
+    return r.tank >= b.ink + 0.5 && d <= b.engage + (b.fireOn ? 0.8 : 0) && err < (b.fireOn ? cone * 2.5 : cone);
+  }
+
+  /** the target just ducked out of sight: find a burst line whose blast point (map hit or airburst at maxRange)
+   *  lands within splash of where it was, with a clear line from the blast to it */
+  private planCorner(b: Brain): void {
+    b.cornerOk = false;
+    if (b.kf.type !== 'burst') return;
+    const f = b.kf, r = b.r;
+    if (b.mode !== 'fight' || b.target < 0 || b.lostT <= 0 || b.lostT > 1.2 || r.tank < b.ink + 0.5) return;
+    const ph = this.world.physics;
+    const my = r.y + COMBAT.muzzleHeight;
+    const lx = b.lastSeenX, ly = b.lastSeenY + 0.6, lz = b.lastSeenZ;
+    const D = Math.hypot(lx - r.x, lz - r.z);
+    if (D < 2.5 || D > f.maxRange + f.splashRadius) return;
+    const base = Math.atan2(lx - r.x, lz - r.z);
+    const pitch = Math.atan2(ly - my, D);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    let best = Infinity;
+    for (let k = 0; k <= 12; k++) {
+      const off = (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.06;
+      const yaw = base + off;
+      const dx = Math.sin(yaw) * cp, dz = Math.cos(yaw) * cp;
+      const h = ph.raycast(r.x, my, r.z, dx, sp, dz, f.maxRange);
+      const t = h ? Math.max(0, h.toi - 0.08) : f.maxRange;
+      const bx = r.x + dx * t, by = my + sp * t, bz = r.z + dz * t;
+      const dd = Math.hypot(bx - lx, by - ly, bz - lz);
+      if (dd > f.splashRadius * 0.9) continue;
+      if (!this.world.lineClear(bx, by, bz, lx, ly, lz)) continue;
+      const s = dd + Math.abs(off) * 3;
+      if (s < best) { best = s; b.cornerYaw = yaw; b.cornerPitch = pitch; b.cornerDist = Math.max(2, t); b.cornerOk = true; }
+    }
+  }
+
+  // ── JELLY CHARGE + specials (every kit) ──
+
+  /** find a sub / special opportunity; a new one is a new stimulus: one reaction roll, latched */
+  private scanTactics(b: Brain): void {
+    const r = b.r, now = this.world.tick;
+    if (r.specialReady) { if (b.readySince < 0) b.readySince = now; } else b.readySince = -1;
+    if (b.tacKind !== 0) return;
+    if (b.mode === 'refill' || b.mode === 'dead' || b.mode === 'wait' || r.leaping || r.specialActive !== ''
+      || b.climbPhase !== 0 || r.state === 'wallslick') { b.tacKey = -1; return; }
+    const o = this.opp;
+    o.key = -1; o.kind = 0; o.gap = false;
+    if (b.spec && r.specialReady && r.special >= 1) {
+      const loose = b.readySince >= 0 && now - b.readySince > Math.round(20 / TICK);
+      if (b.spec.type === 'cloudburst') this.cloudOpp(b, b.spec.throwRange, b.spec.soakRadius, loose);
+      else this.wellOpp(b, b.spec.coreRadius, b.spec.ringRadius, loose);
+      if (o.key >= 0) o.kind = 2;
+    }
+    if (o.key < 0 && b.jelly && r.tank >= Math.max(SUB_TANK, b.jelly.tankCost) && r.subCooldown <= 1e-9) {
+      this.jellyOpp(b, b.jelly);
+      if (o.key >= 0) o.kind = 1;
+    }
+    if (o.key < 0) { b.tacKey = -1; return; }
+    if (o.key !== b.tacKey) {
+      b.tacKey = o.key;
+      b.tacReactAt = now + Math.round((b.sk.reactMin + (b.sk.reactMax - b.sk.reactMin) * b.trnd()) / TICK);
+    }
+    if (now < b.tacReactAt) return;
+    b.tacKind = o.kind; b.tacX = o.x; b.tacY = o.y; b.tacZ = o.z; b.tacGap = o.gap;
+    b.tacCount = o.kind === 1 ? r.subs : r.specials;
+    b.tacUntil = now + Math.round(1.0 / TICK);
+    b.tacKey = -1;
+  }
+
+  /** ≥ CLUSTER of the enemies b sees within `rad` (horizontal, same level) of one of them within [dMin, dMax] */
+  private clusterOpp(b: Brain, dMin: number, dMax: number, rad: number, keyBase: number): boolean {
+    const r = b.r, R = this.world.runners, o = this.opp;
+    for (const i of b.seen) {
+      const e = R[i];
+      const dh = Math.hypot(e.x - r.x, e.z - r.z);
+      if (dh > dMax || dh < dMin || Math.abs(e.y - r.y) > 3) continue;
+      let n = 0, sx = 0, sz = 0, mask = 0;
+      for (const j of b.seen) {
+        const q = R[j];
+        if (Math.abs(q.y - e.y) < 1.5 && Math.hypot(q.x - e.x, q.z - e.z) <= rad) { n++; sx += q.x; sz += q.z; mask |= 1 << (j & 15); }
+      }
+      if (n >= CLUSTER) { o.key = keyBase | mask; o.x = sx / n; o.y = e.y; o.z = sz / n; return true; }
+    }
+    return false;
+  }
+
+  private jellyOpp(b: Brain, s: JellyDef): void {
+    const r = b.r, o = this.opp, now = this.world.tick;
+    // 1. an enemy cluster in reach
+    if (this.clusterOpp(b, 3, SUB_REACH, s.blastRadius * 0.9, 0x10000)) return;
+    // 2. behind the cover the fight target just left sight at
+    if (b.mode === 'fight' && b.target >= 0 && b.lostT > 0 && b.lostT <= 1.3) {
+      const dh = Math.hypot(b.lastSeenX - r.x, b.lastSeenZ - r.z);
+      const my = r.y + COMBAT.muzzleHeight;
+      if (dh >= 3 && dh <= SUB_REACH && Math.abs(b.lastSeenY - r.y) < 2.5
+        && !this.world.lineClear(r.x, my, r.z, b.lastSeenX, b.lastSeenY + 0.6, b.lastSeenZ)) {
+        o.key = 0x20000 | b.target; o.x = b.lastSeenX; o.y = b.lastSeenY; o.z = b.lastSeenZ;
+        return;
+      }
+    }
+    // 3. an enemy dye gap in reach (painting, nobody in sight, a full tank)
+    if (b.mode !== 'paint' || b.seen.length > 0 || r.tank < 95 || now < b.gapCd) return;
+    const zi = this.bestZoneNear(b, 4, SUB_REACH, 1.5, 0, 0.5, 7);
+    if (zi < 0) return;
+    const z = this.zones[zi];
+    o.key = 0x40000 | zi; o.x = z.cx; o.y = z.cy; o.z = z.cz; o.gap = true;
+  }
+
+  private cloudOpp(b: Brain, throwRange: number, soak: number, loose: boolean): void {
+    const o = this.opp;
+    if (this.clusterOpp(b, 3, throwRange - 1, soak * 0.85, 0x100000)) return;
+    // contested turf: the zone in range with the most enemy dye under its soak disk
+    const zi = this.bestZoneNear(b, 6, throwRange - 1, 4, soak, 0, loose ? 16 : 30);
+    if (zi < 0) return;
+    const z = this.zones[zi];
+    o.key = 0x200000 | zi; o.x = z.cx; o.y = z.cy; o.z = z.cz;
+  }
+
+  private wellOpp(b: Brain, core: number, ring: number, loose: boolean): void {
+    const r = b.r, R = this.world.runners, o = this.opp;
+    if (!r.grounded) return;
+    let n = 0, mask = 0;
+    for (const i of b.seen) {
+      const e = R[i];
+      if (Math.abs(e.y - r.y) < 1.5 && Math.hypot(e.x - r.x, e.z - r.z) <= core + 0.5) { n++; mask |= 1 << (i & 15); }
+    }
+    if (n >= CLUSTER) { o.key = 0x400000 | mask; o.x = r.x; o.y = r.y; o.z = r.z; return; }
+    const zi = this.zoneAt(r.x, r.z, r.y);
+    if (zi < 0 || this.enemyAreaNear(zi, ring, b.own) < (loose ? 18 : 34)) return;
+    o.key = 0x800000 | zi; o.x = r.x; o.y = r.y; o.z = r.z;
+  }
+
+  /** the zone within [dMin, dMax] m (|dy| ≤ dyMax) with the most enemy dye — its own (rad 0) or within `rad` of it —
+   *  at least `minArea` m² (and an enemy share ≥ minShare of its own floor), with a clear throw line; −1 if none */
+  private bestZoneNear(b: Brain, dMin: number, dMax: number, dyMax: number, rad: number, minShare: number, minArea: number): number {
+    const r = b.r, own = b.own;
+    const cx0 = Math.floor((r.x - dMax + 200) / ZONE), cx1 = Math.floor((r.x + dMax + 200) / ZONE);
+    const cz0 = Math.floor((r.z - dMax + 200) / ZONE), cz1 = Math.floor((r.z + dMax + 200) / ZONE);
+    const top = this.topId, topS = this.topS;
+    top[0] = top[1] = top[2] = -1; topS[0] = topS[1] = topS[2] = -Infinity;
+    for (let cz = cz0; cz <= cz1; cz++) for (let cx = cx0; cx <= cx1; cx++) {
+      const l = this.zoneGrid.get(cz * 1000 + cx);
+      if (!l) continue;
+      for (const zi of l) {
+        const z = this.zones[zi];
+        if (Math.abs(z.cy - r.y) > dyMax || z.enemyShare[own] < minShare) continue;
+        const dh = Math.hypot(z.cx - r.x, z.cz - r.z);
+        if (dh < dMin || dh > dMax) continue;
+        const a = rad > 0 ? this.enemyAreaNear(zi, rad, own) : z.area * z.enemyShare[own];
+        if (a < minArea || a <= topS[2]) continue;
+        let p = 2;
+        while (p > 0 && (a > topS[p - 1] || (a === topS[p - 1] && zi < top[p - 1]))) { topS[p] = topS[p - 1]; top[p] = top[p - 1]; p--; }
+        topS[p] = a; top[p] = zi;
+      }
+    }
+    for (let k = 0; k < 3; k++) {
+      const zi = top[k];
+      if (zi < 0) break;
+      const z = this.zones[zi];
+      if (this.world.lineClear(r.x, r.y + 1.8, r.z, z.cx, z.cy + 1.6, z.cz)) return zi;
+    }
+    return -1;
+  }
+
+  /** a pending throw aims at its point (jelly, CLOUDBURST); WELLSPRING needs no aim. Clears itself when done. */
+  private tacAim(b: Brain): boolean {
+    const r = b.r, now = this.world.tick;
+    const done = b.tacKind === 1 ? r.subs !== b.tacCount : r.specials !== b.tacCount;
+    if (done || now > b.tacUntil || !r.alive) {
+      if (done && b.tacKind === 1 && b.tacGap) b.gapCd = now + Math.round(15 / TICK);
+      b.tacKind = 0;
+      return false;
+    }
+    if (b.tacKind === 2 && b.spec && b.spec.type === 'wellspring') return false;
+    this.aimStraight(b, b.tacX, b.tacY + 0.1, b.tacZ);
+    return true;
+  }
+
+  /** press sub / special once the aim is on the point (the aim point carries the skill's jitter) */
+  private tacTrigger(b: Brain, it: PlayerIntent): void {
+    if (b.tacKind === 2 && b.spec && b.spec.type === 'wellspring') { it.special = true; return; }
+    const err = Math.hypot(adelta(b.aimYaw, b.desYaw), b.aimPitch - b.desPitch);
+    if (err > 0.07) return;
+    if (b.tacKind === 1) it.sub = true; else it.special = true;
   }
 
   // ── aim ──
@@ -1371,7 +2091,7 @@ export class BotDirector {
     b.desPitch = Math.atan2(yy - my, Math.max(0.3, D));
     b.aimDist = Math.max(1, D);
     const err = Math.abs(adelta(b.aimYaw, b.desYaw)) + Math.abs(b.aimPitch - b.desPitch);
-    return err < 0.25 && r.tank >= b.fire.tankPerShot + 0.5;
+    return err < 0.25 && r.tank >= b.ink + 0.5;
   }
 
   /** ease + rate-limit the aim toward des*, plus smooth skill noise (never a twitch) */

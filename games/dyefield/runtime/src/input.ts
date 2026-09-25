@@ -27,6 +27,22 @@ export const DEFAULT_BINDINGS: Readonly<Record<Action, readonly string[]>> = {
 };
 
 const ALL_ACTIONS = Object.keys(DEFAULT_BINDINGS) as Action[];
+
+const NAMED: Record<string, string> = {
+  Mouse0: 'LMB', Mouse1: 'MMB', Mouse2: 'RMB', Space: 'SPACE', ShiftLeft: 'SHIFT', ShiftRight: 'SHIFT',
+  ControlLeft: 'CTRL', ControlRight: 'CTRL', AltLeft: 'ALT', AltRight: 'ALT', Escape: 'ESC', Tab: 'TAB', Enter: 'ENTER',
+  Backquote: '`', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', CapsLock: 'CAPS',
+};
+
+/** A KeyboardEvent.code / 'MouseN' as a short keycap label: KeyQ → Q, Digit1 → 1, Mouse2 → RMB, ShiftLeft → SHIFT. */
+export function codeLabel(code: string): string {
+  if (NAMED[code]) return NAMED[code];
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit\d$/.test(code)) return code.slice(5);
+  if (/^Numpad\d$/.test(code)) return 'NUM ' + code.slice(6);
+  if (/^F\d{1,2}$/.test(code)) return code;
+  return code.replace(/(Left|Right)$/, '').toUpperCase();
+}
 /** actions that fire a one-shot UI callback on press (not sim input) */
 const UI_ACTIONS: ReadonlySet<Action> = new Set<Action>(['pause', 'debug', 'map']);
 
@@ -73,6 +89,19 @@ export class Input {
         this.bindings.set(code, list);
       }
     }
+  }
+
+  /** the codes bound to an action (in binding order) */
+  bindingsFor(a: Action): string[] {
+    const out: string[] = [];
+    for (const [code, acts] of this.bindings) if (acts.includes(a)) out.push(code);
+    return out;
+  }
+
+  /** the keycap label of an action's FIRST binding (HUD badges show the actual binding, e.g. special → Q) */
+  keyLabel(a: Action): string {
+    const b = this.bindingsFor(a);
+    return b.length ? codeLabel(b[0]) : '';
   }
 
   /** subscribe to UI-action presses (pause / debug / map) */

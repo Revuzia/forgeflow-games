@@ -77,8 +77,9 @@ data-driven numbers, determinism, and verification by real input.
   - the CLOUDBURST cell (model + rain particles + a shadow disk);
   - the WELLSPRING ring wave.
 - HUD:
-  - the special gauge shows the kit's special icon and fills; at 100 % it pulses with a "F" key
-    badge;
+  - the special gauge shows the kit's special icon and fills; at 100 % it pulses with a key badge
+    showing the actual special binding (`Input.keyLabel('special')`, "Q" by default —
+    `CHANGED(INTEGRATE)`: the text said "F", the shipped binding is Q);
   - the sub icon greys out below the sub cost;
   - the charger shows a charge ring around the reticle.
 

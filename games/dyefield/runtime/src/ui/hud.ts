@@ -3,9 +3,12 @@
 //   top centre    4 SUNCREW crests (◉) · timer pill 3:00 → 0:00 (pulses in the final 10) · 4 GULF CREW
 //                 crests (▲); a downed crest shows ✕ plus its respawn count. A slim unlabeled tug bar
 //                 under the pill shows the turf split (shape marks at its ends).
-//   top right     special gauge (the kit's special name from weapons.json), then the kill feed
-//                 `{A} washed {B}` (a sea death shows {B} with a wave icon)
-//   centre        reticle + TANK pipette (dry-click flash), hit marker
+//   top right     special gauge: the kit's special icon + name (weapons.json), a fill, and at 100 % a
+//                 pulse with a key badge showing the ACTUAL binding (Input.keyLabel('special'));
+//                 then the kill feed `{A} washed {B}` (a sea death shows {B} with a wave icon)
+//   centre        reticle + TANK pipette (dry-click flash; a tick at the sub cost), hit marker; the sub
+//                 chip (JELLY CHARGE icon + its key) greys out below the sub cost; NEEDLE-GLINT shows a
+//                 charge ring around the reticle (bright at full charge)
 //   bottom centre low-tank toast `Tank low — hold SHIFT on your color to drink`
 //   bottom left   minimap (MinimapRaster → putImageData only when dirty) + the runner arrow + ally dots
 //                 and seen-enemy dots (dot shape = crew mark: ◉ circle / ▲ triangle)
@@ -33,6 +36,29 @@ export interface HudDebug {
   match?: string; hp?: number; projectiles?: number; particles?: number; runners?: string;
 }
 
+/** the human's kit, for the gauge / sub chip / charge ring (main.ts builds it from weapons.json + Input) */
+export interface HudKit {
+  /** weapons.json fire.type: stream | roll | charge | burst */
+  fire: string;
+  specialId: string; specialName: string;
+  /** keycap label of the special binding (e.g. 'Q') */
+  specialKey: string;
+  subName: string; subCost: number;
+  /** keycap label of the sub binding (e.g. 'E') */
+  subKey: string;
+}
+
+const ICONS: Record<string, string> = {
+  cloudburst: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 14.6a3.6 3.6 0 0 1 .3-7.2 5 5 0 0 1 9.4-1.3 4.1 4.1 0 0 1 1.3 8.5z" fill="#fff8ec" stroke="#14203a" stroke-width="1.6" stroke-linejoin="round"/>'
+    + '<path d="M8.2 17.4l-1 2.8M12.2 17.4l-1 2.8M16.2 17.4l-1 2.8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  wellspring: '<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="18.2" rx="9.4" ry="3.4" fill="none" stroke="currentColor" stroke-width="2.4"/>'
+    + '<ellipse cx="12" cy="18.2" rx="4.6" ry="1.6" fill="none" stroke="#fff8ec" stroke-width="1.6"/>'
+    + '<path d="M12 14.6V3.6M7.8 7.8L12 3.6l4.2 4.2" fill="none" stroke="#fff8ec" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  jelly: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 16.2c0-5.2 3.8-9.4 8.4-9.4s8.4 4.2 8.4 9.4c0 1.8-3.8 3.2-8.4 3.2s-8.4-1.4-8.4-3.2z" fill="currentColor" stroke="#14203a" stroke-width="1.7"/>'
+    + '<ellipse cx="12" cy="15.4" rx="3.2" ry="2.2" fill="#fff8ec" opacity=".85"/><path d="M7.6 11c1-1.5 2.4-2.2 3.8-2.3" stroke="#fff8ec" stroke-width="1.7" stroke-linecap="round" fill="none"/></svg>',
+};
+const CHARGE_C = 2 * Math.PI * 15.5;
+
 export interface CrestInfo { id: number; name: string; team: TeamId; alive: boolean; respawnIn: number; special: number; you: boolean }
 export interface DotInfo { x: number; z: number; team: TeamId; show: boolean }
 
@@ -53,6 +79,10 @@ export interface HudFrame {
   dots: readonly DotInfo[];
   /** seconds until the human respawns (death slate ring) */
   respawnIn: number;
+  /** phase 6: NEEDLE-GLINT charge 0..1 · the special is ready (meter full + 'ready' fired) · the sub can be thrown */
+  charge?: number;
+  specialReady?: boolean;
+  subReady?: boolean;
 }
 
 /**
@@ -117,6 +147,13 @@ export class Hud {
   private readonly gulfFill: HTMLElement;
   private readonly gauge: HTMLElement;
   private readonly gaugeFill: HTMLElement;
+  private readonly gaugeKey: HTMLElement;
+  private readonly kit: HudKit | null;
+  private readonly sub: HTMLElement;
+  private readonly chargeRing: SVGCircleElement | null;
+  private lastReady = false;
+  private lastSub: boolean | null = null;
+  private lastCharge = -1;
   private readonly feed: HTMLElement;
   private readonly feedItems: FeedEntry[] = [];
   private readonly tankFill: HTMLElement;
@@ -150,8 +187,9 @@ export class Hud {
   private readonly pxy: [number, number] = [0, 0];
   private lastHide = false;
 
-  constructor(host: HTMLElement, o: { team: TeamId; minimap: MinimapRaster | null; specialName?: string; roster?: ReadonlyArray<{ id: number; name: string; team: TeamId }>; youId?: number }) {
+  constructor(host: HTMLElement, o: { team: TeamId; minimap: MinimapRaster | null; specialName?: string; roster?: ReadonlyArray<{ id: number; name: string; team: TeamId }>; youId?: number; kit?: HudKit }) {
     this.team = o.team;
+    this.kit = o.kit ?? null;
     this.mini = o.minimap;
     this.root = el('div', 'df-hud');
     const sun = teamById(1), gulf = teamById(2);
@@ -195,8 +233,13 @@ export class Hud {
     const right = el('div', 'df-right');
     this.gauge = el('div', `df-gauge ${teamKey(this.team)}`);
     this.gaugeFill = el('b', 'fill');
-    const gLabel = el('span', 'label', o.specialName ?? '');
-    this.gauge.append(this.gaugeFill, gLabel);
+    const gIcon = el('i', 'icon');
+    gIcon.innerHTML = ICONS[this.kit?.specialId ?? ''] ?? '';
+    const gLabel = el('span', 'label', this.kit?.specialName ?? o.specialName ?? '');
+    this.gaugeKey = el('kbd', 'key', this.kit?.specialKey ?? '');
+    this.gaugeKey.setAttribute('aria-label', `press ${this.kit?.specialKey ?? ''}`);
+    this.gauge.append(this.gaugeFill, gIcon, gLabel, this.gaugeKey);
+    if (!this.kit?.specialKey) this.gaugeKey.hidden = true;
     this.feed = el('div', 'df-feed');
     this.feed.setAttribute('aria-live', 'polite');
     right.append(this.gauge, this.feed);
@@ -232,7 +275,10 @@ export class Hud {
     this.ret.innerHTML = '<svg viewBox="-17 -17 34 34" aria-hidden="true">'
       + '<circle class="ring" r="11" fill="none" stroke="#fff8ec" stroke-width="3.2"/>'
       + '<circle r="11" fill="none" stroke="#14203a" stroke-width="1.2" opacity=".75"/>'
-      + '<circle r="2.6" fill="#fff8ec" stroke="#14203a" stroke-width="1.2"/></svg>';
+      + '<circle r="2.6" fill="#fff8ec" stroke="#14203a" stroke-width="1.2"/>'
+      + '<circle class="charge-bg" r="15.5" fill="none" stroke="rgba(20,32,58,.55)" stroke-width="5"/>'
+      + `<circle class="charge" r="15.5" fill="none" stroke="${this.team === 2 ? 'var(--gulf)' : 'var(--sun)'}" stroke-width="3.2" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="0 ${CHARGE_C.toFixed(2)}"/></svg>`;
+    this.chargeRing = this.ret.querySelector('circle.charge');
     this.hitMark = el('div', 'df-hitmark');
     this.hitMark.innerHTML = '<svg viewBox="-20 -20 40 40" aria-hidden="true"><path d="M-14 -14 L-6 -6 M14 -14 L6 -6 M-14 14 L-6 6 M14 14 L6 6" stroke="#fff8ec" stroke-width="4.2" stroke-linecap="round"/>'
       + '<path d="M-14 -14 L-6 -6 M14 -14 L6 -6 M-14 14 L-6 6 M14 14 L6 6" stroke="#14203a" stroke-width="1.4" stroke-linecap="round" opacity=".6"/></svg>';
@@ -240,7 +286,19 @@ export class Hud {
     this.tankFill = el('div', 'df-tank-fill');
     const tankLine = el('div', 'df-tank-low');
     this.tankBox.append(this.tankFill, tankLine);
+    if (this.kit && this.kit.subCost > 0 && this.kit.subCost < 100) {
+      const subLine = el('div', 'df-tank-sub');
+      subLine.style.bottom = `${this.kit.subCost}%`;
+      this.tankBox.append(subLine);
+    }
     const tankLabel = el('div', 'df-tank-label', 'TANK');
+    // sub chip (JELLY CHARGE): greys out below the sub cost
+    this.sub = el('div', `df-sub ${teamKey(this.team)} grey`);
+    this.sub.innerHTML = ICONS.jelly;
+    this.sub.title = this.kit?.subName ?? '';
+    const subKey = el('kbd', 'key', this.kit?.subKey ?? '');
+    this.sub.append(subKey);
+    if (!this.kit) this.sub.hidden = true;
 
     // ── low-tank toast
     this.toast = el('div', 'df-toast', LOW_TANK_TOAST);
@@ -269,7 +327,7 @@ export class Hud {
     this.pause.append(pc);
     resume.addEventListener('click', (e) => { e.stopPropagation(); this.onResume?.(); });
 
-    this.root.append(this.vignette, top, right, miniBox, this.ret, this.hitMark, this.tankBox, tankLabel, this.toast, this.debug);
+    this.root.append(this.vignette, top, right, miniBox, this.ret, this.hitMark, this.tankBox, tankLabel, this.sub, this.toast, this.debug);
     host.append(this.root);
     this.slates = new Slates(host);
     host.append(this.pause);
@@ -324,6 +382,11 @@ export class Hud {
   dry(): void {
     for (const e of [this.tankBox, this.ret]) { e.classList.remove('dry'); void e.offsetWidth; e.classList.add('dry'); }
     this.lowTank();
+  }
+
+  /** the special just became ready: a pop on the gauge (the pulse + key badge follow from the frame) */
+  specialReady(): void {
+    this.gauge.classList.remove('pop'); void this.gauge.offsetWidth; this.gauge.classList.add('pop');
   }
 
   hitMarker(washed = false): void {
@@ -399,12 +462,31 @@ export class Hud {
       this.gulfFill.style.width = `${(w.gulf * 100).toFixed(2)}%`;
     }
 
-    // special gauge
+    // special gauge: fill; at 100 % (ready) a pulse + the key badge
     const g = Math.round(Math.max(0, Math.min(1, f.special)) * 100);
     if (g !== this.lastGauge) {
       this.lastGauge = g;
       this.gaugeFill.style.width = `${g}%`;
-      this.gauge.classList.toggle('full', g >= 100);
+    }
+    const ready = (f.specialReady ?? g >= 100) && g >= 100;
+    if (ready !== this.lastReady) {
+      this.lastReady = ready;
+      this.gauge.classList.toggle('full', ready);
+    }
+
+    // sub chip: grey below the sub cost (or while the throw cools down / washed)
+    const subOk = !!f.subReady && f.alive && f.phase !== 'ended';
+    if (subOk !== this.lastSub) { this.lastSub = subOk; this.sub.classList.toggle('grey', !subOk); }
+
+    // NEEDLE-GLINT charge ring
+    if (this.chargeRing && this.kit?.fire === 'charge') {
+      const c = Math.round(Math.max(0, Math.min(1, f.charge ?? 0)) * 100);
+      if (c !== this.lastCharge) {
+        this.lastCharge = c;
+        this.chargeRing.setAttribute('stroke-dasharray', `${((c / 100) * CHARGE_C).toFixed(2)} ${CHARGE_C.toFixed(2)}`);
+        this.ret.classList.toggle('charging', c > 0);
+        this.ret.classList.toggle('charged', c >= 100);
+      }
     }
 
     // kill feed ageing
@@ -429,6 +511,7 @@ export class Hud {
       this.lastHide = hidden;
       this.ret.classList.toggle('off', hidden);
       this.tankBox.classList.toggle('off', hidden);
+      this.sub.classList.toggle('off', hidden);
     }
 
     if (this.hitT > 0) { this.hitT -= dt; if (this.hitT <= 0) this.hitMark.classList.remove('on'); }
@@ -516,6 +599,10 @@ export class Hud {
       feed: this.feedItems.map((f) => f.e.textContent),
       crests: this.crests.filter(Boolean).map((c) => ({ alive: c.alive, text: c.box.textContent })),
       gauge: this.lastGauge,
+      special: { pct: this.lastGauge, ready: this.gauge.classList.contains('full'), name: this.kit?.specialName ?? null,
+        key: this.gaugeKey.hidden ? null : this.gaugeKey.textContent, icon: this.kit?.specialId ?? null },
+      sub: { ready: this.lastSub === true, grey: this.sub.classList.contains('grey'), key: this.kit?.subKey ?? null, cost: this.kit?.subCost ?? null },
+      charge: this.kit?.fire === 'charge' ? Math.max(0, this.lastCharge) : null,
       tank: this.lastTank,
       dots: this.dots.filter((d) => d.on).length,
       ...this.slates.text(),

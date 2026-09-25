@@ -1,9 +1,11 @@
 // DYEFIELD — boot: params → WebGL2 check → loading card → parallel loads (Rapier, map geometry +
-// paint atlas, map GLB view, tide-runner + kit) → physics + bot nav graph → the 8-runner match
-// (roster, merged runner views, FX, HUD) → shader pre-warm → CLICK TO PLAY → countdown → play.
+// paint atlas, map GLB view, tide-runner + kits + sub/special models) → physics + bot nav graph → the
+// 8-runner match (roster, one merged runner body per kit, FX + its instanced models, HUD) → shader
+// pre-warm → CLICK TO PLAY → countdown → play.
 // Query params (CONTRACT §6, §11): ?map=pier18 · ?dev=1 · ?preset=noon|golden · ?seed=N ·
-//   ?kit=mist-rasp · ?bots=chill|fresh|fierce · ?autostart=1 (skip the CLICK TO PLAY card; a click on
-//   the view captures the mouse) · ?quality=auto|high|low
+//   ?kit=mist-rasp|sheet-drum|needle-glint|pop-well (the human's kit; the bots get a mixed lineup: the
+//   human's 3 crewmates carry the other 3 kits, the rival crew one of each) · ?bots=chill|fresh|fierce ·
+//   ?autostart=1 (skip the CLICK TO PLAY card; a click on the view captures the mouse) · ?quality=auto|high|low
 // dev-only (?dev=1): ?matchSeconds=N · ?brush=1 (LMB = the phase-2 DEV_BRUSH) · ?merge=0 · ?tonemap=…
 // Any failure lands on the error card with the message (never a blank canvas).
 
@@ -34,15 +36,15 @@ import { PaintTexture } from './view/paintlayer.ts';
 import { createDyeUniforms } from './view/surfaces.ts';
 import { loadMapView } from './view/mapview.ts';
 import { loadHeroAssets } from './view/heroview.ts';
-import { PlayerViews, prepareRunnerKit } from './view/players.ts';
-import { Fx } from './view/fx.ts';
-import { Hud, applyTeamCssVars } from './ui/hud.ts';
+import { PlayerViews, prepareRunnerKit, loadKitArt, mixedBotKits, kitFireType, type RunnerKit } from './view/players.ts';
+import { Fx, bakeFxModels } from './view/fx.ts';
+import { Hud, applyTeamCssVars, type HudKit } from './ui/hud.ts';
 import { BootUI } from './ui/boot.ts';
 import { Input } from './input.ts';
 import { Game, type AppStatus, type MatchConfig } from './game.ts';
 import { installTestSurface } from './testsurface.ts';
 
-export const VERSION = 'dyefield-0.5.0-phase5';
+export const VERSION = 'dyefield-0.6.0-phase6';
 
 declare global {
   interface Window {
@@ -145,8 +147,11 @@ async function boot(): Promise<void> {
     const rapierP = loadRapier().then((R) => { prog.rapier = 1; report(); return R; });
     const geoP = loadMapGeometry(def).then((g) => { prog.geo = 1; report('Building the paint atlas…'); return g; });
     const heroP = loadHeroAssets(loader, (f) => { prog.hero = f; report(); }).then((h) => { prog.hero = 1; report(); return h; });
+    // the other kits + the sub / special models (heroview already loads kit_mist_rasp.glb: reused below)
+    const kitArtP = heroP.then((h) => loadKitArt(loader, { kit_mist_rasp: h.kit }));
     rapierP.catch(() => undefined);
     heroP.catch(() => undefined);
+    kitArtP.catch(() => undefined);
 
     const geo = await geoP;
     await nextFrame();
@@ -189,17 +194,30 @@ async function boot(): Promise<void> {
     prog.nav = 1;
     report('Loading the tide-runners…');
 
-    const roster = defaultRoster({ humanKit: config.kit, seed: config.seed, skill: config.skill });
+    const roster = defaultRoster({ humanKit: config.kit, seed: config.seed, skill: config.skill, botKits: mixedBotKits(config.kit) });
     const heroAssets = await heroP;
-    const kitGeo = prepareRunnerKit(heroAssets);
+    const kitArt = await kitArtP;
+    // one merged runner body per kit in the roster (hero + that kit baked into bind space)
+    const kits = new Map<string, RunnerKit>();
+    for (const e of roster) {
+      if (!kits.has(e.kit)) kits.set(e.kit, prepareRunnerKit(heroAssets, { id: e.kit, gltf: kitArt.kits.get(e.kit) ?? null }));
+    }
     const fx = new Fx(sky.sunDir);
-    const players = new PlayerViews(heroAssets, roster, fx, uiRoot, kitGeo);
+    fx.setModels(bakeFxModels(kitArt));
+    const players = new PlayerViews(heroAssets, roster, fx, uiRoot, kits);
     scene.add(players.root, fx.root);
 
     const input = new Input(canvas);
     const kitRow = WEAPONS.kits.find((k) => k.id === config.kit) ?? WEAPONS.kits[0];
-    const specialName = WEAPONS.specials.find((s) => s.id === kitRow?.special)?.name ?? '';
-    const hud = new Hud(uiRoot, { team: 1, minimap, specialName, roster, youId: 0 });
+    const spRow = WEAPONS.specials.find((s) => s.id === kitRow?.special);
+    const subRow = WEAPONS.subs.find((s) => s.id === kitRow?.sub);
+    const specialName = spRow?.name ?? '';
+    const hudKit: HudKit = {
+      fire: kitFireType(config.kit),
+      specialId: spRow?.id ?? '', specialName, specialKey: input.keyLabel('special'),
+      subName: subRow?.name ?? '', subCost: typeof subRow?.tankCost === 'number' ? subRow.tankCost : 70, subKey: input.keyLabel('sub'),
+    };
+    const hud = new Hud(uiRoot, { team: 1, minimap, specialName, roster, youId: 0, kit: hudKit });
 
     const game = new Game({
       app, def, canvas, rig, scene, cam, sky, water, map, geo, atlas, painter, minimap, paint, dye, R, physics, nav,
@@ -215,10 +233,10 @@ async function boot(): Promise<void> {
     // builds the shadow-depth programs) behind the loading card
     report('Compiling shaders…');
     for (const v of players.views) v.fin.visible = true;
-    fx.drops.count = 1;
+    fx.prewarm(true);
     try { await renderer.compileAsync(scene, cam.camera); } catch (e) { console.warn('[dyefield] compileAsync:', e); }
     for (const v of players.views) v.fin.visible = false;
-    fx.drops.count = 0;
+    fx.prewarm(false);
     game.render(0, 1);
     await nextFrame();
     game.render(0, 1);
@@ -229,9 +247,10 @@ async function boot(): Promise<void> {
     console.info(`[dyefield] ${VERSION} map ${def.id}: atlas ${atlas.size}² · ${atlas.count} texels · overlaps ${atlas.overlaps} · built in ${atlasMs.toFixed(0)} ms; `
       + `map ${map.triangles} tris (${map.paintTriangles} paint); static meshes ${map.merge.before} → ${map.merge.after}; `
       + `physics ${physics.triangles} tris; nav ${nav.nodes} nodes in ${navMs.toFixed(0)} ms; `
-      + `runners ${ps.runners} × ${Math.round(ps.bodyTris)} tris (1 merged skinned mesh each); `
+      + `runners ${ps.runners} (1 merged skinned mesh each; tris by kit ${Object.entries(ps.kits).map(([k, t]) => `${k} ${t}`).join(', ')}); `
+      + `lineup ${roster.map((e) => `${e.id}:${e.kit}`).join(' ')}; `
       + `match seed ${config.seed} · bots ${config.skill} · kit ${config.kit}${config.durationS ? ` · ${config.durationS} s` : ''}; quality ${quality}; gpu ${rig.gpu()}`);
-    for (const w of [...map.warnings, ...heroAssets.warnings, ...players.warnings]) console.warn('[dyefield]', w);
+    for (const w of [...map.warnings, ...heroAssets.warnings, ...kitArt.warnings, ...players.warnings]) console.warn('[dyefield]', w);
 
     app.phase = 'ready';
     bootUi.showPlay(() => game.requestPlay());

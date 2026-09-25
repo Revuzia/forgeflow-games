@@ -23,9 +23,21 @@
 // are written by combat/*; the runner itself adds the WELLSPRING leap (startLeap: intents ignored, its own
 // gravity, slamPending on landing), knock() (an impulse that lifts the runner into the air), a firing speed
 // cap (the roller's rollSpeed) and face-the-motion while firing (the roller).
+//
+// Phases 7–8 (CHANGED(MAPSIM), CONTRACT_P6_11 §19), with opts.features (MapGeometry.features):
+//   * CONVEYOR: grounded on a conveyor_ belt top → the belt's df_conveyor is added to this tick's
+//     displacement, and the vertical part of the whole displacement is set to stay in the belt plane (a
+//     standing runner moves exactly df_conveyor). The belt never enters vx/vz: stepping off leaves no
+//     carried momentum.
+//   * SPRING: grounded inside a spring_ pad disc → velocity := df_launch, AIR, BALLISTIC (no air drag,
+//     no air steering, no coyote jump, no wall grab) until the next landing; a 0.4 s re-trigger lock.
+//     Gravity is MOVE.gravity (15), the value the art lane verified the df_land arcs against.
+//   * OOB: feet inside any oob_ volume (AABB) → the sea (inSea; MatchWorld washes with cause 'sea').
 
 import type { MoveState, PlayerIntent, Side, TeamId } from './types.ts';
 import type { CharacterBody, PhysicsWorld } from './physics.ts';
+import type { MapFeatures } from './mapgeo.ts';
+import { conveyorAt, oobAt, springAt } from './mapgeo.ts';
 import type { Painter } from './paint/painter.ts';
 import type { SimEvent } from './match/events.ts';
 import { COMBAT, DEV_BRUSH, HITBOX, MATCH, MOVE, SLICK, TANK, TICK } from './config.ts';
@@ -55,9 +67,16 @@ export interface RunnerOptions {
   fireSpeedCap?: number;
   /** keep facing the motion (not the aim) while fire is held (SHEET-DRUM) */
   faceMotionWhileFiring?: boolean;
+  /** CHANGED(MAPSIM): the map's conveyors / springs / oob volumes (MapGeometry.features); none when absent */
+  features?: MapFeatures | null;
 }
 
+/** CHANGED(MAPSIM): s after a spring launch before any spring may fire again */
+export const SPRING_RELOCK = 0.4;
+
 const TAU = Math.PI * 2;
+/** runner-side scene queries see grate_* too (the capsule collides with them) */
+const GRATES = { grates: true } as const;
 
 /** shortest signed angle a → b */
 export function angleDelta(a: number, b: number): number {
@@ -181,6 +200,21 @@ export class Runner {
   /** @internal gravity during the leap */
   leapG = 0;
 
+  // ── phase 7–8 map features (CHANGED(MAPSIM)) ──
+  /** spring flight in progress: pure ballistic (no air drag / steering) until the next landing */
+  ballistic = false;
+  /** spring launches so far (the view splashes the pad on each increment) */
+  launches = 0;
+  /** index into features.springs of the last launch (−1: none yet) */
+  lastSpring = -1;
+  /** index into features.conveyors of the belt carrying this runner this tick (−1: none) */
+  onConveyor = -1;
+  /** feet inside an oob_ volume this tick (implies inSea / a respawn) */
+  inOob = false;
+  /** @internal s until a spring may launch this runner again */
+  springLock = 0;
+  readonly features: MapFeatures | null;
+
   readonly body: CharacterBody;
   readonly physics: PhysicsWorld | null;
   ownPad: PadZone | null;
@@ -226,6 +260,7 @@ export class Runner {
     this.fireSpeedCap = opts.fireSpeedCap ?? Infinity;
     this.faceMotion = opts.faceMotionWhileFiring ?? false;
     this.killY = opts.killY ?? -1;
+    this.features = opts.features ?? null;
     this.spawn = { ...spawn };
     this.respawn(spawn);
     this.respawns = 0;
@@ -277,6 +312,7 @@ export class Runner {
     this.pressFlicked = false; this.prevFireHeld = false;
     this.subCooldown = 0;
     this.leaping = false; this.slamPending = false; this.leapT = 0;
+    this.ballistic = false; this.springLock = 0; this.onConveyor = -1; this.inOob = false;
     this.respawns++;
   }
 
@@ -290,6 +326,7 @@ export class Runner {
     if (yaw !== undefined) { this.yaw = yaw; this.pyaw = yaw; this.aimYaw = yaw; }
     if (this.state === 'wallslick') this.state = 'air';
     this.airTime = 0;
+    this.ballistic = false;
   }
 
   /** The spawn this runner returns to. */
@@ -306,6 +343,7 @@ export class Runner {
   startLeap(vy: number, g: number): void {
     if (this.state === 'wallslick') { this.state = 'air'; this.wallCd = 0.2; }
     this.leaping = true;
+    this.ballistic = false;
     this.slamPending = false;
     this.leapT = 0;
     this.leapG = g;
@@ -319,6 +357,7 @@ export class Runner {
   knock(vx: number, vy: number, vz: number): void {
     if (!this.alive || this.leaping) return;
     if (this.state === 'wallslick') { this.state = 'air'; this.wallCd = 0.2; }
+    this.ballistic = false;
     this.vx = vx; this.vz = vz;
     this.vy = Math.max(this.vy, vy);
     this.grounded = false;
@@ -346,6 +385,8 @@ export class Runner {
     this.px = this.x; this.py = this.y; this.pz = this.z; this.pyaw = this.yaw;
     this.ticks++;
     this.inSea = false;
+    this.inOob = false;
+    this.onConveyor = -1;
     if (!this.alive) { this.firing = false; this.hidden = false; this.brushing = false; return; }
     if (this.leaping) {
       // WELLSPRING: committed — aim still tracks, nothing else is read
@@ -383,6 +424,7 @@ export class Runner {
     else this.jumpBuf = Math.max(0, this.jumpBuf - dt);
     this.prevJump = !!intent.jump;
     this.wallCd = Math.max(0, this.wallCd - dt);
+    if (this.springLock > 0) this.springLock = Math.max(0, this.springLock - dt);
 
     // ── ground context (from the last tick's contact)
     const onOwnPad = this.grounded && this.onPad(this.ownPad);
@@ -433,7 +475,7 @@ export class Runner {
           onWall = false;
         }
       }
-    } else if (wantSlick && this.physics && wlen > 0.1 && this.wallCd <= 0 && this.enemy !== 0) {
+    } else if (wantSlick && this.physics && wlen > 0.1 && this.wallCd <= 0 && this.enemy !== 0 && !this.ballistic) {
       const code = this.probeWall(dirx, dirz, painter);
       if (code === WALL_OWN && -(dirx * this.probeNx + dirz * this.probeNz) > SLICK.wallPushDot) {
         this.wallNx = this.probeNx; this.wallNz = this.probeNz;
@@ -496,6 +538,8 @@ export class Runner {
           const acc = ground === 'slick' ? SLICK.accel : MOVE.accel;
           const rate = wlen > 1e-3 ? acc : Math.max(MOVE.decel, acc * 0.75);
           this.approach(tx, tz, rate * dt);
+        } else if (this.ballistic) {
+          // spring flight: pure ballistic — no steering, no drag
         } else if (wlen > 1e-3) {
           this.approach(tx, tz, MOVE.airAccel * dt);
         } else {
@@ -525,6 +569,23 @@ export class Runner {
         dy = 0.5 * (v0 + this.vy) * dt;          // trapezoid: exact apex for constant gravity
       }
       wantX = this.vx * dt; wantZ = this.vz * dt;
+    }
+
+    // ── conveyor: a grounded runner on a belt top is carried (the displacement, never vx/vz)
+    let beltX = 0, beltZ = 0;
+    const feats = this.features;
+    if (feats && feats.conveyors.length && this.grounded && !onWall) {
+      const ci = conveyorAt(feats, this.x, this.y, this.z);
+      if (ci >= 0) {
+        const v = feats.conveyors[ci].vel;
+        this.onConveyor = ci;
+        beltX = v[0] * dt; beltZ = v[2] * dt;
+        wantX += beltX; wantZ += beltZ;
+        // keep the whole displacement in the belt plane (the belt vector and the level line across it): the
+        // KCC then neither shortens it (projection onto the ramp) nor lifts off it (walking down an up-belt)
+        const hv2 = v[0] * v[0] + v[2] * v[2];
+        dy += hv2 > 1e-6 ? (v[1] / hv2) * (v[0] * wantX + v[2] * wantZ) : v[1] * dt;
+      }
     }
 
     // ── enemy pad: cancel inward velocity and shove outward (no spawn camping)
@@ -570,12 +631,31 @@ export class Runner {
         if (this.vy > 0 && dy > 1e-5 && res.dy < dy * 0.5) this.vy = 0;   // ceiling bonk
       }
       // hard-blocked by a wall / crate: adopt the KCC's slide so velocity never builds into it
-      const wantLen = Math.hypot(wantX, wantZ);
-      const gotLen = Math.hypot(res.dx, res.dz);
+      // (the runner's own part of the displacement: the belt's share is taken out first)
+      const wantLen = Math.hypot(wantX - beltX, wantZ - beltZ);
+      const gotX = res.dx - beltX, gotZ = res.dz - beltZ;
+      const gotLen = Math.hypot(gotX, gotZ);
       const climbed = res.dy > dy + 1e-4;
       if (wantLen > 1e-6 && gotLen < wantLen * 0.5 && !climbed) {
-        if (gotLen > 1e-6) { this.vx = res.dx / dt; this.vz = res.dz / dt; }
+        if (gotLen > 1e-6) { this.vx = gotX / dt; this.vz = gotZ / dt; }
         else { this.vx = 0; this.vz = 0; }
+      }
+      if (this.grounded) this.ballistic = false;
+      // tide-spring: grounded inside a pad disc → launch (ballistic until the next landing)
+      if (this.grounded && feats && feats.springs.length && this.springLock <= 0) {
+        const si = springAt(feats, this.x, this.y, this.z);
+        if (si >= 0) {
+          const L = feats.springs[si].launch;
+          this.vx = L[0]; this.vy = L[1]; this.vz = L[2];
+          this.grounded = false;
+          this.ballistic = true;
+          this.coyote = 0;
+          this.jumpBuf = 0;
+          this.airTime = 0;
+          this.springLock = SPRING_RELOCK;
+          this.lastSpring = si;
+          this.launches++;
+        }
       }
     }
     this.speed = Math.hypot(res.dx, res.dz) / dt;
@@ -638,10 +718,11 @@ export class Runner {
       if (this.surfacing < 1e-6) this.surfacing = 0;
     }
 
-    // ── out of bounds
-    if (this.y < this.killY) {
+    // ── out of bounds: below killY, or feet inside an oob_ volume (CHANGED(MAPSIM))
+    const oob = feats !== null && feats.oob.length > 0 && oobAt(feats, this.x, this.y, this.z) >= 0;
+    if (this.y < this.killY || oob) {
       if (this.autoRespawn) this.respawn();
-      else this.inSea = true;
+      else { this.inSea = true; this.inOob = oob; }
     }
   }
 
@@ -678,7 +759,7 @@ export class Runner {
     if (ph) {
       const topY = this.y + MOVE.radius + 2 * MOVE.slickHalfHeight;          // top sphere centre of the slick capsule
       const need = 2 * (MOVE.halfHeight - MOVE.slickHalfHeight) + MOVE.skin + SLICK.headroomMargin;
-      if (ph.sphereCast(this.x, topY, this.z, 0, 1, 0, MOVE.radius - 0.02, need)) return false;
+      if (ph.sphereCast(this.x, topY, this.z, 0, 1, 0, MOVE.radius - 0.02, need, GRATES)) return false;
     }
     this.body.setShape(MOVE.radius, MOVE.halfHeight);
     this.tall = true;
@@ -697,7 +778,7 @@ export class Runner {
     if (!ph) return WALL_NONE;
     const cr = SLICK.wallCastRadius;
     const cy = this.y + MOVE.radius + (this.tall ? MOVE.halfHeight : MOVE.slickHalfHeight);
-    const hit = ph.sphereCast(this.x, cy, this.z, dx, 0, dz, cr, SLICK.wallCastDist);
+    const hit = ph.sphereCast(this.x, cy, this.z, dx, 0, dz, cr, SLICK.wallCastDist, GRATES);
     if (!hit) return WALL_NONE;
     if (Math.abs(hit.ny) >= SLICK.wallMaxNy) return WALL_NONE;
     const hl = Math.hypot(hit.nx, hit.nz);

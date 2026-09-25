@@ -14,6 +14,15 @@
 // edge drops below killY and respawns at spawn A. Extra (APP-lane features): coyote jump, jump
 // buffer, wall stop (no tunnelling), and — when the PAINT lane is present — the dev brush dyes the
 // floor under the feet (teamUnder === SUNCREW).
+// CHANGED(MAPSIM) (CONTRACT_P6_11 §19) — map features on the other maps, driven the same way:
+//   * CINDER tide-springs: walking onto spring_beach / spring_mid launches the runner (df_launch), the flight is
+//     ballistic (the stick held AGAINST the flight changes nothing: constant horizontal speed, no drag), it lands
+//     near df_land after ≈ df_flight s; a runner set down on the pad centre lands within 0.3 m of df_land;
+//   * LOCKWELL conveyor: standing on conveyor_ramp_A carries the runner up the belt at |df_conveyor| (2.2 m/s)
+//     to the mezzanine, grounded all the way; walking down against it nets walk − belt;
+//   * CINDER channel: walking off beach A into the lagoon channel → feet inside oob_chan_lagoon → MatchWorld
+//     emits 'washed' with cause 'sea' (above killY: the volume, not the kill plane, washed it);
+//   * CINDER mist: a SLICK enemy moving on its pad is seen at < hideRange and hidden beyond it (canSee).
 // Exit: 0 all pass · 1 a check failed · 2 setup failure (missing module / GLB / Rapier).
 
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -21,7 +30,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadRapier, PhysicsWorld } from '../runtime/src/core/physics.ts';
 import { Runner, type SpawnPoint } from '../runtime/src/core/runner.ts';
-import { MOVE, TICK, DEV_BRUSH } from '../runtime/src/core/config.ts';
+import { MOVE, TICK, DEV_BRUSH, COMBAT, HITBOX } from '../runtime/src/core/config.ts';
 import { mapById, type MapDef, type V3 } from '../runtime/src/core/data.ts';
 import { DEG, emptyIntent, type PlayerIntent, type TeamId } from '../runtime/src/core/types.ts';
 import type { MapGeometry } from '../runtime/src/core/mapgeo.ts';
@@ -419,6 +428,11 @@ async function main(): Promise<number> {
     console.log('SKIP  dev brush check (no real painter in this run)');
   }
 
+  // ── 7. map features (CHANGED(MAPSIM)): Cinder springs + channel + mist, Lockwell conveyor
+  if (!SYNTH) {
+    try { await mapFeatureChecks(R); } catch (e) { check('map features (springs / conveyor / oob / mist)', false, `setup error: ${(e as Error).stack ?? e}`); }
+  }
+
   console.log('-'.repeat(96));
   const failed = checks.filter((c) => c.gate && !c.pass);
   const verdict = SYNTH ? (failed.length ? 'SMOKE FAIL' : 'SMOKE OK (synthetic geometry — not gate G2)') : (failed.length ? `FAIL (${failed.length})` : 'OK');
@@ -432,6 +446,195 @@ async function main(): Promise<number> {
   } catch { /* report is best-effort */ }
   pw.dispose();
   return failed.length ? 1 : 0;
+}
+
+// ───────────────────────────── map features (CHANGED(MAPSIM)) ─────────────────────────────
+async function mapFeatureChecks(R: Awaited<ReturnType<typeof loadRapier>>): Promise<void> {
+  const mg = await import('../runtime/src/core/mapgeo.ts');
+  const { MatchWorld } = await import('../runtime/src/core/match/world.ts');
+  const { defaultRoster } = await import('../runtime/src/core/match/roster.ts');
+  const mk = async (id: string) => {
+    const def = mapById(id);
+    const geo = await mg.loadMapGeometry(def);
+    const pw = new PhysicsWorld(R, geo);
+    const body = pw.createCharacter(MOVE.radius, MOVE.halfHeight);
+    const f = mg.featuresOf(geo);
+    const p = new Runner({ id: 0, name: 'probe', team: 1, kit: 'mist-rasp', bot: false }, body, geo.spawns.A,
+      { killY: def.killY ?? -1, physics: pw, autoRespawn: false, features: f });
+    return { def, geo, pw, f, p };
+  };
+
+  // ── 7a. CINDER tide-springs
+  const C = await mk('cinder');
+  console.log(`cinder: ${C.f.springs.length} springs, ${C.f.oob.length} oob volumes, mist ${JSON.stringify((C.def as unknown as { mist?: unknown }).mist ?? null)}`);
+  for (const name of ['spring_beach', 'spring_mid']) {
+    const s = C.f.springs.find((q) => q.name === name);
+    if (!s || !s.land) { check(`spring ${name}: launch`, false, 'no such spring / no df_land in the GLB'); continue; }
+    const p = C.p;
+    // (i) walked onto from 2.4 m behind the pad (against the launch direction), stick held BACKWARD in flight
+    const lh = Math.hypot(s.launch[0], s.launch[2]);
+    const ux = s.launch[0] / lh, uz = s.launch[2] / lh;
+    const gx = s.x - ux * 2.4, gz = s.z - uz * 2.4;
+    const g = C.pw.raycast(gx, s.y + 2, gz, 0, -1, 0, 4, { grates: true });
+    p.respawn({ x: gx, y: g ? g.y : s.y, z: gz, yaw: Math.atan2(ux, uz) });
+    const it = emptyIntent();
+    const l0 = p.launches;
+    let tLaunch = -1, tLand = -1, apex = -Infinity, vhMin = Infinity, vhMax = -Infinity, ballisticAll = true;
+    for (let i = 0; i < 400; i++) {
+      const flying = tLaunch >= 0;
+      it.yaw = Math.atan2(ux, uz); it.moveZ = flying ? -1 : 1;             // in flight: pull back hard (must not matter)
+      p.step(TICK, it, STUB_PAINTER);
+      if (tLaunch < 0 && p.launches > l0) tLaunch = i;
+      else if (tLaunch >= 0 && tLand < 0) {
+        if (p.grounded) { tLand = i; break; }
+        apex = Math.max(apex, p.y);
+        const vh = Math.hypot(p.vx, p.vz);
+        vhMin = Math.min(vhMin, vh); vhMax = Math.max(vhMax, vh);
+        if (!p.ballistic) ballisticAll = false;
+      }
+      if (p.inSea) break;
+    }
+    const flight = (tLand - tLaunch) * TICK;
+    const dLand = Math.hypot(p.x - s.land[0], p.z - s.land[2]);
+    check(`spring ${name}: walked onto → launched, ballistic flight (stick pulled back), lands by df_land`,
+      tLaunch >= 0 && tLand > 0 && !p.inSea && ballisticAll && vhMax - vhMin < 1e-6 && dLand < 1.4 && Math.abs(p.y - s.land[1]) < 0.35
+        && (s.flight === null || Math.abs(flight - s.flight) < 0.1),
+      `launch after ${f2(tLaunch * TICK)} s at |v| ${f2(Math.hypot(...s.launch))} m/s; flight ${f2(flight)} s (df_flight ${s.flight}); apex y ${f2(apex)}; horizontal speed ${f3(vhMin)}–${f3(vhMax)} m/s in flight; landed (${f2(p.x)}, ${f2(p.y)}, ${f2(p.z)}) = ${f2(dLand)} m from df_land [${s.land.join(', ')}]; washed ${p.inSea}`);
+    // (ii) set down on the pad centre → lands on df_land (the art lane's arc: g 15 m/s², no drag)
+    p.respawn({ x: s.x, y: s.y, z: s.z, yaw: 0 });
+    const it2 = emptyIntent();
+    let launched = false, landed = false;
+    const l1 = p.launches;
+    for (let i = 0; i < 300; i++) {
+      p.step(TICK, it2, STUB_PAINTER);
+      if (!launched && p.launches > l1) launched = true;
+      else if (launched && p.grounded) { landed = true; break; }
+      if (p.inSea) break;
+    }
+    const d2 = Math.hypot(p.x - s.land[0], p.z - s.land[2]);
+    check(`spring ${name}: from the pad centre → lands within 0.3 m of df_land`, launched && landed && d2 < 0.3 && p.launches === l1 + 1,
+      `landed (${f2(p.x)}, ${f2(p.y)}, ${f2(p.z)}), ${f3(d2)} m from df_land; launches ${p.launches - l1}`);
+  }
+
+  // ── 7b. CINDER channel: into the lagoon → 'washed' cause 'sea' (the oob_ volume, above killY)
+  {
+    const physics = new PhysicsWorld(R, C.geo);
+    const roster = defaultRoster({ humanKit: 'mist-rasp', seed: 1, skill: 'fresh' });
+    const { Painter } = await import('../runtime/src/core/paint/painter.ts');
+    const { buildAtlas } = await import('../runtime/src/core/paint/atlas.ts');
+    const painter = new Painter(buildAtlas(C.geo.paint, C.geo.atlasSize, { wallWeight: 0.35, floorMinNy: 0.45 }));
+    const world = new MatchWorld({ def: C.def, geo: C.geo, physics, painter, roster, seed: 1, countdownS: 0 });
+    const intents = roster.map(() => emptyIntent());
+    const r0 = world.runners[0];
+    r0.teleport(0, 1.3, -34, 0);
+    intents[0].yaw = 0; intents[0].moveZ = 1;                           // walk north off beach A into the lagoon channel
+    const ev: import('../runtime/src/core/match/events.ts').SimEvent[] = [];
+    let washed: { cause: string; y: number; z: number; t: number } | null = null;
+    let minY = Infinity;
+    for (let i = 0; i < 400 && !washed; i++) {
+      const y0 = r0.y, z0 = r0.z;
+      world.step(intents);
+      ev.length = 0; world.drainEvents(ev);
+      if (r0.alive) minY = Math.min(minY, r0.y);
+      for (const e of ev) if (e.t === 'washed' && e.victim === 0) washed = { cause: e.cause, y: y0, z: z0, t: i * TICK };
+    }
+    const lag = C.f.oob.find((o) => o.name === 'oob_chan_lagoon');
+    check('channel: walking off beach A into the lagoon → WASHED, cause \'sea\', by the oob_ volume (above killY)',
+      !!washed && washed.cause === 'sea' && washed.y > (C.def.killY ?? -1) && !!lag && washed.z >= lag.min[2] - 0.5,
+      washed ? `washed after ${f2(washed.t)} s, cause '${washed.cause}', last feet (z ${f2(washed.z)}, y ${f3(washed.y)}) vs killY ${C.def.killY} · oob_chan_lagoon z ${lag?.min[2]}..${lag?.max[2]}, top y ${lag?.max[1]}` : `not washed (min y ${f3(minY)})`);
+
+    // ── 7c. CINDER mist: a SLICK enemy on its own pad, moving, seen inside hideRange and hidden beyond it
+    const target = world.runners[0];                                   // SUNCREW
+    const viewer = world.runners.find((q) => q.team === 2)!;           // GULF CREW
+    if (!target.alive) { for (let i = 0; i < 400 && !target.alive; i++) { world.step(roster.map(() => emptyIntent())); ev.length = 0; world.drainEvents(ev); } }
+    const pad = world.pads.A;
+    target.teleport(pad.x, pad.y, pad.z, Math.PI / 2);
+    const tIt = roster.map(() => emptyIntent());
+    tIt[0].slick = true; tIt[0].moveZ = 1;
+    const range = world.mistRange;
+    const rows: string[] = [];
+    let okNear = false, okFar = false, nearTested = false, farTested = false;
+    for (const dist of [range - 6, range + 5]) {
+      // a viewer spot on open ground at this distance with a clear eye line to the pad (scanned in 10° steps)
+      let vx = NaN, vz = NaN, vy = NaN;
+      for (let k = 0; k < 36 && !(vx === vx); k++) {
+        const a = k * Math.PI / 18;
+        const qx = pad.x + Math.sin(a) * dist, qz = pad.z + Math.cos(a) * dist;
+        const gq = physics.raycast(qx, 12, qz, 0, -1, 0, 16);
+        if (!gq || gq.ny < 0.7 || gq.y < (C.def.waterY ?? -0.6) + 0.2) continue;
+        // the same eye line canSee casts: viewer eye (COMBAT.eyeHeight) → the slick target's hit-volume middle,
+        // clear for every point of the pad circle the target runs (±1.2 m around the centre)
+        const ey = gq.y + COMBAT.eyeHeight, ty = pad.y + MOVE.skin + HITBOX.slickHeight * 0.5;
+        let clearAll = true;
+        for (let j = 0; j < 8 && clearAll; j++) {
+          const px = pad.x + Math.sin(j * Math.PI / 4) * 1.2, pz = pad.z + Math.cos(j * Math.PI / 4) * 1.2;
+          const l = Math.hypot(px - qx, ty - ey, pz - qz);
+          if (physics.raycast(qx, ey, qz, px - qx, ty - ey, pz - qz, l - 0.25)) clearAll = false;
+        }
+        if (!clearAll) continue;
+        vx = qx; vz = qz; vy = gq.y;
+      }
+      if (!(vx === vx)) { rows.push(`${f2(dist)} m: no open viewer spot with a clear eye line`); continue; }
+      const gv = { y: vy };
+      viewer.teleport(vx, gv.y, vz, 0);
+      // circle on the pad for 0.5 s so the target is SLICK and moving
+      let seen = false, slick = false, spd = 0;
+      for (let i = 0; i < 30; i++) {
+        tIt[0].yaw = (i / 30) * Math.PI * 2;
+        world.step(tIt); ev.length = 0; world.drainEvents(ev);
+        viewer.teleport(vx, gv.y, vz, 0);
+      }
+      slick = target.slickForm; spd = target.speed;
+      seen = world.canSee(viewer, target);
+      const ey = viewer.y + COMBAT.eyeHeight, ty = target.y + target.hitHeight() * 0.5;
+      const d3 = Math.hypot(target.x - viewer.x, ty - ey, target.z - viewer.z);
+      const los = !physics.raycast(viewer.x, ey, viewer.z, target.x - viewer.x, ty - ey, target.z - viewer.z, d3 - 0.25);
+      rows.push(`${f2(d3)} m: slick ${slick}, ${f2(spd)} m/s, clear eye line ${los} → canSee ${seen}`);
+      if (dist < range) { nearTested = slick && los; okNear = seen; } else { farTested = slick; okFar = !seen; }
+    }
+    check(`mist (hideRange ${range} m): a moving SLICK enemy is seen inside the range, hidden beyond it`,
+      nearTested && farTested && okNear && okFar, rows.join(' · '));
+  }
+
+  // ── 7d. LOCKWELL conveyor: carried up at |df_conveyor|, walking against it nets walk − belt
+  {
+    const L = await mk('lockwell');
+    const c = L.f.conveyors.find((q) => q.name === 'conveyor_ramp_A');
+    if (!c) { check('conveyor_ramp_A: carried up the belt', false, 'no conveyor_ramp_A in the GLB'); return; }
+    const p = L.p;
+    const cx = (c.min[0] + c.max[0]) / 2;
+    const belt = Math.hypot(...c.vel), bh = Math.hypot(c.vel[0], c.vel[2]);
+    const up = c.vel[2] > 0 ? 1 : -1;                                   // the belt climbs toward +z (ramp A)
+    const zLow = up > 0 ? c.min[2] + 1.2 : c.max[2] - 1.2, zHigh = up > 0 ? c.max[2] : c.min[2];
+    const gl = L.pw.raycast(cx, 3, zLow, 0, -1, 0, 5);
+    p.teleport(cx, gl ? gl.y : 0.5, zLow, 0);
+    const idle = emptyIntent();
+    for (let i = 0; i < 10; i++) p.step(TICK, idle, STUB_PAINTER);
+    const x0 = p.x, y0 = p.y, z0 = p.z;
+    let t = 0, grounded = 0, onBelt = 0;
+    for (; t < 900; t++) {
+      p.step(TICK, idle, STUB_PAINTER);
+      if (p.grounded) grounded++;
+      if (p.onConveyor >= 0) onBelt++;
+      if ((p.z - zHigh) * up > -0.6) break;
+    }
+    const along = Math.hypot(p.x - x0, p.y - y0, p.z - z0) / ((t + 1) * TICK);
+    check(`conveyor_ramp_A: a standing runner is carried up the belt at |df_conveyor| (${f2(belt)} m/s)`,
+      Math.abs(along - belt) < belt * 0.05 && grounded === t + 1 && p.y > 4.2 && onBelt > 0,
+      `(${f2(x0)}, ${f2(y0)}, ${f2(z0)}) → (${f2(p.x)}, ${f2(p.y)}, ${f2(p.z)}) in ${f2((t + 1) * TICK)} s = ${f3(along)} m/s along the belt; grounded ${grounded}/${t + 1} ticks, on the belt ${onBelt}`);
+    // walk down against the belt
+    const gt = L.pw.raycast(cx, 6, zHigh - up * 0.8, 0, -1, 0, 5);
+    p.teleport(cx, gt ? gt.y : 4.5, zHigh - up * 0.8, up > 0 ? Math.PI : 0);
+    for (let i = 0; i < 10; i++) p.step(TICK, idle, STUB_PAINTER);
+    const walk = emptyIntent(); walk.yaw = up > 0 ? Math.PI : 0; walk.moveZ = 1;
+    for (let i = 0; i < 15; i++) p.step(TICK, walk, STUB_PAINTER);   // up to speed
+    const za = p.z; let n = 0, gr = 0;
+    for (; n < 60; n++) { p.step(TICK, walk, STUB_PAINTER); if (p.grounded) gr++; }
+    const net = Math.abs(p.z - za) / (n * TICK);
+    check(`conveyor_ramp_A: walking down against the belt nets walk − belt (${f2(MOVE.walk - bh)} m/s horizontal)`,
+      Math.abs(net - (MOVE.walk - bh)) < 0.3 && gr === n,
+      `${f3(net)} m/s horizontal over 1 s, grounded ${gr}/${n} ticks`);
+  }
 }
 
 main().then((code) => process.exit(code), (e) => {

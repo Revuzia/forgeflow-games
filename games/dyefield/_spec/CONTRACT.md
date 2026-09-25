@@ -440,6 +440,39 @@ alive, and marks a run CONTAMINATED if one appears. In headed runs, `bootcheck.p
 foreground watch to tell focus theft by another window (NOTE + one real re-click) apart from a
 game-caused pointer-lock loss (FAIL).
 
+### §5.3 `CHANGED(LOOK-MAPS)`: phases 7–8 map look (CONTRACT_P6_11 §19, CONTRACT_ART_P6_8 §14.3/§14.4) — additive only
+No §5.0–§5.2 signature is removed or changed; `createSky` / `createWater` / `loadMapView` keep their arguments.
+```ts
+// view/mapview.ts — MapView gains (existing fields unchanged):
+features: MapFeatures;          // { grates, conveyors, springs, oob, lightEmpties, lightPool, ao: string|null, shore: [w,h]|null }
+lights: THREE.PointLight[];     // the FIXED pool: min(6, light_ empties), created at load, never added/removed later
+update(dt: number, camera: THREE.Camera): void;   // OPTIONAL explicit driver (see below); calling it disables the auto driver
+// MapPrefix gains 'grate' | 'conveyor' | 'spring' | 'oob' | 'light'; counts[] has those keys.
+// root.userData.dfShore?: ShoreMap  — depth-below-water grid (0.5 m) for maps with ground under the water (Cinder).
+export const AO_INTENSITY = 0.8; export const LIGHT_POOL = { max: 6, period: 0.5, fade: 0.3, gain: 28 };
+// view/surfaces.ts — new exports
+export function presetKind(p: LightingPreset): 'outdoor' | 'interior';
+export function mistOf(p: LightingPreset): MistDef | null;     // the owning map's maps.json `mist` block
+export function grateMaterial(name, fallback): MeshStandardMaterial;   export function grateDepthMaterial(): MeshDepthMaterial;
+export function beltMaterial(name, fallback, { dir, speed, center, halfWidth }): MeshStandardMaterial;
+export function springMaterial(name, fallback, { center, radius }): MeshStandardMaterial;
+// SURFACE_ENV gains uDfWater, uDfStrip, uDfWindow, uDfSodium (vec3) and uDfInterior (float).
+// view/sky.ts — SkyRig gains optional kind ('outdoor'|'interior'), ambient (AmbientLight|null), mist (MistDef|null);
+export const INTERIOR = { keyGain, hemiGain, ambientGain, shadowIntensity }; export const MIST = { fogLean, dome };
+```
+- **AO:** `mapinfo.df_ao` → `aoMap` on every paint material (`channel = 1` = uv1, flipY false, NoColorSpace,
+  `aoMapIntensity` 0.8) on all three maps; it multiplies the indirect (hemisphere/ambient) light.
+- **Interior preset** (`kind: 'interior'`): no dome; key DirectionalLight along `keyDir` with the texel-snapped shadow
+  box (the roof shades the hall, light falls through the skylight slots); hemi + AmbientLight; FogExp2(fogColor);
+  the water plane is hidden. Glazing / light-source materials (M_glass, M_skylight, M_strip, M_lamp) never cast.
+- **Light pool:** re-assigned to the empties nearest the camera every 0.5 s with 0.3 s fades. It is driven from the
+  paint meshes' `onBeforeRender` (once per rendered frame), so no game-loop wiring is required; `MapView.update(dt,
+  camera)` is available if the game loop prefers to drive it explicitly.
+- **Mist:** found from the preset object (the map that owns it): fog = max(fogDensity, mist.density), colour leaned
+  to `mist.color`, and a mist band on the dome's lower sky. (Runner fading beyond `hideRange` stays with the view
+  lane that owns players.ts, per §19.)
+- **Not in LOOK-MAPS files:** the "splash on launch" of a spring pad needs a sim event → fx.ts (VIEW-KITS/integrator).
+
 ## §6 Test surface — `window.__DF__` (lane RUNTIME)
 
 ```ts
@@ -711,6 +744,18 @@ Rules fixed here (numbers: `weapons.json`, knobs: `config.ts KITS`):
   a coreRadius floor splat, coreDamage to enemies within coreRadius (line of sight) and a knockback impulse of
   `knockback` m/s outward + 0.45 × that upward.
 
+**`CHANGED(VIEW-KITS)` (phase 6 view, CONTRACT_P6_11 §18.2): additive only.**
+- `window.__DF__` gains read-backs `kit()` (the human's charge / rolling / special meter / sub cooldown / layer
+  summary / left-hand → grip_L distance) and `fx()` (live drops, jelly, puddles, cells, raining cells, glint lines,
+  beam flashes), and dev-only `fillSpecial(pid = 0)` (sets the Runner's public `special` = 1 and
+  `specialReady` = true; no 'ready' event, MatchWorld has no dev hook for it) and `freeze(on)` (stops the sim and
+  the visual clock while rendering continues, for exact-moment screenshots). `match().runners[]` also carries
+  `kit charge rolling flicking leaping specialActive specialReady subCooldown`.
+- The §18.2 special-gauge key badge shows the ACTUAL binding (`Input.keyLabel('special')`, `KeyQ` → `Q`), not a
+  hard-coded "F". `?kit=` picks the human kit; the bots get `defaultRoster(… botKits)` = the human's 3 crewmates
+  carry the other 3 kits and the rival crew one of each (`view/players.ts mixedBotKits`).
+- `python _harness/playtest.py --kits` = the kit-shot pass (`_shots/kit_<id>_<action>.png`, real input).
+
 ### §10.3 Bot behavior (acceptance, measured by `_harness/probe_bots.ts`)
 - **Paint-hungry:** a bot picks the goals with the most neutral or enemy floor area nearby,
   sampled from the atlas, not random wandering. It sweeps fire across the floor while moving.
@@ -829,6 +874,96 @@ because Rapier flips a ray's normal toward the ray origin). Climb edges (kind 3)
 1.05–3.0 m tall, onto a flat top with ≥ 4 walk links (decks, the buoy block; not crate lids or ramp sides).
 `game.ts` should build the graph once per map (`buildNav(geo, physics, def)`, ≈ 0.5 s on Pier 18 in node) and
 reuse it across matches: it depends only on the map, never on paint.
+
+### §10.6 `CHANGED(MAPSIM)`: phases 7–8 map features in the sim (CONTRACT_P6_11 §19) — additive only
+No §4 / §10.2 / §10.5 signature is removed or changed; a map without the new prefixes (Pier 18) builds the same
+collision, the same physics world and the same nav graph nodes as before (its bot-match hashes are unchanged).
+```ts
+// core/mapgeo.ts
+MapGeometry.collision            // now paint_* ∪ solid_* ∪ col_* ∪ conveyor_* ∪ spring_* (every MAP_SOLID triangle)
+MapGeometry.features?: MapFeatures;              // always set by extractMapGeometry; featuresOf(geo) → it or NO_FEATURES
+interface MapFeatures {
+  grates: { positions; indices };                // grate_*: runner-only collision
+  col: { positions; indices };                   // col_* (stair wedges): walkable floor for the nav (also in collision)
+  conveyors: { name; vel: [vx,vy,vz] /*df_conveyor*/; min; max; top: Float32Array /*up-facing tris, 9 floats each*/ }[];
+  springs: { name; x; y; z; r /*pad disc from the mesh AABB: centre, top, radius*/; launch /*df_launch*/; land /*df_land|null*/; flight /*df_flight|null*/; min; max }[];
+  oob: { name; min; max }[];                     // oob_* mesh AABBs
+  lights: { name; x; y; z; color; intensity; range }[];   // light_* empties (df_light)
+  ao: string | null;                             // mapinfo.df_ao
+}
+NodeKind gains 'grate' | 'conveyor' | 'spring' | 'oob' | 'light';
+export function conveyorAt(f, x, y, z, tol = 0.2): number;      // belt under the feet or −1 (pure geometry)
+export function springAt(f, x, y, z, below = 0.4, above = 0.3): number;   // pad disc holding the feet or −1
+export function oobAt(f, x, y, z): number;                      // oob_ volume holding the point or −1
+// core/physics.ts — collision groups: MAP_SOLID (the collision soup) and GRATE (its own trimesh, only when the map has
+// grate_ nodes). Runner capsules / the KCC collide with both; queries default to MAP_SOLID only:
+raycast(ox, oy, oz, dx, dy, dz, maxDist, opts?: { grates?: boolean }): CastHit | null;
+sphereCast(ox, oy, oz, dx, dy, dz, radius, maxDist, opts?: { grates?: boolean }): CastHit | null;
+readonly grate: RCollider | null;
+// core/runner.ts
+RunnerOptions.features?: MapFeatures | null;     // MatchWorld passes featuresOf(geo)
+export const SPRING_RELOCK = 0.4;
+ballistic: boolean;      // spring flight in progress (no air drag / steering until the next landing)
+launches: number;        // spring launches so far — the view's cue for the pad splash (there is no SimEvent for it)
+lastSpring: number;      // features.springs index of the last launch (−1 none)
+onConveyor: number;      // features.conveyors index carrying the runner this tick (−1 none)
+inOob: boolean;          // this tick's sea wash came from an oob_ volume (inSea is set too)
+// core/match/world.ts
+readonly mistRange: number;   // maps.json map-level mist.hideRange, Infinity without mist
+// core/bots/nav.ts
+export const EDGE_SPRING = 4;                    // approach node → landing node across a spring pad
+stats.edgesByKind: [walk, drop, jump, climb, spring]; stats.pruned?: number;
+```
+Rules fixed here:
+- **Conveyor:** grounded on a belt top (`conveyorAt`) → `df_conveyor` is added to the tick's displacement, and the
+  displacement's vertical part is set to stay in the belt plane (a standing runner moves exactly |df_conveyor|, 2.2 m/s
+  on Lockwell; walking against it nets walk − belt). The belt never enters vx/vz.
+- **Spring:** grounded inside a pad disc (`springAt`) and the lock expired → velocity := `df_launch`, AIR, `ballistic`
+  (no air drag, no air-accel steering, no coyote jump, no wall grab) until the next landing, `MOVE.gravity` (15, the
+  value the art lane verified `df_land` with); a 0.4 s re-trigger lock. From the pad centre the runner lands 0.10 m
+  (beach) / 0.02 m (mid) from `df_land`, and in `df_flight` ± 1 tick.
+- **OOB:** feet inside any `oob_` AABB → `inSea` (standalone runners respawn); MatchWorld washes with cause `'sea'`.
+- **Mist:** `canSee` hides every SLICK (`slickForm`) enemy farther than `mist.hideRange`, moving or not; the phase-3
+  hidden rule (slick and ≤ 1.5 m/s → unseen beyond `SLICK.hiddenRange`) still applies. The view fades by the same rule.
+- **Nav:** nodes stand on paint_, the pads (maps.json spawnpad brush radius, else `spawns.<side>.padRadius`), col_,
+  grate_ and conveyor_ floors; never inside an `oob_` volume or within a spring disc + 0.55 m (walk footing avoids the
+  same zones and `ground()` answers NaN there). On col_ stair wedges the footing tolerances follow the slope and walk
+  links climb up to `MOVE.maxSlopeDeg`. Walk edges over a belt cost length × walk / (walk + belt·dir) (A* heuristic
+  scaled by the smallest factor). SPRING edges (kind 4) go from approach nodes 1.6–3.65 m behind the pad, whose line
+  to the landing node crosses the pad centre within 0.45 m, to the node nearest the arc landing simulated from the pad
+  centre; a bot drives it like any non-walk edge (steer at the target; the runner launches itself on the pad). Drops
+  and jumps need landing room (floor 0.7 m past the target, not in `oob_`, ≥ r + 1.4 m from a spring), a jump over a
+  block within 0.28 m of the apex needs a 0.46 m landing column, a climb needs no overhang; islands of nodes linked to
+  no spawn are dropped. Probes: `probe_nav.ts --map <id>` and `probe_bots.ts --map <id> [--seeds a,b,c]`.
+
+### §10.7 `CHANGED(INTEGRATE)`: phases 6–8 integration — additive only, no signature removed or changed
+Bot director behaviour (no interface change; `BotDirector` constructor / `think` / `holding` / `info` and the
+`info().mode` strings are as before):
+- **Level pull.** Zones are banded by height (3 m bands above the lowest zone); a band with ≥ 80 m² of floor is a
+  level. In `selectGoal`, a zone on another level whose un-owned share beats the bot's own level's by > 0.15 gets
+  its score × (1 + 6 × advantage / (1 + 1.5 × allies already there or headed there)). Pier 18 has one level (its
+  2.5–3 m band is 21 m²), so its goal choice is unchanged; Lockwell's mezzanine / crane walk and Cinder's wreck
+  deck now get painted.
+- **REFILL** starts at `tank < TANK.low` exactly (was `< TANK.low + 0.5`, which sent painters home one shot early).
+- **Paths:** a paint target > 1.1 rad off the travel direction is re-picked (no body whip at burst end); a grounded
+  runner whose current path edge lies wholly > 1.2 m ABOVE it (it fell off) drops the path and re-plans; the
+  unstuck hop never steps off a ledge (`safeStep`); a pure-pursuit look-ahead point within 0.5 m of the runner (a
+  path doubling back round a corner) falls back to the node; a bot whose nearest node has no path to its goal
+  (stranded on a rock / crate top) first walks or drops to the nearest `nodeMain` node within 6 m at or below it.
+- **Stick deadzone:** a smoothed move wish under 0.2 is emitted as a resting stick (the runner faces any stick
+  over 0.05, so a settling bot's wandering direction flicked its body).
+View / app:
+```ts
+// view/players.ts
+interface PlayersFrameOpts { /* … */ mistRange?: number }   // world.mistRange; a SLICK enemy the crew can't see
+//   (game.ts `seen`, from MatchWorld.canSee) sinks its fin out of sight over 0.2 s and leaves no wake / ripple
+// view/fx.ts
+springSplash(x: number, y: number, z: number, r: number, lx?: number, lz?: number): void;  // pad launch: neutral foam ring + spray
+```
+`game.ts`: every frame, a growth of `runner.launches` splashes `features.springs[runner.lastSpring]`
+(`__DF__.match().events.springLaunch` counts them); `map.update(dt, camera)` drives the `light_` pool explicitly;
+`frameOpts.mistRange = world.mistRange`. Harness: `playtest.py --map <id> --kit <kit>` runs G9 with any human
+kit (shots `_shots/pt_<map>_<kit>_<name>.png` unless Pier 18 + MIST-RASP).
 
 ## §11 View / app for phases 3–5 (`three` + DOM)
 

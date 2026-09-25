@@ -78,14 +78,28 @@ html, body {
 
 /* ── top right: special gauge + kill feed */
 .df-right { position: absolute; top: 18px; right: 20px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-.df-gauge { position: relative; width: 196px; height: 30px; border-radius: 999px; background: rgba(20,32,58,.55); overflow: hidden;
+.df-gauge { position: relative; width: 226px; height: 34px; border-radius: 999px; background: rgba(20,32,58,.55); overflow: hidden;
   border: var(--edge) solid var(--ink); box-shadow: var(--drop); }
 .df-gauge .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; transition: width .2s ease-out; }
 .df-gauge.sun .fill { background: linear-gradient(180deg, #ffc27a, var(--sun-dye)); }
 .df-gauge.gulf .fill { background: linear-gradient(180deg, #a79dff, var(--gulf-dye)); }
-.df-gauge .label { position: absolute; inset: 0; display: grid; place-items: center; font: 400 16px/1 var(--display); letter-spacing: .08em;
+.df-gauge .label { position: absolute; inset: 0 30px 0 32px; display: grid; place-items: center; font: 400 16px/1 var(--display); letter-spacing: .08em;
   color: var(--cream); text-shadow: 0 2px 0 var(--ink); }
+.df-gauge .icon { position: absolute; left: 3px; top: 50%; width: 26px; height: 26px; margin-top: -13px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--ink2); box-shadow: inset 0 0 0 2px rgba(255,248,236,.25); }
+.df-gauge.sun .icon { color: var(--sun); }
+.df-gauge.gulf .icon { color: var(--gulf); }
+.df-gauge .icon svg { width: 20px; height: 20px; display: block; }
+.df-gauge .key { position: absolute; right: 4px; top: 50%; min-width: 22px; height: 22px; margin-top: -11px; padding: 0 4px; border-radius: 7px;
+  background: var(--cream); color: var(--ink); border: 2px solid var(--ink); box-shadow: 0 2px 0 var(--ink); font: 400 14px/18px var(--display);
+  text-align: center; transform: scale(0); transition: transform .2s cubic-bezier(.2,1.6,.4,1); }
 .df-gauge.full { animation: dfGauge .9s ease-in-out infinite; }
+.df-gauge.full .key { transform: scale(1); animation: dfKey .9s ease-in-out infinite; }
+.df-gauge.full .fill { animation: dfPulse .9s ease-in-out infinite; }
+.df-gauge.full .icon { box-shadow: inset 0 0 0 2px var(--cream), 0 0 0 2px var(--ink); }
+.df-gauge.pop { animation: dfGaugePop .35s cubic-bezier(.2,1.6,.4,1), dfGauge .9s ease-in-out .35s infinite; }
+@keyframes dfKey { 50% { transform: scale(1.14); } }
+@keyframes dfGaugePop { 0% { transform: scale(1.12); } 100% { transform: scale(1); } }
 @keyframes dfGauge { 50% { box-shadow: 0 5px 0 var(--ink), 0 0 0 4px rgba(255,248,236,.8); } }
 .df-feed { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .df-feed-item { display: flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 999px; background: rgba(20,32,58,.82); color: var(--cream);
@@ -124,6 +138,23 @@ html, body {
 .df-ret svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .df-ret.firing svg circle.ring { stroke: #ffffff; }
 .df-ret.slick { opacity: .35; }
+.df-ret circle.charge, .df-ret circle.charge-bg { opacity: 0; transition: opacity .08s linear; }
+.df-ret.charging circle.charge, .df-ret.charging circle.charge-bg { opacity: 1; }
+.df-ret.charged circle.charge { stroke: #fff8ec; stroke-width: 4.2; filter: drop-shadow(0 0 3px rgba(255,248,236,.9)); }
+.df-ret.charged { animation: dfCharged .35s ease-in-out infinite; }
+@keyframes dfCharged { 50% { transform: scale(1.08); } }
+
+/* ── sub chip (JELLY CHARGE): greys out below the sub cost */
+.df-sub { position: absolute; left: calc(50% + 60px); top: 50%; width: 34px; height: 34px; margin-top: -17px; border-radius: 50%;
+  display: grid; place-items: center; background: rgba(20,32,58,.62); border: 2.5px solid var(--ink); box-shadow: 0 3px 0 var(--ink);
+  transition: opacity .15s ease, filter .15s ease; }
+.df-sub.sun { color: var(--sun); }
+.df-sub.gulf { color: var(--gulf); }
+.df-sub svg { width: 25px; height: 25px; display: block; }
+.df-sub .key { position: absolute; right: -9px; bottom: -7px; min-width: 17px; height: 17px; padding: 0 3px; border-radius: 5px;
+  background: var(--cream); color: var(--ink); border: 1.5px solid var(--ink); font: 400 11px/14px var(--display); text-align: center; }
+.df-sub.grey { filter: grayscale(1) brightness(.8); opacity: .5; }
+.df-sub.off { opacity: 0; }
 .df-ret.off, .df-tank.off { opacity: 0; }
 .df-ret.dry { animation: dfShake .28s linear; }
 @keyframes dfShake { 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
@@ -139,6 +170,7 @@ html, body {
 .df-tank.gulf .df-tank-fill { background: linear-gradient(180deg, #a79dff, var(--gulf-dye)); }
 .df-tank::after { content: ''; position: absolute; left: 3px; top: 4px; width: 3px; bottom: 6px; border-radius: 3px; background: rgba(255,255,255,.55); }
 .df-tank-low { position: absolute; left: 0; right: 0; bottom: 20%; height: 2px; background: rgba(255,248,236,.75); }
+.df-tank-sub { position: absolute; left: 0; right: 0; height: 2px; margin-bottom: -1px; background: rgba(20,32,58,.85); box-shadow: 0 1px 0 rgba(255,248,236,.6); }
 .df-tank.low { border-color: var(--bad); }
 .df-tank.low .df-tank-fill { animation: dfLow .7s ease-in-out infinite; }
 @keyframes dfLow { 50% { filter: brightness(1.5); } }
@@ -305,4 +337,4 @@ html, body {
 @keyframes dfMarch { to { background-position: 34px 0; } }
 @keyframes dfBob { 50% { transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .df-progress b, .df-play { animation: none; } }
-@media (max-width: 760px) { .df-crest { width: 28px; height: 28px; } .df-crest .mark { font-size: 15px; } .df-timer { font-size: 26px; min-width: 90px; } .df-gauge { width: 140px; } .df-toast { font-size: 13px; } }
+@media (max-width: 760px) { .df-crest { width: 28px; height: 28px; } .df-crest .mark { font-size: 15px; } .df-timer { font-size: 26px; min-width: 90px; } .df-gauge { width: 176px; } .df-gauge .label { font-size: 12px; } .df-toast { font-size: 13px; } }

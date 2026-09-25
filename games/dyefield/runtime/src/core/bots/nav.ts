@@ -24,16 +24,40 @@
 // rotation-invariant (both crews get mirrored path shapes); the id breaks only exact ties — and an
 // admissible horizontal-distance heuristic (every edge costs ≥ its horizontal length).
 // nearest() walks a 2 m XZ bucket grid and prefers nodes on the query's own level.
+//
+// CHANGED(MAPSIM) (CONTRACT_P6_11 §19), all additive; a map without the phase 7–8 features (Pier 18) builds the
+// exact graph it did before:
+//   * floors a node may stand on: paint_*, the spawn pads, and the walkable unpaintable floors col_* (stair
+//     wedges), grate_* (catwalks) and conveyor_* belt tops. Physics queries see grates (runners collide).
+//   * STAIRS: on a col_ surface the footing ring tolerances follow the surface slope and walk links may climb
+//     up to MOVE.maxSlopeDeg (a stair wedge is ≈ 31–36°), so multi-floor staircases link up.
+//   * CONVEYORS: a walk edge over a belt costs length × walk / (walk + belt·dir) (with the belt cheaper, against
+//     it dearer); the A* heuristic is scaled by the smallest such factor, so it stays admissible.
+//   * SPRINGS: no node and no walk footing within a pad's disc + 0.55 m (a walk never launches by accident;
+//     ground() answers NaN there too, so the bots' safe-step test keeps them off the pads). A SPRING edge (kind 4,
+//     EDGE_SPRING) goes from an approach node 1.6–3.65 m from the pad, whose straight line to the landing node
+//     crosses the pad centre (≤ 0.45 m off it), to the node nearest the landing point of the arc simulated from
+//     the pad centre (runner ballistics: MOVE.gravity, trapezoid steps of TICK). A bot drives it like any
+//     non-walk edge: it steers straight at the landing node — it walks onto the pad, the runner launches itself,
+//     flies ballistic and lands next to the target node.
+//   * OOB: no node and no walk footing inside an oob_ volume (± 5 cm).
+//   * pad radius: maps.json spawnpad brushes, else (layout maps) spawns.<side>.padRadius, else 2.2 m.
+//   * drops / jumps need landing room (the floor goes on 0.7 m past the target, not into oob_, not onto a spring
+//     pad); a jump over a tall block needs a wider landing column; a climb needs no overhang above the wall.
+//   * islands (node groups linked to no spawn by any edge, either way) are dropped at the end (stats.pruned).
 
 import type { MapDef } from '../data.ts';
-import type { MapGeometry } from '../mapgeo.ts';
+import type { MapFeatures, MapGeometry, MapOob } from '../mapgeo.ts';
+import { conveyorAt, featuresOf } from '../mapgeo.ts';
 import type { PhysicsWorld } from '../physics.ts';
-import { MOVE } from '../config.ts';
+import { MOVE, TICK } from '../config.ts';
 
 export const EDGE_WALK = 0;
 export const EDGE_DROP = 1;
 export const EDGE_JUMP = 2;
 export const EDGE_CLIMB = 3;
+/** CHANGED(MAPSIM): approach node → landing node across a tide-spring pad (walk onto the pad; the runner launches itself) */
+export const EDGE_SPRING = 4;
 
 export interface NavClimb {
   /** wall contact point (on the face, at the base node's height + 0.5) */
@@ -47,7 +71,7 @@ export interface NavClimb {
 export interface NavGraph {
   nodes: number;
   x: Float32Array; y: Float32Array; z: Float32Array;   // node positions (walkable floor points, ~1 m grid, multi-level)
-  edgeStart: Int32Array; edgeTo: Int32Array; edgeCost: Float32Array; edgeKind: Uint8Array; // CSR; kind 0 walk, 1 drop, 2 jump, 3 wall-slick climb
+  edgeStart: Int32Array; edgeTo: Int32Array; edgeCost: Float32Array; edgeKind: Uint8Array; // CSR; kind 0 walk, 1 drop, 2 jump, 3 wall-slick climb, 4 spring
   nearest(x: number, y: number, z: number): number;          // node id or -1
   path(from: number, to: number, out: number[], extraCost?: (edge: number) => number): boolean;     // A*, deterministic tie-breaks
   // ── CHANGED(BOTS): additive extras (see CONTRACT §10.2 note) ──
@@ -59,7 +83,7 @@ export interface NavGraph {
   /** can a runner walk the straight line a → b (continuous footing + no wall at knee/chest)? */
   walkable(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean;
   /** build statistics */
-  stats: { buildMs: number; columns: number; nudged: number; edgesByKind: [number, number, number, number]; nodeMs: number; open: number };
+  stats: { buildMs: number; columns: number; nudged: number; edgesByKind: [number, number, number, number, number]; nodeMs: number; open: number; pruned?: number };
 }
 
 // ─────────────────────────────── tuning ───────────────────────────────
@@ -77,6 +101,12 @@ const JUMP_OVER_MAX = 1.1;
 const CLIMB_MIN = 1.05;
 const CLIMB_MAX = 3.0;
 const NUDGE = 0.4;
+/** CHANGED(MAPSIM): clearance of a jump's landing column (the capsule radius + 0.14 m) */
+const LAND_R = MOVE.radius + 0.14;
+/** CHANGED(MAPSIM): a drop / jump lands with speed: the floor must go on this far past the target node (m) */
+const LAND_ROOM = 0.7;
+/** CHANGED(MAPSIM): a drop / jump target stays this far outside a spring disc (m): an overshoot must not launch */
+const SPRING_LAND = 1.4;
 /** a node's own clearance: the real capsule (MOVE.radius) + the KCC skin + a hair */
 const NODE_R = MOVE.radius + MOVE.skin + 0.01;
 const NODE_KNEE = STEP + NODE_R + 0.02;
@@ -85,6 +115,59 @@ const EPS = 1e-6;
 const RING_IN = new Float64Array(8), RING_OUT = new Float64Array(16);
 for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4; RING_IN[k * 2] = Math.cos(a) * 0.2; RING_IN[k * 2 + 1] = Math.sin(a) * 0.2; }
 for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; RING_OUT[k * 2] = Math.cos(a) * 0.45; RING_OUT[k * 2 + 1] = Math.sin(a) * 0.45; }
+
+/** physics queries of the nav see grates (runner collision) */
+const GR = { grates: true } as const;
+/** no node / walk footing within a spring disc + this margin (m) */
+const SPRING_KEEP = 0.55;
+
+// ─────────────────────────────── exclusion zones (CHANGED(MAPSIM)) ───────────────────────────────
+interface Excl { n: number; x: Float64Array; y: Float64Array; z: Float64Array; r2: Float64Array; oob: MapOob[] }
+
+function exclusionOf(f: MapFeatures): Excl | null {
+  if (!f.springs.length && !f.oob.length) return null;
+  const n = f.springs.length;
+  const ex: Excl = { n, x: new Float64Array(n), y: new Float64Array(n), z: new Float64Array(n), r2: new Float64Array(n), oob: f.oob };
+  for (let i = 0; i < n; i++) {
+    const s = f.springs[i];
+    ex.x[i] = s.x; ex.y[i] = s.y; ex.z[i] = s.z; ex.r2[i] = (s.r + SPRING_KEEP) ** 2;
+  }
+  return ex;
+}
+
+/** inside a spring keep-out disc (±1 m of the pad top) or an oob_ volume (±5 cm) */
+function excluded(ex: Excl, x: number, y: number, z: number): boolean {
+  for (let i = 0; i < ex.n; i++) {
+    const dx = x - ex.x[i], dz = z - ex.z[i];
+    if (dx * dx + dz * dz <= ex.r2[i] && Math.abs(y - ex.y[i]) < 1.0) return true;
+  }
+  const O = ex.oob;
+  for (let i = 0; i < O.length; i++) {
+    const o = O[i];
+    if (x >= o.min[0] && x <= o.max[0] && z >= o.min[2] && z <= o.max[2] && y >= o.min[1] - 0.05 && y <= o.max[1] + 0.05) return true;
+  }
+  return false;
+}
+
+type Soup = { positions: Float32Array; indices: Uint32Array };
+function mergeSoups(list: Soup[]): Soup {
+  let nv = 0, ni = 0;
+  for (const s of list) { nv += s.positions.length; ni += s.indices.length; }
+  const positions = new Float32Array(nv), indices = new Uint32Array(ni);
+  let vo = 0, io = 0;
+  for (const s of list) {
+    positions.set(s.positions, vo);
+    for (let k = 0; k < s.indices.length; k++) indices[io + k] = s.indices[k] + vo / 3;
+    vo += s.positions.length; io += s.indices.length;
+  }
+  return { positions, indices };
+}
+/** a flat 9-floats-per-triangle list as a soup */
+function trisSoup(t: Float32Array): Soup {
+  const indices = new Uint32Array(t.length / 3);
+  for (let i = 0; i < indices.length; i++) indices[i] = i;
+  return { positions: t, indices };
+}
 
 // ─────────────────────────────── triangle column index ───────────────────────────────
 interface TriIndex {
@@ -286,6 +369,9 @@ class Nav implements NavGraph {
 
   private readonly ti: TriIndex;
   private readonly physics: PhysicsWorld;
+  /** CHANGED(MAPSIM): spring keep-out discs + oob volumes (null: none), and the A* heuristic scale (conveyors) */
+  private readonly ex: Excl | null;
+  private readonly hScale: number;
   private readonly colY = new Float64Array(64);
   private readonly colN = new Float64Array(64);
   // nearest() buckets
@@ -298,8 +384,9 @@ class Nav implements NavGraph {
 
   constructor(ti: TriIndex, physics: PhysicsWorld, x: Float32Array, y: Float32Array, z: Float32Array,
     edgeStart: Int32Array, edgeTo: Int32Array, edgeCost: Float32Array, edgeKind: Uint8Array, edgeClimb: Int32Array, climbs: NavClimb[],
-    stats: NavGraph['stats']) {
+    stats: NavGraph['stats'], ex: Excl | null, hScale: number) {
     this.ti = ti; this.physics = physics;
+    this.ex = ex; this.hScale = hScale;
     this.nodes = x.length; this.x = x; this.y = y; this.z = z;
     this.edgeStart = edgeStart; this.edgeTo = edgeTo; this.edgeCost = edgeCost; this.edgeKind = edgeKind;
     this.edgeClimb = edgeClimb; this.climbs = climbs; this.stats = stats;
@@ -369,7 +456,8 @@ class Nav implements NavGraph {
     const ep = this.epoch;
     const X = this.x, Z = this.z;
     const tx = X[to], tz = Z[to];
-    const h = (i: number): number => Math.hypot(X[i] - tx, Z[i] - tz);
+    const hs = this.hScale;
+    const h = hs === 1 ? (i: number): number => Math.hypot(X[i] - tx, Z[i] - tz) : (i: number): number => Math.hypot(X[i] - tx, Z[i] - tz) * hs;
     this.heapLen = 0;
     this.g[from] = 0; this.came[from] = -1; this.seen[from] = ep;
     this.push(h(from), h(from), from);
@@ -451,7 +539,7 @@ class Nav implements NavGraph {
       const y = this.colY[k];
       if (y > yHi) continue;
       if (y < yLo) break;
-      if (this.colN[k] >= FLOOR_NY) return y;
+      if (this.colN[k] >= FLOOR_NY) return this.ex && excluded(this.ex, x, y, z) ? NaN : y;
       if (this.colN[k] < 0) continue;       // underside of something: keep looking below
       return NaN;                            // a steep up-facing face is the top surface here
     }
@@ -459,13 +547,13 @@ class Nav implements NavGraph {
   }
 
   walkable(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
-    return walkLine(this.ti, this.physics, this.colY, this.colN, ax, ay, az, bx, by, bz);
+    return walkLine(this.ti, this.physics, this.colY, this.colN, ax, ay, az, bx, by, bz, this.ex);
   }
 }
 
 /** continuous footing a → b: every 0.25 m sample is walkable floor, no rise above the step height between samples */
 function footing(ti: TriIndex, colY: Float64Array, colN: Float64Array,
-  ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
+  ax: number, ay: number, az: number, bx: number, by: number, bz: number, ex: Excl | null = null): boolean {
   const hd = Math.hypot(bx - ax, bz - az);
   const steps = Math.max(1, Math.ceil(hd / 0.25));
   let prev = ay;
@@ -476,8 +564,10 @@ function footing(ti: TriIndex, colY: Float64Array, colN: Float64Array,
     const g = groundNear(ti, colY, colN, px, pz, prev + STEP + 0.02, prev - STEP - 0.02);
     if (!(g === g)) return false;
     if (Math.abs(g - expect) > 0.45) return false;
+    if (ex && excluded(ex, px, g, pz)) return false;
     prev = g;
   }
+  if (ex && excluded(ex, bx, by, bz)) return false;
   return Math.abs(by - prev) <= STEP + 0.02;
 }
 
@@ -485,15 +575,15 @@ function footing(ti: TriIndex, colY: Float64Array, colN: Float64Array,
 function sweepClear(physics: PhysicsWorld, ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
   const l = Math.hypot(bx - ax, by - ay, bz - az);
   if (l < 1e-4) return true;
-  if (physics.sphereCast(ax, ay + KNEE_Y, az, bx - ax, by - ay, bz - az, CAP_R, l)) return false;
-  if (physics.sphereCast(ax, ay + CHEST_Y, az, bx - ax, by - ay, bz - az, CHEST_R, l)) return false;
+  if (physics.sphereCast(ax, ay + KNEE_Y, az, bx - ax, by - ay, bz - az, CAP_R, l, GR)) return false;
+  if (physics.sphereCast(ax, ay + CHEST_Y, az, bx - ax, by - ay, bz - az, CHEST_R, l, GR)) return false;
   return true;
 }
 
 /** continuous footing a → b (samples every 0.25 m) + knee/chest sweeps clear */
 function walkLine(ti: TriIndex, physics: PhysicsWorld, colY: Float64Array, colN: Float64Array,
-  ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
-  return footing(ti, colY, colN, ax, ay, az, bx, by, bz) && sweepClear(physics, ax, ay, az, bx, by, bz);
+  ax: number, ay: number, az: number, bx: number, by: number, bz: number, ex: Excl | null = null): boolean {
+  return footing(ti, colY, colN, ax, ay, az, bx, by, bz, ex) && sweepClear(physics, ax, ay, az, bx, by, bz);
 }
 
 // ─────────────────────────────── clutter index (every collision triangle's AABB, XZ-binned) ───────────────────────────────
@@ -619,10 +709,39 @@ function topAt(ti: TriIndex, x: number, z: number, lo: number, hi: number): numb
   return maxAll > hi ? maxAll : bandUp;
 }
 
+/**
+ * CHANGED(MAPSIM): where a runner launched from (x, y, z) at (vx, vy, vz) lands — the runner's own ballistics
+ * (MOVE.gravity, trapezoid steps of TICK, no drag). Landing = the first walkable floor the feet cross while
+ * falling; a steep hit (the capsule's chest sphere against a wall) or a fall below killY → null.
+ */
+function springArc(ti: TriIndex, colY: Float64Array, colN: Float64Array, physics: PhysicsWorld,
+  x: number, y: number, z: number, vx: number, vy: number, vz: number, killY: number): { x: number; y: number; z: number; t: number } | null {
+  y += MOVE.skin;
+  for (let i = 1; i <= 900; i++) {
+    const v0 = vy;
+    vy = Math.max(-MOVE.maxFall, vy - MOVE.gravity * TICK);
+    const dy = 0.5 * (v0 + vy) * TICK;
+    const nx = x + vx * TICK, ny = y + dy, nz = z + vz * TICK;
+    const hit = physics.sphereCast(x, y + CHEST_Y, z, nx - x, dy, nz - z, CHEST_R, Math.hypot(nx - x, dy, nz - z), GR);
+    if (hit && Math.abs(hit.ny) < FLOOR_NY) return null;
+    if (vy < 0) {
+      const g = groundNear(ti, colY, colN, nx, nz, y + 0.02, ny - 0.02);
+      if (g === g) return { x: nx, y: g, z: nz, t: i * TICK };
+    }
+    x = nx; y = ny; z = nz;
+    if (y < killY) return null;
+  }
+  return null;
+}
+
 // ─────────────────────────────── builder ───────────────────────────────
 export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): NavGraph {
   const t0 = performance.now();
-  const ti = buildTriIndex(geo.collision.positions, geo.collision.indices, 0.5);
+  const F = featuresOf(geo);
+  // runner collision = the MAP_SOLID soup + grates (a map without grates uses the soup as is)
+  const solid: Soup = F.grates.indices.length ? mergeSoups([geo.collision, F.grates]) : geo.collision;
+  const ti = buildTriIndex(solid.positions, solid.indices, 0.5);
+  const ex = exclusionOf(F);
   const colY = new Float64Array(64), colN = new Float64Array(64);
   const b = def.bounds ?? { min: [-30, -2, -45], max: [30, 12, 45] };
   const killY = def.killY ?? -1;
@@ -635,34 +754,58 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
   const inside = (x: number, yf: number, z: number): boolean => firstAboveNy(ti, x, z, yf + 0.02) > 0.05;
   // floors a bot may stand on: paintable floors (paint_*) and the two spawn pads. Unpaintable set
   // dressing (planter soil around a palm trunk, bollard caps, lamp bases) is never a goal or a node.
-  const paintTi = buildTriIndex(geo.paint.positions, geo.paint.indices, 0.5);
-  let padR = 2.2;
-  for (const br of (def.brushes ?? []) as Array<Record<string, unknown>>) if (br.kind === 'spawnpad' && typeof br.radius === 'number') padR = br.radius;
+  // CHANGED(MAPSIM): plus the walkable unpaintable floors — col_ stair wedges, grates, conveyor belt tops.
+  const conveyorTops = F.conveyors.map((c) => trisSoup(c.top));
+  const floorSoup: Soup = F.col.indices.length || F.grates.indices.length || conveyorTops.length
+    ? mergeSoups([geo.paint, F.col, F.grates, ...conveyorTops]) : geo.paint;
+  const paintTi = buildTriIndex(floorSoup.positions, floorSoup.indices, 0.5);
+  // col_ surfaces (stair wedges): a node there gets slope-aware footing tolerances and steep walk links
+  const colTi = F.col.indices.length ? buildTriIndex(F.col.positions, F.col.indices, 0.5) : null;
+  const onColFloor = (x: number, yf: number, z: number): boolean => {
+    if (!colTi) return false;
+    const g = groundNear(colTi, colY, colN, x, z, yf + 0.03, yf - 0.03);
+    return g === g;
+  };
+  let padR = 2.2, padBrush = false;
+  for (const br of (def.brushes ?? []) as Array<Record<string, unknown>>) if (br.kind === 'spawnpad' && typeof br.radius === 'number') { padR = br.radius; padBrush = true; }
   const pads = [geo.spawns.A, geo.spawns.B];
+  const padRs = [padR, padR];
+  if (!padBrush) {
+    // layout maps (no inline brushes): maps.json spawns.<side>.padRadius
+    const sp = def.spawns as unknown as Record<string, { padRadius?: unknown }> | undefined;
+    (['A', 'B'] as const).forEach((side, k) => { const r = sp?.[side]?.padRadius; if (typeof r === 'number' && r > 0) padRs[k] = r; });
+  }
   const onPaintOrPad = (x: number, yf: number, z: number): boolean => {
-    for (const p of pads) if ((x - p.x) ** 2 + (z - p.z) ** 2 <= padR * padR && Math.abs(yf - p.y) < 0.3) return true;
+    for (let k = 0; k < 2; k++) { const p = pads[k]; if ((x - p.x) ** 2 + (z - p.z) ** 2 <= padRs[k] * padRs[k] && Math.abs(yf - p.y) < 0.3) return true; }
     const g = groundNear(paintTi, colY, colN, x, z, yf + 0.06, yf - 0.06);
     return g === g;
   };
-  const standable = (x: number, yf: number, z: number): boolean => {
+  const standable = (x: number, yf: number, z: number, ny = 1): boolean => {
     if (yf < killY + 0.5) return false;
+    if (ex && excluded(ex, x, yf, z)) return false;
     if (!onPaintOrPad(x, yf, z)) return false;
     if (inside(x, yf, z)) return false;
     // the physics agrees: a ray straight down lands on this floor (not on a lip or an edge beside it)
-    const down = physics.raycast(x, yf + 0.3, z, 0, -1, 0, 0.6);
+    const down = physics.raycast(x, yf + 0.3, z, 0, -1, 0, 0.6, GR);
     if (!down || Math.abs(down.y - yf) > 0.04) return false;
     // headroom + capsule clearance: a sphere resting just above the step height, swept to 1.25 m
-    if (physics.sphereCast(x, yf + NODE_KNEE, z, 0, 1, 0, NODE_R, Math.max(1e-3, HEADROOM - NODE_KNEE - NODE_R))) return false;
+    if (physics.sphereCast(x, yf + NODE_KNEE, z, 0, 1, 0, NODE_R, Math.max(1e-3, HEADROOM - NODE_KNEE - NODE_R), GR)) return false;
     // footing under the capsule: the 4 inner ring points (0.2 m) on the same surface, and 6 of the 8
     // outer ring points (0.45 m) within ±0.3 m — a 0.6 m wall top or a chevron cap is not a place to stand
-    // inner ring on the SAME surface (±0.12 m allows a 16° ramp): a node never sits on a lip or a box edge
+    // inner ring on the SAME surface (±0.12 m allows a 16° ramp): a node never sits on a lip or a box edge.
+    // CHANGED(MAPSIM): on a col_ stair wedge (31–36°) the tolerances follow the slope.
+    let tolIn = 0.12, tolOut = 0.3;
+    if (ny < 0.999 && onColFloor(x, yf, z)) {
+      const tanS = Math.sqrt(Math.max(0, 1 - ny * ny)) / Math.max(ny, 0.5);
+      tolIn = Math.max(tolIn, 0.2 * tanS + 0.04); tolOut = Math.max(tolOut, 0.45 * tanS + 0.06);
+    }
     for (let k = 0; k < 4; k++) {
-      const g = groundNear(ti, colY, colN, x + RING_IN[k * 2], z + RING_IN[k * 2 + 1], yf + 0.12, yf - 0.12);
+      const g = groundNear(ti, colY, colN, x + RING_IN[k * 2], z + RING_IN[k * 2 + 1], yf + tolIn, yf - tolIn);
       if (!(g === g)) return false;
     }
     let ok = 0;
     for (let k = 0; k < 8; k++) {
-      const g = groundNear(ti, colY, colN, x + RING_OUT[k * 2], z + RING_OUT[k * 2 + 1], yf + 0.3, yf - 0.3);
+      const g = groundNear(ti, colY, colN, x + RING_OUT[k * 2], z + RING_OUT[k * 2 + 1], yf + tolOut, yf - tolOut);
       if (g === g) ok++;
     }
     return ok >= 6;
@@ -699,7 +842,7 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
         if (yf > yTop) continue;
         if (ns[k] < FLOOR_NY) continue;
         if (lastY - yf < HEADROOM) { /* stacked too close to a floor we already took */ }
-        let px = cx, pz = cz, py = yf, ok = standable(cx, yf, cz);
+        let px = cx, pz = cz, py = yf, ok = standable(cx, yf, cz, ns[k]);
         if (!ok) {
           // nudge off a nearby wall / lip (deterministic, rotation-equivariant order)
           for (let r = 1; r <= 2 && !ok; r++) {
@@ -707,7 +850,7 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
               const qx = cx + ox * NUDGE * r, qz = cz + oz * NUDGE * r;
               const qy = groundNear(ti, colY, colN, qx, qz, yf + 0.1, yf - 0.1);
               if (!(qy === qy)) continue;
-              if (standable(qx, qy, qz)) { px = qx; pz = qz; py = qy; ok = true; nudged++; break; }
+              if (standable(qx, qy, qz, ns[k])) { px = qx; pz = qz; py = qy; ok = true; nudged++; break; }
             }
           }
         }
@@ -726,9 +869,26 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
   const tNodes = performance.now();
 
   // ── per-node "open": no collision triangle within 1.8 m in the capsule band (walk sweeps can be skipped) ──
-  const clutter = buildClutter(geo.collision.positions, geo.collision.indices);
+  const clutter = buildClutter(solid.positions, solid.indices);
   const open = new Uint8Array(N);
   for (let i = 0; i < N; i++) open[i] = openAround(clutter, NX[i], NY[i] + 0.3, NY[i] + 1.9, NZ[i], 1.8) ? 1 : 0;
+  // CHANGED(MAPSIM): nodes on a col_ stair wedge may link to neighbours up to the KCC's max slope
+  const steep = new Uint8Array(N);
+  if (colTi) for (let i = 0; i < N; i++) steep[i] = onColFloor(NX[i], NY[i], NZ[i]) ? 1 : 0;
+  const STEEP_K = Math.tan(MOVE.maxSlopeDeg * Math.PI / 180);
+  const riseK = (a: number, bn: number): number => (steep[a] || steep[bn] ? STEEP_K : 0.5);
+  // CHANGED(MAPSIM): walk edges over a conveyor: cost × walk / (walk + belt·dir); the heuristic scale keeps A* admissible
+  let hScale = 1;
+  for (const c of F.conveyors) hScale = Math.min(hScale, MOVE.walk / (MOVE.walk + Math.hypot(c.vel[0], c.vel[2])));
+  const beltFactor = (a: number, bn: number): number => {
+    if (!F.conveyors.length) return 1;
+    const mx = (NX[a] + NX[bn]) / 2, my = (NY[a] + NY[bn]) / 2, mz = (NZ[a] + NZ[bn]) / 2;
+    const ci = conveyorAt(F, mx, my, mz, 0.3);
+    if (ci < 0) return 1;
+    const v = F.conveyors[ci].vel;
+    const dx = NX[bn] - NX[a], dz = NZ[bn] - NZ[a], l = Math.hypot(dx, dz) || 1;
+    return MOVE.walk / Math.max(1, MOVE.walk + (v[0] * dx + v[2] * dz) / l);
+  };
 
   // ── edges ──
   const eFrom: number[] = [], eTo: number[] = [], eCost: number[] = [], eKind: number[] = [], eClimb: number[] = [];
@@ -740,7 +900,7 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
     const key = lo * N + hi;
     const v = walkKnown.get(key);
     if (v !== undefined) return v;
-    let w = footing(ti, colY, colN, NX[lo], NY[lo], NZ[lo], NX[hi], NY[hi], NZ[hi]);
+    let w = footing(ti, colY, colN, NX[lo], NY[lo], NZ[lo], NX[hi], NY[hi], NZ[hi], ex);
     // sweeps only where something could be in the way (open = no triangle near the capsule band)
     if (w && !(open[lo] && open[hi] && Math.abs(NY[hi] - NY[lo]) <= 0.3)) w = sweepClear(physics, NX[lo], NY[lo], NZ[lo], NX[hi], NY[hi], NZ[hi]);
     walkKnown.set(key, w);
@@ -748,8 +908,8 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
   };
   const clear = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, r: number): boolean => {
     const l = Math.hypot(bx - ax, by - ay, bz - az);
-    if (l < 1e-4) return !physics.sphereCast(ax, ay, az, 0, 1, 0, r, 1e-3);
-    return !physics.sphereCast(ax, ay, az, bx - ax, by - ay, bz - az, r, l);
+    if (l < 1e-4) return !physics.sphereCast(ax, ay, az, 0, 1, 0, r, 1e-3, GR);
+    return !physics.sphereCast(ax, ay, az, bx - ax, by - ay, bz - az, r, l, GR);
   };
   /** max top height of anything between a and b (column samples), relative band [lo, hi] */
   const obstacleTop = (ax: number, az: number, bx: number, bz: number, lo: number, hi: number): number => {
@@ -764,6 +924,21 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
     return top;
   };
   const pw = buildPaintWalls(geo, def.scoring?.floorMinNy ?? 0.45);
+  // CHANGED(MAPSIM): landing room for drops / jumps — a runner arriving over a lip still carries speed, so the floor
+  // at b's level (±0.3 m) must go on 0.35 and 0.7 m past b (not into an oob_ channel), and b stays clear of spring pads
+  const landingRoom = (ax: number, az: number, bx: number, by: number, bz: number): boolean => {
+    const dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz);
+    if (l > 1e-6) {
+      for (const f of [0.5, 1]) {
+        const qx = bx + dx / l * LAND_ROOM * f, qz = bz + dz / l * LAND_ROOM * f;
+        const g = groundNear(ti, colY, colN, qx, qz, by + 0.3, by - 0.3);
+        if (!(g === g)) return false;
+        if (ex && excluded(ex, qx, g, qz)) return false;
+      }
+    }
+    for (const sp of F.springs) if ((bx - sp.x) ** 2 + (bz - sp.z) ** 2 < (sp.r + SPRING_LAND) ** 2 && Math.abs(by - sp.y) < 1.5) return false;
+    return true;
+  };
 
   // pass 1: walk links of every node (special edges below skip pairs a two-step walk already joins)
   const walkAdj: number[][] = new Array(N);
@@ -778,7 +953,7 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
       const cb = bzI * nxCols + bxI;
       for (let bn = colStart[cb]; bn < colStart[cb + 1]; bn++) {
         const dy = NY[bn] - NY[a], hd = Math.hypot(NX[bn] - NX[a], NZ[bn] - NZ[a]);
-        if (Math.abs(dy) <= Math.max(STEP, hd * 0.5) + 0.02 && walkPair(a, bn)) list.push(bn);
+        if (Math.abs(dy) <= Math.max(STEP, hd * riseK(a, bn)) + 0.02 && walkPair(a, bn)) list.push(bn);
       }
     }
     walkAdj[a] = list;
@@ -808,10 +983,10 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
           const bx = NX[bn], by = NY[bn], bz = NZ[bn];
           const dy = by - ay;
           const hd = Math.hypot(bx - ax, bz - az);
-          if (ring === 1 && Math.abs(dy) <= Math.max(STEP, hd * 0.5) + 0.02) {
+          if (ring === 1 && Math.abs(dy) <= Math.max(STEP, hd * riseK(a, bn)) + 0.02) {
             if (walkPair(a, bn)) {
               walkTo.push(bn);
-              eFrom.push(a); eTo.push(bn); eCost.push(Math.hypot(bx - ax, dy, bz - az)); eKind.push(EDGE_WALK); eClimb.push(-1);
+              eFrom.push(a); eTo.push(bn); eCost.push(Math.hypot(bx - ax, dy, bz - az) * beltFactor(a, bn)); eKind.push(EDGE_WALK); eClimb.push(-1);
               continue;
             }
           }
@@ -834,7 +1009,7 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
       if (drops >= 3) break;
       const bx = NX[bn], by = NY[bn], bz = NZ[bn];
       // the lip must be real: the footing between a and b is not continuous
-      if (footing(ti, colY, colN, ax, ay, az, bx, by, bz)) continue;
+      if (footing(ti, colY, colN, ax, ay, az, bx, by, bz, ex)) continue;
       // horizontal run at a's height over the lip, then the fall onto b
       if (!clear(ax, ay + KNEE_Y, az, bx, ay + KNEE_Y, bz, CAP_R)) continue;
       if (!clear(ax, ay + CHEST_Y, az, bx, ay + CHEST_Y, bz, CHEST_R)) continue;
@@ -842,6 +1017,7 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
       // don't "drop" through a floor that is in between (landing must be b's level)
       const g = groundNear(ti, colY, colN, bx, bz, ay - 0.1, by + 0.2);
       if (g === g && g > by + 0.25) continue;
+      if (!landingRoom(ax, az, bx, by, bz)) continue;
       eFrom.push(a); eTo.push(bn); eCost.push(hd + 0.6 + (ay - by) * 0.25); eKind.push(EDGE_DROP); eClimb.push(-1);
       drops++;
     }
@@ -855,7 +1031,7 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
       const top = obstacleTop(ax, az, bx, bz, Math.min(ay, by) - 0.5, ay + 3);
       // same level: only worth a jump when something taller than a step stands in between
       if (Math.abs(by - ay) <= STEP && !(top > Math.max(ay, by) + STEP)) continue;
-      if (footing(ti, colY, colN, ax, ay, az, bx, by, bz) && sweepClear(physics, ax, ay, az, bx, by, bz)) continue;   // plain walk
+      if (footing(ti, colY, colN, ax, ay, az, bx, by, bz, ex) && sweepClear(physics, ax, ay, az, bx, by, bz)) continue;   // plain walk
       const H = Math.max(by, top === -Infinity ? ay : top) + 0.14;            // feet height to clear
       if (H - ay > JUMP_OVER_MAX + 0.14) continue;
       if (by - ay > JUMP_UP_MAX) continue;
@@ -865,6 +1041,11 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
       if (!clear(ax, H + KNEE_Y, az, bx, H + KNEE_Y, bz, CAP_R)) continue;
       if (!clear(ax, H + CHEST_Y, az, bx, H + CHEST_Y, bz, CHEST_R)) continue;
       if (!clear(bx, H + KNEE_Y, bz, bx, by + KNEE_Y, bz, CAP_R)) continue;
+      // CHANGED(MAPSIM): over a TALL obstacle (< 0.28 m under the jump apex) the landing column must clear the
+      // real capsule + a margin: a runner coming down the flat arc next to a 1.1 m crate hangs on its top edge
+      // (measured: 6 of 56 such jumps on Lockwell, 6 of 1642 on Pier 18)
+      if (Math.abs(by - ay) <= STEP && H - Math.max(ay, by) > 1.0 && !clear(bx, H + KNEE_Y, bz, bx, by + KNEE_Y, bz, LAND_R)) continue;
+      if (!landingRoom(ax, az, bx, by, bz)) continue;
       // a jump that can't clear: apex 1.28 m (v²/2g) must top H with margin while moving hd
       eFrom.push(a); eTo.push(bn); eCost.push(hd + 1.6 + (H - ay)); eKind.push(EDGE_JUMP); eClimb.push(-1);
       jumps++;
@@ -874,7 +1055,7 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
     const cOffs = offsFor(flipA);
     for (let k = 0; k < 8 && climbsHere < 2; k++) {
       const [dxu, dzu] = cOffs[k];
-      const hit = physics.raycast(ax, ay + 0.5, az, dxu, 0, dzu, 1.3);
+      const hit = physics.raycast(ax, ay + 0.5, az, dxu, 0, dzu, 1.3, GR);
       if (!hit || Math.abs(hit.ny) > 0.3) continue;
       // face normal pointing back at us (horizontal)
       let fnx = hit.nx, fnz = hit.nz;
@@ -889,14 +1070,14 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
       let flat = true;
       for (const sgn of [-1, 1]) {
         const ox = cxp - inx * 0.5 + (-inz) * 0.4 * sgn, oz = czp - inz * 0.5 + inx * 0.4 * sgn;
-        const side = physics.raycast(ox, ay + 0.5, oz, inx, 0, inz, 0.8);
+        const side = physics.raycast(ox, ay + 0.5, oz, inx, 0, inz, 0.8, GR);
         if (!side || Math.abs(side.toi - 0.5) > 0.08 || side.nx * fnx + side.nz * fnz < 0.95) { flat = false; break; }
       }
       if (!flat) continue;
       // find the wall top: horizontal probes up the face until one misses
       let wallTop = NaN;
       for (let hgt = 0.75; hgt <= CLIMB_MAX + 0.3; hgt += 0.25) {
-        const probe = physics.raycast(cxp - inx * 0.6, ay + hgt, czp - inz * 0.6, inx, 0, inz, 0.9);
+        const probe = physics.raycast(cxp - inx * 0.6, ay + hgt, czp - inz * 0.6, inx, 0, inz, 0.9, GR);
         if (!probe) { wallTop = ay + hgt; break; }
       }
       if (!(wallTop === wallTop)) continue;
@@ -904,6 +1085,9 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
       if (!(topY === topY)) continue;
       const rise = topY - ay;
       if (rise < CLIMB_MIN || rise > CLIMB_MAX) continue;
+      // CHANGED(MAPSIM): nothing overhangs the climb (an eave / roof lip stops a wall-slicker under it): a sphere
+      // 0.42 m off the face sweeps from chest height at the base to 1.2 m over the top
+      if (!clear(cxp - inx * 0.42, ay + 0.9, czp - inz * 0.42, cxp - inx * 0.42, topY + 1.2, czp - inz * 0.42, 0.26)) continue;
       // a flat top (not the side of a ramp): the floor stays at topY 0.45–1.2 m in, and 0.4 m to each side
       let level = true;
       for (const [fi, ft] of [[0.8, 0], [1.2, 0], [0.8, -0.4], [0.8, 0.4]]) {
@@ -956,22 +1140,89 @@ export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): 
     eFrom.push(extraFrom[i]); eTo.push(extraTo[i]); eCost.push(extraCost[i]); eKind.push(EDGE_CLIMB); eClimb.push(extraClimb[i]);
   }
 
+  // ── CHANGED(MAPSIM): SPRING edges (kind 4): approach node → landing node across a tide-spring pad ──
+  for (const s of F.springs) {
+    const land = springArc(ti, colY, colN, physics, s.x, s.y, s.z, s.launch[0], s.launch[1], s.launch[2], killY);
+    if (!land) continue;
+    // landing node: the roomy node (≥ 3 walk links) nearest the landing point, within 1.6 m and ±0.6 m
+    let L = -1, bestL = Math.round(1.6 * 1.6 * 1e4);
+    for (let n = 0; n < N; n++) {
+      if (Math.abs(NY[n] - land.y) > 0.6 || walkDeg[n] < 3) continue;
+      const d2 = Math.round(((NX[n] - land.x) ** 2 + (NZ[n] - land.z) ** 2) * 1e4);
+      if (d2 < bestL) { bestL = d2; L = n; }
+    }
+    if (L < 0) continue;
+    const R0 = s.r + SPRING_KEEP, R1 = s.r + 2.6;
+    for (let n = 0; n < N; n++) {
+      const cx = s.x - NX[n], cz = s.z - NZ[n];
+      const hd = Math.hypot(cx, cz);
+      if (hd <= R0 || hd > R1 || Math.abs(NY[n] - s.y) > 0.5) continue;
+      // the straight line n → L crosses the pad: the centre lies ahead, ≤ 0.45 m off the line
+      const lx = NX[L] - NX[n], lz = NZ[L] - NZ[n], ll = Math.hypot(lx, lz);
+      if (ll < 1e-6) continue;
+      const ux = lx / ll, uz = lz / ll;
+      const along = cx * ux + cz * uz, perp = Math.abs(cx * uz - cz * ux);
+      if (along <= 0 || along >= ll || perp > 0.45) continue;
+      // footing from the node over the rim onto the pad centre, and nothing in the way at knee / chest height
+      if (!footing(ti, colY, colN, NX[n], NY[n], NZ[n], s.x, s.y, s.z)) continue;
+      if (!sweepClear(physics, NX[n], NY[n], NZ[n], s.x, s.y, s.z)) continue;
+      eFrom.push(n); eTo.push(L); eCost.push(ll + 1.0); eKind.push(EDGE_SPRING); eClimb.push(-1);
+    }
+  }
+
+  // ── CHANGED(MAPSIM): drop the ISLANDS — groups of nodes linked to no spawn by any edge in either direction (a
+  // sliver of steep bank, a lone node at a channel lip). Nothing can ever path to or from them; the survivors
+  // keep their relative order. (One-way perches with a drop edge down stay: they touch the main graph.) ──
+  const keepNode = new Uint8Array(N);
+  {
+    const adj = new Int32Array(N + 1);
+    for (let e = 0; e < eFrom.length; e++) { adj[eFrom[e] + 1]++; adj[eTo[e] + 1]++; }
+    for (let i = 1; i <= N; i++) adj[i] += adj[i - 1];
+    const lst = new Int32Array(eFrom.length * 2), fl = adj.slice(0, N);
+    for (let e = 0; e < eFrom.length; e++) { lst[fl[eFrom[e]]++] = eTo[e]; lst[fl[eTo[e]]++] = eFrom[e]; }
+    const q: number[] = [];
+    for (let k = 0; k < 2; k++) {
+      const sp = pads[k];
+      let best = -1, bd = Infinity;
+      for (let n = 0; n < N; n++) {
+        if (Math.abs(NY[n] - sp.y) > 0.6) continue;
+        const d = (NX[n] - sp.x) ** 2 + (NZ[n] - sp.z) ** 2;
+        if (d < bd) { bd = d; best = n; }
+      }
+      if (best >= 0 && !keepNode[best]) { keepNode[best] = 1; q.push(best); }
+    }
+    for (let h = 0; h < q.length; h++) {
+      const u = q[h];
+      for (let k = adj[u]; k < adj[u + 1]; k++) { const v = lst[k]; if (!keepNode[v]) { keepNode[v] = 1; q.push(v); } }
+    }
+    if (!q.length) keepNode.fill(1);
+  }
+  const newId = new Int32Array(N).fill(-1);
+  const KX: number[] = [], KY: number[] = [], KZ: number[] = [];
+  for (let n = 0; n < N; n++) if (keepNode[n]) { newId[n] = KX.length; KX.push(NX[n]); KY.push(NY[n]); KZ.push(NZ[n]); }
+  const pruned = N - KX.length;
+  const M = KX.length;
+
   // ── CSR (stable by source: edges keep their emission order within a node) ──
-  const E = eFrom.length;
-  const edgeStart = new Int32Array(N + 1);
-  for (let e = 0; e < E; e++) edgeStart[eFrom[e] + 1]++;
-  for (let i = 1; i <= N; i++) edgeStart[i] += edgeStart[i - 1];
+  const edgeStart = new Int32Array(M + 1);
+  let E = 0;
+  for (let e = 0; e < eFrom.length; e++) if (newId[eFrom[e]] >= 0 && newId[eTo[e]] >= 0) { edgeStart[newId[eFrom[e]] + 1]++; E++; }
+  for (let i = 1; i <= M; i++) edgeStart[i] += edgeStart[i - 1];
   const edgeTo = new Int32Array(E), edgeCost = new Float32Array(E), edgeKind = new Uint8Array(E), edgeClimb = new Int32Array(E);
-  const fill = edgeStart.slice(0, N);
-  const byKind: [number, number, number, number] = [0, 0, 0, 0];
-  for (let e = 0; e < E; e++) {
-    const k = fill[eFrom[e]]++;
-    edgeTo[k] = eTo[e]; edgeCost[k] = eCost[e]; edgeKind[k] = eKind[e]; edgeClimb[k] = eClimb[e];
+  const fill = edgeStart.slice(0, M);
+  const byKind: [number, number, number, number, number] = [0, 0, 0, 0, 0];
+  for (let e = 0; e < eFrom.length; e++) {
+    const a = newId[eFrom[e]], b = newId[eTo[e]];
+    if (a < 0 || b < 0) continue;
+    const k = fill[a]++;
+    edgeTo[k] = b; edgeCost[k] = eCost[e]; edgeKind[k] = eKind[e]; edgeClimb[k] = eClimb[e];
     byKind[eKind[e]]++;
   }
-  const stats = { buildMs: 0, columns: nxCols * nzCols, nudged, edgesByKind: byKind, nodeMs: tNodes - t0, open: open.reduce((a, v) => a + v, 0) };
-  const nav = new Nav(ti, physics, Float32Array.from(NX), Float32Array.from(NY), Float32Array.from(NZ),
-    edgeStart, edgeTo, edgeCost, edgeKind, edgeClimb, climbs, stats);
+  let openKept = 0;
+  for (let n = 0; n < N; n++) if (keepNode[n]) openKept += open[n];
+  const stats = { buildMs: 0, columns: nxCols * nzCols, nudged, edgesByKind: byKind, nodeMs: tNodes - t0, open: openKept, pruned };
+  const nav = new Nav(ti, physics, Float32Array.from(KX), Float32Array.from(KY), Float32Array.from(KZ),
+    edgeStart, edgeTo, edgeCost, edgeKind, edgeClimb, climbs, stats, ex, hScale);
   stats.buildMs = performance.now() - t0;
   return nav;
 }
