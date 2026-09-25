@@ -21,6 +21,7 @@ import { enemiesInShape, nearestEnemy } from './spatial.ts';
 import { spawnTelegraph } from './telegraphs.ts';
 import { damageBoss } from '../ai/bosses/index.ts';
 import { damageProp, propsInRect } from '../city/citysim.ts';
+import { redLightActive } from '../meta/powerups.ts';
 
 export type ProjectileSpawn = Partial<Projectile> & {
   owner: Owner; kind: ProjectileKind; x: number; z: number; vx: number; vz: number; dmg: number;
@@ -330,9 +331,13 @@ export function stepProjectiles(w: World): void {
   const dt = w.dt;
   const n = ps.length;   // shots spawned during this pass start next tick
   const b = w.city ? w.city.bounds : null;
+  // v2 RED LIGHT (FEATURES_V2 §6.1, pre-wired): enemy-owned shots hang in the air (no move, no aging);
+  // boss- and titan-owned shots are unaffected
+  const red = redLightActive(w);
   for (let i = 0; i < n; i++) {
     const p = ps[i];
     if (!p.alive) continue;
+    if (red && p.owner === 'enemy') continue;
     const ex = extraOf(p);
     if (p.lob) { stepLob(w, p, ex); continue; }
     const x0 = p.x, z0 = p.z;

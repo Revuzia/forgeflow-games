@@ -22,6 +22,7 @@ import { damageBoss } from '../ai/bosses/index.ts';
 import { buildingById, buildingsInRect, damageBuilding, damageProp, propsInRect } from '../city/citysim.ts';
 import { healTitan, hurtTitan } from '../titans/titansim.ts';
 import { stat } from '../upgrades/stats.ts';
+import { ultBankKill } from '../meta/ultimate.ts';
 
 // ─────────────────────────────── tuning (lane-local) ───────────────────────────────
 /** Lifesteal heals at most this fraction of maxHp per tick (CONTRACT §5.4). */
@@ -349,7 +350,10 @@ export function killEnemy(w: World, e: Enemy, crushed: boolean): void {
   const xp = def ? def.xp : 1;
   const mass = (def ? def.mass : 1) * (KILL_MASS_RANK_MUL[w.titan.rank] ?? 1);
   const n = mass >= 40 ? 4 : mass >= 8 ? 3 : mass >= 3 ? 2 : 1;
-  for (let i = 0; i < n; i++) spawnPickup(w, 'scrap', e.x, e.z, xp / n, mass / n);
+  // v2 (FEATURES_V2 §2.7): kills during an UPROAR / DEMOLITION bank their XP instead (merged pickups)
+  if (!ultBankKill(w, e.x, e.z, xp, mass)) {
+    for (let i = 0; i < n; i++) spawnPickup(w, 'scrap', e.x, e.z, xp / n, mass / n);
+  }
   const elite = e.elite || e.kind === 'elite';
   if (elite) {
     spawnPickup(w, 'chest', e.x, e.z, 0, 0);

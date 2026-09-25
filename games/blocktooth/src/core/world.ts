@@ -22,6 +22,13 @@ import { stepEnemies } from '../ai/enemies.ts';
 import { stepBoss } from '../ai/bosses/index.ts';
 import { createUpgradeState, recomputeStats } from '../upgrades/stats.ts';
 import { stepUpgrades, processTriggers } from '../upgrades/engine.ts';
+// v2 (FEATURES_V2 §2.3) — meta systems (L0 stubs; lanes L1/L4/L5 fill them)
+import { chargeUltimate, createUltState, stepUltimate } from '../meta/ultimate.ts';
+import { createMapState, stepObjectives } from '../meta/objectives.ts';
+import { stepPowerups } from '../meta/powerups.ts';
+import { createTally, stepTally } from '../meta/tally.ts';
+import { stepEndless } from '../meta/endless.ts';
+import { applyPerk, sanitizeRunMeta, tryRevive } from '../meta/perks.ts';
 
 export const NO_INPUT: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
 
@@ -56,8 +63,15 @@ export function createWorld(opts: RunOptions): World {
     input: { ...NO_INPUT },
     cheats: { god: false, noSpawns: false },
     nextId: 1,
+    // v2 (FEATURES_V2 §2.3)
+    meta: sanitizeRunMeta(opts.meta),
+    ult: createUltState(),
+    map: createMapState(),
+    tally: createTally(),
+    endless: null,
   };
   recomputeStats(w);
+  applyPerk(w);           // v2: after recomputeStats, before hp = maxHp
   w.titan.hp = w.titan.maxHp;
   return w;
 }
@@ -76,14 +90,16 @@ function snapshotPrev(w: World): void {
 function compact(w: World): void {
   const keep = <T extends { alive: boolean }>(a: T[]) => { let j = 0; for (let i = 0; i < a.length; i++) if (a[i].alive) a[j++] = a[i]; a.length = j; };
   keep(w.enemies); keep(w.projectiles); keep(w.telegraphs); keep(w.hazards); keep(w.pickups);
+  keep(w.map.objectives); keep(w.map.powerups);   // v2
 }
 
 function checkRunEnd(w: World): void {
   if (w.run.result) return;
   if (!w.titan.alive) {
+    if (tryRevive(w)) return;                             // v2: perk STAY OF DEMOLITION (§8.5)
     w.run.result = 'dead'; w.run.phase = 'dead'; w.run.endT = w.t;
     w.events.push({ type: 'runEnd', result: 'dead' });
-  } else if (w.director.bossSpawned && w.boss && !w.boss.alive) {
+  } else if (!w.endless && w.director.bossSpawned && w.boss && !w.boss.alive) {   // v2: in endless only death ends the run
     w.run.result = 'clear'; w.run.phase = 'clear'; w.run.endT = w.t;
     w.events.push({ type: 'runEnd', result: 'clear' });
   }
@@ -105,8 +121,10 @@ export function stepWorld(w: World, input: TitanInput): void {
 
   stepCity(w);            // traffic, scared cars, blocks-leveled bookkeeping
   rebuildEnemyGrid(w);    // broadphase for the titan's attacks
+  stepUltimate(w);        // v2: UPROAR fire (input.ultimate) + roar/blast + bank flush — BEFORE stepTitan (invuln + roar move on the fire tick)
   stepTitan(w);           // move, dash, leash, collide, contact smash/crush, footsteps, regen, kit (auto + hook)
   stepDirector(w);        // waves, elite, boss scheduling + run.phase transitions
+  stepEndless(w);         // v2: EXTENDED COVERAGE escalation + rematches (no-op unless w.endless)
   stepEnemies(w);         // AI, movement, firing (spawns projectiles/telegraphs)
   stepBoss(w);            // boss AI + part colliders
   rebuildEnemyGrid(w);    // enemies moved — projectiles/hazards/telegraphs test current positions
@@ -116,6 +134,10 @@ export function stepWorld(w: World, input: TitanInput): void {
   stepPickups(w);         // magnet + collect → gainXp / gainMass (level/rank ups)
   stepUpgrades(w);        // buff timers, trigger icds, 'interval' triggers
   processTriggers(w);     // upgrade triggers fired by THIS tick's events
+  stepObjectives(w);      // v2: AFTER processTriggers so proc collapses / prop kills are seen (§2.3)
+  stepPowerups(w);        // v2: drops from ALL of this tick's kills/collapses, collect, timers
+  chargeUltimate(w);      // v2: UPROAR charge from this tick's events
+  stepTally(w);           // v2: run tally the goals read
   if (w.titan.rank > w.run.peakRank) w.run.peakRank = w.titan.rank;
   checkRunEnd(w);
   if (w.tick % 30 === 0) compact(w);

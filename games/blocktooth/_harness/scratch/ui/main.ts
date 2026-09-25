@@ -2,7 +2,7 @@
 // a real World from createWorld/stepN, poked into the state each screen needs.
 // Screens: hud · slate · sizeup · alert · boss · draft · chest · select · select2 · title · pause ·
 //          settings · tabloid · tabloiddead · flow (keyboard-driven interaction test → window.__RESULTS__)
-import type { BossState, TitanId, World } from '../../../src/core/types.ts';
+import type { BiomeId, BossState, TitanId, World } from '../../../src/core/types.ts';
 import { TITAN_IDS } from '../../../src/core/types.ts';
 import { createWorld, stepN } from '../../../src/core/world.ts';
 import { Input } from '../../../src/core/input.ts';
@@ -17,6 +17,11 @@ import { BossBar } from '../../../src/ui/bossbar.ts';
 import { SelectScreen } from '../../../src/ui/select.ts';
 import { DraftScreen } from '../../../src/ui/draft.ts';
 import { TitleScreen, PauseMenu, SettingsPanel } from '../../../src/ui/menus.ts';
+import { emptyProfile } from '../../../src/meta/profile.ts';
+// v2 (FEATURES_V2 §13.1) call shapes for the changed screen entry points (L0 tsc completion)
+const dctx = (n: number) => ({ rerollsLeft: n, banishLeft: 0, lockLeft: 0, locked: null, newIds: [] as string[] });
+const sopts = (portraits: Record<TitanId, string>, initial?: { titan?: TitanId; biome?: BiomeId }) =>
+  ({ portraits, portraitFor: async (t: TitanId) => portraits[t] ?? '', profile: emptyProfile(), bests: {}, initial });
 
 declare global { interface Window { __SNAP_READY__?: boolean; __RESULTS__?: unknown[]; __UI__?: unknown } }
 
@@ -174,14 +179,14 @@ async function main(): Promise<void> {
       const ids = offer.filter(Boolean).map((u) => (u as { id: string }).id);
       const hud = new Hud(root); hud.show(true); hud.update(w, 0.016);
       const d = new DraftScreen(root, input);
-      void d.open(w, ids, screen === 'chest' ? 0 : 2).then((r) => results.push(r));
+      void d.open(w, ids, dctx(screen === 'chest' ? 0 : 2)).then((r) => results.push(r));
       window.__UI__ = { d };
       setTimeout(() => { window.__SNAP_READY__ = true; }, 1100);
       return;
     }
     case 'select': case 'select2': {
       const s = new SelectScreen(root, input);
-      void s.run(portraits, { titan: titanId, biome: biomeId }).then((r) => results.push(r));
+      void s.run(sopts(portraits, { titan: titanId, biome: biomeId })).then((r) => results.push(r));
       if (screen === 'select2') setTimeout(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter' })), 500);
       window.__UI__ = { s };
       setTimeout(() => { window.__SNAP_READY__ = true; }, 1300);
@@ -227,13 +232,13 @@ async function flow(portraits: Record<TitanId, string>, shot: string): Promise<v
   await sleep(450); key('Enter', 'Enter'); await tp; log('title.done', true);
   // select: right, Enter (→ step 2), Esc (→ step 1), Enter, right, right, Enter (DROP IN)
   const s = new SelectScreen(root, input);
-  const sp = s.run(portraits, { titan: 'molo', biome: 'grideast' });
+  const sp = s.run(sopts(portraits, { titan: 'molo', biome: 'grideast' }));
   await sleep(350); key('ArrowRight', 'ArrowRight'); await sleep(60); key('Enter', 'Enter'); await sleep(80);
   key('Escape', 'Escape'); await sleep(80); key('Enter', 'Enter'); await sleep(80);
   key('KeyD', 'd'); await sleep(60); key('KeyD', 'd'); await sleep(60); key('Enter', 'Enter');
   log('select.result', await sp);
   // select: Esc at step 1 → null
-  const sp2 = s.run(portraits); await sleep(350); key('Escape', 'Escape'); log('select.esc', await sp2);
+  const sp2 = s.run(sopts(portraits)); await sleep(350); key('Escape', 'Escape'); log('select.esc', await sp2);
   // slate: any key
   const bc = new Broadcast(root, input);
   const sl = bc.openSlate(BIOMES.lockwater, TITANS.voltkite); await sleep(600); key('KeyQ', 'q'); await sl; log('slate.done', true);
@@ -241,10 +246,10 @@ async function flow(portraits: Record<TitanId, string>, shot: string): Promise<v
   const w = midRun(2); w.upgrades.pendingDrafts = 1;
   const ids = UPGRADES.filter((u) => !u.titan).slice(0, 3).map((u) => u.id);
   const d = new DraftScreen(root, input);
-  let dp = d.open(w, ids, 1); await sleep(400); key('Space', ' '); await sleep(120); key('Digit2', '2');
+  let dp = d.open(w, ids, dctx(1)); await sleep(400); key('Space', ' '); await sleep(120); key('Digit2', '2');
   log('draft.pick2', await dp); log('draft.expect', ids[1]);
-  dp = d.open(w, ids, 1); await sleep(400); key('KeyR', 'r'); log('draft.reroll', await dp);
-  dp = d.open(w, ids, 0); await sleep(400); key('KeyR', 'r'); await sleep(150); key('ArrowRight', 'ArrowRight'); await sleep(50); key('Enter', 'Enter');
+  dp = d.open(w, ids, dctx(1)); await sleep(400); key('KeyR', 'r'); log('draft.reroll', await dp);
+  dp = d.open(w, ids, dctx(0)); await sleep(400); key('KeyR', 'r'); await sleep(150); key('ArrowRight', 'ArrowRight'); await sleep(50); key('Enter', 'Enter');
   log('draft.noReroll.enter', await dp);
   // pause: down ×2 (retry) Enter Enter → retry; then Esc → resume
   input.mode = 'game';

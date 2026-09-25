@@ -27,6 +27,8 @@ const DEFAULTS: StatBlock = {
   shellCapacity: 1, stompDelay: 0.6, magmaDuration: 0,
   // BRIARWICK
   turretCap: 4, turretRate: 1, sporeHeal: 1, vineLength: 1,
+  // v2 UPROAR (FEATURES_V2 §3)
+  ultCharge: 1, ultPower: 1,
 };
 
 function statBlock(over: Partial<StatBlock>): StatBlock {

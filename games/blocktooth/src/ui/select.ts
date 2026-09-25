@@ -10,6 +10,7 @@
 import type { Input } from '../core/input.ts';
 import type { BiomeDef, BiomeId, EnemyKind, TitanDef, TitanId } from '../core/types.ts';
 import { BIOME_IDS, TITAN_IDS } from '../core/types.ts';
+import type { SelectResultV2, SelectRunOpts } from '../v2types.ts';
 import { bestKey, loadBest } from '../core/save.ts';
 import { TITANS } from '../data/titans.ts';
 import { BIOMES } from '../data/biomes.ts';
@@ -111,7 +112,15 @@ export class SelectScreen {
     this.buildBiomeCards();
   }
 
-  run(portraits: Record<TitanId, string>, initial?: { titan?: TitanId; biome?: BiomeId }): Promise<SelectResult> {
+  /** v2 signature (SelectScreenApi, FEATURES_V2 §13.1). L0: today's behaviour — only `portraits` and
+   *  `initial.titan/biome` are read; resolves {kind: 'start', titan, biome, perk: null, palette: 0} or null,
+   *  never {kind: 'goals'} (lane L9 adds the palette/perk rows, NEXT PERMIT PENDING and G / pad X). */
+  run(opts: SelectRunOpts): Promise<SelectResultV2> {
+    return this.runV1(opts.portraits, opts.initial).then((r): SelectResultV2 => (
+      r ? { kind: 'start', titan: r.titan, biome: r.biome, perk: null, palette: 0 } : null));
+  }
+
+  private runV1(portraits: Record<TitanId, string>, initial?: { titan?: TitanId; biome?: BiomeId }): Promise<SelectResult> {
     if (this.session && !this.session.done) this.session.abort();
     this.buildTitanCards(portraits || ({} as Record<TitanId, string>));
     const from = this.resume ?? initial;

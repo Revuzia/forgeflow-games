@@ -27,6 +27,8 @@ import { buildingsInRect, damageBuilding, damageProp, propsInRect, resolveCircle
 import { titanMaxSpeed } from '../../titans/titansim.ts';
 import * as caisson4 from './caisson4.ts';
 import * as irongully from './irongully.ts';
+import * as parkade6 from './parkade6.ts';
+import { endlessBossDmgMul } from '../../meta/endless.ts';
 
 // ─────────────────────────────── tuning (lane-local) ───────────────────────────────
 export const INTRO_S = 4;
@@ -56,7 +58,7 @@ interface BossModule {
    *  can never be closer than this to the boss centre (0/absent = off). */
   noseOut?(w: World, b: BossState): { reach: number; min: number } | null;
 }
-const MODS: Record<BossId, BossModule> = { caisson4, irongully };
+const MODS: Record<BossId, BossModule> = { caisson4, irongully, parkade6 };
 
 // ─────────────────────────────── toolkit (used by the boss modules) ───────────────────────────────
 /** Aim lead per phase, as a fraction of the attack's windup: the paint is laid where the titan
@@ -179,7 +181,7 @@ export function bossWindupMul(b: BossState): number { return WINDUP_MUL[b.phase]
 /** Hostile damage scaled by the titan's rank HP multiplier (§5.4). */
 export function bossHostile(w: World, base: number): number {
   const ph = w.boss ? w.boss.phase : 1;
-  return base * BOSS_DMG_MUL * (BOSS_PHASE_DMG_MUL[ph] ?? 1) * RANKS[w.titan.rank].hpMul;
+  return base * BOSS_DMG_MUL * (BOSS_PHASE_DMG_MUL[ph] ?? 1) * RANKS[w.titan.rank].hpMul * endlessBossDmgMul(w);   // v2: rematch ramp (1 outside endless)
 }
 
 export function makePart(name: string, ox: number, oz: number, r: number, y0: number, y1: number, hpMul = 1, strainMul = 0.3): BossPart {
@@ -570,7 +572,7 @@ export function spawnBoss(w: World, id: BossId): void {
   const D = w.director;
   D.bossSpawned = true;
   if (!(D.bossT <= w.t)) D.bossT = w.t;
-  if (!w.run.result) w.run.phase = 'boss';
+  if (!w.run.result && !w.endless) w.run.phase = 'boss';   // v2: an endless rematch keeps 'endless'
   w.events.push({ type: 'alert', key: 'boss' });
   w.events.push({ type: 'bossSpawn', boss: id });
 }
@@ -653,4 +655,27 @@ export function damageBoss(w: World, part: number, dmg: number, opts: DamageOpts
   if (b.hp <= 1e-6) { defeat(w, b); return; }
   if (p.strainMul > 0 && b.maxHp > 0) addMeter(w, b, (d * p.strainMul) / (METER_HP_FRAC * b.maxHp));
   checkPhase(w, b);
+}
+
+/**
+ * v2 (FEATURES_V2 §2.7 / §3.4, ModBossAdd): an UPROAR / DEMOLITION NOTICE hit on the live boss.
+ * BODY-ONLY and exact: the boss loses min(frac × maxHp, hp), credited to parts[0] in the `bossHit`
+ * event; BOSS_KIND_MUL, part hpMul / strainMul and the stagger ×2 are ignored. The meter gains exactly
+ * `meter` through addMeter (never derived from the damage). No-op during the intro or when dead.
+ * Returns the HP removed.
+ */
+export function bossUltHit(w: World, frac: number, meter: number): number {
+  const b = w.boss;
+  if (!b || !b.alive || b.introT > 0) return 0;
+  if (!(frac > 0) || !Number.isFinite(frac) || !(b.maxHp > 0)) return 0;
+  const p = b.parts[0];
+  const d = Math.min(frac * b.maxHp, b.hp);
+  b.hp -= d;
+  b.data.flash = 0.12;
+  b.data.by_ult = (b.data.by_ult ?? 0) + d;
+  w.events.push({ type: 'bossHit', part: p ? p.name : 'body', dmg: d, x: p ? p.x : b.x, z: p ? p.z : b.z });
+  if (b.hp <= 1e-6) { defeat(w, b); return d; }
+  if (meter > 0 && Number.isFinite(meter)) addMeter(w, b, meter);
+  checkPhase(w, b);
+  return d;
 }

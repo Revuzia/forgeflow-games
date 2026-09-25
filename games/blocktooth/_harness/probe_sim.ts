@@ -5,6 +5,7 @@
 //   node _harness/probe_sim.ts --titan molo,voltkite --minutes 6 --quiet
 //   node _harness/probe_sim.ts --det all                # determinism re-run for every config
 //   node _harness/probe_sim.ts --json _harness/_reports/probe_sim.json
+//   node _harness/probe_sim.ts --meta full              # v2: everything unlocked, no perk (default: --meta fresh)
 //
 // For every run: createWorld → the deterministic bot (bot.ts) drives until the run ends or
 // the time limit; pending drafts are auto-picked through rollOffer / pickUpgrade (exactly
@@ -17,12 +18,16 @@
 //   * boss spawns ≤ 560 s
 //   * drafts every ~10–25 s early (median gap of the drafts in the first 180 s, or until Size III)
 //   * full matrix only: a competent bot clears ≥ 8 of 12 runs in 8–12 min, and dies in some
+//     (v2 §0.6: "deaths ≥ 1 across the 12-run matrix" is stated explicitly — heals / shields / screen
+//     clears must not turn the gate into a walkover)
+//   * v2 §0.6 reporting lines per run: the share of all XP granted through the UPROAR bank
+//     (w.ult.xpTotal) and through OVERLOAD SITE payouts (w.map.overloadXp), and DEMOLITION kills
 // Exit: 0 = every assertion holds · 1 = violations (listed) · 2 = the sim could not be loaded.
 //
 // Harness code (not sim code): performance.now() is used ONLY to time ticks.
 
-import type { BiomeId, SimEvent, TitanId, World } from '../src/core/types.ts';
-import { BIOME_IDS, TITAN_IDS } from '../src/core/types.ts';
+import type { BiomeId, RunMeta, SimEvent, TitanId, World } from '../src/core/types.ts';
+import { BIOME_IDS, EMPTY_RUN_META, TITAN_IDS } from '../src/core/types.ts';
 import { BUDGET, SIM_HZ, cumXpAt } from '../src/core/config.ts';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -32,6 +37,7 @@ import { dirname } from 'node:path';
 type WorldMod = typeof import('../src/core/world.ts');
 type DraftMod = typeof import('../src/upgrades/draft.ts');
 type BotMod = typeof import('./bot.ts');
+type UpgMod = typeof import('../src/data/upgrades.ts');
 let createWorld: WorldMod['createWorld'];
 let stepWorld: WorldMod['stepWorld'];
 let hasPendingDraft: DraftMod['hasPendingDraft'];
@@ -39,12 +45,17 @@ let pickUpgrade: DraftMod['pickUpgrade'];
 let rollOffer: DraftMod['rollOffer'];
 let botInput: BotMod['botInput'];
 let botPickUpgrade: BotMod['botPickUpgrade'];
+/** v2 --meta: the RunMeta every run starts with (fresh = EMPTY_RUN_META; full = every locked card, no perk) */
+let RUN_META: RunMeta = { ...EMPTY_RUN_META, unlocked: [] };
+let lockedIds: string[] = [];
 
 async function loadSim(): Promise<string | null> {
   try {
     const wm: WorldMod = await import('../src/core/world.ts');
     const dm: DraftMod = await import('../src/upgrades/draft.ts');
     const bm: BotMod = await import('./bot.ts');
+    const um: UpgMod = await import('../src/data/upgrades.ts');
+    lockedIds = um.UPGRADES.filter((u) => u.locked).map((u) => u.id).sort();
     createWorld = wm.createWorld; stepWorld = wm.stepWorld;
     hasPendingDraft = dm.hasPendingDraft; pickUpgrade = dm.pickUpgrade; rollOffer = dm.rollOffer;
     botInput = bm.botInput; botPickUpgrade = bm.botPickUpgrade;
@@ -71,10 +82,11 @@ const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
 interface Args {
   titans: TitanId[]; biomes: BiomeId[]; seed: number; minutes: number; quiet: boolean;
   det: 'all' | number; json: string | null;
+  meta: 'fresh' | 'full';
 }
 
 function parseArgs(argv: string[]): Args {
-  const a: Args = { titans: [...TITAN_IDS], biomes: [...BIOME_IDS], seed: 1337, minutes: 13, quiet: false, det: 2, json: null };
+  const a: Args = { titans: [...TITAN_IDS], biomes: [...BIOME_IDS], seed: 1337, minutes: 13, quiet: false, det: 2, json: null, meta: 'fresh' };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     const v = (): string => {
@@ -95,8 +107,13 @@ function parseArgs(argv: string[]): Args {
     else if (k === '--quiet') a.quiet = true;
     else if (k === '--det') { const x = v(); a.det = x === 'all' ? 'all' : Math.max(0, Math.floor(Number(x))); }
     else if (k === '--json') a.json = v();
+    else if (k === '--meta') {
+      const x = v().toLowerCase();
+      if (x !== 'fresh' && x !== 'full') { console.error(`unknown --meta '${x}' (fresh|full)`); process.exit(2); }
+      a.meta = x;
+    }
     else if (k === '--help' || k === '-h') {
-      console.log('usage: node _harness/probe_sim.ts [--titan id[,id]] [--biome id[,id]] [--seed n] [--minutes m] [--det n|all] [--json path] [--quiet]');
+      console.log('usage: node _harness/probe_sim.ts [--titan id[,id]] [--biome id[,id]] [--seed n] [--minutes m] [--det n|all] [--json path] [--meta fresh|full] [--quiet]');
       process.exit(0);
     } else { console.error(`unknown arg ${k}`); process.exit(2); }
   }
@@ -163,6 +180,8 @@ interface RunResult {
   dmgTaken: number; peakEnemies: number; level: number; rank: number;
   bossHpFrac: number;
   simAvgMs: number; simP99Ms: number; simMaxMs: number; ticks: number;
+  // v2 §0.6 reporting (XP through the UPROAR bank / OVERLOAD SITE payouts, DEMOLITION kills, total XP)
+  ultXp: number; overloadXp: number; demolitionKills: number; totalXp: number;
   checkpoints: string[]; hash: string;
   error: string | null; nan: string | null; draftIssues: string[];
   events: Record<string, number>;
@@ -198,10 +217,11 @@ function runOne(titan: TitanId, biome: BiomeId, seed: number, maxTicks: number, 
     kills: 0, crushed: 0, dmgTaken: 0, peakEnemies: 0, level: 1, rank: 0, bossHpFrac: NaN,
     simAvgMs: 0, simP99Ms: 0, simMaxMs: 0, ticks: 0, checkpoints: [], hash: '', error: null, nan: null,
     draftIssues: [], events: {},
+    ultXp: 0, overloadXp: 0, demolitionKills: 0, totalXp: 0,
   };
   let w: World;
   try {
-    w = createWorld({ titan, biome, seed });
+    w = createWorld({ titan, biome, seed, meta: { ...RUN_META, unlocked: RUN_META.unlocked.slice() } });
   } catch (e) {
     r.error = `createWorld threw: ${(e as Error)?.stack ?? String(e)}`;
     return r;
@@ -285,6 +305,10 @@ function runOne(titan: TitanId, biome: BiomeId, seed: number, maxTicks: number, 
   r.simP99Ms = pct(sorted, 0.99);
   r.simMaxMs = sorted.length ? sorted[sorted.length - 1] : 0;
   r.hash = hashWorld(w);
+  r.ultXp = w.ult ? w.ult.xpTotal : 0;
+  r.overloadXp = w.map ? w.map.overloadXp : 0;
+  r.demolitionKills = w.map ? w.map.demolitionKills : 0;
+  r.totalXp = cumXpAt(T.level) + T.xp;
   return r;
 }
 
@@ -370,7 +394,10 @@ async function main(): Promise<number> {
   const configs: { titan: TitanId; biome: BiomeId }[] = [];
   for (const t of args.titans) for (const b of args.biomes) configs.push({ titan: t, biome: b });
   const fullMatrix = configs.length === TITAN_IDS.length * BIOME_IDS.length;
-  console.log(`BLOCKTOOTH probe_sim — ${configs.length} run(s) × ${args.minutes} sim-min, seed ${args.seed}, ${SIM_HZ} Hz`);
+  RUN_META = args.meta === 'full'
+    ? { unlocked: lockedIds.slice(), perk: null, palette: 0, reviveUsed: false }
+    : { ...EMPTY_RUN_META, unlocked: [] };
+  console.log(`BLOCKTOOTH probe_sim — ${configs.length} run(s) × ${args.minutes} sim-min, seed ${args.seed}, ${SIM_HZ} Hz, --meta ${args.meta} (${RUN_META.unlocked.length} locked card(s) unlocked)`);
 
   const results: RunResult[] = [];
   const wall0 = performance.now();
@@ -438,6 +465,8 @@ async function main(): Promise<number> {
     const hl: string[] = [];
     for (let L = 1; L <= 11; L++) hl.push(`${L}:${r.heightAtLevel[L] === undefined ? '·' : r.heightAtLevel[L].toFixed(2)}`);
     console.log(`  ${pad('', 24)} settled H by level (m): ${hl.join(' ')}`);
+    const share = (x: number) => (r.totalXp > 0 ? `${((100 * x) / r.totalXp).toFixed(1)} %` : '—');
+    console.log(`  ${pad('', 24)} v2: XP via UPROAR bank ${r.ultXp.toFixed(0)} (${share(r.ultXp)}) · via OVERLOAD SITE ${r.overloadXp.toFixed(0)} (${share(r.overloadXp)}) · DEMOLITION kills ${r.demolitionKills} · total XP ${r.totalXp.toFixed(0)}`);
   }
   console.log('');
   console.log('determinism:');
@@ -452,9 +481,15 @@ async function main(): Promise<number> {
   const deaths = results.filter((r) => r.result === 'dead');
   console.log('');
   console.log(`clears ${clears.length}/${results.length} (in ${CLEAR_WINDOW_S[0] / 60}–${CLEAR_WINDOW_S[1] / 60} min: ${inWindow.length}) · deaths ${deaths.length} · timeouts ${results.filter((r) => r.result === 'timeout').length}`);
+  {
+    const sum = (f: (r: RunResult) => number) => results.reduce((a, r) => a + f(r), 0);
+    const tot = sum((r) => r.totalXp);
+    const pc = (x: number) => (tot > 0 ? `${((100 * x) / tot).toFixed(1)} %` : '—');
+    console.log(`v2 (§0.6): XP share via UPROAR bank ${pc(sum((r) => r.ultXp))} · via OVERLOAD SITE ${pc(sum((r) => r.overloadXp))} · DEMOLITION kills ${sum((r) => r.demolitionKills)} · deaths ${deaths.length} (need ≥ 1 over the 12-run matrix) · --meta ${args.meta}`);
+  }
   if (fullMatrix) {
     if (inWindow.length < CLEARS_REQUIRED) violations.push(`clear rate: ${inWindow.length}/12 runs cleared inside ${CLEAR_WINDOW_S[0] / 60}–${CLEAR_WINDOW_S[1] / 60} min (need ≥ ${CLEARS_REQUIRED})`);
-    if (deaths.length === 0) violations.push('difficulty: the bot died in 0 of 12 runs (the gate wants some deaths — not a walkover)');
+    if (deaths.length === 0) violations.push('difficulty: the bot died in 0 of 12 runs (v2 §0.6: deaths ≥ 1 — the gate wants some deaths, not a walkover)');
     for (const r of clears) if (r.endT < CLEAR_WINDOW_S[0]) violations.push(`${r.titan}/${r.biome}: cleared at ${r.endT.toFixed(0)} s (< ${CLEAR_WINDOW_S[0]} s — too fast)`);
   } else {
     console.log('aggregate gates (≥ 8/12 clears in 8–12 min, some deaths) skipped: not the full 4×3 matrix');

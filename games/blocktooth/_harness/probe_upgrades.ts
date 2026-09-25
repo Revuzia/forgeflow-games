@@ -13,6 +13,13 @@
 //   D. DRAFTS — determinism, distinct + eligible offers, rarity histogram over 10,000 rolls at luck 0
 //               and luck 3 vs the analytic expectation, chest drafts rare+ only, thin-pool fallback,
 //               reroll / pick bookkeeping.
+//   V2 (lane L2, FEATURES_V2 §7) — coverage rules for the v2 cards: counts (2 base · 15 evolutions ·
+//               24 unlockable · 2 perk), evolution shape (legendary · 1 stack · tags ['evolution', base
+//               tag] · base's titan · recipe cards exist and are rolled cards), EVOLUTIONS / EVO_OF_BASE
+//               mirror the `evo` fields, perk cards match config PERKS, every StatKey is touched by the
+//               FRESH pool (no locked / evo / perk card needed), 'ultCharge' executes. The draft helpers
+//               below mirror the v2 isEligible (evo / perk / locked / banished / owned-evolution rules).
+//               Evolution offers, banish and lock are asserted by probe_evolutions.ts.
 //
 // Parallel-build fallback: if (and only if) a module another lane owns does not exist on disk yet, a
 // PROBE-LOCAL stub stands in for it (see STUBS) and the run is labelled STUBBED. Once the real modules
@@ -97,6 +104,8 @@ function section(t: string): void { console.log(`\n== ${t} ==`); }
 
 // ─────────────────────────────── load modules ───────────────────────────────
 const DATA = await import('../src/data/upgrades.ts');
+const V2DATA = await import('../src/data/upgrades_v2.ts');
+const EVODATA = await import('../src/data/evolutions.ts');
 const STATS = await import('../src/upgrades/stats.ts');
 const { TITANS } = await import('../src/data/titans.ts');
 const CFG = await import('../src/core/config.ts');
@@ -108,8 +117,12 @@ const { baseStatBlock, recomputeStats, stat, createUpgradeState, STAT_KEYS } = S
 const TITAN_IDS: readonly TitanId[] = TYPES.TITAN_IDS;
 const ALL_ACTIONS: readonly TriggerAction[] = [
   'spark', 'shockwave', 'heal', 'shield', 'mass', 'xp', 'magnet', 'rubbleShot', 'frenzy', 'cdReduce',
-  'dashRefund', 'meteor', 'arc', 'magma', 'bloom', 'slowField',
+  'dashRefund', 'meteor', 'arc', 'magma', 'bloom', 'slowField', 'ultCharge',
 ];
+/** v2 (FEATURES_V2 §7): ids of the cards data/upgrades_v2.ts appends (the v1 kit-stat rule is v1-only). */
+const V2_IDS: ReadonlySet<string> = new Set(V2DATA.UPGRADES_V2_RAW.map((u) => u.id));
+/** v2: a card the draft can roll for a FRESH profile (no unlocks) — not an evolution, perk or locked card. */
+const inFreshPool = (u: UpgradeDef): boolean => !u.evo && !u.perk && !u.locked;
 const ALL_ONS: readonly TriggerOn[] = [
   'smash', 'floorBreak', 'collapse', 'kill', 'crush', 'hit', 'crit', 'dash', 'ability', 'hurt', 'pickup',
   'rankUp', 'levelUp', 'interval',
@@ -148,7 +161,12 @@ section('A. DATA');
     const readsKit = own.filter((u) => u.effects.some((e) => e.stat && KIT_STATS[tid].includes(e.stat)));
     perTitan.push(`${tid} ${own.length} (kit-stat ${readsKit.length})`);
     ok(own.length >= 14, `${tid}: >= 14 titan cards (got ${own.length})`);
-    ok(readsKit.length === own.length, `${tid}: every titan card reads a kit stat (${readsKit.length}/${own.length})`);
+    // v1 rule (the v1 catalogue): every titan card reads a kit stat. v2 unlockable titan cards may instead be
+    // kit-flavoured triggers (on hook / on dash / on collapse) — FEATURES_V2 §7.6; v2 titan evolutions read one.
+    const ownV1 = own.filter((u) => !V2_IDS.has(u.id));
+    const readsKitV1 = ownV1.filter((u) => u.effects.some((e) => e.stat && KIT_STATS[tid].includes(e.stat)));
+    ok(readsKitV1.length === ownV1.length, `${tid}: every v1 titan card reads a kit stat (${readsKitV1.length}/${ownV1.length})`);
+    for (const u of own.filter((x) => !!x.evo)) ok(u.effects.some((e) => e.stat && KIT_STATS[tid].includes(e.stat)), `${tid}: evolution ${u.id} reads a kit stat`);
     for (const k of KIT_STATS[tid]) ok(own.some((u) => u.effects.some((e) => e.stat === k)), `${tid}: kit stat ${k} touched by a ${tid} card`);
     // titan-locked cards must not touch ANOTHER titan's kit stats
     for (const u of own) for (const e of u.effects) {
@@ -209,6 +227,14 @@ section('A. DATA');
   console.log(`action coverage ${ALL_ACTIONS.length - missingActions.length}/${ALL_ACTIONS.length}${missingActions.length ? ' missing ' + missingActions.join(',') : ''}`);
   console.log(`trigger-on coverage ${ALL_ONS.length - missingOns.length}/${ALL_ONS.length}${missingOns.length ? ' missing ' + missingOns.join(',') : ''}`);
   ok(missingStats.length === 0, 'every StatKey touched by >= 1 upgrade');
+  // v2 (§7.2): the same holds for the FRESH pool alone (no unlock, evolution or perk card needed)
+  const freshStats = new Set<string>();
+  for (const u of UPGRADES) if (inFreshPool(u)) for (const e of u.effects) {
+    if (e.stat) freshStats.add(e.stat);
+    if (e.trigger && e.trigger.action === 'frenzy') freshStats.add(String(e.trigger.p.stat));
+  }
+  const missingFresh = STAT_KEYS.filter((k) => !freshStats.has(k));
+  ok(missingFresh.length === 0, `v2: every StatKey touched by the fresh pool${missingFresh.length ? ' (missing ' + missingFresh.join(',') + ')' : ''}`);
   ok(missingActions.length === 0, 'every TriggerAction used by >= 1 upgrade');
 
   // forbidden-name scan (CONTRACT §1 + common survivor-like item names)
@@ -262,6 +288,60 @@ section('A. DATA');
   }
 }
 
+// ── V2 coverage (lane L2, FEATURES_V2 §7) ──
+section('A2. V2 CARDS');
+{
+  const raw = V2DATA.UPGRADES_V2_RAW;
+  const inCat = raw.filter((u) => UPGRADE_BY_ID[u.id] && UPGRADES.includes(UPGRADE_BY_ID[u.id]));
+  ok(inCat.length === raw.length, `v2: every UPGRADES_V2_RAW card is appended to UPGRADES (${inCat.length}/${raw.length})`);
+  ok(raw.every((u) => u.desc === ''), 'v2: raw desc is empty (data/upgrades.ts generates it)');
+  const evos = raw.filter((u) => !!u.evo);
+  const perks = raw.filter((u) => !!u.perk);
+  const unlock = raw.filter((u) => !u.evo && !u.perk && u.locked);
+  const base = raw.filter((u) => !u.evo && !u.perk && !u.locked);
+  console.log(`v2 cards ${raw.length}: base ${base.length} · evolutions ${evos.length} (locked ${evos.filter((u) => u.locked).length}) · unlockable ${unlock.length} · perk ${perks.length}`);
+  ok(base.length === 2 && base.map((u) => u.id).sort().join() === 'airtime_ledger,press_conference', 'v2: 2 base-pool cards (§7.2)');
+  ok(evos.length === 15, `v2: 15 evolutions (§7.3, got ${evos.length})`);
+  ok(evos.filter((u) => u.locked).length === 6, 'v2: 6 locked evolutions (§8.1)');
+  ok(unlock.length === 24, `v2: 24 unlockable cards (§7.6, got ${unlock.length})`);
+  ok(perks.length === 2, 'v2: 2 perk cards');
+  // v1 cards are untouched by v2 flags
+  for (const u of UPGRADES) if (!V2_IDS.has(u.id)) ok(!u.evo && !u.perk && !u.locked, `v1 card ${u.id} carries no v2 flag`);
+  // evolution shape + recipes
+  const bases = new Set<string>();
+  for (const e of evos) {
+    const b = UPGRADE_BY_ID[e.evo!.base], c = UPGRADE_BY_ID[e.evo!.with];
+    ok(!!b && !!c, `${e.id}: recipe cards exist (${e.evo!.base} + ${e.evo!.with})`);
+    if (!b || !c) continue;
+    ok(e.rarity === 'legendary' && e.maxStacks === 1, `${e.id}: legendary · 1 stack`);
+    ok(e.tags.length === 2 && e.tags[0] === 'evolution' && e.tags[1] === b.tags[0], `${e.id}: tags ['evolution', '${b.tags[0]}'] (got ${JSON.stringify(e.tags)})`);
+    ok((e.titan ?? null) === (b.titan ?? null), `${e.id}: titan = the base's titan`);
+    ok((c.titan ?? null) === null || c.titan === b.titan, `${e.id}: companion is generic or the same titan's`);
+    ok(inFreshPool(b) && inFreshPool(c), `${e.id}: base and companion are ordinary rolled cards`);
+    ok(b.maxStacks > 1, `${e.id}: base stacks (maxStacks ${b.maxStacks})`);
+    ok(!bases.has(b.id), `${e.id}: base ${b.id} has only one evolution`); bases.add(b.id);
+    ok(e.minRank === undefined, `${e.id}: no minRank`);
+  }
+  // EVOLUTIONS / EVO_OF_BASE mirror the evo fields, catalogue order
+  const rows = EVODATA.EVOLUTIONS;
+  ok(rows.length === evos.length && rows.every((r, i) => r.id === evos[i].id && r.base === evos[i].evo!.base && r.with === evos[i].evo!.with),
+    'v2: EVOLUTIONS mirrors the evo fields in catalogue order');
+  ok(Object.keys(EVODATA.EVO_OF_BASE).length === evos.length && evos.every((e) => EVODATA.EVO_OF_BASE[e.evo!.base] === e.id), 'v2: EVO_OF_BASE maps every base to its evolution');
+  // perk cards = config PERKS numbers, hidden
+  const pc = UPGRADE_BY_ID['perk_card_petty_cash'], ps = UPGRADE_BY_ID['perk_card_safety_inspection'];
+  ok(!!pc && pc.perk === true && pc.effects.length === 1 && pc.effects[0].stat === 'rerolls' && pc.effects[0].add === CFG.PERKS.pettyCashRerolls, 'perk_card_petty_cash: +PERKS.pettyCashRerolls rerolls');
+  ok(!!ps && ps.perk === true && ps.effects.length === 1 && ps.effects[0].stat === 'armor' && ps.effects[0].add === CFG.PERKS.safetyArmor, 'perk_card_safety_inspection: +PERKS.safetyArmor armor');
+  // 'ult' family cards all feed UPROAR (a stat or the ultCharge action)
+  for (const u of UPGRADES) if (u.tags[0] === 'ult') {
+    ok(u.effects.some((e) => e.stat === 'ultCharge' || e.stat === 'ultPower' || (e.trigger && e.trigger.action === 'ultCharge')), `${u.id}: an 'ult' card feeds UPROAR`);
+  }
+  // spot the copy
+  for (const id of ['airtime_ledger', 'evo_shear_wall_certificate', 'evo_citywide_blackout', 'evo_municipal_stomach', 'u_psa', 'u_night_market', 'bw_u_arbor_day']) {
+    const u = UPGRADE_BY_ID[id];
+    if (u) console.log(`  [${u.rarity}${u.evo ? ' EVO' : ''}${u.locked ? ' locked' : ''}] ${u.name} ×${u.maxStacks}: ${u.desc}`);
+  }
+}
+
 // ═══════════════════════════════ B. STATS (hand-built World) ═══════════════════════════════
 section('B. STATS');
 /** Minimal World: exactly the fields stats.ts reads/writes. */
@@ -281,6 +361,7 @@ function handWorld(tid: TitanId, rank: RankIndex = 0): World {
     projectiles: 0, buildingDamage: 1, smashDamage: 1, smashRadius: 1, sparkChance: 0, abilityCooldown: 1,
     abilityPower: 1, biteCleave: 0, pulseEvery: 4, vacuumRadius: 1, arcForks: 3, wireDuration: 4, wireDamage: 1,
     shellCapacity: 1, stompDelay: 0.6, magmaDuration: 0, turretCap: 4, turretRate: 1, sporeHeal: 1, vineLength: 1,
+    ultCharge: 1, ultPower: 1,
   };
   const b = baseStatBlock();
   const keys = Object.keys(EXPECT) as StatKey[];
@@ -629,9 +710,23 @@ const NOOP = { stat: 'luck', mul: 0, dur: 0.05 };   // frenzy that changes nothi
       const h = w.hazards.find((q) => q.alive && q.kind === 'frost' && q.owner === 'titan');
       return h && h.dps > 0 && (w.upgrades.icd['__act_slowField_molo'] ?? 0) >= 3 - 1e-9 ? null : 'no damaging frost field / linger icd';
     });
+  // v2 'ultCharge' (L2 body in engine.ts): p.amount × stacks UPROAR points through addUproar (× the ultCharge
+  // stat, capped by the meter). A proc that moves nothing is not a proc (like heal at full HP).
+  runAction('molo', 'ultCharge', { amount: 8 }, (w) => { w.ult.charge = 0; w.ult.lockT = 0; w.ult.ready = false; },
+    (w) => w.ult.charge > 0 ? null : `UPROAR charge ${w.ult.charge}`);
+  {
+    const w = fresh('molo', 23);
+    const id = synth('__act_ultCharge_full', 'hit', 'ultCharge', { amount: 8 });
+    w.upgrades.owned[id] = 1;
+    w.ult.charge = CFG.ULT.max; w.ult.lockT = 0;
+    w.events.length = 0;
+    w.events.push({ type: 'enemyHit', id: 0, x: w.titan.x, z: w.titan.z, dmg: 1, crit: false });
+    processTriggers(w);
+    ok(procs(w, id) === 0 && (w.upgrades.icd[id] ?? 0) === 0, 'ultCharge on a full meter: no proc, icd not spent');
+  }
   console.log(`actions executed with observed effect: ${results.join(' ')}`);
   const covered = new Set(results.map((r) => r.replace('✗', '')));
-  ok(ALL_ACTIONS.every((a) => covered.has(a)), 'all 16 TriggerActions exercised');
+  ok(ALL_ACTIONS.every((a) => covered.has(a)), `all ${ALL_ACTIONS.length} TriggerActions exercised`);
 }
 
 // ── 'xp' pricing: triggering building's tier, capped at canFlatten; else canFlatten ·
@@ -793,7 +888,10 @@ const NOOP = { stat: 'luck', mul: 0, dur: 0.05 };   // frenzy that changes nothi
 section('D. DRAFTS');
 {
   const { rollOffer, pickUpgrade, rerollOffer, hasPendingDraft } = DR;
+  // mirrors upgrades/draft.ts isEligible, incl. the v2 rules (FEATURES_V2 §7.1)
   const eligible = (w: World, u: UpgradeDef): boolean =>
+    !u.evo && !u.perk && (!u.locked || w.meta.unlocked.includes(u.id)) && !w.upgrades.banished.includes(u.id) &&
+    !((w.upgrades.owned[EVODATA.EVO_OF_BASE[u.id]] ?? 0) > 0) &&
     (!u.titan || u.titan === w.titanId) && (u.minRank ?? 0) <= w.titan.rank && (w.upgrades.owned[u.id] ?? 0) < u.maxStacks;
   const RB: Record<Rarity, number> = { common: 60, rare: 28, epic: 10, legendary: 2 };
   const RL: Record<Rarity, number> = { common: 0, rare: 0.5, epic: 1, legendary: 1.5 };
@@ -879,6 +977,9 @@ section('D. DRAFTS');
   // thin pools
   {
     const w = fresh('briarwick', 9);
+    // v2: maxing every card below completes evolution recipes; banish the evolutions so this stays the v1
+    // thin-pool rule (evolution offers in thin pools are probe_evolutions' job)
+    for (const r of EVODATA.EVOLUTIONS) w.upgrades.banished.push(r.id);
     const elig = UPGRADES.filter((u) => eligible(w, u));
     const keep = elig.filter((u) => u.rarity === 'common').slice(0, 2).map((u) => u.id);
     for (const u of elig) if (!keep.includes(u.id)) w.upgrades.owned[u.id] = u.maxStacks;

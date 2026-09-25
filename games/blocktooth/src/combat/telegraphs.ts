@@ -17,6 +17,7 @@ import { circleInShape, shapeCenter } from '../core/math.ts';
 import type { Attacker } from './damage.ts';
 import { damageArea, hurtTitanByShape } from './damage.ts';
 import { nearestEnemy } from './spatial.ts';
+import { redLightActive } from '../meta/powerups.ts';
 
 /** Contract spawn record (+ optional titan-side damage modifiers, a superset — callers may omit). */
 export type TelegraphSpawn = {
@@ -136,9 +137,13 @@ export function stepTelegraphs(w: World): void {
   const list = w.telegraphs;
   const dt = w.dt;
   const n = list.length;   // telegraphs spawned during this pass start next tick
+  // v2 RED LIGHT (FEATURES_V2 §6.1, pre-wired): enemy-owned paint stops counting down;
+  // boss- and titan-owned telegraphs are unaffected
+  const red = redLightActive(w);
   for (let i = 0; i < n; i++) {
     const tg = list[i];
     if (!tg.alive) continue;
+    if (red && tg.owner === 'enemy') continue;
     tg.t += dt;
     const x = extraOf(w, tg);
     if (!tg.fired) {

@@ -12,6 +12,11 @@
 //   __BT__.shot(name)              render a frame, POST the PNG to /__shot/<name>, resolve the saved path
 //   __BT__.perf()                  frame-time ring stats {fps, p50, p99, max, simMs}
 //   __BT__.events(n)               the last n sim events (ring of 400)
+//   v2 (FEATURES_V2 §13.3, pre-wired by L0 against the stubs):
+//   __BT__.state().v2              UPROAR, objectives, power-ups, endless, tally, map, meta, cine, draft, profile
+//   __BT__.state().v2dom           read-only DOM snapshot of the v2 HUD (fixed data-v2 hooks lane L8 puts on)
+//   __BT__.newRun({…, meta?})      explicit RunMeta for the run
+//   __BT__.cheat.{ult, powerup, objective, endless, evolveReady, bossSpawn, tillOpen}   dev only
 //   __PAUSE__.{pause, resume, toggle}
 //
 // Cheats mutate the world between ticks through app.mutate(), which routes any events they emit
@@ -19,8 +24,11 @@
 // a tick's events — so e.g. cheat.rank() still gets the camera punch, MASS BREACH and hit-stop.
 
 import type { App, Screen } from './game.ts';
-import type { BiomeId, EnemyKind, RunStats, SimEvent, TitanId, TitanInput, World } from './core/types.ts';
-import { BIOME_IDS, ENEMY_KINDS, TITAN_IDS } from './core/types.ts';
+import type {
+  BiomeId, BossId, EndlessState, EnemyKind, ObjectiveKind, ObjectiveTarget, PowerUpKind, RunMeta, RunStats, SimEvent,
+  TitanId, TitanInput, UltPhase, World,
+} from './core/types.ts';
+import { BIOME_IDS, BOSS_IDS, ENEMY_KINDS, OBJECTIVE_KINDS, POWERUP_KINDS, TITAN_IDS } from './core/types.ts';
 import { CAMERA, CITY, cameraDistance, rankForLevel } from './core/config.ts';
 import { frameStats } from './core/loop.ts';
 import type * as THREE from 'three';
@@ -30,6 +38,14 @@ import { spawnEnemy } from './ai/enemies.ts';
 import { spawnBoss } from './ai/bosses/index.ts';
 import { killEnemy } from './combat/damage.ts';
 import { BIOMES } from './data/biomes.ts';
+// v2 (L0 stubs; lanes fill them)
+import { UPGRADE_BY_ID } from './data/upgrades.ts';
+import { applyUpgrade } from './upgrades/engine.ts';
+import { bossUltHit } from './ai/bosses/index.ts';
+import { addUproar } from './meta/ultimate.ts';
+import { spawnObjective } from './meta/objectives.ts';
+import { spawnPowerup } from './meta/powerups.ts';
+import { sanitizeRunMeta } from './meta/perks.ts';
 
 export const BT_VERSION = 'blocktooth-0.1.0';
 
@@ -59,6 +75,32 @@ export interface BtState {
   renderScale: number;
   /** DynRes internals: estimated display interval (ms), last live window's missed-frame %, steps taken */
   dynres: { intervalMs: number; lastMissPct: number; down: number; up: number };
+  /** v2 (FEATURES_V2 §13.3). World-derived parts are null outside a run. */
+  v2: BtV2State;
+  /** v2 read-only DOM snapshot for real-input checks (every count 0 with the L0 stubs). */
+  v2dom: BtV2Dom;
+}
+
+export interface BtV2State {
+  ult: { charge: number; phase: UltPhase; fired: number; ready: boolean; r: number; invulnT: number } | null;
+  objectives: { id: number; kind: ObjectiveKind; x: number; z: number; t: number; life: number; target: ObjectiveTarget; targetId: number }[];
+  powerups: { id: number; kind: PowerUpKind; x: number; z: number; t: number }[];
+  power: { redLightT: number; rushHourT: number } | null;
+  endless: EndlessState | null;
+  tally: {
+    ults: number; objectives: Record<ObjectiveKind, number>; powerups: Record<PowerUpKind, number>;
+    evolutions: number; banishes: number; locks: number; rerolls: number;
+  } | null;
+  map: { overloadsDone: number; reliefsDone: number; annexesDone: number } | null;
+  meta: RunMeta | null;
+  cine: { shot: string; t: number } | null;
+  draft: { banishLeft: number; lockLeft: number; locked: string | null; banished: string[] } | null;
+  profile: { done: string[]; newUnlocks: string[] };
+}
+
+export interface BtV2Dom {
+  barSlots: number; barBadges: string[]; activeCdText: string; meterPct: number;
+  trackerRows: number; markers: number; toasts: number;
 }
 
 export interface BtPerf { fps: number; p50: number; p99: number; max: number; simMs: number; simTickMs: number; samples: number }
@@ -77,13 +119,28 @@ export interface BtCheats {
   noSpawns(on?: boolean): boolean;
   heal(): number;
   time(sec: number): number;
+  // ── v2 (FEATURES_V2 §13.3) — cheats only SET UP state; acceptance actions are real keys / walks ──
+  /** add UPROAR points (raw, not × the ultCharge stat); returns the charge */
+  ult(points?: number): number;
+  /** spawn a power-up of `kind` 3 H straight ahead of the titan; returns its id or null */
+  powerup(kind: PowerUpKind): number | null;
+  /** place an objective now; `ahead` (m) moves a free-standing one (RELIEF DEPOT) straight ahead of the titan */
+  objective(kind: ObjectiveKind, ahead?: number): number | null;
+  /** field + kill the city's boss so the run clears, and let the clear tabloid pick KEEP GOING */
+  endless(): boolean;
+  /** set owned stacks so the evolution's recipe is ready (base maxed, `with` ≥ 1) */
+  evolveReady(evoId: string): boolean;
+  /** field any boss id (incl. parkade6) */
+  bossSpawn(id: BossId): string | null;
+  /** PARKADE-6 only: open the TILL for `s` seconds */
+  tillOpen(s: number): number;
 }
 
 export interface BtSurface {
   readonly version: string;
   readonly world: World | null;
   state(): BtState;
-  newRun(opts: { titan?: TitanId; biome?: BiomeId; seed?: number; skipSlate?: boolean }): Promise<void>;
+  newRun(opts: { titan?: TitanId; biome?: BiomeId; seed?: number; skipSlate?: boolean; meta?: RunMeta }): Promise<void>;
   step(n: number, input?: Partial<TitanInput>): number;
   freeze(on: boolean): void;
   dismiss(): Promise<boolean>;
@@ -142,6 +199,54 @@ export function installTestSurface(app: App): BtSurface {
     return need(`cheat.${what}`);
   };
 
+  /** Visible nodes carrying a fixed data-v2 hook (lane L8 puts them on its nodes, §13.3). */
+  const v2nodes = (tag: string): HTMLElement[] => {
+    try {
+      return Array.from(document.querySelectorAll<HTMLElement>(`[data-v2="${tag}"]`)).filter((n) => n.getClientRects().length > 0);
+    } catch { return []; }
+  };
+  const v2dom = (): BtV2Dom => {
+    const meter = v2nodes('meter')[0];
+    const pct = meter ? Number(meter.dataset.pct) : 0;
+    const cd = v2nodes('active-cd')[0];
+    return {
+      barSlots: v2nodes('bar-slot').length,
+      barBadges: v2nodes('badge').map((n) => (n.textContent || '').trim()),
+      activeCdText: cd ? (cd.textContent || '').trim() : '',
+      meterPct: Number.isFinite(pct) ? pct : 0,
+      trackerRows: v2nodes('tracker-row').length,
+      markers: v2nodes('marker').length,
+      toasts: v2nodes('toast').length,
+    };
+  };
+  const v2state = (w: World | null): BtV2State => {
+    const P = app.profile;
+    const profile = { done: Object.keys(P.done), newUnlocks: P.newUnlocks.slice() };
+    if (!w) {
+      return {
+        ult: null, objectives: [], powerups: [], power: null, endless: null, tally: null, map: null, meta: null,
+        cine: app.cineShot, draft: null, profile,
+      };
+    }
+    const u = w.ult, m = w.map, t = w.tally, U = w.upgrades;
+    return {
+      ult: { charge: u.charge, phase: u.phase, fired: u.fired, ready: u.ready, r: u.r, invulnT: u.invulnT },
+      objectives: m.objectives.filter((o) => o.alive).map((o) => ({ id: o.id, kind: o.kind, x: o.x, z: o.z, t: o.t, life: o.life, target: o.target, targetId: o.targetId })),
+      powerups: m.powerups.filter((o) => o.alive).map((o) => ({ id: o.id, kind: o.kind, x: o.x, z: o.z, t: o.t })),
+      power: { redLightT: m.redLightT, rushHourT: m.rushHourT },
+      endless: w.endless ? { ...w.endless } : null,
+      tally: {
+        ults: t.ults, objectives: { ...t.objectives }, powerups: { ...t.powerups },
+        evolutions: t.evolutions, banishes: t.banishes, locks: t.locks, rerolls: t.rerolls,
+      },
+      map: { overloadsDone: m.overloadsDone, reliefsDone: m.reliefsDone, annexesDone: m.annexesDone },
+      meta: { ...w.meta, unlocked: w.meta.unlocked.slice() },
+      cine: app.cineShot,
+      draft: { banishLeft: U.banishLeft, lockLeft: U.lockLeft, locked: U.locked, banished: U.banished.slice() },
+      profile,
+    };
+  };
+
   const state = (): BtState => {
     const w = app.world;
     const c = app.choice;
@@ -160,6 +265,8 @@ export function installTestSurface(app: App): BtSurface {
         lastMissPct: app.dynres.lastMiss < 0 ? -1 : Math.round(app.dynres.lastMiss * 1000) / 10,
         down: app.dynres.steps.down, up: app.dynres.steps.up,
       },
+      v2: v2state(w),
+      v2dom: v2dom(),
     };
     if (!w) {
       return {
@@ -295,6 +402,72 @@ export function installTestSurface(app: App): BtSurface {
       w.t = Math.max(0, s);
       return w.t;
     },
+    // ── v2 (FEATURES_V2 §13.3) ──
+    ult(points = 100) {
+      const w = devOnly('ult');
+      const n = Math.max(0, num(points, 100));
+      app.mutate((ww) => addUproar(ww, n, true));
+      return w.ult.charge;
+    },
+    powerup(kind) {
+      devOnly('powerup');
+      if (!(POWERUP_KINDS as readonly string[]).includes(kind)) throw new Error(`cheat.powerup: unknown kind '${String(kind)}' (${POWERUP_KINDS.join(', ')})`);
+      return app.mutate((ww) => {
+        const T = ww.titan, d = 3 * T.height;
+        const p = spawnPowerup(ww, kind, T.x + Math.sin(T.heading) * d, T.z + Math.cos(T.heading) * d, true);
+        return p ? p.id : null;
+      });
+    },
+    objective(kind, ahead) {
+      devOnly('objective');
+      if (!(OBJECTIVE_KINDS as readonly string[]).includes(kind)) throw new Error(`cheat.objective: unknown kind '${String(kind)}' (${OBJECTIVE_KINDS.join(', ')})`);
+      return app.mutate((ww) => {
+        const o = spawnObjective(ww, kind);
+        if (!o) return null;
+        const a = num(ahead, NaN);
+        if (Number.isFinite(a) && o.target === 'none') {
+          const T = ww.titan;
+          o.x = T.x + Math.sin(T.heading) * a;
+          o.z = T.z + Math.cos(T.heading) * a;
+        }
+        return o.id;
+      });
+    },
+    endless() {
+      const w = devOnly('endless');
+      app.autoEndlessOnce = true;
+      app.mutate((ww) => {
+        if (!ww.boss || !ww.boss.alive) spawnBoss(ww, BIOMES[ww.biomeId].boss);
+        const b = ww.boss;
+        if (b && b.alive) { b.introT = 0; bossUltHit(ww, 1, 0); }
+      });
+      return !!w.boss && !w.boss.alive;
+    },
+    evolveReady(evoId) {
+      const w = devOnly('evolveReady');
+      const def = UPGRADE_BY_ID[evoId];
+      if (!def || !def.evo) throw new Error(`cheat.evolveReady: '${String(evoId)}' is not an evolution`);
+      const base = UPGRADE_BY_ID[def.evo.base], withC = UPGRADE_BY_ID[def.evo.with];
+      if (!base || !withC) throw new Error(`cheat.evolveReady: recipe of '${evoId}' names an unknown card`);
+      app.mutate((ww) => {
+        for (let i = 0; i < 64 && (ww.upgrades.owned[base.id] ?? 0) < base.maxStacks; i++) applyUpgrade(ww, base.id);
+        if ((ww.upgrades.owned[withC.id] ?? 0) < 1) applyUpgrade(ww, withC.id);
+      });
+      return (w.upgrades.owned[base.id] ?? 0) >= base.maxStacks && (w.upgrades.owned[withC.id] ?? 0) >= 1;
+    },
+    bossSpawn(id) {
+      const w = devOnly('bossSpawn');
+      if (!(BOSS_IDS as readonly string[]).includes(id)) throw new Error(`cheat.bossSpawn: unknown boss '${String(id)}' (${BOSS_IDS.join(', ')})`);
+      app.mutate((ww) => spawnBoss(ww, id));
+      return w.boss && w.boss.alive ? w.boss.id : null;
+    },
+    tillOpen(sec) {
+      const w = devOnly('tillOpen');
+      const b = w.boss;
+      if (!b || !b.alive || b.id !== 'parkade6') throw new Error('cheat.tillOpen: needs a live PARKADE-6 (cheat.bossSpawn(\'parkade6\'))');
+      b.data.tillOpen = Math.max(0, num(sec, 3));
+      return b.data.tillOpen;
+    },
   };
 
   const surface: BtSurface = {
@@ -307,7 +480,8 @@ export function installTestSurface(app: App): BtSurface {
       const titan = typeof o.titan === 'string' && (TITAN_IDS as readonly string[]).includes(o.titan) ? o.titan : c.titan;
       const biome = typeof o.biome === 'string' && (BIOME_IDS as readonly string[]).includes(o.biome) ? o.biome : c.biome;
       const seed = Math.abs(Math.floor(num(o.seed, Math.floor(Math.random() * 0x7fffffff)))) >>> 0;
-      await app.startRun({ titan, biome, seed, skipSlate: !!o.skipSlate });
+      const meta = o.meta !== undefined ? sanitizeRunMeta(o.meta) : undefined;   // v2
+      await app.startRun({ titan, biome, seed, skipSlate: !!o.skipSlate, meta });
     },
     step(n, input) {
       need('step');

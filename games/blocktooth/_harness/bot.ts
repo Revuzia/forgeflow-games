@@ -27,6 +27,10 @@ import { CRUSH_RATIO, RANKS, TITAN, lootMass, lootXp, titanSpeed } from '../src/
 import { circleInShape, clamp, wrapAngle } from '../src/core/math.ts';
 import { buildingsInRect, propsInRect } from '../src/city/citysim.ts';
 import { UPGRADE_BY_ID } from '../src/data/upgrades.ts';
+// v2 bot hooks (FEATURES_V2 §2.7; L0 stubs — lanes L1 / L2 / L4 fill them)
+import { botUltimate } from './bot_ult.ts';
+import { botDraftScore } from './bot_draft.ts';
+import { botDetour } from './bot_map.ts';
 
 // ─────────────────────────────── tuning ───────────────────────────────
 const PLAN_EVERY_TICKS = 6;          // re-plan the food target at 5 Hz
@@ -441,6 +445,9 @@ function hookDecision(w: World): boolean {
 
 // ─────────────────────────────── main policy ───────────────────────────────
 /** The bot's command for this tick. Deterministic; never mutates gameplay state. */
+/** scratch point for botDetour */
+const DETOUR = { x: 0, z: 0 };
+
 export function botInput(w: World): TitanInput {
   const T = w.titan;
   const m = memoryOf(w);
@@ -530,6 +537,12 @@ export function botInput(w: World): TitanInput {
     m.wasMoving = !threatened;
   }
 
+  // v2 map detour (objectives / power-ups worth the walk; stub → null = no detour)
+  if (!threatened) {
+    const det = botDetour(w, DETOUR);
+    if (det) { dir.x = det.x - T.x; dir.z = det.z - T.z; }
+  }
+
   // keep inside the playable bounds
   const bd = w.city.bounds, edge = Math.max(3, T.radius * 1.5);
   if (T.x < bd.minX + edge && dir.x < 0) dir.x = Math.abs(dir.x) * 0.5;
@@ -547,6 +560,9 @@ export function botInput(w: World): TitanInput {
     m.holdAbilityUntil = w.tick + 36;       // MOLO's vacuum is a 1.2 s channel: keep holding
   }
   out.abilityHeld = out.ability || w.tick < m.holdAbilityUntil;
+
+  // ── v2 UPROAR (stub → false: never fires) ──
+  if (botUltimate(w)) out.ultimate = true;
 
   // ── offensive / travel dash (never spend the last charge when paint is around) ──
   if (!out.dash && !threatened && T.dashCharges >= 1 && T.dashT <= 0) {
@@ -599,6 +615,8 @@ const RARITY_BONUS: Record<string, number> = { common: 0, rare: 1, epic: 2, lege
 
 /** Deterministic value of taking upgrade `id` now (higher = better). */
 export function botScoreUpgrade(w: World, id: string): number {
+  const v2 = botDraftScore(w, id);          // v2 override (evolutions, v2 cards); stub → null
+  if (v2 !== null) return v2;
   const def: UpgradeDef | undefined = (UPGRADE_BY_ID as Record<string, UpgradeDef | undefined>)[id];
   if (!def) return -1e9;
   const stats = w.titan.stats;

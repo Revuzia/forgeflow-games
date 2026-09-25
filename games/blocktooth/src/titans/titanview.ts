@@ -24,6 +24,7 @@ import type { TitanModel } from './models.ts';
 import { DEFEAT, TitanAnimator } from './anim.ts';
 import { addOutline, bakeOutlineNormals, makeToon } from '../render/materials.ts';
 import type { AnimState } from './anim.ts';
+import type { CineChannels, FaceAnchor } from '../v2types.ts';
 
 /**
  * Night look (LOCKWATER). The navy street (#0d1a26) and the #1b1426 ink leave a dark hide with no
@@ -208,6 +209,14 @@ export class TitanView implements ViewModule {
     this.updateDust(w, dt);
     this.updateRing(w, f.alpha, dt);
   }
+
+  // ── v2 cinematic hooks (FEATURES_V2 §11.4, TitanViewAdd) — L0 SKELETON STUBS; lane L10 fills them ──
+  /** Fill the head joint's world position + unit forward + titan height. STUB: false (→ legacy slate). */
+  faceAnchor(_out: FaceAnchor): boolean {
+    return false;
+  }
+  /** Cinematic blend channels layered over idle (null = off). STUB: no-op. */
+  setCine(_ch: CineChannels | null): void { /* L10 */ }
 
   unmount(): void {
     this.disposeModel();

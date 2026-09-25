@@ -14,6 +14,7 @@
 
 import type { Input } from '../core/input.ts';
 import type { AlertKey, BiomeDef, RankIndex, TitanDef, World } from '../core/types.ts';
+import type { TabloidChoiceV2, TabloidExtra } from '../v2types.ts';
 import { bestKey, loadBest } from '../core/save.ts';
 import { BIOMES } from '../data/biomes.ts';
 import { BOSSES } from '../data/bosses.ts';
@@ -379,7 +380,9 @@ export class Broadcast {
 
   // ─────────────────────────────── tabloid ───────────────────────────────
 
-  tabloid(w: World, photo: string): Promise<TabloidChoice> {
+  /** v2 signature (BroadcastAdd, FEATURES_V2 §13.1). L0: `extra` is ignored and 'endless' is never
+   *  resolved (lane L9 adds KEEP GOING [K], the EXTENDED COVERAGE variant and NEW ON THE RECORD). */
+  tabloid(w: World, photo: string, _extra: TabloidExtra | null = null): Promise<TabloidChoiceV2> {
     if (this.tabSession && !this.tabSession.done) this.tabSession.abort();
     this.clearBanners();
     this.buildPaper(w, photo);

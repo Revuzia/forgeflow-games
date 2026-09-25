@@ -93,7 +93,7 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
       { kind: 'truck', perBlock: 0.3 }, { kind: 'bus', perBlock: 0.25 },
     ],
     trafficPerLane: 3,
-    boss: 'caisson4',
+    boss: 'parkade6',
     enemyBias: { android: 1.2, squad: 1.1, buggy: 1.0, drone: 0.9, tank: 0.9, walker: 0.9 },
     music: { bpm: 118, root: 51, scale: 'major', mood: 'city-pop funk, bright brass stabs, slap bass, sunny and oblivious' },
     // low afternoon sun, 30° elevation, from screen-RIGHT (a touch behind the camera). The camera

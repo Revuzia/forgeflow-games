@@ -27,6 +27,8 @@ import { buildingById, buildingsInRect, damageProp, propsInRect, resolveCircleVs
 import { spawnProjectile } from '../combat/projectiles.ts';
 import { spawnTelegraph } from '../combat/telegraphs.ts';
 import { damageTitanArea } from '../combat/damage.ts';
+import { endlessHpMul } from '../meta/endless.ts';
+import { redLightActive } from '../meta/powerups.ts';
 
 // ─────────────────────────────── lane-local tuning ───────────────────────────────
 const REACT_MIN = 0.3, REACT_SPAN = 0.5;          // 300–800 ms reaction (§9)
@@ -533,7 +535,7 @@ export function spawnEnemy(w: World, kind: EnemyKind, x: number, z: number, opts
   const def = ENEMIES[kind];
   const T = w.titan, B = w.city.bounds, r = w.rng.ai;
   const elite = kind === 'elite' || opts?.elite === true;
-  let hp = def.hp * (1 + ENEMY_HP_PER_MIN * Math.max(0, w.t) / 60) * (ENEMY_HP_RANK_MUL[T.rank] ?? 1);
+  let hp = def.hp * (1 + ENEMY_HP_PER_MIN * Math.max(0, w.t) / 60) * (ENEMY_HP_RANK_MUL[T.rank] ?? 1) * endlessHpMul(w);   // v2: endless (1 otherwise)
   if (elite && kind !== 'elite') hp *= VETERAN_HP_MUL;
   if (!Number.isFinite(x) || !Number.isFinite(z)) { x = T.x; z = T.z; }
   const P = { x, z };
@@ -1121,10 +1123,14 @@ export function stepEnemies(w: World): void {
 
   const R = ringRadius(w), recycleD2 = (R * RECYCLE_MUL) * (R * RECYCLE_MUL);
   const n = es.length;   // enemies spawned this tick (apc squads) start acting next tick
+  // v2 RED LIGHT (FEATURES_V2 §6.1, pre-wired): no AI, no movement, timers t / cd stand still;
+  // only the hit flash decays
+  const red = redLightActive(w);
   for (let i = 0; i < n; i++) {
     const e = es[i] as AiEnemy;
     if (!e.alive) continue;
     mem(e);
+    if (red) { if (e.flash > 0) e.flash = Math.max(0, e.flash - dt); continue; }
     e.t += dt;
     if (e.flash > 0) e.flash = Math.max(0, e.flash - dt);
     if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) { e.slowT = 0; e.slowMul = 1; } }

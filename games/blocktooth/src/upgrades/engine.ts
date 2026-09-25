@@ -58,6 +58,7 @@ import { findTarget, targetPos, hitTarget } from '../combat/targeting.ts';
 import { spawnProjectile } from '../combat/projectiles.ts';
 import { spawnHazard } from '../combat/hazards.ts';
 import { magnetAll } from '../combat/pickups.ts';
+import { addUproar } from '../meta/ultimate.ts';
 import { healTitan, gainGrowth, gainXp, refundDash } from '../titans/titansim.ts';
 
 // ─────────────────────────────── tuning ───────────────────────────────
@@ -571,6 +572,18 @@ function execute(w: World, en: Entry, x: number, z: number, evTier = -1): boolea
       });
       if (dps > 0) LINGER = life;
       return true;
+    }
+
+    // v2 (FEATURES_V2 §2.1; lane L2): p.amount UPROAR points × stacks (addUproar applies the ultCharge
+    // stat, the lockout and the cap). Like 'heal' at full HP, a proc that moves nothing (meter full or
+    // frozen after a fire) is not a proc: no upgradeProc event and the icd is not spent.
+    case 'ultCharge': {
+      const amt = sc('amount');
+      const U = w.ult;
+      if (!U || !(amt > 0)) return false;
+      const c0 = U.charge;
+      addUproar(w, amt);
+      return U.charge !== c0;
     }
   }
   return false;

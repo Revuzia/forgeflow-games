@@ -10,7 +10,7 @@
 // speed, a zero-width attack or an infinite reroll count.
 
 import type { StatBlock, StatKey, UpgradeState, World } from '../core/types.ts';
-import { RANKS } from '../core/config.ts';
+import { DRAFT_V2, RANKS } from '../core/config.ts';
 import { TITANS } from '../data/titans.ts';
 import { UPGRADE_BY_ID } from '../data/upgrades.ts';
 
@@ -27,6 +27,7 @@ export const STAT_KEYS: readonly StatKey[] = [
   'arcForks', 'wireDuration', 'wireDamage',
   'shellCapacity', 'stompDelay', 'magmaDuration',
   'turretCap', 'turretRate', 'sporeHeal', 'vineLength',
+  'ultCharge', 'ultPower',
 ];
 
 /** Cooldown multipliers never drop below this (§5.5). */
@@ -56,6 +57,8 @@ export function baseStatBlock(): StatBlock {
     shellCapacity: 1, stompDelay: 0.6, magmaDuration: 0,
     // BRIARWICK
     turretCap: 4, turretRate: 1, sporeHeal: 1, vineLength: 1,
+    // v2 UPROAR (FEATURES_V2 §3)
+    ultCharge: 1, ultPower: 1,
   };
 }
 
@@ -76,6 +79,7 @@ const LIMITS: Record<StatKey, readonly [number, number]> = {
   arcForks: [0, 16], wireDuration: [0.5, 20], wireDamage: [0.1, Infinity],
   shellCapacity: [0.1, 6], stompDelay: [0.15, 2], magmaDuration: [0, 20],
   turretCap: [1, 16], turretRate: [0.2, 5], sporeHeal: [0, 10], vineLength: [0.3, 4],
+  ultCharge: [0.2, 5], ultPower: [0.1, Infinity],
 };
 
 /** Counts: floored (a half-bought charge is not a charge). pulseEvery is rounded. */
@@ -104,6 +108,11 @@ export function createUpgradeState(): UpgradeState {
     buffs: [],
     shield: 0,
     chestDrafts: 0,
+    // v2 (FEATURES_V2 §7.5)
+    banished: [],
+    banishLeft: DRAFT_V2.banishes,
+    lockLeft: DRAFT_V2.locks,
+    locked: null,
   };
 }
 

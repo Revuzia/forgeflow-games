@@ -21,7 +21,7 @@ export function hashStr(s: string): number {
 
 export function makeStreams(seed: number): RngStreams {
   const s = (name: string) => mulberry32((seed ^ hashStr(name)) >>> 0);
-  return { city: s('city'), spawn: s('spawn'), ai: s('ai'), combat: s('combat'), loot: s('loot'), boss: s('boss') };
+  return { city: s('city'), spawn: s('spawn'), ai: s('ai'), combat: s('combat'), loot: s('loot'), boss: s('boss'), meta: s('meta') };
 }
 
 // Helpers over any () => number stream

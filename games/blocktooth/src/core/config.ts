@@ -87,7 +87,7 @@
 //     HEARTHBACK 0/9 (BRIARWICK died 2–4/9 in neighbouring tunings — single-seed outcomes are noisy).
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════════
 
-import type { DamageKind, RankIndex, Shape, Tier, World } from './types.ts';
+import type { DamageKind, EnemyKind, PowerUpKind, RankIndex, Shape, Tier, World } from './types.ts';
 
 // ─────────────────────────────── time ───────────────────────────────
 export const SIM_HZ = 30;
@@ -764,4 +764,121 @@ export const BUDGET = {
   simTickMsMax: 4,
   dprMax: 1.5,
   shadowMap: 1024,          // doctrine §3: 1024, fit the frustum tightly instead
+} as const;
+
+// ═══════════════════════════════ v2 (FEATURES_V2 §2.2 — verbatim from _spec/features_v2_types.ts) ═══════════════════════════════
+// Starting points. The lane that owns the system tunes them with its probe; GATE 2 is the arbiter.
+
+/** #2 UPROAR. Points, not percent: max 100. */
+export const ULT = {
+  max: 100,
+  /** passive trickle (points/s) while the run is live and not locked out */
+  trickle: 0.6,
+  /** points per destruction event, before × ultCharge stat × ULT_CITY_RANK_MUL[rank] (city sources only) */
+  prop: 0.4,
+  floor: 0.9,
+  collapsePerTier: 2,      // × (tier + 1)
+  /** only city events within this × titan height of the titan charge the meter (boss crush does not) */
+  nearH: 4,
+  /** points per enemy kill by kind (× ultCharge) */
+  kill: { android: 0.45, squad: 0.45, drone: 0.6, buggy: 1.6, apc: 3, tank: 4, walker: 6, elite: 20 } as Readonly<Record<EnemyKind, number>>,
+  /** rage: points = hurt × dmg / maxHp (taking 10 % of max HP → +3) */
+  hurt: 30,
+  /** points = bossHit × dmg / boss.maxHp (dealing 5 % of the boss → +7.5) */
+  bossHit: 150,
+  /** after a fire the meter is frozen for this long (s) */
+  lockoutS: 6,
+  /** blast radius R = max(rFloorH × H, rFrac × spawnRing(w)) — covers the AUTO-framed view (zoom 1) */
+  rFrac: 0.95, rFloorH: 3,
+  /** ROAR: invulT = roar length (no damage of any kind) + move × roarMove (ultMoveMul); hostile NON-boss
+   *  projectiles and unfired enemy-owned telegraphs inside R are deleted when the roar ends */
+  roarMove: 0.3,
+  /** kills while phase !== 'idle' bank their XP × killXpMul (combat killEnemy → ultBankKill) */
+  killXpMul: 0.5,
+  /** one fire grants at most this × the XP the titan's CURRENT level needs; banked XP past it is dropped */
+  xpCapLevelFrac: 0.5,
+  /** the bank spawns at most this many merged scrap pickups per tick (perf: a Size V fire kills ~250) */
+  bankPickupsPerTick: 6,
+  /** boss: one fire removes exactly bossCapFrac × maxHp (split over the pulses that reach it) + bossMeter */
+  bossCapFrac: 0.06, bossMeter: 0.3,
+  /** app hit-stop on 'ultFire' blast start (view/app only) */
+  hitStopScale: 0.3, hitStopS: 0.18,
+} as const;
+/** × city-source charge by titan rank (a Size V body breaks 20 floors a second). */
+export const ULT_CITY_RANK_MUL: readonly number[] = [1, 0.7, 0.4, 0.22, 0.12];
+/** probe_ult acceptance: median seconds between "ready" edges for the fire-on-ready bot, per rank band. */
+export const ULT_GAP_BAND_S: readonly [number, number] = [30, 65];
+
+/** #4 objectives (per-biome overrides in data/objectives.ts). */
+export const OBJECTIVES = {
+  overload: { firstAtS: 25, respawnS: 35, lifeS: 75, bandMin: 0.8, bandMax: 1.8, maxActive: 1, uproar: 35, xpFrac: 0.2 },
+  relief: { firstAtS: 40, respawnS: 40, lifeS: 90, bandMin: 0.5, bandMax: 1.4, maxActiveLow: 1, maxActiveHigh: 2, hpBelow: 0.85, forceEveryS: 90, heals: 3, fullHpUproar: 8, sizeH: 0.35, sizeMinM: 1.5 },
+  annex: { delayAfterBreachS: 20, lifeS: 120, bandMin: 1.0, bandMax: 2.2, fromRank: 1 as RankIndex },
+  /** leaving an objective behind: expire once it is farther than this × spawnRing */
+  strandMul: 2.8,
+  /** candidates scored, the pick is rng.meta-weighted over the best N */
+  topN: 12,
+} as const;
+
+/** #8 map power-ups. */
+export const POWERUPS = {
+  lifeS: 30, blinkS: 5, maxAlive: 3, minGapS: 18,
+  /** collect distance = titan.radius + max(1, collectH × titan.height) */
+  collectH: 0.6,
+  dropByKill: { android: 0.002, squad: 0.002, drone: 0.004, buggy: 0.012, apc: 0.03, tank: 0.035, walker: 0.05, elite: 1 } as Readonly<Record<EnemyKind, number>>,
+  dropByCollapse: 0.006,   // tier >= 2 collapses
+  bossDropMul: 0.5,
+  weights: { cleanup: 30, demolition: 18, redLight: 16, rushHour: 22, backPay: 14 } as Readonly<Record<PowerUpKind, number>>,
+  redLightS: 6, redLightBossS: 4.5,
+  rushHourS: 10, rushAttackRate: 0.5, rushMoveSpeed: 0.2, rushSmash: 1.0,
+  demolitionEliteFrac: 0.25, demolitionBossFrac: 0.02, demolitionBossMeter: 0.1,
+  /** DEMOLITION kills bank like UPROAR kills (merged pickups, ≤ bankPickupsPerTick per tick) — perf */
+  demolitionBanks: true,
+} as const;
+
+/** #8 draft extras. */
+export const DRAFT_V2 = {
+  banishes: 2, locks: 2,
+  /** a READY evolution joins a level-up offer (slot 2, 0-based) with this chance (one rng.loot draw, ONLY
+   *  when at least one evolution is ready — otherwise the loot stream is untouched); chest offers always
+   *  put the first ready evolution in slot 0 (slot 1 when a held card occupies slot 0) */
+  evoDraftChance: 0.2,
+  /** BANISH ignores presses for this long after the draft opens (on top of the screen's armMs) */
+  banishArmS: 0.6,
+  /** pad BANISH is a HOLD of pad Y this long (a fill ring on the card); a tap never banishes */
+  banishHoldS: 0.5,
+} as const;
+
+/** #8 endless. */
+export const ENDLESS = {
+  budgetPerMin: 0.30, budgetMax: 6,
+  hpPerMin: 0.35,
+  dmgPerMin: 0.10, dmgMax: 3,
+  eliteEveryS: 60,
+  bossEveryS: 150,
+  rematchHpStep: 0.5, rematchDmgStep: 0.1,
+  score: { perSecond: 10, perKill: 2, perRematch: 5000, perTons: 1 / 500 },
+} as const;
+
+/** #5 perks (numbers the perk cards / applyPerk use). */
+export const PERKS = {
+  pettyCashRerolls: 1, redTapeBanish: 1, redTapeLock: 1, safetyArmor: 8,
+  stayHpFrac: 0.25, stayInvulnS: 2, tipLineExtraOverload: 1, tipLineMarkerMul: 2,
+} as const;
+
+/** tally: the window after an 'ability' event that counts hook pickups / hook kills (s) */
+export const HOOK_WINDOW_S = 1.4;
+
+/** Modal-screen bindings (FEATURES_V2 §2.4), compared against ui/dom.ts UiPress.key (lower-case
+ *  KeyboardEvent.key or 'pad:<n>') inside the screen module, BEFORE its `switch (p.act)`. Pad 8 (Select)
+ *  stays 'back' and pad 3 (Y) stays 'alt' = confirm on the title/select screens. ui/dom.ts is NOT edited. */
+export const UI_BIND = {
+  /** draft: X / hold pad Y (DRAFT_V2.banishHoldS). pad Y maps to act 'alt', which the draft ignores. */
+  banish: { key: 'x', pad: 'pad:3' },
+  /** draft: C / pad LB (4). Unmapped in PAD_MAP → act null. */
+  lock: { key: 'c', pad: 'pad:4' },
+  /** title + select: G / pad X (2). pad X maps to act 'reroll', which title and select ignore. */
+  goals: { key: 'g', pad: 'pad:2' },
+  /** clear tabloid: K; on pad the KEEP GOING button is reached with the d-pad and confirmed with A */
+  keepGoing: { key: 'k', pad: null },
 } as const;

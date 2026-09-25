@@ -35,12 +35,29 @@ export const BOSSES: Record<BossId, BossDef> = {
       { id: 'breathSlam', name: 'WHITEOUT COMBO', subtitle: 'WHITEOUT — LEAVE THE SIGHTLINE, THEN DASH THE RING', phase: 3 },
     ],
   },
+  // v2 (FEATURES_V2 §10.2) — GRID-EAST's boss: a walking multi-storey car park; weak point the TILL (ai/bosses/parkade6.ts)
+  parkade6: {
+    id: 'parkade6',
+    name: 'PARKADE-6',
+    title: 'HALVARD MOBILE PARKING STRUCTURE',
+    meterName: 'JAM',
+    hp: 180000,
+    height: 64,
+    attacks: [
+      { id: 'rampLaunch', name: 'RAMP LAUNCH', subtitle: 'RAMP LAUNCH — WATCH FOR FALLING TRAFFIC', phase: 1 },
+      { id: 'barrierSwing', name: 'BARRIER ARM', subtitle: 'BARRIER ARM — GET BEHIND THE BOOTH', phase: 1 },
+      { id: 'towChain', name: 'TOW CHAIN', subtitle: 'TOW CHAIN — STEP OFF THE LINKS', phase: 2 },
+      { id: 'deckDrop', name: 'DECK DROP', subtitle: 'DECK DROP — CLEAR THE FOOTPRINT', phase: 2 },
+      { id: 'levelCollapse', name: 'LEVEL COLLAPSE', subtitle: 'LEVEL COLLAPSE — COUNT THE RINGS, DASH THE LAST', phase: 3 },
+    ],
+  },
 };
 
 /** Nameplate subtitle when no attack is active (the default mechanic hint, §10). */
 export const BOSS_DEFAULT_SUBTITLE: Record<BossId, string> = {
   caisson4: 'BREAK THE LEGS — BUILD STRAIN',
   irongully: 'CRACK THE SAIL — BUILD FRACTURE',
+  parkade6: 'HIT THE TILL WHEN THE DECK OPENS — BUILD JAM',
 };
 
 /** Subtitle for an attack id (falls back to the default hint). */

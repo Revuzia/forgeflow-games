@@ -350,6 +350,11 @@ export const ALERTS: Record<AlertKey, { title: string; sub: string }> = {
   bossPhase3: { title: 'FINAL CONTAINMENT PROTOCOL', sub: 'EVERYTHING IT HAS, ALL AT ONCE — HOLD YOUR GROUND' },
   lowHp: { title: 'SUBJECT APPEARS WINDED', sub: 'EAT RUBBLE — THE CITY IS ALSO A PANTRY' },
   chest: { title: 'SUPPLY CRATE RECOVERED', sub: 'HALVARD PROPERTY — MUTATION REPORT INCOMING' },
+  // v2 (FEATURES_V2 §2.5)
+  overloadSite: { title: 'OVERLOAD SITE ON THE GRID', sub: 'A MARKED UTILITY STRUCTURE IS OVERLOADING — RESIDENTS ADVISED TO UNPLUG' },
+  recordsAnnex: { title: 'RECORDS ANNEX LOCATED', sub: 'SEALED MUNICIPAL PAPERWORK — HALVARD HAS POSTED A GUARD' },
+  endless: { title: 'EXTENDED COVERAGE', sub: 'THE BROADCAST CONTINUES. SO DOES THE SUBJECT.' },
+  rematch: { title: 'CONTAINMENT RESUBMITTED', sub: 'HALVARD HAS SENT ANOTHER RIG. IT HAS BEEN REINFORCED.' },
 };
 
 /** Size-up sting sub-lines, index = RankIndex (0 = Size I, used on the open slate). */

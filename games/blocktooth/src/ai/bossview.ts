@@ -26,6 +26,10 @@ import type { FrameInfo, ViewCtx, ViewModule } from '../render/viewtypes.ts';
 import { addOutline, INK } from '../render/materials.ts';
 import { FOE_PAL, Facet, M, makeFoeMaterial, ngon, rect } from './foemodels.ts';
 import type { FoeMaterial } from './foemodels.ts';
+import { buildParkadeRig } from './foemodels_parkade.ts';
+
+/** every boss rig built at mount (warmup compiles every boss program up front) — v2 adds PARKADE-6 */
+const RIG_IDS = ['caisson4', 'irongully', 'parkade6'] as const;
 
 /** CONTRACT §6.1: titans / bosses 3.0 px ink. */
 const OUTLINE_W = 3.0;
@@ -131,7 +135,7 @@ function footOffset(g: Gait, L: LegRig, r: BossRig, out: THREE.Vector3): void {
 }
 
 // ─────────────────────────────── rig types ───────────────────────────────
-interface LegRig {
+export interface LegRig {
   name: string;                 // collider / flash group name (legFL …)
   hip: THREE.Vector3;           // body-local hip
   rest: THREE.Vector3;          // root-local rest ankle target
@@ -143,9 +147,9 @@ interface LegRig {
   flinch: number;
 }
 
-interface FlashGroup { mat: FoeMaterial; flash: number; glowBase: number }
+export interface FlashGroup { mat: FoeMaterial; flash: number; glowBase: number }
 
-interface BossRig {
+export interface BossRig {
   id: BossId;
   root: THREE.Group;            // boss XZ + heading
   body: THREE.Group;            // body joint (pose offsets)
@@ -890,7 +894,7 @@ export class BossView implements ViewModule {
   private rig(id: BossId): BossRig {
     let r = this.rigs[id];
     if (!r) {
-      r = id === 'caisson4' ? buildCaisson(this.glowMul) : buildGully(this.glowMul);
+      r = id === 'caisson4' ? buildCaisson(this.glowMul) : id === 'parkade6' ? buildParkadeRig(this.glowMul) : buildGully(this.glowMul);
       r.root.visible = false;
       this.world.add(r.root);
       if (id === 'caisson4') for (const k of ['hook', 'w1', 'w2', 'cable0', 'cable1', 'cable2', 'cable3']) {
@@ -902,7 +906,7 @@ export class BossView implements ViewModule {
   }
 
   private show(r: BossRig | null): void {
-    for (const id of ['caisson4', 'irongully'] as const) {
+    for (const id of RIG_IDS) {
       const x = this.rigs[id];
       if (!x) continue;
       const on = x === r;
@@ -921,7 +925,7 @@ export class BossView implements ViewModule {
     if (!this.mounted) { this.ctx.scene.add(this.world); this.mounted = true; }
     const time = BIOMES[w.biomeId]?.time ?? 'day';
     this.glowMul = time === 'night' ? 1.6 : time === 'overcast' ? 1.15 : 1.0;
-    for (const id of ['caisson4', 'irongully'] as const) {
+    for (const id of RIG_IDS) {
       const r = this.rig(id);          // build both once: warmup compiles every boss program up front
       for (const k in r.groups) { const g = r.groups[k]; g.glowBase = k === 'head' ? this.glowMul * 1.2 : this.glowMul; g.flash = 0; }
     }
@@ -938,7 +942,7 @@ export class BossView implements ViewModule {
   /** Release GPU resources (page teardown; not part of the per-run cycle). */
   dispose(): void {
     this.unmount();
-    for (const id of ['caisson4', 'irongully'] as const) {
+    for (const id of RIG_IDS) {
       const r = this.rigs[id];
       if (!r) continue;
       const geos = new Set<THREE.BufferGeometry>();
@@ -999,6 +1003,12 @@ export class BossView implements ViewModule {
     const h = b.pheading + wrapAngle(b.heading - b.pheading) * a;
     r.root.position.set(x, 0, z);
     r.root.rotation.set(0, h, 0);
+    // v2 PARKADE-6 (L0 placeholder rig): its own pose path, never the IRON GULLY one (FEATURES_V2 §2.7)
+    if (b.id === 'parkade6') {
+      this.poseParkade(w, b, r);
+      if (this.xray.core.visible) { this.xray.ink.visible = false; this.xray.core.visible = false; this.leashT = -1; }
+      return;
+    }
     GS.x = x; GS.z = z; GS.h = h; GS.dt = dt;
     stepGait(this.gait, r);
     const mkr = this.gait.pace / (0.35 * r.walkSpeed);
@@ -1024,6 +1034,9 @@ export class BossView implements ViewModule {
     if (b.id === 'caisson4') this.updateHook(w, b, r);
     else if (this.xray.core.visible) { this.xray.ink.visible = false; this.xray.core.visible = false; this.leashT = -1; }
   }
+
+  /** PARKADE-6 pose (L0 SKELETON STUB: the placeholder rig is not posed; lane L7 writes the real one). */
+  private poseParkade(_w: World, _b: BossState, _r: BossRig): void { /* L7 */ }
 
   // ─────────────────────────────── windup lookup ───────────────────────────────
   /** Windup (s) of the live, unfired boss telegraph `tag` (cached for this attack), else the fallback. */

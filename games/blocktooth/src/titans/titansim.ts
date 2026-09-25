@@ -30,6 +30,8 @@ import { ENEMIES } from '../data/enemies.ts';
 import { recomputeStats, stat } from '../upgrades/stats.ts';
 import { initKit, kitMassMul, kitOnDash, kitOnHurt, stepKit } from './kits/index.ts';
 import { distToBuilding, propRadius } from './kits/common.ts';
+import { ultMoveMul } from '../meta/ultimate.ts';
+import { endlessDmgMul } from '../meta/endless.ts';
 
 // ─────────────────────────────── tuning (balance gate tunes these) ───────────────────────────────
 /** seconds to reach full speed from rest, per rank (snappy at Size I, weighty at V) */
@@ -209,7 +211,7 @@ export function stepTitan(w: World): void {
   const H = T.height;
   const rank = T.rank;
   const canFlatten = RANKS[rank].canFlatten;
-  const maxSp = titanMaxSpeed(w);
+  const maxSp = titanMaxSpeed(w) * ultMoveMul(w);   // v2: UPROAR roar slows the titan (1 otherwise)
 
   // ── input ──
   let mx = Number.isFinite(w.input.mx) ? w.input.mx : 0;
@@ -624,9 +626,10 @@ export function hurtTitan(w: World, dmg: number, kind: DamageKind, x: number, z:
   const T = w.titan;
   if (!T.alive || !(dmg > 0) || !Number.isFinite(dmg)) return 0;
   if (w.cheats.god) return 0;
+  if (w.ult.invulnT > 0) return 0;                    // v2: UPROAR roar / perk revive window — covers dot too
   if (dot ? num(T.kit.sim_dashIfrT, 0) > 0 : T.iframeT > 0) return 0;
   const armor = Math.max(-50, stat(w, 'armor'));
-  let d = dmg * (100 / (100 + armor));
+  let d = dmg * endlessDmgMul(w) * (100 / (100 + armor));   // v2: endless escalation (1 outside endless)
   d = kitOnHurt(w, d);
   if (!(d > 0)) return 0;
   const U = w.upgrades;

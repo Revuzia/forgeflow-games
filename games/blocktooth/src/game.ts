@@ -18,15 +18,20 @@
 //     flow no-ops. Loads are serialised by a lock so a view is never mounted twice at once.
 //   * Errors: a boot/load failure or a sim exception surfaces in #fatal (onFatal); a view throwing
 //     in a frame is logged and only escalates to #fatal if it keeps failing (60 frames in a row).
+//   * v2 (FEATURES_V2 §13.1, pre-wired by lane L0 against the stubs; no later lane edits this file):
+//     profile + run meta at run start, select ⇄ GOALS & RECORDS, the cinematic opening (CineCam.plan
+//     null → the legacy slate), ability bar / tracker / markers / toasts every play frame, UPROAR
+//     hit-stop, 1 Hz goal checks, draft BANISH / LOCK / NEW ids, run-end profile ledger, KEEP GOING →
+//     EXTENDED COVERAGE, pause LOADOUT ctx. Every stub keeps today's behaviour.
 
-import type { AlertKey, BiomeId, RankIndex, SimEvent, TitanId, TitanInput, World } from './core/types.ts';
-import { BIOME_IDS, TITAN_IDS } from './core/types.ts';
-import { BUDGET, INPUT_BUFFER_S, SIM_DT } from './core/config.ts';
+import type { AlertKey, BiomeId, PerkId, Profile, RankIndex, RunMeta, SimEvent, TitanId, TitanInput, World } from './core/types.ts';
+import { BIOME_IDS, EMPTY_RUN_META, PERK_IDS, TITAN_IDS } from './core/types.ts';
+import { BUDGET, INPUT_BUFFER_S, SIM_DT, ULT } from './core/config.ts';
 import { createWorld, stepWorld } from './core/world.ts';
 import { GameLoop, frameStats } from './core/loop.ts';
 import { Input } from './core/input.ts';
 import { DebugOverlay } from './core/debug.ts';
-import { bestKey, loadBest, loadSettings, saveBest, type Settings } from './core/save.ts';
+import { bestKey, loadBest, loadProfile, loadSettings, saveBest, saveProfile, type Settings } from './core/save.ts';
 
 import { createRenderCore, defaultQuality, type RenderCore, type RenderStats } from './render/renderer.ts';
 import { CameraRig } from './render/camera.ts';
@@ -37,7 +42,7 @@ import { FrameProf } from './render/frameprof.ts';
 import type { FrameInfo, Quality, ViewCtx, ViewModule } from './render/viewtypes.ts';
 import { CityView } from './city/cityview.ts';
 import { TitanView } from './titans/titanview.ts';
-import { renderPortraits } from './titans/portraits.ts';
+import { renderPortrait, renderPortraits } from './titans/portraits.ts';
 import { EnemyView } from './ai/enemyview.ts';
 import { BossView } from './ai/bossview.ts';
 import { TelegraphView } from './render/telegraphview.ts';
@@ -47,6 +52,12 @@ import { FxView } from './render/fx.ts';
 import { DebrisView } from './render/debris.ts';
 import { CivilianView } from './render/civilians.ts';
 import { PickupView } from './render/pickupview.ts';
+// v2 views (L6 / L10; L0 stubs)
+import { UltView } from './render/ultview.ts';
+import { ObjectiveView } from './render/objectiveview.ts';
+import { PowerupView } from './render/powerupview.ts';
+import { MarkerView } from './render/markerview.ts';
+import { CineCam } from './render/cinecam.ts';
 
 import { Hud } from './ui/hud.ts';
 import { Broadcast, runFigures } from './ui/broadcast.ts';
@@ -54,6 +65,14 @@ import { BossBar } from './ui/bossbar.ts';
 import { SelectScreen } from './ui/select.ts';
 import { DraftScreen } from './ui/draft.ts';
 import { PauseMenu, TitleScreen } from './ui/menus.ts';
+// v2 UI (L8 / L9 / L10; L0 stubs)
+import { AbilityBar } from './ui/abilitybar.ts';
+import { ObjectiveTracker } from './ui/tracker.ts';
+import { ScreenMarkers } from './ui/markers.ts';
+import { Toasts } from './ui/toast.ts';
+import { GoalsScreen } from './ui/goals.ts';
+import { CineOverlay } from './ui/cine.ts';
+import type { CineVariant, DraftResultV2, FaceAnchor, SelectResume, SelectResultV2, TabloidChoiceV2 } from './v2types.ts';
 
 import { AudioEngine } from './audio/audio.ts';
 import { Sfx } from './audio/sfx.ts';
@@ -63,14 +82,20 @@ import { TITANS } from './data/titans.ts';
 import { BIOMES } from './data/biomes.ts';
 import { BOSSES } from './data/bosses.ts';
 import { UPGRADES, UPGRADE_BY_ID } from './data/upgrades.ts';
-import { hasPendingDraft, pickUpgrade, rerollOffer, rollOffer } from './upgrades/draft.ts';
+import { banishCard, hasPendingDraft, lockCard, pickUpgrade, rerollOffer, rollOffer } from './upgrades/draft.ts';
+// v2 meta (L5; L0 stubs)
+import { GOALS } from './data/goals.ts';
+import { TITAN_PALETTES } from './data/palettes.ts';
+import { applyRunToProfile, evalGoals, markSeen, runMetaFor, unlockLabel } from './meta/goals.ts';
+import { emptyProfile } from './meta/profile.ts';
+import { continueEndless } from './meta/endless.ts';
 
 // ─────────────────────────────── types ───────────────────────────────
 
-export type Screen = 'boot' | 'title' | 'select' | 'loading' | 'slate' | 'play' | 'draft' | 'pause' | 'end';
+export type Screen = 'boot' | 'title' | 'select' | 'loading' | 'slate' | 'play' | 'draft' | 'pause' | 'end' | 'goals';
 
 /** Which awaited modal screen currently owns input (so it can be closed on a forced transition). */
-type Modal = 'title' | 'select' | 'slate' | 'draft' | 'pause' | 'end';
+type Modal = 'title' | 'select' | 'slate' | 'draft' | 'pause' | 'end' | 'goals';
 
 export interface AppParams {
   seed: number | null;
@@ -88,6 +113,14 @@ export interface AppParams {
   dynres: boolean;
   /** frame profiler (perf attribution; `?prof=1`, exposed as window.__BTPROF__) */
   prof: boolean;
+  /** v2 `?cine=0|1|2`: session override of the opening setting (null = settings.cinematic) */
+  cine: 0 | 1 | 2 | null;
+  /** v2 `?meta=fresh|full` (dev only): in-memory empty profile / everything unlocked; storage untouched */
+  meta: 'fresh' | 'full' | null;
+  /** v2 `?perk=<PerkId>` (dev only): the run's perk */
+  perk: PerkId | null;
+  /** v2 `?endless=1` (dev only): the clear tabloid auto-picks KEEP GOING (harness) */
+  endless: boolean;
 }
 
 export interface RunRequest {
@@ -95,6 +128,10 @@ export interface RunRequest {
   biome: BiomeId;
   seed: number;
   skipSlate?: boolean;
+  /** v2: explicit run meta (test surface); otherwise the app derives it (params / profile) */
+  meta?: RunMeta;
+  /** v2: play the SHORT opening (RETRY) */
+  short?: boolean;
 }
 
 export type FatalHandler = (title: string, err: unknown) => void;
@@ -156,7 +193,13 @@ const CLOSE_KEY: Record<Exclude<Modal, 'slate' | 'end'>, { key: string; code: st
   select: { key: 'Escape', code: 'Escape' },
   draft: { key: '1', code: 'Digit1' },
   pause: { key: 'Escape', code: 'Escape' },
+  goals: { key: 'Escape', code: 'Escape' },
 };
+
+/** v2: goals are checked this often while playing (s) */
+const GOALS_PERIOD_S = 1;
+/** v2: the RESTRUCTURED evolution toast sub-line hold (the Toasts stack owns timing) */
+const EVO_TOAST_KICKER = 'RESTRUCTURED';
 
 // ─────────────────────────────── small helpers ───────────────────────────────
 
@@ -197,6 +240,10 @@ export function parseParams(search: string): AppParams {
     noslate: flag('noslate'),
     dynres: q.get('dynres') === null ? true : flag('dynres'),
     prof: flag('prof'),
+    cine: (() => { const c = q.get('cine'); return c === '0' || c === '1' || c === '2' ? (Number(c) as 0 | 1 | 2) : null; })(),
+    meta: (() => { const m = (q.get('meta') || '').toLowerCase(); return m === 'fresh' || m === 'full' ? m : null; })(),
+    perk: (() => { const k = q.get('perk') || ''; return (PERK_IDS as readonly string[]).includes(k) ? (k as PerkId) : null; })(),
+    endless: flag('endless'),
   };
 }
 
@@ -390,6 +437,16 @@ export class App {
   readonly selectScreen: SelectScreen;
   readonly draftScreen: DraftScreen;
   readonly pauseMenu: PauseMenu;
+  // v2 UI + views (FEATURES_V2 §13.1)
+  readonly abilityBar: AbilityBar;
+  readonly tracker: ObjectiveTracker;
+  readonly markers: ScreenMarkers;
+  readonly toasts: Toasts;
+  readonly goalsScreen: GoalsScreen;
+  readonly cineOverlay: CineOverlay;
+  readonly cineCam: CineCam;
+  private readonly markerView: MarkerView;
+  private readonly titanView: TitanView;
 
   // audio
   readonly audio: AudioEngine;
@@ -449,6 +506,25 @@ export class App {
   private _testFrozen = false;
   private forcedInput: TitanInput | null = null;
 
+  // v2 app state (FEATURES_V2 §13.1)
+  /** the persistent profile (in-memory copy; `?meta=` runs never touch storage) */
+  private _profile: Profile;
+  /** perk + palette chosen on the select screen (next runs) */
+  private perkChoice: PerkId | null = null;
+  private paletteChoice: Record<TitanId, number> = { molo: 0, voltkite: 0, hearthback: 0, briarwick: 0 };
+  /** portrait cache per titan × palette (palette 0 = the canonical set) */
+  private readonly portraitCache = new Map<string, Promise<string>>();
+  /** the next opening plays the SHORT variant (RETRY) */
+  private shortOpening = false;
+  /** the cinematic overlay is up (dismiss() skips it instead of the slate) */
+  private cinePlaying = false;
+  private readonly face: FaceAnchor = { x: 0, y: 0, z: 0, fx: 0, fy: 0, fz: 1, h: 1 };
+  /** goals met live this run (tabloid NEW ON THE RECORD) + the 1 Hz check timer */
+  private runNewGoals: string[] = [];
+  private goalsAcc = 0;
+  /** v2 test surface (cheat.endless): the next clear tabloid picks KEEP GOING by itself, once */
+  autoEndlessOnce = false;
+
   // error accounting
   private frameErrStreak = 0;
   private frameErrTotal = 0;
@@ -460,6 +536,9 @@ export class App {
     this.params = params;
     this.splash = new Splash(document);
     this.settings = loadSettings();
+    this._profile = this.params.dev && this.params.meta ? emptyProfile() : loadProfile();
+    this.perkChoice = this._profile.perk;
+    for (const t of TITAN_IDS) this.paletteChoice[t] = this._profile.palette[t] ?? 0;
     this._choice = {
       titan: params.titan ?? 'molo',
       biome: params.biome ?? 'grideast',
@@ -479,20 +558,28 @@ export class App {
 
     // every run-scoped view, constructed ONCE (CONTRACT §6); mount/unmount per run
     const ctx: ViewCtx = { renderer: this.core.renderer, scene: this.core.scene, camera: this.core.camera, quality: this.core.quality };
+    this.titanView = new TitanView(ctx);
+    this.markerView = new MarkerView(ctx);
     this.views = [
       new EnvView(ctx),
       new CityView(ctx),
       new CivilianView(ctx),
       new PickupView(ctx),
       new DebrisView(ctx),
-      new TitanView(ctx),
+      this.titanView,
       new EnemyView(ctx),
       new BossView(ctx),
       new HazardView(ctx),
       new TelegraphView(ctx),
       new ProjectileView(ctx),
       new FxView(ctx),
+      // v2 (FEATURES_V2 §2.6; L0 stubs, L6 fills)
+      new ObjectiveView(ctx),
+      new PowerupView(ctx),
+      new UltView(ctx),
+      this.markerView,
     ];
+    this.cineCam = new CineCam(this.core.camera);
 
     // UI (HTML overlay). Layer z-order comes from ui/styles.css.
     this.hud = new Hud(uiRoot);
@@ -503,7 +590,14 @@ export class App {
     this.titleScreen = new TitleScreen(uiRoot, this.input);
     this.pauseMenu = new PauseMenu(uiRoot, this.input);
     this.pauseMenu.onSettings = (s) => this.applySettings(s);
-    this.hud.show(false);
+    // v2 UI (FEATURES_V2 §13.1; L0 stubs, L8 / L9 / L10 fill)
+    this.abilityBar = new AbilityBar(uiRoot);
+    this.tracker = new ObjectiveTracker(uiRoot);
+    this.markers = new ScreenMarkers(uiRoot);
+    this.toasts = new Toasts(uiRoot);
+    this.goalsScreen = new GoalsScreen(uiRoot, this.input);
+    this.cineOverlay = new CineOverlay(uiRoot, this.input);
+    this.showHud(false);
     this.bossbar.hide();
     this.debug = new DebugOverlay(uiRoot);
 
@@ -540,6 +634,13 @@ export class App {
   /** titan / biome / seed of the current (or next) run */
   get choice(): { titan: TitanId; biome: BiomeId; seed: number } { return { ...this._choice }; }
   get testFrozen(): boolean { return this._testFrozen; }
+  /** v2: the in-memory profile (read-only by convention; test surface) */
+  get profile(): Profile { return this._profile; }
+  /** v2: the cinematic shot on screen (null outside the opening) */
+  get cineShot(): { shot: string; t: number } | null {
+    const s = this.cineCam.shot;
+    return this.cinePlaying && s ? { shot: s.id, t: s.t } : null;
+  }
   get isEnding(): boolean { return this.ending; }
 
   /** Boot: start the frame loop, then the title (or ?autostart straight into a run). */
@@ -573,19 +674,27 @@ export class App {
     // pre-render the select portraits while the title is up (cached for the whole page; a no-op
     // once done) so Enter → select is instant
     if (!this.portraits) setTimeout(() => { if (ep === this.epoch && this._screen === 'title') void this.getPortraits(); }, 700);
+    let pick: 'play' | 'goals';
     try {
-      await this.titleScreen.run();
+      pick = await this.titleScreen.run();
     } finally {
       if (this.modal === 'title') this.modal = null;
     }
     if (ep !== this.epoch) return;
+    if (pick === 'goals') {          // v2: GOALS & RECORDS from the title, then back to the title
+      void this.audio.unlock();
+      await this.runGoals(ep);
+      if (ep !== this.epoch) return;
+      void this.goTitle();
+      return;
+    }
     void this.audio.unlock();       // the title's Enter/click is the first user gesture
     this.sfx.ui('confirm');
     void this.goSelect();
   }
 
   /** Titan + biome select → run (null result = back to the title). */
-  async goSelect(initial?: { titan?: TitanId; biome?: BiomeId }): Promise<void> {
+  async goSelect(initial?: Partial<SelectResume>): Promise<void> {
     const ep = ++this.epoch;
     await this.loadLock;
     if (ep !== this.epoch) return;
@@ -604,18 +713,86 @@ export class App {
     try { portraits = await pending; } finally { clearTimeout(slow); }
     this.splash.hide();
     if (ep !== this.epoch) return;
-    this.setScreen('select');
-    this.modal = 'select';
-    let res: { titan: TitanId; biome: BiomeId } | null;
-    try {
-      res = await this.selectScreen.run(portraits, initial ?? { titan: this._choice.titan, biome: this._choice.biome });
-    } finally {
-      if (this.modal === 'select') this.modal = null;
+    let from: Partial<SelectResume> = initial ?? { titan: this._choice.titan, biome: this._choice.biome };
+    let res: SelectResultV2 = null;
+    for (let guard = 0; guard < 32; guard++) {
+      this.setScreen('select');
+      this.modal = 'select';
+      try {
+        res = await this.selectScreen.run({
+          portraits,
+          portraitFor: (t, pal) => this.portraitFor(t, pal),
+          profile: this._profile,
+          bests: loadBest(),
+          initial: from,
+        });
+      } finally {
+        if (this.modal === 'select') this.modal = null;
+      }
+      if (ep !== this.epoch) return;
+      if (!res || res.kind !== 'goals') break;
+      // v2: GOALS & RECORDS from the select screen, then back to the same step / choice / row
+      await this.runGoals(ep);
+      if (ep !== this.epoch) return;
+      from = res.resume;
     }
-    if (ep !== this.epoch) return;
-    if (!res) { this.sfx.ui('back'); void this.goTitle(); return; }
+    if (!res || res.kind !== 'start') { this.sfx.ui('back'); void this.goTitle(); return; }
     this.sfx.ui('confirm');
+    // v2: the chosen perk + palette are remembered (profile) and used by this and later runs
+    this.perkChoice = res.perk;
+    this.paletteChoice[res.titan] = res.palette;
+    this._profile.perk = res.perk;
+    this._profile.palette[res.titan] = res.palette;
+    this.persistProfile();
     void this.startRun({ titan: res.titan, biome: res.biome, seed: freshSeed(), skipSlate: this.params.noslate });
+  }
+
+  /** v2: GOALS & RECORDS (from the title or the select screen). */
+  private async runGoals(ep: number): Promise<void> {
+    this.setScreen('goals');
+    this.input.mode = 'ui';
+    this.modal = 'goals';
+    try {
+      await this.goalsScreen.open(this._profile, loadBest());
+    } finally {
+      if (this.modal === 'goals') this.modal = null;
+    }
+    if (ep === this.epoch) this.sfx.ui('back');
+  }
+
+  /** v2 SelectRunOpts.portraitFor: one data URL per titan × palette (palette 0 = the canonical set). */
+  private portraitFor(titan: TitanId, palette: number): Promise<string> {
+    const pal = Number.isFinite(palette) ? Math.max(0, Math.min(2, Math.floor(palette))) : 0;
+    if (pal === 0) return this.getPortraits().then((all) => all[titan] ?? '');
+    const key = titan + '#' + pal;
+    let p = this.portraitCache.get(key);
+    if (!p) {
+      p = renderPortrait(this.core.renderer, titan, PORTRAIT_PX, TITAN_PALETTES[titan][pal - 1]).catch((e: unknown) => {
+        console.error('[blocktooth] palette portrait failed', e);
+        this.portraitCache.delete(key);
+        return '';
+      });
+      this.portraitCache.set(key, p);
+    }
+    return p;
+  }
+
+  /** v2: save the profile unless this is a `?meta=` harness run (in-memory only). */
+  private persistProfile(): void {
+    if (this.params.dev && this.params.meta) return;
+    try { saveProfile(this._profile); } catch { /* storage is a nicety */ }
+  }
+
+  /** v2: the run meta for a titan (URL override → profile). */
+  private runMetaFor(titan: TitanId): RunMeta {
+    const P = this.params;
+    if (P.dev && P.meta === 'full') {
+      const unlocked = UPGRADES.filter((u) => u.locked).map((u) => u.id).sort();
+      return { unlocked, perk: P.perk, palette: 0, reviveUsed: false };
+    }
+    if (P.dev && P.meta === 'fresh') return { ...EMPTY_RUN_META, unlocked: [], perk: P.perk };
+    const perk = P.dev && P.perk ? P.perk : this.perkChoice;
+    return runMetaFor(this._profile, titan, perk, this.paletteChoice[titan] ?? 0);
   }
 
   /**
@@ -638,7 +815,8 @@ export class App {
       if (ep !== this.epoch) return;
       this.teardownRun();
       this._choice = { titan, biome, seed };
-      ok = await this.loadRun(ep, titan, biome, seed);
+      this.shortOpening = !!req.short;
+      ok = await this.loadRun(ep, titan, biome, seed, req.meta ?? this.runMetaFor(titan));
     } catch (e) {
       if (ep === this.epoch) this.fail('the run failed to load', e);
       return;
@@ -647,13 +825,13 @@ export class App {
     }
     if (!ok || ep !== this.epoch) return;
     if (req.skipSlate) { this.enterPlay(); return; }
-    void this.runSlate(ep);
+    void this.runOpening(ep);
   }
 
   /** Same titan + biome, new seed. */
   retry(): Promise<void> {
     const c = this._choice;
-    return this.startRun({ titan: c.titan, biome: c.biome, seed: freshSeed(), skipSlate: this.params.noslate });
+    return this.startRun({ titan: c.titan, biome: c.biome, seed: freshSeed(), skipSlate: this.params.noslate, short: true });   // v2: RETRY → short opening
   }
 
   /** Pause (Esc / P / __PAUSE__ / tab hidden). Only from live play. */
@@ -705,6 +883,7 @@ export class App {
     switch (before) {
       case 'slate':
       case 'end': {
+        if (before === 'slate' && this.cinePlaying) { this.cineOverlay.skip(); break; }   // v2 opening
         const b = this.broadcast as unknown as { dismiss?: () => boolean };
         if (typeof b.dismiss === 'function') b.dismiss();
         else synthKey('Enter', 'Enter');
@@ -713,6 +892,7 @@ export class App {
       case 'draft': await this.closeModalByKeys('draft'); break;
       case 'pause': await this.closeModalByKeys('pause'); break;
       case 'title': await this.closeModalByKeys('title'); break;
+      case 'goals': await this.closeModalByKeys('goals'); break;
       default: return false;
     }
     for (let i = 0; i < 40 && this._screen === before; i++) await wait(50);
@@ -780,14 +960,14 @@ export class App {
   // ─────────────────────────────── loading / teardown ───────────────────────────────
 
   /** Build the world and mount every view. Returns false when superseded (epoch changed). */
-  private async loadRun(ep: number, titan: TitanId, biome: BiomeId, seed: number): Promise<boolean> {
+  private async loadRun(ep: number, titan: TitanId, biome: BiomeId, seed: number, meta: RunMeta): Promise<boolean> {
     this.setScreen('loading');
     this.input.mode = 'ui';
     this.splash.show(LOADING.city, 0.05);
     await yieldFrame();
     if (ep !== this.epoch) return false;
 
-    const w = createWorld({ titan, biome, seed });
+    const w = createWorld({ titan, biome, seed, meta });
     this._world = w;
     this.resetRunState();
     this.lighting.applyBiome(BIOMES[biome]);
@@ -888,9 +1068,11 @@ export class App {
     }
     this.mounted = [];
     this._world = null;
-    this.hud.show(false);
+    this.showHud(false);
     this.bossbar.hide();
     this.broadcast.clear();
+    this.stopCine();
+    this.toasts.clear();
     this.evA.length = 0;
     this.evB.length = 0;
     this.ring.length = 0;
@@ -914,6 +1096,24 @@ export class App {
     this._testFrozen = false;
     this.forcedInput = null;
     this.loop.timeScale = 1;
+    this.runNewGoals = [];
+    this.goalsAcc = 0;
+  }
+
+  /** v2 abort path of the cinematic opening (closeScreens, teardown, every epoch change). */
+  private stopCine(): void {
+    this.cinePlaying = false;
+    try { this.cineCam.stop(); } catch (e) { console.error('[blocktooth] cineCam.stop failed', e); }
+    try { this.cineOverlay.clear(); } catch (e) { console.error('[blocktooth] cineOverlay.clear failed', e); }
+    try { this.titanView.setCine(null); } catch { /* view not mounted */ }
+  }
+
+  /** The HUD and the v2 HUD pieces are shown / hidden together. */
+  private showHud(on: boolean): void {
+    this.hud.show(on);
+    this.abilityBar.show(on);
+    this.tracker.show(on);
+    this.markers.show(on);
   }
 
   /**
@@ -923,6 +1123,7 @@ export class App {
    */
   private async closeScreens(): Promise<void> {
     this.broadcast.clear();
+    this.stopCine();
     if (this.modal === 'slate' || this.modal === 'end') this.modal = null;
     const m = this.modal;
     if (m) await this.closeModalByKeys(m);
@@ -949,13 +1150,67 @@ export class App {
     try { document.body.dataset.screen = s; } catch { /* no DOM */ }
   }
 
+  /**
+   * v2 opening (FEATURES_V2 §11 / §13.1): the WARD-7 STREET CAM cinematic when the setting (or ?cine)
+   * asks for one AND CineCam.plan() returns a plan; otherwise the legacy freeze-frame slate (runSlate,
+   * unchanged). The L0 stubs return no face anchor / no plan, so the slate always plays today.
+   */
+  private async runOpening(ep: number): Promise<void> {
+    const w = this._world;
+    if (!w) return;
+    const setting = this.params.cine ?? this.settings.cinematic;
+    const seenKey = w.titanId + '.' + w.biomeId;
+    let plan = null;
+    let variant: CineVariant = 'full';
+    if (setting > 0) {
+      variant = this.settings.reduceMotion ? 'reduced'
+        : setting === 1 || this.shortOpening || this._profile.cineSeen[seenKey] === 1 ? 'short' : 'full';
+      try {
+        if (this.titanView.faceAnchor(this.face)) plan = this.cineCam.plan(w, this.rig, this.face, variant);
+      } catch (e) {
+        console.error('[blocktooth] cinematic plan failed — legacy slate', e);
+        plan = null;
+      }
+    }
+    this.shortOpening = false;
+    if (!plan) { await this.runSlate(ep); return; }
+    this.setScreen('slate');
+    this.input.mode = 'ui';
+    this.loop.simEnabled = false;
+    this.showHud(false);
+    this.music.stop();
+    this.modal = 'slate';
+    this.cinePlaying = true;
+    let res: 'done' | 'skipped' | 'aborted' = 'aborted';
+    try {
+      this.cineCam.start(plan);
+      const B = BIOMES[w.biomeId], T = TITANS[w.titanId];
+      res = await this.cineOverlay.play(plan, {
+        place: B.slate, sub: '', titanName: T.name,
+        reduceFlash: !!this.settings.reduceFlashing, reduceMotion: !!this.settings.reduceMotion,
+      });
+    } catch (e) {
+      console.error('[blocktooth] cinematic failed', e);
+      res = 'skipped';
+    } finally {
+      if (this.modal === 'slate') this.modal = null;
+      this.cinePlaying = false;
+    }
+    if (res === 'aborted' || ep !== this.epoch || this._world !== w) return;
+    if (this.cineCam.active) this.cineCam.skip();
+    this.titanView.setCine(null);
+    if (res === 'done' && plan.variant === 'full') { this._profile.cineSeen[seenKey] = 1; this.persistProfile(); }
+    void this.audio.unlock();
+    this.enterPlay();
+  }
+
   private async runSlate(ep: number): Promise<void> {
     const w = this._world;
     if (!w) return;
     this.setScreen('slate');
     this.input.mode = 'ui';
     this.loop.simEnabled = false;
-    this.hud.show(false);
+    this.showHud(false);
     this.music.stop();
     this.sfx.ui('slate');
     this.modal = 'slate';
@@ -975,7 +1230,7 @@ export class App {
     this.setScreen('play');
     this.input.mode = 'game';
     this.input.clearEdges();
-    this.hud.show(true);
+    this.showHud(true);
     this.loop.simEnabled = !this._testFrozen && !this.ending;
     this.musicAcc = MUSIC_PERIOD_S;               // refresh intensity on the next frame
     this.music.play(w.boss && w.boss.alive ? 'boss' : w.biomeId);
@@ -998,9 +1253,16 @@ export class App {
         break;
       }
       this.modal = 'draft';
-      let res: { pick: string } | { reroll: true };
+      // v2: ids newly unlocked and not yet seen get the NEW ribbon once (markSeen + save right away)
+      const U = w.upgrades;
+      const newIds = offer.filter((id) => this._profile.newUnlocks.includes(id));
+      if (newIds.length) { this._profile = markSeen(this._profile, newIds); this.persistProfile(); }
+      let res: DraftResultV2;
       try {
-        res = await this.draftScreen.open(w, offer, Math.max(0, w.upgrades.rerolls | 0));
+        res = await this.draftScreen.open(w, offer, {
+          rerollsLeft: Math.max(0, U.rerolls | 0), banishLeft: Math.max(0, U.banishLeft | 0),
+          lockLeft: Math.max(0, U.lockLeft | 0), locked: U.locked, newIds,
+        });
       } finally {
         if (this.modal === 'draft') this.modal = null;
       }
@@ -1010,9 +1272,25 @@ export class App {
         this.sfx.ui('move');
         continue;
       }
+      if ('banish' in res) {                     // v2 BANISH: same draft, refilled offer
+        const bid = res.banish;
+        this.mutate((ww) => banishCard(ww, bid));
+        this.sfx.ui('move');
+        continue;
+      }
+      if ('lock' in res) {                       // v2 LOCK (toggle): same draft
+        const lid = res.lock;
+        this.mutate((ww) => lockCard(ww, lid));
+        this.sfx.ui('move');
+        continue;
+      }
       const id = res.pick;
       this.mutate((ww) => pickUpgrade(ww, id));
       this.sfx.ui('pick');
+      const def = UPGRADE_BY_ID[id];
+      if (def && def.evo && (w.upgrades.owned[id] ?? 0) > 0) {   // v2: an evolution was taken
+        this.toasts.push({ kicker: EVO_TOAST_KICKER, title: EVO_TOAST_KICKER + ': ' + def.name.toUpperCase(), sub: '', glyph: 'evo' });
+      }
     }
     if (ep !== this.epoch || this._world !== w) return;
     this.enterPlay();
@@ -1030,7 +1308,7 @@ export class App {
     this.modal = 'pause';
     let choice: 'resume' | 'retry' | 'quit';
     try {
-      choice = await this.pauseMenu.open();
+      choice = await this.pauseMenu.open({ w });
     } finally {
       if (this.modal === 'pause') this.modal = null;
     }
@@ -1059,7 +1337,56 @@ export class App {
     this.input.mode = 'ui';
     this.music.setIntensity(result === 'clear' ? 1 : 0.15);
     const w = this._world;
-    if (w) this.recordBests(w, result);
+    if (w) {
+      this.recordBests(w, result);
+      this.fileRun(w, result);
+    }
+  }
+
+  /** v2 run end (FEATURES_V2 §13.1): the profile ledger (applyRunToProfile → save → toasts). */
+  private fileRun(w: World, result: 'clear' | 'dead'): void {
+    try {
+      const out = applyRunToProfile(this._profile, w, result);
+      this._profile = out.profile;
+      this.persistProfile();
+      for (const id of out.newly) {
+        if (!this.runNewGoals.includes(id)) this.runNewGoals.push(id);
+        this.toastGoal(id);
+      }
+    } catch (e) {
+      console.error('[blocktooth] profile update failed', e);
+    }
+  }
+
+  /** v2: one GOAL MET toast for a goal id. */
+  private toastGoal(id: string): void {
+    const g = GOALS.find((x) => x.id === id);
+    if (!g) return;
+    const unlock = g.unlocks.length ? g.unlocks.map((u) => unlockLabel(u)).join(', ') : '';
+    this.toasts.push({ kicker: 'GOAL MET', title: g.name, sub: unlock ? 'UNLOCKED: ' + unlock + ' — NEXT RUN' : '', glyph: 'ribbon' });
+  }
+
+  /** v2: live goal checks (1 Hz while playing): newly met run goals are filed, saved and toasted. */
+  private checkGoals(w: World, dt: number): void {
+    this.goalsAcc += dt;
+    if (this.goalsAcc < GOALS_PERIOD_S) return;
+    this.goalsAcc = 0;
+    let ids: string[];
+    try {
+      ids = evalGoals(this._profile, w.tally, { titan: w.titanId, biome: w.biomeId, result: w.run.result, endT: w.run.endT });
+    } catch (e) {
+      console.error('[blocktooth] goal check failed', e);
+      return;
+    }
+    let changed = false;
+    for (const id of ids) {
+      if (this._profile.done[id] !== undefined) continue;
+      this._profile.done[id] = Date.now();
+      changed = true;
+      if (!this.runNewGoals.includes(id)) this.runNewGoals.push(id);
+      this.toastGoal(id);
+    }
+    if (changed) this.persistProfile();
   }
 
   /** Aftermath over: photo right after a render, then the tabloid. */
@@ -1084,22 +1411,55 @@ export class App {
       for (const o of hidden) o.visible = true;
     }
     this.setScreen('end');
-    this.hud.show(false);
+    this.showHud(false);
     this.bossbar.hide();
     this.music.play('tabloid');
     this.sfx.ui('print');
     this.modal = 'end';
-    let choice: 'retry' | 'select' | 'title';
+    const canContinue = w.run.result === 'clear' && !w.endless;
+    const newGoals = this.runNewGoals.map((id) => {
+      const g = GOALS.find((x) => x.id === id);
+      return { goal: g ? g.name : id, unlock: g ? g.unlocks.map((u) => unlockLabel(u)).join(', ') : '' };
+    });
+    let choice: TabloidChoiceV2;
     try {
-      choice = await this.broadcast.tabloid(w, photo);
+      // `?endless=1` (dev harness): the clear front page picks KEEP GOING by itself
+      if (canContinue && ((this.params.dev && this.params.endless) || this.autoEndlessOnce)) { this.autoEndlessOnce = false; choice = 'endless'; }
+      else choice = await this.broadcast.tabloid(w, photo, { newGoals, canContinue });
     } finally {
       if (this.modal === 'end') this.modal = null;
     }
     if (ep !== this.epoch) return;
     this.sfx.ui('confirm');
+    if (choice === 'endless') { this.continueEndlessFlow(w); return; }
     if (choice === 'retry') void this.retry();
     else if (choice === 'select') void this.goSelect({ titan: w.titanId, biome: w.biomeId });
     else void this.goTitle();
+  }
+
+  /**
+   * v2 KEEP GOING → EXTENDED COVERAGE (FEATURES_V2 §9.1). The stub continueEndless refuses, and the
+   * app then falls back to RETRY (today's default choice).
+   */
+  private continueEndlessFlow(w: World): void {
+    if (this._world !== w || !this.mutate((ww) => continueEndless(ww))) { void this.retry(); return; }
+    // undo the ending state beginEnding set, or enterPlay would leave the sim frozen
+    this.ending = false;
+    this.endResult = null;
+    this.endT = 0;
+    this.hitStopT = 0;
+    this.sizeUpHoldT = 0;
+    this.loop.timeScale = 1;
+    this.input.bufferS = INPUT_BUFFER_S;
+    this.wantDraft = false;
+    this.draftArmed = false;
+    this.modal = null;
+    this.bossbar.hide();
+    const key: AlertKey = 'endless';
+    this.evA.push({ type: 'alert', key });
+    this.enterPlay();
+    this.music.play(w.biomeId);
+    this.music.setIntensity(0.8);
   }
 
   /**
@@ -1116,6 +1476,14 @@ export class App {
       for (const k in fig) if (k !== 'clearS') higher[bestKey(t, b, k)] = fig[k];
       saveBest(higher);
       if (fig.clearS !== undefined) saveBest(bestKey(t, b, 'clearS'), fig.clearS, true);   // lower wins
+      if (w.endless) {                                  // v2 EXTENDED COVERAGE records (higher wins)
+        const E = w.endless;
+        saveBest({
+          [bestKey(t, b, 'endlessS')]: Math.max(0, w.t - E.startT),
+          [bestKey(t, b, 'endlessScore')]: E.score,
+          [bestKey(t, b, 'rematches')]: E.rematches,
+        });
+      }
     } catch { /* storage blocked — bests are a nicety */ }
   }
 
@@ -1234,10 +1602,23 @@ export class App {
       views[i].update(w, f);
       if (P) P.mark(views[i].constructor.name);
     }
+    // v2 cinematic opening: CineCam owns the camera while active (after the rig, before the render)
+    if (this.cineCam.active) {
+      const on = this.cineCam.update(dt);
+      this.cineOverlay.setShot(on ? this.cineCam.shot : null);
+      this.titanView.setCine(on ? this.cineCam.channels() : null);
+      if (P) P.mark('cine');
+    }
     if (react) {
       this.hud.update(w, dt);
       if (events.length) this.hud.onEvents(w, events);
       this.bossbar.update(w.boss);
+      // v2 HUD (FEATURES_V2 §4, §13.1)
+      this.abilityBar.update(w, dt);
+      if (events.length) this.abilityBar.onEvents(w, events);
+      this.tracker.update(w, dt);
+      if (events.length) this.tracker.onEvents(w, events);
+      this.markers.update(this.markerView.frame());
       if (P) P.mark('hud');
       const tg = this.rig.target;
       this.sfx.onEvents(w, events, tg.x, tg.z);
@@ -1317,8 +1698,23 @@ export class App {
         case 'bossDefeated': this.stingT = Math.max(this.stingT, 4); break;
         case 'eliteSpawn': this.stingT = Math.max(this.stingT, 2); break;
         case 'runEnd': this.beginEnding(e.result); break;
+        case 'ultFire': this.onUltFire(); break;     // v2 UPROAR
         default: break;
       }
+    }
+  }
+
+  /** v2 UPROAR fire (FEATURES_V2 §3.6): hit-stop, widened input buffer, camera punch (unless reduce motion). */
+  private onUltFire(): void {
+    if (this.ending || this._screen !== 'play' || this._testFrozen) return;
+    if (!(this.hitStopT > ULT.hitStopS)) {
+      this.loop.timeScale = Math.min(this.loop.timeScale, ULT.hitStopScale);
+      this.hitStopT = Math.max(this.hitStopT, ULT.hitStopS);
+      this.input.bufferS = Math.max(this.input.bufferS, SIM_DT / ULT.hitStopScale + 0.02);
+    }
+    if (!this.settings.reduceMotion) {
+      const r = this.rig as unknown as { punch?: (frac: number, s: number) => void };
+      if (typeof r.punch === 'function') r.punch(0.06, 0.8);   // CameraRig.punch arrives with lane L6
     }
   }
 
@@ -1349,6 +1745,7 @@ export class App {
         this.music.setIntensity(this.musicIntensity(w));
       }
       this.checkLowHp(w);
+      if (!this._testFrozen && this.loop.simEnabled) this.checkGoals(w, dt);   // v2 (1 Hz)
     }
 
     if (this.ending) {

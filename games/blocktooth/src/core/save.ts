@@ -6,6 +6,9 @@
 // Loaded values are sanitised field by field, so a corrupt or hand-edited blob (or an older
 // schema) can never push NaN / out-of-range numbers into the audio graph or the renderer.
 
+import type { Profile } from './types.ts';
+import { sanitizeProfile } from '../meta/profile.ts';
+
 export type Settings = {
   master: number;          // 0..1
   music: number;           // 0..1
@@ -13,6 +16,10 @@ export type Settings = {
   quality: 0 | 1 | 2;      // low / med / high
   screenShake: boolean;
   reduceFlashing: boolean;
+  /** v2 (FEATURES_V2 §13.1): cinematic → 'reduced' variant; no camera punch on UPROAR / breach */
+  reduceMotion: boolean;
+  /** v2: opening — 0 = legacy freeze-frame slate · 1 = short cinematic · 2 = full cinematic */
+  cinematic: 0 | 1 | 2;
 };
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
@@ -22,10 +29,13 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   quality: 2,
   screenShake: true,
   reduceFlashing: false,
+  reduceMotion: false,
+  cinematic: 2,
 });
 
 const SETTINGS_KEY = 'blocktooth.settings.v1';
 const BEST_KEY = 'blocktooth.best.v1';
+const PROFILE_KEY = 'blocktooth.profile.v1';
 
 // ─────────────────────────────── storage access ───────────────────────────────
 
@@ -102,6 +112,8 @@ export function sanitizeSettings(v: unknown): Settings {
     quality: qualityOf(o.quality, d.quality),
     screenShake: bool(o.screenShake, d.screenShake),
     reduceFlashing: bool(o.reduceFlashing, d.reduceFlashing),
+    reduceMotion: bool(o.reduceMotion, d.reduceMotion),
+    cinematic: qualityOf(o.cinematic, d.cinematic),     // same {0,1,2} rounding as quality
   };
 }
 
@@ -115,6 +127,21 @@ export function loadSettings(): Settings {
 /** Persist settings (sanitised first). Returns false when storage is unavailable — never throws. */
 export function saveSettings(s: Settings): boolean {
   return writeJson(SETTINGS_KEY, sanitizeSettings(s));
+}
+
+// ─────────────────────────────── v2 profile (FEATURES_V2 §8.3) ───────────────────────────────
+// ── L0 SKELETON STUBS ── lane L5 writes the bodies (try/catch storage, in-memory fallback for the
+// session). Inert: loadProfile hands back what meta/profile.ts sanitizeProfile makes of the stored
+// blob (the L0 stub: always an empty profile); saveProfile writes nothing and reports false.
+
+/** The persistent goals / unlocks profile (key 'blocktooth.profile.v1'). Never throws. */
+export function loadProfile(): Profile {
+  return sanitizeProfile(readJson(PROFILE_KEY));
+}
+
+/** Persist the profile. STUB: no write, false. */
+export function saveProfile(_p: Profile): boolean {
+  return false;
 }
 
 // ─────────────────────────────── personal bests ───────────────────────────────

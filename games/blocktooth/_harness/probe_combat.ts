@@ -20,6 +20,11 @@ const STUB_MODULES: Record<string, { re: RegExp; names: string[] }> = {
   citysim: { re: /city\/citysim\.ts$/, names: ['stepCity', 'buildingsInRect', 'propsInRect', 'damageBuilding', 'damageProp', 'resolveCircleVsCity', 'blockOf', 'buildingById', 'nearestRubble'] },
   bosses: { re: /ai\/bosses\/index\.ts$/, names: ['spawnBoss', 'stepBoss', 'damageBoss'] },
   stats: { re: /upgrades\/stats\.ts$/, names: ['createUpgradeState', 'recomputeStats', 'stat', 'baseStatBlock'] },
+  // v2 (FEATURES_V2 §2.7, L0): the pre-wired meta hooks in combat/* are other lanes' systems too —
+  // stubbed inert here so this probe keeps testing combat alone (killEnemy drops its own scrap,
+  // RED LIGHT is never on) and never pulls the world / director import chain in
+  ultimate: { re: /meta\/ultimate\.ts$/, names: ['ultBankKill', 'addUproar', 'ultMoveMul', 'ultRadius'] },
+  powerups: { re: /meta\/powerups\.ts$/, names: ['redLightActive', 'spawnPowerup', 'stepPowerups'] },
 };
 
 registerHooks({
@@ -110,6 +115,17 @@ G.__BT_STUBS__ = {
       if (w.boss) w.boss.hp -= dmg * w.boss.parts[part].hpMul;
     },
   },
+  ultimate: {
+    ultBankKill: () => false,
+    addUproar: () => {},
+    ultMoveMul: () => 1,
+    ultRadius: () => 0,
+  },
+  powerups: {
+    redLightActive: () => false,
+    spawnPowerup: () => null,
+    stepPowerups: () => {},
+  },
   stats: {
     createUpgradeState: () => ({}),
     recomputeStats: () => {},
@@ -155,6 +171,8 @@ function baseStats(): StatBlock {
     arcForks: 3, wireDuration: 4, wireDamage: 1,
     shellCapacity: 1, stompDelay: 0.6, magmaDuration: 0,
     turretCap: 4, turretRate: 1, sporeHeal: 1, vineLength: 1,
+    // v2 UPROAR (FEATURES_V2 §3)
+    ultCharge: 1, ultPower: 1,
   };
 }
 

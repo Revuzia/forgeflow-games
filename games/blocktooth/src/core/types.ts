@@ -13,7 +13,8 @@
 // ─────────────────────────────── ids ───────────────────────────────
 export type TitanId = 'molo' | 'voltkite' | 'hearthback' | 'briarwick';
 export type BiomeId = 'grideast' | 'whitestacks' | 'lockwater';
-export type BossId = 'caisson4' | 'irongully';
+export type BossId = 'caisson4' | 'irongully' | 'parkade6';   // v2: parkade6 = GRID-EAST's boss (FEATURES_V2 §10)
+export const BOSS_IDS: readonly BossId[] = ['caisson4', 'irongully', 'parkade6'];
 export type EnemyKind =
   | 'android'   // CROSSING WARDEN — patrol android, pellet gun
   | 'squad'     // PICKET SQUAD member — formation androids, 3-round volleys
@@ -150,7 +151,9 @@ export type StatKey =
   | 'biteCleave' | 'pulseEvery' | 'vacuumRadius'                     // MOLO
   | 'arcForks' | 'wireDuration' | 'wireDamage'                       // VOLT-KITE
   | 'shellCapacity' | 'stompDelay' | 'magmaDuration'                 // HEARTHBACK
-  | 'turretCap' | 'turretRate' | 'sporeHeal' | 'vineLength';         // BRIARWICK
+  | 'turretCap' | 'turretRate' | 'sporeHeal' | 'vineLength'          // BRIARWICK
+  // v2 UPROAR (FEATURES_V2 §3): charge-rate and power multipliers (defaults 1 / 1)
+  | 'ultCharge' | 'ultPower';
 
 export type StatBlock = Record<StatKey, number>;
 
@@ -193,6 +196,9 @@ export interface TitanInput {
   ability: boolean;        // edge: hook pressed this tick (buffered by the input layer)
   abilityHeld: boolean;
   dash: boolean;           // edge: dash pressed this tick (buffered)
+  /** v2 edge: UPROAR pressed this tick (buffered like ability). OPTIONAL on purpose (existing literals stay
+   *  valid): read it as `!!input.ultimate`. */
+  ultimate?: boolean;
 }
 
 // ─────────────────────────────── enemies ───────────────────────────────
@@ -247,7 +253,8 @@ export interface DamageOpts {
 
 export type ProjectileKind =
   | 'pellet' | 'volley' | 'rocket' | 'shell' | 'mortar' | 'plate' | 'hookDrop'   // hostile
-  | 'seed' | 'rubbleShot' | 'spark';                                          // titan-owned
+  | 'seed' | 'rubbleShot' | 'spark'                                           // titan-owned
+  | 'carLob';                                                                 // v2 hostile: PARKADE-6's lobbed car (lob, circle tell like 'plate')
 
 export interface Projectile {
   id: number;
@@ -374,7 +381,8 @@ export type TriggerAction =
   | 'arc'         // lightning arc from the titan to p.count nearest enemies: p.dmg
   | 'magma'       // spawn a magma pool at the event point: p.r, p.dps, p.dur
   | 'bloom'       // spawn a bloom turret at the event point (BRIARWICK synergy, works for all)
-  | 'slowField';  // spawn a frost hazard slowing enemies: p.r, p.dur
+  | 'slowField'   // spawn a frost hazard slowing enemies: p.r, p.dur
+  | 'ultCharge';  // v2: add p.amount UPROAR points (stack-scaled, × ultCharge stat)
 
 export interface UpgradeEffect {
   stat?: StatKey;
@@ -400,6 +408,13 @@ export interface UpgradeDef {
   effects: UpgradeEffect[];
   /** minimum rank before it can be offered */
   minRank?: RankIndex;
+  /** v2 evolution recipe: READY when owned[base] === UPGRADE_BY_ID[base].maxStacks AND owned[with] >= 1
+   *  AND owned[this] is 0 (see upgrades/draft.ts evolutionsReady) */
+  evo?: { base: string; with: string };
+  /** v2: needs a profile unlock (RunMeta.unlocked contains this id) before it can be offered */
+  locked?: boolean;
+  /** v2 hidden perk card: never offered, never on the ability bar; granted by applyPerk */
+  perk?: boolean;
 }
 
 export interface UpgradeState {
@@ -412,10 +427,18 @@ export interface UpgradeState {
   buffs: { stat: StatKey; mul: number; t: number }[];   // frenzy buffs
   shield: number;                         // absorb pool
   chestDrafts: number;                    // elite chests → rare+ drafts
+  // ── v2 (FEATURES_V2 §7.5): createUpgradeState sets banished [], banishLeft DRAFT_V2.banishes,
+  //    lockLeft DRAFT_V2.locks, locked null ──
+  banished: string[];      // ids removed from this run's pool
+  banishLeft: number;
+  lockLeft: number;
+  /** id held: it keeps its slot through rerolls of the CURRENT offer and arrives in slot 0 (0-based) of
+   *  the NEXT offer; cleared when it is picked or delivered */
+  locked: string | null;
 }
 
 // ─────────────────────────────── director / run ───────────────────────────────
-export type RunPhase = 'intro' | 'waves' | 'elite' | 'boss' | 'clear' | 'dead';
+export type RunPhase = 'intro' | 'waves' | 'elite' | 'boss' | 'clear' | 'dead' | 'endless';   // v2: 'endless' after KEEP GOING (§9)
 
 export interface DirectorState {
   wave: number;
@@ -483,17 +506,33 @@ export type SimEvent =
   | { type: 'bossDefeated'; x: number; z: number }
   | { type: 'leash'; on: boolean; x: number; z: number }
   | { type: 'upgradeProc'; id: string; x: number; z: number }
-  | { type: 'runEnd'; result: 'clear' | 'dead' };
+  | { type: 'runEnd'; result: 'clear' | 'dead' }
+  // ── v2 (FEATURES_V2 §2.1, SimEventAdd) ──
+  | { type: 'ultCharged' }                                                             // rising edge of ult.ready
+  | { type: 'ultFire'; titan: TitanId; x: number; z: number; r: number }               // roar starts (0.4–0.6 s windup)
+  | { type: 'ultPulse'; titan: TitanId; x: number; z: number; r0: number; r1: number; n: number; kind: DamageKind } // each damage pulse
+  | { type: 'ultEnd'; titan: TitanId; kills: number }
+  | { type: 'objectiveSpawn'; id: number; kind: ObjectiveKind; x: number; z: number }
+  | { type: 'objectiveDone'; id: number; kind: ObjectiveKind; x: number; z: number }
+  | { type: 'objectiveExpire'; id: number; kind: ObjectiveKind }
+  | { type: 'powerupSpawn'; id: number; kind: PowerUpKind; x: number; z: number }
+  | { type: 'powerup'; id: number; kind: PowerUpKind; x: number; z: number }            // collected
+  | { type: 'powerupEnd'; kind: 'redLight' | 'rushHour' }
+  | { type: 'endlessBoss'; boss: BossId; n: number }                                   // a rematch is fielded
+  | { type: 'revive'; x: number; z: number };                                          // perk_stay_of_demolition revive
 
 /** Keys into data/strings.ts ALERTS (full-width broadcast banners). */
 export type AlertKey =
   | 'contractors' | 'squads' | 'drones' | 'vehicles' | 'armor' | 'artillery' | 'elite' | 'boss'
-  | 'bossPhase2' | 'bossPhase3' | 'lowHp' | 'chest';
+  | 'bossPhase2' | 'bossPhase3' | 'lowHp' | 'chest'
+  | 'overloadSite' | 'recordsAnnex' | 'endless' | 'rematch';   // v2 (FEATURES_V2 §2.5)
 
 // ─────────────────────────────── world ───────────────────────────────
 export interface RngStreams {
   city: () => number; spawn: () => number; ai: () => number;
   combat: () => number; loot: () => number; boss: () => number;
+  /** v2: objective placement, power-up drops/kinds, endless skew (seeded by hashStr('meta'): shifts no other stream) */
+  meta: () => number;
 }
 
 export interface World {
@@ -520,9 +559,19 @@ export interface World {
   /** cheats (only honoured when the page was opened with ?dev=1) */
   cheats: { god: boolean; noSpawns: boolean };
   nextId: number;          // monotonically increasing id source — use newId(w)
+  // ── v2 (FEATURES_V2 §2.3): createWorld initialises every one ──
+  meta: RunMeta;           // sanitizeRunMeta(opts.meta) — read-only for the sim except reviveUsed
+  ult: UltState;           // createUltState()
+  map: MapState;           // createMapState()
+  tally: RunTally;         // createTally()
+  endless: EndlessState | null;   // null until continueEndless()
 }
 
-export interface RunOptions { titan: TitanId; biome: BiomeId; seed: number; }
+export interface RunOptions {
+  titan: TitanId; biome: BiomeId; seed: number;
+  /** v2: profile-derived run meta (unlocks, perk, palette); EMPTY_RUN_META when absent */
+  meta?: RunMeta;
+}
 
 // ─────────────────────────────── data defs ───────────────────────────────
 export interface TitanDef {
@@ -600,4 +649,222 @@ export interface BossDef {
   hp: number;              // base; scaled by BOSS_HP_SCALE[rank]
   height: number;          // metres (view scale reference)
   attacks: { id: string; name: string; subtitle: string; phase: 1 | 2 | 3 }[];
+}
+
+// ═══════════════════════════════ v2 (FEATURES_V2 §2.1 — merged from _spec/features_v2_types.ts) ═══════════════════════════════
+
+// ── #2 UPROAR (ultimate) ──
+export type UltPhase = 'idle' | 'roar' | 'blast';
+export interface UltState {
+  charge: number;          // 0..ULT.max (100)
+  ready: boolean;          // charge >= ULT.max (latched; 'ultCharged' emitted on the rising edge)
+  phase: UltPhase;
+  t: number;               // seconds in the current phase
+  x: number; z: number;    // blast centre (latched at fire)
+  r: number;               // blast radius R (m), latched at fire = ultRadius(w)
+  pulse: number;           // index of the next scheduled pulse (data/ultimates.ts)
+  lockT: number;           // > 0: charge frozen after a fire (ULT.lockoutS)
+  /** > 0: the titan takes NO damage of any kind, dot included (ROAR; perk revive window). titansim.ts
+   *  hurtTitan returns 0 while it is > 0 (L0 pre-wire). stepUltimate counts it down. */
+  invulnT: number;
+  fired: number;           // ultimates fired this run
+  kills: number;           // kills credited to the ultimate in flight
+  killsBest: number;       // best single-ultimate kill count this run (tally/goals)
+  heal: number;            // BRIARWICK heal-over-time pool left (HP), 0 otherwise
+  // ── kill-XP bank (§3.5 / perf): kills while phase !== 'idle' do not spawn their own scrap; they bank
+  //    here and stepUltimate flushes ≤ ULT.bankPickupsPerTick merged pickups per tick ──
+  bankXp: number; bankMass: number;
+  /** true while meta/powerups.ts runs its DEMOLITION kill loop: those kills bank too (normal XP, no
+   *  killXpMul, no xpCap) so a screen of kills never spawns hundreds of pickups in one tick */
+  bankOpen: boolean;
+  bankPts: number[];       // x,z pairs of the first kills banked this tick (≤ 2 × ULT.bankPickupsPerTick numbers)
+  xpCap: number;           // XP this fire may still grant (latched at fire = ULT.xpCapLevelFrac × current level's XP need)
+  xpTotal: number;         // XP granted through the bank this run (GATE 2 reporting)
+}
+
+// ── #4 objectives + #8 power-ups (one map-state struct) ──
+export type ObjectiveKind = 'overloadSite' | 'reliefDepot' | 'recordsAnnex';
+export const OBJECTIVE_KINDS: readonly ObjectiveKind[] = ['overloadSite', 'reliefDepot', 'recordsAnnex'];
+/** what an objective is bound to: a tagged building (Size II+ OVERLOAD SITE, RECORDS ANNEX), a tagged
+ *  static prop (Size I OVERLOAD SITE), or nothing (RELIEF DEPOT, a free-standing entity). */
+export type ObjectiveTarget = 'building' | 'prop' | 'none';
+export interface Objective {
+  id: number;              // newId(w)
+  kind: ObjectiveKind;
+  alive: boolean;          // false once done or expired (compacted every 30 ticks)
+  x: number; z: number;    // marker anchor (building centre / prop / crate centre)
+  target: ObjectiveTarget;
+  targetId: number;        // building id or prop id; -1 for 'none'
+  r: number;               // reliefDepot contact radius (m) / building half-diagonal for markers
+  h: number;               // marker height anchor (m): building height, prop height or crate height
+  t: number;               // age (s)
+  life: number;            // expires after this (s)
+  rank: RankIndex;         // titan rank when placed (sizes the crate + beacon)
+  done: boolean;           // completed (payout paid) vs expired
+}
+export type PowerUpKind = 'cleanup' | 'demolition' | 'redLight' | 'rushHour' | 'backPay';
+export const POWERUP_KINDS: readonly PowerUpKind[] = ['cleanup', 'demolition', 'redLight', 'rushHour', 'backPay'];
+export interface PowerUp {
+  id: number;
+  kind: PowerUpKind;
+  alive: boolean;
+  x: number; z: number;
+  t: number;               // age (s)
+  life: number;            // POWERUPS.lifeS
+  h: number;               // titan height at spawn (sizes the token)
+}
+export interface MapState {
+  objectives: Objective[];
+  powerups: PowerUp[];
+  nextOverloadT: number;   // world.t when the next OVERLOAD SITE may be placed
+  nextReliefT: number;
+  annexDue: number[];      // world.t values at which a RECORDS ANNEX is owed (pushed on rankUp)
+  lastDropT: number;       // world.t of the last RANDOM power-up drop (gap rule)
+  redLightT: number;       // > 0: RED LIGHT active (s left)
+  rushHourT: number;       // > 0: RUSH HOUR active (s left)
+  overloadsDone: number; reliefsDone: number; annexesDone: number;   // this run (tally mirrors them)
+  // GATE 2 reporting (probe_sim prints them; never read by gameplay)
+  overloadXp: number;      // XP granted by OVERLOAD SITE payouts this run
+  demolitionKills: number; // kills made by DEMOLITION NOTICE this run
+}
+
+// ── #8 endless ──
+export interface EndlessState {
+  startT: number;          // world.t at KEEP GOING
+  rematches: number;       // rematch bosses defeated
+  nextBossT: number;       // world.t for the next rematch (Infinity while one is alive)
+  bossIx: number;          // index into rematchOrder(biome)
+  nextEliteT: number;
+  killsAt: number;         // titan.kills at KEEP GOING (score counts kills since)
+  tonsAt: number;          // run.tonnage at KEEP GOING
+  score: number;           // endlessScore(w), refreshed every tick
+}
+
+// ── #5 / #8 run tally (sim-side counters the goals read; THREE-free, deterministic) ──
+export interface RunTally {
+  kills: number; crushed: number;
+  killsBy: Record<EnemyKind, number>;
+  props: number;
+  propsBy: Partial<Record<PropKind, number>>;
+  floors: number;
+  collapses: number;
+  collapsesByTier: [number, number, number, number, number];
+  tier4Total: number;      // tier-4 buildings the city generated (set on the first stepTally; g_ws_cold_storage)
+  ults: number; ultKillsBest: number;
+  objectives: Record<ObjectiveKind, number>;
+  powerups: Record<PowerUpKind, number>;
+  evolutions: number; banishes: number; locks: number; rerolls: number;
+  hpLowFrac: number;       // lowest hp/maxHp seen this run (1 at start)
+  healed: number;          // HP healed this run (titanHeal events)
+  bossesDefeated: number;
+  bossDefeatedBy: Partial<Record<BossId, number>>;
+  staggersThisFight: number;
+  /** best staggers in ONE fight per boss — the city's own boss fight only (a boss fielded while
+   *  w.endless is set, i.e. a rematch, does not count) */
+  staggersBestFightBy: Partial<Record<BossId, number>>;
+  fightIsRematch: boolean; // bookkeeping for the above
+  endlessS: number;
+  // kit-derived (event-derived, never read from kit-private state)
+  vacuumBest: number;      // MOLO: pickups collected within HOOK_WINDOW_S of one 'ability' event
+  wiresBest: number;       // VOLT-KITE: most wires in one 'wireDetonate' (pts.length / 4), EXCLUDING detonations
+                           // before ultWireUntilT (ultimate-laid wires would make the goal trivial)
+  ultWireUntilT: number;   // world.t until which VOLT-KITE's GRIDLOCK SURGE wires may still be live
+  hookKillsBest: number;   // any titan: kills within HOOK_WINDOW_S of one 'ability' event
+  fullVents: number;       // HEARTHBACK: 'vent' events with power (fill) >= 0.95
+  bloomsBest: number;      // BRIARWICK: most titan-owned 'bloom' hazards alive at once WITHOUT data.wild (ult blooms excluded)
+  // window bookkeeping (lane-internal but part of the struct so it survives compaction/probes)
+  hookT: number;           // world.t of the last 'ability' event (-1 = none)
+  hookPickups: number; hookKills: number;
+}
+
+// ── #5 meta / unlocks ──
+export type PerkId = 'perk_petty_cash' | 'perk_red_tape' | 'perk_warm_mic' | 'perk_safety_inspection' | 'perk_stay_of_demolition' | 'perk_tip_line';
+export const PERK_IDS: readonly PerkId[] = ['perk_petty_cash', 'perk_red_tape', 'perk_warm_mic', 'perk_safety_inspection', 'perk_stay_of_demolition', 'perk_tip_line'];
+
+/** Fixed per run, passed in through RunOptions.meta (the app builds it from the profile). The sim only
+ *  READS it: which locked cards/evolutions are in the pool, the perk, the cosmetic palette. */
+export interface RunMeta {
+  unlocked: string[];      // UpgradeDef ids with `locked: true` that this profile has unlocked (sorted)
+  perk: PerkId | null;
+  palette: number;         // 0 = canonical colours; 1..2 = data/palettes.ts TITAN_PALETTES[titan][i-1] (view-only)
+  reviveUsed: boolean;     // perk_stay_of_demolition bookkeeping (sim writes it; starts false)
+}
+export const EMPTY_RUN_META: Readonly<RunMeta> = Object.freeze({ unlocked: [], perk: null, palette: 0, reviveUsed: false });
+
+/** PARKADE-6 keeps its own keys in BossState.data (no structural change):
+ *  tillOpen — s left of the open-till window (> 0 = the TILL drawer is out, §10.2);
+ *  tow — 1 while the tow chain holds; deckTilt — rampLaunch deck tilt 0..1 (view);
+ *  part_till / part_booth / part_body / part_legs — titan damage dealt per part group (probe telemetry).
+ *  parkade6.ts step() REWRITES the 'till' BossPart every tick (FEATURES_V2 §10.2). */
+export type BossDataKeysParkade = 'tillOpen' | 'tow' | 'deckTilt' | 'part_till' | 'part_booth' | 'part_body' | 'part_legs';
+
+// ── v2 data shapes (new data files) ──
+/** data/ultimates.ts ULTS: Record<TitanId, UltDef>. Radii are fractions of R (the blast radius). */
+export interface UltPulse { t: number; r0: number; r1: number; dmg: number; kind: DamageKind; knock?: number; stun?: number }
+export interface UltDef {
+  id: string; name: string; burst: string; desc: string;
+  roarS: number;           // windup (invulnerable) before the first pulse
+  blastS: number;          // blast phase length after the roar
+  pulses: UltPulse[];      // t = seconds after the roar ends
+}
+
+/** data/objectives.ts per-biome config. */
+export interface ObjectiveBiomeCfg {
+  overloadRespawnS: number; reliefRespawnS: number;
+  overloadLabel: string;          // Size II+ building dressing: 'rooftop transformer' / 'pump house' / 'tide relay'
+  overloadLabelS1: string;        // Size I prop dressing: 'utility truck' / 'generator container' / 'relay container'
+  overloadPropsS1: PropKind[];    // static props eligible at Size I (tier 1 first, then tier 0)
+  reliefLabel: string; annexLabel: string;
+  reliefProps: PropKind[];
+}
+
+/** data/evolutions.ts (EVO_OF_BASE: Readonly<Record<string, string>> maps base id → evo id). */
+export interface EvolutionRow { id: string; base: string; with: string }
+
+/** data/goals.ts GOALS: GoalDef[] (40). */
+export type GoalMetric =
+  | 'runsFinished' | 'peakRank' | 'clears' | 'biomesCleared' | 'kills' | 'cleanClear' | 'ults' | 'banishesLife'
+  | 'blocks' | 'endlessS' | 'bossesInRun' | 'evolutionsLife' | 'powerups' | 'objectives' | 'vacuumBest' | 'crushed'
+  | 'titanClears' | 'titanBiomesCleared' | 'wiresBest' | 'hookKillsBest' | 'fullVents' | 'bloomsBest' | 'healed'
+  | 'props' | 'overloadSites' | 'tier4CollapseFrac' | 'bossKillsLife' | 'staggersBestFight' | 'boats' | 'fastClearS';
+export type UnlockRef =
+  | { kind: 'card'; id: string }             // locked UpgradeDef (incl. evolutions)
+  | { kind: 'perk'; id: PerkId }
+  | { kind: 'palette'; titan: TitanId; index: 1 | 2 };
+export interface GoalDef {
+  id: string; name: string; desc: string;
+  group: 'general' | 'titan' | 'city';
+  titan?: TitanId; biome?: BiomeId; boss?: BossId;
+  metric: GoalMetric;
+  target: number;
+  scope: 'run' | 'life';
+  /** 'fastClearS' only: lower is better (target = seconds) */
+  lowerIsBetter?: boolean;
+  unlocks: UnlockRef[];
+}
+
+/** data/palettes.ts TITAN_PALETTES: Record<TitanId, [TitanPalette, TitanPalette]>. */
+export interface TitanPalette { id: string; name: string; primary: string; secondary: string; belly: string; accent: string; glow: string; eye: string; extra?: string }
+
+/** data/perks.ts PERKS_DEF: Record<PerkId, PerkDef>. */
+export interface PerkDef { id: PerkId; name: string; desc: string; card: string | null }
+
+/** meta/goals.ts run context (APP-PURE). */
+export interface RunCtx { titan: TitanId; biome: BiomeId; result: 'clear' | 'dead' | null; endT: number }
+
+/** save.ts profile (key 'blocktooth.profile.v1', sanitised by meta/profile.ts sanitizeProfile). */
+export interface Profile {
+  v: 1;
+  done: Record<string, number>;          // goal id → epoch ms of first completion
+  best: Record<string, number>;          // goal id → best progress value seen (x in "x of y")
+  life: {
+    runs: number; clears: number; banishes: number; evolutions: number;
+    clearedBy: Record<TitanId, BiomeId[]>;     // distinct biomes cleared per titan
+    bossKills: Partial<Record<BossId, number>>;
+  };
+  perk: PerkId | null;                   // last equipped perk (re-offered on the select screen)
+  palette: Record<TitanId, number>;      // last chosen palette per titan
+  cineSeen: Record<string, 1>;           // `${titan}.${biome}` → the FULL cinematic has played once
+  newUnlocks: string[];                  // card ids not yet seen in a draft ("NEW" ribbon); game.ts removes the
+                                         // ids of each offer it shows (markSeen) and saves at once
 }

@@ -24,6 +24,8 @@ import { BIOMES } from '../data/biomes.ts';
 import { ENEMIES } from '../data/enemies.ts';
 import { ringPoint, ringRadius, spawnEnemy } from './enemies.ts';
 import { spawnBoss } from './bosses/index.ts';
+import { endlessBudgetMul } from '../meta/endless.ts';
+import { redLightActive } from '../meta/powerups.ts';
 
 // ─────────────────────────────── tuning (lane-local) ───────────────────────────────
 const FIRST_WAVE_S = 2.5;
@@ -135,7 +137,8 @@ function weightOf(w: World, k: EnemyKind): number {
 /** Budget points per second at the current time/rank (§9). */
 export function budgetRate(w: World): number {
   const r = (1.2 + (0.9 * Math.min(w.t, 600)) / 60 + 0.6 * w.titan.rank) * (DIRECTOR_BUDGET_RANK_MUL[w.titan.rank] ?? 1);
-  return w.boss && w.boss.alive ? r * BOSS_SPAWN_MUL : r;
+  const out = w.boss && w.boss.alive ? r * BOSS_SPAWN_MUL : r;
+  return out * endlessBudgetMul(w);   // v2: EXTENDED COVERAGE escalation (1 outside endless)
 }
 
 const P = { x: 0, z: 0 };
@@ -294,15 +297,19 @@ export function stepDirector(w: World): void {
 
   // ── budget ──
   const rate = budgetRate(w);
-  D.spawnBudget += rate * w.dt;
-  const cap = rate * (WAVE_MIN_S + WAVE_SPAN_S) * BANK_WAVES + 10;
-  if (D.spawnBudget > cap) D.spawnBudget = cap;
+  // v2 RED LIGHT (FEATURES_V2 §6.1, pre-wired): the budget does not bank and waves are held
+  const red = redLightActive(w);
+  if (!red) {
+    D.spawnBudget += rate * w.dt;
+    const cap = rate * (WAVE_MIN_S + WAVE_SPAN_S) * BANK_WAVES + 10;
+    if (D.spawnBudget > cap) D.spawnBudget = cap;
+  }
 
   // ── boss ──
   if (!D.bossSpawned && w.t >= D.bossT) {
     spawnBoss(w, BIOMES[w.biomeId].boss);
     D.bossSpawned = true;
-    w.run.phase = 'boss';
+    if (!w.endless) w.run.phase = 'boss';   // v2: never overwrite 'endless'
   }
 
   // ── elite(s) ──
@@ -317,7 +324,9 @@ export function stepDirector(w: World): void {
   }
 
   // ── waves ──
-  if (w.t >= D.nextWaveT) {
+  if (red) {
+    if (Number.isFinite(D.nextWaveT)) D.nextWaveT += w.dt;   // v2 RED LIGHT: the wave clock stands still
+  } else if (w.t >= D.nextWaveT) {
     runWave(w);
     D.nextWaveT = w.t + WAVE_MIN_S + WAVE_SPAN_S * w.rng.spawn();
   }

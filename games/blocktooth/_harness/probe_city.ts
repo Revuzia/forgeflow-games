@@ -29,6 +29,8 @@ import { stepTraffic } from '../src/city/traffic.ts';
 import { hashStr, makeStreams, mulberry32 } from '../src/core/rng.ts';
 import { CITY, PARCEL_HALF, SIM_DT, TIERS } from '../src/core/config.ts';
 import { segDist } from '../src/core/math.ts';
+import { createMapState } from '../src/meta/objectives.ts';
+import { createTally } from '../src/meta/tally.ts';
 
 const BIOME_LIST: BiomeId[] = ['grideast', 'whitestacks', 'lockwater'];
 const SEEDS = [1, 7, 90210];
@@ -276,10 +278,14 @@ function miniWorld(biome: BiomeId, seed: number): World {
     titan: titan as unknown as World['titan'],
     enemies: [], projectiles: [], telegraphs: [], hazards: [], pickups: [], boss: null,
     director: { wave: 0, nextWaveT: 0, spawnBudget: 0, eliteT: Infinity, elitesSpawned: 0, bossT: Infinity, bossSpawned: false, squadSeq: 0, data: {} },
-    upgrades: { owned: {}, order: [], pendingDrafts: 0, offer: null, rerolls: 0, icd: {}, buffs: [], shield: 0, chestDrafts: 0 },
+    upgrades: { owned: {}, order: [], pendingDrafts: 0, offer: null, rerolls: 0, icd: {}, buffs: [], shield: 0, chestDrafts: 0, banished: [], banishLeft: 2, lockLeft: 2, locked: null },
     run: { phase: 'waves', endT: -1, result: null, tonnage: 0, blocksLeveled: 0, peakRank: 0 },
     events: [], input: { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false },
     cheats: { god: false, noSpawns: false }, nextId: 1,
+    // v2 World fields (FEATURES_V2 §2.3; L0 tsc completion — the city probe never reads them;
+    // ult is a stand-in so this probe keeps its light import chain)
+    meta: { unlocked: [], perk: null, palette: 0, reviveUsed: false },
+    ult: {} as unknown as World['ult'], map: createMapState(), tally: createTally(), endless: null,
   };
 }
 function tickPrev(w: World): void {

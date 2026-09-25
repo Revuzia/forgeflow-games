@@ -9,6 +9,7 @@
 
 import type { Input } from '../core/input.ts';
 import type { Settings } from '../core/save.ts';
+import type { PauseCtx } from '../v2types.ts';
 import { loadSettings, saveSettings } from '../core/save.ts';
 import { STR, TICKER } from '../data/strings.ts';
 import {
@@ -65,7 +66,7 @@ export class TitleScreen {
   private readonly layer: HTMLDivElement;
   private readonly clock: HTMLElement;
   private readonly crawl: HTMLElement;
-  private session: ModalSession<void> | null = null;
+  private session: ModalSession<'play' | 'goals'> | null = null;
 
   constructor(root: HTMLElement, input: Input) {
     this.input = input;
@@ -123,7 +124,9 @@ export class TitleScreen {
     this.crawl = div('bt-ticker-strip bt-css-crawl', win);
   }
 
-  run(): Promise<void> {
+  /** v2 signature (TitleScreenApi, FEATURES_V2 §13.1). L0: today's behaviour — never resolves 'goals'
+   *  (lane L9 adds G / pad X and the GOALS & RECORDS chip). */
+  run(): Promise<'play' | 'goals'> {
     if (this.session && !this.session.done) this.session.abort();
     this.clock.textContent = wallClock();
     // CSS crawl: title lines + a few wire headlines, duplicated so the loop is seamless
@@ -139,7 +142,7 @@ export class TitleScreen {
     }
     this.layer.classList.remove('bt-hidden');
     this.layer.classList.remove('leaving');
-    const { promise, session } = runModal<void>(this.layer, this.input, (p) => {
+    const { promise, session } = runModal<'play' | 'goals'>(this.layer, this.input, (p) => {
       if (p.act === 'confirm' || p.act === 'alt' || p.key === 'pad:0' || p.key === 'pad:9') this.go();
     }, {
       armMs: 350,
@@ -153,7 +156,7 @@ export class TitleScreen {
     const s = this.session;
     if (!s || s.done) return;
     this.layer.classList.add('leaving');
-    s.finish(undefined, flashesReduced() ? 120 : 380);
+    s.finish('play', flashesReduced() ? 120 : 380);
   }
 }
 
@@ -217,7 +220,9 @@ export class PauseMenu {
     div('bt-pause-keys', card, STR.pause.keys);
   }
 
-  open(): Promise<PauseChoice> {
+  /** v2 signature (PauseMenuApi, FEATURES_V2 §13.1). L0: `ctx` is ignored (lane L9 adds the LOADOUT
+   *  panel read from ctx.w). */
+  open(_ctx: PauseCtx | null = null): Promise<PauseChoice> {
     if (this.session && !this.session.done) this.session.abort();
     this.armed = null;
     this.busy = false;

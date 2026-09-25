@@ -137,7 +137,7 @@ function tick(w: World, L: RunLog): void {
 
 // ─────────────────────────────── A + B: director + boss per biome ───────────────────────────────
 function runBiome(biome: BiomeId, seed: number): void {
-  const expectBoss = biome === 'whitestacks' ? 'irongully' : 'caisson4';
+  const expectBoss = biome === 'whitestacks' ? 'irongully' : biome === 'grideast' ? 'parkade6' : 'caisson4';
   console.log(`\n══ ${biome.toUpperCase()} (seed ${seed}) — passive god titan, 9 min director run ══`);
   const w = createWorld({ titan: 'molo', biome, seed });
   w.cheats.god = true;
@@ -252,14 +252,15 @@ function bossFight(w: World, L: RunLog): void {
   const allowed: Record<string, Record<number, string[]>> = {
     caisson4: { 1: ['hookLane', 'hookDrop'], 2: ['hookLane', 'hookDrop', 'winchLeash', 'boomSweep'], 3: ['hookLane', 'hookDrop', 'winchLeash', 'boomSweep', 'legStomp'] },
     irongully: { 1: ['coneBreath', 'pawSlam'], 2: ['coneBreath', 'pawSlam', 'plateVolley', 'ridgeCharge'], 3: ['coneBreath', 'pawSlam', 'plateVolley', 'ridgeCharge', 'breathSlam'] },
+    parkade6: { 1: ['rampLaunch', 'barrierSwing'], 2: ['rampLaunch', 'barrierSwing', 'towChain', 'deckDrop'], 3: ['rampLaunch', 'barrierSwing', 'towChain', 'deckDrop', 'levelCollapse'] },
   };
   for (const p of [1, 2, 3]) {
     for (const k of Object.keys(hist[p])) check(allowed[b.id][p].includes(k), `${b.id}: attack ${k} used in P${p}`);
     check(Object.keys(hist[p]).length >= 2, `${b.id}: P${p} used only ${Object.keys(hist[p]).join(',')}`);
   }
-  const newIn2 = b.id === 'caisson4' ? ['winchLeash', 'boomSweep'] : ['plateVolley', 'ridgeCharge'];
+  const newIn2 = b.id === 'caisson4' ? ['winchLeash', 'boomSweep'] : b.id === 'parkade6' ? ['towChain', 'deckDrop'] : ['plateVolley', 'ridgeCharge'];
   check(newIn2.some((k) => (hist[2][k] ?? 0) + (hist[3][k] ?? 0) > 0), `${b.id}: P2 attacks never used`);
-  const p3 = b.id === 'caisson4' ? 'legStomp' : 'breathSlam';
+  const p3 = b.id === 'caisson4' ? 'legStomp' : b.id === 'parkade6' ? 'levelCollapse' : 'breathSlam';
   check((hist[3][p3] ?? 0) > 0 || b.id === 'caisson4', `${b.id}: ${p3} never used in P3`);
   check(phaseEv.join(',') === '2,3', `${b.id}: phase events ${phaseEv.join(',')}`);
   check(alerts.includes('bossPhase2') && alerts.includes('bossPhase3'), `${b.id}: phase alerts missing (${alerts.join(',')})`);

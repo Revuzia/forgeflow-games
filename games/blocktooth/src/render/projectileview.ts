@@ -485,6 +485,8 @@ const LOOK: Record<ProjectileKind, Look> = {
   shell:      { len: 0.9, minPx: 11, rMul: 0, halo: '#fff1a8', haloK: 0.55, haloA: 0.45, streak: '#fff1a8', streakK: 11, streakW: 0.12, streakA: 0.85, puff: 0, orient: 'vel' },
   mortar:     { len: 1.6, minPx: 15, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 2, orient: 'vel' },
   plate:      { len: 6.0, minPx: 20, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 0, orient: 'tumble' },
+  // v2 PARKADE-6 lobbed car (L0: a copy of the plate look; lane L7 replaces it)
+  carLob:     { len: 6.0, minPx: 20, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 0, orient: 'tumble' },
   hookDrop:   { len: 12, minPx: 26, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 0, orient: 'upright' },
   seed:       { len: 0.8, minPx: 10, rMul: 2.6, halo: '#d8ff7a', haloK: 0.6, haloA: 0.28, streak: '#a8e05a', streakK: 3, streakW: 0.22, streakA: 0.5, puff: 0, orient: 'spin' },
   rubbleShot: { len: 1.2, minPx: 11, rMul: 2.0, halo: null, haloK: 0, haloA: 0, streak: '#d9d2c3', streakK: 2.2, streakW: 0.3, streakA: 0.35, puff: 0, orient: 'tumble' },

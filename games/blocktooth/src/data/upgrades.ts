@@ -22,6 +22,7 @@
 // plumbing, zoning, appetite). None from CONTRACT §1's forbidden list.
 
 import type { Rarity, RankIndex, StatKey, TitanId, TriggerAction, TriggerOn, UpgradeDef, UpgradeEffect } from '../core/types.ts';
+import { UPGRADES_V2_RAW } from './upgrades_v2.ts';
 
 // ─────────────────────────────── description generator ───────────────────────────────
 
@@ -91,6 +92,9 @@ const STAT_TEXT: Record<StatKey, StatText> = {
   turretRate: { label: 'BLOOM TURRET fire rate' },
   sporeHeal: { label: 'spore healing' },
   vineLength: { label: 'VINE LASH length' },
+  // v2 UPROAR (FEATURES_V2 §2.1)
+  ultCharge: { label: 'UPROAR charge rate' },
+  ultPower: { label: 'UPROAR power' },
 };
 
 /** Human label for a stat (UI chips, frenzy text). */
@@ -133,6 +137,7 @@ function actionText(action: TriggerAction, p: Record<string, number | string>, s
     case 'magma': return `leave a ${fmtNum(P(p, 'r'))}-body-height magma pool for ${fmtNum(P(p, 'dur'))} s at ${per(P(p, 'dps'), ' dmg/s')}`;
     case 'bloom': return `root a BLOOM TURRET for ${fmtNum(P(p, 'dur', 20))} s`;
     case 'slowField': return `spread a ${fmtNum(P(p, 'r'))}-body-height frost field for ${fmtNum(P(p, 'dur'))} s that slows foes 40%${P(p, 'dps') ? ` and deals ${per(P(p, 'dps'), ' dmg/s')}` : ''}`;
+    case 'ultCharge': return `add ${per(P(p, 'amount'), ' UPROAR')}`;   // v2 (FEATURES_V2 §2.1)
   }
 }
 
@@ -383,3 +388,7 @@ export const UPGRADES: UpgradeDef[] = [
 
 export const UPGRADE_BY_ID: Record<string, UpgradeDef> = {};
 for (const u of UPGRADES) UPGRADE_BY_ID[u.id] = u;
+
+// ── v2 append block (FEATURES_V2 §7.1, L0): the v2 cards (lane L2's data/upgrades_v2.ts) join the
+//    catalogue with their desc generated here. upgrades_v2.ts never imports this file (no cycle). ──
+for (const u of UPGRADES_V2_RAW) { const d = { ...u, desc: describe(u.effects, u.maxStacks) }; UPGRADES.push(d); UPGRADE_BY_ID[d.id] = d; }

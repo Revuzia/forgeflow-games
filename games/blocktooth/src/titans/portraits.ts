@@ -9,7 +9,7 @@
 // autoClear, viewport/scissor) is restored before it resolves.
 
 import * as THREE from 'three';
-import type { TitanId } from '../core/types.ts';
+import type { TitanId, TitanPalette } from '../core/types.ts';
 import { TITAN_IDS } from '../core/types.ts';
 import { applyGlow, buildTitanModel, setTitanRim } from './models.ts';
 import type { TitanModel } from './models.ts';
@@ -122,6 +122,16 @@ function heroState(): AnimState {
     speed01: 0, moving: false, turn: 0, attack: null, attackT: -1, dashT: -1, hurtT: -1, abilityT: -1, growT: -1,
     t: 1.1, kit: { stored: 0.8, cap: 1, wires: 3, turrets: 2 }, speedH: 0, hero: 1, noFlash: true, deadT: -1, aim: 0.2,
   };
+}
+
+/**
+ * v2 (FEATURES_V2 §8.6, RenderPortraitFn): one titan's portrait in a palette (null = canonical colours).
+ * ── L0 SKELETON STUB ── returns the CANONICAL portrait for any palette; lane L10 renders the palette.
+ * game.ts caches the result per titan × palette (palette 0 never calls this).
+ */
+export async function renderPortrait(renderer: THREE.WebGLRenderer, id: TitanId, size: number, _palette: TitanPalette | null): Promise<string> {
+  const all = await renderPortraits(renderer, size);
+  return all[id] ?? '';
 }
 
 export async function renderPortraits(renderer: THREE.WebGLRenderer, size = 256): Promise<Record<TitanId, string>> {

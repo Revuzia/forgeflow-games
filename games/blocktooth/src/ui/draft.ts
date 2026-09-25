@@ -7,6 +7,7 @@
 
 import type { Input } from '../core/input.ts';
 import type { UpgradeDef, World } from '../core/types.ts';
+import type { DraftCtx, DraftResultV2 } from '../v2types.ts';
 import { UPGRADE_BY_ID } from '../data/upgrades.ts';
 import { TITANS } from '../data/titans.ts';
 import { STR } from '../data/strings.ts';
@@ -65,7 +66,10 @@ export class DraftScreen {
     onTap(this.rerollBtn, () => this.reroll());
   }
 
-  open(w: World, offer: string[], rerollsLeft: number): Promise<DraftResult> {
+  /** v2 signature (DraftScreenApi, FEATURES_V2 §13.1). L0: only ctx.rerollsLeft is read; the screen
+   *  never resolves {banish} / {lock} (lane L9 adds BANISH / LOCK, the evolution card and the NEW ribbon). */
+  open(w: World, offer: string[], ctx: DraftCtx): Promise<DraftResultV2> {
+    const rerollsLeft = ctx ? ctx.rerollsLeft : 0;
     if (this.session && !this.session.done) this.session.abort();
     const ids = offer.filter((id) => !!id).slice(0, 3);
     this.ids = ids;

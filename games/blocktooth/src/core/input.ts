@@ -35,12 +35,12 @@ import { INPUT_BUFFER_S, screenToWorld } from './config.ts';
 export type Action =
   | 'up' | 'down' | 'left' | 'right'
   | 'confirm' | 'back' | 'pause' | 'debug'
-  | 'ability' | 'dash'
+  | 'ability' | 'dash' | 'ultimate'   // v2: UPROAR (FEATURES_V2 §2.4)
   | 'pick1' | 'pick2' | 'pick3' | 'reroll'
   | 'zoomIn' | 'zoomOut' | 'zoomReset';
 
 export const ACTIONS: readonly Action[] = [
-  'up', 'down', 'left', 'right', 'confirm', 'back', 'pause', 'debug', 'ability', 'dash', 'pick1', 'pick2', 'pick3', 'reroll',
+  'up', 'down', 'left', 'right', 'confirm', 'back', 'pause', 'debug', 'ability', 'dash', 'ultimate', 'pick1', 'pick2', 'pick3', 'reroll',
   'zoomIn', 'zoomOut', 'zoomReset',
 ];
 
@@ -85,6 +85,7 @@ const KEYMAP: Readonly<Record<string, readonly Action[]>> = {
   Equal: ['zoomIn'], NumpadAdd: ['zoomIn'],
   Minus: ['zoomOut'], NumpadSubtract: ['zoomOut'],
   KeyZ: ['zoomReset'],
+  KeyE: ['ultimate'],                 // v2 UPROAR (pad Y / RT in pollPads)
 };
 
 /** reverse map: action → key codes */
@@ -103,7 +104,7 @@ const MODIFIER_CODES: ReadonlySet<string> = new Set([
   'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight',
   'CapsLock', 'Tab', 'F1', 'OSLeft', 'OSRight', 'ContextMenu',
 ]);
-const GAMEPLAY: ReadonlySet<Action> = new Set<Action>(['ability', 'dash']);
+const GAMEPLAY: ReadonlySet<Action> = new Set<Action>(['ability', 'dash', 'ultimate']);
 /** camera actions: like GAMEPLAY they only exist in 'game' mode, but they are never buffered */
 const VIEW: ReadonlySet<Action> = new Set<Action>(['zoomIn', 'zoomOut', 'zoomReset']);
 const NAV: readonly Action[] = ['up', 'down', 'left', 'right'];
@@ -119,7 +120,7 @@ const MOVE_CODE_SET: ReadonlySet<string> = new Set<string>([
 
 // ─────────────────────────────── gamepad map (standard mapping) ───────────────────────────────
 const PAD_BUTTONS = 17;
-const PAD_A = 0, PAD_B = 1, PAD_X = 2, PAD_Y = 3, PAD_RB = 5, PAD_SELECT = 8, PAD_START = 9, PAD_R3 = 11;
+const PAD_A = 0, PAD_B = 1, PAD_X = 2, PAD_Y = 3, PAD_RB = 5, PAD_RT = 7, PAD_SELECT = 8, PAD_START = 9, PAD_R3 = 11;
 const PAD_UP = 12, PAD_DOWN = 13, PAD_LEFT = 14, PAD_RIGHT = 15;
 /** d-pad buttons: movement in play (live across a ui → game flip, like the movement keys) */
 const PAD_MOVE_BUTTONS: readonly number[] = [PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT];
@@ -158,6 +159,7 @@ export function actionLabel(a: Action, device: InputDevice = 'keyboard'): string
       case 'debug': return 'F1';
       case 'ability': return 'A';
       case 'dash': return 'B';
+      case 'ultimate': return 'Y';
       case 'pick1': case 'pick2': case 'pick3': return 'A';
       case 'reroll': return 'X';
       case 'zoomIn': return 'R-STICK UP';
@@ -176,6 +178,7 @@ export function actionLabel(a: Action, device: InputDevice = 'keyboard'): string
     case 'debug': return 'F1';
     case 'ability': return 'SPACE';
     case 'dash': return 'SHIFT';
+    case 'ultimate': return 'E';
     case 'pick1': return '1';
     case 'pick2': return '2';
     case 'pick3': return '3';
@@ -214,6 +217,8 @@ export class Input {
   // ability / dash buffers (clock ms of the unconsumed press, or -Infinity)
   private abilityAt = -Infinity;
   private dashAt = -Infinity;
+  /** v2 UPROAR buffer (same rule as ability / dash) */
+  private ultimateAt = -Infinity;
 
   // gamepad
   private readonly padDown: boolean[] = new Array<boolean>(PAD_BUTTONS).fill(false);
@@ -391,7 +396,12 @@ export class Input {
       dash = now - this.dashAt <= win;
       this.dashAt = -Infinity;
     }
-    return { mx: m.mx, mz: m.mz, ability, abilityHeld: this.held('ability'), dash };
+    let ultimate = false;
+    if (this.ultimateAt > -Infinity) {
+      ultimate = now - this.ultimateAt <= win;
+      this.ultimateAt = -Infinity;
+    }
+    return { mx: m.mx, mz: m.mz, ability, abilityHeld: this.held('ability'), dash, ultimate };
   }
 
   /** Forget this frame's edges, queued edges and the ability/dash buffers (a screen consumed them). */
@@ -402,6 +412,7 @@ export class Input {
     this.pendingAny = false;
     this.abilityAt = -Infinity;
     this.dashAt = -Infinity;
+    this.ultimateAt = -Infinity;
     this.wheelNotches = 0;
   }
 
@@ -450,6 +461,7 @@ export class Input {
         if (this._mode === 'game') {
           this.pending.add(a);
           if (a === 'ability') this.abilityAt = clockNow();
+          else if (a === 'ultimate') this.ultimateAt = clockNow();
           else this.dashAt = clockNow();
         }
         continue;
@@ -507,6 +519,7 @@ export class Input {
       case 'back': return !game && this.padLive(PAD_B);
       case 'ability': return game && this.padLive(PAD_A);
       case 'dash': return game && (this.padLive(PAD_B) || this.padLive(PAD_RB));
+      case 'ultimate': return game && (this.padLive(PAD_Y) || this.padLive(PAD_RT));
       case 'pause': return this.padLive(PAD_START);
       case 'reroll': return this.padLive(PAD_X);
       default: return false;
@@ -579,6 +592,9 @@ export class Input {
           break;
         case PAD_RB:
           if (game) { this.edges.add('dash'); this.dashAt = now; }
+          break;
+        case PAD_Y: case PAD_RT:          // v2 UPROAR (play only; modal screens read pad Y through ui/dom.ts)
+          if (game) { this.edges.add('ultimate'); this.ultimateAt = now; }
           break;
         case PAD_START: this.edges.add('pause'); break;
         case PAD_R3: if (game) this.edges.add('zoomReset'); break;
