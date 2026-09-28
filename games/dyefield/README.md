@@ -102,41 +102,90 @@ truth; outputs in `art/gltf/`):
 See `_spec/DESIGN.md` for the IP lock, the map thumbnails and the coverage + swim plan, and
 `_spec/CONTRACT.md` for the module contract, data formats and gates.
 
+## Play it
+
+**Live (CDN, unpublished in the catalog):** https://forgeflow-games-cdn.isimcha85.workers.dev/dyefield/index.html
+
+Title → **PLAY** (map, time of day on Pier 18, bot skill BREEZE / SWELL / STORM) → **START**. **LOADOUT**
+picks the kit and crew and has a name field. **SETTINGS** has key remap (with conflict detection),
+sensitivity, invert Y, colorblind marks, master/music/SFX volume, render quality, reduce motion and
+show FPS. **HOW TO PLAY** and **CREDITS** are on the title menu.
+
+| action | default key |
+|---|---|
+| move / look | WASD / mouse (click to capture) |
+| fire (MIST-RASP stream · SHEET-DRUM roll, tap to flick · NEEDLE-GLINT hold to charge, release · POP-WELL burst) | LMB |
+| slick into your own color (swim, hide, **drink** to refill the tank) | hold SHIFT |
+| jump | SPACE |
+| JELLY CHARGE (sub, ~70 % tank) | E or RMB |
+| special when the gauge is full (CLOUDBURST / WELLSPRING) | Q |
+| pause (resume, settings, how to play, quit match, control legend) | ESC |
+| debug panel (coverage %, tank, map, fps, move state, atlas, render scale) | F1 |
+
+Dev query params (harness only): `?map=`, `?kit=`, `?bots=breeze|swell|storm`, `?seed=`,
+`?matchSeconds=`, `?preset=noon|golden`, `?quality=auto|high|low`, `?autostart=1`, `?dev=1` (test
+hooks on `window.__DF__`).
+
 ## Build status by phase
 
 | phase | scope | status |
 |---|---|---|
-| 0 | stack decision + repo that boots | done: `npm install && npm run dev` boots clean |
-| 1 | athlete moving on Pier 18 | done: Blender-authored tide-runner (26 bones, 14 clips) walks, jumps and climbs ramps on the Blender-built Pier 18 (Rapier KCC) |
-| 2 | coverage buffer + paint write + live minimap | done: hold LMB to dye the tiles under your feet; the CPU atlas is the truth; glossy dye shader, coverage bar and minimap update live |
-| 3 | swim / slog / tank drink | next |
-| 4–11 | kits, match, bots, Lockwell, Cinder, lobby, juice, harden | planned |
+| 0 | stack decision + repo that boots | done |
+| 1 | athlete moving on Pier 18 | done: Blender-authored tide-runner (26 bones, 22 clips), Rapier kinematic controller |
+| 2 | coverage buffer + paint write + live minimap | done: the CPU paint atlas is the source of truth; the GPU mirror uploads dirty rows only |
+| 3 | swim / slog / tank drink | done: SLICK (8.4 m/s, 36 %/s refill), SLOG, WALL-SLICK up own-dyed walls, own pad = own dye |
+| 4 | MIST-RASP + dry click when empty | done |
+| 5 | 3:00 match + 7 bots | done: countdown, horns, WASHED BY slate, 3 s respawn, victory slate, bots paint/fight/refill/chase |
+| 6 | four kits + sub + special | done: SHEET-DRUM, NEEDLE-GLINT, POP-WELL, JELLY CHARGE, CLOUDBURST, WELLSPRING; bot kit tactics |
+| 7 | LOCKWELL WORKS | done: 3 floors, conveyors, grated crane-walk, wall-slick shortcuts, interior lighting |
+| 8 | CINDER REEF | done: atoll, wreck, bridges, sandbars, tide-springs, deep channels, mist |
+| 9 | lobby, loadout, map select | done: live 3D lobby, mannequin loadout, settings, how to play, credits, pause |
+| 10 | juice, audio, score horn, per-map lighting | done: shake/markers/vignette/stains/confetti; music + 57 SFX + horn |
+| 11 | harden, pause, README | done: leak-flat across matches, adaptive resolution, focus-loss pause, context-loss card |
+| ship | CDN deploy | done: `dyefield-1.0.0` live and verified (files, marker, cover md5, live boot + live match) |
 
-**What is better BECAUSE of the chosen stack (phases 0–2):**
-- **Phase 0:** one command runs the game, and the whole paint and movement sim runs under plain
-  `node`, so gates G1/G2 are exit-code probes that take about 1 s (73 paint checks, 11 movement
-  checks).
-- **Phase 1:** the Blender-authored rig and clips load straight into three's `AnimationMixer`
-  (the upper-body `brush` layers over locomotion). Rapier's kinematic controller gives autostep,
-  slope limits and snap-to-ground on the authored trimesh without hand-written collision.
-- **Phase 2:** the paint atlas is *one* TypeScript module shared by the Node probe, the sim and
-  the browser. Its GPU mirror uploads only dirty rows (`Texture.addUpdateRange`). On Pier 18 the
-  atlas is 1024², 412k surface texels, and builds in about 0.15 s; a 1 m splat costs about
-  0.05 ms.
+**What is better BECAUSE of the chosen stack:**
+- **Phases 0–2:** the paint and movement sim runs under plain `node`, so the paint, move, swim,
+  combat, match, kits, nav and bot gates are all exit-code probes that finish in seconds. The paint
+  atlas is one TypeScript module shared by the probes, the sim and the browser.
+- **Phases 3–5:** a full 3:00 eight-bot match simulates headless in about 10 s. Bot pacing,
+  coverage, stuck detection and determinism are measured over 8 seeds per map instead of eyeballed.
+- **Phase 6:** kits are data (`data/weapons.json`). Balance changes were measured with mixed-lineup
+  bot matches in node before any browser run.
+- **Phases 7–8:** Blender builds each map from data, including the paint UV2, an AO bake on UV2 and
+  node extras for conveyors, springs and lights. The runtime reads the same GLB in the browser and
+  in node.
+- **Phases 9–11:** everything is DOM + WebGL on one Vite page, deployed as static files to the
+  portal CDN with no plugin or native build step.
 
-## Controls (phase 2)
+## Gates (run from this folder)
 
-| action | key |
-|---|---|
-| move / look | WASD / mouse (click to capture) |
-| jump | SPACE |
-| dye the tiles under your feet (phase-2 brush; the MIST-RASP kit replaces it in phase 4) | hold LMB |
-| debug panel (coverage %, tank, map, fps, move state, atlas, render scale) | F1 |
-| pause | ESC |
+`npm run typecheck` · `node _harness/probe_{paint,move,swim,combat,match,kits,audio}.ts` ·
+`node _harness/probe_nav.ts --map {pier18,lockwell,cinder}` · `node _harness/probe_bots.ts [--map id] [--lineup mixed] [--seeds 1..8]` ·
+`python art/build.py check` · `python _harness/bootcheck.py [--headless] [--base URL]` ·
+`python _harness/menus.py` · `python _harness/playtest.py --map id --kit id` ·
+`python _harness/perfcheck.py --map id` · `python _harness/abperf.py` (interleaved GPU A/B).
 
-Dev query params: `?map=pier18`, `?preset=noon|golden`, `?quality=auto|high|low`, `?dev=1`
-(test hooks on `window.__DF__`).
+Final QA (G12): all 12 map × kit combinations passed a real-input playtest. On the Intel UHD iGPU at
+1600×900 and a 50 Hz display, every map held ~50 fps with p99 20.7 ms (Pier 18), 23.4 ms (Lockwell,
+adaptive scale 0.75–0.9) and 21.4 ms (Cinder).
+
+## Data & art
+
+`data/teams.json` (crews, colorblind palette) · `data/weapons.json` (kits, sub, specials, balance
+log) · `data/maps.json` + `data/layouts/*.json` (arenas). `art/blender/*.py` builds every GLB
+headless (`npm run art`), and `art/build.py check` enforces the asset contract. The spec lives in
+`_spec/`.
 
 ## Credits
 
 An original 4 v 4 turf-paint shooter.
+
+- Built with Three.js, Rapier, Vite and TypeScript; all 3D art authored in Blender (headless scripts).
+- Music: "Revelation", "Chasing The Stars", "Hyper Drive" and "8-bit Hero" from the SynthWave Music
+  Pack by Travis Rise (Unity Asset Store).
+- Sound effects: Kenney (CC0) Interface Sounds + Impact Sounds; Sonniss #GameAudioGDC 2024
+  (BluezoneCorp, Bolt, InMotionAudio, Jake Fielding, Justsoundeffects, Rescopic Sound, Rogue
+  Waves, Sonik Sound Library). Horns, beeps, squirts and the spring were synthesised for DYEFIELD.
+- Fonts: Lilita One, Nunito (SIL Open Font License, via @fontsource).
+- ForgeFlow Labs.

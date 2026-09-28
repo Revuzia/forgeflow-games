@@ -658,7 +658,11 @@ def main() -> int:
             checks["fire"] = {"tank": [p0.get("tank"), p1.get("tank")], "coverageSun": [cov0, cov1], "shots": ev.get("shot"),
                               "walked": math.hypot(p1.get("x", 0) - p0.get("x", 0), p1.get("z", 0) - p0.get("z", 0)),
                               "hudTank": h1.get("tank"), "timer": [timer0, h1.get("timer")]}
-            if not (isinstance(p0.get("tank"), (int, float)) and isinstance(p1.get("tank"), (int, float)) and p0["tank"] - p1["tank"] >= 8):
+            # SHEET-DRUM drains per METRE rolled (0.85 %/m), not per second of fire, so its bar is 4 % (≈ 4.7 m
+            # actually rolled). On Cinder the straight walk from the spawn runs down the beach into the deep channel
+            # within ~12 m (a sea wash is correct there), so an 8 % bar measured the map's shoreline, not the roller.
+            min_drain = 4 if kit == "sheet-drum" else 8
+            if not (isinstance(p0.get("tank"), (int, float)) and isinstance(p1.get("tank"), (int, float)) and p0["tank"] - p1["tank"] >= min_drain):
                 problems.append("firing did not drain the tank (%s → %s)" % (p0.get("tank"), p1.get("tank")))
             if not (cov1 > cov0 + 1e-5):
                 problems.append("firing did not raise coverage.sun (%s → %s)" % (cov0, cov1))
@@ -666,7 +670,7 @@ def main() -> int:
             if need and not (ev.get(need[0]) or 0) >= need[1]:
                 problems.append("fewer than %d '%s' events after ~3 s of %s fire (%s)" % (need[1], need[0], kit, ev.get(need[0])))
             if kit == "sheet-drum":
-                checks["fire"]["rolled"] = walked_rolled = (p0.get("tank") or 0) - (p1.get("tank") or 0) >= 8 and cov1 > cov0
+                checks["fire"]["rolled"] = walked_rolled = (p0.get("tank") or 0) - (p1.get("tank") or 0) >= min_drain and cov1 > cov0
                 if not walked_rolled:
                     problems.append("holding LMB while walking with SHEET-DRUM did not roll dye down")
             if h1.get("tank") is not None and abs((h1.get("tank") or 0) - round(p1.get("tank") or 0)) > 2:

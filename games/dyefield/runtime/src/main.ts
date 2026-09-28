@@ -66,7 +66,7 @@ import { Input } from './input.ts';
 import { Game, type AppStatus, type GameHooks, type GameMode, type MatchConfig } from './game.ts';
 import { installTestSurface, type AppHandles } from './testsurface.ts';
 
-export const VERSION = 'dyefield-0.10.0-phase10';
+export const VERSION = 'dyefield-1.0.0';
 
 declare global {
   interface Window {

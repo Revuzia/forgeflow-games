@@ -117,7 +117,9 @@ function harnessEndpoints(): Plugin {
 export default defineConfig({
   root: resolve(ROOT, 'runtime'),
   base: './',
-  publicDir: false,
+  // runtime/public holds the store metadata + cover the CDN deploy needs (game_meta.json, thumbnail.png);
+  // Vite copies it into dist/ verbatim.
+  publicDir: resolve(ROOT, 'runtime', 'public'),
   clearScreen: false,
   plugins: [harnessEndpoints()],
   css: { postcss: { plugins: [] } },
@@ -140,7 +142,7 @@ export default defineConfig({
     target: 'es2022',
     outDir: resolve(ROOT, 'dist'),
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: false,          // never ship .map files (they embed the full TS source) to the public CDN
     assetsInlineLimit: 4096,
     chunkSizeWarningLimit: 4096,
     rolldownOptions: {

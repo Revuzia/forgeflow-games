@@ -38,6 +38,7 @@ import math
 import os
 import sys
 import time
+import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (SHOTS, HarnessError, Session, add_common_args, aim_info, build_url, diag_problems,  # noqa: E402
@@ -277,7 +278,13 @@ def main() -> int:
             time.sleep(0.6)
             sess.lock_guard("during the brushed strafe", notes, problems)
             shots["painted"] = sess.screenshot(shot_painted)
-            ok_s, df_shot = sess.df("shot", "boot_canvas")
+            # __DF__.shot POSTs to the dev server's /__shot endpoint; a deployed build (CDN) has no such
+            # endpoint, so on a non-local base the call would only log a harness-made 404. Skip it there.
+            _host = (urllib.parse.urlparse(args.base).hostname or "").lower()
+            if _host in ("localhost", "127.0.0.1", "::1"):
+                ok_s, df_shot = sess.df("shot", "boot_canvas")
+            else:
+                df_shot = {"skipped": "non-local base (no /__shot endpoint on a deployed build)"}
 
             # ── 7. F1 debug panel
             sess.press("F1", 80)
