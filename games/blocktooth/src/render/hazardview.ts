@@ -662,6 +662,7 @@ const easeOutBack = (t: number) => { const s = 1.70158, u = t - 1; return 1 + (s
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 interface IM { mesh: THREE.InstancedMesh; cap: number; n: number; }
+const _cssSize = new THREE.Vector2();
 
 // ─────────────────────────────── the view ───────────────────────────────
 export class HazardView implements ViewModule {
@@ -826,7 +827,9 @@ export class HazardView implements ViewModule {
 
   update(w: World, f: FrameInfo): void {
     const now = f.time;
-    const cssH = Math.max(1, this.ctx.renderer.domElement.clientHeight || 720);
+    // the renderer's own CSS size (setSize), not canvas.clientHeight: reading a layout property here forced a
+    // synchronous style/layout flush every frame (0.3 ms of HazardView's time, GATEKEEPERS §8.3 perf (d))
+    const cssH = Math.max(1, this.ctx.renderer.getSize(_cssSize).y || 720);
     const px = Math.max(1e-4, (f.camDist * K_VIEW) / cssH);
     const y = DECAL_Y0 + f.camDist * DECAL_Y_PER_M;
     const pull = PULL0 + f.camDist * PULL_PER_M;

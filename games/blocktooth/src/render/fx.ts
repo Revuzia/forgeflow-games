@@ -25,6 +25,8 @@ import { STR_GATE } from '../data/strings_gate.ts';
 import { sizeLocked } from '../meta/gates.ts';
 import { addOutline, bakeOutlineNormals, facet, INK, makeToon } from './materials.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from './viewtypes.ts';
+/** scratch for renderer.getSize (the canvas CSS size without a layout read) */
+const _cssSize = new THREE.Vector2();
 
 // ─────────────────────────────── constants ───────────────────────────────
 /** 2·tan(fov/2) for the 30° camera: screen height in metres at distance D = D · K_VIEW */
@@ -1756,7 +1758,8 @@ export class FxView implements ViewModule {
     const P = pos.array as Float32Array, C = colA.array as Float32Array;
     const rf = this.ctx.quality.reduceFlashing;
     const cam = this.camera();
-    const vpH = Math.max(1, this.ctx.renderer.domElement.clientHeight || 720);
+    // renderer CSS size, not clientHeight: a layout read here forces a style/layout flush every frame
+    const vpH = Math.max(1, this.ctx.renderer.getSize(_cssSize).y || 720);
     let quads = 0;
     const maxQ = RIBBON_QUADS;
     for (const b of this.bolts.items) {

@@ -36,6 +36,8 @@ import type { FrameInfo, ViewCtx, ViewModule } from './viewtypes.ts';
 import { CAMERA, CITY } from '../core/config.ts';
 import { addOutline, bakeOutlineNormals, INK, makeToon } from './materials.ts';
 import { buildToyCarGeo } from '../ai/foemodels_parkade.ts';
+/** scratch for renderer.getSize (the canvas CSS size without a layout read) */
+const _cssSize = new THREE.Vector2();
 
 // ─────────────────────────────── constants ───────────────────────────────
 const K_VIEW = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
@@ -690,7 +692,8 @@ export class ProjectileView implements ViewModule {
 
   update(w: World, f: FrameInfo): void {
     this.now = f.time;
-    const cssH = Math.max(1, this.ctx.renderer.domElement.clientHeight || 720);
+    // renderer CSS size, not clientHeight: a layout read here forces a style/layout flush every frame
+    const cssH = Math.max(1, this.ctx.renderer.getSize(_cssSize).y || 720);
     const px = Math.max(1e-4, (f.camDist * K_VIEW) / cssH);
     const alpha = f.frozen ? 1 : Math.min(1, Math.max(0, f.alpha));
     this.shadowMat.uniforms.uY.value = SHADOW_Y0 + f.camDist * 0.00005;

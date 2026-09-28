@@ -6,11 +6,13 @@
 zebra crossing, eats parked cars and kiosks, outgrows the shops, then the offices, then the
 skyline. It gets through five **SIZE** ranks while a municipal news desk (WARD-7, "Ward Seven Municipal
 Alert") panics on air. HALVARD CIVIL DEFENSE sends androids, drones, buggies, APCs, tanks and
-artillery walkers, then an elite breach-dozer, and finally each city's own containment boss:
-**PARKADE-6** (a walking multi-storey car park, GRID-EAST), **IRON GULLY** (WHITE STACKS) or
-**CAISSON-4** (LOCKWATER). Level-ups open 3-card **MUTATION REPORT** drafts. The run ends on the
-front page of *THE WARD SEVEN WITNESS*: **THE CITY GOT SMALLER.** A clear can be pushed on into
-**EXTENDED COVERAGE** (endless).
+artillery walkers, and an elite breach-dozer. Every Size ceiling has a **HEIGHT LIMIT**: at LV 7, 16
+and 27 a **gatekeeper** (STENCIL-1, CORDON-2, SWITCHBOARD-5) holds the titan at its Size until it is
+beaten, and at LV 35 each city's own containment boss guards the last breach: **PARKADE-6** (a
+walking multi-storey car park, GRID-EAST), **IRON GULLY** (WHITE STACKS) or **CAISSON-4**
+(LOCKWATER). Its kill is the **VICTORY FINALE**: the last MASS BREACH to Size V and a short rampage.
+Level-ups open 3-card **MUTATION REPORT** drafts. The run ends on the front page of *THE WARD SEVEN
+WITNESS*: **THE CITY GOT SMALLER.** A clear can be pushed on into **EXTENDED COVERAGE** (endless).
 
 The look is a Saturday-morning monster comic built as a clean 3D diorama: faceted low-poly shapes,
 toon ramps, thick ink outlines, painted palettes and long soft shadows. Everything is procedural:
@@ -21,9 +23,10 @@ and springs.
   fortress), **BRIARWICK** (area control)
 * 3 cities: **GRID-EAST** (day, commercial blocks), **WHITE STACKS** (snowed industrial park),
   **LOCKWATER** (flooded container port at night)
-* 201 data-driven card definitions (currently): generic cards, 72 titan-locked cards, 30 cards
-  that unlock through goals, and 15 **evolutions** (RESTRUCTURED cards: a maxed base card plus its
-  partner, offered in a draft, never rolled)
+* 206 data-driven card definitions (currently; `probe_upgrades`): generic cards, 72 titan-locked
+  cards, cards that unlock through goals (the 5 gatekeeper cards among them), and 15 **evolutions**
+  (RESTRUCTURED cards: a maxed base card plus its partner, offered in a draft, never rolled)
+* 46 goals (50 unlock items) and 7 starting perks (`probe_meta`)
 
 v2 (`_spec/FEATURES_V2.md`) adds: the charged ultimate **UPROAR** (one per titan), the ability bar +
 ACTIVE panel + UPROAR meter + objective tracker HUD, map objectives (**OVERLOAD SITE**, **RELIEF
@@ -31,6 +34,64 @@ DEPOT**, **RECORDS ANNEX**), map power-ups (**RED LIGHT**, **RUSH HOUR**, **BACK
 CREW**, **DEMOLITION NOTICE**), draft **BANISH** / **LOCK**, 40 goals with unlocks, starting perks and
 titan palettes (**GOALS & RECORDS**), the unique GRID-EAST boss PARKADE-6, the endless mode, and a
 cinematic opening (the **WARD-7 STREET CAM**).
+
+The gatekeepers (`_spec/GATEKEEPERS.md`, rev 2) add the three Size gates, the city boss re-scaled to
+fight a Size IV titan, the VICTORY FINALE, and gatekeeper rematches in EXTENDED COVERAGE (see
+[Gatekeepers](#gatekeepers-the-height-limit) below).
+
+---
+
+## Gatekeepers: the HEIGHT LIMIT
+
+`RANK_LEVELS` is unchanged (`[1, 7, 16, 27, 35]`), but reaching a Size level no longer breaches by
+itself. Each breach needs a kill:
+
+| LV reached | fight | guards | titan during the fight | on the kill |
+|---|---|---|---|---|
+| 7 | **STENCIL-1**, HALVARD ROAD-MARKING UNIT | Size I → II | Size I, held at its ceiling | MASS BREACH to Size II |
+| 16 | **CORDON-2**, HALVARD CROWD-BARRIER UNIT | Size II → III | Size II, held | MASS BREACH to Size III |
+| 27 | **SWITCHBOARD-5**, HALVARD MOBILE SWITCHBOARD | Size III → IV | Size III, held | MASS BREACH to Size IV |
+| 35 | the city boss (PARKADE-6 / IRON GULLY / CAISSON-4) | Size IV → V | Size IV, held (50 m) | the VICTORY FINALE, then the front page |
+
+* **The lock** (`meta/gates.ts`). The level-up that reaches the gate level does not rank up. It locks
+  the gate instead: the `gateLocked` event, an alert, a padlock sting, and the GROW bar turns full and
+  hazard-striped with `SIZE LOCKED — STENCIL-1 EN ROUTE`, then `SIZE LOCKED — BEAT STENCIL-1` once it
+  arrives. XP, levels and drafts keep flowing. The body's height stops at the Size ceiling (a "strain"
+  beat instead of the grow pop), and every level banked during the hold is paid back in the breach.
+  The pacing catch-up is off while a fight is alive.
+* **Arrival.** 1.5 s after the lock the gatekeeper spawns off-screen ahead of the titan (an edge arrow
+  points at it). It then drives in over a 3 s invulnerable intro, with the nameplate in its
+  `GATEKEEPER` variant. The city boss keeps its own 4 s intro and never arrives before 7:20 (440 s);
+  a titan at LV 35 earlier than that waits at Size IV with a countdown on the GROW bar.
+* **The fights.** Each gatekeeper has a meter, a stagger and a weak point that opens after its own
+  attack: STENCIL-1 (STRIPE RUN, PAINT BUCKETS, DOUBLE LINE, U-TURN; hit the open paint **DRUM** during
+  the REFILL → SPILL → TIPPED OVER; its **WET PAINT** slows), CORDON-2 (SHIELD SHOVE, SAWHORSE TOSS,
+  BACKFIRE, SQUAD BEHIND THE LINE; get behind the wall and hit the **PACK** → STALL → STALLED),
+  SWITCHBOARD-5 (CALL-IN, PUT THROUGH adds, HOLD MUSIC, RELOCATE; hit the **DISHES** as the crown turns →
+  FEEDBACK → LINES DOWN, which also stuns its adds). No single gatekeeper hit takes more than 40 % of the
+  titan's max HP, and the damage the titan deals is capped at 6 % of the rig's HP per 1-s window (UPROAR
+  hits exempt).
+* **Running away does not help.** Past its band a gatekeeper hunts the titan; a titan more than
+  2.2 × the spawn ring away for 4 s is cut off (it re-enters ahead: `CUTTING YOU OFF`). Time spent not
+  engaged raises **containment pressure** (0–3: more spawns, shorter attack gaps, more damage), and
+  fatigue runs on `max(engaged time, 0.5 × fight time)`, so every fight is bounded.
+* **Time caps.** A starved run still reaches every fight: the gates lock at 165 / 320 / 430 s and the
+  city boss at 540 s even below the level, and a capped kill tops the level up (the drafts are owed).
+* **The kill** breaches on the same tick (`LIMIT LIFTED` stamp, then the MASS BREACH banner), drops a
+  chest and adds +40 UPROAR. A titan that dies in a gate fight gets the sub-head
+  `HELD AT SIZE II BY CORDON-2` on its front page.
+* **VICTORY FINALE.** The city boss's kill is the last MASS BREACH to Size V. For 10 s every enemy is
+  stunned, hostile tells and shots are cancelled, the titan cannot be hurt, 120 civilians flee through
+  the streets, and the live banner **THE CITY GOT SMALLER.** plays. Drafts owed during the finale
+  wait. After 3 s a `SKIP [ENTER]` / `SKIP [A]` hint appears. The clear time on the front page is the
+  kill, not the end of the finale.
+* **EXTENDED COVERAGE** (KEEP GOING) continues at Size V. Every 75 s a rematch arrives, alternating a
+  gatekeeper (`HEIGHT LIMIT REISSUED`, kicker `REISSUED · SIZE V`, 100 000 HP × (1 + 0.5 n)) and the
+  next city boss. A gatekeeper rematch guards nothing (no breach) and pays a chest, a power-up and
+  1 500 score. The endless front page adds `REISSUED n`.
+* **Meta.** Six goals (TIPPED OFF, LINE CROSSED, HANG UP, WITHOUT A DENT, OVER THE LIMIT, REISSUED)
+  unlock five cards (Fresh Coat, Sawhorse Stack, Call Waiting, Blanket Exemption, Carbon Copy) and the
+  perk **DEFERRED MAINTENANCE** (every gatekeeper arrives with its meter at 25 %).
 
 ---
 
@@ -70,6 +131,7 @@ blank canvas. If boot fails, a "TECHNICAL DIFFICULTIES" card shows the error.
 | draft: **LOCK** / unlock the focused card (held into the next draft) | C | LB |
 | title / select: open **GOALS & RECORDS** | G | X |
 | goals screen: tabs / rows / back | ← → · ↑ ↓ · Esc | d-pad · B |
+| skip the **VICTORY FINALE** (after 3 s, once `SKIP` shows) | Enter | A |
 | clear front page: **KEEP GOING** (endless) | K | focus it + A |
 | skip the cinematic opening | any key | any button |
 | debug overlay | F1 | — |
@@ -182,13 +244,14 @@ src/
                         loop (fixed-step GameLoop), input (keys + gamepad), debug (F1), save
   data/                 titans, biomes, enemies, bosses, upgrades, strings (all copy); v2: upgrades_v2,
                         evolutions, ultimates, objectives, powerups, goals, perks, palettes, cine,
-                        strings_hud, strings_screens
-  meta/                 v2 sim: ultimate (UPROAR), objectives, powerups, tally, goals, perks, profile, endless
+                        strings_hud, strings_screens; gatekeepers: upgrades_gate, strings_gate
+  meta/                 v2 sim: ultimate (UPROAR), objectives, powerups, tally, goals, perks, profile, endless;
+                        gates (the Size gates: lock, fight bookkeeping, pressure, breach, finale)
   city/                 citygen, citysim, traffic (sim) · meshkit, cityview (view)
   titans/               titansim + kits/* (sim) · models, anim, titanview, portraits (view)
   combat/               spatial, damage, targeting, projectiles, telegraphs, hazards, pickups (sim)
-  ai/                   enemies, director, bosses/* incl. parkade6 (sim) · enemyview, bossview, foemodels,
-                        foemodels_parkade (view)
+  ai/                   enemies, director, bosses/* incl. parkade6 and the gatekeepers stencil1, cordon2,
+                        switchboard5 (sim) · enemyview, bossview, foemodels, foemodels_parkade, foemodels_gate (view)
   upgrades/             stats, engine (triggers, frenzy, shield), draft (3-card offers)
   render/               renderer, camera, materials, lighting, env, warmup,
                         telegraphview, projectileview, hazardview, fx, debris (Rapier), civilians, pickupview;
@@ -200,6 +263,7 @@ src/
 _harness/               probes (node), bot, and the browser gates (bootcheck, playtest, perfcheck, shots)
 _spec/CONTRACT.md       the build contract (names, exports, numbers, file ownership)
 _spec/FEATURES_V2.md    the v2 feature contract (owner items 2–8) + features_v2_types.ts
+_spec/GATEKEEPERS.md    the gatekeeper contract (rev 2): the Size gates, the finale, rematches, the build plan
 ```
 
 ## Architecture
@@ -368,6 +432,14 @@ With the dev server up, `window.__BT__` exposes:
   `cheat.ult(points = 100)`, `cheat.powerup(kind)` (3 H ahead), `cheat.objective(kind, ahead?)`,
   `cheat.endless(autoPick = true)` (fields and kills the city's boss; `false` leaves KEEP GOING to a real K),
   `cheat.evolveReady(evoId)`, `cheat.bossSpawn(id)` (any boss incl. `parkade6`), `cheat.tillOpen(s)` (PARKADE-6)
+* Gatekeepers (GATEKEEPERS §7.3): `state().gates` = the `GatesState` fields (`unlocked`, `pending`, `active`,
+  `dueT`, `pressure`, `engagedS`, `liveFightS`, `killT`, `finaleT`, `finaleDone`, `mainKillT`, `rematchN`, …) plus the
+  live gatekeeper (`live`: id, HP, meter, `drumOpen` / `overheated` / `folded`, `weakMask`). Dev cheats (`?dev=1`, set-up only):
+  `cheat.gateLock(slot)` (1–4, through the real lock path), `cheat.gateKill()` (kills the live fight and runs its breach),
+  `cheat.gateHp(frac)`, `cheat.gatesOpen(n)` (opens gates 1..n without fights, then the Size the level implies),
+  `cheat.finaleSkip()` (the Enter / A path), and `cheat.bossSpawn(id)` also takes `stencil1 | cordon2 | switchboard5`.
+  `cheat.rank(r)` and `cheat.level(n)` are a documented bypass: they open every gate up to the Size they jump to
+  (`growToRank`), so use `cheat.xp` + a real eat to reach a gate the way play does (playtest_gate step 1).
 
 `window.__PAUSE__ = {pause, resume, toggle}` is the portal contract.
 
@@ -413,6 +485,28 @@ python _harness/perfcheck.py --boss parkade6 --enemies 150   # perf (b): the PAR
 python _harness/scratch/g3/perfquiet.py --n 5 --out DIR --extra=--v2   # perfcheck only in GPU-quiet windows (shared box)
 python _harness/scratch/final/leakcheck.py --cine 1   # the newRun ×7 leak check through the cinematic opening
 python _harness/shots.py --groups v2fx,v2hud,cine,screens,parkade   # the v2 shot additions (§15.4)
+```
+
+The gatekeepers (GATEKEEPERS §8.3 / §8.4) add:
+
+```bash
+node _harness/probe_sim.ts --det 2 --meta fresh|full   # GATE 2 on the GATE2_V3 bands (gate spawn / breach bands,
+                                                       #   city-boss spawn 440–560 s, levels per city fight)
+node _harness/probe_gatekeepers.ts            # 246 checks, cases 1–16 of §5.4 (summon, no breach without the kill,
+                                              #   beatable, weak points, fair tells, volley geometry, avoider, soaked
+                                              #   fighter, time caps, finale, city boss at Size IV, rematches,
+                                              #   determinism, RAMROD, stuck rule, tick-end breach); --quick, --only 1,2,6b
+python _harness/playtest_gate.py              # real input: 1 the SIZE LOCKED bar + GATEKEEPER nameplate from a real eat,
+                                              #   2 a kill with a real attack (gateDefeated + rankUp 1 on one frame, MASS BREACH),
+                                              #   2b STENCIL-1 tipped over with no HP cheat, 3 avoidance (pressure ≥ 2, stays
+                                              #   within 2.2 × spawnRing), 4 the finale + real Enter → the clear tabloid at the
+                                              #   kill time, 5 real K → a REISSUED · SIZE V rematch, 6 pad A skips the finale
+python _harness/perfcheck.py --gate c|d|e --enemies 150   # (c) SWITCHBOARD-5 at Size III + adds + an UPROAR,
+                                              #   (d) STENCIL-1 P3 with 10 WET PAINT hazards held live (HazardView ≤ 0.2 ms),
+                                              #   (e) the Size V finale with the 120-civilian surge; p99 ≤ 22 ms, ≤ 450 draws, ALONE
+python _harness/scratch/final/leakcheck.py --gate 1   # newRun ×7 with a gatekeeper rig built each cycle
+python _harness/shots.py --groups gates       # 19 shots: the three rigs' tells and staggers, the city bosses at
+                                              #   Size IV, GROW-bar lock at 1280 / 1920, the finale, heldBy, a rematch
 ```
 
 Start the server once as `BT_FROZEN=1 npx vite --port 5178 --strictPort`, with no HMR and no file

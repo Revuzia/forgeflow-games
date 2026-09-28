@@ -714,3 +714,33 @@ Two ownership gaps were closed by the lane that found them and are recorded here
 palette (`w.meta.palette`, FEATURES_V2 §8.6), so L10 builds the in-game model in it in `titanview.mount()`;
 and §15.4 asks every view lane for shots in `_harness/shots.py` although §15.2 lists the file for no lane
 (L10 added `cine`; the orchestrator added `screens` and `parkade`).
+
+### Gatekeeper lane ownership (GATEKEEPERS §8.2; built K0–K2, 2026-09-27/28)
+
+| Lane | Owns (new files) | Edited in existing files (only the named part) |
+|---|---|---|
+| K0 skeleton (orchestrator, alone) | the inert stubs of `src/meta/gates.ts`, `src/ai/bosses/stencil1.ts` / `cordon2.ts` / `switchboard5.ts`, `src/ai/foemodels_gate.ts`, `src/data/upgrades_gate.ts`, `src/data/strings_gate.ts` (names only), `_harness/bot_gate.ts` | `core/types.ts`, `core/config.ts` (`GATES`, `GATE_HP_AT_RANK`, `GATE_HP_MUL`, `GATE2_V3`, `ENDLESS_V3`), `core/world.ts` (`flushGateBreach`, `checkRunEnd` v3), `src/v2types.ts`; the pre-wires in `titansim.ts`, `bosses/index.ts`, `combat/targeting.ts`, `combat/damage.ts`, `director.ts`, `game.ts`, `testsurface.ts`, `bot.ts`, `probe_sim.ts` (report lines); `data/bosses.ts` (role / slot / kicker, placeholder gate defs); `data/strings.ts` (the six ALERTS); `ai/bossview.ts` (placeholder branches); `meta/tally.ts` and `meta/endless.ts` (field initialisation) |
+| K1a gate loop | `src/meta/gates.ts` (real), `_harness/bot_gate.ts`, `_harness/probe_gatekeepers.ts` | `meta/endless.ts` (the alternating rematch rotation), `meta/tally.ts` (gate fields and cases), `probe_sim.ts` (GATE2_V3 bands), `probe_endless.ts` (rotation), `probe_map.ts` (the ANNEX count note) |
+| K1b gatekeeper sims | `src/ai/bosses/stencil1.ts`, `cordon2.ts`, `switchboard5.ts` | `data/bosses.ts` (the three final defs: attacks, subtitles, kickers) |
+| K2a gate view | `src/ai/foemodels_gate.ts` | `ai/bossview.ts` (rig registration, scale by `b.data.H`, poses), `render/projectileview.ts` (`paintCan` / `sawhorse` / `callFlare`), `render/hazardview.ts` (`paint`), `render/markerview.ts` (`gate`, `weakPoint`), `render/fx.ts` (stagger words, `LIMIT LIFTED`, the strain beat, role-routed `bossStagger` / `bossPhase`), `render/civilians.ts` (`surge`), `render/camera.ts` (gate trauma cases), `titans/titanview.ts` (held-glow dim + strain squash), `audio/sfx.ts` (gate section) |
+| K2b gate UI | `src/data/strings_gate.ts` (full copy) | `ui/hud.ts` (GROW bar lock), `ui/bossbar.ts` (gate variant), `ui/broadcast.ts` (`heldBy`, `REISSUED n`), `ui/markers.ts` (two kinds), `ui/icons.ts` (`gatekeeper` glyph), `probe_icons.ts` (glyph count) |
+| K2c meta | `src/data/upgrades_gate.ts` (the five cards) | `data/upgrades.ts` (one append line), `data/goals.ts` (+6 goals; EARLY CLOSING 600 s), `meta/goals.ts` (6 metrics), `meta/profile.ts` (`life.gateRematches`), `data/perks.ts` + `meta/perks.ts` (DEFERRED MAINTENANCE), `probe_meta.ts` (46 goals / 50 unlock items, reachability), `probe_upgrades.ts` (coverage) |
+| orchestrator (K1/K2 gates, K3, final) | `_harness/playtest_gate.py` | `game.ts` / `testsurface.ts` cross-lane wires (the finale SKIP hint, `cheat.gate*`), `_harness/shots.py` (group `gates`), `_harness/perfcheck.py` (`--gate c|d|e`), `_harness/playtest_v2.py` (step 6 picks the drafts owed from the finale with a real 1 before its tick check), `_harness/scratch/final/leakcheck.py` (`--gate`), `README.md`, this table; K3 fixes in `ui/broadcast.ts` (the finale banner pre-empts older alerts) and `render/civilians.ts` (the surge re-uses fleeing slots); final: the per-frame layout read in the views (below) |
+
+Notes (recorded, not yet ratified by the owner):
+* **Out-of-lane edits.** K2c edited `src/core/types.ts` (orchestrator-owned; the goal-metric names, the perk id and
+  `life.gateRematches` its lane needed) instead of asking the orchestrator. The edits typecheck and every probe
+  passes on them; they are recorded here rather than reverted.
+* **SIGNAL BOOST 8 → 4 power-ups** (`data/goals.ts`, FEATURES_V2 §8.2 says 8). The goal is supply-capped:
+  `probe_meta` G(a) requires every run-scope target to be ≤ what the quickest gate-bot run can drop (the
+  `data/goals.ts` header), and K2c lowered it to 4 for the gated runs (the reason is K2c's, not re-measured here). FEATURES_V2 §8.2 still reads 8 until the owner ratifies 4.
+* **Views read the canvas size from the renderer** (final battery, 2026-09-28). `hazardview`, `telegraphview`,
+  `projectileview`, `fx` and `bossview` read `renderer.getSize()` (the CSS size `renderer.ts` passes to `setSize`)
+  instead of `canvas.clientHeight`. The HUD's always-running CSS animations invalidate style every frame, so the
+  first layout read of a frame forced a synchronous style/layout flush (≈ 0.3 ms). That flush was billed to
+  HazardView (perf (d)'s ≤ 0.2 ms budget); with HazardView fixed alone it moved to TelegraphView. It now happens
+  in `renderer.ts render()`'s own per-frame `clientWidth` check, so the frame total is about the same; a
+  ResizeObserver there (render-core) is the way to remove it.
+* **Git.** 112 gatekeeper files (K0–K2) were committed inside the unrelated `dyefield` commit `23185774`, because
+  the forgeflow-games index is shared by concurrent sessions; `cf4dd1dc` records the K2 gate results for that
+  content. Gate agents commit right after staging, from a clean index.

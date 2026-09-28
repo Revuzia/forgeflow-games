@@ -42,6 +42,8 @@ import type { FrameInfo, ViewCtx, ViewModule } from './viewtypes.ts';
 import { CAMERA, SIM_DT } from '../core/config.ts';
 import { BIOMES } from '../data/biomes.ts';
 import { INK } from './materials.ts';
+/** scratch for renderer.getSize (the canvas CSS size without a layout read) */
+const _cssSize = new THREE.Vector2();
 
 // ─────────────────────────────── constants ───────────────────────────────
 const STYLES: readonly TelegraphStyle[] = ['cone', 'oval', 'lane', 'ring', 'circle', 'chain'];
@@ -758,7 +760,8 @@ export class TelegraphView implements ViewModule {
   update(w: World, f: FrameInfo): void {
     const now = f.time;
     // metres per CSS pixel at the look target (hatch spacing, rim/ink floor)
-    const cssH = Math.max(1, this.ctx.renderer.domElement.clientHeight || 720);
+    // renderer CSS size, not clientHeight: a layout read here forces a style/layout flush every frame
+    const cssH = Math.max(1, this.ctx.renderer.getSize(_cssSize).y || 720);
     const px = Math.max(1e-4, (f.camDist * K_VIEW) / cssH);
     const flashMax = this.ctx.quality.reduceFlashing ? 0.3 : 0.92;
     const y = DECAL_Y0 + f.camDist * DECAL_Y_PER_M;

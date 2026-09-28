@@ -14,6 +14,8 @@ def main():
     ap = argparse.ArgumentParser()
     add_common_args(ap)
     ap.add_argument("--v2", type=int, default=1, help="1 = also exercise the v2 views each cycle (default)")
+    ap.add_argument("--gate", type=int, default=0,
+                    help="1 = also field a gatekeeper rig each cycle (GATEKEEPERS §8.4), keyed by titan so repeated combos build the same rig")
     ap.add_argument("--cine", type=int, default=0, help="1 = each newRun plays the cinematic opening (no skipSlate); a real Enter dismisses it after ~1.5 s")
     args = ap.parse_args()
     combos = [("molo", "grideast"), ("voltkite", "lockwater"), ("hearthback", "whitestacks"),
@@ -45,6 +47,13 @@ def main():
                 # an OVERLOAD SITE + a RELIEF DEPOT (objective / marker views)
                 s.cheat("ult", 100); time.sleep(0.3); s.press("KeyE", 80)
                 s.cheat("powerup", "cleanup"); s.cheat("objective", "overloadSite"); s.cheat("objective", "reliefDepot", 20)
+            gate = None
+            if args.gate:
+                gate = {"molo": "stencil1", "voltkite": "cordon2", "hearthback": "switchboard5", "briarwick": "stencil1"}[t]
+                s.cheat("god", True)
+                ok_g, v_g = s.cheat("bossSpawn", gate)
+                if not ok_g:
+                    print("bossSpawn failed", gate, v_g); return 2
             s.hold(["w", "d"]); time.sleep(4.0); s.release_all()
             time.sleep(0.5)
             m = s.js(MEM_JS)
@@ -52,7 +61,8 @@ def main():
             v2 = st.get("v2") or {}
             rows.append({"i": i, "titan": t, "biome": b, **(m or {}), "screen": st.get("screen"), "rank": st.get("rank"),
                          "ultFired": (v2.get("ult") or {}).get("fired"), "objs": len(v2.get("objectives") or []),
-                         "pus": len(v2.get("powerups") or []), **({"cine": cine_shots} if args.cine else {})})
+                         "pus": len(v2.get("powerups") or []),
+                         **({"gate": gate, "gateLive": ((st.get("gates") or {}).get("live") or {}).get("id")} if args.gate else {}), **({"cine": cine_shots} if args.cine else {})})
             print(json.dumps(rows[-1]), flush=True)
         errs = [c for c in s.console if c[0] == "error"] + s.page_errors
         print("errors:", len(errs), errs[:5])

@@ -31,6 +31,8 @@ import { buildParkadeRig, CHAIN_CAP, ParkadePoser } from './foemodels_parkade.ts
 import type { ParkadeFrame, ParkadeRig } from './foemodels_parkade.ts';
 import { buildGateRig } from './foemodels_gate.ts';
 import type { GateFrame, GateRig } from './foemodels_gate.ts';
+/** scratch for renderer.getSize (the canvas CSS size without a layout read) */
+const _cssSize = new THREE.Vector2();
 
 /** every boss rig built at mount (warmup compiles every boss program up front) — v2 adds PARKADE-6, the
  *  GATEKEEPERS lane K2a the three gatekeeper rigs (ai/foemodels_gate.ts; one shown at a time) */
@@ -1650,7 +1652,8 @@ export class BossView implements ViewModule {
     const cam = this.ctx.camera;
     _v2.addVectors(A, B).multiplyScalar(0.5);
     const d = Math.max(1, _v2.distanceTo(cam.position));
-    const hPx = Math.max(200, this.ctx.renderer.domElement.clientHeight || 720);
+    // renderer CSS size, not clientHeight: a layout read here forces a style/layout flush every frame
+    const hPx = Math.max(200, this.ctx.renderer.getSize(_cssSize).y || 720);
     const mpp = (d * 2 * Math.tan((cam.fov * PI) / 360)) / hPx;
     const pop = 1 + 0.6 * Math.exp(-this.leashT * 7);                  // the catch snaps taut
     const core = LEASH_CORE_PX * mpp * pop;
