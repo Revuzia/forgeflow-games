@@ -24,8 +24,10 @@ export type GlyphId =
   | 'jaw' | 'vortex' | 'fork' | 'wire' | 'dome' | 'lava' | 'turret' | 'spore' | 'vine'
   | 'flame' | 'meteor' | 'snow'
   | 'plus' | 'lock' | 'banish' | 'evo' | 'overload' | 'annex' | 'trafficLight' | 'notice' | 'rush' | 'coin'
-  | 'ribbon' | 'swatch' | 'key' | 'till';
-export type MarkerKind = 'overloadSite' | 'reliefDepot' | 'recordsAnnex' | 'powerup' | 'till';
+  | 'ribbon' | 'swatch' | 'key' | 'till'
+  | 'gatekeeper';   // GATEKEEPERS §7.2: a hazard-striped sawhorse (K0 placeholder glyph; lane K2b draws the final one)
+export type MarkerKind = 'overloadSite' | 'reliefDepot' | 'recordsAnnex' | 'powerup' | 'till'
+  | 'gate' | 'weakPoint';   // GATEKEEPERS §7.2: an arriving / off-screen gatekeeper; an exposed weak point (lane K2b)
 export interface MarkerItem { kind: MarkerKind; sub: string; x: number; y: number; onScreen: boolean; angle: number; dist: number }
 /** CSS px; `angle` = edge-arrow direction when off-screen; `dist` in blocks (m ÷ CITY pitch). ≤ 12 items. */
 export interface MarkerFrame { items: MarkerItem[] }
@@ -121,7 +123,12 @@ export interface DraftScreenApi { open(w: World, offer: string[], ctx: DraftCtx)
 export interface TabloidExtra {
   newGoals: { goal: string; unlock: string }[];     // "NEW ON THE RECORD" sidebar (names, already resolved)
   canContinue: boolean;                             // clear variant only: show KEEP GOING
+  /** GATEKEEPERS §7.2 (TabloidExtraAddV3): the gatekeeper that held the titan when it died (its name), else null.
+   *  The dead front page's sub-head `HELD AT SIZE II BY CORDON-2` (lane K2b, ui/broadcast.ts). */
+  heldBy: string | null;
 }
+/** GATEKEEPERS §7.2 (CiviliansAddV3): render/civilians.ts gains surge() in lane K2a; game.ts calls it only when present. */
+export interface CiviliansAddV3 { surge(x: number, z: number, radius: number, count: number): void }
 export type TabloidChoiceV2 = 'retry' | 'select' | 'title' | 'endless';
 /** ui/broadcast.ts Broadcast.tabloid — replaces tabloid(w, photo). The EXTENDED COVERAGE variant is chosen
  *  by `w.endless !== null`. */

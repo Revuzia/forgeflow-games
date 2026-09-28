@@ -6,10 +6,11 @@
 //   node _harness/probe_meta.ts --seed 7
 //
 // Asserts (exit 1 on any failure, 2 if the sim cannot load):
-//   A. catalogue: ≥ 30 goals (40 expected: 15 general · 16 titan · 9 city), unique ids and names, every
-//      metric known; the 44 unlock items (every `locked` card incl. the 6 locked evolutions, the 6 perks,
-//      the 8 palettes) are each referenced by exactly ONE goal, and every reference resolves; the perk
-//      cards of data/perks.ts exist and are `perk: true` hidden cards
+//   A. catalogue: ≥ 30 goals (46 expected: 21 general · 16 titan · 9 city — GATEKEEPERS §6.5 added six general
+//      goals), unique ids and names, every metric known; the 50 unlock items (every `locked` card: 24 v2 + 5
+//      gatekeeper cards + the 6 locked evolutions, the 7 perks, the 8 palettes) are each referenced by exactly
+//      ONE goal, and every reference resolves; the perk cards of data/perks.ts exist and are `perk: true`
+//      hidden cards; the five gatekeeper cards match §6.5 (rarity, stacks, tags, effects, locked)
 //   B. profile sanitize fuzz: corrupt JSON, wrong types, huge / negative / NaN numbers, unknown ids and
 //      2 000 seeded random blobs → never throws, always structurally valid, idempotent
 //      (sanitize(sanitize(x)) = sanitize(x)); core/save.ts loadProfile / saveProfile over a working, a
@@ -22,19 +23,23 @@
 //   E. tally vs a scripted event run (every counter), the HOOK window, SIX-WAY SPLICE / FULL BLOOM
 //      exclusions (only GRIDLOCK SURGE wires / GREENBELT DECREE blooms → 0), HAIRLINE counts the city
 //      fight only (a rematch fielded in endless does not update staggersBestFightBy)
+//   E2. the six gatekeeper goals (GATEKEEPERS §6.5) from scripted gate events through the real tally: each
+//      metric's value, met / not met on both sides of its target, gate staggers never touch HAIRLINE,
+//      REISSUED filed once per World (life.gateRematches) across an EXTENDED COVERAGE double filing
 //   F. perks: sanitizeRunMeta; each perk's effect at createWorld; STAY OF DEMOLITION revives once, at 25 %
-//      HP, blocks discrete AND dot damage for 2 s, then the second lethal hit ends the run
+//      HP, blocks discrete AND dot damage for 2 s, then the second lethal hit ends the run; DEFERRED
+//      MAINTENANCE: every gatekeeper spawns with its meter at 0.25 (home and rematch), the city boss at 0
 //   G. goal reachability on seed 1337 (§8.2): (a) every run-scope target ≤ what one full gate-bot run can
 //      physically supply (props, boats, tier-4 buildings, OVERLOAD SITES placed, power-ups dropped,
 //      objectives placed, foes fielded); (b) ≥ 10 run-scope goals met by the gate bot somewhere in the
 //      12-run matrix (fresh meta)
-//   H. perk rank bands: 4 titans × GRID-EAST × 6 perks, seed 1337: every Size reached inside its GATE-2
-//      band (II 60–150 · III 150–300 · IV 280–450 · V 400–560 s), boss ≤ 560 s; plus a determinism
-//      re-run (same seed + same RunMeta + same inputs ⇒ same hash)
+//   H. perk rank bands: 4 titans × GRID-EAST × 7 perks, seed 1337: every Size reached inside its GATE-2
+//      band (GATEKEEPERS §5.3 GATE2_V3.breachBand for II–IV, the clear window for V), city boss ≤
+//      GATE2_V3.mainSpawn[1]; plus a determinism re-run (same seed + same RunMeta + same inputs ⇒ same hash)
 
 import type { BiomeId, GoalDef, PerkId, Profile, RunMeta, RunTally, SimEvent, TitanId, TitanInput, World } from '../src/core/types.ts';
 import { BIOME_IDS, PERK_IDS, TITAN_IDS } from '../src/core/types.ts';
-import { PERKS, SIM_HZ, ULT } from '../src/core/config.ts';
+import { GATE2_V3, PERKS, SIM_HZ, ULT } from '../src/core/config.ts';
 
 type Mods = {
   world: typeof import('../src/core/world.ts');
@@ -47,6 +52,7 @@ type Mods = {
   save: typeof import('../src/core/save.ts');
   titansim: typeof import('../src/titans/titansim.ts');
   stats: typeof import('../src/upgrades/stats.ts');
+  bosses: typeof import('../src/ai/bosses/index.ts');
   GOALS: GoalDef[];
   PERKS_DEF: typeof import('../src/data/perks.ts')['PERKS_DEF'];
   TITAN_PALETTES: typeof import('../src/data/palettes.ts')['TITAN_PALETTES'];
@@ -68,6 +74,7 @@ async function load(): Promise<string | null> {
       save: await import('../src/core/save.ts'),
       titansim: await import('../src/titans/titansim.ts'),
       stats: await import('../src/upgrades/stats.ts'),
+      bosses: await import('../src/ai/bosses/index.ts'),
       GOALS: (await import('../src/data/goals.ts')).GOALS,
       PERKS_DEF: (await import('../src/data/perks.ts')).PERKS_DEF,
       TITAN_PALETTES: (await import('../src/data/palettes.ts')).TITAN_PALETTES,
@@ -93,8 +100,11 @@ function section(s: string): void { console.log('\n' + s); }
 const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
 /** a goal's target, read from the data (F4: the fixtures follow the §8.2 retune instead of hard-coding it) */
 const TG = (id: string): number => M.GOALS.find((g) => g.id === id)!.target;
-const RANK_BANDS: readonly (readonly [number, number])[] = [[0, 0], [60, 150], [150, 300], [280, 450], [400, 560]];
-const BOSS_BY_S = 560;
+/** Size reached (s): GATEKEEPERS §5.3 (GATE2_V3) — Size II/III/IV = gatekeeper 1/2/3's kill (breachBand); Size V only on
+ *  the city boss's kill tick, which is the clear, so its band is GATE 2's clear window (8–12 min, probe_sim CLEAR_WINDOW_S).
+ *  (The v2 bands 60–150 / 150–300 / 280–450 / 400–560 were the ungated schedule.) */
+const RANK_BANDS: readonly (readonly [number, number])[] = [[0, 0], ...GATE2_V3.breachBand.slice(1), [480, 720]];
+const BOSS_BY_S = GATE2_V3.mainSpawn[1];
 const NO_INPUT: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
 
 function arg(name: string): string | null {
@@ -126,16 +136,54 @@ const METRICS = new Set([
   'blocks', 'endlessS', 'bossesInRun', 'evolutionsLife', 'powerups', 'objectives', 'vacuumBest', 'crushed',
   'titanClears', 'titanBiomesCleared', 'wiresBest', 'hookKillsBest', 'fullVents', 'bloomsBest', 'healed',
   'props', 'overloadSites', 'tier4CollapseFrac', 'bossKillsLife', 'staggersBestFight', 'boats', 'fastClearS',
+  // GATEKEEPERS §6.5
+  'gateTippedFastS', 'gateStallsBestFight', 'gateSwitchFastS', 'gateCleanKills', 'gateTotalFightS', 'gateRematchesLife',
 ]);
+/** lower-is-better metrics (seconds): EARLY CLOSING + the three timed gatekeeper goals */
+const LOWER_METRICS = new Set(['fastClearS', 'gateTippedFastS', 'gateSwitchFastS', 'gateTotalFightS']);
+/** GATEKEEPERS §6.5: goal id → [metric, target, scope, lowerIsBetter, unlock] */
+const GATE_GOALS: readonly [string, string, number, 'run' | 'life', boolean, string][] = [
+  ['g_gate_tipped_off', 'gateTippedFastS', 20, 'run', true, 'card:gate_fresh_coat'],
+  ['g_gate_line_crossed', 'gateStallsBestFight', 2, 'run', false, 'card:gate_sawhorse_stack'],
+  ['g_gate_hang_up', 'gateSwitchFastS', 40, 'run', true, 'card:gate_call_waiting'],
+  ['g_gate_without_a_dent', 'gateCleanKills', 1, 'run', false, 'perk:perk_deferred_maintenance'],
+  ['g_gate_over_the_limit', 'gateTotalFightS', 135, 'run', true, 'card:gate_blanket_exemption'],
+  ['g_gate_reissued', 'gateRematchesLife', 1, 'life', false, 'card:gate_carbon_copy'],
+];
+/** GATEKEEPERS §6.5 card table: id → [name, rarity, maxStacks, tags, effects JSON] */
+const GATE_CARDS: readonly [string, string, string, number, string[], string][] = [
+  ['gate_fresh_coat', 'Fresh Coat', 'common', 3, ['mobility'], '[{"stat":"moveSpeed","mul":0.05},{"stat":"smashRadius","mul":0.06}]'],
+  ['gate_sawhorse_stack', 'Sawhorse Stack', 'rare', 2, ['survival', 'trigger'], '[{"stat":"armor","add":4},{"trigger":{"on":"hurt","chance":0.3,"icd":6,"action":"shield","p":{"amount":0.06}}}]'],
+  ['gate_call_waiting', 'Call Waiting', 'epic', 2, ['ult', 'trigger'], '[{"trigger":{"on":"hit","chance":0.1,"icd":3,"action":"ultCharge","p":{"amount":3}}}]'],
+  ['gate_blanket_exemption', 'Blanket Exemption', 'epic', 1, ['offense'], '[{"stat":"damage","mul":0.12},{"stat":"maxHp","mul":-0.08}]'],
+  ['gate_carbon_copy', 'Carbon Copy', 'rare', 2, ['growth'], '[{"stat":"rerolls","add":1},{"stat":"xpGain","mul":0.04}]'],
+];
 
 function checkCatalogue(): void {
   section('A. catalogue');
   const G = M.GOALS;
   ok(G.length >= 30, `≥ 30 goals (have ${G.length})`);
-  ok(G.length === 40, `40 goals per §8.2 (have ${G.length})`);
+  ok(G.length === 46, `46 goals per §8.2 + GATEKEEPERS §6.5 (have ${G.length})`);
   const by = { general: 0, titan: 0, city: 0 };
   for (const g of G) by[g.group]++;
-  ok(by.general === 15 && by.titan === 16 && by.city === 9, `groups 15/16/9 (have ${by.general}/${by.titan}/${by.city})`);
+  ok(by.general === 21 && by.titan === 16 && by.city === 9, `groups 21/16/9 (have ${by.general}/${by.titan}/${by.city})`);
+  // GATEKEEPERS §6.5: the six gate goals exactly as specified (group general, metric, target, scope, unlock)
+  for (const [id, metric, target, scope, lower, unlock] of GATE_GOALS) {
+    const g = G.find((x) => x.id === id);
+    const u = g && g.unlocks.length === 1 ? g.unlocks[0] : null;
+    const uk = u ? (u.kind === 'palette' ? `palette:${u.titan}:${u.index}` : `${u.kind}:${u.id}`) : '';
+    ok(!!g && g.group === 'general' && g.metric === metric && g.target === target && g.scope === scope && !!g.lowerIsBetter === lower && uk === unlock,
+      `${id}: general · ${metric} · ${target} · ${scope}${lower ? ' · lowerIsBetter' : ''} → ${unlock} (got ${g ? `${g.group} · ${g.metric} · ${g.target} · ${g.scope}${g.lowerIsBetter ? ' · lowerIsBetter' : ''} → ${uk}` : 'missing'})`);
+  }
+  const ec = G.find((x) => x.id === 'g_lw_early_closing');
+  ok(!!ec && ec.target === 600 && ec.lowerIsBetter === true && /10:00/.test(ec.desc), `EARLY CLOSING: under 10:00 = 600 s (GATEKEEPERS §6.5; got ${ec?.target} '${ec?.desc}')`);
+  // the five gatekeeper cards (§6.5 table), appended to UPGRADES, locked, desc generated
+  for (const [id, name, rarity, stacks, tags, fx] of GATE_CARDS) {
+    const d = M.UPGRADE_BY_ID[id];
+    ok(!!d && M.UPGRADES.includes(d) && d.name === name && d.rarity === rarity && d.maxStacks === stacks && JSON.stringify(d.tags) === JSON.stringify(tags)
+      && JSON.stringify(d.effects) === fx && d.locked === true && !d.evo && !d.perk && !d.titan && d.desc.length > 0 && !/undefined|NaN/.test(d.desc),
+      `gate card ${id}: ${name} · ${rarity} · ${stacks} · ${tags.join(', ')} · locked (desc '${d?.desc}')`);
+  }
   ok(new Set(G.map((g) => g.id)).size === G.length, 'unique goal ids');
   ok(new Set(G.map((g) => g.name)).size === G.length, 'unique goal names');
   for (const g of G) {
@@ -145,7 +193,8 @@ function checkCatalogue(): void {
     ok(g.unlocks.length >= 1, `${g.id}: unlocks something`);
     if (g.group === 'titan') ok(!!g.titan, `${g.id}: titan goal names its titan`);
     if (g.group === 'city') ok(!!g.biome, `${g.id}: city goal names its biome`);
-    if (g.lowerIsBetter) ok(g.metric === 'fastClearS', `${g.id}: lowerIsBetter only on fastClearS`);
+    if (g.lowerIsBetter) ok(LOWER_METRICS.has(g.metric), `${g.id}: lowerIsBetter only on a seconds metric (${g.metric})`);
+    else ok(!LOWER_METRICS.has(g.metric), `${g.id}: a seconds metric is lowerIsBetter (${g.metric})`);
   }
   // unlock items
   const refs = new Map<string, number>();
@@ -162,14 +211,15 @@ function checkCatalogue(): void {
   for (const p of PERK_IDS) items.push(`perk:${p}`);
   for (const t of TITAN_IDS) for (const i of [1, 2]) items.push(`palette:${t}:${i}`);
   const evos = lockedCards.filter((u) => u.evo).length;
-  ok(lockedCards.length - evos === 24 && evos === 6, `24 locked cards + 6 locked evolutions (have ${lockedCards.length - evos} + ${evos})`);
-  ok(items.length === 44, `44 unlock items (have ${items.length})`);
+  ok(lockedCards.length - evos === 29 && evos === 6, `29 locked cards (24 v2 + 5 gatekeeper) + 6 locked evolutions (have ${lockedCards.length - evos} + ${evos})`);
+  ok(PERK_IDS.length === 7 && PERK_IDS.includes('perk_deferred_maintenance'), `7 perks incl. DEFERRED MAINTENANCE (have ${PERK_IDS.length})`);
+  ok(items.length === 50, `50 unlock items (have ${items.length})`);
   let once = 0;
   for (const it of items) {
     const n = refs.get(it) ?? 0;
     if (ok(n === 1, `unlock item ${it} referenced exactly once (have ${n})`)) once++;
   }
-  ok(refs.size === items.length, `no goal references an item outside the 44 (refs ${refs.size})`);
+  ok(refs.size === items.length, `no goal references an item outside the ${items.length} (refs ${refs.size})`);
   console.log(`  ${G.length} goals · ${items.length} unlock items · ${once} referenced exactly once`);
   for (const p of PERK_IDS) {
     const d = M.PERKS_DEF[p];
@@ -189,7 +239,7 @@ function validProfile(p: Profile, tag: string): boolean {
   const goalIds = new Set(M.GOALS.map((g) => g.id));
   for (const k of Object.keys(p.done)) { if (!goalIds.has(k)) bad.push('done.' + k); num(p.done[k], 'done.' + k, 1e13); }
   for (const k of Object.keys(p.best)) { if (!goalIds.has(k)) bad.push('best.' + k); num(p.best[k], 'best.' + k); }
-  for (const k of ['runs', 'clears', 'banishes', 'evolutions'] as const) { num(p.life[k], 'life.' + k); if (!Number.isInteger(p.life[k])) bad.push('life.' + k + ' int'); }
+  for (const k of ['runs', 'clears', 'banishes', 'evolutions', 'gateRematches'] as const) { num(p.life[k], 'life.' + k); if (!Number.isInteger(p.life[k])) bad.push('life.' + k + ' int'); }
   for (const t of TITAN_IDS) {
     const l = p.life.clearedBy[t];
     if (!Array.isArray(l) || new Set(l).size !== l.length || l.some((b) => !(BIOME_IDS as readonly string[]).includes(b))) bad.push('clearedBy.' + t);
@@ -210,12 +260,13 @@ function randomBlob(r: () => number, depth: number): unknown {
   const leaf = (): unknown => pick<() => unknown>([
     () => null, () => undefined, () => r() < 0.5, () => r() * 1e6 - 5e5, () => NaN, () => Infinity, () => -Infinity,
     () => 1e308, () => -1, () => 'x', () => String(Math.floor(r() * 50)), () => '', () => 'NaN',
-    () => pick(['molo', 'grideast', 'caisson4', 'perk_red_tape', 'u_psa', 'g_first_broadcast', 'molo.grideast', 'evo_third_rail', 'bogus']),
+    () => pick(['molo', 'grideast', 'caisson4', 'perk_red_tape', 'u_psa', 'g_first_broadcast', 'molo.grideast', 'evo_third_rail', 'bogus',
+      'perk_deferred_maintenance', 'gate_carbon_copy', 'g_gate_reissued', 'stencil1']),
     () => [], () => ({}),
   ])();
   if (depth <= 0 || r() < 0.3) return leaf();
   if (r() < 0.3) { const n = Math.floor(r() * 5); const a: unknown[] = []; for (let i = 0; i < n; i++) a.push(randomBlob(r, depth - 1)); return a; }
-  const keys = ['v', 'done', 'best', 'life', 'runs', 'clears', 'banishes', 'evolutions', 'clearedBy', 'bossKills', 'perk', 'palette',
+  const keys = ['v', 'done', 'best', 'life', 'runs', 'clears', 'banishes', 'evolutions', 'gateRematches', 'clearedBy', 'bossKills', 'perk', 'palette',
     'cineSeen', 'newUnlocks', 'molo', 'voltkite', 'hearthback', 'briarwick', 'grideast', 'caisson4', 'parkade6', 'g_first_broadcast',
     'g_zoning_change', 'g_bogus', 'molo.grideast', 'x.y', '__proto__', 'constructor'];
   const o: Record<string, unknown> = {};
@@ -234,7 +285,7 @@ function checkProfileFuzz(): void {
     ['huge + negative + NaN', {
       done: { g_first_broadcast: 1e308, g_zoning_change: -5, g_crowd_control: NaN, g_bogus: 1 },
       best: { g_crowd_control: 'NaN', g_kills: 5, g_live_coverage: '7', g_ge_curb_appeal: Infinity, g_one_take: -1 },
-      life: { runs: 1e308, clears: -3, banishes: '4', evolutions: 2.7, clearedBy: { molo: ['grideast', 'nope', 'grideast', 5], bogus: ['lockwater'], voltkite: 'x' }, bossKills: { parkade6: 3, godzilla: 9, caisson4: -1, irongully: '2' } },
+      life: { runs: 1e308, clears: -3, banishes: '4', evolutions: 2.7, gateRematches: '3.9', clearedBy: { molo: ['grideast', 'nope', 'grideast', 5], bogus: ['lockwater'], voltkite: 'x' }, bossKills: { parkade6: 3, godzilla: 9, caisson4: -1, irongully: '2', stencil1: 4 } },
       perk: 'perk_bogus', palette: { molo: 99, voltkite: -2, hearthback: 1.4, briarwick: 'x' },
       cineSeen: { 'molo.grideast': 1, 'molo.nowhere': 1, bad: 1, 'voltkite.lockwater': 0 },
       newUnlocks: ['u_psa', 'u_psa', 'airtime_ledger', 'bogus', 7, 'evo_third_rail'],
@@ -249,7 +300,14 @@ function checkProfileFuzz(): void {
   const hp = S(cases[cases.length - 1][1]);
   ok(hp.life.runs === 1e9 && hp.life.clears === 0 && hp.life.banishes === 4 && hp.life.evolutions === 2, `counters coerced (runs ${hp.life.runs} clears ${hp.life.clears} banishes ${hp.life.banishes} evolutions ${hp.life.evolutions})`);
   ok(deepEq(hp.life.clearedBy.molo, ['grideast']) && hp.life.clearedBy.voltkite.length === 0, 'clearedBy filtered + deduped');
-  ok(hp.life.bossKills.parkade6 === 3 && hp.life.bossKills.irongully === 2 && hp.life.bossKills.caisson4 === undefined, 'bossKills filtered');
+  ok(hp.life.bossKills.parkade6 === 3 && hp.life.bossKills.irongully === 2 && hp.life.bossKills.caisson4 === undefined && hp.life.bossKills.stencil1 === undefined, 'bossKills filtered (city bosses only; a gatekeeper id is dropped)');
+  ok(hp.life.gateRematches === 3, `life.gateRematches coerced ('3.9' → ${hp.life.gateRematches})`);
+  const old = S({ v: 1, life: { runs: 2, clears: 1, banishes: 0, evolutions: 0, clearedBy: {}, bossKills: {} }, perk: 'perk_deferred_maintenance' });
+  ok(old.life.gateRematches === 0 && old.life.runs === 2 && old.perk === 'perk_deferred_maintenance', `a pre-gate blob (no gateRematches) → 0; DEFERRED MAINTENANCE is a valid perk (gateRematches ${old.life.gateRematches}, perk ${old.perk})`);
+  const neg = S({ life: { gateRematches: -2 } }), inf = S({ life: { gateRematches: Infinity } }), big = S({ life: { gateRematches: 1e308 } });
+  ok(neg.life.gateRematches === 0 && inf.life.gateRematches === 0 && big.life.gateRematches === 1e9, `gateRematches junk: −2 → ${neg.life.gateRematches}, ∞ → ${inf.life.gateRematches}, 1e308 → ${big.life.gateRematches}`);
+  const cl = M.profile.cloneProfile(hp); cl.life.gateRematches++;
+  ok(hp.life.gateRematches === 3 && cl.life.gateRematches === 4, 'cloneProfile copies gateRematches (independent copy)');
   ok(hp.palette.molo === 2 && hp.palette.voltkite === 0 && hp.palette.hearthback === 1 && hp.palette.briarwick === 0, 'palette clamped 0..2');
   ok(deepEq(hp.newUnlocks, ['u_psa', 'evo_third_rail']), `newUnlocks = locked cards only, deduped (${hp.newUnlocks.join(',')})`);
   ok(hp.done.g_first_broadcast === 1e13 && hp.done.g_zoning_change === undefined && hp.done.g_crowd_control === undefined, 'done timestamps coerced');
@@ -375,13 +433,18 @@ function checkLedger(): void {
   M.world.stepN(wc, 10);
   wc.tally.hpLowFrac = 0.3; wc.run.result = 'clear'; wc.run.endT = 530;
   const e = G.applyRunToProfile(M.profile.emptyProfile(), wc, 'clear');
-  ok(e.newly.includes('g_one_take') && e.newly.includes('g_lw_early_closing'), 'ONE TAKE (low 30 %) + EARLY CLOSING (8:50) met');
+  ok(e.newly.includes('g_one_take') && e.newly.includes('g_lw_early_closing'), 'ONE TAKE (low 30 %) + EARLY CLOSING (8:50 < 10:00) met');
   ok(e.profile.best.g_lw_early_closing === 530, 'EARLY CLOSING best = 530 s');
   const wc2 = mkWorld('briarwick', 'lockwater');
   M.world.stepN(wc2, 10);
-  wc2.tally.hpLowFrac = 0.2; wc2.run.result = 'clear'; wc2.run.endT = 560;
+  wc2.tally.hpLowFrac = 0.2; wc2.run.result = 'clear'; wc2.run.endT = 620;
   const e2 = G.applyRunToProfile(M.profile.emptyProfile(), wc2, 'clear');
-  ok(!e2.newly.includes('g_one_take') && !e2.newly.includes('g_lw_early_closing'), 'ONE TAKE (low 20 %) + EARLY CLOSING (9:20) not met');
+  ok(!e2.newly.includes('g_one_take') && !e2.newly.includes('g_lw_early_closing'), 'ONE TAKE (low 20 %) + EARLY CLOSING (10:20) not met');
+  const wc3 = mkWorld('briarwick', 'lockwater');
+  M.world.stepN(wc3, 10);
+  wc3.tally.hpLowFrac = 0.2; wc3.run.result = 'clear'; wc3.run.endT = 580;
+  const e4 = G.applyRunToProfile(M.profile.emptyProfile(), wc3, 'clear');
+  ok(e4.newly.includes('g_lw_early_closing'), 'EARLY CLOSING at 9:40 is met under the GATEKEEPERS 10:00 target (was not under 9:00)');
   const e3 = G.applyRunToProfile(e.profile, wc2, 'clear');
   ok(e3.profile.best.g_lw_early_closing === 530, 'lower-is-better best keeps the lower time');
   // evalGoals (live)
@@ -433,11 +496,11 @@ function checkNextUnlock(): void {
   n = G.nextUnlock(tie, 'molo', null);
   ok(n?.goal.id === 'g_crowd_control', `tie → list order (got ${n?.goal.id})`);
   const lb = M.profile.emptyProfile();
-  lb.best.g_lw_early_closing = 600;          // 540/600 = 0.9
+  lb.best.g_lw_early_closing = TG('g_lw_early_closing') / 0.9;   // target / best = 0.9
   lb.best.g_crowd_control = 0.8 * TG('g_crowd_control');             // 0.8
   n = G.nextUnlock(lb, 'molo', 'lockwater');
-  ok(n?.goal.id === 'g_lw_early_closing' && n.value === 600, `lower-is-better ranks by target / best (got ${n?.goal.id})`);
-  ok(Math.abs(G.goalFrac(M.GOALS.find((g) => g.id === 'g_lw_early_closing')!, 600) - 0.9) < 1e-9, 'goalFrac(EARLY CLOSING, 600) = 0.9');
+  ok(n?.goal.id === 'g_lw_early_closing' && n.value === TG('g_lw_early_closing') / 0.9, `lower-is-better ranks by target / best (got ${n?.goal.id})`);
+  ok(Math.abs(G.goalFrac(M.GOALS.find((g) => g.id === 'g_lw_early_closing')!, TG('g_lw_early_closing') / 0.9) - 0.9) < 1e-9, 'goalFrac(EARLY CLOSING, target / 0.9) = 0.9');
   const lf = M.profile.emptyProfile(); lf.life.clears = 0; lf.life.runs = 0;
   n = G.nextUnlock(lf, 'briarwick', null);
   ok(!!n && (n.goal.group === 'general' || n.goal.titan === 'briarwick'), `empty profile → a general or BRIARWICK goal (got ${n?.goal.id})`);
@@ -447,7 +510,7 @@ function checkNextUnlock(): void {
   n = G.nextUnlock(all, 'molo', null);
   ok(!!n && (n.goal.titan !== undefined && n.goal.titan !== 'molo' || n.goal.biome !== undefined), `relevant set filed → fallback to a remaining goal (got ${n?.goal.id})`);
   for (const g of M.GOALS) all.done[g.id] = 1;
-  ok(G.nextUnlock(all, 'molo', 'grideast') === null, 'all 40 filed → null (EVERY PERMIT ISSUED)');
+  ok(G.nextUnlock(all, 'molo', 'grideast') === null, `all ${M.GOALS.length} filed → null (EVERY PERMIT ISSUED)`);
   // goalProgress of a filed goal reads at least the target
   const pd = M.profile.emptyProfile(); pd.done.g_crowd_control = 1;
   ok(G.goalProgress(M.GOALS.find((g) => g.id === 'g_crowd_control')!, pd, null, null) >= TG('g_crowd_control'), 'a filed goal reports ≥ its target');
@@ -553,6 +616,121 @@ function checkTally(): void {
   ok(M.tally.tallyV2(wr.tally).peakRank === wr.titan.rank || M.tally.tallyV2(wr.tally).peakRank === wr.run.peakRank, 'tally peakRank follows the run');
 }
 
+// ─────────────────────────────── E2. gatekeeper goals ───────────────────────────────
+/** GATEKEEPERS §6.5: the six gate goals through the REAL tally (meta/tally.ts) from scripted gate events. */
+function checkGateGoals(): void {
+  section('E2. gatekeeper goals (GATEKEEPERS §6.5) from scripted gate events');
+  const G = M.goals;
+  const goal = (id: string): GoalDef => M.GOALS.find((g) => g.id === id)!;
+  const w = mkWorld('molo', 'grideast');
+  M.world.stepN(w, 1);
+  const T = M.tally;
+  const t = T.tallyV2(w.tally);
+  Object.assign(t, T.createTally());
+  w.enemies.length = 0; w.hazards.length = 0;
+  const step = (evs: SimEvent[], dt = w.dt): void => { w.t += dt; w.tick++; w.events.length = 0; for (const e of evs) w.events.push(e); T.stepTally(w); };
+  const ctx = { titan: 'molo' as TitanId, biome: 'grideast' as BiomeId, result: null, endT: -1 };
+  const prog = (id: string): number => G.goalProgress(goal(id), M.profile.emptyProfile(), w.tally, ctx);
+  const gs = w.gates;
+  const fake = (id: string, slot: number, t0: number): void => {
+    (w as { boss: World['boss'] }).boss = { id, alive: true, role: 'gate', slot, data: { t: t0 } } as unknown as World['boss'];
+  };
+  // nothing happened yet: the timed metrics read 0 ("no value"), nothing is met
+  for (const id of ['g_gate_tipped_off', 'g_gate_hang_up', 'g_gate_over_the_limit', 'g_gate_line_crossed', 'g_gate_without_a_dent']) ok(prog(id) === 0, `${id}: progress 0 before any gate fight (got ${prog(id)})`);
+  ok(G.evalGoals(M.profile.emptyProfile(), w.tally, ctx).length === 0, 'no goal met by an empty tally');
+
+  // ── fight 1: STENCIL-1, tipped over 12 s after its spawn, killed at 30 s without taking damage
+  fake('stencil1', 1, 0);
+  gs.active = 1; gs.spawnT[1] = w.t;
+  step([{ type: 'gateSpawn', gate: 'stencil1', slot: 1, rematch: false }]);
+  (w.boss as unknown as { data: { t: number } }).data.t = 12;
+  step([{ type: 'bossStagger' }]);
+  (w.boss as unknown as { data: { t: number } }).data.t = 18;
+  step([{ type: 'bossStagger' }]);
+  ok(prog('g_gate_tipped_off') === 12, `TIPPED OFF: the FIRST TIPPED OVER 12 s after arrival (got ${prog('g_gate_tipped_off')})`);
+  ok((t.staggersBestFightBy.irongully ?? 0) === 0 && t.staggersThisFight === 0, 'gate staggers never reach the city-boss stagger metrics (HAIRLINE untouched)');
+  step([{ type: 'gateDefeated', gate: 'stencil1', slot: 1, x: 0, z: 0, fightS: 30, rematch: false }]);
+  gs.killT[1] = gs.spawnT[1] + 30; gs.active = 0;
+  ok(prog('g_gate_without_a_dent') === 1, `WITHOUT A DENT: a clean home kill counts (gateCleanKills ${t.gateCleanKills})`);
+  ok(t.bossesDefeated === 0, `a gate kill is not a containment-boss kill (bossesDefeated ${t.bossesDefeated})`);
+  const p1 = M.profile.emptyProfile();
+  const met1 = G.evalGoals(p1, w.tally, ctx);
+  ok(met1.includes('g_gate_tipped_off') && met1.includes('g_gate_without_a_dent') && !met1.includes('g_gate_line_crossed') && !met1.includes('g_gate_over_the_limit'),
+    `live: TIPPED OFF + WITHOUT A DENT met after fight 1 (${met1.join(',')})`);
+  ok(p1.newUnlocks.includes('gate_fresh_coat'), 'TIPPED OFF queues its card Fresh Coat for the NEW ribbon');
+
+  // ── fight 2: CORDON-2, the titan is hurt, stalled once then twice, killed at 40 s
+  fake('cordon2', 2, 0);
+  gs.active = 2; gs.spawnT[2] = w.t;
+  step([{ type: 'gateSpawn', gate: 'cordon2', slot: 2, rematch: false }]);
+  step([{ type: 'titanHurt', dmg: 25, x: 0, z: 0, src: 'shell' }]);
+  step([{ type: 'bossStagger' }]);
+  ok(prog('g_gate_line_crossed') === 1 && !G.goalMet(goal('g_gate_line_crossed'), prog('g_gate_line_crossed')), `LINE CROSSED: 1 STALLED is 1 / 2, not met (got ${prog('g_gate_line_crossed')})`);
+  step([{ type: 'bossStagger' }]);
+  ok(prog('g_gate_line_crossed') === 2 && G.goalMet(goal('g_gate_line_crossed'), 2), `LINE CROSSED: 2 STALLED in one fight met (got ${prog('g_gate_line_crossed')})`);
+  ok(prog('g_gate_tipped_off') === 12, 'a CORDON-2 stall never moves TIPPED OFF');
+  step([{ type: 'gateDefeated', gate: 'cordon2', slot: 2, x: 0, z: 0, fightS: 40, rematch: false }]);
+  gs.killT[2] = gs.spawnT[2] + 40; gs.active = 0;
+  ok(t.gateCleanKills === 1, `a kill after taking damage is not clean (gateCleanKills stays ${t.gateCleanKills})`);
+  ok(prog('g_gate_over_the_limit') === 0, 'OVER THE LIMIT has no value until all three gatekeepers died');
+
+  // ── fight 3: SWITCHBOARD-5 killed at 50 s: HANG UP not met (50 ≥ 40); total 30 + 40 + 50 = 120 < 135 met
+  fake('switchboard5', 3, 0);
+  gs.active = 3; gs.spawnT[3] = w.t;
+  step([{ type: 'gateSpawn', gate: 'switchboard5', slot: 3, rematch: false }]);
+  step([{ type: 'gateDefeated', gate: 'switchboard5', slot: 3, x: 0, z: 0, fightS: 50, rematch: false }]);
+  gs.killT[3] = gs.spawnT[3] + 50; gs.active = 0;
+  ok(prog('g_gate_hang_up') === 50 && !G.goalMet(goal('g_gate_hang_up'), 50), `HANG UP: a 50 s SWITCHBOARD-5 fight is not under 40 s (got ${prog('g_gate_hang_up')})`);
+  ok(Math.abs(prog('g_gate_over_the_limit') - 120) < 1e-9 && G.goalMet(goal('g_gate_over_the_limit'), prog('g_gate_over_the_limit')), `OVER THE LIMIT: 30 + 40 + 50 = 120 s < 135 s met (got ${prog('g_gate_over_the_limit')})`);
+  ok(t.gateKills === 3 && t.gateCleanKills === 2 && t.bossesDefeated === 0, `3 gate kills, 2 clean (SWITCHBOARD-5 was not hurt), 0 containment bosses (${t.gateKills} / ${t.gateCleanKills} / ${t.bossesDefeated})`);
+
+  // ── target edges on the timed goals (lower is better, strictly under the target)
+  const edge = (id: string, v: number): boolean => G.goalMet(goal(id), v);
+  ok(edge('g_gate_hang_up', 39.9) && !edge('g_gate_hang_up', 40) && !edge('g_gate_hang_up', 0) && !edge('g_gate_hang_up', Infinity), 'HANG UP edges: 39.9 met · 40 / 0 / ∞ not');
+  ok(edge('g_gate_tipped_off', 19.9) && !edge('g_gate_tipped_off', 20), 'TIPPED OFF edges: 19.9 met · 20 not');
+  ok(edge('g_gate_over_the_limit', 134.9) && !edge('g_gate_over_the_limit', 135), 'OVER THE LIMIT edges: 134.9 met · 135 not');
+
+  // ── rematch in EXTENDED COVERAGE: counts for REISSUED (life), never for WITHOUT A DENT / the home metrics
+  (w as { endless: World['endless'] }).endless = { startT: w.t, rematches: 0, nextBossT: Infinity, bossIx: 0, nextEliteT: 1e9, killsAt: 0, tonsAt: 0, score: 0 };
+  fake('stencil1', 0, 0);
+  step([{ type: 'gateSpawn', gate: 'stencil1', slot: 0, rematch: true }]);
+  step([{ type: 'gateDefeated', gate: 'stencil1', slot: 0, x: 0, z: 0, fightS: 8, rematch: true }]);
+  ok(t.gateRematches === 1 && t.gateCleanKills === 2 && Math.abs(prog('g_gate_over_the_limit') - 120) < 1e-9, `a rematch win: gateRematches 1, clean kills stay 2, OVER THE LIMIT stays 120 (${t.gateRematches} / ${t.gateCleanKills})`);
+  ok(G.evalGoals(M.profile.emptyProfile(), w.tally, ctx).every((id) => id !== 'g_gate_reissued'), 'REISSUED is a life goal: never evaluated live');
+  w.run.result = 'clear'; w.run.endT = 600;
+  const pa = G.applyRunToProfile(M.profile.emptyProfile(), w, 'clear');
+  ok(pa.profile.life.gateRematches === 1 && pa.newly.includes('g_gate_reissued') && pa.profile.newUnlocks.includes('gate_carbon_copy'), `run end: life.gateRematches 1, REISSUED filed, Carbon Copy queued (${pa.profile.life.gateRematches})`);
+  for (const id of ['g_gate_tipped_off', 'g_gate_line_crossed', 'g_gate_without_a_dent', 'g_gate_over_the_limit']) ok(pa.newly.includes(id), `run end files ${id}`);
+  ok(!pa.newly.includes('g_gate_hang_up') && pa.profile.best.g_gate_hang_up === 50, `HANG UP not filed; best 50 s on file (${pa.profile.best.g_gate_hang_up})`);
+  ok(pa.profile.best.g_gate_tipped_off === 12 && pa.profile.best.g_gate_over_the_limit === 120 && pa.profile.best.g_gate_line_crossed === 2, 'gate bests filed (12 s · 120 s · 2 stalls)');
+  const pb = G.applyRunToProfile(pa.profile, w, 'clear');
+  ok(pb.profile.life.gateRematches === 1 && pb.newly.length === 0, `the same World filed again: gateRematches stays 1 (${pb.profile.life.gateRematches})`);
+  // KEEP GOING: a second rematch won, then the death files the World again → only the delta is added
+  fake('cordon2', 0, 0);
+  step([{ type: 'gateSpawn', gate: 'cordon2', slot: 0, rematch: true }]);
+  step([{ type: 'gateDefeated', gate: 'cordon2', slot: 0, x: 0, z: 0, fightS: 20, rematch: true }]);
+  w.run.result = 'dead'; w.run.endT = 900;
+  const pc = G.applyRunToProfile(pb.profile, w, 'dead');
+  ok(pc.profile.life.gateRematches === 2 && G.goalProgress(goal('g_gate_reissued'), pc.profile, null, null) === 2, `endless death: +1 rematch only (life.gateRematches ${pc.profile.life.gateRematches})`);
+  const pd = G.applyRunToProfile(pc.profile, w, 'dead');
+  ok(pd.profile.life.gateRematches === 2, 'endless death re-applied: no change');
+  // a better HANG UP in a later run replaces the best (lower is better)
+  const w2 = mkWorld('voltkite', 'lockwater');
+  M.world.stepN(w2, 1);
+  Object.assign(T.tallyV2(w2.tally), T.createTally());
+  w2.tally.gateSwitchFastS = 33; w2.run.result = 'dead'; w2.run.endT = 420;
+  const pe = G.applyRunToProfile(pd.profile, w2, 'dead');
+  ok(pe.profile.best.g_gate_hang_up === 33 && pe.newly.includes('g_gate_hang_up'), `HANG UP 33 s in a later run: best 50 → ${pe.profile.best.g_gate_hang_up}, filed`);
+  // the perk is gated on WITHOUT A DENT
+  ok(G.runMetaFor(M.profile.emptyProfile(), 'molo', 'perk_deferred_maintenance', 0).perk === null, 'DEFERRED MAINTENANCE refused on a fresh profile');
+  ok(G.runMetaFor(pe.profile, 'molo', 'perk_deferred_maintenance', 0).perk === 'perk_deferred_maintenance', 'DEFERRED MAINTENANCE granted once WITHOUT A DENT is filed');
+  ok(M.goals.unlockLabel({ kind: 'perk', id: 'perk_deferred_maintenance' }) === 'DEFERRED MAINTENANCE' && M.goals.unlockLabel({ kind: 'card', id: 'gate_call_waiting' }) === 'Call Waiting', 'unlock labels: DEFERRED MAINTENANCE · Call Waiting');
+  // the goal list shown in the goals screen: the gate goals are general, so every titan sees them
+  const nu = G.nextUnlock((() => { const q = M.profile.emptyProfile(); q.best.g_gate_hang_up = 40 / 0.97; return q; })(), 'briarwick', 'whitestacks');
+  ok(nu?.goal.id === 'g_gate_hang_up', `nextUnlock ranks a gate goal like any general goal (HANG UP at 0.97 → got ${nu?.goal.id})`);
+  (w as { boss: World['boss'] }).boss = null;
+}
+
 // ─────────────────────────────── F. perks ───────────────────────────────
 function checkPerks(): void {
   section('F. perks');
@@ -573,6 +751,27 @@ function checkPerks(): void {
   ok(S(si, 'armor') === S(base, 'armor') + PERKS.safetyArmor && si.titan.hp === si.titan.maxHp, `SAFETY INSPECTION: armor ${S(base, 'armor')} → ${S(si, 'armor')}`);
   const tl = mk('perk_tip_line');
   ok(tl.meta.perk === 'perk_tip_line', 'ADVANCE TIP-LINE is on w.meta.perk (read by the map sim / marker view)');
+  // DEFERRED MAINTENANCE (GATEKEEPERS §6.5): every gatekeeper arrives with its meter at 0.25; the city boss never
+  const dm = mk('perk_deferred_maintenance');
+  ok(dm.meta.perk === 'perk_deferred_maintenance' && dm.titan.hp === dm.titan.maxHp && S(dm, 'armor') === S(base, 'armor') && S(dm, 'rerolls') === S(base, 'rerolls'),
+    'DEFERRED MAINTENANCE is on w.meta.perk and changes no titan stat at createWorld');
+  const meterOf = (w: World, spawn: (w: World) => void): { meter: number; role: string } => {
+    (w as { boss: World['boss'] }).boss = null;
+    spawn(w);
+    const b = w.boss;
+    const r = { meter: b ? b.meter : NaN, role: b ? b.role : 'none' };
+    (w as { boss: World['boss'] }).boss = null;
+    return r;
+  };
+  for (const g of ['stencil1', 'cordon2', 'switchboard5'] as const) {
+    const on = meterOf(dm, (w) => M.bosses.spawnGate(w, g, 0));
+    const off = meterOf(base, (w) => M.bosses.spawnGate(w, g, 0));
+    ok(on.role === 'gate' && on.meter === 0.25 && off.role === 'gate' && off.meter === 0, `DEFERRED MAINTENANCE: ${g} arrives at meter ${on.meter} (0.25); without the perk ${off.meter}`);
+  }
+  const rm = meterOf(dm, (w) => M.bosses.spawnGate(w, 'cordon2', 2));
+  ok(rm.meter === 0.25, `DEFERRED MAINTENANCE: a gatekeeper rematch also arrives at 0.25 (${rm.meter})`);
+  const cb = meterOf(dm, (w) => M.bosses.spawnBoss(w, 'parkade6'));
+  ok(cb.role === 'main' && cb.meter === 0, `DEFERRED MAINTENANCE never touches the city boss (PARKADE-6 meter ${cb.meter}, role ${cb.role})`);
   // determinism of perk worlds: same seed + meta + inputs ⇒ same state
   const d1 = mk('perk_warm_mic'), d2 = mk('perk_warm_mic');
   runBot(d1, 90 * SIM_HZ, null); runBot(d2, 90 * SIM_HZ, null);
@@ -741,7 +940,10 @@ function checkReachability(): void {
   console.log(`  run-scope goals met by the gate bot (${metAll.size} of ${runGoals.length}):`);
   for (const g of runGoals) {
     const where = metAll.get(g.id);
-    const best = Math.max(0, ...runs.map((r) => (g.titan && r.titan !== g.titan) || (g.biome && r.biome !== g.biome) ? 0 : M.goals.goalProgress(g, M.profile.emptyProfile(), r.tally, { titan: r.titan, biome: r.biome, result: r.result === 'timeout' ? null : r.result, endT: r.endT })));
+    const vals = runs.map((r) => (g.titan && r.titan !== g.titan) || (g.biome && r.biome !== g.biome) ? 0 : M.goals.goalProgress(g, M.profile.emptyProfile(), r.tally, { titan: r.titan, biome: r.biome, result: r.result === 'timeout' ? null : r.result, endT: r.endT }));
+    // lower-is-better (EARLY CLOSING, the timed gate goals): the best is the LOWEST recorded time (0 = none)
+    const pos = vals.filter((v) => v > 0);
+    const best = g.lowerIsBetter ? (pos.length ? Math.min(...pos) : 0) : Math.max(0, ...vals);
     console.log(`    ${where ? 'MET ' : '    '} ${g.id.padEnd(26)} best ${Number.isInteger(best) ? best : best.toFixed(2)} / ${g.target}${where ? '  (' + where.slice(0, 4).join(', ') + (where.length > 4 ? ', …' : '') + ')' : ''}`);
   }
   ok(metAll.size >= 10, `(b) ≥ 10 run-scope goals met in the 12-run matrix (${metAll.size})`);
@@ -749,7 +951,7 @@ function checkReachability(): void {
 
 // ─────────────────────────────── H. perk bands ───────────────────────────────
 function checkPerkBands(): void {
-  section(`H. perk rank bands (4 titans × GRID-EAST × 6 perks + none, seed ${SEED})`);
+  section(`H. perk rank bands (4 titans × GRID-EAST × ${PERK_IDS.length} perks + none, seed ${SEED})`);
   console.log(`  ${'titan'.padEnd(10)} ${'perk'.padEnd(24)}   II  III   IV    V bossT result   endT`);
   let vio = 0;
   for (const t of TITAN_IDS) {
@@ -776,7 +978,7 @@ async function main(): Promise<number> {
   const wall0 = performance.now();
   const steps: [string, () => void][] = [
     ['catalogue', checkCatalogue], ['profile', checkProfileFuzz], ['ledger', checkLedger], ['nextUnlock', checkNextUnlock],
-    ['tally', checkTally], ['perks', checkPerks],
+    ['tally', checkTally], ['gateGoals', checkGateGoals], ['perks', checkPerks],
   ];
   if (!QUICK) steps.push(['reachability', checkReachability], ['perkBands', checkPerkBands]);
   for (const [name, fn] of steps) {

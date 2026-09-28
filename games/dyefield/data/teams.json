@@ -1,5 +1,5 @@
 {
-  "_doc": "Crews. id is the byte stored in the paint atlas (0 = neutral). side A spawns at maps[].spawns.A. Colors are sRGB hex. 'mark' is the colorblind-safe SHAPE shown with every team color (crests, minimap, kill feed, HUD).",
+  "_doc": "Crews. id is the byte stored in the paint atlas (0 = neutral). side A spawns at maps[].spawns.A. Colors are sRGB hex. 'mark' is the colorblind-safe SHAPE shown with every team color (crests, minimap, kill feed, HUD). 'ffa' (FREE-FOR-ALL, CONTRACT_FFA §F1): 8 crews, ids 1..8 in the atlas byte, one per runner; same fields as a team minus 'side'; an FFA crew's shown name is its runner's name ('name' here is only the colour label for UI chips); FFA has no colorblind swap (the marks carry identity). Read through core/data.ts crewDef / crewDyeHex / FFA_CREWS.",
   "neutral": { "id": 0, "name": "NEUTRAL" },
   "teams": [
     {
@@ -27,6 +27,104 @@
       "uiInk": "#0E0833",
       "mark": "wave-peak",
       "markGlyph": "▲"
+    }
+  ],
+  "ffa": [
+    {
+      "id": 1,
+      "key": "amber",
+      "name": "AMBER",
+      "dye": "#FF8A1F",
+      "dyeDeep": "#D9570A",
+      "dyeGloss": "#FFD08A",
+      "ui": "#FFA84A",
+      "uiInk": "#2A1300",
+      "mark": "sun-disc",
+      "markGlyph": "◉"
+    },
+    {
+      "id": 2,
+      "key": "violet",
+      "name": "VIOLET",
+      "dye": "#5B4BF0",
+      "dyeDeep": "#3423B8",
+      "dyeGloss": "#B7AEFF",
+      "ui": "#8A7CFF",
+      "uiInk": "#0E0833",
+      "mark": "wave-peak",
+      "markGlyph": "▲"
+    },
+    {
+      "id": 3,
+      "key": "lime",
+      "name": "LIME",
+      "dye": "#7ACC29",
+      "dyeDeep": "#619223",
+      "dyeGloss": "#B5E991",
+      "ui": "#95DE5A",
+      "uiInk": "#172608",
+      "mark": "block",
+      "markGlyph": "■"
+    },
+    {
+      "id": 4,
+      "key": "magenta",
+      "name": "MAGENTA",
+      "dye": "#E0409E",
+      "dyeDeep": "#B1247F",
+      "dyeGloss": "#F09FC7",
+      "ui": "#E870B0",
+      "uiInk": "#27061A",
+      "mark": "diamond",
+      "markGlyph": "◆"
+    },
+    {
+      "id": 5,
+      "key": "sky",
+      "name": "SKY",
+      "dye": "#22B8E0",
+      "dyeDeep": "#1D8EA2",
+      "dyeGloss": "#91D3F0",
+      "ui": "#59C3E8",
+      "uiInk": "#062128",
+      "mark": "star",
+      "markGlyph": "★"
+    },
+    {
+      "id": 6,
+      "key": "coral",
+      "name": "CORAL",
+      "dye": "#EE4A3C",
+      "dyeDeep": "#C31C19",
+      "dyeGloss": "#F7AD9E",
+      "ui": "#F27E6D",
+      "uiInk": "#2A0704",
+      "mark": "cross",
+      "markGlyph": "✚"
+    },
+    {
+      "id": 7,
+      "key": "sunflower",
+      "name": "SUNFLOWER",
+      "dye": "#F2CF1A",
+      "dyeDeep": "#B59012",
+      "dyeGloss": "#F9F18C",
+      "ui": "#F5E353",
+      "uiInk": "#2B2502",
+      "mark": "pentagon",
+      "markGlyph": "⬟"
+    },
+    {
+      "id": 8,
+      "key": "jade",
+      "name": "JADE",
+      "dye": "#2EBF8F",
+      "dyeDeep": "#268962",
+      "dyeGloss": "#91E5D0",
+      "ui": "#5AD7B4",
+      "uiInk": "#09251C",
+      "mark": "hexagon",
+      "markGlyph": "⬢"
     }
   ],
   "colorblind": {

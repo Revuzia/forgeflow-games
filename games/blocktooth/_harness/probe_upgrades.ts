@@ -20,6 +20,9 @@
 //               FRESH pool (no locked / evo / perk card needed), 'ultCharge' executes. The draft helpers
 //               below mirror the v2 isEligible (evo / perk / locked / banished / owned-evolution rules).
 //               Evolution offers, banish and lock are asserted by probe_evolutions.ts.
+//   GATE (lane K2c, GATEKEEPERS §6.5) — the five locked gatekeeper unlock cards (data/upgrades_gate.ts):
+//               appended to UPGRADES once with a generated desc, locked, no titan / evo / perk / minRank,
+//               raw desc empty, never in the FRESH pool; the v1 "no v2 flag" rule skips them like the v2 cards.
 //
 // Parallel-build fallback: if (and only if) a module another lane owns does not exist on disk yet, a
 // PROBE-LOCAL stub stands in for it (see STUBS) and the run is labelled STUBBED. Once the real modules
@@ -105,6 +108,7 @@ function section(t: string): void { console.log(`\n== ${t} ==`); }
 // ─────────────────────────────── load modules ───────────────────────────────
 const DATA = await import('../src/data/upgrades.ts');
 const V2DATA = await import('../src/data/upgrades_v2.ts');
+const GATEDATA = await import('../src/data/upgrades_gate.ts');
 const EVODATA = await import('../src/data/evolutions.ts');
 const STATS = await import('../src/upgrades/stats.ts');
 const { TITANS } = await import('../src/data/titans.ts');
@@ -121,6 +125,8 @@ const ALL_ACTIONS: readonly TriggerAction[] = [
 ];
 /** v2 (FEATURES_V2 §7): ids of the cards data/upgrades_v2.ts appends (the v1 kit-stat rule is v1-only). */
 const V2_IDS: ReadonlySet<string> = new Set(V2DATA.UPGRADES_V2_RAW.map((u) => u.id));
+/** GATEKEEPERS §6.5 (K2c): the five locked gatekeeper cards — later than v2, so outside the v1 rules too */
+const GATE_IDS_U: ReadonlySet<string> = new Set(GATEDATA.UPGRADES_GATE.map((u) => u.id));
 /** v2: a card the draft can roll for a FRESH profile (no unlocks) — not an evolution, perk or locked card. */
 const inFreshPool = (u: UpgradeDef): boolean => !u.evo && !u.perk && !u.locked;
 const ALL_ONS: readonly TriggerOn[] = [
@@ -306,7 +312,7 @@ section('A2. V2 CARDS');
   ok(unlock.length === 24, `v2: 24 unlockable cards (§7.6, got ${unlock.length})`);
   ok(perks.length === 2, 'v2: 2 perk cards');
   // v1 cards are untouched by v2 flags
-  for (const u of UPGRADES) if (!V2_IDS.has(u.id)) ok(!u.evo && !u.perk && !u.locked, `v1 card ${u.id} carries no v2 flag`);
+  for (const u of UPGRADES) if (!V2_IDS.has(u.id) && !GATE_IDS_U.has(u.id)) ok(!u.evo && !u.perk && !u.locked, `v1 card ${u.id} carries no v2 flag`);
   // evolution shape + recipes
   const bases = new Set<string>();
   for (const e of evos) {
@@ -340,6 +346,25 @@ section('A2. V2 CARDS');
     const u = UPGRADE_BY_ID[id];
     if (u) console.log(`  [${u.rarity}${u.evo ? ' EVO' : ''}${u.locked ? ' locked' : ''}] ${u.name} ×${u.maxStacks}: ${u.desc}`);
   }
+}
+
+// ── GATE cards (lane K2c, GATEKEEPERS §6.5) ──
+section('A3. GATEKEEPER CARDS');
+{
+  const raw = GATEDATA.UPGRADES_GATE;
+  ok(raw.length === 5, `gate: 5 cards (got ${raw.length})`);
+  ok(raw.map((u) => u.id).join() === 'gate_fresh_coat,gate_sawhorse_stack,gate_call_waiting,gate_blanket_exemption,gate_carbon_copy', 'gate: the §6.5 ids in table order');
+  ok(raw.every((u) => u.desc === ''), 'gate: raw desc is empty (data/upgrades.ts generates it)');
+  for (const r of raw) {
+    const d = UPGRADE_BY_ID[r.id];
+    ok(!!d && UPGRADES.filter((u) => u.id === r.id).length === 1, `${r.id}: appended to UPGRADES exactly once`);
+    if (!d) continue;
+    ok(d.locked === true && !d.evo && !d.perk && d.titan === undefined && d.minRank === undefined, `${r.id}: locked, generic, no evo / perk / minRank`);
+    ok(!inFreshPool(d), `${r.id}: never in the FRESH pool (offered only when RunMeta.unlocked lists it)`);
+    ok(d.desc === describe(d.effects, d.maxStacks) && d.desc.length > 0, `${r.id}: desc = describe(effects) ('${d.desc}')`);
+    ok(d.effects.length > 0 && d.maxStacks >= 1, `${r.id}: has effects, maxStacks ${d.maxStacks}`);
+  }
+  for (const r of raw) console.log(`  [${r.rarity} locked] ${UPGRADE_BY_ID[r.id]?.name} ×${r.maxStacks}: ${UPGRADE_BY_ID[r.id]?.desc}`);
 }
 
 // ═══════════════════════════════ B. STATS (hand-built World) ═══════════════════════════════

@@ -14,7 +14,7 @@
 // Everything no-ops before AudioEngine.unlock() and without an AudioContext.
 
 import type {
-  AlertKey, BossId, DamageKind, EnemyKind, ObjectiveKind, PowerUpKind, ProjectileKind, PropKind, SimEvent, TelegraphStyle, TitanId, World,
+  AlertKey, BossId, DamageKind, EnemyKind, GateId, ObjectiveKind, PowerUpKind, ProjectileKind, PropKind, SimEvent, TelegraphStyle, TitanId, World,
 } from '../core/types.ts';
 import type { AudioEngine } from './audio.ts';
 import {
@@ -295,6 +295,9 @@ const GAP: Record<string, number> = {
   // v2 (L6): UPROAR, objectives, power-ups, revive, endless rematch
   ultReady: 1.5, ultFire: 0.5, ultPulse: 0.12, objSpawn: 1.2, objDone: 0.4, puSpawn: 0.6, puGet: 0.25, puEnd: 0.5,
   revive: 2, endlessBoss: 6,
+  // GATEKEEPERS (§6.8, lane K2a)
+  gateArrive: 3, gateLock: 0.8, gateEsc: 2, gateDown: 3, gateRam: 0.5, gatePhase: 1.2, gateStag: 1.5, finale: 6,
+  gateRoll: 0.3, gateSpray: 0.28, gateTread: 0.18, gateCrawl: 0.4, gateServo: 1.4,
   ui_banish: 0.15, ui_lock: 0.1, ui_goal: 0.35,
   ui_move: 0.03, ui_confirm: 0.05, ui_back: 0.05, ui_draft: 0.2, ui_pick: 0.15, ui_slate: 0.5, ui_print: 0.5,
 };
@@ -347,6 +350,8 @@ export class Sfx {
   private tokens = LOW_BURST; private tokT = 0;
   /** PARKADE-6 step tracker (hydraulic hiss per tripod step) */
   private pkInit = false; private pkLx = 0; private pkLz = 0; private pkAcc = 0;
+  /** GATEKEEPERS: the live gatekeeper's motion tracker (wheels / treads / crawler voices) */
+  private gtInit = false; private gtLx = 0; private gtLz = 0; private gtAcc = 0; private gtCrown = 0;
 
   constructor(engine: AudioEngine) { this.eng = engine; }
 
@@ -377,6 +382,7 @@ export class Sfx {
       }
       if (pickN > 0) this.pickupTicks(pickN, pickScrap > pickN / 2, pickX / pickN, pickZ / pickN);
       if (w.boss && this.bossId === 'parkade6') this.parkadeTick(w.boss); else this.pkInit = false;
+      if (w.boss && w.boss.role === 'gate') this.gateTick(w, w.boss); else this.gtInit = false;
     } catch {
       // cosmetic subsystem: never let a synthesis error reach the game loop
     }
@@ -538,10 +544,31 @@ export class Sfx {
         if (this.gate('siren', now)) this.bossSiren();
         if (e.boss === 'parkade6' && w.boss && this.gate('pkBeep', now)) this.parkadeBeeper(w.boss.x, w.boss.z);
         break;
-      case 'bossPhase': if (this.gate('phase', now)) this.phaseSting(e.phase); break;
-      case 'bossAttack': if (this.gate('bossAtk', now)) this.bossAttack(e.attack, e.x, e.z); break;
-      case 'bossHit': if (this.gate('bossHit', now)) this.bossHit(e.part, e.x, e.z); break;
-      case 'bossStagger': if (this.gate('stagger', now)) this.stagger(); break;
+      // GATEKEEPERS §6.7/§6.8: phase / stagger / attacks / hits route by role — a gatekeeper never plays the city
+      // boss's phaseSting (its phase change is a short chirp) and has its own stagger voices
+      case 'bossPhase':
+        if (w.boss && w.boss.role === 'gate') { if (this.gate('gatePhase', now)) this.gatePhaseChirp(e.phase); }
+        else if (this.gate('phase', now)) this.phaseSting(e.phase);
+        break;
+      case 'bossAttack':
+        if (!this.gate('bossAtk', now)) break;
+        if (w.boss && w.boss.role === 'gate') this.gateAttack(w.boss.id as GateId, e.attack, e.x, e.z);
+        else this.bossAttack(e.attack, e.x, e.z);
+        break;
+      case 'bossHit':
+        if (!this.gate('bossHit', now)) break;
+        if (w.boss && w.boss.role === 'gate') this.gateHit(e.part, e.x, e.z); else this.bossHit(e.part, e.x, e.z);
+        break;
+      case 'bossStagger':
+        if (w.boss && w.boss.role === 'gate') { if (this.gate('gateStag', now)) this.gateStagger(w.boss.id as GateId); }
+        else if (this.gate('stagger', now)) this.stagger();
+        break;
+      case 'gateSpawn': if (this.gate('gateArrive', now)) this.gateArrival(e.gate, w); break;
+      case 'gateLocked': if (this.gate('gateLock', now)) this.padlock(); break;
+      case 'gateEscalate': if (this.gate('gateEsc', now)) this.klaxonBlip(); break;
+      case 'gateDefeated': if (this.gate('gateDown', now)) this.approved(e.x, e.z); break;
+      case 'gateRam': if (this.gate('gateRam', now)) this.ramCrunch(e.x, e.z); break;
+      case 'finale': if (e.on && this.gate('finale', now)) this.brassSwell(); break;
       case 'bossDefeated': if (this.gate('bossDown', now)) this.bossDown(e.x, e.z); break;
       case 'leash': if (this.gate('leash', now)) this.leash(e.on, e.x, e.z); break;
       case 'upgradeProc': if (this.gate('proc', now)) this.proc(e.x, e.z); break;
@@ -1502,6 +1529,228 @@ export class Sfx {
     const o = osc(b, 'sawtooth', 38, b.t, b.t + 3.0);                                        // diesel idle
     const a = gn(b); envAHR(a.gain, b.t, 0.18, 0.3, 2.0, 0.6);
     wire(o, mkGrit(b.ac, 0.4), flt(b, 'lowpass', 420), a, b.o);
+  }
+
+  // ───────────── GATEKEEPERS (§6.8, lane K2a): procedural, voice-limited ─────────────
+
+  /** Arrival stings per gatekeeper (gateSpawn). */
+  private gateArrival(id: GateId, w: World): void {
+    const b0 = w.boss;
+    const s = b0 ? this.spatial(b0.x, b0.z) : { g: 1, pan: 0 };
+    const g = Math.max(0.55, s.g);
+    const b = this.voice('gateArrive', 4, 3.2, g * 0.5, s.pan, 0.3); if (!b) return;
+    const t = b.t;
+    if (id === 'stencil1') {
+      // a reversing beeper, an aerosol hiss, a two-tone chime
+      for (let i = 0; i < 3; i++) beep(b, b.o, t + i * 0.42, 'square', 1120, 0.22, 0.3, 3000);
+      burst(b, b.o, t + 1.3, 'white', 'highpass', 5200, 0.8, 0.02, 0.55, 0.45, 8000, 1);
+      bell(b, b.o, t + 1.95, mtof(79), 0.7, 0.35, 2.0, 0.8);
+      bell(b, b.o, t + 2.2, mtof(75), 0.9, 0.35, 2.0, 0.8);
+    } else if (id === 'cordon2') {
+      // a klaxon whoop, a track clank, a megaphone crackle
+      const o = osc(b, 'square', 220, t, t + 0.75); sweep(o.frequency, t, 220, 560, 0.6);
+      const a = gn(b); envAHR(a.gain, t, 0.35, 0.03, 0.55, 0.15); wire(o, flt(b, 'bandpass', 900, 1.2), a, b.o);
+      crackle(b, b.o, t + 0.8, 0.7, 12, 900, 2.5, 0.8, true);
+      for (let i = 0; i < 3; i++) clang(b, b.o, t + 0.85 + i * 0.22, rnd(110, 150), 1.41, 4, 0.3, 0.35);
+      burst(b, b.o, t + 1.7, 'white', 'bandpass', 1600, 3, 0.01, 0.7, 0.4);
+      crackle(b, b.o, t + 1.7, 0.7, 26, 2200, 1.5, 0.5);
+    } else {
+      // a rising ring tone, a four-note hold-music fragment, relay chirps
+      for (let i = 0; i < 2; i++) {
+        const t0 = t + i * 0.55;
+        const r1 = osc(b, 'sine', 440 + i * 60, t0, t0 + 0.4), r2 = osc(b, 'sine', 480 + i * 60, t0, t0 + 0.4);
+        const am = osc(b, 'square', 20, t0, t0 + 0.4); const amg = gn(b, 0.5); wire(am, amg);
+        const a = gn(b); envAHR(a.gain, t0, 0.3, 0.01, 0.36, 0.03); amg.connect(a.gain);
+        r1.connect(a); r2.connect(a); a.connect(b.o);
+      }
+      const fig = [72, 76, 79, 77];
+      fig.forEach((n, i) => {
+        const tn = t + 1.25 + i * 0.26;
+        const o = osc(b, 'triangle', mtof(n), tn, tn + 0.24);
+        const a = gn(b); envAHR(a.gain, tn, 0.22, 0.01, 0.18, 0.05); wire(o, flt(b, 'lowpass', 1800), a, b.o);
+      });
+      for (let i = 0; i < 5; i++) blip(b, b.o, t + 2.35 + i * 0.07, 'square', rnd(1800, 3200), 0.04, 0.12, rnd(2400, 4000));
+    }
+  }
+
+  /** Attack voices (bossAttack) per gatekeeper; unknown ids fall back to a short work-site horn. */
+  private gateAttack(id: GateId, attack: string, x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const g = Math.max(0.5, s.g);
+    const b = this.voice('bossAtk', 3, 1.6, g * 0.5, s.pan, 0.25); if (!b) return;
+    const t = b.t;
+    switch (attack) {
+      case 'stripeRun': case 'uTurn': {   // engine rev + aerosol hiss (the lane is being painted)
+        const o = osc(b, 'sawtooth', 70, t, t + 1.3); sweep(o.frequency, t, 70, 150, 1.1);
+        const a = gn(b); envAHR(a.gain, t, 0.35, 0.15, 0.8, 0.3); wire(o, mkGrit(b.ac, 0.5), flt(b, 'lowpass', 900), a, b.o);
+        burst(b, b.o, t + 0.05, 'white', 'highpass', 4800, 0.8, 0.03, 0.9, 0.35);
+        return;
+      }
+      case 'doubleLine': burst(b, b.o, t, 'white', 'highpass', 5000, 0.8, 0.03, 1.1, 0.45); burst(b, b.o, t + 0.25, 'white', 'highpass', 6200, 0.8, 0.03, 0.8, 0.3); return;
+      case 'paintBuckets': {               // flinger clunks + whooshes
+        for (let i = 0; i < 3; i++) { thump(b, b.o, t + i * 0.15, 160, 90, 0.08, 0.5); whoosh(b, b.o, t + i * 0.15 + 0.02, 0.35, 500, 1600, 1.2, 0.35); }
+        return;
+      }
+      case 'shieldShove': {                // engine roar + the panels lock (slam)
+        const o = osc(b, 'sawtooth', 48, t, t + 1.4); sweep(o.frequency, t, 48, 95, 1.2);
+        const a = gn(b); envAHR(a.gain, t, 0.45, 0.2, 0.9, 0.3); wire(o, mkGrit(b.ac, 0.7), flt(b, 'lowpass', 700), a, b.o);
+        clang(b, b.o, t + 0.1, 130, 1.41, 6, 0.45, 0.55); thump(b, b.o, t + 0.1, 90, 50, 0.25, 0.7);
+        return;
+      }
+      case 'sawhorseToss': { crackle(b, b.o, t, 0.6, 14, 1300, 2.2, 0.7); for (let i = 0; i < 3; i++) woodCrack(b, b.o, t + 0.1 + i * 0.2, 0.35); return; }
+      case 'backfire': {                   // stack pops
+        for (let i = 0; i < 3; i++) { boom(b, b.o, t + i * 0.13, 0.35, 0.45); crackle(b, b.o, t + i * 0.13, 0.15, 6, 2200, 1.5, 0.3); }
+        return;
+      }
+      case 'squadBehind': { burst(b, b.o, t, 'white', 'bandpass', 1500, 3, 0.01, 0.6, 0.45); crackle(b, b.o, t, 0.6, 24, 2200, 1.5, 0.45); return; }
+      case 'callIn': { for (let i = 0; i < 6; i++) blip(b, b.o, t + i * 0.06, 'square', rnd(1800, 3400), 0.04, 0.16, rnd(2400, 4200)); whoosh(b, b.o, t + 0.35, 0.5, 400, 1800, 1, 0.3); return; }
+      case 'putThrough': {                 // two rings of the line
+        for (let i = 0; i < 2; i++) { const t0 = t + i * 0.45; beep(b, b.o, t0, 'sine', 440, 0.3, 0.3, 3000); beep(b, b.o, t0, 'sine', 480, 0.3, 0.25, 3000); }
+        return;
+      }
+      case 'holdMusic': {                  // the hold-music fragment, pushed through the deck horns
+        const fig = [72, 76, 79, 77, 76, 72];
+        fig.forEach((n, i) => {
+          const tn = t + i * 0.2;
+          const o = osc(b, 'square', mtof(n), tn, tn + 0.19);
+          const a = gn(b); envAHR(a.gain, tn, 0.2, 0.01, 0.15, 0.04); wire(o, flt(b, 'bandpass', 1400, 1.5), a, b.o);
+        });
+        return;
+      }
+      case 'relocate': {                   // crawler rumble + a reversing beeper
+        rumble(b, b.o, t, 0.2, 0.9, 0.4, 260, 110, 0.45);
+        for (let i = 0; i < 2; i++) beep(b, b.o, t + i * 0.5, 'square', 1040, 0.25, 0.3, 3000);
+        return;
+      }
+      default: this.horn(b, t, 0.5, 0.35);
+    }
+  }
+
+  /** A hit on a gatekeeper part: the drum thonks, the pack zaps, a dish pings, the wall panels clang. */
+  private gateHit(part: string, x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('bossHit', 1, 0.5, Math.max(0.4, s.g) * 0.3, s.pan, 0.2); if (!b) return;
+    if (part === 'drum') { thump(b, b.o, b.t, 190, 95, 0.22, 0.9, 'triangle'); burst(b, b.o, b.t, 'pink', 'lowpass', 900, 1, 0.002, 0.12, 0.4); }
+    else if (part === 'pack') { this.zapInto(b, 0.5); clang(b, b.o, b.t, rnd(260, 320), 1.41, 4, 0.25, 0.35); }
+    else if (part.startsWith('dish')) { bell(b, b.o, b.t, rnd(900, 1300), 0.35, 0.4, 2.7, 1.2); }
+    else if (part.startsWith('wall')) { clang(b, b.o, b.t, rnd(120, 170), 2.1, 6, 0.4, 0.6); }
+    else { clang(b, b.o, b.t, rnd(230, 320), 1.41, 5, 0.3, 0.6); burst(b, b.o, b.t, 'white', 'bandpass', 2500, 1, 0.001, 0.03, 0.4); }
+  }
+
+  /** Stagger voices: a paint glug (TIPPED OVER), an engine cough (STALLED), a dial tone dropping (LINES DOWN). */
+  private gateStagger(id: GateId): void {
+    const b = this.voice('gateStag', 4, 2.2, 0.55, 0, 0.3); if (!b) return;
+    const t = b.t;
+    if (id === 'stencil1') {
+      thump(b, b.o, t, 120, 60, 0.3, 0.8);                                        // the cart hits its side
+      for (let i = 0; i < 6; i++) blip(b, b.o, t + 0.35 + i * 0.19, 'sine', rnd(150, 230), 0.14, 0.45, 70, 0.01, 700);   // glug
+    } else if (id === 'cordon2') {
+      for (let i = 0; i < 4; i++) { burst(b, b.o, t + i * 0.28, 'brown', 'lowpass', 600, 1, 0.005, 0.12, 0.6, 200); thump(b, b.o, t + i * 0.28, 70, 40, 0.12, 0.5); }
+      const o = osc(b, 'sawtooth', 40, t, t + 1.4); sweep(o.frequency, t, 40, 18, 1.3);
+      const a = gn(b); envAHR(a.gain, t, 0.25, 0.05, 0.8, 0.5); wire(o, mkGrit(b.ac, 0.6), flt(b, 'lowpass', 400), a, b.o);
+    } else {
+      const d1 = osc(b, 'sine', 350, t, t + 1.6), d2 = osc(b, 'sine', 440, t, t + 1.6);
+      sweep(d1.frequency, t + 0.5, 350, 120, 1.0); sweep(d2.frequency, t + 0.5, 440, 150, 1.0);
+      const a = gn(b); envAHR(a.gain, t, 0.3, 0.02, 1.0, 0.5); d1.connect(a); d2.connect(a); a.connect(b.o);
+      for (let i = 0; i < 3; i++) beep(b, b.o, t + 1.6 + i * 0.18, 'sine', 480, 0.09, 0.2, 2500);   // busy tone
+    }
+  }
+
+  /** A gatekeeper's phase change: a short two-note chirp (never the city boss's phaseSting). */
+  private gatePhaseChirp(phase: number): void {
+    const b = this.voice('gatePhase', 3, 0.6, 0.35, 0, 0.2); if (!b) return;
+    const root = phase >= 3 ? 79 : 76;
+    beep(b, b.o, b.t, 'square', mtof(root), 0.09, 0.3, 2600);
+    beep(b, b.o, b.t + 0.11, 'square', mtof(root + 5), 0.12, 0.3, 2600);
+  }
+
+  /** gateLocked: a padlock ratchet (a run of clicks, then the clunk). */
+  private padlock(): void {
+    const b = this.voice('gateLock', 4, 0.9, 0.45, 0, 0.15); if (!b) return;
+    crackle(b, b.o, b.t, 0.4, 8, 3200, 3, 0.8, true);
+    clang(b, b.o, b.t + 0.45, 520, 2.4, 3, 0.25, 0.5);
+    thump(b, b.o, b.t + 0.45, 180, 90, 0.1, 0.6);
+  }
+
+  /** gateEscalate: a double klaxon blip. */
+  private klaxonBlip(): void {
+    const b = this.voice('gateEsc', 4, 0.9, 0.45, 0, 0.2); if (!b) return;
+    for (let i = 0; i < 2; i++) {
+      const t0 = b.t + i * 0.32;
+      const o = osc(b, 'square', 330, t0, t0 + 0.24); sweep(o.frequency, t0, 330, 520, 0.2);
+      const a = gn(b); envAHR(a.gain, t0, 0.35, 0.01, 0.18, 0.05); wire(o, flt(b, 'bandpass', 900, 1.1), a, b.o);
+    }
+  }
+
+  /** gateDefeated: a municipal "approved" stamp and a brass hit (the MASS BREACH stab follows). */
+  private approved(x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('gateDown', 4, 2.0, Math.max(0.6, s.g) * 0.6, s.pan, 0.35); if (!b) return;
+    const t = b.t;
+    whoosh(b, b.o, t, 0.18, 700, 2400, 1, 0.35);
+    thump(b, b.o, t + 0.18, 140, 70, 0.14, 0.9);
+    woodCrack(b, b.o, t + 0.18, 0.55);
+    brass(b, b.o, t + 0.32, [55, 59, 62, 67], 0.8, 0.55, 1.0);
+  }
+
+  /** RAMMING THROUGH: steel and masonry. */
+  private ramCrunch(x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('gateRam', 3, 1.0, Math.max(0.4, s.g) * 0.55, s.pan, 0.3); if (!b) return;
+    metalCrunch(b, b.o, b.t, 170, 0.8, 0.8);
+    burst(b, b.o, b.t, 'brown', 'lowpass', 900, 0.8, 0.005, 0.6, 0.6, 120);
+  }
+
+  /** The VICTORY FINALE: the brass swell the boss track resolves into (a long rising chord). */
+  private brassSwell(): void {
+    const b = this.voice('finale', 5, 3.4, 0.6, 0, 0.45); if (!b) return;
+    this.eng.duck(STING_DUCK.breach[0], 2.6, 1.4);
+    const t = b.t;
+    brass(b, b.o, t, [48, 55, 60, 64], 1.2, 0.45, 0.8);
+    brass(b, b.o, t + 1.0, [50, 57, 62, 66], 1.0, 0.5, 1.0);
+    brass(b, b.o, t + 1.9, [53, 60, 65, 69, 72], 1.4, 0.6, 1.2);
+    thump(b, b.o, t + 1.9, 98, 55, 0.7, 0.8);
+  }
+
+  /** Running voices from the rig's motion: STENCIL-1 wheels + spray, CORDON-2 tread clank, SWITCHBOARD-5 crawler + dish servo. */
+  private gateTick(w: World, b: NonNullable<World['boss']>): void {
+    if (!b.alive) { this.gtInit = false; return; }
+    const H = b.data.H > 0 ? b.data.H : Math.max(1, this.H);
+    if (!this.gtInit) { this.gtLx = b.x; this.gtLz = b.z; this.gtAcc = 0; this.gtCrown = b.data.crown ?? 0; this.gtInit = true; return; }
+    const d = Math.hypot(b.x - this.gtLx, b.z - this.gtLz);
+    this.gtLx = b.x; this.gtLz = b.z;
+    if (d > 30 * H) { this.gtAcc = 0; return; }
+    this.gtAcc += d / H;
+    const now = this.eng.now;
+    const s = this.spatial(b.x, b.z);
+    const g = Math.max(0.2, s.g);
+    const id = b.id as GateId;
+    if (id === 'stencil1') {
+      if (this.gtAcc >= 0.9) {
+        this.gtAcc = 0;
+        if (this.gate('gateRoll', now)) { const v = this.voice('gateRoll', 0, 0.35, g * 0.18, s.pan, 0.05); if (v) burst(v, v.o, v.t, 'brown', 'lowpass', 500, 0.8, 0.02, 0.25, 0.6); }
+      }
+      const painting = (b.attack === 'stripeRun' || b.attack === 'uTurn' || b.attack === 'doubleLine') || (b.data.raceT ?? 0) > 0;
+      if (painting && this.gate('gateSpray', now)) { const v = this.voice('gateSpray', 1, 0.3, g * 0.16, s.pan, 0.05); if (v) burst(v, v.o, v.t, 'white', 'highpass', 5200, 0.8, 0.02, 0.24, 0.5); }
+    } else if (id === 'cordon2') {
+      if (this.gtAcc >= 0.35) {
+        this.gtAcc = 0;
+        if (this.gate('gateTread', now)) { const v = this.voice('gateTread', 0, 0.3, g * 0.2, s.pan, 0.05); if (v) { crackle(v, v.o, v.t, 0.2, 4, 800, 2.5, 0.6, true); thump(v, v.o, v.t, 80, 50, 0.1, 0.35); } }
+      }
+    } else {
+      if (this.gtAcc >= 0.5) {
+        this.gtAcc = 0;
+        if (this.gate('gateCrawl', now)) { const v = this.voice('gateCrawl', 0, 0.5, g * 0.22, s.pan, 0.05); if (v) rumble(v, v.o, v.t, 0.05, 0.25, 0.2, 220, 90, 0.5); }
+      }
+      const cr = b.data.crown ?? 0;
+      const turned = Math.abs(cr - this.gtCrown);
+      this.gtCrown = cr;
+      if (turned > 1e-4 && turned < 1 && this.gate('gateServo', now)) {
+        const v = this.voice('gateServo', 0, 0.8, g * 0.08, s.pan, 0.05);
+        if (v) { const o = osc(v, 'sawtooth', 180, v.t, v.t + 0.7); sweep(o.frequency, v.t, 180, 240, 0.6); const a = gn(v); envAHR(a.gain, v.t, 0.25, 0.1, 0.4, 0.2); wire(o, flt(v, 'bandpass', 900, 3), a, v.o); }
+      }
+    }
+    void w;
   }
 
   /** Attack wind-ups (bossAttack). Returns false for an id that is not one of PARKADE-6's. */

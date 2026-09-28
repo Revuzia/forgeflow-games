@@ -1,8 +1,18 @@
-// BLOCKTOOTH v2 — the 40 goals (FEATURES_V2 §8.2). THREE-free data. Lane L5 (META/ENDLESS-SIM).
+// BLOCKTOOTH v2 — the 46 goals (FEATURES_V2 §8.2 + GATEKEEPERS §6.5). THREE-free data. Lane L5 (META/ENDLESS-SIM);
+// the six gatekeeper goals and the EARLY CLOSING retune are lane K2c's.
 //
-// 15 general · 16 titan · 9 city. Every unlock item (24 locked cards, 6 locked evolutions, 6 perks,
-// 8 palettes = 44) is referenced by exactly one goal (asserted by _harness/probe_meta.ts).
-// `desc` is the condition text of §8.2.
+// 21 general · 16 titan · 9 city. Every unlock item (29 locked cards = 24 v2 + 5 gatekeeper, 6 locked
+// evolutions, 7 perks, 8 palettes = 50) is referenced by exactly one goal (asserted by _harness/probe_meta.ts).
+// `desc` is the condition text of §8.2 / GATEKEEPERS §6.5.
+//
+// GATEKEEPERS §6.5 (K2c): six goals in group `general` (so the GOALS & RECORDS tabs do not change), measured
+// by meta/tally.ts from the gate events (gateSpawn / bossStagger with a gatekeeper in the slot / gateDefeated):
+// TIPPED OFF (STENCIL-1 tipped over ≤ 20 s after its spawn), LINE CROSSED (CORDON-2 stalled twice in one
+// fight), HANG UP (SWITCHBOARD-5 killed ≤ 40 s after its spawn), WITHOUT A DENT (a home gate kill with no
+// damage taken during that fight), OVER THE LIMIT (the three home gate fights sum < 135 s) and REISSUED (a
+// gatekeeper rematch won in EXTENDED COVERAGE, lifetime: Profile.life.gateRematches). The three timed goals
+// are lower-is-better like EARLY CLOSING. EARLY CLOSING moves 9:00 → 10:00 (600 s): gates hold the Size, and
+// in the GATEKEEPERS §5.1 re-run emulation 1 of 16 LOCKWATER clears was under 540 s, 8 under 600 s.
 //
 // F4 retune (critic LOW: a first run met ~1/3 of all goals): the run-scope thresholds that the gate bot
 // overshot on its FIRST run (CROWD CONTROL 1.4×, LIVE COVERAGE 1.4×, URBAN RENEWAL 3.4×, CURBSIDE 10×,
@@ -20,7 +30,7 @@ import type { GoalDef, UnlockRef } from '../core/types.ts';
 const card = (id: string): UnlockRef => ({ kind: 'card', id });
 
 export const GOALS: GoalDef[] = [
-  // ─────────────────────────────── general (15) ───────────────────────────────
+  // ─────────────────────────────── general (21 = 15 + 6 gatekeeper) ───────────────────────────────
   { id: 'g_first_broadcast', name: 'FIRST BROADCAST', desc: 'Finish any run', group: 'general',
     metric: 'runsFinished', target: 1, scope: 'life', unlocks: [card('u_block_captain')] },
   { id: 'g_zoning_change', name: 'ZONING CHANGE', desc: 'Reach SIZE III', group: 'general',
@@ -47,10 +57,28 @@ export const GOALS: GoalDef[] = [
     metric: 'bossesInRun', target: 2, scope: 'run', unlocks: [card('evo_audit_season')] },
   { id: 'g_change_order', name: 'CHANGE ORDER', desc: 'Take an evolution', group: 'general',
     metric: 'evolutionsLife', target: 1, scope: 'life', unlocks: [{ kind: 'perk', id: 'perk_tip_line' }] },
-  { id: 'g_signal_boost', name: 'SIGNAL BOOST', desc: 'Collect 8 power-ups in one run', group: 'general',
-    metric: 'powerups', target: 8, scope: 'run', unlocks: [card('u_night_market')] },
+  // GATEKEEPERS retune (lane K2c, 2026-09-28): 8 → 4 by the supply rule above. With three gatekeeper fights the
+  // "× 0.5 while a boss is alive" drop rule (GATEKEEPERS §6.2) leaves the seed-1337 gate matrix dropping only
+  // 4–10 power-ups per run (5 of 12 runs under 8; briarwick/grideast 4), so 8 failed probe_meta G(a).
+  // Revert to 8 if the power-up supply during gate fights is raised instead.
+  { id: 'g_signal_boost', name: 'SIGNAL BOOST', desc: 'Collect 4 power-ups in one run', group: 'general',
+    metric: 'powerups', target: 4, scope: 'run', unlocks: [card('u_night_market')] },
   { id: 'g_running_errands', name: 'RUNNING ERRANDS', desc: 'Complete 14 objectives in one run', group: 'general',
     metric: 'objectives', target: 14, scope: 'run', unlocks: [{ kind: 'perk', id: 'perk_warm_mic' }] },
+
+  // ── GATEKEEPERS §6.5 (lane K2c): six gatekeeper goals, group general ──
+  { id: 'g_gate_tipped_off', name: 'TIPPED OFF', desc: 'Tip STENCIL-1 over within 20 s of its arrival', group: 'general',
+    metric: 'gateTippedFastS', target: 20, scope: 'run', lowerIsBetter: true, unlocks: [card('gate_fresh_coat')] },
+  { id: 'g_gate_line_crossed', name: 'LINE CROSSED', desc: 'Stall CORDON-2 twice in one fight', group: 'general',
+    metric: 'gateStallsBestFight', target: 2, scope: 'run', unlocks: [card('gate_sawhorse_stack')] },
+  { id: 'g_gate_hang_up', name: 'HANG UP', desc: 'Defeat SWITCHBOARD-5 within 40 s of its arrival', group: 'general',
+    metric: 'gateSwitchFastS', target: 40, scope: 'run', lowerIsBetter: true, unlocks: [card('gate_call_waiting')] },
+  { id: 'g_gate_without_a_dent', name: 'WITHOUT A DENT', desc: 'Defeat a gatekeeper without taking any damage during its fight', group: 'general',
+    metric: 'gateCleanKills', target: 1, scope: 'run', unlocks: [{ kind: 'perk', id: 'perk_deferred_maintenance' }] },
+  { id: 'g_gate_over_the_limit', name: 'OVER THE LIMIT', desc: 'Defeat all three gatekeepers in one run in under 2:15 of fighting in total', group: 'general',
+    metric: 'gateTotalFightS', target: 135, scope: 'run', lowerIsBetter: true, unlocks: [card('gate_blanket_exemption')] },
+  { id: 'g_gate_reissued', name: 'REISSUED', desc: 'Defeat a gatekeeper rematch in extended coverage', group: 'general',
+    metric: 'gateRematchesLife', target: 1, scope: 'life', unlocks: [card('gate_carbon_copy')] },
 
   // ─────────────────────────────── titan (16) ───────────────────────────────
   { id: 'g_molo_curbside_pickup', name: 'CURBSIDE PICKUP', desc: 'MOLO: 750 pickups from one GULLET VACUUM', group: 'titan', titan: 'molo',
@@ -110,8 +138,9 @@ export const GOALS: GoalDef[] = [
     metric: 'boats', target: 520, scope: 'run', unlocks: [card('u_street_festival')] },
   { id: 'g_lw_port_closed', name: 'PORT CLOSED', desc: 'Defeat CAISSON-4', group: 'city', biome: 'lockwater', boss: 'caisson4',
     metric: 'bossKillsLife', target: 1, scope: 'life', unlocks: [card('u_landmark_status')] },
-  { id: 'g_lw_early_closing', name: 'EARLY CLOSING', desc: 'Clear LOCKWATER in under 9:00', group: 'city', biome: 'lockwater',
-    metric: 'fastClearS', target: 540, scope: 'run', lowerIsBetter: true, unlocks: [card('u_detour_signage')] },
+  // GATEKEEPERS §6.5: 9:00 → 10:00 (the gates hold the Size; see the header)
+  { id: 'g_lw_early_closing', name: 'EARLY CLOSING', desc: 'Clear LOCKWATER in under 10:00', group: 'city', biome: 'lockwater',
+    metric: 'fastClearS', target: 600, scope: 'run', lowerIsBetter: true, unlocks: [card('u_detour_signage')] },
 ];
 
 /** goal id → goal (built once). */

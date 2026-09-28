@@ -18,7 +18,13 @@
 //
 // Progress values (goalProgress): the number shown as x in "x / y" — for tier4CollapseFrac it is the
 // FRACTION (goalParts gives the §8.2 display `x / ceil(0.6 × tier4Total)` when a tally is at hand); for
-// lowerIsBetter (fastClearS) it is the best clear time in seconds, 0 = none on file.
+// lowerIsBetter (fastClearS and the timed gate metrics) it is the best time in seconds, 0 = none on file.
+//
+// GATEKEEPERS §6.5 (lane K2c): six gate metrics. Run scope, from the tally (meta/tally.ts, event-derived):
+// gateTippedFastS / gateSwitchFastS / gateTotalFightS (seconds, lower is better; the tally holds Infinity until
+// the event happened → 0 = no value here), gateStallsBestFight, gateCleanKills. Life scope: gateRematchesLife
+// = Profile.life.gateRematches, filed at run end from tally.gateRematches with the same once-per-World delta
+// rule as banishes / evolutions (EXTENDED COVERAGE files a World twice).
 
 import type { BiomeId, GoalDef, PerkId, Profile, RunCtx, RunMeta, RunTally, TitanId, UnlockRef, World } from '../core/types.ts';
 import { GOALS } from '../data/goals.ts';
@@ -59,9 +65,14 @@ function lifeValue(g: GoalDef, p: Profile): number {
     case 'titanClears':
     case 'titanBiomesCleared': return g.titan ? L.clearedBy[g.titan].length : 0;
     case 'bossKillsLife': return g.boss ? (L.bossKills[g.boss] ?? 0) : sumRec(L.bossKills as Record<string, number>);
+    case 'gateRematchesLife': return L.gateRematches;
     default: return 0;
   }
 }
+
+/** a tally time (Infinity = not happened yet) as a progress value: 0 = none. A fight time of exactly 0 cannot
+ *  happen (every gate fight includes GATES.introS of invulnerable walk-in), so 0 is free to mean "none". */
+function timeVal(v: number): number { return Number.isFinite(v) && v > 0 ? v : 0; }
 
 /** RUN-scope value of THIS run (0 when the run does not match the goal's filters). */
 function runValue(g: GoalDef, t: RunTally, ctx: RunCtx): number {
@@ -90,6 +101,12 @@ function runValue(g: GoalDef, t: RunTally, ctx: RunCtx): number {
     case 'staggersBestFight': return g.boss ? (x.staggersBestFightBy[g.boss] ?? 0) : 0;
     case 'boats': return x.propsBy.boat ?? 0;
     case 'fastClearS': return ctx.result === 'clear' && ctx.endT > 0 ? ctx.endT : 0;
+    // GATEKEEPERS §6.5 (K2c)
+    case 'gateTippedFastS': return timeVal(x.gateTippedFastS);
+    case 'gateSwitchFastS': return timeVal(x.gateSwitchFastS);
+    case 'gateTotalFightS': return timeVal(x.gateTotalFightS);
+    case 'gateStallsBestFight': return x.gateStallsBestFight;
+    case 'gateCleanKills': return x.gateCleanKills;
     default: return 0;
   }
 }
@@ -175,7 +192,7 @@ export function evalGoals(p: Profile, t: RunTally, ctx: RunCtx): string[] {
 }
 
 /** what one World has already filed into a profile (EXTENDED COVERAGE files a run twice) */
-interface Filed { run: boolean; clear: boolean; banishes: number; evolutions: number; boss: Record<string, number> }
+interface Filed { run: boolean; clear: boolean; banishes: number; evolutions: number; gateRematches: number; boss: Record<string, number> }
 const FILED = new WeakMap<World, Filed>();
 
 /**
@@ -187,7 +204,7 @@ export function applyRunToProfile(p: Profile, w: World, result: 'clear' | 'dead'
   const q = cloneProfile(p);
   const t = w.tally;
   let f = FILED.get(w);
-  if (!f) { f = { run: false, clear: false, banishes: 0, evolutions: 0, boss: {} }; FILED.set(w, f); }
+  if (!f) { f = { run: false, clear: false, banishes: 0, evolutions: 0, gateRematches: 0, boss: {} }; FILED.set(w, f); }
 
   if (!f.run) { q.life.runs++; f.run = true; }
   if (result === 'clear' && !f.clear) {
@@ -200,6 +217,10 @@ export function applyRunToProfile(p: Profile, w: World, result: 'clear' | 'dead'
   q.life.banishes += db; f.banishes += db;
   const de = Math.max(0, t.evolutions - f.evolutions);
   q.life.evolutions += de; f.evolutions += de;
+  // GATEKEEPERS §6.5 (K2c): gatekeeper rematches won in EXTENDED COVERAGE (REISSUED), once per World
+  const tg = tallyV2(t).gateRematches;
+  const dg = Number.isFinite(tg) ? Math.max(0, Math.floor(tg) - f.gateRematches) : 0;
+  q.life.gateRematches += dg; f.gateRematches += dg;
   for (const id in t.bossDefeatedBy) {
     const n = t.bossDefeatedBy[id as keyof typeof t.bossDefeatedBy] ?? 0;
     const d = Math.max(0, n - (f.boss[id] ?? 0));
@@ -276,7 +297,7 @@ function relevant(g: GoalDef, titan: TitanId, biome: BiomeId | null): boolean {
 /**
  * The goal closest to done (NEXT PERMIT PENDING, §8.4): incomplete goals that are general or match the
  * titan (and biome, when given), ranked by progress fraction, ties by list order. When every relevant
- * goal is filed, the closest of all remaining goals; null only when all 40 are filed.
+ * goal is filed, the closest of all remaining goals; null only when every goal (46) is filed.
  */
 export function nextUnlock(p: Profile, titan: TitanId, biome: BiomeId | null): { goal: GoalDef; value: number } | null {
   let best: { goal: GoalDef; value: number } | null = null, bestF = -1;

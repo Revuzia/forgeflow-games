@@ -16,13 +16,19 @@
 // Colours: pixels with no owner are transparent (alpha 0). Owned pixels are opaque: neutral
 // texels show `base` shaded by height (0.72 at the lowest floor → 1.0 at the highest, so decks
 // read lighter), team texels show the team colour with a milder height shade (0.86 → 1.0).
+// CHANGED(CORE) (CONTRACT_FFA §F6): `colors.palette` (index = crew id, 0..255 RGB) colours a dyed texel by its crew
+// (FFA: 8 crews); without it the teams pair sun / gulf is used exactly as before. setPalette() swaps it and repaints.
 
 import type { PaintAtlas } from './atlas.ts';
 
 export interface MinimapOptions {
   min: [number, number]; max: [number, number];   // world x,z rectangle (maps.json minimap)
   pxPerMeter: number;
-  colors: { base: [number, number, number]; sun: [number, number, number]; gulf: [number, number, number] }; // 0..255
+  colors: {
+    base: [number, number, number]; sun: [number, number, number]; gulf: [number, number, number];   // 0..255
+    /** CHANGED(CORE): colour by crew id (index 0 unused); when set it replaces sun / gulf */
+    palette?: ReadonlyArray<readonly [number, number, number]> | null;
+  };
 }
 
 const HEIGHT_EPS = 0.02;
@@ -32,6 +38,7 @@ export class MinimapRaster {
 
   private readonly atlas: PaintAtlas;
   private readonly o: MinimapOptions;
+  private palette: ReadonlyArray<readonly [number, number, number]> | null;
   /** id → pixel index (row*w + col) or −1 (not a floor texel / outside the rectangle) */
   private readonly pixOf: Int32Array;
   /** pixel → owning texel id or −1 */
@@ -42,6 +49,7 @@ export class MinimapRaster {
   constructor(atlas: PaintAtlas, o: MinimapOptions) {
     this.atlas = atlas;
     this.o = o;
+    this.palette = o.colors.palette ?? null;
     const ppm = o.pxPerMeter;
     if (!(ppm > 0)) throw new Error(`[minimap] bad pxPerMeter ${ppm}`);
     this.w = Math.max(1, Math.round((o.max[0] - o.min[0]) * ppm));
@@ -104,6 +112,12 @@ export class MinimapRaster {
     this.dirty = true;
   }
 
+  /** CHANGED(CORE): colour dyed texels by crew id from `p` (null → the teams sun / gulf pair); repaints every pixel */
+  setPalette(p: ReadonlyArray<readonly [number, number, number]> | null): void {
+    this.palette = p;
+    this.rebuild();
+  }
+
   worldToPixel(x: number, z: number): [number, number] {
     const ppm = this.o.pxPerMeter;
     return [(this.o.max[0] - x) * ppm, (this.o.max[1] - z) * ppm];
@@ -118,7 +132,10 @@ export class MinimapRaster {
   private paintPixel(p: number, id: number): void {
     const t = this.atlas.team[id];
     const s = this.shade[p];
-    const c = t === 1 ? this.o.colors.sun : t === 2 ? this.o.colors.gulf : this.o.colors.base;
+    const pal = this.palette;
+    const c = t === 0 ? this.o.colors.base
+      : pal ? (pal[t] ?? this.o.colors.base)
+      : t === 1 ? this.o.colors.sun : t === 2 ? this.o.colors.gulf : this.o.colors.base;
     const f = t === 0 ? 0.72 + 0.28 * s : 0.86 + 0.14 * s;
     const q = p * 4;
     this.rgba[q] = c[0] * f;

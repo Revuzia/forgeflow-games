@@ -14,20 +14,34 @@
 // Input while it listens.
 //
 // State lives in SettingsStore / ProfileStore (settings.ts); main.ts listens to them and applies changes live.
+//
+// CONTRACT_FFA F3: PLAY carries a MODE selector — TEAMS · 4 v 4 (the default) / FREE-FOR-ALL — persisted in the
+// profile. The title's mode line reads exactly 'Harbor Cup • 4 v 4' in teams mode and 'Harbor Cup • Free-for-all'
+// in FFA. In FFA the LOADOUT crew toggle becomes a colour pick of the 8 FFA crews (a chip + its mark; bots take the
+// other seven), and the profile card / plate / PLAY kit line / mannequin take the picked colour.
 
 import { WEAPONS, playableMaps, teamById, TEAMS_RAW, type MapDef } from '../core/data.ts';
 import type { TeamId } from '../core/types.ts';
 import type { BotSkill } from '../core/match/roster.ts';
 import { codeLabel, type Action, type Input } from '../input.ts';
 import { RENDER_QUALITIES, type RenderQuality } from '../view/renderer.ts';
-import { cleanName, NAME_MAX, SENS_MAX, SENS_MIN, BOT_SKILL_IDS, type Bindings, type ProfileStore, type SettingsStore } from './settings.ts';
+import { cleanName, NAME_MAX, SENS_MAX, SENS_MIN, BOT_SKILL_IDS, type Bindings, type ProfileMode, type ProfileStore, type SettingsStore } from './settings.ts';
+import { crewLook, ffaCrews } from './slates.ts';
 import { KIT_ICONS, MAP_THUMBS, SVG, roleLabel } from './icons.ts';
-import { MODE_LINE } from './boot.ts';
+import { MODE_LINE, MODE_LINE_FFA } from './boot.ts';
 import type { Mannequin } from './mannequin.ts';
 import './menus.css';
 
 export const LOADOUT_HINT = 'Pick your kit — crest sits on the right';
+/** CONTRACT_FFA F3: the title mode line in FREE-FOR-ALL (teams mode keeps boot.ts MODE_LINE exactly); defined in
+ *  boot.ts so the loading card shares it */
+export { MODE_LINE_FFA };
+/** CONTRACT_FFA F3: the PLAY mode selector labels */
+export const MODE_LABELS: ReadonlyArray<readonly [ProfileMode, string]> = [['teams', 'TEAMS · 4 v 4'], ['ffa', 'FREE-FOR-ALL']];
 export const CREDITS_LINE = 'An original 4 v 4 turf-paint shooter.';
+/** HOW TO PLAY panel 1's rule: teams (unchanged copy) / FREE-FOR-ALL (new copy, CONTRACT_FFA F3) */
+export const HOW_RULE = 'Dye the court in your crew’s color. When the final horn sounds, the crew with more turf wins.';
+export const HOW_RULE_FFA = 'Free-for-all: every runner is a crew of one. When the final horn sounds, the most turf wins.';
 export const MENU_LABELS = ['PLAY', 'LOADOUT', 'SETTINGS', 'HOW TO PLAY', 'CREDITS'] as const;
 
 export type Screen = 'title' | 'loadout' | 'play' | 'settings' | 'howto' | 'credits' | 'pause';
@@ -42,6 +56,10 @@ export interface StartSelection {
   kit: string;
   crew: TeamId;
   name: string;
+  /** CONTRACT_FFA F3: the match mode picked on PLAY */
+  mode: ProfileMode;
+  /** CONTRACT_FFA F3: the human's FFA colour (1..8) */
+  ffaColor: number;
 }
 
 export interface MenuHooks {
@@ -147,6 +165,17 @@ export class Menus {
   private readonly profCrew: HTMLElement;
   private readonly profMark: HTMLElement;
   private readonly kitCard: HTMLElement;
+  private readonly modeText: HTMLElement;
+  private readonly modeMarkL: HTMLElement;
+  private readonly modeMarkR: HTMLElement;
+  /** HOW TO PLAY panel 1's rule line: HOW_RULE (teams, unchanged) / HOW_RULE_FFA, by the profile's mode */
+  private howRule: HTMLElement | null = null;
+  // CONTRACT_FFA F3: the PLAY mode selector + the LOADOUT FFA colour pick
+  private readonly modeBtns = new Map<ProfileMode, HTMLButtonElement>();
+  private readonly crewCap: HTMLElement;
+  private readonly crewRow: HTMLElement;
+  private readonly colorRow: HTMLElement;
+  private readonly colorBtns = new Map<number, HTMLButtonElement>();
   // loadout parts
   private readonly kitTiles = new Map<string, HTMLButtonElement>();
   private readonly crewBtns = new Map<TeamId, HTMLButtonElement>();
@@ -204,7 +233,10 @@ export class Menus {
     const mode = el('p', 'df-mode');
     const m1 = el('i', '', '◉'); m1.setAttribute('aria-hidden', 'true');
     const m2 = el('i', 'g', '▲'); m2.setAttribute('aria-hidden', 'true');
-    mode.append(m1, el('span', '', MODE_LINE), m2);
+    this.modeText = el('span', '', MODE_LINE);
+    this.modeMarkL = m1;
+    this.modeMarkR = m2;
+    mode.append(m1, this.modeText, m2);
     brand.append(wm, mode);
     const stack = el('nav', 'dfm-stack');
     stack.setAttribute('aria-label', 'Main menu');
@@ -261,8 +293,10 @@ export class Menus {
       kits.append(b);
     }
     const crew = el('div', 'dfm-crew');
-    crew.append(el('h3', 'dfm-cap', 'CREW'));
+    this.crewCap = el('h3', 'dfm-cap', 'CREW');
+    crew.append(this.crewCap);
     const crewRow = el('div', 'dfm-seg crew');
+    this.crewRow = crewRow;
     for (const t of [1, 2] as TeamId[]) {
       const td = teamById(t);
       const b = btn(`dfm-crewbtn ${td.key}`, '');
@@ -272,7 +306,26 @@ export class Menus {
       this.crewBtns.set(t, b);
       crewRow.append(b);
     }
-    crew.append(crewRow);
+    // FFA: the colour pick of the 8 crews (a chip + its mark)
+    this.colorRow = el('div', 'dfm-colors');
+    this.colorRow.setAttribute('role', 'radiogroup');
+    this.colorRow.setAttribute('aria-label', 'Color');
+    this.colorRow.hidden = true;
+    for (const c of ffaCrews()) {
+      const b = btn('dfm-color', '');
+      b.id = `dfm-color-${c.key}`;
+      b.dataset.color = String(c.id);
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-label', c.label);
+      b.title = c.label;
+      b.style.setProperty('--c', c.dye);
+      b.style.setProperty('--cg', c.dyeGloss);
+      b.append(el('i', '', c.markGlyph));
+      b.addEventListener('click', () => { this.sound('click'); this.profile.set({ ffaColor: c.id }); });
+      this.colorBtns.set(c.id, b);
+      this.colorRow.append(b);
+    }
+    crew.append(crewRow, this.colorRow);
     const nameBox = el('label', 'dfm-namebox');
     nameBox.append(el('h3', 'dfm-cap', 'NAME'));
     this.nameInput = el('input', 'dfm-name');
@@ -308,7 +361,26 @@ export class Menus {
 
     // ── PLAY → map select ─────────────────────────────────
     const play = this.mkScreen('play');
-    play.append(el('div', 'dfm-scrim full'), this.header('PLAY', 'Pick an arena'));
+    const playHead = this.header('PLAY', 'Pick an arena');
+    // CONTRACT_FFA F3: the MODE selector (TEAMS · 4 v 4 / FREE-FOR-ALL), persisted in the profile
+    const modeBox = el('div', 'dfm-modebox');
+    modeBox.append(el('h3', 'dfm-cap', 'MODE'));
+    // its own class (not .dfm-seg): the PLAY screen's first .dfm-seg stays the TIME OF DAY row
+    const modeSeg = el('div', 'dfm-modeseg');
+    modeSeg.setAttribute('role', 'radiogroup');
+    modeSeg.setAttribute('aria-label', 'Mode');
+    for (const [m, label] of MODE_LABELS) {
+      const b = btn('dfm-segbtn dfm-modebtn', label);
+      b.id = `dfm-mode-${m}`;
+      b.dataset.mode = m;
+      b.setAttribute('role', 'radio');
+      b.addEventListener('click', () => { this.sound('click'); this.profile.set({ mode: m }); });
+      this.modeBtns.set(m, b);
+      modeSeg.append(b);
+    }
+    modeBox.append(modeSeg);
+    playHead.append(modeBox);
+    play.append(el('div', 'dfm-scrim full'), playHead);
     const mapRow = el('div', 'dfm-maps');
     mapRow.setAttribute('role', 'radiogroup');
     const mkMap = (id: string, name: string, type: string, favors: string[], thumb: string | null, tagline: string): HTMLButtonElement => {
@@ -447,7 +519,7 @@ export class Menus {
     const panels = el('div', 'dfm-how');
     panels.append(
       this.howPanel(1, 'THE FLOOR IS THE SCORE', HOW_ART.floor, [
-        'Dye the court in your crew’s color. When the final horn sounds, the crew with more turf wins.',
+        HOW_RULE,
         'Floors count most; walls count a little.']),
       this.howPanel(2, 'SLICK & DRINK', HOW_ART.slick, [
         ['Hold ', ['slick'], ' on your own color to slick down: you sink, your crest cuts through like a fin, and your tank refills fast.'],
@@ -459,6 +531,7 @@ export class Menus {
         ['', ['sub'], ' throws a JELLY CHARGE (most of a tank). Paint and washes fill your special; ', ['special'], ' unleashes CLOUDBURST or WELLSPRING.'],
         ['Hit ', ['fire'], ' to shoot, ', ['jump'], ' to jump.']]),
     );
+    this.howRule = panels.querySelector('.dfm-howp p');
     this.howLegend = el('div', 'dfm-card dfm-howkeys');
     how.append(panels, this.howLegend);
 
@@ -559,7 +632,7 @@ export class Menus {
     this.offs.push(this.settings.on(() => this.refresh()));
     this.offs.push(this.profile.on((_p, keys) => {
       this.refresh();
-      if (keys.includes('kit') || keys.includes('crew')) this.syncMannequin(keys.includes('kit'));
+      if (keys.includes('kit') || keys.includes('crew') || keys.includes('mode') || keys.includes('ffaColor')) this.syncMannequin(keys.includes('kit'));
     }));
     this.dragOff = null;
     this.refresh();
@@ -772,6 +845,7 @@ export class Menus {
     this.sound('start');
     this.hooks.start({
       map, random, preset: map === 'pier18' ? p.preset : '', skill: p.skill, kit: p.kit, crew: p.crew, name: cleanName(this.profile.get().name),
+      mode: p.mode, ffaColor: p.ffaColor,
     });
   }
 
@@ -796,9 +870,11 @@ export class Menus {
     const m = this.mannequin;
     if (!m) return;
     const p = this.profile.get();
-    m.team = p.crew;
+    // FFA: the mannequin wears the picked FFA colour (main.ts's dye callback resolves it in the profile's mode)
+    const t = (p.mode === 'ffa' ? p.ffaColor : p.crew) as TeamId;
+    m.team = t;
     m.setKit(p.kit, preview);
-    m.setTeam(p.crew);
+    m.setTeam(t);
   }
 
   private bindMannequin(on: boolean): void {
@@ -818,15 +894,28 @@ export class Menus {
   refresh(): void {
     const p = this.profile.get();
     const s = this.settings.get();
+    const ffa = p.mode === 'ffa';
     const team = teamById(p.crew);
-    const col = crewColors(p.crew, s.colorblind);
+    // FFA: the player's colour (teams.json → ffa) drives the menus' accent instead of the crew's
+    const fc = crewLook(p.ffaColor, 'ffa');
+    const col = ffa ? { ui: fc.ui, dye: fc.dye } : crewColors(p.crew, s.colorblind);
+    const mark = ffa ? fc.markGlyph : team.markGlyph;
+    const crewName = ffa ? fc.label : team.name;
     this.root.style.setProperty('--crew', col.ui);
     this.root.style.setProperty('--crew-dye', col.dye);
-    this.root.dataset.crew = team.key;
-    // title
-    this.profMark.textContent = team.markGlyph;
+    if (ffa) { this.root.style.setProperty('--crew-gloss', fc.dyeGloss); this.root.style.setProperty('--crew-ink', fc.uiInk); }
+    else { this.root.style.removeProperty('--crew-gloss'); this.root.style.removeProperty('--crew-ink'); }
+    this.root.dataset.crew = ffa ? 'ffa' : team.key;
+    this.root.dataset.mode = p.mode;
+    // title (the mode line: exactly MODE_LINE in teams mode)
+    this.modeText.textContent = ffa ? MODE_LINE_FFA : MODE_LINE;
+    if (this.howRule) this.howRule.textContent = ffa ? HOW_RULE_FFA : HOW_RULE;
+    this.modeMarkL.textContent = ffa ? fc.markGlyph : '◉';
+    this.modeMarkL.style.color = ffa ? fc.ui : '';
+    this.modeMarkR.hidden = ffa;
+    this.profMark.textContent = mark;
     this.profName.textContent = p.name || 'YOU';
-    this.profCrew.textContent = team.name;
+    this.profCrew.textContent = ffa ? MODE_LABELS[1][1] : team.name;
     const k = kitRow(p.kit);
     const sub = subRow(k.sub), sp = specialRow(k.special);
     this.kitCard.replaceChildren();
@@ -844,11 +933,17 @@ export class Menus {
     // loadout
     for (const [id, b] of this.kitTiles) { const on = id === p.kit; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
     for (const [t, b] of this.crewBtns) { const on = t === p.crew; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }
+    // FFA: the colour pick replaces the crew toggle
+    this.crewRow.hidden = ffa;
+    this.colorRow.hidden = !ffa;
+    this.crewCap.textContent = ffa ? `COLOR · ${fc.label}` : 'CREW';
+    for (const [id, b] of this.colorBtns) { const on = id === p.ffaColor; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
+    for (const [m, b] of this.modeBtns) { const on = m === p.mode; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
     if (document.activeElement !== this.nameInput) this.nameInput.value = p.name;
     this.renderStats(k);
     this.subBox.replaceChildren(...this.miniCard('SUB', sub?.name ?? '—', str(sub?.blurb), SVG['jelly-charge']));
     this.spBox.replaceChildren(...this.miniCard('SPECIAL', sp?.name ?? '—', str(sp?.blurb), SVG[sp?.id ?? ''] ?? ''));
-    this.plate.replaceChildren(el('i', '', team.markGlyph), el('b', '', p.name || 'YOU'), el('span', '', k.name));
+    this.plate.replaceChildren(el('i', '', mark), el('b', '', p.name || 'YOU'), el('span', '', k.name));
     // play
     for (const [id, b] of this.mapCards) { const on = id === p.map; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
     const pier = p.map === 'pier18';
@@ -864,7 +959,7 @@ export class Menus {
     pimg.alt = '';
     pimg.draggable = false;
     const pk = el('span', 'txt');
-    pk.append(el('b', '', k.name), el('span', '', `${team.markGlyph} ${team.name}`));
+    pk.append(el('b', '', k.name), el('span', '', `${mark} ${crewName}`));
     this.playKit.append(pimg, pk);
     // settings
     for (const [, row] of this.setCtl) (row as HTMLElement & { dfUpd?: () => void }).dfUpd?.();
@@ -1279,6 +1374,7 @@ export class Menus {
       confirm: !this.confirm.hidden, capture: this.capture ? `${this.capture.action}:${this.capture.slot}` : null,
       conflict: this.conflict ? { ...this.conflict } : null, note: this.bindNote.textContent || '',
       profile: { ...this.profile.get() }, mannequin: this.mannequin?.info() ?? null,
+      modeLine: this.modeText.textContent,
       gamepad: this.padSeen,
     };
   }

@@ -15,6 +15,10 @@
 //                                                # on EVERY seed; determinism = the first seed replayed + distinct hashes
 //                                                # CHANGED(BOTFIX): then per-kit washes / special ready + use summed
 //                                                # over the seeds (with --lineup mixed: the balance target, info only)
+//   node _harness/probe_bots.ts --mode ffa --map cinder --seeds 1,2,3
+//                                                # CHANGED(CORE) (CONTRACT_FFA §F4): FREE-FOR-ALL — 8 crews, one bot each;
+//                                                # gates: every crew ≥ 4 %, neutral < 60 %, ≥ 10 washes, no stuck bot, no
+//                                                # jitter, deterministic, < 25 s wall (slicks / refills printed as info)
 //
 // The human slot (id 0) is a bot too. Every tick: director.think(intents) → world.step(intents) →
 // world.drainEvents(). Gates (§10.3): both teams cover > 15 %, neutral < 55 %, ≥ 6 washes; no bot stuck
@@ -33,7 +37,8 @@ import { defaultRoster, parseBotSkill, type BotSkill } from '../runtime/src/core
 import type { SimEvent } from '../runtime/src/core/match/events.ts';
 import { buildNav, type NavGraph } from '../runtime/src/core/bots/nav.ts';
 import { BotDirector } from '../runtime/src/core/bots/director.ts';
-import { emptyIntent, type PlayerIntent } from '../runtime/src/core/types.ts';
+import { emptyIntent, parseMatchMode, type MatchMode, type PlayerIntent } from '../runtime/src/core/types.ts';
+import { crewDef } from '../runtime/src/core/data.ts';
 import { TICK } from '../runtime/src/core/config.ts';
 
 const argv = process.argv.slice(2);
@@ -47,6 +52,11 @@ const QUIET = argv.includes('--quiet');
 const LINEUP = arg('--lineup', 'default');
 const MAP = arg('--map', 'pier18');
 const SEEDS = arg('--seeds', '').split(',').filter((x) => x.trim() !== '').map((x) => Number(x) | 0);
+/** CHANGED(CORE): --mode teams (default) | ffa */
+const MODE: MatchMode = parseMatchMode(arg('--mode', 'teams'));
+const FFA = MODE === 'ffa';
+/** FFA gates (CONTRACT_FFA §F4) */
+const FFA_MIN_CREW = 0.04, FFA_MAX_NEUTRAL = 0.60, FFA_MIN_WASHES = 10, FFA_WALL_MS = 25000;
 /** --lineup mixed: ids 0-3 SUNCREW and 4-7 GULF CREW each get mist-rasp, sheet-drum, needle-glint, pop-well */
 const MIXED_BOT_KITS = ['sheet-drum', 'needle-glint', 'pop-well', 'mist-rasp'];
 
@@ -63,6 +73,8 @@ interface StuckEvent { id: number; name: string; t0: number; t1: number; x: numb
 interface RunResult {
   hash: string; wallMs: number; thinkMs: number; stepMs: number;
   coverage: { sun: number; gulf: number; neutral: number };
+  /** CHANGED(CORE): weighted share by crew id ([0] neutral) and the crews in play */
+  shares: number[]; crews: number[]; crewNames: Record<number, string>;
   washes: number; seaWashes: number; slicks: number; refills: number; shots: number; dry: number; hits: number;
   stuck: StuckEvent[];
   perBot: Array<{ id: number; name: string; team: number; washes: number; washed: number; painted: number; shots: number; dries: number;
@@ -92,9 +104,9 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
   const sc = def.scoring ?? { wallWeight: 0.35, floorMinNy: 0.45 };
   const atlas: PaintAtlas = buildAtlas(geo.paint, geo.atlasSize, { wallWeight: sc.wallWeight, floorMinNy: sc.floorMinNy });
   const painter = new Painter(atlas);
-  const roster = defaultRoster({ humanKit: 'mist-rasp', seed, skill, botKits: LINEUP === 'mixed' ? MIXED_BOT_KITS : undefined });
+  const roster = defaultRoster({ humanKit: 'mist-rasp', seed, skill, botKits: LINEUP === 'mixed' ? MIXED_BOT_KITS : undefined, mode: MODE });
   roster[0].bot = true;                                   // §10.3: the human slot is a bot too
-  const world = new MatchWorld({ def, geo, physics, painter, roster, seed, durationS: seconds });
+  const world = new MatchWorld({ def, geo, physics, painter, roster, seed, durationS: seconds, mode: MODE });
   const director = new BotDirector(world, nav, seed, skill);
   const intents: PlayerIntent[] = roster.map(() => emptyIntent());
   const ev: SimEvent[] = [];
@@ -232,19 +244,30 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
     snapBody: snapBody[i] / Math.max(1e-9, liveTicks[i] * TICK / 60), snapAim: snapAim[i] / Math.max(1e-9, liveTicks[i] * TICK / 60),
   }));
   let refills = 0; for (const r of world.runners) refills += r.refillsFromLow;
+  const shares = world.result?.shares ?? Array.from(painter.coverageByTeam());
+  const crewNames: Record<number, string> = {};
+  for (const r of world.runners) crewNames[r.team] = FFA ? `${r.name}/${crewDef('ffa', r.team).key}` : crewDef('teams', r.team).name;
+  let resText = world.result ? `winner ${world.result.winner === 1 ? 'SUNCREW' : world.result.winner === 2 ? 'GULF CREW' : 'draw'}` : 'no result';
+  if (FFA && world.result) resText = world.result.winner ? `winner ${crewNames[world.result.winner]}` : `draw (${(world.result.tied ?? []).map((t) => crewNames[t]).join(', ')})`;
   return {
-    hash: world.hash(), wallMs, thinkMs, stepMs, coverage: cov,
+    hash: world.hash(), wallMs, thinkMs, stepMs, coverage: cov, shares, crews: world.crews.slice(), crewNames,
     washes: world.stats.washes, seaWashes: world.stats.seaWashes, slicks: world.stats.slicks, refills,
     shots: world.stats.shots, dry: world.stats.dry, hits: world.stats.hits,
     stuck, perBot, events: evCount, horns, maxTurn,
     launches: world.runners.reduce((a, r) => a + r.launches, 0), beltS: beltTicks * TICK, upperS: upperTicks * TICK,
     shakeBy, kits: world.runners.map((r) => r.kit), washKit, washKitCause, ready, started, dodges: director.stats?.dodges ?? 0,
-    result: world.result ? `winner ${world.result.winner === 1 ? 'SUNCREW' : world.result.winner === 2 ? 'GULF CREW' : 'draw'}` : 'no result',
+    result: resText,
   };
 }
 
+/** CHANGED(CORE): the per-crew coverage line of an FFA run (share desc) */
+function ffaCov(res: RunResult): string {
+  return res.crews.slice().sort((a, b) => res.shares[b] - res.shares[a] || a - b).map((c) => `${res.crewNames[c]} ${pct(res.shares[c])}`).join(' · ');
+}
+
 function report(label: string, res: RunResult): void {
-  console.log(`\n── ${label}: ${res.result} · SUNCREW ${pct(res.coverage.sun)} · GULF CREW ${pct(res.coverage.gulf)} · neutral ${pct(res.coverage.neutral)}`);
+  if (FFA) console.log(`\n── ${label}: ${res.result} · ${ffaCov(res)} · neutral ${pct(res.shares[0])}`);
+  else console.log(`\n── ${label}: ${res.result} · SUNCREW ${pct(res.coverage.sun)} · GULF CREW ${pct(res.coverage.gulf)} · neutral ${pct(res.coverage.neutral)}`);
   console.log(`   washes ${res.washes} (sea ${res.seaWashes}) · hits ${res.hits} · shots ${res.shots} · dry ${res.dry} · slick entries ${res.slicks} · refills from <20 % ${res.refills}`);
   console.log(`   wall ${(res.wallMs / 1000).toFixed(2)} s (bots ${(res.thinkMs / 1000).toFixed(2)} s, sim ${(res.stepMs / 1000).toFixed(2)} s) · hash ${res.hash}`);
   console.log(`   horns: ${res.horns.join(' ')}`);
@@ -261,7 +284,7 @@ function report(label: string, res: RunResult): void {
   for (const b of res.perBot) {
     const tot = Object.values(b.modes).reduce((a, v) => a + v, 0) || 1;
     const ms = Object.entries(b.modes).sort((a, c) => c[1] - a[1]).map(([k, v]) => `${k} ${Math.round(v / tot * 100)}%`).join(' ');
-    console.log(`   ${String(b.id).padStart(2)} ${b.name.padEnd(8)} ${b.team === 1 ? 'SUN ' : 'GULF'} ${b.painted.toFixed(0).padStart(10)}  ${String(b.washes).padStart(6)} ${String(b.washed).padStart(6)} ${String(b.shots).padStart(6)} ${String(b.dries).padStart(5)} ${String(b.slicks).padStart(6)} ${String(b.refills).padStart(7)} ${String(b.jumps).padStart(5)} ${String(b.climbs).padStart(6)} ${b.dist.toFixed(0).padStart(6)} ${(b.moving * 100).toFixed(0).padStart(6)}% ${b.twitchBody.toFixed(1).padStart(10)} ${b.twitchAim.toFixed(1).padStart(4)} ${b.reversals.toFixed(1).padStart(7)}   ${ms}`);
+    console.log(`   ${String(b.id).padStart(2)} ${b.name.padEnd(8)} ${FFA ? crewDef('ffa', b.team).key.slice(0, 4).padEnd(4) : b.team === 1 ? 'SUN ' : 'GULF'} ${b.painted.toFixed(0).padStart(10)}  ${String(b.washes).padStart(6)} ${String(b.washed).padStart(6)} ${String(b.shots).padStart(6)} ${String(b.dries).padStart(5)} ${String(b.slicks).padStart(6)} ${String(b.refills).padStart(7)} ${String(b.jumps).padStart(5)} ${String(b.climbs).padStart(6)} ${b.dist.toFixed(0).padStart(6)} ${(b.moving * 100).toFixed(0).padStart(6)}% ${b.twitchBody.toFixed(1).padStart(10)} ${b.twitchAim.toFixed(1).padStart(4)} ${b.reversals.toFixed(1).padStart(7)}   ${ms}`);
   }
   if (res.stuck.length) {
     console.log(`   stuck events (${res.stuck.length}):`);
@@ -289,7 +312,7 @@ async function main(): Promise<number> {
     geo = await loadMapGeometry(def);
     const navPhysics = new PhysicsWorld(R, geo);
     nav = buildNav(geo, navPhysics, def);
-    console.log(`map ${MAP} · nav ${nav.nodes} nodes / ${nav.edgeTo.length} edges (built in ${nav.stats.buildMs.toFixed(0)} ms) · skill ${SKILL} · ${SEEDS.length ? `seeds ${SEEDS.join(',')}` : `seed ${SEED}`} · ${SECONDS} s`);
+    console.log(`${FFA ? 'FREE-FOR-ALL · ' : ''}map ${MAP} · nav ${nav.nodes} nodes / ${nav.edgeTo.length} edges (built in ${nav.stats.buildMs.toFixed(0)} ms) · skill ${SKILL} · ${SEEDS.length ? `seeds ${SEEDS.join(',')}` : `seed ${SEED}`} · ${SECONDS} s`);
     if (LINEUP === 'mixed') console.log(`lineup mixed: ${defaultRoster({ humanKit: 'mist-rasp', seed: SEED, skill: SKILL, botKits: MIXED_BOT_KITS }).map((e) => `${e.id}:${e.kit}`).join(' ')}`);
   } catch (e) {
     console.log('SETUP FAILED:', (e as Error).stack ?? e);
@@ -311,6 +334,7 @@ async function main(): Promise<number> {
   console.log('\n' + '-'.repeat(100));
   const gateRun = SECONDS === 180;
   if (!gateRun) console.log(`NOTE: ${SECONDS} s match — the gates below are printed for information; G8 needs the full 180 s.`);
+  if (FFA) return ffaMain(a, b, c);
   check('both teams cover > 15 %', a.coverage.sun > 0.15 && a.coverage.gulf > 0.15, `SUNCREW ${pct(a.coverage.sun)}, GULF CREW ${pct(a.coverage.gulf)}`);
   check('neutral share < 55 %', a.coverage.neutral < 0.55, `neutral ${pct(a.coverage.neutral)}`);
   check('≥ 6 washes in total', a.washes >= 6, `${a.washes} washes (${a.seaWashes} by the sea)`);
@@ -344,6 +368,43 @@ async function main(): Promise<number> {
   const failed = checks.filter((x) => !x.pass);
   console.log('-'.repeat(100));
   console.log(failed.length ? `G8 bots: FAIL (${failed.length} of ${checks.length} checks)` : `G8 bots: PASS (${checks.length} checks)`);
+  return failed.length ? 1 : 0;
+}
+
+/** CHANGED(CORE): the FFA play gates of one run (CONTRACT_FFA §F4): [name, pass, detail] */
+function ffaGates(r: RunResult): Array<[string, boolean, string]> {
+  const n = r.perBot.length;
+  const mb = r.perBot.reduce((x, b) => x + b.twitchBody, 0) / n, ma = r.perBot.reduce((x, b) => x + b.twitchAim, 0) / n;
+  const tb = r.perBot.reduce((x, b) => Math.max(x, b.twitchBody), 0), ta = r.perBot.reduce((x, b) => Math.max(x, b.twitchAim), 0);
+  const mv = r.perBot.reduce((x, b) => Math.min(x, b.moving), 1);
+  const low = r.crews.filter((c) => !(r.shares[c] >= FFA_MIN_CREW));
+  const minC = r.crews.reduce((m, c) => Math.min(m, r.shares[c]), 1);
+  return [
+    [`every crew ≥ ${FFA_MIN_CREW * 100} %`, r.crews.length === 8 && low.length === 0,
+      `${r.crews.length} crews, lowest ${pct(minC)}${low.length ? ` (under: ${low.map((c) => `${r.crewNames[c]} ${pct(r.shares[c])}`).join(', ')})` : ''}`],
+    [`neutral < ${FFA_MAX_NEUTRAL * 100} %`, r.shares[0] < FFA_MAX_NEUTRAL, `neutral ${pct(r.shares[0])}`],
+    [`≥ ${FFA_MIN_WASHES} washes`, r.washes >= FFA_MIN_WASHES, `${r.washes} (sea ${r.seaWashes})`],
+    ['no stuck', r.stuck.length === 0, r.stuck.length ? r.stuck.slice(0, 3).map((s) => `${s.name} ${s.t0.toFixed(0)}-${s.t1.toFixed(0)} s @ (${f1(s.x)},${f1(s.y)},${f1(s.z)}) ${s.mode.slice(0, 24)}`).join('; ') : '0'],
+    ['no jitter / moving ≥ 60 %', mb <= 0.75 && ma <= 0.75 && tb <= 2.5 && ta <= 2.5 && mv >= 0.6,
+      `shakes body ${mb.toFixed(2)} (worst ${tb.toFixed(2)}) aim ${ma.toFixed(2)} (worst ${ta.toFixed(2)}) · least moving ${(mv * 100).toFixed(0)} %`],
+    [`< ${FFA_WALL_MS / 1000} s wall`, r.wallMs < FFA_WALL_MS, `${(r.wallMs / 1000).toFixed(2)} s`],
+  ];
+}
+
+/** CHANGED(CORE): FFA gates for the default A / B (repeat) / C (seed + 1) runs */
+function ffaMain(a: RunResult, b: RunResult | null, c: RunResult | null): number {
+  for (const [name, pass, detail] of ffaGates(a)) check(`FFA ${name}`, pass, detail);
+  console.log(`INFO  slick entries ${a.slicks} · refills from < 20 % ${a.refills} (teams gates ≥ 20 / ≥ 4; not FFA gates)`);
+  if (b && c) {
+    check('same seed → identical hash', a.hash === b.hash, `${a.hash} vs ${b.hash}`);
+    check('different seed → different hash', a.hash !== c.hash, `${a.hash} vs ${c.hash}`);
+    const bad = ffaGates(c).filter((g) => !g[1]);
+    check('seed+1 also passes the FFA play gates', bad.length === 0, bad.length ? bad.map((g) => `${g[0]}: ${g[2]}`).join(' · ') : ffaGates(c).map((g) => g[2]).slice(0, 3).join(' · '));
+    check(`B and C < ${FFA_WALL_MS / 1000} s wall`, b.wallMs < FFA_WALL_MS && c.wallMs < FFA_WALL_MS, `B ${(b.wallMs / 1000).toFixed(2)} s, C ${(c.wallMs / 1000).toFixed(2)} s`);
+  }
+  const failed = checks.filter((x) => !x.pass);
+  console.log('-'.repeat(100));
+  console.log(failed.length ? `FFA bots (${MAP}): FAIL (${failed.length} of ${checks.length} checks)` : `FFA bots (${MAP}): PASS (${checks.length} checks)`);
   return failed.length ? 1 : 0;
 }
 
@@ -406,9 +467,11 @@ async function multiSeed(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<ty
   kitAggregate(runs.map((x) => x.r));
   console.log('\n' + '-'.repeat(100));
   if (SECONDS !== 180) console.log(`NOTE: ${SECONDS} s matches — the gates below are printed for information; G8 needs the full 180 s.`);
-  const names = playGates(runs[0].r).map((g) => g[0]);
+  const gates = FFA ? ffaGates : playGates;               // CHANGED(CORE): the FFA gate set in FFA mode
+  if (FFA) console.log(`INFO  slick entries ${runs.map(({ seed, r }) => `s${seed} ${r.slicks}`).join(' · ')} · refills from < 20 % ${runs.map(({ seed, r }) => `s${seed} ${r.refills}`).join(' · ')}`);
+  const names = gates(runs[0].r).map((g) => g[0]);
   for (let k = 0; k < names.length; k++) {
-    const per = runs.map(({ seed, r }) => ({ seed, g: playGates(r)[k] }));
+    const per = runs.map(({ seed, r }) => ({ seed, g: gates(r)[k] }));
     const bad = per.filter((p) => !p.g[1]);
     check(`${names[k]} on every seed (${SEEDS.length})`, bad.length === 0,
       per.map((p) => `s${p.seed}: ${p.g[2]}${p.g[1] ? '' : ' ✗'}`).join(' · '));
@@ -418,7 +481,7 @@ async function multiSeed(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<ty
   check('different seeds → different hashes', distinct === runs.length, `${distinct} distinct of ${runs.length}`);
   const failed = checks.filter((x) => !x.pass);
   console.log('-'.repeat(100));
-  console.log(failed.length ? `G8 bots (${MAP}, seeds ${SEEDS.join(',')}): FAIL (${failed.length} of ${checks.length} checks)` : `G8 bots (${MAP}, seeds ${SEEDS.join(',')}): PASS (${checks.length} checks)`);
+  console.log(failed.length ? `${FFA ? 'FFA ' : 'G8 '}bots (${MAP}, seeds ${SEEDS.join(',')}): FAIL (${failed.length} of ${checks.length} checks)` : `${FFA ? 'FFA ' : 'G8 '}bots (${MAP}, seeds ${SEEDS.join(',')}): PASS (${checks.length} checks)`);
   return failed.length ? 1 : 0;
 }
 

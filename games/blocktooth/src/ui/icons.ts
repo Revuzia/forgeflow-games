@@ -72,7 +72,7 @@ function bar(x0: number, y0: number, x1: number, y1: number, w: number): string 
   return poly([x0 + nx, y0 + ny, x1 + nx, y1 + ny, x1 - nx, y1 - ny, x0 - nx, y0 - ny]);
 }
 
-// ─────────────────────────────── the glyph set (58) ───────────────────────────────
+// ─────────────────────────────── the glyph set (59) ───────────────────────────────
 type GlyphDef = [main: string, detail?: string];
 
 const DEFS: Record<GlyphId, GlyphDef> = {
@@ -165,6 +165,18 @@ const DEFS: Record<GlyphId, GlyphDef> = {
   key: [rect(2.5, 5, 19, 14), rect(2.5, 8, 19, 2.5) + ' ' + rect(5.5, 13, 4.2, 3.4) + ' ' + rect(12, 13.8, 7, 1.4)],
   till: [rect(5, 2.5, 14, 12.5) + ' ' + rect(1.8, 15, 15.2, 6),
     rect(10, 5.2, 4, 1.4) + ' ' + rect(7.8, 8.6, 8.4, 3.4) + ' ' + rect(4, 17.1, 6, 1.6)],
+  // GATEKEEPERS §7.2 (lane K2b): a municipal sawhorse, drawn bold so it survives 16 px (a marker disc): a deep
+  // hazard-striped rail with a warning-lamp dome on top, standing on two solid A-frames (a notch between the
+  // legs, no thin braces: at 16 px a 2 px ink stroke eats anything under ~3 units). Cream detail = the rail's
+  // three diagonal hazard bands.
+  gatekeeper: [
+    rect(1, 5.2, 22, 6.3)                                                       // rail
+    + ' ' + 'M9.4 5.2 A2.6 2.6 0 0 1 14.6 5.2 Z'                                // lamp dome
+    + ' ' + poly([3.2, 11.5, 9.3, 11.5, 10.9, 22, 7.4, 22, 6.25, 16.8, 5.1, 22, 1.6, 22])      // left A-frame
+    + ' ' + poly([14.7, 11.5, 20.8, 11.5, 22.4, 22, 18.9, 22, 17.75, 16.8, 16.6, 22, 13.1, 22]),  // right A-frame
+    poly([2.4, 10.5, 5.4, 6.2, 8.4, 6.2, 5.4, 10.5]) + ' ' + poly([9.4, 10.5, 12.4, 6.2, 15.4, 6.2, 12.4, 10.5])
+    + ' ' + poly([16.4, 10.5, 19.4, 6.2, 22, 6.2, 22, 7.2, 19.8, 10.5]),
+  ],
 };
 
 /** SVG main path data (viewBox 0 0 24 24) per glyph. */

@@ -34,7 +34,7 @@
 //     Gravity is MOVE.gravity (15), the value the art lane verified the df_land arcs against.
 //   * OOB: feet inside any oob_ volume (AABB) → the sea (inSea; MatchWorld washes with cause 'sea').
 
-import type { MoveState, PlayerIntent, Side, TeamId } from './types.ts';
+import type { MatchMode, MoveState, PlayerIntent, Side, TeamId } from './types.ts';
 import type { CharacterBody, PhysicsWorld } from './physics.ts';
 import type { MapFeatures } from './mapgeo.ts';
 import { conveyorAt, oobAt, springAt } from './mapgeo.ts';
@@ -57,6 +57,10 @@ export interface RunnerOptions {
   ownPad?: PadZone | null;
   /** enemy team pad: this runner is pushed back out of it */
   enemyPad?: PadZone | null;
+  /** CHANGED(CORE) (CONTRACT_FFA §F6): FFA — every other runner's drop pad; this runner is pushed out of each */
+  otherPads?: readonly PadZone[] | null;
+  /** CHANGED(CORE): the match mode (FFA → `enemy` = 0: every other crew is a foe) */
+  mode?: MatchMode;
   /** standalone default true: below killY → respawn at once. MatchWorld passes false and washes (cause 'sea'). */
   autoRespawn?: boolean;
   /** phase-2 DEV_BRUSH: while fire is held, dye the floor under the feet */
@@ -107,7 +111,7 @@ export class Runner {
   readonly side: Side;
   readonly kit: string;
   readonly bot: boolean;
-  /** the other crew */
+  /** the other crew (teams). CHANGED(CORE): FFA → 0 — every other crew is a foe; use isFoe() */
   readonly enemy: TeamId;
 
   x = 0; y = 0; z = 0;              // feet
@@ -209,6 +213,8 @@ export class Runner {
   lastSpring = -1;
   /** index into features.conveyors of the belt carrying this runner this tick (−1: none) */
   onConveyor = -1;
+  /** set by MatchWorld at the end horn: the court is frozen, so belts stop carrying and springs stop launching */
+  courtFrozen = false;
   /** feet inside an oob_ volume this tick (implies inSea / a respawn) */
   inOob = false;
   /** @internal s until a spring may launch this runner again */
@@ -219,6 +225,8 @@ export class Runner {
   readonly physics: PhysicsWorld | null;
   ownPad: PadZone | null;
   enemyPad: PadZone | null;
+  /** CHANGED(CORE): FFA — the other runners' drop pads (pushed out of each); [] in teams */
+  otherPads: readonly PadZone[];
   readonly autoRespawn: boolean;
   readonly devBrush: boolean;
   fireMoveMul: number;
@@ -247,13 +255,14 @@ export class Runner {
     this.name = who.name;
     this.team = who.team;
     this.side = who.team === 2 ? 'B' : 'A';
-    this.enemy = who.team === 1 ? 2 : who.team === 2 ? 1 : 0;
+    this.enemy = opts.mode === 'ffa' ? 0 : who.team === 1 ? 2 : who.team === 2 ? 1 : 0;
     this.kit = who.kit;
     this.bot = who.bot;
     this.body = body;
     this.physics = opts.physics ?? null;
     this.ownPad = opts.ownPad ?? null;
     this.enemyPad = opts.enemyPad ?? null;
+    this.otherPads = opts.otherPads ?? [];
     this.autoRespawn = opts.autoRespawn ?? true;
     this.devBrush = opts.devBrush ?? false;
     this.fireMoveMul = opts.fireMoveMul ?? 1;
@@ -364,6 +373,11 @@ export class Runner {
     this.coyote = 0;
   }
 
+  /** CHANGED(CORE): is crew byte `t` a foe's dye (not null, neutral or own)? Both modes (teams: t === enemy). */
+  isFoe(t: number | null): boolean {
+    return t !== null && t !== 0 && t !== this.team;
+  }
+
   /** feet inside the pad disc (horizontal) and at its height */
   onPad(p: PadZone | null): boolean {
     if (!p) return false;
@@ -430,7 +444,7 @@ export class Runner {
     const onOwnPad = this.grounded && this.onPad(this.ownPad);
     const under = this.grounded ? painter.teamUnder(this.x, this.y, this.z) : null;
     const ownGround = this.grounded && (onOwnPad || under === this.team);
-    const enemyGround = this.grounded && !onOwnPad && under === this.enemy && this.enemy !== 0;
+    const enemyGround = this.grounded && !onOwnPad && this.isFoe(under);   // CHANGED(CORE): = under === enemy in teams
     const wantSlick = !!intent.slick;
 
     // ── WALL-SLICK
@@ -475,7 +489,7 @@ export class Runner {
           onWall = false;
         }
       }
-    } else if (wantSlick && this.physics && wlen > 0.1 && this.wallCd <= 0 && this.enemy !== 0 && !this.ballistic) {
+    } else if (wantSlick && this.physics && wlen > 0.1 && this.wallCd <= 0 && this.team !== 0 && !this.ballistic) {   // CHANGED(CORE): was enemy !== 0 (same in teams)
       const code = this.probeWall(dirx, dirz, painter);
       if (code === WALL_OWN && -(dirx * this.probeNx + dirz * this.probeNz) > SLICK.wallPushDot) {
         this.wallNx = this.probeNx; this.wallNz = this.probeNz;
@@ -574,7 +588,7 @@ export class Runner {
     // ── conveyor: a grounded runner on a belt top is carried (the displacement, never vx/vz)
     let beltX = 0, beltZ = 0;
     const feats = this.features;
-    if (feats && feats.conveyors.length && this.grounded && !onWall) {
+    if (feats && feats.conveyors.length && this.grounded && !onWall && !this.courtFrozen) {
       const ci = conveyorAt(feats, this.x, this.y, this.z);
       if (ci >= 0) {
         const v = feats.conveyors[ci].vel;
@@ -588,9 +602,12 @@ export class Runner {
       }
     }
 
-    // ── enemy pad: cancel inward velocity and shove outward (no spawn camping)
-    const ep = this.enemyPad;
-    if (ep) {
+    // ── enemy pad: cancel inward velocity and shove outward (no spawn camping). CHANGED(CORE): FFA — the same for
+    //    every other runner's drop pad (otherPads; empty in teams, so the teams tick is unchanged)
+    const nOther = this.otherPads.length;
+    for (let pi = -1; pi < nOther; pi++) {
+      const ep = pi < 0 ? this.enemyPad : this.otherPads[pi];
+      if (!ep) continue;
       const ddx = this.x - ep.x, ddz = this.z - ep.z;
       const d = Math.hypot(ddx, ddz);
       const R = ep.r + MOVE.radius;
@@ -642,7 +659,7 @@ export class Runner {
       }
       if (this.grounded) this.ballistic = false;
       // tide-spring: grounded inside a pad disc → launch (ballistic until the next landing)
-      if (this.grounded && feats && feats.springs.length && this.springLock <= 0) {
+      if (this.grounded && feats && feats.springs.length && this.springLock <= 0 && !this.courtFrozen) {
         const si = springAt(feats, this.x, this.y, this.z);
         if (si >= 0) {
           const L = feats.springs[si].launch;

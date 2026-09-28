@@ -42,6 +42,9 @@ const METRIC_GLYPH: Record<GoalMetric, GlyphId> = {
   crushed: 'foot', titanClears: 'ribbon', titanBiomesCleared: 'ribbon', wiresBest: 'wire', hookKillsBest: 'hook',
   fullVents: 'dome', bloomsBest: 'turret', healed: 'bandage', props: 'chunk', overloadSites: 'overload',
   tier4CollapseFrac: 'wreck', bossKillsLife: 'bullseye', staggersBestFight: 'ripple', boats: 'ripple', fastClearS: 'rush',
+  // GATEKEEPERS §6.5 (K0 Record completion; lane K2c adds the goals)
+  gateTippedFastS: 'gatekeeper', gateStallsBestFight: 'gatekeeper', gateSwitchFastS: 'gatekeeper', gateCleanKills: 'gatekeeper',
+  gateTotalFightS: 'gatekeeper', gateRematchesLife: 'gatekeeper',
 };
 
 export function goalGlyph(g: GoalDef): GlyphId { return METRIC_GLYPH[g.metric] ?? 'ribbon'; }

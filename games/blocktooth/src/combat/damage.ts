@@ -18,7 +18,7 @@ import { circleInShape, clamp, rectInShape, shapeBounds } from '../core/math.ts'
 import { enemiesInShape, nearestEnemy } from './spatial.ts';
 import { spawnPickup } from './pickups.ts';
 import { ENEMIES } from '../data/enemies.ts';
-import { damageBoss } from '../ai/bosses/index.ts';
+import { damageBoss, gateAddIds } from '../ai/bosses/index.ts';
 import { buildingById, buildingsInRect, damageBuilding, damageProp, propsInRect } from '../city/citysim.ts';
 import { healTitan, hurtTitan } from '../titans/titansim.ts';
 import { stat } from '../upgrades/stats.ts';
@@ -256,14 +256,26 @@ export function damageArea(w: World, s: Shape, dmg: number, opts: DamageOpts): n
   // part (each share then gets that part's hpMul / strainMul / stagger inside damageBoss). Giving every
   // overlapping part the full amount made a big AoE worth up to 7× a single-target hit (measured: 6.4
   // parts per HEARTHBACK stomp at Size V → CAISSON-4 dead in ~8 s vs ~90 s for MOLO's bite).
+  // GATEKEEPERS §3.0: for a gatekeeper, a shape that overlaps an OPEN weak part (bit i of data.weakMask)
+  // gives the WHOLE hit to the overlapping weak part(s) only — the window pays what it promises (MOLO's
+  // bite behind STENCIL-1's open drum also overlaps the body and both rear wheels). Still one hit's worth.
   const B = w.boss;
   if (B && B.alive) {
-    let n = 0;
-    for (let i = 0; i < B.parts.length; i++) { const p = B.parts[i]; if (circleInShape(s, p.x, p.z, p.r)) n++; }
+    const weak = B.role === 'gate' && B.data.weakMask > 0 ? B.data.weakMask : 0;
+    let n = 0, nWeak = 0;
+    for (let i = 0; i < B.parts.length; i++) {
+      const p = B.parts[i];
+      if (!circleInShape(s, p.x, p.z, p.r)) continue;
+      n++;
+      if (weak && i < 31 && ((weak >>> i) & 1)) nWeak++;
+    }
+    const onlyWeak = nWeak > 0;
+    if (onlyWeak) n = nWeak;
     if (n > 0) {
       const share = BOSS_AOE_SPLIT ? c.dmg / n : c.dmg;
       for (let i = 0; i < B.parts.length && B.alive; i++) {
         const p = B.parts[i];
+        if (onlyWeak && !(i < 31 && ((weak >>> i) & 1))) continue;
         if (!circleInShape(s, p.x, p.z, p.r)) continue;
         const before = B.hp;
         damageBoss(w, i, share, hitOpts);
@@ -318,7 +330,12 @@ function hitEnemy(w: World, e: Enemy, dmg: number, opts: DamageOpts, ox: number,
   e.flash = HIT_FLASH_S;
   const dealt = Math.max(0, Math.min(before, dmg));
   emitEnemyHit(w, e, dmg, opts.crit === true);
-  if (isTitanSide(opts.src)) lifesteal(w, dealt);
+  if (isTitanSide(opts.src)) {
+    lifesteal(w, dealt);
+    // GATEKEEPERS §2.4 engagement rule (b): hitting one of the live gatekeeper's adds counts as engaging it
+    const adds = gateAddIds(w);
+    if (adds.length > 0 && adds.includes(e.id)) w.gates.lastAddHitT = w.t;
+  }
   if (e.hp <= 0) { killEnemy(w, e, false); return true; }
   if (knock > 0) applyKnock(w, e, knock, ox, oz);
   return false;

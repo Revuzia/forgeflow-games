@@ -30,10 +30,14 @@
 //     drifts slowly round the court on an ellipse (lobbyCamera) and the menus draw over it. The app phase
 //     is 'menu' while it runs. mode 'match' is the phase 3–8 game. dispose() stops the loop and removes
 //     every listener so main.ts can swap sessions (lobby ⇄ match, map to map) in one page.
+//   * CONTRACT_FFA F3: MatchConfig.mode 'ffa' runs MatchWorld in FREE-FOR-ALL (8 crews of one). The HUD gets the
+//     per-crew shares every frame (Painter.coverageByTeam into one reused buffer); the victory slate gets the result's
+//     standings (winner / top 3 / everyone, with %); the victory / defeat stinger follows whether the HUMAN won (a draw
+//     counts as won when the human is among the tied crews). Teams mode takes none of these branches.
 
 import * as THREE from 'three';
 import { TICK, MAX_STEPS_PER_FRAME, DEV_BRUSH, COMBAT } from './core/config.ts';
-import { emptyIntent, type PlayerIntent, type TeamId } from './core/types.ts';
+import { CREW_SLOTS, emptyIntent, type MatchMode, type PlayerIntent, type TeamId } from './core/types.ts';
 import { WEAPONS, type MapDef } from './core/data.ts';
 import type { MapGeometry } from './core/mapgeo.ts';
 import type { PaintAtlas } from './core/paint/atlas.ts';
@@ -55,7 +59,7 @@ import type { DyeUniforms } from './view/surfaces.ts';
 import type { MapView } from './view/mapview.ts';
 import { kitFireType, type KitFireType, type PlayerViews, type PlayersFrameOpts } from './view/players.ts';
 import type { Fx } from './view/fx.ts';
-import type { Hud, HudDebug, CrestInfo, DotInfo, HudFrame } from './ui/hud.ts';
+import type { Hud, HudDebug, CrestInfo, DotInfo, HudFrame, FfaVictory } from './ui/hud.ts';
 import type { BootUI } from './ui/boot.ts';
 import type { Juice, JuiceCtx } from './ui/juice.ts';
 import type { AudioFrame, GameAudio, ListenerPose } from './audio/index.ts';
@@ -89,6 +93,8 @@ export interface MatchConfig {
   crew?: TeamId;
   /** ?dev=1&brush=1: LMB is the phase-2 DEV_BRUSH instead of the kit */
   devBrush: boolean;
+  /** CONTRACT_FFA F3: 'teams' (default) or 'ffa' (8 crews of one; `crew` is then the human's FFA colour 1..8) */
+  mode?: MatchMode;
 }
 
 export type GameMode = 'lobby' | 'match';
@@ -248,10 +254,15 @@ export class Game {
   private readonly juiceCtx: JuiceCtx;
   private readonly listener: ListenerPose = { x: 0, y: 0, z: 0, fx: 0, fy: 0, fz: -1, ux: 0, uy: 1, uz: 0 };
   private readonly audioFrame: AudioFrame;
+  /** CONTRACT_FFA F3: the match mode ('teams' for the lobby) */
+  readonly matchMode: MatchMode;
+  /** FFA: the per-crew coverage shares, refreshed each rendered frame (no per-frame allocation) */
+  private readonly shareBuf = new Float64Array(CREW_SLOTS);
 
   constructor(parts: GameParts, settings: Partial<GameSettings> = {}) {
     this.p = parts;
     this.mode = parts.mode ?? 'match';
+    this.matchMode = this.mode === 'match' && parts.config.mode === 'ffa' ? 'ffa' : 'teams';
     this.settings = { quality: settings.quality ?? parts.rig.adaptive().quality };
     this.physics = parts.physics;
     for (let i = 0; i < parts.roster.length; i++) {
@@ -347,6 +358,7 @@ export class Game {
       def: p.def, geo: p.geo, physics: this.physics, painter: p.painter, roster: p.roster,
       seed: p.config.seed + (lobby ? this.lobbyRounds * 7919 : 0),
       ...(dur ? { durationS: dur } : {}), ...(lobby ? { countdownS: 0 } : {}),
+      ...(this.matchMode === 'ffa' ? { mode: 'ffa' as const } : {}),
     });
   }
 
@@ -783,7 +795,7 @@ export class Game {
           const v = rs[e.victim];
           const by = e.by !== null && e.by >= 0 ? rs[e.by] : null;
           if (v) {
-            const burstTeam: TeamId = by ? by.team : (v.team === 1 ? 2 : 1);
+            const burstTeam: TeamId = by ? by.team : this.matchMode === 'ffa' ? v.team : (v.team === 1 ? 2 : 1);
             if (e.cause !== 'sea') fx.washedBurst(v.x, v.y, v.z, burstTeam);
             players.onWashed(e.victim);
             if (!lobby) hud.killFeed(e.cause === 'sea' || !by ? null : { name: by.name, team: by.team }, { name: v.name, team: v.team });
@@ -850,17 +862,49 @@ export class Game {
       const res = this.world.result ?? { ...this.p.painter.coverage(), winner: 0 as TeamId };
       this.p.hud.hideDeath();
       const hooks = this.p.hooks;
-      this.p.hud.showVictory({ sun: res.sun, gulf: res.gulf, neutral: res.neutral, winner: res.winner }, () => this.playAgain(),
+      const ffa = this.matchMode === 'ffa' ? this.ffaVictory() : undefined;
+      this.p.hud.showVictory({ sun: res.sun, gulf: res.gulf, neutral: res.neutral, winner: res.winner, ...(ffa ? { ffa } : {}) }, () => this.playAgain(),
         hooks?.lobby ? () => hooks.lobby?.() : undefined);
       hooks?.victory?.(this.p.hud.slates.victoryEl);
       // confetti in the winner's colours, kept off the slate's card (title + tally stay clean); the stinger
-      this.p.juice?.victory(res.winner, this.p.hud.slates.victoryCardEl);
-      this.p.audio?.playMusic(res.winner === this.humanTeam || res.winner === 0 ? 'victory' : 'defeat');
+      if (ffa) this.p.juice?.victory(res.winner, this.p.hud.slates.victoryCardEl, ffa.winners);   // FFA draw: the tied crews' colours
+      else this.p.juice?.victory(res.winner, this.p.hud.slates.victoryCardEl);
+      // the stinger follows whether the human won (teams: a draw plays 'victory', as before; FFA: a draw is won only
+      // when the human is among the crews tied for first)
+      const won = ffa ? ffa.winners.includes(this.humanTeam) : res.winner === this.humanTeam || res.winner === 0;
+      this.p.audio?.playMusic(won ? 'victory' : 'defeat');
       // the world is over: the keys belong to the slate now (arrows / Space / Enter drive PLAY AGAIN · LOBBY)
       this.p.input.live = false;
       this.p.input.releaseAll();
       if (document.pointerLockElement === this.p.canvas) document.exitPointerLock();
     }
+  }
+
+  /**
+   * CONTRACT_FFA F3: the FFA slate's data — the sim's final standings (share descending, a tie → the lower crew id) with
+   * the runner names, and the winners (the winner, or every crew tied for first on a draw). A result without standings
+   * (never the case for a finished FFA match) falls back to the painter's per-crew shares.
+   */
+  private ffaVictory(): FfaVictory {
+    const w = this.world;
+    const res = w.result;
+    const rs = w.runners;
+    const standings = res?.standings?.length
+      ? res.standings.map((s) => ({ team: s.crew, name: s.name, share: s.share, you: s.pid === HUMAN }))
+      : (() => {
+        const sh = this.p.painter.coverageByTeam(this.shareBuf);
+        return rs.map((r) => ({ team: r.team, name: r.name, share: sh[r.team] ?? 0, you: r.id === HUMAN }))
+          .sort((a, b) => (b.share - a.share) || (a.team - b.team));
+      })();
+    let winners: number[];
+    if (res && res.winner !== 0) winners = [res.winner];
+    else if (res?.tied?.length) winners = [...res.tied];
+    else {
+      const top = standings.length ? standings[0].share : 0;
+      winners = standings.filter((s) => s.share === top).map((s) => s.team);
+    }
+    const neutral = res?.shares ? res.shares[0] : this.p.painter.coverageByTeam(this.shareBuf)[0];
+    return { standings, winners, neutral };
   }
 
   private playAgain(): void {
@@ -949,6 +993,7 @@ export class Game {
     hf.timeLeft = w.timeLeft;
     hf.countdown = w.countdown;
     hf.coverage = p.painter.coverage();
+    hf.shares = this.matchMode === 'ffa' ? p.painter.coverageByTeam(this.shareBuf) : null;
     hf.tank = me.tank; hf.hp = me.hp; hf.alive = me.alive;
     hf.slick = me.slickForm; hf.firing = me.firing && this.phase === 'play';
     hf.x = f.x; hf.z = f.z; hf.yaw = f.yaw;
@@ -1019,6 +1064,9 @@ export class Game {
     return {
       mode: this.mode, phase: w.phase, timeLeft: w.timeLeft, countdown: w.countdown, tick: w.tick, result: w.result,
       coverage: this.p.painter.coverage(), matchNo: this.matchNo, victoryShown: this.victoryShown,
+      // CONTRACT_FFA F3: the match mode, the crews in play (world.crews, ascending) and the weighted share per crew id
+      // (index 0 = neutral; teams mode fills 1 / 2)
+      matchMode: this.matchMode, crews: [...w.crews], coverageByTeam: Array.from(this.p.painter.coverageByTeam()),
       runners: w.runners.map((r) => ({
         id: r.id, name: r.name, team: r.team, bot: r.bot, state: r.state, hp: r.hp, tank: r.tank, alive: r.alive,
         x: r.x, y: r.y, z: r.z, hidden: r.hidden, slickForm: r.slickForm, special: r.special, respawnT: r.respawnT,

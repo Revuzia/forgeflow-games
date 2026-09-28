@@ -6,11 +6,15 @@
 //   * objectives (alive): anchored at the top of their light column (OBJ_ANCHOR, ObjectiveView), always
 //     listed while ON screen; OFF screen only within 3 × spawnRing (6 × with the ADVANCE TIP-LINE perk);
 //   * power-ups (alive): anchored over the token; off screen only within 1.5 × spawnRing (× 2 with the perk);
-//   * the PARKADE-6 TILL while it is open (`boss.data.tillOpen > 0`): `HIT THE TILL`, always listed.
+//   * the PARKADE-6 TILL while it is open (`boss.data.tillOpen > 0`): `HIT THE TILL`, always listed;
+//   * GATEKEEPERS §6.6 (lane K2a): `gate` — the live gatekeeper, listed only while it is OFF screen (an edge
+//     arrow while it arrives or is out-run; the nameplate covers it on screen), `sub` = its GateId; `weakPoint` —
+//     the exposed weak part nearest the titan (the open DRUM, the PACK, a DISH: `b.data.weakMask`), anchored at
+//     the part's top while it is open, `sub` = the GateId (ui/markers.ts turns it into HIT THE DRUM / …).
 // Off screen: the item is clamped to a 3u inset of the view edge along the ray from the view centre
 // (a point behind the camera is mirrored first), `angle` = atan2(dy, dx) in CSS px (0 = right, +π/2 =
 // down), `onScreen` false. `dist` = metres from the titan ÷ CITY.pitch (blocks). Priority when more than
-// 12 qualify: the TILL, then objectives, then power-ups, each nearest-first.
+// 12 qualify: the TILL / weak point / gatekeeper, then objectives, then power-ups, each nearest-first.
 
 import * as THREE from 'three';
 import type { World } from '../core/types.ts';
@@ -28,7 +32,7 @@ const CAND = 24;
 const INSET_U = 3;
 const OBJ_RANGE = 3, PU_RANGE = 1.5, TIP_MUL = 2;
 
-interface Cand { kind: MarkerKind; sub: string; x: number; y: number; z: number; d: number; prio: number; always: boolean; liftPx: number }
+interface Cand { kind: MarkerKind; sub: string; x: number; y: number; z: number; d: number; prio: number; always: boolean; liftPx: number; offOnly: boolean }
 
 const _v = new THREE.Vector4();
 const _size = new THREE.Vector2();
@@ -44,7 +48,7 @@ export class MarkerView implements ViewModule, MarkerViewApi {
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
     for (let i = 0; i < MAX; i++) this.pool.push({ kind: 'overloadSite', sub: '', x: 0, y: 0, onScreen: false, angle: 0, dist: 0 });
-    for (let i = 0; i < CAND; i++) this.cand.push({ kind: 'overloadSite', sub: '', x: 0, y: 0, z: 0, d: 0, prio: 0, always: false, liftPx: 0 });
+    for (let i = 0; i < CAND; i++) this.cand.push({ kind: 'overloadSite', sub: '', x: 0, y: 0, z: 0, d: 0, prio: 0, always: false, liftPx: 0, offOnly: false });
   }
 
   mount(_w: World): void { this.out.items.length = 0; }
@@ -68,6 +72,23 @@ export class MarkerView implements ViewModule, MarkerViewApi {
         if (p.name !== 'till') continue;
         this.push('till', 'HIT THE TILL', p.x, Math.max(p.y1, 1), p.z, Math.hypot(p.x - T.x, p.z - T.z), 0, true);
         break;
+      }
+    }
+    // GATEKEEPERS §6.6: the gatekeeper (off screen only) and its exposed weak point
+    if (b && b.alive && b.role === 'gate') {
+      const Hg = b.data.H > 0 ? b.data.H : H;
+      this.push('gate', b.id, b.x, Hg * 1.6, b.z, Math.hypot(b.x - T.x, b.z - T.z), 0, true, Infinity, 0);
+      this.cand[this.nCand - 1].offOnly = true;
+      const mask = b.introT > 0 ? 0 : (b.data.weakMask ?? 0);
+      if (mask > 0) {
+        let best = -1, bd = Infinity;
+        for (let i = 0; i < b.parts.length && i < 30; i++) {
+          if (((mask >> i) & 1) === 0) continue;
+          const p = b.parts[i];
+          const dd = Math.hypot(p.x - T.x, p.z - T.z);
+          if (dd < bd) { bd = dd; best = i; }
+        }
+        if (best >= 0) { const p = b.parts[best]; this.push('weakPoint', b.id, p.x, Math.max(p.y1, 0.5), p.z, bd, 0, true); }
       }
     }
     const objs = w.map.objectives;
@@ -118,6 +139,7 @@ export class MarkerView implements ViewModule, MarkerViewApi {
       const px = (nx * 0.5 + 0.5) * W, py = (0.5 - ny * 0.5) * Hh;
       const on = !behind && px >= 0 && px <= W && py >= 0 && py <= Hh;
       if (!on && !c.always && c.d > (c.prio === 2 ? puR : objR)) continue;
+      if (on && c.offOnly) continue;
       const it = this.pool[items.length];
       it.kind = c.kind; it.sub = c.sub; it.dist = c.d / CITY.pitch; it.onScreen = on;
       if (on) { it.x = px; it.y = py - c.liftPx * (Hh / 720); it.angle = 0; }
@@ -144,6 +166,6 @@ export class MarkerView implements ViewModule, MarkerViewApi {
     if (this.nCand >= CAND) return;
     if (!always && d > range * 4) return;   // far beyond even the edge-arrow range: cannot be on screen either
     const c = this.cand[this.nCand++];
-    c.kind = kind; c.sub = sub; c.x = x; c.y = y; c.z = z; c.d = d; c.prio = prio; c.always = always; c.liftPx = liftPx;
+    c.kind = kind; c.sub = sub; c.x = x; c.y = y; c.z = z; c.d = d; c.prio = prio; c.always = always; c.liftPx = liftPx; c.offOnly = false;
   }
 }

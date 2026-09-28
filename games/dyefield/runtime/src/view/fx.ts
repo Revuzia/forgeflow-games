@@ -35,9 +35,9 @@
 // Colours are the teams.json dyes (linear). Math.random is fine here (view only, never core).
 
 import * as THREE from 'three';
-import { crewDyeHex, teamById, WEAPONS } from '../core/data.ts';
+import { crewDef, crewDyeHex, crewIds, WEAPONS } from '../core/data.ts';
 import { TICK, KITS } from '../core/config.ts';
-import type { TeamId } from '../core/types.ts';
+import type { MatchMode, TeamId } from '../core/types.ts';
 import { bakeModel, type BakedModel, type KitArt } from './players.ts';
 
 /** the slice of core/combat/projectiles.ts ProjectilePool the view reads (CONTRACT §10.2 + CHANGED(KITSIM)) */
@@ -524,6 +524,9 @@ export class Fx {
   private readonly teamCol: Record<number, THREE.Color>;
   private readonly teamLight: Record<number, THREE.Color>;
   private readonly teamDark: Record<number, THREE.Color>;
+  /** the match mode (CONTRACT_FFA): teams → crews 1 SUNCREW, 2 GULF CREW; ffa → crews 1..8 */
+  private mode: MatchMode = 'teams';
+  private colorblind = false;
   private readonly white = new THREE.Color(0xf4fbff);
   private readonly mist = new THREE.Color(0xe8f6ff);
   private readonly grey = new THREE.Color(0x9aa3ad);
@@ -577,14 +580,15 @@ export class Fx {
   /** camera position of the last update (emitters cull by distance: no fill spent on far FX) */
   private readonly eye = new THREE.Vector3(0, 1e6, 0);
 
-  constructor(sunDir: THREE.Vector3) {
+  constructor(sunDir: THREE.Vector3, mode: MatchMode = 'teams') {
     this.sunDir = sunDir;
     this.root.name = 'fx';
-    const c1 = new THREE.Color(teamById(1).dye), c2 = new THREE.Color(teamById(2).dye);
     const n = new THREE.Color(0xdfe6ee);
-    this.teamCol = { 0: n, 1: c1, 2: c2 };
-    this.teamLight = { 0: n, 1: c1.clone().lerp(new THREE.Color(teamById(1).dyeGloss), 0.35), 2: c2.clone().lerp(new THREE.Color(teamById(2).dyeGloss), 0.35) };
-    this.teamDark = { 0: n.clone().multiplyScalar(0.5), 1: c1.clone().multiplyScalar(0.55), 2: c2.clone().multiplyScalar(0.55) };
+    this.teamCol = { 0: n };
+    this.teamLight = { 0: n };
+    this.teamDark = { 0: n.clone().multiplyScalar(0.5) };
+    this.mode = mode;
+    this.fillCrews();
 
     // ── projectile droplets
     const dropGeo = new THREE.IcosahedronGeometry(1, 1);
@@ -1483,16 +1487,36 @@ export class Fx {
    * Settings → Colorblind marks: the crew colours (teams.json `colorblind` dye; light = toward the gloss, as the
    * dye shader derives it) are changed IN PLACE, so every pool that holds them picks them up; the per-slot
    * colour caches are dropped so live instances re-colour on their next frame. Particles already in flight
-   * keep their colour (they live < 1 s).
+   * keep their colour (they live < 1 s). FFA has no colour swap (crewDyeHex): the crews keep their dyes.
    */
   setColorblind(on: boolean): void {
-    for (const t of [1, 2] as const) {
-      const dye = new THREE.Color(crewDyeHex(t, on));
-      const gloss = on ? dye.clone().lerp(new THREE.Color(1, 1, 1), 0.55) : new THREE.Color(teamById(t).dyeGloss);
-      this.teamCol[t].copy(dye);
-      this.teamLight[t].copy(dye).lerp(gloss, 0.35);
-      this.teamDark[t].copy(dye).multiplyScalar(0.55);
+    this.colorblind = !!on;
+    this.fillCrews();
+    this.recolour();
+  }
+
+  /** CHANGED(VIEW) (CONTRACT_FFA §F7): switch the crew palette (teams: 1 SUNCREW · 2 GULF CREW; ffa: crews 1..8) in place */
+  setMode(mode: MatchMode): void {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    this.fillCrews();
+    this.recolour();
+  }
+
+  /** (re)fill every crew colour of the mode IN PLACE (dye, light = 35 % toward the gloss, dark = × 0.55) */
+  private fillCrews(): void {
+    const white = new THREE.Color(1, 1, 1);
+    for (const t of crewIds(this.mode)) {
+      const dye = new THREE.Color(crewDyeHex(this.mode, t, this.colorblind));
+      const gloss = this.colorblind && this.mode === 'teams' ? dye.clone().lerp(white, 0.55) : new THREE.Color(crewDef(this.mode, t).dyeGloss);
+      (this.teamCol[t] ??= new THREE.Color()).copy(dye);
+      (this.teamLight[t] ??= new THREE.Color()).copy(dye).lerp(gloss, 0.35);
+      (this.teamDark[t] ??= new THREE.Color()).copy(dye).multiplyScalar(0.55);
     }
+  }
+
+  /** drop the per-slot colour caches: live instances re-colour on their next push */
+  private recolour(): void {
     this.lastDropTeams.fill(255);
     for (const pool of [this.jelly, this.puddle, this.cloud, this.buoy]) pool?.invalidate();
   }

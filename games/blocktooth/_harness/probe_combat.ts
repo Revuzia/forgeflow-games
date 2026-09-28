@@ -18,7 +18,7 @@ const G = globalThis as unknown as { __BT_STUBS__: StubTable };
 const STUB_MODULES: Record<string, { re: RegExp; names: string[] }> = {
   titansim: { re: /titans\/titansim\.ts$/, names: ['createTitan', 'stepTitan', 'hurtTitan', 'healTitan', 'gainXp', 'gainMass', 'titanMaxSpeed'] },
   citysim: { re: /city\/citysim\.ts$/, names: ['stepCity', 'buildingsInRect', 'propsInRect', 'damageBuilding', 'damageProp', 'resolveCircleVsCity', 'blockOf', 'buildingById', 'nearestRubble'] },
-  bosses: { re: /ai\/bosses\/index\.ts$/, names: ['spawnBoss', 'stepBoss', 'damageBoss'] },
+  bosses: { re: /ai\/bosses\/index\.ts$/, names: ['spawnBoss', 'stepBoss', 'damageBoss', 'gateAddIds'] },   // + GATEKEEPERS K0 (damage.ts hitEnemy)
   stats: { re: /upgrades\/stats\.ts$/, names: ['createUpgradeState', 'recomputeStats', 'stat', 'baseStatBlock'] },
   // v2 (FEATURES_V2 §2.7, L0): the pre-wired meta hooks in combat/* are other lanes' systems too —
   // stubbed inert here so this probe keeps testing combat alone (killEnemy drops its own scrap,
@@ -114,6 +114,7 @@ G.__BT_STUBS__ = {
       rec.boss.push({ part, dmg });
       if (w.boss) w.boss.hp -= dmg * w.boss.parts[part].hpMul;
     },
+    gateAddIds: () => [],   // GATEKEEPERS K0: no gatekeeper adds in the combat probe
   },
   ultimate: {
     ultBankKill: () => false,

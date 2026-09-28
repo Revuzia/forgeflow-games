@@ -28,6 +28,7 @@ import type { CineChannels, FaceAnchor } from '../v2types.ts';
 import { ULTS } from '../data/ultimates.ts';
 import { TITAN_PALETTES } from '../data/palettes.ts';
 import { CINE } from '../data/cine.ts';
+import { sizeLocked } from '../meta/gates.ts';
 
 /**
  * Night look (LOCKWATER). The navy street (#0d1a26) and the #1b1426 ink leave a dark hide with no
@@ -59,9 +60,15 @@ const TIMER_MAX = 3;
 const POP_RING = {
   level: { r0: 0.45, r1: 1.9, life: 0.6, alpha: 1 },
   breach: { r0: 0.6, r1: 3.4, life: 0.95, alpha: 1 },
+  /** GATEKEEPERS §6.7: a level held at the Size ceiling — a hazard-yellow ring that stops short (no growth) */
+  strain: { r0: 0.5, r1: 1.15, life: 0.45, alpha: 1 },
   inner: 0.74,              // inner radius / outer radius of the band
   color: '#ffe7a3',         // warm cream: reads on navy asphalt, snow and night water alike
+  strainColor: '#ffc63d',   // hazard yellow (the HEIGHT LIMIT's colour)
 } as const;
+/** GATEKEEPERS §6.7: while a Size is held the glow parts dim to this; a held level-up squashes (no pop) */
+const HELD_GLOW = 0.6;
+const STRAIN = { dur: 0.5, squash: 0.08, bulge: 0.045, tremble: 0.012 } as const;
 /** grow-pop strength (anim popAmt) for a plain level-up / a Size breach */
 const POP_AMT_LEVEL = 1, POP_AMT_BREACH = 1.5;
 
@@ -118,6 +125,10 @@ export class TitanView implements ViewModule {
   private ring: THREE.Mesh | null = null;
   private ringT = -1;
   private ringBig = false;
+  // GATEKEEPERS (lane K2a): the held-Size glow dim (smoothed 1 → HELD_GLOW) and the STRAIN squash clock
+  private heldK = 1;
+  private strainT = -1;
+  private ringStrain = false;
   // v2 (lane L10): the palette the model was built in (0 = canonical), the cinematic channels and the
   // WHITE STACKS breath puffs at the snarl (two puffs from the dust pool)
   private palette = 0;
@@ -154,6 +165,7 @@ export class TitanView implements ViewModule {
     const s = this.st;
     s.attack = null; s.attackT = -1; s.dashT = -1; s.hurtT = -1; s.abilityT = -1; s.growT = -1; s.deadT = -1;
     s.clearT = -1; s.downSide = 1; s.popT = -1; s.popAmt = POP_AMT_LEVEL;
+    this.strainT = -1; this.heldK = 1; this.ringStrain = false;
     s.ultT = -1; s.ultRoar = ULTS[w.titanId].roarS; s.ultBlast = ULTS[w.titanId].blastS;
     this.kUlt = 0;
     this.lift = 0; this.dustDone = false; this.dustLive = 0;
@@ -197,6 +209,7 @@ export class TitanView implements ViewModule {
     s.growT = advT(s.growT, dt);
     s.popT = advT(s.popT ?? -1, dt);
     s.ultT = advT(s.ultT ?? -1, dt);
+    if (this.strainT >= 0) { this.strainT += dt; if (this.strainT > STRAIN.dur) this.strainT = -1; }
     if (!T.alive) {
       if (s.deadT! < 0) {
         // land on the flank that turns the belly to the camera (camera yaw 45°: it sits at +X+Z).
@@ -318,6 +331,16 @@ export class TitanView implements ViewModule {
     root.position.set(lerpPose(T.px, T.x, a), 0, lerpPose(T.pz, T.z, a));
     root.rotation.set(0, lerpAngle(T.pheading, T.heading, a), 0);
     root.scale.setScalar(Math.max(0.01, lerpPose(this.hPrev, this.hCur, a)));
+    // GATEKEEPERS §6.7: the STRAIN squash — the body presses against the HEIGHT LIMIT and gives (no growth)
+    if (this.strainT >= 0) {
+      const u = this.strainT / STRAIN.dur;
+      const k = Math.sin(Math.min(1, u) * Math.PI) * (1 - 0.4 * u);
+      const h = root.scale.y;
+      root.scale.set(h * (1 + STRAIN.bulge * k), h * (1 - STRAIN.squash * k), h * (1 + STRAIN.bulge * k));
+      const tr = STRAIN.tremble * h * k;
+      root.position.x += Math.sin(this.strainT * 71) * tr;
+      root.position.z += Math.cos(this.strainT * 63) * tr;
+    }
     if (this.lift !== 0) root.position.y = this.lift;
   }
 
@@ -421,7 +444,8 @@ export class TitanView implements ViewModule {
     const m = this.ring;
     if (!m) return;
     if (this.ringT < 0) { if (m.visible) m.visible = false; return; }
-    const P = this.ringBig ? POP_RING.breach : POP_RING.level;
+    const P = this.ringStrain ? POP_RING.strain : this.ringBig ? POP_RING.breach : POP_RING.level;
+    (m.material as THREE.MeshBasicMaterial).color.set(this.ringStrain ? POP_RING.strainColor : POP_RING.color);
     this.ringT += dt;
     const u = this.ringT / P.life;
     if (u >= 1) { this.ringT = -1; m.visible = false; return; }
@@ -529,11 +553,16 @@ export class TitanView implements ViewModule {
       if (t === 'levelUp') lv = true;
       else if (t === 'rankUp') breach = true;
     }
-    if (lv || breach) {
+    if (lv && !breach && sizeLocked(w)) {
+      // GATEKEEPERS §6.7: the STRAIN beat — a squash that does not grow, a short hazard-yellow ring (no grow pop)
+      this.strainT = 0;
+      this.ringT = 0; this.ringBig = false; this.ringStrain = true;
+    } else if (lv || breach) {
       s.popT = 0;
       s.popAmt = breach ? POP_AMT_BREACH : POP_AMT_LEVEL;
       this.ringT = 0;
       this.ringBig = breach;
+      this.ringStrain = false;
     }
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
@@ -571,7 +600,11 @@ export class TitanView implements ViewModule {
   private driveGlow(w: World, dt: number): void {
     // DEFEAT: the glow parts gutter out as the titan goes down (a clear keeps them blazing)
     const out = this.st.deadT! >= 0 ? 1 - 0.75 * clamp(this.st.deadT! / DEFEAT.impact, 0, 1) : 1;
-    this.glowOut = out;
+    // GATEKEEPERS §6.7: the glow parts dim to 60 % while a Size is held (eased; restored by the MASS BREACH)
+    const heldT = sizeLocked(w) ? HELD_GLOW : 1;
+    this.heldK += (heldT - this.heldK) * Math.min(1, dt * 4);
+    if (dt <= 0) this.heldK = heldT;
+    this.glowOut = out * this.heldK;
     if (this.st.clearT! >= 0 && this.kAbility < 0.6) this.kAbility = 0.6;
     const K = w.titan.kit;
     const calm = this.ctx.quality.reduceFlashing;

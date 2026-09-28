@@ -2,10 +2,10 @@
 //
 //   node _harness/probe_icons.ts
 //
-// Asserts: the 58-glyph set exists and every glyph is a non-empty, well-formed path inside the 24×24
-// box; every UPGRADES entry resolves (iconFor) to an existing glyph, an evolution to its base card's
-// glyph; every action/stat table value exists; every StatKey and TriggerAction has a glyph; every
-// tags[0] / tags[1] value used by UPGRADES maps to a family colour (evolutions read tags[1]); the
+// Asserts: the 59-glyph set exists (58 + the GATEKEEPERS `gatekeeper` sawhorse, lane K2b) and every glyph
+// is a non-empty, well-formed path inside the 24×24 box; every UPGRADES entry resolves (iconFor) to an
+// existing glyph, an evolution to its base card's glyph; every action/stat table value exists; every
+// StatKey and TriggerAction has a glyph; every tags[0] / tags[1] value used by UPGRADES maps to a family colour (evolutions read tags[1]); the
 // rarity frame class; the §4.2 bar ordering rule on synthetic owned sets (≤ 10 all in pick order,
 // > 10 top-9 by score in pick order + `+N`, ties by pick order, perk cards and duplicates excluded);
 // the §4.3 badge rule. F4 adds: (6) bar glyphs — every card has ≥ 10 distinct candidates, and barGlyphs
@@ -39,9 +39,10 @@ const EXPECTED: GlyphId[] = [
   'vortex', 'fork', 'wire', 'dome', 'lava', 'turret', 'spore', 'vine', 'flame', 'meteor', 'snow', 'plus',
   'lock', 'banish', 'evo', 'overload', 'annex', 'trafficLight', 'notice', 'rush', 'coin', 'ribbon', 'swatch',
   'key', 'till',
+  'gatekeeper',   // GATEKEEPERS §7.2 (K0: GlyphId grew by one; lane K2b draws the final glyph)
 ];
-ok(EXPECTED.length === 58, `expected list has 58 ids (${EXPECTED.length})`);
-ok(GLYPH_IDS.length === 58, `GLYPHS has 58 ids (${GLYPH_IDS.length})`);
+ok(EXPECTED.length === 59, `expected list has 59 ids (${EXPECTED.length})`);
+ok(GLYPH_IDS.length === 59, `GLYPHS has 59 ids (${GLYPH_IDS.length})`);
 for (const id of EXPECTED) ok(typeof GLYPHS[id] === 'string' && GLYPHS[id].length > 0, `glyph ${id} exists and is non-empty`);
 
 /** parse absolute M/L/H/V/C/Q/A/Z path data → end points; returns an error string or '' */

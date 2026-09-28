@@ -6,6 +6,12 @@
 // adopts it (#df-boot) so there is no flash between the two.
 
 export const MODE_LINE = 'Harbor Cup • 4 v 4';
+/** CONTRACT_FFA F3: the mode line in FREE-FOR-ALL (teams keeps MODE_LINE exactly). The loading / play cards show the
+ *  line of the session being loaded: BootUI.setMode('ffa') before showLoading(), setMode('teams') for the lobby. */
+export const MODE_LINE_FFA = 'Harbor Cup • Free-for-all';
+
+/** the card's current mode line (module state: one boot card per page) */
+let modeText = MODE_LINE;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -27,7 +33,7 @@ function modeLine(): HTMLElement {
   const p = el('p', 'df-mode');
   const m1 = el('i', '', '◉'); m1.setAttribute('aria-hidden', 'true');
   const m2 = el('i', 'g', '▲'); m2.setAttribute('aria-hidden', 'true');
-  p.append(m1, el('span', '', MODE_LINE), m2);
+  p.append(m1, el('span', '', modeText), m2);
   return p;
 }
 
@@ -62,6 +68,16 @@ export class BootUI {
     }
     this.root.setAttribute('role', 'status');
     this.root.setAttribute('aria-live', 'polite');
+  }
+
+  /**
+   * CONTRACT_FFA F3: the mode line of the session about to load ('ffa' → 'Harbor Cup • Free-for-all', else exactly
+   * MODE_LINE). Updates the card on screen in place and every card built after it.
+   */
+  setMode(mode: 'teams' | 'ffa'): void {
+    modeText = mode === 'ffa' ? MODE_LINE_FFA : MODE_LINE;
+    const span = this.root.querySelector('.df-mode span');
+    if (span && span.textContent !== modeText) span.textContent = modeText;
   }
 
   /** f in 0..1 (monotonic: never moves backwards) */

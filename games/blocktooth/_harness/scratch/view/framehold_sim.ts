@@ -9,7 +9,7 @@
 // Reports: zigzag legs / pumps / tv÷range of the held series (same metric as framepump.py), the same
 // metrics for the round-1 rule (hold 1.6 s, release at 1/s, replayed on the raw need series), and
 // whether held ≥ need on every tick (a live tell never outgrows the held framing).
-import type { BiomeId, BossId, TitanId, TitanInput, World } from '../../../src/core/types.ts';
+import type { BiomeId, MainBossId, TitanId, TitanInput, World } from '../../../src/core/types.ts';
 import { createWorld, stepWorld } from '../../../src/core/world.ts';
 import { BOSS_FRAME, bossFrameNeed, bossFrameFitAt, cameraDistance } from '../../../src/core/config.ts';
 import { gainGrowth } from '../../../src/titans/titansim.ts';
@@ -25,7 +25,7 @@ const DUMP = process.argv.includes('--dump');
 for (const kv of arg('--set', '').split(',').filter(Boolean)) { const [k, v] = kv.split('='); (BOSS_FRAME as unknown as Record<string, number>)[k] = +v; }
 console.log('BOSS_FRAME ' + JSON.stringify(BOSS_FRAME));
 const ONLY = arg('--boss', '');
-const BOSSES: [BossId, BiomeId][] = [['parkade6', 'grideast'], ['irongully', 'whitestacks'], ['caisson4', 'lockwater']];
+const BOSSES: [MainBossId, BiomeId][] = [['parkade6', 'grideast'], ['irongully', 'whitestacks'], ['caisson4', 'lockwater']];
 const TITANS: TitanId[] = ['molo', 'voltkite'];
 const NO: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
 

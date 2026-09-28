@@ -106,7 +106,14 @@ See `_spec/DESIGN.md` for the IP lock, the map thumbnails and the coverage + swi
 
 **Live (CDN, unpublished in the catalog):** https://forgeflow-games-cdn.isimcha85.workers.dev/dyefield/index.html
 
-Title → **PLAY** (map, time of day on Pier 18, bot skill BREEZE / SWELL / STORM) → **START**. **LOADOUT**
+**Two modes** (PLAY → MODE):
+- **TEAMS · 4 v 4** (the default): SUNCREW vs GULF CREW, and the crew with more turf wins.
+- **FREE-FOR-ALL**: 8 runners (you + 7 bots), each a crew of one in its own colour (amber, violet,
+  lime, magenta, sky, coral, sunflower or jade), each with a shape mark for colorblind play. Everyone
+  respawns on their own drop pad, and the most turf at the horn wins. The HUD shows your share, rank
+  and a live top 3; the victory slate shows a podium and the full standings.
+
+Title → **PLAY** (mode, map, time of day on Pier 18, bot skill BREEZE / SWELL / STORM) → **START**. **LOADOUT**
 picks the kit and crew and has a name field. **SETTINGS** has key remap (with conflict detection),
 sensitivity, invert Y, colorblind marks, master/music/SFX volume, render quality, reduce motion and
 show FPS. **HOW TO PLAY** and **CREDITS** are on the title menu.
@@ -122,7 +129,7 @@ show FPS. **HOW TO PLAY** and **CREDITS** are on the title menu.
 | pause (resume, settings, how to play, quit match, control legend) | ESC |
 | debug panel (coverage %, tank, map, fps, move state, atlas, render scale) | F1 |
 
-Dev query params (harness only): `?map=`, `?kit=`, `?bots=breeze|swell|storm`, `?seed=`,
+Dev query params (harness only): `?mode=teams|ffa`, `?map=`, `?kit=`, `?bots=breeze|swell|storm`, `?seed=`,
 `?matchSeconds=`, `?preset=noon|golden`, `?quality=auto|high|low`, `?autostart=1`, `?dev=1` (test
 hooks on `window.__DF__`).
 
@@ -143,6 +150,7 @@ hooks on `window.__DF__`).
 | 10 | juice, audio, score horn, per-map lighting | done: shake/markers/vignette/stains/confetti; music + 57 SFX + horn |
 | 11 | harden, pause, README | done: leak-flat across matches, adaptive resolution, focus-loss pause, context-loss card |
 | ship | CDN deploy | done: `dyefield-1.0.0` live and verified (files, marker, cover md5, live boot + live match) |
+| FFA | free-for-all mode (owner request 2026-09-28) | done: 8 crews, fair FFA spawns on all 3 maps, FFA HUD + standings; teams unchanged (all 12 teams determinism hashes identical until the shared bot fixes were enabled, then re-validated on 8 seeds); `dyefield-1.1.0` |
 
 **What is better BECAUSE of the chosen stack:**
 - **Phases 0–2:** the paint and movement sim runs under plain `node`, so the paint, move, swim,

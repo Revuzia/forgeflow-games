@@ -66,6 +66,7 @@ function drafts(w: World): void {
 function grownWorld(titan: TitanId, seed: number, level: number, god: boolean): World {
   const w = createWorld({ titan, biome: 'grideast' as BiomeId, seed });
   w.cheats.god = god; w.cheats.noSpawns = true;
+  w.gates.unlocked = 4;   // GATEKEEPERS: a grown duel titan, not a gate run (the growToRank dev bypass)
   for (let g = 0; g < 200 && w.titan.level < level; g++) { gainGrowth(w, 1); drafts(w); }
   for (let i = 0; i < 150; i++) { drafts(w); stepWorld(w, NO); }   // let the grow tween settle
   w.enemies.length = 0;

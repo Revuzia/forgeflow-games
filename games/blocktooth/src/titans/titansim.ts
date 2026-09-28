@@ -4,6 +4,9 @@
 // Contract exports: createTitan, stepTitan, hurtTitan, healTitan, gainXp, gainMass, titanMaxSpeed.
 // Lane extras: gainGrowth (the 'mass' upgrade action), growToRank (dev cheat), paceMul, refundDash,
 // dashRechargeS.
+// GATEKEEPERS (§7.3, lane K0 pre-wire): grow() ranks up only while T.rank + 1 <= w.gates.unlocked and then
+// runs checkGateLock (the lock of the next Size gate); breachTo(w, rank) is the kill-tick MASS BREACH
+// meta/gates.ts onGateDefeated / onMainDefeated call; paceMul holds the catch-up while a fight is alive.
 //
 // GROWTH (2026-09-24): SIZE is driven by LEVEL. gainXp is the only growth path — every level-up
 // steps the body up (config titanHeightAt, tweened over LEVEL_GROW_S) and reaching RANK_LEVELS[r]
@@ -16,7 +19,7 @@
 // reads on the next tick:  kit.sim_moveMul (own-speed multiplier, default 1) and
 // kit.sim_faceH / kit.sim_faceT (heading to swivel toward while idle, and for how long).
 
-import type { DamageKind, DamageOpts, Enemy, TitanDef, TitanState, Tier, World } from '../core/types.ts';
+import type { DamageKind, DamageOpts, Enemy, RankIndex, TitanDef, TitanState, Tier, World } from '../core/types.ts';
 import {
   AHEAD_FROM_RANK, AHEAD_GRACE_S, AHEAD_MIN, AHEAD_PER_MIN, CATCHUP_MAX, CATCHUP_PER_MIN, CRUSH_RATIO, GROW_TWEEN_S, LEVEL_GROW_S,
   RANKS, RANK_LEVELS, RANK_SCHEDULE_S, SMASH_MIN_SPEED_FRAC, SMASH_SLOW, TIERS, TITAN, TITAN_RADIUS_PER_H, cumXpAt, sizeMassMirror,
@@ -32,6 +35,7 @@ import { initKit, kitMassMul, kitOnDash, kitOnHurt, stepKit } from './kits/index
 import { distToBuilding, propRadius } from './kits/common.ts';
 import { ultMoveMul } from '../meta/ultimate.ts';
 import { endlessDmgMul } from '../meta/endless.ts';
+import { fightAlive, lockGate } from '../meta/gates.ts';
 
 // ─────────────────────────────── tuning (balance gate tunes these) ───────────────────────────────
 /** seconds to reach full speed from rest, per rank (snappy at Size I, weighty at V) */
@@ -508,6 +512,10 @@ function crush(w: World): void {
  */
 export function paceMul(w: World): number {
   const T = w.titan;
+  // GATEKEEPERS §2.2 / §4.2: the climax is governed (the city boss due or alive at Size IV); no catch-up
+  // while any fight is alive
+  if (T.rank === 3 && (w.gates.pending === 4 || w.gates.active === 4)) return AHEAD_MIN;
+  if (fightAlive(w)) return 1;
   const next = T.rank + 1;
   if (next >= RANK_SCHEDULE_S.length) return 1;
   if (w.t > RANK_SCHEDULE_S[next]) {
@@ -564,6 +572,9 @@ export function gainMass(_w: World, _mass: number): void {
 export function growToRank(w: World, rank: number, minLevel = 0): number {
   const T = w.titan;
   const want = clamp(Math.floor(Number.isFinite(rank) ? rank : 0), 0, 4);
+  // GATEKEEPERS §7.3: the dev cheat (cheat.rank / cheat.level) still jumps Sizes — a documented bypass
+  // that opens every gate up to the wanted Size first
+  if (want > w.gates.unlocked) w.gates.unlocked = want as RankIndex;
   const lv = Math.max(T.level, RANK_LEVELS[want], Number.isFinite(minLevel) ? Math.floor(minLevel) : 0);
   if (!T.alive || (want <= T.rank && lv <= T.level)) return T.rank;
   const r0 = T.rank;
@@ -597,12 +608,46 @@ function addXp(w: World, amount: number): void {
 function grow(w: World, r0: number): void {
   const T = w.titan, K = T.kit;
   let guard = 0;
-  while (T.rank < 4 && T.level >= RANK_LEVELS[T.rank + 1] && guard++ < 5) rankUp(w);
+  // GATEKEEPERS §2.1: a Size is only entered once its gate is open (gates.unlocked)
+  while (T.rank < 4 && T.rank + 1 <= w.gates.unlocked && T.level >= RANK_LEVELS[T.rank + 1] && guard++ < 5) rankUp(w);
+  checkGateLock(w);
   const dur = Math.max(T.rank !== r0 ? GROW_TWEEN_S : LEVEL_GROW_S, T.growT);
   K.sim_growFrom = T.height;
   K.sim_growDur = dur;
   T.growT = dur;
   T.mass = sizeMassMirror(T.rank, T.level, T.xp);
+}
+
+/**
+ * GATEKEEPERS §7.2 (ModTitanAddV3): the lock check grow() runs after its level loop; meta/gates.ts
+ * onGateDefeated calls it after the breach (§2.5 step 5) so a chained lock does not wait for a level-up.
+ */
+export function checkGateLock(w: World): void {
+  const T = w.titan;
+  if (T.rank < 4 && T.level >= RANK_LEVELS[T.rank + 1] && w.gates.unlocked <= T.rank) lockGate(w, (T.rank + 1) as 1 | 2 | 3 | 4, false);
+}
+
+/**
+ * GATEKEEPERS §7.2 (ModTitanAddV3): breach to Size `rank` NOW (the kill tick). Tops the level up to
+ * RANK_LEVELS[rank] with exact XP if it is below (a capped kill; the drafts are owed and counted in
+ * gates.topUpLevels), sets gates.unlocked = rank, then the real rankUp path (stats, heal, events, the
+ * MASS BREACH tween). Never shrinks.
+ */
+export function breachTo(w: World, rank: RankIndex): void {
+  const T = w.titan;
+  const want = clamp(Math.floor(Number.isFinite(rank) ? rank : 0), 0, 4) as RankIndex;
+  if (want > w.gates.unlocked) w.gates.unlocked = want;
+  if (!T.alive || want <= T.rank) return;
+  const lv0 = T.level;
+  const need = RANK_LEVELS[want];
+  while (T.level < need) {
+    T.level++;
+    T.xpToNext = xpToNext(T.level);
+    w.upgrades.pendingDrafts++;
+    w.events.push({ type: 'levelUp', level: T.level });
+  }
+  if (T.level !== lv0) { T.xp = 0; w.gates.topUpLevels += T.level - lv0; }
+  grow(w, T.rank);
 }
 
 function rankUp(w: World): void {

@@ -14,7 +14,7 @@ import { spawnEnemy } from '../../../src/ai/enemies.ts';
 import { spawnBoss } from '../../../src/ai/bosses/index.ts';
 import { BIOMES } from '../../../src/data/biomes.ts';
 import { SIM_DT } from '../../../src/core/config.ts';
-import type { BiomeId, BossId, EnemyKind, Shape, World, SimEvent } from '../../../src/core/types.ts';
+import type { BiomeId, MainBossId, EnemyKind, Shape, World, SimEvent } from '../../../src/core/types.ts';
 import type { FrameInfo, Quality, ViewCtx } from '../../../src/render/viewtypes.ts';
 import { makeToon } from '../../../src/render/materials.ts';
 
@@ -206,7 +206,7 @@ const PHASE_OF: Record<string, 1 | 2 | 3> = {
   coneBreath: 1, pawSlam: 1, plateVolley: 2, ridgeCharge: 2, breathSlam: 3,
 };
 interface BossRun { w: World; view: BossView; ok: boolean; note: string }
-function runBoss(id: BossId, biome: BiomeId, S: Stage, attack: string, at: number, seed: number): BossRun {
+function runBoss(id: MainBossId, biome: BiomeId, S: Stage, attack: string, at: number, seed: number): BossRun {
   const w = createWorld({ titan: 'molo', biome, seed });
   w.cheats.god = true; w.cheats.noSpawns = true;
   const T = w.titan;
@@ -259,7 +259,7 @@ function bosses(): void {
 }
 
 function boss(): void {
-  const id = (q.get('id') ?? 'caisson4') as BossId;
+  const id = (q.get('id') ?? 'caisson4') as MainBossId;
   const biome = (q.get('biome') ?? (id === 'caisson4' ? 'grideast' : 'whitestacks')) as BiomeId;
   const S = stage(biome, 3000);
   const r = runBoss(id, biome, S, q.get('attack') ?? 'idle', num('t', 1), num('seed', 3));

@@ -17,15 +17,22 @@
 // feet inside one → the sea, step 2); a map-level `mist` (maps.json `mist.hideRange`) hides every SLICK
 // enemy (slick form: moving or not, floor or wall) beyond hideRange in canSee, on top of the phase-3 rule
 // (hidden = slick and slow → unseen beyond SLICK.hiddenRange).
+//
+// CHANGED(CORE) (CONTRACT_FFA §F1/§F6): MatchOptions.mode 'ffa' = FREE-FOR-ALL. Every runner is its own crew (the
+// roster's team byte 1..8). Each stands on its own runtime DROP PAD (maps.json ffaSpawns, r = MATCH_FFA.padRadius)
+// assigned by a seeded shuffle; the pad counts as its owner's dye (slick + refill) and every other runner is pushed
+// out of it; a washed runner respawns there after the usual 3 s. The A/B team pads are neutral scenery in FFA. The
+// result carries shares / standings per crew and the winner by strict comparison (a tie for first = a draw, `tied`).
+// Teams mode takes none of the new branches: its ticks and hashes are unchanged.
 
 import type { MapDef } from '../data.ts';
-import { WEAPONS } from '../data.ts';
+import { teamById, WEAPONS } from '../data.ts';
 import type { MapGeometry } from '../mapgeo.ts';
 import { featuresOf } from '../mapgeo.ts';
 import type { CastHit, PhysicsWorld } from '../physics.ts';
 import type { Painter } from '../paint/painter.ts';
-import type { MoveState, PlayerIntent, Side, TeamId } from '../types.ts';
-import { emptyIntent } from '../types.ts';
+import type { MatchMode, MoveState, PlayerIntent, Side, TeamId } from '../types.ts';
+import { DEG, emptyIntent } from '../types.ts';
 import { hash32, mulberry32 } from '../rng.ts';
 import { COMBAT, HEALTH, HITBOX, KITS, MATCH, MOVE, SLICK, TANK, TICK } from '../config.ts';
 import { Runner, type PadZone, type SpawnPoint } from '../runner.ts';
@@ -49,9 +56,65 @@ import { endSpecial, landCloud, slam, stepSpecialInput, tickCloud, type SpecialH
 export interface MatchOptions {
   def: MapDef; geo: MapGeometry; physics: PhysicsWorld; painter: Painter; roster: RosterEntry[];
   seed: number; durationS?: number /*180*/; countdownS?: number /*3*/;
+  /** CHANGED(CORE): 'teams' (default) or 'ffa' (every roster entry its own crew, drop pads from maps.json ffaSpawns) */
+  mode?: MatchMode;
 }
 
-export interface MatchResult { sun: number; gulf: number; neutral: number; winner: TeamId }
+/** CHANGED(CORE): one crew's line of the final standings */
+export interface CrewStanding {
+  crew: TeamId; share: number;
+  /** 1-based; crews with exactly equal shares share a rank */
+  rank: number;
+  /** FFA: the crew's runner; teams: the crew's first runner (lowest id) */
+  pid: number;
+  /** FFA: the runner's name; teams: the crew name (teams.json) */
+  name: string;
+}
+
+/** sun / gulf / neutral / winner as before (teams). CHANGED(CORE), additive: FFA sets sun = shares[1], gulf = shares[2],
+ *  neutral = shares[0]; read shares / standings there. winner 0 = a draw; `tied` then lists the crews tied for first. */
+export interface MatchResult {
+  sun: number; gulf: number; neutral: number; winner: TeamId;
+  mode?: MatchMode;
+  /** weighted share per crew id (length CREW_SLOTS, [0] = neutral), sums to 1 */
+  shares?: number[];
+  /** every crew in play, share descending (ties → lower crew id first) */
+  standings?: CrewStanding[];
+  /** winner 0 → the crews tied for first; otherwise [] */
+  tied?: TeamId[];
+}
+
+/** CHANGED(CORE): an FFA drop pad (runtime-rendered disc on the floor): top-centre + radius, its crew, its runner, the spawn yaw (rad) */
+export interface CrewPad extends PadZone { crew: TeamId; pid: number; yaw: number }
+
+/** CHANGED(CORE): FFA numbers (config.ts is not CORE-owned) */
+export const MATCH_FFA = {
+  /** m: drop-pad radius (CONTRACT_FFA §F1) */
+  padRadius: 1.6,
+} as const;
+
+/** CHANGED(CORE): the FFA spawn of each runner id: maps.json ffaSpawns (yaw degrees) under a seeded shuffle; a map without
+ *  enough ffaSpawns falls back to slots spread over the two team pads (never the case for a built map). */
+export function ffaSpawnPoints(def: MapDef, geo: MapGeometry, n: number, seed: number): SpawnPoint[] {
+  const raw = def.ffaSpawns ?? [];
+  let pts: SpawnPoint[];
+  if (raw.length >= n) {
+    pts = raw.map((s) => ({ x: s.pos[0], y: s.pos[1], z: s.pos[2], yaw: s.yaw * DEG }));
+  } else {
+    pts = [];
+    for (let i = 0; i < n; i++) {
+      const sp = geo.spawns[i % 2 === 0 ? 'A' : 'B'];
+      const lat = MATCH.spawnSlots[(i >> 1) % MATCH.spawnSlots.length] * 2.4;
+      pts.push({ x: sp.x - Math.cos(sp.yaw) * lat, y: sp.y, z: sp.z + Math.sin(sp.yaw) * lat, yaw: sp.yaw });
+    }
+  }
+  const idx = pts.map((_, i) => i);
+  const rnd = mulberry32(hash32(seed | 0, 0xffa5));
+  for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = idx[i]; idx[i] = idx[j]; idx[j] = t; }
+  const out: SpawnPoint[] = [];
+  for (let i = 0; i < n; i++) out.push({ ...pts[idx[i % idx.length]] });
+  return out;
+}
 
 export interface MatchStats {
   shots: number; dry: number; splats: number; hits: number; washes: number; seaWashes: number;
@@ -95,7 +158,14 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
   result: MatchResult | null = null;
 
   // ── §10.4 extras ──
+  /** the two team pads (teams: A = SUNCREW, B = GULF CREW; FFA: neutral scenery) */
   readonly pads: Record<Side, PadZone>;
+  /** CHANGED(CORE): 'teams' | 'ffa' */
+  readonly mode: MatchMode;
+  /** CHANGED(CORE): FFA drop pads, one per runner in runner-id order (crewPads[i].pid === i); [] in teams */
+  readonly crewPads: CrewPad[] = [];
+  /** CHANGED(CORE): the crews in play, ascending (teams [1, 2]; FFA the roster's crews) */
+  readonly crews: TeamId[];
   readonly durationS: number;
   readonly countdownS: number;
   readonly stats: MatchStats = {
@@ -154,6 +224,7 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
     const sc = WEAPONS.specialCharge;
     this.specialPts = { perM2: sc['pointsPerSquareMetre'] ?? 1, perWash: sc['pointsPerWash'] ?? 20, keep: sc['keepOnWashed'] ?? 0.5 };
     this.pads = padsOf(o.def, o.geo);
+    this.mode = o.mode === 'ffa' ? 'ffa' : 'teams';
     this.projectiles = new ProjectilePool(COMBAT.poolCapacity);
 
     // projectile variants: 0 = MIST-RASP (the fallback of every droplet), then per kit / sub / special
@@ -175,14 +246,32 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
     this.specialId = [];
     this.respawnTicks = new Int32Array(roster.length);
     const perTeam: Record<number, number> = { 0: 0, 1: 0, 2: 0 };
+    const ffa = this.mode === 'ffa';
+    if (ffa) {
+      // CHANGED(CORE): one drop pad per runner, known before any runner is built (each is pushed out of the others)
+      const pts = ffaSpawnPoints(o.def, o.geo, roster.length, this.seed);
+      for (let i = 0; i < roster.length; i++) {
+        const sp = pts[i];
+        this.crewPads.push({ x: sp.x, y: sp.y, z: sp.z, r: MATCH_FFA.padRadius, crew: roster[i].team, pid: i, yaw: sp.yaw });
+      }
+      this.crews = [...new Set(roster.map((e) => e.team))].filter((t) => t !== 0).sort((a, b) => a - b);
+    } else {
+      this.crews = [1, 2];
+    }
     for (let i = 0; i < roster.length; i++) {
       const e = roster[i];
       if (e.id !== i) throw new Error(`MatchWorld: roster[${i}].id is ${e.id}; ids must equal their index (runners[i] ↔ intents[i])`);
       const side: Side = e.team === 2 ? 'B' : 'A';
-      const sp = o.geo.spawns[side];
-      const k = perTeam[e.team]++;
-      const lat = MATCH.spawnSlots[k % MATCH.spawnSlots.length];
-      const slot: SpawnPoint = { x: sp.x - Math.cos(sp.yaw) * lat, y: sp.y, z: sp.z + Math.sin(sp.yaw) * lat, yaw: sp.yaw };
+      let slot: SpawnPoint;
+      if (ffa) {
+        const cp = this.crewPads[i];
+        slot = { x: cp.x, y: cp.y, z: cp.z, yaw: cp.yaw };
+      } else {
+        const sp = o.geo.spawns[side];
+        const k = perTeam[e.team]++;
+        const lat = MATCH.spawnSlots[k % MATCH.spawnSlots.length];
+        slot = { x: sp.x - Math.cos(sp.yaw) * lat, y: sp.y, z: sp.z + Math.sin(sp.yaw) * lat, yaw: sp.yaw };
+      }
       this.slots.push(slot);
       const f = kitFire(e.kit);
       this.fire.push(f);
@@ -207,8 +296,10 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
       const r = new Runner({ id: e.id, name: e.name, team: e.team, kit: e.kit, bot: e.bot }, body, slot, {
         killY: this.killY,
         physics: o.physics,
-        ownPad: this.pads[side],
-        enemyPad: this.pads[side === 'A' ? 'B' : 'A'],
+        ownPad: ffa ? this.crewPads[i] : this.pads[side],
+        enemyPad: ffa ? null : this.pads[side === 'A' ? 'B' : 'A'],
+        otherPads: ffa ? this.crewPads.filter((p) => p.pid !== i && p.crew !== e.team) : null,
+        mode: this.mode,
         autoRespawn: false,
         fireMoveMul: f.moveSpeedWhileFiring,
         fireSpeedCap: f.type === 'roll' ? f.rollSpeed : undefined,
@@ -316,7 +407,12 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
   }
 
   onOwnPad(r: Runner): boolean {
-    return r.onPad(this.pads[r.side]);
+    return r.onPad(this.padOf(r));
+  }
+
+  /** CHANGED(CORE): the runner's own pad (teams: its team pad; FFA: its drop pad) */
+  padOf(r: Runner): PadZone {
+    return this.mode === 'ffa' ? (this.crewPads[r.id] ?? this.pads[r.side]) : this.pads[r.side];
   }
 
   canSee(viewer: Runner, target: Runner): boolean {
@@ -630,8 +726,7 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
     if (this.phase === 'ended') return;
     this.phase = 'ended';
     this.timeLeft = 0;
-    const c = this.painter.coverage();
-    this.result = { sun: c.sun, gulf: c.gulf, neutral: c.neutral, winner: c.sun > c.gulf ? 1 : c.gulf > c.sun ? 2 : 0 };
+    this.result = this.computeResult();
     this.projectiles.clear();
     // the horn freezes the court: no firing, no coasting (gravity still lands anyone airborne); running
     // specials end, kits reset, a leaper falls with normal gravity and never slams
@@ -640,9 +735,46 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
       resetKit(r, this);
       r.leaping = false; r.slamPending = false;
       r.firing = false; r.vx = 0; r.vz = 0;
+      r.courtFrozen = true;   // no conveyor carry / spring launch after the horn (was: belts kept carrying runners)
     }
     this.pushEvent({ t: 'horn', kind: 'end' });
     this.pushEvent({ t: 'phase', phase: 'ended' });
+  }
+
+  /** CHANGED(CORE): the result at the horn — teams exactly as before (+ shares / standings / tied), FFA per crew */
+  private computeResult(): MatchResult {
+    const c = this.painter.coverage();
+    const shares: number[] = [];
+    let winner: TeamId;
+    let tied: TeamId[] = [];
+    if (this.mode === 'ffa') {
+      const by = this.painter.coverageByTeam();
+      for (let k = 0; k < by.length; k++) shares.push(by[k]);
+      let best = -Infinity;
+      for (const k of this.crews) {
+        const v = shares[k];
+        if (v > best) { best = v; tied = [k]; } else if (v === best) tied.push(k);
+      }
+      winner = tied.length === 1 ? tied[0] : 0;
+      if (tied.length === 1) tied = [];
+    } else {
+      for (let k = 0; k < 9; k++) shares.push(0);
+      shares[0] = c.neutral; shares[1] = c.sun; shares[2] = c.gulf;
+      winner = c.sun > c.gulf ? 1 : c.gulf > c.sun ? 2 : 0;
+      if (winner === 0) tied = [1, 2];
+    }
+    const ffa = this.mode === 'ffa';
+    const standings: CrewStanding[] = this.crews.map((k) => {
+      const owner = this.runners.find((r) => r.team === k);
+      const name = ffa ? (owner?.name ?? `CREW ${k}`) : teamById(k).name;
+      return { crew: k, share: shares[k], rank: 1, pid: owner ? owner.id : -1, name };
+    });
+    standings.sort((a, b) => (b.share - a.share) || (a.crew - b.crew));
+    for (const s of standings) s.rank = 1 + standings.filter((o) => o.share > s.share).length;
+    return {
+      sun: ffa ? shares[1] : c.sun, gulf: ffa ? shares[2] : c.gulf, neutral: ffa ? shares[0] : c.neutral,
+      winner, mode: this.mode, shares, standings, tied,
+    };
   }
 
   private pushEvent(e: SimEvent): void {

@@ -1,22 +1,23 @@
 {
   "title": "DYEFIELD",
   "short_description": "DYEFIELD — a third-person 4 v 4 turf-paint arena. Two crews of kid athletes stain the court, swim through their own color and slog through the enemy's. When the horn sounds, the floor is the scoreboard.",
-  "description": "Harbor Cup • 4 v 4.\n\nTwo crews stain an arena. The floor is the scoreboard. SUNCREW (amber) and GULF CREW (violet-blue) have three minutes to cover more of the court than the other side. Every tile you dye counts; walls count a little.\n\nYour own color is a highway and a refill pool. Hold SHIFT on it and your tide-runner slicks down into the dye, so only the hair-crest cuts the surface like a fin. You move faster, hide from sight and refill your tank. Enemy color is glue: you slog through it and can't slick. Get washed and you're back on your team pad three seconds later.\n\nFour kits, each readable in one second:\n• MIST-RASP (shooter): a fast stream with high coverage.\n• SHEET-DRUM (roller): coats a wide lane as you walk, and flattens any foe it rolls over.\n• NEEDLE-GLINT (charger): hold to charge a glint line, release for a long splat line.\n• POP-WELL (blaster): slow airborne bursts; a direct hit deletes.\nEvery kit carries a JELLY CHARGE throwable and a special: CLOUDBURST (a rain cell that soaks a disk of turf) or WELLSPRING (a jump-slam that paints a ring and knocks foes back).\n\nThree arenas with different movement grammar:\n• PIER 18 PLAZA: a wide tile court on a harbor pier, long sightlines, water all around.\n• LOCKWELL WORKS: three floors of press hall, mezzanine and grated crane-walk, with conveyors and dyed walls you can slick straight up.\n• CINDER REEF: a broken atoll of beaches, basalt isles and a rusted wreck, crossed by bridges, sandbars and tide-springs over deep channels, in light mist.\n\nPlay a full 4 v 4 against seven bots at BREEZE, SWELL or STORM skill. Loadout, crew choice, key remapping, colorblind marks (shape + color), volume and quality settings are all in the menus.",
+  "description": "Harbor Cup • 4 v 4.\n\nTwo crews stain an arena. The floor is the scoreboard. SUNCREW (amber) and GULF CREW (violet-blue) have three minutes to cover more of the court than the other side. Every tile you dye counts; walls count a little.\n\nYour own color is a highway and a refill pool. Hold SHIFT on it and your tide-runner slicks down into the dye, so only the hair-crest cuts the surface like a fin. You move faster, hide from sight and refill your tank. Enemy color is glue: you slog through it and can't slick. Get washed and you're back on your team pad three seconds later.\n\nFour kits, each readable in one second:\n• MIST-RASP (shooter): a fast stream with high coverage.\n• SHEET-DRUM (roller): coats a wide lane as you walk, and flattens any foe it rolls over.\n• NEEDLE-GLINT (charger): hold to charge a glint line, release for a long splat line.\n• POP-WELL (blaster): slow airborne bursts; a direct hit deletes.\nEvery kit carries a JELLY CHARGE throwable and a special: CLOUDBURST (a rain cell that soaks a disk of turf) or WELLSPRING (a jump-slam that paints a ring and knocks foes back).\n\nThree arenas with different movement grammar:\n• PIER 18 PLAZA: a wide tile court on a harbor pier, long sightlines, water all around.\n• LOCKWELL WORKS: three floors of press hall, mezzanine and grated crane-walk, with conveyors and dyed walls you can slick straight up.\n• CINDER REEF: a broken atoll of beaches, basalt isles and a rusted wreck, crossed by bridges, sandbars and tide-springs over deep channels, in light mist.\n\nPlay a full 4 v 4, or FREE-FOR-ALL where eight runners each paint their own colour, against seven bots at BREEZE, SWELL or STORM skill. Loadout, crew choice, key remapping, colorblind marks (shape + color), volume and quality settings are all in the menus.",
   "genre": "action",
   "sub_genre": "turf-paint arena shooter",
   "difficulty": "medium",
   "controls_keyboard": "WASD move · mouse aim (click to capture) · LMB fire / roll / charge · SHIFT slick & drink on your color · SPACE jump · E or RMB JELLY CHARGE · Q special · ESC pause · F1 debug · all keys remappable in SETTINGS",
   "tags": [
-    "shooter",
-    "paint",
-    "arena",
-    "third-person",
-    "4v4",
-    "bots",
     "3d",
-    "singleplayer",
+    "4v4",
+    "arena",
+    "bots",
+    "colorful",
     "competitive",
-    "colorful"
+    "free-for-all",
+    "paint",
+    "shooter",
+    "singleplayer",
+    "third-person"
   ],
   "art_direction": "Toy-bright Saturday-morning sports anime in clean stylized 3D. Kid-scale 'tide-runner' athletes with big round heads, short bodies, sport shorts, tank tops, chunky sneakers and a bold swept hair-crest in their crew color, carrying a small glass dye tank on their backs. Two crews: amber-orange (SUNCREW) versus violet-blue (GULF CREW). Glossy liquid dye splashed across a sunny harbor sports court on a pier: tile floor with court lines, teal-and-white chevron barriers, teal cargo crates, palm planters, wooden boardwalk decks, sparkling sea, a lighthouse and distant cranes. Mid-action: runners spraying toy-like paint sprayers, a big wide roller laying a lane of orange dye, one runner slicked into its own color so only the crest-fin shows. Saturated, clean, soft shadows, joyful energy. No text, no logos."
 }

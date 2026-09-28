@@ -345,8 +345,16 @@ async function runMatch(mapId: string, seed: number): Promise<{ persp: Persp[]; 
   };
   let endTicks = -1;
   let guard = 0;
+  // Deterministic spring coverage: bots take a tide-spring only 0-2 times per Cinder match, so waiting for one made
+  // the 'spring' sound check a coin flip. At 30 s of a map with springs, place runner 0 on the first spring pad (the
+  // dev teleport hook); stepping on the pad launches it like any player, and the router must play the spring sound.
+  const springTick = Math.round((world.countdown + 30) / TICK);
   while (guard++ < (SECONDS + 20) / TICK) {
     director.think(intents);
+    if (guard === springTick && feats && feats.springs.length && world.runners[0].alive) {
+      const sp = feats.springs[0];
+      world.devTeleport(0, sp.x, sp.y + 0.05, sp.z, world.runners[0].yaw);
+    }
     world.step(intents);
     ev.length = 0;
     world.drainEvents(ev);

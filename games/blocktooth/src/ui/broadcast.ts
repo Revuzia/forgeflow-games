@@ -12,6 +12,10 @@
 //              KEEP GOING [K] first in the row (gold EXTENDED COVERAGE tag; focus stays on RETRY); a
 //              death after KEEP GOING prints the EXTENDED COVERAGE EDITION (IT WOULD NOT LEAVE.);
 //              a NEW ON THE RECORD clipping lists the goals this run filed (TabloidExtra.newGoals).
+//              GATEKEEPERS §6.6 (lane K2b): a death while a gatekeeper held the titan prints the sub-head
+//              `HELD AT SIZE II BY CORDON-2` (TabloidExtra.heldBy); the EXTENDED COVERAGE sub-head gains
+//              `REISSUED n` (gatekeeper rematches won). The six gate banners (gate1..3, gateEscalate,
+//              gateRematch, finale) run as full-width urgent straps.
 //   clear      drop every banner/queue and close an open slate (resolved) or tabloid (abandoned).
 // Deferred work is guarded by an epoch (doctrine §4): a timer from a cleared run no-ops.
 
@@ -24,6 +28,7 @@ import { BOSSES } from '../data/bosses.ts';
 import { TITANS } from '../data/titans.ts';
 import { ALERTS, RANK_SUBS, STR } from '../data/strings.ts';
 import { SCREENS } from '../data/strings_screens.ts';
+import { STR_GATE } from '../data/strings_gate.ts';
 import {
   type ModalSession, type UiPress, clearEl, div, el, fmt, fmtClock, fmtInt, fmtTime, keyChip, onTap, pickOne,
   pickSeeded, pulse, roman, runModal, wrapIndex, flashesReduced,
@@ -37,9 +42,14 @@ const TOAST_MS = 3600;          // a toast is small and carries a how-to line: i
 const ALERT_GAP_MS = 260;
 const SIZEUP_MS = 2300;
 const ALERT_QUEUE_MAX = 4;
-const URGENT: ReadonlySet<AlertKey> = new Set<AlertKey>(['boss', 'bossPhase2', 'bossPhase3', 'elite']);
+const URGENT: ReadonlySet<AlertKey> = new Set<AlertKey>([
+  'boss', 'bossPhase2', 'bossPhase3', 'elite',
+  // GATEKEEPERS §6.6: the six gate banners are full-width straps
+  'gate1', 'gate2', 'gate3', 'gateEscalate', 'gateRematch', 'finale',
+]);
 const ALERT_TONE: Partial<Record<AlertKey, string>> = {
   boss: 'red', bossPhase2: 'red', bossPhase3: 'red', elite: 'red', lowHp: 'coral', chest: 'teal',
+  gate1: 'red', gate2: 'red', gate3: 'red', gateEscalate: 'red', gateRematch: 'red', finale: 'teal',
 };
 const TABLOID_BASE: readonly TabloidChoice[] = ['retry', 'select', 'title'];
 
@@ -336,6 +346,17 @@ export class Broadcast {
   alert(key: AlertKey): void {
     if (!ALERTS[key]) return;
     if (this.showing === key || this.queue.includes(key)) return;
+    if (key === 'finale') {
+      // GATEKEEPERS §4.3: the victory banner is due 2.5 s in and the finale may be skipped from 3 s, so it never
+      // waits behind older news: the queue is dropped and a showing alert (e.g. a toast the MASS BREACH sting
+      // re-queued) is cut (playtest_gate step 4 found it landing at +6.3 s behind a replayed toast)
+      this.queue = [];
+      if (this.showing) {
+        this.showing = null;
+        if (this.alertAnim) { this.alertAnim.cancel(); this.alertAnim = null; }
+        this.alertBox.classList.remove('on');
+      }
+    }
     if (URGENT.has(key)) {
       // an urgent banner jumps the queue; a superseded boss phase alert is dropped
       if (key === 'bossPhase3') this.queue = this.queue.filter((k) => k !== 'bossPhase2');
@@ -409,7 +430,7 @@ export class Broadcast {
     this.tabItems = canContinue ? ['endless', ...TABLOID_BASE] : TABLOID_BASE.slice();
     this.keepBtn.classList.toggle('bt-hidden', !canContinue);
     this.tab.classList.toggle('endless', !!w.endless);
-    this.buildPaper(w, photo);
+    this.buildPaper(w, photo, extra ? extra.heldBy : null);
     this.buildRecordClip(extra ? extra.newGoals : []);
     this.tab.classList.remove('bt-hidden');
     this.tabSelect(this.tabItems.indexOf('retry'));
@@ -481,7 +502,7 @@ export class Broadcast {
     if (list.length > 5) div('bt2-onrecord-more', C, `+${list.length - 5}`);
   }
 
-  private buildPaper(w: World, photo: string): void {
+  private buildPaper(w: World, photo: string, heldBy: string | null = null): void {
     const P = this.paper;
     clearEl(P);
     const T = w.titan;
@@ -521,12 +542,17 @@ export class Broadcast {
       // EXTENDED COVERAGE EDITION (FEATURES_V2 §9.3)
       div('bt2-np-kicker', P, SCREENS.tabloid.endlessKicker);
       div('bt-np-headline bt2-np-endless', P, SCREENS.tabloid.endlessHeadline);
+      // GATEKEEPERS §4.4 / §6.6: + REISSUED n (gatekeeper rematches won; REMATCHES WON keeps counting city bosses)
+      const reissued = w.gates ? Math.max(0, w.gates.rematchGates | 0) : 0;
       div('bt-np-subhead', P, fmt(SCREENS.tabloid.endlessSubs, {
         air: fmtTime(endT), ext: fmtTime(extS), n: fmtInt(E.rematches), score: fmtInt(E.score),
-      }));
+      }) + ' · ' + fmt(STR_GATE.tabloid.reissued, { n: fmtInt(reissued) }));
     } else {
       div('bt-np-headline', P, STR.tabloid.headline);
-      div('bt-np-subhead', P, pickSeeded(result === 'clear' ? STR.tabloid.subClear : STR.tabloid.subDead, seed));
+      // GATEKEEPERS §6.6: a death while a gatekeeper held the Size names it (HELD AT SIZE II BY CORDON-2)
+      const held = result === 'dead' && heldBy ? fmt(STR_GATE.tabloid.heldBy, { size: roman(T.rank), name: heldBy }) : '';
+      const sub = div('bt-np-subhead', P, held || pickSeeded(result === 'clear' ? STR.tabloid.subClear : STR.tabloid.subDead, seed));
+      if (held) sub.dataset.gate = 'heldby';
     }
 
     const grid = div('bt-np-grid', P);

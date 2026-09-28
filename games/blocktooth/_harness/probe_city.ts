@@ -286,6 +286,7 @@ function miniWorld(biome: BiomeId, seed: number): World {
     // ult is a stand-in so this probe keeps its light import chain)
     meta: { unlocked: [], perk: null, palette: 0, reviveUsed: false },
     ult: {} as unknown as World['ult'], map: createMapState(), tally: createTally(), endless: null,
+    gates: {} as unknown as World['gates'],   // GATEKEEPERS (K0): the city probe never reads the gate state
   };
 }
 function tickPrev(w: World): void {

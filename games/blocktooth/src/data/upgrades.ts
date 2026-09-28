@@ -23,6 +23,7 @@
 
 import type { Rarity, RankIndex, StatKey, TitanId, TriggerAction, TriggerOn, UpgradeDef, UpgradeEffect } from '../core/types.ts';
 import { UPGRADES_V2_RAW } from './upgrades_v2.ts';
+import { UPGRADES_GATE } from './upgrades_gate.ts';
 
 // ─────────────────────────────── description generator ───────────────────────────────
 
@@ -392,3 +393,5 @@ for (const u of UPGRADES) UPGRADE_BY_ID[u.id] = u;
 // ── v2 append block (FEATURES_V2 §7.1, L0): the v2 cards (lane L2's data/upgrades_v2.ts) join the
 //    catalogue with their desc generated here. upgrades_v2.ts never imports this file (no cycle). ──
 for (const u of UPGRADES_V2_RAW) { const d = { ...u, desc: describe(u.effects, u.maxStacks) }; UPGRADES.push(d); UPGRADE_BY_ID[d.id] = d; }
+// GATEKEEPERS §6.5 (lane K2c): the five locked gatekeeper unlock cards join the same way (data/upgrades_gate.ts).
+for (const u of UPGRADES_GATE) { const d = { ...u, desc: describe(u.effects, u.maxStacks) }; UPGRADES.push(d); UPGRADE_BY_ID[d.id] = d; }

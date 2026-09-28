@@ -114,7 +114,7 @@ function fakeBoss(w: World, phase: 1 | 2 | 3, frac: number): BossState {
     id, alive: true, x: 0, z: 0, heading: 0, px: 0, pz: 0, pheading: 0,
     hp: def.hp * 0.75 * frac, maxHp: def.hp * 0.75, phase, meter: 0.62, staggerT: 0,
     attack: phase >= 2 ? def.attacks[2].id : null, attackT: 0.4, cd: 2, introT: 0, parts: [],
-    subtitle: phase >= 2 ? def.attacks[2].subtitle : '', data: {},
+    subtitle: phase >= 2 ? def.attacks[2].subtitle : '', data: {}, role: 'main', slot: 4,
   };
   w.boss = b;
   return b;

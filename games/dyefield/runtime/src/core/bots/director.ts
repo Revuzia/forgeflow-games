@@ -34,10 +34,18 @@
 // so a MIST-RASP bot's phase-5 rolls are untouched until it actually throws).
 // CHANGED(BOTFIX): every bot notices an enemy NEEDLE-GLINT's glint aimed at it (a stimulus: reaction by skill, STORM
 // fast, BREEZE slow) and dodges across the line (see GLINT_OFF); skill ids are BREEZE / SWELL / STORM.
+// CHANGED(CORE) (CONTRACT_FFA §F1/§F6): FREE-FOR-ALL. An enemy is any crew but mine (Brain.foe: foe dye slogs and
+// costs 2.3× on a path), zones keep their need / enemy share for every crew in play, refill uses own dye or the own pad
+// (world.padOf), and the other runners' drop pads are avoided like the enemy pad (+80 path cost, no goal within 3.6 m
+// of one). No half-court assumption is used in FFA. FFA-only tuning (see FFA_FOE_*): foe dye is worth half of neutral
+// floor to goals and sweeps, every other bot's goal crowds a zone, and two path-following dead ends re-plan / step off
+// (stalePath, perched). In teams mode every changed test reduces to the old one (the atlas and pad bytes are 0 / 1 / 2
+// there) and the FFA branches are never taken, so its hashes hold.
 
 import type { PlayerIntent, TeamId } from '../types.ts';
+import { CREW_SLOTS } from '../types.ts';
 import type { MatchWorld } from '../match/world.ts';
-import type { Runner } from '../runner.ts';
+import type { PadZone, Runner } from '../runner.ts';
 import type { BotSkill } from '../match/roster.ts';
 import type { NavGraph } from './nav.ts';
 import { EDGE_CLIMB, EDGE_JUMP, EDGE_WALK } from './nav.ts';
@@ -111,8 +119,8 @@ interface Zone {
   node: number;                         // a nav node inside it
   area: number;                         // m² of floor
   samples: Int32Array;                  // atlas texel ids (floor)
-  need: [number, number, number];       // per viewing team: un-owned share (enemy dye counts 1.5×), 0..1.5
-  enemyShare: [number, number, number];
+  need: number[];                       // per viewing crew id (length CREW_SLOTS): un-owned share (enemy dye counts 1.5×), 0..1.5
+  enemyShare: number[];                 // per viewing crew id: the share of other crews' dye
   band: number;                         // level band (LEVEL_BAND m slices above the lowest zone)
 }
 
@@ -125,6 +133,16 @@ const LEVEL_BAND = 3;
 const LEVEL_MIN_AREA = 80;
 const LEVEL_ADV = 0.15;
 const LEVEL_PULL = 6;
+
+// CHANGED(CORE) FFA tuning (teams mode keeps its literals). With seven foes, the teams' taste for enemy dye (need counts it
+// 1.5×, goals +50 % × share, sweeps +0.7) had every crew repainting the others' turf: neutral stayed ~54 % and the weakest
+// crew ended at 3.2–4.0 % on Pier 18 (seeds 1–3). On Cinder (the big map, spawns four to a beach) 1.0 / 0.35 and then
+// 0.8 / 0.15 still left 52–60 % neutral and the weakest crew at 2.8–3.6 %: ~9 000 m² painted per match for ~45 % net,
+// i.e. mostly crews overwriting each other. FFA bots value foe dye at half of neutral floor and their sweeps prefer
+// neutral texels (flipping a foe texel lifts you against one rival; neutral lifts you against all seven).
+const FFA_FOE_NEED = 0.5;          // need = neutral + this × foe share   (teams 1.5)
+const FFA_FOE_GOAL = 0.2;          // goal score × (1 + this × foe share)  (teams 0.5)
+const FFA_FOE_TEXEL = -0.3;        // paint-target score bonus on a foe texel (teams +0.7)
 
 const TAU = Math.PI * 2;
 function wrap(a: number): number { a %= TAU; if (a > Math.PI) a -= TAU; else if (a < -Math.PI) a += TAU; return a; }
@@ -254,6 +272,9 @@ class Brain {
   // extra cost closure
   readonly edgeExtra: (e: number) => number;
 
+  /** CHANGED(CORE): crew byte `t` is another crew's (dye or pad) — both modes (teams: t === enemy) */
+  foe(t: number | null): boolean { return t !== null && t !== 0 && t !== this.own; }
+
   constructor(dir: BotDirector, r: Runner, skill: BotSkill, seed: number) {
     this.id = r.id;
     this.r = r;
@@ -282,13 +303,15 @@ class Brain {
       const v = nav.edgeTo[e];
       let extra = 0;
       const tid = dir.nodeTexel[v];
+      const pad = dir.nodePad[v];
       let m = 1;
-      if (tid >= 0) {
+      if (dir.ffa && pad === this.own) m = 0.7;              // CHANGED(CORE): an FFA drop pad sits on paintable floor
+      else if (tid >= 0) {
         const t = dir.atlasTeam[tid];
-        if (t === this.enemy) m = 2.3; else if (t === this.own) m = 0.7;
-      } else if (dir.nodePad[v] === this.own) m = 0.7;
+        if (this.foe(t)) m = 2.3; else if (t === this.own) m = 0.7;
+      } else if (pad === this.own) m = 0.7;
       extra += nav.edgeCost[e] * (m - 1);
-      if (dir.nodePad[v] === this.enemy) extra += 80;
+      if (this.foe(pad)) extra += 80;
       if (nav.edgeKind[e] === EDGE_CLIMB) {
         const own = dir.climbOwned(nav.edgeClimb[e], this.own);
         if (!own) {
@@ -309,14 +332,19 @@ export class BotDirector {
   readonly world: MatchWorld;
   readonly nav: NavGraph;
   readonly seed: number;
+  /** CHANGED(CORE): FREE-FOR-ALL (world.mode === 'ffa') */
+  readonly ffa: boolean;
   /** nav node → atlas floor texel under it (−1: none, e.g. a spawn pad) */
   readonly nodeTexel: Int32Array;
-  /** nav node → team whose pad it lies on (0 none) */
+  /** nav node → team whose pad it lies on (0 none). CHANGED(CORE): FFA — the crew whose drop pad it lies on (the A/B
+   *  team pads are neutral scenery there: 0) */
   readonly nodePad: Uint8Array;
   readonly atlasTeam: Uint8Array;
   /** nav node → 1 when it can reach spawn A and be reached from it (goals must be in this set) */
   readonly nodeMain: Uint8Array;
   private readonly brains: Array<Brain | null> = [];
+  /** CHANGED(INTEGRATION): failJumpWall's reachability test path (scratch) */
+  private readonly jumpTest: number[] = [];
   private readonly zones: Zone[] = [];
   private readonly zoneGrid = new Map<number, number[]>();   // (ix, iz) → zone indices
   private zoneStamp = -1;
@@ -339,7 +367,9 @@ export class BotDirector {
   private floorY0 = 0;
   /** level bands: floor m² per band, and per team the un-owned share of each band (updateZones) */
   private bandArea: number[] = [];
-  private readonly bandOpen: [number[], number[], number[]] = [[], [], []];
+  private readonly bandOpen: number[][] = Array.from({ length: CREW_SLOTS }, () => []);
+  /** CHANGED(CORE): FFA per-zone crew counts (scratch) */
+  private readonly crewCnt = new Int32Array(CREW_SLOTS);
   private bandY0 = 0;
   private readonly mv = { x: 0, z: 0, s: 0 };
   private readonly opp = { key: -1, kind: 0, x: 0, y: 0, z: 0, gap: false };
@@ -353,6 +383,7 @@ export class BotDirector {
     this.world = world;
     this.nav = nav;
     this.seed = seed | 0;
+    this.ffa = world.mode === 'ffa';
     const P = world.painter;
     const A = P.atlas;
     this.atlasTeam = A.team;
@@ -365,9 +396,15 @@ export class BotDirector {
       const x = nav.x[n], y = nav.y[n], z = nav.z[n];
       const s = P.surfaceAt(x, y + 0.02, z, 0.6, 'floor');
       if (s && Math.abs(s.y - y) < 0.3) this.nodeTexel[n] = s.id;
-      for (const side of ['A', 'B'] as const) {
-        const p = pads[side];
-        if ((x - p.x) ** 2 + (z - p.z) ** 2 <= (p.r + 0.6) ** 2 && Math.abs(y - p.y) < 0.6) this.nodePad[n] = side === 'A' ? 1 : 2;
+      if (this.ffa) {
+        for (const p of world.crewPads) {
+          if ((x - p.x) ** 2 + (z - p.z) ** 2 <= (p.r + 0.6) ** 2 && Math.abs(y - p.y) < 0.6) this.nodePad[n] = p.crew;
+        }
+      } else {
+        for (const side of ['A', 'B'] as const) {
+          const p = pads[side];
+          if ((x - p.x) ** 2 + (z - p.z) ** 2 <= (p.r + 0.6) ** 2 && Math.abs(y - p.y) < 0.6) this.nodePad[n] = side === 'A' ? 1 : 2;
+        }
       }
     }
 
@@ -539,7 +576,7 @@ export class BotDirector {
       const samples: number[] = [];
       for (let k = Math.floor(stride / 2); k < ids.length; k += stride) samples.push(ids[k]);
       const ix = Math.floor((cx - OX) / ZONE), iz = Math.floor((cz - OZ) / ZONE);
-      const z: Zone = { cx, cy, cz, ix, iz, node, area, samples: Int32Array.from(samples), need: [1, 1, 1], enemyShare: [0, 0, 0], band: 0 };
+      const z: Zone = { cx, cy, cz, ix, iz, node, area, samples: Int32Array.from(samples), need: new Array<number>(CREW_SLOTS).fill(1), enemyShare: new Array<number>(CREW_SLOTS).fill(0), band: 0 };
       const zi = this.zones.length;
       this.zones.push(z);
       const gk = iz * 1000 + ix;
@@ -556,13 +593,14 @@ export class BotDirector {
       while (this.bandArea.length <= z.band) this.bandArea.push(0);
       this.bandArea[z.band] += z.area;
     }
-    for (const t of [1, 2]) this.bandOpen[t] = this.bandArea.map(() => 1);
+    for (const t of this.world.crews) this.bandOpen[t] = this.bandArea.map(() => 1);
   }
 
   private bandOf(y: number): number { return Math.max(0, Math.floor((y - this.bandY0 + 0.5) / LEVEL_BAND)); }
 
   private updateZones(): void {
     this.zoneStamp = this.world.tick;
+    if (this.ffa) { this.updateZonesFfa(); return; }
     const T = this.atlasTeam;
     for (const z of this.zones) {
       let n1 = 0, n2 = 0;
@@ -584,6 +622,40 @@ export class BotDirector {
       o2[z.band] += z.area * (neutral + z.enemyShare[2]);
     }
     for (let k = 0; k < this.bandArea.length; k++) { const a = this.bandArea[k] || 1; o1[k] /= a; o2[k] /= a; }
+  }
+
+  /** CHANGED(CORE): FFA — per zone and crew in play: enemy share = every other crew's dye, need = neutral + FFA_FOE_NEED × that;
+   *  per band and crew: the un-owned share (neutral + other crews) */
+  private updateZonesFfa(): void {
+    const T = this.atlasTeam, crews = this.world.crews, cnt = this.crewCnt;
+    for (const c of crews) this.bandOpen[c].fill(0);
+    for (const z of this.zones) {
+      cnt.fill(0);
+      const s = z.samples;
+      for (let k = 0; k < s.length; k++) cnt[T[s[k]]]++;
+      const n = s.length || 1;
+      const neutral = cnt[0] / n, dyed = s.length - cnt[0];
+      for (const c of crews) {
+        const e = (dyed - cnt[c]) / n;
+        z.enemyShare[c] = e;
+        z.need[c] = neutral + FFA_FOE_NEED * e;
+        this.bandOpen[c][z.band] += z.area * (neutral + e);
+      }
+    }
+    for (const c of crews) {
+      const o = this.bandOpen[c];
+      for (let k = 0; k < this.bandArea.length; k++) o[k] /= this.bandArea[k] || 1;
+    }
+  }
+
+  /** CHANGED(CORE): FFA — is (x, y, z) within `margin` m of another crew's drop pad (horizontal; same level ±2 m)? */
+  private nearFoePad(x: number, y: number, z: number, own: TeamId, margin: number): boolean {
+    for (const p of this.world.crewPads) {
+      if (p.crew === own || Math.abs(p.y - y) > 2) continue;
+      const R = p.r + margin;
+      if ((x - p.x) ** 2 + (z - p.z) ** 2 < R * R) return true;
+    }
+    return false;
   }
 
   private zoneAt(x: number, z: number, y: number): number {
@@ -669,6 +741,22 @@ export class BotDirector {
     }
     if (b.mode === 'cover' && now >= b.coverUntil) { b.mode = 'paint'; b.coverCd = now + Math.round(6 / TICK); b.path.length = 0; }
 
+    // CHANGED(CORE) FFA: a path planned in mid-air (nav.nearest picks the deck the runner is falling past) leaves its
+    // next node hanging over the landed runner; its residual steering sat between the idle watchdog (0.15) and the stuck
+    // tracker (0.3), so nothing re-planned — measured on Lockwell: a refilling bot parked under its refill node 26 s. Drop
+    // such a path; the per-mode planner below re-plans from the ground. (Teams mode never takes this branch: its hashes hold.)
+    if (this.stalePath(b)) { b.path.length = 0; b.pk = 0; }   // both modes since 2026-09-28 (was FFA-only)
+    // CHANGED(CORE) FFA: perched on a lip right over the node its drop edge leads to (the capsule rests on the ledge
+    // corner, 0.01 m off the node horizontally), path following has no direction and every re-plan picks the same drop —
+    // measured on Lockwell: 6–10 s parked at y 0.85 over a node at y 0. Step off along the edge with the stuck nudge.
+    if (now >= b.nudgeUntil && this.perched(b)) {   // both modes since 2026-09-28 (was FFA-only)
+      const nav = this.nav, a = b.path[b.pk - 1], n = b.path[b.pk];
+      let dx = nav.x[n] - nav.x[a], dz = nav.z[n] - nav.z[a];
+      let l = Math.hypot(dx, dz);
+      if (l < 0.05) { const ang = this.hashNoise(n) * TAU; dx = Math.sin(ang); dz = Math.cos(ang); l = 1; }
+      b.nudgeX = dx / l; b.nudgeZ = dz / l; b.nudgeUntil = now + 27;
+    }
+
     // ── per-mode planning
     b.holding = false;
     switch (b.mode) {
@@ -699,6 +787,26 @@ export class BotDirector {
         else if (b.mode === 'refill') this.planRefill(b);
       }
     } else b.idleT = 0;
+  }
+
+  /** CHANGED(CORE): the next path node hangs > 1.6 m above a grounded runner within 1.5 m horizontally, and the edge
+   *  into it is no wall-slick climb (a climb's top node legitimately sits above its base) */
+  private stalePath(b: Brain): boolean {
+    const r = b.r, nav = this.nav;
+    if (!r.grounded || b.climbPhase !== 0 || b.pk >= b.path.length) return false;
+    const n = b.path[b.pk];
+    const e = b.pk < b.pathEdge.length ? b.pathEdge[b.pk] : -1;
+    if (e >= 0 && nav.edgeKind[e] === EDGE_CLIMB) return false;
+    return nav.y[n] - r.y > 1.6 && Math.hypot(nav.x[n] - r.x, nav.z[n] - r.z) < 1.5;
+  }
+
+  /** CHANGED(CORE): grounded ≥ 0.5 m above the next path node and within 0.4 m of it horizontally, one node into the
+   *  path (a drop edge whose lip the runner is resting on) */
+  private perched(b: Brain): boolean {
+    const r = b.r, nav = this.nav;
+    if (!r.grounded || b.climbPhase !== 0 || b.pk < 1 || b.pk >= b.path.length) return false;
+    const n = b.path[b.pk];
+    return r.y - nav.y[n] >= 0.5 && Math.hypot(nav.x[n] - r.x, nav.z[n] - r.z) < 0.4;
   }
 
   private resetBrain(b: Brain): void {
@@ -799,7 +907,7 @@ export class BotDirector {
       const ey = e.y + COMBAT.muzzleHeight;
       const blocked = !!ph.raycast(px, py, pz, e.x - px, ey - py, e.z - pz, Math.hypot(e.x - px, ey - py, e.z - pz));
       // enemy dye ahead slogs the run (2 m/s): the other side unless that one is worse
-      const slog = this.teamUnder(r.x + vx * 1.6, r.y, r.z + vz * 1.6) === b.enemy;
+      const slog = b.foe(this.teamUnder(r.x + vx * 1.6, r.y, r.z + vz * 1.6));
       const sc = (blocked ? 2 : 0) + (s === pref ? 1 : 0) - (slog ? 1.5 : 0);
       if (sc > bestS) { bestS = sc; bx = vx; bz = vz; bs = s; }
     }
@@ -893,10 +1001,11 @@ export class BotDirector {
   private selectGoal(b: Brain): void {
     const r = b.r, now = this.world.tick;
     const own = b.own;
-    const eps = this.world.pads[own === 1 ? 'B' : 'A'];
+    const eps = this.ffa ? null : this.world.pads[own === 1 ? 'B' : 'A'];   // CHANGED(CORE): FFA uses nearFoePad
     // allies' goals (crowding)
     const allyGoals: number[] = [];
-    for (const o of this.brains) if (o && o !== b && o.own === own && o.goalZone >= 0 && o.r.alive) allyGoals.push(o.goalZone);
+    // CHANGED(CORE): FFA has no allies — every other bot's goal crowds a zone, so eight crews spread over the map
+    for (const o of this.brains) if (o && o !== b && (this.ffa || o.own === own) && o.goalZone >= 0 && o.r.alive) allyGoals.push(o.goalZone);
     // level pull (see LEVEL_*): per band, a multiplier for zones on another level that is barer than ours
     const BA = this.bandArea, open = this.bandOpen[own];
     const myBand = Math.min(this.bandOf(r.y), BA.length - 1);
@@ -923,7 +1032,7 @@ export class BotDirector {
       let gain = z.area * z.need[own];
       if (b.kind === 'charge') gain = this.sightGain(zi, own, gain);
       if (gain < 2.5) continue;
-      if ((z.cx - eps.x) ** 2 + (z.cz - eps.z) ** 2 < (eps.r + 4) ** 2) continue;
+      if (eps ? (z.cx - eps.x) ** 2 + (z.cz - eps.z) ** 2 < (eps.r + 4) ** 2 : this.nearFoePad(z.cx, z.cy, z.cz, own, 2)) continue;
       const d = Math.hypot(z.cx - r.x, z.cz - r.z) + Math.abs(z.cy - r.y) * 2;
       const t = d / MOVE.walk;
       let crowd = 0;
@@ -933,9 +1042,9 @@ export class BotDirector {
       let s = gain / (5 + t * 2.2);
       s /= 1 + crowd * 1.2;
       // a little love for contested enemy dye (flipping it swings the score twice)
-      s *= 1 + 0.5 * z.enemyShare[own];
+      s *= 1 + (this.ffa ? FFA_FOE_GOAL : 0.5) * z.enemyShare[own];
       // the enemy base is a trap
-      if ((z.cx - eps.x) ** 2 + (z.cz - eps.z) ** 2 < 16 * 16) s *= 0.6;
+      if (eps && (z.cx - eps.x) ** 2 + (z.cz - eps.z) ** 2 < 16 * 16) s *= 0.6;
       s *= pull[z.band];
       if (!(s > 0)) continue;
       // insert into top-K (deterministic order: score desc, index asc)
@@ -998,7 +1107,7 @@ export class BotDirector {
           if (moving && cm < minCos) continue;
           const ca = (dx * adx + dz * adz) / d;
           let sc = ca * 1.3 + cm * 0.4 - Math.abs(d - PAINT_BEST) * 0.22 + b.rnd() * 0.6;
-          if (t === b.enemy) sc += 0.7;
+          if (b.foe(t)) sc += this.ffa ? FFA_FOE_TEXEL : 0.7;
           if (sc <= topS[2]) continue;
           // insert (ties: lower texel id first)
           let p = 2;
@@ -1178,7 +1287,7 @@ export class BotDirector {
     let best = -1, bestD = Infinity;
     const list = this.nodesNear(r.x, r.z, 18).slice();
     for (const n of list) {
-      if (!this.nodeMain[n] || this.nodePad[n] === b.enemy) continue;
+      if (!this.nodeMain[n] || b.foe(this.nodePad[n])) continue;
       const x = nav.x[n], y = nav.y[n], z = nav.z[n];
       let d = Math.hypot(x - r.x, z - r.z) + Math.abs(y - r.y) * 3;
       if (d >= bestD) continue;
@@ -1198,7 +1307,7 @@ export class BotDirector {
       if (around < 2) continue;
       best = n; bestD = d;
     }
-    const pad = this.world.pads[r.side];
+    const pad = this.world.padOf(r);                        // CHANGED(CORE): teams pads[side]; FFA the drop pad
     const padD = Math.hypot(pad.x - r.x, pad.z - r.z) + Math.abs(pad.y - r.y) * 3;
     if (best >= 0 && bestD < padD && b.refillTries < 3) {
       b.refillX = nav.x[best]; b.refillY = nav.y[best]; b.refillZ = nav.z[best]; b.refillNode = best;
@@ -1444,7 +1553,7 @@ export class BotDirector {
         if (own) {
           const l = Math.hypot(b.mvx, b.mvz) || 1;
           const ax = r.x + b.mvx / l * 1.1, az = r.z + b.mvz / l * 1.1;
-          own = this.teamUnder(ax, r.y, az) === b.own || this.onPadXZ(ax, r.y, az, r.side);
+          own = this.teamUnder(ax, r.y, az) === b.own || this.onPadXZ(ax, r.y, az, w.padOf(r));
         }
         b.ownAhead = own && !this.wallAhead(r, b.mvx, b.mvz);
       }
@@ -1700,7 +1809,11 @@ export class BotDirector {
           out.jump = true; b.jumpDone = true; b.jumpTries++;
         } else if (b.jumpDone && r.grounded && r.airTime === 0 && Math.abs(r.y - nav.y[from]) < 0.3 && d > 0.8) {
           // landed back where we started: retry once, then give up on this edge
-          if (b.jumpTries >= 2) { this.failEdge(b, e); return { x: 0, z: 0, s: 0, jump: false, climb: false }; }
+          // (CHANGED(INTEGRATION), FFA only: give up the whole stretch of wall — see failJumpWall)
+          if (b.jumpTries >= 2) {
+            this.failJumpWall(b, e, from);   // both modes since 2026-09-28 (was FFA-only; teams used failEdge)
+            return { x: 0, z: 0, s: 0, jump: false, climb: false };
+          }
           b.jumpDone = false;
         }
       }
@@ -1720,6 +1833,40 @@ export class BotDirector {
         const q = nav.climbs[nav.edgeClimb[k]];
         if (q && Math.hypot(q.cx - c.cx, q.cz - c.cz) < 1.5 && Math.abs(q.y1 - c.y1) < 0.6) { b.blocked.push(k); b.blockedUntil.push(until); }
       }
+    }
+    this.failEdge(b, e);
+  }
+
+  /**
+   * CHANGED(INTEGRATION), FFA only (the teams hashes stay): a jump edge given up after two tries blocks, for the same 12 s,
+   * every jump edge up the same stretch of wall — from nodes within 2.6 m of the take-off at the same height, rising at
+   * least as far, onto the same top floor (±0.6 m) — like failClimb does for climbs. Measured on Lockwell (FFA seed 8):
+   * a bot refilling from the y 0 channel on foe dye failed edge 2614 up a 1.0 m wall, re-planned onto the parallel edges
+   * 2290, 2298, 2291, 2299 one after another and failed each (93.5–99 s): the 6 s stuck window. When the bot's goal is
+   * unreachable with the whole wall blocked, only the failed edge stays blocked (the old rule: a way out always remains).
+   */
+  private failJumpWall(b: Brain, e: number, from: number): void {
+    const nav = this.nav;
+    const to = nav.edgeTo[e];
+    const rise = nav.y[to] - nav.y[from];
+    const until = this.world.tick + Math.round(12 / TICK);
+    const base = b.blocked.length;
+    const near = this.nodesNear(nav.x[from], nav.z[from], 2.6).slice();
+    for (const n of near) {
+      if (Math.abs(nav.y[n] - nav.y[from]) > 0.4) continue;
+      for (let k = nav.edgeStart[n]; k < nav.edgeStart[n + 1]; k++) {
+        if (k === e || nav.edgeKind[k] !== EDGE_JUMP) continue;
+        const t = nav.edgeTo[k];
+        if (nav.y[t] - nav.y[n] >= rise - 0.35 && Math.abs(nav.y[t] - nav.y[to]) < 0.6) { b.blocked.push(k); b.blockedUntil.push(until); }
+      }
+    }
+    const goal = b.mode === 'refill' ? b.refillNode : b.goalNode;
+    if (b.blocked.length > base && goal >= 0) {
+      const start = nav.nearest(b.r.x, b.r.y, b.r.z);
+      b.blocked.push(e); b.blockedUntil.push(until);            // test with the failed edge blocked too
+      const ok = start >= 0 && nav.path(start, goal, this.jumpTest, b.edgeExtra);
+      b.blocked.pop(); b.blockedUntil.pop();
+      if (!ok) { b.blocked.length = base; b.blockedUntil.length = base; }
     }
     this.failEdge(b, e);
   }
@@ -1752,8 +1899,7 @@ export class BotDirector {
     return this.world.painter.teamUnder(x, y, z);
   }
 
-  private onPadXZ(x: number, y: number, z: number, side: 'A' | 'B'): boolean {
-    const p = this.world.pads[side];
+  private onPadXZ(x: number, y: number, z: number, p: PadZone): boolean {   // CHANGED(CORE): takes the pad (was a side)
     return (x - p.x) ** 2 + (z - p.z) ** 2 <= p.r * p.r && Math.abs(y - p.y) < 0.6;
   }
 

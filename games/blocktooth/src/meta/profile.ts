@@ -6,6 +6,7 @@
 //   * unknown goal ids (done / best) are dropped; non-finite / negative numbers are dropped; counters are
 //     floored and clamped to [0, MAX_COUNT]; strings that look like numbers are accepted (like settings);
 //   * titan / biome / boss / perk ids are validated against the unions; palette indices are 0..2;
+//   * life.gateRematches (GATEKEEPERS §6.5, lane K2c; absent in pre-gate blobs) is a counter like runs;
 //   * clearedBy lists are de-duplicated and sorted in BIOME_IDS order; newUnlocks keeps only real
 //     `locked` card ids (de-duplicated); cineSeen keeps only `${titan}.${biome}` keys.
 // Never throws (probe_meta fuzzes it with corrupt JSON, wrong types and huge numbers).
@@ -29,6 +30,7 @@ export function emptyProfile(): Profile {
       runs: 0, clears: 0, banishes: 0, evolutions: 0,
       clearedBy: { molo: [], voltkite: [], hearthback: [], briarwick: [] },
       bossKills: {},
+      gateRematches: 0,
     },
     perk: null,
     palette: { molo: 0, voltkite: 0, hearthback: 0, briarwick: 0 },
@@ -111,6 +113,8 @@ export function sanitizeProfile(v: unknown): Profile {
           p.life.clearedBy[t] = BIOME_IDS.filter((b) => arr.includes(b));
         }
       }
+      // GATEKEEPERS §6.5 (K2c): older blobs have no gateRematches → 0; junk → 0; floored and clamped
+      p.life.gateRematches = count(life.gateRematches);
       const bk = obj(life.bossKills);
       if (bk) {
         for (const id of Object.keys(bk)) {
@@ -163,6 +167,7 @@ export function cloneProfile(p: Profile): Profile {
       hearthback: p.life.clearedBy.hearthback.slice(), briarwick: p.life.clearedBy.briarwick.slice(),
     },
     bossKills: { ...p.life.bossKills },
+    gateRematches: p.life.gateRematches,
   };
   c.perk = p.perk;
   c.palette = { ...p.palette };

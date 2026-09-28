@@ -1,6 +1,11 @@
 // BLOCKTOOTH — containment bosses (ai lane, CONTRACT §10, names per §1). THREE-free data.
 // hp is the base; spawnBoss scales it by BOSS_HP_SCALE[titan.rank]. Attack ids are the ids
 // the boss modules put in BossState.attack and in `bossAttack` events.
+// GATEKEEPERS (§7.2): every def carries role / slot / kicker. The city bosses are role 'main', slot 4,
+// kicker ''. The three gatekeeper defs (§1, §3.1–§3.3, lane K1b) list their real attacks (the ids the modules
+// put in BossState.attack and in `bossAttack` events). Gatekeeper HP comes from meta/gates.ts gateHpFor, not
+// from `hp` (kept at GATE_HP_AT_RANK of the home Size for reference). Module BEATS (REFILL, OVERHEATED, …) set
+// BossState.attack WITHOUT a `bossAttack` event; their subtitles are BOSS_BEAT_SUBTITLE below.
 
 import type { BossDef, BossId } from '../core/types.ts';
 
@@ -10,6 +15,7 @@ export const BOSSES: Record<BossId, BossDef> = {
     name: 'CAISSON-4',
     title: 'HALVARD HARBOUR CONTAINMENT RIG',
     meterName: 'STRAIN',
+    role: 'main', slot: 4, kicker: '',
     hp: 190000,
     height: 75,
     attacks: [
@@ -25,6 +31,7 @@ export const BOSSES: Record<BossId, BossDef> = {
     name: 'IRON GULLY',
     title: 'THE PALE RIDGE OF THE STACKS',
     meterName: 'FRACTURE',
+    role: 'main', slot: 4, kicker: '',
     hp: 215000,
     height: 70,
     attacks: [
@@ -41,6 +48,7 @@ export const BOSSES: Record<BossId, BossDef> = {
     name: 'PARKADE-6',
     title: 'HALVARD MOBILE PARKING STRUCTURE',
     meterName: 'JAM',
+    role: 'main', slot: 4, kicker: '',
     hp: 180000,
     height: 64,
     attacks: [
@@ -51,6 +59,52 @@ export const BOSSES: Record<BossId, BossDef> = {
       { id: 'levelCollapse', name: 'LEVEL COLLAPSE', subtitle: 'LEVEL COLLAPSE — COUNT THE RINGS, DASH THE LAST', phase: 3 },
     ],
   },
+  // ── GATEKEEPERS (§1, §3.1–§3.3; lane K1b) ──
+  stencil1: {
+    id: 'stencil1',
+    name: 'STENCIL-1',
+    title: 'HALVARD ROAD-MARKING UNIT',
+    meterName: 'SPILL',
+    role: 'gate', slot: 1, kicker: 'GATEKEEPER · SIZE I HEIGHT LIMIT',
+    hp: 1000,
+    height: 7.2,
+    attacks: [
+      { id: 'stripeRun', name: 'STRIPE RUN', subtitle: 'STRIPE RUN — STEP OFF THE LINE', phase: 1 },
+      { id: 'paintBuckets', name: 'PAINT BUCKETS', subtitle: 'PAINT BUCKETS — WATCH THE SPLASH', phase: 1 },
+      { id: 'doubleLine', name: 'DOUBLE LINE', subtitle: 'DOUBLE LINE — STAY BETWEEN THE LINES', phase: 2 },
+      { id: 'uTurn', name: 'U-TURN', subtitle: "U-TURN — IT'S COMING BACK", phase: 3 },
+    ],
+  },
+  cordon2: {
+    id: 'cordon2',
+    name: 'CORDON-2',
+    title: 'HALVARD CROWD-BARRIER UNIT',
+    meterName: 'STALL',
+    role: 'gate', slot: 2, kicker: 'GATEKEEPER · SIZE II HEIGHT LIMIT',
+    hp: 4500,
+    height: 21.5,
+    attacks: [
+      { id: 'shieldShove', name: 'SHIELD SHOVE', subtitle: 'SHIELD SHOVE — GET OUT OF ITS WAY', phase: 1 },
+      { id: 'sawhorseToss', name: 'SAWHORSE TOSS', subtitle: 'SAWHORSE TOSS — MIND THE BARRICADES', phase: 1 },
+      { id: 'backfire', name: 'BACKFIRE', subtitle: 'BACKFIRE — STEP OFF THE EXHAUST', phase: 2 },
+      { id: 'squadBehind', name: 'SQUAD BEHIND THE LINE', subtitle: 'SQUAD BEHIND THE LINE', phase: 3 },
+    ],
+  },
+  switchboard5: {
+    id: 'switchboard5',
+    name: 'SWITCHBOARD-5',
+    title: 'HALVARD MOBILE SWITCHBOARD',
+    meterName: 'FEEDBACK',
+    role: 'gate', slot: 3, kicker: 'GATEKEEPER · SIZE III HEIGHT LIMIT',
+    hp: 20000,
+    height: 69,
+    attacks: [
+      { id: 'callIn', name: 'CALL-IN', subtitle: 'CALL-IN — CLEAR THE MARKED SPOTS', phase: 1 },
+      { id: 'putThrough', name: 'PUT THROUGH', subtitle: 'PUTTING YOU THROUGH TO A CREW', phase: 1 },
+      { id: 'relocate', name: 'RELOCATE', subtitle: 'RELOCATING — CATCH IT', phase: 1 },
+      { id: 'holdMusic', name: 'HOLD MUSIC', subtitle: 'HOLD MUSIC — CLEAR THE RING', phase: 2 },
+    ],
+  },
 };
 
 /** Nameplate subtitle when no attack is active (the default mechanic hint, §10). */
@@ -58,10 +112,33 @@ export const BOSS_DEFAULT_SUBTITLE: Record<BossId, string> = {
   caisson4: 'BREAK THE LEGS — BUILD STRAIN',
   irongully: 'CRACK THE SAIL — BUILD FRACTURE',
   parkade6: 'HIT THE TILL WHEN THE DECK OPENS — BUILD JAM',
+  // GATEKEEPERS (§3.1–§3.3)
+  stencil1: 'WAIT FOR THE REFILL — HIT THE DRUM',
+  cordon2: 'GET BEHIND THE WALL — HIT THE PACK',
+  switchboard5: 'HIT THE DISHES AS THEY COME ROUND — BUILD FEEDBACK',
 };
 
-/** Subtitle for an attack id (falls back to the default hint). */
+/**
+ * GATEKEEPERS: subtitles of the module BEATS (BossState.attack ids a gatekeeper sets without a `bossAttack`
+ * event, §2.4 / §3.0–§3.3). Shared by all three gatekeepers; a beat id is never a real attack id.
+ */
+export const BOSS_BEAT_SUBTITLE: Readonly<Record<string, string>> = {
+  refill: 'REFILLING — HIT THE DRUM',                  // STENCIL-1 after a STRIPE RUN / U-TURN
+  overheated: 'OVERHEATED — GET BEHIND IT',            // CORDON-2 after a SHIELD SHOVE
+  packUp: 'PACKING UP',                                // SWITCHBOARD-5 folds before it drives (hunt)
+  planting: 'PLANTING',                                // SWITCHBOARD-5 outriggers down
+  caught: 'CAUGHT — HIT THE DISHES',                   // SWITCHBOARD-5 stopped mid-RELOCATE
+  reconfiguring: 'RECONFIGURING',                      // 1.2 s after a phase change
+  ramming: 'RAMMING THROUGH',                          // the stuck rule (§3.0)
+  cutOff: 'CUTTING YOU OFF',                           // the §2.4 cut-off re-entry
+};
+
+/** Subtitle for an attack id or a gatekeeper beat id (falls back to the default hint). */
 export function bossSubtitle(id: BossId, attack: string | null): string {
-  if (attack) for (const a of BOSSES[id].attacks) if (a.id === attack) return a.subtitle;
+  if (attack) {
+    for (const a of BOSSES[id].attacks) if (a.id === attack) return a.subtitle;
+    const beat = BOSS_BEAT_SUBTITLE[attack];
+    if (beat !== undefined && BOSSES[id].role === 'gate') return beat;
+  }
   return BOSS_DEFAULT_SUBTITLE[id];
 }

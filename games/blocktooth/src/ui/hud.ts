@@ -10,13 +10,26 @@
 //   bottom     WARD-7 WIRE ticker crawl (live items injected on big moments)
 //   overlay    low-HP vignette pulse, hurt edge flash, pickup / level flashes
 // update() is change-only: every DOM write goes through TextSlot / VarSlot / ClassSlot.
+//
+// GATEKEEPERS §6.6 / §4.1 (lane K2b): while sizeLocked(w) the GROW row is overlaid by the LOCK strip — a
+// hazard-stripe fill (crawling by transform only), a padlock and `SIZE LOCKED — <NAME> EN ROUTE` (pending)
+// / `SIZE LOCKED — BEAT <NAME>` (the fight is alive) / `SIZE LOCKED — <BOSS> EN ROUTE · 0:nn` (the city
+// boss waits for GATES.mainEarliestS; one text write per second). The "n/m LV → SIZE" value is hidden, the
+// SIZE box wears a padlock chip, and a held level-up pulses the padlock instead of the notches. The strip
+// is keyed by (pending, active, countdown second): its text is written only when that key changes. Wire
+// lines on gateSpawn / gateDefeated (§6.7), next to bossSpawn's.
 
-import type { SimEvent, World } from '../core/types.ts';
+import type { GateId, SimEvent, World } from '../core/types.ts';
+import { GATE_OF_SLOT } from '../core/types.ts';
 import { hpReadout } from '../data/strings_hud.ts';
-import { RANK_LEVELS, sizeProgress } from '../core/config.ts';
+import { GATES, RANK_LEVELS, sizeProgress } from '../core/config.ts';
 import { TITANS } from '../data/titans.ts';
 import { BOSSES } from '../data/bosses.ts';
+import { BIOMES } from '../data/biomes.ts';
 import { STR, TICKER, RANK_SUBS } from '../data/strings.ts';
+import { STR_GATE, gateName } from '../data/strings_gate.ts';
+import { sizeLocked } from '../meta/gates.ts';
+import { glyphSvg } from './icons.ts';
 import {
   ClassSlot, TextSlot, VarSlot, clearEl, div, el, fmt, fmtClock, fmtInt, fmtTime, flashesReduced,
   keyChip, pulse, roman,
@@ -26,6 +39,61 @@ const LOW_HP = 0.3;
 const TRAIL_HOLD_S = 0.4;
 const TRAIL_RATE = 0.9;          // fraction of max HP per second the trail drains
 const ZOOM_HINT_BRIGHT_S = 20;   // the zoom key hint is at full strength for this long into a run
+
+/** GROW-bar lock styles (lane K2b owns no stylesheet: injected once; only .locked / .bt-gl* selectors). The
+ *  stripes are -45 deg bands with a 1.28u perpendicular period, so a 1.28u x sqrt2 = 1.8102u horizontal
+ *  period: a translateX of exactly that loops seamlessly (compositor-only). */
+const LOCK_CSS = `
+.bt-bar-mass { position: relative; }
+.bt-gl { display: none; }
+.bt-bar-mass.locked { min-height: calc(var(--u) * 1.75); }
+.bt-bar-mass.locked > :not(.bt-gl) { visibility: hidden; }
+.bt-bar-mass.locked .bt-gl {
+  display: flex; align-items: center; position: absolute; left: 0; right: 0; top: 0; bottom: 0; overflow: hidden; z-index: 5;
+  background: #1b1426; border: calc(var(--u) * .13) solid #1b1426;
+}
+.bt-gl-stripes {
+  position: absolute; top: 0; bottom: 0; left: 0; width: calc(100% + var(--u) * 1.8102);
+  background: repeating-linear-gradient(-45deg, #ffc21a 0 calc(var(--u) * .64), #1b1426 calc(var(--u) * .64) calc(var(--u) * 1.28));
+  animation: bt-gl-crawl 1.2s linear infinite; will-change: transform;
+}
+@keyframes bt-gl-crawl { to { transform: translateX(calc(var(--u) * -1.8102)); } }
+.bt-gl-lock {
+  position: relative; flex: 0 0 auto; align-self: stretch; display: flex; align-items: center; justify-content: center;
+  width: calc(var(--u) * 1.6); background: #ffc21a; border-right: calc(var(--u) * .13) solid #1b1426;
+}
+.bt-gl-lock svg { width: calc(var(--u) * 1.3); height: calc(var(--u) * 1.3); }
+.bt-gl-t {
+  position: relative; flex: 0 1 auto; min-width: 0; margin-left: calc(var(--u) * .3);
+  font-family: var(--f-display); font-size: calc(var(--u) * .86); line-height: 1.2; letter-spacing: .03em;
+  color: #1b1426; background: #ffc21a; padding: 0 calc(var(--u) * .4); border: calc(var(--u) * .1) solid #1b1426;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bt-gl-t.long { font-size: calc(var(--u) * .76); letter-spacing: .02em; }
+.bt-gl-t.xlong { font-size: calc(var(--u) * .68); letter-spacing: .01em; }
+.bt-size { position: relative; }
+.bt-size-lock { display: none; }
+.bt-size.locked .bt-size-lock {
+  display: flex; align-items: center; gap: calc(var(--u) * .15); position: absolute; left: 50%; bottom: calc(var(--u) * -.72);
+  transform: translateX(-50%); padding: calc(var(--u) * .08) calc(var(--u) * .3); background: #ffc21a; color: #1b1426;
+  border: calc(var(--u) * .12) solid #1b1426; font-weight: 800; font-size: calc(var(--u) * .56); letter-spacing: .14em; white-space: nowrap;
+}
+.bt-size-lock svg { width: calc(var(--u) * .8); height: calc(var(--u) * .8); }
+@media (prefers-reduced-motion: reduce) { .bt-gl-stripes { animation: none; } }
+`;
+let lockCssDone = false;
+function ensureLockCss(): void {
+  if (lockCssDone || typeof document === 'undefined') return;
+  lockCssDone = true;
+  const st = document.createElement('style');
+  st.dataset.bt = 'gate-hud';
+  st.textContent = LOCK_CSS;
+  document.head.appendChild(st);
+}
+/** a lock label longer than these drops to the .long / .xlong size (the ~16u GROW row at 1280 × 720:
+ *  `SIZE LOCKED — SWITCHBOARD-5 EN ROUTE` 36 chars, `SIZE LOCKED — IRON GULLY EN ROUTE · 7:20` 40) */
+const LOCK_LONG_CHARS = 32;
+const LOCK_XLONG_CHARS = 37;
 
 /** CSS unit (--u) in px, mirrored from styles.css: max(8px, min(1vw, 1.7778vh)). */
 function unitPx(): number { return Math.max(8, Math.min(window.innerWidth / 100, (window.innerHeight * 1.7778) / 100)); }
@@ -78,6 +146,15 @@ export class Hud {
   private readonly lowHpOn: ClassSlot;
   private readonly vignette: HTMLElement;
   private readonly hurtFlash: HTMLElement;
+  // GATEKEEPERS: the GROW-bar lock strip + the SIZE-box padlock chip
+  private readonly lockBox: HTMLElement;
+  private readonly lockIcon: HTMLElement;
+  private readonly lockT: TextSlot;
+  private readonly lockLong: ClassSlot;
+  private readonly lockXLong: ClassSlot;
+  private readonly lockOn: ClassSlot;
+  private readonly sizeLockOn: ClassSlot;
+  private lockKey = -1;
 
   // derived state
   private trail = 1;
@@ -151,6 +228,10 @@ export class Hud {
     this.sizeBox = div('bt-size', body);
     div('bt-size-lbl', this.sizeBox, STR.hud.size);
     this.sizeT = new TextSlot(div('bt-size-num', this.sizeBox, 'I'));
+    const chip = div('bt-size-lock', this.sizeBox);
+    chip.insertAdjacentHTML('beforeend', glyphSvg('lock', '#1b1426', 12));
+    chip.appendChild(el('span', '', STR_GATE.grow.chip));
+    this.sizeLockOn = new ClassSlot(this.sizeBox, 'locked');
 
     const bars = div('bt-bars', body);
     const bar = (cls: string, label: string) => {
@@ -174,6 +255,16 @@ export class Hud {
     this.massFill = new VarSlot(div('bt-bar-fill', ms.track), '--p');
     div('bt-bar-lvticks', ms.track);
     this.massVal = new TextSlot(ms.val);
+    ensureLockCss();
+    const gl = this.lockBox = div('bt-gl', this.massBar);
+    gl.dataset.gate = 'grow-lock';
+    div('bt-gl-stripes', gl);
+    this.lockIcon = div('bt-gl-lock', gl);
+    this.lockIcon.innerHTML = glyphSvg('lock', '#1b1426', 16);   // an ink padlock on hazard yellow (small-size legible)
+    this.lockT = new TextSlot(div('bt-gl-t', gl));
+    this.lockLong = new ClassSlot(this.lockT.node, 'long');
+    this.lockXLong = new ClassSlot(this.lockT.node, 'xlong');
+    this.lockOn = new ClassSlot(this.massBar, 'locked');
     const xp = bar('bt-bar-xp', STR.hud.xp);
     this.xpBar = xp.row;
     this.xpFill = new VarSlot(div('bt-bar-fill', xp.track), '--p');
@@ -273,8 +364,12 @@ export class Hud {
     this.lowHpOn.set(T.alive && hpF < LOW_HP);
     this.cardLow.set(T.alive && hpF < LOW_HP);
 
-    // SIZE progress by level: XP toward the level that breaches the next Size
-    if (T.rank < 4) {
+    // SIZE progress by level: XP toward the level that breaches the next Size (GATEKEEPERS: the lock strip
+    // replaces it while a Size gate is pending or its fight is alive)
+    const locked = this.updateLock(w);
+    if (locked) {
+      this.massFill.set(1);
+    } else if (T.rank < 4) {
       const L0 = RANK_LEVELS[T.rank], L1 = RANK_LEVELS[T.rank + 1];
       const span = Math.max(1, L1 - L0);
       this.massFill.set(sizeProgress(T.rank, T.level, T.xp));
@@ -323,7 +418,13 @@ export class Hud {
           }
           break;
         case 'levelUp':
-          pulse(this.massBar, [{ filter: 'brightness(1.6) saturate(1.3)', transform: 'scaleY(1.25)' }, { filter: 'none', transform: 'none' }], 520);
+          // GATEKEEPERS §6.6: a held level-up (the Size is locked) pulses the padlock, not the notches
+          if (sizeLocked(w)) pulse(this.lockIcon, [
+            { transform: 'scale(1.55) rotate(-14deg)', background: '#e63946' },
+            { transform: 'scale(.92) rotate(8deg)', offset: 0.45 },
+            { transform: 'scale(1) rotate(0deg)' },
+          ], 560);
+          else pulse(this.massBar, [{ filter: 'brightness(1.6) saturate(1.3)', transform: 'scaleY(1.25)' }, { filter: 'none', transform: 'none' }], 520);
           pulse(this.lvBox, [{ transform: 'scale(1.6)', color: '#ff6f5e' }, { transform: 'scale(1)' }], 520);
           pulse(this.lvFlash, [
             { opacity: 0, transform: 'translate(-50%, 30%) scale(.6) rotate(-6deg)' },
@@ -346,6 +447,22 @@ export class Hud {
         case 'chest':
           this.pushWire(STR.hud.wire.chest);
           break;
+        // ── GATEKEEPERS §6.7: wire lines (the GROW-bar lock itself re-keys in update()) ──
+        case 'gateSpawn': {
+          const name = gateName(e.gate);
+          this.pushWire(e.rematch
+            ? fmt(STR_GATE.wire.rematchSpawn, { name, n: roman(w.titan.rank) })
+            : fmt(STR_GATE.wire.spawn, { name, n: roman(Math.max(0, e.slot - 1)) }));
+          break;
+        }
+        case 'gateDefeated':
+          this.pushWire(e.rematch
+            ? fmt(STR_GATE.wire.rematchDefeated, { name: gateName(e.gate) })
+            : fmt(STR_GATE.wire.defeated, { n: roman(e.slot) }));
+          break;
+        case 'gateEscalate':
+          this.pushWire(STR_GATE.wire.escalate);
+          break;
         default:
           break;
       }
@@ -353,6 +470,43 @@ export class Hud {
   }
 
   // ─────────────────────────────── internals ───────────────────────────────
+
+  /** The name on the lock strip for slot s: the gatekeeper (1..3) or this city's boss (4). */
+  private slotName(w: World, s: number): string {
+    if (s >= 1 && s <= 3) return gateName(GATE_OF_SLOT[s] as GateId);
+    const b = w.boss;
+    if (b && b.alive && b.role === 'main' && BOSSES[b.id]) return BOSSES[b.id].name;
+    const id = BIOMES[w.biomeId]?.boss;
+    return id && BOSSES[id] ? BOSSES[id].name : '';
+  }
+
+  /** GROW-bar lock (§6.6): returns sizeLocked(w). Re-keys on (pending, active, countdown second) and writes
+   *  the strip only when the key changes (so the countdown is one text write per second). */
+  private updateLock(w: World): boolean {
+    const G = w.gates;
+    const locked = !!G && sizeLocked(w);
+    let secs = 0;
+    // the city boss's floor wait (§4.1): a whole-second countdown while its dueT sits past the summon delay
+    if (locked && G.pending === 4 && G.active === 0 && Number.isFinite(G.dueT) && G.dueT > G.lockT + GATES.summonDelayS + 0.01
+        && G.dueT > w.t) {
+      secs = Math.max(1, Math.ceil(G.dueT - w.t - 1e-6));
+    }
+    const key = locked ? 1 + (G.pending << 1) + (G.active << 4) + (secs << 8) : 0;
+    if (key === this.lockKey) return locked;
+    this.lockKey = key;
+    this.lockOn.set(locked);
+    this.sizeLockOn.set(locked);
+    if (!locked) return false;
+    let txt: string;
+    if (G.active > 0) txt = fmt(STR_GATE.grow.beat, { name: this.slotName(w, G.active) });
+    else if (secs > 0) txt = fmt(STR_GATE.grow.enRouteT, { name: this.slotName(w, G.pending), t: fmtTime(secs) });
+    else txt = fmt(STR_GATE.grow.enRoute, { name: this.slotName(w, G.pending) });
+    this.lockT.set(txt);
+    this.lockLong.set(txt.length > LOCK_LONG_CHARS && txt.length <= LOCK_XLONG_CHARS);
+    this.lockXLong.set(txt.length > LOCK_XLONG_CHARS);
+    this.lockBox.dataset.text = txt;
+    return true;
+  }
 
   /** New run (or first frame): reset every cache so nothing from the last run leaks. */
   private bind(w: World): void {
@@ -368,6 +522,7 @@ export class Hud {
     for (const s of [this.clock, this.runT, this.tonsVal, this.blocksVal, this.crushVal, this.lvT, this.sizeT, this.hpVal, this.massVal]) s.reset();
     for (const v of [this.hpFill, this.hpTrail, this.hpShield, this.massFill, this.xpFill]) v.reset();
     for (const c of [this.lowHpOn, this.cardLow, this.zoomDim]) c.reset();
+    this.lockKey = -1;
     this.pips = [];
     clearEl(this.pipsBox);
     this.tkLive = [];

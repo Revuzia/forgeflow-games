@@ -21,6 +21,8 @@ import type { Enemy, SimEvent, TitanId, World } from '../core/types.ts';
 import { BIOMES } from '../data/biomes.ts';
 import { TITANS } from '../data/titans.ts';
 import { BURST_WORDS } from '../data/strings.ts';
+import { STR_GATE } from '../data/strings_gate.ts';
+import { sizeLocked } from '../meta/gates.ts';
 import { addOutline, bakeOutlineNormals, facet, INK, makeToon } from './materials.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from './viewtypes.ts';
 
@@ -67,6 +69,10 @@ const FALLBACK_WORDS: Record<string, string[]> = {
   ability_hearthback: ['FWASH!', 'KA-FWOOM!'], ability_briarwick: ['SPROING!', 'FWUMPH!', 'KA-BLOOM!'],
   explosion: ['KA-BLAM!'], titanHurt: ['OOF!'], levelUp: ['DING!'], rankUp: ['BIGGER!'], bossHit: ['KLANNG!'],
   bossStagger: ['WOBBLE!'], bossDefeated: ['KRASSSH!'], pickup: ['TINK!'], chest: ['KA-CHUNK!'], generic: ['WHUMP!'],
+  // GATEKEEPERS (§1, §6.7; lane K2a): each gatekeeper's own stagger word, the kill stamp, and the held level-up's
+  // STRAIN beat (a creak instead of the grow pop's DING)
+  gate_stencil1: [STR_GATE.names.stencil1.stagger], gate_cordon2: [STR_GATE.names.cordon2.stagger],
+  gate_switchboard5: [STR_GATE.names.switchboard5.stagger], gateKill: [STR_GATE.killStamp], strain: ['CREEEAK!', 'GRRNNK!'],
 };
 
 /** per-word-type colourway [fill, backing], size class, priority, cooldown (s) */
@@ -104,6 +110,11 @@ const WORD_STYLE: Record<string, WordStyle> = {
   pickup:           { fill: '#fff27a', back: '#ff9f43', size: 0.045, prio: 0, cd: 2.5 },
   chest:            { fill: '#ffd166', back: '#ff9f43', size: 0.09, prio: 4, cd: 0.5 },
   generic:          { fill: '#ffffff', back: '#ff6f5e', size: 0.07, prio: 1, cd: 0.5 },
+  gate_stencil1:    { fill: '#fff27a', back: '#1e242e', size: 0.11, prio: 5, cd: 0.5 },
+  gate_cordon2:     { fill: '#fff27a', back: '#1e242e', size: 0.11, prio: 5, cd: 0.5 },
+  gate_switchboard5: { fill: '#fff27a', back: '#1e242e', size: 0.11, prio: 5, cd: 0.5 },
+  gateKill:         { fill: '#ffd166', back: '#e84a3c', size: 0.13, prio: 6, cd: 0.2 },
+  strain:           { fill: '#1e242e', back: '#ffc63d', size: 0.07, prio: 3, cd: 0.5 },
 };
 
 const ABILITY_KEY: Record<string, string> = {
@@ -1068,6 +1079,15 @@ export class FxView implements ViewModule {
         break;
       }
       case 'levelUp': {
+        // GATEKEEPERS §6.7: a level held at the Size ceiling plays the STRAIN beat instead of the grow pop — a
+        // hazard-yellow dashed ground ring that stops short (the body cannot grow), grit, a creak
+        if (sizeLocked(w)) {
+          this.ring(T.x, T.z, T.radius * 1.0, T.radius * 2.2, 0.55, L('#ffc63d'), 1, H * 0.12, 0, 0, 14, 0, true);
+          this.ring(T.x, T.z, T.radius * 0.9, T.radius * 1.5, 0.35, L('#1e242e'), 0.8, H * 0.05, 0, 0.08, 14, 0, true);
+          this.dustBurst(T.x, T.z, T.radius * 1.1, Math.round(6 * qm) + 2, H * 0.12, 0.6);
+          this.word('strain', T.x, H * 1.3, T.z, f);
+          break;
+        }
         this.ring(T.x, T.z, T.radius * 1.2, T.radius * 3.4, 0.9, L('#ffd166'), 1, H * 0.1, 0, 0, 20, 2.5, true);
         const n = Math.round(10 * qm) + 3;
         for (let i = 0; i < n; i++) {
@@ -1117,7 +1137,15 @@ export class FxView implements ViewModule {
       }
       case 'bossStagger': {
         const b = w.boss;
-        if (b) {
+        if (b && b.role === 'gate') {
+          // GATEKEEPERS §6.7: H-scaled — its own word (TIPPED OVER / STALLED / LINES DOWN) at 2.6 H, a ring
+          // 0.6 H → 2.5 H (capped so it never spans more than ~45 % of the frame width at Size I)
+          const Hg = this.gateH(w);
+          const r1 = Math.min(2.5 * Hg, this.frameW(f) * 0.225);
+          this.ring(b.x, b.z, Math.min(0.6 * Hg, r1 * 0.3), r1, 0.9, L('#fff27a'), 1, Hg * 0.12);
+          this.dustBurst(b.x, b.z, Hg * 0.9, Math.round(10 * qm) + 4, Hg * 0.14, 0.9);
+          this.word('gate_' + b.id, b.x, 2.6 * Hg, b.z, f, true);
+        } else if (b) {
           this.ring(b.x, b.z, 10, 70, 0.9, L('#fff27a'), 1, 6);
           this.word('bossStagger', b.x, 60, b.z, f, true);
         }
@@ -1139,7 +1167,56 @@ export class FxView implements ViewModule {
       }
       case 'bossPhase': {
         const b = w.boss;
-        if (b) this.ring(b.x, b.z, 8, 110, 1.0, L('#ff4fa0'), 0.8, 7, 0, 0, 16, 1.5);
+        if (b && b.role === 'gate') {
+          // GATEKEEPERS §6.7: RECONFIGURING — a ring 0.5 H → 3.0 H (frame-capped), no word, no full-width banner
+          const Hg = this.gateH(w);
+          const r1 = Math.min(3.0 * Hg, this.frameW(f) * 0.225);
+          this.ring(b.x, b.z, Math.min(0.5 * Hg, r1 * 0.25), r1, 1.0, L('#ff4fa0'), 0.8, Hg * 0.1, 0, 0, 16, 1.5);
+        } else if (b) this.ring(b.x, b.z, 8, 110, 1.0, L('#ff4fa0'), 0.8, 7, 0, 0, 16, 1.5);
+        break;
+      }
+      // ── GATEKEEPERS (§6.7; lane K2a) ──
+      case 'gateSpawn': {
+        const b = w.boss;
+        if (b) { const Hg = this.gateH(w); this.ring(b.x, b.z, Hg * 0.4, Math.min(3 * Hg, this.frameW(f) * 0.3), 1.2, this.dustCol, 0.7, Hg * 0.1); }
+        break;
+      }
+      case 'gateLocked': {
+        // the padlock: a hazard-yellow double ring clamps in round the titan
+        this.ring(T.x, T.z, T.radius * 2.6, T.radius * 1.1, 0.5, L('#ffc63d'), 1, H * 0.14, 0, 0, 10, 0, true);
+        this.ring(T.x, T.z, T.radius * 3.2, T.radius * 1.3, 0.6, L('#1e242e'), 0.8, H * 0.06, 0, 0.1, 10, 0, true);
+        break;
+      }
+      case 'gateRam': {
+        // RAMMING THROUGH: a crash beat at the rig (the building collapse fx comes from the city's own events)
+        const Hg = this.gateH(w);
+        this.dustBurst(e.x, e.z, Hg * 1.2, Math.round(14 * qm) + 5, Hg * 0.25, 1.1);
+        this.sparks(e.x, Hg * 0.6, e.z, 6, Hg * 3, '#ffffff', '#ffd166', Hg * 0.3);
+        this.ring(e.x, e.z, Hg * 0.3, Math.min(2 * Hg, this.frameW(f) * 0.2), 0.6, this.dustCol, 0.8, Hg * 0.12);
+        break;
+      }
+      case 'gateDefeated': {
+        // the wreck: an H-scaled burst, then the LIMIT LIFTED stamp over it (the MASS BREACH presentation follows)
+        const Hg = this.gateH(w);
+        for (let i = 0; i < 5; i++) {
+          const a = rnd(0, Math.PI * 2), rr = rnd(0, Hg * 0.8);
+          this.explosion(e.x + Math.cos(a) * rr, e.z + Math.sin(a) * rr, Hg * rnd(0.35, 0.6), '#fff4c2', '#ffd166', '#e84a3c', 0.9, Hg * 0.6, i * 0.14);
+        }
+        this.ring(e.x, e.z, Hg * 0.4, Math.min(3 * Hg, this.frameW(f) * 0.3), 1.3, this.dustCol, 0.9, Hg * 0.15);
+        this.word('gateKill', e.x, 2.4 * Hg, e.z, f, true);
+        break;
+      }
+      case 'finale': {
+        if (!e.on) break;
+        // the Size V rampage: a city-scale dust skirt and debris kicked up round the titan (no extra screen layer)
+        const Hn = Math.max(H, 1);
+        this.ring(T.x, T.z, Hn * 0.6, Hn * 7, 1.6, this.dustCol, 0.8, Hn * 0.3, 0, 0.2);
+        this.dustBurst(T.x, T.z, Hn * 3.2, Math.round(26 * qm) + 8, Hn * 0.35, 1.8);
+        for (let i = 0; i < Math.round(14 * qm) + 4; i++) {
+          const a = rnd(0, Math.PI * 2), rr = Hn * rnd(1, 3);
+          this.spritePart(T.x + Math.cos(a) * rr, Hn * 0.2, T.z + Math.sin(a) * rr, Math.cos(a) * Hn * 0.8, Hn * rnd(1, 2), Math.sin(a) * Hn * 0.8,
+            Hn * 0.18, IC_STAR4, i % 2 ? '#ffd166' : '#f4ecd8', '#ffffff', rnd(0.9, 1.4), Hn * 1.2, 1);
+        }
         break;
       }
       case 'telegraphFire': {
@@ -1234,6 +1311,15 @@ export class FxView implements ViewModule {
         Math.max(size * 0.06, this.minShard), 5, rnd(0.18, 0.32), c0, c1, speed * 1.5, 0);
     }
   }
+
+  /** the live gatekeeper's latched height (m): its fx scale (the rigs are authored in titan heights) */
+  private gateH(w: World): number {
+    const b = w.boss;
+    const h = b ? b.data.H : 0;
+    return h > 0 && Number.isFinite(h) ? h : Math.max(0.5, w.titan.height);
+  }
+  /** frame width (m) at the look target (a 16:9 view) */
+  private frameW(f: FrameInfo): number { return f.camDist * K_VIEW * 1.78; }
 
   private dustBurst(x: number, z: number, r: number, n: number, s: number, life: number, col?: number[]): void {
     const c = col ?? this.dustCol;

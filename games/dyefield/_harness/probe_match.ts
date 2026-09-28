@@ -3,6 +3,11 @@
 //
 //   node _harness/probe_match.ts            # full 180 s match ×2 (same seed) + ×1 (other seed)
 //   node _harness/probe_match.ts --verbose
+//   node _harness/probe_match.ts --mode ffa [--map pier18|lockwell|cinder]
+//                                            # CHANGED(CORE) (CONTRACT_FFA §F4): FREE-FOR-ALL — 8 crews on their drop pads;
+//                                            # countdown freeze, horns, shares sum to 1, a winner (strict, tie = draw),
+//                                            # determinism, plus the drop-pad rules (own pad = own dye, others pushed out,
+//                                            # respawn on the own pad after 3 s)
 //
 // The runners are driven by a SCRIPTED driver (not the BOTS lane's AI): each walks a lane toward mid,
 // sweeping fire over the floor ahead; it aims at a visible enemy within range (MatchWorld.canSee, 10 Hz);
@@ -19,14 +24,19 @@ import { buildAtlas } from '../runtime/src/core/paint/atlas.ts';
 import { Painter } from '../runtime/src/core/paint/painter.ts';
 import { mapById, type MapDef } from '../runtime/src/core/data.ts';
 import { TICK, MATCH } from '../runtime/src/core/config.ts';
-import { emptyIntent, type PlayerIntent } from '../runtime/src/core/types.ts';
+import { emptyIntent, parseMatchMode, type MatchMode, type PlayerIntent } from '../runtime/src/core/types.ts';
 import { mulberry32, hash32 } from '../runtime/src/core/rng.ts';
-import { MatchWorld, type MatchStats } from '../runtime/src/core/match/world.ts';
+import { MatchWorld, type MatchResult, type MatchStats } from '../runtime/src/core/match/world.ts';
 import { defaultRoster } from '../runtime/src/core/match/roster.ts';
 import type { SimEvent } from '../runtime/src/core/match/events.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const VERBOSE = process.argv.includes('--verbose');
+const argv = process.argv.slice(2);
+const argOf = (k: string, d: string): string => { const i = argv.indexOf(k); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
+/** CHANGED(CORE): --mode teams (default) | ffa */
+const MODE: MatchMode = parseMatchMode(argOf('--mode', 'teams'));
+const MAP_ID = argOf('--map', 'pier18');
 
 interface Check { name: string; pass: boolean; detail: string }
 const checks: Check[] = [];
@@ -43,10 +53,17 @@ interface RunOut {
   horns: Array<{ kind: string; tick: number }>; phases: Array<{ phase: string; tick: number }>;
   freeze: { maxDrift: number; shots: number; flips: number; phaseOk: boolean };
   endLock: { moved: number; shots: number; hashSame: boolean; projectiles: number };
-  result: { sun: number; gulf: number; neutral: number; winner: number } | null;
+  result: MatchResult | null;
   coverageAtEnd: { sun: number; gulf: number; neutral: number };
+  /** CHANGED(CORE): Painter.coverageByTeam() at the horn */
+  sharesAtEnd: number[];
+  /** CHANGED(CORE): FFA — crews in play, distinct roster crews, every runner started on its own pad (max offset m) */
+  crews: number; distinctCrews: number; padStartOff: number;
   stats: MatchStats; washes: number; special: number[]; painted: number[]; refills: number; countdownTicks: number;
 }
+
+/** CHANGED(CORE): FFA — the scripted runner's home (its drop pad) and the waypoint bounds */
+interface ScriptHome { x: number; z: number; lo: [number, number]; hi: [number, number] }
 
 /** Deterministic scripted driver for one runner. */
 class Script {
@@ -58,14 +75,22 @@ class Script {
   private lastX = 0; private lastZ = 0;
   private aim: { x: number; y: number; z: number } | null = null;
   private jumpT = 0;
-  constructor(seed: number, i: number, team: number) {
+  /** CHANGED(CORE): FFA — waypoints around the own drop pad (no halves), inside the map bounds */
+  private readonly home: ScriptHome | null;
+  constructor(seed: number, i: number, team: number, home: ScriptHome | null = null) {
     this.rnd = mulberry32(hash32(seed, i, 0x5c417));
     this.s = team === 1 ? -1 : 1;
     const lanes = [-17, -6, 6, 17];
     this.lane = lanes[i % 4] * (this.s < 0 ? 1 : -1);
+    this.home = home;
     this.pick();
   }
   private pick(): void {
+    if (this.home) {
+      const h = this.home, a = this.rnd() * Math.PI * 2, d = 5 + this.rnd() * 14;
+      this.wp = { x: Math.max(h.lo[0], Math.min(h.hi[0], h.x + Math.sin(a) * d)), z: Math.max(h.lo[1], Math.min(h.hi[1], h.z + Math.cos(a) * d)) };
+      return;
+    }
     const z = this.s * (-4 + this.rnd() * 22);                  // own half … a bit past mid
     const x = this.lane + (this.rnd() - 0.5) * 10;
     this.wp = { x: Math.max(-19, Math.min(19, x)), z };
@@ -89,7 +114,7 @@ class Script {
     }
     let tx: number, tz: number;
     if (this.refill) {
-      const pad = w.pads[r.side];
+      const pad = w.padOf(r);                                   // CHANGED(CORE): teams pads[side]; FFA the drop pad
       tx = pad.x; tz = pad.z;
       it.slick = true;
     } else {
@@ -118,11 +143,14 @@ async function runMatch(R: Rapier, def: MapDef, geo: MapGeometry, seed: number):
   const atlas = buildAtlas(geo.paint, geo.atlasSize, { wallWeight: sc.wallWeight, floorMinNy: sc.floorMinNy });
   const painter = new Painter(atlas);
   const physics = new PhysicsWorld(R, geo);
-  const roster = defaultRoster({ humanKit: 'mist-rasp', humanName: 'Probe', seed, skill: 'swell' });
-  const world = new MatchWorld({ def, geo, physics, painter, roster, seed, durationS: MATCH.durationS, countdownS: MATCH.countdownS });
+  const roster = defaultRoster({ humanKit: 'mist-rasp', humanName: 'Probe', seed, skill: 'swell', mode: MODE });
+  const world = new MatchWorld({ def, geo, physics, painter, roster, seed, durationS: MATCH.durationS, countdownS: MATCH.countdownS, mode: MODE });
   const n = world.runners.length;
   const intents: PlayerIntent[] = world.runners.map(() => emptyIntent());
-  const scripts = world.runners.map((r, i) => new Script(seed, i, r.team));
+  const b = def.bounds ?? { min: [-28, -2, -42], max: [28, 12, 42] };
+  const scripts = world.runners.map((r, i) => new Script(seed, i, r.team, MODE === 'ffa'
+    ? { x: world.padOf(r).x, z: world.padOf(r).z, lo: [b.min[0] + 2, b.min[2] + 2], hi: [b.max[0] - 2, b.max[2] - 2] } : null));
+  const padStartOff = MODE === 'ffa' ? world.runners.reduce((m, r) => Math.max(m, Math.hypot(r.x - world.padOf(r).x, r.z - world.padOf(r).z)), 0) : 0;
   const events: SimEvent[] = [];
   const horns: RunOut['horns'] = [];
   const phases: RunOut['phases'] = [];
@@ -173,6 +201,7 @@ async function runMatch(R: Rapier, def: MapDef, geo: MapGeometry, seed: number):
   }
   const wallS = (performance.now() - t0) / 1000;
   const coverageAtEnd = painter.coverage();
+  const sharesAtEnd = Array.from(painter.coverageByTeam());
   const hashAtEnd = world.hash();
   const paintHashAtEnd = painter.hash();
 
@@ -196,7 +225,8 @@ async function runMatch(R: Rapier, def: MapDef, geo: MapGeometry, seed: number):
     horns, phases,
     freeze: { maxDrift, shots: cdShots, flips: cdFlips, phaseOk },
     endLock: { moved, shots: endShots, hashSame: painter.hash() === paintHashAtEnd, projectiles: world.projectiles.count },
-    result: world.result, coverageAtEnd, stats: { ...world.stats },
+    result: world.result, coverageAtEnd, sharesAtEnd, stats: { ...world.stats },
+    crews: world.crews.length, distinctCrews: new Set(world.runners.map((r) => r.team)).size, padStartOff,
     washes: world.runners.reduce((s, r) => s + r.washes, 0),
     special: world.runners.map((r) => r.special), painted: world.runners.map((r) => r.painted),
     refills: world.runners.reduce((s, r) => s + r.refillsFromLow, 0), countdownTicks,
@@ -207,11 +237,17 @@ async function runMatch(R: Rapier, def: MapDef, geo: MapGeometry, seed: number):
 
 async function main(): Promise<number> {
   const t0 = performance.now();
-  const def = mapById('pier18');
+  const def = mapById(MAP_ID);
   let R: Rapier, geo: MapGeometry;
   try { R = await loadRapier(); geo = await loadMapGeometry(def); } catch (e) { console.log('SETUP FAILED:', (e as Error).stack ?? e); return 2; }
   const SEED = 1234;
-  console.log(`map pier18 · match ${MATCH.durationS} s + countdown ${MATCH.countdownS} s · 8 scripted runners · seed ${SEED} (×2) and ${SEED + 1}`);
+  console.log(`map ${MAP_ID} · ${MODE === 'ffa' ? 'FREE-FOR-ALL · ' : ''}match ${MATCH.durationS} s + countdown ${MATCH.countdownS} s · 8 scripted runners · seed ${SEED} (×2) and ${SEED + 1}`);
+  if (MODE === 'ffa') {
+    const pr = await padRules(R, def, geo, SEED);
+    check('FFA drop pads: 8 pads r 1.6, own pad = own dye (slick + refill), others pushed out, respawn on the own pad after 3 s',
+      pr.pads === 8 && pr.distinct && pr.pushedOut && pr.slickOnOwn && pr.refilled && pr.respawnOnPad,
+      `pads ${pr.pads} (distinct ${pr.distinct}, r ${pr.r}) · intruder ${pr.intruderD.toFixed(2)} m from the foe pad centre after 1 s (pushed out ${pr.pushedOut}) · own pad: state ${pr.state}, tank 10 → ${pr.tank.toFixed(0)} · respawn after ${pr.respawnS.toFixed(2)} s at ${pr.respawnD.toFixed(2)} m from the own pad`);
+  }
   console.log('-'.repeat(100));
   const a = await runMatch(R, def, geo, SEED);
   log(`run A: ${a.wallS.toFixed(2)} s, hash ${a.hash}`);
@@ -236,13 +272,29 @@ async function main(): Promise<number> {
     a.phases.map((p) => p.phase).join(',') === 'countdown,live,ended' && a.phases[0].tick === 1 && a.phases[1].tick === cd && a.phases[2].tick === cd + dur,
     `${a.phases.map((p) => `${p.phase}@${p.tick}`).join(' → ')} (the constructor's countdown event is drained after tick 1)`);
   const r = a.result;
+  if (MODE === 'ffa') {
+    const sh = r?.shares ?? [];
+    const sum = sh.reduce((x, v) => x + v, 0);
+    const st = r?.standings ?? [];
+    let best = -Infinity, tied: number[] = [];
+    for (let k = 1; k < sh.length; k++) { if (!st.some((x) => x.crew === k)) continue; if (sh[k] > best) { best = sh[k]; tied = [k]; } else if (sh[k] === best) tied.push(k); }
+    const winnerOk = !!r && (tied.length === 1 ? r.winner === tied[0] && (r.tied ?? []).length === 0 : r.winner === 0 && (r.tied ?? []).join() === tied.join());
+    check('FFA: 8 crews (one per runner), every runner starts on its own drop pad',
+      a.crews === 8 && a.distinctCrews === 8 && a.padStartOff < 0.3, `crews in play ${a.crews}, distinct runner crews ${a.distinctCrews}, max start offset from the own pad ${a.padStartOff.toFixed(3)} m`);
+    check('FFA result: shares by crew sum to 1, equal Painter.coverageByTeam() at the horn, standings of 8, strict winner (tie = draw)',
+      !!r && Math.abs(sum - 1) < 1e-9 && sh.length === 9 && sh.every((v, k) => v === a.sharesAtEnd[k]) && st.length === 8 && winnerOk && st.every((x) => x.share > 0),
+      r ? `${st.map((x) => `#${x.rank} ${x.name} (crew ${x.crew}) ${pct(x.share)}`).join(' · ')} · neutral ${pct(sh[0])} (sum ${sum.toFixed(12)}) → winner ${r.winner}${r.winner === 0 ? ` (draw: ${(r.tied ?? []).join(', ')})` : ''}` : 'no result');
+  } else {
   const sum = r ? r.sun + r.gulf + r.neutral : NaN;
   const winnerOk = r ? r.winner === (r.sun > r.gulf ? 1 : r.gulf > r.sun ? 2 : 0) : false;
   check('result: weighted coverage, sums to 1, strict winner, equals Painter.coverage() at the horn',
     !!r && Math.abs(sum - 1) < 1e-9 && winnerOk && r.sun > 0 && r.gulf > 0 && r.sun === a.coverageAtEnd.sun && r.gulf === a.coverageAtEnd.gulf,
     r ? `SUNCREW ${pct(r.sun)} · GULF CREW ${pct(r.gulf)} · neutral ${pct(r.neutral)} (sum ${sum.toFixed(12)}) → winner ${r.winner}` : 'no result');
+  }
   check('after the end: inputs ignored (no motion, no shots, no paint), pool empty',
-    a.endLock.moved < 1e-6 && a.endLock.shots === 0 && a.endLock.hashSame && a.endLock.projectiles === 0,
+    // < 1 cm: gravity can still settle a runner a few mm on an inclined belt (Lockwell measured 6 mm / 2 s); input- or
+    // belt-driven motion would be decimetres (the pre-fix conveyor carry was 4.2 m / 2 s), so 1 cm still catches it
+    a.endLock.moved < 0.01 && a.endLock.shots === 0 && a.endLock.hashSame && a.endLock.projectiles === 0,
     `max horizontal motion ${a.endLock.moved.toExponential(1)} m over 2 s of pushed inputs, shot/splat/hit events ${a.endLock.shots}, paint unchanged ${a.endLock.hashSame}, projectiles ${a.endLock.projectiles}`);
   const s = a.stats;
   check('the match is played: shots, splats, hits and washes happen; nothing dropped',
@@ -266,12 +318,55 @@ async function main(): Promise<number> {
   try {
     const dir = resolve(HERE, '_reports');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(resolve(dir, 'probe_match.json'), JSON.stringify({
+    writeFileSync(resolve(dir, MODE === 'ffa' ? `probe_match_ffa_${MAP_ID}.json` : MAP_ID === 'pier18' ? 'probe_match.json' : `probe_match_${MAP_ID}.json`), JSON.stringify({
       checks, verdict, runs: [a, b, c].map((x) => ({ hash: x.hash, wallS: x.wallS, tickMsP99: x.tickMsP99, tickMsMax: x.tickMsMax, result: x.result, stats: x.stats, horns: x.horns })),
       at: new Date().toISOString(),
     }, null, 2) + '\n', 'utf8');
   } catch { /* best-effort */ }
   return failed.length ? 1 : 0;
+}
+
+/** CHANGED(CORE): FFA drop-pad rules on a fresh world (no countdown): an intruder is pushed out of a foe's pad, the own
+ *  pad slicks + refills, a washed runner respawns on its own pad after respawnSeconds */
+async function padRules(R: Rapier, def: MapDef, geo: MapGeometry, seed: number): Promise<{
+  pads: number; distinct: boolean; r: number; intruderD: number; pushedOut: boolean; state: string; slickOnOwn: boolean; tank: number;
+  refilled: boolean; respawnS: number; respawnD: number; respawnOnPad: boolean;
+}> {
+  const sc = def.scoring ?? { wallWeight: 0.35, floorMinNy: 0.45 };
+  const painter = new Painter(buildAtlas(geo.paint, geo.atlasSize, { wallWeight: sc.wallWeight, floorMinNy: sc.floorMinNy }));
+  const physics = new PhysicsWorld(R, geo);
+  const roster = defaultRoster({ humanKit: 'mist-rasp', seed, skill: 'swell', mode: 'ffa' });
+  const w = new MatchWorld({ def, geo, physics, painter, roster, seed, countdownS: 0, mode: 'ffa' });
+  const it: PlayerIntent[] = w.runners.map(() => emptyIntent());
+  const pads = w.crewPads;
+  const distinct = new Set(pads.map((p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`)).size === pads.length && new Set(pads.map((p) => p.crew)).size === pads.length;
+  // 1. runner 1 dropped on runner 2's pad centre, standing still → shoved out within 1 s
+  const foe = pads[2];
+  w.devTeleport(1, foe.x + 0.3, foe.y + 0.05, foe.z + 0.2);
+  for (let k = 0; k < 60; k++) w.step(it);
+  const r1 = w.runners[1];
+  const intruderD = Math.hypot(r1.x - foe.x, r1.z - foe.z);
+  // 2. runner 0 on its own (still neutral) pad with a near-empty tank, holding SHIFT → slick form + refill
+  w.devSetTank(0, 10);
+  it[0].slick = true; it[0].yaw = w.runners[0].yaw;
+  let slickSeen = false;
+  for (let k = 0; k < 60; k++) { w.step(it); if (w.runners[0].state === 'slick') slickSeen = true; }
+  it[0].slick = false;
+  const r0 = w.runners[0];
+  const state = r0.state, tank = r0.tank;
+  // 3. runner 3 washed (by nobody) → back on its own pad after respawnSeconds
+  const r3 = w.runners[3];
+  w.devTeleport(3, pads[3].x + 5, pads[3].y + 0.05, pads[3].z);
+  for (let k = 0; k < 3; k++) w.step(it);
+  w.devDamage(3, 1000);
+  let ticks = 0;
+  while (!r3.alive && ticks < 600) { w.step(it); ticks++; }
+  const respawnD = Math.hypot(r3.x - pads[3].x, r3.z - pads[3].z);
+  physics.dispose();
+  return {
+    pads: pads.length, distinct, r: pads[0]?.r ?? 0, intruderD, pushedOut: intruderD >= foe.r - 0.05, state, slickOnOwn: slickSeen,
+    tank, refilled: tank > 30, respawnS: ticks * TICK, respawnD, respawnOnPad: r3.alive && respawnD < 0.3 && Math.abs(ticks * TICK - 3) < 0.05,
+  };
 }
 
 main().then((code) => process.exit(code), (e) => {

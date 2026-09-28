@@ -14,8 +14,11 @@
 //   rows. A flip marks its own texel AND its gutter mirrors. takeDirty hands the spans out in
 //   ascending row order, as cb(row, x0, x1) with x1 INCLUSIVE, and clears them.
 // * onFlip(id, from, to) fires once per texel whose team actually changes (after the change).
+// * CHANGED(CORE) (CONTRACT_FFA §F6): the weighted totals are kept per crew id 0..8 (FFA); coverageByTeam() gives
+//   the shares by crew id. coverage() {sun, gulf, neutral} is the teams view and is unchanged.
 
 import type { Coverage, TeamId } from '../types.ts';
+import { CREW_SLOTS } from '../types.ts';
 import { hash32 } from '../rng.ts';
 import type { PaintAtlas } from './atlas.ts';
 
@@ -59,7 +62,7 @@ export class Painter {
   /** Diagnostics: texels examined by the last splat/capsule (all items of the touched cells). */
   lastVisited = 0;
 
-  private readonly w = new Float64Array(3);
+  private readonly w = new Float64Array(CREW_SLOTS);
   private readonly rowMin: Int32Array;
   private readonly rowMax: Int32Array;
   private readonly rows: Int32Array;
@@ -267,6 +270,20 @@ export class Painter {
     return this.w[team];
   }
 
+  /** CHANGED(CORE): weighted coverage share per crew id (length CREW_SLOTS, [0] = neutral), sum 1; all-neutral →
+   *  [1, 0, …]. Pass `out` to reuse a buffer. */
+  coverageByTeam(out?: Float64Array): Float64Array {
+    const o = out && out.length >= CREW_SLOTS ? out : new Float64Array(CREW_SLOTS);
+    o.fill(0);
+    let total = 0;
+    for (let t = 0; t < CREW_SLOTS; t++) total += this.w[t];
+    if (!(total > 0)) { o[0] = 1; return o; }
+    let dyed = 0;
+    for (let t = 1; t < CREW_SLOTS; t++) { const v = Math.max(0, this.w[t] / total); o[t] = v; dyed += v; }
+    o[0] = Math.max(0, 1 - dyed);
+    return o;
+  }
+
   takeDirty(cb: (row: number, x0: number, x1: number) => void): void {
     const n = this.nRows;
     if (n === 0) return;
@@ -304,7 +321,7 @@ export class Painter {
   /** Recompute the weighted totals from the arrays (removes any Float64 drift). */
   recount(): void {
     const A = this.atlas;
-    this.w[0] = 0; this.w[1] = 0; this.w[2] = 0;
+    this.w.fill(0);
     for (let i = 0; i < A.count; i++) this.w[A.team[i]] += A.area[i] * A.weight[i];
   }
 }

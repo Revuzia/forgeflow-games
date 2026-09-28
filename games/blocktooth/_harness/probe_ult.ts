@@ -35,7 +35,7 @@
 //      already owed at the press (the app running on). Full runs: no tick ends with an ultFire and a freezing
 //      draft; level-ups mid-UPROAR are reported
 
-import type { BiomeId, BossId, EnemyKind, RankIndex, SimEvent, TitanId, TitanInput, World } from '../src/core/types.ts';
+import type { BiomeId, MainBossId, EnemyKind, RankIndex, SimEvent, TitanId, TitanInput, World } from '../src/core/types.ts';
 import { BIOME_IDS, TITAN_IDS } from '../src/core/types.ts';
 import { RANK_LEVELS, RANK_V_GROWTH_LEVELS, TITAN_RADIUS_PER_H, ULT, ULT_GAP_BAND_S, titanHeightAt, xpToNext } from '../src/core/config.ts';
 
@@ -327,7 +327,7 @@ function partD(): void {
 // ─────────────────────────────── E. boss: −6 % exactly, meter +0.30 exactly, nothing in the intro ───────────────────────────────
 function partE(): void {
   console.log('\n── E. boss per fire: −' + (100 * ULT.bossCapFrac) + ' % max HP and meter +' + ULT.bossMeter + ' exactly (body-only) ──');
-  const bosses: BossId[] = ['caisson4', 'irongully', 'parkade6'];
+  const bosses: MainBossId[] = ['caisson4', 'irongully', 'parkade6'];
   for (const id of bosses) {
     const row: string[] = [];
     for (const titan of TITAN_IDS) {
@@ -611,7 +611,7 @@ function partJ(): void {
 // ─────────────────────────────── K. boss-framed coverage ───────────────────────────────
 function partK(): void {
   console.log('\n── K. boss framing: an ON-SCREEN boss (settled framing, default zoom) is always inside UPROAR ──');
-  const bosses: BossId[] = ['caisson4', 'irongully', 'parkade6'];
+  const bosses: MainBossId[] = ['caisson4', 'irongully', 'parkade6'];
   const K = 2 * Math.tan((M.cfg.CAMERA.fovDeg * Math.PI) / 360);
   for (const rank of [2, 3, 4] as RankIndex[]) {
     const row: string[] = [];
@@ -670,6 +670,7 @@ function partL(): void {
       const lv = mode === 'rankUp' ? RANK_LEVELS[2] - 1 : RANK_LEVELS[1] + 1;
       const make = (): World => {
         const w = worldAt(titan, 1, lv);
+        if (mode === 'rankUp') w.gates.unlocked = 2;   // GATEKEEPERS: the level-driven breach this mode tests (dev bypass)
         for (let i = 0; i < 5; i++) M.stepWorld(w, input());
         M.addUproar(w, ULT.max, true);
         if (mode === 'level' || mode === 'rankUp') M.spawnPickup(w, 'scrap', w.titan.x, w.titan.z, Math.max(1, w.titan.xpToNext - w.titan.xp) + 1, 0);

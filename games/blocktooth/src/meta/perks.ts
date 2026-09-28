@@ -12,6 +12,8 @@
 // | SAFETY INSPECTION        | hidden perk card perk_card_safety_inspection (armor +8)                  |
 // | STAY OF DEMOLITION       | tryRevive: once per run, hp = stayHpFrac × maxHp, ult.invulnT ≥ stayInvulnS (covers dot) + 'revive' event |
 // | ADVANCE TIP-LINE         | read from w.meta.perk by meta/objectives.ts (+1 OVERLOAD SITE) and the marker view (reach × 2) |
+// | DEFERRED MAINTENANCE     | read from w.meta.perk by ai/bosses/index.ts spawnGate: every gatekeeper (home or rematch, never the |
+// |                          | city boss) arrives with its meter at 0.25 (GATEKEEPERS §6.5, lane K2c; unlocked by WITHOUT A DENT) |
 //
 // Measured (L5, 2026-09-25, `node _harness/probe_meta.ts` section H: 4 titans × GRID-EAST × 6 perks, seed 1337, gate
 // bot, the C2 tree with L4's map sim in progress). Size-up times (s) II / III / IV / V · boss · result:
@@ -103,7 +105,8 @@ export function applyPerk(w: World): void {
       w.ult.ready = true;
       break;
     default:
-      break;   // PETTY CASH / SAFETY INSPECTION = their card; STAY = tryRevive; TIP-LINE = map + marker view
+      break;   // PETTY CASH / SAFETY INSPECTION = their card; STAY = tryRevive; TIP-LINE = map + marker view;
+               // DEFERRED MAINTENANCE = spawnGate (meter 0.25 on every gatekeeper's arrival)
   }
 }
 

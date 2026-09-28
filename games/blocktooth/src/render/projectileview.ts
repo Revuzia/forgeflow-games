@@ -14,6 +14,11 @@
 //   seed        green spinning pods with a blossom tip        (BRIARWICK bloom turrets)
 //   rubbleShot  tumbling faceted concrete chunks              (upgrades)
 //   spark       twinkling pale star + streak                  (upgrades)
+//   paintCan    a white road-paint bucket (yellow lid + band) tumbling, a white splash streak   (STENCIL-1)
+//   sawhorse    a red / white striped sawhorse barricade tumbling end over end                   (CORDON-2)
+//   callFlare   a red-and-white road flare, burning tip, glow halo + smoke trail                  (SWITCHBOARD-5)
+//   (the three gatekeeper lobs are sized from `aoe` — their landing circle, a multiple of the rig's H — so the
+//    same look reads at Size I and on a Size V rematch; GATEKEEPERS §3.4, lane K2a)
 // Every projectile also casts a soft ground shadow blob (lobbed ones: it tightens and darkens as
 // the round comes down, so the landing spot reads even without the painted telegraph).
 //
@@ -36,7 +41,7 @@ import { buildToyCarGeo } from '../ai/foemodels_parkade.ts';
 const K_VIEW = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
 const KINDS: readonly ProjectileKind[] = [
   'pellet', 'volley', 'rocket', 'shell', 'mortar', 'plate', 'carLob', 'hookDrop',
-  'seed', 'rubbleShot', 'spark',
+  'seed', 'rubbleShot', 'spark', 'paintCan', 'sawhorse', 'callFlare',
 ];
 const SHADOW_Y0 = 0.035;
 const SHADOW_PULL0 = 0.28;
@@ -262,6 +267,42 @@ function hookGeo(): THREE.BufferGeometry {
   return g.build(true);
 }
 
+// GATEKEEPERS (lane K2a) — the three gatekeeper lobs, unit length along +Z
+function paintCanGeo(): THREE.BufferGeometry {
+  const g = new Geo();
+  // a road-paint bucket: dark base, white body with a yellow band, a yellow lid (a lathe round +Z), a steel handle
+  g.lathe([0, -0.5, 0.34, -0.5, 0.36, -0.44, 0.4, -0.05, 0.41, 0.08, 0.44, 0.36, 0.47, 0.4, 0.47, 0.5, 0.2, 0.52, 0, 0.52], 10,
+    (ring) => (ring <= 1 ? '#343a46' : ring === 3 ? '#ffd166' : ring >= 6 ? '#ffd166' : '#f7f6f0'));
+  g.box(0, 0.5, 0.1, 0.03, 0.03, 0.34, '#98a1ad');
+  g.box(0, 0.25, 0.44, 0.03, 0.25, 0.03, '#98a1ad');
+  g.box(0, -0.25, 0.44, 0.03, 0.25, 0.03, '#98a1ad');
+  // a white paint slop over the rim
+  g.box(0.26, 0.2, 0.46, 0.12, 0.1, 0.06, '#ffffff');
+  return g.build(true);
+}
+function sawhorseGeo(): THREE.BufferGeometry {
+  const g = new Geo();
+  // the top rail: red / white stripes (5 blocks), two A-frame leg pairs and a lower brace
+  for (let i = 0; i < 5; i++) g.box(0, 0.18, -0.4 + i * 0.2, 0.07, 0.07, 0.1, i % 2 ? '#f4f1ea' : '#e84a3c');
+  for (const z of [-0.36, 0.36]) {
+    for (const sx of [-1, 1]) {
+      const x0 = sx * 0.04, x1 = sx * 0.26;
+      g.hexa([x0 - 0.03, 0.12, z - 0.03, x0 + 0.03, 0.12, z - 0.03, x0 + 0.03, 0.12, z + 0.03, x0 - 0.03, 0.12, z + 0.03,
+        x1 - 0.03, -0.5, z - 0.03, x1 + 0.03, -0.5, z - 0.03, x1 + 0.03, -0.5, z + 0.03, x1 - 0.03, -0.5, z + 0.03], '#ffc63d');
+    }
+    g.box(0, -0.22, z, 0.17, 0.025, 0.025, '#343a46');
+  }
+  g.box(0, 0.26, 0, 0.05, 0.02, 0.06, '#ffb13b');
+  return g.build(true);
+}
+function callFlareGeo(): THREE.BufferGeometry {
+  const g = new Geo();
+  // a road flare: red tube with white bands, a burning tip (+Z), a dark striker cap at the tail
+  g.lathe([0, -0.5, 0.11, -0.5, 0.12, -0.44, 0.12, -0.25, 0.12, -0.12, 0.12, 0.05, 0.12, 0.2, 0.12, 0.32, 0.1, 0.38, 0.16, 0.44, 0.08, 0.56, 0, 0.6], 8,
+    (ring) => (ring === 0 ? '#343a46' : ring === 2 || ring === 4 ? '#f4f1ea' : ring >= 7 ? (ring === 7 ? '#fff1a8' : '#ffd166') : '#e84a3c'));
+  return g.build(true);
+}
+
 function seedGeo(): THREE.BufferGeometry {
   const g = new Geo();
   g.lathe([0, -0.5, 0.13, -0.4, 0.28, -0.12, 0.3, 0.05, 0.24, 0.25, 0.12, 0.4, 0, 0.5], 6,
@@ -479,6 +520,8 @@ interface Look {
   streak: string | null; streakK: number; streakW: number; streakA: number;
   puff: 0 | 1 | 2;              // 0 none · 1 rocket smoke · 2 thin mortar smoke
   orient: 'vel' | 'upright' | 'tumble' | 'spin';
+  /** body length from the lob's landing radius (`aoe`, a multiple of the rig's H): len = max(len, aoe × this) */
+  aoeMul?: number;
 }
 const LOOK: Record<ProjectileKind, Look> = {
   pellet:     { len: 0.6, minPx: 9, rMul: 0, halo: '#ffb347', haloK: 1.5, haloA: 0.5, streak: '#ff8a3d', streakK: 4.5, streakW: 0.36, streakA: 0.75, puff: 0, orient: 'vel' },
@@ -493,6 +536,11 @@ const LOOK: Record<ProjectileKind, Look> = {
   seed:       { len: 0.8, minPx: 10, rMul: 2.6, halo: '#d8ff7a', haloK: 0.6, haloA: 0.28, streak: '#a8e05a', streakK: 3, streakW: 0.22, streakA: 0.5, puff: 0, orient: 'spin' },
   rubbleShot: { len: 1.2, minPx: 11, rMul: 2.0, halo: null, haloK: 0, haloA: 0, streak: '#d9d2c3', streakK: 2.2, streakW: 0.3, streakA: 0.35, puff: 0, orient: 'tumble' },
   spark:      { len: 0.7, minPx: 9, rMul: 1.2, halo: '#9ff6ff', haloK: 1.3, haloA: 0.5, streak: '#dffcff', streakK: 5, streakW: 0.18, streakA: 0.75, puff: 0, orient: 'tumble' },
+  // GATEKEEPERS (lane K2a): sized from the landing circle (aoe ∝ the rig's H): a bucket ≈ 0.35 H, a sawhorse
+  // ≈ 1.4 H (its capsule's length), a flare ≈ 0.45 H; the minimum on-screen size keeps a Size I lob readable
+  paintCan:   { len: 0.5, minPx: 13, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: '#ffffff', streakK: 2.2, streakW: 0.35, streakA: 0.55, puff: 0, orient: 'tumble', aoeMul: 0.8 },
+  sawhorse:   { len: 1.5, minPx: 20, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 0, orient: 'tumble', aoeMul: 5.4 },
+  callFlare:  { len: 0.5, minPx: 13, rMul: 0, halo: '#ff6f5e', haloK: 0.9, haloA: 0.5, streak: '#ffb347', streakK: 3, streakW: 0.3, streakA: 0.6, puff: 2, orient: 'vel', aoeMul: 0.9 },
 };
 
 interface KindMesh { mesh: THREE.InstancedMesh; cap: number; n: number; }
@@ -581,6 +629,9 @@ export class ProjectileView implements ViewModule {
     this.kinds.set('seed', mk('seed', seedGeo(), toon, 200, 1.5));
     this.kinds.set('rubbleShot', mk('rubbleShot', rubbleGeo(), toon, 200, 1.6));
     this.kinds.set('spark', mk('spark', sparkGeo(), basic, 200, 0));
+    this.kinds.set('paintCan', mk('paintCan', paintCanGeo(), toon, 24, 1.8));
+    this.kinds.set('sawhorse', mk('sawhorse', sawhorseGeo(), toon, 16, 2.0));
+    this.kinds.set('callFlare', mk('callFlare', callFlareGeo(), toon, 24, 1.6));
     this.flame = mk('flame', flameGeo(), basic, 160, 0);
     this.cable = mk('cable', cableGeo(), toon, 16, 0);
     const pm = mk('puff', puffGeo(), puffMat, this.puffCap, 1.3);
@@ -697,7 +748,7 @@ export class ProjectileView implements ViewModule {
     if (dl < 1e-5) { dx = 0; dy = -1; dz = 0; dl = 1; }
     dx /= dl; dy /= dl; dz /= dl;
 
-    const phys = Math.max(L.len, L.rMul > 0 ? p.r * L.rMul : 0);
+    const phys = Math.max(L.len, L.rMul > 0 ? p.r * L.rMul : 0, L.aoeMul && p.aoe > 0 ? p.aoe * L.aoeMul : 0);
     const len = Math.max(phys, L.minPx * px);
     const seed = ((p.id * 2654435761) >>> 0) / 4294967296;
 
@@ -717,7 +768,7 @@ export class ProjectileView implements ViewModule {
         this.q.multiply(this.q2);
         break;
       case 'tumble': {
-        const sp = p.kind === 'plate' ? 2.2 : p.kind === 'carLob' ? 2.6 : 6;
+        const sp = p.kind === 'plate' ? 2.2 : p.kind === 'carLob' || p.kind === 'sawhorse' ? 2.6 : p.kind === 'paintCan' ? 4 : 6;
         this.e.set(time * sp * (0.7 + seed) + seed * 9, time * sp * 0.6 + seed * 4, time * sp * (1.3 - seed) * 0.5);
         this.q.setFromEuler(this.e);
         if (p.kind === 'plate') {

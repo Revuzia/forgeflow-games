@@ -17,16 +17,17 @@
 //       6 m big (falloff with distance) · own hard landing / special start small–medium;
 //   * hit markers on damage dealt: four ticks round the reticle, coloured by the hit's damage
 //       (chip cream < 20 · solid yellow < 45 · heavy coral ≥ 45); a wash adds a longer X + a ring pop;
-//   * damage vignette in the enemy colour (both crews' gradients prebuilt; opacity only) + an arc at the
-//     screen edge pointing to where the hit came from; low HP keeps a faint breathing vignette;
-//   * victory confetti: a two-cannon burst + a curtain in the winner's colours (both for a draw), never drawn
+//   * damage vignette in the ATTACKER's crew colour (teams: both crews' gradients prebuilt, opacity only;
+//     FFA (CONTRACT_FFA §F2): one layer whose gradient is re-set when the attacking crew changes) + an arc at
+//     the screen edge pointing to where the hit came from; low HP keeps a faint breathing vignette;
+//   * victory confetti: a two-cannon burst + a curtain in the winner's colours (a draw: the tied crews'), never drawn
 //     over the victory card (an even-odd clip round its box: the pieces pass behind it).
 // Everything else in §21 lives in the view (fx.ts / players.ts / camera.ts) and needs no wiring:
 // bouncing splat droplets, landing puffs, slick crowns, the tide-spout column, body dye drips.
 
-import { TEAMS_RAW, teamById, WEAPONS } from '../core/data.ts';
+import { TEAMS_RAW, crewDef, crewIds, WEAPONS } from '../core/data.ts';
 import type { SimEvent } from '../core/match/events.ts';
-import type { TeamId } from '../core/types.ts';
+import type { MatchMode, TeamId } from '../core/types.ts';
 
 /** the slice of core/runner.ts Runner juice reads */
 export interface JuiceRunner {
@@ -61,6 +62,8 @@ export interface JuiceOptions {
   markers?: boolean;
   /** draw the damage vignette + direction arc (false when the HUD keeps its own) */
   vignette?: boolean;
+  /** CHANGED(VIEW) (CONTRACT_FFA §F7): the match mode — the crew palette (teams 1 SUNCREW · 2 GULF CREW; ffa 1..8) */
+  mode?: MatchMode;
 }
 
 export interface JuiceReadback {
@@ -76,8 +79,9 @@ export interface JuiceReadback {
 export interface Juice {
   onEvents(events: readonly SimEvent[], ctx: JuiceCtx): void;
   update(dt: number, ctx: JuiceCtx): void;
-  /** `avoid`: an element confetti must never cover (the victory card; its children's boxes count too) */
-  victory(winner: TeamId | 0, avoid?: HTMLElement | null): void;
+  /** `avoid`: an element confetti must never cover (the victory card; its children's boxes count too).
+   *  `tied` (winner 0): the crews tied for first — the draw's confetti colours (default: every crew of the mode) */
+  victory(winner: TeamId | 0, avoid?: HTMLElement | null, tied?: readonly TeamId[]): void;
   trauma(amount: number, cap?: number): void;
   setReduceMotion(on: boolean): void;
   setColorblind(on: boolean): void;
@@ -149,19 +153,27 @@ function hexRgb(hex: string): [number, number, number] {
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
 }
 
-function palette(team: TeamId, colorblind: boolean): TeamPal {
-  const t = teamById(team) as unknown as { dye: string; dyeDeep?: string; dyeGloss?: string; ui?: string };
+function palette(mode: MatchMode, team: TeamId, colorblind: boolean): TeamPal {
+  const t = crewDef(mode, team) as unknown as { key: string; dye: string; dyeDeep?: string; dyeGloss?: string; ui?: string };
   let dye = t.dye, ui = t.ui ?? t.dye;
-  if (colorblind) {
+  // FFA has no colour-blind swap (CONTRACT_FFA §F6: the marks carry identity)
+  if (colorblind && mode === 'teams') {
     try {
       const cb = (teamsColorblind() as Record<string, { dye?: string; ui?: string }>)[team === 1 ? 'sun' : 'gulf'];
       if (cb?.dye) dye = cb.dye;
       if (cb?.ui) ui = cb.ui;
     } catch { /* keep the normal palette */ }
   }
-  const deep = colorblind ? dye : (t.dyeDeep ?? dye);
+  const deep = colorblind && mode === 'teams' ? dye : (t.dyeDeep ?? dye);
   const gloss = t.dyeGloss ?? ui;
   return { dye, deep, gloss, ui, rgbDye: hexRgb(dye), rgbDeep: hexRgb(deep) };
+}
+
+/** every crew of the mode → its palette */
+function palettes(mode: MatchMode, colorblind: boolean): Record<number, TeamPal> {
+  const out: Record<number, TeamPal> = {};
+  for (const t of crewIds(mode)) out[t] = palette(mode, t, colorblind);
+  return out;
 }
 
 /** teams.json `colorblind` block (Settings → Colorblind marks) */
@@ -207,6 +219,9 @@ class JuiceImpl implements Juice {
   private readonly showMarkers: boolean;
   private readonly showVignette: boolean;
   private pal: Record<number, TeamPal>;
+  private readonly mode: MatchMode;
+  /** FFA: the crew whose gradient the single vignette layer (vig[0]) holds */
+  private vigCrew = -1;
   // state
   private markT = 99; private markLife = MARK_LIFE; private markDmg = 0; private markKill = false; private markTier = -1;
   private hurt = 0; private hurtTeam: TeamId = 2; private lowHp = 0; private breathe = 0;
@@ -239,7 +254,8 @@ class JuiceImpl implements Juice {
     this.colorblind = !!o.colorblind;
     this.showMarkers = o.markers !== false;
     this.showVignette = o.vignette !== false;
-    this.pal = { 1: palette(1, this.colorblind), 2: palette(2, this.colorblind) };
+    this.mode = o.mode === 'ffa' ? 'ffa' : 'teams';
+    this.pal = palettes(this.mode, this.colorblind);
     if (!doc.getElementById('dfj-css')) {
       this.style = doc.createElement('style');
       this.style.id = 'dfj-css';
@@ -250,11 +266,14 @@ class JuiceImpl implements Juice {
     this.under = doc.createElement('div');
     this.under.className = 'dfj-under';
     this.under.setAttribute('aria-hidden', 'true');
-    this.vig = { 1: doc.createElement('div'), 2: doc.createElement('div') };
-    for (const t of [1, 2] as const) {
-      this.vig[t].className = 'dfj-vig';
-      this.vig[t].style.background = vignetteCss(this.pal[t]);
-      this.under.append(this.vig[t]);
+    // teams: both crews' gradients prebuilt (opacity only) · FFA: ONE layer, re-coloured per attacking crew
+    this.vig = {};
+    for (const t of this.vigSlots()) {
+      const el = doc.createElement('div');
+      el.className = 'dfj-vig';
+      if (t !== 0) el.style.background = vignetteCss(this.pal[t]);
+      this.vig[t] = el;
+      this.under.append(el);
     }
     this.arcBox = doc.createElement('div');
     this.arcBox.className = 'dfj-arcbox';
@@ -301,7 +320,7 @@ class JuiceImpl implements Juice {
         case 'hit': {
           if (e.victim === ctx.me) {
             const by = e.by >= 0 ? rs[e.by] : undefined;
-            const team: TeamId = by ? by.team : (me && me.team === 1 ? 2 : 1);
+            const team: TeamId = by && this.pal[by.team] ? by.team : this.otherCrew(me ? me.team : 0);
             this.hurtBy(ctx, team, e.dmg, by ? by.x : e.x, by ? by.z : e.z, !!by);
             this.addTrauma(ctx, TRAUMA.hitTaken.base + TRAUMA.hitTaken.perDmg * Math.min(50, Math.max(0, e.dmg)), TRAUMA.hitTaken.cap);
           } else if (e.by === ctx.me) this.hitMarker(e.dmg, false);
@@ -418,10 +437,20 @@ class JuiceImpl implements Juice {
       this.breathe += sdt;
       const br = this.reduce ? 1 : 0.8 + 0.2 * Math.sin(this.breathe * 4.2);
       const v = me && me.alive ? Math.min(1, Math.max(this.hurt * 0.9, this.lowHp * 0.5 * br)) : 0;
-      const vs = this.hurtTeam === 1 ? 1 : 2;
-      const a1 = vs === 1 ? r2(v) : 0, a2 = vs === 2 ? r2(v) : 0;
-      if (a1 !== this.lastVig[0]) { this.lastVig[0] = a1; this.vig[1].style.opacity = String(a1); }
-      if (a2 !== this.lastVig[1]) { this.lastVig[1] = a2; this.vig[2].style.opacity = String(a2); }
+      if (this.mode === 'teams') {
+        const vs = this.hurtTeam === 1 ? 1 : 2;
+        const a1 = vs === 1 ? r2(v) : 0, a2 = vs === 2 ? r2(v) : 0;
+        if (a1 !== this.lastVig[0]) { this.lastVig[0] = a1; this.vig[1].style.opacity = String(a1); }
+        if (a2 !== this.lastVig[1]) { this.lastVig[1] = a2; this.vig[2].style.opacity = String(a2); }
+      } else {
+        const a = r2(v);
+        const p = this.pal[this.hurtTeam];
+        if (p && this.hurtTeam !== this.vigCrew && (a > 0 || this.vigCrew < 0)) {
+          this.vigCrew = this.hurtTeam;
+          this.vig[0].style.background = vignetteCss(p);
+        }
+        if (a !== this.lastVig[0]) { this.lastVig[0] = a; this.vig[0].style.opacity = String(a); }
+      }
       // the direction arc
       this.arcT += sdt;
       const ak = this.arcT < ARC_LIFE ? 1 - this.arcT / ARC_LIFE : 0;
@@ -429,7 +458,7 @@ class JuiceImpl implements Juice {
       if (aa > 0 && (this.arcDeg !== this.lastArcDeg)) {
         this.lastArcDeg = this.arcDeg;
         this.arcBox.style.transform = `rotate(${this.arcDeg.toFixed(1)}deg)`;
-        this.arc.style.setProperty('--c', this.pal[this.arcTeam].dye);
+        this.arc.style.setProperty('--c', (this.pal[this.arcTeam] ?? this.pal[this.otherCrew(0)]).dye);
       }
       if (aa !== this.lastArc) { this.lastArc = aa; this.arc.style.opacity = String(aa); }
     }
@@ -469,13 +498,14 @@ class JuiceImpl implements Juice {
   }
 
   // ───────────────────────────── confetti ─────────────────────────────
-  victory(winner: TeamId | 0, avoid?: HTMLElement | null): void {
+  victory(winner: TeamId | 0, avoid?: HTMLElement | null, tied?: readonly TeamId[]): void {
     this.stats.bursts++;
     this.avoidEl = avoid ?? null;
     this.avoidBox = null;
     this.avoidT = 0;
     const cols: string[] = [];
-    const teams: TeamId[] = winner === 1 ? [1] : winner === 2 ? [2] : [1, 2];
+    const draw = (tied ?? []).filter((t) => !!this.pal[t]);
+    const teams: TeamId[] = winner !== 0 && this.pal[winner] ? [winner] : draw.length ? draw : crewIds(this.mode);
     for (const t of teams) { const p = this.pal[t]; cols.push(p.dye, p.gloss, p.ui, p.dye); }
     cols.push('#fff8ec', '#ffd23f');
     this.confettiCols = cols;
@@ -634,8 +664,11 @@ class JuiceImpl implements Juice {
 
   setColorblind(on: boolean): void {
     this.colorblind = !!on;
-    this.pal = { 1: palette(1, this.colorblind), 2: palette(2, this.colorblind) };
-    for (const t of [1, 2] as const) this.vig[t].style.background = vignetteCss(this.pal[t]);
+    this.pal = palettes(this.mode, this.colorblind);
+    for (const t of this.vigSlots()) {
+      const p = this.pal[t === 0 ? this.vigCrew : t];
+      if (p) this.vig[t].style.background = vignetteCss(p);
+    }
     this.lastArcDeg = NaN;
   }
 
@@ -647,7 +680,18 @@ class JuiceImpl implements Juice {
     this.avoidEl = null; this.avoidBox = null;
     if (this.canvas && this.g2) { this.g2.setTransform(1, 0, 0, 1, 0, 0); this.g2.clearRect(0, 0, this.canvas.width, this.canvas.height); this.canvas.hidden = true; }
     this.lastVig[0] = this.lastVig[1] = -1; this.lastArc = -1; this.lastMark = -1; this.lastRing = -1;
-    for (const el of [this.vig[1], this.vig[2], this.arc, this.mark, this.ring]) el.style.opacity = '0';
+    for (const el of [...this.vigSlots().map((t) => this.vig[t]), this.arc, this.mark, this.ring]) el.style.opacity = '0';
+  }
+
+  /** the vignette layers: teams [1, 2] (one per crew) · FFA [0] (one, re-coloured) */
+  private vigSlots(): number[] { return this.mode === 'teams' ? [1, 2] : [0]; }
+
+  /** a crew that is not `t` (teams: the other crew; FFA: the next crew id, wrapping) — the default attacker */
+  private otherCrew(t: number): TeamId {
+    if (this.mode === 'teams') return t === 1 ? 2 : 1;
+    const ids = crewIds(this.mode);
+    const i = ids.indexOf(t as TeamId);
+    return ids[(i + 1) % ids.length] ?? 1;
   }
 
   readback(): JuiceReadback {
@@ -656,7 +700,7 @@ class JuiceImpl implements Juice {
       reduceMotion: this.reduce,
       markers: this.stats.markers, kills: this.stats.kills, lastDmg: this.markDmg, lastTier: this.stats.markers ? (this.markKill ? 'kill' : TIERS[tier].name) : '',
       markerOpacity: Math.max(0, this.lastMark),
-      hurts: this.stats.hurts, vignette: Math.max(this.lastVig[0], this.lastVig[1], 0), vignetteTeam: this.hurtTeam === 1 ? 'sun' : 'gulf',
+      hurts: this.stats.hurts, vignette: Math.max(this.lastVig[0], this.lastVig[1], 0), vignetteTeam: this.mode === 'teams' ? (this.hurtTeam === 1 ? 'sun' : 'gulf') : (crewKey(this.mode, this.hurtTeam)),
       arc: Math.max(0, this.lastArc), arcDeg: Math.round(this.arcDeg),
       confetti: this.confettiLive, bursts: this.stats.bursts, confettiClip: this.avoidBox ? this.avoidBox.map((v) => Math.round(v)) : null,
       shakes: this.stats.shakes, traumaAdded: Math.round(this.stats.traumaAdded * 100) / 100,
@@ -669,6 +713,10 @@ class JuiceImpl implements Juice {
     this.style?.remove();
     this.canvas = null; this.g2 = null;
   }
+}
+
+function crewKey(mode: MatchMode, t: TeamId): string {
+  try { return crewDef(mode, t).key; } catch { return ''; }
 }
 
 function prefersReducedMotion(): boolean {

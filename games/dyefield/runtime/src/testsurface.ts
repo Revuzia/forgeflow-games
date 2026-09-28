@@ -24,6 +24,9 @@
 //   `special` = 1 and `specialReady` = true; MatchWorld has no dev hook for it, and the 'ready' event is
 //   NOT emitted) · freeze(on) — stops the sim AND the visual clock while rendering continues, so a
 //   screenshot can catch an exact moment (the harness unfreezes right after).
+//   CONTRACT_FFA F3: match() adds matchMode ('teams' | 'ffa'), crews (the crews in play) and coverageByTeam (the
+//   weighted share per crew id, [0] = neutral) — `mode` stays the session kind ('match' | 'lobby'); state() adds
+//   matchMode; minimapPixel() adds `own` (the human's crew dye, either mode) and `crews` (dye by crew id).
 
 import type { AppStatus } from './game.ts';
 import type { Menus } from './ui/menus.ts';
@@ -40,8 +43,8 @@ export interface AppHandles {
   audio(): unknown;
   juice(): unknown;
 }
-import type { Coverage, MoveState, TeamId } from './core/types.ts';
-import { teamById, hexToRgb01 } from './core/data.ts';
+import type { Coverage, MatchMode, MoveState, TeamId } from './core/types.ts';
+import { teamById, hexToRgb01, crewDef, crewIds } from './core/data.ts';
 
 export interface DFState {
   phase: AppStatus['phase'];
@@ -55,6 +58,8 @@ export interface DFState {
   error?: string;
   startedBy?: string | null;
   pointerLocked?: boolean;
+  /** CONTRACT_FFA F3 */
+  matchMode?: MatchMode;
 }
 
 const rgb255 = (hex: string): number[] => hexToRgb01(hex).map((v) => Math.round(v * 255));
@@ -88,6 +93,7 @@ export function installTestSurface(app: AppStatus, handles?: AppHandles): void {
         pointerLocked: !!document.pointerLockElement,
       };
       if (game) s.match = { phase: game.world.phase, timeLeft: game.world.timeLeft, countdown: game.world.countdown };
+      if (game) s.matchMode = game.matchMode;
       if (app.error) s.error = app.error;
       return s;
     },
@@ -212,13 +218,16 @@ export function installTestSurface(app: AppStatus, handles?: AppHandles): void {
       const game = g();
       return game ? { ...game.p.fx.live, emitted: game.p.fx.emitted } : null;
     },
-    minimapPixel(): { px: number; py: number; rgba: number[]; sun: number[]; gulf: number[] } | null {
+    minimapPixel(): { px: number; py: number; rgba: number[]; sun: number[]; gulf: number[]; own: number[]; crews: Record<number, number[]> } | null {
       const game = g();
       if (!game) return null;
       const p = game.human;
       const r = game.p.hud.minimapPixel(p.x, p.z);
       if (!r) return null;
-      return { ...r, sun: rgb255(teamById(1).dye), gulf: rgb255(teamById(2).dye) };
+      const mm = game.matchMode;
+      const crews: Record<number, number[]> = {};
+      for (const id of crewIds(mm)) crews[id] = rgb255(crewDef(mm, id).dye);
+      return { ...r, sun: rgb255(teamById(1).dye), gulf: rgb255(teamById(2).dye), own: rgb255(crewDef(mm, p.team).dye), crews };
     },
     render(): Record<string, unknown> | null {
       const game = g();

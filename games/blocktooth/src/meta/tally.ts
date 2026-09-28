@@ -18,6 +18,15 @@
 //     sweep for a boss that died outside a tick (dev cheats); each BossState is credited once (data.tallied)
 //   * staggersThisFight / staggersBestFightBy ← 'bossStagger', reset on 'bossSpawn'; a boss fielded while
 //     w.endless is set is a rematch (fightIsRematch) and never updates staggersBestFightBy
+//   * GATEKEEPERS §6.5 (lane K1a): 'gateSpawn' resets gateStaggersThisFight / gateFightDmg; 'titanHurt' while
+//     gates.active is 1–3 adds to gateFightDmg; 'bossStagger' with a gatekeeper in the slot counts to
+//     gateStaggersThisFight (never to the city-boss stagger metrics: HAIRLINE FRACTURES is untouched) and sets
+//     gateTippedFastS (STENCIL-1's first TIPPED OVER, seconds since its spawn = w.boss.data.t) /
+//     gateStallsBestFight (CORDON-2); 'gateDefeated' → gateKills, gateCleanKills (a HOME kill with
+//     gateFightDmg 0), gateSwitchFastS (SWITCHBOARD-5's spawn → kill), gateTotalFightS (Σ spawn → kill of
+//     slots 1..3 once all three died; the kill tick's own fight from the event, since meta/gates.ts writes
+//     killT at the end of the tick), gateRematches (EXTENDED COVERAGE). Gatekeepers never count as
+//     bossesDefeated (the event branch and the state sweep credit role 'main' only).
 //   * endlessS ← w.t − w.endless.startT
 //   * HOOK window (HOOK_WINDOW_S after one 'ability' event): hookPickups ← 'pickup', hookKills ←
 //     'enemyKilled'; vacuumBest / hookKillsBest are the best single window. A new 'ability' event
@@ -59,6 +68,9 @@ export function createTally(): TallyV2 {
     endlessS: 0,
     vacuumBest: 0, wiresBest: 0, ultWireUntilT: -1, hookKillsBest: 0, fullVents: 0, bloomsBest: 0,
     hookT: -1, hookPickups: 0, hookKills: 0,
+    // GATEKEEPERS §7.2 RunTallyAddV3 (K0: initialisation only; lane K1a adds the event cases, §6.5)
+    gateKills: 0, gateCleanKills: 0, gateTotalFightS: Infinity, gateTippedFastS: Infinity, gateStallsBestFight: 0,
+    gateSwitchFastS: Infinity, gateRematches: 0, gateStaggersThisFight: 0, gateFightDmg: 0,
     peakRank: 0, blocks: 0,
   };
 }
@@ -71,10 +83,11 @@ export function tallyV2(t: RunTally): TallyV2 {
   return x as TallyV2;
 }
 
-/** one boss defeat, credited once per BossState (b.data.tallied marks it) */
+/** one boss defeat, credited once per BossState (b.data.tallied marks it). City bosses only. */
 function creditBoss(w: World, t: TallyV2): void {
   const b = w.boss;
   if (!b) { t.bossesDefeated++; return; }
+  if (b.role === 'gate') return;
   if (b.data.tallied === 1) return;
   b.data.tallied = 1;
   t.bossesDefeated++;
@@ -136,7 +149,39 @@ export function stepTally(w: World): void {
         t.staggersThisFight = 0;
         t.fightIsRematch = w.endless !== null;
         break;
+      case 'gateSpawn':
+        t.gateStaggersThisFight = 0;
+        t.gateFightDmg = 0;
+        break;
+      case 'titanHurt':
+        if (w.gates.active >= 1 && w.gates.active <= 3 && e.dmg > 0 && Number.isFinite(e.dmg)) t.gateFightDmg += e.dmg;
+        break;
+      case 'gateDefeated': {
+        t.gateKills++;
+        if (e.rematch) t.gateRematches++;
+        else if (!(t.gateFightDmg > 0)) t.gateCleanKills++;
+        const f = Number.isFinite(e.fightS) ? e.fightS : Infinity;
+        if (e.gate === 'switchboard5' && f < t.gateSwitchFastS) t.gateSwitchFastS = f;
+        if (!e.rematch && e.slot >= 1 && e.slot <= 3) {
+          const G = w.gates;
+          let sum = f, all = true;
+          for (let s = 1; s <= 3; s++) {
+            if (s === e.slot) continue;
+            const d = G.killT[s] - G.spawnT[s];
+            if (Number.isFinite(d)) sum += d; else all = false;
+          }
+          if (all && sum < t.gateTotalFightS) t.gateTotalFightS = sum;
+        }
+        break;
+      }
       case 'bossStagger':
+        if (w.boss && w.boss.role === 'gate') {
+          t.gateStaggersThisFight++;
+          const since = Number.isFinite(w.boss.data.t) ? w.boss.data.t : Infinity;
+          if (w.boss.id === 'stencil1' && t.gateStaggersThisFight === 1 && since < t.gateTippedFastS) t.gateTippedFastS = since;
+          if (w.boss.id === 'cordon2' && t.gateStaggersThisFight > t.gateStallsBestFight) t.gateStallsBestFight = t.gateStaggersThisFight;
+          break;
+        }
         t.staggersThisFight++;
         if (!t.fightIsRematch && w.boss) {
           const id = w.boss.id;
@@ -144,7 +189,7 @@ export function stepTally(w: World): void {
         }
         break;
       case 'bossDefeated':
-        creditBoss(w, t);
+        creditBoss(w, t);   // role 'main' only (gatekeepers push gateDefeated)
         break;
       case 'ability':
         // a new hook closes the previous window (fold its counts in) and opens a new one
@@ -180,7 +225,7 @@ export function stepTally(w: World): void {
 
   // state sweep: a boss that died OUTSIDE a tick (the dev cheats kill it through app.mutate, whose events
   // never reach a stepTally) is credited here, once (b.data.tallied)
-  if (w.boss && !w.boss.alive) creditBoss(w, t);
+  if (w.boss && !w.boss.alive && w.boss.role === 'main') creditBoss(w, t);
 
   // BRIARWICK bloom turrets alive at once (ult blooms carry data.wild and are excluded)
   let blooms = 0;

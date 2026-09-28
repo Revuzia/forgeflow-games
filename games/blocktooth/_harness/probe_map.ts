@@ -338,6 +338,10 @@ function testExpiry(): void {
     for (let i = 0; i < 30 * 30 && !o; i++) { step(w); o = w.map.objectives.find((q) => q.alive && q.kind === 'overloadSite') ?? null; }
     if (!check(!!o && o.target === 'prop' && w.t >= OBJECTIVES.overload.firstAtS - 0.05, `the scheduler places the first OVERLOAD SITE at ${OBJECTIVES.overload.firstAtS} s (a prop at Size I)`, o ? `t ${f1(w.t)}` : 'none')) return;
     const T = w.titan;
+    // GATEKEEPERS (lane K1a): LV 7 now LOCKS Size II until STENCIL-1 dies; this unit test is about how the map
+    // sim reacts to a breach, so gate 1 is opened first (the documented dev bypass growToRank uses) and the
+    // level-driven breach runs as before, inside stepPickups
+    w.gates.unlocked = Math.max(w.gates.unlocked, 1) as typeof w.gates.unlocked;
     T.level = RANK_LEVELS[1] - 1; T.xpToNext = xpToNext(T.level); T.xp = T.xpToNext - 1e-3;
     S.pk.spawnPickup(w, 'scrap', T.x, T.z, 1, 0);
     const p = w.pickups[w.pickups.length - 1]; p.t = 0.2; p.magnet = true;
@@ -550,7 +554,10 @@ function fullRun(titan: TitanId, biome: BiomeId, seed: number): RunRec {
     }
     for (const e of ev) {
       switch (e.type) {
-        case 'rankUp': r.breaches++; breachT.push(w.t); break;
+        // GATEKEEPERS §5.4 (lane K1a): "ANNEX = the number of breaches reached" excludes the finale breach (Size V on
+        // the city boss's kill) unless the run continues into EXTENDED COVERAGE — the ANNEX owed 20 s after it only
+        // appears there (the run clears at the kill, before it is due)
+        case 'rankUp': if (e.rank >= 4 && !w.endless) break; r.breaches++; breachT.push(w.t); break;
         case 'objectiveSpawn': {
           const o = w.map.objectives.find((q) => q.id === e.id);
           if (!o) { bad(`objectiveSpawn ${e.id} not in map.objectives`); break; }

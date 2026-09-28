@@ -43,6 +43,7 @@ function damageKindOf(k: HazardKind): DamageKind {
     case 'frost': return 'breath';
     case 'fire': return 'magma';
     case 'oil': return 'generic';
+    case 'paint': return 'generic';   // GATEKEEPERS §7.2: WET PAINT is slow only (dps 0, owner 'boss')
   }
   return 'generic';
 }

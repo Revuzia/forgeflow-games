@@ -31,6 +31,12 @@ errors, 0 failed requests, frames + sim ticks advancing. Shader compiler WARNING
 holding only "warning X…" lines) are printed for the material's owner but do not gate (G4 says
 "0 shader errors").
 Exit codes: 0 clean · 1 not clean · 2 the page never got far enough to judge.
+
+--mode ffa (CONTRACT_FFA F4, lane UI): the same boot in FREE-FOR-ALL (?mode=ffa): state().matchMode 'ffa' with 8 crews in
+match(); every bot is a foe from the first second, so a timed step (W hold, LMB hold) during which the human is washed
+waits for the respawn and runs again (up to twice, NOTED); the LMB check wants the human's OWN crew under the feet (default amber = 1), its share in
+match().coverageByTeam > 0, and the minimap pixel in its own FFA colour. Shots _shots/ffa_ui_boot_*.png, report
+bootcheck_ffa. Teams mode (the default) is unchanged.
 """
 import argparse
 import json
@@ -43,7 +49,7 @@ import urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (SHOTS, HarnessError, Session, add_common_args, aim_info, build_url, diag_problems,  # noqa: E402
                     fmt, match_info, mouse_home, mouse_turn, preflight_chromes, print_diagnostics, save_report,
-                    wait_match_phase, wait_warm)
+                    wait_alive, wait_match_phase, wait_warm)
 
 DEG = math.pi / 180.0
 
@@ -52,7 +58,7 @@ def dist_xz(a, b):
     return math.hypot(a["x"] - b["x"], a["z"] - b["z"])
 
 
-def classify_minimap(px):
+def classify_minimap(px, ffa=False):
     """Which colour is the minimap pixel? The raster paints team texels as dye × (0.86..1.0 height
     shade) and neutral as base × (0.72..1.0); returns (label, detail)."""
     if not px or not isinstance(px.get("rgba"), list):
@@ -70,6 +76,14 @@ def classify_minimap(px):
             if best is None or d < best[0]:
                 best = (d, f)
         return best
+    if ffa:
+        # FFA: the nearest of the 8 crew colours (+ neutral); 'own' when it is the human's crew
+        own = px.get("own")
+        cands = [("crew%s" % k, fit(v)[0]) for k, v in (px.get("crews") or {}).items()] + [("neutral", fit([226, 219, 204])[0])]
+        best = min(cands, key=lambda t: t[1])
+        do = fit(own)[0] if own else 1e9
+        label = "own" if own and do <= best[1] + 1e-6 and do <= 45 else best[0]
+        return label, "rgba=%s at px (%s, %s); dist own %.0f · best %s %.0f" % (px["rgba"], px.get("px"), px.get("py"), do, best[0], best[1])
     ds, _ = fit(px["sun"])
     dg, _ = fit(px["gulf"])
     dn, _ = fit([226, 219, 204])
@@ -86,13 +100,19 @@ def main() -> int:
     ap.add_argument("--map", default="pier18")
     ap.add_argument("--wait", type=float, default=90.0, help="seconds to wait for __DF__ and 'ready'")
     ap.add_argument("--out-dir", default=SHOTS)
+    ap.add_argument("--mode", default="teams", choices=("teams", "ffa"), help="CONTRACT_FFA: the match mode (?mode=)")
     args = ap.parse_args()
 
-    url = build_url(args.base, map=args.map, dev=1)
-    shot_spawn = os.path.join(args.out_dir, "boot_spawn.png")
-    shot_painted = os.path.join(args.out_dir, "boot_painted.png")
-    shot_debug = os.path.join(args.out_dir, "boot_debug.png")
-    report = {"url": url, "headless": args.headless}
+    ffa = args.mode == "ffa"
+    url = build_url(args.base, map=args.map, dev=1, **({"mode": "ffa"} if ffa else {}))
+    pre = "ffa_ui_boot" if ffa else "boot"
+    shot_spawn = os.path.join(args.out_dir, "%s_spawn.png" % pre)
+    shot_painted = os.path.join(args.out_dir, "%s_painted.png" % pre)
+    shot_debug = os.path.join(args.out_dir, "%s_debug.png" % pre)
+    report_name = "bootcheck_ffa" if ffa else "bootcheck"
+    report = {"url": url, "headless": args.headless, "mode": args.mode}
+    my_team = 1
+    ffa_info = None
     problems = []
     notes = []
     fatal = None
@@ -190,6 +210,13 @@ def main() -> int:
             s0 = sess.state() or {}
             tick_a = s0.get("tick")
             shots["spawn"] = sess.screenshot(shot_spawn)
+            if ffa:
+                mf = match_info(sess) or {}
+                my_team = ((s0.get("player") or {}).get("team")) or 1
+                ffa_info = {"matchMode": s0.get("matchMode"), "crews": mf.get("crews"), "myTeam": my_team,
+                            "runnerCrews": [r.get("team") for r in mf.get("runners") or []]}
+                if s0.get("matchMode") != "ffa" or sorted(ffa_info["runnerCrews"]) != list(range(1, 9)):
+                    problems.append("FFA: want matchMode 'ffa' and 8 runners on crews 1..8 (%s)" % ffa_info)
 
             # ── 4. real W hold 1.5 s. Each timed step is guarded: a lock loss caused by focus theft is
             #       re-locked with one real click and the step runs once more; a loss with focus fails.
@@ -203,13 +230,29 @@ def main() -> int:
                 d = dist_xz(p0, p1) if p0 and p1 else 0.0
                 return {"from": p0, "to": p1, "metres": d, "phaseAfter": sess.phase()}
 
-            for attempt in range(2):
+            def washes():
+                rs = (match_info(sess) or {}).get("runners") or []
+                return (rs[0].get("washedCount") or 0) if rs else 0
+
+            def ffa_rearm(where):
+                # FFA: the human may be washed by any bot at any time — wait out the respawn + the spout drop
+                wait_alive(sess, 6.0)
+                time.sleep(1.0)
+                mouse_home(sess)
+
+            for attempt in range(4 if ffa else 2):
                 wait_warm(sess, notes, "before the W hold")
                 sess.lock_guard("before the W hold", notes, problems)
+                if ffa:
+                    ffa_rearm("before the W hold")
+                w0 = washes() if ffa else 0
                 walk = do_walk()
                 g = sess.lock_guard("during the W hold", notes, problems)
                 if g == "relocked" and attempt == 0:
                     notes.append("the W hold was interrupted by focus theft → repeated once")
+                    continue
+                if ffa and washes() > w0 and attempt < 3:
+                    notes.append("FFA: the human was washed by a bot during the W hold → waited for the respawn and repeated it")
                     continue
                 break
             if not (walk["metres"] > 3.0):
@@ -229,7 +272,7 @@ def main() -> int:
                 time.sleep(0.35)
                 under = sess.df("teamUnderFeet")[1]
                 nudged = False
-                if under != 1:
+                if under != my_team:
                     nudged = True
                     sess.page.keyboard.down("KeyW"); time.sleep(0.25); sess.page.keyboard.up("KeyW")
                     sess.page.mouse.down(button="left"); time.sleep(0.7); sess.page.mouse.up(button="left")
@@ -240,28 +283,53 @@ def main() -> int:
                 st = sess.state() or {}
                 flips1 = sess.df("flips")[1]
                 cov = st.get("coverage") or {}
+                if ffa:
+                    cbt = (match_info(sess) or {}).get("coverageByTeam") or []
+                    cov = dict(cov, own=cbt[my_team] if 0 <= my_team < len(cbt) else None)
+                # read the atlas crew under the feet in the same breath as the minimap pixel: in FFA a bot can overpaint the
+                # spot between the LMB check and this read (seen: jade Quill rushed + washed the human), and the invariant is
+                # "the minimap mirrors the atlas", not "the spot is still mine"
+                under_px = sess.df("teamUnderFeet")[1]
                 ok_px, px = sess.df("minimapPixel")
-                label, px_detail = classify_minimap(px if ok_px else None)
+                label, px_detail = classify_minimap(px if ok_px else None, ffa)
                 return {"underBefore": before_under, "underAfter": under, "nudged": nudged, "coverage": cov, "flips": [flips0, flips1],
-                        "minimap": px, "minimapLabel": label, "minimapDetail": px_detail, "player": st.get("player")}
+                        "minimap": px, "minimapLabel": label, "minimapDetail": px_detail, "underAtPixel": under_px, "player": st.get("player")}
 
-            for attempt in range(2):
+            for attempt in range(4 if ffa else 2):
                 wait_warm(sess, notes, "before the LMB hold")
                 sess.lock_guard("before the LMB hold", notes, problems)
+                if ffa:
+                    ffa_rearm("before the LMB hold")
+                w0 = washes() if ffa else 0
                 mouse_home(sess)
                 brush = do_brush()
                 g = sess.lock_guard("during the LMB hold", notes, problems)
                 if g == "relocked" and attempt == 0:
                     notes.append("the LMB hold was interrupted by focus theft → repeated once")
                     continue
+                if ffa and washes() > w0 and attempt < 3:
+                    notes.append("FFA: the human was washed by a bot during the LMB hold → waited for the respawn and repeated it")
+                    continue
                 break
             under, cov, label = brush["underAfter"], brush["coverage"], brush["minimapLabel"]
-            if under != 1:
-                problems.append("after a real LMB hold aimed at the feet teamUnderFeet() = %r (want 1 = SUNCREW)" % (under,))
-            if not (isinstance(cov.get("sun"), (int, float)) and cov["sun"] > 0):
-                problems.append("coverage.sun = %r after the brush (want > 0)" % (cov.get("sun"),))
-            if label != "sun":
-                problems.append("minimap pixel under the runner is %s, not SUNCREW (%s)" % (label, brush["minimapDetail"]))
+            if ffa:
+                if under != my_team:
+                    problems.append("FFA: after a real LMB hold aimed at the feet teamUnderFeet() = %r (want the own crew %s)" % (under, my_team))
+                if not (isinstance(cov.get("own"), (int, float)) and cov["own"] > 0):
+                    problems.append("FFA: the own crew's share = %r after the brush (want > 0)" % (cov.get("own"),))
+                u_px = brush.get("underAtPixel")
+                want = "own" if u_px == my_team else ("crew%s" % u_px if isinstance(u_px, int) and u_px > 0 else None)
+                if want is None or label != want:
+                    problems.append("FFA: minimap pixel under the runner is %s but the atlas crew there is %r (%s)" % (label, u_px, brush["minimapDetail"]))
+                elif want != "own":
+                    notes.append("FFA: a bot overpainted the spot before the minimap read (atlas crew %s) — the minimap matched it" % u_px)
+            else:
+                if under != 1:
+                    problems.append("after a real LMB hold aimed at the feet teamUnderFeet() = %r (want 1 = SUNCREW)" % (under,))
+                if not (isinstance(cov.get("sun"), (int, float)) and cov["sun"] > 0):
+                    problems.append("coverage.sun = %r after the brush (want > 0)" % (cov.get("sun"),))
+                if label != "sun":
+                    problems.append("minimap pixel under the runner is %s, not SUNCREW (%s)" % (label, brush["minimapDetail"]))
 
             # ── 6. a firing strafe for the picture, then the painted shot
             sess.page.mouse.down(button="left")
@@ -282,7 +350,7 @@ def main() -> int:
             # endpoint, so on a non-local base the call would only log a harness-made 404. Skip it there.
             _host = (urllib.parse.urlparse(args.base).hostname or "").lower()
             if _host in ("localhost", "127.0.0.1", "::1"):
-                ok_s, df_shot = sess.df("shot", "boot_canvas")
+                ok_s, df_shot = sess.df("shot", "%s_canvas" % pre)
             else:
                 df_shot = {"skipped": "non-local base (no /__shot endpoint on a deployed build)"}
 
@@ -309,6 +377,8 @@ def main() -> int:
     print("=" * 84)
     print("URL          : %s" % url)
     print("mode         : %s" % ("headless Chrome (d3d11)" if args.headless else "headed Chrome (d3d11)"))
+    if ffa:
+        print("FFA          : %s" % json.dumps(ffa_info))
     print("boot → ready : %s" % ("%.1f s" % t_ready if t_ready is not None else "—"))
     print("entered play : %s" % (entered or "NO"))
     print("countdown    : %s" % (countdown or "—"))
@@ -318,9 +388,9 @@ def main() -> int:
             walk["metres"], fmt(a.get("x")), fmt(a.get("y")), fmt(a.get("z")), fmt(b.get("x")), fmt(b.get("y")), fmt(b.get("z"))))
     if brush:
         cov = brush.get("coverage") or {}
-        print("LMB (aim down): teamUnderFeet %r → %r%s · coverage sun %s %% · flips %s → %s" % (
+        print("LMB (aim down): teamUnderFeet %r → %r%s · coverage %s %s %% · flips %s → %s" % (
             brush.get("underBefore"), brush.get("underAfter"), " (after one W nudge + re-fire)" if brush.get("nudged") else "",
-            fmt((cov.get("sun") or 0) * 100, 3), brush["flips"][0], brush["flips"][1]))
+            "own crew" if ffa else "sun", fmt((cov.get("own" if ffa else "sun") or 0) * 100, 3), brush["flips"][0], brush["flips"][1]))
         print("minimap      : %s — %s" % (brush.get("minimapLabel"), brush.get("minimapDetail")))
     print("frames       : %s → %s  (%s)" % (adv[1], adv[2], "advancing" if adv[0] else "STALLED"))
     print("sim ticks    : %s → %s  (%s)" % (tick_a, tick_b, "advancing" if sim_adv else "STALLED"))
@@ -340,13 +410,13 @@ def main() -> int:
 
     report.update({"readyS": t_ready, "entered": entered, "countdown": countdown, "walk": walk, "brush": brush, "framesAdvancing": adv[0],
                    "simAdvancing": sim_adv, "render": render, "diagnostics": diag, "fatal": fatal, "notes": notes,
-                   "shots": shots, "dfShot": df_shot, "final": st_final, "timeline": tl})
+                   "shots": shots, "dfShot": df_shot, "final": st_final, "timeline": tl, "ffa": ffa_info})
     if fatal:
         report["verdict"] = "NOT CLEAN"
         print("VERDICT: NOT CLEAN — %s" % fatal)
         for p in diag_problems(diag):
             print("   X %s" % p)
-        print("report       : %s" % save_report("bootcheck", report, args.base))
+        print("report       : %s" % save_report(report_name, report, args.base))
         print("RESULT: FAIL")
         return 2
 
@@ -364,7 +434,7 @@ def main() -> int:
     print("VERDICT: %s" % report["verdict"])
     for p in problems:
         print("   X %s" % p)
-    print("report       : %s" % save_report("bootcheck", report, args.base))
+    print("report       : %s" % save_report(report_name, report, args.base))
     print("RESULT: %s" % ("OK" if clean else "FAIL"))
     return 0 if clean else 1
 

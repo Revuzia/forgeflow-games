@@ -1,5 +1,6 @@
 // BLOCKTOOTH v2 — the DOM marker layer: on-screen label chips and off-screen edge arrows for objectives,
-// power-ups and the TILL (FEATURES_V2 §5.4). Lane L8. UI.
+// power-ups and the TILL (FEATURES_V2 §5.4). Lane L8. UI. GATEKEEPERS §6.6 (lane K2b): the `gate` arrow
+// and the `weakPoint` chip (kinds fed by render/markerview.ts, inside the same ≤ 12 budget).
 //
 // Input: render/markerview.ts (L6) `frame()` → ≤ 12 MarkerItems in CSS px (`dist` in blocks). This layer
 // draws them: on-screen → a label chip under the anchor (`OVERLOAD SITE  2.4 BLK`); off-screen → a disc
@@ -25,6 +26,7 @@ import type { GlyphId, MarkerFrame, MarkerItem, MarkerKind, MarkersApi } from '.
 import { OBJECTIVE_NAMES } from '../data/objectives.ts';
 import { POWERUP_NAMES } from '../data/powerups.ts';
 import { HUD2 } from '../data/strings_hud.ts';
+import { STR_GATE, gateIdOf, gateName, weakPointLabel } from '../data/strings_gate.ts';
 import { div } from './dom.ts';
 import { glyphSvg } from './icons.ts';
 import { OBJECTIVE_COLOR, OBJECTIVE_GLYPH, POWERUP_COLOR, POWERUP_GLYPH } from './tracker.ts';
@@ -35,6 +37,10 @@ const INSET_BOTTOM_U = 4.6;       // clear of the ticker (2.35u); the panels abo
 const TEXT_PERIOD_MS = 250;
 const HUD_PERIOD_MS = 250;
 const PAD_U = 0.45;               // breathing room around each HUD panel
+/** GATEKEEPERS §6.6: the gatekeeper arrow wears hazard yellow (the sawhorse glyph's rail); an exposed weak
+ *  point is hot pink-red, the colour the game already uses for "hit this" tells (boss subtitle ▲) */
+const GATE_COLOR = '#ffc21a';
+const WEAK_COLOR = '#ff4f6d';
 
 /** A HUD panel box in u: x from the left edge (ax 'l'), the right edge ('r') or the centre ('c'); y from the top ('t') or the bottom ('b'). */
 export interface HudBox { ax: 'l' | 'r' | 'c'; x0: number; x1: number; ay: 't' | 'b'; y0: number; y1: number }
@@ -42,7 +48,7 @@ export interface HudBox { ax: 'l' | 'r' | 'c'; x0: number; x1: number; ay: 't' |
 export const HUD_BOXES: readonly HudBox[] = [
   { ax: 'l', x0: 1.6, x1: 23.1, ay: 't', y0: 1.4, y1: 3.7 },          // WARD-7 bug + clock
   { ax: 'r', x0: 1.6, x1: 21.2, ay: 't', y0: 1.4, y1: 5.1 },          // TONNAGE / BLOCKS / CRUSHED
-  { ax: 'l', x0: 1.6, x1: 24.7, ay: 'b', y0: 3.9, y1: 14.8 },         // status card
+  { ax: 'l', x0: 1.6, x1: 24.7, ay: 'b', y0: 3.9, y1: 15.4 },         // status card (+0.6u: the GATEKEEPERS lock row)
   { ax: 'c', x0: -20.4, x1: 20.4, ay: 'b', y0: 3.3, y1: 10.0 },       // UPROAR meter (+ tab) + ability bar
   { ax: 'r', x0: 1.6, x1: 18.7, ay: 'b', y0: 3.3, y1: 11.0 },         // ACTIVE panel + zoom hint
   { ax: 'l', x0: 0, x1: 1000, ay: 'b', y0: 0, y1: 2.4 },              // ticker
@@ -121,6 +127,18 @@ function lookOf(it: MarkerItem): { glyph: GlyphId; color: string; name: string }
       return { glyph: OBJECTIVE_GLYPH[it.kind as 'overloadSite'], color: OBJECTIVE_COLOR[it.kind as 'overloadSite'], name: it.sub || OBJECTIVE_NAMES[it.kind as 'overloadSite'] };
     case 'till':
       return { glyph: 'till', color: '#ffc53d', name: it.sub || 'HIT THE TILL' };
+    // GATEKEEPERS §6.6 (lane K2b): `sub` is the GateId (preferred), the gatekeeper's name, or a ready label.
+    // gate: the hazard-striped sawhorse on the cream disc + the gatekeeper's name (an edge arrow while it is
+    // off-screen); weakPoint: a bullseye chip `HIT THE DRUM` / `HIT THE PACK` / `HIT THE DISH` on the part.
+    case 'gate': {
+      const id = gateIdOf(it.sub);
+      return { glyph: 'gatekeeper', color: GATE_COLOR, name: id ? gateName(id) : (it.sub || STR_GATE.marker.gate) };
+    }
+    case 'weakPoint': {
+      const id = gateIdOf(it.sub);
+      const label = id ? weakPointLabel(id) : (it.sub && it.sub.toUpperCase().startsWith('HIT ') ? it.sub : STR_GATE.marker.weakAny);
+      return { glyph: 'bullseye', color: WEAK_COLOR, name: label };
+    }
     case 'powerup': default: {
       const k = powerupOf(it.sub);
       return { glyph: k ? POWERUP_GLYPH[k] : 'star', color: k ? POWERUP_COLOR[k] : '#f4ecd8', name: k ? POWERUP_NAMES[k] : (it.sub || '') };

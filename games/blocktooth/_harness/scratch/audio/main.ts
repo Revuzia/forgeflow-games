@@ -14,7 +14,7 @@ import type { UiSound } from '../../../src/audio/sfx.ts';
 import { Music } from '../../../src/audio/music.ts';
 import type { MusicTrack } from '../../../src/audio/music.ts';
 import type {
-  BossId, EnemyKind, PropKind, RankIndex, SimEvent, TelegraphStyle, TitanId, World,
+  MainBossId, EnemyKind, PropKind, RankIndex, SimEvent, TelegraphStyle, TitanId, World,
 } from '../../../src/core/types.ts';
 
 const SR = 44100;
@@ -132,7 +132,7 @@ function setTitan(id: TitanId, rank: RankIndex): void {
   T.radius = T.height * 0.42;
 }
 
-interface Case { name: string; group: string; dur: number; titan?: TitanId; rank?: RankIndex; boss?: BossId; ev?: () => SimEvent[]; ui?: UiSound; }
+interface Case { name: string; group: string; dur: number; titan?: TitanId; rank?: RankIndex; boss?: MainBossId; ev?: () => SimEvent[]; ui?: UiSound; }
 const cases: Case[] = [];
 const add = (c: Case) => cases.push(c);
 const at = (dx = 0, dz = 0) => ({ x: cx + dx, z: cz + dz });
@@ -204,7 +204,7 @@ add({ name: 'chest drop', group: 'news', dur: 1.6, ev: () => [{ type: 'chest', .
 add({ name: 'bossSpawn siren', group: 'news', dur: 4.2, ev: () => [{ type: 'bossSpawn', boss: 'caisson4' }] });
 add({ name: 'bossPhase 3 sting', group: 'news', dur: 2.2, ev: () => [{ type: 'bossPhase', phase: 3 }] });
 // boss
-const BATK: [BossId, string][] = [['caisson4', 'hookLane'], ['caisson4', 'hookDrop'], ['caisson4', 'winchLeash'], ['caisson4', 'boomSweep'], ['caisson4', 'legStomp'],
+const BATK: [MainBossId, string][] = [['caisson4', 'hookLane'], ['caisson4', 'hookDrop'], ['caisson4', 'winchLeash'], ['caisson4', 'boomSweep'], ['caisson4', 'legStomp'],
   ['irongully', 'coneBreath'], ['irongully', 'pawSlam'], ['irongully', 'plateVolley'], ['irongully', 'ridgeCharge'], ['irongully', 'breathSlam']];
 for (const [b, a] of BATK) add({ name: `boss ${a}`, group: 'boss', dur: 2.2, boss: b, rank: 4, ev: () => [{ type: 'bossAttack', attack: a, ...at(40, 40) }] });
 add({ name: 'bossHit caisson leg', group: 'boss', dur: 0.8, boss: 'caisson4', rank: 4, ev: () => [{ type: 'bossHit', part: 'legFL', dmg: 900, ...at(20, 20) }] });
@@ -222,8 +222,8 @@ for (const u of ['move', 'confirm', 'back', 'draft', 'pick', 'slate', 'print'] a
 
 // ─────────────────────────────── run ───────────────────────────────
 
-const bossCache: Partial<Record<BossId, World['boss']>> = {};
-function useBoss(id: BossId | undefined): void {
+const bossCache: Partial<Record<MainBossId, World['boss']>> = {};
+function useBoss(id: MainBossId | undefined): void {
   if (!id) { world.boss = null; return; }
   if (!bossCache[id]) { world.boss = null; spawnBoss(world, id); bossCache[id] = world.boss; }
   world.boss = bossCache[id] ?? null;

@@ -298,7 +298,8 @@ def heavy_splats(pose):
 
 def load_map(s, a, mp):
     pose = POSES[mp]
-    url = build_url(a.base, map=mp, dev=1, quality="high", seed=7, matchSeconds=900)
+    extra = {"mode": a.mode} if getattr(a, "mode", None) else {}
+    url = build_url(a.base, map=mp, dev=1, quality="high", seed=7, matchSeconds=900, **extra)
     s.goto(url)
     if not s.wait_df(90):
         raise RuntimeError("__DF__ never appeared (%s)" % url)
@@ -320,6 +321,7 @@ def load_map(s, a, mp):
 def main() -> int:
     ap = argparse.ArgumentParser(description="DYEFIELD frame-interleaved A/B GPU-cost bench")
     add_common_args(ap)
+    ap.add_argument("--mode", default=None, help="teams | ffa (page-level: compare modes with two runs; GPU timer ms)")
     ap.add_argument("--maps", default="pier18,lockwell,cinder")
     ap.add_argument("--variant", action="append", default=[], metavar="NAME[=ops]",
                     help="default: legacy=shaders=legacy, new, flat=flat")

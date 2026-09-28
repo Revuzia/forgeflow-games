@@ -272,6 +272,7 @@ for (const id of TITANS) {
 console.log('\n[unit] growth / damage API');
 {
   const w = WM.createWorld({ titan: 'molo', biome: 'grideast', seed: 11 });
+  w.gates.unlocked = 4;   // GATEKEEPERS: this unit block tests the level-driven rank-up; open every gate (the growToRank dev bypass)
   const T = w.titan;
   console.log(`  createTitan: LV ${T.level} rank ${T.rank} H ${T.height} r ${T.radius.toFixed(3)} hp ${T.hp}/${T.maxHp} dash ${T.dashCharges}`);
   if (T.level !== 1 || T.rank !== 0 || Math.abs(T.height - CFG.titanHeightAt(0, 1)) > 1e-9 || T.hp !== T.maxHp || T.maxHp !== 140) fail('createTitan initial state');

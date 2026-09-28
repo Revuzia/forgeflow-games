@@ -345,6 +345,20 @@ export function processTriggers(w: World): void {
   if (a < n0) runRange(w, ix, a, n0, null, 0);
 }
 
+/**
+ * Upgrade triggers for the events pushed at index ≥ `start` AFTER processTriggers ran this tick (the only
+ * caller: core/world.ts, for a GATEKEEPERS §2.5 breach flushed after a trigger proc landed the kill — its
+ * rankUp / levelUp / pickup events still fire their cards on the kill tick). No-op when nothing is new.
+ */
+export function processTriggersFrom(w: World, start: number): void {
+  const T = w.titan;
+  const ev = w.events;
+  if (!T.alive || !(start >= 0) || start >= ev.length) return;
+  const n = ev.length;
+  for (let i = start; i < n; i++) if (ev[i].type === 'rankUp') { recomputeStats(w); break; }
+  runRange(w, triggerIndex(w), start, n, null, 0);
+}
+
 /** citysim tags city events caused by hostiles with `noCredit` (see citysim push()). */
 const noCredit = (e: SimEvent): boolean => (e as SimEvent & { noCredit?: boolean }).noCredit === true;
 

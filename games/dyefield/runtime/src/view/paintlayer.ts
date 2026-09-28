@@ -4,10 +4,16 @@
 // module mirrors it into one RGBA8 DataTexture of the same S×S size, sampled by the dye layer
 // (view/surfaces.ts) at the mesh's `uv1` (glTF TEXCOORD_1):
 //
-//   R = 255 when the texel's source surface is SUNCREW (team 1), else 0
-//   G = 255 when it is GULF CREW (team 2), else 0
+//   R = 255 when the texel's source surface holds ANY crew's dye (team byte ≠ 0), else 0
+//       (the painted amount: the dye shader B-spline-filters it for the organic paint/bare edge)
+//   G = crew id × 16  (team byte 0..8 → 0..128; exact, CONTRACT_FFA §F2): the shader reads the crew
+//       with texelFetch on the nearest texels (FFA), or — two crews only (teams) — from the filtered
+//       mean (G·255/16)/R, which is 1 + the GULF share of the paint present, exactly as before
 //   B = atlas.noise[src]        (stable per-texel hash → organic dye edges in the shader)
 //   A = 255 on surface AND gutter texels (atlas.srcOf ≥ 0), 0 elsewhere
+//
+// CHANGED(VIEW, FFA): was R = SUNCREW flag, G = GULF CREW flag. R + G of the old encoding equals the
+// new R on every texel, so the painted amount (and every paint/bare edge) is bit-identical in teams.
 //
 // Gutter texels (srcOf ≠ self) copy their nearest surface texel, so bilinear sampling at an
 // island border never bleeds unpainted/foreign colour in. The texture is data, not colour:
@@ -28,6 +34,11 @@
 import * as THREE from 'three';
 import type { PaintAtlas } from '../core/paint/atlas.ts';
 import type { Painter } from '../core/paint/painter.ts';
+
+/** G channel = crew id × CREW_STEP (exact in 8 bits for crews 0..MAX_CREW; CONTRACT_FFA §F2) */
+export const CREW_STEP = 16;
+/** the highest crew id the atlas may hold (FFA: 8 crews; teams: 2) */
+export const MAX_CREW = 8;
 
 export class PaintTexture {
   readonly texture: THREE.DataTexture;
@@ -126,8 +137,8 @@ export class PaintTexture {
       return;
     }
     const t = this.atlas.team[src];
-    d[o] = t === 1 ? 255 : 0;
-    d[o + 1] = t === 2 ? 255 : 0;
+    d[o] = t !== 0 ? 255 : 0;
+    d[o + 1] = t <= MAX_CREW ? t * CREW_STEP : 0;
     d[o + 2] = this.atlas.noise[src];
     d[o + 3] = 255;
   }

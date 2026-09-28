@@ -19,6 +19,7 @@
 
 import * as THREE from 'three';
 import type { BossId, BossState, World } from '../core/types.ts';
+import { isGateId } from '../core/types.ts';
 import { SIM_DT } from '../core/config.ts';
 import { clamp, easeInCubic, easeOutCubic, lerp, smoothstep, wrapAngle } from '../core/math.ts';
 import { BIOMES } from '../data/biomes.ts';
@@ -28,9 +29,12 @@ import { FOE_PAL, Facet, M, makeFoeMaterial, ngon, rect } from './foemodels.ts';
 import type { FoeMaterial } from './foemodels.ts';
 import { buildParkadeRig, CHAIN_CAP, ParkadePoser } from './foemodels_parkade.ts';
 import type { ParkadeFrame, ParkadeRig } from './foemodels_parkade.ts';
+import { buildGateRig } from './foemodels_gate.ts';
+import type { GateFrame, GateRig } from './foemodels_gate.ts';
 
-/** every boss rig built at mount (warmup compiles every boss program up front) — v2 adds PARKADE-6 */
-const RIG_IDS = ['caisson4', 'irongully', 'parkade6'] as const;
+/** every boss rig built at mount (warmup compiles every boss program up front) — v2 adds PARKADE-6, the
+ *  GATEKEEPERS lane K2a the three gatekeeper rigs (ai/foemodels_gate.ts; one shown at a time) */
+const RIG_IDS = ['caisson4', 'irongully', 'parkade6', 'stencil1', 'cordon2', 'switchboard5'] as const;
 
 /** CONTRACT §6.1: titans / bosses 3.0 px ink. */
 const OUTLINE_W = 3.0;
@@ -896,6 +900,8 @@ export class BossView implements ViewModule {
   private pkLk = 2.5;
   private pkFrac = 0.5;
   private pkPts = new Float32Array((PK_CHAIN_PTS + 2) * 3);
+  // GATEKEEPERS (lane K2a): the gate posers' frame record
+  private gateF: GateFrame = { dt: 0.5, alpha: 0.5, frozen: false, x: 0.5, z: 0.5, h: 0.5, time: 0.5, H: 0.5 };
 
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
@@ -906,7 +912,8 @@ export class BossView implements ViewModule {
   private rig(id: BossId): BossRig {
     let r = this.rigs[id];
     if (!r) {
-      r = id === 'caisson4' ? buildCaisson(this.glowMul) : id === 'parkade6' ? buildParkadeRig(this.glowMul) : buildGully(this.glowMul);
+      r = isGateId(id) ? buildGateRig(id, this.glowMul)
+        : id === 'caisson4' ? buildCaisson(this.glowMul) : id === 'parkade6' ? buildParkadeRig(this.glowMul) : buildGully(this.glowMul);
       r.root.visible = false;
       this.world.add(r.root);
       if (id === 'caisson4') for (const k of ['hook', 'w1', 'w2', 'cable0', 'cable1', 'cable2', 'cable3']) {
@@ -917,6 +924,10 @@ export class BossView implements ViewModule {
         const pk = (r as ParkadeRig).pk;
         pk.chain.visible = false; pk.steam.visible = false;
         this.world.add(pk.chain, pk.steam);
+      }
+      if (isGateId(id)) {
+        // GATEKEEPERS (K2a): world-space fx (paint blobs, stack smoke) live in the bosses group, hidden with the rig
+        for (const o of (r as GateRig).fx) { o.visible = false; this.world.add(o); }
       }
       this.rigs[id] = r;
     }
@@ -938,6 +949,7 @@ export class BossView implements ViewModule {
         const pk = (x as ParkadeRig).pk;
         pk.chain.visible = false; pk.chain.count = 0; pk.steam.visible = false; pk.steam.count = 0;
       }
+      if (isGateId(id) && !on) (x as GateRig).poser.hideFx();
     }
     if (!r) { this.xray.ink.visible = false; this.xray.core.visible = false; this.leashT = -1; }
     this.active = r;
@@ -970,8 +982,21 @@ export class BossView implements ViewModule {
       const geos = new Set<THREE.BufferGeometry>();
       for (const m of r.meshes) geos.add(m.geometry);
       for (const k in r.joints) { const o = r.joints[k] as THREE.Mesh; if (o.isMesh) geos.add(o.geometry); }
+      const mats = new Set<THREE.Material>();
+      if (isGateId(id)) {
+        // gate rigs also own a spray / ring material and world-space fx outside `meshes`
+        const grab = (o: THREE.Object3D) => o.traverse((c) => {
+          const m = c as THREE.Mesh;
+          if (!m.isMesh || m.userData.isOutline) return;
+          geos.add(m.geometry);
+          if (!Array.isArray(m.material)) mats.add(m.material);
+        });
+        grab(r.root);
+        for (const o of (r as GateRig).fx) grab(o);
+      }
       for (const g of geos) g.dispose();
-      for (const k in r.groups) r.groups[k].mat.dispose();
+      for (const k in r.groups) { mats.delete(r.groups[k].mat); r.groups[k].mat.dispose(); }
+      for (const m of mats) m.dispose();
       delete this.rigs[id];
     }
     this.xray.ink.geometry.dispose();
@@ -988,6 +1013,7 @@ export class BossView implements ViewModule {
     this.hookInit = false; this.hookVel.set(0, 0, 0);
     this.drops[0] = this.drops[1] = this.drops[2] = null;
     this.pkPose.reset(); this.pkChainN = 0; this.pkTowW = 1.5;
+    for (const id of RIG_IDS) { if (isGateId(id)) { const g = this.rigs[id] as GateRig | undefined; if (g) g.poser.reset(); } }
   }
 
   // ─────────────────────────────── frame ───────────────────────────────
@@ -996,6 +1022,9 @@ export class BossView implements ViewModule {
     this.time += dt;
     const b = w.boss;
     if (!b) { if (this.active) this.show(null); return; }
+    // GATEKEEPERS (lane K2a): the gate rigs have their own pose path (ai/foemodels_gate.ts) — never fall through
+    // to another boss's rig (the v2 §2.7 lesson: a missing branch drew PARKADE-6 as IRON GULLY)
+    if (isGateId(b.id)) { this.updateGate(w, b, f, dt); return; }
     const r = this.rig(b.id);
     if (this.active !== r) { this.show(r); this.resetRun(); }
 
@@ -1057,6 +1086,43 @@ export class BossView implements ViewModule {
     this.applyPose(r);
     if (b.id === 'caisson4') this.updateHook(w, b, r);
     else if (this.xray.core.visible) { this.xray.ink.visible = false; this.xray.core.visible = false; this.leashT = -1; }
+  }
+
+  // ─────────────────────────────── GATEKEEPERS (GATEKEEPERS.md §3.4, lane K2a) ───────────────────────────────
+  /**
+   * A gatekeeper in the slot: its rig (built at mount), part flashes by collider name, `resetRun` on `gateSpawn`
+   * (gates never push `bossSpawn`, so a new gatekeeper must not inherit the last rig's state), the root scaled by
+   * the latched `b.data.H` (the rig is authored at H = 1: the Size V rematch is the same model, bigger), then the
+   * rig's own procedural poser.
+   */
+  private updateGate(w: World, b: BossState, f: FrameInfo, dt: number): void {
+    const r = this.rig(b.id) as GateRig;
+    if (this.active !== r) { this.show(r); this.resetRun(); }
+    const cap = this.ctx.quality.reduceFlashing ? 0.35 : 0.85;
+    for (let i = 0; i < f.events.length; i++) {
+      const ev = f.events[i];
+      if (ev.type === 'bossHit') { const g = r.groups[ev.part] ?? r.groups.body ?? r.groups.base; if (g) g.flash = 1; }
+      else if (ev.type === 'bossPhase') r.poser.phase();
+      else if (ev.type === 'gateSpawn' || ev.type === 'bossSpawn') this.resetRun();
+    }
+    for (let gi = 0; gi < r.groupKeys.length; gi++) {
+      const g = r.groups[r.groupKeys[gi]];
+      g.flash = Math.max(0, g.flash - dt / 0.16);
+      g.mat.userData.bt.uFlash.value = Math.min(cap, g.flash * 0.85);
+    }
+    const a = clamp(f.alpha, 0, 1);
+    const x = b.px + (b.x - b.px) * a;
+    const z = b.pz + (b.z - b.pz) * a;
+    const h = b.pheading + wrapAngle(b.heading - b.pheading) * a;
+    const Hd = b.data.H;
+    const H = Hd > 0 && Number.isFinite(Hd) ? Hd : Math.max(0.5, w.titan.height);
+    r.root.position.set(x, 0, z);
+    r.root.rotation.set(0, h, 0);
+    r.root.scale.setScalar(H);
+    const F = this.gateF;
+    F.dt = dt; F.alpha = a; F.frozen = f.frozen; F.x = x; F.z = z; F.h = h; F.time = this.time; F.H = H;
+    r.poser.update(w, b, F);
+    if (this.xray.core.visible) { this.xray.ink.visible = false; this.xray.core.visible = false; this.leashT = -1; }
   }
 
   // ─────────────────────────────── PARKADE-6 (FEATURES_V2 §10.3, lane L7) ───────────────────────────────

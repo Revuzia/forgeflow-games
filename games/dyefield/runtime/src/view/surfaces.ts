@@ -37,7 +37,8 @@
 
 import * as THREE from 'three';
 import type { LightingPreset, MapDef } from '../core/data.ts';
-import { MAPS, crewDyeHex, mapById, teamById, TEAMS_RAW } from '../core/data.ts';
+import { MAPS, crewDef, crewDyeHex, crewIds, mapById, teamById, TEAMS_RAW } from '../core/data.ts';
+import type { MatchMode } from '../core/types.ts';
 import type { PaintTexture } from './paintlayer.ts';
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
@@ -1835,45 +1836,92 @@ export interface DyeUniforms {
   uViewerTeam: THREE.IUniform;
   uTime: THREE.IUniform;
   uColorblind: THREE.IUniform;
+  /** 0 = teams (crews 1 SUNCREW · 2 GULF CREW), 1 = FFA (crews 1..8); set with setDyeMode() */
+  uDyeFfa: THREE.IUniform<number>;
+  /** the crew palette, indexed by the atlas crew id (0 = neutral, unused): linear colours */
+  uCrewCol: THREE.IUniform<THREE.Color[]>;
+  uCrewDeep: THREE.IUniform<THREE.Color[]>;
+  uCrewGloss: THREE.IUniform<THREE.Color[]>;
+  /** Settings → Colorblind marks: each crew's colour-blind dye (deep = × 0.5, gloss = 55 % toward white, in the shader) */
+  uCrewColCB: THREE.IUniform<THREE.Color[]>;
 }
 
-interface ColorblindDef { sun: { dye: string }; gulf: { dye: string } }
+/** palette slots of the dye shader: crew ids 0 (neutral) … 8 (core/types.ts CREW_SLOTS) */
+export const DYE_CREW_SLOTS = 9;
 
-/** linear-space deep / gloss variants for a colour-blind dye (teams.json only lists `dye`) */
-function deepOf(c: THREE.Color): THREE.Color { return c.clone().multiplyScalar(0.5); }
-function glossOf(c: THREE.Color): THREE.Color { return c.clone().lerp(new THREE.Color(1, 1, 1), 0.55); }
+/** the match mode the dye palette is built for (core/types.ts MatchMode) */
+export type DyeMode = MatchMode;
+
+/** one crew's dye colours (sRGB hex) as the dye shader needs them */
+export interface DyeCrewHex { dye: string; dyeDeep: string; dyeGloss: string; cb: string }
 
 /**
- * One shared uniform set per map. Team colours come from data/teams.json. APP sets
- * `uViewerTeam.value` (1 | 2; 0 = spectator, both crews look friendly), `uColorblind.value`
- * (0 | 1) and `uTime.value` (seconds; it is the same object as SURFACE_ENV.uDfTime, which
- * water.update(t) also writes). Extra tunables: uDyeBump, uDyeEnv, uDyeSparkle, uDyeGlow (default 1:
- * scales the dye's self-illumination floor) and uDyeHueLock (default 0.8: saturation-protection
- * strength — where a coloured preset light drained the dye's chroma, its diffuse light gets the
- * albedo's hue back at the same luminance; it never engages where the light adds chroma).
+ * The dye palette of a mode, by crew id (index 0 = neutral → null), from core/data.ts crewDef(): teams →
+ * teams.json `teams` (1 SUNCREW, 2 GULF CREW) + their `colorblind` dyes; FFA → teams.json `ffa` (crews 1..8),
+ * where the colour-blind dye is the crew's own (crewDyeHex: no FFA swap — the marks and the enemy hatch carry it).
  */
-export function createDyeUniforms(paint: PaintTexture): DyeUniforms {
-  const sun = teamById(1);
-  const gulf = teamById(2);
-  const cb = (TEAMS_RAW.colorblind ?? { sun: { dye: '#FFB000' }, gulf: { dye: '#1F6BFF' } }) as ColorblindDef;
-  const sunCB = col(cb.sun.dye);
-  const gulfCB = col(cb.gulf.dye);
-  return {
+export function dyeCrewPalette(mode: DyeMode): Array<DyeCrewHex | null> {
+  const out: Array<DyeCrewHex | null> = new Array(DYE_CREW_SLOTS).fill(null);
+  for (const id of crewIds(mode)) {
+    if (!(id >= 1 && id < DYE_CREW_SLOTS)) continue;
+    const c = crewDef(mode, id);
+    out[id] = { dye: c.dye, dyeDeep: c.dyeDeep, dyeGloss: c.dyeGloss, cb: crewDyeHex(mode, id, true) };
+  }
+  return out;
+}
+
+const NEUTRAL_DYE = '#DFE6EE';
+
+function fillDyePalette(dye: DyeUniforms, mode: DyeMode): void {
+  const pal = dyeCrewPalette(mode);
+  const cc = dye.uCrewCol.value, cd = dye.uCrewDeep.value, cg = dye.uCrewGloss.value, cx = dye.uCrewColCB.value;
+  for (let i = 0; i < DYE_CREW_SLOTS; i++) {
+    const p = pal[i];
+    cc[i].set(p ? p.dye : NEUTRAL_DYE);
+    cd[i].set(p ? p.dyeDeep : NEUTRAL_DYE);
+    cg[i].set(p ? p.dyeGloss : NEUTRAL_DYE);
+    cx[i].set(p ? p.cb : NEUTRAL_DYE);
+  }
+  dye.uDyeFfa.value = mode === 'ffa' ? 1 : 0;
+}
+
+/**
+ * Switch a dye uniform set between the teams palette and the FFA palette IN PLACE (no recompile: the
+ * mode is a uniform). APP calls it per session, next to `uViewerTeam` (an arena may be reused across
+ * modes). `uViewerTeam` is the viewer's crew id in either mode (FFA: 1..8; 0 = spectator).
+ */
+export function setDyeMode(dye: DyeUniforms, mode: DyeMode): void {
+  fillDyePalette(dye, mode);
+}
+
+/**
+ * One shared uniform set per map. Crew colours come from data/teams.json (`teams`, or `ffa` in FFA).
+ * APP sets `uViewerTeam.value` (the viewer's crew id: teams 1 | 2, FFA 1..8; 0 = spectator, every crew
+ * looks friendly), `uColorblind.value` (0 | 1), the mode (`setDyeMode`, default teams) and `uTime.value`
+ * (seconds; it is the same object as SURFACE_ENV.uDfTime, which water.update(t) also writes). Extra
+ * tunables: uDyeBump, uDyeEnv, uDyeSparkle, uDyeGlow (default 1: scales the dye's self-illumination
+ * floor) and uDyeHueLock (default 0.8: saturation-protection strength — where a coloured preset light
+ * drained the dye's chroma, its diffuse light gets the albedo's hue back at the same luminance; it never
+ * engages where the light adds chroma).
+ */
+export function createDyeUniforms(paint: PaintTexture, mode: DyeMode = 'teams'): DyeUniforms {
+  const slots = (): THREE.Color[] => Array.from({ length: DYE_CREW_SLOTS }, () => new THREE.Color());
+  const dye: DyeUniforms = {
     uDyeTex: U(paint.texture),
     uDyeSize: U(new THREE.Vector2(paint.size, 1 / paint.size)),
     uViewerTeam: U(1),
     uTime: SURFACE_ENV.uDfTime,
     uColorblind: U(0),
-    uDyeSun: U(col(sun.dye)), uDyeSunDeep: U(col(sun.dyeDeep)), uDyeSunGloss: U(col(sun.dyeGloss)),
-    uDyeGulf: U(col(gulf.dye)), uDyeGulfDeep: U(col(gulf.dyeDeep)), uDyeGulfGloss: U(col(gulf.dyeGloss)),
-    uDyeSunCB: U(sunCB), uDyeSunCBDeep: U(deepOf(sunCB)), uDyeSunCBGloss: U(glossOf(sunCB)),
-    uDyeGulfCB: U(gulfCB), uDyeGulfCBDeep: U(deepOf(gulfCB)), uDyeGulfCBGloss: U(glossOf(gulfCB)),
+    uDyeFfa: U(0),
+    uCrewCol: U(slots()), uCrewDeep: U(slots()), uCrewGloss: U(slots()), uCrewColCB: U(slots()),
     uDyeBump: U(1),
     uDyeEnv: U(1),
     uDyeSparkle: U(1),
     uDyeHueLock: U(0.8),
     uDyeGlow: U(1),
   };
+  fillDyePalette(dye, mode);
+  return dye;
 }
 
 const DYE_VERT_PARS = /* glsl */ `
@@ -1893,18 +1941,12 @@ uniform vec2 uDyeSize;
 uniform float uViewerTeam;
 uniform float uTime;
 uniform float uColorblind;
-uniform vec3 uDyeSun;
-uniform vec3 uDyeSunDeep;
-uniform vec3 uDyeSunGloss;
-uniform vec3 uDyeGulf;
-uniform vec3 uDyeGulfDeep;
-uniform vec3 uDyeGulfGloss;
-uniform vec3 uDyeSunCB;
-uniform vec3 uDyeSunCBDeep;
-uniform vec3 uDyeSunCBGloss;
-uniform vec3 uDyeGulfCB;
-uniform vec3 uDyeGulfCBDeep;
-uniform vec3 uDyeGulfCBGloss;
+uniform float uDyeFfa;
+// the crew palette by atlas crew id (0 neutral · teams 1 SUNCREW, 2 GULF CREW · FFA 1..8); linear
+uniform vec3 uCrewCol[ 9 ];
+uniform vec3 uCrewDeep[ 9 ];
+uniform vec3 uCrewGloss[ 9 ];
+uniform vec3 uCrewColCB[ 9 ];
 uniform float uDyeBump;
 uniform float uDyeEnv;
 uniform float uDyeSparkle;
@@ -1953,7 +1995,7 @@ const DYE_FRAG_NORMAL = /* glsl */ `
 	vec2 dyeDp = fwidth( dyeP );
 	float dyeMpp = max( max( dyeDp.x, dyeDp.y ), 1e-5 ); // metres per pixel (the long footprint axis)
 	float dyeValid = smoothstep( 0.3, 0.7, dyeT.a );
-	float dyeAmt = ( dyeT.r + dyeT.g ) * dyeValid;
+	float dyeAmt = dyeT.r * dyeValid;                    // R = the painted amount (any crew)
 	// edge noise: each octave fades out before its period drops to ~3 px, so a far edge never
 	// aliases into texel-like stair steps (the old 61/m and 23/m octaves stayed on at 6-8 m, where
 	// a pixel is ~9 x 27 mm of floor)
@@ -1976,26 +2018,83 @@ const DYE_FRAG_NORMAL = /* glsl */ `
 	// raised rim: a bead just inside the edge, never thinner than ~2 px (no quad-sized steps)
 	float dyeRimW = max( 0.16, dyeFw * 2.5 );
 	float dyeRimB = dyeCover * ( 1.0 - smoothstep( 0.5 + dyeRimW * 0.35, 0.5 + dyeRimW, dyeV ) );
-	// which crew: GULF share of the paint present, with its own wiggle (no seam where crews meet)
-	float dyeGf = dyeT.g / max( dyeT.r + dyeT.g, 1e-3 );
+	// ── which crew: a pair (lo, hi) of crew ids and the share of the paint present that is 'hi' ──
+	// G = crew id × 16, so the filtered mean id is (G·255/16)/R, exact wherever at most two crews share
+	// the footprint. TEAMS: the pair is always (1 SUNCREW, 2 GULF CREW) and mean − 1 is the GULF share
+	// of the paint present — the old g / (r + g) — so teams renders as before. FFA: the two strongest
+	// crews of the 4 nearest texels (texelFetch: exact ids), ordered by id, with the bilinear share of
+	// 'hi': a third crew is never averaged in, and the pair only changes across a texel whose weight is
+	// 0, so crew-vs-crew borders stay smooth and seam-free.
+	float dyeMean = dyeT.g * 15.9375 / max( dyeT.r, 1e-3 );
+	float dyeLo = 1.0;
+	float dyeHi = 2.0;
+	float dyeGf = ( dyeT.g * 15.9375 - dyeT.r ) / max( dyeT.r, 1e-3 );
+	if ( uDyeFfa > 0.5 ) {
+		vec2 dyeSt = vDfUv1 * uDyeSize.x - 0.5;
+		vec2 dyeI0 = floor( dyeSt );
+		vec2 dyeFr = dyeSt - dyeI0;
+		ivec2 dyeLim = ivec2( int( uDyeSize.x ) - 1 );
+		ivec2 dyeP0 = clamp( ivec2( dyeI0 ), ivec2( 0 ), dyeLim );
+		ivec2 dyeP1 = clamp( ivec2( dyeI0 ) + 1, ivec2( 0 ), dyeLim );
+		vec2 dyeK00 = texelFetch( uDyeTex, dyeP0, 0 ).rg;
+		vec2 dyeK10 = texelFetch( uDyeTex, ivec2( dyeP1.x, dyeP0.y ), 0 ).rg;
+		vec2 dyeK01 = texelFetch( uDyeTex, ivec2( dyeP0.x, dyeP1.y ), 0 ).rg;
+		vec2 dyeK11 = texelFetch( uDyeTex, dyeP1, 0 ).rg;
+		vec4 dyeId = floor( vec4( dyeK00.y, dyeK10.y, dyeK01.y, dyeK11.y ) * 15.9375 + 0.5 );
+		vec4 dyeW4 = vec4( ( 1.0 - dyeFr.x ) * ( 1.0 - dyeFr.y ), dyeFr.x * ( 1.0 - dyeFr.y ), ( 1.0 - dyeFr.x ) * dyeFr.y, dyeFr.x * dyeFr.y )
+			* step( 0.5, vec4( dyeK00.x, dyeK10.x, dyeK01.x, dyeK11.x ) ) * step( 0.5, dyeId );
+		// each texel's crew total over the 4 (bare texels weigh 0)
+		vec4 dyeTot = vec4(
+			dot( dyeW4, vec4( equal( dyeId, dyeId.xxxx ) ) ),
+			dot( dyeW4, vec4( equal( dyeId, dyeId.yyyy ) ) ),
+			dot( dyeW4, vec4( equal( dyeId, dyeId.zzzz ) ) ),
+			dot( dyeW4, vec4( equal( dyeId, dyeId.wwww ) ) ) ) * step( 1e-6, dyeW4 );
+		// the strongest crew (a) and the strongest other crew (b)
+		float dyeCa = dyeId.x, dyeTa = dyeTot.x;
+		if ( dyeTot.y > dyeTa ) { dyeCa = dyeId.y; dyeTa = dyeTot.y; }
+		if ( dyeTot.z > dyeTa ) { dyeCa = dyeId.z; dyeTa = dyeTot.z; }
+		if ( dyeTot.w > dyeTa ) { dyeCa = dyeId.w; dyeTa = dyeTot.w; }
+		float dyeCbb = dyeCa, dyeTb = 0.0;
+		if ( dyeId.x != dyeCa && dyeTot.x > dyeTb ) { dyeCbb = dyeId.x; dyeTb = dyeTot.x; }
+		if ( dyeId.y != dyeCa && dyeTot.y > dyeTb ) { dyeCbb = dyeId.y; dyeTb = dyeTot.y; }
+		if ( dyeId.z != dyeCa && dyeTot.z > dyeTb ) { dyeCbb = dyeId.z; dyeTb = dyeTot.z; }
+		if ( dyeId.w != dyeCa && dyeTot.w > dyeTb ) { dyeCbb = dyeId.w; dyeTb = dyeTot.w; }
+		if ( dyeTa <= 0.0 ) {
+			// paint only in the B-spline's outer ring (an edge pixel): the mean id names its crew
+			dyeCa = clamp( floor( dyeMean + 0.5 ), 1.0, 8.0 );
+			dyeCbb = dyeCa;
+		}
+		dyeLo = min( dyeCa, dyeCbb );
+		dyeHi = max( dyeCa, dyeCbb );
+		dyeGf = dyeHi > dyeLo ? ( dyeCa == dyeHi ? dyeTa : dyeTb ) / max( dyeTa + dyeTb, 1e-6 ) : 0.0;
+	}
+	// the crew threshold keeps its own wiggle (no seam where crews meet) and ~1 px AA
 	float dyeGv = dyeGf + dyeHf * 0.5 + ( dyeT.b - 0.5 ) * 0.16;
 	float dyeAA2 = clamp( fwidth( dyeGv ) * 0.75, 0.01, 0.5 );
-	float dyeGulf = smoothstep( 0.5 - dyeAA2, 0.5 + dyeAA2, dyeGv );
-	float dyeViewGulf = step( 1.5, uViewerTeam );
+	float dyeGulf = smoothstep( 0.5 - dyeAA2, 0.5 + dyeAA2, dyeGv );   // 0 = crew lo … 1 = crew hi
+	int dyeL = int( dyeLo );
+	int dyeH = int( dyeHi );
+	// friendly = crew == uViewerTeam (0 = spectator: every crew looks friendly)
 	float dyeSpect = 1.0 - step( 0.5, uViewerTeam );
-	float dyeFriendT = max( mix( 1.0 - dyeGulf, dyeGulf, dyeViewGulf ), dyeSpect );
+	float dyeFriendL = 1.0 - step( 0.5, abs( dyeLo - uViewerTeam ) );
+	float dyeFriendH = 1.0 - step( 0.5, abs( dyeHi - uViewerTeam ) );
+	float dyeFriendT = max( mix( dyeFriendL, dyeFriendH, dyeGulf ), dyeSpect );
 	float dyeFriend = dyeCover * dyeFriendT;
 	float dyeEnemy = dyeCover * ( 1.0 - dyeFriendT );
-	// palette (colour-blind mode swaps to the max-separation pair)
+	// palette (colour-blind marks: teams swap to the max-separation pair; deep = × 0.5, gloss = 55 % white)
 	float dyeCb = step( 0.5, uColorblind );
-	vec3 dyeCol = mix( mix( uDyeSun, uDyeSunCB, dyeCb ), mix( uDyeGulf, uDyeGulfCB, dyeCb ), dyeGulf );
-	vec3 dyeDeep = mix( mix( uDyeSunDeep, uDyeSunCBDeep, dyeCb ), mix( uDyeGulfDeep, uDyeGulfCBDeep, dyeCb ), dyeGulf );
-	vec3 dyeGloss = mix( mix( uDyeSunGloss, uDyeSunCBGloss, dyeCb ), mix( uDyeGulfGloss, uDyeGulfCBGloss, dyeCb ), dyeGulf );
-	// colour-blind hatch on GULF CREW dye (diagonal, ~7 stripes per metre); its AA width comes from
-	// dyeDp (fwidth of a sum ≤ sum of fwidths), so no extra derivative
+	vec3 dyeCbL = uCrewColCB[ dyeL ];
+	vec3 dyeCbH = uCrewColCB[ dyeH ];
+	vec3 dyeCol = mix( mix( uCrewCol[ dyeL ], dyeCbL, dyeCb ), mix( uCrewCol[ dyeH ], dyeCbH, dyeCb ), dyeGulf );
+	vec3 dyeDeep = mix( mix( uCrewDeep[ dyeL ], dyeCbL * 0.5, dyeCb ), mix( uCrewDeep[ dyeH ], dyeCbH * 0.5, dyeCb ), dyeGulf );
+	vec3 dyeGloss = mix( mix( uCrewGloss[ dyeL ], mix( dyeCbL, vec3( 1.0 ), 0.55 ), dyeCb ),
+		mix( uCrewGloss[ dyeH ], mix( dyeCbH, vec3( 1.0 ), 0.55 ), dyeCb ), dyeGulf );
+	// colour-blind hatch (diagonal, ~7 stripes per metre): teams → GULF CREW dye; FFA → every crew but
+	// the viewer's own. Its AA width comes from dyeDp (fwidth of a sum ≤ sum of fwidths): no extra derivative
 	float dyeHs = ( dyeP.x + dyeP.y ) * 7.0;
 	float dyeHaa = ( dyeDp.x + dyeDp.y ) * 5.25 + 1e-4;
-	float dyeHatch = ( 1.0 - smoothstep( 0.17 - dyeHaa, 0.17 + dyeHaa, abs( fract( dyeHs ) - 0.5 ) ) ) * dyeCb * dyeGulf;
+	float dyeHatch = ( 1.0 - smoothstep( 0.17 - dyeHaa, 0.17 + dyeHaa, abs( fract( dyeHs ) - 0.5 ) ) ) * dyeCb
+		* mix( dyeGulf, 1.0 - dyeFriendT, uDyeFfa );
 	// ── body: only where paint shows (no derivatives below this line) ──
 	float dyeRise = smoothstep( 0.5, 0.9, dyeV );            // 0 at the edge → 1 a few cm inside
 	float dyeBody = smoothstep( 0.55, 1.0, dyeAmt );         // the unjittered B-spline: ~15 cm ramp

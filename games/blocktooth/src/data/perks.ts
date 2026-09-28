@@ -14,4 +14,7 @@ export const PERKS_DEF: Record<PerkId, PerkDef> = {
   perk_safety_inspection: { id: 'perk_safety_inspection', name: 'SAFETY INSPECTION', desc: '+8 armor', card: 'perk_card_safety_inspection' },
   perk_stay_of_demolition: { id: 'perk_stay_of_demolition', name: 'STAY OF DEMOLITION', desc: 'Once per run, lethal damage leaves you at 25 % HP with 2 s of invulnerability', card: null },
   perk_tip_line: { id: 'perk_tip_line', name: 'ADVANCE TIP-LINE', desc: '+1 OVERLOAD SITE active; objective arrows reach twice as far', card: null },
+  // GATEKEEPERS §6.5 (lane K2c): unlocked by the goal WITHOUT A DENT, offered through PERK_IDS. Applied by
+  // bosses/index.ts spawnGate (every gatekeeper's meter starts at 0.25; the city boss never), not by applyPerk.
+  perk_deferred_maintenance: { id: 'perk_deferred_maintenance', name: 'DEFERRED MAINTENANCE', desc: 'Every gatekeeper arrives with its meter at 25 %', card: null },
 };

@@ -1,13 +1,13 @@
 // L3 scratch: gate-bot (non-god, no adds) boss fight length per boss id, same harness as probe_boss3 §E.
 //   node _harness/scratch/l3_bosscmp.ts caisson4,irongully,parkade6 [seeds=1,2,3] [adds=0]
-import type { BiomeId, BossId, TitanId, TitanInput, World } from '../../src/core/types.ts';
+import type { BiomeId, MainBossId, TitanId, TitanInput, World } from '../../src/core/types.ts';
 import { createWorld, stepWorld } from '../../src/core/world.ts';
 import { gainGrowth } from '../../src/titans/titansim.ts';
 import { spawnBoss } from '../../src/ai/bosses/index.ts';
 import { hasPendingDraft, pickUpgrade, rollOffer } from '../../src/upgrades/draft.ts';
 import { botInput, botPickUpgrade } from '../bot.ts';
 const NO: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
-const ids = (process.argv[2] ?? 'caisson4,irongully,parkade6').split(',') as BossId[];
+const ids = (process.argv[2] ?? 'caisson4,irongully,parkade6').split(',') as MainBossId[];
 const seeds = (process.argv[3] ?? '1,2,3').split(',').map(Number);
 const adds = process.argv[4] === '1';
 function drafts(w: World): void { let g = 0; while (hasPendingDraft(w) && g++ < 200) { const o = w.upgrades.offer?.length ? w.upgrades.offer : rollOffer(w, w.upgrades.chestDrafts > 0); if (!o.length) break; pickUpgrade(w, botPickUpgrade(w, o)); } }

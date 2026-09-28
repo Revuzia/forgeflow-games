@@ -7,9 +7,52 @@
 // (a click skips the show). The final percentages are always in the slate's text (a visually hidden line),
 // so a read-back mid-count still sees them. Only the brief's strings are shown (DESIGN §1); names come from
 // the roster, crew names / marks from data/teams.json.
+// CONTRACT_FFA F3 (FREE-FOR-ALL): the same slate element carries an FFA body — the winner (name + colour + mark;
+// every tied crew on a draw), a top-3 podium and the full standings with %. Its tally raises the podium steps and
+// fills the standings bars while the numbers count up (the same timeline), then the winner's mark stamps. The
+// death slate takes the washer's FFA colour + mark. crewLook() is the one palette resolver the HUD, the slates and
+// the menus share: teams mode → teams.json `teams` (+ its colorblind block), FFA → teams.json `ffa`.
 
-import { teamById } from '../core/data.ts';
-import type { TeamId } from '../core/types.ts';
+import { FFA_CREWS, TEAMS_RAW, teamById } from '../core/data.ts';
+import type { MatchMode, TeamId } from '../core/types.ts';
+
+/** CONTRACT_FFA F1: the match mode (core/types.ts MatchMode) */
+export type UiMode = MatchMode;
+
+/** a crew's UI palette entry (teams.json `teams[]` or `ffa[]` fields) */
+export interface CrewLook {
+  id: number; key: string;
+  /** teams: the crew name (SUNCREW) · FFA: the colour label for UI chips (an FFA crew's NAME is its runner's) */
+  label: string;
+  dye: string; dyeDeep: string; dyeGloss: string; ui: string; uiInk: string; markGlyph: string;
+}
+
+let ffaCache: CrewLook[] | null = null;
+/** the 8 FFA crews (ids 1..8, ascending) — core/data.ts FFA_CREWS (teams.json → ffa) */
+export function ffaCrews(): CrewLook[] {
+  if (ffaCache) return ffaCache;
+  ffaCache = FFA_CREWS.map((c) => ({
+    id: c.id, key: c.key, label: c.name.toUpperCase(), dye: c.dye, dyeDeep: c.dyeDeep, dyeGloss: c.dyeGloss, ui: c.ui, uiInk: c.uiInk,
+    markGlyph: c.markGlyph,
+  }));
+  return ffaCache;
+}
+
+/** the palette entry of crew `team` in `mode` (teams: the colorblind swap when `colorblind`) */
+export function crewLook(team: number, mode: UiMode, colorblind = false): CrewLook {
+  if (mode === 'ffa') {
+    const all = ffaCrews();
+    return all.find((c) => c.id === team) ?? all[Math.max(0, Math.min(7, (team | 0) - 1))];
+  }
+  const t = teamById((team === 2 ? 2 : 1) as TeamId);
+  const cb = colorblind ? (TEAMS_RAW.colorblind as Record<string, { dye?: string; ui?: string }> | undefined)?.[t.key] : undefined;
+  return { id: t.id, key: t.key, label: t.name, dye: cb?.dye ?? t.dye, dyeDeep: t.dyeDeep, dyeGloss: t.dyeGloss, ui: cb?.ui ?? t.ui, uiInk: t.uiInk, markGlyph: t.markGlyph };
+}
+
+/** one crew on the FFA victory slate / leaderboard */
+export interface FfaStanding { team: number; name: string; share: number; you: boolean }
+/** the FFA result for the slate: standings sorted best first; `winners` = the crews tied for first (1 = a clear win) */
+export interface FfaVictory { standings: FfaStanding[]; winners: number[]; neutral: number }
 
 export const DEATH_PREFIX = 'WASHED BY';
 export const SEA_NAME = 'the sea';
@@ -49,7 +92,7 @@ export function waveIcon(cls = 'df-wave'): SVGSVGElement {
   return svg;
 }
 
-export interface VictoryInfo { sun: number; gulf: number; neutral: number; winner: TeamId }
+export interface VictoryInfo { sun: number; gulf: number; neutral: number; winner: TeamId; /** CONTRACT_FFA F3: the FFA slate */ ffa?: FfaVictory }
 
 const pct = (f: number): string => `${(Math.max(0, f) * 100).toFixed(1)}%`;
 
@@ -91,6 +134,17 @@ export class Slates {
   /** seconds since the victory slate showed (the tally clock) */
   tallyT = -1;
   private tally: { sun: number; gulf: number; winner: TeamId; stamped: boolean; ready: boolean } | null = null;
+  // FFA (CONTRACT_FFA F3)
+  /** the crews' palette mode (the HUD sets it for its session) */
+  mode: UiMode = 'teams';
+  private readonly scores: HTMLElement;
+  private readonly ffaBody: HTMLElement;
+  private readonly ffaWinner: HTMLElement;
+  private readonly podium: HTMLElement;
+  private readonly standings: HTMLElement;
+  private ffaRows: Array<{ row: HTMLElement; fill: HTMLElement; pct: HTMLElement; share: number }> = [];
+  private ffaSteps: Array<{ step: HTMLElement; pct: HTMLElement; share: number; h: number }> = [];
+  private ffaTally: FfaVictory | null = null;
 
   constructor(host: HTMLElement) {
     this.root = el('div', 'df-slates');
@@ -146,6 +200,7 @@ export class Slates {
     this.vicMark = el('div', 'df-victory-mark');
     this.vicMark.setAttribute('aria-hidden', 'true');
     const scores = el('div', 'df-tally');
+    this.scores = scores;
     const sun = teamById(1), gulf = teamById(2);
     const box = (key: 'sun' | 'gulf', mark: string, name: string): [HTMLElement, HTMLElement, HTMLElement] => {
       const b = el('div', `row ${key}`);
@@ -174,7 +229,17 @@ export class Slates {
     this.lobbyBtn.dataset.nav = '';
     this.lobbyBtn.addEventListener('click', (e) => { e.stopPropagation(); this.onLobby?.(); });
     this.vicBtns.append(this.vicBtn, this.lobbyBtn);
-    vc.append(this.vicMark, title, scores, this.vicFinal, this.vicBtns);
+    // FFA body: the winner line, the top-3 podium and the full standings (filled by showVictory)
+    this.ffaBody = el('div', 'df-ffa');
+    this.ffaBody.hidden = true;
+    this.ffaWinner = el('div', 'df-ffa-winner');
+    const cols = el('div', 'df-ffa-cols');
+    this.podium = el('div', 'df-podium');
+    this.podium.setAttribute('aria-hidden', 'true');
+    this.standings = el('ol', 'df-standings');
+    cols.append(this.podium, this.standings);
+    this.ffaBody.append(this.ffaWinner, cols);
+    vc.append(this.vicMark, title, scores, this.ffaBody, this.vicFinal, this.vicBtns);
     this.victory.append(vc);
 
     this.root.append(this.count, this.death, this.victory);
@@ -219,14 +284,19 @@ export class Slates {
     this.death.hidden = false;
     this.death.classList.remove('in'); void this.death.offsetWidth; this.death.classList.add('in');
     this.death.classList.toggle('sea', name === null);
-    this.death.dataset.team = team === 2 ? 'gulf' : team === 1 ? 'sun' : 'sea';
+    const ffa = this.mode === 'ffa' && name !== null && team !== null && team > 0 ? crewLook(team, 'ffa') : null;
+    this.death.dataset.team = ffa ? 'ffa' : team === 2 ? 'gulf' : team === 1 ? 'sun' : 'sea';
+    if (ffa) this.death.style.setProperty('--splat', ffa.dye); else this.death.style.removeProperty('--splat');
     this.deathIcon.replaceChildren();
     if (name === null) {
       this.deathIcon.append(waveIcon('df-wave big'));
       this.deathName.textContent = SEA_NAME;
     } else {
-      const g = el('i', '', teamById(team === 2 ? 2 : 1).markGlyph);
+      const g = el('i', '', ffa ? ffa.markGlyph : teamById(team === 2 ? 2 : 1).markGlyph);
       g.setAttribute('aria-hidden', 'true');
+      // FFA: the washer's mark as a crew chip (crew-colour disc, ink ring, cream mark — the crests' look). A bare glyph
+      // in the crew colour vanished on its own crew's splat (lime ■ on the lime splat), and the gold name read as SUNFLOWER.
+      if (ffa) { g.className = 'chip'; g.style.setProperty('--cu', ffa.ui); }
       this.deathIcon.append(g);
       this.deathName.textContent = name;
     }
@@ -255,6 +325,13 @@ export class Slates {
     this.lobbyBtn.hidden = !onLobby;
     this.victoryShown = true;
     this.tallyT = 0;
+    const isFfa = !!v.ffa;
+    this.scores.hidden = isFfa;
+    this.ffaBody.hidden = !isFfa;
+    this.victoryCard.classList.toggle('ffa', isFfa);
+    this.victory.classList.toggle('ffa', isFfa);
+    this.ffaTally = null;
+    if (v.ffa) { this.showFfa(v, v.ffa); return; }
     this.tally = { sun: Math.max(0, v.sun), gulf: Math.max(0, v.gulf), winner: v.winner, stamped: false, ready: false };
     this.vicSun.textContent = pct(0);
     this.vicGulf.textContent = pct(0);
@@ -282,6 +359,7 @@ export class Slates {
     const t = this.tally;
     if (!t || !this.victoryShown) return;
     this.tallyT += Math.max(0, Math.min(0.1, dt));
+    if (this.ffaTally) { this.updateFfa(t); return; }
     const u = Math.max(0, Math.min(1, (this.tallyT - TALLY.fillFrom) / (TALLY.fillTo - TALLY.fillFrom)));
     const k = 1 - Math.pow(1 - u, 3);
     // bars compare the crews: the bigger share fills the track, the other is in proportion (numbers are absolute)
@@ -303,6 +381,8 @@ export class Slates {
     this.victoryShown = false;
     this.victory.hidden = true;
     this.tally = null;
+    this.ffaTally = null;
+    this.podium.classList.remove('stamped');
     this.tallyT = -1;
   }
 
@@ -311,9 +391,126 @@ export class Slates {
     return {
       countdown: this.count.hidden ? null : (this.count.querySelector('.df-count-row')?.textContent ?? null),
       death: this.death.hidden ? null : `${DEATH_PREFIX} ${this.deathName.textContent ?? ''}`,
-      victory: this.victory.hidden ? null : (this.victory.textContent ?? ''),
+      // the card's visible parts (the idle mode's body — FFA or teams tally — is hidden and not read back)
+      victory: this.victory.hidden ? null : [...this.victoryCard.children].filter((e) => !(e as HTMLElement).hidden).map((e) => e.textContent ?? '').join(''),
       tally: this.victory.hidden ? null : { t: Math.round(this.tallyT * 100) / 100, stamped: this.vicMark.classList.contains('stamped'),
-        sun: this.vicSun.textContent, gulf: this.vicGulf.textContent },
+        sun: this.vicSun.textContent, gulf: this.vicGulf.textContent,
+        ...(this.ffaTally ? {
+          mode: 'ffa', winner: this.ffaWinner.textContent,
+          podium: this.ffaSteps.map((s) => s.pct.textContent),
+          standings: this.ffaRows.map((r) => ({ text: r.row.textContent, pct: r.pct.textContent, win: r.row.classList.contains('win') })),
+        } : {}) },
     };
+  }
+
+  // ───────────────────────────── FFA victory (CONTRACT_FFA F3) ─────────────────────────────
+  private showFfa(v: VictoryInfo, f: FfaVictory): void {
+    const rows = f.standings;
+    this.tally = { sun: 0, gulf: 0, winner: v.winner, stamped: false, ready: false };
+    this.ffaTally = f;
+    const winners = f.winners.length ? f.winners : rows.length ? [rows[0].team] : [];
+    const draw = winners.length > 1;
+    // the winner line: name + colour chip + mark (every tied crew on a draw)
+    this.ffaWinner.replaceChildren();
+    winners.forEach((w, i) => {
+      const r = rows.find((x) => x.team === w);
+      const c = crewLook(w, 'ffa');
+      if (i > 0) this.ffaWinner.append(el('span', 'amp', '&'));
+      const who = el('span', 'who');
+      const mk = el('i', 'mk', c.markGlyph);
+      mk.style.background = c.dye;
+      mk.setAttribute('aria-hidden', 'true');
+      const nm = el('b', '', r?.name ?? c.label);
+      who.append(mk, nm, el('span', 'col', c.label));
+      this.ffaWinner.append(who);
+    });
+    this.ffaWinner.classList.toggle('draw', draw);
+    this.ffaBody.classList.remove('stamped');
+    // the podium: 2nd · 1st · 3rd
+    this.podium.replaceChildren();
+    this.podium.classList.remove('stamped');
+    this.ffaSteps = [];
+    for (const rank of [1, 0, 2]) {
+      const r = rows[rank];
+      const col = el('div', `step-col r${rank + 1}`);
+      if (!r) { col.classList.add('empty'); this.podium.append(col); continue; }
+      const c = crewLook(r.team, 'ffa');
+      const mk = el('i', 'mk', c.markGlyph);
+      mk.style.background = c.dye;
+      const nm = el('b', `nm${r.you ? ' you' : ''}`, r.name);
+      const pctE = el('span', 'pct', pct(0));
+      const step = el('div', 'step');
+      step.style.setProperty('--c', c.dye);
+      step.style.setProperty('--cg', c.dyeGloss);
+      step.append(el('span', 'rk', String(rank + 1)));
+      col.append(mk, nm, pctE, step);
+      this.podium.append(col);
+      this.ffaSteps.push({ step, pct: pctE, share: Math.max(0, r.share), h: rank === 0 ? 1 : rank === 1 ? 0.7 : 0.48 });
+    }
+    // the full standings
+    this.standings.replaceChildren();
+    this.ffaRows = [];
+    rows.forEach((r, i) => {
+      const c = crewLook(r.team, 'ffa');
+      const li = el('li', `srow${r.you ? ' you' : ''}`);
+      li.style.setProperty('--c', c.dye);
+      li.style.setProperty('--cg', c.dyeGloss);
+      // the winner's % sits on a pill of the crew's UI colour in its ink (≥ 5.8:1 for all 8 crews); crew-coloured text
+      // on the cream card was 1.2–3.1:1 (sunflower / lime / jade unreadable)
+      li.style.setProperty('--cu', c.ui);
+      li.style.setProperty('--ci', c.uiInk);
+      li.dataset.team = String(r.team);
+      const mk = el('i', 'mk', c.markGlyph);
+      mk.setAttribute('aria-hidden', 'true');
+      const track = el('div', 'track');
+      const fill = el('b', 'fill');
+      track.append(fill);
+      const pctE = el('b', 'pct', pct(0));
+      li.append(el('span', 'rk', String(i + 1)), mk, el('span', 'nm', r.name), track, pctE);
+      this.standings.append(li);
+      this.ffaRows.push({ row: li, fill, pct: pctE, share: Math.max(0, r.share) });
+    });
+    this.vicFinal.textContent = rows.map((r, i) => `${i + 1}. ${r.name} ${pct(r.share)}`).join(' · ');
+    this.vicMark.classList.remove('stamped');
+    this.vicBtns.classList.remove('ready');
+    this.vicMark.replaceChildren();
+    for (const w of winners.slice(0, 3)) {
+      const c = crewLook(w, 'ffa');
+      const m = el('span', 'ffa', c.markGlyph);
+      m.style.background = c.dye;
+      this.vicMark.append(m);
+    }
+    this.victory.dataset.winner = draw ? 'draw' : 'ffa';
+    this.victory.style.setProperty('--win', crewLook(winners[0] ?? 1, 'ffa').dye);
+    this.updateFfa(this.tally);
+    this.victory.hidden = false;
+    this.victory.classList.remove('in'); void this.victory.offsetWidth; this.victory.classList.add('in');
+    this.vicBtn.focus({ preventScroll: true });
+  }
+
+  private updateFfa(t: { stamped: boolean; ready: boolean }): void {
+    const f = this.ffaTally;
+    if (!f) return;
+    const u = Math.max(0, Math.min(1, (this.tallyT - TALLY.fillFrom) / (TALLY.fillTo - TALLY.fillFrom)));
+    const k = 1 - Math.pow(1 - u, 3);
+    let top = 1e-6;
+    for (const r of this.ffaRows) top = Math.max(top, r.share);
+    for (const r of this.ffaRows) {
+      r.fill.style.width = `${((r.share / top) * k * 100).toFixed(2)}%`;
+      r.pct.textContent = pct(u >= 1 ? r.share : r.share * k);
+    }
+    for (const s of this.ffaSteps) {
+      s.step.style.setProperty('--h', (s.h * k).toFixed(3));
+      s.pct.textContent = pct(u >= 1 ? s.share : s.share * k);
+    }
+    if (!t.ready && this.tallyT >= TALLY.buttons) { t.ready = true; this.vicBtns.classList.add('ready'); }
+    if (!t.stamped && this.tallyT >= TALLY.stamp) {
+      t.stamped = true;
+      const win = new Set(f.winners);
+      for (const r of this.ffaRows) r.row.classList.toggle('win', win.has(Number(r.row.dataset.team)));
+      this.podium.classList.add('stamped');
+      this.ffaBody.classList.add('stamped');
+      this.vicMark.classList.add('stamped');
+    }
   }
 }

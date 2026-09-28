@@ -89,6 +89,9 @@ const TR = {
   rankUp: 0.55,
   hurtBase: 0.08, hurtPerFrac: 1.4,
   vent: 0.3, wireDetonate: 0.22, ability: 0.12, pulse: 0.05,
+  // GATEKEEPERS (lane K2a): stagger × 0.6 (§6.7), the arrival / kill / lock / finale beats (the kill's MASS BREACH
+  // rankUp adds its own punch + rankUp trauma on the same tick, so the kill itself stays modest)
+  gateStaggerK: 0.6, gateSpawn: 0.2, gateDefeated: 0.4, gateLocked: 0.1, finale: 0.35,
 } as const;
 
 export class CameraRig {
@@ -341,7 +344,14 @@ export class CameraRig {
         case 'bump': add += TR.bump; break;
         case 'explosion': add += Math.min(0.35, TR.explosion + TR.explosionPerExtent * (e.r / ext) * 0.3) * att(e.x, e.z); break;
         case 'bossAttack': add += TR.bossAttack * Math.max(0.35, att(e.x, e.z)); break;
-        case 'bossStagger': add += TR.bossStagger; break;
+        // GATEKEEPERS §6.7 (lane K2a): trauma is already titan-relative (displacement ∝ titan height), so a
+        // gatekeeper's beats are not rescaled by H — its stagger shakes at 0.6×, its phase change not at all
+        case 'bossStagger': add += w.boss && w.boss.role === 'gate' ? TR.bossStagger * TR.gateStaggerK : TR.bossStagger; break;
+        case 'gateRam': add += TR.bossAttack * Math.max(0.35, att(e.x, e.z)); break;
+        case 'gateSpawn': add += TR.gateSpawn; break;
+        case 'gateDefeated': add += TR.gateDefeated; break;
+        case 'gateLocked': add += TR.gateLocked; break;
+        case 'finale': if (e.on) add += TR.finale; break;
         case 'bossDefeated': add += TR.bossDefeated; break;
         case 'bossSpawn': add += TR.bossSpawn; break;
         case 'titanHurt': {

@@ -23,6 +23,12 @@
 // the Game ticks it every frame (a match routes its events + the camera as the listener) and plays the victory /
 // defeat stinger. One Juice per MATCH session (ui/juice.ts): the hit markers, the damage vignette + arc, the trauma
 // shake and the victory confetti; REDUCE MOTION and COLORBLIND MARKS reach it (and the runner / FX dye) live.
+//
+// CONTRACT_FFA F3 (FREE-FOR-ALL): `?mode=ffa|teams` (default teams; a deep-link key) and the menus' MODE pick choose
+// the match mode. An FFA session builds the FFA roster (the human on its colour — `?crew=1..8` or a colour key such
+// as `?crew=violet`, else the LOADOUT pick, default amber — and bots on the other seven), runs MatchWorld in 'ffa',
+// switches the dye shader (setDyeMode) and the minimap raster (setPalette) to the 8-crew palette, and gives the HUD
+// its FFA mode. Teams sessions (and the lobby) take none of these branches.
 
 /// <reference types="vite/client" />
 
@@ -35,26 +41,26 @@ import './ui/styles.css';
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { mapById, teamById, hexToRgb01, WEAPONS, playableMaps, type LightingPreset, type MapDef } from './core/data.ts';
-import type { TeamId } from './core/types.ts';
+import { mapById, teamById, hexToRgb01, WEAPONS, playableMaps, FFA_CREWS, type LightingPreset, type MapDef } from './core/data.ts';
+import { parseMatchMode, type MatchMode, type TeamId } from './core/types.ts';
 import { loadMapGeometry, type MapGeometry } from './core/mapgeo.ts';
 import { buildAtlas, type PaintAtlas } from './core/paint/atlas.ts';
 import { Painter } from './core/paint/painter.ts';
 import { MinimapRaster } from './core/paint/minimap.ts';
 import { loadRapier, PhysicsWorld, type Rapier } from './core/physics.ts';
-import { defaultRoster, parseBotSkill, type BotSkill, type RosterEntry } from './core/match/roster.ts';
+import { defaultRoster, ffaCrew, parseBotSkill, type BotSkill, type RosterEntry } from './core/match/roster.ts';
 import { buildNav, type NavGraph } from './core/bots/nav.ts';
 import { createRenderer, hasWebGL2, isRenderQuality, type RenderQuality, type RendererRig } from './view/renderer.ts';
 import { FollowCamera } from './view/camera.ts';
 import { createSky, type SkyRig } from './view/sky.ts';
 import { createWater, type WaterRig } from './view/water.ts';
 import { PaintTexture } from './view/paintlayer.ts';
-import { createDyeUniforms, setPadColorblind, type DyeUniforms } from './view/surfaces.ts';
-import { loadMapView, type MapView } from './view/mapview.ts';
+import { createDyeUniforms, setDyeMode, setPadColorblind, type DyeUniforms } from './view/surfaces.ts';
+import { loadMapView, addFfaPads, type MapView, type FfaPads } from './view/mapview.ts';
 import { loadHeroAssets, type HeroAssets } from './view/heroview.ts';
 import { PlayerViews, prepareRunnerKit, loadKitArt, mixedBotKits, kitFireType, type RunnerKit, type KitArt } from './view/players.ts';
 import { Fx, bakeFxModels } from './view/fx.ts';
-import { Hud, applyTeamCssVars, type HudKit } from './ui/hud.ts';
+import { Hud, applyTeamCssVars, crewLook, type HudKit } from './ui/hud.ts';
 import { createJuice, type Juice } from './ui/juice.ts';
 import { createAudio, type GameAudio } from './audio/index.ts';
 import { BootUI } from './ui/boot.ts';
@@ -66,7 +72,7 @@ import { Input } from './input.ts';
 import { Game, type AppStatus, type GameHooks, type GameMode, type MatchConfig } from './game.ts';
 import { installTestSurface, type AppHandles } from './testsurface.ts';
 
-export const VERSION = 'dyefield-1.0.0';
+export const VERSION = 'dyefield-1.1.0';
 
 declare global {
   interface Window {
@@ -76,7 +82,7 @@ declare global {
 }
 
 const params = new URLSearchParams(location.search);
-const DEEP_KEYS = ['map', 'kit', 'bots', 'seed', 'matchSeconds', 'preset', 'autostart', 'brush', 'crew'];
+const DEEP_KEYS = ['map', 'kit', 'bots', 'seed', 'matchSeconds', 'preset', 'autostart', 'brush', 'crew', 'mode'];
 /** a harness / share link straight into a match (no lobby) */
 const DEEP_LINK = params.get('lobby') !== '1' && DEEP_KEYS.some((k) => params.has(k));
 const LOBBY_MAP = 'pier18';
@@ -112,6 +118,13 @@ function paramConfig(): MatchConfig {
   const sq = params.get('seed');
   const seed = sq !== null && sq !== '' && Number.isFinite(Number(sq)) ? (Number(sq) >>> 0) : randomSeed();
   const cq = (params.get('crew') || '').toLowerCase();
+  // CONTRACT_FFA F3: ?mode=ffa|teams (default teams); in FFA ?crew= is the human's colour (1..8 or a colour key)
+  const mode: MatchMode = parseMatchMode(params.get('mode'));
+  if (mode === 'ffa') {
+    const byKey = FFA_CREWS.find((c) => c.key === cq);
+    const crew = byKey ? byKey.id : ffaCrew(cq || 1);
+    return { kit, skill, seed, durationS: devSeconds(), crew, mode, devBrush: app.dev && params.get('brush') === '1' };
+  }
   const crew: TeamId = cq === '2' || cq === 'gulf' ? 2 : 1;
   return { kit, skill, seed, durationS: devSeconds(), crew, devBrush: app.dev && params.get('brush') === '1' };
 }
@@ -203,6 +216,14 @@ function mmPalette(colorblind: boolean): Arena['mmColors'] {
   return { base: [226, 219, 204], sun: rgb255(crewColors(1, colorblind).dye), gulf: rgb255(crewColors(2, colorblind).dye) };
 }
 
+/** CONTRACT_FFA F3: the minimap raster's 8-crew palette (index = crew id; the FFA dye, no colorblind swap) */
+function ffaMinimapPalette(): Array<[number, number, number]> {
+  const out: Array<[number, number, number]> = [[226, 219, 204]];
+  for (const c of FFA_CREWS) out[c.id] = rgb255(c.dye);
+  for (let i = 1; i < 9; i++) if (!out[i]) out[i] = [226, 219, 204];
+  return out;
+}
+
 async function loadArena(S: Shared, mapId: string, presetName: string | null, report: Report): Promise<Arena> {
   const def = mapById(mapId);
   if (def.status !== 'built') throw new Error(`map '${def.id}' is ${def.status}, not built — only built maps can be played`);
@@ -291,6 +312,8 @@ interface Session {
   hud: Hud;
   /** match sessions only */
   juice: Juice | null;
+  /** CONTRACT_FFA F7: the FFA drop pads (FFA match sessions only) */
+  ffaPads: FfaPads | null;
   dispose(): void;
 }
 
@@ -302,6 +325,11 @@ function lobbyRoster(seed: number): RosterEntry[] {
 }
 
 function matchRoster(cfg: MatchConfig): RosterEntry[] {
+  if (cfg.mode === 'ffa') {
+    // CONTRACT_FFA F1: 8 runners, each its own crew — the human on its colour, bots on the other seven
+    return defaultRoster({ humanKit: cfg.kit, humanName: cfg.humanName, seed: cfg.seed, skill: cfg.skill, botKits: mixedBotKits(cfg.kit),
+      mode: 'ffa', humanCrew: ffaCrew(cfg.crew ?? 1) });
+  }
   const r = defaultRoster({ humanKit: cfg.kit, humanName: cfg.humanName, seed: cfg.seed, skill: cfg.skill, botKits: mixedBotKits(cfg.kit) });
   if (cfg.crew === 2) for (const e of r) e.team = (e.team === 1 ? 2 : 1) as TeamId;
   return r;
@@ -314,10 +342,14 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
   report(NaN, 'Loading the tide-runners…');
   const roster = mode === 'lobby' ? lobbyRoster(config.seed) : matchRoster(config);
   const humanTeam = roster[0]?.team ?? 1;
-  // a clean court for every session
+  /** CONTRACT_FFA F3: the match mode of this session (the lobby backdrop is always teams) */
+  const matchMode: MatchMode = mode === 'match' && config.mode === 'ffa' ? 'ffa' : 'teams';
+  // a clean court for every session; the dye shader + the minimap raster take the mode's palette (an arena may be
+  // reused across modes). setPalette repaints the whole raster (the rebuild).
   arena.painter.reset();
   arena.paint.rebuildAll();
-  arena.minimap.rebuild();
+  setDyeMode(arena.dye, matchMode);
+  arena.minimap.setPalette(matchMode === 'ffa' ? ffaMinimapPalette() : null);
   if (arena.dye.uViewerTeam) arena.dye.uViewerTeam.value = mode === 'lobby' ? 0 : humanTeam;
   if (arena.dye.uColorblind) arena.dye.uColorblind.value = S.settings.get().colorblind ? 1 : 0;
   renderer.toneMappingExposure = arena.preset.exposure ?? 1;
@@ -327,9 +359,10 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
   for (const e of roster) {
     if (!S.kits.has(e.kit)) S.kits.set(e.kit, prepareRunnerKit(heroAssets, { id: e.kit, gltf: kitArt.kits.get(e.kit) ?? null }));
   }
-  const fx = new Fx(arena.sky.sunDir);
+  // CONTRACT_FFA F7: the FX pools, the runner tint / stains / name tags and the juice take the mode's crew palette
+  const fx = new Fx(arena.sky.sunDir, matchMode);
   fx.setModels(bakeFxModels(kitArt));
-  const players = new PlayerViews(heroAssets, roster, fx, mode === 'lobby' ? null : uiRoot, S.kits);
+  const players = new PlayerViews(heroAssets, roster, fx, mode === 'lobby' ? null : uiRoot, S.kits, matchMode);
   const st = S.settings.get();
   if (st.colorblind) { fx.setColorblind(true); players.setColorblind(true); }
   arena.scene.add(players.root, fx.root);
@@ -343,10 +376,10 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
     specialId: spRow?.id ?? '', specialName, specialKey: input.keyLabel('special'),
     subName: subRow?.name ?? '', subCost: typeof subRow?.tankCost === 'number' ? subRow.tankCost : 70, subKey: input.keyLabel('sub'),
   };
-  const hud = new Hud(uiRoot, { team: humanTeam, minimap: arena.minimap, specialName, roster, youId: 0, kit: hudKit });
+  const hud = new Hud(uiRoot, { team: humanTeam, minimap: arena.minimap, specialName, roster, youId: 0, kit: hudKit, mode: matchMode });
   hud.slates.setLegend(S.menus.legend());
   // after the HUD: juice's over-layer (hit marker, confetti) sits above the HUD and the slates
-  const juice = mode === 'match' ? createJuice(uiRoot, { reduceMotion: st.reduceMotion, colorblind: st.colorblind }) : null;
+  const juice = mode === 'match' ? createJuice(uiRoot, { reduceMotion: st.reduceMotion, colorblind: st.colorblind, mode: matchMode }) : null;
 
   const game = new Game({
     app, def, canvas: S.canvas, rig, scene: arena.scene, cam, sky: arena.sky, water: arena.water, map: arena.map, geo: arena.geo,
@@ -361,6 +394,9 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
     cam.reset(me.yaw);
     cam.update(0, me, arena.physics);
   }
+  // CONTRACT_FFA F7: one drop pad per FFA runner (MatchWorld.crewPads). PLAY AGAIN rebuilds the world with the same
+  // seed, so the pads (a seeded shuffle of maps.json ffaSpawns) stay where they are for the whole session.
+  const ffaPads = matchMode === 'ffa' ? addFfaPads(arena.map, game.world.crewPads) : null;
 
   // shader pre-warm (doctrine §3): compile every program before frame 1 — including the ones that are hidden
   // at spawn (the slick fins, the projectile droplets) — then one real frame (which also builds the
@@ -382,18 +418,19 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
     + `physics ${arena.physics.triangles} tris; nav ${arena.nav.nodes} nodes in ${arena.navMs.toFixed(0)} ms; `
     + `runners ${ps.runners} (tris by kit ${Object.entries(ps.kits).map(([k, t]) => `${k} ${t}`).join(', ')}); `
     + `lineup ${roster.map((e) => `${e.id}:${e.kit}:${e.team}`).join(' ')}; `
-    + `seed ${config.seed} · bots ${roster[1]?.skill ?? config.skill} · kit ${config.kit}${config.durationS ? ` · ${config.durationS} s` : ''}; quality ${S.quality()}; `
+    + `seed ${config.seed} · bots ${roster[1]?.skill ?? config.skill} · kit ${config.kit}${config.durationS ? ` · ${config.durationS} s` : ''} · mode ${matchMode}; quality ${S.quality()}; `
     + `${mode === 'lobby' ? `backdrop warmed in ${warmMs.toFixed(0)} ms; ` : ''}gpu ${rig.gpu()}`);
   for (const w of [...arena.map.warnings, ...heroAssets.warnings, ...kitArt.warnings, ...players.warnings]) console.warn('[dyefield]', w);
 
   game.run();
   let disposed = false;
   return {
-    mode, arena, game, players, fx, hud, juice,
+    mode, arena, game, players, fx, hud, juice, ffaPads,
     dispose(): void {
       if (disposed) return;
       disposed = true;
       game.dispose();
+      ffaPads?.dispose();                        // restores the A/B team pads' crew accent for the next session
       if (app.game === game) app.game = null;
       // the view modules free their own GPU objects (the runner skeletons' bone textures, the FX disk texture)
       juice?.dispose();
@@ -414,6 +451,8 @@ async function boot(): Promise<void> {
   // one WebAudio per page: nothing sounds (and no AudioContext exists) until the first gesture unlocks it
   const audio = createAudio({ volumes: settings.get().volume });
   const bootUi = new BootUI();
+  // CONTRACT_FFA F3: a ?mode=ffa deep link loads an FFA match — the loading card says so
+  if (DEEP_LINK && parseMatchMode(params.get('mode')) === 'ffa') bootUi.setMode('ffa');
   window.__DF_BOOT__?.handoff();
   let arena: Arena | null = null;
   let session: Session | null = null;
@@ -424,7 +463,7 @@ async function boot(): Promise<void> {
   const handles: AppHandles = {
     menus: () => S?.menus ?? null, settings: () => settings, profile: () => profile,
     session: () => (session ? {
-      mode: session.mode, map: session.arena.def.id, preset: session.arena.presetName, key: session.arena.key,
+      mode: session.mode, matchMode: session.game.matchMode, map: session.arena.def.id, preset: session.arena.presetName, key: session.arena.key,
       cam: S ? S.cam.camera.position.toArray().map((v) => Math.round(v * 100) / 100) : null, fov: S ? S.cam.camera.fov : null,
     } : null),
     renderInfo: () => (S ? S.rig.renderer.info : null),
@@ -534,6 +573,7 @@ async function boot(): Promise<void> {
       try {
         const def = mapById(sel.map);
         S.menus.hideAll();
+        bootUi.setMode(sel.mode === 'ffa' ? 'ffa' : 'teams');   // CONTRACT_FFA F3: the card names the mode being loaded
         bootUi.showLoading(sel.random ? `Random arena: ${def.name}` : `Loading ${def.name}…`, { name: def.name, thumb: MAP_THUMBS[def.id] ?? null });
         app.phase = 'loading';
         arenaF = 0;
@@ -547,8 +587,11 @@ async function boot(): Promise<void> {
           arena = null;
           arena = await loadArena(S, def.id, pname, report);
         } else report(1);
+        // CONTRACT_FFA F3: FFA → the human's crew is the LOADOUT colour pick
+        const ffa = sel.mode === 'ffa';
         const cfg: MatchConfig = {
-          kit: sel.kit, skill: sel.skill, seed: randomSeed(), durationS: devSeconds(), humanName: sel.name || undefined, crew: sel.crew, devBrush: false,
+          kit: sel.kit, skill: sel.skill, seed: randomSeed(), durationS: devSeconds(), humanName: sel.name || undefined,
+          crew: ffa ? ffaCrew(sel.ffaColor) : sel.crew, devBrush: false, ...(ffa ? { mode: 'ffa' as const } : {}),
         };
         session = await startSession(S, arena, 'match', cfg, hooks, report);
         app.phase = 'ready';
@@ -569,6 +612,7 @@ async function boot(): Promise<void> {
         S.menus.hideAll();
         S.menus.extraScope = null;
         const def = mapById(LOBBY_MAP);
+        bootUi.setMode('teams');                  // the lobby backdrop is always teams
         bootUi.showLoading('Back to the harbor…', { name: def.name, thumb: MAP_THUMBS[def.id] ?? null });
         app.phase = 'loading';
         arenaF = 0;
@@ -638,7 +682,8 @@ async function boot(): Promise<void> {
           arena.minimap.rebuild();
           session?.hud.redrawMinimapNow();
         }
-        shared.mannequin?.setTeam(profile.get().crew);
+        const pr = profile.get();
+        shared.mannequin?.setTeam(pr.mode === 'ffa' ? pr.ffaColor : pr.crew);
       }
       if (has('quality') && !all) {
         qualityOverride = null;
@@ -659,7 +704,8 @@ async function boot(): Promise<void> {
 
     // the LOADOUT mannequin, once the hero + kits are in
     void Promise.all([hero, kitArt]).then(([h, k]) => {
-      const m = new Mannequin(rig.renderer, h, k, (t) => crewColors(t, settings.get().colorblind).dye);
+      // the LOADOUT mannequin wears the profile's pick: the crew (teams) or the FFA colour (CONTRACT_FFA F3)
+      const m = new Mannequin(rig.renderer, h, k, (t) => (profile.get().mode === 'ffa' ? crewLook(t, 'ffa').dye : crewColors(t, settings.get().colorblind).dye));
       shared.mannequin = m;
       menus.setMannequin(m);
     }).catch((e) => console.warn('[dyefield] mannequin unavailable:', e));

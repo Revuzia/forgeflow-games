@@ -27,6 +27,17 @@ Real mouse clicks (page.mouse at element centres) and real key presses (page.key
  10. layout         — every screen at 1600×900 and 1280×720: every control inside the viewport and no two
                       controls overlapping; screenshots _shots/menu_*.png (720p ones _shots/menu720_*.png).
 
+FREE-FOR-ALL (CONTRACT_FFA F3, lane UI), all by real clicks / keys:
+ 11. PLAY → MODE      — FREE-FOR-ALL selects (aria-checked, the profile, localStorage); the title mode line reads
+                      exactly 'Harbor Cup • Free-for-all' (and exactly 'Harbor Cup • 4 v 4' again after TEAMS · 4 v 4);
+                      LOADOUT swaps the crew toggle for the 8-colour pick (chip + mark): VIOLET → the profile + the
+                      mannequin's team + its pixels; TEAMS restores the crew row with GULF CREW still picked.
+ 12. an FFA match     — PLAY → FREE-FOR-ALL → CINDER REEF → START: 8 crews, the human on the picked colour, the FFA HUD;
+                      the 25 s clock → the FFA victory slate (winner, podium, 8 standings, the stamp; the stinger by
+                      whether the human won) → LOBBY. Leaks are compared after this match too.
+ 13. 720p             — the FFA PLAY / title / LOADOUT screens and a deep-link FFA victory slate (dev setTimeLeft) are
+                      layout-checked at 1280×720. Shots _shots/ffa_ui_menu_*.png / ffa_ui_menu720_*.png.
+
 Verdict line: MENUS OK / MENUS FAIL (+ problems). Report: _harness/_reports/menus.json.
 
 Run:  python _harness/menus.py            (headless, dev server on :5186 — started with DF_FROZEN=1 if down)
@@ -52,7 +63,9 @@ SCREENS = [("loadout", "#dfm-loadout"), ("play", "#dfm-play"), ("settings", "#df
 STRINGS = {
     "wordmark": "DYEFIELD", "mode": "Harbor Cup • 4 v 4", "hint": "Pick your kit — crest sits on the right",
     "credits": "An original 4 v 4 turf-paint shooter.", "victory": "THE HARBOR CHOSE A COLOR.",
+    "modeFfa": "Harbor Cup • Free-for-all", "teams": "TEAMS · 4 v 4", "ffa": "FREE-FOR-ALL",
 }
+FFA_COLORS = ["amber", "violet", "lime", "magenta", "sky", "coral", "sunflower", "jade"]
 FORBIDDEN = ("CHILL", "FRESH", "FIERCE")
 
 
@@ -76,7 +89,9 @@ class Run:
         return bool(cond)
 
     def shot(self, name):
-        path = os.path.join(SHOTS, "%s_%s.png" % (self.prefix, name))
+        # CONTRACT_FFA F3: the FFA legs' shots are _shots/ffa_ui_<prefix>_<name>.png
+        fname = ("ffa_ui_%s_%s.png" % (self.prefix, name[4:])) if name.startswith("ffa_") else ("%s_%s.png" % (self.prefix, name))
+        path = os.path.join(SHOTS, fname)
         if self.s.screenshot(path):
             self.shots.append(os.path.relpath(path, os.path.dirname(SHOTS)).replace("\\", "/"))
         return path
@@ -521,6 +536,137 @@ def match_keyboard(run):
     return run.gl()
 
 
+def ffa_menus(run):
+    """CONTRACT_FFA F3: the PLAY mode selector (persisted), the title mode line per mode, the LOADOUT colour pick.
+    Starts and ends on the PLAY screen in TEAMS mode (the LOCKWELL match leg follows)."""
+    print("FFA: PLAY mode selector + LOADOUT colour pick")
+    s = run.s
+    if run.menu().get("screen") != "play":
+        run.click("#dfm-play", 0.7)
+    labels = s.safe_js("() => [...document.querySelectorAll('.dfm-modebtn')].map((b) => b.textContent)", default=[])
+    run.ok(labels == [STRINGS["teams"], STRINGS["ffa"]], "mode selector labels %s" % labels)
+    run.ok((run.menu().get("profile") or {}).get("mode") == "teams", "the default mode is not TEAMS (%s)" % run.menu().get("profile"))
+    run.click("#dfm-mode-ffa", 0.4)
+    prof = run.menu().get("profile") or {}
+    checked = s.safe_js("() => document.querySelector('#dfm-mode-ffa').getAttribute('aria-checked')", default=None)
+    saved = s.safe_js("() => { try { return JSON.parse(localStorage.getItem('dyefield.profile.v1') || '{}'); } catch (e) { return null; } }", default=None) or {}
+    run.checks["ffaMode"] = {"profile": prof, "ariaChecked": checked, "saved": {k: saved.get(k) for k in ("mode", "ffaColor")}}
+    run.ok(prof.get("mode") == "ffa" and checked == "true", "FREE-FOR-ALL did not select (profile %s, aria %s)" % (prof, checked))
+    run.ok(saved.get("mode") == "ffa", "the FFA mode was not persisted (localStorage %s)" % saved)
+    run.shot("ffa_play")
+    run.layout("ffa play")
+    run.key("Escape", 0.5)
+    line = run.text("#df-menus .dfm-brand .df-mode span")
+    card = run.text(".dfm-profile .txt span")
+    run.checks["ffaTitle"] = {"modeLine": line, "profileCard": card}
+    run.ok(line == STRINGS["modeFfa"], "FFA title mode line %r (want %r)" % (line, STRINGS["modeFfa"]))
+    run.ok(card == STRINGS["ffa"], "the FFA profile card reads %r" % card)
+    run.shot("ffa_title")
+    run.layout("ffa title")
+    # LOADOUT: the 8-colour pick replaces the crew toggle
+    run.click("#dfm-loadout", 0.8)
+    slot = run.box("#dfm-mannequin")
+    vis = s.safe_js("""() => ({ colors: [...document.querySelectorAll('.dfm-color')].filter((b) => b.getBoundingClientRect().width > 0 && !b.closest('[hidden]')).map((b) => [b.id, b.textContent]),
+      crewRow: !!document.querySelector('#dfm-crew-sun') && !document.querySelector('#dfm-crew-sun').closest('[hidden]'),
+      cap: document.querySelector('.dfm-crew .dfm-cap').textContent })""", default={}) or {}
+    run.ok(len(vis.get("colors") or []) == 8 and len({t for _, t in vis.get("colors") or []}) == 8, "the FFA colour pick shows %s (want 8 chips, 8 marks)" % vis.get("colors"))
+    run.ok(not vis.get("crewRow"), "the crew toggle is still visible in FFA")
+    run.ok((vis.get("cap") or "").startswith("COLOR"), "the FFA colour caption reads %r" % vis.get("cap"))
+    a_path = run.shot("ffa_loadout_amber")
+    run.click("#dfm-color-violet", 0.7)
+    m = run.menu()
+    prof, mq = m.get("profile") or {}, m.get("mannequin") or {}
+    run.ok(prof.get("ffaColor") == 2 and mq.get("team") == 2, "VIOLET did not reach the profile / mannequin (%s / %s)" % (prof.get("ffaColor"), mq))
+    time.sleep(0.4)
+    v_path = run.shot("ffa_loadout")
+    d = run.region_diff(a_path, v_path, slot) if slot else None
+    run.checks["ffaLoadout"] = {"visible": vis, "profile": {k: prof.get(k) for k in ("mode", "ffaColor", "crew")}, "mannequin": mq, "recolourDiff": d}
+    if d is not None:
+        run.ok(d > 1.0, "the mannequin did not recolour for VIOLET (mean diff %.2f)" % d)
+    run.layout("ffa loadout")
+    run.key("Escape", 0.5)
+    # back to TEAMS: the exact teams line, the crew row, GULF CREW still picked (the LOCKWELL leg needs it)
+    run.click("#dfm-play", 0.7)
+    run.click("#dfm-mode-teams", 0.4)
+    run.key("Escape", 0.5)
+    line = run.text("#df-menus .dfm-brand .df-mode span")
+    prof = run.menu().get("profile") or {}
+    run.checks["ffaBackToTeams"] = {"modeLine": line, "profile": prof, "mannequin": run.menu().get("mannequin")}
+    run.ok(line == STRINGS["mode"], "the teams mode line reads %r after TEAMS (want exactly %r)" % (line, STRINGS["mode"]))
+    run.ok(prof.get("mode") == "teams" and prof.get("crew") == 2 and (run.menu().get("mannequin") or {}).get("team") == 2,
+           "TEAMS did not restore the crew pick (%s)" % prof)
+    run.click("#dfm-play", 0.7)
+
+
+def match_ffa(run):
+    """CONTRACT_FFA F3: PLAY → FREE-FOR-ALL → CINDER REEF → START → the FFA HUD → the FFA victory slate → LOBBY."""
+    print("FFA match: PLAY → FREE-FOR-ALL → CINDER → victory standings → LOBBY")
+    s = run.s
+    run.click("#dfm-play", 0.7)
+    run.click("#dfm-mode-ffa", 0.3)
+    run.click("#dfm-map-cinder", 0.3)
+    run.click("#dfm-start", 0.05)
+    ph = run.wait(lambda: run.phase() if run.phase() in ("ready", "play", "error") else None, 60)
+    ses = run.df("session") or {}
+    run.ok(ph in ("ready", "play"), "FFA START did not reach the match (phase %s: %s)" % (ph, (s.state() or {}).get("error")))
+    if ph == "ready":
+        run.click("#df-play", 1.0)
+    live = run.wait(lambda: (run.df("match") or {}).get("phase") == "live" or None, 10)
+    run.ok(live, "the FFA match did not go live")
+    time.sleep(0.6)
+    m = run.df("match") or {}
+    h = run.df("hud") or {}
+    rs = m.get("runners") or []
+    me = rs[0] if rs else {}
+    run.checks["ffaMatch"] = {"session": ses, "matchMode": m.get("matchMode"), "crews": [r.get("team") for r in rs], "me": {k: me.get(k) for k in ("team", "name", "kit")},
+                              "hudMode": h.get("mode"), "hudFfa": {k: (h.get("ffa") or {}).get(k) for k in ("me", "rank")}}
+    run.ok(ses.get("matchMode") == "ffa" and ses.get("map") == "cinder", "the FFA match is not FFA on CINDER (%s)" % ses)
+    run.ok(m.get("matchMode") == "ffa" and sorted(r.get("team") for r in rs) == list(range(1, 9)), "FFA: want 8 crews 1..8 (%s)" % run.checks["ffaMatch"]["crews"])
+    run.ok(me.get("team") == 2 and me.get("name") == "Tester", "the human is not on the picked VIOLET crew (%s)" % me)
+    run.ok(h.get("mode") == "ffa", "the HUD is not in FFA mode (%s)" % h.get("mode"))
+    run.shot("ffa_match_live")
+    vic = run.wait(lambda: (run.df("match") or {}).get("victoryShown") or None, 70, 0.1)
+    run.ok(vic, "no FFA victory slate")
+    time.sleep(0.75)
+    h1 = run.df("hud") or {}
+    run.shot("ffa_victory_tally")
+    # the tally clock is the page's frame dt (≤ 0.1 s a frame): poll for the stamp, not wall time
+    run.wait(lambda: ((run.df("hud") or {}).get("tally") or {}).get("stamped") or None, 10, 0.2)
+    time.sleep(0.3)
+    h2 = run.df("hud") or {}
+    m2 = run.df("match") or {}
+    au = run.df("audio") or {}
+    run.shot("ffa_victory")
+    t1, t2 = h1.get("tally") or {}, h2.get("tally") or {}
+    res = m2.get("result") or {}
+    winners = [res.get("winner")] if res.get("winner") else list(res.get("tied") or [])
+    won = 2 in winners
+    run.checks["ffaVictory"] = {"mid": {k: t1.get(k) for k in ("t", "stamped", "podium")}, "end": {k: t2.get(k) for k in ("t", "stamped", "winner", "podium")},
+                                "rows": [r.get("text") for r in t2.get("standings") or []], "result": {k: res.get(k) for k in ("mode", "winner", "tied")},
+                                "cue": au.get("cue"), "humanWon": won}
+    run.ok(STRINGS["victory"] in (h2.get("victory") or ""), "FFA victory line missing (%r)" % (h2.get("victory") or "")[:120])
+    run.ok(t2.get("mode") == "ffa" and len(t2.get("standings") or []) == 8 and len(t2.get("podium") or []) == 3,
+           "the FFA slate lacks the podium / 8 standings (%s)" % t2)
+    run.ok(t1 and not t1.get("stamped") and t2.get("stamped"), "the FFA tally did not count up then stamp (mid %s, end %s)" % (t1.get("stamped"), t2.get("stamped")))
+    run.ok([r.get("pct") for r in t1.get("standings") or []] != [r.get("pct") for r in t2.get("standings") or []], "the FFA tally numbers did not count up")
+    for st in res.get("standings") or []:
+        p = "%.1f%%" % ((st.get("share") or 0) * 100)
+        run.ok(p in (h2.get("victory") or "") and st.get("name") in (h2.get("victory") or ""), "the FFA slate misses %s %s" % (st.get("name"), p))
+    if au.get("cue") in ("victory", "defeat"):
+        run.ok(au.get("cue") == ("victory" if won else "defeat"), "FFA stinger %r but the human %s" % (au.get("cue"), "won" if won else "lost"))
+    else:
+        run.fail("the FFA victory slate started no stinger (cue %r)" % au.get("cue"))
+    btns = s.safe_js("() => [...document.querySelectorAll('.df-victory .df-btn')].filter((b) => !b.hidden).map((b) => b.textContent)", default=[])
+    run.ok(btns == ["PLAY AGAIN", "LOBBY"], "FFA victory buttons %s" % btns)
+    run.layout("ffa victory")
+    run.click("#df-lobby", 0.2)
+    ph = run.wait(lambda: run.phase() if run.phase() in ("menu", "error") else None, 60)
+    ses = run.df("session") or {}
+    run.ok(ph == "menu" and ses.get("mode") == "lobby" and ses.get("matchMode") == "teams", "LOBBY did not return to the (teams) lobby backdrop (%s / %s)" % (ph, ses))
+    time.sleep(1.0)
+    return run.gl()
+
+
 def gamepad(run):
     print("synthetic gamepad")
     s = run.s
@@ -568,6 +714,38 @@ def small_screens(args, all_problems, shots):
                 run.shot(name)
                 run.layout("720 " + name)
                 run.key("Escape", 0.4)
+            # CONTRACT_FFA F3: the FFA screens at 1280×720
+            run.click("#dfm-play", 0.8)
+            run.click("#dfm-mode-ffa", 0.4)
+            run.shot("ffa_play")
+            run.layout("720 ffa play")
+            run.key("Escape", 0.4)
+            run.shot("ffa_title")
+            run.layout("720 ffa title")
+            run.click("#dfm-loadout", 0.8)
+            run.click("#dfm-color-jade", 0.5)
+            run.shot("ffa_loadout")
+            run.layout("720 ffa loadout")
+            run.key("Escape", 0.4)
+            # the FFA victory slate at 1280×720: a deep-link FFA match, dev setTimeLeft to reach the horn
+            s.goto(build_url(args.base, map="lockwell", dev=1, mode="ffa", seed=11, autostart=1))
+            ok, ph = s.wait_phase(("play",), 120)
+            live = run.wait(lambda: (run.df("match") or {}).get("phase") == "live" or None, 12)
+            if not live:
+                run.fail("720p: the FFA deep link never went live (%s)" % ph)
+            else:
+                time.sleep(4.0)
+                run.shot("ffa_hud")
+                s.safe_js("() => window.__DF__.setTimeLeft(1)")
+                vic = run.wait(lambda: (run.df("match") or {}).get("victoryShown") or None, 20, 0.1)
+                # the tally clock is the page's frame dt (≤ 0.1 s a frame): poll for the stamp, not wall time
+                run.wait(lambda: ((run.df("hud") or {}).get("tally") or {}).get("stamped") or None, 10, 0.2)
+                time.sleep(0.4)
+                t = (run.df("hud") or {}).get("tally") or {}
+                run.ok(vic and t.get("mode") == "ffa" and t.get("stamped") and len(t.get("standings") or []) == 8,
+                       "720p: the FFA victory slate did not show its 8 standings (%s)" % t)
+                run.shot("ffa_victory")
+                run.layout("720 ffa victory")
         all_problems.extend(run.problems)
         shots.extend(run.shots)
         d = s.diagnostics()
@@ -601,7 +779,7 @@ def main():
         else:
             time.sleep(1.2)
             steps = [("title", title), ("loadout", loadout), ("settings", settings), ("howto_credits", howto_credits),
-                     ("map_select", map_select)]
+                     ("map_select", map_select), ("ffa_menus", ffa_menus)]
             for name, fn in steps:
                 try:
                     fn(run)
@@ -617,6 +795,10 @@ def main():
             except Exception as e:
                 run.fail("match 2: harness error %s" % str(e).splitlines()[0][:300])
             try:
+                gl["lobby3"] = match_ffa(run)
+            except Exception as e:
+                run.fail("FFA match: harness error %s" % str(e).splitlines()[0][:300])
+            try:
                 gamepad(run)
             except Exception as e:
                 run.fail("gamepad: harness error %s" % str(e).splitlines()[0][:300])
@@ -627,9 +809,10 @@ def main():
         shots.extend(run.shots)
         report.update(checks=run.checks, notes=run.notes, diagnostics=d)
     # leaks across sessions: the same lobby state after each return
-    g0, g1, g2 = gl.get("lobby0") or {}, gl.get("lobby1") or {}, gl.get("lobby2") or {}
+    g0, g1, g2, g3 = gl.get("lobby0") or {}, gl.get("lobby1") or {}, gl.get("lobby2") or {}, gl.get("lobby3") or {}
     report["gl"] = gl
-    for (na, ga), (nb, gb) in ((("before the matches", g0), ("after match 1", g1)), (("after match 1", g1), ("after match 2", g2))):
+    for (na, ga), (nb, gb) in ((("before the matches", g0), ("after match 1", g1)), (("after match 1", g1), ("after match 2", g2)),
+                               (("after match 2", g2), ("after the FFA match", g3))):
         if not ga or not gb:
             continue
         for k in ("geometries", "textures"):
@@ -650,8 +833,8 @@ def main():
     verdict = "MENUS OK" if not problems else "MENUS FAIL"
     report["verdict"] = verdict
     path = save_report("menus", report, args.base)
-    print("\nleaks (renderer.info at lobby: boot / after match 1 / after match 2): %s" % json.dumps(gl))
-    print("screenshots: %d in _shots/ (menu_*.png, menu720_*.png)" % len(shots))
+    print("\nleaks (renderer.info at lobby: boot / after match 1 / after match 2 / after the FFA match): %s" % json.dumps(gl))
+    print("screenshots: %d in _shots/ (menu_*.png, menu720_*.png, ffa_ui_menu_*.png, ffa_ui_menu720_*.png)" % len(shots))
     print("report: %s" % path)
     if problems:
         print("\n%s — %d problem(s):" % (verdict, len(problems)))

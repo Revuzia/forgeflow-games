@@ -5,29 +5,37 @@
 //   node _harness/probe_endless.ts --minutes 12
 //
 // Scenario A (the §9.3 run): the gate bot plays until the city's boss is fielded, the boss is killed the way
-// the dev cheat does it (intro skipped, bossUltHit(w, 1, 0)), the next tick files `runEnd clear`, then
+// the dev cheat does it (intro skipped, bossUltHit(w, 1, 0)), the Size V finale plays out (GATEKEEPERS §4.3:
+// `runEnd clear` GATES.finaleS after the kill, with run.endT = the kill), then
 // continueEndless → 12 sim minutes with the gate bot (no god), then death (natural, or forced at the end).
 // Scenario B (rematch bookkeeping): the same clear, then every rematch is dev-killed as soon as its intro
 // ends, so 4+ rematches happen inside the window whatever the bot's damage output.
 //
 // Asserts (exit 1 on any failure, 2 if the sim cannot load):
 //   1. continueEndless refuses before a clear and twice; after it: result null, phase 'endless', endT −1,
-//      boss null, EndlessState per §9.1 (rematches 0, nextBossT +150, bossIx 1, nextEliteT +30, killsAt, tonsAt)
+//      boss null, EndlessState per §9.1 (rematches 0, nextBossT +ENDLESS_V3.rematchGapS 75, bossIx 1, nextEliteT
+//      +30, killsAt, tonsAt), gates.rematchSeq 0
 //   2. no NaN / no throw; run.phase stays 'endless' on every endless tick; no runEnd clear in endless
 //   3. multipliers at m = 1 / 5 / 10 equal the formulas (direct), and are the ratios the pre-wired call sites
 //      actually apply: director budgetRate, spawnEnemy HP, hurtTitan damage, bossHostile (rematch step)
-//   4. rematches: the first at KEEP GOING + 150 s, each next one 150 s after the previous rematch dies (±1 tick),
-//      in rematchOrder(biome) starting at bossIx 1 (GRID-EAST: CAISSON-4 → IRON GULLY → PARKADE-6 → …), HP =
-//      BOSSES[id].hp × BOSS_HP_SCALE[rank] × (1 + 0.5 n); `endlessBoss` + ONE `alert rematch` (no `alert boss`);
-//      a dead rematch drops a chest (+ a forced power-up once the L4 map sim is merged) and rematches++
+//   4. rematches (GATEKEEPERS §4.4, lane K1a): the first at KEEP GOING + 75 s, each next one 75 s after the
+//      previous rematch dies (±1 tick), ALTERNATING a gatekeeper and a city boss: STENCIL-1, the next city boss in
+//      rematchOrder(biome) from bossIx 1 (GRID-EAST: CAISSON-4 → IRON GULLY → PARKADE-6 → …), CORDON-2, the next
+//      city boss, SWITCHBOARD-5, …. City boss HP = BOSSES[id].hp × BOSS_HP_SCALE[rank] × (1 + 0.5 n) with
+//      `endlessBoss` + ONE `alert rematch` (no `alert boss`); a gatekeeper = gateHpFor(id, rank, n) (GATE_HP_AT_RANK[4]
+//      × GATE_HP_MUL × (1 + 0.5 n), n = its own rematches won) with `gateSpawn {rematch}` + `alert gateRematch`,
+//      slot 0; a dead rematch drops a chest (+ a forced power-up once the L4 map sim is merged); a city death
+//      does rematches++, a gatekeeper death gates.rematchN[ix]++ / rematchGates++ and NEVER rematches++
 //   5. RAMRODs: the first 30 s after KEEP GOING, then ≥ 60 s apart
-//   6. the score is monotone (every tick) and equals floor(10·s + 2·kills + 5000·rematches + tons/500)
+//   6. the score is monotone (every tick) and equals floor(10·s + 2·kills + 5000·rematches + tons/500
+//      + 1500·gates.rematchGates)
 //   7. death ends the run: result 'dead', runEnd dead, w.endless still set; stepWorld after it is a no-op
 //   8. determinism: scenario A run twice (same seed, same decision tick) → identical hashes at every 60 s checkpoint
 
 import type { BiomeId, BossId, SimEvent, TitanId, TitanInput, World } from '../src/core/types.ts';
 import { BIOME_IDS, TITAN_IDS } from '../src/core/types.ts';
-import { BOSS_HP_SCALE, ENDLESS, SIM_HZ } from '../src/core/config.ts';
+import { BOSS_HP_SCALE, ENDLESS, ENDLESS_V3, GATES, SIM_HZ } from '../src/core/config.ts';
+import { GATE_IDS } from '../src/core/types.ts';
 
 type Mods = {
   world: typeof import('../src/core/world.ts');
@@ -38,6 +46,7 @@ type Mods = {
   director: typeof import('../src/ai/director.ts');
   enemies: typeof import('../src/ai/enemies.ts');
   titansim: typeof import('../src/titans/titansim.ts');
+  gates: typeof import('../src/meta/gates.ts');
   BOSSES: typeof import('../src/data/bosses.ts')['BOSSES'];
   BIOMES: typeof import('../src/data/biomes.ts')['BIOMES'];
 };
@@ -54,6 +63,7 @@ async function load(): Promise<string | null> {
       director: await import('../src/ai/director.ts'),
       enemies: await import('../src/ai/enemies.ts'),
       titansim: await import('../src/titans/titansim.ts'),
+      gates: await import('../src/meta/gates.ts'),
       BOSSES: (await import('../src/data/bosses.ts')).BOSSES,
       BIOMES: (await import('../src/data/biomes.ts')).BIOMES,
     };
@@ -121,16 +131,24 @@ function hashWorld(w: World): string {
   for (const e of w.enemies) if (e.alive) { n(e.x); n(e.z); n(e.hp); }
   if (w.boss) { n(w.boss.hp); n(w.boss.maxHp); n(w.boss.x); n(w.boss.z); }
   if (w.endless) { n(w.endless.score); n(w.endless.rematches); n(w.endless.bossIx); n(Number.isFinite(w.endless.nextBossT) ? w.endless.nextBossT : -1); }
+  if (w.gates) { n(w.gates.rematchSeq); n(w.gates.rematchGates); n(w.gates.rematchN[0]); n(w.gates.rematchN[1]); n(w.gates.rematchN[2]); }
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
-/** play with the gate bot until the city boss is fielded and its intro is over (≤ 600 s), then dev-kill it
- *  (the cheat's path) and step once: the run files `runEnd clear`. Returns false when no clear happened. */
+/** play with the gate bot until the city boss is fielded and its intro is over (≤ 600 s; each gatekeeper on the
+ *  way is dev-killed after its intro), then dev-kill it (the cheat's path) and step through the Size V finale:
+ *  the run files `runEnd clear`. Returns false when no clear happened. */
 function playToClear(w: World): boolean {
   const cap = 600 * SIM_HZ;
   for (let i = 0; i < cap && !w.run.result; i++) {
     botStep(w);
-    if (w.boss && w.boss.alive && w.boss.introT <= 0) break;
+    const bb = w.boss;
+    if (bb && bb.alive && bb.introT <= 0) {
+      if (bb.role === 'main') break;
+      // GATEKEEPERS: the three gatekeepers on the way are dev-killed the same way (their breach runs at the end
+      // of the next tick), so this probe stays about EXTENDED COVERAGE, not the gate fights' balance
+      M.bosses.bossUltHit(w, 1, 0);
+    }
   }
   if (w.run.result) return false;
   if (!w.boss || !w.boss.alive) {
@@ -140,7 +158,9 @@ function playToClear(w: World): boolean {
   if (!b) return false;
   b.introT = 0;
   M.bosses.bossUltHit(w, 1, 0);
-  botStep(w);
+  // GATEKEEPERS §4.3: the kill → Size V → the finale (GATES.finaleS) → runEnd clear
+  const t = GATES.finaleS * SIM_HZ + 2 * SIM_HZ;
+  for (let i = 0; i < t && !w.run.result; i++) botStep(w);
   return w.run.result === 'clear';
 }
 
@@ -203,14 +223,17 @@ function scenarioA(titan: TitanId, biome: BiomeId, minutes: number, verbose: boo
   ok(M.endless.continueEndless(w), `${tag}: continueEndless accepted after the clear`);
   const E = w.endless!;
   ok(w.run.result === null && w.run.phase === 'endless' && w.run.endT === -1 && w.boss === null, `${tag}: run reopened (result ${w.run.result} phase ${w.run.phase} endT ${w.run.endT} boss ${w.boss})`);
-  ok(E.startT === t0 && E.rematches === 0 && near(E.nextBossT, t0 + ENDLESS.bossEveryS) && E.bossIx === 1 && near(E.nextEliteT, t0 + 30) && E.killsAt === kills0 && E.tonsAt === tons0 && E.score === 0,
+  ok(E.startT === t0 && E.rematches === 0 && near(E.nextBossT, t0 + ENDLESS_V3.rematchGapS) && E.bossIx === 1 && near(E.nextEliteT, t0 + 30) && E.killsAt === kills0 && E.tonsAt === tons0 && E.score === 0 && w.gates.rematchSeq === 0,
     `${tag}: EndlessState per §9.1 (${JSON.stringify(E)})`);
   ok(!M.endless.continueEndless(w), `${tag}: continueEndless refused a second time`);
   log.startT = t0;
   const order = M.endless.rematchOrder(biome);
   const maxTicks = Math.round(minutes * 60 * SIM_HZ);
   let lastScore = -1, monotone = true, phaseOk = true, clearInEndless = false, nan: string | null = null, threw: string | null = null;
-  let alerts = { boss: 0, rematch: 0 };
+  let alerts = { boss: 0, rematch: 0, gateRematch: 0 };
+  let cityRematches = 0, gateRematches = 0, cityDeaths = 0, gateDeaths = 0;
+  /** GATEKEEPERS §4.4: rotation step k → the expected fight */
+  const expectAt = (k: number): string => (k % 2 === 0 ? GATE_IDS[Math.floor(k / 2) % GATE_IDS.length] : order[(1 + (k - 1) / 2) % order.length]);
   const chestsBefore = (ww: World): number => { let n = 0; for (const p of ww.pickups) if (p.alive && p.kind === 'chest') n++; return n; };
   // a rematch death → its reward (chest + forced power-up) lands in stepEndless on the SAME tick when the
   // titan's own attack (stepTitan, before stepEndless) killed it, or on the NEXT tick otherwise (stepBoss /
@@ -219,6 +242,26 @@ function scenarioA(titan: TitanId, biome: BiomeId, minutes: number, verbose: boo
   let pendingDeath: { chests: number; pu: number; ticks: number } | null = null;
   let chestOk = 0, chestChecks = 0, puSeen = 0, puAll = 0;
   const hpChecks: string[] = [];
+  const onRematch = (id: string): void => {
+    const b = w.boss!;
+    log.rematchT.push(w.t); log.rematchIds.push(id);
+    const n = log.rematchT.length - 1;
+    ok(id === expectAt(n), `${tag}: rematch #${n + 1} is ${id} (want ${expectAt(n)})`);
+    let wantHp: number;
+    if ((GATE_IDS as readonly string[]).includes(id)) {
+      const ix = (GATE_IDS as readonly string[]).indexOf(id);
+      wantHp = M.gates.gateHpFor(id as (typeof GATE_IDS)[number], w.titan.rank, w.gates.rematchN[ix]);
+      ok(b.role === 'gate' && b.slot === 0, `${tag}: rematch #${n + 1} (${id}) role ${b.role} slot ${b.slot} (want gate / 0)`);
+      hpChecks.push(`${id} ${b.maxHp.toFixed(0)}/${wantHp.toFixed(0)}`);
+      ok(near(b.maxHp, wantHp, 1e-9) && near(b.hp, b.maxHp), `${tag}: rematch #${n + 1} HP ${b.maxHp.toFixed(0)} = gateHpFor(${id}, rank ${w.titan.rank}, n ${w.gates.rematchN[ix]})`);
+    } else {
+      wantHp = M.BOSSES[id as BossId].hp * BOSS_HP_SCALE[w.titan.rank] * (1 + ENDLESS.rematchHpStep * E.rematches);
+      hpChecks.push(`${id} ${b.maxHp.toFixed(0)}/${wantHp.toFixed(0)}`);
+      ok(near(b.maxHp, wantHp, 1e-9) && near(b.hp, b.maxHp), `${tag}: rematch #${n + 1} HP ${b.maxHp.toFixed(0)} = ${M.BOSSES[id as BossId].hp} × ${BOSS_HP_SCALE[w.titan.rank]} × (1 + 0.5·${E.rematches})`);
+    }
+    const due = n === 0 ? t0 + ENDLESS_V3.rematchGapS : log.bossDeathT[log.bossDeathT.length - 1] + ENDLESS_V3.rematchGapS;
+    ok(Math.abs(w.t - due) <= 2 * TICK + 1e-9, `${tag}: rematch #${n + 1} at ${w.t.toFixed(2)} s (due ${due.toFixed(2)} s)`);
+  };
   const mChecks: string[] = [];
   const mAt = new Set([1, 5, 10].map((m) => Math.round((t0 + 60 * m) * SIM_HZ)));
   let i = 0;
@@ -229,20 +272,13 @@ function scenarioA(titan: TitanId, biome: BiomeId, minutes: number, verbose: boo
       const evs: readonly SimEvent[] = w.events;
       let puSpawn = 0;
       for (const e of evs) {
-        if (e.type === 'endlessBoss') {
-          const b = w.boss!;
-          log.rematchT.push(w.t); log.rematchIds.push(e.boss);
-          const n = log.rematchT.length - 1;
-          const wantId = order[(1 + n) % order.length];
-          ok(e.boss === wantId, `${tag}: rematch #${n + 1} is ${e.boss} (want ${wantId})`);
-          const wantHp = M.BOSSES[e.boss].hp * BOSS_HP_SCALE[w.titan.rank] * (1 + ENDLESS.rematchHpStep * E.rematches);
-          hpChecks.push(`${e.boss} ${b.maxHp.toFixed(0)}/${wantHp.toFixed(0)}`);
-          ok(near(b.maxHp, wantHp, 1e-9) && near(b.hp, b.maxHp), `${tag}: rematch #${n + 1} HP ${b.maxHp.toFixed(0)} = ${M.BOSSES[e.boss].hp} × ${BOSS_HP_SCALE[w.titan.rank]} × (1 + 0.5·${E.rematches})`);
-          const due = n === 0 ? t0 + ENDLESS.bossEveryS : log.bossDeathT[log.bossDeathT.length - 1] + ENDLESS.bossEveryS;
-          ok(Math.abs(w.t - due) <= 2 * TICK + 1e-9, `${tag}: rematch #${n + 1} at ${w.t.toFixed(2)} s (due ${due.toFixed(2)} s)`);
-        } else if (e.type === 'alert' && e.key === 'boss') alerts.boss++;
+        if (e.type === 'endlessBoss') { cityRematches++; onRematch(e.boss); }
+        else if (e.type === 'gateSpawn' && e.rematch) { gateRematches++; onRematch(e.gate); }
+        else if (e.type === 'alert' && e.key === 'boss') alerts.boss++;
         else if (e.type === 'alert' && e.key === 'rematch') alerts.rematch++;
-        else if (e.type === 'bossDefeated') { log.bossDeathT.push(w.t); pendingDeath = { chests, pu: 0, ticks: 0 }; }
+        else if (e.type === 'alert' && e.key === 'gateRematch') alerts.gateRematch++;
+        else if (e.type === 'bossDefeated') { cityDeaths++; log.bossDeathT.push(w.t); pendingDeath = { chests, pu: 0, ticks: 0 }; }
+        else if (e.type === 'gateDefeated' && e.rematch) { gateDeaths++; log.bossDeathT.push(w.t); pendingDeath = { chests, pu: 0, ticks: 0 }; }
         else if (e.type === 'eliteSpawn') log.eliteT.push(w.t);
         else if (e.type === 'runEnd' && e.result === 'clear') clearInEndless = true;
         else if (e.type === 'powerupSpawn') { puSpawn++; puAll++; }
@@ -269,8 +305,9 @@ function scenarioA(titan: TitanId, biome: BiomeId, minutes: number, verbose: boo
         ok(okM, `${tag}: in-run multipliers at m = ${m.toFixed(2)}`);
       }
       if (devKillRematches && !w.run.result && w.boss && w.boss.alive && w.boss.introT <= 0) {
-        M.bosses.bossUltHit(w, 1, 0);          // outside stepWorld: its bossDefeated event is not in the next scan
-        if (!w.boss.alive) { log.bossDeathT.push(w.t); pendingDeath = { chests: chestsBefore(w), pu: 0, ticks: 0 }; }
+        const wasGate = w.boss.role === 'gate';
+        M.bosses.bossUltHit(w, 1, 0);          // outside stepWorld: its bossDefeated / gateDefeated event is not in the next scan
+        if (!w.boss.alive) { if (wasGate) gateDeaths++; else cityDeaths++; log.bossDeathT.push(w.t); pendingDeath = { chests: chestsBefore(w), pu: 0, ticks: 0 }; }
       }
       if (i % 15 === 0) { const bad = nanCheck(w); if (bad) { nan = bad; break; } }
       if ((i + 1) % (60 * SIM_HZ) === 0) log.hashes.push(hashWorld(w));
@@ -285,8 +322,9 @@ function scenarioA(titan: TitanId, biome: BiomeId, minutes: number, verbose: boo
   ok(phaseOk, `${tag}: run.phase 'endless' on every endless tick`);
   ok(!clearInEndless, `${tag}: no runEnd clear in endless`);
   ok(monotone, `${tag}: score monotone`);
-  ok(alerts.boss === 0 && alerts.rematch === log.rematchT.length, `${tag}: one 'alert rematch' per rematch, no 'alert boss' (rematch ${alerts.rematch}, boss ${alerts.boss}, rematches ${log.rematchT.length})`);
-  ok(E.rematches === log.bossDeathT.length, `${tag}: rematches won ${E.rematches} = rematch deaths ${log.bossDeathT.length}`);
+  ok(alerts.boss === 0 && alerts.rematch === cityRematches && alerts.gateRematch === gateRematches, `${tag}: one 'alert rematch' per city rematch and one 'alert gateRematch' per gatekeeper rematch, no 'alert boss' (rematch ${alerts.rematch}/${cityRematches}, gateRematch ${alerts.gateRematch}/${gateRematches}, boss ${alerts.boss})`);
+  ok(E.rematches === cityDeaths, `${tag}: city rematches won ${E.rematches} = city rematch deaths ${cityDeaths} (gatekeeper deaths never count)`);
+  ok(w.gates.rematchGates === gateDeaths && w.gates.rematchN[0] + w.gates.rematchN[1] + w.gates.rematchN[2] === gateDeaths, `${tag}: gatekeeper rematches won ${w.gates.rematchGates} (rematchN ${w.gates.rematchN.join('/')}) = gatekeeper rematch deaths ${gateDeaths}`);
   if (chestChecks > 0) ok(chestOk === chestChecks, `${tag}: a chest after every rematch death (${chestOk}/${chestChecks})`);
   if (chestChecks > 0 && puAll > 0) ok(puSeen === chestChecks, `${tag}: a forced power-up after every rematch death (${puSeen}/${chestChecks}; the map sim drops power-ups)`);
   if (log.eliteT.length) {
@@ -296,7 +334,8 @@ function scenarioA(titan: TitanId, biome: BiomeId, minutes: number, verbose: boo
   } else ok(w.t - t0 < 30 + TICK, `${tag}: a RAMROD 30 s after KEEP GOING`);
   // score formula
   const S = ENDLESS.score;
-  const want = Math.floor(S.perSecond * (w.t - t0) + S.perKill * (w.titan.kills - kills0) + S.perRematch * E.rematches + (w.run.tonnage - tons0) * S.perTons);
+  const want = Math.floor(S.perSecond * (w.t - t0) + S.perKill * (w.titan.kills - kills0) + S.perRematch * E.rematches + (w.run.tonnage - tons0) * S.perTons
+    + ENDLESS_V3.scorePerGateRematch * w.gates.rematchGates);
   ok(w.run.result === 'dead' || E.score === want, `${tag}: score ${E.score} = formula ${want}`);
   // death
   if (!w.run.result) {
@@ -310,7 +349,7 @@ function scenarioA(titan: TitanId, biome: BiomeId, minutes: number, verbose: boo
   const tk = w.tick; M.world.stepWorld(w, NO_INPUT);
   ok(w.tick === tk, `${tag}: stepWorld after the death is a no-op`);
   log.endT = w.t; log.result = w.run.result; log.rematchesWon = E.rematches; log.score = E.score; log.finalHash = hashWorld(w);
-  console.log(`  ${tag}: KEEP GOING @${t0.toFixed(0)} s → ${log.forcedDeath ? 'alive at the window end (forced death)' : 'died'} @${w.t.toFixed(0)} s (+${((w.t - t0) / 60).toFixed(1)} min) · rematches fielded ${log.rematchT.length} [${log.rematchIds.join(', ')}] at +${log.rematchT.map((t) => (t - t0).toFixed(0)).join('/')} s · won ${E.rematches} · RAMRODs ${log.eliteT.length} · chests ${chestOk}/${chestChecks} · forced power-ups seen ${puSeen}/${chestChecks} · score ${E.score}`);
+  console.log(`  ${tag}: KEEP GOING @${t0.toFixed(0)} s → ${log.forcedDeath ? 'alive at the window end (forced death)' : 'died'} @${w.t.toFixed(0)} s (+${((w.t - t0) / 60).toFixed(1)} min) · rematches fielded ${log.rematchT.length} [${log.rematchIds.join(', ')}] at +${log.rematchT.map((t) => (t - t0).toFixed(0)).join('/')} s · won ${E.rematches} city + ${w.gates.rematchGates} gatekeeper · RAMRODs ${log.eliteT.length} · chests ${chestOk}/${chestChecks} · forced power-ups seen ${puSeen}/${chestChecks} · score ${E.score}`);
   if (hpChecks.length) console.log(`    rematch HP (got/want): ${hpChecks.join(' · ')}`);
   if (mChecks.length) console.log(`    in-run multiplier samples: ${mChecks.join(' · ')}`);
   return log;

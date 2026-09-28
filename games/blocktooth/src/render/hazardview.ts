@@ -14,6 +14,10 @@
 //   frost  ice zone — pale fern-cracked decal with a bright rim and ink edge (reads on snow),
 //          faceted ice crystals that grow in and melt away.
 //   fire / oil — generic: scorch + flickering flame tongues / dark slick with an iridescent sheen.
+//   paint  STENCIL-1's WET PAINT (GATEKEEPERS §3.4, lane K2a) — a glossy white road-paint coat with a drifting
+//          wet sheen and a dashed safety-yellow border, an ink hairline so it reads on snow; it dulls as it
+//          dries and a STRIPE RUN's stripe is laid progressively along the race (`data.reveal` s). It only slows,
+//          so it carries no pink "hurts you" rim.
 // Hostile hazards (boss frost, any non-titan owner) add a dashed telegraph-pink rim: pink always
 // means "this hurts YOU" (CONTRACT §6.1).
 // Lifetime: fade/grow in over the first ~0.3 s, fade out over the tail of `life`; hazards removed
@@ -35,7 +39,7 @@ import { addOutline, bakeOutlineNormals, INK, makeToon } from './materials.ts';
 
 // ─────────────────────────────── constants ───────────────────────────────
 const K_VIEW = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
-const HKINDS: readonly HazardKind[] = ['wire', 'magma', 'bloom', 'spore', 'frost', 'fire', 'oil'];
+const HKINDS: readonly HazardKind[] = ['wire', 'magma', 'bloom', 'spore', 'frost', 'fire', 'oil', 'paint'];
 /** decal plane height (m); depth order vs curbs / sidewalks / flood water comes from the view-ray
  *  pull (a little less than the telegraph pull, so telegraphs always paint over hazards) */
 const DECAL_Y0 = 0.025;
@@ -236,6 +240,36 @@ vec4 paint(vec2 L, float sd, float R, float t, float seed, float aa, float life)
   float hot = smoothstep(0.62, 0.9, em) * (0.6 + 0.4 * sin(t * 9.0 + em * 20.0));
   vec3 col = mix(lin(vec3(0.12, 0.09, 0.1)), lin(vec3(1.0, 0.55, 0.2)), hot);
   return vec4(col, (0.6 + 0.35 * hot) * inside);
+}`,
+  // GATEKEEPERS (lane K2a): WET PAINT — glossy white road paint, dashed yellow border, ink hairline, dries dull;
+  // a STRIPE RUN's capsule is revealed from its start as the cart races (iE.w = reveal seconds, vD.y = age)
+  paint: /* glsl */ `
+vec4 paint(vec2 L, float sd, float R, float t, float seed, float aa, float life) {
+  float rv = vE.w;
+  if (rv > 0.0 && vShape > 4.5) {
+    float fr = clamp(vD.y / rv, 0.0, 1.0);
+    if (L.y > vB.x * fr + vB.y * 0.15) return vec4(0.0);
+  }
+  float n = vnoise(L / (R * 0.5) + seed * 11.0);
+  float e = sd + (n - 0.5) * R * 0.09;
+  float inkW = max(1.4 * aa, uPx * 1.2);
+  float inside = 1.0 - smoothstep(-aa, aa, e);
+  float ink = (1.0 - inside) * (1.0 - smoothstep(inkW - aa, inkW + aa, e));
+  if (inside + ink <= 0.001) return vec4(0.0);
+  float sheen = smoothstep(0.55, 0.95, vnoise(L / (R * 0.35) + vec2(t * 0.15, -t * 0.07)));
+  float glint = step(0.93, vnoise(L / (R * 0.12) + seed * 3.0)) * 0.6;
+  vec3 col = mix(lin(vec3(0.9, 0.9, 0.88)), vec3(1.0), clamp(sheen * 0.8 + glint, 0.0, 1.0));
+  col = mix(col, lin(vec3(0.84, 0.83, 0.8)), smoothstep(0.55, 1.0, life) * 0.55);
+  float sd2, per;
+  shapeEval(L, sd2, per);
+  float edgeW = max(R * 0.13, uPx * 2.6);
+  float band = inside * smoothstep(-edgeW - aa, -edgeW + aa, e);
+  float dash = stripe(per / max(uPx * 10.0, R * 0.55), 0.27);
+  col = mix(col, lin(vec3(1.0, 0.8, 0.25)), band * dash);
+  float a = 0.93 * inside;
+  col = mix(col, uInk, ink);
+  a = max(a, 0.55 * ink);
+  return vec4(col, a);
 }`,
   oil: /* glsl */ `
 vec4 paint(vec2 L, float sd, float R, float t, float seed, float aa, float life) {
@@ -587,13 +621,15 @@ interface HzRec {
   seen: boolean;
   goneAt: number;
   seed: number;
+  /** paint: seconds over which a stripe is laid along its capsule (data.reveal; 0 = all at once) */
+  reveal: number;
 }
 
 function newRec(): HzRec {
   return {
     id: -1, kind: 'fire', owner: 'titan', k: 'circle', x: 0, z: 0, rot: 0, p0: 0, p1: 0, p2: 0, p3: 0,
     x0: 0, z0: 0, x1: 0, z1: 0, t: 0, life: 1, size: 1, h: 1, cd: 1, spore: 4, fireAt: -99, sporeAt: -99,
-    armed: false, shots: -1, seen: false, goneAt: -1, seed: 0,
+    armed: false, shots: -1, seen: false, goneAt: -1, seed: 0, reveal: 0,
   };
 }
 
@@ -849,6 +885,7 @@ export class HazardView implements ViewModule {
         case 'frost': this.drawFrost(r, fade, px, now, lvl); break;
         case 'fire': this.drawFire(r, fade, px, now, lvl); break;
         case 'oil': break;
+        case 'paint': break;   // GATEKEEPERS: decal only (lane K2a)
       }
     }
     for (const b of this.decals.values()) b.end();
@@ -863,6 +900,7 @@ export class HazardView implements ViewModule {
     copyShape(r, h.shape);
     r.t = Math.max(0, h.t - back);
     r.life = Math.max(1e-3, h.life);
+    r.reveal = h.kind === 'paint' && h.data && Number.isFinite(h.data.reveal) && h.data.reveal > 0 ? h.data.reveal : 0;
     if (h.kind === 'bloom') {
       const hh = h.data.h;
       r.h = hh !== undefined && hh > 0 ? hh : Math.max(0.5, r.size / 0.3);
@@ -975,8 +1013,9 @@ export class HazardView implements ViewModule {
     d[o + 4] = r.p0; d[o + 5] = r.p1; d[o + 6] = r.p2; d[o + 7] = r.p3;
     d[o + 8] = umin; d[o + 9] = umax; d[o + 10] = vmin; d[o + 11] = vmax;
     const wither = r.kind === 'bloom' ? clamp01((3 - (r.life - r.t)) / 3) : clamp01(r.t / r.life);
-    d[o + 12] = fade; d[o + 13] = r.t; d[o + 14] = wither; d[o + 15] = r.owner === 'titan' ? 0 : 1;
-    d[o + 16] = r.seed; d[o + 17] = Math.max(r.size, px * 3); d[o + 18] = 1; d[o + 19] = 0;
+    // WET PAINT only slows: no pink "hurts you" rim (its own dashed yellow border reads as the edge)
+    d[o + 12] = fade; d[o + 13] = r.t; d[o + 14] = wither; d[o + 15] = r.owner === 'titan' || r.kind === 'paint' ? 0 : 1;
+    d[o + 16] = r.seed; d[o + 17] = Math.max(r.size, px * 3); d[o + 18] = 1; d[o + 19] = r.kind === 'paint' ? r.reveal : 0;
   }
 
   // ─────────────────────────────── wire: crackling bolts ───────────────────────────────

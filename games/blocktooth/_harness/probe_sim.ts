@@ -14,8 +14,11 @@
 // avg/p99), a determinism check (same seed run twice ⇒ identical state hashes at every
 // sim-minute checkpoint and at the end) and asserts the gate-2 bands:
 //   * no NaN / no throw
-//   * rank II 60–150 s · III 150–300 s · IV 280–450 s · V 400–560 s
-//   * boss spawns ≤ 560 s
+//   * GATEKEEPERS §5.3 (GATE2_V3, lane K1a): gatekeeper 1/2/3 spawns 60–150 / 170–320 / 270–450 s; Size II/III/IV
+//     (= gate 1/2/3's kill) 80–210 / 210–380 / 300–500 s; the city boss spawns 440–560 s; Size V ONLY on the
+//     city boss's kill tick; each gate fight (spawn → kill) 15–90 s, per-gatekeeper matrix median 25–55 s;
+//     the city fight's matrix median 60–150 s; levels gained in the city fight ≤ 6 per run, matrix median
+//     ≤ 4; a time cap firing (gateLocked capped) is a violation
 //   * drafts every ~10–25 s early (median gap of the drafts in the first 180 s, or until Size III)
 //   * full matrix only: a competent bot clears ≥ 8 of 12 runs in 8–12 min, and dies in some
 //     (v2 §0.6: "deaths ≥ 1 across the 12-run matrix" is stated explicitly — heals / shields / screen
@@ -28,7 +31,7 @@
 
 import type { BiomeId, RunMeta, SimEvent, TitanId, World } from '../src/core/types.ts';
 import { BIOME_IDS, EMPTY_RUN_META, TITAN_IDS } from '../src/core/types.ts';
-import { BUDGET, SIM_HZ, cumXpAt } from '../src/core/config.ts';
+import { BUDGET, GATE2_V3, SIM_HZ, cumXpAt } from '../src/core/config.ts';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -67,8 +70,11 @@ async function loadSim(): Promise<string | null> {
 
 // ─────────────────────────────── gate constants (CONTRACT §15 gate 2) ───────────────────────────────
 /** [min, max] seconds for reaching rank index 1..4 (Size II..V). */
-const RANK_BANDS: readonly (readonly [number, number])[] = [[0, 0], [60, 150], [150, 300], [280, 450], [400, 560]];
-const BOSS_BY_S = 560;
+// GATEKEEPERS §5.3 (lane K1a): the v3 bands replace RANK_BANDS [[60,150],[150,300],[280,450],[400,560]] and
+// BOSS_BY_S 560 — Size II..IV now come from the gatekeepers' kills, Size V only from the city boss's kill.
+const GATE_SPAWN_BANDS = GATE2_V3.spawnBand;
+const BREACH_BANDS = GATE2_V3.breachBand;
+const MAIN_SPAWN_BAND = GATE2_V3.mainSpawn;
 const CLEAR_WINDOW_S: readonly [number, number] = [480, 720];
 const CLEARS_REQUIRED = 8;          // of 12
 const DRAFT_EARLY_S = 180;
@@ -185,6 +191,15 @@ interface RunResult {
   checkpoints: string[]; hash: string;
   error: string | null; nan: string | null; draftIssues: string[];
   events: Record<string, number>;
+  // GATEKEEPERS (§5.3 report lines, lane K0; lane K1a switches the bands to GATE2_V3): per-slot lock / spawn /
+  // kill world times (index = slot 1..4, NaN = never), gate fight seconds, levels during the city fight
+  gateLockT: number[]; gateCapped: boolean[]; gateSpawnT: number[]; gateKillT: number[]; gateFightS: number[];
+  gateUnlocked: number; gateTopUp: number; gateFightTotalS: number; mainKillT: number; finaleOnT: number;
+  levelAtMainSpawn: number; levelAtMainKill: number;
+  // K1a (§5.3 report lines): levels / drafts per fight (index = slot 1..4), pressure peak per gate, RAMMING
+  // THROUGH count, the wait from the city boss's lock to its spawn, the tick of rankUp 4 vs the city kill
+  levelAtGateSpawn: number[]; levelAtGateKill: number[]; draftsInFight: number[]; pressurePeak: number[];
+  rams: number; mainWaitS: number; rankVOnKillTick: boolean | null; escalations: number; repositions: number;
 }
 
 function finite(...xs: number[]): boolean { for (const x of xs) if (!Number.isFinite(x)) return false; return true; }
@@ -218,6 +233,11 @@ function runOne(titan: TitanId, biome: BiomeId, seed: number, maxTicks: number, 
     simAvgMs: 0, simP99Ms: 0, simMaxMs: 0, ticks: 0, checkpoints: [], hash: '', error: null, nan: null,
     draftIssues: [], events: {},
     ultXp: 0, overloadXp: 0, demolitionKills: 0, totalXp: 0,
+    gateLockT: [NaN, NaN, NaN, NaN, NaN], gateCapped: [false, false, false, false, false], gateSpawnT: [NaN, NaN, NaN, NaN, NaN],
+    gateKillT: [NaN, NaN, NaN, NaN, NaN], gateFightS: [NaN, NaN, NaN, NaN, NaN],
+    gateUnlocked: 0, gateTopUp: 0, gateFightTotalS: 0, mainKillT: NaN, finaleOnT: NaN, levelAtMainSpawn: NaN, levelAtMainKill: NaN,
+    levelAtGateSpawn: [NaN, NaN, NaN, NaN, NaN], levelAtGateKill: [NaN, NaN, NaN, NaN, NaN], draftsInFight: [0, 0, 0, 0, 0],
+    pressurePeak: [0, 0, 0, 0, 0], rams: 0, mainWaitS: NaN, rankVOnKillTick: null, escalations: 0, repositions: 0,
   };
   let w: World;
   try {
@@ -250,6 +270,7 @@ function runOne(titan: TitanId, biome: BiomeId, seed: number, maxTicks: number, 
         const after = w.upgrades.pendingDrafts + w.upgrades.chestDrafts;
         if (after >= before) { r.draftIssues.push(`pickUpgrade did not consume a draft @t=${w.t.toFixed(1)} (${before}→${after})`); break; }
         r.drafts++; r.draftTimes.push(w.t);
+        if (w.gates && w.gates.active > 0 && !w.endless) r.draftsInFight[w.gates.active]++;
       }
       const inp = botInput(w);
       const t0 = performance.now();
@@ -267,8 +288,27 @@ function runOne(titan: TitanId, biome: BiomeId, seed: number, maxTicks: number, 
           r.pickupsByKind[ev.kind] = (r.pickupsByKind[ev.kind] ?? 0) + 1;
         }
         else if (ev.type === 'telegraphFire' && ev.owner !== 'titan') { r.paintFired++; if (ev.hit) r.paintHit++; }
-        else if (ev.type === 'bossSpawn') { if (Number.isNaN(r.bossT)) { r.bossT = w.t; r.levelAtBoss = w.titan.level; } }
+        else if (ev.type === 'bossSpawn') {
+          if (Number.isNaN(r.bossT)) { r.bossT = w.t; r.levelAtBoss = w.titan.level; }
+          if (Number.isNaN(r.gateSpawnT[4]) && !w.endless) { r.gateSpawnT[4] = w.t; r.levelAtMainSpawn = w.titan.level; }
+        }
+        // GATEKEEPERS report lines (§5.3)
+        else if (ev.type === 'gateLocked') { if (Number.isNaN(r.gateLockT[ev.slot])) { r.gateLockT[ev.slot] = w.t; r.gateCapped[ev.slot] = ev.capped; } }
+        else if (ev.type === 'gateSpawn') { if (!ev.rematch && Number.isNaN(r.gateSpawnT[ev.slot])) { r.gateSpawnT[ev.slot] = w.t; r.levelAtGateSpawn[ev.slot] = w.titan.level; } }
+        else if (ev.type === 'gateDefeated') { if (!ev.rematch && Number.isNaN(r.gateKillT[ev.slot])) { r.gateKillT[ev.slot] = w.t; r.gateFightS[ev.slot] = w.t - r.gateSpawnT[ev.slot]; r.levelAtGateKill[ev.slot] = w.titan.level; } }
+        else if (ev.type === 'bossDefeated') {
+          if (Number.isNaN(r.mainKillT) && !w.endless) {
+            r.mainKillT = w.t; r.levelAtMainKill = w.titan.level;
+            let rk4 = false; for (let q = 0; q < evs.length; q++) { const e2 = evs[q]; if (e2.type === 'rankUp' && e2.rank === 4) rk4 = true; }
+            r.rankVOnKillTick = rk4;
+          }
+        }
+        else if (ev.type === 'gateRam') r.rams++;
+        else if (ev.type === 'gateEscalate') r.escalations++;
+        else if (ev.type === 'gateReposition') r.repositions++;
+        else if (ev.type === 'finale') { if (ev.on && Number.isNaN(r.finaleOnT)) r.finaleOnT = w.t; }
       }
+      if (w.gates && w.gates.active >= 1 && w.gates.active <= 3 && w.gates.pressure > r.pressurePeak[w.gates.active]) r.pressurePeak[w.gates.active] = w.gates.pressure;
       if ((growLv > 0 || growRank >= 0) && !(w.titan.growT > 0)) {
         if (growLv > 0) { r.heightAtLevel[growLv] = w.titan.height; growLv = 0; }
         if (growRank >= 0) { r.heightAtRank[growRank] = w.titan.height; growRank = -1; }
@@ -309,6 +349,8 @@ function runOne(titan: TitanId, biome: BiomeId, seed: number, maxTicks: number, 
   r.overloadXp = w.map ? w.map.overloadXp : 0;
   r.demolitionKills = w.map ? w.map.demolitionKills : 0;
   r.totalXp = cumXpAt(T.level) + T.xp;
+  if (w.gates) { r.gateUnlocked = w.gates.unlocked; r.gateTopUp = w.gates.topUpLevels; r.gateFightTotalS = w.gates.fightS; }
+  if (!Number.isNaN(r.gateLockT[4]) && !Number.isNaN(r.gateSpawnT[4])) r.mainWaitS = r.gateSpawnT[4] - r.gateLockT[4];
   return r;
 }
 
@@ -343,16 +385,32 @@ function runViolations(r: RunResult): string[] {
   if (r.nan) v.push(`${id}: NaN — ${r.nan}`);
   for (const d of r.draftIssues) v.push(`${id}: draft — ${d}`);
   const endT = r.endT;
-  for (let k = 1; k <= 4; k++) {
-    const [lo, hi] = RANK_BANDS[k];
+  const dead = r.result === 'dead';
+  const died = dead ? `; died at ${endT.toFixed(0)} s` : '';
+  // GATEKEEPERS §5.3 (GATE2_V3): gatekeeper spawns, the breaches (= the kills), the fights
+  for (let k = 1; k <= 3; k++) {
+    const [slo, shi] = GATE_SPAWN_BANDS[k];
+    const st = r.gateSpawnT[k];
+    if (Number.isNaN(st)) { if (endT > shi) v.push(`${id}: gatekeeper ${k} never spawned by ${shi} s (band ${slo}–${shi} s${died})`); }
+    else if (st < slo || st > shi) v.push(`${id}: gatekeeper ${k} spawned at ${st.toFixed(0)} s, outside ${slo}–${shi} s`);
+    const [blo, bhi] = BREACH_BANDS[k];
     const t = r.rankT[k];
     if (Number.isNaN(t)) {
-      if (endT > hi && r.result !== 'dead') v.push(`${id}: Size ${ROMAN[k]} not reached by ${hi} s (band ${lo}–${hi} s)`);
-      else if (endT > hi && r.result === 'dead') v.push(`${id}: Size ${ROMAN[k]} not reached by ${hi} s (band ${lo}–${hi} s; died at ${endT.toFixed(0)} s)`);
-    } else if (t < lo || t > hi) v.push(`${id}: Size ${ROMAN[k]} at ${t.toFixed(0)} s, outside ${lo}–${hi} s`);
+      if (endT > bhi) v.push(`${id}: Size ${ROMAN[k]} not reached by ${bhi} s (band ${blo}–${bhi} s${died})`);
+    } else {
+      if (t < blo || t > bhi) v.push(`${id}: Size ${ROMAN[k]} at ${t.toFixed(0)} s, outside ${blo}–${bhi} s`);
+      if (Number.isNaN(r.gateKillT[k]) || Math.abs(r.gateKillT[k] - t) > 1e-6) v.push(`${id}: Size ${ROMAN[k]} at ${t.toFixed(0)} s is not gatekeeper ${k}'s kill tick (kill ${Number.isNaN(r.gateKillT[k]) ? '—' : r.gateKillT[k].toFixed(2)})`);
+    }
+    const f = r.gateFightS[k];
+    if (!Number.isNaN(f) && (f < GATE2_V3.gateFightS[0] || f > GATE2_V3.gateFightS[1])) v.push(`${id}: gatekeeper ${k} fight ${f.toFixed(0)} s, outside ${GATE2_V3.gateFightS[0]}–${GATE2_V3.gateFightS[1]} s`);
+    if (!Number.isNaN(st) && Number.isNaN(r.gateKillT[k]) && !dead && endT - st > GATE2_V3.gateFightS[1]) v.push(`${id}: gatekeeper ${k} alive ${(endT - st).toFixed(0)} s after its spawn (> ${GATE2_V3.gateFightS[1]} s)`);
   }
-  if (Number.isNaN(r.bossT)) { if (endT > BOSS_BY_S && r.result !== 'dead') v.push(`${id}: boss never spawned by ${BOSS_BY_S} s`); }
-  else if (r.bossT > BOSS_BY_S) v.push(`${id}: boss spawned at ${r.bossT.toFixed(0)} s (> ${BOSS_BY_S} s)`);
+  for (let k = 1; k <= 4; k++) if (r.gateCapped[k]) v.push(`${id}: the slot ${k} time cap fired (gateLocked capped @${r.gateLockT[k].toFixed(0)} s) — the XP economy did not deliver the level (§2.7)`);
+  const [mlo, mhi] = MAIN_SPAWN_BAND;
+  if (Number.isNaN(r.bossT)) { if (endT > mhi) v.push(`${id}: the city boss never spawned by ${mhi} s${died}`); }
+  else if (r.bossT < mlo || r.bossT > mhi) v.push(`${id}: the city boss spawned at ${r.bossT.toFixed(0)} s, outside ${mlo}–${mhi} s`);
+  if (!Number.isNaN(r.rankT[4]) && !(r.rankVOnKillTick === true && Math.abs(r.rankT[4] - r.mainKillT) < 1e-6)) v.push(`${id}: Size V at ${r.rankT[4].toFixed(0)} s is not on the city boss's kill tick (kill ${Number.isNaN(r.mainKillT) ? '—' : r.mainKillT.toFixed(2)})`);
+  if (!Number.isNaN(r.levelAtMainSpawn) && !Number.isNaN(r.levelAtMainKill) && r.levelAtMainKill - r.levelAtMainSpawn > GATE2_V3.mainFightLevels.max) v.push(`${id}: ${r.levelAtMainKill - r.levelAtMainSpawn} levels gained in the city fight (> ${GATE2_V3.mainFightLevels.max})`);
   const g = earlyDraftGap(r);
   if (g.n === 0) { if (endT >= g.window) v.push(`${id}: no drafts in the first ${g.window.toFixed(0)} s`); }
   else if (g.median < DRAFT_GAP_HARD[0] || g.median > DRAFT_GAP_HARD[1]) {
@@ -466,6 +524,18 @@ async function main(): Promise<number> {
     for (let L = 1; L <= 11; L++) hl.push(`${L}:${r.heightAtLevel[L] === undefined ? '·' : r.heightAtLevel[L].toFixed(2)}`);
     console.log(`  ${pad('', 24)} settled H by level (m): ${hl.join(' ')}`);
     const share = (x: number) => (r.totalXp > 0 ? `${((100 * x) / r.totalXp).toFixed(1)} %` : '—');
+    {
+      // GATEKEEPERS (§5.3; K0 prints, K1a asserts GATE2_V3): per slot lock / spawn / kill (s), gate fight (s)
+      const tt = (t: number) => (Number.isNaN(t) ? '—' : t.toFixed(0));
+      const slots = [1, 2, 3].map((k) => `G${k} lock ${tt(r.gateLockT[k])}${r.gateCapped[k] ? ' CAP' : ''} spawn ${tt(r.gateSpawnT[k])} kill ${tt(r.gateKillT[k])}${Number.isNaN(r.gateFightS[k]) ? '' : ` (${r.gateFightS[k].toFixed(0)} s)`}`);
+      const lv = Number.isNaN(r.levelAtMainSpawn) || Number.isNaN(r.levelAtMainKill) ? '—' : String(r.levelAtMainKill - r.levelAtMainSpawn);
+      console.log(`  ${pad('', 24)} gates: unlocked ${r.gateUnlocked} · ${slots.join(' · ')} · city lock ${tt(r.gateLockT[4])} spawn ${tt(r.gateSpawnT[4])} kill ${tt(r.mainKillT)} (+${lv} LV) · finale ${tt(r.finaleOnT)} · top-up ${r.gateTopUp} LV`);
+      const fl = [1, 2, 3, 4].map((k) => {
+        const a = k === 4 ? r.levelAtMainSpawn : r.levelAtGateSpawn[k], b = k === 4 ? r.levelAtMainKill : r.levelAtGateKill[k];
+        return `${k === 4 ? 'city' : 'G' + k} +${Number.isNaN(a) || Number.isNaN(b) ? '—' : b - a} LV / ${r.draftsInFight[k]} drafts${k === 4 ? '' : ` p≤${r.pressurePeak[k]}`}`;
+      });
+      console.log(`  ${pad('', 24)} gate fights: ${fl.join(' · ')} · held (fight time) ${r.gateFightTotalS.toFixed(0)} s · wait for mainEarliestS ${Number.isNaN(r.mainWaitS) ? '—' : r.mainWaitS.toFixed(0) + ' s'} · RAMMING THROUGH ${r.rams} · escalations ${r.escalations} · cut-offs ${r.repositions}`);
+    }
     console.log(`  ${pad('', 24)} v2: XP via UPROAR bank ${r.ultXp.toFixed(0)} (${share(r.ultXp)}) · via OVERLOAD SITE ${r.overloadXp.toFixed(0)} (${share(r.overloadXp)}) · DEMOLITION kills ${r.demolitionKills} · total XP ${r.totalXp.toFixed(0)}`);
   }
   console.log('');
@@ -491,8 +561,25 @@ async function main(): Promise<number> {
     if (inWindow.length < CLEARS_REQUIRED) violations.push(`clear rate: ${inWindow.length}/12 runs cleared inside ${CLEAR_WINDOW_S[0] / 60}–${CLEAR_WINDOW_S[1] / 60} min (need ≥ ${CLEARS_REQUIRED})`);
     if (deaths.length === 0) violations.push('difficulty: the bot died in 0 of 12 runs (v2 §0.6: deaths ≥ 1 — the gate wants some deaths, not a walkover)');
     for (const r of clears) if (r.endT < CLEAR_WINDOW_S[0]) violations.push(`${r.titan}/${r.biome}: cleared at ${r.endT.toFixed(0)} s (< ${CLEAR_WINDOW_S[0]} s — too fast)`);
+    // GATEKEEPERS §5.3 matrix medians
+    for (let k = 1; k <= 3; k++) {
+      const fs = results.map((r) => r.gateFightS[k]).filter((x) => !Number.isNaN(x));
+      const m = median(fs);
+      if (fs.length && (m < GATE2_V3.gateFightMedianS[0] || m > GATE2_V3.gateFightMedianS[1])) violations.push(`gatekeeper ${k}: matrix median fight ${m.toFixed(1)} s over ${fs.length} kills, outside ${GATE2_V3.gateFightMedianS[0]}–${GATE2_V3.gateFightMedianS[1]} s`);
+    }
+    const mf = results.filter((r) => !Number.isNaN(r.mainKillT) && !Number.isNaN(r.bossT)).map((r) => r.mainKillT - r.bossT);
+    const mm = median(mf);
+    if (mf.length && (mm < GATE2_V3.mainFightMedianS[0] || mm > GATE2_V3.mainFightMedianS[1])) violations.push(`city boss: matrix median fight ${mm.toFixed(1)} s over ${mf.length} kills, outside ${GATE2_V3.mainFightMedianS[0]}–${GATE2_V3.mainFightMedianS[1]} s`);
+    const ml = results.filter((r) => !Number.isNaN(r.levelAtMainSpawn) && !Number.isNaN(r.levelAtMainKill)).map((r) => r.levelAtMainKill - r.levelAtMainSpawn);
+    const mlm = median(ml);
+    if (ml.length && mlm > GATE2_V3.mainFightLevels.median) violations.push(`city fight: matrix median ${mlm} levels gained (> ${GATE2_V3.mainFightLevels.median})`);
   } else {
     console.log('aggregate gates (≥ 8/12 clears in 8–12 min, some deaths) skipped: not the full 4×3 matrix');
+  }
+  {
+    const md = (xs: number[]) => { const f = xs.filter((x) => !Number.isNaN(x)); return f.length ? `${median(f).toFixed(1)} (${f.length})` : '—'; };
+    const g = [1, 2, 3].map((k) => `G${k} ${md(results.map((r) => r.gateFightS[k]))} s`).join(' · ');
+    console.log(`GATE2_V3 medians: fights ${g} · city fight ${md(results.map((r) => r.mainKillT - r.bossT))} s · levels in the city fight ${md(results.map((r) => r.levelAtMainKill - r.levelAtMainSpawn))} · caps fired ${results.filter((r) => r.gateCapped.some(Boolean)).length}`);
   }
   const slow = results.filter((r) => r.simP99Ms > BUDGET.simTickMsMax);
   for (const r of slow) console.log(`  note: ${r.titan}/${r.biome} sim p99 ${r.simP99Ms.toFixed(2)} ms/tick > budget ${BUDGET.simTickMsMax} ms (informational)`);

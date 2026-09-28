@@ -47,6 +47,16 @@ interest so the capture shows that exact moment. Screenshots: _shots/kit_<id>_<a
 action's sim events fired, the HUD special gauge is ready with the ACTUAL special binding as its key badge,
 the sub chip greys below the sub cost, the charger ring reads 100 at full charge, the FX read-back shows
 the action (glint line, beam flash, puddle, raining cell), and 0 console / page / shader errors.
+--mode ffa (CONTRACT_FFA F3/F4, lane UI): the same real-input G9 walk in FREE-FOR-ALL (?mode=ffa; the human on the
+default amber crew, seven bots on the other seven): 8 distinct crews and the FFA HUD (8 crests, own share + mark, the
+live top 3); fire raises the human's OWN crew share (match().coverageByTeam); slick + refill on own dye (or the own drop
+pad); the fight targets any other crew; the kill feed names carry crew ids; the FFA victory slate shows the winner, the
+top-3 podium and all 8 standings with the sim's percentages, the tally stamps, and the stinger is 'victory' exactly when
+the human won (a draw counts when the human is among the tied crews); PLAY AGAIN clears every crew's paint. Shots go to
+_shots/ffa_ui_pt_<map>_<kit>_<name>.png, the report to _harness/_reports/playtest_ffa.json. FFA runs default to a 75 s dev
+match (room for the respawn-and-repeat of a step during which a bot washed the human; NOTED), the slick step nudges onto
+the fresh splat (only OWN dye counts: no allies) and the bots' "moved" check uses each bot's furthest excursion seen
+during the fight (FFA bots respawn on their own pads often). Teams mode (the default) is unchanged.
 VERDICT "PLAYTEST PASS" only when every check holds AND 0 console errors, 0 page/window errors,
 0 shader/GL errors, 0 failed requests. Pointer-lock losses are classified like bootcheck (focus theft →
 NOTE + one real re-click; a loss with focus → FAIL).
@@ -117,6 +127,33 @@ def audio_check(sess, checks, problems, key):
 def me_of(m):
     rs = (m or {}).get("runners") or []
     return rs[0] if rs else {}
+
+
+def washes_of(sess):
+    """the human's washedCount (match().runners[0])"""
+    rs = (match_info(sess) or {}).get("runners") or []
+    return (rs[0].get("washedCount") or 0) if rs else 0
+
+
+def ffa_rearm(sess):
+    """FFA: wait out a respawn + the tide-spout drop before a timed step"""
+    wait_alive(sess, 6.0)
+    time.sleep(1.0)
+    mouse_home(sess)
+
+
+def painted_of(sess):
+    """the human's credited dye: match().runners[0].painted (weighted m² newly dyed by them; never decreases)"""
+    rs = (match_info(sess) or {}).get("runners") or []
+    return (rs[0].get("painted") or 0) if rs else 0
+
+
+def own_share(sess, team, ffa):
+    """the human's crew coverage: teams → state().coverage.sun (the G9 human is SUNCREW); FFA → match().coverageByTeam[team]"""
+    if not ffa:
+        return ((sess.state() or {}).get("coverage") or {}).get("sun", 0)
+    cbt = (match_info(sess) or {}).get("coverageByTeam") or []
+    return cbt[team] if isinstance(team, int) and 0 <= team < len(cbt) else 0
 
 
 def nearest(m, pred):
@@ -510,27 +547,36 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="DYEFIELD match playtest (gate G9)")
     add_common_args(ap)
     ap.add_argument("--map", default="pier18")
-    ap.add_argument("--match-seconds", type=float, default=45.0)
+    ap.add_argument("--match-seconds", type=float, default=None, help="dev match length (default 45 s; FFA 75 s: room for respawn-and-repeat)")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--fight", type=float, default=14.0, help="seconds of real aim + fire toward enemies")
     ap.add_argument("--wait", type=float, default=90.0)
     ap.add_argument("--kits", action="store_true", help="phase 6 kit shots instead of the G9 match playtest")
     ap.add_argument("--kit-list", default="", help="--kits: comma-separated subset (default all four)")
     ap.add_argument("--kit", default="mist-rasp", choices=KITS, help="G9: the human's kit (?kit=)")
+    ap.add_argument("--mode", default="teams", choices=("teams", "ffa"), help="CONTRACT_FFA: the match mode (?mode=)")
     args = ap.parse_args()
+    if args.match_seconds is None:
+        args.match_seconds = 75.0 if args.mode == "ffa" else 45.0
     if args.width == 1280 and args.height == 720:
         args.width, args.height = 1600, 900
     if args.kits:
         return kits_main(args)
     kit = args.kit
+    ffa = args.mode == "ffa"
     q = {"map": args.map, "dev": 1, "matchSeconds": int(args.match_seconds), "seed": args.seed}
     if kit != "mist-rasp":
         q["kit"] = kit
+    if ffa:
+        q["mode"] = "ffa"
     url = build_url(args.base, **q)
-    if args.map != "pier18" or kit != "mist-rasp":
+    if ffa:
+        SHOT_PREFIX[0] = "ffa_ui_pt_%s_%s" % (args.map, kit)
+    elif args.map != "pier18" or kit != "mist-rasp":
         SHOT_PREFIX[0] = "pt_%s_%s" % (args.map, kit)
+    my_team = 1                                     # teams: SUNCREW; FFA: the default amber crew (read back below)
 
-    rep = {"url": url, "headless": args.headless, "size": [args.width, args.height], "kit": kit}
+    rep = {"url": url, "headless": args.headless, "size": [args.width, args.height], "kit": kit, "mode": args.mode}
     problems, notes, shots = [], [], {}
     checks = {}
     fatal = None
@@ -613,6 +659,20 @@ def main() -> int:
                     problems.append("the countdown slate stayed up after the match went live")
                 if len(h2.get("crests") or []) != 8:
                     problems.append("HUD shows %d crests (want 4 + 4)" % len(h2.get("crests") or []))
+                if ffa:
+                    # CONTRACT_FFA F3/F4: 8 crews of one, the human on its crew, the FFA HUD
+                    mf = match_info(sess) or {}
+                    rs_ = mf.get("runners") or []
+                    my_team = me_of(mf).get("team", 1)
+                    crews = sorted({r.get("team") for r in rs_})
+                    hf = h2.get("ffa") or {}
+                    checks["ffaLive"] = {"matchMode": mf.get("matchMode"), "crews": mf.get("crews"), "runnerCrews": [r.get("team") for r in rs_],
+                                         "myTeam": my_team, "hudMode": h2.get("mode"), "me": hf.get("me"), "rank": hf.get("rank"),
+                                         "crestMarks": [c.get("mark") for c in hf.get("crests") or []]}
+                    if mf.get("matchMode") != "ffa" or crews != list(range(1, 9)) or len(rs_) != 8:
+                        problems.append("FFA: want 8 runners on crews 1..8 (matchMode %r, crews %s)" % (mf.get("matchMode"), crews))
+                    if h2.get("mode") != "ffa" or not hf.get("me") or len({c.get("mark") for c in hf.get("crests") or []}) != 8:
+                        problems.append("FFA HUD missing (mode %r, own share %r, crest marks %s)" % (h2.get("mode"), hf.get("me"), checks["ffaLive"]["crestMarks"]))
                 sess.js(RECORDER_JS)
                 sess.js("() => { const P = window.__PF__; P.dts = []; P.stats = []; P.last = -1; P.on = true; }")
                 frames = True
@@ -621,127 +681,177 @@ def main() -> int:
 
         # ── 2. walk + fire at the floor ahead
         if not fatal:
-            wait_warm(sess, notes, "before firing")
-            sess.lock_guard("before firing", notes, problems)
-            mouse_home(sess)
-            s0 = sess.state() or {}
-            p0 = s0.get("player") or {}
-            cov0 = (s0.get("coverage") or {}).get("sun", 0)
-            timer0 = (hud_info(sess) or {}).get("timer")
-            kb, ms = sess.page.keyboard, sess.page.mouse
-            kb.down("KeyW"); time.sleep(0.8)
-            a0 = aim_info(sess) or {}
-            mouse_turn(sess, 0.0, (-30 * DEG) - (a0.get("pitch") or -14 * DEG))
-            if kit == "needle-glint":
-                # charge → release, four times (a player's line-painting rhythm); the capture lands mid-charge
-                for k in range(4):
-                    ms.down(button="left"); time.sleep(0.85)
-                    if k == 1:
-                        shot(sess, "firing", shots)
-                    ms.up(button="left"); time.sleep(0.25)
-                kb.up("KeyW")
-                time.sleep(0.4)
-            else:
-                ms.down(button="left")
-                time.sleep(1.1)
-                shot(sess, "firing", shots)
-                time.sleep(1.1)
-                kb.up("KeyW")
-                time.sleep(0.8)
-                ms.up(button="left")
-                time.sleep(0.4)
-            s1 = sess.state() or {}
-            p1 = s1.get("player") or {}
-            cov1 = (s1.get("coverage") or {}).get("sun", 0)
-            ev = (match_info(sess) or {}).get("events") or {}
-            h1 = hud_info(sess) or {}
-            checks["fire"] = {"tank": [p0.get("tank"), p1.get("tank")], "coverageSun": [cov0, cov1], "shots": ev.get("shot"),
-                              "walked": math.hypot(p1.get("x", 0) - p0.get("x", 0), p1.get("z", 0) - p0.get("z", 0)),
-                              "hudTank": h1.get("tank"), "timer": [timer0, h1.get("timer")]}
-            # SHEET-DRUM drains per METRE rolled (0.85 %/m), not per second of fire, so its bar is 4 % (≈ 4.7 m
-            # actually rolled). On Cinder the straight walk from the spawn runs down the beach into the deep channel
-            # within ~12 m (a sea wash is correct there), so an 8 % bar measured the map's shoreline, not the roller.
-            min_drain = 4 if kit == "sheet-drum" else 8
-            if not (isinstance(p0.get("tank"), (int, float)) and isinstance(p1.get("tank"), (int, float)) and p0["tank"] - p1["tank"] >= min_drain):
-                problems.append("firing did not drain the tank (%s → %s)" % (p0.get("tank"), p1.get("tank")))
-            if not (cov1 > cov0 + 1e-5):
-                problems.append("firing did not raise coverage.sun (%s → %s)" % (cov0, cov1))
-            need = {"mist-rasp": ("shot", 6), "pop-well": ("shot", 2), "needle-glint": ("beam", 1)}.get(kit)
-            if need and not (ev.get(need[0]) or 0) >= need[1]:
-                problems.append("fewer than %d '%s' events after ~3 s of %s fire (%s)" % (need[1], need[0], kit, ev.get(need[0])))
-            if kit == "sheet-drum":
-                checks["fire"]["rolled"] = walked_rolled = (p0.get("tank") or 0) - (p1.get("tank") or 0) >= min_drain and cov1 > cov0
-                if not walked_rolled:
-                    problems.append("holding LMB while walking with SHEET-DRUM did not roll dye down")
-            if h1.get("tank") is not None and abs((h1.get("tank") or 0) - round(p1.get("tank") or 0)) > 2:
-                problems.append("HUD tank pipette %s ≠ runner tank %s" % (h1.get("tank"), p1.get("tank")))
-            if timer0 is not None and timer0 == h1.get("timer"):
-                problems.append("the HUD timer did not change in ~4 s (%s)" % timer0)
-            audio_check(sess, checks, problems, "audioLive")
+            for ffa_try in range(3 if ffa else 1):
+                # FFA: every bot is a foe from the first second; a step during which the human was washed
+                # is void (its verdicts are dropped) and runs again after the respawn (NOTED)
+                if ffa:
+                    ffa_rearm(sess)
+                w0, n0 = washes_of(sess), len(problems)
+                wait_warm(sess, notes, "before firing")
+                sess.lock_guard("before firing", notes, problems)
+                mouse_home(sess)
+                s0 = sess.state() or {}
+                p0 = s0.get("player") or {}
+                cov0 = own_share(sess, my_team, ffa)
+                pt0 = painted_of(sess)
+                timer0 = (hud_info(sess) or {}).get("timer")
+                kb, ms = sess.page.keyboard, sess.page.mouse
+                kb.down("KeyW"); time.sleep(0.8)
+                a0 = aim_info(sess) or {}
+                mouse_turn(sess, 0.0, (-30 * DEG) - (a0.get("pitch") or -14 * DEG))
+                if kit == "needle-glint":
+                    # charge → release, four times (a player's line-painting rhythm); the capture lands mid-charge
+                    for k in range(4):
+                        ms.down(button="left"); time.sleep(0.85)
+                        if k == 1:
+                            shot(sess, "firing", shots)
+                        ms.up(button="left"); time.sleep(0.25)
+                    kb.up("KeyW")
+                    time.sleep(0.4)
+                else:
+                    ms.down(button="left")
+                    time.sleep(1.1)
+                    shot(sess, "firing", shots)
+                    time.sleep(1.1)
+                    kb.up("KeyW")
+                    time.sleep(0.8)
+                    ms.up(button="left")
+                    time.sleep(0.4)
+                s1 = sess.state() or {}
+                p1 = s1.get("player") or {}
+                cov1 = own_share(sess, my_team, ffa)
+                pt1 = painted_of(sess)
+                ev = (match_info(sess) or {}).get("events") or {}
+                h1 = hud_info(sess) or {}
+                checks["fire"] = {"tank": [p0.get("tank"), p1.get("tank")], "coverageSun": [cov0, cov1], "shots": ev.get("shot"),
+                                  "walked": math.hypot(p1.get("x", 0) - p0.get("x", 0), p1.get("z", 0) - p0.get("z", 0)),
+                                  "hudTank": h1.get("tank"), "timer": [timer0, h1.get("timer")], "painted": [pt0, pt1]}
+                # SHEET-DRUM drains per METRE rolled (0.85 %/m), not per second of fire, so its bar is 4 % (≈ 4.7 m
+                # actually rolled). On Cinder the straight walk from the spawn runs down the beach into the deep channel
+                # within ~12 m (a sea wash is correct there), so an 8 % bar measured the map's shoreline, not the roller.
+                min_drain = 4 if kit == "sheet-drum" else 8
+                if not (isinstance(p0.get("tank"), (int, float)) and isinstance(p1.get("tank"), (int, float)) and p0["tank"] - p1["tank"] >= min_drain):
+                    problems.append("firing did not drain the tank (%s → %s)" % (p0.get("tank"), p1.get("tank")))
+                # FFA: seven foes (incl. a rival CLOUDBURST over the same patch) can lower the human's NET share while
+                # the stream lands, so the verdict is the human's own credit (match().runners[0].painted = weighted m²
+                # newly dyed by them, monotonic); the net share is recorded, not judged
+                if ffa:
+                    if not (pt1 > pt0 + 0.05):
+                        problems.append("firing did not dye the court: the human's painted m² %s → %s (own share %s → %s)" % (pt0, pt1, cov0, cov1))
+                elif not (cov1 > cov0 + 1e-5):
+                    problems.append("firing did not raise coverage.sun (%s → %s)" % (cov0, cov1))
+                if ffa:
+                    hf1 = h1.get("ffa") or {}
+                    checks["ffaHud"] = {"me": hf1.get("me"), "rank": hf1.get("rank"), "top3": hf1.get("top3")}
+                    if not hf1.get("top3"):
+                        problems.append("FFA HUD: the live top-3 leaderboard is empty after ~4 s of play (%s)" % hf1)
+                    elif hf1.get("me") in (None, "0.0%"):
+                        problems.append("FFA HUD: own share still %r after painting" % hf1.get("me"))
+                need = {"mist-rasp": ("shot", 6), "pop-well": ("shot", 2), "needle-glint": ("beam", 1)}.get(kit)
+                if need and not (ev.get(need[0]) or 0) >= need[1]:
+                    problems.append("fewer than %d '%s' events after ~3 s of %s fire (%s)" % (need[1], need[0], kit, ev.get(need[0])))
+                if kit == "sheet-drum":
+                    checks["fire"]["rolled"] = walked_rolled = (p0.get("tank") or 0) - (p1.get("tank") or 0) >= min_drain and ((pt1 > pt0 + 0.05) if ffa else (cov1 > cov0))
+                    if not walked_rolled:
+                        problems.append("holding LMB while walking with SHEET-DRUM did not roll dye down")
+                if h1.get("tank") is not None and abs((h1.get("tank") or 0) - round(p1.get("tank") or 0)) > 2:
+                    problems.append("HUD tank pipette %s ≠ runner tank %s" % (h1.get("tank"), p1.get("tank")))
+                if timer0 is not None and timer0 == h1.get("timer"):
+                    problems.append("the HUD timer did not change in ~4 s (%s)" % timer0)
+                audio_check(sess, checks, problems, "audioLive")
+                if ffa and washes_of(sess) > w0 and ffa_try < 2:
+                    del problems[n0:]
+                    notes.append("FFA: the human was washed by a bot during the fire step → waited for the respawn and repeated it")
+                    continue
+                break
 
         # ── 3. dye the floor under the feet, then SHIFT → SLICK + refill
         if not fatal:
-            wait_warm(sess, notes, "before slick")
-            sess.lock_guard("before slick", notes, problems)
-            kb, ms = sess.page.keyboard, sess.page.mouse
-            a0 = aim_info(sess) or {}
-            mouse_turn(sess, 0.0, (-64 * DEG) - (a0.get("pitch") or 0))
-            under = None
-            for attempt in range(3):
-                if kit == "sheet-drum":
-                    # a roll is a moving stroke: roll a metre forward, then back onto it
-                    ms.down(button="left"); kb.down("KeyW"); time.sleep(0.5); kb.up("KeyW")
-                    kb.down("KeyS"); time.sleep(0.45); kb.up("KeyS"); ms.up(button="left")
-                else:
-                    ms.down(button="left"); time.sleep(0.9); ms.up(button="left")
-                time.sleep(0.25)
-                under = sess.df("teamUnderFeet")[1]
-                if under == 1:
-                    break
-                # CHANGED(INTEGRATE): a wash + respawn (early contact on Lockwell) leaves the runner on its own pad,
-                # which is own dye to the sim (not an atlas surface, so teamUnderFeet() is None there)
-                if under is None and sess.safe_js("() => { const g = __DF__.dev && __DF__.dev.game; return !!g && g.world.onOwnPad(g.human); }"):
-                    under = "own pad"
-                    notes.append("slick check on the own spawn pad (the human was washed and respawned before it)")
-                    break
-                kb.down("KeyW"); time.sleep(0.25); kb.up("KeyW")
-            tank_before = ((sess.state() or {}).get("player") or {}).get("tank")
-            samples = []
-            kb.down("ShiftLeft")
-            t_s = time.time()
-            while time.time() - t_s < 1.6:
+            for ffa_try in range(3 if ffa else 1):
+                # FFA: every bot is a foe from the first second; a step during which the human was washed
+                # is void (its verdicts are dropped) and runs again after the respawn (NOTED)
+                if ffa:
+                    ffa_rearm(sess)
+                w0, n0 = washes_of(sess), len(problems)
+                wait_warm(sess, notes, "before slick")
+                sess.lock_guard("before slick", notes, problems)
+                kb, ms = sess.page.keyboard, sess.page.mouse
+                a0 = aim_info(sess) or {}
+                mouse_turn(sess, 0.0, (-64 * DEG) - (a0.get("pitch") or 0))
+                under = None
+                for attempt in range(3):
+                    if kit == "sheet-drum":
+                        # a roll is a moving stroke: roll a metre forward, then back onto it
+                        ms.down(button="left"); kb.down("KeyW"); time.sleep(0.5); kb.up("KeyW")
+                        kb.down("KeyS"); time.sleep(0.45); kb.up("KeyS"); ms.up(button="left")
+                    else:
+                        ms.down(button="left"); time.sleep(0.9); ms.up(button="left")
+                    time.sleep(0.25)
+                    under = sess.df("teamUnderFeet")[1]
+                    if under == my_team:
+                        break
+                    # CHANGED(INTEGRATE): a wash + respawn (early contact on Lockwell) leaves the runner on its own pad,
+                    # which is own dye to the sim (not an atlas surface, so teamUnderFeet() is None there).
+                    # FFA: the drop pad lies on paintable floor, and counts as own dye whatever is under it (F1)
+                    if (under is None or ffa) and sess.safe_js("() => { const g = __DF__.dev && __DF__.dev.game; return !!g && g.world.onOwnPad(g.human); }"):
+                        under = "own pad"
+                        notes.append("slick check on the own spawn pad (the human was washed and respawned before it)")
+                        break
+                    if ffa:
+                        # FFA: only the human's OWN dye counts (no allies' paint around), and a burst / stream lands a few
+                        # metres ahead of the feet: step onto the fresh splat in short real W nudges
+                        for _ in range(8):
+                            kb.down("KeyW"); time.sleep(0.16); kb.up("KeyW"); time.sleep(0.08)
+                            under = sess.df("teamUnderFeet")[1]
+                            if under == my_team:
+                                break
+                        if under == my_team:
+                            break
+                        continue
+                    kb.down("KeyW"); time.sleep(0.25); kb.up("KeyW")
+                tank_before = ((sess.state() or {}).get("player") or {}).get("tank")
+                samples = []
+                kb.down("ShiftLeft")
+                t_s = time.time()
+                while time.time() - t_s < 1.6:
+                    st = (sess.state() or {}).get("player") or {}
+                    samples.append((round(time.time() - t_s, 2), st.get("state"), st.get("slickForm"), st.get("tank")))
+                    time.sleep(0.12)
+                a1 = aim_info(sess) or {}
+                mouse_turn(sess, 0.0, (-14 * DEG) - (a1.get("pitch") or 0))
+                # swim BACK over the trail painted while walking forward (own dye), toward the camera
+                kb.down("KeyS"); time.sleep(0.45)
+                shot(sess, "slick", shots)
                 st = (sess.state() or {}).get("player") or {}
-                samples.append((round(time.time() - t_s, 2), st.get("state"), st.get("slickForm"), st.get("tank")))
-                time.sleep(0.12)
-            a1 = aim_info(sess) or {}
-            mouse_turn(sess, 0.0, (-14 * DEG) - (a1.get("pitch") or 0))
-            # swim BACK over the trail painted while walking forward (own dye), toward the camera
-            kb.down("KeyS"); time.sleep(0.45)
-            shot(sess, "slick", shots)
-            st = (sess.state() or {}).get("player") or {}
-            samples.append(("swim", st.get("state"), st.get("slickForm"), st.get("tank")))
-            kb.up("KeyS")
-            time.sleep(0.3)
-            kb.up("ShiftLeft")
-            time.sleep(0.4)
-            tank_after = ((sess.state() or {}).get("player") or {}).get("tank")
-            slicked = any(s[2] is True or s[1] == "slick" for s in samples)
-            tanks = [s[3] for s in samples if isinstance(s[3], (int, float))]
-            refill = (max(tanks) - min(tanks)) if tanks else 0
-            checks["slick"] = {"teamUnderFeet": under, "tankBefore": tank_before, "tankAfter": tank_after, "samples": samples, "refill": refill,
-                               "slickBlend": (aim_info(sess) or {}).get("slickBlend")}
-            if under not in (1, "own pad"):
-                problems.append("could not stand on own dye for the slick check (teamUnderFeet %r)" % under)
-            if not slicked:
-                problems.append("holding SHIFT on own dye never entered SLICK (samples %s)" % samples[:6])
-            # refilled = rose ≥ 10, or filled to the top while slicking (a cheap SHEET-DRUM stroke leaves < 10 to refill)
-            if not (refill >= 10 or (tanks and max(tanks) >= 99.5 and refill > 0 and slicked)
-                    or (isinstance(tank_before, (int, float)) and tank_before >= 95 and slicked)):
-                problems.append("no tank refill observed while slicking (tank %s → max %s; samples %s)" % (
-                    tank_before, max(tanks) if tanks else None, samples[:6]))
+                samples.append(("swim", st.get("state"), st.get("slickForm"), st.get("tank")))
+                kb.up("KeyS")
+                time.sleep(0.3)
+                kb.up("ShiftLeft")
+                time.sleep(0.4)
+                tank_after = ((sess.state() or {}).get("player") or {}).get("tank")
+                slicked = any(s[2] is True or s[1] == "slick" for s in samples)
+                tanks = [s[3] for s in samples if isinstance(s[3], (int, float))]
+                refill = (max(tanks) - min(tanks)) if tanks else 0
+                checks["slick"] = {"teamUnderFeet": under, "tankBefore": tank_before, "tankAfter": tank_after, "samples": samples, "refill": refill,
+                                   "slickBlend": (aim_info(sess) or {}).get("slickBlend")}
+                if under not in (my_team, "own pad"):
+                    problems.append("could not stand on own dye for the slick check (teamUnderFeet %r)" % under)
+                if not slicked:
+                    problems.append("holding SHIFT on own dye never entered SLICK (samples %s)" % samples[:6])
+                # refilled = rose ≥ 10, or filled to the top while slicking (a cheap SHEET-DRUM stroke leaves < 10 to refill)
+                if not (refill >= 10 or (tanks and max(tanks) >= 99.5 and refill > 0 and slicked)
+                        or (isinstance(tank_before, (int, float)) and tank_before >= 95 and slicked)):
+                    problems.append("no tank refill observed while slicking (tank %s → max %s; samples %s)" % (
+                        tank_before, max(tanks) if tanks else None, samples[:6]))
+                if ffa and washes_of(sess) > w0 and ffa_try < 2:
+                    del problems[n0:]
+                    notes.append("FFA: the human was washed by a bot during the slick step → waited for the respawn and repeated it")
+                    continue
+                break
 
         # ── 4. turn toward enemies and fight (real mouse + keys)
         washes_by_me = washed_me = 0
+        bot_max = {}                                   # FFA: bot id → the furthest it got from its live position
         death_read = None
         fight_shot = False
         if not fatal:
@@ -751,10 +861,17 @@ def main() -> int:
             firing = walking = False
             seen_ev = set()
             closest = 1e9
+            bot_start = {r[0]: (r[1], r[2]) for r in rep.get("botsAtLive") or []}
             while time.time() - t_f < args.fight:
                 m = match_info(sess) or {}
                 if m.get("phase") != "live" or (m.get("timeLeft") or 0) < 12:
                     break                           # leave match time for the death-slate + bots checks
+                if ffa:
+                    # FFA bots are washed (and respawn on their own pads) often: track each one's furthest excursion
+                    for r in m.get("runners") or []:
+                        if r["id"] in bot_start:
+                            d0 = math.hypot(r["x"] - bot_start[r["id"]][0], r["z"] - bot_start[r["id"]][1])
+                            bot_max[r["id"]] = max(bot_max.get(r["id"], 0.0), d0)
                 me = me_of(m)
                 for e in events_tail(sess, 120):
                     key = (e.get("tick"), e.get("t"), e.get("victim"), e.get("by"))
@@ -778,7 +895,7 @@ def main() -> int:
                     wait_alive(sess, 5.0)
                     mouse_home(sess)
                     continue
-                tgt, dist = nearest(m, lambda r: r.get("team") != 1 and r.get("alive"))
+                tgt, dist = nearest(m, lambda r: r.get("team") != my_team and r.get("alive"))
                 if not tgt:
                     time.sleep(0.2)
                     continue
@@ -808,6 +925,9 @@ def main() -> int:
             if walking:
                 kb.up("KeyW")
             checks["fight"] = {"closestEnemy": closest, "washesByMe": washes_by_me, "washedMe": washed_me, "deathSlate": death_read}
+            if ffa:
+                # the kill feed names carry their crews ([A, B] crew ids per `{A} washed {B}` line still on screen)
+                checks["fight"]["feedCrews"] = ((hud_info(sess) or {}).get("ffa") or {}).get("feedCrews")
             if closest > 40:
                 notes.append("the fight never got within 40 m of an enemy (closest %.1f m)" % closest)
 
@@ -836,7 +956,8 @@ def main() -> int:
             pair, bd = None, 1e9
             for a_ in rs:
                 for b_ in rs:
-                    if a_["team"] == 1 and b_["team"] == 2 and a_["id"] != 0:
+                    # teams: an ally / enemy pair; FFA: any two bots (every crew is a foe)
+                    if (ffa and a_["id"] != 0 and b_["id"] != 0 and a_["id"] < b_["id"]) or (not ffa and a_["team"] == 1 and b_["team"] == 2 and a_["id"] != 0):
                         d = math.hypot(a_["x"] - b_["x"], a_["z"] - b_["z"])
                         if d < bd:
                             pair, bd = (a_, b_), d
@@ -851,8 +972,10 @@ def main() -> int:
             ev = m2.get("events") or {}
             start = {r[0]: (r[1], r[2]) for r in rep.get("botsAtLive") or []}
             moved = [r["id"] for r in (m2.get("runners") or []) if r["id"] != 0 and r["id"] in start
-                     and math.hypot(r["x"] - start[r["id"]][0], r["z"] - start[r["id"]][1]) > 5]
+                     and (math.hypot(r["x"] - start[r["id"]][0], r["z"] - start[r["id"]][1]) > 5 or (ffa and bot_max.get(r["id"], 0) > 5))]
             checks["bots"] = {"pairDist": bd, "moved": moved, "events": ev}
+            if ffa:
+                checks["bots"]["maxExcursion"] = {k: round(v, 1) for k, v in sorted(bot_max.items())}
             if len(moved) < 5:
                 problems.append("only %d of 7 bots moved > 5 m since the match went live (%s)" % (len(moved), moved))
             # CHANGED(INTEGRATE): the "bots fought" check reads the whole match's counts at the final horn
@@ -903,7 +1026,9 @@ def main() -> int:
             if not vic or VICTORY not in vic:
                 problems.append("the victory slate %r does not show %r" % (vic, VICTORY))
             s_, g_, n_ = res.get("sun"), res.get("gulf"), res.get("neutral")
-            if not all(isinstance(v, (int, float)) for v in (s_, g_, n_)):
+            if ffa:
+                ffa_victory_checks(sess, res, vic, au, checks, problems, shots)
+            elif not all(isinstance(v, (int, float)) for v in (s_, g_, n_)):
                 problems.append("match().result is missing percentages: %s" % res)
             else:
                 if not (0 < s_ < 1 and 0 < g_ < 1 and abs(s_ + g_ + n_ - 1) < 1e-3):
@@ -938,6 +1063,8 @@ def main() -> int:
                 cv = m.get("coverage") or {}
                 if (cv.get("sun") or 0) > 0.01 or (cv.get("gulf") or 0) > 0.01:
                     problems.append("PLAY AGAIN kept old paint (coverage %s)" % cv)
+                if ffa and any((v or 0) > 0.01 for v in (m.get("coverageByTeam") or [])[1:]):
+                    problems.append("PLAY AGAIN kept old FFA paint (coverageByTeam %s)" % m.get("coverageByTeam"))
                 if h.get("victory"):
                     problems.append("the victory slate stayed up after PLAY AGAIN")
                 time.sleep(3.2)
@@ -960,8 +1087,8 @@ def main() -> int:
     print("URL          : %s" % url)
     print("mode         : %s Chrome (d3d11) %dx%d" % ("headless" if args.headless else "headed", args.width, args.height))
     print("entered play : %s · ready after %s s" % (rep.get("entered"), fmt(rep.get("readyS"), 1)))
-    for k in ("countdownSeen", "liveHud", "fire", "audioLive", "slick", "fight", "deathForced", "deathSlate", "bots", "victory", "audioVictory",
-              "matchEvents", "playAgain"):
+    for k in ("countdownSeen", "liveHud", "ffaLive", "fire", "ffaHud", "audioLive", "slick", "fight", "deathForced", "deathSlate", "bots", "victory",
+              "ffaVictory", "audioVictory", "matchEvents", "playAgain"):
         if k in checks:
             print("%-13s: %s" % (k, json.dumps(checks[k], default=str)[:900]))
     if perf:
@@ -982,21 +1109,76 @@ def main() -> int:
     if fatal:
         rep["verdict"] = "NOT JUDGED"
         print("VERDICT: NOT JUDGED — %s" % fatal)
-        print("report       : %s" % save_report("playtest", rep, args.base))
+        print("report       : %s" % save_report("playtest_ffa" if ffa else "playtest", rep, args.base))
         print("RESULT: FAIL")
         return 2
     problems += diag_problems(diag)
     for k in ("countdown", "firing", "slick", "bots", "victory", "death"):
         if not shots.get(k):
-            problems.append("screenshot pt_%s was not saved" % k)
+            problems.append("screenshot %s_%s was not saved" % (SHOT_PREFIX[0], k))
     rep["problems"] = problems
     rep["verdict"] = "PLAYTEST PASS" if not problems else "PLAYTEST FAIL"
     print("VERDICT: %s" % rep["verdict"])
     for p in problems:
         print("   X %s" % p)
-    print("report       : %s" % save_report("playtest", rep, args.base))
+    print("report       : %s" % save_report("playtest_ffa" if ffa else "playtest", rep, args.base))
     print("RESULT: %s" % ("OK" if not problems else "FAIL"))
     return 0 if not problems else 1
+
+
+def ffa_victory_checks(sess, res, vic, au, checks, problems, shots):
+    """CONTRACT_FFA F3/F4: the FFA result + slate — shares by crew sum to 1, 8 standings share-descending, the winner by
+    strict comparison (a tie → 0 + tied), the slate shows every standing's % and the winner's name, the tally stamped with
+    the winner rows marked, and the stinger follows whether the human won."""
+    shares = res.get("shares") or []
+    st = res.get("standings") or []
+    # the tally stamps the winner at 1.75 s after the slate shows: read the slate once it has
+    h, tally = {}, {}
+    deadline = time.time() + 4.0
+    while time.time() < deadline:
+        h = hud_info(sess) or {}
+        tally = h.get("tally") or {}
+        if tally.get("stamped"):
+            break
+        time.sleep(0.15)
+    time.sleep(0.5)
+    shot(sess, "victory_stamped", shots)
+    rows = tally.get("standings") or []
+    me = me_of(match_info(sess) or {})
+    my_team = me.get("team")
+    tied = res.get("tied") or []
+    winners = [res.get("winner")] if res.get("winner") else list(tied)
+    human_won = my_team in winners
+    checks["ffaVictory"] = {"mode": res.get("mode"), "winner": res.get("winner"), "tied": tied, "standings": [(s.get("name"), round(s.get("share") or 0, 4)) for s in st],
+                            "slateWinner": tally.get("winner"), "slateRows": [r.get("text") for r in rows], "stamped": tally.get("stamped"),
+                            "humanWon": human_won, "cue": (au or {}).get("cue")}
+    if res.get("mode") != "ffa":
+        problems.append("FFA: match().result.mode is %r" % res.get("mode"))
+    if len(shares) != 9 or abs(sum(shares) - 1) > 1e-3:
+        problems.append("FFA: result shares %s do not sum to 1 over 9 slots" % shares)
+    if len(st) != 8 or any((st[i].get("share") or 0) < (st[i + 1].get("share") or 0) for i in range(len(st) - 1)):
+        problems.append("FFA: want 8 standings, share-descending (%s)" % checks["ffaVictory"]["standings"])
+    if st:
+        top = st[0].get("share")
+        want = [s.get("crew") for s in st if s.get("share") == top]
+        if (len(want) == 1 and res.get("winner") != want[0]) or (len(want) > 1 and (res.get("winner") != 0 or sorted(tied) != sorted(want))):
+            problems.append("FFA: winner %r / tied %s but the top share belongs to %s" % (res.get("winner"), tied, want))
+    for s in st:
+        p = "%.1f%%" % ((s.get("share") or 0) * 100)
+        if not vic or p not in vic or (s.get("name") or "?") not in vic:
+            problems.append("FFA victory slate misses %s %s (text %r)" % (s.get("name"), p, (vic or "")[:200]))
+            break
+    if len(rows) != 8:
+        problems.append("FFA victory slate shows %d standings rows (want 8)" % len(rows))
+    if not tally.get("stamped") or not any(r.get("win") for r in rows):
+        problems.append("FFA victory tally did not stamp the winner (%s)" % tally)
+    for w in winners:
+        name = next((s.get("name") for s in st if s.get("crew") == w), None)
+        if name and name not in (tally.get("winner") or ""):
+            problems.append("FFA victory slate winner line %r misses %s" % (tally.get("winner"), name))
+    cue = (au or {}).get("cue")
+    if cue in ("victory", "defeat") and cue != ("victory" if human_won else "defeat"):
+        problems.append("FFA stinger %r but the human %s" % (cue, "won" if human_won else "lost"))
 
 
 if __name__ == "__main__":

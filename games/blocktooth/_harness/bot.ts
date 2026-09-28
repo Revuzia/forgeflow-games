@@ -31,6 +31,7 @@ import { UPGRADE_BY_ID } from '../src/data/upgrades.ts';
 import { botUltimate } from './bot_ult.ts';
 import { botDraftScore, botRecipeBonus } from './bot_draft.ts';
 import { botDetour } from './bot_map.ts';
+import { botGate } from './bot_gate.ts';   // GATEKEEPERS §5.5 (K0 stub: null → the generic boss branch)
 
 // ─────────────────────────────── tuning ───────────────────────────────
 const PLAN_EVERY_TICKS = 6;          // re-plan the food target at 5 Hz
@@ -447,6 +448,8 @@ function hookDecision(w: World): boolean {
 /** The bot's command for this tick. Deterministic; never mutates gameplay state. */
 /** scratch point for botDetour */
 const DETOUR = { x: 0, z: 0 };
+/** scratch point for botGate (GATEKEEPERS §7.3) */
+const GATE_OUT = { x: 0, z: 0 };
 
 export function botInput(w: World): TitanInput {
   const T = w.titan;
@@ -489,7 +492,11 @@ export function botInput(w: World): TitanInput {
     if (w.tick - m.strafeFlipTick > 180) { m.strafeSign = -m.strafeSign; m.strafeFlipTick = w.tick; }
     const tx = to.z * m.strafeSign, tz = -to.x * m.strafeSign;   // tangent
     bossGap = best; bossTanX = tx; bossTanZ = tz;
-    if (b.introT > 0) {
+    // GATEKEEPERS §7.3: a gatekeeper fight may steer to a point of its own (weak point, flank, chase)
+    const g = botGate(w, GATE_OUT);
+    if (g) {
+      norm(g.x - T.x, g.z - T.z, dir);
+    } else if (b.introT > 0) {
       // entrance (invulnerable): keep eating but do not wander into its feet
       if (best < reach * 1.2) { dir.x = -to.x; dir.z = -to.z; }
     } else if (best > reach * 0.75) {
@@ -537,8 +544,10 @@ export function botInput(w: World): TitanInput {
     m.wasMoving = !threatened;
   }
 
-  // v2 map detour (objectives / power-ups worth the walk; stub → null = no detour)
-  if (!threatened) {
+  // v2 map detour (objectives / power-ups worth the walk; stub → null = no detour). GATEKEEPERS §7.3: no
+  // detour while a Size gate is pending and nothing is alive yet (the bot waits for the fight to arrive)
+  const gateWait = w.gates.pending > 0 && !(b && b.alive);
+  if (!threatened && !gateWait) {
     const det = botDetour(w, DETOUR);
     if (det) { dir.x = det.x - T.x; dir.z = det.z - T.z; }
   }

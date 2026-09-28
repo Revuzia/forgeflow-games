@@ -67,7 +67,10 @@ import { hasPendingDraft } from '../upgrades/draft.ts';
  */
 export const ULT_CHARGE = {
   trickle: 1.0,
-  cityRankMul: [1.8, 0.32, 0.1, 0.03, 0.02] as number[],
+  // GATEKEEPERS K1 (orchestrator, FEATURES_V2 §3.2 tuning order knob 1): Size III 0.1 → 0.05. With the gates on, RAMROD
+  // waits for SWITCHBOARD-5's kill (§2.8) and the gate fight + kill (+40) land inside Size III: probe_ult H's Size III
+  // ready-edge median fell to 26.7 s (band 30–65). 0.05 → 32.3 s; kill points (knob 3) untouched.
+  cityRankMul: [1.8, 0.32, 0.05, 0.03, 0.02] as number[],
   killRankMul: [1, 0.6, 0.4, 0.28, 0.24] as number[],
 };
 

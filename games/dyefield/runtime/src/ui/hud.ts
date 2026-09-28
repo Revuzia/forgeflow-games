@@ -16,11 +16,21 @@
 //                 are ui/juice.ts (phase 10): the HUD no longer draws its own.
 //   F1            debug panel. The pause card moved to ui/menus.ts in phase 9 (PAUSED / RESUME / SETTINGS / …).
 // Every per-frame write is skipped when its value did not change.
+//
+// CONTRACT_FFA F3 — FREE-FOR-ALL (`mode: 'ffa'`): the same rhythm for 8 crews of one. Top centre: 4 + 4 small crests
+// in each runner's FFA colour + mark (downed ✕ + count) round the timer pill, and a slim 8-colour share bar under
+// it. Top left: your own share + mark, then a live TOP-3 leaderboard (colour chip, mark, name, %). The kill feed
+// names take their crew colour + mark (`{A} washed {B}`), the death slate the washer's; the gauge / tank / sub /
+// charge ring take the human's colour; the minimap (the raster's 8-colour palette) is north-up with every seen
+// runner's dot in its crew colour and mark SHAPE (◉ circle · ▲ triangle · ■ square · ◆ diamond · ★ star · ✚ cross ·
+// ⬟ pentagon · ⬢ hexagon), so it reads in colorblind modes. Teams mode is unchanged.
 
 import type { Coverage, MoveState, TeamId } from '../core/types.ts';
 import { TEAMS, TEAMS_RAW, teamById } from '../core/data.ts';
 import type { MinimapRaster } from '../core/paint/minimap.ts';
-import { Slates, waveIcon, type VictoryInfo } from './slates.ts';
+import { Slates, waveIcon, crewLook, type CrewLook, type UiMode, type VictoryInfo } from './slates.ts';
+
+export { crewLook, ffaCrews, type CrewLook, type UiMode, type FfaVictory, type FfaStanding } from './slates.ts';
 
 export const LOW_TANK_TOAST = 'Tank low — hold SHIFT on your color to drink';
 export const FEED_VERB = 'washed';
@@ -84,7 +94,13 @@ export interface HudFrame {
   charge?: number;
   specialReady?: boolean;
   subReady?: boolean;
+  /** CONTRACT_FFA F3: the weighted coverage share per crew id (index 0 = neutral, 1..8 = crews); FFA only */
+  shares?: ArrayLike<number> | null;
 }
+
+/** minimap dot shape per crew mark glyph (CONTRACT_FFA F3: the dot shape = the crew's mark) */
+const MARK_SHAPE: Record<string, string> = { '◉': 'circle', '▲': 'tri', '■': 'sq', '◆': 'dia', '★': 'star', '✚': 'cross', '⬟': 'pent', '⬢': 'hex' };
+const pct1 = (f: number): string => `${(Math.max(0, f) * 100).toFixed(1)}%`;
 
 /**
  * Tug-of-war widths (fractions of the bar) for the weighted coverage fractions: the two fills keep the
@@ -130,9 +146,10 @@ export function applyTeamCssVars(colorblind = false): void {
 
 const teamKey = (t: TeamId): 'sun' | 'gulf' => (t === 2 ? 'gulf' : 'sun');
 
-interface CrestEl { box: HTMLElement; mark: HTMLElement; num: HTMLElement; alive: boolean; n: number; ready: boolean }
+interface CrestEl { box: HTMLElement; mark: HTMLElement; num: HTMLElement; alive: boolean; n: number; ready: boolean; glyph: string }
 interface DotEl { e: HTMLElement; on: boolean; tx: string }
 interface FeedEntry { e: HTMLElement; t: number }
+interface LeadRow { li: HTMLElement; chip: HTMLElement; name: HTMLElement; pct: HTMLElement; team: number; txt: string }
 
 export class Hud {
   readonly root: HTMLElement;
@@ -185,34 +202,76 @@ export class Hud {
   private arrowAlive = true;
   private readonly pxy: [number, number] = [0, 0];
   private lastHide = false;
+  // CONTRACT_FFA F3
+  readonly mode: UiMode;
+  private readonly ffa: boolean;
+  /** the minimap is turned 180° (a GULF CREW viewer in teams mode only) */
+  private readonly flipMini: boolean;
+  private readonly names = new Map<number, string>();
+  private meBox: HTMLElement | null = null;
+  private mePct: HTMLElement | null = null;
+  private meRank: HTMLElement | null = null;
+  private readonly lead: LeadRow[] = [];
+  private readonly shareFills: Array<{ e: HTMLElement; team: number }> = [];
+  private readonly order: number[] = [];
+  private lastShareKey = '';
+  private readonly ffaInfo = { me: '', rank: 0, top3: [] as Array<{ team: number; name: string; pct: string }> };
 
-  constructor(host: HTMLElement, o: { team: TeamId; minimap: MinimapRaster | null; specialName?: string; roster?: ReadonlyArray<{ id: number; name: string; team: TeamId }>; youId?: number; kit?: HudKit }) {
+  constructor(host: HTMLElement, o: { team: TeamId; minimap: MinimapRaster | null; specialName?: string; roster?: ReadonlyArray<{ id: number; name: string; team: TeamId }>; youId?: number; kit?: HudKit;
+    /** CONTRACT_FFA F3: 'ffa' = the FREE-FOR-ALL HUD (default 'teams') */
+    mode?: UiMode }) {
     this.team = o.team;
     this.kit = o.kit ?? null;
     this.mini = o.minimap;
+    this.mode = o.mode ?? 'teams';
+    this.ffa = this.mode === 'ffa';
+    this.flipMini = !this.ffa && this.team === 2;
     this.root = el('div', 'df-hud');
     const sun = teamById(1), gulf = teamById(2);
+    const meLook = crewLook(this.team, this.mode);
+    /** the colour class of the human's own widgets: sun / gulf (teams) or me (FFA: the --me* vars below) */
+    const meKey = this.ffa ? 'me' : teamKey(this.team);
+    if (this.ffa) {
+      this.root.classList.add('ffa');
+      this.root.style.setProperty('--me', meLook.ui);
+      this.root.style.setProperty('--me-dye', meLook.dye);
+      this.root.style.setProperty('--me-gloss', meLook.dyeGloss);
+    }
 
-    // ── top centre: crests · timer · crests, tug bar
+    // ── top centre: crests · timer · crests, tug bar (FFA: 4 + 4 crews of one, an 8-colour share bar)
     const top = el('div', 'df-top');
     const sunRow = el('div', 'df-crests sun');
     const gulfRow = el('div', 'df-crests gulf');
     const roster = o.roster ?? [];
+    for (const r of roster) this.names.set(r.team, r.name);
     const mkCrest = (id: number, team: TeamId, name: string): CrestEl => {
-      const box = el('div', `df-crest ${teamKey(team)}${id === (o.youId ?? 0) ? ' you' : ''}`);
+      const look = this.ffa ? crewLook(team, 'ffa') : null;
+      const box = el('div', `df-crest ${look ? 'ffa' : teamKey(team)}${id === (o.youId ?? 0) ? ' you' : ''}`);
       box.title = name;
-      const mark = el('span', 'mark', teamById(team).markGlyph);
+      if (look) { box.style.setProperty('--c', look.ui); box.dataset.team = String(team); }
+      const glyph = look ? look.markGlyph : teamById(team).markGlyph;
+      const mark = el('span', 'mark', glyph);
       const num = el('span', 'num', '');
       box.append(mark, num);
-      return { box, mark, num, alive: true, n: -1, ready: false };
+      return { box, mark, num, alive: true, n: -1, ready: false, glyph };
     };
-    for (const t of [1, 2] as TeamId[]) {
-      const mem = roster.filter((r) => r.team === t);
-      const list = mem.length ? mem : [0, 1, 2, 3].map((i) => ({ id: (t - 1) * 4 + i, name: '', team: t }));
-      for (const r of list) {
-        const c = mkCrest(r.id, t, r.name);
+    if (this.ffa) {
+      const list = roster.length ? [...roster].sort((a, b) => a.id - b.id) : [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ id: i, name: '', team: (i + 1) as TeamId }));
+      list.forEach((r, i) => {
+        const c = mkCrest(r.id, r.team, r.name);
         this.crests[r.id] = c;
-        (t === 1 ? sunRow : gulfRow).append(c.box);
+        (i < Math.ceil(list.length / 2) ? sunRow : gulfRow).append(c.box);
+      });
+      sunRow.classList.add('ffa'); gulfRow.classList.add('ffa');
+    } else {
+      for (const t of [1, 2] as TeamId[]) {
+        const mem = roster.filter((r) => r.team === t);
+        const list = mem.length ? mem : [0, 1, 2, 3].map((i) => ({ id: (t - 1) * 4 + i, name: '', team: t }));
+        for (const r of list) {
+          const c = mkCrest(r.id, t, r.name);
+          this.crests[r.id] = c;
+          (t === 1 ? sunRow : gulfRow).append(c.box);
+        }
       }
     }
     this.timer = el('div', 'df-timer');
@@ -223,14 +282,55 @@ export class Hud {
     tug.setAttribute('aria-hidden', 'true');
     this.sunFill = el('div', 'fill sun');
     this.gulfFill = el('div', 'fill gulf');
-    const tm1 = el('i', 'm sun', sun.markGlyph), tm2 = el('i', 'm gulf', gulf.markGlyph);
-    tug.append(this.sunFill, this.gulfFill, tm1, tm2);
+    if (this.ffa) {
+      tug.className = 'df-tug df-sharebar';
+      for (let t = 1; t <= 8; t++) {
+        const f = el('div', 'fill');
+        f.style.background = crewLook(t, 'ffa').dye;
+        tug.append(f);
+        this.shareFills.push({ e: f, team: t });
+      }
+    } else {
+      const tm1 = el('i', 'm sun', sun.markGlyph), tm2 = el('i', 'm gulf', gulf.markGlyph);
+      tug.append(this.sunFill, this.gulfFill, tm1, tm2);
+    }
     mid.append(this.timer, tug);
     top.append(sunRow, mid, gulfRow);
 
+    // ── top left (FFA): your own share + mark, then the live top-3 leaderboard
+    let ffaPanel: HTMLElement | null = null;
+    if (this.ffa) {
+      ffaPanel = el('div', 'df-ffa-panel');
+      const me = el('div', 'df-me');
+      const mk = el('i', 'mk', meLook.markGlyph);
+      mk.setAttribute('aria-hidden', 'true');
+      const txt = el('div', 'txt');
+      txt.append(el('span', 'nm', roster.find((r) => r.id === (o.youId ?? 0))?.name ?? ''));
+      this.mePct = el('b', 'pct', pct1(0));
+      txt.append(this.mePct);
+      this.meRank = el('span', 'rank', '');
+      me.append(mk, txt, this.meRank);
+      this.meBox = me;
+      const ol = el('ol', 'df-lead');
+      for (let i = 0; i < 3; i++) {
+        const li = el('li', '');
+        const chip = el('i', 'chip', '');
+        chip.setAttribute('aria-hidden', 'true');
+        const name = el('b', 'nm', '');
+        const p = el('span', 'pct', '');
+        li.append(el('span', 'rk', String(i + 1)), chip, name, p);
+        li.hidden = true;
+        ol.append(li);
+        this.lead.push({ li, chip, name, pct: p, team: 0, txt: '' });
+      }
+      ffaPanel.append(me, ol);
+      for (const r of roster) this.order.push(r.team);
+      if (!this.order.length) for (let t = 1; t <= 8; t++) this.order.push(t);
+    }
+
     // ── top right: special gauge + kill feed
     const right = el('div', 'df-right');
-    this.gauge = el('div', `df-gauge ${teamKey(this.team)}`);
+    this.gauge = el('div', `df-gauge ${meKey}`);
     this.gaugeFill = el('b', 'fill');
     const gIcon = el('i', 'icon');
     gIcon.innerHTML = ICONS[this.kit?.specialId ?? ''] ?? '';
@@ -245,7 +345,7 @@ export class Hud {
 
     // ── minimap
     const miniBox = el('div', 'df-mini');
-    this.miniView = el('div', 'df-mini-view' + (this.team === 2 ? ' gulf' : ''));
+    this.miniView = el('div', 'df-mini-view' + (this.flipMini ? ' gulf' : ''));
     this.miniCanvas = el('canvas');
     this.miniCanvas.id = 'df-minimap';
     const w = this.mini?.w ?? 180, h = this.mini?.h ?? 264;
@@ -264,7 +364,7 @@ export class Hud {
       this.dots.push({ e, on: false, tx: '' });
     }
     this.arrow = el('div', 'df-mini-arrow');
-    const tcol = teamById(this.team === 2 ? 2 : 1);
+    const tcol = this.ffa ? meLook : teamById(this.team === 2 ? 2 : 1);
     this.arrow.innerHTML = `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1.5 L17.5 17.5 L10 13.2 L2.5 17.5 Z" fill="${tcol.ui}" stroke="#14203a" stroke-width="2.2" stroke-linejoin="round"/></svg>`;
     this.miniView.append(this.miniCanvas, dotLayer, this.arrow);
     miniBox.append(this.miniView);
@@ -276,9 +376,9 @@ export class Hud {
       + '<circle r="11" fill="none" stroke="#14203a" stroke-width="1.2" opacity=".75"/>'
       + '<circle r="2.6" fill="#fff8ec" stroke="#14203a" stroke-width="1.2"/>'
       + '<circle class="charge-bg" r="15.5" fill="none" stroke="rgba(20,32,58,.55)" stroke-width="5"/>'
-      + `<circle class="charge" r="15.5" fill="none" stroke="${this.team === 2 ? 'var(--gulf)' : 'var(--sun)'}" stroke-width="3.2" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="0 ${CHARGE_C.toFixed(2)}"/></svg>`;
+      + `<circle class="charge" r="15.5" fill="none" stroke="${this.ffa ? 'var(--me)' : this.team === 2 ? 'var(--gulf)' : 'var(--sun)'}" stroke-width="3.2" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="0 ${CHARGE_C.toFixed(2)}"/></svg>`;
     this.chargeRing = this.ret.querySelector('circle.charge');
-    this.tankBox = el('div', 'df-tank' + (this.team === 2 ? ' gulf' : ''));
+    this.tankBox = el('div', 'df-tank' + (this.ffa ? ' me' : this.team === 2 ? ' gulf' : ''));
     this.tankFill = el('div', 'df-tank-fill');
     const tankLine = el('div', 'df-tank-low');
     this.tankBox.append(this.tankFill, tankLine);
@@ -289,7 +389,7 @@ export class Hud {
     }
     const tankLabel = el('div', 'df-tank-label', 'TANK');
     // sub chip (JELLY CHARGE): greys out below the sub cost
-    this.sub = el('div', `df-sub ${teamKey(this.team)} grey`);
+    this.sub = el('div', `df-sub ${meKey} grey`);
     this.sub.innerHTML = ICONS.jelly;
     this.sub.title = this.kit?.subName ?? '';
     this.subKey = el('kbd', 'key', this.kit?.subKey ?? '');
@@ -309,10 +409,15 @@ export class Hud {
     this.debug.append(this.debugBody);
 
     this.root.append(top, right, miniBox, this.ret, this.tankBox, tankLabel, this.sub, this.toast, this.debug);
+    if (ffaPanel) this.root.insertBefore(ffaPanel, this.debug);
     host.append(this.root);
     this.slates = new Slates(host);
+    this.slates.mode = this.mode;
     this.redrawMinimap(true);
   }
+
+  /** a crew's look in this HUD's mode (teams: the CSS-var palette classes carry colorblind) */
+  look(team: number): CrewLook { return crewLook(team, this.mode); }
 
   /** remove every DOM node this HUD added (a match session ends) */
   dispose(): void {
@@ -349,6 +454,17 @@ export class Hud {
   killFeed(a: { name: string; team: TeamId } | null, b: { name: string; team: TeamId }): void {
     const e = el('div', 'df-feed-item');
     const who = (p: { name: string; team: TeamId }): HTMLElement => {
+      if (this.ffa) {
+        // CONTRACT_FFA F3: each name in its crew colour + mark
+        const c = crewLook(p.team, 'ffa');
+        const s = el('span', 'who ffa');
+        s.style.setProperty('--c', c.ui);
+        s.dataset.team = String(p.team);
+        const m = el('i', '', c.markGlyph);
+        m.setAttribute('aria-hidden', 'true');
+        s.append(m, el('b', '', p.name));
+        return s;
+      }
       const s = el('span', `who ${teamKey(p.team)}`);
       const m = el('i', '', teamById(p.team).markGlyph);
       m.setAttribute('aria-hidden', 'true');
@@ -423,7 +539,7 @@ export class Hud {
       if (c.alive !== ce.alive) {
         ce.alive = c.alive;
         ce.box.classList.toggle('down', !c.alive);
-        ce.mark.textContent = c.alive ? teamById(c.team).markGlyph : '✕';
+        ce.mark.textContent = c.alive ? ce.glyph : '✕';
       }
       const n = c.alive ? -1 : Math.max(0, Math.ceil(c.respawnIn - 1e-3));
       if (n !== ce.n) { ce.n = n; ce.num.textContent = n >= 0 ? String(n) : ''; }
@@ -431,14 +547,17 @@ export class Hud {
       if (ready !== ce.ready) { ce.ready = ready; ce.box.classList.toggle('ready', ready); }
     }
 
-    // tug bar
-    const cov = f.coverage;
-    const key = `${(cov.sun * 1000).toFixed(0)}|${(cov.gulf * 1000).toFixed(0)}`;
-    if (key !== this.lastCov) {
-      this.lastCov = key;
-      const w = coverageBar(cov.sun, cov.gulf);
-      this.sunFill.style.width = `${(w.sun * 100).toFixed(2)}%`;
-      this.gulfFill.style.width = `${(w.gulf * 100).toFixed(2)}%`;
+    // tug bar (FFA: the share bar, own share and the top-3 leaderboard)
+    if (this.ffa) this.updateFfa(f.shares ?? null);
+    else {
+      const cov = f.coverage;
+      const key = `${(cov.sun * 1000).toFixed(0)}|${(cov.gulf * 1000).toFixed(0)}`;
+      if (key !== this.lastCov) {
+        this.lastCov = key;
+        const w = coverageBar(cov.sun, cov.gulf);
+        this.sunFill.style.width = `${(w.sun * 100).toFixed(2)}%`;
+        this.gulfFill.style.width = `${(w.gulf * 100).toFixed(2)}%`;
+      }
     }
 
     // special gauge: fill; at 100 % (ready) a pulse + the key badge
@@ -507,7 +626,7 @@ export class Hud {
     // minimap + arrow + dots
     this.redrawMinimap(false);
     if (this.mini) {
-      const gulf = this.team === 2;
+      const gulf = this.flipMini;
       this.place(f.x, f.z);
       const rot = -f.yaw + (gulf ? Math.PI : 0);
       const at = `translate(${this.pxy[0].toFixed(1)}px, ${this.pxy[1].toFixed(1)}px) rotate(${rot.toFixed(2)}rad)`;
@@ -521,8 +640,12 @@ export class Hud {
           this.place(info.x, info.z);
           const tx = `translate(${this.pxy[0].toFixed(0)}px, ${this.pxy[1].toFixed(0)}px)`;
           if (tx !== d.tx) { d.tx = tx; d.e.style.transform = tx; }
-          const cls = `df-dot ${teamKey(info.team)}${info.team !== this.team ? ' foe' : ''}`;
-          if (d.e.className !== cls) d.e.className = cls;
+          const cls = this.ffa ? `df-dot ffa ${MARK_SHAPE[crewLook(info.team, 'ffa').markGlyph] ?? 'circle'}${info.team !== this.team ? ' foe' : ''}`
+            : `df-dot ${teamKey(info.team)}${info.team !== this.team ? ' foe' : ''}`;
+          if (d.e.className !== cls) {
+            d.e.className = cls;
+            if (this.ffa) d.e.style.setProperty('--c', crewLook(info.team, 'ffa').ui);
+          }
         }
         if (on !== d.on) { d.on = on; d.e.hidden = !on; }
       }
@@ -541,7 +664,7 @@ export class Hud {
   private place(x: number, z: number): void {
     const m = this.mini!;
     const [px, py] = m.worldToPixel(x, z);
-    const gulf = this.team === 2;
+    const gulf = this.flipMini;
     this.pxy[0] = (gulf ? m.w - px : px) * this.miniScale;
     this.pxy[1] = (gulf ? m.h - py : py) * this.miniScale;
   }
@@ -578,8 +701,66 @@ export class Hud {
       charge: this.kit?.fire === 'charge' ? Math.max(0, this.lastCharge) : null,
       tank: this.lastTank,
       dots: this.dots.filter((d) => d.on).length,
+      mode: this.mode,
+      ...(this.ffa ? {
+        ffa: { me: this.ffaInfo.me, rank: this.ffaInfo.rank, top3: this.ffaInfo.top3.map((r) => ({ ...r })),
+          crests: this.crests.filter(Boolean).map((c) => ({ team: Number(c.box.dataset.team), alive: c.alive, mark: c.glyph })),
+          feedCrews: this.feedItems.map((f) => [...f.e.querySelectorAll<HTMLElement>('.who')].map((w) => Number(w.dataset.team))) },
+      } : {}),
       ...this.slates.text(),
     };
+  }
+
+  /**
+   * FFA (CONTRACT_FFA F3): the 8-colour share bar under the timer (∛ of the painted total, split by share), your own
+   * share + rank, and the top 3 (share desc, a tie → the lower crew id: the sim's deterministic order). DOM writes
+   * only when a shown number changes.
+   */
+  private updateFfa(shares: ArrayLike<number> | null): void {
+    if (!shares) return;
+    const ord = this.order;
+    let key = '';
+    for (const t of ord) key += `${Math.round((shares[t] ?? 0) * 1000)}|`;
+    if (key === this.lastShareKey) return;
+    this.lastShareKey = key;
+    ord.sort((a, b) => ((shares[b] ?? 0) - (shares[a] ?? 0)) || (a - b));
+    let painted = 0;
+    for (const t of ord) painted += Math.max(0, shares[t] ?? 0);
+    const total = painted > 0 ? Math.min(1, Math.cbrt(Math.min(1, painted))) : 0;
+    for (const f of this.shareFills) {
+      const s = Math.max(0, shares[f.team] ?? 0);
+      f.e.style.width = painted > 0 ? `${((total * s / painted) * 100).toFixed(2)}%` : '0%';
+    }
+    const mine = Math.max(0, shares[this.team] ?? 0);
+    const me = pct1(mine);
+    const rank = ord.indexOf(this.team) + 1;
+    this.ffaInfo.me = me;
+    this.ffaInfo.rank = rank;
+    if (this.mePct && this.mePct.textContent !== me) this.mePct.textContent = me;
+    // no rank while the human has no turf yet (an all-zero board would tie-break the human to #1 in the countdown)
+    if (this.meRank) { const r = rank > 0 && mine > 0 ? `#${rank}` : ''; if (this.meRank.textContent !== r) this.meRank.textContent = r; }
+    this.meBox?.classList.toggle('lead', rank === 1 && mine > 0);
+    this.ffaInfo.top3.length = 0;
+    for (let i = 0; i < this.lead.length; i++) {
+      const row = this.lead[i];
+      const t = ord[i];
+      const s = t !== undefined ? Math.max(0, shares[t] ?? 0) : 0;
+      const on = t !== undefined && s > 0;
+      if (row.li.hidden === on) row.li.hidden = !on;
+      if (!on) continue;
+      const name = this.names.get(t) ?? '';
+      const p = pct1(s);
+      this.ffaInfo.top3.push({ team: t, name, pct: p });
+      if (row.team !== t) {
+        row.team = t;
+        const c = crewLook(t, 'ffa');
+        row.chip.textContent = c.markGlyph;
+        row.chip.style.background = c.dye;
+        row.name.textContent = name;
+        row.li.classList.toggle('you', t === this.team);
+      }
+      if (row.txt !== p) { row.txt = p; row.pct.textContent = p; }
+    }
   }
 
   private renderDebug(d: HudDebug): void {

@@ -64,6 +64,14 @@
     var timer = setTimeout(function () {
       if (!window.__DF_MAIN__) show('DYEFIELD did not start', 'src/main.ts never ran (60 s). Is the dev server up? Run: npm install && npm run dev');
     }, 60000);
+    // CONTRACT_FFA F3: a ?mode=ffa deep link (not ?lobby=1) loads a free-for-all match — the static card says so
+    try {
+      var q = new URLSearchParams(location.search), mq = (q.get('mode') || '').toLowerCase();
+      if (q.get('lobby') !== '1' && (mq === 'ffa' || mq === 'free-for-all')) {
+        var ms = document.querySelector('#df-boot .df-mode span');
+        if (ms) ms.textContent = 'Harbor Cup • Free-for-all';
+      }
+    } catch (e) { /* the module takes over the card anyway */ }
     window.__DF_BOOT__ = {
       handoff: function () { window.removeEventListener('error', onErr); window.removeEventListener('unhandledrejection', onRej); clearTimeout(timer); },
       fail: show,

@@ -21,7 +21,7 @@ import { createDirector, stepDirector } from '../ai/director.ts';
 import { stepEnemies } from '../ai/enemies.ts';
 import { stepBoss } from '../ai/bosses/index.ts';
 import { createUpgradeState, recomputeStats } from '../upgrades/stats.ts';
-import { stepUpgrades, processTriggers } from '../upgrades/engine.ts';
+import { stepUpgrades, processTriggers, processTriggersFrom } from '../upgrades/engine.ts';
 // v2 (FEATURES_V2 §2.3) — meta systems (L0 stubs; lanes L1/L4/L5 fill them)
 import { chargeUltimate, createUltState, stepUltimate } from '../meta/ultimate.ts';
 import { createMapState, stepObjectives } from '../meta/objectives.ts';
@@ -29,6 +29,8 @@ import { stepPowerups } from '../meta/powerups.ts';
 import { createTally, stepTally } from '../meta/tally.ts';
 import { stepEndless } from '../meta/endless.ts';
 import { applyPerk, sanitizeRunMeta, tryRevive } from '../meta/perks.ts';
+// GATEKEEPERS (§7.3) — the size gates (lane K0 skeleton: inert stub; lane K1a fills it)
+import { createGates, flushGateBreach, stepGates } from '../meta/gates.ts';
 
 export const NO_INPUT: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
 
@@ -69,6 +71,8 @@ export function createWorld(opts: RunOptions): World {
     map: createMapState(),
     tally: createTally(),
     endless: null,
+    // GATEKEEPERS §7.3
+    gates: createGates(),
   };
   recomputeStats(w);
   applyPerk(w);           // v2: after recomputeStats, before hp = maxHp
@@ -99,8 +103,10 @@ function checkRunEnd(w: World): void {
     if (tryRevive(w)) return;                             // v2: perk STAY OF DEMOLITION (§8.5)
     w.run.result = 'dead'; w.run.phase = 'dead'; w.run.endT = w.t;
     w.events.push({ type: 'runEnd', result: 'dead' });
-  } else if (!w.endless && w.director.bossSpawned && w.boss && !w.boss.alive) {   // v2: in endless only death ends the run
-    w.run.result = 'clear'; w.run.phase = 'clear'; w.run.endT = w.t;
+  } else if (!w.endless && w.director.bossSpawned && w.boss && !w.boss.alive && w.boss.role === 'main'
+             && w.gates.finaleDone) {   // v2: in endless only death ends the run · GATEKEEPERS §4.3 v3: after the finale
+    w.run.result = 'clear'; w.run.phase = 'clear';
+    w.run.endT = w.gates.mainKillT >= 0 ? w.gates.mainKillT : w.t;   // the clear time is the kill, not the finale's end
     w.events.push({ type: 'runEnd', result: 'clear' });
   }
 }
@@ -123,7 +129,8 @@ export function stepWorld(w: World, input: TitanInput): void {
   rebuildEnemyGrid(w);    // broadphase for the titan's attacks
   stepUltimate(w);        // v2: UPROAR fire (input.ultimate) + roar/blast + bank flush — BEFORE stepTitan (invuln + roar move on the fire tick)
   stepTitan(w);           // move, dash, leash, collide, contact smash/crush, footsteps, regen, kit (auto + hook)
-  stepDirector(w);        // waves, elite, boss scheduling + run.phase transitions
+  stepDirector(w);        // waves, elite + run.phase transitions (the boss block moved to stepGates, GATEKEEPERS §7.3)
+  stepGates(w);           // GATEKEEPERS: locks, gatekeeper / city-boss spawns, pressure, finale timer
   stepEndless(w);         // v2: EXTENDED COVERAGE escalation + rematches (no-op unless w.endless)
   stepEnemies(w);         // AI, movement, firing (spawns projectiles/telegraphs)
   stepBoss(w);            // boss AI + part colliders
@@ -133,14 +140,30 @@ export function stepWorld(w: World, input: TitanInput): void {
   stepHazards(w);
   stepPickups(w);         // magnet + collect → gainXp / gainMass (level/rank ups)
   stepUpgrades(w);        // buff timers, trigger icds, 'interval' triggers
+  flushGateBreach(w);     // GATEKEEPERS §2.5: a kill landed by any system above breaches HERE (after every attack of the tick),
+                          // so processTriggers (rankUp cards), stepObjectives (RECORDS ANNEX owed, Size I prop sites),
+                          // chargeUltimate and stepTally see the kill tick's rankUp / levelUp events
   processTriggers(w);     // upgrade triggers fired by THIS tick's events
+  settleGateBreach(w);    // a kill landed by a trigger proc breaches HERE; its rankUp / levelUp fire their cards now
   stepObjectives(w);      // v2: AFTER processTriggers so proc collapses / prop kills are seen (§2.3)
   stepPowerups(w);        // v2: drops from ALL of this tick's kills/collapses, collect, timers
   chargeUltimate(w);      // v2: UPROAR charge from this tick's events
   stepTally(w);           // v2: run tally the goals read
+  flushGateBreach(w);     // a kill landed by an objective / power-up this tick (rare: stepObjectives has run, so its ANNEX is not owed)
   if (w.titan.rank > w.run.peakRank) w.run.peakRank = w.titan.rank;
   checkRunEnd(w);
   if (w.tick % 30 === 0) compact(w);
+}
+
+/** GATEKEEPERS §2.5 after processTriggers: a trigger proc that landed a gatekeeper / city-boss kill breaches on
+ *  this tick, and the breach's own events (rankUp, levelUp, pickups) get their upgrade triggers too, so the
+ *  rankUp cards, the RECORDS ANNEX, UPROAR charge and the tally all see it. Bounded: a slot breaches once. */
+function settleGateBreach(w: World): void {
+  for (let k = 0; k < 4 && w.gates.breachDue !== 0; k++) {
+    const n = w.events.length;
+    flushGateBreach(w);
+    processTriggersFrom(w, n);
+  }
 }
 
 /** Convenience for probes/tests: advance n ticks with a constant input. */

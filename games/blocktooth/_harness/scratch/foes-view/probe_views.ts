@@ -14,7 +14,7 @@ import { spawnEnemy } from '../../../src/ai/enemies.ts';
 import { spawnBoss } from '../../../src/ai/bosses/index.ts';
 import { SIM_DT } from '../../../src/core/config.ts';
 import { ENEMY_KINDS } from '../../../src/core/types.ts';
-import type { BiomeId, BossId, World } from '../../../src/core/types.ts';
+import type { BiomeId, MainBossId, World } from '../../../src/core/types.ts';
 import type { FrameInfo, ViewCtx } from '../../../src/render/viewtypes.ts';
 
 let fails = 0;
@@ -98,7 +98,7 @@ const finiteMat = (m: THREE.Matrix4) => m.elements.every(Number.isFinite);
 }
 
 // ─────────────────────────────── bosses ───────────────────────────────
-for (const [id, biome] of [['caisson4', 'lockwater'], ['irongully', 'whitestacks']] as [BossId, BiomeId][]) {
+for (const [id, biome] of [['caisson4', 'lockwater'], ['irongully', 'whitestacks']] as [MainBossId, BiomeId][]) {
   const w = createWorld({ titan: 'hearthback', biome, seed: 9 });
   w.cheats.god = true; w.cheats.noSpawns = true;
   w.titan.rank = 4; w.titan.height = 60; w.titan.radius = 25.2;

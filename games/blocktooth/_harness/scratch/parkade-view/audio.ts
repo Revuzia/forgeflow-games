@@ -7,15 +7,15 @@ import { spawnTelegraph } from '../../../src/combat/telegraphs.ts';
 import { spawnBoss } from '../../../src/ai/bosses/index.ts';
 import { AudioEngine } from '../../../src/audio/audio.ts';
 import { Sfx } from '../../../src/audio/sfx.ts';
-import type { BossId, SimEvent, World } from '../../../src/core/types.ts';
+import type { MainBossId, SimEvent, World } from '../../../src/core/types.ts';
 
 const SR = 44100;
 const world: World = createWorld({ titan: 'molo', biome: 'grideast', seed: 11 });
 const T = world.titan;
 T.rank = 4; T.height = 60; T.radius = 25;
 const cx = T.x, cz = T.z;
-const bosses: Partial<Record<BossId, World['boss']>> = {};
-function useBoss(id: BossId): NonNullable<World['boss']> {
+const bosses: Partial<Record<MainBossId, World['boss']>> = {};
+function useBoss(id: MainBossId): NonNullable<World['boss']> {
   if (!bosses[id]) { world.boss = null; spawnBoss(world, id); bosses[id] = world.boss; }
   world.boss = bosses[id] ?? null;
   const b = world.boss!;
@@ -28,13 +28,13 @@ const fire = (tag: string): SimEvent[] => {
   return [{ type: 'telegraphFire', id: tg.id, owner: 'boss', hit: true, ...at() }];
 };
 
-interface Case { name: string; dur: number; boss: BossId; ev?: () => SimEvent[]; step?: boolean }
+interface Case { name: string; dur: number; boss: MainBossId; ev?: () => SimEvent[]; step?: boolean }
 const cases: Case[] = [
   { name: 'bossSpawn (siren + reversing beeper)', dur: 4.2, boss: 'parkade6', ev: () => [{ type: 'bossSpawn', boss: 'parkade6' }] },
   { name: 'step hiss (tripod step)', dur: 0.8, boss: 'parkade6', step: true },
-  ...['rampLaunch', 'barrierSwing', 'towChain', 'deckDrop', 'levelCollapse'].map((a) => ({ name: `bossAttack ${a}`, dur: 2, boss: 'parkade6' as BossId, ev: () => [{ type: 'bossAttack', attack: a, ...at() } as SimEvent] })),
-  ...['barrierSwing', 'deckDrop', 'levelCollapse:A', 'levelCollapse:C'].map((t) => ({ name: `fire ${t}`, dur: 2, boss: 'parkade6' as BossId, ev: () => fire(t) })),
-  ...['till', 'legFL', 'booth', 'body'].map((p) => ({ name: `bossHit ${p}`, dur: 0.8, boss: 'parkade6' as BossId, ev: () => [{ type: 'bossHit', part: p, dmg: 900, ...at(20, 20) } as SimEvent] })),
+  ...['rampLaunch', 'barrierSwing', 'towChain', 'deckDrop', 'levelCollapse'].map((a) => ({ name: `bossAttack ${a}`, dur: 2, boss: 'parkade6' as MainBossId, ev: () => [{ type: 'bossAttack', attack: a, ...at() } as SimEvent] })),
+  ...['barrierSwing', 'deckDrop', 'levelCollapse:A', 'levelCollapse:C'].map((t) => ({ name: `fire ${t}`, dur: 2, boss: 'parkade6' as MainBossId, ev: () => fire(t) })),
+  ...['till', 'legFL', 'booth', 'body'].map((p) => ({ name: `bossHit ${p}`, dur: 0.8, boss: 'parkade6' as MainBossId, ev: () => [{ type: 'bossHit', part: p, dmg: 900, ...at(20, 20) } as SimEvent] })),
   { name: 'bossStagger (JAMMED)', dur: 2.8, boss: 'parkade6', ev: () => [{ type: 'bossStagger' }] },
   { name: 'bossDefeated (collapse + alarms)', dur: 5, boss: 'parkade6', ev: () => [{ type: 'bossDefeated', ...at(30, 30) }] },
   { name: 'leash on (tow hooks)', dur: 1, boss: 'parkade6', ev: () => [{ type: 'leash', on: true, ...at(20, 0) }] },

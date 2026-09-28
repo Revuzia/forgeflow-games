@@ -25,6 +25,9 @@
 //     flung up and flailing → calm down once far away.
 //   * A titan footstep that lands on them (Size II+) — or a collapse / explosion on top of them —
 //     makes them PUFF: a little cream dust pop. Never gore.
+//   * GATEKEEPERS §4.3 (lane K2a): `surge(x, z, radius, count)` — the VICTORY FINALE fills the streets round the
+//     Size V titan with a FIXED number of fleeing civilians (placed on the next frame, recycling calm ones when the
+//     pool is full, never inside a building or the harbour), all in full panic away from the titan.
 //   * Readability vs the HALVARD androids (off-white + safety orange + navy, visors, carbines):
 //     civilians never wear that palette, have hair / hats instead of visors, carry bags, phones,
 //     umbrellas and balloons instead of weapons, and behave like a crowd.
@@ -1233,6 +1236,10 @@ export class CivilianView implements ViewModule {
   private aspectInv = 9 / 16;
   private freeCursor = 0;
   private frameNo = 0;
+  /** GATEKEEPERS §4.3: a pending finale surge (placed by the next update, which has the World) */
+  private surgeN = 0; private surgeX = 0; private surgeZ = 0; private surgeR = 0;
+  /** civilians placed by the last surge (debug / perf scenario (e)) */
+  surgePlaced = 0;
   /** per prop id: footprint half extents (width / length; trees = trunk) and a per-frame heading trig cache */
   private propHW = new Float32Array(0);
   private propHL = new Float32Array(0);
@@ -1260,7 +1267,71 @@ export class CivilianView implements ViewModule {
   /** civilians currently on screen (debug / tests) */
   get count(): number { return this.live; }
 
+  /**
+   * GATEKEEPERS §4.3 (CiviliansAddV3): the finale crowd surge — `count` fleeing civilians in a band round (x, z)
+   * out to `radius` (view-only, cosmetic randomness). The count is fixed (quality does not scale it), so the
+   * perf scenario measures the real load; they are placed on the next frame.
+   */
+  surge(x: number, z: number, radius: number, count: number): void {
+    if (!(count > 0) || !Number.isFinite(x) || !Number.isFinite(z) || !(radius > 0)) return;
+    this.surgeN = Math.min(CAP, Math.floor(count)); this.surgeX = x; this.surgeZ = z; this.surgeR = radius;
+  }
+
+  private placeSurge(w: World, tx: number, tz: number, H: number, tbx: number, tbz: number, liveR: number): void {
+    const city = w.city, n = this.surgeN;
+    this.surgeN = 0;
+    let placed = 0;
+    const used = new Uint8Array(CAP);           // slots this surge filled (never recycled twice)
+    for (let tries = 0; tries < n * 8 && placed < n; tries++) {
+      const a = Math.random() * Math.PI * 2;
+      const rr = this.surgeR * (0.45 + 0.75 * Math.sqrt(Math.random()));
+      const x = this.surgeX + Math.cos(a) * rr, z = this.surgeZ + Math.sin(a) * rr;
+      if (this.waterZ !== null && z < this.waterZ + 2) continue;
+      if (!this.inLiveBlock(city, x, z, tbx, tbz, liveR)) continue;
+      if (this.inBuilding(city, x, z, 0.8 * this.scaleNow)) continue;
+      let i = this.freeSlot();
+      if (i < 0) {
+        // the pool is full: recycle a calm one (the surge is the finale's crowd)
+        for (let k = 0; k < CAP; k++) { const j = (this.freeCursor + k) % CAP; if (!used[j] && (this.st[j] === ST_MILL || this.st[j] === ST_IDLE)) { i = j; break; } }
+        // a Size V rampage leaves the whole pool already fleeing (perfcheck (e): 12 / 120 placed): then the
+        // fleeing civilian farthest from the titan (off-screen) is re-used, so the finale's crowd is always 120
+        if (i < 0) {
+          let bd = -1;
+          for (let j = 0; j < CAP; j++) {
+            if (used[j] || this.st[j] !== ST_FLEE) continue;
+            const dd = (this.x[j] - tx) * (this.x[j] - tx) + (this.z[j] - tz) * (this.z[j] - tz);
+            if (dd > bd) { bd = dd; i = j; }
+          }
+        }
+        if (i < 0) break;
+      }
+      used[i] = 1;
+      this.dressUp(i, w.biomeId);
+      this.rad[i] = this.radiusOf(i);
+      this.initCivilian(i, x, z, tx, tz, i, false, false, 1, 0, 1, 1);
+      // full panic, away from the titan (with a spread), long enough to outlast the 10 s finale
+      const dx = x - tx, dz = z - tz, d = Math.hypot(dx, dz) || 1;
+      const sp = (3.8 + 0.11 * H) * (0.85 + Math.random() * 0.45);
+      const jit = (Math.random() - 0.5) * 0.9;
+      const ux = dx / d, uz = dz / d;
+      this.st[i] = ST_FLEE;
+      this.vx[i] = (ux * Math.cos(jit) - uz * Math.sin(jit)) * sp;
+      this.vz[i] = (ux * Math.sin(jit) + uz * Math.cos(jit)) * sp;
+      this.spd[i] = sp;
+      this.t[i] = 8 + Math.random() * 4;
+      this.pose[i] = Math.random() < 0.8 ? P_PANIC : P_WALK;
+      this.hd[i] = Math.atan2(this.vx[i], this.vz[i]);
+      this.wallT[i] = 0; this.steer[i] = 0;
+      this.feel[i] = 0.6 + Math.random() * 1.0;
+      this.bias[i] = (Math.random() < 0.5 ? -1 : 1) * (0.35 + Math.random() * 0.65);
+      this.hashInsert(i);
+      placed++;
+    }
+    this.surgePlaced = placed;
+  }
+
   mount(w: World): void {
+    this.surgeN = 0; this.surgePlaced = 0;
     this.waterZ = harbourWaterZ(w.city);
     const toon = makeCivToon();
     const ink = makeCivOutline();
@@ -1431,6 +1502,9 @@ export class CivilianView implements ViewModule {
       const got = this.spawnGroup(w, tx, tz, R, H, tbx, tbz, liveR, scale, Math.min(5, want - alive, budget), slate);
       alive += got; budget -= Math.max(1, got);
     }
+
+    // ── GATEKEEPERS §4.3: the finale surge (a fixed count, placed once) ──
+    if (this.surgeN > 0 && !f.frozen) this.placeSurge(w, tx, tz, H, tbx, tbz, liveR);
 
     // ── behaviour + integration ──
     /** facade feelers for fleeing civilians (skipped at Size IV–V where a figure is a few px) */

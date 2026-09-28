@@ -321,3 +321,72 @@ html.df-cb .df-tag.gulf { background: rgba(21,77,187,.94); }
 @keyframes dfBob { 50% { transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .df-progress b, .df-play { animation: none; } }
 @media (max-width: 760px) { .df-crest { width: 28px; height: 28px; } .df-crest .mark { font-size: 15px; } .df-timer { font-size: 26px; min-width: 90px; } .df-gauge { width: 176px; } .df-gauge .label { font-size: 12px; } .df-toast { font-size: 13px; } }
+
+/* ───────────────────────── FREE-FOR-ALL HUD (CONTRACT_FFA F3; hud.ts mode 'ffa') ─────────────────────────
+   --me / --me-dye / --me-gloss = the human's FFA colour (set on .df-hud.ffa); --c = a crew's colour (inline). */
+.df-crest.ffa { background: var(--c); color: var(--cream); }
+.df-crests.ffa { gap: 5px; }
+.df-tug.df-sharebar { display: flex; overflow: hidden; }
+.df-tug.df-sharebar .fill { position: relative; flex: none; height: 100%; width: 0; border-radius: 0; transition: width .25s ease-out; }
+.df-gauge.me .fill { background: linear-gradient(180deg, var(--me-gloss), var(--me-dye)); }
+.df-gauge.me .icon { color: var(--me); }
+.df-sub.me { color: var(--me); }
+.df-tank.me .df-tank-fill { background: linear-gradient(180deg, var(--me-gloss), var(--me-dye)); }
+.df-feed-item .who.ffa i, .df-feed-item .who.ffa b { color: var(--c); }
+
+/* top left: your own share + mark, then the live top 3 */
+.df-ffa-panel { position: absolute; left: 20px; top: 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; width: 232px; }
+.df-me { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 16px 6px 6px; border-radius: 999px; background: var(--cream);
+  border: var(--edge) solid var(--ink); box-shadow: var(--drop); transition: box-shadow .2s ease; }
+.df-me .mk { flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font: 400 25px/1 var(--display);
+  background: var(--me-dye); color: var(--cream); border: 3px solid var(--ink); text-shadow: 0 2px 0 var(--ink); }
+.df-me .txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.df-me .nm { font: 900 11px/1 var(--body); letter-spacing: .14em; color: var(--ink2); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.df-me .pct { font: 400 28px/1 var(--display); letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.df-me .rank { flex: none; font: 400 22px/1 var(--display); color: var(--ink2); }
+.df-me.lead { box-shadow: 0 5px 0 var(--ink), 0 0 0 4px var(--me); }
+.df-me.lead .rank { color: var(--ink); }
+.df-lead { list-style: none; margin: 0; padding: 7px 10px; width: 100%; display: flex; flex-direction: column; gap: 5px; border-radius: 16px;
+  background: rgba(20,32,58,.78); border: 2px solid rgba(255,248,236,.35); }
+.df-lead:not(:has(li:not([hidden]))) { display: none; }
+.df-lead li { display: grid; grid-template-columns: 12px 22px minmax(0, 1fr) auto; align-items: center; gap: 7px; color: var(--cream); font: 800 14px/1 var(--body); }
+.df-lead .rk { font: 400 14px/1 var(--display); color: #b9c6e4; text-align: center; }
+.df-lead .chip { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font: 400 12px/1 var(--display);
+  color: var(--cream); border: 2px solid var(--ink); text-shadow: 0 1px 0 var(--ink); }
+.df-lead .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 800; }
+.df-lead .pct { font: 400 15px/1 var(--display); font-variant-numeric: tabular-nums; }
+.df-lead li.you .nm { color: var(--warn); }
+
+/* minimap dots: crew colour + mark SHAPE (an ink outline = the element, the colour = ::after) */
+.df-dot.ffa { width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--ink); }
+.df-dot.ffa::after { content: ''; position: absolute; inset: 2px; background: var(--c); }
+.df-dot.ffa.circle, .df-dot.ffa.circle::after { border-radius: 50%; }
+.df-dot.ffa.tri, .df-dot.ffa.tri::after { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.df-dot.ffa.tri { width: 14px; height: 13px; margin: -7px 0 0 -7px; }
+.df-dot.ffa.tri::after { inset: 4px 3px 1.8px; }
+.df-dot.ffa.dia, .df-dot.ffa.dia::after { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.df-dot.ffa.dia { width: 14px; height: 14px; margin: -7px 0 0 -7px; }
+.df-dot.ffa.dia::after { inset: 2.6px; }
+.df-dot.ffa.star, .df-dot.ffa.star::after { clip-path: polygon(50% 0, 62% 35%, 99% 36%, 69% 58%, 80% 94%, 50% 72%, 20% 94%, 31% 58%, 1% 36%, 38% 35%); }
+.df-dot.ffa.star { width: 16px; height: 16px; margin: -8px 0 0 -8px; }
+.df-dot.ffa.star::after { inset: 3px; }
+.df-dot.ffa.cross, .df-dot.ffa.cross::after { clip-path: polygon(33% 0, 67% 0, 67% 33%, 100% 33%, 100% 67%, 67% 67%, 67% 100%, 33% 100%, 33% 67%, 0 67%, 0 33%, 33% 33%); }
+.df-dot.ffa.cross { width: 14px; height: 14px; margin: -7px 0 0 -7px; }
+.df-dot.ffa.cross::after { inset: 2px; }
+.df-dot.ffa.pent, .df-dot.ffa.pent::after { clip-path: polygon(50% 0, 100% 38%, 81% 100%, 19% 100%, 0 38%); }
+.df-dot.ffa.pent { width: 14px; height: 13px; margin: -7px 0 0 -7px; }
+.df-dot.ffa.pent::after { inset: 2.6px 2.4px 2px; }
+.df-dot.ffa.hex, .df-dot.ffa.hex::after { clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); }
+.df-dot.ffa.hex { width: 14px; height: 13px; margin: -7px 0 0 -7px; }
+.df-dot.ffa.hex::after { inset: 2.2px; }
+
+/* FFA death line: the washer's crew chip carries the colour; the name is cream (the gold --warn name read as SUNFLOWER) */
+.df-death[data-team="ffa"] .df-death-line .name { color: var(--cream); }
+.df-death-line .icon i.chip { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 50%; background: var(--cu);
+  border: 4px solid var(--ink); box-shadow: 0 5px 0 var(--ink); font-size: 32px; color: var(--cream); -webkit-text-stroke: 2px var(--ink);
+  text-shadow: none; box-sizing: border-box; }
+/* the death slate's splat in the washer's FFA colour */
+.df-death[data-team="ffa"] .df-death-splat { background: radial-gradient(closest-side, var(--splat) 0 62%, transparent 64%),
+    radial-gradient(closest-side, var(--splat) 0 60%, transparent 62%) 12% 70% / 22% 40% no-repeat,
+    radial-gradient(closest-side, var(--splat) 0 60%, transparent 62%) 92% 22% / 16% 30% no-repeat; }
+@media (max-width: 760px) { .df-ffa-panel { width: 190px; } .df-me .pct { font-size: 22px; } .df-me .mk { width: 36px; height: 36px; font-size: 20px; } }

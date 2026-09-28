@@ -7,6 +7,8 @@
 //                           distance; oversize buildings/props only when nothing else is in range.
 // All distances are SURFACE distances (to the enemy/part circle, the building footprint, the prop's
 // radius). Ties: enemies < boss < buildings < props, then lower id / part index.
+// GATEKEEPERS §2.4 (lane K0): with preferEnemies, an OPEN weak point of a live gatekeeper (a part whose bit
+// is set in boss.data.weakMask) within range is returned BEFORE any enemy. City bosses are unchanged.
 
 import type { DamageOpts, Enemy, World } from '../core/types.ts';
 import { RANKS } from '../core/config.ts';
@@ -31,6 +33,24 @@ function better(d: number, cat: number, id: number, b: Best): boolean {
   if (d > b.d) return false;
   if (cat !== b.cat) return cat < b.cat;
   return id < b.id;
+}
+
+/** GATEKEEPERS §2.4: the nearest OPEN weak part (bit i of boss.data.weakMask) of a live gatekeeper within
+ *  range (surface distance); −1 if none, for a city boss, or while the rig is not hittable. */
+function nearestWeakPart(w: World, x: number, z: number, range: number): number {
+  const B = w.boss;
+  if (!B || !B.alive || B.introT > 0 || B.role !== 'gate') return -1;
+  const mask = B.data.weakMask;
+  if (!(mask > 0)) return -1;
+  let best = -1, bestD = Infinity;
+  for (let i = 0; i < B.parts.length && i < 31; i++) {
+    if (!((mask >>> i) & 1)) continue;
+    const p = B.parts[i];
+    const d = Math.max(0, Math.hypot(p.x - x, p.z - z) - p.r);
+    if (d > range) continue;
+    if (d < bestD) { best = i; bestD = d; }
+  }
+  return best;
 }
 
 /** Nearest boss part within range (surface distance); −1 if none / boss not hittable. */
@@ -93,6 +113,10 @@ function cityTarget(b: Best): Target | null {
 /** Pick the auto-attack target around (x, z) within `range` metres (see header for the order). */
 export function findTarget(w: World, x: number, z: number, range: number, preferEnemies = true): Target | null {
   if (!(range >= 0)) return null;
+  if (preferEnemies) {
+    const weak = nearestWeakPart(w, x, z, range);   // GATEKEEPERS §2.4: an open weak point beats any enemy
+    if (weak >= 0) return { kind: 'boss', part: weak };
+  }
   const e = nearestEnemy(w, x, z, range);
   const bp = bestPart; bp.d = Infinity; bp.cat = 1; bp.id = 0;
   if (preferEnemies) {

@@ -52,10 +52,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { HeroAssets } from './heroview.ts';
 import type { Fx } from './fx.ts';
-import { crewDyeHex, teamById, WEAPONS } from '../core/data.ts';
+import { crewDef, crewDyeHex, crewIds, WEAPONS } from '../core/data.ts';
 import { artUrl } from '../core/glb.ts';
 import { MOVE } from '../core/config.ts';
-import type { MoveState, TeamId } from '../core/types.ts';
+import type { MatchMode, MoveState, TeamId } from '../core/types.ts';
 
 /** The slice of core/runner.ts `Runner` (CONTRACT §10.2) the view reads. Structural, read-only. */
 export interface RunnerLike {
@@ -655,6 +655,12 @@ function runnerMaterial(team: TeamId, u: RunnerUniforms, skinned: boolean): THRE
   return m;
 }
 
+/** '#RRGGBB' → [r, g, b] 0..255 */
+function hexRgb255(hex: string): [number, number, number] {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
 // ───────────────────────────── one runner ─────────────────────────────
 
 export interface RunnerFrame {
@@ -749,8 +755,10 @@ class RunnerView {
   private readonly e = new THREE.Euler();
   private readonly axis = new THREE.Vector3();
 
-  constructor(assets: HeroAssets, kit: RunnerKit, id: number, team: TeamId, name: string, tagHost: HTMLElement | null) {
+  constructor(assets: HeroAssets, kit: RunnerKit, id: number, team: TeamId, name: string, tagHost: HTMLElement | null,
+    mode: MatchMode = 'teams') {
     this.id = id; this.team = team; this.name = name; this.kit = kit;
+    const crew = crewDef(mode, team);
     this.root.name = `runner_${id}`;
     this.model = SkeletonUtils.clone(assets.hero.scene);
     this.model.traverse((o) => { if ((o as THREE.Light).isLight || (o as THREE.Camera).isCamera) o.visible = false; });
@@ -767,7 +775,7 @@ class RunnerView {
     // the original tide_runner Group (multi-primitive) may be the parent: attach to ITS parent
     const holder = ownerOf(refMesh, ['tide_runner']) && parent !== this.model && origName(parent) === 'tide_runner' ? (parent.parent ?? this.model) : parent;
 
-    const col = new THREE.Color(teamById(team).dye);
+    const col = new THREE.Color(crew.dye);
     this.u = {
       uTeam: { value: col }, uTankY: { value: kit.fillMax }, uFlash: { value: 0 }, uRim: { value: 0.22 }, uGlow: { value: 0.05 },
       uSpin: { value: 0 }, uDrumP: { value: kit.drum ? kit.drum.p.clone() : new THREE.Vector3() }, uDrumD: { value: kit.drum ? kit.drum.d.clone() : new THREE.Vector3(1, 0, 0) },
@@ -839,9 +847,16 @@ class RunnerView {
 
     // name tag
     this.tag = document.createElement('div');
-    this.tag.className = `df-tag ${team === 2 ? 'gulf' : 'sun'}`;
+    if (mode === 'ffa') {
+      // FFA: one of 8 crews — the pill takes the crew's deep dye inline (styles.css only knows sun / gulf)
+      this.tag.className = `df-tag ffa crew-${crew.key}`;
+      const [r, g, b] = hexRgb255(crew.dyeDeep);
+      this.tag.style.background = `rgba(${r},${g},${b},.92)`;
+      this.tag.style.setProperty('--crew', crew.dye);
+      this.tag.style.setProperty('--crew-ui', crew.ui);
+    } else this.tag.className = `df-tag ${team === 2 ? 'gulf' : 'sun'}`;
     const mk = document.createElement('i');
-    mk.textContent = teamById(team).markGlyph;
+    mk.textContent = crew.markGlyph;
     mk.setAttribute('aria-hidden', 'true');
     const nm = document.createElement('span');
     nm.textContent = name;
@@ -1119,13 +1134,17 @@ export class PlayerViews {
   private readonly m = new THREE.Matrix4();
   private readonly camPos = new THREE.Vector3();
   private time = 0;
-  /** linear dye per crew (the stain colour) */
-  private readonly dyeLin: Record<number, THREE.Color> = { 1: new THREE.Color(teamById(1).dye), 2: new THREE.Color(teamById(2).dye) };
+  /** the match mode (CONTRACT_FFA): the crew palette of the runners, stains and tags */
+  readonly mode: MatchMode;
+  /** linear dye per crew id of the mode (the stain colour) */
+  private readonly dyeLin: Record<number, THREE.Color> = {};
   /** juice counters (harness read-back) */
   readonly juice = { stains: 0, bodyDrips: 0, landPuffs: 0, crowns: 0 };
 
   constructor(assets: HeroAssets, roster: ReadonlyArray<{ id: number; name: string; team: TeamId; kit?: string }>, fx: Fx | null,
-    tagHost: HTMLElement | null, kits?: RunnerKit | Map<string, RunnerKit>) {
+    tagHost: HTMLElement | null, kits?: RunnerKit | Map<string, RunnerKit>, mode: MatchMode = 'teams') {
+    this.mode = mode;
+    for (const t of crewIds(mode)) this.dyeLin[t] = new THREE.Color(crewDef(mode, t).dye);
     if (kits instanceof Map) this.kits = kits;
     else {
       this.kits = new Map();
@@ -1148,7 +1167,7 @@ export class PlayerViews {
       this.tagHost = box;
     } else this.tagHost = null;
     for (const e of roster) {
-      const rv = new RunnerView(assets, kitFor(e.kit), e.id, e.team, e.name, this.tagHost);
+      const rv = new RunnerView(assets, kitFor(e.kit), e.id, e.team, e.name, this.tagHost, mode);
       this.views.push(rv);
       this.root.add(rv.root);
       this.frames.push({ x: 0, y: 0, z: 0, yaw: 0, speed: 0, vx: 0, vz: 0, vy: 0 });
@@ -1197,20 +1216,21 @@ export class PlayerViews {
 
   /**
    * runner `id` took a hit: the white flash + the dye-drip stain (juice §21). `byTeam` = the attacker's
-   * crew (default: the other crew), (x, y, z) = the world hit point (default: mid-torso), dmg sizes it.
+   * crew (any crew id of the mode; default: teams the other crew, FFA the next crew id), (x, y, z) = the world
+   * hit point (default: mid-torso), dmg sizes it.
    */
   onHit(id: number, byTeam?: TeamId, x?: number, y?: number, z?: number, dmg = 34): void {
     const rv = this.views[id];
     if (!rv) return;
     rv.u.uFlash.value = 0.9;
     const f = this.frames[id];
-    const team: TeamId = byTeam === 1 || byTeam === 2 ? byTeam : (rv.team === 1 ? 2 : 1);
+    const team: TeamId = byTeam !== undefined && byTeam !== 0 && this.dyeLin[byTeam] ? byTeam : this.otherCrew(rv.team);
     const fresh = rv.dripAmt < 0.08;
     rv.dripTeam = team;
     rv.dripAmt = Math.min(1, rv.dripAmt + 0.25 + 0.45 * Math.min(1, Math.max(0, dmg) / 50));
     rv.dripT = 0;
     if (fresh) rv.dripGrow = 0;
-    const c = this.dyeLin[team] ?? this.dyeLin[2];
+    const c = this.dyeLin[team] ?? this.dyeLin[this.otherCrew(rv.team)];
     rv.u.uDrip.value.set(c.r, c.g, c.b, rv.dripAmt);
     // the stain centre in bind space: the hit point relative to the feet, un-yawed (clamped to the body)
     let lx = 0, ly = 0.62, lz = 0.05;
@@ -1224,6 +1244,14 @@ export class PlayerViews {
     if (fresh) cp.set(lx, ly, lz, 0);
     else cp.set(cp.x + (lx - cp.x) * 0.5, cp.y + (ly - cp.y) * 0.5, cp.z + (lz - cp.z) * 0.5, cp.w);
     this.juice.stains++;
+  }
+
+  /** a crew that is not `t` (teams: the other crew; FFA: the next crew id, wrapping) — the default attacker */
+  private otherCrew(t: TeamId): TeamId {
+    if (this.mode !== 'ffa') return t === 1 ? 2 : 1;
+    const ids = crewIds(this.mode);
+    const i = ids.indexOf(t);
+    return ids[(i + 1) % ids.length] ?? 1;
   }
 
   private clearDrip(rv: RunnerView): void {
@@ -1476,10 +1504,11 @@ export class PlayerViews {
     return { bodyTris: this.kit.bodyTris, finTris: this.kit.finTris, runners: this.views.length, kits };
   }
 
-  /** Settings → Colorblind marks: the crew tint on every runner + the body-stain dye (teams.json colorblind) */
+  /** Settings → Colorblind marks: the crew tint on every runner + the body-stain dye (teams.json colorblind; FFA
+   *  has no swap — crewDyeHex returns each crew's own dye) */
   setColorblind(on: boolean): void {
-    for (const t of [1, 2] as const) this.dyeLin[t]?.set(crewDyeHex(t, on));
-    for (const rv of this.views) rv.u.uTeam.value.set(crewDyeHex(rv.team, on));
+    for (const t of crewIds(this.mode)) this.dyeLin[t]?.set(crewDyeHex(this.mode, t, on));
+    for (const rv of this.views) rv.u.uTeam.value.set(crewDyeHex(this.mode, rv.team, on));
   }
 
   dispose(): void {

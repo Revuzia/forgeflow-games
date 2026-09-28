@@ -357,3 +357,77 @@ html.df-cb .dfm[data-crew="gulf"] .dfm-stat .bar i.on { background-image: repeat
 .dfm-cardhead { display: flex; align-items: flex-start; justify-content: space-between; }
 .dfm-cardhead .dfm-swatch { margin: -4px 0 0; }
 .dfm-swatch { display: flex; gap: 4px; }
+
+/* ───────── FREE-FOR-ALL (CONTRACT_FFA F3) ───────── */
+/* PLAY: the MODE selector (right end of the header) */
+.dfm-modebox { margin-left: auto; flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 18px; border-radius: 999px;
+  background: var(--cream); border: 4px solid var(--ink); box-shadow: 0 6px 0 var(--ink); }
+.dfm-modebox .dfm-cap { margin: 0; }
+.dfm-modeseg { display: flex; flex-wrap: nowrap; gap: 6px; }
+.dfm-modebtn { white-space: nowrap; }
+/* LOADOUT: the colour pick of the 8 FFA crews (a chip + its mark) */
+.dfm-colors { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 8px; }
+.dfm-color { position: relative; height: 44px; border-radius: 999px; border: 4px solid var(--ink); background: var(--cream); box-shadow: 0 5px 0 var(--ink);
+  display: grid; place-items: center; cursor: pointer; padding: 0; transition: transform .12s cubic-bezier(.2,1.5,.4,1), box-shadow .12s ease; }
+.dfm-color i { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font: 400 15px/1 var(--display);
+  background: var(--c); color: var(--cream); border: 2px solid var(--ink); text-shadow: 0 1px 0 var(--ink); }
+.dfm-color.on { background: linear-gradient(180deg, var(--cg), var(--c)); }
+.dfm-color.on i { border-color: var(--cream); box-shadow: 0 0 0 2px var(--ink); }
+.dfm-color.on::after { content: '✓'; position: absolute; right: -8px; top: -9px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--ink); color: var(--cream); font: 400 13px/1 var(--display); border: 2px solid var(--cream); }
+.dfm-color:focus, .dfm-color:hover { outline: none; transform: translateY(-2px); box-shadow: 0 7px 0 var(--ink), 0 0 0 4px var(--cream); }
+/* the player's FFA colour on the title / PLAY accents (teams keeps its sun / gulf rules) */
+.dfm[data-crew="ffa"] .dfm-item-play, .dfm[data-crew="ffa"] .dfm-start { background: linear-gradient(180deg, var(--crew-gloss), var(--crew)); color: var(--crew-ink); }
+.dfm[data-crew="ffa"] .dfm-item-play:focus, .dfm[data-crew="ffa"] .dfm-item-play:hover { background: linear-gradient(180deg, var(--crew-gloss), var(--crew-dye)); }
+
+/* the FFA victory slate: winner line, top-3 podium, full standings (slates.ts showFfa) */
+.df-victory.ffa .df-victory-title { text-shadow: 0 4px 0 var(--win); }
+.df-victory-card.ffa { gap: 12px; padding: 22px 34px 26px; }
+.df-victory-mark span.ffa { background: var(--win); }
+.df-ffa { display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(880px, 84vw); }
+.df-ffa-winner { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 12px; }
+.df-ffa-winner .who { display: inline-flex; align-items: center; gap: 9px; padding: 4px 18px 4px 4px; border-radius: 999px; background: var(--ink); color: var(--cream); }
+.df-ffa-winner .mk { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font: 400 20px/1 var(--display);
+  color: var(--cream); border: 3px solid var(--cream); text-shadow: 0 1px 0 var(--ink); }
+.df-ffa-winner b { font: 400 25px/1 var(--display); letter-spacing: .04em; }
+.df-ffa-winner .col { font: 900 11px/1 var(--body); letter-spacing: .16em; color: #b9c6e4; }
+.df-ffa-winner .amp { font: 400 24px/1 var(--display); color: var(--ink); }
+/* the winner line is revealed by the tally's stamp (the podium + bars count up first) */
+.df-ffa-winner { transition: opacity .25s ease, transform .35s cubic-bezier(.2,1.6,.4,1); }
+.df-ffa:not(.stamped) .df-ffa-winner { opacity: 0; transform: scale(.8); }
+.df-ffa-cols { display: grid; grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr); gap: 26px; width: 100%; align-items: end; }
+.df-podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; height: 232px; }
+.df-podium .step-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 5px; height: 100%; min-width: 0; }
+.df-podium .mk { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font: 400 22px/1 var(--display);
+  color: var(--cream); border: 3px solid var(--ink); box-shadow: 0 3px 0 var(--ink); text-shadow: 0 2px 0 var(--ink); }
+.df-podium .r1 .mk { width: 50px; height: 50px; font-size: 28px; }
+.df-podium .nm { max-width: 100%; font: 400 17px/1.1 var(--display); letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.df-podium .nm.you { padding: 1px 8px; border-radius: 999px; background: var(--ink); color: var(--cream); }
+.df-podium .pct { font: 400 18px/1 var(--display); font-variant-numeric: tabular-nums; }
+.df-podium { --stepMax: 104px; }
+.df-podium .step { flex: none; width: 100%; height: calc(16px + var(--h, 0) * var(--stepMax)); border-radius: 12px 12px 5px 5px; border: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink);
+  background: linear-gradient(180deg, var(--cg), var(--c)); display: flex; justify-content: center; overflow: hidden; }
+.df-podium .step .rk { margin-top: 6px; font: 400 28px/1 var(--display); color: var(--cream); text-shadow: 0 2px 0 var(--ink); }
+.df-podium.stamped .r1 .mk { animation: dfStamp .42s cubic-bezier(.2,1.6,.4,1); }
+.df-standings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.df-standings .srow { display: grid; grid-template-columns: 16px 24px minmax(0, 118px) minmax(0, 1fr) 66px; align-items: center; gap: 8px;
+  transition: transform .25s cubic-bezier(.2,1.6,.4,1); }
+.df-standings .rk { font: 400 15px/1 var(--display); color: var(--ink2); text-align: right; }
+.df-standings .mk { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font: 400 13px/1 var(--display);
+  color: var(--cream); background: var(--c); border: 2px solid var(--ink); text-shadow: 0 1px 0 var(--ink); }
+.df-standings .nm { font: 400 16px/1.15 var(--display); letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; justify-self: start; max-width: 100%; }
+.df-standings .srow.you .nm { padding: 1px 8px; border-radius: 999px; background: var(--ink); color: var(--cream); }
+.df-standings .track { position: relative; height: 18px; border-radius: 999px; background: var(--neutral); border: 2.5px solid var(--ink); overflow: hidden; }
+.df-standings .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 999px; background: linear-gradient(180deg, var(--cg), var(--c)); }
+.df-standings .pct { font: 400 19px/1 var(--display); text-align: right; font-variant-numeric: tabular-nums; }
+.df-standings .srow.win { transform: scale(1.03); }
+.df-standings .srow.win .track { box-shadow: 0 0 0 2px var(--cream), 0 0 0 4px var(--ink); }
+/* the winner's %: the crew's UI colour as a pill, its ink as the text (crew-coloured text on cream was unreadable) */
+.df-standings .srow.win .pct { justify-self: end; padding: 3px 6px 2px; border-radius: 999px; font-size: 17px; color: var(--ci, var(--ink));
+  background: var(--cu, var(--c)); border: 2px solid var(--ink); box-shadow: 0 2px 0 var(--ink); }
+@media (max-height: 760px) {
+  .df-victory-card.ffa { gap: 9px; padding: 18px 30px 20px; }
+  .df-podium { height: 200px; --stepMax: 76px; }
+  .df-standings { gap: 3px; }
+  .df-standings .mk { width: 22px; height: 22px; }
+}

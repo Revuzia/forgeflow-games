@@ -5,7 +5,8 @@
 //                  colorblind marks, master / music / sfx volume (0..1 — the shape audio.setVolumes() takes),
 //                  render quality auto | high | low, show FPS.
 //   ProfileStore   the lobby selections: name, crew (1 SUNCREW | 2 GULF CREW), kit, map (or 'random'), the
-//                  time-of-day preset, bot skill.
+//                  time-of-day preset, bot skill; CONTRACT_FFA F3: the match mode ('teams' | 'ffa', default
+//                  'teams') and the FFA colour (1..8 = teams.json → ffa, default 1 = amber).
 //
 // Both emit change events: `store.on((value, keys) => …)` → an unsubscribe function. `keys` lists the
 // top-level fields that changed. The integrator wires audio with one line:
@@ -34,9 +35,19 @@ export interface Settings {
   reduceMotion: boolean;
 }
 
+/** CONTRACT_FFA F1: the match mode (mirrors core/types.ts `MatchMode`) */
+export type ProfileMode = 'teams' | 'ffa';
+export const PROFILE_MODES: readonly ProfileMode[] = ['teams', 'ffa'];
+/** FFA crews are 1..8 (teams.json → ffa) */
+export const FFA_COLORS = 8;
+
 export interface Profile {
   name: string;
   crew: TeamId;
+  /** CONTRACT_FFA F3: TEAMS · 4 v 4 (default) or FREE-FOR-ALL */
+  mode: ProfileMode;
+  /** CONTRACT_FFA F3: the human's FFA colour, 1..8 (default 1 = amber); bots take the rest */
+  ffaColor: number;
   kit: string;
   /** a map id or 'random' */
   map: string;
@@ -73,7 +84,7 @@ export function defaultSettings(): Settings {
 }
 
 export function defaultProfile(): Profile {
-  return { name: '', crew: 1, kit: 'mist-rasp', map: 'pier18', preset: 'noon', skill: DEFAULT_BOT_SKILL };
+  return { name: '', crew: 1, mode: 'teams', ffaColor: 1, kit: 'mist-rasp', map: 'pier18', preset: 'noon', skill: DEFAULT_BOT_SKILL };
 }
 
 /** a display name: letters, digits, space, - _ . ' ; trimmed; ≤ NAME_MAX */
@@ -137,6 +148,8 @@ export function sanitizeProfile(raw: unknown, kits: readonly string[], maps: rea
   return {
     name: cleanName(r.name),
     crew: r.crew === 2 ? 2 : 1,
+    mode: r.mode === 'ffa' ? 'ffa' : 'teams',
+    ffaColor: typeof r.ffaColor === 'number' && Number.isInteger(r.ffaColor) && r.ffaColor >= 1 && r.ffaColor <= FFA_COLORS ? r.ffaColor : d.ffaColor,
     kit, map,
     preset: r.preset === 'golden' ? 'golden' : 'noon',
     skill: typeof r.skill === 'string' && (BOT_SKILL_IDS as readonly string[]).includes(r.skill) ? parseBotSkill(r.skill) : d.skill,

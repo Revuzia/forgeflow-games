@@ -46,14 +46,18 @@
 // that ancestor too. Exported lights and cameras are stripped (doctrine §3). Paint materials are
 // created separately from non-paint ones, so the dye layer can never leak onto a mesh without an
 // atlas UV (uv1).
+//
+// FFA (CONTRACT_FFA §F7, lane VIEW): addFfaPads(map, world.crewPads) adds the runtime drop pads (one instanced
+// draw, the owner crew's ring + mark) and turns the A/B team pads' crew accent neutral until its dispose().
 
 import * as THREE from 'three';
 import type { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { artUrl } from '../core/glb.ts';
-import type { MapDef } from '../core/data.ts';
+import { crewDef, type MapDef } from '../core/data.ts';
+import type { TeamId } from '../core/types.ts';
 import {
-  materialFor, applyDye, beltMaterial, springMaterial, grateMaterial, grateDepthMaterial, type DyeUniforms,
+  materialFor, applyDye, beltMaterial, springMaterial, grateMaterial, grateDepthMaterial, SURFACE_ENV, type DyeUniforms,
 } from './surfaces.ts';
 
 export type MapPrefix = 'paint' | 'solid' | 'deco' | 'col' | 'water' | 'grate' | 'conveyor' | 'spring' | 'oob' | 'light';
@@ -834,6 +838,248 @@ export async function loadMapView(loader: GLTFLoader, def: MapDef, dye: DyeUnifo
       aoTex?.dispose();
       shore?.tex.dispose();
       for (const l of pool.lights) l.dispose();
+    },
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// FFA drop pads (CONTRACT_FFA §F1 / §F7, lane VIEW)
+// ════════════════════════════════════════════════════════════════════════════════════════════
+//
+// One runtime-rendered drop pad per FFA runner at its spawn (MatchWorld.crewPads: maps.json ffaSpawns under the
+// seeded shuffle, r = 1.6 m): ONE InstancedMesh (one draw + one shadow-free pass), a low navy slab like the team
+// pads, a glowing ring and the crew's MARK as a shape (colour-blind safe, like the team pads' sun-disc / wave-peak)
+// in the owner's dye, gently pulsing. The slab sits on the floor found by a downward ray (ffaSpawns hold the drop
+// height, ~1 m above it). While the pads are shown, the A/B team pads' crew accent turns neutral steel: in FFA
+// they are scenery (CONTRACT_FFA §F1), and an orange / violet pad would read as the amber / violet crew's.
+
+/** one FFA pad as MatchWorld.crewPads holds it (x, y, z = the spawn; yaw radians) */
+export interface FfaPadSpec { x: number; y: number; z: number; r?: number; crew: TeamId; yaw?: number }
+
+export interface FfaPads {
+  root: THREE.Group;
+  count: number;
+  /** the floor height found under each pad (harness read-back) */
+  floorY: number[];
+  /** remove the pads and restore the team pads' crew accent */
+  dispose(): void;
+}
+
+/** teams.json crew `mark` → the shape index the pad shader draws (1..8; unknown → 1 = disc) */
+const FFA_MARKS = ['sun-disc', 'wave-peak', 'block', 'diamond', 'star', 'cross', 'pentagon', 'hexagon'];
+/** the team pads' crew accent in FFA (neutral scenery) */
+const TEAM_PAD_NEUTRAL = '#606A7C';
+/** slab height (m) and how far its top stands above the floor */
+const FFA_PAD_H = 0.07;
+const FFA_PAD_TOP = 0.035;
+
+const FFA_PAD_VERT_PARS = /* glsl */ `
+attribute vec3 aCrew;
+attribute vec2 aPad;
+varying vec3 vPadP;
+varying vec3 vPadCrew;
+varying vec2 vPad;
+varying float vPadTop;
+varying float vPadWorldTop;
+`;
+const FFA_PAD_FRAG_PARS = /* glsl */ `
+uniform float uPadTime;
+varying vec3 vPadP;
+varying vec3 vPadCrew;
+varying vec2 vPad;
+varying float vPadTop;
+varying float vPadWorldTop;
+float fpBox( vec2 p, vec2 b ) { vec2 d = abs( p ) - b; return length( max( d, 0.0 ) ) + min( max( d.x, d.y ), 0.0 ); }
+float fpTri( vec2 p, float r ) {
+	const float k = 1.7320508;
+	p.x = abs( p.x ) - r; p.y = p.y + r / k;
+	if ( p.x + k * p.y > 0.0 ) p = vec2( p.x - k * p.y, - k * p.x - p.y ) / 2.0;
+	p.x -= clamp( p.x, - 2.0 * r, 0.0 );
+	return - length( p ) * sign( p.y );
+}
+float fpStar( vec2 p, float r, float rf ) {
+	const vec2 k1 = vec2( 0.809016994375, - 0.587785252292 );
+	const vec2 k2 = vec2( - 0.809016994375, - 0.587785252292 );
+	p.x = abs( p.x );
+	p -= 2.0 * max( dot( k1, p ), 0.0 ) * k1;
+	p -= 2.0 * max( dot( k2, p ), 0.0 ) * k2;
+	p.x = abs( p.x );
+	p.y -= r;
+	vec2 ba = rf * vec2( - k1.y, k1.x ) - vec2( 0.0, 1.0 );
+	float h = clamp( dot( p, ba ) / dot( ba, ba ), 0.0, r );
+	return length( p - ba * h ) * sign( p.y * ba.x - p.x * ba.y );
+}
+float fpPent( vec2 p, float r ) {
+	const vec3 k = vec3( 0.809016994, 0.587785252, 0.726542528 );
+	p.x = abs( p.x );
+	p -= 2.0 * min( dot( vec2( - k.x, k.y ), p ), 0.0 ) * vec2( - k.x, k.y );
+	p -= 2.0 * min( dot( vec2( k.x, k.y ), p ), 0.0 ) * vec2( k.x, k.y );
+	p -= vec2( clamp( p.x, - r * k.z, r * k.z ), r );
+	return length( p ) * sign( p.y );
+}
+float fpHex( vec2 p, float r ) {
+	const vec3 k = vec3( - 0.866025404, 0.5, 0.577350269 );
+	p = abs( p );
+	p -= 2.0 * min( dot( k.xy, p ), 0.0 ) * k.xy;
+	p -= vec2( clamp( p.x, - k.z * r, k.z * r ), r );
+	return length( p ) * sign( p.y );
+}
+// the crew mark (teams.json 'mark'), R = pad radius; +y = the pad's forward (the spawn yaw)
+float fpMark( vec2 p, float m, float R ) {
+	float r = length( p );
+	if ( m < 1.5 ) return min( r - 0.2 * R, abs( r - 0.5 * R ) - 0.055 * R );                     // sun-disc
+	if ( m < 2.5 ) return fpTri( p - vec2( 0.0, 0.04 * R ), 0.34 * R );                          // wave-peak
+	if ( m < 3.5 ) return fpBox( p, vec2( 0.25 * R ) );                                          // block
+	if ( m < 4.5 ) return fpBox( mat2( 0.7071068, - 0.7071068, 0.7071068, 0.7071068 ) * p, vec2( 0.25 * R ) ); // diamond
+	if ( m < 5.5 ) return fpStar( p, 0.44 * R, 0.42 );                                           // star
+	if ( m < 6.5 ) return min( fpBox( p, vec2( 0.38 * R, 0.12 * R ) ), fpBox( p, vec2( 0.12 * R, 0.38 * R ) ) ); // cross
+	if ( m < 7.5 ) return fpPent( p, 0.28 * R );                                                 // pentagon
+	return fpHex( p, 0.3 * R );                                                                  // hexagon
+}
+`;
+const FFA_PAD_COLOR = /* glsl */ `
+	vec2 fpQ = vPadP.xz * vPad.x;            // metres, +y = forward
+	float fpR = length( fpQ );
+	float fpRad = vPad.x;
+	float fpAa = fwidth( fpR ) * 0.8 + 1e-4;
+	float fpTopM = step( 0.6, vPadTop );
+	float fpGrooveD = abs( fract( fpR / 0.3 ) - 0.5 ) * 0.3;
+	float fpGroove = ( 1.0 - smoothstep( 0.01 - fpAa, 0.01 + fpAa, fpGrooveD ) ) * ( 1.0 - step( 0.7 * fpRad, fpR ) );
+	float fpRing = smoothstep( 0.74 * fpRad - fpAa, 0.74 * fpRad + fpAa, fpR ) * ( 1.0 - smoothstep( 0.89 * fpRad - fpAa, 0.89 * fpRad + fpAa, fpR ) );
+	float fpD = fpMark( vec2( fpQ.x, fpQ.y ), vPad.y, fpRad );
+	float fpMk = 1.0 - smoothstep( - fpAa, fpAa, fpD );
+	float fpGlow = max( fpRing, fpMk ) * fpTopM;
+	vec3 fpBody = vec3( 0.0194, 0.0262, 0.0482 );   // PALETTE.padBody #262D3E (linear), as the team pads
+	vec3 fpC = mix( fpBody, fpBody * 0.7, fpGroove * fpTopM );
+	fpC = mix( fpC, vPadCrew * 0.55, fpGlow );
+	float fpSide = ( 1.0 - fpTopM ) * smoothstep( - 0.035, - 0.02, vPadWorldTop );
+	fpC = mix( fpC, vPadCrew * 0.7, fpSide );
+	diffuseColor.rgb = fpC;
+	float fpPulse = 0.82 + 0.18 * sin( uPadTime * 2.2 );
+`;
+const FFA_PAD_EMISSIVE = /* glsl */ `
+	totalEmissiveRadiance += vPadCrew * ( ( fpRing * 1.9 * fpPulse + fpMk * 1.2 ) * fpTopM + fpSide * 1.3 * fpPulse );
+`;
+
+let ffaPadSeq = 0;
+
+/**
+ * FFA only: add a drop pad per entry of `pads` (MatchWorld.crewPads — its crew is the roster's) under `map.root`, in
+ * the owner crew's colour (core/data.ts crewDef('ffa', crew)). Returns a handle whose dispose() removes them.
+ */
+export function addFfaPads(map: MapView, pads: ReadonlyArray<FfaPadSpec>): FfaPads {
+  const root = new THREE.Group();
+  root.name = 'ffa_pads';
+  const n = pads.length;
+  const floorY: number[] = [];
+  // the slab: unit radius, FFA_PAD_H tall, its top at y = 0 (the instance lifts it to floor + FFA_PAD_TOP)
+  const geo = new THREE.CylinderGeometry(1, 1.03, FFA_PAD_H, 64, 1, false);
+  geo.translate(0, -FFA_PAD_H / 2, 0);
+  const aCrew = new Float32Array(Math.max(1, n) * 3);
+  const aPad = new Float32Array(Math.max(1, n) * 2);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.42, metalness: 0.15 });
+  mat.name = 'M_ffa_pad';
+  const uTime = SURFACE_ENV.uDfTime;
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uPadTime = uTime;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\n' + FFA_PAD_VERT_PARS)
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPadP = position;\nvPadCrew = aCrew;\nvPad = aPad;\nvPadTop = normal.y;'
+        + '\nvPadWorldTop = position.y * length( instanceMatrix[ 1 ].xyz );');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\n' + FFA_PAD_FRAG_PARS)
+      .replace('#include <color_fragment>', '#include <color_fragment>\n' + FFA_PAD_COLOR)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix( roughnessFactor, 0.3, fpGlow );')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n' + FFA_PAD_EMISSIVE);
+  };
+  mat.customProgramCacheKey = () => 'df-ffa-pad-v1';
+  const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, n));
+  mesh.name = 'ffa_pad_' + (++ffaPadSeq);
+  mesh.castShadow = false;
+  mesh.receiveShadow = true;
+  mesh.count = n;
+
+  // the floor under each pad: the highest upward-facing map surface within 3 m below the spawn's drop height
+  const ray = new THREE.Raycaster();
+  const down = new THREE.Vector3(0, -1, 0);
+  const targets: THREE.Object3D[] = [];
+  map.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && o.visible && m !== mesh) targets.push(o); });
+  const nrm = new THREE.Vector3();
+  const m4 = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const floorAt = (x: number, y: number, z: number, fallback: number): number => {
+    ray.set(new THREE.Vector3(x, y, z), down);
+    ray.far = 3.4;
+    for (const h of ray.intersectObjects(targets, false)) {
+      if (!h.face) continue;
+      nrm.copy(h.face.normal).transformDirection(h.object.matrixWorld);
+      if (nrm.y < 0.7) continue;
+      return h.point.y;
+    }
+    return fallback;
+  };
+  for (let i = 0; i < n; i++) {
+    const p = pads[i];
+    const R = p.r && p.r > 0 ? p.r : 1.6;
+    // the centre and 8 rim samples: the slab's top clears the highest, its skirt reaches the lowest (sloped
+    // sand / a step under the rim never cuts into the disc)
+    const fy = floorAt(p.x, p.y + 0.4, p.z, p.y - 1.0);
+    let hi = fy, lo = fy;
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      const ry = floorAt(p.x + Math.sin(a) * R * 0.95, fy + 0.6, p.z + Math.cos(a) * R * 0.95, NaN);
+      if (!Number.isFinite(ry) || Math.abs(ry - fy) > 0.5) continue;   // a ledge / a hole: not this pad's floor
+      hi = Math.max(hi, ry); lo = Math.min(lo, ry);
+    }
+    floorY.push(fy);
+    const top = hi + FFA_PAD_TOP;
+    const sy = Math.max(1, (top - lo + 0.03) / FFA_PAD_H);
+    q.setFromAxisAngle(up, p.yaw ?? 0);
+    m4.compose(new THREE.Vector3(p.x, top, p.z), q, new THREE.Vector3(R, sy, R));
+    mesh.setMatrixAt(i, m4);
+    let crew: { dye: string; mark: string };
+    try { crew = crewDef('ffa', p.crew); } catch { crew = { dye: '#DFE6EE', mark: 'sun-disc' }; }
+    const c = new THREE.Color(crew.dye);
+    aCrew[i * 3] = c.r; aCrew[i * 3 + 1] = c.g; aCrew[i * 3 + 2] = c.b;
+    aPad[i * 2] = R;
+    aPad[i * 2 + 1] = Math.max(1, FFA_MARKS.indexOf(crew.mark) + 1);
+  }
+  geo.setAttribute('aCrew', new THREE.InstancedBufferAttribute(aCrew, 3));
+  geo.setAttribute('aPad', new THREE.InstancedBufferAttribute(aPad, 2));
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.computeBoundingSphere();
+  root.add(mesh);
+  map.root.add(root);
+  root.updateMatrixWorld(true);
+
+  // the A/B team pads → neutral scenery while the FFA pads are shown (setPadColorblind skips them meanwhile)
+  const saved: Array<{ m: THREE.Material; key: unknown; u: THREE.IUniform<THREE.Color>; c: THREE.Color }> = [];
+  map.root.traverse((o) => {
+    const mm = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+    if (!mm) return;
+    for (const m of Array.isArray(mm) ? mm : [mm]) {
+      const p = m.userData?.dfPadTeam as { team: number; u: THREE.IUniform<THREE.Color> } | undefined;
+      if (!p || saved.some((s) => s.m === m)) continue;
+      saved.push({ m, key: p, u: p.u, c: p.u.value.clone() });
+      p.u.value.set(TEAM_PAD_NEUTRAL);
+      delete m.userData.dfPadTeam;
+    }
+  });
+
+  let disposed = false;
+  return {
+    root,
+    count: n,
+    floorY,
+    dispose(): void {
+      if (disposed) return;
+      disposed = true;
+      root.removeFromParent();
+      geo.dispose();
+      mat.dispose();
+      mesh.dispose();
+      for (const s of saved) { s.u.value.copy(s.c); s.m.userData.dfPadTeam = s.key; }
     },
   };
 }
