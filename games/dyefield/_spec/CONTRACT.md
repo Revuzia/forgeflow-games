@@ -975,6 +975,31 @@ springSplash(x: number, y: number, z: number, r: number, lx?: number, lz?: numbe
 `frameOpts.mistRange = world.mistRange`. Harness: `playtest.py --map <id> --kit <kit>` runs G9 with any human
 kit (shots `_shots/pt_<map>_<kit>_<name>.png` unless Pier 18 + MIST-RASP).
 
+### §10.8 `CHANGED(INTEGRATE)` + `CHANGED(FRONTEND)`: phases 9–10 integration (CONTRACT_P6_11 §20–§21) — additive only
+- **App (FRONTEND):** a bare URL (or `?lobby=1`) opens the LOBBY — a `'lobby'` Game on Pier 18 at noon behind the
+  menus; `app.phase` is `'menu'` there. Deep links (`?map ?kit ?bots ?seed ?matchSeconds ?preset ?autostart ?brush
+  ?crew`) load a match directly as before; `?crew=sun|gulf` is new; `?quality=` is a per-page override.
+  `GameParts.mode / hooks`, `Game.warm() / beginWithLock() / dispose() / frameEvents / isLobby / humanTeam`.
+- **Audio + juice (INTEGRATE):** `GameParts.audio?: GameAudio` (ONE per page, `main.ts` creates it with the saved
+  volumes; the lobby only ticks it; a match calls `audio.onEvents(drained, {listener = camera, runners, me, map,
+  phase, timeLeft, countdown, projectiles, conveyors})` + `audio.update(vdt)` every frame, `setPaused` in
+  `pause()` / `enterPlay()` / `dispose()`, the victory / defeat stinger when the slate shows) and
+  `GameParts.juice?: Juice` (one per MATCH session: `onEvents` on every drained batch, `update(vdt)` after the
+  render, `victory(winner, slates.victoryCardEl)` — confetti never drawn over the card — `reset()` on PLAY AGAIN,
+  `trauma(0.2, 0.35)` on a spring launch). Juice owns every screen shake, hit marker and the damage vignette:
+  `Hud.hitMarker()` / `Hud.damaged()` and the legacy `cam.shake` writes are gone.
+- **Colorblind marks reach the 3D:** `PlayerViews.setColorblind(on)` (runner crew tint + body stains),
+  `Fx.setColorblind(on)` (every crew-coloured FX pool), `setPadColorblind(mapRoot, on)` (view/surfaces.ts: the spawn
+  pads' crew accent), `crewDyeHex(team, colorblind)` (core/data.ts, pure). The name-tag pills follow `html.df-cb`.
+- **Dispose at the source:** `RunnerView.dispose()` frees its Skeleton's bone texture; `Fx.dispose()` frees the
+  CLOUDBURST disk texture (the session stopgap in main.ts is gone; the arena's GLB-texture sweep remains).
+- **`window.__DF__` additions:** `menu() · settings() · profile() · session() · gl()` (FRONTEND), `audio()` (the
+  `GameAudio.stats()`: unlocked, state, cue, voices / peak / stolen / rejected, loops, played + `playedBus {sfx, ui}`,
+  router `counts` + `loopStarts` per sound id, decoded, errors, `meter {peakDb, rmsDb, rmsMaxDb, limiterDb,
+  peakAllDb}` since the previous read, volumes, paused) and `juice()` (the Juice read-back + `confettiClip`).
+- **G9:** `playtest.py` also asserts the audio after the countdown (unlocked + running, cue `match`/`final`, ≥ 1
+  world-sfx one-shot, 0 decode errors, no clipping) and a victory / defeat stinger + a confetti burst on the slate.
+
 ## §11 View / app for phases 3–5 (`three` + DOM)
 
 - `view/players.ts` shows 8 runners from one `HeroAssets`. The runtime **merges each hero's

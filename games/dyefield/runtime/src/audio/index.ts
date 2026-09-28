@@ -69,7 +69,9 @@ export function createAudio(opts: AudioOptions = {}): GameAudio {
       const p = engine.poolStats;
       return {
         unlocked, state: engine.ctx ? engine.ctx.state : 'none', cue: engine.cue, voices: engine.voices, peakVoices: p.peak,
-        stolen: p.stolen, rejected: p.rejected, loops: engine.loopKeys, played: engine.played, decoded: engine.decoded, errors: [...engine.errors],
+        stolen: p.stolen, rejected: p.rejected, loops: engine.loopKeys, played: engine.played, playedBus: { ...engine.playedBus },
+        counts: { ...router.counts }, loopStarts: { ...router.loopStarts },
+        decoded: engine.decoded, errors: [...engine.errors], meter: engine.meterRead(), volumes: engine.volumes, paused: engine.isPaused,
       };
     },
     dispose(): void {

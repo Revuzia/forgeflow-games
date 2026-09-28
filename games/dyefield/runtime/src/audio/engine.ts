@@ -61,6 +61,13 @@ export class AudioEngine implements AudioSink {
   ctx: AudioContext | null = null;
   readonly errors: string[] = [];
   played = 0;
+  /** one-shots started per bus (world sfx vs UI / flow: horns, beeps, menu sounds) */
+  readonly playedBus = { sfx: 0, ui: 0 };
+  /** the output meter (after the limiter), sampled every 3rd tick: max-hold peak + short-term RMS, dBFS */
+  private meter: AnalyserNode | null = null;
+  private meterBuf: Float32Array | null = null;
+  private meterN = 0;
+  private readonly meterHold = { peak: 0, rms: 0, rmsMax: 0, limiter: 0, peakAll: 0 };
   private master!: GainNode;
   private limiter!: DynamicsCompressorNode;
   private sfxIn!: GainNode;
@@ -135,6 +142,11 @@ export class AudioEngine implements AudioSink {
     this.master = G(this.vol.master);
     this.master.connect(this.limiter);
     this.limiter.connect(ctx.destination);
+    // a tap for the harness meter (an analyser needs no output connection to be processed)
+    this.meter = ctx.createAnalyser();
+    this.meter.fftSize = 2048;
+    this.meterBuf = new Float32Array(this.meter.fftSize);
+    this.limiter.connect(this.meter);
     this.sfxBus = G(this.vol.sfx); this.sfxBus.connect(this.master);
     this.pauseGain = G(this.paused ? 0 : 1); this.pauseGain.connect(this.sfxBus);
     this.sfxDuck = G(1); this.sfxDuck.connect(this.pauseGain);
@@ -253,6 +265,7 @@ export class AudioEngine implements AudioSink {
     src.onended = () => { this.pool.release(h); src.disconnect(); g.disconnect(); if (tail !== g) tail.disconnect(); };
     src.start(now);
     this.played++;
+    this.playedBus[c.bus === 'ui' ? 'ui' : 'sfx']++;
   }
 
   loop(key: string, c: LoopCmd | null): void {
@@ -343,6 +356,7 @@ export class AudioEngine implements AudioSink {
   }
 
   get volumes(): AudioVolumes { return { ...this.vol }; }
+  get isPaused(): boolean { return this.paused; }
 
   setPaused(p: boolean): void {
     this.paused = p;
@@ -372,6 +386,35 @@ export class AudioEngine implements AudioSink {
   /** per frame: keep the music scheduled */
   tick(): void {
     this.pump();
+    if (this.meter && this.meterBuf && this.ctx?.state === 'running' && ++this.meterN % 3 === 0) {
+      const b = this.meterBuf;
+      this.meter.getFloatTimeDomainData(b as Float32Array<ArrayBuffer>);
+      let pk = 0, sq = 0;
+      for (let i = 0; i < b.length; i++) { const v = b[i]; const a = v < 0 ? -v : v; if (a > pk) pk = a; sq += v * v; }
+      const rms = Math.sqrt(sq / b.length);
+      const h = this.meterHold;
+      if (pk > h.peak) h.peak = pk;
+      if (pk > h.peakAll) h.peakAll = pk;
+      h.rms += (rms - h.rms) * 0.25;
+      if (h.rms > h.rmsMax) h.rmsMax = h.rms;
+      // the compressor reports a large reduction for ~2 s after the context starts while the output is quiet (its
+      // envelope settling, not limiting): the first 3 s of context time are not metered for the limiter
+      const red = this.ctx.currentTime > 3 ? -(this.limiter.reduction ?? 0) : 0;
+      if (red > h.limiter) h.limiter = red;
+    }
+  }
+
+  /**
+   * The output meter since the last read (then the window restarts): peakDb = the max sample, rmsDb = the short-term
+   * RMS now, rmsMaxDb = its max in the window, limiterDb = the most gain reduction the master limiter applied,
+   * peakAllDb = the max sample since the context started. dBFS; -120 = silence / not metered.
+   */
+  meterRead(): { peakDb: number; rmsDb: number; rmsMaxDb: number; limiterDb: number; peakAllDb: number } {
+    const db = (v: number): number => (v > 1e-6 ? Math.round(20 * Math.log10(v) * 10) / 10 : -120);
+    const h = this.meterHold;
+    const out = { peakDb: db(h.peak), rmsDb: db(h.rms), rmsMaxDb: db(h.rmsMax), limiterDb: Math.round(h.limiter * 10) / 10, peakAllDb: db(h.peakAll) };
+    h.peak = 0; h.rmsMax = 0; h.limiter = 0;
+    return out;
   }
 
   // ── music ───────────────────────────────────────────────────────────────────────────────
@@ -538,6 +581,7 @@ export class AudioEngine implements AudioSink {
       default: g.disconnect(); return;
     }
     this.played++;
+    this.playedBus[c.bus === 'ui' ? 'ui' : 'sfx']++;
   }
 
   private fail(what: string, e: unknown): void {

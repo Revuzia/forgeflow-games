@@ -52,7 +52,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { HeroAssets } from './heroview.ts';
 import type { Fx } from './fx.ts';
-import { teamById, WEAPONS } from '../core/data.ts';
+import { crewDyeHex, teamById, WEAPONS } from '../core/data.ts';
 import { artUrl } from '../core/glb.ts';
 import { MOVE } from '../core/config.ts';
 import type { MoveState, TeamId } from '../core/types.ts';
@@ -1072,9 +1072,15 @@ class RunnerView {
 
   dispose(): void {
     this.mixer.stopAllAction();
+    this.mixer.uncacheRoot(this.model);
+    // each runner is a SkeletonUtils clone with its own Skeleton: its bone DataTexture (made by the renderer on
+    // first draw) is freed only by Skeleton.dispose() — never by a material's or a geometry's dispose()
+    const skeletons = new Set<THREE.Skeleton>();
+    this.root.traverse((o) => { const sm = o as THREE.SkinnedMesh; if (sm.isSkinnedMesh && sm.skeleton) skeletons.add(sm.skeleton); });
     this.root.removeFromParent();
     (this.body.material as THREE.Material).dispose();
     (this.fin.material as THREE.Material).dispose();
+    for (const k of skeletons) k.dispose();
     this.tag.remove();
   }
 }
@@ -1468,6 +1474,12 @@ export class PlayerViews {
     const kits: Record<string, number> = {};
     for (const [id, k] of this.kits) kits[id] = Math.round(k.bodyTris);
     return { bodyTris: this.kit.bodyTris, finTris: this.kit.finTris, runners: this.views.length, kits };
+  }
+
+  /** Settings → Colorblind marks: the crew tint on every runner + the body-stain dye (teams.json colorblind) */
+  setColorblind(on: boolean): void {
+    for (const t of [1, 2] as const) this.dyeLin[t]?.set(crewDyeHex(t, on));
+    for (const rv of this.views) rv.u.uTeam.value.set(crewDyeHex(rv.team, on));
   }
 
   dispose(): void {

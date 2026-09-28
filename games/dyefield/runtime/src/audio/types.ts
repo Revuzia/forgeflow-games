@@ -87,8 +87,19 @@ export interface AudioStats {
   rejected: number;
   loops: string[];
   played: number;
+  /** one-shots started per bus: world sfx vs UI / flow (horns, beeps, menu sounds) */
+  playedBus: { sfx: number; ui: number };
+  /** the router's plays per sound id (before the engine's voice limit / level cull) and its loop starts per id */
+  counts: Record<string, number>;
+  loopStarts: Record<string, number>;
   decoded: string[];
   errors: string[];
+  /** the output meter since the previous stats() read (dBFS; -120 = silence) — see AudioEngine.meterRead */
+  meter: { peakDb: number; rmsDb: number; rmsMaxDb: number; limiterDb: number; peakAllDb: number };
+  /** the volumes in force (0..1) */
+  volumes: { master: number; music: number; sfx: number };
+  /** setPaused(true) in force */
+  paused: boolean;
 }
 
 /** the ONE integration surface (see README.md) */

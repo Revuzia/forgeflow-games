@@ -73,6 +73,7 @@ export class Slates {
   private readonly legend: HTMLElement;
   // victory
   private readonly victory: HTMLElement;
+  private readonly victoryCard: HTMLElement;
   private readonly vicMark: HTMLElement;
   private readonly vicSun: HTMLElement;
   private readonly vicGulf: HTMLElement;
@@ -140,6 +141,7 @@ export class Slates {
     this.victory = el('div', 'df-victory');
     this.victory.hidden = true;
     const vc = el('div', 'df-victory-card');
+    this.victoryCard = vc;
     const title = el('h2', 'df-victory-title', VICTORY_LINE);
     this.vicMark = el('div', 'df-victory-mark');
     this.vicMark.setAttribute('aria-hidden', 'true');
@@ -191,6 +193,8 @@ export class Slates {
 
   /** the victory slate (the menus' focus scope while it shows) */
   get victoryEl(): HTMLElement { return this.victory; }
+  /** the victory card (title + tally + buttons; the winner mark overhangs its top): juice keeps confetti off it */
+  get victoryCardEl(): HTMLElement { return this.victoryCard; }
 
   /** n = ceil(seconds left) while counting down; 0 / negative hides it */
   countdown(n: number): void {

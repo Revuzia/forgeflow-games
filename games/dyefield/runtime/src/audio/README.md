@@ -81,8 +81,11 @@ Payload: 2.6 MB (budget 8 MB). All files are Ogg Vorbis at 44.1 kHz, ≤ 128 kb/
 8. **Credits screen**: `import credits from './audio/CREDITS.json'` and show `credits.lines`.
 
 9. **Harness**: `audio.stats()` returns `{ unlocked, state, cue, voices, peakVoices, stolen, rejected, loops,
-   played, decoded, errors }`. It is worth exposing on the test surface (for example `window.__df.audio()`),
-   so a browser run can assert that music is playing and nothing failed to decode.
+   played, playedBus: { sfx, ui }, counts, loopStarts, decoded, errors, meter, volumes, paused }`. `counts` /
+   `loopStarts` are the router's plays / loop starts per sound id; `meter` is the output after the limiter since the
+   previous `stats()` read (`peakDb`, `rmsDb`, `rmsMaxDb`, `limiterDb` = the most gain reduction, `peakAllDb` since
+   the context started; the limiter is not metered in the first 3 s of context time, while the compressor's
+   envelope settles). Wired as `window.__DF__.audio()`; `playtest.py` asserts it after the countdown.
 
 ## What sounds when
 

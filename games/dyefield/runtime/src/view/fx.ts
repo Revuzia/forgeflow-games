@@ -35,7 +35,7 @@
 // Colours are the teams.json dyes (linear). Math.random is fine here (view only, never core).
 
 import * as THREE from 'three';
-import { teamById, WEAPONS } from '../core/data.ts';
+import { crewDyeHex, teamById, WEAPONS } from '../core/data.ts';
 import { TICK, KITS } from '../core/config.ts';
 import type { TeamId } from '../core/types.ts';
 import { bakeModel, type BakedModel, type KitArt } from './players.ts';
@@ -379,6 +379,8 @@ class ModelPool {
     }
   }
   get cap(): number { return this.teams.length; }
+  /** the crew colours changed in place (colorblind marks): re-colour every slot on its next push */
+  invalidate(): void { this.teams.fill(255); }
   begin(): void { this.n = 0; }
   push(m4: THREE.Matrix4, team: number): number {
     const i = this.n;
@@ -1477,7 +1479,27 @@ export class Fx {
     this.spouts.visible = false;
   }
 
+  /**
+   * Settings → Colorblind marks: the crew colours (teams.json `colorblind` dye; light = toward the gloss, as the
+   * dye shader derives it) are changed IN PLACE, so every pool that holds them picks them up; the per-slot
+   * colour caches are dropped so live instances re-colour on their next frame. Particles already in flight
+   * keep their colour (they live < 1 s).
+   */
+  setColorblind(on: boolean): void {
+    for (const t of [1, 2] as const) {
+      const dye = new THREE.Color(crewDyeHex(t, on));
+      const gloss = on ? dye.clone().lerp(new THREE.Color(1, 1, 1), 0.55) : new THREE.Color(teamById(t).dyeGloss);
+      this.teamCol[t].copy(dye);
+      this.teamLight[t].copy(dye).lerp(gloss, 0.35);
+      this.teamDark[t].copy(dye).multiplyScalar(0.55);
+    }
+    this.lastDropTeams.fill(255);
+    for (const pool of [this.jelly, this.puddle, this.cloud, this.buoy]) pool?.invalidate();
+  }
+
   dispose(): void {
+    // the CLOUDBURST disk's DataTexture: a material's dispose() never frees its map
+    ((this.disks.material as THREE.MeshBasicMaterial).map)?.dispose();
     this.drops.geometry.dispose();
     (this.drops.material as THREE.Material).dispose();
     this.particles.geometry.dispose();

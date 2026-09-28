@@ -4,7 +4,8 @@
 //   const juice = createJuice(uiRoot, { reduceMotion });          // once, after the HUD exists
 //   juice.onEvents(events, ctx);    // every frame, with the SimEvents drained this frame
 //   juice.update(dt, ctx);          // every rendered frame (fades, low-HP breathing, confetti)
-//   juice.victory(winner);          // when the victory slate appears (confetti in the winner's colour)
+//   juice.victory(winner, card);    // when the victory slate appears (confetti in the winner's colour, clipped
+//                                   // off `card` — the slate's title + tally + buttons stay clean)
 //   juice.trauma(amount, cap);      // extra shake sources without a SimEvent (spring pads)
 //   juice.setReduceMotion(on) / setColorblind(on) / reset() / dispose() / readback()
 // `ctx` is ONE object the caller keeps and refreshes (no per-frame allocation): the viewer id, the sim
@@ -18,7 +19,8 @@
 //       (chip cream < 20 · solid yellow < 45 · heavy coral ≥ 45); a wash adds a longer X + a ring pop;
 //   * damage vignette in the enemy colour (both crews' gradients prebuilt; opacity only) + an arc at the
 //     screen edge pointing to where the hit came from; low HP keeps a faint breathing vignette;
-//   * victory confetti: a two-cannon burst + a curtain in the winner's colours (both for a draw).
+//   * victory confetti: a two-cannon burst + a curtain in the winner's colours (both for a draw), never drawn
+//     over the victory card (an even-odd clip round its box: the pieces pass behind it).
 // Everything else in §21 lives in the view (fx.ts / players.ts / camera.ts) and needs no wiring:
 // bouncing splat droplets, landing puffs, slick crowns, the tide-spout column, body dye drips.
 
@@ -66,13 +68,16 @@ export interface JuiceReadback {
   markers: number; kills: number; lastDmg: number; lastTier: string; markerOpacity: number;
   hurts: number; vignette: number; vignetteTeam: string; arc: number; arcDeg: number;
   confetti: number; bursts: number;
+  /** the confetti keep-out box (CSS px: x0, y0, x1, y1) or null */
+  confettiClip: number[] | null;
   shakes: number; traumaAdded: number;
 }
 
 export interface Juice {
   onEvents(events: readonly SimEvent[], ctx: JuiceCtx): void;
   update(dt: number, ctx: JuiceCtx): void;
-  victory(winner: TeamId | 0): void;
+  /** `avoid`: an element confetti must never cover (the victory card; its children's boxes count too) */
+  victory(winner: TeamId | 0, avoid?: HTMLElement | null): void;
   trauma(amount: number, cap?: number): void;
   setReduceMotion(on: boolean): void;
   setColorblind(on: boolean): void;
@@ -222,6 +227,10 @@ class JuiceImpl implements Juice {
   private confettiN = 0;
   private confettiLive = 0;
   private confettiCols: string[] = ['#fff8ec'];
+  /** the confetti keep-out: an element (the victory card) and its box in the over layer's CSS px */
+  private avoidEl: HTMLElement | null = null;
+  private avoidBox: [number, number, number, number] | null = null;
+  private avoidT = 0;
   private cssW = 0; private cssH = 0; private dpr = 1;
 
   constructor(host: HTMLElement, o: JuiceOptions) {
@@ -460,8 +469,11 @@ class JuiceImpl implements Juice {
   }
 
   // ───────────────────────────── confetti ─────────────────────────────
-  victory(winner: TeamId | 0): void {
+  victory(winner: TeamId | 0, avoid?: HTMLElement | null): void {
     this.stats.bursts++;
+    this.avoidEl = avoid ?? null;
+    this.avoidBox = null;
+    this.avoidT = 0;
     const cols: string[] = [];
     const teams: TeamId[] = winner === 1 ? [1] : winner === 2 ? [2] : [1, 2];
     for (const t of teams) { const p = this.pal[t]; cols.push(p.dye, p.gloss, p.ui, p.dye); }
@@ -537,6 +549,18 @@ class JuiceImpl implements Juice {
     const grav = 1400 * u, drag = 1.5, term = 480 * u;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    // keep-out: the card's box, re-measured every 0.15 s (it slams in with a scale animation)
+    this.avoidT -= dt;
+    if (this.avoidT <= 0) { this.avoidT = 0.15; this.measureAvoid(); }
+    const box = this.avoidBox;
+    g.save();
+    if (box) {
+      const d = this.dpr;
+      g.beginPath();
+      g.rect(0, 0, this.canvas.width, this.canvas.height);
+      g.rect(box[0] * d, box[1] * d, (box[2] - box[0]) * d, (box[3] - box[1]) * d);
+      g.clip('evenodd');
+    }
     let live = 0;
     const cols = this.confettiCols;
     // one fillStyle per colour: loop colours outside, pieces inside (≤ 10 colours × N pieces)
@@ -577,6 +601,7 @@ class JuiceImpl implements Juice {
         }
       }
     }
+    g.restore();
     g.globalAlpha = 1;
     g.setTransform(1, 0, 0, 1, 0, 0);
     this.confettiLive = live;
@@ -584,6 +609,24 @@ class JuiceImpl implements Juice {
       g.clearRect(0, 0, this.canvas.width, this.canvas.height);
       this.canvas.hidden = true;
     }
+  }
+
+  /** the keep-out box: the avoid element's box ∪ its children's (the winner mark overhangs the card), + 8 px */
+  private measureAvoid(): void {
+    const el = this.avoidEl;
+    this.avoidBox = null;
+    if (!el || !el.isConnected) return;
+    const r = el.getBoundingClientRect();
+    if (!(r.width > 4 && r.height > 4)) return;
+    let x0 = r.left, y0 = r.top, x1 = r.right, y1 = r.bottom;
+    for (const c of Array.from(el.children)) {
+      const q = c.getBoundingClientRect();
+      if (!(q.width > 0 && q.height > 0)) continue;
+      x0 = Math.min(x0, q.left); y0 = Math.min(y0, q.top); x1 = Math.max(x1, q.right); y1 = Math.max(y1, q.bottom);
+    }
+    const o = this.over.getBoundingClientRect();
+    const pad = 8;
+    this.avoidBox = [x0 - o.left - pad, y0 - o.top - pad, x1 - o.left + pad, y1 - o.top + pad];
   }
 
   // ───────────────────────────── settings / lifecycle ─────────────────────────────
@@ -601,6 +644,7 @@ class JuiceImpl implements Juice {
     this.hurt = 0; this.lowHp = 0; this.arcT = 99;
     this.pendingTrauma = 0; this.pendingCap = 0;
     this.confettiLive = 0; this.confettiN = 0;
+    this.avoidEl = null; this.avoidBox = null;
     if (this.canvas && this.g2) { this.g2.setTransform(1, 0, 0, 1, 0, 0); this.g2.clearRect(0, 0, this.canvas.width, this.canvas.height); this.canvas.hidden = true; }
     this.lastVig[0] = this.lastVig[1] = -1; this.lastArc = -1; this.lastMark = -1; this.lastRing = -1;
     for (const el of [this.vig[1], this.vig[2], this.arc, this.mark, this.ring]) el.style.opacity = '0';
@@ -614,7 +658,7 @@ class JuiceImpl implements Juice {
       markerOpacity: Math.max(0, this.lastMark),
       hurts: this.stats.hurts, vignette: Math.max(this.lastVig[0], this.lastVig[1], 0), vignetteTeam: this.hurtTeam === 1 ? 'sun' : 'gulf',
       arc: Math.max(0, this.lastArc), arcDeg: Math.round(this.arcDeg),
-      confetti: this.confettiLive, bursts: this.stats.bursts,
+      confetti: this.confettiLive, bursts: this.stats.bursts, confettiClip: this.avoidBox ? this.avoidBox.map((v) => Math.round(v)) : null,
       shakes: this.stats.shakes, traumaAdded: Math.round(this.stats.traumaAdded * 100) / 100,
     };
   }

@@ -71,6 +71,16 @@ export function teamById(id: TeamId): TeamDef {
   return t;
 }
 
+/** a crew's dye (sRGB hex): teams.json, or its `colorblind` block when Settings → Colorblind marks is on */
+export function crewDyeHex(team: TeamId, colorblind: boolean): string {
+  const t = teamById(team);
+  if (colorblind) {
+    const cb = (TEAMS_RAW.colorblind as Record<string, { dye?: unknown }> | undefined)?.[t.key];
+    if (cb && typeof cb.dye === 'string') return cb.dye;
+  }
+  return t.dye;
+}
+
 export function teamBySide(side: Side): TeamDef {
   const t = TEAMS.find((x) => x.side === side);
   if (!t) throw new Error(`no team on side ${side}`);

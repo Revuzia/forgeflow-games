@@ -22,6 +22,11 @@ turned by real pointer-lock mouse motion, never by writing its yaw):
      (pt_victory.png); percentages must be sane (0 < share < 1, sum ≤ 1, winner = the larger share,
      the slate's numbers = the sim's result);
   7. a real click on PLAY AGAIN → a second match starts (countdown) with the paint reset.
+AUDIO (CHANGED(INTEGRATE) phase 10): after the countdown (read once the first fire burst is done) __DF__.audio() must
+report the context unlocked + running, the music cue 'match' (or 'final'), >= 1 WORLD sfx one-shot started (the
+sfx bus, not the UI / flow bus of the beeps and horns) and 0 decode / fetch errors; the victory slate must switch
+the cue to the 'victory' or 'defeat' stinger. The output meter is reported (peak / RMS / limiter, dBFS) and a
+clipping master (peak > -0.1 dBFS) is a problem.
 Frame times are recorded page-side for the whole live match (every rAF delta): avg fps, p50/p90/p99.
 
     python _harness/playtest.py --kits --headless    # phase 6 kit shots (CONTRACT_P6_11 §18.2)
@@ -72,6 +77,41 @@ def shot(sess, name, shots):
     ok = sess.screenshot(path)
     shots[name] = path if ok else None
     return ok
+
+
+def dfd(sess, name):
+    """__DF__.<name>() as a dict ({} when it failed or returned nothing)"""
+    ok, v = sess.df(name)
+    return v if ok and isinstance(v, dict) else {}
+
+
+def audio_check(sess, checks, problems, key):
+    """__DF__.audio() after the countdown: unlocked + running, cue 'match' (or 'final' in a short match's last
+    minute), >= 1 world-sfx one-shot started, 0 decode / fetch errors, and a master that does not clip."""
+    au = None
+    for _ in range(12):                    # the match cue decodes asynchronously: allow ~3 s
+        au = dfd(sess, "audio")
+        if au.get("cue") in ("match", "final"):
+            break
+        time.sleep(0.25)
+    au = au or {}
+    bus = au.get("playedBus") or {}
+    meter = au.get("meter") or {}
+    checks[key] = {"unlocked": au.get("unlocked"), "state": au.get("state"), "cue": au.get("cue"), "played": au.get("played"),
+                   "playedBus": bus, "voices": au.get("voices"), "peakVoices": au.get("peakVoices"), "stolen": au.get("stolen"),
+                   "loops": au.get("loops"), "decoded": au.get("decoded"), "errors": au.get("errors"), "meter": meter,
+                   "volumes": au.get("volumes")}
+    if not au.get("unlocked") or au.get("state") != "running":
+        problems.append("audio not unlocked / running after the countdown (unlocked %r, state %r)" % (au.get("unlocked"), au.get("state")))
+    if au.get("cue") not in ("match", "final"):
+        problems.append("the match music cue is not playing after the countdown (cue %r)" % au.get("cue"))
+    if not (bus.get("sfx") or 0) >= 1:
+        problems.append("no world sfx voice started after the countdown (playedBus %s)" % bus)
+    if au.get("errors"):
+        problems.append("audio decode / fetch errors: %s" % au.get("errors"))
+    if isinstance(meter.get("peakAllDb"), (int, float)) and meter["peakAllDb"] > -0.1:
+        problems.append("the audio master clips (peak %.1f dBFS)" % meter["peakAllDb"])
+    return au
 
 
 def me_of(m):
@@ -633,6 +673,7 @@ def main() -> int:
                 problems.append("HUD tank pipette %s ≠ runner tank %s" % (h1.get("tank"), p1.get("tank")))
             if timer0 is not None and timer0 == h1.get("timer"):
                 problems.append("the HUD timer did not change in ~4 s (%s)" % timer0)
+            audio_check(sess, checks, problems, "audioLive")
 
         # ── 3. dye the floor under the feet, then SHIFT → SLICK + refill
         if not fatal:
@@ -842,6 +883,14 @@ def main() -> int:
             m = match_info(sess) or {}
             res = m.get("result") or {}
             checks["victory"] = {"text": vic, "result": res, "phase": m.get("phase"), "coverage": m.get("coverage")}
+            au = dfd(sess, "audio")
+            jb = dfd(sess, "juice")
+            checks["audioVictory"] = {"cue": au.get("cue"), "errors": au.get("errors"), "meter": au.get("meter"),
+                                      "confetti": jb.get("confetti"), "confettiClip": jb.get("confettiClip"), "bursts": jb.get("bursts")}
+            if au.get("cue") not in ("victory", "defeat"):
+                problems.append("the victory slate did not start the victory / defeat stinger (audio cue %r)" % au.get("cue"))
+            if not jb.get("bursts"):
+                problems.append("the victory slate fired no confetti burst (juice %s)" % jb)
             ev_end = m.get("events") or {}
             checks["matchEvents"] = {"hit": ev_end.get("hit"), "washed": ev_end.get("washed"), "shot": ev_end.get("shot"),
                                      "springLaunch": ev_end.get("springLaunch")}
@@ -907,7 +956,8 @@ def main() -> int:
     print("URL          : %s" % url)
     print("mode         : %s Chrome (d3d11) %dx%d" % ("headless" if args.headless else "headed", args.width, args.height))
     print("entered play : %s · ready after %s s" % (rep.get("entered"), fmt(rep.get("readyS"), 1)))
-    for k in ("countdownSeen", "liveHud", "fire", "slick", "fight", "deathForced", "deathSlate", "bots", "victory", "matchEvents", "playAgain"):
+    for k in ("countdownSeen", "liveHud", "fire", "audioLive", "slick", "fight", "deathForced", "deathSlate", "bots", "victory", "audioVictory",
+              "matchEvents", "playAgain"):
         if k in checks:
             print("%-13s: %s" % (k, json.dumps(checks[k], default=str)[:900]))
     if perf:

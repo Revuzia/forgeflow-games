@@ -16,6 +16,13 @@
 //   ?autostart=1 · ?quality=auto|high|low
 // dev-only (?dev=1): ?matchSeconds=N · ?brush=1 (LMB = the phase-2 DEV_BRUSH) · ?merge=0 · ?tonemap=…
 // Any failure lands on the error card with the message (never a blank canvas).
+//
+// Phase 10 (CONTRACT_P6_11 §21): ONE GameAudio per page (audio/README.md): created at boot with the saved volumes,
+// unlocked by the first gesture (plus explicitly in the first menu click / the CLICK TO PLAY click), the lobby cue
+// on every lobby entry, the menus' hover / click / back / start through MenuHooks.sound, the SETTINGS sliders live;
+// the Game ticks it every frame (a match routes its events + the camera as the listener) and plays the victory /
+// defeat stinger. One Juice per MATCH session (ui/juice.ts): the hit markers, the damage vignette + arc, the trauma
+// shake and the victory confetti; REDUCE MOTION and COLORBLIND MARKS reach it (and the runner / FX dye) live.
 
 /// <reference types="vite/client" />
 
@@ -42,12 +49,14 @@ import { FollowCamera } from './view/camera.ts';
 import { createSky, type SkyRig } from './view/sky.ts';
 import { createWater, type WaterRig } from './view/water.ts';
 import { PaintTexture } from './view/paintlayer.ts';
-import { createDyeUniforms, type DyeUniforms } from './view/surfaces.ts';
+import { createDyeUniforms, setPadColorblind, type DyeUniforms } from './view/surfaces.ts';
 import { loadMapView, type MapView } from './view/mapview.ts';
 import { loadHeroAssets, type HeroAssets } from './view/heroview.ts';
 import { PlayerViews, prepareRunnerKit, loadKitArt, mixedBotKits, kitFireType, type RunnerKit, type KitArt } from './view/players.ts';
 import { Fx, bakeFxModels } from './view/fx.ts';
 import { Hud, applyTeamCssVars, type HudKit } from './ui/hud.ts';
+import { createJuice, type Juice } from './ui/juice.ts';
+import { createAudio, type GameAudio } from './audio/index.ts';
 import { BootUI } from './ui/boot.ts';
 import { Menus, crewColors, type StartSelection } from './ui/menus.ts';
 import { SettingsStore, ProfileStore, type Settings } from './ui/settings.ts';
@@ -57,7 +66,7 @@ import { Input } from './input.ts';
 import { Game, type AppStatus, type GameHooks, type GameMode, type MatchConfig } from './game.ts';
 import { installTestSurface, type AppHandles } from './testsurface.ts';
 
-export const VERSION = 'dyefield-0.9.0-phase9';
+export const VERSION = 'dyefield-0.10.0-phase10';
 
 declare global {
   interface Window {
@@ -124,6 +133,7 @@ interface Shared {
   input: Input;
   settings: SettingsStore;
   profile: ProfileStore;
+  audio: GameAudio;
   boot: BootUI;
   menus: Menus;
   kits: Map<string, RunnerKit>;
@@ -181,8 +191,6 @@ function texturesOf(root: THREE.Object3D, own: (t: THREE.Texture) => boolean = (
   for (const t of [...out]) if (!own(t)) out.delete(t);
   return out;
 }
-/** procedural textures (DataTexture / CanvasTexture) — per-session objects, never the shared GLB images */
-const procedural = (t: THREE.Texture): boolean => (t as THREE.DataTexture).isDataTexture === true || (t as THREE.CanvasTexture).isCanvasTexture === true;
 
 function presetOf(def: MapDef, name: string | null | undefined): { name: string; preset: LightingPreset } {
   const n = name && def.lighting?.presets[name] ? name : (def.lighting?.default ?? 'noon');
@@ -227,6 +235,7 @@ async function loadArena(S: Shared, mapId: string, presetName: string | null, re
   const map = await loadMapView(S.loader, def, dye, (f) => { prog.map = f; rep(); },
     { mergeStatic: !(app.dev && params.get('merge') === '0') });
   prog.map = 1;
+  if (S.settings.get().colorblind) setPadColorblind(map.root, true);
   const scene = new THREE.Scene();
   scene.add(map.root);
   const sky = createSky(scene, renderer, preset);
@@ -280,6 +289,8 @@ interface Session {
   players: PlayerViews;
   fx: Fx;
   hud: Hud;
+  /** match sessions only */
+  juice: Juice | null;
   dispose(): void;
 }
 
@@ -319,6 +330,8 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
   const fx = new Fx(arena.sky.sunDir);
   fx.setModels(bakeFxModels(kitArt));
   const players = new PlayerViews(heroAssets, roster, fx, mode === 'lobby' ? null : uiRoot, S.kits);
+  const st = S.settings.get();
+  if (st.colorblind) { fx.setColorblind(true); players.setColorblind(true); }
   arena.scene.add(players.root, fx.root);
 
   const kitRow = WEAPONS.kits.find((k) => k.id === config.kit) ?? WEAPONS.kits[0];
@@ -332,11 +345,14 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
   };
   const hud = new Hud(uiRoot, { team: humanTeam, minimap: arena.minimap, specialName, roster, youId: 0, kit: hudKit });
   hud.slates.setLegend(S.menus.legend());
+  // after the HUD: juice's over-layer (hit marker, confetti) sits above the HUD and the slates
+  const juice = mode === 'match' ? createJuice(uiRoot, { reduceMotion: st.reduceMotion, colorblind: st.colorblind }) : null;
 
   const game = new Game({
     app, def, canvas: S.canvas, rig, scene: arena.scene, cam, sky: arena.sky, water: arena.water, map: arena.map, geo: arena.geo,
     atlas: arena.atlas, painter: arena.painter, minimap: arena.minimap, paint: arena.paint, dye: arena.dye, R: await S.rapier,
     physics: arena.physics, nav: arena.nav, roster, players, fx, hud, boot: S.boot, input, config, mode, hooks,
+    audio: S.audio, juice,
   }, { quality: S.quality() });
   app.game = game;
   app.mapId = def.id;
@@ -373,22 +389,18 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
   game.run();
   let disposed = false;
   return {
-    mode, arena, game, players, fx, hud,
+    mode, arena, game, players, fx, hud, juice,
     dispose(): void {
       if (disposed) return;
       disposed = true;
       game.dispose();
       if (app.game === game) app.game = null;
-      const tex = new Set([...texturesOf(players.root, procedural), ...texturesOf(fx.root, procedural)]);
-      // each runner is a SkeletonUtils clone with its own Skeleton, whose bone DataTexture only Skeleton.dispose() frees
-      const skeletons = new Set<THREE.Skeleton>();
-      players.root.traverse((o) => { const sm = o as THREE.SkinnedMesh; if (sm.isSkinnedMesh && sm.skeleton) skeletons.add(sm.skeleton); });
+      // the view modules free their own GPU objects (the runner skeletons' bone textures, the FX disk texture)
+      juice?.dispose();
       hud.dispose();
       players.dispose();
       fx.dispose();
       arena.scene.remove(players.root, fx.root);
-      for (const t of tex) t.dispose();
-      for (const k of skeletons) k.dispose();
     },
   };
 }
@@ -399,6 +411,8 @@ async function boot(): Promise<void> {
   const settings = new SettingsStore();
   const profile = new ProfileStore(WEAPONS.kits.map((k) => k.id), playableMaps().map((m) => m.id));
   applyTeamCssVars(settings.get().colorblind);
+  // one WebAudio per page: nothing sounds (and no AudioContext exists) until the first gesture unlocks it
+  const audio = createAudio({ volumes: settings.get().volume });
   const bootUi = new BootUI();
   window.__DF_BOOT__?.handoff();
   let arena: Arena | null = null;
@@ -414,6 +428,8 @@ async function boot(): Promise<void> {
       cam: S ? S.cam.camera.position.toArray().map((v) => Math.round(v * 100) / 100) : null, fov: S ? S.cam.camera.fov : null,
     } : null),
     renderInfo: () => (S ? S.rig.renderer.info : null),
+    audio: () => audio.stats(),
+    juice: () => session?.juice?.readback() ?? null,
   };
   installTestSurface(app, handles);
 
@@ -537,7 +553,7 @@ async function boot(): Promise<void> {
         session = await startSession(S, arena, 'match', cfg, hooks, report);
         app.phase = 'ready';
         const g = session.game;
-        if (!g.beginWithLock()) bootUi.showPlay(() => g.requestPlay());
+        if (!g.beginWithLock()) bootUi.showPlay(() => { void audio.unlock(); g.requestPlay(); });
       } catch (e) {
         fail('The match could not start', e);
       } finally {
@@ -569,7 +585,7 @@ async function boot(): Promise<void> {
         app.startedBy = null;
         S.menus.showTitle();
         bootUi.hide();
-        // (integrator: the lobby cue — audio.playMusic('lobby') — belongs here and after the first lobby below)
+        audio.playMusic('lobby');                 // resets the match's world loops; the harbour ambience returns
       } catch (e) {
         fail('The lobby could not load', e);
       } finally {
@@ -577,8 +593,7 @@ async function boot(): Promise<void> {
       }
     };
 
-    // integrator: UI sounds are one hook — add `sound: (s) => audio.ui(s)` to these hooks — and the volumes one
-    // listener: settings.on((s, k) => { if (k.includes('volume')) audio.setVolumes(s.volume); })
+    // UI sounds (hover / click / back / start): the UI bus is never ducked or paused; a click also unlocks
     const menus = new Menus(uiRoot, {
       settings, profile, input,
       hooks: {
@@ -586,9 +601,10 @@ async function boot(): Promise<void> {
         resume: () => app.game?.resume(),
         quitMatch: () => { void toLobby(); },
         padStart: () => { const g = app.game; if (g && !g.isLobby && app.phase === 'play' && !g.matchOver) g.pause('pad'); },
+        sound: (s) => audio.ui(s),
       },
     });
-    S = { canvas, uiRoot, rig, cam, loader, rapier, hero, kitArt, input, settings, profile, boot: bootUi, menus, kits: new Map(), mannequin: null, fpsEl,
+    S = { canvas, uiRoot, rig, cam, loader, rapier, hero, kitArt, input, settings, profile, audio, boot: bootUi, menus, kits: new Map(), mannequin: null, fpsEl,
       quality: effectiveQuality };
     const shared = S;
 
@@ -612,8 +628,10 @@ async function boot(): Promise<void> {
       }
       if (has('colorblind')) {
         applyTeamCssVars(s.colorblind);
+        if (session) { session.fx.setColorblind(s.colorblind); session.players.setColorblind(s.colorblind); session.juice?.setColorblind(s.colorblind); }
         if (arena) {
           if (arena.dye.uColorblind) arena.dye.uColorblind.value = s.colorblind ? 1 : 0;
+          setPadColorblind(arena.map.root, s.colorblind);
           const pal = mmPalette(s.colorblind);
           arena.mmColors.sun.splice(0, 3, ...pal.sun);
           arena.mmColors.gulf.splice(0, 3, ...pal.gulf);
@@ -630,7 +648,11 @@ async function boot(): Promise<void> {
       const c = cam as FollowCamera & { sensitivityScale?: number; invertY?: boolean; reduceMotion?: boolean };
       if (has('sensitivity') && 'sensitivityScale' in c) c.sensitivityScale = s.sensitivity;
       if (has('invertY') && 'invertY' in c) c.invertY = s.invertY;
-      if (has('reduceMotion') && 'reduceMotion' in c) c.reduceMotion = s.reduceMotion;
+      if (has('reduceMotion')) {
+        if ('reduceMotion' in c) c.reduceMotion = s.reduceMotion;
+        session?.juice?.setReduceMotion(s.reduceMotion);   // juice also pushes it to the camera every frame
+      }
+      if (has('volume')) audio.setVolumes(s.volume);
     };
     settings.on(applySettings);
     applySettings(settings.get(), []);
@@ -650,7 +672,7 @@ async function boot(): Promise<void> {
       bootUi.progress(1, 'Ready');
       app.phase = 'ready';
       const g = session.game;
-      bootUi.showPlay(() => g.requestPlay());
+      bootUi.showPlay(() => { void audio.unlock(); g.requestPlay(); });
       if (params.get('autostart') === '1') g.devStart();
     } else {
       // ── the lobby: Pier 18 at noon behind the menus
@@ -660,6 +682,7 @@ async function boot(): Promise<void> {
       app.phase = 'menu';
       menus.showTitle();
       bootUi.hide();
+      audio.playMusic('lobby');                   // queued until the first gesture unlocks the context
     }
   } catch (e) {
     fail('DYEFIELD could not start', e);

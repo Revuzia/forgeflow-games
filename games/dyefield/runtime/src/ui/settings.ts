@@ -60,10 +60,15 @@ export function defaultBindings(): Bindings {
   return out;
 }
 
+/** the OS 'reduce motion' preference: the REDUCE MOTION default until the player sets it */
+function osReducedMotion(): boolean {
+  try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+}
+
 export function defaultSettings(): Settings {
   return {
     bindings: defaultBindings(), sensitivity: 1, invertY: false, colorblind: false,
-    volume: { ...DEFAULT_VOLUMES }, quality: 'auto', showFps: false, reduceMotion: false,
+    volume: { ...DEFAULT_VOLUMES }, quality: 'auto', showFps: false, reduceMotion: osReducedMotion(),
   };
 }
 

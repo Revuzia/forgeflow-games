@@ -37,7 +37,7 @@
 
 import * as THREE from 'three';
 import type { LightingPreset, MapDef } from '../core/data.ts';
-import { MAPS, mapById, teamById, TEAMS_RAW } from '../core/data.ts';
+import { MAPS, crewDyeHex, mapById, teamById, TEAMS_RAW } from '../core/data.ts';
 import type { PaintTexture } from './paintlayer.ts';
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
@@ -1663,7 +1663,28 @@ function padMaterial(name: string, fallback: THREE.Material | null, o: SurfaceOp
     uPadCenter: U(info.center), uPadRadius: U(info.radius), uPadFwd: U(info.fwd),
     uPadBody: U(col(PALETTE.padBody)), uPadTeam: U(col(team.dye)), uPadMark: U(side === 'A' ? 1 : 2),
   };
-  return simple('pad', PAD_GLSL, name, fallback, u, 0.42, 0.15);
+  const m = simple('pad', PAD_GLSL, name, fallback, u, 0.42, 0.15);
+  m.userData.dfPadTeam = { team: side === 'A' ? 1 : 2, u: u.uPadTeam };      // setPadColorblind() recolours it
+  return m;
+}
+
+/**
+ * Settings → Colorblind marks on the spawn pads' crew accent (ring, mark, side band): teams.json `colorblind` dye
+ * when on, the crew dye when off. Walks `root` (the MapView root) for the pad materials; returns how many it set.
+ */
+export function setPadColorblind(root: THREE.Object3D, on: boolean): number {
+  let n = 0;
+  root.traverse((o) => {
+    const mat = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+    if (!mat) return;
+    for (const m of Array.isArray(mat) ? mat : [mat]) {
+      const p = m.userData?.dfPadTeam as { team: 1 | 2; u: THREE.IUniform<THREE.Color> } | undefined;
+      if (!p) continue;
+      p.u.value.copy(col(crewDyeHex(p.team, on)));
+      n++;
+    }
+  });
+  return n;
 }
 
 /**

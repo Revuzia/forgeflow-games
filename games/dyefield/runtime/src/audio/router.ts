@@ -175,6 +175,8 @@ export class AudioRouter {
   /** plays per sound id, culls per reason (the probe reads these) */
   readonly counts: Record<string, number> = {};
   readonly culled: Record<string, number> = {};
+  /** loop starts per sound id (a keyed loop counts once each time it (re)starts) — harness read-back */
+  readonly loopStarts: Record<string, number> = {};
   private readonly rnd: () => number;
   private readonly lastVariant: Record<string, number> = {};
   private readonly lastShot = new Float64Array(MAX_RUNNERS).fill(-1e9);
@@ -604,6 +606,7 @@ export class AudioRouter {
       if (est < MIN_EST) return;
     }
     this.wanted.add(key);
+    if (!this.active.has(key)) this.loopStarts[c.id] = (this.loopStarts[c.id] ?? 0) + 1;
     this.active.add(key);
     sink.loop(key, c);
   }

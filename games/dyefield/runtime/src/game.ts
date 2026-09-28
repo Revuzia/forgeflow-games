@@ -57,6 +57,8 @@ import { kitFireType, type KitFireType, type PlayerViews, type PlayersFrameOpts 
 import type { Fx } from './view/fx.ts';
 import type { Hud, HudDebug, CrestInfo, DotInfo, HudFrame } from './ui/hud.ts';
 import type { BootUI } from './ui/boot.ts';
+import type { Juice, JuiceCtx } from './ui/juice.ts';
+import type { AudioFrame, GameAudio, ListenerPose } from './audio/index.ts';
 import type { Input } from './input.ts';
 
 export type Phase = 'boot' | 'loading' | 'ready' | 'play' | 'paused' | 'menu' | 'error';
@@ -136,6 +138,12 @@ export interface GameParts {
   /** phase 9: 'match' (default) or the lobby's live backdrop */
   mode?: GameMode;
   hooks?: GameHooks;
+  /** phase 10 (CONTRACT_P6_11 §21): the page's WebAudio (main.ts creates it once). The lobby only ticks it
+   *  (ambience + music); a match routes its drained SimEvents + the listener pose to it every frame. */
+  audio?: GameAudio | null;
+  /** phase 10: the screen-space juice (hit markers, damage vignette + arc, trauma shake, victory confetti) —
+   *  match sessions only. It replaces the HUD's old hit marker / vignette and the legacy cam.shake writes. */
+  juice?: Juice | null;
 }
 
 /** player-facing settings the game applies itself */
@@ -236,6 +244,10 @@ export class Game {
   private savedFov = 0;
   /** lobby rounds played (each restart repaints the court from clean) */
   lobbyRounds = 0;
+  // phase 10: the one ctx object each of juice / audio reads every frame (no per-frame allocation)
+  private readonly juiceCtx: JuiceCtx;
+  private readonly listener: ListenerPose = { x: 0, y: 0, z: 0, fx: 0, fy: 0, fz: -1, ux: 0, uy: 1, uz: 0 };
+  private readonly audioFrame: AudioFrame;
 
   constructor(parts: GameParts, settings: Partial<GameSettings> = {}) {
     this.p = parts;
@@ -254,6 +266,12 @@ export class Game {
     }
     this.world = this.makeWorld();
     this.director = new BotDirector(this.world, parts.nav, parts.config.seed ^ 0x9e3779b9);
+    this.juiceCtx = { me: HUMAN, runners: this.world.runners, cam: parts.cam };
+    this.audioFrame = {
+      listener: this.listener, runners: this.world.runners, me: HUMAN, map: parts.def.id,
+      phase: this.world.phase, timeLeft: this.world.timeLeft, countdown: this.world.countdown,
+      projectiles: this.world.projectiles, conveyors: parts.geo.features?.conveyors,
+    };
     this.frameOpts = {
       alpha: 1, camera: parts.cam.camera, viewerTeam: this.humanTeam, viewerId: HUMAN, seen: this.seenFn, width: 1, height: 1, winner: null,
       mistRange: this.world.mistRange,
@@ -393,6 +411,7 @@ export class Game {
     if (this.mode === 'match') {
       this.p.input.live = false;
       this.p.input.releaseAll();
+      this.p.audio?.setPaused(false);             // QUIT MATCH from the pause card: the lobby must not stay muted
     }
   }
 
@@ -402,6 +421,7 @@ export class Game {
     this.p.app.error = msg;
     this.p.input.live = false;
     this.p.hud.show(false);
+    this.p.audio?.setPaused(true);
     this.p.hooks?.paused?.(false, '');
     this.p.boot.error('The match stopped', msg);
     console.error('[dyefield] frame error:', e);
@@ -483,6 +503,7 @@ export class Game {
     this.phase = 'play';
     this.p.rig.graceFor(2);                       // never rescale in the first 2 s of play
     this.p.boot.hide();
+    this.p.audio?.setPaused(false);
     this.p.hooks?.paused?.(false, '');
     this.p.hud.show(true);
     this.p.canvas.focus({ preventScroll: true });
@@ -494,6 +515,7 @@ export class Game {
     this.acc = 0;
     this.p.input.live = false;
     this.p.input.releaseAll();
+    this.p.audio?.setPaused(true);                // world sounds + loops silent, music at 40 %; UI sounds stay
     // ESC in a pointer-locked page arrives as a lock loss (the browser eats the key): the same plain pause card
     this.p.hooks?.paused?.(true, '');
     if (document.pointerLockElement === this.p.canvas) document.exitPointerLock();
@@ -514,6 +536,10 @@ export class Game {
     this.releaseWorld(this.world);
     if (this.mode === 'lobby') this.lobbyRounds++;
     this.world = this.makeWorld();
+    this.juiceCtx.runners = this.world.runners;
+    this.audioFrame.runners = this.world.runners;
+    this.audioFrame.projectiles = this.world.projectiles;
+    p.juice?.reset();
     this.director = new BotDirector(this.world, p.nav, (p.config.seed + this.matchNo * 7919) ^ 0x9e3779b9);
     this.matchNo++;
     this.tick = 0;
@@ -653,7 +679,29 @@ export class Game {
     const alpha = playing || this.frozen ? Math.min(1, this.acc / TICK) : 1;
     this.matchFlow(vdt);
     this.render(vdt, alpha);
+    this.sound(vdt);
     p.hooks?.frame?.(dt);
+  }
+
+  /**
+   * Audio, EVERY frame (audio/README.md §4 — quiet frames too: drainEvents() returns early on an empty queue).
+   * A match routes this frame's drained events with the listener = the camera just rendered, plus the flow
+   * state (the countdown beeps start when the countdown actually runs; the final-10 ticks are exact). The
+   * lobby only ticks the router (ambience + music): its backdrop bots are scenery, not a soundscape.
+   */
+  private sound(vdt: number): void {
+    const a = this.p.audio;
+    if (!a) return;
+    if (this.mode === 'match') {
+      const e = this.p.cam.camera.matrixWorld.elements, L = this.listener;
+      L.x = e[12]; L.y = e[13]; L.z = e[14];
+      L.fx = -e[8]; L.fy = -e[9]; L.fz = -e[10];
+      L.ux = e[4]; L.uy = e[5]; L.uz = e[6];
+      const f = this.audioFrame, w = this.world;
+      f.phase = w.phase; f.timeLeft = w.timeLeft; f.countdown = w.countdown;
+      a.onEvents(this.drained, f);
+    }
+    a.update(vdt);                                  // the visuals' dt: 0 while paused
   }
 
   // ───────────────────────────── events → view ─────────────────────────────
@@ -666,6 +714,9 @@ export class Game {
     const rs = this.world.runners;
     const lobby = this.mode === 'lobby';
     const me = lobby ? -1 : HUMAN;
+    // juice: trauma shake (per kit / by damage / near slams, pops, washes), hit markers, the damage vignette
+    // + arc. It owns every screen shake and hit marker: the old cam.shake writes and HUD marks are gone.
+    if (!lobby) this.p.juice?.onEvents(out, this.juiceCtx);
     for (const e of out) {
       this.counts[e.t] = (this.counts[e.t] ?? 0) + 1;
       const le = e as LoggedEvent;
@@ -687,7 +738,6 @@ export class Game {
           const team = rs[e.pid]?.team ?? 1;
           const m = players.muzzle(e.pid, this.muzzle) ? this.muzzle : this.v1.set(e.x0, e.y0, e.z0);
           fx.beamFlash(m.x, m.y, m.z, e.x1, e.y1, e.z1, e.charge, team);
-          if (e.pid === me) cam.shake = Math.min(1, cam.shake + 0.12 + 0.2 * e.charge);
           break;
         }
         case 'burst':
@@ -696,21 +746,14 @@ export class Game {
         case 'flick':
           players.onFlick(e.pid);
           break;
-        case 'ring': {
+        case 'ring':
           fx.ringWave(e.x, e.y, e.z, e.r, rs[e.pid]?.team ?? 1);
-          const h = lobby ? null : rs[me];
-          if (h && Math.hypot(h.x - e.x, h.z - e.z) < e.r + 4) cam.shake = Math.min(1, cam.shake + (e.pid === me ? 0.6 : 0.3));
           break;
-        }
         case 'sub': {
           const team = rs[e.pid]?.team ?? 1;
           if (e.phase === 'throw') players.onThrow(e.pid);
           else if (e.phase === 'land') fx.jellyLand(e.x, e.y, e.z, team);
-          else {
-            fx.jellyPop(e.x, e.y, e.z, SUB_BLAST, team);
-            const h = lobby ? null : rs[me];
-            if (h && Math.hypot(h.x - e.x, h.z - e.z) < SUB_BLAST + 3) cam.shake = Math.min(1, cam.shake + 0.3);
-          }
+          else fx.jellyPop(e.x, e.y, e.z, SUB_BLAST, team);
           break;
         }
         case 'special': {
@@ -733,9 +776,7 @@ export class Game {
         case 'hit': {
           const by = rs[e.by];
           fx.hitSparks(e.x, e.y, e.z, by?.team ?? 1);
-          players.onHit(e.victim);
-          if (e.victim === me) { hud.damaged(by?.team ?? 2); cam.shake = Math.min(1, cam.shake + 0.35); }
-          if (e.by === me) hud.hitMarker(false);
+          players.onHit(e.victim, by?.team, e.x, e.y, e.z, e.dmg);   // the body stain sits at the hit, sized by damage
           break;
         }
         case 'washed': {
@@ -747,11 +788,7 @@ export class Game {
             players.onWashed(e.victim);
             if (!lobby) hud.killFeed(e.cause === 'sea' || !by ? null : { name: by.name, team: by.team }, { name: v.name, team: v.team });
           }
-          if (e.victim === me) {
-            hud.showDeath(e.cause === 'sea' || !by ? null : by.name, by ? by.team : null, WEAPONS.respawnSeconds);
-            cam.shake = 1;
-          }
-          if (e.by === me && e.victim !== me) hud.hitMarker(true);
+          if (e.victim === me) hud.showDeath(e.cause === 'sea' || !by ? null : by.name, by ? by.team : null, WEAPONS.respawnSeconds);
           break;
         }
         case 'respawn': {
@@ -764,9 +801,6 @@ export class Game {
           }
           break;
         }
-        case 'land':
-          if (e.pid === me && e.hard) cam.shake = Math.min(1, cam.shake + 0.25);
-          break;
         case 'tankLow':
           if (e.pid === me) hud.lowTank();
           break;
@@ -797,7 +831,7 @@ export class Game {
       const lh = Math.hypot(sp.launch[0], sp.launch[2]);
       this.p.fx.springSplash(sp.x, sp.y, sp.z, Math.max(0.6, sp.r), lh > 1e-3 ? sp.launch[0] / lh : 0, lh > 1e-3 ? sp.launch[2] / lh : 0);
       this.counts.springLaunch = (this.counts.springLaunch ?? 0) + 1;
-      if (i === HUMAN && this.mode === 'match') this.p.cam.shake = Math.min(1, this.p.cam.shake + 0.2);
+      if (i === HUMAN && this.mode === 'match') this.p.juice?.trauma(0.2, 0.35);
     }
   }
 
@@ -819,6 +853,9 @@ export class Game {
       this.p.hud.showVictory({ sun: res.sun, gulf: res.gulf, neutral: res.neutral, winner: res.winner }, () => this.playAgain(),
         hooks?.lobby ? () => hooks.lobby?.() : undefined);
       hooks?.victory?.(this.p.hud.slates.victoryEl);
+      // confetti in the winner's colours, kept off the slate's card (title + tally stay clean); the stinger
+      this.p.juice?.victory(res.winner, this.p.hud.slates.victoryCardEl);
+      this.p.audio?.playMusic(res.winner === this.humanTeam || res.winner === 0 ? 'victory' : 'defeat');
       // the world is over: the keys belong to the slate now (arrows / Space / Enter drive PLAY AGAIN · LOBBY)
       this.p.input.live = false;
       this.p.input.releaseAll();
@@ -904,6 +941,7 @@ export class Game {
     p.rig.renderer.render(p.scene, p.cam.camera);
     p.hooks?.overlay?.(p.rig.renderer, dt);
     if (lobby) return;
+    p.juice?.update(dt, this.juiceCtx);           // the same dt as the visuals: pause + dev freeze stop it
 
     // HUD
     const hf = this.hudFrame;

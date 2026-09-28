@@ -16,6 +16,10 @@
 //   phase 9 (CONTRACT_P6_11 §20): state().phase gains 'menu' (the lobby behind the menus) · menu() — the menus'
 //   screen / context / focus / profile / mannequin · settings() — the saved settings · session() — the running
 //   session (mode, map, preset) · gl() — renderer.info memory + program counts (leak checks across sessions)
+//   phase 10 (CONTRACT_P6_11 §21): audio() — the GameAudio stats (unlocked, context state, music cue, voices,
+//   peak / stolen / rejected, loops, one-shots played (sfx / ui), decoded sets, decode + fetch errors, the output
+//   meter) · juice() — the match's juice read-back (markers, hurt vignette + arc, confetti + its keep-out box,
+//   shakes / trauma added; null outside a match)
 //   dev-only phase 6: fillSpecial(pid = 0) — fills the special meter and arms it (sets the Runner's public
 //   `special` = 1 and `specialReady` = true; MatchWorld has no dev hook for it, and the 'ready' event is
 //   NOT emitted) · freeze(on) — stops the sim AND the visual clock while rendering continues, so a
@@ -33,6 +37,8 @@ export interface AppHandles {
   profile(): ProfileStore;
   session(): { mode: string; map: string; preset: string; key: string; cam: number[] | null; fov: number | null } | null;
   renderInfo(): WebGLInfo | null;
+  audio(): unknown;
+  juice(): unknown;
 }
 import type { Coverage, MoveState, TeamId } from './core/types.ts';
 import { teamById, hexToRgb01 } from './core/data.ts';
@@ -181,6 +187,12 @@ export function installTestSurface(app: AppStatus, handles?: AppHandles): void {
       if (!i) return null;
       return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0,
         heapMB: (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory ? Math.round((performance as unknown as { memory: { usedJSHeapSize: number } }).memory.usedJSHeapSize / 1048576) : null };
+    },
+    audio(): unknown {
+      return handles ? handles.audio() : null;
+    },
+    juice(): unknown {
+      return handles ? handles.juice() : null;
     },
     // ── harness read-backs (additive)
     kit(): Record<string, unknown> | null {

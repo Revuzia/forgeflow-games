@@ -6,13 +6,14 @@
 //   top right     special gauge: the kit's special icon + name (weapons.json), a fill, and at 100 % a
 //                 pulse with a key badge showing the ACTUAL binding (Input.keyLabel('special'));
 //                 then the kill feed `{A} washed {B}` (a sea death shows {B} with a wave icon)
-//   centre        reticle + TANK pipette (dry-click flash; a tick at the sub cost), hit marker; the sub
+//   centre        reticle + TANK pipette (dry-click flash; a tick at the sub cost); the sub
 //                 chip (JELLY CHARGE icon + its key) greys out below the sub cost; NEEDLE-GLINT shows a
 //                 charge ring around the reticle (bright at full charge)
 //   bottom centre low-tank toast `Tank low — hold SHIFT on your color to drink`
 //   bottom left   minimap (MinimapRaster → putImageData only when dirty) + the runner arrow + ally dots
 //                 and seen-enemy dots (dot shape = crew mark: ◉ circle / ▲ triangle)
-//   overlays      damage vignette (enemy dye at the edges) · slates.ts (3 · 2 · 1, WASHED BY, victory + tally)
+//   overlays      slates.ts (3 · 2 · 1, WASHED BY, victory + tally). Hit markers and the damage vignette + arc
+//                 are ui/juice.ts (phase 10): the HUD no longer draws its own.
 //   F1            debug panel. The pause card moved to ui/menus.ts in phase 9 (PAUSED / RESUME / SETTINGS / …).
 // Every per-frame write is skipped when its value did not change.
 
@@ -164,9 +165,7 @@ export class Hud {
   private readonly tankFill: HTMLElement;
   private readonly tankBox: HTMLElement;
   private readonly ret: HTMLElement;
-  private readonly hitMark: HTMLElement;
   private readonly toast: HTMLElement;
-  private readonly vignette: HTMLElement;
   private readonly dots: DotEl[] = [];
   private readonly debug: HTMLElement;
   private readonly debugBody: HTMLElement;
@@ -177,15 +176,11 @@ export class Hud {
   private lastTank = -1;
   private lastGauge = -1;
   private toastT = 0;
-  private hitT = 0;
-  private hurt = 0;
-  private lastVig = -1;
   private clock = 0;
   private lastPhase = '';
   private final10 = false;
   private retSlick = false;
   private retFiring = false;
-  private lastHpLow = false;
   private lastArrow = '';
   private arrowAlive = true;
   private readonly pxy: [number, number] = [0, 0];
@@ -283,9 +278,6 @@ export class Hud {
       + '<circle class="charge-bg" r="15.5" fill="none" stroke="rgba(20,32,58,.55)" stroke-width="5"/>'
       + `<circle class="charge" r="15.5" fill="none" stroke="${this.team === 2 ? 'var(--gulf)' : 'var(--sun)'}" stroke-width="3.2" stroke-linecap="round" transform="rotate(-90)" stroke-dasharray="0 ${CHARGE_C.toFixed(2)}"/></svg>`;
     this.chargeRing = this.ret.querySelector('circle.charge');
-    this.hitMark = el('div', 'df-hitmark');
-    this.hitMark.innerHTML = '<svg viewBox="-20 -20 40 40" aria-hidden="true"><path d="M-14 -14 L-6 -6 M14 -14 L6 -6 M-14 14 L-6 6 M14 14 L6 6" stroke="#fff8ec" stroke-width="4.2" stroke-linecap="round"/>'
-      + '<path d="M-14 -14 L-6 -6 M14 -14 L6 -6 M-14 14 L-6 6 M14 14 L6 6" stroke="#14203a" stroke-width="1.4" stroke-linecap="round" opacity=".6"/></svg>';
     this.tankBox = el('div', 'df-tank' + (this.team === 2 ? ' gulf' : ''));
     this.tankFill = el('div', 'df-tank-fill');
     const tankLine = el('div', 'df-tank-low');
@@ -309,9 +301,6 @@ export class Hud {
     this.toast.hidden = true;
     this.toast.setAttribute('role', 'status');
 
-    // ── damage vignette
-    this.vignette = el('div', 'df-vignette');
-
     // ── debug panel
     this.debug = el('div', 'df-debug');
     this.debug.hidden = true;
@@ -319,7 +308,7 @@ export class Hud {
     this.debugBody = el('table');
     this.debug.append(this.debugBody);
 
-    this.root.append(this.vignette, top, right, miniBox, this.ret, this.hitMark, this.tankBox, tankLabel, this.sub, this.toast, this.debug);
+    this.root.append(top, right, miniBox, this.ret, this.tankBox, tankLabel, this.sub, this.toast, this.debug);
     host.append(this.root);
     this.slates = new Slates(host);
     this.redrawMinimap(true);
@@ -392,18 +381,6 @@ export class Hud {
     this.gauge.classList.remove('pop'); void this.gauge.offsetWidth; this.gauge.classList.add('pop');
   }
 
-  hitMarker(washed = false): void {
-    this.hitT = washed ? 0.4 : 0.2;
-    this.hitMark.classList.toggle('big', washed);
-    this.hitMark.classList.remove('on'); void this.hitMark.offsetWidth; this.hitMark.classList.add('on');
-  }
-
-  /** the human took a hit from `team`'s dye */
-  damaged(team: TeamId): void {
-    this.hurt = 1;
-    this.vignette.dataset.team = teamKey(team);
-  }
-
   showDeath(name: string | null, team: TeamId | null, seconds: number): void { this.slates.showDeath(name, team, seconds); }
   hideDeath(): void { this.slates.hideDeath(); }
   showVictory(v: VictoryInfo, onAgain: () => void, onLobby?: () => void): void { this.slates.showVictory(v, onAgain, onLobby); }
@@ -414,7 +391,6 @@ export class Hud {
     for (const f of this.feedItems) f.e.remove();
     this.feedItems.length = 0;
     this.toastT = 0; this.toast.hidden = true;
-    this.hurt = 0; this.hitT = 0;
     this.hideDeath();
     this.hideVictory();
     this.lastPhase = '';
@@ -517,19 +493,12 @@ export class Hud {
       this.sub.classList.toggle('off', hidden);
     }
 
-    if (this.hitT > 0) { this.hitT -= dt; if (this.hitT <= 0) this.hitMark.classList.remove('on'); }
     if (this.toastT > 0) {
       this.toastT -= dt;
-      if (this.toastT <= 0 || f.slick) { this.toastT = 0; this.toast.hidden = true; }
+      // the final horn ends every nag: the victory slate never sits over a low-tank toast
+      if (this.toastT <= 0 || f.slick || f.phase === 'ended') { this.toastT = 0; this.toast.hidden = true; }
     }
 
-    // damage vignette: a hit flash + low HP
-    this.hurt = Math.max(0, this.hurt - dt * 2.2);
-    const lowHp = f.alive ? Math.max(0, 1 - f.hp / 100) : 0;
-    const vig = Math.round(Math.min(1, Math.max(this.hurt * 0.85, lowHp * 0.55)) * 100) / 100;
-    if (vig !== this.lastVig) { this.lastVig = vig; this.vignette.style.opacity = String(vig); }
-    const hpLow = f.alive && f.hp < 60;
-    if (hpLow !== this.lastHpLow) { this.lastHpLow = hpLow; this.vignette.classList.toggle('pulse', hpLow); }
 
     // death slate ring · victory tally
     if (this.slates.deathVisible) this.slates.updateDeath(f.respawnIn);
