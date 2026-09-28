@@ -13,12 +13,27 @@
 //   phase 6: kit() — the human's kit read-outs (charge, rolling, special meter, sub cooldown, layer summary,
 //   the left-hand → grip_L distance of a two-handed kit) · fx() — live FX counts (drops, jelly, puddles,
 //   cells, raining cells, glint lines, beam flashes)
+//   phase 9 (CONTRACT_P6_11 §20): state().phase gains 'menu' (the lobby behind the menus) · menu() — the menus'
+//   screen / context / focus / profile / mannequin · settings() — the saved settings · session() — the running
+//   session (mode, map, preset) · gl() — renderer.info memory + program counts (leak checks across sessions)
 //   dev-only phase 6: fillSpecial(pid = 0) — fills the special meter and arms it (sets the Runner's public
 //   `special` = 1 and `specialReady` = true; MatchWorld has no dev hook for it, and the 'ready' event is
 //   NOT emitted) · freeze(on) — stops the sim AND the visual clock while rendering continues, so a
 //   screenshot can catch an exact moment (the harness unfreezes right after).
 
 import type { AppStatus } from './game.ts';
+import type { Menus } from './ui/menus.ts';
+import type { ProfileStore, SettingsStore } from './ui/settings.ts';
+import type { WebGLInfo } from 'three';
+
+/** app handles the phase 9 read-backs use (main.ts fills them) */
+export interface AppHandles {
+  menus(): Menus | null;
+  settings(): SettingsStore;
+  profile(): ProfileStore;
+  session(): { mode: string; map: string; preset: string; key: string; cam: number[] | null; fov: number | null } | null;
+  renderInfo(): WebGLInfo | null;
+}
 import type { Coverage, MoveState, TeamId } from './core/types.ts';
 import { teamById, hexToRgb01 } from './core/data.ts';
 
@@ -38,7 +53,7 @@ export interface DFState {
 
 const rgb255 = (hex: string): number[] => hexToRgb01(hex).map((v) => Math.round(v * 255));
 
-export function installTestSurface(app: AppStatus): void {
+export function installTestSurface(app: AppStatus, handles?: AppHandles): void {
   const g = () => app.game;
   const devOnly = (name: string): void => {
     if (!app.dev) throw new Error(`__DF__.${name} is dev-only — load with ?dev=1`);
@@ -146,6 +161,26 @@ export function installTestSurface(app: AppStatus): void {
       const game = need('freeze');
       game.frozen = !!on;
       return game.frozen;
+    },
+    // ── phase 9 read-backs
+    menu(): Record<string, unknown> | null {
+      const m = handles?.menus();
+      return m ? m.readback() : null;
+    },
+    settings(): Record<string, unknown> | null {
+      return handles ? JSON.parse(JSON.stringify(handles.settings().get())) : null;
+    },
+    profile(): Record<string, unknown> | null {
+      return handles ? { ...handles.profile().get() } : null;
+    },
+    session(): Record<string, unknown> | null {
+      return handles?.session() ?? null;
+    },
+    gl(): Record<string, unknown> | null {
+      const i = handles?.renderInfo();
+      if (!i) return null;
+      return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0,
+        heapMB: (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory ? Math.round((performance as unknown as { memory: { usedJSHeapSize: number } }).memory.usedJSHeapSize / 1048576) : null };
     },
     // ── harness read-backs (additive)
     kit(): Record<string, unknown> | null {

@@ -12,12 +12,12 @@
 //   bottom centre low-tank toast `Tank low — hold SHIFT on your color to drink`
 //   bottom left   minimap (MinimapRaster → putImageData only when dirty) + the runner arrow + ally dots
 //                 and seen-enemy dots (dot shape = crew mark: ◉ circle / ▲ triangle)
-//   overlays      damage vignette (enemy dye at the edges) · slates.ts (3 · 2 · 1, WASHED BY, victory)
-//   F1            debug panel · pause card (PAUSED / RESUME)
+//   overlays      damage vignette (enemy dye at the edges) · slates.ts (3 · 2 · 1, WASHED BY, victory + tally)
+//   F1            debug panel. The pause card moved to ui/menus.ts in phase 9 (PAUSED / RESUME / SETTINGS / …).
 // Every per-frame write is skipped when its value did not change.
 
 import type { Coverage, MoveState, TeamId } from '../core/types.ts';
-import { TEAMS, teamById } from '../core/data.ts';
+import { TEAMS, TEAMS_RAW, teamById } from '../core/data.ts';
 import type { MinimapRaster } from '../core/paint/minimap.ts';
 import { Slates, waveIcon, type VictoryInfo } from './slates.ts';
 
@@ -111,14 +111,20 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return e;
 }
 
-/** push teams.json colors into the CSS variables the stylesheet uses */
-export function applyTeamCssVars(): void {
+/**
+ * Push teams.json colors into the CSS variables the stylesheet uses. `colorblind` (SETTINGS → colorblind
+ * marks) swaps in the teams.json `colorblind` pair and sets `html.df-cb`, which adds the GULF CREW hatch.
+ */
+export function applyTeamCssVars(colorblind = false): void {
   const r = document.documentElement.style;
+  const cb = (colorblind ? TEAMS_RAW.colorblind : null) as Record<string, { dye?: string; ui?: string }> | null;
   for (const t of TEAMS) {
-    r.setProperty(`--${t.key}`, t.ui);
+    const alt = cb?.[t.key];
+    r.setProperty(`--${t.key}`, alt?.ui ?? t.ui);
     r.setProperty(`--${t.key}-ink`, t.uiInk);
-    r.setProperty(`--${t.key}-dye`, t.dye);
+    r.setProperty(`--${t.key}-dye`, alt?.dye ?? t.dye);
   }
+  document.documentElement.classList.toggle('df-cb', !!cb);
 }
 
 const teamKey = (t: TeamId): 'sun' | 'gulf' => (t === 2 ? 'gulf' : 'sun');
@@ -131,7 +137,6 @@ export class Hud {
   readonly root: HTMLElement;
   readonly slates: Slates;
   debugVisible = false;
-  onResume: (() => void) | null = null;
   private readonly team: TeamId;
   private readonly mini: MinimapRaster | null;
   private readonly miniCanvas: HTMLCanvasElement;
@@ -165,8 +170,7 @@ export class Hud {
   private readonly dots: DotEl[] = [];
   private readonly debug: HTMLElement;
   private readonly debugBody: HTMLElement;
-  private readonly pause: HTMLElement;
-  private readonly pauseMsg: HTMLElement;
+  private readonly subKey: HTMLElement;
   private debugClock = 0;
   private lastTimer = '';
   private lastCov = '';
@@ -296,8 +300,8 @@ export class Hud {
     this.sub = el('div', `df-sub ${teamKey(this.team)} grey`);
     this.sub.innerHTML = ICONS.jelly;
     this.sub.title = this.kit?.subName ?? '';
-    const subKey = el('kbd', 'key', this.kit?.subKey ?? '');
-    this.sub.append(subKey);
+    this.subKey = el('kbd', 'key', this.kit?.subKey ?? '');
+    this.sub.append(this.subKey);
     if (!this.kit) this.sub.hidden = true;
 
     // ── low-tank toast
@@ -315,24 +319,29 @@ export class Hud {
     this.debugBody = el('table');
     this.debug.append(this.debugBody);
 
-    // ── pause overlay
-    this.pause = el('div', 'df-pause');
-    this.pause.hidden = true;
-    const pc = el('div', 'df-pause-card');
-    const resume = el('button', 'df-btn', 'RESUME');
-    resume.type = 'button';
-    resume.id = 'df-resume';
-    this.pauseMsg = el('p', '', '');
-    pc.append(el('h2', '', 'PAUSED'), resume, this.pauseMsg);
-    this.pause.append(pc);
-    resume.addEventListener('click', (e) => { e.stopPropagation(); this.onResume?.(); });
-
     this.root.append(this.vignette, top, right, miniBox, this.ret, this.hitMark, this.tankBox, tankLabel, this.sub, this.toast, this.debug);
     host.append(this.root);
     this.slates = new Slates(host);
-    host.append(this.pause);
     this.redrawMinimap(true);
   }
+
+  /** remove every DOM node this HUD added (a match session ends) */
+  dispose(): void {
+    this.root.remove();
+    this.slates.root.remove();
+  }
+
+  /** SETTINGS rebind mid-match: the special / sub key badges show the new keys */
+  setKeys(specialKey: string, subKey: string): void {
+    if (this.kit) { this.kit.specialKey = specialKey; this.kit.subKey = subKey; }
+    this.gaugeKey.textContent = specialKey;
+    this.gaugeKey.setAttribute('aria-label', `press ${specialKey}`);
+    this.gaugeKey.hidden = !specialKey;
+    this.subKey.textContent = subKey;
+  }
+
+  /** the minimap colours changed (colorblind marks): repaint it now */
+  redrawMinimapNow(): void { this.redrawMinimap(true); }
 
   show(on: boolean): void {
     this.root.classList.toggle('on', on);
@@ -344,12 +353,6 @@ export class Hud {
     this.debug.hidden = !this.debugVisible;
     this.debugClock = 1e9;
     return this.debugVisible;
-  }
-
-  setPaused(on: boolean, msg = ''): void {
-    this.pause.hidden = !on;
-    this.pauseMsg.textContent = msg;
-    this.pauseMsg.hidden = !msg;
   }
 
   // ───────────────────────────── events ─────────────────────────────
@@ -403,7 +406,7 @@ export class Hud {
 
   showDeath(name: string | null, team: TeamId | null, seconds: number): void { this.slates.showDeath(name, team, seconds); }
   hideDeath(): void { this.slates.hideDeath(); }
-  showVictory(v: VictoryInfo, onAgain: () => void): void { this.slates.showVictory(v, onAgain); }
+  showVictory(v: VictoryInfo, onAgain: () => void, onLobby?: () => void): void { this.slates.showVictory(v, onAgain, onLobby); }
   hideVictory(): void { this.slates.hideVictory(); }
 
   /** clear transient state (match restart) */
@@ -528,8 +531,9 @@ export class Hud {
     const hpLow = f.alive && f.hp < 60;
     if (hpLow !== this.lastHpLow) { this.lastHpLow = hpLow; this.vignette.classList.toggle('pulse', hpLow); }
 
-    // death slate ring
+    // death slate ring · victory tally
     if (this.slates.deathVisible) this.slates.updateDeath(f.respawnIn);
+    this.slates.update(dt);
 
     // minimap + arrow + dots
     this.redrawMinimap(false);

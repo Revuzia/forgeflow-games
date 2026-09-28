@@ -27,6 +27,11 @@
 //     wakes, faint ripples, the WASHED burst, the tide-spout; phase 6: the roller sheet spray, the flick
 //     fan, the charger scope glint + beam flash, blaster burst rings, the jelly land / pop, the
 //     CLOUDBURST rain + dissipate, the WELLSPRING take-off splash + slam ring wave, leap drips.
+//   * Phase 10 juice (CONTRACT_P6_11 §21): particles carry a floor plane + restitution (iPhys.zw) and the
+//     vertex shader bounces them analytically (two shrinking hops, then rest) — floor splats, crowns, the
+//     washed burst, body drips and the spout spray land with a small toy bounce. New emitters: slickCrown
+//     (in / out of the dye), landPuff (soft / hard). The tide-spout respawn is a real COLUMN: one instanced
+//     open tube (SPOUTS slots, one draw call, hidden when none is alive) + crest spray. `juice` counters.
 // Colours are the teams.json dyes (linear). Math.random is fine here (view only, never core).
 
 import * as THREE from 'three';
@@ -72,6 +77,13 @@ const PSTATE_FLY = 0, PSTATE_PUDDLE = 1, PSTATE_HOVER = 2;
 const DROP_R = [0.075, 0.11, 0.17];
 const BEAMS = 32;
 const GLINTS = 16;
+/** restitution of bouncing droplets (a small toy hop, then a second tiny one, then rest) */
+const BOUNCE = 0.34;
+/** tide-spout columns alive at once (respawns; ring buffer) */
+const SPOUTS = 8;
+/** tide-spout column: lifetime (s) and full height (m) — the respawn drop is 0.6 s from 3.4 m (players.ts) */
+const SPOUT_LIFE = 1.0;
+const SPOUT_H = 3.9;
 const MODEL_CAP = { jelly: 24, puddle: 24, cloud: 8 };
 
 // the numbers the view needs (weapons.json / config.ts KITS)
@@ -94,7 +106,7 @@ attribute vec3 iVel;
 attribute vec4 iNrm;   // normal xyz (oriented kinds), kind
 attribute vec4 iT;     // t0, life, size0, size1
 attribute vec4 iCol;   // linear rgb, alpha
-attribute vec2 iPhys;  // gravity (m/s^2), drag (1/s)
+attribute vec4 iPhys;  // gravity (m/s^2), drag (1/s), floor y (bouncers), restitution (0 = no floor)
 uniform float uTime;
 varying vec2 vUv;
 varying vec4 vCol;
@@ -106,8 +118,26 @@ void main() {
   float k = age / max(iT.y, 1e-3);
   if (age < 0.0 || k >= 1.0) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); vK = 1.0; return; }
   float drag = iPhys.y;
+  float g = iPhys.x;
   float te = drag > 0.0 ? (1.0 - exp(-drag * age)) / drag : age;
-  vec3 p = iPos + iVel * te - vec3(0.0, 0.5 * iPhys.x * age * age, 0.0);
+  vec3 p = iPos + iVel * te - vec3(0.0, 0.5 * g * age * age, 0.0);
+  if (iPhys.w > 0.0 && g > 0.0) {
+    // bouncer: ballistic vertical (no drag) onto the floor plane, then two shrinking hops and rest;
+    // the horizontal keeps its drag and loses half its speed at the first contact (friction)
+    float e = iPhys.w, fy = iPhys.z, vy = iVel.y;
+    float t1 = (vy + sqrt(max(vy * vy + 2.0 * g * (iPos.y - fy), 0.0))) / g;
+    if (age < t1) p.y = iPos.y + vy * age - 0.5 * g * age * age;
+    else {
+      float te1 = drag > 0.0 ? (1.0 - exp(-drag * t1)) / drag : t1;
+      p.xz = iPos.xz + iVel.xz * (te1 + (te - te1) * 0.5);
+      float v1 = (g * t1 - vy) * e, t2 = 2.0 * v1 / g, a = age - t1;
+      if (a < t2) p.y = fy + v1 * a - 0.5 * g * a * a;
+      else {
+        float v2 = v1 * e, b = a - t2;
+        p.y = b < 2.0 * v2 / g ? fy + v2 * b - 0.5 * g * b * b : fy;
+      }
+    }
+  }
   float size = mix(iT.z, iT.w, k);
   float kind = iNrm.w;
   // per-instance rotation of the quad (variety for splashes / puffs); sparks and flares stay upright
@@ -238,6 +268,84 @@ void main() {
   float a = clamp(vCol.a * core * smoothstep(0.0, 0.02, vT), 0.0, 1.0);
   gl_FragColor = vec4(col, a);
   #include <colorspace_fragment>
+}`;
+
+// the respawn tide-spout column (juice §21): an open tapered tube per instance, shot up from the pad,
+// held while the runner drops into it, then collapsing; team dye with foam streaks racing upward.
+const SPOUT_VERT = /* glsl */ `
+attribute vec4 iS;       // base xyz, t0
+attribute vec4 iC;       // linear dye rgb, full height (m)
+uniform float uTime;
+uniform float uLife;
+varying vec2 vUv;
+varying vec3 vN;
+varying vec3 vV;
+varying float vAge;
+varying float vK;
+varying float vTop;
+varying vec3 vCol;
+#include <fog_pars_vertex>
+void main() {
+  float age = uTime - iS.w;
+  float k = age / uLife;
+  if (age < 0.0 || k >= 1.0) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); vK = 1.0; return; }
+  float v = position.y;                                           // 0 base .. 1 top
+  float up = 1.0 - pow(1.0 - clamp(age / 0.16, 0.0, 1.0), 3.0);   // shoots up (ease-out)
+  float fall = smoothstep(0.5, 1.0, k);                           // then the top falls back
+  float H = iC.w * up * (1.0 - 0.9 * fall);
+  float r = 0.36 * (1.0 + 1.2 * pow(1.0 - v, 5.0))                // flared foot
+    * (1.0 + 0.16 * sin(v * 11.0 - age * 26.0) * v)               // bulges racing up the column
+    * mix(1.0, 1.5, fall)                                         // spreads as it collapses
+    * (0.4 + 0.6 * smoothstep(0.0, 0.1, age))                     // starts as a thin jet
+    * mix(1.0, 0.5, smoothstep(0.84, 1.0, v));                    // rounded crest
+  vec3 p = iS.xyz + vec3(position.x * r, v * H, position.z * r);
+  vec4 mv = viewMatrix * vec4(p, 1.0);
+  gl_Position = projectionMatrix * mv;
+  vN = normalize((viewMatrix * vec4(position.x, 0.25, position.z, 0.0)).xyz);
+  vV = -mv.xyz;
+  vUv = vec2(atan(position.z, position.x) / 6.2831853 + 0.5, v * H);
+  vAge = age;
+  vK = k;
+  vTop = v;
+  vCol = iC.rgb;
+  vec4 mvPosition = mv;
+  #include <fog_vertex>
+}`;
+
+const SPOUT_FRAG = /* glsl */ `
+uniform vec3 uSunV;
+varying vec2 vUv;
+varying vec3 vN;
+varying vec3 vV;
+varying float vAge;
+varying float vK;
+varying float vTop;
+varying vec3 vCol;
+#include <fog_pars_fragment>
+float dfH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float dfN(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(dfH(i), dfH(i + vec2(1.0, 0.0)), f.x), mix(dfH(i + vec2(0.0, 1.0)), dfH(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+void main() {
+  if (vK >= 1.0) discard;
+  vec3 n = normalize(vN), vv = normalize(vV);
+  if (!gl_FrontFacing) n = -n;
+  float ndv = clamp(abs(dot(n, vv)), 0.0, 1.0);
+  // foam streaks racing up the column (u wraps around the tube, v in metres)
+  float s = dfN(vec2(vUv.x * 14.0, vUv.y * 2.2 - vAge * 9.0)) * 0.65 + dfN(vec2(vUv.x * 31.0, vUv.y * 5.0 - vAge * 14.0)) * 0.35;
+  float foam = smoothstep(0.58, 0.72, s);
+  float crest = smoothstep(0.72, 1.0, vTop) + (1.0 - smoothstep(0.0, 0.12, vTop)) * 0.6;
+  vec3 dye = vCol * (0.88 + 0.28 * ndv);
+  float spec = pow(max(dot(reflect(-uSunV, n), vv), 0.0), 24.0);
+  vec3 col = mix(dye, vec3(0.97, 0.99, 1.0), clamp(foam * 0.62 + crest * 0.5 + (1.0 - ndv) * 0.12, 0.0, 1.0)) + spec * 0.3;
+  float a = (0.74 + 0.2 * (1.0 - ndv) + 0.1 * foam) * (gl_FrontFacing ? 1.0 : 0.35);
+  a *= 1.0 - smoothstep(0.75, 1.0, vK);
+  gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+  #include <fog_fragment>
 }`;
 
 interface Attr { a: THREE.InstancedBufferAttribute; arr: Float32Array; n: number }
@@ -445,12 +553,23 @@ export class Fx {
   private readonly glints: Glint[] = [];
   private readonly flashes: Flash[] = [];
   private flashHead = 0;
+  // tide-spout columns (juice §21)
+  readonly spouts: THREE.Mesh;
+  private readonly spoutMat: THREE.ShaderMaterial;
+  private readonly spoutGeo: THREE.InstancedBufferGeometry;
+  private readonly sS: Attr; private readonly sC: Attr;
+  private spoutHead = 0;
+  private spoutUntil = -1;
+  private readonly puffCol = new THREE.Color(0xb9c3cf);
+  private readonly foam = new THREE.Color(0xf7fbff);
   /** emitted particle count (stats) */
   emitted = 0;
   /** skipped emissions (beyond the FX range) */
   culled = 0;
   /** live counts of the last update (harness read-back) */
-  readonly live = { drops: 0, jelly: 0, puddles: 0, cells: 0, raining: 0, glints: 0, flashes: 0 };
+  readonly live = { drops: 0, jelly: 0, puddles: 0, cells: 0, raining: 0, glints: 0, flashes: 0, spouts: 0 };
+  /** juice emitter counters (harness read-back) */
+  readonly juice = { landPuffs: 0, crowns: 0, spouts: 0, bouncers: 0 };
   /** the view height in CSS px (the beams' minimum pixel widths); game.ts keeps it current */
   viewHeight = 720;
   /** camera position of the last update (emitters cull by distance: no fill spent on far FX) */
@@ -495,7 +614,7 @@ export class Fx {
       return { a, arr, n };
     };
     this.aPos = mk(g, CAP, 'iPos', 3); this.aVel = mk(g, CAP, 'iVel', 3); this.aNrm = mk(g, CAP, 'iNrm', 4);
-    this.aT = mk(g, CAP, 'iT', 4); this.aCol = mk(g, CAP, 'iCol', 4); this.aPhys = mk(g, CAP, 'iPhys', 2);
+    this.aT = mk(g, CAP, 'iT', 4); this.aCol = mk(g, CAP, 'iCol', 4); this.aPhys = mk(g, CAP, 'iPhys', 4);
     // every slot starts dead (t0 far in the past, life tiny)
     for (let i = 0; i < CAP; i++) { this.aT.arr[i * 4] = -1e6; this.aT.arr[i * 4 + 1] = 0.001; }
     g.instanceCount = CAP;
@@ -550,7 +669,33 @@ export class Fx {
     this.disks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     for (let i = 0; i < MODEL_CAP.cloud; i++) this.disks.setColorAt(i, this.teamCol[1]);
 
-    this.root.add(this.drops, this.disks, this.particles, this.beams);
+    // ── tide-spout columns: one instanced open tube (SPOUTS slots, one draw call while any is alive)
+    const tube = new THREE.CylinderGeometry(1, 1, 1, 20, 12, true).translate(0, 0.5, 0);
+    const sg = new THREE.InstancedBufferGeometry();
+    sg.setAttribute('position', tube.getAttribute('position'));
+    sg.setIndex(tube.getIndex());
+    this.sS = mk(sg, SPOUTS, 'iS', 4); this.sC = mk(sg, SPOUTS, 'iC', 4);
+    for (let i = 0; i < SPOUTS; i++) this.sS.arr[i * 4 + 3] = -1e6;
+    sg.instanceCount = SPOUTS;
+    sg.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
+    this.spoutGeo = sg;
+    this.spoutMat = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uLife: { value: SPOUT_LIFE }, uSunV: { value: new THREE.Vector3(0, 1, 0) } }]),
+      vertexShader: SPOUT_VERT,
+      fragmentShader: SPOUT_FRAG,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      fog: true,
+    });
+    this.spoutMat.name = 'fx_spout';
+    this.spouts = new THREE.Mesh(sg, this.spoutMat);
+    this.spouts.name = 'fx_spouts';
+    this.spouts.frustumCulled = false;
+    this.spouts.renderOrder = 4;
+    this.spouts.visible = false;
+
+    this.root.add(this.drops, this.disks, this.particles, this.beams, this.spouts);
   }
 
   /** hand over the baked sub / special models (main.ts, once) */
@@ -572,12 +717,13 @@ export class Fx {
     this.disks.count = on ? 1 : 0;
     this.beamGeo.instanceCount = on ? 1 : 0;
     this.drops.count = on ? 1 : 0;
+    this.spouts.visible = on || this.time < this.spoutUntil;
   }
 
   // ───────────────────────────── low level ─────────────────────────────
   private slot(px: number, py: number, pz: number, vx: number, vy: number, vz: number,
     kind: number, life: number, s0: number, s1: number, col: THREE.Color, alpha: number,
-    grav: number, drag: number, nx = 0, ny = 0, nz = 0, delay = 0): void {
+    grav: number, drag: number, nx = 0, ny = 0, nz = 0, delay = 0, floorY = 0, bounce = 0): void {
     const i = this.head;
     this.head = (this.head + 1) % CAP;
     this.aPos.arr[i * 3] = px; this.aPos.arr[i * 3 + 1] = py; this.aPos.arr[i * 3 + 2] = pz;
@@ -585,7 +731,7 @@ export class Fx {
     this.aNrm.arr[i * 4] = nx; this.aNrm.arr[i * 4 + 1] = ny; this.aNrm.arr[i * 4 + 2] = nz; this.aNrm.arr[i * 4 + 3] = kind;
     this.aT.arr[i * 4] = this.time + delay; this.aT.arr[i * 4 + 1] = life; this.aT.arr[i * 4 + 2] = s0; this.aT.arr[i * 4 + 3] = s1;
     this.aCol.arr[i * 4] = col.r; this.aCol.arr[i * 4 + 1] = col.g; this.aCol.arr[i * 4 + 2] = col.b; this.aCol.arr[i * 4 + 3] = alpha;
-    this.aPhys.arr[i * 2] = grav; this.aPhys.arr[i * 2 + 1] = drag;
+    this.aPhys.arr[i * 4] = grav; this.aPhys.arr[i * 4 + 1] = drag; this.aPhys.arr[i * 4 + 2] = floorY; this.aPhys.arr[i * 4 + 3] = bounce;
     if (this.dirtyN === 0) this.dirtyLo = i;
     this.dirtyN = Math.min(CAP, this.dirtyN + 1);
     this.emitted++;
@@ -629,12 +775,19 @@ export class Fx {
     this.slot(x, y, z, 0, 0, 0, KIND_SPLASH, big ? 0.3 : 0.22, r * 0.35, r * (big ? 0.9 : 0.7), c, 0.9, 0, 0, nx, ny, nz);
     if (d2 > 30 * 30) return;
     const drops = big ? (d2 < 12 * 12 ? 6 : 4) : 1;
+    // a floor splat's droplets land back on the floor with a small bounce (juice §21), a wall's fall away
+    const floor = ny > 0.7;
     for (let i = 0; i < drops; i++) {
       this.hemi(nx, ny, nz, 0.75);
       const sp = (big ? 2.2 : 1.2) + Math.random() * (big ? 3.2 : 1.4);
       const sz = (big ? 0.05 : 0.035) + Math.random() * 0.045;
-      this.slot(x + nx * 0.05, y + ny * 0.05, z + nz * 0.05, this.d.x * sp, this.d.y * sp, this.d.z * sp,
-        KIND_BLOB, 0.35 + Math.random() * 0.3, sz, sz * 0.5, c, 1, 14, 0.6);
+      if (floor) {
+        this.slot(x + nx * 0.05, y + ny * 0.05, z + nz * 0.05, this.d.x * sp * 0.8, this.d.y * sp, this.d.z * sp * 0.8,
+          KIND_BLOB, 0.7 + Math.random() * 0.3, sz, sz * 0.55, c, 1, 14, 0.9, 0, 0, 0, 0, y + sz * 0.6, BOUNCE);
+      } else {
+        this.slot(x + nx * 0.05, y + ny * 0.05, z + nz * 0.05, this.d.x * sp, this.d.y * sp, this.d.z * sp,
+          KIND_BLOB, 0.35 + Math.random() * 0.3, sz, sz * 0.5, c, 1, 14, 0.6);
+      }
     }
     if (big && d2 < 18 * 18) this.slot(x, y, z, 0, 0, 0, KIND_RING, 0.26, r * 0.3, r * 1.1, this.light(team), 0.5, 0, 0, nx, ny, nz);
   }
@@ -679,16 +832,85 @@ export class Fx {
     }
   }
 
-  /** slick in / out (big = the respawn landing): a ring on the floor + a splash of droplets */
+  /** slick in / out (big = the respawn landing): a ring on the floor + a splash crown (juice §21) */
   slickRing(x: number, y: number, z: number, team: TeamId, big: boolean): void {
-    const c = this.col(team);
-    this.slot(x, y, z, 0, 0, 0, KIND_RING, big ? 0.55 : 0.4, 0.15, big ? 1.8 : 1.05, this.light(team), 0.85, 0, 0, 0, 1, 0);
-    this.slot(x, y, z, 0, 0, 0, KIND_SPLASH, big ? 0.5 : 0.3, 0.2, big ? 1.1 : 0.6, c, 0.85, 0, 0, 0, 1, 0);
-    const n = big ? 12 : 6;
+    if (!big) { this.slickCrown(x, y, z, team, true); return; }
+    const c = this.col(team), cl = this.light(team);
+    if (this.d2(x, y, z) > 60 * 60) { this.culled++; return; }
+    this.juice.crowns++;
+    this.slot(x, y, z, 0, 0, 0, KIND_RING, 0.55, 0.15, 1.9, cl, 0.85, 0, 0, 0, 1, 0);
+    this.slot(x, y, z, 0, 0, 0, KIND_RING, 0.7, 0.1, 1.2, this.foam, 0.55, 0, 0, 0, 1, 0, 0.08);
+    this.slot(x, y, z, 0, 0, 0, KIND_SPLASH, 0.5, 0.2, 1.1, c, 0.85, 0, 0, 0, 1, 0);
+    // the landing crown: a coronet of droplets thrown up and out, bouncing where they land
+    const n = 18;
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + Math.random() * 0.4;
-      const sp = (big ? 2.4 : 1.5) + Math.random() * 1.5;
-      this.slot(x, y + 0.05, z, Math.cos(a) * sp, 2 + Math.random() * 2.5, Math.sin(a) * sp, KIND_BLOB, 0.45, 0.05, 0.025, c, 1, 16, 0.4);
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.25;
+      const sp = 2.0 + Math.random() * 1.2;
+      const sz = 0.05 + Math.random() * 0.035;
+      this.slot(x + Math.cos(a) * 0.4, y + 0.06, z + Math.sin(a) * 0.4, Math.cos(a) * sp, 3.2 + Math.random() * 1.6, Math.sin(a) * sp,
+        KIND_BLOB, 0.9 + Math.random() * 0.25, sz, sz * 0.55, i % 5 === 0 ? this.foam : c, 1, 16, 0.5, 0, 0, 0, 0, y + sz * 0.6, BOUNCE);
+    }
+    this.juice.bouncers += n;
+  }
+
+  /**
+   * SLICK in / out (juice §21): a splash crown. Diving in (`into`) throws a coronet of droplets up and out
+   * around the dive point; surfacing adds a short central spurt. Droplets bounce once on the floor.
+   */
+  slickCrown(x: number, y: number, z: number, team: TeamId, into: boolean): void {
+    const d2 = this.d2(x, y, z);
+    if (d2 > 45 * 45) { this.culled++; return; }
+    this.juice.crowns++;
+    const c = this.col(team), cl = this.light(team);
+    this.slot(x, y, z, 0, 0, 0, KIND_RING, 0.38, 0.12, into ? 1.0 : 0.85, this.foam, 0.7, 0, 0, 0, 1, 0);
+    this.slot(x, y, z, 0, 0, 0, KIND_RING, 0.46, 0.1, into ? 0.75 : 0.6, cl, 0.8, 0, 0, 0, 1, 0, 0.05);
+    this.slot(x, y, z, 0, 0, 0, KIND_SPLASH, 0.3, 0.18, into ? 0.62 : 0.5, cl, 0.8, 0, 0, 0, 1, 0);
+    if (d2 > 30 * 30) return;
+    const n = d2 < 15 * 15 ? 14 : 8;
+    const r0 = 0.26;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.3;
+      const out = 1.0 + Math.random() * 0.6;
+      const up = (into ? 2.3 : 1.8) + Math.random() * 0.9;
+      const sz = 0.03 + Math.random() * 0.02;
+      this.slot(x + Math.cos(a) * r0, y + 0.04, z + Math.sin(a) * r0, Math.cos(a) * out, up, Math.sin(a) * out,
+        KIND_BLOB, 0.62 + Math.random() * 0.2, sz, sz * 0.55, (i & 1) === 0 ? this.foam : cl, 1, 15, 0.4, 0, 0, 0, 0, y + sz * 0.6, BOUNCE);
+    }
+    this.juice.bouncers += n;
+    if (!into) {
+      for (let i = 0; i < 4; i++) {
+        const a = Math.random() * Math.PI * 2;
+        this.slot(x, y + 0.05, z, Math.cos(a) * 0.35, 3.4 + Math.random() * 1.2, Math.sin(a) * 0.35,
+          KIND_BLOB, 0.6, 0.04, 0.025, i < 2 ? this.foam : cl, 1, 15, 0.3, 0, 0, 0, i * 0.02, y + 0.03, BOUNCE);
+      }
+    }
+  }
+
+  /**
+   * a runner lands (juice §21): a low ring of soft puffs rolling out along the floor (bigger when `hard`),
+   * plus, on a hard landing, a few kicked droplets of the dye underfoot (`team` 0 = dry ground: none).
+   */
+  landPuff(x: number, y: number, z: number, hard: boolean, team: TeamId | 0 = 0): void {
+    const d2 = this.d2(x, y, z);
+    if (d2 > 35 * 35) { this.culled++; return; }
+    this.juice.landPuffs++;
+    const n = hard ? 10 : 7;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.5;
+      const sp = (hard ? 3.6 : 2.7) + Math.random() * 0.9;
+      this.slot(x + Math.cos(a) * 0.22, y + 0.1, z + Math.sin(a) * 0.22, Math.cos(a) * sp, 0.25 + Math.random() * 0.4, Math.sin(a) * sp,
+        KIND_PUFF, 0.5 + Math.random() * 0.15, hard ? 0.18 : 0.15, hard ? 0.6 : 0.46, this.puffCol, hard ? 0.72 : 0.62, -0.3, 5.5);
+    }
+    this.slot(x, y + 0.03, z, 0, 0, 0, KIND_RING, 0.32, 0.15, hard ? 1.15 : 0.8, this.foam, hard ? 0.75 : 0.55, 0, 0, 0, 1, 0);
+    if (hard && team !== 0 && d2 < 25 * 25) {
+      const c = this.col(team);
+      for (let i = 0; i < 5; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const sp = 1.2 + Math.random();
+        this.slot(x, y + 0.05, z, Math.cos(a) * sp, 1.8 + Math.random() * 1.2, Math.sin(a) * sp,
+          KIND_BLOB, 0.6, 0.04, 0.022, c, 1, 15, 0.5, 0, 0, 0, 0, y + 0.03, BOUNCE);
+      }
+      this.juice.bouncers += 5;
     }
   }
 
@@ -727,7 +949,8 @@ export class Fx {
       this.hemi(0, 1, 0, 1);
       const sp = 2.5 + Math.random() * 5.5;
       const sz = 0.04 + Math.random() * 0.06;
-      this.slot(x, cy, z, this.d.x * sp, this.d.y * sp + 1.2, this.d.z * sp, KIND_BLOB, 0.55 + Math.random() * 0.45, sz, sz * 0.4, c, 1, 15, 0.5, 0, 0, 0, i < 12 ? 0 : Math.random() * 0.06);
+      this.slot(x, cy, z, this.d.x * sp, this.d.y * sp + 1.2, this.d.z * sp, KIND_BLOB, 0.8 + Math.random() * 0.45, sz, sz * 0.4, c, 1, 15, 0.5, 0, 0, 0,
+        i < 12 ? 0 : Math.random() * 0.06, y + sz * 0.5, BOUNCE);
     }
     for (let i = 0; i < 6; i++) {
       this.hemi(0, 1, 0, 1);
@@ -742,19 +965,45 @@ export class Fx {
     }
   }
 
-  /** the tide-spout respawn: a rising column of dye + sea spray over ~0.6 s, then a splash */
+  /**
+   * the tide-spout respawn (juice §21): a column of sea + dye shoots up out of the pad (SPOUT_H m in
+   * 0.16 s), holds while the runner drops into it (players.ts: 0.6 s from 3.4 m), then collapses; foam
+   * spray rides its crest and a crown of droplets rains back down around the pad.
+   */
   spout(x: number, y: number, z: number, team: TeamId): void {
-    const c = this.col(team);
-    for (let i = 0; i < 26; i++) {
-      const delay = (i / 26) * 0.5;
-      const a = Math.random() * Math.PI * 2, rr = Math.random() * 0.35;
-      this.slot(x + Math.cos(a) * rr, y + 0.05, z + Math.sin(a) * rr, Math.cos(a) * 0.4, 5 + Math.random() * 4, Math.sin(a) * 0.4,
-        KIND_BLOB, 0.5 + Math.random() * 0.2, 0.07 + Math.random() * 0.06, 0.03, i % 3 === 0 ? this.white : c, 1, 12, 0.3, 0, 0, 0, delay);
+    this.juice.spouts++;
+    const c = this.col(team), cl = this.light(team);
+    const i = this.spoutHead;
+    this.spoutHead = (this.spoutHead + 1) % SPOUTS;
+    this.sS.arr[i * 4] = x; this.sS.arr[i * 4 + 1] = y; this.sS.arr[i * 4 + 2] = z; this.sS.arr[i * 4 + 3] = this.time;
+    this.tmpC.copy(c).lerp(cl, 0.25);
+    this.sC.arr[i * 4] = this.tmpC.r; this.sC.arr[i * 4 + 1] = this.tmpC.g; this.sC.arr[i * 4 + 2] = this.tmpC.b; this.sC.arr[i * 4 + 3] = SPOUT_H;
+    for (const at of [this.sS, this.sC]) {
+      at.a.clearUpdateRanges();
+      at.a.addUpdateRange(0, SPOUTS * 4);
+      at.a.needsUpdate = true;
     }
-    for (let i = 0; i < 6; i++) {
-      this.slot(x, y + 0.2 + i * 0.4, z, 0, 1.5, 0, KIND_PUFF, 0.6, 0.3, 0.7, this.mist, 0.35, -0.2, 2, 0, 0, 0, i * 0.06);
+    this.spoutUntil = this.time + SPOUT_LIFE;
+    this.spouts.visible = true;
+    if (this.d2(x, y, z) > 70 * 70) { this.culled++; return; }
+    // foot: a foam ring + the dye splash
+    this.slot(x, y + 0.03, z, 0, 0, 0, KIND_RING, 0.7, 0.3, 1.7, cl, 0.85, 0, 0, 0, 1, 0);
+    this.slot(x, y + 0.02, z, 0, 0, 0, KIND_SPLASH, 0.8, 0.4, 1.0, c, 0.8, 0, 0, 0, 1, 0);
+    // crest spray: droplets thrown off the rising top (delayed so they leave the crest as it passes)
+    for (let k = 0; k < 20; k++) {
+      const delay = 0.04 + (k / 20) * 0.34;
+      const h = SPOUT_H * (1 - Math.pow(1 - Math.min(1, delay / 0.16), 3));
+      const a = Math.random() * Math.PI * 2;
+      const sp = 1.4 + Math.random() * 1.6;
+      const sz = 0.05 + Math.random() * 0.05;
+      this.slot(x + Math.cos(a) * 0.2, y + h, z + Math.sin(a) * 0.2, Math.cos(a) * sp, 1.5 + Math.random() * 2.2, Math.sin(a) * sp,
+        KIND_BLOB, 1.1 + Math.random() * 0.3, sz, sz * 0.5, k % 3 === 0 ? this.foam : c, 1, 13, 0.25, 0, 0, 0, delay, y + sz * 0.5, BOUNCE);
     }
-    this.slot(x, y + 0.03, z, 0, 0, 0, KIND_RING, 0.7, 0.3, 1.6, this.light(team), 0.8, 0, 0, 0, 1, 0);
+    this.juice.bouncers += 20;
+    // mist hanging round the column
+    for (let k = 0; k < 5; k++) {
+      this.slot(x, y + 0.4 + k * 0.7, z, 0, 0.8, 0, KIND_PUFF, 0.7, 0.35, 0.95, this.mist, 0.32, -0.2, 2, 0, 0, 0, 0.05 + k * 0.04);
+    }
   }
 
   // ── phase 6 ──────────────────────────────────────────────────────────────────────────────────
@@ -970,9 +1219,15 @@ export class Fx {
   }
 
   /** one falling drip of dye (WELLSPRING leap trail) */
-  drip(x: number, y: number, z: number, team: TeamId): void {
+  drip(x: number, y: number, z: number, team: TeamId, floorY?: number): void {
     if (this.d2(x, y, z) > 35 * 35) return;
     const s = 0.04 + Math.random() * 0.04;
+    if (floorY !== undefined) {
+      // a drip off a hit runner's body (juice §21): falls, taps the floor with a tiny hop, rests, fades
+      this.slot(x, y, z, (Math.random() - 0.5) * 0.3, -0.4, (Math.random() - 0.5) * 0.3, KIND_BLOB, 0.75, s * 0.8, s * 0.45, this.col(team), 1, 14, 0.2,
+        0, 0, 0, 0, floorY + s * 0.4, BOUNCE * 0.6);
+      return;
+    }
     this.slot(x + (Math.random() - 0.5) * 0.3, y, z + (Math.random() - 0.5) * 0.3, 0, -1, 0, KIND_BLOB, 0.5, s, s * 0.6, this.col(team), 1, 14, 0.2);
   }
 
@@ -983,6 +1238,15 @@ export class Fx {
     this.eye.setFromMatrixPosition(camera.matrixWorld);
     this.mat.uniforms.uTime.value = this.time;
     (this.mat.uniforms.uSunV.value as THREE.Vector3).copy(this.sunDir).transformDirection(camera.matrixWorldInverse);
+    const spoutsOn = this.time < this.spoutUntil;
+    if (this.spouts.visible !== spoutsOn) this.spouts.visible = spoutsOn;
+    if (spoutsOn) {
+      this.spoutMat.uniforms.uTime.value = this.time;
+      (this.spoutMat.uniforms.uSunV.value as THREE.Vector3).copy(this.mat.uniforms.uSunV.value as THREE.Vector3);
+      let n = 0;
+      for (let i = 0; i < SPOUTS; i++) if (this.time - this.sS.arr[i * 4 + 3] < SPOUT_LIFE) n++;
+      this.live.spouts = n;
+    } else this.live.spouts = 0;
     this.placePool(drops, alpha, dt);
     this.placeBeams(camera);
     if (this.dirtyN > 0) {
@@ -1206,6 +1470,11 @@ export class Fx {
     for (const g of this.glints) g.on = false;
     for (const f of this.flashes) f.t0 = -1e6;
     this.beamGeo.instanceCount = 0;
+    for (let i = 0; i < SPOUTS; i++) this.sS.arr[i * 4 + 3] = -1e6;
+    this.sS.a.clearUpdateRanges();
+    this.sS.a.needsUpdate = true;
+    this.spoutUntil = -1;
+    this.spouts.visible = false;
   }
 
   dispose(): void {
@@ -1217,6 +1486,8 @@ export class Fx {
     this.beamMat.dispose();
     this.disks.geometry.dispose();
     (this.disks.material as THREE.Material).dispose();
+    this.spoutGeo.dispose();
+    this.spoutMat.dispose();
     for (const pool of [this.jelly, this.puddle, this.cloud, this.buoy]) pool?.dispose();
     this.root.removeFromParent();
   }

@@ -1,5 +1,5 @@
 // DYEFIELD — input: an action map (CONTRACT §5.1: move*/jump/fire/slick/sub/special/pause/debug/map)
-// over keyboard + mouse, ready for remapping. The sim never sees keys — it sees one PlayerIntent per
+// over keyboard + mouse; SETTINGS remaps it live (setBindings from ui/settings.ts; phase 9). The sim never sees keys — it sees one PlayerIntent per
 // 60 Hz tick, built here. Presses are LATCHED until the next tick consumes them, so a tap shorter
 // than one tick (or one that lands between two ticks) still jumps / still splats once.
 
@@ -49,6 +49,8 @@ const UI_ACTIONS: ReadonlySet<Action> = new Set<Action>(['pause', 'debug', 'map'
 export class Input {
   /** live = the sim accepts movement / fire input (in play). UI actions work regardless. */
   live = false;
+  /** the SETTINGS key-remap capture is listening: every key / button is ignored here (phase 9) */
+  suspended = false;
   private bindings = new Map<string, Action[]>();
   private readonly held = new Set<string>();
   private readonly latched = new Set<Action>();
@@ -104,8 +106,11 @@ export class Input {
     return b.length ? codeLabel(b[0]) : '';
   }
 
-  /** subscribe to UI-action presses (pause / debug / map) */
-  onUi(fn: (a: Action, e: Event) => void): void { this.uiHandlers.push(fn); }
+  /** subscribe to UI-action presses (pause / debug / map) → unsubscribe */
+  onUi(fn: (a: Action, e: Event) => void): () => void {
+    this.uiHandlers.push(fn);
+    return () => { const i = this.uiHandlers.indexOf(fn); if (i >= 0) this.uiHandlers.splice(i, 1); };
+  }
 
   isHeld(a: Action): boolean {
     for (const [code, acts] of this.bindings) if (acts.includes(a) && this.held.has(code)) return true;
@@ -152,13 +157,14 @@ export class Input {
     if (!acts) return false;
     if (!repeat) this.held.add(code);
     for (const a of acts) {
-      if (UI_ACTIONS.has(a)) { if (!repeat) for (const h of this.uiHandlers) h(a, e); }
+      if (UI_ACTIONS.has(a)) { if (!repeat) for (const h of [...this.uiHandlers]) h(a, e); }
       else if (this.live && !repeat) this.latched.add(a);
     }
     return true;
   }
 
   private onKey(e: KeyboardEvent, down: boolean): void {
+    if (this.suspended) return;
     const code = e.code || e.key;
     const acts = this.bindings.get(code);
     if (!acts) return;
@@ -172,6 +178,7 @@ export class Input {
   }
 
   private onMouse(e: MouseEvent, down: boolean): void {
+    if (this.suspended) return;
     const code = 'Mouse' + e.button;
     if (!this.bindings.has(code)) return;
     if (down) {

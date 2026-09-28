@@ -1,7 +1,12 @@
-// DYEFIELD — full-screen match slates (CONTRACT §11 HUD): the 3 · 2 · 1 countdown, the death slate
-// `WASHED BY {name}` with a 3 s ring, and the victory slate `THE HARBOR CHOSE A COLOR.` with both
-// crews' percentages, the winning crew's mark and PLAY AGAIN. Only the brief's strings are shown
-// (DESIGN §1); names come from the roster, crew names / marks from data/teams.json.
+// DYEFIELD — full-screen match slates (CONTRACT §11 HUD): the 3 · 2 · 1 countdown (with a control legend
+// from the live bindings), the death slate `WASHED BY {name}` with a 3 s ring, and the victory slate
+// `THE HARBOR CHOSE A COLOR.` with both crews' percentages, the winning crew's mark, PLAY AGAIN and LOBBY.
+// Phase 9 (CONTRACT_P6_11 §20/§21): the victory slate runs a coverage TALLY — both crew bars fill while the
+// numbers count up (0.35–1.65 s; the bigger share fills its track, the other in proportion; the numbers are the
+// absolute weighted coverage), then the winner's mark STAMPS (1.75 s); the buttons are live from the start
+// (a click skips the show). The final percentages are always in the slate's text (a visually hidden line),
+// so a read-back mid-count still sees them. Only the brief's strings are shown (DESIGN §1); names come from
+// the roster, crew names / marks from data/teams.json.
 
 import { teamById } from '../core/data.ts';
 import type { TeamId } from '../core/types.ts';
@@ -10,6 +15,9 @@ export const DEATH_PREFIX = 'WASHED BY';
 export const SEA_NAME = 'the sea';
 export const VICTORY_LINE = 'THE HARBOR CHOSE A COLOR.';
 export const PLAY_AGAIN = 'PLAY AGAIN';
+export const LOBBY = 'LOBBY';
+/** tally timeline (s after the slate shows) */
+export const TALLY = { fillFrom: 0.35, fillTo: 1.65, stamp: 1.75, buttons: 0.9 } as const;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -61,6 +69,8 @@ export class Slates {
   private deathTotal = 3;
   private deathOn = false;
   private deathLastNum = -1;
+  // countdown legend
+  private readonly legend: HTMLElement;
   // victory
   private readonly victory: HTMLElement;
   private readonly vicMark: HTMLElement;
@@ -68,9 +78,18 @@ export class Slates {
   private readonly vicGulf: HTMLElement;
   private readonly vicSunBox: HTMLElement;
   private readonly vicGulfBox: HTMLElement;
+  private readonly vicSunBar: HTMLElement;
+  private readonly vicGulfBar: HTMLElement;
+  private readonly vicFinal: HTMLElement;
+  private readonly vicBtns: HTMLElement;
   private readonly vicBtn: HTMLButtonElement;
+  private readonly lobbyBtn: HTMLButtonElement;
   private onAgain: (() => void) | null = null;
+  private onLobby: (() => void) | null = null;
   victoryShown = false;
+  /** seconds since the victory slate showed (the tally clock) */
+  tallyT = -1;
+  private tally: { sun: number; gulf: number; winner: TeamId; stamped: boolean; ready: boolean } | null = null;
 
   constructor(host: HTMLElement) {
     this.root = el('div', 'df-slates');
@@ -85,13 +104,9 @@ export class Slates {
       this.countDigits.push(d);
       row.append(d);
     });
-    const legend = el('div', 'df-count-keys');
-    for (const [k, v] of [['WASD', 'move'], ['LMB', 'fire'], ['SHIFT', 'slick'], ['SPACE', 'jump']]) {
-      const pill = el('span', 'k');
-      pill.append(el('b', '', k), el('span', '', v));
-      legend.append(pill);
-    }
-    this.count.append(row, legend);
+    this.legend = el('div', 'df-count-keys');
+    this.setLegend([['WASD', 'move'], ['LMB', 'fire'], ['SHIFT', 'slick'], ['SPACE', 'jump']]);
+    this.count.append(row, this.legend);
 
     // ── death slate
     this.death = el('div', 'df-death');
@@ -128,28 +143,54 @@ export class Slates {
     const title = el('h2', 'df-victory-title', VICTORY_LINE);
     this.vicMark = el('div', 'df-victory-mark');
     this.vicMark.setAttribute('aria-hidden', 'true');
-    const scores = el('div', 'df-victory-scores');
+    const scores = el('div', 'df-tally');
     const sun = teamById(1), gulf = teamById(2);
-    const box = (key: 'sun' | 'gulf', mark: string, name: string): [HTMLElement, HTMLElement] => {
-      const b = el('div', `score ${key}`);
-      const m = el('i', '', mark); m.setAttribute('aria-hidden', 'true');
-      const v = el('b', '', '0.0%');
-      b.append(m, v, el('span', '', name));
-      return [b, v];
+    const box = (key: 'sun' | 'gulf', mark: string, name: string): [HTMLElement, HTMLElement, HTMLElement] => {
+      const b = el('div', `row ${key}`);
+      const m = el('i', 'mk', mark); m.setAttribute('aria-hidden', 'true');
+      const track = el('div', 'track');
+      const fill = el('b', 'fill');
+      track.append(fill);
+      const v = el('b', 'pct', '0.0%');
+      v.setAttribute('aria-hidden', 'true');
+      b.append(m, el('span', 'nm', name), track, v);
+      return [b, v, fill];
     };
-    [this.vicSunBox, this.vicSun] = box('sun', sun.markGlyph, sun.name);
-    [this.vicGulfBox, this.vicGulf] = box('gulf', gulf.markGlyph, gulf.name);
+    [this.vicSunBox, this.vicSun, this.vicSunBar] = box('sun', sun.markGlyph, sun.name);
+    [this.vicGulfBox, this.vicGulf, this.vicGulfBar] = box('gulf', gulf.markGlyph, gulf.name);
+    this.vicFinal = el('p', 'df-sr', '');
     scores.append(this.vicSunBox, this.vicGulfBox);
+    this.vicBtns = el('div', 'df-victory-btns');
     this.vicBtn = el('button', 'df-btn df-again', PLAY_AGAIN);
     this.vicBtn.type = 'button';
     this.vicBtn.id = 'df-again';
+    this.vicBtn.dataset.nav = '';
     this.vicBtn.addEventListener('click', (e) => { e.stopPropagation(); this.onAgain?.(); });
-    vc.append(this.vicMark, title, scores, this.vicBtn);
+    this.lobbyBtn = el('button', 'df-btn df-lobby', LOBBY);
+    this.lobbyBtn.type = 'button';
+    this.lobbyBtn.id = 'df-lobby';
+    this.lobbyBtn.dataset.nav = '';
+    this.lobbyBtn.addEventListener('click', (e) => { e.stopPropagation(); this.onLobby?.(); });
+    this.vicBtns.append(this.vicBtn, this.lobbyBtn);
+    vc.append(this.vicMark, title, scores, this.vicFinal, this.vicBtns);
     this.victory.append(vc);
 
     this.root.append(this.count, this.death, this.victory);
     host.append(this.root);
   }
+
+  /** the countdown's control legend: [keycap, label] pills (main.ts passes the live bindings) */
+  setLegend(rows: ReadonlyArray<readonly [string, string]>): void {
+    this.legend.replaceChildren();
+    for (const [k, v] of rows) {
+      const pill = el('span', 'k');
+      pill.append(el('b', '', k), el('span', '', v));
+      this.legend.append(pill);
+    }
+  }
+
+  /** the victory slate (the menus' focus scope while it shows) */
+  get victoryEl(): HTMLElement { return this.victory; }
 
   /** n = ceil(seconds left) while counting down; 0 / negative hides it */
   countdown(n: number): void {
@@ -204,13 +245,22 @@ export class Slates {
 
   get deathVisible(): boolean { return this.deathOn; }
 
-  showVictory(v: VictoryInfo, onAgain: () => void): void {
+  showVictory(v: VictoryInfo, onAgain: () => void, onLobby?: () => void): void {
     this.onAgain = onAgain;
+    this.onLobby = onLobby ?? null;
+    this.lobbyBtn.hidden = !onLobby;
     this.victoryShown = true;
-    this.vicSun.textContent = pct(v.sun);
-    this.vicGulf.textContent = pct(v.gulf);
-    this.vicSunBox.classList.toggle('win', v.winner === 1);
-    this.vicGulfBox.classList.toggle('win', v.winner === 2);
+    this.tallyT = 0;
+    this.tally = { sun: Math.max(0, v.sun), gulf: Math.max(0, v.gulf), winner: v.winner, stamped: false, ready: false };
+    this.vicSun.textContent = pct(0);
+    this.vicGulf.textContent = pct(0);
+    this.vicSunBar.style.width = '0%';
+    this.vicGulfBar.style.width = '0%';
+    this.vicFinal.textContent = `${teamById(1).name} ${pct(v.sun)} · ${teamById(2).name} ${pct(v.gulf)}`;
+    this.vicSunBox.classList.remove('win');
+    this.vicGulfBox.classList.remove('win');
+    this.vicMark.classList.remove('stamped');
+    this.vicBtns.classList.remove('ready');
     this.vicMark.replaceChildren();
     const marks: TeamId[] = v.winner === 1 ? [1] : v.winner === 2 ? [2] : [1, 2];
     for (const t of marks) {
@@ -223,17 +273,43 @@ export class Slates {
     this.vicBtn.focus({ preventScroll: true });
   }
 
+  /** the tally clock (Hud.update drives it with the frame dt) */
+  update(dt: number): void {
+    const t = this.tally;
+    if (!t || !this.victoryShown) return;
+    this.tallyT += Math.max(0, Math.min(0.1, dt));
+    const u = Math.max(0, Math.min(1, (this.tallyT - TALLY.fillFrom) / (TALLY.fillTo - TALLY.fillFrom)));
+    const k = 1 - Math.pow(1 - u, 3);
+    // bars compare the crews: the bigger share fills the track, the other is in proportion (numbers are absolute)
+    const top = Math.max(t.sun, t.gulf, 1e-6);
+    this.vicSunBar.style.width = `${((t.sun / top) * k * 100).toFixed(2)}%`;
+    this.vicGulfBar.style.width = `${((t.gulf / top) * k * 100).toFixed(2)}%`;
+    this.vicSun.textContent = pct(u >= 1 ? t.sun : t.sun * k);
+    this.vicGulf.textContent = pct(u >= 1 ? t.gulf : t.gulf * k);
+    if (!t.ready && this.tallyT >= TALLY.buttons) { t.ready = true; this.vicBtns.classList.add('ready'); }
+    if (!t.stamped && this.tallyT >= TALLY.stamp) {
+      t.stamped = true;
+      this.vicSunBox.classList.toggle('win', t.winner === 1);
+      this.vicGulfBox.classList.toggle('win', t.winner === 2);
+      this.vicMark.classList.add('stamped');
+    }
+  }
+
   hideVictory(): void {
     this.victoryShown = false;
     this.victory.hidden = true;
+    this.tally = null;
+    this.tallyT = -1;
   }
 
   /** text content of the visible slates (harness read-back) */
-  text(): { countdown: string | null; death: string | null; victory: string | null } {
+  text(): { countdown: string | null; death: string | null; victory: string | null; tally: Record<string, unknown> | null } {
     return {
       countdown: this.count.hidden ? null : (this.count.querySelector('.df-count-row')?.textContent ?? null),
       death: this.death.hidden ? null : `${DEATH_PREFIX} ${this.deathName.textContent ?? ''}`,
       victory: this.victory.hidden ? null : (this.victory.textContent ?? ''),
+      tally: this.victory.hidden ? null : { t: Math.round(this.tallyT * 100) / 100, stamped: this.vicMark.classList.contains('stamped'),
+        sun: this.vicSun.textContent, gulf: this.vicGulf.textContent },
     };
   }
 }

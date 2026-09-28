@@ -20,11 +20,16 @@
 //     glint line from the scope to the point its aim ray meets within the charge's range.
 //   * pause gates simStep() itself (doctrine §5); window.__PAUSE__ = { pause, resume, toggle }.
 //     ESC pauses; losing pointer lock pauses (except after the final horn, when the mouse is freed
-//     on purpose for the victory slate's PLAY AGAIN).
+//     on purpose for the victory slate's PLAY AGAIN). The pause CARD is the menus' (hooks.paused).
 //   * PLAY AGAIN rebuilds the match: painter.reset(), a new MatchWorld + BotDirector over the same
 //     PhysicsWorld, NavGraph and views. The PhysicsWorld is kept on purpose: the NavGraph queries it
-//     (bots string-pull their paths with sphere casts), and the previous match's character capsules
-//     are in the character collision group, which map-only queries and the KCC never see.
+//     (bots string-pull their paths with sphere casts); the old world's character capsules are removed
+//     from it (releaseWorld) so rebuilt matches never pile up colliders.
+//   * phase 9 (CONTRACT_P6_11 §20): mode 'lobby' — the same sim with an all-bot roster (a few runners
+//     painting at BREEZE, no countdown, a long clock that restarts itself), no input and no HUD; the camera
+//     drifts slowly round the court on an ellipse (lobbyCamera) and the menus draw over it. The app phase
+//     is 'menu' while it runs. mode 'match' is the phase 3–8 game. dispose() stops the loop and removes
+//     every listener so main.ts can swap sessions (lobby ⇄ match, map to map) in one page.
 
 import * as THREE from 'three';
 import { TICK, MAX_STEPS_PER_FRAME, DEV_BRUSH, COMBAT } from './core/config.ts';
@@ -54,7 +59,7 @@ import type { Hud, HudDebug, CrestInfo, DotInfo, HudFrame } from './ui/hud.ts';
 import type { BootUI } from './ui/boot.ts';
 import type { Input } from './input.ts';
 
-export type Phase = 'boot' | 'loading' | 'ready' | 'play' | 'paused' | 'error';
+export type Phase = 'boot' | 'loading' | 'ready' | 'play' | 'paused' | 'menu' | 'error';
 
 /** App-wide status that exists before the Game does (the test surface reads it from boot on). */
 export interface AppStatus {
@@ -70,7 +75,7 @@ export interface AppStatus {
   lockSuccesses: number;
 }
 
-/** match settings from the query (CONTRACT §11): ?kit ?bots ?seed ?matchSeconds (dev) ?autostart */
+/** match settings from the query (CONTRACT §11) or the menus: ?kit ?bots ?seed ?matchSeconds (dev) ?autostart */
 export interface MatchConfig {
   kit: string;
   skill: BotSkill;
@@ -78,8 +83,28 @@ export interface MatchConfig {
   /** null = the MatchWorld default (180 s) */
   durationS: number | null;
   humanName?: string;
+  /** the human's crew (menus crew choice; default SUNCREW) */
+  crew?: TeamId;
   /** ?dev=1&brush=1: LMB is the phase-2 DEV_BRUSH instead of the kit */
   devBrush: boolean;
+}
+
+export type GameMode = 'lobby' | 'match';
+
+/** app callbacks (main.ts): the menus, the mannequin pass, the FPS meter */
+export interface GameHooks {
+  /** show / hide the pause card (msg: e.g. 'Click RESUME again to capture the mouse.') */
+  paused?(on: boolean, msg: string): void;
+  /** the victory slate's LOBBY button */
+  lobby?(): void;
+  /** after the world render (the LOADOUT mannequin pass) */
+  overlay?(renderer: THREE.WebGLRenderer, dt: number): void;
+  /** every frame, after the render (menus' gamepad polling, the FPS meter) */
+  frame?(dt: number): void;
+  /** the victory slate showed (its element: a focus scope) or hid (null) */
+  victory?(el: HTMLElement | null): void;
+  /** mouse-look multipliers when the camera has no settings fields of its own */
+  look?(): { sens: number; invertY: boolean };
 }
 
 export interface GameParts {
@@ -108,9 +133,12 @@ export interface GameParts {
   boot: BootUI;
   input: Input;
   config: MatchConfig;
+  /** phase 9: 'match' (default) or the lobby's live backdrop */
+  mode?: GameMode;
+  hooks?: GameHooks;
 }
 
-/** player-facing settings (hooks only this phase — no settings UI yet) */
+/** player-facing settings the game applies itself */
 export interface GameSettings {
   quality: RenderQuality;
 }
@@ -120,6 +148,12 @@ export type LoggedEvent = SimEvent & { tick: number };
 
 const EVENT_LOG = 512;
 const HUMAN = 0;
+/** lobby clock: a long 'match' that restarts itself (fresh paint) */
+export const LOBBY_SECONDS = 900;
+/** the lobby backdrop is fast-forwarded this far before it shows (runners spread out, some dye down) */
+export const LOBBY_WARM_S = 10;
+/** the lobby camera's vertical FOV (the match camera's is CAMERA.fovDeg) */
+export const LOBBY_FOV = 46;
 
 const numField = (o: unknown, k: string, d: number): number => {
   const v = (o as Record<string, unknown> | undefined)?.[k];
@@ -137,6 +171,7 @@ const SUB_BLAST = numField(JELLY_ROW, 'blastRadius', 3);
 export class Game {
   readonly p: GameParts;
   readonly settings: GameSettings;
+  readonly mode: GameMode;
   world: MatchWorld;
   director: BotDirector;
   physics: PhysicsWorld;
@@ -150,6 +185,7 @@ export class Game {
   private fpsFrames = 0;
   private time = 0;
   private raf = 0;
+  private disposed = false;
   private readonly intents: PlayerIntent[] = [];
   private readonly feet = { x: 0, y: 0, z: 0 };
   private readonly focus = new THREE.Vector3();
@@ -158,6 +194,7 @@ export class Game {
   private lockSeq = 0;
   /** pointer lock was held at some point of this play session (a later loss pauses) */
   private lockedThisPlay = false;
+  private readonly offs: Array<() => void> = [];
   // events
   private readonly drained: SimEvent[] = [];
   private readonly log: LoggedEvent[] = [];
@@ -190,14 +227,24 @@ export class Game {
   frozen = false;
   /** phases 7–8: runner.launches already splashed (the sim has no launch event; the view watches the counter) */
   private readonly launchSeen: number[] = [];
+  // phase 9: the lobby camera drift
+  private lobbyT = 0;
+  private readonly lobbyTarget = new THREE.Vector3();
+  /** the smoothed point the lobby camera circles (the crews' centroid pulled toward mid-court) */
+  private readonly lobbyAim = new THREE.Vector3(NaN, 0, 0);
+  /** the follow camera's FOV, restored when the lobby session ends (the lobby shoots tighter) */
+  private savedFov = 0;
+  /** lobby rounds played (each restart repaints the court from clean) */
+  lobbyRounds = 0;
 
   constructor(parts: GameParts, settings: Partial<GameSettings> = {}) {
     this.p = parts;
+    this.mode = parts.mode ?? 'match';
     this.settings = { quality: settings.quality ?? parts.rig.adaptive().quality };
     this.physics = parts.physics;
     for (let i = 0; i < parts.roster.length; i++) {
       this.intents.push(emptyIntent());
-      this.seen.push(false);
+      this.seen.push(this.mode === 'lobby');
       const r = parts.roster[i];
       this.crests.push({ id: r.id, name: r.name, team: r.team, alive: true, respawnIn: 0, special: 0, you: r.id === HUMAN });
       this.dots.push({ x: 0, z: 0, team: r.team, show: false });
@@ -208,7 +255,7 @@ export class Game {
     this.world = this.makeWorld();
     this.director = new BotDirector(this.world, parts.nav, parts.config.seed ^ 0x9e3779b9);
     this.frameOpts = {
-      alpha: 1, camera: parts.cam.camera, viewerTeam: 1, viewerId: HUMAN, seen: this.seenFn, width: 1, height: 1, winner: null,
+      alpha: 1, camera: parts.cam.camera, viewerTeam: this.humanTeam, viewerId: HUMAN, seen: this.seenFn, width: 1, height: 1, winner: null,
       mistRange: this.world.mistRange,
     };
     this.hudFrame = {
@@ -216,17 +263,20 @@ export class Game {
       tank: 100, hp: 100, alive: true, slick: false, firing: false, x: 0, z: 0, yaw: 0, special: 0,
       crests: this.crests, dots: this.dots, respawnIn: 0, charge: 0, specialReady: false, subReady: false,
     };
+    if (this.mode === 'lobby') {                // no input, no pointer lock, no pause API in the lobby
+      const c = parts.cam.camera;
+      this.savedFov = c.fov;
+      c.fov = LOBBY_FOV;
+      c.updateProjectionMatrix();
+      return;
+    }
 
     const { input, hud, canvas } = parts;
-    input.onUi((a) => {
+    this.offs.push(input.onUi((a) => {
       if (a === 'debug') hud.toggleDebug();
-      else if (a === 'pause') {
-        if (this.phase === 'play' && !this.matchOver) this.pause('esc');
-        else if (this.phase === 'paused') this.resume();
-      }
-    });
-    hud.onResume = () => this.resume();
-    document.addEventListener('pointerlockchange', () => {
+    }));
+    const onLock = (): void => {
+      if (this.disposed) return;
       const locked = document.pointerLockElement === canvas;
       if (locked) {
         this.lockReq = 0;
@@ -236,35 +286,85 @@ export class Game {
       } else if (this.phase === 'play' && this.lockedThisPlay && !this.matchOver) {
         this.pause('pointer lock lost');
       }
-    });
-    document.addEventListener('pointerlockerror', () => this.lockFailed(this.lockReq, 'pointerlockerror'));
+    };
+    const onLockErr = (): void => { if (!this.disposed) this.lockFailed(this.lockReq, 'pointerlockerror'); };
     // a play session entered without the lock (?autostart / __DF__.start): a click on the view captures the mouse
-    canvas.addEventListener('mousedown', () => {
+    const onDown = (): void => {
       if (this.phase === 'play' && !this.matchOver && document.pointerLockElement !== canvas && this.lockReq === 0) this.requestLock();
+    };
+    document.addEventListener('pointerlockchange', onLock);
+    document.addEventListener('pointerlockerror', onLockErr);
+    canvas.addEventListener('mousedown', onDown);
+    this.offs.push(() => {
+      document.removeEventListener('pointerlockchange', onLock);
+      document.removeEventListener('pointerlockerror', onLockErr);
+      canvas.removeEventListener('mousedown', onDown);
     });
-    (window as unknown as { __PAUSE__: unknown }).__PAUSE__ = {
+    const api = {
       pause: () => this.pause('api'),
       resume: () => this.resume(),
       toggle: () => (this.phase === 'paused' ? this.resume() : this.pause('api')),
     };
+    (window as unknown as { __PAUSE__: unknown }).__PAUSE__ = api;
+    this.offs.push(() => {
+      const w = window as unknown as { __PAUSE__?: unknown };
+      if (w.__PAUSE__ === api) delete w.__PAUSE__;
+    });
   }
 
   get phase(): Phase { return this.p.app.phase; }
   private set phase(v: Phase) { this.p.app.phase = v; }
   get matchOver(): boolean { return this.world.phase === 'ended'; }
   get human(): Runner { return this.world.runners[HUMAN]; }
+  get humanTeam(): TeamId { return this.p.roster[HUMAN]?.team ?? 1; }
+  get isLobby(): boolean { return this.mode === 'lobby'; }
+  /** the sim advances: a match in play, or the lobby behind the menus */
+  private get running(): boolean { return this.mode === 'lobby' ? this.phase === 'menu' : this.phase === 'play'; }
 
   private makeWorld(): MatchWorld {
     const p = this.p;
+    const lobby = this.mode === 'lobby';
+    const dur = lobby ? LOBBY_SECONDS : p.config.durationS;
     return new MatchWorld({
       def: p.def, geo: p.geo, physics: this.physics, painter: p.painter, roster: p.roster,
-      seed: p.config.seed, ...(p.config.durationS ? { durationS: p.config.durationS } : {}),
+      seed: p.config.seed + (lobby ? this.lobbyRounds * 7919 : 0),
+      ...(dur ? { durationS: dur } : {}), ...(lobby ? { countdownS: 0 } : {}),
     });
+  }
+
+  /** remove the runners' capsules of a world we are discarding from the kept PhysicsWorld */
+  private releaseWorld(w: MatchWorld): void {
+    const pw = this.physics;
+    for (const r of w.runners) {
+      const b = r.body as unknown as { dispose?: (world: unknown) => void };
+      try { b.dispose?.(pw.world); } catch { /* already gone */ }
+    }
+  }
+
+  /**
+   * Lobby: fast-forward the backdrop `seconds` of sim (behind the loading card), so the court is already
+   * alive when the menus appear. The events of the skipped time are dropped (no FX burst on frame 1).
+   * Returns the ms it took.
+   */
+  warm(seconds = LOBBY_WARM_S): number {
+    if (this.mode !== 'lobby') return 0;
+    const t0 = performance.now();
+    const n = Math.max(0, Math.round(seconds / TICK));
+    for (let i = 0; i < n && this.world.phase !== 'ended'; i++) {
+      this.director.think(this.intents);
+      this.world.step(this.intents);
+      this.tick++;
+    }
+    this.world.drainEvents(this.drained);
+    this.drained.length = 0;
+    this.p.players.reset();
+    return performance.now() - t0;
   }
 
   /** start the render loop (the scene renders behind the CLICK TO PLAY card) */
   run(): void {
     const loop = (now: number): void => {
+      if (this.disposed) return;
       this.raf = requestAnimationFrame(loop);
       try {
         this.frame(now);
@@ -276,18 +376,40 @@ export class Game {
     this.raf = requestAnimationFrame(loop);
   }
 
+  /** stop the loop, drop every listener and the world's capsules (the session is being replaced) */
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    cancelAnimationFrame(this.raf);
+    for (const f of this.offs) { try { f(); } catch { /* ignore */ } }
+    this.offs.length = 0;
+    this.releaseWorld(this.world);
+    if (this.victoryShown) this.p.hooks?.victory?.(null);
+    if (this.mode === 'lobby' && this.savedFov > 0) {
+      const c = this.p.cam.camera;
+      c.fov = this.savedFov;
+      c.updateProjectionMatrix();
+    }
+    if (this.mode === 'match') {
+      this.p.input.live = false;
+      this.p.input.releaseAll();
+    }
+  }
+
   fail(e: unknown): void {
     const msg = e instanceof Error ? (e.stack || e.message) : String(e);
     this.p.app.phase = 'error';
     this.p.app.error = msg;
     this.p.input.live = false;
     this.p.hud.show(false);
+    this.p.hooks?.paused?.(false, '');
     this.p.boot.error('The match stopped', msg);
     console.error('[dyefield] frame error:', e);
   }
 
   /** CLICK TO PLAY: ask for pointer lock; play begins on pointerlockchange. */
   requestPlay(): void {
+    if (this.mode === 'lobby' || this.disposed) return;
     if (this.phase !== 'ready' && this.phase !== 'paused') return;
     if (document.pointerLockElement === this.p.canvas) { this.enterPlay('pointerlock'); return; }
     this.requestLock();
@@ -320,9 +442,9 @@ export class Game {
     console.warn(`[dyefield] pointer lock refused (${app.lockErrors}): ${why}`);
     if (app.lockErrors >= 2 && app.lockSuccesses === 0 && (this.phase === 'ready' || this.phase === 'paused')) {
       this.p.boot.showBlocked(() => this.requestPlay());
-      this.p.hud.setPaused(false);
+      this.p.hooks?.paused?.(false, '');
     } else if (this.phase === 'paused') {
-      this.p.hud.setPaused(true, 'Click RESUME again to capture the mouse.');
+      this.p.hooks?.paused?.(true, 'Click RESUME again to capture the mouse.');
     }
   }
 
@@ -335,7 +457,20 @@ export class Game {
 
   /** dev (__DF__.start) / ?autostart=1: enter play without pointer lock (a click on the view captures it later) */
   devStart(): void {
+    if (this.mode === 'lobby') return;
     if (this.phase === 'ready' || this.phase === 'paused') this.enterPlay('dev-start');
+  }
+
+  /**
+   * The menus' START: the click already asked for pointer lock (a user gesture) while the arena loaded.
+   * Locked now → straight into the countdown; otherwise false (main shows CLICK TO PLAY).
+   */
+  beginWithLock(): boolean {
+    if (this.mode === 'lobby' || this.phase !== 'ready') return false;
+    if (document.pointerLockElement !== this.p.canvas) return false;
+    this.lockedThisPlay = true;
+    this.enterPlay('pointerlock');
+    return true;
   }
 
   private enterPlay(by: 'pointerlock' | 'dev-start'): void {
@@ -348,18 +483,19 @@ export class Game {
     this.phase = 'play';
     this.p.rig.graceFor(2);                       // never rescale in the first 2 s of play
     this.p.boot.hide();
-    this.p.hud.setPaused(false);
+    this.p.hooks?.paused?.(false, '');
     this.p.hud.show(true);
     this.p.canvas.focus({ preventScroll: true });
   }
 
   pause(reason = 'api'): void {
-    if (this.phase !== 'play') return;
+    if (this.mode === 'lobby' || this.phase !== 'play') return;
     this.phase = 'paused';
     this.acc = 0;
     this.p.input.live = false;
     this.p.input.releaseAll();
-    this.p.hud.setPaused(true, reason === 'pointer lock lost' ? 'Mouse released.' : '');
+    // ESC in a pointer-locked page arrives as a lock loss (the browser eats the key): the same plain pause card
+    this.p.hooks?.paused?.(true, '');
     if (document.pointerLockElement === this.p.canvas) document.exitPointerLock();
   }
 
@@ -369,18 +505,21 @@ export class Game {
     else this.enterPlay('dev-start');
   }
 
-  /** PLAY AGAIN: a fresh match on the same map (a proper lobby arrives in phase 9). */
+  /** PLAY AGAIN: a fresh match on the same map (the lobby restarts its own round the same way). */
   restart(): void {
     const p = this.p;
     p.painter.reset();
     p.paint.rebuildAll();
     p.minimap.rebuild();
+    this.releaseWorld(this.world);
+    if (this.mode === 'lobby') this.lobbyRounds++;
     this.world = this.makeWorld();
     this.director = new BotDirector(this.world, p.nav, (p.config.seed + this.matchNo * 7919) ^ 0x9e3779b9);
     this.matchNo++;
     this.tick = 0;
     this.acc = 0;
     this.endT = -1;
+    if (this.victoryShown) p.hooks?.victory?.(null);
     this.victoryShown = false;
     this.drained.length = 0;
     for (const k of Object.keys(this.counts)) delete this.counts[k];
@@ -389,6 +528,7 @@ export class Game {
     p.players.reset();
     p.fx.clear();
     p.hud.reset();
+    if (this.mode === 'lobby') return;
     const h = this.human;
     p.cam.reset(h.yaw);
     this.feet.x = h.x; this.feet.y = h.y; this.feet.z = h.z;
@@ -401,18 +541,21 @@ export class Game {
   }
 
   // ───────────────────────────── the sim tick ─────────────────────────────
-  /** One fixed sim tick — gated: nothing advances unless the game is in play. */
+  /** One fixed sim tick — gated: nothing advances unless the game is in play (or the lobby runs). */
   simStep(): boolean {
-    if (this.phase !== 'play' || this.stepping) return false;
+    if (!this.running || this.stepping) return false;
     this.stepping = true;
     try {
       const { input, cam, config } = this.p;
       const me = this.intents[HUMAN];
-      input.intent(cam.yaw, cam.pitch, me);
-      me.hasAim = this.aimOk;
-      me.aimX = this.aim.x; me.aimY = this.aim.y; me.aimZ = this.aim.z;
-      const brush = config.devBrush && me.fire;
-      if (config.devBrush) me.fire = false;
+      let brush = false;
+      if (this.mode === 'match') {
+        input.intent(cam.yaw, cam.pitch, me);
+        me.hasAim = this.aimOk;
+        me.aimX = this.aim.x; me.aimY = this.aim.y; me.aimZ = this.aim.z;
+        brush = config.devBrush && me.fire;
+        if (config.devBrush) me.fire = false;
+      }
       this.director.think(this.intents);
       this.world.step(this.intents);
       if (brush) this.devBrushStep();
@@ -460,6 +603,15 @@ export class Game {
     this.aimOk = true;
   }
 
+  /** mouse look with the settings (the camera applies them itself when it has the fields) */
+  private look(dx: number, dy: number): void {
+    const cam = this.p.cam as FollowCamera & { sensitivityScale?: number };
+    if (typeof cam.sensitivityScale === 'number') { cam.addMouse(dx, dy); return; }
+    const l = this.p.hooks?.look?.();
+    const s = l ? l.sens : 1;
+    cam.addMouse(dx * s, dy * s * (l?.invertY ? -1 : 1));
+  }
+
   frame(now: number): void {
     const p = this.p;
     const rawMs = this.last < 0 ? 0 : now - this.last;
@@ -473,11 +625,13 @@ export class Game {
     this.fpsClock += dt;
     if (this.fpsClock >= 0.5) { this.fps = this.fpsFrames / this.fpsClock; this.fpsFrames = 0; this.fpsClock = 0; }
 
-    const playing = this.phase === 'play' && !this.frozen;
+    const playing = this.running && !this.frozen;
     if (playing) {
-      const m = p.input.takeMouse();
-      if (!this.matchOver) p.cam.addMouse(m.dx, m.dy);
-      this.updateAim();
+      if (this.mode === 'match') {
+        const m = p.input.takeMouse();
+        if (!this.matchOver) this.look(m.dx, m.dy);
+        this.updateAim();
+      }
       this.acc += dt;
       let steps = 0;
       while (this.acc >= TICK && steps < MAX_STEPS_PER_FRAME) {
@@ -488,7 +642,7 @@ export class Game {
       if (this.acc >= TICK) this.acc %= TICK;      // drop the excess debt
     } else if (!this.frozen) {
       this.acc = 0;
-      p.input.takeMouse();
+      if (this.mode === 'match') p.input.takeMouse();
     }
     this.drainEvents();
     this.springLaunches();
@@ -499,6 +653,7 @@ export class Game {
     const alpha = playing || this.frozen ? Math.min(1, this.acc / TICK) : 1;
     this.matchFlow(vdt);
     this.render(vdt, alpha);
+    p.hooks?.frame?.(dt);
   }
 
   // ───────────────────────────── events → view ─────────────────────────────
@@ -509,7 +664,8 @@ export class Game {
     if (!out.length) return;
     const { fx, players, hud, cam } = this.p;
     const rs = this.world.runners;
-    const me = HUMAN;
+    const lobby = this.mode === 'lobby';
+    const me = lobby ? -1 : HUMAN;
     for (const e of out) {
       this.counts[e.t] = (this.counts[e.t] ?? 0) + 1;
       const le = e as LoggedEvent;
@@ -542,7 +698,7 @@ export class Game {
           break;
         case 'ring': {
           fx.ringWave(e.x, e.y, e.z, e.r, rs[e.pid]?.team ?? 1);
-          const h = rs[me];
+          const h = lobby ? null : rs[me];
           if (h && Math.hypot(h.x - e.x, h.z - e.z) < e.r + 4) cam.shake = Math.min(1, cam.shake + (e.pid === me ? 0.6 : 0.3));
           break;
         }
@@ -552,7 +708,7 @@ export class Game {
           else if (e.phase === 'land') fx.jellyLand(e.x, e.y, e.z, team);
           else {
             fx.jellyPop(e.x, e.y, e.z, SUB_BLAST, team);
-            const h = rs[me];
+            const h = lobby ? null : rs[me];
             if (h && Math.hypot(h.x - e.x, h.z - e.z) < SUB_BLAST + 3) cam.shake = Math.min(1, cam.shake + 0.3);
           }
           break;
@@ -589,7 +745,7 @@ export class Game {
             const burstTeam: TeamId = by ? by.team : (v.team === 1 ? 2 : 1);
             if (e.cause !== 'sea') fx.washedBurst(v.x, v.y, v.z, burstTeam);
             players.onWashed(e.victim);
-            hud.killFeed(e.cause === 'sea' || !by ? null : { name: by.name, team: by.team }, { name: v.name, team: v.team });
+            if (!lobby) hud.killFeed(e.cause === 'sea' || !by ? null : { name: by.name, team: by.team }, { name: v.name, team: v.team });
           }
           if (e.victim === me) {
             hud.showDeath(e.cause === 'sea' || !by ? null : by.name, by ? by.team : null, WEAPONS.respawnSeconds);
@@ -623,6 +779,9 @@ export class Game {
     }
   }
 
+  /** the drained events of this frame (read synchronously after frame(): the audio router's input) */
+  get frameEvents(): readonly SimEvent[] { return this.drained; }
+
   /** spring pads (phases 7–8): a launch has no SimEvent — each growth of runner.launches splashes its pad */
   private springLaunches(): void {
     const springs = this.p.geo.features?.springs;
@@ -638,20 +797,30 @@ export class Game {
       const lh = Math.hypot(sp.launch[0], sp.launch[2]);
       this.p.fx.springSplash(sp.x, sp.y, sp.z, Math.max(0.6, sp.r), lh > 1e-3 ? sp.launch[0] / lh : 0, lh > 1e-3 ? sp.launch[2] / lh : 0);
       this.counts.springLaunch = (this.counts.springLaunch ?? 0) + 1;
-      if (i === HUMAN) this.p.cam.shake = Math.min(1, this.p.cam.shake + 0.2);
+      if (i === HUMAN && this.mode === 'match') this.p.cam.shake = Math.min(1, this.p.cam.shake + 0.2);
     }
   }
 
-  /** after the final horn: 1.6 s of victory poses, then the slate + a free mouse for PLAY AGAIN */
+  /** after the final horn: 1.6 s of victory poses, then the slate + a free mouse for PLAY AGAIN / LOBBY */
   private matchFlow(dt: number): void {
     if (this.world.phase !== 'ended') return;
+    if (this.mode === 'lobby') {
+      // the lobby's round is over: a fresh court, fast-forwarded (the menus stay up; nobody is watching a scoreboard)
+      if (this.phase === 'menu') { this.restart(); this.warm(); }
+      return;
+    }
     if (this.endT < 0) this.endT = 0;
     this.endT += dt;
     if (!this.victoryShown && this.endT >= 1.6) {
       this.victoryShown = true;
       const res = this.world.result ?? { ...this.p.painter.coverage(), winner: 0 as TeamId };
       this.p.hud.hideDeath();
-      this.p.hud.showVictory({ sun: res.sun, gulf: res.gulf, neutral: res.neutral, winner: res.winner }, () => this.playAgain());
+      const hooks = this.p.hooks;
+      this.p.hud.showVictory({ sun: res.sun, gulf: res.gulf, neutral: res.neutral, winner: res.winner }, () => this.playAgain(),
+        hooks?.lobby ? () => hooks.lobby?.() : undefined);
+      hooks?.victory?.(this.p.hud.slates.victoryEl);
+      // the world is over: the keys belong to the slate now (arrows / Space / Enter drive PLAY AGAIN · LOBBY)
+      this.p.input.live = false;
       this.p.input.releaseAll();
       if (document.pointerLockElement === this.p.canvas) document.exitPointerLock();
     }
@@ -659,8 +828,41 @@ export class Game {
 
   private playAgain(): void {
     if (this.phase !== 'play' && this.phase !== 'paused') return;
-    if (this.phase === 'paused') { this.phase = 'play'; this.p.hud.setPaused(false); }
+    if (this.phase === 'paused') { this.phase = 'play'; this.p.hooks?.paused?.(false, ''); }
     this.restart();
+  }
+
+  // ───────────────────────────── lobby camera ─────────────────────────────
+  /**
+   * The lobby camera: a slow orbit (radius 17 m, ~7 m up) round a point that glides after the crews — their
+   * centroid pulled 40 % toward mid-court, smoothed over ~2.5 s — so a few runners painting are always in a
+   * readable shot. The view is turned a little about the world up axis so the action sits right of the menu
+   * column.
+   */
+  private lobbyCamera(dt: number): void {
+    this.lobbyT += dt;
+    const cam = this.p.cam.camera;
+    const b = this.p.def.bounds;
+    const mx = b ? (b.min[0] + b.max[0]) / 2 : 0, mz = b ? (b.min[2] + b.max[2]) / 2 : 0;
+    let sx = 0, sz = 0, n = 0;
+    for (const r of this.world.runners) { if (!r.alive) continue; sx += r.x; sz += r.z; n++; }
+    const tx = n ? mx + (sx / n - mx) * 0.6 : mx, tz = n ? mz + (sz / n - mz) * 0.6 : mz;
+    const aim = this.lobbyAim;
+    if (Number.isNaN(aim.x)) aim.set(tx, 0, tz);
+    const k = 1 - Math.exp(-Math.max(0, dt) / 2.5);
+    aim.x += (tx - aim.x) * k;
+    aim.z += (tz - aim.z) * k;
+    const a = 2.3 + this.lobbyT * 0.035;
+    const R = 17, y = 7 + Math.sin(this.lobbyT * 0.11) * 1.0;
+    cam.position.set(aim.x + Math.sin(a) * R, y, aim.z + Math.cos(a) * R);
+    this.focus.set(aim.x, 0.8, aim.z);
+    // turn the view about the WORLD up axis (a level horizon), so the action sits right of the menu column
+    const dx = aim.x - cam.position.x, dz = aim.z - cam.position.z;
+    const t = 0.22, c = Math.cos(t), s = Math.sin(t);
+    this.lobbyTarget.set(cam.position.x + dx * c + dz * s, 0.8, cam.position.z - dx * s + dz * c);
+    cam.up.set(0, 1, 0);
+    cam.lookAt(this.lobbyTarget);
+    cam.updateMatrixWorld();
   }
 
   // ───────────────────────────── render ─────────────────────────────
@@ -669,19 +871,24 @@ export class Game {
     const p = this.p;
     const w = this.world;
     const me = this.human;
+    const lobby = this.mode === 'lobby';
     this.updateSeen(dt);
     const fo = this.frameOpts;
     fo.alpha = alpha;
-    fo.viewerTeam = me.team;
+    fo.viewerTeam = lobby ? 1 : me.team;
     fo.width = p.canvas.clientWidth || window.innerWidth;
     fo.height = p.canvas.clientHeight || window.innerHeight;
     fo.winner = w.phase === 'ended' && w.result ? w.result.winner : null;
     p.players.update(dt, w.runners, fo);
     const f = p.players.frame(HUMAN);
-    this.feet.x = f.x; this.feet.y = f.y + p.players.dropOffset(HUMAN); this.feet.z = f.z;
-    p.cam.slickTarget = me.alive && me.slickForm ? 1 : 0;
-    p.cam.update(dt, this.feet, this.physics);
-    this.focus.set(f.x, f.y + 0.6, f.z);
+    if (lobby) {
+      this.lobbyCamera(dt);
+    } else {
+      this.feet.x = f.x; this.feet.y = f.y + p.players.dropOffset(HUMAN); this.feet.z = f.z;
+      p.cam.slickTarget = me.alive && me.slickForm ? 1 : 0;
+      p.cam.update(dt, this.feet, this.physics);
+      this.focus.set(f.x, f.y + 0.6, f.z);
+    }
     p.sky.update(dt, p.cam.camera, this.focus);
     p.water.update(this.time, p.cam.camera);
     p.map.update(dt, p.cam.camera);          // light_ pool re-assignment (0.5 s) + fades; stands the auto driver down
@@ -690,11 +897,13 @@ export class Game {
     p.paint.upload(p.painter);
     this.glints();
     p.fx.viewHeight = fo.height;
-    p.fx.update(dt, p.cam.camera, this.phase === 'play' || this.phase === 'paused' ? w.projectiles : null, alpha);
+    p.fx.update(dt, p.cam.camera, this.running || this.phase === 'paused' ? w.projectiles : null, alpha);
 
     p.rig.resize(p.cam.camera);
     p.rig.beginFrame();
     p.rig.renderer.render(p.scene, p.cam.camera);
+    p.hooks?.overlay?.(p.rig.renderer, dt);
+    if (lobby) return;
 
     // HUD
     const hf = this.hudFrame;
@@ -747,6 +956,7 @@ export class Game {
 
   /** team vision at 5 Hz: an enemy is seen when any living crewmate can see it (world.canSee) */
   private updateSeen(dt: number): void {
+    if (this.mode === 'lobby') return;          // the lobby shows everyone
     this.seenClock -= dt;
     if (this.seenClock > 0) return;
     this.seenClock = 0.2;
@@ -769,7 +979,7 @@ export class Game {
   matchInfo(): Record<string, unknown> {
     const w = this.world;
     return {
-      phase: w.phase, timeLeft: w.timeLeft, countdown: w.countdown, tick: w.tick, result: w.result,
+      mode: this.mode, phase: w.phase, timeLeft: w.timeLeft, countdown: w.countdown, tick: w.tick, result: w.result,
       coverage: this.p.painter.coverage(), matchNo: this.matchNo, victoryShown: this.victoryShown,
       runners: w.runners.map((r) => ({
         id: r.id, name: r.name, team: r.team, bot: r.bot, state: r.state, hp: r.hp, tank: r.tank, alive: r.alive,

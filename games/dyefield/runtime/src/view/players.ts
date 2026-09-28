@@ -36,6 +36,15 @@
 // tide-spout drop onto the pad (0.6 s). Name tags (DOM, one element per runner, transforms only):
 // allies always, enemies only while seen. Rollers throw a sheet spray at the drum contact while rolling;
 // WELLSPRING leapers drip a dye trail.
+//
+// Phase 10 juice (CONTRACT_P6_11 §21), all driven from this file's own frame (no extra wiring needed):
+//   * DYE DRIPS: a hit stains the runner in the attacker's dye — procedural blotches around the hit point
+//     plus runs that trickle down the body and end in a bead (fragment shader, bind space, body parts only;
+//     the team-mask attribute (aTone.x) keeps the crew-colour parts mostly clean so the crew still reads).
+//     The stain holds ~1.4 s, then fades; while it is wet, drops fall off the body and bounce on the floor.
+//     onHit(id, byTeam?, x?, y?, z?, dmg?) — the extra arguments place / size the stain (optional).
+//   * LANDING PUFFS: a landing after ≥ 0.3 s airborne kicks a ring of puffs (hard after ≥ 1.0 s).
+//   * SLICK CROWNS: diving into / surfacing from the dye throws a splash crown (fx.slickCrown).
 
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
@@ -572,7 +581,47 @@ interface RunnerUniforms {
   uSpin: { value: number };
   uDrumP: { value: THREE.Vector3 };
   uDrumD: { value: THREE.Vector3 };
+  /** juice: dye-drip stain — rgb = the attacker's dye (linear), a = amount 0..1 (0 = off: the shader skips it) */
+  uDrip: { value: THREE.Vector4 };
+  /** juice: stain centre in bind space (xyz) + seconds the runs have been growing (w) */
+  uDripP: { value: THREE.Vector4 };
 }
+
+/** dye-drip stain (bind space, metres): blotches round the hit + runs down the body ending in a bead */
+const DRIP_GLSL = /* glsl */ `
+float dfH1(float n) { return fract(sin(n) * 43758.5453); }
+float dfVN(vec3 p) {
+  vec3 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float n = i.x + i.y * 57.0 + i.z * 113.0;
+  return mix(mix(mix(dfH1(n), dfH1(n + 1.0), f.x), mix(dfH1(n + 57.0), dfH1(n + 58.0), f.x), f.y),
+             mix(mix(dfH1(n + 113.0), dfH1(n + 114.0), f.x), mix(dfH1(n + 170.0), dfH1(n + 171.0), f.x), f.y), f.z);
+}
+float dfDrip(vec3 p, vec4 c, float amt) {
+  // two octaves of value noise bunch round 0.5: spread them so the cover value reads as an area share
+  float n = smoothstep(0.22, 0.78, dfVN(p * 10.0) * 0.62 + dfVN(p * 26.0 + 3.1) * 0.38);
+  float near = 1.0 - smoothstep(0.06, 0.42, distance(p, c.xyz));
+  float cover = amt * (0.05 + 0.5 * near);
+  float blot = smoothstep(1.0 - cover, 1.0 - cover + 0.05, n);
+  // runs: 28 columns round the body axis on the hit's side, each hanging from the stain band a random
+  // length (grows over ~0.6 s)
+  float ang = atan(p.x, p.z);
+  float u = ang / 6.2831853 * 28.0;
+  float ci = floor(u);
+  float fx = fract(u) - 0.5;
+  float h1 = dfH1(ci * 7.13 + 1.7), h2 = dfH1(ci * 3.71 + 9.2), h3 = dfH1(ci * 1.93 + 4.4);
+  float ca = atan(c.x, c.z + 1e-4);
+  float side = abs(atan(sin(ang - ca), cos(ang - ca)));
+  float on = step(0.5, h1) * step(0.12, amt) * step(side, 1.8);
+  float top = c.y + (h2 - 0.5) * 0.22;
+  float len = (0.05 + 0.26 * h3) * min(1.0, 0.2 + c.w * 1.4) * clamp(amt * 1.5, 0.0, 1.0);
+  float dy = top - p.y;
+  float w = (0.2 + 0.08 * h1) * (1.0 - 0.4 * clamp(dy / max(len, 1e-3), 0.0, 1.0));
+  float run = on * step(0.0, dy) * (1.0 - step(len, dy)) * (1.0 - smoothstep(w - 0.07, w, abs(fx)));
+  float bead = on * (1.0 - smoothstep(0.3, 0.4, length(vec2(fx, (dy - len) * 22.0))));
+  return clamp(max(blot, max(run, bead)), 0.0, 1.0);
+}
+`;
 
 function runnerMaterial(team: TeamId, u: RunnerUniforms, skinned: boolean): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.5, metalness: 0 });
@@ -580,26 +629,29 @@ function runnerMaterial(team: TeamId, u: RunnerUniforms, skinned: boolean): THRE
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 aTone;\nvarying vec4 vTone;\nvarying float vBindY;\n'
+      .replace('#include <common>', '#include <common>\nattribute vec4 aTone;\nvarying vec4 vTone;\nvarying float vBindY;\nvarying vec3 vBindP;\n'
         + 'uniform float uSpin;\nuniform vec3 uDrumP;\nuniform vec3 uDrumD;\n'
         + 'vec3 dfSpin(vec3 v, vec3 k, float a) { float c = cos(a), s = sin(a); return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c); }')
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nif (aTone.w > 2.5) objectNormal = dfSpin(objectNormal, uDrumD, uSpin);')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTone = aTone;\nvBindY = position.y;\n'
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTone = aTone;\nvBindY = position.y;\nvBindP = position;\n'
         + 'if (aTone.w > 2.5) transformed = uDrumP + dfSpin(transformed - uDrumP, uDrumD, uSpin);');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uTeam;\nuniform float uTankY;\nuniform float uFlash;\nuniform float uRim;\nuniform float uGlow;\nvarying vec4 vTone;\nvarying float vBindY;')
+      .replace('#include <common>', '#include <common>\nuniform vec3 uTeam;\nuniform float uTankY;\nuniform float uFlash;\nuniform float uRim;\nuniform float uGlow;\n'
+        + 'uniform vec4 uDrip;\nuniform vec4 uDripP;\nvarying vec4 vTone;\nvarying float vBindY;\nvarying vec3 vBindP;\n' + DRIP_GLSL)
       .replace('#include <color_fragment>', '#include <color_fragment>\n'
         + 'if (vTone.w > 0.5 && vTone.w < 1.5 && vBindY > uTankY) discard;\n'
-        + 'diffuseColor.rgb *= mix(vec3(1.0), uTeam, vTone.x);')
-      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vTone.y;')
+        + 'diffuseColor.rgb *= mix(vec3(1.0), uTeam, vTone.x);\n'
+        + 'float dfDripM = 0.0;\n'
+        + 'if (uDrip.a > 0.002 && vTone.w < 0.5) { dfDripM = dfDrip(vBindP, uDripP, uDrip.a) * (1.0 - 0.6 * vTone.x); diffuseColor.rgb = mix(diffuseColor.rgb, uDrip.rgb, dfDripM); }')
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix(vTone.y, 0.2, dfDripM);')
       .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vTone.z;')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n'
-        + 'totalEmissiveRadiance += uFlash * vec3(1.0, 0.96, 0.9) + vTone.x * uTeam * uGlow;')
+        + 'totalEmissiveRadiance += uFlash * vec3(1.0, 0.96, 0.9) + vTone.x * uTeam * uGlow + uDrip.rgb * dfDripM * 0.14;')
       .replace('#include <opaque_fragment>',
         '{ float fr = 1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);\n'
         + '  outgoingLight += uRim * fr * fr * fr * mix(vec3(1.0), uTeam, 0.55); }\n#include <opaque_fragment>');
   };
-  m.customProgramCacheKey = () => 'df-runner-v2';
+  m.customProgramCacheKey = () => 'df-runner-v3';
   return m;
 }
 
@@ -678,6 +730,18 @@ class RunnerView {
   landedDrop = true;
   victory = false;
   tagOn = false;
+  // juice (§21)
+  /** dye-drip stain amount 0..1 (display) and seconds since the last stain hit */
+  dripAmt = 0;
+  dripT = 99;
+  /** seconds the drip runs have been growing (kept across re-hits so runs never snap back) */
+  dripGrow = 0;
+  dripAcc = 0;
+  /** the attacker crew of the current stain */
+  dripTeam: TeamId = 2;
+  /** set by animate() on a landing: the airtime (s) that ended; consumed by PlayerViews.update */
+  landedNow = false;
+  landAir = 0;
   // scratch
   private readonly q = new THREE.Quaternion();
   private readonly q2 = new THREE.Quaternion();
@@ -707,6 +771,7 @@ class RunnerView {
     this.u = {
       uTeam: { value: col }, uTankY: { value: kit.fillMax }, uFlash: { value: 0 }, uRim: { value: 0.22 }, uGlow: { value: 0.05 },
       uSpin: { value: 0 }, uDrumP: { value: kit.drum ? kit.drum.p.clone() : new THREE.Vector3() }, uDrumD: { value: kit.drum ? kit.drum.d.clone() : new THREE.Vector3(1, 0, 0) },
+      uDrip: { value: new THREE.Vector4(0, 0, 0, 0) }, uDripP: { value: new THREE.Vector4(0, 0.6, 0, 0) },
     };
     this.body = new THREE.SkinnedMesh(kit.body, runnerMaterial(team, this.u, true));
     this.body.name = `runner_body_${id}`;
@@ -716,7 +781,7 @@ class RunnerView {
     this.body.bind(refMesh.skeleton, refMesh.bindMatrix);
     for (const o of drop) o.removeFromParent();
 
-    this.fin = new THREE.Mesh(kit.fin, runnerMaterial(team, this.u, false));
+    this.fin = new THREE.Mesh(kit.fin, runnerMaterial(team, { ...this.u, uDrip: { value: new THREE.Vector4(0, 0, 0, 0) } }, false));
     this.fin.name = `runner_fin_${id}`;
     this.fin.castShadow = true;
     this.fin.receiveShadow = false;
@@ -816,6 +881,8 @@ class RunnerView {
     if (r.jumps !== this.lastJumps) { this.lastJumps = r.jumps; this.jumpT = 0; this.airborneByJump = true; this.restart('jump'); }
     if (r.landings !== this.lastLandings) {
       this.lastLandings = r.landings;
+      this.landedNow = true;
+      this.landAir = this.maxAir;
       if (this.maxAir > 0.22) { this.landT = 0; this.restart('land'); }
       this.airborneByJump = false; this.maxAir = 0;
     }
@@ -1046,6 +1113,10 @@ export class PlayerViews {
   private readonly m = new THREE.Matrix4();
   private readonly camPos = new THREE.Vector3();
   private time = 0;
+  /** linear dye per crew (the stain colour) */
+  private readonly dyeLin: Record<number, THREE.Color> = { 1: new THREE.Color(teamById(1).dye), 2: new THREE.Color(teamById(2).dye) };
+  /** juice counters (harness read-back) */
+  readonly juice = { stains: 0, bodyDrips: 0, landPuffs: 0, crowns: 0 };
 
   constructor(assets: HeroAssets, roster: ReadonlyArray<{ id: number; name: string; team: TeamId; kit?: string }>, fx: Fx | null,
     tagHost: HTMLElement | null, kits?: RunnerKit | Map<string, RunnerKit>) {
@@ -1104,6 +1175,7 @@ export class PlayerViews {
     rv.washT = 0;
     rv.alive = false;
     rv.cancelActions();
+    this.clearDrip(rv);
   }
 
   onRespawn(id: number): void {
@@ -1114,11 +1186,43 @@ export class PlayerViews {
     rv.dropT = 0;
     rv.landedDrop = false;
     rv.cancelActions();
+    this.clearDrip(rv);
   }
 
-  onHit(id: number): void {
+  /**
+   * runner `id` took a hit: the white flash + the dye-drip stain (juice §21). `byTeam` = the attacker's
+   * crew (default: the other crew), (x, y, z) = the world hit point (default: mid-torso), dmg sizes it.
+   */
+  onHit(id: number, byTeam?: TeamId, x?: number, y?: number, z?: number, dmg = 34): void {
     const rv = this.views[id];
-    if (rv) rv.u.uFlash.value = 0.9;
+    if (!rv) return;
+    rv.u.uFlash.value = 0.9;
+    const f = this.frames[id];
+    const team: TeamId = byTeam === 1 || byTeam === 2 ? byTeam : (rv.team === 1 ? 2 : 1);
+    const fresh = rv.dripAmt < 0.08;
+    rv.dripTeam = team;
+    rv.dripAmt = Math.min(1, rv.dripAmt + 0.25 + 0.45 * Math.min(1, Math.max(0, dmg) / 50));
+    rv.dripT = 0;
+    if (fresh) rv.dripGrow = 0;
+    const c = this.dyeLin[team] ?? this.dyeLin[2];
+    rv.u.uDrip.value.set(c.r, c.g, c.b, rv.dripAmt);
+    // the stain centre in bind space: the hit point relative to the feet, un-yawed (clamped to the body)
+    let lx = 0, ly = 0.62, lz = 0.05;
+    if (f && x !== undefined && y !== undefined && z !== undefined && Number.isFinite(x + y + z)) {
+      const dx = x - f.x, dz = z - f.z, cy = Math.cos(f.yaw), sy = Math.sin(f.yaw);
+      lx = clamp(dx * cy - dz * sy, -0.25, 0.25);
+      lz = clamp(dx * sy + dz * cy, -0.25, 0.25);
+      ly = clamp(y - f.y, 0.3, 1.0);
+    }
+    const cp = rv.u.uDripP.value;
+    if (fresh) cp.set(lx, ly, lz, 0);
+    else cp.set(cp.x + (lx - cp.x) * 0.5, cp.y + (ly - cp.y) * 0.5, cp.z + (lz - cp.z) * 0.5, cp.w);
+    this.juice.stains++;
+  }
+
+  private clearDrip(rv: RunnerView): void {
+    rv.dripAmt = 0; rv.dripT = 99; rv.dripGrow = 0; rv.dripAcc = 0;
+    rv.u.uDrip.value.w = 0;
   }
 
   /** SHEET-DRUM flick windup started */
@@ -1168,6 +1272,8 @@ export class PlayerViews {
       rv.alive = true; rv.washT = 99; rv.dropT = 99; rv.landedDrop = true; rv.victory = false;
       rv.u.uFlash.value = 0;
       rv.cancelActions();
+      this.clearDrip(rv);
+      rv.landedNow = false;
     }
   }
 
@@ -1225,11 +1331,20 @@ export class PlayerViews {
       const tk = clamp(r.tank / 100, 0, 1);
       rv.u.uTankY.value = this.kitFill(rv, tk);
       if (rv.u.uFlash.value > 0) rv.u.uFlash.value = Math.max(0, rv.u.uFlash.value - dt * 5);
+      if (rv.dripAmt > 0) this.stain(rv, r, f, dt, dist, bodyOn && !popping);
 
       // shadows only near the camera: a far runner's shadow is a few texels of a 48 m shadow box
       const caster = dist < 26;
       if (rv.body.castShadow !== caster) { rv.body.castShadow = caster; rv.fin.castShadow = caster; }
       rv.animate(dt, r, f, dist > 28);
+      // landing puff (juice §21): a real jump / fall, not a step; hard after ≥ 1.0 s airborne (a plain jump is 0.83 s)
+      if (rv.landedNow) {
+        rv.landedNow = false;
+        if (this.fx && bodyOn && rv.landAir >= 0.3 && dist < 35) {
+          this.fx.landPuff(f.x, f.y + 0.02, f.z, rv.landAir >= 1.0, 0);
+          this.juice.landPuffs++;
+        }
+      }
 
       // SHEET-DRUM: spin the drum while it rolls (the top moves with the runner), sheet spray at the contact
       if (rv.kit.drum && bodyOn) this.drum(i, rv, r, f, dt, dist);
@@ -1258,7 +1373,8 @@ export class PlayerViews {
       }
       if (slick !== rv.finWas) {
         rv.finWas = slick;
-        if (this.fx && r.alive && !ghost) this.fx.slickRing(f.x, f.y + 0.03, f.z, r.team, false);
+        // splash crown in / out of the dye (juice §21)
+        if (this.fx && r.alive && !ghost && !misted) { this.fx.slickCrown(f.x, f.y + 0.03, f.z, r.team, slick); this.juice.crowns++; }
       }
       // wake (moving slickers, any range) / faint ripple (hidden ones)
       if (this.fx && slick) {
@@ -1280,6 +1396,27 @@ export class PlayerViews {
       // name tag
       this.placeTag(rv, r, f, o, drop, slick, ghost, dist);
     }
+  }
+
+  /** the dye-drip stain: hold ~1.4 s, then fade; wet drops fall off the body while it is fresh */
+  private stain(rv: RunnerView, r: RunnerLike, f: RunnerFrame, dt: number, dist: number, visible: boolean): void {
+    rv.dripT += dt;
+    rv.dripGrow += dt;
+    if (rv.dripT > 1.4) rv.dripAmt = Math.max(0, rv.dripAmt - dt * 0.55);
+    rv.u.uDrip.value.w = rv.dripAmt;
+    rv.u.uDripP.value.w = rv.dripGrow;
+    if (!this.fx || !visible || !r.grounded || dist > 25 || rv.dripAmt < 0.2 || rv.dripT > 2.2) { rv.dripAcc = 0; return; }
+    rv.dripAcc += dt * (0.5 + rv.dripAmt);
+    if (rv.dripAcc < 0.16) return;
+    rv.dripAcc = 0;
+    const a = Math.random() * TAU, rr = 0.12 + Math.random() * 0.1;
+    this.fx.drip(f.x + Math.cos(a) * rr, f.y + 0.3 + Math.random() * 0.4, f.z + Math.sin(a) * rr, rv.dripTeam, f.y + 0.01);
+    this.juice.bodyDrips++;
+  }
+
+  /** stain read-back (harness): amount + centre per runner */
+  drips(): Array<{ id: number; amt: number; team: number; t: number }> {
+    return this.views.map((rv) => ({ id: rv.id, amt: Math.round(rv.dripAmt * 100) / 100, team: rv.dripTeam, t: Math.round(Math.min(rv.dripT, 99) * 100) / 100 }));
   }
 
   private kitFill(rv: RunnerView, tk: number): number {

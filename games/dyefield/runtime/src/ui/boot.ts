@@ -73,6 +73,37 @@ export class BootUI {
     if (status !== undefined) this.status.textContent = status;
   }
 
+  /**
+   * Phase 9: the loading card again (menus → a match, or back to the lobby): wordmark, mode line, the arena's
+   * name + thumbnail when given, and a fresh progress bar.
+   */
+  showLoading(status: string, arena?: { name: string; thumb?: string | null }): void {
+    this.card = 'loading';
+    this.shown = 0;
+    this.root.classList.remove('gone');
+    this.root.setAttribute('role', 'status');
+    this.box.className = 'df-card';
+    const parts: HTMLElement[] = [wordmark(), modeLine()];
+    if (arena) {
+      const a = el('div', 'df-arena');
+      if (arena.thumb) {
+        const img = el('img');
+        img.src = arena.thumb;
+        img.alt = '';
+        a.append(img);
+      }
+      a.append(el('b', '', arena.name));
+      parts.push(a);
+    }
+    const prog = el('div', 'df-progress');
+    prog.append(this.bar);
+    this.bar.style.width = '4%';
+    this.status.textContent = status;
+    parts.push(prog, this.status);
+    this.box.replaceChildren(...parts);
+    this.root.onclick = null;
+  }
+
   /** CLICK TO PLAY: resolves the click handler on a real click anywhere on the card. */
   showPlay(onClick: (e: MouseEvent) => void): void {
     this.card = 'play';
@@ -93,7 +124,7 @@ export class BootUI {
     this.root.classList.remove('gone');
     this.box.className = 'df-card df-err';
     const h = el('h2', '', 'MOUSE CAPTURE BLOCKED');
-    const p = el('p', 'df-sub', 'This browser refused to capture the mouse. Reload the page, or click here to try again.');
+    const p = el('p', 'df-note', 'This browser refused to capture the mouse. Reload the page, or click here to try again.');
     const b = el('button', 'df-btn', 'RELOAD');
     b.type = 'button';
     b.onclick = (e) => { e.stopPropagation(); location.reload(); };
