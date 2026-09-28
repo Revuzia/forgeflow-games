@@ -28,11 +28,21 @@
 //                                         probe waits twice as long (8 s → 128 s max)
 //   * between 1.1× and 1.2×            → no change (the dead band)
 // Nothing scales during the first 2 s of play, nor in the 2 windows right after a change.
+// Deep floor (PERF lane): the regular floor max(0.75, 0.6 × DPR) holds a DPR-1 screen at 0.75. When
+// the scale already sits on that floor and p90 stays over 1.1 × target for DEEP_AFTER_S (3) consecutive
+// windows, the floor opens down to 0.6 × DPR (0.6 on a DPR-1 laptop) and the governor keeps stepping.
+// It closes again once the scale climbs back above the regular floor. 'low' still pins the regular floor.
 // Why so conservative (phase 5, 8 runners): a scale change reallocates the drawing buffer, and on
 // the dev box's shared Intel iGPU (dwm + a display-driver host hold 30–45 % of its 3D engine) that
 // reallocation measured 257–383 ms in one frame. A governor that reacts to every noisy window pays
 // that hitch over and over; one that changes rarely pays it once.
 // quality 'high' pins the cap, 'low' pins the floor (Settings hook; no UI this phase).
+//
+// Opaque draw order (PERF lane): strictly front to back (groupOrder, renderOrder, then view depth).
+// three's default sorts by material id before depth, so a wall drawn after the floor behind it made
+// every floor pixel run the full dye / surface shader before being overdrawn. Measured with the
+// frame-interleaved A/B bench (_harness/abperf.py): 4–8 % less GPU time per frame on all three maps.
+// `renderer.dfOpaqueSort` exposes the function so the bench can restore it after a variant.
 
 import * as THREE from 'three';
 
@@ -40,6 +50,10 @@ export const MAX_DPR = 1.5;
 /** floor of the adaptive pixel ratio: max(ABS_MIN_SCALE, MIN_SCALE_OF_DPR × devicePixelRatio) */
 export const MIN_SCALE_OF_DPR = 0.6;
 export const ABS_MIN_SCALE = 0.75;
+/** the deep floor on 'auto' (DEEP_OF_DPR × devicePixelRatio), opened by a sustained overload at the floor */
+export const DEEP_OF_DPR = 0.6;
+/** seconds (1 s windows) of p90 > 1.1 × target at the regular floor before the deep floor opens */
+export const DEEP_AFTER_S = 3;
 
 export type RenderQuality = 'auto' | 'high' | 'low';
 export const RENDER_QUALITIES: readonly RenderQuality[] = ['auto', 'high', 'low'];
@@ -52,8 +66,13 @@ export interface AdaptiveInfo {
   quality: RenderQuality;
   /** current drawing-buffer pixel ratio */
   scale: number;
+  /** the floor in effect (the deep floor while it is open) */
   min: number;
   max: number;
+  /** the regular floor max(0.75, 0.6 × DPR) and the deep floor 0.6 × DPR; deepOpen = the deep floor is in effect */
+  floor: number;
+  deepMin: number;
+  deepOpen: boolean;
   /** target frame interval (ms) the governor holds */
   targetMs: number;
   /** p90 frame time (ms) of the last full 1 s window (0 before the first) */
@@ -110,11 +129,11 @@ const CLOCK50_HI_MS = 20.5;
 const WINDOW_S = 1.0;
 const STEP_QUANT = 0.025;
 
-function scaleBounds(): { min: number; max: number } {
+function scaleBounds(): { min: number; max: number; deep: number } {
   const dpr = window.devicePixelRatio || 1;
   const max = Math.min(MAX_DPR, dpr);
   const min = Math.min(max, Math.max(ABS_MIN_SCALE, MIN_SCALE_OF_DPR * dpr));
-  return { min, max };
+  return { min, max, deep: Math.min(min, DEEP_OF_DPR * dpr) };
 }
 
 function percentile(sorted: Float32Array, n: number, p: number): number {
@@ -147,21 +166,34 @@ export class ResolutionGovernor {
   private probeFrom = 0;          // scale before the pending probe (0 = none)
   private probeWindows = 0;
   private readonly clocks: number[] = [];
+  /** the deep floor (≤ min) and whether it is open; seconds over target while sitting on the floor */
+  deepMin: number;
+  deepOpen = false;
+  private floorOverS = 0;
 
-  constructor(min: number, max: number) {
+  constructor(min: number, max: number, deepMin: number = min) {
     this.min = min;
     this.max = max;
+    this.deepMin = Math.min(min, deepMin);
     this.scale = max;
   }
 
-  setBounds(min: number, max: number): void {
+  /** the floor in effect */
+  lo(): number {
+    return this.deepOpen && this.quality === 'auto' ? this.deepMin : this.min;
+  }
+
+  setBounds(min: number, max: number, deepMin: number = min): void {
     this.min = min;
     this.max = max;
-    this.scale = this.pinned() ?? Math.min(max, Math.max(min, this.scale));
+    this.deepMin = Math.min(min, deepMin);
+    this.scale = this.pinned() ?? Math.min(max, Math.max(this.lo(), this.scale));
   }
 
   setQuality(q: RenderQuality): void {
     this.quality = q;
+    this.deepOpen = false;
+    this.floorOverS = 0;
     const p = this.pinned();
     if (p !== null) { this.scale = p; this.last = `quality ${q}`; }
     else { this.scale = this.max; this.last = 'quality auto'; this.resetWindow(); this.probeAfter = 8; }
@@ -182,8 +214,9 @@ export class ResolutionGovernor {
   }
 
   private set(v: number, why: string): boolean {
-    const q = Math.min(this.max, Math.max(this.min, Math.round(v / STEP_QUANT) / (1 / STEP_QUANT)));
-    const nv = q > this.max - STEP_QUANT * 0.5 ? this.max : q < this.min + STEP_QUANT * 0.5 ? this.min : q;
+    const lo = this.lo();
+    const q = Math.min(this.max, Math.max(lo, Math.round(v / STEP_QUANT) / (1 / STEP_QUANT)));
+    const nv = q > this.max - STEP_QUANT * 0.5 ? this.max : q < lo + STEP_QUANT * 0.5 ? lo : q;
     if (Math.abs(nv - this.scale) < 1e-6) return false;
     this.scale = nv;
     this.changes++;
@@ -220,9 +253,19 @@ export class ResolutionGovernor {
     if (this.clocks.length > 5) this.clocks.shift();
     this.clockMs = Math.min(...this.clocks);
     this.targetMs = this.clockMs >= CLOCK50_LO_MS && this.clockMs <= CLOCK50_HI_MS ? this.clockMs : FPS60_MS;
+    const r = this.p90 / this.targetMs;
+    // deep floor: a sustained overload while already on the regular floor opens it (see the header)
+    if (this.scale <= this.min + 1e-6 && r > 1.1) this.floorOverS += WINDOW_S;
+    else this.floorOverS = 0;
+    if (this.deepOpen && this.scale > this.min + 1e-6) this.deepOpen = false;
+    if (!this.deepOpen && this.deepMin < this.min - 1e-6 && this.floorOverS >= DEEP_AFTER_S) {
+      this.deepOpen = true;
+      this.floorOverS = 0;
+      this.last = `deep floor ${this.deepMin.toFixed(2)} opened (p90 ${this.p90.toFixed(1)} ms at the floor for ${DEEP_AFTER_S} s)`;
+      return this.set(this.scale * Math.min(0.95, Math.max(0.8, Math.sqrt(this.targetMs / this.p90))), this.last);
+    }
     if (this.cooldown > 0) { this.cooldown--; return false; }
 
-    const r = this.p90 / this.targetMs;
     if (this.probeFrom > 0) {
       this.probeWindows++;
       if (r > 1.2) {                          // the probe cost frames: undo it, back off
@@ -266,10 +309,16 @@ export class ResolutionGovernor {
 
   info(): AdaptiveInfo {
     return {
-      quality: this.quality, scale: this.scale, min: this.min, max: this.max, targetMs: this.targetMs,
+      quality: this.quality, scale: this.scale, min: this.lo(), max: this.max, targetMs: this.targetMs,
       p90: this.p90, clockMs: this.clockMs, changes: this.changes, last: this.last,
+      floor: this.min, deepMin: this.deepMin, deepOpen: this.deepOpen && this.quality === 'auto',
     };
   }
+}
+
+/** opaque render-list order: front to back after groupOrder / renderOrder (see the header) */
+export function frontToBack(a: THREE.RenderItem, b: THREE.RenderItem): number {
+  return (a.groupOrder - b.groupOrder) || (a.renderOrder - b.renderOrder) || (a.z - b.z) || (a.id - b.id);
 }
 
 export function createRenderer(canvas: HTMLCanvasElement, toneMap: string = 'neutral', quality: RenderQuality = 'auto'): RendererRig {
@@ -283,7 +332,7 @@ export function createRenderer(canvas: HTMLCanvasElement, toneMap: string = 'neu
   });
   if (!renderer.capabilities.isWebGL2) throw new Error('WebGL 2 is required (this context is WebGL 1)');
   const b0 = scaleBounds();
-  const gov = new ResolutionGovernor(b0.min, b0.max);
+  const gov = new ResolutionGovernor(b0.min, b0.max, b0.deep);
   gov.setQuality(quality);
   renderer.setPixelRatio(gov.scale);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -293,6 +342,8 @@ export function createRenderer(canvas: HTMLCanvasElement, toneMap: string = 'neu
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.info.autoReset = false;
   renderer.setClearColor(0x9cd3ff, 1);
+  renderer.setOpaqueSort(frontToBack);
+  (renderer as THREE.WebGLRenderer & { dfOpaqueSort?: typeof frontToBack }).dfOpaqueSort = frontToBack;
 
   let lastW = 0, lastH = 0, lastScale = 0, lastDpr = window.devicePixelRatio || 1;
   const rig: RendererRig = {
@@ -306,7 +357,7 @@ export function createRenderer(canvas: HTMLCanvasElement, toneMap: string = 'neu
       if (dpr !== lastDpr) {                    // moved to another monitor / zoom changed
         lastDpr = dpr;
         const b = scaleBounds();
-        gov.setBounds(b.min, b.max);
+        gov.setBounds(b.min, b.max, b.deep);
       }
       const w = Math.max(1, Math.floor(canvas.clientWidth || window.innerWidth));
       const h = Math.max(1, Math.floor(canvas.clientHeight || window.innerHeight));

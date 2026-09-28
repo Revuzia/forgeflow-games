@@ -32,6 +32,8 @@
 // dye gaps, and uses the special when ≥ 2 enemies sit in its area or enemy turf waits to be reclaimed. Those
 // sub / special opportunities are stimuli too: a reaction rolled once per opportunity (own mulberry32 stream,
 // so a MIST-RASP bot's phase-5 rolls are untouched until it actually throws).
+// CHANGED(BOTFIX): every bot notices an enemy NEEDLE-GLINT's glint aimed at it (a stimulus: reaction by skill, STORM
+// fast, BREEZE slow) and dodges across the line (see GLINT_OFF); skill ids are BREEZE / SWELL / STORM.
 
 import type { PlayerIntent, TeamId } from '../types.ts';
 import type { MatchWorld } from '../match/world.ts';
@@ -61,12 +63,14 @@ interface SkillProfile {
   coverBias: number;                   // chance (rolled per stimulus) to hold cover vs an out-of-range enemy
   retreatHp: number;                   // hp under which a bot losing a duel slicks away (0 = never)
   strafe: number;                      // 0..1 strafe intensity
+  /** s from a NEEDLE-GLINT glint first aimed at the bot to its dodge (CHANGED(BOTFIX): rolled once per glint) */
+  glintMin: number; glintMax: number;
 }
 
 const SKILLS: Record<BotSkill, SkillProfile> = {
-  chill: { reactMin: 0.62, reactMax: 0.8, jitter: 0.018 * 2.4, turnRate: 4.5, turnAccel: 28, aimEase: 7, lead: 0.25, engage: 9.0, fireCone: 0.13, coverBias: 0.35, retreatHp: 0, strafe: 0.5 },
-  fresh: { reactMin: 0.45, reactMax: 0.62, jitter: 0.018 * 1.6, turnRate: 6.5, turnAccel: 42, aimEase: 10, lead: 0.6, engage: 10.0, fireCone: 0.1, coverBias: 0.55, retreatHp: 30, strafe: 0.8 },
-  fierce: { reactMin: 0.3, reactMax: 0.42, jitter: 0.018, turnRate: 9, turnAccel: 60, aimEase: 14, lead: 0.9, engage: 10.8, fireCone: 0.08, coverBias: 0.7, retreatHp: 38, strafe: 1.0 },
+  breeze: { reactMin: 0.62, reactMax: 0.8, jitter: 0.018 * 2.4, turnRate: 4.5, turnAccel: 28, aimEase: 7, lead: 0.25, engage: 9.0, fireCone: 0.13, coverBias: 0.35, retreatHp: 0, strafe: 0.5, glintMin: 0.8, glintMax: 1.05 },
+  swell: { reactMin: 0.45, reactMax: 0.62, jitter: 0.018 * 1.6, turnRate: 6.5, turnAccel: 42, aimEase: 10, lead: 0.6, engage: 10.0, fireCone: 0.1, coverBias: 0.55, retreatHp: 30, strafe: 0.8, glintMin: 0.42, glintMax: 0.58 },
+  storm: { reactMin: 0.3, reactMax: 0.42, jitter: 0.018, turnRate: 9, turnAccel: 60, aimEase: 14, lead: 0.9, engage: 10.8, fireCone: 0.08, coverBias: 0.7, retreatHp: 38, strafe: 1.0, glintMin: 0.18, glintMax: 0.28 },
 };
 
 const THINK_EVERY = 6;          // ticks between decisions (10 Hz)
@@ -75,8 +79,29 @@ const ZONE_SAMPLES = 48;        // atlas samples per zone
 const REFILL_TO = 95;
 const CHASE_S = 2.0;
 const PAINT_MIN = 2.2, PAINT_MAX = 9.5, PAINT_BEST = 6.2;
-// a paint burst lasts ≥ 0.35 s (a stripe, not a flicker)
-const BURST_MIN_TICKS = 21;
+// Trigger discipline (stream / burst kits). The runner faces the aim while firing and the stick otherwise, so every
+// trigger flip turns the body; two flips inside 0.4 s turned it to the aim and straight back (a "shake": on Lockwell
+// ~90 % of them were a burst cut short — the paint target gone, slick wanted, sight lost for one decide — or a
+// 0.15 s fight pause with the stick on the strafe line). A burst lasts ≥ BURST_MIN_TICKS of real fire whatever ends
+// the want (only a dry tank or a pending throw cuts it), a paint pause lasts ≥ PAINT_PAUSE_TICKS, and a fight pause
+// rests the stick for FIGHT_REST_TICKS (the body keeps facing the target; the next burst needs no turn).
+const BURST_MIN_TICKS = 27;
+const PAINT_PAUSE_TICKS = 27;
+const FIGHT_PAUSE_TICKS = 9;
+const FIGHT_REST_TICKS = 27;
+/** s a fight target may drop out of sight (a decide or two at a cover edge) before the bot stops fighting it */
+const SIGHT_GRACE = 0.3;
+// Glint reaction (CHANGED(BOTFIX), balance: NEEDLE-GLINT took 55-60 % of all washes in the mixed lineup because
+// nobody reacted to a charge aimed at them). A bot that sees an enemy charger's glint line pass within GLINT_OFF
+// (+ GLINT_OFF_PER_M per metre) of its chest notices it after its skill's glint reaction (rolled once per glint) and
+// dodges: a lateral run of DODGE_MIN_S..DODGE_MAX_S (a held direction, never a flicker; stream / burst triggers come
+// up for it), preferring the side that breaks the line of sight and avoids enemy dye, slicking when the floor is its
+// own dye; a glint still on it as the run ends reverses it (a juke). A strafing target keeps the charger's aim off
+// its settle tolerance, so the release waits (tactics.ts CHARGE_SETTLE; chargeHold's near-line rule) or goes wide.
+const GLINT_OFF = 1.6, GLINT_OFF_PER_M = 0.07;
+const DODGE_MIN_S = 0.7, DODGE_MAX_S = 1.0;
+/** ticks after a dodge before the same glint can start another one (a glint still on the bot as a run ends: a juke) */
+const DODGE_GAP = 6;
 
 type Mode = 'wait' | 'dead' | 'paint' | 'fight' | 'cover' | 'chase' | 'refill';
 
@@ -174,6 +199,7 @@ class Brain {
   jumpDone = false;
   jumpTries = 0;
   climbPhase = 0; climbT = 0; climbEdge = -1;
+  climbBestY = 0; climbProg = -1;  // CHANGED(BOTFIX): wall-slick climb progress (highest y, tick it was reached)
   blocked: number[] = [];          // edge ids
   blockedUntil: number[] = [];
   // refill
@@ -186,6 +212,7 @@ class Brain {
   aimYaw = 0; aimPitch = 0; desYaw = 0; desPitch = 0; aimDist = 8;
   aimVy = 0; aimVp = 0;               // aim angular velocity (rad/s)
   fireOn = false; fireSince = 0;      // fire hysteresis
+  burstTicks = 0;                     // ticks the current burst has really fired (surfacing / dry ticks excluded)
   seenRespawns = 0;
   hasPaintTarget = false; ptx = 0; pty = 0; ptz = 0; paintRetargetAt = 0;
   ptId = -1; ptNext: number[] = [-1, -1];   // current target texel + the runners-up of the last scan
@@ -221,6 +248,9 @@ class Brain {
   // sub / special: 0 none, 1 sub, 2 special
   tacKind = 0; tacKey = -1; tacReactAt = 0; tacUntil = 0; tacCount = 0; tacX = 0; tacY = 0; tacZ = 0; tacGap = false;
   gapCd = 0; readySince = -1;
+  // glint reaction (CHANGED(BOTFIX))
+  readonly grnd: () => number;      // glint stream (reaction rolls, dodge lengths): the phase-5 streams stay untouched
+  glintId = -1; glintReactAt = 0; dodgeUntil = -1000; dodgeX = 0; dodgeZ = 0; dodgeSlick = false; dodgeSign = 1;
   // extra cost closure
   readonly edgeExtra: (e: number) => number;
 
@@ -229,19 +259,20 @@ class Brain {
     this.r = r;
     this.own = r.team;
     this.enemy = r.team === 1 ? 2 : 1;
-    this.sk = SKILLS[skill] ?? SKILLS.fresh;
+    this.sk = SKILLS[skill] ?? SKILLS.swell;
     this.rnd = mulberry32(hash32(seed, r.id, 0xb0751));
     this.fire = streamFire(r.kit);
     this.bal = ballisticOf(this.fire);
     this.kf = kitFire(r.kit);
-    const kt = kitTactic(this.kf, SKILLS[skill] ? skill : 'fresh', this.sk.engage);
+    const kt = kitTactic(this.kf, SKILLS[skill] ? skill : 'swell', this.sk.engage);
     this.kind = kt.kind; this.engage = kt.engage; this.ink = kt.ink;
-    this.settle = Math.round(CHARGE_SETTLE[SKILLS[skill] ? skill : 'fresh'] / TICK);
+    this.settle = Math.round(CHARGE_SETTLE[SKILLS[skill] ? skill : 'swell'] / TICK);
     let subId = 'jelly-charge', spId = 'cloudburst';
     try { const row = kitDef(r.kit); subId = String(row.sub); spId = String(row.special); } catch { /* unknown kit → MIST-RASP's */ }
     this.jelly = jellyDef(subId);
     this.spec = specialDef(spId);
     this.trnd = mulberry32(hash32(seed, r.id, 0x7ac71c5));
+    this.grnd = mulberry32(hash32(seed, r.id, 0x611a7));
     this.phase = (r.id * 5) % THINK_EVERY;
     this.aimYaw = r.yaw; this.desYaw = r.yaw;
     this.seenRespawns = r.respawns;
@@ -312,8 +343,13 @@ export class BotDirector {
   private bandY0 = 0;
   private readonly mv = { x: 0, z: 0, s: 0 };
   private readonly opp = { key: -1, kind: 0, x: 0, y: 0, z: 0, gap: false };
+  /** CHANGED(BOTFIX): counters for the probes (read-only for callers). dodges = glint reactions (a bot that noticed
+   *  a charger's glint aimed at it and broke the line / strafed / slicked) */
+  readonly stats = { dodges: 0 };
+  /** runner id → the beam reach of its NEEDLE-GLINT (0: not a charger): whose glint a bot can notice */
+  private readonly glintRange: Float64Array;
 
-  constructor(world: MatchWorld, nav: NavGraph, seed: number, skill: BotSkill | readonly BotSkill[] = 'fresh') {
+  constructor(world: MatchWorld, nav: NavGraph, seed: number, skill: BotSkill | readonly BotSkill[] = 'swell') {
     this.world = world;
     this.nav = nav;
     this.seed = seed | 0;
@@ -368,10 +404,15 @@ export class BotDirector {
     this.midBand = Math.abs(pads.A.z - pads.B.z) * 0.27;
     this.buildZones();
 
+    this.glintRange = new Float64Array(world.runners.length);
+    for (const r of world.runners) {
+      try { const f = kitFire(r.kit); if (f.type === 'charge') this.glintRange[r.id] = f.maxRange; } catch { /* unknown kit: not a charger */ }
+    }
+
     const skills: readonly BotSkill[] | null = Array.isArray(skill) ? skill as readonly BotSkill[] : null;
     for (const r of world.runners) {
       if (!r.bot) { this.brains.push(null); continue; }
-      const sk: BotSkill = skills ? (skills[r.id] ?? 'fresh') : (skill as BotSkill);
+      const sk: BotSkill = skills ? (skills[r.id] ?? 'swell') : (skill as BotSkill);
       this.brains.push(new Brain(this, r, sk, this.seed));
     }
     this.floorY0 = this.zones.reduce((m, z) => Math.min(m, z.cy), Infinity);
@@ -572,6 +613,7 @@ export class BotDirector {
     for (let i = b.blocked.length - 1; i >= 0; i--) if (b.blockedUntil[i] <= now) { b.blocked.splice(i, 1); b.blockedUntil.splice(i, 1); }
 
     this.perceive(b);
+    this.noticeGlint(b);
     this.trackStuck(b);
 
     // ── mode selection
@@ -703,6 +745,70 @@ export class BotDirector {
       const t = w.runners[best];
       b.lastSeenX = t.x; b.lastSeenY = t.y; b.lastSeenZ = t.z;
     }
+  }
+
+  /** CHANGED(BOTFIX): a visible enemy charger whose glint line passes by the bot's chest is a stimulus (reaction
+   *  rolled once per glint, by skill); once reacted, the bot dodges (see GLINT_OFF) */
+  private noticeGlint(b: Brain): void {
+    const w = this.world, r = b.r, now = w.tick;
+    let src = -1, bestT = Infinity;
+    for (const i of b.seen) {
+      const e = w.runners[i];
+      const reach = this.glintRange[i];
+      if (reach <= 0 || !e.charging || e.charge <= 0) continue;
+      const cp = Math.cos(e.aimPitch);
+      const ax = Math.sin(e.aimYaw) * cp, ay = Math.sin(e.aimPitch), az = Math.cos(e.aimYaw) * cp;
+      const qx = r.x - e.x, qy = r.y + 0.8 - (e.y + COMBAT.muzzleHeight), qz = r.z - e.z;
+      const t = qx * ax + qy * ay + qz * az;
+      if (t < 2 || t > reach + 1) continue;
+      const off = Math.hypot(qx - ax * t, qy - ay * t, qz - az * t);
+      if (off > GLINT_OFF + GLINT_OFF_PER_M * t) continue;
+      if (t < bestT) { bestT = t; src = i; }
+    }
+    if (src < 0) { b.glintId = -1; return; }
+    if (src !== b.glintId) {
+      b.glintId = src;
+      b.glintReactAt = now + Math.round((b.sk.glintMin + (b.sk.glintMax - b.sk.glintMin) * b.grnd()) / TICK);
+    }
+    if (now < b.glintReactAt) return;
+    // a new dodge after a gap, or — still aimed at when the current one ends before the next decide — a juke: the
+    // run reverses (the charger's aim, lagging the first run, overshoots; measured over 3 seeds × 2 tunings the juke
+    // cut NEEDLE-GLINT's wash share ~5 points vs running on). Every run is held ≥ DODGE_MIN_S − 0.1 s.
+    if (now >= b.dodgeUntil + DODGE_GAP) this.startDodge(b, w.runners[src], false);
+    else if (b.dodgeUntil > now && b.dodgeUntil - now <= THINK_EVERY) this.startDodge(b, w.runners[src], true);
+  }
+
+  /** a lateral run across the charger's line: the side that breaks its sight (else the one kept from the last dodge,
+   *  else the side the aim already misses on), with footing; slick when the floor both under and ahead is own dye */
+  private startDodge(b: Brain, e: Runner, juke: boolean): void {
+    const r = b.r, now = this.world.tick, ph = this.world.physics;
+    const dx = r.x - e.x, dz = r.z - e.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const ux = dx / d, uz = dz / d;
+    const chained = juke || now - b.dodgeUntil <= DODGE_GAP + THINK_EVERY;
+    // the side the aim misses on: the sign of the cross product (aim × to-me)
+    const cross = Math.sin(e.aimYaw) * uz - Math.cos(e.aimYaw) * ux;
+    const pref = juke ? -b.dodgeSign : chained ? b.dodgeSign : (cross >= 0 ? 1 : -1);
+    let bestS = -Infinity, bx = 0, bz = 0, bs = 0;
+    for (const s of [pref, -pref]) {
+      // mostly across the line, a little away from the charger
+      let vx = -uz * s * 0.95 + ux * 0.3, vz = ux * s * 0.95 + uz * 0.3;
+      const l = Math.hypot(vx, vz); vx /= l; vz /= l;
+      if (!this.safeStep(r, vx, vz)) continue;
+      const px = r.x + vx * 2.4, pz = r.z + vz * 2.4, py = r.y + 1.0;
+      const ey = e.y + COMBAT.muzzleHeight;
+      const blocked = !!ph.raycast(px, py, pz, e.x - px, ey - py, e.z - pz, Math.hypot(e.x - px, ey - py, e.z - pz));
+      // enemy dye ahead slogs the run (2 m/s): the other side unless that one is worse
+      const slog = this.teamUnder(r.x + vx * 1.6, r.y, r.z + vz * 1.6) === b.enemy;
+      const sc = (blocked ? 2 : 0) + (s === pref ? 1 : 0) - (slog ? 1.5 : 0);
+      if (sc > bestS) { bestS = sc; bx = vx; bz = vz; bs = s; }
+    }
+    if (bs === 0) { if (!juke) b.glintId = -1; return; }   // no footing either way: keep going (a juke: finish the run)
+    b.dodgeSign = bs; b.dodgeX = bx; b.dodgeZ = bz;
+    b.dodgeUntil = now + Math.round((DODGE_MIN_S + (DODGE_MAX_S - DODGE_MIN_S) * b.grnd()) / TICK);
+    const ahead = this.teamUnder(r.x + bx * 1.1, r.y, r.z + bz * 1.1);
+    b.dodgeSlick = r.grounded && this.teamUnder(r.x, r.y, r.z) === b.own && ahead === b.own && !this.wallAhead(r, bx, bz);
+    if (!chained) this.stats.dodges++;
   }
 
   /** stuck = wanted to move for 2 s and moved < 0.5 m: jump + nudge, then re-plan, then a new goal */
@@ -1236,7 +1342,9 @@ export class BotDirector {
     let jump = false;
     let climbing = false;
     const tgt = b.target >= 0 ? w.runners[b.target] : null;
-    const engaged = b.mode === 'fight' && tgt !== null && tgt.alive && b.lostT === 0 && now >= b.reactAt;
+    // a target that drops out of sight for a decide or two (a cover edge, a crate corner) is still the fight: flipping
+    // engaged at 10 Hz swapped strafing for path-following and cut bursts (visibility flicker)
+    const engaged = b.mode === 'fight' && tgt !== null && tgt.alive && b.lostT <= SIGHT_GRACE && now >= b.reactAt;
 
     if (b.mode === 'fight' && engaged && b.kind !== 'stream') {
       const m = this.kitFightMove(b, tgt!);
@@ -1271,6 +1379,12 @@ export class BotDirector {
     } else {
       const f = this.follow(b);
       wx = f.x; wz = f.z; speed = f.s; jump = f.jump; climbing = f.climb;
+    }
+    // glint dodge (CHANGED(BOTFIX)): a held lateral run; a ledge ahead ends it
+    const dodging = now < b.dodgeUntil && !climbing && b.climbPhase === 0;
+    if (dodging) {
+      if (this.safeStep(r, b.dodgeX, b.dodgeZ)) { wx = b.dodgeX; wz = b.dodgeZ; speed = 1; }
+      else b.dodgeUntil = now;
     }
     // unstuck nudge
     if (now < b.nudgeUntil) {
@@ -1337,7 +1451,7 @@ export class BotDirector {
       travelOwn = b.ownAhead;
     }
     const canTravel = !engaged && b.climbPhase !== 2 && !(b.mode === 'refill' && b.holding) && !(climbing && b.climbPhase === 3)
-      && !(b.kind === 'charge' && b.chHeld) && !(b.kind === 'roll' && b.fireOn) && b.tacKind === 0;
+      && !(b.kind === 'charge' && b.chHeld) && !b.fireOn && b.tacKind === 0;
     if (b.slickTravel) {
       const lostForm = !r.slickForm && now - b.slickSince > 20;
       const wallAhead = r.grounded && Math.hypot(b.mvx, b.mvz) > 0.3 && this.wallAhead(r, b.mvx, b.mvz);
@@ -1371,13 +1485,14 @@ export class BotDirector {
       const inkOk = r.tank >= b.fire.tankPerShot + 0.5;
       // start inside the cone, keep going inside 2.5× the cone (a burst, not a flicker)
       wantFire = aimed && inkOk && d <= b.sk.engage + (b.fireOn ? 0.8 : 0) && err < (b.fireOn ? cone * 2.5 : cone);
+      if (b.lostT > 0) wantFire = wantFire && b.fireOn;      // out of sight: finish the burst, open none
       if (!aimed || !inkOk || d > b.sk.engage + 1.5) hardStop = true;
       // keep the gun up while tracking (don't dive into slick between bursts)
       if (!wantFire && d <= b.sk.engage + 1) b.slickTravel = false;
     } else if (engaged) {
       const d = Math.hypot(tgt!.x - r.x, tgt!.z - r.z);
       if (b.kind === 'burst') {
-        wantFire = this.burstAim(b, tgt!, d);
+        wantFire = this.burstAim(b, tgt!, d) && (b.lostT === 0 || b.fireOn);
         if (r.tank < b.ink + 0.5 || d > b.engage + 1.5) hardStop = true;
       } else if (b.kind === 'roll') direct = this.rollFight(b, tgt!, d) ? 1 : 0;
       else direct = this.chargeFight(b, tgt!, d) ? 1 : 0;
@@ -1435,11 +1550,19 @@ export class BotDirector {
       if (b.fireOn && this.allyInLine(b, 2.5)) { wantFire = false; hardStop = true; }
       // hysteresis: a burst lasts ≥ 0.35 s and a painting pause ≥ 0.4 s, so the body (which faces the aim
       // while firing, the travel direction otherwise) never swings back and forth; a fight opens fire at once
+      // (see BURST_MIN_TICKS: hard stops wait for the minimum burst too, except a dry tank / a pending throw)
+      const dry = r.tank < b.ink + 0.5;
+      // a glint dodge runs at full speed (firing slows the runner to moveSpeedWhileFiring): the trigger comes up for it
       if (b.fireOn) {
-        if (!wantFire && (hardStop || now - b.fireSince >= BURST_MIN_TICKS)) { b.fireOn = false; b.fireSince = now; }
-      } else if (wantFire && now - b.fireSince >= (engaged ? 9 : 24)) { b.fireOn = true; b.fireSince = now; }
-      wantFire = b.fireOn && !(r.tank < b.ink + 0.5);
+        const young = b.burstTicks < BURST_MIN_TICKS && now - b.fireSince < 2 * BURST_MIN_TICKS;
+        if (dry || tacAim || dodging || (!wantFire && !young)) { b.fireOn = false; b.fireSince = now; }
+      } else if (wantFire && !dry && !dodging && now - b.fireSince >= (engaged ? FIGHT_PAUSE_TICKS : PAINT_PAUSE_TICKS)) {
+        b.fireOn = true; b.fireSince = now; b.burstTicks = 0;
+      }
+      wantFire = b.fireOn && !dry;
       fire = wantFire && r.canFire();
+      if (fire) b.burstTicks++;
+      void hardStop;
     }
 
     // ── slick: refill in place, the wall climb, or travel ──
@@ -1447,6 +1570,7 @@ export class BotDirector {
     if (b.mode === 'refill' && b.holding) slick = true;
     else if (climbing && b.climbPhase === 3) slick = true;
     else if (b.slickTravel) slick = true;
+    else if (dodging && b.dodgeSlick && !b.fireOn && !b.chHeld) slick = true;
     // an unintended wall-slick (grazing an own-dyed crate) is let go at once: climbs are deliberate only
     if (r.state === 'wallslick' && !(climbing && b.climbPhase === 3)) { slick = false; b.slickTravel = false; b.slickCd = now + 30; }
     // a slicker that wants to shoot surfaces first (the runner blocks fire for 0.12 s)
@@ -1468,6 +1592,8 @@ export class BotDirector {
     // NEEDLE-GLINT between two charges in a fight: the body faces the aim only while charging, so a one-tick
     // gap with the stick pushed would swing it toward the strafe and back (a shake): let the stick rest
     if (b.kind === 'charge' && engaged && !fire && now - b.chRelAt <= 2) { it.moveX = 0; it.moveZ = 0; }
+    // a stream / burst fighter between two bursts: the stick rests for the pause (see FIGHT_REST_TICKS)
+    if (engaged && (b.kind === 'stream' || b.kind === 'burst') && !b.fireOn && now - b.fireSince < FIGHT_REST_TICKS && !dodging) { it.moveX = 0; it.moveZ = 0; }
     // a stick deflection under 0.2 is a bot settling (arrival, a strafe reversing through zero, a stall): the runner
     // faces any stick > 0.05, so its wandering direction flicked the body back and forth (half the Lockwell shakes).
     // Rest the stick instead; the runner keeps its facing. Climbs steer on purpose.
@@ -1520,7 +1646,11 @@ export class BotDirector {
             // popped over the lip: walk onto the top node
             out.x = dx / (d || 1); out.z = dz / (d || 1); out.s = 1; return out;
           }
-          if (now - b.climbT > 200) { this.failEdge(b, e); return out; }
+          // CHANGED(BOTFIX): no height gained for 1 s = the slick keeps losing the wall (a runner bobbing between wall-slick
+          // and air under a lip, 6 s on Pier 18 seed 3 mixed): give up on this wall — every climb edge onto it
+          if (b.climbProg < b.climbT) { b.climbProg = now; b.climbBestY = r.y; }
+          if (r.y > b.climbBestY + 0.12) { b.climbBestY = r.y; b.climbProg = now; }
+          if (now - b.climbProg > 60 || now - b.climbT > 200) { this.failClimb(b, e); return out; }
           out.x = -c.nx; out.z = -c.nz; out.s = 1;
           return out;
         }
@@ -1577,6 +1707,21 @@ export class BotDirector {
       return out;
     }
     return out;
+  }
+
+  /** CHANGED(BOTFIX): a failed wall climb blocks every climb edge onto the same stretch of wall (records within 1.5 m,
+   *  same top floor) for 12 s — re-planning onto a neighbouring climb edge of that wall repeated the failure */
+  private failClimb(b: Brain, e: number): void {
+    const nav = this.nav, c = nav.climbs[nav.edgeClimb[e]];
+    if (c) {
+      const until = this.world.tick + Math.round(12 / TICK);
+      for (let k = 0; k < nav.edgeKind.length; k++) {
+        if (k === e || nav.edgeKind[k] !== EDGE_CLIMB) continue;
+        const q = nav.climbs[nav.edgeClimb[k]];
+        if (q && Math.hypot(q.cx - c.cx, q.cz - c.cz) < 1.5 && Math.abs(q.y1 - c.y1) < 0.6) { b.blocked.push(k); b.blockedUntil.push(until); }
+      }
+    }
+    this.failEdge(b, e);
   }
 
   private failEdge(b: Brain, e: number): void {
@@ -1754,7 +1899,9 @@ export class BotDirector {
     b.chOnT = err < tol ? b.chOnT + 1 : 0;            // ticks the aim has stayed on (lining the shot up)
     if (r.charge >= need - 0.005) {
       b.chReadyT++;
-      if (b.chOnT >= settle || b.chReadyT > 40) return false;   // release (or stop waiting for a perfect aim)
+      // release once lined up; after 0.67 s only a near line goes out, after 1.5 s anything (CHANGED(BOTFIX) balance:
+      // a charger no longer fires blind at a target that keeps dodging — it holds the glint up, exposed, instead)
+      if (b.chOnT >= settle || (b.chReadyT > 40 && err < tol * 1.6) || b.chReadyT > 90) return false;
     } else b.chReadyT = 0;
     return true;
   }

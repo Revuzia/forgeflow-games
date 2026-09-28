@@ -1,8 +1,9 @@
 // DYEFIELD — gate G8b (CONTRACT §10.3 / §12): a full 180 s 8-bot match on Pier 18, headless in node.
 //
-//   node _harness/probe_bots.ts                  # the gate: seed 1, skill fresh, twice + a second seed
+//   node _harness/probe_bots.ts                  # the gate: seed 1, skill swell, twice + a second seed
 //   node _harness/probe_bots.ts --seed 7         # another seed
-//   node _harness/probe_bots.ts --skill fierce   # chill | fresh | fierce
+//   node _harness/probe_bots.ts --skill storm    # breeze | swell | storm (CHANGED(BOTFIX): the original tier names;
+//                                                # the old chill | fresh | fierce still parse as aliases)
 //   node _harness/probe_bots.ts --once           # a single match (no determinism runs)
 //   node _harness/probe_bots.ts --seconds 60     # shorter match (smoke; gates still printed, not a gate run)
 //   node _harness/probe_bots.ts --trace 3        # per-second trace of bot 3
@@ -12,6 +13,8 @@
 //   node _harness/probe_bots.ts --map lockwell --seeds 1,2,3
 //                                                # CHANGED(MAPSIM): one match per listed seed; the play gates must pass
 //                                                # on EVERY seed; determinism = the first seed replayed + distinct hashes
+//                                                # CHANGED(BOTFIX): then per-kit washes / special ready + use summed
+//                                                # over the seeds (with --lineup mixed: the balance target, info only)
 //
 // The human slot (id 0) is a bot too. Every tick: director.think(intents) → world.step(intents) →
 // world.drainEvents(). Gates (§10.3): both teams cover > 15 %, neutral < 55 %, ≥ 6 washes; no bot stuck
@@ -26,7 +29,7 @@ import { loadMapGeometry, type MapGeometry } from '../runtime/src/core/mapgeo.ts
 import { buildAtlas, type PaintAtlas } from '../runtime/src/core/paint/atlas.ts';
 import { Painter } from '../runtime/src/core/paint/painter.ts';
 import { MatchWorld } from '../runtime/src/core/match/world.ts';
-import { defaultRoster, type BotSkill } from '../runtime/src/core/match/roster.ts';
+import { defaultRoster, parseBotSkill, type BotSkill } from '../runtime/src/core/match/roster.ts';
 import type { SimEvent } from '../runtime/src/core/match/events.ts';
 import { buildNav, type NavGraph } from '../runtime/src/core/bots/nav.ts';
 import { BotDirector } from '../runtime/src/core/bots/director.ts';
@@ -36,7 +39,7 @@ import { TICK } from '../runtime/src/core/config.ts';
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string): string => { const i = argv.indexOf(k); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
 const SEED = Number(arg('--seed', '1')) | 0;
-const SKILL = arg('--skill', 'fresh') as BotSkill;
+const SKILL: BotSkill = parseBotSkill(arg('--skill', 'swell'));
 const ONCE = argv.includes('--once');
 const SECONDS = Number(arg('--seconds', '180'));
 const TRACE = Number(arg('--trace', '-1'));
@@ -71,6 +74,16 @@ interface RunResult {
   /** CHANGED(MAPSIM): map-feature use — spring launches, runner-seconds carried by a conveyor, runner-seconds above y 3 (upper floors) */
   launches: number; beltS: number; upperS: number;
   result: string;
+  /** CHANGED(BOTFIX): body shakes attributed to the brain's mode + what drove the facing ('toggle' = the facing source
+   *  flipped between aim and motion within 0.4 s, 'aim' = firing, 'move' = the stick); washes by the washer's kit
+   *  (and cause); special meter ready / start counts per runner */
+  shakeBy: Record<string, number>;
+  kits: string[];
+  washKit: Record<string, number>;
+  washKitCause: Record<string, number>;
+  ready: number[]; started: number[];
+  /** glint reactions (CHANGED(BOTFIX)): bots that broke a charger's line after noticing its glint */
+  dodges: number;
 }
 
 async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typeof loadRapier>>, nav: NavGraph,
@@ -108,6 +121,10 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
   const headHist: number[][] = Array.from({ length: N }, () => []);
   const reversals = new Array(N).fill(0);
   let maxTurn = 0;
+  const shakeBy: Record<string, number> = {};
+  const srcPrev = new Array(N).fill(0), srcFlip = new Array(N).fill(-1e9);
+  const washKit: Record<string, number> = {}, washKitCause: Record<string, number> = {};
+  const ready = new Array(N).fill(0), started = new Array(N).fill(0);
 
   let thinkMs = 0, stepMs = 0, beltTicks = 0, upperTicks = 0;
   const t0 = performance.now();
@@ -125,6 +142,13 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
       evCount[e.t] = (evCount[e.t] ?? 0) + 1;
       if (e.t === 'horn') horns.push(`${e.kind}@${(world.durationS - world.timeLeft).toFixed(1)}s`);
       if (e.t === 'slick' && e.on && e.wall) climbs[e.pid]++;
+      if (e.t === 'washed' && e.by !== null && e.by >= 0 && e.by < N) {
+        const k = world.runners[e.by].kit;
+        washKit[k] = (washKit[k] ?? 0) + 1;
+        washKitCause[`${k}:${e.cause}`] = (washKitCause[`${k}:${e.cause}`] ?? 0) + 1;
+      }
+      if (e.t === 'special' && e.phase === 'ready') ready[e.pid]++;
+      if (e.t === 'special' && e.phase === 'start') started[e.pid]++;
     }
     for (let i = 0; i < N; i++) {
       const r = world.runners[i];
@@ -137,9 +161,16 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
         if (spd > 1) movingTicks[i]++;
         let dy = r.yaw - r.pyaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         let da = r.aimYaw - prevAim[i]; da = Math.atan2(Math.sin(da), Math.cos(da));
+        const src = r.firing || r.flicking ? 1 : 0;
+        if (src !== srcPrev[i]) { srcPrev[i] = src; srcFlip[i] = world.tick; }
         if (Math.abs(dy) > TW && Math.abs(prevDy[i]) > TW && Math.sign(dy) !== Math.sign(prevDy[i])) {
           snapBody[i]++;
-          if (world.tick - lastRevBody[i] <= 24) twitchBody[i]++;
+          if (world.tick - lastRevBody[i] <= 24) {
+            twitchBody[i]++;
+            const why = world.tick - srcFlip[i] <= 24 ? 'toggle' : src ? 'aim' : 'move';
+            const key = `${director.info(i).mode}/${why}/${r.kit}`;
+            shakeBy[key] = (shakeBy[key] ?? 0) + 1;
+          }
           lastRevBody[i] = world.tick;
         }
         if (Math.abs(da) > TW && Math.abs(prevDa[i]) > TW && Math.sign(da) !== Math.sign(prevDa[i])) {
@@ -207,6 +238,7 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
     shots: world.stats.shots, dry: world.stats.dry, hits: world.stats.hits,
     stuck, perBot, events: evCount, horns, maxTurn,
     launches: world.runners.reduce((a, r) => a + r.launches, 0), beltS: beltTicks * TICK, upperS: upperTicks * TICK,
+    shakeBy, kits: world.runners.map((r) => r.kit), washKit, washKitCause, ready, started, dodges: director.stats?.dodges ?? 0,
     result: world.result ? `winner ${world.result.winner === 1 ? 'SUNCREW' : world.result.winner === 2 ? 'GULF CREW' : 'draw'}` : 'no result',
   };
 }
@@ -221,6 +253,9 @@ function report(label: string, res: RunResult): void {
   console.log(`   motion: shakes/min body ${avg((b) => b.twitchBody).toFixed(2)} (worst ${worst((b) => b.twitchBody).toFixed(2)}) · aim ${avg((b) => b.twitchAim).toFixed(2)} · single snaps/min body ${avg((b) => b.snapBody).toFixed(1)} · aim ${avg((b) => b.snapAim).toFixed(1)} · heading reversals/min ${avg((b) => b.reversals).toFixed(1)} · moving ${(avg((b) => b.moving) * 100).toFixed(0)} % of live time · max body turn ${res.maxTurn.toFixed(1)} rad/s`);
   console.log(`   stuck events: ${res.stuck.length}`);
   console.log(`   map features: spring launches ${res.launches} · on a conveyor ${res.beltS.toFixed(1)} runner-s · above y 3 ${res.upperS.toFixed(1)} runner-s`);
+  const sb = Object.entries(res.shakeBy).sort((a, c) => c[1] - a[1]);
+  console.log(`   body shakes by mode/cause/kit: ${sb.length ? sb.map(([k, v]) => `${k} ${v}`).join(' · ') : 'none'}`);
+  console.log(`   ${kitLine(res)}`);
   if (QUIET) return;
   console.log('   id name     team  painted m²  washes washed  shots dries slicks refills jumps climbs dist m  moving   shake/min body aim  rev/min   mode share');
   for (const b of res.perBot) {
@@ -232,6 +267,18 @@ function report(label: string, res: RunResult): void {
     console.log(`   stuck events (${res.stuck.length}):`);
     for (const s of res.stuck.slice(0, 30)) console.log(`     ${s.name} (id ${s.id}) ${s.t0.toFixed(1)}–${s.t1.toFixed(1)} s at (${f1(s.x)}, ${f1(s.y)}, ${f1(s.z)}) modes ${s.mode}`);
   } else console.log('   stuck events: none');
+}
+
+/** washes by the washer's kit (share of all washes credited to a runner) + special ready / start per bot */
+function kitLine(res: RunResult): string {
+  const tot = Object.values(res.washKit).reduce((a, v) => a + v, 0) || 1;
+  const kits = [...new Set(res.kits)];
+  return 'kits: ' + kits.map((k) => {
+    const ids = res.kits.map((x, i) => (x === k ? i : -1)).filter((i) => i >= 0);
+    const rd = ids.reduce((a, i) => a + res.ready[i], 0), st = ids.reduce((a, i) => a + res.started[i], 0);
+    const causes = ['dye', 'sub', 'special'].map((c) => res.washKitCause[`${k}:${c}`] ?? 0);
+    return `${k} washes ${res.washKit[k] ?? 0} (${pct((res.washKit[k] ?? 0) / tot)}; dye ${causes[0]} sub ${causes[1]} special ${causes[2]}) special ready ${rd} used ${st} (${ids.length} bots)`;
+  }).join(' · ') + ` · glint dodges ${res.dodges}`;
 }
 
 async function main(): Promise<number> {
@@ -319,6 +366,33 @@ function playGates(r: RunResult): Array<[string, boolean, string]> {
   ];
 }
 
+/** CHANGED(BOTFIX): per-kit washes (share of all washes credited to a runner) and special ready / use, summed over the
+ *  seeds, plus the per-match averages. With --lineup mixed it prints the balance target (information, not a gate):
+ *  no kit > 40 % of washes, every kit ≥ 10 %, every kit's special used ≥ 1× per match on average. */
+function kitAggregate(rs: RunResult[]): void {
+  const kits = [...new Set(rs.flatMap((r) => r.kits))];
+  const wk: Record<string, number> = {}, rd: Record<string, number> = {}, st: Record<string, number> = {}, nb: Record<string, number> = {};
+  let tot = 0;
+  for (const r of rs) {
+    for (const k of kits) {
+      wk[k] = (wk[k] ?? 0) + (r.washKit[k] ?? 0);
+      tot += r.washKit[k] ?? 0;
+      r.kits.forEach((x, i) => { if (x === k) { rd[k] = (rd[k] ?? 0) + r.ready[i]; st[k] = (st[k] ?? 0) + r.started[i]; } });
+    }
+  }
+  for (const k of kits) nb[k] = rs[0].kits.filter((x) => x === k).length;
+  const n = rs.length, share = (k: string): number => (wk[k] ?? 0) / (tot || 1);
+  console.log(`\n── kits over ${n} seed(s) (${tot} washes credited to a runner; dodges ${rs.reduce((a, r) => a + r.dodges, 0)}):`);
+  for (const k of kits) {
+    console.log(`   ${k.padEnd(13)} washes ${String(wk[k] ?? 0).padStart(4)} (${pct(share(k)).padStart(7)}) · special ready ${rd[k] ?? 0} (${((rd[k] ?? 0) / n).toFixed(2)}/match) · used ${st[k] ?? 0} (${((st[k] ?? 0) / n).toFixed(2)}/match, ${((st[k] ?? 0) / n / Math.max(1, nb[k])).toFixed(2)} per bot) · ${nb[k]} bot(s)`);
+  }
+  if (LINEUP === 'mixed') {
+    const over = kits.filter((k) => share(k) > 0.4), under = kits.filter((k) => share(k) < 0.1), idle = kits.filter((k) => (st[k] ?? 0) / n < 1);
+    const ok = !over.length && !under.length && !idle.length;
+    console.log(`   balance target (info, not a gate): ${ok ? 'MET' : 'MISSED'} — > 40 %: ${over.join(', ') || 'none'} · < 10 %: ${under.join(', ') || 'none'} · special used < 1/match: ${idle.join(', ') || 'none'}`);
+  }
+}
+
 /** CHANGED(MAPSIM): --seeds a,b,c — one match per seed; every seed must pass the play gates */
 async function multiSeed(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typeof loadRapier>>, nav: NavGraph): Promise<number> {
   const runs: Array<{ seed: number; r: RunResult }> = [];
@@ -329,6 +403,7 @@ async function multiSeed(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<ty
   }
   const again = await runMatch(def, geo, R, nav, SEEDS[0], SKILL, SECONDS, -1);
   console.log(`\n── seed ${SEEDS[0]} replayed: hash ${again.hash}`);
+  kitAggregate(runs.map((x) => x.r));
   console.log('\n' + '-'.repeat(100));
   if (SECONDS !== 180) console.log(`NOTE: ${SECONDS} s matches — the gates below are printed for information; G8 needs the full 180 s.`);
   const names = playGates(runs[0].r).map((g) => g[0]);

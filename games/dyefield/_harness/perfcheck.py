@@ -293,6 +293,8 @@ def main() -> int:
             rep["positions"] = {"settled": p0, "walkFrom": p1, "walkTo": p2}
             rep["standDrift"] = ((p1.get("x", 0) - p0.get("x", 0)) ** 2 + (p1.get("z", 0) - p0.get("z", 0)) ** 2) ** 0.5 if p0 and p1 else None
             rep["render"] = sess.df("render")[1]
+            # the governor's own view (deep floor: renderer.ts opens 0.6 × DPR after 3 s over target at the floor)
+            rep["adaptive"] = sess.safe_js("() => { const d = __DF__.dev; return d && d.parts.rig.adaptive ? d.parts.rig.adaptive() : null; }")
             rep["phaseAfter"] = sess.phase()
             rep["version"] = sess.safe_js("() => window.__DF__.version")
             rep["dpr"] = sess.safe_js("() => window.devicePixelRatio")
@@ -330,8 +332,11 @@ def main() -> int:
         print("walked       : %s m with a real 10 s KeyW hold (stand drift %s m) · phase after %s" % (
             fmt(rep.get("walkMetres")), fmt(rep.get("standDrift")), rep.get("phaseAfter")))
         if isinstance(r, dict) and "quality" in r:
-            print("adaptive     : quality %s · scale %s · floor %s · cap %s · buffer %s" % (
-                r.get("quality"), fmt(r.get("scale"), 3), fmt(r.get("scaleMin"), 3), fmt(r.get("scaleMax"), 3), r.get("buffer")))
+            ad = rep.get("adaptive") or {}
+            deep = (" · deep floor %s %s" % (fmt(ad.get("deepMin"), 3), "OPEN" if ad.get("deepOpen") else "closed")) if "deepMin" in ad else ""
+            print("adaptive     : quality %s · scale %s · floor %s · cap %s · buffer %s%s · last '%s'" % (
+                r.get("quality"), fmt(r.get("scale"), 3), fmt(r.get("scaleMin"), 3), fmt(r.get("scaleMax"), 3), r.get("buffer"),
+                deep, ad.get("last", r.get("scaleLast"))))
         else:
             print("adaptive     : (this build reports no adaptive scale; the scale column is renderer.getPixelRatio())")
     print("-" * 96)

@@ -571,7 +571,8 @@ add an explicit "own pad counts as own dye" rule in the sim, not make the pad pa
 ### §10.2 Modules and exact signatures
 ```ts
 // core/match/roster.ts
-export type BotSkill = 'chill' | 'fresh' | 'fierce';
+export type BotSkill = 'breeze' | 'swell' | 'storm';     // CHANGED(BOTFIX): was 'chill' | 'fresh' | 'fierce' (see below)
+export function parseBotSkill(raw: string | null | undefined, fallback?: BotSkill): BotSkill;   // CHANGED(BOTFIX), additive
 export interface RosterEntry { id: number; name: string; team: TeamId; kit: string; bot: boolean; skill: BotSkill }
 /** id 0 = the human on SUNCREW; ids 1-3 SUNCREW bots; ids 4-7 GULF CREW bots. Names are drawn
  *  deterministically from an ORIGINAL pool (never Suki/Coral/Kelp/Juno/Riptide/Zest/Inky Vee or
@@ -659,6 +660,14 @@ export class BotDirector {
   think(intents: PlayerIntent[]): void;
 }
 ```
+
+`CHANGED(BOTFIX)`: bot skill ids are the ORIGINAL tier names — `'breeze'` (easy) · `'swell'` (normal, the default) ·
+`'storm'` (hard) — replacing `'chill' | 'fresh' | 'fierce'` everywhere in core and the harness. `parseBotSkill(raw)`
+(core/match/roster.ts) is the one parser for query params / CLI flags / saved settings: case-insensitive, and the old
+ids `chill | fresh | fierce` map silently to `breeze | swell | storm` so old links (`?bots=fresh`) keep working; anything
+else falls back to `'swell'`. The UI labels (BREEZE / SWELL / STORM) belong to the frontend. The same lane added a
+glint reaction (a bot that sees an enemy NEEDLE-GLINT's charge line on it dodges after a skill-scaled reaction:
+STORM 0.18–0.28 s, SWELL 0.42–0.58 s, BREEZE 0.8–1.05 s) and `BotDirector.stats.dodges`; no signature was removed.
 
 **`CHANGED(KITSIM)` (phase 6, CONTRACT_P6_11 §18.1): additive only; no signature above is removed or changed.**
 ```ts
@@ -863,7 +872,8 @@ walkable(ax, ay, az, bx, by, bz): boolean;                         // continuous
 stats: { buildMs; columns; nudged; edgesByKind: [walk, drop, jump, climb]; nodeMs; open };
 export const EDGE_WALK = 0, EDGE_DROP = 1, EDGE_JUMP = 2, EDGE_CLIMB = 3;
 // core/bots/director.ts — BotDirector gains:
-constructor(world: MatchWorld, nav: NavGraph, seed: number, skill?: BotSkill | readonly BotSkill[]);  // default 'fresh'; an array is per runner id
+constructor(world: MatchWorld, nav: NavGraph, seed: number, skill?: BotSkill | readonly BotSkill[]);  // default 'swell' (CHANGED(BOTFIX): was 'fresh'); an array is per runner id
+readonly stats: { dodges: number };   // CHANGED(BOTFIX), additive: glint reactions this match (probes)
 holding(i: number): boolean;           // bot i is deliberately stationary (refilling, holding cover, painting a wall to climb)
 info(i: number): { mode: string; goal: number; target: number; holding: boolean };                   // debug / HUD / probes
 ```
@@ -999,7 +1009,8 @@ kit (shots `_shots/pt_<map>_<kit>_<name>.png` unless Pier 18 + MIST-RASP).
 - `game.ts` owns a `MatchWorld` and a `BotDirector`. Human input becomes `intents[0]`, with the
   aim point from a camera raycast (`physics.raycast` from the camera through the reticle, max
   60 m). The bots fill the rest. It drains events into fx / players / hud every frame.
-  Queries: `?kit=`, `?bots=chill|fresh|fierce`, `?seed=`, `?matchSeconds=` (dev only), and
+  Queries: `?kit=`, `?bots=breeze|swell|storm` (CHANGED(BOTFIX): the old `chill|fresh|fierce` still parse as silent
+  aliases), `?seed=`, `?matchSeconds=` (dev only), and
   `?autostart=1` (skip to the match).
 - `window.__DF__` additions: `match()` (phase, timeLeft, runners[] {id, name, team, state, hp,
   tank, alive, x, y, z, hidden}, result, coverage) and `events(n)`. Dev-only extras:

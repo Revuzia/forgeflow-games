@@ -87,7 +87,7 @@ async function main(): Promise<number> {
   const physics = new PhysicsWorld(R, geo);
   // SUNCREW: 0 SHEET-DRUM (WELLSPRING), 1 NEEDLE-GLINT (CLOUDBURST), 2 POP-WELL (WELLSPRING), 3 MIST-RASP (JELLY tests)
   // GULF CREW: 4-7 targets
-  const roster = defaultRoster({ humanKit: 'sheet-drum', seed: 5, skill: 'fresh',
+  const roster = defaultRoster({ humanKit: 'sheet-drum', seed: 5, skill: 'swell',
     botKits: ['needle-glint', 'pop-well', 'mist-rasp', 'mist-rasp', 'mist-rasp', 'mist-rasp', 'mist-rasp'] });
   const world = new MatchWorld({ def, geo, physics, painter, roster, seed: 5, countdownS: 0, durationS: 900 });
   const [DRUM, NEEDLE, POP, MIST] = [0, 1, 2, 3].map((i) => world.runners[i]);

@@ -118,7 +118,7 @@ async function runMatch(R: Rapier, def: MapDef, geo: MapGeometry, seed: number):
   const atlas = buildAtlas(geo.paint, geo.atlasSize, { wallWeight: sc.wallWeight, floorMinNy: sc.floorMinNy });
   const painter = new Painter(atlas);
   const physics = new PhysicsWorld(R, geo);
-  const roster = defaultRoster({ humanKit: 'mist-rasp', humanName: 'Probe', seed, skill: 'fresh' });
+  const roster = defaultRoster({ humanKit: 'mist-rasp', humanName: 'Probe', seed, skill: 'swell' });
   const world = new MatchWorld({ def, geo, physics, painter, roster, seed, durationS: MATCH.durationS, countdownS: MATCH.countdownS });
   const n = world.runners.length;
   const intents: PlayerIntent[] = world.runners.map(() => emptyIntent());

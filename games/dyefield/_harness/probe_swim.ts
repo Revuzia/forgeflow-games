@@ -53,7 +53,7 @@ async function main(): Promise<number> {
   const atlas = buildAtlas(geo.paint, geo.atlasSize, { wallWeight: sc.wallWeight, floorMinNy: sc.floorMinNy });
   const painter = new Painter(atlas);
   const physics = new PhysicsWorld(R, geo);
-  const roster = defaultRoster({ humanKit: 'mist-rasp', seed: 7, skill: 'fresh' });
+  const roster = defaultRoster({ humanKit: 'mist-rasp', seed: 7, skill: 'swell' });
   const world = new MatchWorld({ def, geo, physics, painter, roster, seed: 7, countdownS: 0, durationS: 900 });
   const me = world.runners[0];
   const foe = world.runners[4];

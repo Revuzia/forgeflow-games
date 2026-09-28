@@ -8,7 +8,20 @@ import type { TeamId } from '../types.ts';
 import { TEAM_GULF, TEAM_SUN } from '../types.ts';
 import { hash32, mulberry32 } from '../rng.ts';
 
-export type BotSkill = 'chill' | 'fresh' | 'fierce';
+/** Bot skill tiers, by their ORIGINAL names (CONTRACT §10.2 CHANGED(BOTFIX)): BREEZE (easy) · SWELL (normal) · STORM (hard). */
+export type BotSkill = 'breeze' | 'swell' | 'storm';
+export const BOT_SKILL_IDS: readonly BotSkill[] = ['breeze', 'swell', 'storm'];
+export const DEFAULT_BOT_SKILL: BotSkill = 'swell';
+/** Old ids kept as silent aliases for old links / scripts (`?bots=chill|fresh|fierce`). */
+const SKILL_ALIASES: Readonly<Record<string, BotSkill>> = { chill: 'breeze', fresh: 'swell', fierce: 'storm' };
+
+/** A skill id from a query param / CLI flag / saved setting (case-insensitive; old ids map to the new tiers);
+ *  anything else → `fallback`. */
+export function parseBotSkill(raw: string | null | undefined, fallback: BotSkill = DEFAULT_BOT_SKILL): BotSkill {
+  const k = (raw ?? '').trim().toLowerCase();
+  if ((BOT_SKILL_IDS as readonly string[]).includes(k)) return k as BotSkill;
+  return SKILL_ALIASES[k] ?? fallback;
+}
 
 export interface RosterEntry { id: number; name: string; team: TeamId; kit: string; bot: boolean; skill: BotSkill }
 

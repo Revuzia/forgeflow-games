@@ -519,7 +519,7 @@ async function mapFeatureChecks(R: Awaited<ReturnType<typeof loadRapier>>): Prom
   // ── 7b. CINDER channel: into the lagoon → 'washed' cause 'sea' (the oob_ volume, above killY)
   {
     const physics = new PhysicsWorld(R, C.geo);
-    const roster = defaultRoster({ humanKit: 'mist-rasp', seed: 1, skill: 'fresh' });
+    const roster = defaultRoster({ humanKit: 'mist-rasp', seed: 1, skill: 'swell' });
     const { Painter } = await import('../runtime/src/core/paint/painter.ts');
     const { buildAtlas } = await import('../runtime/src/core/paint/atlas.ts');
     const painter = new Painter(buildAtlas(C.geo.paint, C.geo.atlasSize, { wallWeight: 0.35, floorMinNy: 0.45 }));

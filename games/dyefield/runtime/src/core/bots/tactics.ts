@@ -29,8 +29,9 @@ export const RETREAT = 6.0;           // m: back off from a closer enemy
 export const FULL_BEYOND = 12.0;      // m: a target this far gets a full charge
 export const LINE_MIN = 5, LINE_MAX = 26;       // m: line-paint targets (and sightline zones)
 export const LINE_TANK = 40;          // tank kept for fights: below it the charger travels (and slick-refills) instead
-/** s the aim must stay on a runner before a charged release (lining the shot up), by skill */
-export const CHARGE_SETTLE: Record<BotSkill, number> = { chill: 0.3, fresh: 0.2, fierce: 0.1 };
+/** s the aim must stay on a runner before a charged release (lining the shot up), by skill. CHANGED(BOTFIX) balance:
+ *  +0.2 s each (was 0.3 / 0.2 / 0.1) — the glint stays up longer, so the target has time to notice it and dodge */
+export const CHARGE_SETTLE: Record<BotSkill, number> = { breeze: 0.5, swell: 0.4, storm: 0.3 };
 // ── POP-WELL ──
 export const BURST_MIN = 5.0, BURST_MAX = 9.0;  // m: held band
 // ── sub / special ──
@@ -46,7 +47,9 @@ export interface KitTactic {
   ink: number;
 }
 
-const CHARGE_ENGAGE: Record<BotSkill, number> = { chill: 22, fresh: 25, fierce: 28 };
+/** m: a charger fights runners within this. CHANGED(BOTFIX) balance: was 22 / 25 / 28 — from 25 m NEEDLE-GLINT
+ *  out-sniped every kit and its mirror (charger duels at 18-24 m were a third of its washes) */
+const CHARGE_ENGAGE: Record<BotSkill, number> = { breeze: 19, swell: 21, storm: 24 };
 
 export function kitTactic(f: KitFire, skill: BotSkill, skillEngage: number): KitTactic {
   switch (f.type) {

@@ -191,7 +191,7 @@ def fx_js(sess):
 
 def run_kit(args, kit, shots, problems, notes, rep):
     """one fresh page: enter play for real, then every kit action with real input"""
-    url = build_url(args.base, map=args.map, dev=1, kit=kit, seed=args.seed, matchSeconds=300, bots="chill")
+    url = build_url(args.base, map=args.map, dev=1, kit=kit, seed=args.seed, matchSeconds=300, bots="breeze")
     info = {"url": url}
     rep[kit] = info
     sess = Session(args, "kits_%s" % kit)

@@ -1,5 +1,8 @@
 {
   "_doc": "Data-driven kits. Adding a 5th kit = a new entry here + a model in art/gltf (model hook = 'model'). Units: metres, seconds, tank percent (0-100), damage vs 100 HP. 'stats' are the 0-10 loadout bars (Range / Damage / Fire rate / Mobility / Coverage). Numbers are phase-4/6 starting values; tuning truth moves here, never into code.",
+  "_changes": [
+    "BOTFIX balance (2026-09-25, game-director call; numbers only): POP-WELL paint.impactRadius 1.1 -> 1.45 and paint.airburstRadius 0.6 -> 0.85 (it readied WELLSPRING ~0.5x per bot per match: 330 weighted m2 painted vs SHEET-DRUM 800); WELLSPRING chargePoints 180 -> 165. Measured with node _harness/probe_bots.ts --lineup mixed --seeds 1..8 on each map: POP-WELL WELLSPRING ready 3.38 / 2.13 / 4.13 per match per kit of 2 bots (Pier 18 / Lockwell / Cinder), used 2.50 / 1.75 / 2.25; before, ~0.5 ready per bot per match on Pier 18."
+  ],
   "hp": 100,
   "respawnSeconds": 3,
   "kits": [
@@ -97,7 +100,7 @@
         "directDamage": 125,
         "splashDamage": 55,
         "splashRadius": 2.2,
-        "paint": { "impactRadius": 1.1, "airburstRadius": 0.6 }
+        "paint": { "impactRadius": 1.45, "airburstRadius": 0.85 }
       }
     }
   ],
@@ -137,7 +140,7 @@
       "name": "WELLSPRING",
       "blurb": "Jump and slam: paints a ring and knocks foes back.",
       "model": "special_wellspring",
-      "chargePoints": 180,
+      "chargePoints": 165,
       "leapHeight": 3.2,
       "ringRadius": 6.0,
       "ringWidth": 1.4,

@@ -4,7 +4,7 @@
 // pre-warm → CLICK TO PLAY → countdown → play.
 // Query params (CONTRACT §6, §11): ?map=pier18 · ?dev=1 · ?preset=noon|golden · ?seed=N ·
 //   ?kit=mist-rasp|sheet-drum|needle-glint|pop-well (the human's kit; the bots get a mixed lineup: the
-//   human's 3 crewmates carry the other 3 kits, the rival crew one of each) · ?bots=chill|fresh|fierce ·
+//   human's 3 crewmates carry the other 3 kits, the rival crew one of each) · ?bots=breeze|swell|storm ·
 //   ?autostart=1 (skip the CLICK TO PLAY card; a click on the view captures the mouse) · ?quality=auto|high|low
 // dev-only (?dev=1): ?matchSeconds=N · ?brush=1 (LMB = the phase-2 DEV_BRUSH) · ?merge=0 · ?tonemap=…
 // Any failure lands on the error card with the message (never a blank canvas).
@@ -26,7 +26,7 @@ import { buildAtlas } from './core/paint/atlas.ts';
 import { Painter } from './core/paint/painter.ts';
 import { MinimapRaster } from './core/paint/minimap.ts';
 import { loadRapier, PhysicsWorld } from './core/physics.ts';
-import { defaultRoster, type BotSkill } from './core/match/roster.ts';
+import { defaultRoster, parseBotSkill, type BotSkill } from './core/match/roster.ts';
 import { buildNav } from './core/bots/nav.ts';
 import { createRenderer, hasWebGL2, isRenderQuality, type RenderQuality } from './view/renderer.ts';
 import { FollowCamera } from './view/camera.ts';
@@ -80,7 +80,7 @@ function matchConfig(): MatchConfig {
     kit = 'mist-rasp';
   }
   const b = params.get('bots');
-  const skill: BotSkill = b === 'chill' || b === 'fierce' || b === 'fresh' ? b : 'fresh';
+  const skill: BotSkill = parseBotSkill(b);     // breeze | swell | storm (the old chill | fresh | fierce still parse)
   const sq = params.get('seed');
   const seed = sq !== null && sq !== '' && Number.isFinite(Number(sq)) ? (Number(sq) >>> 0) : ((Math.random() * 0x7fffffff) >>> 0);
   const ms = app.dev ? Number(params.get('matchSeconds')) : NaN;
