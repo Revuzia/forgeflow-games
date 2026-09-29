@@ -48,6 +48,23 @@ from playtest_v2 import PAD_A, PAD_JS  # noqa: E402  (the same standard-mapping 
 STEPS = ["1", "2", "2b", "3", "4", "5", "6"]
 
 # ── read-only probes ──────────────────────────────────────────────────────────────────────────────
+# step 5: live boss tells / hazards in the sim vs what the views drew last frame (+ a steer toward the rig)
+TELL_DRAWN_JS = r"""
+() => {
+  const B = window.__BT__; const W = B && B.world; if (!W) return null;
+  const st = B.state(); const v = st.views || {};
+  let bossTells = 0, tellAge = 0;
+  for (const tg of W.telegraphs) if (tg.alive && tg.owner === 'boss' && !tg.fired) { bossTells++; tellAge = Math.max(tellAge, tg.t); }
+  let hazards = 0, hazAge = 0;
+  for (const h of W.hazards) if (h.alive) { hazards++; hazAge = Math.max(hazAge, h.t); }
+  const b = W.boss, T = W.titan;
+  const out = { t: W.t, bossTells, tellAge, hazards, hazAge, tgDrawn: v.tgDrawn, tgBossDrawn: v.tgBossDrawn, hzDrawn: v.hzDrawn };
+  if (b && b.alive) { const dx = b.x - T.x, dz = b.z - T.z, d = Math.hypot(dx, dz);
+    out.dx = dx / (d || 1); out.dz = dz / (d || 1); out.far = d > 3 * (b.data.H || 10); }
+  return out;
+}
+"""
+
 GS_JS = r"""
 () => {
   const B = window.__BT__; const W = B && B.world; if (!W) return null;
@@ -55,13 +72,15 @@ GS_JS = r"""
   const bo = b ? { id: b.id, role: b.role, slot: b.slot, alive: b.alive, x: b.x, z: b.z, heading: b.heading,
     hp: b.hp, maxHp: b.maxHp, introT: b.introT, staggerT: b.staggerT, meter: b.meter, attack: b.attack,
     attackT: b.attackT, phase: b.phase, H: b.data.H, drumOpen: b.data.drumOpen || 0, raceT: b.data.raceT || 0,
-    weakMask: b.data.weakMask || 0 } : null;
+    weakMask: b.data.weakMask || 0,
+    byKind: Object.fromEntries(Object.entries(b.data).filter(([k, v]) => k.startsWith('by_') && typeof v === 'number')) } : null;
   return { t: W.t, tick: W.tick, screen: B.state().screen,
     titan: { x: T.x, z: T.z, heading: T.heading, height: T.height, radius: T.radius, rank: T.rank, level: T.level,
              xp: T.xp, xpToNext: T.xpToNext, hp: T.hp, alive: T.alive, dashCharges: T.dashCharges, dashT: T.dashT },
     gates: { unlocked: G.unlocked, pending: G.pending, active: G.active, pressure: G.pressure, ignoredS: G.ignoredS,
              farS: G.farS, finaleT: G.finaleT, finaleDone: G.finaleDone, mainKillT: G.mainKillT, dueT: G.dueT,
-             mainEarliestT: G.mainEarliestT, rematchGates: G.rematchGates },
+             mainEarliestT: G.mainEarliestT, rematchGates: G.rematchGates, engagedS: G.engagedS,
+             lastAddHitT: G.lastAddHitT, bossLastHitT: b && Number.isFinite(b.data.lastHitT) ? b.data.lastHitT : null },
     boss: bo, run: { result: W.run.result, endT: W.run.endT, phase: W.run.phase },
     endless: E ? { nextBossT: E.nextBossT } : null };
 }
@@ -135,6 +154,29 @@ FW_JS = r"""
 }
 """
 FW_READ_JS = "() => { const S = window.__PG_FW__; return S ? { n: S.n, frames: S.frames } : null; }"
+# step 3: every rendered frame, the nameplate subtitle the PLAYER sees (DOM .bt-boss-sub) + the rig's b.attack, stored
+# as transitions [tick, attack, text] — read back to check each cut-off re-entry put CUTTING YOU OFF on screen
+SUB_JS = r"""
+() => {
+  const S = window.__PG_SUB__ || (window.__PG_SUB__ = { loop: false });
+  S.on = true; S.tr = []; S.key = '';
+  if (!S.loop) {
+    S.loop = true;
+    const f = () => {
+      if (S.on) {
+        const W = window.__BT__.world, b = W && W.boss, e = document.querySelector('.bt-boss-sub');
+        const txt = e ? (e.textContent || '').trim() : '', at = b && b.alive ? (b.attack || '') : '';
+        const k = at + '|' + txt;
+        if (W && k !== S.key) { S.key = k; S.tr.push([W.tick, at, txt]); }
+      }
+      requestAnimationFrame(f);
+    };
+    requestAnimationFrame(f);
+  }
+  return true;
+}
+"""
+SUB_READ_JS = "() => { const S = window.__PG_SUB__; if (!S) return null; S.on = false; return S.tr; }"
 FW_OFF_JS = "() => { const S = window.__PG_FW__; if (S) S.on = false; return true; }"
 
 # STENCIL-1 / generic gate policy (read-only): where the titan should move (world XZ), whether to dash / press
@@ -250,6 +292,296 @@ async () => { const m = await import('/src/ai/director.ts'); const W = window.__
 FMT_JS = r"""
 async (sec) => { const m = await import('/src/ui/dom.ts'); return m.fmtTime(sec); }
 """
+
+# step 3's runner reads the street grid a player sees (roads are the open lanes between blocks; no building
+# stands on a road), the titan's walk / dash reach and the rig's band — read-only
+GRID_JS = r"""
+async () => {
+  const W = window.__BT__.world; if (!W) return null;
+  const c = W.city, T = W.titan, b = W.boss;
+  const m = await import('/src/ai/bosses/index.ts');
+  const H = b ? m.bossH(W, b) : T.height;
+  return { blocksX: c.blocksX, blocksZ: c.blocksZ, pitch: c.pitch, roadW: c.roadW, sidewalkW: c.sidewalkW, originX: c.originX,
+    originZ: c.originZ, bounds: c.bounds, walk: m.titanWalk(W), R: T.radius, height: T.height,
+    dashM: Math.max(0, T.stats.dashDistance || 0) * T.height, H,
+    bandMaxH: b && b.data.bandMaxH > 0 ? b.data.bandMaxH : 3.5 };
+}
+"""
+
+
+class StreetRunner:
+    """A player running from a hunting gatekeeper (GATEKEEPERS §2.4) with nothing but WASD + Shift.
+
+    It runs the open street grid (roads never hold a building, so nothing uncrushable is in the way), and at
+    every intersection picks the next street the way a runner reads the map: for each street out of the corner
+    (and the three after it, a ~16 s look-ahead) it plays the chase forward — the rig driving straight at the
+    titan at the §2.4 hunt speed (huntClose / huntHot × the titan's walk, eased to HUNT_FLOOR at the engagement
+    edge; a pessimistic rig that ignores buildings) — and takes the street whose closest approach stays largest,
+    then the one that ends farthest from the rig and away from the city edge (a corner is a trap). Every ~1 s it
+    re-reads the rig (a cut-off can put it ahead) and turns back on the street if that is clearly better. It dashes
+    (Shift) whenever a charge is up, the street ahead is long enough for the dash, and the rig is behind it."""
+
+    HUNT_FLOOR = 0.8
+    HUNT_CLOSE, HUNT_HOT, ENGAGE_MARGIN_H = 0.95, 1.05, 0.5
+
+    def __init__(self, grid, log=None):
+        g = grid or {}
+        self.ok = bool(g) and (g.get("pitch") or 0) > 0
+        self.log = log or (lambda *_: None)
+        self.nx = int(g.get("blocksX") or 0) + 1
+        self.nz = int(g.get("blocksZ") or 0) + 1
+        self.pitch = float(g.get("pitch") or 72)
+        self.roadW = float(g.get("roadW") or 14)
+        self.sidewalkW = float(g.get("sidewalkW") or 0)
+        self.ox = float(g.get("originX") or 0)
+        self.oz = float(g.get("originZ") or 0)
+        B = g.get("bounds") or {}
+        self.B = (B.get("minX", -1e9), B.get("maxX", 1e9), B.get("minZ", -1e9), B.get("maxZ", 1e9))
+        self.walk = float(g.get("walk") or 15)
+        self.R = float(g.get("R") or 4)
+        self.dashM = float(g.get("dashM") or 0)
+        self.H = float(g.get("H") or 10)
+        self.bandMax = float(g.get("bandMaxH") or 3.5) * self.H
+        self.edge = self.bandMax + self.ENGAGE_MARGIN_H * self.H
+        self.target = None          # (i, j) intersection being run to
+        self.prev = None            # the intersection the titan left
+        self.on_road = True
+        self.replans = 0
+        self.unsticks = 0
+        self.turns = 0
+        self.last_eval = -1e9
+        self.last_pos = None
+        self.stuck_t = 0.0
+        self.unstick_until = 0.0
+        self.unstick_dir = None
+        self.pressure = 0
+
+    # ── the grid ──
+    def node_xz(self, n):
+        return self.ox + n[0] * self.pitch, self.oz + n[1] * self.pitch
+
+    def valid(self, n):
+        if not (0 <= n[0] < self.nx and 0 <= n[1] < self.nz):
+            return False
+        x, z = self.node_xz(n)
+        return self.B[0] <= x <= self.B[1] and self.B[2] <= z <= self.B[3]
+
+    def nbrs(self, n):
+        for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            m = (n[0] + di, n[1] + dj)
+            if self.valid(m):
+                yield m
+
+    def nearest_node(self, x, z):
+        i = min(self.nx - 1, max(0, int(round((x - self.ox) / self.pitch))))
+        j = min(self.nz - 1, max(0, int(round((z - self.oz) / self.pitch))))
+        return (i, j)
+
+    def edge_dist(self, x, z):
+        return min(x - self.B[0], self.B[1] - x, z - self.B[2], self.B[3] - z)
+
+    # ── the chase, played forward ──
+    def hunt_speed(self, d, hot):
+        over = min(1.0, max(0.0, (d - self.edge) / max(1e-6, self.bandMax)))
+        return (self.HUNT_HOT if hot else self.HUNT_CLOSE) * self.walk * max(self.HUNT_FLOOR, over)
+
+    def play(self, tx, tz, pts, bx, bz, horizon=14.0, dt=0.25):
+        """Titan from (tx, tz) along the polyline pts at its walk (a 90° corner costs 0.3 s, a reversal 0.6 s);
+        the rig pursues. Returns (closest approach, final distance, final titan point)."""
+        hot = self.pressure >= 2
+        v = self.walk
+        seg = 0
+        cx, cz = tx, tz
+        hdg = None
+        pause = 0.0
+        dmin = math.hypot(bx - cx, bz - cz)
+        t = 0.0
+        while t < horizon:
+            step = v * dt
+            if pause > 0:
+                use = min(pause, dt)
+                pause -= use
+                step = v * (dt - use)
+            while step > 1e-6 and seg < len(pts):
+                px, pz = pts[seg]
+                ddx, ddz = px - cx, pz - cz
+                L = math.hypot(ddx, ddz)
+                if L < 1e-6:
+                    seg += 1
+                    continue
+                h = (ddx / L, ddz / L)
+                if hdg is not None and h[0] * hdg[0] + h[1] * hdg[1] < 0.5:
+                    pause += 0.6 if h[0] * hdg[0] + h[1] * hdg[1] < -0.5 else 0.3
+                    hdg = h
+                    break
+                hdg = h
+                if L <= step:
+                    cx, cz = px, pz
+                    step -= L
+                    seg += 1
+                else:
+                    cx += h[0] * step
+                    cz += h[1] * step
+                    step = 0
+            d = math.hypot(cx - bx, cz - bz)
+            if d > 1e-6:
+                s = min(d, self.hunt_speed(d, hot) * dt)
+                bx += (cx - bx) / d * s
+                bz += (cz - bz) / d * s
+            d = math.hypot(cx - bx, cz - bz)
+            dmin = min(dmin, d)
+            t += dt
+        return dmin, math.hypot(cx - bx, cz - bz), (cx, cz)
+
+    # ── steering (keys) ──
+    def keys_to(self, T, n):
+        """Hold the keys that run the titan down the street to intersection n (centred on the road)."""
+        x, z = T.get("x", 0), T.get("z", 0)
+        nx_, nz_ = self.node_xz(n)
+        dx, dz = nx_ - x, nz_ - z
+        # the street's axis: the larger leg; the smaller leg is the drift off the road's centre line
+        if abs(dx) >= abs(dz):
+            ax, lat = (1.0 if dx > 0 else -1.0, 0.0), dz
+        else:
+            ax, lat = (0.0, 1.0 if dz > 0 else -1.0), dx
+        off = abs(lat)
+        # the titan's centre may drift this far off the centre line before its body meets the kerb-side buildings
+        half = max(0.5, self.roadW / 2 + self.sidewalkW - self.R)
+        vx, vz = ax
+        if off > 0.5 * half:                      # drifting toward a kerb: bear back to the centre line
+            k = 0.9 if off > half else 0.55
+            if ax[0] != 0:
+                vz += k * (1 if lat > 0 else -1)
+            else:
+                vx += k * (1 if lat > 0 else -1)
+        return world_to_keys(vx, vz) or {"KeyW"}, (vx, vz)
+
+    def step(self, T, b, t, pressure=0):
+        """One 0.1 s decision. Returns (held keys, mode label)."""
+        self.pressure = pressure or 0
+        x, z = T.get("x", 0), T.get("z", 0)
+        bx, bz = b.get("x", 0), b.get("z", 0)
+        if not self.ok:
+            return world_to_keys(x - bx, z - bz) or {"KeyW"}, "flee"
+        # on the road network?
+        fi, fj = (x - self.ox) / self.pitch, (z - self.oz) / self.pitch
+        offx = abs(fi - round(fi)) * self.pitch
+        offz = abs(fj - round(fj)) * self.pitch
+        self.on_road = min(offx, offz) <= self.roadW / 2
+        # stuck (a prop / the rig's body / a knock): step across for 0.8 s, then re-plan
+        if self.last_pos is not None:
+            moved = math.hypot(x - self.last_pos[0], z - self.last_pos[1])
+            self.stuck_t = self.stuck_t + 0.1 if moved < 0.12 * self.walk * 0.1 else 0.0
+        self.last_pos = (x, z)
+        if self.stuck_t > 0.6:
+            self.stuck_t = 0.0
+            self.unsticks += 1
+            self.unstick_until = t + 0.8
+            ax, az = x - bx, z - bz
+            self.unstick_dir = (-az, ax) if (self.unsticks % 2) else (az, -ax)
+            self.target = None
+        if t < self.unstick_until and self.unstick_dir:
+            return world_to_keys(*self.unstick_dir) or {"KeyW"}, "unstick"
+        if not self.on_road:
+            # back onto the nearest street, the short way (perpendicular to it), away-side preferred
+            ri, rj = round(fi), round(fj)
+            if offx <= offz:
+                return world_to_keys(self.ox + ri * self.pitch - x, 0.0) or {"KeyW"}, "to-road"
+            return world_to_keys(0.0, self.oz + rj * self.pitch - z) or {"KeyW"}, "to-road"
+        here = self.nearest_node(x, z)
+        hx, hz = self.node_xz(here)
+        at_node = math.hypot(x - hx, z - hz) <= max(4.0, 0.45 * self.roadW)
+        if self.target is not None and not self.valid(self.target):
+            self.target = None
+        if self.target is not None and self.target == here and at_node:
+            self.prev, self.target = here, None
+        if self.target is None:
+            # a decision at (or on the way to) an intersection: which street next
+            if at_node:
+                start, cands = here, list(self.nbrs(here))
+            else:
+                # mid-street: the two ends of the street the titan stands on
+                if offx <= offz:          # on a north-south street (x = const)
+                    i = round(fi); j0 = math.floor(fj)
+                    cands = [m for m in ((i, j0), (i, j0 + 1)) if self.valid(m)]
+                else:
+                    j = round(fj); i0 = math.floor(fi)
+                    cands = [m for m in ((i0, j), (i0 + 1, j)) if self.valid(m)]
+                start = None
+            best = None
+            for c in cands:
+                sc = self.score_from(x, z, start, c, bx, bz)
+                if sc and (best is None or sc[0] > best[0]):
+                    best = (sc[0], c, sc)
+            if best is None:
+                return world_to_keys(x - bx, z - bz) or {"KeyW"}, "flee"
+            if self.target is not None and best[1] != self.target:
+                self.turns += 1
+            self.prev, self.target = start, best[1]
+            self.last_eval = t
+        elif t - self.last_eval >= 1.0:
+            # re-read the rig: keep running to the target, or turn back if that is clearly better
+            self.last_eval = t
+            keep = self.score_from(x, z, None, self.target, bx, bz)
+            back = self.prev if self.prev is not None and self.valid(self.prev) else None
+            if back is not None and back != self.target:
+                alt = self.score_from(x, z, None, back, bx, bz)
+                if keep and alt and alt[0] > keep[0] + 2.0 * self.H:
+                    self.replans += 1
+                    self.prev, self.target = self.target, back
+        keys, _ = self.keys_to(T, self.target)
+        return keys, "run"
+
+    def score_from(self, x, z, start, first, bx, bz):
+        """score() with the titan's current point first (so a street it is half-way along is costed right)."""
+        best = None
+        cap_min, cap_end = 9.0 * self.H, 16.0 * self.H
+        stack = [[first]]
+        paths = []
+        while stack:
+            path = stack.pop()
+            if len(path) >= 4:
+                paths.append(path)
+                continue
+            last = path[-1]
+            prev = path[-2] if len(path) >= 2 else start
+            ext = False
+            for m in self.nbrs(last):
+                if m == prev:
+                    continue
+                stack.append(path + [m])
+                ext = True
+            if not ext:
+                paths.append(path)
+        for path in paths:
+            pts = [self.node_xz(n) for n in path]
+            dmin, dend, (ex, ez) = self.play(x, z, pts, bx, bz)
+            room = self.edge_dist(ex, ez)
+            sc = 3.0 * min(dmin, cap_min) + min(dend, cap_end) - 2.0 * max(0.0, 2.5 * self.pitch - room)
+            if best is None or sc > best[0]:
+                best = (sc, path, dmin, dend)
+        return best
+
+    def want_dash(self, T, b):
+        """Shift now? A charge is up, the titan is lined up with its street, the street ahead holds the whole dash
+        (so it does not dash into a block), and the rig is behind it."""
+        if not self.ok or self.target is None or not self.on_road or self.dashM <= 0:
+            return False
+        if (T.get("dashCharges") or 0) < 1 or (T.get("dashT") or 0) > 0:
+            return False
+        x, z = T.get("x", 0), T.get("z", 0)
+        nx_, nz_ = self.node_xz(self.target)
+        dx, dz = nx_ - x, nz_ - z
+        L = math.hypot(dx, dz)
+        if L < self.dashM + self.R + 4.0:
+            return False
+        ux, uz = dx / L, dz / L
+        hd = T.get("heading") or 0.0
+        if math.sin(hd) * ux + math.cos(hd) * uz < 0.94:
+            return False
+        rx, rz = x - b.get("x", 0), z - b.get("z", 0)
+        rm = math.hypot(rx, rz) or 1.0
+        return (rx * ux + rz * uz) / rm > 0.2
 
 
 class GatePlaytest:
@@ -632,6 +964,9 @@ class GatePlaytest:
         ring = s.js(RING_JS)
         H = (g.get("boss") or {}).get("H") or 5
         self.log("  CORDON-2 live at t %.1f · spawnRing %.1f m · rig H %.2f" % (g.get("t") or 0, ring or -1, H))
+        kit = s.js("() => { const W = window.__BT__.world, T = W.titan; return { thorns: T.stats.thorns || 0, "
+                   "owned: (window.__BT__.state().owned || []) }; }") or {}
+        self.log("  titan kit at the start: thorns %s · owned %s" % (kit.get("thorns"), json.dumps(kit.get("owned"))[:300]))
         t0 = g.get("t") or 0
         wall0 = time.time()
         maxP = 0
@@ -641,12 +976,17 @@ class GatePlaytest:
         prev_t = t0
         repos = 0
         prev_b = None
-        stuck_t = 0.0
-        last_pos = None
-        turn = 0.0
         pz = []
         s.js(FW_JS, ["gateReposition", "gateEscalate"])
-        B = s.js("() => window.__BT__.world.city.bounds")
+        s.js(SUB_JS)
+        grid = s.js(GRID_JS)
+        runner = StreetRunner(grid, self.log)
+        modes = {}
+        dashes = 0
+        eng_log = []
+        hit_log = []                 # (game s since live, dist÷ring, damage by kind since the last hit, titan hp)
+        last_lh = (self.gs().get("gates") or {}).get("bossLastHitT")
+        last_by = dict(((self.gs().get("boss") or {}).get("byKind")) or {})
         while True:
             g = self.gs()
             t = g.get("t") or t0
@@ -670,51 +1010,81 @@ class GatePlaytest:
             if prev_b and math.hypot(b.get("x", 0) - prev_b[0], b.get("z", 0) - prev_b[1]) > 0.5 * (ring or 50):
                 repos += 1
             prev_b = (b.get("x", 0), b.get("z", 0))
+            # why a tick counts as engaged (§2.4): proximity / a hit on the rig / a hit on one of its adds
+            eng_p = d <= (runner.bandMax / max(1e-6, runner.H) + 0.5) * H
+            lh, la = G.get("bossLastHitT"), G.get("lastAddHitT")
+            eng_h = isinstance(lh, (int, float)) and t - lh <= 5
+            eng_a = isinstance(la, (int, float)) and t - la <= 5
+            if isinstance(lh, (int, float)) and lh != last_lh:
+                bk = b.get("byKind") or {}
+                dk = {k: round(v - last_by.get(k, 0), 2) for k, v in bk.items() if v - last_by.get(k, 0) > 1e-6}
+                hit_log.append((round(lh - t0, 1), round(d / max(1e-6, ring or 1), 2), dk, round(T.get("hp") or 0)))
+                last_lh, last_by = lh, dict(bk)
+            if eng_p or eng_h or eng_a:
+                why = ("prox " if eng_p else "") + ("rigHit " if eng_h else "") + ("addHit" if eng_a else "")
+                eng_log.append((round(t - t0, 1), why.strip()))
             if int(t) != int(prev_t):
                 pz.append((round(t - t0), G.get("pressure"), round(d / max(1e-6, ring or 1), 2)))
             prev_t = t
-            # away from the rig, bent away from the map edge; turn 90° when stuck
-            ax, az = T.get("x", 0) - b.get("x", 0), T.get("z", 0) - b.get("z", 0)
-            m = math.hypot(ax, az) or 1
-            ax, az = ax / m, az / m
-            if B:
-                cx, cz = (B["minX"] + B["maxX"]) / 2, (B["minZ"] + B["maxZ"]) / 2
-                hx, hz = (B["maxX"] - B["minX"]) / 2, (B["maxZ"] - B["minZ"]) / 2
-                ex = (T.get("x", 0) - cx) / max(1, hx)
-                ez = (T.get("z", 0) - cz) / max(1, hz)
-                if abs(ex) > 0.7:
-                    ax -= 2.0 * ex
-                if abs(ez) > 0.7:
-                    az -= 2.0 * ez
-            if last_pos is not None:
-                moved = math.hypot(T.get("x", 0) - last_pos[0], T.get("z", 0) - last_pos[1])
-                stuck_t = stuck_t + 0.1 if moved < 0.05 * max(1, T.get("height", 5)) else 0.0
-            last_pos = (T.get("x", 0), T.get("z", 0))
-            if stuck_t > 0.6:
-                turn = time.time() + 1.2
-                stuck_t = 0.0
-            if time.time() < turn:
-                ax, az = -az, ax
-            s.hold(world_to_keys(ax, az) or {"KeyW"})
-            if d < 3.0 * H and (T.get("dashCharges") or 0) >= 1:
+            # a real runner: flee along the open street grid (roads never hold an uncrushable building), choosing
+            # each next intersection by a short look-ahead of where the hunting rig will be; only WASD / Shift
+            keys, info = runner.step(T, b, g.get("t") or t, G.get("pressure") or 0)
+            modes[info] = modes.get(info, 0) + 1
+            s.hold(keys or {"KeyW"})
+            if runner.want_dash(T, b):
                 s.press("ShiftLeft", 50)
+                dashes += 1
             time.sleep(0.1)
         s.release_all()
         if far_run > 0:
             far_runs.append(round(far_run, 2))
         fw = s.js(FW_READ_JS) or {}
         s.js(FW_OFF_JS)
+        sub_tr = s.js(SUB_READ_JS) or []
         evr = [e.get("type") for fr in fw.get("frames") or [] for e in fr["events"]]
         g = self.gs()
         G = g.get("gates") or {}
         self.snap("step3_avoid_pressure")
         self.metrics["step3"] = {"pressureSeries": pz, "spawnRing": ring, "maxDistOverRing": round(dmax / max(1e-6, ring or 1), 2),
                                  "farRuns": far_runs, "repositionEvents": evr.count("gateReposition"),
-                                 "escalateEvents": evr.count("gateEscalate"), "gameS": round((g.get("t") or 0) - t0, 1)}
+                                 "escalateEvents": evr.count("gateEscalate"), "gameS": round((g.get("t") or 0) - t0, 1),
+                                 "runnerModes": modes, "dashes": dashes, "replans": runner.replans, "unsticks": runner.unsticks,
+                                 "engagedS": round(G.get("engagedS") or 0, 1) if "engagedS" in G else None}
         self.log("  pressure / distance÷spawnRing per second: %s" % json.dumps(pz))
+        self.log("  engaged samples (game s since live, why): %d · %s · engagedS %s" % (
+            len(eng_log), json.dumps(eng_log[:60]), G.get("engagedS")))
+        self.metrics["step3"]["engaged"] = eng_log
+        self.log("  titan hits on the rig (game s since live, dist÷ring, dmg by kind, titan hp): %s" % json.dumps(hit_log[:40]))
+        self.metrics["step3"]["rigHits"] = hit_log
         self.check("3", (G.get("pressure") or 0) >= 2 or maxP >= 2,
                    "45 s of real keys away from CORDON-2 → gates.pressure %s (max %s; ignoredS %.1f; gateEscalate ×%d)" % (
                        G.get("pressure"), maxP, G.get("ignoredS") or 0, evr.count("gateEscalate")))
+        # §2.4 cut-off for a runner that out-walks the hunt (Lane A fx2: gateUnstick's out-run rule — the rig hunts,
+        # stops closing for repositionS → it re-enters ahead of the titan, `gateReposition`)
+        self.check("3", evr.count("gateReposition") >= 1,
+                   "out-run → CUTTING YOU OFF: gateReposition ×%d (≥ 1) · runner: %d dashes, %d turn-backs, %d unsticks, "
+                   "modes %s" % (evr.count("gateReposition"), dashes, runner.replans, runner.unsticks, json.dumps(modes)))
+        # critic 2026-09-29: the out-run cut-off (gateUnstick → gateReenter, after that tick's gateBeats) never showed
+        # CUTTING YOU OFF. Each re-entry made while the rig was free (no real attack live — the beat's own rule) must
+        # put the subtitle in the DOM within 1.5 s (45 ticks).
+        rep_ticks = [fr.get("tick") for fr in fw.get("frames") or [] for e in fr["events"]
+                     if e.get("type") == "gateReposition" and isinstance(fr.get("tick"), (int, float))]
+        elig = shown = 0
+        detail = []
+        for rt in rep_ticks:
+            prior = [x for x in sub_tr if x[0] <= rt - 1]
+            at_before = prior[-1][1] if prior else ""
+            if at_before not in ("", "ramming", "cutOff"):
+                detail.append((rt, "busy:" + at_before))
+                continue
+            elig += 1
+            ok_sub = any(rt - 1 <= x[0] <= rt + 45 and "CUTTING YOU OFF" in (x[2] or "") for x in sub_tr)
+            shown += 1 if ok_sub else 0
+            detail.append((rt, "shown" if ok_sub else "MISSING"))
+        self.metrics["step3"]["cutOffSubtitle"] = detail
+        self.check("3", elig >= 1 and shown == elig,
+                   "CUTTING YOU OFF on the nameplate (DOM) within 1.5 s of each free cut-off re-entry: %d of %d "
+                   "(%d re-entries; %s)" % (shown, elig, len(rep_ticks), json.dumps(detail[:12])))
         long_far = [x for x in far_runs if x > 4 + 1.5]
         self.check("3", not long_far,
                    "the gatekeeper stays within 2.2 × spawnRing (%.1f m): max %.2f × ring; past 2.2 × for %s s at a time; "
@@ -773,7 +1143,14 @@ class GatePlaytest:
         self.check("4", (g.get("titan") or {}).get("rank") == 4, "titan.rank %s (Size V)" % (g.get("titan") or {}).get("rank"))
         # the `alert finale` is due 2.5 s after the kill (FINALE_ALERT_S, after the MASS BREACH sting): poll to +3.3 s
         ban, seen_at, d, snapped = [], None, {}, False
+        plate2 = None                              # §4.3.4: the dead boss's nameplate is gone 2 s after `finale on`
         while time.time() - kill_wall < 3.3:
+            if plate2 is None and time.time() - kill_wall >= 2.0:
+                dp = self.dom()
+                gp = self.gs()
+                plate2 = {"visible": dp.get("plateVisible"), "name": dp.get("plateName"),
+                          "wallS": round(time.time() - kill_wall, 2),
+                          "gameS": round((gp.get("t") or 0) - ((gp.get("gates") or {}).get("mainKillT") or 0), 2)}
             b2 = s.js(BANNER_JS) or []
             if b2 and seen_at is None:
                 seen_at = time.time() - kill_wall
@@ -785,6 +1162,8 @@ class GatePlaytest:
         kill_t = (g.get("gates") or {}).get("mainKillT")
         d = self.dom()
         self.log("  skip hint at +3.3 s: %r" % d.get("skipHint"))
+        self.check("4", plate2 is not None and plate2.get("visible") is False,
+                   "the dead boss's nameplate is hidden 2 s after `finale on` (%s)" % json.dumps(plate2))
         self.check("4", bool(ban), "`THE CITY GOT SMALLER.` banner visible in the DOM %s (%s)" % (
             "at +%.1f s after the kill" % seen_at if seen_at is not None else "— not within 3.3 s of the kill", ban[:2]))
         g_pre = self.gs()
@@ -832,6 +1211,40 @@ class GatePlaytest:
                        b.get("id"), b.get("slot"), (g.get("t") or 0) - t_k))
         self.check("5", d.get("kickerVisible") and (d.get("kicker") or "").strip() == "REISSUED · SIZE V",
                    "nameplate kicker %r (visible %s), name %r" % (d.get("kicker"), d.get("kickerVisible"), d.get("plateName")))
+        # the rematch's tells must be DRAWN, not only live in the sim (critic 2026-09-29: the runEnd fade blanked
+        # every telegraph + hazard for the rest of an EXTENDED COVERAGE run). Real keys only: walk toward the rig
+        # so it attacks; sample the sim's live boss tells vs what TelegraphView drew last frame.
+        if not ok:
+            return
+        n_live = n_drawn = 0
+        hz_live = hz_drawn = 0
+        first = None
+        t_end = time.time() + 45
+        while time.time() < t_end and (n_live < 8 or hz_live < 8):
+            if s.screen() != "play":
+                self.keep_play()
+            v = s.safe_js(TELL_DRAWN_JS) or {}
+            if v.get("dx") is not None and v.get("far"):
+                s.hold(world_to_keys(v["dx"], v["dz"]) or set())
+            else:
+                s.hold(set())
+            if v.get("bossTells", 0) > 0 and v.get("tellAge", 0) >= 0.25:
+                n_live += 1
+                n_drawn += 1 if v.get("tgBossDrawn", 0) > 0 else 0
+                if first is None:
+                    first = v
+            if v.get("hazards", 0) > 0 and v.get("hazAge", 0) >= 0.5:
+                hz_live += 1
+                hz_drawn += 1 if v.get("hzDrawn", 0) > 0 else 0
+            time.sleep(0.12)
+        s.release_all()
+        self.snap("step5_rematch_tell")
+        self.check("5", n_live >= 3 and n_drawn == n_live,
+                   "rematch tells DRAWN: %d of %d samples with a live boss tell (>= 0.25 s old) had it on screen "
+                   "(TelegraphView boss decals > 0); first %s" % (n_drawn, n_live, json.dumps(first)))
+        self.check("5", hz_live == 0 or hz_drawn == hz_live,
+                   "hazards DRAWN: %d of %d samples with a live hazard (>= 0.5 s old) drew it (HazardView > 0)" % (
+                       hz_drawn, hz_live))
 
     # ── step 6 ──
     def step6(self):

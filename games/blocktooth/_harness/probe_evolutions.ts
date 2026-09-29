@@ -23,6 +23,11 @@
 //      every locked card of its titan
 //   8. no evolution ready and nothing held ⇒ exactly the pre-v2 rng.loot draw count (one per offered card)
 //   9. determinism of a scripted draft session with banish / lock / reroll / evolve
+//   1c. fx2/D LATE CALL (data/evolutions.ts EVO_LATE_LEVEL = RANK_LEVELS[3]): from that level a titan with no
+//       evolution gets every live recipe half nudged (nothing started), its closest / most-stacked started recipe
+//       nudged xEVO_LATE_NUDGE (base included), or a ready evolution in EVERY level-up draft (draw count unchanged)
+//   11. real-sim rate (GATE 2 draft bot, bot.ts, probe_sim's draft loop): evolution OFFERED by LV 35 in >= 9 of
+//       4 titans x 3 seeds (fresh profile; BT_EVO_META=full for the full profile), reported per titan
 
 import type { TitanId, UpgradeDef, World } from '../src/core/types.ts';
 
@@ -30,12 +35,12 @@ const WM = await import('../src/core/world.ts');
 const DR = await import('../src/upgrades/draft.ts');
 const EN = await import('../src/upgrades/engine.ts');
 const { UPGRADES, UPGRADE_BY_ID } = await import('../src/data/upgrades.ts');
-const { EVOLUTIONS, EVO_NUDGE, EVO_READY_STACKS, evoReadyStacks } = await import('../src/data/evolutions.ts');
-const { DRAFT_V2 } = await import('../src/core/config.ts');
-const { TITAN_IDS } = await import('../src/core/types.ts');
+const { EVOLUTIONS, EVO_NUDGE, EVO_READY_STACKS, EVO_LATE_LEVEL, EVO_LATE_NUDGE, EVO_ROWS_OF_PART, evoReadyStacks } = await import('../src/data/evolutions.ts');
+const { DRAFT_V2, RANK_LEVELS, SIM_HZ } = await import('../src/core/config.ts');
+const { TITAN_IDS, BIOME_IDS, EMPTY_RUN_META } = await import('../src/core/types.ts');
 const { STAT_KEYS } = await import('../src/upgrades/stats.ts');
 
-const { rollOffer, rerollOffer, pickUpgrade, hasPendingDraft, isEligible, banishCard, lockCard, evolutionsReady, deliveredHold, recipeNudge, recipeHint, evolutionProgress } = DR;
+const { rollOffer, rerollOffer, pickUpgrade, hasPendingDraft, isEligible, banishCard, lockCard, evolutionsReady, deliveredHold, recipeNudge, recipeHint, evolutionProgress, lateCall } = DR;
 const { applyUpgrade } = EN;
 
 let fails = 0, passes = 0;
@@ -284,6 +289,78 @@ section('1b. F1: draft nudge toward a started recipe, recipe hints');
   ok(hasPendingDraft(w2), 'an evolution alone keeps hasPendingDraft true');
   const o = rollOffer(w2, false);
   ok(o.length === 1 && o[0] === 'evo_shear_wall_certificate', `pool empty except the evo → it is offered alone (${o.join(',')})`);
+}
+
+// ═══════════════════════════════ 1c. fx2/D LATE CALL ═══════════════════════════════
+section('1c. fx2/D: late call — a titan with no evolution by EVO_LATE_LEVEL');
+{
+  // a titan at LV 26-27 is Size III-IV: rank set to match so minRank cards are in the pool, as in a real run
+  const setLv = (w: World, lv: number): void => { (w.titan as { level: number }).level = lv; (w.titan as { rank: number }).rank = lv >= RANK_LEVELS[3] ? 3 : 2; };
+  ok(EVO_LATE_LEVEL === RANK_LEVELS[3], `EVO_LATE_LEVEL ${EVO_LATE_LEVEL} = RANK_LEVELS[3] ${RANK_LEVELS[3]} (the SWITCHBOARD-5 gate / Size IV)`);
+  ok(EVO_LATE_NUDGE > EVO_NUDGE, `EVO_LATE_NUDGE ×${EVO_LATE_NUDGE} > EVO_NUDGE ×${EVO_NUDGE}`);
+  for (const tid of TITAN_IDS) {
+    const w = fresh(tid, 91);
+    const live = EVOLUTIONS.filter((r) => { const u = UPGRADE_BY_ID[r.id]; return (!u.titan || u.titan === tid) && !u.locked; });
+    const halves = new Set<string>(); for (const r of live) { halves.add(r.base); halves.add(r.with); }
+    const plain = UPGRADES.find((u) => !u.evo && !EVO_ROWS_OF_PART[u.id] && isEligible(w, u))!;
+    setLv(w, EVO_LATE_LEVEL - 1);
+    ok(lateCall(w) === null && [...halves].every((id) => recipeNudge(w, id) === 1), `${tid}: LV ${EVO_LATE_LEVEL - 1}, nothing started → no late call, no nudge`);
+    setLv(w, EVO_LATE_LEVEL);
+    const lc = lateCall(w);
+    ok(!!lc && lc.kind === 'start', `${tid}: LV ${EVO_LATE_LEVEL}, nothing started → late call 'start' (${lc ? lc.kind : 'null'})`);
+    const bad = [...halves].filter((id) => recipeNudge(w, id) !== EVO_NUDGE);
+    ok(halves.size > 0 && bad.length === 0, `${tid}: every half of its ${live.length} live recipes nudged ×${EVO_NUDGE} (not nudged: ${bad.join(',') || '-'})`);
+    ok(!!plain && recipeNudge(w, plain.id) === 1, `${tid}: a non-recipe card (${plain?.id}) is not nudged`);
+  }
+  // started: the target is the closest recipe, ties broken by the most-stacked base; its base is nudged too while short
+  {
+    const w = fresh('molo', 92);
+    const cand = EVOLUTIONS.filter((r) => { const u = UPGRADE_BY_ID[r.id]; return (!u.titan || u.titan === 'molo') && !u.locked && needOf(r.base) >= 3; });
+    const parts = (r: typeof cand[number]) => [r.base, r.with];
+    const ra = cand[0];
+    const rb = cand.find((r) => r !== ra && !parts(r).some((x) => parts(ra).includes(x))
+      && !EVOLUTIONS.some((o) => o !== r && o !== ra && (parts(o).includes(r.base) || parts(o).includes(ra.base))))
+      ?? cand.find((r) => r !== ra && !parts(r).some((x) => parts(ra).includes(x)))!;
+    applyUpgrade(w, ra.base);                                 // A: base 1/need, companion missing
+    applyUpgrade(w, rb.base); applyUpgrade(w, rb.base);       // B: base 2/need, companion missing
+    setLv(w, EVO_LATE_LEVEL - 1);
+    ok(recipeNudge(w, rb.base) === 1 || EVOLUTIONS.some((x) => x.with === rb.base), `below the late level a base never nudges itself (${rb.base} ×${recipeNudge(w, rb.base)})`);
+    setLv(w, EVO_LATE_LEVEL);
+    const lc = lateCall(w);
+    ok(!!lc && lc.kind === 'finish' && lc.target.evo === rb.id, `two started (${ra.id} 1/3, ${rb.id} 2/3) → late target ${rb.id} (${lc && lc.kind === 'finish' ? lc.target.evo : lc ? lc.kind : 'null'})`);
+    ok(recipeNudge(w, rb.with) === EVO_LATE_NUDGE && recipeNudge(w, rb.base) === EVO_LATE_NUDGE, `target's companion ${rb.with} ×${recipeNudge(w, rb.with)} and short base ${rb.base} ×${recipeNudge(w, rb.base)} = ×${EVO_LATE_NUDGE}`);
+    ok(recipeNudge(w, ra.with) === EVO_NUDGE, `the other started recipe keeps the F1 rule (companion ${ra.with} ×${recipeNudge(w, ra.with)})`);
+    // draw count untouched by the late nudge
+    const c = countLoot(w);
+    let draws = 0, cards = 0, hit = 0;
+    for (let i = 0; i < 400; i++) { w.upgrades.offer = null; const a = c.n; const o = rollOffer(w, false); draws += c.n - a; cards += o.length; if (o.includes(rb.with)) hit++; }
+    console.log(`late target ${rb.id}: companion ${rb.with} offered in ${hit}/400 drafts`);
+    ok(draws === cards, `late nudge adds no rng.loot draw (${draws} draws / ${cards} cards)`);
+    // once the titan owns ANY evolution the late call is over
+    setRecipe(w, rb.id);
+    w.upgrades.offer = null; w.upgrades.pendingDrafts = 1;
+    const oe = rollOffer(w, false);
+    ok(oe.includes(rb.id), `late 'ready': the level-up draft shows ${rb.id} (${oe.join(',')})`);
+    pickUpgrade(w, rb.id);
+    ok((w.upgrades.owned[rb.id] ?? 0) > 0 && lateCall(w) === null, `after evolving (${rb.id} owned) → no late call (${JSON.stringify(lateCall(w))})`);
+  }
+  // ready at/after the late level: every level-up draft shows it in slot 2, with the same single extra draw
+  {
+    const w = fresh('molo', 93);
+    setRecipe(w, 'evo_bulldozer_clause');
+    setLv(w, EVO_LATE_LEVEL - 1);
+    const c = countLoot(w);
+    let early = 0, late = 0, badDraw = 0;
+    const T = 300;
+    for (let i = 0; i < T; i++) { w.upgrades.offer = null; w.upgrades.pendingDrafts = 1; const a = c.n; const o = rollOffer(w, false); if (o[2] === 'evo_bulldozer_clause') early++; if (c.n - a !== o.length + 1) badDraw++; }
+    setLv(w, EVO_LATE_LEVEL);
+    const lc = lateCall(w);
+    for (let i = 0; i < T; i++) { w.upgrades.offer = null; w.upgrades.pendingDrafts = 1; const a = c.n; const o = rollOffer(w, false); if (o[2] === 'evo_bulldozer_clause') late++; if (c.n - a !== o.length + 1) badDraw++; }
+    console.log(`ready evolution in slot 2: LV ${EVO_LATE_LEVEL - 1} ${early}/${T} (evoDraftChance ${DRAFT_V2.evoDraftChance}) · LV ${EVO_LATE_LEVEL} ${late}/${T}`);
+    ok(!!lc && lc.kind === 'ready' && lc.evo === 'evo_bulldozer_clause', `late call 'ready' names the ready evolution (${JSON.stringify(lc)})`);
+    ok(early < T && late === T, `before the late level the evo rides the chance roll (${early}/${T}); from it, every level-up draft shows it (${late}/${T})`);
+    ok(badDraw === 0, `the late 'ready' rule keeps the level-up draw count (${badDraw} drafts off)`);
+  }
 }
 
 // ═══════════════════════════════ 4. LOCK ═══════════════════════════════
@@ -580,6 +657,46 @@ section('10. REACHABILITY (draft-only model)');
     ok(n.runs >= 0.4 * N, `${tid}: a player ignoring recipes still meets an evolution in ≥ 40 % of runs (${n.runs}/${N})`);
     ok(n.evos / N <= 2, `${tid}: ... but not a given: ≤ 2 evolutions per run on average (${(n.evos / N).toFixed(2)})`);
   }
+}
+
+// ═══════════════════════════════ 11. REAL-SIM RATE: EVOLUTION OFFERED BY LV 35 ═══════════════════════════════
+// fx2/D (critic: a normal run is not reliably offered an evolution before the city boss). The real sim, driven
+// exactly as probe_sim's GATE 2 loop drives it (bot.ts botInput + botPickUpgrade on rollOffer), 4 titans × 3 seeds
+// (biomes rotate with the seed), until the titan passes LV 35. A hit = any draft at LV ≤ 35 offered an evolution.
+// Measured before the late call (fx2/D, fresh): 10/12 (per titan 3/2/3/2). ~45 s.
+section('11. REAL SIM: evolution offered by LV 35 (GATE 2 draft bot)');
+{
+  const { botInput, botPickUpgrade } = await import('./bot.ts');
+  const metaFull = process.env.BT_EVO_META === 'full';
+  const SEEDS = [1337, 1338, 1339];
+  const per: Record<string, number> = {};
+  let hit = 0, n = 0;
+  for (const tid of TITAN_IDS) {
+    per[tid] = 0;
+    for (let si = 0; si < SEEDS.length; si++) {
+      const seed = SEEDS[si], biome = BIOME_IDS[si % BIOME_IDS.length];
+      const w = WM.createWorld({ titan: tid, biome, seed, meta: { ...EMPTY_RUN_META, unlocked: metaFull ? LOCKED_IDS.slice() : [] } });
+      const maxTicks = 13 * 60 * SIM_HZ;
+      let first = -1, drafts = 0, late = '';
+      for (let i = 0; i < maxTicks && !w.run.result && w.titan.level <= 35 && first < 0; i++) {
+        let guard = 0;
+        while (hasPendingDraft(w) && ++guard < 200) {
+          const chest = w.upgrades.chestDrafts > 0;
+          const offer = w.upgrades.offer && w.upgrades.offer.length > 0 ? w.upgrades.offer : rollOffer(w, chest);
+          if (!offer || offer.length === 0) break;
+          if (w.titan.level <= 35) drafts++;
+          if (!late && w.titan.level >= EVO_LATE_LEVEL) { const lc = lateCall(w); late = lc ? lc.kind : 'none (evolved)'; }
+          if (first < 0 && w.titan.level <= 35 && offer.some((id) => !!UPGRADE_BY_ID[id].evo)) first = w.titan.level;
+          pickUpgrade(w, botPickUpgrade(w, offer));
+        }
+        WM.stepWorld(w, botInput(w));
+      }
+      n++; if (first > 0) { hit++; per[tid]++; }
+      console.log(`${tid.padEnd(10)} ${biome.padEnd(11)} seed ${seed} · ${first > 0 ? `evolution offered at LV ${first}` : `NO evolution by LV 35 (stopped LV ${w.titan.level} ${w.run.result ?? ''} t=${w.t.toFixed(0)}s)`} · drafts ${drafts}${late ? ` · late call: ${late}` : ''}`);
+    }
+  }
+  console.log(`--meta ${metaFull ? 'full' : 'fresh'}: evolution offered by LV 35 in ${hit}/${n} runs · per titan ${TITAN_IDS.map((t) => `${t} ${per[t]}/${SEEDS.length}`).join(' · ')}`);
+  ok(hit >= 9, `evolution offered by LV 35 in ≥ 9/12 real-sim runs (${hit}/${n})`);
 }
 
 console.log(`\nRESULT: ${passes} checks passed, ${fails} failed`);

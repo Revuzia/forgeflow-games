@@ -937,6 +937,12 @@ export class App {
 
   /** Renderer counters of the last rendered frame. */
   renderStats(): RenderStats { return this.core.stats(); }
+  /** what the telegraph / hazard views drew last frame (tests: a live tell is ON SCREEN, not only in the sim) */
+  viewStats(): { tgDrawn: number; tgBossDrawn: number; hzDrawn: number } {
+    const tg = this.views.find((v): v is TelegraphView => v instanceof TelegraphView);
+    const hz = this.views.find((v): v is HazardView => v instanceof HazardView);
+    return { tgDrawn: tg ? tg.drawn : -1, tgBossDrawn: tg ? tg.bossDrawn : -1, hzDrawn: hz ? hz.drawn : -1 };
+  }
 
   /**
    * Render one still frame right now (no events, dt 0 — nothing advances) and return the canvas
@@ -1465,6 +1471,9 @@ export class App {
     this.draftArmed = false;
     this.modal = null;
     this.bossbar.hide();
+    // the runEnd fade blanked the telegraph + hazard stage; KEEP GOING does not remount the views,
+    // so every view that faded on runEnd un-fades here (or no tell is ever drawn again this run)
+    for (const v of this.views) v.resumeAfterEnd?.();
     const key: AlertKey = 'endless';
     this.evA.push({ type: 'alert', key });
     this.enterPlay();
@@ -1706,7 +1715,10 @@ export class App {
           break;
         }
         case 'bossPhase': this.stingT = Math.max(this.stingT, 2); break;
-        case 'bossDefeated': this.stingT = Math.max(this.stingT, 4); break;
+        case 'bossDefeated':
+          // GATEKEEPERS §4.3.4: the (city) boss nameplate hides 1.5 s after the defeat stamp — the Size V finale
+          // keeps the run going for 10 s, so the dead plate must not wait for beginEnding() to clear it
+          this.gateBarHideT = 1.5; this.stingT = Math.max(this.stingT, 4); break;
         case 'eliteSpawn': this.stingT = Math.max(this.stingT, 2); break;
         case 'runEnd': this.beginEnding(e.result); break;
         case 'ultFire': this.onUltFire(); break;     // v2 UPROAR
@@ -1734,6 +1746,9 @@ export class App {
   private onFinale(on: boolean): void {
     if (!on) { this.setFinaleHint(-1); return; }
     this.setFinaleHint(0);
+    // §4.3.4: the nameplate hides 1.5 s after the defeat stamp (bossDefeated pushes on the same tick; this
+    // is the belt-and-braces for a finale whose defeat event was not seen by this app frame)
+    if (!(this.gateBarHideT > 0)) this.gateBarHideT = 1.5;
     this.music.setIntensity(1);
     const mu = this.music as unknown as { swell?: () => void };
     if (typeof mu.swell === 'function') mu.swell();
@@ -1815,7 +1830,7 @@ export class App {
     if (this.sizeUpHoldT > 0) this.sizeUpHoldT = Math.max(0, this.sizeUpHoldT - dt);
     if (this.stingT > 0) this.stingT = Math.max(0, this.stingT - dt);
 
-    // GATEKEEPERS: the gate nameplate hides 1.5 s after gateDefeated (unless a new fight took the slot)
+    // GATEKEEPERS: the gate / boss nameplate hides 1.5 s after gateDefeated / bossDefeated (unless a new fight took the slot)
     if (this.gateBarHideT > 0) {
       this.gateBarHideT -= dt;
       if (this.gateBarHideT <= 0) { this.gateBarHideT = 0; if (!(w.boss && w.boss.alive)) this.bossbar.hide(); }

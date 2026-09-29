@@ -43,6 +43,12 @@ export interface ViewModule {
   mount(world: World): void | Promise<void>;
   update(world: World, f: FrameInfo): void;
   unmount(): void;
+  /**
+   * The run ended (a `runEnd` event) and then went on WITHOUT a remount — KEEP GOING → EXTENDED
+   * COVERAGE (FEATURES_V2 §9.1). A view that fades its stage out on runEnd must undo that here, or it
+   * stays blank for the rest of the run. Called by the app before play resumes.
+   */
+  resumeAfterEnd?(): void;
 }
 
 /** Interpolate a sim pose for rendering. */

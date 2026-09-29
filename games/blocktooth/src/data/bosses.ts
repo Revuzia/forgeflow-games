@@ -124,6 +124,10 @@ export const BOSS_DEFAULT_SUBTITLE: Record<BossId, string> = {
  */
 export const BOSS_BEAT_SUBTITLE: Readonly<Record<string, string>> = {
   refill: 'REFILLING — HIT THE DRUM',                  // STENCIL-1 after a STRIPE RUN / U-TURN
+  // the staggers (fx2 lane B: the default "wait for the window" hint stayed up while the window was wide open)
+  tippedOver: 'TIPPED OVER — HIT THE DRUM NOW',         // STENCIL-1 SPILL full (the drum forced open)
+  stalled: 'STALLED — HIT THE PACK NOW',                // CORDON-2 STALL full (the tracks stop)
+  linesDown: 'LINES DOWN — HIT THE DISHES NOW',         // SWITCHBOARD-5 FEEDBACK full (the dishes droop, still out)
   overheated: 'OVERHEATED — GET BEHIND IT',            // CORDON-2 after a SHIELD SHOVE
   packUp: 'PACKING UP',                                // SWITCHBOARD-5 folds before it drives (hunt)
   planting: 'PLANTING',                                // SWITCHBOARD-5 outriggers down

@@ -84,6 +84,8 @@ export interface BtState {
   gates: BtGatesState | null;
   frozen: boolean; testFrozen: boolean; ending: boolean;
   fps: number; draws: number; tris: number; programs: number;
+  /** last frame: telegraph decals drawn (all / boss-owned), hazards drawn — the view layer, not the sim */
+  views: { tgDrawn: number; tgBossDrawn: number; hzDrawn: number };
   /** adaptive render scale applied to the quality DPR (1 = full resolution) */
   renderScale: number;
   /** DynRes internals: estimated display interval (ms), last live window's missed-frame %, steps taken */
@@ -286,6 +288,7 @@ export function installTestSurface(app: App): BtSurface {
       ending: app.isEnding,
       fps: Math.round(fs.fps * 10) / 10,
       draws: rs.draws, tris: rs.tris, programs: rs.programs,
+      views: app.viewStats(),
       renderScale: app.dynres.scale,
       dynres: {
         intervalMs: Math.round(app.dynres.displayInterval * 10000) / 10,

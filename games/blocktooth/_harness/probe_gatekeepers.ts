@@ -2,7 +2,7 @@
 // holds · 1 = failures (listed) · 2 = the sim could not be loaded.
 //
 //   node _harness/probe_gatekeepers.ts                  # every case
-//   node _harness/probe_gatekeepers.ts --only 1,2,6b    # a subset (case ids as in §5.4: 1 2 3 4 5 6 6b 7 7b 8 9 10 11 12 13 14 15 16)
+//   node _harness/probe_gatekeepers.ts --only 1,2,6b    # a subset (case ids as in §5.4: 1 2 3 4 5 6 6b 6c 7 7b 7c 8 9 10 11 12 13 14 15 16)
 //   node _harness/probe_gatekeepers.ts --calibrate      # case 4 + the per-titan fight medians K1b tunes GATE_HP_MUL with
 //   node _harness/probe_gatekeepers.ts --quick          # seed 1337 only in the matrix / scenario sweeps (dev loop)
 //
@@ -30,11 +30,16 @@
 //   6  Fair tells (the boss_threat policy port of probe_boss3, god, 5 seeds, phases forced every 30 s): tells landed
 //      on VOLT-KITE and MOLO 4–20 %; windup ≥ 0.9 s (0.8 s in P3); no hit > GATES.hitCap; never inside a hard
 //      keep-out. At the home Size AND against the Size V rematch (KEEP GOING, rotation forced to that gatekeeper).
+//   6c Walkers (fx2): the same port with NO dash and a fixed 0.35 s reaction, 4 titans, each gatekeeper at home and each
+//      city boss at Size IV: tells landed ≤ 20 % per titan × boss.
 //   6b Volley geometry (pure): volleyPoints from a titan on the lead point, 100 rng.boss seeds, every phase, the four
 //      walk speeds, home H / 60 / 67 (+ slowed 0.65 for STENCIL-1): a straight escape exists; gateWindup ≥ fair;
 //      DOUBLE LINE median ≥ 0.3 H; SAWHORSE gaps ≥ 1.04 H; STRIPE RUN lane width = 2 × parts[0].r (live tells).
-//   7  Avoider (walks straight away, never attacks, god): pressure 3 by 75 s of fight time; ≥ 1 gateReposition; no
+//   7  Avoider (flees the rig along open streets like a runner — fx2: was a straight line into the first building
+//      it could not crush; never attacks, god): pressure 3 by 75 s of fight time; ≥ 1 gateReposition; no
 //      pending lock overdue; engagedS 0 and the fatigue clock exactly 0.5 × liveFightS; dead to fatigue by 210 s.
+//   7c Out-run on open road (fx2): every building flattened, the case-7 runner: 0 gateRam and ≥ 1 gateReposition within
+//      60 s of fight time, each gatekeeper × 4 titans × 3 cities.
 //   7b Soaked fighter (VOLT-KITE, HEARTHBACK, no god, gate bot, SWITCHBOARD-5 with its adds held at the 14 cap by
 //      the probe): a kill (or a titan death, reported) within 90 s; pressure never rises within band max + 0.5 H;
 //      never reaches 3.
@@ -56,7 +61,7 @@
 import type { BiomeId, BossState, GateId, RunMeta, SimEvent, TitanId, TitanInput, World, Shape } from '../src/core/types.ts';
 import { BIOME_IDS, EMPTY_RUN_META, GATE_IDS, TITAN_IDS } from '../src/core/types.ts';
 import {
-  ENDLESS, GATE2_V3, GATES, GROW_TWEEN_S, LEVEL_GROW_S, RANK_LEVELS, SIM_HZ, ULT, bossFrameMaxMul, bossFrameNeed,
+  ENDLESS, GATE2_V3, GATES, GROW_TWEEN_S, LEVEL_GROW_S, RANKS, RANK_LEVELS, SIM_HZ, SMASH_SLOW, ULT, bossFrameMaxMul, bossFrameNeed,
   cameraDistance, titanHeightAt, titanSpeed,
 } from '../src/core/config.ts';
 
@@ -108,6 +113,9 @@ const optv = (k: string): string | null => { const i = argv.indexOf(k); return i
 const ONLY = (() => { const s = optv('--only'); return s ? new Set(s.split(',').map((x) => x.trim())) : null; })();
 const CALIBRATE = flag('--calibrate');
 const QUICK = flag('--quick');
+const TRACE7 = process.env.AVOID_TRACE ?? '';   // e.g. switchboard5/voltkite/grideast: a per-0.5 s case-7 trace
+/** fx2 diagnostics: DUEL_TRACE=1 prints every landed boss tell of a duel (cast state vs fire state). */
+const DUEL_TRACE = process.env.DUEL_TRACE ?? '';
 const want = (id: string) => (CALIBRATE ? id === '4' : !ONLY || ONLY.has(id));
 const SEEDS = QUICK ? [1337] : [1337, 7, 99];
 const TICK = 1 / SIM_HZ;
@@ -188,6 +196,9 @@ function atGate(titan: TitanId, biome: BiomeId, seed: number, s: 1 | 2 | 3 | 4, 
 function lockAndSpawn(w: World, s: number): BossState | null {
   if (s === 4) w.gates.mainEarliestT = Math.min(w.gates.mainEarliestT, w.t);   // a probe fixture: no 7:20 wait
   M.titansim.gainGrowth(w, 1); drafts(w);
+  // fx2: a titan whose drafts overshot LV 35 during atGate's warm-up locked slot 4 BEFORE the override above, so its
+  // due time still carries the 7:20 wait (briarwick/grideast seed 1: dueT 440 → "could not field it") — same fixture intent
+  if (s === 4 && w.gates.pending === 4 && w.gates.dueT > w.t) w.gates.dueT = w.t;
   // the noSpawns cheat also holds a pending gate (stepGates, like the director's boss block): lift it until the fight is fielded
   const ns = w.cheats.noSpawns;
   w.cheats.noSpawns = false;
@@ -349,10 +360,18 @@ function matrixRun(titan: TitanId, biome: BiomeId, seed: number): MatrixRun {
     if (b && b.alive && b.role === 'main' && !w.endless && b.introT > 0) {
       if (bossFrameNeed(w).d >= bossFrameMaxMul(T.rank) * cameraDistance(T.height) * 0.999) r.frameIntroSat++;
     }
+    if (process.env.FRAME_TRACE && b && b.alive && b.role === 'main' && !w.endless && w.tick % 30 === 0) {
+      const Hh = M.bosses.bossH(w, b);
+      console.log(`    [city] t=${w.t.toFixed(1)} P${b.phase} att=${b.attack ?? '-'} d=${(Math.hypot(T.x - b.x, T.z - b.z) / Hh).toFixed(2)}H hp=${(T.hp / T.maxHp).toFixed(2)} dash=${T.dashCharges} leash=${T.leash ? 1 : 0} frame=${(bossFrameNeed(w).d / Math.max(1e-6, cameraDistance(T.height))).toFixed(2)}`);
+    }
     if (b && b.alive && b.role === 'main' && !w.endless && b.introT <= 0) {
       const need = bossFrameNeed(w).d, cap = bossFrameMaxMul(T.rank) * cameraDistance(T.height);
       r.frameMax = Math.max(r.frameMax, need / Math.max(1e-6, cameraDistance(T.height)));
       if (need >= cap * 0.999) bad('10', `bossFrameNeed saturated at maxMul × curve @${f1(w.t)} s (P${b.phase}, ${f1(w.t - spawnT[4])} s after the spawn)`);
+      if (need >= cap * 0.999 && process.env.FRAME_TRACE) {
+        const Hh = M.bosses.bossH(w, b);
+        console.log(`    [frame] t=${w.t.toFixed(2)} T=(${(T.x / Hh).toFixed(2)},${(T.z / Hh).toFixed(2)})H boss=(${(b.x / Hh).toFixed(2)},${(b.z / Hh).toFixed(2)})H d=${(Math.hypot(T.x - b.x, T.z - b.z) / Hh).toFixed(2)}H leash=${T.leash ? T.leash.t.toFixed(2) : '-'} tells: ${w.telegraphs.filter((q) => q.alive && q.owner === 'boss').map((q) => `${q.tag}@${q.t.toFixed(2)}/${q.windup.toFixed(2)}+${q.active.toFixed(1)} ${JSON.stringify(q.shape, (k, v) => typeof v === 'number' ? Math.round((v / Hh) * 100) / 100 : v)}`).join(' | ')}`);
+      }
     }
     // case 5 (matrix share): titan damage to the rig while a weak point is open
     if (b && b.role === 'gate' && b.slot >= 1) {
@@ -392,7 +411,9 @@ function runMatrix(): void {
   console.log('\nTHE MATRIX — 4 titans × 3 cities × seeds ' + SEEDS.join('/') + ' (gate bot, no god, fresh meta)');
   const runs: MatrixRun[] = [];
   const wall0 = performance.now();
+  const mOnly = process.env.MATRIX_ONLY ?? '';   // fx2 diagnostics: e.g. "lockwater/voltkite/99" runs that one config
   for (const biome of BIOME_IDS) for (const titan of TITAN_IDS) for (const seed of SEEDS) {
+    if (mOnly && mOnly !== `${biome}/${titan}/${seed}`) continue;
     const t0 = performance.now();
     const r = matrixRun(titan, biome, seed);
     runs.push(r);
@@ -490,7 +511,15 @@ function inside(s: Shape, x: number, z: number, r: number): boolean {
   }
   return false;
 }
-function esc(s: Shape, x: number, z: number): [number, number] {
+function esc(s: Shape, x: number, z: number, cheap = false): [number, number] {
+  // 6c's walker (cheap): out of a cone by the SHORTER exit, like a player — past the reach when that is nearer than
+  // the side edge (the boss_threat port always steps sideways)
+  if (cheap && s.k === 'cone') {
+    const dx = x - s.x, dz = z - s.z, d = Math.hypot(dx, dz);
+    let a = Math.atan2(dx, dz) - s.dir; a = Math.atan2(Math.sin(a), Math.cos(a));
+    const side = d * Math.sin(Math.max(0, s.half - Math.abs(a))), out = s.r - d;
+    if (d > 1e-6 && out < side) return [dx / d, dz / d];
+  }
   if (s.k === 'lane') { const fx = Math.sin(s.dir), fz = Math.cos(s.dir); const sd = (x - s.x) * fz - (z - s.z) * fx; const g = sd >= 0 ? 1 : -1; return [fz * g, -fx * g]; }
   if (s.k === 'cone') { const th = Math.atan2(x - s.x, z - s.z); let a = th - s.dir; a = Math.atan2(Math.sin(a), Math.cos(a)); const g = a >= 0 ? 1 : -1; return [Math.cos(th) * g, -Math.sin(th) * g]; }
   if (s.k === 'capsule') {
@@ -520,16 +549,24 @@ interface Duel {
   titan: TitanId; gate: GateId; seed: number; fired: number; landed: number; minWindup: number; minWindupP3: number;
   maxHit: number; keepViol: number; keepPinned: number; openDmg: number; openWeak: number; fightS: number; stagger: number; nan: boolean;
   laneW: number[]; parts0R: number; geom: string[];
+  /** fired / landed per telegraph tag (fx2 diagnostics) */
+  byTag: Map<string, [number, number]>;
+  /** 0-damage control tells (damagingOnly duels): fired / landed, kept out of fired / landed */
+  ctrlFired: number; ctrlLanded: number;
 }
 /** The boss_threat policy port (probe_boss3 §D) against a live gatekeeper, god, no adds; phases forced every phaseS. */
-function duel(w: World, seed: number, phaseS: number, geo: boolean): Duel {
+/** Duel options (fx2): `react` = a fixed reaction to a new tell (s; default 0.25 + 0.1 × hash, the boss_threat port);
+ *  `noDash` = the policy never dashes (case 6c's walker). */
+interface DuelOpts { react?: number; noDash?: boolean; damagingOnly?: boolean; humanEsc?: boolean }
+function duel(w: World, seed: number, phaseS: number, geo: boolean, opt: DuelOpts = {}): Duel {
   const b = w.boss!;
   const T = w.titan;
   const D: Duel = {
     titan: T.id, gate: b.id as GateId, seed, fired: 0, landed: 0, minWindup: Infinity, minWindupP3: Infinity, maxHit: 0, keepViol: 0, keepPinned: 0,
-    openDmg: 0, openWeak: 0, fightS: 0, stagger: 0, nan: false, laneW: [], parts0R: 0, geom: [],
+    openDmg: 0, openWeak: 0, fightS: 0, stagger: 0, nan: false, laneW: [], parts0R: 0, geom: [], byTag: new Map(), ctrlFired: 0, ctrlLanded: 0,
   };
-  const seen = new Map<number, number>(), tagSeen = new Set<number>(), seenP = new Set<number>();
+  const seen = new Map<number, number>(), tagSeen = new Set<number>(), seenP = new Set<number>(), idTag = new Map<number, string>();
+  const castInfo = new Map<number, string>(), ctrlIds = new Set<number>();
   let lastDash = -9, lastSpace = -9, mx = 0, mz = -1, phaseT = 0, lastPhase = 1, prevMask = 0;
   const OUT = { x: 0, z: 0 };
   const geoDone = new Set<string>();
@@ -537,17 +574,19 @@ function duel(w: World, seed: number, phaseS: number, geo: boolean): Duel {
     const t = w.t;
     let dash = false, ability = false;
     if (i % 3 === 0) {
-      let sx = 0, sz = 0, tMin = Infinity, n = 0;
+      let sx = 0, sz = 0, tMin = Infinity, n = 0, wSum = 0;
+      const circ: { x: number; z: number; w: number }[] = [];
       const rr = T.radius * 1.3 + 0.1 * T.height;
       for (const tg of w.telegraphs) {
         if (!tg.alive || tg.owner === 'titan') continue;
-        if (!seen.has(tg.id)) seen.set(tg.id, t + 0.25 + 0.1 * hash01(tg.id, seed));
+        if (!seen.has(tg.id)) seen.set(tg.id, t + (opt.react !== undefined ? opt.react : 0.25 + 0.1 * hash01(tg.id, seed)));
         if (t < seen.get(tg.id)!) continue;
         let tl: number;
         if (!tg.fired) tl = tg.windup - tg.t; else if (tg.active > 0 && tg.t < tg.windup + tg.active) tl = 0; else continue;
         if (tl > 3 || !inside(tg.shape, T.x, T.z, rr)) continue;
-        const [ex, ez] = esc(tg.shape, T.x, T.z); const wt = 1 / (0.2 + tl);
-        sx += ex * wt; sz += ez * wt; n++; tMin = Math.min(tMin, tl);
+        const [ex, ez] = esc(tg.shape, T.x, T.z, !!opt.humanEsc); const wt = 1 / (0.2 + tl);
+        sx += ex * wt; sz += ez * wt; n++; tMin = Math.min(tMin, tl); wSum += wt;
+        if (tg.shape.k === 'circle') circ.push({ x: tg.shape.x, z: tg.shape.z, w: wt });
       }
       let dx = 0, dz = 0;
       if (n) { dx = sx; dz = sz; }
@@ -561,6 +600,37 @@ function duel(w: World, seed: number, phaseS: number, geo: boolean): Duel {
         else if (d < hold * 0.8) { dx = -bx / d + 0.6 * (-bz / d); dz = -bz / d + 0.6 * (bx / d); }
         else { dx = -bz / d + 0.25 * bx / d; dz = bx / d + 0.25 * bz / d; }
       } else { dx = b.x - T.x; dz = b.z - T.z; }
+      // 6c's walker reads a ROW of circles (a trolley run, a volley line) the way a player does: when the per-circle
+      // escapes cancel (the titan stands on the row), it steps SIDEWAYS off the row (the side it already leans to,
+      // else away from the rig) instead of freezing on a fixed key — the boss_threat port (case 6) is unchanged
+      if (opt.humanEsc && n >= 2 && circ.length >= 2 && Math.hypot(sx, sz) < 0.35 * wSum) {
+        circ.sort((p, q) => q.w - p.w);
+        let ax = circ[1].x - circ[0].x, az = circ[1].z - circ[0].z;
+        const am = Math.hypot(ax, az);
+        if (am > 1e-6) {
+          ax /= am; az /= am;
+          let px = -az, pz = ax;
+          const side = (T.x - circ[0].x) * px + (T.z - circ[0].z) * pz;
+          const away = (T.x - b.x) * px + (T.z - b.z) * pz;
+          if ((Math.abs(side) > 0.5 * T.radius ? side : away) < 0) { px = -px; pz = -pz; }
+          dx = px; dz = pz;
+          if (process.env.ESC_DBG) console.log(`      [escdbg] t=${t.toFixed(2)} n=${n} circ=${circ.length} sum=${Math.hypot(sx, sz).toFixed(2)} wSum=${wSum.toFixed(2)} p=(${px.toFixed(2)},${pz.toFixed(2)})`);
+        }
+      }
+      // …and it does not walk INTO the rig's hard keep-out wall or its body (it cannot pass them):
+      // pressed against the wall, the inward part of the escape is dropped and it slides along the wall instead
+      if (opt.humanEsc && n > 0) {
+        // the wall: the rig's hard keep-out, or its body (parts[0] + the titan's radius) where it has none
+        const kw = Math.max(M.bosses.bossKeepOutM(w, b), (b.parts[0]?.r ?? 0) + T.radius);
+        const bx = T.x - b.x, bz = T.z - b.z, bd = Math.hypot(bx, bz);
+        if (kw > 0 && bd > 1e-6 && bd < kw + 0.25 * T.height) {
+          const ox = bx / bd, oz = bz / bd, inward = -(dx * ox + dz * oz);
+          if (inward > 0) {
+            dx += inward * ox; dz += inward * oz;
+            if (Math.hypot(dx, dz) < 0.2 * Math.hypot(sx, sz) + 1e-6) { dx = ox; dz = oz; }
+          }
+        }
+      }
       const B = w.city.bounds, edge = Math.max(4, 2 * T.height);
       if (T.x < B.minX + edge) dx = Math.abs(dx) + 0.5;
       if (T.x > B.maxX - edge) dx = -Math.abs(dx) - 0.5;
@@ -570,7 +640,7 @@ function duel(w: World, seed: number, phaseS: number, geo: boolean): Duel {
       if (T.abilityCd <= 0 && t - lastSpace > 1) { ability = true; lastSpace = t; }
       const urgent = n > 0 && tMin < 0.45;
       const periodic = t - lastDash > (T.id === 'voltkite' ? 2.5 : 6);
-      if ((urgent || periodic) && T.dashCharges >= 1 && t - lastDash > 0.35) { dash = true; lastDash = t; }
+      if (!opt.noDash && (urgent || periodic) && T.dashCharges >= 1 && t - lastDash > 0.35) { dash = true; lastDash = t; }
     }
     // case 5 geometry: the first tick a weak point is open, MOLO at the keep-out / push-out distance behind it
     const mask0 = (b.data.weakMask ?? 0) | 0;
@@ -596,10 +666,24 @@ function duel(w: World, seed: number, phaseS: number, geo: boolean): Duel {
     M.world.stepWorld(w, { mx, mz, ability, abilityHeld: false, dash });
     for (const ev of w.events) {
       if (ev.type === 'bossStagger') D.stagger++;
-      if (ev.type === 'telegraphFire' && ev.owner === 'boss') { D.fired++; if (ev.hit) D.landed++; }
+      if (ev.type === 'telegraphFire' && ev.owner === 'boss') {
+        if (opt.damagingOnly && ctrlIds.has(ev.id)) { D.ctrlFired++; if (ev.hit) D.ctrlLanded++; continue; }
+        D.fired++; if (ev.hit) D.landed++;
+        if (DUEL_TRACE && ev.hit) {
+          const tgf = w.telegraphs.find((q) => q.id === ev.id);
+          const Hh = M.bosses.bossH(w, b);
+          console.log(`    [trace ${T.id}/${b.id} s${seed}] HIT ${idTag.get(ev.id)} ${castInfo.get(ev.id) ?? '?'} | fire t=${w.t.toFixed(2)} T=(${(T.x / Hh).toFixed(2)},${(T.z / Hh).toFixed(2)})H boss=(${(b.x / Hh).toFixed(2)},${(b.z / Hh).toFixed(2)})H d=${(Math.hypot(T.x - b.x, T.z - b.z) / Hh).toFixed(2)}H v=${(Math.hypot(T.vx, T.vz) / Hh).toFixed(2)} in=(${mx.toFixed(2)},${mz.toFixed(2)}) dashT=${T.dashT.toFixed(2)} ${tgf ? '' : ''}`);
+        }
+        const tag = idTag.get(ev.id) ?? '?', row = D.byTag.get(tag) ?? [0, 0];
+        row[0]++; if (ev.hit) row[1]++; D.byTag.set(tag, row);
+      }
     }
     for (const tg of w.telegraphs) if (tg.owner === 'boss' && !tagSeen.has(tg.id)) {
-      tagSeen.add(tg.id);
+      tagSeen.add(tg.id); idTag.set(tg.id, tg.tag || tg.kind || '?');
+      // a CONTROL tell deals no damage of its own (CAISSON-4's winch leash, IRON GULLY's charge lane — the charge body
+      // hits separately): lob paint (tag 'lob:…') is excluded, its projectile carries the damage
+      if (!(tg.dmg > 0) && !String(tg.tag || '').startsWith('lob:')) ctrlIds.add(tg.id);
+      if (DUEL_TRACE) castInfo.set(tg.id, `cast t=${w.t.toFixed(2)} ph${b.phase} wu=${tg.windup.toFixed(2)} dmg=${(tg.dmg / Math.max(1, T.maxHp)).toFixed(3)} d=${(Math.hypot(T.x - b.x, T.z - b.z) / M.bosses.bossH(w, b)).toFixed(2)}H v=${(Math.hypot(T.vx, T.vz) / M.bosses.bossH(w, b)).toFixed(2)}H/s vrad=${(((T.vx * (T.x - b.x) + T.vz * (T.z - b.z)) / (Math.hypot(T.x - b.x, T.z - b.z) || 1)) / M.bosses.bossH(w, b)).toFixed(2)} walk=${(M.bosses.titanWalk(w) / M.bosses.bossH(w, b)).toFixed(2)} slowT=${T.slowT.toFixed(2)} leash=${T.leash ? T.leash.t.toFixed(2) : '-'} shape=${JSON.stringify(tg.shape, (k, v) => typeof v === 'number' ? Math.round(v * 10) / 10 : v)}`);
       if (b.phase === 3) D.minWindupP3 = Math.min(D.minWindupP3, tg.windup); else D.minWindup = Math.min(D.minWindup, tg.windup);
       D.maxHit = Math.max(D.maxHit, tg.dmg / Math.max(1, T.maxHp));
       if (b.id === 'stencil1' && tg.shape.k === 'lane' && /stripe|run|uTurn/i.test(tg.tag)) D.laneW.push(tg.shape.w / Math.max(1e-6, 2 * b.parts[0].r));
@@ -634,6 +718,47 @@ function duel(w: World, seed: number, phaseS: number, geo: boolean): Duel {
   return D;
 }
 
+/** Landed share per telegraph tag across duels, worst first ("tag landed/fired"). */
+function tagRows(ds: Duel[], n = 4): string {
+  const m = new Map<string, [number, number]>();
+  for (const d of ds) for (const [k, v] of d.byTag) { const r = m.get(k) ?? [0, 0]; r[0] += v[0]; r[1] += v[1]; m.set(k, r); }
+  return [...m.entries()].filter(([, v]) => v[1] > 0).sort((a, b) => b[1][1] / b[1][0] - a[1][1] / a[1][0]).slice(0, n).map(([k, v]) => `${k} ${v[1]}/${v[0]}`).join(', ') || '—';
+}
+/**
+ * 6c (fx2, critic r2/r3: walk-only players died where dashers were never hit). The boss_threat port as a WALKER: never
+ * dashes, reacts to every new tell after exactly 0.35 s (REACT_S). All four titans; each gatekeeper at its home Size and
+ * each city boss at Size IV (LV 35; the boss follows the city: GRID EAST / WHITE STACKS / LOCKWATER); god, no adds,
+ * phases forced every 30 s, 5 seeds. Tells landed ≤ 20 % in every titan × boss cell.
+ */
+function runWalkers(): void {
+  const seeds = QUICK ? [1, 2] : [1, 2, 3, 4, 5];
+  console.log(`
+6c. Fair tells for WALKERS (no dash, 0.35 s reaction, god, no adds, phases forced every 30 s, seeds ${seeds.join('/')})`);
+  const fixtures: { name: string; s: 1 | 2 | 3 | 4; biome: BiomeId }[] = [
+    ...GATE_IDS.map((g) => ({ name: GATE_NAME[g], s: (GATE_IDS.indexOf(g) + 1) as 1 | 2 | 3, biome: 'grideast' as BiomeId })),
+    ...BIOME_IDS.map((bi) => ({ name: `city boss (${bi}, Size IV)`, s: 4 as const, biome: bi })),
+  ];
+  const only = process.env.WALK_ONLY ?? '';   // fx2 diagnostics: e.g. "4/grideast/molo" runs that one cell
+  for (const fx of fixtures) for (const titan of TITAN_IDS) {
+    if (only && only !== `${fx.s}/${fx.biome}/${titan}`) continue;
+    const ds: Duel[] = [];
+    let bossId = '?';
+    for (const seed of seeds) {
+      const w = atGate(titan, fx.biome, seed, fx.s, true);
+      if (!lockAndSpawn(w, fx.s) || !w.boss) { check(false, `6c. ${fx.name} × ${titan} seed ${seed}: could not field it`, `LV ${w.titan.level} rank ${w.titan.rank} t ${w.t.toFixed(1)} gates ${JSON.stringify(w.gates, (k, v) => typeof v === 'number' ? Math.round(v * 100) / 100 : v).slice(0, 400)}`); continue; }
+      bossId = w.boss.id;
+      ds.push(duel(w, seed, 30, false, { react: 0.35, noDash: true, damagingOnly: true, humanEsc: !process.env.NO_HUMAN_ESC }));
+    }
+    if (!ds.length) continue;
+    const fired = ds.reduce((a, d) => a + d.fired, 0), landed = ds.reduce((a, d) => a + d.landed, 0);
+    const rate = fired ? landed / fired : 0;
+    const tag = `${fx.name} [${bossId}] × ${titan}`;
+    const cf = ds.reduce((a, d) => a + d.ctrlFired, 0), cl = ds.reduce((a, d) => a + d.ctrlLanded, 0);
+    console.log(`  ${tag}: tells ${landed}/${fired} landed (${(100 * rate).toFixed(1)} %) · worst tags ${tagRows(ds)}${cf ? ` · 0-damage control tells (not counted) ${cl}/${cf} caught` : ''}`);
+    check(fired > 0 && rate <= 0.20, `6c. ${tag}: a walker (no dash, 0.35 s) is landed on ≤ 20 %: ${(100 * rate).toFixed(1)} %`, `${landed}/${fired}`);
+  }
+}
+
 function runDuels(): void {
   const doHome = want('6') || want('5');
   const doV = want('6');
@@ -653,7 +778,8 @@ function runDuels(): void {
             if (!lockAndSpawn(w, s)) w = null;
           } else w = atRematch(titan, 'grideast', seed, gate, true);
           if (!w || !w.boss) { check(false, `${where} ${gate} × ${titan} seed ${seed}: could not field the gatekeeper`); continue; }
-          ds.push(duel(w, seed, 30, where === 'home' && seed === seeds[0]));
+          // DUEL_REACT (diagnostics only, never in a gate run): force the policy's reaction to test how tight the tells are
+          ds.push(duel(w, seed, 30, where === 'home' && seed === seeds[0], process.env.DUEL_REACT ? { react: Number(process.env.DUEL_REACT) } : {}));
         }
         if (!ds.length) continue;
         const fired = ds.reduce((a, d) => a + d.fired, 0), landed = ds.reduce((a, d) => a + d.landed, 0);
@@ -662,7 +788,7 @@ function runDuels(): void {
         const maxHit = Math.max(...ds.map((d) => d.maxHit)), keep = ds.reduce((a, d) => a + d.keepViol, 0);
         const oD = ds.reduce((a, d) => a + d.openDmg, 0), oW = ds.reduce((a, d) => a + d.openWeak, 0);
         const tag = `${where} ${GATE_NAME[gate]} × ${titan}`;
-        console.log(`  ${tag}: tells ${landed}/${fired} landed (${(100 * rate).toFixed(1)} %) · min windup ${f2(minW)} s (P3 ${f2(minW3)}) · max hit ${(100 * maxHit).toFixed(1)} % · keep-out ticks ${keep} (+${ds.reduce((a, d) => a + d.keepPinned, 0)} pinned against a building, reported separately as probe_boss3 does) · staggers ${ds.map((d) => d.stagger).join('/')} · open-weak share ${oD > 0 ? ((100 * oW) / oD).toFixed(0) : '—'} %`);
+        console.log(`  ${tag}: tells ${landed}/${fired} landed (${(100 * rate).toFixed(1)} %) · min windup ${f2(minW)} s (P3 ${f2(minW3)}) · max hit ${(100 * maxHit).toFixed(1)} % · keep-out ticks ${keep} (+${ds.reduce((a, d) => a + d.keepPinned, 0)} pinned against a building, reported separately as probe_boss3 does) · staggers ${ds.map((d) => d.stagger).join('/')} · open-weak share ${oD > 0 ? ((100 * oW) / oD).toFixed(0) : '—'} % · landed by tag ${tagRows(ds)}`);
         if (want('6')) {
           check(fired > 0 && rate >= 0.04 && rate <= 0.20, `6. ${tag}: tells landed ${(100 * rate).toFixed(1)} % in 4–20 %`, `${landed}/${fired}`);
           check(minW >= 0.9 - 1e-9 && minW3 >= 0.8 - 1e-9, `6. ${tag}: every windup ≥ 0.9 s (0.8 s in P3)`, `${f2(minW)} / P3 ${f2(minW3)}`);
@@ -793,29 +919,92 @@ function runVolleyGeometry(): void {
 }
 
 // ─────────────────────────────── 7. avoider ───────────────────────────────
-/** "Always walks directly away from the gatekeeper": straight away; at the map edge the outward component is
- *  dropped (slide along it), in a corner it slides toward the side away from the rig. The titan's own damage is
- *  zeroed (auto-attacks are kit-driven, not input-driven, so "never attacks" is enforced on the stats). */
-function avoidInput(w: World, b: BossState): TitanInput {
-  const T = w.titan, Bd = w.city.bounds;
-  T.stats.damage = 0; T.stats.smashDamage = 0;
-  let dx = T.x - b.x, dz = T.z - b.z;
-  const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
-  const edge = Math.max(3, 2 * T.radius);
-  const atMinX = T.x < Bd.minX + edge, atMaxX = T.x > Bd.maxX - edge, atMinZ = T.z < Bd.minZ + edge, atMaxZ = T.z > Bd.maxZ - edge;
-  if ((atMinX && dx < 0) || (atMaxX && dx > 0)) dx = 0;
-  if ((atMinZ && dz < 0) || (atMaxZ && dz > 0)) dz = 0;
-  if (Math.hypot(dx, dz) < 0.2) {
-    // cornered: slide along the edge, on the side farther from the rig
-    const cx = (Bd.minX + Bd.maxX) / 2, cz = (Bd.minZ + Bd.maxZ) / 2;
-    dx = Math.sign(cx - T.x) || 1; dz = Math.sign(cz - T.z) || 1;
-    if (Math.abs(b.x - T.x) > Math.abs(b.z - T.z)) dx = 0; else dz = 0;
+/**
+ * "Always walks directly away from the gatekeeper" — as a RUNNER does it on a street grid (fx2 lane A harness
+ * change, made to be MORE like a real player: the K3/K4 avoider walked a straight line into the first building above
+ * its crush tier and stood there pinned at 0.07–0.17 × walk, so the rig planted in its band and the titan was — by
+ * §2.4 rule a, correctly — engaged; k4/avoid_diag.txt). Every AVOID_REPLAN_S it scores 16 headings: the straight
+ * run it can make along each within AVOID_LOOK_S of walking (stopped by a building above its crush tier or by the
+ * map edge, ray-marched like laneClearLen; buildings it flattens cost SMASH_SLOW), and the heading whose end point
+ * is FARTHEST from the rig wins (a small bonus keeps the current heading: no dithering). So it flees along open
+ * streets and turns at corners / around blocks it cannot crush. A heading it is commanding but not moving on
+ * (< 0.25 × walk for 0.5 s while facing it) is barred for 2 s. It DASHES along its heading when the rig closes to within band max +
+ * 0.5 H + AVOID_DASH_H (a runner spends its dash to get away; dashing is movement, not an attack). Never attacks (the titan's damage is zeroed: auto-attacks are
+ * kit-driven, not input-driven, so "never attacks" is enforced on the stats). No RNG: deterministic.
+ */
+interface AvoidState { hx: number; hz: number; nextT: number; slowT: number; barX: number; barZ: number; barT: number; dashT: number }
+function newAvoid(): AvoidState { return { hx: 0, hz: 0, nextT: -1, slowT: 0, barX: 0, barZ: 0, barT: -1, dashT: -9 }; }
+const AVOID_REPLAN_S = 0.25, AVOID_LOOK_S = 3, AVOID_HEADINGS = 16, AVOID_ROOM_H = 8, AVOID_DASH_H = 1, AVOID_KEEP_H = 1;
+const avBuf: number[] = [];
+/** Free straight run (m) from the titan along (fx, fz) up to len, and the extra seconds lost plowing on it. */
+function titanRun(w: World, fx: number, fz: number, len: number, walk: number): [number, number] {
+  const T = w.titan, c = w.city, Bd = c.bounds;
+  const R = 0.85 * Math.max(0.5, T.radius || 0.42 * T.height);
+  const canFlat = RANKS[Math.max(0, Math.min(4, T.rank))].canFlatten;
+  const step = Math.max(0.5, 0.5 * R);
+  let plow = 0;
+  for (let s = step; s <= len + 1e-9; s += step) {
+    const px = T.x + fx * s, pz = T.z + fz * s;
+    // the titan's centre is clamped to the bounds: a step that leaves them ends the run (sliding along an edge is fine)
+    if (px < Bd.minX || px > Bd.maxX || pz < Bd.minZ || pz > Bd.maxZ) return [Math.max(0, s - step), plow];
+    avBuf.length = 0;
+    M.citysim.buildingsInRect(c, px - R, pz - R, px + R, pz + R, avBuf);
+    let hitPlow = false;
+    for (let i = 0; i < avBuf.length; i++) {
+      const bd = c.buildings[avBuf[i]];
+      if (!bd || bd.collapsed || !(bd.alive > 0)) continue;
+      const qx = Math.max(bd.x - bd.w / 2, Math.min(px, bd.x + bd.w / 2)), qz = Math.max(bd.z - bd.d / 2, Math.min(pz, bd.z + bd.d / 2));
+      if (Math.hypot(px - qx, pz - qz) > R) continue;
+      if (bd.tier > canFlat) return [Math.max(0, s - step), plow];
+      hitPlow = true;
+    }
+    if (hitPlow) plow += (step / walk) * (1 / SMASH_SLOW - 1);
   }
-  const m = Math.hypot(dx, dz) || 1;
-  return { mx: dx / m, mz: dz / m, ability: false, abilityHeld: false, dash: false };
+  return [len, plow];
+}
+function avoidInput(w: World, b: BossState, st: AvoidState): TitanInput {
+  const T = w.titan;
+  T.stats.damage = 0; T.stats.smashDamage = 0;
+  const walk = Math.max(0.1, M.bosses.titanWalk(w));
+  // blocked on the commanded heading: bar it for 2 s
+  const sp = Math.hypot(T.vx, T.vz);
+  if (st.hx !== 0 || st.hz !== 0) {
+    // only while it FACES the heading (a titan turning round is slow, not blocked)
+    const facing = Math.sin(T.heading) * st.hx + Math.cos(T.heading) * st.hz > 0.87;
+    st.slowT = sp < 0.25 * walk && facing ? st.slowT + w.dt : 0;
+    if (st.slowT >= 0.5) { st.barX = st.hx; st.barZ = st.hz; st.barT = w.t + 2; st.slowT = 0; st.nextT = -1; }
+  }
+  if (w.t >= st.nextT) {
+    st.nextT = w.t + AVOID_REPLAN_S;
+    const d0 = Math.hypot(T.x - b.x, T.z - b.z);
+    let best = -Infinity, bx = 0, bz = 0;
+    for (let k = 0; k < AVOID_HEADINGS; k++) {
+      const a = (k * 2 * Math.PI) / AVOID_HEADINGS, fx = Math.sin(a), fz = Math.cos(a);
+      if (w.t < st.barT && fx * st.barX + fz * st.barZ > 0.92) continue;
+      const [run, plow] = titanRun(w, fx, fz, AVOID_LOOK_S * walk, walk);
+      // time left after the plow slowdown → the distance actually covered in AVOID_LOOK_S
+      const cover = Math.min(run, Math.max(0, AVOID_LOOK_S - plow) * walk);
+      const ex = T.x + fx * cover, ez = T.z + fz * cover;
+      // a runner keeps ROOM: an end point near a map edge (inside AVOID_ROOM_H × H, per axis) scores down, so it
+      // leaves an edge road for an inward street and turns before a corner instead of running into it with the rig behind
+      const Bd = w.city.bounds, C = AVOID_ROOM_H * T.height;
+      const roomX = Math.min(ex - Bd.minX, Bd.maxX - ex), roomZ = Math.min(ez - Bd.minZ, Bd.maxZ - ez);
+      let sc = Math.hypot(ex - b.x, ez - b.z) - d0 - 0.7 * (Math.max(0, C - roomX) + Math.max(0, C - roomZ));
+      if (fx * st.hx + fz * st.hz > 0.98) sc += AVOID_KEEP_H * T.height;
+      if (sc > best) { best = sc; bx = fx; bz = fz; }
+    }
+    if (best === -Infinity) { bx = T.x - b.x; bz = T.z - b.z; const m = Math.hypot(bx, bz) || 1; bx /= m; bz /= m; }
+    st.hx = bx; st.hz = bz;
+  }
+  // a runner DASHES when the rig closes to within band max + 0.5 H (engagement) + AVOID_DASH_H — movement, not an attack
+  const H = M.bosses.bossH(w, b), bandMax = (b.data.bandMaxH > 0 ? b.data.bandMaxH : 4) * H;
+  const dNow = Math.hypot(T.x - b.x, T.z - b.z);
+  const dash = T.dashCharges >= 1 && dNow < bandMax + (GATES.engageMarginH + AVOID_DASH_H) * H && w.t - st.dashT > 0.5 && (st.hx !== 0 || st.hz !== 0);
+  if (dash) st.dashT = w.t;
+  return { mx: st.hx, mz: st.hz, ability: false, abilityHeld: false, dash };
 }
 function runAvoider(): void {
-  console.log('\n7. No soft-lock, avoider (walks straight away, never attacks, god)');
+  console.log('\n7. No soft-lock, avoider (flees along open streets, never attacks, god)');
   for (const gate of GATE_IDS) {
     const s = (GATE_IDS.indexOf(gate) + 1) as 1 | 2 | 3;
     const rows: string[] = [];
@@ -827,11 +1016,23 @@ function runAvoider(): void {
       const b = lockAndSpawn(w, s);
       if (!b) { badL.push(`${titan}/${biome}: not fielded`); continue; }
       n++;
+      // fx2: "never attacks" from the fight's first tick — lockAndSpawn steps the titan with its full kit (NO input) while
+      // the rig walks in, and a HEARTHBACK magma pool laid then keeps its spawn-time dps on the rig's entry path (it
+      // engaged SWITCHBOARD-5 by rule b for 8.8 s at ~200 m, k-fx2 trace): drop titan-owned damage left from before
+      for (const hz of w.hazards) if (hz.owner === 'titan') hz.dps = 0;
+      for (const tg of w.telegraphs) if (tg.owner === 'titan') tg.dmg = 0;
+      for (const pr of w.projectiles) if (pr.owner === 'titan') pr.dmg = 0;
       const G = w.gates;
       let p3T = NaN, reps = 0, overdue = 0, clockBad = 0, deadT = NaN;
+      const st = newAvoid();
       for (let i = 0; i < 260 * SIM_HZ && b.alive; i++) {
-        M.world.stepWorld(w, avoidInput(w, b));
+        M.world.stepWorld(w, avoidInput(w, b, st));
         for (const e of w.events) if (e.type === 'gateReposition') reps++;
+        if (TRACE7 === `${gate}/${titan}/${biome}` && G.liveFightS < 12) for (const e of w.events) if (/hit|Hit|dmg|damage/.test(e.type)) console.log(`    t ev ${f2(G.liveFightS)} ${JSON.stringify(e)}`);
+        if (TRACE7 === `${gate}/${titan}/${biome}` && i % (SIM_HZ / 2) === 0) {
+          const H = M.bosses.bossH(w, b), wk = M.bosses.titanWalk(w);
+          console.log(`    t ${f1(G.liveFightS)} d ${f2(Math.hypot(w.titan.x - b.x, w.titan.z - b.z) / H)} H · titan ${f2(w.titan.speed / wk)}×walk hd (${f2(st.hx)},${f2(st.hz)}) · rig ${f2((b.data.speed ?? 0) / wk)}×walk ${b.attack ?? '-'} hunt ${b.data.hunting ?? '-'} · eng ${f1(G.engagedS)} p ${G.pressure} reps ${reps} ram ${f2(b.data.ramT ?? 0)} out ${f1(b.data.outrunS ?? 0)} pos (${f1(w.titan.x)},${f1(w.titan.z)})`);
+        }
         if (G.pressure >= 3 && Number.isNaN(p3T)) p3T = G.liveFightS;
         if (G.pending > 0 && !M.gates.fightAlive(w) && w.t > G.dueT + TICK + 1e-9) overdue++;
         const clock = Math.max(G.engagedS, 0.5 * G.liveFightS);
@@ -851,6 +1052,48 @@ function runAvoider(): void {
     check(okDue === n, `7. ${GATE_NAME[gate]}: no tick with a pending lock overdue and no fight alive (${okDue}/${n})`);
     check(okEng === n, `7. ${GATE_NAME[gate]}: engagedS stays 0 and the fatigue clock is exactly 0.5 × liveFightS (${okEng}/${n})`, badL.filter((x) => x.includes('engaged')).slice(0, 3).join(' | '));
     check(okDie === n, `7. ${GATE_NAME[gate]}: dies to fatigue alone by 210 s of fight time (${okDie}/${n})`, badL.filter((x) => x.includes('alive')).slice(0, 3).join(' | '));
+  }
+}
+
+// ─────────────────────────────── 7c. out-run on open road ───────────────────────────────
+/**
+ * fx2 (critic t_avoid: STENCIL-1 fired gateRam 33× in a row every 2 s at a titan that simply out-walked it, and CUTTING
+ * YOU OFF only came at +125 s): every building flattened (collapsed — the whole city is open road), the titan flees with
+ * the case-7 runner, never attacks, god. Within 60 s of fight time: 0 `gateRam` (a rig that moves freely is being
+ * out-run, not stuck) and ≥ 1 `gateReposition` (the out-run cut-off fires for a fleeing titan). 4 titans × 3 cities.
+ */
+function runOutrun(): void {
+  console.log('\n7c. Out-run on open road (every building flattened; the case-7 runner; never attacks, god; 60 s of fight)');
+  for (const gate of GATE_IDS) {
+    const s = (GATE_IDS.indexOf(gate) + 1) as 1 | 2 | 3;
+    const rows: string[] = [], bad: string[] = [];
+    let n = 0, okRam = 0, okRep = 0;
+    for (const biome of BIOME_IDS) for (const titan of TITAN_IDS) {
+      const w = atGate(titan, biome, 1337, s, true);
+      for (const bd of w.city.buildings) { bd.collapsed = true; bd.alive = 0; }
+      w.cheats.noSpawns = false;
+      const b = lockAndSpawn(w, s);
+      if (!b) { bad.push(`${titan}/${biome}: not fielded`); continue; }
+      n++;
+      for (const hz of w.hazards) if (hz.owner === 'titan') hz.dps = 0;
+      for (const tg of w.telegraphs) if (tg.owner === 'titan') tg.dmg = 0;
+      for (const pr of w.projectiles) if (pr.owner === 'titan') pr.dmg = 0;
+      const G = w.gates, st = newAvoid();
+      let rams = 0, reps = 0, firstRep = NaN;
+      for (let i = 0; i < 90 * SIM_HZ && b.alive && G.liveFightS < 60; i++) {
+        M.world.stepWorld(w, avoidInput(w, b, st));
+        for (const e of w.events) {
+          if (e.type === 'gateRam') rams++;
+          if (e.type === 'gateReposition') { reps++; if (Number.isNaN(firstRep)) firstRep = G.liveFightS; }
+        }
+      }
+      if (rams === 0) okRam++; else bad.push(`${titan}/${biome}: ${rams} gateRam`);
+      if (reps >= 1) okRep++; else bad.push(`${titan}/${biome}: no gateReposition in ${f1(G.liveFightS)} s`);
+      rows.push(`${titan}/${biome} ram ${rams} rep ${reps} (1st @${f1(firstRep)} s)`);
+    }
+    console.log(`  ${GATE_NAME[gate]}: ${rows.join(' · ')}`);
+    check(okRam === n && n > 0, `7c. ${GATE_NAME[gate]}: 0 gateRam while out-run on open road (${okRam}/${n})`, bad.filter((x) => x.includes('Ram')).slice(0, 3).join(' | '));
+    check(okRep === n && n > 0, `7c. ${GATE_NAME[gate]}: ≥ 1 gateReposition within 60 s of fight (${okRep}/${n})`, bad.filter((x) => x.includes('Reposition')).slice(0, 3).join(' | '));
   }
 }
 
@@ -1093,11 +1336,20 @@ function runRematch(): void {
     // movement in the first 10 s after the intro: the titan walks straight away (the avoider), so the rig must hunt;
     // a rematch pinned by the city (a crush tier below 4) would not get > 5 H
     w!.cheats.noSpawns = false;
-    while (b.introT > 0 && b.alive) M.world.stepWorld(w!, avoidInput(w!, b));
-    const x0 = b.x, z0 = b.z, H = M.bosses.bossH(w!, b);
-    let maxD = 0;
-    for (let i = 0; i < 10 * SIM_HZ && b.alive; i++) { M.world.stepWorld(w!, avoidInput(w!, b)); maxD = Math.max(maxD, Math.hypot(b.x - x0, b.z - z0)); }
-    check(maxD > 5 * H, `12. the rematch rig moves ${f2(maxD / H)} H (> 5 H) from its start in its first 10 s after the intro (titan walking away)`);
+    const ast = newAvoid();
+    while (b.introT > 0 && b.alive) M.world.stepWorld(w!, avoidInput(w!, b, ast));
+    const H = M.bosses.bossH(w!, b);
+    let x0 = b.x, z0 = b.z, segD = 0, walked = 0;
+    const reps: string[] = [];
+    // fx2: a CUTTING YOU OFF re-entry is a teleport, not movement: the walk is split at each one and only the
+    // distance WALKED counts (each segment's max displacement from its own start, summed)
+    for (let i = 0; i < 10 * SIM_HZ && b.alive; i++) {
+      M.world.stepWorld(w!, avoidInput(w!, b, ast));
+      if (w!.events.some((e) => e.type === 'gateReposition')) { walked += segD; segD = 0; x0 = b.x; z0 = b.z; reps.push(`+${f1(i / SIM_HZ)} s`); continue; }
+      segD = Math.max(segD, Math.hypot(b.x - x0, b.z - z0));
+    }
+    walked += segD;
+    check(walked > 5 * H, `12. the rematch rig walks ${f2(walked / H)} H (> 5 H) in its first 10 s after the intro (titan fleeing${reps.length ? `; split at its cut-off${reps.length > 1 ? 's' : ''} ${reps.join(', ')}` : ''})`);
     // kill it: no breach, rematchN++, E.rematches untouched
     const rk0 = w!.titan.rank, er0 = E.rematches, rn0 = G.rematchN[ix], rg0 = G.rematchGates;
     let rankUp = false;
@@ -1229,7 +1481,9 @@ async function main(): Promise<number> {
   if (want('5') || want('6') || want('6b')) {
     try { runDuels(); } catch (e) { check(false, `the duels threw: ${String((e as Error)?.stack ?? e).split(NL).slice(0, 4).join(' | ')}`); }
   }
+  guard('6c', runWalkers);
   guard('7', runAvoider);
+  guard('7c', runOutrun);
   guard('7b', runSoaked);
   guard('8', runCaps);
   guard('11', runInteractions);

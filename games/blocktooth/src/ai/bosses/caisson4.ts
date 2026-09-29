@@ -54,6 +54,7 @@ import {
 } from './index.ts';
 import { spawnProjectile } from '../../combat/projectiles.ts';
 import { titanSpeed } from '../../core/config.ts';
+import { TURN_RATE_I, TURN_RATE_V } from '../../titans/titansim.ts';
 
 // ─────────────────────────────── tuning ───────────────────────────────
 const WALK = 6, INTRO_WALK = 16, TURN = 0.7, AIM_TURN = 1.1;
@@ -334,10 +335,16 @@ function startAttack(w: World, b: BossState, id: string): void {
     }
     case 'boomSweep': {
       const r = BOOM.rH * H, d = dist(b.x, b.z, T.x, T.z);
-      // walk-out: the cheaper of sideways out of the cone and outward past its reach
+      // walk-out: the cheaper of sideways out of the cone and outward past its reach (from the cone's axis)
       const esc = Math.min(d * Math.sin(BOOM.half) + T.radius, Math.max(0, r - d) + T.radius);
-      const wu = fairWindup(w, b, esc, BOOM.min, BOOM.max);
-      const dir = aimAtTitan(w, b, 0.05, wu);
+      const wu0 = fairWindup(w, b, esc, BOOM.min, BOOM.max);
+      const dir = aimAtTitan(w, b, 0.05, wu0);
+      // fx2 (critic: a walk-only VOLT-KITE needed 61 / 66 m of a 68.6 / 67.2 m budget): the cone is aimed at the LEAD
+      // point, so a titan walking round the crane stands off-axis, walking INTO it. Re-derive the windup from the
+      // painted cone and the exits a player actually has — the near edge, the far edge (keep walking through) and
+      // out past the reach — each on its own heading (fairWindup: momentum into the tell along it, plowing, slows),
+      // take the best exit, and never go below the axis windup (walk windups are never shortened).
+      const wu = Math.max(wu0, boomExitWindup(w, b, dir, r));
       beginAttack(w, b, id, T.x, T.z);
       b.data.dir = dir;
       const tg = bossTelegraph(w, {
@@ -360,6 +367,29 @@ function startAttack(w: World, b: BossState, id: string): void {
       break;
     }
   }
+}
+
+/** BOOM SWEEP: the fair windup of the best exit out of the cone (apex = the rig, axis `dir`, reach r) from where the
+ *  titan stands: tangentially to the near edge, tangentially through the far edge, or radially out past the reach. */
+function boomExitWindup(w: World, b: BossState, dir: number, r: number): number {
+  const T = w.titan;
+  const dx = T.x - b.x, dz = T.z - b.z, d = Math.hypot(dx, dz);
+  if (!(d > 1e-6)) return BOOM.min;
+  const th = Math.atan2(dx, dz);
+  const a = wrapAngle(th - dir), g = a >= 0 ? 1 : -1, off = Math.abs(a);
+  // tangential unit toward +a (the side the titan is on) = (cos th, -sin th) × g
+  const tx = Math.cos(th) * g, tz = -Math.sin(th) * g;
+  const near = d * Math.sin(Math.max(0, BOOM.half - off)) + T.radius;
+  const far = d * Math.sin(Math.min(Math.PI / 2, BOOM.half + off)) + T.radius;
+  const out = Math.max(0, r - d) + T.radius;
+  // fairWindup charges a 90° pivot (fairLossS); a body FACING away from an exit turns further first (HOLD MUSIC's rule)
+  const r3 = clamp(Math.floor(Number.isFinite(T.rank) ? T.rank : 0), 0, 4);
+  const turn = TURN_RATE_I + (TURN_RATE_V - TURN_RATE_I) * (r3 / 4);
+  const pivot = (ux: number, uz: number): number => Math.max(0, Math.abs(wrapAngle(Math.atan2(ux, uz) - T.heading)) - Math.PI / 2) / turn;
+  const wNear = fairWindup(w, b, near, BOOM.min, BOOM.max, 0, tx, tz) + pivot(tx, tz);
+  const wFar = fairWindup(w, b, far, BOOM.min, BOOM.max, 0, -tx, -tz) + pivot(-tx, -tz);
+  const wOut = fairWindup(w, b, out, BOOM.min, BOOM.max, 0, dx / d, dz / d) + pivot(dx / d, dz / d);
+  return Math.min(wNear, wFar, wOut);
 }
 
 function runAttack(w: World, b: BossState): void {

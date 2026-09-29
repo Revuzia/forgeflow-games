@@ -15,7 +15,7 @@
 // Footwork: band [3.0, 6.0] H. Inside: keepRange(3 H, 6 H, 0.75 × titanWalk, 2.2 rad/s). Past 6 H: HUNT at up
 //   to GATES.huntClose (huntHot from pressure 2) × titanWalk (gap-ramped, huntSpeed) with the stuck rule. Intro: drives in at
 //   1.4 × titanWalk until inside the band. b.data.bandMinH / bandMaxH publish the band for meta/gates.ts.
-// Attacks (gaps [_, 2.2, 1.8, 1.5] s × (0.85–1.15), P3 × 0.8, × (1 − 0.1 pressure); repeatMul anti-spam; tells
+// Attacks (gaps [_, 2.2, 1.8, 1.5] s × (0.85–1.15), P3 × P3_GAP 0.65 (was 0.8), × (1 − 0.1 pressure); repeatMul anti-spam; tells
 //   are gateWindup (§3.0) and bossTelegraph(…, false); damage = min(bossHostile(base), GATES.hitCap × maxHp)):
 //   P1+ stripeRun    lane from the nose through the lead point, w 1.7 H (= 2 × parts[0].r), len clamp(d + 3 H,
 //                    5 H, 9 H) then laneClearLen; windup gateWindup(0.85 H + R, 1.1, 1.9); dmg 10 + knock 0.5 H/s
@@ -30,13 +30,16 @@
 //                    2.0 H to one side along the axis (rng.boss) → a 1.5 H dry median; gateWindup(0.25 H + R, 1.0,
 //                    1.8); dmg 8; both lines stay as WET PAINT (capsule r 0.25 H, 4 s).
 //   P3  uTurn        a STRIPE RUN, then a second one re-aimed from the first lane's end (painted as the first
-//                    fires); the REFILL comes only after the second race. dmg 10 each.
+//                    fires); the REFILL comes only after the second race. dmg 10 each. The P3 SIGNATURE: the first
+//                    P3 decision, and the first decision after every REFILL (not one that followed a U-TURN) or
+//                    TIPPED OVER, is a U-TURN (fx2 lane B; weighted picks as before otherwise).
 //   any dash answer  (watchDash, cd [_, 7, 5, 4]) one 'paintCan' circle r 0.4 H at the dash end + 0.3 (r + R) ahead,
 //                    gateWindup at k 1 (0.9–1.8); dmg 4.
 // SPILL (the meter): the standard rule — almost only from the OPEN drum (strain 4) and a little from the cab (0.5).
 //   Full → TIPPED OVER (bosses/index.ts: GATES.staggerS 4.5 s, ×2 damage): the drum is forced open and gushes a
 //   WET PAINT pool (circle r 0.8 H behind it, for the stagger). weakMask = the drum's bit while it is open.
-// Beats (b.attack WITHOUT a bossAttack event; subtitles in data/bosses.ts BOSS_BEAT_SUBTITLE): refill,
+// Beats (b.attack WITHOUT a bossAttack event; subtitles in data/bosses.ts BOSS_BEAT_SUBTITLE): tippedOver (the whole
+//   stagger, set by staggerBeat from sync), refill,
 //   reconfiguring (1.2 s after a phase change), ramming (the stuck rule's RAMMING THROUGH; the hunt keeps moving),
 //   cutOff (1.5 s after a `gateReposition`; the hunt keeps moving).
 // Telemetry (probes read, views ignore): refills, tipped, stripes, part_drum / part_other (titan damage after hpMul),
@@ -125,21 +128,102 @@ export function gateHunt(w: World, b: BossState, speed: number, turn: number): v
 }
 
 /**
- * The shared beats, called once per tick from each module's step (outside the intro): a `gateReposition` this
- * tick → beat cutOff (1.5 s) unless a real attack is live; RAMMING THROUGH (b.data.ramT > 0) → beat ramming;
+ * The shared beats, called once per tick from each module's step (outside the intro): a cut-off re-entry
+ * (gateReenter's cutOffTick stamp, this tick or the previous one) → beat cutOff (1.5 s) unless a real attack is live; RAMMING THROUGH (b.data.ramT > 0) → beat ramming;
  * a phase change → beat reconfiguring (1.2 s) as soon as no attack is live. Ends finished move beats.
  */
 export function gateBeats(w: World, b: BossState): void {
   const d = b.data;
   if (!(d.phaseSeen >= 1)) d.phaseSeen = b.phase;
   if (b.phase !== d.phaseSeen) { d.phaseSeen = b.phase; d.reconf = 1; }
-  let repo = false;
-  for (let i = 0; i < w.events.length; i++) if (w.events[i].type === 'gateReposition') { repo = true; break; }
+  // a cut-off re-entry this tick or the previous one (gateReenter stamps cutOffTick; it can run after this call in the
+  // same step — gateUnstick from the move — so the tick's events are gone by the next gateBeats). Consumed once.
+  const repo = d.cutOffTick !== undefined && d.cutOffTick >= w.tick - 1;
+  if (repo) d.cutOffTick = -1;
   const free = !b.attack || isMoveBeat(b.attack);
   if (repo && free) startBeat(b, 'cutOff', 1.5);
   else if (d.ramT > 0 && free && b.attack !== 'cutOff') startBeat(b, 'ramming', d.ramT);
   if (isMoveBeat(b.attack) && b.attackT >= (d.beatS ?? 0)) endAttack(b, Math.max(b.cd, 0.2));
   if (!b.attack && d.reconf > 0) { d.reconf = 0; startBeat(b, 'reconfiguring', 1.2); }
+}
+
+/** P3 cadence (fx2 lane B, critic r1: strong builds turned the late phases into damage races — STENCIL-1 made 6
+ *  attacks in 35 s and DOUBLE LINE / U-TURN never appeared): every gatekeeper's P3 decision gap × this (was 0.8 for
+ *  STENCIL-1 only, 1.0 for the other two). */
+export const P3_GAP = 0.65;
+
+/**
+ * The stagger BEAT (fx2 lane B): while the rig is staggered (TIPPED OVER / STALLED / LINES DOWN) b.attack holds the
+ * module's stagger beat id, so the nameplate subtitle (bosses/index.ts: bossSubtitle(b.id, b.attack) after the
+ * per-tick sync hook) says what to do NOW instead of the default "wait for the window" hint. Called from each
+ * module's sync() on every tick (bosses/index.ts calls it through keepOut / noseOut, stagger included); step() is
+ * not called during a stagger, and the beat is cleared on the first tick after it (the rig then waits ≥ 0.9 s, as
+ * bosses/index.ts sets at the stagger's end). Views gate every pose on staggerT, never on this id.
+ */
+export function staggerBeat(b: BossState, id: string): void {
+  if (b.alive && b.staggerT > 0) {
+    if (b.attack !== id) { b.attack = id; b.attackT = 0; b.data.beatS = b.staggerT; }
+  } else if (b.attack === id) endAttack(b, Math.max(b.cd, 0.9));
+}
+
+/** EXTENDED COVERAGE chase (rematches only): the titan counts as RUNNING after it has walked away from the rig
+ *  (velocity along rig → titan ≥ fleeFrac × titanWalk) for fleeS; it stops counting once that has stayed below
+ *  calmFrac × titanWalk for calmS (it stood, turned to fight, or circled — a runner rounding a corner is not). */
+const CHASE = { fleeFrac: 0.4, calmFrac: 0.15, fleeS: 0.6, calmS: 1.0, pullPerS: 1.0 };
+/**
+ * Is a REMATCH rig (slot 0) chasing a running titan? (fx2 lane B, §5.4 case 12.) At home a runner is answered by
+ * containment pressure and the cut-off (§2.4), and HUNT_FLOOR keeps the hunt from running it down; a rematch has no
+ * pressure, so the rig itself must keep up. Measured before this rule: a Size V titan walking away plows at
+ * 0.54 H/s (SMASH_SLOW), the floor hunt closed on it at 0.09 H/s, and then the rig stood still for a 2.5 s toss or a
+ * plant while the titan walked off again (CORDON-2 3.8 H, SWITCHBOARD-5 3.7 H in the first 10 s; fx2/B/rematch_diag.ts).
+ * While this is true the rig takes no standing decision (no toss, no plant, no attack): it drives (chaseStep).
+ * Updates its clock once per tick (call it every tick, intro included). Home fights: always false.
+ */
+/** A rematch chasing a runner does not stand and watch a thrown volley land: once this long into a VOLLEY attack
+ *  (every tell of it is already out — telegraphs and lobs live on their own) the attack ends and the chase goes on. */
+export const CHASE_VOLLEY_S = 0.4;
+export function rematchChasing(w: World, b: BossState): boolean {
+  const d = b.data;
+  if (b.slot !== 0 || !w.titan.alive) { d.fleeT = 0; return false; }
+  if (d.fleeTick !== w.tick) {
+    d.fleeTick = w.tick;
+    const T = w.titan;
+    const dx = T.x - b.x, dz = T.z - b.z, m = Math.hypot(dx, dz);
+    const vx = Number.isFinite(T.vx) ? T.vx : 0, vz = Number.isFinite(T.vz) ? T.vz : 0;
+    const vr = m > 1e-6 ? (vx * dx + vz * dz) / m : 0;
+    const walk = titanWalk(w);
+    if (vr >= CHASE.fleeFrac * walk) { d.fleeT = (d.fleeT ?? 0) + w.dt; d.calmT = 0; }
+    else if (vr < CHASE.calmFrac * walk) {
+      d.calmT = (d.calmT ?? 0) + w.dt;
+      if (d.calmT >= CHASE.calmS) d.fleeT = 0;
+    }
+  }
+  return (d.fleeT ?? 0) >= CHASE.fleeS;
+}
+
+/**
+ * One chase step (rematch, crush tier 4 so the city cannot pin it: no stuck rule needed). Beyond `stopD`: drive at
+ * the titan at GATES.huntClose × titanWalk (the full hunt, no HUNT_FLOOR ramp — that ramp only exists to keep a home
+ * avoider out of the engagement ring for pressure). Within it: SHADOW the titan — take its velocity (so a runner
+ * rounding a corner is followed round it, not watched) plus a gentle pull back to `stopD` — capped at the full hunt,
+ * so the rig never drives into the keep-out and never out-runs its own hunt.
+ */
+export function chaseStep(w: World, b: BossState, dd: number, stopD: number, turn: number): void {
+  const T = w.titan;
+  const dx = T.x - b.x, dz = T.z - b.z, m = Math.hypot(dx, dz);
+  if (!(m > 1e-6)) { b.data.speed = 0; return; }
+  const ux = dx / m, uz = dz / m;
+  const cap = GATES.huntClose * titanWalk(w);
+  let vx = ux * cap, vz = uz * cap;
+  if (dd <= stopD) {
+    const tvx = Number.isFinite(T.vx) ? T.vx : 0, tvz = Number.isFinite(T.vz) ? T.vz : 0;
+    const pull = clamp((dd - stopD) * CHASE.pullPerS, -0.25 * cap, 0.25 * cap);
+    vx = tvx + ux * pull; vz = tvz + uz * pull;
+    const sp = Math.hypot(vx, vz);
+    if (sp > cap) { vx *= cap / sp; vz *= cap / sp; }
+  }
+  turnBoss(b, Math.atan2(ux, uz), turn, w.dt);
+  moveBoss(w, b, vx, vz);
 }
 
 /** End of every module step: gateUnstick only counts its DETOUR / RAMMING THROUGH timers down while it is
@@ -189,7 +273,7 @@ export function boundsLen(w: World, x: number, z: number, fx: number, fz: number
 export const BAND_MIN_H = 3.0, BAND_MAX_H = 6.0;
 const WALK_FRAC = 0.75, TURN = 2.2, AIM_TURN = 4.0, INTRO_WALK = 1.4;
 const GAP = [0, 2.2, 1.8, 1.5] as const;
-const P3_CADENCE = 0.8;
+const P3_CADENCE = P3_GAP;
 /** Decisions are taken only with the titan within band max + this (H); farther, it hunts. */
 /** Decisions only with the titan inside the band: past band max the rig HUNTS, and an attack started mid-hunt
  *  would reset the stuck rule's progress clock (a rig blocked 0.2 H outside its band tossed forever and never
@@ -234,6 +318,7 @@ export function create(w: World): BossState {
   d.bandMinH = BAND_MIN_H; d.bandMaxH = BAND_MAX_H;
   d.refills = 0; d.tipped = 0; d.stripes = 0; d.wasStag = 0;
   d.part_drum = 0; d.part_other = 0; d.open_drum = 0; d.open_all = 0; d.lastRefillSpill = 0; d.refillMeter0 = 0;
+  d.p3Seen = 0; d.sigDue = 0; d.refillUT = 0; d.fleeT = 0; d.fleeTick = -1;
   d.syncTick = -1;
   return b;
 }
@@ -251,6 +336,7 @@ export function noseOut(w: World, b?: BossState): null {
 export function step(w: World, b: BossState): void {
   const T = w.titan, d = b.data;
   const H = bossH(w, b);
+  const chasing = rematchChasing(w, b);
   if (b.introT > 0) {
     const dd = dist(b.x, b.z, T.x, T.z);
     if (dd > (BAND_MAX_H - 0.5) * H) gateHunt(w, b, INTRO_WALK * titanWalk(w), TURN);
@@ -262,9 +348,10 @@ export function step(w: World, b: BossState): void {
   if (d.raceT > 0) { stepRace(w, b); dashAnswer(w, b); gateAfterMove(w, b); sync(w, b); return; }
   if (!b.attack || isMoveBeat(b.attack)) {
     const dd = dist(b.x, b.z, T.x, T.z);
-    if (dd > BAND_MAX_H * H) gateHunt(w, b, huntSpeed(w, b, dd), TURN);
+    if (chasing) chaseStep(w, b, dd, (BAND_MIN_H + 0.5) * H, TURN);   // a rematch chasing a runner: no decision
+    else if (dd > BAND_MAX_H * H) gateHunt(w, b, huntSpeed(w, b, dd), TURN);
     else keepRange(w, b, BAND_MIN_H * H, BAND_MAX_H * H, WALK_FRAC * titanWalk(w), TURN);
-    if (!b.attack && b.cd <= 0 && dd <= (BAND_MAX_H + DECIDE_SLACK_H) * H) decide(w, b);
+    if (!chasing && !b.attack && b.cd <= 0 && dd <= (BAND_MAX_H + DECIDE_SLACK_H) * H) decide(w, b);
   } else {
     runAttack(w, b);
   }
@@ -299,6 +386,7 @@ function sync(w: World, b: BossState): void {
     if (stag && !(d.wasStag > 0)) {
       d.wasStag = 1;
       d.tipped += 1;
+      if (b.phase >= 3) d.sigDue = 1;   // a TIPPED OVER ends a cycle: the next P3 decision is a U-TURN
       // the drum gushes: a WET PAINT pool behind the cart for the stagger
       const c = Math.cos(b.heading), s = Math.sin(b.heading), oz = TIPPED_POOL.ozH * H;
       spawnHazard(w, { owner: 'boss', kind: 'paint', shape: { k: 'circle', x: b.x + oz * s, z: b.z + oz * c, r: TIPPED_POOL.rH * H }, life: Math.max(0.5, b.staggerT), data: { slow: PAINT_SLOW } });
@@ -306,6 +394,7 @@ function sync(w: World, b: BossState): void {
     // a race only runs inside its own attack (a stagger or a kill ends the attack mid-race)
     if (d.raceT > 0 && (stag || !b.alive || (b.attack !== 'stripeRun' && b.attack !== 'uTurn'))) { d.raceT = 0; d.raceV = 0; }
   }
+  staggerBeat(b, 'tippedOver');
   const open = b.alive && (stag || b.attack === 'refill');
   d.drumOpen = open ? 1 : 0;
   for (let i = 0; i < b.parts.length && i < PARTS_H.length; i++) {
@@ -323,7 +412,14 @@ function sync(w: World, b: BossState): void {
 
 // ─────────────────────────────── decision ───────────────────────────────
 function decide(w: World, b: BossState): void {
-  const P = b.phase;
+  const P = b.phase, d = b.data;
+  // P3 signature: U-TURN on the first P3 decision and once per REFILL / TIPPED OVER cycle after that (a cycle
+  // whose REFILL followed a U-TURN has shown it: fx2 lane B, critic r1 "U-TURN never appeared")
+  if (P >= 3 && !(d.p3Seen > 0)) { d.p3Seen = 1; d.sigDue = 1; }
+  if (P >= 3 && d.sigDue > 0) {
+    d.sigDue = 0;
+    if (startAttack(w, b, 'uTurn')) return;
+  }
   const wts = [
     1.5,                    // stripeRun (the REFILL opener: the lesson)
     0.5,                    // paintBuckets (a 3–5 tell volley whose secondaries sit off the exit by design: kept rarer)
@@ -442,6 +538,7 @@ function stepRace(w: World, b: BossState): void {
     d.runN = (d.runN ?? 0) + 1;
     if (d.runN >= (d.runs ?? 1)) {
       // REFILL: the cart ends past the titan facing away, so the open drum faces it
+      d.refillUT = b.attack === 'uTurn' ? 1 : 0;
       startBeat(b, 'refill', REFILL_S[b.phase] ?? 3);
       d.refills += 1;
       d.refillMeter0 = b.meter;
@@ -532,13 +629,14 @@ function runAttack(w: World, b: BossState): void {
       turnBoss(b, faceT, REFILL_TURN, w.dt);
       if (t >= (d.beatS ?? 3)) {
         d.lastRefillSpill = Math.max(0, b.meter - (d.refillMeter0 ?? 0));
+        if (b.phase >= 3 && !(d.refillUT > 0)) d.sigDue = 1;   // a P3 cycle without the U-TURN: it comes next
         endAttack(b, gateGap(w, b, GAP, P3_CADENCE));
       }
       break;
     case 'paintBuckets':
     case 'doubleLine':
       turnBoss(b, faceT, TURN * 0.5, w.dt);
-      if (t >= (d.attackEnd ?? 2)) endAttack(b, gateGap(w, b, GAP, P3_CADENCE));
+      if (t >= (d.attackEnd ?? 2) || (t >= CHASE_VOLLEY_S && rematchChasing(w, b))) endAttack(b, gateGap(w, b, GAP, P3_CADENCE));
       break;
     case 'reconfiguring':
       if (t >= (d.beatS ?? 1.2)) endAttack(b, Math.max(0.3, b.cd));

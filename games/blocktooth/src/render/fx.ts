@@ -57,6 +57,18 @@ const SHRINK_WORDS = new Set([...DROP_WORDS, 'bossHit', 'chest', 'titanHurt', 'l
 const MAX_BLOCK = 24;
 /** word placement: side offsets tried, as a fraction of the screen height (world m at the target) */
 const WORD_OFFSETS = [0.13, 0.24, 0.36] as const;
+/**
+ * A screen band for a set-piece word (fractions of the viewport height from the top): the word's top — including
+ * the drift it rises over its life — stays at or below `topMin`, and (optionally) its centre at or above
+ * `centerMax`. fx2 (critic r3/030, §6.7): the gatekeeper nameplate plus its LIMIT LIFTED wire line end at ~18 % of a
+ * 1280×720 frame and the MASS BREACH strap spans ~13–37 %, so a world-anchored word at 2.4–2.6 H over a Size II+
+ * rig was drawn under them.
+ */
+interface WordBand { topMin: number; centerMax?: number; }
+/** stagger words (TIPPED OVER / STALLED / LINES DOWN): below the nameplate, inside the upper third (§6.7) */
+const GATE_STAGGER_BAND: WordBand = { topMin: 0.22, centerMax: 1 / 3 };
+/** the LIMIT LIFTED kill stamp: below the nameplate AND the MASS BREACH strap that wipes in on the same tick */
+const GATE_KILL_BAND: WordBand = { topMin: 0.38 };
 const RIBBON_QUADS = 4096;
 
 /** local fallback burst words (ORIGINAL — used only if data/strings.ts lacks a key) */
@@ -189,6 +201,8 @@ interface Word extends Timed {
   x: number; y: number; z: number;
   h: number; cell: number; fill: number[]; back: number[];
   rot: number; prio: number; jx: number; jy: number;
+  /** a set-piece word kept inside a screen band every frame (the rank-up camera move would carry it out) */
+  band: WordBand | null;
 }
 interface Bolt extends Timed {
   n: number;                       // polyline points
@@ -629,7 +643,7 @@ export class FxView implements ViewModule {
     const mkDecal = (): Decal => ({ t: 1, life: 0, x: 0, y: 0, z: 0, r0: 1, r1: 1, thick: 0, inner: 0.8, dashes: 0, spin: 0, rot: 0, fill: 0, a0: 1, col: [1, 1, 1], follow: false });
     const mkPart = (): Part => ({ t: 1, life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s0: 0, s1: 1, peakAt: 0.3, drag: 0, grav: 0, rot: 0, vrot: 0, c0: [1, 1, 1], c1: [1, 1, 1], home: 0, stretch: 1 });
     const mkSP = (): SPart => ({ t: 1, life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 1, rot: 0, vrot: 0, grav: 0, drag: 0, icon: 0, fill: [1, 1, 1], back: [1, 1, 1], pop: 1 });
-    const mkWord = (): Word => ({ t: 1, life: 0, x: 0, y: 0, z: 0, h: 1, cell: 0, fill: [1, 1, 1], back: [1, 1, 1], rot: 0, prio: 0, jx: 0, jy: 0 });
+    const mkWord = (): Word => ({ t: 1, life: 0, x: 0, y: 0, z: 0, h: 1, cell: 0, fill: [1, 1, 1], back: [1, 1, 1], rot: 0, prio: 0, jx: 0, jy: 0, band: null });
     const mkBolt = (): Bolt => ({ t: 1, life: 0, n: 0, base: new Float32Array(3 * 16), pts: new Float32Array(3 * 16 * 12), sub: 0, jitT: 0, amp: 0, wPx: 3, core: [1, 1, 1], glow: [1, 1, 1], vine: false });
     this.decals = new Pool(CAP_DECAL[q], mkDecal);
     this.dust = new Pool(CAP_DUST[q], mkPart);
@@ -1146,7 +1160,7 @@ export class FxView implements ViewModule {
           const r1 = Math.min(2.5 * Hg, this.frameW(f) * 0.225);
           this.ring(b.x, b.z, Math.min(0.6 * Hg, r1 * 0.3), r1, 0.9, L('#fff27a'), 1, Hg * 0.12);
           this.dustBurst(b.x, b.z, Hg * 0.9, Math.round(10 * qm) + 4, Hg * 0.14, 0.9);
-          this.word('gate_' + b.id, b.x, 2.6 * Hg, b.z, f, true);
+          this.word('gate_' + b.id, b.x, 2.6 * Hg, b.z, f, true, GATE_STAGGER_BAND);
         } else if (b) {
           this.ring(b.x, b.z, 10, 70, 0.9, L('#fff27a'), 1, 6);
           this.word('bossStagger', b.x, 60, b.z, f, true);
@@ -1205,7 +1219,7 @@ export class FxView implements ViewModule {
           this.explosion(e.x + Math.cos(a) * rr, e.z + Math.sin(a) * rr, Hg * rnd(0.35, 0.6), '#fff4c2', '#ffd166', '#e84a3c', 0.9, Hg * 0.6, i * 0.14);
         }
         this.ring(e.x, e.z, Hg * 0.4, Math.min(3 * Hg, this.frameW(f) * 0.3), 1.3, this.dustCol, 0.9, Hg * 0.15);
-        this.word('gateKill', e.x, 2.4 * Hg, e.z, f, true);
+        this.word('gateKill', e.x, 2.4 * Hg, e.z, f, true, GATE_KILL_BAND);
         break;
       }
       case 'finale': {
@@ -1518,6 +1532,29 @@ export class FxView implements ViewModule {
     return true;
   }
 
+  /**
+   * The world height that puts a word (centred at x, y, z; world height h) inside a screen band (WordBand): three
+   * secant steps on the projected rect (the placement offsets that follow are horizontal, along camRight, so they
+   * keep the band). The top limit wins over the centre limit.
+   */
+  private bandY(x: number, y: number, z: number, h: number, aspect: number, band: WordBand): number {
+    const topMax = 1 - 2 * band.topMin;                                          // NDC y (+1 = top edge)
+    const cMin = band.centerMax !== undefined ? 1 - 2 * band.centerMax : -Infinity;
+    for (let it = 0; it < 3; it++) {
+      if (!this.wordRect(x, y, z, h, aspect)) return y;
+      const top0 = this.cand[3], cy0 = this.clip.y / this.clip.w;
+      if (!this.wordRect(x, y + h, z, h, aspect)) return y;
+      const slope = (this.cand[3] - top0) / h;                                  // NDC per world metre up
+      if (!(slope > 1e-6)) return y;
+      let dy = 0;
+      if (top0 > topMax + 1e-4) dy = (topMax - top0) / slope;                    // under the plate / strap: down
+      else if (cy0 < cMin - 1e-4) dy = Math.min((cMin - cy0) / slope, (topMax - top0) / slope);   // too low: up
+      if (Math.abs(dy) < 1e-3) return y;
+      y += dy;
+    }
+    return y;
+  }
+
   /** overlap area (NDC²) of this.cand with rect (x0,y0)-(x1,y1) */
   private ov(x0: number, y0: number, x1: number, y1: number): number {
     const r = this.cand;
@@ -1549,7 +1586,7 @@ export class FxView implements ViewModule {
     return a;
   }
 
-  private word(key: string, x: number, y: number, z: number, f: FrameInfo, force = false): void {
+  private word(key: string, x: number, y: number, z: number, f: FrameInfo, force = false, band?: WordBand): void {
     if (!this.atlas) return;
     const st = WORD_STYLE[key] ?? WORD_STYLE.generic;
     const cd = this.wordCd.get(key) ?? 0;
@@ -1596,6 +1633,7 @@ export class FxView implements ViewModule {
     if (busy && SHRINK_WORDS.has(key)) size *= BUSY_SHRINK;
     const h = size * hScreen * (this.ctx.quality.level === 0 ? 0.9 : 1);
     const aspect = this.atlas.cells[cell * 5 + 4] || 3.4;
+    if (band) y = this.bandY(x, y, z, h, aspect, band);
     // placement: beside the event, on the screen side AWAY from the boss, stepping further out until
     // the word clears the boss, every hostile telegraph, live words and (secondary words while busy)
     // the titan. Env words that find no clear spot while busy are dropped.
@@ -1628,6 +1666,7 @@ export class FxView implements ViewModule {
     slot.prio = st.prio;
     slot.life = st.prio >= 5 ? 1.35 : 0.95;
     slot.t = 0; slot.jx = 0; slot.jy = 0;
+    slot.band = band ?? null;
   }
 
   // Molo's GULLET VACUUM: streaks converge on the mouth while kit.vacuumT > 0
@@ -1905,6 +1944,9 @@ export class FxView implements ViewModule {
       const rise = wd.h * 0.35 * u;
       const cell = wd.cell;
       const aspect = at.cells[cell * 5 + 4] || 3.4;
+      // a banded word is re-fitted to its screen band on every frame (this frame's view-projection): the kill
+      // stamp lands on the rank-up tick, whose camera pull-back otherwise lifts it under the MASS BREACH strap
+      if (wd.band) wd.y = this.bandY(wd.x, wd.y, wd.z, wd.h, aspect, wd.band);
       const h = wd.h * k;
       sb.push(wd.x + wd.jx, wd.y + rise + wd.jy, wd.z, h * aspect, h, wd.rot + (wd.t < 0.3 && !rf ? (Math.random() - 0.5) * 0.06 : 0),
         at.cells, cell, wd.fill, a, wd.back);

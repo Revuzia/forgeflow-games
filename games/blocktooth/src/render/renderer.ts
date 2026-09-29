@@ -102,8 +102,29 @@ export function createRenderCore(canvas: HTMLCanvasElement, quality: Quality): R
   camera.userData.quality = q;
   let lastW = -1, lastH = -1, lastDpr = -1;
 
+  // fx2 perf: the canvas CSS size is cached by a ResizeObserver. Reading canvas.clientWidth / clientHeight in
+  // render() forced a style + layout flush EVERY frame (~0.3–0.5 ms) because the HUD runs infinite CSS animations
+  // (the layout is always dirty by the next rAF). The observer fires after layout, before paint, on any CSS size
+  // change (window resize, fullscreen, a layout change); DPR changes are still caught by effectiveDpr(q) below.
+  // Without ResizeObserver (a non-browser host) it falls back to the per-frame read.
+  let obsW = 0, obsH = 0;
+  const hasRO = typeof ResizeObserver !== 'undefined';
+  if (hasRO) {
+    obsW = canvas.clientWidth; obsH = canvas.clientHeight;      // one read at start-up
+    new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const box = e.contentBoxSize && e.contentBoxSize[0];
+        // clientWidth / clientHeight round the content box; keep that rounding so sizes match the old read
+        obsW = Math.round(box ? box.inlineSize : e.contentRect.width);
+        obsH = Math.round(box ? box.blockSize : e.contentRect.height);
+      }
+    }).observe(canvas);
+  }
+  const cssW = (): number => (hasRO ? obsW : canvas.clientWidth);
+  const cssH = (): number => (hasRO ? obsH : canvas.clientHeight);
+
   function cssBox(): { w: number; h: number } {
-    let w = canvas.clientWidth, h = canvas.clientHeight;
+    let w = cssW(), h = cssH();
     if (!(w > 0 && h > 0)) {
       // canvas not laid out yet (display:none or detached) — fall back to the window, then a safe default
       w = typeof window !== 'undefined' ? window.innerWidth : 1280;
@@ -128,9 +149,9 @@ export function createRenderCore(canvas: HTMLCanvasElement, quality: Quality): R
   }
 
   function render(): void {
-    // cheap per-frame check instead of a ResizeObserver: handles CSS layout changes,
-    // fullscreen toggles and DPR changes (window dragged to another monitor) alike
-    const w = canvas.clientWidth, h = canvas.clientHeight;
+    // the observed CSS size (no layout read) + the DPR: handles CSS layout changes, fullscreen toggles and
+    // DPR changes (window dragged to another monitor) alike
+    const w = cssW(), h = cssH();
     if ((w > 0 && h > 0 && (w !== lastW || h !== lastH)) || effectiveDpr(q) !== lastDpr) {
       const t0 = performance.now();
       resize();

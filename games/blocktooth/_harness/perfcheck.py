@@ -64,6 +64,17 @@ PROF_JS = r"""() => { const p = window.__BTPROF__; if (!p) return null; const ri
     mean[k] = Math.round(a.reduce((u, v) => u + v, 0) / Math.max(1, a.length) * 1000) / 1000; }
   return { frames: n, median, p90, mean }; }"""
 
+# the profiler's own per-frame percentiles over play frames (rAF gap, CPU frame, GPU render() time)
+PROF_DUMP_JS = r"""() => { const p = window.__BTPROF__; if (!p) return null; const ring = p.ring || [];
+  const raw = [], cpu = [], gpu = [];
+  const scales = {};
+  for (const f of ring) { if (!f || f.screen !== 'play') continue; raw.push(f.raw); cpu.push(f.cpu); if (f.gpu >= 0) gpu.push(f.gpu);
+    scales[f.scale] = (scales[f.scale] || 0) + 1; }
+  const P = (a) => { if (!a.length) return null; const s = a.slice().sort((u, v) => u - v);
+    const q = (x) => s[Math.min(s.length - 1, Math.max(0, Math.ceil(x * s.length) - 1))];
+    return { n: s.length, p50: q(0.5), p90: q(0.9), p99: q(0.99), max: s[s.length - 1] }; };
+  return { gpuSupported: !!p.gpuSupported, rawP: P(raw), cpuP: P(cpu), gpuP: P(gpu), scales }; }"""
+
 
 GATE_SCEN = {
     # scenario → (gate id, slot, level one below the gate's level, titan rank during the window)
@@ -224,6 +235,9 @@ def main() -> int:
     ap.add_argument("--ult-at", type=float, default=4.0, help="--v2: seconds into the window to fire the UPROAR")
     ap.add_argument("--prof", action="store_true",
                     help="add ?prof=1 and print per-lane median ms of the frameprof marks (§4.7); not for the p99 gate")
+    ap.add_argument("--prof-nogpu", action="store_true",
+                    help="with --prof: add profgpu=0 (frameprof without its GPU timer queries — the A/B for the "
+                         "profiler's own pacing cost)")
     ap.add_argument("--shot", default=os.path.join(SHOTS, "perfcheck.png"))
     ap.add_argument("--zoom", choices=("auto", "max"), default="auto",
                     help="player camera zoom during the window: auto framing (1x) or held at the max zoom-OUT "
@@ -239,7 +253,8 @@ def main() -> int:
     gsamples = []
 
     url = build_url(args.base, autostart=1, dev=1, noslate=1, titan=args.titan, biome=args.biome, seed=args.seed,
-                    quality=args.quality, prof=(1 if args.prof else None))
+                    quality=args.quality, prof=(1 if args.prof else None),
+                    profgpu=(0 if (args.prof and args.prof_nogpu) else None))
     logs = []
 
     def log(msg):
@@ -262,6 +277,7 @@ def main() -> int:
     prog0 = prog1 = None
     top_ups = 0
     st_end = None
+    dyn0 = {}
     tick0 = tick1 = None
     overlays = {}
     zoom_info = {}
@@ -400,6 +416,7 @@ def main() -> int:
             s = sess.state() or {}
             prog0 = s.get("programs")
             tick0 = s.get("tick")
+            dyn0 = {"scale": s.get("renderScale"), **(s.get("dynres") or {})}
             # sampling window
             if fire_ult:
                 # timestamped rAF recorder (the UPROAR window is cut from it by page time)
@@ -479,6 +496,7 @@ def main() -> int:
                 v2["ult"] = {"pressPt": ult_press_pt, "idlePt": ult_idle_pt, "fired0": fired0, "state": ult_state}
             if args.prof:
                 v2["prof"] = sess.safe_js(PROF_JS)
+                v2["profDump"] = sess.safe_js(PROF_DUMP_JS)
             zoom_info["end"] = sess.safe_js("() => { const c = window.__BTCAM__; return c ? {zoom: c.zoom, d: c.distance, auto: c.autoDist} : null; }")
             perf_bt = sess.perf()
             st_end = sess.state() or {}
@@ -545,6 +563,13 @@ def main() -> int:
               max(enemies) if enemies else None, top_ups, sim_ticks, want_ticks, json.dumps(overlays)))
     print("camera    : zoom %s · start %s · end %s" % (args.zoom, json.dumps(zoom_info.get("start")), json.dumps(zoom_info.get("end"))))
     print("end state : %s" % json.dumps(compact_state(st_end))[:600])
+    # fx2: DynRes over the window (a GPU-bound scene steps the drawing buffer down to the 0.6 floor; misses AT the
+    # floor are the ones the p99 sees) — diagnostic only
+    se = st_end or {}
+    print("dynres    : scale %s -> %s · steps down/up at start %s/%s -> end %s/%s · last 1-s window missed %s %% · "
+          "display interval %s ms" % (dyn0.get("scale"), se.get("renderScale"), dyn0.get("down"), dyn0.get("up"),
+                                       (se.get("dynres") or {}).get("down"), (se.get("dynres") or {}).get("up"),
+                                       (se.get("dynres") or {}).get("lastMissPct"), (se.get("dynres") or {}).get("intervalMs")))
     print_diagnostics(diag, limit=10)
 
     problems = []
@@ -631,6 +656,12 @@ def main() -> int:
         print("frameprof : %s play frames · per-mark median ms: %s" % (pr.get("frames"), json.dumps(med, sort_keys=True)))
         mn = pr.get("mean") or {}
         print("frameprof : per-mark MEAN ms (performance.now is 0.1 ms-coarse, so sub-0.1 medians read 0): %s" % json.dumps(mn, sort_keys=True))
+        pd = v2.get("profDump") or {}
+        print("frameprof : GPU timer %s · play frames: rAF gap %s · CPU frame %s · GPU render() %s (ms; GPU = "
+              "EXT_disjoint_timer_query around core.render())" % (
+                  "ON" if pd.get("gpuSupported") else "off", json.dumps(pd.get("rawP")), json.dumps(pd.get("cpuP")),
+                  json.dumps(pd.get("gpuP"))))
+        print("frameprof : DynRes scale per play frame %s" % json.dumps(pd.get("scales")))
         for tag, src in (("median", med), ("mean", mn)):
             lanes = {"L6 views": sum(src.get(k, 0) for k in ("UltView", "ObjectiveView", "PowerupView", "MarkerView")),
                      "L7 BossView": src.get("BossView", 0), "hud (v1 + v2)": src.get("hud", 0)}

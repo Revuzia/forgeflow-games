@@ -40,6 +40,14 @@ const RIG_IDS = ['caisson4', 'irongully', 'parkade6', 'stencil1', 'cordon2', 'sw
 
 /** CONTRACT §6.1: titans / bosses 3.0 px ink. */
 const OUTLINE_W = 3.0;
+/**
+ * fx2 (critic r2/057–058): IRON GULLY's pale, frost-caked hide barely separates from WHITE STACKS snow at Size IV
+ * zoom. On that biome only, the rig swaps its 3 px ink hulls for SNOW_OUTLINE_W px ones (a second hull per mesh,
+ * built once; exactly one of the two is visible, so the draw count is unchanged) and its hide is shaded down to
+ * SNOW_HIDE_MUL (material colour × vertex colour; the lamp glow is emissive and keeps its glare).
+ */
+const SNOW_OUTLINE_W = 5.5;
+const SNOW_HIDE_MUL = 0.8;
 const PI = Math.PI;
 const P = FOE_PAL;
 /** Fallback windup scale per phase (the live telegraph's windup is preferred — see tell()). */
@@ -168,6 +176,9 @@ export interface BossRig {
   meshes: THREE.Mesh[];
   stride: number; duty: number; liftH: number; rMean: number; walkSpeed: number;
   footYawOut: boolean;          // foot pads yaw outward (crane) or follow the body (beast)
+  /** IRON GULLY on WHITE STACKS: the default 3 px hulls and the thick snow hulls (see SNOW_OUTLINE_W) */
+  inkThin?: THREE.Object3D[];
+  inkSnow?: THREE.Object3D[];
 }
 
 function mkMesh(geo: THREE.BufferGeometry, mat: THREE.Material, name: string, shadow = true): THREE.Mesh {
@@ -961,12 +972,30 @@ export class BossView implements ViewModule {
     if (!this.mounted) { this.ctx.scene.add(this.world); this.mounted = true; }
     const time = BIOMES[w.biomeId]?.time ?? 'day';
     this.glowMul = time === 'night' ? 1.6 : time === 'overcast' ? 1.15 : 1.0;
+    const snow = w.biomeId === 'whitestacks';
     for (const id of RIG_IDS) {
       const r = this.rig(id);          // build both once: warmup compiles every boss program up front
       for (const k in r.groups) { const g = r.groups[k]; g.glowBase = k === 'head' ? this.glowMul * 1.2 : this.glowMul; g.flash = 0; }
+      if (id === 'irongully') this.snowLook(r, snow);
     }
     this.resetRun();
     this.show(null);
+  }
+
+  /** IRON GULLY vs snow (see SNOW_OUTLINE_W): thick ink hulls + a shaded-down hide on WHITE STACKS, else as built. */
+  private snowLook(r: BossRig, snow: boolean): void {
+    if (!r.inkSnow) {
+      r.inkThin = []; r.inkSnow = [];
+      for (const m of r.meshes) {
+        for (const c of m.children) if (c.userData.isOutline) r.inkThin.push(c);
+        const h = addOutline(m, SNOW_OUTLINE_W);
+        h.visible = false;
+        r.inkSnow.push(h);
+      }
+    }
+    for (const h of r.inkThin!) h.visible = !snow;
+    for (const h of r.inkSnow) h.visible = snow;
+    for (const k in r.groups) r.groups[k].mat.color.setScalar(snow ? SNOW_HIDE_MUL : 1);
   }
 
   unmount(): void {

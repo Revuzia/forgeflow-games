@@ -283,7 +283,18 @@ function decide(w: World, b: BossState): void {
     P >= 3 ? (d < RIG_R + COLLAPSE.cH * H + T.radius ? 1.2 : 0.3) : 0,    // levelCollapse
   ];
   for (let i = 0; i < wts.length; i++) wts[i] *= repeatMul(b, ATTACKS[i]);
-  const id = pickWeighted(w, ATTACKS, wts) ?? 'rampLaunch';
+  const drawn = pickWeighted(w, ATTACKS, wts) ?? 'rampLaunch';
+  // fx2 repair (R): FEATURES_V2 §10.2 acceptance — "every attack fires at least once in its phases". P3's only new
+  // attack was left to a 0.3 weight at range (probe_ai: a 23 s P3, 5 draws, no LEVEL COLLAPSE). If the first two P3
+  // decisions did not draw it, the third is LEVEL COLLAPSE (the draw above is still made: rng.boss consumption
+  // unchanged). Not on P3 entry: a titan in melee already draws it at weight 1.2, and forcing it there too added a
+  // collapse per fight for walkers (probe_gatekeepers 6c parkade6 x briarwick 20.0 -> 20.6 %).
+  let id = drawn;
+  if (P >= 3) {
+    if (!(b.data.p3Sig > 0) && (b.data.p3Draws ?? 0) >= 2) id = 'levelCollapse';
+    b.data.p3Draws = (b.data.p3Draws ?? 0) + 1;
+    if (id === 'levelCollapse') b.data.p3Sig = 1;
+  }
   startAttack(w, b, id);
 }
 
@@ -396,9 +407,14 @@ function startAttack(w: World, b: BossState, id: string): void {
       beginAttack(w, b, id, b.x, b.z);
       b.data.dir = b.heading;
       const dmg = pkHit(w, COLLAPSE.dmg);
+      // fx2 (probe_gatekeepers 6c: a walker inside A landed by B/C 100 %): each band is 0.7 H wide, narrower than the
+      // titan (0.84 H), so nobody stands BETWEEN the beats — the walk-out is past the band's outer edge, and B / C get
+      // their own fair walk-out (the formula, not a fixed A + 0.45 / 0.9 s that rolled the wave out at ~2 × walk speed)
+      const wuB = Math.max(wu + COLLAPSE.dtB, fairWindup(w, b, Math.max(0, rB - d) + T.radius, COLLAPSE.min, COLLAPSE.max + COLLAPSE.dtB));
+      const wuC = Math.max(wuB + (COLLAPSE.dtC - COLLAPSE.dtB), fairWindup(w, b, Math.max(0, rC - d) + T.radius, COLLAPSE.min, COLLAPSE.max + COLLAPSE.dtC));
       bossTelegraph(w, { style: 'ring', shape: { k: 'ring', x: b.x, z: b.z, r0: 0, r1: rA }, windup: wu, dmg, kind: 'stomp', tag: 'levelCollapse:A' }, false);
-      bossTelegraph(w, { style: 'ring', shape: { k: 'ring', x: b.x, z: b.z, r0: rA, r1: rB }, windup: wu + COLLAPSE.dtB, dmg, kind: 'stomp', tag: 'levelCollapse:B' }, false);
-      const tc = bossTelegraph(w, { style: 'ring', shape: { k: 'ring', x: b.x, z: b.z, r0: rB, r1: rC }, windup: wu + COLLAPSE.dtC, dmg, kind: 'stomp', tag: 'levelCollapse:C' }, false);
+      bossTelegraph(w, { style: 'ring', shape: { k: 'ring', x: b.x, z: b.z, r0: rA, r1: rB }, windup: wuB, dmg, kind: 'stomp', tag: 'levelCollapse:B' }, false);
+      const tc = bossTelegraph(w, { style: 'ring', shape: { k: 'ring', x: b.x, z: b.z, r0: rB, r1: rC }, windup: wuC, dmg, kind: 'stomp', tag: 'levelCollapse:C' }, false);
       b.data.collapseEnd = tc.windup + COLLAPSE.recover;
       break;
     }

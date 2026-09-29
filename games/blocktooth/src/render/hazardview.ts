@@ -693,6 +693,9 @@ export class HazardView implements ViewModule {
   private endAt = -1;
   /** 1 while the run is live, → 0 over END_FADE_S after runEnd (dressing that ignores the tail fade) */
   private endK = 1;
+  /** hazards drawn last frame (debug / tests) */
+  private drawnN = 0;
+  get drawn(): number { return this.drawnN; }
 
   // scratch
   private readonly m4 = new THREE.Matrix4();
@@ -779,6 +782,12 @@ export class HazardView implements ViewModule {
     this.puffs = mk('sporePuff', puffGeo(), puffMat, 512, 0, false, 7);
     // turret parts cast shadows: they are the only tall hazard dressing
     for (const m of [this.mound, this.stem, this.pod, this.petals, this.leaves]) m.mesh.castShadow = true;
+  }
+
+  /** KEEP GOING (ViewModule.resumeAfterEnd): the runEnd stage fade is over — hazards draw again */
+  resumeAfterEnd(): void {
+    this.endAt = -1;
+    this.endK = 1;
   }
 
   mount(world: World): void {
@@ -876,10 +885,12 @@ export class HazardView implements ViewModule {
     for (const m of this.ims()) m.n = 0;
     const lvl = this.ctx.quality.level;
     let turrets = 0;
+    this.drawnN = 0;
     for (const r of this.recs.values()) {
       const fade = this.fadeOf(r, now) * endK;
       if (fade <= 0.001) continue;
       this.decal(r, fade, px);
+      this.drawnN++;
       switch (r.kind) {
         case 'wire': this.drawWire(r, fade, px, now, lvl); break;
         case 'magma': this.drawMagma(r, fade, px, now, lvl); break;

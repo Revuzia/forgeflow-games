@@ -474,6 +474,10 @@ const TITAN_REACH: Readonly<Record<string, readonly [number, number]>> = {
 };
 const REACH_DEFAULT: readonly [number, number] = [0.8, -0.8];
 const _sight = new Float64Array(SIGHT_N);
+/** fx2 (k4 gate_switch_callin): sight points on a live GATEKEEPER (one per collider part, ≤ BOSS_SIGHT_MAX): glass
+ *  towers between the camera and SWITCHBOARD-5's base / dishes hid the fight. Same see-through rule as the titan's. */
+const BOSS_SIGHT_MAX = 8;
+const _bossSight = new Float64Array(BOSS_SIGHT_MAX * 3);
 /** does segment a→b cross the axis-aligned box? (slab test, t ∈ [0, 1]; allocation-free) */
 const _slab = [0, 1];
 function slab(o: number, d: number, lo: number, hi: number): boolean {
@@ -2028,7 +2032,8 @@ export class CityView implements ViewModule {
 
   // ─────────────────────────────── occluders ───────────────────────────────
   /** Live buildings whose box cuts a sight line from the camera to the titan (chest, head, both
-   *  shoulders, crown, feet, and the snout / muzzle / tail reach along the heading) are drawn
+   *  shoulders, crown, feet, and the snout / muzzle / tail reach along the heading) — or to a part of the live
+   *  gatekeeper (fx2: SWITCHBOARD-5's base under a glass tower) — are drawn
    *  see-through — EVERY storey, via the dithered twin batches — until GHOST_HOLD_S after they clear.
    *  The whole occluding piece ghosts: a band that stopped at the highest crossed storey left a
    *  chimney's solid upper storeys over MOLO's snout while its base was ghosted (critic F04).
@@ -2057,6 +2062,23 @@ export class CityView implements ViewModule {
     px[18] = tx + hx * nose * 0.92; px[19] = H * 0.7; px[20] = tz + hz * nose * 0.92;     // snout tip
     px[21] = tx + hx * nose * 0.55; px[22] = H * 0.88; px[23] = tz + hz * nose * 0.55;    // muzzle root / brow
     px[24] = tx + hx * tail * 0.75; px[25] = H * 0.22; px[26] = tz + hz * tail * 0.75;    // tail
+    // the live gatekeeper's parts (a point a third up each part, pulled toward the camera by half its radius), and
+    // the XZ box every camera→part segment stays inside (buildings outside it skip the extra tests)
+    const bs = _bossSight;
+    let nb = 0, bx0 = Infinity, bx1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
+    const boss = world.boss;
+    if (boss && boss.alive && boss.role === 'gate') {
+      for (let i = 0; i < boss.parts.length && nb < BOSS_SIGHT_MAX; i++) {
+        const q = boss.parts[i];
+        let cx = cam.x - q.x, cz = cam.z - q.z;
+        const cl = Math.hypot(cx, cz) || 1; cx /= cl; cz /= cl;
+        const o = nb * 3;
+        bs[o] = q.x + cx * q.r * 0.5; bs[o + 1] = q.y0 + (q.y1 - q.y0) * 0.35; bs[o + 2] = q.z + cz * q.r * 0.5;
+        bx0 = Math.min(bx0, bs[o]); bx1 = Math.max(bx1, bs[o]); bz0 = Math.min(bz0, bs[o + 2]); bz1 = Math.max(bz1, bs[o + 2]);
+        nb++;
+      }
+      bx0 = Math.min(bx0, cam.x); bx1 = Math.max(bx1, cam.x); bz0 = Math.min(bz0, cam.z); bz1 = Math.max(bz1, cam.z);
+    }
     for (const ab of this.arches) {
       for (const id of ab.ids) {
         const b = city.buildings[id];
@@ -2069,6 +2091,11 @@ export class CityView implements ViewModule {
           const x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
           for (let k = 0; k < SIGHT_N && !hit; k += 3) {
             hit = segHitsBox(cam.x, cam.y, cam.z, px[k], px[k + 1], px[k + 2], x0, 0, z0, x1, top, z1);
+          }
+          if (!hit && nb > 0 && x1 >= bx0 && x0 <= bx1 && z1 >= bz0 && z0 <= bz1) {
+            for (let k = 0; k < nb * 3 && !hit; k += 3) {
+              hit = segHitsBox(cam.x, cam.y, cam.z, bs[k], bs[k + 1], bs[k + 2], x0, 0, z0, x1, top, z1);
+            }
           }
         }
         const was = this.ghostT[id] > 0;

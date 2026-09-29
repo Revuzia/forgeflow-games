@@ -29,7 +29,7 @@ const TICK_S = 0.2;
 /** Default slow fraction for frost (40 %). */
 const FROST_SLOW = 0.4;
 /** Slow duration refreshed every tick while inside (covers the 5 Hz gap + a short linger). */
-const SLOW_LINGER_S = 0.35;
+export const SLOW_LINGER_S = 0.35;
 /** Titan-owned hazards hit buildings/props at this multiplier (DamageOpts.buildingMul doc). */
 const HAZARD_BUILDING_MUL = 0.5;
 const EPS = 1e-9;
@@ -76,6 +76,8 @@ export function spawnHazard(w: World, h: HazardSpawn): Hazard {
   return hz;
 }
 
+/** The slow fraction a hazard applies to the opposing side (0 = none; exported for bosses/index.ts escapeWalk, fx2). */
+export function hazardSlowFrac(h: Hazard): number { return slowFrac(h); }
 function slowFrac(h: Hazard): number {
   const d = h.data.slow;
   if (d !== undefined && Number.isFinite(d) && d > 0) return Math.min(0.95, d);

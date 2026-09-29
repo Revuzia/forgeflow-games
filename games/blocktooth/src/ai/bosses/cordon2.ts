@@ -19,7 +19,7 @@
 //   behind it. Past 3.5 H it HUNTS (GATES.huntClose / huntHot × titanWalk, gateUnstick). Intro: 1.4 × titanWalk.
 // weakMask = the pack's bit while OVERHEATED, STALLED, or with the titan in the rear arc (> 110° off the facing,
 //   probe case 5's "the pack … from behind"): an open weak point in reach is targeted before adds (targeting.ts).
-// Attacks (gaps [_, 2.4, 2.0, 1.7] × (0.85–1.15) × (1 − 0.1 pressure); gateWindup; bossTelegraph(…, false);
+// Attacks (gaps [_, 2.4, 2.0, 1.7] × (0.85–1.15), P3 × P3_GAP 0.65, × (1 − 0.1 pressure); gateWindup; bossTelegraph(…, false);
 //   damage = min(bossHostile(base), GATES.hitCap × maxHp)):
 //   P1+ shieldShove  lane from the wall face along the facing, w 2.4 H, len 3.2 H (laneClearLen); gateWindup(1.2 H +
 //                    R, 1.2, 2.2); dmg 12 + knock 1.0 H/s along the lane. Only with the titan in the front arc (±60°), where it is
@@ -30,32 +30,41 @@
 //                    across the lead point, the rest BEYOND it along the axis at 1.6 H spacing (1.1 H gaps); the
 //                    axis turns tangential when the lead is closer than keep-out + (0.25 H + R) + 0.2 H (§3.0);
 //                    gateWindup(0.25 H + R, 1.1, 2.0) + 0.2 s × i; dmg 8 each. The rig stands still (turn × 0.3).
-//   P2+ backfire     a response, not in the cycle: after the titan has been in the rear arc for 0.8 s (P3 0.6 s),
-//                    a cone from the pack backwards, half 55°, reach 2.4 H; windup from the cheaper walk-out
-//                    (sideways d·sin 55° + R, or out past the reach), gateWindup(…, 1.0, 1.9); dmg 11. ≥ 3 s apart.
+//   P2+ backfire     a response, not in the cycle: after the titan has been in the rear arc for 1.2 s (P3 0.9 s),
+//                    a cone from the pack backwards, half 40°, reach 1.8 H; windup from the SIDESTEP walk-out (square to
+//                    the cone's axis, sliding round the keep-out; backfireEscape, circleInShape) at k 1 in every phase
+//                    (gateWindupK1, 1.0–1.9); dmg 7. ≥ 3 s apart.
+//                    (fx2 lane B retune: 55° / 2.4 H / 11 / 0.8 s trapped the stand-behind-the-rig spot; critic r2/r3.)
+//   FLANK WINDOW     while OVERHEATED the pack's hit circle is r 0.6 H at −1.0 H: a 0.9 H bite reaches it from the
+//                    keep-out within ±60° of straight behind (outside the BACKFIRE cone from ~±35°).
 //   P3  squadBehind  a PICKET SQUAD (5) from the pack side every 14 s (first 3 s into P3), at most 2 of its squads
 //                    alive; ids registered as gatekeeper adds (registerGateAdd → gateAddIds); a `bossAttack` event
-//                    only (no beat — the rig keeps fighting).
+//                    only (no beat — the rig keeps fighting). The P3 SIGNATURE repeats once per cycle: an OVERHEATED
+//                    window or a STALLED that ended with no squad since the last cycle makes one due in 0.5 s; at the
+//                    cap (2 squads alive / the city full) it retries every 2 s (fx2 lane B).
 //   any dash answer  (watchDash, cd [_, 8, 6, 5]) one 'sawhorse' capsule across the dash end, len 1.2 H, r 0.25 H,
 //                    gateWindup at k 1 (0.9–1.8); dmg 5.
 // STALL: pack strain 3 (3.75 OVERHEATED). Full → STALLED (bosses/index.ts: 4.5 s, ×2 damage; step() is not called:
 //   the tracks stop, turn 0).
-// Beats (no event): overheated, reconfiguring, ramming, cutOff (see stencil1.ts gateBeats).
+// Beats (no event): overheated, stalled (the whole stagger; staggerBeat), reconfiguring, ramming, cutOff (see
+//   stencil1.ts gateBeats). REMATCH (slot 0) chasing a running titan (rematchChasing): no decision, chaseStep.
 // Telemetry: shoves, overheats, stalls, squads, part_pack / part_other, open_pack / open_all.
 
 import type { BossState, World } from '../../core/types.ts';
-import { CITY } from '../../core/config.ts';
-import { clamp, dist, wrapAngle } from '../../core/math.ts';
+import { CITY, RANKS } from '../../core/config.ts';
+import { circleInShape, clamp, dist, wrapAngle } from '../../core/math.ts';
 import {
-  baseBoss, beginAttack, bossH, bossTelegraph, endAttack, gateSettledH, gateWindup, keepRange, laneClearLen,
+  ESCAPE_K, baseBoss, beginAttack, bossH, bossTelegraph, endAttack, gateSettledH, gateWindup, keepRange, laneClearLen,
   leadPoint, localToWorld, makePart, moveBoss, pickWeighted, refreshParts, registerGateAdd, repeatMul, shoveTitan,
   titanWalk, turnBoss, watchDash,
 } from './index.ts';
 import {
-  boundsLen, gateAfterMove, gateBeats, gateGap, gateHit, gateHunt, gateWindupK1, huntSpeed, isMoveBeat, startBeat, sweepCrush,
+  CHASE_VOLLEY_S, P3_GAP, boundsLen, chaseStep, gateAfterMove, gateBeats, gateGap, gateHit, gateHunt, gateWindupK1, huntSpeed, isMoveBeat,
+  rematchChasing, staggerBeat, startBeat, sweepCrush,
 } from './stencil1.ts';
 import { spawnProjectile } from '../../combat/projectiles.ts';
 import { spawnEnemy } from '../enemies.ts';
+import { buildingsInRect, resolveCircleVsCity } from '../../city/citysim.ts';
 
 // ─────────────────────────────── tuning (× H unless noted) ───────────────────────────────
 export const BAND_MIN_H = 1.6, BAND_MAX_H = 3.5;
@@ -75,8 +84,17 @@ const SHOVE = { wH: 2.4, lenH: 3.2, faceH: 1.2, escH: 1.2, min: 1.2, max: 2.2, d
 export const OVERHEAT_S: readonly number[] = [0, 2.0, 1.7, 1.4];
 const OVERHEAT_TURN = 0.15, TOSS_TURN = 0.3;
 const TOSS = { n: [0, 2, 3, 4] as const, lenH: 1.4, rH: 0.25, spacingH: 1.6, min: 1.1, max: 2.0, stagger: 0.2, dmg: 8, recover: 0.5, yH: 2.0 };
-const BACKFIRE = { half: (55 * Math.PI) / 180, rH: 2.4, min: 1.0, max: 1.9, dmg: 11, recover: 0.5, afterS: [0, 0.8, 0.8, 0.6] as const, cdS: 3 };
-const SQUAD = { everyS: 14, firstS: 3, maxAlive: 2, size: 5, backH: 1.8, jitterH: 0.5 };
+/** BACKFIRE (fx2 lane B, critic r2/r3): at half 55°, reach 2.4 H, base 11 after 0.8 s behind, the spot the fight teaches
+ *  (straight behind the rig, on the pack) was a trap: the cone + the titan's radius spanned 75–89° either side at the
+ *  keep-out, the hard keep-out blocked the "sideways" walk-out the windup assumed, and a no-dash walker ate 26–34 %
+ *  of max HP several times a fight. Now: half 40°, reach 1.8 H, base 7, a longer dwell (1.2 / 0.9 s), and the windup
+ *  is computed from the real walk-out around the keep-out (backfireEscape). */
+const BACKFIRE = { half: (40 * Math.PI) / 180, rH: 1.8, min: 1.0, max: 1.9, dmg: 7, recover: 0.5, afterS: [0, 1.2, 1.2, 0.9] as const, cdS: 3 };
+/** The FLANK WINDOW: while OVERHEATED the vented pack's hit circle grows (r 0.45 → 0.6 H, centre −0.95 → −1.0 H), so
+ *  a 0.9 H bite (MOLO, the shortest reach) lands on it from the keep-out anywhere within ±60° of straight behind —
+ *  outside the BACKFIRE cone from about ±35° out. */
+const PACK_VENT = { oz: -1.0, r: 0.6 };
+const SQUAD = { everyS: 14, firstS: 3, maxAlive: 2, size: 5, backH: 1.8, jitterH: 0.5, cycleS: 0.5, retryS: 2 };
 const DASH_ANSWER = { lenH: 1.2, rH: 0.25, aheadR: 0.3, cd: [0, 8, 6, 5] as const, dmg: 5, min: 0.9, max: 1.8, yH: 2.0 };
 const PACK_STRAIN = 3.0, OVERHEAT_STRAIN_MUL = 1.25;
 
@@ -104,7 +122,7 @@ export function create(w: World): BossState {
   const b = baseBoss('cordon2', w.titan.x, w.titan.z, 0, parts);
   const d = b.data;
   d.weakMask = 0; d.overheated = 0; d.rear = 0; d.rearT = 0; d.backfireCd = 0; d.squadT = -1; d.squadA = -1; d.squadB = -1;
-  d.lurchT = 0; d.lurchV = 0;
+  d.lurchT = 0; d.lurchV = 0; d.fleeT = 0; d.fleeTick = -1; d.squadCyc = 0;
   d.bandMinH = BAND_MIN_H; d.bandMaxH = BAND_MAX_H;
   d.shoves = 0; d.overheats = 0; d.stalls = 0; d.squads = 0; d.wasStag = 0;
   d.part_pack = 0; d.part_other = 0; d.open_pack = 0; d.open_all = 0;
@@ -123,6 +141,7 @@ export function step(w: World, b: BossState): void {
   const T = w.titan, d = b.data;
   const H = bossH(w, b);
   const dd = dist(b.x, b.z, T.x, T.z);
+  const chasing = rematchChasing(w, b);
   if (b.introT > 0) {
     if (dd > (BAND_MAX_H - 0.3) * H) gateHunt(w, b, INTRO_WALK * titanWalk(w), HUNT_TURN);
     else { turnBoss(b, Math.atan2(T.x - b.x, T.z - b.z), TURN[1], w.dt); b.data.speed = 0; }
@@ -137,9 +156,10 @@ export function step(w: World, b: BossState): void {
   squads(w, b);
   if (d.lurchT > 0) { stepLurch(w, b); gateAfterMove(w, b); sync(w, b); return; }
   if (!b.attack || isMoveBeat(b.attack)) {
-    if (dd > BAND_MAX_H * H) gateHunt(w, b, huntSpeed(w, b, dd), HUNT_TURN);
+    if (chasing) chaseStep(w, b, dd, (BAND_MIN_H + 0.5) * H, HUNT_TURN);   // a rematch chasing a runner: no decision
+    else if (dd > BAND_MAX_H * H) gateHunt(w, b, huntSpeed(w, b, dd), HUNT_TURN);
     else keepRange(w, b, BAND_MIN_H * H, BAND_MAX_H * H, WALK_FRAC * titanWalk(w), TURN[b.phase] ?? 0.9);
-    if (!b.attack) {
+    if (!b.attack && !chasing) {
       if (b.phase >= 2 && d.rearT >= (BACKFIRE.afterS[b.phase] ?? 0.8) && d.backfireCd <= 0 && dd <= BAND_MAX_H * H) backfire(w, b);
       else if (b.cd <= 0 && dd <= (BAND_MAX_H + DECIDE_SLACK_H) * H) decide(w, b);
     }
@@ -161,14 +181,23 @@ export function onDamage(_w: World, b: BossState, part: number, dmg: number): vo
 /**
  * bosses/index.ts projects the titan onto the hard keep-out, then settles it against the CITY: a titan pinned
  * against a building it cannot flatten can end the tick inside the wall. The rig yields instead: at the start of
- * its step it backs straight off by the overlap (never shoves the titan through a building).
+ * its step it backs straight off by the overlap (never shoves the titan through a building) — ONLY in that pinned
+ * case (the keep-out point the titan would be put back on lies inside a building it cannot flatten, the same test
+ * probe_gatekeepers uses to classify a pin). fx2 lane B: it used to yield to ANY overlap, so a titan simply walking
+ * into the rig pushed it along at walk speed — the wall you are meant to go AROUND could be bulldozed, and a titan
+ * holding the stick toward the weak point during a tell carried the rig (and itself) deeper into a telegraph that
+ * stays where it was cast (BACKFIRE's cone, HOLD MUSIC's ring; fx2/B/bf_walker.ts).
  */
+const PIN = { x: 0, z: 0, bumpTier: -1 };
 function yieldWall(w: World, b: BossState): void {
   const T = w.titan;
   if (!T.alive) return;
   const keep = KEEP_H * bossH(w, b) + T.radius;
   const dx = b.x - T.x, dz = b.z - T.z, d = Math.hypot(dx, dz);
   if (d >= keep - 1e-3 || d < 1e-4) return;
+  const wx = b.x - (dx / d) * keep, wz = b.z - (dz / d) * keep;
+  const flat = RANKS[clamp(Math.floor(T.rank), 0, RANKS.length - 1)].canFlatten;
+  if (!resolveCircleVsCity(w.city, wx, wz, T.radius, flat, PIN)) return;   // open ground: pushTitanOut puts it back
   const need = keep - d;
   b.x += (dx / d) * need; b.z += (dz / d) * need;
   refreshParts(b);
@@ -181,9 +210,10 @@ function sync(w: World, b: BossState): void {
   const stag = b.staggerT > 0;
   if (d.syncTick !== w.tick) {
     d.syncTick = w.tick;
-    if (stag && !(d.wasStag > 0)) { d.wasStag = 1; d.stalls += 1; d.lurchT = 0; d.overheated = 0; }
+    if (stag && !(d.wasStag > 0)) { d.wasStag = 1; d.stalls += 1; d.lurchT = 0; d.overheated = 0; squadCycle(b); }
     else if (!stag) d.wasStag = 0;
   }
+  staggerBeat(b, 'stalled');
   if (b.attack !== 'overheated') d.overheated = 0;
   if (b.attack !== 'shieldShove') d.lurchT = 0;
   // rear arc: the titan more than REAR_ARC off the facing
@@ -191,7 +221,8 @@ function sync(w: World, b: BossState): void {
   d.rear = a > REAR_ARC ? 1 : 0;
   for (let i = 0; i < b.parts.length && i < PARTS_H.length; i++) {
     const p = b.parts[i], g = PARTS_H[i];
-    p.ox = g[1] * H; p.oz = g[2] * H; p.r = g[3] * H; p.y0 = g[4] * H; p.y1 = g[5] * H; p.hpMul = g[6];
+    const vent = i === PACK_IX && d.overheated > 0;
+    p.ox = g[1] * H; p.oz = (vent ? PACK_VENT.oz : g[2]) * H; p.r = (vent ? PACK_VENT.r : g[3]) * H; p.y0 = g[4] * H; p.y1 = g[5] * H; p.hpMul = g[6];
     p.strainMul = i === PACK_IX ? PACK_STRAIN * (d.overheated > 0 ? OVERHEAT_STRAIN_MUL : 1) : g[7];
   }
   const open = b.alive && (stag || d.overheated > 0 || d.rear > 0);
@@ -317,14 +348,81 @@ function sawhorseToss(w: World, b: BossState): void {
 }
 
 // ─────────────────────────────── BACKFIRE ───────────────────────────────
-function backfire(w: World, b: BossState): void {
+const ESC = { x: 0, z: 0 };
+const CONE: { k: 'cone'; x: number; z: number; dir: number; half: number; r: number } = { k: 'cone', x: 0, z: 0, dir: 0, half: 0, r: 0 };
+const WALK_BUF: number[] = [];
+/** Walk from the titan along (ux, uz) in 0.05 H steps until its body is out of the cone (circleInShape, THE hit
+ *  test); a step that would enter the hard keep-out is projected back onto it (bosses/index.ts does that every tick),
+ *  so the walk slides round the rig's back and every step still costs its full length. Infinity past maxL, or when a
+ *  step meets a building the titan cannot flatten (tier > canFlatten; its collision circle is the full R: a wall, not an exit). Plowing through a
+ *  flattenable one is left to gateWindup's escapeWalk (SMASH_SLOW along the direction it is given). */
+function walkOut(w: World, b: BossState, cone: typeof CONE, ux: number, uz: number, maxL: number): number {
+  const T = w.titan, H = bossH(w, b), R = T.radius, c = w.city;
+  const keep = KEEP_H * H + R, step = 0.05 * H, rc = R;
+  const flat = RANKS[clamp(Math.floor(T.rank), 0, RANKS.length - 1)].canFlatten;
+  let x = T.x, z = T.z, s = 0;
+  while (circleInShape(cone, x, z, R)) {
+    if (s >= maxL) return Infinity;
+    x += ux * step; z += uz * step; s += step;
+    const dx = x - b.x, dz = z - b.z, dd = Math.hypot(dx, dz);
+    if (dd < keep && dd > 1e-6) { x = b.x + (dx / dd) * keep; z = b.z + (dz / dd) * keep; }
+    if (c && c.buildings) {
+      WALK_BUF.length = 0;
+      buildingsInRect(c, x - rc, z - rc, x + rc, z + rc, WALK_BUF);
+      for (let i = 0; i < WALK_BUF.length; i++) {
+        const bd = c.buildings[WALK_BUF[i]];
+        if (!bd || bd.collapsed || !(bd.alive > 0) || bd.tier <= flat) continue;
+        const qx = clamp(x, bd.x - bd.w / 2, bd.x + bd.w / 2), qz = clamp(z, bd.z - bd.d / 2, bd.z + bd.d / 2);
+        if (Math.hypot(x - qx, z - qz) < rc) { WALK_BUF.length = 0; return Infinity; }
+      }
+      WALK_BUF.length = 0;
+    }
+  }
+  return s;
+}
+/**
+ * The BACKFIRE walk-out (m) a player actually takes: the SIDESTEP — perpendicular to the cone's axis, toward the side
+ * the titan is already on (either side from dead centre) — sliding round the rig's back on the keep-out. It is never
+ * shorter than the best straight walk (also computed, over 32 headings, as the fallback). Writes its heading to ESC.
+ * (The old estimate, min(d·sin(half) + R, reach − d + R), assumed a perpendicular step off the cone's EDGE, which from
+ * straight behind points INTO the keep-out; the real walk round the ring was about twice as long.)
+ */
+function backfireEscape(w: World, b: BossState, cone: typeof CONE): number {
   const T = w.titan, H = bossH(w, b), R = T.radius;
+  const maxL = cone.r + 2 * R + 2 * H;
+  const ax = Math.sin(cone.dir), az = Math.cos(cone.dir), px = az, pz = -ax;
+  const side = (T.x - cone.x) * px + (T.z - cone.z) * pz;
+  let best = Infinity, bx = px, bz = pz;
+  // the titan's own side first; the other side only when that one is walled off (or from dead centre)
+  const first = side >= 0 ? 1 : -1;
+  for (const sg of Math.abs(side) > 1e-6 ? [first, -first] : [1, -1]) {
+    const L = walkOut(w, b, cone, px * sg, pz * sg, maxL);
+    if (L < best) { best = L; bx = px * sg; bz = pz * sg; }
+    if (Number.isFinite(best) && Math.abs(side) > 1e-6) break;
+  }
+  if (!Number.isFinite(best)) {
+    for (let k = 0; k < 32; k++) {
+      const a = (k / 32) * Math.PI * 2, ux = Math.sin(a), uz = Math.cos(a);
+      const L = walkOut(w, b, cone, ux, uz, Math.min(best, maxL));
+      if (L < best) { best = L; bx = ux; bz = uz; }
+    }
+  }
+  ESC.x = bx; ESC.z = bz;
+  return Number.isFinite(best) ? best : cone.r + R;
+}
+
+function backfire(w: World, b: BossState): void {
+  const T = w.titan, H = bossH(w, b);
   const pk = localToWorld(b, 0, -0.95 * H, TMP);
   const px = pk.x, pz = pk.z;
-  const r = BACKFIRE.rH * H, d = dist(px, pz, T.x, T.z);
-  const esc = Math.min(d * Math.sin(BACKFIRE.half) + R, Math.max(0, r - d) + R);
-  const wu = gateWindup(w, b, esc / H, BACKFIRE.min, BACKFIRE.max);
+  const r = BACKFIRE.rH * H;
   const dir = wrapAngle(b.heading + Math.PI);
+  CONE.x = px; CONE.z = pz; CONE.dir = dir; CONE.half = BACKFIRE.half; CONE.r = r;
+  const esc = backfireEscape(w, b, CONE);
+  // k = 1 in every phase (as gateWindupK1; P3's ESCAPE_K 0.9 would make it a dash check): BACKFIRE answers the spot
+  // the fight TEACHES you to stand in, so a pure 0.35 s read-and-react walk-out always makes it. The escape heading
+  // goes to gateWindup so a sidestep that plows through a flattenable building walks at SMASH_SLOW.
+  const wu = gateWindup(w, b, esc / H / (ESCAPE_K[b.phase] ?? 1), BACKFIRE.min, BACKFIRE.max, ESC.x, ESC.z);
   beginAttack(w, b, 'backfire', px, pz);
   b.data.dir = dir;
   const tg = bossTelegraph(w, {
@@ -348,12 +446,14 @@ function squads(w: World, b: BossState): void {
   if (d.squadT < 0) { d.squadT = SQUAD.firstS; return; }
   d.squadT -= w.dt;
   if (d.squadT > 0) return;
-  d.squadT = SQUAD.everyS;
   const aliveA = squadAlive(w, d.squadA), aliveB = squadAlive(w, d.squadB);
-  if (aliveA && aliveB) return;
+  // at the cap (two squads alive, or the city full): try again shortly, not a whole period later
+  if (aliveA && aliveB) { d.squadT = SQUAD.retryS; return; }
   let n = 0;
   for (let i = 0; i < w.enemies.length; i++) if (w.enemies[i].alive) n++;
-  if (n + SQUAD.size > CITY.maxEnemies) return;
+  if (n + SQUAD.size > CITY.maxEnemies) { d.squadT = SQUAD.retryS; return; }
+  d.squadT = SQUAD.everyS;
+  d.squadCyc = 1;
   const H = bossH(w, b);
   const sid = w.director.squadSeq++;
   const bx = Math.sin(b.heading), bz = Math.cos(b.heading), rx = bz, rz = -bx;
@@ -375,6 +475,14 @@ function squads(w: World, b: BossState): void {
   w.events.push({ type: 'bossAttack', attack: 'squadBehind', x: ox, z: oz });
 }
 
+/** An OVERHEATED window or a STALLED stagger ended a cycle: in P3, a cycle with no squad makes one due now (the P3
+ *  signature repeats once per cycle — fx2 lane B, critic r1: late phases never showed their kit). */
+function squadCycle(b: BossState): void {
+  const d = b.data;
+  if (b.phase >= 3 && d.squadT >= 0 && !(d.squadCyc > 0)) d.squadT = Math.min(d.squadT, SQUAD.cycleS);
+  d.squadCyc = 0;
+}
+
 // ─────────────────────────────── attack runner ───────────────────────────────
 function runAttack(w: World, b: BossState): void {
   const T = w.titan, t = b.attackT, d = b.data;
@@ -384,15 +492,15 @@ function runAttack(w: World, b: BossState): void {
   switch (b.attack) {
     case 'shieldShove':
       // the crouch: the wall holds its line (no turn) until the lurch
-      if (t > (d.shoveWu ?? 2) + SHOVE.lurchS + 2.0) endAttack(b, gateGap(w, b, GAP, 1));   // fire lost (cancelled)
+      if (t > (d.shoveWu ?? 2) + SHOVE.lurchS + 2.0) endAttack(b, gateGap(w, b, GAP, P3_GAP));   // fire lost (cancelled)
       break;
     case 'overheated':
       turnBoss(b, faceT, turn * OVERHEAT_TURN, w.dt);
-      if (t >= (d.beatS ?? 2)) { d.overheated = 0; endAttack(b, gateGap(w, b, GAP, 1)); }
+      if (t >= (d.beatS ?? 2)) { d.overheated = 0; squadCycle(b); endAttack(b, gateGap(w, b, GAP, P3_GAP)); }
       break;
     case 'sawhorseToss':
       turnBoss(b, faceT, turn * TOSS_TURN, w.dt);
-      if (t >= (d.attackEnd ?? 2)) endAttack(b, gateGap(w, b, GAP, 1));
+      if (t >= (d.attackEnd ?? 2) || (t >= CHASE_VOLLEY_S && rematchChasing(w, b))) endAttack(b, gateGap(w, b, GAP, P3_GAP));
       break;
     case 'backfire':
       if (t >= (d.attackEnd ?? 2)) { d.backfireCd = BACKFIRE.cdS; endAttack(b, Math.max(b.cd, 0.6)); }

@@ -739,6 +739,14 @@ def menus_to_slate(sess, titan, biome, log=print, snap=None, timeout_s=90):
         while time.time() < deadline and sess.screen() == "title":
             sess.press("Enter")
             time.sleep(0.9)
+        # G2 fix: the game shows screen 'loading' between the title and the select screen while the titan
+        # portraits render (game.ts goSelect: "screen === 'select' must mean the select screen is listening");
+        # a player waits for the select screen instead of giving up the instant Enter was accepted
+        if sess.screen() == "loading":
+            t_ld = time.time()
+            sess.wait_screen(("select",), 15)
+            log("    title → 'loading' for %.1f s before the select screen took input (screen now %r)" % (
+                time.time() - t_ld, sess.screen()))
         if sess.screen() != "select":
             detail["error"] = "Enter on the title did not open the select screen (screen=%r)" % (sess.screen(),)
             return False, detail

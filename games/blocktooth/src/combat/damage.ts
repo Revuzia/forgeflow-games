@@ -334,7 +334,8 @@ function hitEnemy(w: World, e: Enemy, dmg: number, opts: DamageOpts, ox: number,
     lifesteal(w, dealt);
     // GATEKEEPERS §2.4 engagement rule (b): hitting one of the live gatekeeper's adds counts as engaging it
     const adds = gateAddIds(w);
-    if (adds.length > 0 && adds.includes(e.id)) w.gates.lastAddHitT = w.t;
+    // (a thorns reflection is the add's own attack bounced back, not the titan engaging)
+    if (adds.length > 0 && opts.kind !== 'thorns' && adds.includes(e.id)) w.gates.lastAddHitT = w.t;
   }
   if (e.hp <= 0) { killEnemy(w, e, false); return true; }
   if (knock > 0) applyKnock(w, e, knock, ox, oz);

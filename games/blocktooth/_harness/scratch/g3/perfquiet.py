@@ -54,6 +54,10 @@ def main():
     ap.add_argument("--quiet", type=float, default=20)
     ap.add_argument("--gpu-max", type=float, default=3.0)
     ap.add_argument("--cpu-max", type=float, default=35.0)
+    ap.add_argument("--cpu-run-max", type=float, default=55.0,
+                    help="fx2: a run whose mean box CPU load exceeded this is CONTAMINATED too (our own Chrome adds "
+                         "~8-12 %% over the quiet start; k4 clean runs read 42-45 %%, a box busy with other sessions' "
+                         "probes read 68-78 %% and 10-41 fps)")
     ap.add_argument("--budget", type=float, default=14400)
     ap.add_argument("--max-tries", type=int, default=12)
     ap.add_argument("--out", required=True)
@@ -113,7 +117,8 @@ def main():
         ls = [l for _, l in series if isinstance(l, (int, float))]
         gmean = sum(gs) / len(gs) if gs else 0.0
         gmax = max(gs) if gs else 0.0
-        contaminated = gmean > a.gpu_max or gmax > 3 * a.gpu_max
+        cmean = (sum(ls) / len(ls)) if ls else 0.0
+        contaminated = gmean > a.gpu_max or gmax > 3 * a.gpu_max or cmean > a.cpu_run_max
         txt = open(log, encoding="utf-8").read()
         m = re.search(r"frames\s*:.*", txt)
         v = re.search(r"PERF GATE.*", txt)

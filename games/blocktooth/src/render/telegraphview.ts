@@ -557,6 +557,8 @@ export class TelegraphView implements ViewModule {
   private mounted = false;
   /** real time of the runEnd event (−1 = run live) */
   private endAt = -1;
+  /** boss-owned telegraphs emitted last frame (bossDrawn) */
+  private bossDrawnN = 0;
   /** titan circle this frame (cover test) */
   private tx = 0; private tz = 0; private tr = 1;
   /** the titan model (scene child 'titan:<id>', read-only) whose body volume masks the x-ray pass, its
@@ -715,6 +717,11 @@ export class TelegraphView implements ViewModule {
     }
   }
 
+  /** KEEP GOING (ViewModule.resumeAfterEnd): the runEnd stage fade is over — telegraphs draw again */
+  resumeAfterEnd(): void {
+    this.endAt = -1;
+  }
+
   mount(world: World): void {
     this.clearRecs();
     this.endAt = -1;
@@ -840,6 +847,7 @@ export class TelegraphView implements ViewModule {
     // emit instances
     for (const b of this.batches.values()) b.begin();
     this.doomed.length = 0;
+    this.bossDrawnN = 0;
     // run over: clear the stage for the aftermath + the tabloid freeze-frame (the subject must be findable)
     const endK = this.endAt >= 0 ? Math.max(0, 1 - (now - this.endAt) / END_FADE_S) : 1;
     for (const r of this.recs.values()) {
@@ -871,6 +879,7 @@ export class TelegraphView implements ViewModule {
       fade *= endK;
       if (fade <= 0.002) continue;
       this.emit(r, px, fade, flash, warm, active, scale, urg);
+      if (r.owner === 'boss') this.bossDrawnN++;
     }
     for (let i = 0; i < this.doomed.length; i++) {
       const r = this.recs.get(this.doomed[i]);
@@ -990,6 +999,9 @@ export class TelegraphView implements ViewModule {
     d[o + 20] = sizeRef; d[o + 21] = urg; d[o + 22] = r.style === 'chain' ? chainRadius(r) : 0;
     d[o + 23] = mode === enum_SHAPE.capsule ? 0 : this.cover(r, warm);   // chain links overwrite this with their flags
   }
+
+  /** number of BOSS-owned telegraphs drawn last frame (debug / tests: playtest_gate step 5 — a live rematch tell is on screen) */
+  get bossDrawn(): number { return this.bossDrawnN; }
 
   /** number of telegraph decals drawn last frame (debug / tests) */
   get drawn(): number {

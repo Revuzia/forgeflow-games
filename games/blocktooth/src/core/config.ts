@@ -883,6 +883,18 @@ export const BOSS_KIND_MUL: Readonly<Partial<Record<DamageKind, number>>> = {
 };
 /** × every boss attack's §10 damage (then × RANKS[titan.rank].hpMul, §5.4). */
 export const BOSS_DMG_MUL = 2.0;
+/** No single city-boss hit takes more than this share of the titan's max HP (the modules' HIT_CAP). fx2: a
+ *  damage-over-time boss tell (active > 0, dmg per second) is capped on its TOTAL — dmg × active ≤ this × maxHp
+ *  (gatekeepers: GATES.hitCap) — in bosses/index.ts bossTelegraph (IRON GULLY's breath was 20 % per 0.2 s tick
+ *  for 1.2 s = 120 % of a Size IV VOLT-KITE, critic r2). */
+export const BOSS_HIT_CAP = 0.55;
+/** fx2 — the DASH is a resource the rigs read (bosses/index.ts, every boss and gatekeeper): a dash that starts inside
+ *  live boss paint (an ESCAPE dash) pulls the rig's next decision to within escapeCdS; and when that dash left a
+ *  charge recharging (P2+), watchDash hands the module a second dash answer followS later — placed on the path the
+ *  titan is walking then, while the dash recharges. Windups stay fair (a walk from where the titan stands): the
+ *  follow-ups simply arrive while no dash is there to answer them. A titan that walks out of tells never dashes, so
+ *  it never meets this (probe_gatekeepers case 6c vs case 6). */
+export const BOSS_DASH_READ = { escapeCdS: 0.6, followS: 1.0 } as const;
 /** × boss attack damage by boss phase (index = phase 1..3): the rig gets meaner as it breaks down. */
 export const BOSS_PHASE_DMG_MUL: readonly number[] = [1, 0.9, 1.05, 1.35];
 /** Elite arrives at min(time, rank IV + 30 s); boss at min(time, rank V + 20 s). */
@@ -910,8 +922,10 @@ export const GATES = {
   spawnMul: { stencil1: 0.35, cordon2: 0.4, switchboard5: 0.45 } as Readonly<Record<GateId, number>>,
   /** engagement (§2.4): titan within band max + this × H of the rig, or a hit on it / its adds within engageHitS */
   engageMarginH: 0.5, engageHitS: 5,
-  /** stuck rule (§3.0): every checkS the distance must drop by progressH × H, else DETOUR, then RAMMING THROUGH */
-  stuck: { checkS: 2, progressH: 0.5, detourS: 1.5, ramS: 1.5 },
+  /** stuck rule (§3.0): every checkS the distance must drop by progressH × H, else DETOUR, then RAMMING THROUGH —
+   *  but only when the rig is HELD (its own displacement over the window < moveFrac × its commanded path); a rig
+   *  that moves freely while the gap does not close is out-run, and cuts the titan off after repositionS (fx2) */
+  stuck: { checkS: 2, progressH: 0.5, detourS: 1.5, ramS: 1.5, moveFrac: 0.5 },
   /** hunt: past its band a gatekeeper closes at up to this × the titan's walk (pressure ≥ 2: huntHot) */
   huntClose: 0.95, huntHot: 1.05,
   /** farther than this × spawnRing for repositionS → it re-enters off-screen ahead of the titan */

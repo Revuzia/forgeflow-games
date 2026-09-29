@@ -19,7 +19,7 @@
 //   0.6 s when CAUGHT). Band [1.67, 4.5] H: the hunt starts after the titan has been farther than 4.5 H for 1.5 s.
 //   Dishes are folded (unhittable, weakMask 0) in modes 1, 2, 3, 4, 5, 6; unfolded (weakMask = the three dish
 //   bits) while planted and during LINES DOWN.
-// Behaviours (gaps [_, 2.3, 1.9, 1.6] × (0.85–1.15) × (1 − 0.1 pressure); gateWindup; bossTelegraph(…, false);
+// Behaviours (gaps [_, 2.3, 1.9, 1.6] × (0.85–1.15), P3 × P3_GAP 0.65, × (1 − 0.1 pressure); gateWindup; bossTelegraph(…, false);
 //   damage = min(bossHostile(base), GATES.hitCap × maxHp)); only while planted:
 //   P1+ callIn      3 / 4 / 5 lobbed 'callFlare' (circle r 0.5 H): the lead on the lead point, the rest by
 //                   volleyPoints (beyond the lead, ±60°, ≥ 1.94 H apart); gateWindup(0.5 H + R, 1.1, 2.0) + 0.15 s × i;
@@ -29,7 +29,12 @@
 //                   titan's far side from the tower (rng.spawn), at most 14 of its adds alive (gateAddIds). A 1.0 s
 //                   subtitle beat with a `bossAttack` event (the NOW SERVING board ticks: b.data.serving).
 //   P2+ holdMusic   ring around the base 0 → 2.0 H, only with the titan within 2.1 H; gateWindup(2.0 H − d + R,
-//                   1.0, 1.9); dmg 14 + knock 0.8 H/s outward.
+//                   1.0, 1.9); dmg 14 + knock 0.8 H/s outward. The P3 SIGNATURE: once per cycle (P3 entry, then
+//                   after each PUT THROUGH, RELOCATE or LINES DOWN) it is due and fires at the next gap, before a
+//                   relocation, whenever the ring can reach the titan's body (within 2.0 H + R) (fx2 lane B).
+//                   Never cast when the straight-out walk (±20°) meets a building the titan cannot flatten
+//                   (holdEscape; the signature then waits up to 1.5 s of decision time for the titan to step off
+//                   the wall); the windup is floored by the walk at SMASH_SLOW when the way out plows (holdWindup).
 //   P1+ relocate    after the titan has spent 5 / 4 / 3 s within 2.6 H since the last relocation (≥ 12 s ago), no
 //                   attack live: PACKING UP 1.0 s, then drives to the best of 8 points 7 H around the titan (in bounds
 //                   by 3 H, clear along laneClearLen; the side away from the titan first; rng.boss tie-break) at
@@ -46,23 +51,29 @@
 //   the base's EDGE (2.3 H centre) is inside the 2.6 H camping radius: every relocation would be caught 0.3 s
 //   after it starts driving, with no chase at all. Built as: the titan's centre within keep-out + CATCH_H
 //   (0.35 H) of the base's centre (pressing against the wall), after ≥ 0.3 s of driving.
-// Beats (no event): packUp / planting (hunt), caught, reconfiguring, ramming, cutOff.
+// Beats (no event): packUp / planting (hunt), caught, linesDown (the whole stagger; staggerBeat), reconfiguring,
+//   ramming, cutOff. REMATCH (slot 0) chasing a running titan (rematchChasing): packs up at once, drives and trails
+//   it (chaseStep), never plants or attacks while it runs.
 // Telemetry: callIns, relocates, caught, putThroughs, addsSummoned, linesDown, serving, part_dish / part_other,
 //   open_dish / open_all.
 
 import type { BossState, EnemyKind, World } from '../../core/types.ts';
-import { CITY } from '../../core/config.ts';
+import { CITY, RANKS, SMASH_SLOW } from '../../core/config.ts';
 import { clamp, dist, wrapAngle } from '../../core/math.ts';
 import {
-  baseBoss, beginAttack, bossH, bossTelegraph, endAttack, gateAddIds, gateRing, gateSettledH, gateWindup,
+  ESCAPE_K, REACT_S, baseBoss, beginAttack, bossH, bossTelegraph, endAttack, gateAddIds, gateRing, gateSettledH, gateWindup,
   laneClearLen, leadPoint, makePart, moveBoss, refreshParts, registerGateAdd, repeatMul, pickWeighted, shoveTitan,
-  titanWalk, turnBoss, volleyPoints, watchDash,
+  fairLossS, titanWalk, turnBoss, volleyPoints, watchDash,
 } from './index.ts';
 import {
-  gateAfterMove, gateBeats, gateGap, gateHit, gateHunt, gateWindupK1, huntSpeed, isMoveBeat, startBeat,
+  CHASE_VOLLEY_S, P3_GAP, chaseStep, gateAfterMove, gateBeats, gateGap, gateHit, gateHunt, gateWindupK1, huntSpeed, isMoveBeat,
+  rematchChasing, staggerBeat, startBeat,
 } from './stencil1.ts';
 import { spawnProjectile } from '../../combat/projectiles.ts';
 import { spawnEnemy } from '../enemies.ts';
+import { buildingsInRect, resolveCircleVsCity } from '../../city/citysim.ts';
+import { TURN_RATE_I, TURN_RATE_V } from '../../titans/titansim.ts';
+import { stat } from '../../upgrades/stats.ts';
 
 // ─────────────────────────────── tuning (× H unless noted) ───────────────────────────────
 export const BAND_MIN_H = 1.67, BAND_MAX_H = 4.5;
@@ -72,7 +83,7 @@ const BASE_TURN = 0.6, HUNT_TURN = 1.2, INTRO_WALK = 1.4;
 const GAP = [0, 2.3, 1.9, 1.6] as const;
 const HUNT = { farS: 1.5, packS: 1.0, plantS: 1.0, stopH: 3.0 };
 const CALLIN = { n: [0, 3, 4, 5] as const, rH: 0.5, min: 1.1, max: 2.0, stagger: 0.15, dmg: 12, recover: 0.5, yH: 2.6 };
-const HOLD = { rH: 2.0, triggerH: 2.1, min: 1.0, max: 1.9, dmg: 14, knockH: 0.8, recover: 0.5 };
+const HOLD = { rH: 2.0, triggerH: 2.1, min: 1.0, max: 1.9, dmg: 14, knockH: 0.8, recover: 0.5, waitS: 1.5 };
 const RELOC = {
   campH: 2.6, campS: [0, 5, 4, 3] as const, everyS: 12, packS: 1.0, ringH: 7, boundsPadH: 3, speed: [0, 0.8, 0.85, 0.9] as const,
   maxS: 6, arriveH: 0.3, plantS: 1.0, caughtPlantS: 0.6, flareEveryS: 1.2, flareRH: 0.4, flareGapH: 1.8, flareMin: 0.9,
@@ -114,6 +125,7 @@ export function create(w: World): BossState {
   d.destX = 0; d.destZ = 0; d.flareT = 0; d.flareId = -1; d.flareX = NaN; d.flareZ = NaN;
   d.callIns = 0; d.relocates = 0; d.caught = 0; d.putThroughs = 0; d.addsSummoned = 0; d.linesDown = 0; d.wasStag = 0;
   d.part_dish = 0; d.part_other = 0; d.open_dish = 0; d.open_all = 0;
+  d.p3Seen = 0; d.holdDue = 0; d.fleeT = 0; d.fleeTick = -1;
   d.syncTick = -1;
   return b;
 }
@@ -130,15 +142,17 @@ export function step(w: World, b: BossState): void {
   const H = bossH(w, b);
   const dd = dist(b.x, b.z, T.x, T.z);
   d.modeT += w.dt;
+  const chasing = rematchChasing(w, b);
   if (b.introT > 0) {
-    // drives in folded, plants as the intro ends
-    if (dd > (BAND_MAX_H - 1.0) * H) { setMode(b, 2); gateHunt(w, b, INTRO_WALK * titanWalk(w), HUNT_TURN); }
+    // drives in folded, plants as the intro ends (a rematch chasing a runner keeps driving: no plant at its back)
+    if (chasing && dd <= (BAND_MAX_H - 1.0) * H) { setMode(b, 2); chaseStep(w, b, dd, (BAND_MIN_H + 0.5) * H, HUNT_TURN); }
+    else if (dd > (BAND_MAX_H - 1.0) * H) { setMode(b, 2); gateHunt(w, b, INTRO_WALK * titanWalk(w), HUNT_TURN); }
     else { if (d.mode === 2) setMode(b, 3); b.data.speed = 0; turnBoss(b, Math.atan2(T.x - b.x, T.z - b.z), BASE_TURN, w.dt); }
     if (d.mode === 3 && d.modeT >= HUNT.plantS) setMode(b, 0);
     sync(w, b);
     return;
   }
-  if (d.mode === 2 && b.attack === null && dd <= HUNT.stopH * H) setMode(b, 3);   // an intro that ended mid-drive
+  if (d.mode === 2 && b.attack === null && dd <= HUNT.stopH * H && !chasing) setMode(b, 3);   // an intro that ended mid-drive
   yieldWall(w, b);
   gateBeats(w, b);
   putThroughTimer(w, b);
@@ -147,7 +161,7 @@ export function step(w: World, b: BossState): void {
   d.farT = dd > BAND_MAX_H * H ? d.farT + w.dt : 0;
 
   if (b.attack === 'relocate' || b.attack === 'caught') runRelocate(w, b);
-  else if (!b.attack || isMoveBeat(b.attack) || b.attack === 'packUp' || b.attack === 'planting') moveModes(w, b, dd);
+  else if (!b.attack || isMoveBeat(b.attack) || b.attack === 'packUp' || b.attack === 'planting') moveModes(w, b, dd, chasing);
   else runAttack(w, b);
   dashAnswer(w, b);
   gateAfterMove(w, b);
@@ -170,16 +184,29 @@ function setMode(b: BossState, m: number): void {
 }
 
 /** Planted / hunt modes (no real attack live). */
-function moveModes(w: World, b: BossState, dd: number): void {
+function moveModes(w: World, b: BossState, dd: number, chasing: boolean): void {
   const T = w.titan, d = b.data, H = bossH(w, b);
+  if (b.phase >= 3 && !(d.p3Seen > 0)) { d.p3Seen = 1; d.holdDue = 1; d.holdWaitT = 0; }
   switch (d.mode) {
     case 0: {   // PLANTED
       b.data.speed = 0;
       turnBoss(b, Math.atan2(T.x - b.x, T.z - b.z), BASE_TURN, w.dt);
       d.crown = wrapAngle((d.crown ?? 0) + (CROWN[b.phase] ?? 0.35) * w.dt);
       if (b.attack) break;   // a move beat (cutOff / ramming) while planted: nothing else
-      if (d.farT >= HUNT.farS) { setMode(b, 1); startBeat(b, 'packUp', HUNT.packS); break; }
+      // a rematch chasing a runner packs up at once (no 1.5 s far clock, no attack at its back)
+      if (d.farT >= HUNT.farS || (chasing && dd > (BAND_MIN_H + 0.5) * H)) { setMode(b, 1); startBeat(b, 'packUp', HUNT.packS); break; }
       if (d.putDue > 0) { putThrough(w, b); break; }
+      // P3 SIGNATURE: HOLD MUSIC once per cycle (P3 entry, then after each PUT THROUGH, RELOCATE or LINES DOWN)
+      // whenever the ring can reach the titan's body — it waits for its gap here instead of relocating first
+      if (b.phase >= 3 && d.holdDue > 0 && dd <= HOLD.rH * H + T.radius && b.staggerT <= 0) {
+        if (holdEscape(w, b, dd)) {
+          if (b.cd <= 0) { d.holdDue = 0; d.holdWaitT = 0; holdMusic(w, b, dd); }
+          break;
+        }
+        // the titan's straight way out is walled (holdEscape): the ring would not be fair right now — give it up to
+        // HOLD.waitS of its decision time to step off the wall before the rig calls in flares instead
+        if (b.cd <= 0 && (d.holdWaitT = (d.holdWaitT ?? 0) + w.dt) < HOLD.waitS) break;
+      }
       if (d.campT >= (RELOC.campS[b.phase] ?? 5) && w.t - d.lastRelocT >= RELOC.everyS && b.staggerT <= 0) { startRelocate(w, b); break; }
       if (b.cd <= 0) decide(w, b, dd);
       break;
@@ -188,7 +215,8 @@ function moveModes(w: World, b: BossState, dd: number): void {
       b.data.speed = 0;
       if (d.modeT >= HUNT.packS) { if (b.attack === 'packUp') endAttack(b, Math.max(b.cd, 0.2)); setMode(b, 2); }
       break;
-    case 2:     // HUNT drive
+    case 2:     // HUNT drive (a rematch chasing a runner keeps driving, trailing it inside stopH: chaseStep)
+      if (chasing) { chaseStep(w, b, dd, (BAND_MIN_H + 0.5) * H, HUNT_TURN); break; }
       if (dd <= HUNT.stopH * H) { setMode(b, 3); startBeat(b, 'planting', HUNT.plantS); b.data.speed = 0; break; }
       gateHunt(w, b, huntSpeed(w, b, dd), HUNT_TURN);
       break;
@@ -205,14 +233,23 @@ function moveModes(w: World, b: BossState, dd: number): void {
 /**
  * bosses/index.ts projects the titan onto the hard keep-out, then settles it against the CITY: a titan pinned
  * against a building it cannot flatten can end the tick inside the wall. The rig yields instead: at the start of
- * its step it backs straight off by the overlap (never shoves the titan through a building).
+ * its step it backs straight off by the overlap (never shoves the titan through a building) — ONLY in that pinned
+ * case (the keep-out point the titan would be put back on lies inside a building it cannot flatten, the same test
+ * probe_gatekeepers uses to classify a pin). fx2 lane B: it used to yield to ANY overlap, so a titan simply walking
+ * into the rig pushed it along at walk speed — the wall you are meant to go AROUND could be bulldozed, and a titan
+ * holding the stick toward the weak point during a tell carried the rig (and itself) deeper into a telegraph that
+ * stays where it was cast (BACKFIRE's cone, HOLD MUSIC's ring; fx2/B/bf_walker.ts).
  */
+const PIN = { x: 0, z: 0, bumpTier: -1 };
 function yieldWall(w: World, b: BossState): void {
   const T = w.titan;
   if (!T.alive) return;
   const keep = KEEP_H * bossH(w, b) + T.radius;
   const dx = b.x - T.x, dz = b.z - T.z, d = Math.hypot(dx, dz);
   if (d >= keep - 1e-3 || d < 1e-4) return;
+  const wx = b.x - (dx / d) * keep, wz = b.z - (dz / d) * keep;
+  const flat = RANKS[clamp(Math.floor(T.rank), 0, RANKS.length - 1)].canFlatten;
+  if (!resolveCircleVsCity(w.city, wx, wz, T.radius, flat, PIN)) return;   // open ground: pushTitanOut puts it back
   const need = keep - d;
   b.x += (dx / d) * need; b.z += (dz / d) * need;
   refreshParts(b);
@@ -238,8 +275,10 @@ function sync(w: World, b: BossState): void {
       }
       // a relocation interrupted by the stagger plants where it stands
       if (d.mode >= 1) setMode(b, 3);
+      if (b.phase >= 3) { d.holdDue = 1; d.holdWaitT = 0; }   // LINES DOWN ends a cycle
     } else if (!stag) d.wasStag = 0;
   }
+  staggerBeat(b, 'linesDown');
   const folded = !stag && d.mode !== 0 && b.alive;
   d.folded = folded ? 1 : 0;
   d.lifted = folded && d.mode !== 3 && d.mode !== 6 ? 1 : 0;
@@ -269,7 +308,8 @@ function decide(w: World, b: BossState, dd: number): void {
   const H = bossH(w, b);
   const wts = [
     1.0,                                                        // callIn
-    b.phase >= 2 && dd <= HOLD.triggerH * H ? 2.0 : 0,          // holdMusic (anti-camping)
+    // holdMusic (anti-camping) — never at a titan walled in against a building it cannot flatten (holdEscape)
+    b.phase >= 2 && dd <= HOLD.triggerH * H && holdEscape(w, b, dd) ? 2.0 : 0,
   ];
   for (let i = 0; i < wts.length; i++) wts[i] *= repeatMul(b, ATTACKS[i]);
   const id = pickWeighted(w, ATTACKS, wts) ?? 'callIn';
@@ -301,10 +341,111 @@ function callIn(w: World, b: BossState): void {
   b.data.attackEnd = end + CALLIN.recover;
 }
 
-function holdMusic(w: World, b: BossState, dd: number): void {
+const HM_BUF: number[] = [];
+/** Does a straight walk of len from (x, z) along (ux, uz) meet a building the titan cannot flatten (its full collision
+ *  radius; 0.25 R steps)? */
+function walled(w: World, x: number, z: number, ux: number, uz: number, len: number): boolean {
+  const T = w.titan, c = w.city, R = T.radius;
+  if (!c || !c.buildings) return false;
+  const flat = RANKS[clamp(Math.floor(T.rank), 0, RANKS.length - 1)].canFlatten;
+  const step = Math.max(0.25, 0.25 * R);
+  for (let s = step; s <= len + 1e-9; s += step) {
+    const px = x + ux * s, pz = z + uz * s;
+    HM_BUF.length = 0;
+    buildingsInRect(c, px - R, pz - R, px + R, pz + R, HM_BUF);
+    for (let i = 0; i < HM_BUF.length; i++) {
+      const bd = c.buildings[HM_BUF[i]];
+      if (!bd || bd.collapsed || bd.tier <= flat) continue;
+      const qx = clamp(px, bd.x - bd.w / 2, bd.x + bd.w / 2), qz = clamp(pz, bd.z - bd.d / 2, bd.z + bd.d / 2);
+      // 5 % skin: a titan resting against a wall (resolved to exactly R) that walks PARALLEL to it is not walled
+      if (Math.hypot(px - qx, pz - qz) < 0.95 * R) { HM_BUF.length = 0; return true; }
+    }
+  }
+  HM_BUF.length = 0;
+  return false;
+}
+const HM_ESC = { len: 0, x: 0, z: 0, turn: 0 };
+/**
+ * HOLD MUSIC's walk-out (fx2 lane B; probe case 6c: a 0.35 s no-dash walker ate 29 of 50 rings, and fx2/B/hm_walker.ts
+ * found why: a titan backed against a building it cannot flatten has NO radial way out). Over 17 headings within ±80°
+ * of straight away from the base (never back past it), the shortest straight walk that takes the whole body out of
+ * the disc (to r1 + R from the base's centre) without meeting such a building. Writes length, heading and the extra
+ * turn it needs beyond the 90° pivot fairLossS allows (the titan faces the base: straight away is a 180° reversal).
+ * false = the straight-out walk (±20°) meets such a building, or every heading does (then there is no fair ring: the
+ * rig calls in flares instead).
+ */
+function holdEscape(w: World, b: BossState, dd: number): boolean {
   const T = w.titan, H = bossH(w, b), R = T.radius;
+  const rOut = HOLD.rH * H + R;
+  if (dd >= rOut) { HM_ESC.len = 0; HM_ESC.x = T.x - b.x; HM_ESC.z = T.z - b.z; HM_ESC.turn = 0; return true; }
+  const rx = (T.x - b.x) / Math.max(1e-6, dd), rz = (T.z - b.z) / Math.max(1e-6, dd);
+  let best = Infinity;
+  for (let k = -8; k <= 8; k++) {
+    const th = (k / 8) * (80 * Math.PI / 180);
+    const c = Math.cos(th), sn = Math.sin(th);
+    const ux = rx * c - rz * sn, uz = rx * sn + rz * c;
+    // ray from the titan (at dd from the base's centre) to the circle rOut: s = −dd·cosθ + √(rOut² − dd²·sin²θ)
+    const L = Math.sqrt(Math.max(0, rOut * rOut - dd * dd * sn * sn)) - dd * c;
+    if (!(L >= 0)) continue;
+    // the READ of a ring is "walk straight out": within ±20° of straight away (a keyboard player's nearest key) the way
+    // out must be open, or the titan backed against a building it cannot flatten slides along it at a fraction of its
+    // walk (fx2/B/hm_walker.ts: RADIAL walkers pressed into a tier-3 wall, velocity turned 60° off the input) -> no ring
+    if (Math.abs(k) <= 2) { if (walled(w, T.x, T.z, ux, uz, L)) return false; }
+    else if (L >= best || walled(w, T.x, T.z, ux, uz, L)) continue;
+    if (L >= best) continue;
+    best = L; HM_ESC.x = ux; HM_ESC.z = uz; HM_ESC.turn = Math.max(0, Math.PI / 2 - Math.abs(th));
+  }
+  if (!Number.isFinite(best)) return false;
+  HM_ESC.len = best;
+  return true;
+}
+/** HOLD MUSIC's windup from holdEscape: the extra reversal turn at the titan's turn rate is added as walk distance, the
+ *  heading goes to gateWindup for its plow check, and k = 1 in every phase (an anti-camping answer is a read, not a
+ *  dash check). Call holdEscape first. */
+function holdWindup(w: World, b: BossState): number {
+  const T = w.titan, H = bossH(w, b);
+  const r = clamp(Math.floor(Number.isFinite(T.rank) ? T.rank : 0), 0, 4);
+  const turn = TURN_RATE_I + (TURN_RATE_V - TURN_RATE_I) * (r / 4);
+  const pivotM = (HM_ESC.turn / turn) * titanWalk(w);
+  const wu = gateWindup(w, b, (HM_ESC.len + pivotM) / H / (ESCAPE_K[b.phase] ?? 1), HOLD.min, HOLD.max, HM_ESC.x, HM_ESC.z);
+  // floor: the walk-out grinds through a flattenable building inside the titan's PLOW reach (titansim contactRadius,
+  // wider than the collision radius escapeWalk marches with) -> the whole walk at SMASH_SLOW (fx2/B/hm_walker.ts: the
+  // walker slowed 0.88 -> 0.64 H/s mid-walk and a 1.59 s ring landed by 0.05 H)
+  if (!(HM_ESC.len > 0) || !plowsInReach(w, HM_ESC.x, HM_ESC.z, HM_ESC.len)) return wu;
+  const slow = T.slowT > 0 ? clamp(Number.isFinite(T.slowMul) ? T.slowMul : 1, 0.1, 1) : 1;
+  const fair = REACT_S + fairLossS(w) + HM_ESC.turn / turn + HM_ESC.len / Math.max(1e-3, titanWalk(w) * slow * SMASH_SLOW);
+  return Math.max(wu, fair);
+}
+/** titansim's plow reach (contactRadius: R × smashRadius + 0.06 H): does a straight walk of len from the titan along
+ *  (ux, uz) pass a standing building it flattens inside that reach (0.25 R steps)? titansim then walks it at SMASH_SLOW. */
+function plowsInReach(w: World, ux: number, uz: number, len: number): boolean {
+  const T = w.titan, c = w.city;
+  if (!c || !c.buildings) return false;
+  const m = Math.hypot(ux, uz);
+  if (!(m > 1e-9)) return false;
+  const fx = ux / m, fz = uz / m, R = T.radius;
+  const reach = R * Math.max(0.2, stat(w, 'smashRadius')) + 0.06 * T.height;
+  const flat = RANKS[clamp(Math.floor(T.rank), 0, RANKS.length - 1)].canFlatten;
+  const step = Math.max(0.25, 0.25 * R);
+  for (let s = 0; s <= len + 1e-9; s += step) {
+    const px = T.x + fx * s, pz = T.z + fz * s;
+    HM_BUF.length = 0;
+    buildingsInRect(c, px - reach, pz - reach, px + reach, pz + reach, HM_BUF);
+    for (let i = 0; i < HM_BUF.length; i++) {
+      const bd = c.buildings[HM_BUF[i]];
+      if (!bd || bd.collapsed || !(bd.alive > 0) || bd.tier > flat) continue;
+      const qx = clamp(px, bd.x - bd.w / 2, bd.x + bd.w / 2), qz = clamp(pz, bd.z - bd.d / 2, bd.z + bd.d / 2);
+      if (Math.hypot(px - qx, pz - qz) <= reach) { HM_BUF.length = 0; return true; }
+    }
+  }
+  HM_BUF.length = 0;
+  return false;
+}
+
+function holdMusic(w: World, b: BossState, dd: number): void {
+  const H = bossH(w, b);
   const r1 = HOLD.rH * H;
-  const wu = gateWindup(w, b, Math.max(0, r1 - dd + R) / H, HOLD.min, HOLD.max);
+  const wu = holdWindup(w, b);
   beginAttack(w, b, 'holdMusic', b.x, b.z);
   const bx = b.x, bz = b.z;
   const tg = bossTelegraph(w, {
@@ -326,7 +467,7 @@ function runAttack(w: World, b: BossState): void {
   switch (b.attack) {
     case 'callIn':
     case 'holdMusic':
-      if (t >= (d.attackEnd ?? 2)) endAttack(b, gateGap(w, b, GAP, 1));
+      if (t >= (d.attackEnd ?? 2) || (b.attack === 'callIn' && t >= CHASE_VOLLEY_S && rematchChasing(w, b))) endAttack(b, gateGap(w, b, GAP, P3_GAP));
       break;
     case 'putThrough':
     case 'reconfiguring':
@@ -403,6 +544,7 @@ function putThrough(w: World, b: BossState): void {
   }
   d.addsSummoned += spawned;
   d.putThroughs += 1;
+  if (b.phase >= 3) { d.holdDue = 1; d.holdWaitT = 0; }   // a PUT THROUGH ends a cycle
   d.serving = (d.serving ?? 5) + 1;
   beginAttack(w, b, 'putThrough', b.x, b.z);
   b.data.beatS = PUT.beatS;
@@ -471,7 +613,8 @@ function runRelocate(w: World, b: BossState): void {
         setMode(b, 0);
         d.lastRelocT = w.t;
         d.campT = 0;
-        endAttack(b, gateGap(w, b, GAP, 1));
+        if (b.phase >= 3) { d.holdDue = 1; d.holdWaitT = 0; }   // a RELOCATE ends a cycle
+        endAttack(b, gateGap(w, b, GAP, P3_GAP));
       }
       break;
     default:

@@ -69,7 +69,7 @@
 import type { Rarity, UpgradeDef, World } from '../core/types.ts';
 import { DRAFT_V2 } from '../core/config.ts';
 import { UPGRADES, UPGRADE_BY_ID } from '../data/upgrades.ts';
-import { EVOLUTIONS, EVO_OF_BASE, EVO_ROWS_OF_PART, EVO_NUDGE, evoReadyStacks } from '../data/evolutions.ts';
+import { EVOLUTIONS, EVO_OF_BASE, EVO_ROWS_OF_PART, EVO_NUDGE, EVO_LATE_LEVEL, EVO_LATE_NUDGE, evoReadyStacks } from '../data/evolutions.ts';
 import type { EvolutionRow } from '../core/types.ts';
 import { recomputeStats, stat } from './stats.ts';
 import { applyUpgrade } from './engine.ts';
@@ -245,7 +245,10 @@ export function rollOffer(w: World, chest?: boolean): string[] {
     if (evo) {
       if (chest) placeAt(ids, heldPlaced ? 1 : 0, evo);
       else if (ids.length === 0) ids.push(evo);                        // nothing else to show: never an empty draft
-      else if (w.rng.loot() < DRAFT_V2.evoDraftChance) placeAt(ids, 2, evo);
+      else {
+        const x = w.rng.loot();                                          // drawn either way: draw count unchanged
+        if (x < DRAFT_V2.evoDraftChance || lateCall(w) !== null) placeAt(ids, 2, evo);   // fx2/D late call: always
+      }
     }
   }
 
@@ -427,6 +430,15 @@ export function recipeNudge(w: World, id: string): number {
   const rows = EVO_ROWS_OF_PART[id];
   if (!rows) return 1;
   const owned = w.upgrades.owned;
+  const late = lateCall(w);
+  if (late) {                                                           // fx2/D late call (data/evolutions.ts)
+    if (late.kind === 'start') { for (const r of rows) if (evoLive(w, r)) return EVO_NUDGE; }
+    else if (late.kind === 'finish') {
+      const p = late.target;
+      if (id === p.base && p.baseHave < p.baseNeed) return EVO_LATE_NUDGE;
+      if (id === p.with && !p.withHave) return EVO_LATE_NUDGE;
+    }
+  }
   for (const r of rows) {
     if (!evoLive(w, r)) continue;
     const haveB = owned[r.base] ?? 0, haveW = owned[r.with] ?? 0;
@@ -434,6 +446,23 @@ export function recipeNudge(w: World, id: string): number {
     if (id === r.with && haveW < 1 && haveB >= 1) return EVO_NUDGE;
   }
   return 1;
+}
+
+/**
+ * fx2/D LATE CALL state (data/evolutions.ts EVO_LATE_LEVEL): null before that level or once the titan owns an
+ * evolution; 'start' = no live recipe started; 'finish' = the closest started recipe (evolutionProgress[0]);
+ * 'ready' = a recipe is ready (a level-up draft then always shows it). Pure function of the world (no draws).
+ */
+export type LateCall = { kind: 'start' } | { kind: 'finish'; target: EvoProgress } | { kind: 'ready'; evo: string };
+export function lateCall(w: World): LateCall | null {
+  if (w.titan.level < EVO_LATE_LEVEL) return null;
+  for (const id in w.upgrades.owned) if ((w.upgrades.owned[id] ?? 0) > 0 && UPGRADE_BY_ID[id]?.evo) return null;
+  const prog = evolutionProgress(w);
+  if (prog.length === 0) {
+    for (const r of EVOLUTIONS) if (evoLive(w, r)) return { kind: 'start' };
+    return null;                                                        // no live recipe at all (all banished)
+  }
+  return prog[0].ready ? { kind: 'ready', evo: prog[0].evo } : { kind: 'finish', target: prog[0] };
 }
 
 /** F1 recipe progress of one live recipe (UI hint rows: EVOLUTION READY / "2 OF 3 · NEEDS <WITH>"). */
@@ -454,7 +483,8 @@ export function evolutionProgress(w: World): EvoProgress[] {
     out.push({ evo: r.id, base: r.base, with: r.with, baseHave, baseNeed, withHave, ready: baseHave >= baseNeed && withHave });
   }
   const gap = (p: EvoProgress): number => Math.max(0, p.baseNeed - p.baseHave) + (p.withHave ? 0 : 1);
-  return out.map((p, i) => ({ p, i })).sort((a, b) => gap(a.p) - gap(b.p) || a.i - b.i).map((x) => x.p);
+  // fx2/D: equal gap → the most-stacked base first (the late call's target), then catalogue order
+  return out.map((p, i) => ({ p, i })).sort((a, b) => gap(a.p) - gap(b.p) || b.p.baseHave - a.p.baseHave || a.i - b.i).map((x) => x.p);
 }
 
 /**

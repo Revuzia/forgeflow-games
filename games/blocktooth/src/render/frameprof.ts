@@ -65,9 +65,13 @@ export class FrameProf {
   scale = 1;
 
   constructor(renderer: THREE.WebGLRenderer) {
+    // `&profgpu=0`: no GPU timer queries (the CPU marks, rAF gaps and LoAFs only) — the A/B that isolates the
+    // timer queries' own cost on frame pacing (fx2 perf (d))
+    let gpuOn = true;
+    try { gpuOn = new URLSearchParams(globalThis.location ? globalThis.location.search : '').get('profgpu') !== '0'; } catch { /* default on */ }
     try {
       const gl = renderer.getContext() as WebGL2RenderingContext;
-      const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') as GLTimer['ext'] | null;
+      const ext = gpuOn ? gl.getExtension('EXT_disjoint_timer_query_webgl2') as GLTimer['ext'] | null : null;
       if (ext) {
         this.timer = { gl, ext, pending: [], free: [], active: null };
         this.gpuSupported = true;

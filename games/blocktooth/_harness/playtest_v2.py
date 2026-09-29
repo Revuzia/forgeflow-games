@@ -584,9 +584,12 @@ class V2Playtest:
         ok, s = self.wait(lambda q: (q.get("v2") or {}).get("endless") is not None and (q.get("run") or {}).get("phase") == "endless", 10.0)
         self.check(6, ok, "real K → v2.endless %s, run.phase %s, screen %s" % (
             "set" if (s.get("v2") or {}).get("endless") is not None else None, (s.get("run") or {}).get("phase"), s.get("screen")))
-        ok_p, s = self.wait(lambda q: q.get("screen") == "play", 15.0)
         # GATEKEEPERS §4.3: the level-ups owed from the finale (draft screens are held while it runs) open
-        # right after KEEP GOING — pick them with real 1s first, then time the endless sim
+        # right after KEEP GOING — pick them with real 1s first, then time the endless sim.
+        # (G2 fix: this used to wait up to 15 s for screen 'play' BEFORE picking, so when an owed draft was
+        # already open that wait timed out and failed the step even after the picks reached play; a player
+        # picks the draft first. The assertion — screen play and >= 60 ticks within 6 s — is unchanged.)
+        self.wait(lambda q: q.get("screen") in ("play", "draft"), 15.0)
         time.sleep(0.8)
         n_drafts = 0
         while self.st().get("screen") == "draft" and n_drafts < 8:
@@ -595,7 +598,7 @@ class V2Playtest:
             time.sleep(0.8)
         if n_drafts:
             self.log("  %d owed draft(s) picked with real 1 after KEEP GOING" % n_drafts)
-        ok_p = ok_p and self.st().get("screen") == "play"
+        ok_p, s = self.wait(lambda q: q.get("screen") == "play", 15.0)
         t0 = int(self.st().get("tick") or 0)
         c0 = time.time()
         ok_t, s2 = self.wait(lambda q: int(q.get("tick") or 0) - t0 >= 60, 6.0, poll=0.1)

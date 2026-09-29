@@ -29,15 +29,18 @@
 import type { BossId, BossPart, BossState, DamageOpts, GateId, GateSlot, MainBossId, Shape, Telegraph, Tier, World } from '../../core/types.ts';
 import { GATE_IDS } from '../../core/types.ts';
 import {
-  BOSS_DMG_MUL, BOSS_FATIGUE, BOSS_HP_SCALE, BOSS_KIND_MUL, BOSS_PHASE_DMG_MUL, CAMERA, GATES, RANKS, RANK_LEVELS, spawnView,
-  titanHeightAt, titanSpeed,
+  BOSS_DASH_READ, BOSS_DMG_MUL, BOSS_FATIGUE, BOSS_HIT_CAP, BOSS_HP_SCALE, BOSS_KIND_MUL, BOSS_PHASE_DMG_MUL, CAMERA, GATES, RANKS, RANK_LEVELS,
+  SMASH_SLOW, spawnView, titanHeightAt, titanSpeed,
 } from '../../core/config.ts';
 import { circleInShape, clamp, dist, shapeCenter, turnToward, wrapAngle } from '../../core/math.ts';
 import { BOSSES, bossSubtitle } from '../../data/bosses.ts';
 import { spawnTelegraph } from '../../combat/telegraphs.ts';
+import { SLOW_LINGER_S, hazardSlowFrac } from '../../combat/hazards.ts';
 import type { TelegraphSpawn } from '../../combat/telegraphs.ts';
 import { buildingsInRect, damageBuilding, damageProp, propsInRect, resolveCircleVsCity } from '../../city/citysim.ts';
-import { titanMaxSpeed } from '../../titans/titansim.ts';
+import {
+  ACCEL_REACH_S, DECEL_MUL, LEASH_OWN_SPEED_MUL, LEASH_RESIST_MIN, TURN_RATE_I, TURN_RATE_V, titanContactRadius, titanMaxSpeed,
+} from '../../titans/titansim.ts';
 import * as caisson4 from './caisson4.ts';
 import * as irongully from './irongully.ts';
 import * as parkade6 from './parkade6.ts';
@@ -45,6 +48,7 @@ import * as stencil1 from './stencil1.ts';
 import * as cordon2 from './cordon2.ts';
 import * as switchboard5 from './switchboard5.ts';
 import { endlessBossDmgMul } from '../../meta/endless.ts';
+import { stat } from '../../upgrades/stats.ts';
 import { gateDmgMul, gateHpFor } from '../../meta/gates.ts';
 
 // ─────────────────────────────── tuning (lane-local) ───────────────────────────────
@@ -60,6 +64,8 @@ const SHOVE_DECAY = 5;
 const CRUSH_EVERY = 0.3, CRUSH_FLOORS = 2.5;
 /** Pending boss tells closer than this × their radius and firing within STACK_DT s are "stacked". */
 const STACK_FRAC = 0.6, STACK_DT = 0.45;
+/** combat/telegraphs.ts TICK_S: an active (damage-over-time) tell deals dmg × this per tick, first tick on fire. */
+const DOT_TICK_S = 0.2;
 /** Past its range band the boss closes at up to this × the titan's walk speed (see keepRange). */
 const BOSS_CLOSE_FRAC = 0.6;
 /** Boss entry: preferred distance from the titan (m) and minimum room. */
@@ -76,6 +82,12 @@ interface BossModule {
   noseOut?(w: World, b: BossState): { reach: number; min: number } | null;
 }
 const MODS: Record<BossId, BossModule> = { caisson4, irongully, parkade6, stencil1, cordon2, switchboard5 };
+/** The module's hard keep-out radius right now (m; 0 = none) — the wall pushTitanOut holds the titan at (probes). */
+export function bossKeepOutM(w: World, b: BossState): number {
+  const mod = MODS[b.id];
+  const k = mod && mod.keepOut ? mod.keepOut(w, b) : 0;
+  return Number.isFinite(k) && k > 0 ? k : 0;
+}
 
 // ─────────────────────────────── toolkit (used by the boss modules) ───────────────────────────────
 /** Aim lead per phase, as a fraction of the attack's windup: the paint is laid where the titan
@@ -95,10 +107,167 @@ const LEAD_FRAC: readonly number[] = [0, 0.35, 0.6, 0.75];
 // little tighter (k < 1 from dead centre: read it early or keep a dash).
 /** Human reaction to a new tell (s). */
 export const REACT_S = 0.35;
-/** Time lost to acceleration from rest (Size V reaches full speed in 0.3 s → half of it is lost). */
+/** The flat acceleration allowance the authored min/max clamps were tuned against (pre-fx2). fairLossS replaces it
+ *  in the formula; the max clamps shift by (fairLossS − this) so a clamp never cuts the new, larger fair value. */
 export const ACCEL_LOSS_S = 0.15;
 /** Walk-time multiplier per phase (1 = exactly walkable from the worst spot after REACT_S). */
 export const ESCAPE_K: readonly number[] = [1, 1.1, 1.0, 0.9];
+
+/**
+ * fx2 (critic r1–r3: walkers died, dashers were never hit): the time a body standing still loses before it walks
+ * at full speed on a NEW heading = half its acceleration ramp (titansim ACCEL_REACH_S[rank], linear ramp) + a 90°
+ * pivot at its turn rate (titansim TURN_RATE_I → TURN_RATE_V; FACING_MIN slows the body while it still faces
+ * away). Size I 0.22 s … Size IV 0.38 s … Size V 0.46 s (was a flat 0.15 s).
+ */
+export function fairLossS(w: World): number {
+  const r = clamp(Math.floor(Number.isFinite(w.titan.rank) ? w.titan.rank : 0), 0, 4);
+  const turn = TURN_RATE_I + (TURN_RATE_V - TURN_RATE_I) * (r / 4);
+  return ACCEL_REACH_S[r] / 2 + (Math.PI / 2) / turn;
+}
+
+const ESC_BUF: number[] = [];
+/** Does a straight walk of `len` m from the titan along (dx, dz) grind through a building the titan flattens
+ *  (tier ≤ canFlatten, standing)? Ray-marched at ½ R steps with buildingsInRect, like laneClearLen. */
+function escapePlows(w: World, dx: number, dz: number, len: number): boolean {
+  const T = w.titan, c = w.city;
+  const m = Math.hypot(dx, dz);
+  if (!(m > 1e-9) || !(len > 0)) return false;
+  const fx = dx / m, fz = dz / m;
+  // the body plows (titansim plowCheck: SMASH_SLOW) inside its CONTACT radius (R × smashRadius + skin), not just R
+  const R = Math.max(0.1, titanContactRadius(w));
+  const flat = RANKS[T.rank].canFlatten;
+  const step = Math.max(0.25, 0.5 * R);
+  for (let s = 0; s <= len + 1e-9; s += step) {
+    const px = T.x + fx * s, pz = T.z + fz * s;
+    buildingsInRect(c, px - R, pz - R, px + R, pz + R, ESC_BUF);
+    for (let i = 0; i < ESC_BUF.length; i++) {
+      const bd = c.buildings[ESC_BUF[i]];
+      if (!bd || bd.collapsed || !(bd.alive > 0) || bd.tier > flat) continue;
+      const qx = clamp(px, bd.x - bd.w / 2, bd.x + bd.w / 2), qz = clamp(pz, bd.z - bd.d / 2, bd.z + bd.d / 2);
+      if (Math.hypot(px - qx, pz - qz) <= R) { ESC_BUF.length = 0; return true; }
+    }
+    ESC_BUF.length = 0;
+  }
+  return false;
+}
+
+/** Walk time (s) for `e` m along the escape heading (ux, uz), starting `t0` s from now (after the reaction + turn),
+ *  marched in small steps: titanWalk × SMASH_SLOW for the whole path when it plows; × the slow the titan stands in
+ *  while what is left of slowT lasts; × a slowing hazard's multiplier (frost, clouds — not the titan's own) while the
+ *  body overlaps it, lingering SLOW_LINGER_S after it leaves (combat/hazards.ts); and while what is left of a winch
+ *  leash lasts, own speed × titansim's leash factor MINUS the pull along the heading. Floored at 5 % of the walk. */
+function escapeTimeS(w: World, e: number, plow: boolean, ux: number, uz: number, t0: number): number {
+  const T = w.titan;
+  if (!(e > 0)) return 0;
+  const v0 = titanWalk(w) * (plow ? SMASH_SLOW : 1);
+  let slowT = T.slowT > 0 ? Math.max(0, T.slowT - t0) : 0;
+  let slowMul = clamp(Number.isFinite(T.slowMul) ? T.slowMul : 1, 0.1, 1);
+  const L = T.leash;
+  let leashT = 0, own = 1, along = 0;
+  if (L && L.t > t0) {
+    leashT = L.t - t0;
+    const pull = Math.max(0, Number.isFinite(L.strength) ? L.strength : 0);
+    own = Math.max(LEASH_OWN_SPEED_MUL, Math.min(1, (pull * LEASH_RESIST_MIN) / Math.max(1e-3, titanWalk(w))));
+    const ax = L.lx - T.x, az = L.lz - T.z, am = Math.hypot(ax, az);
+    along = am > T.radius ? pull * ((ux * ax + uz * az) / am) : 0;
+  }
+  // the slowing hazards still alive when the walk starts (other owners' paint only)
+  const haz = w.hazards;
+  let anyHaz = false;
+  for (let i = 0; i < haz.length && !anyHaz; i++) {
+    const h = haz[i];
+    if (h.alive && h.owner !== 'titan' && h.life - h.t > t0 && hazardSlowFrac(h) > 0) anyHaz = true;
+  }
+  const ds = Math.max(e / 48, 0.02 * Math.max(1, T.radius));
+  let t = 0, s = 0;
+  for (let it = 0; it < 400 && s < e - 1e-9; it++) {
+    if (anyHaz) {
+      const px = T.x + ux * s, pz = T.z + uz * s;
+      let mul = 1;
+      for (let i = 0; i < haz.length; i++) {
+        const h = haz[i];
+        if (!h.alive || h.owner === 'titan' || h.life - h.t <= t0 + t) continue;
+        const f = hazardSlowFrac(h);
+        if (f > 0 && 1 - f < mul && circleInShape(h.shape, px, pz, T.radius)) mul = 1 - f;
+      }
+      // combat/hazards.ts: the stronger slow wins; it lingers SLOW_LINGER_S after the body leaves
+      if (mul < 1 && (!(slowT > t) || mul <= slowMul)) { slowMul = mul; slowT = Math.max(slowT, t + SLOW_LINGER_S); }
+    }
+    const v = Math.max(0.05 * v0, v0 * (t < slowT ? slowMul : 1) * (t < leashT ? own : 1) + (t < leashT ? along : 0));
+    const step = Math.min(ds, e - s);
+    s += step; t += step / v;
+  }
+  return t;
+}
+
+/** Does the escape of `e` m plow? With a heading (dirX, dirZ) that path is marched; without one the likely exits:
+ *  straight away from the rig and the two perpendiculars (circles and rings around the rig, lanes and cones aimed at
+ *  the titan) — plowing when the MAJORITY of them do (the titan takes the clear one when one exists). */
+function escapePlowsAny(w: World, b: BossState | null, e: number, dirX: number, dirZ: number): boolean {
+  const T = w.titan;
+  if (!(e > 0) || !w.city || !w.city.buildings) return false;
+  if (Number.isFinite(dirX) && Number.isFinite(dirZ) && Math.hypot(dirX, dirZ) > 1e-9) return escapePlows(w, dirX, dirZ, e);
+  let ax = b ? T.x - b.x : Math.sin(T.heading), az = b ? T.z - b.z : Math.cos(T.heading);
+  const am = Math.hypot(ax, az);
+  if (am > 1e-9) { ax /= am; az /= am; } else { ax = Math.sin(T.heading); az = Math.cos(T.heading); }
+  const n = (escapePlows(w, ax, az, e) ? 1 : 0) + (escapePlows(w, az, -ax, e) ? 1 : 0) + (escapePlows(w, -az, ax, e) ? 1 : 0);
+  return n >= 2;
+}
+
+/**
+ * fx2 (probe case 6c traces: MOLO walking INTO PARKADE-6 at full speed when DECK DROP / LEVEL COLLAPSE was cast drifted
+ * 0.27–0.39 H deeper during its reaction, then had to brake before it could walk out — hit by 0.02–0.3 H). A body that
+ * is moving INTO the tell keeps moving for REACT_S (the reaction), then brakes that speed at titansim's deceleration
+ * (walk / ACCEL_REACH_S[rank] × DECEL_MUL) before the walk out starts. Returns the extra metres (drift + braking) and
+ * the braking seconds. The escape heading: (dirX, dirZ) when given, else straight away from the rig. None while the
+ * titan dashes: a dash answer is authored from dead centre (the dash carry is already the worst case).
+ */
+const MOM = { m: 0, s: 0 };
+export function escapeMomentum(w: World, b: BossState | null, dirX = NaN, dirZ = NaN): { m: number; s: number } {
+  MOM.m = 0; MOM.s = 0;
+  const T = w.titan;
+  if (T.dashT > 0 || !T.alive) return MOM;
+  let ux = dirX, uz = dirZ;
+  if (!(Number.isFinite(ux) && Number.isFinite(uz) && Math.hypot(ux, uz) > 1e-9)) {
+    if (!b) return MOM;
+    ux = T.x - b.x; uz = T.z - b.z;
+  }
+  const um = Math.hypot(ux, uz);
+  if (!(um > 1e-9)) return MOM;
+  const vx = Number.isFinite(T.vx) ? T.vx : 0, vz = Number.isFinite(T.vz) ? T.vz : 0;
+  const vIn = Math.min(Math.max(0, -(vx * ux + vz * uz) / um), 1.5 * titanWalk(w));
+  if (!(vIn > 1e-6)) return MOM;
+  const r = clamp(Math.floor(Number.isFinite(T.rank) ? T.rank : 0), 0, 4);
+  const decel = (titanWalk(w) / ACCEL_REACH_S[r]) * DECEL_MUL;
+  const tb = vIn / Math.max(1e-3, decel);
+  MOM.m = vIn * REACT_S + 0.5 * vIn * tb;
+  MOM.s = tb;
+  return MOM;
+}
+
+/**
+ * The AVERAGE speed (m/s) a titan actually walks `escapeM` m out of a tell with, starting after the reaction and
+ * fairLossS: escapeM ÷ escapeTimeS — titanWalk × SMASH_SLOW when the path plows a building (titansim slows a body
+ * grinding through a flattenable building inside its contact radius), × the slow it stands in while that lasts, and
+ * against a winch leash's pull while that lasts. Optional escape heading (dirX, dirZ): see escapePlowsAny.
+ */
+export function escapeWalk(w: World, b: BossState | null, escapeM: number, dirX = NaN, dirZ = NaN): number {
+  const e = Math.max(0, Number.isFinite(escapeM) ? escapeM : 0);
+  const T = w.titan;
+  const plow = escapePlowsAny(w, b, e, dirX, dirZ);
+  if (!(e > 0)) {
+    return titanWalk(w) * (T.slowT > 0 ? clamp(Number.isFinite(T.slowMul) ? T.slowMul : 1, 0.1, 1) : 1);
+  }
+  // the heading walked: the one given, else straight away from the rig (from a winch anchor when none), else facing
+  let ux = dirX, uz = dirZ;
+  if (!(Number.isFinite(ux) && Number.isFinite(uz) && Math.hypot(ux, uz) > 1e-9)) {
+    if (b) { ux = T.x - b.x; uz = T.z - b.z; } else if (T.leash) { ux = T.x - T.leash.lx; uz = T.z - T.leash.lz; } else { ux = 0; uz = 0; }
+    if (!(Math.hypot(ux, uz) > 1e-9)) { ux = Math.sin(T.heading); uz = Math.cos(T.heading); }
+  }
+  const um = Math.hypot(ux, uz);
+  const tS = escapeTimeS(w, e, plow, ux / um, uz / um, REACT_S + fairLossS(w));
+  return Math.max(1e-3, tS > 0 ? e / tS : titanWalk(w));
+}
 
 /** The titan height boss geometry is authored in: latched at spawn, re-latched if the titan ranks up
  *  mid-fight (a Size IV titan that breaches during the fight gets Size V paint). */
@@ -128,14 +297,21 @@ export function titanWalk(w: World): number {
 }
 
 /**
- * Windup (s) for a tell the titan has to walk `escapeM` metres to leave: reaction + acceleration +
- * walk time × ESCAPE_K[phase] (or `kFixed`), clamped to [min, max]. Already phase-scaled — spawn it with
- * bossTelegraph(w, spec, false) so WINDUP_MUL is not applied twice.
+ * Windup (s) for a tell the titan has to walk `escapeM` metres to leave: reaction + fairLossS (acceleration +
+ * a 90° pivot) + walk time at escapeWalk (slowed, plowing) × ESCAPE_K[phase] (or `kFixed`), clamped to
+ * [min, max + (fairLossS − ACCEL_LOSS_S)] (the authored max assumed the old flat 0.15 s loss, and the max opens by
+ * titanWalk / escapeWalk so a slowed or plowing walk is never clamped below fair). Optional escape direction
+ * (dirX, dirZ): see escapeWalk. Already phase-scaled — spawn it with bossTelegraph(w, spec, false) so WINDUP_MUL is
+ * not applied twice.
  */
-export function fairWindup(w: World, b: BossState, escapeM: number, min: number, max: number, kFixed = 0): number {
+export function fairWindup(w: World, b: BossState, escapeM: number, min: number, max: number, kFixed = 0, dirX = NaN, dirZ = NaN): number {
   const k = kFixed > 0 ? kFixed : (ESCAPE_K[b.phase] ?? 1);
   const e = Math.max(0, Number.isFinite(escapeM) ? escapeM : 0);
-  return clamp(REACT_S + ACCEL_LOSS_S + (e / titanWalk(w)) * k, min, max);
+  const v = escapeWalk(w, b, e, dirX, dirZ), loss = fairLossS(w);
+  const open = Math.max(1, titanWalk(w) / v);
+  // momentum into the tell (drift during the reaction + braking), never scaled by k and never clamped away
+  const mo = escapeMomentum(w, b, dirX, dirZ), extra = mo.s + mo.m / v;
+  return clamp(REACT_S + loss + extra + (e / v) * k, min, Math.max(min, max * open + (loss - ACCEL_LOSS_S) + extra));
 }
 
 // ─────────────────── dash watch (shared anti dash-spam trigger) ───────────────────
@@ -164,10 +340,35 @@ export const DASH_S = 0.22;
  * Watches this tick's `dash` events and returns the one the boss should answer (null = none): P1 only
  * a hot dash, P2+ any dash, never inside `cd[phase]` s of the last answer. Call once per tick.
  */
+const FOLLOW_EV = { x0: 0, z0: 0, x1: 0, z1: 0 };
+/** A dash charge is recharging (the titan dashed within the last recharge): a titan that never dashes never is. */
+function dashRecharging(w: World): boolean {
+  return w.titan.dashCharges < Math.floor(stat(w, 'dashCharges'));
+}
 export function watchDash(w: World, b: BossState, cd: readonly number[]): { x0: number; z0: number; x1: number; z1: number } | null {
   const heat0 = Math.max(0, (b.data.dashHeat ?? 0) - DASH_HEAT_DECAY * w.dt);
   b.data.dashHeat = heat0;
-  if (b.staggerT > 0 || b.introT > 0 || !w.titan.alive) return null;
+  if (b.staggerT > 0 || b.introT > 0 || !w.titan.alive) { b.data.follow2At = 0; return null; }
+  // fx2 — the second answer, timed into the dash cooldown: an escape dash that spent the titan's last charge is
+  // followed BOSS_DASH_READ.followS later by an answer on the path the titan is walking then (a pseudo-dash ending
+  // at its position, along its velocity — or the spent dash's direction when it stands), only while no charge is back
+  const f2 = b.data.follow2At ?? 0;
+  if (f2 > 0 && w.t >= f2) {
+    b.data.follow2At = 0;
+    const T = w.titan;
+    if (b.phase >= 2 && dashRecharging(w)) {
+      const sp = Math.hypot(T.vx, T.vz);
+      let fx = b.data.follow2X ?? 0, fz = b.data.follow2Z ?? 0;
+      if (sp > 0.3 * titanWalk(w)) { fx = T.vx / sp; fz = T.vz / sp; }
+      const fm = Math.hypot(fx, fz);
+      if (fm > 1e-6) {
+        fx /= fm; fz /= fm;
+        FOLLOW_EV.x0 = T.x - fx * T.radius; FOLLOW_EV.z0 = T.z - fz * T.radius; FOLLOW_EV.x1 = T.x; FOLLOW_EV.z1 = T.z;
+        b.data.followLast = w.t;
+        return FOLLOW_EV;
+      }
+    }
+  }
   for (let i = 0; i < w.events.length; i++) {
     const e = w.events[i];
     if (e.type !== 'dash') continue;
@@ -181,6 +382,11 @@ export function watchDash(w: World, b: BossState, cd: readonly number[]): { x0: 
     if (b.phase < 2 && heat < DASH_HEAT_P1) return null;
     b.data.followAt = w.t + (cd[b.phase] ?? 5) / clamp(heat, 1, DASH_HEAT_DIV_MAX);
     b.data.followLast = w.t;
+    if (escape && dashRecharging(w)) {
+      const m = Math.hypot(e.x1 - e.x0, e.z1 - e.z0);
+      b.data.follow2At = w.t + BOSS_DASH_READ.followS;
+      b.data.follow2X = m > 1e-6 ? (e.x1 - e.x0) / m : 0; b.data.follow2Z = m > 1e-6 ? (e.z1 - e.z0) / m : 0;
+    }
     return e;
   }
   return null;
@@ -327,6 +533,14 @@ export function bossTelegraph(w: World, spec: Omit<TelegraphSpawn, 'owner'>, pha
       if (Math.abs(oFire - windup) < STACK_DT) { windup = oFire + STACK_DT + 0.05; moved = true; }
     }
     if (!moved) break;
+  }
+  // fx2: a damage-over-time tell (dmg per second while active) takes at most one hit's worth IN TOTAL
+  const act = Number.isFinite(spec.active) ? (spec.active as number) : 0;
+  if (act > 0 && spec.dmg > 0) {
+    const cap = (b && b.role === 'gate' ? GATES.hitCap : BOSS_HIT_CAP) * Math.max(1, w.titan.maxHp);
+    // combat/telegraphs.ts ticks an active tell at 5 Hz from the fire tick: ceil(active / 0.2) ticks of dmg × 0.2
+    const dmgS = Math.ceil(act / DOT_TICK_S - 1e-6) * DOT_TICK_S;
+    if (spec.dmg * dmgS > cap) return spawnTelegraph(w, { ...spec, dmg: cap / dmgS, windup, owner: 'boss' });
   }
   return spawnTelegraph(w, { ...spec, windup, owner: 'boss' });
 }
@@ -641,6 +855,11 @@ export function stepBoss(w: World): void {
     if (b.staggerT === 0) b.cd = Math.max(b.cd, 0.9);
   } else {
     if (b.attack) b.attackT += dt; else b.cd -= dt;
+    // an ESCAPE dash (out of live boss paint) is read: the next decision comes within escapeCdS
+    if (T.alive) for (let i = 0; i < w.events.length; i++) {
+      const e = w.events[i];
+      if (e.type === 'dash' && dashFromPaint(w, e.x0, e.z0)) { b.cd = Math.min(b.cd, BOSS_DASH_READ.escapeCdS); break; }
+    }
     mod.step(w, b);
   }
 
@@ -702,7 +921,10 @@ export function damageBoss(w: World, part: number, dmg: number, opts: DamageOpts
   if (b.role === 'gate') {
     // GATEKEEPERS §3.0: titan damage per TUMBLING 1 s window ≤ GATES.dpsCapFrac × maxHp (bossUltHit exempt)
     const G = w.gates;
-    b.data.lastHitT = w.t;                   // engagement rule (b), §2.4
+    // engagement rule (b), §2.4: "the titan damaged the gatekeeper". A THORNS reflection is the rig's own attack bounced
+    // back (hurtTitan reflects even under i-frames / god), not the titan engaging: one held a runner 230 m away
+    // 'engaged' for 5 s (fx2 Gate: playtest_gate step 3, by_thorns 1.11 at 1.49 x spawnRing)
+    if (opts.kind !== 'thorns') b.data.lastHitT = w.t;
     if (!(w.t < G.dpsWinT + 1)) { G.dpsWinT = w.t; G.dpsWin = 0; }
     const room = Math.max(0, GATES.dpsCapFrac * b.maxHp - G.dpsWin);
     if (d > room) d = room;
@@ -786,18 +1008,19 @@ export function gateCrushTier(b: BossState): 0 | 1 | 2 | 3 | 4 {
  * = that slowed walk / H. The `min` clamp is never scaled. Already phase-scaled (ESCAPE_K): spawn the tell
  * with bossTelegraph(w, spec, false).
  */
-export function gateWindup(w: World, b: BossState, escapeH: number, min: number, max: number): number {
-  const T = w.titan;
+export function gateWindup(w: World, b: BossState, escapeH: number, min: number, max: number, dirX = NaN, dirZ = NaN): number {
   const H = bossH(w, b);
-  const slow = T.slowT > 0 ? clamp(Number.isFinite(T.slowMul) ? T.slowMul : 1, 0.1, 1) : 1;
-  const v = Math.max(1e-3, titanWalk(w) * slow);
-  const k = ESCAPE_K[b.phase] ?? 1;
   const e = Math.max(0, Number.isFinite(escapeH) ? escapeH : 0) * H;
-  const raw = REACT_S + ACCEL_LOSS_S + (e / v) * k;
+  // fx2: the walk is escapeWalk (slowed AND plowing), the loss is fairLossS (accel ramp + a 90° pivot)
+  const v = escapeWalk(w, b, e, dirX, dirZ), loss = fairLossS(w);
+  const k = ESCAPE_K[b.phase] ?? 1;
+  const mo = escapeMomentum(w, b, dirX, dirZ), extra = mo.s + mo.m / v;   // momentum into the tell (see fairWindup)
+  const raw = REACT_S + loss + extra + (e / v) * k;
   const Hh = b.role === 'gate' ? gateHomeH(b.id as GateId) : H;
   const vHome = Hh > 0 ? titanSpeed(Hh) / Hh : 1;
   const vNow = H > 0 ? v / H : vHome;
-  const maxEff = max * Math.max(1, vNow > 0 ? vHome / vNow : 1);
+  // the authored max assumed the old flat 0.15 s loss: it shifts by the loss increase (never below fair at home)
+  const maxEff = max * Math.max(1, vNow > 0 ? vHome / vNow : 1) + (loss - ACCEL_LOSS_S) + extra;
   return clamp(raw, min, Math.max(min, maxEff));
 }
 
@@ -876,16 +1099,27 @@ export function laneClearLen(w: World, x: number, z: number, dirX: number, dirZ:
   return L;
 }
 
+const ENTRY_TURNS: readonly number[] = [Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2, 3 * Math.PI / 4, -3 * Math.PI / 4, Math.PI];
 /** The §2.3 entry / §2.4 cut-off point: entryRingMul × the spawn ring on the titan's heading side (±30°,
  *  rng.boss; the opposite side when that is out of bounds), facing the titan. */
 export function gateEntry(w: World, out: { x: number; z: number; heading: number }): void {
   const T = w.titan, Bd = w.city.bounds;
   const d = GATES.entryRingMul * gateRing(w);
-  let a = T.heading + (w.rng.boss() - 0.5) * (Math.PI / 3);
-  let x = T.x + Math.sin(a) * d, z = T.z + Math.cos(a) * d;
-  if (x < Bd.minX || x > Bd.maxX || z < Bd.minZ || z > Bd.maxZ) {
-    a += Math.PI;
-    x = T.x + Math.sin(a) * d; z = T.z + Math.cos(a) * d;
+  // fx2: "ahead" is where the titan is GOING — its velocity while it moves (a titan sliding along the map edge
+  // faces into the edge), its facing at rest; when that point is out of bounds, the nearest in-bounds rotation
+  // (±45°, ±90°, ±135°) before the far side (the flip used to drop the cut-off BEHIND a runner on the edge)
+  const sp = Math.hypot(T.vx, T.vz);
+  const base = sp > 0.25 * titanWalk(w) ? Math.atan2(T.vx, T.vz) : T.heading;
+  const a0 = base + (w.rng.boss() - 0.5) * (Math.PI / 3);
+  let x = T.x + Math.sin(a0) * d, z = T.z + Math.cos(a0) * d;
+  const inB = (px: number, pz: number) => px >= Bd.minX && px <= Bd.maxX && pz >= Bd.minZ && pz <= Bd.maxZ;
+  if (!inB(x, z)) {
+    for (const k of ENTRY_TURNS) {
+      const a = a0 + k;
+      const px = T.x + Math.sin(a) * d, pz = T.z + Math.cos(a) * d;
+      x = px; z = pz;
+      if (inB(px, pz)) break;
+    }
   }
   out.x = clamp(x, Bd.minX, Bd.maxX);
   out.z = clamp(z, Bd.minZ, Bd.maxZ);
@@ -901,8 +1135,14 @@ export function gateReenter(w: World, b: BossState): void {
   b.x = b.px = ENTRY.x; b.z = b.pz = ENTRY.z;
   b.heading = b.pheading = ENTRY.heading;
   b.data.detourT = 0; b.data.ramT = 0; b.data.stuckN = 0; b.data.stuckT = 0;
+  b.data.outrunS = 0; b.data.stuckX = b.x; b.data.stuckZ = b.z; b.data.stuckCmd = 0; b.data.stuckSteer = 0;
+  const rd = Math.hypot(w.titan.x - b.x, w.titan.z - b.z);
+  b.data.stuckUX = rd > 1e-6 ? (w.titan.x - b.x) / rd : 0; b.data.stuckUZ = rd > 1e-6 ? (w.titan.z - b.z) / rd : 0;
   b.data.stuckD = Math.hypot(w.titan.x - b.x, w.titan.z - b.z);
   refreshParts(b);
+  // the module's gateBeats reads this stamp (not w.events): gateUnstick re-enters from the move step, AFTER that
+  // tick's gateBeats, and the next tick clears w.events — the cutOff beat (CUTTING YOU OFF) never started (critic)
+  b.data.cutOffTick = w.tick;
   w.events.push({ type: 'gateReposition', x: b.x, z: b.z });
 }
 
@@ -918,17 +1158,43 @@ export function gateUnstick(w: World, b: BossState): void {
   const T = w.titan, d = b.data, dt = w.dt, S = GATES.stuck;
   const H = bossH(w, b);
   const dist = Math.hypot(T.x - b.x, T.z - b.z);
+  const steering = d.ramT > 0 || d.detourT > 0;
   if (d.ramT > 0) d.ramT = Math.max(0, d.ramT - dt);
   if (d.detourT > 0) d.detourT = Math.max(0, d.detourT - dt);
   // a fresh hunt (first call, or the rig was inside its band for a while): new checkpoint
-  if (!(d.stuckLastT !== undefined && w.t - d.stuckLastT <= 2.5 * dt)) { d.stuckT = 0; d.stuckD = dist; d.stuckN = 0; }
+  if (!(d.stuckLastT !== undefined && w.t - d.stuckLastT <= 2.5 * dt)) {
+    d.stuckT = 0; d.stuckD = dist; d.stuckN = 0; d.outrunS = 0;
+    d.stuckX = b.x; d.stuckZ = b.z; d.stuckCmd = 0; d.stuckSteer = 0;
+    d.stuckUX = dist > 1e-6 ? (T.x - b.x) / dist : 0; d.stuckUZ = dist > 1e-6 ? (T.z - b.z) / dist : 0;
+  }
   d.stuckLastT = w.t;
   d.stuckT = (d.stuckT ?? 0) + dt;
+  // fx2 (critic t_avoid: being OUT-RUN was read as being STUCK): the rig's commanded path this window (moveBoss's
+  // last speed, i.e. what the module asked for on the previous tick) vs its own displacement
+  d.stuckCmd = (d.stuckCmd ?? 0) + (Number.isFinite(d.speed) ? Math.max(0, d.speed) : 0) * dt;
+  if (steering) d.stuckSteer = 1;
   if (d.stuckT < S.checkS) return;
-  d.stuckT = 0;
+  // the displacement that counts is the part TOWARD where the titan was at the window's start: sliding along a
+  // wall it cannot crush (a titan standing behind a block, case 15) is being held, not out-run
+  const moved = (b.x - (d.stuckX ?? b.x)) * (d.stuckUX ?? 0) + (b.z - (d.stuckZ ?? b.z)) * (d.stuckUZ ?? 0);
+  const cmd = d.stuckCmd ?? 0, steered = d.stuckSteer === 1;
+  d.stuckT = 0; d.stuckX = b.x; d.stuckZ = b.z; d.stuckCmd = 0; d.stuckSteer = 0;
+  d.stuckUX = dist > 1e-6 ? (T.x - b.x) / dist : 0; d.stuckUZ = dist > 1e-6 ? (T.z - b.z) / dist : 0;
   const progressed = (d.stuckD ?? dist) - dist >= S.progressH * H;
   d.stuckD = dist;
-  if (progressed) { d.stuckN = 0; return; }
+  if (progressed) { d.stuckN = 0; d.outrunS = 0; return; }
+  // STUCK only when the body itself is held: its displacement toward the titan < moveFrac × the commanded path. A
+  // rig that moves freely toward it while the gap does not close is being OUT-RUN: after GATES.repositionS of that (DETOUR /
+  // RAMMING THROUGH windows excluded — those are the stuck rule's own steering) it CUTS YOU OFF (§2.4).
+  if (moved >= S.moveFrac * cmd && cmd > 0) {
+    d.stuckN = 0;
+    // the walk-in (introT) is staged and invulnerable: it never cuts off
+    if (steered || b.introT > 0) { d.outrunS = 0; return; }
+    d.outrunS = (d.outrunS ?? 0) + S.checkS;
+    if (d.outrunS >= GATES.repositionS - 1e-9) gateReenter(w, b);
+    return;
+  }
+  d.outrunS = 0;
   d.stuckN = (d.stuckN ?? 0) + 1;
   if (d.stuckN === 1) {
     const r = b.parts[0] ? b.parts[0].r : 0.5 * H;

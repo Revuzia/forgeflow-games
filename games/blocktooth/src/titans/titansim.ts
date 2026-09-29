@@ -39,12 +39,12 @@ import { fightAlive, lockGate } from '../meta/gates.ts';
 
 // ─────────────────────────────── tuning (balance gate tunes these) ───────────────────────────────
 /** seconds to reach full speed from rest, per rank (snappy at Size I, weighty at V) */
-const ACCEL_REACH_S = [0.12, 0.16, 0.2, 0.25, 0.3] as const;
+export const ACCEL_REACH_S = [0.12, 0.16, 0.2, 0.25, 0.3] as const;
 /** braking is this much stronger than accelerating */
-const DECEL_MUL = 1.6;
+export const DECEL_MUL = 1.6;
 /** turn rate (rad/s) at Size I and Size V, linear across ranks */
-const TURN_RATE_I = 10;
-const TURN_RATE_V = 5;
+export const TURN_RATE_I = 10;
+export const TURN_RATE_V = 5;
 /** turn-rate multiplier while dashing, and while swivelling to face an auto target at rest */
 const DASH_TURN_MUL = 3;
 const IDLE_FACE_TURN_MUL = 0.6;
@@ -73,9 +73,9 @@ const CRUSH_MIN_SPEED_FRAC = 0.15;
 /** airborne enemies above this fraction of H are out of stomping reach */
 const CRUSH_MAX_Y_PER_H = 0.35;
 /** own move speed while a winch leash is attached (the pull is added on top) … */
-const LEASH_OWN_SPEED_MUL = 0.55;
+export const LEASH_OWN_SPEED_MUL = 0.55;
 /** … but never below this × the pull strength, so walking straight away always (slowly) wins */
-const LEASH_RESIST_MIN = 1.15;
+export const LEASH_RESIST_MIN = 1.15;
 /** rank-up: current hp keeps its ratio, then heals this fraction of the new max */
 const RANKUP_HEAL_FRAC = 0.15;
 /** outside a tween the body eases toward its target at this rate (1/s) — only a safety net: every
@@ -408,7 +408,8 @@ function updateHeight(w: World, dt: number): void {
   T.radius = T.height * TITAN_RADIUS_PER_H;
 }
 
-/** Contact reach radius for smashing/plowing. */
+/** Contact reach radius for smashing/plowing (exported for bosses/index.ts escapeWalk, fx2). */
+export function titanContactRadius(w: World): number { return contactRadius(w); }
 function contactRadius(w: World): number {
   const T = w.titan;
   return T.radius * Math.max(0.2, stat(w, 'smashRadius')) + CONTACT_SKIN_PER_H * T.height;

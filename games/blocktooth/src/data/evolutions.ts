@@ -14,6 +14,7 @@
 //     owned; the base, below its ready threshold, once the companion is owned) rolls with EVO_NUDGE × its
 //     normal weight INSIDE its rarity — the 60/28/10/2 rarity split is untouched, and the rng.loot draw count
 //     is unchanged (one per card). A base never nudges itself (measured: that fed mono-stacking).
+//   * fx2/D LATE CALL from EVO_LATE_LEVEL (below) for a titan with no evolution yet.
 
 import type { EvolutionRow } from '../core/types.ts';
 import { UPGRADES_V2_RAW } from './upgrades_v2.ts';
@@ -39,6 +40,23 @@ export const EVO_ROWS_OF_PART: Readonly<Record<string, readonly EvolutionRow[]>>
 export const EVO_READY_STACKS = 3;
 /** F1: roll-weight multiplier (within the card's rarity) for the missing half of a started recipe. */
 export const EVO_NUDGE = 10;
+
+/**
+ * fx2/D LATE CALL (critic: a normal run is not reliably offered an evolution before the city boss). From this
+ * level on — RANK_LEVELS[3], the SWITCHBOARD-5 gate / Size IV; probe_evolutions asserts the two agree — a titan
+ * that owns NO evolution yet gets the late call (upgrades/draft.ts lateCall):
+ *   * nothing started (no live recipe has either half owned): every half of every live recipe rolls at
+ *     EVO_NUDGE × its weight (inside its rarity), so a recipe gets started;
+ *   * something started, nothing ready: the CLOSEST started recipe (evolutionProgress order: fewest cards
+ *     missing, then the most-stacked base, then catalogue) rolls its missing halves at EVO_LATE_NUDGE — its
+ *     base included while below the ready stacks (the F1 "a base never nudges itself" rule stays for every
+ *     other recipe and before this level);
+ *   * a recipe ready: a level-up draft always shows it (slot 2) instead of the evoDraftChance roll — the
+ *     rng.loot draw is still made, so the draw count is unchanged.
+ */
+export const EVO_LATE_LEVEL = 27;
+/** fx2/D: roll-weight multiplier (within the rarity) for the missing halves of the late-call target recipe. */
+export const EVO_LATE_NUDGE = 30;
 
 /** Base stacks that make a recipe ready: min(EVO_READY_STACKS, base maxStacks). */
 export function evoReadyStacks(baseMaxStacks: number): number {
