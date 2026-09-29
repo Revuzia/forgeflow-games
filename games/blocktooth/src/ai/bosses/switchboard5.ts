@@ -63,7 +63,7 @@ import { clamp, dist, wrapAngle } from '../../core/math.ts';
 import {
   ESCAPE_K, REACT_S, baseBoss, beginAttack, bossH, bossTelegraph, endAttack, gateAddIds, gateRing, gateSettledH, gateWindup,
   laneClearLen, leadPoint, makePart, moveBoss, refreshParts, registerGateAdd, repeatMul, pickWeighted, shoveTitan,
-  fairLossS, titanWalk, turnBoss, volleyPoints, watchDash,
+  fairLossS, titanWalk, turnBoss, volleyPoints, watchDash, denialRing,
 } from './index.ts';
 import {
   CHASE_VOLLEY_S, P3_GAP, chaseStep, gateAfterMove, gateBeats, gateGap, gateHit, gateHunt, gateWindupK1, huntSpeed, isMoveBeat,
@@ -93,6 +93,8 @@ const RELOC = {
 export const CATCH_H = 0.35;
 const PUT = { everyS: [0, 13, 11, 9] as const, maxAdds: 14, beatS: 1.0 };
 const DASH_ANSWER = { rH: 0.45, aheadR: 0.3, cd: [0, 8, 6, 5] as const, dmg: 6, min: 0.9, max: 1.8, yH: 2.6 };
+/** TITAN PASS D2 (GATEKEEPERS §3.6): which tells carry a RINGBACK (bosses/index.ts denialRing). */
+const RINGBACK = { callIn: true, dash: true, dashPhase: 1 };
 const STUN_S = 3;
 
 /** Dish part geometry (H units): [radial, r, y0, y1, hpMul, strainMul]. */
@@ -337,6 +339,8 @@ function callIn(w: World, b: BossState): void {
       dmg: 0, lob: true, tx, tz, aoe: r, life: tg.windup, tg: tg.id,
     });
     end = Math.max(end, tg.windup);
+    // TITAN PASS D2 (GATEKEEPERS §3.6): the lead flare's RINGBACK — step out and stop; a blind dash lands in it
+    if (i === 0 && RINGBACK.callIn) end = Math.max(end, denialRing(w, b, tx, tz, r, tg.windup, gateHit(w, CALLIN.dmg), 'shell', 'ringback')?.windup ?? 0);
   }
   b.data.attackEnd = end + CALLIN.recover;
 }
@@ -668,5 +672,6 @@ function dashAnswer(w: World, b: BossState): void {
     owner: 'boss', kind: 'callFlare', x: b.x, z: b.z, y: DASH_ANSWER.yH * H, vx: 0, vz: 0,
     dmg: 0, lob: true, tx: x, tz: z, aoe: r, life: tg.windup, tg: tg.id,
   });
+  if (RINGBACK.dash && b.phase >= RINGBACK.dashPhase) denialRing(w, b, x, z, r, tg.windup, gateHit(w, DASH_ANSWER.dmg), 'shell', 'ringback:dash');
   b.data.followX = x; b.data.followZ = z;
 }

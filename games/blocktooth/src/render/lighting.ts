@@ -35,6 +35,22 @@ const HALF_STEP = 1.06;
  *  shadow.matrix when the map renders), so the lookup stays self-consistent; the only artefact is a
  *  moving caster's shadow trailing by one frame — at this zoom < 1 screen px. */
 const HALF_RATE_D = 250;
+/** TITAN PASS perf (HARN): frame-pacing relief. The ea2a1c22 perf (c) / (d) spike runs (p99 39.6 / 40.1 ms, their
+ *  twins 20.9 / 20.6 ms) were bursts of missed vsyncs on a frame that is GPU-bound ~3 ms under the 20 ms vsync
+ *  of the reference Intel UHD; a burst of ≥ 2 misses in a second also makes DynRes reallocate the drawing buffer
+ *  one step down inside it (3–5 ms on an idle GPU, 60–110 ms with the GPU queue backed up). What tips the frame
+ *  over is load from OTHER processes, not the scene: the same (d) frame (STENCIL-1 + 150 foes, Size I, DynRes
+ *  pinned 0.7) misses 0–0.3 % of vsyncs on a quiet box and 16–20 % with six idle-priority CPU burners running
+ *  (the iGPU shares the package with the CPU cores). The deferrable GPU cost is the sun pass: 0.46 M of the
+ *  1.5 M triangles, GPU render() mean −23 % without it. Interleaved in-page A/B under that load, missed frames
+ *  per ~1100: every frame 222 · every 2nd 180 · every 3rd 94 · every 4th 37 · never 37. So after a missed vsync
+ *  the shadow map re-renders every PRESSURE_PERIOD-th frame until PRESSURE_HOLD_MS pass without a miss. The
+ *  artefact is the half-rate one above, only while frames are already dropping: a moving caster's shadow trails
+ *  its body by up to 3 frames (≤ 5 screen px at Size I, ≤ 3 px from Size III). */
+const PRESSURE_PERIOD = 4;
+const PRESSURE_HOLD_MS = 4000;
+/** a frame gap longer than this is a pause / tab switch / loading step, not a missed vsync */
+const GAP_IGNORE_MS = 250;
 
 interface TimeLook {
   sun: number;          // × π
@@ -97,7 +113,12 @@ export class Lighting {
   private readonly ly = new THREE.Vector3();
   private readonly lz = new THREE.Vector3();
   private lastHalf = -1;
-  private shadowParity = 0;
+  private shadowTick = 0;
+  /** frame-pacing relief (see PRESSURE_HOLD_MS): last update() time, the display-interval estimate, and the
+   *  time the relief ends (0 = none) — all wall-clock ms, render-side only (the sim never reads them) */
+  private lastNow = 0;
+  private intervalMs = 0;
+  private pressureUntil = 0;
   private night = false;
   /** current night lift weight (−1 = not yet applied for this biome) */
   private lift = -1;
@@ -257,11 +278,23 @@ export class Lighting {
       cam.updateProjectionMatrix();
       this.lastHalf = half;
     }
-    // half-rate shadow map at the big ranks (see HALF_RATE_D); always re-render on a texel step
-    if (D >= HALF_RATE_D) {
+    // frame pacing (see PRESSURE_HOLD_MS): the display interval = the shortest recent gap (drifts up slowly so a
+    // move to a slower monitor re-learns it); a gap > 1.5 × it is a missed vsync
+    const now = typeof performance !== 'undefined' ? performance.now() : 0;
+    const gap = this.lastNow > 0 ? now - this.lastNow : 0;
+    this.lastNow = now;
+    if (gap > 4 && gap < GAP_IGNORE_MS) {
+      if (this.intervalMs === 0 || gap < this.intervalMs) this.intervalMs = gap;
+      else this.intervalMs += (gap - this.intervalMs) * 0.001;
+      if (gap > 1.5 * this.intervalMs) this.pressureUntil = now + PRESSURE_HOLD_MS;
+    }
+    // shadow map period: every frame, every 2nd at the big ranks (see HALF_RATE_D), every PRESSURE_PERIOD-th
+    // while frames drop; always re-render on a texel step
+    const period = now < this.pressureUntil ? PRESSURE_PERIOD : D >= HALF_RATE_D ? 2 : 1;
+    if (period > 1) {
       sh.autoUpdate = false;
-      this.shadowParity ^= 1;
-      if (this.shadowParity === 1 || refit) sh.needsUpdate = true;
+      this.shadowTick = (this.shadowTick + 1) % period;
+      if (this.shadowTick === 0 || refit) sh.needsUpdate = true;
     } else if (!sh.autoUpdate) {
       sh.autoUpdate = true;
     }

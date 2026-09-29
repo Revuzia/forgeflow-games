@@ -71,7 +71,7 @@ import { clamp, dist, wrapAngle } from '../../core/math.ts';
 import {
   addMeter, baseBoss, beginAttack, bossH, bossHostile, bossTelegraph, endAttack, entryPoint, fairWindup,
   keepRange, leadPoint, localToWorld, makePart, moveBoss, pickWeighted, releaseLeash, repeatMul, shoveTitan,
-  turnBoss, watchDash,
+  turnBoss, watchDash, denialRing,
 } from './index.ts';
 import { spawnProjectile } from '../../combat/projectiles.ts';
 import { titanSpeed } from '../../core/config.ts';
@@ -100,6 +100,8 @@ const TOW = { pastH: 0.8, linkH: 0.55, minLinks: 5, maxLinks: 10, rH: 0.3, dmg: 
 const DECK = { rH: 0.9, dmg: 40, min: 0.9, max: 2.0, recover: 0.6 };
 const COLLAPSE = { aH: 0.6, bH: 1.3, cH: 2.0, dmg: 36, min: 0.9, max: 2.0, dtB: 0.451, dtC: 0.902, recover: 0.5 };
 const DASH_ANSWER = { rH: 0.45, aheadR: 0.3, cd: [0, 8, 6, 5] as const, dmg: 8, min: 0.9, max: 2.0, y: 60 };
+/** TITAN PASS D2 (GATEKEEPERS §3.6): which tells carry a SKID RING (bosses/index.ts denialRing). */
+const SKID = { dash: true, dashPhase: 1 };
 
 /** Till part geometry: [ox, oz, r, y0, y1, hpMul, strainMul]. */
 const TILL_CLOSED = [0, 30, 4, 40, 46, 0.3, 0] as const;
@@ -493,5 +495,7 @@ function dashAnswer(w: World, b: BossState): void {
     owner: 'boss', kind: 'carLob', x, z, y: DASH_ANSWER.y, vx: 0, vz: 0,
     dmg: pkHit(w, DASH_ANSWER.dmg), lob: true, tx: x, tz: z, aoe: r, life,
   });
+  // TITAN PASS D2 (GATEKEEPERS §3.6): the clamp's SKID RING — a second blind dash out of the answer lands in it
+  if (SKID.dash && b.phase >= SKID.dashPhase) denialRing(w, b, x, z, r, life, pkHit(w, DASH_ANSWER.dmg), 'slam', 'skid:dash');
   b.data.followX = x; b.data.followZ = z;
 }

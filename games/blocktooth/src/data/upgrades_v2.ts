@@ -52,8 +52,8 @@ const LT = (titan: TitanId): Opt => ({ titan, locked: true });
 
 // ─────────────────────────────── §7.2 new base-pool cards (not locked) ───────────────────────────────
 const BASE_V2: UpgradeDef[] = [
-  U('airtime_ledger', 'Airtime Ledger', 'rare', 3, ['ult'], [mul('ultCharge', 0.12)]),
-  U('press_conference', 'Press Conference', 'rare', 3, ['ult'], [mul('ultPower', 0.15)]),
+  U('airtime_ledger', 'Airtime Ledger', 'rare', 4, ['ult'], [mul('ultCharge', 0.12)]),
+  U('press_conference', 'Press Conference', 'rare', 4, ['ult'], [mul('ultPower', 0.15)]),
 ];
 
 // ─────────────────────────────── §7.3 evolutions (catalogue order = EVOLUTIONS order) ───────────────────────────────
@@ -92,30 +92,30 @@ const EVOS: UpgradeDef[] = [
 
 // ─────────────────────────────── §7.6 unlockable cards (locked; each unlocked by one goal) ───────────────────────────────
 const UNLOCKABLE: UpgradeDef[] = [
-  U('u_block_captain', 'Block Captain', 'common', 4, ['offense'], [mul('damage', 0.06), mul('area', 0.04)], L),
+  U('u_block_captain', 'Block Captain', 'common', 5, ['offense'], [mul('damage', 0.06), mul('area', 0.04)], L),
   U('u_sidewalk_sale', 'Sidewalk Sale', 'common', 5, ['growth'], [mul('pickupRadius', 0.12), mul('xpGain', 0.03)], L),
-  U('u_ribbon_cutting', 'Ribbon Cutting', 'epic', 1, ['survival', 'trigger'], [mul('maxHp', 0.08), on('levelUp', 1, 0, 'shockwave', { r: 2.5, dmg: 30 })], L),
-  U('u_rolling_closure', 'Rolling Closure', 'rare', 3, ['offense', 'trigger'], [on('kill', 0.1, 2, 'slowField', { r: 1.5, dur: 3 })], L),
-  U('u_psa', 'Public Service Announcement', 'epic', 2, ['ult', 'hook', 'trigger'], [on('ability', 0.25, 4, 'ultCharge', { amount: 8 })], L),
-  U('u_bulk_trash_day', 'Bulk Trash Day', 'common', 4, ['smash', 'trigger'], [mul('buildingDamage', 0.08), on('floorBreak', 0.06, 0.4, 'rubbleShot', { count: 1, dmg: 6 })], L),
-  U('u_utility_bill', 'Utility Bill', 'epic', 2, ['offense', 'trigger'], [on('interval', 1, 0, 'shockwave', { r: 1.4, dmg: 16, every: 5 })], L),
-  U('u_night_market', 'Night Market', 'rare', 3, ['ult', 'trigger'], [on('pickup', 0.03, 0.5, 'ultCharge', { amount: 3 })], L),
-  U('u_parking_validation', 'Parking Validation', 'common', 4, ['mobility', 'trigger'], [mul('dashCooldown', -0.06), on('dash', 0.2, 3, 'heal', { amount: 0.01, frac: 1 })], L),
-  U('u_after_hours_permit', 'After-Hours Permit', 'rare', 3, ['hook', 'trigger'], [on('ability', 1, 6, 'frenzy', { stat: 'attackRate', mul: 0.2, dur: 4 })], L),
-  U('u_citizen_hotline', 'Citizen Hotline', 'rare', 3, ['survival', 'trigger'], [on('hurt', 0.3, 3, 'arc', { count: 3, dmg: 10 })], L),
-  U('u_rent_control', 'Rent Control', 'rare', 3, ['survival'], [add('armor', 5), add('thorns', 0.2)], L),
-  U('u_eviction_notice', 'Eviction Notice', 'epic', 2, ['offense', 'trigger'], [on('crush', 0.25, 0.5, 'shockwave', { r: 1, dmg: 12 })], L),
-  U('u_street_festival', 'Street Festival', 'rare', 3, ['growth', 'trigger'], [on('collapse', 0.3, 3, 'magnet', { r: 6 })], { locked: true, minRank: 1 }),
+  U('u_ribbon_cutting', 'Ribbon Cutting', 'epic', 3, ['survival', 'trigger'], [mul('maxHp', 0.08), on('levelUp', 1, 0, 'shockwave', { r: 2.5, dmg: 30 })], L),
+  U('u_rolling_closure', 'Rolling Closure', 'rare', 1, ['offense', 'trigger'], [on('kill', 0.1, 2, 'slowField', { r: 1.5, dur: 3 })], L),
+  U('u_psa', 'Public Service Announcement', 'epic', 3, ['ult', 'hook', 'trigger'], [on('ability', 0.25, 4, 'ultCharge', { amount: 8 })], L),
+  U('u_bulk_trash_day', 'Bulk Trash Day', 'common', 5, ['smash', 'trigger'], [mul('buildingDamage', 0.08), on('floorBreak', 0.06, 0.4, 'rubbleShot', { count: 1, dmg: 6 })], L),
+  U('u_utility_bill', 'Utility Bill', 'epic', 3, ['offense', 'trigger'], [on('interval', 1, 0, 'shockwave', { r: 1.4, dmg: 16, every: 5 })], L),
+  U('u_night_market', 'Night Market', 'rare', 4, ['ult', 'trigger'], [on('pickup', 0.03, 0.5, 'ultCharge', { amount: 3 })], L),
+  U('u_parking_validation', 'Parking Validation', 'common', 5, ['mobility', 'trigger'], [mul('dashCooldown', -0.06), on('dash', 0.2, 3, 'heal', { amount: 0.01, frac: 1 })], L),
+  U('u_after_hours_permit', 'After-Hours Permit', 'rare', 4, ['hook', 'trigger'], [on('ability', 1, 6, 'frenzy', { stat: 'attackRate', mul: 0.2, dur: 4 })], L),
+  U('u_citizen_hotline', 'Citizen Hotline', 'rare', 4, ['survival', 'trigger'], [on('hurt', 0.3, 3, 'arc', { count: 3, dmg: 10 })], L),
+  U('u_rent_control', 'Rent Control', 'rare', 4, ['survival'], [add('armor', 5), add('thorns', 0.2)], L),
+  U('u_eviction_notice', 'Eviction Notice', 'epic', 3, ['offense', 'trigger'], [on('crush', 0.25, 0.5, 'shockwave', { r: 1, dmg: 12 })], L),
+  U('u_street_festival', 'Street Festival', 'rare', 1, ['growth', 'trigger'], [on('collapse', 0.3, 3, 'magnet', { r: 6 })], { locked: true, minRank: 1 }),
   U('u_landmark_status', 'Landmark Status', 'legendary', 1, ['mutation', 'survival'], [mul('maxHp', 0.35), add('armor', 15), mul('moveSpeed', -0.1)], L),
-  U('u_detour_signage', 'Detour Signage', 'common', 4, ['mobility'], [mul('knockback', 0.15), mul('moveSpeed', 0.03)], L),
-  U('molo_u_manhole_lid', 'Manhole Lid', 'rare', 3, ['kit', 'survival', 'trigger'], [add('armor', 5), on('ability', 1, 0, 'slowField', { r: 3, dur: 3 })], LT('molo')),
-  U('molo_u_open_mouth_policy', 'Open-Mouth Policy', 'epic', 2, ['kit', 'hook', 'growth', 'trigger'], [mul('vacuumRadius', 0.2), on('ability', 1, 0, 'xp', { amount: 2 })], LT('molo')),
-  U('vk_u_lineman_gloves', "Lineman's Gloves", 'rare', 3, ['kit', 'survival'], [add('armor', 5), mul('wireDamage', 0.1)], LT('voltkite')),
-  U('vk_u_load_shedding_waltz', 'Load-Shedding Waltz', 'rare', 3, ['kit', 'mobility', 'trigger'], [on('dash', 1, 1, 'shockwave', { r: 0.8, dmg: 10 })], LT('voltkite')),
-  U('hb_u_geothermal_lease', 'Geothermal Lease', 'rare', 3, ['kit', 'survival'], [add('regen', 0.5), mul('shellCapacity', 0.1)], LT('hearthback')),
-  U('hb_u_ash_cloud_advisory', 'Ash Cloud Advisory', 'epic', 2, ['kit', 'hook', 'trigger'], [on('ability', 1, 0, 'slowField', { r: 3, dur: 4, dps: 8 })], LT('hearthback')),
+  U('u_detour_signage', 'Detour Signage', 'common', 5, ['mobility'], [mul('knockback', 0.15), mul('moveSpeed', 0.03)], L),
+  U('molo_u_manhole_lid', 'Manhole Lid', 'rare', 4, ['kit', 'survival', 'trigger'], [add('armor', 5), on('ability', 1, 0, 'slowField', { r: 3, dur: 3 })], LT('molo')),
+  U('molo_u_open_mouth_policy', 'Open-Mouth Policy', 'epic', 3, ['kit', 'hook', 'growth', 'trigger'], [mul('vacuumRadius', 0.2), on('ability', 1, 0, 'xp', { amount: 2 })], LT('molo')),
+  U('vk_u_lineman_gloves', "Lineman's Gloves", 'rare', 4, ['kit', 'survival'], [add('armor', 5), mul('wireDamage', 0.1)], LT('voltkite')),
+  U('vk_u_load_shedding_waltz', 'Load-Shedding Waltz', 'rare', 4, ['kit', 'mobility', 'trigger'], [on('dash', 1, 1, 'shockwave', { r: 0.8, dmg: 10 })], LT('voltkite')),
+  U('hb_u_geothermal_lease', 'Geothermal Lease', 'rare', 4, ['kit', 'survival'], [add('regen', 0.5), mul('shellCapacity', 0.1)], LT('hearthback')),
+  U('hb_u_ash_cloud_advisory', 'Ash Cloud Advisory', 'epic', 3, ['kit', 'hook', 'trigger'], [on('ability', 1, 0, 'slowField', { r: 3, dur: 4, dps: 8 })], LT('hearthback')),
   U('bw_u_seed_catalogue', 'Seed Catalogue', 'rare', 3, ['kit', 'survival'], [mul('sporeHeal', 0.2), add('regen', 0.3)], LT('briarwick')),
-  U('bw_u_arbor_day', 'Arbor Day', 'rare', 3, ['kit', 'smash', 'trigger'], [on('collapse', 0.4, 2, 'bloom', { dur: 16 })], { titan: 'briarwick', locked: true, minRank: 1 }),
+  U('bw_u_arbor_day', 'Arbor Day', 'rare', 3, ['kit', 'smash', 'trigger'], [on('collapse', 0.4, 2, 'bloom', { dur: 9 })], { titan: 'briarwick', locked: true, minRank: 1 }),
 ];
 
 // ─────────────────────────────── §7.6 perk cards (hidden; granted by meta/perks.ts applyPerk) ───────────────────────────────

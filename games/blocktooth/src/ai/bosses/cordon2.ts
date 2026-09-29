@@ -56,7 +56,7 @@ import { circleInShape, clamp, dist, wrapAngle } from '../../core/math.ts';
 import {
   ESCAPE_K, baseBoss, beginAttack, bossH, bossTelegraph, endAttack, gateSettledH, gateWindup, keepRange, laneClearLen,
   leadPoint, localToWorld, makePart, moveBoss, pickWeighted, refreshParts, registerGateAdd, repeatMul, shoveTitan,
-  titanWalk, turnBoss, watchDash,
+  titanWalk, turnBoss, watchDash, denialRing,
 } from './index.ts';
 import {
   CHASE_VOLLEY_S, P3_GAP, boundsLen, chaseStep, gateAfterMove, gateBeats, gateGap, gateHit, gateHunt, gateWindupK1, huntSpeed, isMoveBeat,
@@ -96,6 +96,8 @@ const BACKFIRE = { half: (40 * Math.PI) / 180, rH: 1.8, min: 1.0, max: 1.9, dmg:
 const PACK_VENT = { oz: -1.0, r: 0.6 };
 const SQUAD = { everyS: 14, firstS: 3, maxAlive: 2, size: 5, backH: 1.8, jitterH: 0.5, cycleS: 0.5, retryS: 2 };
 const DASH_ANSWER = { lenH: 1.2, rH: 0.25, aheadR: 0.3, cd: [0, 8, 6, 5] as const, dmg: 5, min: 0.9, max: 1.8, yH: 2.0 };
+/** TITAN PASS D2 (GATEKEEPERS §3.6): the dash answer carries a CORDON RING (bosses/index.ts denialRing). */
+const CORDON_RING = { dash: true, dashPhase: 2 };
 const PACK_STRAIN = 3.0, OVERHEAT_STRAIN_MUL = 1.25;
 
 /** Parts in H units: [name, ox, oz, r, y0, y1, hpMul, strainMul]. Index 4 is the pack. */
@@ -532,5 +534,9 @@ function dashAnswer(w: World, b: BossState): void {
     owner: 'boss', kind: 'sawhorse', x: b.x, z: b.z, y: DASH_ANSWER.yH * H, vx: 0, vz: 0,
     dmg: 0, lob: true, tx: cx, tz: cz, aoe: r, life: tg.windup, tg: tg.id,
   });
+  // TITAN PASS D2 (GATEKEEPERS §3.6): the answer's CORDON RING (P2+) — a second blind dash out of the answer lands in it. Its moat is
+  // sized for the sawhorse's walk-out: stepping off it sideways (r + R, the sawhorse lies across the dash) ends within
+  // hypot(half, r + R) of its centre = a circle of radius hypot(half, r + R) − R for denialRing
+  if (CORDON_RING.dash && b.phase >= CORDON_RING.dashPhase) denialRing(w, b, cx, cz, Math.hypot(half, reach) - T.radius, tg.windup, gateHit(w, DASH_ANSWER.dmg), 'plate', 'cordon:dash');
   b.data.followX = cx; b.data.followZ = cz;
 }

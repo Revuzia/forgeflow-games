@@ -45,6 +45,8 @@ const METRIC_GLYPH: Record<GoalMetric, GlyphId> = {
   // GATEKEEPERS §6.5 (K0 Record completion; lane K2c adds the goals)
   gateTippedFastS: 'gatekeeper', gateStallsBestFight: 'gatekeeper', gateSwitchFastS: 'gatekeeper', gateCleanKills: 'gatekeeper',
   gateTotalFightS: 'gatekeeper', gateRematchesLife: 'gatekeeper',
+  // TITAN PASS T0 Record completion (BRIARWICK FULL BLOOM keeps its row glyph when lane DATA retargets it)
+  cascadeBest: 'turret',
 };
 
 export function goalGlyph(g: GoalDef): GlyphId { return METRIC_GLYPH[g.metric] ?? 'ribbon'; }

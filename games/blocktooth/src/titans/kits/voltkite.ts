@@ -1,8 +1,9 @@
 // BLOCKTOOTH — VOLT-KITE kit: CHAIN ASSASSIN (CONTRACT §8). Lane titan-sim. THREE-free, deterministic.
 //   Auto  FORK-ARC          — lightning to a target, then forks (enemies first, then boss/city), −15 %/jump.
+//                             GROUNDING: every 2nd arc that strikes a foe/boss earths a short LIVE WIRE there.
 //   Pass  LIVE WIRE         — every dash lays a `wire` hazard (capsule) along its path. Cap 6.
 //   Hook  RECAST: DETONATE  — every live wire explodes along its length; no wires → static burst.
-// Kit state (titan.kit): wires (live wire count, view/HUD), arcHits (last arc's hits).
+// Kit state (titan.kit): wires (live wire count, view/HUD), arcHits (last arc's hits), arcN (arc counter).
 
 import type { DamageOpts, Enemy, Hazard, Shape, World } from '../../core/types.ts';
 import { dist, headingOf } from '../../core/math.ts';
@@ -20,7 +21,7 @@ import {
 /** Tuning (balance gate edits these; mutable so probes can sweep them at runtime). */
 export const VOLT = {
   arcEveryS: 0.9,          // ÷ attackRate
-  arcRangeH: 3.2,          // × H × attackRange
+  arcRangeH: 3.8,          // × H × attackRange (titanpass: 3.2 → 3.8, the kiter out-ranges breath cones)
   jumpRangeH: 1.6,         // × H × chainRange
   arcDmg: 12,
   arcFalloff: 0.85,        // per jump
@@ -38,6 +39,10 @@ export const VOLT = {
   burstRH: 1.2,            // × H × area (no wires out)
   burstDmg: 15,            // × abilityPower
   burstKnock: 0.8,
+  groundEvery: 2,          // GROUNDING: every Nth arc that strikes a foe/boss lays a short live wire (titanpass)
+  groundLenH: 1.4,         // × H, from the struck point back toward the titan
+  groundLife: 0.5,         // × wireDuration (0.75 let the bot kill IRON GULLY in 30 s: GATE 2 full clear @474 s < 480)
+  bossParts: 2,            // boss parts one arc may strike (was 1; titanpass)
 };
 
 const hazBuf: Hazard[] = [];
@@ -53,7 +58,7 @@ const BURST_OPTS: DamageOpts = { src: 'titan', kind: 'arc' };
 const notHitEnemy = (e: Enemy) => hitEnemies.indexOf(e.id) < 0;
 
 export function init(): Record<string, number> {
-  return { wires: 0, arcHits: 0 };
+  return { wires: 0, arcHits: 0, arcN: 0 };
 }
 
 /** Auto-attack reach (m) right now — pickups.ts latches drops inside ~1.2 × this (kits/index kitReach). */
@@ -112,6 +117,14 @@ function forkArc(w: World, first: Target, range: number): void {
     cur = nextTarget(w, px, pz, jumpR);
   }
   T.kit.arcHits = hits;
+  if (VOLT.groundEvery > 0 && (first.kind === 'enemy' || first.kind === 'boss') && ++T.kit.arcN % VOLT.groundEvery === 0) {
+    // GROUNDING: the bolt earths through the first thing it struck: a short LIVE WIRE from that point back toward VOLT-KITE,
+    // so RECAST has real wires to blow without dash-weaving (titanpass T9: 31 % -> ~79 % real detonations, player-like)
+    aimPoint(w, first, T.x, T.z, pt);
+    const dx = T.x - pt.x, dz = T.z - pt.z, d = Math.hypot(dx, dz) || 1;
+    const L = Math.min(d, VOLT.groundLenH * T.height);
+    layWire(w, pt.x, pt.z, pt.x + (dx / d) * L, pt.z + (dz / d) * L, Math.max(0.1, S(w, 'wireDuration')) * VOLT.groundLife);
+  }
   w.events.push({ type: 'arc', pts, kind: 'fork' });
   emitAttack(w, 'forkArc', T.x, T.z, dir, range, hits);
   faceToward(w, dir);
@@ -122,10 +135,10 @@ function nextTarget(w: World, x: number, z: number, r: number): Target | null {
   const e = nearestEnemy(w, x, z, r, notHitEnemy);
   if (e) return { kind: 'enemy', e };
 
-  // the boss is ONE fork target: an arc that already struck a part never re-forks into the
-  // other parts (7 overlapping part colliders would otherwise take the full ×(1+.85+.72+.61) chain)
+  // the boss takes at most `bossParts` forks: an arc never chains through all 7 overlapping part
+  // colliders (which would take the full ×(1+.85+.72+.61) chain); 2 = one follow-up jump (titanpass)
   const B = w.boss;
-  if (B && B.alive && B.introT <= 0 && hitParts.length === 0) {
+  if (B && B.alive && B.introT <= 0 && hitParts.length < VOLT.bossParts) {
     let best = -1, bestD = Infinity;
     for (let i = 0; i < B.parts.length; i++) {
       if (hitParts.indexOf(i) >= 0) continue;
@@ -166,12 +179,18 @@ export function onDash(w: World, x0: number, z0: number, x1: number, z1: number)
   let ex = x1, ez = z1;
   const minLen = VOLT.wireMinLenH * H;
   if (Math.hypot(x1 - x0, z1 - z0) < minLen) { ex = x0 + T.dashDirX * minLen; ez = z0 + T.dashDirZ * minLen; }
-  const life = Math.max(0.1, S(w, 'wireDuration'));
+  layWire(w, x0, z0, ex, ez, Math.max(0.1, S(w, 'wireDuration')));
+}
+
+/** One LIVE WIRE capsule (dash wires and GROUNDING wires share the cap, the dps and the look). */
+function layWire(w: World, x0: number, z0: number, x1: number, z1: number, life: number): void {
+  const T = w.titan;
+  const H = T.height;
   const r = VOLT.wireRH * H * Math.max(0.1, S(w, 'area'));
   makeRoom(titanHazards(w, 'wire', hazBuf), VOLT.wireCap);
   spawnHazard(w, {
     owner: 'titan', kind: 'wire',
-    shape: { k: 'capsule', x0, z0, x1: ex, z1: ez, r },
+    shape: { k: 'capsule', x0, z0, x1, z1, r },
     life,
     dps: titanDamage(w, VOLT.wireDps) * Math.max(0, S(w, 'wireDamage')),
     data: { life0: life, h: H },

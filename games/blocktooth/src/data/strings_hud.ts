@@ -27,6 +27,10 @@ export const HUD2 = {
   wires: 'WIRES',
   shell: 'SHELL',
   blooms: 'BLOOMS',
+  // TITAN PASS (BRIARWICK kit C): the kit row reads 'PODS n · RIPE m' (ui/abilitybar.ts, lane VIEW); 'BLOOMS' stays
+  // for any caller not yet moved
+  pods: 'PODS',
+  ripe: 'RIPE',
 
   // ── ability bar (§4.2 / §4.3) ──
   badgeMax: 'MAX',

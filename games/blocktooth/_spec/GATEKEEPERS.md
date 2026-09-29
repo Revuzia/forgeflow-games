@@ -370,7 +370,8 @@ by a live RAMROD. EXTENDED COVERAGE keeps its RAMROD every 60 s. `probe_gatekeep
   so `probe_gatekeepers` case 15 asserts **no hunting interval longer than 6 s without 0.5 H of
   progress** (4 s as the reviewer suggested would fire before the rule's own second check).
   CUTTING YOU OFF still covers the far case (> 2.2 × spawnRing).
-* **Dash answer**: `watchDash(w, b, cd)`, the same anti dash-spam rule as the city bosses.
+* **Dash answer**: `watchDash(w, b, cd)`, the same anti dash-spam rule as the city bosses. TITAN PASS D2: some tells
+  carry a SPACE-DENIAL ring that catches a reflexive second dash (§3.6).
 * **Keep-out**: listed per gatekeeper and chosen so that MOLO's 0.9 H bite reaches the exposed weak
   point from the wall (checked by the geometry test in §5.4).
 * Default and attack subtitles are copy in `data/bosses.ts` (a gatekeeper is a `BossDef` with
@@ -412,10 +413,10 @@ stuck rule per §2.4 / §3.0.
 | Phase | Attack | Telegraph | Geometry | Windup | Base | Notes |
 |---|---|---|---|---|---|---|
 | P1+ | **STRIPE RUN** — "STRIPE RUN — STEP OFF THE LINE" | `lane` | from the nose through `leadPoint`, w **1.7 H** (the cart's own footprint: body r 0.85 H), len clamp(d + 3 H, 5 H, 9 H), then clamped by `laneClearLen` | `gateWindup(0.85 H + R, 1.1, 1.9)` (1.10–1.15 s at home) | 10, knock 0.5 H/s sideways | on fire the cart races the lane end-to-end in 0.4 s along the lane's **centre line** (its sim position moves; the lane's own fire is the damage) and **`pushTitanOut` is suspended for the race** (`b.data.raceT > 0`), so a titan that stepped out of the painted footprint is never shoved by the passing body; the push-out resumes when the cart stops. It leaves **WET PAINT** along the centre (hazard `paint`, capsule r 0.35 H, 5 s, `data.slow` 0.35, no dps): the stripe is narrower than the damage lane, which is drawn as the cart's full-width tyre track with the wet stripe inside it. Then **REFILL** 3.0 / 2.6 / 2.2 s (P1 / P2 / P3): `drumOpen`, no movement, turn rate 0.4 rad/s, subtitle `REFILLING — HIT THE DRUM`. The cart ends past the titan facing away, so **the open drum faces the titan** |
-| P1+ | **PAINT BUCKETS** — "PAINT BUCKETS — WATCH THE SPLASH" | `circle` per bucket (lobbed `paintCan` → auto circle tell) | 3 / 4 / 5 buckets, r **0.45 H**: the first on `leadPoint`, the rest placed by `volleyPoints` (§3.0): beyond the lead along the volley axis, within ±60°, ≥ **1.84 H** (2 × (0.45 H + R) + 0.1 H) from the lead and from each other (`rng.boss` angles inside the arc) | `gateWindup(0.45 H + R, 1.0, 1.8)` for the lead, + 0.15 s × i | 6 each | the rig-side half-plane is always clear (the exit is toward the cart, which is where the drum is); each splash leaves a WET PAINT puddle (circle r 0.45 H, 4 s, slow 0.35) |
+| P1+ | **PAINT BUCKETS** — "PAINT BUCKETS — WATCH THE SPLASH" | `circle` per bucket (lobbed `paintCan` → auto circle tell) | 3 / 4 / 5 buckets, r **0.45 H**: the first on `leadPoint`, the rest placed by `volleyPoints` (§3.0): beyond the lead along the volley axis, within ±60°, ≥ **1.84 H** (2 × (0.45 H + R) + 0.1 H) from the lead and from each other (`rng.boss` angles inside the arc) | `gateWindup(0.45 H + R, 1.0, 1.8)` for the lead, + 0.15 s × i | 6 each | the rig-side half-plane is always clear (the exit is toward the cart, which is where the drum is); each splash leaves a WET PAINT puddle (circle r 0.45 H, 4 s, slow 0.35); TITAN PASS D2: the lead bucket carries a SPLASH ring (`splash`, 0.5 × dmg, §3.6) |
 | P2+ | **DOUBLE LINE** — "DOUBLE LINE — STAY BETWEEN THE LINES" | 2 × `lane` | perpendicular to the cart→titan axis, len 8 H, w 0.5 H: one centred on the lead point, the other **2.0 H** to one side (`rng.boss`); the **1.5 H** strip between them is clear for the 0.84 H body (a 0.66 H band for the titan's centre, 2.1 m at Size I), and the lead line's outer side is open too | `gateWindup(0.25 H + R, 1.0, 1.8)` (step into the median or out the far side) | 8 | both lines stay as WET PAINT (4 s), so the median is the dry way out |
 | P3 | **U-TURN** — "U-TURN — IT'S COMING BACK" | 2 × `lane` in sequence | STRIPE RUN, then a second STRIPE RUN re-aimed from the first lane's end | each as STRIPE RUN; the second painted as the first fires | 10 each | the REFILL comes only after the second run |
-| any | *dash answer* (`watchDash`, cd `[_, 7, 5, 4]`) | `circle` (one `paintCan`) | r 0.4 H at the dash end + 0.3 (r + R) ahead | `gateWindup`, k 1 (0.9–1.8) | 4 | |
+| any | *dash answer* (`watchDash`, cd `[_, 7, 5, 4]`) | `circle` (one `paintCan`) | r 0.4 H at the dash end + 0.3 (r + R) ahead | `gateWindup`, k 1 (0.9–1.8) | 4 | P3: + SPLASH ring `splash:dash` at 0.5 × dmg (§3.6) |
 
 **Weak point and stagger.** SPILL fills almost only from the **open DRUM** (strainMul 4) and a little from
 the cab (0.5). Full SPILL → **TIPPED OVER** (4.5 s): the cart lies on its side, the drum is forced open
@@ -459,7 +460,7 @@ get behind. That is the lesson.
 | P1+ | **SAWHORSE TOSS** — "SAWHORSE TOSS — MIND THE BARRICADES" | `capsule` per sawhorse (lobbed `sawhorse`) | 2 / 3 / 4 sawhorses, len 1.4 H, r 0.25 H, each lying across the volley axis (§3.0): one across the lead point, the rest **beyond** it along the axis at **1.6 H** spacing (≥ 2 × (0.25 H + R) + 0.1 H = 1.44 H, so the 1.1 H gaps also fit the 0.84 H body); never behind the lead. Needs the lead ≥ 2.5 H from the rig's centre (keep-out 1.62 H + 0.67 H + 0.2 H), else the axis turns tangential | `gateWindup(0.25 H + R, 1.1, 2.0)` + 0.2 s × i | 8 each | the rig-side half-plane is always clear: step back toward the wall and go round it. The rig stands still while it throws (turn × 0.3): a flank window |
 | P2+ | **BACKFIRE** — "BACKFIRE — STEP OFF THE EXHAUST" | `cone` from the pack, backwards | half 55°, reach 2.4 H | the cheaper walk-out (sideways d·sin 55° + R, or out past the reach), fair (1.0–1.9) | 11 | a response, not in the cycle: fires when the titan has been in the rear arc (> 110° off its facing) for 0.8 s (P3 0.6 s). Hit the pack, then step aside |
 | P3 | **SQUAD BEHIND THE LINE** | — (spawns) | a PICKET SQUAD from the pack side every 14 s, at most 2 of its squads alive | — | — | `spawnEnemy(w, 'squad', …)`; positions from `rng.boss`; counts toward the director's caps; ids go in the same add list as SWITCHBOARD-5's (`gateAddIds`, §3.3) |
-| any | *dash answer* (cd `[_, 8, 6, 5]`) | `capsule` (one sawhorse) across the dash end | len 1.2 H, r 0.25 H | `gateWindup`, k 1 | 5 | |
+| any | *dash answer* (cd `[_, 8, 6, 5]`) | `capsule` (one sawhorse) across the dash end | len 1.2 H, r 0.25 H | `gateWindup`, k 1 | 5 | P2+: + CORDON RING `cordon:dash` (§3.6) |
 
 **Weak point and stagger.** STALL fills from the **PACK** (strainMul 3, 3.75 while OVERHEATED). Full
 STALL → **STALLED** (4.5 s): the tracks stop, turn 0, the wall panels droop, ×2 damage. Default subtitle
@@ -500,11 +501,11 @@ direction: it drives *away* to a new spot when the titan camps it.
 
 | Phase | Behaviour | Telegraph | Geometry | Windup | Base | Notes |
 |---|---|---|---|---|---|---|
-| P1+ | **CALL-IN** — "CALL-IN — CLEAR THE MARKED SPOTS" | `circle` per flare (lobbed `callFlare`) | 3 / 4 / 5, r **0.5 H**: the first on `leadPoint`, the rest by `volleyPoints` (§3.0): beyond the lead along the volley axis, within ±60°, ≥ **1.94 H** (2 × (0.5 H + R) + 0.1 H) from the lead and from each other. Needs the lead ≥ 2.8 H from the base's centre (keep-out 1.67 H + 0.92 H + 0.2 H), else the axis turns tangential | `gateWindup(0.5 H + R, 1.1, 2.0)` + 0.15 s × i (1.29–1.56 s at home) | 12 each | the rig-side half-plane is always clear |
+| P1+ | **CALL-IN** — "CALL-IN — CLEAR THE MARKED SPOTS" | `circle` per flare (lobbed `callFlare`) | 3 / 4 / 5, r **0.5 H**: the first on `leadPoint`, the rest by `volleyPoints` (§3.0): beyond the lead along the volley axis, within ±60°, ≥ **1.94 H** (2 × (0.5 H + R) + 0.1 H) from the lead and from each other. Needs the lead ≥ 2.8 H from the base's centre (keep-out 1.67 H + 0.92 H + 0.2 H), else the axis turns tangential | `gateWindup(0.5 H + R, 1.1, 2.0)` + 0.15 s × i (1.29–1.56 s at home) | 12 each | the rig-side half-plane is always clear; TITAN PASS D2: the lead flare carries a RINGBACK (`ringback`, §3.6) |
 | P1+ | **PUT THROUGH** — subtitle flash `PUTTING YOU THROUGH TO A CREW` | — (spawns) | on its own timer 13 / 11 / 9 s (× (1 − 0.1 p)): P1 one PICKET SQUAD + 3 CROSSING WARDENs; P2 + 3 GNATs; P3 + 1 HOPPER, at the spawn ring on the titan's far side from the tower | — | — | at most **14** of its adds alive; ids kept in a module-private `WeakMap<BossState, number[]>` (deterministic), exposed read-only as `gateAddIds(w)` for `hitEnemy`'s engagement mark (§2.4), CALL DROPPED and RED LIGHT. No add can spawn more bodies (the earlier draft's P3 BULWARK is dropped: a BULWARK deploys up to `APC_MAX_SQUADS` 2 × 5 PICKET members that were outside the list, the cap and CALL DROPPED). The titan's auto-attacks target enemies before boss parts (`findTarget`) unless a dish is **open and in reach** (§2.4), so the adds soak the forks and the misplaced swings, not the whole fight: that is the test. Adds never feed pressure while the titan is in the band (§2.4) |
 | P2+ | **HOLD MUSIC** — "HOLD MUSIC — CLEAR THE RING" | `ring` around the base | 0 → 2.0 H | `gateWindup(2.0 H − d + R, 1.0, 1.9)` | 14, knock 0.8 H/s outward | only when the titan is within 2.1 H (anti-camping) |
 | P1+ | **RELOCATE** — "RELOCATING — CATCH IT" | a 1.0 s PACKING UP beat (dishes fold, outriggers lift) | drives to the best of 8 points at 7 H around the titan (in bounds by 3 H, reachable along `laneClearLen`, `rng.boss` tie-break) at 0.8 / 0.85 / 0.9 × titanWalk, for at most 6 s; a `callFlare` drops behind it every 1.2 s (r 0.4 H, `gateWindup`; one at a time, ≥ 1.8 H apart along the path, so the trail never closes the chase lane) | — | 10 per flare | triggers when the titan has spent 5 / 4 / 3 s within 2.6 H since the last relocation, at least 12 s ago, with no attack live and no stagger. **CAUGHT**: a titan within 1.5 H of the moving base stops it; it plants in 0.6 s. On arrival it plants in 1.0 s. The dishes are unhittable (strain 0) while folded, so the chase is the price of letting it go |
-| any | *dash answer* (cd `[_, 8, 6, 5]`) | `circle` (one `callFlare`) | r 0.45 H past the dash end | `gateWindup`, k 1 | 6 | |
+| any | *dash answer* (cd `[_, 8, 6, 5]`) | `circle` (one `callFlare`) | r 0.45 H past the dash end | `gateWindup`, k 1 | 6 | + RINGBACK `ringback:dash`, every phase (§3.6) |
 
 **Weak points and stagger.** FEEDBACK fills from the **DISHES** (strainMul 2.5). Full FEEDBACK → **LINES
 DOWN** (4.5 s): the dishes droop, ×2 damage, and every add it summoned that is alive is stunned 3 s
@@ -547,6 +548,50 @@ DOWN** (4.5 s): the dishes droop, ×2 damage, and every add it summoned that is 
 * From the reference video: no segmented or multi-car body (no centipede), no copied names, no copied
   screen compositions.
 * From existing designs: no humanoid, no dinosaur, no crab, no loudspeaker-headed figure (§3.3).
+
+### 3.6 SPACE-DENIAL rings: the dash-read counterplay (TITAN PASS D2, 2026-09-29; lane RING)
+Orchestrator decision D2: design **B** (`dr/B/dash_read.patch`, report `dr/B/REPORT.md`, verified against every gate on
+ea2a1c22). Design A (a lock on the player's dash) is **rejected**: it adds a hidden rule to the player's dash. Here the
+rigs answer a reflexive dash with **space**, never by touching the dash itself.
+
+**Why a ring.** The case-6 dasher (`probe_gatekeepers`) answers a tell with an urgent dash when < 0.45 s is left; it
+lands 2.6–3.2 H from the tell's centre in a direction that cannot be predicted at cast (measured spread ±180° around the
+rig axis), so no directional second tell can cover "the way out". An annulus around the tell covers every direction, and
+the policy cannot re-dash for 0.35 s, so a ring that fires WITH its tell catches the reflexive dash. A walker who steps
+out and stops stands in a dry moat between the tell and the ring.
+
+**Toolkit** (`bosses/index.ts`: `DENIAL`, `denialRadii(w, b, r)`, `denialRing(w, b, x, z, r, fireS, dmg, kind, tag)`).
+A circle tell of radius r can carry a ring around the same centre (R = titan radius, dash = the titan's `dashDistance`
+stat × H):
+* **dry moat**: titan centres in [r + R, r + R + 0.6 H] (`DENIAL.moatH` 0.6): the walk-out of the circle (r + R from its
+  centre, any direction) ends here, so stepping out and stopping is never in the ring (0.4 H made the walker dither);
+* **ring** r0 = r + 2R + 0.6 H … r1 = max(r0 + 0.5 H, r + dash + `overH` 0): a straight dash from the circle ends in it;
+* **windup** = the circle's own fire time + `lagS` (0); if the titan already overlaps the band at the cast, never less
+  than the fair walk-out of the ring from where it stands (`gateWindup` for a gatekeeper, `fairWindup` for the city
+  boss). Spawned with `bossTelegraph(…, false)`: its windup is final. No clamp was lowered;
+* **frame guard**: no ring is cast when the boss framing would need ≥ `DENIAL.frameFrac` (0.9) × the per-rank cap to
+  hold it — `core/config.ts bossFrameNeed(w, extra)` takes the tell about to be cast as an optional shape (T0 landed
+  that hunk; `extra` omitted = the pre-D2 behaviour). Every live tell stays on screen;
+* no `rng` draw (deterministic); style `'ring'` (the existing IRON GULLY annulus look); damage through the normal hit
+  and DoT caps (max hit ≤ 40 % in case 6).
+
+**Per rig** (tags are `Telegraph.tag`, the probes count landings by tag):
+| rig | ring | on foot | by dash |
+|---|---|---|---|
+| STENCIL-1 (§3.1, the tutorial) | **SPLASH** on the PAINT BUCKETS lead (`splash`, every phase) and on the dash answer (`splash:dash`, **P3 only**), both at **0.5 ×** damage (`SPLASH.dmgMul`); subtitle unchanged ("WATCH THE SPLASH") | step off the bucket and stop | a blind dash lands in the splash |
+| CORDON-2 (§3.2) | **CORDON RING** on the dash answer (`cordon:dash`, **P2+**), built on a circle of radius hypot(0.6 H, r + R) − R so the sideways walk-out off the sawhorse ends in the moat | walkers never meet it | a second blind dash lands in it |
+| SWITCHBOARD-5 (§3.3) | **RINGBACK** on the CALL-IN lead flare (`ringback`) and on the dash-answer flare (`ringback:dash`), every phase | step out toward the rig side (the clear half-plane of the volley rule) and stop | a blind dash lands in it |
+| PARKADE-6 (city boss, FEATURES_V2 §10.2) | **SKID RING** on the dash-answer wheel clamp (`skid:dash`), every phase | walkers never meet it (case 6c byte-identical to ea2a1c22) | chained blind dashes land in it |
+| CAISSON-4, IRON GULLY | unchanged | | |
+
+STENCIL-1 stays the gentlest (10-seed diag, home, VOLT / MOLO: S1 6.1 / 7.9 % < C2 7.0 / 9.4 % < SB5 10.5 / 11.6 %).
+
+**Gates it passed on ea2a1c22** (`dr/B/REPORT.md` §3, verbatim there): `probe_gatekeepers` "277 checks · 0 failed"
+(case 6: all 12 dasher cells 4.5–13.6 %, band 4–20 %; case 6c walkers ≤ 20 %; min windup ≥ 0.90 s; keep-out ticks 0;
+the new 6b ring check below); `probe_boss3` VOLT 9.7 %, MOLO 5.9 % (band 4–16 %; baseline VOLT 3.7 % ✗); `probe_ai`;
+GATE 2 fresh PASS (1 death) and full PASS (2 deaths). Known caveats carried: the fresh death is a RAMROD one-shot, not a
+ring; the GATE 2 bot dashes inside its 0.3 s i-frames so rings rarely damage it; case 10 (winch escape) passes only
+because the trajectory moved — its mechanism (bot CROWD dashes carrying the titan out of the frame) is outside D2.
 
 ---
 
@@ -819,7 +864,10 @@ Runs 4 titans × 3 cities × seeds 1337 / 7 / 99 with the gate bot unless a line
    `gateWindup(lead) − 0.5 s` at `ESCAPE_K[phase]`; and that DOUBLE LINE's median band for the titan's
    centre is ≥ 0.3 H, SAWHORSE TOSS's gaps are ≥ 0.84 H + 0.2 H, and STRIPE RUN's lane width equals
    2 × `parts[0].r`. Also: `gateWindup` ≥ the fair value (0.5 + escape ÷ walk × k) in every one of
-   those cases (no clamp binds below fair).
+   those cases (no clamp binds below fair). TITAN PASS D2 (§3.6): for the ringed volleys (PAINT BUCKETS, CALL-IN) the
+   straight exit must also END in the dry moat (+ the titan's braking distance), never in the ring, and a straight dash
+   from the lead's centre must end in the ring band; the same walk-out + braking check runs for the three gatekeeper
+   dash answers (home / 60 / 67 H, 4 walk speeds) — `SPACE-DENIAL rings: … in all N cases` (144 on ea2a1c22).
 7. **No soft-lock, avoider** (a bot that always walks directly away from the gatekeeper and never
    attacks, god): pressure reaches 3 by 75 s of fight time (the first seconds inside the band are engaged by proximity); `gateReposition` fires at least once when out-run;
    no tick with `pending > 0`, no fight alive and `w.t > dueT + 1 tick`; `engagedS` stays 0 and the

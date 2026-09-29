@@ -93,7 +93,8 @@ function runValue(g: GoalDef, t: RunTally, ctx: RunCtx): number {
     case 'wiresBest': return x.wiresBest;
     case 'hookKillsBest': return x.hookKillsBest;
     case 'fullVents': return x.fullVents;
-    case 'bloomsBest': return x.bloomsBest;
+    case 'bloomsBest': return x.bloomsBest;       // pre-TITAN PASS FULL BLOOM metric (no goal reads it now)
+    case 'cascadeBest': return x.cascadeBest;        // TITAN PASS FULL BLOOM (meta/tally.ts 'bloomBurst'; tallyV2 reads a missing field as 0)
     case 'healed': return x.healed;
     case 'props': return x.props;
     case 'overloadSites': return x.objectives.overloadSite ?? 0;

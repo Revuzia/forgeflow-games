@@ -28,6 +28,20 @@
 //       nudged xEVO_LATE_NUDGE (base included), or a ready evolution in EVERY level-up draft (draw count unchanged)
 //   11. real-sim rate (GATE 2 draft bot, bot.ts, probe_sim's draft loop): evolution OFFERED by LV 35 in >= 9 of
 //       4 titans x 3 seeds (fresh profile; BT_EVO_META=full for the full profile), reported per titan
+//   12. TITAN PASS D1 BUILD SLOTS (FEATURES_V2 §7.7, lane DRAFT): slotsUsed (recipe pair = 1 slot, evolution +
+//       companion = 1 slot, ONE-OFF cards and perks free), slotsFull at SLOT_CAP, the slot-full pool (never a
+//       'new' or ONE-OFF card; owned-not-maxed, the missing half of a started recipe), every draft shows
+//       OFFER_SIZE (OVERFLOW padding, no draw; never while slots are free), OVERFLOW rewards (SICK DAY heal, HOT TIP
+//       UPROAR, HARD HAT shield; no reroll / banish / lock; the pick consumes the draft, never owned), a held card
+//       that would need a new slot is dropped with its LOCK charge refunded, a ready evolution fills a short
+//       slot-full offer without a draw, the START CALL (EVO_START_NUDGE while slots fill, off once a half is owned,
+//       once slots are full or at EVO_LATE_LEVEL).
+//   Asserts REPLACED by D1 (lane DRAFT, listed for the merge): 1b "no half owned → no nudge" → START CALL ×N while
+//   slots fill + "another recipe started → no nudge" (the F1 intent); 1b "pool empty except the evo" setup banishes
+//   instead of maxing (maxing > SLOT_CAP cards filled the slots) + a slot-full twin (evo first, OVERFLOW padding);
+//   1c "LV 25, nothing started → no late call, no nudge" → no late call, START CALL ×N; 4 LOCK dedupe and 5 BANISH
+//   empty-refill setups banish instead of maxing (same 4 / 3-card pools, slots free); 8 "one draw per offered card"
+//   → per offered CARD (OVERFLOW padding is drawless, asserted in 12).
 
 import type { TitanId, UpgradeDef, World } from '../src/core/types.ts';
 
@@ -41,6 +55,8 @@ const { TITAN_IDS, BIOME_IDS, EMPTY_RUN_META } = await import('../src/core/types
 const { STAT_KEYS } = await import('../src/upgrades/stats.ts');
 
 const { rollOffer, rerollOffer, pickUpgrade, hasPendingDraft, isEligible, banishCard, lockCard, evolutionsReady, deliveredHold, recipeNudge, recipeHint, evolutionProgress, lateCall } = DR;
+const { SLOT_CAP, OFFER_SIZE, OVERFLOW, EVO_START_NUDGE, slotsUsed, slotsFull, cardSlot, isOverflowReward, isOneOff, startCall, OVERFLOW_IDS } = DR;
+const { ULT } = await import('../src/core/config.ts');
 const { applyUpgrade } = EN;
 
 let fails = 0, passes = 0;
@@ -218,7 +234,21 @@ section('1b. F1: draft nudge toward a started recipe, recipe hints');
     const tid = titanOf(e);
     const full = !!e.locked;
     const w = fresh(tid, 71, full);
-    ok(recipeNudge(w, r.base) === 1 && recipeNudge(w, r.with) === 1, `${r.id}: no half owned → no nudge`);
+    // D1 START CALL (replaces "no half owned → no nudge"): nothing started, slots filling → both halves ×EVO_START_NUDGE
+    ok(startCall(w) && recipeNudge(w, r.base) === EVO_START_NUDGE && recipeNudge(w, r.with) === EVO_START_NUDGE,
+      `${r.id}: no half owned, slots filling → START CALL ×${EVO_START_NUDGE} on both halves (×${recipeNudge(w, r.base)} / ×${recipeNudge(w, r.with)})`);
+    {
+      // the F1 intent kept: once ANOTHER recipe is started (start call off), this recipe's untouched halves are not nudged
+      const w2 = fresh(tid, 72, full);
+      const mine = (x: typeof r) => { const u = UPGRADE_BY_ID[x.id]; return (!u.titan || u.titan === tid) && (!u.locked || full); };
+      const touches = (id: string) => (EVO_ROWS_OF_PART[id] ?? []).flatMap((x) => [x.base, x.with]);
+      const other = EVOLUTIONS.find((x) => x.id !== r.id && mine(x) && !touches(r.base).includes(x.base) && !touches(r.with).includes(x.base));
+      if (other) {
+        applyUpgrade(w2, other.base);
+        ok(!startCall(w2) && recipeNudge(w2, r.base) === 1 && recipeNudge(w2, r.with) === 1,
+          `${r.id}: another recipe started (${other.base}) → start call off, no nudge on ${r.base} / ${r.with}`);
+      }
+    }
     applyUpgrade(w, r.base);
     const need = needOf(r.base);
     ok(recipeNudge(w, r.with) === EVO_NUDGE, `${r.id}: base owned → companion ${r.with} nudged ×${recipeNudge(w, r.with)}`);
@@ -282,13 +312,25 @@ section('1b. F1: draft nudge toward a started recipe, recipe hints');
   w.upgrades.chestDrafts = 1;
   ok(rollOffer(w, true)[0] === 'evo_shear_wall_certificate', 'chest offers the first ready evolution');
   // only an evolution left to offer: hasPendingDraft true and a level-up offer is never empty
+  // D1: the rest of the pool is BANISHED (maxing every eligible card would fill the slots — see the twin below)
   const w2 = fresh('molo', 6);
   setRecipe(w2, 'evo_shear_wall_certificate');
-  for (const u of UPGRADES) if (isEligible(w2, u)) w2.upgrades.owned[u.id] = u.maxStacks;
+  for (const u of UPGRADES) if (isEligible(w2, u)) w2.upgrades.banished.push(u.id);
+  ok(!slotsFull(w2), `slots free (${slotsUsed(w2)}/${SLOT_CAP})`);
   w2.upgrades.pendingDrafts = 1;
   ok(hasPendingDraft(w2), 'an evolution alone keeps hasPendingDraft true');
   const o = rollOffer(w2, false);
   ok(o.length === 1 && o[0] === 'evo_shear_wall_certificate', `pool empty except the evo → it is offered alone (${o.join(',')})`);
+  // D1 twin: slots FULL and nothing to deepen → the ready evolution leads, the offer is padded with OVERFLOW rewards
+  const w3 = fresh('molo', 6);
+  setRecipe(w3, 'evo_shear_wall_certificate');
+  for (const u of UPGRADES) if (isEligible(w3, u)) w3.upgrades.owned[u.id] = u.maxStacks;
+  ok(slotsFull(w3), `every eligible card maxed → slots full (${slotsUsed(w3)}/${SLOT_CAP})`);
+  w3.upgrades.pendingDrafts = 1;
+  const c3 = countLoot(w3);
+  const o3 = rollOffer(w3, false);
+  ok(o3.length === OFFER_SIZE && o3[0] === 'evo_shear_wall_certificate' && o3.slice(1).every((id) => isOverflowReward(id)) && c3.n === 0,
+    `slots full, pool empty except the evo → evo first + OVERFLOW padding, no draw (${o3.join(',')}, ${c3.n} draws)`);
 }
 
 // ═══════════════════════════════ 1c. fx2/D LATE CALL ═══════════════════════════════
@@ -304,8 +346,11 @@ section('1c. fx2/D: late call — a titan with no evolution by EVO_LATE_LEVEL');
     const halves = new Set<string>(); for (const r of live) { halves.add(r.base); halves.add(r.with); }
     const plain = UPGRADES.find((u) => !u.evo && !EVO_ROWS_OF_PART[u.id] && isEligible(w, u))!;
     setLv(w, EVO_LATE_LEVEL - 1);
-    ok(lateCall(w) === null && [...halves].every((id) => recipeNudge(w, id) === 1), `${tid}: LV ${EVO_LATE_LEVEL - 1}, nothing started → no late call, no nudge`);
+    // D1: below the late level with the slots filling, the START CALL nudges every half (replaces "no nudge")
+    ok(lateCall(w) === null && startCall(w) && [...halves].every((id) => recipeNudge(w, id) === EVO_START_NUDGE),
+      `${tid}: LV ${EVO_LATE_LEVEL - 1}, nothing started → no late call; START CALL ×${EVO_START_NUDGE} on every half`);
     setLv(w, EVO_LATE_LEVEL);
+    ok(!startCall(w), `${tid}: LV ${EVO_LATE_LEVEL} → the start call hands over to the late call`);
     const lc = lateCall(w);
     ok(!!lc && lc.kind === 'start', `${tid}: LV ${EVO_LATE_LEVEL}, nothing started → late call 'start' (${lc ? lc.kind : 'null'})`);
     const bad = [...halves].filter((id) => recipeNudge(w, id) !== EVO_NUDGE);
@@ -398,7 +443,7 @@ section('4. LOCK');
     const w = fresh('hearthback', 200 + s);
     for (const r of EVOLUTIONS) w.upgrades.banished.push(r.id);   // maxing the rest must not make a recipe ready
     const keep = UPGRADES.filter((u) => isEligible(w, u) && u.rarity === 'common').slice(0, 4).map((u) => u.id);
-    for (const u of UPGRADES) if (isEligible(w, u) && !keep.includes(u.id)) w.upgrades.owned[u.id] = u.maxStacks;
+    for (const u of UPGRADES) if (isEligible(w, u) && !keep.includes(u.id)) w.upgrades.banished.push(u.id);   // D1: banish, slots stay free
     w.upgrades.pendingDrafts = 2;
     const o1 = rollOffer(w);
     const held = o1[1];
@@ -486,7 +531,7 @@ section('5. BANISH');
   const w = fresh('briarwick', 32);
   for (const r of EVOLUTIONS) w.upgrades.banished.push(r.id);   // maxing the rest must not make a recipe ready
   const keep = UPGRADES.filter((u) => isEligible(w, u) && u.rarity === 'common').slice(0, 3).map((u) => u.id);
-  for (const u of UPGRADES) if (isEligible(w, u) && !keep.includes(u.id)) w.upgrades.owned[u.id] = u.maxStacks;
+  for (const u of UPGRADES) if (isEligible(w, u) && !keep.includes(u.id)) w.upgrades.banished.push(u.id);   // D1: banish, slots stay free
   w.upgrades.pendingDrafts = 1;
   w.upgrades.banishLeft = 5;
   const o = rollOffer(w);
@@ -561,12 +606,13 @@ section('8. NO EVOLUTION READY ⇒ PRE-v2 DRAW COUNT');
       const o = rollOffer(w, chest);
       if (ready) { withEvo++; pickUpgrade(w, o[0]); continue; }
       drafts++;
-      if (c.n - n0 !== o.length) { bad++; if (bad < 4) console.log(`  draws ${c.n - n0} for ${o.length} cards (${tid} draft ${i})`); }
+      const cards = o.filter((id) => !isOverflowReward(id)).length;   // D1: OVERFLOW padding is drawless (section 12)
+      if (c.n - n0 !== cards) { bad++; if (bad < 4) console.log(`  draws ${c.n - n0} for ${cards} cards (${tid} draft ${i})`); }
       pickUpgrade(w, o[i % o.length]);
     }
   }
   console.log(`${drafts} drafts with no evolution ready: draws = offered cards in ${drafts - bad}; ${withEvo} drafts had one ready (skipped)`);
-  ok(bad === 0 && drafts > 1000, 'no evolution ready and nothing held ⇒ exactly one rng.loot draw per offered card (the pre-v2 count)');
+  ok(bad === 0 && drafts > 1000, 'no evolution ready and nothing held ⇒ exactly one rng.loot draw per offered card (the pre-v2 count; OVERFLOW padding draws nothing)');
 }
 
 // ═══════════════════════════════ 9. DETERMINISM ═══════════════════════════════
@@ -584,7 +630,7 @@ section('9. DETERMINISM (scripted session: banish · lock · reroll · evolve)')
       if (i % 7 === 3 && w.upgrades.banishLeft > 0) { o = banishCard(w, o[o.length - 1]) ?? o; log.push('B:' + o.join('+')); }
       if (i % 6 === 2) { lockCard(w, o[o.length - 1]); log.push('L:' + String(w.upgrades.locked)); }
       if (i % 4 === 1) { const r = rerollOffer(w); if (r) { o = r; log.push('R:' + o.join('+')); } }
-      const evo = o.find((id) => !!UPGRADE_BY_ID[id].evo);
+      const evo = o.find((id) => !!UPGRADE_BY_ID[id]?.evo);
       const pick = evo ?? o.find((id) => id !== w.upgrades.locked) ?? o[0];
       pickUpgrade(w, pick);
     }
@@ -620,6 +666,7 @@ section('10. REACHABILITY (draft-only model)');
       for (const r of mine) { recipe.add(r.base); recipe.add(r.with); }
       const score = (id: string): number => {
         const u = UPGRADE_BY_ID[id];
+        if (!u) return -1;                                   // D1 OVERFLOW reward: last choice
         if (u.evo) return 1e6;
         if (!chase) return 0;
         const r = mine.find((x) => x.base === id);
@@ -641,7 +688,7 @@ section('10. REACHABILITY (draft-only model)');
           if (hold) lockCard(w, hold);
         }
         pickUpgrade(w, best);
-        if (UPGRADE_BY_ID[best].evo) { got++; if (f < 0) f = d; }
+        if (UPGRADE_BY_ID[best]?.evo) { got++; if (f < 0) f = d; }
       }
       if (got) { runs++; first.push(f); }
       evos += got;
@@ -686,7 +733,7 @@ section('11. REAL SIM: evolution offered by LV 35 (GATE 2 draft bot)');
           if (!offer || offer.length === 0) break;
           if (w.titan.level <= 35) drafts++;
           if (!late && w.titan.level >= EVO_LATE_LEVEL) { const lc = lateCall(w); late = lc ? lc.kind : 'none (evolved)'; }
-          if (first < 0 && w.titan.level <= 35 && offer.some((id) => !!UPGRADE_BY_ID[id].evo)) first = w.titan.level;
+          if (first < 0 && w.titan.level <= 35 && offer.some((id) => !!UPGRADE_BY_ID[id]?.evo)) first = w.titan.level;
           pickUpgrade(w, botPickUpgrade(w, offer));
         }
         WM.stepWorld(w, botInput(w));
@@ -697,6 +744,172 @@ section('11. REAL SIM: evolution offered by LV 35 (GATE 2 draft bot)');
   }
   console.log(`--meta ${metaFull ? 'full' : 'fresh'}: evolution offered by LV 35 in ${hit}/${n} runs · per titan ${TITAN_IDS.map((t) => `${t} ${per[t]}/${SEEDS.length}`).join(' · ')}`);
   ok(hit >= 9, `evolution offered by LV 35 in ≥ 9/12 real-sim runs (${hit}/${n})`);
+}
+
+// ═══════════════════════════════ 12. TITAN PASS D1 BUILD SLOTS ═══════════════════════════════
+section('12. D1 BUILD SLOTS (FEATURES_V2 §7.7)');
+{
+  ok(SLOT_CAP === 8 && OFFER_SIZE === 3, `SLOT_CAP ${SLOT_CAP}, OFFER_SIZE ${OFFER_SIZE}`);
+  ok(OVERFLOW_IDS.length >= OFFER_SIZE, `at least OFFER_SIZE OVERFLOW rewards (${OVERFLOW_IDS.join(',')}) so an empty slot-full pool still shows ${OFFER_SIZE}`);
+  // slotsUsed: distinct non-perk, non-ONE-OFF cards; a recipe pair counts once; evolution + companion count once
+  const plainOf = (w: World, n: number): string[] => UPGRADES.filter((u) => isEligible(w, u) && !EVO_ROWS_OF_PART[u.id] && !isOneOff(u) && u.maxStacks >= 3).slice(0, n).map((u) => u.id);
+  {
+    const w = fresh('molo', 401);
+    ok(slotsUsed(w) === 0 && !slotsFull(w), 'fresh run: 0 slots');
+    const plain = plainOf(w, 3);
+    for (const id of plain) applyUpgrade(w, id);
+    applyUpgrade(w, plain[0]);
+    ok(slotsUsed(w) === 3, `3 distinct cards (one at 2 stacks) = 3 slots (${slotsUsed(w)})`);
+    const one = UPGRADES.find((u) => isEligible(w, u) && isOneOff(u));
+    if (one) { applyUpgrade(w, one.id); ok(slotsUsed(w) === 3 && !isEligible(w, one), `a ONE-OFF card (${one.id}) takes no slot (${slotsUsed(w)})`); }
+    const r = EVOLUTIONS.find((x) => { const u = UPGRADE_BY_ID[x.id]; return (!u.titan || u.titan === 'molo') && !u.locked; })!;
+    applyUpgrade(w, r.base);
+    ok(slotsUsed(w) === 4, `a recipe base = +1 slot (${slotsUsed(w)})`);
+    ok(cardSlot(w, r.with) === 'shared', `its missing companion ${r.with} is tagged 'shared' (${cardSlot(w, r.with)})`);
+    applyUpgrade(w, r.with);
+    ok(slotsUsed(w) === 4, `base + companion share ONE slot (${slotsUsed(w)})`);
+    while (!evolutionsReady(w).includes(r.id)) applyUpgrade(w, r.base);
+    w.upgrades.chestDrafts = 1;
+    const o = rollOffer(w, true);
+    ok(o[0] === r.id && cardSlot(w, r.id) === 'evolution', `ready evolution offered, tagged 'evolution' (${o.join(',')})`);
+    pickUpgrade(w, r.id);
+    ok((w.upgrades.owned[r.id] ?? 0) > 0 && slotsUsed(w) === 4, `evolution + companion keep sharing ONE slot (${slotsUsed(w)})`);
+    ok(cardSlot(w, plain[1]) === 'upgrade' && cardSlot(w, 'ovf_sick_day') === 'overflow', 'owned → upgrade · overflow id → overflow');
+  }
+  // slots full: 400 offers never show a card that needs a new slot; every offer shows OFFER_SIZE; padding draws nothing
+  {
+    const w = fresh('voltkite', 402);
+    const plain = plainOf(w, SLOT_CAP);
+    for (const id of plain) applyUpgrade(w, id);
+    ok(slotsFull(w) && slotsUsed(w) === SLOT_CAP, `${SLOT_CAP} distinct cards → slots full (${slotsUsed(w)})`);
+    ok(plainOf(w, 0).length === 0 && UPGRADES.filter((u) => isEligible(w, u) && !((w.upgrades.owned[u.id] ?? 0) > 0) && !isOneOff(u)).every((u) => cardSlot(w, u.id) === 'new' || cardSlot(w, u.id) === 'shared'),
+      'every unowned multi-stack card is tagged new / shared');
+    const c = countLoot(w);
+    let bad = 0, short = 0, cards = 0, draws = 0, ownedSeen = 0, freeSeen = 0, pad = 0;
+    for (let i = 0; i < 400; i++) {
+      w.upgrades.offer = null;
+      const n0 = c.n;
+      const o = rollOffer(w, i % 5 === 0);
+      if (o.length !== OFFER_SIZE) short++;
+      for (const id of o) {
+        const t = cardSlot(w, id);
+        if (t === 'new') bad++;
+        if (t === 'upgrade') ownedSeen++;
+        if (t === 'free') freeSeen++;
+        if (t === 'overflow') pad++; else cards++;
+      }
+      draws += c.n - n0;
+    }
+    console.log(`slots full, 400 offers: ${ownedSeen} upgrade / ${freeSeen} one-off / ${pad} overflow cards, ${bad} new, ${short} short; draws ${draws} for ${cards} cards`);
+    ok(bad === 0, `slots full → never a card that needs a new slot (${bad} in 400 offers)`);
+    ok(short === 0, `slots full → every offer shows ${OFFER_SIZE} (${short} short)`);
+    ok(draws === cards, `OVERFLOW padding costs no rng.loot draw (${draws} draws for ${cards} cards)`);
+    ok(ownedSeen > 0 && freeSeen === 0, `owned cards are offered while full, ONE-OFF cards are not (${ownedSeen} / ${freeSeen})`);
+  }
+  // slots free: never an OVERFLOW id
+  {
+    const w = fresh('hearthback', 403);
+    let pad = 0;
+    for (let i = 0; i < 300; i++) { w.upgrades.offer = null; for (const id of rollOffer(w, i % 3 === 0)) if (isOverflowReward(id)) pad++; }
+    ok(!slotsFull(w) && pad === 0, `slots free → no OVERFLOW reward in 300 offers (${pad})`);
+  }
+  // empty slot-full pool → 3 OVERFLOW rewards; no reroll / banish / lock; each reward applies and consumes the draft
+  {
+    const mk = (seed: number): World => {
+      const w = fresh('briarwick', seed);
+      for (const r of EVOLUTIONS) w.upgrades.banished.push(r.id);
+      for (const u of UPGRADES) if (isEligible(w, u)) w.upgrades.owned[u.id] = u.maxStacks;
+      return w;
+    };
+    const w = mk(404);
+    ok(slotsFull(w), `setup: slots full (${slotsUsed(w)})`);
+    w.upgrades.pendingDrafts = 1;
+    ok(hasPendingDraft(w), 'slots full + nothing offerable → a draft is still owed (OVERFLOW)');
+    const c = countLoot(w);
+    const o = rollOffer(w);
+    ok(o.length === OFFER_SIZE && o.every((id) => isOverflowReward(id)) && new Set(o).size === OFFER_SIZE && c.n === 0,
+      `empty slot-full pool → ${OFFER_SIZE} distinct OVERFLOW rewards, no draw (${o.join(',')}, ${c.n})`);
+    w.upgrades.rerolls = 2; w.upgrades.banishLeft = 2; w.upgrades.lockLeft = 2;
+    ok(rerollOffer(w) === null && w.upgrades.rerolls === 2, 'an all-OVERFLOW offer cannot be rerolled (charge kept)');
+    ok(banishCard(w, o[0]) === null && w.upgrades.banishLeft === 2, 'an OVERFLOW reward cannot be banished (charge kept)');
+    ok(lockCard(w, o[0]) === false && w.upgrades.locked === null && w.upgrades.lockLeft === 2, 'an OVERFLOW reward cannot be locked (charge kept)');
+    // SICK DAY
+    const T = w.titan;
+    T.hp = T.maxHp * 0.3;
+    const hp0 = T.hp;
+    const owned0 = JSON.stringify(w.upgrades.owned);
+    pickUpgrade(w, 'ovf_sick_day');
+    ok(Math.abs(T.hp - Math.min(T.maxHp, hp0 + OVERFLOW.sickDayHeal * T.maxHp)) < 1e-6 * T.maxHp + 1e-6, `SICK DAY heals ${OVERFLOW.sickDayHeal * 100}% max HP (${hp0.toFixed(0)} → ${T.hp.toFixed(0)} of ${T.maxHp.toFixed(0)})`);
+    ok(w.upgrades.pendingDrafts === 0 && w.upgrades.offer === null && JSON.stringify(w.upgrades.owned) === owned0 && !w.upgrades.order.includes('ovf_sick_day') && slotsUsed(w) >= SLOT_CAP,
+      'the OVERFLOW pick consumes the draft, never enters owned / order / slots');
+    ok(!hasPendingDraft(w), 'no draft owed afterwards');
+    pickUpgrade(w, 'ovf_hot_tip');
+    ok(w.upgrades.pendingDrafts === 0 && T.hp > hp0, 'an OVERFLOW id outside an open offer is ignored');
+    // HOT TIP
+    const w2 = mk(405);
+    w2.upgrades.pendingDrafts = 1;
+    rollOffer(w2);
+    const u0 = w2.ult.charge;
+    pickUpgrade(w2, 'ovf_hot_tip');
+    ok(w2.ult.charge > u0 || w2.ult.ready, `HOT TIP adds UPROAR (${u0.toFixed(1)} → ${w2.ult.charge.toFixed(1)} of ${ULT.max}, ready ${w2.ult.ready})`);
+    ok(Math.abs(w2.ult.charge - Math.min(ULT.max, u0 + OVERFLOW.hotTipUproar * ULT.max)) < 1e-6 || w2.ult.ready, `HOT TIP = +${OVERFLOW.hotTipUproar * 100}% of the meter`);
+    // HARD HAT
+    if (OVERFLOW_IDS.includes('ovf_hard_hat' as never)) {
+      const w3 = mk(406);
+      w3.upgrades.pendingDrafts = 1;
+      rollOffer(w3);
+      w3.upgrades.shield = 0;
+      pickUpgrade(w3, 'ovf_hard_hat');
+      const want = Math.min(OVERFLOW.hardHatShield, OVERFLOW.hardHatCap) * w3.titan.maxHp;
+      ok(Math.abs(w3.upgrades.shield - want) < 1e-6, `HARD HAT shield = ${OVERFLOW.hardHatShield * 100}% max HP (${w3.upgrades.shield.toFixed(0)} / ${want.toFixed(0)})`);
+      w3.upgrades.pendingDrafts = 1; rollOffer(w3); pickUpgrade(w3, 'ovf_hard_hat');
+      w3.upgrades.pendingDrafts = 1; rollOffer(w3); pickUpgrade(w3, 'ovf_hard_hat');
+      ok(w3.upgrades.shield <= OVERFLOW.hardHatCap * w3.titan.maxHp + 1e-6, `HARD HAT stacks only to ${OVERFLOW.hardHatCap * 100}% max HP (${w3.upgrades.shield.toFixed(0)})`);
+    }
+    // most-needed first: a badly hurt titan sees SICK DAY in slot 0
+    const w4 = mk(407);
+    w4.titan.hp = w4.titan.maxHp * 0.2;
+    w4.upgrades.pendingDrafts = 1;
+    ok(rollOffer(w4)[0] === 'ovf_sick_day', 'a hurt titan sees SICK DAY first');
+  }
+  // a held card that now needs a new slot: dropped at delivery, LOCK charge refunded
+  {
+    const w = fresh('molo', 408);
+    const plain = plainOf(w, SLOT_CAP - 1);
+    for (const id of plain) applyUpgrade(w, id);
+    w.upgrades.pendingDrafts = 2;
+    const o = rollOffer(w);
+    const newOnes = o.filter((id) => cardSlot(w, id) === 'new');
+    if (newOnes.length >= 2) {
+      const held = newOnes[1];
+      lockCard(w, held);
+      const L = w.upgrades.lockLeft, locks = w.tally.locks;
+      pickUpgrade(w, newOnes[0]);                        // the 8th slot fills
+      ok(slotsFull(w), `8th card taken → slots full (${slotsUsed(w)})`);
+      const o2 = rollOffer(w);
+      ok(!o2.includes(held) && w.upgrades.locked === null && w.upgrades.lockLeft === L + 1 && w.tally.locks === locks - 1,
+        `a held card that would need a new slot is dropped, LOCK refunded (${o2.join(',')}; lockLeft ${L} → ${w.upgrades.lockLeft})`);
+    } else ok(false, `setup: need 2 new cards in the offer (${o.join(',')})`);
+  }
+  // banish refill while full keeps OFFER_SIZE (padding), never a new card
+  {
+    const w = fresh('hearthback', 409);
+    for (const r of EVOLUTIONS) w.upgrades.banished.push(r.id);
+    const plain = plainOf(w, SLOT_CAP);
+    for (const id of plain) applyUpgrade(w, id);
+    for (const u of UPGRADES) if (isEligible(w, u) && !plain.includes(u.id)) w.upgrades.banished.push(u.id);
+    w.upgrades.pendingDrafts = 1; w.upgrades.banishLeft = 5;
+    const o = rollOffer(w);
+    const b = banishCard(w, o.find((id) => !isOverflowReward(id))!);
+    ok(!!b && b.length === OFFER_SIZE && b.every((id) => cardSlot(w, id) !== 'new'), `banish refill while full keeps ${OFFER_SIZE} cards, none new (${o.join(',')} → ${b ? b.join(',') : 'null'})`);
+  }
+  // START CALL: off once a half is owned, off when slots are full
+  {
+    const w = fresh('voltkite', 410);
+    ok(startCall(w), 'fresh run → start call on');
+    for (const id of plainOf(w, SLOT_CAP)) applyUpgrade(w, id);
+    ok(slotsFull(w) && !startCall(w), 'slots full → start call off');
+  }
 }
 
 console.log(`\nRESULT: ${passes} checks passed, ${fails} failed`);

@@ -60,6 +60,13 @@ const HIT_CAP = 0.55;
 function igHit(w: World, base: number): number {
   return Math.min(bossHostile(w, base), HIT_CAP * Math.max(1, w.titan.maxHp));
 }
+/** TITAN PASS 4.1 item 3: the breath is damage per second for BREATH.active s, so it is capped IN TOTAL — one whole
+ *  breath takes at most HIT_CAP of max HP (a Size-IV breath was 594–891 vs VOLT-KITE's 495 max HP). bossTelegraph's
+ *  generic DoT cap (bosses/index.ts, BOSS_HIT_CAP = HIT_CAP) enforces the same bound on the tick-rounded duration;
+ *  this line states it where the breath is authored (same final dmg, bit for bit). */
+function breathDps(w: World): number {
+  return Math.min(bossHostile(w, BREATH.dps), HIT_CAP * Math.max(1, w.titan.maxHp) / BREATH.active);
+}
 
 const ATTACKS = ['coneBreath', 'pawSlam', 'plateVolley', 'ridgeCharge', 'breathSlam'] as const;
 const TMP = { x: 0, z: 0 };
@@ -144,7 +151,7 @@ function castBreath(w: World, b: BossState): void {
   b.data.dir = dir;
   const tg = bossTelegraph(w, {
     style: 'cone', shape: { k: 'cone', x: ox, z: oz, dir, half: BREATH.half, r },
-    windup: wu, active: BREATH.active, dmg: bossHostile(w, BREATH.dps), kind: 'breath', tag: 'coneBreath',
+    windup: wu, active: BREATH.active, dmg: breathDps(w), kind: 'breath', tag: 'coneBreath',
     onFire: (w2) => {
       if (!b.alive) return;
       b.data.breath = 1;

@@ -442,7 +442,7 @@ pulse. Radii are fractions of R. Enemies are hit with `enemiesInShape` + `damage
 | **MOLO** (SMASH TANK) | **STREET SWALLOW**: the street caves into a sinkhole mouth and MOLO gulps the block's crowd | 0.55 s | 0.0–0.9 s PULL: `magnetAll(w, R)` once; every crushable enemy inside R is dragged toward the jaws at 0.4 R/s and takes 20 base/s (5 Hz ticks, kind `bite`). **0.9 s SNAP**: circle [0, 0.55] **200** + ring [0.55, 1.0] **190** (kind `bite`, knock 0.3 H/s outward) | on SNAP: heal 12 % maxHp + shield 10 % maxHp (`upgrades.shield`) |
 | **VOLT-KITE** (CHAIN ASSASSIN) | **GRIDLOCK SURGE**: the static mane grounds into every streetlight at once | 0.4 s | 4 pulses at 0 / 0.25 / 0.5 / 0.75 s, each circle [0, 1.0] **50** (kind `arc`), stun 0.3 s. The view draws arcs to the 40 nearest; damage hits everything inside R | at blast start: 6 radial LIVE WIRES (hazard `wire`, owner titan, capsule from the titan out to min(0.6 R, 6 H), r 0.25 H × area, life wireDuration + 2 s, same `data` keys voltkite.ts writes, plus `ult: 1`). The oldest wires go first to respect the cap of 6. HOOK right after = a full-screen detonation combo. Detonations until `tally.ultWireUntilT` (the fire time + the wires' life) do not count toward the SIX-WAY SPLICE goal (§8.2) |
 | **HEARTHBACK** (ERUPTION FORTRESS) | **CALDERA BLOWOUT**: the dome shell erupts in three rings | 0.6 s | ring [0, 0.45] **200** at 0 s · ring [0.4, 0.75] **190** at 0.3 s · ring [0.7, 1.0] **190** at 0.6 s (kind `vent`, knock 0.6 H/s). The bands overlap, so the seams take two rings | all rings × (1 + 0.6 × shell fill), fill = `kit.stored / kit.cap`; the SHELL is **not** emptied. 6 `magma` hazards (circle r 0.5 H, 5 s, 12 base dps) evenly on the 0.55 R circle |
-| **BRIARWICK** (AREA CONTROL) | **GREENBELT DECREE**: a bramble wave rolls out and roots the block | 0.5 s | thorn wave expands 0 → R over 0.6 s; damage at 0.3 s: circle [0, 1.0] **190** (kind `vine`), root = `stun` 3 s, then `slowT` 3 s at `slowMul` 0.6 | **`stat(w,'turretCap')` bloom turrets** (4 at the base cap) evenly on the 0.4 R circle (the engine's `doBloom` data keys + `wild: 1`, life 14 s). They go through the normal cap: the decree **replants** the garden, replacing the oldest turrets, so none is culled the tick it appears (rev 1 spawned 6 against a base cap of 4). `wild` blooms do not count toward FULL BLOOM (§8.2). Heal 20 % maxHp over 4 s (`ult.heal` pool) |
+| **BRIARWICK** (AREA CONTROL) | **GREENBELT DECREE**: a bramble wave rolls out and roots the block | 0.5 s | thorn wave expands 0 → R over 0.6 s; damage at 0.3 s: circle [0, 1.0] **190** (kind `vine`), root = `stun` 3 s, then `slowT` 3 s at `slowMul` 0.6 | **`stat(w,'turretCap')` blooms** (10) evenly on the 0.4 R circle — TITAN PASS: BRIARWICK's base `turretCap` is 10 and kit C adopts every decree bloom as an **unripe seed pod** under the rooted foes (they ripen in 2 s and go off on them; a POP-UP PARK right after detonates the rest; mechanics otherwise unchanged) (the engine's `doBloom` data keys + `wild: 1`, life 14 s). They go through the normal cap: the decree **replants** the garden, replacing the oldest turrets, so none is culled the tick it appears (rev 1 spawned 6 against a base cap of 4). `wild` blooms do not count toward the pre-TITAN-PASS FULL BLOOM metric `bloomsBest`; whether decree-seeded chains count toward its TITAN PASS metric `cascadeBest` is lane DATA's recorded decision (§8.2). Heal 20 % maxHp over 4 s (`ult.heal` pool) |
 
 `UltDef` (data file): `{id, name, burst, desc, roarS, blastS, pulses[]}`. The extras are code in
 `meta/ultimate.ts`, switched on titan id. Events: `ultFire` at the roar start (x, z, r),
@@ -916,10 +916,102 @@ turretCap ≤ 16, vineLength ≤ 4, shellCapacity ≤ 6.
 | `hb_u_geothermal_lease` | Geothermal Lease | rare / 3, HEARTH | regen +0.5 · shellCapacity mul +0.1 |
 | `hb_u_ash_cloud_advisory` | Ash Cloud Advisory | epic / 2, HEARTH | on hook slowField r 3 dur 4 dps 8 |
 | `bw_u_seed_catalogue` | Seed Catalogue | rare / 3, BRIAR | sporeHeal mul +0.2 · regen +0.3 |
-| `bw_u_arbor_day` | Arbor Day | rare / 3, BRIAR | on collapse 40 % (icd 2) bloom dur 16 |
+| `bw_u_arbor_day` | Arbor Day | rare / 3, BRIAR | on collapse 40 % (icd 2) bloom dur **9** (TITAN PASS: was 16; = the seed-pod life) |
 
 Perk cards (hidden, `perk: true`, never offered or shown on the bar): `perk_card_petty_cash`
 (rerolls +1), `perk_card_safety_inspection` (armor +8).
+
+### 7.7 Build slots (TITAN PASS D1 — owner decision 2026-09-29; sim `upgrades/draft.ts`, UI `ui/draft.ts`, lane DRAFT)
+
+**Why.** Owner playtest: "as I level up the skills are almost always tier 1, and I can never really get tier 2".
+"Tier" = card LEVEL (the STACKS pips / the `L2…L5` bar badge). Cause (`titanpass/draft_stacking.md`): the draft deals
+3 of ~100 eligible cards with no weight for owned ones, so about 1 offered card in 7 is one you own and 81 % of owned
+cards ended a run at stack 1. The owner chose **BUILD SLOTS** (the Vampire-Survivors model) over the guaranteed
+upgrade slot and the ×4 owned weight: a run holds a limited number of distinct cards, and once they are all taken the
+draft only deepens them.
+
+**The rule.**
+1. **Cap.** `SLOT_CAP` = **8** distinct cards (`upgrades/draft.ts`). 8 is the measured `slots8` mode: 77.9 % of non-evo
+   cards at ≥ 2 stacks and 47.5 % at ≥ 3 (HEAD 17.6 % / 1.5 %); GATE 2 fresh 9 / full 11 clears, both PASS (on HEAD
+   70b3852e). A different cap is a DRAFT-lane tuning change with its measurement written down here.
+2. **What takes a slot** (`slotsUsed(w)`, a pure function of `w.upgrades.owned`, no draws): every distinct card with
+   `owned[id] ≥ 1` that is not a perk card (`perk: true`: granted by the profile perk, never offered) and not a
+   **ONE-OFF** card (`isOneOff`: `maxStacks` 1 and not an evolution: the legendary trade-offs and the no-scaling
+   triggers). A ONE-OFF card can never be upgraded, so it files outside the slots (tag **ONE-OFF — NO SLOT**,
+   `DraftCardSlot` `'free'`); it is offered while the slots fill and never once they are full (offered when full, the
+   renormalised rarity roll landed on them: the bot collected 12–13 legendary trade-offs per run).
+   * **Evolutions are slot-neutral.** Taking one deletes `owned[base]` and the evolution takes the base's slot (§7.3).
+   * **A recipe's two halves share ONE slot.** Once both the base and the companion (`with`) of a live recipe are
+     owned they count as one slot, and after the evolution the evolution + its companion keep sharing it. Pairs are
+     assigned in `EVOLUTIONS` catalogue order, each card in at most one pair (deterministic).
+3. **Slots not full → the pre-D1 POOL and the same `rng.loot` draw count** (same pool, rarity roll, LOCK, evolution
+   slot). Only the roll WEIGHTS differ, and only while the **START CALL** (rule 6) is on. `maxStacks` of 119 cards whose
+   every stack adds power went up by 1 (and `u_rolling_closure` / `u_street_festival` went 3 → 1: their stacks 2–3 did
+   nothing), so runs are not bit-identical to the pre-D1 HEAD even before the slots fill.
+4. **Slots full** (`slotsFull(w)` = `slotsUsed(w) ≥ SLOT_CAP`): the pool keeps only cards that need **no new slot**,
+   filtered before sampling (the rarity split renormalises over what is left, as it already does for empty rarities):
+   * owned cards that are not maxed (tag **UPGRADE**);
+   * the **missing half of a started live recipe**: the companion once the base is owned, the base (below its ready
+     stacks) once the companion is owned (tag **SHARES A SLOT**; it keeps its F1 recipe nudge);
+   * ready evolutions keep arriving through the unchanged EVOLUTION step (§7.4 step 4), because an evolution never
+     needs a new slot.
+   Chest drafts take rare+ from that pool first, then its commons (the existing top-up). REROLL and the BANISH refill
+   roll from the same restricted pool. A LOCKed card that would now need a new slot is dropped at delivery and its LOCK
+   charge is **refunded** (the slot rule made it undeliverable, not the player). **Every draft shows 3**: a short
+   slot-full offer is topped up first with a ready evolution (no draw), then with OVERFLOW rewards (rule 5, most-needed
+   first, no draw); it is never padded with a card that needs a new slot (slots8 had shown 2.4 cards per late offer).
+5. **OVERFLOW.** While the slots are full, any offer the restricted pool cannot fill to 3 is padded with the
+   **OVERFLOW rewards** (`OVERFLOW_REWARD_IDS`, three of them, placed in `U.offer` like card ids; an empty pool shows
+   all three):
+   * **SICK DAY** (`ovf_sick_day`): heal `OVERFLOW.sickDayHeal` (0.25) × maxHp through the normal heal path
+     (`titanHeal` event);
+   * **HOT TIP** (`ovf_hot_tip`): `OVERFLOW.hotTipUproar` (0.35) × `ULT.max` onto the UPROAR meter (clamped; the normal
+     `ultCharged` rising edge; banked like BACK PAY while UPROAR cools);
+   * **HARD HAT** (`ovf_hard_hat`): the absorb shield rises by `OVERFLOW.hardHatShield` (0.3) × maxHp, capped at
+     `OVERFLOW.hardHatCap` (0.5) × maxHp (the cap every shield card obeys).
+   None of them grants XP: an XP reward (OVERTIME) was tried first and fed itself (each level it bought owed another
+   slot-full draft: 55 OVERTIME picks in 132 drafts over 3 MOLO runs, LV 43 vs 37–38).
+   No `rng` draw; no REROLL / BANISH / LOCK on an overflow offer. Picking one consumes the draft exactly like a card and
+   never enters `owned`, `order` or the slot count. `hasPendingDraft` stays true while an overflow draft is owed, so a
+   draft never silently vanishes (slots8 had 8.8 such drafts per run; the prototype lifted the cap there instead). With
+   the slots NOT full, an empty pool keeps the pre-D1 behaviour (no draft owed).
+6. **How evolutions stay reachable.** The slots8 prototype lost about a third of its evolutions (0.78 per run vs HEAD
+   1.17) because a recipe's companion could not enter a full slot set. Here: evolving is slot-neutral (rule 2), a
+   recipe's halves share a slot (rule 2), the missing half stays offerable while full (rule 4), and the F1 nudge and
+   the fx2/D late call (`EVO_LATE_LEVEL`) are unchanged. **START CALL** (`startCall(w)`): while the slots are filling,
+   below `EVO_LATE_LEVEL`, with no half of any live recipe owned, every half of every live recipe rolls at
+   `EVO_START_NUDGE` (3) inside its rarity (no extra draw). Without it a run fills its slots before it starts a recipe
+   and can then never start one: 36-run study, start call off → 0.75 evolutions per run (20/36 runs with one); on →
+   1.14 (31/36).
+7. **UI** (`ui/draft.ts`; strings `STR.draft.slot*` / `overflow*`; tag from `cardSlot(w, id)` → `DraftCardSlot`):
+   * header counter `SLOTS {n}/{cap}` on every draft; when full, the banner `SLOTS FULL — UPGRADES ONLY`;
+   * per card: `new` → **NEW — TAKES A SLOT** (it replaces the plain `NEW` flag on unowned cards; the profile
+     NEW-unlock ribbon of §7.5 is a different thing and stays); `upgrade` → **UPGRADE** (the STACKS pips show the next
+     level); `shared` → **SHARES A SLOT** (next to the existing TOWARD / COMPLETES recipe hint); `evolution` → the
+     existing RESTRUCTURED card;
+   * overflow draft: header `NOTHING NEW TO FILE` / `EVERY SLOT IS FILED AND FINAL — TAKE A PERK OF THE JOB`, cards
+     stamped `OFF THE RECORD` with the names / descriptions of `STR.draft.overflow[id]` (`{n}` = the rounded percentage
+     from `OVERFLOW`); the REROLL / BANISH / LOCK controls are hidden.
+8. **Acceptance** (DRAFT lane: `titanpass/study2.mts` on the lane tree, 36 runs, plus GATE 2 logged): offers showing an
+   owned card ≥ 60 % (slots8: 62.6 %); non-evo cards at ≥ 3 stacks ≥ 40 % (slots8: 47.5 %); evolutions per run ≥ 1.1
+   (HEAD 1.17: the shared-slot rule must win back the slots8 loss); every overflow draft is paid (count reported; no
+   empty or stuck draft); tsc 0; `probe_upgrades` and `probe_evolutions` exit 0. GATE 2 hashes change as soon as a run
+   fills its slots (every run does), so they are re-baselined after the DRAFT merge. *These bands are the T0
+   proposal; the orchestrator may re-band them with evidence.*
+
+### 7.8 TITAN PASS card and text changes (BRIARWICK kit C: lane DATA; titan cards: lane SIM)
+Every card id is kept (saves stay valid). Sources: `titanpass/briarwick_final.md` §7–§8, `TITAN_PASS.md` §2–§3.
+
+| id | Name | Change |
+|---|---|---|
+| `bw_guerrilla_gardening` | Guerrilla Gardening | bloom `dur` 14 → **9** (the seed-pod life) |
+| `bw_u_arbor_day` | Arbor Day | `dur` 16 → **9** (§7.6) |
+| `bw_greenhouse_effect` | **Domino Zoning** (was Greenhouse Effect) | rare / 3, `[mul('chainRange', 0.15), mul('abilityPower', 0.05)]`; it was an exact duplicate of Seed Catalogue (`[mul('sporeHeal', 0.2), add('regen', 0.3)]`) |
+| `bw_pollinator_corridor` | Pollinator Corridor | epic / 2, `[mul('turretRate', 0.2), mul('chainRange', 0.1)]` (stat-only; its interval bloom only ever popped at end of life) |
+| `bw_overgrowth_ordinance` | Overgrowth Ordinance | unchanged; its `ability` slow field now fires on POP-UP PARK |
+| stat labels (`data/upgrades.ts`) | — | `turretCap` "SEED POD cap", `turretRate` "pod ripening speed", `vineLength` "BURR LASH length" |
+| titan cards (`data/titans.ts`) | — | BRIARWICK BURR LASH / POP-UP PARK / BRAMBLE BOUND texts (CONTRACT §8); VOLT-KITE FORK-ARC "3.8 body-heights … Every 2nd strike GROUNDS …" and the species line; MOLO CURB BITE "10 dmg" → **22** (the code's value) |
+| `g_bw_full_bloom` | FULL BLOOM | metric `cascadeBest` · **15** (§8.2; 18 lowered to the seed-1337 bot's reach) |
 
 ---
 
@@ -976,7 +1068,7 @@ goals carry `titan`.
 | g_hb_rolling_boil | ROLLING BOIL | HEARTHBACK: 40 kills from one SHELL VENT (hookKillsBest · 40 · run) | card Geothermal Lease |
 | g_hb_warm_welcome | WARM WELCOME | clear any city with HEARTHBACK (titanClears · 1 · life) | evolution Supervolcano Permit |
 | g_hb_continental_drift | CONTINENTAL DRIFT | clear all three with HEARTHBACK (titanBiomesCleared · 3 · life) | palette TERRACOTTA + card Ash Cloud Advisory |
-| g_bw_full_bloom | FULL BLOOM | BRIARWICK: 8 bloom turrets alive at once, GREENBELT DECREE blooms not counted (bloomsBest · 8 · run) | BRIARWICK palette AUTUMN LOT |
+| g_bw_full_bloom | FULL BLOOM | BRIARWICK: one pod pop chains 15 more pods in one run (cascadeBest · 15 · run; cascadeBest is in LINKS, link k = the k-th pod set off after the first pop; GREENBELT-seeded chains COUNT, lane DATA's rule in `meta/tally.ts`) — TITAN PASS; was "8 bloom turrets alive at once" (bloomsBest · 8), trivial under kit C's pod cap of 10. Kit C measured a longest chain of 13–22 per run (median 15, 5/24 runs ≥ 18); if the seed-1337 reachability bot misses 18, lane DATA lowers the target to the bot's value and records it here. **Recorded (lane DATA, 2026-09-29): the bot's best chains were 14 GRID-EAST · 13 WHITE STACKS · 15–16 LOCKWATER → target 15** (probe_meta G(c) asserts best ≥ target) | BRIARWICK palette AUTUMN LOT |
 | g_bw_green_thumb | GREEN THUMB | BRIARWICK: heal 2 000 HP in one run (healed · 2000 · run) | card Seed Catalogue |
 | g_bw_rewilded | REWILDED | clear any city with BRIARWICK (titanClears · 1 · life) | evolution Urban Forest Act |
 | g_bw_canopy_cover | CANOPY COVER | clear all three with BRIARWICK (titanBiomesCleared · 3 · life) | palette NIGHT GARDEN + card Arbor Day |
@@ -1004,7 +1096,9 @@ seed 1337, per biome and titan the goal applies to: (a) every run-scope target i
 physically supply (props, boats, tier-4 buildings, OVERLOAD SITES placed and power-ups dropped over one
 full gate-bot run); (b) at least 10 run-scope goals are met by the gate bot somewhere in the 12-run
 GATE 2 matrix; (c) the GREENBELT DECREE and GRIDLOCK SURGE exclusions (a scripted tally with only ult
-blooms / ult wires leaves FULL BLOOM / SIX-WAY SPLICE at 0).
+blooms / ult wires leaves FULL BLOOM / SIX-WAY SPLICE at 0). TITAN PASS: the FULL BLOOM half of (c) now tests
+`cascadeBest` under lane DATA's recorded rule for decree-seeded chains (probe_meta's `bloomsBest` exclusion assert is
+replaced by the `cascadeBest` one, never just deleted).
 
 ### 8.3 Persistence (`core/save.ts` + `meta/profile.ts`)
 * Key **`blocktooth.profile.v1`** holds a `Profile` (snippet). Every read and write is wrapped in
@@ -1599,6 +1693,8 @@ controls (E, X, C, G, K), the new screens, URL params and test-surface fields.
 6. **Cinematic**: full on the first run of each titan × city, short afterwards and on retry; OFF in
    settings restores the freeze-frame slate.
 7. **KEEP GOING** is a fourth button on the clear front page; default focus stays on RETRY.
+8. **Decided 2026-09-29 (TITAN PASS D1):** "tier" = card LEVEL, answered with **BUILD SLOTS** (§7.7), the owner's
+   pick over the guaranteed upgrade slot and the ×4 owned weight.
 
 ---
 

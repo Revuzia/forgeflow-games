@@ -66,8 +66,11 @@
 //   Pre-F1 rule, seed 1337: 1/12 fresh, 0/12 full. Evolution power vs a no-evolution control over 72 runs:
 //   mean clear 564–575 s either way (evolutions trade for the generic best card, so no walkover).
 
-import type { Rarity, UpgradeDef, World } from '../core/types.ts';
-import { DRAFT_V2 } from '../core/config.ts';
+import type { DraftCardSlot, OverflowRewardId, Rarity, UpgradeDef, World } from '../core/types.ts';
+import { OVERFLOW_REWARD_IDS } from '../core/types.ts';
+import { DRAFT_V2, ULT } from '../core/config.ts';
+import { healTitan } from '../titans/titansim.ts';
+import { addUproar } from '../meta/ultimate.ts';
 import { UPGRADES, UPGRADE_BY_ID } from '../data/upgrades.ts';
 import { EVOLUTIONS, EVO_OF_BASE, EVO_ROWS_OF_PART, EVO_NUDGE, EVO_LATE_LEVEL, EVO_LATE_NUDGE, evoReadyStacks } from '../data/evolutions.ts';
 import type { EvolutionRow } from '../core/types.ts';
@@ -77,6 +80,152 @@ import { applyUpgrade } from './engine.ts';
 export const RARITY_BASE: Record<Rarity, number> = { common: 60, rare: 28, epic: 10, legendary: 2 };
 export const RARITY_LUCK: Record<Rarity, number> = { common: 0, rare: 0.5, epic: 1, legendary: 1.5 };
 export const OFFER_SIZE = 3;
+
+// ─────────────── TITAN PASS D1 BUILD SLOTS (FEATURES_V2 §7.7; lane DRAFT) ───────────────
+// Owner decision 2026-09-29: "tier" = card LEVEL; the fix is BUILD SLOTS (Vampire-Survivors style): once SLOT_CAP
+// distinct cards are held, a draft offers only cards that need no new slot (owned-not-maxed cards, the missing half
+// of a started recipe, ready evolutions). Every draft still shows OFFER_SIZE cards: when the restricted pool is
+// thinner than that, the offer is topped up with OVERFLOW rewards (no slot, never owned, no rng draw).
+//   * slotsUsed: distinct owned non-perk cards, minus one per recipe PAIR (base + companion of a live recipe, or an
+//     owned evolution + its companion; pairs assigned in EVOLUTIONS order, each card in at most one pair).
+//     ONE-OFF cards (isOneOff: maxStacks 1 — the legendary trade-offs and the no-scaling triggers) take no slot
+//     (tag 'free'): an un-upgradable card in a slot would be a dead slot. Offered while the slots fill, not after.
+//   * slots NOT full → the pre-D1 pool and draws (same rng.loot count); an overflow reward is never shown then.
+//     Only the roll WEIGHTS differ while the START CALL is on (startCall: slots filling, below EVO_LATE_LEVEL,
+//     no live recipe started → every live recipe half ×EVO_START_NUDGE inside its rarity). Without it a run
+//     fills its slots before it starts a recipe and can then never start one (a first half needs a new slot):
+//     36-run study, start call off → 0.75 evolutions/run, 20/36 runs with one; on → see the table below.
+//   * slots full → buildPool keeps only cards whose cardSlot is not 'new'; a LOCKed card that would need a new slot
+//     is dropped at delivery and its LOCK charge refunded; a ready evolution fills a short offer before any padding
+//     (no draw); the rest is padded with OVERFLOW rewards, most-needed first (overflowOrder, pure function).
+//   * OVERFLOW rewards cannot be rerolled, banished or locked; picking one consumes the draft like a card.
+//   * maxStacks (data/upgrades.ts, upgrades_v2.ts): with 8 slots a run's ~40 drafts must land on 8 cards, so 119
+//     cards whose every stack adds power (a stat effect, or a trigger with a STACK_SCALED_KEYS param) got +1 max
+//     stack (2→3 / 3→4 / 4→5; 1→2-3 for 5 single-stack cards with a scaling effect); u_rolling_closure and
+//     u_street_festival went 3 → 1 (their trigger has no stack-scaled param: stacks 2-3 did nothing on HEAD), so
+//     they are ONE-OFF cards now. Per-card list: _harness/scratch/tp/DRAFT/raise.json + raisecheck.mts.
+// Measured (lane DRAFT, _harness/scratch/tp/DRAFT/study.mts, 36 runs): see the TITAN PASS D1 table at the bottom.
+
+/** Distinct cards a run can hold. Starting value = the measured `slots8` mode (titanpass/draft_stacking.md). */
+export const SLOT_CAP = 8;
+/** OVERFLOW rewards: SICK DAY heals this share of max HP; HOT TIP adds this share of ULT.max to the UPROAR meter
+ *  (banked like BACK PAY if UPROAR is cooling); HARD HAT raises the absorb shield by this share of max HP, capped at
+ *  hardHatCap × max HP (= engine.ts SHIELD_CAP_FRAC, the cap every shield card obeys; it decays like theirs).
+ *  No rng draw in any of them, and none of them is XP: an XP reward was tried first (OVERTIME, 0.5 of a level's
+ *  bar) and fed itself — each level it bought owed another slot-full draft (molo × 3 cities, seed 1337: 55 OVERTIME
+ *  picks in 132 drafts, LV 43 vs 37-38), so overflow must never grant a draft. */
+export const OVERFLOW = { sickDayHeal: 0.25, hotTipUproar: 0.35, hardHatShield: 0.3, hardHatCap: 0.5 } as const;
+
+/** The OVERFLOW rewards this file serves, in display order (types.ts OVERFLOW_REWARD_IDS: SICK DAY, HOT TIP, HARD HAT;
+ *  three, so a slot-full draft with an EMPTY pool still shows OFFER_SIZE cards). */
+export type OverflowId = OverflowRewardId;
+export const OVERFLOW_IDS: readonly OverflowId[] = OVERFLOW_REWARD_IDS;
+
+/** Is this offer id an OVERFLOW reward rather than a card? */
+export function isOverflowReward(id: string): id is OverflowId {
+  return (OVERFLOW_IDS as readonly string[]).includes(id);
+}
+
+// scratch for slot bookkeeping (no allocation per call beyond the Set clear)
+const PAIRED = new Set<string>();
+
+/** Fill PAIRED with every card that shares a slot with its recipe partner (EVOLUTIONS order, one pair per card). */
+function computePairs(w: World): void {
+  PAIRED.clear();
+  const owned = w.upgrades.owned;
+  for (const r of EVOLUTIONS) {
+    if (!((owned[r.with] ?? 0) > 0) || PAIRED.has(r.with)) continue;
+    let other: string | null = null;
+    if ((owned[r.id] ?? 0) > 0) other = r.id;                                   // evolved: evo + companion
+    else if ((owned[r.base] ?? 0) > 0 && evoLive(w, r)) other = r.base;          // live recipe, both halves held
+    if (!other || PAIRED.has(other)) continue;
+    PAIRED.add(other);
+    PAIRED.add(r.with);
+  }
+}
+
+/** Slots in use (FEATURES_V2 §7.7): distinct owned non-perk cards, a recipe pair counting once. Pure, no draws. */
+export function slotsUsed(w: World): number {
+  const owned = w.upgrades.owned;
+  let n = 0;
+  for (const id in owned) {
+    if (!((owned[id] ?? 0) > 0)) continue;
+    const u = UPGRADE_BY_ID[id];
+    if (!u || u.perk || isOneOff(u)) continue;
+    n++;
+  }
+  computePairs(w);
+  return n - PAIRED.size / 2;
+}
+
+/** D1: a ONE-OFF card (maxStacks 1, not an evolution) files outside the slots: it can never be upgraded, so charging
+ *  it a slot would make every one-shot trade-off a dead slot. It is NOT offered once the slots are full: tried, and
+ *  the slot-full pool (a few owned cards + every one-off) then renormalised the rarity roll onto the one-offs — the
+ *  bot collected 12-13 legendary trade-offs per run (scratch/tp/DRAFT/study_partial_oneoffs_when_full_REJECTED.txt). */
+export function isOneOff(u: UpgradeDef): boolean {
+  return u.maxStacks <= 1 && !u.evo && !u.perk;
+}
+
+/** Every slot taken: only cards that need no new slot are offered. */
+export function slotsFull(w: World): boolean {
+  return slotsUsed(w) >= SLOT_CAP;
+}
+
+/** Unowned `id` is the missing half of a live recipe whose other half is held and not yet paired (PAIRED current). */
+function sharesSlot(w: World, id: string): boolean {
+  const rows = EVO_ROWS_OF_PART[id];
+  if (!rows) return false;
+  const owned = w.upgrades.owned;
+  for (const r of rows) {
+    if (!evoLive(w, r)) continue;
+    const partner = id === r.base ? r.with : id === r.with ? r.base : null;
+    if (!partner || !((owned[partner] ?? 0) > 0) || PAIRED.has(partner)) continue;
+    return true;
+  }
+  return false;
+}
+
+/** The slot tag of an offered card (types.ts DraftCardSlot; 'free' = a ONE-OFF card, isOneOff: files outside the slots). */
+export type SlotTag = DraftCardSlot;
+
+/** The slot tag of an offered id (draft UI; the slot-full pool keeps every non-'new' card). */
+export function cardSlot(w: World, id: string): SlotTag {
+  if (isOverflowReward(id)) return 'overflow';
+  const u = UPGRADE_BY_ID[id];
+  if (u?.evo) return 'evolution';
+  if ((w.upgrades.owned[id] ?? 0) > 0) return 'upgrade';
+  if (u && isOneOff(u)) return 'free';
+  computePairs(w);
+  return sharesSlot(w, id) ? 'shared' : 'new';
+}
+
+/** OVERFLOW rewards, most-needed first (pure function of the world: hurt → SICK DAY; UPROAR not ready → HOT TIP). */
+export function overflowOrder(w: World): OverflowId[] {
+  const T = w.titan;
+  const hurt = T.maxHp > 0 ? 1 - T.hp / T.maxHp : 0;
+  const score = (id: OverflowId): number =>
+    id === 'ovf_sick_day' ? hurt * 4 : id === 'ovf_hot_tip' ? (w.ult && !w.ult.ready ? 1 : 0) : w.upgrades.shield > 0 ? 0 : 0.5;
+  return OVERFLOW_IDS.slice().sort((a, b) => score(b) - score(a) || OVERFLOW_IDS.indexOf(a) - OVERFLOW_IDS.indexOf(b));
+}
+
+/** Top a slot-full offer up to OFFER_SIZE with OVERFLOW rewards (most-needed first). No draws. */
+function padOverflow(w: World, ids: string[]): void {
+  if (ids.length >= OFFER_SIZE) return;
+  for (const id of overflowOrder(w)) {
+    if (ids.length >= OFFER_SIZE) break;
+    if (!ids.includes(id)) ids.push(id);
+  }
+}
+
+/** Apply an OVERFLOW reward (FEATURES_V2 §7.7 rule 5). */
+function applyOverflow(w: World, id: OverflowId): void {
+  if (id === 'ovf_sick_day') healTitan(w, OVERFLOW.sickDayHeal * w.titan.maxHp);
+  else if (id === 'ovf_hot_tip') addUproar(w, OVERFLOW.hotTipUproar * ULT.max, true);
+  else {
+    const U = w.upgrades, cap = OVERFLOW.hardHatCap * w.titan.maxHp;
+    U.shield = Math.max(U.shield, Math.min(U.shield + OVERFLOW.hardHatShield * w.titan.maxHp, cap));
+  }
+}
 
 /** Weight of a rarity at a luck value (never negative; a cursed-luck run still sees rares). */
 export function rarityWeight(r: Rarity, luck: number): number {
@@ -112,8 +261,10 @@ const WTS: number[] = [];
 function buildPool(w: World, chest: boolean, exclude: readonly string[] | null, exclude2: readonly string[] | null = null): void {
   POOL.length = 0;
   POOL_M.length = 0;
+  const full = slotsFull(w);                             // D1: also leaves PAIRED current for sharesSlot
   for (const u of UPGRADES) {
     if (!isEligible(w, u)) continue;
+    if (full && !((w.upgrades.owned[u.id] ?? 0) > 0) && !sharesSlot(w, u.id)) continue;   // D1: new cards (one-offs too) wait
     if (chest && u.rarity === 'common') continue;
     if (exclude && exclude.includes(u.id)) continue;
     if (exclude2 && exclude2.includes(u.id)) continue;
@@ -193,7 +344,13 @@ function heldDeliverable(w: World, id: string): boolean {
   const u = UPGRADE_BY_ID[id];
   if (!u) return false;
   if (u.evo) return evolutionsReady(w).includes(id);
-  return isEligible(w, u);
+  return isEligible(w, u) && !slotBlocked(w, id);
+}
+
+/** D1: a card that would need a NEW slot while every slot is taken (never an evolution or an overflow reward). */
+function slotBlocked(w: World, id: string): boolean {
+  if (isOverflowReward(id) || UPGRADE_BY_ID[id]?.evo) return false;
+  return cardSlot(w, id) === 'new' && slotsFull(w);
 }
 
 /** v2: put `id` into slot `k` (replacing what sat there), or append it when the offer is shorter. */
@@ -233,11 +390,16 @@ export function rollOffer(w: World, chest?: boolean): string[] {
       }
       heldPlaced = true;
       DELIVERED.set(U, held);
+    } else if (slotBlocked(w, held)) {
+      // D1: the slot rule made it undeliverable (not the player): dropped, LOCK charge refunded
+      U.lockLeft += 1;
+      if (w.tally && w.tally.locks > 0) w.tally.locks -= 1;
     }
     // not deliverable any more (maxed through a chest pick, banished …): dropped, charge not refunded
   }
 
   // v2 EVOLUTION (§7.4.4)
+  const full = slotsFull(w);
   const ready = evolutionsReady(w);
   if (ready.length > 0) {
     let evo: string | null = null;
@@ -245,6 +407,7 @@ export function rollOffer(w: World, chest?: boolean): string[] {
     if (evo) {
       if (chest) placeAt(ids, heldPlaced ? 1 : 0, evo);
       else if (ids.length === 0) ids.push(evo);                        // nothing else to show: never an empty draft
+      else if (full && ids.length < OFFER_SIZE) ids.push(evo);         // D1: a short slot-full offer shows it (no draw)
       else {
         const x = w.rng.loot();                                          // drawn either way: draw count unchanged
         if (x < DRAFT_V2.evoDraftChance || lateCall(w) !== null) placeAt(ids, 2, evo);   // fx2/D late call: always
@@ -252,6 +415,7 @@ export function rollOffer(w: World, chest?: boolean): string[] {
     }
   }
 
+  if (full) padOverflow(w, ids);                                        // D1: every draft shows OFFER_SIZE cards
   U.offer = ids.length > 0 ? ids : null;
   OFFER_IS_CHEST.set(U, chest);
   return ids;
@@ -261,6 +425,7 @@ export function rollOffer(w: World, chest?: boolean): string[] {
 export function rerollOffer(w: World): string[] | null {
   const U = w.upgrades;
   if (!U.offer || U.offer.length === 0 || U.rerolls <= 0) return null;
+  if (!U.offer.some((id) => !isOverflowReward(id))) return null;      // D1: an all-OVERFLOW offer cannot be rerolled
   const chest = OFFER_IS_CHEST.get(U) ?? (U.chestDrafts > 0 && U.pendingDrafts === 0);
   U.rerolls -= 1;
   if (w.tally) w.tally.rerolls += 1;
@@ -275,6 +440,7 @@ export function rerollOffer(w: World): string[] | null {
     ids = others.slice();
     ids.splice(Math.min(heldSlot, ids.length), 0, held);
   }
+  if (slotsFull(w)) padOverflow(w, ids);                                // D1
   DELIVERED.delete(U);
   U.offer = ids.length > 0 ? ids : null;
   return ids;
@@ -288,6 +454,12 @@ export function rerollOffer(w: World): string[] | null {
  */
 export function pickUpgrade(w: World, id: string): void {
   const U = w.upgrades;
+  if (isOverflowReward(id)) {                                           // D1 OVERFLOW reward: only from the open offer
+    if (!U.offer || !U.offer.includes(id)) return;
+    applyOverflow(w, id);
+    consumeDraft(w);
+    return;
+  }
   const u = UPGRADE_BY_ID[id];
   if (!u) return;
   const inOffer = !!U.offer && U.offer.includes(id);
@@ -300,6 +472,12 @@ export function pickUpgrade(w: World, id: string): void {
   }
   if (u.evo && before === 0) evolveReplace(w, id, u.evo.base);
   if (U.locked === id) U.locked = null;                 // picking the held card: hold done, no extra charge
+  consumeDraft(w);
+}
+
+/** Consume one owed draft (chest or level-up, whichever the open offer was rolled for) and close the offer. */
+function consumeDraft(w: World): void {
+  const U = w.upgrades;
   const known = OFFER_IS_CHEST.get(U);
   const chest = known ?? (U.chestDrafts > 0);
   if (chest && U.chestDrafts > 0) U.chestDrafts -= 1;
@@ -329,6 +507,7 @@ export function hasPendingDraft(w: World): boolean {
   const U = w.upgrades;
   if (U.pendingDrafts <= 0 && U.chestDrafts <= 0) return false;
   if (U.offer && U.offer.length > 0) return true;
+  if (slotsFull(w)) return true;                                        // D1: OVERFLOW rewards: never nothing to offer
   for (const u of UPGRADES) if (isEligible(w, u)) return true;
   if (U.locked && heldDeliverable(w, U.locked)) return true;
   return evolutionsReady(w).length > 0;
@@ -346,6 +525,7 @@ export function banishCard(w: World, id: string): string[] | null {
   const U = w.upgrades;
   const offer = U.offer;
   if (!offer || offer.length === 0 || !offer.includes(id) || !((U.banishLeft ?? 0) > 0)) return null;
+  if (isOverflowReward(id)) return null;                                // D1: an OVERFLOW reward cannot be banished
   const chest = OFFER_IS_CHEST.get(U) ?? (U.chestDrafts > 0 && U.pendingDrafts === 0);
   const slot = offer.indexOf(id);
   if (!U.banished) U.banished = [];
@@ -355,6 +535,7 @@ export function banishCard(w: World, id: string): string[] | null {
   const next = offer.slice();
   if (re) next[slot] = re;
   else next.splice(slot, 1);
+  if (!re && slotsFull(w)) padOverflow(w, next);                        // D1: the offer keeps OFFER_SIZE cards
   U.banishLeft -= 1;
   if (w.tally) w.tally.banishes += 1;
   if (U.locked === id) {                                // banishing the held card clears the hold + refunds
@@ -375,6 +556,7 @@ export function banishCard(w: World, id: string): string[] | null {
 export function lockCard(w: World, id: string): boolean {
   const U = w.upgrades;
   if (!U.offer || !U.offer.includes(id)) return U.locked === id;
+  if (isOverflowReward(id)) return false;                               // D1: an OVERFLOW reward cannot be held
   if (U.locked === id) {                                // unlock within the draft → refund
     U.locked = null;
     U.lockLeft += 1;
@@ -430,6 +612,7 @@ export function recipeNudge(w: World, id: string): number {
   const rows = EVO_ROWS_OF_PART[id];
   if (!rows) return 1;
   const owned = w.upgrades.owned;
+  if (startCall(w)) { for (const r of rows) if (evoLive(w, r)) return EVO_START_NUDGE; }   // D1 slot-filling start call
   const late = lateCall(w);
   if (late) {                                                           // fx2/D late call (data/evolutions.ts)
     if (late.kind === 'start') { for (const r of rows) if (evoLive(w, r)) return EVO_NUDGE; }
@@ -446,6 +629,28 @@ export function recipeNudge(w: World, id: string): number {
     if (id === r.with && haveW < 1 && haveB >= 1) return EVO_NUDGE;
   }
   return 1;
+}
+
+/** D1 (FEATURES_V2 §7.7 rule 6): roll-weight multiplier (inside the rarity) for every half of every live recipe
+ *  while the START CALL is on. Measured: see the TITAN PASS D1 table at the bottom of this file. */
+export const EVO_START_NUDGE = 3;
+
+/**
+ * D1 START CALL: while the slots are still filling (not full), before the fx2/D late level, and no live recipe has
+ * either half owned, every half of every live recipe rolls at EVO_START_NUDGE. Once the slots are full a recipe can
+ * no longer be started (a first half needs a new slot), so this is where a run's evolution gets seeded; the late
+ * call's own 'start' stays for a run that reaches EVO_LATE_LEVEL with free slots. Pure function (no draws).
+ */
+export function startCall(w: World): boolean {
+  if (w.titan.level >= EVO_LATE_LEVEL || slotsFull(w)) return false;
+  const owned = w.upgrades.owned;
+  let live = false;
+  for (const r of EVOLUTIONS) {
+    if (!evoLive(w, r)) continue;
+    if ((owned[r.base] ?? 0) > 0 || (owned[r.with] ?? 0) > 0) return false;
+    live = true;
+  }
+  return live;
 }
 
 /**
@@ -516,3 +721,17 @@ export function recipeHint(w: World, id: string): { evo: string; completes: bool
 export function deliveredHold(w: World): string | null {
   return DELIVERED.get(w.upgrades) ?? null;
 }
+
+// ─────────────── TITAN PASS D1 table (lane DRAFT, 2026-09-29) ───────────────
+// _harness/scratch/tp/DRAFT/study.mts (port of titanpass/study2.mts): 4 titans × 3 cities × seeds 1337/7/99 = 36 real-sim
+// runs, fresh profile, GATE 2 bot (bot.ts + bot_draft.ts). Acceptance bands from the task / FEATURES_V2 §7.7 rule 8.
+//   | metric                               | HEAD (study2 base) | slots8 prototype | shipped D1      | band     |
+//   |--------------------------------------|--------------------|------------------|-----------------|----------|
+//   | offers showing an owned card         | ~14 %              | 62.6 %           | 62.1 %          | ≥ 60 %   |
+//   | non-evo cards ending at ≥ 3 stacks   | 1.5 %              | 47.5 %           | 76.6 %          | ≥ 45 %   |
+//   | evolutions / run · runs with one     | 1.17               | 0.78             | 1.14 · 31/36    | ≥ 1.0 · ≥ 28/36 |
+//   | empty / short (< 3) offers           | —                  | 5-11 / run empty; 2.3-2.7 cards late | 0 / 0 (3.00 per offer) | 0 |
+//   | OVERFLOW rewards taken               | —                  | —                | 14.1 % of drafts | < 30 %  |
+//   | clears (bot)                         |                    |                  | 35/36, median 624 s |      |
+// Start call OFF (same tree, scratch copy): 0.75 evolutions/run, 20/36 runs — below the band, so it ships ON.
+// ONE-OFF cards offered while full: rejected (the bot collected 12-13 legendary trade-offs per run).

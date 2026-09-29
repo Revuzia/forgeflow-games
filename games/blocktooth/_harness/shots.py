@@ -46,6 +46,14 @@ Groups (all by default, in this order):
            + surge, 3.2 s after the city boss's kill); tabloid_heldby (a death while CORDON-2 holds Size II);
            gate_rematch_v (clear → real K → the REAL EXTENDED COVERAGE rematch, its 75 s timer moved to 1 s).
            Stagger shots reach the stagger in real time (fx ignores events while frozen).
+  titanpass (TITAN PASS §5.1 HARN / §6 items 13–14) VOLT-KITE remodel at Size I / III / V in each city
+           (tp_volt_<biome>_I/III/V + _close crops), its select portrait through the palette row with real ↓ →
+           (tp_volt_portrait_pal0/1/2) and each colourway in play at Size III (tp_volt_colour0/1/2_III; a crafted
+           profile unlocks palettes 1 + 2 and is removed afterwards); BRIARWICK at Size II: unripe / ripe / fused
+           pods frozen (tp_briar_pods + _close), the HUD pod row with ≥ 3 ripe (tp_briar_hud + _bar crop), and the
+           POP-UP PARK beats from a REAL Space frozen 0.08 / 0.3 / 0.4 s in (tp_briar_popuppark / _roots /
+           _cascade; foes pulled into a 1.4–5 H band — dev state — so the stamp and bursts have foes to root); a draft past the build-slot cap (tp_draft_slots_full, real 1-picks until slotsFull) and an
+           OVERFLOW draft (tp_draft_overflow: owned cards set to max stacks — dev state — then the next draft).
 
 Output: _shots/battery/<name>.png, _shots/battery/manifest.json (one entry per shot: group, kind,
 titan, biome, rank, screen, state summary, capture method, ok) and labelled contact sheets
@@ -68,7 +76,8 @@ from common import (BIOME_BOSS, BIOME_NAMES, BIOMES, ROMAN, ROOT, SHOTS, TITAN_N
                     diag_problems, ensure_play, navigate_cards, print_diagnostics, save_report, set_rank,
                     world_to_keys, xp_to_next)
 
-GROUPS = ("menus", "titans", "hud", "bosses", "tabloid", "v2fx", "v2hud", "cine", "screens", "parkade", "gates")
+GROUPS = ("menus", "titans", "hud", "bosses", "tabloid", "v2fx", "v2hud", "cine", "screens", "parkade", "gates",
+          "titanpass")
 # ── GATEKEEPERS §8.3 shots (group `gates`; ported from the K2a / K2b lane scripts) ──
 GATE_OF = {"stencil": ("stencil1", 1, 7), "cordon": ("cordon2", 2, 16), "switch": ("switchboard5", 3, 27)}
 # name → (gate key, mode, param, min phase, titan, biome)
@@ -995,20 +1004,36 @@ class Battery:
         sess.cheat("level", 12)
         sess.cheat("boss")
         time.sleep(0.5)
-        sess.js("() => { const w = window.__H_W__(); const b = w.boss; if (b) { b.introT = 0; b.hp = 0; b.alive = false; } }")
+        # GATEKEEPERS: the run clears through bosses/index.ts defeat() (breachDue 4 → the finale → the tabloid);
+        # writing boss.alive = false skipped it and the shot never reached the clear tabloid. cheat.gateKill() is
+        # the dev kill that goes through defeat() (city boss or gatekeeper).
+        sess.cheat("gateKill")
         ok, scr = sess.wait_screen(("end",), 40)
         if not ok:
             self.miss(name, "clear tabloid not reached (screen=%r)" % (scr,))
             return
         time.sleep(2.2)
         sess.press("KeyK")
-        ok, scr = sess.wait_screen(("play",), 12)
+        ok, scr = sess.wait_screen(("play", "draft"), 12)
+        # drafts owed from the cheated levels open first (playtest_v2 step 6: "real K → … screen draft"): take them
+        for _ in range(30):
+            if scr != "draft":
+                break
+            sess.press("Digit1")
+            time.sleep(0.8)
+            ok, scr = sess.wait_screen(("play", "draft"), 6)
         st = sess.state() or {}
         if not ok or (st.get("v2") or {}).get("endless") is None:
             self.miss(name, "real K did not start EXTENDED COVERAGE (screen=%r)" % (scr,))
             return
         time.sleep(2.0)
         sess.cheat("god", False)
+        for _ in range(30):                     # a draft screen freezes the sim: take any owed draft first
+            ok, scr = sess.wait_screen(("play", "draft"), 6)
+            if scr != "draft":
+                break
+            sess.press("Digit1")
+            time.sleep(0.8)
         sess.js("() => { const w = window.__H_W__(); w.titan.hp = 0; w.titan.alive = false; }")
         ok, scr = sess.wait_screen(("end",), 40)
         time.sleep(2.4)
@@ -1308,6 +1333,231 @@ async ([mode, want, tStop, phase, maxTicks]) => {
             self.miss(name, "CORDON-2 never arrived")
 
     # ─────────────────────────────── contact sheets ───────────────────────────────
+    # ─────────────────────────────── titanpass (TITAN PASS §5.1 HARN / §6 items 13–14) ───────────────────────────────
+    # VOLT-KITE remodel at Size I / III / V in each city + its select portrait and 3 colourways; BRIARWICK pods, the
+    # POP-UP PARK stamp / cascade ripple / root coils, the HUD pod row; a draft past the build-slot cap (D1).
+    TP_PODS_JS = r"""async ([ripes, fused, rMin, rMax]) => {
+      const m = await import('/src/combat/hazards.ts'); const W = window.__BT__.world; if (!W) return 0;
+      const T = W.titan, H = T.height, n = ripes.length;
+      for (let i = 0; i < n; i++) {
+        const a = T.heading + Math.PI * (0.35 + 1.3 * i / Math.max(1, n - 1)), d = (rMin + (rMax - rMin) * ((i * 5) % n) / n) * H;
+        m.spawnHazard(W, { owner: 'titan', kind: 'bloom', shape: { k: 'circle', x: T.x + Math.sin(a) * d, z: T.z + Math.cos(a) * d, r: Math.max(0.3, 0.3 * H) },
+          life: 9, dps: 0, data: { pod: 1, ripe: ripes[i], fuse: i < fused ? 0.8 + 0.1 * i : -1, link: 0, src: 3, h: H, vol: 0 } });
+      }
+      return n; }"""
+    TP_CLEAR_PODS_JS = r"""() => { const W = window.__BT__.world; if (!W) return 0; let n = 0;
+      for (const h of W.hazards) if (h.alive && h.owner === 'titan' && h.kind === 'bloom') { h.alive = false; n++; } return n; }"""
+    # dev STATE only: pull up to n live foes into a band around the titan (the spawn cheat drops them at the view edge,
+    # outside the POP-UP PARK stamp and the pod field), so the beat has foes to TANGLE
+    TP_GATHER_JS = r"""([n, rMin, rMax]) => { const W = window.__BT__.world; if (!W) return 0; const T = W.titan, H = T.height; let k = 0;
+      for (const e of W.enemies) { if (!e.alive || k >= n) continue; const a = (k / n) * Math.PI * 2 + 0.3, d = (rMin + (rMax - rMin) * ((k * 7) % n) / n) * H;
+        e.x = T.x + Math.sin(a) * d; e.z = T.z + Math.cos(a) * d; if (e.vx !== undefined) { e.vx = 0; e.vz = 0; } k++; }
+      return k; }"""
+    TP_KIT_JS = r"""() => { const W = window.__BT__.world; if (!W) return null; const T = W.titan, K = T.kit; let pods = 0, ripe = 0, fused = 0, stunned = 0;
+      for (const h of W.hazards) if (h.alive && h.owner === 'titan' && h.kind === 'bloom') { pods++; if ((h.data.ripe || 0) >= 1) ripe++; if ((h.data.fuse ?? -1) >= 0) fused++; }
+      for (const e of W.enemies) if (e.alive && (e.stun || 0) > 0) stunned++;
+      return { id: T.id, rank: T.rank, cd: T.abilityCd, chain: K.chain || 0, kitPods: K.pods, kitRipe: K.ripe, pods, ripe, fused, stunned }; }"""
+    TP_SLOTS_JS = r"""async () => { const d = await import('/src/upgrades/draft.ts'); const W = window.__BT__.world; if (!W) return null;
+      const U = W.upgrades; return { used: d.slotsUsed ? d.slotsUsed(W) : null, full: d.slotsFull ? d.slotsFull(W) : null,
+        cap: d.SLOT_CAP ?? null, owned: Object.keys(U.owned).filter((k) => U.owned[k] > 0).length, offer: (U.offer || []).slice() }; }"""
+    # dev STATE only (cheats may set state): every owned card to its max stacks, so the next slot-full draft has
+    # nothing left to deepen and must pay OVERFLOW rewards
+    TP_MAX_OWNED_JS = r"""async () => { const u = await import('/src/data/upgrades.ts'); const W = window.__BT__.world; if (!W) return 0;
+      const O = W.upgrades.owned; let n = 0;
+      for (const k of Object.keys(O)) { const def = u.UPGRADE_BY_ID[k]; if (def && O[k] > 0 && O[k] < def.maxStacks) { O[k] = def.maxStacks; n++; } }
+      return n; }"""
+
+    def tp_profile(self, volt_palette):
+        p = json.loads(json.dumps(self.V2_PROFILE))
+        now = self.V2_NOW
+        p["done"]["g_vk_six_way_splice"] = now - 3600000          # unlocks VOLT-KITE palette 1
+        p["done"]["g_vk_coast_to_coast"] = now - 1800000          # unlocks VOLT-KITE palette 2
+        p["perk"] = None
+        p["palette"] = {"molo": 0, "voltkite": volt_palette, "hearthback": 0, "briarwick": 0}
+        return p
+
+    def tp_crop(self, name, box_frac, suffix):
+        """Crop a region (fractions of the frame) of an already-captured shot, upscaled (a crop, not a re-render)."""
+        try:
+            from PIL import Image
+            src = os.path.join(self.out, name + ".png")
+            im = Image.open(src)
+            W, H = im.size
+            box = (int(W * box_frac[0]), int(H * box_frac[1]), int(W * box_frac[2]), int(H * box_frac[3]))
+            c = im.crop(box)
+            sc = max(1.0, 1400.0 / c.size[0])
+            c = c.resize((int(c.size[0] * sc), int(c.size[1] * sc)), Image.LANCZOS)
+            out = os.path.join(self.out, name + suffix + ".png")
+            c.save(out)
+            if self.items and self.items[-1].get("name") == name:
+                self.items[-1]["crop" + suffix] = os.path.relpath(out, ROOT).replace("\\", "/")
+            return out
+        except Exception as e:
+            self.log("    crop %s failed: %s" % (name, e))
+            return None
+
+    def g_titanpass(self):
+        """The crafted profile (VOLT-KITE palettes) is removed again afterwards."""
+        try:
+            self._g_titanpass()
+        finally:
+            try:
+                self.sess.release_all()
+                self.sess.goto(build_url(self.args.base, dev=1, noslate=1, quality=self.args.quality))
+                self.sess.wait_bt(60)
+                self.sess.js(self.V2_UNSEED_JS)
+            except Exception as e:
+                self.log("    could not remove the crafted profile: %s" % str(e).splitlines()[0][:200])
+
+    def _g_titanpass(self):
+        self.group = "titanpass"
+        a, sess = self.args, self.sess
+        # 1) VOLT-KITE at Size I / III / V in each city (gameplay camera; *_close = centre crop)
+        for bi, b in enumerate(BIOMES):
+            base = "tp_volt_%s" % b
+            ok, scr = self.start_run("voltkite", b, a.seed + 300 + bi, False)
+            if not ok or not ensure_play(sess, 20, self.olog)[0]:
+                for r in ("I", "III", "V"):
+                    self.miss("%s_%s" % (base, r), "run did not start (%s)" % (scr,))
+                continue
+            self.cheats_on(god=True)
+            time.sleep(0.8)
+            for r in ("I", "III", "V"):
+                idx = RANK_ARG[r]
+                if idx > 0:
+                    set_rank(sess, idx, self.log)
+                self.walk(a.walk)
+                time.sleep(a.settle if idx > 0 else 1.0)
+                st = sess.state() or {}
+                self.play_shot("%s_%s" % (base, r), "titan", wantRank=idx, rankOk=st.get("rank") == idx)
+        # 2) VOLT-KITE colourways: the select portrait swapped through the palette row (real ↓ →), then each palette
+        #    in play at Size III (a crafted profile unlocks palettes 1 + 2; removed again in g_titanpass's finally)
+        sess.goto(build_url(a.base, dev=1, noslate=1, quality=a.quality))
+        sess.wait_bt(90)
+        sess.js(self.V2_SEED_JS, [self.tp_profile(0), self.V2_BESTS])
+        sess.goto(build_url(a.base, dev=1, noslate=1, quality=a.quality))
+        sess.wait_bt(90)
+        ok, scr = sess.wait_screen(("title",), 60)
+        if ok:
+            time.sleep(0.8)
+            sess.press("Enter")
+            ok, scr = sess.wait_screen(("select",), 30)
+        if not ok:
+            for k in range(3):
+                self.miss("tp_volt_portrait_pal%d" % k, "select screen not reached (screen=%r)" % (scr,))
+        else:
+            time.sleep(1.4)
+            okn, how = navigate_cards(sess, TITANS, TITAN_NAMES, "voltkite", self.log)
+            time.sleep(1.0)
+            self.shot("tp_volt_portrait_pal0", "portrait", navOk=okn, nav=how)
+            sess.press("ArrowDown")                       # focus the palette row
+            time.sleep(0.4)
+            for k in (1, 2):
+                sess.press("ArrowRight")
+                time.sleep(1.4)                           # the portrait re-renders for the palette
+                self.shot("tp_volt_portrait_pal%d" % k, "portrait", palette=k)
+        for k in (0, 1, 2):
+            name = "tp_volt_colour%d_III" % k
+            sess.goto(build_url(a.base, dev=1, noslate=1, quality=a.quality))
+            sess.wait_bt(60)
+            sess.js(self.V2_SEED_JS, [self.tp_profile(k), self.V2_BESTS])
+            ok, scr = self.start_run("voltkite", "whitestacks", a.seed + 320 + k, False)
+            if not ok or not ensure_play(sess, 20, self.olog)[0]:
+                self.miss(name, "run did not start (%s)" % (scr,))
+                continue
+            pal = sess.safe_js("() => { const W = window.__BT__.world; return W && W.meta ? W.meta.palette : null; }")
+            self.cheats_on(god=True)
+            set_rank(sess, 2, self.log)
+            self.walk(a.walk)
+            time.sleep(a.settle)
+            self.play_shot(name, "titan", palette=k, metaPalette=pal)
+        sess.js(self.V2_UNSEED_JS)
+        # 3) BRIARWICK at Size II in GRID-EAST: pods (unripe / ripe / fused), then POP-UP PARK beats from a REAL Space
+        ok, scr = self.start_run("briarwick", "grideast", a.seed + 340, False)
+        names = ["tp_briar_pods", "tp_briar_hud", "tp_briar_popuppark", "tp_briar_cascade", "tp_briar_roots"]
+        if not ok or not ensure_play(sess, 20, self.olog)[0]:
+            for n in names:
+                self.miss(n, "run did not start (%s)" % (scr,))
+        else:
+            self.cheats_on(god=True, no_spawns=True)
+            set_rank(sess, 1, self.log)
+            time.sleep(a.settle)
+            sess.cheat("killAll")
+            sess.js(self.TP_CLEAR_PODS_JS)
+            # pods: 3 fused (lit fuse, ripe), 4 unripe (0.15 … 0.6), 4 ripe; frozen so none pops
+            sess.bt_call("freeze", True)
+            sess.js(self.TP_PODS_JS, [[1, 1, 1, 0.15, 0.3, 0.45, 0.6, 1, 1, 1, 1], 3, 1.6, 4.5])
+            time.sleep(0.6)
+            self.shot("tp_briar_pods", "titanpass", kit=sess.safe_js(self.TP_KIT_JS))
+            self.tp_crop("tp_briar_pods", (0.25, 0.2, 0.75, 0.8), "_close")
+            sess.bt_call("freeze", False)
+            # HUD pod row: ripe ≥ 3 on the field (SPACE primed glow), no foes, hook ready
+            sess.js(self.TP_CLEAR_PODS_JS)
+            sess.js(self.TP_PODS_JS, [[1, 1, 1, 1, 0.3, 0.5], 0, 2.0, 4.0])
+            sess.js("() => { window.__BT__.world.titan.abilityCd = 0; }")
+            time.sleep(0.8)
+            self.play_shot("tp_briar_hud", "hud", kit=sess.safe_js(self.TP_KIT_JS))
+            self.tp_crop("tp_briar_hud", (0.0, 0.72, 0.6, 1.0), "_bar")
+            # POP-UP PARK beats: the same set-up per beat (pods + a crowd + hook ready), a REAL Space, then the sim is
+            # frozen at the beat (views keep idling) for the capture
+            # roots at 0.3 s: the stamp ring TANGLES for 1.0 s (heavies × 0.6), a pod burst for 0.6 s — by 0.8 s the
+            # coils are gone (VIEW lane's note: 0 stunned at 0.8 s); tanks + APCs survive the Size II bursts to show them
+            for name, delay in (("tp_briar_popuppark", 0.08), ("tp_briar_roots", 0.3), ("tp_briar_cascade", 0.4)):
+                sess.cheat("killAll")
+                sess.js(self.TP_CLEAR_PODS_JS)
+                ensure_play(sess, 8, self.olog)
+                sess.cheat("spawn", "android", 14)
+                sess.cheat("spawn", "squad", 6)
+                if name == "tp_briar_roots":
+                    sess.cheat("spawn", "tank", 6)
+                    sess.cheat("spawn", "apc", 6)
+                time.sleep(0.5)
+                sess.js(self.TP_GATHER_JS, [32, 1.4, 5.0])
+                sess.js(self.TP_PODS_JS, [[0.2] * 12, 0, 1.5, 9.0])
+                sess.js("() => { window.__BT__.world.titan.abilityCd = 0; }")
+                sess.press("Space", 70)
+                time.sleep(delay)
+                sess.bt_call("freeze", True)
+                self.shot(name, "titanpass", beatS=delay, kit=sess.safe_js(self.TP_KIT_JS))
+                sess.bt_call("freeze", False)
+        # 4) a draft past the build-slot cap (D1): real 1-picks until the slots are full, then the slot-full offer;
+        #    then every owned card set to its max stacks (dev state) → the next draft pays OVERFLOW rewards
+        ok, scr = self.start_run("molo", "grideast", a.seed + 360, False)
+        if not ok or not ensure_play(sess, 20, self.olog)[0]:
+            self.miss("tp_draft_slots_full", "run did not start (%s)" % (scr,))
+            self.miss("tp_draft_overflow", "run did not start (%s)" % (scr,))
+            return
+        self.cheats_on(god=True, no_spawns=True)
+        sess.cheat("level", 30)
+        picks, full_shot, info = 0, False, {}
+        deadline = time.time() + 150
+        while time.time() < deadline and picks < 80:
+            s = sess.state() or {}
+            if s.get("screen") != "draft":
+                if s.get("screen") in ("pause", "slate"):
+                    ensure_play(sess, 6, self.olog)
+                sess.cheat("xp", 2000)
+                time.sleep(0.5)
+                continue
+            time.sleep(0.5)
+            info = sess.safe_js(self.TP_SLOTS_JS) or {}
+            cards = sess.safe_js(self.V2_CARDS_JS) or []
+            ovf = any(str(c).startswith("ovf_") for c in cards)
+            if info.get("full") and not full_shot and not ovf:
+                self.shot("tp_draft_slots_full", "draft", slots=info, cards=cards, picks=picks)
+                full_shot = True
+                sess.js(self.TP_MAX_OWNED_JS)
+            elif info.get("full") and ovf:
+                self.shot("tp_draft_overflow", "draft", slots=info, cards=cards, picks=picks)
+                break
+            sess.press("Digit1")
+            picks += 1
+            time.sleep(0.4)
+        if not full_shot:
+            self.miss("tp_draft_slots_full", "slots never filled in %d picks (%s)" % (picks, json.dumps(info)[:200]))
+        if not any(it.get("name") == "tp_draft_overflow" and it.get("ok") for it in self.items):
+            self.miss("tp_draft_overflow", "no OVERFLOW offer seen in %d picks (%s)" % (picks, json.dumps(info)[:200]))
+
     def contact_sheets(self):
         try:
             from PIL import Image, ImageDraw, ImageFont

@@ -54,7 +54,7 @@ export const TITANS: Record<TitanId, TitanDef> = {
     auto: {
       id: 'curbBite',
       name: 'CURB BITE',
-      desc: 'Every 0.75 s: a wide snapping cone ahead (50° each side), 10 dmg — the head turns to catch anything within 70°. Snaps at buildings while plowing. Every 4th footstep sends out a 6 dmg foot-pulse.',
+      desc: 'Every 0.75 s: a wide snapping cone ahead (50° each side), 22 dmg — the head turns to catch anything within 70°. Snaps at buildings while plowing. Every 4th footstep sends out a 6 dmg foot-pulse.',
     },
     hook: {
       id: 'gulletVacuum',
@@ -70,7 +70,7 @@ export const TITANS: Record<TitanId, TitanDef> = {
   voltkite: {
     id: 'voltkite',
     name: 'VOLT-KITE',
-    species: 'lean indigo jackal-drake with a static mane',
+    species: 'storm-hound drake under twin kite sails with a static mane',
     role: 'CHAIN ASSASSIN',
     tagline: 'Every streetlight it passes files a formal complaint.',
     lore: [
@@ -81,11 +81,11 @@ export const TITANS: Record<TitanId, TitanDef> = {
     ],
     difficulty: 3,
     colors: { primary: '#3b3f9e', secondary: '#23255e', belly: '#8f94d9', accent: '#6ff3ff', glow: '#6ff3ff', eye: '#fff27a' },
-    base: statBlock({ maxHp: 90, moveSpeed: 1.15, dashCharges: 2, dashCooldown: 0.75 }),
+    base: statBlock({ maxHp: 90, armor: 12, moveSpeed: 1.15, dashCharges: 2, dashCooldown: 0.75 }),
     auto: {
       id: 'forkArc',
       name: 'FORK-ARC',
-      desc: 'Every 0.9 s: lightning leaps to a target within 3.2 body-heights, then forks to 3 more nearby (foes first, then buildings). 12 dmg, −15% per jump.',
+      desc: 'Every 0.9 s: lightning leaps to a target within 3.8 body-heights, then forks to 3 more nearby (foes first, then buildings). 12 dmg, −15% per jump. Every 2nd strike GROUNDS: a short LIVE WIRE is left where it hit.',
     },
     hook: {
       id: 'recastDetonate',
@@ -137,26 +137,26 @@ export const TITANS: Record<TitanId, TitanDef> = {
     tagline: 'Plants a garden in whatever used to be your office.',
     lore: [
       'Horned, mossy and deeply committed to urban renewal.',
-      'Anything it knocks down tends to sprout something that shoots back.',
+      'Anything it knocks down tends to sprout something that goes off.',
       'The Parks Department has declined to take responsibility. The Parks Department is now a hedge.',
       'Allergy season has been extended until further notice.',
     ],
     difficulty: 2,
     colors: { primary: '#5e8f3a', secondary: '#6b4a2f', belly: '#c9d98f', accent: '#ff9ec7', glow: '#d8ff7a', eye: '#fff3b0' },
-    base: statBlock({ maxHp: 120, armor: 5 }),
+    base: statBlock({ maxHp: 120, armor: 5, turretCap: 10 }),
     auto: {
       id: 'vineLash',
-      name: 'VINE LASH',
-      desc: 'Every 1.0 s: a whip lane 2.6 body-heights long toward a target, 14 dmg to everything in it. Passive BLOOM TURRETS: nearby broken floors may root seed-spitting turrets (collapses always do).',
+      name: 'BURR LASH',
+      desc: 'Every 1.0 s: a lash 3.2 body-heights long (5.8 at Size I), 14 dmg to everything in it, and it plants a seed pod where it lands. Pods ripen in 2 s and burst when anything touches them: 18 dmg, tangles foes, heals you a little, and sets off ripe pods nearby — each link hits 10% harder.',
     },
     hook: {
-      id: 'sow',
-      name: 'SOW',
-      desc: 'Up to 3 nearby rubble piles sprout bloom turrets at once, and a spore cloud heals 8% max HP over 3 s while slowing foes 40%. 10 s cooldown.',
+      id: 'popUpPark',
+      name: 'POP-UP PARK',
+      desc: 'Horns down: a ring burst (24 dmg, tangles 1 s), 4 ripe seeds fly at the nearest foes, then every pod within 12 body-heights goes off in one rolling chain. 8 s cooldown.',
     },
     dash: {
       name: 'BRAMBLE BOUND',
-      desc: 'A springy bound of 2.2 body-heights that tramples everything small along the way.',
+      desc: 'A springy bound of 2.2 body-heights that tramples everything small and drops 2 seed pods along the way.',
     },
   },
 };

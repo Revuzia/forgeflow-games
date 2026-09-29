@@ -17,7 +17,7 @@
 // colourway; the shader recombines them with per-instance colours.
 
 import * as THREE from 'three';
-import type { Enemy, SimEvent, TitanId, World } from '../core/types.ts';
+import type { Enemy, Hazard, SimEvent, TitanId, World } from '../core/types.ts';
 import { BIOMES } from '../data/biomes.ts';
 import { TITANS } from '../data/titans.ts';
 import { BURST_WORDS } from '../data/strings.ts';
@@ -70,6 +70,18 @@ const GATE_STAGGER_BAND: WordBand = { topMin: 0.22, centerMax: 1 / 3 };
 /** the LIMIT LIFTED kill stamp: below the nameplate AND the MASS BREACH strap that wipes in on the same tick */
 const GATE_KILL_BAND: WordBand = { topMin: 0.38 };
 const RIBBON_QUADS = 4096;
+/** TITAN PASS BRIARWICK pods (CONTRACT §8 view row): once this many seed bursts land inside SEED_WINDOW_S, further
+ *  bursts in the window draw only their spore ring decal (no petal spray / dust) — a 16-pod cascade stays cheap */
+const SEED_BUDGET = 6;
+const SEED_WINDOW_S = 0.1;
+/** spore motes drifting from each pod burst back to the titan (the heal): per burst, and live at most */
+const MOTES_PER_BURST = 3;
+const MOTES_MAX = 12;
+const MOTE_LIFE_S = 0.7;
+/** a POP-UP PARK volley pod's flight (the sim lands it after 0.3 s; hazardview hides it meanwhile) */
+const VOLLEY_FLIGHT_S = 0.3;
+/** cascade call-outs: the link counts that pop an "×N IN BLOOM!" word (link ≥ 5, CONTRACT §8) */
+const IN_BLOOM_AT: Record<number, string> = { 5: 'inBloom5', 8: 'inBloom8', 12: 'inBloom12', 16: 'inBloom16', 20: 'inBloom20' };
 
 /** local fallback burst words (ORIGINAL — used only if data/strings.ts lacks a key) */
 const FALLBACK_WORDS: Record<string, string[]> = {
@@ -81,6 +93,11 @@ const FALLBACK_WORDS: Record<string, string[]> = {
   // 'ability_<titanId>'; data/strings.ts may override any of them under the same key.
   ability_molo: ['SHLUUURP!', 'GLRRRK!', 'SHOOMP!'], ability_voltkite: ['ZAPPOW!', 'KZZZAK!'],
   ability_hearthback: ['FWASH!', 'KA-FWOOM!'], ability_briarwick: ['SPROING!', 'FWUMPH!', 'KA-BLOOM!'],
+  // TITAN PASS: BRIARWICK's POP-UP PARK (own key, so data/strings.ts's older SOW list under ability_briarwick does
+  // not override it) and the cascade call-outs
+  popupPark: ['POP-UP!', 'PARKED!', 'KA-BLOOM!'],
+  inBloom5: ['×5 IN BLOOM!'], inBloom8: ['×8 IN BLOOM!'], inBloom12: ['×12 IN BLOOM!'], inBloom16: ['×16 IN BLOOM!'],
+  inBloom20: ['×20 IN BLOOM!'],
   explosion: ['KA-BLAM!'], titanHurt: ['OOF!'], levelUp: ['DING!'], rankUp: ['BIGGER!'], bossHit: ['KLANNG!'],
   bossStagger: ['WOBBLE!'], bossDefeated: ['KRASSSH!'], pickup: ['TINK!'], chest: ['KA-CHUNK!'], generic: ['WHUMP!'],
   // GATEKEEPERS (§1, §6.7; lane K2a): each gatekeeper's own stagger word, the kill stamp, and the held level-up's
@@ -114,6 +131,12 @@ const WORD_STYLE: Record<string, WordStyle> = {
   ability_voltkite: { fill: '#6ff3ff', back: '#3b3f9e', size: 0.09, prio: 3, cd: 0.6 },
   ability_hearthback: { fill: '#ffe08a', back: '#ff5a2e', size: 0.09, prio: 3, cd: 0.6 },
   ability_briarwick: { fill: '#ff9ec7', back: '#5e8f3a', size: 0.09, prio: 3, cd: 0.6 },
+  popupPark:        { fill: '#ff9ec7', back: '#5e8f3a', size: 0.1, prio: 4, cd: 0.6 },
+  inBloom5:         { fill: '#d8ff7a', back: '#c2417f', size: 0.085, prio: 4, cd: 0.4 },
+  inBloom8:         { fill: '#d8ff7a', back: '#c2417f', size: 0.095, prio: 4, cd: 0.4 },
+  inBloom12:        { fill: '#fff27a', back: '#c2417f', size: 0.105, prio: 5, cd: 0.4 },
+  inBloom16:        { fill: '#fff27a', back: '#c2417f', size: 0.115, prio: 5, cd: 0.4 },
+  inBloom20:        { fill: '#ffffff', back: '#c2417f', size: 0.125, prio: 5, cd: 0.4 },
   explosion:        { fill: '#ffd166', back: '#e84a3c', size: 0.075, prio: 2, cd: 0.45 },
   titanHurt:        { fill: '#ffffff', back: '#e84a3c', size: 0.065, prio: 2, cd: 1.6 },
   levelUp:          { fill: '#fff27a', back: '#5b7cff', size: 0.075, prio: 3, cd: 0.5 },
@@ -132,7 +155,7 @@ const WORD_STYLE: Record<string, WordStyle> = {
 };
 
 const ABILITY_KEY: Record<string, string> = {
-  molo: 'ability_molo', voltkite: 'ability_voltkite', hearthback: 'ability_hearthback', briarwick: 'ability_briarwick',
+  molo: 'ability_molo', voltkite: 'ability_voltkite', hearthback: 'ability_hearthback', briarwick: 'popupPark',
 };
 
 // atlas icons (row after the words)
@@ -596,6 +619,9 @@ export class FxView implements ViewModule {
   private vacRingCd = 0;
   /** enemy arrival puffs left this frame (a cheat/perf burst of 250 spawns must not flood the pools) */
   private spawnFxLeft = 0;
+  /** TITAN PASS: view times of the recent seed bursts (the SEED_BUDGET window) and of the live spore motes */
+  private readonly seedTimes: number[] = [];
+  private readonly moteEnd: number[] = [];
   private readonly spawnV = new THREE.Vector3();
   private lastTime = 0;
   private readonly enemyMap = new Map<number, Enemy>();
@@ -753,6 +779,7 @@ export class FxView implements ViewModule {
     this.wordTokens = 4;
     this.cellShown.fill(-99);
     this.healAcc = 0; this.healCd = 0; this.pickupCd = 0; this.vacSpawnAcc = 0; this.vacRingCd = 0;
+    this.seedTimes.length = 0; this.moteEnd.length = 0;
     this.enemyMapTick = -1;
     this.ctx.scene.add(this.root);
     this.mounted = true;
@@ -981,11 +1008,14 @@ export class FxView implements ViewModule {
         break;
       }
       case 'bloomSpawn': {
+        const hz = this.hazard(w, e.id);
+        if (hz && hz.data.pod === 1) { this.podSpawn(w, e.x, e.z, !!hz.data.vol, f); break; }
         this.dustBurst(e.x, e.z, H * 0.3, 4, H * 0.12, 0.6, L('#b9e07a'));
         for (let i = 0; i < 5; i++) this.spritePart(e.x, H * 0.2, e.z, rnd(-1, 1) * H, rnd(1, 2) * H, rnd(-1, 1) * H, H * 0.15, IC_PETAL, '#ff9ec7', '#fff3b0', 0.8, H * 2, 1);
         if (Math.random() < 0.3) this.word('bloomSpawn', e.x, H * 0.7, e.z, f);
         break;
       }
+      case 'bloomBurst': this.podBurst(w, e.x, e.z, e.r, e.link, e.ripe, f); break;
       case 'spore': {
         const n = Math.round((10 + Math.min(20, e.r / Math.max(0.5, H) * 4)) * qm) + 3;
         const sc = L('#d8ff7a'), sc2 = L('#fff3b0');
@@ -1259,6 +1289,7 @@ export class FxView implements ViewModule {
   private onExplosion(w: World, x: number, z: number, r: number, kind: string, f: FrameInfo): void {
     const H = w.titan.height;
     const qm = Q_MUL[this.ctx.quality.level] ?? 1;
+    if (kind === 'seed') { this.seedBurst(w, x, z, r, f); return; }
     if (kind === 'stomp') {
       // HEARTHBACK magma stomp: a low molten splash
       this.explosion(x, z, r * 0.55, '#ffe08a', '#ff7a2e', '#b2331c', 0.7, H);
@@ -1285,6 +1316,94 @@ export class FxView implements ViewModule {
       this.ring(x, z, r * 0.2, r * 1.1, 0.45, L('#ffb36b'), 0.8, Math.max(0.3, r * 0.12));
       if (r > H * 0.3 && Math.random() < 0.5) this.word('explosion', x, r + H * 0.3, z, f);
     }
+  }
+
+  // ─────────────────────────────── TITAN PASS: BRIARWICK seed pods ───────────────────────────────
+  /**
+   * A 'seed' explosion: a BRIARWICK pod burst, or (centred on the titan) the POP-UP PARK horn stamp. Pods: a pink
+   * petal spray, a lime #d8ff7a spore ring decal at r fading over 0.35 s, a short dust kick. Past SEED_BUDGET
+   * bursts inside SEED_WINDOW_S only the ring decal is drawn. The stamp: a bark-dust ground ring + a lime ring at the
+   * ring radius and a seed-ruff flare of petals.
+   */
+  private seedBurst(w: World, x: number, z: number, r: number, f: FrameInfo): void {
+    const T = w.titan, H = T.height;
+    const qm = Q_MUL[this.ctx.quality.level] ?? 1;
+    const lime = L('#d8ff7a');
+    if (Math.hypot(x - T.x, z - T.z) < H * 0.05) {
+      // POP-UP PARK horn stamp (the kit emits its ring burst at the titan's own position)
+      this.ring(x, z, T.radius * 0.5, r, 0.5, this.dustCol, 0.75, H * 0.2, 0.15);
+      this.ring(x, z, r * 0.35, r, 0.45, lime, 0.95, H * 0.12, 0, 0.04, 12, 0.6);
+      this.dustBurst(x, z, r * 0.8, Math.round(10 * qm) + 3, H * 0.2, 0.8, L('#8a6a48'));
+      const n = Math.round(10 * qm) + 4;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + rnd(-0.2, 0.2);
+        this.spritePart(x + Math.cos(a) * T.radius * 0.6, H * 0.55, z + Math.sin(a) * T.radius * 0.6,
+          Math.cos(a) * H * rnd(2.2, 3.4), H * rnd(1.2, 2.2), Math.sin(a) * H * rnd(2.2, 3.4),
+          H * 0.2, IC_PETAL, i % 3 ? '#ff9ec7' : '#d8ff7a', '#fff3b0', rnd(0.6, 0.9), H * 3, 1);
+      }
+      return;
+    }
+    const now = f.time;
+    let n = 0;
+    for (let i = this.seedTimes.length - 1; i >= 0; i--) {
+      if (now - this.seedTimes[i] > SEED_WINDOW_S) { this.seedTimes.splice(0, i + 1); break; }
+      n++;
+    }
+    this.seedTimes.push(now);
+    // the spore ring decal: always (it is the burst's footprint)
+    this.ring(x, z, r * 0.25, r, 0.35, lime, 0.9, Math.max(H * 0.08, r * 0.12), 0.18);
+    if (n >= SEED_BUDGET) return;
+    const k = Math.round(6 * qm) + 2;
+    for (let i = 0; i < k; i++) {
+      const a = rnd(0, Math.PI * 2), sp = rnd(1.4, 2.6);
+      this.spritePart(x, H * 0.3, z, Math.cos(a) * r * sp, H * rnd(1.4, 2.6), Math.sin(a) * r * sp,
+        H * rnd(0.13, 0.19), IC_PETAL, i % 4 === 3 ? '#d8ff7a' : '#ff9ec7', '#fff3b0', rnd(0.5, 0.75), H * 3, 1);
+    }
+    this.dustBurst(x, z, r * 0.5, Math.round(3 * qm) + 1, H * 0.12, 0.5, L('#9a7a52'));
+  }
+
+  /** A pod's burst event: spore motes drift to the titan (the heal; <= MOTES_MAX live) and the cascade call-out */
+  private podBurst(w: World, x: number, z: number, r: number, link: number, ripe: number, f: FrameInfo): void {
+    const T = w.titan, H = T.height;
+    const now = f.time;
+    let live = 0;
+    for (let i = 0; i < this.moteEnd.length; i++) if (this.moteEnd[i] > now) this.moteEnd[live++] = this.moteEnd[i];
+    this.moteEnd.length = live;
+    const m = Math.min(MOTES_PER_BURST, MOTES_MAX - live);
+    for (let i = 0; i < m; i++) {
+      const sx = x + rnd(-0.3, 0.3) * r, sz = z + rnd(-0.3, 0.3) * r, life = MOTE_LIFE_S * rnd(0.85, 1.1);
+      // aim at where the titan's chest will be; the sprite's 0.8 /s drag is paid back so it arrives
+      const k = 1.3 / life;
+      this.spritePart(sx, H * 0.35, sz, (T.x - sx) * k, H * 0.6 / life, (T.z - sz) * k,
+        H * 0.1, IC_DOT, '#d8ff7a', '#ffffff', life, 0, 0);
+      this.moteEnd.push(now + life);
+    }
+    const key = ripe >= 1 ? IN_BLOOM_AT[link] : undefined;
+    if (key) this.word(key, x, H * 1.1, z, f);
+  }
+
+  /** A pod planted: a small soil kick (the bulb pops in on hazardview); a volley pod flies there first */
+  private podSpawn(w: World, x: number, z: number, vol: boolean, f: FrameInfo): void {
+    const T = w.titan, H = T.height;
+    if (vol) {
+      // POP-UP PARK seed volley: a seed arcs from the ruff to the landing point over the 0.3 s flight
+      const x0 = T.x, z0 = T.z, y0 = H * 0.8, fl = VOLLEY_FLIGHT_S;
+      const g = H * 18;
+      const dk = 1 / Math.exp(-0.8 * fl * 0.5);                   // pay back the sprite drag
+      const vx = ((x - x0) / fl) * dk, vz = ((z - z0) / fl) * dk;
+      const vy = (0.1 * H - y0) / fl + 0.5 * g * fl;
+      this.spritePart(x0, y0, z0, vx, vy, vz, H * 0.22, IC_DOT, '#5e8f3a', '#d8ff7a', fl, g, 0);
+      this.spritePart(x0, y0, z0, vx * 0.97, vy * 0.97, vz * 0.97, H * 0.16, IC_PETAL, '#ff9ec7', '#fff3b0', fl * 1.05, g, 0);
+      return;
+    }
+    this.dustBurst(x, z, H * 0.2, 2, H * 0.08, 0.45, L('#b9e07a'));
+    if (Math.random() < 0.08) this.word('bloomSpawn', x, H * 0.7, z, f);
+  }
+
+  private hazard(w: World, id: number): Hazard | undefined {
+    const hs = w.hazards;
+    for (let i = hs.length - 1; i >= 0; i--) if (hs[i].id === id) return hs[i];
+    return undefined;
   }
 
   // ─────────────────────────────── spawners ───────────────────────────────

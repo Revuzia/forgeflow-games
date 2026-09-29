@@ -9,6 +9,12 @@
 //          leaves, a bulb pod whose five petals snap OPEN when it fires a seed (and part just
 //          before), swells on each spore pulse, grows in with a spring and WITHERS (droops,
 //          browns, sinks) over its last seconds.
+//   bloom  BRIARWICK SEED POD (TITAN PASS kit C, CONTRACT §8; `data.pod === 1`) — unripe: a closed moss bulb in a
+//          bark husk that swells 0.6 → 1.0 with `data.ripe`; ripe: the husk splits into a 5-petal pink blossom over
+//          a lime halo decal (0.6 H) with a 2 Hz bob; fused (`data.fuse` ≥ 0, a chain / POP-UP PARK link): a ±4 %
+//          20 Hz shiver and a glow ramp to the pop. Volley pods (`data.vol`) stay hidden for their 0.3 s flight
+//          (fx.ts draws the seed arc) and a burst pod vanishes at once (fx.ts draws the burst). Card blooms of the
+//          other titans keep the turret plant above.
 //   spore  healing spore cloud — soft green haze with a dotted swirling rim, translucent puffs
 //          drifting round the edge and motes rising.
 //   frost  ice zone — pale fern-cracked decal with a bright rim and ink edge (reads on snow),
@@ -52,6 +58,11 @@ const END_FADE_S = 0.6;
 const PINK_FALLBACK = '#ff4fa0';
 const SHAPE_ID = { circle: 0, ring: 1, cone: 2, lane: 3, oval: 4, capsule: 5 } as const;
 const MAX_TURRETS = 32;
+/** TITAN PASS pods (CONTRACT §8 BRIARWICK): POP-UP PARK volley pods fly this long before they land (fx draws the
+ *  arc meanwhile); the husk splits into the blossom over POD_OPEN_S once ripe; halo radius in body heights */
+const VOLLEY_FLIGHT_S = 0.3;
+const POD_OPEN_S = 0.28;
+const POD_HALO_H = 0.6;
 
 // ─────────────────────────────── decal shaders ───────────────────────────────
 const DECAL_VERT = /* glsl */ `
@@ -285,11 +296,34 @@ vec4 paint(vec2 L, float sd, float R, float t, float seed, float aa, float life)
   return vec4(col, 0.88 * inside);
 }`,
   bloom: /* glsl */ `
-vec4 paint(vec2 L, float sd, float R, float t, float seed, float aa, float life) {
+// TITAN PASS seed pod (vE.w >= 0): a soil core of 0.5 R under the bulb and, once ripe (vE.z), a lime #d8ff7a halo
+// out to R (= 0.6 H) with an ink hairline so it reads on snow; vE.w = fuse progress (brighter + pulsing to the pop)
+vec4 podPaint(vec2 L, float R, float t, float seed, float aa) {
+  float d = length(L);
+  float ripe = clamp(vE.z, 0.0, 1.0), fz = clamp(vE.w, 0.0, 1.0);
+  float rc = R * 0.36;
+  float n = vnoise(L / (R * 0.2) + seed * 19.0);
+  float core = 1.0 - smoothstep(rc - aa * 2.0, rc + aa * 2.0, d + (n - 0.5) * rc * 0.35);
+  vec3 soil = mix(lin(vec3(0.29, 0.23, 0.165)), lin(vec3(0.42, 0.29, 0.18)), vnoise(L / (R * 0.08)));
+  soil = mix(soil, lin(vec3(0.37, 0.56, 0.23)), step(0.62, n) * 0.8);
+  float halo = ripe * (1.0 - smoothstep(R - aa * 2.0, R, d));
+  float pulse = 0.5 + 0.5 * sin(t * 12.566);
+  vec3 lime = lin(vec3(0.847, 1.0, 0.478));
+  vec3 hc = mix(lime, vec3(1.0, 1.0, 0.85), fz * (0.35 + 0.35 * pulse));
+  float ha = halo * mix(0.42, 0.62, smoothstep(rc, R, d)) + halo * fz * 0.3;
+  float ink = ripe * (1.0 - smoothstep(0.0, max(aa * 1.5, uPx * 1.4), abs(d - R + uPx * 1.2)));
+  vec3 col = mix(hc, soil, core);
+  float a = max(core * 0.92, ha);
+  col = mix(col, uInk, ink * 0.8);
+  a = max(a, ink * 0.85);
+  return vec4(col, a);
+}
+// card turret (vE.w < 0): the soil patch; single exit (D3D's HLSL flags a branch-return into paint() as possibly
+// uninitialised, warning X4000, when paint dispatches between two returning helpers)
+vec4 turretPaint(vec2 L, float sd, float R, float seed, float aa, float life) {
   float n = vnoise(L / (R * 0.4) + seed * 19.0);
   float e = sd + (n - 0.5) * R * 0.35;
   float inside = 1.0 - smoothstep(-aa * 2.0, aa * 2.0, e);
-  if (inside <= 0.001) return vec4(0.0);
   // round moss tufts + fallen petals scattered on the soil (jittered dots, one per cell)
   float cs = max(R * 0.16, 1e-3);
   vec2 cell = floor(L / cs);
@@ -302,6 +336,12 @@ vec4 paint(vec2 L, float sd, float R, float t, float seed, float aa, float life)
   if (h > 0.9) col = mix(col, lin(vec3(1.0, 0.62, 0.78)), dotM);
   col = mix(col, soil * 0.7, life * 0.8);
   return vec4(col, 0.9 * inside);
+}
+vec4 paint(vec2 L, float sd, float R, float t, float seed, float aa, float life) {
+  vec4 c = vec4(0.0);
+  if (vE.w > -0.5) c = podPaint(L, R, t, seed, aa);
+  else c = turretPaint(L, sd, R, seed, aa, life);
+  return c;
 }`,
 };
 
@@ -570,6 +610,28 @@ function petalGeo(): THREE.BufferGeometry {
   g.leaf(1, 0.55, 0.12, '#e86aa0', '#ffd0e4');
   return g.build(true);
 }
+/** TITAN PASS pod bulb: a closed moss teardrop (unit height, radius ≈ 0.42), lighter toward the tip. Bright moss
+ *  lime-moss greens (not the darker #5e8f3a of the spec row): the G5 gate needs luminance contrast >= 25 against the
+ *  teal GRID-EAST and grey WHITE STACKS roads (measured L 98–132 on screen; LOCKWATER's are ~23–38) — a darker moss
+ *  sat within 10 of GRID-EAST's Size-I road; the dark bark husk collar keeps the "closed bud" read. */
+function bulbGeo(): THREE.BufferGeometry {
+  const g = new Geo();
+  g.latheY([0.12, 0, 0.36, 0.14, 0.44, 0.38, 0.38, 0.62, 0.22, 0.84, 0.06, 0.97, 0, 1.0], 7,
+    (ring, seg) => (ring >= 5 ? '#ecffb4' : ring >= 4 ? '#d2f384' : seg % 2 ? '#acde64' : '#b9e870'));
+  return g.build(true);
+}
+/** TITAN PASS pod petal: a broad, saturated #ff9ec7 petal (five make the ripe blossom) */
+function podPetalGeo(): THREE.BufferGeometry {
+  const g = new Geo();
+  g.leaf(1, 0.8, 0.1, '#ff9ec7', '#ffd8ea');
+  return g.build(true);
+}
+/** TITAN PASS pod husk: a bark sepal (three cup the bulb, then split open under the blossom) */
+function huskGeo(): THREE.BufferGeometry {
+  const g = new Geo();
+  g.leaf(1, 0.9, 0.14, '#5a3c24', '#8a6a44');
+  return g.build(true);
+}
 function leafGeo(): THREE.BufferGeometry {
   const g = new Geo();
   g.leaf(1, 0.5, 0.1, '#3f7a2a', '#8fbf4f');
@@ -623,6 +685,9 @@ interface HzRec {
   seed: number;
   /** paint: seconds over which a stripe is laid along its capsule (data.reveal; 0 = all at once) */
   reveal: number;
+  /** TITAN PASS seed pod (bloom with data.pod === 1): ripeness 0..1, fuse seconds (< 0 none), volley pod,
+   *  when it turned ripe / was fused (view time), and the fuse length at that moment */
+  pod: boolean; ripe: number; fuse: number; vol: boolean; ripeAt: number; fuseAt: number; fuse0: number;
 }
 
 function newRec(): HzRec {
@@ -630,6 +695,7 @@ function newRec(): HzRec {
     id: -1, kind: 'fire', owner: 'titan', k: 'circle', x: 0, z: 0, rot: 0, p0: 0, p1: 0, p2: 0, p3: 0,
     x0: 0, z0: 0, x1: 0, z1: 0, t: 0, life: 1, size: 1, h: 1, cd: 1, spore: 4, fireAt: -99, sporeAt: -99,
     armed: false, shots: -1, seen: false, goneAt: -1, seed: 0, reveal: 0,
+    pod: false, ripe: 0, fuse: -1, vol: false, ripeAt: -99, fuseAt: -99, fuse0: 1,
   };
 }
 
@@ -679,6 +745,9 @@ export class HazardView implements ViewModule {
   private readonly pod: IM;
   private readonly petals: IM;
   private readonly leaves: IM;
+  private readonly bulbs: IM;
+  private readonly husks: IM;
+  private readonly podPetals: IM;
   private readonly crystals: IM;
   private readonly bubbles: IM;
   private readonly flames: IM;
@@ -695,6 +764,8 @@ export class HazardView implements ViewModule {
   private endK = 1;
   /** hazards drawn last frame (debug / tests) */
   private drawnN = 0;
+  /** view time of this frame (the decal writer reads the pod ramps with it) */
+  private lastNow = 0;
   get drawn(): number { return this.drawnN; }
 
   // scratch
@@ -776,12 +847,15 @@ export class HazardView implements ViewModule {
     this.pod = mk('pod', podGeo(), toon, MAX_TURRETS, 1.8, true);
     this.petals = mk('petal', petalGeo(), toon, MAX_TURRETS * 5, 1.4, true);
     this.leaves = mk('leaf', leafGeo(), toon, MAX_TURRETS * 3, 1.3, true);
+    this.bulbs = mk('podBulb', bulbGeo(), toon, MAX_TURRETS, 1.8, true);
+    this.husks = mk('podHusk', huskGeo(), toon, MAX_TURRETS * 3, 1.4, true);
+    this.podPetals = mk('podPetal', podPetalGeo(), toon, MAX_TURRETS * 5, 1.4, true);
     this.crystals = mk('crystal', crystalGeo(), toon, 320, 1.4, false);
     this.bubbles = mk('bubble', bubbleGeo(), basic, 256, 0, false);
     this.flames = mk('flame', flameGeo(), basic, 256, 1.2, false);
     this.puffs = mk('sporePuff', puffGeo(), puffMat, 512, 0, false, 7);
     // turret parts cast shadows: they are the only tall hazard dressing
-    for (const m of [this.mound, this.stem, this.pod, this.petals, this.leaves]) m.mesh.castShadow = true;
+    for (const m of [this.mound, this.stem, this.pod, this.petals, this.leaves, this.bulbs, this.husks, this.podPetals]) m.mesh.castShadow = true;
   }
 
   /** KEEP GOING (ViewModule.resumeAfterEnd): the runEnd stage fade is over — hazards draw again */
@@ -825,7 +899,7 @@ export class HazardView implements ViewModule {
   private imList: IM[] | null = null;
   /** every instanced dressing mesh (cached: no per-frame allocation) */
   private ims(): IM[] {
-    if (!this.imList) this.imList = [this.mound, this.stem, this.pod, this.petals, this.leaves, this.crystals, this.bubbles, this.flames, this.puffs];
+    if (!this.imList) this.imList = [this.mound, this.stem, this.pod, this.petals, this.leaves, this.bulbs, this.husks, this.podPetals, this.crystals, this.bubbles, this.flames, this.puffs];
     return this.imList;
   }
 
@@ -836,6 +910,7 @@ export class HazardView implements ViewModule {
 
   update(w: World, f: FrameInfo): void {
     const now = f.time;
+    this.lastNow = now;
     // the renderer's own CSS size (setSize), not canvas.clientHeight: reading a layout property here forced a
     // synchronous style/layout flush every frame (0.3 ms of HazardView's time, GATEKEEPERS §8.3 perf (d))
     const cssH = Math.max(1, this.ctx.renderer.getSize(_cssSize).y || 720);
@@ -862,6 +937,7 @@ export class HazardView implements ViewModule {
       if (!r) {
         r = this.pool.pop() ?? newRec();
         r.id = h.id; r.goneAt = -1; r.fireAt = -99; r.sporeAt = -99; r.armed = false; r.shots = -1;
+        r.pod = false; r.ripe = 0; r.fuse = -1; r.vol = false; r.ripeAt = -99; r.fuseAt = -99; r.fuse0 = 1;
         r.seed = ((h.id * 2654435761) >>> 0) / 4294967296;
         r.cd = h.data.cd ?? 1; r.spore = h.data.spore ?? 4;
         this.recs.set(h.id, r);
@@ -887,6 +963,10 @@ export class HazardView implements ViewModule {
     let turrets = 0;
     this.drawnN = 0;
     for (const r of this.recs.values()) {
+      // a burst pod is gone at once: fx.ts draws the burst (no 0.2 s fade of a pod that already popped)
+      if (r.pod && r.goneAt >= 0) continue;
+      // a volley pod is in the air for its first 0.3 s (fx.ts draws the seed arc)
+      if (r.pod && r.vol && r.t < VOLLEY_FLIGHT_S) continue;
       const fade = this.fadeOf(r, now) * endK;
       if (fade <= 0.001) continue;
       this.decal(r, fade, px);
@@ -894,7 +974,7 @@ export class HazardView implements ViewModule {
       switch (r.kind) {
         case 'wire': this.drawWire(r, fade, px, now, lvl); break;
         case 'magma': this.drawMagma(r, fade, px, now, lvl); break;
-        case 'bloom': if (turrets++ < MAX_TURRETS) this.drawBloom(r, fade, px, now); break;
+        case 'bloom': if (turrets++ < MAX_TURRETS) { if (r.pod) this.drawPod(r, fade, px, now); else this.drawBloom(r, fade, px, now); } break;
         case 'spore': this.drawSpore(r, fade, px, now, lvl); break;
         case 'frost': this.drawFrost(r, fade, px, now, lvl); break;
         case 'fire': this.drawFire(r, fade, px, now, lvl); break;
@@ -918,6 +998,17 @@ export class HazardView implements ViewModule {
     if (h.kind === 'bloom') {
       const hh = h.data.h;
       r.h = hh !== undefined && hh > 0 ? hh : Math.max(0.5, r.size / 0.3);
+      if (h.data.pod === 1) {
+        // TITAN PASS seed pod: ripeness / fuse transitions stamp view times for the open + glow ramps
+        const ripe = Number.isFinite(h.data.ripe) ? h.data.ripe : 0;
+        const fuse = Number.isFinite(h.data.fuse) ? h.data.fuse : -1;
+        if (!r.pod) { r.ripeAt = ripe >= 1 ? now - POD_OPEN_S : -99; r.fuseAt = -99; }
+        else if (ripe >= 1 && r.ripe < 1) r.ripeAt = now;
+        if (fuse >= 0 && r.fuse < 0) { r.fuseAt = now; r.fuse0 = Math.max(0.05, fuse); }
+        r.pod = true; r.ripe = ripe; r.fuse = fuse; r.vol = !!h.data.vol;
+        return;
+      }
+      r.pod = false;
       // Shot detection. The kit re-arms the SAME cooldown field when it finds no target (seedRetryS),
       // so a cooldown jump is NOT a shot (that made idle pods recoil ~4x/s with no seed fired). A real
       // shot is either a change of h.data.shots (when the kit publishes a counter) or a new 'seed'
@@ -1015,8 +1106,11 @@ export class HazardView implements ViewModule {
     const d = b.f;
     const pad = r.size * 0.3 + px * 6;
     let umin: number, umax: number, vmin: number, vmax: number, mode: number;
+    // TITAN PASS pod: the decal covers the ripe halo (0.6 H), the soil core is its inner half
+    const podR = r.pod ? Math.max(POD_HALO_H * r.h, r.size * 2, px * 8) : 0;
+    const p0 = r.pod ? podR : r.p0;
     switch (r.k) {
-      case 'circle': mode = SHAPE_ID.circle; umin = vmin = -(r.p0 + pad); umax = vmax = r.p0 + pad; break;
+      case 'circle': mode = SHAPE_ID.circle; umin = vmin = -(p0 + pad); umax = vmax = p0 + pad; break;
       case 'ring': mode = SHAPE_ID.ring; umin = vmin = -(r.p1 + pad); umax = vmax = r.p1 + pad; break;
       case 'cone': mode = SHAPE_ID.cone; umin = vmin = -(r.p0 + pad); umax = vmax = r.p0 + pad; break;
       case 'lane': mode = SHAPE_ID.lane; umin = -(r.p1 * 0.5 + pad); umax = r.p1 * 0.5 + pad; vmin = -pad; vmax = r.p0 + pad; break;
@@ -1024,12 +1118,18 @@ export class HazardView implements ViewModule {
       default: mode = SHAPE_ID.capsule; umin = -(r.p1 + pad); umax = r.p1 + pad; vmin = -(r.p1 + pad); vmax = r.p0 + r.p1 + pad; break;
     }
     d[o] = r.x; d[o + 1] = r.z; d[o + 2] = r.rot; d[o + 3] = mode;
-    d[o + 4] = r.p0; d[o + 5] = r.p1; d[o + 6] = r.p2; d[o + 7] = r.p3;
+    d[o + 4] = p0; d[o + 5] = r.p1; d[o + 6] = r.p2; d[o + 7] = r.p3;
     d[o + 8] = umin; d[o + 9] = umax; d[o + 10] = vmin; d[o + 11] = vmax;
     const wither = r.kind === 'bloom' ? clamp01((3 - (r.life - r.t)) / 3) : clamp01(r.t / r.life);
     // WET PAINT only slows: no pink "hurts you" rim (its own dashed yellow border reads as the edge)
     d[o + 12] = fade; d[o + 13] = r.t; d[o + 14] = wither; d[o + 15] = r.owner === 'titan' || r.kind === 'paint' ? 0 : 1;
-    d[o + 16] = r.seed; d[o + 17] = Math.max(r.size, px * 3); d[o + 18] = 1; d[o + 19] = r.kind === 'paint' ? r.reveal : 0;
+    d[o + 16] = r.seed; d[o + 17] = r.pod ? podR : Math.max(r.size, px * 3); d[o + 18] = 1;
+    d[o + 19] = r.kind === 'paint' ? r.reveal : 0;
+    if (r.kind === 'bloom') {
+      // bloom shader: vE.z = the pod's ripe glow (0..1), vE.w = fuse progress (≥ 0: a pod; −1: a card turret)
+      d[o + 18] = r.pod ? this.podOpen(r, this.lastNow) : 1;
+      d[o + 19] = r.pod ? this.podFuse(r, this.lastNow) : -1;
+    }
   }
 
   // ─────────────────────────────── wire: crackling bolts ───────────────────────────────
@@ -1199,6 +1299,78 @@ export class HazardView implements ViewModule {
       this.v.set(r.x, sc * 0.14, r.z);
       const ls = sc * (0.36 + 0.06 * k);
       this.put(this.leaves, this.v, this.q, this.s.set(ls, ls, ls), tint);
+    }
+  }
+
+  // ─────────────────────────────── TITAN PASS: BRIARWICK seed pod ───────────────────────────────
+  /** 0..1 blossom opening (0 unripe, eases to 1 over POD_OPEN_S after the pod turns ripe) */
+  private podOpen(r: HzRec, now: number): number {
+    if (r.ripe < 1) return 0;
+    const k = clamp01((now - r.ripeAt) / POD_OPEN_S);
+    return k < 1 ? clamp01(easeOutBack(k)) : 1;
+  }
+  /** 0..1 fuse progress (0 when not fused) */
+  private podFuse(r: HzRec, now: number): number {
+    if (r.fuse < 0 || r.fuseAt < 0) return 0;
+    return clamp01((now - r.fuseAt) / r.fuse0);
+  }
+
+  private drawPod(r: HzRec, fade: number, px: number, now: number): void {
+    // unit U: the full (ripe) bulb height. 0.55 H so an unripe bulb (0.6 U = 0.33 H tall) is >= 0.3 H and fills
+    // the 0.3 H pod footprint; >= 26 px so an unripe bulb stays >= 12 px across at the widest camera
+    const U = Math.max(0.55 * r.h, 26 * px);
+    const grow = clamp01(r.t / 0.18);                          // the burr pops in
+    const g = (grow < 1 ? easeOutBack(grow) : 1) * this.endK;
+    if (g <= 0.001) return;
+    const phase = r.seed * 6.2832;
+    const open = this.podOpen(r, now);
+    const fz = this.podFuse(r, now);
+    const fused = r.fuse >= 0;
+    // unripe swell 0.6 -> 1.0 with ripeness; ripe: a 2 Hz bob; fused: +-4 % at 20 Hz
+    const swell = 0.6 + 0.4 * clamp01(r.ripe);
+    const shiver = fused ? 1 + 0.04 * Math.sin(now * 125.66 + phase) : 1;
+    const bob = open > 0 ? Math.sin(now * 12.566 + phase) * 0.05 * U * open : 0;
+    const sc = U * g * shiver;
+    const tint = this.col;
+    // soil mound
+    this.v.set(r.x, 0, r.z);
+    this.q.setFromAxisAngle(HazardView.Y, phase);
+    const ms = sc * 0.22;
+    this.put(this.mound, this.v, this.q, this.s.set(ms, ms * 0.8, ms));
+    // bulb: closed moss teardrop; ripe -> it shrinks into the blossom's heart and warms toward lime
+    const bs = sc * swell * (1 - 0.42 * open);
+    const glow = 1 + fz * 0.7;
+    // lifted 1.45x so the toon-shaded bulb's mean luminance (shadow band included) clears the lighter roads by
+    // >= 25 at every Size (G5; 1.3x measured 22-23 over GRID-EAST's Size III/V road)
+    tint.setRGB(1.45 + 0.05 * open, 1.45, 1.3 - 0.2 * open).multiplyScalar(glow);
+    this.v.set(r.x, sc * 0.04 + bob, r.z);
+    this.q.setFromAxisAngle(HazardView.Y, phase);
+    this.put(this.bulbs, this.v, this.q, this.s.set(bs, bs, bs), tint);
+    // bark husk: three sepals cup the bulb, then split open flat under the blossom
+    tint.setRGB(1, 1, 1).multiplyScalar(1 + fz * 0.4);
+    const hl = sc * (0.42 + 0.08 * swell + 0.06 * open);
+    const cupA = 0.62 + (1.35 - 0.62) * open;             // a bark collar under the bulb, flat once ripe
+    for (let k = 0; k < 3; k++) {
+      const a = phase + (k / 3) * Math.PI * 2;
+      this.q1.setFromAxisAngle(HazardView.Y, a);
+      this.q2.setFromAxisAngle(HazardView.X, cupA);
+      this.q.copy(this.q1).multiply(this.q2);
+      this.v.set(r.x + Math.sin(a) * bs * 0.18, sc * 0.03 + bob * 0.5, r.z + Math.cos(a) * bs * 0.18);
+      this.put(this.husks, this.v, this.q, this.s.set(hl, hl, hl), tint);
+    }
+    if (open <= 0.001) return;
+    // ripe: five pink petals unfurl round the heart
+    const pl = sc * 0.6 * open;
+    const petalA = 0.45 + 0.8 * open;
+    tint.setRGB(1, 1, 1).multiplyScalar(glow);
+    const hy = sc * 0.04 + bob + bs * 0.35;
+    for (let k = 0; k < 5; k++) {
+      const a = phase * 0.5 + (k / 5) * Math.PI * 2;
+      this.q1.setFromAxisAngle(HazardView.Y, a);
+      this.q2.setFromAxisAngle(HazardView.X, petalA);
+      this.q.copy(this.q1).multiply(this.q2);
+      this.v.set(r.x + Math.sin(a) * bs * 0.28, hy, r.z + Math.cos(a) * bs * 0.28);
+      this.put(this.podPetals, this.v, this.q, this.s.set(pl, pl, pl), tint);
     }
   }
 

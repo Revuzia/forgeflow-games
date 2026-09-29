@@ -15,6 +15,9 @@
 //     multiplicative with the painted vertex colours and cannot reach white on navy, so it
 //     carries the veteran gold / frost-slow tint instead);
 //   * spawn pop-in (easeOutBack on sim time since spawnT), death → hidden (fx does the puff).
+//   * TITAN PASS root coils (CONTRACT §8 BRIARWICK TANGLE, graft G1): a `rooted {id, t}` event wraps 2–3 moss
+//     #5e8f3a vine loops round the foe's legs for t s (one instanced ring mesh + ink), so a tangled foe reads as
+//     held by the garden, not frozen by a bug. The stun wobble below is its struggle.
 //   * distance LOD: shadows off past ENEMY_SHADOW_MAX_D, ink hulls off below INK_MIN_RATIO, and
 //     below FAR_RATIO a kind swaps to its merged, decimated far mesh (one instance per enemy).
 // Zero per-frame allocation: scratch math objects + pooled per-enemy view records.
@@ -25,7 +28,7 @@ import { ENEMY_KINDS } from '../core/types.ts';
 import { CITY, SIM_DT } from '../core/config.ts';
 import { BIOMES } from '../data/biomes.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from '../render/viewtypes.ts';
-import { addOutline, indexGeometry } from '../render/materials.ts';
+import { addOutline, indexGeometry, makeToon } from '../render/materials.ts';
 import { buildFoeFar, buildFoeModel, disposeFoeModel, makeFoeMaterial, PIV_STRIDE } from './foemodels.ts';
 import type { FoeMaterial, FoeModel, FoePart } from './foemodels.ts';
 
@@ -54,6 +57,10 @@ const FAR_RATIO = 0.0085, FAR_HYST = 1.15;
  *  triangles per trooper — ~160k triangles for 250 foes at Size V, the second-largest vertex load
  *  after the city on the reference Intel UHD. */
 const FAR_CELLS = 9;
+/** TITAN PASS root coils: loops per rooted foe, instance cap (foes × loops), grow-in / let-go times (s) */
+const COIL_LOOPS = 3;
+const COIL_CAP = 96 * COIL_LOOPS;
+const COIL_IN_S = 0.12, COIL_OUT_S = 0.18;
 
 // ─────────────────────────────── per-enemy view record (pooled) ───────────────────────────────
 interface Vis {
@@ -74,11 +81,13 @@ interface Vis {
   plant: number;         // walker planted stance 0..1
   aimK: number;          // biped weapon raised 0..1
   seed: number;          // cosmetic phase offset
+  /** TITAN PASS: root coils — view time they let go (< 0 none) and the tangle length */
+  rootEnd: number; rootLen: number;
 }
 function newVis(): Vis {
   return {
     id: -1, seen: 0, init: false, lx: 0, lz: 0, lh: 0, dist: 0, speed: 0, turn: 0, roll: 0, steer: 0,
-    tYaw: 0, recoil: 0, flash: 0, blade: 0, hatch: 0, plant: 0, aimK: 0, seed: 0,
+    tYaw: 0, recoil: 0, flash: 0, blade: 0, hatch: 0, plant: 0, aimK: 0, seed: 0, rootEnd: -1, rootLen: 1,
   };
 }
 
@@ -157,6 +166,11 @@ export class EnemyView implements ViewModule {
   private frame = 0;
   private time = 0;
   private mounted = false;
+  /** TITAN PASS root coils (one instanced faceted ring + ink hull) */
+  private readonly coils: THREE.InstancedMesh;
+  private readonly coilMat: THREE.Material;
+  private readonly coilR: Range = { start: 0, count: 0 };
+  private coilN = 0;
 
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
@@ -164,6 +178,29 @@ export class EnemyView implements ViewModule {
     this.root.matrixAutoUpdate = false;
     this.mat = makeFoeMaterial(true);
     for (const kind of ENEMY_KINDS) { const b = this.buildBatch(kind); this.batches.set(kind, b); this.batchList.push(b); }
+    // root coil: a low faceted torus (unit radius, lying flat) painted in moss / leaf bands
+    const tg = new THREE.TorusGeometry(1, 0.16, 4, 10).toNonIndexed();
+    tg.rotateX(Math.PI / 2);
+    const cnt = tg.getAttribute('position').count;
+    const col = new Float32Array(cnt * 3);
+    const moss = new THREE.Color('#5e8f3a'), leaf = new THREE.Color('#8fbf4f'), bark = new THREE.Color('#6b4a2f');
+    for (let t = 0; t < cnt / 3; t++) {
+      const c = t % 7 === 0 ? leaf : t % 11 === 0 ? bark : moss;
+      for (let k = 0; k < 3; k++) { col[(t * 3 + k) * 3] = c.r; col[(t * 3 + k) * 3 + 1] = c.g; col[(t * 3 + k) * 3 + 2] = c.b; }
+    }
+    tg.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    tg.computeVertexNormals();
+    this.coilMat = makeToon({ vertexColors: true, flat: true });
+    this.coils = new THREE.InstancedMesh(tg, this.coilMat, COIL_CAP);
+    this.coils.name = 'foe:rootCoils';
+    this.coils.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.coils.count = 0;
+    this.coils.visible = false;
+    this.coils.frustumCulled = false;
+    this.coils.matrixAutoUpdate = false;
+    this.coils.castShadow = false;
+    addOutline(this.coils, 1.6);
+    this.root.add(this.coils);
   }
 
   private buildBatch(kind: EnemyKind): KindBatch {
@@ -234,6 +271,7 @@ export class EnemyView implements ViewModule {
       for (const p of b.parts) { p.mesh.count = 0; p.mesh.visible = false; }
       b.far.mesh.count = 0; b.far.mesh.visible = false; b.useFar = false;
     }
+    this.coils.count = 0; this.coils.visible = false;
     this.root.updateMatrixWorld(true);
   }
 
@@ -254,6 +292,7 @@ export class EnemyView implements ViewModule {
       b.far.mesh.geometry.dispose(); b.far.mesh.dispose();
       disposeFoeModel(b.model);
     }
+    this.coils.geometry.dispose(); this.coils.dispose(); this.coilMat.dispose();
     this.mat.dispose();
   }
 
@@ -268,7 +307,7 @@ export class EnemyView implements ViewModule {
     if (!v) {
       v = this.pool.pop() ?? newVis();
       v.id = e.id; v.init = false; v.dist = 0; v.speed = 0; v.turn = 0; v.roll = 0; v.steer = 0;
-      v.tYaw = 0; v.recoil = 0; v.flash = 0; v.blade = 0; v.hatch = 0; v.plant = 0; v.aimK = 0;
+      v.tYaw = 0; v.recoil = 0; v.flash = 0; v.blade = 0; v.hatch = 0; v.plant = 0; v.aimK = 0; v.rootEnd = -1; v.rootLen = 1;
       v.seed = ((e.id * 0.6180339887) % 1) * Math.PI * 2;
       this.vis.set(e.id, v);
       this.visList.push(v);
@@ -285,7 +324,12 @@ export class EnemyView implements ViewModule {
     for (let i = 0; i < f.events.length; i++) {
       const ev = f.events[i];
       if (ev.type === 'enemyFire') { const v = this.vis.get(ev.id); if (v) v.recoil = 1; }
+      else if (ev.type === 'rooted') {
+        const v = this.vis.get(ev.id);
+        if (v && ev.t > 0) { v.rootEnd = Math.max(v.rootEnd, this.time + ev.t); v.rootLen = Math.max(0.2, ev.t); }
+      }
     }
+    this.coilN = 0;
 
     const BL = this.batchList;
     for (let bi = 0; bi < BL.length; bi++) { const b = BL[bi]; b.drawn = 0; b.far.n = 0; for (let pi = 0; pi < b.parts.length; pi++) b.parts[pi].n = 0; }
@@ -350,6 +394,9 @@ export class EnemyView implements ViewModule {
         markRange(F.color, F.rC, fn * 3);
       }
     }
+    this.coils.count = this.coilN;
+    this.coils.visible = this.coilN > 0;
+    if (this.coilN > 0) markRange(this.coils.instanceMatrix, this.coilR, this.coilN * 16);
 
     // forget enemies that died / were compacted away (pooled, swap-remove, no allocation)
     const VL = this.visList;
@@ -442,6 +489,7 @@ export class EnemyView implements ViewModule {
     _q.setFromEuler(_e.set(rx, h, rz, 'YXZ'));
     _scl.set(s, s, s);
     _root.compose(_pos, _q, _scl);
+    if (v.rootEnd > this.time) this.drawCoils(e, v, x, y + hoverBob * s, z, pop);
 
     // instance tint (multiplies the painted colours): veteran gold, frost-slow ice
     let cr = 1, cg = 1, cb = 1;
@@ -493,6 +541,32 @@ export class EnemyView implements ViewModule {
   }
 
   /** Procedural animation of one pivot → ANIM (rotation inside the rest yaw + offset). */
+  /** TITAN PASS: 2–3 vine loops round a tangled foe's legs (a hover unit's body), cinching in and letting go */
+  private drawCoils(e: Enemy, v: Vis, x: number, y: number, z: number, pop: number): void {
+    const left = v.rootEnd - this.time;
+    const since = v.rootLen - left;
+    const kin = since < COIL_IN_S ? Math.max(0, since / COIL_IN_S) : 1;
+    const grow = kin < 1 ? 1 + 2.70158 * (kin - 1) ** 3 + 1.70158 * (kin - 1) ** 2 : 1;   // easeOutBack
+    const out = left < COIL_OUT_S ? left / COIL_OUT_S : 1;
+    const k = Math.max(0, grow * out) * pop;
+    if (k <= 0.01) return;
+    const hgt = Math.max(0.3, e.height);
+    const rad = Math.max(e.radius * 0.95, hgt * 0.22);
+    const loops = e.radius >= 1.6 ? COIL_LOOPS : COIL_LOOPS - 1 + (v.id & 1);   // small foes: 2–3 loops
+    for (let i = 0; i < loops; i++) {
+      if (this.coilN >= COIL_CAP) return;
+      const ly = y + hgt * (0.1 + 0.16 * i) * (0.6 + 0.4 * out);
+      const rr = rad * (1.08 - 0.13 * i) * (0.75 + 0.25 * k);
+      const tilt = (i % 2 ? 0.28 : -0.22) + Math.sin(this.time * 7 + v.seed + i) * 0.05;
+      _q.setFromEuler(_e.set(tilt, v.seed + i * 1.9 + this.time * (i % 2 ? 0.9 : -0.7), tilt * 0.5, 'YXZ'));
+      _pos.set(x, ly, z);
+      _scl.set(rr * k, rr * k * 1.25, rr * k);
+      _local.compose(_pos, _q, _scl);
+      _local.toArray(this.coils.instanceMatrix.array as Float32Array, this.coilN * 16);
+      this.coilN++;
+    }
+  }
+
   private animPivot(m: FoeModel, part: FoePart, k: number, o: number, e: Enemy, v: Vis): void {
     ANIM.rx = 0; ANIM.ry = 0; ANIM.rz = 0; ANIM.ox = 0; ANIM.oy = 0; ANIM.oz = 0;
     const t = FR.time, st = e.state, moveK = FR.moveK, phase = FR.phase;

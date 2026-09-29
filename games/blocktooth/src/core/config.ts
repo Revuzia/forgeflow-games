@@ -620,8 +620,10 @@ function bfFit(ox: number, oz: number): number {
  *  maxMul × it. No offset while the curve's own view (centred on the titan) already holds everything;
  *  otherwise the smallest shift toward the fight's centre that does (or the full centring, widened).
  *  THREE-free and deterministic: the director eases/holds it (director.data.bossFrameD / bossFrameOx /
- *  bossFrameOz) for the spawn ring AND the camera. The returned object is reused. */
-export function bossFrameNeed(w: World): { d: number; ox: number; oz: number } {
+ *  bossFrameOz) for the spawn ring AND the camera. The returned object is reused.
+ *  TITAN PASS D2 (GATEKEEPERS §3.6 SPACE-DENIAL rings): `extra` = a tell about to be cast — bosses/index.ts
+ *  denialRing asks whether the frame could still hold it (null / omitted = the pre-D2 behaviour, bit-identical). */
+export function bossFrameNeed(w: World, extra: Shape | null = null): { d: number; ox: number; oz: number } {
   BF_OUT.d = 0; BF_OUT.ox = 0; BF_OUT.oz = 0;
   BF.n = 0;
   const b = w.boss;
@@ -659,6 +661,8 @@ export function bossFrameNeed(w: World): { d: number; ox: number; oz: number } {
     if (!tg.alive || tg.owner !== 'boss') continue;
     shapePoints(tg.shape, pt);
   }
+  // TITAN PASS D2: the tell about to be cast (denialRing's frame guard)
+  if (extra) shapePoints(extra, pt);
   BF.n = n;
   const dCurve = cameraDistance(T.height);
   BF.dLo = dCurve; BF.dHi = bossFrameMaxMul(T.rank) * dCurve;   // GATEKEEPERS §4.2: per-rank cap

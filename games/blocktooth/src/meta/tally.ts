@@ -35,7 +35,21 @@
 //     may still be live; meta/ultimate.ts sets ultWireUntilT)
 //   * fullVents ← 'vent' with power ≥ FULL_VENT (HEARTHBACK's SHELL fill)
 //   * bloomsBest ← most titan-owned 'bloom' hazards alive at once WITHOUT data.wild (GREENBELT DECREE
-//     blooms carry wild = 1)
+//     blooms carry wild = 1). Pre-TITAN PASS FULL BLOOM metric; still counted (save / probe compatibility),
+//     no goal reads it any more.
+//   * cascadeBest ← the highest 'bloomBurst'.link of the run (TITAN PASS FULL BLOOM, FEATURES_V2 §8.2): the
+//     longest BRIARWICK pod chain in LINKS (link 0 = a lone / first pop, so link k = k pods set off after the
+//     first). Only BRIARWICK's kit emits bloomBurst.
+//     DECISION (lane DATA, 2026-09-29): chains seeded by GREENBELT DECREE pods COUNT. Reasons: (1) the decree
+//     does not raise the ceiling — it REPLANTS through the normal turretCap (meta/ultimate.ts makeRoom), so a
+//     chain can never hold more pods with the decree than a full garden the lash / dash / POP-UP PARK volley
+//     plants without it; the only pods above the cap are POP-UP PARK's own volley; (2) 'bloomBurst' carries
+//     no source and a pod adopted from the decree is re-tagged by every chain / press that sets it off, so an
+//     exclusion could only be a time window after 'ultFire' (like ultWireUntilT), which would also throw away
+//     the lash-planted pods in the same chain; (3) the 13–22 per-run range kit C measured already had UPROAR
+//     firing. (SIX-WAY SPLICE differs: GRIDLOCK SURGE lays exactly the 6 wires that goal asks for, so one
+//     UPROAR + one detonation met it and its exclusion stays; the decree only fills the garden that BURR LASH
+//     fills at 1 pod/s anyway, and a chain of 18 links still needs cap cards / hook power on top of it.)
 //
 // TallyV2 adds two run numbers the RunTally struct (types.ts, L0) does not carry but two goals need —
 // peakRank (ZONING CHANGE / SKYLINE ADJUSTED) and blocks (URBAN RENEWAL). They live on the same object
@@ -67,6 +81,7 @@ export function createTally(): TallyV2 {
     bossesDefeated: 0, bossDefeatedBy: {}, staggersThisFight: 0, staggersBestFightBy: {}, fightIsRematch: false,
     endlessS: 0,
     vacuumBest: 0, wiresBest: 0, ultWireUntilT: -1, hookKillsBest: 0, fullVents: 0, bloomsBest: 0,
+    cascadeBest: 0,   // TITAN PASS: longest BRIARWICK pod chain in links ('bloomBurst' case below)
     hookT: -1, hookPickups: 0, hookKills: 0,
     // GATEKEEPERS §7.2 RunTallyAddV3 (K0: initialisation only; lane K1a adds the event cases, §6.5)
     gateKills: 0, gateCleanKills: 0, gateTotalFightS: Infinity, gateTippedFastS: Infinity, gateStallsBestFight: 0,
@@ -80,6 +95,7 @@ export function tallyV2(t: RunTally): TallyV2 {
   const x = t as Partial<TallyV2> & RunTally;
   if (typeof x.peakRank !== 'number') x.peakRank = 0;
   if (typeof x.blocks !== 'number') x.blocks = 0;
+  if (typeof x.cascadeBest !== 'number') x.cascadeBest = 0;   // TITAN PASS: a tally made before the field existed
   return x as TallyV2;
 }
 
@@ -210,6 +226,10 @@ export function stepTally(w: World): void {
         break;
       case 'vent':
         if (e.power >= FULL_VENT) t.fullVents++;
+        break;
+      case 'bloomBurst':
+        // BRIARWICK pod chain length in links; decree-seeded chains count (header DECISION)
+        if (Number.isFinite(e.link) && e.link > t.cascadeBest) t.cascadeBest = Math.floor(e.link);
         break;
       default:
         break;

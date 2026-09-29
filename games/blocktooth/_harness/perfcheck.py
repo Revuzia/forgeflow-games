@@ -32,6 +32,14 @@ GATEKEEPERS §8.3 scenarios (--gate, run by the orchestrator ALONE after K2; pai
                 civilians.surge(x, z, 3 H, 120), Size V destruction under real keys, the stunned enemies live.
                 The window is capped at 9 s (the finale's end clears the run).
   All three: the same p99 ≤ 22 ms and ≤ 450 draw calls.
+TITAN PASS §6 item 12, scenario (f) (--kit; the default Size V + --enemies 250 load, titan forced to the kit's owner):
+  (f) --kit briar  BRIARWICK: every time POP-UP PARK is off cooldown, --kit-pods (14) UNRIPE seed pods are planted
+                   3–10 H around the titan (the kit's own pod record, dev state only), then a REAL Space press: the
+                   hook ripens every pod within 12 H + its 4-seed volley and bursts them as one outward cascade.
+                   Held when a press shows kit.chain ≥ 16 (kit C's worst case: a 16-pod cascade, 134 bursts/min).
+      --kit volt   VOLT-KITE: 6 live wires (the kit's own wire capsules, dev state only) around the titan, then a REAL
+                   Space (RECAST: DETONATE blows them all); repeated every time RECAST is off cooldown.
+  Both: the same p99 ≤ 22 ms / ≤ 450 draws over the window, and the p99 of each press window (press → +2 s) alone.
 Exit: 0 pass · 1 fail (or the load could not be reached) · 2 setup failed (server/browser/__BT__/cheats).
 """
 import argparse
@@ -114,6 +122,42 @@ PAINT_JS = r"""async (want) => {
 SURGE_JS = r"""() => { const c = window.__BT__; const cv = c.debugCore && c.debugCore.scene.getObjectByName('civilians');
   const cs = cv && cv.userData.civState; const dbg = cv && cv.userData.civ;
   return { surgePlaced: cs ? cs.view.surgePlaced : null, civLive: dbg ? dbg.live : null, fleeing: dbg ? dbg.fleeing : null }; }"""
+
+
+# (f) --kit briar: plant N UNRIPE pods (the record briarwick.ts plantPod writes; unripe pods never self-trigger, so
+# the load waits for the real Space press). Returns the number planted.
+KIT_PODS_JS = r"""async (n) => {
+  const m = await import('/src/combat/hazards.ts'); const W = window.__BT__.world; if (!W) return 0;
+  const T = W.titan, H = T.height; let made = 0;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + Math.random() * 0.4, d = (3 + 7 * ((i * 7) % n) / n) * H;
+    m.spawnHazard(W, { owner: 'titan', kind: 'bloom', shape: { k: 'circle', x: T.x + Math.sin(a) * d, z: T.z + Math.cos(a) * d, r: Math.max(0.3, 0.3 * H) },
+      life: 9, dps: 0, data: { pod: 1, ripe: 0, fuse: -1, link: 0, src: 3, h: H, vol: 0 } });
+    made++;
+  }
+  return made; }"""
+
+# (f) --kit volt: top the titan's LIVE WIRE capsules up to n (the record voltkite.ts layWire writes). Returns wires live.
+KIT_WIRES_JS = r"""async (n) => {
+  const m = await import('/src/combat/hazards.ts'); const dmg = await import('/src/combat/damage.ts');
+  const W = window.__BT__.world; if (!W) return 0;
+  const T = W.titan, H = T.height; let live = 0;
+  for (const h of W.hazards) if (h.alive && h.owner === 'titan' && h.kind === 'wire') live++;
+  for (let i = live; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + Math.random() * 0.5, d = (0.6 + Math.random()) * H, L = 2.2 * H, dir = a + Math.PI / 2;
+    const x0 = T.x + Math.sin(a) * d, z0 = T.z + Math.cos(a) * d;
+    m.spawnHazard(W, { owner: 'titan', kind: 'wire', shape: { k: 'capsule', x0, z0, x1: x0 + Math.sin(dir) * L, z1: z0 + Math.cos(dir) * L, r: 0.25 * H },
+      life: 3, dps: dmg.titanDamage(W, 10), data: { life0: 3, h: H } });
+    live++;
+  }
+  T.kit.wires = live;
+  return live; }"""
+
+KIT_STATE_JS = r"""() => { const W = window.__BT__.world; if (!W) return null; const T = W.titan, K = T.kit; let pods = 0, ripe = 0, fused = 0, wires = 0;
+  for (const h of W.hazards) { if (!h.alive || h.owner !== 'titan') continue;
+    if (h.kind === 'bloom') { pods++; if ((h.data.ripe || 0) >= 1) ripe++; if ((h.data.fuse ?? -1) >= 0) fused++; }
+    else if (h.kind === 'wire') wires++; }
+  return { cd: T.abilityCd, chain: K.chain || 0, pods, ripe, fused, wires, id: T.id, rank: T.rank }; }"""
 
 
 def gate_setup(sess, args, log, info):
@@ -201,6 +245,15 @@ def spawn_mix(sess, n, log):
     return asked
 
 
+def s_screen_ok(sess):
+    """True when the play screen is up (a draft / pause would swallow the Space press)."""
+    st = sess.state() or {}
+    if st.get("screen") in ("draft", "pause", "slate"):
+        clear_overlay(sess, st.get("screen"))
+        return False
+    return st.get("screen") == "play"
+
+
 def clear_overlay(sess, screen):
     """Real keys: 1 picks the first draft card, Esc resumes an (auto-)pause."""
     sess.release_all()
@@ -233,17 +286,42 @@ def main() -> int:
                     help="GATEKEEPERS §8.3 scenario (c) SWITCHBOARD-5 + adds + UPROAR, (d) STENCIL-1 P3 + 10 WET PAINT, "
                          "(e) the Size V finale + 120-civilian surge; pair with --enemies 150")
     ap.add_argument("--ult-at", type=float, default=4.0, help="--v2: seconds into the window to fire the UPROAR")
+    ap.add_argument("--kit", choices=("briar", "volt"), default=None,
+                    help="TITAN PASS scenario (f): BRIARWICK POP-UP PARK cascades (briar) or VOLT-KITE RECAST on 6 live "
+                         "wires (volt), real Space on every cooldown; forces the titan; Size V + --enemies")
+    ap.add_argument("--kit-pods", type=int, default=14, help="--kit briar: unripe pods planted before each press")
+    ap.add_argument("--kit-wires", type=int, default=6, help="--kit volt: live wires topped up before each press")
     ap.add_argument("--prof", action="store_true",
                     help="add ?prof=1 and print per-lane median ms of the frameprof marks (§4.7); not for the p99 gate")
     ap.add_argument("--prof-nogpu", action="store_true",
                     help="with --prof: add profgpu=0 (frameprof without its GPU timer queries — the A/B for the "
                          "profiler's own pacing cost)")
+    ap.add_argument("--prof-dump", default=None,
+                    help="with --prof: write the frame profiler's full dump (worst 50 frames with their section ms, GPU "
+                         "time, heap delta, DynRes scale and notes, the per-frame series, Long-Animation-Frame entries) "
+                         "to this JSON file ({t} in the name = the wall-clock HHMMSS) — the frame-level evidence for a spike")
+    ap.add_argument("--precise-mem", action="store_true",
+                    help="launch Chrome with --enable-precise-memory-info so frameprof's per-frame heap delta is exact "
+                         "(a garbage collection shows as a large negative dHeap on its frame); attribution only")
+    ap.add_argument("--param", action="append", default=[],
+                    help="extra URL param k=v for attribution A/Bs (e.g. rscale=0.6 pins the DynRes scale, dynres=0); "
+                         "not for the gate verdict")
     ap.add_argument("--shot", default=os.path.join(SHOTS, "perfcheck.png"))
     ap.add_argument("--zoom", choices=("auto", "max"), default="auto",
                     help="player camera zoom during the window: auto framing (1x) or held at the max zoom-OUT "
                          "(real mouse-wheel notches; the rig clamps it to CAMERA_ZOOM.max / dAbsMax)")
     args = ap.parse_args()
+    if args.kit:
+        want_titan = "briarwick" if args.kit == "briar" else "voltkite"
+        if args.titan != want_titan:
+            print("--kit %s: titan %s -> %s" % (args.kit, args.titan, want_titan))
+            args.titan = want_titan
+        if args.gate or args.v2 or args.boss:
+            print("SETUP FAILED: --kit runs alone (no --gate / --v2 / --boss)")
+            print("RESULT: FAIL")
+            return 2
     fire_ult = args.v2 or args.gate == "c"
+    kit = {"presses": [], "fired": 0, "chainMax": 0, "planted": 0}
     want_rank = GATE_SCEN[args.gate][3] if args.gate else 4
     if args.gate == "e" and args.seconds > 9.0:
         args.seconds = 9.0                                  # the window must end inside the 10 s finale
@@ -254,13 +332,18 @@ def main() -> int:
 
     url = build_url(args.base, autostart=1, dev=1, noslate=1, titan=args.titan, biome=args.biome, seed=args.seed,
                     quality=args.quality, prof=(1 if args.prof else None),
-                    profgpu=(0 if (args.prof and args.prof_nogpu) else None))
+                    profgpu=(0 if (args.prof and args.prof_nogpu) else None),
+                    **dict(kv.split("=", 1) for kv in args.param if "=" in kv))
     logs = []
 
     def log(msg):
         logs.append(msg)
         print(msg, flush=True)
 
+    if args.precise_mem:
+        import common as _common
+        if "--enable-precise-memory-info" not in _common.FLAGS:
+            _common.FLAGS.append("--enable-precise-memory-info")
     sess = Session(args, "perfcheck")
     try:
         sess.start()
@@ -418,8 +501,8 @@ def main() -> int:
             tick0 = s.get("tick")
             dyn0 = {"scale": s.get("renderScale"), **(s.get("dynres") or {})}
             # sampling window
-            if fire_ult:
-                # timestamped rAF recorder (the UPROAR window is cut from it by page time)
+            if fire_ult or args.kit:
+                # timestamped rAF recorder (the UPROAR / kit-press windows are cut from it by page time)
                 sess.safe_js("() => { window.__G3_TS__ = []; window.__G3_ON__ = true; if (!window.__G3_LOOP__) {"
                              " window.__G3_LOOP__ = true; const f = (ts) => { if (window.__G3_ON__) window.__G3_TS__.push(ts);"
                              " requestAnimationFrame(f); }; requestAnimationFrame(f); } }")
@@ -437,6 +520,25 @@ def main() -> int:
                     sess.hold(CIRCLE[i % len(CIRCLE)])
                     i += 1
                     next_dir = now + 0.35
+                if args.kit and now - t0 >= 0.5 and (not kit["presses"] or now - kit["presses"][-1]["wall"] >= 1.0):
+                    ks = sess.safe_js(KIT_STATE_JS) or {}
+                    if isinstance(ks.get("cd"), (int, float)) and ks["cd"] <= 0 and s_screen_ok(sess):
+                        if args.kit == "briar":
+                            kit["planted"] += int(sess.safe_js(KIT_PODS_JS, args.kit_pods, default=0) or 0)
+                        else:
+                            sess.safe_js(KIT_WIRES_JS, args.kit_wires, default=0)
+                        pre = sess.safe_js(KIT_STATE_JS) or {}
+                        press_pt = sess.safe_js("() => performance.now()")
+                        sess.press("Space", 90)                     # real Space (the hook)
+                        time.sleep(0.35)
+                        post = sess.safe_js(KIT_STATE_JS) or {}
+                        fired = isinstance(post.get("cd"), (int, float)) and post["cd"] > 0
+                        kit["presses"].append({"wall": time.time(), "pt": press_pt, "pre": pre, "post": post, "fired": fired})
+                        if fired:
+                            kit["fired"] += 1
+                            kit["chainMax"] = max(kit["chainMax"], post.get("chain") or 0)
+                        sess.hold(CIRCLE[i % len(CIRCLE)])
+                        continue
                 if ult_state == "pending" and now - t0 >= args.ult_at:
                     st_u = sess.state() or {}
                     fired0 = (((st_u.get("v2") or {}).get("ult") or {}).get("fired"))
@@ -490,6 +592,9 @@ def main() -> int:
                     clear_overlay(sess, s.get("screen"))
                 time.sleep(0.25)
             ft = sess.ft_stop()
+            if args.kit and not fire_ult:
+                v2["frames"] = sess.safe_js("() => { window.__G3_ON__ = false; return window.__G3_TS__.slice(); }",
+                                            default=[]) or []
             if fire_ult:
                 v2["frames"] = sess.safe_js("() => { window.__G3_ON__ = false; return window.__G3_TS__.slice(); }",
                                             default=[]) or []
@@ -497,6 +602,17 @@ def main() -> int:
             if args.prof:
                 v2["prof"] = sess.safe_js(PROF_JS)
                 v2["profDump"] = sess.safe_js(PROF_DUMP_JS)
+                if args.prof_dump:
+                    full = sess.safe_js("() => { const p = window.__BTPROF__; return p ? p.dump() : null; }")
+                    dump_path = args.prof_dump.replace("{t}", time.strftime("%H%M%S"))
+                    try:
+                        os.makedirs(os.path.dirname(os.path.abspath(dump_path)), exist_ok=True)
+                        with open(dump_path, "w", encoding="utf-8") as fh:
+                            json.dump({"url": url, "gate": args.gate, "kit": args.kit, "dump": full,
+                                       "windowPerfSeries": [x.get("perf") for x in samples if x.get("perf")]}, fh)
+                        log("prof dump: %s" % dump_path)
+                    except Exception as e:
+                        log("prof dump failed: %s" % e)
             zoom_info["end"] = sess.safe_js("() => { const c = window.__BTCAM__; return c ? {zoom: c.zoom, d: c.distance, auto: c.autoDist} : null; }")
             perf_bt = sess.perf()
             st_end = sess.state() or {}
@@ -650,6 +766,36 @@ def main() -> int:
                 b - a, len(win), fmt(up50, 2), fmt(up99, 2), fmt(umx, 2), ult_rep["phasesSeen"]))
             if up99 is None or up99 > args.p99_ms:
                 problems.append("UPROAR-window p99 %s ms > %.1f ms" % (fmt(up99, 2), args.p99_ms))
+    kit_rep = None
+    if args.kit:
+        ts = [x for x in v2.get("frames") or [] if isinstance(x, (int, float))]
+        # the UNION of the press windows (presses come every ~1.3 s, windows are 2 s: a frame is counted once)
+        in_win = set()
+        for pz in kit["presses"]:
+            if not pz.get("fired") or not isinstance(pz.get("pt"), (int, float)):
+                continue
+            a, b = pz["pt"], pz["pt"] + 2000.0
+            in_win.update(k for k in range(1, len(ts)) if a <= ts[k] <= b)
+        wins = [ts[k] - ts[k - 1] for k in sorted(in_win)]
+        kp99, kmx = percentile(wins, 99), (max(wins) if wins else None)
+        kit_rep = {"presses": len(kit["presses"]), "fired": kit["fired"], "chainMax": kit["chainMax"], "planted": kit["planted"],
+                   "pressFrames": len(wins), "pressP99": kp99, "pressMax": kmx,
+                   "detail": [{"pre": pz.get("pre"), "post": pz.get("post"), "fired": pz.get("fired")} for pz in kit["presses"]]}
+        print("kit (f)   : %s · presses %d · fired %d · %s · press windows (press → +2 s) %d frames · p99 %s · max %s" % (
+            args.kit, len(kit["presses"]), kit["fired"],
+            ("cascade max %d pods (need ≥ 16) · pods planted %d" % (kit["chainMax"], kit["planted"])) if args.kit == "briar"
+            else ("wires before each press %s" % [((pz.get("pre") or {}).get("wires")) for pz in kit["presses"]]),
+            len(wins), fmt(kp99, 2), fmt(kmx, 2)))
+        for pz in kit["presses"]:
+            print("            press: pre %s -> post %s" % (json.dumps(pz.get("pre")), json.dumps(pz.get("post"))))
+        if kit["fired"] < 1:
+            problems.append("scenario (f) not held: no hook press fired in the window")
+        if args.kit == "briar" and kit["chainMax"] < 16:
+            problems.append("scenario (f) not held: largest POP-UP PARK cascade %d pods < 16" % kit["chainMax"])
+        if args.kit == "volt" and not any(((pz.get("pre") or {}).get("wires") or 0) >= 6 and pz.get("fired") for pz in kit["presses"]):
+            problems.append("scenario (f) not held: no RECAST fired on 6 live wires")
+        if kp99 is None or kp99 > args.p99_ms:
+            problems.append("kit press-window p99 %s ms > %.1f ms" % (fmt(kp99, 2), args.p99_ms))
     if args.prof:
         pr = v2.get("prof") or {}
         med = pr.get("median") or {}
@@ -683,7 +829,7 @@ def main() -> int:
            "drawsMax": draws_max, "drawsP50": percentile(draws, 50), "trisMax": max(tris) if tris else None,
            "programs": [prog0, prog1], "meanEnemies": mean_en, "samples": samples, "topUps": top_ups,
            "simTicks": sim_ticks, "overlays": overlays, "v2": args.v2, "uproar": ult_rep,
-           "gate": args.gate, "gateInfo": ginfo, "gateSamples": gsamples,
+           "gate": args.gate, "gateInfo": ginfo, "gateSamples": gsamples, "kit": args.kit, "kitInfo": kit_rep,
            "problems": problems, "pass": passed, "log": logs, "diagnostics": diag}
     print("report    : %s" % save_report("perfcheck", rep, args.base, args.report_dir))
     print("PERF GATE: %s" % ("PASS" if passed else "FAIL"))

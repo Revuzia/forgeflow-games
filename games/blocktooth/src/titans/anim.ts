@@ -523,7 +523,7 @@ export class TitanAnimator {
       case 'forkArc': {              // VOLT-KITE: mane flares, head thrusts, jaw crackles open
         const flare = env(t, 0, 0.06, 0.12, 0.45);
         const thrust = env(t, 0.02, 0.08, 0.14, 0.4);
-        c.mane *= 1 + 0.55 * flare;
+        c.mane *= 1 + 0.22 * flare;          // v3 remodel: big blades, small pulse (was 0.55)
         c.ears -= 0.7 * flare;
         c.neckPitch -= 0.15 * thrust;
         c.headPitch += 0.18 * thrust;
@@ -660,7 +660,7 @@ export class TitanAnimator {
         c.neckPitch -= 0.35 * howl;
         c.headPitch -= 0.3 * howl;
         c.jaw += 0.55 * howl;
-        c.mane *= 1 + 0.8 * Math.max(howl, crouch * 0.5);
+        c.mane *= 1 + 0.4 * Math.max(howl, crouch * 0.5);
         c.ears -= 0.9 * howl;
         c.wings += 0.9 * howl;
         c.tailLift += 0.25 * howl;
@@ -683,19 +683,27 @@ export class TitanAnimator {
         c.feetOut += 0.03 * heave;
         break;
       }
-      case 'briarwick': {            // SOW — ruff blooms, stamp, proud head raise
-        const cloud = (kit.sowT ?? 0) > 0 ? 1 : 0;
-        if ((t < 0 || t > 1.3) && !cloud) break;
-        const tt = t < 0 ? 1 : t;
-        const bloom = Math.max(env(tt, 0, 0.14, 0.9, 1.25), cloud * 0.6);
-        const stamp = env(tt, 0.02, 0.1, 0.12, 0.22);
-        const proud = env(tt, 0.2, 0.4, 0.8, 1.2);
-        c.ruff *= 1 + 0.5 * bloom;
-        c.frontLift += 0.1 * stamp;
-        c.bodyPitch -= 0.08 * stamp - 0.04 * env(tt, 0.2, 0.24, 0.26, 0.4);
-        c.headPitch -= 0.25 * proud - 0.2 * stamp;
-        c.jaw += 0.25 * proud;
-        c.neckPitch -= 0.1 * proud;
+      case 'briarwick': {            // POP-UP PARK (TITAN PASS G2) — rear 0.1 s, a double-forefoot stamp as the
+        // horns drive down, the seed ruff flaring on the stamp; the ruff stays half-open while the ripple rolls out
+        // (kit.bloomT = the cascade's length; sowT is its legacy alias)
+        const ripple = ((kit.bloomT ?? kit.sowT) ?? 0) > 0 ? 1 : 0;
+        if ((t < 0 || t > 1.1) && !ripple) break;
+        const tt = t < 0 ? 1.1 : t;
+        const rear = env(tt, 0, 0.07, 0.09, 0.13);
+        const stamp = env(tt, 0.1, 0.13, 0.15, 0.26);               // both forefeet + horns down
+        const stamp2 = env(tt, 0.19, 0.21, 0.23, 0.32);             // the second, smaller forefoot beat
+        const flare = Math.max(env(tt, 0.1, 0.15, 0.4, 0.8), ripple * 0.45);
+        const proud = env(tt, 0.35, 0.55, 0.8, 1.1);
+        c.frontLift += 0.3 * rear - 0.05 * stamp + 0.08 * env(tt, 0.15, 0.17, 0.18, 0.21);
+        c.bodyPitch -= 0.14 * rear - 0.1 * stamp - 0.05 * stamp2;
+        c.bodyY -= 0.035 * stamp;
+        c.sq *= 1 - 0.1 * stamp - 0.05 * stamp2;
+        c.neckPitch += 0.18 * stamp - 0.12 * rear - 0.06 * proud;
+        c.headPitch += 0.4 * stamp + 0.15 * stamp2 - 0.18 * rear - 0.18 * proud;
+        c.ruff *= 1 + 0.75 * flare;
+        c.jaw += 0.3 * rear + 0.2 * proud;
+        c.tailLift += 0.15 * rear + 0.1 * flare;
+        c.feetOut += 0.03 * stamp;
         break;
       }
     }
@@ -765,7 +773,7 @@ export class TitanAnimator {
         c.neckPitch -= 0.25 * hold;
         c.headPitch -= 0.3 * hold;
         c.jaw += 0.6 * hold;
-        c.mane *= 1 + (0.8 + 0.4 * beat) * hold;
+        c.mane *= 1 + (0.4 + 0.2 * beat) * hold;
         c.wings += (0.8 + 0.2 * beat) * hold;
         c.ears -= 0.8 * hold;
         c.bodyRoll += 0.03 * Math.sin(a.t * 47) * hold;

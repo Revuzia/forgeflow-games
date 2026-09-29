@@ -17,7 +17,7 @@
 
 import type { World } from '../src/core/types.ts';
 import { UPGRADE_BY_ID } from '../src/data/upgrades.ts';
-import { recipeHint } from '../src/upgrades/draft.ts';
+import { isOverflowReward, recipeHint } from '../src/upgrades/draft.ts';
 
 /** Score that makes the bot take an offered evolution over any ordinary card. */
 export const BOT_EVO_SCORE = 1000;
@@ -25,7 +25,21 @@ export const BOT_EVO_SCORE = 1000;
 export const BOT_RECIPE_TOWARD = 14;
 export const BOT_RECIPE_COMPLETES = 30;
 
+/** TITAN PASS D1 OVERFLOW rewards (upgrades/draft.ts OVERFLOW): what a player weighs them at. SICK DAY is worth
+ *  BOT_OVF_HEAL × the missing HP share (at half HP it beats any ordinary card; near full it is the last pick);
+ *  HOT TIP (UPROAR not ready) / HARD HAT (no shield up) sit under an ordinary owned card (generic scores ≈ 1.5–10),
+ *  so a real upgrade is taken whenever one is offered and the rewards pay out when nothing better is on the table. */
+export const BOT_OVF_HEAL = 40;
+export const BOT_OVF_UPROAR = 0.8;
+export const BOT_OVF_SHIELD = 0.6;
+
 export function botDraftScore(w: World, id: string): number | null {
+  if (isOverflowReward(id)) {
+    const T = w.titan;
+    if (id === 'ovf_sick_day') return BOT_OVF_HEAL * (T.maxHp > 0 ? Math.max(0, 1 - T.hp / T.maxHp) : 0);
+    if (id === 'ovf_hot_tip') return w.ult && w.ult.ready ? 0 : BOT_OVF_UPROAR;
+    return w.upgrades.shield > 0 ? 0.1 : BOT_OVF_SHIELD;
+  }
   const u = UPGRADE_BY_ID[id];
   if (!u) return null;
   if (u.evo) {

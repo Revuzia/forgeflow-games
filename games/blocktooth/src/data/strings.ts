@@ -4,7 +4,7 @@
 // Tone: Saturday-morning monster comic + a panicking municipal news desk. Deadpan civic.
 // Templates use {tokens}; fill them with fmt() from ui/dom.ts.
 
-import type { AlertKey, BiomeId, Rarity } from '../core/types.ts';
+import type { AlertKey, BiomeId, OverflowRewardId, Rarity } from '../core/types.ts';
 
 /** Roman size numerals, index = RankIndex. */
 const RANK_NUMERALS = ['I', 'II', 'III', 'IV', 'V'] as const;
@@ -199,6 +199,29 @@ export const STR = {
     locked: 'SUBJECT-SPECIFIC',
     caseFile: 'CASE 07-{n}',
     rarity: { common: 'ROUTINE', rare: 'NOTABLE', epic: 'ALARMING', legendary: 'CLASSIFIED' } as Record<Rarity, string>,
+    // ── TITAN PASS D1 build slots (FEATURES_V2 §7.7; types.ts DraftCardSlot; lane DRAFT renders them) ──
+    /** tag on a card you do not own yet ('new') */
+    slotNew: 'NEW — TAKES A SLOT',
+    /** tag on a card you own ('upgrade': the next stack) */
+    slotUpgrade: 'UPGRADE',
+    /** tag on the missing half of a started evolution recipe ('shared': files into its partner's slot) */
+    slotShared: 'SHARES A SLOT',
+    /** tag on a ONE-OFF card ('free': maxStacks 1, files outside the slots) */
+    slotFree: 'ONE-OFF — NO SLOT',
+    /** header counter, e.g. 'SLOTS 6/8' */
+    slotCount: 'SLOTS {n}/{cap}',
+    /** header banner once every slot is taken */
+    slotsFull: 'SLOTS FULL — UPGRADES ONLY',
+    /** OVERFLOW draft (nothing offerable): header + stamp + the three rewards (types.ts OverflowRewardId).
+     *  {n} = the percentage the draft lane's OVERFLOW constants give. */
+    overflowTitle: 'NOTHING NEW TO FILE',
+    overflowSub: 'EVERY SLOT IS FILED AND FINAL — TAKE A PERK OF THE JOB',
+    overflowStamp: 'OFF THE RECORD',
+    overflow: {
+      ovf_sick_day: { name: 'SICK DAY', desc: 'Patch yourself up: heal {n}% of max HP.' },
+      ovf_hot_tip: { name: 'HOT TIP', desc: 'An anonymous caller feeds the story: UPROAR +{n}%.' },
+      ovf_hard_hat: { name: 'HARD HAT', desc: 'Site safety comes through: a shield of {n}% of max HP.' },
+    } as Record<OverflowRewardId, { name: string; desc: string }>,
   },
 
   pause: {

@@ -27,6 +27,7 @@ import { CRUSH_RATIO, RANKS, TITAN, lootMass, lootXp, titanSpeed } from '../src/
 import { circleInShape, clamp, wrapAngle } from '../src/core/math.ts';
 import { buildingsInRect, propsInRect } from '../src/city/citysim.ts';
 import { UPGRADE_BY_ID } from '../src/data/upgrades.ts';
+import { kitReach } from '../src/titans/kits/index.ts';
 // v2 bot hooks (FEATURES_V2 §2.7; L0 stubs — lanes L1 / L2 / L4 fill them)
 import { botUltimate } from './bot_ult.ts';
 import { botDraftScore, botRecipeBonus } from './bot_draft.ts';
@@ -65,8 +66,10 @@ function reactionOf(w: World, id: number): number {
 /** Policy switches for sensitivity experiments (probe scripts may flip them; defaults = the gate bot). */
 export const BOT_TUNE = { threatDash: true, reactionScale: 1, lapseP: 0.12 };
 
-/** Attack reach of each titan's auto attack, in titan heights (CONTRACT §8). */
-const REACH_H: Record<string, number> = { molo: 0.9, voltkite: 3.2, hearthback: 2.5, briarwick: 2.6 };
+/** Attack reach of each titan's auto attack, in titan heights (CONTRACT §8). BRIARWICK is not in the table: its
+ *  BURR LASH reach comes from the kit itself (kitReach — lash length × vineLength × attackRange, ×1.8 at Size I),
+ *  so the bot holds the distance the lash actually reaches (TITAN_PASS §5.1 HARN). */
+const REACH_H: Record<string, number> = { molo: 0.9, voltkite: 3.2, hearthback: 2.5 };
 
 interface AvoidSpot { x: number; z: number; until: number }
 
@@ -115,10 +118,16 @@ function norm(x: number, z: number, out: { x: number; z: number }): number {
 
 function reachOf(w: World): number {
   const T = w.titan;
-  let h = REACH_H[T.id] ?? 1.5;
-  if (T.id === 'briarwick') h *= Math.max(0.5, T.stats.vineLength || 1);
+  if (T.id === 'briarwick') {
+    const r = kitReach(w);                   // metres, already × vineLength × attackRange (and the Size-I lash)
+    if (r > 0) return r;
+  }
+  const h = REACH_H[T.id] ?? 1.5;
   return h * T.height * Math.max(0.5, T.stats.attackRange || 1);
 }
+
+/** The bot's attack reach (m) — exported for probe_balance's player-like policy (one definition). */
+export function botReach(w: World): number { return reachOf(w); }
 
 function maxSpeedOf(T: TitanState): number {
   return titanSpeed(T.height) * Math.max(0.3, T.stats.moveSpeed || 1);
@@ -397,18 +406,6 @@ function wireState(w: World): { wires: number; loaded: number; expiring: boolean
   return { wires, loaded, expiring };
 }
 
-function collapsedWithin(w: World, r: number): number {
-  const T = w.titan, city = w.city;
-  BUF_B.length = 0;
-  const ids = buildingsInRect(city, T.x - r, T.z - r, T.x + r, T.z + r, BUF_B);
-  let n = 0;
-  for (let k = 0; k < ids.length; k++) {
-    const b = city.buildings[ids[k]];
-    if (b && b.collapsed && Math.hypot(b.x - T.x, b.z - T.z) <= r) n++;
-  }
-  return n;
-}
-
 /** Should the hook fire this tick? Titan-appropriate rules (CONTRACT §8). */
 function hookDecision(w: World): boolean {
   const T = w.titan;
@@ -436,9 +433,10 @@ function hookDecision(w: World): boolean {
       return fill >= 0.6 || (fill >= 0.3 && a.near >= 2) || (hpFrac < 0.45 && stored > 0)
         || (bossIn && fill >= 0.25 && bossNear(w, (1.5 + 2.5 * fill) * H));
     }
-    case 'briarwick': {                    // SOW — turrets on rubble + heal cloud
-      const a = scanEnemies(w, 3 * H, 2.5 * H);
-      return a.near >= 3 || hpFrac < 0.75 || bossIn || collapsedWithin(w, 5 * H) >= 2;
+    case 'briarwick': {                    // POP-UP PARK — stamp + volley + every pod in 12 H bursts outward
+      // press when the field holds ≥ 3 ripe pods (a real cascade), a foe is inside the 3 H stamp, or a boss is up
+      const ripe = T.kit.ripe || 0;
+      return ripe >= 3 || scanEnemies(w, 3 * H, 3 * H).near >= 1 || bossIn;
     }
   }
   return false;
@@ -624,6 +622,15 @@ const RARITY_BONUS: Record<string, number> = { common: 0, rare: 1, epic: 2, lege
 
 /** Deterministic value of taking upgrade `id` now (higher = better). */
 export function botScoreUpgrade(w: World, id: string): number {
+  // TITAN PASS D1 (FEATURES_V2 §7.7 rule 5): an OVERFLOW draft offers rewards (ids `ovf_*`) instead of cards.
+  // SICK DAY (heal) when hurt, else HARD HAT (shield), else HOT TIP (UPROAR meter). Never owned, no card scoring.
+  if (id.startsWith('ovf_')) {
+    const hpFrac = w.titan.maxHp > 0 ? w.titan.hp / w.titan.maxHp : 1;
+    if (id === 'ovf_sick_day') return hpFrac < 0.7 ? 3 : 0;
+    if (id === 'ovf_hard_hat') return 1.5;
+    if (id === 'ovf_hot_tip') return 1;
+    return 0.5;
+  }
   const v2 = botDraftScore(w, id);          // v2 override (evolutions, v2 cards); stub → null
   if (v2 !== null) return v2;
   const def: UpgradeDef | undefined = (UPGRADE_BY_ID as Record<string, UpgradeDef | undefined>)[id];

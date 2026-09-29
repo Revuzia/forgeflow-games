@@ -30,9 +30,10 @@
 // Exit code: 0 ok, 1 assertion failure, 2 = the sim cannot load at all.
 
 import nodeModule from 'node:module';
+import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import type {
-  Rarity, RankIndex, SimEvent, StatKey, TitanId, TriggerAction, TriggerOn, UpgradeDef, World,
+  Hazard, Rarity, RankIndex, SimEvent, StatKey, TitanId, TriggerAction, TriggerOn, UpgradeDef, World,
 } from '../src/core/types.ts';
 
 // ─────────────────────────────── missing-module stubs (probe-local) ───────────────────────────────
@@ -139,6 +140,11 @@ const KIT_STATS: Record<TitanId, readonly StatKey[]> = {
   hearthback: ['shellCapacity', 'stompDelay', 'magmaDuration'],
   briarwick: ['turretCap', 'turretRate', 'sporeHeal', 'vineLength'],
 };
+/** TITAN PASS: SHARED stats a titan's kit reads as a kit number (not kit-only, so generic cards may touch them too).
+ *  BRIARWICK kit C sizes its pod chain radius by chainRange (`BRIAR.chainRH × H × area × chainRange`), so Domino
+ *  Zoning / Pollinator Corridor on chainRange are kit cards, not dead picks. Each entry is PROVEN below by the kit
+ *  source reading `S(w, '<stat>')` — an entry the kit does not read fails the probe. */
+const KIT_READS: Record<TitanId, readonly StatKey[]> = { molo: [], voltkite: [], hearthback: [], briarwick: ['chainRange'] };
 
 // ═══════════════════════════════ A. DATA ═══════════════════════════════
 section('A. DATA');
@@ -170,7 +176,11 @@ section('A. DATA');
     // v1 rule (the v1 catalogue): every titan card reads a kit stat. v2 unlockable titan cards may instead be
     // kit-flavoured triggers (on hook / on dash / on collapse) — FEATURES_V2 §7.6; v2 titan evolutions read one.
     const ownV1 = own.filter((u) => !V2_IDS.has(u.id));
-    const readsKitV1 = ownV1.filter((u) => u.effects.some((e) => e.stat && KIT_STATS[tid].includes(e.stat)));
+    // TITAN PASS: "a kit stat" = a kit-only stat OR a shared stat the kit source is proven to read (KIT_READS)
+    const kitSrc = readFileSync(`src/titans/kits/${tid}.ts`, 'utf8');
+    for (const k of KIT_READS[tid]) ok(kitSrc.includes(`S(w, '${k}')`), `${tid}: kit source reads shared stat ${k} (KIT_READS entry)`);
+    const kitRead = (k: StatKey) => KIT_STATS[tid].includes(k) || KIT_READS[tid].includes(k);
+    const readsKitV1 = ownV1.filter((u) => u.effects.some((e) => e.stat && kitRead(e.stat)));
     ok(readsKitV1.length === ownV1.length, `${tid}: every v1 titan card reads a kit stat (${readsKitV1.length}/${ownV1.length})`);
     for (const u of own.filter((x) => !!x.evo)) ok(u.effects.some((e) => e.stat && KIT_STATS[tid].includes(e.stat)), `${tid}: evolution ${u.id} reads a kit stat`);
     for (const k of KIT_STATS[tid]) ok(own.some((u) => u.effects.some((e) => e.stat === k)), `${tid}: kit stat ${k} touched by a ${tid} card`);
@@ -198,7 +208,7 @@ section('A. DATA');
     ok(['common', 'rare', 'epic', 'legendary'].includes(u.rarity), `${u.id}: rarity`);
     ok(u.effects.length > 0 && u.tags.length > 0, `${u.id}: effects + tags`);
     ok(u.desc.length > 0 && !u.desc.includes('\n'), `${u.id}: one-line desc`);
-    ok(u.desc === describe(u.effects, u.maxStacks), `${u.id}: desc generated from effects`);
+    ok(u.desc === describe(u.effects, u.maxStacks, u.titan), `${u.id}: desc generated from effects`);
     if (u.minRank !== undefined) ok(u.minRank >= 0 && u.minRank <= 4, `${u.id}: minRank`);
     for (const e of u.effects) {
       if (e.stat) {
@@ -216,6 +226,56 @@ section('A. DATA');
       }
     }
     if (u.titan) ok(TITAN_IDS.includes(u.titan), `${u.id}: titan id`);
+  }
+
+  // TITAN PASS: card-EFFECT uniqueness. No two cards one titan can be offered carry the same effect list (order-free)
+  // — "Greenhouse Effect" was an exact copy of Seed Catalogue ([sporeHeal ×0.2, regen +0.3]) for a whole pass.
+  // Perk cards are exempt (never offered; granted by the profile perk, and PETTY CASH is Appeals Process on purpose).
+  {
+    const canon = (v: unknown): string => (v !== null && typeof v === 'object'
+      ? `{${Object.keys(v as object).sort().map((k) => `${k}:${canon((v as Record<string, unknown>)[k])}`).join(',')}}`
+      : JSON.stringify(v));
+    const effKey = (u: UpgradeDef) => u.effects.map(canon).sort().join('|');
+    const offerable = UPGRADES.filter((u) => !u.perk);
+    let dup = 0;
+    for (let i = 0; i < offerable.length; i++) for (let j = i + 1; j < offerable.length; j++) {
+      const a = offerable[i], b = offerable[j];
+      if (a.titan && b.titan && a.titan !== b.titan) continue;   // never in the same run
+      if (effKey(a) === effKey(b)) { dup++; ok(false, `card effects duplicated: ${a.id} (${a.name}) == ${b.id} (${b.name})`); }
+    }
+    console.log(`card-effect uniqueness: ${offerable.length} offerable cards, ${dup} duplicate pair(s)`);
+    const dz = UPGRADE_BY_ID.bw_greenhouse_effect, sc = UPGRADE_BY_ID.bw_u_seed_catalogue;
+    ok(!!dz && !!sc && effKey(dz) !== effKey(sc), 'Greenhouse slot (bw_greenhouse_effect) != Seed Catalogue');
+  }
+
+  // TITAN PASS (FEATURES_V2 §7.8): BRIARWICK card changes, and card text = kit C (pods, not turrets)
+  {
+    const U8 = (id: string) => UPGRADE_BY_ID[id];
+    const eff = (id: string) => JSON.stringify(U8(id)?.effects ?? null);
+    const dz = U8('bw_greenhouse_effect');
+    ok(!!dz && dz.name === 'Domino Zoning' && dz.rarity === 'rare' && dz.maxStacks === 3 && dz.titan === 'briarwick'
+      && eff('bw_greenhouse_effect') === JSON.stringify([{ stat: 'chainRange', mul: 0.15 }, { stat: 'abilityPower', mul: 0.05 }]),
+      `Domino Zoning = rare ×3 [chainRange ×0.15, abilityPower ×0.05] (${dz?.name} ${eff('bw_greenhouse_effect')})`);
+    const pc = U8('bw_pollinator_corridor');
+    ok(!!pc && pc.rarity === 'epic' && pc.maxStacks === 2
+      && eff('bw_pollinator_corridor') === JSON.stringify([{ stat: 'turretRate', mul: 0.2 }, { stat: 'chainRange', mul: 0.1 }]),
+      `Pollinator Corridor = epic ×2 [turretRate ×0.2, chainRange ×0.1] (${eff('bw_pollinator_corridor')})`);
+    const bloomDur = (id: string) => U8(id)?.effects.find((e) => e.trigger?.action === 'bloom')?.trigger?.p.dur;
+    ok(bloomDur('bw_guerrilla_gardening') === 9, `Guerrilla Gardening bloom dur 9 = the pod life (got ${bloomDur('bw_guerrilla_gardening')})`);
+    ok(bloomDur('bw_u_arbor_day') === 9, `Arbor Day bloom dur 9 (got ${bloomDur('bw_u_arbor_day')})`);
+    // no BRIARWICK card may still promise a turret; every generic bloom card says what BRIARWICK gets
+    for (const u of UPGRADES) {
+      const blooms = u.effects.some((e) => e.trigger?.action === 'bloom');
+      if (u.titan === 'briarwick') ok(!/TURRET|VINE LASH/.test(u.desc), `${u.id}: BRIARWICK card text still says turret / VINE LASH ('${u.desc}')`);
+      if (u.titan === 'briarwick' && blooms) ok(u.desc.includes('SEED POD'), `${u.id}: BRIARWICK bloom card says SEED POD ('${u.desc}')`);
+      if (!u.titan && blooms) ok(u.desc.includes('SEED POD for BRIARWICK'), `${u.id}: generic bloom card names the BRIARWICK pod ('${u.desc}')`);
+    }
+    ok(DATA.statLabel('turretCap') === 'SEED POD cap' && DATA.statLabel('turretRate') === 'pod ripening speed' && DATA.statLabel('vineLength') === 'BURR LASH length',
+      `BRIARWICK stat labels (${DATA.statLabel('turretCap')} / ${DATA.statLabel('turretRate')} / ${DATA.statLabel('vineLength')})`);
+    for (const id of ['bw_greenhouse_effect', 'bw_pollinator_corridor', 'bw_guerrilla_gardening', 'bw_u_arbor_day', 'bw_extra_allotment', 'community_garden']) {
+      const u = U8(id);
+      if (u) console.log(`  [${u.rarity}] ${u.name} ×${u.maxStacks}: ${u.desc}`);
+    }
   }
 
   // coverage: every StatKey, every TriggerAction
@@ -361,7 +421,7 @@ section('A3. GATEKEEPER CARDS');
     if (!d) continue;
     ok(d.locked === true && !d.evo && !d.perk && d.titan === undefined && d.minRank === undefined, `${r.id}: locked, generic, no evo / perk / minRank`);
     ok(!inFreshPool(d), `${r.id}: never in the FRESH pool (offered only when RunMeta.unlocked lists it)`);
-    ok(d.desc === describe(d.effects, d.maxStacks) && d.desc.length > 0, `${r.id}: desc = describe(effects) ('${d.desc}')`);
+    ok(d.desc === describe(d.effects, d.maxStacks, d.titan) && d.desc.length > 0, `${r.id}: desc = describe(effects) ('${d.desc}')`);
     ok(d.effects.length > 0 && d.maxStacks >= 1, `${r.id}: has effects, maxStacks ${d.maxStacks}`);
   }
   for (const r of raw) console.log(`  [${r.rarity} locked] ${UPGRADE_BY_ID[r.id]?.name} ×${r.maxStacks}: ${UPGRADE_BY_ID[r.id]?.desc}`);
@@ -714,22 +774,54 @@ const NOOP = { stat: 'luck', mul: 0, dur: 0.05 };   // frenzy that changes nothi
     (w, b) => w.events.filter((e) => e.type === 'arc' && e.kind === 'upgrade').length === 3 && hpSum(w) < b.ehp ? null : 'want 3 upgrade arcs + damage');
   runAction('hearthback', 'magma', { r: 1, dps: 10, dur: 3 }, () => {},
     (w) => w.hazards.some((h) => h.alive && h.kind === 'magma' && h.owner === 'titan' && h.dps > 0 && h.data.upg === 1) ? null : 'no magma pool');
-  for (const tid of ['molo', 'briarwick'] as TitanId[]) {
-    runAction(tid, 'bloom', { dur: 10 }, (w) => ringEnemies(w, 'tank', 2, 3.5),
-      (w) => {
-        const h = w.hazards.find((q) => q.alive && q.kind === 'bloom');
-        if (!h || !('cd' in h.data && 'spore' in h.data && 'h' in h.data && h.data.upg === 1)) return 'bloom hazard / data keys {cd,spore,h,upg}';
-        if (countEv(w, 'bloomSpawn') !== 1) return 'no bloomSpawn event';
-        // the bloom must actually fire seeds: tick the real world ~1.5 s (kit for BRIARWICK, engine otherwise)
-        const seeds0 = w.projectiles.filter((q) => q.kind === 'seed').length;
-        let seeded = 0;
-        for (let i = 0; i < 45 && !w.run.result; i++) {
-          WM.stepWorld(w, WM.NO_INPUT);
-          seeded += w.projectiles.filter((q) => q.alive && q.kind === 'seed').length > seeds0 ? 1 : 0;
+  // the card bloom itself (engine doBloom, every titan): a titan-owned `bloom` hazard with the engine's data keys
+  const bloomPlanted = (w: World): Hazard | string => {
+    const h = w.hazards.find((q) => q.alive && q.kind === 'bloom');
+    if (!h || !('cd' in h.data && 'spore' in h.data && 'h' in h.data && h.data.upg === 1)) return 'bloom hazard / data keys {cd,spore,h,upg}';
+    if (countEv(w, 'bloomSpawn') !== 1) return 'no bloomSpawn event';
+    return h;
+  };
+  // MOLO (and every titan but BRIARWICK): the bloom is a BLOOM TURRET that fires seeds (engine driveUpgradeBlooms)
+  runAction('molo', 'bloom', { dur: 10 }, (w) => ringEnemies(w, 'tank', 2, 3.5),
+    (w) => {
+      const h = bloomPlanted(w);
+      if (typeof h === 'string') return h;
+      // the bloom must actually fire seeds: tick the real world ~1.5 s
+      const seeds0 = w.projectiles.filter((q) => q.kind === 'seed').length;
+      let seeded = 0;
+      for (let i = 0; i < 45 && !w.run.result; i++) {
+        WM.stepWorld(w, WM.NO_INPUT);
+        seeded += w.projectiles.filter((q) => q.alive && q.kind === 'seed').length > seeds0 ? 1 : 0;
+      }
+      return seeded > 0 ? null : 'bloom never fired a seed';
+    });
+  // BRIARWICK (TITAN PASS kit C — replaces "the bloom fires seeds", a turret the kit no longer has): the kit ADOPTS
+  // the card bloom as an UNRIPE seed pod (data.pod 1, 0 < ripe < 1 after one tick), the pod ripens, and it BURSTS
+  // ripe (a 'bloomBurst' at the pod with ripe 1 and a 'seed' explosion) before its 10 s life runs out.
+  runAction('briarwick', 'bloom', { dur: 10 }, (w) => ringEnemies(w, 'tank', 2, 3.5),
+    (w) => {
+      const h = bloomPlanted(w);
+      if (typeof h === 'string') return h;
+      if (h.shape.k !== 'circle') return `bloom shape ${h.shape.k}`;
+      const px = h.shape.x, pz = h.shape.z;
+      WM.stepWorld(w, WM.NO_INPUT);
+      if (h.data.pod !== 1) return `card bloom not adopted as a pod (data ${JSON.stringify(h.data)})`;
+      if (!(h.data.ripe > 0 && h.data.ripe < 1)) return `adopted pod should start unripe and ripen (ripe ${h.data.ripe})`;
+      let burstRipe = -1, seedBoom = false, ticks = 1;
+      for (; ticks < 320 && !w.run.result && burstRipe < 0; ticks++) {
+        WM.stepWorld(w, WM.NO_INPUT);
+        for (const e of w.events) {
+          if (e.type === 'bloomBurst' && Math.hypot(e.x - px, e.z - pz) < 1e-6) burstRipe = e.ripe;
+          if (e.type === 'explosion' && e.kind === 'seed' && Math.hypot(e.x - px, e.z - pz) < 1e-6) seedBoom = true;
         }
-        return seeded > 0 ? null : 'bloom never fired a seed';
-      });
-  }
+      }
+      if (burstRipe < 0) return `the adopted pod never burst in ${(ticks * w.dt).toFixed(1)} s (alive ${h.alive})`;
+      if (h.alive) return 'pod burst but its hazard is still alive';
+      if (!seedBoom) return 'pod burst without a seed explosion';
+      if (burstRipe < 1) return `pod burst unripe (ripe ${burstRipe.toFixed(2)})`;
+      console.log(`  briarwick card bloom → unripe pod → burst ripe after ${(ticks * w.dt).toFixed(2)} s`);
+      return null;
+    });
   runAction('molo', 'slowField', { r: 2, dur: 3, dps: 4 }, () => {},
     (w) => {
       const h = w.hazards.find((q) => q.alive && q.kind === 'frost' && q.owner === 'titan');
@@ -999,34 +1091,78 @@ section('D. DRAFTS');
     ok(seen > 0, `minRank-1 cards appear once the titan is Size II (${seen} over 3000 offers)`);
   }
 
-  // thin pools
+  // thin pools. TITAN PASS D1 (FEATURES_V2 §7.7) replaced the setup "every other eligible card maxed": that owns far
+  // more than SLOT_CAP distinct cards, so it now tests the SLOTS-FULL rule (second block). The pre-D1 thin-pool rule
+  // (rule 3: slots not full → the draft is unchanged) is kept with the other cards BANISHED instead of owned.
   {
     const w = fresh('briarwick', 9);
-    // v2: maxing every card below completes evolution recipes; banish the evolutions so this stays the v1
-    // thin-pool rule (evolution offers in thin pools are probe_evolutions' job)
+    // v2: banish the evolutions so this stays the v1 thin-pool rule (evolution offers in thin pools are
+    // probe_evolutions' job)
     for (const r of EVODATA.EVOLUTIONS) w.upgrades.banished.push(r.id);
     const elig = UPGRADES.filter((u) => eligible(w, u));
     const keep = elig.filter((u) => u.rarity === 'common').slice(0, 2).map((u) => u.id);
-    for (const u of elig) if (!keep.includes(u.id)) w.upgrades.owned[u.id] = u.maxStacks;
+    const lastRare = elig.find((u) => u.rarity !== 'common' && u.maxStacks > 1)!;
+    for (const u of elig) if (!keep.includes(u.id) && u.id !== lastRare.id) w.upgrades.banished.push(u.id);
+    w.upgrades.banished.push(lastRare.id);
+    ok(!DR.slotsFull(w), `thin pool: slots not full (${DR.slotsUsed(w)}/${DR.SLOT_CAP})`);
     w.upgrades.pendingDrafts = 1;
     const o = rollOffer(w);
     ok(o.length === 2 && o.every((id) => keep.includes(id)), `thin pool (2 left) → offer of 2 (${o.join(',')})`);
     ok(hasPendingDraft(w), 'hasPendingDraft true while cards remain');
     // chest with only one rare+ left → topped up with commons (graceful, never short when commons exist)
     w.upgrades.offer = null;
-    const lastRare = elig.find((u) => u.rarity !== 'common')!;
-    w.upgrades.owned[lastRare.id] = 0;
+    w.upgrades.banished.splice(w.upgrades.banished.indexOf(lastRare.id), 1);
     w.upgrades.chestDrafts = 1;
     const c = rollOffer(w, true);
     ok(c.length === 3 && c.includes(lastRare.id), `thin chest pool → rare+ first, then commons (${c.join(',')})`);
     pickUpgrade(w, lastRare.id);
     ok(w.upgrades.chestDrafts === 0 && w.upgrades.pendingDrafts === 1, 'chest pick consumed the chest draft, not the level-up draft');
-    // empty pool → [] and no pending draft reported (the app never blocks on an impossible draft)
-    for (const u of elig) w.upgrades.owned[u.id] = u.maxStacks;
+    // empty pool with the slots NOT full → [] and no pending draft reported (pre-D1: the app never blocks on an
+    // impossible draft; §7.7 rule 5 keeps this while slots are free)
+    w.upgrades.owned[lastRare.id] = lastRare.maxStacks;
+    for (const id of keep) w.upgrades.banished.push(id);
     w.upgrades.offer = null;
+    ok(!DR.slotsFull(w), 'empty pool: slots still not full');
     const e = rollOffer(w);
-    ok(e.length === 0 && w.upgrades.offer === null && !hasPendingDraft(w), 'empty pool → [] and hasPendingDraft false');
+    ok(e.length === 0 && w.upgrades.offer === null && !hasPendingDraft(w), 'empty pool (slots free) → [] and hasPendingDraft false');
     console.log(`thin pools: 2-card offer ${o.join(',')} · chest top-up ${c.join(',')} · empty → [${e.join(',')}]`);
+  }
+  // SLOTS FULL (§7.7 rules 4–5): only owned, not-maxed cards (UPGRADE) are offered — never a card that needs a new
+  // slot, even when the pool has nothing else; and an owed draft with nothing offerable pays OVERFLOW rewards (no
+  // silent vanish): hasPendingDraft stays true, the pick consumes the draft and never enters owned.
+  {
+    const w = fresh('briarwick', 9);
+    for (const r of EVODATA.EVOLUTIONS) w.upgrades.banished.push(r.id);
+    const elig = UPGRADES.filter((u) => eligible(w, u));
+    const fresh2 = elig.filter((u) => u.rarity === 'common').slice(0, 2).map((u) => u.id);        // never owned
+    const deep = elig.filter((u) => !fresh2.includes(u.id) && u.maxStacks > 1).slice(0, 2).map((u) => u.id);
+    for (const u of elig) if (!fresh2.includes(u.id)) w.upgrades.owned[u.id] = deep.includes(u.id) ? u.maxStacks - 1 : u.maxStacks;
+    ok(DR.slotsFull(w), `slots full (${DR.slotsUsed(w)}/${DR.SLOT_CAP})`);
+    ok(fresh2.every((id) => DR.cardSlot(w, id) === 'new') && deep.every((id) => DR.cardSlot(w, id) === 'upgrade'),
+      `cardSlot: unowned = new, owned not maxed = upgrade (${fresh2.map((id) => DR.cardSlot(w, id)).join(',')} / ${deep.map((id) => DR.cardSlot(w, id)).join(',')})`);
+    w.upgrades.pendingDrafts = 1;
+    const o = rollOffer(w);
+    // the CARDS are exactly the 2 owned, not-maxed ones; a short offer may be topped up with OVERFLOW rewards (lane
+    // DRAFT: every draft shows 3), never with a card that needs a new slot
+    const oc = o.filter((id) => !DR.isOverflowReward(id));
+    ok(oc.length === 2 && oc.every((id) => deep.includes(id)) && !o.some((id) => fresh2.includes(id)),
+      `slots full → only the 2 owned, not-maxed cards (${o.join(',')}; new ${fresh2.join(',')} never)`);
+    pickUpgrade(w, oc[0]);
+    // now nothing is offerable: every owned card maxed but one stack of deep[1] / deep[0]; max both
+    for (const id of deep) w.upgrades.owned[id] = UPGRADE_BY_ID[id].maxStacks;
+    w.upgrades.pendingDrafts = 1;
+    w.upgrades.offer = null;
+    const owned0 = JSON.stringify(w.upgrades.owned);
+    const f = rollOffer(w);
+    ok(f.length === DR.OFFER_SIZE && f.every((id) => DR.isOverflowReward(id)) && !f.some((id) => fresh2.includes(id)),
+      `slots full + empty pool → OVERFLOW rewards (${f.join(',')})`);
+    ok(hasPendingDraft(w), 'an owed OVERFLOW draft keeps hasPendingDraft true (never silently vanishes)');
+    if (f.length) {
+      pickUpgrade(w, f[0]);
+      ok(w.upgrades.pendingDrafts === 0 && JSON.stringify(w.upgrades.owned) === owned0 && !w.upgrades.order.includes(f[0]),
+        `OVERFLOW pick consumes the draft and never enters owned / order (pending ${w.upgrades.pendingDrafts})`);
+    }
+    console.log(`slots full: offer ${o.join(',')} · overflow [${f.join(',')}]`);
   }
 
   // reroll + pick bookkeeping

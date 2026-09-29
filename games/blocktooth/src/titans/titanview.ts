@@ -43,7 +43,7 @@ import { sizeLocked } from '../meta/gates.ts';
  */
 const NIGHT_LOOK: Record<TitanId, { fill: number; rim: number }> = {
   molo: { fill: 0, rim: 0.26 },
-  voltkite: { fill: 1.1, rim: 0.5 },
+  voltkite: { fill: 0.35, rim: 0.45 },   // v3 remodel: the back is lavender now (was fill 1.1)
   hearthback: { fill: 0.5, rim: 0.45 },
   briarwick: { fill: 0.12, rim: 0.3 },
 };

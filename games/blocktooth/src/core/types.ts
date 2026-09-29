@@ -457,6 +457,19 @@ export interface UpgradeState {
   locked: string | null;
 }
 
+// ── TITAN PASS D1 BUILD SLOTS (FEATURES_V2 §7.7; upgrades/draft.ts SLOT_CAP · slotsUsed · slotsFull · cardSlot) ──
+/** What an offered card is to the slot rule (draft UI tag):
+ *  'new' = not owned, takes a new slot · 'upgrade' = owned, another stack · 'shared' = the missing half of a
+ *  started evolution recipe, files into its partner's slot · 'evolution' = a ready evolution (takes its base's slot) ·
+ *  'overflow' = an OverflowRewardId (no slot, never owned) · 'free' = a ONE-OFF card (maxStacks 1, not an evolution
+ *  or perk): files outside the slots, offered only while the slots are filling. */
+export type DraftCardSlot = 'new' | 'upgrade' | 'shared' | 'evolution' | 'overflow' | 'free';
+/** Served when an owed draft has NOTHING offerable (slots full and every slotted card maxed / banished, no recipe
+ *  half and no evolution ready). The ids go in UpgradeState.offer like card ids; pickUpgrade applies one at once,
+ *  consumes the draft, and it never enters owned / order / slots. Deterministic (no rng draw). */
+export type OverflowRewardId = 'ovf_sick_day' | 'ovf_hot_tip' | 'ovf_hard_hat';
+export const OVERFLOW_REWARD_IDS: readonly OverflowRewardId[] = ['ovf_sick_day', 'ovf_hot_tip', 'ovf_hard_hat'];
+
 // ─────────────────────────────── director / run ───────────────────────────────
 export type RunPhase = 'intro' | 'waves' | 'elite' | 'boss' | 'clear' | 'dead' | 'endless';   // v2: 'endless' after KEEP GOING (§9)
 
@@ -547,7 +560,15 @@ export type SimEvent =
   | { type: 'gateEscalate'; level: 1 | 2 | 3 }
   | { type: 'gateReposition'; x: number; z: number }                // the gatekeeper cut the titan off
   | { type: 'gateRam'; x: number; z: number }                       // the stuck rule's RAMMING THROUGH (§3.0)
-  | { type: 'finale'; on: boolean };                                // on: same tick as the city boss's kill + rankUp 4
+  | { type: 'finale'; on: boolean }                                 // on: same tick as the city boss's kill + rankUp 4
+  // ── TITAN PASS (CONTRACT §8 BRIARWICK kit C, §16; lane SIM emits, lanes VIEW / DATA read) ──
+  /** a foe is TANGLED by a BRIARWICK pod burst / POP-UP PARK ring: emitted where the kit sets e.stun (id = enemy
+   *  id, t = the stun seconds it got). View: root coils around the foe's legs for t s. */
+  | { type: 'rooted'; id: number; x: number; z: number; t: number }
+  /** a BRIARWICK seed pod burst: r = burst radius (m); link = its chain link (0 = a lone / first pop, k = the k-th
+   *  link of a chain or POP-UP PARK cascade); ripe = its ripeness at the burst (1 = ripe; < 1 = an unripe pod that
+   *  burst at end of life / at the cap). View: petal burst, pitch +1 semitone per link; tally: cascadeBest. */
+  | { type: 'bloomBurst'; x: number; z: number; r: number; link: number; ripe: number };
 
 /** Keys into data/strings.ts ALERTS (full-width broadcast banners). */
 export type AlertKey =
@@ -807,7 +828,11 @@ export interface RunTally {
   ultWireUntilT: number;   // world.t until which VOLT-KITE's GRIDLOCK SURGE wires may still be live
   hookKillsBest: number;   // any titan: kills within HOOK_WINDOW_S of one 'ability' event
   fullVents: number;       // HEARTHBACK: 'vent' events with power (fill) >= 0.95
-  bloomsBest: number;      // BRIARWICK: most titan-owned 'bloom' hazards alive at once WITHOUT data.wild (ult blooms excluded)
+  bloomsBest: number;      // BRIARWICK (pre-TITAN PASS goal metric, kept for save/probe compatibility): most titan-owned
+                           // 'bloom' hazards alive at once WITHOUT data.wild (ult blooms excluded)
+  /** TITAN PASS: BRIARWICK's longest pod chain this run, in links (+1 = pods in the chain), from 'bloomBurst'
+   *  events (meta/tally.ts; lane DATA decides and documents whether UPROAR-seeded chains count). Goal FULL BLOOM. */
+  cascadeBest: number;
   // window bookkeeping (lane-internal but part of the struct so it survives compaction/probes)
   hookT: number;           // world.t of the last 'ability' event (-1 = none)
   hookPickups: number; hookKills: number;
@@ -876,7 +901,9 @@ export type GoalMetric =
   | 'titanClears' | 'titanBiomesCleared' | 'wiresBest' | 'hookKillsBest' | 'fullVents' | 'bloomsBest' | 'healed'
   | 'props' | 'overloadSites' | 'tier4CollapseFrac' | 'bossKillsLife' | 'staggersBestFight' | 'boats' | 'fastClearS'
   // GATEKEEPERS §6.5 (lane K2c fills goalProgress; K0 returns the neutral value)
-  | 'gateTippedFastS' | 'gateStallsBestFight' | 'gateSwitchFastS' | 'gateCleanKills' | 'gateTotalFightS' | 'gateRematchesLife';
+  | 'gateTippedFastS' | 'gateStallsBestFight' | 'gateSwitchFastS' | 'gateCleanKills' | 'gateTotalFightS' | 'gateRematchesLife'
+  // TITAN PASS (lane DATA retargets g_bw_full_bloom to it and fills goalProgress; T0: neutral value 0)
+  | 'cascadeBest';
 export type UnlockRef =
   | { kind: 'card'; id: string }             // locked UpgradeDef (incl. evolutions)
   | { kind: 'perk'; id: PerkId }

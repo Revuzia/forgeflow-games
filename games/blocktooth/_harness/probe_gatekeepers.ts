@@ -849,6 +849,15 @@ function runVolleyGeometry(): void {
     { gate: 'switchboard5', name: 'CALL-IN', escH: 0.5, min: 1.1, max: 2.0 },
   ];
   let volleyCases = 0, volleyBad: string[] = [], fairCases = 0, fairBad: string[] = [];
+  // TITAN PASS D2 (GATEKEEPERS §3.6): the SPACE-DENIAL rings (bosses/index.ts denialRing) — the lead circle of these volleys and every
+  // dash answer carries a ring r0..r1 around it that fires WITH it. Walk-fair combo: the straight exit that clears the
+  // lead (r + R) and the secondaries must also END in the dry moat (+ the titan's braking distance) — never in the ring;
+  // and a straight dash from the lead's centre must end in the ring band (what the combo reads).
+  const RINGED = new Set(['PAINT BUCKETS', 'CALL-IN']);
+  // CORDON-2's answer is a sawhorse capsule (half 0.6 H, r 0.25 H) whose sideways walk-out ends within hypot(0.6 H, r + R):
+  // its ring is built on the circle of that radius − R (cordon2.ts), checked here as that circle
+  const DASH_ANS: { gate: GateId; rH: number; cap?: boolean }[] = [{ gate: 'stencil1', rH: 0.4 }, { gate: 'switchboard5', rH: 0.45 }, { gate: 'cordon2', rH: 0.25, cap: true }];
+  let ringCases = 0; const ringBad: string[] = [];
   for (const [titan, ms] of titans) {
     for (const gate of GATE_IDS) {
       const s = (GATE_IDS.indexOf(gate) + 1) as 1 | 2 | 3;
@@ -880,6 +889,14 @@ function runVolleyGeometry(): void {
           const r = V.rH * H, n = V.count[phase];
           const out = new Float32Array(2 * 9);
           const wuLead = M.bosses.gateWindup(w, b, (r + R) / H, V.min, V.max);
+          const ring = RINGED.has(V.name) ? { ...M.bosses.denialRadii(w, b, r) } : null;
+          const brake = walk * M.titansim.ACCEL_REACH_S[T.rank] / (2 * M.titansim.DECEL_MUL);
+          if (ring) {
+            ringCases++;
+            const dashM = Math.max(0, T.stats.dashDistance || 2.2) * T.height;
+            if (r + 2 * R + brake > ring.r0 - 1e-6) ringBad.push(`${gate} ${V.name} ${titan} H ${f1(H)} P${phase}: the exit + braking ${f2((r + 2 * R + brake) / H)} H reaches the ring (r0 ${f2(ring.r0 / H)} H)`);
+            if (!(dashM >= ring.r0 - R - 1e-6 && dashM <= ring.r1 + R + 1e-6)) ringBad.push(`${gate} ${V.name} ${titan} H ${f1(H)} P${phase}: a dash from the centre (${f2(dashM / H)} H) misses the ring band [${f2((ring.r0 - R) / H)}, ${f2((ring.r1 + R) / H)}] H`);
+          }
           for (let sd = 0; sd < (QUICK ? 20 : 100); sd++) {
             volleyCases++;
             // rig at a band distance from the titan (who stands on the lead point), in a seeded direction
@@ -898,6 +915,7 @@ function runVolleyGeometry(): void {
               const tNeed = (need / walk) * k;
               if (tNeed > wuLead - 0.5 + 1e-6) continue;
               const px = T.x + ex * need, pz = T.z + ez * need;
+              if (ring && need + R + brake > ring.r0 + 1e-6) continue;   // the exit must stop in the dry moat
               if (keep > 0 && Math.hypot(px - b.x, pz - b.z) < keep) continue;
               let clear = true;
               for (let i = 1; i < np && clear; i++) if (Math.hypot(px - out[2 * i], pz - out[2 * i + 1]) < r + R - 1e-6) clear = false;
@@ -911,6 +929,22 @@ function runVolleyGeometry(): void {
   }
   check(volleyBad.length === 0, `volleys: a straight exit within gateWindup − 0.5 s exists in all ${volleyCases} cases (buckets, flares; home / 60 / 67 H; slowed STENCIL-1; P1–P3; 4 walk speeds)`, volleyBad.slice(0, 4).join(' | '));
   check(fairBad.length === 0, `gateWindup ≥ the fair value in all ${fairCases} lead cases`, fairBad.slice(0, 4).join(' | '));
+  // the dash answers' rings: stepping out of the answer (r + R, any direction) and braking stays in the moat
+  for (const [titan, ms] of titans) for (const A of DASH_ANS) {
+    const s = (GATE_IDS.indexOf(A.gate) + 1) as 1 | 2 | 3;
+    const w = atGate(titan, 'grideast', 1337, s, true);
+    const b = lockAndSpawn(w, s);
+    if (!b) { ringBad.push(`${titan}/${A.gate}: not fielded`); continue; }
+    const T = w.titan;
+    for (const H of [titanHeightAt((s - 1) as 0 | 1 | 2, RANK_LEVELS[s]), 60, 67]) {
+      T.height = H; T.radius = 0.42 * H; T.stats.moveSpeed = ms; T.slowT = 0; b.data.H = H;
+      const R = T.radius, r = A.cap ? Math.hypot(0.6 * H, A.rH * H + R) - R : A.rH * H, ring = { ...M.bosses.denialRadii(w, b, r) };
+      const brake = M.bosses.titanWalk(w) * M.titansim.ACCEL_REACH_S[T.rank] / (2 * M.titansim.DECEL_MUL);
+      ringCases++;
+      if (r + 2 * R + brake > ring.r0 - 1e-6) ringBad.push(`${A.gate} dash answer ${titan} H ${f1(H)}: exit + braking reaches the ring`);
+    }
+  }
+  check(ringBad.length === 0, `SPACE-DENIAL rings: the walk-out of the lead / dash answer (+ braking) ends in the dry moat and a straight dash from the centre ends in the ring band, in all ${ringCases} cases (buckets, flares, dash answers; home / 60 / 67 H; 4 walk speeds)`, ringBad.slice(0, 4).join(' | '));
   // DOUBLE LINE and SAWHORSE TOSS by their §3.1 / §3.2 geometry (spacing, widths) vs the titan body R = 0.42 H
   const dlMedian = 2.0 - 0.5 - 2 * 0.42;
   check(dlMedian >= 0.3 - 1e-9, `DOUBLE LINE: median band for the titan's centre ${dlMedian.toFixed(2)} H ≥ 0.3 H (spacing 2.0 H, lines 0.5 H)`);

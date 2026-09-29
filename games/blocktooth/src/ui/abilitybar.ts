@@ -25,7 +25,8 @@ import { loadProfile } from '../core/save.ts';
 import { ClassSlot, TextSlot, VarSlot, div, el, flashesReduced, keyChip, pulse } from './dom.ts';
 import { BAR_SLOTS, badgeFor, barFill, barGlyphs, barSlots, glyphSvg, rarityFrameClass } from './icons.ts';
 import { dismissHudToast, pushHudToast } from './toast.ts';
-import { evolutionProgress } from '../upgrades/draft.ts';
+import { SLOT_CAP, evolutionProgress, slotsUsed } from '../upgrades/draft.ts';
+import { STR } from '../data/strings.ts';
 
 const SLOT_REFRESH_S = 0.25;
 const PROC_GAP_MS = 250;          // ≤ 4 Hz per slot (§4.2.5)
@@ -33,6 +34,37 @@ const DEVICE_POLL_S = 0.25;
 const WIRE_CAP = 6;               // VOLT-KITE live-wire cap (CONTRACT §8)
 const BURST_MS = 1300;
 const HINT_KEY = 'uproarHint';
+/** TITAN PASS (CONTRACT §8 BRIARWICK): the SPACE prompt glows once this many seed pods are ripe */
+const RIPE_GLOW_AT = 3;
+
+/** (the slot counter sits at the right end of the UPROAR header row: left-aligned above the slots it covered the
+ *  UPROAR meter's left end) */
+/** TITAN PASS styles for this file's new nodes (hud_v2.css belongs to no titan-pass lane, so they are injected
+ *  once here): the D1 build-slot counter above the bar, the POP-UP PARK "primed" glow on the SPACE chip, and the
+ *  pod bar (ripe share drawn over the live share). Transform / opacity / class toggles only, like hud_v2.css. */
+const TP_CSS = `
+.bt-abar-slots { position: absolute; right: 0; bottom: calc(100% + var(--u) * 1.55); padding: calc(var(--u) * .08) calc(var(--u) * .4);
+  font-family: var(--f-mono); font-weight: 700; font-size: calc(var(--u) * .66); letter-spacing: .08em; line-height: 1.2;
+  color: var(--cream, #f4ecd8); background: rgba(20, 33, 61, .82); border: calc(var(--u) * .1) solid var(--ink, #1b1426); white-space: nowrap; }
+.bt-abar-slots.off { display: none; }
+.bt-abar-slots.full { color: var(--navy, #14213d); background: var(--gold, #ffc63d); }
+.bt-act-kit[data-kit="pods"] .bt-act-kitbar > i { background: #5e8f3a; }
+.bt-act-kit[data-kit="pods"] .bt-act-kitbar > b { position: absolute; inset: 0; transform-origin: 0 50%; transform: scaleX(var(--r, 0)); background: #ff9ec7; }
+.bt-active.primed .bt-act-top .bt-key { color: #1b1426; background: #d8ff7a; box-shadow: 0 0 0 calc(var(--u) * .12) #ff9ec7, 0 0 calc(var(--u) * .9) calc(var(--u) * .2) rgba(216, 255, 122, .85);
+  animation: bt-tp-primed .8s ease-in-out infinite alternate; }
+.bt-active.primed .bt-act-kitval { color: #c2417f; }
+@keyframes bt-tp-primed { from { transform: scale(1); } to { transform: scale(1.12); } }
+.bt-reduce-flash .bt-active.primed .bt-act-top .bt-key { animation: none; }
+`;
+let tpCssOn = false;
+function injectTpCss(): void {
+  if (tpCssOn || typeof document === 'undefined') return;
+  tpCssOn = true;
+  const st = document.createElement('style');
+  st.dataset.bt = 'titanpass-abilitybar';
+  st.textContent = TP_CSS;
+  document.head.appendChild(st);
+}
 
 interface SlotNode {
   root: HTMLDivElement;
@@ -92,6 +124,15 @@ export class AbilityBar implements AbilityBarApi {
   private readonly kitLbl: TextSlot;
   private readonly kitVal: TextSlot;
   private readonly kitBar: VarSlot;
+  /** BRIARWICK pods: the ripe share over the live share (--r) */
+  private readonly kitRipe: VarSlot;
+  /** BRIARWICK: SPACE glows while kit.ripe >= RIPE_GLOW_AT (POP-UP PARK is worth pressing) */
+  private readonly primed: ClassSlot;
+  /** D1 build slots: 'SLOTS n/8' above the bar (upgrades/draft.ts slotsUsed / SLOT_CAP) */
+  private readonly slotTag: HTMLDivElement;
+  private readonly slotTxt: TextSlot;
+  private readonly slotOff: ClassSlot;
+  private readonly slotFull: ClassSlot;
   private kitKind = '';
   private hookMax = 1;
   private lastCd = 0;
@@ -133,7 +174,13 @@ export class AbilityBar implements AbilityBarApi {
     this.burst = div('bt-up-burst', m);
 
     // ── ability bar (10 pooled slots)
+    injectTpCss();
     this.bar = div('bt-abar', L);
+    this.slotTag = div('bt-abar-slots off', this.bar);
+    this.slotTag.dataset.v2 = 'slot-count';
+    this.slotTxt = new TextSlot(this.slotTag);
+    this.slotOff = new ClassSlot(this.slotTag, 'off');
+    this.slotFull = new ClassSlot(this.slotTag, 'full');
     for (let i = 0; i < BAR_SLOTS; i++) {
       const r = div('bt-slot empty', this.bar);
       div('bt-rv', r);
@@ -180,8 +227,11 @@ export class AbilityBar implements AbilityBarApi {
     const kb = div('bt-act-kitbar', kit);
     this.kitBar = new VarSlot(el('i'), '--p', 0.005);
     kb.appendChild(this.kitBar.node);
+    this.kitRipe = new VarSlot(el('b'), '--r', 0.005);
+    kb.appendChild(this.kitRipe.node);
     this.kitVal = new TextSlot(div('bt-act-kitval', kit));
     this.kitOn = new ClassSlot(kit, 'on');
+    this.primed = new ClassSlot(a, 'primed');
 
     // device detection for the key chips (no Input reference is passed to this class)
     window.addEventListener('keydown', () => { this.device = 'keyboard'; }, { passive: true });
@@ -205,7 +255,7 @@ export class AbilityBar implements AbilityBarApi {
 
     // bar (4 Hz re-derive; change-only DOM)
     this.slotAcc += d;
-    if (this.slotAcc >= SLOT_REFRESH_S) { this.slotAcc = 0; this.refreshSlots(w, false); }
+    if (this.slotAcc >= SLOT_REFRESH_S) { this.slotAcc = 0; this.refreshSlots(w, false); this.updateSlotCount(w); }
 
     this.updateMeter(w, d);
     this.updateActive(w, d);
@@ -250,8 +300,9 @@ export class AbilityBar implements AbilityBarApi {
     this.hookMax = 1; this.lastCd = 0; this.kitKind = ''; this.cdShown = -1; this.kitAcc = 1;
     this.pctShown = -1; this.drainT = 0;
     for (const s of [this.meterLbl, this.meterPct, this.meterKey, this.actCd, this.actKey, this.kitLbl, this.kitVal]) s.reset();
-    for (const v of [this.meterFill, this.meterCool, this.actBar, this.swA, this.swB, this.kitBar]) v.reset();
-    for (const c of [this.meterReady, this.meterCooling, this.actReady, this.kitOn]) c.reset();
+    for (const v of [this.meterFill, this.meterCool, this.actBar, this.swA, this.swB, this.kitBar, this.kitRipe]) v.reset();
+    for (const c of [this.meterReady, this.meterCooling, this.actReady, this.kitOn, this.primed, this.slotOff, this.slotFull]) c.reset();
+    this.slotTxt.reset();
     this.lines.style.opacity = '0';
     this.burst.style.opacity = '0';
     this.slotSig = '#';
@@ -461,27 +512,43 @@ export class AbilityBar implements AbilityBarApi {
     if (this.kitAcc >= 0.1) { this.kitAcc = 0; this.updateKit(w); }   // kit counters at ~10 Hz
   }
 
+  /** D1 build slots: 'SLOTS n/cap' (STR.draft.slotCount) from upgrades/draft.ts slotsUsed(); gold when full.
+   *  Hidden until the first card is filed, so a fresh run's bar stays clean. */
+  private updateSlotCount(w: World): void {
+    const n = Math.max(0, Math.round(slotsUsed(w)));
+    this.slotOff.set(n <= 0);
+    if (n <= 0) return;
+    this.slotTxt.set(STR.draft.slotCount.replace('{n}', String(n)).replace('{cap}', String(SLOT_CAP)));
+    this.slotFull.set(n >= SLOT_CAP);
+  }
+
   private updateKit(w: World): void {
     const T = w.titan, K = T.kit || {};
-    let kind = '', frac = 0, val = '';
+    let kind = '', frac = 0, val = '', ripeFrac = 0;
+    let primed = false;
     if (w.titanId === 'hearthback' && (K.cap || 0) > 0) {
       kind = 'shell'; frac = (K.stored || 0) / K.cap; val = `${Math.floor(Math.max(0, Math.min(1, frac)) * 100)}%`;
     } else if (w.titanId === 'voltkite') {
       const n = Math.max(0, Math.round(K.wires || 0));
       kind = 'wires'; frac = n / WIRE_CAP; val = `${n}/${WIRE_CAP}`;
     } else if (w.titanId === 'briarwick') {
-      const cap = Math.max(1, Math.round(T.stats ? T.stats.turretCap : 4));
-      const n = Math.max(0, Math.round(K.turrets || 0));
-      kind = 'blooms'; frac = n / cap; val = `${n}/${cap}`;
+      // TITAN PASS kit C: 'PODS n · RIPE m' (kit.pods / kit.ripe; kit.turrets is the legacy alias of pods)
+      const cap = Math.max(1, Math.round(T.stats ? T.stats.turretCap : 10));
+      const n = Math.max(0, Math.round(K.pods ?? K.turrets ?? 0));
+      const m = Math.max(0, Math.min(n, Math.round(K.ripe || 0)));
+      kind = 'pods'; frac = n / cap; ripeFrac = m / cap; val = `${n} · ${HUD2.ripe} ${m}`;
+      primed = m >= RIPE_GLOW_AT && (T.abilityCd || 0) <= 0;   // only while a press would fire
     }
     this.kitOn.set(kind !== '');
+    this.primed.set(primed);
     if (!kind) return;
     if (kind !== this.kitKind) {
       this.kitKind = kind;
-      this.kitLbl.set(kind === 'shell' ? HUD2.shell : kind === 'wires' ? HUD2.wires : HUD2.blooms);
+      this.kitLbl.set(kind === 'shell' ? HUD2.shell : kind === 'wires' ? HUD2.wires : HUD2.pods);
       this.kitRow.dataset.kit = kind;
     }
     this.kitBar.set(Math.max(0, Math.min(1, frac)));
+    this.kitRipe.set(Math.max(0, Math.min(1, ripeFrac)));
     this.kitVal.set(val);
   }
 }

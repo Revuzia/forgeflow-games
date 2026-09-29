@@ -22,7 +22,9 @@
 //      fallback when the relevant set is filed, null when all 40 are filed
 //   E. tally vs a scripted event run (every counter), the HOOK window, SIX-WAY SPLICE / FULL BLOOM
 //      exclusions (only GRIDLOCK SURGE wires / GREENBELT DECREE blooms → 0), HAIRLINE counts the city
-//      fight only (a rematch fielded in endless does not update staggersBestFightBy)
+//      fight only (a rematch fielded in endless does not update staggersBestFightBy). TITAN PASS: FULL BLOOM
+//      is cascadeBest (longest 'bloomBurst' chain in links): live decree blooms alone → 0, a chain counts its
+//      top link, decree-seeded chains COUNT (lane DATA's recorded rule, meta/tally.ts header), the goal reads it
 //   E2. the six gatekeeper goals (GATEKEEPERS §6.5) from scripted gate events through the real tally: each
 //      metric's value, met / not met on both sides of its target, gate staggers never touch HAIRLINE,
 //      REISSUED filed once per World (life.gateRematches) across an EXTENDED COVERAGE double filing
@@ -138,6 +140,8 @@ const METRICS = new Set([
   'props', 'overloadSites', 'tier4CollapseFrac', 'bossKillsLife', 'staggersBestFight', 'boats', 'fastClearS',
   // GATEKEEPERS §6.5
   'gateTippedFastS', 'gateStallsBestFight', 'gateSwitchFastS', 'gateCleanKills', 'gateTotalFightS', 'gateRematchesLife',
+  // TITAN PASS (FEATURES_V2 §8.2): FULL BLOOM's pod-chain metric
+  'cascadeBest',
 ]);
 /** lower-is-better metrics (seconds): EARLY CLOSING + the three timed gatekeeper goals */
 const LOWER_METRICS = new Set(['fastClearS', 'gateTippedFastS', 'gateSwitchFastS', 'gateTotalFightS']);
@@ -590,7 +594,37 @@ function checkTally(): void {
   for (let i = 0; i < 5; i++) w.hazards.push(bloom(200 + i, false));
   step([]);
   ok(t.bloomsBest === 5, `5 kit blooms among them → bloomsBest ${t.bloomsBest}`);
+  // TITAN PASS FULL BLOOM = cascadeBest (replaces the bloomsBest goal assert above, which stays as a tally check).
+  // (c) exclusion half: GREENBELT DECREE blooms merely alive (no pod burst) leave FULL BLOOM at 0
+  const gFB = M.GOALS.find((g) => g.id === 'g_bw_full_bloom')!;
+  const bwCtx = { titan: 'briarwick' as TitanId, biome: 'lockwater' as BiomeId, result: null, endT: -1 };
+  ok(gFB.metric === 'cascadeBest' && gFB.target === 15 && gFB.scope === 'run' && gFB.titan === 'briarwick',
+    `FULL BLOOM = cascadeBest ≥ 15 (18 lowered to the seed-1337 bot value, data/goals.ts), run scope, BRIARWICK (${gFB.metric} ${gFB.target} ${gFB.scope} ${gFB.titan})`);
+  ok(t.cascadeBest === 0 && M.goals.goalProgress(gFB, M.profile.emptyProfile(), t, bwCtx) === 0,
+    `FULL BLOOM exclusion: 14 live blooms (9 decree), no burst → cascadeBest ${t.cascadeBest}, progress 0`);
   w.hazards.length = 0;
+  const pop = (link: number, ripe = 1): SimEvent => ({ type: 'bloomBurst', x: 0, z: 0, r: 2, link, ripe });
+  step([pop(0), pop(0, 0.4)]);
+  ok(t.cascadeBest === 0, `lone pops (link 0) → cascadeBest ${t.cascadeBest}`);
+  step([pop(1)]); step([pop(2), pop(2)]); step([pop(3)]); step([pop(5)]);
+  ok(t.cascadeBest === 5, `a chain counts its top link → cascadeBest ${t.cascadeBest} (5)`);
+  step([pop(2), pop(Number.NaN), pop(Number.POSITIVE_INFINITY)]);
+  ok(t.cascadeBest === 5, `a shorter chain / a non-finite link never moves it (${t.cascadeBest})`);
+  // lane DATA's rule: a chain seeded by GREENBELT DECREE pods counts (the decree replants within turretCap)
+  step([{ type: 'ultFire', titan: 'briarwick', x: 0, z: 0, r: 30 }]);
+  step([pop(0), pop(9)], 0.5);
+  ok(t.cascadeBest === 9, `decree-seeded chain counts (lane DATA rule) → cascadeBest ${t.cascadeBest} (9)`);
+  ok(M.goals.goalProgress(gFB, M.profile.emptyProfile(), t, bwCtx) === 9 && !M.goals.goalMet(gFB, 9),
+    'FULL BLOOM progress 9 of 15, not met');
+  ok(M.goals.goalProgress(gFB, M.profile.emptyProfile(), t, { ...bwCtx, titan: 'molo' }) === 0, 'FULL BLOOM: a MOLO run never counts');
+  step([pop(14)]);
+  ok(!M.goals.goalMet(gFB, M.goals.goalProgress(gFB, M.profile.emptyProfile(), t, bwCtx)), `a 14-link chain does not meet FULL BLOOM (cascadeBest ${t.cascadeBest})`);
+  step([pop(15)]);
+  ok(M.goals.goalMet(gFB, M.goals.goalProgress(gFB, M.profile.emptyProfile(), t, bwCtx)), `a 15-link chain meets FULL BLOOM (cascadeBest ${t.cascadeBest})`);
+  // a tally made before the field existed reads 0 (tallyV2), never NaN / undefined
+  const old = T.createTally() as unknown as Record<string, unknown>; delete old.cascadeBest;
+  ok(T.tallyV2(old as unknown as RunTally).cascadeBest === 0, 'tallyV2: a tally without cascadeBest reads 0');
+  console.log(`  FULL BLOOM (cascadeBest): decree blooms alive → 0 · chain 0..5 → 5 · decree-seeded 9 → 9 · 14 → not met · 15 → met (final ${t.cascadeBest})`);
   // HAIRLINE: city fight counts, a rematch (fielded in endless) does not
   const fakeBoss = { id: 'irongully', alive: true, data: {} } as unknown as World['boss'];
   (w as { boss: World['boss'] }).boss = fakeBoss;
@@ -947,6 +981,12 @@ function checkReachability(): void {
     console.log(`    ${where ? 'MET ' : '    '} ${g.id.padEnd(26)} best ${Number.isInteger(best) ? best : best.toFixed(2)} / ${g.target}${where ? '  (' + where.slice(0, 4).join(', ') + (where.length > 4 ? ', …' : '') + ')' : ''}`);
   }
   ok(metAll.size >= 10, `(b) ≥ 10 run-scope goals met in the 12-run matrix (${metAll.size})`);
+  // TITAN PASS (FEATURES_V2 §8.2 FULL BLOOM row): the seed-1337 gate bot must reach the FULL BLOOM chain with
+  // BRIARWICK in at least one city (the target is set to what this bot reaches if it cannot reach 18)
+  const gFB = M.GOALS.find((g) => g.id === 'g_bw_full_bloom')!;
+  const casc = runs.filter((r) => r.titan === 'briarwick').map((r) => `${r.biome} ${r.tally.cascadeBest}`);
+  const bestCasc = Math.max(0, ...runs.filter((r) => r.titan === 'briarwick').map((r) => r.tally.cascadeBest));
+  ok(bestCasc >= gFB.target, `(c) FULL BLOOM reachable: BRIARWICK longest pod chain ${bestCasc} links ≥ target ${gFB.target} (${casc.join(' · ')})`);
 }
 
 // ─────────────────────────────── H. perk bands ───────────────────────────────

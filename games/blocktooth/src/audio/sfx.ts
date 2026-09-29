@@ -283,6 +283,9 @@ const GAP: Record<string, number> = {
   step: 0.07, prop: 0.03, floor: 0.045, collapse: 0.1, smash: 0.08, bump: 0.45,
   bite: 0.05, arcAtk: 0.05, stompWind: 0.1, vine: 0.05, zap: 0.06, pulse: 0.1, dash: 0.08,
   hook: 0.25, wires: 0.2, vent: 0.3, sprout: 0.1, spore: 0.35,
+  // TITAN PASS BRIARWICK kit C (CONTRACT §8): pod pops (a POP-UP PARK ripple is 0.06 s per link), the ripen chime
+  // (<= 4/s) and the TANGLE rope creak (<= 1 per 0.25 s)
+  pod: 0.03, ripen: 0.25, tangle: 0.25,
   hit: 0.05, crit: 0.06, crush: 0.045, pop: 0.04, kill: 0.06, bigKill: 0.12,
   boom: 0.07, magma: 0.08, pjHit: 0.04, impact: 0.08,
   fire_android: 0.05, fire_squad: 0.04, fire_apc: 0.07, fire_drone: 0.18, fire_buggy: 0.12,
@@ -322,6 +325,11 @@ const LOW_RATE = 40, LOW_BURST = 10;
 
 const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33, 36];
 
+/** TITAN PASS: at most this many seed-pod pops ring at once (a 16-pod cascade stays a run, not a wall) */
+const POD_VOICES = 6;
+/** pod pop pitch climbs one semitone per chain link, capped here */
+const POD_LINK_CAP = 12;
+
 /** Per-titan voice colour: pitch multiplier + grunt vowel. */
 const TITAN_VOICE: Record<TitanId, { mul: number; vowel: Vowel; growl: number }> = {
   molo: { mul: 0.85, vowel: 'o', growl: 0.35 },
@@ -352,6 +360,10 @@ export class Sfx {
   private pkInit = false; private pkLx = 0; private pkLz = 0; private pkAcc = 0;
   /** GATEKEEPERS: the live gatekeeper's motion tracker (wheels / treads / crawler voices) */
   private gtInit = false; private gtLx = 0; private gtLz = 0; private gtAcc = 0; private gtCrown = 0;
+  /** TITAN PASS: BRIARWICK pods seen ripe last call (hazard ids) — a pod newly ripe rings the ripen chime */
+  private ripeSeen = new Set<number>();
+  private ripeNext = new Set<number>();
+  private ripeInit = false;
 
   constructor(engine: AudioEngine) { this.eng = engine; }
 
@@ -383,6 +395,7 @@ export class Sfx {
       if (pickN > 0) this.pickupTicks(pickN, pickScrap > pickN / 2, pickX / pickN, pickZ / pickN);
       if (w.boss && this.bossId === 'parkade6') this.parkadeTick(w.boss); else this.pkInit = false;
       if (w.boss && w.boss.role === 'gate') this.gateTick(w, w.boss); else this.gtInit = false;
+      if (w.titanId === 'briarwick') this.ripenTick(w); else this.ripeInit = false;
     } catch {
       // cosmetic subsystem: never let a synthesis error reach the game loop
     }
@@ -513,6 +526,8 @@ export class Sfx {
       case 'wireDetonate': if (this.gate('wires', now)) this.wires(e.pts); break;
       case 'vent': if (this.gate('vent', now)) this.ventHiss(e.x, e.z, e.power); break;
       case 'bloomSpawn': if (this.gate('sprout', now)) this.sprout(e.x, e.z); break;
+      case 'bloomBurst': this.podPop(e.x, e.z, e.link, e.ripe, now); break;
+      case 'rooted': if (this.gate('tangle', now)) this.tangleCreak(e.x, e.z); break;
       case 'spore': if (this.gate('spore', now)) this.sporePuff(e.x, e.z); break;
       case 'enemySpawn': break;
       case 'enemyHit':
@@ -789,6 +804,9 @@ export class Sfx {
         whoosh(b, b.o, b.t, 0.13, 500, 4800, 2.5, 0.9, 'white');                              // whip
         burst(b, b.o, b.t + 0.12, 'white', 'highpass', 3000, 0.9, 0.001, 0.03, 0.9);        // crack
         burst(b, b.o, b.t + 0.13, 'white', 'bandpass', 700, 6, 0.005, 0.12, 0.35);          // creak
+        // TITAN PASS BURR LASH: the burr (seed pod) lodging at the tip — a short woody "thk"
+        burst(b, b.o, b.t + 0.15, 'white', 'bandpass', 1100, 4, 0.001, 0.025, 0.55);
+        thump(b, b.o, b.t + 0.15, 260, 150, 0.05, 0.35, 'triangle');
         break;
       }
       default: {
@@ -878,13 +896,14 @@ export class Sfx {
         crackle(b, b.o, t + 0.2, 0.9, 12, 700, 1.3, 0.35);                                     // rocks
         break;
       }
-      case 'briarwick': {   // SOW — bloom chime
-        const b = this.voice('hook', 3, 1.8, s.g * 0.5 * pw, s.pan, 0.45); if (!b) return;
+      case 'briarwick': {   // POP-UP PARK — low horn thump + an inhale-whoosh; the pods' rising run follows
+        const b = this.voice('hook', 3, 1.0, s.g * 0.7 * pw, s.pan, 0.3); if (!b) return;
         const t = b.t;
-        const notes = [79, 83, 86, 91];
-        notes.forEach((m, i) => bell(b, b.o, t + i * 0.085, mtof(m), 1.1, 0.4, 3.5, 1.2));
-        burst(b, b.o, t, 'pink', 'bandpass', 1300, 0.9, 0.12, 0.6, 0.4);                       // spore puff
-        burst(b, b.o, t + 0.02, 'white', 'bandpass', 520, 7, 0.02, 0.25, 0.3);                 // wood creak
+        whoosh(b, b.o, t, 0.16, 260, 1900, 1.6, 0.55);                                         // inhale (rising)
+        thump(b, b.o, t + 0.1, 92, 38, 0.32, 1);                                               // horns down
+        thump(b, b.o, t + 0.17, 80, 34, 0.26, 0.7);                                            // second forefoot
+        burst(b, b.o, t + 0.1, 'brown', 'lowpass', 600, 1.1, 0.004, 0.24, 0.8, 140);           // ground whumpf
+        burst(b, b.o, t + 0.11, 'white', 'bandpass', 520, 7, 0.02, 0.22, 0.3);                 // wood creak
         break;
       }
     }
@@ -916,6 +935,64 @@ export class Sfx {
     blip(b, b.o, b.t, 'triangle', 520, 0.12, 0.8, 800);
     blip(b, b.o, b.t + 0.07, 'sine', 1040, 0.15, 0.4, 1300);
     burst(b, b.o, b.t, 'pink', 'bandpass', 1500, 2, 0.002, 0.05, 0.4);
+  }
+
+  /** TITAN PASS: one seed pod bursting — a woody "pok" + petal rustle, +1 semitone per chain link (cap 12) so a
+   *  cascade plays as a rising run; an unripe pod (end of life / cap overflow) is duller. <= POD_VOICES at once. */
+  private podPop(x: number, z: number, link: number, ripe: number, now: number): void {
+    if (!this.gate('pod', now)) return;
+    this.prune(now);
+    let live = 0;
+    for (let i = 0; i < this.voices.length; i++) if (this.voices[i].name === 'pod') live++;
+    if (live >= POD_VOICES) return;
+    const s = this.spatial(x, z);
+    const k = Math.max(0, Math.min(POD_LINK_CAP, Math.round(fin(link, 0))));
+    const green = fin(ripe, 1) < 1;
+    const up = Math.pow(2, k / 12);
+    const size = clampf(Math.pow(1.2 / this.H, 0.12), 0.55, 1);
+    const b = this.voice('pod', 2, 0.28, s.g * (green ? 0.3 : 0.45), s.pan, 0.12); if (!b) return;
+    const f = 420 * up * size;
+    blip(b, b.o, b.t, 'triangle', f * 1.6, 0.05, green ? 0.35 : 0.6, f * 0.8, 0.001, green ? 1500 : 3200);   // pok
+    burst(b, b.o, b.t, 'white', 'bandpass', 1400 * up, 3, 0.001, 0.02, 0.6);                               // husk click
+    if (!green) burst(b, b.o, b.t + 0.015, 'pink', 'highpass', 3800, 0.8, 0.01, 0.12, 0.28);             // petal rustle
+  }
+
+  /** TITAN PASS: TANGLE — a tight rope creak (gated to 1 per 0.25 s) */
+  private tangleCreak(x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('tangle', 1, 0.3, s.g * 0.35, s.pan, 0.08); if (!b) return;
+    const o = osc(b, 'sawtooth', 150, b.t, b.t + 0.26);
+    sweep(o.frequency, b.t, 150, 210, 0.22);
+    const lfo = osc(b, 'square', 38, b.t, b.t + 0.26); const d = gn(b, 30); wire(lfo, d); d.connect(o.frequency);
+    const bp = flt(b, 'bandpass', 900, 5);
+    const a = gn(b); envPerc(a.gain, b.t, 0.35, 0.02, 0.22, 3);
+    wire(o, bp, a, b.o);
+  }
+
+  /** TITAN PASS: a soft chime when a BRIARWICK pod turns ripe on its own (<= 4/s by the 'ripen' gap; cascade-fused
+   *  and volley pods are skipped — the press is voiced by the hook and the pops) */
+  private ripenTick(w: World): void {
+    const now = this.eng.now;
+    const next = this.ripeNext;
+    next.clear();
+    let newest = -1, nx = 0, nzz = 0;
+    for (const h of w.hazards) {
+      if (!h.alive || h.kind !== 'bloom' || h.owner !== 'titan') continue;
+      const d = h.data;
+      if (d.pod !== 1 || !(d.ripe >= 1)) continue;
+      next.add(h.id);
+      if (!this.ripeSeen.has(h.id) && !(d.fuse >= 0) && !d.vol && h.id > newest && h.shape.k === 'circle') {
+        newest = h.id; nx = h.shape.x; nzz = h.shape.z;
+      }
+    }
+    this.ripeNext = this.ripeSeen;
+    this.ripeSeen = next;
+    const first = !this.ripeInit;
+    this.ripeInit = true;
+    if (first || newest < 0 || !this.gate('ripen', now)) return;
+    const s = this.spatial(nx, nzz);
+    const b = this.voice('ripen', 1, 0.45, s.g * 0.28, s.pan, 0.25); if (!b) return;
+    bell(b, b.o, b.t, mtof(pick([88, 91, 93])), 0.4, 0.3, 2, 0.7);
   }
 
   private sporePuff(x: number, z: number): void {
@@ -1289,6 +1366,9 @@ export class Sfx {
         return;
       }
       case 'seed': case 'rubble': case 'spark': {
+        // TITAN PASS: BRIARWICK's seed explosions are its pods and its POP-UP PARK stamp — voiced by 'bloomBurst'
+        // (the pitched pops) and the hook; only other titans' seed shots keep this generic pop
+        if (kind === 'seed' && this.titan === 'briarwick') return;
         if (!this.gate('pjHit', now)) return;
         const b = this.voice('pj', 1, 0.3, s.g * 0.25, s.pan, 0.08); if (!b) return;
         boom(b, b.o, b.t, 0.25, 0.6);

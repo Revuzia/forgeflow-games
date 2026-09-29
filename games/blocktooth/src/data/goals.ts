@@ -111,8 +111,14 @@ export const GOALS: GoalDef[] = [
     metric: 'titanBiomesCleared', target: 3, scope: 'life',
     unlocks: [{ kind: 'palette', titan: 'hearthback', index: 2 }, card('hb_u_ash_cloud_advisory')] },
 
-  { id: 'g_bw_full_bloom', name: 'FULL BLOOM', desc: 'BRIARWICK: 8 bloom turrets alive at once (GREENBELT DECREE blooms do not count)', group: 'titan', titan: 'briarwick',
-    metric: 'bloomsBest', target: 8, scope: 'run', unlocks: [{ kind: 'palette', titan: 'briarwick', index: 1 }] },
+  // TITAN PASS (FEATURES_V2 §8.2): was "8 bloom turrets alive at once" (bloomsBest 8), trivial under kit C's pod cap of
+  // 10. cascadeBest = the longest chain in LINKS (the first pop is link 0), so 15 = one pop + 15 more pods set off by
+  // it. Kit C measured a longest chain of 13–22 per run (median 15, 5/24 runs ≥ 18). Id kept: a met goal stays met.
+  // TARGET 15, not 18 (the §8.2 rule "if the seed-1337 reachability bot misses 18, lower the target to the bot's
+  // value"): probe_meta G(c) on the TITAN PASS tree (kit C + the HARN bot) measured the gate bot's longest chain at
+  // GRID-EAST 14 · WHITE STACKS 13 · LOCKWATER 15 links (_harness/scratch/tp/DATA/probe_meta.log, 2026-09-29).
+  { id: 'g_bw_full_bloom', name: 'FULL BLOOM', desc: 'BRIARWICK: one pod pop chains 15 more pods in one run', group: 'titan', titan: 'briarwick',
+    metric: 'cascadeBest', target: 15, scope: 'run', unlocks: [{ kind: 'palette', titan: 'briarwick', index: 1 }] },
   { id: 'g_bw_green_thumb', name: 'GREEN THUMB', desc: 'BRIARWICK: heal 2 400 HP in one run', group: 'titan', titan: 'briarwick',
     metric: 'healed', target: 2400, scope: 'run', unlocks: [card('bw_u_seed_catalogue')] },
   { id: 'g_bw_rewilded', name: 'REWILDED', desc: 'Clear any city with BRIARWICK', group: 'titan', titan: 'briarwick',

@@ -71,7 +71,7 @@ with a scrap-plate sail.
 | Size-up sting | `MASS BREACH` | + sub-line per rank (§12) |
 | Run-end tabloid | `THE CITY GOT SMALLER.` | masthead: **THE WARD SEVEN WITNESS** |
 | Titan 1 | **MOLO** — squat jade monitor, sawtooth back-fin | SMASH TANK |
-| Titan 2 | **VOLT-KITE** — lean indigo jackal-drake, static mane | CHAIN ASSASSIN |
+| Titan 2 | **VOLT-KITE** — storm-hound drake under twin kite sails with a static mane (TITAN PASS remodel; the `data/titans.ts` species string; was a lean indigo jackal-drake) | CHAIN ASSASSIN |
 | Titan 3 | **HEARTHBACK** — walking caldera, obsidian dome shell | ERUPTION FORTRESS |
 | Titan 4 | **BRIARWICK** — horned garden-beast, seed ruff | AREA CONTROL |
 | Biome 1 | **GRID-EAST** — daytime commercial blocks, zebra crossings, toy traffic | boss CAISSON-4 |
@@ -454,17 +454,32 @@ shellCapacity 1, stompDelay 0.6, magmaDuration 0, turretCap 4, turretRate 1, spo
 
 **MOLO — SMASH TANK** (maxHp 140, armor 10, moveSpeed 0.95)
 * Auto **CURB BITE** — every 0.75 s ÷ attackRate: cone r = 0.9H × attackRange, half-angle 50° +
-  10°·biteCleave, dmg 10, aimed at the target if within ±70° of heading (head turns), else ahead.
+  10°·biteCleave, dmg **22** (the code's `MOLO.biteDmg`; this line and the titan card said 10 until the TITAN PASS
+  text fix — no tuning change), aimed at the target if within ±70° of heading (head turns), else ahead.
 * **Foot-pulse** — every `pulseEvery` footsteps: ring damage r = 1.4H × area, dmg 6, `pulse` event.
 * HOOK **GULLET VACUUM** (cd 9 s): 1.2 s channel. All pickups within 6H × vacuumRadius × area
   magnetize at 3× speed; crushable enemies within that radius are dragged toward the mouth at
   1.5H/s and take 12 dmg/s; on release gain a shield of 4 % maxHp + 0.2 % per pickup vacuumed
   (cap 40 %) × abilityPower. "Raw mass" — vacuumed pickups give +25 % mass.
 
-**VOLT-KITE — CHAIN ASSASSIN** (maxHp 90, moveSpeed 1.15, dashCharges 2, dashCooldown 0.75)
-* Auto **FORK-ARC** — every 0.9 s ÷ attackRate: arc to a target within 3.2H × attackRange, then
+**VOLT-KITE — CHAIN ASSASSIN** (maxHp 90, **armor 12** (TITAN PASS; was 0), moveSpeed 1.15, dashCharges 2, dashCooldown 0.75)
+* Auto **FORK-ARC** — every 0.9 s ÷ attackRate: arc to a target within **3.8H** (TITAN PASS; was 3.2H) × attackRange, then
   jumps up to `arcForks + chains` more targets within 1.6H × chainRange of the previous
-  (enemies first, then buildings/props), dmg 12 with ×0.85 falloff per jump. `arc` event.
+  (enemies first, then buildings/props), dmg 12 with ×0.85 falloff per jump. `arc` event. A single arc may strike
+  at most **2 boss parts** (`VOLT.bossParts`; was 1): one follow-up jump into a second part, never the whole rig.
+* **GROUNDING** (TITAN PASS rider on FORK-ARC) — every **2nd** arc whose first target is a foe or a boss part lays a
+  LIVE WIRE from the struck point **1.4H** back toward VOLT-KITE (never longer than the gap), life **0.5 ×
+  wireDuration**. It shares the wire cap (6), the dps and the look with dash wires (one `layWire` helper), so RECAST
+  has real wires to blow without dash-weaving. Kit state adds `arcN` (arc counter). Card text: "… 3.8 body-heights …
+  Every 2nd strike GROUNDS: a short LIVE WIRE is left where it hit."
+* **Model (TITAN PASS remodel)** — "storm-hound drake under twin kite sails": broad chest, two diamond sail membranes on
+  glowing cross-spars in a shallow V from the shoulders (`wingL/R` bones), a flat diamond kite on the tail tip, a zigzag
+  bolt down the spine and 9 broad mane blades laid back along the neck. Same bone names, same canonical hexes (only
+  their placement moves: belly `#8f94d9` on upward faces, primary on flanks/legs, secondary on brows / ear tips / lower
+  legs / paw pads, glow on mane, spars, bolt and panels). Originality guard (§1): not a winged horse / lion /
+  wolf-with-cloud-mane; no star-tipped tail, no cheek pouches, no spike crest over the skull; the sails are flat
+  diamonds on visible spars, never feathered or bat wings. Look bar at the game camera (turntable): screen area ≥ 0.09,
+  body luminance ≥ 85, dark share (luminance < 60) ≤ 0.40, head visible from behind at Size V.
 * **LIVE WIRE** — every dash leaves a `wire` hazard (capsule r 0.25H × area along the dash
   path) for `wireDuration` s dealing 10 × wireDamage dps to enemies (5 Hz). Cap 6 wires.
 * HOOK **RECAST: DETONATE** (cd 1.5 s): every live wire explodes along its capsule (r 0.8H × area,
@@ -481,16 +496,45 @@ shellCapacity 1, stompDelay 0.6, magmaDuration 0, turretCap 4, turretRate 1, spo
 * HOOK **SHELL VENT** (cd 6 s): ring burst r = (1.5 + 2.5·fill)H × area, dmg (20 + 2.5 × stored)
   × abilityPower, heals 15 % of stored, resets store, `vent` event.
 
-**BRIARWICK — AREA CONTROL** (maxHp 120, armor 5)
-* Auto **VINE LASH** — every 1.0 s ÷ attackRate: `lane` from the titan toward the target, len
-  2.6H × vineLength × attackRange, width 0.35H × area, dmg 14, hits everything in the lane.
-* **BLOOM TURRETS** (passive) — each floorBreak/buildingCollapse within 3H has a 35 % chance
-  (collapse: 100 %) to root a `bloom` hazard turret on the rubble (cap `turretCap`, oldest
-  replaced, life 20 s): fires a `seed` projectile at the nearest enemy within 3.5H every
-  1.2 s ÷ turretRate, dmg 8; every 4 s pulses spores — titan within 2H heals 1 % maxHp × sporeHeal.
-* HOOK **SOW** (cd 10 s): up to 3 nearest collapsed-building rubble sites within 5H sprout
-  turrets immediately; spore cloud r 2.5H heals 8 % maxHp × sporeHeal over 3 s and slows
-  enemies 40 % (`spore` event + `frost`-style slow hazard owned by the titan).
+**BRIARWICK — AREA CONTROL** (maxHp 120, armor 5, **turretCap 10** — TITAN PASS kit C, 2026-09-29; it replaces VINE
+LASH / BLOOM TURRETS / SOW. Tuning = `titanpass/briarwick_C.ts` shipped unchanged, all of it inside `BRIAR.*` in
+`src/titans/kits/briarwick.ts`; never tuned through `BOSS_KIND_MUL` — its `seed` entry also scales every titan's
+upgrade seed damage. Size-I multipliers apply only while `titan.rank === 0`.)
+* Auto **BURR LASH** — every 1.0 s ÷ attackRate; target via `findTarget` (weak point → foes → boss parts → city);
+  `lane` 3.2H × vineLength × attackRange long (**×1.8 at Size I**), 0.55H × area wide; **14** dmg to everything in it,
+  knock 0.5, kind `vine`; **plants 1 seed pod** at the struck point (foe, boss part, building or prop). Emits `vine` +
+  `titanAttack 'vineLash'`.
+* **RIPENING** (passive; seed pods) — a pod is a titan-owned `bloom` hazard, r 0.3H, life **9 s**, dps 0, ripening
+  0 → 1 over **2.0 s ÷ turretRate**. A RIPE pod bursts when a foe or boss part is within **0.9H**; at end of life it
+  bursts anyway (×0.6 if unripe). **Burst**: r 1.1H × area (×1.3 at Size I), **18** dmg × chain multiplier, knock 0.8,
+  kind `seed`, one `bloomBurst {x, z, r, link, ripe}` event (types.ts); **TANGLE** stuns foes 0.6 s (elites ×0.3,
+  heavies of radius ≥ 2.4 ×0.6, bosses never) and emits `rooted {id, x, z, t}` for each foe it stuns; heals 0.4 % maxHp ×
+  sporeHeal, capped at 1.5 % maxHp per rolling second. **Chain**: a burst sets off RIPE pods within 2.4H × area ×
+  chainRange after 0.1 s (unripe pods there gain +0.5 ripeness); +10 % per link, cap ×2. **Sprouting**: floors broken
+  within 3H sprout an unripe pod (35 %; a collapse always does). **Cap** `turretCap`: at the cap the OLDEST unfused pod
+  bursts early instead of being deleted. Card and UPROAR blooms are adopted as unripe pods (`upgrades/engine.ts` skips
+  `driveUpgradeBlooms` for BRIARWICK).
+* HOOK **POP-UP PARK** (cd **8 s** × abilityCooldown, floor 0.35; renamed from kit C's "FULL BLOOM" because goal
+  `g_bw_full_bloom` already has that name) — one tick: (1) horn-stamp ring r 1.6H × area (×1.3 Size I), **24** ×
+  abilityPower, knock 1.2, TANGLE 1.0 s; (2) seed volley of 4 + round(2 × (abilityPower − 1)) pods (3..10), 0.3 s flight
+  to the nearest foes within 6H (×1.8 Size I), leftovers to the nearest boss part, then fanned 2.5H ahead; they land
+  RIPE and bypass the cap; (3) every pod within **12H** ripens and gets a fuse 0.15 s + 0.06 s × its distance rank
+  (volley pods 0.3 s + 0.06 s × order); pod *k* bursts at link *k* (×(1 + 0.1 k), cap ×2) × abilityPower — a ripple
+  rolling outward from the horns. A press with zero pods still does the ring and the volley. Emits `ability`.
+* DASH **BRAMBLE BOUND** — the shared bound (2.2H in 0.22 s, i-frames, ×2 contact smash); `onDash` drops **2 unripe
+  pods** at 1/3 and 2/3 of the path.
+* **Kit state** `titan.kit`: `pods`, `ripe`, `chain` (length of the last cascade), `bloomT` (hook anim time), plus the
+  legacy `turrets` (= pods) and `sowT` (= bloomT) so `titanview.ts` / `anim.ts` keep working. Pod hazard `data`:
+  `pod 1, ripe 0..1, fuse (−1 none), link, src (0 lash/rubble, 1 hook, 2 dash, 3 card/ult), h, vol`.
+* Text: stat labels `turretCap` "SEED POD cap", `turretRate` "pod ripening speed", `vineLength` "BURR LASH length";
+  titan-card texts verbatim from `titanpass/briarwick_final.md` §7 (BURR LASH 14 dmg, POP-UP PARK 24 dmg / 12
+  body-heights / 8 s, BRAMBLE BOUND 2 pods); flavour "Anything it knocks down tends to sprout something that goes off."
+* View (lane VIEW): unripe pod = closed moss `#5e8f3a` bulb in a bark `#6b4a2f` husk, 0.6 → 1.0 scale with ripeness;
+  ripe = 5-petal `#ff9ec7` blossom + `#d8ff7a` halo 0.6H + 2 Hz bob; fused = ±4 % shiver at 20 Hz + emissive ramp; bulb
+  ≥ 0.3H and ≥ 12 px; `'seed'` explosion branch (petal spray + spore ring decal 0.35 s; > 6 bursts within 0.1 s → ring
+  decal only); root coils (2–3 `#5e8f3a` loops round the legs) for `rooted.t`; pod / decal luminance contrast ≥ 25
+  against every biome road. HUD kit row "PODS n · RIPE m" (strings_hud `HUD2.pods` / `HUD2.ripe`); the SPACE prompt
+  glows at `kit.ripe ≥ 3`.
 
 ---
 
@@ -581,6 +625,11 @@ Parts: body r20, head r8 (hpMul 1.6, strainMul 2.0), sail r10 (strainMul 2.5), 4
 * Every stat in `StatKey` must be touched by ≥ 1 upgrade; every `TriggerAction` used by ≥ 1.
 * Rarity weights common 60 / rare 28 / epic 10 / legendary 2, × (1 + luck·[0, .5, 1, 1.5]).
   Offer = 3 distinct eligible ids (titan filter, minRank, not maxed). Chest drafts: rare+ only.
+* **TITAN PASS D1 — BUILD SLOTS** (owner decision 2026-09-29; full rule in FEATURES_V2 §7.7): a run holds at most
+  `SLOT_CAP` (8) distinct cards; once they are all taken, drafts offer only cards that need no new slot (owned-not-maxed
+  cards, the missing half of a started evolution recipe, ready evolutions); an owed draft with nothing offerable pays
+  an OVERFLOW reward (SICK DAY / HOT TIP) instead. API in `upgrades/draft.ts` (`SLOT_CAP`, `slotsUsed`, `slotsFull`,
+  `cardSlot`, `isOverflowReward`, `OVERFLOW`); types `DraftCardSlot` / `OverflowRewardId` in `core/types.ts`.
   `rerolls` stat = rerolls per draft.
 * Engine: stat recompute on apply/rank-up; triggers per §5.5; `frenzy` buffs; `shield` pool;
   `interval` triggers use `p.every` seconds.
@@ -744,3 +793,29 @@ Notes (recorded, not yet ratified by the owner):
 * **Git.** 112 gatekeeper files (K0–K2) were committed inside the unrelated `dyefield` commit `23185774`, because
   the forgeflow-games index is shared by concurrent sessions; `cf4dd1dc` records the K2 gate results for that
   content. Gate agents commit right after staging, from a clean index.
+
+### Titan pass lane ownership (titanpass/TITAN_PASS.md §5; T0 skeleton 2026-09-29, on HEAD ea2a1c22)
+
+Owner / orchestrator decisions that override the plan text: **D1** "tier" = card LEVEL, fixed with **BUILD SLOTS**
+(FEATURES_V2 §7.7; not the plan's guaranteed-slot default, not the ×4 weight). **D2** gatekeeper / city-boss dash
+counterplay = design B **SPACE-DENIAL rings** (GATEKEEPERS §3.6; `dr/B/dash_read.patch`); design A (dash lock) is
+rejected. **D3** BRIARWICK = kit C with the hook renamed **POP-UP PARK** (§8); VOLT-KITE = the "storm-hound drake under
+twin kite sails" remodel + kit set (§8). MOLO / HEARTHBACK: no change except card text that must match the code.
+IRON GULLY breath capped at HIT_CAP in total.
+
+All lanes edit the SAME working tree: a lane edits only the files in its row; a file shared by two rows is edited with
+targeted edits in the named region only, never rewritten. Prototypes are env-gated — the port strips every
+`process.env`, `__PA`, `paTag` and experiment counter from shipped code. Cross-lane notes:
+`_harness/scratch/tp/NOTES.md`; per-lane progress `_harness/scratch/tp/<LANE>/STATUS.txt`. No lane edits `types.ts`,
+`config.ts`, `strings*.ts` or `_spec/*` (orchestrator-owned; ask through NOTES.md). Only the Merge agent commits.
+
+| Lane | Owns (only these files) | Work (sources) |
+|---|---|---|
+| T0 skeleton (orchestrator, alone, before the lanes) | `core/types.ts`, `core/config.ts`, `data/strings.ts`, `data/strings_hud.ts`, `_spec/CONTRACT.md`, `_spec/FEATURES_V2.md`, `_spec/GATEKEEPERS.md`; the STUB exports at the top of `upgrades/draft.ts` | SimEvents `rooted` + `bloomBurst`; `RunTally.cascadeBest` + GoalMetric `'cascadeBest'`; `DraftCardSlot`, `OverflowRewardId`, `OVERFLOW_REWARD_IDS`; `bossFrameNeed(w, extra)` (the D2 ring frame guard); draft slot strings, `HUD2.pods` / `HUD2.ripe`; draft.ts `SLOT_CAP` 8, `OVERFLOW`, `slotsUsed` / `slotsFull` / `cardSlot` / `isOverflowReward` stubs (pre-D1 behaviour). Two Record/struct completions outside the row, one line each, so tsc stays 0: `meta/tally.ts` (`cascadeBest: 0` init) and `ui/goals.ts` (`METRIC_GLYPH.cascadeBest`). Gate: tsc 0, GATE 2 fresh + full hashes identical to ea2a1c22 |
+| SIM (titan sim + the one boss line) | `src/titans/kits/briarwick.ts`, `src/titans/kits/voltkite.ts`, `src/ai/bosses/irongully.ts`, `src/data/titans.ts`, `_harness/probe_titan.ts` | kit C port (`titanpass/briarwick_C.ts`, FULL BLOOM → POP-UP PARK, env / `__PA` / `paTag` stripped; emit `rooted` where it sets `e.stun`, `bloomBurst` per burst); VOLT `vk/kit_tuning.diff`; IRON GULLY breath ≤ HIT_CAP in total (HEAD ea2a1c22 already caps every boss DoT tell in `bosses/index.ts bossTelegraph` — verify before adding a second cap); `data/titans.ts` BRIAR `turretCap 10` + §8 text, VOLT `armor 12` + FORK-ARC text + species, MOLO CURB BITE "22"; probe_titan: pod asserts replace the turret asserts, + a VOLT GROUNDING assert |
+| VIEW (titan view, combat view, fx, audio, HUD row) | `src/titans/models.ts`, `anim.ts`, `titanview.ts`, `portraits.ts`, `src/render/hazardview.ts`, `src/render/fx.ts`, `src/render/camera.ts` (only if the stamp punch cannot use the trauma path), `src/ai/enemyview.ts`, `src/audio/sfx.ts`, `src/ui/abilitybar.ts` | VOLT `vk/model_prototype.diff`; BRIAR pod states, `'seed'` burst branch + budget, spore motes, root coils on `rooted`, POP-UP PARK stamp / ring / volley / ripple, comic words, SFX cues + voice caps, HUD "PODS n · RIPE m" + SPACE glow at ripe ≥ 3 (§8) |
+| DATA (cards, goals, ult text, meta tally) | `src/data/upgrades.ts`, `src/data/upgrades_v2.ts`, `src/data/goals.ts`, `src/data/ultimates.ts`, `src/meta/tally.ts`, `src/meta/goals.ts`, `_harness/probe_upgrades.ts`, `_harness/probe_meta.ts` | stat labels; Domino Zoning, Pollinator Corridor, Guerrilla / Arbor `dur` 9; goal `g_bw_full_bloom` → `cascadeBest ≥ 18` (tally from `bloomBurst.link`; write down whether UPROAR-seeded chains count); GREENBELT text "(10)"; probe asserts for pods, card-effect uniqueness, `cascadeBest` (FEATURES_V2 §7.8 / §8.2 rows) |
+| DRAFT | `src/upgrades/draft.ts` (below the T0 stub block, and the stub bodies), `src/ui/draft.ts` | D1 BUILD SLOTS per FEATURES_V2 §7.7: `slotsUsed` / `slotsFull` / `cardSlot` real, the restricted pool when full, OVERFLOW rewards (offer ids, `pickUpgrade` applies, `hasPendingDraft` stays true), draft UI tags / counter / banner / overflow cards from `STR.draft.slot*` / `overflow*`; no env switch, no experiment counters. Gates: tsc 0, `probe_upgrades` + `probe_evolutions` exit 0 (run, not edited), GATE 2 logged |
+| HARN (harness + probes) | `_harness/bot.ts`, `_harness/probe_balance.ts` (new), `_harness/perfcheck.py`, `_harness/shots.py`, `src/testsurface.ts` (one cheat, if needed) | bot BRIAR reach from `kitReach` + the POP-UP PARK press rule; `probe_balance.ts` (player-like policy `pa/pa.ts`, report only); perfcheck scenario (f) `--kit briar|volt`; shots group `titanpass` (incl. a slot-full draft and an overflow draft) |
+| RING (boss dash-read, D2) | `src/ai/bosses/index.ts`, `stencil1.ts`, `cordon2.ts`, `switchboard5.ts`, `parkade6.ts`, `_harness/probe_gatekeepers.ts` | apply `dr/B/dash_read.patch` minus its `config.ts` hunk (landed in T0): `DENIAL` / `denialRadii` / `denialRing`, the four rigs' rings (GATEKEEPERS §3.6), the case-6b ring check; gates per `dr/B/REPORT.md` (probe_gatekeepers, probe_boss3, probe_ai, GATE 2) |
+| Merge (orchestrator) | commits; `README.md`, CHANGELOG, this table | merge order SIM → DATA → HARN → RING → DRAFT → VIEW; after each: tsc 0 + GATE 2 fresh + full (logged); then the tuning loop and the final battery (TITAN_PASS §4.4, §6) |

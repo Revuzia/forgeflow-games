@@ -7,6 +7,8 @@
 // (level steps, the level-driven rank-up, catch-up), gainGrowth, the retired gainMass, growToRank,
 // hurtTitan (armor, iframes, shield, god, death), healTitan, dash charges,
 // the CAISSON-4 winch leash (pull + resisting it), the HEARTHBACK shell store and acceleration feel.
+// TITAN PASS: BRIARWICK kit C (seed pods: planted, burst, chained, POP-UP PARK cascade >= 4 pods, `rooted`
+// events) replaces the old BLOOM TURRET asserts; VOLT-KITE GROUNDING lays wires with the dash never pressed.
 //
 // Parallel-build fallback: if (and only if) a module another lane owns does not exist on disk yet, a
 // PROBE-LOCAL stub stands in for it (see STUBS) and the run is labelled STUBBED. The stub director spawns
@@ -142,9 +144,15 @@ interface RunResult {
   dashes: number; nanAt: string | null; w: World; pickedUpgrades: number; maxWires: number; maxTurrets: number;
   maxStored: number; stompExpl: number; vacuumTicks: number; maxHazards: Map<string, number>; rankT: string[];
   arcMaxHits: number; seeds: number; maxShield: number;
+  /** BRIARWICK pods: bursts, deepest chain link, most bursts inside one POP-UP PARK press window, foes rooted */
+  bursts: number; maxLink: number; maxPressBursts: number; rooted: number;
 }
 
-function run(titan: TitanId): RunResult {
+/** A POP-UP PARK press's cascade: bursts within this many seconds after the press count toward it
+ *  (fuse 0.15 s + 0.06 s per rank: 20 pods ~ 1.35 s). */
+const PRESS_WINDOW_S = 1.5;
+
+function run(titan: TitanId, opts: { noDash?: boolean } = {}): RunResult {
   const w = WM.createWorld({ titan, biome: 'grideast', seed: 7 });
   const ev = new Map<string, number>();
   const attacks = new Map<string, number>();
@@ -153,6 +161,7 @@ function run(titan: TitanId): RunResult {
   let maxWires = 0, maxTurrets = 0, maxStored = 0, stompExpl = 0, vacuumTicks = 0;
   const rankT: string[] = [];
   let arcMaxHits = 0, maxShield = 0;
+  let bursts = 0, maxLink = 0, maxPressBursts = 0, rooted = 0, pressT = -1, pressN = 0;
   const seedIds = new Set<number>();
   let tgt: { x: number; z: number } | null = null;
   let stuck = 0, lastX = w.titan.x, lastZ = w.titan.z, detour = 0;
@@ -165,11 +174,16 @@ function run(titan: TitanId): RunResult {
     if (tgt) { const dx = tgt.x - T.x, dz = tgt.z - T.z, d = Math.hypot(dx, dz) || 1; mx = dx / d; mz = dz / d; }
     if (detour > 0) { detour--; const a = Math.atan2(mx, mz) + Math.PI / 2; mx = Math.sin(a); mz = Math.cos(a); }
     input.mx = mx; input.mz = mz;
-    input.dash = i % 90 === 45;                                 // a dash every 3 s
+    input.dash = !opts.noDash && i % 90 === 45;                 // a dash every 3 s (never, for the GROUNDING run)
     input.ability = i % 150 === 75;                             // the hook every 5 s
     input.abilityHeld = input.ability;
     const x0 = T.x, z0 = T.z;
     WM.stepWorld(w, input);
+    // TITAN PASS (merge): HEARTHBACK's shell assert needs at least one landed hit. The drive used to get one by
+    // luck (HEAD: 2 pellets, 3.3 dmg); the D1 draft's first-card picks change the run and the drive now dodges
+    // every pellet (0 dmg), so one real enemy pellet lands at 30 s through the sim's own hurtTitan (armor, kit
+    // onHurt, shield). The assert itself is unchanged.
+    if (titan === 'hearthback' && i === 30 * HZ) TM.hurtTitan(w, 6, 'bullet', w.titan.x + 1, w.titan.z);
     dist += Math.hypot(w.titan.x - x0, w.titan.z - z0);
     if (i % 30 === 29) {                                        // stuck → side-step for 0.5 s
       if (Math.hypot(w.titan.x - lastX, w.titan.z - lastZ) < 0.2 * w.titan.height) { stuck++; detour = 15; }
@@ -183,6 +197,12 @@ function run(titan: TitanId): RunResult {
       if (e.type === 'explosion' && e.kind === 'stomp') stompExpl++;
       if (e.type === 'arc' && e.kind === 'fork') arcMaxHits = Math.max(arcMaxHits, e.pts.length / 2 - 1);
       if (e.type === 'rankUp') rankT.push(`${['I', 'II', 'III', 'IV', 'V'][e.rank]}@${w.t.toFixed(1)}s`);
+      if (e.type === 'ability') { maxPressBursts = Math.max(maxPressBursts, pressN); pressT = w.t; pressN = 0; }
+      if (e.type === 'bloomBurst') {
+        bursts++; maxLink = Math.max(maxLink, e.link);
+        if (pressT >= 0 && w.t - pressT <= PRESS_WINDOW_S + 1e-9) pressN++;
+      }
+      if (e.type === 'rooted') rooted++;
     }
     const K = w.titan.kit;
     maxWires = Math.max(maxWires, K.wires ?? 0);
@@ -207,10 +227,11 @@ function run(titan: TitanId): RunResult {
       if (bad.length) nanAt = `tick ${w.tick}: ${bad.slice(0, 6).join(', ')}`;
     }
   }
+  maxPressBursts = Math.max(maxPressBursts, pressN);
   return {
     hash: titanHash(w), dist, ev, attacks, abilities, dashes, nanAt, w, pickedUpgrades: picked,
     maxWires, maxTurrets, maxStored, stompExpl, vacuumTicks, maxHazards, rankT,
-    arcMaxHits, seeds: seedIds.size, maxShield,
+    arcMaxHits, seeds: seedIds.size, maxShield, bursts, maxLink, maxPressBursts, rooted,
   };
 }
 
@@ -229,6 +250,7 @@ for (const id of TITANS) {
   console.log(`  abilities ${r.abilities} | dashes ${r.dashes} | attacks ${[...r.attacks].map(([k, v]) => `${k}:${v}`).join(' ')}`);
   console.log(`  kit ${Object.entries(T.kit).filter(([k]) => !k.startsWith('sim_')).map(([k, v]) => `${k}=${Math.round(v * 100) / 100}`).join(' ')}`);
   console.log(`  titan hazards (max live) ${[...r.maxHazards].map(([k, v]) => `${k}:${v}`).join(' ') || '-'} | stomp eruptions ${r.stompExpl} | vacuum ticks ${r.vacuumTicks} | max shield ${r.maxShield.toFixed(1)} | max stored ${r.maxStored.toFixed(1)} | longest arc ${r.arcMaxHits} hits | seeds fired ${r.seeds}`);
+  if (id === 'briarwick') console.log(`  pods: planted ${ev('bloomSpawn')} | bursts ${r.bursts} | deepest chain link ${r.maxLink} | most bursts in one POP-UP PARK window ${r.maxPressBursts} | foes rooted ${r.rooted}`);
   console.log(`  events ${[...r.ev].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${v}`).join(' ')}`);
   if (r.nanAt) fail(`${id}: non-finite titan state at ${r.nanAt}`);
   if (r.dist < 20) fail(`${id}: moved only ${r.dist.toFixed(1)} m`);
@@ -257,15 +279,63 @@ for (const id of TITANS) {
       if (!(r.maxStored > 0)) fail('hearthback: shell never stored anything');
       break;
     case 'briarwick':
+      // kit C (TITAN PASS): the old turret asserts (bloomSpawn turret, spore, seeds fired) tested the retired
+      // BLOOM TURRETS / SOW kit; their replacements test the pods that took over both jobs
       if (ev('vine') === 0) fail('briarwick: no vine events');
-      if (ev('bloomSpawn') === 0) fail('briarwick: no bloom turret');
-      if (ev('spore') === 0) fail('briarwick: no spores');
-      if (r.seeds === 0) fail('briarwick: bloom turrets never fired a seed');
+      if (ev('bloomSpawn') === 0) fail('briarwick: no seed pod planted');
+      if (r.bursts === 0) fail('briarwick: no pod ever burst');
+      if (r.maxLink < 2) fail(`briarwick: no pod chain reached 2 links (deepest ${r.maxLink})`);
+      if (r.maxPressBursts < 4) fail(`briarwick: no POP-UP PARK press detonated 4 pods (best ${r.maxPressBursts})`);
+      // (no `rooted` assert here: at Size I every foe a burst catches in this drive dies, and only survivors are
+      //  rooted; the [unit] POP-UP PARK block below asserts the event on a foe that survives the ring)
       break;
   }
   const again = run(id);
   if (again.hash !== r.hash) fail(`${id}: NOT deterministic\n    ${r.hash}\n    ${again.hash}`);
   else console.log(`  deterministic ✓ (${r.hash.slice(0, 48)}…)`);
+  if (id === 'voltkite') {
+    // GROUNDING (TITAN PASS): every 2nd arc that strikes a foe / boss part lays a short LIVE WIRE, so the same
+    // drive with the dash NEVER pressed must still put wires on the ground (RECAST has something real to blow)
+    const g = run('voltkite', { noDash: true });
+    const gw = g.maxHazards.get('wire') ?? 0;
+    console.log(`  GROUNDING (dash never pressed): dashes ${g.dashes} | max live wires ${g.maxWires} | max wire hazards ${gw} | detonations ${g.ev.get('wireDetonate') ?? 0}`);
+    if (g.dashes !== 0) fail('voltkite GROUNDING run: the dash was pressed');
+    if (!(g.maxWires > 0 && gw > 0)) fail('voltkite: GROUNDING laid no wire without a dash');
+  }
+}
+
+{
+  // BRIARWICK POP-UP PARK, isolated: no spawns, one foe beside the horns, one press. The ring TANGLES the foe for
+  // ringTangleS (a `rooted` event carrying that time), the 4-pod volley lands ripe and the cascade detonates every
+  // pod outward, link 0, 1, 2, 3 ...
+  console.log('\n[unit] BRIARWICK POP-UP PARK');
+  const w = WM.createWorld({ titan: 'briarwick', biome: 'grideast', seed: 21 });
+  w.cheats.noSpawns = true;
+  const T = w.titan;
+  const EN = await import('../src/ai/enemies.ts');
+  const BW = await import('../src/titans/kits/briarwick.ts');
+  const foe = EN.spawnEnemy(w, 'android', T.x + Math.sin(T.heading) * 0.8 * T.height, T.z + Math.cos(T.heading) * 0.8 * T.height);
+  foe.hp = foe.maxHp = 1e9;                                     // survives the ring so its stun is observable
+  const idle: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
+  WM.stepWorld(w, { ...idle, ability: true, abilityHeld: true });
+  const pressEv = w.events.filter((e) => e.type === 'ability').length;
+  let rootN = 0, rootT = -1;
+  for (const e of w.events as SimEvent[]) if (e.type === 'rooted') { rootN++; if (e.id === foe.id) rootT = e.t; }
+  const chain = T.kit.chain;
+  const links: number[] = [];
+  let burstsSeen = 0;
+  for (let i = 0; i < Math.ceil(PRESS_WINDOW_S * HZ); i++) {
+    WM.stepWorld(w, idle);
+    for (const e of w.events as SimEvent[]) if (e.type === 'bloomBurst') { burstsSeen++; links.push(e.link); }
+  }
+  const maxL = links.length ? Math.max(...links) : -1;
+  console.log(`  press: ability events ${pressEv} | rooted events ${rootN} (foe t ${rootT.toFixed(2)} s, want ${BW.BRIAR.ringTangleS}) | cascade size ${chain} | bursts in ${PRESS_WINDOW_S} s ${burstsSeen} (links ${links.join(',')}) | cd ${T.abilityCd.toFixed(2)} s`);
+  if (pressEv !== 1) fail('POP-UP PARK: one press should emit exactly one ability event');
+  if (rootN === 0) fail('POP-UP PARK: TANGLE rooted nothing (no rooted events)');
+  if (Math.abs(rootT - BW.BRIAR.ringTangleS) > 1e-9) fail('POP-UP PARK: the horn-stamp ring should root the adjacent foe for ringTangleS');
+  if (!(chain >= BW.BRIAR.volleyN)) fail(`POP-UP PARK: cascade ${chain} < the ${BW.BRIAR.volleyN}-pod volley`);
+  if (!(burstsSeen >= 4)) fail(`POP-UP PARK: detonated ${burstsSeen} pods (want >= 4)`);
+  if (!(maxL >= 3)) fail(`POP-UP PARK: the cascade never reached link 3 (deepest ${maxL})`);
 }
 
 // ─────────────────────────────── unit block ───────────────────────────────
@@ -471,6 +541,55 @@ for (const [rank, strength] of [[0, 3], [2, 12], [4, 12]] as const) {
     const want = rank === 0 ? 0.12 : 0.3;
     if (!(reach >= want * 0.5 && reach <= want * 1.8)) fail(`Size ${rank + 1} acceleration ${reach} s (want ~${want} s)`);
   }
+}
+
+{
+  // TITAN PASS: every number a titan card states is the code's number (the MOLO card said 10 dmg while the bite did 22).
+  // Each card fact is derived from the kit constants here, so a retune that forgets the card fails this probe.
+  console.log('\n[unit] titan cards = kit constants');
+  const TD = (await import('../src/data/titans.ts')).TITANS;
+  const { MOLO } = await import('../src/titans/kits/molo.ts');
+  const { VOLT } = await import('../src/titans/kits/voltkite.ts');
+  const { HEARTH } = await import('../src/titans/kits/hearthback.ts');
+  const { BRIAR } = await import('../src/titans/kits/briarwick.ts');
+  const pct = (f: number) => `${Math.round(f * 100)}%`;
+  const facts: [TitanId, 'auto' | 'hook' | 'dash', string][] = [
+    ['molo', 'auto', `Every ${MOLO.biteEveryS} s`], ['molo', 'auto', `(${MOLO.biteHalfDeg}° each side), ${MOLO.biteDmg} dmg`],
+    ['molo', 'auto', `within ${MOLO.biteAimDeg}°`], ['molo', 'auto', `${MOLO.pulseDmg} dmg foot-pulse`],
+    ['molo', 'hook', `${MOLO.vacChannelS} s inhale over ${MOLO.vacRH} body-heights`], ['molo', 'hook', `${MOLO.vacDps} dmg/s`],
+    ['molo', 'hook', `${pct(MOLO.vacShieldBase)} max HP + ${Math.round(MOLO.vacShieldPer * 1000) / 10}% per pickup swallowed (max ${pct(MOLO.vacShieldCap)})`],
+    ['molo', 'hook', `+${pct(MOLO.vacMassMul - 1)} XP`], ['molo', 'hook', `${MOLO.vacCdS} s cooldown`],
+    ['voltkite', 'auto', `Every ${VOLT.arcEveryS} s`], ['voltkite', 'auto', `within ${VOLT.arcRangeH} body-heights`],
+    ['voltkite', 'auto', `${VOLT.arcDmg} dmg, −${pct(1 - VOLT.arcFalloff)} per jump`],
+    ['voltkite', 'auto', `Every ${VOLT.groundEvery === 2 ? '2nd' : VOLT.groundEvery + 'th'} strike GROUNDS`],
+    ['voltkite', 'hook', `${VOLT.detDmg} dmg along each wire + ${VOLT.detPerSec} per second`],
+    ['voltkite', 'hook', `${VOLT.burstDmg} dmg static burst`], ['voltkite', 'hook', `${VOLT.detCdS} s cooldown`],
+    ['voltkite', 'dash', `${VOLT.wireDps} dmg/s over ${TD.voltkite.base.wireDuration} s (up to ${VOLT.wireCap} wires)`],
+    ['hearthback', 'auto', `Every ${HEARTH.stompEveryS} s`], ['hearthback', 'auto', `up to ${HEARTH.stompRangeH} body-heights`],
+    ['hearthback', 'auto', `${TD.hearthback.base.stompDelay} s later for ${HEARTH.stompDmg} dmg`],
+    ['hearthback', 'hook', `${pct(HEARTH.shellStoreFrac)} of damage taken`],
+    ['hearthback', 'hook', `(${HEARTH.ventDmg} + ${HEARTH.ventPerStored} per point)`],
+    ['hearthback', 'hook', `heals ${pct(HEARTH.ventHealFrac)}`], ['hearthback', 'hook', `${HEARTH.ventCdS} s cooldown`],
+    ['briarwick', 'auto', `Every ${BRIAR.lashEveryS.toFixed(1)} s`],
+    ['briarwick', 'auto', `${BRIAR.lashLenH} body-heights long (${(BRIAR.lashLenH * BRIAR.size1LenMul).toFixed(1)} at Size I), ${BRIAR.lashDmg} dmg`],
+    ['briarwick', 'auto', `ripen in ${BRIAR.ripenS} s`], ['briarwick', 'auto', `${BRIAR.burstDmg} dmg, tangles`],
+    ['briarwick', 'auto', `hits ${pct(BRIAR.linkBonus)} harder`],
+    ['briarwick', 'hook', `(${BRIAR.ringDmg} dmg, tangles ${BRIAR.ringTangleS} s), ${BRIAR.volleyN} ripe seeds`],
+    ['briarwick', 'hook', `within ${BRIAR.hookRH} body-heights`], ['briarwick', 'hook', `${BRIAR.hookCdS} s cooldown`],
+    ['briarwick', 'dash', `drops ${BRIAR.dashPods} seed pods`],
+  ];
+  let bad = 0;
+  for (const [t, part, fact] of facts) {
+    const desc = TD[t][part].desc;
+    if (!desc.includes(fact)) { bad++; fail(`${t} ${part} card does not state the code's "${fact}": ${desc}`); }
+  }
+  for (const t of TITANS) {
+    const d = TD[t].base.dashDistance;
+    if (!TD[t].dash.desc.includes(`${d} body-heights`) && t !== 'voltkite' && t !== 'hearthback') { bad++; fail(`${t} dash card does not state dashDistance ${d}`); }
+  }
+  if (TD.briarwick.base.turretCap !== 10) { bad++; fail(`briarwick base turretCap ${TD.briarwick.base.turretCap} (kit C: 10)`); }
+  if (TD.voltkite.base.armor !== 12) { bad++; fail(`voltkite base armor ${TD.voltkite.base.armor} (TITAN PASS: 12)`); }
+  console.log(`  ${facts.length} card facts + dash distances + base stats checked, ${bad} mismatch(es)`);
 }
 
 console.log(failures ? `\nprobe_titan: ${failures} FAILURE(S)` : '\nprobe_titan: OK');

@@ -89,6 +89,9 @@ const TR = {
   rankUp: 0.55,
   hurtBase: 0.08, hurtPerFrac: 1.4,
   vent: 0.3, wireDetonate: 0.22, ability: 0.12, pulse: 0.05,
+  // TITAN PASS (BRIARWICK POP-UP PARK): one micro-kick per pod burst, only for chain links 0..podLinkCap, so a
+  // 16-28-pod cascade ripples instead of saturating trauma (its 'seed' explosions add no trauma of their own)
+  podLink: 0.04, podLinkCap: 8,
   // GATEKEEPERS (lane K2a): stagger × 0.6 (§6.7), the arrival / kill / lock / finale beats (the kill's MASS BREACH
   // rankUp adds its own punch + rankUp trauma on the same tick, so the kill itself stays modest)
   gateStaggerK: 0.6, gateSpawn: 0.2, gateDefeated: 0.4, gateLocked: 0.1, finale: 0.35,
@@ -342,7 +345,9 @@ export class CameraRig {
         }
         case 'floorBreak': if (e.tier >= rank) add += TR.floorBreak * att(e.x, e.z); break;
         case 'bump': add += TR.bump; break;
-        case 'explosion': add += Math.min(0.35, TR.explosion + TR.explosionPerExtent * (e.r / ext) * 0.3) * att(e.x, e.z); break;
+        case 'explosion':
+          if (e.kind === 'seed' && w.titanId === 'briarwick') break;   // pod bursts shake via 'bloomBurst' below
+          add += Math.min(0.35, TR.explosion + TR.explosionPerExtent * (e.r / ext) * 0.3) * att(e.x, e.z); break;
         case 'bossAttack': add += TR.bossAttack * Math.max(0.35, att(e.x, e.z)); break;
         // GATEKEEPERS §6.7 (lane K2a): trauma is already titan-relative (displacement ∝ titan height), so a
         // gatekeeper's beats are not rescaled by H — its stagger shakes at 0.6×, its phase change not at all
@@ -363,6 +368,7 @@ export class CameraRig {
         case 'wireDetonate': add += TR.wireDetonate; break;
         case 'ability': add += TR.ability; break;
         case 'pulse': add += TR.pulse; break;
+        case 'bloomBurst': if (e.link <= TR.podLinkCap) add += TR.podLink * att(e.x, e.z); break;
         default: break;
       }
     }

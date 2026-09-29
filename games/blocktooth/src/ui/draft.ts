@@ -14,16 +14,21 @@
 // Mash guards for BANISH (§2.4): UiKeys edge-detects pad buttons against the state at start() (a Y held
 // from play is no press); BANISH ignores presses for DRAFT_V2.banishArmS after open; on pad it is a HOLD
 // polled every frame through navigator.getGamepads() (a tap never completes it).
+// TITAN PASS D1 BUILD SLOTS (FEATURES_V2 §7.7, lane DRAFT): the header counts `SLOTS n/8` and turns into the
+// `SLOTS FULL — UPGRADES ONLY` banner once every slot is taken; every card carries a slot tab beside its case tab
+// (upgrades/draft.ts cardSlot): NEW — TAKES A SLOT (n/8) · UPGRADE LV a → b · SHARES A SLOT · ONE-OFF — NO SLOT.
+// OVERFLOW rewards (slots full, nothing left to deepen) are OFF THE RECORD cards; they cannot be banished, locked
+// or rerolled, and an all-overflow draft swaps the header for NOTHING NEW TO FILE.
 
 import type { Input } from '../core/input.ts';
 import type { UpgradeDef, World } from '../core/types.ts';
-import type { DraftCtx, DraftResultV2 } from '../v2types.ts';
+import type { DraftCtx, DraftResultV2, GlyphId } from '../v2types.ts';
 import { DRAFT_V2 } from '../core/config.ts';
 import { UPGRADE_BY_ID } from '../data/upgrades.ts';
 import { TITANS } from '../data/titans.ts';
 import { STR } from '../data/strings.ts';
 import { SCREENS } from '../data/strings_screens.ts';
-import { deliveredHold, recipeHint } from '../upgrades/draft.ts';
+import { OVERFLOW, SLOT_CAP, cardSlot, deliveredHold, isOverflowReward, recipeHint, slotsFull, slotsUsed } from '../upgrades/draft.ts';
 import { familyColor, glyphSvg, iconFor } from './icons.ts';
 import {
   type ModalSession, type UiPress, clearEl, div, el, fmt, keyChip, onTap, pulse, runModal, wrapIndex, flashesReduced,
@@ -35,8 +40,10 @@ export class DraftScreen {
   private readonly input: Input;
   private readonly layer: HTMLDivElement;
   private readonly head: HTMLDivElement;
+  private readonly title: HTMLElement;
   private readonly kicker: HTMLElement;
   private readonly charges: HTMLElement;
+  private readonly slots: HTMLElement;
   private readonly cardsBox: HTMLDivElement;
   private readonly foot: HTMLDivElement;
   private readonly hints: HTMLDivElement;
@@ -58,6 +65,7 @@ export class DraftScreen {
 
   constructor(root: HTMLElement, input: Input) {
     this.input = input;
+    injectSlotCss();
     const L = this.layer = div('bt-layer bt-screen bt-draft bt-hidden', root);
     L.setAttribute('role', 'dialog');
     L.setAttribute('aria-label', STR.draft.title);
@@ -66,10 +74,12 @@ export class DraftScreen {
     const stamp = div('bt-draft-desk', head);
     stamp.appendChild(el('span', 'bt-draft-bureau', STR.network));
     stamp.appendChild(el('span', 'bt-draft-filed', STR.draft.filed));
-    div('bt-draft-title', head, STR.draft.title);
+    this.title = div('bt-draft-title', head, STR.draft.title);
     this.kicker = div('bt-draft-kicker', head);
     this.charges = div('bt2-draft-charges', head);
     this.charges.dataset.v2 = 'draft-charges';
+    this.slots = div('bt3-draft-slots', head);
+    this.slots.dataset.v2 = 'draft-slots';
     this.cardsBox = div('bt-draft-cards', L);
     this.cardsBox.setAttribute('role', 'listbox');
     const foot = this.foot = div('bt-draft-foot bt-confirmbar', L);
@@ -106,12 +116,24 @@ export class DraftScreen {
     const U = w.upgrades;
     const chest = U.pendingDrafts <= 0 && U.chestDrafts > 0;
     this.layer.classList.toggle('chest', chest);
-    this.kicker.textContent = chest
-      ? STR.draft.crate
-      : fmt(STR.draft.level, { n: w.titan.level }) + ' · ' + (TITANS[w.titanId]?.name ?? '');
+    // D1: an all-OVERFLOW draft (slots full, nothing left to deepen) gets its own header and no controls
+    const allOvf = ids.length > 0 && ids.every((id) => isOverflowReward(id));
+    const full = slotsFull(w);
+    this.layer.classList.toggle('ovf', allOvf);
+    this.layer.classList.toggle('slots-full', full);
+    this.title.textContent = allOvf ? STR.draft.overflowTitle : STR.draft.title;
+    this.kicker.textContent = allOvf
+      ? STR.draft.overflowSub
+      : chest
+        ? STR.draft.crate
+        : fmt(STR.draft.level, { n: w.titan.level }) + ' · ' + (TITANS[w.titanId]?.name ?? '');
     this.charges.textContent = fmt(SCREENS.draft.charges, { r: rerollsLeft, b: this.ctx.banishLeft, l: this.ctx.lockLeft });
+    this.charges.classList.toggle('bt-hidden', allOvf);
+    const used = Math.max(0, Math.round(slotsUsed(w)));
+    this.slots.textContent = full ? STR.draft.slotsFull : fmt(STR.draft.slotCount, { n: used, cap: SLOT_CAP });
+    this.slots.classList.toggle('full', full);
 
-    const canReroll = rerollsLeft > 0 && ids.length > 0;
+    const canReroll = rerollsLeft > 0 && ids.length > 0 && !allOvf;
     this.rerollBtn.disabled = !canReroll;
     this.rerollBtn.classList.toggle('off', !canReroll);
     this.rerollLeft.textContent = canReroll ? fmt(STR.draft.rerollLeft, { n: rerollsLeft }) : STR.draft.noReroll;
@@ -246,7 +268,7 @@ export class DraftScreen {
     if (!s || s.done || i < 0 || i >= this.ids.length) return;
     if (performance.now() - this.openedAt < DRAFT_V2.banishArmS * 1000) return;
     const card = this.cards[i];
-    if (this.ctx.banishLeft <= 0 || this.ids.length <= 1) { this.refuse(card, '.bt2-corner.b'); return; }
+    if (this.ctx.banishLeft <= 0 || this.ids.length <= 1 || isOverflowReward(this.ids[i])) { this.refuse(card, '.bt2-corner.b'); return; }
     this.cancelHold();
     this.select(i);
     card.classList.add('is-banished');
@@ -263,6 +285,7 @@ export class DraftScreen {
     if (!s || s.done || i < 0 || i >= this.ids.length) return;
     const id = this.ids[i];
     const card = this.cards[i];
+    if (isOverflowReward(id)) { this.refuse(card, '.bt2-corner.l'); return; }   // D1: an OVERFLOW reward is never held
     if (this.ctx.locked !== id && !this.ctx.locked && this.ctx.lockLeft <= 0) { this.refuse(card, '.bt2-corner.l'); return; }
     this.cancelHold();
     this.select(i);
@@ -285,7 +308,7 @@ export class DraftScreen {
   private startHold(): void {
     if (!this.session || this.session.done || !this.cards.length) return;
     if (performance.now() - this.openedAt < DRAFT_V2.banishArmS * 1000) return;   // mash guard
-    if (this.ctx.banishLeft <= 0 || this.ids.length <= 1) { this.refuse(this.cards[this.sel], '.bt2-corner.b'); return; }
+    if (this.ctx.banishLeft <= 0 || this.ids.length <= 1 || isOverflowReward(this.ids[this.sel])) { this.refuse(this.cards[this.sel], '.bt2-corner.b'); return; }
     this.hold = { t0: performance.now(), i: this.sel };
     this.cards[this.sel].classList.add('is-holding');
     this.cards[this.sel].style.setProperty('--hold', '0');
@@ -309,6 +332,7 @@ export class DraftScreen {
   }
 
   private buildCard(w: World, id: string, def: UpgradeDef | undefined, i: number, heldFromLast: boolean): HTMLElement {
+    if (isOverflowReward(id)) return this.buildOverflowCard(id, i);
     const rarity = def ? def.rarity : 'common';
     const owned = w.upgrades.owned[id] || 0;
     const max = def ? Math.max(1, def.maxStacks) : 1;
@@ -323,8 +347,20 @@ export class DraftScreen {
     card.setAttribute('role', 'option');
     card.dataset.card = id;
 
-    const tab = div('bt-dossier-tab', card);
+    const tabs = div('bt3-tabs', card);
+    const tab = div('bt-dossier-tab', tabs);
     tab.appendChild(el('span', '', fmt(STR.draft.caseFile, { n: String(caseNo(id)).padStart(3, '0') })));
+    // D1 slot tab (upgrades/draft.ts cardSlot): what taking this card does to the build slots
+    const slot = cardSlot(w, id);
+    const slotTxt = slot === 'new' ? `${STR.draft.slotNew} (${Math.round(slotsUsed(w)) + 1}/${SLOT_CAP})`
+      : slot === 'upgrade' ? `${STR.draft.slotUpgrade} LV ${owned} → ${next}`
+        : slot === 'shared' ? STR.draft.slotShared
+          : slot === 'free' ? slotFreeText()
+            : '';
+    if (slotTxt) {
+      const st = div(`bt3-slottab s-${slot}`, tabs, slotTxt);
+      st.dataset.v2 = 'slot-tag';
+    }
     div('bt-dossier-key', card, String(i + 1));
 
     // v2 corner buttons (focused card): ✕ BANISH · ▣ LOCK — plus the pad-hold fill ring
@@ -351,7 +387,7 @@ export class DraftScreen {
     heldBadge.appendChild(el('b', '', SCREENS.draft.held));
     if (isNew) { const rb = div('bt2-ribbon', card); rb.appendChild(el('span', '', SCREENS.draft.newRibbon)); }
     const flags = div('bt-dossier-flags', paper);
-    if (owned === 0 && !isNew && !evo) flags.appendChild(el('span', 'bt-flag new', STR.draft.newTag));
+    // D1: the slot tab (NEW — TAKES A SLOT) replaces the plain NEW flag (FEATURES_V2 §7.7 rule 7)
     if (next >= max && max > 1) flags.appendChild(el('span', 'bt-flag final', STR.draft.maxTag));
     if (def && def.titan) flags.appendChild(el('span', 'bt-flag locked', STR.draft.locked));
     // Gate F: this card advances a started evolution recipe (COMPLETES = taking it makes the recipe ready)
@@ -412,6 +448,87 @@ export class DraftScreen {
     }
     return card;
   }
+
+  /** D1 OVERFLOW reward card (never owned, no slot): OFF THE RECORD stamp, STR.draft.overflow name / desc. */
+  private buildOverflowCard(id: string, i: number): HTMLElement {
+    const card = el('button', 'bt-dossier r-common ovf');
+    card.type = 'button';
+    card.tabIndex = -1;
+    card.setAttribute('role', 'option');
+    card.dataset.card = id;
+    const tabs = div('bt3-tabs', card);
+    const tab = div('bt-dossier-tab', tabs);
+    tab.appendChild(el('span', '', fmt(STR.draft.caseFile, { n: String(caseNo(id)).padStart(3, '0') })));
+    const st = div('bt3-slottab s-overflow', tabs, STR.draft.overflowStamp);
+    st.dataset.v2 = 'slot-tag';
+    div('bt-dossier-key', card, String(i + 1));
+    const paper = div('bt-dossier-paper', card);
+    div('bt-dossier-stamp', paper, STR.draft.overflowStamp);
+    div('bt-dossier-flags', paper);
+    const txt = overflowText(id);
+    const nameRow = div('bt2-dname', paper);
+    const g = el('span', 'bt2-glyph dg');
+    g.innerHTML = glyphSvg(OVF_GLYPH[id] ?? 'plus', OVF_COLOR[id] ?? '#ffd166');
+    nameRow.appendChild(g);
+    div('bt-dossier-name', nameRow, txt.name);
+    div('bt-dossier-rule', paper);
+    const body = div('bt-dossier-body', paper);
+    div('bt-dossier-desc', body, txt.desc);
+    const emb = div('bt-dossier-emblem tag-misc', body);
+    emb.appendChild(el('b', '', monogram(txt.name)));
+    emb.appendChild(el('small', '', STR.draft.overflowStamp));
+    div('bt-dossier-clip', emb);
+    return card;
+  }
+}
+
+// ── D1 OVERFLOW rewards: glyph, colour, text ({n} = the rounded percentage from upgrades/draft.ts OVERFLOW) ──
+const OVF_GLYPH: Record<string, GlyphId> = { ovf_sick_day: 'bandage', ovf_hot_tip: 'megaphone', ovf_hard_hat: 'plate' };
+const OVF_COLOR: Record<string, string> = { ovf_sick_day: '#ff6f5e', ovf_hot_tip: '#ffd166', ovf_hard_hat: '#4fb3b0' };
+const OVF_PCT: Record<string, number> = {
+  ovf_sick_day: OVERFLOW.sickDayHeal, ovf_hot_tip: OVERFLOW.hotTipUproar, ovf_hard_hat: OVERFLOW.hardHatShield,
+};
+function overflowText(id: string): { name: string; desc: string } {
+  const t = (STR.draft.overflow as Record<string, { name: string; desc: string } | undefined>)[id] ?? { name: id.toUpperCase(), desc: '' };
+  return { name: t.name, desc: fmt(t.desc, { n: Math.round(100 * (OVF_PCT[id] ?? 0)) }) };
+}
+function slotFreeText(): string {
+  return STR.draft.slotFree;
+}
+
+const SLOT_CSS = `
+.bt3-tabs { display: flex; align-items: flex-end; gap: calc(var(--u) * .35); margin-left: calc(var(--u) * 1); margin-right: calc(var(--u) * 2.4); min-width: 0; }
+.bt3-tabs .bt-dossier-tab { margin-left: 0; flex: 0 0 auto; }
+.bt3-slottab {
+  flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border: calc(var(--u) * .18) solid var(--ink); border-bottom: 0; border-radius: calc(var(--u) * .4) calc(var(--u) * .4) 0 0;
+  padding: calc(var(--u) * .2) calc(var(--u) * .7) calc(var(--u) * .1); font-weight: 800; font-size: calc(var(--u) * .78);
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.bt3-slottab.s-new { background: var(--teal); color: var(--cream); }
+.bt3-slottab.s-upgrade { background: var(--navy); color: var(--gold); }
+.bt3-slottab.s-shared { background: var(--gold); color: var(--ink); }
+.bt3-slottab.s-free { background: #6b5a8e; color: var(--cream); }
+.bt3-slottab.s-overflow { background: var(--red); color: var(--cream); }
+.bt3-draft-slots {
+  margin-top: calc(var(--u) * .35); font-family: var(--f-mono); font-weight: 700; font-size: calc(var(--u) * .95); letter-spacing: .1em;
+  color: var(--cream); background: rgba(47, 127, 134, .9); padding: calc(var(--u) * .1) calc(var(--u) * .8);
+  border: calc(var(--u) * .12) solid rgba(244, 236, 216, .5);
+}
+.bt3-draft-slots.full { color: var(--ink); background: var(--gold); border-color: var(--ink); font-size: calc(var(--u) * 1.05); }
+.bt-dossier.ovf .bt-dossier-paper { background: repeating-linear-gradient(135deg, #fbf5e6 0 calc(var(--u) * 1.4), #f3e6c4 calc(var(--u) * 1.4) calc(var(--u) * 2.8)); }
+.bt-dossier.ovf .bt-dossier-stamp { color: var(--red); border-color: var(--red); }
+.bt-dossier.ovf .bt2-corners { display: none !important; }
+.bt-draft.ovf .bt-draft-title { color: var(--gold); text-shadow: calc(var(--u) * .4) calc(var(--u) * .4) 0 var(--red); }
+`;
+let slotCssOn = false;
+function injectSlotCss(): void {
+  if (slotCssOn || typeof document === 'undefined') return;
+  slotCssOn = true;
+  const st = document.createElement('style');
+  st.dataset.bt = 'titanpass-draft-slots';
+  st.textContent = SLOT_CSS;
+  document.head.appendChild(st);
 }
 
 /** true when any connected pad has button `b` down (the BANISH hold poll). */
