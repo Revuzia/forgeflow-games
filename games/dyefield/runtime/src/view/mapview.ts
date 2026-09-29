@@ -47,8 +47,9 @@
 // created separately from non-paint ones, so the dye layer can never leak onto a mesh without an
 // atlas UV (uv1).
 //
-// FFA (CONTRACT_FFA §F7, lane VIEW): addFfaPads(map, world.crewPads) adds the runtime drop pads (one instanced
-// draw, the owner crew's ring + mark) and turns the A/B team pads' crew accent neutral until its dispose().
+// FFA (CONTRACT_FFA §F7, lane VIEW): addFfaPads(map, world.crewPads) adds the runtime drop pads (one merged draw,
+// each pad conforming to the ground under it, the owner crew's ring + mark) and turns the A/B team pads' crew accent
+// neutral until its dispose().
 
 import * as THREE from 'three';
 import type { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -843,15 +844,42 @@ export async function loadMapView(loader: GLTFLoader, def: MapDef, dye: DyeUnifo
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
-// FFA drop pads (CONTRACT_FFA §F1 / §F7, lane VIEW)
+// FFA drop pads (CONTRACT_FFA §F1 / §F7, lane VIEW; ground-conforming build: lane PADS)
 // ════════════════════════════════════════════════════════════════════════════════════════════
 //
 // One runtime-rendered drop pad per FFA runner at its spawn (MatchWorld.crewPads: maps.json ffaSpawns under the
-// seeded shuffle, r = 1.6 m): ONE InstancedMesh (one draw + one shadow-free pass), a low navy slab like the team
-// pads, a glowing ring and the crew's MARK as a shape (colour-blind safe, like the team pads' sun-disc / wave-peak)
-// in the owner's dye, gently pulsing. The slab sits on the floor found by a downward ray (ffaSpawns hold the drop
-// height, ~1 m above it). While the pads are shown, the A/B team pads' crew accent turns neutral steel: in FFA
-// they are scenery (CONTRACT_FFA §F1), and an orange / violet pad would read as the amber / violet crew's.
+// seeded shuffle, r = 1.6 m): a low navy slab like the team pads, a glowing ring and the crew's MARK as a shape
+// (colour-blind safe, like the team pads' sun-disc / wave-peak) in the owner's dye, gently pulsing. While the pads
+// are shown, the A/B team pads' crew accent turns neutral steel: in FFA they are scenery (CONTRACT_FFA §F1), and an
+// orange / violet pad would read as the amber / violet crew's.
+//
+// The pad CONFORMS to the ground it sits on (was: one flat, level slab whose top cleared the highest of 9 floor
+// samples, so on Cinder's curved sand the low side stood up to ~17 cm proud and read as a floating puck):
+//
+//   * the floor: ONE pass over the map's visible meshes (the pads' own excluded) collects every world-space triangle
+//     whose world normal y >= FFA_PAD.minNy and whose bounds touch a pad's square (R + 0.35 m) and height band
+//     (spawn y − 3 m … + 1.6 m), binned into a 0.25 m xz grid per pad. A ground height is then an exact vertical ray
+//     (point-in-triangle in xz + the plane height) — the same answer a downward Raycaster gives for the first
+//     up-facing face, at a fraction of the cost (a Raycaster walks every triangle of every mesh per ray; the old
+//     72-ray build took 350–1060 ms on the iGPU machine, this one 24–50 ms for 8 pads);
+//   * the top: a radial grid, FFA_PAD.seg spokes × FFA_PAD.rings rings (+ the centre), each vertex at the ground
+//     under it + FFA_PAD.lift. Each spoke is WALKED outward from the centre's floor: a ring takes the highest ground
+//     face within rise·Δr + slack of the height extrapolated from the two rings inside it, so only this pad's own
+//     floor band is followed (sloped / curved sand yes; a ledge or lip below the rim, a hole, a prop top above it
+//     no). A vertex with no such ground (the rim overhanging a ledge or a hole) is CLAMPED to the least-squares
+//     plane through the valid samples: the slab then carries straight on over the drop like a poured slab would,
+//     its short skirt showing as the edge (no spawn in maps.json does this today — the padcheck gate would flag it
+//     as hover);
+//   * the lift (1.5 cm, a constant along the vertical) keeps the top clear of the ground's own depth (the dye is a
+//     layer of the paint_ material, there is no separate decal to fight) at every distance the camera reaches —
+//     24-bit depth at near 0.08 m resolves ~5 mm at 80 m — and the material adds polygonOffset(−1, −1) on top;
+//   * the skirt: a ring of quads from the top's rim down to FFA_PAD.skirtDepth below the rim's ground, flared
+//     outward by FFA_PAD.skirtFlare, so the edge reads as a slab (its top band glows in the crew dye like the old
+//     slab's side);
+//   * ONE draw for all pads: every pad's grid + skirt is merged into one BufferGeometry (world space) whose vertices
+//     carry the crew dye + mark (aPadCrew) and the pad-local metric coordinates, radius and skirt depth (aPadQ) the
+//     shader draws the grooves, ring and mark from. receiveShadow, no castShadow (as before).
+// root.userData.buildMs holds the build time (harness read-back: __DF__.ffaPads(), _harness/padcheck.py).
 
 /** one FFA pad as MatchWorld.crewPads holds it (x, y, z = the spawn; yaw radians) */
 export interface FfaPadSpec { x: number; y: number; z: number; r?: number; crew: TeamId; yaw?: number }
@@ -859,7 +887,7 @@ export interface FfaPadSpec { x: number; y: number; z: number; r?: number; crew:
 export interface FfaPads {
   root: THREE.Group;
   count: number;
-  /** the floor height found under each pad (harness read-back) */
+  /** the floor height found under each pad's centre (harness read-back) */
   floorY: number[];
   /** remove the pads and restore the team pads' crew accent */
   dispose(): void;
@@ -869,26 +897,41 @@ export interface FfaPads {
 const FFA_MARKS = ['sun-disc', 'wave-peak', 'block', 'diamond', 'star', 'cross', 'pentagon', 'hexagon'];
 /** the team pads' crew accent in FFA (neutral scenery) */
 const TEAM_PAD_NEUTRAL = '#606A7C';
-/** slab height (m) and how far its top stands above the floor */
-const FFA_PAD_H = 0.07;
-const FFA_PAD_TOP = 0.035;
+/** the conforming pad build (see the section header) */
+const FFA_PAD = {
+  /** spokes and rings of the top's radial grid (≈ 16 cm between rings, ≤ 16 cm between spokes at the rim) */
+  seg: 64,
+  rings: 10,
+  /** the top's constant lift above the ground (m) */
+  lift: 0.015,
+  /** the skirt reaches this far below the rim's ground (m) and flares outward this much (m) */
+  skirtDepth: 0.05,
+  skirtFlare: 0.02,
+  /** a map face is floor when its world normal y >= this */
+  minNy: 0.7,
+  /** the spoke walk: a ring's floor lies within rise·Δr + slack (m) of the height extrapolated from inside */
+  rise: 1.0,
+  slack: 0.05,
+  /** the floor search around the spawn height: below / above (m) */
+  below: 3.0,
+  above: 1.6,
+  /** the xz bins of a pad's floor triangles (m) and the margin of a pad's square beyond R (m) */
+  cell: 0.25,
+  margin: 0.35,
+} as const;
 
 const FFA_PAD_VERT_PARS = /* glsl */ `
-attribute vec3 aCrew;
-attribute vec2 aPad;
-varying vec3 vPadP;
+attribute vec4 aPadCrew;
+attribute vec4 aPadQ;
 varying vec3 vPadCrew;
-varying vec2 vPad;
-varying float vPadTop;
-varying float vPadWorldTop;
+varying vec4 vPadQ;
+varying float vPadMark;
 `;
 const FFA_PAD_FRAG_PARS = /* glsl */ `
 uniform float uPadTime;
-varying vec3 vPadP;
 varying vec3 vPadCrew;
-varying vec2 vPad;
-varying float vPadTop;
-varying float vPadWorldTop;
+varying vec4 vPadQ;
+varying float vPadMark;
 float fpBox( vec2 p, vec2 b ) { vec2 d = abs( p ) - b; return length( max( d, 0.0 ) ) + min( max( d.x, d.y ), 0.0 ); }
 float fpTri( vec2 p, float r ) {
 	const float k = 1.7320508;
@@ -937,22 +980,24 @@ float fpMark( vec2 p, float m, float R ) {
 	return fpHex( p, 0.3 * R );                                                                  // hexagon
 }
 `;
+// vPadQ = (pad-local x, pad-local forward) in metres, the pad radius, and the skirt depth below the top's rim in
+// metres (−1 on the top surface)
 const FFA_PAD_COLOR = /* glsl */ `
-	vec2 fpQ = vPadP.xz * vPad.x;            // metres, +y = forward
+	vec2 fpQ = vPadQ.xy;                      // metres, +y = forward
 	float fpR = length( fpQ );
-	float fpRad = vPad.x;
+	float fpRad = vPadQ.z;
 	float fpAa = fwidth( fpR ) * 0.8 + 1e-4;
-	float fpTopM = step( 0.6, vPadTop );
+	float fpTopM = 1.0 - step( - 0.5, vPadQ.w );
 	float fpGrooveD = abs( fract( fpR / 0.3 ) - 0.5 ) * 0.3;
 	float fpGroove = ( 1.0 - smoothstep( 0.01 - fpAa, 0.01 + fpAa, fpGrooveD ) ) * ( 1.0 - step( 0.7 * fpRad, fpR ) );
 	float fpRing = smoothstep( 0.74 * fpRad - fpAa, 0.74 * fpRad + fpAa, fpR ) * ( 1.0 - smoothstep( 0.89 * fpRad - fpAa, 0.89 * fpRad + fpAa, fpR ) );
-	float fpD = fpMark( vec2( fpQ.x, fpQ.y ), vPad.y, fpRad );
+	float fpD = fpMark( fpQ, vPadMark, fpRad );
 	float fpMk = 1.0 - smoothstep( - fpAa, fpAa, fpD );
 	float fpGlow = max( fpRing, fpMk ) * fpTopM;
 	vec3 fpBody = vec3( 0.0194, 0.0262, 0.0482 );   // PALETTE.padBody #262D3E (linear), as the team pads
 	vec3 fpC = mix( fpBody, fpBody * 0.7, fpGroove * fpTopM );
 	fpC = mix( fpC, vPadCrew * 0.55, fpGlow );
-	float fpSide = ( 1.0 - fpTopM ) * smoothstep( - 0.035, - 0.02, vPadWorldTop );
+	float fpSide = ( 1.0 - fpTopM ) * ( 1.0 - smoothstep( 0.007, 0.013, vPadQ.w ) );
 	fpC = mix( fpC, vPadCrew * 0.7, fpSide );
 	diffuseColor.rgb = fpC;
 	float fpPulse = 0.82 + 0.18 * sin( uPadTime * 2.2 );
@@ -963,92 +1008,360 @@ const FFA_PAD_EMISSIVE = /* glsl */ `
 
 let ffaPadSeq = 0;
 
+/** visible all the way up to (and including) `stop` */
+function shownUnder(o: THREE.Object3D, stop: THREE.Object3D): boolean {
+  for (let x: THREE.Object3D | null = o; x; x = x.parent) {
+    if (!x.visible) return false;
+    if (x === stop) return true;
+  }
+  return false;
+}
+
+/** the up-facing map triangles under one pad (world space, 9 floats each), binned into an xz grid */
+class PadFloor {
+  readonly x0: number;
+  readonly z0: number;
+  readonly x1: number;
+  readonly z1: number;
+  readonly n: number;
+  readonly y0: number;
+  readonly y1: number;
+  readonly cell: number;
+  readonly tri: number[] = [];
+  readonly bins: number[][];
+
+  constructor(cx: number, cz: number, half: number, y0: number, y1: number, cell: number) {
+    this.x0 = cx - half; this.z0 = cz - half; this.x1 = cx + half; this.z1 = cz + half;
+    this.y0 = y0; this.y1 = y1; this.cell = cell;
+    this.n = Math.max(1, Math.ceil((2 * half) / cell));
+    this.bins = Array.from({ length: this.n * this.n }, () => []);
+  }
+
+  /** bin a triangle (its xz bounds are known to overlap this pad's square) */
+  add(t: ArrayLike<number>, minX: number, maxX: number, minZ: number, maxZ: number): void {
+    const id = this.tri.length / 9;
+    for (let k = 0; k < 9; k++) this.tri.push(t[k]);
+    const n = this.n, c = this.cell;
+    const i0 = Math.max(0, Math.floor((minX - this.x0) / c)), i1 = Math.min(n - 1, Math.floor((maxX - this.x0) / c));
+    const j0 = Math.max(0, Math.floor((minZ - this.z0) / c)), j1 = Math.min(n - 1, Math.floor((maxZ - this.z0) / c));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) this.bins[j * n + i].push(id);
+  }
+
+  /**
+   * the highest floor height at (x, z) inside [lo, hi] — what a downward ray from `hi` reports as the first
+   * up-facing face at or below it, restricted to the band — or NaN when there is none
+   */
+  heightAt(x: number, z: number, lo: number, hi: number): number {
+    const c = this.cell, n = this.n;
+    const i = Math.floor((x - this.x0) / c), j = Math.floor((z - this.z0) / c);
+    if (i < 0 || j < 0 || i >= n || j >= n) return NaN;
+    const T = this.tri;
+    let best = NaN;
+    for (const id of this.bins[j * n + i]) {
+      const o = id * 9;
+      const ax = T[o], ay = T[o + 1], az = T[o + 2];
+      const e0x = T[o + 3] - ax, e0z = T[o + 5] - az, e1x = T[o + 6] - ax, e1z = T[o + 8] - az;
+      const den = e0x * e1z - e1x * e0z;
+      if (den > -1e-12 && den < 1e-12) continue;
+      const px = x - ax, pz = z - az;
+      const u = (px * e1z - e1x * pz) / den;
+      const v = (e0x * pz - px * e0z) / den;
+      if (u < -1e-6 || v < -1e-6 || u + v > 1 + 1e-6) continue;
+      const h = ay + u * (T[o + 4] - ay) + v * (T[o + 7] - ay);
+      if (h < lo || h > hi || h <= best) continue;
+      best = h;
+    }
+    return best;
+  }
+}
+
+/**
+ * Collect the floor triangles under every pad in ONE pass over the map's visible meshes (skipping `skip`'s
+ * subtree): world-space triangles with world normal y >= FFA_PAD.minNy inside a pad's square and height band.
+ */
+function gatherPadFloors(mapRoot: THREE.Object3D, floors: PadFloor[], skip: THREE.Object3D | null): { meshes: number; scanned: number } {
+  mapRoot.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  const padBox = new THREE.Box3();
+  const m4 = new THREE.Matrix4();
+  const im = new THREE.Matrix4();
+  const I = new THREE.Matrix4();
+  const v = new THREE.Vector3();
+  const t = new Float64Array(9);
+  let world = new Float32Array(0);
+  const hit: PadFloor[] = [];
+  const padBoxOf = (f: PadFloor): THREE.Box3 => { padBox.min.set(f.x0, f.y0, f.z0); padBox.max.set(f.x1, f.y1, f.z1); return padBox; };
+  let meshes = 0, scanned = 0;
+  mapRoot.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || (mesh as THREE.SkinnedMesh).isSkinnedMesh || !shownUnder(o, mapRoot)) return;
+    for (let x: THREE.Object3D | null = o; x && x !== mapRoot; x = x.parent) if (x === skip) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    if (mats.every((m) => m && m.side === THREE.BackSide)) return;         // a back-face-only mesh is never hit from above
+    const geo = mesh.geometry;
+    const pos = geo.getAttribute('position') as THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined;
+    if (!pos || pos.itemSize < 3) return;
+    box.setFromObject(mesh);
+    hit.length = 0;
+    for (const f of floors) if (box.intersectsBox(padBoxOf(f))) hit.push(f);
+    if (!hit.length) return;
+    meshes++;
+    const inst = mesh as THREE.InstancedMesh;
+    const copies = inst.isInstancedMesh ? inst.count : 1;
+    const idx = geo.index ? geo.index.array : null;
+    const total = idx ? geo.index!.count : pos.count;
+    const start = Math.max(0, geo.drawRange.start);
+    const end = Math.min(total, start + (Number.isFinite(geo.drawRange.count) ? geo.drawRange.count : total));
+    // a plain float xyz attribute is read in place; anything else (interleaved, normalized, quantized) is decoded
+    const plain = !(pos as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute && pos.itemSize === 3
+      && !pos.normalized && (pos as THREE.BufferAttribute).array instanceof Float32Array;
+    if (inst.isInstancedMesh && !geo.boundingBox) geo.computeBoundingBox();
+    // the pads' union square: most of a big mesh's triangles are rejected by it alone
+    let ux0 = Infinity, ux1 = -Infinity, uz0 = Infinity, uz1 = -Infinity;
+    for (const f of hit) { ux0 = Math.min(ux0, f.x0); ux1 = Math.max(ux1, f.x1); uz0 = Math.min(uz0, f.z0); uz1 = Math.max(uz1, f.z1); }
+    for (let c = 0; c < copies; c++) {
+      m4.copy(mesh.matrixWorld);
+      if (inst.isInstancedMesh) {
+        inst.getMatrixAt(c, im);
+        m4.multiply(im);
+        box.copy(geo.boundingBox as THREE.Box3).applyMatrix4(m4);   // this instance nowhere near a pad: skip it
+        if (!hit.some((f) => box.intersectsBox(padBoxOf(f)))) continue;
+      }
+      // a mirrored transform flips the world cross product; the rendered (and raycast) front face does not flip
+      const flip = m4.determinant() < 0 ? -1 : 1;
+      let W: ArrayLike<number>;
+      if (plain && m4.equals(I)) {
+        W = (pos as THREE.BufferAttribute).array as Float32Array;     // merged statics: already in world space
+      } else {
+        if (world.length < pos.count * 3) world = new Float32Array(pos.count * 3);
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(m4);
+          world[i * 3] = v.x; world[i * 3 + 1] = v.y; world[i * 3 + 2] = v.z;
+        }
+        W = world;
+      }
+      scanned += Math.max(0, Math.floor((end - start) / 3));
+      for (let k = start; k + 2 < end; k += 3) {
+        const a = (idx ? idx[k] : k) * 3, b = (idx ? idx[k + 1] : k + 1) * 3, cc = (idx ? idx[k + 2] : k + 2) * 3;
+        const ax = W[a], az = W[a + 2], bx = W[b], bz = W[b + 2], cx = W[cc], cz = W[cc + 2];
+        const minX = ax < bx ? (ax < cx ? ax : cx) : (bx < cx ? bx : cx);
+        if (minX > ux1) continue;
+        const maxX = ax > bx ? (ax > cx ? ax : cx) : (bx > cx ? bx : cx);
+        if (maxX < ux0) continue;
+        const minZ = az < bz ? (az < cz ? az : cz) : (bz < cz ? bz : cz);
+        if (minZ > uz1) continue;
+        const maxZ = az > bz ? (az > cz ? az : cz) : (bz > cz ? bz : cz);
+        if (maxZ < uz0) continue;
+        const ay = W[a + 1], by = W[b + 1], cy = W[cc + 1];
+        const minY = Math.min(ay, by, cy), maxY = Math.max(ay, by, cy);
+        let ny = NaN;
+        for (const f of hit) {
+          if (maxX < f.x0 || minX > f.x1 || maxZ < f.z0 || minZ > f.z1 || maxY < f.y0 || minY > f.y1) continue;
+          if (Number.isNaN(ny)) {
+            const e0x = bx - ax, e0y = by - ay, e0z = bz - az, e1x = cx - ax, e1y = cy - ay, e1z = cz - az;
+            const nx = e0y * e1z - e0z * e1y, nyr = e0z * e1x - e0x * e1z, nz = e0x * e1y - e0y * e1x;
+            const len = Math.sqrt(nx * nx + nyr * nyr + nz * nz);
+            ny = len > 1e-12 ? (flip * nyr) / len : -1;
+          }
+          if (ny < FFA_PAD.minNy) break;
+          t[0] = ax; t[1] = ay; t[2] = az; t[3] = bx; t[4] = by; t[5] = bz; t[6] = cx; t[7] = cy; t[8] = cz;
+          f.add(t, minX, maxX, minZ, maxZ);
+        }
+      }
+    }
+  });
+  return { meshes, scanned };
+}
+
+/**
+ * The ground heights of one pad's radial grid: [centre, then ring 1..rings × spoke 0..seg−1], each the floor under
+ * that vertex (the spoke walk + the plane clamp of the section header). Grid vertex (ring j, spoke s) sits at
+ * pad-local (sin θ, cos θ)·R·j/rings, θ = 2π s / seg, turned by the spawn yaw (+local z = the pad's forward).
+ */
+function padGround(fl: PadFloor, p: FfaPadSpec, R: number): { h: Float64Array; centre: number; clamped: number } {
+  const { seg, rings, rise, slack } = FFA_PAD;
+  const yaw = p.yaw ?? 0;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const h = new Float64Array(1 + seg * rings);
+  const ok = new Uint8Array(1 + seg * rings);
+  const c0 = fl.heightAt(p.x, p.z, p.y - FFA_PAD.below, p.y + 0.4);
+  const centre = Number.isFinite(c0) ? c0 : p.y;
+  h[0] = centre; ok[0] = Number.isFinite(c0) ? 1 : 0;
+  const dr = R / rings;
+  for (let s = 0; s < seg; s++) {
+    const th = (s / seg) * Math.PI * 2;
+    const lx = Math.sin(th), lz = Math.cos(th);
+    const wx = lx * cy + lz * sy, wz = -lx * sy + lz * cy;
+    let prev = centre, slope = 0, known = 0;
+    for (let j = 1; j <= rings; j++) {
+      const r = dr * j;
+      const expect = prev + slope * dr;
+      const tol = rise * dr * (known >= 2 ? 1 : 1.5) + slack;
+      const g = fl.heightAt(p.x + wx * r, p.z + wz * r, expect - tol, expect + tol);
+      const k = 1 + s * rings + (j - 1);
+      if (Number.isFinite(g)) {
+        h[k] = g; ok[k] = 1;
+        slope = known >= 1 || ok[0] ? (g - prev) / dr : 0;
+        prev = g; known++;
+      } else {
+        h[k] = expect;                                   // provisional: the plane clamp below replaces it
+        prev = expect;
+      }
+    }
+  }
+  // the least-squares plane through the valid samples → the clamp for the rest
+  let n = 0, sx = 0, sz = 0, sh = 0, sxx = 0, szz = 0, sxz = 0, sxh = 0, szh = 0;
+  const at = (k: number): [number, number] => {
+    if (k === 0) return [0, 0];
+    const s = Math.floor((k - 1) / rings), j = ((k - 1) % rings) + 1;
+    const th = (s / seg) * Math.PI * 2;
+    return [Math.sin(th) * dr * j, Math.cos(th) * dr * j];
+  };
+  for (let k = 0; k < h.length; k++) {
+    if (!ok[k]) continue;
+    const [x, z] = at(k);
+    n++; sx += x; sz += z; sh += h[k]; sxx += x * x; szz += z * z; sxz += x * z; sxh += x * h[k]; szh += z * h[k];
+  }
+  let clamped = 0;
+  if (n < h.length) {
+    let a = centre, b = 0, c = 0;
+    if (n >= 3) {
+      const mx = sx / n, mz = sz / n, mh = sh / n;
+      const cxx = sxx / n - mx * mx, czz = szz / n - mz * mz, cxz = sxz / n - mx * mz;
+      const cxh = sxh / n - mx * mh, czh = szh / n - mz * mh;
+      const det = cxx * czz - cxz * cxz;
+      if (Math.abs(det) > 1e-12) {
+        b = (cxh * czz - czh * cxz) / det; c = (czh * cxx - cxh * cxz) / det;
+      }
+      a = mh - b * mx - c * mz;
+    } else if (n > 0) {
+      a = sh / n;
+    }
+    for (let k = 0; k < h.length; k++) {
+      if (ok[k]) continue;
+      const [x, z] = at(k);
+      h[k] = a + b * x + c * z;
+      clamped++;
+    }
+  }
+  return { h, centre: h[0], clamped };
+}
+
 /**
  * FFA only: add a drop pad per entry of `pads` (MatchWorld.crewPads — its crew is the roster's) under `map.root`, in
- * the owner crew's colour (core/data.ts crewDef('ffa', crew)). Returns a handle whose dispose() removes them.
+ * the owner crew's colour (core/data.ts crewDef('ffa', crew)), each conforming to the ground under it (see the
+ * section header). Returns a handle whose dispose() removes them.
  */
 export function addFfaPads(map: MapView, pads: ReadonlyArray<FfaPadSpec>): FfaPads {
+  const tBuild = performance.now();
   const root = new THREE.Group();
   root.name = 'ffa_pads';
   const n = pads.length;
+  const { seg, rings, lift, skirtDepth, skirtFlare } = FFA_PAD;
+  const radius = pads.map((p) => (p.r && p.r > 0 ? p.r : 1.6));
+
+  // the floor under every pad, gathered in one pass over the map
+  const floors = pads.map((p, i) => new PadFloor(p.x, p.z, radius[i] + FFA_PAD.margin, p.y - FFA_PAD.below, p.y + FFA_PAD.above, FFA_PAD.cell));
+  const gather = gatherPadFloors(map.root, floors, null);
+  const gatherMs = performance.now() - tBuild;
+
+  // the merged geometry: per pad the top grid (1 + seg·rings vertices) and the skirt (2·seg vertices)
+  const perPad = 1 + seg * rings + 2 * seg;
+  const vCount = Math.max(1, n * perPad);
+  const position = new Float32Array(vCount * 3);
+  const aCrew = new Float32Array(vCount * 4);
+  const aQ = new Float32Array(vCount * 4);
+  const index: number[] = [];
   const floorY: number[] = [];
-  // the slab: unit radius, FFA_PAD_H tall, its top at y = 0 (the instance lifts it to floor + FFA_PAD_TOP)
-  const geo = new THREE.CylinderGeometry(1, 1.03, FFA_PAD_H, 64, 1, false);
-  geo.translate(0, -FFA_PAD_H / 2, 0);
-  const aCrew = new Float32Array(Math.max(1, n) * 3);
-  const aPad = new Float32Array(Math.max(1, n) * 2);
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.42, metalness: 0.15 });
+  let clampedTotal = 0;
+  const col = new THREE.Color();
+  for (let i = 0; i < n; i++) {
+    const p = pads[i];
+    const R = radius[i];
+    const yaw = p.yaw ?? 0;
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const g = padGround(floors[i], p, R);
+    floorY.push(g.centre);
+    clampedTotal += g.clamped;
+    let crew: { dye: string; mark: string };
+    try { crew = crewDef('ffa', p.crew); } catch { crew = { dye: '#DFE6EE', mark: 'sun-disc' }; }
+    col.set(crew.dye);
+    const mark = Math.max(1, FFA_MARKS.indexOf(crew.mark) + 1);
+    const base = i * perPad;
+    const put = (v: number, lx: number, lz: number, y: number, side: number): void => {
+      position[v * 3] = p.x + lx * cy + lz * sy;
+      position[v * 3 + 1] = y;
+      position[v * 3 + 2] = p.z - lx * sy + lz * cy;
+      aCrew[v * 4] = col.r; aCrew[v * 4 + 1] = col.g; aCrew[v * 4 + 2] = col.b; aCrew[v * 4 + 3] = mark;
+      aQ[v * 4] = lx; aQ[v * 4 + 1] = lz; aQ[v * 4 + 2] = R; aQ[v * 4 + 3] = side;
+    };
+    // the top: centre + rings, every vertex at its ground + lift
+    put(base, 0, 0, g.h[0] + lift, -1);
+    const dr = R / rings;
+    for (let s = 0; s < seg; s++) {
+      const th = (s / seg) * Math.PI * 2;
+      for (let j = 1; j <= rings; j++) {
+        const k = 1 + s * rings + (j - 1);
+        put(base + k, Math.sin(th) * dr * j, Math.cos(th) * dr * j, g.h[k] + lift, -1);
+      }
+    }
+    const top = (s: number, j: number): number => (j === 0 ? base : base + 1 + (((s % seg) + seg) % seg) * rings + (j - 1));
+    for (let s = 0; s < seg; s++) {
+      index.push(base, top(s, 1), top(s + 1, 1));                      // the centre fan (faces up)
+      for (let j = 1; j < rings; j++) {
+        const i0 = top(s, j), i1 = top(s + 1, j), o0 = top(s, j + 1), o1 = top(s + 1, j + 1);
+        index.push(i0, o0, o1, i0, o1, i1);
+      }
+    }
+    // the skirt: the rim (at its ground + lift) down to skirtDepth below the rim's ground, flared outward
+    const sk = base + 1 + seg * rings;
+    const flare = (R + skirtFlare) / R;
+    for (let s = 0; s < seg; s++) {
+      const th = (s / seg) * Math.PI * 2;
+      const lx = Math.sin(th) * R, lz = Math.cos(th) * R;
+      const gr = g.h[1 + s * rings + (rings - 1)];
+      put(sk + s * 2, lx, lz, gr + lift, 0);
+      put(sk + s * 2 + 1, lx * flare, lz * flare, gr - skirtDepth, lift + skirtDepth);
+    }
+    for (let s = 0; s < seg; s++) {
+      const t0 = sk + s * 2, b0 = t0 + 1, t1 = sk + ((s + 1) % seg) * 2, b1 = t1 + 1;
+      index.push(t0, b0, b1, t0, b1, t1);                              // faces outward
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(position, 3));
+  geo.setAttribute('aPadCrew', new THREE.BufferAttribute(aCrew, 4));
+  geo.setAttribute('aPadQ', new THREE.BufferAttribute(aQ, 4));
+  geo.setIndex(index);
+  geo.computeVertexNormals();                // the top and the skirt share no vertex: a crisp rim, smooth sand
+  // the geometry is in world space: bring it into map.root's frame (identity on every shipped map)
+  map.root.updateMatrixWorld(true);
+  if (!map.root.matrixWorld.equals(new THREE.Matrix4())) geo.applyMatrix4(map.root.matrixWorld.clone().invert());
+  geo.computeBoundingBox();
+  geo.computeBoundingSphere();
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xffffff, roughness: 0.42, metalness: 0.15, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+  });
   mat.name = 'M_ffa_pad';
   const uTime = SURFACE_ENV.uDfTime;
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uPadTime = uTime;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\n' + FFA_PAD_VERT_PARS)
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPadP = position;\nvPadCrew = aCrew;\nvPad = aPad;\nvPadTop = normal.y;'
-        + '\nvPadWorldTop = position.y * length( instanceMatrix[ 1 ].xyz );');
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPadCrew = aPadCrew.rgb;\nvPadMark = aPadCrew.w;\nvPadQ = aPadQ;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\n' + FFA_PAD_FRAG_PARS)
       .replace('#include <color_fragment>', '#include <color_fragment>\n' + FFA_PAD_COLOR)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix( roughnessFactor, 0.3, fpGlow );')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n' + FFA_PAD_EMISSIVE);
   };
-  mat.customProgramCacheKey = () => 'df-ffa-pad-v1';
-  const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, n));
+  mat.customProgramCacheKey = () => 'df-ffa-pad-v2';
+  const mesh = new THREE.Mesh(geo, mat);
   mesh.name = 'ffa_pad_' + (++ffaPadSeq);
   mesh.castShadow = false;
   mesh.receiveShadow = true;
-  mesh.count = n;
-
-  // the floor under each pad: the highest upward-facing map surface within 3 m below the spawn's drop height
-  const ray = new THREE.Raycaster();
-  const down = new THREE.Vector3(0, -1, 0);
-  const targets: THREE.Object3D[] = [];
-  map.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && o.visible && m !== mesh) targets.push(o); });
-  const nrm = new THREE.Vector3();
-  const m4 = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const up = new THREE.Vector3(0, 1, 0);
-  const floorAt = (x: number, y: number, z: number, fallback: number): number => {
-    ray.set(new THREE.Vector3(x, y, z), down);
-    ray.far = 3.4;
-    for (const h of ray.intersectObjects(targets, false)) {
-      if (!h.face) continue;
-      nrm.copy(h.face.normal).transformDirection(h.object.matrixWorld);
-      if (nrm.y < 0.7) continue;
-      return h.point.y;
-    }
-    return fallback;
-  };
-  for (let i = 0; i < n; i++) {
-    const p = pads[i];
-    const R = p.r && p.r > 0 ? p.r : 1.6;
-    // the centre and 8 rim samples: the slab's top clears the highest, its skirt reaches the lowest (sloped
-    // sand / a step under the rim never cuts into the disc)
-    const fy = floorAt(p.x, p.y + 0.4, p.z, p.y - 1.0);
-    let hi = fy, lo = fy;
-    for (let k = 0; k < 8; k++) {
-      const a = (k / 8) * Math.PI * 2;
-      const ry = floorAt(p.x + Math.sin(a) * R * 0.95, fy + 0.6, p.z + Math.cos(a) * R * 0.95, NaN);
-      if (!Number.isFinite(ry) || Math.abs(ry - fy) > 0.5) continue;   // a ledge / a hole: not this pad's floor
-      hi = Math.max(hi, ry); lo = Math.min(lo, ry);
-    }
-    floorY.push(fy);
-    const top = hi + FFA_PAD_TOP;
-    const sy = Math.max(1, (top - lo + 0.03) / FFA_PAD_H);
-    q.setFromAxisAngle(up, p.yaw ?? 0);
-    m4.compose(new THREE.Vector3(p.x, top, p.z), q, new THREE.Vector3(R, sy, R));
-    mesh.setMatrixAt(i, m4);
-    let crew: { dye: string; mark: string };
-    try { crew = crewDef('ffa', p.crew); } catch { crew = { dye: '#DFE6EE', mark: 'sun-disc' }; }
-    const c = new THREE.Color(crew.dye);
-    aCrew[i * 3] = c.r; aCrew[i * 3 + 1] = c.g; aCrew[i * 3 + 2] = c.b;
-    aPad[i * 2] = R;
-    aPad[i * 2 + 1] = Math.max(1, FFA_MARKS.indexOf(crew.mark) + 1);
-  }
-  geo.setAttribute('aCrew', new THREE.InstancedBufferAttribute(aCrew, 3));
-  geo.setAttribute('aPad', new THREE.InstancedBufferAttribute(aPad, 2));
-  mesh.instanceMatrix.needsUpdate = true;
-  mesh.computeBoundingSphere();
+  mesh.visible = n > 0;
   root.add(mesh);
   map.root.add(root);
   root.updateMatrixWorld(true);
@@ -1067,6 +1380,10 @@ export function addFfaPads(map: MapView, pads: ReadonlyArray<FfaPadSpec>): FfaPa
     }
   });
 
+  root.userData.buildMs = performance.now() - tBuild;
+  root.userData.gather = { ms: Math.round(gatherMs * 10) / 10, meshes: gather.meshes, scanned: gather.scanned };
+  root.userData.floorTris = floors.map((f) => f.tri.length / 9);
+  root.userData.clamped = clampedTotal;
   let disposed = false;
   return {
     root,
@@ -1078,7 +1395,6 @@ export function addFfaPads(map: MapView, pads: ReadonlyArray<FfaPadSpec>): FfaPa
       root.removeFromParent();
       geo.dispose();
       mat.dispose();
-      mesh.dispose();
       for (const s of saved) { s.u.value.copy(s.c); s.m.userData.dfPadTeam = s.key; }
     },
   };

@@ -260,3 +260,32 @@ BootUI.setMode(mode: 'teams' | 'ffa'): void   // the loading / play cards' mode 
 //   far, onto the same top floor ±0.6 m), unless that leaves the bot's goal unreachable. Fixes the Lockwell FFA seed-8
 //   stuck window (a refilling bot on foe dye failed 5 parallel jump edges up one 1.0 m wall, 93.5–99 s).
 ```
+
+## F10 `CHANGED(CORE)`: review fixes (2026-09-28; FFA branches only; teams hashes unchanged)
+- **F2 drop-pad floor**: `Painter.lockDiscs` (painter.ts): locked texels are never dyed, are left out of every total /
+  share, and are not a surface to `nearest` / `teamUnder`. The FFA `MatchWorld` locks the floor under the 8 drop pads
+  (r 1.6, |dy| < 0.3; ~64 m², 1.3–1.8 % of a map); a teams world clears the lock. Before, dye under the opaque pad scored
+  unseen. The bots' zones sample open floor only. Gates: `probe_match` "FFA drop-pad floor locked" (both modes) and
+  `probe_paint` 3 lock checks.
+- **F1 pad accent**: main.ts `startSession` re-applies `setPadColorblind` every session (the FFA pads' dispose used to
+  restore the palette saved at FFA start). Gate: `menus.py` leg `ffa_pier18_cb`.
+- **F3 FFA bots on the shipped roster**: `probe_bots --mode ffa` defaults to `--lineup mixed` (= `mixedBotKits`), gates
+  "no fight standoff > 5 s", and `npm run probe` runs it on the 3 maps (seeds 1,2,3). director.ts, FFA only: standoff
+  breaker; SHEET-DRUM / POP-WELL open no fight beyond 6 m unless hit; POP-WELL paint bursts aim straight, wait for their
+  pitch and keep 2.6 m from their last 4; 4 s spawn grace; goal zones keep pad r + 6 m off foe pads; NEEDLE-GLINT
+  engages ≤ 16 m. Mixed roster, "every crew ≥ 4 %" over 3 maps × seeds 1–8: 5 of 24 matches under (standoff breaker
+  alone) → 3 of 24, all Cinder
+  (lowest 3.4–3.6 %, a POP-WELL each time); Pier 18 and Lockwell pass every gate on seeds 1–16.
+- **Was open after F3** (fixes lane): Cinder FFA, mixed roster, seed 2 lowest crew 3.6 % (a POP-WELL). The kit is
+  tank-bound (8 per burst), so paint per burst decides its share. Also latent: a runner can wedge at Cinder
+  (9.5, −0.5, −3.7) (20–80 s windows seen in 2 of 48 matches; not seen again in the 96 repair-round matches).
+- **Repair round** (director.ts, FFA POP-WELL paint bursts only; teams hashes unchanged): 20 % of its paint bursts airburst and
+  painted ~0 m² (Cinder seeds 1–3, 762 bursts). The cause was the target, not the pitch: the line check passed texels a
+  straight burst could not land on (aimed 5 cm above the texel, 59 % of those airburst; grazing lines < 0.05 rad, 50 %),
+  and the stream's sweep rule (fire at aim error < 1 rad) loosed bursts wherever the aim swung. Now: targets must pass
+  `burstLands` (the ray at the texel meets it, incidence ≥ 0.1 rad, inside the fuse − 0.4 m) from a top-8; the
+  pick adds 1.5 × the open share of the 1.45 m impact disc (`discValue`); the trigger fires only while `burstLandsNow`
+  (the emitted aim ray, noise included, meets non-own floor inside the fuse − 0.4 m). The pitch-lag gate is gone.
+  Measured: Cinder paint airbursts 20 % → 4 %, POP-WELL painted m² +34 % (seeds 1–3); `probe_bots --mode ffa` on
+  3 maps × seeds 1–32: 1 of 96 matches fails a gate (Cinder seed 20, a NEEDLE-GLINT dueling in place on foe dye for
+  6 s, counted as stuck), none under 4 % (lowest crew 4.1 %). Before (F3), seeds 1–16: 6 of 48 failed.

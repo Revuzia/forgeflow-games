@@ -72,7 +72,7 @@ import { Input } from './input.ts';
 import { Game, type AppStatus, type GameHooks, type GameMode, type MatchConfig } from './game.ts';
 import { installTestSurface, type AppHandles } from './testsurface.ts';
 
-export const VERSION = 'dyefield-1.1.0';
+export const VERSION = 'dyefield-1.2.0';
 
 declare global {
   interface Window {
@@ -352,6 +352,11 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
   arena.minimap.setPalette(matchMode === 'ffa' ? ffaMinimapPalette() : null);
   if (arena.dye.uViewerTeam) arena.dye.uViewerTeam.value = mode === 'lobby' ? 0 : humanTeam;
   if (arena.dye.uColorblind) arena.dye.uColorblind.value = S.settings.get().colorblind ? 1 : 0;
+  // the A/B team pads' crew accent follows the setting too (review F1): during an FFA session they are untagged neutral
+  // scenery, so a COLORBLIND MARKS toggle then misses them and the FFA pads' dispose restores the accent saved at FFA
+  // start — the stale palette on a reused arena (Pier 18 noon = the lobby's) until the next toggle. The previous
+  // session is disposed before this runs; an FFA session's addFfaPads (below) then saves the current palette.
+  setPadColorblind(arena.map.root, S.settings.get().colorblind);
   renderer.toneMappingExposure = arena.preset.exposure ?? 1;
 
   const heroAssets = await S.hero;
@@ -430,7 +435,7 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
       if (disposed) return;
       disposed = true;
       game.dispose();
-      ffaPads?.dispose();                        // restores the A/B team pads' crew accent for the next session
+      ffaPads?.dispose();                        // re-tags the A/B team pads; the next startSession re-applies the colorblind setting
       if (app.game === game) app.game = null;
       // the view modules free their own GPU objects (the runner skeletons' bone textures, the FX disk texture)
       juice?.dispose();
@@ -451,8 +456,9 @@ async function boot(): Promise<void> {
   // one WebAudio per page: nothing sounds (and no AudioContext exists) until the first gesture unlocks it
   const audio = createAudio({ volumes: settings.get().volume });
   const bootUi = new BootUI();
-  // CONTRACT_FFA F3: a ?mode=ffa deep link loads an FFA match — the loading card says so
-  if (DEEP_LINK && parseMatchMode(params.get('mode')) === 'ffa') bootUi.setMode('ffa');
+  // CONTRACT_FFA F3: a deep link loads a match of one mode — the loading card names it; a bare URL opens the lobby,
+  // where the card keeps the both-modes line (boot.ts MODE_LINE_ALL)
+  bootUi.setMode(DEEP_LINK ? (parseMatchMode(params.get('mode')) === 'ffa' ? 'ffa' : 'teams') : 'all');
   window.__DF_BOOT__?.handoff();
   let arena: Arena | null = null;
   let session: Session | null = null;
@@ -612,7 +618,7 @@ async function boot(): Promise<void> {
         S.menus.hideAll();
         S.menus.extraScope = null;
         const def = mapById(LOBBY_MAP);
-        bootUi.setMode('teams');                  // the lobby backdrop is always teams
+        bootUi.setMode('all');                    // back to the lobby: no mode committed (the backdrop itself is teams)
         bootUi.showLoading('Back to the harbor…', { name: def.name, thumb: MAP_THUMBS[def.id] ?? null });
         app.phase = 'loading';
         arenaF = 0;

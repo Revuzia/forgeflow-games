@@ -19,6 +19,9 @@
 //                                                # CHANGED(CORE) (CONTRACT_FFA §F4): FREE-FOR-ALL — 8 crews, one bot each;
 //                                                # gates: every crew ≥ 4 %, neutral < 60 %, ≥ 10 washes, no stuck bot, no
 //                                                # jitter, deterministic, < 25 s wall (slicks / refills printed as info)
+//                                                # review F3: FFA defaults to --lineup mixed (the shipping roster; pass
+//                                                # --lineup default for all MIST-RASP) and gates a fight standoff (a bot
+//                                                # in FIGHT, not moving, no shot for > FFA_MAX_STANDOFF_S)
 //
 // The human slot (id 0) is a bot too. Every tick: director.think(intents) → world.step(intents) →
 // world.drainEvents(). Gates (§10.3): both teams cover > 15 %, neutral < 55 %, ≥ 6 washes; no bot stuck
@@ -49,14 +52,19 @@ const ONCE = argv.includes('--once');
 const SECONDS = Number(arg('--seconds', '180'));
 const TRACE = Number(arg('--trace', '-1'));
 const QUIET = argv.includes('--quiet');
-const LINEUP = arg('--lineup', 'default');
 const MAP = arg('--map', 'pier18');
 const SEEDS = arg('--seeds', '').split(',').filter((x) => x.trim() !== '').map((x) => Number(x) | 0);
 /** CHANGED(CORE): --mode teams (default) | ffa */
 const MODE: MatchMode = parseMatchMode(arg('--mode', 'teams'));
 const FFA = MODE === 'ffa';
+/** --lineup default | mixed. review F3: FFA defaults to MIXED — the roster the game ships (main.ts matchRoster →
+ *  mixedBotKits(kit): for the default MIST-RASP human exactly MIXED_BOT_KITS below); teams keeps 'default' (all MIST-RASP) */
+const LINEUP = arg('--lineup', FFA ? 'mixed' : 'default');
 /** FFA gates (CONTRACT_FFA §F4) */
 const FFA_MIN_CREW = 0.04, FFA_MAX_NEUTRAL = 0.60, FFA_MIN_WASHES = 10, FFA_WALL_MS = 25000;
+/** review F3: the longest a bot may sit in FIGHT without moving or firing (s); the stuck gate skips holding bots and the
+ *  idle watchdog engaged ones, so a fight neither side can open (across a drop, each just out of reach) went unseen */
+const FFA_MAX_STANDOFF_S = 5;
 /** --lineup mixed: ids 0-3 SUNCREW and 4-7 GULF CREW each get mist-rasp, sheet-drum, needle-glint, pop-well */
 const MIXED_BOT_KITS = ['sheet-drum', 'needle-glint', 'pop-well', 'mist-rasp'];
 
@@ -79,7 +87,9 @@ interface RunResult {
   stuck: StuckEvent[];
   perBot: Array<{ id: number; name: string; team: number; washes: number; washed: number; painted: number; shots: number; dries: number;
     slicks: number; refills: number; jumps: number; modes: Record<string, number>; climbs: number; dist: number;
-    twitchBody: number; twitchAim: number; reversals: number; moving: number; snapBody: number; snapAim: number }>;
+    twitchBody: number; twitchAim: number; reversals: number; moving: number; snapBody: number; snapAim: number;
+    /** review F3: longest stretch (s) in FIGHT without moving (> 1 m/s) or a shot */
+    standoff: number }>;
   maxTurn: number;
   events: Record<string, number>;
   horns: string[];
@@ -137,6 +147,7 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
   const srcPrev = new Array(N).fill(0), srcFlip = new Array(N).fill(-1e9);
   const washKit: Record<string, number> = {}, washKitCause: Record<string, number> = {};
   const ready = new Array(N).fill(0), started = new Array(N).fill(0);
+  const standRun = new Array(N).fill(0), standMax = new Array(N).fill(0), standShots = new Array(N).fill(-1);
 
   let thinkMs = 0, stepMs = 0, beltTicks = 0, upperTicks = 0;
   const t0 = performance.now();
@@ -171,6 +182,9 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
         liveTicks[i]++;
         const spd = Math.hypot(r.x - r.px, r.z - r.pz) / TICK;
         if (spd > 1) movingTicks[i]++;
+        // review F3: a fight standoff — in FIGHT, not moving, no shot since the stretch began
+        if (director.info(i).mode === 'fight' && spd <= 1 && r.shots === standShots[i]) { if (++standRun[i] > standMax[i]) standMax[i] = standRun[i]; }
+        else { standRun[i] = 0; standShots[i] = r.shots; }
         let dy = r.yaw - r.pyaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         let da = r.aimYaw - prevAim[i]; da = Math.atan2(Math.sin(da), Math.cos(da));
         const src = r.firing || r.flicking ? 1 : 0;
@@ -201,7 +215,7 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
             if (Math.abs(d) > 2.1) { reversals[i]++; hh.length = 0; }
           }
         } else hh.length = 0;
-      } else { prevDy[i] = 0; prevDa[i] = 0; headHist[i].length = 0; }
+      } else { prevDy[i] = 0; prevDa[i] = 0; headHist[i].length = 0; standRun[i] = 0; standShots[i] = -1; }
       prevAim[i] = r.aimYaw;
       const m = director.info(i).mode;
       modeTicks[i][m] = (modeTicks[i][m] ?? 0) + 1;
@@ -242,6 +256,7 @@ async function runMatch(def: MapDef, geo: MapGeometry, R: Awaited<ReturnType<typ
     twitchBody: twitchBody[i] / Math.max(1e-9, liveTicks[i] * TICK / 60), twitchAim: twitchAim[i] / Math.max(1e-9, liveTicks[i] * TICK / 60),
     reversals: reversals[i] / Math.max(1e-9, liveTicks[i] * TICK / 60), moving: movingTicks[i] / Math.max(1, liveTicks[i]),
     snapBody: snapBody[i] / Math.max(1e-9, liveTicks[i] * TICK / 60), snapAim: snapAim[i] / Math.max(1e-9, liveTicks[i] * TICK / 60),
+    standoff: standMax[i] * TICK,
   }));
   let refills = 0; for (const r of world.runners) refills += r.refillsFromLow;
   const shares = world.result?.shares ?? Array.from(painter.coverageByTeam());
@@ -379,6 +394,7 @@ function ffaGates(r: RunResult): Array<[string, boolean, string]> {
   const mv = r.perBot.reduce((x, b) => Math.min(x, b.moving), 1);
   const low = r.crews.filter((c) => !(r.shares[c] >= FFA_MIN_CREW));
   const minC = r.crews.reduce((m, c) => Math.min(m, r.shares[c]), 1);
+  const so = r.perBot.reduce((m, b) => (b.standoff > m.s ? { s: b.standoff, name: b.name } : m), { s: 0, name: '' });
   return [
     [`every crew ≥ ${FFA_MIN_CREW * 100} %`, r.crews.length === 8 && low.length === 0,
       `${r.crews.length} crews, lowest ${pct(minC)}${low.length ? ` (under: ${low.map((c) => `${r.crewNames[c]} ${pct(r.shares[c])}`).join(', ')})` : ''}`],
@@ -387,6 +403,7 @@ function ffaGates(r: RunResult): Array<[string, boolean, string]> {
     ['no stuck', r.stuck.length === 0, r.stuck.length ? r.stuck.slice(0, 3).map((s) => `${s.name} ${s.t0.toFixed(0)}-${s.t1.toFixed(0)} s @ (${f1(s.x)},${f1(s.y)},${f1(s.z)}) ${s.mode.slice(0, 24)}`).join('; ') : '0'],
     ['no jitter / moving ≥ 60 %', mb <= 0.75 && ma <= 0.75 && tb <= 2.5 && ta <= 2.5 && mv >= 0.6,
       `shakes body ${mb.toFixed(2)} (worst ${tb.toFixed(2)}) aim ${ma.toFixed(2)} (worst ${ta.toFixed(2)}) · least moving ${(mv * 100).toFixed(0)} %`],
+    [`no fight standoff > ${FFA_MAX_STANDOFF_S} s`, so.s <= FFA_MAX_STANDOFF_S, `longest ${so.s.toFixed(1)} s${so.name ? ` (${so.name})` : ''}`],
     [`< ${FFA_WALL_MS / 1000} s wall`, r.wallMs < FFA_WALL_MS, `${(r.wallMs / 1000).toFixed(2)} s`],
   ];
 }

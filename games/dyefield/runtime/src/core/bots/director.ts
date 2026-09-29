@@ -143,6 +143,48 @@ const LEVEL_PULL = 6;
 const FFA_FOE_NEED = 0.5;          // need = neutral + this × foe share   (teams 1.5)
 const FFA_FOE_GOAL = 0.2;          // goal score × (1 + this × foe share)  (teams 0.5)
 const FFA_FOE_TEXEL = -0.3;        // paint-target score bonus on a foe texel (teams +0.7)
+// CHANGED(CORE) FFA (review F3): the fight standoff. Mode selection fights a visible foe up to engage + 1.5 m, beyond the
+// fire reach, and the fight movement refuses a step off a ledge (safeStep); two bots across a drop, each just out of the
+// other's reach, then both held still with no shot all match — the idle watchdog skips an engaged bot and the stuck gate a
+// holding one. Measured (Cinder seed 2, mixed lineup): a MIST-RASP and a POP-WELL 10.5 m apart across a 0.7 m step from
+// t = 10 s to the horn, 16–17 % moving, shares 3.7 % / 1.8 %. A fight with no shot fired and no motion for
+// FFA_STANDOFF_S drops that foe as a fight target for FFA_STANDOFF_SKIP_S (unless it hits the bot meanwhile).
+const FFA_STANDOFF_S = 2.5;
+const FFA_STANDOFF_SKIP_S = 6;
+// CHANGED(CORE) FFA (review F3): the shipped FFA roster is MIXED (main.ts matchRoster → mixedBotKits: 2 of each kit), and
+// with it the "every crew ≥ 4 %" gate failed (lowest 1.5–3.9 % on 5 of 24 matches over 3 maps × 8 seeds). Each rule below
+// answers one mechanism measured on that roster (diagnosis: every wash with victim mode / killer kit / distance, paint
+// m² per mode-second, every POP-WELL burst's aim vs its target):
+// * paint bias — SHEET-DRUM / POP-WELL (the low-coverage kits) open no fight beyond FFA_SHY_R unless that foe hit them in
+//   the last FFA_SHY_HIT_S: a drum died 11–15× a match, 6–11 of them in fights it opened (drum share 7.4 → 11.3 %).
+const FFA_SHY_R = 6.0, FFA_SHY_HIT_S = 2.0;
+// * landing paint bursts (repair round; replaces a pitch-lag gate) — a POP-WELL paint burst aims the straight line at its
+//   target texel (not MIST-RASP's lob), the target is one a straight burst lands on (burstLands: the ray aimed at the
+//   texel meets the map at it, not grazing — incidence ≥ FFA_BURST_INC rad — inside the fuse), and the trigger fires only
+//   while the burst the bot would loose this tick lands (burstLandsNow: its actual aim ray, noise included, meets floor that
+//   is not its own within the fuse − FFA_BURST_FUSE_MARGIN). Measured on Cinder seeds 1–3 (762 paint bursts): 20 % airburst
+//   and painted ~0 m² each (median 0); 59 % of the shots at targets the old line check passed but a straight shot could
+//   not land on (aimed 5 cm above the texel, the ray met nothing within L + 2 m) airburst, 50 % of grazing ones
+//   (< 0.05 rad), and the sweep rule (fire at aim error < 1 rad, a stream's) loosed bursts wherever the aim swung.
+const FFA_BURST_INC = 0.1, FFA_BURST_FUSE_MARGIN = 0.4;
+/** repair round: the FFA POP-WELL paint-target scan keeps this many candidates for the landing check (others keep 3) */
+const FFA_BURST_TOPK = 8;
+/** repair round: weight of a candidate's open impact disc (discValue, 0..1) in the FFA POP-WELL paint-target choice: a
+ *  burst painted 4.6 of its 6.6 m² on average (the rest fell on its own dye) and the kit is tank-bound (8 per burst) */
+const FFA_BURST_DISC = 1.5;
+// * spaced paint bursts — the next paint target keeps FFA_BURST_GAP m from the bot's last 4 paint bursts (fired within
+//   FFA_BURST_MEMORY ticks): picking targets near the current aim laid overlapping discs, ~4.0 of 6.6 m² per burst (+10 %
+//   painted m²).
+const FFA_BURST_GAP = 2.6, FFA_BURST_MEMORY = 150;
+// * spawn grace — a runner back on its drop pad less than 4 s ago is no target unless it hit the bot: both NEEDLE-GLINTs
+//   camped one POP-WELL's pad (Pier 18 seed 4: 26 washes, most 1–5 s after a respawn, sniped from 12–21 m; share 2.6 %).
+const FFA_FRESH_TICKS = Math.round(4 / TICK);
+// * home patch — goal zones keep pad r + FFA_HOME_MARGIN m (was + 2) off every foe drop pad: goals next to a foe pad put
+//   bots (and chargers' sightlines) over the spot where that crew respawns.
+const FFA_HOME_MARGIN = 6;
+// * NEEDLE-GLINT engages within FFA_CHARGE_ENGAGE m (SWELL 21): with seven foes a charger always had a target in reach —
+//   the top washer (14–16 a match), in fights 30–40 % of the time, standing to charge (least moving 52–59 %).
+const FFA_CHARGE_ENGAGE = 16;
 
 const TAU = Math.PI * 2;
 function wrap(a: number): number { a %= TAU; if (a > Math.PI) a -= TAU; else if (a < -Math.PI) a += TAU; return a; }
@@ -266,6 +308,12 @@ class Brain {
   // sub / special: 0 none, 1 sub, 2 special
   tacKind = 0; tacKey = -1; tacReactAt = 0; tacUntil = 0; tacCount = 0; tacX = 0; tacY = 0; tacZ = 0; tacGap = false;
   gapCd = 0; readySince = -1;
+  // CHANGED(CORE) FFA (review F3): the standoff breaker (FFA_STANDOFF_S)
+  standoffT = 0; standoffShots = -1; skipTarget = -1; skipUntil = 0;
+  // CHANGED(CORE) FFA (review F3): the last 4 paint bursts' target points (x, z, tick) — FFA_BURST_GAP
+  readonly bRing = new Float64Array(3 * 4); bRingN = 0; bRingI = 0; bShots = -1; bLastX = 0; bLastZ = 0; bLastOk = false;
+  // CHANGED(CORE) FFA (repair round): where the paint burst the trigger would loose this tick lands (burstLandsNow)
+  bLandX = 0; bLandZ = 0;
   // glint reaction (CHANGED(BOTFIX))
   readonly grnd: () => number;      // glint stream (reaction rolls, dodge lengths): the phase-5 streams stay untouched
   glintId = -1; glintReactAt = 0; dodgeUntil = -1000; dodgeX = 0; dodgeZ = 0; dodgeSlick = false; dodgeSign = 1;
@@ -286,7 +334,7 @@ class Brain {
     this.bal = ballisticOf(this.fire);
     this.kf = kitFire(r.kit);
     const kt = kitTactic(this.kf, SKILLS[skill] ? skill : 'swell', this.sk.engage);
-    this.kind = kt.kind; this.engage = kt.engage; this.ink = kt.ink;
+    this.kind = kt.kind; this.engage = kt.kind === 'charge' && dir.ffa ? Math.min(kt.engage, FFA_CHARGE_ENGAGE) : kt.engage; this.ink = kt.ink;   // FFA_CHARGE_ENGAGE (review F3)
     this.settle = Math.round(CHARGE_SETTLE[SKILLS[skill] ? skill : 'swell'] / TICK);
     let subId = 'jelly-charge', spId = 'cloudburst';
     try { const row = kitDef(r.kit); subId = String(row.sub); spId = String(row.special); } catch { /* unknown kit → MIST-RASP's */ }
@@ -352,8 +400,8 @@ export class BotDirector {
   private readonly nbOx: number; private readonly nbOz: number; private readonly nbW: number; private readonly nbH: number;
   private readonly nbStart: Int32Array; private readonly nbItems: Int32Array;
   private readonly tmp2 = [0, 0];
-  private readonly topId = new Int32Array(3);
-  private readonly topS = new Float64Array(3);
+  private readonly topId = new Int32Array(FFA_BURST_TOPK);   // a top-3 everywhere; FFA POP-WELL paint targets a top-FFA_BURST_TOPK
+  private readonly topS = new Float64Array(FFA_BURST_TOPK);
   /** the line between the two pads (mid court) and the half-width of the contested band */
   private readonly midZ: number;
   private readonly midBand: number;
@@ -378,12 +426,17 @@ export class BotDirector {
   readonly stats = { dodges: 0 };
   /** runner id → the beam reach of its NEEDLE-GLINT (0: not a charger): whose glint a bot can notice */
   private readonly glintRange: Float64Array;
+  /** CHANGED(CORE) FFA (review F3): runner id → respawns seen / the tick of its last respawn (spawn grace) */
+  private readonly respSeen: Int32Array;
+  private readonly respTick: Int32Array;
 
   constructor(world: MatchWorld, nav: NavGraph, seed: number, skill: BotSkill | readonly BotSkill[] = 'swell') {
     this.world = world;
     this.nav = nav;
     this.seed = seed | 0;
     this.ffa = world.mode === 'ffa';
+    this.respSeen = new Int32Array(world.runners.length);
+    this.respTick = new Int32Array(world.runners.length).fill(-1e6);
     const P = world.painter;
     const A = P.atlas;
     this.atlasTeam = A.team;
@@ -511,6 +564,9 @@ export class BotDirector {
   think(intents: PlayerIntent[]): void {
     const w = this.world;
     if (w.phase === 'live' && w.tick - this.zoneStamp >= 30) this.updateZones();
+    if (this.ffa) {   // review F3 spawn grace: each runner's last respawn tick
+      for (const r of w.runners) if (r.respawns !== this.respSeen[r.id]) { this.respSeen[r.id] = r.respawns; this.respTick[r.id] = w.tick; }
+    }
     for (let i = 0; i < this.brains.length; i++) {
       const b = this.brains[i];
       if (!b || !intents[i]) continue;
@@ -543,7 +599,7 @@ export class BotDirector {
   // ── zones (paint-hungry goals) ─────────────────────────────────────────────────────────────
 
   private buildZones(): void {
-    const A = this.world.painter.atlas;
+    const P = this.world.painter, A = P.atlas;
     const nav = this.nav;
     const byKey = new Map<number, number[]>();
     const OX = -200, OZ = -200;
@@ -572,11 +628,19 @@ export class BotDirector {
         if (node < 0 || Math.hypot(nav.x[node] - A.px[best], nav.z[node] - A.pz[best]) > 2.5 || Math.abs(nav.y[node] - A.py[best]) > 1.0) continue;
       }
       if (!this.nodeMain[node]) continue;
-      const stride = Math.max(1, Math.ceil(ids.length / ZONE_SAMPLES));
+      // CHANGED(CORE) (review F2): FFA drop-pad floor is locked in the painter (never dyed, never scored). The zone stays
+      // (found and placed from all its floor, so the zone list — and the per-nav-graph sightline cache — is the same in
+      // every mode); its samples and area are its OPEN floor only, so no bot aims at or heads for pad floor. Teams: no lock.
+      let open = ids, openArea = area;
+      if (P.lockedCount > 0) {
+        open = ids.filter((id) => !P.isLocked(id));
+        if (open.length !== ids.length) { openArea = 0; for (const id of open) openArea += A.area[id]; }
+      }
+      const stride = Math.max(1, Math.ceil(open.length / ZONE_SAMPLES));
       const samples: number[] = [];
-      for (let k = Math.floor(stride / 2); k < ids.length; k += stride) samples.push(ids[k]);
+      for (let k = Math.floor(stride / 2); k < open.length; k += stride) samples.push(open[k]);
       const ix = Math.floor((cx - OX) / ZONE), iz = Math.floor((cz - OZ) / ZONE);
-      const z: Zone = { cx, cy, cz, ix, iz, node, area, samples: Int32Array.from(samples), need: new Array<number>(CREW_SLOTS).fill(1), enemyShare: new Array<number>(CREW_SLOTS).fill(0), band: 0 };
+      const z: Zone = { cx, cy, cz, ix, iz, node, area: openArea, samples: Int32Array.from(samples), need: new Array<number>(CREW_SLOTS).fill(1), enemyShare: new Array<number>(CREW_SLOTS).fill(0), band: 0 };
       const zi = this.zones.length;
       this.zones.push(z);
       const gk = iz * 1000 + ix;
@@ -693,16 +757,28 @@ export class BotDirector {
     const reacted = tgt !== null && now >= b.reactAt;
     const tgtVisible = tgt !== null && b.lostT === 0;
     const dT = tgt ? Math.hypot(tgt.x - r.x, tgt.z - r.z) : Infinity;
+    // CHANGED(CORE) FFA (review F3): a fight with no shot and no motion for FFA_STANDOFF_S drops that foe for a while
+    let skipped = false;
+    if (this.ffa) {
+      if (b.mode === 'fight' && tgt !== null && r.shots === b.standoffShots && Math.hypot(b.mvx, b.mvz) < 0.15) {
+        b.standoffT += THINK_EVERY * TICK;
+        if (b.standoffT >= FFA_STANDOFF_S) { b.skipTarget = tgt.id; b.skipUntil = now + Math.round(FFA_STANDOFF_SKIP_S / TICK); b.standoffT = 0; }
+      } else { b.standoffT = 0; b.standoffShots = r.shots; }
+      skipped = tgt !== null && tgt.id === b.skipTarget && now < b.skipUntil && !(r.lastAttacker === tgt.id && r.lastHitT < 0.5);
+      // paint bias (review F3): SHEET-DRUM / POP-WELL open no fight beyond FFA_SHY_R unless that foe hit them lately
+      if (!skipped && tgt !== null && (b.kind === 'burst' || b.kind === 'roll') && dT > FFA_SHY_R
+        && !(r.lastAttacker === tgt.id && r.lastHitT < FFA_SHY_HIT_S)) skipped = true;
+    }
 
     // REFILL below TANK.low exactly (the header's "tank < 20 %"): a +0.5 margin sent painters home at 20.0–20.5,
     // one shot early, so their refill never counted as one from low (the runner's refillsFromLow, a §10.3 gate)
     if (b.mode !== 'refill' && r.tank < TANK.low) this.enterRefill(b);
     if (b.mode === 'refill') {
       if (r.tank >= REFILL_TO) { b.mode = 'paint'; b.goalZone = -1; b.path.length = 0; }
-      else if (tgt && reacted && tgtVisible && dT < 6.5 && r.tank >= 45) b.mode = 'fight';
+      else if (tgt && reacted && !skipped && tgtVisible && dT < 6.5 && r.tank >= 45) b.mode = 'fight';
     }
     if (b.mode !== 'refill') {
-      if (tgt && reacted && (tgtVisible || b.lostT < 1.2)) {
+      if (tgt && reacted && !skipped && (tgtVisible || b.lostT < 1.2)) {
         // losing a duel at low hp → slick away (rolled once per engagement)
         if (!b.retreatRolled) { b.retreatRolled = true; b.retreatWanted = b.rnd() < 0.6; }
         if (b.sk.retreatHp > 0 && b.retreatWanted && r.hp < b.sk.retreatHp && tgt.hp > r.hp + 10 && dT < b.engage + 2) {
@@ -829,6 +905,8 @@ export class BotDirector {
       if (e.team === r.team || !e.alive) continue;
       const d = Math.hypot(e.x - r.x, e.y - r.y, e.z - r.z);
       if (d > 34) continue;
+      // CHANGED(CORE) FFA spawn grace (review F3): back on its drop pad < 4 s ago → no target, unless it hit this bot
+      if (this.ffa && w.tick - this.respTick[e.id] < FFA_FRESH_TICKS && e.respawns > 0 && !(e.id === r.lastAttacker && r.lastHitT < 3)) continue;
       if (!w.canSee(r, e)) continue;
       b.seen.push(e.id);
       if (e.id === b.target) curVisible = true;
@@ -1032,7 +1110,7 @@ export class BotDirector {
       let gain = z.area * z.need[own];
       if (b.kind === 'charge') gain = this.sightGain(zi, own, gain);
       if (gain < 2.5) continue;
-      if (eps ? (z.cx - eps.x) ** 2 + (z.cz - eps.z) ** 2 < (eps.r + 4) ** 2 : this.nearFoePad(z.cx, z.cy, z.cz, own, 2)) continue;
+      if (eps ? (z.cx - eps.x) ** 2 + (z.cz - eps.z) ** 2 < (eps.r + 4) ** 2 : this.nearFoePad(z.cx, z.cy, z.cz, own, FFA_HOME_MARGIN)) continue;   // review F3: FFA home patch
       const d = Math.hypot(z.cx - r.x, z.cz - r.z) + Math.abs(z.cy - r.y) * 2;
       const t = d / MOVE.walk;
       let crowd = 0;
@@ -1085,8 +1163,15 @@ export class BotDirector {
     const mdx = moving ? b.mvx / ml : adx, mdz = moving ? b.mvz / ml : adz;
     const minCos = Math.cos(1.0);                      // ahead / to the side of travel, never behind
     const min2 = PAINT_MIN * PAINT_MIN, max2 = PMAX * PMAX;
+    const gapped = this.ffa && b.kind === 'burst' && b.bRingN > 0;   // review F3: FFA_BURST_GAP
+    // repair round: an FFA POP-WELL target must be one its burst lands on (burstLands); the free geometric part of that
+    // test (inside the fuse, not grazing) filters the scan, and the line check walks a top-FFA_BURST_TOPK
+    const lands = this.ffa && b.kind === 'burst';
+    const K = lands ? FFA_BURST_TOPK : 3;
+    const my = r.y + COMBAT.muzzleHeight;
+    const fuse2 = lands ? (BURST_MAX - FFA_BURST_FUSE_MARGIN) ** 2 : 0, sinInc = Math.sin(FFA_BURST_INC);
     const top = this.topId, topS = this.topS;
-    top[0] = top[1] = top[2] = -1; topS[0] = topS[1] = topS[2] = -Infinity;
+    for (let k = 0; k < K; k++) { top[k] = -1; topS[k] = -Infinity; }
     for (let cz = cz0; cz <= cz1; cz++) for (let cx = cx0; cx <= cx1; cx++) {
       const l = this.zoneGrid.get(cz * 1000 + cx);
       if (!l) continue;
@@ -1102,24 +1187,47 @@ export class BotDirector {
           const d2 = dx * dx + dz * dz;
           if (d2 < min2 || d2 > max2) continue;
           if (Math.abs(PY[id] - r.y) > 2.2) continue;
+          if (gapped && this.burstNear(b, PX[id], PZ[id], now)) continue;
+          if (lands) {
+            const dy = PY[id] - my, L2 = d2 + dy * dy;
+            if (L2 > fuse2 || Math.abs(dx * A.nx[id] + dy * A.ny[id] + dz * A.nz[id]) < sinInc * Math.sqrt(L2)) continue;
+          }
           const d = Math.sqrt(d2);
           const cm = (dx * mdx + dz * mdz) / d;
           if (moving && cm < minCos) continue;
           const ca = (dx * adx + dz * adz) / d;
           let sc = ca * 1.3 + cm * 0.4 - Math.abs(d - PAINT_BEST) * 0.22 + b.rnd() * 0.6;
           if (b.foe(t)) sc += this.ffa ? FFA_FOE_TEXEL : 0.7;
-          if (sc <= topS[2]) continue;
+          if (sc <= topS[K - 1]) continue;
           // insert (ties: lower texel id first)
-          let p = 2;
+          let p = K - 1;
           while (p > 0 && (sc > topS[p - 1] || (sc === topS[p - 1] && id < top[p - 1]))) { topS[p] = topS[p - 1]; top[p] = top[p - 1]; p--; }
           topS[p] = sc; top[p] = id;
         }
       }
     }
     b.hasPaintTarget = false;
+    // repair round: an FFA POP-WELL takes, among the landable candidates, the best score + FFA_BURST_DISC × the share of
+    // its impact disc that is not its own dye yet (discValue)
+    if (lands) {
+      let best = -1, bestV = -Infinity;
+      for (let k = 0; k < K; k++) {
+        const id = top[k];
+        if (id < 0) break;
+        if (!this.burstLands(b, id)) { top[k] = -2; continue; }
+        const v = topS[k] + FFA_BURST_DISC * this.discValue(b, id);
+        if (v > bestV) { bestV = v; best = k; }
+      }
+      if (best < 0) { b.ptId = -1; return; }
+      const id = top[best];
+      b.hasPaintTarget = true; b.ptx = PX[id]; b.pty = PY[id]; b.ptz = PZ[id]; b.ptId = id;
+      let n = 0;
+      b.ptNext[0] = b.ptNext[1] = -1;
+      for (let k = 0; k < K && n < 2; k++) if (k !== best && top[k] >= 0) b.ptNext[n++] = top[k];
+      return;
+    }
     // the best three get a line-of-fire check
-    const my = r.y + COMBAT.muzzleHeight;
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < K; k++) {
       const id = top[k];
       if (id < 0) break;
       const tx = PX[id], ty = PY[id], tz = PZ[id];
@@ -1127,7 +1235,7 @@ export class BotDirector {
       const hit = this.world.physics.raycast(r.x, my, r.z, tx - r.x, ty + 0.05 - my, tz - r.z, dd);
       if (hit && hit.toi < dd - 0.35) continue;
       b.hasPaintTarget = true; b.ptx = tx; b.pty = ty; b.ptz = tz; b.ptId = id;
-      b.ptNext[0] = k + 1 < 3 ? top[k + 1] : -1; b.ptNext[1] = k + 2 < 3 ? top[k + 2] : -1;
+      b.ptNext[0] = k + 1 < K ? top[k + 1] : -1; b.ptNext[1] = k + 2 < K ? top[k + 2] : -1;
       return;
     }
     b.ptId = -1;
@@ -1141,11 +1249,89 @@ export class BotDirector {
       if (id < 0 || T[id] === b.own) continue;
       const d = Math.hypot(A.px[id] - r.x, A.pz[id] - r.z);
       if (d < PAINT_MIN || d > (b.kind === 'burst' ? BURST_MAX - 0.5 : PAINT_MAX)) continue;
+      if (this.ffa && b.kind === 'burst' && this.burstNear(b, A.px[id], A.pz[id], this.world.tick)) continue;   // review F3: FFA_BURST_GAP
+      if (this.ffa && b.kind === 'burst' && !this.burstLands(b, id)) continue;   // repair round: a runner-up it can land on
       b.ptNext[k] = -1;
       b.ptId = id; b.ptx = A.px[id]; b.pty = A.py[id]; b.ptz = A.pz[id]; b.hasPaintTarget = true;
       return;
     }
     this.pickPaintTarget(b);
+  }
+
+  /** CHANGED(CORE) FFA (repair round): would a straight burst loosed from here at floor texel `id` land on it? The ray from
+   *  the muzzle aimed at the texel centre meets the map within 0.35 m of it (a bump just before it still counts), meets
+   *  its surface at ≥ FFA_BURST_INC rad (a grazing line turns a hair of aim error into metres of overshoot) and ends
+   *  inside the fuse. */
+  private burstLands(b: Brain, id: number): boolean {
+    const r = b.r, A = this.world.painter.atlas;
+    const my = r.y + COMBAT.muzzleHeight;
+    const dx = A.px[id] - r.x, dy = A.py[id] - my, dz = A.pz[id] - r.z;
+    const L = Math.hypot(dx, dy, dz);
+    const fuse = b.kf.type === 'burst' ? b.kf.maxRange : BURST_MAX;
+    if (L < 1e-3 || L > fuse - FFA_BURST_FUSE_MARGIN) return false;
+    if (Math.abs(dx * A.nx[id] + dy * A.ny[id] + dz * A.nz[id]) / L < Math.sin(FFA_BURST_INC)) return false;
+    const hit = this.world.physics.raycast(r.x, my, r.z, dx, dy, dz, L + 0.5);
+    return hit !== null && Math.abs(hit.toi - L) <= 0.35;
+  }
+
+  /** CHANGED(CORE) FFA (repair round): the share (0..1) of the zone samples inside a burst's impact disc around texel `id`
+   *  (same level ± 0.8 m) that are not the bot's own dye — what a burst there would add */
+  private discValue(b: Brain, id: number): number {
+    const A = this.world.painter.atlas, T = this.atlasTeam;
+    const x = A.px[id], y = A.py[id], z = A.pz[id];
+    const R = b.kf.type === 'burst' ? b.kf.impactRadius : 1.45, R2 = R * R;
+    const cx0 = Math.floor((x - R + 200) / ZONE), cx1 = Math.floor((x + R + 200) / ZONE);
+    const cz0 = Math.floor((z - R + 200) / ZONE), cz1 = Math.floor((z + R + 200) / ZONE);
+    let n = 0, open = 0;
+    for (let cz = cz0; cz <= cz1; cz++) for (let cx = cx0; cx <= cx1; cx++) {
+      const l = this.zoneGrid.get(cz * 1000 + cx);
+      if (!l) continue;
+      for (const zi of l) {
+        const zn = this.zones[zi];
+        if (Math.abs(zn.cy - y) > 3) continue;
+        const smp = zn.samples;
+        for (let k = 0; k < smp.length; k++) {
+          const j = smp[k];
+          const dx = A.px[j] - x, dz = A.pz[j] - z;
+          if (dx * dx + dz * dz > R2 || Math.abs(A.py[j] - y) > 0.8) continue;
+          n++;
+          if (T[j] !== b.own) open++;
+        }
+      }
+    }
+    return n ? open / n : 0;
+  }
+
+  /** CHANGED(CORE) FFA (repair round): the burst this bot would loose THIS tick — its aim as emitAim will send it, skill
+   *  noise included — meets floor that is not its own inside the fuse − FFA_BURST_FUSE_MARGIN (else it would airburst, or
+   *  repaint its own dye). The landing point goes to bLandX / bLandZ (the FFA_BURST_GAP ring). */
+  private burstLandsNow(b: Brain): boolean {
+    const r = b.r;
+    // the emitted aim: the same expression as emitAim (read-only here)
+    const s = smoothstep(clamp(b.jT / b.jPeriod, 0, 1));
+    const amp = b.target >= 0 && b.mode === 'fight' ? b.sk.jitter : b.sk.jitter * 0.6;
+    const yaw = b.aimYaw + (b.jA[0] + (b.jB[0] - b.jA[0]) * s) * amp;
+    const pitch = b.aimPitch + (b.jA[1] + (b.jB[1] - b.jA[1]) * s) * amp * 0.7;
+    const cp = Math.cos(pitch);
+    const fuse = b.kf.type === 'burst' ? b.kf.maxRange : BURST_MAX;
+    const hit = this.world.physics.raycast(r.x, r.y + COMBAT.muzzleHeight, r.z, Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp, fuse - FFA_BURST_FUSE_MARGIN);
+    if (!hit) return false;
+    const t = this.world.painter.teamUnder(hit.x, hit.y, hit.z);
+    if (t === null || t === b.own) return false;
+    b.bLandX = hit.x; b.bLandZ = hit.z;
+    return true;
+  }
+
+  /** CHANGED(CORE) FFA (review F3): (x, z) lies within FFA_BURST_GAP of a paint burst this bot fired in the last
+   *  FFA_BURST_MEMORY ticks */
+  private burstNear(b: Brain, x: number, z: number, now: number): boolean {
+    const g = b.bRing, g2 = FFA_BURST_GAP * FFA_BURST_GAP;
+    for (let k = 0; k < b.bRingN; k++) {
+      if (now - g[k * 3 + 2] > FFA_BURST_MEMORY) continue;
+      const dx = x - g[k * 3], dz = z - g[k * 3 + 1];
+      if (dx * dx + dz * dz < g2) return true;
+    }
+    return false;
   }
 
   private atlasTeamAt(x: number, y: number, z: number): number {
@@ -1439,6 +1625,15 @@ export class BotDirector {
       b.seenRespawns = r.respawns;
       b.aimYaw = r.aimYaw; b.desYaw = r.aimYaw; b.aimPitch = 0; b.desPitch = 0; b.aimVy = 0; b.aimVp = 0; b.fireOn = false;
     }
+    if (this.ffa && b.kind === 'burst') {   // review F3: a paint burst fired last tick joins the ring (FFA_BURST_GAP)
+      if (b.bShots >= 0 && r.shots > b.bShots && b.bLastOk) {
+        const k = b.bRingI % 4;
+        b.bRing[k * 3] = b.bLastX; b.bRing[k * 3 + 1] = b.bLastZ; b.bRing[k * 3 + 2] = now;
+        b.bRingI++; if (b.bRingN < 4) b.bRingN++;
+        b.paintRetargetAt = now;              // the next think re-picks away from it
+      }
+      b.bShots = r.shots;
+    }
     if (w.phase !== 'live') {
       // countdown: look down the court
       this.aimToward(b, r.x + Math.sin(r.yaw) * 10, r.y + 0.5, r.z + Math.cos(r.yaw) * 10, false);
@@ -1582,6 +1777,7 @@ export class BotDirector {
     let direct = -1;                      // SHEET-DRUM / NEEDLE-GLINT drive the trigger themselves: 1 down, 0 up
     const selfTrigger = b.kind === 'roll' || b.kind === 'charge';
     const tacAim = b.tacKind !== 0 && this.tacAim(b);
+    let paintAim = false;   // review F3: an FFA POP-WELL paint shot (FFA_BURST_GAP ring)
     if (tacAim) {
       // aiming a jelly / CLOUDBURST throw: the trigger rests
       hardStop = true;
@@ -1626,16 +1822,23 @@ export class BotDirector {
     } else if (b.kind === 'charge') {
       direct = this.linePaint(b) ? 1 : 0;
     } else if (b.hasPaintTarget && r.tank >= TANK.low && (b.mode === 'paint' || b.mode === 'chase' || b.mode === 'cover' || b.mode === 'fight')) {
-      this.aimToward(b, b.ptx, b.pty, b.ptz, false);
-      // paint sweeps while the aim travels between targets (a stripe, the way a player paints)
+      // CHANGED(CORE) FFA (review F3 / repair round): a POP-WELL paint burst flies straight (no lob) at its target texel,
+      // and fires only while that burst lands (checked after the aim slews, below: FFA_BURST_INC)
+      const ffaBurst = this.ffa && b.kind === 'burst';
+      if (ffaBurst) this.aimStraight(b, b.ptx, b.pty, b.ptz);
+      else this.aimToward(b, b.ptx, b.pty, b.ptz, false);
+      // paint sweeps while the aim travels between targets (a stripe, the way a player paints); an FFA POP-WELL burst is
+      // one discrete shot, gated on where it lands instead (burstLandsNow)
       const err = Math.abs(adelta(b.aimYaw, b.desYaw)) + Math.abs(b.aimPitch - b.desPitch);
       // a new burst starts only where the body already faces (no whip-around to paint behind)
-      wantFire = err < 1.0 && (b.fireOn || Math.abs(adelta(r.yaw, b.aimYaw)) < 0.9);
+      wantFire = (ffaBurst || err < 1.0) && (b.fireOn || Math.abs(adelta(r.yaw, b.aimYaw)) < 0.9);
+      paintAim = ffaBurst;
     } else {
       this.aimAlongMove(b);
       hardStop = true;
     }
     this.slewAim(b, dt, engaged);
+    if (paintAim && wantFire && !this.burstLandsNow(b)) wantFire = false;   // repair round: burstLandsNow, on the aim after the slew
     let fire: boolean;
     if (direct >= 0) {
       wantFire = direct === 1;
@@ -1673,6 +1876,7 @@ export class BotDirector {
       if (fire) b.burstTicks++;
       void hardStop;
     }
+    if (paintAim) { b.bLastOk = fire; b.bLastX = b.bLandX; b.bLastZ = b.bLandZ; } else b.bLastOk = false;   // repair round: where it lands
 
     // ── slick: refill in place, the wall climb, or travel ──
     let slick = false;

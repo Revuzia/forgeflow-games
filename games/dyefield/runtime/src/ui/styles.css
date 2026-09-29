@@ -306,6 +306,9 @@ html.df-cb .df-tag.gulf { background: rgba(21,77,187,.94); }
   font: 400 20px/1 var(--display); letter-spacing: .08em; }
 .df-mode i { font-style: normal; color: var(--sun); }
 .df-mode i.g { color: var(--gulf); }
+/* the mode line wraps only between its phrases (boot.ts fillModeLine), centred, on a narrow card */
+.df-mode > span { text-align: center; line-height: 1.12; }
+.df-nw { white-space: nowrap; }
 .df-progress { position: relative; width: min(420px, 74vw); height: 20px; border-radius: 999px; background: var(--neutral);
   border: 3px solid var(--ink); overflow: hidden; margin-top: 6px; }
 .df-progress b { position: absolute; left: 0; top: 0; bottom: 0; width: 4%; border-radius: 999px;

@@ -28,8 +28,9 @@ Real mouse clicks (page.mouse at element centres) and real key presses (page.key
                       controls overlapping; screenshots _shots/menu_*.png (720p ones _shots/menu720_*.png).
 
 FREE-FOR-ALL (CONTRACT_FFA F3, lane UI), all by real clicks / keys:
- 11. PLAY → MODE      — FREE-FOR-ALL selects (aria-checked, the profile, localStorage); the title mode line reads
-                      exactly 'Harbor Cup • Free-for-all' (and exactly 'Harbor Cup • 4 v 4' again after TEAMS · 4 v 4);
+ 11. PLAY → MODE      — FREE-FOR-ALL selects (aria-checked, the profile, localStorage); the title mode line keeps
+                      naming both modes ('Harbor Cup • 4 v 4 · Free-for-all') and the profile card says FREE-FOR-ALL;
+                      a match's loading card names its mode exactly ('Harbor Cup • 4 v 4' / 'Harbor Cup • Free-for-all');
                       LOADOUT swaps the crew toggle for the 8-colour pick (chip + mark): VIOLET → the profile + the
                       mannequin's team + its pixels; TEAMS restores the crew row with GULF CREW still picked.
  12. an FFA match     — PLAY → FREE-FOR-ALL → CINDER REEF → START: 8 crews, the human on the picked colour, the FFA HUD;
@@ -37,12 +38,16 @@ FREE-FOR-ALL (CONTRACT_FFA F3, lane UI), all by real clicks / keys:
                       whether the human won) → LOBBY. Leaks are compared after this match too.
  13. 720p             — the FFA PLAY / title / LOADOUT screens and a deep-link FFA victory slate (dev setTimeLeft) are
                       layout-checked at 1280×720. Shots _shots/ffa_ui_menu_*.png / ffa_ui_menu720_*.png.
+ 14. review F1        — FFA on PIER 18 at NOON (the lobby's arena, kept on QUIT): pause → SETTINGS → COLORBLIND MARKS on
+                      → QUIT → the lobby: the A/B team pads' accent (their dfPadTeam uniform) = the page's team dye
+                      (--sun-dye / --gulf-dye); then COLORBLIND off from the title → they follow again.
 
 Verdict line: MENUS OK / MENUS FAIL (+ problems). Report: _harness/_reports/menus.json.
 
 Run:  python _harness/menus.py            (headless, dev server on :5186 — started with DF_FROZEN=1 if down)
       python _harness/menus.py --headed   (watch it)
       python _harness/menus.py --base http://localhost:5191/
+      python _harness/menus.py --legs ffa_pier18_cb --skip-720   (one leg; names in --help)
 """
 from __future__ import annotations
 
@@ -62,9 +67,29 @@ SCREENS = [("loadout", "#dfm-loadout"), ("play", "#dfm-play"), ("settings", "#df
            ("howto", "#dfm-how-to-play"), ("credits", "#dfm-credits")]
 STRINGS = {
     "wordmark": "DYEFIELD", "mode": "Harbor Cup • 4 v 4", "hint": "Pick your kit — crest sits on the right",
-    "credits": "An original 4 v 4 turf-paint shooter.", "victory": "THE HARBOR CHOSE A COLOR.",
+    "credits": "An original 4 v 4 and free-for-all turf-paint shooter.", "victory": "THE HARBOR CHOSE A COLOR.",
     "modeFfa": "Harbor Cup • Free-for-all", "teams": "TEAMS · 4 v 4", "ffa": "FREE-FOR-ALL",
+    # owner 2026-09-28: where no mode is committed (title, lobby card, bare-URL static card) the line names BOTH modes;
+    # a match's loading card names that match's mode ("mode" / "modeFfa" exactly)
+    "modeAll": "Harbor Cup • 4 v 4 · Free-for-all",
 }
+BOOT_MODE_JS = "() => { const c = document.querySelector('#df-boot'); const s = c && c.querySelector('.df-mode span'); return s && c.getBoundingClientRect().width > 0 && getComputedStyle(c).display !== 'none' ? s.textContent : null; }"
+
+
+def loading_line(run, want, label):
+    """the mode line on the loading card right after START (the match being loaded names its mode). The card can be
+    gone already on a fast load: that is recorded, not failed."""
+    got = None
+    t_end = time.time() + 1.5
+    while time.time() < t_end and got is None:
+        got = run.s.safe_js(BOOT_MODE_JS, default=None)
+        if got is None:
+            time.sleep(0.05)
+    run.checks.setdefault("loadingLine", {})[label] = got
+    if got is None:
+        run.notes.append("%s: the loading card was already gone when read (fast load) — mode line not checked" % label)
+    else:
+        run.ok(got == want, "%s: the loading card reads %r (want exactly %r)" % (label, got, want))
 FFA_COLORS = ["amber", "violet", "lime", "magenta", "sky", "coral", "sunflower", "jade"]
 FORBIDDEN = ("CHILL", "FRESH", "FIERCE")
 
@@ -191,8 +216,10 @@ def title(run):
     run.ok(m.get("screen") == "title", "the lobby did not open on the title (menu %s)" % m)
     wm = run.text("#df-menus .dfm-brand .df-wordmark")
     run.ok(wm == STRINGS["wordmark"], "wordmark %r" % wm)
-    mode = run.text("#df-menus .dfm-brand .df-mode")
-    run.ok(mode and STRINGS["mode"] in mode, "mode line %r" % mode)
+    mode = run.text("#df-menus .dfm-brand .df-mode span")
+    run.ok(mode == STRINGS["modeAll"], "title mode line %r (want exactly %r: both modes)" % (mode, STRINGS["modeAll"]))
+    boot_title = s.safe_js("() => document.title", default="")
+    run.ok("Free-for-all" in (boot_title or "") and "4 v 4" in (boot_title or ""), "the page title %r does not name both modes" % boot_title)
     labels = s.safe_js("() => [...document.querySelectorAll('.dfm-stack .dfm-item .lbl')].map((e) => e.textContent)", default=[])
     run.ok(labels == ["PLAY", "LOADOUT", "SETTINGS", "HOW TO PLAY", "CREDITS"], "menu labels %s" % labels)
     hints = s.safe_js("() => document.querySelector('.dfm-hints').innerText", default="")
@@ -393,7 +420,8 @@ def match_lockwell(run):
     run.click("#dfm-map-lockwell", 0.3)
     t0 = time.time()
     run.click("#dfm-start", 0.05)
-    time.sleep(0.5)
+    loading_line(run, STRINGS["mode"], "teams START (LOCKWELL)")
+    time.sleep(0.2)
     run.shot("loading")
     ph = run.wait(lambda: run.phase() if run.phase() in ("ready", "play", "error") else None, 60)
     load_s = time.time() - t0
@@ -409,7 +437,9 @@ def match_lockwell(run):
         run.click("#df-play", 1.0)
     cd = run.wait(lambda: (run.df("match") or {}).get("phase") == "countdown" or None, 6)
     run.ok(cd or (run.df("match") or {}).get("phase") == "live", "no countdown after START")
-    live = run.wait(lambda: (run.df("match") or {}).get("phase") == "live" or None, 8)
+    # 20 s, not 8: the sim runs at most MAX_STEPS_PER_FRAME (5) ticks a frame, so below 12 fps the 3 s countdown takes
+    # longer than 3 s of wall time (QA 2026-09-28: 9 FPS on the contended iGPU, live came just after an 8 s wait)
+    live = run.wait(lambda: (run.df("match") or {}).get("phase") == "live" or None, 20)
     run.ok(live, "the match did not go live")
     time.sleep(0.5)
     run.shot("match_live")
@@ -559,7 +589,7 @@ def ffa_menus(run):
     line = run.text("#df-menus .dfm-brand .df-mode span")
     card = run.text(".dfm-profile .txt span")
     run.checks["ffaTitle"] = {"modeLine": line, "profileCard": card}
-    run.ok(line == STRINGS["modeFfa"], "FFA title mode line %r (want %r)" % (line, STRINGS["modeFfa"]))
+    run.ok(line == STRINGS["modeAll"], "FFA picked: the title mode line %r (want exactly %r: still both modes)" % (line, STRINGS["modeAll"]))
     run.ok(card == STRINGS["ffa"], "the FFA profile card reads %r" % card)
     run.shot("ffa_title")
     run.layout("ffa title")
@@ -592,7 +622,7 @@ def ffa_menus(run):
     line = run.text("#df-menus .dfm-brand .df-mode span")
     prof = run.menu().get("profile") or {}
     run.checks["ffaBackToTeams"] = {"modeLine": line, "profile": prof, "mannequin": run.menu().get("mannequin")}
-    run.ok(line == STRINGS["mode"], "the teams mode line reads %r after TEAMS (want exactly %r)" % (line, STRINGS["mode"]))
+    run.ok(line == STRINGS["modeAll"], "the title mode line reads %r after TEAMS (want exactly %r)" % (line, STRINGS["modeAll"]))
     run.ok(prof.get("mode") == "teams" and prof.get("crew") == 2 and (run.menu().get("mannequin") or {}).get("team") == 2,
            "TEAMS did not restore the crew pick (%s)" % prof)
     run.click("#dfm-play", 0.7)
@@ -606,6 +636,7 @@ def match_ffa(run):
     run.click("#dfm-mode-ffa", 0.3)
     run.click("#dfm-map-cinder", 0.3)
     run.click("#dfm-start", 0.05)
+    loading_line(run, STRINGS["modeFfa"], "FFA START (CINDER)")
     ph = run.wait(lambda: run.phase() if run.phase() in ("ready", "play", "error") else None, 60)
     ses = run.df("session") or {}
     run.ok(ph in ("ready", "play"), "FFA START did not reach the match (phase %s: %s)" % (ph, (s.state() or {}).get("error")))
@@ -667,6 +698,87 @@ def match_ffa(run):
     return run.gl()
 
 
+PAD_ACCENT_JS = r"""() => {
+  const d = window.__DF__ && window.__DF__.dev;
+  const root = d && d.parts && d.parts.map && d.parts.map.root;
+  if (!root) return null;
+  const pads = {}, seen = new Set();
+  root.traverse((o) => {
+    const mm = o.material;
+    if (!mm) return;
+    for (const m of (Array.isArray(mm) ? mm : [mm])) {
+      const p = m.userData && m.userData.dfPadTeam;
+      if (!p || seen.has(m)) continue;
+      seen.add(m);
+      pads[p.team] = '#' + p.u.value.getHexString();
+    }
+  });
+  const cs = getComputedStyle(document.documentElement);
+  return { pads, css: { 1: cs.getPropertyValue('--sun-dye').trim().toLowerCase(), 2: cs.getPropertyValue('--gulf-dye').trim().toLowerCase() },
+           cb: document.documentElement.classList.contains('df-cb') };
+}"""
+
+
+def pad_accent_ok(acc):
+    """the A/B team pads' accent (their dfPadTeam uniform) equals the page's team dye (--sun-dye / --gulf-dye)"""
+    if not acc:
+        return False
+    pads, css = acc.get("pads") or {}, acc.get("css") or {}
+    return set(pads.keys()) == {"1", "2"} and all(pads[k].lower() == css.get(k) for k in ("1", "2"))
+
+
+def ffa_pier18_colorblind(run):
+    """review F1: FFA on PIER 18 at NOON — the lobby's arena, kept on QUIT — with COLORBLIND MARKS turned on from the pause
+    card mid-match: back in the lobby the A/B team pads' accent must follow the setting (it came back in the palette saved
+    when the FFA session began). Then SETTINGS → COLORBLIND off from the title: the pads follow again."""
+    print("FFA on PIER 18 (noon) → pause → SETTINGS → COLORBLIND on → QUIT → lobby: the team-pad accent follows the setting")
+    s = run.s
+    cb0 = bool((run.df("settings") or {}).get("colorblind"))
+    run.ok(not cb0, "colorblind is already on before the FFA Pier 18 leg")
+    run.click("#dfm-play", 0.7)
+    run.click("#dfm-mode-ffa", 0.3)
+    run.click("#dfm-map-pier18", 0.3)
+    run.click("#dfm-preset-noon", 0.3)
+    run.click("#dfm-start", 0.05)
+    ph = run.wait(lambda: run.phase() if run.phase() in ("ready", "play", "error") else None, 60)
+    ses = run.df("session") or {}
+    run.ok(ph in ("ready", "play"), "FFA Pier 18 START did not reach the match (phase %s: %s)" % (ph, (s.state() or {}).get("error")))
+    run.ok(ses.get("matchMode") == "ffa" and ses.get("key") == "pier18:noon", "not FFA on the lobby's arena pier18:noon (%s)" % ses)
+    if ph == "ready":
+        run.click("#df-play", 1.0)
+    live = run.wait(lambda: (run.df("match") or {}).get("phase") in ("countdown", "live") or None, 10)
+    run.ok(live, "the FFA Pier 18 match did not start")
+    in_ffa = s.safe_js(PAD_ACCENT_JS, default=None) or {}
+    run.ok(in_ffa.get("pads") == {}, "during FFA the A/B team pads are still tagged crew pads (%s)" % in_ffa.get("pads"))
+    run.key("Escape", 0.6)
+    run.ok(run.phase() == "paused" and run.menu().get("screen") == "pause", "ESC did not pause the FFA match (phase %s)" % run.phase())
+    run.click("#df-p-settings", 0.5)
+    run.ok(run.menu().get("screen") == "settings" and run.menu().get("context") == "pause", "pause → SETTINGS failed (%s)" % run.menu().get("screen"))
+    run.click("#dfm-colorblind", 0.4)
+    run.ok((run.df("settings") or {}).get("colorblind") is True, "COLORBLIND MARKS did not switch on from the pause SETTINGS")
+    run.key("Escape", 0.5)
+    run.click("#df-p-quit", 0.4)
+    run.click("#dfm-quit-yes", 0.2)
+    ph = run.wait(lambda: run.phase() if run.phase() in ("menu", "error") else None, 60)
+    ses2 = run.df("session") or {}
+    run.ok(ph == "menu" and ses2.get("mode") == "lobby" and ses2.get("key") == "pier18:noon", "QUIT did not return to the pier18:noon lobby (%s / %s)" % (ph, ses2))
+    time.sleep(0.6)
+    acc_on = s.safe_js(PAD_ACCENT_JS, default=None)
+    run.ok(pad_accent_ok(acc_on) and (acc_on or {}).get("cb") is True,
+           "after FFA on the reused Pier 18 arena with COLORBLIND on mid-match, the team pads' accent %s ≠ the team dye %s"
+           % ((acc_on or {}).get("pads"), (acc_on or {}).get("css")))
+    run.shot("lobby_after_ffa_cb")
+    # back off from the title's SETTINGS (the live toggle path; the legs after this one expect colorblind off)
+    run.click("#dfm-settings", 0.6)
+    run.click("#dfm-colorblind", 0.4)
+    run.key("Escape", 0.5)
+    acc_off = s.safe_js(PAD_ACCENT_JS, default=None)
+    run.ok((run.df("settings") or {}).get("colorblind") is False and pad_accent_ok(acc_off) and (acc_off or {}).get("cb") is False,
+           "COLORBLIND off from the title: the team pads' accent %s vs the team dye %s" % ((acc_off or {}).get("pads"), (acc_off or {}).get("css")))
+    run.ok(run.menu().get("screen") == "title", "ESC did not go back to the title after SETTINGS")
+    run.checks["padAccentAfterFfa"] = {"session": ses.get("key"), "duringFfa": in_ffa.get("pads"), "cbOn": acc_on, "cbOff": acc_off}
+
+
 def gamepad(run):
     print("synthetic gamepad")
     s = run.s
@@ -681,7 +793,14 @@ def gamepad(run):
         time.sleep(hold)
         s.js("(i) => { const b = window.__PADX__.buttons[i]; b.pressed = false; b.value = 0; }", i)
         time.sleep(0.15)
+    # the checks below start from PLAY; the leg before this one (ffa_pier18_cb) returns from the title's SETTINGS, so
+    # the focus comes back on SETTINGS — home it to PLAY with real ↑ key presses first (QA 2026-09-28 harness fix)
+    for _ in range(6):
+        if run.menu().get("focus") == "dfm-play":
+            break
+        run.key("ArrowUp", 0.2)
     f0 = run.menu().get("focus")
+    run.ok(f0 == "dfm-play", "gamepad leg: could not home the title focus to PLAY with ↑ (focus %s)" % f0)
     press(13)                   # d-pad down
     f1 = run.menu().get("focus")
     press(0)                    # A
@@ -758,8 +877,11 @@ def main():
     ap.add_argument("--headed", action="store_true", help="show the browser (default headless)")
     ap.add_argument("--match-seconds", type=int, default=25, help="dev match length for the victory leg")
     ap.add_argument("--skip-720", action="store_true")
+    ap.add_argument("--legs", default="", help="comma list of legs to run (title, loadout, settings, howto_credits, map_select, ffa_menus, lockwell, keyboard, ffa, ffa_pier18_cb, gamepad, 720); default: all")
     args = ap.parse_args()
     args.headless = not args.headed
+    legs = {x.strip() for x in (args.legs or "").split(",") if x.strip()}
+    on = (lambda name: not legs or name in legs)
     args.chrome_arg = list(args.chrome_arg or []) + ["--js-flags=--expose-gc"]     # the leak check forces GC
     args.width, args.height = (args.width if args.width != 1280 else 1600), (args.height if args.height != 720 else 900)
     t_start = time.time()
@@ -781,25 +903,36 @@ def main():
             steps = [("title", title), ("loadout", loadout), ("settings", settings), ("howto_credits", howto_credits),
                      ("map_select", map_select), ("ffa_menus", ffa_menus)]
             for name, fn in steps:
+                if not on(name):
+                    continue
                 try:
                     fn(run)
                 except Exception as e:
                     run.fail("%s: harness error %s" % (name, str(e).splitlines()[0][:300]))
             gl["lobby0"] = run.gl()            # after every lobby screen (the mannequin's textures are in)
             try:
-                gl["lobby1"] = match_lockwell(run)
+                if on("lockwell"):
+                    gl["lobby1"] = match_lockwell(run)
             except Exception as e:
                 run.fail("match 1: harness error %s" % str(e).splitlines()[0][:300])
             try:
-                gl["lobby2"] = match_keyboard(run)
+                if on("keyboard"):
+                    gl["lobby2"] = match_keyboard(run)
             except Exception as e:
                 run.fail("match 2: harness error %s" % str(e).splitlines()[0][:300])
             try:
-                gl["lobby3"] = match_ffa(run)
+                if on("ffa"):
+                    gl["lobby3"] = match_ffa(run)
             except Exception as e:
                 run.fail("FFA match: harness error %s" % str(e).splitlines()[0][:300])
             try:
-                gamepad(run)
+                if on("ffa_pier18_cb"):
+                    ffa_pier18_colorblind(run)
+            except Exception as e:
+                run.fail("FFA Pier 18 colorblind: harness error %s" % str(e).splitlines()[0][:300])
+            try:
+                if on("gamepad"):
+                    gamepad(run)
             except Exception as e:
                 run.fail("gamepad: harness error %s" % str(e).splitlines()[0][:300])
         d = s.diagnostics()
@@ -822,7 +955,7 @@ def main():
         ha, hb = ga.get("heapMB"), gb.get("heapMB")
         if isinstance(ha, (int, float)) and isinstance(hb, (int, float)) and hb > ha * 1.15 + 5:
             problems.append("JS heap (after GC) grew in the lobby %s → %s: %s → %s MB" % (na, nb, ha, hb))
-    if not args.skip_720:
+    if not args.skip_720 and on("720"):
         try:
             report["checks720"] = small_screens(args, problems, shots)
         except Exception as e:

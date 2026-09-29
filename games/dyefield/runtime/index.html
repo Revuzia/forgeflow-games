@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>DYEFIELD — Harbor Cup • 4 v 4</title>
-<meta name="description" content="DYEFIELD — an original 4 v 4 turf-paint shooter. Two crews stain an arena; the floor is the scoreboard.">
+<title>DYEFIELD — Harbor Cup • 4 v 4 · Free-for-all</title>
+<meta name="description" content="DYEFIELD — an original turf-paint shooter: 4 v 4 crews or an eight-runner free-for-all. Stain the arena; the floor is the scoreboard.">
 <meta name="theme-color" content="#2f86dc">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='3' y='3' width='58' height='58' rx='16' fill='%2314203a'/%3E%3Cpath d='M12 40c2-10 10-17 20-17s18 7 20 17c-4-3-8-3-11 1-3-3-6-3-9 0-3-3-6-3-9 0-3-4-7-4-11-1z' fill='%23ff8a1f'/%3E%3Ccircle cx='24' cy='20' r='5' fill='%23fff8ec'/%3E%3Cpath d='M38 15l7 11h-14z' fill='%235b4bf0' stroke='%23fff8ec' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
@@ -20,11 +20,265 @@
   #df-boot .df-wordmark .dye { color: #ff8a1f; } #df-boot .df-wordmark .field { color: #8a7cff; }
   #df-boot .df-mode { display: inline-flex; gap: 10px; margin: 0; padding: 6px 18px; border-radius: 999px; background: #14203a; color: #fff8ec; font: 400 20px/1 'Lilita One', 'Trebuchet MS', sans-serif; letter-spacing: .08em; }
   #df-boot .df-mode i { font-style: normal; color: #ffa84a; } #df-boot .df-mode i.g { color: #8a7cff; }
+  #df-boot .df-mode > span { text-align: center; line-height: 1.12; } .df-nw { white-space: nowrap; }
   #df-boot .df-progress { position: relative; width: min(420px, 74vw); height: 20px; border-radius: 999px; background: #e9e2d2; border: 3px solid #14203a; overflow: hidden; margin-top: 6px; box-sizing: border-box; }
   #df-boot .df-progress b { position: absolute; left: 0; top: 0; bottom: 0; width: 4%; border-radius: 999px; background: #ff8a1f; }
   #df-boot .df-status { min-height: 1.3em; font-weight: 800; font-size: 14px; color: #22325a; }
   #df-boot pre { white-space: pre-wrap; text-align: left; max-width: 88vw; font: 12.5px/1.45 Consolas, monospace; background: #14203a; color: #ffd9d4; padding: 12px; border-radius: 12px; }
 </style>
+<script>
+  // ── Boot guard ── a small classic script at the end of the authored <head>. Vite appends the entry
+  // <script type="module">, the <link rel="modulepreload"> chunks and the <link rel="stylesheet"> AFTER it,
+  // so every listener here exists before any of those can fail (a classic script in <body> would also wait
+  // for that stylesheet). It owns the static #df-boot card until src/main.ts calls __DF_BOOT__.handoff(),
+  // which removes every listener, timer, probe and observer installed here.
+  //  * LOAD FAILURE -> "DYEFIELD could not load", at once. A <script>/<link> load error does not bubble, so a
+  //    CAPTURE-phase window 'error' listener hears it (own-origin script / modulepreload / stylesheet only).
+  //    The card names the file, one GET of it reports the HTTP status, and the page reloads ONCE by itself
+  //    (cache-busting ?dfretry=a<t>, stripped on the next load; sessionStorage 'dyefield.bootRetry' blocks a
+  //    second automatic retry until a boot reaches handoff): a deploy in progress or a network blip is the
+  //    likeliest cause. Images / audio / GLBs are fetched by main.ts itself after handoff (own error paths).
+  //  * EVALUATION ERROR before handoff (window 'error' / 'unhandledrejection') -> "DYEFIELD could not start".
+  //  * WATCHDOG -> "DYEFIELD did not start" only when the page has been VISIBLE >= 60 s (hidden time does not
+  //    count) AND no file finished for 20 s AND a HEAD probe of a pending entry file got no answer within 10 s
+  //    (a server that answers = a slow download, not a dead one), or at the 240 s visible cap. Until then the
+  //    status line shows "Loading... <size> · <s>", plus "slow connection" after 15 s. The card lists the entry
+  //    files that loaded and the ones pending; if one of those arrives or main.ts starts after all, the
+  //    loading card comes back (the guard only HIDES the loading card's nodes, so BootUI adopts the real ones).
+  //  * Vite's HTML env replacement turns the percent-wrapped DEV key below into true on the dev server only:
+  //    there the cards add the "npm run dev" hint; a built bundle gets a player-facing line + a diagnostic line.
+  //  * TEST ONLY: ?bootguard=<scale> (0.02 .. 1) scales the 60 / 20 / 15 / 240 s thresholds and the probe
+  //    timeout (floor 3 s). Read only here; _harness/bootguard.py drives the slow and stalled paths with it.
+  (function () {
+    var W = window, D = document, L = location, P = W.performance;
+    var now = function () { return P && P.now ? P.now() : Date.now(); };
+    var DEV = '%DEV%' === 'true';
+    var q = null; try { q = new URLSearchParams(L.search); } catch (e) { /* defaults */ }
+    var sc = q ? parseFloat(q.get('bootguard') || '') : NaN, scale = sc > 0 && sc < 1 ? Math.max(0.02, sc) : 1;
+    var VISIBLE = 60000 * scale, QUIET = 20000 * scale, SLOW = 15000 * scale, CAP = 240000 * scale, PROBE = Math.max(3000, 10000 * scale);
+    var HINT_DEV = 'Is the dev server up? Run: npm install && npm run dev';
+    var RK = 'dyefield.bootRetry', store = null;
+    try { store = W.sessionStorage; store.getItem(RK); } catch (e) { store = null; }
+    function unretry(u) { return u.replace(/([?&])dfretry=[^&#]*(&?)/, function (m, a, b) { return b ? a : ''; }).replace(/\?(#|$)/, '$1'); }
+    var rq = q ? q.get('dfretry') || '' : '', autoRetried = rq.charAt(0) === 'a';
+    if (rq) try { history.replaceState(history.state, '', unretry(L.href)); } catch (e) { /* keep the marker */ }
+    var origin = L.protocol + '//' + L.host + '/', dir = L.href.replace(/[?#].*$/, '').replace(/[^\/]*$/, '');
+    function short(u) { u = String(u || ''); return u.indexOf(dir) === 0 ? u.slice(dir.length) : u.replace(/^[a-z]+:\/\/[^\/]+/i, ''); }
+    function size(b) { return b < 104858 ? Math.round(b / 1024) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; }
+    function secs(ms) { return Math.round(ms / 1000) + ' s'; }
+    function isDev() { return DEV || !!D.querySelector('script[src*="/@vite/client"]'); }
+    var over = false, shown = '', mine = [], hid = [], later = null, wrote = false, pend = [];
+
+    // visible time: a hidden tab never runs toward a failure
+    var visMs = 0, visFrom = D.visibilityState === 'visible' ? now() : -1;
+    function visible() { return visMs + (visFrom >= 0 ? now() - visFrom : 0); }
+    function onVis() {
+      if (D.visibilityState === 'visible') { if (visFrom < 0) visFrom = now(); }
+      else if (visFrom >= 0) { visMs += now() - visFrom; visFrom = -1; }
+    }
+
+    // progress from resource timing (our own probes are fetches: never counted)
+    var got = {}, bytes = 0, last = now(), obs = null, polled = 0;
+    function take(list) {
+      for (var i = 0; i < list.length; i++) {
+        var e = list[i], it = e.initiatorType;
+        if (it === 'fetch' || it === 'xmlhttprequest' || it === 'beacon') continue;
+        bytes += e.transferSize || e.encodedBodySize || 0;
+        last = now();
+        if (!(e.responseStatus >= 400)) got[e.name] = 1;
+      }
+    }
+    try { obs = new PerformanceObserver(function (l) { take(l.getEntries()); }); obs.observe({ type: 'resource', buffered: true }); } catch (e) { obs = null; }
+    function poll() { if (obs || !P || !P.getEntriesByType) return; var a = P.getEntriesByType('resource'); take(a.slice(polled)); polled = a.length; }
+    function split() {
+      var r = { loaded: [], pending: [], urls: [] };
+      var els = D.querySelectorAll('script[type="module"][src],link[rel="modulepreload"][href],link[rel="stylesheet"][href]');
+      for (var i = 0; i < els.length; i++) {
+        var u = els[i].src || els[i].href;
+        if (got[u]) r.loaded.push(short(u)); else { r.pending.push(short(u)); r.urls.push(u); }
+      }
+      return r;
+    }
+    function check(url, method, cb) {   // one request for the status line of a card; the body is never read
+      var ctl = W.AbortController ? new AbortController() : null, fin = false, rec = { ctl: ctl, to: 0 };
+      function end(code, text) {
+        if (fin) return; fin = true; clearTimeout(rec.to);
+        try { if (ctl) ctl.abort(); } catch (e) { /* done */ }
+        if (!over) cb(code, text);
+      }
+      rec.to = setTimeout(function () { end(0, 'no answer in ' + secs(PROBE)); }, PROBE);
+      pend.push(rec);
+      try {
+        fetch(url, { method: method, cache: 'no-store', credentials: 'same-origin', signal: ctl ? ctl.signal : undefined }).then(function (r) {
+          var ct = (r.headers.get('content-type') || '').split(';')[0];
+          end(r.status, 'HTTP ' + r.status + (ct ? ' ' + ct : ''));
+        }, function () { end(0, 'network error'); });
+      } catch (e) { end(0, 'network error'); }
+    }
+    function diag(what) {
+      return 'bootguard: ' + what + ' | t ' + secs(now()) + ', visible ' + secs(visible()) + ', ' + size(bytes) + ' received | '
+        + (isDev() ? 'vite dev server' : 'build') + (autoRetried ? ' | after 1 auto-retry' : '') + (scale !== 1 ? ' | scale ' + scale : '');
+    }
+
+    // the card: the loading card's nodes (all but the wordmark) are hidden, never removed
+    function show(kind, title, lines) {
+      var c = D.querySelector('#df-boot .df-card');
+      if (!c) { later = [kind, title, lines]; return; }   // <body> not parsed yet: readystatechange shows it
+      later = null;
+      for (var i = 0; i < mine.length; i++) if (mine[i].parentNode) mine[i].parentNode.removeChild(mine[i]);
+      if (!shown) for (var k = c.firstElementChild; k; k = k.nextElementSibling) {
+        if (!k.classList.contains('df-wordmark') && k.style.display !== 'none') { hid.push(k); k.style.display = 'none'; }
+      }
+      shown = kind;
+      var h = D.createElement('h2'), pre = D.createElement('pre'), b = D.createElement('button');
+      h.textContent = title; h.style.cssText = 'margin:0;color:#ff5a5f';
+      pre.textContent = lines.join('\n');
+      b.type = 'button'; b.textContent = 'RELOAD'; b.onclick = function () { reload(false); };
+      b.style.cssText = 'font:400 22px/1 "Lilita One",sans-serif;padding:10px 30px;border-radius:999px;border:3px solid #14203a;background:#ffa84a;cursor:pointer';
+      mine = [h, pre, b];
+      for (var j = 0; j < mine.length; j++) c.appendChild(mine[j]);
+    }
+    function restore() {
+      for (var i = 0; i < mine.length; i++) if (mine[i].parentNode) mine[i].parentNode.removeChild(mine[i]);
+      for (var j = 0; j < hid.length; j++) hid[j].style.display = '';
+      mine = []; hid = []; shown = ''; later = null;
+    }
+    function reload(auto) {
+      if (auto) try { if (store) store.setItem(RK, '1'); } catch (e) { /* the URL marker still stops a loop */ }
+      var u = unretry(L.href), h = '', i = u.indexOf('#');
+      if (i >= 0) { h = u.slice(i); u = u.slice(0, i); }
+      L.replace(u + (u.indexOf('?') >= 0 ? '&' : '?') + 'dfretry=' + (auto ? 'a' : 'm') + Date.now() + h);
+    }
+
+    // 1. load failures (capture phase)
+    var failed = [], failKind = '', codes = {}, willRetry = false, retryAt = 0, reloading = false;
+    function canRetry() { if (autoRetried) return false; try { return !store || store.getItem(RK) !== '1'; } catch (e) { return false; } }
+    function onLoadErr(ev) {
+      var t = ev && ev.target;
+      if (over || !t || t === W || !t.tagName) return;
+      var rel = String(t.getAttribute('rel') || '').toLowerCase();
+      var kind = t.tagName === 'SCRIPT' ? 'script' : t.tagName === 'LINK' && (rel === 'modulepreload' || rel === 'stylesheet') ? rel : '';
+      var url = String(t.src || t.href || '');
+      if (!kind || url.indexOf(origin) !== 0) return;   // only the game's own entry files
+      var f = short(url);
+      if (failed.indexOf(f) >= 0) return;
+      failed.push(f);
+      if (!failKind) failKind = kind;
+      if (failed.length === 1 && canRetry()) { willRetry = true; retryAt = now() + 1500; }
+      drawLoad();
+      check(url, 'GET', function (code, text) { codes[f] = text; drawLoad(); });
+    }
+    function drawLoad() {
+      var lines = ['A game file did not download:'];
+      for (var i = 0; i < failed.length; i++) lines.push('  ' + failed[i] + '  (' + (codes[failed[i]] || 'checking...') + ')');
+      lines.push('', isDev() ? HINT_DEV : 'Check your connection, then press RELOAD. If DYEFIELD was just updated, wait a minute and try again.');
+      if (willRetry) lines.push('Retrying once automatically...');
+      lines.push('', diag('load-error ' + failKind));
+      show('load', 'DYEFIELD could not load', lines);
+    }
+
+    // 2. evaluation errors (bubble phase)
+    function failStart(detail) { if (!over && shown !== 'load') show('start', 'DYEFIELD could not start', [String(detail || 'unknown error'), '', diag('error')]); }
+    function onErr(e) { if (!(e && e.target && e.target !== W && e.target.tagName)) failStart((e && e.error && e.error.stack) || (e && e.message) || e); }
+    function onRej(e) { var r = e && e.reason; failStart((r && r.stack) || r); }
+
+    // 3. the watchdog
+    var probing = false, stallN = 0;
+    function stall(why, detail) {
+      var s = split();
+      stallN = s.pending.length;
+      show('stall', 'DYEFIELD did not start', [
+        why === 'cap' ? 'Still not started after ' + secs(visible()) + ' of loading (' + size(bytes) + ' received).'
+          : 'The game files stopped arriving (' + size(bytes) + ' received, nothing new for ' + secs(now() - last) + ').',
+        isDev() ? HINT_DEV : 'Check your connection, then press RELOAD.',
+        '',
+        'Loaded:  ' + (s.loaded.join(', ') || '-'),
+        'Pending: ' + (s.pending.join(', ') || '- (all arrived; the game code is still starting)') + (detail ? '\n         probe ' + detail : ''),
+        '', diag('watchdog ' + why)]);
+    }
+    function probe() {
+      var s = split();
+      if (!s.urls.length) { last = now(); return; }   // every entry file arrived: still importing / evaluating (the cap still applies)
+      probing = true;
+      check(s.urls[0], 'HEAD', function (code, text) {
+        probing = false;
+        if (shown) return;
+        if ((code >= 200 && code < 400) || code === 405 || code === 501) { last = now(); return; }   // it answers: slow, not dead
+        stall('stalled', s.pending[0] + ': ' + text);
+      });
+    }
+    function tick() {
+      if (over) return;
+      poll();
+      var t = now(), vis = visible();
+      if (willRetry && !reloading && t >= retryAt && (codes[failed[0]] || t >= retryAt + 2500)) { reloading = true; reload(true); return; }
+      if (shown === 'stall' && split().pending.length < stallN) restore();   // it was slow after all
+      if (shown || W.__DF_MAIN__) return;
+      var st = D.querySelector('#df-boot .df-status');
+      if (st) {
+        var s = 'Loading…' + (t >= 2000 && bytes > 0 ? ' ' + size(bytes) + ' · ' + secs(t) : '') + (vis >= SLOW ? ' — slow connection, still loading' : '');
+        if (st.textContent !== s) { st.textContent = s; wrote = true; }
+      }
+      if (vis >= CAP) stall('cap');
+      else if (vis >= VISIBLE && t - last >= QUIET && !probing) probe();
+    }
+
+    // The static card names both modes (a bare URL opens the lobby: nothing is picked yet). A deep link (main.ts
+    // DEEP_KEYS, not ?lobby=1) loads ONE match, so the card names that match's mode, as boot.ts setMode() will.
+    function mode() {
+      try {
+        if (!q || q.get('lobby') === '1') return;
+        var keys = ['map', 'kit', 'bots', 'seed', 'matchSeconds', 'preset', 'autostart', 'brush', 'crew', 'mode'], deep = false;
+        for (var i = 0; i < keys.length; i++) if (q.has(keys[i])) deep = true;
+        if (!deep) return;
+        var mq = (q.get('mode') || '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+        var ms = D.querySelector('#df-boot .df-mode span');
+        if (ms) ms.textContent = (mq === 'ffa' || mq === 'free-for-all' || mq === 'freeforall') ? 'Harbor Cup • Free-for-all' : 'Harbor Cup • 4 v 4';
+      } catch (e) { /* the module takes over the card anyway */ }
+    }
+    function onReady() { if (D.readyState !== 'loading') { mode(); if (later) show(later[0], later[1], later[2]); } }
+
+    W.addEventListener('error', onLoadErr, true);
+    W.addEventListener('error', onErr);
+    W.addEventListener('unhandledrejection', onRej);
+    D.addEventListener('visibilitychange', onVis);
+    D.addEventListener('readystatechange', onReady);
+    var iv = setInterval(tick, 250);
+
+    W.__DF_BOOT__ = {
+      handoff: function () {
+        if (over) return;
+        mode();
+        over = true;
+        clearInterval(iv);
+        for (var i = 0; i < pend.length; i++) { clearTimeout(pend[i].to); try { if (pend[i].ctl) pend[i].ctl.abort(); } catch (e) { /* done */ } }
+        pend = [];
+        W.removeEventListener('error', onLoadErr, true);
+        W.removeEventListener('error', onErr);
+        W.removeEventListener('unhandledrejection', onRej);
+        D.removeEventListener('visibilitychange', onVis);
+        D.removeEventListener('readystatechange', onReady);
+        if (obs) try { obs.disconnect(); } catch (e) { /* done */ }
+        // main.ts runs, so a missing chunk / a slow load / a stray error was not fatal: back to the loading card.
+        // A missing stylesheet is (the UI would be unstyled): keep its card and use the automatic retry.
+        if (shown === 'load' && failKind === 'stylesheet') {
+          if (willRetry && !reloading) { reloading = true; setTimeout(function () { reload(true); }, Math.max(0, retryAt - now())); }
+          return;
+        }
+        restore();
+        var st = D.querySelector('#df-boot .df-status');
+        if (st && wrote) st.textContent = 'Loading…';
+        try { if (store) store.removeItem(RK); } catch (e) { /* done */ }
+      },
+      fail: function (title, detail) { if (!over) show('start', String(title), [String(detail || 'unknown error'), '', diag('fail')]); },
+      info: function () {
+        var s = split();
+        return { dev: isDev(), scale: scale, visibleMs: Math.round(visible()), bytes: bytes, card: shown, failed: failed.slice(),
+                 loaded: s.loaded, pending: s.pending, autoRetried: autoRetried, retrying: reloading, handedOff: over };
+      },
+    };
+  })();
+</script>
 </head>
 <body>
 <canvas id="game" tabindex="-1" aria-label="DYEFIELD — game view"></canvas>
@@ -33,51 +287,12 @@
 <div id="df-boot" class="df-boot" role="status" aria-live="polite">
   <div class="df-card">
     <h1 class="df-wordmark" aria-label="DYEFIELD"><span class="dye">DYE</span><span class="field">FIELD</span></h1>
-    <p class="df-mode"><i aria-hidden="true">◉</i><span>Harbor Cup • 4 v 4</span><i class="g" aria-hidden="true">▲</i></p>
+    <p class="df-mode"><i aria-hidden="true">◉</i><span><span class="df-nw">Harbor Cup •</span> <span class="df-nw">4 v 4 ·</span> <span class="df-nw">Free-for-all</span></span><i class="g" aria-hidden="true">▲</i></p>
     <div class="df-progress"><b></b></div>
     <div class="df-status">Loading…</div>
   </div>
 </div>
 
-<script>
-  // Boot guard (classic script, runs before the module graph): if src/main.ts fails to load or throws
-  // before it takes over error reporting, show the message on the card instead of a dead page.
-  (function () {
-    var done = false;
-    function show(title, detail) {
-      if (done) return;
-      done = true;
-      var card = document.querySelector('#df-boot .df-card');
-      if (!card) return;
-      card.innerHTML = '';
-      var h = document.createElement('h1'); h.className = 'df-wordmark'; h.innerHTML = '<span class="dye">DYE</span><span class="field">FIELD</span>';
-      var t = document.createElement('h2'); t.textContent = title; t.style.margin = '0'; t.style.color = '#ff5a5f';
-      var pre = document.createElement('pre'); pre.textContent = String(detail || 'unknown error');
-      var b = document.createElement('button'); b.textContent = 'RELOAD'; b.onclick = function () { location.reload(); };
-      b.style.cssText = 'font:400 22px/1 "Lilita One",sans-serif;padding:10px 30px;border-radius:999px;border:3px solid #14203a;background:#ffa84a;cursor:pointer';
-      card.append(h, t, pre, b);
-    }
-    function onErr(e) { show('DYEFIELD could not start', (e && e.error && e.error.stack) || (e && e.message) || e); }
-    function onRej(e) { var r = e && e.reason; show('DYEFIELD could not start', (r && r.stack) || r); }
-    window.addEventListener('error', onErr);
-    window.addEventListener('unhandledrejection', onRej);
-    var timer = setTimeout(function () {
-      if (!window.__DF_MAIN__) show('DYEFIELD did not start', 'src/main.ts never ran (60 s). Is the dev server up? Run: npm install && npm run dev');
-    }, 60000);
-    // CONTRACT_FFA F3: a ?mode=ffa deep link (not ?lobby=1) loads a free-for-all match — the static card says so
-    try {
-      var q = new URLSearchParams(location.search), mq = (q.get('mode') || '').toLowerCase();
-      if (q.get('lobby') !== '1' && (mq === 'ffa' || mq === 'free-for-all')) {
-        var ms = document.querySelector('#df-boot .df-mode span');
-        if (ms) ms.textContent = 'Harbor Cup • Free-for-all';
-      }
-    } catch (e) { /* the module takes over the card anyway */ }
-    window.__DF_BOOT__ = {
-      handoff: function () { window.removeEventListener('error', onErr); window.removeEventListener('unhandledrejection', onRej); clearTimeout(timer); },
-      fail: show,
-    };
-  })();
-</script>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

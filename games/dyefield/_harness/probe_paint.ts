@@ -456,6 +456,49 @@ function syntheticChecks(): void {
       `nonNeutral=${nonNeutral} neutral=${P0.coverage().neutral} flips=${P0.flips}`);
   }
 
+  // ── CHANGED(CORE) (review F2): the lock (the floor under an FFA drop pad: no dye, no score, not a surface) ──
+  {
+    const P = new PA.Painter(A);
+    const disc = { x: 8, y: 0, z: 8, r: 1.5 };                 // floor under the shelf corner; the shelf (y = 1) is out of band
+    P.splat(8, 0.02, 8, { radius: 2.2, team: 2, edgeNoise: 0, nx: 0, ny: 1, nz: 0 });   // dye first: locking neutralises it
+    let neutralised = 0;
+    P.onFlip = (_id, from, to) => { if (from === 2 && to === 0) neutralised++; };
+    const n = P.lockDiscs([disc]);
+    P.onFlip = null;
+    let expect = 0, maskBad = 0, lockedW = 0, dyedBefore = 0;
+    for (let id = 0; id < A.count; id++) {
+      const want = A.floor[id] === 1 && (A.px[id] - 8) ** 2 + (A.pz[id] - 8) ** 2 <= 1.5 * 1.5 && Math.abs(A.py[id]) < 0.3;
+      if (want) { expect++; lockedW += A.area[id] * A.weight[id]; }
+      if (want !== P.isLocked(id)) maskBad++;
+    }
+    for (let id = 0; id < A.count; id++) if (!P.isLocked(id) && A.team[id] === 2 && A.py[id] < 0.3 && (A.px[id] - 8) ** 2 + (A.pz[id] - 8) ** 2 <= 2 * 2) dyedBefore++;
+    const flipped = P.splat(8, 0.02, 8, { radius: 2.5, team: 1, edgeNoise: 0, nx: 0, ny: 1, nz: 0 });
+    let dyedLocked = 0;
+    for (let id = 0; id < A.count; id++) if (P.isLocked(id) && A.team[id] !== 0) dyedLocked++;
+    const rc = AT.recountWeighted(A);                           // the locked (neutral) texels sit in rc[0]
+    const tot = A.totalWeighted - lockedW;
+    const cov = P.coverage();
+    const totalsOk = Math.abs(P.lockedWeighted - lockedW) < 1e-9 * A.totalWeighted && Math.abs(P.weighted(0) - (rc[0] - lockedW)) < 1e-9 * A.totalWeighted
+      && Math.abs(P.weighted(1) - rc[1]) < 1e-9 * A.totalWeighted && Math.abs(cov.sun - rc[1] / tot) < 1e-9 && Math.abs(cov.sun + cov.gulf + cov.neutral - 1) < 1e-12;
+    const underC = P.teamUnder(8, 0.02, 8), underShelf = P.teamUnder(8, 1.02, 8), underOut = P.teamUnder(8, 0.02, 6.2);
+    const near = P.nearest(8, 0.02, 8, 0.4, 'floor');
+    P.reset();
+    const keeps = P.lockedCount === n && Math.abs(P.weighted(0) - tot) < 1e-9 * A.totalWeighted;
+    const cleared = P.lockDiscs([]);
+    const unlocked = cleared === 0 && P.lockedCount === 0 && P.lockedWeighted === 0 && P.weighted(0) === A.totalWeighted && !P.isLocked(0);
+    const again = P.splat(8, 0.02, 8, { radius: 0.5, team: 1, edgeNoise: 0, nx: 0, ny: 1, nz: 0 });
+    check('lock: lockDiscs locks exactly the floor texels in the disc (not the shelf 1 m above) and neutralises their dye through onFlip',
+      n === expect && n > 0 && maskBad === 0 && neutralised > 0 && dyedBefore > 0,
+      `locked ${n} (expected ${expect}, mask mismatches ${maskBad}) · neutralised ${neutralised} · dye kept outside ${dyedBefore}`);
+    check('lock: a splat dyes no locked texel; nearest / teamUnder skip them (null at the centre, the shelf and the open floor still read)',
+      flipped > 0 && dyedLocked === 0 && underC === null && near === -1 && underShelf === 1 && underOut === 1,
+      `flipped ${flipped} (locked dyed ${dyedLocked}) · teamUnder centre ${underC}, shelf ${underShelf}, open floor ${underOut} · nearest ${near}`);
+    check('lock: totals and coverage leave the locked texels out; reset keeps the lock; lockDiscs([]) restores the full totals',
+      totalsOk && keeps && unlocked && again > 0,
+      `lockedWeighted ${f3(P.lockedWeighted)} after unlock · coverage sun ${cov.sun.toFixed(5)} vs ${(rc[1] / tot).toFixed(5)} · reset keeps ${keeps} · unlocked ${unlocked} · re-splat ${again}`);
+    P.reset();
+  }
+
   // ── dirty spans incl. mirrors ──
   {
     const P = new PA.Painter(A);

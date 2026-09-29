@@ -1,11 +1,12 @@
-# DYEFIELD — Harbor Cup • 4 v 4
+# DYEFIELD — Harbor Cup • 4 v 4 · Free-for-all
 
-> Two crews stain an arena. The floor is the scoreboard.
+> Stain the arena. The floor is the scoreboard.
 
-**DYEFIELD** is an original third-person 4 v 4 turf-paint arena game. **Tide-runners** —
-kid-scale coastal athletes — fight for the **HARBOR CUP**: **SUNCREW** (amber-orange) against
-**GULF CREW** (violet-blue). Your own dye is a highway and a refill pool, and enemy dye is glue.
-When the horn sounds, the crew that covers more of the floor wins.
+**DYEFIELD** is an original third-person turf-paint arena game with two modes: **TEAMS · 4 v 4**
+and an eight-runner **FREE-FOR-ALL**. **Tide-runners** — kid-scale coastal athletes — fight for the
+**HARBOR CUP**: in teams, **SUNCREW** (amber-orange) against **GULF CREW** (violet-blue); in
+free-for-all, every runner is a crew of one. Your own dye is a highway and a refill pool, and
+everyone else's dye is glue. When the horn sounds, whoever covers more of the floor wins.
 
 ## Run it (one command)
 
@@ -187,7 +188,7 @@ headless (`npm run art`), and `art/build.py check` enforces the asset contract. 
 
 ## Credits
 
-An original 4 v 4 turf-paint shooter.
+An original 4 v 4 and free-for-all turf-paint shooter.
 
 - Built with Three.js, Rapier, Vite and TypeScript; all 3D art authored in Blender (headless scripts).
 - Music: "Revelation", "Chasing The Stars", "Hyper Drive" and "8-bit Hero" from the SynthWave Music

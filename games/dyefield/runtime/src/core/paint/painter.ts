@@ -16,6 +16,12 @@
 // * onFlip(id, from, to) fires once per texel whose team actually changes (after the change).
 // * CHANGED(CORE) (CONTRACT_FFA §F6): the weighted totals are kept per crew id 0..8 (FFA); coverageByTeam() gives
 //   the shares by crew id. coverage() {sun, gulf, neutral} is the teams view and is unchanged.
+// * CHANGED(CORE) (review F2, FFA drop pads): an optional LOCK mask (lockDiscs). A locked texel is never dyed by a splat
+//   or capsule, is left out of every weighted total and share (the coverage denominators too) and is not a surface to
+//   nearest / surfaceAt / teamUnder — exactly as if it were not in the atlas, like the team pads (unpaintable solid_
+//   meshes, CONTRACT §7). The FFA MatchWorld locks the floor under each runtime drop pad, which is drawn opaque over it:
+//   dye there used to score unseen. reset() keeps the lock; lockDiscs([]) clears it. With no lock (teams) every path is
+//   the old one, so the teams hashes and totals are bit-identical.
 
 import type { Coverage, TeamId } from '../types.ts';
 import { CREW_SLOTS } from '../types.ts';
@@ -68,6 +74,10 @@ export class Painter {
   private readonly rows: Int32Array;
   private nRows = 0;
   private flipCount = 0;
+  /** CHANGED(CORE) (review F2): id → 1 when locked (lockDiscs); null = nothing locked */
+  private lockMask: Uint8Array | null = null;
+  private lockN = 0;
+  private lockW = 0;
 
   constructor(atlas: PaintAtlas) {
     this.atlas = atlas;
@@ -78,6 +88,62 @@ export class Painter {
   }
 
   get flips(): number { return this.flipCount; }
+
+  // ── CHANGED(CORE) (review F2): locked texels ──────────────────────────────────────────────────
+
+  /** texels locked now (0 = no lock) */
+  get lockedCount(): number { return this.lockN; }
+  /** Σ area·weight of the locked texels (left out of every total and share) */
+  get lockedWeighted(): number { return this.lockW; }
+  isLocked(id: number): boolean { const m = this.lockMask; return m !== null && m[id] !== 0; }
+
+  /**
+   * Lock the FLOOR texels (atlas.floor) whose centre lies within a disc's r of its centre (horizontal) and less than
+   * maxDy (m) above / below its y — replacing any previous lock; `[]` unlocks everything. A newly locked texel that holds
+   * dye goes neutral first, through the normal flip path (dirty span + onFlip). The totals are then recounted without
+   * the locked texels. Returns the number locked. No lock before and none asked for → a no-op (teams worlds).
+   */
+  lockDiscs(discs: ReadonlyArray<{ x: number; y: number; z: number; r: number }>, maxDy: number = 0.3): number {
+    const A = this.atlas;
+    if (discs.length === 0 && this.lockMask === null) return 0;
+    let mask: Uint8Array | null = null;
+    let n = 0;
+    if (discs.length > 0 && A.count > 0) {
+      mask = new Uint8Array(A.count);
+      const g = A.grid, inv = 1 / g.cell;
+      const { start, items } = g;
+      const { px, py, pz, floor } = A;
+      for (const d of discs) {
+        if (!(d.r > 0)) continue;
+        const r2 = d.r * d.r;
+        const ix0 = Math.max(0, Math.floor((d.x - d.r - g.ox) * inv)), ix1 = Math.min(g.nx - 1, Math.floor((d.x + d.r - g.ox) * inv));
+        const iy0 = Math.max(0, Math.floor((d.y - maxDy - g.oy) * inv)), iy1 = Math.min(g.ny - 1, Math.floor((d.y + maxDy - g.oy) * inv));
+        const iz0 = Math.max(0, Math.floor((d.z - d.r - g.oz) * inv)), iz1 = Math.min(g.nz - 1, Math.floor((d.z + d.r - g.oz) * inv));
+        for (let iz = iz0; iz <= iz1; iz++) {
+          for (let iy = iy0; iy <= iy1; iy++) {
+            for (let ix = ix0; ix <= ix1; ix++) {
+              const c = (iz * g.ny + iy) * g.nx + ix;
+              for (let k = start[c], e = start[c + 1]; k < e; k++) {
+                const id = items[k];
+                if (mask[id] !== 0 || floor[id] === 0 || !(Math.abs(py[id] - d.y) < maxDy)) continue;
+                const dx = px[id] - d.x, dz = pz[id] - d.z;
+                if (dx * dx + dz * dz > r2) continue;
+                mask[id] = 1;
+                n++;
+              }
+            }
+          }
+        }
+      }
+      if (n === 0) mask = null;
+    }
+    this.lockMask = null;                              // the neutralising flips below take the plain path
+    if (mask) for (let id = 0; id < A.count; id++) if (mask[id] !== 0 && A.team[id] !== 0) this.flip(id, 0);
+    this.lockMask = mask;
+    this.lockN = n;
+    this.recount();
+    return n;
+  }
 
   // ── painting ──────────────────────────────────────────────────────────────────────────────
 
@@ -129,6 +195,7 @@ export class Painter {
 
     const { start, items } = g;
     const { px, py, pz, nx, ny, nz, team, lin } = A;
+    const lk = this.lockMask;
     const half = 0.5 * cell;
     const cellSkip = reach + half * Math.sqrt(3);
     const cellSkip2 = cellSkip * cellSkip;
@@ -166,6 +233,7 @@ export class Painter {
             const d2 = dx * dx + dy * dy + dz * dz;
             if (d2 > reach2) continue;
             if (team[id] === to) continue;
+            if (lk !== null && lk[id] !== 0) continue;            // CHANGED(CORE) (review F2): locked (FFA pad floor)
             if (useFacing && nx[id] * fx + ny[id] * fy + nz[id] * fz <= minFacing) continue;
             if (d2 > inner2) {
               const n = SMOOTH_SHARE * valueNoise3(tx * freq, ty * freq, tz * freq, key)
@@ -225,6 +293,7 @@ export class Painter {
     const iz1 = Math.min(g.nz - 1, Math.floor((z + maxDist - g.oz) * inv));
     const { start, items } = g;
     const { px, py, pz, floor } = A;
+    const lk = this.lockMask;
     const wantFloor = kind === 'floor' ? 1 : kind === 'wall' ? 0 : -1;
     let best = -1, bestD2 = maxDist * maxDist;
     for (let iz = iz0; iz <= iz1; iz++) {
@@ -234,6 +303,7 @@ export class Painter {
           for (let k = start[c], e = start[c + 1]; k < e; k++) {
             const id = items[k];
             if (wantFloor >= 0 && floor[id] !== wantFloor) continue;
+            if (lk !== null && lk[id] !== 0) continue;            // CHANGED(CORE) (review F2): locked = not a surface
             const dx = px[id] - x, dy = py[id] - y, dz = pz[id] - z;
             const d2 = dx * dx + dy * dy + dz * dz;
             if (d2 < bestD2 || (d2 === bestD2 && (best < 0 || id < best))) { best = id; bestD2 = d2; }
@@ -297,7 +367,7 @@ export class Painter {
     }
   }
 
-  /** Back to all-neutral. Every changed texel goes through the normal flip path (dirty + onFlip). */
+  /** Back to all-neutral. Every changed texel goes through the normal flip path (dirty + onFlip). The lock stays. */
   reset(): void {
     const team = this.atlas.team;
     for (let id = 0; id < this.atlas.count; id++) {
@@ -318,10 +388,22 @@ export class Painter {
     return (h >>> 0).toString(16).padStart(8, '0');
   }
 
-  /** Recompute the weighted totals from the arrays (removes any Float64 drift). */
+  /** Recompute the weighted totals from the arrays (removes any Float64 drift). CHANGED(CORE) (review F2): locked
+   *  texels are left out (their sum → lockedWeighted). */
   recount(): void {
     const A = this.atlas;
     this.w.fill(0);
-    for (let i = 0; i < A.count; i++) this.w[A.team[i]] += A.area[i] * A.weight[i];
+    const lk = this.lockMask;
+    if (lk === null) {
+      for (let i = 0; i < A.count; i++) this.w[A.team[i]] += A.area[i] * A.weight[i];
+      this.lockW = 0;
+      return;
+    }
+    let lw = 0;
+    for (let i = 0; i < A.count; i++) {
+      if (lk[i] !== 0) { lw += A.area[i] * A.weight[i]; continue; }
+      this.w[A.team[i]] += A.area[i] * A.weight[i];
+    }
+    this.lockW = lw;
   }
 }

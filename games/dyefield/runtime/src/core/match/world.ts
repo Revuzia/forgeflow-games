@@ -23,6 +23,7 @@
 // assigned by a seeded shuffle; the pad counts as its owner's dye (slick + refill) and every other runner is pushed
 // out of it; a washed runner respawns there after the usual 3 s. The A/B team pads are neutral scenery in FFA. The
 // result carries shares / standings per crew and the winner by strict comparison (a tie for first = a draw, `tied`).
+// The floor under each drop pad is locked in the painter (review F2): no dye, no score, like the unpaintable team pads.
 // Teams mode takes none of the new branches: its ticks and hashes are unchanged.
 
 import type { MapDef } from '../data.ts';
@@ -258,6 +259,12 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
     } else {
       this.crews = [1, 2];
     }
+    // CHANGED(CORE) (review F2): FFA locks the floor under every drop pad in the painter (Painter.lockDiscs): never dyed,
+    // never scored, not a surface to the runners' / bots' floor queries — as the team pads are unpaintable solid_ meshes
+    // (CONTRACT §7). The pad is drawn opaque over that floor (view/mapview.ts addFfaPads), so dye there used to score unseen
+    // (~64 m², 1.3–1.8 % of each map). Teams clears the lock (a no-op on a painter that never had one: teams hashes
+    // unchanged) — one painter serves every session and mode on an arena.
+    o.painter.lockDiscs(ffa ? this.crewPads : []);
     for (let i = 0; i < roster.length; i++) {
       const e = roster[i];
       if (e.id !== i) throw new Error(`MatchWorld: roster[${i}].id is ${e.id}; ids must equal their index (runners[i] ↔ intents[i])`);

@@ -3,9 +3,10 @@
 // lobby Game on Pier 18 at noon behind it). Toy-bright and chunky like the HUD: Lilita One + Nunito, ink
 // outlines, hard drop shadows.
 //
-// Copy: only the brief's fixed strings where they apply (DESIGN §1) — wordmark DYEFIELD, the mode line
-// 'Harbor Cup • 4 v 4', the LOADOUT hint 'Pick your kit — crest sits on the right', the credits line
-// 'An original 4 v 4 turf-paint shooter.', the menu labels PLAY / LOADOUT / SETTINGS / HOW TO PLAY / CREDITS;
+// Copy: the brief's fixed strings where they apply (DESIGN §1) — wordmark DYEFIELD, the mode line (a teams match:
+// 'Harbor Cup • 4 v 4'; the title names both modes, 'Harbor Cup • 4 v 4 · Free-for-all'), the LOADOUT hint 'Pick your
+// kit — crest sits on the right', the credits line (widened to 'An original 4 v 4 and free-for-all turf-paint
+// shooter.' once FFA shipped), the menu labels PLAY / LOADOUT / SETTINGS / HOW TO PLAY / CREDITS;
 // bot tiers BREEZE / SWELL / STORM (ids breeze / swell / storm).
 //
 // Navigation: every control carries [data-nav]. Arrow keys / d-pad / left stick move focus spatially inside
@@ -16,8 +17,8 @@
 // State lives in SettingsStore / ProfileStore (settings.ts); main.ts listens to them and applies changes live.
 //
 // CONTRACT_FFA F3: PLAY carries a MODE selector — TEAMS · 4 v 4 (the default) / FREE-FOR-ALL — persisted in the
-// profile. The title's mode line reads exactly 'Harbor Cup • 4 v 4' in teams mode and 'Harbor Cup • Free-for-all'
-// in FFA. In FFA the LOADOUT crew toggle becomes a colour pick of the 8 FFA crews (a chip + its mark; bots take the
+// profile. The title's brand line names both modes whichever is picked; the profile card shows the picked one
+// (TEAMS: the crew name, FFA: FREE-FOR-ALL). In FFA the LOADOUT crew toggle becomes a colour pick of the 8 FFA crews (a chip + its mark; bots take the
 // other seven), and the profile card / plate / PLAY kit line / mannequin take the picked colour.
 
 import { WEAPONS, playableMaps, teamById, TEAMS_RAW, type MapDef } from '../core/data.ts';
@@ -28,17 +29,17 @@ import { RENDER_QUALITIES, type RenderQuality } from '../view/renderer.ts';
 import { cleanName, NAME_MAX, SENS_MAX, SENS_MIN, BOT_SKILL_IDS, type Bindings, type ProfileMode, type ProfileStore, type SettingsStore } from './settings.ts';
 import { crewLook, ffaCrews } from './slates.ts';
 import { KIT_ICONS, MAP_THUMBS, SVG, roleLabel } from './icons.ts';
-import { MODE_LINE, MODE_LINE_FFA } from './boot.ts';
+import { MODE_LINE_ALL, MODE_LINE_FFA, fillModeLine } from './boot.ts';
 import type { Mannequin } from './mannequin.ts';
 import './menus.css';
 
 export const LOADOUT_HINT = 'Pick your kit — crest sits on the right';
-/** CONTRACT_FFA F3: the title mode line in FREE-FOR-ALL (teams mode keeps boot.ts MODE_LINE exactly); defined in
- *  boot.ts so the loading card shares it */
-export { MODE_LINE_FFA };
+/** the title's brand line (both modes) and the FFA match line; defined in boot.ts so the loading card shares them */
+export { MODE_LINE_ALL, MODE_LINE_FFA };
 /** CONTRACT_FFA F3: the PLAY mode selector labels */
 export const MODE_LABELS: ReadonlyArray<readonly [ProfileMode, string]> = [['teams', 'TEAMS · 4 v 4'], ['ffa', 'FREE-FOR-ALL']];
-export const CREDITS_LINE = 'An original 4 v 4 turf-paint shooter.';
+/** the brief's credits line, widened for the FREE-FOR-ALL mode (owner 2026-09-28: 4 v 4-only copy was misleading) */
+export const CREDITS_LINE = 'An original 4 v 4 and free-for-all turf-paint shooter.';
 /** HOW TO PLAY panel 1's rule: teams (unchanged copy) / FREE-FOR-ALL (new copy, CONTRACT_FFA F3) */
 export const HOW_RULE = 'Dye the court in your crew’s color. When the final horn sounds, the crew with more turf wins.';
 export const HOW_RULE_FFA = 'Free-for-all: every runner is a crew of one. When the final horn sounds, the most turf wins.';
@@ -166,8 +167,6 @@ export class Menus {
   private readonly profMark: HTMLElement;
   private readonly kitCard: HTMLElement;
   private readonly modeText: HTMLElement;
-  private readonly modeMarkL: HTMLElement;
-  private readonly modeMarkR: HTMLElement;
   /** HOW TO PLAY panel 1's rule line: HOW_RULE (teams, unchanged) / HOW_RULE_FFA, by the profile's mode */
   private howRule: HTMLElement | null = null;
   // CONTRACT_FFA F3: the PLAY mode selector + the LOADOUT FFA colour pick
@@ -233,9 +232,8 @@ export class Menus {
     const mode = el('p', 'df-mode');
     const m1 = el('i', '', '◉'); m1.setAttribute('aria-hidden', 'true');
     const m2 = el('i', 'g', '▲'); m2.setAttribute('aria-hidden', 'true');
-    this.modeText = el('span', '', MODE_LINE);
-    this.modeMarkL = m1;
-    this.modeMarkR = m2;
+    this.modeText = el('span');
+    fillModeLine(this.modeText, MODE_LINE_ALL);
     mode.append(m1, this.modeText, m2);
     brand.append(wm, mode);
     const stack = el('nav', 'dfm-stack');
@@ -907,12 +905,10 @@ export class Menus {
     else { this.root.style.removeProperty('--crew-gloss'); this.root.style.removeProperty('--crew-ink'); }
     this.root.dataset.crew = ffa ? 'ffa' : team.key;
     this.root.dataset.mode = p.mode;
-    // title (the mode line: exactly MODE_LINE in teams mode)
-    this.modeText.textContent = ffa ? MODE_LINE_FFA : MODE_LINE;
+    // title: the brand line names BOTH modes whatever is picked (owner 2026-09-28: a 4 v 4-only line read as if FFA
+    // did not exist); the picked mode shows on the profile card below (profCrew) and on PLAY's MODE selector
+    fillModeLine(this.modeText, MODE_LINE_ALL);
     if (this.howRule) this.howRule.textContent = ffa ? HOW_RULE_FFA : HOW_RULE;
-    this.modeMarkL.textContent = ffa ? fc.markGlyph : '◉';
-    this.modeMarkL.style.color = ffa ? fc.ui : '';
-    this.modeMarkR.hidden = ffa;
     this.profMark.textContent = mark;
     this.profName.textContent = p.name || 'YOU';
     this.profCrew.textContent = ffa ? MODE_LABELS[1][1] : team.name;

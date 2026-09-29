@@ -8,6 +8,8 @@
 //                                            # countdown freeze, horns, shares sum to 1, a winner (strict, tie = draw),
 //                                            # determinism, plus the drop-pad rules (own pad = own dye, others pushed out,
 //                                            # respawn on the own pad after 3 s)
+// Both modes also run padFloor (review F2): the floor under the FFA drop pads is locked (no dye, no score) and a later
+// TEAMS world on the same painter unlocks it.
 //
 // The runners are driven by a SCRIPTED driver (not the BOTS lane's AI): each walks a lane toward mid,
 // sweeping fire over the floor ahead; it aims at a visible enemy within range (MatchWorld.canSee, 10 Hz);
@@ -248,6 +250,16 @@ async function main(): Promise<number> {
       pr.pads === 8 && pr.distinct && pr.pushedOut && pr.slickOnOwn && pr.refilled && pr.respawnOnPad,
       `pads ${pr.pads} (distinct ${pr.distinct}, r ${pr.r}) · intruder ${pr.intruderD.toFixed(2)} m from the foe pad centre after 1 s (pushed out ${pr.pushedOut}) · own pad: state ${pr.state}, tank 10 → ${pr.tank.toFixed(0)} · respawn after ${pr.respawnS.toFixed(2)} s at ${pr.respawnD.toFixed(2)} m from the own pad`);
   }
+  {
+    // review F2 (both modes, so `npm run probe` keeps it): the floor under the FFA drop pads is locked — the pad is drawn
+    // opaque over it, so dye there used to score unseen
+    const pf = await padFloor(R, def, geo, SEED);
+    check('FFA drop-pad floor locked: a foe stream at a pad dyes 0 texels in its disc (teamUnder there null), shares leave the pad floor out, a teams world on the same painter unlocks it',
+      pf.lockedOk && pf.fired && pf.dyedInDisc === 0 && pf.underCentre === null && pf.sharesOk && pf.teamsUnlocked && pf.teamsTotalsOk && pf.teamsPaintsPadFloor,
+      `locked ${pf.locked} texels = ${pf.expect} floor texels in the 8 discs (${pf.lockedM2.toFixed(1)} m², ${pct(pf.lockedM2 / pf.totalM2)} of the map; every pad ${pf.minPerPad}+) · `
+      + `stream at runner ${pf.padPid}'s pad from ${pf.fromD.toFixed(2)} m: shots ${pf.shots}, splats ${pf.splats}, shooter painted ${pf.painted.toFixed(2)} m² · texels in the disc dyed ${pf.dyedInDisc}, teamUnder(centre) ${pf.underCentre} · `
+      + `Σ crew weights ${pf.sumW.toFixed(3)} = total − locked ${(pf.totalM2 - pf.lockedM2).toFixed(3)} (${pf.sharesOk}) · then TEAMS on the same painter: locked ${pf.teamsLocked}, neutral total ${pf.teamsTotal.toFixed(3)} vs atlas ${pf.totalM2.toFixed(3)}, a splat at the old pad centre → teamUnder ${pf.teamsUnder}`);
+  }
   console.log('-'.repeat(100));
   const a = await runMatch(R, def, geo, SEED);
   log(`run A: ${a.wallS.toFixed(2)} s, hash ${a.hash}`);
@@ -366,6 +378,93 @@ async function padRules(R: Rapier, def: MapDef, geo: MapGeometry, seed: number):
   return {
     pads: pads.length, distinct, r: pads[0]?.r ?? 0, intruderD, pushedOut: intruderD >= foe.r - 0.05, state, slickOnOwn: slickSeen,
     tank, refilled: tank > 30, respawnS: ticks * TICK, respawnD, respawnOnPad: r3.alive && respawnD < 0.3 && Math.abs(ticks * TICK - 3) < 0.05,
+  };
+}
+
+/** review F2: the floor under the FFA drop pads is LOCKED in the painter (Painter.lockDiscs via the FFA MatchWorld). An FFA
+ *  world on a fresh painter: the lock = exactly the floor texels in the 8 pad discs (the same predicate: r, |dy| < 0.3 m);
+ *  runner 0's stream held on a foe's pad centre from 4.5 m for 2.5 s (+1 s to land; its hits / washes on the pad owner
+ *  paint too) dyes none of them and teamUnder(centre) is null; the crew weights sum to the atlas total minus the locked
+ *  part (the shares leave it out). Then the arena-reuse path: reset + a TEAMS world on the same painter unlocks it (totals
+ *  = the atlas total again, the old pad floor paints). */
+async function padFloor(R: Rapier, def: MapDef, geo: MapGeometry, seed: number): Promise<{
+  locked: number; expect: number; lockedOk: boolean; lockedM2: number; totalM2: number; minPerPad: number;
+  padPid: number; fromD: number; shots: number; splats: number; painted: number; fired: boolean; dyedInDisc: number; underCentre: number | null;
+  sumW: number; sharesOk: boolean; teamsLocked: number; teamsUnlocked: boolean; teamsTotal: number; teamsTotalsOk: boolean;
+  teamsUnder: number | null; teamsPaintsPadFloor: boolean;
+}> {
+  const sc = def.scoring ?? { wallWeight: 0.35, floorMinNy: 0.45 };
+  const A = buildAtlas(geo.paint, geo.atlasSize, { wallWeight: sc.wallWeight, floorMinNy: sc.floorMinNy });
+  const painter = new Painter(A);
+  const physics = new PhysicsWorld(R, geo);
+  const roster = defaultRoster({ humanKit: 'mist-rasp', seed, skill: 'swell', mode: 'ffa' });
+  const w = new MatchWorld({ def, geo, physics, painter, roster, seed, countdownS: 0, durationS: 60, mode: 'ffa' });
+  const pads = w.crewPads;
+  const inDisc = (i: number, p: { x: number; y: number; z: number; r: number }): boolean =>
+    A.floor[i] === 1 && (A.px[i] - p.x) ** 2 + (A.pz[i] - p.z) ** 2 <= p.r * p.r && Math.abs(A.py[i] - p.y) < 0.3;
+  let expect = 0, minPerPad = Infinity, minPadM2 = Infinity;
+  const perPad = pads.map(() => ({ n: 0, m2: 0 }));
+  for (let i = 0; i < A.count; i++) {
+    let any = false;
+    for (let k = 0; k < pads.length; k++) if (inDisc(i, pads[k])) { perPad[k].n++; perPad[k].m2 += A.area[i] * A.weight[i]; any = true; }
+    if (any) expect++;
+  }
+  for (const q of perPad) { minPerPad = Math.min(minPerPad, q.n); minPadM2 = Math.min(minPadM2, q.m2); }
+  const lockedOk = painter.lockedCount === expect && pads.length === 8 && minPadM2 >= 0.8 * Math.PI * 1.6 * 1.6
+    && pads.every((p) => { let bad = 0; for (let i = 0; i < A.count; i++) if (inDisc(i, p) && !painter.isLocked(i)) bad++; return bad === 0; });
+  // runner 0 holds its stream on a foe pad's centre from 4.5 m (flat floor at the pad's height)
+  const me = w.runners[0];
+  const intents: PlayerIntent[] = w.runners.map(() => emptyIntent());
+  const sink: SimEvent[] = [];
+  let pad = pads[1], fromD = NaN;
+  for (let pi = 1; pi < pads.length && !Number.isFinite(fromD); pi++) {
+    const p = pads[pi];
+    if (p.crew === me.team) continue;
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      const sx = p.x + Math.sin(a) * 4.5, sz = p.z + Math.cos(a) * 4.5;
+      const h = physics.raycast(sx, p.y + 1.5, sz, 0, -1, 0, 3);
+      if (!h || Math.abs(h.y - p.y) > 0.3 || h.ny < 0.9) continue;
+      w.devTeleport(0, sx, h.y, sz, Math.atan2(p.x - sx, p.z - sz));
+      pad = p; fromD = Math.hypot(sx - p.x, sz - p.z);
+      break;
+    }
+  }
+  const it = intents[0];
+  for (let t = 0; t < Math.round(3.5 / TICK); t++) {
+    const firing = t < Math.round(2.5 / TICK);
+    it.fire = firing; it.hasAim = firing; it.aimX = pad.x; it.aimY = pad.y + 0.02; it.aimZ = pad.z;
+    it.yaw = Math.atan2(pad.x - me.x, pad.z - me.z);
+    w.step(intents);
+    sink.length = 0; w.drainEvents(sink);
+  }
+  let dyedInDisc = 0;
+  for (let i = 0; i < A.count; i++) if (A.team[i] !== 0 && inDisc(i, pad)) dyedInDisc++;
+  const underCentre = painter.teamUnder(pad.x, pad.y, pad.z);
+  let sumW = 0;
+  for (let t = 0; t < 9; t++) sumW += painter.weighted(t);
+  const by = painter.coverageByTeam();
+  const bySum = Array.from(by).reduce((x, v) => x + v, 0);
+  const sharesOk = Math.abs(sumW - (A.totalWeighted - painter.lockedWeighted)) <= 1e-9 * A.totalWeighted && Math.abs(bySum - 1) < 1e-9
+    && Math.abs(painter.lockedWeighted - perPad.reduce((s, q) => s + q.m2, 0)) < 1e-6;
+  const out = {
+    locked: painter.lockedCount, expect, lockedOk, lockedM2: painter.lockedWeighted, totalM2: A.totalWeighted, minPerPad,
+    padPid: pad.pid, fromD, shots: w.stats.shots, splats: w.stats.splats, painted: me.painted,
+    fired: Number.isFinite(fromD) && w.stats.shots > 10 && w.stats.splats > 10 && me.painted > 0, dyedInDisc, underCentre, sumW, sharesOk,
+  };
+  // the arena-reuse path (main.ts startSession / Game.restart): reset, the old world's capsules out, a TEAMS world
+  for (const r of w.runners) { const b = r.body as unknown as { dispose?: (world: unknown) => void }; try { b.dispose?.(physics.world); } catch { /* gone */ } }
+  painter.reset();
+  const tw = new MatchWorld({ def, geo, physics, painter, roster: defaultRoster({ humanKit: 'mist-rasp', seed, skill: 'swell' }), seed, countdownS: 0, durationS: 60 });
+  const teamsLocked = painter.lockedCount;
+  const teamsTotal = painter.weighted(0);
+  painter.splat(pad.x, pad.y + 0.05, pad.z, { radius: 0.8, team: 1, nx: 0, ny: 1, nz: 0 });
+  const teamsUnder = painter.teamUnder(pad.x, pad.y, pad.z);
+  void tw;
+  physics.dispose();
+  return {
+    ...out, teamsLocked, teamsUnlocked: teamsLocked === 0 && painter.lockedWeighted === 0 && !painter.isLocked(0),
+    teamsTotal, teamsTotalsOk: Math.abs(teamsTotal - A.totalWeighted) <= 1e-12 * A.totalWeighted, teamsUnder, teamsPaintsPadFloor: teamsUnder === 1,
   };
 }
 

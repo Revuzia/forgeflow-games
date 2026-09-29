@@ -1,5 +1,5 @@
-// DYEFIELD — boot cards (CONTRACT §5.1 ui/boot.ts): loading card (wordmark DYEFIELD, mode line
-// "Harbor Cup • 4 v 4", progress) → CLICK TO PLAY (pointer lock) → play. The error card shows the
+// DYEFIELD — boot cards (CONTRACT §5.1 ui/boot.ts): loading card (wordmark DYEFIELD, mode line —
+// "Harbor Cup • 4 v 4 · Free-for-all" until a mode is committed, then that match's line —, progress) → CLICK TO PLAY (pointer lock) → play. The error card shows the
 // message and never leaves a blank canvas. After 2+ pointerlockerrors with zero successful locks
 // ever, the play card swaps to the "mouse capture blocked" message (doctrine §6).
 // index.html paints the same loading card statically before the module graph runs; this class
@@ -7,11 +7,31 @@
 
 export const MODE_LINE = 'Harbor Cup • 4 v 4';
 /** CONTRACT_FFA F3: the mode line in FREE-FOR-ALL (teams keeps MODE_LINE exactly). The loading / play cards show the
- *  line of the session being loaded: BootUI.setMode('ffa') before showLoading(), setMode('teams') for the lobby. */
+ *  line of the session being loaded: BootUI.setMode('ffa') / setMode('teams') before showLoading() of a match. */
 export const MODE_LINE_FFA = 'Harbor Cup • Free-for-all';
+/** Owner 2026-09-28 ("shows 4v4 but … we had an option of free for all — this is misleading"): wherever no mode is
+ *  committed yet — the static card of a bare URL, the lobby's loading card, the title screen — the line names BOTH
+ *  modes. index.html paints this same text statically. */
+export const MODE_LINE_ALL = 'Harbor Cup • 4 v 4 · Free-for-all';
 
 /** the card's current mode line (module state: one boot card per page) */
-let modeText = MODE_LINE;
+let modeText = MODE_LINE_ALL;
+
+/**
+ * Fill a mode-line element with `text`, split after its ' • ' / ' · ' separators into no-wrap chunks (.df-nw), so a
+ * narrow card wraps the pill BETWEEN phrases ("Harbor Cup •" / "4 v 4 ·" / "Free-for-all"), never inside "4 v 4" or
+ * "Free-for-all". textContent stays exactly `text` (the chunks are joined by single spaces).
+ */
+export function fillModeLine(span: HTMLElement, text: string): void {
+  if (span.textContent === text && span.firstElementChild) return;
+  const parts = text.split(/(?<=[•·]) /);
+  const nodes: Node[] = [];
+  parts.forEach((p, i) => {
+    if (i) nodes.push(document.createTextNode(' '));
+    nodes.push(el('span', 'df-nw', p));
+  });
+  span.replaceChildren(...nodes);
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -33,7 +53,9 @@ function modeLine(): HTMLElement {
   const p = el('p', 'df-mode');
   const m1 = el('i', '', '◉'); m1.setAttribute('aria-hidden', 'true');
   const m2 = el('i', 'g', '▲'); m2.setAttribute('aria-hidden', 'true');
-  p.append(m1, el('span', '', modeText), m2);
+  const line = el('span');
+  fillModeLine(line, modeText);
+  p.append(m1, line, m2);
   return p;
 }
 
@@ -71,13 +93,14 @@ export class BootUI {
   }
 
   /**
-   * CONTRACT_FFA F3: the mode line of the session about to load ('ffa' → 'Harbor Cup • Free-for-all', else exactly
-   * MODE_LINE). Updates the card on screen in place and every card built after it.
+   * CONTRACT_FFA F3: the mode line of the session about to load ('ffa' → 'Harbor Cup • Free-for-all', 'teams' →
+   * exactly MODE_LINE, 'all' → MODE_LINE_ALL for the lobby, where no mode is picked yet). Updates the card on screen in
+   * place and every card built after it.
    */
-  setMode(mode: 'teams' | 'ffa'): void {
-    modeText = mode === 'ffa' ? MODE_LINE_FFA : MODE_LINE;
-    const span = this.root.querySelector('.df-mode span');
-    if (span && span.textContent !== modeText) span.textContent = modeText;
+  setMode(mode: 'teams' | 'ffa' | 'all'): void {
+    modeText = mode === 'ffa' ? MODE_LINE_FFA : mode === 'teams' ? MODE_LINE : MODE_LINE_ALL;
+    const span = this.root.querySelector<HTMLElement>('.df-mode > span');
+    if (span) fillModeLine(span, modeText);
   }
 
   /** f in 0..1 (monotonic: never moves backwards) */
