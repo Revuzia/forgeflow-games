@@ -33,10 +33,16 @@ export interface MapDef {
   spawns?: Record<Side, { pos: V3; yaw: number }>;
   /** CHANGED(CORE) (CONTRACT_FFA §F1): the 8 FFA drop-pad spawns, yaw in DEGREES (written by _harness/gen_ffa_spawns.ts) */
   ffaSpawns?: Array<{ pos: V3; yaw: number }>;
+  /** CHANGED(SPAWNS) (CONTRACT_FFA_SPAWNS §S1): the FFA spawn-site POOL (16–24 per map, sized to its floor area; the first 8
+   *  = ffaSpawns), yaw in DEGREES facing the map's open centre (written by _harness/gen_ffa_spawns.ts --count auto --write) */
+  ffaSites?: Array<{ pos: V3; yaw: number }>;
   courtLines?: { centerCircleRadius: number; midLineZ: number; color: string; width: number };
   lighting?: { default: string; presets: Record<string, LightingPreset> };
   brushes?: unknown[];
   design?: unknown;
+  /** CHANGED(WASHOUT) (CONTRACT_WASHOUT §W1): this map's WASHOUT score limits (TEAMS / FREE-FOR-ALL), tuned per map with
+   *  `npm run probe:washout:tune`; a missing / bad value falls back to data/weapons.json → washout (world.ts washoutLimitFor) */
+  washout?: { teamLimit?: number; ffaLimit?: number };
 }
 
 export interface TeamDef {

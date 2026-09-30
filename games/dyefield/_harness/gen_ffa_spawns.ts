@@ -24,6 +24,22 @@
 // beaches, and a heavier territory weight (400, all FPS starts polished) only packed the spawns two to a corner
 // (nearest spawn 9 m) at ±43 % — so the weight stays 150 and Cinder's territory spread is reported, not fixed.
 // Yaw faces the nav path toward the map centroid (the point ~6 m along it), in DEGREES like maps.json spawns.
+//
+// CHANGED(SPAWNS) (CONTRACT_FFA_SPAWNS §S1): the FFA spawn-site POOL (maps.json <map>.ffaSites; ffaSpawns is kept as it is)
+//   node _harness/gen_ffa_spawns.ts --count auto [--map ...]          # generate the pool + report (no write)
+//   node _harness/gen_ffa_spawns.ts --count auto --write              # … and write maps.json <map>.ffaSites + a _changes note
+//   node _harness/gen_ffa_spawns.ts --count 20 --map pier18           # a fixed size (even on a rot180 map)
+//   node _harness/gen_ffa_spawns.ts --check                           # also verifies ffaSites (rules + regenerated = stored)
+// The pool = the 8 ffaSpawns (same order) + new sites under the SAME site rules (floor ny, clearance incl. a map's
+// ffaSpawnRules, off grates / conveyors / springs / oob / team pads), added in rot180 mirror pairs by HIDDEN COVERAGE:
+// the respawn needs a site no foe sees (S2 / S6 "≥ 90 % unseen"), so over a seeded model of 600 layouts of 7 foes kept
+// 14 m apart (FFA bots spread out) each new pair is the one that most often gives a layout with < 2 available sites (no foe
+// seeing its chest within 30 m — no mist rule: a respawned runner is tall —, none within 3 m) one more, among the pairs
+// keeping ≥ POOL_SPREAD m (nav)
+// from every pool site (ties: the farther, then the lower index; none keeps it: the farthest pair). Size `auto`: one site per
+// POOL_AREA_PER_SITE m² of core floor (territory samples × 4 m²), rounded to an even count, clamped to 16–24. Gates: the
+// size in 16–24, every site site-ok, every pair of sites ≥ POOL_MIN_GAP m apart by nav, all mutually reachable; --check
+// also regenerates the pool and requires it to equal the stored one (so the file and this generator cannot drift).
 // Exit: 0 every map fair (and written with --write) · 1 a map failed a rule · 2 setup failure.
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -36,6 +52,8 @@ import { buildAtlas } from '../runtime/src/core/paint/atlas.ts';
 import { Painter } from '../runtime/src/core/paint/painter.ts';
 import { buildNav, type NavGraph } from '../runtime/src/core/bots/nav.ts';
 import { padsOf, MATCH_FFA } from '../runtime/src/core/match/world.ts';
+import { COMBAT, HITBOX, MOVE } from '../runtime/src/core/config.ts';
+import { hash32, mulberry32 } from '../runtime/src/core/rng.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAPS_JSON = resolve(HERE, '..', 'data', 'maps.json');
@@ -44,6 +62,26 @@ const arg = (k: string, d: string): string => { const i = argv.indexOf(k); retur
 const WRITE = argv.includes('--write');
 const CHECK = argv.includes('--check');
 const MAP_IDS = arg('--map', '').split(',').map((s) => s.trim()).filter(Boolean);
+/** CHANGED(SPAWNS): --count auto | N → the site-pool mode (maps.json ffaSites); '' = the 8-spawn mode as before */
+const COUNT_RAW = arg('--count', '').trim();
+const POOL = COUNT_RAW !== '';
+const POOL_MIN = 16, POOL_MAX = 24;
+/** m² of core floor per pool site (auto size). Measured core floor 2026-09-30: pier18 4936, lockwell 4368 (its upper
+ *  decks included), cinder 5144 m² → 22 / 20 / 24 sites. The respawn wants several SAFE candidates (unseen, ≥ 12 m from 7
+ *  foes: each foe rules out ~450 m² of floor), so the density sits at the dense end the 16–24 range allows (150 m² put
+ *  every map at the 24 cap: no longer sized to the map; 250 m² gave 20 / 18 / 20) */
+const POOL_AREA_PER_SITE = 200;
+/** m: the nav distance every two pool sites keep (gate) */
+const POOL_MIN_GAP = 6;
+/** m: a foe farther than this never sees a site (world.ts MATCH_FFA.seeRange) — the exposure measure's range */
+const POOL_SEE_RANGE = 30;
+/** the hidden-coverage choice of the new pool sites (see genPool): POOL_MC_K foe layouts of POOL_MC_FOES foes kept
+ *  POOL_MC_SEP m apart; each new pair adds the most layouts-with-fewer-than-POOL_MC_WANT-available-sites, among the pairs
+ *  keeping POOL_SPREAD m (nav) from every pool site */
+const POOL_MC_K = Number(arg("--mc-k", "600")), POOL_MC_FOES = 7, POOL_MC_SEP = Number(arg("--mc-sep", "14")), POOL_MC_WANT = Number(arg("--want", "2"));
+/** held-out layouts judging the final pool (report only) */
+const POOL_MC_JUDGE_K = 3000;
+const POOL_SPREAD = Number(arg("--spread", "9"));
 
 // ── the F1 site rules ──
 const N_SPAWNS = 8;
@@ -430,15 +468,368 @@ async function genMap(id: string, R: Awaited<ReturnType<typeof loadRapier>>): Pr
 
 function round2(v: number): number { const r = Math.round(v * 100) / 100; return r === 0 ? 0 : r; }
 
+/** yaw (DEGREES, 5° steps) from `node` toward the point ~6 m along its nav path to the centroid node (as genMap) */
+function yawToward(nav: NavGraph, node: number, cNode: number, pred: Int32Array): number {
+  dijkstra(nav, node, pred);
+  const path: number[] = [];
+  for (let v = cNode; v >= 0 && path.length < 100000; v = pred[v]) { path.push(v); if (v === node) break; }
+  path.reverse();
+  let tx = nav.x[cNode], tz = nav.z[cNode], acc = 0;
+  for (let k = 1; k < path.length; k++) {
+    acc += Math.hypot(nav.x[path[k]] - nav.x[path[k - 1]], nav.z[path[k]] - nav.z[path[k - 1]]);
+    if (acc >= 6) { tx = nav.x[path[k]]; tz = nav.z[path[k]]; break; }
+  }
+  let yaw = Math.atan2(tx - nav.x[node], tz - nav.z[node]) * 180 / Math.PI;
+  yaw = Math.round(yaw / 5) * 5;
+  if (yaw <= -180) yaw += 360;
+  return yaw === 0 ? 0 : yaw;
+}
+
+// ── CHANGED(SPAWNS) (CONTRACT_FFA_SPAWNS §S1): the spawn-site pool ──
+interface PoolOut {
+  id: string; count: number; auto: number; area: number;
+  sites: Array<{ pos: [number, number, number]; yaw: number }>;
+  /** per site: nav distance (symmetrised) to its nearest other site */
+  nn: number[]; minGap: number; reachable: boolean;
+  /** per site: exposure (share of the core floor samples that see it within the see range) */
+  expo: number[];
+  /** the foe-layout model on the final pool: share of layouts with no available site / fewer than POOL_MC_WANT, mean */
+  model: { none: number; mean: number; none18: number; mean18: number };
+  /** --check: stored ffaSites count and whether the regenerated pool equals it (null: not checked) */
+  stored: number; same: boolean | null;
+  counts: Record<string, number>; ms: number; problems: string[];
+}
+
+async function genPool(id: string, R: Awaited<ReturnType<typeof loadRapier>>): Promise<PoolOut> {
+  const t0 = performance.now();
+  const def = mapById(id);
+  const rules = (def as unknown as { ffaSpawnRules?: { clear?: number; minNy?: number } }).ffaSpawnRules ?? {};
+  CLEAR = Number(arg('--clear', String(rules.clear ?? CLEAR_DEFAULT)));
+  MIN_NY = Number(arg('--minny', String(rules.minNy ?? MIN_NY_DEFAULT)));
+  console.log(`[${id}] pool · site rules: clear ${CLEAR} m · floor ny >= ${MIN_NY}${(def as unknown as { ffaSpawnRules?: unknown }).ffaSpawnRules ? ' (maps.json ffaSpawnRules)' : ''}`);
+  const geo = await loadMapGeometry(def);
+  const physics = new PhysicsWorld(R, geo);
+  const nav = buildNav(geo, physics, def);
+  const sc = def.scoring ?? { wallWeight: 0.35, floorMinNy: 0.45 };
+  const painter = new Painter(buildAtlas(geo.paint, geo.atlasSize, { wallWeight: sc.wallWeight, floorMinNy: sc.floorMinNy }));
+  const pads = padsOf(def, geo);
+  const core = coreNodes(nav, nav.nearest(pads.A.x, pads.A.y, pads.A.z));
+  const counts: Record<string, number> = { 'nav nodes': nav.nodes };
+  const problems: string[] = [];
+
+  // the centroid node (as genMap) and the core floor area (one sample per 2 m cell and 1 m level = 4 m²)
+  let sx = 0, sz = 0, nc = 0; const ys: number[] = [];
+  for (let n = 0; n < nav.nodes; n++) if (core[n]) { sx += nav.x[n]; sz += nav.z[n]; ys.push(nav.y[n]); nc++; }
+  ys.sort((a, b) => a - b);
+  const cx = sx / nc, cz = sz / nc, cy = ys[ys.length >> 1];
+  let cNode = -1, cBest = Infinity;
+  for (let n = 0; n < nav.nodes; n++) {
+    if (!core[n]) continue;
+    const d = (nav.x[n] - cx) ** 2 + (nav.z[n] - cz) ** 2 + 4 * (nav.y[n] - cy) ** 2;
+    if (d < cBest) { cBest = d; cNode = n; }
+  }
+  const tcell = new Map<string, number>();
+  for (let n = 0; n < nav.nodes; n++) {
+    if (!core[n]) continue;
+    const key = `${Math.floor(nav.x[n] / THIN)},${Math.floor(nav.z[n] / THIN)},${Math.round(nav.y[n])}`;
+    if (!tcell.has(key)) tcell.set(key, n);
+  }
+  const area = tcell.size * THIN * THIN;
+  // exposure of a site at node n: the share of the core floor samples (one per 2 m cell and 1 m level) whose eye sees the
+  // chest of a runner standing there (the canSee ray: map collision only, 0.25 m slack) within POOL_SEE_RANGE. The chest
+  // is world.ts siteSeen's: feet MOVE.skin over the floor + half the tall hit height. No mist rule (skeptic fix
+  // 2026-09-30): canSee's mist hides only SLICK targets, and a respawned runner is tall
+  const eyeSamples = [...tcell.values()];
+  const seeR = POOL_SEE_RANGE;
+  // visOf(n)[i] = 1: the eye of core sample i sees the chest of a runner standing at node n
+  const visMemo = new Map<number, Uint8Array>();
+  const visOf = (n: number): Uint8Array => {
+    const hit = visMemo.get(n);
+    if (hit) return hit;
+    const x = nav.x[n], cy = nav.y[n] + MOVE.skin + HITBOX.height * 0.5, z = nav.z[n];
+    const out = new Uint8Array(eyeSamples.length);
+    for (let i = 0; i < eyeSamples.length; i++) {
+      const s = eyeSamples[i];
+      const ex = nav.x[s], ey = nav.y[s] + COMBAT.eyeHeight, ez = nav.z[s];
+      const dx = x - ex, dy = cy - ey, dz = z - ez, d = Math.hypot(dx, dy, dz);
+      if (d > seeR) continue;
+      if (d < 1e-3) { out[i] = 1; continue; }
+      const h = physics.raycast(ex, ey, ez, dx, dy, dz, d);
+      if (!h || h.toi >= d - 0.25) out[i] = 1;
+    }
+    visMemo.set(n, out);
+    return out;
+  };
+  const exposure = (n: number): number => { const v = visOf(n); let see = 0; for (let i = 0; i < v.length; i++) see += v[i]; return see / Math.max(1, v.length); };
+  const sym = (def.symmetry ?? '').includes('rot180');
+  const auto = Math.max(POOL_MIN, Math.min(POOL_MAX, 2 * Math.round(area / POOL_AREA_PER_SITE / 2)));
+  const want = COUNT_RAW === '' || COUNT_RAW === 'auto' ? auto : Math.round(Number(COUNT_RAW));
+  counts['core floor m²'] = area;
+  if (!(want >= POOL_MIN && want <= POOL_MAX)) problems.push(`pool size ${want} outside ${POOL_MIN}–${POOL_MAX}`);
+  if (sym && want % 2 !== 0) problems.push(`pool size ${want} is odd on a rot180 map (sites are added in mirror pairs)`);
+
+  // the base: the 8 ffaSpawns, as stored
+  const baseRaw = def.ffaSpawns ?? [];
+  if (baseRaw.length !== N_SPAWNS) problems.push(`maps.json ${id}.ffaSpawns has ${baseRaw.length} entries (want ${N_SPAWNS})`);
+  const baseNodes = baseRaw.map((s) => nav.nearest(s.pos[0], s.pos[1], s.pos[2]));
+  const site = siteRules(def, geo, physics, nav, painter, core, counts);
+  const siteOk = new Set(site);
+  baseNodes.forEach((n, i) => { if (!siteOk.has(n)) problems.push(`ffaSpawns ${i} (node ${n}) breaks a site rule`); });
+
+  // candidates: site-ok nodes thinned to a 2 m grid per 1 m level; rot180 mirror pairs (as genMap)
+  const cell = new Map<string, number>();
+  for (const n of site) {
+    const ix = Math.floor(nav.x[n] / THIN), iz = Math.floor(nav.z[n] / THIN), iy = Math.round(nav.y[n]);
+    const key = `${ix},${iz},${iy}`;
+    const ccx = (ix + 0.5) * THIN, ccz = (iz + 0.5) * THIN;
+    const d = (nav.x[n] - ccx) ** 2 + (nav.z[n] - ccz) ** 2;
+    const prev = cell.get(key);
+    if (prev === undefined || d < (nav.x[prev] - ccx) ** 2 + (nav.z[prev] - ccz) ** 2 || (d === (nav.x[prev] - ccx) ** 2 + (nav.z[prev] - ccz) ** 2 && n < prev)) cell.set(key, n);
+  }
+  const thin = [...cell.values()].sort((a, b) => a - b);
+  const C: Candidate[] = thin.map((n) => ({ node: n, x: nav.x[n], y: nav.y[n], z: nav.z[n], mirror: -1 }));
+  if (sym) {
+    for (let i = 0; i < C.length; i++) {
+      let best = -1, bd = 1.2 * 1.2;
+      for (let j = 0; j < C.length; j++) {
+        if (Math.abs(C[j].y - C[i].y) > 0.3) continue;
+        const d = (C[j].x + C[i].x) ** 2 + (C[j].z + C[i].z) ** 2;
+        if (d < bd || (d === bd && j < best)) { bd = d; best = j; }
+      }
+      C[i].mirror = best;
+    }
+  }
+  const usable = C.map((c, i) => (!sym || (c.mirror >= 0 && c.mirror !== i && C[c.mirror].mirror === i)) ? i : -1).filter((i) => i >= 0);
+  counts['candidates (2 m thinned)'] = C.length;
+  counts['usable (mirror pair)'] = usable.length;
+  const fwdC = C.map((c) => dijkstra(nav, c.node));
+  const fwdB = baseNodes.map((n) => dijkstra(nav, n));
+  const dCC = (i: number, j: number): number => (fwdC[i][C[j].node] + fwdC[j][C[i].node]) / 2;
+  const dBC = (b: number, j: number): number => (fwdB[b][C[j].node] + fwdC[j][baseNodes[b]]) / 2;
+  const groups: number[][] = [];
+  const seen = new Set<number>();
+  for (const i of usable) {
+    if (seen.has(i)) continue;
+    if (sym) { const j = C[i].mirror; seen.add(i); seen.add(j); groups.push([Math.min(i, j), Math.max(i, j)]); }
+    else { seen.add(i); groups.push([i]); }
+  }
+  counts['groups'] = groups.length;
+
+  // HIDDEN COVERAGE (the respawn needs a site no foe sees, CONTRACT_FFA_SPAWNS §S2/§S6 "≥ 90 % unseen"). A Monte-Carlo model
+  // of the foes: POOL_MC_K layouts of POOL_MC_FOES foes on core floor samples, kept ≥ POOL_MC_SEP m apart (FFA bots spread
+  // out: measured on pier18 the spread model predicts the matches' unseen-candidate counts, a uniform one does not), from a
+  // stream seeded by the map id (deterministic). A site is AVAILABLE in a layout when no foe there sees its chest (the canSee
+  // ray within 30 m; no mist rule) and none stands within siteClear m. Each new pair is the one that adds the most
+  // availability where the pool still has fewer than POOL_MC_WANT available sites (Σ min(available, WANT) over the layouts),
+  // among the pairs keeping ≥ POOL_SPREAD m (nav) from every pool site; a tie → the farther pair, then the lower index.
+  // No pair keeps POOL_SPREAD m any more → the farthest pair (plain farthest point).
+  const idHash = [...id].reduce((h, ch) => hash32(h, ch.charCodeAt(0)), 0x5b175e5);
+  const makeLayouts = (seed: number, K: number, sep: number): Int32Array[] => {
+    const mc = mulberry32(seed);
+    const out: Int32Array[] = [];
+    for (let k = 0; k < K; k++) {
+      const foes: number[] = [];
+      for (let t = 0; foes.length < POOL_MC_FOES && t < 20000; t++) {
+        const c = Math.floor(mc() * eyeSamples.length);
+        const n = eyeSamples[c];
+        if (foes.every((f) => Math.hypot(nav.x[eyeSamples[f]] - nav.x[n], nav.z[eyeSamples[f]] - nav.z[n]) >= sep)) foes.push(c);
+      }
+      out.push(Int32Array.from(foes));
+    }
+    return out;
+  };
+  /** out[k] = 1: a runner standing at node n is available in layout k (no foe sees its chest, none within siteClear) */
+  const availIn = (L: Int32Array[], n: number): Uint8Array => {
+    const v = visOf(n);
+    const out = new Uint8Array(L.length);
+    for (let k = 0; k < L.length; k++) {
+      let ok = 1;
+      for (const f of L[k]) {
+        const s = eyeSamples[f];
+        if (v[f] || Math.hypot(nav.x[s] - nav.x[n], nav.y[s] - nav.y[n], nav.z[s] - nav.z[n]) < MATCH_FFA.siteClear) { ok = 0; break; }
+      }
+      out[k] = ok;
+    }
+    return out;
+  };
+  const layouts = makeLayouts(idHash, POOL_MC_K, POOL_MC_SEP);
+  const availMemo = new Map<number, Uint8Array>();
+  const avail = (n: number): Uint8Array => {
+    const hit = availMemo.get(n);
+    if (hit) return hit;
+    const out = availIn(layouts, n);
+    availMemo.set(n, out);
+    return out;
+  };
+  const cnt = new Int32Array(layouts.length);
+  for (const n of baseNodes) { const a = avail(n); for (let k = 0; k < cnt.length; k++) cnt[k] += a[k]; }
+  // spread: a group's nearest nav distance to the current set (and, for a pair, the gap between its two members)
+  const md = new Float64Array(groups.length);
+  for (let g = 0; g < groups.length; g++) {
+    let m = Infinity;
+    for (const j of groups[g]) for (let b = 0; b < baseNodes.length; b++) m = Math.min(m, dBC(b, j));
+    if (groups[g].length === 2) m = Math.min(m, dCC(groups[g][0], groups[g][1]));
+    md[g] = Number.isFinite(m) ? m : -1;
+  }
+  const gain = (g: number): number => {
+    let s = 0;
+    const a0 = avail(C[groups[g][0]].node), a1 = groups[g].length > 1 ? avail(C[groups[g][1]].node) : null;
+    for (let k = 0; k < cnt.length; k++) {
+      const c = cnt[k];
+      if (c >= POOL_MC_WANT) continue;
+      s += Math.min(c + a0[k] + (a1 ? a1[k] : 0), POOL_MC_WANT) - c;
+    }
+    return s;
+  };
+  const picked: number[] = [];
+  let spreadOnly = 0;
+  while (baseNodes.length + picked.length < want) {
+    let pg = -1, pv = -1, pd = -1;
+    for (let g = 0; g < groups.length; g++) {
+      if (!(md[g] >= POOL_SPREAD)) continue;
+      const v = gain(g);
+      if (v > pv || (v === pv && md[g] > pd)) { pv = v; pd = md[g]; pg = g; }
+    }
+    if (pg < 0) { pd = 0; for (let g = 0; g < groups.length; g++) if (md[g] > pd) { pd = md[g]; pg = g; } if (pg >= 0) spreadOnly++; }
+    if (pg < 0) { problems.push(`only ${baseNodes.length + picked.length} sites: no site-ok candidate left (want ${want})`); break; }
+    if (baseNodes.length + picked.length + groups[pg].length > want) { problems.push(`size ${want} cannot be filled by whole mirror pairs`); break; }
+    for (const j of groups[pg]) { picked.push(j); const a = avail(C[j].node); for (let k = 0; k < cnt.length; k++) cnt[k] += a[k]; }
+    md[pg] = -1;
+    for (let g = 0; g < groups.length; g++) {
+      if (md[g] < 0) continue;
+      for (const j of groups[g]) for (const p of groups[pg]) md[g] = Math.min(md[g], dCC(p, j));
+    }
+  }
+  counts['pairs by spread only'] = spreadOnly;
+  // the verdict on the final pool (report + _changes), on HELD-OUT layouts (other seeds; the choice never saw them): foes
+  // kept POOL_MC_SEP m apart and, a harder case, 18 m apart — the share of layouts with no available site, the mean count
+  const poolNodes = [...baseNodes, ...picked.map((ci) => C[ci].node)];
+  const judge = (L: Int32Array[]): { none: number; mean: number } => {
+    const c = new Int32Array(L.length);
+    for (const n of poolNodes) { const a = availIn(L, n); for (let k = 0; k < c.length; k++) c[k] += a[k]; }
+    let none = 0, sum = 0;
+    for (let k = 0; k < c.length; k++) { if (c[k] === 0) none++; sum += c[k]; }
+    return { none: none / Math.max(1, c.length), mean: sum / Math.max(1, c.length) };
+  };
+  const h14 = judge(makeLayouts(hash32(idHash, 0x401d), POOL_MC_JUDGE_K, POOL_MC_SEP)), h18 = judge(makeLayouts(hash32(idHash, 0x401e), POOL_MC_JUDGE_K, 18));
+  const model = { none: h14.none, mean: h14.mean, none18: h18.none, mean18: h18.mean };
+  const pred = new Int32Array(nav.nodes);
+  const sites: PoolOut['sites'] = [
+    ...baseRaw.map((s) => ({ pos: [s.pos[0], s.pos[1], s.pos[2]] as [number, number, number], yaw: s.yaw })),
+    ...picked.map((ci) => ({ pos: [round2(C[ci].x), round2(C[ci].y), round2(C[ci].z)] as [number, number, number], yaw: yawToward(nav, C[ci].node, cNode, pred) })),
+  ];
+  // spread: every site's nav distance to its nearest other site; mutual reachability
+  const fwdOf = (k: number): Float64Array => (k < baseNodes.length ? fwdB[k] : fwdC[picked[k - baseNodes.length]]);
+  const nodeOf = (k: number): number => (k < baseNodes.length ? baseNodes[k] : C[picked[k - baseNodes.length]].node);
+  const nn: number[] = [];
+  let reachable = true;
+  for (let a = 0; a < sites.length; a++) {
+    let m = Infinity;
+    for (let b = 0; b < sites.length; b++) {
+      if (a === b) continue;
+      const d = (fwdOf(a)[nodeOf(b)] + fwdOf(b)[nodeOf(a)]) / 2;
+      if (!Number.isFinite(d)) reachable = false;
+      m = Math.min(m, d);
+    }
+    nn.push(m);
+  }
+  const minGap = nn.length ? Math.min(...nn) : 0;
+  const expo = sites.map((_, k) => exposure(nodeOf(k)));
+  if (!reachable) problems.push('not all pool sites are mutually reachable');
+  if (minGap < POOL_MIN_GAP) problems.push(`two pool sites are ${minGap.toFixed(1)} m apart by nav (gate ≥ ${POOL_MIN_GAP} m)`);
+  // --check: the stored pool = the regenerated one, every stored site site-ok, the first 8 = ffaSpawns
+  const stored = def.ffaSites ?? [];
+  let same: boolean | null = null;
+  if (CHECK) {
+    if (!stored.length) problems.push(`maps.json ${id} has no ffaSites`);
+    else {
+      same = stored.length === sites.length && stored.every((s, i) => s.pos.every((v, k) => Math.abs(v - sites[i].pos[k]) < 0.006) && s.yaw === sites[i].yaw);
+      if (!same) problems.push(`the stored ffaSites (${stored.length}) differ from the regenerated pool (${sites.length})`);
+      if (stored.length < POOL_MIN || stored.length > POOL_MAX) problems.push(`stored ffaSites has ${stored.length} sites (want ${POOL_MIN}–${POOL_MAX})`);
+      stored.forEach((s, i) => { const n = nav.nearest(s.pos[0], s.pos[1], s.pos[2]); if (!siteOk.has(n)) problems.push(`stored ffaSites ${i} (node ${n}) breaks a site rule`); });
+      const b8 = baseRaw.every((s, i) => !!stored[i] && s.pos.every((v, k) => v === stored[i].pos[k]) && s.yaw === stored[i].yaw);
+      if (!b8) problems.push('the first 8 stored ffaSites are not the 8 ffaSpawns');
+    }
+  }
+  physics.dispose();
+  return { id, count: sites.length, auto, area, sites, nn, minGap, reachable, expo, model, stored: stored.length, same, counts, ms: performance.now() - t0, problems };
+}
+
+function reportPool(r: PoolOut): void {
+  const mean = r.nn.reduce((s, v) => s + v, 0) / Math.max(1, r.nn.length);
+  console.log(`\n── ${r.id} pool: ${r.problems.length ? 'FAIL' : 'OK'} · ${r.count} sites (auto ${r.auto} for ${r.area} m² of core floor, ${POOL_AREA_PER_SITE} m²/site, ${POOL_MIN}–${POOL_MAX}) · ${(r.ms / 1000).toFixed(1)} s`);
+  console.log(`   site filter: ${Object.entries(r.counts).map(([k, v]) => `${k} ${v}`).join(' · ')}`);
+  console.log(`   nav distance to the nearest other site: min ${r.minGap.toFixed(1)} m (gate ≥ ${POOL_MIN_GAP} m) · mean ${mean.toFixed(1)} m · mutually reachable ${r.reachable ? 'yes' : 'NO'} · held-out foe layouts (${POOL_MC_JUDGE_K} each): no available site ${(r.model.none * 100).toFixed(1)} % (foes ${POOL_MC_SEP} m apart; mean ${r.model.mean.toFixed(2)} available) / ${(r.model.none18 * 100).toFixed(1)} % (18 m apart; mean ${r.model.mean18.toFixed(2)}) · exposure mean ${(r.expo.reduce((s, v) => s + v, 0) / Math.max(1, r.expo.length) * 100).toFixed(1)} % (ffaSpawns ${(r.expo.slice(0, 8).reduce((s, v) => s + v, 0) / 8 * 100).toFixed(1)} %, new ${(r.expo.slice(8).reduce((s, v) => s + v, 0) / Math.max(1, r.expo.length - 8) * 100).toFixed(1)} %)${r.same === null ? '' : ` · stored ${r.stored} = regenerated: ${r.same ? 'yes' : 'NO'}`}`);
+  console.log('    #   x        y       z       yaw°   nearest site   exposure   (0-7 = ffaSpawns)');
+  r.sites.forEach((s, i) => {
+    console.log(`   ${String(i).padStart(2)} ${s.pos[0].toFixed(2).padStart(7)} ${s.pos[1].toFixed(2).padStart(6)} ${s.pos[2].toFixed(2).padStart(7)} ${String(s.yaw).padStart(6)}   ${r.nn[i].toFixed(1).padStart(6)} m   ${(r.expo[i] * 100).toFixed(1).padStart(6)} %`);
+  });
+  for (const p of r.problems) console.log(`   PROBLEM: ${p}`);
+}
+
+/** CHANGED(SPAWNS): insert / replace <map>.ffaSites right after the map's ffaSpawns block, and the _changes note (text
+ *  surgery, as writeMaps; verified: the file parses and only ffaSites / _changes differ) */
+function writePool(results: PoolOut[]): void {
+  const { src, eol } = readMapsLf();
+  const before = JSON.parse(src) as { maps: Array<Record<string, unknown>> } & Record<string, unknown>;
+  const lines = src.split('\n');
+  for (const r of results) {
+    const idLine = lines.findIndex((l) => l === `      "id": ${JSON.stringify(r.id)},`);
+    if (idLine < 0) throw new Error(`maps.json: no map line for ${r.id}`);
+    let end = lines.findIndex((l, i) => i > idLine && /^ {6}"id": /.test(l));
+    if (end < 0) end = lines.length;
+    const old = lines.findIndex((l, i) => i > idLine && i < end && l === '      "ffaSites": [');
+    if (old >= 0) {
+      const close = lines.findIndex((l, i) => i > old && l === '      ],');
+      lines.splice(old, close - old + 1);
+    }
+    const fs0 = lines.findIndex((l, i) => i > idLine && l === '      "ffaSpawns": [');
+    if (fs0 < 0) throw new Error(`maps.json: ${r.id} has no ffaSpawns block`);
+    const close = lines.findIndex((l, i) => i > fs0 && l === '      ],');
+    if (close < 0) throw new Error(`maps.json: ${r.id} ffaSpawns block has no close`);
+    lines.splice(close + 1, 0, ...ffaBlock(r.sites, 'ffaSites').split('\n'));
+  }
+  const note = `2026-09-30 CHANGED(SPAWNS) ffaSites (CONTRACT_FFA_SPAWNS S1, CORE lane): ${results.map((r) => `${r.id} ${r.count} sites (${r.area} m² of core floor; nearest-site nav gap min ${r.minGap.toFixed(1)} m)`).join(', ')} — the FFA spawn-site pool the random safe respawn draws from (runtime/src/core/match/world.ts ffaSitePool / chooseSite). Generated by node _harness/gen_ffa_spawns.ts --count auto --write: the 8 ffaSpawns (unchanged, first) + new sites under the same site rules (floor ny, clearance incl. ffaSpawnRules, off grates / conveyors / springs / oob / team pads) added in rot180 mirror pairs by hidden coverage (a seeded model of ${POOL_MC_K} layouts of ${POOL_MC_FOES} foes kept ${POOL_MC_SEP} m apart; each pair adds the most layouts with fewer than ${POOL_MC_WANT} available sites, an available site = no foe sees its chest (feet MOVE.skin over the floor + half the tall hit height) within 30 m and none stands within 3 m — no mist rule since the skeptic fix of 2026-09-30: canSee's mist hides only SLICK targets and a respawned runner is tall —, among the pairs keeping ${POOL_SPREAD} m nav from the pool; held-out check, layouts with no available site (foes 14 / 18 m apart): ${results.map((r) => `${r.id} ${(r.model.none * 100).toFixed(1)} / ${(r.model.none18 * 100).toFixed(1)} %`).join(', ')}); size = one site per ${POOL_AREA_PER_SITE} m² of core floor, even, clamped to ${POOL_MIN}-${POOL_MAX}; yaw (degrees) faces the nav path to the map centre. --check regenerates and compares. ffaSpawns kept as-is for back-compat. Nothing else in this file changed.`;
+  let text = lines.join('\n');
+  const obj = JSON.parse(text) as Record<string, unknown>;
+  const prevChanges = Array.isArray(obj._changes) ? (obj._changes as string[]).filter((c) => !c.includes('CHANGED(SPAWNS) ffaSites')) : [];
+  const allChanges = [...prevChanges, note];
+  const block = `  "_changes": [\n${allChanges.map((c, i) => `    ${JSON.stringify(c)}${i < allChanges.length - 1 ? ',' : ''}`).join('\n')}\n  ],`;
+  const tl = text.split('\n');
+  const cs = tl.findIndex((l) => l === '  "_changes": [');
+  if (cs >= 0) { const ce = tl.findIndex((l, i) => i > cs && l === '  ],'); tl.splice(cs, ce - cs + 1, ...block.split('\n')); }
+  else { const di = tl.findIndex((l) => l.startsWith('  "_doc": ')); tl.splice(di + 1, 0, ...block.split('\n')); }
+  text = tl.join('\n');
+  const after = JSON.parse(text) as typeof before;
+  const strip = (o: typeof before): string => JSON.stringify({ ...o, _changes: undefined, maps: o.maps.map((m) => ({ ...m, ffaSites: undefined })) });
+  if (strip(after) !== strip(before)) throw new Error('maps.json write would change more than ffaSites / _changes — aborted');
+  for (const r of results) {
+    const m = after.maps.find((x) => x.id === r.id) as { ffaSites?: unknown[] };
+    if (!m || !Array.isArray(m.ffaSites) || m.ffaSites.length !== r.count) throw new Error(`maps.json write: ${r.id}.ffaSites missing after write`);
+  }
+  writeMapsEol(text, eol);
+}
+
+/** CHANGED(SPAWNS): maps.json as LF text + the file's own line ending (a Windows checkout with core.autocrlf has CRLF: the
+ *  line surgery matched no line there) — the writers work on LF and write the file's ending back */
+function readMapsLf(): { src: string; eol: string } {
+  const raw = readFileSync(MAPS_JSON, 'utf8');
+  const eol = raw.includes('\r\n') ? '\r\n' : '\n';
+  return { src: raw.replace(/\r\n/g, '\n'), eol };
+}
+function writeMapsEol(text: string, eol: string): void {
+  writeFileSync(MAPS_JSON, eol === '\n' ? text : text.replace(/\n/g, eol), 'utf8');
+}
+
 /** a number the way Python's json.dump writes a float (the file is Python-formatted): 12.3, 0.0, -4.0 */
 function pyNum(v: number): string {
   if (Object.is(v, -0)) v = 0;
   return Number.isInteger(v) ? `${v}.0` : String(v);
 }
 
-function ffaBlock(spawns: MapOut['spawns']): string {
+function ffaBlock(spawns: MapOut['spawns'], key: 'ffaSpawns' | 'ffaSites' = 'ffaSpawns'): string {
   const I = '      ';
-  const lines: string[] = [`${I}"ffaSpawns": [`];
+  const lines: string[] = [`${I}"${key}": [`];
   spawns.forEach((s, i) => {
     lines.push(`${I}  {`, `${I}    "pos": [`, ...s.pos.map((v, k) => `${I}      ${pyNum(v)}${k < 2 ? ',' : ''}`), `${I}    ],`,
       `${I}    "yaw": ${pyNum(s.yaw)}`, `${I}  }${i < spawns.length - 1 ? ',' : ''}`);
@@ -450,7 +841,7 @@ function ffaBlock(spawns: MapOut['spawns']): string {
 /** insert / replace <map>.ffaSpawns right after the map's "spawns" block, and the top-level _changes note (text surgery,
  *  so the rest of the Python-formatted file stays byte-identical) */
 function writeMaps(results: MapOut[]): void {
-  const src = readFileSync(MAPS_JSON, 'utf8');
+  const { src, eol } = readMapsLf();                              // CHANGED(SPAWNS): CRLF-safe (see readMapsLf)
   const before = JSON.parse(src) as { maps: Array<Record<string, unknown>> } & Record<string, unknown>;
   const lines = src.split('\n');
   for (const r of results) {
@@ -490,7 +881,7 @@ function writeMaps(results: MapOut[]): void {
     const m = after.maps.find((x) => x.id === r.id) as { ffaSpawns?: unknown[] };
     if (!m || !Array.isArray(m.ffaSpawns) || m.ffaSpawns.length !== N_SPAWNS) throw new Error(`maps.json write: ${r.id}.ffaSpawns missing after write`);
   }
-  writeFileSync(MAPS_JSON, text, 'utf8');
+  writeMapsEol(text, eol);
 }
 
 function report(r: MapOut): void {
@@ -516,24 +907,34 @@ async function main(): Promise<number> {
   let R: Awaited<ReturnType<typeof loadRapier>>;
   const ids = MAP_IDS.length ? MAP_IDS : playableMaps().map((m) => m.id);
   try { R = await loadRapier(); } catch (e) { console.log('SETUP FAILED:', (e as Error).stack ?? e); return 2; }
-  console.log(`gen_ffa_spawns · maps ${ids.join(', ')} · ${CHECK ? 'check the maps.json spawns' : 'generate'}${WRITE && !CHECK ? ' + write maps.json' : ''}`);
+  console.log(`gen_ffa_spawns · maps ${ids.join(', ')} · ${CHECK ? 'check the maps.json spawns + site pools' : POOL ? `generate the site pools (--count ${COUNT_RAW})` : 'generate'}${WRITE && !CHECK ? ' + write maps.json' : ''}`);
   const results: MapOut[] = [];
+  const pools: PoolOut[] = [];
   for (const id of ids) {
-    try { results.push(await genMap(id, R)); } catch (e) { console.log(`SETUP FAILED (${id}):`, (e as Error).stack ?? e); return 2; }
-    report(results[results.length - 1]);
+    try {
+      // the 8 spawns: generated (plain run) or checked (--check); a pool-only run (--count) skips them
+      if (!POOL || CHECK) { results.push(await genMap(id, R)); report(results[results.length - 1]); }
+      // CHANGED(SPAWNS): the site pool — generated with --count, checked with --check
+      if (POOL || CHECK) { pools.push(await genPool(id, R)); reportPool(pools[pools.length - 1]); }
+    } catch (e) { console.log(`SETUP FAILED (${id}):`, (e as Error).stack ?? e); return 2; }
   }
-  const bad = results.filter((r) => !r.rulesOk);
+  const bad = [...results.filter((r) => !r.rulesOk).map((r) => r.id), ...pools.filter((p) => p.problems.length).map((p) => `${p.id} pool`)];
   try {
     const dir = resolve(HERE, '_reports');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(resolve(dir, 'gen_ffa_spawns.json'), JSON.stringify({ at: new Date().toISOString(), check: CHECK, results }, null, 2) + '\n', 'utf8');
+    writeFileSync(resolve(dir, 'gen_ffa_spawns.json'), JSON.stringify({ at: new Date().toISOString(), check: CHECK, count: COUNT_RAW, results, pools }, null, 2) + '\n', 'utf8');
   } catch { /* best-effort */ }
   if (WRITE && !CHECK) {
-    if (bad.length) { console.log(`\nNOT WRITTEN: ${bad.map((r) => r.id).join(', ')} failed`); return 1; }
-    writeMaps(results);
-    console.log(`\nmaps.json: ffaSpawns written for ${results.map((r) => r.id).join(', ')} (+ the _changes note)`);
+    if (bad.length) { console.log(`\nNOT WRITTEN: ${bad.join(', ')} failed`); return 1; }
+    if (POOL) {
+      writePool(pools);
+      console.log(`\nmaps.json: ffaSites written for ${pools.map((r) => `${r.id} (${r.count})`).join(', ')} (+ the _changes note)`);
+    } else {
+      writeMaps(results);
+      console.log(`\nmaps.json: ffaSpawns written for ${results.map((r) => r.id).join(', ')} (+ the _changes note)`);
+    }
   }
-  console.log(`\nRESULT: ${bad.length ? `FAIL (${bad.map((r) => r.id).join(', ')})` : 'OK'}`);
+  console.log(`\nRESULT: ${bad.length ? `FAIL (${bad.join(', ')})` : 'OK'}`);
   return bad.length ? 1 : 0;
 }
 

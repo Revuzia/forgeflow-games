@@ -35,12 +35,29 @@
 // CHANGED(BOTFIX): every bot notices an enemy NEEDLE-GLINT's glint aimed at it (a stimulus: reaction by skill, STORM
 // fast, BREEZE slow) and dodges across the line (see GLINT_OFF); skill ids are BREEZE / SWELL / STORM.
 // CHANGED(CORE) (CONTRACT_FFA §F1/§F6): FREE-FOR-ALL. An enemy is any crew but mine (Brain.foe: foe dye slogs and
-// costs 2.3× on a path), zones keep their need / enemy share for every crew in play, refill uses own dye or the own pad
-// (world.padOf), and the other runners' drop pads are avoided like the enemy pad (+80 path cost, no goal within 3.6 m
-// of one). No half-court assumption is used in FFA. FFA-only tuning (see FFA_FOE_*): foe dye is worth half of neutral
+// costs 2.3× on a path), zones keep their need / enemy share for every crew in play, refill uses own dye (the own drop
+// pad and the avoidance of the other runners' pads went with the pads: CHANGED(SPAWNS) below). No half-court assumption
+// is used in FFA. FFA-only tuning (see FFA_FOE_*): foe dye is worth half of neutral
 // floor to goals and sweeps, every other bot's goal crowds a zone, and two path-following dead ends re-plan / step off
 // (stalePath, perched). In teams mode every changed test reduces to the old one (the atlas and pad bytes are 0 / 1 / 2
 // there) and the FFA branches are never taken, so its hashes hold.
+// CHANGED(WASHOUT) (CONTRACT_WASHOUT §W3): rule-aware. In WASHOUT (world.rule, both modes) the bots HUNT: a MIST-RASP
+// engages from further out (its stream's reach, WO_STREAM_*); a visible foe beyond the kit's reach is chased along the
+// nav graph instead of held from cover or ignored for paint; a hit by an unseen foe is chased longer (WO_CHASE_S); with no
+// foe in sight the PAINT mode's goal is a foe's position (planHunt / selectHunt, re-planned every WO_HUNT_REPLAN), and
+// only when there is nobody to hunt does the bot pick paint goals as in TURF. Paint is kept for mobility / refill / escape:
+// sweeps, rolls and line paint only with tank ≥ WO_PAINT_TANK / WO_LINE_TANK and never while the bot is spawn-protected
+// (its protection would end), no jelly into dye gaps. A spawn-protected runner is never a target; a foe near its own pad
+// (WO_PAD_TARGET) is no target unless it just hit the bot, and one near its pad (WO_PAD_HUNT) is never hunted (no pad
+// camping); the FFA spawn grace applies in both modes. Every safety behaviour stays (stale path, perched, failJumpWall,
+// safeStep sea-edge care) and the fight-standoff breaker runs in WASHOUT TEAMS too; the FFA-TURF paint bias (shy
+// drum / blaster) is off in WASHOUT. TURF takes none of these branches: its bots and hashes are unchanged.
+// CHANGED(SPAWNS) (CONTRACT_FFA_SPAWNS §S4): FFA has no drop pads any more (MatchWorld.padOf → null), so the own-pad logic
+// is gone in FFA: no pad nodes (nodePad all 0), no pad path costs, no "home patch" goal exclusion, no pad refill — an FFA
+// refill uses own dye only (the nearest own-dye spot within 18 m, else the nearest zone holding own dye, else back to
+// painting for REFILL_RETRY_S). A spawn-protected runner is never a target in ANY mode (protectedT is 0 in TEAMS TURF, so
+// that test changes nothing there); the spawn grace (a runner back from a respawn < 4 s ago is no target unless it hit
+// the bot) stays in FFA and WASHOUT. No bot ever paths to a spawn site: goals are paint zones, foes, refill spots.
 
 import type { PlayerIntent, TeamId } from '../types.ts';
 import { CREW_SLOTS } from '../types.ts';
@@ -176,15 +193,35 @@ const FFA_BURST_DISC = 1.5;
 //   FFA_BURST_MEMORY ticks): picking targets near the current aim laid overlapping discs, ~4.0 of 6.6 m² per burst (+10 %
 //   painted m²).
 const FFA_BURST_GAP = 2.6, FFA_BURST_MEMORY = 150;
-// * spawn grace — a runner back on its drop pad less than 4 s ago is no target unless it hit the bot: both NEEDLE-GLINTs
+// * spawn grace — a runner back from a respawn less than 4 s ago is no target unless it hit the bot: both NEEDLE-GLINTs
 //   camped one POP-WELL's pad (Pier 18 seed 4: 26 washes, most 1–5 s after a respawn, sniped from 12–21 m; share 2.6 %).
+//   CHANGED(SPAWNS): kept on top of the 2 s spawn protection (there are no pads to camp now; the grace covers the 2 s
+//   after protection ends)
 const FFA_FRESH_TICKS = Math.round(4 / TICK);
-// * home patch — goal zones keep pad r + FFA_HOME_MARGIN m (was + 2) off every foe drop pad: goals next to a foe pad put
-//   bots (and chargers' sightlines) over the spot where that crew respawns.
-const FFA_HOME_MARGIN = 6;
+// (the "home patch" — goals kept FFA_HOME_MARGIN m off every foe drop pad — went with the pads, CHANGED(SPAWNS))
+/** CHANGED(SPAWNS): FFA refill without a pad (findRefillFfa) — tries on own-dye nodes within 18 m, then (in all) on zones
+ *  holding own dye; then s the bot paints on before it looks for a refill again */
+const REFILL_FFA_NODE_TRIES = 4, REFILL_FFA_ZONE_TRIES = 8;
+const REFILL_RETRY_S = 3;
 // * NEEDLE-GLINT engages within FFA_CHARGE_ENGAGE m (SWELL 21): with seven foes a charger always had a target in reach —
 //   the top washer (14–16 a match), in fights 30–40 % of the time, standing to charge (least moving 52–59 %).
 const FFA_CHARGE_ENGAGE = 16;
+
+// CHANGED(WASHOUT) (CONTRACT_WASHOUT §W3) — the hunt (WASHOUT only; TURF never reads these)
+/** MIST-RASP opens fire within min(stream maxRange − MARGIN, skill engage + EXTRA) m (TURF: the skill's engage) */
+const WO_STREAM_EXTRA = 1.5, WO_STREAM_MARGIN = 1.0;
+/** s a bot chases a foe it lost sight of / was hit by (TURF CHASE_S) */
+const WO_CHASE_S = 3.5;
+/** ticks between hunt re-plans (the hunted foe keeps moving) */
+const WO_HUNT_REPLAN = Math.round(2.5 / TICK);
+/** tank needed before a stream / burst / roll paint sweep (the rest is kept for fights) */
+const WO_PAINT_TANK = 60;
+/** tank needed before a NEEDLE-GLINT line-paint charge (TURF LINE_TANK) */
+const WO_LINE_TANK = 70;
+/** m beyond a foe's own pad radius: a foe there is no target unless it hit the bot in the last 3 s (no pad camping) */
+const WO_PAD_TARGET = 3;
+/** m beyond a foe's own pad radius: a foe there is never hunted */
+const WO_PAD_HUNT = 6;
 
 const TAU = Math.PI * 2;
 function wrap(a: number): number { a %= TAU; if (a > Math.PI) a -= TAU; else if (a < -Math.PI) a += TAU; return a; }
@@ -264,6 +301,8 @@ class Brain {
   blockedUntil: number[] = [];
   // refill
   refillX = 0; refillY = 0; refillZ = 0; refillNode = -1; refillHasSpot = false; refillStart = 0; refillTries = 0; refillOnPad = false;
+  /** CHANGED(SPAWNS): FFA — no refill is entered before this tick (findRefillFfa found no own dye); 0 = none (teams) */
+  refillCd = 0;
   // cover
   coverNode = -1; peekNode = -1; coverUntil = 0; peekPhase = 0; peekT = 0; coverCd = 0;
   // fight movement
@@ -317,6 +356,8 @@ class Brain {
   // glint reaction (CHANGED(BOTFIX))
   readonly grnd: () => number;      // glint stream (reaction rolls, dodge lengths): the phase-5 streams stay untouched
   glintId = -1; glintReactAt = 0; dodgeUntil = -1000; dodgeX = 0; dodgeZ = 0; dodgeSlick = false; dodgeSign = 1;
+  // CHANGED(WASHOUT): the hunted foe (−1: none) and the tick of the last hunt plan
+  huntId = -1; huntAt = -1e9;
   // extra cost closure
   readonly edgeExtra: (e: number) => number;
 
@@ -335,6 +376,8 @@ class Brain {
     this.kf = kitFire(r.kit);
     const kt = kitTactic(this.kf, SKILLS[skill] ? skill : 'swell', this.sk.engage);
     this.kind = kt.kind; this.engage = kt.kind === 'charge' && dir.ffa ? Math.min(kt.engage, FFA_CHARGE_ENGAGE) : kt.engage; this.ink = kt.ink;   // FFA_CHARGE_ENGAGE (review F3)
+    // CHANGED(WASHOUT): a hunting MIST-RASP opens fire from further out, within its stream's reach
+    if (dir.washout && kt.kind === 'stream') this.engage = Math.min(this.fire.maxRange - WO_STREAM_MARGIN, this.sk.engage + WO_STREAM_EXTRA);
     this.settle = Math.round(CHARGE_SETTLE[SKILLS[skill] ? skill : 'swell'] / TICK);
     let subId = 'jelly-charge', spId = 'cloudburst';
     try { const row = kitDef(r.kit); subId = String(row.sub); spId = String(row.special); } catch { /* unknown kit → MIST-RASP's */ }
@@ -353,8 +396,7 @@ class Brain {
       const tid = dir.nodeTexel[v];
       const pad = dir.nodePad[v];
       let m = 1;
-      if (dir.ffa && pad === this.own) m = 0.7;              // CHANGED(CORE): an FFA drop pad sits on paintable floor
-      else if (tid >= 0) {
+      if (tid >= 0) {                                         // CHANGED(SPAWNS): the FFA own-drop-pad branch went with the pads
         const t = dir.atlasTeam[tid];
         if (this.foe(t)) m = 2.3; else if (t === this.own) m = 0.7;
       } else if (pad === this.own) m = 0.7;
@@ -382,10 +424,12 @@ export class BotDirector {
   readonly seed: number;
   /** CHANGED(CORE): FREE-FOR-ALL (world.mode === 'ffa') */
   readonly ffa: boolean;
+  /** CHANGED(WASHOUT): the WASHOUT rule (world.rule === 'washout'): the bots hunt */
+  readonly washout: boolean;
   /** nav node → atlas floor texel under it (−1: none, e.g. a spawn pad) */
   readonly nodeTexel: Int32Array;
-  /** nav node → team whose pad it lies on (0 none). CHANGED(CORE): FFA — the crew whose drop pad it lies on (the A/B
-   *  team pads are neutral scenery there: 0) */
+  /** nav node → team whose pad it lies on (0 none). CHANGED(SPAWNS): FFA — all 0 (no drop pads; the A/B team pads are
+   *  neutral scenery there) */
   readonly nodePad: Uint8Array;
   readonly atlasTeam: Uint8Array;
   /** nav node → 1 when it can reach spawn A and be reached from it (goals must be in this set) */
@@ -423,7 +467,8 @@ export class BotDirector {
   private readonly opp = { key: -1, kind: 0, x: 0, y: 0, z: 0, gap: false };
   /** CHANGED(BOTFIX): counters for the probes (read-only for callers). dodges = glint reactions (a bot that noticed
    *  a charger's glint aimed at it and broke the line / strafed / slicked) */
-  readonly stats = { dodges: 0 };
+  /** climbOuts: CHANGED(SPAWNS) — hops out of an off-nav bank pocket (belowNav) */
+  readonly stats = { dodges: 0, climbOuts: 0 };
   /** runner id → the beam reach of its NEEDLE-GLINT (0: not a charger): whose glint a bot can notice */
   private readonly glintRange: Float64Array;
   /** CHANGED(CORE) FFA (review F3): runner id → respawns seen / the tick of its last respawn (spawn grace) */
@@ -435,6 +480,7 @@ export class BotDirector {
     this.nav = nav;
     this.seed = seed | 0;
     this.ffa = world.mode === 'ffa';
+    this.washout = world.rule === 'washout';
     this.respSeen = new Int32Array(world.runners.length);
     this.respTick = new Int32Array(world.runners.length).fill(-1e6);
     const P = world.painter;
@@ -449,11 +495,7 @@ export class BotDirector {
       const x = nav.x[n], y = nav.y[n], z = nav.z[n];
       const s = P.surfaceAt(x, y + 0.02, z, 0.6, 'floor');
       if (s && Math.abs(s.y - y) < 0.3) this.nodeTexel[n] = s.id;
-      if (this.ffa) {
-        for (const p of world.crewPads) {
-          if ((x - p.x) ** 2 + (z - p.z) ** 2 <= (p.r + 0.6) ** 2 && Math.abs(y - p.y) < 0.6) this.nodePad[n] = p.crew;
-        }
-      } else {
+      if (!this.ffa) {                                        // CHANGED(SPAWNS): FFA has no pads — no node lies on one
         for (const side of ['A', 'B'] as const) {
           const p = pads[side];
           if ((x - p.x) ** 2 + (z - p.z) ** 2 <= (p.r + 0.6) ** 2 && Math.abs(y - p.y) < 0.6) this.nodePad[n] = side === 'A' ? 1 : 2;
@@ -564,7 +606,7 @@ export class BotDirector {
   think(intents: PlayerIntent[]): void {
     const w = this.world;
     if (w.phase === 'live' && w.tick - this.zoneStamp >= 30) this.updateZones();
-    if (this.ffa) {   // review F3 spawn grace: each runner's last respawn tick
+    if (this.ffa || this.washout) {   // review F3 spawn grace: each runner's last respawn tick (CHANGED(WASHOUT): both modes)
       for (const r of w.runners) if (r.respawns !== this.respSeen[r.id]) { this.respSeen[r.id] = r.respawns; this.respTick[r.id] = w.tick; }
     }
     for (let i = 0; i < this.brains.length; i++) {
@@ -628,9 +670,10 @@ export class BotDirector {
         if (node < 0 || Math.hypot(nav.x[node] - A.px[best], nav.z[node] - A.pz[best]) > 2.5 || Math.abs(nav.y[node] - A.py[best]) > 1.0) continue;
       }
       if (!this.nodeMain[node]) continue;
-      // CHANGED(CORE) (review F2): FFA drop-pad floor is locked in the painter (never dyed, never scored). The zone stays
-      // (found and placed from all its floor, so the zone list — and the per-nav-graph sightline cache — is the same in
-      // every mode); its samples and area are its OPEN floor only, so no bot aims at or heads for pad floor. Teams: no lock.
+      // CHANGED(CORE) (review F2): locked floor (Painter.lockDiscs) is never dyed or scored. The zone stays (found and
+      // placed from all its floor, so the zone list — and the per-nav-graph sightline cache — is the same in every mode);
+      // its samples and area are its OPEN floor only. CHANGED(SPAWNS): no mode locks any floor now (the FFA pad lock went
+      // with the pads), so every zone keeps all of its floor.
       let open = ids, openArea = area;
       if (P.lockedCount > 0) {
         open = ids.filter((id) => !P.isLocked(id));
@@ -712,16 +755,6 @@ export class BotDirector {
     }
   }
 
-  /** CHANGED(CORE): FFA — is (x, y, z) within `margin` m of another crew's drop pad (horizontal; same level ±2 m)? */
-  private nearFoePad(x: number, y: number, z: number, own: TeamId, margin: number): boolean {
-    for (const p of this.world.crewPads) {
-      if (p.crew === own || Math.abs(p.y - y) > 2) continue;
-      const R = p.r + margin;
-      if ((x - p.x) ** 2 + (z - p.z) ** 2 < R * R) return true;
-    }
-    return false;
-  }
-
   private zoneAt(x: number, z: number, y: number): number {
     const ix = Math.floor((x + 200) / ZONE), iz = Math.floor((z + 200) / ZONE);
     const l = this.zoneGrid.get(iz * 1000 + ix);
@@ -759,20 +792,21 @@ export class BotDirector {
     const dT = tgt ? Math.hypot(tgt.x - r.x, tgt.z - r.z) : Infinity;
     // CHANGED(CORE) FFA (review F3): a fight with no shot and no motion for FFA_STANDOFF_S drops that foe for a while
     let skipped = false;
-    if (this.ffa) {
+    if (this.ffa || this.washout) {   // CHANGED(WASHOUT): the standoff breaker runs in WASHOUT TEAMS too
       if (b.mode === 'fight' && tgt !== null && r.shots === b.standoffShots && Math.hypot(b.mvx, b.mvz) < 0.15) {
         b.standoffT += THINK_EVERY * TICK;
         if (b.standoffT >= FFA_STANDOFF_S) { b.skipTarget = tgt.id; b.skipUntil = now + Math.round(FFA_STANDOFF_SKIP_S / TICK); b.standoffT = 0; }
       } else { b.standoffT = 0; b.standoffShots = r.shots; }
       skipped = tgt !== null && tgt.id === b.skipTarget && now < b.skipUntil && !(r.lastAttacker === tgt.id && r.lastHitT < 0.5);
-      // paint bias (review F3): SHEET-DRUM / POP-WELL open no fight beyond FFA_SHY_R unless that foe hit them lately
-      if (!skipped && tgt !== null && (b.kind === 'burst' || b.kind === 'roll') && dT > FFA_SHY_R
+      // paint bias (review F3): SHEET-DRUM / POP-WELL open no fight beyond FFA_SHY_R unless that foe hit them lately.
+      // CHANGED(WASHOUT): FFA TURF only — in WASHOUT every kit hunts
+      if (this.ffa && !this.washout && !skipped && tgt !== null && (b.kind === 'burst' || b.kind === 'roll') && dT > FFA_SHY_R
         && !(r.lastAttacker === tgt.id && r.lastHitT < FFA_SHY_HIT_S)) skipped = true;
     }
 
     // REFILL below TANK.low exactly (the header's "tank < 20 %"): a +0.5 margin sent painters home at 20.0–20.5,
     // one shot early, so their refill never counted as one from low (the runner's refillsFromLow, a §10.3 gate)
-    if (b.mode !== 'refill' && r.tank < TANK.low) this.enterRefill(b);
+    if (b.mode !== 'refill' && r.tank < TANK.low && now >= b.refillCd) this.enterRefill(b);   // refillCd: CHANGED(SPAWNS), 0 in teams
     if (b.mode === 'refill') {
       if (r.tank >= REFILL_TO) { b.mode = 'paint'; b.goalZone = -1; b.path.length = 0; }
       else if (tgt && reacted && !skipped && tgtVisible && dT < 6.5 && r.tank >= 45) b.mode = 'fight';
@@ -785,6 +819,10 @@ export class BotDirector {
           this.enterRefill(b);
         } else if (dT <= b.engage + 1.5 || !tgtVisible) {
           b.mode = 'fight';
+        } else if (this.washout) {
+          // CHANGED(WASHOUT): a visible foe beyond the kit's reach is hunted down along the nav graph (no cover, no paint)
+          if (b.mode !== 'chase' || b.chaseId !== tgt.id) { b.mode = 'chase'; b.chaseId = tgt.id; b.path.length = 0; }
+          b.hitReactAt = now; b.chaseUntil = now + Math.round(WO_CHASE_S / TICK);
         } else {
           if (!b.coverRolled) { b.coverRolled = true; b.coverWanted = b.rnd() < b.sk.coverBias; }
           if (b.coverWanted && dT <= 24 && now >= b.coverCd && this.planCover(b, tgt)) b.mode = 'cover';
@@ -801,7 +839,7 @@ export class BotDirector {
           if (a && a.alive && a.team !== r.team && b.chaseId !== a.id) {
             b.chaseId = a.id;
             b.hitReactAt = now + Math.round(this.rollReact(b) / TICK);
-            b.chaseUntil = b.hitReactAt + Math.round((CHASE_S + 0.3 * (b.rnd() - 0.5)) / TICK);
+            b.chaseUntil = b.hitReactAt + Math.round(((this.washout ? WO_CHASE_S : CHASE_S) + 0.3 * (b.rnd() - 0.5)) / TICK);   // CHANGED(WASHOUT)
             b.chaseX = a.x; b.chaseY = a.y; b.chaseZ = a.z;
           }
         }
@@ -832,11 +870,26 @@ export class BotDirector {
       if (l < 0.05) { const ang = this.hashNoise(n) * TAU; dx = Math.sin(ang); dz = Math.cos(ang); l = 1; }
       b.nudgeX = dx / l; b.nudgeZ = dz / l; b.nudgeUntil = now + 27;
     }
+    // CHANGED(SPAWNS) (CONTRACT_FFA_SPAWNS §S6 "no stuck bot"): grounded OFF the nav graph BELOW it. Cinder's steep banks
+    // down into the shallow water by the crossings (floor ny 0.75–0.80, feet at y −0.76 under nodes at 0.5–0.95) carry no
+    // node, so nav.nearest gives one 1.3–1.7 m overhead, every re-plan starts there and follow() drops that path at once
+    // (both edge ends > 1.2 m above): the bot stood with no move wish, so the stuck tracker (it counts wanted moves) never
+    // fired and the idle reset only re-planned the same path — measured: FFA TURF cinder seed 3, YOU 107–142 s at
+    // (−8.1, −0.7, 8.0); a bot dropped there sat 15 s in both modes, before this lane too. Walking up the 37–41° bank
+    // slides along it; walking with a hop climbs out in 0.4 s. Hop toward that node with the stuck nudge (no RNG draw).
+    if (now >= b.nudgeUntil) {
+      const n = this.belowNav(b);
+      if (n >= 0) {
+        const nav = this.nav, dx = nav.x[n] - r.x, dz = nav.z[n] - r.z, l = Math.hypot(dx, dz);
+        b.nudgeX = dx / l; b.nudgeZ = dz / l; b.nudgeUntil = now + 27;
+        this.stats.climbOuts++;
+      }
+    }
 
     // ── per-mode planning
     b.holding = false;
     switch (b.mode) {
-      case 'paint': this.planPaint(b); break;
+      case 'paint': if (this.washout) this.planHunt(b); else this.planPaint(b); break;   // CHANGED(WASHOUT)
       case 'fight': this.planFight(b, tgt!); break;
       case 'cover': this.planCoverStep(b, tgt!); break;
       case 'chase': this.planChase(b); break;
@@ -859,7 +912,7 @@ export class BotDirector {
         if (b.mode === 'refill') { b.refillHasSpot = false; b.refillTries++; }
         if (b.mode === 'cover') { b.coverUntil = now; b.coverCd = now + Math.round(6 / TICK); b.mode = 'paint'; }
         if (b.mode === 'chase') { b.chaseId = -1; b.mode = 'paint'; }
-        if (b.mode === 'paint') this.planPaint(b);
+        if (b.mode === 'paint') { if (this.washout) this.planHunt(b); else this.planPaint(b); }   // CHANGED(WASHOUT)
         else if (b.mode === 'refill') this.planRefill(b);
       }
     } else b.idleT = 0;
@@ -885,10 +938,29 @@ export class BotDirector {
     return r.y - nav.y[n] >= 0.5 && Math.hypot(nav.x[n] - r.x, nav.z[n] - r.z) < 0.4;
   }
 
+  /** CHANGED(SPAWNS): grounded off the nav graph below it — the nearest node (nav.nearest weighs height above the feet
+   *  9×, so this means no node near the runner's own level) sits 0.9–2.2 m above (a walk edge's reach is ±0.9; the hop
+   *  apex is 1.28 m plus the bank) and 0.2–3.5 m away horizontally, and the ground 1.1 m toward it is no lower than the
+   *  feet − 0.3 m (the hop climbs, never leaves a lip). Returns that node, or −1. */
+  private belowNav(b: Brain): number {
+    const r = b.r, nav = this.nav;
+    if (!r.grounded || b.climbPhase !== 0) return -1;
+    const n = nav.nearest(r.x, r.y, r.z);
+    if (n < 0) return -1;
+    const rise = nav.y[n] - r.y;
+    if (rise <= 0.9 || rise >= 2.2) return -1;
+    const dx = nav.x[n] - r.x, dz = nav.z[n] - r.z, h = Math.hypot(dx, dz);
+    if (h < 0.2 || h > 3.5) return -1;
+    const g = this.world.physics.raycast(r.x + dx / h * 1.1, r.y + 2.5, r.z + dz / h * 1.1, 0, -1, 0, 3.5);
+    if (!g || g.y < r.y - 0.3) return -1;
+    return n;
+  }
+
   private resetBrain(b: Brain): void {
     b.target = -1; b.lostT = 0; b.path.length = 0; b.pk = 0; b.goalZone = -1; b.goalNode = -1;
     b.climbPhase = 0; b.chaseId = -1; b.coverRolled = false; b.retreatRolled = false; b.stuckLevel = 0;
     b.hn = 0; b.hasPaintTarget = false; b.refillHasSpot = false;
+    b.huntId = -1;   // CHANGED(WASHOUT) (read only in WASHOUT)
   }
 
   private rollReact(b: Brain): number {
@@ -905,8 +977,13 @@ export class BotDirector {
       if (e.team === r.team || !e.alive) continue;
       const d = Math.hypot(e.x - r.x, e.y - r.y, e.z - r.z);
       if (d > 34) continue;
-      // CHANGED(CORE) FFA spawn grace (review F3): back on its drop pad < 4 s ago → no target, unless it hit this bot
-      if (this.ffa && w.tick - this.respTick[e.id] < FFA_FRESH_TICKS && e.respawns > 0 && !(e.id === r.lastAttacker && r.lastHitT < 3)) continue;
+      // CHANGED(CORE) FFA spawn grace (review F3): back from a respawn < 4 s ago → no target, unless it hit this bot.
+      // CHANGED(WASHOUT): in both modes; a spawn-protected runner is never a target, nor one by its own pad (no camping).
+      // CHANGED(SPAWNS): a spawn-protected runner is never a target in ANY mode (FFA TURF has protection too; TEAMS TURF
+      // never sets it, so nothing changes there); FFA has no own pad (nearOwnPad false)
+      if ((this.ffa || this.washout) && w.tick - this.respTick[e.id] < FFA_FRESH_TICKS && e.respawns > 0 && !(e.id === r.lastAttacker && r.lastHitT < 3)) continue;
+      if (e.protectedT > 0) continue;
+      if (this.washout && this.nearOwnPad(e, WO_PAD_TARGET) && !(e.id === r.lastAttacker && r.lastHitT < 3)) continue;
       if (!w.canSee(r, e)) continue;
       b.seen.push(e.id);
       if (e.id === b.target) curVisible = true;
@@ -1079,7 +1156,7 @@ export class BotDirector {
   private selectGoal(b: Brain): void {
     const r = b.r, now = this.world.tick;
     const own = b.own;
-    const eps = this.ffa ? null : this.world.pads[own === 1 ? 'B' : 'A'];   // CHANGED(CORE): FFA uses nearFoePad
+    const eps = this.ffa ? null : this.world.pads[own === 1 ? 'B' : 'A'];   // CHANGED(CORE): FFA has no enemy pad
     // allies' goals (crowding)
     const allyGoals: number[] = [];
     // CHANGED(CORE): FFA has no allies — every other bot's goal crowds a zone, so eight crews spread over the map
@@ -1110,7 +1187,9 @@ export class BotDirector {
       let gain = z.area * z.need[own];
       if (b.kind === 'charge') gain = this.sightGain(zi, own, gain);
       if (gain < 2.5) continue;
-      if (eps ? (z.cx - eps.x) ** 2 + (z.cz - eps.z) ** 2 < (eps.r + 4) ** 2 : this.nearFoePad(z.cx, z.cy, z.cz, own, FFA_HOME_MARGIN)) continue;   // review F3: FFA home patch
+      // teams: never a goal on the enemy pad. CHANGED(SPAWNS): FFA — nothing to keep off (the drop-pad "home patch" went
+      // with the pads; no goal is ever a spawn site on purpose)
+      if (eps && (z.cx - eps.x) ** 2 + (z.cz - eps.z) ** 2 < (eps.r + 4) ** 2) continue;
       const d = Math.hypot(z.cx - r.x, z.cz - r.z) + Math.abs(z.cy - r.y) * 2;
       const t = d / MOVE.walk;
       let crowd = 0;
@@ -1426,10 +1505,104 @@ export class BotDirector {
   private planChase(b: Brain): void {
     const w = this.world;
     const a = b.chaseId >= 0 ? w.runners[b.chaseId] : null;
+    if (this.washout) { this.planChaseWashout(b, a); return; }   // CHANGED(WASHOUT)
     if (a && a.alive) { b.chaseX = a.x; b.chaseY = a.y; b.chaseZ = a.z; }
     const n = this.nav.nearest(b.chaseX, b.chaseY, b.chaseZ);
     if (n >= 0 && (b.goalNode !== n || b.path.length === 0)) { b.goalNode = n; this.planTo(b, n); }
     if (w.tick >= b.paintRetargetAt) this.pickPaintTarget(b);
+  }
+
+  // ── WASHOUT hunt (CHANGED(WASHOUT), CONTRACT_WASHOUT §W3; never called in TURF) ──
+
+  /** foe `e` stands within its own pad's radius + margin (horizontal, same level ±2 m): teams its team pad. CHANGED(SPAWNS):
+   *  FFA → false (no own pad; a fresh spawn is covered by the protection and the spawn grace) */
+  private nearOwnPad(e: Runner, margin: number): boolean {
+    const p = this.world.padOf(e);
+    if (!p) return false;
+    const R = p.r + margin;
+    return Math.abs(e.y - p.y) < 2 && (e.x - p.x) ** 2 + (e.z - p.z) ** 2 < R * R;
+  }
+
+  /** a foe the hunt leaves alone: spawn-protected, back from a respawn < 4 s ago, or by its own pad (no pad camping; FFA:
+   *  no pads) */
+  private huntExcluded(e: Runner): boolean {
+    return e.protectedT > 0 || (e.respawns > 0 && this.world.tick - this.respTick[e.id] < FFA_FRESH_TICKS) || this.nearOwnPad(e, WO_PAD_HUNT);
+  }
+
+  /** chase a foe along the nav graph: re-plan only when its node moved > 2.5 m (and ≥ 0.5 s since the last plan) or the path
+   *  ran out (a re-plan every decide cost an A* per bot per 0.1 s); a foe that died / respawned / went home ends the chase */
+  private planChaseWashout(b: Brain, a: Runner | null): void {
+    const w = this.world, nav = this.nav, now = w.tick;
+    if (a && (!a.alive || this.huntExcluded(a))) {
+      b.chaseId = -1; b.chaseUntil = now; b.mode = 'paint'; b.path.length = 0; b.pk = 0;
+      this.planHunt(b);
+      return;
+    }
+    if (a) { b.chaseX = a.x; b.chaseY = a.y; b.chaseZ = a.z; }
+    const n = nav.nearest(b.chaseX, b.chaseY, b.chaseZ);
+    if (n >= 0) {
+      const g = b.goalNode;
+      const moved = g < 0 || Math.hypot(nav.x[g] - nav.x[n], nav.z[g] - nav.z[n]) + Math.abs(nav.y[g] - nav.y[n]) > 2.5;
+      if (b.path.length === 0 || b.pk >= b.path.length || (moved && now - b.planAt >= 30)) { b.goalNode = n; this.planTo(b, n); }
+    }
+    if (now >= b.paintRetargetAt) this.pickPaintTarget(b);
+  }
+
+  /** PAINT mode in WASHOUT: go where a foe is (selectHunt, re-planned every WO_HUNT_REPLAN); nobody to hunt → paint goals
+   *  exactly as in TURF (planPaint) */
+  private planHunt(b: Brain): void {
+    const w = this.world, now = w.tick;
+    const h = b.huntId >= 0 ? w.runners[b.huntId] : null;
+    const valid = h !== null && h.alive && !this.huntExcluded(h);
+    if (!valid || b.pk >= b.path.length || now - b.huntAt >= WO_HUNT_REPLAN) {
+      b.huntAt = now;
+      const was = b.huntId;
+      if (!this.selectHunt(b)) {
+        if (was >= 0) { b.huntId = -1; b.goalZone = -1; b.goalNode = -1; b.path.length = 0; b.pk = 0; }
+        this.planPaint(b);
+        return;
+      }
+    }
+    // paint targets along the route (sweeps only above WO_PAINT_TANK, see control)
+    if (now >= b.paintRetargetAt || !b.hasPaintTarget) this.pickPaintTarget(b);
+    else if (b.ptId >= 0 && this.atlasTeam[b.ptId] === b.own) this.nextPaintTarget(b);
+    else if (this.paintOffTravel(b)) this.pickPaintTarget(b);
+  }
+
+  /** the foe to hunt: the nearest few (travel distance, allies already hunting it, a hurt foe first), a weighted pick from
+   *  the bot's own stream; the goal is the strongly connected nav node under it (not a foe pad). false = nobody to hunt. */
+  private selectHunt(b: Brain): boolean {
+    const w = this.world, r = b.r, nav = this.nav;
+    const ids = [-1, -1, -1], sc = [0, 0, 0];
+    for (const e of w.runners) {
+      if (e.team === r.team || !e.alive || this.huntExcluded(e)) continue;
+      const d = Math.hypot(e.x - r.x, e.z - r.z) + Math.abs(e.y - r.y) * 2;
+      let crowd = 0;
+      for (const o of this.brains) if (o && o !== b && o.own === b.own && o.r.alive && o.huntId === e.id) crowd++;
+      const s = (1 / (1 + d / 14)) / (1 + crowd * 0.9) * (e.hp < 60 ? 1.25 : 1);
+      let p = 3;
+      while (p > 0 && (ids[p - 1] < 0 || s > sc[p - 1])) p--;
+      if (p >= 3) continue;
+      for (let k = 2; k > p; k--) { ids[k] = ids[k - 1]; sc[k] = sc[k - 1]; }
+      ids[p] = e.id; sc[p] = s;
+    }
+    if (ids[0] < 0) return false;
+    // weighted pick (score²), then the others in rank order as fallbacks
+    let sum = 0;
+    for (let k = 0; k < 3; k++) if (ids[k] >= 0) sum += sc[k] * sc[k];
+    let pick = b.rnd() * sum, first = 0;
+    for (let k = 0; k < 3; k++) { if (ids[k] < 0) break; pick -= sc[k] * sc[k]; if (pick <= 0) { first = k; break; } }
+    for (let j = 0; j < 3; j++) {
+      const k = j === 0 ? first : (j <= first ? j - 1 : j);
+      if (ids[k] < 0) continue;
+      const e = w.runners[ids[k]];
+      const n = nav.nearest(e.x, e.y, e.z);
+      if (n < 0 || !this.nodeMain[n] || b.foe(this.nodePad[n])) continue;
+      if (!this.planTo(b, n)) continue;
+      b.huntId = e.id; b.goalZone = -1; b.goalSince = w.tick; b.wanders = 0;
+      return true;
+    }
+    return false;
   }
 
   // ── REFILL ──
@@ -1493,7 +1666,8 @@ export class BotDirector {
       if (around < 2) continue;
       best = n; bestD = d;
     }
-    const pad = this.world.padOf(r);                        // CHANGED(CORE): teams pads[side]; FFA the drop pad
+    const pad = this.world.padOf(r);                        // teams pads[side]; CHANGED(SPAWNS): FFA null (no pads)
+    if (!pad) { this.findRefillFfa(b, best); return; }
     const padD = Math.hypot(pad.x - r.x, pad.z - r.z) + Math.abs(pad.y - r.y) * 3;
     if (best >= 0 && bestD < padD && b.refillTries < 3) {
       b.refillX = nav.x[best]; b.refillY = nav.y[best]; b.refillZ = nav.z[best]; b.refillNode = best;
@@ -1506,6 +1680,42 @@ export class BotDirector {
     b.refillX = pad.x; b.refillY = pad.y; b.refillZ = pad.z; b.refillNode = n;
     b.refillHasSpot = n >= 0; b.refillOnPad = true; b.refillStart = this.world.tick;
     if (n >= 0) this.planTo(b, n);
+  }
+
+  /** CHANGED(SPAWNS): an FFA refill spot without a pad. `best` = the own-dye node findRefillSpot found within 18 m (−1:
+   *  none). Order: that node (its first REFILL_FFA_NODE_TRIES tries; each failed try re-rolls the choice through the
+   *  refillTries noise); else the nearest zone holding own dye (≥ 3 samples and ≥ 15 % of them), whose own-dye patch is
+   *  searched on arrival (up to REFILL_FFA_ZONE_TRIES tries in all); else there is no own dye to reach: back to PAINT, and
+   *  no refill for REFILL_RETRY_S (the bot lays own dye meanwhile, or is washed and respawns with a full tank). */
+  private findRefillFfa(b: Brain, best: number): void {
+    const r = b.r, nav = this.nav, now = this.world.tick;
+    if (best >= 0 && b.refillTries < REFILL_FFA_NODE_TRIES) {
+      b.refillX = nav.x[best]; b.refillY = nav.y[best]; b.refillZ = nav.z[best]; b.refillNode = best;
+      b.refillHasSpot = true; b.refillOnPad = false; b.refillStart = now;
+      if (!this.planTo(b, best)) { b.refillHasSpot = false; b.refillTries++; }
+      return;
+    }
+    const T = this.atlasTeam;
+    let bz = -1, bd = Infinity;
+    for (let zi = 0; zi < this.zones.length; zi++) {
+      const z = this.zones[zi];
+      const s = z.samples;
+      let own = 0;
+      for (let k = 0; k < s.length; k++) if (T[s[k]] === b.own) own++;
+      if (own < 3 || own < s.length * 0.15) continue;
+      const d = Math.hypot(z.cx - r.x, z.cz - r.z) + Math.abs(z.cy - r.y) * 2 + b.refillTries * 4 * this.hashNoise(z.node);
+      if (d < bd) { bd = d; bz = zi; }
+    }
+    if (bz >= 0 && b.refillTries < REFILL_FFA_ZONE_TRIES) {
+      const z = this.zones[bz];
+      b.refillX = nav.x[z.node]; b.refillY = nav.y[z.node]; b.refillZ = nav.z[z.node]; b.refillNode = z.node;
+      b.refillHasSpot = true; b.refillOnPad = false; b.refillStart = now;
+      if (!this.planTo(b, z.node)) { b.refillHasSpot = false; b.refillTries++; }
+      return;
+    }
+    b.refillHasSpot = false;
+    b.mode = 'paint'; b.goalZone = -1; b.goalNode = -1; b.path.length = 0; b.pk = 0;
+    b.refillCd = now + Math.round(REFILL_RETRY_S / TICK);
   }
 
   private hashNoise(id: number): number { return (hash32(id, this.seed, 0x7e11) >>> 8) / 16777216; }
@@ -1722,7 +1932,7 @@ export class BotDirector {
       b.rollCheckTick = now;
       const l = Math.hypot(b.mvx, b.mvz);
       let want = false;
-      if (r.grounded && l > 0.3 && b.mode !== 'refill') {
+      if (r.grounded && l > 0.3 && b.mode !== 'refill' && (!this.washout || (r.tank >= WO_PAINT_TANK && r.protectedT <= 0))) {   // CHANGED(WASHOUT)
         const fx = b.mvx / l, fz = b.mvz / l;
         let n = 0;
         for (let s = -1; s <= 1; s++) {
@@ -1788,12 +1998,13 @@ export class BotDirector {
       const err = Math.hypot(adelta(b.aimYaw, b.desYaw), b.aimPitch - b.desPitch);
       const cone = Math.max(b.sk.fireCone, Math.atan2(0.55, Math.max(1, d)));
       const inkOk = r.tank >= b.fire.tankPerShot + 0.5;
+      const eng = this.washout ? b.engage : b.sk.engage;   // CHANGED(WASHOUT): the stream's reach (TURF: the skill's)
       // start inside the cone, keep going inside 2.5× the cone (a burst, not a flicker)
-      wantFire = aimed && inkOk && d <= b.sk.engage + (b.fireOn ? 0.8 : 0) && err < (b.fireOn ? cone * 2.5 : cone);
+      wantFire = aimed && inkOk && d <= eng + (b.fireOn ? 0.8 : 0) && err < (b.fireOn ? cone * 2.5 : cone);
       if (b.lostT > 0) wantFire = wantFire && b.fireOn;      // out of sight: finish the burst, open none
-      if (!aimed || !inkOk || d > b.sk.engage + 1.5) hardStop = true;
+      if (!aimed || !inkOk || d > eng + 1.5) hardStop = true;
       // keep the gun up while tracking (don't dive into slick between bursts)
-      if (!wantFire && d <= b.sk.engage + 1) b.slickTravel = false;
+      if (!wantFire && d <= eng + 1) b.slickTravel = false;
     } else if (engaged) {
       const d = Math.hypot(tgt!.x - r.x, tgt!.z - r.z);
       if (b.kind === 'burst') {
@@ -1821,7 +2032,8 @@ export class BotDirector {
       direct = this.rollPaint(b) ? 1 : 0;
     } else if (b.kind === 'charge') {
       direct = this.linePaint(b) ? 1 : 0;
-    } else if (b.hasPaintTarget && r.tank >= TANK.low && (b.mode === 'paint' || b.mode === 'chase' || b.mode === 'cover' || b.mode === 'fight')) {
+    } else if (b.hasPaintTarget && r.tank >= TANK.low && (b.mode === 'paint' || b.mode === 'chase' || b.mode === 'cover' || b.mode === 'fight')
+      && (!this.washout || (r.tank >= WO_PAINT_TANK && r.protectedT <= 0))) {   // CHANGED(WASHOUT): ink kept for fights
       // CHANGED(CORE) FFA (review F3 / repair round): a POP-WELL paint burst flies straight (no lob) at its target texel,
       // and fires only while that burst lands (checked after the aim slews, below: FFA_BURST_INC)
       const ffaBurst = this.ffa && b.kind === 'burst';
@@ -2103,8 +2315,8 @@ export class BotDirector {
     return this.world.painter.teamUnder(x, y, z);
   }
 
-  private onPadXZ(x: number, y: number, z: number, p: PadZone): boolean {   // CHANGED(CORE): takes the pad (was a side)
-    return (x - p.x) ** 2 + (z - p.z) ** 2 <= p.r * p.r && Math.abs(y - p.y) < 0.6;
+  private onPadXZ(x: number, y: number, z: number, p: PadZone | null): boolean {   // CHANGED(CORE): takes the pad (was a side); CHANGED(SPAWNS): FFA null → false
+    return p !== null && (x - p.x) ** 2 + (z - p.z) ** 2 <= p.r * p.r && Math.abs(y - p.y) < 0.6;
   }
 
   // ── kits (lane BOTKITS; numbers in bots/tactics.ts) ─────────────────────────────────────────
@@ -2262,9 +2474,12 @@ export class BotDirector {
     if (b.kf.type !== 'charge') return false;
     const f = b.kf;
     if (!b.chHeld && (!b.lineOk || now >= b.lineRetargetAt)) this.pickLineTarget(b);
-    // below LINE_TANK the tank is kept for fights: travel (slicking through own dye refills on the move)
-    if (!b.chHeld && r.tank < LINE_TANK) b.hasPaintTarget = false;
-    if (!b.lineOk || (!b.chHeld && r.tank < LINE_TANK) || (b.mode !== 'paint' && b.mode !== 'chase' && b.mode !== 'cover' && b.mode !== 'fight')) {
+    // below LINE_TANK the tank is kept for fights: travel (slicking through own dye refills on the move).
+    // CHANGED(WASHOUT): WO_LINE_TANK, and no new charge while spawn-protected (it would end the protection)
+    const keep = this.washout ? WO_LINE_TANK : LINE_TANK;
+    const idle = !b.chHeld && (r.tank < keep || (this.washout && r.protectedT > 0));
+    if (idle) b.hasPaintTarget = false;
+    if (!b.lineOk || idle || (b.mode !== 'paint' && b.mode !== 'chase' && b.mode !== 'cover' && b.mode !== 'fight')) {
       this.aimAlongMove(b);
       return false;
     }
@@ -2443,8 +2658,8 @@ export class BotDirector {
         return;
       }
     }
-    // 3. an enemy dye gap in reach (painting, nobody in sight, a full tank)
-    if (b.mode !== 'paint' || b.seen.length > 0 || r.tank < 95 || now < b.gapCd) return;
+    // 3. an enemy dye gap in reach (painting, nobody in sight, a full tank). CHANGED(WASHOUT): never — the tank is for fights
+    if (this.washout || b.mode !== 'paint' || b.seen.length > 0 || r.tank < 95 || now < b.gapCd) return;
     const zi = this.bestZoneNear(b, 4, SUB_REACH, 1.5, 0, 0.5, 7);
     if (zi < 0) return;
     const z = this.zones[zi];
