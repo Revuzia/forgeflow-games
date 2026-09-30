@@ -6,7 +6,7 @@
 //   HECKLER: arcs aimed at the player, <= maxLive in the air, parry = points, perfect x2, block = 0, hit = -hitCost, 40 s.
 //   Both: twin runs identical, save / step / load / re-step every frame == straight run, for every fighter as the player.
 // Numbers come from data/system.json (brawl / heckler); nothing is restated. Usage: node _harness/probe_brawl.ts [-v]
-import { I, dirBits, evs, newMatch, run, sb, tester } from './fixtures/simkit.ts';
+import { I, dirBits, evs, newMatch, run, sb, tester, lxU, toLineU, fromLineU } from './fixtures/simkit.ts';
 import { checksum, load, readFighter, readMatch, save, step } from '../runtime/src/core/sim/match.ts';
 import type { Match } from '../runtime/src/core/sim/match.ts';
 import { loadGameData } from '../runtime/src/core/data.ts';
@@ -14,6 +14,7 @@ import { EV, SCORE_WHY } from '../runtime/src/core/sim/events.ts';
 import { BR, BRAWL_BASE, F, G, GOON_CAP, GS, P, PH, PROJ_CAP, ST, STATE_INTS_BRAWL, W, goonBase, projBase } from '../runtime/src/core/sim/layout.ts';
 import { comboBonus } from '../runtime/src/core/sim/brawl.ts';
 import { compileBrawl } from '../runtime/src/core/sim/compile.ts';
+import { dirToYaw } from '../runtime/src/core/sim/fx3d.ts';
 import type { SimEvent } from '../runtime/src/core/types.ts';
 
 const t = tester('probe_brawl');
@@ -90,7 +91,7 @@ function botWord(f: number): number {
     maxAlive = Math.max(maxAlive, alive.length);
     let tok = 0;
     let tele = 0;
-    const px = m.s[sb(0) + F.x];
+    const px = lxU(m, 0); // CHANGED(SIM3D): line coordinates
     for (let k = 0; k < GOON_CAP; k++) {
       const g = gb(k);
       if (m.s[g + G.act] === 0) {
@@ -115,7 +116,7 @@ function botWord(f: number): number {
         if (m.s[g + G.mvF] === mv.startup && atkStart[k] >= 0 && fr - atkStart[k] + 1 < BRS.telegraphMinF) shortTele++;
       }
       if (m.s[g + G.st] !== GS.DOWN) {
-        if (m.s[g + G.x] < px) sawLeft = true;
+        if (toLineU(m, m.s[g + G.x], m.s[g + G.z]) < px) sawLeft = true;
         else sawRight = true;
       }
     }
@@ -154,13 +155,25 @@ function placeGoon(m: Match, k: number, kind: number, xM: number, st: number = G
   for (let j = 0; j < 32 && j < G.reserved + 1; j++) m.s[g + j] = 0;
   m.s[g + G.act] = 1;
   m.s[g + G.kind] = kind;
-  m.s[g + G.x] = Math.round(xM * U);
-  m.s[g + G.facing] = xM < m.s[sb(0) + F.x] / U ? 1 : -1;
+  // CHANGED(SIM3D): on the match line at xM (metres from the ring centre), facing the player
+  const w = fromLineU(m, Math.round(xM * U));
+  m.s[g + G.x] = w[0];
+  m.s[g + G.z] = w[1];
+  m.s[g + G.facing] = xM < lxU(m, 0) / U ? 1 : -1;
+  m.s[g + G.yaw] = dirToYaw(m.s[sb(0) + F.x] - w[0], m.s[sb(0) + F.z] - w[1]);
   m.s[g + G.hp] = cb.kindHp[kind];
   m.s[g + G.mv] = -1;
   m.s[g + G.hitInst] = -1;
   m.s[g + G.think] = 999;
   m.s[g + G.st] = st;
+}
+/** CHANGED(SIM3D): the player at the ring centre facing +line (test setup). */
+function centrePlayer(m: Match): void {
+  const w = fromLineU(m, 0);
+  m.s[sb(0) + F.x] = w[0];
+  m.s[sb(0) + F.z] = w[1];
+  const f = fromLineU(m, 100000);
+  m.s[sb(0) + F.yaw] = dirToYaw(f[0] - w[0], f[1] - w[1]);
 }
 function stopWaves(m: Match): void {
   m.s[H(BR.waveLeft)] = 0;
@@ -170,7 +183,7 @@ function stopWaves(m: Match): void {
   // a player hit: damage, HIT to 8+slot, points x multiplier
   const m = mk('brawl');
   stopWaves(m);
-  m.s[sb(0) + F.x] = 0;
+  centrePlayer(m);
   placeGoon(m, 0, 0, 0.75);
   m.s[H(BR.lastGrant)] = -100000; // no tokens: the goon stays passive
   const hp0 = m.s[gb(0) + G.hp];
@@ -189,7 +202,7 @@ function stopWaves(m: Match): void {
   const m2 = mk('brawl');
   stopWaves(m2);
   m2.s[H(BR.lastGrant)] = -100000;
-  m2.s[sb(0) + F.x] = 0;
+  centrePlayer(m2);
   placeGoon(m2, 0, 0, 0.8);
   placeGoon(m2, 1, 2, 1.25);
   const e2 = m2.frame();
@@ -202,7 +215,7 @@ function stopWaves(m: Match): void {
   const m3 = mk('brawl');
   stopWaves(m3);
   m3.s[H(BR.lastGrant)] = -100000;
-  m3.s[sb(0) + F.x] = 0;
+  centrePlayer(m3);
   placeGoon(m3, 0, 2, 0.75);
   m3.s[gb(0) + G.hp] = 1;
   const e3 = m3.frame();
@@ -217,7 +230,7 @@ function stopWaves(m: Match): void {
   const m4 = mk('brawl');
   stopWaves(m4);
   m4.s[H(BR.lastGrant)] = -100000;
-  m4.s[sb(0) + F.x] = 0;
+  centrePlayer(m4);
   placeGoon(m4, 0, 1, 0.75);
   m4.s[gb(0) + G.hp] = 99999;
   const e4 = m4.frame();
@@ -238,7 +251,7 @@ function stopWaves(m: Match): void {
   const setup = (): Match => {
     const m = mk('brawl');
     stopWaves(m);
-    m.s[sb(0) + F.x] = 0;
+    centrePlayer(m);
     m.s[sb(0) + F.facing] = 1;
     placeGoon(m, 0, 0, 0.9);
     m.s[H(BR.ratings)] = 45000; // grade 4
@@ -302,10 +315,11 @@ function hecklerFirstContact(m: Match): { frames: number; dir: number } {
     let best = 1 << 30;
     for (let p = 0; p < PROJ_CAP; p++) {
       if (m.s[projBase(p) + P.act] === 0 || m.s[projBase(p) + P.kind] !== 2) continue;
-      const d = Math.abs(m.s[projBase(p) + P.x] - m.s[sb(0) + F.x]);
+      // CHANGED(SIM3D): planar distance; the travel direction's SCREEN side (camera basis) picks the guard direction
+      const d = Math.hypot(m.s[projBase(p) + P.x] - m.s[sb(0) + F.x], m.s[projBase(p) + P.z] - m.s[sb(0) + F.z]);
       if (d < best) {
         best = d;
-        dir = m.s[projBase(p) + P.vx] >= 0 ? 1 : -1;
+        dir = m.s[projBase(p) + P.vx] * m.s[W.camNZ] - m.s[projBase(p) + P.vz] * m.s[W.camNX] >= 0 ? 1 : -1;
       }
     }
     step(m, 0, 0);

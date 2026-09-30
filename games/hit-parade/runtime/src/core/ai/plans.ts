@@ -43,6 +43,19 @@ function usableIn(b: Brain, list: readonly number[], needReach: boolean): number
   return list.filter((k) => !b.kit.moves[k].inert && b.canUse(k) && (!needReach || b.inReach(k)));
 }
 
+/**
+ * CHANGED(AI) P2 (task: honest low-level defense): the chance to hold a guard posture in the opponent's range this
+ * decision. No level can react to a 4-12 f ground attack (reactF 18-60 f), so blocking one is a GUESS - and a player
+ * guesses from habits: the opponent's observed attack rate when it stands in its range (habits.ts, committed after the
+ * reaction delay). `base` = the level's flat guard lever; the level's `habit` weight blends in block x attack rate.
+ */
+export function guardChance(b: Brain, base: number): number {
+  const P = b.profile;
+  const pA = b.habits.attackRate;
+  const g = (1 - P.habit) * base + P.habit * Math.min(1, P.block * 2) * pA;
+  return Math.max(0, Math.min(0.95, g));
+}
+
 export function neutralPlan(b: Brain): Decision {
   const s = b.seen;
   const me = s.me;
@@ -66,6 +79,12 @@ export function neutralPlan(b: Brain): Decision {
   const opThreat = b.opReach + (me.cf.hurtStand[0] >> 1) + 25000;
   const cornerBehind = Math.abs(me.x) > s.wall - 100000 && me.x * s.dx < 0;
   const guard = (frames: number): Decision => ({ t: 'guard', crouch: b.chooseGuardCrouch(), frames });
+
+  // CHANGED(AI) P2: the fighter's unique (uniques.ts): counter reads, teleports, stance, armor steps, the ball, installs
+  if (b.projEta() > 30) {
+    const u = b.uniq.neutral(b, aggro);
+    if (u) return u;
+  }
 
   // opponent knocked down: walk up for the wakeup (okizeme) at higher levels, else hang back
   if (op.st === ST.KNOCKDOWN) {
@@ -131,6 +150,15 @@ export function neutralPlan(b: Brain): Decision {
 
   // charge fighters keep their charge (down-back = back AND down charge, and a crouch guard)
   if (st.charge && !aggro) return { t: 'guard', crouch: true, frames: think + 8 };
+  // CHANGED(AI) P2: at zoning range with the charge special not charged yet: sit in down-back until it is (the kit's
+  // chargeF, 45 f for Krane) - the next decision releases it (canUse sees the stored charge)
+  if (st.charge && d > (st.backOff >= 0.3 ? Math.min(kit.rangeLo, 220000) : kit.rangeHi * 0.85) && st.zone > 0) {
+    const chargeZ = (kit.lists.zoning.length > 0 ? kit.lists.zoning : kit.projMoves).filter((k) => kit.moves[k].recipe !== null && kit.moves[k].recipe!.charge !== 0 && !b.canUse(k));
+    if (chargeZ.length > 0 && zoning.length === 0) {
+      const need = Math.max(4, kit.cf.mw.chargeFrames - me.chB + 2);
+      return { t: 'guard', crouch: true, frames: Math.min(need, think + 30) };
+    }
+  }
 
   // zoners / setplay / shotos at range: projectile cadence (never two of your own on screen). A keep-away
   // style fires anywhere inside its own range; the others from the far end of theirs.
@@ -180,11 +208,14 @@ export function neutralPlan(b: Brain): Decision {
         }],
         [st.mix, () => { const x = pick(b, mix); return x !== undefined ? { t: 'move', idx: x } : null; }],
         [st.armor, () => { const a = pick(b, armor); return a !== undefined ? { t: 'move', idx: a } : null; }],
-        [0.15, () => guard(think)],
+        [0.15 * guardChance(b, 1) / Math.max(0.05, P.guard + 0.05), () => guard(think)],
       ]);
       if (dec) return dec;
     } else if (d <= kit.rangeHi + 40000) {
       const approach = usableIn(b, kit.lists.approach, true);
+      // CHANGED(AI) P2: the kit's other specials (in no fighter JSON cpu list) as occasional pokes where they connect now
+      // and are not badly unsafe (armored ones always qualify) - so every special of a kit shows up
+      const other = b.otherSpecials().filter((k) => b.canUse(k) && b.inReach(k) && (kit.moves[k].advBlock >= -12 || kit.moves[k].armored));
       const jumpIn = d > 150000 && d < 300000;
       const dec = choose(b, [
         [st.poke, () => { const p = pick(b, pokes); return p !== undefined ? { t: 'move', idx: p } : null; }],
@@ -193,6 +224,7 @@ export function neutralPlan(b: Brain): Decision {
         [jumpIn ? st.jump : 0, () => { b.stats.jumps++; return { t: 'steps', steps: [{ d: 9, b: 0 }, { d: 9, b: 0 }] }; }],
         [st.walkIn, () => (intoPress(kit.cf.walkF * think, think) ? null : { t: 'hold', d: 6, frames: think })],
         [st.air > 0 && jumpIn ? st.air : 0, () => { b.stats.jumps++; return { t: 'steps', steps: [{ d: 9, b: 0 }, { d: 9, b: 0 }] }; }],
+        [other.length > 0 ? 0.08 : 0, () => { const o = pick(b, other); return o !== undefined ? { t: 'move', idx: o } : null; }],
       ]);
       if (dec) return dec;
     } else {
@@ -207,20 +239,42 @@ export function neutralPlan(b: Brain): Decision {
     }
   }
 
+  // CHANGED(AI) P2: a throw-happy opponent up close (its observed throw share): step out of throw range, or (L3+)
+  // press a fast button - a strike beats a throw on the same frame - instead of holding a guard it would throw
+  if (d <= closeU + 10000 && op.st !== ST.KNOCKDOWN) {
+    const h = b.habits;
+    const pT = P.habit * h.confidence() * h.pThrow();
+    if (pT > 0 && b.rnd() < pT) {
+      b.stats.throwEscapes++;
+      if (P.level >= 3 || P.level < 0) {
+        const jab = kit.lights.find((k) => b.canUse(k) && b.inReach(k));
+        if (jab !== undefined && b.rnd() < 0.5) return { t: 'move', idx: jab };
+      }
+      if (!cornerBehind) return { t: 'hold', d: 4, frames: Math.max(8, think >> 1) };
+    }
+  }
+
   // waiting: get back to the preferred range (footsies), guard inside the opponent's threat range
   const closer = st.walkIn >= 0.7; // rushdown / grappler live up close
   if (!closer && d < kit.rangeLo && !cornerBehind && b.rnd() < 0.3 + st.backOff) {
     if (keepAway && b.rnd() < 0.35) return { t: 'steps', steps: [{ d: 4, b: 0 }, { d: 5, b: 0 }, { d: 4, b: 0 }] };
     return { t: 'hold', d: 4, frames: think };
   }
-  if (d <= opThreat && b.rnd() < P.guard + 0.1) return guard(think + 4);
+  // CHANGED(AI) P2: the guard posture is a guess from its habits (guardChance), not a flat roll
+  if (d <= opThreat && b.rnd() < guardChance(b, P.guard + 0.1)) {
+    b.stats.habitGuards++;
+    return guard(think + 4);
+  }
   if (st.setup > 0 && d > kit.rangeLo && b.rnd() < st.setup) {
     const setup = usableIn(b, kit.lists.setup, false);
     if (setup.length > 0) return { t: 'move', idx: setup[0] };
   }
   if (d > kit.rangeHi && !intoPress(kit.cf.walkF * think, think) && b.rnd() < st.walkIn + 0.2) return { t: 'hold', d: 6, frames: think };
   if (d < kit.rangeLo && !cornerBehind && b.rnd() < st.backOff + 0.1) return { t: 'hold', d: 4, frames: think };
-  if (d <= opThreat + 60000 && b.rnd() < P.guard) return guard(think);
+  if (d <= opThreat + 60000 && b.rnd() < guardChance(b, P.guard)) {
+    b.stats.habitGuards++;
+    return guard(think);
+  }
   return { t: 'none', frames: think };
 }
 

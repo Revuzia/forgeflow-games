@@ -8,7 +8,7 @@
 //
 // Deep links (harnesses, share links; any of these keys skips the title):
 //   ?mode=versus|training|arcade|brawl|heckler|online  ?p1=<fighter> ?p2=<fighter> ?stage=<stage> ?seed=<uint>
-//   ?cpu1=<-1..8> ?cpu2=<-1..8> (absent = human; training defaults P2 to CPU 0 = the dummy)
+//   ?cpu1=<-1..8> ?cpu2=<-1..8> (absent = human; training: absent = the dummy, n = DUMMY: CPU at level n)
 //   ?scheme1=0|1|simple|classic ?scheme2=... ?autostart=1 (no PRESS START card) ?room=<CODE> (join an online room)
 // Modifiers: ?dev=1 (the __HP__.dev surface) · ?touch=1|0 (pins the input method) · ?quality=low|med|high (this page
 // only, never saved) · ?relay=1 (online: force the relay tier; read by net/online.ts).
@@ -37,7 +37,7 @@ import { installTestSurface } from './testsurface.ts';
 import { TouchControls } from './touch/controls.ts';
 import { PortraitQueue } from './app/portraits.ts';
 
-export const VERSION = 'hit-parade-0.1.0';
+export const VERSION = 'hit-parade-0.2.0';   // CHANGED(integrator) P2: 12 fighters, 5 stages, bonus rounds, training, online
 
 const params = new URLSearchParams(location.search);
 export const DEEP_KEYS = ['mode', 'p1', 'p2', 'stage', 'seed', 'cpu1', 'cpu2', 'scheme1', 'scheme2', 'autostart', 'room'] as const;
@@ -94,7 +94,9 @@ function paramCfg(data: GameData, mode: MatchCfg['mode']): MatchCfg {
     mode, stage, seed,
     p: [
       { fighter: p1, color: 0, scheme: schemeParam('scheme1'), cpu: intParam('cpu1', -1, 8, -1) },
-      { fighter: p2, color: p2 === p1 ? 1 : 0, scheme: schemeParam('scheme2'), cpu: intParam('cpu2', -1, 8, training ? 0 : -1) },
+      // CHANGED(integrator) P2: training P2 defaults to -1 = the TrainingDriver's dummy (UI §27.1: the menus send -1 too;
+      // ?cpu2=n >= 0 starts the driver in DUMMY: CPU at level n). P1: 0 = a CPU at level 0 stood in for the dummy.
+      { fighter: p2, color: p2 === p1 ? 1 : 0, scheme: schemeParam('scheme2'), cpu: intParam('cpu2', -1, 8, -1) },
     ],
     ...(training ? { timer: 0 } : {}),
   };
@@ -135,6 +137,8 @@ async function boot(): Promise<void> {
       bout: !!game?.bout, frozen: game?.frozen ?? false, gameFps: game ? Math.round(game.fps * 10) / 10 : 0,
       matchPhase: game?.bout ? (game.matchInfo()?.phase ?? null) : null,
       season: game?.season ? { index: game.season.index, slots: game.season.slots.length, continues: game.season.continues } : null,
+      // CHANGED(integrator) P2: the TRAINING driver's read-back (dummy mode, guard / record / reset counters, last readout)
+      trainer: game?.bout?.trainer ? game.bout.trainer.readback() : null,
       // CHANGED(fixer) D4: camera read-back (look height, the HUD safe line, each fighter's top on screen)
       cam: game?.bout ? game.bout.view.camReadback() : null,
       contextLost,

@@ -8,6 +8,13 @@
   python tools/build_fighters.py --fighter johnny --check     # resolve + validate the plan only, no bake
   options: --no-qc  --keep-blend  --budget-mb 3.0  --blender <exe>  --no-publish (subset tests)
            --from-raw (re-compress/publish the last bake)  --qc-only  --layer-attach yaw|full|world
+  CHANGED(ASSETS3D) (staged rebakes while the game runs; CONTRACT 35.5):
+  python tools/build_fighters.py --all --stage --measure --no-qc   # bake + check into art/renders/<id>/_build only
+  python tools/build_fighters.py --all --publish-staged            # then swap EVERY staged GLB + clips.json (+ the
+           measure_body extents) in at once: all are verified first (structural check, budget, plan not changed
+           since the bake), nothing is copied unless all pass; each file lands by an atomic rename
+  --measure  runs art/blender/measure_body.py (@all clips) on the staged qc.glb -> _build/body_all.json (fighters)
+  --extra-plan <json>  extra / overriding clip entries for experiments (never needed for a real build)
 
 Per fighter:
   1. resolve the clip plan: tools/clipplan/_shared.json (lane ASSETS) + tools/clipplan/<id>.json
@@ -54,8 +61,13 @@ def load_json(p):
         return json.load(fh)
 
 
+EXTRA_PLAN = None   # --extra-plan (experiments only)
+
+
 def resolve_plan(fid, shared_only=False):
     shared = load_json(P("tools", "clipplan", "_shared.json"))
+    if EXTRA_PLAN:
+        shared = dict(shared, **load_json(EXTRA_PLAN))
     plan, origin = {}, {}
     for k, v in shared.items():
         if k.startswith("_"):
@@ -185,6 +197,7 @@ CLIPS_META = {
     "contact": "seconds from clip start of the strike frame (front-pass rule: fastest end effector's extension peak, then the frame in [c-8, c+3] where it is farthest forward), or the clip plan's explicit frame; null = not a strike",
     "effector": "{bone, at: [x_fwd, y_up]} the striking point at contact (knuckles = <Side>HandMiddle1 head, ball of foot = <Side>ToeBase head, knee = <Side>Leg head, head = HeadTop_End), fighter-local metres with the root at the sim position",
     "root": "[[t, dx_fwd_m], ...] one row per baked frame: the hips' forward travel since frame 0 that was STRIPPED from the clip (the GLB keeps the hips above the root); the sim's `move` curve can be derived from it",
+    "rootLat": "optional (side-steps / side-walks, CONTRACT 35.5): [[t, dx_right_m], ...] one row per baked frame, the LATERAL hips travel since frame 0 that was stripped (+ = toward the fighter's own right, so *_l clips run negative); loops with a rootSpeed are baked per body so |rootLat end| / dur = that speed",
     "apexY": "for clips baked with air='strip' (jumps): the lift that was removed so the feet stay at the root (the clip's own jump height); null otherwise",
     "loop": "true = plays cyclically (loopBlend eased the last frames into frame 0)",
     "marks": "optional named sync times in seconds (throw victims: grab / slam; wall_splat: splat; multi-hit strikes: hit1..hitN)",
@@ -337,7 +350,24 @@ def build_one(fid, a, bodies):
     if probs:
         rep["problems"].append({"structural": probs})
     hard = [p for p in probs if "budget" in p or "!=" in p]
-    if not hard and not bake.get("errors") and not a.no_publish:
+    if a.stage:
+        # CHANGED(ASSETS3D): staged = baked + checked, published later by --publish-staged (all fighters at once)
+        with open(build + "/clips.json", "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(clips_json, fh, indent=1)
+        if not hard and not bake.get("errors"):
+            rep["staged"] = {"glb": tmp_out, "bytes": os.path.getsize(tmp_out), "clips_json": build + "/clips.json"}
+        else:
+            rep["problems"].append("NOT staged (hard structural problems or clip errors)")
+        if a.measure and not bcfg.get("goon") and "staged" in rep:
+            rcm, sm = run_blender(a.blender, P("art", "blender", "measure_body.py"),
+                                  [build + "/qc.glb", build + "/clips.json", build + "/body_all.json", "@all"],
+                                  build + "/measure.log", 3600)
+            rep["measure_rc"], rep["measure_secs"] = rcm, sm
+            print("[build] %s measure rc=%d %.0fs" % (fid, rcm, sm), flush=True)
+            if rcm != 0 or not os.path.exists(build + "/body_all.json"):
+                rep["problems"].append("measure_body failed: " + " | ".join(tail(build + "/measure.log", 6)))
+                rep.pop("staged", None)
+    elif not hard and not bake.get("errors") and not a.no_publish:
         shutil.copyfile(tmp_out, out)
         cj = P("data", "clips", fid + ".clips.json")
         os.makedirs(os.path.dirname(cj), exist_ok=True)
@@ -355,10 +385,86 @@ def build_one(fid, a, bodies):
         json.dump(clips_json, open(cjq, "w"), indent=1)
         run_qc(fid, a, build, rep)
     rep["secs"] = round(time.time() - t0, 1)
-    rep["ok"] = "published" in rep
+    rep["ok"] = "published" in rep or "staged" in rep
     with open(P("art", "renders", fid, "build_report.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(rep, fh, indent=1)
     return rep
+
+
+def _plan_key(e):
+    return json.dumps({k: v for k, v in e.items() if k != "id"}, sort_keys=True)
+
+
+def check_staged(fid, a, bodies):
+    """CHANGED(ASSETS3D): verify one staged bake (art/renders/<id>/_build) before --publish-staged. Returns
+    (list of (src, dst) copies, problems)."""
+    build = P("art", "renders", fid, "_build")
+    probs, copies = [], []
+    need = [build + "/final.glb", build + "/clips.json", build + "/job.json"]
+    miss = [x for x in need if not os.path.exists(x)]
+    if miss:
+        return [], ["missing staged files %s" % miss], 0
+    rp = P("art", "renders", fid, "build_report.json")
+    rep = load_json(rp) if os.path.exists(rp) else {}
+    if not rep.get("staged"):
+        probs.append("build_report.json has no 'staged' record (last build was not a clean --stage bake)")
+    cj = load_json(build + "/clips.json")
+    bcfg = bodies["bodies"][fid]
+    budget_mb = float(bcfg.get("budgetMB", a.budget_mb))
+    facts = glb_facts(build + "/final.glb")
+    joints = facts["skins"][0]["joints"] if facts["skins"] else 0
+    hard = [p for p in structural_check(facts, list(cj["clips"]), budget_mb, joints) if "budget" in p or "!=" in p]
+    probs += hard
+    # the plan must not have changed since the bake (lane FIGHTERS may rewrite tools/clipplan/<id>.json meanwhile)
+    job = load_json(build + "/job.json")
+    baked = {c["id"]: _plan_key(c) for c in job["clips"]}
+    plan, _ = resolve_plan(fid)
+    want = {k: _plan_key(dict(v)) for k, v in plan.items()}
+    stale = sorted(k for k in set(baked) | set(want) if baked.get(k) != want.get(k))
+    if stale:
+        probs.append("plan changed since the bake: %s" % stale)
+    if sorted(cj["clips"]) != sorted(want):
+        probs.append("staged clips.json ids != plan ids: %s" % sorted(set(cj["clips"]) ^ set(want)))
+    copies += [(build + "/final.glb", P("art", "gltf", "fighters", fid + ".glb")),
+               (build + "/clips.json", P("data", "clips", fid + ".clips.json"))]
+    if not bcfg.get("goon"):
+        if os.path.exists(build + "/body_all.json"):
+            copies.append((build + "/body_all.json", P("tools", "measure", fid + ".body_all.json")))
+        else:
+            probs.append("no staged body_all.json (bake with --measure)")
+    return copies, probs, facts["bytes"]
+
+
+def publish_staged(ids, a, bodies):
+    """Verify EVERY staged fighter, then copy all of them (tmp file + os.replace per file). Nothing is copied
+    unless every fighter passes."""
+    allc, bad = [], {}
+    sizes = {}
+    for fid in ids:
+        copies, probs, nbytes = check_staged(fid, a, bodies)
+        sizes[fid] = nbytes
+        if probs:
+            bad[fid] = probs
+        allc += copies
+    if bad:
+        print("[publish-staged] REFUSED - nothing copied:", json.dumps(bad, indent=1))
+        return 1
+    for src, dst in allc:
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        tmp = dst + ".staged_tmp"
+        shutil.copyfile(src, tmp)
+    for src, dst in allc:
+        os.replace(dst + ".staged_tmp", dst)
+    for fid in ids:
+        rp = P("art", "renders", fid, "build_report.json")
+        rep = load_json(rp)
+        rep["published"] = {"glb": P("art", "gltf", "fighters", fid + ".glb"), "bytes": sizes[fid],
+                            "clips_json": P("data", "clips", fid + ".clips.json"), "from": "staged",
+                            "at": time.strftime("%Y-%m-%d %H:%M:%S")}
+        with open(rp, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(rep, fh, indent=1)
+    print("[publish-staged] PUBLISHED %d fighters, %d files: %s" % (len(ids), len(allc), json.dumps(sizes)))
+    return 0
 
 
 def main():
@@ -381,7 +487,16 @@ def main():
                     help="skip the Blender bake: compress + check + publish + QC the last raw.glb / bake.json")
     ap.add_argument("--no-publish", action="store_true",
                     help="bake + QC into art/renders/<id>/ only; never touch art/gltf or data/clips (subset tests)")
+    # CHANGED(ASSETS3D): staged rebakes + one-move publish, measure_body, experiment plans
+    ap.add_argument("--stage", action="store_true",
+                    help="bake + check into art/renders/<id>/_build (final.glb, clips.json); publish later with --publish-staged")
+    ap.add_argument("--measure", action="store_true", help="with --stage: measure_body.py @all -> _build/body_all.json")
+    ap.add_argument("--publish-staged", action="store_true",
+                    help="verify every listed staged bake, then copy all of them in (nothing copied unless all pass)")
+    ap.add_argument("--extra-plan", default="", help="json of extra / overriding shared clip entries (experiments)")
     a = ap.parse_args()
+    global EXTRA_PLAN
+    EXTRA_PLAN = a.extra_plan or None
     bodies = load_json(P("tools", "bodies.json"))
     if a.all:
         ids = sorted(k for k, v in bodies["bodies"].items() if not v.get("goon"))
@@ -395,6 +510,11 @@ def main():
     ids = [i for i in ids if i not in skip]
     if not ids or ids == [None]:
         ap.error("--fighter <id>[,<id>...] or --all [--skip a,b] or --goons")
+    if a.publish_staged:
+        unknown = [f for f in ids if f not in bodies["bodies"]]
+        if unknown:
+            ap.error("unknown fighters %s" % unknown)
+        sys.exit(publish_staged(ids, a, bodies))
     bad = 0
     for fid in ids:
         if fid not in bodies["bodies"]:
@@ -417,6 +537,7 @@ def main():
         rep = build_one(fid, a, bodies)
         brief = {k: rep.get(k) for k in ("fighter", "ok", "secs", "compress", "problems")}
         brief["published"] = rep.get("published")
+        brief["staged"] = rep.get("staged")
         print("[build] RESULT", json.dumps(brief))
         if not rep["ok"]:
             bad += 1

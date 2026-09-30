@@ -106,6 +106,42 @@ def main():
         out = os.path.join(a.qc_dir, "moves_%02d.png" % (si // per))
         sheet.save(out)
         sheets.append(out)
+    # CHANGED(ASSETS3D): locomotion sheets (side-steps / side-walks): per clip 3 rows (front / top / game view) x up
+    # to 8 frames with the stripped travel put back and footprint discs (red = left ball of foot, blue = right); the
+    # tile label "f7 L-" = frame 7, left foot planted, right foot in the air
+    lclips = [c for c in clips if q["clips"][c].get("loco")]
+    for cid in lclips:
+        m = q["clips"][cid]
+        lo = m["loco"]
+        fr = lo["frames"]
+        views = lo.get("views", ["front", "top", "game"])
+        sheet = Image.new("RGB", (tw * max(1, len(fr)), (th + lab) * len(views) + lab), (24, 24, 28))
+        d = ImageDraw.Draw(sheet)
+        sl = lo.get("slide_mesh_rig", {})
+        txt = "%s  %df  travel fwd %.3f m / lat %+.3f m (+ = his right)  stance slide L %s / R %s m/s (mean/max)" % (
+            cid, m["frames"], lo["travel_m"][0], lo["travel_m"][1],
+            "%s/%s" % (sl.get("Left", {}).get("slide_mps_mean"), sl.get("Left", {}).get("slide_mps_max")),
+            "%s/%s" % (sl.get("Right", {}).get("slide_mps_mean"), sl.get("Right", {}).get("slide_mps_max")))
+        d.text((6, 4), txt, fill=(255, 220, 90), font=f1)
+        d.text((6, 18), "low %.3f..%.3f m  tpose %d%s" % (m["lowest_min"], m["lowest_max"], len(m["tpose_frames"]), step_txt(m)),
+               fill=(200, 200, 210), font=f2)
+        hint = {"front": "FRONT view (his LEFT = screen RIGHT)", "top": "TOP view, facing screen-down (his LEFT = screen RIGHT)",
+                "feet": "FEET close-up, front 28 deg down (planted = the foot stays on its disc; red = left ball, blue = right)",
+                "game": "GAME side view (orbit camera on the step axis: a step reads as depth)"}
+        stl = lo.get("stance_LR") or []
+        for r, v in enumerate(views):
+            y = lab + r * (th + lab)
+            d.text((6, y + 10), hint.get(v, v), fill=(150, 210, 255), font=f2)
+            for k, f in enumerate(fr):
+                p = os.path.join(a.qc_dir, "%s__loco_%s%d.png" % (cid, v, k))
+                if os.path.exists(p):
+                    im = Image.open(p).convert("RGB").resize((tw, th))
+                    sheet.paste(im, (k * tw, y + lab))
+                    d.text((k * tw + 4, y + lab + 2), "f%d %s" % (f, "".join(stl[k]) if k < len(stl) else ""),
+                           fill=(20, 20, 20), font=f1)
+        out = os.path.join(a.qc_dir, "loco_%s.png" % cid)
+        sheet.save(out)
+        sheets.append(out)
     turn = [os.path.join(a.qc_dir, "_turn_%d.png" % k) for k in range(8)] + \
            [os.path.join(a.qc_dir, "_turn_head_%d.png" % k) for k in range(2)]
     turn = [p for p in turn if os.path.exists(p)]

@@ -68,6 +68,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "palm_flick"},
       "desc": "Quick palm.",
       "boxes": [{"f": [5, 7], "x": 0.845, "y": 1.278, "w": 0.389, "h": 0.356}],
@@ -97,6 +99,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "low_palm"},
       "desc": "Crouching palm to the shin.",
       "boxes": [{"f": [5, 7], "x": 0.909, "y": 0.75, "w": 0.518, "h": 0.25}],
@@ -126,6 +130,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 5, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "spear_hand"},
       "desc": "Long straight-arm spear hand: the zoner's longest poke.",
       "boxes": [{"f": [9, 11], "x": 0.973, "y": 1.265, "w": 0.646, "h": 0.33}],
@@ -156,6 +162,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
+      "track": {"until": 5, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "low_spear"},
       "desc": "Long crouching spear hand (low); cancel into CARD FAN.",
       "boxes": [{"f": [9, 11], "x": 0.97, "y": 1.066, "w": 0.639, "h": 0.3}],
@@ -180,14 +188,16 @@
       "pushback": {"hit": 0.6, "block": 0.8},
       "cancel": ["special", "super"],
       "juggle": {"js": 0, "ji": 1, "jl": 0},
-      "onHit": {"kd": "none", "launch": [0, 0], "wallSplat": false, "groundBounce": false, "crumple": false},
+      "onHit": {"kd": "none", "launch": [0, 0], "wallSplat": true, "groundBounce": false, "crumple": false},
       "gain": {"showtime": 1000, "nerveCost": 5000},
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 8, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "double_palm"},
-      "desc": "Double palm that shoves them back to his range.",
+      "desc": "Double palm that shoves them back to his range; wall-splats at the ring edge.",
       "boxes": [{"f": [12, 14], "x": 0.988, "y": 1.245, "w": 0.676, "h": 0.35}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [8, 0.001], [11, 0.282], [14, 0.308], [23, 0.257], [29, 0.105], [35, 0.006]]
@@ -216,6 +226,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["antiair"],
+      "track": {"until": 5, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "rising_palm"},
       "desc": "Rising palm anti-air."
     },
@@ -243,6 +255,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["overhead"],
+      "track": {"until": 16, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "abracadabra"},
       "desc": "Two-fist hammer onto the head: overhead.",
       "pushExt": [
@@ -281,6 +295,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "air_palm"},
       "desc": "Air palm.",
       "pushExt": [[0, 0.007], [4, 0.005], [7, 0.044], [15, 0.042]]
@@ -309,6 +325,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 3, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "air_flick"},
       "desc": "Flung arm air-to-air.",
       "pushExt": [[0, 0.0], [2, 0.0], [4, 0.068], [16, 0.089]]
@@ -337,6 +355,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 6, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "air_double"},
       "desc": "Double-palm jump-in.",
       "pushExt": [[0, 0.0], [3, 0.0], [5, 0.035], [9, 0.22], [19, 0.168]]
@@ -375,6 +395,7 @@
         "victim": [[0, "hit_high_s", 0.0, 0.15], [18, "thrown_f", 0.3, 1.1]]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Grabs the lapels and blasts them away with both palms.",
       "pushExt": [[0, 0.224], [4, 0.078], [10, 0.014], [22, 0.0], [31, 0.079]]
@@ -413,6 +434,7 @@
         "victim": [[0, "hit_high_s", 0.0, 0.15], [6, "thrown_b", 0.0, 0.4], [18, "thrown_b", 0.4, 1.2]]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Spins and flings them behind him.",
       "pushExt": [[0, 0.224], [4, 0.078], [10, 0.014], [22, 0.0], [31, 0.079]]
@@ -440,11 +462,23 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "projectile": {"life": 180, "box": [0.3, 0.2], "y": 1.2, "hits": 1, "clip": "card", "x": 0.6, "speed": 5.0, "strength": "L"},
+      "projectile": {
+        "life": 180,
+        "box": [0.3, 0.2],
+        "y": 1.2,
+        "hits": 1,
+        "clip": "card",
+        "x": 0.6,
+        "speed": 5.0,
+        "strength": "L",
+        "aimed": true,
+        "lateralM": 0.3
+      },
       "role": ["projectile"],
+      "track": {"until": 10, "rate": 180},
       "anim": {"clip": "card_flick"},
       "sfx": [[0, "card_throw"]],
-      "desc": "Flicked playing cards; fast and straight.",
+      "desc": "Flicked playing cards; fast, aimed at the opponent on release.",
       "pushExt": [[0, 0.0], [10, 0.0], [37, 0.087], [48, 0.025]]
     },
     "card_fan_m": {
@@ -470,11 +504,23 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "projectile": {"life": 180, "box": [0.3, 0.2], "y": 1.2, "hits": 1, "clip": "card", "x": 0.6, "speed": 6.5, "strength": "M"},
+      "projectile": {
+        "life": 180,
+        "box": [0.3, 0.2],
+        "y": 1.2,
+        "hits": 1,
+        "clip": "card",
+        "x": 0.6,
+        "speed": 6.5,
+        "strength": "M",
+        "aimed": true,
+        "lateralM": 0.3
+      },
       "role": ["projectile"],
+      "track": {"until": 8, "rate": 180},
       "anim": {"clip": "card_flick"},
       "sfx": [[0, "card_throw"]],
-      "desc": "Flicked playing cards; fast and straight.",
+      "desc": "Flicked playing cards; fast, aimed at the opponent on release.",
       "pushExt": [[0, 0.0], [9, 0.0], [36, 0.087], [48, 0.025]]
     },
     "card_fan_h": {
@@ -500,11 +546,23 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "projectile": {"life": 180, "box": [0.3, 0.2], "y": 1.2, "hits": 1, "clip": "card", "x": 0.6, "speed": 8.0, "strength": "H"},
+      "projectile": {
+        "life": 180,
+        "box": [0.3, 0.2],
+        "y": 1.2,
+        "hits": 1,
+        "clip": "card",
+        "x": 0.6,
+        "speed": 8.0,
+        "strength": "H",
+        "aimed": true,
+        "lateralM": 0.3
+      },
       "role": ["projectile"],
+      "track": {"until": 6, "rate": 180},
       "anim": {"clip": "card_flick"},
       "sfx": [[0, "card_throw"]],
-      "desc": "Flicked playing cards; fast and straight.",
+      "desc": "Flicked playing cards; fast, aimed at the opponent on release.",
       "pushExt": [[0, 0.0], [36, 0.087], [48, 0.025]]
     },
     "card_fan_ex": {
@@ -530,8 +588,20 @@
       "cost": {"showtime": 0, "nerve": 20000},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "projectile": {"life": 180, "box": [0.4, 0.4], "y": 1.2, "hits": 3, "clip": "card", "x": 0.6, "speed": 8.0, "strength": "H"},
+      "projectile": {
+        "life": 180,
+        "box": [0.4, 0.4],
+        "y": 1.2,
+        "hits": 3,
+        "clip": "card",
+        "x": 0.6,
+        "speed": 8.0,
+        "strength": "H",
+        "aimed": true,
+        "lateralM": 0.4
+      },
       "role": ["projectile"],
+      "track": {"until": 5, "rate": 180},
       "anim": {"clip": "card_flick"},
       "sfx": [[0, "card_throw"]],
       "desc": "A full deck: 3 hits.",
@@ -570,9 +640,12 @@
         "vy": 5.0,
         "g": 15.0,
         "speed": 1.0,
-        "strength": "L"
+        "strength": "L",
+        "aimed": true,
+        "lateralM": 0.225
       },
       "role": ["projectile", "antiair"],
+      "track": {"until": 12, "rate": 180},
       "anim": {"clip": "flash_cast"},
       "sfx": [[0, "fire_whoosh"]],
       "desc": "Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump."
@@ -610,9 +683,12 @@
         "vy": 5.0,
         "g": 15.0,
         "speed": 2.6,
-        "strength": "M"
+        "strength": "M",
+        "aimed": true,
+        "lateralM": 0.225
       },
       "role": ["projectile", "antiair"],
+      "track": {"until": 14, "rate": 180},
       "anim": {"clip": "flash_cast"},
       "sfx": [[0, "fire_whoosh"]],
       "desc": "Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump."
@@ -650,9 +726,12 @@
         "vy": 5.0,
         "g": 15.0,
         "speed": 4.3,
-        "strength": "H"
+        "strength": "H",
+        "aimed": true,
+        "lateralM": 0.225
       },
       "role": ["projectile", "antiair"],
+      "track": {"until": 16, "rate": 180},
       "anim": {"clip": "flash_cast"},
       "sfx": [[0, "fire_whoosh"]],
       "desc": "Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump."
@@ -690,9 +769,12 @@
         "vy": 5.0,
         "g": 15.0,
         "speed": 2.6,
-        "strength": "H"
+        "strength": "H",
+        "aimed": true,
+        "lateralM": 0.45
       },
       "role": ["projectile", "antiair"],
+      "track": {"until": 10, "rate": 180},
       "anim": {"clip": "flash_cast"},
       "sfx": [[0, "fire_whoosh"]],
       "desc": "A huge fireball, 2 hits."
@@ -722,6 +804,7 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "teleport": {"f": 17, "to": "behind", "gapM": 0.8},
       "role": ["approach"],
+      "track": {"until": 2, "rate": 180},
       "anim": {"clip": "vanish"},
       "desc": "Trapdoor: reappears 0.8 m BEHIND the opponent (14f recovery).",
       "pushExt": [[0, 0.001], [21, 0.106], [40, 0.133]]
@@ -751,6 +834,7 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "teleport": {"f": 17, "to": "front", "gapM": 0.9},
       "role": ["approach"],
+      "track": {"until": 2, "rate": 180},
       "anim": {"clip": "vanish"},
       "desc": "Trapdoor: reappears 0.9 m IN FRONT of the opponent.",
       "pushExt": [[0, 0.001], [21, 0.106], [40, 0.133]]
@@ -780,6 +864,7 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "teleport": {"f": 17, "to": "home", "gapM": 1.0},
       "role": ["escape"],
+      "track": {"until": 2, "rate": 180},
       "anim": {"clip": "vanish"},
       "desc": "Trapdoor: escapes to 1.0 m from his own wall.",
       "pushExt": [[0, 0.001], [21, 0.106], [40, 0.133]]
@@ -809,6 +894,7 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "teleport": {"f": 10, "to": "behind", "gapM": 0.8},
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "vanish"},
       "desc": "Instant: invulnerable from frame 1, reappears behind, cancelable into a special.",
       "pushExt": [[0, 0.001], [14, 0.106], [26, 0.133]]
@@ -837,7 +923,10 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "boxes": [{"f": [9, 13], "x": 0.3, "y": 1.7, "w": 1.2, "h": 1.0}],
-      "role": ["antiair"],
+      "role": ["antiair", "antistep"],
+      "track": {"until": 13, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "flourish_burst"},
       "sfx": [[0, "fire_whoosh"]],
       "desc": "Burst of flame and doves above and around him; not invulnerable (EX is)."
@@ -866,7 +955,10 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "boxes": [{"f": [10, 14], "x": 0.4, "y": 1.7, "w": 1.3, "h": 1.0}],
-      "role": ["antiair"],
+      "role": ["antiair", "antistep"],
+      "track": {"until": 14, "rate": 20},
+      "homing": true,
+      "lateralM": 0.65,
       "anim": {"clip": "flourish_burst"},
       "sfx": [[0, "fire_whoosh"]],
       "desc": "Burst of flame and doves above and around him; not invulnerable (EX is)."
@@ -895,7 +987,10 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "boxes": [{"f": [11, 15], "x": 0.5, "y": 1.75, "w": 1.4, "h": 1.1}],
-      "role": ["antiair"],
+      "role": ["antiair", "antistep"],
+      "track": {"until": 15, "rate": 20},
+      "homing": true,
+      "lateralM": 0.7,
       "anim": {"clip": "flourish_burst"},
       "sfx": [[0, "fire_whoosh"]],
       "desc": "Burst of flame and doves above and around him; not invulnerable (EX is)."
@@ -924,7 +1019,10 @@
       "invuln": {"strike": [1, 11], "throw": [1, 11], "air": [1, 11], "proj": [1, 11]},
       "armor": {"hits": 0, "f": [0, 0]},
       "boxes": [{"f": [8, 12], "x": 0.3, "y": 1.4, "w": 1.6, "h": 1.6}],
-      "role": ["antiair", "reversal"],
+      "role": ["antiair", "reversal", "antistep"],
+      "track": {"until": 12, "rate": 20},
+      "homing": true,
+      "lateralM": 0.8,
       "anim": {"clip": "flourish_burst"},
       "sfx": [[0, "fire_whoosh"]],
       "desc": "Fully invulnerable burst."
@@ -960,12 +1058,15 @@
         "hits": 5,
         "strength": "H",
         "clip": "saw_card",
-        "x": 0.8
+        "x": 0.8,
+        "aimed": true,
+        "lateralM": 0.45
       },
       "role": ["projectile", "reversal"],
+      "track": {"until": 3, "rate": 180},
       "anim": {"clip": "palm_shove"},
       "sfx": [[0, "crowd_cheer_burst"]],
-      "desc": "A giant spinning card-saw: 5-hit projectile, invulnerable startup.",
+      "desc": "A giant spinning card-saw: 5-hit projectile, invulnerable startup, aimed.",
       "pushExt": [[0, 0.0], [5, 0.0], [8, 0.194], [13, 0.235], [39, 0.223], [55, 0.139]]
     },
     "the_prestige": {
@@ -1132,6 +1233,9 @@
         "endGapM": 1.5
       },
       "role": ["reversal"],
+      "track": {"until": 13, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "palm_shove"},
       "desc": "PRIME TIME: a palm to the chest, a sheet over the victim, and the big reveal.",
       "boxes": [{"f": [10, 13], "x": 0.962, "y": 1.378, "w": 0.623, "h": 0.555}],
@@ -1173,7 +1277,8 @@
     "pokes": ["5M", "2M"],
     "punish": ["5H", "flourish_h"],
     "combo": ["2M", "card_fan_h"],
-    "meter": "grand_illusion"
+    "meter": "grand_illusion",
+    "antiStep": ["flourish_l", "card_fan_m"]
   },
   "introLine": "Pick a card. Any card. It will be the last one you pick.",
   "winQuotes": ["And for my next trick - you disappear.", "Every great trick has three acts. You were the second.", "Applause is optional. Screaming is appreciated."],

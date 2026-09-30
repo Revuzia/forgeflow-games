@@ -5,6 +5,10 @@
 // hitstun - (active + recovery) frames, so on-hit advantage = hitstun - (active + recovery) like
 // every other move. Tech window 9 frames (normal throws only); punish-counter throws (+70%,
 // hard knockdown, 1 NERVE bar drained) and command grabs are untechable.
+//
+// CHANGED(SIM3D) (CONTRACT §35.4): a grab connects when the defender is within range (push circle to push circle, the
+// old push-box front to front on the line) AND inside the thrower's front arc +- throw.frontArcDeg (70); the victim's
+// carry runs along the thrower's yaw (fighter.ts throwCarry), a back throw lands it behind along -forward.
 
 import { ACT, F, FL, ST } from './layout.ts';
 import { EV, SC } from './events.ts';
@@ -13,8 +17,9 @@ import type { CMove } from './compile.ts';
 import { addShowtime, clearMove, drainNerve, emit, fb, isAirborne, setSt } from './state.ts';
 import type { Match } from './state.ts';
 import { applyDamage, comboStep } from './hits.ts';
-import { pushExt } from './boxes.ts';
+import { pushCircle } from './boxes.ts';
 import { throwEarlyRelease, throwWakeNeed } from './throwpose.ts';
+import { Q, YAW_HALF, cosQ, divRound, dirToYaw, isqrt, sinQ } from './fx3d.ts';
 
 function inRange(inv: Int32Array, o: number, f: number): boolean {
   return inv[o] > 0 && f >= inv[o] && f <= inv[o + 1];
@@ -67,6 +72,24 @@ function airGrabbable(m: Match, d: number): boolean {
   return true;
 }
 
+const GA = new Int32Array(3);
+const GD2 = new Int32Array(3);
+
+/**
+ * CHANGED(SIM3D): is defender d inside attacker a's front arc (+- throw.frontArcDeg around dir(yaw))? Root to root.
+ */
+export function inFrontArc(m: Match, a: number, d: number): boolean {
+  const s = m.s;
+  const ba = fb(a);
+  const bd = fb(d);
+  const rx = s[bd + F.x] - s[ba + F.x];
+  const rz = s[bd + F.z] - s[ba + F.z];
+  const dist = isqrt(rx * rx + rz * rz);
+  if (dist === 0) return true;
+  const yaw = s[ba + F.yaw];
+  return rx * sinQ(yaw) + rz * cosQ(yaw) >= m.sys.frontArcCos * dist;
+}
+
 function grabCandidate(m: Match, a: number): CMove | null {
   const s = m.s;
   const ba = fb(a);
@@ -77,15 +100,21 @@ function grabCandidate(m: Match, a: number): CMove | null {
   if (f < mv.startup || f > mv.lastActive) return null;
   const d = 1 - a;
   if (mv.grab && mv.grab.air ? !airGrabbable(m, d) : !throwable(m, d)) return null;
-  const dx = Math.abs(s[ba + F.x] - s[fb(d) + F.x]);
-  // CHANGED(fixer) D2: the push-box edges that face each other (asymmetric boxes)
-  const toD = s[fb(d) + F.x] >= s[ba + F.x] ? 1 : -1;
-  const eA = pushExt(m, a, toD);
-  const eD = pushExt(m, d, -toD);
+  // CHANGED(SIM3D): the front arc, then the reach between the push circles (on the line = the old facing box edges)
+  if (!inFrontArc(m, a, d)) return null;
+  pushCircle(m, a, GA);
+  pushCircle(m, d, GD2);
   if (mv.grabGap >= 0) {
     // CONTRACT 20.2: pushbox front to pushbox front within rangeM (throws: throwRangeM)
-    if (dx - eA - eD > mv.grabGap) return null;
-  } else if (dx > mv.grabReach + eD) return null;
+    const dx = GD2[0] - GA[0];
+    const dz = GD2[1] - GA[1];
+    if (isqrt(dx * dx + dz * dz) - GA[2] - GD2[2] > mv.grabGap) return null;
+  } else {
+    // box-reach grabs: attacker root to the defender's body edge
+    const dx = GD2[0] - s[ba + F.x];
+    const dz = GD2[1] - s[ba + F.z];
+    if (isqrt(dx * dx + dz * dz) - GD2[2] > mv.grabReach) return null;
+  }
   return mv;
 }
 
@@ -143,12 +172,19 @@ function connect(m: Match, a: number, mv: CMove): void {
   // thrower clear of both push-box fronts (the thrower turns to face it; the lying victim keeps its facing until it rises)
   s[bd + F.tot] = s[bd + F.stun];
   s[bd + F.thrX] = s[bd + F.x];
+  s[bd + F.thrZ] = s[bd + F.z];
+  // CHANGED(SIM3D) (CONTRACT §35.4): the victim faces the thrower and its carry runs along the thrower's yaw; the
+  // victim's own root sits on the thrower's forward line from here on (the carry anchor is its position at the connect)
+  s[bd + F.thrYaw] = s[ba + F.yaw];
+  s[bd + F.yaw] = (s[ba + F.yaw] + YAW_HALF) & 65535;
   s[bd + F.kdFace] = 0;
   s[bd + F.thrDisp] = 0;
   s[bd + F.thrMv] = s[ba + F.mv];
   s[bd + F.thrSlam] = g ? g.hitF : s[ba + F.throwDmgF];
   if (mv.throwBack) {
-    const d0 = Math.abs(s[bd + F.x] - s[ba + F.x]);
+    const ddx = s[bd + F.x] - s[ba + F.x];
+    const ddz = s[bd + F.z] - s[ba + F.z];
+    const d0 = isqrt(ddx * ddx + ddz * ddz);
     // clear of both FRONTS: once the victim is up it turns to face the thrower (no push-apart pop at that turn)
     const after = Math.max(m.sys.backThrowOff, m.cf[a].pushFS + m.cf[d].pushFS + 2000);
     s[bd + F.thrDisp] = d0 + after;
@@ -195,9 +231,16 @@ function tech(m: Match, a: number): void {
   }
   const ba = fb(a);
   const bd = fb(d);
-  const dirA = s[bd + F.x] >= s[ba + F.x] ? 1 : -1;
-  s[ba + F.pushLeft] = -dirA * m.sys.techPush;
-  s[bd + F.pushLeft] = dirA * m.sys.techPush;
+  // CHANGED(SIM3D): the tech pushes both apart along the line between them
+  const dx = s[bd + F.x] - s[ba + F.x];
+  const dz = s[bd + F.z] - s[ba + F.z];
+  const yawAD = dx === 0 && dz === 0 ? s[ba + F.yaw] : dirToYaw(dx, dz);
+  s[ba + F.pushLeft] = m.sys.techPush;
+  s[ba + F.pushYaw] = (yawAD + YAW_HALF) & 65535;
+  s[bd + F.pushLeft] = m.sys.techPush;
+  s[bd + F.pushYaw] = yawAD;
+  void Q;
+  void divRound;
   addShowtime(m, d, sys.showtime.techGain);
   emit(m, EV.THROW_TECH, a, d, 0, 0);
 }

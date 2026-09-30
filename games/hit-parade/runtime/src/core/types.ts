@@ -32,6 +32,10 @@ export interface ProjectileDef {
   vy?: number; // m/s initial vertical speed (arcing projectile)
   g?: number; // m/s² gravity on the projectile
   ground?: boolean; // rolls along the floor instead of despawning on touchdown
+  /** CHANGED(SIM3D) (CONTRACT §35.4): aim at the opponent at spawn (default: along the thrower's yaw) */
+  aimed?: boolean;
+  /** CHANGED(SIM3D): hit box half-depth across the travel line (m); default box[0] / 2 */
+  lateralM?: number;
 }
 
 export interface CinematicDef {
@@ -105,6 +109,15 @@ export interface Move {
   install?: { frames: number; damagePct?: number; walkPct?: number };
   /** informational (FIGHTERS §20.6): "hitVolume" = the v1 derived box widened; SIM re-derives those (§28.5b) */
   boxSrc?: string;
+  /** CHANGED(SIM3D) (CONTRACT §35.4): move frames 1..until re-face the opponent by at most `rate` deg / frame
+   *  (rate absent / 0 = full re-face). Defaults: normals until = startup - 4, specials / supers startup - 6. */
+  track?: { until?: number; rate?: number };
+  /** tracks through the active frames (sweeps, spins, lariats, most supers, command-grab reach arcs) */
+  homing?: boolean;
+  /** no tracking after frame 1 (rushes, straight projectiles, charge moves) */
+  linear?: boolean;
+  /** hitbox half-depth across the attack line (m). Defaults L 0.15, M 0.18, H 0.22, sweep 0.45, homing 0.60 */
+  lateralM?: number;
 }
 
 /** CHANGED(SIM) P2 (CONTRACT §28.5c): measured posture extents [front, back] in metres from the root along the facing. */
@@ -274,6 +287,8 @@ export interface System {
     startup: number; active: number; recovery: number; rangeM: number; damage: number; hitstunF: number;
     hitstunB: number; techWindow: number; techFrames: number; techPushM: number; damageFrame: number;
     postStunInvuln: number; wakeupInvuln: number; backThrowOffsetM: number;
+    /** CHANGED(SIM3D) (CONTRACT §35.4): the defender must be inside the thrower's front arc +- this (deg), default 70 */
+    frontArcDeg?: number;
   };
   kd: { fallFrames: number; wakeupFrames: number; softLandTotal: number; hardLandTotal: number; airResetLand: number; backRiseM: number; minTotal: number };
   juggle: {
@@ -299,6 +314,11 @@ export interface System {
     wakeMaxRate?: number;
   };
   training: { refillDelay: number };
+  /** CHANGED(SIM3D) (CONTRACT §35): ring defaults, STEP_IN / STEP_OUT, tracking + lateral defaults */
+  ring?: { defaultRadiusM?: number; againstWallM?: number; camMinSepM?: number; spawnAxisDeg?: number; sectors?: number };
+  step?: { frames?: number; distM?: number; movePct?: number; bufferF?: number; attackF?: number; blockF?: number; walkMps?: number; settleF?: number };
+  track?: { normalUntilOffset?: number; specialUntilOffset?: number };
+  lateral?: { L: number; M: number; H: number; sweep: number; homing: number };
   /** CHANGED(SIM) P2 (CONTRACT §28): unique defaults, bonus rounds */
   uniques?: UniquesSys;
   brawl?: BrawlSys;
@@ -390,9 +410,15 @@ export interface FighterFlags {
 }
 
 export interface FighterSnap {
-  x: number; // metres
-  y: number; // metres
-  facing: number; // +1 | -1
+  x: number; // metres (world x)
+  y: number; // metres (height)
+  /** CHANGED(SIM3D) (CONTRACT §35): world z (metres) - the fight is on the (x, z) ground plane. Always set by the sim
+   *  (optional in the type only so older hand-built snapshots in labs / probes still type-check) */
+  z?: number;
+  /** CHANGED(SIM3D): body yaw in RADIANS for the view (three.js rotation.y of a model facing +Z at rest); always set */
+  yaw?: number;
+  /** +1 | -1 = the SCREEN side the fighter faces (sign of its forward on the camera's screen-right, CONTRACT §35.3) */
+  facing: number;
   state: number;
   stateName: string;
   moveId: number; // §17 rule 1, -1 none
@@ -424,6 +450,9 @@ export interface FighterSnap {
   install?: number;
   absent?: boolean;
   actionable?: boolean;
+  /** CHANGED(SIM3D) (CONTRACT §35.2): step state - kind, step frame (1..), the side of the fighter's OWN body it moves
+   *  toward (-1 left, +1 right, 0 none) and which button ('in' = STEP_IN away from the camera, 'out' = toward it) */
+  step?: { kind: 'none' | 'sidestep' | 'sidewalk' | 'settle'; frame: number; side: number; dir: 'in' | 'out' | '' };
 }
 
 /** CHANGED(SIM) P2 (CONTRACT §28.4): one goon of BRAWL BREAK. */
@@ -433,6 +462,9 @@ export interface GoonSnap {
   kindIdx: number;
   x: number;
   y: number;
+  /** CHANGED(SIM3D): world z (m) and yaw (radians, three.js rotation.y); always set by the sim */
+  z?: number;
+  yaw?: number;
   facing: number;
   state: number;
   stateName: string;
@@ -467,6 +499,8 @@ export interface BrawlSnap {
   perfects: number;
   hitsTaken: number;
   goons: GoonSnap[];
+  /** CHANGED(SIM3D) (CONTRACT §35.8): the soft-lock goon slot the player faces (-1 none) */
+  target?: number;
 }
 
 export type MatchPhase = 'intro' | 'fight' | 'ko' | 'timeover' | 'roundEnd' | 'matchEnd';
@@ -486,9 +520,26 @@ export interface MatchSnap {
   freeze: number;
   /** CHANGED(integrator): live projectiles for the view (§17.1 request; metres, vx in m/s, moveId per §17 rule 1,
    *  kind 0 projectile / 1 ball / 2 heckle object). Read-only copy; never part of the state or the checksum. */
-  proj?: Array<{ slot: number; owner: number; x: number; y: number; vx: number; moveId: number; kind: number; alive: boolean; obj?: number }>;
+  proj?: Array<{ slot: number; owner: number; x: number; y: number; vx: number; moveId: number; kind: number; alive: boolean; obj?: number;
+    /** CHANGED(SIM3D): world z (m), vz (m/s), travel yaw (radians) */
+    z?: number; vz?: number; yaw?: number }>;
+  /** CHANGED(SIM3D) (CONTRACT §35.3): camera normal = float unit vector [x, z] in the ground plane; the view camera sits
+   *  on +camN from the pair midpoint (the sim owns the basis, the view smooths it) */
+  camN?: [number, number];
+  /** CHANGED(SIM3D): the ring this match is fought in (metres / radians; constant per match) */
+  ring?: RingSnap;
   /** CHANGED(SIM) P2 (CONTRACT §28.4): present in `brawl` / `heckler` matches */
   brawl?: BrawlSnap;
+}
+
+/** CHANGED(SIM3D) (CONTRACT §35.2 / §35.11): the ring boundary. circle: radius; poly: apothem (centre -> side), sides,
+ *  rot = yaw (radians) of side 0's outward normal (circle: sector 0's centre); centre [x, z] (m). */
+export interface RingSnap {
+  shape: 'circle' | 'poly';
+  radius: number;
+  sides: number;
+  rot: number;
+  centre: [number, number];
 }
 
 /** §4.5 / §18.1 */

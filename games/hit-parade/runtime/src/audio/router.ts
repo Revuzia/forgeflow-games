@@ -89,9 +89,15 @@ export const FIGHTER_VOICE: Readonly<Record<string, { bank: Bank; rate: number }
   boneyard: { bank: 'm2', rate: 0.88 }, spin: { bank: 'm1', rate: 1.1 }, gazza: { bank: 'm2', rate: 1.0 },
   rerun: { bank: 'mon', rate: 1.14 }, freak: { bank: 'mon', rate: 0.9 }, ricky: { bank: 'm1', rate: 0.94 },
 };
-/** BRAWL BREAK goon kinds (system.json brawl.kinds ids, CONTRACT s28.4) -> pitch of the shared goon bank */
-export const GOON_VOICE_RATE: Readonly<Record<string, number>> = { goon_hardhat: 0.96, goon_riot: 0.84, goon_scrub: 1.14 };
+/** BRAWL BREAK goon kinds -> pitch of the shared goon bank. Keys = the final goon ids (CONTRACT s32.1, the GLB stems SIM
+ *  mirrors into system.json brawl.kinds). Any other id (e.g. a pre-rename system.json) is pitched by its kind index, so
+ *  routing never depends on an id spelling: index 0 hardhat (big), 1 security (heaviest), 2 medic (lightest). */
+export const GOON_VOICE_RATE: Readonly<Record<string, number>> = { goon_hardhat: 0.96, goon_security: 0.84, goon_medic: 1.14 };
 const GOON_RATE_BY_INDEX = [0.96, 0.84, 1.14];
+/** the goon bank pitch for a kind id / kind index (named id first, else by index; never undefined) */
+export function goonVoiceRate(id: string | undefined, kindIdx: number): number {
+  return (id !== undefined ? GOON_VOICE_RATE[id] : undefined) ?? GOON_RATE_BY_INDEX[((kindIdx % 3) + 3) % 3] ?? 1;
+}
 /** projectile spawn sound per fighter when the move table is unknown (fallback of PROJ_SOUNDS) */
 export const PROJ_BY_FIGHTER: Readonly<Record<string, SfxId>> = {
   johnny: 'proj_throw', zambini: 'proj_card', gazza: 'proj_ball', krane: 'proj_zap', ricky: 'proj_fire', lotus: 'proj_flame_breath',
@@ -1063,8 +1069,7 @@ export class AudioRouter {
   }
 
   private goonRate(kindIdx: number): number {
-    const id = this.ctx?.goonKinds[kindIdx];
-    return (id && GOON_VOICE_RATE[id]) || GOON_RATE_BY_INDEX[((kindIdx % 3) + 3) % 3] || 1;
+    return goonVoiceRate(this.ctx?.goonKinds[kindIdx], kindIdx);
   }
 
   /** a fighter's (or goon's) voice line (per-voice gap, probability p) */
@@ -1080,7 +1085,7 @@ export class AudioRouter {
     if (goon) {
       const g = this.goonSnap(who);
       bank = 'goon';
-      rate = g ? (GOON_VOICE_RATE[g.kind] ?? this.goonRate(g.kindIdx)) : 1;
+      rate = g ? goonVoiceRate(g.kind, g.kindIdx) : 1;
     } else {
       const v = FIGHTER_VOICE[this.fighterId(who)] ?? { bank: 'm1' as Bank, rate: 1 };
       bank = v.bank;

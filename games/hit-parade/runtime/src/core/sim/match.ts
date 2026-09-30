@@ -2,14 +2,19 @@
 // clock-free: step(m, in1, in2) advances exactly one frame and is pure over (state, inputs, data).
 // All mutable sim state lives in m.s (one Int32Array, layout.ts); save/load copy it, checksum
 // hashes it. Snapshots (readFighter / readMatch) are the only thing the view / UI read.
+//
+// CHANGED(SIM3D) (CONTRACT §35): the 3D ring. createMatch reads the stage's ring / spawnAxisDeg / cameraSideDeg
+// (ring.ts), each fight frame hands every fighter its opponent point (fighter.ts OPP) from the START-of-frame positions,
+// and after the bodies / hits / throws settled it updates the camera basis camN (continuity: the perpendicular of
+// P2 - P1 closest to the previous one) and each fighter's screen-side facing sign (the input mapping, §4.4).
 
 import type { FighterSnap, GameData, MatchPhase, MatchSnap } from '../types.ts';
 import { ACT, BUF, F, FL, MODE_CODES, P, PH, PH_NAMES, PROJ_CAP, ST, ST_NAMES, STATE_INTS, STATE_INTS_BRAWL, STATE_VERSION, W, projBase } from './layout.ts';
 import { EventRing, EV } from './events.ts';
 import { UK, compileBrawl, compileFighter, compileSystem } from './compile.ts';
 import { recordInput, parseAction } from './inputs.ts';
-import { fighterUpdate, freezeBufferRule, enterKnockdown, PROX_THREAT, proxThreat } from './fighter.ts';
-import { clampToWalls, resolveBodies } from './boxes.ts';
+import { fighterUpdate, freezeBufferRule, enterKnockdown, PROX_THREAT, proxThreat, setOpp } from './fighter.ts';
+import { clampToRing, hurtCyls, pushCircle, resolveBodies } from './boxes.ts';
 import { ballPost, projectilesTick } from './projectiles.ts';
 import { applyDamage, comboStep, resolveHits, scaledDamage } from './hits.ts';
 import { resolveThrows } from './throws.ts';
@@ -18,11 +23,13 @@ import { animTick } from './anim.ts';
 import { initRound, startKO, startTimeover } from './rounds.ts';
 import { hashInts } from './hash.ts';
 import { M } from './units.ts';
-import { clearMove, emit, fb, gainNerve, isFreeState, nerveMax, setSt } from './state.ts';
+import { clearMove, emit, fb, gainNerve, isFreeState, nerveMax, setSt, updateCamN } from './state.ts';
 import { KDF } from './throwpose.ts';
 import { checkPhases, initUniques, uniquesPost } from './uniques.ts';
 import { brawlFightStep, brawlInit, isBonus, readBrawl } from './brawl.ts';
 import type { Match, MatchCfg, PlayerCfg, Scheme } from './state.ts';
+import { ringFromState, stageRingDef, writeRing, RING_POLY } from './ring.ts';
+import { Q, alongYaw, cosQ, mulQ, sinQ, yawToRad } from './fx3d.ts';
 
 export type { Match, MatchCfg, PlayerCfg, Scheme };
 export { STATE_VERSION };
@@ -38,6 +45,8 @@ export function createMatch(cfg: MatchCfg, data: GameData): Match {
   const s = new Int32Array(brawl ? STATE_INTS_BRAWL : STATE_INTS);
   const events = new EventRing(s, W.evSeq);
   const training = cfg.mode === 'training';
+  // CHANGED(SIM3D) (CONTRACT §35.11 / §35.12): the stage's ring + spawn axis + camera side, into the world block
+  writeRing(s, stageRingDef(data, cfg.stage, sys.ringR, sys.spawnAxis));
   const m: Match = {
     cfg,
     s,
@@ -50,6 +59,7 @@ export function createMatch(cfg: MatchCfg, data: GameData): Match {
     training,
     arcade: cfg.mode === 'arcade',
     bonus: brawl ? compileBrawl(data) : null,
+    ring: ringFromState(s),
   };
   s[W.ver] = STATE_VERSION | 0;
   s[W.seed] = cfg.seed | 0;
@@ -118,9 +128,13 @@ function cinematicTick(m: Match): void {
     // CHANGED(SIM) P2 (§26.1 request): the cinematic already laid the victim down - no second fall from standing
     s[fb(d) + F.kdFace] = KDF.NOFALL | (mv.cinEndDown ? KDF.DOWN : 0);
     if (mv.cinEndGap >= 0) {
+      // CHANGED(SIM3D): the victim ends endGapM along the attacker's yaw, clamped to the ring
       const bd = fb(d);
-      s[bd + F.x] = s[ba + F.x] + s[ba + F.facing] * mv.cinEndGap;
-      clampToWalls(m, d); // CHANGED(fixer) D2: per-side wall limits
+      const g2 = [0, 0];
+      alongYaw(mv.cinEndGap, s[ba + F.yaw], g2);
+      s[bd + F.x] = s[ba + F.x] + g2[0];
+      s[bd + F.z] = s[ba + F.z] + g2[1];
+      clampToRing(m, d);
     }
   }
 }
@@ -158,7 +172,11 @@ function fightStep(m: Match, in1: number, in2: number): void {
     return;
   }
   const x0 = s[b0 + F.x];
+  const z0 = s[b0 + F.z];
   const x1 = s[b1 + F.x];
+  const z1 = s[b1 + F.z];
+  setOpp(0, x1, z1); // CHANGED(SIM3D): start-of-frame opponent points
+  setOpp(1, x0, z0);
   PROX_THREAT[0] = proxThreat(m, 0) ? 1 : 0;
   PROX_THREAT[1] = proxThreat(m, 1) ? 1 : 0;
   for (let i = 0; i < 2; i++) {
@@ -168,13 +186,14 @@ function fightStep(m: Match, in1: number, in2: number): void {
       frozenScratch[i] = 1;
     } else {
       frozenScratch[i] = 0;
-      fighterUpdate(m, i, i === 0 ? x1 : x0);
+      fighterUpdate(m, i);
     }
   }
-  resolveBodies(m, x0, x1);
+  resolveBodies(m, x0, z0, x1, z1);
   projectilesTick(m);
   resolveHits(m);
   resolveThrows(m);
+  cameraTick(m); // CHANGED(SIM3D)
   // CHANGED(SIM) P2 (CONTRACT §28.2): the ball (knock-away / pickup / respawn), boss phases, unique snapshot mirrors
   ballPost(m);
   // (a KO this frame wins over a phase change: the KO itself is started by checkKO below, after the timer, as in P1)
@@ -194,6 +213,18 @@ function fightStep(m: Match, in1: number, in2: number): void {
   checkKO(m);
   animTick(m, 0, frozenScratch[0] === 0);
   animTick(m, 1, frozenScratch[1] === 0);
+}
+
+/**
+ * CHANGED(SIM3D) (CONTRACT §35.3): camera basis from the settled positions. The screen-side facing signs (the input
+ * mapping) follow the yaw where the yaw is set - auto-face / tracking / round start - exactly as the old facing flipped
+ * only when a free fighter re-faced (a fighter mid-move or in stun keeps its mapping).
+ */
+function cameraTick(m: Match): void {
+  const s = m.s;
+  const b0 = fb(0);
+  const b1 = fb(1);
+  updateCamN(s, s[b0 + F.x], s[b0 + F.z], s[b1 + F.x], s[b1 + F.z], m.sys.camMinSep);
 }
 
 /** KO check (never during a cinematic, never in training). Returns true when a KO started. */
@@ -221,17 +252,22 @@ function outroUpdate(m: Match, winPose: boolean): void {
   const s = m.s;
   quietInputs(m);
   const x0 = s[fb(0) + F.x];
+  const z0 = s[fb(0) + F.z];
   const x1 = s[fb(1) + F.x];
+  const z1 = s[fb(1) + F.z];
+  setOpp(0, x1, z1);
+  setOpp(1, x0, z0);
   PROX_THREAT[0] = 0;
   PROX_THREAT[1] = 0;
   for (let i = 0; i < 2; i++) {
     const b = fb(i);
     if (s[b + F.hitstop] > 0) s[b + F.hitstop]--;
-    fighterUpdate(m, i, i === 0 ? x1 : x0);
+    fighterUpdate(m, i);
     const st = s[b + F.st];
     if (winPose && s[b + F.hp] > 0 && (st === ST.IDLE || st === ST.CROUCH || st === ST.WALK_F || st === ST.WALK_B)) setSt(m, i, ST.WIN);
   }
-  resolveBodies(m, x0, x1);
+  resolveBodies(m, x0, z0, x1, z1);
+  if (!isBonus(m)) cameraTick(m);
   animTick(m, 0, true);
   animTick(m, 1, true);
 }
@@ -372,9 +408,13 @@ export function readFighter(m: Match, i: number): FighterSnap {
   const armor = mv !== null && s[b + F.armorLeft] > 0 && f >= mv.armorF0 && f <= mv.armorF1;
   const animId = s[b + F.animId];
   const animF = s[b + F.animF];
+  // CHANGED(SIM3D) (CONTRACT §35.2): the step state for the view / UI / AI
+  const stepKind = st === ST.SIDESTEP ? 'sidestep' : st === ST.SIDEWALK ? 'sidewalk' : st === ST.STEP_END ? 'settle' : 'none';
   return {
     x: s[b + F.x] / M,
     y: s[b + F.y] / M,
+    z: s[b + F.z] / M,
+    yaw: yawToRad(s[b + F.yaw]),
     facing: s[b + F.facing],
     state: st,
     stateName: ST_NAMES[st] ?? '',
@@ -415,6 +455,12 @@ export function readFighter(m: Match, i: number): FighterSnap {
     install: Math.max(0, s[b + F.instF]),
     absent: st === ST.ABSENT,
     actionable: (isFreeState(st) || (st === ST.STANCE && cf.uk === UK.STANCE)) && s[b + F.hitstop] <= 0 && s[W.freeze] <= 0 && s[W.phase] === PH.FIGHT,
+    step: {
+      kind: stepKind,
+      frame: stepKind === 'none' ? 0 : s[b + F.stF] + 1,
+      side: stepKind === 'sidestep' || stepKind === 'sidewalk' ? (s[b + F.stepDir] > 0 ? -1 : 1) : 0,
+      dir: stepKind === 'none' ? '' : s[b + F.stepIn] !== 0 ? 'in' : 'out',
+    },
   };
 }
 
@@ -431,8 +477,11 @@ export function readMatch(m: Match): MatchSnap {
     const mv = owner === 0 || owner === 1 ? m.cf[owner]?.moves[s[pb + P.mv]] : undefined;
     const kind = s[pb + P.kind];
     proj.push({ slot: k, owner, x: s[pb + P.x] / M, y: s[pb + P.y] / M, vx: (s[pb + P.vx] * 60) / M, moveId: kind === 2 ? s[pb + P.mode] : mv ? mv.snapId : -1,
-      kind, alive: true, obj: kind === 1 || kind === 2 ? s[pb + P.mode] : 0 });
+      kind, alive: true, obj: kind === 1 || kind === 2 ? s[pb + P.mode] : 0,
+      // CHANGED(SIM3D)
+      z: s[pb + P.z] / M, vz: (s[pb + P.vz] * 60) / M, yaw: yawToRad(s[pb + P.yaw]) });
   }
+  const rg = m.ring;
   return {
     frame: s[W.frame],
     phase: (PH_NAMES[s[W.phase]] ?? 'fight') as MatchPhase,
@@ -453,8 +502,51 @@ export function readMatch(m: Match): MatchSnap {
     slowmo: s[W.phase] === PH.KO && s[W.koStop] === 0 && s[W.slowmo] > 0,
     freeze: s[W.freeze],
     proj,
+    // CHANGED(SIM3D) (CONTRACT §35.3): the camera basis + the ring
+    camN: [s[W.camNX] / Q, s[W.camNZ] / Q],
+    ring: { shape: rg.kind === RING_POLY ? 'poly' : 'circle', radius: rg.r / M, sides: rg.sides, rot: yawToRad(rg.rot), centre: [rg.cx / M, rg.cz / M] },
     ...(isBonus(m) && m.bonus ? { brawl: readBrawl(m) } : {}),
   };
+}
+
+// ------------------------------------------------------------------ boxes (CHANGED(SIM3D): the §27.1 readBoxes request)
+/** World-space collision volumes of fighter i in metres (training overlay / debug; read-only). */
+export interface BoxesSnap {
+  /** vertical hurt cylinders */
+  hurt: Array<{ x: number; z: number; r: number; y0: number; y1: number }>;
+  /** active hit boxes: centre (x, z), yaw (radians), forward length `len`, lateral half-depth `lat`, heights */
+  hit: Array<{ x: number; z: number; yaw: number; len: number; lat: number; y0: number; y1: number }>;
+  /** push circle */
+  push: { x: number; z: number; r: number };
+}
+const RB = new Int32Array(30);
+const RP = new Int32Array(3);
+
+export function readBoxes(m: Match, i: number): BoxesSnap {
+  const s = m.s;
+  const b = fb(i);
+  const n = hurtCyls(m, i, RB);
+  const hurt: BoxesSnap['hurt'] = [];
+  for (let k = 0; k < n; k++) hurt.push({ x: RB[k * 5] / M, z: RB[k * 5 + 1] / M, r: RB[k * 5 + 2] / M, y0: RB[k * 5 + 3] / M, y1: RB[k * 5 + 4] / M });
+  const hit: BoxesSnap['hit'] = [];
+  const k = s[b + F.mv];
+  if (k >= 0 && s[b + F.st] === ST.ATTACK) {
+    const mv = m.cf[i].moves[k];
+    const f = s[b + F.mvF];
+    const yaw = s[b + F.yaw];
+    for (let j = 0; j < mv.nBox; j++) {
+      const q = j * 7;
+      if (f < mv.boxes[q] || f > mv.boxes[q + 1]) continue;
+      const fwd = mv.boxes[q + 2];
+      hit.push({
+        x: (s[b + F.x] + mulQ(fwd, sinQ(yaw))) / M, z: (s[b + F.z] + mulQ(fwd, cosQ(yaw))) / M, yaw: yawToRad(yaw),
+        len: mv.boxes[q + 4] / M, lat: mv.lateral / M,
+        y0: (s[b + F.y] + mv.boxes[q + 3] - (mv.boxes[q + 5] >> 1)) / M, y1: (s[b + F.y] + mv.boxes[q + 3] + (mv.boxes[q + 5] >> 1)) / M,
+      });
+    }
+  }
+  pushCircle(m, i, RP);
+  return { hurt, hit, push: { x: RP[0] / M, z: RP[1] / M, r: RP[2] / M } };
 }
 
 // ------------------------------------------------------------------ dev (test surface only, §18.2)

@@ -2,7 +2,8 @@
 //
 // Input word (§4.4): bit0 UP, bit1 DOWN, bit2 LEFT, bit3 RIGHT (screen-relative, SOCD-cleaned by
 // the input layer), bit4 L, bit5 M, bit6 H, bit7 S, bit8 ASSIST, bit9 THROW, bit10 PARRY,
-// bit11 IMPACT, bit12 TAUNT. The sim converts LEFT/RIGHT to back/forward with `facing` and stores
+// bit11 IMPACT, bit12 TAUNT, CHANGED(SIM3D) bit13 STEP_IN, bit14 STEP_OUT (CONTRACT §35.2). The sim converts LEFT/RIGHT
+// to back/forward with `facing` (= the screen side from the camera basis, §35.3) and stores
 // one history int per frame IN the state (motion.ts parses it). Parsing produces ONE action per
 // frame by priority (EX > super > 360 > DP > QC > HC > charge > other specials > throw / parry /
 // impact > assist route > normals > taunt > dash) and writes it into the action buffer
@@ -18,8 +19,18 @@ import type { Match } from './state.ts';
 
 export const IN = {
   UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, L: 16, M: 32, H: 64, S: 128, ASSIST: 256, THROW: 512, PARRY: 1024, IMPACT: 2048, TAUNT: 4096,
+  STEP_IN: 8192, STEP_OUT: 16384, // CHANGED(SIM3D): circle away from / toward the camera (CONTRACT §35.2)
 } as const;
-const BTN_MASK = 0x1ff0;
+/** CHANGED(SIM3D): the 15 used bits of the input word (bits 13 / 14 = STEP_IN / STEP_OUT). */
+export const WORD_BITS = 0x7fff;
+const BTN_MASK = 0x7ff0; // history: held buttons incl. the STEP bits (bits 4..14)
+
+/** CHANGED(SIM3D): +1 = STEP_IN held, -1 = STEP_OUT held, 0 = neither or both (SOCD neutral). */
+export function stepBits(raw: number): number {
+  const a = (raw & IN.STEP_IN) !== 0;
+  const b = (raw & IN.STEP_OUT) !== 0;
+  return a === b ? 0 : a ? 1 : -1;
+}
 const AGE_CAP = 255;
 
 /** Facing-relative numpad direction (1..9) of a raw word. */
@@ -53,7 +64,7 @@ function ageBtn(s: Int32Array, o: number, pressed: number, bit: number): void {
 export function recordInput(m: Match, i: number, raw: number, frozen: boolean): void {
   const s = m.s;
   const b = fb(i);
-  raw &= 0x1fff;
+  raw &= WORD_BITS;
   s[b + F.prevRaw] = s[b + F.raw];
   s[b + F.raw] = raw;
   const dir = dirOf(raw, s[b + F.facing]);
@@ -167,6 +178,9 @@ export function parseAction(m: Match, i: number): void {
   const b = fb(i);
   const st = s[b + F.st];
   if (st === ST.INTRO || st === ST.KO || st === ST.WIN || st === ST.LOSE || st === ST.ABSENT) return;
+  // CHANGED(SIM3D) (CONTRACT §35.2): a sidestep buffers presses only from step frame step.bufferF (9) on (the parse runs
+  // before this frame's update: the step frame being played now is stF + 2)
+  if (st === ST.SIDESTEP && s[b + F.stF] + 2 < m.sys.stepBufferF) return;
   const cf = m.cf[i];
   const R = routeOf(m, i); // CHANGED(SIM) P2: phase-2 routing for a `phases` fighter
   const sys = m.sys.raw;
@@ -331,6 +345,12 @@ export function parseAction(m: Match, i: number): void {
 
   // ---------------------------------------------------------------- normals
   const nb = (pressed & IN.H) !== 0 ? 2 : (pressed & IN.M) !== 0 ? 1 : (pressed & IN.L) !== 0 ? 0 : -1;
+  // CHANGED(SIM3D) (FIGHTERS3D §35.12.5): step-attacks win over the plain normals while stepping
+  const sAtk = nb >= 0 && (st === ST.SIDESTEP || st === ST.SIDEWALK) ? cf.stepAtk[nb as number] : -1;
+  if (sAtk >= 0 && canAfford(m, i, cf.moves[sAtk])) {
+    setBuf(m, i, ACT.MOVE, sAtk, BUF.STEPATK, win);
+    return;
+  }
   if (nb >= 0) {
     const ch = chainTarget(cf, curMv, dir, nb, air);
     if (ch >= 0) {
@@ -344,10 +364,18 @@ export function parseAction(m: Match, i: number): void {
     }
   }
 
-  // ---------------------------------------------------------------- taunt, dashes
+  // ---------------------------------------------------------------- taunt, steps, dashes
   if ((pressed & IN.TAUNT) !== 0 && !air) {
     setBuf(m, i, ACT.TAUNT, -1, 0, win);
     return;
+  }
+  // CHANGED(SIM3D) (CONTRACT §35.2): a STEP tap buffers the sidestep (the dash window); a held STEP circles in fighter.ts
+  if (!air && (pressed & (IN.STEP_IN | IN.STEP_OUT)) !== 0) {
+    const sb = stepBits(raw);
+    if (sb !== 0) {
+      setBuf(m, i, ACT.STEP, sb > 0 ? 1 : 0, 0, Math.max(sys.buffer.dash, 2));
+      return;
+    }
   }
   if (!air && (dir === 6 || dir === 4)) {
     const e1 = s[b + F.hist + ((s[b + F.hHead] - 1 + HIST) % HIST)];

@@ -6,7 +6,10 @@
     "Extra fields (additive to CONTRACT 6.2): loop, loopBlend (frames eased into frame 0), air ('strip' = feet ground-locked, the removed lift is clips.json apexY; 'hold' = hips height held at frame 0), floor ('clamp' default = the real skinned mesh is evaluated every frame and the hips raised wherever it sinks under the floor; 'plant' = lowest vertex put exactly on the floor every frame; 'none'), contact (null | 'auto' | source frame), effector (bone), marks {name: source frame} -> clips.json marks {name: seconds}.",
     "GUARD = CMU 13_17 frames 4168-4316: an orthodox boxing guard bounce (1.23 s; start/end pose differ by 8 cm, net travel 6 cm; found by tools/research-style window search), used as the fighting idle and as the upper body of walks/dashes/crouches/standing block so every fighter keeps his hands up. The Pro_Magic 'standing idle' is a spell-caster pose (right arm raised), so it is NOT used.",
     "Budget: the shared set is ~40 s of animation (~1.2 MB of the 3 MB GLB after meshopt); the slow theatrical deaths are sped up (the view warps system clips to state length anyway) and the long loops trimmed so the fighter clips fit.",
-    "Throw pair sync: thrown_f / thrown_b are the VICTIM halves. Frame 0 = the throw connects (= the attacker throw clip's contact); marks.slam = the victim hits the floor (thrown_f 22 = 0.733 s, thrown_b 20 = 0.667 s). An attacker throw clip in a fighter clipplan declares its own marks.slam; the view warps both clips so the slams share one sim frame."
+    "Throw pair sync: thrown_f / thrown_b are the VICTIM halves. Frame 0 = the throw connects (= the attacker throw clip's contact); marks.slam = the victim hits the floor (thrown_f 22 = 0.733 s, thrown_b 20 = 0.667 s). An attacker throw clip in a fighter clipplan declares its own marks.slam; the view warps both clips so the slams share one sim frame.",
+    "CHANGED(ASSETS3D) 3D RING (CONTRACT 35.5): sidestep_l / sidestep_r / sidewalk_l / sidewalk_r. _l = the fighter's OWN left (clips.json rootLat runs negative), _r = own right. Lower body = Pro_Magic 'Standing Walk Left' (a crossover side-walk; its pelvis stays within 4-21 deg of square, so the guard upper twists least: measured waist twist on johnny sidewalk 43 / 19 deg max vs walk_f 40; Pro_Magic 'Standing Walk Right' twisted 66 deg, Male_Locomotion 'left strafe walking' 100 deg, and Magic_Locomotion's Walk / Run Left-Right are byte-identical to Pro_Magic's); the _r clips MIRROR it so both sides match. Upper body = the CMU 13_17 guard like every locomotion clip.",
+    "sidestep = source f1-f20 (lead foot out, trail foot closes beside it: a step-close ending balanced), played at 19/7 x = 8 frames = 0.233 s = the sim's 15-frame step (anim frames 0..14 at 60 fps); upper = guard f4140-4168 (faced like the idle window: `faceRange`) so the step ENDS on the guard frame the idle and the side-walk START on. Lateral travel = 0.90 m x the body's hip ratio (johnny 0.82 m; the sim moves 0.85 m).",
+    "sidewalk = the same walk cycle (1-36, pose(36) = pose(1) + one stride) STARTED at f20 (`cycle`: frames past 36 wrap + one stride of travel), so hold-to-walk continues exactly where the side-step ended; `rootSpeed` 1.8 m/s + `rootFrom` feet: the playback rate is set PER BODY so the travel that keeps THIS body's planted feet still (hip-ratio travel x the measured feet factor k, bake.json `rate.feet_k`) runs at exactly the sim's 1.8 m/s tangential walk (within half a frame per cycle); rootLat carries that feet-consistent travel. `loopBlendScope` upper (the lower is an exact cycle)."
   ],
   "idle": {"src": "cmu", "file": "13_17", "range": [4168, 4316], "kind": "getup", "face": "guard", "fist": 75,
            "loop": true, "loopBlend": 8, "contact": null},
@@ -60,5 +63,17 @@
   "timeover_lose": {"src": "mixamo", "file": "Male_Injured_Pack/injured hurting idle", "range": [1, 76], "loop": true, "loopBlend": 10, "contact": null},
   "parry": {"src": "author", "file": "parry", "floor": "plant", "contact": null},
   "impact_windup": {"src": "author", "file": "impact_windup", "floor": "plant", "contact": 13, "effector": "RightHand"},
-  "shove": {"src": "author", "file": "shove", "floor": "plant", "contact": 8}
+  "shove": {"src": "author", "file": "shove", "floor": "plant", "contact": 8},
+  "sidestep_l": {"src": "layer", "layer": {"lower": {"src": "mixamo", "file": "Pro_Magic_Pack/Standing Walk Left", "range": [1, 20], "speed": 2.7142857142857144},
+                                           "upper": {"src": "cmu", "file": "13_17", "range": [4140, 4168], "faceRange": [4168, 4316], "kind": "getup", "face": "guard", "fist": 75}},
+                 "rootLat": true, "contact": null},
+  "sidestep_r": {"src": "layer", "layer": {"lower": {"src": "mixamo", "file": "Pro_Magic_Pack/Standing Walk Left", "range": [1, 20], "speed": 2.7142857142857144, "mirror": true},
+                                           "upper": {"src": "cmu", "file": "13_17", "range": [4140, 4168], "faceRange": [4168, 4316], "kind": "getup", "face": "guard", "fist": 75}},
+                 "rootLat": true, "contact": null},
+  "sidewalk_l": {"src": "layer", "layer": {"lower": {"src": "mixamo", "file": "Pro_Magic_Pack/Standing Walk Left", "range": [20, 55], "cycle": [1, 36]},
+                                           "upper": {"src": "cmu", "file": "13_17", "range": [4168, 4316], "kind": "getup", "face": "guard", "fist": 75}},
+                 "loop": true, "loopBlend": 4, "loopBlendScope": "upper", "rootSpeed": 1.8, "rootAxis": "lat", "rootFrom": "feet", "rootLat": true, "contact": null},
+  "sidewalk_r": {"src": "layer", "layer": {"lower": {"src": "mixamo", "file": "Pro_Magic_Pack/Standing Walk Left", "range": [20, 55], "cycle": [1, 36], "mirror": true},
+                                           "upper": {"src": "cmu", "file": "13_17", "range": [4168, 4316], "kind": "getup", "face": "guard", "fist": 75}},
+                 "loop": true, "loopBlend": 4, "loopBlendScope": "upper", "rootSpeed": 1.8, "rootAxis": "lat", "rootFrom": "feet", "rootLat": true, "contact": null}
 }

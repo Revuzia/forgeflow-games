@@ -7,7 +7,7 @@
 //       the grab's victim segments (johnny throw_f: hit_body, then kd_fall_b) and a knockdown ends on the wake clip's last
 //       frame (no pop to idle); a KD from a sweep starts with the fall clip past its drop time (not a standing pose).
 import { readFileSync } from 'node:fs';
-import { newMatch, place, run, fs, evs, I, tester, dirBits, sb, ROOT } from './fixtures/simkit.ts';
+import { newMatch, place, run, fs, evs, I, tester, dirBits, sb, ROOT, lxU } from './fixtures/simkit.ts';
 import { step } from '../runtime/src/core/sim/match.ts';
 import type { Match } from '../runtime/src/core/sim/match.ts';
 import { loadGameData } from '../runtime/src/core/data.ts';
@@ -26,7 +26,7 @@ const U = 100000;
 function mk(): Match {
   return newMatch({ p1: 'johnny', p2: 'bruno', data, s1: 0, s2: 0 });
 }
-const sep = (m: Match): number => Math.abs(m.s[sb(1) + F.x] - m.s[sb(0) + F.x]) / U;
+const sep = (m: Match): number => Math.abs(lxU(m, 1) - lxU(m, 0)) / U; // CHANGED(SIM3D): line coordinates
 const st = (m: Match, i: number): number => m.s[sb(i) + F.st];
 function isFree(m: Match, i: number): boolean {
   const s = st(m, i);
@@ -69,7 +69,7 @@ const jf = J.push?.front ?? 0, bf = B.push?.front ?? 0, jcf = J.push?.crouchFron
   const m = mk();
   place(m, -6.0, -3.5);
   run(m, 200, dirBits(m, 0, 4), 0);
-  const x = m.s[sb(0) + F.x] / U;
+  const x = lxU(m, 0) / U;
   t.near(x, -(data.system.stage.wallM - (J.push?.back ?? 0)), 0.0001, `backing into the wall stops at wall - push.back (${(J.push?.back ?? 0).toFixed(3)} m)`);
 }
 
@@ -79,7 +79,7 @@ const jf = J.push?.front ?? 0, bf = B.push?.front ?? 0, jcf = J.push?.crouchFron
   place(m, -1.5, 1.5);
   run(m, 150, dirBits(m, 0, 6), 0);
   run(m, 10, 0, 0);
-  const x0 = m.s[sb(1) + F.x] / U;
+  const x0 = lxU(m, 1) / U;
   const from = m.frame() + 1;
   let maxStep = 0;
   let prev = x0;
@@ -92,7 +92,7 @@ const jf = J.push?.front ?? 0, bf = B.push?.front ?? 0, jcf = J.push?.crouchFron
   let prevSt = st(m, 1);
   for (let k = 0; k < 140; k++) {
     step(m, k === 0 ? I.THROW : 0, 0);
-    const x = m.s[sb(1) + F.x] / U;
+    const x = lxU(m, 1) / U;
     const s1 = st(m, 1);
     if (prevSt === ST.THROWN && s1 === ST.KNOCKDOWN) relStep = Math.abs(x - prev);
     else if (s1 === ST.THROWN) lastCarry = Math.abs(x - prev);
@@ -113,7 +113,7 @@ const jf = J.push?.front ?? 0, bf = B.push?.front ?? 0, jcf = J.push?.crouchFron
   t.ok(anims.has(CL('hit_body')) && anims.has(CL('kd_fall_b')), 'the victim shows the grab.victim segments (hit_body, kd_fall_b)',
     [...anims].map((a) => SHARED_CLIPS[a] ?? a).join(','));
   t.ok(!anims.has(CL('thrown_f')), 'Clinch Body Shots no longer plays the generic thrown_f');
-  const x1 = m.s[sb(1) + F.x] / U;
+  const x1 = lxU(m, 1) / U;
   t.ok(x1 - x0 > 0.3, 'the victim is carried away from the thrower (no wake-up inside it)', `x ${x0.toFixed(3)} -> ${x1.toFixed(3)}`);
   // CHANGED(SIM) P2: a teleport = a step larger than the carry itself was making (FIGHTERS' P2 victim timeline ends in a
   // 2x kd_fall_b slide, 4-7 cm per frame); the release frame may continue that motion, never jump beyond it
@@ -130,14 +130,14 @@ const jf = J.push?.front ?? 0, bf = B.push?.front ?? 0, jcf = J.push?.crouchFron
   place(m, -1.5, 1.5);
   run(m, 150, dirBits(m, 0, 6), 0);
   run(m, 10, 0, 0);
-  const x0 = m.s[sb(0) + F.x] / U;
+  const x0 = lxU(m, 0) / U;
   let maxStep = 0;
-  let prev = m.s[sb(1) + F.x] / U;
+  let prev = lxU(m, 1) / U;
   let sawThrownB = false;
   let kdDown = false;
   for (let k = 0; k < 140; k++) {
     step(m, k === 0 ? dirBits(m, 0, 4) | I.THROW : 0, 0);
-    const x = m.s[sb(1) + F.x] / U;
+    const x = lxU(m, 1) / U;
     if (st(m, 1) === ST.THROWN) {
       maxStep = Math.max(maxStep, Math.abs(x - prev));
       if (m.s[sb(1) + F.animId] === CL('thrown_b')) sawThrownB = true;
@@ -145,7 +145,7 @@ const jf = J.push?.front ?? 0, bf = B.push?.front ?? 0, jcf = J.push?.crouchFron
     if (st(m, 1) === ST.KNOCKDOWN && [CL('kd_ground_f'), CL('wake_f')].includes(m.s[sb(1) + F.animId])) kdDown = true;
     prev = x;
   }
-  const xv = m.s[sb(1) + F.x] / U, xa = m.s[sb(0) + F.x] / U;
+  const xv = lxU(m, 1) / U, xa = lxU(m, 0) / U;
   t.ok(sawThrownB, 'back throw victim plays thrown_b');
   t.ok(xv < xa, 'back throw: the victim lands behind the thrower', `thrower ${xa.toFixed(3)} (from ${x0.toFixed(3)}) victim ${xv.toFixed(3)}`);
   t.ok(xa - xv >= jf + bf - 0.0001, 'after the wake-up both push boxes are clear (gap >= front + front)', `${(xa - xv).toFixed(3)} m`);

@@ -15,7 +15,7 @@ def build():
         cpu={"style": "setplay", "rangeM": [1.8, 3.5], "zoning": ["power_shot_m", "power_shot_l"],
              "setup": ["keepy_m"], "antiAir": ["bicycle_l", "j.M"], "pokes": ["5M", "2M"],
              "punish": ["5H", "bicycle_h"], "combo": ["2L", "5M", "power_shot_h"], "approach": ["dive_m"],
-             "meter": "top_bins"},
+             "meter": "top_bins", "antiStep": ["2M", "power_shot_l"]},
         doc=dict(
             difficulty=3, packs="Soccer_Game_Pack (shots, header, bicycle, slide, keepy-uppy) + CMU 74_xx swing kicks",
             look="Ch08: bearded, fade haircut, light-grey hoodie, grey sweatpants with a black side stripe, black "
@@ -29,6 +29,17 @@ def build():
             weakness="Without the ball he has no projectile (it rests on the floor until he walks over it or it "
                      "respawns after 3 s); BICYCLE KICK lands him on his back (-26 to -34); no anti-air normal.",
             rivalry="His stray shot popped Zambini's prize dove on live TV. Zambini swears revenge on the ball.",
+            # CHANGED(FIGHTERS3D): 3D ring play (CONTRACT 35.12)
+            ring=dict(
+                stepping="POWER SHOT M is a straight driven shot (LINEAR, along his frame-1 facing): step it on "
+                         "anticipation. The L roller, the H chip lob and the EX curler are AIMED on the kick, so against "
+                         "those the step has to come after the ball leaves his foot. A missed shot rebounds off the ring "
+                         "boundary (vector reflection) and can come back through a stepper's new line. 2H SLIDE TACKLE "
+                         "and the SIMULATION dive are LINEAR.",
+                homing="2M GRASS CUTTER (10f homing low swing kick, 0.40 m deep, -2) is the anti-step tool; KEEPY-UPPY "
+                       "parks a ball above him that hits whoever circles in; TOP BINS is aimed; HAT TRICK homes.",
+                wall="5H VOLLEY wall-splats at the ring edge; near the boundary a shot rebounds sooner, so the ball comes "
+                     "back fast for the next set-play."),
         ),
     )
 
@@ -84,13 +95,17 @@ def build():
     K.add("5M", "M", name="Snap Kick", clip="snap_kick", startup=9, cancel=["special", "super"], role=["poke"],
           desc="Front snap kick.", why="Kick: startup 8->9 (+2/-4).")
     K.add("2M", "2M", name="Grass Cutter", clip="grass_cutter", startup=10,
-          hurtOverride=[{"f": [1, 27], "w": 0.54, "h": 1.71}], cancel=["special", "super"], role=["poke", "low"],
-          desc="Standing low swing kick along the grass: long low, but he stays tall.",
+          hurtOverride=[{"f": [1, 27], "w": 0.54, "h": 1.71}], cancel=["special", "super"],
+          role=["poke", "low", "antistep"], homing=True, lateralM=0.40,
+          why3d="soccer swing kick along the grass: homing anti-step low, 0.40 m deep",
+          desc="Standing low swing kick along the grass: long low, but he stays tall; homing.",
           why="Footballer low: a standing soccer swing kick (low, 0.36 m) with a standing hurtbox; startup 10.")
     K.add("5H", "H", name="Volley", clip="volley", cancel=["special", "super"], sfx=[[8, "whoosh_heavy"]],
-          desc="Big front volley.")
+          wallSplat=True, why3d="straight front kick (tracks to f8); wall-splats at the ring edge (3D wall game)",
+          desc="Big front volley; wall-splats at the ring edge.")
     K.add("2H", "SWEEP", name="Slide Tackle", clip="slide_tackle", startup=12, move=[[0, 0], [12, 1.2]],
           hurtOverride=[{"f": [6, 20], "w": 0.9, "h": 0.6}], role=["sweep", "low", "lowprofile"],
+          homing=False, linear=True, why3d="a 1.2 m feet-first slide cannot turn: linear (not the homing sweep default)",
           sfx=[[4, "whoosh_light"]], desc="Feet-first slide tackle from range (travels 1.2 m).",
           why="Slide sweep: travels 1.2 m during a 12-frame startup (10->12), low profile 6-20.")
     K.add("4M", "M", input="4M", kind="command", name="Knee Trap", clip="knee_trap", startup=7, recovery=15,
@@ -130,11 +145,15 @@ def build():
                           desc="Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off "
                                "the wall."),
               per={"l": dict(guard="L", projectile=dict(ball, speed=5.0, y=0.15, ground=True, strength="L"),
-                             why="L is a ground roller: guard L (must be blocked crouching)."),
-                   "m": dict(projectile=dict(ball, speed=7.0, y=1.0, strength="M")),
+                             why="L is a ground roller: guard L (must be blocked crouching).", aimed=True,
+                             why3d="the roller is AIMED at the opponent's feet"),
+                   "m": dict(projectile=dict(ball, speed=7.0, y=1.0, strength="M"), linear=True,
+                             why3d="a straight driven shot along his frame-1 facing: linear, not aimed (step bait)"),
                    "h": dict(projectile=dict(ball, speed=5.5, y=0.3, vy=5.5, g=14.0, strength="H"),
-                             role=["projectile", "antiair"])},
-              ex=dict(name="Power Shot (EX)", startup=11, recovery=30, damage=1000,
+                             role=["projectile", "antiair"], aimed=True,
+                             why3d="the chip lob is AIMED (it drops on the opponent's line)")},
+              ex=dict(name="Power Shot (EX)", startup=11, recovery=30, damage=1000, aimed=True, projLateralM=0.30,
+                      why3d="the curler is AIMED and bends 0.30 m wide",
                       projectile=dict(ball, speed=8.0, y=1.0, hits=2, strength="H"),
                       desc="Curling 2-hit shot.", why="EX: 2 hits, 11f."))
     K.special("bicycle", "dp", motion="623",
@@ -171,7 +190,8 @@ def build():
     K.special("dive", None, motion="22",
               common=dict(name="Simulation", clip="dive_roll", damage=0, hitstun=0, blockstun=0, hitstop=0, gain=0,
                           nerve=0, pb=(0.0, 0.0), guard="HL", cancel=["whiff", "special"], startup=2, active=24,
-                          role=["lowprofile", "approach"],
+                          role=["lowprofile", "approach"], linear=True,
+                          why3d="a dive-roll along its frame-1 line: linear",
                           desc="A theatrical forward dive-roll under projectiles and high attacks.",
                           why="Approach trick: low profile (0.6 m) and projectile-invulnerable 3-24, travel "
                               "1.2/1.6/2.0 m, 14/16/18 recovery (punishable on reaction)."),
@@ -187,7 +207,8 @@ def build():
           invuln={"strike": [1, 11], "throw": [1, 11]}, cost={"showtime": LV1_COST}, gain=0, nerve=600,
           projectile={"speed": 8.0, "life": 120, "box": [0.6, 0.6], "y": 1.0, "hits": 5, "strength": "H",
                       "clip": "fireball_football", "x": 0.8},
-          role=["projectile", "reversal"], sfx=[[0, "crowd_cheer_burst"]],
+          role=["projectile", "reversal"], sfx=[[0, "crowd_cheer_burst"]], aimed=True,
+          why3d="the flaming shot is AIMED on the kick",
           desc="Flicks up a fresh ball and smashes a 5-hit flaming shot; invulnerable startup.",
           why="Setplay Lv1 = projectile super (always summons a ball): 5 x 400, invulnerable 1-11, knocks down "
               "(KD +23 point blank).")

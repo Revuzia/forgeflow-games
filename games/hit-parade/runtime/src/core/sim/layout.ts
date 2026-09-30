@@ -11,8 +11,10 @@
 import { hash32 } from '../rng.ts';
 
 /** Bump when a field's MEANING changes without the sizes changing. */
-export const LAYOUT_REV = 3; // CHANGED(fixer): 2 = throw carry / knockdown presentation fields, asymmetric push boxes
+export const LAYOUT_REV = 4; // CHANGED(fixer): 2 = throw carry / knockdown presentation fields, asymmetric push boxes
 // CHANGED(SIM) P2: 3 = uniques (stance state, install timer, ball / heckle projectile fields), BRAWL header + goon blocks v2
+// CHANGED(SIM3D): 4 = the 3D ring (CONTRACT §35): z / vz / yaw per fighter, projectile and goon, step state, camera basis
+// camN, ring cache, push direction, throw carry direction; F.facing = the SCREEN-side sign from the camN basis
 
 function builder(): { f: () => number; a: (n: number) => number; size: () => number } {
   let n = 0;
@@ -64,7 +66,19 @@ export const W = {
   roundsNeed: wb.f(),
   maxRounds: wb.f(),
   timerSetting: wb.f(), // seconds, 0 = infinite
-  reserved: wb.a(6),
+  // CHANGED(SIM3D) (CONTRACT §35.1 / §35.3): camera basis + ring cache (constant per match; in the state so a load /
+  // checksum covers them)
+  camNX: wb.f(), // camN x (Q14): the view camera sits on +camN from the pair midpoint
+  camNZ: wb.f(), // camN z (Q14)
+  ringKind: wb.f(), // 0 circle, 1 poly
+  ringR: wb.f(), // circle radius / poly apothem (U)
+  ringSides: wb.f(), // poly sides (circle: 16 WALL_SPLAT sectors)
+  ringRot: wb.f(), // yaw of side 0's outward normal / sector 0's centre
+  ringCX: wb.f(), // ring centre x (U)
+  ringCZ: wb.f(), // ring centre z (U)
+  spawnYaw: wb.f(), // yaw of the stage's spawn axis (P1 -> P2 unless swapped for the camera side)
+  camYaw: wb.f(), // yaw from the ring centre toward the stage's initial camera side
+  reserved: wb.a(2),
 };
 export const WORLD_INTS = wb.size();
 
@@ -173,6 +187,15 @@ export const F = {
   instMv: fb.f(), // move index that granted the install (its effects), -1 none
   thrRel: fb.f(), // victim: throw-lock frames the release comes early by (the knockdown takes them, §28.5d)
   ucnt: fb.f(), // unique counter (stance: frames down has been held)
+  // CHANGED(SIM3D) (CONTRACT §35.1-35.4)
+  z: fb.f(), // U (x above = world x; the fight is on the (x, z) ground plane, y up)
+  vz: fb.f(), // U/frame (vx above = world x velocity)
+  yaw: fb.f(), // 0..65535 (0 faces +Z, + turns toward +X); facing above = screen side sign (+1 faces screen-right)
+  stepDir: fb.f(), // circling sense of the running SIDESTEP / SIDEWALK: +1 = offset rotated +90 deg (ccw), -1 = cw
+  stepIn: fb.f(), // 1 = the running step was STEP_IN (away from the camera), 0 = STEP_OUT (anim side / held check)
+  pushYaw: fb.f(), // direction of the pending pushback F.pushLeft (U, >= 0 along this yaw)
+  thrZ: fb.f(), // victim: z anchor of the throw carry (thrX above = x anchor)
+  thrYaw: fb.f(), // victim: the thrower's yaw at the connect (the carry runs along -dir(thrYaw))
 };
 export const FIGHTER_INTS = fb.size();
 
@@ -202,6 +225,10 @@ export const P = {
   mode: pb.f(), // kind 1: BALL.* state; kind 2: heckle object type
   aux: pb.f(), // kind 1: wall rebounds left; kind 2: target x (U)
   ground: pb.f(), // 1 = rolls on the floor instead of landing
+  // CHANGED(SIM3D): the projectile travels in the ground plane
+  z: pb.f(), // U
+  vz: pb.f(), // U/frame (vx above = world x)
+  yaw: pb.f(), // travel direction (hit box frame; set at spawn / wall rebound)
 };
 export const PROJ_INTS = pb.size();
 
@@ -237,7 +264,8 @@ export const BR = {
   heckleCd: bh.f(), // frames until the next heckle throw
   heckles: bh.f(), // heckle objects thrown
   koCount: bh.f(), // KOs inside the multi-KO window (informational)
-  reserved: bh.a(7),
+  target: bh.f(), // CHANGED(SIM3D): soft-lock goon slot the player faces / attacks (-1 none), CONTRACT §35.8
+  reserved: bh.a(6),
 };
 export const BRAWL_HEADER_INTS = bh.size();
 const gb = builder();
@@ -273,6 +301,11 @@ export const G = {
   animInst: gb.f(), // anim restart key
   jc: gb.f(), // juggle hits taken in the current air time
   appF: gb.f(), // frames spent walking in with a token (gives up after a while)
+  // CHANGED(SIM3D): goons live in the ground plane
+  z: gb.f(),
+  vz: gb.f(),
+  yaw: gb.f(), // facing (G.facing above = screen side sign, informational)
+  orbit: gb.f(), // bearing offset (yaw units) the goon holds around the player while waiting (spreads the ring)
   reserved: gb.a(1),
 };
 export const GOON_INTS = gb.size();
@@ -327,12 +360,15 @@ export const ST = {
   GRAB: 29, // attacker holding a landed grab (CONTRACT 20.2 grab.frames)
   STANCE: 30, // CHANGED(SIM) P2: unique stance (Lotus sway), CONTRACT §28.2
   ABSENT: 31, // CHANGED(SIM) P2: fighter 1 in brawl / heckler (not on the set)
+  SIDESTEP: 32, // CHANGED(SIM3D): tap STEP_IN / STEP_OUT (CONTRACT §35.2), 15 f arc around the opponent
+  SIDEWALK: 33, // CHANGED(SIM3D): held STEP = circle-walk around the opponent
+  STEP_END: 34, // CHANGED(SIM3D): the settle after a sidewalk is released
 } as const;
 export const ST_NAMES: readonly string[] = [
   'intro', 'idle', 'crouch', 'walk_f', 'walk_b', 'prejump', 'air', 'land', 'dash_f', 'dash_b',
   'attack', 'hitstun', 'blockstun', 'juggle', 'knockdown', 'thrown', 'tech', 'parry', 'parry_rec',
   'crumple', 'wall_splat', 'dizzy', 'rush', 'taunt', 'recover', 'cinematic', 'ko', 'win', 'lose', 'grab',
-  'stance', 'absent',
+  'stance', 'absent', 'sidestep', 'sidewalk', 'step_end',
 ];
 
 /** CHANGED(SIM) P2: goon states (G.st, brawl.ts). */
@@ -383,10 +419,10 @@ export const CF = {
 } as const;
 
 /** Buffered actions (F.bufA). */
-export const ACT = { NONE: 0, MOVE: 1, PARRY: 2, DASH_F: 3, DASH_B: 4, TAUNT: 5, ROUTE: 6 } as const;
+export const ACT = { NONE: 0, MOVE: 1, PARRY: 2, DASH_F: 3, DASH_B: 4, TAUNT: 5, ROUTE: 6, STEP: 7 } as const; // STEP: bufM 1 = IN, 0 = OUT (CHANGED(SIM3D))
 
 /** Buffer flags (F.bufF). */
-export const BUF = { SIMPLE: 1, CHAIN: 2, FROM_KD: 4, NEG: 8, FROZEN: 16, STANCE: 32 } as const;
+export const BUF = { SIMPLE: 1, CHAIN: 2, FROM_KD: 4, NEG: 8, FROZEN: 16, STANCE: 32, STEPATK: 64 } as const; // STEPATK: CHANGED(SIM3D)
 
 /** Mode codes (W.mode). */
 export const MODE_CODES: readonly string[] = ['versus', 'arcade', 'training', 'online', 'brawl', 'heckler'];

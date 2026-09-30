@@ -24,14 +24,21 @@ export interface PropShow {
   /** visible while a PRIME TIME attacker clip matches (cinematics play clips, not moves) */
   cineClips?: RegExp;
 }
-export interface PropRule { ids: string[]; bone: string; show: PropShow; pos?: [number, number, number]; rotDeg?: [number, number, number] }
+export interface PropRule {
+  ids: string[]; bone: string; show: PropShow; pos?: [number, number, number]; rotDeg?: [number, number, number];
+  /** hold it in `bone` with the resolved grip MIRRORED from the other hand (the grip data was solved for the right hand) */
+  mirrorGrip?: boolean;
+}
 
 export const PROP_RULES: Record<string, PropRule[]> = {
   johnny: [{ ids: ['brick'], bone: 'RightHand', show: { moves: /^brickbat_/, untilRelease: true } }],
   krane: [
     { ids: ['riot_shield', 'shield'], bone: 'LeftHand', show: { always: true } },
     { ids: ['baton'], bone: 'RightHand', show: { always: true, except: /taser/ } },
-    { ids: ['taser'], bone: 'RightHand', show: { moves: /^taser_/, cineClips: /taser/ } },
+    // the taser clips (taser_* moves, the riot_act `taser_fire` cinematic clip) punch the LEFT hand out from behind the
+    // shield - the wire and the barb leave from there - so the taser rides in that fist (grip mirrored from the right-hand
+    // solve); measured in the real game: with the taser in the rear right hand the barb flew out of the empty shield hand
+    { ids: ['taser'], bone: 'LeftHand', mirrorGrip: true, show: { moves: /^taser_/, cineClips: /taser/ } },
   ],
   boneyard: [{ ids: ['cleaver'], bone: 'RightHand', show: { always: true } }],
   ricky: [{ ids: ['mic_cane', 'miccane', 'cane'], bone: 'RightHand', show: { always: true } }],
@@ -104,9 +111,10 @@ export class PropLibrary {
         const ex = obj.userData.attach as PropAttach | null;
         const mine = row?.fighters?.[fighter] ?? row?.attach ?? null;
         const attach: PropAttach = {
-          bone: mine?.bone ?? ex?.bone ?? rule.bone,
+          bone: rule.mirrorGrip ? rule.bone : mine?.bone ?? ex?.bone ?? rule.bone,
           pos: mine?.pos ?? row?.pos ?? ex?.pos ?? rule.pos ?? [0, 0.08, 0.03],
           rotDeg: mine?.rotDeg ?? row?.rotDeg ?? ex?.rotDeg ?? rule.rotDeg ?? [0, 0, 0],
+          mirror: !!rule.mirrorGrip,
         };
         obj.name = `prop:${fighter}:${id}`;
         res.push({ id, rule, obj, attach });

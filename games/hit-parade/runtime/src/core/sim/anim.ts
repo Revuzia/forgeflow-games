@@ -119,6 +119,18 @@ export function desiredAnim(m: Match, i: number): number {
       const a = cf.u.stAnim[Math.max(0, Math.min(2, s[b + F.uniq + 3]))];
       return a >= 0 ? a : A.idle;
     }
+    case ST.SIDESTEP:
+    case ST.SIDEWALK: {
+      // CHANGED(SIM3D) (CONTRACT §35.5): _l / _r = the fighter's OWN side it moves toward (it faces the opponent while
+      // circling, so stepDir +1 = its left); the entries are appended to the table (data.ts STEP_CLIPS)
+      lastKind = KIND_LOCO;
+      const k = (st === ST.SIDEWALK ? 2 : 0) + (s[b + F.stepDir] > 0 ? 0 : 1);
+      const a = cf.animStep[k];
+      return a >= 0 ? a : A.idle;
+    }
+    case ST.STEP_END:
+      lastKind = KIND_LOCO;
+      return A.idle;
     case ST.GRAB: {
       const k = s[b + F.mv];
       const g = k >= 0 ? cf.moves[k].grab : null;
@@ -174,7 +186,8 @@ export function animTick(m: Match, i: number, advance: boolean): void {
   const moveAnim = kind === KIND_MOVE;
   const st0 = s[b + F.st];
   const mvF = st0 === ST.CINEMATIC && s[W.cinFighter] === i ? s[b + F.mvF] + s[W.cinFrame] : st0 === ST.GRAB ? s[b + F.stF] : s[b + F.mvF];
-  const restart = moveAnim && s[b + F.animInst] !== s[b + F.mvInst];
+  // CHANGED(SIM3D): every new sidestep restarts its one-shot clip
+  const restart = (moveAnim && s[b + F.animInst] !== s[b + F.mvInst]) || (st0 === ST.SIDESTEP && s[b + F.stF] === 0 && s[b + F.animF] !== 0);
   if (want !== s[b + F.animId] || restart) {
     const an = m.sys.raw.anim;
     s[b + F.pAnimId] = s[b + F.animId];

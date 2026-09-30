@@ -13,7 +13,8 @@ def build():
         stage="rooftop",
         cpu={"style": "rushdown", "rangeM": [0.8, 1.8], "approach": ["cue_m", "stage_dive_m", "slide_m"],
              "pokes": ["5M", "2M"], "antiAir": ["spotlight_l", "j.M"], "punish": ["5H", "cue_h"],
-             "combo": ["2L", "2L", "cue_l"], "meter": "highlight_reel"},
+             "combo": ["2L", "2L", "cue_l"], "meter": "highlight_reel", "antiStep": ["2M", "5H"],
+             "stepAttack": "SS.H"},
         doc=dict(
             difficulty=2, packs="CMU kicks/knees + 2 AUTHORED crouch kicks",
             look="Eve: high bun, eyepatch, black leather jacket with gold piping and a red collar, belted shorts, "
@@ -28,6 +29,20 @@ def build():
                      "every rekka gap can be interrupted and CUE 3 low is -13 on block.",
             rivalry="Spin crashed her live cue with a headspin on the rooftop set. She counts him down every "
                     "time.",
+            # CHANGED(FIGHTERS3D): 3D ring play (CONTRACT 35.12)
+            ring=dict(
+                stepping="Her approach specials are LINEAR - CUE KICK L/M/H, STAGE DIVE, FLOOR SLIDE and the 6M step "
+                         "knee commit to their frame-1 line, and 4H BACK KICK is a straight thrust - so a read sidestep "
+                         "beats a raw approach; she hides them behind confirms and the fastest dash in the cast. Her own "
+                         "step is a weapon: BLINDSIDE KICK (STEP + H, out of a sidestep from frame 11 or a circle-walk) "
+                         "is a homing turning kick into the flank that knocks down and wall-splats, the punish for a "
+                         "stepped linear move.",
+                homing="2M SHIN KICK (8f homing low roundhouse, 0.40 m deep) is the anti-step poke and cancels into the "
+                       "rekka; 5H HEAD KICK homes (12f, -3). CUE 2 homes, so stepping the gap after a blocked CUE 1 gets "
+                       "caught; CUE 3 low homes, CUE 3 overhead does not (a step beats the overhead ender). 2H leg kick "
+                       "is a homing sweep; HIGHLIGHT REEL and ON AIR home.",
+                wall="4H BACK KICK and BLINDSIDE KICK wall-splat; at the ring edge the CUE 3 overhead / low guess is her "
+                     "damage and a stepper runs into the boundary."),
         ),
     )
 
@@ -84,10 +99,14 @@ def build():
           desc="Crouching toe kick (low).")
     K.add("5M", "M", name="Teep", clip="teep", pb=(0.35, 0.55), cancel=["special", "super"], role=["poke"],
           sfx=[[5, "whoosh_light"]], desc="Push kick; long reach, pushes blockers out.")
-    K.add("2M", "2M", name="Shin Kick", clip="shin_kick", cancel=["special", "super"], role=["poke", "low"],
-          desc="Crouching low roundhouse; cancel into the CUE KICK rekka.")
+    K.add("2M", "2M", name="Shin Kick", clip="shin_kick", cancel=["special", "super"], role=["poke", "low", "antistep"],
+          homing=True, lateralM=0.40,
+          why3d="low roundhouse (authored: the leg whips round at shin height): homing anti-step poke; 0.40 m deep, not the "
+                "0.60 of a full spin (an 8f -2 low must stay answerable)",
+          desc="Crouching low roundhouse; homing (catches a sidestep); cancel into the CUE KICK rekka.")
     K.add("5H", "H", name="Head Kick", clip="roundhouse_hi", cancel=["special", "super"], sfx=[[8, "whoosh_heavy"]],
-          desc="Head-high roundhouse.")
+          homing=True, why3d="head-high roundhouse (CMU roundhouse.1): homing, her safe tool vs a stepper",
+          desc="Head-high roundhouse; homing.")
     K.add("2H", "SWEEP", name="Leg Kick", clip="leg_kick", startup=11,
           hurtOverride=[{"f": [1, 37], "w": 0.46, "h": 1.63}], role=["sweep", "low"], sfx=[[7, "whoosh_heavy"]],
           desc="Standing Muay Thai leg kick that knocks down; long, but she stands tall.",
@@ -95,10 +114,24 @@ def build():
               "trade for its reach; startup 10->11 for the full turning kick.")
     K.add("6M", "CMD", input="6M", kind="command", name="Step Knee", clip="step_knee", startup=14, recovery=17,
           hitstun=22, blockstun=16, damage=700, move=[[0, 0], [14, 0.5]], role=["approach"],
+          linear=True, why3d="stepping straight knee: commits to its line (a sidestep beats it)",
           desc="Stepping knee: +2 on hit, -4 on block, travels 0.5 m.",
           why="Rushdown approach normal: 0.5 m step, 14/3/17 (+2/-4), 700.")
     K.add("4H", "CMD", input="4H", kind="command", name="Back Kick", clip="side_kick_back", pb=(0.60, 0.60),
-          desc="Long spinning back kick; her furthest button (+2/-3).")
+          linear=True, wallSplat=True,
+          why3d="the spin only chambers it: the strike is a straight back-kick thrust (CMU side_kick.1), LINEAR - her "
+                "longest button, beaten by a read step; wall-splats a cornered opponent (the 0.60 m pushback carries)",
+          desc="Long spinning back kick; her furthest button (+2/-3); wall-splats at the ring edge.")
+    # CHANGED(FIGHTERS3D): step-attack (CONTRACT 35.12 item 5) - reuses the spin_toss clip (CMU roundhouse.3, already in the
+    # GLB as the back-throw clip): no new clip, no re-bake
+    K.add("SS.H", "CMD", input="SS.H", kind="command", name="Blindside Kick", clip="spin_toss", startup=13,
+          recovery=18, damage=900, hitstun=51, blockstun=19, pb=(0.0, 0.50), kd="soft", wallSplat=True,
+          cancel=["super"], role=["stepatk"], homing=True, sfx=[[7, "whoosh_heavy"]],
+          why="STEP-ATTACK: H out of a sidestep (from step frame 11) or a circle-walk. 13/3/18 (the CMD 16/3/20 minus the "
+              "frames the step already spent), 900, KD +30 and wall splat on hit, -2 on block: the reward for stepping a "
+              "linear move.",
+          why3d="homing turning kick into the flank (CMU roundhouse.3, 104 deg turn); wall-splats at the ring",
+          desc="STEP + H: turning kick into the flank out of a sidestep; knocks down, wall-splats, -2 on block.")
     K.add("j.L", "jL", input="j.L", name="Air Jab", clip="air_jab", desc="Air jab.")
     K.add("j.M", "jM", input="j.M", name="Flying Side Kick", clip="flying_side", role=["antiair"],
           desc="Air-to-air side kick.")
@@ -127,10 +160,14 @@ def build():
                           desc="Rekka part 1: stepping front kick; 236 again for CUE 2.",
                           why="Rekka opener (FIGHTING_DESIGN 8c rushdown): rush-class startups 10/12/14 but "
                               "no knockdown: +1/-1/-3 on hit, -5/-7/-9 on block, always cancelable into CUE 2."),
-              per={"l": dict(startup=10, recovery=18, damage=700, move=[[0, 0], [10, 0.6]]),
-                   "m": dict(startup=12, recovery=20, damage=750, move=[[0, 0], [12, 0.9]]),
-                   "h": dict(startup=14, recovery=22, damage=800, move=[[0, 0], [14, 1.2]])},
+              per={"l": dict(startup=10, recovery=18, damage=700, move=[[0, 0], [10, 0.6]], linear=True,
+                             why3d="stepping front-kick rush: linear"),
+                   "m": dict(startup=12, recovery=20, damage=750, move=[[0, 0], [12, 0.9]], linear=True,
+                             why3d="stepping front-kick rush: linear"),
+                   "h": dict(startup=14, recovery=22, damage=800, move=[[0, 0], [14, 1.2]], linear=True,
+                             why3d="stepping front-kick rush: linear")},
               ex=dict(name="Cue Kick (EX)", startup=9, recovery=16, blockstun=17, damage=1000,
+                      why3d="OD: not linear - re-aims until frame 3 (special default)",
                       armor={"hits": 1, "f": [1, 8]}, move=[[0, 0], [9, 1.2]],
                       desc="Armored, -2 on block.", why="EX: 1 hit of armor through startup, -2 on block."))
     K.add("cue2", None, kind="special", input="236>236", name="Cue 2: Head Snap", strength="M", tc=True,
@@ -138,7 +175,8 @@ def build():
           startup=9, active=3, recovery=20, hitstun=24, blockstun=16, damage=700, hitstop=13, guard="HL",
           gain=700, nerve=3000, pb=(0.25, 0.35), move=[[0, 0], [9, 0.4]],
           cancel=["chain:cue3_oh", "chain:cue3_lo", "super"], sfx=[[3, "whoosh_heavy"]],
-          desc="Rekka part 2: left head kick (+1/-7); 236 = CUE 3 overhead, 214 = CUE 3 low.",
+          homing=True, why3d="round head kick (CMU roundhouse.2): homes, so stepping the gap after a blocked CUE 1 is caught",
+          desc="Rekka part 2: left head kick (+1/-7); homing; 236 = CUE 3 overhead, 214 = CUE 3 low.",
           why="Rekka part 2: 9/3/20, +1 on hit so CUE 3 combos, -7 on block (the gap to interrupt).")
     K.add("cue3_oh", None, kind="special", input="236>236>236", name="Cue 3: Curtain Drop", strength="H", tc=True,
           trigger={"classic": {"motion": "236", "btn": "LMH"}, "simple": "5S"}, clip="cue_drop",
@@ -151,12 +189,16 @@ def build():
           trigger={"classic": {"motion": "214", "btn": "LMH"}, "simple": "2S"}, clip="leg_kick",
           startup=12, active=3, recovery=26, hitstun=59, blockstun=16, damage=900, hitstop=15, guard="L",
           gain=1000, nerve=4000, pb=(0.0, 0.45), kd="soft", role=["low"], sfx=[[7, "whoosh_heavy"]],
+          homing=True, lateralM=0.40,
+          why3d="turning leg kick: homes (0.40 m, a low roundhouse) - the overhead ender does not, so a step after CUE 2 "
+                "beats only the overhead",
           desc="Rekka finisher: low leg kick, knocks down, -13 on block.",
           why="Low finisher: faster than the overhead (12f) but -13 on block, KD +30.")
     K.special("stage_dive", None, motion="214",
               common=dict(name="Stage Dive", clip="flying_knee", active=3, hitstun=21, blockstun=18, hitstop=13,
                           guard="H", gain=800, nerve=4000, pb=(0.30, 0.35), cancel=["super"],
-                          role=["overhead", "approach"], sfx=[[4, "whoosh_heavy"]],
+                          role=["overhead", "approach"], sfx=[[4, "whoosh_heavy"]], linear=True,
+                          why3d="a 1-2 m hop along its frame-1 line: linear (a read step makes it sail past)",
                           desc="Hopping flying knee: an overhead that hops over lows.",
                           why="FIGHTING_DESIGN 8c STAGE DIVE (overhead hop 20f, +1): +4/+1 L, +3/0 M, +2/-1 H."),
               per={"l": dict(startup=20, recovery=14, damage=700, move=[[0, 0], [20, 1.0]],
@@ -192,7 +234,8 @@ def build():
     K.special("slide", None, motion="22",
               common=dict(name="Floor Slide", clip="slide", active=8, blockstun=18, hitstop=13, guard="L",
                           gain=800, nerve=3000, pb=(0.0, 0.40), kd="soft", cancel=["super"],
-                          role=["low", "lowprofile", "approach"], sfx=[[3, "whoosh_light"]],
+                          role=["low", "lowprofile", "approach"], sfx=[[3, "whoosh_light"]], linear=True,
+                          why3d="a feet-first floor slide cannot turn: linear",
                           desc="Low-profile slide under projectiles; low, knocks down.",
                           why="Anti-zoning tool: low profile from frame 4 (0.45 m tall), -10/-12/-14 on block."),
               per={"l": dict(startup=12, recovery=20, damage=800, hitstun=58, move=[[0, 0], [20, 1.5]],

@@ -14,7 +14,8 @@ def build():
         intro="intro_rise", win=["win_chew", "win_idle"], taunt="taunt_scream", rival="lotus", stage="rust_theater",
         cpu={"style": "counter", "rangeM": [1.0, 2.0], "pokes": ["2M", "5M"],
              "counter": ["play_dead_l", "play_dead_m"], "antiAir": ["arise_l", "2H"], "punish": ["5H", "grave_crawl_h"],
-             "grab": ["last_meal_m"], "combo": ["2L", "5M", "grave_crawl_m"], "meter": "dead_air"},
+             "grab": ["last_meal_m"], "combo": ["2L", "5M", "grave_crawl_m"], "meter": "dead_air",
+             "antiStep": ["5M", "last_meal_m"]},
         doc=dict(
             difficulty=2, packs="Scary_Zombie (lurch, neck bite, crawl, scream, death) + CMU open-hand swat",
             look="Prisoner: zombified convict in a grey/white striped uniform and cap, barefoot; the right hand "
@@ -27,6 +28,16 @@ def build():
             weakness="Counters lose to throws, projectiles and delayed attacks; PLAY DEAD has 26+ frames of "
                      "whiff recovery lying on the floor; slow walk for his range.",
             rivalry="He ate Lotus Liu's lucky gourd on the Wheel of Pain. He does not remember doing it.",
+            # CHANGED(FIGHTERS3D): 3D ring play (CONTRACT 35.12)
+            ring=dict(
+                stepping="5H LONG REACH (his longest button, a lunge) and GRAVE CRAWL are LINEAR: step them. His "
+                         "counters do not care where the attack comes from - PLAY DEAD and DEAD AIR catch a step-attack "
+                         "like any strike - and GRAVE RISE / DEAD AIR BITE home, so the follow-up lands on a flank "
+                         "attacker.",
+                homing="5M LURCH CLAW (9f wild claw, homing, -4) is the anti-step poke; LAST MEAL (5f command grab) homes "
+                       "through its active frames; GRAVE RISE, DEAD AIR BITE and SERIES FINALE home.",
+                wall="5H LONG REACH wall-splats at the ring edge; a cornered opponent who panics into a step-attack walks "
+                     "into PLAY DEAD."),
         ),
     )
 
@@ -89,7 +100,9 @@ def build():
     K.add("2L", "2L", name="Ankle Bite", clip="ankle_bite", cancel=["chain:2L", "special", "super"],
           role=["poke", "low"], desc="Crouching bite at the ankle.")
     K.add("5M", "M", name="Lurch Claw", clip="lurch", startup=9, recovery=17, cancel=["special", "super"],
-          role=["poke"], sfx=[[5, "whoosh_light"]], desc="Wild one-arm claw.",
+          role=["poke", "antistep"], sfx=[[5, "whoosh_light"]], homing=True,
+          why3d="wild one-arm claw swing: homing anti-step poke",
+          desc="Wild one-arm claw; homing.",
           why="Zombie wind-up: 9/3/17 (+2/-4).")
     K.add("2M", "2M", name="Crawl Claw", clip="crawl_claw", startup=10, recovery=17,
           hurtOverride=[{"f": [4, 22], "w": 0.95, "h": 0.45}], cancel=["special", "super"],
@@ -98,7 +111,9 @@ def build():
           why="Signature footsie tool: prone 0.45 m low profile 4-22 beats high pokes, so it is slower "
               "(10f) and -4 on block (recovery 17).")
     K.add("5H", "H", name="Long Reach", clip="long_reach", startup=13, cancel=["special", "super"],
-          desc="Double-claw lunge: his longest button (1.35 m).",
+          linear=True, wallSplat=True,
+          why3d="a straight double-claw lunge: linear (a read step beats his longest button); wall-splats at the ring",
+          desc="Double-claw lunge: his longest button (1.35 m); wall-splats at the ring edge.",
           why="Longest reach in his kit: startup 12->13.")
     K.add("2H", "AA", name="Scream Claw", clip="scream_up", juggle={"js": 1, "ji": 1, "jl": 0},
           boxes=[{"f": [9, 12], "x": 0.45, "y": 1.35, "w": 0.50, "h": 0.45}],
@@ -145,12 +160,14 @@ def build():
     K.add("grave_rise", None, kind="special", input="214>catch", name="Grave Rise", strength="M", tc=True,
           clip="rise_claw", startup=5, active=3, recovery=20, damage=1200, hitstun=53, blockstun=16, hitstop=15,
           guard="HL", gain=1000, nerve=3000, pb=(0.0, 0.50), kd="soft", cancel=["super"], role=["reversal"],
+          homing=True, why3d="counter follow-up: homes onto wherever the caught attacker stands",
           desc="Snaps up off the floor into a claw (after a PLAY DEAD catch).",
           why="Counter follow-up: 5/3/20, 1200, KD +30 (the caught attacker is in recovery = punish counter).")
     K.add("grave_rise_big", None, kind="special", input="214H>catch", name="Grave Rise (Heavy)", strength="H", tc=True,
           clip="rise_claw", startup=5, active=3, recovery=24, damage=1600, hitstun=57, blockstun=16, hitstop=17,
           guard="HL", gain=1200, nerve=3000, pb=(0.0, 0.50), kd="soft", groundBounce=True, launch=[0.5, 4.0],
           juggle={"js": 1, "ji": 1, "jl": 4}, cancel=["super"], role=["reversal", "launcher"],
+          homing=True, why3d="counter follow-up: homes onto wherever the caught attacker stands",
           desc="Bigger rise: ground bounce for a juggle.", why="H / EX follow-up: 1600 and a ground bounce.")
     gc = {}
     for s, (st, mv, dmg) in {"l": (16, 1.5, 800), "m": (18, 2.0, 900), "h": (20, 2.5, 1000)}.items():
@@ -159,7 +176,8 @@ def build():
     K.special("grave_crawl", None, motion="236",
               common=dict(name="Grave Crawl", clip="crawl_run", active=3, recovery=22, blockstun=16, hitstop=15,
                           guard="L", gain=900, nerve=3000, pb=(0.0, 0.40), kd="soft", warp="auto", cancel=["super"],
-                          role=["low", "lowprofile", "approach"], sfx=[[2, "whoosh_light"]],
+                          role=["low", "lowprofile", "approach"], sfx=[[2, "whoosh_light"]], linear=True,
+                          why3d="a four-limb crawl along its frame-1 line: linear",
                           desc="Four-limb crawl under everything, then an ankle bite (low, knockdown).",
                           why="Low-profile approach (0.60 m from f3): 16/18/20 startup, -9 on block, KD +30."),
               per=gc,
@@ -182,8 +200,9 @@ def build():
                                                   [75, "kd_fall_b", 1.0, 1.55]]})
     K.special("last_meal", None, motion="63214", kind="cmdgrab",
               common=dict(name="Last Meal", clip="throw_reach", startup=5, active=3, recovery=48, hitstun=0,
-                          blockstun=0, hitstop=0, guard="U", gain=3000, nerve=0, pb=(0.0, 0.0), role=["grab"],
-                          sfx=[[1, "grab_cloth"]],
+                          blockstun=0, hitstop=0, guard="U", gain=3000, nerve=0, pb=(0.0, 0.0),
+                          role=["grab", "antistep"], sfx=[[1, "grab_cloth"]],
+                          why3d="command grab reach arc: homes through its active frames",
                           desc="Half-circle command grab: grabs, gnaws (comic), shoves them away.",
                           why="Counter fighter's answer to blockers: a half-circle (not 360) grab with less reach "
                               "and damage than Bruno's (1.00/0.95/0.90 m, 2200-2600) and less whiff recovery (48)."),
@@ -221,7 +240,8 @@ def build():
               "projectiles; the damage lives in DEAD AIR BITE; loses to throws.")
     K.add("dead_air_bite", None, kind="special", input="236236>catch", name="Dead Air Bite", strength="H", tc=True,
           clip="bite_lunge", startup=1, active=3, recovery=20, damage=2000, hitstun=0, blockstun=0, hitstop=0,
-          guard="U", gain=0, nerve=0, pb=(0.0, 0.0), role=["grab"],
+          guard="U", gain=0, nerve=0, pb=(0.0, 0.0), role=["grab"], homing=True,
+          why3d="counter follow-up grab: homes (the caught attacker may be at his flank)",
           grab={"rangeM": 2.5, "frames": 90, "adv": 23, "hitF": 68, "swap": False, "air": False, "techable": False,
                 "clip": "neck_bite",
                 # P2 paired grab: the same neck bite over 90 f: grab lock 16, bite 21, shove lock 68 (was hitF 50)

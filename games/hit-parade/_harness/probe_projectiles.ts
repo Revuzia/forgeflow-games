@@ -4,7 +4,7 @@
 // hit / block (chip) through the move data, the thrower is not frozen by projectile hitstop,
 // projectile invulnerability.
 import { readFileSync } from 'node:fs';
-import { fixtureData, newMatch, place, run, fs, evs, I, tester, dirBits, sb, ROOT } from './fixtures/simkit.ts';
+import { fixtureData, newMatch, place, run, fs, evs, I, tester, dirBits, sb, ROOT, lxU, plx } from './fixtures/simkit.ts';
 import { step } from '../runtime/src/core/sim/match.ts';
 import type { Match } from '../runtime/src/core/sim/match.ts';
 import { buildGameData } from '../runtime/src/core/data.ts';
@@ -37,7 +37,7 @@ function active(m: Match): number[] {
 // ------------------------------------------------------------------ spawn + speed
 for (const [id, btn] of [['brickbat_l', I.L], ['brickbat_m', I.M], ['brickbat_h', I.H]] as const) {
   const m = at(-3, 3);
-  const x0 = m.s[sb(0) + F.x];
+  const x0 = lxU(m, 0); // CHANGED(SIM3D): line coordinates (the axis may be rotated: HP_PROBE_AXIS)
   fire(m, 0, btn);
   let spawnX = 0;
   let xs: number[] = [];
@@ -45,14 +45,15 @@ for (const [id, btn] of [['brickbat_l', I.L], ['brickbat_m', I.M], ['brickbat_h'
     step(m, 0, 0);
     const a = active(m);
     if (a.length) {
-      const x = m.s[projBase(a[0]) + P.x];
+      const x = plx(m, a[0]);
       if (!xs.length) spawnX = x;
       xs.push(x);
     }
   }
   const pj = A[id].projectile!;
-  t.eq(spawnX - x0, Math.round(pj.x! * 100000), `${id}: spawns ${pj.x} m in front`);
-  t.eq(xs[1] - xs[0], Math.round((pj.speed * 100000) / 60), `${id}: ${pj.speed} m/s = ${Math.round((pj.speed * 100000) / 60)} U/frame`);
+  // (+-1 U: off the x axis the Q14 direction rounds per component)
+  t.near(spawnX - x0, Math.round(pj.x! * 100000), 1, `${id}: spawns ${pj.x} m in front`);
+  t.near(xs[1] - xs[0], Math.round((pj.speed * 100000) / 60), 1, `${id}: ${pj.speed} m/s = ${Math.round((pj.speed * 100000) / 60)} U/frame`);
 }
 // ------------------------------------------------------------------ life (variant data with life 20) + screen edge
 {
@@ -84,10 +85,10 @@ for (const [id, btn] of [['brickbat_l', I.L], ['brickbat_m', I.M], ['brickbat_h'
   for (let k = 0; k < 120 && gone < 0; k++) {
     step(m, 0, 0);
     const a = active(m);
-    if (a.length) lastX = m.s[projBase(a[0]) + P.x];
+    if (a.length) lastX = plx(m, a[0]);
     else if (lastX !== 0) gone = k;
   }
-  const mid = (m.s[sb(0) + F.x] + m.s[sb(1) + F.x]) / 2;
+  const mid = (lxU(m, 0) + lxU(m, 1)) / 2;
   t.ok(gone > 0 && Math.abs(lastX - mid) <= data.system.projectile.screenHalfM * 100000 + 12500, 'projectile despawns at the screen edge (mid +-4.5 m)', `last x ${(lastX / 1e5).toFixed(2)} m`);
 }
 // ------------------------------------------------------------------ clash (mirror match)

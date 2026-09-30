@@ -33,7 +33,7 @@ import { AUDIO_ALT_PAYLOAD_BYTES, AUDIO_BUDGET_BYTES, AUDIO_PAYLOAD_BYTES, MUSIC
 import { loopSlice } from '../runtime/src/audio/seam.ts';
 import { altOffset, oggOffset } from '../runtime/src/audio/engine.ts';
 import { AMBIENT_BY_STAGE, AudioRouter, CINE_BEATS, EVENT_SOUNDS, EXTRA_EVENT_SOUNDS, GOON_VOICE_RATE, HECKLE_OBJ_SOUNDS, PROJ_SOUNDS, SFX_CUE_ALIASES,
-  STATE_SOUNDS, UI_ALIASES, WEAPON_SOUNDS, boutContext, resolveCue, type AudioSink, type BoutCtx, type LoopCmd, type MusicCmd, type PlayCmd } from '../runtime/src/audio/router.ts';
+  STATE_SOUNDS, UI_ALIASES, WEAPON_SOUNDS, boutContext, goonVoiceRate, resolveCue, type AudioSink, type BoutCtx, type LoopCmd, type MusicCmd, type PlayCmd } from '../runtime/src/audio/router.ts';
 import { VoicePool } from '../runtime/src/audio/voices.ts';
 import { EV, EVX, SC, eventsSince } from '../runtime/src/core/sim/events.ts';
 import type { FighterSnap, GameData, MatchSnap, SimEvent } from '../runtime/src/core/types.ts';
@@ -405,14 +405,21 @@ function dataChecks(): void {
   const objs = (sys?.heckler?.objects ?? []).map((o) => o.id);
   const noObj = objs.filter((o) => !(o in HECKLE_OBJ_SOUNDS));
   if (noObj.length) bad.push(`heckle objects without a sound: ${noObj.join(',')}`);
+  // goon voices: every system.json kind resolves a pitch (named id or kind index) and the kinds sound distinct; the final
+  // ids (CONTRACT s32.1) must be named. A kind id not in GOON_VOICE_RATE (pre-rename system.json) is pitched by index: noted.
   const kinds = (sys?.brawl?.kinds ?? []).map((k) => k.id);
-  const noKind = kinds.filter((k) => !(k in GOON_VOICE_RATE));
-  if (noKind.length) bad.push(`goon kinds without a voice pitch: ${noKind.join(',')}`);
+  const kindRates = kinds.map((k, i) => goonVoiceRate(k, i));
+  if (kindRates.some((v) => !Number.isFinite(v) || v <= 0)) bad.push(`goon kinds without a voice pitch: ${kinds.join(',')} -> ${kindRates.join(',')}`);
+  if (new Set(kindRates).size !== kindRates.length) bad.push(`goon kinds share a voice pitch: ${kinds.map((k, i) => `${k}=${kindRates[i]}`).join(',')}`);
+  const finalIds = ['goon_hardhat', 'goon_security', 'goon_medic'];
+  const unnamed = finalIds.filter((k) => !(k in GOON_VOICE_RATE));
+  if (unnamed.length) bad.push(`final goon ids without a named voice pitch: ${unnamed.join(',')}`);
+  const byIndex = kinds.filter((k) => !(k in GOON_VOICE_RATE));
   const lobby = ['search', 'found', 'join', 'leave', 'ready', 'reveal', 'code', 'rematch', 'disconnect', 'countdown'];
   const noUi = lobby.filter((c) => !UI_ALIASES[c]);
   if (noUi.length) bad.push(`lobby ui cues unmapped: ${noUi.join(',')}`);
   check('P2 data coverage: projectile clips, cinematic cues, weapons, every stage music + ambience, bonus cues, heckle objects, goon kinds, lobby cues',
-    bad.length === 0, `${bad.length ? bad.join(' | ') + ' || ' : ''}${clips.size} clips (${[...clips.keys()].join(',')}), ${cues.size} cinematic cues, weapon moves ${JSON.stringify(weaponHits)}; stages ${stRows.join(', ')}; objects ${objs.join(',') || '(system.json has none yet)'}; goon kinds ${kinds.join(',') || '(none yet)'}; ${lobby.length} lobby cues`);
+    bad.length === 0, `${bad.length ? bad.join(' | ') + ' || ' : ''}${clips.size} clips (${[...clips.keys()].join(',')}), ${cues.size} cinematic cues, weapon moves ${JSON.stringify(weaponHits)}; stages ${stRows.join(', ')}; objects ${objs.join(',') || '(system.json has none yet)'}; goon kinds ${kinds.map((k, i) => `${k}@${kindRates[i]}`).join(',') || '(none yet)'}${byIndex.length ? ` (pitched by kind index, not the s32.1 ids: ${byIndex.join(',')})` : ''}; ${lobby.length} lobby cues`);
 }
 
 // -------------------------------------------------------------------------------------------------------- router
@@ -671,7 +678,7 @@ async function bonusAndCinema(): Promise<void> {
     const bout: AudioBout = { fighters: ['johnny', 'johnny'], stage: 'rust_theater', mode: 'brawl', local: 0 };
     r.setBout(bout, sink, boutContext(bout, data));
     const f: [FighterSnap, FighterSnap] = [fakeFighter(0), fakeFighter(0, { absent: true })];
-    const goon = { slot: 0, kind: 'goon_riot', kindIdx: 1, x: 2.0, y: 0, facing: -1, state: 0, stateName: 'idle', animId: 0, animFrame: 0, prevAnimId: -1, prevAnimFrame: 0,
+    const goon = { slot: 0, kind: 'goon_security', kindIdx: 1, x: 2.0, y: 0, facing: -1, state: 0, stateName: 'idle', animId: 0, animFrame: 0, prevAnimId: -1, prevAnimFrame: 0,
       blendT: 1, hp: 3000, hpMax: 3000, hitstop: 0, telegraph: false, token: false, moveName: '', down: false };
     const brawl = { mode: 'brawl' as const, score: 0, ratings: 300, grade: 3, mult: 200, timeLeft: 40, timeLeftF: 2400, wave: 1, spawned: 1, downed: 0, combo: 0, parries: 0,
       perfects: 0, hitsTaken: 0, goons: [goon] };

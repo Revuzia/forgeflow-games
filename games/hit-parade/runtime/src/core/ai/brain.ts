@@ -19,6 +19,7 @@
 
 import type { Match } from '../sim/state.ts';
 import type { CMove } from '../sim/compile.ts';
+import { UK } from '../sim/compile.ts';
 import { F, PH, ST, fighterBase } from '../sim/layout.ts';
 import { mulberry32 } from '../rng.ts';
 import { B, Pad, awayBits } from './pad.ts';
@@ -26,9 +27,10 @@ import type { Step } from './pad.ts';
 import { isFree, newSeen, sense } from './sense.ts';
 import type { FView, Seen } from './sense.ts';
 import { buildKit, cancelsInto } from './kit.ts';
-import type { Kit, MoveInfo } from './kit.ts';
-import { counterLive } from './boss.ts';
+import type { Kit, MoveInfo, Recipe } from './kit.ts';
 import type { BossTools } from './boss.ts';
+import { HK, Habits } from './habits.ts';
+import { DEFAULT_UNIQUE_RATES, UniqueTools } from './uniques.ts';
 
 // ------------------------------------------------------------------ profile
 export const ROUTE_KINDS = ['jab', 'single', 'two', 'chainSpecial', 'bnb', 'bnbMeter', 'bestMeterless', 'bestMeter', 'bestCorner'] as const;
@@ -55,6 +57,12 @@ export interface Profile {
   guard: number;
   /** chance per neutral decision to respect a presser (plans.ts): guard / space-poke instead of walking into it; 0 = never (no roll) */
   respect: number;
+  /**
+   * CHANGED(AI) P2: weight 0..1 of the opponent's observed HABITS (habits.ts) in the guesses a reaction cannot make:
+   * whether to hold a guard in its range (its attack rate), crouch or stand (its lows vs overheads), tech / escape a
+   * throw (its throw share), wake-up / pressure reads. 0 = the flat P1 guesses.
+   */
+  habit: number;
   thinkF: number;
   delayF: number;
   /** extra jump-over share of reacted projectiles + dash-in chance between them (cpu.json [R]) */
@@ -106,7 +114,7 @@ export type Decision =
   | { t: 'steps'; steps: Step[] }
   | { t: 'none'; frames: number };
 
-interface Threat {
+export interface Threat {
   inst: number;
   mv: number;
   cm: CMove;
@@ -165,12 +173,35 @@ export interface BrainStats {
   respects: number;
   /** footsies pokes swung into a presser's walk-in (plans.ts respect rule, brain.spacePoke) */
   spacePokes: number;
+  // CHANGED(AI) P2
+  /** unique tool moves the planner started (uniques.ts) */
+  uniques: number;
+  counterReads: number;
+  stepReads: number;
+  rekicks: number;
+  uniqueCancels: number;
+  stances: number;
+  stanceFollows: number;
+  rekkas: number;
+  /** neutral guard postures chosen from the opponent's habits (attack rate in range) */
+  habitGuards: number;
+  /** close-range throw escapes (back off / strike) chosen from its throw habit */
+  throwEscapes: number;
+  /** supers that finished the round (kill rule) */
+  superKills: number;
+  wakeSupers: number;
+  /** weave / duck reads vs a presser of high buttons */
+  evadeReads: number;
+  /** Lv3 punishes on a full meter */
+  lv3Cash: number;
 }
 
 function blankStats(): BrainStats {
   return {
     frames: 0, threats: 0, reacted: 0, blocksChosen: 0, parries: 0, aaChosen: 0, aaFired: 0, punishes: 0, whiffPunishes: 0, interrupts: 0,
     routes: 0, routeSteps: 0, drops: 0, techTries: 0, supers: 0, tools: 0, impacts: 0, throws: 0, jumps: 0, respects: 0, spacePokes: 0,
+    uniques: 0, counterReads: 0, stepReads: 0, rekicks: 0, uniqueCancels: 0, stances: 0, stanceFollows: 0, rekkas: 0, habitGuards: 0,
+    throwEscapes: 0, superKills: 0, wakeSupers: 0, evadeReads: 0, lv3Cash: 0,
   };
 }
 
@@ -245,6 +276,21 @@ export class Brain {
   chargeKit = false;
   private shoveKey = -1;
   private lastDecision: Decision | null = null;
+  // ---- CHANGED(AI) P2
+  /** the opponent's observed habits (visible only, committed after the reaction delay) */
+  habits: Habits;
+  /** unique-move planner (uniques.ts); rates from cpu.json `uniques` */
+  uniq: UniqueTools = new UniqueTools(DEFAULT_UNIQUE_RATES);
+  /** recipe tables by phase ([0] phase 1, [1] phase 2 of a `phases` kit or null) */
+  private kits: [Kit | null, Kit | null] = [null, null];
+  private blockReadKey = -1;
+  /** cpu.json rules.lv1Spend: chance a Lv3-capable CPU spends a Lv1 in a route while it has < 3 bars */
+  lv1Spend = 0.35;
+  /** cpu.json rules.lv3Cash: chance a full-meter CPU (3 bars, Lv3 allowed) punishes with its Lv3 when it reaches */
+  lv3Cash = 0.6;
+  /** the latched "spend a Lv1 now" roll (rolled once each time my bar count changes, never per frame) */
+  spendLv1 = false;
+  private lastBars = -1;
 
   constructor(profile: Profile, seed: number, style: StyleParams | null = null) {
     this.profile = profile;
@@ -252,6 +298,7 @@ export class Brain {
     this.rnd = mulberry32(this.seed ^ 0x6a09e667);
     this.style = style ?? DEFAULT_STYLE;
     this.pad = new Pad(profile.delayF);
+    this.habits = new Habits(profile.reactF, profile.thinkF);
   }
 
   // ------------------------------------------------------------------ binding
@@ -259,6 +306,9 @@ export class Brain {
     this.m = m;
     this.i = i;
     this.kit = buildKit(m.data, m.cf[i], m.cfg.p[i].scheme);
+    // CHANGED(AI) P2: a `phases` kit re-routes its SIMPLE keys and Lv3 in phase 2 - its own measured recipe table
+    this.kits = [this.kit, m.cf[i].uk === UK.PHASES ? buildKit(m.data, m.cf[i], m.cfg.p[i].scheme, 2) : null];
+    this.habits = new Habits(this.profile.reactF, this.profile.thinkF);
     this.chargeKit = this.kit.moves.some((mi) => mi.recipe !== null && mi.recipe.charge === 1);
     this.seen = newSeen(m, i);
     const st = this.styleTable[this.kit.rawStyle] ?? this.styleTable[this.kit.style];
@@ -370,7 +420,7 @@ export class Brain {
     for (const k of this.kit.groundStrikes) {
       const mi = this.kit.moves[k];
       if (!mi.normal || mi.inert || mi.proj || mi.grab || !this.canUse(k)) continue;
-      const st0 = mi.recipe!.steps[0];
+      const st0 = this.rcp(k)!.steps[0];
       if (charged && (st0.d === 6 || st0.d === 3 || st0.d === 9)) continue;
       const t = this.connectsAt(k, closingNow, stopAt);
       if (t < 0) continue;
@@ -402,7 +452,7 @@ export class Brain {
     const mi = this.kit.moves[idx];
     const cm = mi.cm;
     if (cm.nBox === 0 || me.air || op.air) return -1;
-    const lag = mi.recipe ? mi.recipe.lag : 1;
+    const lag = this.rcpLag(idx);
     const fc = me.facing;
     // the presser may be in a crouching button by my active frame: the box must meet its crouching body too
     const cur = op.crouch ? op.cf.hurtCrouch : op.cf.hurtStand;
@@ -467,14 +517,44 @@ export class Brain {
     return h[0] >> 1;
   }
 
-  /** usable right now (recipe, meter, projectile limit, air state, charge stored, meter policy) */
+  /** is the charge a charge recipe needs stored now? (the CPU's OWN charge counters; kit charge numbers per fighter) */
+  private chargeReady(r: Recipe): boolean {
+    if (r.charge === 0) return true;
+    const me = this.seen.me;
+    const mw = this.kit.cf.mw;
+    const need = mw.chargeFrames;
+    const keep = mw.chargeKeep;
+    if (r.charge === 1) return me.chB >= need || (me.chBS >= need && me.chBR <= keep - 1);
+    return me.chD >= need || (me.chDS >= need && me.chDR <= keep - 1);
+  }
+
+  /**
+   * CHANGED(AI) P2: the recipe to use for `idx` NOW: the measured one, or - for a charge motion without the charge
+   * stored - the no-charge alternative (SIMPLE S+dir); null = cannot be input now.
+   */
+  rcp(idx: number): Recipe | null {
+    const mi = this.kit.moves[idx];
+    if (!mi || !mi.recipe) return null;
+    if (this.chargeReady(mi.recipe)) return mi.recipe;
+    return mi.alt;
+  }
+  rcpLag(idx: number): number {
+    const r = this.rcp(idx) ?? this.kit.moves[idx]?.recipe;
+    return r ? r.lag : 1;
+  }
+
+  /** usable right now (recipe, meter, projectile limit, air state, charge stored, meter policy, unique rules) */
   canUse(idx: number): boolean {
     if (idx < 0 || idx >= this.kit.moves.length) return false;
     const mi = this.kit.moves[idx];
-    const r = mi.recipe;
+    const r = this.rcp(idx);
     if (!r) return false;
     const me = this.seen.me;
     const cm = mi.cm;
+    // CHANGED(AI) P2: context recipes only in their context (stance follow-ups in STANCE; chain parts from the parent)
+    if (r.ctx === 'stance' && me.st !== ST.STANCE) return false;
+    if (r.ctx === 'chain' && !(me.st === ST.ATTACK && me.cm !== null && me.cm.chains.indexOf(idx) >= 0)) return false;
+    if (r.ctx === '' && me.st === ST.STANCE && !(cm.isSpecialCat || cm.isSuper || cm.isGrab || cm.isImpact)) return false;
     if (r.air !== me.air) return false;
     if (cm.costShow > 0 && me.show < cm.costShow) return false;
     if (cm.costNerve > 0 && !this.nerveOk(cm.costNerve)) return false;
@@ -483,21 +563,61 @@ export class Brain {
     if (mi.super === 1 && P.meter < 2) return false;
     if (mi.super === 3 && P.meter < 3) return false;
     if (cm.isImpact && !this.nerveOk(this.m.sys.raw.nerve.impactCost)) return false;
-    if (cm.proj && this.myProjCount() >= cm.proj.limit) return false;
-    if (r.charge === 1) {
-      const need = this.m.sys.raw.motion.chargeFrames;
-      if (!(me.chB >= need || (me.chBS >= need && me.chBR <= this.m.sys.raw.motion.chargeKeep - 1))) return false;
-    } else if (r.charge === 2) {
-      const need = this.m.sys.raw.motion.chargeFrames;
-      if (!(me.chD >= need || (me.chDS >= need && me.chDR <= this.m.sys.raw.motion.chargeKeep - 1))) return false;
-    }
+    if (cm.proj && cm.ballAct === 0 && this.myProjCount() >= cm.proj.limit) return false;
+    if (!this.uniq.canUse(this, mi)) return false;
     return true;
+  }
+
+  /** CHANGED(AI) P2: frames a projectile move's shot needs to fly from its spawn point to the opponent's body (0 others) */
+  projTravel(idx: number): number {
+    const pj = this.kit.moves[idx].cm.proj;
+    if (!pj || pj.vx <= 0) return 0;
+    const gap = this.seen.dist - pj.x - (pj.w >> 1) - this.opHurtHalf();
+    return gap > 0 ? Math.ceil(gap / pj.vx) : 0;
   }
 
   /** frames from now until `idx`'s first active frame */
   timeToActive(idx: number): number {
     const mi = this.kit.moves[idx];
-    return (mi.recipe ? mi.recipe.lag : 1) + mi.firstActive - 1;
+    return this.rcpLag(idx) + mi.firstActive - 1;
+  }
+
+  private others: number[] | null = null;
+  private othersKit: Kit | null = null;
+  /** CHANGED(AI) P2: plain special strikes of my kit in no fighter JSON cpu list (neutral recipe, not a tool / projectile) */
+  otherSpecials(): number[] {
+    if (this.others && this.othersKit === this.kit) return this.others;
+    const kit = this.kit;
+    const listed = new Set<number>();
+    for (const k of Object.keys(kit.lists) as (keyof typeof kit.lists)[]) for (const x of kit.lists[k]) listed.add(x);
+    const out: number[] = [];
+    for (const mi of kit.moves) {
+      if (!mi.special || mi.ex || mi.super > 0 || mi.inert || mi.proj || mi.grab || mi.tool !== '' || !mi.recipe || mi.recipe.ctx !== '' || mi.recipe.air) continue;
+      if (!listed.has(mi.idx)) out.push(mi.idx);
+    }
+    this.others = out;
+    this.othersKit = kit;
+    return out;
+  }
+
+  /** CHANGED(AI) P2: centre distance (U) inside which the opponent's longest ground normal reaches me (+0.25 m) */
+  opThreatU(): number {
+    return this.opReach + (this.seen.me.cf.hurtStand[0] >> 1) + 25000;
+  }
+
+  /** CHANGED(AI) P2: would `idx` input with `lag` frames of input from now reach (grab range / exact box prediction)? */
+  inReachFrom(idx: number, lag: number): boolean {
+    const mi = this.kit.moves[idx];
+    if (mi.proj) return true;
+    if (mi.grab) return this.inReach(idx);
+    return this.connects(idx, lag);
+  }
+  connectsFrom(idx: number, lag: number): boolean {
+    return this.connects(idx, lag);
+  }
+  /** is the strike threat `t` still coming (public for uniques.ts) */
+  threatLive(t: Threat): boolean {
+    return this.live(t);
   }
 
   /**
@@ -521,8 +641,7 @@ export class Brain {
 
   /** planned steps for move idx (execution drops applied) */
   movePlan(idx: number, dropOk = true): Step[] {
-    const mi = this.kit.moves[idx];
-    const r = mi.recipe;
+    const r = this.rcp(idx);
     if (!r) return [];
     const steps = r.steps.slice();
     if (dropOk && this.profile.drop > 0 && this.rnd() < this.profile.drop * 0.5) {
@@ -559,10 +678,19 @@ export class Brain {
     return { d: 5, b: 0, raw: awayBits(me.x, fromX, me.facing) | (crouch ? B.DOWN : 0) };
   }
 
-  /** crouch-or-stand guess for a guard posture (guess weights + adaptation, FIGHTING_DESIGN §10) */
+  /**
+   * crouch-or-stand guess for a guard posture (guess weights + adaptation, FIGHTING_DESIGN §10). CHANGED(AI) P2: blended
+   * with the opponent's HABIT (habits.ts: its share of lows vs overheads close in, x confidence x the level's `habit`
+   * weight) - a crouch guard is right against lows and mids, a standing one against overheads and mids.
+   */
   chooseGuardCrouch(): boolean {
     let p = 0.5;
     if (this.opOverheadF >= this.profile.reactF) p = 0.85; // overheads are reactable at this level: crouch by default
+    const h = this.habits;
+    const lo = h.pLow();
+    const oh = h.pOverhead();
+    const w = this.profile.habit * h.confidence();
+    if (w > 0) p = (1 - w) * p + w * ((lo + 0.03) / (lo + oh + 0.06));
     if (this.profile.guessAdapt > 0 && this.mixHist.length > 0) {
       let lo = 0;
       let hi = 0;
@@ -591,8 +719,19 @@ export class Brain {
       return this.pad.out(null, s.me.facing) & 0;
     }
     this.wasFight = true;
+    // CHANGED(AI) P2: a `phases` kit after its phase change plays its phase-2 recipe table (own state, u0 = phase)
+    if (this.kits[1]) {
+      const want = s.me.uq[0] === 2 ? this.kits[1] : this.kits[0]!;
+      if (this.kit !== want) this.kit = want;
+    }
     if (s.cin) return this.out(null);
     this.track();
+    this.habits.tick(s.frame);
+    const bars = this.showBars();
+    if (bars !== this.lastBars) {
+      this.lastBars = bars;
+      this.spendLv1 = this.rnd() < this.lv1Spend;
+    }
     const me = s.me;
     const st = me.st;
     const prev = this.lastMySt;
@@ -641,6 +780,17 @@ export class Brain {
     if (this.pad.busy) return this.out(this.pad.shift());
     if (st === ST.RUSH) return this.out(this.rushTick());
     if (st === ST.AIR || (st === ST.ATTACK && me.air)) return this.out(st === ST.AIR ? this.airTick() : null);
+    // CHANGED(AI) P2: the stance (Lotus) and my running unique moves (weave / dive / armor step cancels) have drivers
+    if (st === ST.STANCE) {
+      // the reaction clock runs in the stance too (the stance driver answers a DECIDED threat: hop / lean / leave)
+      const t = this.strike;
+      if (t && !t.decided && this.live(t) && this.ready(t.start)) this.decideStrike(t);
+      return this.out(this.uniq.busy(this));
+    }
+    if (st === ST.ATTACK) {
+      const u = this.uniq.busy(this);
+      if (u) return this.out(u);
+    }
     if (!isFree(st)) {
       // busy (own move, dash, landing, recovery): hold the guard a decided reaction wants, so the first
       // free frame already blocks; otherwise nothing
@@ -648,6 +798,16 @@ export class Brain {
     }
     // ---- free on the ground
     if (this.punishTick()) return this.out(this.pad.shift());
+    // CHANGED(AI) P2: the first free frame after my blockstun: a counter read vs its frame-trap habit (uniques.ts)
+    if (prev === ST.BLOCKSTUN && this.blockReadKey !== s.frame) {
+      this.blockReadKey = s.frame;
+      const c = this.uniq.counterRead(this, 'block');
+      if (c >= 0 && this.startMove(c, false)) {
+        this.stats.counterReads++;
+        this.uniq.started(c);
+        return this.out(this.pad.shift());
+      }
+    }
     const r = this.reactTick();
     if (r) return this.out(r);
     if (this.confirmTick()) return this.out(this.pad.shift());
@@ -656,6 +816,8 @@ export class Brain {
   }
 
   resetRound(): void {
+    this.uniq.resetRound();
+    this.habits.resetRound();
     this.pad.resetRound();
     this.strike = null;
     this.jump = null;
@@ -674,9 +836,23 @@ export class Brain {
   private track(): void {
     const s = this.seen;
     const op = s.op;
+    let newAttack = false;
     // a new opponent move instance = a new attack to react to (ONE latched roll)
     if (op.st === ST.ATTACK && op.cm) {
       if (!this.strike || this.strike.inst !== op.inst) {
+        newAttack = true;
+        // CHANGED(AI) P2: the habit it just showed (committed after my reaction delay - pattern knowledge for the NEXT one)
+        const cm0 = op.cm;
+        if (cm0.proj) this.habits.action(s.frame, HK.PROJ);
+        else if (!op.air && s.dist <= this.opThreatU() + 40000) {
+          if (cm0.isGrab) this.habits.action(s.frame, HK.THROW);
+          else if (cm0.isStrike && cm0.nBox > 0) {
+            this.habits.action(s.frame, cm0.guard === 2 ? HK.LOW : cm0.guard === 1 ? HK.OVERHEAD : HK.MID);
+            let lo = 1 << 30;
+            for (let k = 0; k < cm0.nBox; k++) lo = Math.min(lo, cm0.boxes[k * 7 + 3] - (cm0.boxes[k * 7 + 5] >> 1));
+            this.habits.strikeHeight(s.frame, lo >= 105000);
+          }
+        }
         this.strike = {
           inst: op.inst, mv: op.mv, cm: op.cm, start: s.frame - Math.max(0, op.mvF - 1), roll: this.rnd(), pRoll: this.rnd(),
           resp: RESP.NONE, decided: false, acted: false, blocked: false, whiffAt: -1, punished: false, tool: -1,
@@ -699,8 +875,19 @@ export class Brain {
       if (!this.jump || this.jump.done) {
         const start = op.st === ST.PREJUMP ? s.frame - op.stF : s.frame - (op.cf.prejump + Math.max(0, op.stF));
         this.jump = { start, roll: this.rnd(), resp: RESP.NONE, decided: false, done: false, fired: false };
+        if (s.dist < 320000) this.habits.action(s.frame, HK.JUMP);
       }
     } else if (this.jump && !this.jump.done) this.jump.done = true;
+    // CHANGED(AI) P2: habit samplers - its attack rate while free in its range, its wake-up / after-block pressure
+    {
+      const opFree = op.st === ST.IDLE || op.st === ST.CROUCH || op.st === ST.WALK_F || op.st === ST.WALK_B;
+      const groundStart = newAttack && !op.air;
+      this.habits.rangeFrame(s.frame, opFree && !op.air && s.dist <= this.opThreatU(), groundStart);
+      const mySt = s.me.st;
+      const myPrev = this.lastMySt;
+      this.habits.wakeFrame(s.frame, myPrev === ST.KNOCKDOWN && mySt !== ST.KNOCKDOWN, groundStart);
+      this.habits.blockFrame(s.frame, myPrev === ST.BLOCKSTUN && mySt !== ST.BLOCKSTUN, groundStart);
+    }
     // projectiles (each new projectile inherits the latched roll of the move that threw it)
     for (let k = 0; k < s.nProj; k++) {
       const p = s.proj[k];
@@ -777,12 +964,13 @@ export class Brain {
       if (tool >= 0) {
         resp = RESP.TOOL;
         t.tool = tool;
-      } else if (this.style.counter > 0 && this.kit.lists.counter.length > 0 && r < P.block * this.style.counter) {
-        // counter stance as a reaction tool - only when the sim implements the §20 counter block
-        const c = this.kit.lists.counter.find((k) => this.canUse(k) && counterLive(this.kit.moves[k].cm));
-        if (c !== undefined) {
+      } else if (r < P.block) {
+        // CHANGED(AI) P2: a unique answer to the reacted strike - a counter whose catch window covers its active
+        // frames, a low-profile move under a high attack (uniques.ts); the SAME latched roll, scaled inside
+        const u = this.uniq.react(this, cm, s.op.mvF, r / Math.max(0.01, P.block));
+        if (u >= 0) {
           resp = RESP.TOOL;
-          t.tool = c;
+          t.tool = u;
         }
       }
       if (resp === RESP.NONE) {
@@ -843,18 +1031,34 @@ export class Brain {
       if (!toward || p.vx === 0) continue;
       if (!this.ready(this.projStart[p.slot])) continue;
       let resp = this.projResp[p.slot];
+      const gap = Math.abs(me.x - p.x) - (p.w >> 1) - (me.cf.hurtStand[0] >> 1);
+      const eta = gap / Math.max(1, Math.abs(p.vx));
+      const r = this.projRoll[p.slot];
       if (resp < 0) {
-        const r = this.projRoll[p.slot];
         const share = P.parry >= 2 ? P.parryShare : P.parry === 1 ? P.parryShare : 0;
-        if (share > 0 && r < P.block * share && this.nerveOk(this.m.sys.raw.parry.costStart)) resp = RESP.PARRY;
+        // CHANGED(AI) P2: a unique answer first (a counter that catches projectiles, a teleport through it, a duck /
+        // dive under it - uniques.ts), inside the block chance with the SAME latched roll
+        const u = r < P.block && isFree(me.st) ? this.uniq.proj(this, p, Math.floor(eta), r / Math.max(0.01, P.block), false) : -1;
+        if (u !== -1) resp = RESP.TOOL;
+        else if (share > 0 && r < P.block * share && this.nerveOk(this.m.sys.raw.parry.costStart)) resp = RESP.PARRY;
         else if (r < P.block * Math.min(1, this.style.jumpProj + P.antiZone) && s.dist > 180000) resp = RESP.JUMP;
         else if (r < P.block) resp = RESP.BLOCK;
         else resp = RESP.NONE;
         this.projResp[p.slot] = resp;
         if (resp === RESP.BLOCK) this.stats.blocksChosen++;
       }
-      const gap = Math.abs(me.x - p.x) - (p.w >> 1) - (me.cf.hurtStand[0] >> 1);
-      const eta = gap / Math.max(1, Math.abs(p.vx));
+      if (resp === RESP.TOOL) {
+        const go = isFree(me.st) ? this.uniq.proj(this, p, Math.floor(eta), r / Math.max(0.01, P.block), true) : -1;
+        if (go >= 0 && this.startMove(go, false)) {
+          this.projResp[p.slot] = RESP.NONE;
+          this.stats.tools++;
+          this.uniq.started(go);
+          return this.pad.shift();
+        }
+        if (go === -2 && eta > 3) continue;
+        this.projResp[p.slot] = RESP.BLOCK; // the window passed / not free: block it
+        resp = RESP.BLOCK;
+      }
       if (resp === RESP.JUMP) {
         if (isFree(me.st) && eta <= 40 && this.jumpClears(k)) {
           this.projResp[p.slot] = RESP.NONE;
@@ -969,6 +1173,7 @@ export class Brain {
             if (!t.acted && t.tool >= 0 && this.canUse(t.tool)) {
               t.acted = true;
               this.startMove(t.tool, false);
+              this.uniq.started(t.tool);
               return this.pad.shift();
             }
             return null;
@@ -1011,14 +1216,14 @@ export class Brain {
    * the opponent's from its visible velocity (ballistic while airborne, standing still on the ground).
    * Box / hurtbox geometry exactly as core/sim/boxes.ts (hitbox centred, hurtbox from the feet up).
    */
-  connects(idx: number): boolean {
+  connects(idx: number, lagOverride = -1): boolean {
     const s = this.seen;
     const me = s.me;
     const op = s.op;
     const mi = this.kit.moves[idx];
     const cm = mi.cm;
     if (cm.nBox === 0) return false;
-    const lag = mi.recipe ? mi.recipe.lag : 1;
+    const lag = lagOverride >= 0 ? lagOverride : this.rcpLag(idx);
     const fc = me.facing;
     const oh = op.air ? op.cf.hurtAir : op.crouch ? op.cf.hurtCrouch : op.cf.hurtStand;
     const ohw = oh[0] >> 1;
@@ -1068,11 +1273,25 @@ export class Brain {
   private antiAirPick(): number {
     const s = this.seen;
     if (!s.op.air) return -1;
-    const cands = this.kit.lists.antiAir.concat(this.kit.roles.antiair ?? []);
+    const cands: number[] = [];
+    // CHANGED(AI) P2: a super as the anti-air on a full meter (Lv3, 3 bars) / a spare bar (Lv1) - only a super that is
+    // invulnerable to air attacks from frame 1 (it wins, never trades); the jump's latched roll decides (no re-roll)
+    const j = this.jump;
+    const P = this.profile;
+    if (j && j.roll < P.antiAir * 0.5) {
+      const kit = this.kit;
+      if (P.meter >= 3 && kit.sup3 >= 0 && this.showBars() >= 3) cands.push(kit.sup3);
+      if (P.meter >= 2 && kit.sup1 >= 0 && (!(P.meter >= 3 && kit.sup3 >= 0) || this.showBars() >= 3 || j.roll < P.antiAir * this.lv1Spend * 0.5)) cands.push(kit.sup1);
+    }
+    for (let k = cands.length - 1; k >= 0; k--) {
+      const cm = this.kit.moves[cands[k]].cm;
+      if (!(cm.inv[4] > 0 && cm.inv[4] <= 1 && cm.inv[5] >= cm.startup) && !(cm.inv[0] > 0 && cm.inv[0] <= 1 && cm.inv[1] >= cm.startup)) cands.splice(k, 1);
+    }
+    for (const k of this.kit.lists.antiAir.concat(this.kit.roles.antiair ?? [])) cands.push(k);
     for (const idx of cands) {
       if (!this.canUse(idx)) continue;
       const mi = this.kit.moves[idx];
-      if (mi.proj || mi.grab || mi.recipe!.air) continue;
+      if (mi.proj || mi.grab || this.rcp(idx)!.air) continue;
       if (this.connects(idx)) return idx;
     }
     return -1;
@@ -1182,6 +1401,9 @@ export class Brain {
       this.throwKey = key;
       let rate = this.profile.tech;
       if (this.profile.guessAdapt > 0) rate += this.profile.guessAdapt * this.mixHist.filter((k) => k === 3).length / 3;
+      // CHANGED(AI) P2: a throw-happy opponent gets teched more (its throw share, x confidence x habit weight)
+      rate += 0.5 * this.profile.habit * this.habits.confidence() * this.habits.pThrow();
+      rate = Math.min(0.9, rate);
       this.techGo = this.rnd() < rate;
       this.techDone = false;
     }
@@ -1204,25 +1426,48 @@ export class Brain {
       const behind = me.x * s.dx < 0 ? Math.abs(me.x) : 0; // my back is to that wall
       this.kdBackRise = me.kd !== 2 && P.level >= 3 && behind < s.wall - 150000 && this.rnd() < P.backRise;
       this.kdReversal = -1;
-      if (P.level >= 5 && this.rnd() < P.wakeReversal * P.punish) {
+      // CHANGED(AI) P2: the wake-up read scales with its meaty habit (habits.wakeRate: did it attack my last wake-ups?)
+      const h = this.habits;
+      const meaty = 1 + P.habit * (h.wakeRate - 0.5) * 2; // 0..2 x
+      if (P.level >= 5 && this.rnd() < P.wakeReversal * P.punish * meaty) {
         const rev = (this.kit.roles.reversal ?? []).filter((k) => {
           const mi = this.kit.moves[k];
-          return mi.invStrike && !mi.recipe!.air && mi.recipe!.charge === 0;
+          return mi.invStrike && mi.recipe !== null && !mi.recipe.air && mi.recipe.charge === 0 && mi.recipe.ctx === '';
         });
+        // an invulnerable super is a reversal too (Lv1 / Lv3 all start strike-invulnerable) - when the meter policy allows
+        for (const sp of [this.kit.sup1, this.kit.sup3]) {
+          if (sp < 0 || rev.indexOf(sp) >= 0) continue;
+          const mi = this.kit.moves[sp];
+          if (!mi.revInv || !mi.recipe || mi.recipe.air || (mi.super === 1 && P.meter < 2) || (mi.super === 3 && P.meter < 3)) continue;
+          if (this.seen.me.show >= mi.cm.costShow) rev.push(sp);
+        }
         if (rev.length > 0) this.kdReversal = rev[Math.floor(this.rnd() * rev.length)];
       }
-      this.kdGuard = this.rnd() < Math.max(P.guard, P.block * 0.5);
+      // a counter read on the wake-up (Rerun / Ricky) vs its meaty habit
+      if (this.kdReversal < 0) {
+        const c = this.uniq.counterRead(this, 'wake');
+        if (c >= 0) this.kdReversal = c;
+      }
+      const g0 = Math.max(P.guard, P.block * 0.5);
+      this.kdGuard = this.rnd() < Math.min(0.95, (1 - P.habit) * g0 + P.habit * Math.max(g0 * 0.5, P.block * h.wakeRate));
     }
     const wf = this.m.sys.raw.kd.wakeupFrames;
     if (this.kdBackRise && me.stun <= wf + 1 && me.stun >= wf - 1) return this.out({ d: 5, b: B.L | B.H });
     if (this.pad.busy) return this.out(this.pad.shift());
-    if (this.kdReversal >= 0 && me.stun === 3 && s.dist < 180000) {
+    // CHANGED(AI) P2: a motion reversal starts early enough that its button lands inside the wake-up buffer
+    const revLen = this.kdReversal >= 0 && this.kit.moves[this.kdReversal].recipe ? this.kit.moves[this.kdReversal].recipe!.steps.length : 0;
+    if (this.kdReversal >= 0 && me.stun === Math.max(3, revLen) && s.dist < 180000) {
       const idx = this.kdReversal;
       this.kdReversal = -1;
       const mi = this.kit.moves[idx];
       const sb = this.seen.me;
       const costOk = (mi.cm.costShow === 0 || sb.show >= mi.cm.costShow) && (mi.cm.costNerve === 0 || this.nerveOk(mi.cm.costNerve));
       if (costOk && mi.recipe) {
+        if (mi.super > 0) this.stats.wakeSupers++;
+        if (mi.tool === 'counter') {
+          this.stats.counterReads++;
+          this.uniq.started(idx);
+        }
         this.pad.push(mi.recipe.steps);
         return this.out(this.pad.shift());
       }
@@ -1296,7 +1541,14 @@ export class Brain {
 
   private estDamage(steps: number[]): number {
     let d = 0;
-    for (let k = 0; k < steps.length; k++) d += (this.kit.moves[steps[k]].damage * SCALE[Math.min(k, SCALE.length - 1)]) / 100;
+    for (let k = 0; k < steps.length; k++) {
+      const mi = this.kit.moves[steps[k]];
+      const rc = this.rcp(steps[k]);
+      // SIMPLE one-button specials / supers deal x0.8; supers keep their minimum share (30 % Lv1 / 50 % Lv3)
+      const simple = rc !== null && rc.simple && (mi.special || mi.super > 0) ? 0.8 : 1;
+      const sc = Math.max(SCALE[Math.min(k, SCALE.length - 1)], mi.super === 3 ? 50 : mi.super === 1 ? 30 : 0);
+      d += (mi.damage * simple * sc) / 100;
+    }
     return d;
   }
 
@@ -1307,7 +1559,8 @@ export class Brain {
   buildRoute(window: number, punish: boolean): number[] | null {
     const P = this.profile;
     const kit = this.kit;
-    const fits = (idx: number): boolean => this.canUse(idx) && !kit.moves[idx].recipe!.air && this.timeToActive(idx) <= window && this.inReach(idx);
+    // CHANGED(AI) P2: a projectile "lands" when it has flown to the opponent, not on its spawn frame
+    const fits = (idx: number): boolean => this.canUse(idx) && !this.rcp(idx)!.air && this.timeToActive(idx) + this.projTravel(idx) <= window && this.inReach(idx);
     const R = P.route;
     const cands: number[][] = [];
     if (R === 0) {
@@ -1328,21 +1581,48 @@ export class Brain {
       else cands.push(combo.slice());
     }
     for (const k of singles) cands.push(R >= 3 ? [k].concat(this.cancelEnder(k)) : [k]);
-    // meter enders / super punishes
-    const withMeter = R === 5 || R >= 7;
+    // meter enders / super punishes. CHANGED(AI) P2: the 'cancel' meter tier (L6+, FIGHTING_DESIGN §10 "all + cancel
+    // supers") cancels its hit-confirms into a super even on a meterless punish route; and at ANY route tier a super
+    // that finishes the round is taken when the meter policy allows it (Lv1 from 'lv1', Lv3 from 'all'), the cheapest
+    // one that kills first.
+    const withMeter = R === 5 || R >= 7 || (P.meter >= 4 && !punish);
     const sups: number[] = [];
-    if (withMeter && P.meter >= 2) {
+    // CHANGED(AI) P2: a CPU that may spend Lv3 ('all' tier) saves bars toward PRIME TIME: with 1-2 bars a Lv1 goes into
+    // a route only as a kill or `rules.lv1Spend` of the time (one roll per route) - so its Lv3 appears too
+    const saving = P.meter >= 3 && kit.sup3 >= 0 && this.showBars() < 3 && !this.spendLv1;
+    if (P.meter >= 2) {
       if (kit.sup3 >= 0 && this.canUse(kit.sup3)) sups.push(kit.sup3);
       if (kit.sup1 >= 0 && this.canUse(kit.sup1)) sups.push(kit.sup1);
     }
+    const opHp = this.seen.op.hp;
+    const kills: number[][] = [];
     if (sups.length > 0) {
-      for (const sp of sups) if (fits(sp)) cands.push([sp]);
-      const add: number[][] = [];
-      for (const c of cands) {
-        const last = kit.moves[c[c.length - 1]].cm;
-        for (const sp of sups) if (last.cSuper && P.meter >= 4) add.push(c.concat([sp]));
+      const base = cands.slice();
+      for (const sp of sups) if (fits(sp)) {
+        if (withMeter && !(saving && sp === kit.sup1)) cands.push([sp]);
+        if (this.estDamage([sp]) >= opHp) kills.push([sp]);
       }
-      for (const a of add) cands.push(a);
+      for (const c of base) {
+        const last = kit.moves[c[c.length - 1]].cm;
+        for (const sp of sups) {
+          if (!last.cSuper || P.meter < 4) continue;
+          const cc = c.concat([sp]);
+          if (withMeter && !(saving && sp === kit.sup1)) cands.push(cc);
+          if (this.estDamage(cc) >= opHp && this.estDamage(c) < opHp) kills.push(cc);
+        }
+      }
+    }
+    if (kills.length > 0) {
+      // the cheapest kill (Lv1 before Lv3), the shortest route among those
+      kills.sort((a, b) => kit.moves[a[a.length - 1]].super - kit.moves[b[b.length - 1]].super || a.length - b.length);
+      this.stats.superKills++;
+      return kills[0];
+    }
+    // CHANGED(AI) P2: a full RATINGS meter (3 bars) at a level allowed Lv3 ('all' tier, L5+) cashes PRIME TIME on a
+    // clean punish (`rules.lv3Cash` of the time) - every kit's Lv3 shows up, not only as a kill
+    if (P.meter >= 3 && kit.sup3 >= 0 && this.showBars() >= 3 && sups.indexOf(kit.sup3) >= 0 && fits(kit.sup3) && this.rnd() < this.lv3Cash) {
+      this.stats.lv3Cash++;
+      return [kit.sup3];
     }
     if (cands.length === 0) return null;
     if (R <= 5 && R !== 5) return cands[0];
@@ -1358,6 +1638,27 @@ export class Brain {
     }
     void punish;
     return best;
+  }
+
+  /** CHANGED(AI) P2: the super to cancel a confirmed hit into now (-1 none): reaches, affordable, policy */
+  private superCancel(): number {
+    const kit = this.kit;
+    const opHp = this.seen.op.hp;
+    const cands: number[] = [];
+    if (kit.sup3 >= 0 && this.canUse(kit.sup3)) cands.push(kit.sup3);
+    if (kit.sup1 >= 0 && this.canUse(kit.sup1)) {
+      const saving = kit.sup3 >= 0 && this.profile.meter >= 3 && this.showBars() < 3;
+      const kills = this.estDamage([kit.sup1]) * 0.7 >= opHp;
+      if (!saving || kills || this.spendLv1) cands.push(kit.sup1);
+    }
+    for (const sp of cands) {
+      const mi = kit.moves[sp];
+      if (mi.proj || this.inReachFrom(sp, this.rcpLag(sp))) {
+        this.stats.supers++;
+        return sp;
+      }
+    }
+    return -1;
   }
 
   private cancelEnder(k: number): number[] {
@@ -1389,20 +1690,25 @@ export class Brain {
     const idx = r.steps[r.k];
     const mi = this.kit.moves[idx];
     if (r.phase === 0) {
-      if (!mi || !mi.recipe) {
+      const rc = mi ? (r.k === 0 || mi.recipe === null || mi.recipe.ctx === '' ? this.rcp(idx) : mi.recipe) : null;
+      if (!mi || !rc) {
         this.route = null;
         return;
       }
+      // a motion trigger for a chain part waits out the hitstop: typed inside it, the button's release re-reads the
+      // same motion as the PARENT special (negative edge) and overwrites the buffered chain (core/sim/inputs.ts;
+      // measured: CLASSIC 236M during CUE 1's hitstop -> no CUE 2; after it -> CUE 2)
+      if (r.k > 0 && rc.ctx === 'chain' && rc.steps.length > 1 && me.hitstop > 0) return;
       const costOk = (mi.cm.costShow === 0 || me.show >= mi.cm.costShow) && (mi.cm.costNerve === 0 || me.nerve > 0);
       if (!costOk) {
         this.route = null;
         return;
       }
-      this.pad.push(r.k === 0 ? this.movePlan(idx, true) : mi.recipe.steps);
+      this.pad.push(r.k === 0 ? this.movePlan(idx, true) : rc.steps);
       this.stats.routeSteps++;
       if (mi.super > 0) this.stats.supers++;
       r.phase = 1;
-      r.deadline = s.frame + mi.recipe.lag + 8 + (r.k > 0 && me.st === ST.ATTACK && me.cm ? Math.max(0, me.cm.total - me.mvF) : 0);
+      r.deadline = s.frame + rc.lag + 8 + (r.k > 0 && me.st === ST.ATTACK && me.cm ? Math.max(0, me.cm.total - me.mvF) : 0);
       r.contactSeen = false;
       r.linkPending = false;
       return;
@@ -1429,6 +1735,19 @@ export class Brain {
     if (!r.contactSeen && me.contact !== 0) {
       r.contactSeen = true;
       if (r.k + 1 >= r.steps.length) {
+        // CHANGED(AI) P2: a rekka continues on contact (Patch CUE 1 -> 2 -> 3 overhead / low, uniques.ts rekka)
+        let ext = this.profile.route >= 3 ? this.uniq.rekka(this, idx, me.contact) : -1;
+        // CHANGED(AI) P2: the 'cancel' meter tier (L6+) cancels a CONFIRMED hit into a super (Lv3 with 3 bars, else a Lv1
+        // unless it is saving toward Lv3 - or the Lv1 kills)
+        if (ext < 0 && me.contact === 1 && mi.cm.cSuper && this.profile.meter >= 4) ext = this.superCancel();
+        if (ext >= 0 && !(this.profile.drop > 0 && this.rnd() < this.profile.drop)) {
+          this.stats.rekkas++;
+          r.steps.push(ext);
+          r.k++;
+          r.phase = 0;
+          this.routeTick();
+          return;
+        }
         this.route = null;
         return;
       }
@@ -1515,9 +1834,14 @@ export class Brain {
       case 'guard':
         this.hold = { d: 5, guard: true, crouch: dec.crouch, until: f + dec.frames };
         break;
-      case 'move':
-        if (!this.startMove(dec.idx)) this.hold = null;
+      case 'move': {
+        // CHANGED(AI) P2: a rekka starter runs as a route so its trigger parts can follow on contact
+        const cm = this.kit.moves[dec.idx]?.cm;
+        const rekka = cm !== undefined && cm.nBox > 0 && this.profile.route >= 3 && cm.chains.some((c) => this.kit.moves[c].cm.trigger !== null && this.kit.moves[c].special);
+        if (rekka && this.canUse(dec.idx)) this.route = this.newRoute([dec.idx]);
+        else if (!this.startMove(dec.idx)) this.hold = null;
         break;
+      }
       case 'route':
         if (dec.steps.length > 0) this.route = this.newRoute(dec.steps);
         break;

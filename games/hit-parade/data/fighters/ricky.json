@@ -68,6 +68,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "cane_jab"},
       "desc": "Two-hand cane butt thrust.",
       "boxes": [{"f": [5, 7], "x": 0.504, "y": 1.375, "w": 0.3, "h": 0.55}],
@@ -97,6 +99,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "low_tap"},
       "desc": "Crouching cane tap to the ankle."
     },
@@ -124,6 +128,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 5, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "cane_swing"},
       "desc": "Diagonal cane chop.",
       "boxes": [{"f": [9, 11], "x": 0.642, "y": 1.379, "w": 0.4, "h": 0.559}],
@@ -153,9 +159,12 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "role": ["poke", "low"],
+      "role": ["poke", "low", "antistep"],
+      "track": {"until": 11, "rate": 20},
+      "homing": true,
+      "lateralM": 0.4,
       "anim": {"clip": "low_cane"},
-      "desc": "Low sweeping cane swing."
+      "desc": "Low sweeping cane swing; homing."
     },
     "5H": {
       "kind": "normal",
@@ -175,15 +184,18 @@
       "pushback": {"hit": 0.45, "block": 0.5},
       "cancel": ["special", "super"],
       "juggle": {"js": 0, "ji": 1, "jl": 0},
-      "onHit": {"kd": "none", "launch": [0, 0], "wallSplat": false, "groundBounce": false, "crumple": false},
+      "onHit": {"kd": "none", "launch": [0, 0], "wallSplat": true, "groundBounce": false, "crumple": false},
       "gain": {"showtime": 1000, "nerveCost": 5000},
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "role": [],
+      "role": ["antistep"],
+      "track": {"until": 14, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "showstopper"},
       "sfx": [[8, "whoosh_heavy"]],
-      "desc": "Big horizontal cane swing.",
+      "desc": "Big horizontal cane swing; homing; wall-splats at the ring edge.",
       "pushExt": [[0, 0.0], [8, 0.0], [10, 0.065], [11, 0.156], [14, 0.217], [17, 0.158], [18, 0.067], [20, 0.0], [35, 0.0]]
     },
     "2H": {
@@ -211,6 +223,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "boxes": [{"f": [9, 12], "x": 0.6, "y": 1.8, "w": 0.7, "h": 0.5}],
       "role": ["antiair"],
+      "track": {"until": 5, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "cane_twirl"},
       "desc": "Chest-high twirl: anti-air."
     },
@@ -238,6 +252,9 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["sweep", "low"],
+      "track": {"until": 16, "rate": 20},
+      "homing": true,
+      "lateralM": 0.45,
       "anim": {"clip": "hook_slide"},
       "desc": "Vaudeville hook: a sliding low cane swing that drags them in and down."
     },
@@ -265,6 +282,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 5, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "stage_kick"},
       "desc": "Kick while holding the cane.",
       "boxes": [{"f": [9, 11], "x": 1.058, "y": 1.228, "w": 0.653, "h": 0.3}],
@@ -295,10 +314,12 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["overhead"],
+      "track": {"until": 16, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "sledgehammer"},
       "sfx": [[12, "whoosh_heavy"]],
       "desc": "Two-hand overhead cane smash.",
-      "boxes": [{"f": [20, 22], "x": 0.512, "y": 1.28, "w": 0.4, "h": 0.36}],
+      "boxes": [{"f": [20, 22], "x": 0.59, "y": 1.351, "w": 0.4, "h": 0.503}],
       "boxSrc": "hitVolume"
     },
     "j.L": {
@@ -325,6 +346,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "air_jab"},
       "desc": "Air cane thrust.",
       "pushExt": [[0, 0.04], [2, 0.036], [4, 0.099], [11, 0.058], [15, 0.075]]
@@ -353,6 +376,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 3, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "air_swing"},
       "desc": "Air cane chop.",
       "pushExt": [[0, 0.037], [11, 0.033], [14, 0.098], [16, 0.1]]
@@ -381,9 +406,11 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 6, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "air_hammer"},
       "desc": "Overhead cane jump-in.",
-      "pushExt": [[0, 0.037], [5, 0.04], [7, 0.092], [11, 0.109], [19, 0.089]]
+      "pushExt": [[0, 0.037], [5, 0.044], [9, 0.113], [19, 0.091]]
     },
     "throw_f": {
       "kind": "throw",
@@ -424,6 +451,7 @@
         ]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Holds them at cane's length for three swings.",
       "pushExt": [[0, 0.057], [2, 0.0], [31, 0.0]]
@@ -462,6 +490,7 @@
         "victim": [[0, "hit_high_s", 0.0, 0.1], [4, "thrown_b", 0.0, 0.4], [15, "thrown_b", 0.4, 1.2]]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Spins them past with the cane.",
       "pushExt": [[0, 0.057], [2, 0.0], [31, 0.0]]
@@ -497,9 +526,13 @@
         "clip": "spotlight_beam",
         "x": 0.8,
         "speed": 5.0,
-        "strength": "L"
+        "strength": "L",
+        "aimed": false,
+        "lateralM": 0.25
       },
       "role": ["projectile"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
       "anim": {"clip": "spotlight_cast"},
       "sfx": [[0, "electric_zap"]],
       "desc": "The cane head fires a spotlight beam."
@@ -535,9 +568,13 @@
         "clip": "spotlight_beam",
         "x": 0.8,
         "speed": 6.5,
-        "strength": "M"
+        "strength": "M",
+        "aimed": false,
+        "lateralM": 0.25
       },
       "role": ["projectile"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
       "anim": {"clip": "spotlight_cast"},
       "sfx": [[0, "electric_zap"]],
       "desc": "The cane head fires a spotlight beam."
@@ -573,9 +610,13 @@
         "clip": "spotlight_beam",
         "x": 0.8,
         "speed": 8.0,
-        "strength": "H"
+        "strength": "H",
+        "aimed": false,
+        "lateralM": 0.25
       },
       "role": ["projectile"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
       "anim": {"clip": "spotlight_cast"},
       "sfx": [[0, "electric_zap"]],
       "desc": "The cane head fires a spotlight beam."
@@ -611,9 +652,12 @@
         "clip": "spotlight_beam",
         "x": 0.8,
         "speed": 8.0,
-        "strength": "H"
+        "strength": "H",
+        "aimed": true,
+        "lateralM": 0.35
       },
       "role": ["projectile"],
+      "track": {"until": 5, "rate": 180},
       "anim": {"clip": "spotlight_cast"},
       "sfx": [[0, "electric_zap"]],
       "desc": "Double beam: 2 hits."
@@ -643,6 +687,7 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "counter": {"catch": [3, 14], "vs": ["strike"], "follow": "commercial_hit"},
       "role": ["reversal"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "catch_pose"},
       "desc": "Parry-counter: 'We'll be right back' - catches a strike and answers with the sledgehammer.",
       "pushExt": [[0, 0.003], [17, 0.042], [39, 0.009]]
@@ -672,6 +717,7 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "counter": {"catch": [3, 18], "vs": ["strike"], "follow": "commercial_hit"},
       "role": ["reversal"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "catch_pose"},
       "desc": "Parry-counter: 'We'll be right back' - catches a strike and answers with the sledgehammer.",
       "pushExt": [[0, 0.003], [21, 0.042], [47, 0.009]]
@@ -701,6 +747,7 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "counter": {"catch": [3, 22], "vs": ["strike"], "follow": "commercial_hit"},
       "role": ["reversal"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "catch_pose"},
       "desc": "Parry-counter: 'We'll be right back' - catches a strike and answers with the sledgehammer.",
       "pushExt": [[0, 0.003], [24, 0.042], [55, 0.009]]
@@ -730,6 +777,7 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "counter": {"catch": [1, 24], "vs": ["strike", "proj"], "follow": "commercial_hit"},
       "role": ["reversal"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "catch_pose"},
       "desc": "Catches strikes and projectiles from frame 1.",
       "pushExt": [[0, 0.003], [22, 0.042], [49, 0.009]]
@@ -759,9 +807,12 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "tc": true,
       "role": ["reversal"],
+      "track": {"until": 8, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "counter_smash"},
       "desc": "The counter's sledgehammer (after a COMMERCIAL BREAK catch).",
-      "boxes": [{"f": [6, 8], "x": 0.512, "y": 1.292, "w": 0.5, "h": 0.385}],
+      "boxes": [{"f": [6, 8], "x": 0.59, "y": 1.364, "w": 0.5, "h": 0.528}],
       "boxSrc": "hitVolume"
     },
     "mic_drop_l": {
@@ -789,6 +840,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [6, 0.3], [12, 1.0], [39, 0.0]],
       "role": ["antiair"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "mic_drop_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Leaping cane swing anti-air.",
@@ -819,6 +872,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [7, 0.3], [13, 1.0], [44, 0.0]],
       "role": ["antiair"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "mic_drop_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Leaping cane swing anti-air.",
@@ -861,6 +916,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [8, 0.3], [14, 1.0], [49, 0.0]],
       "role": ["antiair"],
+      "track": {"until": 2, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "mic_drop_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Leaping cane swing anti-air.",
@@ -903,6 +960,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [6, 0.3], [12, 1.2], [45, 0.0]],
       "role": ["antiair", "reversal"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "mic_drop_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Fully invulnerable.",
@@ -934,6 +993,9 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["low", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "hook_slide"},
       "sfx": [[3, "whoosh_heavy"]],
       "desc": "Sliding low hook that drags them across the floor to him (low, knockdown).",
@@ -963,6 +1025,9 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["low", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "hook_slide"},
       "sfx": [[3, "whoosh_heavy"]],
       "desc": "Sliding low hook that drags them across the floor to him (low, knockdown).",
@@ -992,6 +1057,9 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["low", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "hook_slide"},
       "sfx": [[3, "whoosh_heavy"]],
       "desc": "Sliding low hook that drags them across the floor to him (low, knockdown).",
@@ -1022,6 +1090,8 @@
       "armor": {"hits": 1, "f": [1, 13]},
       "hits": [{"f": [14, 15], "damage": 500, "hitstop": 11}, {"f": [22, 23], "damage": 800, "hitstop": 15}],
       "role": ["low", "approach"],
+      "track": {"until": 8, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "hook_slide"},
       "sfx": [[3, "whoosh_heavy"]],
       "desc": "Armored 2-hit hook, -6 on block.",
@@ -1060,9 +1130,12 @@
         "x": 0.8,
         "ground": true,
         "speed": 3.5,
-        "strength": "L"
+        "strength": "L",
+        "aimed": true,
+        "lateralM": 0.3
       },
       "role": ["projectile"],
+      "track": {"until": 12, "rate": 180},
       "anim": {"clip": "pyro_slam"},
       "sfx": [[0, "explosion"]],
       "desc": "PHASE 2: the cane slams the floor and a line of stage pyro races along it (2 hits).",
@@ -1101,9 +1174,12 @@
         "x": 0.8,
         "ground": true,
         "speed": 4.5,
-        "strength": "M"
+        "strength": "M",
+        "aimed": true,
+        "lateralM": 0.3
       },
       "role": ["projectile"],
+      "track": {"until": 12, "rate": 180},
       "anim": {"clip": "pyro_slam"},
       "sfx": [[0, "explosion"]],
       "desc": "PHASE 2: the cane slams the floor and a line of stage pyro races along it (2 hits).",
@@ -1142,9 +1218,12 @@
         "x": 0.8,
         "ground": true,
         "speed": 5.5,
-        "strength": "H"
+        "strength": "H",
+        "aimed": true,
+        "lateralM": 0.3
       },
       "role": ["projectile"],
+      "track": {"until": 12, "rate": 180},
       "anim": {"clip": "pyro_slam"},
       "sfx": [[0, "explosion"]],
       "desc": "PHASE 2: the cane slams the floor and a line of stage pyro races along it (2 hits).",
@@ -1183,9 +1262,12 @@
         "x": 0.8,
         "ground": true,
         "speed": 5.5,
-        "strength": "H"
+        "strength": "H",
+        "aimed": true,
+        "lateralM": 0.3
       },
       "role": ["projectile"],
+      "track": {"until": 8, "rate": 180},
       "anim": {"clip": "pyro_slam"},
       "sfx": [[0, "explosion"]],
       "desc": "Three-hit pyro line.",
@@ -1220,6 +1302,9 @@
         {"f": [42, 43], "damage": 900, "hitstop": 20}
       ],
       "role": ["reversal"],
+      "track": {"until": 43, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "three_swings", "warp": [[0, 0.0], [8, 0.367], [28, 1.467], [42, 2.167], [97, 2.667]]},
       "sfx": [[1, "crowd_cheer_burst"]],
       "desc": "Invulnerable three-swing cane routine.",
@@ -1381,6 +1466,9 @@
         "endGapM": 2.2
       },
       "role": ["reversal"],
+      "track": {"until": 13, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "showstopper"},
       "desc": "PRIME TIME (phase 1): the host's cane routine for camera one.",
       "pushExt": [[0, 0.0], [7, 0.0], [10, 0.187], [14, 0.217], [21, 0.191], [31, 0.0], [72, 0.0]]
@@ -1566,6 +1654,9 @@
         "endGapM": 1.8
       },
       "role": ["reversal"],
+      "track": {"until": 13, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "finale_slam"},
       "desc": "PHASE 2 Lv3: the whole set - pyro columns, a falling lighting rig and the confetti cannon.",
       "pushExt": [[0, 0.0], [4, 0.017], [8, 0.203], [9, 0.277], [11, 0.337], [15, 0.365], [61, 0.365], [72, 0.288]]
@@ -1616,7 +1707,8 @@
     "punish": ["5H", "the_hook_h"],
     "combo": ["2M", "5H", "the_hook_m"],
     "phase2": ["pyro_m", "season_finale"],
-    "meter": "standing_ovation"
+    "meter": "standing_ovation",
+    "antiStep": ["2M", "5H"]
   },
   "introLine": "Ladies and gentlemen... it's ME.",
   "winQuotes": ["And THAT is why they call it my show.", "Don't touch that dial. We'll be right back - you won't.", "Another contestant, another rerun. Roll credits!"],

@@ -283,6 +283,8 @@ export interface PrimeSample {
   vic: PoseEntry[]; vicGap: number; vicY: number; vicVisible: boolean; carry: 0 | 1 | 2; carryBlend: number;
   /** world-space camera (v2) or attacker-frame camera (v1: `camLocal` true) */
   cam: LocalPose; camLocal: boolean;
+  /** v2: the running shot's `target` (attacker | defender | both) - BoutView's framing guard keeps these in the picture */
+  camTarget: string;
   ts: number; dim: number; spot: number; spotOnVictim: boolean; letterbox: number; slate: number; crowdBoost: number; freeze: number;
 }
 
@@ -301,6 +303,8 @@ export interface PrimeBegin {
   attPre: { clip: string; t: number } | null;
   vicPre: { clip: string; t: number } | null;
   hA: number; hV: number;
+  /** push-box fronts (m) of the attacker / defender: the §26.5 no-overlap floor for the v2 gap while both are grounded */
+  frontA?: number; frontV?: number;
   simVictim?: boolean;
 }
 
@@ -460,9 +464,17 @@ export function compilePlan(b: PrimeBegin): PrimePlan {
   if (v2) {
     const pa = def.pathA ?? [];
     const gd = [[0, Math.max(0.4, b.gap0), 0], ...(def.gapD ?? []).filter((k) => k[0] >= 1)];
+    // §26.5 no body overlap: while both are grounded (lift < 0.30 m) the gap never goes under the two push fronts (authored
+    // gaps suit ~1.8 m bodies; Bruno / Freak defenders need more). Ramped in over lift 0.30 -> 0.15 m so a victim landing
+    // from a launch slides out to the floor instead of popping; endGapM (>= 1.5 m) already clears every fronts sum.
+    const fronts = Math.max(0, (b.frontA ?? 0) + (b.frontV ?? 0));
     for (let f = 0; f < N; f++) {
       pwl3(pa.length ? [[0, 0, 0], ...pa.filter((k) => k[0] >= 1)] : [], f, tmp2); AX[f] = tmp2[0]; AY[f] = tmp2[1];
       pwl3(gd, f, tmp2); G[f] = tmp2[0]; Y[f] = tmp2[1];
+      if (fronts > 0 && f > 0 && G[f] < fronts) {
+        const w = Math.max(0, Math.min(1, (0.30 - Math.max(Y[f], AY[f])) / 0.15));
+        G[f] += (fronts - G[f]) * w;
+      }
     }
   } else {
     const wallReach = wallDist <= 5.2;
@@ -658,6 +670,7 @@ export function samplePlan(p: PrimePlan, frame: number, short: boolean, crowd: V
       out.cam.roll = scratch.blendFrom.roll + (out.cam.roll - scratch.blendFrom.roll) * k;
     }
     out.camLocal = false;
+    out.camTarget = c.target ?? 'both';
     out.shot = c.shot ?? 'v2'; out.shotIdx = ci;
   } else {
     let si = 0;
@@ -678,6 +691,7 @@ export function samplePlan(p: PrimePlan, frame: number, short: boolean, crowd: V
       sampleShot(sh.name, ctx, out.cam, prev);
     }
     out.camLocal = true;
+    out.camTarget = '';
   }
   // dressing
   out.ts = p.rate[f] * (out.freeze ? 0 : 1);
@@ -698,22 +712,26 @@ export function samplePlan(p: PrimePlan, frame: number, short: boolean, crowd: V
 function camV2(p: PrimePlan, ci: number, f: number, ax: number, facing: number, s: PrimeSample, out: LocalPose): void {
   const c = p.cams[ci];
   const k = easeK(c.ease, (f - c.from) / Math.max(1, c.to - c.from - 1));
-  const lookH = val(c.lookH, 1.2, k);
+  // §26.5 height scaling: the numbers are authored for 1.80 m bodies; lookH and dist follow the target's height (both =
+  // the taller one), `height` is not scaled
+  const rA = p.hA / 1.8, rV = p.hV / 1.8;
+  const hk = c.target === 'attacker' ? rA : c.target === 'defender' ? rV : Math.max(rA, rV);
+  const lookH = val(c.lookH, 1.2, k) * hk;
   const aX = ax + facing * p.AX[f];
   const vX = aX + facing * s.vicGap;
   const tx = c.target === 'attacker' ? aX : c.target === 'defender' ? vX : (aX + vX) / 2;
   const yaw = val(c.yawDeg, 0, k) * Math.PI / 180;
-  const dist = val(c.dist, 3, k), height = val(c.height, 1.4, k);
+  const dist = val(c.dist, 3, k) * hk, height = val(c.height, 1.4, k);
   out.look.set(tx, lookH, 0);
   out.pos.set(tx + facing * Math.sin(yaw) * dist, height, Math.cos(yaw) * dist);
   out.fov = val(c.fovDeg, 35, k);
   out.roll = val(c.roll, 0, k) * Math.PI / 180;
-  void s;
+  s.camTarget = c.target ?? 'both';
 }
 
 export function newSample(): PrimeSample {
   return { f: 0, shot: '', shotIdx: 0, att: [], attY: 0, attDx: 0, attVisible: true, vic: [], vicGap: 1, vicY: 0, vicVisible: true, carry: 0, carryBlend: 0,
-    cam: newLocalPose(), camLocal: true, ts: 1, dim: 0, spot: 0, spotOnVictim: false, letterbox: 0, slate: 0, crowdBoost: 0, freeze: 0 };
+    cam: newLocalPose(), camLocal: true, camTarget: '', ts: 1, dim: 0, spot: 0, spotOnVictim: false, letterbox: 0, slate: 0, crowdBoost: 0, freeze: 0 };
 }
 
 // ───────────────────────────────────────── the name slate ─────────────────────────────────────────

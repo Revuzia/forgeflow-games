@@ -5,6 +5,9 @@
     python _harness/lookshots.py --headless          # headless Chrome (same d3d11 flags)
     python _harness/lookshots.py --only toon,sep     # a subset of the shot groups
     python _harness/lookshots.py --base http://localhost:5323/ --no-serve
+    python _harness/lookshots.py --game                # P2: the REAL game page (/?mode=...&dev=1, frozen, one tick per
+                                                       #   rendered frame): gprops (props + projectiles per fighter), gbrawl,
+                                                       #   gheckler (real goon GLBs, popups), gstage (dressing live values)
     python _harness/lookshots.py --sim                 # P2: REAL sim + REAL data drive the view (lab view.html?sim=1):
                                                        #   prime (a strip per fighter's Lv3 PRIME TIME), proj (every
                                                        #   projectile type), props, lineup (12), showcase, ko, brawl,
@@ -219,7 +222,12 @@ def main():
     ap.add_argument("--sim", action="store_true", help="P2: the real sim + real data drive the view (groups: %s)" % ",".join(SIM_GROUPS))
     ap.add_argument("--fighters", default="", help="--sim: comma list of fighter ids (default all 12)")
     ap.add_argument("--stages", default="rust_theater,butcher_block,wheel_of_pain,rooftop,control_room", help="--sim stage group ids")
+    ap.add_argument("--game", action="store_true", help="P2: the REAL game page (deep link + __HP__ dev surface), groups: %s" % ",".join(GAME_GROUPS))
     args = ap.parse_args()
+    if args.game:
+        if args.prefix == "view":
+            args.prefix = "game"
+        return game_main(args)
     if args.sim:
         if args.prefix == "view":
             args.prefix = "sim"
@@ -394,10 +402,26 @@ def sim_main(args):
                     pr = info.get("prime") or {}
                     path = shoot("prime_%s_f%03d" % (key, cf))
                     paths.append(path)
-                    row["frames"].append({"cf": cf, "shot": nm, "cam": info["camera"]["mode"], "prime": {k: pr.get(k) for k in ("f", "shot", "att", "vic", "gap", "vy", "carry", "freeze", "slate", "letterbox", "dim", "spot")},
+                    row["frames"].append({"cf": cf, "shot": nm, "cam": info["camera"]["mode"], "prime": {k: pr.get(k) for k in ("f", "shot", "att", "vic", "gap", "vy", "carry", "freeze", "slate", "letterbox", "dim", "spot", "guard", "camTarget")},
                                           "fighters": [{k: x.get(k) for k in ("x", "y", "clip", "t", "propsShown", "override")} for x in info.get("fighters", [])], "fx": info.get("fx")})
-                    log("prime %-16s cf %3d %-14s att %-26s vic %-26s gap %.2f vy %.2f" % (key, cf, nm, ",".join(pr.get("att") or [])[:26], ",".join(pr.get("vic") or [])[:26], pr.get("gap") or 0, pr.get("vy") or 0))
+                    gd = pr.get("guard") or {}
+                    log("prime %-16s cf %3d %-14s att %-26s vic %-26s gap %.2f vy %.2f guard d%.2f fov+%.1f cr%.2f" % (key, cf, nm, ",".join(pr.get("att") or [])[:26], ",".join(pr.get("vic") or [])[:26], pr.get("gap") or 0, pr.get("vy") or 0, gd.get("dolly") or 0, gd.get("fov") or 0, gd.get("crouch") or 0))
                 if end is not None and end >= 0:
+                    # hand-back: per-frame view-root steps of both bodies from 3 frames before CINEMATIC_END to 12 after
+                    # (a pop = a jump well over a walk / knockback step; the camera cut back to the fight rig is by design)
+                    prev = None
+                    steps = []
+                    for hf in range(end - 3, end + 13):
+                        hi = goto(hf)
+                        xy = [(fz.get("x") or 0, fz.get("y") or 0) for fz in hi.get("fighters", [])]
+                        if prev is not None and len(xy) == 2:
+                            steps.append({"f": hf - end, "dx": [round(abs(xy[i][0] - prev[i][0]), 3) for i in range(2)], "dy": [round(abs(xy[i][1] - prev[i][1]), 3) for i in range(2)],
+                                          "clip": [fz.get("clip") for fz in hi.get("fighters", [])]})
+                        prev = xy
+                    mx = max((max(s_["dx"] + s_["dy"]) for s_ in steps), default=0)
+                    worst = max(steps, key=lambda s_: max(s_["dx"] + s_["dy"])) if steps else {}
+                    row["handback"] = {"maxStep": mx, "worst": worst, "steps": steps}
+                    log("prime %-16s hand-back max step %.3f m (at end%+d, %s)" % (key, mx, worst.get("f", 0), json.dumps(worst.get("clip"))))
                     info = goto(end + 12)
                     paths.append(shoot("prime_%s_after" % key))
                     row["after"] = {"cam": info["camera"]["mode"], "f": info.get("f")}
@@ -532,6 +556,340 @@ def sim_main(args):
             if paths:
                 rep["groups"]["stage_strip"] = strip(paths, os.path.join(SHOTS, "%s_stage_strip.png" % pre), cols=3)
         rep["labInfoEnd"] = p.js("() => window.__LAB__.info()")
+    except Exception as e:
+        probs.append("harness error: %s" % str(e).splitlines()[0][:600])
+    finally:
+        probs += problems_of(p)
+        rep["console"] = p.console[-80:]
+        rep["pageErrors"] = p.errors
+        rep["failed"] = p.failed
+        p.close()
+        stop_server(server)
+    rep["problems"] = probs
+    rep["fails"] = fails
+    out = os.path.join(REPORTS, "lookshots_%s.json" % pre)
+    with open(out, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(rep, fh, indent=2, default=str)
+    log("=" * 90)
+    log("report       : %s" % out)
+    for f in fails:
+        log("   F %s" % f)
+    for pr in probs:
+        log("   X %s" % pr)
+    ok = not probs and not fails
+    log("RESULT: %s" % ("OK" if ok else "FAIL"))
+    return 0 if ok else 1
+
+
+# ─────────────────────────────── P2: GAME mode (the REAL game page, deep link + __HP__ dev surface) ───────────────────────────────
+# Not the lab: runtime/index.html boots main.ts -> Game -> BoutView exactly as a player gets it. The harness freezes the loop
+# and steps the sim one tick per rendered frame (__HP__.dev.step(1) + one rAF), so every tick is presented by the real
+# game's own frame() (events drained, FX, props, HUD). View read-back: window.__HP_VIEW__ (dev-only handle set by
+# BoutView.create). Shots: __HP__.shot(name) (the game's canvas -> /__shot -> _shots/<name>.png).
+
+GAME_GROUPS = ["gprops", "gbrawl", "gheckler", "gstage"]
+GAME_PROJ = {  # fighter -> [(label, word, hold frames, phase2)]
+    "johnny": [("brick", 128, 2, False)],
+    "zambini": [("card_fan", 128, 2, False), ("flame", 4 | 128, 2, False), ("saw_card", 128 | 64, 2, False)],
+    "krane": [("taser", 128, 2, False)],
+    "lotus": [("flame_breath", 128, 2, False)],
+    "gazza": [("football", 128, 2, False), ("fireball_football", 128 | 64, 2, False)],
+    "ricky": [("spotlight", 128, 2, False), ("pyro_line", 8 | 128, 2, True)],
+}
+GAME_EXPECT_PROPS = {  # fighter -> {prop id: expected visible at idle}
+    "johnny": {"brick": False}, "zambini": {"card_fan": False}, "krane": {"riot_shield": True, "baton": True, "taser": False},
+    "lotus": {"gourd": True}, "boneyard": {"cleaver": True}, "ricky": {"mic_cane": True},
+}
+GAME_JS = r"""
+window.__LK__ = {
+  async frames(n) { for (let i = 0; i < n; i++) await new Promise((r) => requestAnimationFrame(() => r())); },
+  /** step n ticks, one rendered frame each; `word` forced on P1 for the first `hold` ticks */
+  async step(n, word, hold) {
+    for (let i = 0; i < n; i++) {
+      if (word && i < (hold ?? 1)) window.__HP__.dev.setInputs(0, word, 1);
+      window.__HP__.dev.step(1);
+      await new Promise((r) => requestAnimationFrame(() => r()));
+    }
+    return window.__HP__.match()?.simFrame ?? -1;
+  },
+  /** step n ticks WITHOUT presenting each one (the machine is shared: rendering every intro / idle tick costs minutes);
+   *  the next rendered frame drains all their events. `word` forced on P1 for the first `hold` ticks of every `every` */
+  bulk(n, word, hold, every) {
+    for (let i = 0; i < n; i++) {
+      if (word && (i % (every || n)) < (hold ?? 1)) window.__HP__.dev.setInputs(0, word, 1);
+      window.__HP__.dev.step(1);
+    }
+    return window.__HP__.match()?.simFrame ?? -1;
+  },
+  async untilFight(max) {
+    for (let i = 0; i < max; i++) {
+      const m = window.__HP__.match();
+      if (m && m.phase === 'fight') { await new Promise((r) => requestAnimationFrame(() => r())); return i; }
+      window.__HP__.dev.step(1);
+    }
+    return -1;
+  },
+  /** one presented tick + the projectile / prop read-back in ONE round trip */
+  async tick(word, kind) {
+    if (word) window.__HP__.dev.setInputs(0, word, 1);
+    window.__HP__.dev.step(1);
+    await new Promise((r) => requestAnimationFrame(() => r()));
+    const m = window.__HP__.match() || {};
+    const v = window.__HP_VIEW__ ? window.__HP_VIEW__.info() : {};
+    const f0 = (window.__HP__.fighters() || [{}])[0] || {};
+    const props = {};
+    for (const q of ((v.fighters || [{}])[0] || {}).props || []) props[q.id] = q.visible;
+    // P1's projectiles of the asked kind (0 = a move's projectile, 1 = Gazza's ball, which stays out between kicks)
+    const n = (m.proj || []).filter((x) => (x.owner === 0 || x.owner === undefined) && (kind === undefined || (x.kind ?? 0) === kind)).length;
+    return { simProj: n, move: f0.moveName, props, proj: v.proj || {} };
+  },
+  view() { return window.__HP_VIEW__ ? window.__HP_VIEW__.info() : null; },
+  popups() { return window.__HP_VIEW__ ? window.__HP_VIEW__.popups() : []; },
+};
+"""
+
+
+def game_main(args):
+    groups = [g for g in (args.only.split(",") if args.only else GAME_GROUPS) if g]
+    only_f = [x for x in args.fighters.split(",") if x] if args.fighters else FIGHTERS
+    os.makedirs(SHOTS, exist_ok=True)
+    os.makedirs(REPORTS, exist_ok=True)
+    try:
+        server = ensure_server(args.base, not args.no_serve)
+    except Exception as e:
+        log("SETUP FAILED: %s" % e)
+        log("RESULT: FAIL")
+        return 2
+    rep = {"base": args.base, "size": [args.width, args.height], "mode": "game", "groups": {}}
+    p = Page(args)
+    probs, fails = [], []
+    pre = args.prefix
+
+    def js(expr, arg=None):
+        return p.js(expr, arg)
+
+    def shot(name):
+        r = js("(n) => window.__HP__.shot(n)", "%s_%s" % (pre, name))
+        if not r or not r.get("ok"):
+            raise RuntimeError("shot %s failed: %s" % (name, r))
+        return r.get("path")
+
+    def start(cfg):
+        js("(c) => window.__HP__.dev.startMatch(c)", cfg)
+        t0 = time.time()
+        while time.time() - t0 < args.wait:
+            st = js("() => window.__HP__.state()")
+            if st.get("bout") and st.get("matchPhase"):
+                break
+            time.sleep(0.25)
+        js("() => window.__HP__.dev.freeze(true)")
+        k = js("(n) => window.__LK__.untilFight(n)", 900)
+        if k < 0:
+            raise RuntimeError("no FIGHT phase for %s" % json.dumps(cfg))
+        return k
+
+    def step(n, word=0, hold=1):
+        return js("([n, w, h]) => window.__LK__.step(n, w, h)", [n, word, hold])
+
+    def view():
+        return js("() => window.__LK__.view()") or {}
+
+    def props0(v):
+        f = (v.get("fighters") or [{}])[0]
+        return {q["id"]: q["visible"] for q in (f.get("props") or [])}
+
+    def boot():
+        """load the deep link, wait for the bout, inject the stepping helpers (again after a WebGL context-loss reload)"""
+        url = args.base.rstrip("/") + "/?mode=versus&p1=johnny&p2=bruno&stage=rust_theater&seed=1&autostart=1&dev=1"
+        p.page.goto(url)
+        t0 = time.time()
+        while time.time() - t0 < args.wait:
+            try:
+                st = p.js("() => window.__HP__ ? window.__HP__.state() : null")
+            except Exception:
+                st = None                      # the page is still navigating (a context-loss reload)
+            if st and st.get("error"):
+                raise RuntimeError("game error: %s" % str(st["error"])[:600])
+            if st and st.get("bout") and st.get("matchPhase"):
+                break
+            time.sleep(0.5)
+        rep["readyS"] = round(time.time() - t0, 1)
+        log("game ready %.1f s (deep link, bout loaded)" % rep["readyS"])
+        p.page.evaluate(GAME_JS)
+
+    def lost(e):
+        m = str(e)
+        return "Execution context was destroyed" in m or "context lost" in m.lower() or "Target page, context or browser has been closed" in m
+
+    try:
+        p.start()
+        boot()
+        if "gprops" in groups:
+            g = rep["groups"]["gprops"] = {}
+            for fid in only_f:
+                for attempt in (0, 1):
+                    try:
+                        row = g[fid] = {"proj": {}}
+                        start({"mode": "versus", "stage": "rust_theater", "seed": 1, "p": [{"fighter": fid, "cpu": -1}, {"fighter": "bruno", "cpu": -1}]})
+                        js("() => window.__HP__.dev.setMeter(0, 'showtime', 30000)")
+                        js("(n) => window.__LK__.bulk(n, 0, 0, 0)", 14)
+                        step(6)
+                        v = view()
+                        pv = props0(v)
+                        row["idleProps"] = pv
+                        row["idleShot"] = shot("gprops_%s_idle" % fid)
+                        exp = GAME_EXPECT_PROPS.get(fid, {})
+                        bad = {k: pv.get(k) for k, want in exp.items() if pv.get(k) is not want}
+                        if bad:
+                            fails.append("gprops %s idle props %s (expected %s)" % (fid, json.dumps(pv), json.dumps(exp)))
+                        if fid not in GAME_EXPECT_PROPS and pv:
+                            fails.append("gprops %s holds props %s (none expected)" % (fid, json.dumps(pv)))
+                        log("gprops %-9s idle props %s" % (fid, json.dumps(pv)))
+                        for label, word, hold, ph2 in GAME_PROJ.get(fid, []):
+                            if ph2:
+                                hpmax = (js("() => window.__HP__.fighters()[0]") or {}).get("hpMax", 10000)
+                                js("(v) => window.__HP__.dev.setHp(0, v)", int(hpmax * 0.4))
+                                step(4)
+                                for _ in range(200):     # the phase-2 lock (world freeze) runs out
+                                    m = js("() => window.__HP__.match()")
+                                    if not m.get("freeze"):
+                                        break
+                                    step(1)
+                            js("() => window.__HP__.dev.setMeter(0, 'showtime', 30000)")
+                            js("(n) => window.__LK__.bulk(n, 0, 0, 0)", 36)
+                            step(4)
+                            v0 = view()
+                            base = dict((v0.get("proj") or {}))
+                            press = js("() => window.__HP__.match().simFrame")
+                            trace = []
+                            spawn = gone = -1
+                            fly = hit = None
+                            for k in range(160):
+                                t_ = js("([w, kd]) => window.__LK__.tick(w, kd)", [word if k < hold else 0, 1 if label == "football" else 0])
+                                pj = t_.get("proj") or {}
+                                n = t_.get("simProj", 0)
+                                trace.append({"k": k, "move": t_.get("move"), "props": t_.get("props") or {}, "simProj": n, "live": pj.get("live")})
+                                if spawn < 0 and n > 0:
+                                    spawn = k
+                                if spawn >= 0 and k == spawn + 4 and fly is None:
+                                    fly = shot("gproj_%s_%s_fly" % (fid, label))
+                                imp = (pj.get("impacts", 0) - base.get("impacts", 0)) + (pj.get("destroyed", 0) - base.get("destroyed", 0))
+                                if spawn >= 0 and k > spawn + 1 and (imp > 0 or n == 0) and gone < 0:
+                                    gone = k
+                                    step(2)
+                                    hit = shot("gproj_%s_%s_hit" % (fid, label))
+                                    break
+                            pj = (view().get("proj") or {})
+                            res = {"press": press, "spawnK": spawn, "goneK": gone, "types": pj.get("types"), "assets": pj.get("assets"),
+                                   "spawned": pj.get("spawned", 0) - base.get("spawned", 0), "impacts": pj.get("impacts", 0) - base.get("impacts", 0),
+                                   "destroyed": pj.get("destroyed", 0) - base.get("destroyed", 0), "fly": fly, "hit": hit,
+                                   "trace": trace}
+                            # the hand prop of a thrown projectile: visible between the press and the release, hidden after
+                            hand = {"johnny": "brick", "zambini": "card_fan"}.get(fid) if label in ("brick", "card_fan") else None
+                            if fid == "krane":
+                                hand = "taser"
+                            if hand and spawn >= 0:
+                                before = [t["props"].get(hand) for t in trace[:spawn] if t["move"]]
+                                after = [t["props"].get(hand) for t in trace[spawn + 2:]]
+                                res["hand"] = {"prop": hand, "shownBeforeRelease": any(before), "shownAfterRelease": any(x for x in after if fid != "krane")}
+                                if not any(before):
+                                    fails.append("gproj %s %s: %s never shown during the throw" % (fid, label, hand))
+                                if fid != "krane" and any(after):
+                                    fails.append("gproj %s %s: %s still in hand after the release" % (fid, label, hand))
+                            if spawn < 0:
+                                fails.append("gproj %s %s: no projectile spawned" % (fid, label))
+                            elif res["impacts"] + res["destroyed"] <= 0 and gone < 0:
+                                fails.append("gproj %s %s: no impact / end seen" % (fid, label))
+                            row["proj"][label] = res
+                            log("gproj  %-9s %-18s spawn k%-3d end k%-3d spawned %d impacts %d destroyed %d types %s assets %s hand %s" % (
+                                fid, label, spawn, gone, res["spawned"], res["impacts"], res["destroyed"], res["types"], res["assets"], json.dumps(res.get("hand"))))
+                        break
+                    except Exception as e:
+                        if attempt or not lost(e):
+                            raise
+                        log("gprops %s: WebGL context lost (shared GPU) - page reloaded, fighter retried" % fid)
+                        rep.setdefault("contextLost", []).append(fid)
+                        time.sleep(3)
+                        boot()
+        for mode in ("gbrawl", "gheckler"):
+            if mode not in groups:
+                continue
+            md = mode[1:]
+            g = rep["groups"][mode] = {"frames": []}
+            for attempt in (0, 1):
+                try:
+                    g["frames"] = []
+                    start({"mode": md, "stage": "rust_theater", "seed": 1, "p": [{"fighter": "johnny", "cpu": -1}, {"fighter": "bruno", "cpu": -1}]})
+                    word = 16 if md == "brawl" else 1024
+                    done = 0
+                    for f in [180, 300, 420, 560, 680]:
+                        k = max(0, f - 12 - done)
+                        if k:
+                            js("([n, w]) => window.__LK__.bulk(n, w, 2, 24)", [k, word])
+                            done += k
+                        while done < f:     # the last 12 ticks presented one per rendered frame (FX, popups, blends)
+                            step(1, word if done % 24 < 2 else 0, 1)
+                            done += 1
+                        v = view()
+                        m = js("() => window.__HP__.match()")
+                        b = v.get("brawl") or {}
+                        pops = js("() => window.__LK__.popups()")
+                        hud = js("() => window.__HP__.hud()")
+                        path = shot("%s_%03d" % (mode, f))
+                        live = b.get("live") or []
+                        mism = [x for x in live if x.get("sim") and x.get("sim") != x.get("body")]
+                        g["frames"].append({"f": f, "brawl": b, "popups": pops, "sim": {k2: (m.get("brawl") or {}).get(k2) for k2 in ("score", "ratings", "grade", "wave", "spawned", "downed", "hitsTaken", "parries")},
+                                            "simGoons": [(x.get("slot"), x.get("kind"), x.get("stateName"), x.get("moveName")) for x in ((m.get("brawl") or {}).get("goons") or [])],
+                                            "proj": [(x.get("kind"), x.get("obj")) for x in (m.get("proj") or [])], "cam": (v.get("camera") or {}).get("mode"),
+                                            "hudPopups": (hud or {}).get("popups") if isinstance(hud, dict) else None, "path": path})
+                        if b.get("fallback"):
+                            fails.append("%s f%d: goons on the stand-in body (fallback)" % (mode, f))
+                        if mism:
+                            fails.append("%s f%d: goon body != sim kind %s" % (mode, f, json.dumps(mism)))
+                        log("%s f%-3d cam %-8s kinds %s live %s popups %d sim %s proj %s" % (mode, f, (v.get("camera") or {}).get("mode"), b.get("kinds"),
+                            json.dumps([(x.get("sim"), x.get("body"), x.get("clip")) for x in live]), len(pops or []), json.dumps(g["frames"][-1]["sim"]), json.dumps(g["frames"][-1]["proj"])))
+                    g["strip"] = strip([fr["path"] for fr in g["frames"]], os.path.join(SHOTS, "%s_%s_strip.png" % (pre, mode)), cols=3)
+                    break
+                except Exception as e:
+                    if attempt or not lost(e):
+                        fails.append("%s: %s" % (mode, str(e).splitlines()[0][:300]))
+                        break
+                    log("%s: WebGL context lost (shared GPU) - page reloaded, retried" % mode)
+                    time.sleep(3)
+                    boot()
+        if "gstage" in groups:
+            g = rep["groups"]["gstage"] = {}
+            paths = []
+            for sid in args.stages.split(","):
+                for attempt in (0, 1):
+                    try:
+                        start({"mode": "versus", "stage": sid, "seed": 1, "p": [{"fighter": "johnny", "cpu": -1}, {"fighter": "bruno", "cpu": -1}]})
+                        step(12)
+                        v1 = view()
+                        paths.append(shot("gstage_%s_a" % sid))
+                        step(20)
+                        v2 = view()
+                        paths.append(shot("gstage_%s_b" % sid))
+                        s1, s2 = (v1.get("stage") or {}), (v2.get("stage") or {})
+                        l1, l2 = s1.get("live") or {}, s2.get("live") or {}
+                        moved = {k: l1.get(k) != l2.get(k) for k in ("spin", "flame", "flicker", "rainY") if l1.get(k)}
+                        g[sid] = {"dressing": s2.get("dressing"), "glare": s2.get("glareGraded"), "live": [l1, l2], "moved": moved, "fallback": v2.get("stageFallback")}
+                        for k, mv in moved.items():
+                            if not mv:
+                                fails.append("gstage %s: %s did not change over 20 frames (%s)" % (sid, k, json.dumps(l2.get(k))))
+                        log("gstage %-14s dressing %s" % (sid, json.dumps(s2.get("dressing"))))
+                        log("gstage %-14s live %s -> %s moved %s" % (sid, json.dumps({k: l1.get(k) for k in ('spin', 'flame', 'flicker', 'rainY', 'steam', 'screens')}),
+                                                                   json.dumps({k: l2.get(k) for k in ('spin', 'flame', 'flicker', 'rainY')}), json.dumps(moved)))
+                        break
+                    except Exception as e:
+                        if attempt or not lost(e):
+                            fails.append("gstage %s: %s" % (sid, str(e).splitlines()[0][:300]))
+                            break
+                        log("%s: WebGL context lost (shared GPU) - page reloaded, retried" % sid)
+                        time.sleep(3)
+                        boot()
+            if paths:
+                rep["groups"]["gstage_strip"] = strip(paths, os.path.join(SHOTS, "%s_gstage_strip.png" % pre), cols=2)
     except Exception as e:
         probs.append("harness error: %s" % str(e).splitlines()[0][:600])
     finally:

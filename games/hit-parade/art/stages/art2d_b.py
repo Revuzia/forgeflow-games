@@ -328,6 +328,97 @@ def gen_rooftop():
     save(sid, "rt13_alu_n", blend_normals(normal_from_height(ribs, 6.0), normal_from_height(n2, 1.0)))
     save(sid, "rt13_alu_r", np.clip(0.28 + 0.2 * n2 + 0.3 * sstep(0.5, 0.85, grime), 0, 1))
     gen_rooftop_art(sid)
+    gen_ring_art(sid)
+
+
+def hazard_band(w, h, period_px, seed, yellow=(0.96, 0.77, 0.08), black=(0.06, 0.055, 0.05), wear=0.3):
+    """tileable (in U) diagonal hazard stripes, worn + grimy: HxWx3 floats. period_px must divide w."""
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    ph = ((xx + yy * (period_px / 2.0) / max(1, h) * 2.0) % period_px) / period_px
+    m = (ph < 0.5).astype(np.float32)
+    # soft edge
+    e = np.minimum(np.abs(ph - 0.5), np.minimum(ph, 1 - ph)) * period_px
+    m = np.where(e < 1.0, 0.5, m)
+    col = np.array(black, np.float32) * (1 - m[..., None]) + np.array(yellow, np.float32) * m[..., None]
+    n = fbm(h, w, 16, 4, seed)
+    chip = sstep(0.62, 0.66, n)
+    col = col * (1 - wear * chip[..., None]) + np.array([0.3, 0.3, 0.3], np.float32) * wear * chip[..., None]
+    col *= (0.85 + 0.25 * fbm(h, w, 32, 2, seed + 1))[..., None]
+    return col
+
+
+def gen_ring_art(sid):
+    """3D ring conversion (lane STAGES3D-B): the helipad-style ring paint + the curb's hazard face (both tileable along
+    the ring: the Blender build maps u = arc length / tile)"""
+    # ---------------------------------------------------------- curb hazard face (1.0 m per tile along the ring)
+    save(sid, "rt13_hazard", hazard_band(512, 64, 128, 1301))
+    # ---------------------------------------------------------- worn road-paint band (RGBA, MASK): top half white,
+    # bottom half yellow; alpha = paint left after years of rain and boots (tileable in U, 2 m per tile)
+    W, H = 1024, 256
+    arr = np.zeros((H, W, 4), np.float32)
+    wear = fbm(H, W, 24, 5, 1311)
+    grit = tnoise(H, W, 256, 1312, cells_y=64)
+    edge_v = np.abs(((np.arange(H, dtype=np.float32) / (H / 2.0)) % 1.0) - 0.5)[:, None]   # 0 at band centre
+    edge = sstep(0.5, 0.44, edge_v + 0.03 * fbm(H, W, 64, 2, 1313))                         # ragged painted edges
+    keep = sstep(0.34, 0.40, wear) * (grit > 0.12) * edge
+    arr[: H // 2, :, 0:3] = np.array([0.66, 0.65, 0.62], np.float32)       # rain-dulled white
+    arr[H // 2:, :, 0:3] = np.array([0.72, 0.52, 0.10], np.float32)        # rain-dulled yellow
+    arr[..., 0:3] *= (0.8 + 0.3 * fbm(H, W, 32, 3, 1314))[..., None]
+    arr[..., 3] = keep
+    save(sid, "rt13_padpaint", arr)
+
+
+def gen_control_ring_art(sid):
+    """3D ring conversion (lane STAGES3D-B): the octagon deck's painted centre logo (RGBA, MASK) + booth signs"""
+    S = 1024
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    c = S // 2
+    red, yel, cream = (190, 34, 44, 255), (224, 168, 26, 255), (214, 204, 184, 255)
+    # octagon outline ring + starburst + title
+    oct_pts = [(c + 480 * math.cos(math.radians(22.5 + 45 * k)), c + 480 * math.sin(math.radians(22.5 + 45 * k))) for k in range(8)]
+    d.polygon(oct_pts, outline=yel, width=26)
+    oct2 = [(c + 420 * math.cos(math.radians(22.5 + 45 * k)), c + 420 * math.sin(math.radians(22.5 + 45 * k))) for k in range(8)]
+    d.polygon(oct2, outline=cream, width=10)
+    starburst(d, c, c, 190, 330, 14, fill=red, rot=0.11)
+    starburst(d, c, c, 160, 280, 14, fill=(30, 12, 24, 255), rot=0.11)
+    text_center(d, (c, c - 40), "HIT", font("bungee", 150), yel)
+    text_center(d, (c, c + 80), "PARADE", font("bungee", 96), yel)
+    fr = font("bebas-neue", 64)
+    for i, ch_ in enumerate("SEASON FINALE"):
+        if ch_ == " ":
+            continue
+        ang = math.radians(-66 + i * 11)
+        x = c + 372 * math.sin(ang)
+        y = c - 372 * math.cos(ang)
+        g = Image.new("RGBA", (110, 110), (0, 0, 0, 0))
+        ImageDraw.Draw(g).text((55, 55), ch_, font=fr, fill=cream, anchor="mm")
+        g = g.rotate(-math.degrees(ang), resample=Image.BICUBIC)
+        im.alpha_composite(g, (int(x - 55), int(y - 55)))
+    arr = to_np(im)
+    wear = fbm(S, S, 20, 5, 2911)
+    keep = sstep(0.36, 0.42, wear)
+    arr[..., 3] *= keep
+    arr[..., 0:3] *= (0.75 + 0.3 * fbm(S, S, 48, 3, 2912))[..., None]
+    save(sid, "cr_floorlogo", arr)
+    # ---------------------------------------------------------- booth signs 1024 x 256: CONTROL (lit) + OBSERVATION
+    im = Image.new("RGB", (1024, 256), (14, 12, 14))
+    d = ImageDraw.Draw(im)
+    d.rectangle((0, 0, 511, 127), fill=(18, 16, 20))
+    d.rectangle((8, 8, 503, 119), outline=(255, 208, 30), width=5)
+    text_center(d, (256, 64), "CONTROL", font("bungee", 74), (255, 208, 30))
+    d.rectangle((512, 0, 1023, 127), fill=(18, 16, 20))
+    d.rectangle((520, 8, 1015, 119), outline=(120, 200, 255), width=5)
+    text_center(d, (768, 64), "OBSERVATION", font("bungee", 56), (140, 210, 255))
+    # [0..512, 128..256] studio rules plate, [512..1024, 128..256] "STAGE 13 - QUIET PLEASE" plate
+    d.rectangle((0, 128, 511, 255), fill=(200, 196, 186))
+    text_center(d, (256, 170), "NO FOOD - NO DRINKS", font("bebas-neue", 50), (30, 28, 26))
+    text_center(d, (256, 222), "CREW ONLY BEYOND THIS POINT", font("bebas-neue", 38), (150, 20, 20))
+    d.rectangle((512, 128, 1023, 255), fill=(150, 20, 24))
+    text_center(d, (768, 180), "STAGE B2", font("bungee", 58), (255, 240, 225))
+    text_center(d, (768, 232), "QUIET WHILE ON AIR", font("bebas-neue", 36), (255, 220, 200))
+    arr = np.asarray(im).astype(np.float32) / 255.0
+    save(sid, "cr_signs2", grime_overlay(arr, 2913, 0.15, streaks=False))
 
 
 def gen_rooftop_art(sid):
@@ -706,6 +797,7 @@ def gen_control_room():
     save(sid, "cr_meters_n", load(JPT + "Environment/JP_Meters/JP_Meters_N.tga", 1024))
     save(sid, "cr_meters_r", rough_from_ms(JPT + "Environment/JP_Meters/JP_Meters_MS.tga", 1024, 0.6))
     gen_control_room_art(sid)
+    gen_control_ring_art(sid)
 
 
 def crt_finish(tile, seed, tintc=(1.0, 1.0, 1.0)):

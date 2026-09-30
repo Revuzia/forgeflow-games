@@ -4,6 +4,11 @@ Owner rules: NO PIRATES (fighting game — no pirate framing, bodies, props, nau
 Street Fighter structure: arcade ladder vs CPU → MINI BOSS → BOSS; local + ONLINE PVP with the
 same roster; 8-12 fighters with their own moves, attacks and specials. I am the game designer.
 
+## Owner directive: FULL 3D RING (2026-09-30)
+Not a flat 2D match: fighters walk around each other in a 360-degree ring (sidestep = tap STEP, circle-walk =
+hold STEP; up = jump, down = crouch as before), straight attacks can be sidestepped, homing attacks punish steppers,
+every stage is an arena seen from all sides, the camera orbits the pair. CONTRACT section 35 is the spec.
+
 ## Fiction
 KNOCKOUT 13 is an underground fight network that takes over the late-night airwaves every Friday
 with HIT PARADE — a live, no-rules fight show shot on condemned sets across a rotting city.

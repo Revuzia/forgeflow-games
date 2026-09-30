@@ -7,7 +7,7 @@
 // Every assertion drives the sim with input words (except test setup: place() / devSet-like HP writes) and reads state /
 // snapshots / events. Usage: node _harness/probe_uniques.ts [-v]
 import { readFileSync, writeFileSync } from 'node:fs';
-import { I, ROOT, dirBits, evs, fs, motion, newMatch, place, run, sb, tester } from './fixtures/simkit.ts';
+import { I, ROOT, dirBits, evs, fs, motion, newMatch, place, run, sb, tester, lxU, plx } from './fixtures/simkit.ts';
 import { readFighter, readMatch, step } from '../runtime/src/core/sim/match.ts';
 import type { Match } from '../runtime/src/core/sim/match.ts';
 import { buildGameData, loadGameData } from '../runtime/src/core/data.ts';
@@ -30,7 +30,7 @@ const def = (id: string): FighterDef => data.fighters[id] as FighterDef;
 const uq = (id: string): Record<string, unknown> => (def(id).unique ?? { kind: 'none' }) as Record<string, unknown>;
 const st = (m: Match, i: number): number => m.s[sb(i) + F.st];
 const mvName = (m: Match, i: number): string => readFighter(m, i).moveName;
-const x = (m: Match, i: number): number => m.s[sb(i) + F.x] / U;
+const x = (m: Match, i: number): number => lxU(m, i) / U; // CHANGED(SIM3D): line coordinate
 function idle(m: Match, n: number): void {
   run(m, n, 0, 0);
 }
@@ -352,9 +352,9 @@ function ballSlotOf(m: Match, i: number): number {
     const sl = ballSlotOf(m, 0);
     t.ok(sl >= 0 && readFighter(m, 0).unique[0] === BALL.HOVER, 'keepy-uppy parks the ball in the air (unique[0] 2)');
     t.near(m.s[projBase(sl) + P.y] / U, km.projectile!.y, 0.001, `hover height = projectile.y ${km.projectile!.y} m`);
-    const hx = m.s[projBase(sl) + P.x];
+    const hx = plx(m, sl);
     run(m, 20, 0, 0);
-    t.eq(m.s[projBase(sl) + P.x], hx, 'the hover ball stays put');
+    t.eq(plx(m, sl), hx, 'the hover ball stays put');
     freeBoth(m);
     motion(m, 0, '236', I.M);
     t.eq(mvName(m, 0) === 'power_shot_m' ? 1 : 0, 1, 're-kick: power_shot_m is available with the hover ball in front');
@@ -376,12 +376,12 @@ function ballSlotOf(m: Match, i: number): number {
     const k = until(m, () => readFighter(m, 0).unique[0] === BALL.REST, 90);
     t.ok(looseK >= 0 && Math.abs(hoverLen - km.projectile!.life) <= 1 && k >= 0, `the hover lasts projectile.life ${km.projectile!.life} f (${hoverLen}), then the ball drops and rests`);
     const sl = ballSlotOf(m, 0);
-    const bx = m.s[projBase(sl) + P.x];
+    const bx = plx(m, sl);
     const e0 = m.frame();
     // walk onto it
     const kk = until(m, () => readFighter(m, 0).unique[0] === BALL.FEET, 120, dirBits(m, 0, 6), 0);
     t.ok(kk >= 0 && evs(m, e0).some((e) => e.type === EVX.BALL && e.b === BALL_EV.PICKUP), 'walking onto the resting ball traps it back at his feet (BALL pickup)');
-    t.ok(Math.abs(bx - m.s[sb(0) + F.x]) <= Math.round(pickupM * U) + Math.round((def('gazza').walk.fwd * U) / 60), `picked up within pickupM ${pickupM} m`);
+    t.ok(Math.abs(bx - lxU(m, 0)) <= Math.round(pickupM * U) + Math.round((def('gazza').walk.fwd * U) / 60), `picked up within pickupM ${pickupM} m`);
   }
   // an opponent strike knocks a resting ball away; respawn after respawnF
   {
@@ -392,7 +392,7 @@ function ballSlotOf(m: Match, i: number): number {
       motion(mh, 0, '214', I.L);
       until(mh, () => readFighter(mh, 0).unique[0] === BALL.HOVER, 20);
       const hs = ballSlotOf(mh, 0);
-      const hx = mh.s[projBase(hs) + P.x] / U;
+      const hx = plx(mh, hs) / U;
       place(mh, -3.0, hx + 0.8);
       const eh = mh.frame();
       step(mh, 0, I.M);
@@ -407,7 +407,7 @@ function ballSlotOf(m: Match, i: number): number {
     run(m, 30, dirBits(m, 0, 4), 0);
     until(m, () => readFighter(m, 0).unique[0] === BALL.REST, 250);
     const sl = ballSlotOf(m, 0);
-    const bx = m.s[projBase(sl) + P.x] / U;
+    const bx = plx(m, sl) / U;
     place(m, -3.5, bx + 0.6); // patch stands right next to the ball, facing it
     m.s[sb(1) + F.facing] = -1;
     const e0 = m.frame();
@@ -503,7 +503,7 @@ counterCase('ricky', '214', I.M, 'commercial_break_m');
   until(m, () => { for (let k = 0; k < PROJ_CAP; k++) if (m.s[projBase(k) + P.act] !== 0 && m.s[projBase(k) + P.owner] === 1) return true; return false; }, bm.startup + 2);
   let slot = -1;
   for (let k = 0; k < PROJ_CAP; k++) if (m.s[projBase(k) + P.act] !== 0 && m.s[projBase(k) + P.owner] === 1) slot = k;
-  const dist = Math.abs(m.s[projBase(slot) + P.x] - m.s[sb(0) + F.x]) / U;
+  const dist = Math.abs(plx(m, slot) - lxU(m, 0)) / U;
   const vx = (bm.projectile!.speed);
   const framesToArrive = Math.floor((dist - 0.6) / (vx / 60));
   run(m, Math.max(0, framesToArrive - 8), 0, 0);
@@ -588,11 +588,13 @@ for (const [moveId, btn] of [['vanish_l', I.L], ['vanish_m', I.M], ['vanish_h', 
   t.eq(mvName(m, 0) === moveId ? 1 : 0, 1, `zambini 214 starts ${moveId}`);
   const k = until(m, () => evs(m, e0).some((e) => e.type === EVX.TELEPORT), tp.f + 2);
   t.ok(k >= 0 && readFighter(m, 0).moveFrame === tp.f, `${moveId}: TELEPORT on move frame ${tp.f}`, `mvF ${readFighter(m, 0).moveFrame}`);
-  const wall = data.system.stage.wallM;
+  // CHANGED(SIM3D): home = the ring boundary behind him seen from the opponent (on the x axis: -ring radius), gap inward;
+  // then the ring clamp (his push circle inside) and the separation cap
+  const wall = m.ring.r / U;
   let want = 0;
   if (tp.to === 'behind') want = 1.0 + tp.gapM;
   else if (tp.to === 'front') want = 1.0 - tp.gapM;
-  else want = Math.max(-wall + m.cf[0].pushBS / U, 1.0 - data.system.stage.separationCapM);
+  else want = Math.max(-wall + tp.gapM, -wall + m.cf[0].pushBS / U, 1.0 - data.system.stage.separationCapM);
   t.near(x(m, 0), want, 0.0015, `${moveId} (${tp.to}, gap ${tp.gapM} m) lands at x ${want.toFixed(3)}`);
   if (tp.to === 'behind') {
     t.eq(m.s[sb(0) + F.facing], 1, 'behind: he still faces his old way during the move (facing re-resolves when free)');

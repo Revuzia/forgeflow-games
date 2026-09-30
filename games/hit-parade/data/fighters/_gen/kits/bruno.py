@@ -13,7 +13,8 @@ def build():
         stage="butcher_block",
         cpu={"style": "grappler", "rangeM": [0.6, 1.4], "approach": ["brace_m", "fridge_door_l"],
              "pokes": ["2M", "5M"], "antiAir": ["lariat_l", "2H"], "punish": ["walk_in_h", "5H"],
-             "combo": ["2L", "5M", "fridge_door_m"], "grab": ["walk_in_l", "walk_in_h"], "meter": "cold_storage"},
+             "combo": ["2L", "5M", "fridge_door_m"], "grab": ["walk_in_l", "walk_in_h"], "meter": "cold_storage",
+             "antiStep": ["lariat_l", "walk_in_l", "5H"]},
         doc=dict(
             difficulty=3, packs="Soccer goalkeeper (stance, grabs, splash, throw-in), axe-pack unarmed swings, CMU "
                                 "grab/chop/flex",
@@ -26,6 +27,17 @@ def build():
             weakness="Slowest walk (1.64 m/s) and shortest dash; zoners keep him out; every armored move "
                      "loses to throws and multi-hits; grab whiff = 54 frames of recovery.",
             rivalry="Officer Krane once cuffed Bruno to a meat locker door. Bruno took the door with him.",
+            # CHANGED(FIGHTERS3D): 3D ring play (CONTRACT 35.12)
+            ring=dict(
+                stepping="Bruno cannot out-step anyone (slowest walk in the cast). FRIDGE DOOR L/M/H is a LINEAR "
+                         "armored rush - a read sidestep makes it run past him - so it is a combo ender or a punish on "
+                         "a backing-off opponent, and the EX re-aims until frame 10. He makes the opponent's step "
+                         "itself the risk: every command grab homes.",
+                homing="WALK-IN FREEZER (5f, every strength), COLD STORAGE and FINAL DELIVERY home through their active "
+                       "frames, so a sidestep on his walk-in is grabbed like a block. DOUBLE-DOOR LARIAT (8f homing "
+                       "spin, 0.60 m deep) is the anti-step strike and 5H HAYMAKER (13f, -4) the safe homing swing.",
+                wall="6H BIG BOOT and FRIDGE DOOR wall-splat; at the ring edge a stepping opponent has one side left, "
+                     "which makes the 360 guess worse for them."),
         ),
     )
 
@@ -110,7 +122,9 @@ def build():
           role=["poke", "low"], desc="Crouching body forearm; cancel into FRIDGE DOOR.",
           why="Startup 9 (big body).")
     K.add("5H", "H", name="Haymaker", clip="haymaker", startup=13, recovery=21, damage=900,
-          cancel=["special", "super"], sfx=[[8, "whoosh_heavy"]], desc="The reference's big haymaker.",
+          cancel=["special", "super"], sfx=[[8, "whoosh_heavy"]], homing=True,
+          why3d="axe-pack horizontal swing (unarmed): a wide haymaker, homing",
+          desc="The reference's big haymaker; homing.",
           why="Grappler damage lever: 900 (+100) paid with startup 13 and recovery 21 (+1 hit / -4 block).")
     K.add("2H", "AA", name="Goalpost", clip="goalpost", startup=10, recovery=22,
           boxes=[{"f": [10, 13], "x": 0.30, "y": 1.90, "w": 0.70, "h": 0.50}],
@@ -158,7 +172,8 @@ def build():
                              "victim": [[0, "hit_body", 0.0, 0.3], [9, "thrown_f", 0.15, 0.7],
                                         [26, "thrown_f", 0.7, 1.3333]]})
     K.special("walk_in", motion="360", fam="cmdgrab", kind="cmdgrab",
-              common=dict(name="Walk-In Freezer", clip="throw_reach", role=["grab"], sfx=[[1, "grab_cloth"]],
+              common=dict(name="Walk-In Freezer", clip="throw_reach", role=["grab", "antistep"], sfx=[[1, "grab_cloth"]],
+                          why3d="command grab reach arc: homes through its active frames (a stepper is grabbed)",
                           desc="360 command grab; L reaches furthest, H hits hardest."),
               per=walk,
               ex=dict(name="Walk-In Freezer (EX)", damage=3500, invuln={"strike": [1, 5]},
@@ -177,19 +192,21 @@ def build():
                           why="Armored rush (FIGHTING_DESIGN 8c 'BODY BLOCK armour'): rush class slowed to "
                               "16/18/20 for 1 hit of armor, -8/-10/-12 on block, KD +30."),
               per={"l": dict(startup=16, recovery=24, damage=1000, hitstun=58, armor={"hits": 1, "f": [3, 15]},
-                             move=[[0, 0], [16, 1.0], [20, 1.1]]),
+                             move=[[0, 0], [16, 1.0], [20, 1.1]], linear=True, why3d="running shove: linear"),
                    "m": dict(startup=18, recovery=26, damage=1100, hitstun=60, armor={"hits": 1, "f": [3, 17]},
-                             move=[[0, 0], [18, 1.5], [22, 1.6]]),
+                             move=[[0, 0], [18, 1.5], [22, 1.6]], linear=True, why3d="running shove: linear"),
                    "h": dict(startup=20, recovery=28, damage=1200, hitstun=62, armor={"hits": 1, "f": [3, 19]},
-                             move=[[0, 0], [20, 2.0], [24, 2.1]])},
+                             move=[[0, 0], [20, 2.0], [24, 2.1]], linear=True, why3d="running shove: linear")},
               ex=dict(name="Fridge Door (EX)", startup=16, recovery=20, damage=1400, hitstun=54,
+                      why3d="OD: not linear - re-aims until frame 10 (special default)",
                       armor={"hits": 2, "f": [1, 15]}, move=[[0, 0], [16, 2.0], [20, 2.1]],
                       desc="Two hits of armor, -4 on block.", why="EX: 2-hit armor from frame 1, -4 on block."))
     K.special("lariat", motion="623", fam=None,
               common=dict(name="Double-Door Lariat", clip="lariat_spin", active=12, blockstun=20, hitstop=13,
                           guard="HL", gain=900, nerve=4000, pb=(0.0, 0.50), kd="soft", cancel=["super"],
-                          role=["antiair", "reversal"], sfx=[[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
-                          desc="Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable.",
+                          role=["antiair", "reversal", "antistep"], sfx=[[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
+                          homing=True, why3d="spinning clothesline: homing, 0.60 m deep - the anti-step strike",
+                          desc="Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable; homing.",
                           why="FIGHTING_DESIGN 8c LARIAT (anti-air + projectile-invulnerable spin); DP-class "
                               "anti-air with 2 hits: -10/-12/-14 on block, KD +30."),
               per={"l": dict(startup=8, recovery=26, damage=1000, hitstun=60,

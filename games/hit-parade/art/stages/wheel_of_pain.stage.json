@@ -8,7 +8,7 @@
     "zambini",
     "lotus"
   ],
-  "look": "neon game-show floor: glossy black floor with LED strips and two hazard-striped trapdoor panels, neon chevron set walls in chrome mullions strung with marquee bulbs; bulb-lit stage edge, contestant podiums with light-up PLAYER 1 / PLAYER 2 boards, audience bays either side of a runway to the GIANT prize wheel (16 comic prizes, gold bulb rim, pegs, flapper) on a lit plinth before an LED starburst wall; truss towers",
+  "look": "game-show studio in the round: glossy black circular stage floor with LED light rings and two hazard-striped trapdoor plates inside a 1 m neon-panel bumper with a chrome bulb rail; the GIANT prize wheel (16 comic prizes, gold bulb rim) on a lit deck before a curved LED starburst wall, truss towers and contestant podiums on one side; raked LED-nosed audience risers with gold end panels all the way round the rest; truss rig overhead",
   "floor": {
     "y": 0.0,
     "surface": "gloss_black",
@@ -24,12 +24,12 @@
     },
     "extent": {
       "x": [
-        -12.0,
-        12.0
+        -19.0,
+        19.0
       ],
       "z": [
-        -3.4,
-        8.0
+        -19.0,
+        19.0
       ]
     },
     "trapdoors": [
@@ -44,7 +44,7 @@
         "sizeM": 1.5
       }
     ],
-    "note": "trapdoors are flush dressing (texture + frame + hinges in the static set); a sim trapdoor move (zambini / ricky) can use these spots"
+    "note": "trapdoors are flush dressing (texture + frame + hinges in the static set) inside the ring; a sim trapdoor move (zambini / ricky) can use these spots. fightStrip = legacy 2.5D (CONTRACT 35.11.7)"
   },
   "walls": {
     "x": [
@@ -85,14 +85,28 @@
         "dustColor": "#7ae4ff"
       }
     ],
-    "note": "WALL_SPLAT event b = wall id (0 = x -8, 1 = x +8), CONTRACT 17.6. Mullions at z -1.33 / 0.73: the body contact patch (z -0.5..0.5) is flat panel."
+    "note": "LEGACY 2.5D (CONTRACT 35.11.7): kept until the sim / view stop reading walls.x; the 3D boundary is `ring`."
   },
+  "ring": {
+    "shape": "circle",
+    "radiusM": 5.8,
+    "sides": 16,
+    "rotDeg": 0.0,
+    "wallHeightM": 1.0,
+    "thicknessM": 0.45,
+    "surface": "neon_panel",
+    "dustColor": "#ff7ad9",
+    "note": "CONTRACT 35.11: radiusM = centre -> inner face (poly: apothem); poly side k normal at rotDeg + k*360/sides; circle: 16 WALL_SPLAT sectors centred on rotDeg + k*22.5"
+  },
+  "spawnAxisDeg": 90.0,
+  "cameraSideDeg": 0.0,
+  "cameraMaxM": 9.5,
   "spawn": {
     "distanceM": 2.4,
     "p1": [
       -1.2,
       0.0,
-      0.0
+      -0.0
     ],
     "p2": [
       1.2,
@@ -102,24 +116,25 @@
   },
   "camera": {
     "vFovDeg": 35.0,
-    "heightM": 1.25,
+    "heightM": 1.35,
     "lookAtY": 1.0,
     "distanceM": [
-      4.36,
-      7.6
+      4.4,
+      9.5
     ],
     "pitchDeg": [
-      -2.0,
+      -4.0,
       -4.0
     ],
+    "orbit": true,
     "wallClampX": 8.0,
-    "note": "FIGHTING_DESIGN 7b. Camera x is clamped so the splat wall sits at the screen edge on the fight line: |camX| <= wallClampX - distance * tan(hFov/2). Proof renders: _harness/_reports/stages/wheel_of_pain_*.png",
+    "note": "CONTRACT 35.7 orbit camera (eye y 1.35, look-at y 1.0, dist 4.4..9.5 from the pair midpoint). wallClampX = legacy 2.5D. Proof renders: _harness/_reports/stages/wheel_of_pain_<shot>.png, orbit sheet wheel_of_pain_orbit_sheet.png",
     "proofShots": [
       {
         "id": "near_center",
         "pos": [
           0.0,
-          1.25,
+          1.35,
           4.4
         ],
         "look": [
@@ -132,37 +147,11 @@
         "id": "far_center",
         "pos": [
           0.0,
-          1.25,
-          7.6
+          1.35,
+          8.0
         ],
         "look": [
           0.0,
-          1.0,
-          0.0
-        ]
-      },
-      {
-        "id": "near_corner_r",
-        "pos": [
-          5.53,
-          1.25,
-          4.4
-        ],
-        "look": [
-          5.53,
-          1.0,
-          0.0
-        ]
-      },
-      {
-        "id": "far_corner_l",
-        "pos": [
-          -3.74,
-          1.25,
-          7.6
-        ],
-        "look": [
-          -3.74,
           1.0,
           0.0
         ]
@@ -171,8 +160,8 @@
         "id": "far_center_phone",
         "pos": [
           0.0,
-          1.25,
-          6.22
+          1.35,
+          6.6
         ],
         "look": [
           0.0,
@@ -180,6 +169,214 @@
           0.0
         ],
         "aspect": 2.1667
+      },
+      {
+        "id": "orbit_000_n",
+        "pos": [
+          0.0,
+          1.35,
+          4.4
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_000_f",
+        "pos": [
+          0.0,
+          1.35,
+          8.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_045_n",
+        "pos": [
+          3.111,
+          1.35,
+          3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_045_f",
+        "pos": [
+          5.657,
+          1.35,
+          5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_090_n",
+        "pos": [
+          4.4,
+          1.35,
+          0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_090_f",
+        "pos": [
+          8.0,
+          1.35,
+          0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_135_n",
+        "pos": [
+          3.111,
+          1.35,
+          -3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_135_f",
+        "pos": [
+          5.657,
+          1.35,
+          -5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_180_n",
+        "pos": [
+          0.0,
+          1.35,
+          -4.4
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_180_f",
+        "pos": [
+          0.0,
+          1.35,
+          -8.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_225_n",
+        "pos": [
+          -3.111,
+          1.35,
+          -3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_225_f",
+        "pos": [
+          -5.657,
+          1.35,
+          -5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_270_n",
+        "pos": [
+          -4.4,
+          1.35,
+          -0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_270_f",
+        "pos": [
+          -8.0,
+          1.35,
+          -0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_315_n",
+        "pos": [
+          -3.111,
+          1.35,
+          3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_315_f",
+        "pos": [
+          -5.657,
+          1.35,
+          5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
       }
     ]
   },
@@ -202,11 +399,11 @@
       "id": "key",
       "type": "directional",
       "color": "#f6ecff",
-      "intensity": 2.3,
+      "intensity": 2.1,
       "position": [
-        -4.0,
-        10.0,
-        8.0
+        -3.078,
+        14.0,
+        -8.457
       ],
       "target": [
         0.0,
@@ -219,12 +416,12 @@
         "bias": -0.0004,
         "normalBias": 0.03,
         "camera": {
-          "left": -10.0,
-          "right": 10.0,
-          "top": 7.0,
-          "bottom": -4.0,
+          "left": -9.0,
+          "right": 9.0,
+          "top": 9.0,
+          "bottom": -9.0,
           "near": 1.0,
-          "far": 30.0
+          "far": 40.0
         }
       }
     },
@@ -232,11 +429,11 @@
       "id": "rim",
       "type": "directional",
       "color": "#62dcff",
-      "intensity": 1.9,
+      "intensity": 1.5,
       "position": [
-        6.0,
+        3.42,
         7.0,
-        -10.0
+        9.397
       ],
       "target": [
         0.0,
@@ -250,7 +447,7 @@
       "type": "hemisphere",
       "sky": "#9a88ff",
       "ground": "#2b1233",
-      "intensity": 0.8
+      "intensity": 0.85
     },
     {
       "id": "wheel_spot",
@@ -262,72 +459,98 @@
       "position": [
         0.0,
         9.0,
-        -5.5
+        -8.0
       ],
       "target": [
         0.0,
-        3.3,
-        -13.0
+        3.0,
+        -14.0
       ],
       "angleDeg": 20.0,
       "penumbra": 0.45
     },
     {
-      "id": "podium_wash",
+      "id": "spot_45",
       "type": "spot",
       "color": "#ffe6c8",
-      "intensity": 55.0,
-      "distance": 16.0,
+      "intensity": 105.0,
+      "distance": 24.0,
       "decay": 2,
       "position": [
-        0.0,
+        6.894,
         7.0,
-        0.5
+        6.894
       ],
       "target": [
         0.0,
         1.0,
-        -4.6
+        0.0
       ],
-      "angleDeg": 38.0,
-      "penumbra": 0.6
+      "angleDeg": 27.0,
+      "penumbra": 0.55
     },
     {
-      "id": "accent_l",
-      "type": "point",
-      "color": "#ff40b8",
-      "intensity": 6.0,
-      "distance": 9.0,
+      "id": "spot_135",
+      "type": "spot",
+      "color": "#ffc8ee",
+      "intensity": 95.0,
+      "distance": 24.0,
       "decay": 2,
       "position": [
-        -7.0,
-        3.2,
-        -2.2
-      ],
-      "flicker": {
-        "amp": 0.06,
-        "hz": 2.0
-      }
-    },
-    {
-      "id": "accent_r",
-      "type": "point",
-      "color": "#40d8ff",
-      "intensity": 6.0,
-      "distance": 9.0,
-      "decay": 2,
-      "position": [
+        6.894,
         7.0,
-        3.2,
-        -2.2
+        -6.894
       ],
-      "flicker": {
-        "amp": 0.06,
-        "hz": 2.3
-      }
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "angleDeg": 27.0,
+      "penumbra": 0.55
+    },
+    {
+      "id": "spot_225",
+      "type": "spot",
+      "color": "#cdefff",
+      "intensity": 95.0,
+      "distance": 24.0,
+      "decay": 2,
+      "position": [
+        -6.894,
+        7.0,
+        -6.894
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "angleDeg": 27.0,
+      "penumbra": 0.55
+    },
+    {
+      "id": "spot_315",
+      "type": "spot",
+      "color": "#ffe6c8",
+      "intensity": 105.0,
+      "distance": 24.0,
+      "decay": 2,
+      "position": [
+        -6.894,
+        7.0,
+        6.894
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "angleDeg": 27.0,
+      "penumbra": 0.55
     }
   ],
-  "lightsNote": "FIXED pool: created once at stage load, never added/removed (shader programs stay warm). No lights are embedded in the GLB. Flicker = view-only intensity modulation.",
+  "lightsNote": "FIXED pool (8): created once at stage load, never added/removed (shader programs stay warm). No lights in the GLB. 360 rig (CONTRACT 35.6): high key from the wheel side + cool rim from the opposite side + hemisphere fill + wheel spot + four tower spots (45/135/225/315 deg) aimed at the ring centre, so the pair is front-lit from whichever side the orbit camera sits.",
   "crowd": {
     "atlas": "crowd_atlas.webp",
     "meta": "crowd_atlas.json",
@@ -354,79 +577,163 @@
         "jeer"
       ]
     },
-    "nodes": "GLB empties crowd_<bay>_<row>_<i>: position = feet point, +Z = card facing, uniform scale = card height; extras {bay,row,i,rand,angle}. Generated from the bays below (rows run along world X; x step = spacing, jitter = [x,z] half-ranges from mulberry32(seed); card yaw = faceYawDeg about +Y).",
+    "nodes": "GLB empties crowd_<bay>_<row>_<i>: position = feet point, +Z = card facing (the ring centre), uniform scale = card height; extras {bay,row,i,rand,angle}. Generated from the ARC bays below (CONTRACT 35.11.6: rows along circles r about the ring centre, spacing along the arc, jitter = [tangential, radial] half-ranges from mulberry32(seed)).",
     "bays": [
       {
-        "id": "bay_l",
-        "x": [
-          -14.2,
-          -5.0
+        "id": "bay_a",
+        "arcDeg": [
+          218.0,
+          266.0
         ],
         "spacing": 0.62,
         "jitter": [
-          0.14,
+          0.12,
           0.08
         ],
-        "faceYawDeg": 0.0,
+        "seed": 3301,
         "rows": [
           {
-            "z": -4.2,
+            "r": 10.3,
             "y": 0.3
           },
           {
-            "z": -5.0,
-            "y": 0.65
+            "r": 11.1,
+            "y": 0.7
           },
           {
-            "z": -5.8,
-            "y": 1.0
+            "r": 11.9,
+            "y": 1.1
           },
           {
-            "z": -6.6,
-            "y": 1.35
+            "r": 12.7,
+            "y": 1.5
           },
           {
-            "z": -7.4,
-            "y": 1.7
+            "r": 13.5,
+            "y": 1.9
+          },
+          {
+            "r": 14.3,
+            "y": 2.3
           }
-        ],
-        "seed": 3301
+        ]
       },
       {
-        "id": "bay_r",
-        "x": [
-          5.0,
-          14.2
+        "id": "bay_b",
+        "arcDeg": [
+          274.0,
+          356.0
         ],
         "spacing": 0.62,
         "jitter": [
-          0.14,
+          0.12,
           0.08
         ],
-        "faceYawDeg": 0.0,
+        "seed": 3302,
         "rows": [
           {
-            "z": -4.2,
+            "r": 10.3,
             "y": 0.3
           },
           {
-            "z": -5.0,
-            "y": 0.65
+            "r": 11.1,
+            "y": 0.7
           },
           {
-            "z": -5.8,
-            "y": 1.0
+            "r": 11.9,
+            "y": 1.1
           },
           {
-            "z": -6.6,
-            "y": 1.35
+            "r": 12.7,
+            "y": 1.5
           },
           {
-            "z": -7.4,
-            "y": 1.7
+            "r": 13.5,
+            "y": 1.9
+          },
+          {
+            "r": 14.3,
+            "y": 2.3
           }
+        ]
+      },
+      {
+        "id": "bay_c",
+        "arcDeg": [
+          4.0,
+          86.0
         ],
-        "seed": 3302
+        "spacing": 0.62,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 3303,
+        "rows": [
+          {
+            "r": 10.3,
+            "y": 0.3
+          },
+          {
+            "r": 11.1,
+            "y": 0.7
+          },
+          {
+            "r": 11.9,
+            "y": 1.1
+          },
+          {
+            "r": 12.7,
+            "y": 1.5
+          },
+          {
+            "r": 13.5,
+            "y": 1.9
+          },
+          {
+            "r": 14.3,
+            "y": 2.3
+          }
+        ]
+      },
+      {
+        "id": "bay_d",
+        "arcDeg": [
+          94.0,
+          142.0
+        ],
+        "spacing": 0.62,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 3304,
+        "rows": [
+          {
+            "r": 10.3,
+            "y": 0.3
+          },
+          {
+            "r": 11.1,
+            "y": 0.7
+          },
+          {
+            "r": 11.9,
+            "y": 1.1
+          },
+          {
+            "r": 12.7,
+            "y": 1.5
+          },
+          {
+            "r": 13.5,
+            "y": 1.9
+          },
+          {
+            "r": 14.3,
+            "y": 2.3
+          }
+        ]
       }
     ]
   },
@@ -439,7 +746,7 @@
       {
         "what": "giant prize wheel",
         "nodes": "anim_spin_wheel",
-        "how": "view stage hook anim_spin_*: rotation.y += dt * 0.8 about the node's local +Y = the axle (glTF +Z, toward the camera); pivot on the axle"
+        "how": "view stage hook anim_spin_*: rotation.y += dt * 0.8 about the node's local +Y = the axle (glTF +Z, toward the ring centre); pivot on the axle"
       },
       {
         "what": "marquee bulbs",
@@ -454,12 +761,12 @@
     "splatWallDust": "#ff7ad9"
   },
   "build": {
-    "bytes": 1529760,
+    "bytes": 2114972,
     "draws": 23,
-    "triangles": 54948,
+    "triangles": 82642,
     "materials": 18,
     "textures": 30,
-    "crowdNodes": 150,
+    "crowdNodes": 540,
     "lights": 0,
     "extensions": [
       "EXT_meshopt_compression",
@@ -467,6 +774,16 @@
       "KHR_materials_emissive_strength",
       "KHR_mesh_quantization"
     ],
-    "envBytes": 402107
+    "envBytes": 402107,
+    "clearance": {
+      "bandY": [
+        1.3,
+        3.0
+      ],
+      "minRadiusM": 9.707,
+      "nearest": "truss_ring_v_135_chord_3",
+      "cameraMaxM": 9.5,
+      "ok": true
+    }
   }
 }

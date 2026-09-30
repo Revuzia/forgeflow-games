@@ -1,6 +1,7 @@
 // HIT PARADE asset pipeline (lane ASSETS): post-process a Blender-exported fighter GLB.
 //   node tools/glb_post.mjs strip <in.glb> <out.glb>     keep rotation tracks + Hips translation only
 //   node tools/glb_post.mjs facts <a.glb> [<b.glb> ...]   one JSON line of structural facts per file
+//   node tools/glb_post.mjs minify <in.glb> <out.glb>    drop glTF-default values from the JSON chunk (CHANGED(ASSETS3D))
 // strip: drops every `scale` channel and every `translation` channel whose target is not the Hips
 // (CONTRACT 6.1: "export rotation tracks + hips translation only"; rig_compat.md: the 64 constant
 // X Bot location tracks would impose X Bot bone lengths on other bodies), prunes the orphans, drops
@@ -8,7 +9,7 @@
 // material whose name ends in `_cutout` (CONTRACT 6.1). Uses the glTF Transform SDK that ships inside
 // the global @gltf-transform/cli 4.4.2 install (TECH_REUSE F). ASCII only.
 import { pathToFileURL } from 'node:url';
-import { statSync } from 'node:fs';
+import { readFileSync, statSync, writeFileSync } from 'node:fs';
 
 const G = 'C:/Users/TestRun/AppData/Roaming/npm/node_modules/@gltf-transform/cli/node_modules/';
 const core = await import(pathToFileURL(G + '@gltf-transform/core/dist/index.js').href);
@@ -143,8 +144,46 @@ async function decimate(inp, out, step, rx, arx) {
   console.log(JSON.stringify({ decimate: out, bytes: statSync(out).size, step, channels: chans, keysBefore: before, keysAfter: after }));
 }
 
+// CHANGED(ASSETS3D) minify <in> <out>: rewrite ONLY the glTF JSON chunk of a finished (meshopt) GLB, dropping values that
+// equal the glTF 2.0 defaults: accessor `normalized: false` and `byteOffset: 0`, animation sampler `interpolation:
+// "LINEAR"` (three's GLTFLoader reads a missing interpolation as linear and a missing normalized as false). The BIN chunk
+// is copied byte for byte. Why: the JSON chunk is ~590 KB of a 1.46 MB goon GLB (2862 accessors + 2508 channel/sampler
+// pairs for 38 clips); the defaults alone were ~114 KB of it, which is what pushed goon_hardhat over its 1.5 MB budget
+// when the 4 CONTRACT 35.5 clips were added. Written without the glTF Transform writer (it would re-emit the defaults).
+function minify(inp, out) {
+  const b = readFileSync(inp);
+  if (b.readUInt32LE(0) !== 0x46546c67) throw new Error('not a GLB: ' + inp);
+  const jl = b.readUInt32LE(12);
+  if (b.readUInt32LE(16) !== 0x4e4f534a) throw new Error('first chunk is not JSON');
+  const j = JSON.parse(b.subarray(20, 20 + jl).toString('utf8'));
+  const rest = b.subarray(20 + jl);   // BIN chunk (header + data), untouched
+  let n = { normalized: 0, byteOffset: 0, interpolation: 0 };
+  for (const a of j.accessors || []) {
+    if (a.normalized === false) { delete a.normalized; n.normalized++; }
+    if (a.byteOffset === 0) { delete a.byteOffset; n.byteOffset++; }
+  }
+  for (const an of j.animations || []) {
+    for (const s of an.samplers || []) {
+      if (s.interpolation === 'LINEAR') { delete s.interpolation; n.interpolation++; }
+    }
+  }
+  let txt = Buffer.from(JSON.stringify(j), 'utf8');
+  const pad = (4 - (txt.length % 4)) % 4;
+  txt = Buffer.concat([txt, Buffer.alloc(pad, 0x20)]);
+  const head = Buffer.alloc(20);
+  head.writeUInt32LE(0x46546c67, 0);
+  head.writeUInt32LE(2, 4);
+  head.writeUInt32LE(20 + txt.length + rest.length, 8);
+  head.writeUInt32LE(txt.length, 12);
+  head.writeUInt32LE(0x4e4f534a, 16);
+  const outB = Buffer.concat([head, txt, rest]);
+  writeFileSync(out, outB);
+  console.log(JSON.stringify({ minify: out, before: b.length, after: outB.length, jsonBefore: jl, jsonAfter: txt.length, dropped: n }));
+}
+
 const [cmd, ...args] = process.argv.slice(2);
 if (cmd === 'strip') await strip(args[0], args[1]);
 else if (cmd === 'decimate') await decimate(args[0], args[1], parseInt(args[2] || '3', 10), args[3], args[4]);
 else if (cmd === 'facts') { for (const a of args) await facts(a); }
-else { console.error('usage: glb_post.mjs strip <in> <out> | facts <glb...> | decimate <in> <out> <step> [nodeRegex] [animRegex]'); process.exit(2); }
+else if (cmd === 'minify') minify(args[0], args[1]);
+else { console.error('usage: glb_post.mjs strip <in> <out> | facts <glb...> | decimate <in> <out> <step> [nodeRegex] [animRegex] | minify <in> <out>'); process.exit(2); }

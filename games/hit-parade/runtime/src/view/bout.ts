@@ -51,6 +51,13 @@ function numAt(o: unknown, paths: string[][], dflt: number): number {
 }
 function smooth(t: number): number { const x = t < 0 ? 0 : t > 1 ? 1 : t; return x * x * (3 - 2 * x); }
 function ps0(s: PrimeSample): number { return s.freeze; }
+/** a fighter's standing push-box front (m): the measured `push.front`, else half the symmetric box */
+function pushFront(def: unknown): number {
+  const d = def as { push?: { front?: unknown }; pushbox?: ReadonlyArray<unknown> } | undefined;
+  if (!d) return 0;
+  const f = Number(d.push?.front ?? (Array.isArray(d.pushbox) ? Number(d.pushbox[0]) / 2 : 0));
+  return Number.isFinite(f) ? Math.max(0, f) : 0;
+}
 
 const TRAUMA_BY_STRENGTH = [0.10, 0.15, 0.20, 0.20, 0.25, 0.35, 0.10, 0.20];
 const OUTRO_FRAMES = 8;
@@ -95,6 +102,13 @@ export class BoutView {
   private readonly tmp = new THREE.Vector3();
   private readonly tmp2 = new THREE.Vector3();
   private readonly tmp3 = new THREE.Vector3();
+  private readonly gV = new THREE.Vector3();
+  private readonly gU = new THREE.Vector3();
+  private readonly gR = new THREE.Vector3();
+  private readonly gD = new THREE.Vector3();
+  private readonly gPts: Array<[number, number, number, number]> = [];   // [x, y, z, axis 0 = top, 1 = side]
+  /** the last frame's framing-guard correction (lab read-back): dolly m, fov widened by deg, crouch follow m */
+  guardLast = { dolly: 0, fov: 0, crouch: 0 };
   private readonly camF: [CamFighter, CamFighter] = [{ x: 0, y: 0, head: 1.8 }, { x: 0, y: 0, head: 1.8 }];
   private pendingHits = new Map<string, { kind: HitKind; rank: number; ev: ViewEvent }>();
   private lastSnaps: [ViewFighterSnap, ViewFighterSnap] | null = null;
@@ -199,6 +213,9 @@ export class BoutView {
     const t2 = performance.now();
     v.loadSplit = { assets: Math.round(t1 - t0), fightersCrowdProps: Math.round(t2 - t1) };
     if (opts.warm !== false) await v.warm();
+    // dev-only harness handle (lookshots.py --game reads the view's own read-back in the REAL game; tree-shaken from the
+    // build): window.__HP_VIEW__ = { info(), popups() } of the live bout
+    if (import.meta.env.DEV) (window as unknown as { __HP_VIEW__?: unknown }).__HP_VIEW__ = { info: () => v.info(), popups: () => v.popups(), view: v };
     return v;
   }
 
@@ -387,6 +404,75 @@ export class BoutView {
 
   private clipFacts(id: string): Record<string, ClipFact> { return clipFactsOf(this.data.clips?.[id]) as Record<string, ClipFact>; }
 
+  /**
+   * v2 PRIME TIME framing guard. The §26.1 numbers assume standing 1.80 m bodies at the authored gap (§26.5 scales lookH /
+   * dist by height); a launched Bruno, a crouched flex or a victim flung wide still leaves the picture. Deterministic: it
+   * reads only this frame's posed bodies (both online peers see the same shot). `top` shots are left alone.
+   *   1. a `close` shot on ONE fighter follows a crouching subject down (camera and look translate together, 0.8 of the
+   *      drop of the head below its standing height), so a bent-over flex is not framed on the crowd above it;
+   *   2. the target's head top (airborne: also hands and feet) stays under the letterbox, and on `both` shots both bodies
+   *      stay inside the frame sideways: dolly out along the view (<= 2.5 m), then widen the FOV (<= 60 deg).
+   */
+  private frameGuard(c: CinePose, ps: PrimeSample, att: 0 | 1): void {
+    const G = this.guardLast;
+    G.dolly = 0; G.fov = 0; G.crouch = 0;
+    if (ps.shot === 'top') return;
+    const A = this.fighters[att], V = this.fighters[1 - att];
+    const tgt = ps.camTarget;
+    const subj = tgt === 'attacker' ? [A] : tgt === 'defender' ? [V] : [A, V];
+    if (ps.shot === 'close' && subj.length === 1) {
+      const f = subj[0];
+      const dy = 0.8 * Math.min(0, f.headY() - (f.root.position.y + f.heightM));
+      c.pos.y += dy; c.look.y += dy; G.crouch = dy;
+    }
+    const pts = this.gPts;
+    pts.length = 0;
+    for (const f of subj) {
+      const x = f.root.position.x;
+      pts.push([x, f.headY(), 0, 0]);
+      if (f.root.position.y > 0.25) {
+        pts.push([x, f.topY(), 0, 0]);
+        for (const b of ['LeftFoot', 'RightFoot', 'LeftToeBase', 'RightToeBase']) if (f.bonePos(b, this.gD)) pts.push([this.gD.x, this.gD.y + 0.08, this.gD.z, 0]);
+      }
+    }
+    if (subj.length === 2) for (const f of subj) { const cy = f.chest(this.gD).y; const x = f.root.position.x; pts.push([x - 0.35, cy, 0, 1], [x + 0.35, cy, 0, 1]); }
+    const aspect = this.r.css.x / Math.max(1, this.r.css.y);
+    const v = this.gV.subVectors(c.look, c.pos);
+    if (v.lengthSq() < 1e-6) return;
+    v.normalize();
+    const u = this.gU.set(0, 1, 0).addScaledVector(v, -v.y);
+    if (u.lengthSq() < 1e-4) return;
+    u.normalize();
+    const rgt = this.gR.crossVectors(v, u);
+    const tv = Math.tan((c.fov * Math.PI / 180) / 2);
+    const allowY = tv * Math.max(0.3, 1 - 2 * ps.letterbox) * 0.94, allowX = tv * aspect * 0.93;
+    const need = (): [number, number] => {           // [dolly needed, worst ratio]
+      let s = 0, q = 0;
+      for (const [x, y, z, ax] of pts) {
+        const d = this.gD.set(x - c.pos.x, y - c.pos.y, z - c.pos.z);
+        const depth = d.dot(v);
+        if (depth < 0.2) continue;
+        const off = ax === 0 ? d.dot(u) : Math.abs(d.dot(rgt));
+        if (off <= 0) continue;
+        const al = ax === 0 ? allowY : allowX;
+        s = Math.max(s, off / al - depth); q = Math.max(q, off / depth / al);
+      }
+      return [s, q];
+    };
+    const [s0] = need();
+    const s = Math.min(2.5, s0);
+    if (s > 0.005) {
+      c.pos.addScaledVector(v, -s);
+      c.pos.set(Math.max(-7.7, Math.min(7.7, c.pos.x)), Math.max(0.12, c.pos.y), Math.min(9, c.pos.z));
+      G.dolly = Math.round(s * 1000) / 1000;
+    }
+    const [, q] = need();
+    if (q > 1.001) {
+      const fov = Math.min(60, 2 * Math.atan(tv * q) * 180 / Math.PI);
+      if (fov > c.fov) { G.fov = Math.round((fov - c.fov) * 100) / 100; c.fov = fov; }
+    }
+  }
+
   /** compile (or reuse) the plan for the running cinematic */
   private primeBegin(snaps: [ViewFighterSnap, ViewFighterSnap], who: 0 | 1, moveIdx: number, simFrames: number, simVictim: boolean): void {
     const id = this.cfg.p[who]?.fighter ?? '';
@@ -408,6 +494,9 @@ export class BoutView {
       attFacts: this.clipFacts(id), vicFacts: this.clipFacts(this.cfg.p[1 - who]?.fighter ?? ''),
       attDur: (clip) => A.pose.has(clip) ? A.pose.dur(clip) : 0, vicDur: (clip) => V.pose.has(clip) ? V.pose.dur(clip) : 0,
       gap0: Math.abs(sv.x - sa.x), ax: sa.x, facing, attPre: pre(A, sa), vicPre: pre(V, sv), hA: A.heightM, hV: V.heightM, simVictim,
+      // a riot shield held in front adds its thickness + standoff to the body front (Krane's bash met Bruno INSIDE the shield)
+      frontA: pushFront(def) + (A.propInfo().some((q) => /shield/.test(q.id)) ? 0.2 : 0),
+      frontV: pushFront(this.data.fighters[this.cfg.p[1 - who]?.fighter ?? '']) + (V.propInfo().some((q) => /shield/.test(q.id)) ? 0.2 : 0),
     });
     this.planKey = `${who}:${moveIdx}:${simVictim ? 'grab' : 'cin'}`;
     this.planAtt = who;
@@ -704,8 +793,10 @@ export class BoutView {
       } else {
         c.pos.copy(L.pos); c.look.copy(L.look); c.roll = L.roll * facing;
       }
-      c.pos.set(Math.max(-7.7, Math.min(7.7, c.pos.x)), Math.max(0.12, c.pos.y), Math.min(9, c.pos.z));
       c.fov = L.fov;
+      if (!ps.camLocal) this.frameGuard(c, ps, att);
+      else this.guardLast.dolly = this.guardLast.fov = this.guardLast.crouch = 0;
+      c.pos.set(Math.max(-7.7, Math.min(7.7, c.pos.x)), Math.max(0.12, c.pos.y), Math.min(9, c.pos.z));
       this.cam.setCinematic(c);
       if (ps.freeze) this.cam.trauma = 0;
     } else if (simCine && !this.plan) {
@@ -768,7 +859,7 @@ export class BoutView {
       this.crowd.update(dt * pts);
     }
     this.proj.frame(m.proj, dt * pts, m.frame);
-    if (this.brawl) { this.brawl.frame(m.brawl?.goons, dt, this.realTime); this.brawl.updatePopups(dt, this.cam.camera); }
+    if (this.brawl) { this.brawl.frame(m.brawl?.goons, dt, this.realTime, snaps[0].x); this.brawl.updatePopups(dt, this.cam.camera); }
     this.fx.update(dt, pts);
   }
 
@@ -816,9 +907,9 @@ export class BoutView {
         vic: this.ps.vic.map((e) => `${e.clip}@${e.t.toFixed(2)}x${e.w.toFixed(2)}`), gap: +this.ps.vicGap.toFixed(2), vy: +this.ps.vicY.toFixed(2), carry: this.ps.carry,
         beats: p.beats.length, v2: p.v2, endGap: p.endGap, wallSplatAt: p.wallSplatAt, simVictim: p.simVictim,
         shots: p.v2 ? p.cams.map((c) => [c.from, c.to, c.shot ?? '']) : p.shots.map((x) => [x.f0, x.f1, x.name]), hits: p.hits.map((h) => h[0]),
-        freeze: ps0(this.ps), slate: +this.ps.slate.toFixed(2), letterbox: +this.ps.letterbox.toFixed(3), dim: this.ps.dim, spot: this.ps.spot } : null,
+        freeze: ps0(this.ps), guard: { ...this.guardLast }, camTarget: this.ps.camTarget, slate: +this.ps.slate.toFixed(2), letterbox: +this.ps.letterbox.toFixed(3), dim: this.ps.dim, spot: this.ps.spot } : null,
       proj: this.proj.info(), props: this.propLib ? this.propLib.report() : null, brawl: this.brawl ? this.brawl.info() : null,
-      stage: { ...this.stage.report },
+      stage: { ...this.stage.report, live: this.stage.live() },
       missingClips: this.fighters.map((x) => [...x.pose.missing]), render: this.r.info(),
     };
   }

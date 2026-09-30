@@ -23,7 +23,11 @@
     "boxes": "CONTRACT 5.2 derived box sizes by strength class; CHANGED(SIM) P2 derive v2 (CONTRACT 28.5b): body-to-effector span, crouch line 1.10 m (FIGHTERS 20.6 measured), class reach floor = FIGHTING_DESIGN 2h table (L 0.85 / 2L 0.81 / M 1.11 / 2M 1.09 / H 1.33 / sweep 1.38 m at 1.80 m)",
     "uniques": "CHANGED(SIM) P2 (CONTRACT 28.2): defaults for the kits' unique blocks (the kit value wins); counter catch hitstop 12 = CONTRACT 20.2; ball physics [R]",
     "brawl": "CHANGED(SIM) P2 (CONTRACT 28.4): DESIGN_RESEARCH 1c (enemy telegraphs 30-54 f), 4b/4c (Normal: 2 melee tokens, >= 18 f between grants, 30 f telegraph floor), 6b (points, RATINGS 7 bands x1.0-x4.0, idle decay, -2 grades on a hit, combo cash-out 5 x hits^1.5); 45 s (FIGHTING_DESIGN 9b); goon HP / waves [R]",
-    "heckler": "CHANGED(SIM) P2 (CONTRACT 28.4): FIGHTING_DESIGN 9b (parry objects from the crowd, perfect parries score double, 40 s); DESIGN_RESEARCH 1c thrower 42 f windup / 10 m/s; arcs + cadence [R]"
+    "heckler": "CHANGED(SIM) P2 (CONTRACT 28.4): FIGHTING_DESIGN 9b (parry objects from the crowd, perfect parries score double, 40 s); DESIGN_RESEARCH 1c thrower 42 f windup / 10 m/s; arcs + cadence [R]",
+    "ring": "CHANGED(SIM3D) (CONTRACT 35.2 / 35.3 / 35.11): default circle ring 5.5 m when a stage has no ring; against the wall = within 0.45 m of the boundary along the attack direction (IMPACT splat, STAGE FRIGHT stun); camN kept while |P2 - P1| < 0.3 m; default spawnAxisDeg 90 (yaw degrees: P1 at -X, the 2.5D layout). stage.wallM / separationCapM: wallM is legacy (AI range estimates), the separation cap stays 6.0 m (3D distance)",
+    "step": "CHANGED(SIM3D) (CONTRACT 35.2): SIDESTEP 15 f / 0.85 m arc (ease-out over 80 % of the frames), buffer from 9, step-attacks from frame 11, block from 12; SIDEWALK 1.8 m/s tangential, 4 f settle on release",
+    "track": "CHANGED(SIM3D) (CONTRACT 35.4): default track.until = startup - 4 (normals, throws, system moves) / startup - 6 (specials, supers); rate = full re-face per frame",
+    "lateral": "CHANGED(SIM3D) (CONTRACT 35.4): hitbox half-depth across the attack line by strength / role (m)"
   },
   "hp": { "default": 10000 },
   "round": {
@@ -38,7 +42,11 @@
     "timeoverOutroFrames": 120,
     "startDistanceM": 2.4
   },
-  "stage": { "wallM": 8.0, "separationCapM": 6.0 },
+  "stage": { "wallM": 5.5, "separationCapM": 6.0 },
+  "ring": { "defaultRadiusM": 5.5, "againstWallM": 0.45, "camMinSepM": 0.3, "spawnAxisDeg": 90, "sectors": 16 },
+  "step": { "frames": 15, "distM": 0.85, "movePct": 80, "bufferF": 9, "attackF": 11, "blockF": 12, "walkMps": 1.8, "settleF": 4 },
+  "track": { "normalUntilOffset": 4, "specialUntilOffset": 6 },
+  "lateral": { "L": 0.15, "M": 0.18, "H": 0.22, "sweep": 0.45, "homing": 0.6 },
   "movement": {
     "walkFirstFramePct": 25,
     "dashTapMax": 8,
@@ -129,7 +137,8 @@
     "techWindow": 9, "techFrames": 20, "techPushM": 0.45,
     "damageFrame": 16,
     "postStunInvuln": 2, "wakeupInvuln": 1,
-    "backThrowOffsetM": 0.7
+    "backThrowOffsetM": 0.7,
+    "frontArcDeg": 70
   },
   "kd": { "fallFrames": 16, "wakeupFrames": 18, "softLandTotal": 40, "hardLandTotal": 56, "airResetLand": 6, "backRiseM": 0.8, "minTotal": 30, "throwLieMinF": 6 },
   "juggle": {
@@ -174,25 +183,26 @@
     "hitstunF": 14, "kdF": 44, "wakeF": 24, "downF": 90, "maxJuggle": 3,
     "kinds": [
       { "id": "goon_hardhat", "hp": 2400, "walk": 1.5 },
-      { "id": "goon_riot", "hp": 3000, "walk": 1.3 },
-      { "id": "goon_scrub", "hp": 1800, "walk": 1.8 }
+      { "id": "goon_security", "hp": 3000, "walk": 1.3 },
+      { "id": "goon_medic", "hp": 1800, "walk": 1.8 }
     ],
+    "_goonsNote": "CHANGED(ASSETS) P2 (CONTRACT 32): kinds = the shipped goon GLB / clips stems; moves = the clips every goon body carries (goon_shove / goon_haymaker / goon_kick). This file owns the goon frame data + HP / walk; data/goons.json (tools/goons_data.py, from each goon's measured clips) adds per-goon boxes, root travel, start ranges and AI pick weights (core/data.ts applyGoons; a stale or missing entry falls back to these shared rows).",
     "waves": [ [0, 2, 0], [0, 1, 2, 0], [1, 0, 2, 1, 0], [0, 1, 2, 0, 1, 2] ],
     "moves": [
-      { "id": "jab", "kind": "normal", "input": "5L", "strength": "L", "startup": 30, "active": 4, "recovery": 30,
-        "damage": 300, "hitstop": 9, "hitstun": 16, "blockstun": 12, "guard": "HL",
-        "boxes": [ { "f": [30, 33], "x": 0.72, "y": 1.38, "w": 0.60, "h": 0.40 } ], "move": [[0, 0], [30, 0.15], [33, 0.2]],
-        "pushback": { "hit": 0.3, "block": 0.3 }, "anim": { "clip": "goon_jab" } },
+      { "id": "shove", "kind": "normal", "input": "5M", "strength": "M", "startup": 32, "active": 4, "recovery": 30,
+        "damage": 350, "hitstop": 11, "hitstun": 18, "blockstun": 14, "guard": "HL",
+        "boxes": [ { "f": [32, 35], "x": 0.70, "y": 1.35, "w": 0.90, "h": 0.30 } ], "move": [[0, 0], [32, 0.11], [66, 0.08]],
+        "pushback": { "hit": 0.9, "block": 0.7 }, "anim": { "clip": "goon_shove" } },
       { "id": "haymaker", "kind": "normal", "input": "5H", "strength": "H", "startup": 45, "active": 5, "recovery": 40,
         "damage": 600, "hitstop": 13, "hitstun": 24, "blockstun": 16, "guard": "HL",
-        "boxes": [ { "f": [45, 49], "x": 0.80, "y": 1.30, "w": 0.70, "h": 0.50 } ], "move": [[0, 0], [45, 0.25], [49, 0.35]],
+        "boxes": [ { "f": [45, 49], "x": 0.67, "y": 1.20, "w": 0.84, "h": 0.35 } ], "move": [[0, 0], [45, 0.10], [90, 0.07]],
         "pushback": { "hit": 0.45, "block": 0.5 }, "anim": { "clip": "goon_haymaker" } },
-      { "id": "lunge", "kind": "normal", "input": "6M", "strength": "M", "startup": 36, "active": 6, "recovery": 45,
+      { "id": "kick", "kind": "normal", "input": "6M", "strength": "M", "startup": 36, "active": 5, "recovery": 40,
         "damage": 500, "hitstop": 11, "hitstun": 20, "blockstun": 14, "guard": "HL",
-        "boxes": [ { "f": [36, 41], "x": 0.75, "y": 1.20, "w": 0.70, "h": 0.60 } ], "move": [[0, 0], [30, 0], [36, 0.5], [41, 1.4]],
-        "pushback": { "hit": 0.4, "block": 0.45 }, "anim": { "clip": "goon_lunge" } }
+        "boxes": [ { "f": [36, 40], "x": 0.70, "y": 1.15, "w": 0.90, "h": 0.30 } ], "move": [[0, 0], [36, 0.33], [81, 0]],
+        "pushback": { "hit": 0.6, "block": 0.55 }, "anim": { "clip": "goon_kick" } }
     ],
-    "moveRangeM": [1.0, 1.05, 2.2],
+    "moveRangeM": [1.11, 1.04, 1.33],
     "score": { "hit": [10, 15, 20], "special": 30, "super": 40, "throw": 80, "ko": 100, "crowd": 150, "parry": 200, "perfect": 400, "comboCashF": 180 },
     "ratings": { "start": 150, "idleF": 90, "mult": [100, 120, 150, 200, 250, 300, 400], "decayPerSec": [8, 12, 16, 20, 24, 28, 32],
       "gain": { "hit": [4, 5, 6], "special": 10, "super": 14, "throw": 18, "ko": 20, "crowd": 20, "parry": 35, "perfect": 50 } }

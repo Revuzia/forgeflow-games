@@ -9,7 +9,11 @@ conventions; CONTRACT 21). Import from a stage script running inside blender.exe
   K.main(dress=[("rain_fall", objs, None), ...], env_src=..., fighters=[...])
 
 Common CLI (after `--`): --no-export --no-render --no-fighters --no-art --no-finish --contact
-  --shots id,id --res 1920x1080 --samples 48
+  --shots id,id --res 1920x1080 --samples 48 [--orbit-only] [--no-orbit]
+3D ring helpers (CONTRACT 35.6 / 35.11): placed(yaw) builds a set piece in the local "behind the ring" frame (local -Z,
+facing +Z = toward the ring centre) and yaws it about the ring centre; crowd bays take `rotDeg`; orbit_shots() = the 8
+angles x near/far proof cameras (the stand-in pair turns with the camera, as the game's camN does); clearance() measures
+the set-free radius at camera height (camera.clearRadiusM).
 Everything is authored in GAME coordinates (glTF: +X fight line, +Y up, camera on +Z) through G(x, y, z) ->
 Blender (x, -z, y); the glTF exporter's +Y-up conversion maps it back exactly. ASCII only.
 """
@@ -68,11 +72,17 @@ DO_CONTACT = bool(arg("--contact", False))
 RES = [int(v) for v in str(arg("--res", "1920x1080")).split("x")]
 SAMPLES = int(arg("--samples", 48))
 SHOTS = arg("--shots", None)
+ORBIT_ONLY = bool(arg("--orbit-only", False))
+NO_ORBIT = bool(arg("--no-orbit", False))
 
 CACHE = os.path.join(ROOT, "_harness", "scratch", "stages_cache")
 REP = os.path.join(ROOT, "_harness", "_reports", "stages")
 GLTF_OUT = os.path.join(ROOT, "art", "gltf", "stages")
-for d in (CACHE, REP, GLTF_OUT):
+# 3D ring conversion (lane STAGES3D-B): every build output (finished GLB, env HDR, fragment) is STAGED here first and
+# swapped into art/gltf/stages + art/stages in one move by `python art/stages/stagefinish_b.py <id> --swap` (the running
+# game keeps loading the shipped files until then).
+OUT3D = os.path.join(CACHE, "out3d")
+for d in (CACHE, REP, GLTF_OUT, OUT3D):
     os.makedirs(d, exist_ok=True)
 
 A = "F:/games/forgeflow-games-assets"
@@ -669,6 +679,115 @@ def face_yaw(dir_g, local_front=Vector((0, -1, 0))):
     return math.atan2(b.y, b.x) - math.atan2(local_front.y, local_front.x)
 
 
+# =============================================================== 3D ring placement (CONTRACT 35.1 / 35.11 yaw)
+def yaw_matrix(yaw_deg, pivot_g=(0.0, 0.0)):
+    """game yaw about +Y (0 = +Z, +90 turns +Z toward +X = three.js rotation.y) about the vertical axis through
+    game (x, z) = pivot_g. Game (x, y, z) -> Blender (x, -z, y): game yaw theta == Blender rotation +theta about +Z
+    (Rz(90) maps Blender -Y = game +Z onto Blender +X = game +X)."""
+    p = G(pivot_g[0], 0.0, pivot_g[1])
+    return Matrix.Translation(p) @ Matrix.Rotation(math.radians(yaw_deg), 4, "Z") @ Matrix.Translation(-p)
+
+
+def rot_objs(objs, yaw_deg, pivot_g=(0.0, 0.0)):
+    """yaw objects about the ring centre through their world matrices (instances share mesh data, so data is never
+    transformed here; join_all bakes the matrices at export)"""
+    R = yaw_matrix(yaw_deg, pivot_g)
+    for o in objs:
+        o.matrix_world = R @ o.matrix_world
+    return objs
+
+
+class placed:
+    """with K.placed(yaw_deg): build a set piece in the LOCAL frame (behind the ring at local -Z, its front facing +Z =
+    toward the ring centre, exactly how the P2 stages were authored) -> every object created inside the block is yawed
+    about the ring centre by yaw_deg. A piece meant to sit in direction a (dir(a) = (sin a, cos a)) uses yaw = a - 180."""
+
+    def __init__(self, yaw_deg, pivot_g=(0.0, 0.0)):
+        self.yaw = yaw_deg
+        self.pivot = pivot_g
+        self.objs = []
+
+    def __enter__(self):
+        self.before = set(o.name for o in COL_SET.objects)
+        return self
+
+    def __exit__(self, *exc):
+        if exc[0] is not None:
+            return False
+        self.objs = [o for o in COL_SET.objects if o.name not in self.before]
+        if abs(self.yaw) > 1e-9:
+            rot_objs(self.objs, self.yaw, self.pivot)
+        return False
+
+
+def ydir(a_deg):
+    """dir(a) in game (x, z): yaw convention of CONTRACT 35.1"""
+    a = math.radians(a_deg)
+    return (math.sin(a), math.cos(a))
+
+
+def ring_points(r, n, a0_deg=0.0, closed=True):
+    """n points on a horizontal circle (game x, z) starting at yaw a0; closed repeats the first point"""
+    pts = []
+    for k in range(n + (1 if closed else 0)):
+        a = math.radians(a0_deg + 360.0 * (k % n) / n)
+        pts.append((r * math.sin(a), r * math.cos(a)))
+    return pts
+
+
+def annulus(name, r0, r1, y, mat, n=96, a0_deg=0.0, a1_deg=360.0, u_len=1.5, v_range=(0.0, 1.0), col=None):
+    """flat ring band (faces +Y) between radii r0 < r1 from yaw a0 to a1: u = arc length along r0.. / u_len (tileable
+    texture along the ring), v across the band in v_range (inner edge = v_range[0])"""
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new("UVMap")
+    span = a1_deg - a0_deg
+    segs = max(2, int(round(n * abs(span) / 360.0)))
+    rm = 0.5 * (r0 + r1)
+    inner, outer = [], []
+    for k in range(segs + 1):
+        a = math.radians(a0_deg + span * k / segs)
+        inner.append(bm.verts.new(G(r0 * math.sin(a), y, r0 * math.cos(a))))
+        outer.append(bm.verts.new(G(r1 * math.sin(a), y, r1 * math.cos(a))))
+    for k in range(segs):
+        f = bm.faces.new((inner[k], outer[k], outer[k + 1], inner[k + 1]))
+        u0 = rm * math.radians(abs(span)) * k / segs / u_len
+        u1 = rm * math.radians(abs(span)) * (k + 1) / segs / u_len
+        for loop, uv in zip(f.loops, ((u0, v_range[0]), (u0, v_range[1]), (u1, v_range[1]), (u1, v_range[0]))):
+            loop[uvl].uv = uv
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    for f in bm.faces:
+        if f.normal.z < 0:
+            f.normal_flip()
+    return finish(bm, name, [mat], uv=False, smooth_angle=5, col=col)
+
+
+def ring_wall(name, r, y0, y1, mat, n=96, a0_deg=0.0, a1_deg=360.0, u_len=1.5, v_range=(0.0, 1.0), inward=True, col=None):
+    """vertical cylindrical band at radius r (y0..y1), facing the ring centre (inward) or away; u = arc / u_len"""
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new("UVMap")
+    span = a1_deg - a0_deg
+    segs = max(2, int(round(n * abs(span) / 360.0)))
+    lo, hi = [], []
+    for k in range(segs + 1):
+        a = math.radians(a0_deg + span * k / segs)
+        lo.append(bm.verts.new(G(r * math.sin(a), y0, r * math.cos(a))))
+        hi.append(bm.verts.new(G(r * math.sin(a), y1, r * math.cos(a))))
+    for k in range(segs):
+        f = bm.faces.new((lo[k], lo[k + 1], hi[k + 1], hi[k]))
+        u0 = r * math.radians(abs(span)) * k / segs / u_len
+        u1 = r * math.radians(abs(span)) * (k + 1) / segs / u_len
+        for loop, uv in zip(f.loops, ((u0, v_range[0]), (u1, v_range[0]), (u1, v_range[1]), (u0, v_range[1]))):
+            loop[uvl].uv = uv
+    ob = finish(bm, name, [mat], uv=False, smooth_angle=30, col=col)
+    me = ob.data
+    p = me.polygons[len(me.polygons) // 2]
+    c = p.center
+    radial = Vector((c.x, c.y, 0.0)).normalized()
+    if (p.normal.dot(radial) > 0) == inward:
+        me.flip_normals()
+    return ob
+
+
 # =============================================================== crowd nodes (exported) + proof cards
 def crowd_nodes():
     """crowd_<bay>_<row>_<i> empties from S.crowd.bays (CONTRACT 21.3): feet point, +Z facing, scale = card height"""
@@ -677,9 +796,12 @@ def crowd_nodes():
     nodes = []
     for bay in crowd["bays"]:
         rng = mulberry32(bay["seed"])
-        x0, x1 = bay["x"]
+        x0, x1 = bay.get("localX", bay["x"])
         jx, jz = bay["jitter"]
-        yaw = math.radians(bay.get("faceYawDeg", 0.0))
+        face = math.radians(bay.get("faceYawDeg", 0.0))
+        rot = bay.get("rotDeg", 0.0)                   # CONTRACT 35.11: bay yawed about the ring centre
+        R = yaw_matrix(rot)
+        yaw = face
         for ri, row in enumerate(bay["rows"]):
             n = int(math.floor((x1 - x0) / bay["spacing"] + 1e-6)) + 1
             stag = 0.5 * bay["spacing"] * (ri % 2)
@@ -695,11 +817,11 @@ def crowd_nodes():
                 if abs(yaw) > 1e-3:
                     ang = "right" if yaw > 0 else "left"
                 else:
-                    ang = "front" if abs(x) < 3.0 else ("left" if x > 0 else "right")
+                    ang = "front" if abs(x) < bay.get("frontHalfM", 3.0) else ("left" if x > 0 else "right")
                 e = bpy.data.objects.new("crowd_%s_%d_%d" % (bay["id"], ri, i), None)
                 e.empty_display_type = "SINGLE_ARROW"
-                e.location = G(x, row["y"], z)
-                e.rotation_euler = (0.0, 0.0, yaw)
+                e.location = R @ G(x, row["y"], z)
+                e.rotation_euler = (0.0, 0.0, yaw + math.radians(rot))
                 e.scale = (card_h, card_h, card_h)
                 e["bay"] = bay["id"]
                 e["row"] = ri
@@ -707,7 +829,7 @@ def crowd_nodes():
                 e["rand"] = round(r, 5)
                 e["angle"] = ang
                 COL_NODES.objects.link(e)
-                nodes.append((e, x, row["y"], z, yaw, r, ang))
+                nodes.append((e, e.location.x, row["y"], -e.location.y, yaw + math.radians(rot), r, ang))
     log("crowd nodes", len(nodes))
     return nodes
 
@@ -797,7 +919,7 @@ def env_map(src, out_name, exposure=1.0):
         a = a.reshape(h, w, 4)
         a[..., :3] *= exposure
         e2.pixels.foreach_set(a.ravel())
-    e2.filepath_raw = os.path.join(GLTF_OUT, out_name)
+    e2.filepath_raw = os.path.join(OUT3D, out_name)       # staged; stagefinish_b.py --swap moves it into art/gltf
     e2.file_format = "HDR"
     e2.save()
     log("env map", e2.filepath_raw, os.path.getsize(e2.filepath_raw))
@@ -843,6 +965,12 @@ def fighters(pairs):
     return out
 
 
+def env_path():
+    """the staged env HDR when this build wrote one, else the shipped one"""
+    p = os.path.join(OUT3D, S["environment"]["hdr"])
+    return p if os.path.exists(p) else os.path.join(GLTF_OUT, S["environment"]["hdr"])
+
+
 def setup_lights_world(hdri):
     for L in S["lights"]:
         t = L["type"]
@@ -883,7 +1011,7 @@ def setup_lights_world(hdri):
         nt.nodes.remove(nd)
     out = nt.nodes.new("ShaderNodeOutputWorld")
     env = nt.nodes.new("ShaderNodeTexEnvironment")
-    env.image = bpy.data.images.load(os.path.join(GLTF_OUT, S["environment"]["hdr"]), check_existing=True)
+    env.image = bpy.data.images.load(env_path(), check_existing=True)
     b1 = nt.nodes.new("ShaderNodeBackground")
     b1.inputs["Strength"].default_value = S["environment"]["intensity"]
     nt.links.new(env.outputs["Color"], b1.inputs["Color"])
@@ -1091,16 +1219,78 @@ def fog_composite(beauty_path, depth_path, out_path):
     b.save()
 
 
-def render_proofs(extra_shots, fighter_pairs):
+ORBIT_DEGS = [0, 45, 90, 135, 180, 225, 270, 315]
+ORBIT_DISTS = (("n", 4.4), ("f", 8.0))
+LAST_NEAREST = None
+
+
+def orbit_shots(height=1.35, look_y=1.0, centre=(0.0, 0.0), camera_side_deg=0.0):
+    """CONTRACT 35.7 / 35.11.7 orbit camera around a pair at the ring centre: 8 angles every 45 deg from cameraSideDeg,
+    position = centre + dir(a) * dist + up * height (dist 4.4 / 8.0), look-at the pair midpoint (centre, y 1.0) - ids
+    orbit_<deg>_<n|f> (STAGES3D-A's naming, so the lab and merge_stages see one set). `pairYaw` = a: the stand-in pair
+    turns with the camera (the game keeps camN perpendicular to the pair)."""
+    out = []
+    for a0 in ORBIT_DEGS:
+        a = (a0 + camera_side_deg) % 360.0
+        for tag, d in ORBIT_DISTS:
+            dx, dz = ydir(a)
+            pos = [round(centre[0] + dx * d, 4), height, round(centre[1] + dz * d, 4)]
+            out.append({"id": "orbit_%03d_%s" % (int(round(a0)), tag), "pos": pos, "look": [centre[0], look_y, centre[1]],
+                        "pairYaw": a, "orbitDeg": a0, "distM": d})
+    return out
+
+
+def proof_shot_list(camera_side_deg=0.0):
+    """camera.proofShots for the fragment: the 16 orbit shots + near_center / far_center aliases of orbit_000_n/_f
+    (merge_stages warns without near_center; the lab renders any id)"""
+    orb = [{k: v for k, v in s.items() if k in ("id", "pos", "look")} for s in orbit_shots(camera_side_deg=camera_side_deg)]
+    alias = []
+    for s in orb:
+        if s["id"] == "orbit_000_n":
+            alias.append(dict(s, id="near_center"))
+        if s["id"] == "orbit_000_f":
+            alias.append(dict(s, id="far_center"))
+    return alias + orb
+
+
+_PAIR = {"pivot": None}
+
+
+def _pair_yaw(deg):
+    pv = _PAIR["pivot"]
+    if pv is not None:
+        pv.rotation_euler = (0.0, 0.0, math.radians(deg))
+        bpy.context.view_layer.update()
+
+
+def orbit_sheets(shots, tag):
+    """2x2 labelled contact sheets of the orbit proofs (1920 x 1080 each, PIL in the system python: stagefinish_b.py
+    --sheets) so every angle is READ at a useful size"""
+    r = subprocess.run([system_python(), os.path.join(HERE, "stagefinish_b.py"), SID, "--sheets"], capture_output=True,
+                       text=True, encoding="utf-8", errors="replace")
+    log("orbit sheets rc=%d" % r.returncode, r.stdout[-1500:], r.stderr[-1500:])
+
+
+def render_proofs(extra_shots, fighter_pairs, orbit=True):
     setup_lights_world(None)
     nodes = [(e, e.location.x, e.location.z, -e.location.y, e.rotation_euler.z, e["rand"], e["angle"])
              for e in COL_NODES.objects if e.name.startswith("crowd_")]
     proof_cards(nodes)
     if DO_FIGHTERS and fighter_pairs:
-        fighters(fighter_pairs)
+        objs = fighters(fighter_pairs)
+        pv = bpy.data.objects.new("pair_pivot", None)
+        COL_PROOF.objects.link(pv)
+        for o in objs:
+            if o.type == "ARMATURE" and o.parent is None:
+                mw = o.matrix_world.copy()
+                o.parent = pv
+                o.matrix_world = mw
+        _PAIR["pivot"] = pv
     for ob in COL_NODES.objects:
         ob.hide_render = True
-    shots = list(S["camera"]["proofShots"]) + list(extra_shots)
+    shots = [] if ORBIT_ONLY else list(extra_shots)
+    if orbit and not NO_ORBIT:
+        shots = orbit_shots() + shots
     if SHOTS:
         want = str(SHOTS).split(",")
         shots = [s for s in shots if s["id"] in want]
@@ -1111,6 +1301,7 @@ def render_proofs(extra_shots, fighter_pairs):
         SCN.render.resolution_y = RES[1]
         cam = make_camera(sh)
         SCN.camera = cam
+        _pair_yaw(sh.get("pairYaw", 0.0))
         render_setup(False)
         p = os.path.join(CACHE, "%s_beauty_%s.png" % (SID, sh["id"]))
         SCN.render.filepath = p
@@ -1127,6 +1318,7 @@ def render_proofs(extra_shots, fighter_pairs):
         SCN.render.resolution_x = int(round(RES[1] * aspect))
         SCN.render.resolution_y = RES[1]
         SCN.camera = cam
+        _pair_yaw(sh.get("pairYaw", 0.0))
         render_setup(True)
         dp = os.path.join(CACHE, "%s_depth_%s.png" % (SID, sh["id"]))
         SCN.render.filepath = dp
@@ -1137,6 +1329,83 @@ def render_proofs(extra_shots, fighter_pairs):
     depth_materials(False, saved)
     for o in hidden:
         o.hide_render = False
+    _pair_yaw(0.0)
+    orbit_sheets([sh for sh, _, _ in beauty], SID)
+
+
+# =============================================================== camera clearance (CONTRACT 35.11 clearRadiusM)
+def _tri_dist2d(P):
+    """P: (n, 3, 2) triangles in the plane -> distance from the origin to each triangle (0 when it contains it)"""
+    A, B, C = P[:, 0], P[:, 1], P[:, 2]
+
+    def seg(a, b):
+        ab = b - a
+        t = np.clip(-(a * ab).sum(1) / np.maximum((ab * ab).sum(1), 1e-12), 0.0, 1.0)
+        q = a + ab * t[:, None]
+        return np.sqrt((q * q).sum(1))
+    d = np.minimum(np.minimum(seg(A, B), seg(B, C)), seg(C, A))
+
+    def cr(u, v):
+        return u[:, 0] * v[:, 1] - u[:, 1] * v[:, 0]
+    s1, s2, s3 = cr(B - A, -A), cr(C - B, -B), cr(A - C, -C)
+    inside = ((s1 >= 0) & (s2 >= 0) & (s3 >= 0)) | ((s1 <= 0) & (s2 <= 0) & (s3 <= 0))
+    inside &= np.abs(cr(B - A, C - A)) > 1e-6        # vertical faces project to zero-area triangles: never "inside"
+    d[inside] = 0.0
+    return d
+
+
+def clearance_record(clear_r, offenders, low_top, r_clear, y0, y1, nearest):
+    """the fragment's build.clearance (CONTRACT 35.11.5, the shape tools/merge_stages.py validates)"""
+    return {"ok": not offenders and clear_r >= r_clear, "minRadiusM": round(clear_r, 3), "bandY": [y0, y1],
+            "requiredM": r_clear, "nearest": nearest, "tallestInsideM": round(low_top, 3),
+            "method": "stagekit_b.clearance: every set triangle whose height range touches bandY, horizontal distance "
+                      "from the ring centre (conservative: full triangle height range), rain cards excluded"}
+
+
+def clearance(r_clear=9.5, y0=1.15, y1=4.5, skip=("rain_",), centre=(0.0, 0.0), report=12):
+    """measured camera clearance: the smallest horizontal distance from the ring centre to any set triangle whose
+    height range touches [y0, y1] (conservative: a triangle counts with its full height range). Returns
+    (clearRadius, offenders inside r_clear [(dist, object, ymin, ymax)], ring-top height of everything inside r_clear).
+    The band 1.15..4.5 m contains STAGES3D-A's 1.30..3.00 m (CONTRACT 35.11.5), so a pass here passes theirs."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    best = []
+    low_top = 0.0
+    cx, cz = centre
+    for ob in COL_SET.objects:
+        if ob.type != "MESH" or ob.name.startswith(skip) or ob.hide_render:
+            continue
+        me = ob.data
+        if not len(me.polygons):
+            continue
+        me.calc_loop_triangles()
+        mw = np.array(ob.matrix_world)
+        co = np.empty(len(me.vertices) * 3, np.float32)
+        me.vertices.foreach_get("co", co)
+        co = co.reshape(-1, 3)
+        co = co @ mw[:3, :3].T + mw[:3, 3]
+        tri = np.empty(len(me.loop_triangles) * 3, np.int32)
+        me.loop_triangles.foreach_get("vertices", tri)
+        P = co[tri.reshape(-1, 3)]                          # Blender: x, y (= -game z), z (= game y)
+        ymin, ymax = P[:, :, 2].min(1), P[:, :, 2].max(1)
+        P2 = np.stack([P[:, :, 0] - cx, P[:, :, 1] + cz], -1)
+        d = _tri_dist2d(P2)
+        inner = d < r_clear
+        if inner.any():
+            low_top = max(low_top, float(ymax[inner & (ymax < y0)].max()) if (inner & (ymax < y0)).any() else 0.0)
+        band = (ymax >= y0) & (ymin <= y1)
+        if band.any():
+            k = int(np.argmin(np.where(band, d, 1e9)))
+            best.append((float(d[k]), ob.name, float(ymin[k]), float(ymax[k])))
+    best.sort()
+    clear_r = best[0][0] if best else 99.0
+    offenders = [b for b in best if b[0] < r_clear]
+    global LAST_NEAREST
+    LAST_NEAREST = ("%s at %.3f m (y %.2f..%.2f)" % (best[0][1], best[0][0], best[0][2], best[0][3])) if best else None
+    log("CLEARANCE band y %.2f..%.2f: clear radius %.3f m (need >= %.1f); tallest low item inside %.1f m: %.3f m" % (
+        y0, y1, clear_r, r_clear, r_clear, low_top))
+    for b in best[:report]:
+        log("  nearest in band: %.3f m  %s  (y %.2f..%.2f)%s" % (b[0], b[1], b[2], b[3], "  <-- INSIDE" if b[0] < r_clear else ""))
+    return clear_r, offenders, low_top
 
 
 # =============================================================== EXPORT
@@ -1219,9 +1488,10 @@ def export(dress):
 
 
 def write_fragment():
-    """art/stages/<id>.stage.json = the StageDef (CONTRACT 21.2) this script authors; `build` is filled by
-    stagefinish_b.py from the finished GLB."""
-    p = os.path.join(HERE, SID + ".stage.json")
+    """<id>.stage.json = the StageDef (CONTRACT 21.2 + 35.11) this script authors, STAGED in OUT3D (moved to
+    art/stages/ together with the GLB by stagefinish_b.py --swap, so data/stages.json never pairs a new ring with the old
+    GLB); `build` is filled by stagefinish_b.py from the finished GLB."""
+    p = os.path.join(OUT3D, SID + ".stage.json")
     d = json.loads(json.dumps(S))
     if os.path.exists(p):
         try:
@@ -1238,7 +1508,7 @@ def write_fragment():
 
 def run_finish():
     import stagefinish_b as F
-    F.finish(SID)
+    F.finish(SID, merge=False, staged=True)
 
 
 # =============================================================== contact render (ENV_KIT section 8.3)

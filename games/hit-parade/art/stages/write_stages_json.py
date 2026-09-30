@@ -1,7 +1,7 @@
 """HIT PARADE - writes data/stages.json (lane STAGES). Plain Python 3.
 
-  python art/stages/write_stages_json.py            # write data/stages.json
-  python art/stages/write_stages_json.py --measure  # also fill rust_theater build stats from the GLB
+  python art/stages/write_stages_json.py            # CHANGED(STAGES3D-A): runs tools/merge_stages.py (fragments win)
+  python art/stages/write_stages_json.py --legacy-p1 [--measure]  # the old P1 whole-file write (2.5D rust entry)
 
 Source of truth for the stage definitions: THIS file (rust_theater is authored here; the other four
 sets are TODO stubs whose kit lists are copied from _research/environment/env_kit.json).
@@ -180,6 +180,17 @@ def glb_stats(path):
 
 
 def main():
+    """CHANGED(STAGES3D-A): superseded. Every built stage (rust_theater included, since the CONTRACT 35.6 360-degree
+    rebuild) is defined by its art/stages/<id>.py build and ships as the fragment art/stages/<id>.stage.json;
+    data/stages.json = tools/merge_stages.py over those fragments. Writing the P1 RUST dict below would put the 2.5D
+    Rust Theater (no ring, old crowd) back over the 3D one, so main() now runs the merge instead (--legacy-p1 = the old
+    whole-file write, kept only for archaeology)."""
+    if "--legacy-p1" not in sys.argv:
+        import subprocess
+        mp = os.path.join(ROOT, "tools", "merge_stages.py")
+        print("write_stages_json.py: superseded by the stage fragments -> running", os.path.relpath(mp, ROOT))
+        subprocess.run([sys.executable, mp] + (["--check"] if "--check" in sys.argv else []), check=True)
+        return
     rust = json.loads(json.dumps(RUST))
     if "--measure" in sys.argv:
         gp = os.path.join(ROOT, "art", "gltf", "stages", "rust_theater.glb")

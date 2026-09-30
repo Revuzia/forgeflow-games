@@ -1,0 +1,734 @@
+// probe_3d (G2, lane SIM3D): the 3D ring (CONTRACT §35.10 + §35.1-35.4, 35.8).
+//   fx3d unit tests (sine table pinned, trig / atan / isqrt / rot exactness, no libm trig in core/sim),
+//   spawn axis + camera side + P1 screen-left, auto-face, STEP_IN / STEP_OUT directions, SIDESTEP (15 f, 0.85 m arc,
+//   step-attack from f11, block from f12), SIDEWALK (distance +-2 cm over 2 s, 1.8 m/s, back cancels into block, 4 f
+//   settle), camN continuity over a full circle, sidestep evades a LINEAR attack but not a HOMING one, tracking
+//   until / rate as authored, lateral hit depth, ring collision + wall splat on a circle and an octagon (sector / side
+//   index + inward normal), projectile dodged by a step, aimed projectiles, Gazza's ball reflection off the ring,
+//   throw front arc +-70 deg, throw carry along the thrower's yaw, back throw lands behind, BRAWL goons + heckle arcs
+//   from all sides, soft lock, determinism + save/load re-step with random STEP streams, snapshot fields.
+import { readFileSync, readdirSync } from 'node:fs';
+import { I, ROOT, dirBits, evs, fixtureData, newMatch, place, place3, run, sb, stepInputs, tester } from './fixtures/simkit.ts';
+import { buildGameData, loadGameData, STEP_CLIPS } from '../runtime/src/core/data.ts';
+import type { GameData } from '../runtime/src/core/types.ts';
+import { checksum, load, readFighter, readMatch, save, step } from '../runtime/src/core/sim/match.ts';
+import type { Match } from '../runtime/src/core/sim/match.ts';
+import { BALL, BR, BRAWL_BASE, F, G, GOON_CAP, P, PROJ_CAP, ST, STATE_INTS, W, goonBase, projBase } from '../runtime/src/core/sim/layout.ts';
+import { BALL_EV, EV, EVX } from '../runtime/src/core/sim/events.ts';
+import {
+  Q, SIN_Q, cosQ, dirToYaw, divRound, isqrt, mulQ, rot, sinQ, sinTableHash, yawDelta, degToYaw,
+} from '../runtime/src/core/sim/fx3d.ts';
+import { canBlock } from '../runtime/src/core/sim/hits.ts';
+import { inFrontArc } from '../runtime/src/core/sim/throws.ts';
+import { boxCyl } from '../runtime/src/core/sim/boxes.ts';
+
+const t = tester('probe_3d');
+const U = 100000;
+const RAW = (rel: string): unknown => JSON.parse(readFileSync(ROOT + rel, 'utf8'));
+
+// ================================================================= 0. fx3d unit tests
+{
+  t.eq(sinTableHash(), 0xc92b373b, 'sine table hash pinned (Taylor polynomial in doubles = identical on every engine)');
+  let mono = true;
+  for (let k = 1; k <= 4096; k++) if (SIN_Q[k] < SIN_Q[k - 1]) mono = false;
+  t.ok(SIN_Q[0] === 0 && SIN_Q[4096] === Q && mono, 'quarter-wave table: 0 .. 16384, monotonic');
+  let maxErr = 0;
+  let maxYawErr = 0;
+  let neg0 = false;
+  for (let y = 0; y < 65536; y++) {
+    const e = Math.abs(sinQ(y) - Math.round(Math.sin((y * 2 * Math.PI) / 65536) * Q));
+    if (e > maxErr) maxErr = e;
+    const back = dirToYaw(sinQ(y) * 37, cosQ(y) * 37);
+    const d = Math.abs(yawDelta(y, back));
+    if (d > maxYawErr) maxYawErr = d;
+    if (Object.is(sinQ(y), -0) || Object.is(cosQ(y), -0)) neg0 = true;
+  }
+  t.ok(maxErr <= 1, `sinQ within 1 LSB of libm for all 65536 yaws (max ${maxErr})`);
+  t.ok(maxYawErr <= 1, `dirToYaw(yawToDir(y)) round trip within 1 unit for all yaws (max ${maxYawErr})`);
+  t.ok(!neg0, 'no negative zero from sinQ / cosQ');
+  t.ok(dirToYaw(1, 0) === 16384 && dirToYaw(0, -5) === 32768 && dirToYaw(-3, 0) === 49152 && dirToYaw(0, 9) === 0 && dirToYaw(7, 7) === 8192,
+    'dirToYaw axes / diagonal: +X 16384, -Z 32768, -X 49152, +Z 0, 45 deg 8192');
+  // big vectors (|d| up to 2^30)
+  let bigErr = 0;
+  for (let k = 0; k < 2000; k++) {
+    const y = (k * 7919) & 65535;
+    const r = (1 << 30) - k * 1000;
+    const got = dirToYaw(mulQ(r, sinQ(y)), mulQ(r, cosQ(y)));
+    bigErr = Math.max(bigErr, Math.abs(yawDelta(y, got)));
+  }
+  t.ok(bigErr <= 1, `dirToYaw exact on 2^30 U vectors (max ${bigErr})`);
+  let bad = 0;
+  let seed = 12345;
+  const rnd = (): number => {
+    seed = (Math.imul(seed, 1103515245) + 12345) | 0;
+    return (seed >>> 0) / 4294967296;
+  };
+  for (let k = 0; k < 100000; k++) {
+    const n = Math.floor(rnd() * 2 ** 52) + Math.floor(rnd() * 1024);
+    const x = isqrt(n);
+    if (!(x * x <= n && (x + 1) * (x + 1) > n)) bad++;
+  }
+  for (const n of [0, 1, 2, 3, 4, 15, 16, 17, 2 ** 32, 2 ** 32 - 1, 2 ** 52, (2 ** 26 - 1) ** 2, (2 ** 26 - 1) ** 2 - 1]) {
+    const x = isqrt(n);
+    if (!(x * x <= n && (x + 1) * (x + 1) > n)) bad++;
+  }
+  t.eq(bad, 0, 'isqrt exact (floor) on 100k random n < 2^52 + edge values');
+  const R2 = [0, 0];
+  let rotErr = 0;
+  for (let k = 0; k < 5000; k++) {
+    const x = Math.floor((rnd() - 0.5) * 2e6);
+    const z = Math.floor((rnd() - 0.5) * 2e6);
+    const y = Math.floor(rnd() * 65536);
+    rot(x, z, y, R2);
+    rotErr = Math.max(rotErr, Math.abs(Math.hypot(R2[0], R2[1]) - Math.hypot(x, z)));
+  }
+  rot(0, 1000, 16384, R2);
+  t.ok(rotErr <= 200 && R2[0] === 1000 && R2[1] === 0, `rot keeps the length (max err ${rotErr.toFixed(1)} U on 10 m vectors) and turns +Z toward +X`);
+  t.ok(divRound(5, 2) === 3 && divRound(-5, 2) === -3 && mulQ(-1, Q / 2) === -1 && mulQ(1, Q / 2) === 1, 'divRound / mulQ round half away from zero (symmetric)');
+  // no libm trig anywhere in core/sim
+  const dir = ROOT + 'runtime/src/core/sim/';
+  const offenders: string[] = [];
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith('.ts')) continue;
+    const src = readFileSync(dir + f, 'utf8').split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+    if (/Math\.(sin|cos|tan|atan2?|asin|acos|sqrt|hypot|cbrt|exp|log|pow|random)\s*\(/.test(src)) offenders.push(f);
+  }
+  t.ok(offenders.length === 0, `no Math.sin / cos / atan2 / sqrt / hypot / random in core/sim code (${offenders.join(', ') || 'none'})`);
+}
+
+// ================================================================= test data (fixtures + variants + stages)
+const STAGES = {
+  version: 1,
+  stages: [
+    { id: 'circ', status: 'built', ring: { shape: 'circle', radiusM: 5.5, sides: 16, rotDeg: 0 }, spawnAxisDeg: 90, cameraSideDeg: 0 },
+    { id: 'rot45', status: 'built', ring: { shape: 'circle', radiusM: 5.2, sides: 16, rotDeg: 0 }, spawnAxisDeg: 45, cameraSideDeg: 315 },
+    { id: 'swap', status: 'built', spawnAxisDeg: 90, cameraSideDeg: 180 },
+    { id: 'oct', status: 'built', ring: { shape: 'poly', radiusM: 5.0, sides: 8, rotDeg: 22.5 }, spawnAxisDeg: 90, cameraSideDeg: 0 },
+  ],
+};
+type AnyRec = Record<string, unknown>;
+function variant(mod: (a: AnyRec, b: AnyRec) => void): GameData {
+  const a = RAW('_harness/fixtures/kit_a.json') as AnyRec;
+  const b = RAW('_harness/fixtures/kit_b.json') as AnyRec;
+  mod(a, b);
+  return buildGameData({
+    system: RAW('data/system.json'),
+    fighters: { kit_a: a, kit_b: b },
+    clips: { kit_a: RAW('_harness/fixtures/kit_a.clips.json'), kit_b: RAW('_harness/fixtures/kit_b.clips.json') },
+    stages: STAGES,
+  });
+}
+const mv = (k: AnyRec, id: string): AnyRec => (k.moves as Record<string, AnyRec>)[id];
+const D0 = variant(() => {});
+const DLIN = variant((a) => { mv(a, '5H').linear = true; });
+const DHOM = variant((a) => { mv(a, '5H').homing = true; });
+const DTRK = variant((a) => { mv(a, '5H').track = { until: 6, rate: 3 }; });
+const DAIM = variant((a) => { (mv(a, 'brickbat_m').projectile as AnyRec).aimed = true; });
+
+const pos = (m: Match, i: number): [number, number] => [m.s[sb(i) + F.x] / U, m.s[sb(i) + F.z] / U];
+const dist = (m: Match): number => {
+  const a = pos(m, 0);
+  const b = pos(m, 1);
+  return Math.hypot(b[0] - a[0], b[1] - a[1]);
+};
+const yaw = (m: Match, i: number): number => m.s[sb(i) + F.yaw];
+const camN = (m: Match): [number, number] => [m.s[W.camNX] / Q, m.s[W.camNZ] / Q];
+const count = (m: Match, from: number, type: number, a = -1): number => evs(m, from).filter((e) => e.type === type && (a < 0 || e.a === a)).length;
+const st = (m: Match, i: number): number => m.s[sb(i) + F.st];
+
+// ================================================================= 1. spawn axis, camera side, P1 screen-left
+{
+  const m = newMatch({ data: D0, stage: 'circ' });
+  const a = pos(m, 0);
+  const b = pos(m, 1);
+  t.ok(Math.abs(a[0] + 1.2) < 1e-4 && Math.abs(b[0] - 1.2) < 1e-4 && a[1] === 0 && b[1] === 0, `default layout: P1 (${a}) P2 (${b}) on x at +-1.2 m`);
+  t.ok(yaw(m, 0) === 16384 && yaw(m, 1) === 49152 && camN(m)[0] === 0 && camN(m)[1] === 1, 'yaws 90 / 270 deg, camN = +Z');
+  t.ok(m.s[sb(0) + F.facing] === 1 && m.s[sb(1) + F.facing] === -1, 'facing (screen side) +1 / -1');
+  const ms = readMatch(m);
+  t.ok(ms.ring?.shape === 'circle' && Math.abs((ms.ring?.radius ?? 0) - 5.5) < 1e-9 && Math.abs(Math.hypot(ms.camN![0], ms.camN![1]) - 1) < 1e-4, 'MatchSnap.ring + unit camN');
+}
+{
+  const m = newMatch({ data: D0, stage: 'rot45' });
+  const a = pos(m, 0);
+  const b = pos(m, 1);
+  const n = camN(m);
+  const R: [number, number] = [n[1], -n[0]];
+  const onAxis = Math.abs(a[0] - -1.2 * Math.SQRT1_2) < 1e-3 && Math.abs(a[1] - -1.2 * Math.SQRT1_2) < 1e-3;
+  t.ok(onAxis && Math.abs(n[0] + Math.SQRT1_2) < 1e-3 && Math.abs(n[1] - Math.SQRT1_2) < 1e-3, `spawnAxisDeg 45 / cameraSideDeg 315: P1 (${a.map((v) => v.toFixed(3))}) camN (${n.map((v) => v.toFixed(3))})`);
+  t.ok((b[0] - a[0]) * R[0] + (b[1] - a[1]) * R[1] > 0, 'P1 is screen-left');
+  const x0 = dist(m);
+  run(m, 20, dirBits(m, 0, 6), 0);
+  t.ok(dist(m) < x0 - 0.3, `RIGHT (= forward for the screen-left P1) walks toward P2 on the rotated axis (${x0.toFixed(2)} -> ${dist(m).toFixed(2)} m)`);
+}
+{
+  const m = newMatch({ data: D0, stage: 'swap' });
+  const a = pos(m, 0);
+  const n = camN(m);
+  t.ok(a[0] > 1.1 && n[1] === -1 && m.s[sb(0) + F.facing] === 1, `cameraSideDeg 180 swaps the spawn ends so P1 stays screen-left (P1 x ${a[0].toFixed(2)}, camN z ${n[1]}, facing ${m.s[sb(0) + F.facing]})`);
+}
+
+// ================================================================= 2. STEP_IN / STEP_OUT, sidestep, auto-face
+{
+  const m = newMatch({ data: D0, stage: 'circ' });
+  const n0 = camN(m);
+  const d0 = dist(m);
+  const p0 = pos(m, 0);
+  step(m, I.STEP_IN, 0);
+  t.ok(st(m, 0) === ST.SIDESTEP, 'STEP_IN tap starts SIDESTEP');
+  const snap = readFighter(m, 0);
+  const clip = m.tab.anims[0][snap.animId]?.clip;
+  let frames = 1;
+  let maxFaceErr = 0;
+  while (st(m, 0) === ST.SIDESTEP && frames < 40) {
+    // P2 idles and auto-faces P1 every frame (toward P1's START-of-frame position: slot order never matters)
+    const px = m.s[sb(0) + F.x];
+    const pz = m.s[sb(0) + F.z];
+    step(m, 0, 0);
+    frames++;
+    const want = dirToYaw(px - m.s[sb(1) + F.x], pz - m.s[sb(1) + F.z]);
+    maxFaceErr = Math.max(maxFaceErr, Math.abs(yawDelta(yaw(m, 1), want)));
+  }
+  const p1 = pos(m, 0);
+  const moved: [number, number] = [p1[0] - p0[0], p1[1] - p0[1]];
+  const c = pos(m, 1);
+  const a0 = Math.atan2(p0[1] - c[1], p0[0] - c[0]);
+  const a1 = Math.atan2(p1[1] - c[1], p1[0] - c[0]);
+  let da = a1 - a0;
+  while (da > Math.PI) da -= 2 * Math.PI;
+  while (da < -Math.PI) da += 2 * Math.PI;
+  const arc = Math.abs(da) * d0;
+  t.ok(moved[0] * n0[0] + moved[1] * n0[1] < -0.5, `STEP_IN moves away from the camera (-camN): dz ${moved[1].toFixed(3)} m`);
+  t.eq(frames - 1, 15, 'SIDESTEP lasts 15 frames (actionable on frame 16)');
+  t.near(dist(m), d0, 0.01, 'sidestep keeps the distance to the opponent (arc, not a straight line)');
+  t.near(arc, 0.85, 0.02, `sidestep arc ${arc.toFixed(3)} m`);
+  t.ok(maxFaceErr <= 1, `the idle opponent auto-faces the stepper every frame (max err ${maxFaceErr} yaw units)`);
+  t.ok(clip === 'sidestep_l', `P1 STEP_IN = its own left -> anim clip "${clip}" (sidestep_l)`);
+  t.ok(readFighter(m, 0).stateName === 'idle', 'tap only: back to idle after the sidestep');
+}
+{
+  const m = newMatch({ data: D0, stage: 'circ' });
+  step(m, I.STEP_OUT, 0);
+  const clip = m.tab.anims[0][readFighter(m, 0).animId]?.clip;
+  run(m, 20, 0, 0);
+  t.ok(pos(m, 0)[1] > 0.5 && clip === 'sidestep_r', `STEP_OUT moves toward the camera (+camN): z ${pos(m, 0)[1].toFixed(3)} m, clip ${clip}`);
+  const m2 = newMatch({ data: D0, stage: 'circ' });
+  run(m2, 10, I.STEP_IN | I.STEP_OUT, 0);
+  t.ok(st(m2, 0) !== ST.SIDESTEP && pos(m2, 0)[1] === 0, 'STEP_IN + STEP_OUT together = neutral (SOCD)');
+}
+{
+  // step-attack: tap, L pressed on step frame 9 -> the attack starts on step frame 11
+  const m = newMatch({ data: D0, stage: 'circ' });
+  step(m, I.STEP_IN, 0);
+  let startF = -1;
+  for (let k = 2; k <= 16; k++) {
+    step(m, k === 9 ? I.L : 0, 0);
+    if (startF < 0 && st(m, 0) === ST.ATTACK) startF = k;
+  }
+  t.eq(startF, 11, 'a button buffered on step frame 9 comes out on step frame 11 (step-attack)');
+  // block from step frame 12 (canBlock accepts SIDESTEP from step.blockF)
+  const m2 = newMatch({ data: D0, stage: 'circ' });
+  step(m2, 0, I.STEP_IN); // step frame 1
+  const atk = m2.cf[0].moves[m2.cf[0].gTable[5 * 3 + 2]];
+  for (let k = 2; k <= 10; k++) step(m2, 0, 0);
+  step(m2, 0, dirBits(m2, 1, 4)); // step frame 11, back held
+  const at11 = st(m2, 1) === ST.SIDESTEP && canBlock(m2, 1, atk, m2.s[sb(0) + F.x], m2.s[sb(0) + F.z]);
+  step(m2, 0, dirBits(m2, 1, 4)); // step frame 12
+  const at12 = st(m2, 1) === ST.SIDESTEP && canBlock(m2, 1, atk, m2.s[sb(0) + F.x], m2.s[sb(0) + F.z]);
+  t.ok(!at11 && at12, `sidestep can block from step frame 12 (frame 11 ${at11}, frame 12 ${at12})`);
+}
+{
+  // SIDEWALK: distance within +-2 cm over 2 s, ~1.8 m/s tangential, settle 4 f, back cancels into block
+  const m = newMatch({ data: D0, stage: 'circ' });
+  const d0 = dist(m);
+  let dmax = 0;
+  let prev = pos(m, 0);
+  let path = 0;
+  let walkClip = '';
+  for (let k = 0; k < 135; k++) {
+    step(m, I.STEP_OUT, 0);
+    const p = pos(m, 0);
+    if (k >= 15) path += Math.hypot(p[0] - prev[0], p[1] - prev[1]);
+    prev = p;
+    dmax = Math.max(dmax, Math.abs(dist(m) - d0));
+    if (k === 60) walkClip = m.tab.anims[0][readFighter(m, 0).animId]?.clip ?? '';
+  }
+  t.ok(st(m, 0) === ST.SIDEWALK, 'held STEP past the sidestep = SIDEWALK');
+  t.ok(dmax <= 0.02, `sidewalk keeps the distance within 2 cm over 2.25 s (max dev ${(dmax * 100).toFixed(2)} cm)`);
+  const speed = (path / 120) * 60;
+  t.near(speed, 1.8, 0.03, `sidewalk tangential speed ${speed.toFixed(3)} m/s`);
+  t.ok(walkClip === 'sidewalk_r', `P1 circling toward the camera = its own right -> ${walkClip}`);
+  let settle = 0;
+  step(m, 0, 0);
+  while (st(m, 0) === ST.STEP_END && settle < 20) {
+    settle++;
+    step(m, 0, 0);
+  }
+  t.eq(settle, 4, 'release = a 4-frame settle (STEP_END), then free');
+  const m2 = newMatch({ data: D0, stage: 'circ' });
+  run(m2, 40, I.STEP_IN, 0);
+  step(m2, I.STEP_IN | dirBits(m2, 0, 4), 0);
+  const s2 = st(m2, 0);
+  t.ok(s2 === ST.WALK_B || s2 === ST.IDLE, `holding BACK cancels circling into the block states at once (state ${readFighter(m2, 0).stateName})`);
+  const atk = m2.cf[1].moves[m2.cf[1].gTable[5 * 3]];
+  t.ok(canBlock(m2, 0, atk, m2.s[sb(1) + F.x], m2.s[sb(1) + F.z]), 'and blocks from that frame');
+}
+{
+  // camN continuity over a full circle: never flips, turns 360 deg, P1 stays screen-left
+  const m = newMatch({ data: D0, stage: 'circ' });
+  let prev = camN(m);
+  let minDot = 1;
+  let turned = 0;
+  let facingFlips = 0;
+  for (let k = 0; k < 560; k++) {
+    step(m, I.STEP_IN, 0);
+    const n = camN(m);
+    minDot = Math.min(minDot, n[0] * prev[0] + n[1] * prev[1]);
+    turned += Math.atan2(prev[0] * n[1] - prev[1] * n[0], prev[0] * n[0] + prev[1] * n[1]);
+    prev = n;
+    if (m.s[sb(0) + F.facing] !== 1) facingFlips++;
+  }
+  const deg = Math.abs((turned * 180) / Math.PI);
+  t.ok(minDot > 0.99 && deg >= 360, `camN continuous while circling (min frame-to-frame dot ${minDot.toFixed(5)}, turned ${deg.toFixed(0)} deg)`);
+  t.eq(facingFlips, 0, 'the circling P1 stays screen-left (facing +1) the whole way round');
+}
+
+{
+  // step-attacks "SS.<btn>" (real data: patch / spin SS.H): routed only out of SIDESTEP / SIDEWALK, winning over 5H there
+  try {
+    const real = loadGameData();
+    const who = Object.keys(real.fighters).filter((id) => Object.keys(real.fighters[id].moves).some((k) => real.fighters[id].moves[k].input === 'SS.H'));
+    let ok = who.length > 0;
+    const notes: string[] = [];
+    for (const id of who) {
+      const tryStep = (pressAt: number): string => {
+        const m = newMatch({ data: real, p1: id, p2: 'johnny', stage: 'rust_theater' });
+        step(m, I.STEP_IN, 0);
+        let name = '';
+        for (let k = 2; k <= 13 && !name; k++) {
+          step(m, k === pressAt ? I.H : 0, 0);
+          if (st(m, 0) === ST.ATTACK) name = readFighter(m, 0).moveName;
+        }
+        return name;
+      };
+      const at9 = tryStep(9);
+      const at5 = tryStep(5);
+      const mw = newMatch({ data: real, p1: id, p2: 'johnny', stage: 'rust_theater' });
+      run(mw, 30, I.STEP_OUT, 0);
+      step(mw, I.STEP_OUT | I.H, 0);
+      const walkName = readFighter(mw, 0).moveName;
+      const mi = newMatch({ data: real, p1: id, p2: 'johnny', stage: 'rust_theater' });
+      step(mi, I.H, 0);
+      const idleName = readFighter(mi, 0).moveName;
+      notes.push(`${id}: step f9 H -> ${at9}, f5 H -> ${at5 || 'none'}, sidewalk H -> ${walkName}, idle H -> ${idleName}`);
+      if (!(at9 === 'SS.H' && at5 === '' && walkName === 'SS.H' && idleName === '5H')) ok = false;
+    }
+    t.ok(ok, `step-attacks: SS.H out of a sidestep (buffered from step frame 9, not 5) and a sidewalk; idle H stays 5H (${notes.join('; ')})`);
+  } catch (e) {
+    t.ok(false, `step-attack case crashed: ${String((e as Error).message).split(String.fromCharCode(10))[0]}`);
+  }
+}
+
+// ================================================================= 3. evasion + tracking
+function stepVs5H(data: GameData): { hit: number; whiff: number } {
+  const m = newMatch({ data, stage: 'circ' });
+  place(m, -0.65, 0.65);
+  run(m, 2, 0, 0);
+  const from = m.frame();
+  step(m, I.H, I.STEP_IN);
+  run(m, 30, 0, 0);
+  return { hit: count(m, from, EV.HIT, 0) + count(m, from, EV.BLOCK, 0), whiff: count(m, from, EV.WHIFF, 0) };
+}
+{
+  const lin = stepVs5H(DLIN);
+  const hom = stepVs5H(DHOM);
+  const m = newMatch({ data: DLIN, stage: 'circ' });
+  place(m, -0.65, 0.65);
+  run(m, 2, 0, 0);
+  const from = m.frame();
+  step(m, I.H, 0);
+  run(m, 30, 0, 0);
+  const ctrl = count(m, from, EV.HIT, 0);
+  t.ok(ctrl === 1, 'control: the linear 5H hits a standing opponent');
+  t.ok(lin.hit === 0 && lin.whiff === 1, `a sidestep on the same frame evades the LINEAR 5H (hits ${lin.hit}, whiff ${lin.whiff})`);
+  t.ok(hom.hit === 1, `but not the HOMING 5H (hits ${hom.hit})`);
+}
+{
+  // tracking as authored: 5H track {until 6, rate 3 deg}
+  const m = newMatch({ data: DTRK, stage: 'circ' });
+  place(m, -0.65, 0.65);
+  run(m, 2, 0, 0);
+  step(m, I.H, I.STEP_IN);
+  const rate = degToYaw(3);
+  let prevY = yaw(m, 0);
+  let maxEarly = 0;
+  let late = 0;
+  let turnedEarly = 0;
+  for (let f = 2; f <= 14; f++) {
+    step(m, 0, 0);
+    const y = yaw(m, 0);
+    const dY = Math.abs(yawDelta(prevY, y));
+    if (f <= 6) {
+      maxEarly = Math.max(maxEarly, dY);
+      turnedEarly += dY;
+    } else late += dY;
+    prevY = y;
+  }
+  t.ok(maxEarly <= rate && turnedEarly > 0, `tracking frames 2..6 turn <= 3 deg / frame (max ${(maxEarly * 360 / 65536).toFixed(2)} deg, total ${(turnedEarly * 360 / 65536).toFixed(2)} deg)`);
+  t.eq(late, 0, 'no tracking after track.until (frames 7..14 keep the yaw)');
+  const cm = m.cf[0].moves[m.cf[0].gTable[5 * 3 + 2]];
+  const d = m.cf[0].moves.find((x) => x.id === '5M')!;
+  t.ok(cm.trackUntil === 6 && cm.trackRate === rate && d.trackUntil === Math.max(1, d.startup - 4), `compiled: 5H until 6 rate ${cm.trackRate}; default normal 5M until startup - 4 = ${d.trackUntil}`);
+  const sp = m.cf[0].moves.find((x) => x.id === 'hook_m')!;
+  const hm = DHOM.fighters.kit_a.moves['5H'];
+  t.ok(sp.trackUntil === Math.max(1, sp.startup - 6), `default special until startup - 6 = ${sp.trackUntil}`);
+  const hmc = newMatch({ data: DHOM }).cf[0].moves.find((x) => x.id === '5H')!;
+  t.ok(hmc.homing && hmc.trackUntil === hmc.lastActive && Math.abs(hmc.lateral - 0.6 * U) < 2 && hm.homing === true, `homing tracks through the active frames (until ${hmc.trackUntil}) with lateral 0.60 m`);
+  const lm = newMatch({ data: DLIN }).cf[0].moves.find((x) => x.id === '5H')!;
+  t.ok(lm.linear && lm.trackUntil === 1 && Math.abs(lm.lateral - 0.22 * U) < 2, 'linear tracks frame 1 only; H lateral default 0.22 m');
+}
+{
+  // lateral depth: box vs circle in the attacker's frame (lateral 0.18, hurt r 0.3): just inside hits, just outside misses
+  const inside = boxCyl(0, 0, sinQ(16384), cosQ(16384), 100000, 20000, 18000, 100000, 130000, 100000, 47999, 30000, 0, 180000);
+  const outside = boxCyl(0, 0, sinQ(16384), cosQ(16384), 100000, 20000, 18000, 100000, 130000, 100000, 48001, 30000, 0, 180000);
+  t.ok(inside && !outside, 'hit box lateral half-depth + hurt radius: 0.47999 m off the line hits, 0.48001 m misses');
+}
+
+// ================================================================= 4. ring collision + wall splat (circle + octagon)
+{
+  const m = newMatch({ data: D0, stage: 'circ' });
+  place(m, -3.5, -2.0); // (the separation cap stops a walk-back 6 m from the opponent)
+  run(m, 200, dirBits(m, 0, 4), 0);
+  const pc = pos(m, 0);
+  const r0 = Math.hypot(pc[0], pc[1]);
+  t.ok(r0 < 5.5 && r0 > 5.0, `walking back into the circle ring stops inside it (root radius ${r0.toFixed(3)} m, ring 5.5 m)`);
+  const m2 = newMatch({ data: D0, stage: 'oct' });
+  place3(m2, -2.5, 2.5, -1.2, 1.2);
+  run(m2, 300, dirBits(m2, 0, 4), 0);
+  const p2 = pos(m2, 0);
+  let maxSide = -1;
+  for (let k = 0; k < 8; k++) {
+    const a = ((22.5 + k * 45) * Math.PI) / 180;
+    maxSide = Math.max(maxSide, p2[0] * Math.sin(a) + p2[1] * Math.cos(a));
+  }
+  t.ok(maxSide <= 5.0 && maxSide > 4.5, `backing into the octagon stops at a side (max side distance ${maxSide.toFixed(3)} m, apothem 5.0 m)`);
+}
+function impactSplat(stage: string, x0: number, z0: number, x1: number, z1: number): { n: number; b: number; c: number; d: number } {
+  const m = newMatch({ data: D0, stage });
+  place3(m, x0, z0, x1, z1);
+  run(m, 2, 0, 0);
+  const from = m.frame();
+  for (let k = 0; k < 45; k++) step(m, k === 0 ? I.IMPACT : 0, 0);
+  const e = evs(m, from).filter((q) => q.type === EV.WALL_SPLAT);
+  return e.length ? { n: e.length, b: e[0].b, c: e[0].c, d: e[0].d } : { n: 0, b: -1, c: 0, d: 0 };
+}
+{
+  // circle: defender near the wall at bearing 90 deg (+X) -> sector 4, inward normal 270 deg
+  const c = impactSplat('circ', 4.2, 0, 5.2, 0);
+  t.ok(c.n === 1 && (c.b & 255) === 4 && c.b >> 8 === 270 && Math.abs(c.c - 550) <= 1 && Math.abs(c.d) <= 1, `circle: IMPACT against the wall = WALL_SPLAT sector ${c.b & 255} normal ${c.b >> 8} deg at (${c.c}, ${c.d}) cm`);
+  // circle at bearing 45 deg
+  const q = Math.SQRT1_2;
+  const c2 = impactSplat('circ', 4.2 * q, 4.2 * q, 5.2 * q, 5.2 * q);
+  t.ok(c2.n === 1 && (c2.b & 255) === 2 && c2.b >> 8 === 225, `circle at 45 deg: sector ${c2.b & 255}, normal ${c2.b >> 8} deg`);
+  // octagon (rot 22.5): side 1 faces 67.5 deg; defender on that normal
+  const a = (67.5 * Math.PI) / 180;
+  const o = impactSplat('oct', 3.65 * Math.sin(a), 3.65 * Math.cos(a), 4.65 * Math.sin(a), 4.65 * Math.cos(a));
+  t.ok(o.n === 1 && (o.b & 255) === 1 && o.b >> 8 === 247, `octagon: WALL_SPLAT side ${o.b & 255} normal ${o.b >> 8} deg`);
+  // 1.2 m off the wall = no splat
+  const far = impactSplat('circ', 3.2, 0, 4.2, 0);
+  t.eq(far.n, 0, 'IMPACT 1 m off the ring wall: no splat');
+}
+{
+  // a launched body flying into the boundary = WALL_SPLAT (once per combo)
+  const m = newMatch({ data: D0, stage: 'circ' });
+  place(m, 3.5, 4.8);
+  run(m, 2, 0, 0);
+  const b1 = sb(1);
+  m.s[b1 + F.st] = ST.JUGGLE;
+  m.s[b1 + F.stF] = 0;
+  m.s[b1 + F.flags] |= 1;
+  m.s[b1 + F.y] = 60000;
+  m.s[b1 + F.vx] = 4000;
+  m.s[b1 + F.vz] = 0;
+  m.s[b1 + F.vy] = 3000;
+  m.s[b1 + F.cCount] = 1;
+  const from = m.frame();
+  run(m, 20, 0, 0);
+  t.ok(count(m, from, EV.WALL_SPLAT) === 1 && readFighter(m, 1).stateName !== 'juggle', 'a juggled body reaching the ring = WALL_SPLAT');
+}
+
+// ================================================================= 5. projectiles
+{
+  const shoot = (stepIt: boolean): { hit: number; flew: boolean } => {
+    const m = newMatch({ data: D0, stage: 'circ' });
+    place(m, -2.2, 2.2);
+    run(m, 2, 0, 0);
+    const from = m.frame();
+    let flew = false;
+    let stepped = false;
+    for (let k = 0; k < 70; k++) {
+      const w1 = k < 3 ? dirBits(m, 0, [2, 3, 6][k]) | (k === 2 ? I.M : 0) : 0;
+      let live = false;
+      for (let q = 0; q < PROJ_CAP; q++) if (m.s[projBase(q) + P.act] !== 0 && m.s[projBase(q) + P.kind] === 0) live = true;
+      if (live) flew = true;
+      const w2 = stepIt && live && !stepped ? I.STEP_OUT : 0;
+      if (w2) stepped = true;
+      step(m, w1, w2);
+    }
+    return { hit: count(m, from, EV.PROJ_HIT, 0), flew };
+  };
+  const hit = shoot(false);
+  const dodge = shoot(true);
+  t.ok(hit.flew && hit.hit === 1, 'control: the straight brick hits a standing opponent');
+  t.ok(dodge.flew && dodge.hit === 0, `a sidestep after the release dodges it (PROJ_HIT ${dodge.hit})`);
+}
+{
+  // aimed: launched toward the opponent's position at spawn, not along the thrower's (locked) yaw
+  const probe = (data: GameData): number => {
+    const m = newMatch({ data, stage: 'circ' });
+    place(m, -1.5, 1.5);
+    run(m, 2, 0, 0);
+    for (let k = 0; k < 3; k++) step(m, dirBits(m, 0, [2, 3, 6][k]) | (k === 2 ? I.M : 0), 0);
+    run(m, 8, 0, 0); // the thrower's tracking is over (startup - 6)
+    // the opponent drifts sideways before the spawn frame
+    for (let k = 0; k < 4; k++) {
+      m.s[sb(1) + F.z] += 15000;
+      step(m, 0, 0);
+    }
+    for (let k = 0; k < 10; k++) {
+      for (let q = 0; q < PROJ_CAP; q++) {
+        const pb = projBase(q);
+        if (m.s[pb + P.act] !== 0 && m.s[pb + P.kind] === 0) return Math.abs(yawDelta(m.s[pb + P.yaw], dirToYaw(m.s[sb(1) + F.x] - m.s[sb(0) + F.x], m.s[sb(1) + F.z] - m.s[sb(0) + F.z])));
+      }
+      step(m, 0, 0);
+    }
+    return -1;
+  };
+  const straight = probe(D0);
+  const aimed = probe(DAIM);
+  t.ok(aimed >= 0 && aimed < 300 && straight > 1000, `projectile.aimed launches at the opponent (off by ${aimed} yaw units; straight one ${straight})`);
+}
+{
+  // Gazza's ball rebounds off the ring by vector reflection (real data)
+  let note = 'skipped (real data/ not loadable)';
+  try {
+    const real = loadGameData();
+    if (real.fighters.gazza) {
+      const m = newMatch({ data: real, p1: 'gazza', p2: 'johnny', stage: 'rust_theater' });
+      const shoot = Object.keys(real.fighters.gazza.moves).find((k) => (real.fighters.gazza.moves[k].ball as { act?: string } | undefined)?.act === 'shoot' && real.fighters.gazza.moves[k].kind !== 'ex');
+      const idx = m.cf[0].moves.findIndex((x) => x.id === shoot);
+      place3(m, -2.0, -2.0, 1.0, -2.0);
+      run(m, 2, 0, 0);
+      // start the shot directly (the routing is probe_uniques' job): state poke = a clean move start
+      m.s[sb(0) + F.bufA] = 1;
+      m.s[sb(0) + F.bufM] = idx;
+      m.s[sb(0) + F.bufAge] = 0;
+      m.s[sb(0) + F.bufWin] = 8;
+      m.s[sb(0) + F.bufF] = 0;
+      const from = m.frame();
+      let vIn: [number, number] | null = null;
+      let vOut: [number, number] | null = null;
+      let posAt: [number, number] = [0, 0];
+      let moved = false;
+      for (let k = 0; k < 240 && !vOut; k++) {
+        step(m, 0, 0);
+        let flying = false;
+        for (let q = 0; q < PROJ_CAP; q++) if (m.s[projBase(q) + P.act] !== 0 && m.s[projBase(q) + P.kind] === 1 && m.s[projBase(q) + P.mode] === BALL.FLYING) flying = true;
+        if (flying && !moved) {
+          // once the ball flies, johnny steps well off its line (test setup) so it reaches the ring wall
+          moved = true;
+          m.s[sb(1) + F.x] = -250000;
+          m.s[sb(1) + F.z] = 250000;
+        }
+        for (let q = 0; q < PROJ_CAP; q++) {
+          const pb = projBase(q);
+          if (m.s[pb + P.act] === 0 || m.s[pb + P.kind] !== 1) continue;
+          const reb = evs(m, from).some((e) => e.type === EVX.BALL && e.b === BALL_EV.REBOUND);
+          if (!reb && m.s[pb + P.mode] === BALL.FLYING) vIn = [m.s[pb + P.vx], m.s[pb + P.vz]];
+          if (reb && vIn && !vOut) {
+            vOut = [m.s[pb + P.vx], m.s[pb + P.vz]];
+            posAt = [m.s[pb + P.x], m.s[pb + P.z]];
+          }
+        }
+      }
+      if (vIn && vOut) {
+        const nx = -posAt[0] / Math.hypot(posAt[0], posAt[1]);
+        const nz = -posAt[1] / Math.hypot(posAt[0], posAt[1]);
+        const vn0 = vIn[0] * nx + vIn[1] * nz;
+        const vn1 = vOut[0] * nx + vOut[1] * nz;
+        const vt0 = vIn[0] * -nz + vIn[1] * nx;
+        const vt1 = vOut[0] * -nz + vOut[1] * nx;
+        const pct = m.cf[0].u.wallRest / 100;
+        const ok = vn0 < 0 && vn1 > 0 && Math.abs(vn1 + vn0 * pct) <= Math.abs(vn0) * 0.05 + 3 && Math.abs(vt1 - vt0 * pct) <= Math.abs(vt0) * 0.05 + 3;
+        note = `v in (${vIn}) -> out (${vOut}) U/f, normal component ${vn0.toFixed(0)} -> ${vn1.toFixed(0)}, tangential ${vt0.toFixed(0)} -> ${vt1.toFixed(0)} (x ${pct})`;
+        t.ok(ok, `Gazza's ball reflects off the ring boundary: ${note}`);
+      } else t.ok(false, `Gazza's ball never rebounded (vIn ${vIn}, vOut ${vOut}, move ${shoot})`);
+    } else t.note(note);
+  } catch (e) {
+    t.ok(false, `ball rebound case crashed: ${String((e as Error).message).split('\n')[0]}`);
+  }
+}
+
+// ================================================================= 6. throws: front arc, carry, back throw
+function throwAt(yawOff: number): number {
+  const m = newMatch({ data: D0, stage: 'circ' });
+  place(m, -0.45, 0.45);
+  run(m, 2, 0, 0);
+  const cf = m.cf[0];
+  const tm = cf.moves[cf.throwF];
+  // state poke: P1 in its throw's first active frame with a yaw turned yawOff away from the opponent (no tracking there)
+  const b0 = sb(0);
+  m.s[b0 + F.st] = ST.ATTACK;
+  m.s[b0 + F.mv] = cf.throwF;
+  m.s[b0 + F.mvF] = tm.startup - 1;
+  m.s[b0 + F.contact] = 0;
+  m.s[b0 + F.yaw] = (16384 + yawOff) & 65535;
+  const from = m.frame();
+  step(m, 0, 0);
+  return count(m, from, EV.THROW, 0);
+}
+{
+  t.ok(throwAt(0) === 1 && throwAt(degToYaw(60)) === 1, 'a defender straight ahead / 60 deg off the forward is thrown');
+  t.ok(throwAt(degToYaw(80)) === 0 && throwAt(degToYaw(-90)) === 0, 'a defender 80 / -90 deg off the forward is not (front arc +-70 deg)');
+  const m = newMatch({ data: D0, stage: 'circ' });
+  place(m, -0.45, 0.45);
+  m.s[sb(0) + F.yaw] = (16384 + degToYaw(69)) & 65535;
+  const in69 = inFrontArc(m, 0, 1);
+  m.s[sb(0) + F.yaw] = (16384 + degToYaw(71)) & 65535;
+  const in71 = inFrontArc(m, 0, 1);
+  t.ok(in69 && !in71, 'front arc boundary: 69 deg in, 71 deg out');
+}
+{
+  // throw carry along the thrower's yaw on a rotated axis; the back throw lands behind along -forward
+  const run2 = (back: boolean): { cross: number; along: number } => {
+    const m = newMatch({ data: D0, p1: 'kit_b', p2: 'kit_a', stage: 'rot45' });
+    const a0 = pos(m, 0);
+    const b0 = pos(m, 1);
+    const ux = b0[0] - a0[0];
+    const uz = b0[1] - a0[1];
+    const L = Math.hypot(ux, uz);
+    // walk in, then throw
+    for (let k = 0; k < 60 && dist(m) > 0.95; k++) step(m, dirBits(m, 0, 6), 0);
+    const from = m.frame();
+    step(m, (back ? dirBits(m, 0, 4) : 0) | I.L | I.M, 0);
+    run(m, 90, 0, 0);
+    const thrown = count(m, from, EV.THROW, 0);
+    const a = pos(m, 0);
+    const b = pos(m, 1);
+    const vx = b[0] - a[0];
+    const vz = b[1] - a[1];
+    return { cross: thrown ? Math.abs((vx * uz - vz * ux) / L) : 99, along: thrown ? (vx * ux + vz * uz) / L : 0 };
+  };
+  const f = run2(false);
+  const bk = run2(true);
+  t.ok(f.cross < 0.02 && f.along > 0.5, `forward throw on a 45 deg axis: the victim lands along the thrower's yaw (off-line ${f.cross.toFixed(3)} m, ahead ${f.along.toFixed(2)} m)`);
+  t.ok(bk.cross < 0.02 && bk.along < -0.3, `back throw lands BEHIND along -forward (off-line ${bk.cross.toFixed(3)} m, along ${bk.along.toFixed(2)} m)`);
+}
+
+// ================================================================= 7. BRAWL / HECKLER in 3D
+{
+  let note = '';
+  try {
+    const real = loadGameData();
+    // spawn bearings over several seeds (each first wave)
+    const octs = new Set<number>();
+    let spawns = 0;
+    for (let sd = 1; sd <= 6; sd++) {
+      const mm = newMatch({ data: real, p1: 'johnny', p2: 'johnny', mode: 'brawl', seed: sd });
+      for (let f = 0; f < 400; f++) {
+        const from = mm.frame() + 1;
+        step(mm, 0, 0);
+        for (const e of evs(mm, from)) if (e.type === EV.GOON_SPAWN) {
+          spawns++;
+          const k = e.a - 8;
+          const gx = mm.s[goonBase(k) + G.x] - mm.s[sb(0) + F.x];
+          const gz = mm.s[goonBase(k) + G.z] - mm.s[sb(0) + F.z];
+          octs.add(Math.floor(((dirToYaw(gx, gz) + 4096) & 65535) / 8192));
+        }
+      }
+    }
+    const m = newMatch({ data: real, p1: 'johnny', p2: 'johnny', mode: 'brawl', seed: 7 });
+    let lockSwitch = false;
+    for (let f = 0; f < 1800; f++) {
+      const px = m.s[sb(0) + F.x];
+      const pz = m.s[sb(0) + F.z];
+      const before = m.s[BRAWL_BASE + BR.target];
+      const tgt = before >= 0 ? goonBase(before) : -1;
+      // press toward the screen side opposite the current target now and then (soft lock)
+      let w = 0;
+      if (tgt >= 0 && f % 45 === 0) {
+        const tx = m.s[tgt + G.x] - px;
+        const tz = m.s[tgt + G.z] - pz;
+        const onRight = tx * m.s[W.camNZ] - tz * m.s[W.camNX] > 0;
+        w = (onRight ? I.L_ : I.R_) | I.L;
+      }
+      step(m, w, 0);
+      const after = m.s[BRAWL_BASE + BR.target];
+      if (w && before >= 0 && after >= 0 && after !== before) lockSwitch = true;
+    }
+    note = `spawns ${spawns}, octants ${[...octs].sort().join(',')}`;
+    t.ok(spawns >= 12 && octs.size >= 6, `BRAWL BREAK goons come from all directions (${note}; 6 seeds x the first wave)`);
+    t.ok(lockSwitch, 'soft lock: an attack toward the other screen side switches the target goon');
+    let goonZ = false;
+    for (let k = 0; k < GOON_CAP; k++) if (m.s[goonBase(k) + G.act] !== 0 && m.s[goonBase(k) + G.z] !== 0) goonZ = true;
+    const bs = readMatch(m).brawl!;
+    t.ok(goonZ && bs.goons.every((g) => typeof g.z === 'number' && typeof g.yaw === 'number') && typeof bs.target === 'number', 'goons live in the plane (z != 0) and the snapshot carries z / yaw / target');
+    const h = newMatch({ data: real, p1: 'johnny', p2: 'johnny', mode: 'heckler', seed: 9 });
+    const hocts = new Set<number>();
+    for (let f = 0; f < 1500; f++) {
+      const from = h.frame() + 1;
+      step(h, 0, 0);
+      for (const e of evs(h, from)) if (e.type === EV.HECKLE_THROW) {
+        const pb = projBase(e.a);
+        const dx = h.s[pb + P.x] - h.s[sb(0) + F.x];
+        const dz = h.s[pb + P.z] - h.s[sb(0) + F.z];
+        hocts.add(Math.floor(((dirToYaw(dx, dz) + 4096) & 65535) / 8192));
+      }
+    }
+    t.ok(hocts.size >= 4, `HECKLER TOSS objects arc in from all sides (octants ${[...hocts].sort().join(',')})`);
+  } catch (e) {
+    t.ok(false, `bonus-round 3D case crashed: ${String((e as Error).message).split('\n')[0]} ${note}`);
+  }
+}
+
+// ================================================================= 8. determinism with random STEP streams
+{
+  const FR = 4000;
+  let twin = 0;
+  let mism = 0;
+  for (const [p1, p2, seed] of [['kit_a', 'kit_b', 3], ['kit_b', 'kit_a', 4], ['kit_a', 'kit_a', 5]] as [string, string, number][]) {
+    const ia = stepInputs(seed, 8, FR);
+    const ib = stepInputs(seed + 100, 4, FR);
+    const a = newMatch({ data: D0, p1, p2, seed, skipIntro: false, stage: seed === 4 ? 'oct' : 'rot45' });
+    const b = newMatch({ data: D0, p1, p2, seed, skipIntro: false, stage: seed === 4 ? 'oct' : 'rot45' });
+    const c = newMatch({ data: D0, p1, p2, seed, skipIntro: false, stage: seed === 4 ? 'oct' : 'rot45' });
+    const slot = new Int32Array(c.s.length);
+    for (let f = 0; f < FR; f++) {
+      step(a, ia[f], ib[f]);
+      step(b, ia[f], ib[f]);
+      if (checksum(a) !== checksum(b)) twin++;
+      save(c, slot);
+      step(c, ia[f], ib[f]);
+      const c1 = checksum(c);
+      load(c, slot);
+      step(c, ia[f], ib[f]);
+      if (checksum(c) !== c1 || c1 !== checksum(a)) mism++;
+    }
+  }
+  t.eq(twin, 0, 'random STEP streams (taps, circling, back-cancels, step-attacks): twin runs identical every frame (3 x 4000 f)');
+  t.eq(mism, 0, 'save / step / load / re-step every frame reproduces the straight run (3 x 4000 f)');
+}
+
+// ================================================================= 9. snapshots + budget
+{
+  const m = newMatch({ data: D0, stage: 'rot45' });
+  run(m, 30, I.STEP_OUT, 0);
+  const f = readFighter(m, 0);
+  const yawRad = (m.s[sb(0) + F.yaw] * 2 * Math.PI) / 65536;
+  t.ok(Math.abs(f.z! - m.s[sb(0) + F.z] / U) < 1e-9 && Math.abs(f.yaw! - yawRad) < 1e-9 && f.step?.kind === 'sidewalk' && f.step.dir === 'out' && f.step.side === 1,
+    `FighterSnap z / yaw (radians) / step {kind ${f.step?.kind}, dir ${f.step?.dir}, side ${f.step?.side}}`);
+  t.ok(STEP_CLIPS.length === 4 && m.cf[0].animStep.every((a, k) => m.tab.anims[0][a]?.clip === STEP_CLIPS[k]), 'anim table carries sidestep_l / sidestep_r / sidewalk_l / sidewalk_r');
+  t.ok(STATE_INTS <= 1024, `versus state ${STATE_INTS} ints <= 1024`);
+}
+
+t.done(`state ${STATE_INTS} ints; sine hash ${sinTableHash().toString(16)}`);
+void fixtureData;

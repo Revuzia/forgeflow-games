@@ -52,6 +52,8 @@ export interface ViewGoon {
   /** a shared clip name when a pose is reported by name (lab) */
   clip?: string; clipFrame?: number;
   hp?: number; hpMax?: number; hitstop?: number; state?: number | string; stateName?: string; telegraph?: boolean; moveName?: string;
+  /** §28.4: holds an attack token (walking in / winding up) */
+  token?: boolean;
   alive?: boolean | number; down?: boolean | number;
 }
 

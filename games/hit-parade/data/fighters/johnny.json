@@ -68,6 +68,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "jab"},
       "sfx": [[2, "whoosh_light"]],
       "desc": "4-frame jab; links into itself, chains into 2L.",
@@ -98,6 +100,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "crouch_jab"},
       "sfx": [[3, "whoosh_light"]],
       "desc": "Low jab to the knee; chains and cancels.",
@@ -128,6 +132,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 4, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "cross"},
       "sfx": [[5, "whoosh_light"]],
       "desc": "Straight right; his best mid-range button.",
@@ -159,6 +165,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
+      "track": {"until": 4, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "low_body"},
       "sfx": [[5, "whoosh_light"]],
       "desc": "Crouching straight to the knee; cancel into HEADLINE HOOK.",
@@ -188,9 +196,12 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 14, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "haymaker"},
       "sfx": [[8, "whoosh_heavy"]],
-      "desc": "Wide rear hook.",
+      "desc": "Wide rear hook; homing (catches a sidestep).",
       "boxes": [{"f": [12, 14], "x": 0.625, "y": 1.413, "w": 0.5, "h": 0.626}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [10, 0.036], [22, 0.009], [28, 0.051], [35, 0.034]]
@@ -219,6 +230,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["antiair"],
+      "track": {"until": 5, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "uppercut"},
       "sfx": [[6, "whoosh_heavy"]],
       "desc": "Anti-air uppercut."
@@ -246,7 +259,10 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "role": ["sweep", "low"],
+      "role": ["sweep", "low", "antistep"],
+      "track": {"until": 12, "rate": 20},
+      "homing": true,
+      "lateralM": 0.45,
       "anim": {"clip": "low_blow"},
       "sfx": [[7, "whoosh_heavy"]],
       "desc": "Crouching hook to the knee that drops them (low, knockdown)."
@@ -275,6 +291,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["overhead"],
+      "track": {"until": 14, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "overhand"},
       "sfx": [[12, "whoosh_heavy"]],
       "desc": "Looping overhand; must be blocked standing.",
@@ -305,6 +323,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "air_jab"},
       "desc": "Fast air-to-air jab.",
       "pushExt": [[0, 0.078], [3, 0.102], [15, 0.074]]
@@ -333,6 +353,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 3, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "air_cross"},
       "desc": "Long jump-in straight.",
       "pushExt": [[0, 0.011], [5, 0.056], [10, 0.002], [16, 0.015]]
@@ -361,6 +383,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 6, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "air_hammer"},
       "desc": "Downward hammer fist jump-in.",
       "pushExt": [[0, 0.157], [11, 0.114], [16, 0.007], [19, 0.003]]
@@ -404,6 +428,7 @@
         ]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Clinches and digs three body shots.",
       "pushExt": [[0, 0.134], [4, 0.005], [5, 0.0], [26, 0.0], [31, 0.028]]
@@ -442,6 +467,7 @@
         "victim": [[0, "hit_high_s", 0.0, 0.2], [8, "thrown_b", 0.0, 0.4], [22, "thrown_b", 0.4, 1.2]]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Pulls them past and hooks them the other way.",
       "pushExt": [[0, 0.134], [4, 0.005], [5, 0.0], [26, 0.0], [31, 0.028]]
@@ -477,9 +503,13 @@
         "strength": "L",
         "clip": "brick",
         "x": 0.6,
-        "speed": 4.5
+        "speed": 4.5,
+        "aimed": false,
+        "lateralM": 0.175
       },
       "role": ["projectile"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
       "anim": {"clip": "brick_throw"},
       "sfx": [[0, "whoosh_light"]],
       "desc": "Hurls a brick. L slow, H fast.",
@@ -516,9 +546,13 @@
         "strength": "M",
         "clip": "brick",
         "x": 0.6,
-        "speed": 6.0
+        "speed": 6.0,
+        "aimed": false,
+        "lateralM": 0.175
       },
       "role": ["projectile"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
       "anim": {"clip": "brick_throw"},
       "sfx": [[0, "whoosh_light"]],
       "desc": "Hurls a brick. L slow, H fast.",
@@ -555,9 +589,13 @@
         "strength": "H",
         "clip": "brick",
         "x": 0.6,
-        "speed": 7.5
+        "speed": 7.5,
+        "aimed": false,
+        "lateralM": 0.175
       },
       "role": ["projectile"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
       "anim": {"clip": "brick_throw"},
       "sfx": [[0, "whoosh_light"]],
       "desc": "Hurls a brick. L slow, H fast.",
@@ -594,9 +632,12 @@
         "strength": "H",
         "clip": "brick",
         "x": 0.6,
-        "speed": 7.5
+        "speed": 7.5,
+        "aimed": true,
+        "lateralM": 0.175
       },
       "role": ["projectile"],
+      "track": {"until": 5, "rate": 180},
       "anim": {"clip": "brick_throw"},
       "sfx": [[0, "whoosh_light"]],
       "desc": "Two bricks at once: 2 hits, fastest startup.",
@@ -627,12 +668,14 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [5, 0.1], [11, 0.8], [20, 0.75], [44, 0.0]],
       "role": ["antiair", "reversal", "launcher"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "encore_upper"},
       "sfx": [[1, "whoosh_heavy"]],
       "desc": "Jumping uppercut; air-invulnerable anti-air.",
-      "boxes": [{"f": [5, 14], "x": 0.585, "y": 1.366, "w": 0.3, "h": 0.731}],
+      "boxes": [{"f": [5, 14], "x": 0.615, "y": 1.29, "w": 0.3, "h": 0.581}],
       "boxSrc": "hitVolume",
-      "pushExt": [[0, 0.024], [15, 0.0], [26, 0.11], [28, 0.11], [29, 0.07], [31, 0.07], [32, 0.023], [34, 0.012], [48, 0.033]]
+      "pushExt": [[0, 0.024], [1, 0.0], [36, 0.0], [44, 0.011], [45, 0.056], [48, 0.056]]
     },
     "encore_m": {
       "kind": "special",
@@ -659,26 +702,14 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [6, 0.15], [13, 1.1], [24, 1.0], [55, 0.0]],
       "role": ["antiair", "reversal", "launcher"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "encore_upper"},
       "sfx": [[1, "whoosh_heavy"]],
       "desc": "Jumping uppercut; air-invulnerable anti-air.",
-      "boxes": [{"f": [6, 15], "x": 0.585, "y": 1.353, "w": 0.4, "h": 0.806}],
+      "boxes": [{"f": [6, 15], "x": 0.615, "y": 1.278, "w": 0.4, "h": 0.656}],
       "boxSrc": "hitVolume",
-      "pushExt": [
-        [0, 0.024],
-        [3, 0.0],
-        [18, 0.0],
-        [22, 0.055],
-        [28, 0.066],
-        [29, 0.109],
-        [32, 0.11],
-        [34, 0.11],
-        [35, 0.07],
-        [37, 0.07],
-        [38, 0.023],
-        [41, 0.012],
-        [58, 0.033]
-      ]
+      "pushExt": [[0, 0.024], [1, 0.0], [43, 0.0], [53, 0.011], [54, 0.056], [58, 0.056]]
     },
     "encore_h": {
       "kind": "special",
@@ -705,26 +736,14 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [7, 0.2], [15, 1.4], [27, 1.3], [63, 0.0]],
       "role": ["antiair", "reversal", "launcher"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "encore_upper"},
       "sfx": [[1, "whoosh_heavy"]],
       "desc": "Jumping uppercut; air-invulnerable anti-air.",
-      "boxes": [{"f": [7, 16], "x": 0.585, "y": 1.341, "w": 0.5, "h": 0.881}],
+      "boxes": [{"f": [7, 16], "x": 0.615, "y": 1.265, "w": 0.5, "h": 0.731}],
       "boxSrc": "hitVolume",
-      "pushExt": [
-        [0, 0.024],
-        [3, 0.0],
-        [21, 0.0],
-        [25, 0.055],
-        [32, 0.066],
-        [33, 0.109],
-        [36, 0.11],
-        [39, 0.11],
-        [40, 0.07],
-        [42, 0.07],
-        [43, 0.023],
-        [47, 0.012],
-        [66, 0.033]
-      ]
+      "pushExt": [[0, 0.024], [1, 0.0], [49, 0.0], [60, 0.011], [61, 0.056], [66, 0.056]]
     },
     "encore_ex": {
       "kind": "ex",
@@ -752,29 +771,17 @@
       "hits": [{"f": [6, 7], "damage": 500, "hitstop": 9}, {"f": [12, 15], "damage": 900, "hitstop": 15}],
       "moveY": [[0, 0], [6, 0.2], [15, 1.5], [27, 1.4], [63, 0.0]],
       "role": ["antiair", "reversal", "launcher"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "encore_upper"},
       "sfx": [[1, "whoosh_heavy"]],
       "desc": "Fully invulnerable 2-hit uppercut.",
       "boxes": [
-        {"f": [6, 7], "x": 0.585, "y": 1.341, "w": 0.5, "h": 0.881},
-        {"f": [12, 15], "x": 0.5852, "y": 1.6061, "w": 0.5, "h": 0.35}
+        {"f": [6, 7], "x": 0.615, "y": 1.265, "w": 0.5, "h": 0.731},
+        {"f": [12, 15], "x": 0.6153, "y": 1.4557, "w": 0.5, "h": 0.35}
       ],
       "boxSrc": "hitVolume",
-      "pushExt": [
-        [0, 0.024],
-        [3, 0.0],
-        [20, 0.0],
-        [24, 0.055],
-        [31, 0.066],
-        [32, 0.109],
-        [35, 0.11],
-        [38, 0.11],
-        [39, 0.07],
-        [41, 0.07],
-        [42, 0.023],
-        [46, 0.012],
-        [65, 0.033]
-      ]
+      "pushExt": [[0, 0.024], [1, 0.0], [48, 0.0], [59, 0.011], [60, 0.056], [65, 0.056]]
     },
     "hook_l": {
       "kind": "special",
@@ -800,6 +807,9 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "run_hook"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Running hook; ends every confirm.",
@@ -831,6 +841,9 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "run_hook"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Running hook; ends every confirm.",
@@ -856,12 +869,15 @@
       "pushback": {"hit": 0.0, "block": 0.5},
       "cancel": ["super"],
       "juggle": {"js": 0, "ji": 1, "jl": 0},
-      "onHit": {"kd": "soft", "launch": [0, 0], "wallSplat": false, "groundBounce": false, "crumple": false},
+      "onHit": {"kd": "soft", "launch": [0, 0], "wallSplat": true, "groundBounce": false, "crumple": false},
       "gain": {"showtime": 1000, "nerveCost": 4000},
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {"throw": [1, 14]},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "run_hook"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Running hook; ends every confirm.",
@@ -887,13 +903,15 @@
       "pushback": {"hit": 0.0, "block": 0.5},
       "cancel": ["super"],
       "juggle": {"js": 0, "ji": 1, "jl": 0},
-      "onHit": {"kd": "soft", "launch": [0, 0], "wallSplat": false, "groundBounce": false, "crumple": false},
+      "onHit": {"kd": "soft", "launch": [0, 0], "wallSplat": true, "groundBounce": false, "crumple": false},
       "gain": {"showtime": 1000, "nerveCost": 4000},
       "cost": {"showtime": 0, "nerve": 20000},
       "invuln": {},
       "armor": {"hits": 1, "f": [1, 12]},
       "hits": [{"f": [10, 11], "damage": 500, "hitstop": 11}, {"f": [16, 17], "damage": 700, "hitstop": 13}],
       "role": ["approach"],
+      "track": {"until": 4, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "run_hook"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Armored two-hook rush, -2 on block.",
@@ -929,8 +947,10 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hurtOverride": [{"f": [3, 14], "w": 0.62, "h": 1.0}],
       "role": ["lowprofile"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "weave_duck"},
-      "desc": "Ducks under high attacks and projectiles; any attack button counters with a rising hook."
+      "desc": "Ducks under high attacks and projectiles; any attack button counters with a rising hook.",
+      "pushExt": [[0, 0.0], [6, 0.013], [7, 0.063], [8, 0.063], [9, 0.121], [15, 0.224], [20, 0.205], [23, 0.112]]
     },
     "weave_m": {
       "kind": "special",
@@ -957,8 +977,20 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hurtOverride": [{"f": [3, 16], "w": 0.62, "h": 1.0}],
       "role": ["lowprofile"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "weave_duck"},
-      "desc": "Ducks under high attacks and projectiles; any attack button counters with a rising hook."
+      "desc": "Ducks under high attacks and projectiles; any attack button counters with a rising hook.",
+      "pushExt": [
+        [0, 0.0],
+        [7, 0.013],
+        [8, 0.063],
+        [10, 0.063],
+        [11, 0.121],
+        [17, 0.224],
+        [23, 0.205],
+        [26, 0.112],
+        [27, 0.112]
+      ]
     },
     "weave_h": {
       "kind": "special",
@@ -985,8 +1017,22 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hurtOverride": [{"f": [3, 18], "w": 0.62, "h": 0.95}],
       "role": ["lowprofile"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "weave_duck"},
-      "desc": "Ducks under high attacks and projectiles; any attack button counters with a rising hook."
+      "desc": "Ducks under high attacks and projectiles; any attack button counters with a rising hook.",
+      "pushExt": [
+        [0, 0.0],
+        [9, 0.013],
+        [10, 0.063],
+        [11, 0.063],
+        [12, 0.121],
+        [14, 0.121],
+        [17, 0.206],
+        [20, 0.224],
+        [27, 0.205],
+        [30, 0.112],
+        [31, 0.112]
+      ]
     },
     "weave_ex": {
       "kind": "ex",
@@ -1013,8 +1059,20 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hurtOverride": [{"f": [1, 18], "w": 0.62, "h": 1.0}],
       "role": ["lowprofile"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "weave_duck"},
-      "desc": "Strike-invulnerable weave."
+      "desc": "Strike-invulnerable weave.",
+      "pushExt": [
+        [0, 0.0],
+        [7, 0.013],
+        [8, 0.063],
+        [10, 0.063],
+        [11, 0.121],
+        [17, 0.224],
+        [23, 0.205],
+        [26, 0.112],
+        [27, 0.112]
+      ]
     },
     "weave_counter": {
       "kind": "special",
@@ -1042,9 +1100,12 @@
       "tc": true,
       "trigger": {"classic": {"motion": "", "btn": "LMH"}, "simple": "LMH"},
       "role": ["reversal"],
+      "track": {"until": 8, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "weave_counter_hook"},
       "desc": "Rising hook out of a Weave; knocks down, -7 on block.",
-      "boxes": [{"f": [6, 8], "x": 0.395, "y": 1.454, "w": 0.5, "h": 0.708}],
+      "boxes": [{"f": [6, 8], "x": 0.414, "y": 1.478, "w": 0.5, "h": 0.756}],
       "boxSrc": "hitVolume"
     },
     "sold_out": {
@@ -1077,6 +1138,9 @@
         {"f": [22, 24], "damage": 950, "hitstop": 20}
       ],
       "role": ["reversal"],
+      "track": {"until": 24, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "sold_out_flurry", "warp": [[0, 0.0], [8, 0.142], [12, 0.358], [16, 0.558], [22, 0.75], [77, 1.4]]},
       "sfx": [[1, "crowd_cheer_burst"]],
       "desc": "Invulnerable jab-cross-jab-uppercut rush.",
@@ -1280,6 +1344,9 @@
         "endGapM": 2.2
       },
       "role": ["reversal"],
+      "track": {"until": 13, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "cross"},
       "desc": "PRIME TIME: a lunging cross that starts a 170-frame beating.",
       "boxes": [{"f": [10, 13], "x": 0.862, "y": 1.397, "w": 0.5, "h": 0.594}],
@@ -1319,7 +1386,8 @@
     "punish": ["5H", "hook_h"],
     "combo": ["2L", "5M", "hook_m"],
     "zoning": ["brickbat_m"],
-    "meter": "sold_out"
+    "meter": "sold_out",
+    "antiStep": ["3H", "5H"]
   },
   "introLine": "Doors open, lights down - and I'm still the headliner.",
   "winQuotes": ["Encore? You couldn't even get through the opening act.", "Put my name back on that marquee. In lights. Big ones.", "That's the hit single. You just heard it live."],

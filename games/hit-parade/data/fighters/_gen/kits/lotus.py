@@ -15,7 +15,7 @@ def build():
         cpu={"style": "stance", "rangeM": [1.0, 2.2], "approach": ["sway_h", "6M"], "pokes": ["5M", "2M"],
              "antiAir": ["rising_lotus_l", "2H"], "punish": ["5H", "rising_lotus_h"],
              "combo": ["2L", "5M", "dragon_breath_m"], "mixup": ["sway_oh", "sway_low", "sway_hop"],
-             "meter": "bottoms_up"},
+             "meter": "bottoms_up", "antiStep": ["2M", "5H"]},
         doc=dict(
             difficulty=3, packs="Male_Drunk (sway stance/stumble), CMU karate kicks + knees + lunges",
             look="Kachujin: bun with bangs, red wrap dress with black obi, blue scarf, arm guards, grey greaves; "
@@ -29,6 +29,17 @@ def build():
                      "(9500); the sway only dodges highs, so lows and throws beat the entry.",
             rivalry="Rerun ate her lucky gourd on the Wheel of Pain. She wants it back - or at least wants him "
                     "to regret it.",
+            # CHANGED(FIGHTERS3D): 3D ring play (CONTRACT 35.12)
+            ring=dict(
+                stepping="SWAY already leans out of highs; in the ring the stance follow-ups split a stepper: TORNADO "
+                         "HOP homes, TIPSY TOE KICK is a homing sweep, the AXE KICK overhead tracks only through its "
+                         "startup (a late step beats it). 6M WOBBLE PALM is LINEAR (a stumble along her line). DRAGON'S "
+                         "BREATH is AIMED on the spawn frame and 0.35 m deep, so the short flame covers a step at "
+                         "1.8-2.8 m.",
+                homing="2M SHIN KICK (8f homing low roundhouse, 0.40 m deep) is the anti-step poke; 5H DRUNKEN "
+                       "ROUNDHOUSE (13f, -3) the safe homing kick; BOTTOMS UP and HAPPY HOUR home.",
+                wall="6M WOBBLE PALM wall-splats at the ring edge; SWAY L leans back and needs room, so with her back "
+                     "to the boundary she enters SWAY M / H or goes straight to a follow-up."),
         ),
     )
 
@@ -79,16 +90,21 @@ def build():
           role=["poke", "low"], desc="Crouching palm to the shin.")
     K.add("5M", "M", name="Staggering Palm", clip="lunge_palm", move=[[0, 0], [8, 0.25]], cancel=["special", "super"],
           role=["poke"], desc="Lunging palm that steps in 0.25 m.")
-    K.add("2M", "2M", name="Shin Kick", clip="shin_kick", cancel=["special", "super"], role=["poke", "low"],
-          desc="Crouching low roundhouse.")
+    K.add("2M", "2M", name="Shin Kick", clip="shin_kick", cancel=["special", "super"], role=["poke", "low", "antistep"],
+          homing=True, lateralM=0.40,
+          why3d="low roundhouse (authored crouch_shin_kick): homing anti-step poke, 0.40 m deep",
+          desc="Crouching low roundhouse; homing.")
     K.add("5H", "H", name="Drunken Roundhouse", clip="drunk_round", startup=13, cancel=["special", "super"],
-          desc="Curving turning kick.", why="Turning kick with a curved path: startup 12->13.")
+          homing=True, why3d="curving turning kick: homing",
+          desc="Curving turning kick; homing.", why="Turning kick with a curved path: startup 12->13.")
     K.add("2H", "AA", name="Knee Lift", clip="knee_lift", juggle={"js": 1, "ji": 1, "jl": 0},
           boxes=[{"f": [9, 12], "x": 0.35, "y": 1.20, "w": 0.45, "h": 0.50}],
           cancel=["special", "super"], desc="Knee-lift anti-air.")
     K.add("6M", "CMD", input="6M", kind="command", name="Wobble Palm", clip="wobble_palm", startup=14, recovery=17,
-          hitstun=22, blockstun=16, damage=700, move=[[0, 0], [14, 0.4]], role=["approach"],
-          desc="Stumbling step-in palm (+2/-4).", why="Approach command normal: 0.4 m step, 14/3/17, 700.")
+          hitstun=22, blockstun=16, damage=700, move=[[0, 0], [14, 0.4]], role=["approach"], linear=True,
+          wallSplat=True, why3d="a stumble along her line: linear; the palm wall-splats at the ring edge",
+          desc="Stumbling step-in palm (+2/-4); wall-splats at the ring edge.",
+          why="Approach command normal: 0.4 m step, 14/3/17, 700.")
     K.add("4H", "CMD", input="4H", kind="command", name="Lean-Away Kick", clip="lean_kick", startup=15,
           hurtOverride=[{"f": [3, 14], "w": 0.40, "h": 1.30}],
           desc="Leans away from high attacks and kicks back (+3/-2).",
@@ -135,6 +151,8 @@ def build():
     K.special("dragon_breath", "proj", motion="236",
               common=dict(name="Dragon's Breath", clip="dragon_palm", recovery=26, hitstun=28, blockstun=24,
                           damage=700, cancel=["super"], role=["projectile"], sfx=[[0, "fire_whoosh"]],
+                          aimed=True, projLateralM=0.35,
+                          why3d="she spits at the opponent: AIMED on the spawn frame; the flame jet is 0.35 m deep",
                           desc="A swig and a short jet of flame (2 hits); range 1.8 / 2.3 / 2.8 m.",
                           why="Short-range flame, not a full-screen projectile: lifetime-capped (14/20/26 f at "
                               "5 m/s), so startup 13/14/15, recovery 26 and +1/-3 point blank; 700 over 2 hits."),
@@ -142,7 +160,8 @@ def build():
                    "m": dict(startup=14, projectile=dict(flame, life=20, strength="M")),
                    "h": dict(startup=15, projectile=dict(flame, life=26, strength="H"))},
               ex=dict(name="Dragon's Breath (EX)", startup=12, damage=1100,
-                      projectile=dict(flame, life=36, hits=3, strength="H", box=[0.8, 0.6]),
+                      projectile=dict(flame, life=36, hits=3, strength="H", box=[0.8, 0.6]), projLateralM=0.40,
+                      why3d="aimed; the long flame is 0.40 m deep (box 0.8 / 2)",
                       desc="Long 3-hit flame (3.6 m).", why="EX: 36-frame flame, 3 hits."))
     K.special("rising_lotus", "dp", motion="623",
               common=dict(name="Lotus Rising", clip="rising_knee", cancel=["super"], launch=[1.2, 6.0],
@@ -172,7 +191,8 @@ def build():
     K.add("sway_hop", None, input="sway>H", name="Tornado Hop", strength="H", clip="tornado_hop", startup=16,
           active=4, recovery=16, hitstun=24, blockstun=18, damage=900, guard="HL", pb=(0.30, 0.40),
           invuln={"throw": [1, 19]}, moveY=[[0, 0], [3, 0.2], [12, 0.9], [19, 0.2], [21, 0.0]],
-          role=["approach"], desc="SWAY follow-up (H): throw-invulnerable hop over lows into a tornado kick.",
+          role=["approach"], homing=True, why3d="tornado kick: a spin, homing",
+          desc="SWAY follow-up (H): throw-invulnerable hop over lows into a tornado kick.",
           why="Stance hop: airborne from f3 (beats lows and throws), +4/-2.", **fol)
     K.add("sway_exit", None, input="sway>2", name="Sober Up", strength="L", clip="sway_exit", startup=1, active=1,
           recovery=6, damage=0, hitstun=0, blockstun=0, guard="HL", stance="exit", kind="special", tc=True,

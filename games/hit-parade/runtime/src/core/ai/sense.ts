@@ -49,6 +49,14 @@ export interface FView {
   chD: number;
   chDS: number;
   chDR: number;
+  /**
+   * CHANGED(AI) P2: the fighter's §28.2 unique ints (stance / charge / ball / counter / armor / teleport / phase), OWN
+   * fighter only (zero for the opponent: a charge kit's u0..u3 mirror its input-derived charge counters, and the
+   * opponent's stance / ball / phase are visible through its state and the projectile list anyway).
+   */
+  uq: [number, number, number, number];
+  /** own install frames left (0 = none) */
+  instF: number;
 }
 
 export interface ProjView {
@@ -63,6 +71,9 @@ export interface ProjView {
   h: number;
   age: number;
   kind: number;
+  /** CHANGED(AI) P2: vertical speed (U/f), P.mode (kind 1: the ball state, kind 2: heckle object type) */
+  vy: number;
+  mode: number;
 }
 
 export interface Seen {
@@ -87,12 +98,13 @@ function blankF(cf: CFighter): FView {
     x: 0, y: 0, vx: 0, vy: 0, facing: 1, st: 0, stF: 0, mv: -1, mvF: 0, inst: 0, contact: 0, contactF: 0,
     hp: 0, hpMax: cf.hpMax, show: 0, nerve: 0, fright: false, stun: 0, hitstop: 0, air: false, crouch: false,
     invT: 0, kd: 0, combo: 0, jumpDir: 0, cm: null, cf, chB: 0, chBS: 0, chBR: 0, chD: 0, chDS: 0, chDR: 0,
+    uq: [0, 0, 0, 0], instF: 0,
   };
 }
 
 export function newSeen(m: Match, i: number): Seen {
   const proj: ProjView[] = [];
-  for (let k = 0; k < PROJ_CAP; k++) proj.push({ slot: k, owner: -1, inst: 0, mv: -1, x: 0, y: 0, vx: 0, w: 0, h: 0, age: 0, kind: 0 });
+  for (let k = 0; k < PROJ_CAP; k++) proj.push({ slot: k, owner: -1, inst: 0, mv: -1, x: 0, y: 0, vx: 0, w: 0, h: 0, age: 0, kind: 0, vy: 0, mode: 0 });
   return {
     frame: 0, phase: 0, freeze: 0, cin: false, me: blankF(m.cf[i]), op: blankF(m.cf[1 - i]), dx: 0, dist: 0,
     wall: m.sys.wall, proj, nProj: 0,
@@ -140,6 +152,11 @@ function readF(m: Match, j: number, v: FView, own: boolean): void {
     v.chD = s[b + F.chD];
     v.chDS = s[b + F.chDS];
     v.chDR = s[b + F.chDR];
+    v.uq[0] = s[b + F.uniq];
+    v.uq[1] = s[b + F.uniq + 1];
+    v.uq[2] = s[b + F.uniq + 2];
+    v.uq[3] = s[b + F.uniq + 3];
+    v.instF = s[b + F.instF];
   }
 }
 
@@ -170,15 +187,20 @@ export function sense(m: Match, i: number, out: Seen): Seen {
     p.h = s[pb + P.h];
     p.age = s[pb + P.age];
     p.kind = s[pb + P.kind];
+    p.vy = s[pb + P.vy];
+    p.mode = s[pb + P.mode];
   }
   out.nProj = n;
   return out;
 }
 
-/** Fields probe_personas scrambles on the OPPONENT before each CPU call (the input-derived ones). */
+/**
+ * Fields probe_personas scrambles on the OPPONENT before each CPU call (the input-derived ones). CHANGED(AI) P2: + the
+ * opponent's unique ints (a charge kit mirrors its charge counters there) and the stance down-hold counter `ucnt`.
+ */
 export const HIDDEN_FIELDS: readonly number[] = (() => {
   const out: number[] = [F.raw, F.prevRaw, F.hHead, F.bufA, F.bufM, F.bufAge, F.bufWin, F.bufF, F.ageL, F.ageM, F.ageH, F.ageS,
-    F.chB, F.chBS, F.chBR, F.chD, F.chDS, F.chDR];
+    F.chB, F.chBS, F.chBR, F.chD, F.chDS, F.chDR, F.uniq, F.uniq + 1, F.uniq + 2, F.uniq + 3, F.ucnt];
   for (let k = 0; k < HIST; k++) out.push(F.hist + k);
   return out;
 })();

@@ -3,19 +3,26 @@
 // (so trades are symmetric: both hit, both counter-hit), then applied in a fixed order
 // (fighter 0's strike, fighter 1's strike, projectiles by slot). Throws resolve afterwards in
 // throws.ts, so a strike landing on the same frame as a throw wins.
+//
+// CHANGED(SIM3D) (CONTRACT §35.4): strikes test attacker-local boxes (lateral half-depth per move) against the defender's
+// hurt cylinders; projectiles test their travel-frame box; the hit direction of a record is a YAW (the attacker's
+// forward, or the projectile's travel): pushback, launches and wall splats run along it. Blocking reads "back" from the
+// camera basis (the screen direction away from the attacker).
 
 import { CF, F, FL, MVF, P, PROJ_CAP, ST, W, projBase } from './layout.ts';
 import { EV, CUE, SC, EVX } from './events.ts';
 import { GD, UK } from './compile.ts';
 import type { CMove } from './compile.ts';
-import { hitRect, hurtRects, pushExt, rectsOverlap } from './boxes.ts';
+import { boxCyl, hurtCyls, moveBoxHits, wallRoom } from './boxes.ts';
 import { IN } from './inputs.ts';
 import {
-  addShowtime, clearMove, drainNerve, emit, fb, gainNerve, isAirborne, setSt,
+  addShowtime, clearMove, drainNerve, emit, fb, gainNerve, isAirborne, setSt, setVelAlong,
 } from './state.ts';
 import type { Match } from './state.ts';
-import { enterKnockdown, startMove } from './fighter.ts';
+import { enterKnockdown, setOpp, startMove } from './fighter.ts';
 import { killProjectile } from './projectiles.ts';
+import { YAW_HALF, cosQ, sinQ } from './fx3d.ts';
+import { wallSplat } from './splat.ts';
 
 export const OUT = { NONE: 0, HIT: 1, BLOCK: 2, PARRY: 3, PPARRY: 4, ARMOR: 5, CLASH: 6, CATCH: 7 } as const;
 
@@ -29,15 +36,14 @@ const rCy = new Int32Array(R_CAP);
 const rProj = new Int32Array(R_CAP);
 const rInst = new Int32Array(R_CAP);
 const rFlags = new Int32Array(R_CAP);
-const rDir = new Int32Array(R_CAP);
+const rDir = new Int32Array(R_CAP); // CHANGED(SIM3D): hit direction yaw (attacker forward / projectile travel)
 const rOut = new Int32Array(R_CAP);
 const rCounter = new Int32Array(R_CAP);
 const rAttX = new Int32Array(R_CAP);
+const rAttZ = new Int32Array(R_CAP);
 let rN = 0;
 
-const HURT = new Int32Array(24);
-const HR = new Int32Array(4);
-const PR = new Int32Array(4);
+const HURT = new Int32Array(30);
 
 function inRange(inv: Int32Array, o: number, f: number): boolean {
   return inv[o] > 0 && f >= inv[o] && f <= inv[o + 1];
@@ -75,7 +81,7 @@ function vulnerable(m: Match, d: number, mv: CMove, attackerAir: boolean, proj: 
   return true;
 }
 
-function push(att: number, vic: number, move: number, hid: number, cy: number, proj: number, inst: number, flags: number, dir: number, attX: number): void {
+function push(att: number, vic: number, move: number, hid: number, cy: number, proj: number, inst: number, flags: number, dir: number, attX: number, attZ: number): void {
   if (rN >= R_CAP) return;
   rAtt[rN] = att;
   rVic[rN] = vic;
@@ -87,6 +93,7 @@ function push(att: number, vic: number, move: number, hid: number, cy: number, p
   rFlags[rN] = flags;
   rDir[rN] = dir;
   rAttX[rN] = attX;
+  rAttZ[rN] = attZ;
   rOut[rN] = OUT.NONE;
   rCounter[rN] = 0;
   rN++;
@@ -101,7 +108,7 @@ function collectStrike(m: Match, a: number): void {
   const d = 1 - a;
   const f = s[ba + F.mvF];
   if (!vulnerable(m, d, mv, isAirborne(s, ba), false)) return;
-  const nh = hurtRects(m, d, HURT);
+  const nh = hurtCyls(m, d, HURT);
   for (let j = 0; j < mv.nBox; j++) {
     const o = j * 7;
     if (f < mv.boxes[o] || f > mv.boxes[o + 1]) continue;
@@ -109,13 +116,26 @@ function collectStrike(m: Match, a: number): void {
     if (mv.multi > 0) {
       if (s[ba + F.hitCount] > 0 && f - s[ba + F.lastHitF] < mv.multi) continue;
     } else if ((s[ba + F.hitMask] & (1 << hid)) !== 0) continue;
-    hitRect(m, a, mv, j, HR, 0);
-    for (let r = 0; r < nh; r++) {
-      if (!rectsOverlap(HR, 0, HURT, r * 4)) continue;
-      push(a, d, mv.idx, hid, mv.boxes[o + 3], -1, s[ba + F.mvInst], s[ba + F.mvFlags], s[ba + F.facing], s[ba + F.x]);
-      return;
-    }
+    if (moveBoxHits(m, a, mv, j, HURT, nh) < 0) continue;
+    push(a, d, mv.idx, hid, mv.boxes[o + 3], -1, s[ba + F.mvInst], s[ba + F.mvFlags], s[ba + F.yaw], s[ba + F.x], s[ba + F.z]);
+    return;
   }
+}
+
+/**
+ * CHANGED(SIM3D): does projectile slot `pb` (its travel-frame box: forward +- w/2, lateral +- lat, height y +- h/2) touch
+ * any of the `n` cylinders in cyl? `lat` = the owner move's projectile.lateralM (heckle objects: w / 2).
+ */
+export function projHitsCyl(s: Int32Array, pb: number, lat: number, cyl: Int32Array, n: number): boolean {
+  const yaw = s[pb + P.yaw];
+  const fx = sinQ(yaw);
+  const fz = cosQ(yaw);
+  const h2 = s[pb + P.h] >> 1;
+  for (let r = 0; r < n; r++) {
+    const o = r * 5;
+    if (boxCyl(s[pb + P.x], s[pb + P.z], fx, fz, 0, s[pb + P.w] >> 1, lat, s[pb + P.y] - h2, s[pb + P.y] + h2, cyl[o], cyl[o + 1], cyl[o + 2], cyl[o + 3], cyl[o + 4])) return true;
+  }
+  return false;
 }
 
 function collectProjectiles(m: Match): void {
@@ -128,32 +148,27 @@ function collectProjectiles(m: Match): void {
     const d = 1 - o;
     const mv = m.cf[o].moves[s[pb + P.mv]];
     if (!vulnerable(m, d, mv, false, true)) continue;
-    const w2 = s[pb + P.w] >> 1;
-    const h2 = s[pb + P.h] >> 1;
-    PR[0] = s[pb + P.x] - w2;
-    PR[1] = s[pb + P.x] + w2;
-    PR[2] = s[pb + P.y] - h2;
-    PR[3] = s[pb + P.y] + h2;
-    const nh = hurtRects(m, d, HURT);
-    for (let r = 0; r < nh; r++) {
-      if (!rectsOverlap(PR, 0, HURT, r * 4)) continue;
-      const dir = s[pb + P.vx] >= 0 ? 1 : -1;
-      push(o, d, mv.idx, 0, s[pb + P.y] - s[fb(d) + F.y], k, s[pb + P.inst], s[pb + P.flags], dir, s[pb + P.x]);
-      break;
-    }
+    const nh = hurtCyls(m, d, HURT);
+    if (!projHitsCyl(s, pb, mv.proj ? mv.proj.lat : s[pb + P.w] >> 1, HURT, nh)) continue;
+    push(o, d, mv.idx, 0, s[pb + P.y] - s[fb(d) + F.y], k, s[pb + P.inst], s[pb + P.flags], s[pb + P.yaw], s[pb + P.x], s[pb + P.z]);
   }
 }
 
-/** Would defender `d` block move `mv` coming from world x `fromX` (pre-hit state)? */
-export function canBlock(m: Match, d: number, mv: CMove, fromX: number): boolean {
+/**
+ * Would defender `d` block move `mv` coming from world (fromX, fromZ) (pre-hit state)? CHANGED(SIM3D): "back" = the
+ * screen direction away from the attacker under the camera basis (screen-right R = (camN.z, -camN.x)); a SIDESTEP can
+ * block from step frame `step.blockF` (CONTRACT §35.2).
+ */
+export function canBlock(m: Match, d: number, mv: CMove, fromX: number, fromZ = 0): boolean {
   if (mv.guard === 0) return false;
   const s = m.s;
   const bd = fb(d);
   if (isAirborne(s, bd)) return false;
   const st = s[bd + F.st];
-  if (st !== ST.IDLE && st !== ST.WALK_F && st !== ST.WALK_B && st !== ST.CROUCH && st !== ST.BLOCKSTUN && st !== ST.PARRY_REC) return false;
+  const stepGuard = st === ST.SIDESTEP && s[bd + F.stF] + 1 >= m.sys.stepBlockF;
+  if (st !== ST.IDLE && st !== ST.WALK_F && st !== ST.WALK_B && st !== ST.CROUCH && st !== ST.BLOCKSTUN && st !== ST.PARRY_REC && !stepGuard) return false;
   const raw = s[bd + F.raw];
-  const dx = s[bd + F.x] - fromX;
+  const dx = (s[bd + F.x] - fromX) * s[W.camNZ] - (s[bd + F.z] - fromZ) * s[W.camNX];
   const awayRight = dx > 0 || (dx === 0 && s[bd + F.facing] < 0);
   const back = awayRight ? (raw & IN.RIGHT) !== 0 && (raw & IN.LEFT) === 0 : (raw & IN.LEFT) !== 0 && (raw & IN.RIGHT) === 0;
   const crouchG = (raw & IN.DOWN) !== 0 && (raw & IN.UP) === 0;
@@ -207,7 +222,7 @@ function outcomeOf(m: Match, r: number): number {
       return OUT.ARMOR;
     }
   }
-  if (canBlock(m, d, mv, rAttX[r])) return OUT.BLOCK;
+  if (canBlock(m, d, mv, rAttX[r], rAttZ[r])) return OUT.BLOCK;
   return OUT.HIT;
 }
 
@@ -274,43 +289,42 @@ export function applyDamage(m: Match, d: number, dmg: number, grey: boolean): vo
   s[bd + F.cDamage] += dmg;
 }
 
-function nearWall(m: Match, d: number, dir: number, range: number): boolean {
-  const s = m.s;
-  const bd = fb(d);
-  const wallX = dir > 0 ? m.sys.wall : -m.sys.wall;
-  // CHANGED(fixer) D2: the victim's push-box edge on the wall side
-  return Math.abs(wallX - s[bd + F.x]) - pushExt(m, d, dir > 0 ? 1 : -1) <= range;
+/**
+ * CHANGED(SIM3D) (CONTRACT §35.2): "against the wall" = the victim's push circle is within `range` of the ring boundary
+ * along the hit direction (yaw).
+ */
+function nearWall(m: Match, d: number, dirYaw: number, range: number): boolean {
+  return wallRoom(m, d, sinQ(dirYaw), cosQ(dirYaw)) <= range;
 }
 
-function toJuggle(m: Match, d: number, vx: number, vy: number): void {
+/** CHANGED(SIM3D): launch victim d along yaw `dirYaw` (horizontal speed vh; negative = toward the attacker). */
+function toJuggle(m: Match, d: number, dirYaw: number, vh: number, vy: number): void {
   const s = m.s;
   const bd = fb(d);
   clearMove(m, d);
   setSt(m, d, ST.JUGGLE);
   s[bd + F.flags] = (s[bd + F.flags] | FL.AIRBORNE) & ~(FL.CROUCHING | FL.PROX | FL.BLOCKING);
-  s[bd + F.vx] = vx;
+  setVelAlong(s, bd, dirYaw, vh);
   s[bd + F.vy] = vy;
   s[bd + F.stun] = 0;
   s[bd + F.pushF] = 0;
   s[bd + F.pushLeft] = 0;
 }
 
-function toWallSplat(m: Match, a: number, d: number, dir: number): void {
-  const s = m.s;
-  const bd = fb(d);
-  clearMove(m, d);
-  setSt(m, d, ST.WALL_SPLAT);
-  s[bd + F.stun] = m.sys.raw.wallSplat.frames;
-  s[bd + F.flags] &= ~(FL.AIRBORNE | FL.CROUCHING);
-  s[bd + F.x] = (dir > 0 ? m.sys.wall : -m.sys.wall) - dir * pushExt(m, d, dir > 0 ? 1 : -1); // CHANGED(fixer) D2
-  s[bd + F.vx] = 0;
-  s[bd + F.vy] = 0;
-  s[bd + F.pushF] = 0;
-  s[bd + F.pushLeft] = 0;
-  s[bd + F.cFlags] |= CF.SPLAT;
-  s[bd + F.jc] = 0;
-  emit(m, EV.WALL_SPLAT, d, dir > 0 ? 1 : 0, 0, 0);
-  emit(m, EV.CAMERA_CUE, a, CUE.WALL_SPLAT, 0, 0);
+function toWallSplat(m: Match, a: number, d: number, dirYaw: number): void {
+  wallSplat(m, a, d, dirYaw);
+}
+
+/** CHANGED(SIM3D): pushback of fighter block b: `amount` U along yaw (negative = the opposite way). */
+function setPush(s: Int32Array, b: number, yaw: number, amount: number, frames: number): void {
+  if (amount < 0) {
+    s[b + F.pushLeft] = -amount;
+    s[b + F.pushYaw] = (yaw + YAW_HALF) & 65535;
+  } else {
+    s[b + F.pushLeft] = amount;
+    s[b + F.pushYaw] = yaw & 65535;
+  }
+  s[b + F.pushF] = frames;
 }
 
 function toCrumple(m: Match, d: number): void {
@@ -436,7 +450,8 @@ function applyHit(m: Match, r: number): void {
   if (counter === 2 && mv.str === 2 && mv.isNormalCat) hs += sys.hitstop.pcHeavyBonus;
   const bonus = (counter === 1 ? sys.counter.chFrames : counter === 2 ? sys.counter.pcFrames : 0) + ((rFlags[r] & MVF.RUSH) !== 0 ? sys.rush.advBonus : 0);
   // victim reaction
-  const frightCorner = mv.isImpact && s[bd + F.fright] !== 0 && nearWall(m, d, dir, m.sys.frightCorner);
+  // CHANGED(SIM3D): STAGE FRIGHT stun / IMPACT splat "against the wall" = within ring.againstWallM (CONTRACT §35.2)
+  const frightCorner = mv.isImpact && s[bd + F.fright] !== 0 && nearWall(m, d, dir, m.sys.againstWall);
   let grounded = false;
   if (nonFinal && !wasAir) {
     clearMove(m, d);
@@ -446,7 +461,7 @@ function applyHit(m: Match, r: number): void {
     s[bd + F.stunKind] = mv.guard === GD.CROUCH ? 3 : rCy[r] < 100000 ? 2 : mv.str === 2 ? 1 : 0;
   } else if (nonFinal) {
     const jc = s[bd + F.jc];
-    toJuggle(m, d, dir * (m.sys.popVx >> 1), m.sys.popVy >> 1);
+    toJuggle(m, d, dir, m.sys.popVx >> 1, m.sys.popVy >> 1);
     s[bd + F.jc] = jc;
     s[bd + F.kd] = Math.max(s[bd + F.kd], 1);
   } else if (frightCorner) {
@@ -455,29 +470,29 @@ function applyHit(m: Match, r: number): void {
     toCrumple(m, d);
   } else if (mv.wallSplat && (s[bd + F.cFlags] & CF.SPLAT) === 0 && nearWall(m, d, dir, m.sys.splatRange)) {
     toWallSplat(m, a, d, dir);
-  } else if (mv.isImpact && !wasAir && nearWall(m, d, dir, m.sys.impactSplat) && (s[bd + F.cFlags] & CF.SPLAT) === 0) {
+  } else if (mv.isImpact && !wasAir && nearWall(m, d, dir, m.sys.againstWall) && (s[bd + F.cFlags] & CF.SPLAT) === 0) {
     toWallSplat(m, a, d, dir);
   } else if (mv.crumple && !wasAir) {
     toCrumple(m, d);
   } else if (mv.groundBounce && (s[bd + F.cFlags] & CF.BOUNCE) === 0) {
     const jc = wasAir ? s[bd + F.jc] + mv.ji : mv.js;
-    toJuggle(m, d, dir * m.sys.popVx, -m.sys.popVy);
+    toJuggle(m, d, dir, m.sys.popVx, -m.sys.popVy);
     s[bd + F.bounce] = 1;
     s[bd + F.cFlags] |= CF.BOUNCE;
     s[bd + F.jc] = jc;
     s[bd + F.kd] = Math.max(s[bd + F.kd], mv.kd, 1);
   } else if (mv.launchVy > 0) {
     const jc = wasAir ? s[bd + F.jc] + mv.ji : mv.js;
-    toJuggle(m, d, dir * mv.launchVx, mv.launchVy);
+    toJuggle(m, d, dir, mv.launchVx, mv.launchVy);
     s[bd + F.jc] = jc;
     s[bd + F.kd] = Math.max(s[bd + F.kd], mv.kd || 1);
   } else if (wasJumping) {
-    toJuggle(m, d, dir * m.sys.airResetVx, m.sys.airResetVy);
+    toJuggle(m, d, dir, m.sys.airResetVx, m.sys.airResetVy);
     s[bd + F.jc] = mv.js;
     s[bd + F.kd] = mv.kd;
   } else if (wasAir || freeJuggle) {
     const jc = wasAir ? s[bd + F.jc] + mv.ji : mv.js;
-    toJuggle(m, d, dir * m.sys.popVx, m.sys.popVy);
+    toJuggle(m, d, dir, m.sys.popVx, m.sys.popVy);
     s[bd + F.jc] = jc;
     s[bd + F.kd] = Math.max(s[bd + F.kd], mv.kd, 1);
   } else if (mv.kd > 0) {
@@ -493,8 +508,7 @@ function applyHit(m: Match, r: number): void {
     grounded = true;
   }
   if (grounded && !nonFinal) {
-    s[bd + F.pushLeft] = dir * mv.pushHit;
-    s[bd + F.pushF] = sys.pushback.frames;
+    setPush(s, bd, dir, mv.pushHit, sys.pushback.frames);
     if (!proj) s[bd + F.flags] |= FL.PUSHX;
     else s[bd + F.flags] &= ~FL.PUSHX;
   }
@@ -546,14 +560,13 @@ function applyBlock(m: Match, r: number): void {
     drainNerve(m, d, dcf.uk === UK.CHARGE && !crouchG ? Math.trunc((mv.nerveDrain * dcf.u.standBlockPct) / 100) : mv.nerveDrain);
     addShowtime(m, a, Math.trunc((mv.gainShow * sys.showtime.blockPct) / 100));
     addShowtime(m, d, Math.trunc((mv.gainShow * sys.showtime.defBlockPct) / 100));
-    s[bd + F.pushLeft] = dir * mv.pushBlock;
-    s[bd + F.pushF] = sys.pushback.frames;
+    setPush(s, bd, dir, mv.pushBlock, sys.pushback.frames);
     if (!proj) s[bd + F.flags] |= FL.PUSHX;
     else s[bd + F.flags] &= ~FL.PUSHX;
   }
   if (mv.isImpact) {
-    if (fright && nearWall(m, d, dir, m.sys.frightCorner)) toDizzy(m, d);
-    else if (nearWall(m, d, dir, m.sys.impactSplat) && (s[bd + F.cFlags] & CF.SPLAT) === 0) toWallSplat(m, a, d, dir);
+    if (fright && nearWall(m, d, dir, m.sys.againstWall)) toDizzy(m, d);
+    else if (nearWall(m, d, dir, m.sys.againstWall) && (s[bd + F.cFlags] & CF.SPLAT) === 0) toWallSplat(m, a, d, dir);
   }
   setHitstop(m, a, d, r, mv.hitstop);
   attackerContact(m, a, r, 2);
@@ -606,12 +619,10 @@ function applyParry(m: Match, r: number, perfect: boolean): void {
   s[bd + F.lastStun] = mv.blockstun;
   s[bd + F.stunKind] = 4;
   const half = mv.pushBlock >> 1;
-  s[bd + F.pushLeft] = dir * (proj ? mv.pushBlock : half);
-  s[bd + F.pushF] = sys.pushback.frames;
+  setPush(s, bd, dir, proj ? mv.pushBlock : half, sys.pushback.frames);
   s[bd + F.flags] &= ~FL.PUSHX;
   if (!proj && !isAirborne(s, ba)) {
-    s[ba + F.pushLeft] = -dir * (mv.pushBlock - half);
-    s[ba + F.pushF] = sys.pushback.frames;
+    setPush(s, ba, dir, -(mv.pushBlock - half), sys.pushback.frames);
     s[ba + F.flags] &= ~FL.PUSHX;
   }
   setHitstop(m, a, d, r, mv.hitstop);
@@ -659,8 +670,8 @@ function applyCatch(m: Match, r: number): void {
   }
   emit(m, EVX.CATCH, d, a, proj ? SC.PROJECTILE : mv.sc, proj ? 1 : 0);
   if (cc.follow >= 0) {
-    const oppX = s[ba + F.x];
-    startMove(m, d, cc.follow, 0, oppX);
+    setOpp(d, s[ba + F.x], s[ba + F.z]); // CHANGED(SIM3D): the follow-up tracks the caught attacker
+    startMove(m, d, cc.follow, 0);
   }
 }
 
@@ -692,8 +703,7 @@ function applyClash(m: Match, r: number): void {
     clearMove(m, i);
     setSt(m, i, ST.RECOVER);
     s[b + F.stun] = 20;
-    s[b + F.pushLeft] = -s[b + F.facing] * (m.cf[i].moves[m.cf[i].impact].pushBlock >> 1);
-    s[b + F.pushF] = sys.pushback.frames;
+    setPush(s, b, s[b + F.yaw], -(m.cf[i].moves[m.cf[i].impact].pushBlock >> 1), sys.pushback.frames);
     s[b + F.flags] &= ~FL.PUSHX;
     if (s[b + F.hitstop] < sys.impact.hitstop) s[b + F.hitstop] = sys.impact.hitstop;
   }

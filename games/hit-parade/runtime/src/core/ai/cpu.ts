@@ -18,6 +18,7 @@ import { Brain, DEFAULT_STYLE, METER_TIERS, NERVE_TIERS, PARRY_TIERS, ROUTE_KIND
 import type { NeutralPlanner, Profile, StyleParams } from './brain.ts';
 import { neutralPlan } from './plans.ts';
 import { bossTools } from './boss.ts';
+import { UniqueTools, uniqueRates } from './uniques.ts';
 
 export interface Cpu {
   readonly level: number;
@@ -85,6 +86,8 @@ export function resolveProfile(row: Obj, table: Obj, name: string, level: number
     adaptAggro,
     guard: n(row, 'guard', 0.3),
     respect: n(row, 'respect', 0),
+    // CHANGED(AI) P2: habit weight (cpu.json levels / personas `habit`, habits.ts); default by level when a row lacks it
+    habit: n(row, 'habit', level >= 0 ? Math.min(0.85, 0.3 + 0.07 * level) : 0.5),
     thinkF: Math.max(1, Math.round(n(row, 'thinkF', 16))),
     delayF: Math.max(0, Math.round(n(row, 'delayF', 0))),
     antiZone: n(row, 'antiZone', 0),
@@ -163,6 +166,10 @@ class LevelCpu implements Cpu {
       b.styleTable = styleTable(table);
       b.planner = neutralPlan;
       b.tools = bossTools(m.cfg.p[playerIndex].fighter, isObj(table.boss) ? table.boss : undefined);
+      b.uniq = new UniqueTools(uniqueRates(table.uniques)); // CHANGED(AI) P2
+      const rules = isObj(table.rules) ? table.rules : {};
+      b.lv1Spend = n(rules, 'lv1Spend', 0.35);
+      b.lv3Cash = n(rules, 'lv3Cash', 0.6);
     }
   }
 }
@@ -178,6 +185,7 @@ export function createBrainCpu(profile: Profile, fighter: string, seed: number, 
   const t = table ?? (CPU_JSON as unknown as Obj);
   brain.styleTable = styleTable(t);
   brain.planner = planner ?? neutralPlan;
+  brain.uniq = new UniqueTools(uniqueRates(t.uniques)); // CHANGED(AI) P2
   return {
     level: profile.level,
     fighter,

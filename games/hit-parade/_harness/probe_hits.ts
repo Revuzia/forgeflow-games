@@ -236,9 +236,11 @@ for (const [id, btn, hs] of [['5L', I.L, 9], ['5M', I.M, 11], ['5H', I.H, 13]] a
   t.ok(reset && !kd, 'anti-air on a jumping opponent = air reset (lands on its feet, no knockdown)');
 }
 // ------------------------------------------------------------------ wall splat (1 per combo)
+// CHANGED(SIM3D): the wall = the ring boundary (default circle 5.5 m on the fixture stage); P1 0.6 m inside it
+const RING_M = newMatch().ring.r / 100000;
 {
   const m = newMatch();
-  place(m, 7.4, 6.6);
+  place(m, RING_M - 0.6, RING_M - 1.4);
   run(m, 2, 0, 0);
   const from = script(m, 40, (k) => [0, k === 0 ? I.H : 0]);
   t.eq(count(m, from, EV.WALL_SPLAT), 1, '5H (wallSplat) near the wall = WALL_SPLAT');
@@ -246,7 +248,7 @@ for (const [id, btn, hs] of [['5L', I.L, 9], ['5M', I.M, 11], ['5H', I.H, 13]] a
 }
 {
   const m = newMatch();
-  place(m, 7.4, 6.6);
+  place(m, RING_M - 0.6, RING_M - 1.4);
   run(m, 2, 0, 0);
   const b0 = sb(0);
   m.s[b0 + F.cCount] = 2;

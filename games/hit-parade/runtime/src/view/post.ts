@@ -79,9 +79,11 @@ const GradeShader = {
         c.rgb = mix( c.rgb, vec3( l ) * vec3( 1.04, 1.0, 0.94 ), 0.45 * uBorder );
         vec2 q = abs( vUv - 0.5 ) * vec2( uAspect, 1.0 );
         vec2 lim = vec2( 0.5 * uAspect - 0.035, 0.5 - 0.035 - uLetterbox );
-        float edge = step( lim.x, q.x ) + step( lim.y, q.y );
-        float inner = step( lim.x - 0.012, q.x ) + step( lim.y - 0.012, q.y );
-        c.rgb = mix( c.rgb, vec3( 1.0 ), clamp( inner - edge, 0.0, 1.0 ) * uBorder );
+        // a clean inset rectangle: inside the outer rect AND outside the inner one (the old per-axis sum let each line
+        // run on past the corners into a '#')
+        float outerR = step( q.x, lim.x ) * step( q.y, lim.y );
+        float innerR = step( q.x, lim.x - 0.012 ) * step( q.y, lim.y - 0.012 );
+        c.rgb = mix( c.rgb, vec3( 1.0 ), clamp( outerR - innerR, 0.0, 1.0 ) * uBorder );
         vec2 dp = ( vUv - vec2( 0.06, 0.86 - uLetterbox ) ) * vec2( uAspect, 1.0 );
         c.rgb = mix( c.rgb, vec3( 1.0, 0.05, 0.05 ), ( 1.0 - smoothstep( 0.012, 0.016, length( dp ) ) ) * uBorder );
       }

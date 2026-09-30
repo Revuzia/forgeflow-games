@@ -13,7 +13,7 @@ import type { SimEvent } from '../runtime/src/core/sim/events.ts';
 import { STATE_INTS, W, PH, F, fighterBase } from '../runtime/src/core/sim/layout.ts';
 import { runSyncTest } from '../runtime/src/core/net/sync.ts';
 import { matchPort } from '../runtime/src/core/net/match_port.ts';
-import { uniqueInputs } from './fixtures/simkit.ts';
+import { uniqueInputs, stepInputs } from './fixtures/simkit.ts';
 
 const t = tester('probe_determinism');
 const FRAMES = 12000;
@@ -164,4 +164,67 @@ try {
   t.ok(false, `unique rollback scenarios crashed: ${String((e as Error).message).split(/\r?\n/)[0]}`);
 }
 
-t.done(`fixture final hashes ${hashes.join(' ')}; ${realNote}; ${uniqNote}`);
+// CHANGED(SIM3D) (CONTRACT §35.10): random STEP streams (sidestep taps, circle-walks, back-cancels, step-attacks) on every
+// real 12 x 12 pair: twin straight runs identical every frame AND save / step / load / re-step every frame reproduces
+// the straight run; every fighter with a unique-heavy stream mixed with STEP, and both bonus rounds per fighter
+let stepNote = '';
+try {
+  const real = loadGameData();
+  const ids = Object.keys(real.fighters).sort();
+  const SF = 900;
+  let runs = 0;
+  let twin = 0;
+  let sl = 0;
+  const bad: string[] = [];
+  const runOne = (mk: () => Match, a: Int32Array, b: Int32Array, label: string): void => {
+    const x = mk();
+    const y = mk();
+    const d = mk();
+    const slot = new Int32Array(d.s.length);
+    let tw = 0;
+    let ms = 0;
+    for (let f = 0; f < a.length; f++) {
+      step(x, a[f], b[f]);
+      step(y, a[f], b[f]);
+      const cx = checksum(x);
+      if (cx !== checksum(y)) tw++;
+      save(d, slot);
+      step(d, a[f], b[f]);
+      const c1 = checksum(d);
+      load(d, slot);
+      step(d, a[f], b[f]);
+      if (checksum(d) !== c1 || c1 !== cx) ms++;
+    }
+    runs++;
+    twin += tw;
+    sl += ms;
+    if ((tw || ms) && bad.length < 3) bad.push(`${label}: twin ${tw} save/load ${ms}`);
+  };
+  for (const p1 of ids) {
+    for (const p2 of ids) {
+      const seed = 3 + runs;
+      runOne(() => newMatch({ data: real, p1, p2, seed, s1: (runs & 1) as 0 | 1, s2: 1, skipIntro: false }), stepInputs(seed * 13 + 1, 8, SF), stepInputs(seed * 29 + 2, 4, SF), `${p1}-${p2}`);
+    }
+  }
+  const pairRuns = runs;
+  // uniques mixed with steps: the unique stream with the STEP stream OR-ed in on every other 200-frame block
+  for (const id of ids) {
+    const u = uniqueInputs(runs * 7 + 5, 8, 1200);
+    const st2 = stepInputs(runs * 11 + 9, 8, 1200);
+    const a = new Int32Array(1200);
+    for (let f = 0; f < 1200; f++) a[f] = Math.floor(f / 200) % 2 === 0 ? u[f] : st2[f];
+    runOne(() => newMatch({ data: real, p1: id, p2: ids[(runs * 5) % ids.length], seed: runs, s1: 1, s2: 0, skipIntro: false }), a, stepInputs(runs * 17 + 3, 4, 1200), `uniques ${id}`);
+  }
+  for (const id of ids) {
+    for (const mode of ['brawl', 'heckler'] as const) {
+      runOne(() => newMatch({ data: real, p1: id, p2: id, mode, seed: runs, s1: 0, skipIntro: false }), stepInputs(runs * 19 + 4, 8, 1200), new Int32Array(1200), `${mode} ${id}`);
+    }
+  }
+  t.eq(twin, 0, `STEP streams: twin runs identical every frame (${pairRuns} real pairs x ${SF} f + ${ids.length} uniques + ${ids.length * 2} bonus runs x 1200 f)${bad.length ? ' - ' + bad[0] : ''}`);
+  t.eq(sl, 0, 'STEP streams: save / step / load / re-step every frame == the straight run (same runs)');
+  stepNote = `; STEP streams ${runs} runs (${pairRuns} pairs + uniques + bonus), 0 mismatches`;
+} catch (e) {
+  t.ok(false, `STEP stream runs crashed: ${String((e as Error).message).split(String.fromCharCode(10))[0]}`);
+}
+
+t.done(`fixture final hashes ${hashes.join(' ')}; ${realNote}; ${uniqNote}${stepNote}`);

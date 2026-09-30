@@ -83,7 +83,7 @@ class ClipSampler(object):
     """A Mixamo clip (FBX on X Bot). rng = [f0, f1] source frames (1-based, as in the file).
     `ev` is an _ArmEval (or an armature, wrapped here)."""
 
-    def __init__(self, ev, rng=None, speed=1.0, mirror=False):
+    def __init__(self, ev, rng=None, speed=1.0, mirror=False, cycle=None):
         self.ev = ev if isinstance(ev, _ArmEval) else _ArmEval(ev)
         a, b = self.ev.frange
         self.f0 = float(rng[0]) if rng else float(a)
@@ -93,12 +93,31 @@ class ClipSampler(object):
         self.n = int(math.floor((self.f1 - self.f0) / self.speed + 1e-6)) + 1
         self.rest = self.ev.rest
         self.hip_h = self.ev.hip_h
+        # CHANGED(ASSETS3D): `cycle` [c0, c1] = the source is a gait cycle (pose(c1) = pose(c0) one stride further):
+        # source frames past c1 wrap back into the cycle and the stride's horizontal hips travel is added per wrap,
+        # so a loop may START at any phase (range [20, 55] on a 1..36 cycle: the side-walk continues exactly where
+        # the side-step ended)
+        self.cycle = (float(cycle[0]), float(cycle[1])) if cycle else None
+        self._stride = None
 
     def src_frame(self, k):
         return min(self.f1, self.f0 + k * self.speed)
 
+    def _eval(self, f):
+        if self.cycle is None or f <= self.cycle[1] + 1e-9:
+            return self.ev.eval(f)
+        c0, c1 = self.cycle
+        span = c1 - c0
+        if self._stride is None:
+            _, hs = self.ev.eval(c0)
+            _, he = self.ev.eval(c1)
+            self._stride = Vector((he.x - hs.x, he.y - hs.y, 0.0))
+        wraps = int(math.floor((f - c0) / span - 1e-9))
+        D, h = self.ev.eval(f - wraps * span)
+        return D, h + self._stride * wraps
+
     def sample(self, k):
-        D, h = self.ev.eval(self.src_frame(k))
+        D, h = self._eval(self.src_frame(k))
         if self.mirror:
             D, h = _mirror(D, h)
         return D, h
@@ -370,6 +389,10 @@ def retarget(sampler, tgt, opts=None):
     # strip horizontal travel -> root motion (model forward = -Y world)
     y0 = hoffs[0].y
     root = [[round(k / float(FPS), 4), round(-(hoffs[k].y - y0) * ratio, 4)] for k in range(n)]
+    # CHANGED(ASSETS3D) (CONTRACT 35.5): the LATERAL part of the stripped travel too (model right = -X world, so
+    # + = toward the fighter's own right): clips.json `rootLat` for the side-steps / side-walks (plan `rootLat: true`)
+    x0 = hoffs[0].x
+    root_lat = [[round(k / float(FPS), 4), round(-(hoffs[k].x - x0) * ratio, 4)] for k in range(n)]
     for k in range(n):
         hips_list[k] = Vector((tgt.rest_hips.x, tgt.rest_hips.y, hips_list[k].z))
     apex = None
@@ -387,19 +410,26 @@ def retarget(sampler, tgt, opts=None):
                 hips_list[k] = hips_list[k] - Vector((0.0, 0.0, lift))
         apex = round(max(0.0, max(lifts)), 4)
     lb = int(opts.get("loopBlend") or 0)
+    # CHANGED(ASSETS3D): loopBlendScope "upper" eases only the upper body (bones outside C.LOWER_BODY) into frame 0:
+    # a lower body that is an EXACT gait cycle (source f1 = f0 + one stride; the side-walks) already closes the loop,
+    # and pulling its last frames toward frame 0 advanced the gait phase there = foot slide at the wrap
+    lb_upper = opts.get("loopBlendScope", "all") == "upper"
     if lb > 0 and n > lb + 1:
         for i in range(lb):
             k = n - lb + i
             w = (i + 1) / float(lb)
             w = w * w * (3 - 2 * w)
             for b in tgt.order:
+                if lb_upper and tgt.short[b] in C.LOWER_BODY:
+                    continue
                 q0, qk = quats[b][0], quats[b][k]
                 quats[b][k] = qk.slerp(q0, w)
-            hips_list[k] = hips_list[k].lerp(hips_list[0], w)
+            if not lb_upper:
+                hips_list[k] = hips_list[k].lerp(hips_list[0], w)
     for b in tgt.order:
         quats[b] = C.quat_list_fix(quats[b])
     locs = [tgt.hips_rrest_inv @ (h - tgt.rest_hips) for h in hips_list]
-    return {"n": n, "quats": quats, "hips_loc": locs, "root": root, "apex_strip": apex,
+    return {"n": n, "quats": quats, "hips_loc": locs, "root": root, "root_lat": root_lat, "apex_strip": apex,
             "ratio": ratio, "lifts": lifts}
 
 

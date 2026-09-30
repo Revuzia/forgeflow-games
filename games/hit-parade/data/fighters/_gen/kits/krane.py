@@ -15,7 +15,7 @@ def build():
         stage="control_room",
         cpu={"style": "charge", "rangeM": [1.6, 3.5], "zoning": ["taser_m"], "antiAir": ["baton_flip_l", "2H"],
              "pokes": ["5M", "2M", "4H"], "punish": ["5H", "shield_rush_h"], "combo": ["2M", "taser_h"],
-             "grab": ["cuff_m"], "meter": "backup", "charge": True},
+             "grab": ["cuff_m"], "meter": "backup", "charge": True, "antiStep": ["5H", "cuff_m"]},
         doc=dict(
             difficulty=2, packs="Pro_Sword_and_Shield (shield idle/block/crouch + 1H baton swings)",
             look="Swat: blue-grey uniform, black tactical vest, helmet with goggles, gloves, knee pads, face "
@@ -30,6 +30,17 @@ def build():
                      "not cover crouch block, so lows and throws open him up.",
             rivalry="Krane cuffed Bruno to a meat locker door; Bruno walked off with the door. Krane wants his "
                     "cuffs back.",
+            # CHANGED(FIGHTERS3D): 3D ring play (CONTRACT 35.12)
+            ring=dict(
+                stepping="Every charge move is LINEAR - TASER SHOT L/M/H fires straight along his frame-1 facing, BATON "
+                         "FLIP rises on its line, SHIELD RUSH L/M/H charges straight - so an opponent who circles him "
+                         "breaks the charge game; the EX versions re-aim (EX TASER is AIMED). Circle-walking to his "
+                         "side also forces him to walk, which empties his charge.",
+                homing="5H BATON SWING (12f, -3, horizontal) is the homing anti-step strike; UNDER ARREST (6f command "
+                       "grab) homes through its active frames, the answer to a stepper at point blank; BACKUP'S HERE and "
+                       "RIOT ACT home.",
+                wall="4H SHIELD BASH wall-splats (0.60 m hit pushback) - at the ring edge it becomes a combo starter "
+                     "instead of a reset; his standing-block NERVE passive makes the wall less scary for him."),
         ),
     )
 
@@ -104,11 +115,13 @@ def build():
     K.add("2M", "2M", name="Knee Rap", clip="knee_rap", cancel=["special", "super"], role=["poke", "low"],
           desc="Crouching baton rap; cancel into TASER SHOT while charging.")
     K.add("5H", "H", name="Baton Swing", clip="baton_swing", cancel=["special", "super"], sfx=[[8, "whoosh_heavy"]],
-          desc="Horizontal baton swing.")
+          role=["antistep"], homing=True, why3d="horizontal baton swing: homing - the anti-step strike",
+          desc="Horizontal baton swing; homing.")
     K.add("2H", "AA", name="Rising Baton", clip="rising_baton", juggle={"js": 1, "ji": 1, "jl": 0},
           cancel=["special", "super"], desc="Rising baton anti-air.")
     K.add("4H", "CMD", input="4H", kind="command", name="Shield Bash", clip="shield_block", startup=14,
-          pb=(0.60, 0.90), desc="Shield shove; pushes them out to taser range (+4/-1).",
+          pb=(0.60, 0.90), wallSplat=True, why3d="straight shield shove (tracks to f10); wall-splats at the ring edge",
+          desc="Shield shove; pushes them out to taser range (+4/-1); wall-splats at the ring edge.",
           why="Charge-friendly command normal (hold back): 14f, +4 hit / -1 block, big block pushback 0.9 m "
               "so it resets to his range instead of starting pressure.",
           hitstun=27, blockstun=22)
@@ -144,9 +157,11 @@ def build():
                           desc="Charge projectile ([4]6): 10f, +3 hit / -3 block point blank.",
                           why="Charge projectile = the Sonic Boom row (1a/1c: startup 10, recovery 30, +3/-3, "
                               "550): charge time pays for the speed."),
-              per={s: dict(projectile=dict(taser, speed=v, strength=s.upper()))
+              per={s: dict(projectile=dict(taser, speed=v, strength=s.upper()), linear=True,
+                           why3d="charge move: fires straight along his frame-1 facing (a step beats it)")
                    for s, v in (("l", 4.5), ("m", 6.0), ("h", 7.5))},
               ex=dict(name="Taser Shot (EX)", damage=900, projectile=dict(taser, speed=7.5, hits=2, strength="H"),
+                      aimed=True, why3d="OD reward: the double barb is AIMED on the release frame",
                       desc="Double-barb taser: 2 hits.", why="EX: 2 hits at the fastest speed."))
     K.special("baton_flip", "dp", motion="[2]8",
               common=dict(name="Baton Flip", clip="baton_flip_rise", active=8, cancel=["super"], launch=[1.2, 5.5],
@@ -155,11 +170,14 @@ def build():
                           why="Charge anti-air = the Somersault row (1a: 5/6/7, air-inv 1-7/1-8/1-9, -30..-32): "
                               "active 8, recovery 42/43/44, damage 1000/1100/1200."),
               per={"l": dict(recovery=42, damage=1000, hitstun=85, invuln={"air": [1, 7]},
-                             moveY=[[0, 0], [5, 0.2], [11, 1.0], [20, 0.9], [50, 0.0]]),
+                             moveY=[[0, 0], [5, 0.2], [11, 1.0], [20, 0.9], [50, 0.0]], linear=True,
+                             why3d="charge anti-air: rises on its frame-1 line"),
                    "m": dict(recovery=43, damage=1100, hitstun=86, invuln={"air": [1, 8]},
-                             moveY=[[0, 0], [6, 0.2], [12, 1.2], [22, 1.1], [52, 0.0]]),
+                             moveY=[[0, 0], [6, 0.2], [12, 1.2], [22, 1.1], [52, 0.0]], linear=True,
+                             why3d="charge anti-air: rises on its frame-1 line"),
                    "h": dict(recovery=44, damage=1200, hitstun=87, invuln={"air": [1, 9]},
-                             moveY=[[0, 0], [7, 0.2], [13, 1.4], [24, 1.3], [54, 0.0]])},
+                             moveY=[[0, 0], [7, 0.2], [13, 1.4], [24, 1.3], [54, 0.0]], linear=True,
+                             why3d="charge anti-air: rises on its frame-1 line")},
               ex=dict(name="Baton Flip (EX)", startup=5, recovery=44, damage=1400, hitstun=86,
                       invuln={"strike": [1, 9], "throw": [1, 9], "air": [1, 9], "proj": [1, 9]},
                       hits=[{"f": [5, 6], "damage": 600, "hitstop": 11}, {"f": [9, 12], "damage": 800,
@@ -169,15 +187,19 @@ def build():
     K.special("shield_rush", "rush", motion="236",
               common=dict(name="Shield Rush", clip="shield_charge", cancel=["super"], role=["approach"],
                           sfx=[[2, "whoosh_heavy"]], desc="Shield-first charge (no charge input needed)."),
-              per={"l": dict(hitstun=54, move=[[0, 0], [10, 1.2], [14, 1.3]]),
-                   "m": dict(hitstun=59, move=[[0, 0], [12, 1.8], [16, 1.9]]),
+              per={"l": dict(hitstun=54, move=[[0, 0], [10, 1.2], [14, 1.3]], linear=True,
+                             why3d="shield charge: linear"),
+                   "m": dict(hitstun=59, move=[[0, 0], [12, 1.8], [16, 1.9]], linear=True,
+                             why3d="shield charge: linear"),
                    "h": dict(hitstun=69, move=[[0, 0], [14, 2.6], [18, 2.7]], armor={"hits": 1, "f": [3, 13]},
+                             linear=True, why3d="shield charge: linear",
                              why="FIGHTING_DESIGN 8c 'SHIELD RUSH ... armor on H': the H version trades the "
                                  "rush template's throw invulnerability for 1 hit of armor (the shield).")},
               ex=dict(name="Shield Rush (EX)", startup=10, active=8, recovery=20, damage=1200, hitstun=52,
                       armor={"hits": 2, "f": [1, 12]}, move=[[0, 0], [10, 2.6], [17, 2.8]],
                       hits=[{"f": [10, 11], "damage": 500, "hitstop": 11}, {"f": [16, 17], "damage": 700,
                                                                            "hitstop": 13}],
+                      why3d="OD: not linear - re-aims until frame 4 (special default)",
                       desc="Two hits of armor, 2 hits, -2 on block.", why="EX: 2-hit armor, 2 hits, -2."))
     cuff = {}
     for s, (rng, dmg) in {"l": (0.95, 1600), "m": (0.90, 1800), "h": (0.85, 2000)}.items():
@@ -189,7 +211,8 @@ def build():
                                                     [24, "kd_ground_b", 0.0, 0.367]]})
     K.special("cuff", None, motion="214", kind="cmdgrab",
               common=dict(name="Under Arrest", clip="throw_reach", startup=6, active=3, recovery=40, hitstun=0,
-                          blockstun=0, hitstop=0, guard="U", gain=2000, nerve=0, pb=(0.0, 0.0), role=["grab"],
+                          blockstun=0, hitstop=0, guard="U", gain=2000, nerve=0, pb=(0.0, 0.0),
+                          role=["grab", "antistep"], why3d="command grab reach arc: homes through its active frames",
                           sfx=[[1, "grab_cloth"]],
                           desc="Short command grab: pins and cuffs; the answer to a blocker.",
                           why="Short-range command grab (not a grappler's 360): 6/3/40, reach 0.95/0.90/0.85 m, "

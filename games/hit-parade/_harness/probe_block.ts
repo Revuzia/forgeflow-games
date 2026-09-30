@@ -294,9 +294,12 @@ function blockAdv(m: Match, hold: number, press: number): number {
   const adv = blockAdv(m, hold, I.IMPACT);
   t.eq(adv, sys.impact.blockstun - (sys.impact.active + sys.impact.recovery), 'IMPACT on block -3 midscreen');
 }
+// CHANGED(SIM3D): "against the wall" = the defender within ring.againstWallM (0.45 m) of the ring boundary along the
+// attack direction (CONTRACT §35.2); the fixture stage has the default circle ring (5.5 m)
+const RING_M = newMatch().ring.r / 100000;
 {
   const m = newMatch();
-  place(m, 6.6, 7.6);
+  place(m, RING_M - 1.35, RING_M - 0.35);
   run(m, 2, 0, 0);
   const hold = dirBits(m, 1, 4);
   const from = script(m, 40, (k) => [k === 0 ? I.IMPACT : 0, hold]);
@@ -304,7 +307,7 @@ function blockAdv(m: Match, hold: number, press: number): number {
 }
 {
   const m = newMatch();
-  place(m, 6.6, 7.6);
+  place(m, RING_M - 1.35, RING_M - 0.35);
   run(m, 2, 0, 0);
   m.s[sb(1) + F.fright] = 1;
   m.s[sb(1) + F.nerve] = 0;
@@ -315,6 +318,15 @@ function blockAdv(m: Match, hold: number, press: number): number {
     return [k === 0 ? I.IMPACT : 0, hold];
   });
   t.ok(count(m, from, EV.CRUMPLE) === 1 && stun >= sys.stageFright.cornerImpactStun - 2, 'STAGE FRIGHT + corner IMPACT (blocked) = 195-frame stun', `stun ${stun}`);
+}
+{
+  // CHANGED(SIM3D): 1.0 m from the wall is NOT against it (0.45 m rule): IMPACT blocked midway = no splat
+  const m = newMatch();
+  place(m, RING_M - 2.3, RING_M - 1.3);
+  run(m, 2, 0, 0);
+  const hold = dirBits(m, 1, 4);
+  const from = script(m, 40, (k) => [k === 0 ? I.IMPACT : 0, hold]);
+  t.ok(count(m, from, EV.BLOCK, 0) === 1 && count(m, from, EV.WALL_SPLAT) === 0, 'IMPACT blocked 1 m off the ring wall = no splat (against the wall = within 0.45 m)');
 }
 {
   const m = at(-0.9, 0.9);

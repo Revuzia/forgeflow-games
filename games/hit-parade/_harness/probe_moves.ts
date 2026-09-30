@@ -4,7 +4,7 @@
 //    (advantage = stun - (active + recovery); KD moves: hitstun = frames to act, §19.3);
 //  - authored forward movement (`move` curve), cancel windows (chain / special / super),
 //    target combos (chain-only), SIMPLE assist route.
-import { fixtureData, newMatch, place, run, fs, evs, I, tester, dirBits, motion, sb } from './fixtures/simkit.ts';
+import { fixtureData, newMatch, place, run, fs, evs, I, tester, dirBits, motion, sb, lvU } from './fixtures/simkit.ts';
 import { step, devSet } from '../runtime/src/core/sim/match.ts';
 import type { Match } from '../runtime/src/core/sim/match.ts';
 import { EV } from '../runtime/src/core/sim/events.ts';
@@ -332,14 +332,14 @@ function moveName(m: Match, i: number): string {
   let landStun = -1;
   for (let k = 0; k < 80; k++) {
     step(m, 0, 0);
-    if (fs(m, 0).moveFrame === A['dive_l'].startup + 1) vxAfter = m.s[sb(0) + F.vx];
+    if (fs(m, 0).moveFrame === A['dive_l'].startup + 1) vxAfter = lvU(m, 0); // CHANGED(SIM3D): along the line
     if (landF < 0 && m.s[sb(0) + F.st] === ST.LAND) {
       landF = k;
       landStun = m.s[sb(0) + F.stun];
     }
   }
   t.ok(name === 'dive_l', 'airborne 214L picks the air: true move (dive_l), not the ground rush', name);
-  t.eq(vxAfter, Math.round((A['dive_l'].airVel![0] * 100000) / 60), 'airVel applied from startup (3.0 m/s)');
+  t.near(vxAfter, Math.round((A['dive_l'].airVel![0] * 100000) / 60), 1, 'airVel applied from startup (3.0 m/s)');
   t.eq(landStun, A['dive_l'].recovery, 'dive ends on landing with `recovery` landing frames');
   const m2 = freshAt(4.0);
   step(m2, dirBits(m2, 0, 5) | I.L, 0);

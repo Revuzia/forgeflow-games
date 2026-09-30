@@ -5,7 +5,7 @@
 //   versus state <= 1024 ints.
 // Timings use performance.now() in the HARNESS only (the sim never reads a clock). Other agents may
 // load this machine; the numbers printed are what was measured this run.
-import { newMatch, randomInputs, tester, fixtureData, uniqueInputs } from './fixtures/simkit.ts';
+import { newMatch, randomInputs, tester, fixtureData, uniqueInputs, stepInputs } from './fixtures/simkit.ts';
 import { loadGameData } from '../runtime/src/core/data.ts';
 import { step, save, load, checksum } from '../runtime/src/core/sim/match.ts';
 import type { Match } from '../runtime/src/core/sim/match.ts';
@@ -76,6 +76,7 @@ function measure(mk: () => Match, streams: (f: number) => [number, number], fram
   return { mean: s0 / frames, p99: pct(ts, 0.99), max: pct(ts, 1) };
 }
 let realNote = '';
+let stepNote = '';
 try {
   const real = loadGameData();
   const ids = Object.keys(real.fighters).sort();
@@ -90,9 +91,18 @@ try {
   let kb = 0;
   const br = measure(() => newMatch({ data: real, p1: ids[kb++ % ids.length], p2: 'johnny', mode: kb % 2 ? 'brawl' : 'heckler', seed: kb, skipIntro: false, s1: 0 }),
     (f) => [ua[f], 0], 6000);
+  // CHANGED(SIM3D): the 3D ring - STEP-heavy streams (sidestep taps, circle-walks with isqrt renormalisation every frame,
+  // step-attacks) on the real kits
+  const sa = stepInputs(7, 8, UF * ids.length);
+  const sb3 = stepInputs(8, 4, UF * ids.length);
+  let ks = 0;
+  const st3 = measure(() => { const id = ids[ks++ % ids.length]; return newMatch({ data: real, p1: id, p2: ids[(ks * 7) % ids.length], seed: ks, s1: 1, s2: 0, skipIntro: false }); },
+    (f) => [sa[f], sb3[f]], UF * ids.length);
+  t.ok(st3.p99 <= BUDGET.stepMs && st3.mean <= BUDGET.stepMs, `real kits + STEP streams (circling): step p99 ${(st3.p99 * 1000).toFixed(1)} us, mean ${(st3.mean * 1000).toFixed(2)} us <= ${BUDGET.stepMs * 1000} us`);
+  stepNote = `, STEP p99 ${(st3.p99 * 1000).toFixed(1)} us mean ${(st3.mean * 1000).toFixed(2)} us`;
   t.ok(vs.p99 <= BUDGET.stepMs, `real kits + unique streams: step p99 ${(vs.p99 * 1000).toFixed(1)} us <= ${BUDGET.stepMs * 1000} us (mean ${(vs.mean * 1000).toFixed(2)} us)`);
   t.ok(br.p99 <= BUDGET.stepMs, `bonus rounds (4 goons / heckle arcs): step p99 ${(br.p99 * 1000).toFixed(1)} us <= ${BUDGET.stepMs * 1000} us (mean ${(br.mean * 1000).toFixed(2)} us)`);
-  realNote = `; real+uniques p99 ${(vs.p99 * 1000).toFixed(1)} us, bonus p99 ${(br.p99 * 1000).toFixed(1)} us`;
+  realNote = `; real+uniques p99 ${(vs.p99 * 1000).toFixed(1)} us, bonus p99 ${(br.p99 * 1000).toFixed(1)} us${stepNote}`;
 } catch (e) {
   t.ok(false, `real-data perf run crashed: ${String((e as Error).message).split(/\r?\n/)[0]}`);
 }

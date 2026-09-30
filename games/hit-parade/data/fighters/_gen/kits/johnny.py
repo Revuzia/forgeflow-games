@@ -13,7 +13,7 @@ def build():
         rival="boneyard", stage="rust_theater",
         cpu={"style": "balanced", "rangeM": [1.4, 2.6], "pokes": ["5M", "2M"], "antiAir": ["encore_l", "2H"],
              "punish": ["5H", "hook_h"], "combo": ["2L", "5M", "hook_m"], "zoning": ["brickbat_m"],
-             "meter": "sold_out"},
+             "meter": "sold_out", "antiStep": ["3H", "5H"]},
         doc=dict(
             difficulty=1, packs="CMU boxing takes (jabs, crosses, hooks, uppercut, body blows, overhand)",
             look="Ch42: shaggy dark hair, tattoo sleeves, red grunge tee, denim shorts, white sneakers.",
@@ -27,6 +27,17 @@ def build():
                      "on block; BRICKBAT recovery (47 total) loses to a read jump.",
             rivalry="Boneyard carved Johnny's name off the Rust Theater marquee with a cleaver. Johnny wants "
                     "the sign back.",
+            # CHANGED(FIGHTERS3D): 3D ring play (CONTRACT 35.12)
+            ring=dict(
+                stepping="BRICKBAT L/M/H and HEADLINE HOOK L/M/H are LINEAR: a read sidestep during their startup beats "
+                         "them and the stepper punishes from the side, so he throws them from 3 m+ or as cancels, never "
+                         "raw point blank. The EX BRICKBAT is AIMED on its spawn frame and the EX HOOK re-aims until "
+                         "frame 4, the meter answer to a stepping opponent. His own step punish is the 4-frame jab or 5M "
+                         "into HOOK from the side.",
+                homing="5H HAYMAKER (12f, -3 on block, 0.60 m deep) is the safe homing mid at poke range; 3H LOW BLOW "
+                       "(10f homing sweep) is the anti-step low; the WEAVE counter hook, SOLD OUT and MAIN EVENT home.",
+                wall="HEADLINE HOOK H / EX wall-splat: the running hook carries any light / medium confirm to the ring "
+                     "boundary, then 6H overhead vs 3H low and IMPACT at the wall."),
         ),
     )
 
@@ -119,10 +130,11 @@ def build():
     K.add("2M", "2M", name="Knee Breaker", clip="low_body", cancel=["special", "super"], role=["poke", "low"],
           sfx=[[5, "whoosh_light"]], desc="Crouching straight to the knee; cancel into HEADLINE HOOK.")
     K.add("5H", "H", name="Haymaker", clip="haymaker", cancel=["special", "super"], sfx=[[8, "whoosh_heavy"]],
-          desc="Wide rear hook.")
+          homing=True, why3d="wide rear hook (CMU hook.1 swings out then across): homing, his safe tool vs a stepper",
+          desc="Wide rear hook; homing (catches a sidestep).")
     K.add("2H", "AA", name="Rising Uppercut", clip="uppercut", cancel=["special", "super"],
           juggle={"js": 1, "ji": 1, "jl": 0}, sfx=[[6, "whoosh_heavy"]], desc="Anti-air uppercut.")
-    K.add("3H", "SWEEP", input="3H", kind="command", name="Low Blow", clip="low_blow", cancel=[],
+    K.add("3H", "SWEEP", input="3H", kind="command", name="Low Blow", clip="low_blow", cancel=[], role=["sweep", "low", "antistep"],
           sfx=[[7, "whoosh_heavy"]], desc="Crouching hook to the knee that drops them (low, knockdown).",
           why="Johnny's 2H is the anti-air, so the sweep lives on 3H (CONTRACT 1: crouch H = anti-air OR "
               "sweep per fighter).")
@@ -158,9 +170,11 @@ def build():
     K.special("brickbat", motion="236", fam="proj",
               common=dict(name="Brickbat", clip="brick_throw", cancel=["super"], role=["projectile"],
                           sfx=[[0, "whoosh_light"]], desc="Hurls a brick. L slow, H fast."),
-              per={s: dict(projectile=dict(brick, speed=v, strength=s.upper()))
+              per={s: dict(projectile=dict(brick, speed=v, strength=s.upper()), linear=True,
+                           why3d="shoto fireball = the classic step bait: thrown straight along his frame-1 facing")
                    for s, v in (("l", 4.5), ("m", 6.0), ("h", 7.5))},
-              ex=dict(name="Brickbat (EX)", startup=11, recovery=30, damage=1000,
+              ex=dict(name="Brickbat (EX)", startup=11, recovery=30, damage=1000, aimed=True,
+                      why3d="OD reward: the two bricks are AIMED at the opponent on the release frame",
                       projectile=dict(brick, speed=7.5, hits=2, strength="H"),
                       desc="Two bricks at once: 2 hits, fastest startup.",
                       why="SF6 OD fireball pattern: 2 hits and faster (11f) for 2 NERVE bars."))
@@ -185,10 +199,14 @@ def build():
     K.special("hook", motion="214", fam="rush",
               common=dict(name="Headline Hook", clip="run_hook", cancel=["super"], role=["approach"],
                           sfx=[[2, "whoosh_heavy"]], desc="Running hook; ends every confirm."),
-              per={"l": dict(hitstun=54, move=[[0, 0], [10, 1.2], [14, 1.3]]),
-                   "m": dict(hitstun=59, move=[[0, 0], [12, 1.8], [16, 1.9]]),
-                   "h": dict(hitstun=69, move=[[0, 0], [14, 2.6], [18, 2.7]], invuln={"throw": [1, 14]})},
+              per={"l": dict(hitstun=54, move=[[0, 0], [10, 1.2], [14, 1.3]], linear=True,
+                             why3d="running rush: commits to its frame-1 line"),
+                   "m": dict(hitstun=59, move=[[0, 0], [12, 1.8], [16, 1.9]], linear=True,
+                             why3d="running rush: commits to its frame-1 line"),
+                   "h": dict(hitstun=69, move=[[0, 0], [14, 2.6], [18, 2.7]], invuln={"throw": [1, 14]}, linear=True,
+                             wallSplat=True, why3d="running rush (linear); the 2.7 m carry wall-splats at the ring")},
               ex=dict(name="Headline Hook (EX)", startup=10, active=8, recovery=20, damage=1200, hitstun=52,
+                      wallSplat=True, why3d="OD: not linear - re-aims until frame 4 (the special default), wall-splats",
                       armor={"hits": 1, "f": [1, 12]}, move=[[0, 0], [10, 2.6], [17, 2.8]],
                       hits=[{"f": [10, 11], "damage": 500, "hitstop": 11}, {"f": [16, 17], "damage": 700,
                                                                            "hitstop": 13}],
@@ -213,7 +231,8 @@ def build():
           trigger={"classic": {"motion": "", "btn": "LMH"}, "simple": "LMH"},
           clip="weave_counter_hook", startup=6, active=3, recovery=20, damage=900, hitstun=48, blockstun=16,
           hitstop=13, guard="HL", gain=1000, nerve=3000, pb=(0.0, 0.45), kd="soft", cancel=["super"],
-          role=["reversal"], desc="Rising hook out of a Weave; knocks down, -7 on block.",
+          role=["reversal"], homing=True, why3d="counter follow-up: homes so it lands wherever the attacker stepped",
+          desc="Rising hook out of a Weave; knocks down, -7 on block.",
           why="Weave follow-up (not a template class): hook frame data 6/3/20, KD +25, -7 so it is "
               "punishable when blocked.")
 

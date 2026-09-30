@@ -12,7 +12,8 @@ def build():
         stage="wheel_of_pain",
         cpu={"style": "zoner", "rangeM": [2.8, 5.5], "zoning": ["card_fan_m", "flash_paper_m"],
              "antiAir": ["flourish_l", "2H"], "escape": ["vanish_h"], "pokes": ["5M", "2M"],
-             "punish": ["5H", "flourish_h"], "combo": ["2M", "card_fan_h"], "meter": "grand_illusion"},
+             "punish": ["5H", "flourish_h"], "combo": ["2M", "card_fan_h"], "meter": "grand_illusion",
+             "antiStep": ["flourish_l", "card_fan_m"]},
         doc=dict(
             difficulty=2, packs="Pro_Magic (casts, palms, area attacks)",
             look="Whiteclown: bald white clown face, dark eye rings, toothy grin, black tuxedo with bow tie and "
@@ -26,6 +27,18 @@ def build():
             weakness="Slowest walk in the cast (1.26 m/s), 9500 HP; VANISHING ACT has 14 frames of visible "
                      "recovery after he reappears; up close his only escapes are EX FLOURISH and the Lv1.",
             rivalry="Gazza's stray shot popped Zambini's prize dove on live TV. Zambini has not forgiven the ball.",
+            # CHANGED(FIGHTERS3D): 3D ring play (CONTRACT 35.12)
+            ring=dict(
+                stepping="CARD FAN and FLASH PAPER are AIMED on the release frame, so stepping during his startup does "
+                         "nothing: the step has to come after the cards leave his hand (the fan is 0.30 m deep, a full "
+                         "sidestep clears it at range). Circle-walking round the cards costs the time he spends throwing "
+                         "more. VANISHING ACT's 14-frame reappear is the thing to step-bait and punish.",
+                homing="He has no homing normal - up close a stepper beats 5M / 5H. FLOURISH (8-11f) is a radial burst "
+                       "0.60-0.80 m deep that homes: the anti-step answer once a stepper is close. At range the AIMED "
+                       "CARD FAN is his reliable tracking tool; GRAND ILLUSION's card-saw is aimed and 0.45 m deep; "
+                       "THE PRESTIGE homes.",
+                wall="5H DOUBLE PALM wall-splats at the ring edge (0.60 m pushback); otherwise the wall is his problem - "
+                     "VANISHING ACT H drops him back to his own side of the ring."),
         ),
     )
 
@@ -81,7 +94,8 @@ def build():
           role=["poke", "low"], desc="Long crouching spear hand (low); cancel into CARD FAN.",
           why="Long low poke: startup 9 pays for the reach.")
     K.add("5H", "H", name="Double Palm", clip="double_palm", pb=(0.60, 0.80), cancel=["special", "super"],
-          desc="Double palm that shoves them back to his range.")
+          wallSplat=True, why3d="straight double palm (tracks to f8); the shove wall-splats at the ring edge (3D wall game)",
+          desc="Double palm that shoves them back to his range; wall-splats at the ring edge.")
     K.add("2H", "AA", name="Rising Palm", clip="rising_palm", juggle={"js": 1, "ji": 1, "jl": 0},
           cancel=["special", "super"], desc="Rising palm anti-air.")
     K.add("6H", "OH", input="6H", kind="command", name="Abracadabra", clip="abracadabra", startup=20, recovery=16,
@@ -112,19 +126,24 @@ def build():
     card = {"life": 180, "box": [0.30, 0.20], "y": 1.20, "hits": 1, "clip": "card", "x": 0.6}
     K.special("card_fan", "proj", motion="236",
               common=dict(name="Card Fan", clip="card_flick", damage=500, cancel=["super"], role=["projectile"],
-                          sfx=[[0, "card_throw"]], desc="Flicked playing cards; fast and straight.",
+                          sfx=[[0, "card_throw"]], desc="Flicked playing cards; fast, aimed at the opponent on release.",
+                          aimed=True, projLateralM=0.30,
+                          why3d="the zoner's neutral: AIMED on the release frame (a step must come after the throw); the "
+                                "flicked fan is 0.30 m deep",
                           why="Zoner projectile is his neutral: 500 (-100) for faster speeds 5.0/6.5/8.0 m/s "
                               "(template 4.5/6/7.5)."),
               per={s: dict(projectile=dict(card, speed=v, strength=s.upper()))
                    for s, v in (("l", 5.0), ("m", 6.5), ("h", 8.0))},
               ex=dict(name="Card Fan (EX)", startup=11, recovery=30, damage=900,
-                      projectile=dict(card, speed=8.0, hits=3, strength="H", box=[0.40, 0.40]),
+                      projectile=dict(card, speed=8.0, hits=3, strength="H", box=[0.40, 0.40]), projLateralM=0.40,
+                      why3d="aimed; a full deck spreads 0.40 m deep",
                       desc="A full deck: 3 hits.", why="EX: 3-hit projectile, 11f startup."))
     lob = {"life": 120, "box": [0.45, 0.45], "y": 1.60, "hits": 1, "clip": "flame", "x": 0.6, "vy": 5.0, "g": 15.0}
     K.special("flash_paper", None, motion="63214",
               common=dict(name="Flash Paper", clip="flash_cast", active=1, recovery=28, hitstun=28, blockstun=22,
                           hitstop=8, guard="HL", gain=600, nerve=2500, pb=(0.40, 0.50), cancel=["super"],
-                          role=["projectile", "antiair"], sfx=[[0, "fire_whoosh"]],
+                          role=["projectile", "antiair"], sfx=[[0, "fire_whoosh"]], aimed=True,
+                          why3d="the lob is AIMED at the opponent on release (it lands at 1.5 / 3.0 / 4.5 m along that line)",
                           desc="Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump.",
                           why="Arcing projectile (FIGHTING_DESIGN 8c HAIL analog): launched at 5.0 m/s up with "
                               "15 m/s2 gravity from 1.6 m -> 0.90 s airtime; horizontal speeds 1.0/2.6/4.3 m/s "
@@ -158,21 +177,26 @@ def build():
     K.special("flourish", None, motion="623",
               common=dict(name="Flourish", clip="flourish_burst", active=5, blockstun=20, hitstop=15, guard="HL",
                           gain=800, nerve=4000, pb=(0.0, 0.60), kd="soft", launch=[0.8, 4.5],
-                          juggle={"js": 1, "ji": 1, "jl": 3}, cancel=["super"], role=["antiair"],
-                          sfx=[[0, "fire_whoosh"]],
+                          juggle={"js": 1, "ji": 1, "jl": 3}, cancel=["super"], role=["antiair", "antistep"],
+                          sfx=[[0, "fire_whoosh"]], homing=True,
                           boxes=[{"f": [9, 15], "x": 0.30, "y": 1.70, "w": 1.20, "h": 1.00}],
                           desc="Burst of flame and doves above and around him; not invulnerable (EX is).",
                           why="Area anti-air (not a DP): 9/10/11 startup, -11/-14/-17 on block; a hand-set box "
                               "above-front because the effector (0.53 m ahead, 1.16 m) would miss jumpers."),
               per={"l": dict(startup=9, recovery=26, damage=900, hitstun=66,
-                             boxes=[{"f": [9, 13], "x": 0.30, "y": 1.70, "w": 1.20, "h": 1.00}]),
+                             boxes=[{"f": [9, 13], "x": 0.30, "y": 1.70, "w": 1.20, "h": 1.00}], lateralM=0.60,
+                             why3d="radial burst around him: homing, as deep as the box is wide (1.20 m / 2)"),
                    "m": dict(startup=10, recovery=29, damage=1000, hitstun=69,
-                             boxes=[{"f": [10, 14], "x": 0.40, "y": 1.70, "w": 1.30, "h": 1.00}]),
+                             boxes=[{"f": [10, 14], "x": 0.40, "y": 1.70, "w": 1.30, "h": 1.00}], lateralM=0.65,
+                             why3d="radial burst around him: homing, as deep as the box is wide (1.30 m / 2)"),
                    "h": dict(startup=11, recovery=32, damage=1100, hitstun=72,
-                             boxes=[{"f": [11, 15], "x": 0.50, "y": 1.75, "w": 1.40, "h": 1.10}])},
+                             boxes=[{"f": [11, 15], "x": 0.50, "y": 1.75, "w": 1.40, "h": 1.10}], lateralM=0.70,
+                             why3d="radial burst around him: homing, as deep as the box is wide (1.40 m / 2)")},
               ex=dict(name="Flourish (EX)", startup=8, recovery=30, damage=1300, hitstun=70,
                       invuln={"strike": [1, 11], "throw": [1, 11], "air": [1, 11], "proj": [1, 11]},
-                      boxes=[{"f": [8, 12], "x": 0.30, "y": 1.40, "w": 1.60, "h": 1.60}], role=["antiair", "reversal"],
+                      boxes=[{"f": [8, 12], "x": 0.30, "y": 1.40, "w": 1.60, "h": 1.60}],
+                      role=["antiair", "reversal", "antistep"], lateralM=0.80,
+                      why3d="radial burst: homing, 1.60 m / 2 deep",
                       desc="Fully invulnerable burst.", why="EX: fully invulnerable 1-11 (his reversal)."))
 
     K.add("grand_illusion", LV1, kind="super1", input="236236", name="Grand Illusion", strength="H",
@@ -180,8 +204,9 @@ def build():
           invuln={"strike": [1, 11], "throw": [1, 11]}, cost={"showtime": LV1_COST}, gain=0, nerve=600,
           projectile={"speed": 7.0, "life": 120, "box": [0.9, 0.9], "y": 1.1, "hits": 5, "strength": "H",
                       "clip": "saw_card", "x": 0.8},
-          role=["projectile", "reversal"], sfx=[[0, "crowd_cheer_burst"]],
-          desc="A giant spinning card-saw: 5-hit projectile, invulnerable startup.",
+          role=["projectile", "reversal"], sfx=[[0, "crowd_cheer_burst"]], aimed=True,
+          why3d="the card-saw is AIMED on release; 0.45 m deep (box 0.9 / 2)",
+          desc="A giant spinning card-saw: 5-hit projectile, invulnerable startup, aimed.",
           why="Zoner Lv1 = projectile super (FIGHTING_DESIGN 8c 'Lv1 lightning column' analog): 5 x 400; "
               "invulnerable 1-11 because up close Lv1/EX are his only escapes; knocks down (KD +23 point blank).")
     K.add("the_prestige", LV3, kind="super3", input="214214", name="The Prestige", strength="H", clip="palm_shove",

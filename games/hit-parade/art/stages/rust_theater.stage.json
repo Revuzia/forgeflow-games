@@ -1,0 +1,796 @@
+{
+  "id": "rust_theater",
+  "name": "THE RUST THEATER",
+  "status": "built",
+  "glb": "rust_theater.glb",
+  "source": "art/stages/rust_theater.py",
+  "home": [
+    "johnny",
+    "rerun"
+  ],
+  "look": "condemned vaudeville theatre turned fight pit: a round blue-painted brick pit (stone floor, iron rings, footlit stone coping) sunk in the stalls; the old stage on one side - torn red-velvet proscenium, opera boxes and the bulb HIT PARADE marquee; a horseshoe of wooden bleachers with the crowd leaning over a velvet rope rail, torch-lit aisles, a gilded dress-circle balcony and chandeliers all the way round",
+  "floor": {
+    "y": 0.0,
+    "surface": "stone",
+    "fightStrip": {
+      "x": [
+        -8.0,
+        8.0
+      ],
+      "z": [
+        -1.5,
+        1.5
+      ]
+    },
+    "extent": {
+      "x": [
+        -17.5,
+        17.5
+      ],
+      "z": [
+        -17.5,
+        17.5
+      ]
+    },
+    "stallsY": 1.0,
+    "note": "the pit floor (y 0, r <= 5.5) is the fight floor; the stalls around the pit sit at y 1.0 (the pit is sunk). fightStrip = legacy 2.5D (CONTRACT 35.11.7)"
+  },
+  "walls": {
+    "x": [
+      -8.0,
+      8.0
+    ],
+    "splat": [
+      {
+        "id": 0,
+        "x": -8.0,
+        "normal": [
+          1,
+          0,
+          0
+        ],
+        "z": [
+          -3.2,
+          3.0
+        ],
+        "heightM": 4.2,
+        "surface": "blue_brick",
+        "dustColor": "#7d8fb0"
+      },
+      {
+        "id": 1,
+        "x": 8.0,
+        "normal": [
+          -1,
+          0,
+          0
+        ],
+        "z": [
+          -3.2,
+          3.0
+        ],
+        "heightM": 4.2,
+        "surface": "blue_brick",
+        "dustColor": "#7d8fb0"
+      }
+    ],
+    "note": "LEGACY 2.5D (CONTRACT 35.11.7): kept until the sim / view stop reading walls.x; the 3D boundary is `ring`."
+  },
+  "ring": {
+    "shape": "circle",
+    "radiusM": 5.5,
+    "sides": 16,
+    "rotDeg": 0.0,
+    "wallHeightM": 1.2,
+    "thicknessM": 0.45,
+    "surface": "blue_brick",
+    "dustColor": "#7d8fb0",
+    "note": "CONTRACT 35.11: circle, radiusM = the pit wall's inner brick face; 16 WALL_SPLAT sectors centred on k*22.5 deg. Stone plinth 0-0.3 m, blue brick 0.3-1.05 m, coping 1.05-1.2 m. Low iron-banded gates (flush) at 90 / 270 deg are part of the wall."
+  },
+  "spawnAxisDeg": 90.0,
+  "cameraSideDeg": 0.0,
+  "cameraMaxM": 9.5,
+  "spawn": {
+    "distanceM": 2.4,
+    "p1": [
+      -1.2,
+      0.0,
+      -0.0
+    ],
+    "p2": [
+      1.2,
+      0.0,
+      0.0
+    ]
+  },
+  "camera": {
+    "vFovDeg": 35.0,
+    "heightM": 1.35,
+    "lookAtY": 1.0,
+    "distanceM": [
+      4.4,
+      9.5
+    ],
+    "pitchDeg": [
+      -4.0,
+      -4.0
+    ],
+    "orbit": true,
+    "wallClampX": 8.0,
+    "note": "CONTRACT 35.7 orbit camera (eye y 1.35, look-at y 1.0, dist 4.4..9.5 from the pair midpoint). wallClampX = legacy 2.5D. Proof renders: _harness/_reports/stages/rust_theater_<shot>.png, orbit sheet rust_theater_orbit_sheet.png",
+    "proofShots": [
+      {
+        "id": "near_center",
+        "pos": [
+          0.0,
+          1.35,
+          4.4
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "far_center",
+        "pos": [
+          0.0,
+          1.35,
+          8.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "far_center_phone",
+        "pos": [
+          0.0,
+          1.35,
+          6.6
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "aspect": 2.1667
+      },
+      {
+        "id": "orbit_000_n",
+        "pos": [
+          0.0,
+          1.35,
+          4.4
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_000_f",
+        "pos": [
+          0.0,
+          1.35,
+          8.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_045_n",
+        "pos": [
+          3.111,
+          1.35,
+          3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_045_f",
+        "pos": [
+          5.657,
+          1.35,
+          5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_090_n",
+        "pos": [
+          4.4,
+          1.35,
+          0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_090_f",
+        "pos": [
+          8.0,
+          1.35,
+          0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_135_n",
+        "pos": [
+          3.111,
+          1.35,
+          -3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_135_f",
+        "pos": [
+          5.657,
+          1.35,
+          -5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_180_n",
+        "pos": [
+          0.0,
+          1.35,
+          -4.4
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_180_f",
+        "pos": [
+          0.0,
+          1.35,
+          -8.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_225_n",
+        "pos": [
+          -3.111,
+          1.35,
+          -3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_225_f",
+        "pos": [
+          -5.657,
+          1.35,
+          -5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_270_n",
+        "pos": [
+          -4.4,
+          1.35,
+          -0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_270_f",
+        "pos": [
+          -8.0,
+          1.35,
+          -0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_315_n",
+        "pos": [
+          -3.111,
+          1.35,
+          3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_315_f",
+        "pos": [
+          -5.657,
+          1.35,
+          5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      }
+    ]
+  },
+  "exposure": 1.0,
+  "toneMapping": "neutral",
+  "fog": {
+    "color": "#17121d",
+    "near": 16.0,
+    "far": 52.0
+  },
+  "environment": {
+    "hdr": "rust_theater_env.hdr",
+    "intensity": 0.28,
+    "background": false,
+    "src": "Poly Haven afrikaans_church_interior_2k.hdr (CC0), downsampled to 512x256",
+    "backgroundColor": "#0b0910"
+  },
+  "lights": [
+    {
+      "id": "key",
+      "type": "directional",
+      "color": "#ffd8ab",
+      "intensity": 2.5,
+      "position": [
+        -3.078,
+        14.0,
+        -8.457
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "castShadow": true,
+      "shadow": {
+        "mapSize": 1024,
+        "bias": -0.0004,
+        "normalBias": 0.03,
+        "camera": {
+          "left": -9.0,
+          "right": 9.0,
+          "top": 9.0,
+          "bottom": -9.0,
+          "near": 1.0,
+          "far": 40.0
+        }
+      }
+    },
+    {
+      "id": "rim",
+      "type": "directional",
+      "color": "#86a8ff",
+      "intensity": 1.7,
+      "position": [
+        3.42,
+        7.0,
+        9.397
+      ],
+      "target": [
+        0.0,
+        1.2,
+        0.0
+      ],
+      "castShadow": false
+    },
+    {
+      "id": "fill",
+      "type": "hemisphere",
+      "sky": "#5b6fa6",
+      "ground": "#3b2621",
+      "intensity": 0.9
+    },
+    {
+      "id": "stage_wash",
+      "type": "spot",
+      "color": "#ff9d7e",
+      "intensity": 150.0,
+      "distance": 32.0,
+      "decay": 2,
+      "position": [
+        0.0,
+        9.0,
+        -1.5
+      ],
+      "target": [
+        0.0,
+        3.6,
+        -13.0
+      ],
+      "angleDeg": 30.0,
+      "penumbra": 0.55
+    },
+    {
+      "id": "spot_60",
+      "type": "spot",
+      "color": "#ffe2c0",
+      "intensity": 200.0,
+      "distance": 30.0,
+      "decay": 2,
+      "position": [
+        12.644,
+        6.2,
+        7.3
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "angleDeg": 22.0,
+      "penumbra": 0.5
+    },
+    {
+      "id": "spot_300",
+      "type": "spot",
+      "color": "#ffe2c0",
+      "intensity": 200.0,
+      "distance": 30.0,
+      "decay": 2,
+      "position": [
+        -12.644,
+        6.2,
+        7.3
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "angleDeg": 22.0,
+      "penumbra": 0.5
+    },
+    {
+      "id": "torch_l",
+      "type": "point",
+      "color": "#ff8a36",
+      "intensity": 7.0,
+      "distance": 9.0,
+      "decay": 2,
+      "position": [
+        -9.8,
+        3.0,
+        -0.0
+      ],
+      "flicker": {
+        "amp": 0.22,
+        "hz": 7.0
+      }
+    },
+    {
+      "id": "torch_r",
+      "type": "point",
+      "color": "#ff8a36",
+      "intensity": 7.0,
+      "distance": 9.0,
+      "decay": 2,
+      "position": [
+        9.8,
+        3.0,
+        0.0
+      ],
+      "flicker": {
+        "amp": 0.22,
+        "hz": 6.3
+      }
+    }
+  ],
+  "lightsNote": "FIXED pool (8): created once at stage load, never added/removed (shader programs stay warm). No lights in the GLB. 360 rig (CONTRACT 35.6): high warm key from the stage side + cool rim from the opposite side + hemisphere fill + two balcony spots (60 / 300 deg) aimed at the pit + a stage wash on the proscenium + two aisle torch glows (flicker = view-only intensity modulation).",
+  "crowd": {
+    "atlas": "crowd_atlas.webp",
+    "meta": "crowd_atlas.json",
+    "cols": 12,
+    "rows": 6,
+    "count": 72,
+    "cardHeightM": 2.4,
+    "cardWidthM": 1.2,
+    "anchor": [
+      0.5,
+      0.97917
+    ],
+    "tint": "#e0d6cf",
+    "brightness": 0.6,
+    "moods": {
+      "idle": [
+        "watch"
+      ],
+      "cheer": [
+        "cheer",
+        "hype"
+      ],
+      "jeer": [
+        "jeer"
+      ]
+    },
+    "nodes": "GLB empties crowd_<bay>_<row>_<i>: position = feet point, +Z = card facing (the ring centre), uniform scale = card height; extras {bay,row,i,rand,angle}. Generated from the ARC bays below (CONTRACT 35.11.6: rows along circles r about the ring centre, spacing along the arc, jitter = [tangential, radial] half-ranges from mulberry32(seed); gapPct = share of empty seats).",
+    "bays": [
+      {
+        "id": "stalls_a",
+        "arcDeg": [
+          214.0,
+          266.0
+        ],
+        "spacing": 0.6,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 1101,
+        "rows": [
+          {
+            "r": 10.2,
+            "y": 1.0
+          },
+          {
+            "r": 11.0,
+            "y": 1.4
+          },
+          {
+            "r": 11.8,
+            "y": 1.8
+          },
+          {
+            "r": 12.6,
+            "y": 2.2
+          },
+          {
+            "r": 13.4,
+            "y": 2.6
+          },
+          {
+            "r": 14.2,
+            "y": 3.0
+          }
+        ]
+      },
+      {
+        "id": "stalls_b",
+        "arcDeg": [
+          274.0,
+          356.0
+        ],
+        "spacing": 0.6,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 1102,
+        "rows": [
+          {
+            "r": 10.2,
+            "y": 1.0
+          },
+          {
+            "r": 11.0,
+            "y": 1.4
+          },
+          {
+            "r": 11.8,
+            "y": 1.8
+          },
+          {
+            "r": 12.6,
+            "y": 2.2
+          },
+          {
+            "r": 13.4,
+            "y": 2.6
+          },
+          {
+            "r": 14.2,
+            "y": 3.0
+          }
+        ]
+      },
+      {
+        "id": "stalls_c",
+        "arcDeg": [
+          4.0,
+          86.0
+        ],
+        "spacing": 0.6,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 1103,
+        "rows": [
+          {
+            "r": 10.2,
+            "y": 1.0
+          },
+          {
+            "r": 11.0,
+            "y": 1.4
+          },
+          {
+            "r": 11.8,
+            "y": 1.8
+          },
+          {
+            "r": 12.6,
+            "y": 2.2
+          },
+          {
+            "r": 13.4,
+            "y": 2.6
+          },
+          {
+            "r": 14.2,
+            "y": 3.0
+          }
+        ]
+      },
+      {
+        "id": "stalls_d",
+        "arcDeg": [
+          94.0,
+          146.0
+        ],
+        "spacing": 0.6,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 1104,
+        "rows": [
+          {
+            "r": 10.2,
+            "y": 1.0
+          },
+          {
+            "r": 11.0,
+            "y": 1.4
+          },
+          {
+            "r": 11.8,
+            "y": 1.8
+          },
+          {
+            "r": 12.6,
+            "y": 2.2
+          },
+          {
+            "r": 13.4,
+            "y": 2.6
+          },
+          {
+            "r": 14.2,
+            "y": 3.0
+          }
+        ]
+      },
+      {
+        "id": "circle",
+        "arcDeg": [
+          212.0,
+          508.0
+        ],
+        "spacing": 0.62,
+        "jitter": [
+          0.14,
+          0.06
+        ],
+        "seed": 1105,
+        "gapPct": 0.18,
+        "rows": [
+          {
+            "r": 15.25,
+            "y": 4.9
+          },
+          {
+            "r": 16.05,
+            "y": 5.3500000000000005
+          }
+        ]
+      }
+    ]
+  },
+  "music": "music_stage_rust_theater",
+  "musicHint": "AUDIO_KIT music_stage pick 'Halloween Rocks' (Evil Mind, rock, 129 BPM) - AUDIO lane maps the id",
+  "ambient": "amb_theater_crowd",
+  "ambientHint": "crowd bed that follows SHOWTIME/ratings + torch crackle near the aisle torches",
+  "dressing": {
+    "animated": [
+      {
+        "what": "aisle torch flames",
+        "nodes": "flame_torches",
+        "how": "view-side flame_* scale.y flicker, synced with the torch_l / torch_r light flicker"
+      },
+      {
+        "what": "marquee bulbs",
+        "nodes": "marquee_bulbs",
+        "how": "optional chase pattern on emissive intensity"
+      },
+      {
+        "what": "crowd",
+        "how": "instanced cards, vertex bob/sway, pose swaps by ratings mood"
+      }
+    ],
+    "splatWallDust": "#7d8fb0"
+  },
+  "build": {
+    "bytes": 2912616,
+    "draws": 20,
+    "triangles": 135832,
+    "materials": 20,
+    "textures": 27,
+    "crowdNodes": 782,
+    "lights": 0,
+    "extensions": [
+      "EXT_meshopt_compression",
+      "EXT_texture_webp",
+      "KHR_materials_emissive_strength",
+      "KHR_mesh_quantization"
+    ],
+    "envBytes": 419127,
+    "clearance": {
+      "bandY": [
+        1.3,
+        3.0
+      ],
+      "minRadiusM": 9.602,
+      "nearest": "torch_90_1",
+      "cameraMaxM": 9.5,
+      "ok": true
+    }
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "hit-parade",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "HIT PARADE - a 3D versus fighting game (arcade ladder, local + online PVP) framed as a live TV fight show. Three.js + TypeScript + Vite. `npm install && npm run dev`.",

@@ -68,6 +68,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 2, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "gauntlet_jab"},
       "desc": "Spiked-gauntlet jab.",
       "boxes": [{"f": [6, 8], "x": 0.796, "y": 1.382, "w": 0.3, "h": 0.565}],
@@ -99,6 +101,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hurtOverride": [{"f": [1, 16], "w": 0.65, "h": 1.8}],
       "role": ["poke", "low"],
+      "track": {"until": 3, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "stomp"},
       "desc": "Stamps on the toes (low)."
     },
@@ -126,6 +130,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 5, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "snap_kick"},
       "desc": "Front snap kick.",
       "boxes": [{"f": [9, 11], "x": 1.021, "y": 1.07, "w": 0.506, "h": 0.3}],
@@ -154,9 +160,12 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "role": ["poke", "low"],
+      "role": ["poke", "low", "antistep"],
+      "track": {"until": 12, "rate": 20},
+      "homing": true,
+      "lateralM": 0.4,
       "anim": {"clip": "low_cleaver"},
-      "desc": "Crouching cleaver swing (low); cancel into MEAT HOOK.",
+      "desc": "Crouching cleaver swing (low); homing; cancel into MEAT HOOK.",
       "pushExt": [[0, 0.0], [9, 0.0], [11, 0.027], [12, 0.072], [14, 0.085], [23, 0.001], [28, 0.0]]
     },
     "5H": {
@@ -183,6 +192,8 @@
       "invuln": {},
       "armor": {"hits": 1, "f": [5, 13]},
       "role": [],
+      "track": {"until": 10, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "cleaver_swing"},
       "sfx": [[9, "whoosh_heavy"]],
       "desc": "Armored overhand cleaver swing (1 hit of armor on frames 5-13)."
@@ -211,6 +222,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["antiair"],
+      "track": {"until": 6, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "rising_backhand"},
       "desc": "Rising backhand anti-air (his only one)."
     },
@@ -238,6 +251,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["overhead"],
+      "track": {"until": 16, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "chop_down"},
       "sfx": [[12, "whoosh_heavy"]],
       "desc": "Overhead cleaver chop (+2/-4).",
@@ -267,6 +282,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 2, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "air_jab"},
       "desc": "Air jab.",
       "pushExt": [[0, 0.024], [4, 0.016], [7, 0.051], [14, 0.0], [16, 0.059]]
@@ -295,6 +312,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 3, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "air_backhand"},
       "desc": "Air backhand.",
       "pushExt": [[0, 0.033], [4, 0.197], [5, 0.211], [6, 0.0], [16, 0.0]]
@@ -323,6 +342,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 6, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "air_chop"},
       "desc": "Overhead cleaver jump-in."
     },
@@ -365,6 +386,7 @@
         ]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Holds them and delivers three flat-side cleaver smacks.",
       "pushExt": [[0, 0.114], [4, 0.0], [31, 0.006]]
@@ -403,6 +425,7 @@
         "victim": [[0, "hit_body", 0.0, 0.2], [10, "thrown_b", 0.1, 0.53], [28, "thrown_b", 0.53, 1.2]]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Hauls them over his shoulder.",
       "pushExt": [[0, 0.114], [4, 0.0], [31, 0.006]]
@@ -432,9 +455,12 @@
       "armor": {"hits": 1, "f": [4, 17]},
       "hits": [{"f": [18, 19], "damage": 500, "hitstop": 13}, {"f": [27, 28], "damage": 600, "hitstop": 15}],
       "role": ["wallsplat"],
+      "track": {"until": 28, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "meat_hook_swing"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Slow armored two-swing heavy; wall-splats in the corner."
+      "desc": "Slow armored two-swing heavy; homing; wall-splats in the corner."
     },
     "meat_hook_m": {
       "kind": "special",
@@ -461,9 +487,12 @@
       "armor": {"hits": 1, "f": [4, 21]},
       "hits": [{"f": [22, 23], "damage": 550, "hitstop": 13}, {"f": [31, 32], "damage": 650, "hitstop": 15}],
       "role": ["wallsplat"],
+      "track": {"until": 32, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "meat_hook_swing"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Slow armored two-swing heavy; wall-splats in the corner."
+      "desc": "Slow armored two-swing heavy; homing; wall-splats in the corner."
     },
     "meat_hook_h": {
       "kind": "special",
@@ -490,9 +519,12 @@
       "armor": {"hits": 2, "f": [4, 25]},
       "hits": [{"f": [26, 27], "damage": 600, "hitstop": 13}, {"f": [35, 36], "damage": 700, "hitstop": 15}],
       "role": ["wallsplat"],
+      "track": {"until": 36, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "meat_hook_swing"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Slow armored two-swing heavy; wall-splats in the corner."
+      "desc": "Slow armored two-swing heavy; homing; wall-splats in the corner."
     },
     "meat_hook_ex": {
       "kind": "ex",
@@ -519,6 +551,9 @@
       "armor": {"hits": 2, "f": [1, 17]},
       "hits": [{"f": [16, 17], "damage": 700, "hitstop": 13}, {"f": [25, 26], "damage": 800, "hitstop": 15}],
       "role": ["wallsplat"],
+      "track": {"until": 26, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "meat_hook_swing"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Faster, 2-hit armor from frame 1, -3 on block."
@@ -548,6 +583,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [4, 0.2], [12, 1.0], [22, 0.0]],
       "role": ["overhead", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "cleaver_leap"},
       "sfx": [[6, "whoosh_heavy"]],
       "desc": "Leaping overhead cleaver smash (hops over lows).",
@@ -580,6 +618,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [4, 0.2], [14, 1.3], [26, 0.0]],
       "role": ["overhead", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "cleaver_leap"},
       "sfx": [[6, "whoosh_heavy"]],
       "desc": "Leaping overhead cleaver smash (hops over lows).",
@@ -610,6 +651,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [4, 0.2], [16, 1.6], [30, 0.0]],
       "role": ["overhead", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "cleaver_leap"},
       "sfx": [[6, "whoosh_heavy"]],
       "desc": "Leaping overhead cleaver smash (hops over lows).",
@@ -652,6 +696,9 @@
       "hits": [{"f": [18, 19], "damage": 700, "hitstop": 13}, {"f": [24, 25], "damage": 600, "hitstop": 15}],
       "moveY": [[0, 0], [4, 0.2], [11, 1.2], [20, 0.0]],
       "role": ["overhead", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "cleaver_leap"},
       "sfx": [[6, "whoosh_heavy"]],
       "desc": "Leap + landing shockwave, ground bounce.",
@@ -681,6 +728,9 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["low", "launcher"],
+      "track": {"until": 16, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "ham_spin"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Spinning low cleaver swing that bounces them for a juggle.",
@@ -720,6 +770,9 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["low", "launcher"],
+      "track": {"until": 18, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "ham_spin"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Spinning low cleaver swing that bounces them for a juggle.",
@@ -749,6 +802,9 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["low", "launcher"],
+      "track": {"until": 20, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "ham_spin"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Spinning low cleaver swing that bounces them for a juggle.",
@@ -779,6 +835,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hits": [{"f": [12, 13], "damage": 600, "hitstop": 11}, {"f": [18, 20], "damage": 700, "hitstop": 15}],
       "role": ["low", "launcher"],
+      "track": {"until": 20, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "ham_spin"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Two spins, -11 on block.",
@@ -808,6 +867,7 @@
       "invuln": {},
       "armor": {"hits": 1, "f": [3, 18]},
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "block_step"},
       "desc": "Armored step with the cleaver up; cancels into any special."
     },
@@ -835,6 +895,7 @@
       "invuln": {},
       "armor": {"hits": 1, "f": [3, 18]},
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "block_step"},
       "desc": "Armored step with the cleaver up; cancels into any special."
     },
@@ -862,6 +923,7 @@
       "invuln": {},
       "armor": {"hits": 1, "f": [3, 18]},
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "block_step"},
       "desc": "Armored step with the cleaver up; cancels into any special."
     },
@@ -889,6 +951,7 @@
       "invuln": {},
       "armor": {"hits": 2, "f": [1, 20]},
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "block_step"},
       "desc": "2-hit armor from frame 1."
     },
@@ -917,6 +980,9 @@
       "armor": {"hits": 99, "f": [1, 30]},
       "hits": [{"f": [10, 11], "damage": 900, "hitstop": 9}, {"f": [30, 30], "damage": 1100, "hitstop": 20}],
       "role": ["reversal", "wallsplat"],
+      "track": {"until": 30, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "chefs_combo", "warp": [[0, 0.0], [10, 0.433], [30, 1.367], [85, 3.133]]},
       "sfx": [[1, "crowd_cheer_burst"]],
       "desc": "Super-armored charge with two cleaver swings."
@@ -1095,6 +1161,9 @@
         "endGapM": 1.8
       },
       "role": ["reversal"],
+      "track": {"until": 13, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "roast_swing"},
       "desc": "PRIME TIME: a cleaver swing that starts the full butchery demonstration (flat-side smacks)."
     }
@@ -1134,7 +1203,8 @@
     "combo": ["2L", "5M", "meat_hook_m"],
     "armor": ["5H", "meat_hook_m", "chefs_special"],
     "approach": ["butcher_block_m", "cleaver_drop_l"],
-    "meter": "chefs_special"
+    "meter": "chefs_special",
+    "antiStep": ["2M", "ham_slam_l"]
   },
   "introLine": "Take a number. The butcher's open.",
   "winQuotes": ["Order up. Tenderized, flat side, well done.", "I hang the good ones in the freezer. You're a keeper.", "No refunds on Block Street."],

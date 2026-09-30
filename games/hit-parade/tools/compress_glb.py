@@ -13,6 +13,9 @@ Chain (every step is the global @gltf-transform/cli 4.4.2, except step 1):
                                        within the 1e-4 tolerance)
   -> --qc copy (Blender can import it: no meshopt)
   5. gltf-transform meshopt           (quantize + EXT_meshopt_compression; E48: preferred to Draco)
+  6. node tools/glb_post.mjs minify   (CHANGED(ASSETS3D): glTF-default values dropped from the JSON chunk:
+                                       accessor normalized:false / byteOffset:0, sampler interpolation LINEAR;
+                                       ~72 KB per GLB; sizes "meshopt_raw" = before, "meshopt" = the final file)
 Prints one JSON line with every intermediate size; exit 1 if the output exceeds --budget-mb.
 ASCII only.
 """
@@ -62,7 +65,12 @@ def compress(raw, out, size=1024, quality=85, qc=None, resample=True):
         sizes["resample"] = os.path.getsize(s4)
     if qc:
         shutil.copyfile(s4, qc)
-    run([gt(), "meshopt", s4, out])
+    s5 = os.path.join(tmp, "5_meshopt.glb")
+    run([gt(), "meshopt", s4, s5])
+    sizes["meshopt_raw"] = os.path.getsize(s5)
+    # CHANGED(ASSETS3D) step 6: drop glTF-default values from the JSON chunk (glb_post.mjs minify; BIN untouched).
+    # "meshopt" stays the key of the FINAL size (build_fighters / reports read it)
+    run(["node", os.path.join(HERE, "glb_post.mjs"), "minify", s5, out])
     sizes["meshopt"] = os.path.getsize(out)
     shutil.rmtree(tmp, ignore_errors=True)
     return {"out": out, "sizes": sizes, "strip": json.loads(info)}

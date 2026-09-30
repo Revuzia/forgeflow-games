@@ -702,14 +702,428 @@ def play_bout(P, S, args, verbs):
     return res
 
 
+# ─────────────────────────────── THE SEASON (G11 browser half, CHANGED(AI) P2) ───────────────────────────────
+# python _harness/playtest.py --season --headless --base http://localhost:5326/          # a whole PILOT to the ending
+# python _harness/playtest.py --season --max-bouts 1 ...                                  # smoke: menus + the first bout
+#
+# A scripted persona drives P1 through REAL key events (Playwright keyboard -> trusted KeyboardEvents -> the game's Input)
+# across THE SEASON ladder exactly as a player does: main menu -> THE SEASON -> PILOT / difficulty -> character select
+# (fighter, colour, SIMPLE controls) -> ladder -> rival / mini boss / boss cards -> VS -> bout -> results (NEXT EPISODE /
+# CONTINUE) -> ... -> name entry -> the ending sequence -> title. It only READS state (__HP__ state / match / fighters /
+# events / menus) to choose keys. TIME CONTROL (SAID in the report): by default each bout runs with the sim frozen
+# (__HP__.dev.freeze) and the harness steps it `--step-frames` at a time (__HP__.dev.step) between its key changes, so a
+# Python bot can answer on the frame it sees (a real-time Python loop reacts 30-100 ms late and loses to CPU L1 - the G6
+# bout above). The keys are still real key events sampled by the game's own tick. `--realtime` plays without stepping.
+# Checks per slot: the slot the game staged (mode, opponent, CPU level) = data/ladder.json + flow.ts; the card for rival
+# / mini boss / boss; results winner = the sim; a bonus slot is PLAYED (mode brawl / heckler, score > 0) - FAILS when
+# game.ts passes over it (BONUS_ROUNDS_IN_SIM = false, SHELL); the boss bout shows RICKY's phase change (PHASE event);
+# the ending sequence (finale ... board) reaches the title. Report: _harness/_reports/playtest_season.json, shots
+# _shots/pts_*.png.
+
+SEASON_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _load_json(*parts):
+    with open(os.path.join(SEASON_ROOT, *parts), encoding="utf-8") as f:
+        return json.load(f)
+
+
+STEP_JS = """async (n) => { const h = window.__HP__; if (n > 0) h.dev.step(n);
+  let f = null, m = null; try { f = h.fighters(); } catch (e) {} try { m = h.match(); } catch (e) {}
+  return { f, m, st: h.state() }; }"""
+
+
+class SeasonBot:
+    """P1 persona: frame-exact guard vs visible attacks and projectiles, throw techs, punishes whiffs / recoveries with
+    the ASSIST auto-combo (hold U + tap J), supers into recoveries, SIMPLE 2S anti-airs, walks in and presses."""
+
+    def __init__(self, me_id, opp_id):
+        self.me = _load_json("data", "fighters", "%s.json" % me_id)
+        self.opp_id = opp_id
+        self.opp = _load_json("data", "fighters", "%s.json" % opp_id) if opp_id else {"moves": {}}
+        self.phase = 0          # alternating tap state of the combo / press keys
+        self.tech_armed = False
+
+    def omove(self, name):
+        return (self.opp.get("moves") or {}).get(name) or {}
+
+    def keys(self, f, m):
+        """the set of P1 keys to hold for the next step (K names -> Playwright codes)"""
+        me, op = f[0], f[1]
+        mode = (m or {}).get("mode")
+        if mode in ("brawl", "heckler"):
+            return self.bonus_keys(f, m)
+        if (m or {}).get("phase") != "fight":
+            return set()
+        dx = op["x"] - me["x"]
+        d = abs(dx)
+        fk, bk = (K["right"], K["left"]) if dx >= 0 else (K["left"], K["right"])
+        self.phase ^= 1
+        st, ost = me.get("stateName"), op.get("stateName")
+        # thrown: tech (a throw press while the tech window is open)
+        if st == "thrown":
+            return {K["throw"]} if self.phase else set()
+        if st in ("knockdown", "hitstun", "juggle", "blockstun", "wall_splat", "crumple", "dizzy"):
+            return {bk, K["down"]}
+        mv = self.omove(op.get("moveName") or "")
+        okind = op.get("moveKind") or ""
+        of = op.get("moveFrame") or 0
+        su = int(mv.get("startup") or 0)
+        ac = int(mv.get("active") or 0)
+        # an incoming throw / command grab: buffer a throw (techs a throw; a command grab: jump away)
+        if ost == "attack" and okind in ("throw", "cmdgrab") and of <= su and d < 1.6:
+            if okind == "cmdgrab":
+                return {K["up"], bk}
+            return {K["throw"]}
+        # an incoming strike: guard low unless it is an overhead or airborne
+        if ost == "attack" and okind not in ("throw", "cmdgrab", "system", "") and of <= su + ac + 1 and d < 3.2:
+            over = (mv.get("guard") == "H") or op.get("airborne")
+            return {bk} if over else {bk, K["down"]}
+        # projectiles flying at me
+        for p in (m or {}).get("proj") or []:
+            if p.get("owner") == 1 and p.get("kind") in (0, 1):
+                toward = (me["x"] - p["x"]) * (p.get("vx") or 0) > 0
+                if toward and abs(me["x"] - p["x"]) < 2.6:
+                    return {bk, K["down"]}
+        # a jump coming in: SIMPLE 2S (down + S) anti-air
+        if op.get("airborne") and ost in ("air", "prejump") and d < 2.0:
+            return {K["down"], K["s"]} if self.phase else {K["down"]}
+        if not me.get("actionable"):
+            return set()
+        # the opponent recovering / whiffed / landing within reach: super (1+ bar) or the ASSIST route
+        recovering = (ost == "attack" and su and of > su + ac - 1) or ost in ("land", "recover", "parry_rec", "dash_b")
+        if recovering and d < 1.6:
+            if (me.get("showtime") or 0) >= 30000 and d < 1.5:
+                return {K["down"], K["s"], K["h"]}
+            if (me.get("showtime") or 0) >= 10000 and d < 1.5:
+                return {K["s"], K["h"]}
+            return {K["assist"], K["l"]} if self.phase else {K["assist"]}
+        if ost == "knockdown":
+            return {fk} if d > 1.0 else {bk, K["down"]}
+        if d > 1.05:
+            return {fk}
+        # close and neutral: mostly the ASSIST route, some throws, some guarding
+        t = int(me.get("x", 0) * 97 + (m or {}).get("frame", 0)) % 10
+        if t < 5:
+            return {K["assist"], K["l"]} if self.phase else {K["assist"]}
+        if t < 7 and d < 0.95:
+            return {K["throw"]} if self.phase else set()
+        return {bk, K["down"]}
+
+    def bonus_keys(self, f, m):
+        me = f[0]
+        br = (m or {}).get("brawl") or {}
+        self.phase ^= 1
+        if br.get("mode") == "heckler":
+            near = [p for p in ((m or {}).get("proj") or []) if p.get("kind") == 2 and abs(p["x"] - me["x"]) < 1.3]
+            return {K["parry"]} if near else set()
+        goons = [g for g in (br.get("goons") or []) if not g.get("down")]
+        if not goons:
+            return set()
+        g = min(goons, key=lambda q: abs(q["x"] - me["x"]))
+        dx = g["x"] - me["x"]
+        toward = K["right"] if dx > 0 else K["left"]
+        if abs(dx) > 0.9:
+            return {toward}
+        return {K["l"]} if self.phase else {K["m"]}
+
+
+def season_bout(P, S, args, tag, report, slot_kind):
+    """one bout (or bonus round) of THE SEASON, played by the SeasonBot through real keys; returns a summary dict"""
+    s = P.s
+    mi = P.m()
+    p = mi.get("p") or [{}, {}]
+    me_id, opp_id = p[0].get("fighter"), p[1].get("fighter")
+    bot = SeasonBot(me_id, opp_id if mi.get("mode") not in ("brawl", "heckler") else None)
+    stepped = not args.realtime
+    if stepped:
+        ok, v = s.hp("dev.freeze", True)
+        report.setdefault("timeControl", []).append({"bout": tag, "freeze": ok, "detail": v})
+    t0 = time.time()
+    frames = 0
+    phase_seen = False
+    last_keys = set()
+    snap = {}
+    n_dec = 0
+    budget = args.season_bout_budget
+    while time.time() - t0 < budget:
+        r = s.safe_js(STEP_JS, args.step_frames if stepped else 0) or {}
+        f, m, stt = r.get("f"), r.get("m") or {}, r.get("st") or {}
+        if stt.get("phase") in ("results", "menu") and not stt.get("bout"):
+            break
+        if not f:
+            time.sleep(0.05)
+            continue
+        snap = m
+        frames = m.get("frame") or frames
+        if m.get("phase") == "matchEnd":
+            s.hold(set())
+            break
+        want = bot.keys(f, m)
+        if want != last_keys:
+            s.hold(want)
+            last_keys = want
+        n_dec += 1
+        if not stepped:
+            time.sleep(0.016)
+        if n_dec % 60 == 0:
+            for e in P.new_events():
+                if e.get("typeName") == "PHASE" and e.get("a") == 1:
+                    phase_seen = True
+    s.hold(set())
+    for e in P.new_events():
+        if e.get("typeName") == "PHASE" and e.get("a") == 1:
+            phase_seen = True
+    if any(e.get("typeName") == "PHASE" and e.get("a") == 1 for e in P.log):
+        phase_seen = True
+    if stepped:
+        s.hp("dev.freeze", False)
+    br = snap.get("brawl") or {}
+    return {"tag": tag, "kind": slot_kind, "mode": snap.get("mode"), "p1": me_id, "p2": opp_id, "cpu": p[1].get("cpu"),
+            "winner": snap.get("winner"), "wins": snap.get("wins"), "frames": frames, "seconds": round(time.time() - t0, 1),
+            "decisions": n_dec, "score": br.get("score"), "phaseEvent": phase_seen, "matchEnd": snap.get("phase") == "matchEnd"}
+
+
+def run_season(args) -> int:
+    S = Steps()
+    report = {"headless": args.headless, "mode": "season", "length": args.length, "fighter": args.fighter,
+              "difficulty": args.difficulty, "timeControl": [], "slots": []}
+    fatal = None
+    ladder = _load_json("data", "ladder.json")
+    specs = ladder.get(args.length) or []
+    report["ladderKinds"] = [x.get("kind") for x in specs]
+    others, _ = preflight_chromes("pre-flight")
+    report["otherAutomatedChrome"] = others
+    sess = Session(args, "playtest_season")
+    try:
+        sess.start()
+    except Exception as e:
+        sess.close()
+        print("SETUP FAILED: %s" % (str(e) if isinstance(e, HarnessError) else repr(e)))
+        print("RESULT: FAIL")
+        return 2
+    P = Player(sess, args.out_dir)
+
+    def shot(name):
+        return sess.screenshot(os.path.join(args.out_dir, "pts_%s.png" % name))
+
+    bouts_played = 0
+    bonus_played = []
+    boss_phase = None
+    try:
+        url = build_url(args.base, dev=1)
+        report["url"] = url
+        sess.goto(url)
+        if not sess.wait_hp(args.wait):
+            fatal = "window.__HP__ never appeared"
+        if not fatal:
+            ok, ph = sess.wait_phase("title", args.wait)
+            S.check("boot_title", ok and P.wait_screen("title", 10), "phase=%s screen=%s" % (ph, P.menus().get("screen")))
+            shot("title")
+            if not ok:
+                fatal = "never reached the title (phase %r)" % ph
+        if not fatal:
+            P.key("Enter")
+            S.check("main_menu", P.wait_screen("main"), "focus=%s" % P.menus().get("focus"))
+            S.check("focus_season", P.focus_to("hpm-main-season"), "focus=%s" % P.menus().get("focus"))
+            P.key("Enter")
+            ok = P.wait_screen("season")
+            S.check("season_setup", ok)
+            if not ok:
+                fatal = "THE SEASON setup never opened"
+        if not fatal:
+            P.focus_to("hpm-season-length-%s" % args.length)
+            P.key("Enter")
+            P.focus_to("hpm-season-diff-%d" % args.difficulty)
+            P.key("Enter")
+            fl = P.menus().get("flow", {})
+            S.check("season_length", fl.get("length") == args.length and fl.get("difficulty") == args.difficulty,
+                    "flow length=%s difficulty=%s" % (fl.get("length"), fl.get("difficulty")))
+            shot("setup")
+            S.check("focus_go", P.focus_to("hpm-season-go"))
+            P.key("Enter")
+            ok = P.wait_screen("charselect")
+            S.check("charselect", ok)
+            if not ok:
+                fatal = "character select never opened"
+        if not fatal:
+            time.sleep(0.6)
+            for _ in range(24):
+                cur = ((P.menus().get("cs", {}).get("p") or [{}])[0]).get("cursor")
+                if cur == args.fighter:
+                    break
+                P.key("ArrowRight", gap=0.08)
+            cur0 = ((P.menus().get("cs", {}).get("p") or [{}])[0]).get("cursor")
+            shot("charselect")
+            P.key("Enter", 3, gap=0.25)     # fighter, colour, controls (SIMPLE is the first choice)
+            S.check("p1_fighter", cur0 == args.fighter, "cursor=%s" % cur0)
+        # ---------------------------------------------------------------- the ladder, slot by slot
+        seen_index = -1
+        continues = 0
+        guard = 0
+        while not fatal and guard < args.max_slots:
+            guard += 1
+            t_wait = time.time()
+            screen = None
+            while time.time() - t_wait < 60:
+                mm = P.menus()
+                stt = sess.state() or {}
+                screen = mm.get("screen") if mm.get("visible") else None
+                if stt.get("phase") == "bout" or screen in ("ladder", "card", "vs", "nameentry", "ending", "title"):
+                    break
+                time.sleep(0.1)
+            stt = sess.state() or {}
+            season = stt.get("season") or {}
+            if screen in ("nameentry", "ending", "title") and stt.get("phase") != "bout":
+                break
+            idx = season.get("index", -1)
+            # bonus slots the game passed over without a bout
+            if isinstance(idx, int) and idx > seen_index + 1:
+                for k in range(seen_index + 1, idx):
+                    kind = specs[k].get("kind") if k < len(specs) else "?"
+                    if kind in ("brawl", "heckler"):
+                        bonus_played.append({"slot": k, "kind": kind, "played": False})
+                        report["slots"].append({"slot": k, "kind": kind, "skipped": True})
+            spec = specs[idx] if isinstance(idx, int) and 0 <= idx < len(specs) else {}
+            kind = spec.get("kind", "?")
+            if screen == "ladder":
+                shot("ladder_%d" % idx)
+                S.check("ladder_%d" % idx, season.get("slots") == len(specs), "season index=%s slots=%s (ladder.json %s: %d)" % (idx, season.get("slots"), args.length, len(specs)))
+                P.key("Enter")
+                time.sleep(0.5)
+                if kind in ("rival", "miniboss", "boss", "brawl", "heckler"):
+                    okc = P.wait_screen("card", 6)
+                    S.check("card_%d_%s" % (idx, kind), okc, "screen=%s" % P.menus().get("screen"))
+                    if okc:
+                        time.sleep(0.4)
+                        shot("card_%d_%s" % (idx, kind))
+                        P.key("Enter")
+            okb, ph = sess.wait_phase("bout", 90)
+            if not okb:
+                fatal = "slot %s (%s): the bout never started (phase %r, screen %r)" % (idx, kind, ph, P.menus().get("screen"))
+                break
+            mi = P.m()
+            p = mi.get("p") or [{}, {}]
+            want_mode = {"brawl": "brawl", "heckler": "heckler"}.get(kind, "arcade")
+            want_lv = (spec.get("level", 0) + (args.difficulty - 1) * 2) if want_mode == "arcade" else 0
+            want_lv = max(0, min(8, want_lv))
+            want_opp = spec.get("opponent")
+            opp_ok = (want_opp is None or p[1].get("fighter") == want_opp) and p[1].get("fighter") != (args.fighter if kind == "bout" else None)
+            S.check("slot_%d_%s_staged" % (idx, kind), mi.get("mode") == want_mode and (want_mode != "arcade" or p[1].get("cpu") == want_lv) and opp_ok
+                    and p[0].get("cpu") == -1 and p[0].get("fighter") == args.fighter,
+                    "mode=%s p1=%s p2=%s cpu=%s (want mode %s level %s opponent %s)" % (mi.get("mode"), p[0].get("fighter"), p[1].get("fighter"), p[1].get("cpu"), want_mode, want_lv, want_opp or "random"))
+            okf, _ = wait_match_phase(sess, ("intro", "fight"), 20)
+            notes = []
+            wait_warm(sess, notes, "slot %s" % idx)
+            shot("bout_%d" % idx)
+            P.new_events()
+            res = season_bout(P, S, args, "slot%d" % idx, report, kind)
+            res["slot"] = idx
+            report["slots"].append(res)
+            bouts_played += 1
+            if want_mode != "arcade":
+                bonus_played.append({"slot": idx, "kind": kind, "played": True, "score": res.get("score")})
+            if kind == "boss":
+                boss_phase = res.get("phaseEvent")
+            ok, ph = sess.wait_phase("results", 25)
+            okr = ok and P.wait_screen("results", 10)
+            time.sleep(0.6)
+            shot("results_%d" % idx)
+            rb = P.menus().get("result") or {}
+            S.check("slot_%d_results" % idx, okr and res.get("matchEnd") and rb.get("winner") == res.get("winner"),
+                    "results card winner=%s sim winner=%s wins=%s score=%s %.0f s %d decisions" % (rb.get("winner"), res.get("winner"), res.get("wins"), res.get("score"), res.get("seconds") or 0, res.get("decisions") or 0))
+            seen_index = idx
+            if args.max_bouts and bouts_played >= args.max_bouts:
+                break
+            if res.get("winner") != 0 and want_mode == "arcade":
+                continues += 1
+                seen_index = idx - 1         # the same slot comes again
+            P.key("Enter")                   # NEXT EPISODE / CONTINUE (the default button)
+            time.sleep(0.5)
+        report["continues"] = continues
+        # ---------------------------------------------------------------- the ending
+        if not fatal and not args.max_bouts:
+            bon = [b for b in bonus_played if b["kind"] in ("brawl", "heckler")]
+            S.check("bonus_round_played", any(b.get("played") and (b.get("score") or 0) > 0 for b in bon),
+                    "bonus slots: %s%s" % (bon, "" if any(b.get("played") for b in bon) else " - game.ts passed over it (BONUS_ROUNDS_IN_SIM = false, SHELL)"))
+            S.check("boss_phase2", boss_phase is True, "PHASE event from RICKY during the boss bout: %s" % boss_phase)
+            okn = P.wait_screen("nameentry", 20)
+            S.check("name_entry", okn, "screen=%s" % P.menus().get("screen"))
+            if okn:
+                shot("nameentry")
+                for k in ("KeyA", "KeyI", "KeyP"):
+                    P.key(k)
+                P.key("Enter")
+            oke = P.wait_screen("ending", 12)
+            cards = []
+            if oke:
+                for _ in range(14):
+                    time.sleep(0.6)
+                    mm = P.menus()
+                    if mm.get("screen") != "ending":
+                        break
+                    cards.append(mm.get("ending"))
+                    if len(cards) == 1:
+                        shot("ending")
+                    P.key("Enter")
+            S.check("ending_sequence", oke and len(cards) >= 3 and cards[0] == "finale", "cards=%s" % cards)
+            S.check("title_after_ending", P.wait_screen("title", 12), "screen=%s" % P.menus().get("screen"))
+    finally:
+        tl = sess.timeline() if sess.page else []
+        diag = sess.diagnostics() if sess.page else {}
+        try:
+            sess.release_all()
+        except Exception:
+            pass
+        sess.close()
+    print("=" * 84)
+    for r in report["slots"]:
+        print("slot         : %s" % json.dumps(r, default=str))
+    print("-" * 84)
+    print_diagnostics(diag)
+    print("=" * 84)
+    problems = [s for s in S.failed]
+    dp = diag_problems(diag)
+    report.update({"steps": S.items, "diagnostics": diag, "fatal": fatal, "timeline": tl[-20:], "boutsPlayed": bouts_played,
+                   "stepped": not args.realtime, "stepFrames": args.step_frames, "smoke": bool(args.max_bouts),
+                   "events": [{k: e.get(k) for k in ("frame", "typeName", "a", "b", "c", "d")} for e in P.log[-300:]]})
+    ok = not fatal and not problems and not dp
+    report["verdict"] = "PASS" if ok else "FAIL"
+    for s in problems:
+        print("   X step %s: %s" % (s["step"], s["detail"] if isinstance(s["detail"], str) else json.dumps(s["detail"], default=str)))
+    for p in dp:
+        print("   X %s" % p)
+    if fatal:
+        print("FATAL        : %s" % fatal)
+    print("time control : %s" % ("REAL-TIME (no stepping)" if args.realtime else "sim frozen + stepped %d frames per key decision (__HP__.dev.freeze / dev.step); keys = real key events" % args.step_frames))
+    print("report       : %s" % save_report("playtest_season", report, args.base))
+    print("steps        : %d passed, %d failed%s" % (len(S.items) - len(problems), len(problems), " (SMOKE: first %d bout(s) only)" % args.max_bouts if args.max_bouts else ""))
+    print("RESULT: %s" % ("OK" if ok else "FAIL"))
+    if fatal:
+        return 2
+    return 0 if ok else 1
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="HIT PARADE playtest (gate G6)")
+    ap = argparse.ArgumentParser(description="HIT PARADE playtest (gate G6; --season = gate G11 browser half)")
     add_common_args(ap)
     ap.add_argument("--wait", type=float, default=90.0)
     ap.add_argument("--bout-budget", type=float, default=420.0, help="seconds for the whole bout (default 420)")
     ap.add_argument("--no-meter-help", action="store_true", help="never fill SHOWTIME with dev.setMeter for the super check")
     ap.add_argument("--out-dir", default=SHOTS)
+    # CHANGED(AI) P2: THE SEASON run (G11)
+    ap.add_argument("--season", action="store_true", help="G11: play THE SEASON ladder to the ending card by real keys")
+    ap.add_argument("--length", choices=("pilot", "season"), default="pilot")
+    ap.add_argument("--fighter", default="johnny")
+    ap.add_argument("--difficulty", type=int, choices=(0, 1, 2), default=1, help="menu index: 0 EASY, 1 NORMAL, 2 HARD")
+    ap.add_argument("--max-bouts", type=int, default=0, help="stop after this many bouts (smoke); 0 = the whole ladder")
+    ap.add_argument("--max-slots", type=int, default=40, help="safety cap on slot attempts incl. continues")
+    ap.add_argument("--step-frames", type=int, default=2, help="sim frames per key decision while stepping")
+    ap.add_argument("--realtime", action="store_true", help="no sim stepping (real-time bot, weak)")
+    ap.add_argument("--season-bout-budget", type=float, default=900.0, help="seconds per season bout (default 900)")
     args = ap.parse_args()
+    if args.season:
+        return run_season(args)
     return run(args)
 
 

@@ -1,4 +1,4 @@
-// HIT PARADE — per-fighter state machine (CONTRACT §4.3 items 1, 2, 5, 8, 9, 10).
+// HIT PARADE — per-fighter state machine (CONTRACT §4.3 items 1, 2, 5, 8, 9, 10; CHANGED(SIM3D) §35.2 / §35.4).
 // One call of fighterUpdate() = one non-frozen frame of that fighter. Hitstop / world freeze
 // frames never reach it (match.ts skips them), so timers, buffers and anim frames do not age then.
 //
@@ -6,21 +6,45 @@
 // startup counts the first active frame; the move ends after mvF = startup + active + recovery - 1
 // and the fighter acts again on the next frame. Hitstun / blockstun / knockdown = frames from the
 // hit frame until the defender can act, so on-hit advantage = stun - (active + recovery).
+//
+// CHANGED(SIM3D) 3D ring (CONTRACT §35): positions (x, z) + yaw. The "opponent point" of each fighter this frame is the
+// scratch OPP (set by match.ts / brawl.ts from START-of-frame positions before either fighter updates, so slot order never
+// matters). Neutral states (idle, walk, crouch, block pose, dash, landing, sidestep / sidewalk) AUTO-FACE the opponent
+// every frame; attacks follow the move's tracking (track.until / rate, homing, linear); hitstun / knockdown keep the yaw.
+// Walks, dashes, jumps, rushes and authored move travel run along the fighter's forward (= the line to the opponent in
+// neutral). STEP_IN / STEP_OUT: SIDESTEP (tap, 15 f arc around the opponent) -> SIDEWALK (held) -> STEP_END (release).
 
-import { ACT, BUF, F, FL, MVF, ST, W } from './layout.ts';
+import { ACT, BUF, CF, F, FL, MVF, ST, W } from './layout.ts';
 import { EV, CUE, EVX } from './events.ts';
 import { BACT, K, STK, TPD, UK } from './compile.ts';
 import type { CMove } from './compile.ts';
-import { IN, curDir, dirOf, prejumpCancelable, projOk } from './inputs.ts';
+import { IN, curDir, dirOf, prejumpCancelable, projOk, stepBits } from './inputs.ts';
 import {
-  addShowtime, canAfford, canNerve, clearMove, emit, fb, isAirborne, setSt, spendNerve,
+  addShowtime, canAfford, canNerve, clearMove, emit, fb, isAirborne, moveAlong, moveFwd, setSt, setVelAlong, spendNerve, updateFacing,
 } from './state.ts';
 import type { Match } from './state.ts';
 import { ballLaunch, spawnProjectile } from './projectiles.ts';
-import { clampToWalls, pushExt, wallLimitX } from './boxes.ts';
+import { clampToRing, pushCircle } from './boxes.ts';
 import { KDF, endsFaceDown, victimPose } from './throwpose.ts';
+import { Q, YAW_HALF, alongYaw, cosQ, divRound, dirToYaw, isqrt, mulQ, sinQ, turnToward } from './fx3d.ts';
 
-export const CTX = { FREE: 0, CANCEL: 1, AIR: 2, PREJUMP: 3, BLOCKSTUN: 4, PARRY: 5, RUSH: 6, STANCE: 7 } as const;
+const AY = new Int32Array(2);
+import { ringClamp, ringGap, ringRay } from './ring.ts';
+import { wallSplat } from './splat.ts';
+
+export const CTX = { FREE: 0, CANCEL: 1, AIR: 2, PREJUMP: 3, BLOCKSTUN: 4, PARRY: 5, RUSH: 6, STANCE: 7, STEP: 8 } as const;
+
+/**
+ * CHANGED(SIM3D): the opponent point per fighter for this frame, U: [x0, z0, x1, z1] (fighter i reads OPP[2i], OPP[2i+1]).
+ * Scratch, rewritten every frame from the state before use (match.ts fightStep / outroUpdate, brawl.ts, hits.ts catch).
+ */
+export const OPP = new Int32Array(4);
+
+/** Sets fighter i's opponent point (U). */
+export function setOpp(i: number, x: number, z: number): void {
+  OPP[2 * i] = x;
+  OPP[2 * i + 1] = z;
+}
 
 function clearBuf(s: Int32Array, b: number): void {
   s[b + F.bufA] = ACT.NONE;
@@ -29,9 +53,37 @@ function clearBuf(s: Int32Array, b: number): void {
   s[b + F.bufF] = 0;
 }
 
+// ------------------------------------------------------------------ facing (CHANGED(SIM3D))
+/** Yaw from fighter i toward its opponent point, or its current yaw when they coincide. */
+export function yawToOpp(m: Match, i: number): number {
+  const s = m.s;
+  const b = fb(i);
+  const dx = OPP[2 * i] - s[b + F.x];
+  const dz = OPP[2 * i + 1] - s[b + F.z];
+  if (dx === 0 && dz === 0) return s[b + F.yaw];
+  return dirToYaw(dx, dz);
+}
+
+/** AUTO-FACE (CONTRACT §35.2): snap the yaw toward the opponent; the input-mapping facing sign follows at once. */
+export function autoFace(m: Match, i: number): void {
+  const s = m.s;
+  const b = fb(i);
+  s[b + F.yaw] = yawToOpp(m, i);
+  updateFacing(s, b);
+}
+
+/** Tracking (CONTRACT §35.4): turn toward the opponent by at most `rate` yaw units (0 = full re-face). */
+function trackOpp(m: Match, i: number, rate: number): void {
+  const s = m.s;
+  const b = fb(i);
+  const want = yawToOpp(m, i);
+  s[b + F.yaw] = rate > 0 ? turnToward(s[b + F.yaw], want, rate) : want;
+  updateFacing(s, b);
+}
+
 // ------------------------------------------------------------------ entry points to states
 /** The fighter becomes actionable on the ground this frame (and may act on it). */
-export function enterFree(m: Match, i: number, oppX: number): void {
+export function enterFree(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   if (s[b + F.cCount] !== 0 || s[b + F.jc] !== 0) {
@@ -51,15 +103,10 @@ export function enterFree(m: Match, i: number, oppX: number): void {
   s[b + F.flags] &= ~(FL.AIRBORNE | FL.PROX | FL.BLOCKING | FL.CROUCHING);
   s[b + F.y] = 0;
   s[b + F.vx] = 0;
+  s[b + F.vz] = 0;
   s[b + F.vy] = 0;
   setSt(m, i, ST.IDLE);
-  freeTick(m, i, oppX);
-}
-
-function faceOpponent(s: Int32Array, b: number, oppX: number): void {
-  const dx = oppX - s[b + F.x];
-  if (dx > 0) s[b + F.facing] = 1;
-  else if (dx < 0) s[b + F.facing] = -1;
+  freeTick(m, i);
 }
 
 /**
@@ -72,6 +119,9 @@ function proxGuard(m: Match, i: number): boolean {
   return PROX_THREAT[i] !== 0;
 }
 
+const PC0 = new Int32Array(3);
+const PC1 = new Int32Array(3);
+
 /** Is an opponent strike in startup/active within reach of fighter `i` (proximity guard)? */
 export function proxThreat(m: Match, i: number): boolean {
   const s = m.s;
@@ -82,20 +132,23 @@ export function proxThreat(m: Match, i: number): boolean {
   if (k < 0) return false;
   const mv = m.cf[o].moves[k];
   if (!mv.isStrike || s[bo + F.mvF] > mv.lastActive) return false;
-  const dx = Math.abs(s[bo + F.x] - s[fb(i) + F.x]);
-  // CHANGED(fixer) D2: the defender's push-box edge toward the attacker (asymmetric boxes)
-  return dx <= mv.maxReach + m.sys.proxGuard + pushExt(m, i, s[bo + F.x] >= s[fb(i) + F.x] ? 1 : -1);
+  // CHANGED(SIM3D): 3D distance root -> the defender's push circle edge (on the line = the old push-box edge)
+  pushCircle(m, i, PC0);
+  const dx = PC0[0] - s[bo + F.x];
+  const dz = PC0[1] - s[bo + F.z];
+  const d = isqrt(dx * dx + dz * dz) - PC0[2];
+  return d <= mv.maxReach + m.sys.proxGuard;
 }
 
 /** Free grounded fighter: act from the buffer, or move by the held direction. */
-export function freeTick(m: Match, i: number, oppX: number): void {
+export function freeTick(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   const cf = m.cf[i];
   const sys = m.sys.raw;
-  faceOpponent(s, b, oppX);
+  autoFace(m, i);
   s[b + F.flags] &= ~(FL.AIRBORNE | FL.PROX | FL.BLOCKING);
-  if (tryAct(m, i, CTX.FREE, oppX)) return;
+  if (tryAct(m, i, CTX.FREE)) return;
   const dir = dirOf(s[b + F.raw], s[b + F.facing]);
   const st = s[b + F.st];
   if (dir >= 7) {
@@ -111,11 +164,17 @@ export function freeTick(m: Match, i: number, oppX: number): void {
     return;
   }
   s[b + F.flags] &= ~FL.CROUCHING;
+  // CHANGED(SIM3D) (CONTRACT §35.2): a held STEP (not with back: back = block) circles; forward + STEP = the step
+  const sb = stepBits(s[b + F.raw]);
+  if (sb !== 0 && dir !== 4) {
+    startSidestep(m, i, sb > 0);
+    return;
+  }
   if (dir === 6) {
     if (st !== ST.WALK_F) setSt(m, i, ST.WALK_F);
     const wf = walkPct(m, i, cf.walkF);
     const sp = s[b + F.stF] === 0 ? Math.trunc((wf * sys.movement.walkFirstFramePct) / 100) : wf;
-    s[b + F.x] += s[b + F.facing] * sp;
+    moveFwd(s, b, sp);
     return;
   }
   if (dir === 4) {
@@ -127,15 +186,115 @@ export function freeTick(m: Match, i: number, oppX: number): void {
     if (st !== ST.WALK_B) setSt(m, i, ST.WALK_B);
     const wb = walkPct(m, i, cf.walkB);
     const sp = s[b + F.stF] === 0 ? Math.trunc((wb * sys.movement.walkFirstFramePct) / 100) : wb;
-    s[b + F.x] -= s[b + F.facing] * sp;
+    moveFwd(s, b, -sp);
     return;
   }
   if (st !== ST.IDLE) setSt(m, i, ST.IDLE);
 }
 
+// ------------------------------------------------------------------ STEP_IN / STEP_OUT (CHANGED(SIM3D), CONTRACT §35.2)
+/**
+ * Starts a SIDESTEP: 15 frames along the circle around the opponent (distance kept), STEP_IN toward -camN (away from the
+ * camera), STEP_OUT toward +camN. The circling sense is latched here (F.stepDir).
+ */
+export function startSidestep(m: Match, i: number, isIn: boolean): void {
+  const s = m.s;
+  const b = fb(i);
+  s[b + F.flags] &= ~(FL.CROUCHING | FL.PROX | FL.BLOCKING);
+  const ox = s[b + F.x] - OPP[2 * i];
+  const oz = s[b + F.z] - OPP[2 * i + 1];
+  // tangent of stepDir +1 = (-oz, ox); its side of the camera decides the sense
+  let side = -oz * s[W.camNX] + ox * s[W.camNZ];
+  if (side === 0) side = 1;
+  const plusIsIn = side < 0; // the +1 tangent points away from the camera
+  s[b + F.stepDir] = plusIsIn === isIn ? 1 : -1;
+  s[b + F.stepIn] = isIn ? 1 : 0;
+  setSt(m, i, ST.SIDESTEP);
+  autoFace(m, i);
+  arcMove(m, i, m.sys.stepCurve[1] - m.sys.stepCurve[0]);
+  autoFace(m, i);
+}
+
+/**
+ * Moves fighter i `amount` U along the circle around its opponent point (sense F.stepDir), keeping the distance (the
+ * tangent step is renormalised to the start radius).
+ */
+function arcMove(m: Match, i: number, amount: number): void {
+  if (amount === 0) return;
+  const s = m.s;
+  const b = fb(i);
+  const px = OPP[2 * i];
+  const pz = OPP[2 * i + 1];
+  const ox = s[b + F.x] - px;
+  const oz = s[b + F.z] - pz;
+  const r = isqrt(ox * ox + oz * oz);
+  const sd = s[b + F.stepDir] >= 0 ? 1 : -1;
+  if (r < 1000) {
+    // on top of the opponent (should not happen with push bodies): step sideways along the own right
+    moveAlong(s, b, s[b + F.yaw] + (sd > 0 ? -16384 : 16384), amount);
+    return;
+  }
+  const tx = -oz * sd;
+  const tz = ox * sd;
+  const nx = ox + divRound(tx * amount, r);
+  const nz = oz + divRound(tz * amount, r);
+  const l = isqrt(nx * nx + nz * nz);
+  s[b + F.x] = px + divRound(nx * r, l);
+  s[b + F.z] = pz + divRound(nz * r, l);
+}
+
+/** Is fighter i still holding the STEP button of its running step (SOCD: both = released)? */
+function stepHeld(s: Int32Array, b: number): boolean {
+  const sb = stepBits(s[b + F.raw]);
+  return sb !== 0 && (sb > 0) === (s[b + F.stepIn] !== 0);
+}
+
+/** One SIDESTEP frame: arc travel by the step curve; actions from attackF (step-attacks); the end -> SIDEWALK or free. */
+function sidestepTick(m: Match, i: number): void {
+  const s = m.s;
+  const b = fb(i);
+  const sys = m.sys;
+  const k = s[b + F.stF] + 1; // step frame (1 on the entry frame)
+  if (k > sys.stepFrames) {
+    if (stepHeld(s, b)) {
+      setSt(m, i, ST.SIDEWALK);
+      sidewalkTick(m, i);
+    } else enterFree(m, i);
+    return;
+  }
+  if (k >= sys.stepAttackF && tryAct(m, i, CTX.STEP)) return;
+  autoFace(m, i);
+  arcMove(m, i, sys.stepCurve[k] - sys.stepCurve[k - 1]);
+  autoFace(m, i);
+}
+
+/**
+ * One SIDEWALK frame (the held STEP, CONTRACT §35.2): 1.8 m/s tangential around the opponent. Back (block), down or up
+ * leave to the free state at once; releasing the STEP button = STEP_END (settle). Attacks come out from it.
+ */
+function sidewalkTick(m: Match, i: number): void {
+  const s = m.s;
+  const b = fb(i);
+  const dir = dirOf(s[b + F.raw], s[b + F.facing]);
+  if (dir !== 5 && dir !== 6) {
+    enterFree(m, i);
+    return;
+  }
+  if (!stepHeld(s, b)) {
+    setSt(m, i, ST.STEP_END);
+    s[b + F.stun] = m.sys.stepSettle;
+    autoFace(m, i);
+    return;
+  }
+  if (tryAct(m, i, CTX.STEP)) return;
+  autoFace(m, i);
+  arcMove(m, i, walkPct(m, i, m.sys.sidewalk));
+  autoFace(m, i);
+}
+
 // ------------------------------------------------------------------ moves
 /** Starts move `idx` this frame (mvF = 1) and runs its first frame. */
-export function startMove(m: Match, i: number, idx: number, flags: number, oppX: number): void {
+export function startMove(m: Match, i: number, idx: number, flags: number): void {
   const s = m.s;
   const b = fb(i);
   const mv = m.cf[i].moves[idx];
@@ -150,6 +309,7 @@ export function startMove(m: Match, i: number, idx: number, flags: number, oppX:
   setSt(m, i, ST.ATTACK);
   if (!airborne) {
     s[b + F.vx] = 0;
+    s[b + F.vz] = 0;
     s[b + F.vy] = 0;
     s[b + F.y] = 0;
     if (mv.isNormalCat && !mv.inAir && mv.inDir <= 3) s[b + F.flags] |= FL.CROUCHING;
@@ -172,7 +332,7 @@ export function startMove(m: Match, i: number, idx: number, flags: number, oppX:
     s[b + F.instMv] = idx;
     emit(m, EVX.INSTALL, i, mv.install.frames, mv.snapId, 0);
   }
-  moveTick(m, i, oppX);
+  moveTick(m, i);
 }
 
 /** CHANGED(SIM) P2: walk speed under an install (walkPct). */
@@ -185,11 +345,11 @@ function walkPct(m: Match, i: number, v: number): number {
 }
 
 /** Pays the move's costs, then starts it. */
-function execMove(m: Match, i: number, idx: number, flags: number, oppX: number): void {
+function execMove(m: Match, i: number, idx: number, flags: number): void {
   const mv = m.cf[i].moves[idx];
   if (mv.costShow > 0) addShowtime(m, i, -mv.costShow);
   if (mv.costNerve > 0) spendNerve(m, i, mv.costNerve);
-  startMove(m, i, idx, flags, oppX);
+  startMove(m, i, idx, flags);
 }
 
 function cancelAllowed(m: Match, i: number, cur: CMove, f: number, t: CMove, bufF: number): boolean {
@@ -219,7 +379,7 @@ function cancelAllowed(m: Match, i: number, cur: CMove, f: number, t: CMove, buf
  * Tries to execute the buffered action in context `ctx`. Returns true if the fighter started
  * something this frame (the buffer is consumed).
  */
-export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean {
+export function tryAct(m: Match, i: number, ctx: number): boolean {
   const s = m.s;
   const b = fb(i);
   const a = s[b + F.bufA];
@@ -232,13 +392,16 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
   const bufF = s[b + F.bufF];
   const mvFlags = (bufF & BUF.SIMPLE) !== 0 ? MVF.SIMPLE : 0;
   switch (ctx) {
-    case CTX.FREE: {
+    case CTX.FREE:
+    case CTX.STEP: {
       if (a === ACT.MOVE) {
         const t = cf.moves[s[b + F.bufM]];
         if (t.airOnly || t.chainOnly || !canAfford(m, i, t)) return false;
+        if (t.stepAtk && ctx !== CTX.STEP) return false; // CHANGED(SIM3D): step-attacks only out of a step
         if (!projOk(m, i, t)) return false;
         clearBuf(s, b);
-        execMove(m, i, t.idx, mvFlags, oppX);
+        autoFace(m, i); // CHANGED(SIM3D): a move from neutral / a step starts facing the opponent
+        execMove(m, i, t.idx, mvFlags);
         return true;
       }
       if (a === ACT.PARRY) {
@@ -262,7 +425,15 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
       if (a === ACT.ROUTE && cf.assist.length > 0) {
         clearBuf(s, b);
         s[b + F.assistStep] = 0;
-        execMove(m, i, cf.assist[0], MVF.ROUTE, oppX);
+        autoFace(m, i);
+        execMove(m, i, cf.assist[0], MVF.ROUTE);
+        return true;
+      }
+      if (a === ACT.STEP && ctx === CTX.FREE) {
+        // CHANGED(SIM3D): a buffered STEP tap (from a step the next one waits until the running one ends)
+        const isIn = s[b + F.bufM] === 1;
+        clearBuf(s, b);
+        startSidestep(m, i, isIn);
         return true;
       }
       return false;
@@ -280,7 +451,7 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
         if (!canAfford(m, i, t)) return false;
         clearBuf(s, b);
         s[b + F.assistStep] = k + 1;
-        execMove(m, i, t.idx, MVF.ROUTE, oppX);
+        execMove(m, i, t.idx, MVF.ROUTE);
         return true;
       }
       if (a === ACT.PARRY) {
@@ -300,8 +471,8 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
       if (!cancelAllowed(m, i, cur, f, t, bufF)) return false;
       clearBuf(s, b);
       // CHANGED(SIM) P2: a teleport cancelled after its jump re-faces the opponent first (EX vanish -> special)
-      if (cur.teleport && f >= cur.teleport.f) faceOpponent(s, b, oppX);
-      execMove(m, i, t.idx, mvFlags | (s[b + F.mvFlags] & MVF.RUSH), oppX);
+      if (cur.teleport && f >= cur.teleport.f) autoFace(m, i);
+      execMove(m, i, t.idx, mvFlags | (s[b + F.mvFlags] & MVF.RUSH));
       return true;
     }
     case CTX.AIR: {
@@ -311,7 +482,7 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
       if (t.isNormalCat && (s[b + F.flags] & FL.AIR_USED) !== 0) return false;
       if (!projOk(m, i, t)) return false;
       clearBuf(s, b);
-      execMove(m, i, t.idx, mvFlags, oppX);
+      execMove(m, i, t.idx, mvFlags);
       return true;
     }
     case CTX.PREJUMP: {
@@ -320,14 +491,14 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
       if (t.airOnly || !prejumpCancelable(t) || !canAfford(m, i, t)) return false;
       if (!projOk(m, i, t)) return false;
       clearBuf(s, b);
-      execMove(m, i, t.idx, mvFlags, oppX);
+      execMove(m, i, t.idx, mvFlags);
       return true;
     }
     case CTX.BLOCKSTUN: {
       if (a !== ACT.PARRY || !canNerve(m, i)) return false;
       clearBuf(s, b);
       s[b + F.stun] = 0;
-      execMove(m, i, cf.shove, 0, oppX);
+      execMove(m, i, cf.shove, 0);
       return true;
     }
     case CTX.PARRY: {
@@ -343,7 +514,7 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
       const t = cf.moves[s[b + F.bufM]];
       if (t.airOnly || !(t.isNormalCat || t.kind === K.throw)) return false;
       clearBuf(s, b);
-      execMove(m, i, t.idx, mvFlags | MVF.RUSH, oppX);
+      execMove(m, i, t.idx, mvFlags | MVF.RUSH);
       return true;
     }
     case CTX.STANCE: {
@@ -360,7 +531,7 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
       if (!follow && (t.chainOnly || t.airOnly || !(t.isSpecialCat || t.isSuper || t.isGrab || t.isImpact))) return false;
       if (!canAfford(m, i, t) || !projOk(m, i, t)) return false;
       clearBuf(s, b);
-      execMove(m, i, t.idx, mvFlags, oppX);
+      execMove(m, i, t.idx, mvFlags);
       return true;
     }
     default:
@@ -369,7 +540,7 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
 }
 
 /** One frame of the running move (mvF already advanced). */
-export function moveTick(m: Match, i: number, oppX: number): void {
+export function moveTick(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   const cf = m.cf[i];
@@ -377,10 +548,13 @@ export function moveTick(m: Match, i: number, oppX: number): void {
   const f = s[b + F.mvF];
   const diving = mv.hasAirVel && f >= mv.startup && isAirborne(s, b) && !mv.yCurve;
   if (f > mv.total && !diving) {
-    finishMove(m, i, oppX);
+    finishMove(m, i);
     return;
   }
-  if (s[b + F.bufA] !== ACT.NONE && tryAct(m, i, CTX.CANCEL, oppX)) return;
+  if (s[b + F.bufA] !== ACT.NONE && tryAct(m, i, CTX.CANCEL)) return;
+  // CHANGED(SIM3D) (CONTRACT §35.4): tracking - frames 1..trackUntil re-face the opponent (homing: through the active
+  // frames; linear: frame 1 only), at most trackRate per frame; later frames keep the yaw (a step off the line whiffs)
+  if (f <= mv.trackUntil) trackOpp(m, i, mv.trackRate);
   if (mv.yCurve) {
     // scripted root height (moveY): airborne while above the floor, never ballistic
     const fy = f < mv.yCurve.length ? f : mv.yCurve.length - 1;
@@ -388,15 +562,16 @@ export function moveTick(m: Match, i: number, oppX: number): void {
     if (s[b + F.y] > 0) s[b + F.flags] = (s[b + F.flags] | FL.AIRBORNE) & ~FL.CROUCHING;
     else s[b + F.flags] &= ~FL.AIRBORNE;
     const d = mv.curve[f] - mv.curve[f - 1];
-    if (d !== 0) s[b + F.x] += s[b + F.facing] * d;
+    if (d !== 0) moveFwd(s, b, d);
   } else if (isAirborne(s, b)) {
     if (mv.hasAirVel && f >= mv.startup) {
-      // dive: constant airVel from startup until landing, then `recovery` landing frames
+      // dive: constant airVel along the forward from startup until landing, then `recovery` landing frames
       if (f === mv.startup) {
-        s[b + F.vx] = s[b + F.facing] * mv.airVelX;
+        setVelAlong(s, b, s[b + F.yaw], mv.airVelX);
         s[b + F.vy] = mv.airVelY;
       }
       s[b + F.x] += s[b + F.vx];
+      s[b + F.z] += s[b + F.vz];
       s[b + F.y] += s[b + F.vy];
       if (s[b + F.y] <= 0) {
         s[b + F.y] = 0;
@@ -410,7 +585,7 @@ export function moveTick(m: Match, i: number, oppX: number): void {
     }
   } else {
     const d = mv.curve[f] - mv.curve[f - 1];
-    if (d !== 0) s[b + F.x] += s[b + F.facing] * d;
+    if (d !== 0) moveFwd(s, b, d);
   }
   if (mv.proj && f === mv.startup && (s[b + F.mvFlags] & MVF.SPAWNED) === 0) {
     s[b + F.mvFlags] |= MVF.SPAWNED;
@@ -418,7 +593,7 @@ export function moveTick(m: Match, i: number, oppX: number): void {
     if (mv.ballAct === BACT.SHOOT || mv.ballAct === BACT.HOVER) ballLaunch(m, i, mv);
     else spawnProjectile(m, i, mv);
   }
-  if (mv.teleport && f === mv.teleport.f) teleport(m, i, mv, oppX);
+  if (mv.teleport && f === mv.teleport.f) teleport(m, i, mv);
   for (let k = 0; k < mv.sfxF.length; k++) if (mv.sfxF[k] === f) emit(m, EV.SFX_CUE, i, mv.sfxI[k], mv.snapId, 0);
   if (f === mv.lastActive + 1 && s[b + F.contact] === 0 && (mv.isStrike || mv.isGrab) && (s[b + F.mvFlags] & MVF.WHIFFED) === 0) {
     s[b + F.mvFlags] |= MVF.WHIFFED;
@@ -426,7 +601,7 @@ export function moveTick(m: Match, i: number, oppX: number): void {
   }
 }
 
-function finishMove(m: Match, i: number, oppX: number): void {
+function finishMove(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   const k = s[b + F.mv];
@@ -458,10 +633,10 @@ function finishMove(m: Match, i: number, oppX: number): void {
     s[b + F.assistStep] = 0;
     s[b + F.ucnt] = 0;
     setSt(m, i, ST.STANCE);
-    stanceTick(m, i, oppX);
+    stanceTick(m, i);
     return;
   }
-  enterFree(m, i, oppX);
+  enterFree(m, i);
 }
 
 // ------------------------------------------------------------------ uniques (CHANGED(SIM) P2, CONTRACT §28.2)
@@ -470,61 +645,84 @@ function finishMove(m: Match, i: number, oppX: number): void {
  * back and leaves after blockExitF frames, forward walks. uniq: u1 frames in stance, u3 anim (0 idle 1 walk_f 2 walk_b);
  * F.assistStep counts the back-hold frames while in the stance (unused by assist routes there).
  */
-function stanceTick(m: Match, i: number, oppX: number): void {
+function stanceTick(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   const u = m.cf[i].u;
   s[b + F.uniq + 1]++;
-  if (tryAct(m, i, CTX.STANCE, oppX)) return;
+  if (tryAct(m, i, CTX.STANCE)) return;
   const dir = dirOf(s[b + F.raw], s[b + F.facing]);
   const down = dir === 1 || dir === 2 || dir === 3;
   // down held stExitHoldF frames exits (a motion special rolls through down faster and starts from the stance instead)
   s[b + F.ucnt] = down ? s[b + F.ucnt] + 1 : 0;
   if (down && s[b + F.ucnt] >= u.stExitHoldF && u.stExit2 >= 0) {
     s[b + F.ucnt] = 0;
-    startMove(m, i, u.stExit2, 0, oppX);
+    startMove(m, i, u.stExit2, 0);
     return;
   }
   if (down) return;
   if (s[b + F.uniq + 1] >= u.stMaxF && u.stExitT >= 0) {
-    startMove(m, i, u.stExitT, 0, oppX);
+    startMove(m, i, u.stExitT, 0);
     return;
   }
   if (dir === 4) {
     s[b + F.assistStep]++;
     if (s[b + F.assistStep] >= u.stBlockExitF) {
       s[b + F.assistStep] = 0;
-      enterFree(m, i, oppX);
+      enterFree(m, i);
       return;
     }
-    s[b + F.x] -= s[b + F.facing] * u.stWalkB;
+    moveFwd(s, b, -u.stWalkB);
     s[b + F.uniq + 3] = 2;
     return;
   }
   s[b + F.assistStep] = 0;
   if (dir === 6) {
-    s[b + F.x] += s[b + F.facing] * u.stWalkF;
+    moveFwd(s, b, u.stWalkF);
     s[b + F.uniq + 3] = 1;
     return;
   }
   s[b + F.uniq + 3] = 0;
 }
 
-/** Teleport on the move's teleport frame (CONTRACT §20.2 / §28.2): behind / front / home, clamped to the walls. */
-function teleport(m: Match, i: number, mv: CMove, oppX: number): void {
+/**
+ * Teleport on the move's teleport frame (CONTRACT §20.2 / §28.2, CHANGED(SIM3D)): along the line from him to the
+ * opponent - behind = opponent + u * gap (the far side), front = opponent - u * gap, home = the ring boundary behind him
+ * (seen from the opponent) moved gap inward; clamped to the ring.
+ */
+function teleport(m: Match, i: number, mv: CMove): void {
   const s = m.s;
   const b = fb(i);
   const tp = mv.teleport;
   if (!tp) return;
   const x0 = s[b + F.x];
-  const dx = oppX - x0;
-  const side = dx > 0 ? 1 : dx < 0 ? -1 : s[b + F.facing];
+  const z0 = s[b + F.z];
+  const ox = OPP[2 * i];
+  const oz = OPP[2 * i + 1];
+  const yaw = ox === x0 && oz === z0 ? s[b + F.yaw] : dirToYaw(ox - x0, oz - z0);
+  const ux = sinQ(yaw);
+  const uz = cosQ(yaw);
   let nx = x0;
-  if (tp.to === TPD.BEHIND) nx = oppX + side * tp.gap;
-  else if (tp.to === TPD.FRONT) nx = oppX - side * tp.gap;
-  else nx = -side * m.sys.wall + side * tp.gap;
+  let nz = z0;
+  if (tp.to === TPD.BEHIND) {
+    alongYaw(tp.gap, yaw, AY);
+    nx = ox + AY[0];
+    nz = oz + AY[1];
+  } else if (tp.to === TPD.FRONT) {
+    alongYaw(tp.gap, yaw, AY);
+    nx = ox - AY[0];
+    nz = oz - AY[1];
+  } else {
+    // home: from the opponent back through me to the wall, then gap inward
+    const t = ringRay(m.ring, ox, oz, -ux, -uz);
+    const d = Math.max(0, t - tp.gap);
+    alongYaw(d, yaw, AY);
+    nx = ox - AY[0];
+    nz = oz - AY[1];
+  }
   s[b + F.x] = nx;
-  clampToWalls(m, i);
+  s[b + F.z] = nz;
+  clampToRing(m, i);
   s[b + F.pushF] = 0;
   s[b + F.pushLeft] = 0;
   if (m.cf[i].uk === UK.TELEPORT) s[b + F.uniq]++;
@@ -532,9 +730,10 @@ function teleport(m: Match, i: number, mv: CMove, oppX: number): void {
 }
 
 // ------------------------------------------------------------------ movement helpers
-/** One ballistic step (x += vx; y += vy; vy -= g). Returns true when the fighter touched down. */
+/** One ballistic step (x += vx; z += vz; y += vy; vy -= g). Returns true when the fighter touched down. */
 export function airStep(s: Int32Array, b: number, g: number): boolean {
   s[b + F.x] += s[b + F.vx];
+  s[b + F.z] += s[b + F.vz];
   s[b + F.y] += s[b + F.vy];
   s[b + F.vy] -= g;
   if (s[b + F.y] <= 0 && s[b + F.vy] < 0) {
@@ -552,6 +751,7 @@ function land(m: Match, i: number): void {
   s[b + F.flags] &= ~(FL.AIRBORNE | FL.AIR_USED);
   s[b + F.y] = 0;
   s[b + F.vx] = 0;
+  s[b + F.vz] = 0;
   s[b + F.vy] = 0;
   setSt(m, i, ST.LAND);
   s[b + F.stun] = Math.max(1, m.cf[i].landing);
@@ -564,7 +764,8 @@ function takeoff(m: Match, i: number): void {
   setSt(m, i, ST.AIR);
   s[b + F.flags] = (s[b + F.flags] | FL.AIRBORNE) & ~(FL.AIR_USED | FL.CROUCHING);
   const jd = s[b + F.jumpDir];
-  s[b + F.vx] = jd * s[b + F.facing] * (jd >= 0 ? cf.vxF : cf.vxB);
+  // CHANGED(SIM3D): the jump arc runs along the line to the opponent (the yaw the prejump faced)
+  setVelAlong(s, b, s[b + F.yaw], jd * (jd >= 0 ? cf.vxF : cf.vxB));
   s[b + F.vy] = cf.vy0;
   if (airStep(s, b, cf.g)) land(m, i);
 }
@@ -584,7 +785,8 @@ function dashMove(m: Match, i: number, k: number): void {
   const back = s[b + F.st] === ST.DASH_B;
   const c = back ? cf.dashB : cf.dashF;
   const d = c[k] - c[k - 1];
-  s[b + F.x] += (back ? -1 : 1) * s[b + F.facing] * d;
+  autoFace(m, i); // CHANGED(SIM3D): dashes run along the line to the opponent (auto-face every frame)
+  moveFwd(s, b, (back ? -1 : 1) * d);
 }
 
 function startParry(m: Match, i: number): void {
@@ -606,7 +808,7 @@ function endParry(m: Match, i: number): void {
   s[b + F.nerveCd] = s[b + F.parryOk] !== 0 ? m.sys.raw.nerve.spendCooldown : m.sys.raw.nerve.whiffParryCooldown;
 }
 
-function parryTick(m: Match, i: number, oppX: number): void {
+function parryTick(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   const p = m.sys.raw.parry;
@@ -617,40 +819,64 @@ function parryTick(m: Match, i: number, oppX: number): void {
     endParry(m, i);
     return;
   }
-  if (tryAct(m, i, CTX.PARRY, oppX)) return;
+  if (tryAct(m, i, CTX.PARRY)) return;
   const raw = s[b + F.raw];
   const held = (raw & IN.PARRY) !== 0 || ((raw & IN.M) !== 0 && (raw & IN.H) !== 0);
   if (!held && f >= p.active) endParry(m, i);
 }
 
-function rushTick(m: Match, i: number, oppX: number): void {
+function rushTick(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   const r = m.sys.raw.rush;
   const f = ++s[b + F.rushF];
-  if (f >= r.startup && tryAct(m, i, CTX.RUSH, oppX)) return;
+  if (f >= r.startup && tryAct(m, i, CTX.RUSH)) return;
   if (f > r.frames) {
     setSt(m, i, ST.RECOVER);
     s[b + F.stun] = r.recovery;
     return;
   }
-  s[b + F.x] += s[b + F.facing] * m.sys.rushSpeed;
+  moveFwd(s, b, m.sys.rushSpeed);
 }
+
+const JC = new Int32Array(3);
+const JR = new Int32Array(2);
 
 function juggleTick(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   const sys = m.sys.raw;
-  if (!airStep(s, b, m.sys.gJuggle)) return;
+  const landed = airStep(s, b, m.sys.gJuggle);
+  if (!landed) {
+    // CHANGED(SIM3D) (CONTRACT §35.2): a launched body reaching the ring boundary = WALL_SPLAT (once per combo), else it
+    // slides along the wall
+    pushCircle(m, i, JC);
+    if (ringGap(m.ring, JC[0], JC[1], JC[2]) < 0) {
+      const vx = s[b + F.vx];
+      const vz = s[b + F.vz];
+      if ((s[b + F.cFlags] & CF.SPLAT) === 0 && (vx !== 0 || vz !== 0)) {
+        wallSplat(m, 1 - i, i, dirToYaw(vx, vz));
+        return;
+      }
+      ringClamp(m.ring, JC[0], JC[1], JC[2], JR);
+      s[b + F.x] += JR[0] - JC[0];
+      s[b + F.z] += JR[1] - JC[1];
+      s[b + F.vx] = 0;
+      s[b + F.vz] = 0;
+    }
+    return;
+  }
   if (s[b + F.bounce] !== 0) {
     s[b + F.bounce] = 0;
     s[b + F.vy] = m.sys.bounceVy;
     s[b + F.vx] = Math.trunc(s[b + F.vx] / 2);
+    s[b + F.vz] = Math.trunc(s[b + F.vz] / 2);
     emit(m, EV.GROUND_BOUNCE, i, 0, 0, 0);
     return;
   }
   s[b + F.flags] &= ~FL.AIRBORNE;
   s[b + F.vx] = 0;
+  s[b + F.vz] = 0;
   s[b + F.vy] = 0;
   if (s[b + F.kd] === 0) {
     setSt(m, i, ST.LAND);
@@ -673,6 +899,7 @@ export function enterKnockdown(m: Match, i: number, total: number, kind: number)
   s[b + F.flags] &= ~(FL.AIRBORNE | FL.CROUCHING);
   s[b + F.y] = 0;
   s[b + F.vx] = 0;
+  s[b + F.vz] = 0;
   s[b + F.vy] = 0;
   setSt(m, i, ST.KNOCKDOWN);
   s[b + F.stun] = Math.max(1, total);
@@ -683,7 +910,7 @@ export function enterKnockdown(m: Match, i: number, total: number, kind: number)
   emit(m, EV.KNOCKDOWN, i, kind, 0, 0);
 }
 
-function kdTick(m: Match, i: number, oppX: number): void {
+function kdTick(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   const sys = m.sys.raw;
@@ -697,26 +924,33 @@ function kdTick(m: Match, i: number, oppX: number): void {
     s[b + F.wake] = 2 | back;
     emit(m, EV.WAKEUP, i, back, 0, 0);
   }
-  // CHANGED(fixer) D3: back rise = away from the opponent (a face-down victim after a back throw faces away from it)
-  if ((s[b + F.wake] & 1) !== 0 && left < wf) s[b + F.x] += (s[b + F.x] >= oppX ? 1 : -1) * Math.trunc(m.sys.backRise / wf);
+  // CHANGED(fixer) D3: back rise = away from the opponent; CHANGED(SIM3D): along the line from the opponent
+  if ((s[b + F.wake] & 1) !== 0 && left < wf) {
+    const away = (yawToOpp(m, i) + YAW_HALF) & 65535;
+    moveAlong(s, b, away, Math.trunc(m.sys.backRise / wf));
+  }
   if (left <= 0) {
     s[b + F.invT] = Math.max(s[b + F.invT], sys.throw.wakeupInvuln);
-    enterFree(m, i, oppX);
+    enterFree(m, i);
   }
 }
 
 const VP = new Int32Array(6);
 
 /**
- * CHANGED(fixer) D3: the throw carry - the victim's x follows its lock segments' clip root travel (throwpose.ts), from
- * the anchor at the connect frame, along the victim's own facing, clamped to the walls. Runs every lock frame.
+ * CHANGED(fixer) D3: the throw carry - the victim follows its lock segments' clip root travel (throwpose.ts) from the
+ * anchor at the connect frame. CHANGED(SIM3D) (CONTRACT §35.4): along the THROWER's yaw at the connect (victim forward =
+ * -dir(thrower yaw)), clamped to the ring. Runs every lock frame.
  */
 function throwCarry(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   if (!victimPose(m, i, VP)) return;
-  s[b + F.x] = s[b + F.thrX] + s[b + F.facing] * VP[3];
-  clampToWalls(m, i);
+  const yaw = (s[b + F.thrYaw] + YAW_HALF) & 65535;
+  alongYaw(VP[3], yaw, AY);
+  s[b + F.x] = s[b + F.thrX] + AY[0];
+  s[b + F.z] = s[b + F.thrZ] + AY[1];
+  clampToRing(m, i);
 }
 
 /**
@@ -739,7 +973,14 @@ function throwRelease(m: Match, i: number): void {
 }
 
 // ------------------------------------------------------------------ pushback
+const AP = new Int32Array(3);
+const AR = new Int32Array(2);
 
+/**
+ * CHANGED(SIM3D): the pending pushback moves the fighter along F.pushYaw (F.pushLeft >= 0 U over F.pushF frames). The
+ * part the ring blocks (the defender against the wall) transfers to the opponent (melee hits, FL.PUSHX) - pushed back
+ * along the same direction.
+ */
 function applyPush(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
@@ -748,25 +989,28 @@ function applyPush(m: Match, i: number): void {
   const amt = Math.trunc(s[b + F.pushLeft] / pf);
   s[b + F.pushLeft] -= amt;
   s[b + F.pushF] = pf - 1;
-  let nx = s[b + F.x] + amt;
-  // CHANGED(fixer) D2: per-side wall limits (asymmetric push boxes)
-  const hi = wallLimitX(m, i, 1);
-  const lo = wallLimitX(m, i, -1);
+  const yaw = s[b + F.pushYaw];
+  const ux = sinQ(yaw);
+  const uz = cosQ(yaw);
   let excess = 0;
-  if (nx > hi) {
-    excess = nx - hi;
-    nx = hi;
-  } else if (nx < lo) {
-    excess = nx - lo;
-    nx = lo;
+  if (amt !== 0) {
+    pushCircle(m, i, AP);
+    const wantX = AP[0] + mulQ(amt, ux);
+    const wantZ = AP[1] + mulQ(amt, uz);
+    if (ringClamp(m.ring, wantX, wantZ, AP[2], AR)) {
+      // how much of the push the wall ate (along the push direction)
+      excess = Math.max(0, divRound((wantX - AR[0]) * ux + (wantZ - AR[1]) * uz, Q));
+    }
+    s[b + F.x] += AR[0] - AP[0];
+    s[b + F.z] += AR[1] - AP[1];
   }
-  s[b + F.x] = nx;
-  if (excess !== 0 && (s[b + F.flags] & FL.PUSHX) !== 0) {
-    const bo = fb(1 - i);
+  if (excess > 0 && (s[b + F.flags] & FL.PUSHX) !== 0) {
+    const o = 1 - i;
+    const bo = fb(o);
     const ost = s[bo + F.st];
-    if (!isAirborne(s, bo) && ost !== ST.THROWN && ost !== ST.KNOCKDOWN) {
-      s[bo + F.x] -= excess;
-      clampToWalls(m, 1 - i);
+    if (!isAirborne(s, bo) && ost !== ST.THROWN && ost !== ST.KNOCKDOWN && ost !== ST.ABSENT) {
+      moveAlong(s, bo, yaw, -excess);
+      clampToRing(m, o);
     }
   }
   if (s[b + F.pushF] === 0) {
@@ -776,7 +1020,7 @@ function applyPush(m: Match, i: number): void {
 }
 
 // ------------------------------------------------------------------ the per-frame update
-export function fighterUpdate(m: Match, i: number, oppX: number): void {
+export function fighterUpdate(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   const cf = m.cf[i];
@@ -790,59 +1034,72 @@ export function fighterUpdate(m: Match, i: number, oppX: number): void {
     case ST.ABSENT:
       return; // CHANGED(SIM) P2: bonus rounds
     case ST.STANCE:
-      stanceTick(m, i, oppX); // CHANGED(SIM) P2
+      stanceTick(m, i); // CHANGED(SIM) P2
       break;
     case ST.IDLE:
     case ST.CROUCH:
     case ST.WALK_F:
     case ST.WALK_B:
-      freeTick(m, i, oppX);
+      freeTick(m, i);
+      break;
+    case ST.SIDESTEP:
+      sidestepTick(m, i); // CHANGED(SIM3D)
+      break;
+    case ST.SIDEWALK:
+      sidewalkTick(m, i); // CHANGED(SIM3D)
+      break;
+    case ST.STEP_END:
+      autoFace(m, i);
+      if (--s[b + F.stun] <= 0) enterFree(m, i);
       break;
     case ST.PREJUMP:
-      if (tryAct(m, i, CTX.PREJUMP, oppX)) break;
+      if (tryAct(m, i, CTX.PREJUMP)) break;
       if (s[b + F.stF] >= cf.prejump) takeoff(m, i);
       break;
     case ST.AIR:
-      if (tryAct(m, i, CTX.AIR, oppX)) break;
+      if (tryAct(m, i, CTX.AIR)) break;
       if (airStep(s, b, cf.g)) land(m, i);
       break;
     case ST.LAND:
+      autoFace(m, i); // CHANGED(SIM3D): landing is a neutral state (CONTRACT §35.2)
+      if (--s[b + F.stun] <= 0) enterFree(m, i);
+      break;
     case ST.TECH:
     case ST.PARRY_REC:
     case ST.RECOVER:
     case ST.DIZZY:
-      if (--s[b + F.stun] <= 0) enterFree(m, i, oppX);
+      if (--s[b + F.stun] <= 0) enterFree(m, i);
       break;
     case ST.DASH_F:
     case ST.DASH_B: {
       const k = s[b + F.stF] + 1;
       const frames = st === ST.DASH_F ? cf.dashFFrames : cf.dashBFrames;
-      if (k > frames) enterFree(m, i, oppX);
+      if (k > frames) enterFree(m, i);
       else dashMove(m, i, k);
       break;
     }
     case ST.ATTACK:
       s[b + F.mvF]++;
-      moveTick(m, i, oppX);
+      moveTick(m, i);
       break;
     case ST.HITSTUN:
       if (--s[b + F.stun] <= 0) {
         s[b + F.invT] = Math.max(s[b + F.invT], m.sys.raw.throw.postStunInvuln);
-        enterFree(m, i, oppX);
+        enterFree(m, i);
       }
       break;
     case ST.BLOCKSTUN:
-      if (tryAct(m, i, CTX.BLOCKSTUN, oppX)) break;
+      if (tryAct(m, i, CTX.BLOCKSTUN)) break;
       if (--s[b + F.stun] <= 0) {
         s[b + F.invT] = Math.max(s[b + F.invT], m.sys.raw.throw.postStunInvuln);
-        enterFree(m, i, oppX);
+        enterFree(m, i);
       }
       break;
     case ST.JUGGLE:
       juggleTick(m, i);
       break;
     case ST.KNOCKDOWN:
-      kdTick(m, i, oppX);
+      kdTick(m, i);
       break;
     case ST.THROWN:
       if (s[b + F.techWin] > 0) s[b + F.techWin]--;
@@ -851,7 +1108,7 @@ export function fighterUpdate(m: Match, i: number, oppX: number): void {
       else throwCarry(m, i);
       break;
     case ST.PARRY:
-      parryTick(m, i, oppX);
+      parryTick(m, i);
       break;
     case ST.CRUMPLE:
       if (--s[b + F.stun] <= 0) {
@@ -863,23 +1120,23 @@ export function fighterUpdate(m: Match, i: number, oppX: number): void {
       if (--s[b + F.stun] <= 0) enterKnockdown(m, i, m.sys.raw.wallSplat.fallTotal, 1);
       break;
     case ST.RUSH:
-      rushTick(m, i, oppX);
+      rushTick(m, i);
       break;
     case ST.GRAB:
       if (--s[b + F.stun] <= 0) {
-        const swap = s[b + F.throwDir] === 1;
+        // CHANGED(SIM3D): no facing flip after a side-swap grab - the free state auto-faces the victim behind him
         s[b + F.flags] &= ~FL.THROWING;
-        enterFree(m, i, oppX);
-        if (swap) s[b + F.facing] = -s[b + F.facing];
+        enterFree(m, i);
       }
       break;
     case ST.TAUNT:
-      if (s[b + F.stF] >= cf.tauntFrames) enterFree(m, i, oppX);
+      if (s[b + F.stF] >= cf.tauntFrames) enterFree(m, i);
       break;
     case ST.KO:
       if (isAirborne(s, b) && airStep(s, b, m.sys.gJuggle)) {
         s[b + F.flags] &= ~FL.AIRBORNE;
         s[b + F.vx] = 0;
+        s[b + F.vz] = 0;
         s[b + F.vy] = 0;
       }
       break;

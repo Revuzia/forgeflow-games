@@ -68,6 +68,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "swat"},
       "desc": "Open-hand swat.",
       "boxes": [{"f": [5, 7], "x": 0.822, "y": 1.355, "w": 0.3, "h": 0.51}],
@@ -97,6 +99,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "ankle_bite"},
       "desc": "Crouching bite at the ankle.",
       "pushExt": [[0, 0.239], [7, 0.318], [17, 0.243]]
@@ -124,10 +128,13 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "role": ["poke"],
+      "role": ["poke", "antistep"],
+      "track": {"until": 11, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "lurch"},
       "sfx": [[5, "whoosh_light"]],
-      "desc": "Wild one-arm claw."
+      "desc": "Wild one-arm claw; homing."
     },
     "2M": {
       "kind": "normal",
@@ -154,6 +161,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hurtOverride": [{"f": [4, 22], "w": 0.95, "h": 0.45}],
       "role": ["poke", "low", "lowprofile"],
+      "track": {"until": 6, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "crawl_claw"},
       "desc": "Drops prone and claws along the floor: goes UNDER high pokes; -4 on block.",
       "pushExt": [[0, 0.155], [3, 0.117], [7, 0.116], [15, 0.235], [30, 0.285]]
@@ -176,14 +185,17 @@
       "pushback": {"hit": 0.45, "block": 0.5},
       "cancel": ["special", "super"],
       "juggle": {"js": 0, "ji": 1, "jl": 0},
-      "onHit": {"kd": "none", "launch": [0, 0], "wallSplat": false, "groundBounce": false, "crumple": false},
+      "onHit": {"kd": "none", "launch": [0, 0], "wallSplat": true, "groundBounce": false, "crumple": false},
       "gain": {"showtime": 1000, "nerveCost": 5000},
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "long_reach"},
-      "desc": "Double-claw lunge: his longest button (1.35 m).",
+      "desc": "Double-claw lunge: his longest button (1.35 m); wall-splats at the ring edge.",
       "boxes": [{"f": [13, 15], "x": 0.489, "y": 1.297, "w": 0.5, "h": 0.395}],
       "boxSrc": "hitVolume"
     },
@@ -212,6 +224,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "boxes": [{"f": [9, 12], "x": 0.45, "y": 1.35, "w": 0.5, "h": 0.45}],
       "role": ["antiair"],
+      "track": {"until": 5, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "scream_up"},
       "desc": "Arms flung up in a scream: anti-air.",
       "pushExt": [[0, 0.0], [14, 0.0], [21, 0.214], [34, 0.262]]
@@ -241,6 +255,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "boxes": [{"f": [18, 20], "x": 0.45, "y": 1.375, "w": 0.4, "h": 0.55}],
       "role": ["overhead"],
+      "track": {"until": 14, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "drop_headbutt"},
       "desc": "Lunging headbutt from above: overhead."
     },
@@ -268,6 +284,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "air_swat"},
       "desc": "Air swat."
     },
@@ -295,6 +313,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 3, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "air_lurch"},
       "desc": "Air claw."
     },
@@ -322,6 +342,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 6, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "air_reach"},
       "desc": "Double-claw pounce."
     },
@@ -364,6 +386,7 @@
         ]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Grabs them and screams in their face."
     },
@@ -401,6 +424,7 @@
         "victim": [[0, "hit_high_s", 0.0, 0.2], [10, "thrown_b", 0.05, 0.4], [24, "thrown_b", 0.4, 1.2]]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Swings them past with a wild claw."
     },
@@ -430,6 +454,7 @@
       "hurtOverride": [{"f": [14, 40], "w": 1.2, "h": 0.4}],
       "counter": {"catch": [4, 20], "vs": ["strike"], "follow": "grave_rise"},
       "role": ["reversal"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "play_dead_fall"},
       "desc": "Collapses like a corpse; a strike on the catch frames triggers GRAVE RISE."
     },
@@ -459,6 +484,7 @@
       "hurtOverride": [{"f": [14, 40], "w": 1.2, "h": 0.4}],
       "counter": {"catch": [4, 24], "vs": ["strike"], "follow": "grave_rise"},
       "role": ["reversal"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "play_dead_fall"},
       "desc": "Collapses like a corpse; a strike on the catch frames triggers GRAVE RISE."
     },
@@ -488,6 +514,7 @@
       "hurtOverride": [{"f": [14, 40], "w": 1.2, "h": 0.4}],
       "counter": {"catch": [4, 20], "vs": ["strike"], "follow": "grave_rise_big"},
       "role": ["reversal"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "play_dead_fall"},
       "desc": "Collapses like a corpse; a strike on the catch frames triggers GRAVE RISE."
     },
@@ -517,6 +544,7 @@
       "hurtOverride": [{"f": [14, 40], "w": 1.2, "h": 0.4}],
       "counter": {"catch": [1, 26], "vs": ["strike", "proj"], "follow": "grave_rise_big"},
       "role": ["reversal"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "play_dead_fall"},
       "desc": "Catches strikes AND projectiles from frame 1."
     },
@@ -545,6 +573,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "tc": true,
       "role": ["reversal"],
+      "track": {"until": 7, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "rise_claw"},
       "desc": "Snaps up off the floor into a claw (after a PLAY DEAD catch)."
     },
@@ -573,6 +604,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "tc": true,
       "role": ["reversal", "launcher"],
+      "track": {"until": 7, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "rise_claw"},
       "desc": "Bigger rise: ground bounce for a juggle."
     },
@@ -601,6 +635,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hurtOverride": [{"f": [3, 19], "w": 1.0, "h": 0.6}],
       "role": ["low", "lowprofile", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "crawl_run", "warp": [[0, 0.0], [16, 0.833], [41, 1.433]]},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Four-limb crawl under everything, then an ankle bite (low, knockdown).",
@@ -631,6 +668,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hurtOverride": [{"f": [3, 21], "w": 1.0, "h": 0.6}],
       "role": ["low", "lowprofile", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "crawl_run", "warp": [[0, 0.0], [18, 0.833], [43, 1.433]]},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Four-limb crawl under everything, then an ankle bite (low, knockdown).",
@@ -661,6 +701,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hurtOverride": [{"f": [3, 23], "w": 1.0, "h": 0.6}],
       "role": ["low", "lowprofile", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "crawl_run", "warp": [[0, 0.0], [20, 0.833], [45, 1.433]]},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Four-limb crawl under everything, then an ankle bite (low, knockdown).",
@@ -692,6 +735,9 @@
       "hits": [{"f": [15, 16], "damage": 500, "hitstop": 9}, {"f": [29, 30], "damage": 700, "hitstop": 15}],
       "hurtOverride": [{"f": [3, 31], "w": 1.0, "h": 0.6}],
       "role": ["low", "lowprofile", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "crawl_run_ex", "warp": [[0, 0.0], [15, 0.833], [29, 1.633], [49, 2.233]]},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Projectile-invulnerable crawl, two bites, -4 on block.",
@@ -737,7 +783,9 @@
           [75, "kd_fall_b", 1.0, 1.55]
         ]
       },
-      "role": ["grab"],
+      "role": ["grab", "antistep"],
+      "track": {"until": 7, "rate": 20},
+      "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
       "desc": "Half-circle command grab: grabs, gnaws (comic), shoves them away."
@@ -782,7 +830,9 @@
           [75, "kd_fall_b", 1.0, 1.55]
         ]
       },
-      "role": ["grab"],
+      "role": ["grab", "antistep"],
+      "track": {"until": 7, "rate": 20},
+      "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
       "desc": "Half-circle command grab: grabs, gnaws (comic), shoves them away."
@@ -827,7 +877,9 @@
           [75, "kd_fall_b", 1.0, 1.55]
         ]
       },
-      "role": ["grab"],
+      "role": ["grab", "antistep"],
+      "track": {"until": 7, "rate": 20},
+      "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
       "desc": "Half-circle command grab: grabs, gnaws (comic), shoves them away."
@@ -872,7 +924,9 @@
           [78, "kd_fall_b", 1.0, 1.55]
         ]
       },
-      "role": ["grab"],
+      "role": ["grab", "antistep"],
+      "track": {"until": 7, "rate": 20},
+      "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
       "desc": "Strike-invulnerable grab, 1.10 m."
@@ -902,10 +956,12 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [8, 0.4], [16, 0.9], [39, 0.0]],
       "role": ["antiair"],
+      "track": {"until": 2, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "arise_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Leaping screaming claw anti-air.",
-      "pushExt": [[0, 0.0], [6, 0.0], [8, 0.07], [13, 0.078], [16, 0.125], [42, 0.156]]
+      "pushExt": [[0, 0.0], [16, 0.0], [23, 0.109], [42, 0.156]]
     },
     "arise_m": {
       "kind": "special",
@@ -932,10 +988,12 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [9, 0.4], [17, 0.9], [43, 0.0]],
       "role": ["antiair"],
+      "track": {"until": 3, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "arise_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Leaping screaming claw anti-air.",
-      "pushExt": [[0, 0.0], [7, 0.0], [9, 0.07], [15, 0.078], [18, 0.125], [46, 0.156]]
+      "pushExt": [[0, 0.0], [18, 0.0], [25, 0.109], [46, 0.156]]
     },
     "arise_h": {
       "kind": "special",
@@ -962,10 +1020,12 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [10, 0.4], [18, 0.9], [47, 0.0]],
       "role": ["antiair"],
+      "track": {"until": 4, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "arise_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Leaping screaming claw anti-air.",
-      "pushExt": [[0, 0.0], [8, 0.0], [10, 0.07], [16, 0.078], [20, 0.125], [50, 0.156]]
+      "pushExt": [[0, 0.0], [19, 0.0], [26, 0.1], [40, 0.154], [50, 0.156]]
     },
     "arise_ex": {
       "kind": "ex",
@@ -992,10 +1052,14 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [7, 0.4], [15, 1.0], [42, 0.0]],
       "role": ["antiair", "reversal"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "arise_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Fully invulnerable leap.",
-      "pushExt": [[0, 0.0], [6, 0.0], [7, 0.07], [13, 0.078], [16, 0.125], [45, 0.156]]
+      "boxes": [{"f": [7, 12], "x": 0.425, "y": 1.162, "w": 0.5, "h": 0.924}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.0], [16, 0.0], [22, 0.1], [36, 0.154], [45, 0.156]]
     },
     "dead_air": {
       "kind": "super1",
@@ -1023,6 +1087,8 @@
       "hurtOverride": [{"f": [14, 40], "w": 1.2, "h": 0.4}],
       "counter": {"catch": [1, 30], "vs": ["strike", "proj"], "follow": "dead_air_bite"},
       "role": ["reversal"],
+      "track": {"until": 30, "rate": 20},
+      "homing": true,
       "anim": {"clip": "play_dead_fall"},
       "desc": "Counter super: plays dead for 30 frames; any strike or projectile is answered with a lunge-bite."
     },
@@ -1068,6 +1134,8 @@
       },
       "tc": true,
       "role": ["grab"],
+      "track": {"until": 3, "rate": 20},
+      "homing": true,
       "anim": {"clip": "bite_lunge"},
       "desc": "The Lv1 follow-up: lunges 2.5 m and bites (unblockable, 2000)."
     },
@@ -1212,6 +1280,9 @@
         "endGapM": 1.6
       },
       "role": ["reversal"],
+      "track": {"until": 13, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "long_reach"},
       "desc": "PRIME TIME: grabs, bites, drags them into a trapdoor grave - and climbs back out alone.",
       "boxes": [{"f": [10, 13], "x": 0.489, "y": 1.297, "w": 0.5, "h": 0.395}],
@@ -1252,7 +1323,8 @@
     "punish": ["5H", "grave_crawl_h"],
     "grab": ["last_meal_m"],
     "combo": ["2L", "5M", "grave_crawl_m"],
-    "meter": "dead_air"
+    "meter": "dead_air",
+    "antiStep": ["5M", "last_meal_m"]
   },
   "introLine": "Previously... on HIT PARADE... BRAAAINS.",
   "winQuotes": ["Cancelled? Me? I'm... syndicated.", "Mmmh. Tastes like season one.", "See you... next week. Same time. Same me."],

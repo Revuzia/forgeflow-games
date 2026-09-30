@@ -192,6 +192,105 @@ LV3_COST = 30000
 MOVE_KINDS = ("normal", "command", "special", "ex", "super1", "super3", "throw", "cmdgrab", "projectile",
               "system")
 
+# --------------------------------------------------------------------------------------------------
+# CHANGED(FIGHTERS3D): 3D ring move fields (CONTRACT 35.4 / 35.12). Every move gets `track: {until, rate}`; strikes get
+# `lateralM`; projectiles get `projectile.aimed` + `projectile.lateralM`; `homing` / `linear` mark the class. Kit moves set
+#   homing=True | False   (default: role sweep, command grabs, grab supers and supers that are not projectile throws)
+#   linear=True           (rushes, charges, leaps, dives, straight non-aimed projectile throws, lunges)
+#   lateralM=<m>          (override with why3d), aimed=True on the move for a projectile aimed at the opponent at spawn,
+#   projLateralM=<m>      (wider projectile half-depth: fans, flames, saws)
+#   why3d="..."           (the 3D decision's reason, printed in ROSTER.md)
+# --------------------------------------------------------------------------------------------------
+TRACK_FULL = 180        # deg / frame: snap (any re-face in one frame)
+HOMING_RATE = 20        # deg / frame through the last active frame: a sidestep sweeps <= ~6 deg / f at 1 m, a sidewalk ~1.7
+TRACK_LEAD = {"normal": 4, "command": 4, "throw": 4}   # until = startup - lead; everything else (specials, supers) 6
+TRACK_LEAD_DEFAULT = 6
+LAT_BY_STRENGTH = {"L": 0.15, "M": 0.18, "H": 0.22}
+LAT_SWEEP = 0.45
+LAT_HOMING = 0.60
+PROJ_LAT_MIN = 0.12
+
+
+def _strike_json(o):
+    """SIM core/data.ts isStrikeKind (same test as build.py is_strike): a move whose boxes can hit."""
+    if o["kind"] in ("throw", "cmdgrab") or o.get("grab") or o.get("projectile"):
+        return False
+    if o.get("cinematic"):
+        return True
+    return o.get("damage", 0) > 0 or any(h["damage"] > 0 for h in o.get("hits", []))
+
+
+def default_homing(m, o):
+    """Class default of `homing` when the kit does not decide: sweeps (they wrap round a stepper), command grabs and grab
+    supers (reach arcs), supers that strike (CONTRACT 35.4 'most supers'). Projectile throws never home (aimed instead)."""
+    kind = o["kind"]
+    if o.get("projectile") or m.get("linear"):
+        return False
+    # every grab that is not a normal throw: command grabs, their EX (kind "ex"), grab supers, grab follow-ups
+    if kind == "cmdgrab" or (o.get("grab") and kind != "throw"):
+        return True
+    if kind in ("super1", "super3"):
+        return True
+    return "sweep" in o.get("role", [])
+
+
+def emit3d(m, o):
+    """Fill o['track'] / o['homing'] / o['linear'] / o['lateralM'] / projectile aimed + lateralM from the kit move m."""
+    homing = m.get("homing")
+    if homing is None:
+        homing = default_homing(m, o)
+    linear = bool(m.get("linear"))
+    if homing and linear:
+        raise ValueError("%s: a move cannot be both homing and linear" % o.get("name"))
+    S, A = o["startup"], o["active"]
+    if homing:
+        track = {"until": S + A - 1, "rate": HOMING_RATE}
+    elif linear:
+        track = {"until": 1, "rate": TRACK_FULL}
+    else:
+        lead = TRACK_LEAD.get(o["kind"], TRACK_LEAD_DEFAULT)
+        track = {"until": max(1, S - lead), "rate": TRACK_FULL}
+    o["track"] = track
+    if homing:
+        o["homing"] = True
+    if linear:
+        o["linear"] = True
+    if _strike_json(o):
+        if "lateralM" in m:
+            lat = m["lateralM"]
+        elif "sweep" in o.get("role", []):
+            lat = LAT_SWEEP
+        elif homing:
+            lat = LAT_HOMING
+        else:
+            # normals by their button class; specials / EX / supers are committed full-body moves whose L/M/H is the
+            # button strength, not the limb: H depth (a 0.15 m-deep Encore L uppercut would whiff a body it visibly hits)
+            st = "H" if o["kind"] in ("super1", "super3", "special", "ex") else o.get("strength", "M")
+            lat = LAT_BY_STRENGTH.get(st, LAT_BY_STRENGTH["M"])
+        o["lateralM"] = round(float(lat), 3)
+    if o.get("projectile"):
+        p = dict(o["projectile"])
+        p["aimed"] = bool(m.get("aimed", False))
+        p["lateralM"] = round(float(m.get("projLateralM", max(PROJ_LAT_MIN, p["box"][0] / 2.0))), 3)
+        o["projectile"] = p
+
+
+def dim3(o):
+    """Short 3D label for the ROSTER frame table: HOMING 20/f->f13 lat 0.60 | LINEAR lat 0.22 | t->f8 lat 0.18 (+ aimed)."""
+    t = o["track"]
+    if o.get("homing"):
+        s = "HOMING %d/f to f%d" % (t["rate"], t["until"])
+    elif o.get("linear"):
+        s = "LINEAR"
+    else:
+        s = "tracks to f%d" % t["until"]
+    if "lateralM" in o:
+        s += ", lat %.2f" % o["lateralM"]
+    p = o.get("projectile")
+    if p:
+        s += ", proj %s lat %.2f" % ("AIMED" if p.get("aimed") else "straight", p["lateralM"])
+    return s
+
 
 # --------------------------------------------------------------------------------------------------
 # Source catalogs (evidence: research JSON)
@@ -561,6 +660,7 @@ class Kit:
             if k in m:
                 o[k] = m[k]
         o["role"] = list(m.get("role", []))
+        emit3d(m, o)   # CHANGED(FIGHTERS3D): track / homing / linear / lateralM / projectile aimed (CONTRACT 35.12)
         anim = {"clip": m["clip"]}
         if m.get("warp") == "auto":
             hf = [h["f"][0] for h in m["hits"]] if m.get("hits") else [o["startup"]]

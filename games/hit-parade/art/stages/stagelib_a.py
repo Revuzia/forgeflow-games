@@ -62,8 +62,21 @@ CACHE = os.path.join(ROOT, "_harness", "scratch", "stages_cache")
 TEXA = os.path.join(CACHE, "tex_a")
 REP = os.path.join(ROOT, "_harness", "_reports", "stages")
 GLTF_OUT = os.path.join(ROOT, "art", "gltf", "stages")
-for _d in (CACHE, TEXA, REP, GLTF_OUT):
+# CHANGED(STAGES3D-A): builds go to a STAGING dir by default (the running game loads art/gltf/stages/*): GLB + env HDR +
+# fragment land in _harness/scratch/stages3d_out/, then `python tools/merge_stages.py --install <id,...>` moves them into
+# art/gltf/stages/ + art/stages/ in one step and merges. `--out live` = the old in-place behaviour.
+OUT_MODE = str(arg("--out", "stage"))
+STAGE_OUT = os.path.join(ROOT, "_harness", "scratch", "stages3d_out")
+for _d in (CACHE, TEXA, REP, GLTF_OUT, STAGE_OUT):
     os.makedirs(_d, exist_ok=True)
+
+
+def out_glb_dir():
+    return GLTF_OUT if OUT_MODE == "live" else STAGE_OUT
+
+
+def out_frag_dir():
+    return HERE if OUT_MODE == "live" else STAGE_OUT
 
 A = "F:/games/forgeflow-games-assets"
 U = "F:/games/unity-assets"
@@ -727,8 +740,48 @@ def crowd_nodes(S):
     CROWD = S["crowd"]
     card_h = CROWD["cardHeightM"]
     nodes = []
+
+    def emit(bay, ri, i, x, y, z, yaw, r, ang):
+        e = bpy.data.objects.new("crowd_%s_%d_%d" % (bay["id"], ri, i), None)
+        e.empty_display_type = "SINGLE_ARROW"
+        e.location = G(x, y, z)
+        e.rotation_euler = (0.0, 0.0, yaw)       # Blender Z rotation psi = game facing angle (35.11: 0 = +Z, 90 = +X)
+        e.scale = (card_h, card_h, card_h)
+        e["bay"] = bay["id"]
+        e["row"] = ri
+        e["i"] = i
+        e["rand"] = round(r, 5)
+        e["angle"] = ang
+        COL["NODES"].objects.link(e)
+        nodes.append((e, x, y, z, yaw, r, ang))
+
     for bay in CROWD["bays"]:
         rng = mulberry32(bay["seed"])
+        if "arcDeg" in bay:
+            # CHANGED(STAGES3D-A) CONTRACT 35.11.6: arc bay - rows run along circles about the ring centre, cards face it
+            a0, a1 = bay["arcDeg"]
+            jt, jr = bay["jitter"]
+            gap = float(bay.get("gapPct", 0.0))
+            arng = mulberry32(bay["seed"] * 7 + 3)
+            for ri, row in enumerate(bay["rows"]):
+                rr = row["r"]
+                span = math.radians(a1 - a0) * rr
+                n = int(math.floor(span / bay["spacing"] + 1e-6)) + 1
+                stag = 0.5 * bay["spacing"] * (ri % 2)
+                for i in range(n):
+                    s_ = i * bay["spacing"] + stag + (rng() * 2 - 1) * jt
+                    rj = rr + (rng() * 2 - 1) * jr
+                    r = rng()
+                    pick = arng()
+                    if s_ > span + 1e-6 or s_ < -1e-6:
+                        continue
+                    if gap > 0 and arng() < gap:
+                        continue
+                    a = a0 + math.degrees(s_ / rr)
+                    x, z = rj * math.sin(math.radians(a)), rj * math.cos(math.radians(a))
+                    ang = bay.get("angle") or ("front" if pick < 0.6 else ("left" if pick < 0.8 else "right"))
+                    emit(bay, ri, i, x, row["y"], z, math.radians(a + 180.0), r, ang)
+            continue
         x0, x1 = bay["x"]
         jx, jz = bay["jitter"]
         yaw = math.radians(bay.get("faceYawDeg", 0.0))
@@ -841,7 +894,7 @@ def env_map(hdri_path, out_name):
     img = bpy.data.images.load(hdri_path, check_existing=True)
     e2 = img.copy()
     e2.scale(512, 256)
-    e2.filepath_raw = os.path.join(GLTF_OUT, out_name)
+    e2.filepath_raw = os.path.join(out_glb_dir(), out_name)
     e2.file_format = "HDR"
     e2.save()
     log("env map", e2.filepath_raw, os.path.getsize(e2.filepath_raw))
@@ -1078,9 +1131,18 @@ def fighters(S, bodies):
     return out
 
 
+def billboard_cards(cards, cam_pos_g):
+    """CHANGED(STAGES3D-A): the view billboards every crowd card about +Y toward the camera (view/crowd.ts); do the same
+    per proof shot so orbit renders show the crowd as the game does. Card plane = Blender XZ, front = local -Y."""
+    cb = G(*cam_pos_g)
+    for ob in cards:
+        dx, dy = cb.x - ob.location.x, cb.y - ob.location.y
+        ob.rotation_euler = (0.0, 0.0, math.atan2(dx, -dy))
+
+
 def render_proofs(S, hdri_path, nodes, bodies, extra_shots=()):
     setup_lights_world(S, hdri_path)
-    proof_cards(S, nodes)
+    cards = proof_cards(S, nodes)
     if DO_FIGHTERS and bodies:
         fighters(S, bodies)
     for ob in COL["NODES"].objects:
@@ -1088,7 +1150,7 @@ def render_proofs(S, hdri_path, nodes, bodies, extra_shots=()):
     shots = list(S["camera"]["proofShots"]) + list(extra_shots)
     if SHOTS:
         want = str(SHOTS).split(",")
-        shots = [s for s in shots if s["id"] in want]
+        shots = [s for s in shots if s["id"] in want or ("orbit" in want and s["id"].startswith("orbit_"))]
     scn = bpy.context.scene
     beauty = []
     for sh in shots:
@@ -1097,6 +1159,7 @@ def render_proofs(S, hdri_path, nodes, bodies, extra_shots=()):
         scn.render.resolution_y = RES[1]
         cam = make_camera(S, sh)
         scn.camera = cam
+        billboard_cards(cards, sh["pos"])
         render_setup(S, False)
         p = os.path.join(CACHE, "beauty_%s_%s.png" % (S["id"], sh["id"]))
         scn.render.filepath = p
@@ -1111,6 +1174,7 @@ def render_proofs(S, hdri_path, nodes, bodies, extra_shots=()):
         scn.render.resolution_x = int(round(RES[1] * aspect))
         scn.render.resolution_y = RES[1]
         scn.camera = cam
+        billboard_cards(cards, sh["pos"])
         render_setup(S, True)
         dp = os.path.join(CACHE, "depth_%s_%s.png" % (S["id"], sh["id"]))
         scn.render.filepath = dp
@@ -1120,7 +1184,20 @@ def render_proofs(S, hdri_path, nodes, bodies, extra_shots=()):
         outs.append(outp)
         log("proof", outp)
     depth_materials(S, False, saved)
+    if any(os.path.basename(o).startswith(S["id"] + "_orbit_") for o in outs):
+        orbit_sheet(S["id"])
     return outs
+
+
+def orbit_sheet(stage_id):
+    """4 x 4 labelled contact sheet of the 16 orbit proofs (plain Python + PIL: art/stages/orbit_sheet_a.py)"""
+    py = shutil.which("python") or shutil.which("python3")
+    if not py:
+        log("orbit sheet skipped: no system python")
+        return
+    r = subprocess.run([py, os.path.join(HERE, "orbit_sheet_a.py"), stage_id], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    log("orbit sheet rc", r.returncode, (r.stdout.strip().splitlines() or [""])[-1], r.stderr.strip()[-400:])
 
 
 # =============================================================== ENV_KIT 8.3 contact render
@@ -1303,7 +1380,7 @@ def export(stage_id, exclude=()):
 
 def finish_glb(stage_id, raw):
     """TECH_REUSE chain D, same flags as art/stages/finish_stage.py (keeps the crowd_* empties)"""
-    out = os.path.join(GLTF_OUT, stage_id + ".glb")
+    out = os.path.join(out_glb_dir(), stage_id + ".glb")
     gt = shutil.which("gltf-transform")
     if not gt:
         raise SystemExit("gltf-transform not on PATH")
@@ -1324,12 +1401,12 @@ def write_fragment(S, build=None):
     if build is not None:
         frag["build"] = build
     else:
-        old = os.path.join(HERE, S["id"] + ".stage.json")
+        old = os.path.join(out_frag_dir(), S["id"] + ".stage.json")
         if os.path.exists(old):
             prev = json.load(open(old, encoding="utf-8"))
             if "build" in prev:
                 frag["build"] = prev["build"]
-    p = os.path.join(HERE, S["id"] + ".stage.json")
+    p = os.path.join(out_frag_dir(), S["id"] + ".stage.json")
     with open(p, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(frag, indent=2) + "\n")
     log("fragment", p)
@@ -1368,6 +1445,7 @@ def crowd_block(tint, brightness, bays):
 def build_and_ship(S, hdri_path, nodes, bodies, extra_shots=(), heroes=None):
     """the common tail: fragment -> proofs -> contact -> export -> gltf-transform -> measured fragment"""
     write_fragment(S)
+    clear = clearance_probe(S) if "ring" in S else None
     if DO_RENDER:
         render_proofs(S, hdri_path, nodes, bodies, extra_shots)
     if DO_CONTACT and heroes:
@@ -1376,13 +1454,253 @@ def build_and_ship(S, hdri_path, nodes, bodies, extra_shots=(), heroes=None):
         raw = export(S["id"])
         out = finish_glb(S["id"], raw)
         st = glb_stats(out)
-        envp = os.path.join(GLTF_OUT, S["environment"]["hdr"])
+        envp = os.path.join(out_glb_dir(), S["environment"]["hdr"])
         st["envBytes"] = os.path.getsize(envp) if os.path.exists(envp) else None
         mesh_nodes = st.pop("meshNodes")
+        if clear is not None:
+            st["clearance"] = clear
         log("measured", json.dumps(st), "mesh nodes", mesh_nodes)
         write_fragment(S, st)
         budget_b = 6000000
         tot = st["bytes"] + (st["envBytes"] or 0)
         log("BUDGET bytes %d (glb %d + env %s) <= %d: %s; draws %d <= 150: %s; lights in GLB %d" % (
             tot, st["bytes"], st["envBytes"], budget_b, tot <= budget_b, st["draws"], st["draws"] <= 150, st["lights"]))
+        log("OUTPUT (%s): %s + %s" % (OUT_MODE, out, os.path.join(out_frag_dir(), S["id"] + ".stage.json")))
     log("DONE")
+
+
+# =============================================================== CHANGED(STAGES3D-A): 360-degree ring arenas (CONTRACT 35.6 / 35.11)
+def polar(r, deg, y=0.0):
+    """game point at radius r, angle deg (35.11: 0 = +Z, 90 = +X), height y"""
+    a = math.radians(deg)
+    return (r * math.sin(a), y, r * math.cos(a))
+
+
+def _orient(bm, faces_expect):
+    """flip faces whose normal disagrees with the expected (game-space) outward direction"""
+    for f, n_g in faces_expect:
+        if not f.is_valid:
+            continue
+        f.normal_update()
+        if f.normal.dot(G(*n_g)) < 0:
+            f.normal_flip()
+
+
+def annulus(name, r_in, r_out, y0, y1, mat, segs=64, a0=0.0, a1=360.0, tile=2.0, poly_apothem=False, mats=None,
+            parts=("in", "out", "top", "bottom", "ends"), col=None, smooth=35.0, tile_v=None, uv_off=(0.0, 0.0)):
+    """annular sector solid between radii r_in..r_out and heights y0..y1 over angles a0..a1 (35.11 convention), `segs`
+    straight segments. poly_apothem=True: r_* are apothems (flat sides, e.g. an octagon with segs=8 and a0 = rot - 22.5).
+    UVs: in/out faces u = chord length along the polygon / tile, v = y / tile; top/bottom planar x, z / tile.
+    mats = {part: material index} with `mat` a list (default all 0). tile_v / uv_off: separate vertical tile and a UV offset
+    for the in/out faces (u = cum / tile + uo, v = y / tile_v + vo; a texture mapped once across a curved wall)."""
+    tv = tile_v or tile
+    uo, vo = uv_off
+    full = abs((a1 - a0) - 360.0) < 1e-6
+    k = 1.0 / math.cos(math.radians((a1 - a0) / segs / 2.0)) if poly_apothem else 1.0
+    ri, ro = r_in * k, r_out * k
+    n = segs if full else segs + 1
+    angs = [a0 + (a1 - a0) * i / segs for i in range(n)]
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new("UVMap")
+
+    def V(r, a, y):
+        return bm.verts.new(G(*polar(r, a, y)))
+    vi0 = [V(ri, a, y0) for a in angs]
+    vi1 = [V(ri, a, y1) for a in angs]
+    vo0 = [V(ro, a, y0) for a in angs]
+    vo1 = [V(ro, a, y1) for a in angs]
+    cum_i, cum_o = [0.0], [0.0]
+    for i in range(1, n + (1 if full else 0)):
+        pa, pb = angs[i - 1], angs[i % n] if i < n else angs[0] + (360.0 if full else 0)
+        ch = 2 * math.sin(math.radians(abs(pb - pa)) / 2)
+        cum_i.append(cum_i[-1] + ri * ch)
+        cum_o.append(cum_o[-1] + ro * ch)
+    mi = mats or {}
+    exp = []
+    m = n if full else n - 1
+    for i in range(m):
+        j = (i + 1) % n
+        am = math.radians((angs[i] + (angs[i] + (a1 - a0) / segs)) / 2)
+        radial = (math.sin(am), 0.0, math.cos(am))
+        if "in" in parts and r_in > 1e-4:
+            f = bm.faces.new((vi0[i], vi0[j], vi1[j], vi1[i]))
+            f.material_index = mi.get("in", 0)
+            for loop, (u, v) in zip(f.loops, ((cum_i[i], y0), (cum_i[i + 1], y0), (cum_i[i + 1], y1), (cum_i[i], y1))):
+                loop[uvl].uv = (u / tile + uo, v / tv + vo)
+            exp.append((f, (-radial[0], 0, -radial[2])))
+        if "out" in parts:
+            f = bm.faces.new((vo0[i], vo0[j], vo1[j], vo1[i]))
+            f.material_index = mi.get("out", 0)
+            for loop, (u, v) in zip(f.loops, ((cum_o[i], y0), (cum_o[i + 1], y0), (cum_o[i + 1], y1), (cum_o[i], y1))):
+                loop[uvl].uv = (u / tile + uo, v / tv + vo)
+            exp.append((f, radial))
+        for part, vs_a, vs_b, ny in (("top", vi1, vo1, 1.0), ("bottom", vi0, vo0, -1.0)):
+            if part not in parts:
+                continue
+            if r_in > 1e-4:
+                f = bm.faces.new((vs_a[i], vs_a[j], vs_b[j], vs_b[i]))
+            else:
+                f = bm.faces.new((vs_a[i], vs_b[j], vs_b[i]))
+            f.material_index = mi.get(part, 0)
+            for loop in f.loops:
+                co = loop.vert.co
+                loop[uvl].uv = (co.x / tile, co.y / tile)
+            exp.append((f, (0, ny, 0)))
+    if not full and "ends" in parts:
+        for idx, sgn in ((0, -1), (n - 1, 1)):
+            a = math.radians(angs[idx])
+            tang = (math.cos(a) * sgn, 0.0, -math.sin(a) * sgn)
+            if r_in > 1e-4:
+                f = bm.faces.new((vi0[idx], vo0[idx], vo1[idx], vi1[idx]))
+            else:
+                f = bm.faces.new((vo0[idx], vo1[idx], vi1[idx], vi0[idx]))
+            f.material_index = mi.get("ends", 0)
+            for loop in f.loops:
+                co = loop.vert.co
+                rr = math.hypot(co.x, co.y)
+                loop[uvl].uv = (rr / tile, co.z / tile)
+            exp.append((f, tang))
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
+    _orient(bm, exp)
+    mats_l = mat if isinstance(mat, (list, tuple)) else [mat]
+    return finish(bm, name, mats_l, uv=False, smooth_angle=smooth, col=col)
+
+
+def disc(name, r, y, mat, segs=64, tile=2.0, col=None, poly_apothem=False, a0=0.0):
+    """flat upward disc (triangle fan) at height y, planar UV x, z / tile"""
+    return annulus(name, 0.0, r, y - 0.001, y, mat, segs=segs, a0=a0, a1=a0 + 360.0, tile=tile, poly_apothem=poly_apothem,
+                   parts=("top",), col=col, smooth=10.0)
+
+
+def place(objs, pos_g, face_deg):
+    """move objects authored at the origin facing game +Z to pos_g, facing angle face_deg (35.11 convention; Blender
+    Z rotation psi turns game +Z toward (sin psi, cos psi))"""
+    M = Matrix.Translation(G(*pos_g)) @ Matrix.Rotation(math.radians(face_deg), 4, "Z")
+    for o in objs:
+        if o is not None:
+            o.matrix_world = M @ o.matrix_world
+    return objs
+
+
+def collect_new(fn, *a, **kw):
+    """run a builder and return every object it added to COL SET (for place())"""
+    before = set(COL["SET"].objects)
+    fn(*a, **kw)
+    return [o for o in COL["SET"].objects if o not in before]
+
+
+def ring_block(shape, radius, wall_h, thickness, surface, dust, sides=None, rot=0.0, note=""):
+    return {"shape": shape, "radiusM": radius, "sides": sides if sides else (16 if shape == "circle" else 8),
+            "rotDeg": rot, "wallHeightM": wall_h, "thicknessM": thickness, "surface": surface, "dustColor": dust,
+            "note": note or "CONTRACT 35.11: radiusM = centre -> inner face (poly: apothem); poly side k normal at rotDeg + "
+                            "k*360/sides; circle: 16 WALL_SPLAT sectors centred on rotDeg + k*22.5"}
+
+
+def orbit_shots(side_deg=0.0, dists=(4.4, 8.0), eye=1.35):
+    out = []
+    for k in range(8):
+        a = (side_deg + 45.0 * k) % 360.0
+        for d, tag in zip(dists, "nf"):
+            p = polar(d, a, eye)
+            out.append({"id": "orbit_%03d_%s" % (int(round(a)), tag), "pos": [round(v, 3) for v in p],
+                        "look": [0.0, 1.0, 0.0]})
+    return out
+
+
+def camera_block_3d(stage_id, side_deg=0.0):
+    """35.7 orbit camera facts + legacy 2.5D fields + proof shots (near/far centre at the camera side + 16 orbit shots)"""
+    near, far = polar(4.4, side_deg, 1.35), polar(8.0, side_deg, 1.35)
+    return {
+        "vFovDeg": 35.0, "heightM": 1.35, "lookAtY": 1.0, "distanceM": [4.4, 9.5], "pitchDeg": [-4.0, -4.0],
+        "orbit": True, "wallClampX": 8.0,
+        "note": "CONTRACT 35.7 orbit camera (eye y 1.35, look-at y 1.0, dist 4.4..9.5 from the pair midpoint). wallClampX = "
+                "legacy 2.5D. Proof renders: _harness/_reports/stages/%s_<shot>.png, orbit sheet %s_orbit_sheet.png"
+                % (stage_id, stage_id),
+        "proofShots": [
+            {"id": "near_center", "pos": [round(v, 3) for v in near], "look": [0.0, 1.0, 0.0]},
+            {"id": "far_center", "pos": [round(v, 3) for v in far], "look": [0.0, 1.0, 0.0]},
+            {"id": "far_center_phone", "pos": [round(v, 3) for v in polar(6.6, side_deg, 1.35)], "look": [0.0, 1.0, 0.0],
+             "aspect": 2.1667},
+        ] + orbit_shots(side_deg),
+    }
+
+
+def spawn_block(axis_deg=90.0, dist=2.4):
+    a = math.radians(axis_deg)
+    h = dist / 2.0
+    return {"distanceM": dist, "p1": [round(-h * math.sin(a), 4), 0.0, round(-h * math.cos(a), 4)],
+            "p2": [round(h * math.sin(a), 4), 0.0, round(h * math.cos(a), 4)]}
+
+
+def clearance_probe(S, band=(1.30, 3.00), rmax=None):
+    """CONTRACT 35.11.5: exact min horizontal radius of any set triangle inside the camera band y band[0]..band[1]
+    (triangles clipped to the band, then the 2D distance of the clipped polygon to the ring axis). Every exported
+    mesh (COL SET + ANIM) counts. Logs the offenders inside cameraMaxM; returns the fragment `build.clearance` block."""
+    rmax = rmax or S.get("cameraMaxM", 9.5)
+    lo, hi = band
+    worst = []
+    deps = bpy.context.evaluated_depsgraph_get()
+    objs = [o for o in COL["SET"].objects if o.type == "MESH"] + [o for o in ANIM.values() if o.type == "MESH"]
+    seen = set()
+    for ob in objs:
+        if ob.name in seen:
+            continue
+        seen.add(ob.name)
+        me = ob.data
+        me.calc_loop_triangles()
+        mw = ob.matrix_world
+        vco = [mw @ v.co for v in me.vertices]
+        # game coords: x = bx, y = bz, z = -by
+        vg = [(c.x, c.z, -c.y) for c in vco]
+        best = 1e9
+        for t in me.loop_triangles:
+            P = [vg[i] for i in t.vertices]
+            ys = [p[1] for p in P]
+            if max(ys) < lo or min(ys) > hi:
+                continue
+            poly = P
+            for plane, keep_above in ((lo, True), (hi, False)):
+                out = []
+                for i in range(len(poly)):
+                    a, b = poly[i], poly[(i + 1) % len(poly)]
+                    ina = (a[1] >= plane) if keep_above else (a[1] <= plane)
+                    inb = (b[1] >= plane) if keep_above else (b[1] <= plane)
+                    if ina:
+                        out.append(a)
+                    if ina != inb:
+                        tt = (plane - a[1]) / (b[1] - a[1])
+                        out.append((a[0] + (b[0] - a[0]) * tt, plane, a[2] + (b[2] - a[2]) * tt))
+                poly = out
+                if not poly:
+                    break
+            if not poly:
+                continue
+            q = [(p[0], p[2]) for p in poly]
+            # origin inside the polygon (2D)? -> 0
+            inside = False
+            for i in range(len(q)):
+                (x1, z1), (x2, z2) = q[i], q[(i + 1) % len(q)]
+                if (z1 > 0) != (z2 > 0) and 0 < (x2 - x1) * (0 - z1) / (z2 - z1 + 1e-300) + x1:
+                    inside = not inside
+            if inside and len(q) >= 3:
+                d = 0.0
+            else:
+                d = 1e9
+                for i in range(len(q)):
+                    (x1, z1), (x2, z2) = q[i], q[(i + 1) % len(q)]
+                    ex, ez = x2 - x1, z2 - z1
+                    L2 = ex * ex + ez * ez
+                    tt = 0.0 if L2 < 1e-12 else max(0.0, min(1.0, -(x1 * ex + z1 * ez) / L2))
+                    d = min(d, math.hypot(x1 + ex * tt, z1 + ez * tt))
+            best = min(best, d)
+        if best < 1e8:
+            worst.append((best, ob.name))
+    worst.sort()
+    inside = [(round(d, 3), n) for d, n in worst if d < rmax]
+    minr = round(worst[0][0], 3) if worst else None
+    log("CLEARANCE band y %.2f..%.2f: min radius %s (%s); inside cameraMaxM %.2f: %d object(s) %s" % (
+        lo, hi, minr, worst[0][1] if worst else "-", rmax, len(inside), inside[:12]))
+    if inside:
+        log("CLEARANCE FAIL")
+    return {"bandY": [lo, hi], "minRadiusM": minr, "nearest": worst[0][1] if worst else None,
+            "cameraMaxM": rmax, "ok": not inside}

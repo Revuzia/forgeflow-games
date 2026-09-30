@@ -9,7 +9,7 @@
     "boneyard",
     "freak"
   ],
-  "look": "cooking-show set in a meat locker: white subway tile with a red band and stainless kick plates, a walk-in freezer door (left wall) and a strip-curtain meat-locker doorway (right wall); behind the floor the kitchen line - brushed-steel counters with red doors, two gas ranges with live flames and pots, an end-grain butcher block with a giant cleaver; comic hams, sausage links and salami on a meat rail; studio audience on black risers; a cleaver-shaped lit show sign on the back wall",
+  "look": "octagonal checker-tile fight floor walled by a 1.0 m white-tile / red-band stainless counter wall, in the round inside a huge industrial show kitchen: a curved kitchen line with gas ranges (live flames, pots, hoods) and an end-grain butcher block with a giant cleaver under the lit cleaver show sign, a walk-in freezer door and a strip-curtain meat-locker doorway, studio audience risers all round under meat rails hung with comic hams, sausage links and salami",
   "floor": {
     "y": 0.0,
     "surface": "tile",
@@ -25,14 +25,15 @@
     },
     "extent": {
       "x": [
-        -12.0,
-        12.0
+        -15.0,
+        15.0
       ],
       "z": [
-        -3.2,
-        8.0
+        -15.0,
+        15.0
       ]
-    }
+    },
+    "note": "fightStrip = legacy 2.5D (CONTRACT 35.11.7); the fight floor is the ring octagon"
   },
   "walls": {
     "x": [
@@ -73,14 +74,28 @@
         "dustColor": "#e6e1d6"
       }
     ],
-    "note": "WALL_SPLAT event b = wall id (0 = x -8, 1 = x +8), CONTRACT 17.6. Left wall carries the freezer door (flush, z -1.9..-0.7), right wall the strip-curtain doorway (z -2.1..-0.5, strips 5 cm behind the wall line): the body contact patch (z -0.5..0.5) is tile on both walls."
+    "note": "LEGACY 2.5D (CONTRACT 35.11.7): kept until the sim / view stop reading walls.x; the 3D boundary is `ring`."
   },
+  "ring": {
+    "shape": "poly",
+    "radiusM": 5.6,
+    "sides": 8,
+    "rotDeg": 0.0,
+    "wallHeightM": 1.0,
+    "thicknessM": 0.5,
+    "surface": "white_tile",
+    "dustColor": "#e6e1d6",
+    "note": "CONTRACT 35.11: octagon, radiusM = apothem (centre -> each side's inner tile face); side k's outward normal at k*45 deg (side 0 faces the start camera, +Z); corners at 22.5 + k*45 deg (stainless posts). Tile face 0.25-0.94 m, red band 0.62-0.80 m, cap 1.0 m."
+  },
+  "spawnAxisDeg": 90.0,
+  "cameraSideDeg": 0.0,
+  "cameraMaxM": 9.5,
   "spawn": {
     "distanceM": 2.4,
     "p1": [
       -1.2,
       0.0,
-      0.0
+      -0.0
     ],
     "p2": [
       1.2,
@@ -90,24 +105,25 @@
   },
   "camera": {
     "vFovDeg": 35.0,
-    "heightM": 1.25,
+    "heightM": 1.35,
     "lookAtY": 1.0,
     "distanceM": [
-      4.36,
-      7.6
+      4.4,
+      9.5
     ],
     "pitchDeg": [
-      -2.0,
+      -4.0,
       -4.0
     ],
+    "orbit": true,
     "wallClampX": 8.0,
-    "note": "FIGHTING_DESIGN 7b. Camera x is clamped so the splat wall sits at the screen edge on the fight line: |camX| <= wallClampX - distance * tan(hFov/2). Proof renders: _harness/_reports/stages/butcher_block_*.png",
+    "note": "CONTRACT 35.7 orbit camera (eye y 1.35, look-at y 1.0, dist 4.4..9.5 from the pair midpoint). wallClampX = legacy 2.5D. Proof renders: _harness/_reports/stages/butcher_block_<shot>.png, orbit sheet butcher_block_orbit_sheet.png",
     "proofShots": [
       {
         "id": "near_center",
         "pos": [
           0.0,
-          1.25,
+          1.35,
           4.4
         ],
         "look": [
@@ -120,37 +136,11 @@
         "id": "far_center",
         "pos": [
           0.0,
-          1.25,
-          7.6
+          1.35,
+          8.0
         ],
         "look": [
           0.0,
-          1.0,
-          0.0
-        ]
-      },
-      {
-        "id": "near_corner_r",
-        "pos": [
-          5.53,
-          1.25,
-          4.4
-        ],
-        "look": [
-          5.53,
-          1.0,
-          0.0
-        ]
-      },
-      {
-        "id": "far_corner_l",
-        "pos": [
-          -3.74,
-          1.25,
-          7.6
-        ],
-        "look": [
-          -3.74,
           1.0,
           0.0
         ]
@@ -159,8 +149,8 @@
         "id": "far_center_phone",
         "pos": [
           0.0,
-          1.25,
-          6.22
+          1.35,
+          6.6
         ],
         "look": [
           0.0,
@@ -168,6 +158,214 @@
           0.0
         ],
         "aspect": 2.1667
+      },
+      {
+        "id": "orbit_000_n",
+        "pos": [
+          0.0,
+          1.35,
+          4.4
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_000_f",
+        "pos": [
+          0.0,
+          1.35,
+          8.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_045_n",
+        "pos": [
+          3.111,
+          1.35,
+          3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_045_f",
+        "pos": [
+          5.657,
+          1.35,
+          5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_090_n",
+        "pos": [
+          4.4,
+          1.35,
+          0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_090_f",
+        "pos": [
+          8.0,
+          1.35,
+          0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_135_n",
+        "pos": [
+          3.111,
+          1.35,
+          -3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_135_f",
+        "pos": [
+          5.657,
+          1.35,
+          -5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_180_n",
+        "pos": [
+          0.0,
+          1.35,
+          -4.4
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_180_f",
+        "pos": [
+          0.0,
+          1.35,
+          -8.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_225_n",
+        "pos": [
+          -3.111,
+          1.35,
+          -3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_225_f",
+        "pos": [
+          -5.657,
+          1.35,
+          -5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_270_n",
+        "pos": [
+          -4.4,
+          1.35,
+          -0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_270_f",
+        "pos": [
+          -8.0,
+          1.35,
+          -0.0
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_315_n",
+        "pos": [
+          -3.111,
+          1.35,
+          3.111
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "orbit_315_f",
+        "pos": [
+          -5.657,
+          1.35,
+          5.657
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
       }
     ]
   },
@@ -190,11 +388,11 @@
       "id": "key",
       "type": "directional",
       "color": "#fff0de",
-      "intensity": 2.5,
+      "intensity": 2.4,
       "position": [
-        -4.0,
-        10.0,
-        8.0
+        -3.078,
+        14.0,
+        -8.457
       ],
       "target": [
         0.0,
@@ -207,12 +405,12 @@
         "bias": -0.0004,
         "normalBias": 0.03,
         "camera": {
-          "left": -10.0,
-          "right": 10.0,
-          "top": 7.0,
-          "bottom": -4.0,
+          "left": -9.0,
+          "right": 9.0,
+          "top": 9.0,
+          "bottom": -9.0,
           "near": 1.0,
-          "far": 30.0
+          "far": 40.0
         }
       }
     },
@@ -220,11 +418,11 @@
       "id": "rim",
       "type": "directional",
       "color": "#a6d2ff",
-      "intensity": 1.7,
+      "intensity": 1.5,
       "position": [
-        5.0,
+        3.42,
         7.0,
-        -10.0
+        9.397
       ],
       "target": [
         0.0,
@@ -241,37 +439,60 @@
       "intensity": 0.85
     },
     {
-      "id": "stove_l",
-      "type": "point",
-      "color": "#ff9440",
-      "intensity": 3.2,
-      "distance": 4.5,
+      "id": "spot_60",
+      "type": "spot",
+      "color": "#fff4ea",
+      "intensity": 110.0,
+      "distance": 26.0,
       "decay": 2,
       "position": [
-        -5.5,
-        1.35,
-        -3.3
+        9.959,
+        8.0,
+        5.75
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "angleDeg": 27.0,
+      "penumbra": 0.55
+    },
+    {
+      "id": "spot_300",
+      "type": "spot",
+      "color": "#fff4ea",
+      "intensity": 110.0,
+      "distance": 26.0,
+      "decay": 2,
+      "position": [
+        -9.959,
+        8.0,
+        5.75
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "angleDeg": 27.0,
+      "penumbra": 0.55
+    },
+    {
+      "id": "stove",
+      "type": "point",
+      "color": "#ff9440",
+      "intensity": 4.0,
+      "distance": 6.0,
+      "decay": 2,
+      "position": [
+        0.0,
+        1.4,
+        -10.0
       ],
       "flicker": {
         "amp": 0.25,
         "hz": 9.0
-      }
-    },
-    {
-      "id": "stove_r",
-      "type": "point",
-      "color": "#ff9440",
-      "intensity": 3.2,
-      "distance": 4.5,
-      "decay": 2,
-      "position": [
-        5.5,
-        1.35,
-        -3.3
-      ],
-      "flicker": {
-        "amp": 0.25,
-        "hz": 8.1
       }
     },
     {
@@ -282,9 +503,9 @@
       "distance": 6.0,
       "decay": 2,
       "position": [
-        9.3,
+        11.5,
         2.0,
-        -1.3
+        0.0
       ],
       "flicker": {
         "amp": 0.04,
@@ -292,27 +513,20 @@
       }
     },
     {
-      "id": "sign_wash",
-      "type": "spot",
-      "color": "#fff4ea",
-      "intensity": 110.0,
-      "distance": 26.0,
+      "id": "freezer",
+      "type": "point",
+      "color": "#a8dcff",
+      "intensity": 3.0,
+      "distance": 5.0,
       "decay": 2,
       "position": [
-        0.0,
-        9.5,
-        -5.0
-      ],
-      "target": [
-        0.0,
-        4.4,
-        -12.4
-      ],
-      "angleDeg": 34.0,
-      "penumbra": 0.6
+        -9.5,
+        2.6,
+        0.0
+      ]
     }
   ],
-  "lightsNote": "FIXED pool: created once at stage load, never added/removed (shader programs stay warm). No lights are embedded in the GLB. Flicker = view-only intensity modulation.",
+  "lightsNote": "FIXED pool (8): created once at stage load, never added/removed (shader programs stay warm). No lights in the GLB. 360 rig (CONTRACT 35.6): high key from the kitchen side + cool rim from the opposite side + hemisphere fill + two riser spots (60 / 300 deg) aimed at the ring centre + practical stove / locker / freezer glows; flicker = view-only intensity modulation.",
   "crowd": {
     "atlas": "crowd_atlas.webp",
     "meta": "crowd_atlas.json",
@@ -339,39 +553,163 @@
         "jeer"
       ]
     },
-    "nodes": "GLB empties crowd_<bay>_<row>_<i>: position = feet point, +Z = card facing, uniform scale = card height; extras {bay,row,i,rand,angle}. Generated from the bays below (rows run along world X; x step = spacing, jitter = [x,z] half-ranges from mulberry32(seed); card yaw = faceYawDeg about +Y).",
+    "nodes": "GLB empties crowd_<bay>_<row>_<i>: position = feet point, +Z = card facing (the ring centre), uniform scale = card height; extras {bay,row,i,rand,angle}. Generated from the ARC bays below (CONTRACT 35.11.6: rows along circles r about the ring centre, spacing along the arc, jitter = [tangential, radial] half-ranges from mulberry32(seed)).",
     "bays": [
       {
-        "id": "risers",
-        "x": [
-          -13.6,
-          13.6
+        "id": "risers_a",
+        "arcDeg": [
+          212.0,
+          250.0
         ],
         "spacing": 0.62,
         "jitter": [
-          0.14,
+          0.12,
           0.08
         ],
-        "faceYawDeg": 0.0,
+        "seed": 2301,
         "rows": [
           {
-            "z": -4.6,
+            "r": 10.3,
             "y": 0.3
           },
           {
-            "z": -5.4,
-            "y": 0.6
+            "r": 11.1,
+            "y": 0.7
           },
           {
-            "z": -6.2,
-            "y": 0.9
+            "r": 11.9,
+            "y": 1.1
           },
           {
-            "z": -7.0,
-            "y": 1.2
+            "r": 12.7,
+            "y": 1.5
+          },
+          {
+            "r": 13.5,
+            "y": 1.9
+          },
+          {
+            "r": 14.3,
+            "y": 2.3
           }
+        ]
+      },
+      {
+        "id": "risers_b",
+        "arcDeg": [
+          290.0,
+          356.0
         ],
-        "seed": 2301
+        "spacing": 0.62,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 2302,
+        "rows": [
+          {
+            "r": 10.3,
+            "y": 0.3
+          },
+          {
+            "r": 11.1,
+            "y": 0.7
+          },
+          {
+            "r": 11.9,
+            "y": 1.1
+          },
+          {
+            "r": 12.7,
+            "y": 1.5
+          },
+          {
+            "r": 13.5,
+            "y": 1.9
+          },
+          {
+            "r": 14.3,
+            "y": 2.3
+          }
+        ]
+      },
+      {
+        "id": "risers_c",
+        "arcDeg": [
+          4.0,
+          70.0
+        ],
+        "spacing": 0.62,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 2303,
+        "rows": [
+          {
+            "r": 10.3,
+            "y": 0.3
+          },
+          {
+            "r": 11.1,
+            "y": 0.7
+          },
+          {
+            "r": 11.9,
+            "y": 1.1
+          },
+          {
+            "r": 12.7,
+            "y": 1.5
+          },
+          {
+            "r": 13.5,
+            "y": 1.9
+          },
+          {
+            "r": 14.3,
+            "y": 2.3
+          }
+        ]
+      },
+      {
+        "id": "risers_d",
+        "arcDeg": [
+          110.0,
+          148.0
+        ],
+        "spacing": 0.62,
+        "jitter": [
+          0.12,
+          0.08
+        ],
+        "seed": 2304,
+        "rows": [
+          {
+            "r": 10.3,
+            "y": 0.3
+          },
+          {
+            "r": 11.1,
+            "y": 0.7
+          },
+          {
+            "r": 11.9,
+            "y": 1.1
+          },
+          {
+            "r": 12.7,
+            "y": 1.5
+          },
+          {
+            "r": 13.5,
+            "y": 1.9
+          },
+          {
+            "r": 14.3,
+            "y": 2.3
+          }
+        ]
       }
     ]
   },
@@ -384,7 +722,7 @@
       {
         "what": "gas burner flames",
         "nodes": "flame_range_l, flame_range_r",
-        "how": "view-side flame_* scale.y flicker about each range's burner level (node origin), synced with the stove_l / stove_r light flicker"
+        "how": "view-side flame_* scale.y flicker about each range's burner level (node origin), synced with the stove light flicker"
       },
       {
         "what": "show-sign bulbs",
@@ -399,12 +737,12 @@
     "splatWallDust": "#e6e1d6"
   },
   "build": {
-    "bytes": 2438240,
+    "bytes": 2903408,
     "draws": 28,
-    "triangles": 99126,
+    "triangles": 127334,
     "materials": 26,
     "textures": 44,
-    "crowdNodes": 176,
+    "crowdNodes": 439,
     "lights": 0,
     "extensions": [
       "EXT_meshopt_compression",
@@ -412,6 +750,16 @@
       "KHR_materials_emissive_strength",
       "KHR_mesh_quantization"
     ],
-    "envBytes": 416472
+    "envBytes": 416472,
+    "clearance": {
+      "bandY": [
+        1.3,
+        3.0
+      ],
+      "minRadiusM": 10.012,
+      "nearest": "fz_port_bolt_2",
+      "cameraMaxM": 9.5,
+      "ok": true
+    }
   }
 }

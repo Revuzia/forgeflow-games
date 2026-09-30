@@ -15,7 +15,7 @@ def build():
         cpu={"style": "bigbody", "rangeM": [1.2, 2.2], "pokes": ["5M", "2M"], "antiAir": ["2H"],
              "punish": ["5H", "meat_hook_h"], "combo": ["2L", "5M", "meat_hook_m"],
              "armor": ["5H", "meat_hook_m", "chefs_special"], "approach": ["butcher_block_m", "cleaver_drop_l"],
-             "meter": "chefs_special"},
+             "meter": "chefs_special", "antiStep": ["2M", "ham_slam_l"]},
         doc=dict(
             difficulty=1, packs="Pro_Melee_Axe (cleaver in the axe grip: swings, chops, leap slam, taunts)",
             look="Ch05: bald, half the face painted white, scalp stitches, leather harness, fur pauldrons, "
@@ -30,6 +30,16 @@ def build():
             weakness="Big hurtbox, slow buttons, weak anti-air (2H only, no DP); armor loses to throws and "
                      "multi-hits; HAM SLAM is -13 to -17 on block.",
             rivalry="Johnny wants his marquee name back; Boneyard wants Johnny on the menu.",
+            # CHANGED(FIGHTERS3D): 3D ring play (CONTRACT 35.12)
+            ring=dict(
+                stepping="CLEAVER DROP is a LINEAR leap (20-28f): step it and punish the landing. He does not out-step "
+                         "anyone - he makes stepping expensive; BUTCHER'S BLOCK walks straight in along the line, so vs a "
+                         "circling opponent he plants and swings instead of chasing.",
+                homing="MEAT HOOK's two armored cleaver swings home through all 11 active frames (0.60 m deep): stepping "
+                       "his slow startup gets hooked, and it wall-splats. 2M LOW CLEAVER (10f homing low, 0.40 m, -2) is "
+                       "the anti-step poke; HAM SLAM's spin homes and launches; CHEF'S SPECIAL and SUNDAY ROAST home.",
+                wall="MEAT HOOK and CHEF'S SPECIAL wall-splat: he walks them to the ring boundary behind armor and hooks "
+                     "them into it; at the wall the 6H TENDERIZER overhead vs HAM SLAM low guess is his damage."),
         ),
     )
 
@@ -96,7 +106,9 @@ def build():
     K.add("5M", "M", name="Snap Kick", clip="snap_kick", startup=9, recovery=17, cancel=["special", "super"],
           role=["poke"], desc="Front snap kick.", why="Big body: 9/3/17 (+2/-4).")
     K.add("2M", "2M", name="Low Cleaver", clip="low_cleaver", startup=10, damage=700, cancel=["special", "super"],
-          role=["poke", "low"], desc="Crouching cleaver swing (low); cancel into MEAT HOOK.",
+          role=["poke", "low", "antistep"], homing=True, lateralM=0.40,
+          why3d="crouching cleaver swing: homing anti-step low, 0.40 m deep",
+          desc="Crouching cleaver swing (low); homing; cancel into MEAT HOOK.",
           why="Cleaver weight: startup 10 for 700 damage.")
     K.add("5H", "H", name="Cleaver Swing", clip="cleaver_swing", startup=14, recovery=21, damage=1000,
           armor={"hits": 1, "f": [5, 13]}, cancel=["special", "super"], sfx=[[9, "whoosh_heavy"]],
@@ -142,8 +154,10 @@ def build():
     K.special("meat_hook", None, motion="236",
               common=dict(name="Meat Hook", clip="meat_hook_swing", active=11, recovery=24, hitstun=56, blockstun=20,
                           hitstop=15, guard="HL", gain=1000, nerve=5000, pb=(0.0, 0.50), kd="soft", wallSplat=True,
-                          cancel=["super"], role=["wallsplat"], sfx=[[2, "whoosh_heavy"]],
-                          desc="Slow armored two-swing heavy; wall-splats in the corner.",
+                          cancel=["super"], role=["wallsplat"], sfx=[[2, "whoosh_heavy"]], homing=True,
+                          why3d="two wide cleaver swings: homing through all active frames (a step into the slow startup "
+                                "is hooked)",
+                          desc="Slow armored two-swing heavy; homing; wall-splats in the corner.",
                           why="FIGHTING_DESIGN 8c MEAT HOOK (slow 2-hit armored heavy, 22f, wall splat): L 18 / "
                               "M 22 / H 26 startup with armor through startup (H 2 hits), -6 on block, KD +30."),
               per=hook,
@@ -155,7 +169,9 @@ def build():
     K.special("cleaver_drop", None, motion="214",
               common=dict(name="Cleaver Drop", clip="cleaver_leap", active=3, blockstun=20, hitstop=15, guard="H",
                           gain=1000, nerve=4000, pb=(0.30, 0.40), cancel=["super"], role=["overhead", "approach"],
-                          sfx=[[6, "whoosh_heavy"]], desc="Leaping overhead cleaver smash (hops over lows).",
+                          sfx=[[6, "whoosh_heavy"]], linear=True,
+                          why3d="a 1-2.6 m leap along its frame-1 line: linear",
+                          desc="Leaping overhead cleaver smash (hops over lows).",
                           why="FIGHTING_DESIGN 8c CHOP (overhead 20f, +2) as a leap: 20/24/28 startup, +1/-1/-3 "
                               "on block, H knocks down."),
               per={"l": dict(startup=20, recovery=16, damage=900, hitstun=23, move=[[0, 0], [20, 1.0]],
@@ -174,7 +190,8 @@ def build():
               common=dict(name="Ham Slam", clip="ham_spin", active=3, blockstun=18, hitstop=15, guard="L",
                           gain=1000, nerve=4000, pb=(0.0, 0.45), kd="soft", groundBounce=True, launch=[0.5, 4.0],
                           juggle={"js": 1, "ji": 1, "jl": 4}, cancel=["super"], role=["low", "launcher"],
-                          sfx=[[4, "whoosh_heavy"]], desc="Spinning low cleaver swing that bounces them for a juggle.",
+                          sfx=[[4, "whoosh_heavy"]], homing=True, why3d="spinning low swing: homing, 0.60 m deep",
+                          desc="Spinning low cleaver swing that bounces them for a juggle.",
                           why="FIGHTING_DESIGN 8c HAM SLAM (ground bounce launcher): low, 14/16/18, -13/-15/-17."),
               per={"l": dict(startup=14, recovery=28, damage=900, hitstun=60),
                    "m": dict(startup=16, recovery=30, damage=1000, hitstun=62),

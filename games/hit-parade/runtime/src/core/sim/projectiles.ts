@@ -6,6 +6,11 @@
 // ball is out, integer physics - kicked flight, wall rebound, keepy-uppy hover, loose fall, rest, pickup, knock-away,
 // respawn; its state is mirrored into the owner's unique[0..3]) and the HECKLER TOSS objects (kind 2, owner 2; moved by
 // brawl.ts). Per-instance gravity / mode / aux live in the slot (P.g, P.mode, P.aux, P.ground).
+//
+// CHANGED(SIM3D) (CONTRACT §35.4): projectiles travel in the ground plane (P.x / P.z, P.vx / P.vz, travel yaw P.yaw):
+// launched along the thrower's yaw (`projectile.aimed` = toward the opponent at spawn), hit box = forward +- w/2,
+// lateral +- lateralM in the travel frame (a sidestep dodges a straight one), despawn at the ring wall / life end /
+// the screen range; Gazza's ball rebounds off the ring boundary by vector reflection about the wall's inward normal.
 
 import { BALL, F, FL, P, PROJ_CAP, PROJ_INTS, ST, projBase } from './layout.ts';
 import { EV, BALL_EV, EVX } from './events.ts';
@@ -13,7 +18,11 @@ import { BACT, UK } from './compile.ts';
 import type { CMove } from './compile.ts';
 import { emit, fb } from './state.ts';
 import type { Match } from './state.ts';
-import { hitRect, rectsOverlap } from './boxes.ts';
+import { moveBoxHits } from './boxes.ts';
+import { Q, alongYaw, cosQ, dirToYaw, divRound, isqrt, sinQ } from './fx3d.ts';
+
+const AY = new Int32Array(2);
+import { ringClamp, ringGap, ringNormal } from './ring.ts';
 
 export const PK = { PROJ: 0, BALL: 1, HECKLE: 2 } as const;
 
@@ -29,13 +38,25 @@ export function spawnProjectile(m: Match, i: number, mv: CMove): number {
   for (let k = 0; k < PROJ_CAP; k++) {
     const pb = projBase(k);
     if (s[pb + P.act] !== 0) continue;
-    const fc = s[b + F.facing];
+    // CHANGED(SIM3D): along the thrower's yaw, or aimed at the opponent's position at spawn
+    let yaw = s[b + F.yaw];
+    if (pj.aimed && (i === 0 || i === 1)) {
+      const bo = fb(1 - i);
+      const dx = s[bo + F.x] - s[b + F.x];
+      const dz = s[bo + F.z] - s[b + F.z];
+      if (dx !== 0 || dz !== 0) yaw = dirToYaw(dx, dz);
+    }
     s[pb + P.act] = 1;
     s[pb + P.owner] = i;
     s[pb + P.mv] = mv.idx;
-    s[pb + P.x] = s[b + F.x] + fc * pj.x;
+    alongYaw(pj.x, yaw, AY);
+    s[pb + P.x] = s[b + F.x] + AY[0];
+    s[pb + P.z] = s[b + F.z] + AY[1];
     s[pb + P.y] = s[b + F.y] + pj.y;
-    s[pb + P.vx] = fc * pj.vx;
+    alongYaw(pj.vx, yaw, AY);
+    s[pb + P.vx] = AY[0];
+    s[pb + P.vz] = AY[1];
+    s[pb + P.yaw] = yaw;
     s[pb + P.life] = pj.life;
     s[pb + P.hits] = pj.hits;
     s[pb + P.w] = pj.w;
@@ -102,8 +123,13 @@ export function ballReady(m: Match, i: number, mv: CMove): boolean {
   const k = ballSlot(m, i);
   if (k < 0) return false;
   const u = m.cf[i].u;
-  const dxF = (s[projBase(k) + P.x] - s[b + F.x]) * s[b + F.facing];
-  return dxF >= -u.kickBack && dxF <= u.kickRange;
+  // CHANGED(SIM3D): in front along his yaw (-kickBack .. kickRange) and within kickRange / 2 sideways
+  const rx = s[projBase(k) + P.x] - s[b + F.x];
+  const rz = s[projBase(k) + P.z] - s[b + F.z];
+  const yaw = s[b + F.yaw];
+  const dxF = divRound(rx * sinQ(yaw) + rz * cosQ(yaw), Q);
+  const lat = divRound(rz * sinQ(yaw) - rx * cosQ(yaw), Q);
+  return dxF >= -u.kickBack && dxF <= u.kickRange && lat <= u.kickRange >> 1 && lat >= -(u.kickRange >> 1);
 }
 
 /** A ball move's launch frame (mv.startup): kick / flick the ball, or re-kick it from where it is. */
@@ -116,7 +142,7 @@ export function ballLaunch(m: Match, i: number, mv: CMove): void {
   const s = m.s;
   const b = fb(i);
   const u = m.cf[i].u;
-  const fc = s[b + F.facing];
+  const yaw = s[b + F.yaw];
   let k = -1;
   if (s[b + F.uniq] === BALL.FEET) {
     k = spawnProjectile(m, i, mv);
@@ -142,9 +168,13 @@ export function ballLaunch(m: Match, i: number, mv: CMove): void {
   s[pb + P.aux] = u.bounces;
   if (mv.ballAct === BACT.HOVER) {
     // keepy-uppy: parked in the air above his toe at the move's height
-    s[pb + P.x] = s[b + F.x] + fc * pj.x;
+    alongYaw(pj.x, yaw, AY);
+    s[pb + P.x] = s[b + F.x] + AY[0];
+    s[pb + P.z] = s[b + F.z] + AY[1];
     s[pb + P.y] = pj.y;
     s[pb + P.vx] = 0;
+    s[pb + P.vz] = 0;
+    s[pb + P.yaw] = yaw;
     s[pb + P.vy] = 0;
     s[pb + P.g] = 0;
     s[pb + P.ground] = 0;
@@ -155,7 +185,10 @@ export function ballLaunch(m: Match, i: number, mv: CMove): void {
     const floor = pj.h >> 1;
     if (pj.ground) s[pb + P.y] = floor;
     else if (s[pb + P.y] < floor) s[pb + P.y] = floor;
-    s[pb + P.vx] = fc * pj.vx;
+    alongYaw(pj.vx, yaw, AY);
+    s[pb + P.vx] = AY[0];
+    s[pb + P.vz] = AY[1];
+    s[pb + P.yaw] = yaw;
     s[pb + P.vy] = pj.vy;
     s[pb + P.g] = pj.g;
     s[pb + P.ground] = pj.ground ? 1 : 0;
@@ -178,6 +211,7 @@ export function ballLoose(m: Match, k: number, deflect: boolean): void {
   const u = m.cf[o].u;
   if (deflect) {
     s[pb + P.vx] = Math.trunc((s[pb + P.vx] * u.deflectVxPct) / 100);
+    s[pb + P.vz] = Math.trunc((s[pb + P.vz] * u.deflectVxPct) / 100);
     s[pb + P.vy] = u.deflectVy;
   }
   s[pb + P.hits] = 0;
@@ -194,6 +228,7 @@ function ballRest(m: Match, k: number): void {
   const o = s[pb + P.owner];
   s[pb + P.y] = s[pb + P.h] >> 1;
   s[pb + P.vx] = 0;
+  s[pb + P.vz] = 0;
   s[pb + P.vy] = 0;
   s[pb + P.hits] = 0;
   s[pb + P.mode] = BALL.REST;
@@ -209,10 +244,11 @@ function ballTick(m: Match, k: number): void {
   const o = s[pb + P.owner];
   const mode = s[pb + P.mode];
   const floor = s[pb + P.h] >> 1;
-  const xr = m.sys.wall - (s[pb + P.w] >> 1);
+  const rad = s[pb + P.w] >> 1;
   if (s[pb + P.hitCd] > 0) s[pb + P.hitCd]--;
   if (mode === BALL.FLYING) {
     s[pb + P.x] += s[pb + P.vx];
+    s[pb + P.z] += s[pb + P.vz];
     if (s[pb + P.g] !== 0 || s[pb + P.vy] !== 0) {
       s[pb + P.y] += s[pb + P.vy];
       s[pb + P.vy] -= s[pb + P.g];
@@ -227,17 +263,14 @@ function ballTick(m: Match, k: number): void {
         }
       }
     }
-    const x = s[pb + P.x];
-    if (x > xr || x < -xr) {
-      const side = x > xr ? 1 : -1;
+    if (ringGap(m.ring, s[pb + P.x], s[pb + P.z], rad) < 0) {
+      // CHANGED(SIM3D) (CONTRACT §35.4): off the ring wall - vector reflection about the inward normal, x wallRest %
+      clampBall(m, pb, rad);
       if (s[pb + P.aux] > 0) {
-        s[pb + P.x] = side * xr - (x - side * xr);
-        const r = ballOwnerOk(m, o) ? m.cf[o].u.wallRest : 70;
-        s[pb + P.vx] = -Math.trunc((s[pb + P.vx] * r) / 100);
+        reflectBall(m, pb, ballOwnerOk(m, o) ? m.cf[o].u.wallRest : 70);
         s[pb + P.aux]--;
         emit(m, EVX.BALL, o, BALL_EV.REBOUND, cm(s[pb + P.x]), cm(s[pb + P.y]));
       } else {
-        s[pb + P.x] = side * xr;
         ballLoose(m, k, true);
         return;
       }
@@ -252,15 +285,14 @@ function ballTick(m: Match, k: number): void {
   if (mode === BALL.LOOSE) {
     const fr = ballOwnerOk(m, o) ? m.cf[o].u.looseFriction : 94;
     s[pb + P.x] += s[pb + P.vx];
+    s[pb + P.z] += s[pb + P.vz];
     s[pb + P.vx] = Math.trunc((s[pb + P.vx] * fr) / 100);
+    s[pb + P.vz] = Math.trunc((s[pb + P.vz] * fr) / 100);
     s[pb + P.y] += s[pb + P.vy];
     s[pb + P.vy] -= s[pb + P.g];
-    if (s[pb + P.x] > xr) {
-      s[pb + P.x] = xr;
-      s[pb + P.vx] = -(s[pb + P.vx] >> 1);
-    } else if (s[pb + P.x] < -xr) {
-      s[pb + P.x] = -xr;
-      s[pb + P.vx] = -Math.trunc(s[pb + P.vx] / 2);
+    if (ringGap(m.ring, s[pb + P.x], s[pb + P.z], rad) < 0) {
+      clampBall(m, pb, rad);
+      reflectBall(m, pb, 50);
     }
     if (s[pb + P.y] <= floor && s[pb + P.vy] <= 0) ballRest(m, k);
     return;
@@ -274,8 +306,35 @@ function ballTick(m: Match, k: number): void {
   }
 }
 
-const BR4 = new Int32Array(4);
-const HR4 = new Int32Array(4);
+const BCY = new Int32Array(5);
+const BCL = new Int32Array(2);
+const BN = new Int32Array(2);
+
+/** CHANGED(SIM3D): keep the ball (circle radius rad) inside the ring. */
+function clampBall(m: Match, pb: number, rad: number): void {
+  const s = m.s;
+  ringClamp(m.ring, s[pb + P.x], s[pb + P.z], rad, BCL);
+  s[pb + P.x] = BCL[0];
+  s[pb + P.z] = BCL[1];
+}
+
+/**
+ * CHANGED(SIM3D): v' = (v - 2 (v . n) n) x pct / 100 with n = the wall's inward normal at the ball (only when moving into
+ * the wall); the travel yaw follows.
+ */
+function reflectBall(m: Match, pb: number, pct: number): void {
+  const s = m.s;
+  ringNormal(m.ring, s[pb + P.x], s[pb + P.z], BN);
+  const vx = s[pb + P.vx];
+  const vz = s[pb + P.vz];
+  const vn = divRound(vx * BN[0] + vz * BN[1], Q); // < 0 = into the wall (n points inward)
+  if (vn >= 0) return;
+  const rx = vx - divRound(2 * vn * BN[0], Q);
+  const rz = vz - divRound(2 * vn * BN[1], Q);
+  s[pb + P.vx] = Math.trunc((rx * pct) / 100);
+  s[pb + P.vz] = Math.trunc((rz * pct) / 100);
+  if (s[pb + P.vx] !== 0 || s[pb + P.vz] !== 0) s[pb + P.yaw] = dirToYaw(s[pb + P.vx], s[pb + P.vz]);
+}
 
 /**
  * Per-frame ball upkeep after hits (CONTRACT §28.2): an opponent strike box touching the ball knocks it away; a resting
@@ -297,16 +356,15 @@ export function ballPost(m: Match): void {
         const mv = m.cf[o].moves[s[bo + F.mv]];
         if (mv.isStrike) {
           const f = s[bo + F.mvF];
-          const w2 = s[pb + P.w] >> 1;
-          const h2 = s[pb + P.h] >> 1;
-          BR4[0] = s[pb + P.x] - w2;
-          BR4[1] = s[pb + P.x] + w2;
-          BR4[2] = s[pb + P.y] - h2;
-          BR4[3] = s[pb + P.y] + h2;
+          // CHANGED(SIM3D): the ball as a small cylinder vs the attacker-local strike boxes
+          BCY[0] = s[pb + P.x];
+          BCY[1] = s[pb + P.z];
+          BCY[2] = s[pb + P.w] >> 1;
+          BCY[3] = s[pb + P.y] - (s[pb + P.h] >> 1);
+          BCY[4] = s[pb + P.y] + (s[pb + P.h] >> 1);
           for (let j = 0; j < mv.nBox; j++) {
             if (f < mv.boxes[j * 7] || f > mv.boxes[j * 7 + 1]) continue;
-            hitRect(m, o, mv, j, HR4, 0);
-            if (!rectsOverlap(HR4, 0, BR4, 0)) continue;
+            if (moveBoxHits(m, o, mv, j, BCY, 1) < 0) continue;
             emit(m, EVX.BALL, i, BALL_EV.KNOCKED, cm(s[pb + P.x]), cm(s[pb + P.y]));
             freeProjectile(m, k);
             s[b + F.uniq] = BALL.GONE;
@@ -321,7 +379,9 @@ export function ballPost(m: Match): void {
       const pb = projBase(k2);
       const st = s[b + F.st];
       const free = st === ST.IDLE || st === ST.WALK_F || st === ST.WALK_B || st === ST.CROUCH;
-      if (s[pb + P.mode] === BALL.REST && free && (s[b + F.flags] & FL.AIRBORNE) === 0 && Math.abs(s[pb + P.x] - s[b + F.x]) <= m.cf[i].u.pickup) {
+      const pdx = s[pb + P.x] - s[b + F.x];
+      const pdz = s[pb + P.z] - s[b + F.z];
+      if (s[pb + P.mode] === BALL.REST && free && (s[b + F.flags] & FL.AIRBORNE) === 0 && isqrt(pdx * pdx + pdz * pdz) <= m.cf[i].u.pickup) {
         emit(m, EVX.BALL, i, BALL_EV.PICKUP, cm(s[pb + P.x]), 0);
         freeProjectile(m, k2);
         s[b + F.uniq] = BALL.FEET;
@@ -355,9 +415,10 @@ export function projectilesTick(m: Match): void {
   const b0 = fb(0);
   const b1 = fb(1);
   // CHANGED(SIM) P2: in bonus rounds fighter 1 is absent - the screen follows the player
-  const mid = s[b1 + F.st] === ST.ABSENT ? s[b0 + F.x] : (s[b0 + F.x] + s[b1 + F.x]) >> 1;
+  const absent = s[b1 + F.st] === ST.ABSENT;
+  const midX = absent ? s[b0 + F.x] : (s[b0 + F.x] + s[b1 + F.x]) >> 1;
+  const midZ = absent ? s[b0 + F.z] : (s[b0 + F.z] + s[b1 + F.z]) >> 1;
   const half = m.sys.projScreenHalf;
-  const wall = m.sys.wall;
   for (let k = 0; k < PROJ_CAP; k++) {
     const pb = projBase(k);
     if (s[pb + P.act] === 0) continue;
@@ -370,6 +431,7 @@ export function projectilesTick(m: Match): void {
       continue;
     }
     s[pb + P.x] += s[pb + P.vx];
+    s[pb + P.z] += s[pb + P.vz];
     if (s[pb + P.g] !== 0 || s[pb + P.vy] !== 0) {
       s[pb + P.y] += s[pb + P.vy];
       s[pb + P.vy] -= s[pb + P.g];
@@ -385,8 +447,10 @@ export function projectilesTick(m: Match): void {
       }
     }
     if (s[pb + P.hitCd] > 0) s[pb + P.hitCd]--;
-    const x = s[pb + P.x];
-    if (--s[pb + P.life] <= 0 || x > wall || x < -wall || x > mid + half || x < mid - half) freeProjectile(m, k);
+    // CHANGED(SIM3D): the ring wall (the projectile's centre past the boundary) and the screen range around the pair
+    const dx = s[pb + P.x] - midX;
+    const dz = s[pb + P.z] - midZ;
+    if (--s[pb + P.life] <= 0 || ringGap(m.ring, s[pb + P.x], s[pb + P.z], 0) < 0 || dx * dx + dz * dz > half * half) freeProjectile(m, k);
   }
   // clashes: opposing owners, overlapping boxes, both still dangerous; each loses one hit
   for (let a = 0; a < PROJ_CAP; a++) {
@@ -395,9 +459,12 @@ export function projectilesTick(m: Match): void {
     for (let c = a + 1; c < PROJ_CAP; c++) {
       const pc = projBase(c);
       if (s[pc + P.act] === 0 || s[pc + P.kind] === PK.HECKLE || s[pc + P.hits] <= 0 || s[pc + P.owner] === s[pa + P.owner]) continue;
-      const dx = Math.abs(s[pa + P.x] - s[pc + P.x]);
+      // CHANGED(SIM3D): planar circles (radius w / 2) + height overlap
+      const dx = s[pa + P.x] - s[pc + P.x];
+      const dz = s[pa + P.z] - s[pc + P.z];
       const dy = Math.abs(s[pa + P.y] - s[pc + P.y]);
-      if (dx * 2 >= s[pa + P.w] + s[pc + P.w] || dy * 2 >= s[pa + P.h] + s[pc + P.h]) continue;
+      const rr = (s[pa + P.w] + s[pc + P.w]) >> 1;
+      if (dx * dx + dz * dz >= rr * rr || dy * 2 >= s[pa + P.h] + s[pc + P.h]) continue;
       emit(m, EV.PROJ_CLASH, s[pa + P.owner], a, m.cf[s[pa + P.owner]].moves[s[pa + P.mv]].snapId, 0);
       emit(m, EV.PROJ_CLASH, s[pc + P.owner], c, m.cf[s[pc + P.owner]].moves[s[pc + P.mv]].snapId, 0);
       if (--s[pa + P.hits] <= 0) killProjectile(m, a);

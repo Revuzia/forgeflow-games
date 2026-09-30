@@ -68,6 +68,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 2, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "chop"},
       "sfx": [[3, "slap"]],
       "desc": "Wrestling chop.",
@@ -98,6 +100,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
+      "track": {"until": 2, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "low_straight"},
       "desc": "Crouching straight; the tick into WALK-IN FREEZER."
     },
@@ -125,6 +129,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 5, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "forearm"},
       "sfx": [[5, "whoosh_light"]],
       "desc": "Heavy straight forearm.",
@@ -155,6 +161,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
+      "track": {"until": 5, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "low_forearm"},
       "desc": "Crouching body forearm; cancel into FRIDGE DOOR.",
       "pushExt": [[0, 0.027], [3, 0.043], [6, 0.1], [10, 0.102], [16, 0.036], [27, 0.0]]
@@ -183,9 +191,12 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 15, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "haymaker"},
       "sfx": [[8, "whoosh_heavy"]],
-      "desc": "The reference's big haymaker.",
+      "desc": "The reference's big haymaker; homing.",
       "boxes": [{"f": [13, 15], "x": 0.893, "y": 1.294, "w": 0.5, "h": 0.387}],
       "boxSrc": "hitVolume"
     },
@@ -214,6 +225,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "boxes": [{"f": [10, 13], "x": 0.3, "y": 1.9, "w": 0.7, "h": 0.5}],
       "role": ["antiair"],
+      "track": {"until": 6, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "goalpost"},
       "desc": "Both arms swing up: anti-air."
     },
@@ -241,6 +254,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["wallsplat"],
+      "track": {"until": 11, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "big_boot"},
       "sfx": [[9, "whoosh_heavy"]],
       "desc": "Push kick; wall-splats a cornered opponent.",
@@ -271,6 +286,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 2, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "air_chop"},
       "desc": "Air chop."
     },
@@ -298,6 +315,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 3, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "air_forearm"},
       "desc": "Air forearm."
     },
@@ -325,6 +344,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 6, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "air_hammer"},
       "desc": "Double-fist jump-in."
     },
@@ -352,9 +373,11 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 8, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "fridge_drop"},
       "desc": "Body press straight down; covers the space under him.",
-      "pushExt": [[0, 0.0], [8, 0.07], [11, 0.0], [28, 0.0]]
+      "pushExt": [[0, 0.0], [10, 0.0], [12, 0.121], [13, 0.15], [28, 0.16]]
     },
     "throw_f": {
       "kind": "throw",
@@ -390,6 +413,7 @@
         "victim": [[0, "hit_body", 0.0, 0.25], [12, "hit_body", 0.25, 0.7], [36, "kd_fall_b", 1.04, 1.5]]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Crushes them in a bear hug."
     },
@@ -427,6 +451,7 @@
         "victim": [[0, "hit_high_s", 0.0, 0.2], [10, "thrown_b", 0.0, 0.4], [26, "thrown_b", 0.4, 1.2]]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Spins them round and flings them behind him."
     },
@@ -464,7 +489,9 @@
         "clip": "freezer_slam",
         "victim": [[0, "hit_body", 0.0, 0.3], [9, "thrown_f", 0.15, 0.7], [26, "thrown_f", 0.7, 1.3333]]
       },
-      "role": ["grab"],
+      "role": ["grab", "antistep"],
+      "track": {"until": 7, "rate": 20},
+      "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
       "desc": "360 command grab; L reaches furthest, H hits hardest."
@@ -503,7 +530,9 @@
         "clip": "freezer_slam",
         "victim": [[0, "hit_body", 0.0, 0.3], [9, "thrown_f", 0.15, 0.7], [26, "thrown_f", 0.7, 1.3333]]
       },
-      "role": ["grab"],
+      "role": ["grab", "antistep"],
+      "track": {"until": 7, "rate": 20},
+      "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
       "desc": "360 command grab; L reaches furthest, H hits hardest."
@@ -542,7 +571,9 @@
         "clip": "freezer_slam",
         "victim": [[0, "hit_body", 0.0, 0.3], [9, "thrown_f", 0.15, 0.7], [26, "thrown_f", 0.7, 1.3333]]
       },
-      "role": ["grab"],
+      "role": ["grab", "antistep"],
+      "track": {"until": 7, "rate": 20},
+      "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
       "desc": "360 command grab; L reaches furthest, H hits hardest."
@@ -581,7 +612,9 @@
         "clip": "freezer_slam",
         "victim": [[0, "hit_body", 0.0, 0.3], [10, "thrown_f", 0.15, 0.7], [28, "thrown_f", 0.7, 1.3333]]
       },
-      "role": ["grab"],
+      "role": ["grab", "antistep"],
+      "track": {"until": 7, "rate": 20},
+      "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
       "desc": "Strike-invulnerable 1-5 reversal grab with the longest reach."
@@ -610,6 +643,9 @@
       "invuln": {},
       "armor": {"hits": 1, "f": [3, 15]},
       "role": ["approach", "wallsplat"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "fridge_shove"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Armored running double-palm shove; wall-splats in the corner.",
@@ -640,6 +676,9 @@
       "invuln": {},
       "armor": {"hits": 1, "f": [3, 17]},
       "role": ["approach", "wallsplat"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "fridge_shove"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Armored running double-palm shove; wall-splats in the corner.",
@@ -670,6 +709,9 @@
       "invuln": {},
       "armor": {"hits": 1, "f": [3, 19]},
       "role": ["approach", "wallsplat"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "fridge_shove"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Armored running double-palm shove; wall-splats in the corner.",
@@ -700,6 +742,8 @@
       "invuln": {},
       "armor": {"hits": 2, "f": [1, 15]},
       "role": ["approach", "wallsplat"],
+      "track": {"until": 10, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "fridge_shove"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Two hits of armor, -4 on block.",
@@ -730,10 +774,13 @@
       "invuln": {"proj": [1, 24], "air": [1, 14]},
       "armor": {"hits": 0, "f": [0, 0]},
       "hits": [{"f": [8, 10], "damage": 500, "hitstop": 11}, {"f": [16, 18], "damage": 500, "hitstop": 13}],
-      "role": ["antiair", "reversal"],
+      "role": ["antiair", "reversal", "antistep"],
+      "track": {"until": 19, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "lariat_spin"},
       "sfx": [[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
-      "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable.",
+      "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable; homing.",
       "boxes": [
         {"f": [8, 10], "x": 0.848, "y": 1.273, "w": 0.3, "h": 0.346},
         {"f": [16, 18], "x": 0.8484, "y": 1.3215, "w": 0.3, "h": 0.25}
@@ -764,10 +811,13 @@
       "invuln": {"proj": [1, 24], "air": [1, 10]},
       "armor": {"hits": 0, "f": [0, 0]},
       "hits": [{"f": [9, 11], "damage": 550, "hitstop": 11}, {"f": [17, 19], "damage": 600, "hitstop": 13}],
-      "role": ["antiair", "reversal"],
+      "role": ["antiair", "reversal", "antistep"],
+      "track": {"until": 20, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "lariat_spin"},
       "sfx": [[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
-      "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable.",
+      "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable; homing.",
       "boxes": [
         {"f": [9, 11], "x": 0.848, "y": 1.286, "w": 0.4, "h": 0.371},
         {"f": [17, 19], "x": 0.8484, "y": 1.3215, "w": 0.4, "h": 0.3}
@@ -798,10 +848,13 @@
       "invuln": {"proj": [1, 24], "air": [1, 6]},
       "armor": {"hits": 0, "f": [0, 0]},
       "hits": [{"f": [10, 12], "damage": 600, "hitstop": 11}, {"f": [18, 20], "damage": 700, "hitstop": 13}],
-      "role": ["antiair", "reversal"],
+      "role": ["antiair", "reversal", "antistep"],
+      "track": {"until": 21, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "lariat_spin"},
       "sfx": [[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
-      "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable.",
+      "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable; homing.",
       "boxes": [
         {"f": [10, 12], "x": 0.848, "y": 1.298, "w": 0.5, "h": 0.396},
         {"f": [18, 20], "x": 0.8484, "y": 1.3215, "w": 0.5, "h": 0.35}
@@ -836,7 +889,10 @@
         {"f": [13, 15], "damage": 450, "hitstop": 11},
         {"f": [17, 19], "damage": 650, "hitstop": 15}
       ],
-      "role": ["antiair", "reversal"],
+      "role": ["antiair", "reversal", "antistep"],
+      "track": {"until": 19, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "lariat_spin"},
       "sfx": [[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
       "desc": "Fully invulnerable 3-hit lariat.",
@@ -871,6 +927,7 @@
       "invuln": {},
       "armor": {"hits": 1, "f": [3, 18]},
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "brace_step"},
       "desc": "Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT)."
     },
@@ -898,6 +955,7 @@
       "invuln": {},
       "armor": {"hits": 1, "f": [3, 18]},
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "brace_step"},
       "desc": "Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT)."
     },
@@ -925,6 +983,7 @@
       "invuln": {},
       "armor": {"hits": 1, "f": [3, 18]},
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "brace_step"},
       "desc": "Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT)."
     },
@@ -952,6 +1011,7 @@
       "invuln": {},
       "armor": {"hits": 2, "f": [1, 20]},
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "brace_step"},
       "desc": "Two hits of armor from frame 1."
     },
@@ -990,6 +1050,8 @@
         "victim": [[0, "hit_body", 0.0, 0.3], [11, "thrown_f", 0.25, 0.7], [28, "thrown_f", 0.7, 1.3333]]
       },
       "role": ["grab", "approach"],
+      "track": {"until": 17, "rate": 20},
+      "homing": true,
       "anim": {"clip": "storage_run"},
       "desc": "Running grab; unblockable, jump it."
     },
@@ -1156,6 +1218,8 @@
         "endGapM": 3.0
       },
       "role": ["grab"],
+      "track": {"until": 5, "rate": 20},
+      "homing": true,
       "anim": {"clip": "delivery_reach"},
       "desc": "PRIME TIME command grab: hugged, spun like a carousel, lifted overhead and hurled across the set."
     }
@@ -1195,7 +1259,8 @@
     "punish": ["walk_in_h", "5H"],
     "combo": ["2L", "5M", "fridge_door_m"],
     "grab": ["walk_in_l", "walk_in_h"],
-    "meter": "cold_storage"
+    "meter": "cold_storage",
+    "antiStep": ["lariat_l", "walk_in_l", "5H"]
   },
   "introLine": "Thirty flights of stairs, no elevator. You're lighter than a freezer.",
   "winQuotes": ["Signed, sealed, delivered. No returns.", "I've carried fridges with more fight in them.", "Tip your mover. Or don't. I'll take it anyway."],

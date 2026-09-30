@@ -3,7 +3,7 @@
 // physics every 4th frame, outro, ROUND_END), result decided on the KO frame, time-out verdict
 // (strict HP fraction, exact tie = draw, ARCADE last-round tie = CPU), draw rounds, double KO,
 // sudden death, max 5 rounds (drawn match), first to 2, MATCH_END, training (no KO, no timer).
-import { fixtureData, newMatch, place, run, fs, ms, evs, I, tester, dirBits, sb } from './fixtures/simkit.ts';
+import { fixtureData, newMatch, place, run, fs, ms, evs, I, tester, dirBits, sb, lxU } from './fixtures/simkit.ts';
 import { step, devSet } from '../runtime/src/core/sim/match.ts';
 import type { Match } from '../runtime/src/core/sim/match.ts';
 import { EV } from '../runtime/src/core/sim/events.ts';
@@ -69,11 +69,12 @@ function koP2(m: Match): number {
   t.ok(ko !== undefined && ko.a === 0 && ko.b === 1 && ko.c === 0, 'KO event: winner 0, loser 1, not match-deciding');
   t.eq(m.s[W.wins0], 1, 'round result decided on the KO frame');
   const y0 = m.s[sb(1) + F.y];
-  const x0 = m.s[sb(1) + F.x];
+  const x0 = lxU(m, 1); // CHANGED(SIM3D): line coordinate (+ z below)
+  const z0 = m.s[sb(1) + F.z];
   let moved = 0;
   for (let k = 0; k < sys.round.koHitstop; k++) {
     step(m, 0, 0);
-    if (m.s[sb(1) + F.y] !== y0 || m.s[sb(1) + F.x] !== x0) moved++;
+    if (m.s[sb(1) + F.y] !== y0 || lxU(m, 1) !== x0 || m.s[sb(1) + F.z] !== z0) moved++;
   }
   t.eq(moved, 0, 'KO hitstop: 30 frames frozen');
   let changes = 0;

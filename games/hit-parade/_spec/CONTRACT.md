@@ -631,7 +631,9 @@ select, one track per stage, boss, results/ending jingle; unused tracks only
    revealed), `code` (room code created / copied), `rematch` (both want the rematch), `disconnect` (connection lost), `countdown`
    (a start-sync tick; `announce('3'|'2'|'1'|'go')` stays). Unknown cues still play `move` and are listed in `stats().unknown`.
 7. **BRAWL / HECKLER and the SIM P2 events: audio follows §28.3 / §28.4 as written** (no extra request): goon indexes
-   `8 + slot` (voice bank per `brawl.kinds` id: hardhat / riot / scrub pitch), crowd object `2`; `MatchSnap.brawl.goons[].x` pans
+   `8 + slot` (voice bank pitch per `brawl.kinds` id - CHANGED(AUDIO) P2 finish: keyed by the §32.1 ids `goon_hardhat` /
+   `goon_security` / `goon_medic`, any other id pitched by its kind index 0 / 1 / 2, so no audio key depends on the old
+   `goon_riot` / `goon_scrub`; goon impacts key on the index `>= 8` only), crowd object `2`; `MatchSnap.brawl.goons[].x` pans
    goon sounds against the player; GOON_SPAWN = stage-door bang + a goon bark, GOON_DOWN = body fall + groan + cheer; HECKLE_THROW
    = throw whoosh + a shout from the stands (panned by `c`); the object's sound by `system.json heckler.objects[b].id` (tomato
    splat, bottle smash, shoe thud, chair crash) on HIT / BLOCK / PARRY with the object side `2`, or when it leaves `MatchSnap.proj`
@@ -1895,6 +1897,38 @@ and the REAL data drive BoutView exactly as game.ts does - snapshots + deduped e
    cards (skin kept), brightness 0.8-1.08, height +-7 %, idle watch / jeer (a third alternate on their own clock), cheer <->
    hype alternation. KO finish hold = a low hero shot on the winner from the side away from the loser (the lying loser is
    below the frame).
+7. **CHANGED(VIEW) P2 resume (2026-09-30 evening; additive, no §16 / §17 / §18 signature changed):**
+   - §26.5 is now implemented in `view/prime.ts`: v2 shots scale `lookH` / `dist` by the target's height / 1.80 (`both` =
+     the taller); the v2 gap never goes under attacker `push.front` + defender `push.front` (+0.20 m for a held riot shield)
+     while both are grounded (full below 0.15 m lift, ramped out by 0.30 m). `PrimeBegin` gains optional `frontA` / `frontV`,
+     `PrimeSample` gains `camTarget`.
+   - **Framing guard** (`BoutView.frameGuard`, v2 shots except `top`; deterministic: reads only this frame's posed bodies):
+     a `close` shot on one fighter follows a crouching subject down (camera + look translate by 0.8 x the head's drop below
+     its standing height); the target's head top (airborne: + hands and feet) stays under the letterbox and, on `both`
+     shots, both bodies stay inside the frame sideways - dolly out along the view (<= 2.5 m), then widen the FOV (<= 60).
+     Read-back `info().prime.guard = {dolly, fov, crouch}`. FIGHTERS' numbers stay authoritative; the guard only corrects.
+   - Freeze-frame border = one clean inset rectangle (was drawn as a '#').
+   - BRAWL pool: 4 views per goon body (`goon_hardhat` / `goon_medic` / `goon_security`), goons at their TRUE height (only
+     the stand-in opponent body is scaled to 1.8 m); `info().brawl.live = [{slot, sim, body, clip, h, vis}]` and
+     `borrowed` (a goon shown on another kind's body; expected 0). Goons waiting in the approach ring stand staggered in
+     depth (per slot, <= 0.7 m) and come back to the fight line when they hold a token / telegraph / are hit / down (a
+     wave on one side no longer walks through itself; the sim is unchanged).
+   - **Score popups are drawn by the view** (nothing consumed `BoutView.popups()`; grep of ui/ + game.ts): numeric comic
+     sprites (`+150`, `-300`; digits only, no copy) at the §31.4 anchor, rising and fading over 1.4 s.
+     `BrawlView.drawPopups = false` turns them off if UI draws its own from `popups()` (hook unchanged).
+   - Krane's taser rides in the LEFT hand (the taser clips punch the shield hand out; the wire / barb leave from there):
+     `PropRule.mirrorGrip` + `PropAttach.mirror` = the props.json right-hand grip mirrored across the hand's local X.
+   - Stage glare: neon materials (`/neon/`) capped at emissive 2.2 (`NEON_CAP`; ROOFTOP's strength-7 letters hazed the
+     frame pink). Name hooks bind the TOP matching node only (gltf-transform `<name>_1..` primitive children were bound too:
+     the wheel / beacons spun at 2x, BUTCHER BLOCK had 6 flames for 2 burners).
+   - Stage: the P1 name hooks are now listed in `info().stage.dressing` (`spin ... (by name)`, `flicker ...`, `flame ...`);
+     `steam_*` nodes vent steam and BUTCHER BLOCK's gas ranges (`flame_range_*`) steam from the pot level above the burner
+     (view-only, no stages.json entry needed); `info().stage.live` = the hooks' current values (spin angles, flame scales,
+     flicker levels, rain offsets, steam emitters, screens).
+   - Dev-only harness handle: `window.__HP_VIEW__ = { info(), popups(), view }` of the live BoutView (set in
+     `BoutView.create` under `import.meta.env.DEV`; tree-shaken from the build). `python _harness/lookshots.py --game` drives
+     the REAL game page with it (deep link + `__HP__.dev`: freeze, one tick per rendered frame, `__HP__.shot`).
+   - `perfcheck.py --stages a,b,...` measures the super cinematic on every set in one page (p50 / p99 per stage).
 
 ## §32 CHANGED(ASSETS) P2: BRAWL BREAK goon bodies, goon clips, data/goons.json (2026-09-30; additive)
 Answers §28.4 ("ASSETS may rename by writing the ids here - SIM mirrors them into system.json") and §31.4 (goon GLBs).
@@ -1930,3 +1964,480 @@ Answers §28.4 ("ASSETS may rename by writing the ids here - SIM mirrors them in
    donor clone / normalised-convolution fill, new text in the original ink with the weave showing through) -> the bake swaps
    the image before the atlas bake (`hp_body.prepare_body` `image_overrides`). Check image: `art/renders/<id>/_src/
    repaint_check.png` (before | after).
+6. **CHANGED(ASSETS) P2 resume (2026-09-30 15:40): goon reconciliation DONE - the sim reads the shipped goons.** Supersedes
+   the "requests to SIM" in 32.1 / 32.3 and the proposed ids / move names in §28.4 (SIM lane finished; ASSETS made the
+   edits in the goon entries of `data/system.json` and the goon mapping of `core/data.ts` / `core/sim/compile.ts` /
+   `core/sim/brawl.ts`, each marked `CHANGED(ASSETS) P2`):
+   - `system.json brawl.kinds` = `goon_hardhat` (2400 HP, walk 1.5), `goon_security` (3000, 1.3), `goon_medic` (1800, 1.8) -
+     same order / numbers as SIM's kinds, so kind indices, waves and AUDIO's index fallback (router.ts `goonVoiceRate`) are
+     unchanged. `brawl.moves` = `shove` (5M, 32/4/30, 350) / `haymaker` (5H, 45/5/40, 600) / `kick` (6M, 36/5/40, 500), clips
+     `goon_shove` / `goon_haymaker` / `goon_kick` (every goon GLB carries them). `GoonSnap.moveName` is now `'shove' |
+     'haymaker' | 'kick' | ''` (types.ts comment still says jab / lunge). system.json owns the goon frame data, HP and walk;
+     its shared `boxes` / `move` / `moveRangeM` rows are the 3-goon measured mean (the fallback).
+   - `data/goons.json` v2 (`python tools/goons_data.py`; it READS frame data / HP / walk from system.json, never its own copy):
+     per goon, per move the system.json row + that goon's measured `boxes`, `move` (root travel), `rangeM` (start range =
+     travel at contact + box far edge - 0.15 m) and `weights` (AI pick odds: hardhat shove 2 / haymaker 3 / kick 1, security
+     3 / 1 / 2, medic 1 / 1 / 3). `core/data.ts` loads it (`RawData.goons`, Vite glob + Node reader already cover data/*.json)
+     and `applyGoons` merges it into a COPY of `system.brawl.kinds[]` (`GoonKindDef`: `moves`, `weights`, `rangeM`), so
+     `dataHash` covers it. A goons.json move whose startup / active / recovery differ from system.json (or a missing /
+     malformed entry) = a GameData warning and that goon keeps the shared rows. `CBrawl.kindMoves / kindRange / kindWeights`;
+     brawl.ts uses the goon's own kit at every move lookup, and `chooseMove` is a weighted roll over the kind's weights
+     (was: lunge when far, else 40 % haymaker). Anim tables (`GameData.goonAnims[id]`) = 34 shared + the kind's 3 moves.
+   - AUDIO: `router.ts GOON_VOICE_RATE` already keys the final ids (`goon_hardhat` / `goon_security` / `goon_medic`, AUDIO's
+     15:19 edit); nothing needed.
+   - Pipeline: `goon_hardhat` bakes with `decimate: 0.72` (tools/bodies.json; 53,738 -> 38,690 tris) = 1,463,552 B <= 1.5 MB.
+     `art/blender/qc_render.py` also renders one game-camera frame per clips.json mark (`<clip>__m_<mark>.png`, qc.json
+     `mark_frames`) so re-timed throw marks can be read against the pose.
+
+## §33 CHANGED(AI) P2: the CPU plays the uniques, habit-guess defense, meter policy, G11 probes (2026-09-30; additive)
+§11 / §16 / §23 signatures unchanged (`createCpu(level, fighterId, seed)`, `Cpu.input / prepare`). Evidence:
+`_harness/_reports/progress_p2_ai.md`. Everything below is lane-AI internal unless marked **Request**.
+1. **Uniques** (`core/ai/uniques.ts`, new): per §28.2 kind, from honest information only (a reaction earned on the
+   reaction clock, an observed habit, the CPU's own state, the visible opponent): counter moves (Rerun / Ricky) when the
+   incoming active frames fall in the catch window, as reads vs a presser / on the wake-up / after the CPU's blockstun, DEAD
+   AIR vs projectiles; teleports (Zambini) cornered -> behind, crowded -> home, through a reacted projectile, wake-up
+   mixups; the stance (Lotus) entered at follow-up range, walked in, follow-up chosen from the opponent's VISIBLE posture
+   (crouching -> M overhead, standing -> L low, a low-happy opponent -> H hop), exit / timeout; evades (Johnny WEAVE ->
+   counter hook trigger, Gazza dive -> special cancel); armor steps (Bruno / Boneyard) as reads / approaches then command
+   grab / 2L tick / special in the cancel window; the ball (Gazza) only when available (at his feet, or a hover / resting /
+   loose ball in kick range - the CPU mirrors `ballReady` from its own u0 and the ball on screen), re-kick of a hovering
+   ball, walking to a resting one; rekkas (Patch CUE 1 -> 2 -> 3, ender from the visible posture); installs (no kit has one;
+   started at a safe distance; proven with an injected install); THE FREAK: armored leap / ROAR through projectiles /
+   MELTDOWN reads; RICKY: SPOTLIGHT from mid range, PYRO in phase 2. Kit specials in no `cpu` list are occasional mid-range
+   pokes when they connect and are not worse than -12 on block (or armored).
+2. **Kit** (`kit.ts`): a `phases` kit gets a second measured recipe table for phase 2 (the sandbox sets its OWN u0 = 2) and
+   the brain switches on its own u0; a SIMPLE charge kit keeps the charge-free S+dir recipe as `alt` (used when no charge is
+   stored); stance follow-ups get `ctx 'stance'` recipes, rekka / weave parts `ctx 'chain'` recipes from their compiled
+   trigger (motion form in SIMPLE too - see request (b)); `MoveInfo.tool / counter / tele / evade* / projInv* / revInv /
+   phase2`; `Kit.sup1 / sup3` are the supers of THAT phase's routing (Ricky phase 2: SEASON FINALE).
+3. **Perception** (`sense.ts`): `FView.uq[4]` / `instF` = the CPU's OWN unique ints / install (zero for the opponent);
+   `HIDDEN_FIELDS` += the opponent's `F.uniq..+3` and `F.ucnt` (a charge kit mirrors its input-derived charge counters
+   there) - probe_personas H2 scrambles them too; `ProjView.vy / mode`.
+4. **Honest low-level defense** (task: levels 0-5 cannot react to a 4-18 f ground attack): `core/ai/habits.ts` (new)
+   keeps the opponent's close-range offense (low / overhead / mid / throw / jump / projectile, decay 0.9 per action), the
+   share of HIGH strikes, its attack rate while free in its range, its meaty rate on my wake-ups and its pressure rate after
+   my blockstun - each observation committed only `reactF` frames after it happened (pattern knowledge about the NEXT
+   attack, never the one on screen). cpu.json `levels[].habit` (L0 0.3 .. L8 0.8; personas novice 0.5, optimal 0.9) =
+   its weight: guard posture chance in the opponent's range = (1 - habit) x the flat `guard` lever + habit x min(1, 2 x
+   block) x attack rate (`plans.ts guardChance`); crouch vs stand blended with its lows vs overheads (x confidence); throw
+   tech + close-range throw escapes (step out / L3+ a fast light: strike beats throw) with its throw share; wake-up guard /
+   reversal / counter read with its meaty rate. Measured (probe_personas H5, L3 defender, no reactable attack): crouch share
+   vs lows 0.83 (habit 0: 0.52); after 24 lows -> overheads the first 4 overheads are still crouch-guarded (0.80: no
+   reaction), later ones stand-guarded more (0.64).
+5. **Meter policy**: a super that finishes the round is taken at any route tier the meter tier allows (cheapest first); the
+   'cancel' tier (L6+) cancels a CONFIRMED hit into a super; a CPU allowed Lv3 saves toward it (`rules.lv1Spend` 0.2 = the
+   chance per bar change, LATCHED, to spend a Lv1 anyway) and cashes it on a clean punish (`rules.lv3Cash` 0.6); invulnerable
+   supers are wake-up reversals and (air-/strike-invulnerable from frame 1) anti-airs; a projectile's flight time counts in
+   punish windows. cpu.json gains `uniques {...}` (per-tool rates) and `rules.lv1Spend / lv3Cash` (documented in `_src`).
+6. **Probes**: `probe_personas.ts` + H5 (pattern guesses, gating always) + U1 (every kit's special families, Lv1, Lv3 and its
+   unique in natural CPU bouts + full-meter bouts + an injected install; gating with `--seeds`, reported in the smoke run).
+   `_harness/probe_season.ts` (new, G11 node half, auto-discovered by run_probes): ladder data vs `flow.ladderSpecs`, 432
+   ladders (12 fighters x SEASON/PILOT x difficulty -2/0/+2 x 6 seeds) resolved through `flow.buildSeason` + built stages,
+   BRAWL BREAK / HECKLER TOSS for all 12 fighters staged as game.ts does (scored by a scripted player), RICKY's phase 2 in
+   the boss bout (fires, persists, phase-2 recipe table + moves), full PILOT x 12 / SEASON x 3 runs to `SeasonRun.cleared`
+   + ending text / key. `_harness/playtest.py --season` (G11 browser half): real key events from the main menu through a
+   PILOT to the ending card; TIME CONTROL is said in its report - the bouts run with `__HP__.dev.freeze` and the harness
+   steps `--step-frames` (2) per key decision (`--realtime` to play unstepped); `--max-bouts 1` = the smoke run.
+7. **Request to SHELL** (game.ts): flip `BONUS_ROUNDS_IN_SIM` to true - the sim runs both bonus modes (§28.4) and
+   probe_season S3 plays them for all 12 fighters exactly as `seasonSlot` stages them (mode brawl / heckler, P2 = the
+   player's id at cpu 0, which the CPU answers with word 0). Until then THE SEASON passes over both bonus slots and
+   `playtest.py --season` FAILS its `bonus_round_played` step (by design: it reports the skip).
+8. **Requests to SIM** (core/sim/inputs.ts; the CPU works around both, a human cannot): (a) SIMPLE rekka enders - a
+   sibling trigger `"5S"` (simpleDir 5) matches S with ANY direction and is checked first, so Patch CUE 2 -> 2S gives CUE 3
+   OVERHEAD, never CUE 3 LOW (measured `cue_m > cue2 > cue3_oh`); (b) CLASSIC: a chain motion typed during the parent's
+   hitstop is lost - the button's release re-reads the motion (negative edge) as the PARENT special and overwrites the
+   buffered chain (`236M` in CUE 1's hitstop -> no CUE 2; after the hitstop -> CUE 2). Scratch repro:
+   `_harness/scratch/ai_p2_rekka.ts`.
+9. Notes for P4 / SHELL: a boss played by the player (after the unlock) meets its own mirror in its slot (flow.ts
+   `buildSeason`); THE FREAK (CPU L6) beats the `optimal` persona 80 % (32/40, seeds 1..40) while RICKY does 27 % (16/60) -
+   the mini boss is the harder wall (its kit: 11,500 HP, 2.4 m reach, armor; AI tool rates changed nothing measurable).
+
+## §34 CHANGED(integrator) P2/P3: the §27 SHELL requests landed, bonus rounds in THE SEASON, v0.2.0 (2026-09-30; additive)
+Every file carries a `CHANGED(integrator) P2` note at the change. Evidence: `_harness/_reports/progress_p2_integrator.md`.
+1. **Training driver in game.ts (§27.1, exactly the lines the UI lab proved):** a training bout (offline) gets `Bout.trainer =
+   new TrainingDriver({opts: menus.training, data, hud, sim: {createMatch, step, readFighter, readMatch, devSet}, cpu:
+   createCpu})`, `begin(cfg, m)` AFTER `hud.mount` (mount resets the training overlays); `tick()` swaps in `pending()`'s Match
+   (seen cleared, lastFrame = its frame) then steps `trainer.tick(m, words)`; `frame()` calls `trainer.frame(projector)` after
+   `hud.frame` (the fight camera -> CSS px of the canvas); `teardown()` calls `end()`. game.ts creates NO game-level CPU in a
+   training bout (the driver owns the dummy incl. DUMMY: CPU); audio `local` = 0 in training. `runtime/src/lab/ui_game.ts`
+   no longer patches Game.prototype (a second wrapper would drive the driver twice) - it boots the game with its read-backs.
+   Deep link: `?mode=training` P2 defaults to cpu -1 = the dummy (P1: 0 = a CPU stood in); `?cpu2=n` = DUMMY: CPU at n.
+   `__HP__.state().trainer` = `TrainingDriver.readback()` (null outside training).
+2. **§27.2** was already wired by NET (§29.6). **§27.3:** `MatchResult.rounds = BoutStats.rounds.slice()`.
+3. **THE SEASON (§27.4 hooks):** `LadderView.continues` = run.continues and a slot being replayed after a loss shows
+   `result: 'lost'`; bonus `CardView.seconds` = system.json `brawl.seconds` / `heckler.seconds`; `showEnding({..., length,
+   continues})`; a season bout calls `hud.setScore(season score banked so far)` and `hud.setEpisodeLine('EPISODE n - <STAGE>')`
+   (bonus rounds keep the sim's running SCORE). `LadderView.ratings` is NOT passed (no season-level ratings number exists).
+4. **Bonus rounds ON:** `BONUS_ROUNDS_IN_SIM = true` (§24.13 superseded). Slots come from data/ladder.json: SEASON = BRAWL BREAK
+   after bout 3, HECKLER TOSS after bout 6; PILOT = BRAWL BREAK after bout 2. Staging (= probe_season S3): mode brawl / heckler,
+   p[1] = the player's own id at cpu 0 (absent), stage = the PLAYER's home stage; no VS card; the bonus card first. The
+   episode score of a bonus round = `MatchSnap.brawl.score` (SCORE `c`); P1 summed the positive SCORE `b` deltas, which
+   over-counted a HECKLER TOSS (heckle hits are negative deltas).
+5. **Stages:** all 5 stages are `built` in data/stages.json, so the VERSUS stage select offers all five (no COMING SOON) and every
+   ladder slot plays on its opponent's home stage (fighters/<id>.json `stage`): RICKY's boss bout on `control_room`, THE FREAK
+   on `butcher_block`. `playableStage()` stays as the fallback for a future `todo` stage.
+6. **Version:** `main.ts VERSION = 'hit-parade-0.2.0'`, package.json 0.2.0; `runtime/public/game_meta.json` describes what exists
+   (12 fighters incl. the two unlockable bosses, THE SEASON / PILOT with both bonus rounds, VERSUS, ONLINE, TRAINING, 5 stages,
+   touch) and claims no rated / ranked online (the ratings RPC is not deployed, §29.9).
+
+## §35 OWNER DIRECTIVE: FULL 3D RING (2026-09-30) — supersedes the 2.5D plane (§1, §2, §4.3.1, §6.4, §7 camera)
+Owner, verbatim: "this should not be a flat 2d arena/match it should be 3d or circular where we can walk
+around the ring to fight". HIT PARADE becomes a **3D arena fighter** (Tekken / Soul Calibur family):
+fighters move on the ground plane (x, z) + height y, can sidestep and circle-walk around each other inside a
+360-degree ring, and the camera orbits the pair. Everything not contradicted here stays (frame data, meters,
+throws, parry, IMPACT, supers, uniques, bonus rounds, rollback, SIMPLE/CLASSIC).
+
+### §35.1 Fixed-point geometry (SIM; deterministic across browsers)
+- Positions x, z (and y) in U (10 µm) as before. **Yaw** = int in [0, 65536) (65536 = 360°); yaw 0 faces +Z,
+  positive yaw turns toward +X (matches three.js rotation.y for a model facing +Z at rest).
+- Trig ONLY via `core/sim/fx3d.ts`: a Q14 sine table (4096 entries, cos by offset), `yawToDir(yaw) -> [dx, dz]`
+  (Q14), `dirToYaw(dx, dz)` (integer atan2 via table/binary search), `isqrt` (integer sqrt), `rot(v, yaw)`,
+  dot/cross kept inside safe integer ranges (document the ranges). NEVER Math.sin / cos / atan2 / sqrt / hypot in
+  core/sim — browser libm results differ and would desync rollback netplay.
+- State additions per fighter: z, vz, yaw, tracking counters, lateral velocity, step state; world: camera normal
+  `camN` (Q14 unit vector in the plane, §35.3), ring params cache. Versus state stays <= 1024 ints.
+
+### §35.2 Movement
+- **Auto-face:** in neutral states (idle, walk, crouch, block, dash, circle, landing) each fighter's yaw snaps to
+  face the opponent every frame. During an attack the yaw follows the move's tracking (§35.4). In hitstun /
+  knockdown the yaw is kept.
+- **Walk** forward/back = along the line to the opponent (existing speeds). Dashes and jumps along that line.
+- **STEP controls:** input bit 13 `STEP_IN` (circle AWAY from the camera) and bit 14 `STEP_OUT` (circle TOWARD
+  the camera); both pressed = neutral (SOCD). **Tap** = SIDESTEP: 15 frames total, 0.85 m along the circle around
+  the opponent (distance to the opponent preserved: an arc, not a straight line); attacks may be buffered from
+  frame 9 and come out from frame 11 (step-attacks); block from frame 12. **Hold** past the sidestep = SIDEWALK:
+  circling at 1.8 m/s tangential around the opponent (the "walk around the ring"); ends on release with a 4-frame
+  settle; holding BACK cancels circling into block. No invulnerability: evasion is geometric (moving off the line).
+- Default bindings: keyboard Q = STEP_IN, E = STEP_OUT (P2: numpad 7 / 9); gamepad right stick up = STEP_IN,
+  down = STEP_OUT; touch: two STEP buttons (IN / OUT) above the stick. All remappable.
+- Screen-relative LEFT/RIGHT -> back/forward uses the camera basis (§35.3) exactly as the old facing sign did.
+- **Ring boundary** (stages.json `ring`): `{shape: 'circle'|'poly', radiusM, sides, rotDeg, wallHeightM, surface}`,
+  default circle radius 5.5 m. Push cylinders collide with the boundary; a launched body reaching it = WALL_SPLAT
+  (b = wall index: circle = index of 16 sectors, poly = side index; contact point + normal in the payload).
+  "Against the wall" (pushback transfer, IMPACT splat, STAGE FRIGHT stun) = the defender within 0.45 m of the
+  boundary along the attack direction. No ring-outs.
+- Round start: fighters 2.4 m apart through the ring centre on the stage's `spawnAxisDeg` line, facing each other.
+
+### §35.3 Camera basis in the sim (inputs camera-relative AND deterministic)
+- `camN` = Q14 unit vector perpendicular to d = P2 − P1, choosing the perpendicular closest to the previous camN
+  (continuity; the initial camN points from the ring centre toward the stage's `cameraSideDeg`). If |d| < 0.3 m keep
+  the previous camN. Screen-right `R` = the in-plane perpendicular of camN oriented so that at round start P1 is
+  screen-left.
+- The VIEW camera sits on +camN from the pair midpoint and orbits as the pair circles — the sim owns the basis, the
+  view smooths it. STEP_IN moves along the circle tangent that points toward −camN, STEP_OUT toward +camN.
+- Cross-overs (jumping over, being thrown behind) swap screen sides naturally (Tekken-style); camN never auto-flips.
+
+### §35.4 Moves in 3D (FIGHTERS data + SIM)
+- New optional Move fields, defaulted by class in the kit generator: `track: {until, rate}` (default normals
+  until = startup − 4, specials startup − 6; rate = full re-face per frame), `homing: true` (tracks through
+  active: sweeps, spins, lariats, flairs, most supers, command grab reach arcs), `linear: true` (no tracking after
+  frame 1: rushes, straight projectiles, charge moves), `lateralM` (hitbox half-depth across the attack line;
+  defaults L 0.15, M 0.18, H 0.22, sweep 0.45, homing/spin 0.60).
+- Hitboxes = boxes in attacker-local (forward, lateral, up); hurt = vertical cylinder per fighter (radius from the
+  measured body in bodies.json) with height ranges per stance (stand / crouch / air). Hit test = box vs circle in
+  the attacker's local plane + height overlap, integer math.
+- Projectiles launch along the thrower's yaw at spawn (`aimed: true` = aim at the opponent at spawn), travel in the
+  plane; sidestepping beats straight projectiles; Gazza's ball rebounds off the ring boundary (vector reflection).
+- Throws: defender within throw range AND inside the thrower's front arc ±70°; victim timelines play along the
+  thrower's yaw; back throws land behind along −forward.
+- Pushback along the attacker's forward vector.
+
+### §35.5 Clips (ASSETS)
+New shared clips on every body: `sidestep_l`, `sidestep_r` (the fighter's own left/right, ~15 f), `sidewalk_l`,
+`sidewalk_r` (loops, 1.8 m/s tangential), optional `turn_l` / `turn_r`. Sources: Pro_Magic Standing Walk
+Left/Right and Standing Run Left/Right, Male_Locomotion left/right strafe (walking), Magic_Locomotion strafes;
+guard upper body from the CMU guard layer like the other locomotion clips. The sim picks _l/_r from the step
+direction relative to the fighter's yaw. Rebake all 12 fighters + 3 goons.
+
+### §35.6 Stages (STAGES): 360-degree arenas
+Each of the 5 stages becomes an arena seen from every angle as the camera orbits: a ring (circle or octagon,
+radius 5.0–6.0 m) with a visible boundary (pit wall / ropes / cage / railing / counters) that reads as a splat
+surface, the stage's identity set pieces kept, and crowd + dressing on ALL sides (tiers, balconies, bleachers);
+lights = a fixed pool that works from all angles. Budget per stage ≤ 6 MB, ≤ 150 draws; crowd stays impostors.
+New stages.json fields: `ring`, `spawnAxisDeg`, `cameraSideDeg`, `cameraMaxM` (old `walls.x` / fightStrip are
+superseded; keep them only as legacy until the sim no longer reads them).
+
+### §35.7 Camera (VIEW)
+Orbit camera: target = pair midpoint (y 1.0), position = mid + camN·dist + up·1.35 m, pitch −4°, vFOV 35°,
+dist = clamp(4.4 .. 9.5 m) by separation so both fighters (heads + feet) stay in frame, smoothed (angle and
+distance), never inside the ring wall or set geometry (pull in / raise when occluded), jump pan as before
+(HUD-clear), rotational shake unchanged, cinematics relative to the attacker's yaw (the existing director keeps
+working), KO orbit, perfect-parry zoom. BRAWL camera: behind/above the player, framing the nearest goons.
+
+### §35.8 BRAWL BREAK / HECKLER in 3D
+Goons spawn around the ring and approach from all directions; the player's attacks auto-target the goon nearest
+the stick direction (soft lock); tokens ≤ 2 unchanged. Heckle objects arc in from the crowd on all sides.
+
+### §35.9 CPU (AI)
+CPU sidesteps linear attacks it has honestly read (level-scaled reaction rules, no input reading), punishes whiffed
+linear moves from the side, uses homing moves vs steppers, circle-walks to get off the wall, avoids its back to the
+wall.
+
+### §35.10 Gates added
+`probe_3d.ts`: sidestep evades a linear attack but not a homing one; sidewalk keeps distance ±2 cm over 2 s;
+tracking until/rate as authored; camN continuity (no flips while circling 360°); ring collision + wall splat on
+circle and octagon rings; projectile dodged by a step; throw front-arc rule; determinism + synctest with random STEP
+inputs (0 mismatches). G4/G6 add a real-key sidestep + circle-walk in the real game with the camera orbiting
+(screenshots from 3 angles READ).
+
+### §35.11 CHANGED(STAGES3D-A): the §35.6 stages.json fields, pinned (2026-09-30; additive, legacy fields kept)
+`tools/merge_stages.py` (lane STAGES3D-A) validates these for every built stage that carries `ring`; SIM / VIEW / AI /
+STAGES3D-B build against this text. All metres in game axes (§2), ring centre = world origin (0, 0, 0), floor y 0.
+1. **Angles** (every `*Deg` below): degrees in the ground plane, the §35.1 yaw convention: 0° = +Z, +90° = +X, i.e.
+   direction(θ) = (x = sin θ, z = cos θ). Integer sim code converts with `yaw = round(θ · 65536 / 360) mod 65536`.
+2. **`ring: { shape, radiusM, sides, rotDeg, wallHeightM, thicknessM, surface, dustColor }`**
+   - `radiusM` = centre -> the boundary's INNER face (circle: its radius; poly: the apothem = centre -> each side's
+     inner face). A body centre stays <= radiusM − its push radius. 5.0 <= radiusM <= 6.0.
+   - `shape: 'poly'`: `sides` (8 = octagon) flat sides; side k (0..sides−1) has its outward normal at angle
+     rotDeg + k·360/sides; inner corners at rotDeg + (k ± ½)·360/sides, radius radiusM / cos(180°/sides).
+     WALL_SPLAT b = side index k.
+   - `shape: 'circle'`: `sides` = 16 = the WALL_SPLAT sector count; sector k is centred on rotDeg + k·22.5°,
+     b = round(wrap360(θ_contact − rotDeg) / 22.5) mod 16.
+   - `wallHeightM` = top of the boundary above the floor (all three STAGES3D-A rings <= 1.2 m, below the 1.35 m
+     camera); `thicknessM` = inner face -> outer face (occlusion hint for the camera); `surface` / `dustColor` = the
+     splat material + dust tint (replace `walls.splat[].surface/dustColor` for ring stages).
+3. **`spawnAxisDeg`**: round start P1 = −(spawn.distanceM / 2)·direction(spawnAxisDeg), P2 = +(distanceM / 2)·direction
+   (distanceM 2.4). `spawn.p1/p2` are written consistently (merge_stages checks to 1 cm).
+4. **`cameraSideDeg`**: the initial camN points from the ring centre toward direction(cameraSideDeg) (§35.3); the
+   stage's identity set piece is authored on the far side (cameraSideDeg + 180°) so the round-start shot shows it
+   behind the pair. STAGES3D-A: spawnAxisDeg 90 (P1 at x −1.2, P2 at x +1.2) + cameraSideDeg 0 (camera on +Z):
+   the round-start frame matches the old 2.5D framing.
+5. **`cameraMaxM`**: horizontal radius from the ring centre inside which the camera band y 1.30–3.00 m holds NO set
+   geometry (only the floor and the ring boundary, which stays below the band). Set pieces, rails, crowd and
+   overhead rigs start outside it (rigs above it may overhang only above y 3.0). The VIEW may place the camera
+   anywhere inside cameraMaxM at y 1.3–3.0 without entering geometry; beyond it, pull in. Measured per build
+   by a BVH probe in the stage script (`clearance` in the fragment's `build`); STAGES3D-A value 9.5.
+6. **Crowd bays (build input only; the view reads the GLB `crowd_*` empties as before):** besides the §21 linear bay
+   (`x: [x0, x1]`, rows `{z, y}`) an ARC bay is `{ id, arcDeg: [a0, a1], rows: [{r, y}], spacing, jitter: [jt, jr],
+   seed, angle? }` - people along each row's arc (radius r, feet at y), cards facing the ring centre (node yaw =
+   θ + 180°), extras unchanged `{bay, row, i, rand, angle}`.
+7. **Legacy:** `floor.fightStrip`, `walls.x`, `walls.splat` (ids 0/1 at x ∓8) and the 2.5D `camera` fields stay in
+   the three STAGES3D-A fragments unchanged until the sim/view stop reading them; merge_stages only WARNS about them
+   on ring stages. `camera.proofShots` gains the 16 orbit shots `orbit_<deg>_<n|f>` (8 angles every 45° from
+   cameraSideDeg, dist 4.4 / 8.0 m, eye y 1.35, look-at (0, 1.0, 0)) the lab (`/lab/stages.html?shot=`) renders.
+
+### §35.11b CHANGED(STAGES3D-B): rooftop + control_room follow §35.11 (STAGES3D-A) exactly - STAGES3D-B additions
+Both fragments are written to the §35.11 text above (angles, `ring` incl. `thicknessM` / `dustColor`, `spawnAxisDeg` 90,
+`cameraSideDeg` 0, `cameraMaxM` = the §35.11.5 clear radius (9.5), `build.clearance` probe, the 16 orbit shots
+`orbit_<deg>_<n|f>`, legacy fields kept); the two texts agree on every value the sim reads (see §35.12). STAGES3D-B's
+earlier draft here defined `cameraMaxM` as an orbit distance - WITHDRAWN in favour of §35.11.5. Optional extras nobody
+has to read: `ring.centre: [0, 0]` (SIM3D's default), `ring.vertexRadiusM` (poly), `ring.measuredLowTopM` (tallest item
+inside the clear radius: the railing), `camera.clearRadiusM` (= build.clearance.minRadiusM rounded down; measured on the
+stricter band y 1.15-4.5 m, which contains 1.30-3.00), crowd bays with `rotDeg` (a §21 linear bay laid out facing local
++Z and yawed about the ring centre - the §35.11.6 arc bay is not used), `near_center` / `far_center` aliases of
+`orbit_000_n` / `orbit_000_f` in proofShots. Rooftop ring: circle r 5.5, 16 railing posts on the sector BORDERS
+(yaw 11.25 + 22.5 k) so every sector centre is a cable span; control room: octagon apothem 5.5, rotDeg 0 (flat sides face
++-X / +-Z, corner posts at yaw 22.5 + 45 k).
+
+### §35.12 CHANGED(SIM3D): how the sim reads the §35.11 stage fields (early note; the full SIM3D interface note follows as §35.13)
+- SIM3D adopts §35.11 exactly as both STAGES3D texts agree: yaw-convention degrees (dir(a) = (sin a, cos a) in x, z),
+  `ring.radiusM` = circle radius / poly APOTHEM, poly side k outward normal at rotDeg + k·360/sides (WALL_SPLAT b = k),
+  circle b = round(wrap360(θ_contact − rotDeg) / 22.5) mod 16, optional `ring.centre: [x, z]` (default [0, 0]).
+- Defaults when a stage has no `ring`: circle, radiusM 5.5, rotDeg 0, centre [0, 0]; no `spawnAxisDeg` = 90, no
+  `cameraSideDeg` = spawnAxisDeg − 90 (= the old 2.5D layout). Degrees -> yaw units with `round(a · 65536 / 360)` at
+  createMatch only (no float in the step). Spawn distance = system.json `round.startDistanceM` (2.4 m).
+- Initial camN = the perpendicular of (P2 − P1) closest to dir(cameraSideDeg). If that camera side would put P1
+  screen-RIGHT (spawnAxisDeg = cameraSideDeg − 90), the sim swaps the spawn ends so P1 is always screen-left.
+- `wallHeightM`, `thicknessM`, `surface`, `dustColor`, `cameraMaxM`, `clearRadiusM` are view-only (the sim wall is
+  infinitely tall, no ring-outs). The sim no longer reads `walls.x` / `fightStrip` once SIM3D lands.
+
+### §35.12 CHANGED(FIGHTERS3D): 3D move fields as emitted in data/fighters/<id>.json (2026-09-30; additive)
+Generated by `data/fighters/_gen/` (kitlib.py class defaults + per-move kit decisions, validate.py checks every rule below).
+The 2.5D sim ignores the 3D fields (the item-7 wall-splat flags are ordinary §5.2 fields); SIM3D reads them. Reasons per
+move are in `_spec/ROSTER.md` (3D column + "3D ring play").
+1. **`track: {"until": u, "rate": r}` on EVERY move.** `until` = the last move frame (1-based, the numbering of `boxes.f` /
+   `hits.f`) on which the attacker's yaw turns toward the opponent; from `until + 1` to the move's end the yaw is frozen
+   (boxes, `move` travel, projectile launch direction and throw front arc all use the frozen yaw). Frame 1 counts: a move
+   started from neutral is already facing (auto-face, §35.2); a move started by a cancel / chain / counter follow-up re-faces
+   on its frame 1 at `rate`. `rate` = max yaw change per frame in whole degrees, 1..180 (180 = snap). Integer conversion for
+   the sim = a compile-time constant (SIM3D compile.ts degToYaw, as built: 20 -> 3641, 180 -> 32768 = any turn; verified
+   2026-09-30 by compiling the real data: trackUntil / trackRate / lateral / homing / linear / aimed match the JSON).
+   Class defaults (the generator applies them; a move without the fields - goons, system IMPACT / SHOVE / RUSH / default
+   throws - should get the same defaults in SIM):
+   - normals, command normals, throws: `until = max(1, startup - 4)`, rate 180;
+   - specials, EX, command grabs, supers without `homing`: `until = max(1, startup - 6)`, rate 180;
+   - `homing: true`: `until = startup + active - 1` (the move's last active frame, multi-hit moves included), rate **20**
+     (catches any stepper: a §35.2 sidestep averages ~3.2 deg / frame at 1 m, ~6 at a front-loaded peak; a sidewalk ~1.7);
+   - `linear: true`: `until = 1`, rate 180 (faces on frame 1, never turns again).
+2. **`homing: true` / `linear: true`** (never both; absent = false). The class that produced `track` - SIM needs only `track`
+   + `lateralM`; AI (§35.9) reads the flags (sidestep `linear`, answer steppers with `homing`). Homing = wide hooks and
+   roundhouses, low roundhouses, sweeps, spins / flairs / lariats, command grabs (reach arcs), counter follow-ups, most
+   supers. Linear = rushes, charge moves, leaps and dives (`airVel`, travelling `moveY` hops), straight non-aimed
+   projectile throws, lunges.
+3. **`lateralM`** (metres) on every strike (a move with damage, `hits` or `cinematic` that is not a throw / cmdgrab / grab
+   and not a pure projectile throw; absent on those - grabs use the §35.4 range + front-arc rule): the half-depth of EVERY
+   box of the move across the attack line (attacker-local lateral axis: each box spans forward x +- w/2, up y +- h/2,
+   lateral +- lateralM). Defaults: normals by button L 0.15, M 0.18, H 0.22; specials / EX / supers 0.22 (their L/M/H is
+   the button strength, not the limb); role `sweep` 0.45, `homing` 0.60; kit
+   overrides carry a reason (low roundhouses 0.40; Freak ROAR = its box half-width 1.0 / 1.2 / 1.4 / 1.5 m: the box is
+   already centred on the body, so the roar is a square AROUND it).
+4. **Projectiles:** `projectile.aimed` (bool, on every projectile move): true = at spawn the projectile's direction is
+   toward the opponent (dirToYaw of opponent - spawn point), false = along the thrower's yaw at spawn (`track` decides that
+   yaw). `projectile.lateralM` = half-depth of the projectile box across its travel (default box[0] / 2, min 0.12; wider for
+   fans / flames / sawblades). A hover / resting projectile (Gazza keepy-uppy) is `aimed: false`, speed 0. Gazza's shot
+   rebounds reflect the direction vector off the ring (§35.4, SIM).
+5. **Step-attacks:** kind `command`, `input: "SS.<btn>"` (btn L | M | H), role `stepatk`. Routed when that button is pressed
+   while the fighter is in SIDESTEP (buffered from step frame 9, starting on frame 11, §35.2) or SIDEWALK; there it wins
+   over the button's plain 5X / 2X / 6X routing, anywhere else it is unreachable. Same in SIMPLE and CLASSIC. The move
+   starts facing the opponent (frame-1 re-face at its `track.rate`). Today's sim parses `SS.H` as button -1 (never routed),
+   so the data is harmless until SIM3D routes it. patch `SS.H` BLINDSIDE KICK (mid, homing, KD + wall splat), spin `SS.H`
+   FLANK FLAIR (low, homing, low-profile, KD).
+6. **Roles** (informational, §20.2 list, additive): `antistep` = the fighter's fast step-catcher (homing strike or command
+   grab with startup <= 12, or an aimed projectile) - every fighter has >= 1; `stepatk` = step-attack. Every fighter also has
+   >= 1 "reliable homing tool" (a homing normal / command / special, startup <= 16, >= -6 on block; or an aimed projectile
+   special for the zoner) - validate.py checks both.
+7. **Wall game:** fighters that had no wall-splat move gained one `onHit.wallSplat: true` ender (johnny hook_h / hook_ex,
+   patch 4H + SS.H, zambini 5H, krane 4H, lotus 6M, spin windmill_h / windmill_ex, gazza 5H, rerun 5H, freak claw_rush_h /
+   claw_rush_ex, ricky 5H). Existing: bruno 6H + fridge_door, boneyard meat_hook + chefs_special.
+8. **Requests:** SIM3D - read `track` / `lateralM` / `projectile.aimed` / `projectile.lateralM`, route `SS.<btn>`, class
+   defaults for moves without the fields (item 1). AI - `homing` / `linear` / roles `antistep` / `stepatk` for the §35.9
+   rules; each fighter's `cpu` block also carries `antiStep: [moveIds]` (what to throw at a stepper) and, for patch /
+   spin, `stepAttack: "SS.H"` (hints, like the existing `pokes` / `punish` lists). UI - move list: render `SS.H` as
+   STEP + H and may tag HOMING / LINEAR moves (FighterDef `moves[id].homing` / `.linear`).
+9. **Numbers as emitted (2026-09-30):** 384 moves (382 + the 2 step-attacks); homing 98, linear 68, aimed projectile
+   moves 24 (johnny 1, krane 1, lotus 4, gazza 4, ricky 5, zambini 9; per-fighter lists in ROSTER.md "From the data"). The
+   2.5D sim reads none of the 3D fields and never routes `SS.H`; only the item-7 wall-splat enders also act in 2.5D (at
+   the stage walls, like the existing ones).
+10. **Step geometry finding for SIM3D / owner (FIGHTERS3D model, scratch stepwin.py - not the sim):** with the §35.2 step
+   (0.85 m arc in 15 f, constant speed), hurt radius 0.25 m, 1.2 m apart and the item-1 tracking, a sidestep evades a
+   LINEAR move when it starts between 4 frames before the attack and its startup - 8 (johnny hook_m / patch cue_m: 9
+   start frames, freak crusher_leap_m: 29), and NEVER evades a default-tracking move (5L / 5M / 6H: the 4-7 frames of
+   step after tracking stops move the defender 0.23-0.40 m < lateralM + r = 0.40-0.47 m) or a homing one. So only the 68
+   LINEAR moves are steppable. If the owner wants straight normals steppable on a read too, the lever is the step curve
+   (front-loaded speed) or a smaller default lead (e.g. normals until = startup - 6); the kits need no change (defaults
+   live in kitlib TRACK_LEAD and validate.py TRACK_LEAD, one line each).
+
+### §35.13 CHANGED(SIM3D): the 3D ring sim as built (2026-09-30; every file carries `CHANGED(SIM3D)` notes)
+Evidence: `_harness/_reports/progress_3d_SIM3D.md`, gates `probe_3d` / `probe_axis` / STEP rows of `probe_synctest`,
+`probe_determinism`, `probe_perf`. On the spawn line (no STEP input) every rule below reduces EXACTLY to the 2.5D game
+(push circle = the asymmetric push box along the line, hurt cylinders = the old hurt rects), so 1D readers keep working
+while they convert.
+1. **Fixed point (`core/sim/fx3d.ts`, §35.1):** Q14 (16384 = 1.0); yaw 0..65535 (0 = +Z, + toward +X, dir(yaw) = (sin, cos)
+   in (x, z)); quarter-wave sine table SIN_Q[0..4096] built at load by a fixed-order Taylor polynomial in doubles (only
+   + - * / : bit-identical on every engine; `sinTableHash()` = 0xc92b373b, pinned by probe_3d), linear between entries;
+   `sinQ cosQ yawToDir dirX dirZ dirToYaw` (binary-search atan, exact round trip), `isqrt` (exact floor, n < 2^53), `rot`,
+   `mulQ`, `divRound` (half away from zero), `alongYaw` (amount along a yaw with the table's own length divided out),
+   `dot2 cross2 dotQ normQ rightOf yawDelta turnToward degToYaw`, `yawToRad` / `yawToDeg` (view only). Safe ranges in the
+   file header (offsets <= 2^25 U, products < 2^53). No Math.sin / cos / atan2 / sqrt / hypot / random anywhere in core/sim
+   (probe_3d scans the sources). All geometry is integer math on JS numbers holding integers.
+2. **State (layout.ts, LAYOUT_REV 4):** fighter `z vz yaw stepDir stepIn pushYaw thrZ thrYaw`; projectile `z vz yaw`
+   (travel yaw); goon `z vz yaw orbit`; world `camNX camNZ` (Q14), `ringKind ringR ringSides ringRot ringCX ringCZ spawnYaw
+   camYaw`; BRAWL header `target`. `F.x / F.vx` = world x, `F.z / F.vz` = world z. **`F.facing` = the SCREEN side sign**
+   (+1 = the forward points screen-right under the camera basis) - the §4.4 input mapping exactly as before; it is set
+   where the yaw is set (auto-face, tracking, round start), so a fighter mid-move or in stun keeps its mapping (the old
+   flip-when-free rule). STATE_INTS 556 -> 614 (world 46, fighter 140, projectile 24), STATE_INTS_BRAWL 922.
+   New fighter states `SIDESTEP 32`, `SIDEWALK 33`, `STEP_END 34` (ST_NAMES 'sidestep' / 'sidewalk' / 'step_end');
+   `ACT.STEP 7` (bufM 1 = IN, 0 = OUT); `BUF.STEPATK 64`.
+3. **Input word:** bit 13 `STEP_IN`, bit 14 `STEP_OUT` (`core/config.ts INPUT`, `inputs.ts IN`, `WORD_BITS = 0x7fff`); both =
+   neutral. The history ring stores bits 4..14; its frozen flag moved from bit 13 to bit 15 (`motion.ts H_FROZEN`).
+   Requests: SHELL `input.ts WORD_MASK 0x1fff -> 0x7fff` + the §35.2 bindings (Q / E, numpad 7 / 9, right stick); UI
+   `touch/controls.ts` (`& 0x1fff`) + the two STEP buttons; AI `cpu.ts` / `pad.ts` masks (`& 0x1fff`) before any CPU steps.
+   NET packets already carry 16 bits.
+4. **Movement (§35.2):** each fight frame fighter i gets its opponent point = the other's START-of-frame position
+   (`fighter.ts OPP` / `setOpp`; brawl: the soft-lock goon). AUTO-FACE (yaw snaps to the opponent) in idle / walk / crouch /
+   block pose / dash (every dash frame) / landing / sidestep / sidewalk / settle and on every move start from neutral;
+   attacks follow tracking (item 6); hitstun / blockstun / knockdown / throws / recovery keep the yaw. Walks, dashes, jump
+   arcs (velocity set at takeoff), RUSH and authored `move` / `moveY` travel run along the fighter's forward. STEP (system
+   `step`): a tap buffers `ACT.STEP` (dash window) or a held STEP starts SIDESTEP from the free state (not while back is
+   held: back = block wins; forward + STEP = the step): 15 frames along the circle around the opponent point, distance
+   kept (tangent step renormalised to the start radius every frame), 0.85 m arc on an ease-out curve over 80 % of the
+   frames; presses buffer from step frame 9 (earlier presses are ignored), actions (`tryAct` CTX.STEP = the free rules
+   minus a new STEP) from frame 11, `canBlock` accepts a SIDESTEP from frame 12; at frame 16 a still-held STEP -> SIDEWALK
+   (1.8 m/s tangential, attacks come out of it, back / down / up leave to the free state at once = back cancels into
+   block, forward keeps circling), release -> STEP_END 4 frames -> free. STEP_IN circles toward -camN, STEP_OUT toward
+   +camN (sense latched per step in `F.stepDir`: +1 = the offset rotated by (-z, x)). Step-attacks (FIGHTERS3D §35.12.5):
+   a move with `input "SS.<L|M|H>"` is `CMove.stepAtk`, never in the normals table, `CFighter.stepAtk[btn]`; its button
+   pressed in SIDESTEP (from frame 9) / SIDEWALK buffers it (wins over the plain normal) and it starts from CTX.STEP only.
+5. **Camera basis (§35.3):** `camN` = the unit perpendicular of (P2 - P1) closest to the previous camN (continuity), kept
+   while |P2 - P1| < `ring.camMinSepM` 0.3 m; updated after bodies / hits / throws each fight frame (`state.ts updateCamN`);
+   brawl: the pair (player, soft-lock goon). Screen-right `R = (camN.z, -camN.x)`; the view camera sits on +camN.
+   Round start per §35.12 (P1 always screen-left). `canBlock` "back" = the screen direction away from the attacker
+   (sign of (defender - attacker) . R); heckle guards by the object's travel screen side.
+6. **Moves in 3D (§35.4):** `CMove.trackUntil` (frames 1..until re-face the opponent point), `trackRate` (yaw units per
+   frame, 0 = full), `homing` (until >= last active), `linear` (until 1), `lateral` (U). Data: FIGHTERS3D §35.12 (`track`
+   rate in degrees 1..180, 180 = any turn); defaults when absent (goons, system moves): normals / throws / system until =
+   startup - 4, specials / EX / cmd grabs / supers startup - 6 (system `track`), full rate; lateral L 0.15 / M 0.18 /
+   H 0.22, specials / supers 0.22, role sweep 0.45, homing 0.60 (system `lateral`). Hit test (`boxes.ts boxCyl /
+   moveBoxHits`): each box in attacker-local (forward x +- w/2, lateral +- lateral, height) vs the defender's hurt
+   cylinders (`hurtCyls`: posture cylinder from data/bodies.json front / back with off = (front - back) >> 1, r = front -
+   off; hurtOverride / stance = centred r = w/2; hurtExt = r w/2 centred x ahead), strict overlap. Pushback, launches and
+   wall splats run along the HIT DIRECTION yaw (attacker forward / projectile travel); `F.pushLeft >= 0` along `F.pushYaw`,
+   the part the ring blocks transfers to the attacker (melee). Proximity guard = 3D distance to the defender's body edge.
+7. **Ring (§35.2, reading §35.11 per §35.12, `core/sim/ring.ts`):** `Match.ring` (CRing: kind, r, sides, rot, centre,
+   side normals), clamp / gap / ray / wall. Bodies: push circles collide (split, a side the ring blocks hands its share
+   over), then the ring, then the separation cap (system 6.0 m) on the 3D root distance. **WALL_SPLAT payload:** a = victim,
+   **b = wall index (circle sector 0..15 / poly side) + 256 x the wall's INWARD normal in whole degrees (0..359, yaw
+   convention)**, c / d = the contact point x / z in cm (consumers: `index = b & 255`, `normalDeg = b >> 8`; VIEW / AUDIO
+   read b as 0 / 1 today and fall back gracefully). "Against the wall" = the victim's push circle within `ring.againstWallM`
+   0.45 m of the boundary along the hit direction: IMPACT splat (hit or block) and the STAGE FRIGHT corner stun (was 1.5 m
+   to the x walls); moves with `onHit.wallSplat` keep `wallSplat.rangeM` 0.9. NEW: a launched (JUGGLE) body reaching the
+   boundary wall-splats (one splat per combo), else slides along it. No ring-outs. `system.stage.wallM` = 5.5 (legacy
+   number only: AI range estimates; the sim reads the ring). `dataHash` now covers every stage's ring / spawnAxisDeg /
+   cameraSideDeg (both online peers must agree).
+8. **Throws:** a grab connects when the defender is inside the thrower's front arc +- `throw.frontArcDeg` 70 (root to root)
+   AND within range between the push circles (`throws.ts inFrontArc`); the victim turns to face the thrower at the connect,
+   its carry runs along -dir(thrower yaw) (`F.thrX / thrZ / thrYaw`), a back throw lands behind along -forward; no facing
+   flip after a GRAB (the free state auto-faces). The tech pushes both apart along the line between them.
+9. **Projectiles:** spawn at the thrower's position + forward x `projectile.x`, velocity along the thrower's yaw at the
+   spawn frame, or at the opponent when `projectile.aimed`; hit box = forward +- w/2, lateral +- `projectile.lateralM`
+   (default box[0] / 2) in the travel frame (`hits.ts projHitsCyl`): a sidestep after the release dodges a straight one.
+   Despawn: life end, the ring wall, or > `projectile.screenHalfM` 4.5 m from the pair midpoint. Clash = planar circles.
+   Gazza's ball: kick / hover along his yaw, `ballReady` = in front (-kickBack .. kickRange) and within kickRange / 2
+   sideways, pickup = planar distance, rebound = vector reflection about the wall's inward normal x `wallRestitutionPct`
+   (loose ball x 50 %). HECKLER objects: random bearing around the player (distance per `heckler.spawnDistM`), aimed at his
+   position at the throw.
+10. **BRAWL BREAK (§35.8):** goons spawn around the player at the emptiest of 8 bearings (clamped inside the ring), walk
+   in along the line to the player, hold the approach ring and spread around him (sideways drift when two share a side),
+   attack with goon-local boxes (tracking to the move's track.until), bodies are circles. Soft lock `BR.target`: when an
+   attack starts (a buffered move while free / stepping) the target = the goon nearest the stick direction (LEFT / RIGHT =
+   -R / +R, STEP_IN / STEP_OUT = -camN / +camN; within 60 deg the nearest, else the smallest angle), else the current
+   target while it lives, else the nearest; the player faces / tracks it.
+11. **Snapshots:** FighterSnap `z`, `yaw` (radians = three.js rotation.y), `step: { kind 'none'|'sidestep'|'sidewalk'|
+   'settle', frame, side (-1 own left / +1 own right), dir 'in'|'out'|'' }`; MatchSnap `camN: [x, z]` (unit floats),
+   `ring: { shape, radius, sides, rot (radians), centre }`, `proj[].z / vz / yaw`; GoonSnap `z`, `yaw`; BrawlSnap `target`.
+   The new fields are OPTIONAL in core/types.ts only so hand-built snapshots in labs / probes still type-check; the sim
+   always fills them. `match.ts readBoxes(m, i)` (the §27.1 request) = world-metre hurt cylinders, active hit boxes
+   (centre, yaw, len, lat, heights) and the push circle for the training overlay; `boxes.ts hurtRects / hitRect / pushExt`
+   stay as LEGACY 1D projections by F.facing.
+12. **Anim table (§35.5):** the step clips are NOT added to SHARED_CLIPS (that would renumber every `34 + k` move id,
+   §17 rule 2 - also the answer to the §35.14.1 note): `core/data.ts STEP_CLIPS = [sidestep_l, sidestep_r, sidewalk_l,
+   sidewalk_r]` are APPENDED to each fighter's table after the stance entries (`animStepId(def, k)`, `CFighter.animStep`,
+   sidewalk_* loop). SIDESTEP shows sidestep_l / _r, SIDEWALK sidewalk_l / _r by the side of the fighter's own body it
+   moves toward (it faces the opponent, so stepDir +1 = its left); STEP_END shows idle. Goon tables unchanged.
+13. **Gates:** `probe_3d.ts` (76 checks, the §35.10 list + fx3d unit tests + step-attacks), `probe_axis.ts` (the 10 system
+   probes re-run on 33 / 200 deg fight lines through `simkit.ts` HP_PROBE_AXIS + its LINE frame: place / fs / lxU / plx),
+   `probe_synctest` +STEP (144 pairs + 24 bonus runs over the 5 real stages and 3 synthetic rings: octagon, hexagon, rotated
+   circle), `probe_determinism` +STEP (144 pairs + 12 unique + 24 bonus runs, twin + save / load re-step every frame),
+   `probe_perf` +STEP row. All SIM probes work in the line frame now.
+14. **Requests / notes to other lanes:** AI - `sense.ts` reads F.x / F.facing / m.sys.wall as 1D (still valid on the line);
+   add F.z / F.yaw / F.stepDir / the ST 32-34 states, `m.ring` (compiled) for walls, and the `probe_season` S3 scripted
+   bonus player (x-only distance to goons: goons now come from all bearings; 1-3 fighters score 0) and S4 (phase-2 moves
+   2/4 bouts: RICKY's L6 bouts vs the L8 hero end faster on the 5.5 m ring) need your 3D pass. UI - `probe_training` RESET
+   CORNER / CORNERED expect x > 6.5 m / < -6.5 m (the old 8 m walls; the driver itself reaches the ring wall at ~5.2-5.4 m),
+   `readBoxes` for the overlay, the move list's `SS.H`. VIEW - FighterSnap z / yaw, camN, ring, proj z / yaw, WALL_SPLAT b
+   decoding, the appended step anim entries (resolve by clip name through GameData.anims as today). AUDIO - WALL_SPLAT b is
+   no longer 0 / 1 (index = b & 255).
+
+### §35.14 CHANGED(ASSETS3D): the §35.5 locomotion clips as baked (2026-09-30; additive, nothing breaks)
+1. **Four new shared clips on every body (12 fighters + 3 goons):** `sidestep_l`, `sidestep_r`, `sidewalk_l`, `sidewalk_r`
+   (`tools/clipplan/_shared.json`; ids appended AFTER the 34 §6.2 shared ids in the plan - `core/data.ts SHARED_CLIPS` is
+   SIM's list: append them at the end so anim ids 0..33 stay). `_l` = the fighter's OWN left, `_r` = own right (the sim
+   picks by the step direction relative to the fighter's yaw, §35.5). Guard upper body = the CMU 13_17 boxing guard of
+   `idle` / walks; lower body = Mixamo Pro_Magic "Standing Walk Left" (a crossover side-walk), `_r` = the same source
+   MIRRORED (why that source: least waist twist - measured below).
+2. **`sidestep_*`**: 8 frames, `dur` 0.2333 s = a 15-frame sim step shown at anim frames 0..14 (60 fps) ends exactly on the
+   clip's last frame. A step-close: lead foot out (frames 0-3), lands, trail foot closes beside it (ends balanced, feet
+   together, guard up). Not a loop. Lateral travel = 0.90 m x the body's hip ratio (johnny 0.824 m; the sim moves 0.85 m;
+   per body in `rootLat`). Its last frame is the upper-body guard frame `idle` and `sidewalk_*` start on, and its lower-body
+   phase is `sidewalk_*` frame 0 (the walk cycle continues seamlessly into hold-to-walk).
+3. **`sidewalk_*`**: loops (`loop: true`), baked PER BODY so the stripped lateral travel runs at the §35.2 1.8 m/s (the
+   playback rate is chosen per body: `rootSpeed` in the plan, record in art/renders/<id>/_build/bake.json `rate`; the
+   achieved speed is within half a frame per cycle, johnny 1.780 m/s / 25 frames / 0.80 s). The view samples loops at
+   natural rate (animF / 60), so at 1.8 m/s the planted feet do not slide (johnny: planted ball-of-foot drift <= 1.3 cm
+   lateral per plant).
+4. **clips.json `rootLat`** (new, optional, only on these 4 clips): `[[t, dx_right_m], ...]` one row per baked frame = the
+   LATERAL hips travel since frame 0 that was stripped from the GLB (+ = toward the fighter's own right, so `_l` runs
+   negative). Same layout as `root` (which stays forward-only, 2-element rows - `core/data.ts isVec2` would drop 3-element
+   rows, hence a separate field). SIM may use the sidestep's `rootLat` shape as the arc's progress curve (normalised to
+   0.85 m), VIEW may read `|rootLat end| / dur` as the loop's authored speed.
+5. Measured numbers per body: see §35.14 item 6 (added after the rebake).

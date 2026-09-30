@@ -51,15 +51,18 @@ import type { Input } from './input.ts';
 import type { TouchControls } from './touch/controls.ts';
 import { hasAssets, playableStage } from './ui/data.ts';
 import type { PortraitQueue } from './app/portraits.ts';
+// CHANGED(integrator) P2: the TRAINING driver (UI §27.1) and the fight camera's projection for its HITBOX overlay
+import { TrainingDriver } from './ui/trainer.ts';
+import { Vector3 } from 'three';
 
 /** after MATCH_END the KO slow-mo + win pose play this long (real ms) before the results card */
 export const RESULTS_DELAY_MS = 2600;
 /**
- * CHANGED(integrator): the sim has no BRAWL BREAK / HECKLER TOSS yet (CONTRACT §4.3.14: no core/sim/brawl.ts, no goon or
- * heckle emitters), so a bonus slot would be a mirror bout against an idle clone. Until SIM lands them THE SEASON passes
- * over bonus slots (recorded as played, 0 points). Flip to true with the sim modes (P3).
+ * CHANGED(integrator) P2: the sim runs BRAWL BREAK / HECKLER TOSS (SIM §28.4, core/sim/brawl.ts; probe_brawl 52/52,
+ * probe_season S3 12/12 fighters), so THE SEASON plays its bonus slots: BRAWL BREAK after bout 3 and HECKLER TOSS after
+ * bout 6 (PILOT: BRAWL BREAK after bout 2), as data/ladder.json lays them out. (P1: false = the slots were skipped.)
  */
-export const BONUS_ROUNDS_IN_SIM = false;
+export const BONUS_ROUNDS_IN_SIM = true;
 /** rollback depth margin for the event reader (frames) */
 const EVENT_MARGIN = 16;
 
@@ -190,6 +193,9 @@ interface Bout {
   lastSnap: MatchSnap | null;
   lastFighters: [FighterSnap, FighterSnap] | null;
   stalls: number;
+  /** CHANGED(integrator) P2 (UI §27.1): the TRAINING driver of a training bout (dummy, record / playback, resets,
+   *  frame data, hitboxes); null in every other mode */
+  trainer: TrainingDriver | null;
 }
 
 /** a logged event for __HP__.events(n) */
@@ -292,10 +298,12 @@ export class Game {
     d.portraits?.need(cfg.p[1].fighter);
     const m = createMatch(cfg, d.data);
     const local: 0 | 1 = ctx.local ?? 0;
+    // CHANGED(integrator) P2: a training bout's dummy (incl. DUMMY: CPU) belongs to the TrainingDriver (UI §27.1)
+    const training = cfg.mode === 'training' && !ctx.online;
     const cpus: [Cpu | null, Cpu | null] = [null, null];
     for (const p of [0, 1] as const) {
       const lv = cfg.p[p].cpu;
-      if (!ctx.online && typeof lv === 'number' && lv >= 0) cpus[p] = createCpu(clampLevel(lv), cfg.p[p].fighter, (cfg.seed ^ (0x9e3779b9 * (p + 1))) >>> 0);
+      if (!ctx.online && !training && typeof lv === 'number' && lv >= 0) cpus[p] = createCpu(clampLevel(lv), cfg.p[p].fighter, (cfg.seed ^ (0x9e3779b9 * (p + 1))) >>> 0);
     }
     const session = ctx.online ? ctx.online.attach(m) : null;
     this.hud.mount(cfg);
@@ -304,7 +312,19 @@ export class Game {
     this.bout = {
       epoch: my, cfg, m, view, cpus, online: ctx.online ?? null, session, local, season: ctx.season ?? null, stats: new BoutStats(),
       seen: new Map(), lastFrame: 0, over: false, finished: false, pausedBy: local, pauseSeq: 0, lastSnap: null, lastFighters: null, stalls: 0,
+      trainer: null,
     };
+    // CHANGED(integrator) P2 (UI §27.1, the lines runtime/lab/ui_game.ts proved): the driver begins after hud.mount
+    // (mount resets the training overlays; begin() applies the TRAINING OPTIONS on top)
+    if (training) {
+      const b = this.bout;
+      b.trainer = new TrainingDriver({ opts: d.menus.training, data: d.data, hud: this.hud,
+        sim: { createMatch, step, readFighter, readMatch, devSet }, cpu: createCpu });
+      b.trainer.begin(cfg, m);
+    }
+    // CHANGED(integrator) P2 (UI §27.4 HUD hooks): THE SEASON's bouts show the season score banked so far and the
+    // EPISODE line on the broadcast bug; bonus rounds keep the sim's running SCORE (Hud reads MatchSnap.brawl.score)
+    if (ctx.season && cfg.mode === 'arcade') this.seasonHud(ctx.season, cfg);
     this.installPauseApi();
     this.audioBout(cfg, m, ctx, local, cpus);
     d.boot.progress(1, 'Ready');
@@ -330,7 +350,8 @@ export class Game {
   private audioBout(cfg: MatchCfg, m: Match, ctx: BoutCtx, local: 0 | 1, cpus: [Cpu | null, Cpu | null]): void {
     const a = this.d.audio;
     const humans = (cfg.p[0].cpu < 0 ? 1 : 0) + (cfg.p[1].cpu < 0 ? 1 : 0);
-    const who = ctx.online ? local : humans === 2 ? -1 : cpus[0] && !cpus[1] ? 1 : 0;
+    // CHANGED(integrator) P2: training = player 1 vs the driver's dummy (its cfg says cpu -1 for the dummy, §27.1)
+    const who = ctx.online ? local : cfg.mode === 'training' ? 0 : humans === 2 ? -1 : cpus[0] && !cpus[1] ? 1 : 0;
     try {
       a.bout({ fighters: [cfg.p[0].fighter, cfg.p[1].fighter], stage: cfg.stage, mode: cfg.mode, local: who, sfxNames: m.tab.sfx });
       a.setSplatter(this.d.settings.get().gore);
@@ -363,6 +384,16 @@ export class Game {
       // with the P2 key set (arrows / numpad) and ignored its touch overlay and first pad.
       const r = b.session.tick(w[0]);
       if (r.stalled) b.stalls++;
+      return;
+    }
+    // CHANGED(integrator) P2 (UI §27.1): TRAINING - a RESET POSITION swaps in the driver's fresh, positioned Match (the
+    // view / HUD read snapshots only, so only the event reader restarts), then the driver turns the sampled words into
+    // [P1, dummy] (dummy / CPU / playback; P1 idles while recording)
+    if (b.trainer) {
+      const nm = b.trainer.pending();
+      if (nm) { b.m = nm; b.seen.clear(); b.lastFrame = nm.frame(); }
+      const [i1, i2] = b.trainer.tick(b.m, w);
+      step(b.m, i1, i2);
       return;
     }
     const in1 = b.cpus[0] ? b.cpus[0].input(b.m, 0) : w[0];
@@ -404,9 +435,24 @@ export class Game {
     b.view.setSafeArea(this.hud.safeTop());
     b.view.frame(snap, f, evs, dt);
     this.hud.frame(snap, f, evs);
+    // CHANGED(integrator) P2 (UI §27.1): the HITBOX overlay, the sim's boxes projected with the fight camera to CSS px
+    if (b.trainer) b.trainer.frame(this.projector(b));
     this.touchFrame(b, f);
     try { d.audio.events(evs, snap, f); } catch (e) { console.warn('[hit-parade] audio.events', e); }
     b.view.render();
+  }
+
+  private readonly projV = new Vector3();
+  /** world metres -> CSS px of the page through the bout's fight camera (null behind the camera) */
+  private projector(b: Bout): (x: number, y: number, z: number) => [number, number] | null {
+    const cam = b.view.cam.camera;
+    const el = this.d.renderer.three.domElement;
+    const w = el.clientWidth, h = el.clientHeight;
+    const v = this.projV;
+    return (x, y, z) => {
+      v.set(x, y, z).project(cam);
+      return v.z > 1 ? null : [((v.x + 1) / 2) * w, ((1 - v.y) / 2) * h];
+    };
   }
 
   /** the touch overlay: visible only while the bout steps in touch mode (hidden on pause / results / menus) */
@@ -498,6 +544,8 @@ export class Game {
     const r: MatchResult = {
       cfg: b.cfg, winner, wins: [snap.wins[0] ?? 0, snap.wins[1] ?? 0], frames: snap.frame, forfeit, fighters: [f[0], f[1]], match: snap,
       stats: [s.player(0), s.player(1)], names: [this.nameOf(b.cfg.p[0].fighter), this.nameOf(b.cfg.p[1].fighter)],
+      // CHANGED(integrator) P2 (UI §27.3): the per-round winners / how, recorded on each KO / TIME OVER frame
+      rounds: s.rounds.slice(),
     };
     const run = b.season;
     const slot = run?.current() ?? null;
@@ -525,8 +573,10 @@ export class Game {
   private episodeScore(b: Bout, winner: -1 | 0 | 1): number {
     const s = b.stats;
     const slot = b.season?.current();
-    if (slot && (slot.kind === 'brawl' || slot.kind === 'heckler')) return s.score[0];
     const snap = b.lastSnap ?? readMatch(b.m);
+    // CHANGED(integrator) P2: a bonus round scores the sim's running total (MatchSnap.brawl.score = SCORE `c`, §28.4). The
+    // P1 sum of positive SCORE `b` deltas over-counted a HECKLER TOSS: a heckle hit's negative delta was dropped.
+    if (slot && (slot.kind === 'brawl' || slot.kind === 'heckler')) return snap.brawl ? Math.max(0, snap.brawl.score) : s.score[0];
     return (snap.wins[0] ?? 0) * 1000 + s.damage[0] + 100 * s.maxCombo[0] + 300 * (s.counters[0] + s.punishes[0]) + 500 * s.perfectParries[0]
       + (winner === 0 ? 5000 : 0) + s.score[0];
   }
@@ -699,13 +749,36 @@ export class Game {
     return (run as SeasonRun & { score?: number }).score ?? 0;
   }
 
+  /** CHANGED(integrator) P2: a bonus round's length (s) = system.json brawl / heckler `seconds` (the sim's default timer) */
+  private bonusSeconds(kind: 'brawl' | 'heckler'): number {
+    const sys = this.d.data.system;
+    const s = kind === 'brawl' ? sys.brawl?.seconds : sys.heckler?.seconds;
+    return typeof s === 'number' && s > 0 ? s : kind === 'brawl' ? 45 : 40;
+  }
+
+  /**
+   * CHANGED(integrator) P2 (UI §27.4 HUD hooks): a SEASON bout's score box shows the season score banked before this
+   * bout, and the broadcast bug reads "EPISODE n - <STAGE>" (strings vs.episode + stage.<id>.name; the Hud's own
+   * default is the stage name alone).
+   */
+  private seasonHud(run: SeasonRun, cfg: MatchCfg): void {
+    const slot = run.current();
+    if (!slot) return;
+    this.hud.setScore(this.seasonScore(run));
+    const str = this.d.data.strings;
+    const ep = (str['vs.episode'] ?? 'EPISODE {n}').replace('{n}', String(slot.episode));
+    const st = str[`stage.${cfg.stage}.name`];
+    this.hud.setEpisodeLine(st ? `${ep} - ${st}` : ep);
+  }
+
   private async seasonSlot(run: SeasonRun): Promise<void> {
     const d = this.d;
     const my = ++this.epoch;
     this.teardown(false);
     const slot = run.current();
     if (!slot) { await this.seasonCleared(run); return; }
-    if (!BONUS_ROUNDS_IN_SIM && (slot.kind === 'brawl' || slot.kind === 'heckler')) {
+    const bonus = slot.kind === 'brawl' || slot.kind === 'heckler';
+    if (!BONUS_ROUNDS_IN_SIM && bonus) {
       console.info(`[hit-parade] season: ${slot.kind} bonus round skipped (not in the sim yet)`);
       run.record(true);
       await this.seasonSlot(run);
@@ -715,22 +788,29 @@ export class Game {
     d.flow.setScreen('ladder');
     d.boot.hide();
     const init = run.init;
+    // CHANGED(integrator) P2 (UI §27.4): the ladder marks the slot a CONTINUE is replaying as lost and shows the continues
     const lv: LadderView = {
       fighter: init.fighter, color: init.color, length: init.length,
-      bouts: run.slots.map((s, k) => ({ kind: s.kind, opponent: s.opponent ?? undefined, result: k < run.index ? 'won' : null })),
-      current: run.index, score: this.seasonScore(run),
+      bouts: run.slots.map((s, k) => ({ kind: s.kind, opponent: s.opponent ?? undefined,
+        result: k < run.index ? 'won' : run.outcomes[k] === 'loss' ? 'lost' : null })),
+      current: run.index, score: this.seasonScore(run), continues: run.continues,
     };
     const go = await d.menus.showLadder(lv);
     if (my !== this.epoch) return;
     if (go === 'quit') { this.season = null; this.toMenus('main'); return; }
-    const bonus = slot.kind === 'brawl' || slot.kind === 'heckler';
     if (slot.kind !== 'bout') {
-      const card: CardView = { kind: slot.kind as Exclude<SlotKind, 'bout'>, a: init.fighter, b: slot.opponent ?? undefined };
+      // CHANGED(integrator) P2: a bonus card carries the round's length from the sim's own numbers (system.json
+      // brawl.seconds 45 / heckler.seconds 40 = what the sim runs when cfg.timer is absent)
+      const card: CardView = { kind: slot.kind as Exclude<SlotKind, 'bout'>, a: init.fighter, b: slot.opponent ?? undefined,
+        ...(bonus ? { seconds: this.bonusSeconds(slot.kind as 'brawl' | 'heckler') } : {}) };
       await d.menus.showCard(card);
       if (my !== this.epoch) return;
     }
     const opp = slot.opponent ?? init.fighter;
-    const stage = playableStage(this.d.data as unknown as Parameters<typeof playableStage>[0], slot.stage ?? this.stageFor(slot.opponent, this.firstStage()));
+    // CHANGED(integrator) P2: a bonus round plays on the PLAYER's home stage (as probe_season S3 stages it); a bout on
+    // the slot's own stage, else the opponent's home stage (THE FREAK butcher_block, RICKY control_room)
+    const home = bonus ? this.stageFor(init.fighter, this.firstStage()) : this.stageFor(slot.opponent, this.firstStage());
+    const stage = playableStage(this.d.data as unknown as Parameters<typeof playableStage>[0], slot.stage ?? home);
     const cfg: MatchCfg = {
       mode: slot.kind === 'brawl' ? 'brawl' : slot.kind === 'heckler' ? 'heckler' : 'arcade',
       stage, seed: run.slotSeed(),
@@ -784,7 +864,8 @@ export class Game {
     if (my !== this.epoch) return;
     const res = d.save.recordClear({ fighter: init.fighter, length: init.length, difficulty: init.difficulty, score, name });
     this.season = null;
-    try { await d.menus.showEnding({ fighter: init.fighter, score, unlocked: res.unlocked }); } catch (e) { console.warn('[hit-parade] ending', e); }
+    // CHANGED(integrator) P2 (UI §27.4): the ending's RATINGS TOTAL card says how many continues the run used
+    try { await d.menus.showEnding({ fighter: init.fighter, score, unlocked: res.unlocked, length: init.length, continues: run.continues }); } catch (e) { console.warn('[hit-parade] ending', e); }
     if (my !== this.epoch) return;
     this.toMenus('title');
   }
@@ -911,6 +992,8 @@ export class Game {
     try { this.d.touch?.setVisible(false); } catch { /* ignore */ }
     if (!b) return;
     this.bout = null;
+    // CHANGED(integrator) P2 (UI §27.1): the driver drops its option listener and clears the HUD overlays
+    try { b.trainer?.end(); } catch (e) { console.warn('[hit-parade] trainer.end', e); }
     try { this.d.audio.setPaused(false); this.d.audio.bout(null); } catch (e) { console.warn('[hit-parade] audio.bout(null)', e); }
     try { this.hud.unmount(); } catch (e) { console.warn('[hit-parade] hud.unmount', e); }
     try { b.view.dispose(); } catch (e) { console.warn('[hit-parade] view.dispose', e); }

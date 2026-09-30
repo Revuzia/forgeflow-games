@@ -28,4 +28,6 @@ export const INPUT = {
   PARRY: 1 << 10,
   IMPACT: 1 << 11,
   TAUNT: 1 << 12,
+  STEP_IN: 1 << 13, // CHANGED(SIM3D): circle away from the camera (CONTRACT §35.2)
+  STEP_OUT: 1 << 14, // CHANGED(SIM3D): circle toward the camera
 } as const;

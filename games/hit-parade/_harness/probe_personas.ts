@@ -27,16 +27,16 @@ import { loadGameData } from '../runtime/src/core/data.ts';
 import type { GameData } from '../runtime/src/core/types.ts';
 import { checksum, createMatch, readMatch, step } from '../runtime/src/core/sim/match.ts';
 import type { Match, MatchCfg, Scheme } from '../runtime/src/core/sim/match.ts';
-import { EV, eventsSince } from '../runtime/src/core/sim/events.ts';
+import { EV, EVX, eventsSince } from '../runtime/src/core/sim/events.ts';
 import type { SimEvent } from '../runtime/src/core/types.ts';
 import { F, FL, PH, ST, fighterBase } from '../runtime/src/core/sim/layout.ts';
 import { hash32, mulberry32 } from '../runtime/src/core/rng.ts';
 import { createCpu, createBrainCpu, levelProfile } from '../runtime/src/core/ai/cpu.ts';
-import type { Cpu } from '../runtime/src/core/ai/cpu.ts';
+import type { Cpu, Profile } from '../runtime/src/core/ai/cpu.ts';
 import { createPersona } from '../runtime/src/core/ai/personas.ts';
 import type { PersonaName } from '../runtime/src/core/ai/personas.ts';
 import { HIDDEN_FIELDS } from '../runtime/src/core/ai/sense.ts';
-import type { Decision } from '../runtime/src/core/ai/brain.ts';
+import type { Brain, Decision } from '../runtime/src/core/ai/brain.ts';
 import { dirBits } from '../runtime/src/core/ai/pad.ts';
 import { buildKit } from '../runtime/src/core/ai/kit.ts';
 
@@ -316,6 +316,257 @@ const pct = (a: number, n: number): string => `${a}/${n} (${n ? Math.round((100 
     report.push(`${R}f ${right}/${total}`);
   }
   say(`reaction clock (pure-reaction defender, block 1.0, no guard posture; startups ${moves.map((q) => q[0]).join(',')}): ${report.join(', ')}`);
+}
+
+// ------------------------------------------------------------------ H5 pattern guesses (CHANGED(AI) P2)
+// Levels 0-5 cannot react to a 4-18 f ground attack (reactF 28-60 f), so they block by GUESSING from the attacker's
+// habits (core/ai/habits.ts: visible move starts, committed only after the reaction delay). A scripted attacker (johnny)
+// walks in and repeats one mixup; the defender is CPU L3 (reactF 36, aggression 0 so it only defends) - once with its
+// habit weight, once with habit 0 (the flat P1 guesses) as the control. Measured at every attack: blocked or hit, and the
+// guard the defender's own output word held on the attack's first active frame (crouch / stand / none).
+//   H5a lows only: crouch share of its guards (late half) with habits >= 0.62 and above the control's by >= 0.1
+//   H5b lows then overheads: its first overheads after the switch are guessed LOW (crouch share >= 0.6: it keeps the
+//       pattern it saw - not reacting), its late overheads get a standing guard more often than the first ones
+//   H5c throws only: it techs later throws more often than early ones, or escapes them (throwEscapes > 0)
+{
+  const ATT = 'johnny';
+  const DEF = 'johnny';
+  const blindP = (): Profile => ({ ...levelProfile(0), name: 'script', level: -1, reactF: 100000, block: 0, guard: 0, punish: 0, antiAir: 0, aggression: 1, thinkF: 2, drop: 0, habit: 0, parry: 0, meter: 0, route: 1, tech: 0, delayF: 0, respect: 0, backRise: 0, wakeReversal: 0 });
+  type Kind = 'low' | 'over' | 'throw';
+  interface AttackLog { kind: Kind; out: 'block' | 'hit' | 'tech' | 'throw' | 'none'; guard: 'crouch' | 'stand' | 'none' }
+  const runScript = (kindAt: (n: number) => Kind, total: number, habitW: number, seed: number): { logs: AttackLog[]; techs: number; escapes: number } => {
+    const m = createMatch({ mode: 'training', stage: 'rust_theater', seed, timer: 0, p: [{ fighter: ATT, color: 0, scheme: 1, cpu: -1 }, { fighter: DEF, color: 1, scheme: 1, cpu: 3 }] }, data);
+    const kitA = buildKit(data, m.cf[0], 1);
+    const lows = kitA.moves.filter((mi) => (mi.normal || mi.cm.kind === 1) && mi.low && mi.recipe && mi.recipe.ctx === '' && !mi.recipe.air).sort((p, q) => p.cm.startup - q.cm.startup);
+    const ohs = kitA.moves.filter((mi) => mi.overhead && mi.recipe && mi.recipe.ctx === '' && !mi.recipe.air && !mi.special).sort((p, q) => p.cm.startup - q.cm.startup);
+    const low = lows[0].idx;
+    const over = ohs[0].idx;
+    const logs: AttackLog[] = [];
+    let n = 0;
+    const plan = (b: Brain): Decision => {
+      const s = b.seen;
+      if (n >= total) return { t: 'none', frames: 30 };
+      const k = kindAt(n);
+      const idx = k === 'low' ? low : k === 'over' ? over : b.kit.throwF;
+      if (s.op.st !== ST.IDLE && s.op.st !== ST.CROUCH && s.op.st !== ST.WALK_F && s.op.st !== ST.WALK_B) return { t: 'none', frames: 2 };
+      if (!b.inReach(idx)) return { t: 'hold', d: 6, frames: 2 };
+      b.nextThink = s.frame + 30 + Math.floor(b.rnd() * 24);
+      logs.push({ kind: k, out: 'none', guard: 'none' });
+      n++;
+      return { t: 'move', idx };
+    };
+    const att = createBrainCpu(blindP(), ATT, seed * 7 + 1, plan);
+    const prof = { ...levelProfile(3), aggression: 0, punish: 0, habit: habitW };
+    const def = createBrainCpu(prof, DEF, seed * 11 + 3, null);
+    const b0 = fighterBase(0);
+    let lastInst = -1;
+    let cur = -1;
+    let seq = m.events.count;
+    for (let f = 0; f < 200 * total + 600; f++) {
+      const w0 = att.input(m, 0);
+      const w1 = def.input(m, 1);
+      // the defender's guard on the attack's first active frame (its own output word; away from the attacker = guard)
+      const inst = m.s[b0 + F.mvInst];
+      if (inst !== lastInst && m.s[b0 + F.st] === ST.ATTACK) {
+        lastInst = inst;
+        if (logs.length > 0) cur = logs.length - 1;
+      }
+      const mv = m.s[b0 + F.mv];
+      if (cur >= 0 && mv >= 0 && m.s[b0 + F.mvF] + 1 === m.cf[0].moves[mv].startup) {
+        const away = m.s[fighterBase(1) + F.x] > m.s[b0 + F.x] ? 8 : 4; // RIGHT / LEFT bit of the §4.4 word
+        logs[cur].guard = (w1 & away) !== 0 ? ((w1 & 2) !== 0 ? 'crouch' : 'stand') : 'none';
+      }
+      step(m, w0, w1);
+      const evs: SimEvent[] = [];
+      const cnt = m.events.count;
+      if (cnt !== seq) {
+        eventsSince(m.events, 0, evs);
+        for (const e of evs.slice(Math.max(0, evs.length - (cnt - seq)))) {
+          if (cur < 0) continue;
+          if (e.type === EV.THROW_TECH) logs[cur].out = 'tech'; // a tech follows the THROW connect event
+          if (logs[cur].out !== 'none') continue;
+          if (e.type === EV.BLOCK && e.a === 0) logs[cur].out = 'block';
+          else if ((e.type === EV.HIT || e.type === EV.COUNTER || e.type === EV.PUNISH) && e.a === 0) logs[cur].out = 'hit';
+          else if (e.type === EV.THROW && e.a === 0) logs[cur].out = 'throw';
+        }
+        seq = cnt;
+      }
+      if (n >= total && m.s[b0 + F.st] !== ST.ATTACK && logs[logs.length - 1].out !== 'none') break;
+    }
+    return { logs, techs: def.brain.stats.techTries, escapes: def.brain.stats.throwEscapes };
+  };
+  const H5S = GATE ? [1, 2, 3, 4, 5, 6] : [1, 2, 3];
+  const share = (ls: AttackLog[], pred: (l: AttackLog) => boolean, of: (l: AttackLog) => boolean): [number, number] => {
+    const base = ls.filter(of);
+    return [base.filter(pred).length, base.length];
+  };
+  const fr = (x: [number, number]): string => `${x[0]}/${x[1]}`;
+  const rate = (x: [number, number]): number => (x[1] ? x[0] / x[1] : 0);
+  // H5a
+  const aH: AttackLog[] = [];
+  const a0: AttackLog[] = [];
+  for (const sd of H5S) {
+    aH.push(...runScript(() => 'low', 36, levelProfile(3).habit, sd).logs.slice(16));
+    a0.push(...runScript(() => 'low', 36, 0, sd).logs.slice(16));
+  }
+  const guarded = (l: AttackLog): boolean => l.guard !== 'none';
+  const crH = share(aH, (l) => l.guard === 'crouch', guarded);
+  const cr0 = share(a0, (l) => l.guard === 'crouch', guarded);
+  const blH = share(aH, (l) => l.out === 'block', () => true);
+  const bl0 = share(a0, (l) => l.out === 'block', () => true);
+  ok(rate(crH) >= 0.62 && rate(crH) - rate(cr0) >= 0.1, `H5a lows only: crouch share of the L3 defender's guards (attacks 17-36) ${fr(crH)} = ${rate(crH).toFixed(2)} with habits vs ${fr(cr0)} = ${rate(cr0).toFixed(2)} habit 0; lows blocked ${fr(blH)} vs ${fr(bl0)}`);
+  // H5b
+  const bFirst: AttackLog[] = [];
+  const bLate: AttackLog[] = [];
+  for (const sd of H5S) {
+    const r = runScript((k) => (k < 24 ? 'low' : 'over'), 48, levelProfile(3).habit, sd + 20).logs;
+    bFirst.push(...r.slice(24, 28));
+    bLate.push(...r.slice(38, 48));
+  }
+  const crF = share(bFirst, (l) => l.guard === 'crouch', guarded);
+  const stF = share(bFirst, (l) => l.guard === 'stand', guarded);
+  const stL = share(bLate, (l) => l.guard === 'stand', guarded);
+  const ohF = share(bFirst, (l) => l.out === 'block', () => true);
+  const ohL = share(bLate, (l) => l.out === 'block', () => true);
+  ok(rate(crF) >= 0.6 && rate(stL) > rate(stF), `H5b lows -> overheads: first 4 overheads after the switch guessed low (crouch share ${fr(crF)} = ${rate(crF).toFixed(2)}, overheads blocked ${fr(ohF)}), attacks 15-24 after it stand share ${fr(stL)} = ${rate(stL).toFixed(2)} > first ${rate(stF).toFixed(2)} (blocked ${fr(ohL)})`);
+  // H5c
+  let tEarly = 0;
+  let tLate = 0;
+  let nE = 0;
+  let nL = 0;
+  let esc = 0;
+  for (const sd of H5S) {
+    const r = runScript(() => 'throw', 30, levelProfile(3).habit, sd + 40);
+    const ls = r.logs;
+    for (let k = 0; k < ls.length; k++) {
+      if (ls[k].out !== 'tech' && ls[k].out !== 'throw') continue;
+      if (k < 10) {
+        nE++;
+        if (ls[k].out === 'tech') tEarly++;
+      } else if (k >= 15) {
+        nL++;
+        if (ls[k].out === 'tech') tLate++;
+      }
+    }
+    esc += r.escapes;
+  }
+  ok(tLate / Math.max(1, nL) > tEarly / Math.max(1, nE) || esc > 0, `H5c throws only: techs early ${tEarly}/${nE}, late ${tLate}/${nL}; close-range throw escapes chosen ${esc}`);
+  say(`pattern guesses (L3 defender, no reactable attack): crouch share vs lows ${rate(crH).toFixed(2)} (habit 0: ${rate(cr0).toFixed(2)}); after lows -> overheads: first overheads crouch-guarded ${rate(crF).toFixed(2)}, later standing ${rate(stL).toFixed(2)}; throw techs ${tEarly}/${nE} -> ${tLate}/${nL}, escapes ${esc}`);
+}
+
+// ------------------------------------------------------------------ U1 uniques + supers in play (CHANGED(AI) P2)
+// Every kit's special families, both supers and its §28 unique, used by the CPU in real bouts (GATING in G3 mode; the
+// smoke run reports). Natural bouts: each fighter as CPU L6 / L8 vs CPU L6 (opponents rotate, zoners included). Full-meter
+// bouts (the probe sets SHOWTIME to 3 bars at every round start - it owns the match): each fighter as CPU L6 vs CPU L4 must
+// start its Lv1 and its Lv3. Install (no kit has one yet, §28.2): johnny with an install block injected into weave_l.
+{
+  const U_ROSTER = Object.keys(data.fighters).sort();
+  const UOPP = ['zambini', 'johnny', 'krane', 'patch', 'gazza', 'bruno', 'lotus', 'rerun', 'spin', 'boneyard'];
+  const useSeeds = GATE ? [1, 2, 3, 4] : [1];
+  const base = (id: string): string => id.replace(/_(l|m|h|ex)$/, '');
+  interface Tally { use: Record<string, number>; ev: Record<string, number>; stance: number }
+  const tallyBout = (hero: string, heroLv: number, opp: string, oppLv: number, seed: number, heroP: number, fullMeter: boolean, gd: GameData, t: Tally): void => {
+    const scheme = (seed % 2 === 0 ? 1 : 0) as Scheme;
+    const p = heroP === 0
+      ? [{ fighter: hero, color: 0, scheme, cpu: heroLv }, { fighter: opp, color: 1, scheme: 0 as Scheme, cpu: oppLv }]
+      : [{ fighter: opp, color: 0, scheme: 0 as Scheme, cpu: oppLv }, { fighter: hero, color: 1, scheme, cpu: heroLv }];
+    const m = createMatch({ mode: 'versus', stage: 'rust_theater', seed: seed * 31 + heroLv, p: p as MatchCfg['p'] }, gd);
+    const cpus = [createCpu(p[0].cpu, p[0].fighter, seed * 101 + heroLv), createCpu(p[1].cpu, p[1].fighter, seed * 131 + oppLv)];
+    const hb = fighterBase(heroP);
+    let lastInst = -1;
+    let seq = m.events.count;
+    let wasFight = false;
+    for (let f = 0; f < 40000; f++) {
+      const fight = m.s[2] === PH.FIGHT;
+      if (fullMeter && fight && !wasFight) for (let i = 0; i < 2; i++) m.s[fighterBase(i) + F.showtime] = 30000;
+      wasFight = fight;
+      step(m, cpus[0].input(m, 0), cpus[1].input(m, 1));
+      const inst = m.s[hb + F.mvInst];
+      const mv = m.s[hb + F.mv];
+      if (inst !== lastInst && mv >= 0) {
+        lastInst = inst;
+        if (m.s[hb + F.st] === ST.ATTACK) {
+          const id = m.cf[heroP].moves[mv].id;
+          t.use[id] = (t.use[id] ?? 0) + 1;
+        }
+      }
+      if (m.s[hb + F.st] === ST.STANCE) t.stance++;
+      const cnt = m.events.count;
+      if (cnt !== seq) {
+        const evs: SimEvent[] = [];
+        eventsSince(m.events, 0, evs);
+        for (const e of evs.slice(Math.max(0, evs.length - (cnt - seq)))) {
+          const k = e.type === EVX.CATCH && e.a === heroP ? 'CATCH' : e.type === EVX.TELEPORT && e.a === heroP ? 'TELEPORT' : e.type === EVX.PHASE && e.a === heroP ? 'PHASE'
+            : e.type === EVX.BALL && e.a === heroP ? `BALL${e.b}` : e.type === EVX.INSTALL && e.a === heroP ? 'INSTALL' : e.type === EV.IMPACT_ARMOR && e.a === heroP ? 'ARMOR' : '';
+          if (k) t.ev[k] = (t.ev[k] ?? 0) + 1;
+        }
+        seq = cnt;
+      }
+      if (m.s[2] === PH.MATCH_END) break;
+    }
+    const bs = cpus[heroP].brain.stats;
+    for (const k of ['uniqueCancels', 'rekicks', 'stanceFollows', 'counterReads', 'rekkas'] as const) t.ev[k] = (t.ev[k] ?? 0) + bs[k];
+  };
+  const missing: string[] = [];
+  const lines2: string[] = [];
+  for (const hero of U_ROSTER) {
+    const t: Tally = { use: {}, ev: {}, stance: 0 };
+    for (const lv of [6, 8]) for (const sd of useSeeds) {
+      let opp = UOPP[(sd + lv + hero.length) % UOPP.length];
+      if (opp === hero) opp = UOPP[(sd + lv + hero.length + 1) % UOPP.length];
+      tallyBout(hero, lv, opp, 6, sd, sd % 2, false, data, t);
+    }
+    const tm: Tally = { use: {}, ev: {}, stance: 0 };
+    for (const sd of GATE ? [1, 2] : [1]) tallyBout(hero, 6, hero === 'johnny' ? 'patch' : 'johnny', 4, sd + 50, sd % 2, true, data, tm);
+    const cf = createMatch({ mode: 'training', stage: 'rust_theater', seed: 1, p: [{ fighter: hero, color: 0, scheme: 1, cpu: -1 }, { fighter: 'johnny', color: 1, scheme: 1, cpu: -1 }] }, data).cf[0];
+    const kit1 = buildKit(data, cf, 0);
+    const miss: string[] = [];
+    // every special family with a neutral / chain / stance recipe (sim-started follow-ups and phase-2 moves aside)
+    const fams = new Map<string, number>();
+    for (const mi of kit1.moves) {
+      if (mi.cm.snapId < 0 || !mi.special || mi.super > 0 || mi.tool === 'auto' || mi.phase2 || !mi.recipe) continue;
+      fams.set(base(mi.id), (fams.get(base(mi.id)) ?? 0) + (t.use[mi.id] ?? 0));
+    }
+    for (const [k, v] of fams) if (v === 0) miss.push(k);
+    // both supers (full-meter bouts; a `phases` kit's Lv3 may be its phase-2 one)
+    const sup = (k: number): number => (k >= 0 ? (tm.use[kit1.moves[k].id] ?? 0) + (t.use[kit1.moves[k].id] ?? 0) : 0);
+    if (kit1.sup1 >= 0 && sup(kit1.sup1) === 0) miss.push(`Lv1 ${kit1.moves[kit1.sup1].id}`);
+    const lv3ids = [kit1.sup3, cf.route2.sup3].filter((k) => k >= 0).map((k) => kit1.moves[k].id);
+    if (lv3ids.length > 0 && lv3ids.every((id) => (tm.use[id] ?? 0) + (t.use[id] ?? 0) === 0)) miss.push(`Lv3 ${lv3ids.join('/')}`);
+    // the unique itself
+    const uk = cf.uk;
+    const ev = (k: string): number => t.ev[k] ?? 0;
+    if (uk === 1 && (t.stance === 0 || ev('stanceFollows') === 0)) miss.push('stance');
+    if (uk === 3 && (ev('BALL0') === 0 || ev('BALL6') === 0 || ev('rekicks') === 0)) miss.push('ball kick / hover / re-kick');
+    if (uk === 4 && ev('CATCH') === 0) miss.push('counter CATCH');
+    // armor steps (Bruno / Boneyard): stepped AND cancelled out of; armored moves without steps (THE FREAK): absorbed
+    if (uk === 5 && (kit1.tools.step ?? []).length > 0 && ev('uniqueCancels') === 0) miss.push('armor-step cancel');
+    if (uk === 5 && (kit1.tools.step ?? []).length === 0 && ev('ARMOR') === 0) miss.push('armor absorb');
+    if (uk === 6 && ev('TELEPORT') === 0) miss.push('TELEPORT');
+    if (uk === 7) {
+      if (ev('PHASE') === 0) miss.push('PHASE');
+      const p2 = kit1.moves.filter((mi) => mi.phase2 && mi.super === 0).map((mi) => mi.id);
+      if (p2.every((id) => (t.use[id] ?? 0) === 0)) miss.push('phase-2 moves');
+    }
+    if (uk === 2) {
+      const chargeFam = kit1.moves.filter((mi) => mi.recipe && mi.recipe.charge !== 0).map((mi) => mi.id);
+      if (chargeFam.every((id) => (t.use[id] ?? 0) === 0)) miss.push('charge specials');
+    }
+    const counts = [...fams.entries()].map(([k, v]) => `${k}:${v}`).join(' ');
+    lines2.push(`${hero}: ${counts} | Lv1 ${sup(kit1.sup1)} Lv3 ${lv3ids.map((id) => (tm.use[id] ?? 0) + (t.use[id] ?? 0)).join('/')} | ${JSON.stringify(t.ev)}${t.stance ? ` stance ${t.stance} f` : ''}`);
+    if (miss.length > 0) missing.push(`${hero} [${miss.join(', ')}]`);
+  }
+  if (VERBOSE) for (const l of lines2) console.log(`    ${l}`);
+  // install (§28.2: available, no kit uses one yet) - johnny's weave_l becomes an install move in a copied GameData
+  const jd = structuredClone(data.fighters.johnny) as GameData['fighters'][string];
+  (jd.moves.weave_l as unknown as Record<string, unknown>).install = { frames: 600, damagePct: 120, walkPct: 110 };
+  const gdI: GameData = { ...data, fighters: { ...data.fighters, johnny: jd } };
+  const ti: Tally = { use: {}, ev: {}, stance: 0 };
+  for (const sd of [1, 2]) tallyBout('johnny', 6, 'zambini', 4, sd + 70, sd % 2, false, gdI, ti);
+  const inst = ti.ev.INSTALL ?? 0;
+  const uText = `every kit's special families + Lv1 + Lv3 + unique in ${U_ROSTER.length * 2 * useSeeds.length} natural + ${U_ROSTER.length * (GATE ? 2 : 1)} full-meter CPU bouts: ${missing.length === 0 ? 'all used' : 'MISSING ' + missing.join('; ')}; injected install started ${ti.use.weave_l ?? 0}x, INSTALL events ${inst}`;
+  if (GATE) ok(missing.length === 0 && inst > 0, `U1 ${uText}`);
+  say(`${GATE ? '' : '(report) '}uniques: ${uText}`);
 }
 
 // ------------------------------------------------------------------ acceptance

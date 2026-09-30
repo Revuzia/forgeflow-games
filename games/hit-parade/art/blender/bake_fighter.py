@@ -14,6 +14,12 @@ Clip entry fields (tools/clipplan/*.json, CONTRACT 6.2 + additive fields documen
   loop, loopBlend (frames), air ("strip" ground-lock | "hold" hips height), contact ("auto" | null |
   source frame), effector (bone), marks {name: source frame}; cmu extras: kind, limb, fist, face
   ("guard" = face the mean hands direction), cmuContact.
+  CHANGED(ASSETS3D): rootSpeed (m/s) + rootAxis ("lat" | "fwd"): per-body playback rate of a travelling loop
+  (apply_root_speed); rootLat: true -> clips.json rootLat (lateral stripped travel); loopBlendScope: "upper";
+  mixamo `cycle` [c0, c1]: the source is a gait cycle, frames past c1 wrap (+ one stride of travel per wrap);
+  rootFrom: "feet" (with rootSpeed): second pass at the rate that makes the planted feet travel at the target speed,
+  root / rootLat scaled to that feet travel (feet_travel_factor).
+  bake.json per clip also records `rate`, `slide` (foot slide at the authored speed) and `twist` (pelvis vs shoulders).
 Writes the raw (uncompressed) GLB and bake.json (clips meta + body facts + gate numbers).
 ASCII only.
 """
@@ -79,7 +85,7 @@ class Library(object):
             import cmu_retarget  # noqa
             self._cmu_mod = cmu_retarget
         self.verify_limb(e, self._cmu_mod)
-        key = json.dumps([e["file"], rng, speed, bool(e.get("mirror")), e.get("fist", 75), e.get("face"),
+        key = json.dumps([e["file"], rng, e.get("faceRange"), speed, bool(e.get("mirror")), e.get("fist", 75), e.get("face"),
                           e.get("kind", "getup"), e.get("_limb_resolved") or e.get("limb", "R"), e.get("cmuContact"),
                           e.get("contact") if isinstance(e.get("contact"), (int, float)) else None])
         if key in self.cmu:
@@ -112,7 +118,10 @@ class Library(object):
             pos = d["pos"]
             if clip["mirror"]:
                 pos, _, _ = CR.mirror_source(d)
-            s, t = int(rng[0]), int(rng[1])
+            # CHANGED(ASSETS3D): `faceRange` = the window the guard facing is measured on (default: the clip's own
+            # range). The side-step's upper (13_17 f4140-4168) is faced like the idle window (4168-4316), so the step
+            # ends on exactly the idle's upper-body facing instead of its own window's mean-hands direction
+            s, t = [int(x) for x in (e.get("faceRange") or rng)]
             mid = (pos[s:t + 1, I["LeftHand"]] + pos[s:t + 1, I["RightHand"]]) / 2.0
             v = (mid - pos[s:t + 1, I["Hips"]]).mean(axis=0)
             clip["face_override"] = [float(v[0]), float(v[1]), 0.0]
@@ -183,7 +192,8 @@ def norm_entry(x):
 def build_sampler(e, lib):
     src = e.get("src", "mixamo")
     if src == "mixamo":
-        return R.ClipSampler(lib.ev(e["file"]), e.get("range"), e.get("speed", 1.0), e.get("mirror", False))
+        return R.ClipSampler(lib.ev(e["file"]), e.get("range"), e.get("speed", 1.0), e.get("mirror", False),
+                             e.get("cycle"))
     if src == "cmu":
         return R.ClipSampler(lib.cmu_ev(e), None, 1.0, False)
     if src == "author":
@@ -348,7 +358,7 @@ def effector_trace(tgt, frames_P):
 
 def bake_pass(e, smp, tgt, body, cid):
     """retarget -> action -> floor fix -> FK -> contact / effector measurement for one sampler."""
-    opts = {"air": e.get("air"), "loopBlend": e.get("loopBlend", 0)}
+    opts = {"air": e.get("air"), "loopBlend": e.get("loopBlend", 0), "loopBlendScope": e.get("loopBlendScope", "all")}
     res = R.retarget(smp, tgt, opts)
     # extremities (hp_retarget: CMU hand data is marker garbage in places; shoes do not bend 58+ deg)
     xs = {}
@@ -382,6 +392,147 @@ def bake_pass(e, smp, tgt, body, cid):
     plan["_eff_cands"] = effector_cands(e)
     m = R.measure(tgt, res, plan, P)
     return res, act, fl, P, m, mk_out
+
+
+def apply_root_speed(e, lib, tgt, k=1.0):
+    """CHANGED(ASSETS3D) (CONTRACT 35.5): plan `rootSpeed` (m/s) + `rootAxis` ("lat" default | "fwd"): the playback
+    rate of a travelling loop is set PER BODY so the stripped root travels at exactly that speed on this body (the
+    sim moves every fighter at the same m/s; the retarget scales the source's hips travel by the body's hip-height
+    ratio, so one fixed `speed` would slide the feet by up to +-15 % across the roster). Works on a mixamo entry or
+    on a layer's mixamo LOWER (the travel comes from the lower; the upper is time-warped onto it anyway). The source
+    `range` must be a whole number of gait cycles; the output frame count is rounded so the last output frame lands
+    exactly on the range end (seamless loop), the achieved speed is within half a frame per cycle of the target.
+    Returns (entry with the lower's explicit `speed`, rate record for bake.json) or (entry, None)."""
+    want = e.get("rootSpeed")
+    if not _num(want):
+        return e, None
+    e = json.loads(json.dumps(e))
+    if e.get("src") == "layer":
+        if isinstance(e["layer"]["lower"], str):
+            e["layer"]["lower"] = {"src": "mixamo", "file": e["layer"]["lower"]}
+        le = e["layer"]["lower"]
+    else:
+        le = e
+    if le.get("src", "mixamo") != "mixamo" or not le.get("range"):
+        raise ValueError("rootSpeed needs a mixamo entry (or a layer with a mixamo lower) with an explicit range")
+    f0, f1 = float(le["range"][0]), float(le["range"][1])
+    smp = R.ClipSampler(lib.ev(le["file"]), le["range"], 1.0, le.get("mirror", False), le.get("cycle"))
+    _, h0 = smp.sample(0)
+    _, h1 = smp.sample(smp.n - 1)
+    ratio = tgt.hip_h / smp.hip_h
+    axis = e.get("rootAxis", "lat")
+    travel = (-(h1.x - h0.x) if axis == "lat" else -(h1.y - h0.y)) * ratio
+    span = f1 - f0
+    nat = travel / (span / float(FPS))
+    if abs(nat) < 0.05:
+        raise ValueError("rootSpeed: source %s travels %.3f m/s along %s - nothing to match" % (le["file"], nat, axis))
+    # k (CHANGED(ASSETS3D) rootFrom "feet", second pass): the travel that keeps THIS body's planted feet still is k x
+    # the hip-ratio travel (feet_travel_factor); the rate then makes that feet travel run at the target speed
+    s = float(want) / (abs(nat) * k)
+    nout = max(2, int(round(span / s)) + 1)
+    s2 = span / float(nout - 1)
+    le["speed"] = s2
+    rec = {"target_mps": float(want), "axis": axis, "source": le["file"], "range": le["range"],
+           "mirror": bool(le.get("mirror")), "ratio": round(ratio, 4), "travel_m": round(travel * k, 4),
+           "natural_mps": round(nat, 4), "feet_k": round(k, 4), "speed": round(s2, 5), "frames": nout,
+           "achieved_mps": round(abs(travel * k) / ((nout - 1) / float(FPS)), 4)}
+    C.log("ROOT SPEED", e.get("id"), json.dumps(rec))
+    return e, rec
+
+
+def stance_runs(zs, band=0.02, min_len=3):
+    """Stance = runs of >= min_len consecutive frames with the point within `band` of its lowest height (a crossover
+    swing skims the floor for 1-2 frames: not a plant). Returns [(first, last), ...]."""
+    zmin = min(zs)
+    n = len(zs)
+    runs, k = [], 0
+    while k < n:
+        if zs[k] < zmin + band:
+            j = k
+            while j + 1 < n and zs[j + 1] < zmin + band:
+                j += 1
+            if j - k + 1 >= min_len:
+                runs.append((k, j))
+            k = j + 1
+        else:
+            k += 1
+    return runs
+
+
+def feet_travel_factor(tgt, P, res, axis="lat"):
+    """CHANGED(ASSETS3D) plan `rootFrom: "feet"` (with rootSpeed): the stripped hips travel is scaled by the body's
+    hip-height ratio, but a body whose legs are proportioned differently from the source's plants its feet a few %
+    off that travel (measured on the first staged rebake: planted-foot drift per plant bruno -2.6 cm, rerun +3.9 cm,
+    johnny +-1.2 cm at 1.8 m/s). k = the ratio of the planted feet's own backward travel (ball of foot, inner frames of
+    every stance run, both feet) to the root travel over the same frames. Returns (k, detail) or (None, detail)."""
+    n = res["n"]
+    rt = [r[1] for r in (res["root_lat"] if axis == "lat" else res["root"])]
+    num = den = 0.0
+    runs_used = []
+    for side in ("Left", "Right"):
+        b = C.PFX + side + "ToeBase"
+        if b not in P[0]:
+            continue
+        loc = [P[k_][b].translation for k_ in range(n)]
+        for a, z in stance_runs([v.z for v in loc]):
+            if z - a < 3:
+                continue
+            p0, p1 = loc[a + 1], loc[z - 1]
+            dl = -(p1.x - p0.x) if axis == "lat" else -(p1.y - p0.y)
+            dr = rt[z - 1] - rt[a + 1]
+            num += -dl
+            den += dr
+            runs_used.append([side, a, z, round(dl, 4), round(dr, 4)])
+    if abs(den) < 0.05:
+        return None, {"runs": runs_used, "why": "root travel over the stance runs < 5 cm"}
+    return num / den, {"runs": runs_used}
+
+
+def foot_slide(tgt, P, res):
+    """CHANGED(ASSETS3D): foot slide AT THE AUTHORED SPEED. The GLB keeps the hips above the root, so a foot that
+    is planted in the world moves backward in the clip at the root speed; re-adding the stripped travel (clips.json
+    `root` forward + `rootLat` lateral) gives each foot's world path. Stance = stance_runs() of the ball of the foot
+    (<Side>ToeBase head; also the ankle <Side>Foot head for reference). Per foot: slide = the horizontal world speed
+    between consecutive stance frames (0 = planted; touch-down / lift-off pairs included), and the INNER DRIFT of
+    each run (2nd -> 2nd-to-last stance frame, lat = + his right / fwd): a wrong loop rate shows up as a lateral
+    drift that grows with the run length."""
+    n = res["n"]
+    fwd = [r[1] for r in res["root"]]
+    lat = [r[1] for r in res.get("root_lat") or [[0, 0.0]] * n]
+    out = {}
+    for side in ("Left", "Right"):
+        for pt in ("ToeBase", "Foot"):
+            b = C.PFX + side + pt
+            if b not in P[0]:
+                continue
+            w = [P[k][b].translation + Vector((-lat[k], -fwd[k], 0.0)) for k in range(n)]
+            runs = stance_runs([v.z for v in w])
+            sp, drift = [], []
+            for a, z in runs:
+                sp += [((w[k + 1] - w[k]).to_2d()).length * FPS for k in range(a, z)]
+                if z - a >= 3:
+                    d = w[z - 1] - w[a + 1]
+                    drift.append([a, z, round(-d.x, 3), round(-d.y, 3)])
+            out[side + pt] = {"stance_frames": sum(z - a + 1 for a, z in runs),
+                              "slide_mps_mean": round(sum(sp) / len(sp), 3) if sp else None,
+                              "slide_mps_max": round(max(sp), 3) if sp else None,
+                              "inner_drift": drift}
+    return out
+
+
+def waist_twist(tgt, P):
+    """CHANGED(ASSETS3D): yaw between the pelvis line (hip joints) and the shoulder line (upper-arm heads), seen
+    from above, per frame (degrees): a layered clip whose lower body is bladed while the guard upper stays square
+    twists here (the existing walk_f is the reference on every body)."""
+    def yaw(a, b):
+        v = P_[C.PFX + b].translation - P_[C.PFX + a].translation
+        return math.degrees(math.atan2(v.y, v.x))
+    tw = []
+    for P_ in P:
+        d = yaw("LeftArm", "RightArm") - yaw("LeftUpLeg", "RightUpLeg")
+        tw.append((d + 180.0) % 360.0 - 180.0)
+    return {"max_abs": round(max(abs(x) for x in tw), 1), "mean": round(sum(tw) / len(tw), 1),
+            "min": round(min(tw), 1), "max": round(max(tw), 1)}
 
 
 AIM_MIN_DEG = 25.0
@@ -690,6 +841,7 @@ def main():
         cid = e["id"]
         tc = time.time()
         try:
+            e, rate = apply_root_speed(e, lib, tgt)   # CHANGED(ASSETS3D): per-body loop rate (plan rootSpeed)
             smp = build_sampler(e, lib)
             res, act, fl, P, m, mk_out = bake_pass(e, smp, tgt, body, cid)
             aim = aim_clip(e, smp, tgt, P, m)
@@ -699,6 +851,21 @@ def main():
                 res, act, fl, P, m, mk_out = bake_pass(e_b, smp, tgt, body, cid)
                 aim["effector_after"] = m["effector"]
                 C.log("AIM", cid, json.dumps(aim))
+            if rate and e.get("rootFrom") == "feet":
+                # CHANGED(ASSETS3D): second pass at the rate that makes the PLANTED FEET travel at the target speed
+                kf, kd = feet_travel_factor(tgt, P, res, rate["axis"])
+                if kf is not None and abs(kf - 1.0) > 0.003:
+                    e, rate = apply_root_speed(e, lib, tgt, kf)
+                    smp = build_sampler(e, lib)
+                    res, act, fl, P, m, mk_out = bake_pass(e, smp, tgt, body, cid)
+                key = "root_lat" if rate["axis"] == "lat" else "root"
+                if kf is not None:
+                    res[key] = [[t, round(v * kf, 4)] for t, v in res[key]]
+                    k2, kd2 = feet_travel_factor(tgt, P, res, rate["axis"])
+                    rate["feet_k_after"] = round(k2, 4) if k2 is not None else None
+                rate["feet_k_detail"] = kd
+                C.log("ROOT FEET", cid, json.dumps({x: rate[x] for x in ("feet_k", "feet_k_after", "speed", "frames",
+                                                                         "achieved_mps") if x in rate}))
             order_first = order_first or act
             n = res["n"]
             marks = {}
@@ -707,6 +874,9 @@ def main():
             entry = {"dur": round((n - 1) / float(FPS), 4), "frames": n, "contact": m["contact"],
                      "effector": m["effector"], "root": res["root"], "apexY": m["apexY"],
                      "loop": bool(e.get("loop", False))}
+            if e.get("rootLat"):
+                # CHANGED(ASSETS3D) (CONTRACT 35.5 / 6.3): lateral stripped travel, + = the fighter's own right
+                entry["rootLat"] = res["root_lat"]
             if marks:
                 entry["marks"] = marks
                 # per strike mark effector point (lane FIGHTERS request, CONTRACT 20.6 -> 6.3 marksAt)
@@ -716,6 +886,7 @@ def main():
                     entry["marksAt"] = mpts
             report["clips"][cid] = {"clip": entry, "contact_frame": m.get("contact_frame"), "floor": fl, "aim": aim, "effector_note": m.get("effector_note"),
                                     "extremities": res.get("extremities"),
+                                    "rate": rate, "slide": foot_slide(tgt, P, res), "twist": waist_twist(tgt, P),
                                     "ratio": round(res["ratio"], 4), "src": e,
                                     "secs": round(time.time() - tc, 2), "trace": effector_trace(tgt, P)}
             if not fk_checked and n > 2:

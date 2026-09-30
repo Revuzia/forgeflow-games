@@ -12,6 +12,9 @@ keys, only meshopt missing because Blender cannot decode it) and, per clip:
   * renders 5 GAME-camera frames at 380x400: c-6, c-3, c, c+3, c+8 around the contact (a red ball at
     clips.json effector.at on c: the fist / foot must sit on it) or 5 evenly spread frames; framed
     0.20 m ahead of the body so a 1.0 m reach stays inside the frame (part 2: 300 px cut fists at 0.8 m)
+  * one GAME-camera frame per clips.json mark (<clip>__m_<mark>.png: grab / slam / splat / hitN; P2 resume)
+  * CHANGED(ASSETS3D): clips with clips.json `rootLat` (side-steps / side-walks) also get locomotion strips with the
+    stripped travel put back + footprint discs (<clip>__loco_{front,top,game}<k>.png, qc.json `loco`; loco_renders)
   * flip metric: the largest single-frame LOCAL rotation step of any body bone (hands included,
     fingers / hair / eyes excluded) with its bone + frame, and the max hand swing / toe bend vs bind
     (a 106-169 deg one-frame hand snap is CMU marker garbage; sanitised in hp_retarget part 2)
@@ -203,6 +206,105 @@ def make_marker():
     return mk
 
 
+LOCO_N = 8   # frames per locomotion strip
+
+
+def make_disc(name, rgba):
+    """A flat footprint disc (Workbench TEXTURE mode shows image textures: 1x1 image like the red marker)."""
+    bpy.ops.mesh.primitive_cylinder_add(radius=0.045, depth=0.004, vertices=16)
+    o = bpy.context.active_object
+    o.name = name
+    img = bpy.data.images.new(name + "_img", 1, 1)
+    img.pixels = list(rgba)
+    m = bpy.data.materials.new(name + "_mat")
+    m.use_nodes = True
+    nt = m.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = img
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    m.diffuse_color = rgba
+    o.data.materials.append(m)
+    return o
+
+
+def loco_renders(arm, cam, cid, meta, height):
+    """CHANGED(ASSETS3D) (CONTRACT 35.5): side-step / side-walk clips (clips.json `rootLat`) are rendered WITH the
+    stripped travel put back (armature moved by root / rootLat per frame, camera fixed, 0.25 m floor checker), so a
+    planted foot must stand still on the floor; footprint discs (red = left ball of foot, blue = right) are dropped
+    at every stance frame (runs >= 3 frames with the ball within 2 cm of its lowest height) - a sliding foot leaves
+    a trail of discs. Four views per frame: FRONT (camera in front of the fighter: his LEFT = screen RIGHT), FEET
+    (the same, low and zoomed on the feet), TOP (from above, fighter facing screen-down: his LEFT = screen RIGHT) and
+    GAME (the orbit camera sits on the step axis: a step reads as depth). Returns the qc.json record."""
+    n = int(meta["frames"])
+    fwd = [r[1] for r in meta.get("root") or []] or [0.0] * n
+    lat = [r[1] for r in meta.get("rootLat") or []] or [0.0] * n
+    off = [Vector((-lat[k], -fwd[k], 0.0)) for k in range(n)]
+    scn = bpy.context.scene
+    feet = {"Left": C.PFX + "LeftToeBase", "Right": C.PFX + "RightToeBase"}
+    wp = {s: [] for s in feet}
+    for k in range(n):
+        arm.location = off[k]
+        scn.frame_set(k)
+        bpy.context.view_layer.update()
+        for s, b in feet.items():
+            pb = arm.pose.bones.get(b)
+            wp[s].append(arm.matrix_world @ pb.head if pb else Vector())
+    discs = []
+    slide = {}
+    stance = {}
+    for s, col in (("Left", (0.95, 0.12, 0.12, 1.0)), ("Right", (0.15, 0.35, 1.0, 1.0))):
+        zs = [v.z for v in wp[s]]
+        zmin = min(zs)
+        low = [z < zmin + 0.02 for z in zs]
+        # stance = runs of >= 3 frames with the ball within 2 cm of its lowest height (a crossover swing skims the
+        # floor for 1-2 frames; those are not plants)
+        st = [False] * n
+        k = 0
+        while k < n:
+            if low[k]:
+                j = k
+                while j + 1 < n and low[j + 1]:
+                    j += 1
+                if j - k + 1 >= 3:
+                    for i in range(k, j + 1):
+                        st[i] = True
+                k = j + 1
+            else:
+                k += 1
+        stance[s] = st
+        sp = [(wp[s][k + 1] - wp[s][k]).to_2d().length * FPS for k in range(n - 1) if st[k] and st[k + 1]]
+        slide[s] = {"stance_frames": sum(st), "slide_mps_mean": round(sum(sp) / len(sp), 3) if sp else None,
+                    "slide_mps_max": round(max(sp), 3) if sp else None}
+        for k in range(n):
+            if st[k]:
+                d = make_disc("qc_fp_%s_%d" % (s, k), col)
+                d.location = (wp[s][k].x, wp[s][k].y, 0.003)
+                discs.append(d)
+    frames = sorted(set(int(round(i * (n - 1) / float(LOCO_N - 1))) for i in range(LOCO_N))) if n > LOCO_N else list(range(n))
+    mid = (off[0] + off[-1]) * 0.5
+    span = (off[-1] - off[0]).length
+    tgt3 = (mid.x, mid.y, height * 0.5)
+    old = (cam.data.ortho_scale, scn.render.resolution_x, scn.render.resolution_y)
+    scn.render.resolution_x, scn.render.resolution_y = W, H
+    views = {"front": (0.0, 12.0), "feet": (0.0, 28.0), "top": (0.0, 89.0), "game": (-90.0, 4.0)}
+    for vname, (az, el) in views.items():
+        cam.data.ortho_scale = {"game": height * 1.45, "feet": span + 1.0}.get(vname, max(height * 1.45, span + 1.3))
+        vt = {"top": (mid.x, mid.y, 0.0), "feet": (mid.x, mid.y, 0.30)}.get(vname, tgt3)
+        for i, f in enumerate(frames):
+            arm.location = off[f]
+            scn.frame_set(f)
+            bpy.context.view_layer.update()
+            aim(cam, vt, az, el, 9.0)
+            render(os.path.join(OUT, "%s__loco_%s%d.png" % (cid, vname, i)))
+    arm.location = (0.0, 0.0, 0.0)
+    C.remove_objects(discs)
+    cam.data.ortho_scale, scn.render.resolution_x, scn.render.resolution_y = old
+    return {"frames": frames, "travel_m": [round(fwd[-1], 4), round(lat[-1], 4)],
+            "slide_mesh_rig": slide, "views": list(views),
+            "stance_LR": [["L" if stance["Left"][f] else "-", "R" if stance["Right"][f] else "-"] for f in frames]}
+
+
 def main():
     t0 = time.time()
     clips = json.load(open(CLIPS_JSON))
@@ -293,10 +395,22 @@ def main():
             aim(cam, gtgt, -90.0, 4.0)
             render(os.path.join(OUT, "%s__g%d.png" % (cid, k)))
         MARK.hide_render = True
+        # CHANGED(ASSETS) P2 resume: one game-camera frame per clips.json mark (throw grab / slam, wall splat, multi-hit
+        # hitN), so a re-timed mark can be read against the pose it lands on (the frames above never showed the slam)
+        mark_frames = {}
+        for mk, mt in sorted((meta.get("marks") or {}).items(), key=lambda kv: kv[1]):
+            f = max(0, min(n - 1, int(round(float(mt) * FPS))))
+            mark_frames[mk] = f
+            bpy.context.scene.frame_set(f)
+            bpy.context.view_layer.update()
+            aim(cam, gtgt, -90.0, 4.0)
+            render(os.path.join(OUT, "%s__m_%s.png" % (cid, mk)))
         cam.data.ortho_scale = height * 1.45
         bpy.context.scene.render.resolution_x, bpy.context.scene.render.resolution_y = W, H
+        loco = loco_renders(arm, cam, cid, meta, height) if meta.get("rootLat") else None
         out["clips"][cid] = {
             "frames": n, "strip_frames": picks, "game_frame": game_f, "contact_frame": cf, "game_frames": gfr,
+            "mark_frames": mark_frames,
             "lowest_min": min(lows), "lowest_max": max(lows), "lowest": lows,
             "highest_max": max(highs), "tpose_frames": tpose,
             "sink_frames_lt_-0.03": sum(1 for v in lows if v < -0.03),
@@ -305,6 +419,8 @@ def main():
             "max_step_deg": round(step[0], 1), "step_bone": step[1], "step_frame": step[2],
             "hand_swing_max_LR": [round(x, 1) for x in hsw], "toe_max_LR": [round(x, 1) for x in tmax],
         }
+        if loco:
+            out["clips"][cid]["loco"] = loco
         C.log("QC", cid, "low %.3f..%.3f" % (min(lows), max(lows)), "tpose", len(tpose),
               "step %.1f %s f%s" % (step[0], step[1], step[2]))
     # ---- textured turntable (EEVEE) of idle frame 0

@@ -68,6 +68,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "jab"},
       "desc": "Jab out of the uprock.",
       "boxes": [{"f": [5, 7], "x": 0.743, "y": 1.317, "w": 0.3, "h": 0.433}],
@@ -98,6 +100,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hurtOverride": [{"f": [3, 14], "w": 0.75, "h": 0.75}],
       "role": ["poke", "low", "lowprofile"],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "floor_tap"},
       "desc": "Drops to the floor and taps the shin; low profile."
     },
@@ -125,6 +129,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
+      "track": {"until": 5, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "front_kick"},
       "desc": "Long front kick.",
       "boxes": [{"f": [9, 11], "x": 0.513, "y": 1.437, "w": 0.4, "h": 0.674}],
@@ -154,9 +160,12 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "hurtOverride": [{"f": [3, 18], "w": 0.8, "h": 0.7}],
-      "role": ["poke", "low", "lowprofile"],
+      "role": ["poke", "low", "lowprofile", "antistep"],
+      "track": {"until": 11, "rate": 20},
+      "homing": true,
+      "lateralM": 0.4,
       "anim": {"clip": "footwork_sweep"},
-      "desc": "Floor footwork leg sweep (low, no knockdown), low profile."
+      "desc": "Floor footwork leg sweep (low, no knockdown), low profile; homing."
     },
     "5H": {
       "kind": "normal",
@@ -183,9 +192,12 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hits": [{"f": [12, 13], "damage": 400, "hitstop": 11}, {"f": [17, 18], "damage": 450, "hitstop": 13}],
       "role": [],
+      "track": {"until": 18, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "swipes"},
       "sfx": [[8, "whoosh_heavy"]],
-      "desc": "Two whipping leg swipes.",
+      "desc": "Two whipping leg swipes; homing.",
       "pushExt": [[0, 0.13], [2, 0.212], [5, 0.0], [40, 0.0]]
     },
     "2H": {
@@ -213,8 +225,11 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "hurtOverride": [{"f": [4, 20], "w": 0.9, "h": 0.8}],
       "role": ["sweep", "low"],
+      "track": {"until": 13, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "flare_sweep"},
-      "desc": "Flair leg sweep, low profile.",
+      "desc": "Flair leg sweep, low profile; homing.",
       "pushExt": [[0, 0.267], [5, 0.198], [6, 0.158], [7, 0.03], [8, 0.0], [38, 0.0]]
     },
     "6M": {
@@ -242,8 +257,11 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [8, 0.6], [18, 0.3], [21, 0.0]],
       "role": ["overhead"],
+      "track": {"until": 20, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "butterfly"},
-      "desc": "Jump spin kick overhead that hops over lows.",
+      "desc": "Jump spin kick overhead that hops over lows; homing.",
       "boxes": [{"f": [18, 20], "x": 0.814, "y": 1.129, "w": 0.4, "h": 0.658}],
       "boxSrc": "hitVolume",
       "pushExt": [
@@ -266,6 +284,39 @@
         [33, 0.018],
         [38, 0.0]
       ]
+    },
+    "SS.H": {
+      "kind": "command",
+      "input": "SS.H",
+      "name": "Flank Flair",
+      "strength": "H",
+      "startup": 10,
+      "active": 3,
+      "recovery": 21,
+      "damage": 900,
+      "chipPct": 0,
+      "hitstop": 13,
+      "hitstun": 57,
+      "blockstun": 16,
+      "guard": "L",
+      "move": [[0, 0], [10, 0.3]],
+      "pushback": {"hit": 0.0, "block": 0.45},
+      "cancel": ["super"],
+      "juggle": {"js": 0, "ji": 1, "jl": 0},
+      "onHit": {"kd": "soft", "launch": [0, 0], "wallSplat": false, "groundBounce": false, "crumple": false},
+      "gain": {"showtime": 1000, "nerveCost": 4000},
+      "cost": {"showtime": 0, "nerve": 0},
+      "invuln": {},
+      "armor": {"hits": 0, "f": [0, 0]},
+      "hurtOverride": [{"f": [3, 20], "w": 0.9, "h": 0.8}],
+      "role": ["stepatk", "sweep", "low", "lowprofile"],
+      "track": {"until": 12, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
+      "anim": {"clip": "flare_sweep"},
+      "sfx": [[4, "whoosh_heavy"]],
+      "desc": "STEP + H: low-profile flair sweep into the flank out of a sidestep; low, knocks down, -8 on block.",
+      "pushExt": [[0, 0.387], [4, 0.335], [7, 0.15], [8, 0.016], [9, 0.0], [34, 0.0]]
     },
     "j.L": {
       "kind": "normal",
@@ -291,6 +342,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 1, "rate": 180},
+      "lateralM": 0.15,
       "anim": {"clip": "air_jab"},
       "desc": "Air jab."
     },
@@ -318,6 +371,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["antiair"],
+      "track": {"until": 3, "rate": 180},
+      "lateralM": 0.18,
       "anim": {"clip": "air_swipe"},
       "desc": "Leg whip air-to-air."
     },
@@ -345,6 +400,8 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
+      "track": {"until": 6, "rate": 180},
+      "lateralM": 0.22,
       "anim": {"clip": "jump_kick"},
       "desc": "Turning jump-in."
     },
@@ -382,6 +439,7 @@
         "victim": [[0, "hit_high_s", 0.0, 0.2], [12, "hit_low", 0.0, 0.5], [28, "kd_fall_b", 1.0, 1.55]]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Drags them down into his footwork.",
       "pushExt": [[0, 0.134], [4, 0.004], [5, 0.0], [31, 0.02]]
@@ -420,6 +478,7 @@
         "victim": [[0, "hit_high_s", 0.0, 0.15], [8, "thrown_b", 0.0, 0.55], [32, "thrown_b", 0.55, 1.1]]
       },
       "role": [],
+      "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Flairs and flings them behind.",
       "pushExt": [[0, 0.134], [4, 0.004], [5, 0.0], [31, 0.02]]
@@ -450,9 +509,12 @@
       "hits": [{"f": [12, 13], "damage": 450, "hitstop": 9}, {"f": [20, 21], "damage": 550, "hitstop": 13}],
       "hurtOverride": [{"f": [6, 22], "w": 0.9, "h": 0.8}],
       "role": ["lowprofile", "approach"],
+      "track": {"until": 21, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "windmill_l", "warp": [[0, 0.0], [12, 0.3], [20, 0.633], [46, 1.8]]},
       "sfx": [[4, "whoosh_light"]],
-      "desc": "Flair spin through the opponent (2/4/6 hits), low profile.",
+      "desc": "Flair spin through the opponent (2/4/6 hits), low profile; homing.",
       "boxes": [
         {"f": [12, 13], "x": 0.863, "y": 0.111, "w": 0.34, "h": 0.25},
         {"f": [20, 21], "x": 0.863, "y": 0.111, "w": 0.34, "h": 0.25}
@@ -502,9 +564,12 @@
       ],
       "hurtOverride": [{"f": [6, 47], "w": 0.9, "h": 0.8}],
       "role": ["lowprofile", "approach"],
+      "track": {"until": 46, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "windmill_m", "warp": [[0, 0.0], [13, 0.3], [24, 0.733], [37, 1.267], [45, 1.567], [73, 2.733]]},
       "sfx": [[4, "whoosh_light"]],
-      "desc": "Flair spin through the opponent (2/4/6 hits), low profile.",
+      "desc": "Flair spin through the opponent (2/4/6 hits), low profile; homing.",
       "pushExt": [
         [0, 0.088],
         [6, 0.0],
@@ -544,7 +609,7 @@
       "pushback": {"hit": 0.0, "block": 0.45},
       "cancel": ["super"],
       "juggle": {"js": 0, "ji": 1, "jl": 0},
-      "onHit": {"kd": "soft", "launch": [0, 0], "wallSplat": false, "groundBounce": false, "crumple": false},
+      "onHit": {"kd": "soft", "launch": [0, 0], "wallSplat": true, "groundBounce": false, "crumple": false},
       "gain": {"showtime": 900, "nerveCost": 3000},
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
@@ -559,12 +624,15 @@
       ],
       "hurtOverride": [{"f": [6, 71], "w": 0.9, "h": 0.8}],
       "role": ["lowprofile", "approach"],
+      "track": {"until": 70, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {
         "clip": "windmill_h",
         "warp": [[0, 0.0], [14, 0.3], [25, 0.733], [38, 1.267], [48, 1.667], [61, 2.2], [69, 2.5], [99, 3.667]]
       },
       "sfx": [[4, "whoosh_light"]],
-      "desc": "Flair spin through the opponent (2/4/6 hits), low profile.",
+      "desc": "Flair spin through the opponent (2/4/6 hits), low profile; homing.",
       "pushExt": [
         [0, 0.088],
         [6, 0.0],
@@ -610,7 +678,7 @@
       "pushback": {"hit": 0.0, "block": 0.45},
       "cancel": ["super"],
       "juggle": {"js": 0, "ji": 1, "jl": 0},
-      "onHit": {"kd": "soft", "launch": [0, 0], "wallSplat": false, "groundBounce": false, "crumple": false},
+      "onHit": {"kd": "soft", "launch": [0, 0], "wallSplat": true, "groundBounce": false, "crumple": false},
       "gain": {"showtime": 900, "nerveCost": 3000},
       "cost": {"showtime": 0, "nerve": 20000},
       "invuln": {"proj": [1, 30]},
@@ -625,6 +693,9 @@
       ],
       "hurtOverride": [{"f": [4, 67], "w": 0.9, "h": 0.8}],
       "role": ["lowprofile", "approach"],
+      "track": {"until": 66, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {
         "clip": "windmill_h",
         "warp": [[0, 0.0], [10, 0.3], [21, 0.733], [34, 1.267], [44, 1.667], [57, 2.2], [65, 2.5], [89, 3.667]]
@@ -689,6 +760,9 @@
       "moveY": [[0, 0], [7, 0.1], [17, 0.4], [55, 0.0]],
       "hurtOverride": [{"f": [4, 28], "w": 0.6, "h": 1.0}],
       "role": ["antiair"],
+      "track": {"until": 28, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "handspin_clip", "warp": [[0, 0.0], [7, 0.3], [17, 0.733], [27, 1.2], [59, 1.467]]},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "One-hand spin with the legs up: 3-hit anti-air, air-invulnerable legs-up startup."
@@ -724,6 +798,9 @@
       "moveY": [[0, 0], [8, 0.1], [18, 0.4], [59, 0.0]],
       "hurtOverride": [{"f": [4, 29], "w": 0.6, "h": 1.0}],
       "role": ["antiair"],
+      "track": {"until": 29, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "handspin_clip", "warp": [[0, 0.0], [8, 0.3], [18, 0.733], [28, 1.2], [63, 1.467]]},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "One-hand spin with the legs up: 3-hit anti-air, air-invulnerable legs-up startup."
@@ -759,6 +836,9 @@
       "moveY": [[0, 0], [9, 0.1], [19, 0.4], [63, 0.0]],
       "hurtOverride": [{"f": [4, 30], "w": 0.6, "h": 1.0}],
       "role": ["antiair"],
+      "track": {"until": 30, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "handspin_clip", "warp": [[0, 0.0], [9, 0.3], [19, 0.733], [29, 1.2], [67, 1.467]]},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "One-hand spin with the legs up: 3-hit anti-air, air-invulnerable legs-up startup."
@@ -794,6 +874,9 @@
       "moveY": [[0, 0], [7, 0.1], [17, 0.5], [55, 0.0]],
       "hurtOverride": [{"f": [4, 28], "w": 0.6, "h": 1.0}],
       "role": ["antiair", "reversal"],
+      "track": {"until": 28, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "handspin_clip", "warp": [[0, 0.0], [7, 0.3], [17, 0.733], [27, 1.2], [63, 1.467]]},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Fully invulnerable handspin."
@@ -824,6 +907,9 @@
       "hits": [{"f": [12, 13], "damage": 400, "hitstop": 9}, {"f": [20, 21], "damage": 400, "hitstop": 11}],
       "hurtOverride": [{"f": [4, 22], "w": 0.9, "h": 0.75}],
       "role": ["low", "lowprofile", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "six_step_clip", "warp": [[0, 0.0], [12, 0.4], [20, 0.633], [40, 1.733]]},
       "sfx": [[3, "whoosh_light"]],
       "desc": "Low-profile footwork crawl-in with two low sweeps."
@@ -854,6 +940,9 @@
       "hits": [{"f": [14, 15], "damage": 450, "hitstop": 9}, {"f": [22, 23], "damage": 450, "hitstop": 11}],
       "hurtOverride": [{"f": [4, 24], "w": 0.9, "h": 0.75}],
       "role": ["low", "lowprofile", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "six_step_clip", "warp": [[0, 0.0], [14, 0.4], [22, 0.633], [44, 1.733]]},
       "sfx": [[3, "whoosh_light"]],
       "desc": "Low-profile footwork crawl-in with two low sweeps."
@@ -884,6 +973,9 @@
       "hits": [{"f": [16, 17], "damage": 500, "hitstop": 9}, {"f": [24, 25], "damage": 500, "hitstop": 11}],
       "hurtOverride": [{"f": [4, 26], "w": 0.9, "h": 0.75}],
       "role": ["low", "lowprofile", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "six_step_clip", "warp": [[0, 0.0], [16, 0.4], [24, 0.633], [48, 1.733]]},
       "sfx": [[3, "whoosh_light"]],
       "desc": "Low-profile footwork crawl-in with two low sweeps."
@@ -918,6 +1010,9 @@
       ],
       "hurtOverride": [{"f": [3, 33], "w": 0.9, "h": 0.75}],
       "role": ["low", "lowprofile", "approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "six_step_ex_clip", "warp": [[0, 0.0], [12, 0.4], [20, 0.633], [31, 1.133], [49, 1.767]]},
       "sfx": [[3, "whoosh_light"]],
       "desc": "Three lows, -2 on block.",
@@ -949,6 +1044,9 @@
       "air": true,
       "airVel": [2.0, -6.0],
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "dive_kick"},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Air-only dive kick (214 or S in the air): L steep, H flat and far."
@@ -979,6 +1077,9 @@
       "air": true,
       "airVel": [3.0, -5.0],
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "dive_kick"},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Air-only dive kick (214 or S in the air): L steep, H flat and far."
@@ -1009,6 +1110,9 @@
       "air": true,
       "airVel": [4.0, -4.0],
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "dive_kick"},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Air-only dive kick (214 or S in the air): L steep, H flat and far."
@@ -1039,6 +1143,9 @@
       "air": true,
       "airVel": [4.5, -5.5],
       "role": ["approach"],
+      "track": {"until": 1, "rate": 180},
+      "linear": true,
+      "lateralM": 0.22,
       "anim": {"clip": "dive_kick"},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Fast, far dive, +3 more on block."
@@ -1076,6 +1183,9 @@
       ],
       "hurtOverride": [{"f": [4, 65], "w": 0.9, "h": 0.8}],
       "role": ["reversal", "lowprofile"],
+      "track": {"until": 64, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {
         "clip": "cypher_clip",
         "warp": [[0, 0.0], [8, 0.3], [19, 0.733], [32, 1.267], [42, 1.667], [55, 2.2], [63, 2.5], [118, 3.667]]
@@ -1305,6 +1415,9 @@
         "endGapM": 2.2
       },
       "role": ["reversal"],
+      "track": {"until": 13, "rate": 20},
+      "homing": true,
+      "lateralM": 0.6,
       "anim": {"clip": "front_kick"},
       "desc": "PRIME TIME: a front kick opens a full battle round the crowd scores live.",
       "boxes": [{"f": [10, 13], "x": 0.513, "y": 1.449, "w": 0.5, "h": 0.699}],
@@ -1355,7 +1468,9 @@
     "punish": ["5H", "windmill_h"],
     "combo": ["2L", "2M", "windmill_m"],
     "meter": "cypher",
-    "air": ["drop_in_l", "drop_in_h"]
+    "air": ["drop_in_l", "drop_in_h"],
+    "antiStep": ["2M", "5H"],
+    "stepAttack": "SS.H"
   },
   "introLine": "Cypher's open. Crowd's the judge. You're the warm-up.",
   "winQuotes": ["Ten, ten, ten. The judges have spoken.", "You danced like you were paying rent on the floor.", "Battle's over. Send me somebody with footwork."],

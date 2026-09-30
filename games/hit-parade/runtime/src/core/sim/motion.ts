@@ -1,13 +1,13 @@
 // HIT PARADE — motion-input parsing over the history ring stored IN the state (CONTRACT §4.3.9).
 // History entry (one int per frame, see inputs.ts): bits 0-3 numpad direction (1..9, facing-relative),
-// bits 4-12 held buttons (same bit positions as the §4.4 input word), bit 13 = frozen frame
-// (hitstop / world freeze). Motion windows count NON-frozen frames only (hitstop never ages inputs).
+// bits 4-14 held buttons (same bit positions as the §4.4 input word; CHANGED(SIM3D) bits 13 / 14 = STEP_IN / STEP_OUT),
+// bit 15 = frozen frame (hitstop / world freeze; was bit 13 before SIM3D). Motion windows count NON-frozen frames only.
 
 import { F, HIST } from './layout.ts';
 import { MO } from './compile.ts';
 
 export const H_DIR = 0xf;
-export const H_FROZEN = 1 << 13;
+export const H_FROZEN = 1 << 15; // CHANGED(SIM3D): bit 13 is STEP_IN now
 
 // scratch (fully rewritten on every call; never carries state between frames)
 const dirs = new Int32Array(HIST);

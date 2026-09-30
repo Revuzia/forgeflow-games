@@ -5,9 +5,51 @@
 
 import { ACT, F, FIGHTER_INTS, FL, HIST, PH, PROJ_CAP, PROJ_INTS, ST, W, projBase } from './layout.ts';
 import { EV, CUE } from './events.ts';
-import { clearMove, emit, fb, nerveMax, setSt } from './state.ts';
+import { clearMove, emit, fb, nerveMax, setSt, setVelAlong, updateFacing } from './state.ts';
 import { resetUniquesForRound } from './uniques.ts';
 import type { Match } from './state.ts';
+import { alongYaw, cosQ, dirToYaw, sinQ, yawDelta } from './fx3d.ts';
+
+/**
+ * CHANGED(SIM3D) (CONTRACT §35.2 / §35.3 / §35.12): round-start placement. Both fighters 2.4 m apart through the ring
+ * centre on the stage's spawn axis, facing each other; the initial camN = the perpendicular of the axis closest to the
+ * stage's camera side; the ends are chosen so P1 is screen-left (screen-right R = (camN.z, -camN.x)).
+ */
+export function placeForRound(m: Match): void {
+  const s = m.s;
+  const axis = s[W.spawnYaw];
+  // camN candidates: dir(axis - 90) and dir(axis + 90); the one on the camera side (a tie takes axis - 90)
+  const cam = s[W.camYaw];
+  const cA = (axis - 16384) & 65535;
+  const cB = (axis + 16384) & 65535;
+  const dA = yawDelta(cA, cam);
+  const camN = (dA <= 16384 && dA >= -16384) ? cA : cB;
+  const nx = sinQ(camN);
+  const nz = cosQ(camN);
+  s[W.camNX] = nx;
+  s[W.camNZ] = nz;
+  // P1 -> P2 along +axis when that runs screen-right, else the ends swap
+  const ux = sinQ(axis);
+  const uz = cosQ(axis);
+  const p1ToP2 = ux * nz - uz * nx >= 0 ? axis : (axis + 32768) & 65535;
+  const half = m.sys.startHalf;
+  const H2 = [0, 0];
+  alongYaw(half, p1ToP2, H2);
+  for (let i = 0; i < 2; i++) {
+    const b = fb(i);
+    const sg = i === 0 ? -1 : 1;
+    s[b + F.x] = s[W.ringCX] + sg * H2[0];
+    s[b + F.z] = s[W.ringCZ] + sg * H2[1];
+  }
+  const b0 = fb(0);
+  const b1 = fb(1);
+  s[b0 + F.yaw] = dirToYaw(s[b1 + F.x] - s[b0 + F.x], s[b1 + F.z] - s[b0 + F.z]);
+  s[b1 + F.yaw] = (s[b0 + F.yaw] + 32768) & 65535;
+  s[b0 + F.facing] = 1;
+  s[b1 + F.facing] = -1;
+  updateFacing(s, b0);
+  updateFacing(s, b1);
+}
 
 /** Resets both fighters and the world for the next round (SHOWTIME, uniques, mvInst carry). */
 export function initRound(m: Match): void {
@@ -29,8 +71,6 @@ export function initRound(m: Match): void {
     s[b + F.uniq + 1] = u1;
     s[b + F.uniq + 2] = u2;
     s[b + F.uniq + 3] = u3;
-    s[b + F.x] = (i === 0 ? -1 : 1) * m.sys.startHalf;
-    s[b + F.facing] = i === 0 ? 1 : -1;
     s[b + F.hp] = m.cf[i].hpMax;
     s[b + F.nerve] = nerveMax(m);
     s[b + F.mv] = -1;
@@ -46,6 +86,7 @@ export function initRound(m: Match): void {
     resetUniquesForRound(m, i); // CHANGED(SIM) P2: per-round unique reset (a boss phase persists, CONTRACT §28.2)
     setSt(m, i, ST.INTRO);
   }
+  placeForRound(m); // CHANGED(SIM3D)
   for (let k = 0; k < PROJ_CAP; k++) {
     const pb = projBase(k);
     for (let j = 0; j < PROJ_INTS; j++) s[pb + j] = 0;
@@ -135,12 +176,16 @@ export function startKO(m: Match, r: number): void {
     s[b + F.hitstop] = 0;
     if (s[b + F.hp] > 0) continue;
     const wasAir = (s[b + F.flags] & FL.AIRBORNE) !== 0;
-    const wx = s[fb(1 - i) + F.facing];
+    // CHANGED(SIM3D): the KO pop flies away from the other fighter (along the line between them)
+    const bo = fb(1 - i);
+    const dx = s[b + F.x] - s[bo + F.x];
+    const dz = s[b + F.z] - s[bo + F.z];
+    const away = dx === 0 && dz === 0 ? (s[bo + F.yaw] & 65535) : dirToYaw(dx, dz);
     clearMove(m, i);
     setSt(m, i, ST.KO);
     s[b + F.flags] |= FL.KO | FL.AIRBORNE;
     if (!wasAir) {
-      s[b + F.vx] = wx * m.sys.popVx;
+      setVelAlong(s, b, away, m.sys.popVx);
       s[b + F.vy] = m.sys.popVy;
     }
     s[b + F.pushF] = 0;
@@ -167,6 +212,7 @@ export function startTimeover(m: Match): void {
     s[b + F.flags] &= ~(FL.AIRBORNE | FL.CROUCHING);
     s[b + F.y] = 0;
     s[b + F.vx] = 0;
+    s[b + F.vz] = 0;
     s[b + F.vy] = 0;
     setSt(m, i, rw === i ? ST.WIN : ST.LOSE);
   }

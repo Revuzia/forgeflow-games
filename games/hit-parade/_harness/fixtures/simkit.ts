@@ -1,6 +1,12 @@
 // HIT PARADE — shared helpers for the SIM probes (lane SIM). Not a probe itself (run_probes only
 // discovers _harness/probe_*.ts). Builds GameData from data/system.json + the fixture kits, so the
 // probes never depend on lanes FIGHTERS / ASSETS.
+//
+// CHANGED(SIM3D) (CONTRACT §35): the probes work in the LINE FRAME of a match - the axis from P1's spawn to P2's spawn
+// (the stage's spawnAxisDeg, P1 screen-left). place(m, a, b) puts both fighters on that line at signed distances a, b
+// (metres) from the ring centre, fs(m, i).x / .z = the line / lateral coordinates, lxU / plx = the same for raw state
+// reads. The fixture stage's spawn axis comes from env HP_PROBE_AXIS (degrees, yaw convention; default 90 = the x axis,
+// the old 2.5D layout): probe_axis.ts re-runs the SIM probes on a rotated axis so every system is exercised off x.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -10,12 +16,18 @@ import { createMatch, readFighter, readMatch, step } from '../../runtime/src/cor
 import type { Match, MatchCfg, Scheme } from '../../runtime/src/core/sim/match.ts';
 import { eventsSince, EV_NAMES } from '../../runtime/src/core/sim/events.ts';
 import { F, PH, W, fighterBase } from '../../runtime/src/core/sim/layout.ts';
+import { cosQ, dirToYaw, sinQ } from '../../runtime/src/core/sim/fx3d.ts';
+import { P, projBase as PROJ_BASE_OF } from '../../runtime/src/core/sim/layout.ts';
+import { updateCamN, updateFacing } from '../../runtime/src/core/sim/state.ts';
 
 export const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 function readJson(rel: string): unknown {
   return JSON.parse(readFileSync(ROOT + rel, 'utf8'));
 }
+
+/** CHANGED(SIM3D): the fixture stage's spawn axis (yaw degrees; env HP_PROBE_AXIS, default 90 = the x axis). */
+export const PROBE_AXIS_DEG = Number.isFinite(Number(process.env.HP_PROBE_AXIS)) && process.env.HP_PROBE_AXIS !== undefined ? Number(process.env.HP_PROBE_AXIS) : 90;
 
 let cached: GameData | null = null;
 export function fixtureData(): GameData {
@@ -24,12 +36,85 @@ export function fixtureData(): GameData {
     system: readJson('data/system.json'),
     fighters: { kit_a: readJson('_harness/fixtures/kit_a.json'), kit_b: readJson('_harness/fixtures/kit_b.json') },
     clips: { kit_a: readJson('_harness/fixtures/kit_a.clips.json'), kit_b: readJson('_harness/fixtures/kit_b.clips.json') },
+    // CHANGED(SIM3D): the default circle ring; the spawn axis from HP_PROBE_AXIS (camera side = axis - 90)
+    stages: { version: 1, stages: ['rust_theater', 'butcher_block'].map((id) => ({ id, status: 'built', spawnAxisDeg: PROBE_AXIS_DEG })) },
   });
   return cached;
 }
 
+// ------------------------------------------------------------------ the line frame (CHANGED(SIM3D))
+/** ux / uz = the unit line direction x 16384 as FLOATS (harness only: exact unit length, unlike the sim's Q14 table) */
+interface Line { ux: number; uz: number; cx: number; cz: number }
+const LINES = new WeakMap<Match, Line>();
+
+/** The match's line frame: unit P1 -> P2 spawn direction (Q14) + the ring centre (U). */
+export function lineOf(m: Match): Line {
+  let l = LINES.get(m);
+  if (l) return l;
+  // not made by newMatch: the stage's spawn yaw (P1 screen-left end first)
+  const y = (m.s[W.spawnYaw] * 2 * Math.PI) / 65536;
+  let ux = Math.sin(y) * 16384;
+  let uz = Math.cos(y) * 16384;
+  if (ux * m.s[W.camNZ] - uz * m.s[W.camNX] < 0) {
+    ux = -ux;
+    uz = -uz;
+  }
+  l = { ux, uz, cx: m.s[W.ringCX], cz: m.s[W.ringCZ] };
+  LINES.set(m, l);
+  return l;
+}
+
+function recordLine(m: Match): void {
+  const s = m.s;
+  const b0 = fighterBase(0);
+  const b1 = fighterBase(1);
+  const dx = s[b1 + F.x] - s[b0 + F.x];
+  const dz = s[b1 + F.z] - s[b0 + F.z];
+  if (dx === 0 && dz === 0) return;
+  const len = Math.hypot(dx, dz);
+  LINES.set(m, { ux: (dx / len) * 16384, uz: (dz / len) * 16384, cx: s[W.ringCX], cz: s[W.ringCZ] });
+}
+
+/** Line coordinate (U) of a world point. */
+export function toLineU(m: Match, x: number, z: number): number {
+  const l = lineOf(m);
+  return Math.round(((x - l.cx) * l.ux + (z - l.cz) * l.uz) / 16384);
+}
+/** Lateral coordinate (U) of a world point (toward the initial camera side). */
+export function toLatU(m: Match, x: number, z: number): number {
+  const l = lineOf(m);
+  // lateral axis = the line rotated -90 deg in yaw = (-uz, ux)
+  return Math.round(((x - l.cx) * -l.uz + (z - l.cz) * l.ux) / 16384);
+}
+/** Fighter i's line coordinate (U). */
+export function lxU(m: Match, i: number): number {
+  const b = fighterBase(i);
+  return toLineU(m, m.s[b + F.x], m.s[b + F.z]);
+}
+/** Fighter i's line coordinate (metres). */
+export function lx(m: Match, i: number): number {
+  return lxU(m, i) / 100000;
+}
+/** Fighter i's planar velocity along the line (U/frame, rounded). */
+export function lvU(m: Match, i: number): number {
+  const l = lineOf(m);
+  const b = fighterBase(i);
+  return Math.round((m.s[b + F.vx] * l.ux + m.s[b + F.vz] * l.uz) / 16384);
+}
+/** Projectile slot k's line coordinate (U). */
+export function plx(m: Match, k: number): number {
+  const pb = PROJ_BASE_OF(k);
+  return toLineU(m, m.s[pb + P.x], m.s[pb + P.z]);
+}
+/** World (x, z) U of the line coordinate a (U) + lateral l (U). */
+export function fromLineU(m: Match, a: number, l = 0): [number, number] {
+  const L = lineOf(m);
+  return [L.cx + Math.round((a * L.ux - l * L.uz) / 16384), L.cz + Math.round((a * L.uz + l * L.ux) / 16384)];
+}
+
 export const I = {
   U: 1, D: 2, L_: 4, R_: 8, L: 16, M: 32, H: 64, S: 128, A: 256, THROW: 512, PARRY: 1024, IMPACT: 2048, TAUNT: 4096,
+  STEP_IN: 8192, STEP_OUT: 16384, // CHANGED(SIM3D)
 } as const;
 
 export interface NewMatchOpts {
@@ -44,12 +129,14 @@ export interface NewMatchOpts {
   cpu2?: number;
   skipIntro?: boolean;
   data?: GameData;
+  /** CHANGED(SIM3D): stage id (ring / spawn axis / camera side from data.stages; default rust_theater) */
+  stage?: string;
 }
 
 export function newMatch(o: NewMatchOpts = {}): Match {
   const cfg: MatchCfg = {
     mode: o.mode ?? 'versus',
-    stage: 'rust_theater',
+    stage: o.stage ?? 'rust_theater',
     seed: o.seed ?? 1,
     p: [
       { fighter: o.p1 ?? 'kit_a', color: 0, scheme: o.s1 ?? 1, cpu: -1 },
@@ -59,6 +146,7 @@ export function newMatch(o: NewMatchOpts = {}): Match {
     timer: o.timer,
   };
   const m = createMatch(cfg, o.data ?? fixtureData());
+  recordLine(m); // CHANGED(SIM3D)
   if (o.skipIntro !== false) skipIntro(m);
   return m;
 }
@@ -105,8 +193,11 @@ export function motion(m: Match, i: number, seq: string, btn: number, other = 0,
   }
 }
 
+/** CHANGED(SIM3D): the fighter snapshot with x / z = its LINE / lateral coordinates (metres). */
 export function fs(m: Match, i: number): FighterSnap {
-  return readFighter(m, i);
+  const f = readFighter(m, i);
+  const b = fighterBase(i);
+  return { ...f, x: toLineU(m, m.s[b + F.x], m.s[b + F.z]) / 100000, z: toLatU(m, m.s[b + F.x], m.s[b + F.z]) / 100000 };
 }
 export const ms = readMatch;
 export function sb(i: number): number {
@@ -123,13 +214,44 @@ export function evName(t: number): string {
   return EV_NAMES[t] ?? String(t);
 }
 
-/** Places both fighters (metres, grounded, idle) — test setup only. */
+/**
+ * Places both fighters on the match's LINE (signed metres from the ring centre; grounded, idle) - test setup only.
+ * CHANGED(SIM3D): the line = the P1 -> P2 spawn axis (the x axis on the default stage).
+ */
 export function place(m: Match, x0: number, x1: number): void {
+  const a = fromLineU(m, Math.round(x0 * 100000));
+  const b = fromLineU(m, Math.round(x1 * 100000));
+  place3(m, a[0] / 100000, a[1] / 100000, b[0] / 100000, b[1] / 100000);
+  // exact line placement (place3 rounds through metres)
+  m.s[fighterBase(0) + F.x] = a[0];
+  m.s[fighterBase(0) + F.z] = a[1];
+  m.s[fighterBase(1) + F.x] = b[0];
+  m.s[fighterBase(1) + F.z] = b[1];
+}
+
+/**
+ * CHANGED(SIM3D): places both fighters at (x, z) metres facing each other; the camera basis turns to the perpendicular of
+ * the pair on its current side (continuity) and both screen-side facing signs follow. Test setup only.
+ */
+export function place3(m: Match, x0: number, z0: number, x1: number, z1: number): void {
   const s = m.s;
-  s[fighterBase(0) + F.x] = Math.round(x0 * 100000);
-  s[fighterBase(1) + F.x] = Math.round(x1 * 100000);
-  s[fighterBase(0) + F.facing] = x0 <= x1 ? 1 : -1;
-  s[fighterBase(1) + F.facing] = x0 <= x1 ? -1 : 1;
+  const b0 = fighterBase(0);
+  const b1 = fighterBase(1);
+  s[b0 + F.x] = Math.round(x0 * 100000);
+  s[b0 + F.z] = Math.round(z0 * 100000);
+  s[b1 + F.x] = Math.round(x1 * 100000);
+  s[b1 + F.z] = Math.round(z1 * 100000);
+  const dx = s[b1 + F.x] - s[b0 + F.x];
+  const dz = s[b1 + F.z] - s[b0 + F.z];
+  s[b0 + F.yaw] = dx === 0 && dz === 0 ? 16384 : dirToYaw(dx, dz);
+  s[b1 + F.yaw] = (s[b0 + F.yaw] + 32768) & 65535;
+  updateCamN(s, s[b0 + F.x], s[b0 + F.z], s[b1 + F.x], s[b1 + F.z], 0);
+  const l = lineOf(m);
+  const p1Left = dx * l.ux + dz * l.uz >= 0;
+  s[b0 + F.facing] = p1Left ? 1 : -1;
+  s[b1 + F.facing] = p1Left ? -1 : 1;
+  updateFacing(s, b0);
+  updateFacing(s, b1);
 }
 
 // ------------------------------------------------------------------ tiny test reporter
@@ -213,8 +335,11 @@ export function randomInputs(seed: number, frames: number): Int32Array {
       const dir = dirs[Math.floor(r() * dirs.length)];
       const hold = 1 + Math.floor(r() * 20);
       const assist = r() < 0.1 ? 256 : 0;
+      // CHANGED(SIM3D): ~8% of the held runs also hold STEP_IN / STEP_OUT (taps when short, circling when long)
+      const sr = r();
+      const stepBit = sr < 0.04 ? 8192 : sr < 0.08 ? 16384 : 0;
       for (let k = 0; k < hold && f < frames; k++, f++) {
-        let w = dir | assist;
+        let w = dir | assist | stepBit;
         const b = r();
         if (b < 0.05) w |= 16;
         else if (b < 0.08) w |= 32;
@@ -226,6 +351,60 @@ export function randomInputs(seed: number, frames: number): Int32Array {
         else if (b < 0.137) w |= 4096; // taunt
         out[f * 2 + p] = w;
       }
+    }
+  }
+  return out;
+}
+
+// ------------------------------------------------------------------ STEP-heavy input streams (CHANGED(SIM3D))
+/**
+ * Deterministic words for ONE player aimed at the 3D ring (CONTRACT §35.2): sidestep taps (IN / OUT), long circling holds
+ * (SIDEWALK) released into the settle or cancelled by back (block), step-attacks (a button 9-13 frames after the tap),
+ * walks, dashes, jumps and plain buttons in between. `fwd` = the screen bit toward the opponent at the start.
+ */
+export function stepInputs(seed: number, fwd: number, frames: number): Int32Array {
+  const r = mulberry32((seed * 40503 + 977) | 0);
+  const out = new Int32Array(frames);
+  const back = fwd === 8 ? 4 : 8;
+  let f = 0;
+  const put = (w: number, n = 1): void => {
+    for (let k = 0; k < n && f < frames; k++) out[f++] = w;
+  };
+  const BTN = [16, 32, 64, 128];
+  while (f < frames) {
+    const q = r();
+    const sb = r() < 0.5 ? 8192 : 16384;
+    if (q < 0.2) {
+      // tap, then maybe a step-attack
+      put(sb, 1 + Math.floor(r() * 2));
+      put(0, 8 + Math.floor(r() * 5));
+      if (r() < 0.6) put(BTN[Math.floor(r() * 4)]);
+    } else if (q < 0.42) {
+      // circle-walk, then release or back-cancel
+      put(sb, 20 + Math.floor(r() * 90));
+      if (r() < 0.4) put(sb | back, 3 + Math.floor(r() * 10));
+    } else if (q < 0.52) {
+      put(sb | fwd, 10 + Math.floor(r() * 30)); // forward + STEP = keeps circling
+    } else if (q < 0.62) {
+      put(fwd, 5 + Math.floor(r() * 25));
+    } else if (q < 0.68) {
+      put(back, 5 + Math.floor(r() * 25));
+    } else if (q < 0.72) {
+      put(fwd);
+      put(0);
+      put(fwd); // 66
+      put(0, 12);
+    } else if (q < 0.76) {
+      put(1 | (r() < 0.5 ? fwd : 0), 4); // jumps
+      put(0, 30);
+    } else if (q < 0.9) {
+      put(BTN[Math.floor(r() * 3)] | (r() < 0.3 ? 2 : 0));
+      put(0, 6 + Math.floor(r() * 12));
+    } else if (q < 0.94) {
+      put(16 | 32); // throw
+      put(0, 20);
+    } else {
+      put(0, 4 + Math.floor(r() * 20));
     }
   }
   return out;

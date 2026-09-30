@@ -7,6 +7,8 @@ import type { CBrawl, CFighter, CMove, CSys } from './compile.ts';
 import { EventRing } from './events.ts';
 import { EV } from './events.ts';
 import { F, FL, ST, W, fighterBase } from './layout.ts';
+import type { CRing } from './ring.ts';
+import { Q, alongYaw, cosQ, divRound, isqrt, sinQ } from './fx3d.ts';
 
 export type Scheme = 0 | 1; // 0 SIMPLE, 1 CLASSIC
 export interface PlayerCfg {
@@ -43,6 +45,8 @@ export interface Match {
   arcade: boolean;
   /** CHANGED(SIM) P2: compiled bonus-round tables in 'brawl' / 'heckler' matches (CONTRACT 28.4), else null */
   bonus?: CBrawl | null;
+  /** CHANGED(SIM3D) (CONTRACT §35.2): the compiled ring of this match (from the state's W.ring* fields; constant) */
+  ring: CRing;
 }
 
 export const FB0 = fighterBase(0);
@@ -165,6 +169,62 @@ export function canAfford(m: Match, i: number, mv: CMove): boolean {
   if (mv.costShow > 0 && m.s[b + F.showtime] < mv.costShow) return false;
   if (mv.costNerve > 0 && !canNerve(m, i)) return false;
   return true;
+}
+
+/** CHANGED(SIM3D): moves fighter block b by `amount` U along yaw `yaw` (negative = backward). */
+export function moveAlong(s: Int32Array, b: number, yaw: number, amount: number): void {
+  if (amount === 0) return;
+  alongYaw(amount, yaw, AL);
+  s[b + F.x] += AL[0];
+  s[b + F.z] += AL[1];
+}
+const AL = new Int32Array(2);
+
+/** CHANGED(SIM3D): moves fighter block b by `amount` U along its own forward (negative = backward). */
+export function moveFwd(s: Int32Array, b: number, amount: number): void {
+  moveAlong(s, b, s[b + F.yaw], amount);
+}
+
+/** CHANGED(SIM3D): sets fighter block b's planar velocity to `speed` U/frame along yaw. */
+export function setVelAlong(s: Int32Array, b: number, yaw: number, speed: number): void {
+  alongYaw(speed, yaw, AL);
+  s[b + F.vx] = AL[0];
+  s[b + F.vz] = AL[1];
+}
+
+/**
+ * CHANGED(SIM3D) (CONTRACT §35.3): screen side of a yaw under the camera basis: +1 = faces screen-right, -1 = left, 0 =
+ * exactly along the camera axis. Screen-right R = (camN.z, -camN.x).
+ */
+export function screenSide(s: Int32Array, yaw: number): number {
+  const d = sinQ(yaw) * s[W.camNZ] - cosQ(yaw) * s[W.camNX];
+  return d > 0 ? 1 : d < 0 ? -1 : 0;
+}
+
+/** CHANGED(SIM3D): refresh F.facing (the input-mapping sign, §4.4) from the yaw + camera basis (0 keeps the old sign). */
+export function updateFacing(s: Int32Array, b: number): void {
+  const sd = screenSide(s, s[b + F.yaw]);
+  if (sd !== 0) s[b + F.facing] = sd;
+}
+
+/**
+ * CHANGED(SIM3D) (CONTRACT §35.3): camera basis camN = the unit perpendicular of (b - a) closest to the previous camN
+ * (continuity: never auto-flips; a cross-over swaps screen sides naturally). |b - a| < minSep keeps the previous one.
+ */
+export function updateCamN(s: Int32Array, ax: number, az: number, bx: number, bz: number, minSep: number): void {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const d2 = dx * dx + dz * dz;
+  if (d2 < minSep * minSep || d2 === 0) return;
+  const d = isqrt(d2);
+  let nx = divRound(-dz * Q, d);
+  let nz = divRound(dx * Q, d);
+  if (nx * s[W.camNX] + nz * s[W.camNZ] < 0) {
+    nx = -nx;
+    nz = -nz;
+  }
+  s[W.camNX] = nx;
+  s[W.camNZ] = nz;
 }
 
 /** Number of active projectiles owned by `i` spawned by moves with the same projectile limit group. */

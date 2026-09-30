@@ -18,7 +18,8 @@ def build():
         intro="intro_roar", win=["win_roar", "win_idle"], taunt="taunt_flex", rival="-", stage="butcher_block",
         cpu={"style": "boss_armor", "rangeM": [1.0, 2.4], "pokes": ["5M", "2M"], "antiAir": ["2H"],
              "punish": ["5H", "claw_rush_h"], "combo": ["2L", "5M", "claw_rush_m"], "approach": ["crusher_leap_m"],
-             "grab": ["specimen_grab_m"], "armor": ["5H", "6H", "claw_rush_m", "crusher_leap_m"], "meter": "meltdown"},
+             "grab": ["specimen_grab_m"], "armor": ["5H", "6H", "claw_rush_m", "crusher_leap_m"], "meter": "meltdown",
+             "antiStep": ["5M", "specimen_grab_m"]},
         doc=dict(
             difficulty=2, packs="Creature (mutant punch, swiping, jump attacks, roar, flex, run/walk)",
             look="Mutant: hulking cracked-rock skin, bony mask with cyan crystals, crystal claw growths on both "
@@ -34,6 +35,17 @@ def build():
                      "and supers; ROAR and CRUSHER LEAP are very punishable; honest frame data (no normal "
                      "below -4 except the anti-air).",
             rivalry="None - it is the network's property. It fights whoever reaches episode 7.",
+            # CHANGED(FIGHTERS3D): 3D ring play (CONTRACT 35.12)
+            ring=dict(
+                stepping="CRUSHER LEAP (28-36f) and CLAW RUSH L/M/H are LINEAR: its big armored approaches are exactly "
+                         "what a sidestep is for - step, then punish the landing or the -4..-12. The EX CLAW RUSH re-aims. "
+                         "It does not need to step itself: 2.40 m reach and armor.",
+                homing="5M WILD SWING (10f looping claw, homing, -4) is the anti-step tool. ROAR hits all around it (its "
+                       "box is centred on the body: a square 2.0-3.0 m wide), so circling it does not help once it "
+                       "roars. SPECIMEN GRAB homes with the longest command-grab reach in the game; MELTDOWN and "
+                       "SPECIMEN 13 home.",
+                wall="CLAW RUSH H / EX wall-splat; ROAR's 4 m/s launch becomes a wall splat when the opponent's back is "
+                     "to the ring boundary."),
         ),
     )
 
@@ -91,7 +103,9 @@ def build():
     K.add("2L", "2L", name="Low Claw", clip="low_claw", startup=6, cancel=["chain:2L", "special", "super"],
           role=["poke", "low"], desc="Crouching claw to the shin.", why="Startup 6 (monster).")
     K.add("5M", "M", name="Wild Swing", clip="wild_swing", startup=10, recovery=17, damage=700,
-          cancel=["special", "super"], role=["poke"], desc="Wild looping claw chop, downward across the body.",
+          cancel=["special", "super"], role=["poke", "antistep"], homing=True,
+          why3d="looping claw chop across the body: homing anti-step tool",
+          desc="Wild looping claw chop, downward across the body; homing.",
           why="Monster medium: 10/3/17, 700 (+2/-4).")
     K.add("2M", "2M", name="Floor Slam", clip="floor_slam", startup=11, damage=700, cancel=["special", "super"],
           role=["poke", "low"], desc="Slams both claws on the floor (low).", why="11f, 700 (+4/-2).")
@@ -131,7 +145,8 @@ def build():
     K.special("crusher_leap", None, motion="214",
               common=dict(name="Crusher Leap", clip="crusher_leap_clip", active=4, recovery=20, hitstun=54,
                           blockstun=16, hitstop=15, guard="H", gain=1000, nerve=5000, pb=(0.0, 0.50), kd="soft",
-                          cancel=[], role=["overhead", "approach"], sfx=[[4, "whoosh_heavy"]],
+                          cancel=[], role=["overhead", "approach"], sfx=[[4, "whoosh_heavy"]], linear=True,
+                          why3d="a 1.5-3.5 m leap along its frame-1 line: linear (step it and punish)",
                           desc="Leaps across the stage and slams down: armored, overhead, very punishable.",
                           why="Boss leap slam (FIGHTING_DESIGN 8c ENFORCER tools): 28/32/36f (reactable), 2-hit armor "
                               "through the leap, overhead, -8 on block, KD +30."),
@@ -144,30 +159,38 @@ def build():
               common=dict(name="Claw Rush", clip="claw_rush_clip", cancel=["super"], role=["approach"],
                           sfx=[[2, "whoosh_heavy"]], desc="Armored running claw swipe."),
               per={"l": dict(startup=14, hitstun=54, armor={"hits": 2, "f": [1, 13]}, move=[[0, 0], [14, 1.4]],
-                             why="Boss rush: slower (14/16/18) with 2-hit armor through the run."),
+                             why="Boss rush: slower (14/16/18) with 2-hit armor through the run.", linear=True,
+                             why3d="running rush: linear"),
                    "m": dict(startup=16, hitstun=59, armor={"hits": 2, "f": [1, 15]}, move=[[0, 0], [16, 2.0]],
-                             why="Boss rush: slower (14/16/18) with 2-hit armor through the run."),
+                             why="Boss rush: slower (14/16/18) with 2-hit armor through the run.", linear=True,
+                             why3d="running rush: linear"),
                    "h": dict(startup=18, hitstun=69, armor={"hits": 2, "f": [1, 17]}, move=[[0, 0], [18, 2.8]],
-                             why="Boss rush: slower (14/16/18) with 2-hit armor through the run.")},
+                             why="Boss rush: slower (14/16/18) with 2-hit armor through the run.", linear=True,
+                             wallSplat=True, why3d="running rush: linear; the 2.8 m carry wall-splats at the ring")},
               ex=dict(name="Claw Rush (EX)", startup=14, active=8, recovery=20, damage=1400, hitstun=52,
+                      wallSplat=True, why3d="OD: not linear - re-aims until frame 8 (special default); wall-splats",
                       armor={"hits": 99, "f": [1, 16]}, move=[[0, 0], [14, 2.8]],
                       hits=[{"f": [14, 15], "damage": 600, "hitstop": 11}, {"f": [20, 21], "damage": 800,
                                                                            "hitstop": 13}],
                       desc="Super-armored 2-hit rush, -2 on block.", why="EX: super armor 1-16, 2 hits."))
     rw = {}
     for s, (w, dmg) in {"l": (2.0, 500), "m": (2.4, 600), "h": (2.8, 700)}.items():
-        rw[s] = dict(damage=dmg, boxes=[{"f": [20, 25], "x": 0.3, "y": 1.0, "w": w, "h": 2.0}])
+        rw[s] = dict(damage=dmg, boxes=[{"f": [20, 25], "x": 0.3, "y": 1.0, "w": w, "h": 2.0}], lateralM=w / 2.0,
+                     why3d="shockwave all around it: the box is centred on the body, so its depth = half its width (a "
+                           "square around the Freak); homing")
     K.special("roar", None, motion="22",
               common=dict(name="Roar", clip="roar_wave", startup=20, active=6, recovery=24, hitstun=48, blockstun=20,
                           hitstop=13, guard="HL", gain=800, nerve=4000, pb=(1.2, 1.0), kd="soft", launch=[4.0, 2.0],
                           armor={"hits": 2, "f": [1, 19]}, invuln={"proj": [1, 25]}, cancel=[],
-                          role=["reversal"], sfx=[[20, "crowd_cheer_burst"]],
+                          role=["reversal"], sfx=[[20, "crowd_cheer_burst"]], homing=True,
                           desc="Shockwave roar all around it: blows opponents away, projectile-invulnerable.",
                           why="Boss 'get off me' tool: 20f startup, 2-hit armor, projectile invulnerable 1-25, a "
                               "2.0/2.4/2.8 m box around it, -10 on block."),
               per=rw,
               ex=dict(name="Roar (EX)", startup=12, damage=900, armor={"hits": 99, "f": [1, 17]},
                       boxes=[{"f": [12, 17], "x": 0.3, "y": 1.0, "w": 3.0, "h": 2.2}], desc="Fast super-armored roar.",
+                      lateralM=1.5, role=["reversal", "antistep"],
+                      why3d="12f radial shockwave (1.5 m deep = half the 3.0 m box): the EX is its fast anti-step answer",
                       why="EX: 12f, super armor."))
     sg = {}
     for s, (rng, dmg) in {"l": (1.30, 2600), "m": (1.20, 3000), "h": (1.10, 3400)}.items():
@@ -180,7 +203,8 @@ def build():
                                        "victim": [[0, "hit_body", 0.0, 0.3], [10, "hit_high_l", 0.0, 0.3],
                                                   [18, "dizzy", 0.3, 1.0], [36, "kd_fall_b", 1.25, 1.8667]]})
     K.special("specimen_grab", "cmdgrab", motion="360", kind="cmdgrab",
-              common=dict(name="Specimen Grab", clip="throw_reach", recovery=50, role=["grab"], sfx=[[1, "grab_cloth"]],
+              common=dict(name="Specimen Grab", clip="throw_reach", recovery=50, role=["grab", "antistep"],
+                          sfx=[[1, "grab_cloth"]], why3d="command grab reach arc: homes through its active frames",
                           desc="360 command grab with the longest reach in the game.",
                           why="Boss command grab: reach +0.08..+0.18 m over the template (its 2.40 m arms), "
                               "damage +100 per strength, whiff recovery 50."),

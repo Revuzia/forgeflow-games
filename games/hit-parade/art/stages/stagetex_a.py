@@ -79,25 +79,44 @@ def to8(a):
 
 def save_rgb(name, arr):
     p = os.path.join(OUT, name + ".png")
-    Image.fromarray(to8(arr) if arr.dtype != np.uint8 else arr, "RGB").save(p, optimize=True)
+    _atomic_save(Image.fromarray(to8(arr) if arr.dtype != np.uint8 else arr, "RGB"), p)
     return p
 
 
 def save_rgba(name, img):
     p = os.path.join(OUT, name + ".png")
-    img.save(p, optimize=True)
+    _atomic_save(img, p)
     return p
 
 
 def save_grey(name, arr):
     p = os.path.join(OUT, name + ".png")
     g = to8(arr)
-    Image.fromarray(np.stack([g, g, g], -1), "RGB").save(p, optimize=True)
+    _atomic_save(Image.fromarray(np.stack([g, g, g], -1), "RGB"), p)
     return p
 
 
+def _decodes(p):
+    """CHANGED(STAGES3D-A): a cached texture counts only if it fully decodes (a truncated / CRC-broken PNG in the cache -
+    bb_steel_n.png was, since 09:50 on 2026-09-30 - made Blender load no texture at all and nobody noticed)"""
+    try:
+        with Image.open(p) as im:
+            im.load()
+        return True
+    except Exception:
+        return False
+
+
 def done(*names):
-    return (not FORCE) and all(os.path.exists(os.path.join(OUT, n + ".png")) for n in names)
+    return (not FORCE) and all(os.path.exists(os.path.join(OUT, n + ".png")) and _decodes(os.path.join(OUT, n + ".png"))
+                               for n in names)
+
+
+def _atomic_save(img, p):
+    """write to a temp name then os.replace: a reader (a Blender build) never sees a half-written PNG"""
+    tmp = p + ".tmp.png"
+    img.save(tmp, optimize=True)
+    os.replace(tmp, p)
 
 
 def scratch_layer(S, n, seed, lmin, lmax, width=1, angle=None, alpha=(40, 140)):
@@ -438,7 +457,7 @@ def gen_bb_labels(S=1024):
     lay = glow(lay, 10, 1.8)
     im.alpha_composite(lay, (0, y0))
     d.rectangle([4, y0 + 4, 1019, 1019], outline=hexc("#ff3a3a"), width=6)
-    im.convert("RGB").save(os.path.join(OUT, "bb_labels.png"), optimize=True)
+    _atomic_save(im.convert("RGB"), os.path.join(OUT, "bb_labels.png"))
     print("bb_labels")
 
 
@@ -564,7 +583,7 @@ def gen_wp_labels(S=1024):
         paste_center(lay, text_img(text, f, hexc(fg), 3, hexc("#5a0008")), 256, 128)
         im.alpha_composite(glow(lay, 8, 1.4), (x0, 768))
         d.rectangle([x0 + 6, 774, x0 + 505, 1017], outline=hexc("#fff7ea"), width=6)
-    im.convert("RGB").save(os.path.join(OUT, "wp_labels.png"), optimize=True)
+    _atomic_save(im.convert("RGB"), os.path.join(OUT, "wp_labels.png"))
     print("wp_labels")
 
 

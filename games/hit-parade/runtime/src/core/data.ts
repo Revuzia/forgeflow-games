@@ -11,7 +11,7 @@
 // go to GameData.warnings, which probe_data prints.
 
 import type {
-  AnimRef, BodyExt, BoxDef, ClassicEntry, ClipInfo, ClipsFile, FighterDef, GameData, Move, SimpleMap, System, Vec2,
+  AnimRef, BodyExt, BoxDef, ClassicEntry, ClipInfo, ClipsFile, FighterDef, GameData, GoonMoveDef, Move, SimpleMap, System, Vec2,
 } from './types.ts';
 import { hashString } from './sim/hash.ts';
 
@@ -23,6 +23,14 @@ export const SHARED_CLIPS: readonly string[] = [
   'thrown_b', 'dizzy', 'ko_fall', 'timeover_lose', 'parry', 'impact_windup', 'shove',
 ];
 const LOOPING_SHARED = new Set(['idle', 'walk_f', 'walk_b', 'crouch_idle', 'dizzy', 'kd_ground_b', 'kd_ground_f']);
+
+/**
+ * CHANGED(SIM3D) (CONTRACT §35.5): the 3D-ring step clips every body gets (lane ASSETS bakes them). They are NOT in
+ * SHARED_CLIPS (that would renumber every move anim id, §17 rule 2): each fighter's anim table APPENDS them after the
+ * stance entries, in this order (animStepId). A GLB without the clip renders idle (§17 rule 7).
+ */
+export const STEP_CLIPS: readonly string[] = ['sidestep_l', 'sidestep_r', 'sidewalk_l', 'sidewalk_r'];
+const LOOPING_STEP = new Set(['sidewalk_l', 'sidewalk_r']);
 
 export const MOVE_KINDS: readonly string[] = [
   'normal', 'command', 'special', 'ex', 'super1', 'super3', 'throw', 'cmdgrab', 'projectile', 'system',
@@ -42,6 +50,23 @@ export interface RawData {
   strings?: unknown;
   /** CHANGED(SIM) P2: data/bodies.json (measured hurtbox extents, CONTRACT §28.5c) */
   bodies?: unknown;
+  /** CHANGED(ASSETS) P2: data/goons.json (per-goon measured kit, CONTRACT §32; tools/goons_data.py) */
+  goons?: unknown;
+}
+
+/**
+ * CHANGED(ASSETS) P2 (CONTRACT §32): a BRAWL BREAK goon kind once data/goons.json is applied (applyGoons). system.json
+ * `brawl.kinds[]` carries id / hp / walk; the optional fields are that goon's own kit: `moves` = system.json `brawl.moves`
+ * (same order, ids and frame data) with the goon's measured `boxes` / `move`, `weights` = AI pick odds per move (integers
+ * >= 0, sum > 0), `rangeM` = start range per move (m, goon centre -> the player's near hurt edge).
+ */
+export interface GoonKindDef {
+  id: string;
+  hp: number;
+  walk: number;
+  moves?: GoonMoveDef[];
+  weights?: number[];
+  rangeM?: number[];
 }
 
 // ------------------------------------------------------------------ file collection
@@ -123,6 +148,7 @@ export function rawFromFiles(files: FileMap): RawData {
   raw.cpu = files['cpu.json'];
   raw.strings = files['strings.json'];
   raw.bodies = files['bodies.json'];
+  raw.goons = files['goons.json'];
   return raw;
 }
 
@@ -422,6 +448,21 @@ function validateMove(where: string, id: string, mv: unknown, moves: Record<stri
     }
   }
   if (mv.role !== undefined && !Array.isArray(mv.role) && typeof mv.role !== 'string') errs.push(`${where}.role: array of tags`);
+  // CHANGED(SIM3D) (CONTRACT §35.4): tracking / lateral depth (all optional)
+  if (mv.track !== undefined) {
+    const tr = mv.track;
+    if (!isObj(tr) || (tr.until !== undefined && !isInt(tr.until)) || (tr.rate !== undefined && (!isNum(tr.rate) || tr.rate < 0))) {
+      errs.push(`${where}.track: {until?: frame (integer), rate?: deg per frame >= 0 (0 = full)}`);
+    }
+  }
+  for (const k of ['homing', 'linear']) if (mv[k] !== undefined && typeof mv[k] !== 'boolean') errs.push(`${where}.${k}: boolean`);
+  if (mv.homing === true && mv.linear === true) warns.push(`${where}: homing and linear both set (homing wins)`);
+  if (mv.lateralM !== undefined && (!isNum(mv.lateralM) || mv.lateralM < 0 || mv.lateralM > 3)) errs.push(`${where}.lateralM: metres in [0, 3]`);
+  if (isObj(mv.projectile)) {
+    const p = mv.projectile;
+    if (p.aimed !== undefined && typeof p.aimed !== 'boolean') errs.push(`${where}.projectile.aimed: boolean`);
+    if (p.lateralM !== undefined && (!isNum(p.lateralM) || p.lateralM <= 0)) errs.push(`${where}.projectile.lateralM: metres > 0`);
+  }
   void id;
 }
 
@@ -731,7 +772,16 @@ function buildAnims(def: FighterDef, clips: ClipsFile | null): AnimRef[] {
   });
   // CHANGED(SIM) P2 (CONTRACT §28.2): stance clips (idle, walk_f, walk_b) after the grab entries
   for (const c of stanceClipNames(def)) out.push({ clip: c, warp: null, loop: loopOf(c, true), moveId: -1 });
+  // CHANGED(SIM3D) (CONTRACT §35.5): the step clips (sidestep_l/_r one-shot ~15 f, sidewalk_l/_r loops), appended
+  for (const c of STEP_CLIPS) out.push({ clip: c, warp: null, loop: loopOf(c, LOOPING_STEP.has(c)), moveId: -1 });
   return out;
+}
+
+/** CHANGED(SIM3D): anim id of step clip k (0 sidestep_l, 1 sidestep_r, 2 sidewalk_l, 3 sidewalk_r) = after the stance entries. */
+export function animStepId(def: FighterDef, k: number): number {
+  let grabs = 0;
+  for (const id of Object.keys(def.moves)) if (def.moves[id].grab) grabs++;
+  return animTauntId(def) + 1 + grabs + stanceClipNames(def).length + k;
 }
 
 /** CHANGED(SIM) P2: a stance fighter's `unique.clips` in anim-table order (idle, walk_f, walk_b); [] otherwise. */
@@ -760,11 +810,13 @@ function buildGoonAnims(sys: System, clipsAll: Record<string, ClipsFile>): Recor
   const out: Record<string, AnimRef[]> = {};
   const br = sys.brawl;
   if (!br || !Array.isArray(br.kinds) || !Array.isArray(br.moves)) return out;
-  for (const kind of br.kinds) {
+  for (const kind of br.kinds as GoonKindDef[]) {
     const cf = clipsAll[kind.id] ?? null;
     const tab: AnimRef[] = [];
     for (const c of SHARED_CLIPS) tab.push({ clip: c, warp: null, loop: cf?.clips[c]?.loop ?? LOOPING_SHARED.has(c), moveId: -1 });
-    br.moves.forEach((mv, k) => {
+    // CHANGED(ASSETS) P2: the goon's own kit when data/goons.json applied one (same ids / frame data / clips)
+    const kit = kind.moves && kind.moves.length === br.moves.length ? kind.moves : br.moves;
+    kit.forEach((mv, k) => {
       const clip = mv.anim?.clip ?? '';
       const ci = cf?.clips[clip];
       const total1 = mv.startup + mv.active + mv.recovery;
@@ -777,6 +829,57 @@ function buildGoonAnims(sys: System, clipsAll: Record<string, ClipsFile>): Recor
     out[kind.id] = tab;
   }
   return out;
+}
+
+function isBoxDef(v: unknown): v is BoxDef {
+  return isObj(v) && isVec2(v.f) && isInt(v.f[0]) && isInt(v.f[1]) && isNum(v.x) && isNum(v.y) && isNum(v.w) && isNum(v.h) && v.w > 0 && v.h > 0;
+}
+
+/**
+ * CHANGED(ASSETS) P2 (CONTRACT §32): merges data/goons.json into a COPY of `system.brawl` (the raw JSON is never mutated;
+ * the merged kinds live in data.system, so dataHash covers them). Per kind, every system.json move needs a goons.json
+ * entry with the same startup / active / recovery plus a valid box list and move curve - else that kind keeps the shared
+ * rows (warning). Frame data, damage, stun, pushback and the clip always come from system.json; goons.json adds the
+ * goon's measured `boxes` / `move`, its start ranges (`rangeM`) and AI pick `weights`.
+ */
+function applyGoons(system: System, raw: unknown, warns: string[]): System {
+  const br = system.brawl;
+  if (raw === undefined || !br || !Array.isArray(br.kinds) || !Array.isArray(br.moves)) return system;
+  const gs = isObj(raw) && isObj(raw.goons) ? raw.goons : null;
+  if (!gs) {
+    warns.push('goons.json: no "goons" object (every goon uses the shared system.json brawl.moves)');
+    return system;
+  }
+  const kinds: GoonKindDef[] = br.kinds.map((kind): GoonKindDef => {
+    const base: GoonKindDef = { id: kind.id, hp: kind.hp, walk: kind.walk };
+    const g = gs[kind.id];
+    if (!isObj(g) || !isObj(g.moves)) {
+      warns.push(`goons.json: no kit for ${kind.id} (it uses the shared system.json brawl.moves)`);
+      return base;
+    }
+    const wt = isObj(g.weights) ? g.weights : {};
+    const moves: GoonMoveDef[] = [];
+    const weights: number[] = [];
+    const rangeM: number[] = [];
+    for (let k = 0; k < br.moves.length; k++) {
+      const mv = br.moves[k];
+      const e = g.moves[mv.id];
+      if (!isObj(e) || e.startup !== mv.startup || e.active !== mv.active || e.recovery !== mv.recovery ||
+        !Array.isArray(e.boxes) || e.boxes.length === 0 || !e.boxes.every(isBoxDef) || !Array.isArray(e.move) || !e.move.every(isVec2)) {
+        warns.push(`goons.json ${kind.id}.moves.${mv.id}: missing or stale vs system.json brawl.moves (re-run tools/goons_data.py); ${kind.id} uses the shared kit`);
+        return base;
+      }
+      const boxes = (e.boxes as BoxDef[]).map((b): BoxDef => ({ f: [b.f[0], b.f[1]], x: b.x, y: b.y, w: b.w, h: b.h }));
+      moves.push({ ...mv, boxes, move: (e.move as Vec2[]).map((p): Vec2 => [p[0], p[1]]) });
+      const w = wt[mv.id];
+      weights.push(isInt(w) && w >= 0 ? w : 1);
+      rangeM.push(isNum(e.rangeM) && e.rangeM > 0 ? e.rangeM : (br.moveRangeM[k] ?? 1.0));
+    }
+    if (!weights.some((w) => w > 0)) weights.fill(1);
+    return { ...base, moves, weights, rangeM };
+  });
+  for (const id of Object.keys(gs).sort()) if (!br.kinds.some((k) => k.id === id)) warns.push(`goons.json: ${id} is not in system.json brawl.kinds (ignored)`);
+  return { ...system, brawl: { ...br, kinds } };
 }
 
 function parseBodies(raw: unknown, warns: string[]): Record<string, BodyExt> {
@@ -829,7 +932,9 @@ export function animTauntId(def: FighterDef): number {
 export function buildGameData(raw: RawData): GameData {
   const errs: string[] = [];
   const warns: string[] = [];
-  const system = validateSystem(raw.system, errs);
+  const sys0 = validateSystem(raw.system, errs);
+  // CHANGED(ASSETS) P2: the per-goon BRAWL BREAK kit from data/goons.json (CONTRACT §32)
+  const system = sys0 ? applyGoons(sys0, raw.goons, warns) : null;
   const clips: Record<string, ClipsFile> = {};
   for (const id of Object.keys(raw.clips).sort()) {
     const c = normaliseClips(id, raw.clips[id], errs);
@@ -878,10 +983,18 @@ export function buildGameData(raw: RawData): GameData {
   };
 }
 
-/** uint32 identity of everything that decides gameplay (system + derived fighters), for NET HELLO. */
+/** uint32 identity of everything that decides gameplay (system + derived fighters + the stage rings), for NET HELLO. */
 export function dataHash(data: GameData): number {
   const ids = Object.keys(data.fighters).sort();
-  return hashString(JSON.stringify([data.system, ids.map((id) => data.fighters[id])]));
+  // CHANGED(SIM3D): the ring / spawn / camera-side fields of every stage decide gameplay too (CONTRACT §35.11)
+  const list = (data.stages as { stages?: unknown }).stages;
+  const rings = Array.isArray(list)
+    ? list.map((st) => {
+      const o = (st ?? {}) as Record<string, unknown>;
+      return [o.id ?? null, o.ring ?? null, o.spawnAxisDeg ?? null, o.cameraSideDeg ?? null];
+    })
+    : [];
+  return hashString(JSON.stringify([data.system, ids.map((id) => data.fighters[id]), rings]));
 }
 
 export type { SimpleMap };

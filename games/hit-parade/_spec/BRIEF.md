@@ -55,6 +55,11 @@ brutal TV-show skin:
   intro/win poses, and a distinct play style; plus a mini boss and a boss.
 - TRAINING mode (move list, dummy) so players can learn each fighter.
 
+**Owner direction #3 (2026-09-30, verbatim):** "this should not be a flat 2d arena/match it should be 3d or
+circular where we can walk around the ring to fight" -> HIT PARADE is a full 3D ARENA fighter (Tekken / Soul
+Calibur family): sidestep + circle-walk around the opponent inside 360-degree ring arenas, orbit camera.
+Supersedes the 2.5D-plane decision. Spec: CONTRACT.md section 35.
+
 Non-negotiables for "built like this":
 1. 3D fighter, fast and weighty, with real mocap-quality animation. Versus bouts use a
    fighting-game camera (side-on, dynamic, punch-ins and cinematic cuts on supers/finishers);

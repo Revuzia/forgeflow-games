@@ -198,6 +198,16 @@ def check_kit(K):
             err("%s %s has no template and no design note" % (fid, mid))
         if m.get("clip") not in K.clips and m.get("clip") not in L.SHARED:
             err("%s %s: anim clip %r not in the clip plan" % (fid, mid, m.get("clip")))
+        # CHANGED(FIGHTERS3D): a lateral-depth override or a tracking decision against the class default needs its reason
+        if ("lateralM" in m or "projLateralM" in m) and not m.get("why3d"):
+            err("%s %s: lateralM override without why3d" % (fid, mid))
+        if m.get("homing") is False and "sweep" in m.get("role", []) and not m.get("why3d"):
+            err("%s %s: non-homing sweep without why3d" % (fid, mid))
+        if m.get("input", "").startswith("SS.") and "stepatk" not in m.get("role", []):
+            err("%s %s: step-attack input without role stepatk" % (fid, mid))
+    ring = K.info["doc"].get("ring")
+    if not ring or any(not ring.get(k) for k in ("stepping", "homing", "wall")):
+        err("%s: doc.ring needs stepping / homing / wall text (ROSTER 3D ring play)" % fid)
         g = m.get("grab")
         if g and g.get("clip") and g["clip"] not in K.clips:
             err("%s %s: grab clip %r not in the clip plan" % (fid, mid, g["clip"]))
@@ -275,6 +285,26 @@ def fighter_md(K):
     if d.get("rivalry"):
         A("**Rivalry.** %s" % d["rivalry"])
         A("")
+    # CHANGED(FIGHTERS3D): how the fighter plays the 360-degree ring (CONTRACT 35); the move lists are generated from the
+    # emitted JSON so the prose and the data cannot drift apart
+    ring = d.get("ring") or {}
+    A("**3D ring play.**")
+    A("")
+    A("- *Stepping game:* %s" % ring.get("stepping", "-"))
+    A("- *Homing tools:* %s" % ring.get("homing", "-"))
+    A("- *Wall game:* %s" % ring.get("wall", "-"))
+    mv = J["moves"]
+
+    def ids(pred):
+        return ", ".join("`%s`" % k for k, o in mv.items() if pred(o)) or "-"
+    A("- *From the data:* homing %s | linear (steppable) %s | aimed projectiles %s | straight projectiles %s | "
+      "anti-step %s | step-attacks %s | wall splat %s." % (
+          ids(lambda o: o.get("homing")), ids(lambda o: o.get("linear")),
+          ids(lambda o: o.get("projectile", {}).get("aimed")),
+          ids(lambda o: o.get("projectile") and not o["projectile"].get("aimed")),
+          ids(lambda o: "antistep" in o["role"]), ids(lambda o: "stepatk" in o["role"]),
+          ids(lambda o: o["onHit"].get("wallSplat"))))
+    A("")
     h = J["hurt"]
     A("**Stats.** HP %d | walk %.2f / %.2f m/s | dash %.2f m (%df) / %.2f m (%df) | jump %d+%d+%d, apex %.2f m, "
       "forward %.2f m | throw range %.2f m | hurtbox stand %s, crouch %s, air %s m | pushbox %s m | build `%s`." % (
@@ -312,9 +342,9 @@ def fighter_md(K):
     A("**Frame data** (60 fps; startup counts the first active frame; advantage = stun - (active + recovery), "
       "from the last hit for multi-hit moves; KD = knockdown advantage; `tpl` = FIGHTING_DESIGN template row).")
     A("")
-    A("| id | name | input | S | A | R | total | on hit | on block | dmg | guard | stop | cancel | inv/armor | tpl "
+    A("| id | name | input | S | A | R | total | on hit | on block | dmg | guard | stop | cancel | inv/armor | 3D | tpl "
       "| deviation / design note |")
-    A("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    A("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for mid in K.order:
         m = K.moves[mid]
         o = J["moves"][mid]
@@ -342,10 +372,12 @@ def fighter_md(K):
             note = ("grab: range %s m, lock %d f, dmg at f%d, %s%s. " % (
                 g.get("rangeM", J["throwRangeM"]), g["frames"], g["hitF"],
                 "swap sides" if g["swap"] else "same side", vic)) + note
-        A("| `%s` | %s | %s | %d | %d | %d | %d | %s | %s | %d | %s | %d | %s | %s | %s | %s |" % (
+        if m.get("why3d"):
+            note = (note + " " if note else "") + "3D: " + m["why3d"]
+        A("| `%s` | %s | %s | %d | %d | %d | %d | %s | %s | %d | %s | %d | %s | %s | %s | %s | %s |" % (
             mid, md_escape(o["name"]), md_escape(o["input"]), o["startup"], o["active"], o["recovery"], tot, oh,
             ob, o["damage"], o["guard"], o["hitstop"], md_escape(" ".join(o["cancel"])) or "-",
-            md_escape(", ".join(inv)) or "-", m.get("_tpl", "custom"), md_escape(note)))
+            md_escape(", ".join(inv)) or "-", md_escape(L.dim3(o)), m.get("_tpl", "custom"), md_escape(note)))
     A("")
     # descriptions
     A("**Move notes.**")
@@ -532,6 +564,24 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   window. Verified in the real sim (scratch throwcheck: all 31 grabs x 3 victim bodies).
 - **Season text (CONTRACT 26.3, P2):** `introLine`, `winQuotes` (3), `banter` (rival / freak / ricky / default; Ricky
   vs every contestant; the Freak's lines are stage directions), `ending` (3-5 sentences), listed per fighter below.
+- **3D ring (CONTRACT 35.4 / 35.12, lane FIGHTERS3D):** the fight is a 360-degree ring; fighters sidestep (15 f, 0.85 m
+  arc) and circle-walk. Every move carries `track {until, rate}` (the last frame the attacker turns toward the opponent,
+  degrees per frame); class defaults: normals / throws track to startup - 4, specials / supers to startup - 6, at 180
+  deg / f (snap). **HOMING** moves track through their last active frame at 20 deg / f and are 0.60 m deep across the
+  attack line: they catch a stepper (wide hooks and roundhouses, low roundhouses, sweeps, spins / flairs / lariats,
+  command-grab reach arcs, counter follow-ups, most supers). **LINEAR** moves face the opponent on frame 1 and never turn
+  (rushes, charge moves, leaps and dives, straight non-aimed projectile throws, lunges): a sidestep during their startup
+  beats them, and the stepper punishes from the side. Default moves track through most of their startup and then
+  freeze (straight punches' later frames): in the plain step geometry (0.85 m in 15 f at constant speed, hurt radius
+  0.25 m, 1.2 m apart) a step that starts from 4 frames before a LINEAR move through its startup - 8 evades it, while
+  default and HOMING moves are never evaded (FIGHTERS3D model, not the sim; SIM3D's step curve decides the real window).
+  `lateralM` = each box's half-depth across the attack line (L 0.15,
+  M 0.18 by button for normals; specials / EX / supers 0.22; sweeps 0.45, homing 0.60 unless noted). Projectiles: **AIMED** = launched at the opponent on
+  the spawn frame (the step has to come after the release); straight = along the thrower's yaw (steppable on
+  anticipation). Roles: `antistep` = the fighter's fast step-catcher (every fighter has one), `stepatk` = a step-attack
+  (`SS.<button>`: the button pressed during a sidestep from its frame 9, out on frame 11, or while circle-walking; PATCH and
+  SPIN). The 3D column of each frame table shows the class, the tracking end frame and the depth; per-fighter "3D ring
+  play" covers the stepping game, the homing tools and the wall game (ring boundary = wall; `onHit.wallSplat` enders).
 
 ## AUTHORED motions (keyframed on X Bot, 30 fps; the only two in the roster)
 

@@ -122,6 +122,11 @@ export class FighterView {
       new THREE.Vector3(meta.pos[0], meta.pos[1], meta.pos[2]),
       new THREE.Quaternion().setFromEuler(new THREE.Euler(meta.rotDeg[0] * DEG, meta.rotDeg[1] * DEG, meta.rotDeg[2] * DEG)),
       new THREE.Vector3(1, 1, 1));
+    if (meta.mirror) {
+      // M * offset * M (M = local X mirror): the other hand's grip, still a proper rotation (the prop is not flipped)
+      const M = new THREE.Matrix4().makeScale(-1, 1, 1);
+      offset.premultiply(M).multiply(M);
+    }
     obj.matrixAutoUpdate = false;
     scene.add(obj);
     this.props.push({ obj, bone, offset, show, id });

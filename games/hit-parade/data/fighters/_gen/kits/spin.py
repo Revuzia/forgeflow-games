@@ -25,7 +25,8 @@ def build():
         intro="intro_uprock", win=["win_freeze", "win_ending"], taunt="taunt_uprock", rival="patch", stage="rooftop",
         cpu={"style": "aerial", "rangeM": [1.2, 3.0], "approach": ["drop_in_m", "six_step_m"],
              "antiAir": ["handspin_l", "j.M"], "pokes": ["2M", "5M"], "punish": ["5H", "windmill_h"],
-             "combo": ["2L", "2M", "windmill_m"], "meter": "cypher", "air": ["drop_in_l", "drop_in_h"]},
+             "combo": ["2L", "2M", "windmill_m"], "meter": "cypher", "air": ["drop_in_l", "drop_in_h"],
+             "antiStep": ["2M", "5H"], "stepAttack": "SS.H"},
         doc=dict(
             difficulty=3, packs="Breakdance (footwork, flairs, one-hand spin, freezes), CMU jump/spin kicks",
             look="Ch06: black hooded track top, black cap, white/red over-ear headphones, black joggers, "
@@ -38,6 +39,18 @@ def build():
             weakness="Anti-airs get full punishes on his jumps; DROP-IN is unsafe when it hits shallow; 9500 HP; "
                      "the low-profile moves are all minus on block and lose to low attacks.",
             rivalry="He headspun through Patch's live cue on the rooftop set. She still counts him down.",
+            # CHANGED(FIGHTERS3D): 3D ring play (CONTRACT 35.12)
+            ring=dict(
+                stepping="The flair game wraps round a stepper: WINDMILL, HANDSPIN, 6M BUTTERFLY KICK, 2H FLARE SWEEP "
+                         "and 5H SWIPES all home. What commits to a line is SIX STEP (a LINEAR crawl-in: step it and "
+                         "punish the -4..-8) and DROP-IN (a linear dive). His own step feeds FLANK FLAIR (STEP + H): a "
+                         "homing, low-profile flair sweep out of a sidestep (from frame 11) or a circle-walk, faster and "
+                         "safer than 2H.",
+                homing="2M FOOTWORK SWEEP (9f homing low, 0.40 m deep, -2) is the anti-step poke; 5H SWIPES (12f, -3) the "
+                       "safe homing mid; WINDMILL spins through a stepper 0.60 m deep; CYPHER and BATTLE OF THE YEAR "
+                       "home.",
+                wall="WINDMILL H / EX wall-splat on the last leg pass, so a windmill confirm near the ring edge ends in a "
+                     "splat; in the open his damage is the windmill knockdown and the floaty jump mixups."),
         ),
     )
 
@@ -92,19 +105,36 @@ def build():
           desc="Long front kick.", why="Kick: startup 8->9 (+2/-4) for 1.37 m.")
     K.add("2M", "2M", name="Footwork Sweep", clip="footwork_sweep", startup=9,
           hurtOverride=[{"f": [3, 18], "w": 0.80, "h": 0.70}], cancel=["special", "super"],
-          role=["poke", "low", "lowprofile"], desc="Floor footwork leg sweep (low, no knockdown), low profile.",
+          role=["poke", "low", "lowprofile", "antistep"], homing=True, lateralM=0.40,
+          why3d="floor footwork leg sweep: homing anti-step low, 0.40 m deep",
+          desc="Floor footwork leg sweep (low, no knockdown), low profile; homing.",
           why="Low-profile floor poke: startup 9.")
     K.add("5H", "H", name="Swipes", clip="swipes", active=7, recovery=21, damage=850,
           hits=[{"f": [12, 13], "damage": 400, "hitstop": 11}, {"f": [17, 18], "damage": 450, "hitstop": 13}],
-          cancel=["special", "super"], sfx=[[8, "whoosh_heavy"]], desc="Two whipping leg swipes.",
+          cancel=["special", "super"], sfx=[[8, "whoosh_heavy"]], homing=True,
+          why3d="two whipping leg swipes: homing, his safe tool vs a stepper",
+          desc="Two whipping leg swipes; homing.",
           why="Two-hit heavy (the clip whips both legs): active 7, recovery 21 keeps +2/-3 from the last hit; "
               "850 over 2 hits.")
     K.add("2H", "SWEEP", name="Flare Sweep", clip="flare_sweep", startup=11,
-          hurtOverride=[{"f": [4, 20], "w": 0.90, "h": 0.80}], desc="Flair leg sweep, low profile.",
+          hurtOverride=[{"f": [4, 20], "w": 0.90, "h": 0.80}], desc="Flair leg sweep, low profile; homing.",
+          lateralM=0.60, why3d="a flair: homing sweep, 0.60 m deep (the legs circle, not a 0.45 m foot sweep)",
           why="Flair sweep: startup 11 (drops onto the hands first), low profile 4-20.")
     K.add("6M", "OH", input="6M", kind="command", name="Butterfly Kick", clip="butterfly",
-          moveY=[[0, 0], [8, 0.6], [18, 0.3], [21, 0.0]], desc="Jump spin kick overhead that hops over lows.",
+          moveY=[[0, 0], [8, 0.6], [18, 0.3], [21, 0.0]], homing=True,
+          why3d="jump spin kick on the spot (no travel): a spinning kick, homing",
+          desc="Jump spin kick overhead that hops over lows; homing.",
           why="Overhead template 18/3/17 on a hop (airborne 1-20, beats lows).")
+    # CHANGED(FIGHTERS3D): step-attack (CONTRACT 35.12 item 5) - reuses the flare_sweep clip (Mixamo flair (3), already in
+    # the GLB): no new clip, no re-bake
+    K.add("SS.H", "SWEEP", input="SS.H", kind="command", name="Flank Flair", clip="flare_sweep", recovery=21,
+          hitstun=57, move=[[0, 0], [10, 0.3]], hurtOverride=[{"f": [3, 20], "w": 0.90, "h": 0.80}],
+          cancel=["super"], role=["stepatk", "sweep", "low", "lowprofile"], lateralM=0.60, sfx=[[4, "whoosh_heavy"]],
+          why="STEP-ATTACK: H out of a sidestep (from step frame 11) or a circle-walk. The sweep template 10/3/24 with "
+              "recovery 21 (-8 on block instead of -11, KD +33 kept: hitstun 57) and a 0.3 m slide into the flank: the "
+              "reward for stepping a linear move, safer than 2H but only reachable from a step.",
+          why3d="homing flair sweep (a spin, 0.60 m deep) into the flank, low profile 3-20",
+          desc="STEP + H: low-profile flair sweep into the flank out of a sidestep; low, knocks down, -8 on block.")
     K.add("j.L", "jL", input="j.L", name="Air Jab", clip="air_jab", desc="Air jab.")
     K.add("j.M", "jM", input="j.M", name="Air Swipe", clip="air_swipe", role=["antiair"], desc="Leg whip air-to-air.")
     K.add("j.H", "jH", input="j.H", name="Jump Turning Kick", clip="jump_kick", desc="Turning jump-in.")
@@ -137,17 +167,20 @@ def build():
         wm[s_] = dict(startup=st, active=last + 1 - st + 1, recovery=rec, damage=sum(dmgs), hits=hits,
                       hitstun=30 + 2 + rec, clip="windmill_" + s_, warp="auto",
                       move=[[0, 0], [last, mv]], hurtOverride=[{"f": [6, last + 2], "w": 0.9, "h": 0.8}])
+        if s_ == "h":
+            wm[s_]["wallSplat"] = True   # CHANGED(FIGHTERS3D): the 6-hit carry ends in a wall splat at the ring edge
     K.special("windmill", None, motion="236",
               common=dict(name="Windmill", blockstun=18, hitstop=13, guard="HL", gain=900, nerve=3000,
                           pb=(0.0, 0.45), kd="soft", cancel=["super"], role=["lowprofile", "approach"],
-                          sfx=[[4, "whoosh_light"]],
-                          desc="Flair spin through the opponent (2/4/6 hits), low profile.",
+                          sfx=[[4, "whoosh_light"]], homing=True,
+                          why3d="flair spin: homing through every leg pass, 0.60 m deep (H / EX wall-splat)",
+                          desc="Flair spin through the opponent (2/4/6 hits), low profile; homing.",
                           why="Multi-hit spin (Breakdance flair chain): one hit per leg pass (entry, 2 per flair "
                               "loop, exit) at ~2.5x, -8/-10/-12 on block, KD +30 from the last hit."),
               per=wm,
               ex=dict(name="Windmill (EX)", clip="windmill_h", startup=10, active=57, recovery=22, damage=1400,
                       hitstun=54, warp="auto", invuln={"proj": [1, 30]}, move=[[0, 0], [65, 1.6]],
-                      hurtOverride=[{"f": [4, 67], "w": 0.9, "h": 0.8}],
+                      hurtOverride=[{"f": [4, 67], "w": 0.9, "h": 0.8}], wallSplat=True,
                       hits=[{"f": [f, f + 1], "damage": d, "hitstop": 9 if k < 5 else 15}
                             for k, (f, d) in enumerate(zip([10, 21, 34, 44, 57, 65], [200, 200, 200, 250, 250, 300]))],
                       desc="Projectile-invulnerable 6-hit windmill, -6 on block.",
@@ -164,7 +197,7 @@ def build():
               common=dict(name="Handspin", clip="handspin_clip", blockstun=20, hitstop=13, guard="HL", gain=800,
                           nerve=4000, pb=(0.0, 0.45), kd="soft", launch=[0.5, 5.0], warp="auto",
                           juggle={"js": 1, "ji": 1, "jl": 4}, cancel=["super"], role=["antiair"],
-                          sfx=[[2, "whoosh_heavy"]],
+                          sfx=[[2, "whoosh_heavy"]], homing=True, why3d="one-hand spin, legs circling: homing",
                           desc="One-hand spin with the legs up: 3-hit anti-air, air-invulnerable legs-up startup.",
                           why="Aerial fighter's anti-air (not a DP): 7/8/9 startup, air-invulnerable 1-12/1-9/1-7 "
                               "(body low, legs high), -12/-15/-18 on block."),
@@ -186,7 +219,8 @@ def build():
     K.special("six_step", None, motion="214",
               common=dict(name="Six Step", clip="six_step_clip", hitstun=22, blockstun=16, hitstop=11, guard="L",
                           gain=800, nerve=3000, pb=(0.25, 0.35), warp="auto", cancel=["super"],
-                          role=["low", "lowprofile", "approach"], sfx=[[3, "whoosh_light"]],
+                          role=["low", "lowprofile", "approach"], sfx=[[3, "whoosh_light"]], linear=True,
+                          why3d="the footwork crawl-in commits to its frame-1 line: linear (steppable approach)",
                           desc="Low-profile footwork crawl-in with two low sweeps.",
                           why="Approach special: two lows 8 frames apart, low profile from frame 4, +2/-4 (L) "
                               "to -2/-8 (H)."),
@@ -200,7 +234,8 @@ def build():
     K.special("drop_in", None, motion="214",
               common=dict(name="Drop-In", clip="dive_kick", air=True, active=20, recovery=6, hitstun=20, blockstun=16,
                           hitstop=11, guard="H", gain=700, nerve=2500, pb=(0.25, 0.30), cancel=[],
-                          role=["approach"], sfx=[[2, "whoosh_light"]],
+                          role=["approach"], sfx=[[2, "whoosh_light"]], linear=True,
+                          why3d="a dive along its frame-1 line: linear",
                           desc="Air-only dive kick (214 or S in the air): L steep, H flat and far.",
                           why="FIGHTING_DESIGN 8c DIVE KICK (air, 10f, +2 on block if deep): the dive lasts until "
                               "landing (active 20 max), 6 landing frames; advantage depends on height."),

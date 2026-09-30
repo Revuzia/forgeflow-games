@@ -5,6 +5,8 @@
     python _harness/perfcheck.py --headless --scene ko      # another scripted window
     python _harness/perfcheck.py --headless --gate-p99 33   # G9: p99 frame <= 33 ms in a super cinematic
     python _harness/perfcheck.py --headless --query crowd=0 --label nocrowd   # A/B knobs: crowd=0 outline=0 post=0 bloom=1
+    python _harness/perfcheck.py --stages rust_theater,butcher_block,wheel_of_pain,rooftop,control_room --gate-p99 33
+                                                            # P2: the super cinematic on every set, one page, p50 / p99 per stage
 
 Refuses to run (exit 3, says why) while another automated Chrome is alive (a chrome.exe browser process with
 --remote-debugging-pipe or --enable-automation and no --type=): a second automated Chrome shares the GPU and the numbers
@@ -97,6 +99,8 @@ def main():
     ap.add_argument("--p1", default="johnny")
     ap.add_argument("--p2", default="bruno")
     ap.add_argument("--ab", type=int, default=0, help="interleave N A/B windows (cinematic vs idle) of --seconds each")
+    ap.add_argument("--stages", default="", help="--lab sim: comma list of stage ids measured one after another in the same page "
+                    "(the super cinematic on each set; per-stage p50 / p99 table; the gate applies to the worst p99)")
     args = ap.parse_args()
     name = "perfcheck_%s" % (args.label or (args.scene + ("_headless" if args.headless else "_headed")))
     extra = FLAGS + (["--disable-gpu-vsync", "--disable-frame-rate-limit"] if args.uncapped else [])
@@ -148,7 +152,44 @@ def main():
         rep["readyS"] = round(time.time() - t1, 1)
         rep["lab"] = pg.evaluate("() => window.__LAB__.info()")
         rep["loadBefore"] = machine_load()
-        if args.lab == "sim":
+        if args.lab == "sim" and args.stages:
+            per = {}
+            for sid in [x for x in args.stages.split(",") if x]:
+                su = pg.evaluate("([a, b, s]) => window.__LAB__.setup(a, b, {stage: s})", [args.p1, args.p2, sid])
+                sc = pg.evaluate("() => window.__LAB__.prime()")
+                c0 = sc.get("cineAt", -1) if sc.get("cineAt", -1) >= 0 else sc.get("lockAt", -1)
+                if c0 is None or c0 < 0:
+                    raise RuntimeError("no PRIME TIME cinematic started on %s: %s" % (sid, json.dumps(sc)))
+                a0, a1 = max(0, sc.get("pressAt", c0) - 4), (sc.get("endAt", c0 + 180) or c0 + 180)
+                wins = []
+                for k in range(max(1, args.ab)):
+                    ra = pg.evaluate("([n, a, b]) => window.__LAB__.perf(n, a, b)", [args.seconds, a0, a1])
+                    rb = pg.evaluate("([n, a, b]) => window.__LAB__.perf(n, a, b)", [args.seconds, 30, max(31, a0 - 10)]) if args.ab > 0 else None
+                    wins.append((ra, rb))
+                med = lambda xs: sorted(xs)[len(xs) // 2]
+                r_ = dict(wins[-1][0])
+                pf = r_.pop("prof", None) or {}
+                for key in ("p50", "p90", "p99", "max", "avgFps"):
+                    r_[key] = med([w[0][key] for w in wins])
+                r_["window"] = [a0, a1]
+                r_["stageFallback"] = su.get("stageFallback")
+                r_["prof"] = {k: pf.get(k) for k in ("gpuSupported", "gpuP", "cpuP", "mean")}
+                if args.ab > 0:
+                    r_["ab"] = [{"A": {k: w[0][k] for k in ("p50", "p99", "frames")}, "B": {k: w[1][k] for k in ("p50", "p99", "frames")}} for w in wins]
+                    r_["idleP50"] = med([w[1]["p50"] for w in wins]); r_["idleP99"] = med([w[1]["p99"] for w in wins])
+                    r_["ratioP99"] = round(r_["p99"] / max(0.01, r_["idleP99"]), 3)
+                per[sid] = r_
+                print("stage %-14s frames %4d avg %5.1f fps | p50 %6.2f p90 %6.2f p99 %6.2f max %6.2f ms | calls %s tris %s | gpu p %s%s" % (
+                    sid, r_["frames"], r_["avgFps"], r_["p50"], r_["p90"], r_["p99"], r_["max"], r_.get("calls"), r_.get("triangles"),
+                    json.dumps(r_["prof"].get("gpuP")),
+                    (" | idle p50 %.2f p99 %.2f -> A/B p99 ratio %.3f (median of %d interleaved)" % (r_["idleP50"], r_["idleP99"], r_["ratioP99"], len(wins))) if args.ab > 0 else ""), flush=True)
+            rep["stages"] = per
+            worst = max(per, key=lambda k: per[k]["p99"])
+            res = dict(per[worst])
+            res.pop("prof", None)
+            res["scene"] = "prime %s vs %s, worst stage %s" % (args.p1, args.p2, worst)
+            res["seconds"] = args.seconds
+        elif args.lab == "sim":
             sc = pg.evaluate("() => window.__LAB__.prime()")
             rep["script"] = sc
             c0 = sc.get("cineAt", -1) if sc.get("cineAt", -1) >= 0 else sc.get("lockAt", -1)

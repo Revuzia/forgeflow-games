@@ -4,9 +4,11 @@
 // sees a float. Results are cached per GameData object.
 
 import type { FighterDef, GameData, Move, System, Vec2 } from '../types.ts';
-import { SHARED_CLIPS, animGrabId, animIntroId, animStanceId, animTauntId, animWinId, classicMoveId, exIdFor, moveStrength } from '../data.ts';
+import { SHARED_CLIPS, animGrabId, animIntroId, animStanceId, animStepId, animTauntId, animWinId, classicMoveId, exIdFor, moveStrength } from '../data.ts';
+import type { GoonKindDef } from '../data.ts';
 import { M, mToU, mpsToUpf, mps2ToUpf2 } from './units.ts';
 import { SC } from './events.ts';
+import { Q, cosQ, degToYaw } from './fx3d.ts';
 
 // ------------------------------------------------------------------ enums
 export const K = { normal: 0, command: 1, special: 2, ex: 3, super1: 4, super3: 5, throw: 6, cmdgrab: 7, projectile: 8, system: 9 } as const;
@@ -53,6 +55,10 @@ export interface CProj {
   vy: number; // U/frame (arcing projectiles, CONTRACT 20.2)
   g: number; // U/frame^2
   ground: boolean; // rolls on the floor instead of despawning
+  /** CHANGED(SIM3D) (CONTRACT §35.4): launched toward the opponent at spawn instead of along the thrower's yaw */
+  aimed: boolean;
+  /** CHANGED(SIM3D): hit box half-depth across the travel line (U); default = box w / 2 */
+  lat: number;
 }
 
 /** CONTRACT 20.2 grab block, compiled. */
@@ -196,6 +202,17 @@ export interface CMove {
   armorStep: boolean; // listed in the fighter's unique.steps
   cinEndDown: boolean; // cinematic.endPose "front" (the victim lies face down)
   hitsTotal: number; // sum of cinematic hits (bonus rounds deal it at once)
+  // CHANGED(SIM3D) (CONTRACT §35.4): tracking + lateral hit depth
+  /** last move frame that re-faces the opponent (frames 1..trackUntil); homing = lastActive, linear = 1 */
+  trackUntil: number;
+  /** max turn per tracking frame (yaw units); 0 = full re-face */
+  trackRate: number;
+  homing: boolean;
+  linear: boolean;
+  /** hitbox half-depth across the attack line (U) */
+  lateral: number;
+  /** CHANGED(SIM3D): a step-attack ("SS.<btn>"): routed only while stepping (CFighter.stepAtk), never from gTable */
+  stepAtk: boolean;
 }
 
 export interface CSpecial {
@@ -342,6 +359,10 @@ export interface CFighter {
   animTaunt: number;
   tauntFrames: number;
   introFrames: number;
+  /** CHANGED(SIM3D): anim ids of the step clips (sidestep_l, sidestep_r, sidewalk_l, sidewalk_r), appended to the table */
+  animStep: [number, number, number, number];
+  /** CHANGED(SIM3D): step-attack move index per button (L, M, H; -1 none) - "SS.<btn>" moves */
+  stepAtk: number[];
 }
 
 export interface CSys {
@@ -371,6 +392,21 @@ export interface CSys {
   drainBySc: Int32Array;
   sfx: string[];
   sfxIndex: Record<string, number>;
+  // CHANGED(SIM3D) (CONTRACT §35.2 / §35.3 / §35.4): system.json `ring`, `step`, `track`, `lateral`, throw front arc
+  ringR: number; // default circle radius (U) when the stage has no ring
+  againstWall: number; // "against the wall" range (U): IMPACT splat, STAGE FRIGHT stun
+  camMinSep: number; // |P2 - P1| below this keeps the previous camN (U)
+  frontArcCos: number; // cos(throw front arc half-angle), Q14
+  spawnAxis: number; // default spawnAxisDeg (yaw units)
+  stepFrames: number;
+  stepCurve: Int32Array; // cumulative sidestep arc travel (U) at step frame f, index 0..stepFrames
+  stepAttackF: number;
+  stepBlockF: number;
+  stepBufferF: number; // presses during a sidestep buffer from this step frame on
+  sidewalk: number; // U/frame tangential
+  stepSettle: number;
+  trackNormalOff: number; // default track.until = startup - this (normals / throws / system)
+  trackSpecialOff: number; // specials / supers
 }
 
 // ------------------------------------------------------------------ helpers
@@ -387,10 +423,17 @@ function pwl(pts: Vec2[], f: number): number {
   return pts[pts.length - 1][1];
 }
 
-function parseInput(inp: string | undefined): { air: boolean; dir: number; btn: number; chainOnly: boolean; back: boolean } {
-  const out = { air: false, dir: 5, btn: -1, chainOnly: false, back: false };
+function parseInput(inp: string | undefined): { air: boolean; dir: number; btn: number; chainOnly: boolean; back: boolean; step: boolean } {
+  const out = { air: false, dir: 5, btn: -1, chainOnly: false, back: false, step: false };
   if (!inp) return out;
   let s = inp.trim();
+  // CHANGED(SIM3D) (CONTRACT §35.12 FIGHTERS3D item 5): step-attacks "SS.<L|M|H>" - routed only from SIDESTEP / SIDEWALK
+  const ss = /^SS\.([LMH])$/.exec(s);
+  if (ss) {
+    out.step = true;
+    out.btn = ss[1] === 'L' ? 0 : ss[1] === 'M' ? 1 : 2;
+    return out;
+  }
   if (s.includes('>')) {
     out.chainOnly = true;
     s = s.split('>').pop() ?? '';
@@ -465,6 +508,7 @@ export function compileSystem(sys: System): CSys {
     drainBySc: byStr(sys.nerve.blockDrain, sys.nerve.blockDrain.special, sys.nerve.blockDrain.super, sys.nerve.blockDrain.impact, sys.nerve.blockDrain.projectile, 0),
     sfx: [],
     sfxIndex: {},
+    ...compileStep(sys),
   };
   for (const k of Object.keys(c) as (keyof CSys)[]) {
     const v = c[k];
@@ -472,6 +516,39 @@ export function compileSystem(sys: System): CSys {
   }
   sysCache.set(sys, c);
   return c;
+}
+
+/** CHANGED(SIM3D): the system.json `ring` / `step` / `track` / throw arc numbers (defaults = CONTRACT §35 values). */
+function compileStep(sys: System): Pick<CSys, 'ringR' | 'againstWall' | 'camMinSep' | 'frontArcCos' | 'spawnAxis' | 'stepFrames' | 'stepCurve' | 'stepAttackF' | 'stepBlockF' | 'stepBufferF' | 'sidewalk' | 'stepSettle' | 'trackNormalOff' | 'trackSpecialOff'> {
+  const rg = sys.ring ?? {};
+  const st = sys.step ?? {};
+  const tr = sys.track ?? {};
+  const frames = Math.max(2, Math.trunc(st.frames ?? 15));
+  const dist = mToU(st.distM ?? 0.85);
+  const movePct = st.movePct ?? 80;
+  // ease-out over movePct of the frames (like the dash), then still: cumulative travel at step frame f (index 0..frames)
+  const curve = new Int32Array(frames + 1);
+  const fm = Math.max(1, Math.round((frames * movePct) / 100));
+  for (let f = 0; f <= frames; f++) {
+    const t = Math.min(1, f / fm);
+    curve[f] = Math.round(dist * (1 - (1 - t) * (1 - t)));
+  }
+  return {
+    ringR: mToU(rg.defaultRadiusM ?? 5.5),
+    againstWall: mToU(rg.againstWallM ?? 0.45),
+    camMinSep: mToU(rg.camMinSepM ?? 0.3),
+    frontArcCos: cosQ(degToYaw(sys.throw.frontArcDeg ?? 70)),
+    spawnAxis: degToYaw(rg.spawnAxisDeg ?? 90),
+    stepFrames: frames,
+    stepCurve: curve,
+    stepAttackF: Math.max(1, Math.trunc(st.attackF ?? 11)),
+    stepBlockF: Math.max(1, Math.trunc(st.blockF ?? 12)),
+    stepBufferF: Math.max(1, Math.trunc(st.bufferF ?? 9)),
+    sidewalk: mpsToUpf(st.walkMps ?? 1.8),
+    stepSettle: Math.max(1, Math.trunc(st.settleF ?? 4)),
+    trackNormalOff: Math.trunc(tr.normalUntilOffset ?? 4),
+    trackSpecialOff: Math.trunc(tr.specialUntilOffset ?? 6),
+  };
 }
 
 function sfxId(cs: CSys, name: string): number {
@@ -566,6 +643,8 @@ function compileMove(id: string, mv: Move, idx: number, snapId: number, animId: 
       vy: p.vy !== undefined ? mpsToUpf(p.vy) : 0,
       g: p.g !== undefined ? mps2ToUpf2(p.g) : 0,
       ground: p.ground === true,
+      aimed: p.aimed === true,
+      lat: Math.max(1, mToU(p.lateralM !== undefined ? p.lateralM : p.box[0] / 2)),
     };
   }
   let cin: CMove['cin'] = null;
@@ -649,6 +728,21 @@ function compileMove(id: string, mv: Move, idx: number, snapId: number, animId: 
     };
   }
   const isGrabKind = kind === K.throw || kind === K.cmdgrab || mv.grab !== undefined;
+  // CHANGED(SIM3D) (CONTRACT §35.4): tracking defaults by class, lateral depth by strength / role
+  const roles = Array.isArray(mv.role) ? mv.role.map(String) : [];
+  const homing = mv.homing === true;
+  const linear = mv.linear === true && !homing;
+  const trackOff = kind === K.special || kind === K.ex || kind === K.projectile || kind === K.cmdgrab || isSuper ? cs.trackSpecialOff : cs.trackNormalOff;
+  const lastActive = mv.startup + mv.active - 1;
+  let trackUntil = mv.track?.until !== undefined ? Math.trunc(mv.track.until) : mv.startup - trackOff;
+  if (homing) trackUntil = Math.max(trackUntil, lastActive);
+  if (linear) trackUntil = 1;
+  trackUntil = Math.max(1, trackUntil);
+  const trackRate = mv.track?.rate !== undefined && mv.track.rate > 0 ? Math.max(1, degToYaw(Math.min(180, mv.track.rate))) : 0;
+  const lat = sys.lateral ?? { L: 0.15, M: 0.18, H: 0.22, sweep: 0.45, homing: 0.6 };
+  // (specials / EX / supers default to the H depth: their L/M/H is the button strength, not the limb - FIGHTERS3D §35.12.3)
+  const special = kind === K.special || kind === K.ex || kind === K.projectile || kind === K.cmdgrab || isSuper;
+  const lateralM = mv.lateralM !== undefined ? mv.lateralM : homing ? lat.homing : roles.includes('sweep') ? lat.sweep : special ? lat.H : str === 0 ? lat.L : str === 1 ? lat.M : lat.H;
   const lightStarter = mv.starter === 'light' || ((kind === K.normal || kind === K.command) && (str === 0 || (inp.dir <= 3 && str === 1 && !inp.air)));
   const cm: CMove = {
     id,
@@ -751,6 +845,12 @@ function compileMove(id: string, mv: Move, idx: number, snapId: number, animId: 
     armorStep: false,
     cinEndDown: mv.cinematic?.endPose === 'front',
     hitsTotal: mv.cinematic ? mv.cinematic.hits.reduce((a, h) => a + h[1], 0) : 0,
+    trackUntil,
+    trackRate,
+    homing,
+    linear,
+    lateral: Math.max(0, mToU(lateralM)),
+    stepAtk: inp.step,
   };
   cm.chainOnly = cm.chainOnly || mv.tc === true;
   if (grab && grab.swap) cm.throwBack = true;
@@ -820,6 +920,12 @@ export interface CBrawl {
   moves: CMove[]; // goon kit (snapId = index, animId = 34 + index)
   moveNames: string[];
   moveRange: number[]; // U: goon centre to the player's near hurt edge where each move is started
+  /** CHANGED(ASSETS) P2 (CONTRACT §32): per kind (system.json brawl.kinds order) its own kit (data/goons.json boxes /
+   *  move measured on that goon's clips; same order, ids and frame data as `moves`), start ranges (U) and AI pick
+   *  weights (integers >= 0). A kind without a goons.json kit uses `moves` / `moveRange` / equal weights. */
+  kindMoves: CMove[][];
+  kindRange: number[][];
+  kindWeights: number[][];
   g: number; // goon juggle gravity U/f^2
   launchVx: number;
   launchVy: number;
@@ -871,6 +977,13 @@ export function compileBrawl(data: GameData): CBrawl {
     throw new Error('system.json: brawl { moves, kinds, waves, ... } and heckler { objects, ... } are required for the bonus rounds (CONTRACT 28.4)');
   }
   const moves = br.moves.map((mv, k) => compileMove(mv.id, mv, k, k, SHARED_CLIPS.length + k, cs, sys, mToU(0.6)));
+  // CHANGED(ASSETS) P2: per-goon kits from data/goons.json (core/data.ts applyGoons merged them into brawl.kinds)
+  const gkinds = br.kinds as GoonKindDef[];
+  const kindMoves = gkinds.map((kd) => (kd.moves && kd.moves.length === br.moves.length
+    ? kd.moves.map((mv, k) => compileMove(mv.id, mv, k, k, SHARED_CLIPS.length + k, cs, sys, mToU(0.6)))
+    : moves));
+  const kindRange = gkinds.map((kd) => br.moves.map((_, k) => mToU(kd.rangeM?.[k] ?? br.moveRangeM[k] ?? 1.0)));
+  const kindWeights = gkinds.map((kd) => br.moves.map((_, k) => Math.max(0, Math.trunc(kd.weights?.[k] ?? 1))));
   const r = br.ratings;
   const decay = r.decayPerSec.map((d) => Math.round((d * 100 * 1000) / 60));
   const cb: CBrawl = {
@@ -902,6 +1015,9 @@ export function compileBrawl(data: GameData): CBrawl {
     moves,
     moveNames: br.moves.map((m) => m.id),
     moveRange: br.moves.map((_, k) => mToU(br.moveRangeM[k] ?? 1.0)),
+    kindMoves,
+    kindRange,
+    kindWeights,
     g: cs.gJuggle,
     launchVx: mpsToUpf(3.0),
     launchVy: mpsToUpf(5.0),
@@ -1090,7 +1206,7 @@ export function compileFighter(data: GameData, id: string): CFighter {
   const aTable = new Int16Array(30).fill(-1);
   const find = (air: boolean, dir: number, btn: number): number => {
     for (const m of moves) {
-      if (m.snapId < 0 || m.chainOnly || !m.isNormalCat || m.phase2) continue;
+      if (m.snapId < 0 || m.chainOnly || !m.isNormalCat || m.phase2 || m.stepAtk) continue;
       if (m.inAir === air && m.inDir === dir && m.inBtn === btn) return m.idx;
     }
     return -1;
@@ -1248,8 +1364,14 @@ export function compileFighter(data: GameData, id: string): CFighter {
     route2,
     mw: { ...sys.motion, chargeFrames: u.chargeF, chargeKeep: u.keepF },
     ...hurtExtents(def, data),
+    animStep: [animStepId(def, 0), animStepId(def, 1), animStepId(def, 2), animStepId(def, 3)],
+    stepAtk: [0, 1, 2].map((bt) => {
+      const mm = moves.find((q) => q.stepAtk && q.inBtn === bt && q.snapId >= 0 && !q.phase2);
+      return mm ? mm.idx : -1;
+    }),
   };
   void M;
+  void Q;
   cache[id] = cf;
   return cf;
 }

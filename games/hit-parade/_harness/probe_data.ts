@@ -12,7 +12,7 @@
 // item. Usage: node _harness/probe_data.ts [--strict] [-v]
 import { existsSync, readFileSync } from 'node:fs';
 import { fixtureData, tester, ROOT } from './fixtures/simkit.ts';
-import { loadGameData, SHARED_CLIPS } from '../runtime/src/core/data.ts';
+import { loadGameData, SHARED_CLIPS, STEP_CLIPS, animStepId } from '../runtime/src/core/data.ts';
 import type { GameData, Move } from '../runtime/src/core/types.ts';
 
 const STRICT = process.argv.includes('--strict');
@@ -171,7 +171,10 @@ if (VERBOSE) for (const l of fr.advTable) console.log(`  adv  ${l}`);
   const ok4 = (v: number, w: number): boolean => Math.abs(v - w) < 0.0002;
   t.ok(!!b && ok4(b.x + b.w / 2, far) && ok4(b.x - b.w / 2, near) && ok4(b.y - b.h / 2, y0) && ok4(b.y + b.h / 2, y1) && b.f[0] === m5.startup && b.f[1] === m5.startup + m5.active - 1,
     `derived box v2: body ${near.toFixed(3)} -> reach ${far.toFixed(3)} m (5M floor), y ${y0.toFixed(3)}..${y1.toFixed(3)} (crouch line), active frames`, JSON.stringify(b));
-  t.eq(fx.anims.kit_a.length, 34 + Object.keys(fx.fighters.kit_a.moves).length + 1 + (fx.fighters.kit_a.win ?? []).length + 1, '§17 anim table: 34 shared + moves + intro + wins + taunt');
+  // CHANGED(SIM3D): + the 4 appended step clips (data.ts STEP_CLIPS: sidestep_l/_r, sidewalk_l/_r, CONTRACT §35.5)
+  const grabsA = Object.keys(fx.fighters.kit_a.moves).filter((k) => fx.fighters.kit_a.moves[k].grab).length;
+  t.eq(fx.anims.kit_a.length, 34 + Object.keys(fx.fighters.kit_a.moves).length + 1 + (fx.fighters.kit_a.win ?? []).length + 1 + grabsA + STEP_CLIPS.length, '§17 anim table: 34 shared + moves + intro + wins + taunt + grabs + 4 step clips');
+  t.ok(STEP_CLIPS.every((c, k) => fx.anims.kit_a[animStepId(fx.fighters.kit_a, k)]?.clip === c), `step clip entries at animStepId 0..3 = ${STEP_CLIPS.join(' ')}`);
   t.ok(fx.anims.kit_a[34].moveId === 0 && fx.anims.kit_a[34].clip === fx.fighters.kit_a.moves['5L'].anim!.clip, '§17 anim id 34 = move 0');
 }
 

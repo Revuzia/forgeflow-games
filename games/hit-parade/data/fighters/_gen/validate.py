@@ -16,6 +16,11 @@ tools/research/fg_template_check.py convention, and checks:
     `boxSrc: hitVolume` boxes still match the clips.json effector (stale after a re-bake -> rerun build.py);
     box frames inside the active frames. Clips whose plan differs from the published bake
     (art/renders/<id>/_build/bake.json src) are reported PENDING (lane ASSETS re-bake), not failed.
+  - CHANGED(FIGHTERS3D) 3D ring fields (CONTRACT 35.12): every move's track {until, rate} matches its class (homing =
+    last active frame at 20 deg/f, linear = frame 1, else startup - 4 / - 6 at 180), homing strikes >= 0.40 m deep,
+    lateralM on every strike and only there, projectile aimed + lateralM, step-attacks (SS.<btn>, role stepatk; patch
+    and spin must have one), every fighter has a reliable homing tool and an antistep move, cpu antiStep / stepAttack
+    refs resolve, and _spec/ROSTER.md carries each fighter's "3D ring play" section.
 Writes _harness/_reports/fighters_validate.txt. Exit 0 = PASS, 1 = FAIL.
 Usage: python data/fighters/_gen/validate.py
 """
@@ -507,6 +512,122 @@ def check_grab_victim(fid, mid, o, g):
     return travel
 
 
+# ------------------------------------------------------------------ CHANGED(FIGHTERS3D): CONTRACT 35.4 / 35.12 checks
+TRACK_LEAD = {"normal": 4, "command": 4, "throw": 4}   # until = max(1, startup - lead); other kinds 6
+HOMING_RATE, TRACK_FULL = 20, 180
+LAT_RANGE, PROJ_LAT_RANGE = (0.10, 1.50), (0.10, 0.80)
+STEP_ATTACK_REQUIRED = ("patch", "spin")
+ROSTER_MD = os.path.join(GAME, "_spec", "ROSTER.md")
+
+
+def is_strike3d(o):
+    """SIM isStrikeKind (build.py is_strike): the moves whose boxes need a lateral depth."""
+    if o["kind"] in ("throw", "cmdgrab") or o.get("grab") or o.get("projectile"):
+        return False
+    if o.get("cinematic"):
+        return True
+    return o.get("damage", 0) > 0 or any(h["damage"] > 0 for h in o.get("hits", []))
+
+
+def check_3d(fid, d):
+    moves = d["moves"]
+    n_hom = n_lin = n_aim = 0
+    reliable, antistep, stepatk = [], [], []
+    for mid, o in moves.items():
+        S, A = o["startup"], o["active"]
+        last_act = S + A - 1
+        t = o.get("track")
+        if not (isinstance(t, dict) and isinstance(t.get("until"), int) and isinstance(t.get("rate"), int)):
+            fail(fid, "%s: track {until, rate} missing or not integers (CONTRACT 35.12)" % mid)
+            continue
+        if not (1 <= t["until"] <= max(1, last_act)):
+            fail(fid, "%s: track.until %d outside 1..%d (the last active frame)" % (mid, t["until"], last_act))
+        if not (1 <= t["rate"] <= 180):
+            fail(fid, "%s: track.rate %d outside 1..180 deg/frame" % (mid, t["rate"]))
+        hom, lin = o.get("homing"), o.get("linear")
+        for k, v in (("homing", hom), ("linear", lin)):
+            if v is not None and v is not True:
+                fail(fid, "%s: %s must be true or absent" % (mid, k))
+        if hom and lin:
+            fail(fid, "%s: homing and linear both set" % mid)
+        strike = is_strike3d(o)
+        if hom:
+            n_hom += 1
+            if t != {"until": last_act, "rate": HOMING_RATE}:
+                fail(fid, "%s: homing needs track {until: %d (last active), rate: %d}, has %s" % (mid, last_act,
+                                                                                              HOMING_RATE, t))
+            if strike and o.get("lateralM", 0) < 0.40:
+                fail(fid, "%s: homing strike %.2f m deep (< 0.40: it would miss the stepper it tracks)" % (
+                    mid, o.get("lateralM", 0)))
+        elif lin:
+            n_lin += 1
+            if t != {"until": 1, "rate": TRACK_FULL}:
+                fail(fid, "%s: linear needs track {until: 1, rate: 180}, has %s" % (mid, t))
+        else:
+            want = max(1, S - TRACK_LEAD.get(o["kind"], 6))
+            if t != {"until": want, "rate": TRACK_FULL}:
+                fail(fid, "%s: class-default track should be {until: %d, rate: 180}, has %s" % (mid, want, t))
+        if strike:
+            lat = o.get("lateralM")
+            if not isinstance(lat, (int, float)) or not (LAT_RANGE[0] <= lat <= LAT_RANGE[1]):
+                fail(fid, "%s: strike lateralM %r outside %s m" % (mid, lat, LAT_RANGE))
+        elif "lateralM" in o:
+            fail(fid, "%s: lateralM on a non-strike (grabs use the front arc, projectiles projectile.lateralM)" % mid)
+        pj = o.get("projectile")
+        if pj:
+            if not isinstance(pj.get("aimed"), bool):
+                fail(fid, "%s: projectile.aimed must be a boolean" % mid)
+            pl = pj.get("lateralM")
+            if not isinstance(pl, (int, float)) or not (PROJ_LAT_RANGE[0] <= pl <= PROJ_LAT_RANGE[1]):
+                fail(fid, "%s: projectile.lateralM %r outside %s m" % (mid, pl, PROJ_LAT_RANGE))
+            if pj.get("aimed"):
+                n_aim += 1
+                if lin:
+                    fail(fid, "%s: an aimed projectile on a linear move (aim = the special's default tracking)" % mid)
+        inp = o.get("input", "")
+        roles = set(o.get("role", []))
+        if inp.startswith("SS."):
+            if o["kind"] != "command" or inp[3:] not in ("L", "M", "H") or "stepatk" not in roles:
+                fail(fid, "%s: step-attack needs kind command, input SS.L|SS.M|SS.H and role stepatk" % mid)
+            stepatk.append(mid)
+        elif "stepatk" in roles:
+            fail(fid, "%s: role stepatk without an SS.<btn> input" % mid)
+        blk = adv_of(o)[1]
+        ground = not (inp.startswith("j.") or o.get("air"))
+        normalish = o["kind"] in ("normal", "command", "special", "ex") and not o.get("tc")
+        aimed_proj = bool(pj and pj.get("aimed"))
+        if normalish and ground and S <= 16 and ((hom and strike and blk >= -6) or aimed_proj):
+            reliable.append(mid)
+        if "antistep" in roles:
+            ok = S <= 12 and ((hom and (strike or o.get("grab"))) or aimed_proj)
+            if not ok:
+                fail(fid, "%s: role antistep needs a homing strike / command grab with startup <= 12, or an aimed "
+                          "projectile (startup %d, homing %s)" % (mid, S, bool(hom)))
+            antistep.append(mid)
+    if not reliable:
+        fail(fid, "no reliable homing tool (homing normal / command / special, startup <= 16, >= -6 on block, or an "
+                  "aimed projectile special)")
+    if not antistep:
+        fail(fid, "no move with role antistep (the fighter's fast step-catcher)")
+    if fid in STEP_ATTACK_REQUIRED and not stepatk:
+        fail(fid, "no step-attack (SS.<btn>) - required for the rushdown / aerial kits")
+    if len(set(moves[m]["input"] for m in stepatk)) != len(stepatk):
+        fail(fid, "two step-attacks share one SS.<btn> input")
+    for k in ("antiStep",):
+        for x in d["cpu"].get(k, []) or []:
+            if x not in moves:
+                fail(fid, "cpu.%s -> %s missing" % (k, x))
+    if d["cpu"].get("stepAttack") and d["cpu"]["stepAttack"] not in stepatk:
+        fail(fid, "cpu.stepAttack %s is not a step-attack" % d["cpu"]["stepAttack"])
+    ros = open(ROSTER_MD, encoding="utf-8").read() if os.path.exists(ROSTER_MD) else ""
+    sec = ros.split("(`%s`)" % fid, 1)[1].split("\n## ", 1)[0] if ("(`%s`)" % fid) in ros else ""
+    for tag in ("**3D ring play.**", "*Stepping game:*", "*Homing tools:*", "*Wall game:*"):
+        if tag not in sec:
+            fail(fid, "_spec/ROSTER.md section lacks %s" % tag)
+    say("  3D: homing %d, linear %d, aimed projectiles %d | reliable homing tools %s | antistep %s | step-attacks %s" % (
+        n_hom, n_lin, n_aim, reliable, antistep, stepatk or "-"))
+
+
 def sentences(t):
     return len(re.findall(r"[.!?](\s|$)", t))
 
@@ -814,6 +935,7 @@ def validate_fighter(fid, mix):
         normals, sorted(fams), (" + phase-2 %s" % sorted(fams2)) if fams2 else "", len(plan), overrides))
     check_hit_volume(fid, d, plan)
     check_text(fid, d)
+    check_3d(fid, d)   # CHANGED(FIGHTERS3D)
 
 
 def main():

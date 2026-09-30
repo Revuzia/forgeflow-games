@@ -42,7 +42,11 @@ export interface StageAsset {
   bytes: number;
 }
 
-export interface PropAttach { bone: string; pos: [number, number, number]; rotDeg: [number, number, number] }
+export interface PropAttach {
+  bone: string; pos: [number, number, number]; rotDeg: [number, number, number];
+  /** the grip was solved for the OTHER hand: mirror it across the hand's local X (Mixamo left / right hands are mirror images) */
+  mirror?: boolean;
+}
 
 const BONE_PREFIX = /^mixamorig\d*[:_]?/;
 

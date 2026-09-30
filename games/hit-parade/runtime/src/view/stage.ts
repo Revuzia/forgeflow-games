@@ -55,6 +55,8 @@ export interface DressingSpec {
 
 /** emissive strength a sign / bulb material may keep (anything above is graded down at load: marquee glare) */
 export const GLARE_CAP = 1.6;
+/** neon tube emissive cap (strength x max channel) */
+export const NEON_CAP = 2.2;
 
 export interface StageFrameCtx {
   /** fighter names + hp fractions for monitor feeds */
@@ -446,13 +448,37 @@ export class StageView {
     }
     v.gradeGlare();
     v.bindScreensByName();
+    // a hook binds the TOP node of a match only: gltf-transform splits a multi-material node into `<name>_1`, `<name>_2`
+    // children, and scaling those under an already-scaled parent compounded the flicker (butcher_block had 6 flames / 6
+    // steam vents for 2 burners)
+    const under = (o: THREE.Object3D, re: RegExp): boolean => { for (let q = o.parent; q; q = q.parent) if (re.test(q.name)) return true; return false; };
     v.group.traverse((o) => {
-      if (/^anim_spin_/i.test(o.name)) v.spinners.push(o);
+      if (/^anim_spin_/i.test(o.name) && !under(o, /^anim_spin_/i)) v.spinners.push(o);
       if (/^anim_flicker_/i.test(o.name)) o.traverse((x) => { if ((x as THREE.Mesh).isMesh && !v.flickers.includes(x as THREE.Mesh)) v.flickers.push(x as THREE.Mesh); });
-      if (/^flame_/i.test(o.name)) v.flames.push(o);
+      if (/^flame_/i.test(o.name) && !under(o, /^flame_/i)) v.flames.push(o);
       if (/^rain_/i.test(o.name)) v.rainNodes.push({ o, y0: o.position.y });
     });
     if (v.rainNodes.length) v.report.dressing.push(`rain scroll ${v.rainNodes.map((r) => r.o.name).join(',')}`);
+    // the P1 name hooks bind silently above; list them so a harness can see what is animated (the p2c run reported only
+    // the P2 kinds, which read as if wheel / beacons / neon / burners were static)
+    if (v.spinners.length) v.report.dressing.push(`spin ${v.spinners.map((o) => o.name).join(',')} (by name)`);
+    const flickNames = new Set<string>();
+    v.group.traverse((o) => { if (/^anim_flicker_/i.test(o.name)) flickNames.add(o.name); });
+    if (flickNames.size) v.report.dressing.push(`flicker ${[...flickNames].join(',')} x${v.flickers.length} meshes (by name)`);
+    if (v.flames.length) v.report.dressing.push(`flame ${v.flames.map((o) => o.name).join(',')} (by name)`);
+    // steam by name: `steam_*` nodes vent at their origin; a gas range burner (`flame_range_*`, BUTCHER BLOCK) steams from
+    // the pot level above it (view-side dressing, no stages.json entry needed; a `kind: 'steam'` entry adds more)
+    v.group.updateMatrixWorld(true);
+    const wp = new THREE.Vector3();
+    const steamNames: string[] = [];
+    v.group.traverse((o) => {
+      const vent = /^steam_/i.test(o.name) && !under(o, /^steam_/i), range = /^flame_range_/i.test(o.name) && !under(o, /^flame_range_/i);
+      if (!vent && !range) return;
+      o.getWorldPosition(wp);
+      v.steam.push({ at: [wp.x, wp.y + (range ? 0.45 : 0), wp.z], rate: range ? 0.45 : 1, size: range ? 0.55 : 0.8, acc: 0, color: new THREE.Color(range ? '#e4e2de' : '#d8dde6') });
+      steamNames.push(o.name);
+    });
+    if (steamNames.length) v.report.dressing.push(`steam ${steamNames.join(',')} (by name)`);
     v.buildDressing();
     return v;
   }
@@ -512,8 +538,12 @@ export class StageView {
         if (!mat || seen.has(mat) || !mat.emissive) continue;
         seen.add(mat);
         const e = mat.emissiveIntensity * Math.max(mat.emissive.r, mat.emissive.g, mat.emissive.b);
-        if (/sign|bulb|marquee|lens/i.test(mat.name) && e > GLARE_CAP) {
-          const k = GLARE_CAP / e;
+        // neon tubes (ROOFTOP's HIT PARADE letters ship at strength 7): a big lit area blooms into a haze over the fighters
+        // (measured in the real game: the whole upper frame washed pink) - capped a little above the bulbs so they still glow
+        const neon = /neon/i.test(mat.name);
+        const cap = neon ? NEON_CAP : GLARE_CAP;
+        if ((neon || /sign|bulb|marquee|lens/i.test(mat.name)) && e > cap) {
+          const k = cap / e;
           mat.emissiveIntensity *= /sign/i.test(mat.name) ? k * 0.8 : k;
           this.report.glareGraded.push(`${mat.name} ${e.toFixed(2)} -> ${(mat.emissiveIntensity * Math.max(mat.emissive.r, mat.emissive.g, mat.emissive.b)).toFixed(2)}`);
         }
@@ -702,6 +732,20 @@ export class StageView {
   }
 
   raining(): boolean { return !!this.rain; }
+
+  /** live dressing values (harness read-back: two samples a few frames apart prove the hooks move) */
+  live(): Record<string, unknown> {
+    const r3 = (x: number) => Math.round(x * 1000) / 1000;
+    const flick = this.flickers.slice(0, 4).map((m) => {
+      const std = m.material as THREE.MeshStandardMaterial;
+      return r3(std && std.emissive && m.userData.baseE !== undefined ? std.emissiveIntensity : ((m.material as THREE.MeshBasicMaterial).color?.r ?? 0));
+    });
+    return {
+      t: r3(this.t), spin: this.spinners.map((o) => r3(o.rotation.y)), flame: this.flames.map((o) => r3(o.scale.y)), flicker: flick,
+      rainY: this.rainNodes.map((x) => r3(x.o.position.y)), steam: this.steam.length, screens: this.screens.length,
+      dress: this.dress.slice(0, 6).map((d) => `${d.spec.kind}:${d.o.name}`),
+    };
+  }
 
   dispose(): void {
     this.group.traverse((o) => {

@@ -16,7 +16,7 @@ def build():
         intro="intro_power", win=["win_bow", "win_cane"], taunt="taunt_dismiss", rival="-", stage="control_room",
         cpu={"style": "boss_showman", "rangeM": [1.4, 3.2], "zoning": ["spotlight_m"], "antiAir": ["mic_drop_l", "2H"],
              "counter": ["commercial_break_m"], "punish": ["5H", "the_hook_h"], "combo": ["2M", "5H", "the_hook_m"],
-             "phase2": ["pyro_m", "season_finale"], "meter": "standing_ovation"},
+             "phase2": ["pyro_m", "season_finale"], "meter": "standing_ovation", "antiStep": ["2M", "5H"]},
         doc=dict(
             difficulty=3, packs="Great_Sword (two-handed = mic-cane), Gestures (host)",
             look="Ch40 (showman mask, gold-trimmed vest, one gloved sleeve, striped trousers) retextured with a "
@@ -32,6 +32,17 @@ def build():
             weakness="Two readable phases; COMMERCIAL BREAK loses to throws and delays; THE HOOK is -12 on block; "
                      "13,000 HP but the same frame rules as the players.",
             rivalry="Everyone's. He picks the rivals.",
+            # CHANGED(FIGHTERS3D): 3D ring play (CONTRACT 35.12)
+            ring=dict(
+                stepping="Phase 1 SPOTLIGHT beams are LINEAR (fired straight along the cane): step them on anticipation; "
+                         "the EX beam is AIMED. GET THE HOOK L/M/H is a LINEAR slide. In phase 2 the PYRO floor line is "
+                         "AIMED on the slam, so the step has to come after it starts racing. COMMERCIAL BREAK catches a "
+                         "step-attack like any strike, and BACK AFTER THIS homes onto the caught attacker.",
+                homing="5H SHOWSTOPPER (12f horizontal cane swing, homing, -3) and 2M LOW CANE (9f homing low, 0.40 m "
+                       "deep) are the anti-step tools; 3H THE HOOK is a homing sweep that drags them in; STANDING "
+                       "OVATION, PRIME TIME and SEASON FINALE home.",
+                wall="5H SHOWSTOPPER wall-splats at the ring edge; THE HOOK pulls opponents toward him - off the wall - "
+                     "when he wants the centre of the set."),
         ),
     )
 
@@ -96,10 +107,14 @@ def build():
           desc="Crouching cane tap to the ankle.")
     K.add("5M", "M", name="Cane Swing", clip="cane_swing", startup=9, recovery=17, cancel=["special", "super"],
           role=["poke"], desc="Diagonal cane chop.", why="Cane weight: 9/3/17 (+2/-4).")
-    K.add("2M", "2M", name="Low Cane", clip="low_cane", startup=9, cancel=["special", "super"], role=["poke", "low"],
-          desc="Low sweeping cane swing.", why="Startup 9 (long cane).")
+    K.add("2M", "2M", name="Low Cane", clip="low_cane", startup=9, cancel=["special", "super"],
+          role=["poke", "low", "antistep"], homing=True, lateralM=0.40,
+          why3d="low sweeping cane swing: homing anti-step low, 0.40 m deep",
+          desc="Low sweeping cane swing; homing.", why="Startup 9 (long cane).")
     K.add("5H", "H", name="Showstopper", clip="showstopper", cancel=["special", "super"], sfx=[[8, "whoosh_heavy"]],
-          desc="Big horizontal cane swing.")
+          role=["antistep"], homing=True, wallSplat=True,
+          why3d="big horizontal cane swing: homing; wall-splats at the ring edge (3D wall game)",
+          desc="Big horizontal cane swing; homing; wall-splats at the ring edge.")
     K.add("2H", "AA", name="Cane Twirl", clip="cane_twirl", juggle={"js": 1, "ji": 1, "jl": 0},
           boxes=[{"f": [9, 12], "x": 0.60, "y": 1.80, "w": 0.70, "h": 0.50}],
           cancel=["special", "super"], desc="Chest-high twirl: anti-air.")
@@ -138,9 +153,11 @@ def build():
               common=dict(name="Spotlight", clip="spotlight_cast", cancel=["super"], role=["projectile"],
                           sfx=[[0, "electric_zap"]], desc="The cane head fires a spotlight beam.",
                           why="Boss projectile: template frames, beams 5.0/6.5/8.0 m/s."),
-              per={s: dict(projectile=dict(beam, speed=v, strength=s.upper()))
+              per={s: dict(projectile=dict(beam, speed=v, strength=s.upper()), linear=True,
+                           why3d="a beam straight along the cane: linear, not aimed (step bait)")
                    for s, v in (("l", 5.0), ("m", 6.5), ("h", 8.0))},
-              ex=dict(name="Spotlight (EX)", startup=11, recovery=30, damage=1000,
+              ex=dict(name="Spotlight (EX)", startup=11, recovery=30, damage=1000, aimed=True,
+                      why3d="OD reward: the double beam is AIMED on the release frame",
                       projectile=dict(beam, speed=8.0, hits=2, strength="H", box=[0.7, 0.7]),
                       desc="Double beam: 2 hits.", why="EX: 2 hits, 11f."))
     cb = {}
@@ -161,6 +178,7 @@ def build():
     K.add("commercial_hit", None, kind="special", input="214>catch", name="Back After This", strength="H", tc=True,
           clip="counter_smash", startup=6, active=3, recovery=22, damage=1400, hitstun=55, blockstun=16, hitstop=17,
           guard="HL", gain=1000, nerve=3000, pb=(0.0, 0.50), kd="soft", cancel=["super"], role=["reversal"],
+          homing=True, why3d="counter follow-up: homes onto the caught attacker",
           desc="The counter's sledgehammer (after a COMMERCIAL BREAK catch).",
           why="Counter follow-up: 6/3/22, 1400, KD +30 (boss damage).")
     md = {}
@@ -180,7 +198,8 @@ def build():
                       desc="Fully invulnerable.", why="EX: fully invulnerable 1-9."))
     th = {}
     for s, (st, mv, dmg) in {"l": (16, 1.0, 800), "m": (18, 1.5, 900), "h": (20, 2.0, 1000)}.items():
-        th[s] = dict(startup=st, damage=dmg, move=[[0, 0], [st, mv]])
+        th[s] = dict(startup=st, damage=dmg, move=[[0, 0], [st, mv]], linear=True,
+                     why3d="a 1-2 m slide along its frame-1 line: linear")
     K.special("the_hook", None, motion="41236",
               common=dict(name="Get The Hook", clip="hook_slide", active=4, recovery=24, hitstun=58, blockstun=16,
                           hitstop=15, guard="L", gain=900, nerve=3000, pb=(0.0, 0.40), kd="soft", launch=[-3.0, 0.0],
@@ -192,12 +211,14 @@ def build():
                       armor={"hits": 1, "f": [1, 13]}, move=[[0, 0], [14, 2.2]],
                       hits=[{"f": [14, 15], "damage": 500, "hitstop": 11}, {"f": [22, 23], "damage": 800,
                                                                            "hitstop": 15}],
+                      why3d="OD: not linear - re-aims until frame 8 (special default)",
                       desc="Armored 2-hit hook, -6 on block.", why="EX: 1-hit armor, 2 hits, -6."))
     pyro = {"life": 150, "box": [0.60, 1.40], "y": 0.70, "hits": 2, "clip": "pyro_line", "x": 0.8, "ground": True}
     K.special("pyro", None, motion="22",
               common=dict(name="Pyro", clip="pyro_slam", startup=18, active=1, recovery=30, damage=800, hitstun=34,
                           blockstun=26, hitstop=8, guard="HL", gain=700, nerve=3000, pb=(0.40, 0.50), phase=2,
-                          cancel=["super"], role=["projectile"], sfx=[[0, "explosion"]],
+                          cancel=["super"], role=["projectile"], sfx=[[0, "explosion"]], aimed=True,
+                          why3d="phase 2: the fire line is AIMED at the opponent on the slam",
                           desc="PHASE 2: the cane slams the floor and a line of stage pyro races along it (2 hits).",
                           why="Phase-2 second projectile (FIGHTING_DESIGN 8c/9b): a tall floor fire line you jump "
                               "or block; 18f startup, -5 point blank."),
