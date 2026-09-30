@@ -27,14 +27,23 @@
   --drop: 0 5px 0 var(--ink);
 }
 
+/* CONTRACT_MOBILE M5 page hygiene: no pull-to-refresh / rubber-band (overscroll-behavior), no pinch / double-tap zoom
+   (touch-action here, manipulation on every button, the iOS gesture* events in boot.ts installPageHygiene), no
+   selection / long-press callout / tap flash on the UI chrome (text inputs and the error text stay selectable), and
+   full height = 100dvh over a 100vh fallback so the mobile URL bar never hides the HUD. */
 html, body {
   margin: 0; width: 100%; height: 100%; overflow: hidden;
   background: #7fc6ec;
-  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none;
   overscroll-behavior: none; touch-action: none;
 }
-#game { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; outline: none; cursor: crosshair; }
-#ui { position: fixed; inset: 0; z-index: 10; pointer-events: none; overflow: hidden; font-family: var(--body); color: var(--ink); }
+input, textarea, .df-err pre { -webkit-touch-callout: default; }
+/* the profile name (iOS Safari will not type into a user-select:none field) and the error text stay selectable in
+   both input modes (the html, body rule above turns selection off for the chrome) */
+.dfm-name, textarea, .df-err pre { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+button, [role="button"] { touch-action: manipulation; }
+#game { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; outline: none; cursor: crosshair; touch-action: none; }
+#ui { position: fixed; inset: 0; height: 100vh; height: 100dvh; z-index: 10; pointer-events: none; overflow: hidden; font-family: var(--body); color: var(--ink); }
 #ui * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
@@ -277,11 +286,12 @@ html.df-cb .df-tag.gulf { background: rgba(21,77,187,.94); }
 .df-btn { font: 400 24px/1 var(--display); letter-spacing: .06em; cursor: pointer; color: var(--sun-ink);
   background: linear-gradient(180deg, #ffc27a, var(--sun)); border: 3px solid var(--ink); border-radius: 999px; padding: 12px 34px 11px;
   box-shadow: 0 5px 0 var(--ink); transition: transform .08s ease, box-shadow .08s ease; pointer-events: auto; }
-.df-btn:hover, .df-btn:focus-visible { transform: translateY(-2px); box-shadow: 0 7px 0 var(--ink); outline: none; }
+@media (hover: hover) { :where(html:not(.df-touch)) .df-btn:hover { transform: translateY(-2px); box-shadow: 0 7px 0 var(--ink); outline: none; } }
+:where(html:not(.df-touch)) .df-btn:focus-visible { transform: translateY(-2px); box-shadow: 0 7px 0 var(--ink); outline: none; }
 .df-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--ink); }
 
 /* ───────────────────────── boot cards ───────────────────────── */
-.df-boot { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; pointer-events: auto;
+.df-boot { position: fixed; inset: 0; height: 100vh; height: 100dvh; z-index: 900; display: grid; place-items: center; pointer-events: auto;
   font-family: var(--body); color: var(--ink);
   background:
     radial-gradient(120% 80% at 50% 115%, #0a6a8c 0%, #1fb5c9 38%, rgba(31,181,201,0) 62%),
@@ -393,3 +403,160 @@ html.df-cb .df-tag.gulf { background: rgba(21,77,187,.94); }
     radial-gradient(closest-side, var(--splat) 0 60%, transparent 62%) 12% 70% / 22% 40% no-repeat,
     radial-gradient(closest-side, var(--splat) 0 60%, transparent 62%) 92% 22% / 16% 30% no-repeat; }
 @media (max-width: 760px) { .df-ffa-panel { width: 190px; } .df-me .pct { font-size: 22px; } .df-me .mk { width: 36px; height: 36px; font-size: 20px; } }
+
+/* ═══════════════════════════ CONTRACT_MOBILE (UI lane) ═══════════════════════════
+   M4 the rotate overlay; M6 the touch HUD (html.df-touch, any size) and the compact phone-landscape HUD + cards
+   (@media (max-height: 500px)). The touch overlay (touch/controls.ts) owns the top-left corner (PAUSE: 10 px into the
+   safe area, Ø44 × touchScale ≤ 58 px), the left-bottom stick and the right-bottom thumb arc: the HUD keeps them clear. */
+
+/* M4 rotate overlay (boot.ts RotateOverlay): over everything while a touch device is held upright */
+.df-rotate { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; height: 100dvh; z-index: 2000; display: grid; place-items: center; padding: 24px;
+  box-sizing: border-box; pointer-events: auto; touch-action: none; -webkit-user-select: none; user-select: none; font-family: var(--body); color: var(--cream);
+  background: radial-gradient(120% 80% at 50% 115%, #0a6a8c 0%, #1fb5c9 38%, rgba(31,181,201,0) 62%), radial-gradient(90% 70% at 50% 0%, #cfedfb 0%, #9cd3ff 45%, #2f86dc 100%); }
+.df-rotate-card { display: flex; flex-direction: column; align-items: center; gap: 18px; max-width: 320px; text-align: center; }
+.df-rotate-icon { width: 128px; height: 128px; filter: drop-shadow(0 5px 0 rgba(10,20,44,.45)); }
+.df-rotate-icon svg { display: block; width: 100%; height: 100%; }
+.df-rotate-icon .ph { transform-box: view-box; transform-origin: 60px 54px; animation: dfTurn 2.6s cubic-bezier(.5,0,.3,1) infinite; }
+@keyframes dfTurn { 0%, 18% { transform: rotate(0deg); } 50%, 82% { transform: rotate(-90deg); } 100% { transform: rotate(0deg); } }
+.df-rotate-text { margin: 0; font: 400 26px/1.15 var(--display); letter-spacing: .03em; color: var(--cream); -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill;
+  text-shadow: 0 3px 0 var(--ink); }
+@media (prefers-reduced-motion: reduce) { .df-rotate-icon .ph { animation: none; transform: rotate(-90deg); } }
+
+/* ── the touch HUD (any size): the minimap moves right of the PAUSE button (a tap on it is MAP), the FFA panel under
+   both, the gauge + kill feed stay top right, the toast sits above the bottom edge between the thumbs ── */
+html.df-touch .df-hud { --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px);
+  --mini-s: .55; }
+html.df-touch .df-mini { left: calc(var(--sl) + 74px); top: calc(var(--st) + 8px); bottom: auto; transform: scale(var(--mini-s)); transform-origin: 0 0; }
+html.df-touch .df-ffa-panel { left: calc(var(--sl) + 12px); top: calc(var(--st) + 20px + 274px * var(--mini-s)); }
+html.df-touch .df-right { right: calc(var(--sr) + 14px); top: calc(var(--st) + 14px); }
+html.df-touch .df-toast { bottom: calc(var(--sb) + 26px); }
+html.df-touch .df-tank-label, html.df-touch .df-tag i { font-size: 12px; }
+/* the reticle's TANK pipette + sub chip sit on the side AWAY from the thumb cluster: left of the reticle right-handed,
+   right of it left-handed (the overlay's #df-touch.lh). On the SE's 667 px the SPECIAL button (220 px in from the
+   right edge × BUTTON SIZE) reaches the right-hand side of the reticle. */
+html.df-touch .df-tank { left: auto; right: calc(50% + 34px); }
+html.df-touch .df-tank-label { left: auto; right: calc(50% + 28px); }
+html.df-touch .df-sub { left: auto; right: calc(50% + 60px); }
+html.df-touch .df-sub .key { right: auto; left: -9px; }
+html.df-touch .df-sub .key.touch { right: auto; left: -10px; }
+html.df-touch:has(#df-touch.lh) .df-tank { right: auto; left: calc(50% + 34px); }
+html.df-touch:has(#df-touch.lh) .df-tank-label { right: auto; left: calc(50% + 28px); }
+html.df-touch:has(#df-touch.lh) .df-sub { right: auto; left: calc(50% + 60px); }
+html.df-touch:has(#df-touch.lh) .df-sub .key { left: auto; right: -9px; }
+html.df-touch:has(#df-touch.lh) .df-sub .key.touch { left: auto; right: -10px; }
+.df-err pre { overscroll-behavior: contain; }
+html.df-touch .df-me .nm { font-size: 12px; }
+html.df-touch .df-debug { left: calc(var(--sl) + 74px); top: calc(var(--st) + 160px); }
+/* keycap badges → the SPECIAL / SUB buttons' glyphs (hud.ts renderBadges), in those buttons' colours */
+.df-gauge .key.touch, .df-sub .key.touch { display: grid; place-items: center; padding: 2px; border-radius: 50%; background: rgba(20,32,58,.92); border-color: var(--cream); }
+.df-gauge .key.touch { width: 24px; min-width: 24px; height: 24px; margin-top: -12px; color: var(--warn); }
+.df-sub .key.touch { width: 20px; min-width: 20px; height: 20px; right: -10px; bottom: -8px; color: var(--sun-dye); }
+.key.touch .tg { display: block; width: 100%; height: 100%; }
+.key.touch .tg svg { display: block; width: 100%; height: 100%; }
+/* the countdown legend in touch mode: glyph pills */
+.df-count-keys.touch .k { padding: 3px 12px 3px 3px; }
+.df-count-keys .k .tg { display: grid; place-items: center; width: 22px; height: 22px; padding: 3px; border-radius: 50%; background: var(--ink); color: var(--sun); }
+.df-count-keys .k .tg svg { display: block; width: 100%; height: 100%; }
+
+/* ═════ phone landscape (every M0 phone; kbm windows that short take it too): the compact HUD and cards ═════ */
+@media (max-height: 500px) {
+  /* top centre: crests · timer · crests, the tug / share bar */
+  .df-top { top: calc(env(safe-area-inset-top, 0px) + 8px); gap: 6px; }
+  .df-crests, .df-crests.ffa { gap: 4px; padding-top: 3px; }
+  .df-crest { width: 24px; height: 24px; border-width: 2px; box-shadow: 0 2px 0 var(--ink); }
+  .df-crest .mark { font-size: 13px; text-shadow: 0 1px 0 var(--ink); }
+  .df-crest.down .mark { font-size: 12px; }
+  .df-crest .num { right: -7px; bottom: -8px; min-width: 16px; height: 16px; padding: 0 3px; border-width: 1.5px; font-size: 12px; line-height: 13px; }
+  .df-crest.you { outline-width: 2px; outline-offset: 1px; }
+  .df-top-mid { gap: 5px; }
+  .df-timer { min-width: 72px; padding: 3px 10px 2px; border-width: 3px; box-shadow: 0 3px 0 var(--ink); font-size: 21px; }
+  .df-tug { width: 104px; height: 8px; border-width: 2px; }
+  .df-tug .m { width: 16px; height: 16px; margin-top: -8px; border-width: 1.5px; font-size: 12px; line-height: 13px; }
+  .df-tug .m.sun { left: -12px; }
+  .df-tug .m.gulf { right: -12px; }
+  /* top right: the gauge, then at most 3 kill-feed lines */
+  .df-right { top: calc(env(safe-area-inset-top, 0px) + 8px); right: calc(env(safe-area-inset-right, 0px) + 10px); gap: 6px; }
+  .df-gauge { width: 150px; height: 28px; border-width: 2px; box-shadow: 0 3px 0 var(--ink); }
+  .df-gauge .label { inset: 0 26px 0 26px; font-size: 12px; letter-spacing: .06em; }
+  .df-gauge .icon { left: 2px; width: 20px; height: 20px; margin-top: -10px; }
+  .df-gauge .icon svg { width: 16px; height: 16px; }
+  .df-gauge .key { right: 2px; min-width: 20px; height: 20px; margin-top: -10px; font-size: 12px; line-height: 16px; }
+  .df-gauge .key.touch { width: 22px; min-width: 22px; height: 22px; margin-top: -11px; right: 1px; }
+  .df-feed { gap: 4px; }
+  .df-feed-item { max-width: 170px; gap: 5px; padding: 3px 9px; border-width: 1.5px; font-size: 12px; }
+  .df-feed-item:nth-child(n+4) { display: none; }
+  .df-feed-item .who { min-width: 0; }
+  .df-feed-item .who b { min-width: 0; max-width: 5.6em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .df-feed-item .who i { font-size: 12px; }
+  .df-wave { width: 20px; height: 12px; }
+  /* the minimap: half size bottom left (kbm); touch mode: right of PAUSE, a third */
+  .df-mini { left: calc(env(safe-area-inset-left, 0px) + 12px); bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); transform: scale(.5); transform-origin: 0 100%; }
+  html.df-touch .df-hud { --mini-s: .32; }
+  html.df-touch .df-mini { left: calc(var(--sl) + 70px); }
+  html.df-touch .df-ffa-panel { top: calc(var(--st) + 14px + 274px * var(--mini-s)); }
+  /* left-handed (the overlay's #df-touch.lh puts SUB / SPECIAL on the left, where the FFA standings sit): the standings
+     move to the right column under the gauge, and the kill feed keeps 2 lines there, clear of the mirrored stick home */
+  html.df-touch:has(#df-touch.lh) .df-hud.ffa .df-ffa-panel { left: auto; right: calc(var(--sr) + 10px); top: calc(var(--st) + 102px); }
+  html.df-touch:has(#df-touch.lh) .df-hud.ffa .df-feed-item:nth-child(n+3) { display: none; }
+  /* BUTTON SIZE >= 115 % (#df-touch.big) / >= 125 % (.bigger), set by touch/controls.ts: the larger SUB button climbs into
+     the right column, the larger stick home into the left one. The HUD drops its least important lines first — kill-feed
+     lines, then the standings below your own share — and, left-handed, shrinks the minimap beside the mirrored SUB, so
+     every touch control stays clear at 130 % (integration; the mobile gate's hud_big / hud_big_lh steps check it). */
+  html.df-touch:has(#df-touch.big) .df-feed-item:nth-child(n+3) { display: none; }
+  html.df-touch:has(#df-touch.bigger) .df-feed-item:nth-child(n+2) { display: none; }
+  html.df-touch:has(#df-touch.big) .df-hud.ffa .df-lead li:nth-child(n+3) { display: none; }
+  html.df-touch:has(#df-touch.bigger) .df-hud.ffa .df-lead { display: none; }
+  html.df-touch:has(#df-touch.lh.bigger) .df-hud { --mini-s: .26; }
+  /* FFA: own share + the top 3, compact */
+  .df-ffa-panel { width: 160px; gap: 4px; }
+  .df-me { gap: 6px; padding: 2px 10px 2px 2px; border-width: 2px; box-shadow: 0 3px 0 var(--ink); }
+  .df-me .mk { width: 28px; height: 28px; border-width: 2px; font-size: 15px; }
+  .df-me .txt { gap: 1px; }
+  .df-me .nm { font-size: 12px; letter-spacing: .06em; }
+  .df-me .pct { font-size: 16px; }
+  .df-me .rank { font-size: 15px; }
+  .df-me.lead { box-shadow: 0 3px 0 var(--ink), 0 0 0 3px var(--me); }
+  .df-lead { gap: 2px; padding: 3px 7px; border-radius: 12px; border-width: 1.5px; }
+  .df-lead li { grid-template-columns: 10px 16px minmax(0, 1fr) auto; gap: 5px; font-size: 12px; }
+  .df-lead .rk { font-size: 12px; }
+  .df-lead .chip { width: 16px; height: 16px; border-width: 1.5px; font-size: 12px; }
+  .df-lead .pct { font-size: 12px; }
+  /* the low-tank toast: top centre, clear of the right column and the thumbs */
+  .df-toast { bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); max-width: calc(100% - 2 * (env(safe-area-inset-right, 0px) + 178px)); padding: 6px 14px;
+    border-width: 2px; box-shadow: 0 3px 0 var(--ink); font-size: 12px; white-space: normal; text-align: center; }
+  html.df-touch .df-toast { top: calc(env(safe-area-inset-top, 0px) + 66px); bottom: auto; }
+  /* slates: countdown, WASHED BY, victory */
+  .df-count { gap: 14px; }
+  .df-count-row { gap: 12px; font-size: 44px; -webkit-text-stroke-width: 2px; text-shadow: 0 4px 0 var(--ink); }
+  .df-count-row .n.now { transform: scale(1.6); }
+  .df-count-row .dot { font-size: 28px; }
+  .df-count-keys { gap: 6px; }
+  .df-count-keys .k { padding: 4px 10px; font-size: 12px; }
+  .df-death-splat { width: min(70vw, 520px); height: min(38vw, 250px); }
+  .df-death-card { gap: 12px; }
+  .df-death-line { gap: 8px; font-size: 34px; -webkit-text-stroke-width: 2px; text-shadow: 0 4px 0 var(--ink); }
+  .df-death-line .icon i { font-size: 28px; }
+  .df-death-line .icon i.chip { width: 40px; height: 40px; border-width: 3px; font-size: 22px; }
+  .df-wave.big { width: 34px; height: 21px; }
+  .df-death-ring { width: 60px; height: 60px; }
+  .df-death-ring .num { font-size: 28px; }
+  .df-victory { padding: 0 max(12px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(12px, env(safe-area-inset-left, 0px)); }
+  .df-victory-card { gap: 10px; padding: 12px 24px 16px; border-width: 3px; border-radius: 22px; box-shadow: 0 6px 0 var(--ink); max-width: 100%; }
+  .df-victory-mark { margin-top: -38px; gap: 8px; }
+  .df-victory-mark span { width: 52px; height: 52px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); font-size: 30px; }
+  .df-victory-title { font-size: 28px; }
+  .df-victory-btns { gap: 12px; margin-top: 2px; }
+  .df-victory-btns .df-btn { padding: 10px 26px 9px; font-size: 20px; }
+  /* the pause card (menus.css sizes its columns) */
+  .df-pause-card h2 { font-size: 40px; }
+  /* the boot cards (loading / TAP TO PLAY / error): index.html's critical rules are #df-boot-scoped, so these are too */
+  #df-boot .df-card { gap: 8px; min-width: min(420px, 86vw); padding: 14px 26px 16px; border-width: 3px; border-radius: 24px; box-shadow: 0 6px 0 var(--ink);
+    max-height: calc(100% - 16px); }
+  #df-boot .df-wordmark { font-size: clamp(40px, 13vh, 64px); -webkit-text-stroke-width: 3px; text-shadow: 0 4px 0 var(--ink); }
+  #df-boot .df-mode { padding: 5px 14px; font-size: 14px; }
+  #df-boot .df-progress { height: 16px; margin-top: 2px; }
+  #df-boot .df-btn { font-size: 20px; padding: 10px 28px 9px; }
+  #df-boot .df-btn.df-play { padding: 12px 36px 11px; font-size: 26px; }
+  #df-boot .df-err h2 { font-size: 28px; }
+  #df-boot .df-err pre { max-height: 28vh; }
+}

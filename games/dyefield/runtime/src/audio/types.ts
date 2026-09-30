@@ -100,12 +100,20 @@ export interface AudioStats {
   volumes: { master: number; music: number; sfx: number };
   /** setPaused(true) in force */
   paused: boolean;
+  /** mobile review A-A11: the sprite + lobby downloads have been started (preload / unlock) */
+  preloaded: boolean;
+  /** mobile review A-A3: per decoded asset, the codec it was decoded from ('aac' = the .m4a twin), the priming samples
+   *  skipped (an untrimmed AAC decode) and the decoded duration (s) */
+  codecs: Record<string, { codec: 'ogg' | 'aac'; off: number; duration: number }>;
 }
 
 /** the ONE integration surface (see README.md) */
 export interface GameAudio {
   /** create/resume the AudioContext + decode the assets; call from the first user gesture (auto by default). Never rejects. */
   unlock(): Promise<void>;
+  /** start the sprite + lobby-music downloads (mobile review A-A11: not at construction — call once the first arena is
+   *  up; unlock() also starts them). Idempotent. */
+  preload(): void;
   setVolumes(v: Partial<AudioVolumes>): void;
   /** switch the music cue. 'match'/'final' pick the map's ambience from o.map. Victory/defeat are one-shot stingers. */
   playMusic(cue: MusicCue, o?: { map?: AudioMapId }): void;

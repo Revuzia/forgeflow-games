@@ -4,6 +4,10 @@
 // ever, the play card swaps to the "mouse capture blocked" message (doctrine §6).
 // index.html paints the same loading card statically before the module graph runs; this class
 // adopts it (#df-boot) so there is no flash between the two.
+// CONTRACT_MOBILE (UI lane): the play card reads TAP TO PLAY in touch mode (setTouch; it also follows html.df-touch);
+// RotateOverlay (M4) covers everything while a touch device is upright; Fullscreen / homeScreenTip back the menus'
+// FULLSCREEN toggles and the iPhone Add-to-Home-Screen tip; installPageHygiene (M5: iOS gesture events, the touch
+// context menu, :active on iOS) runs once from the BootUI constructor.
 
 export const MODE_LINE = 'Harbor Cup • 4 v 4';
 /** CONTRACT_FFA F3: the mode line in FREE-FOR-ALL (teams keeps MODE_LINE exactly). The loading / play cards show the
@@ -16,6 +20,204 @@ export const MODE_LINE_ALL = 'Harbor Cup • 4 v 4 · Free-for-all';
 
 /** the card's current mode line (module state: one boot card per page) */
 let modeText = MODE_LINE_ALL;
+
+// ───────────────────────────── CONTRACT_MOBILE (UI lane) ─────────────────────────────
+// M1: the input method lives on <html> as `df-touch` / `df-kbm` (input.ts sets it). The CSS keys off that class; the
+// UI modules read the same class, so the boot cards, the menus, the HUD and the rotate overlay always agree with it.
+// main.ts also calls BootUI.setTouch / menus.setTouchMode / hud.setTouchMode (M12); both paths land on the same state.
+
+/** the play card's button in each input mode (M4) */
+export const PLAY_CLICK = 'CLICK TO PLAY';
+export const PLAY_TAP = 'TAP TO PLAY';
+/** M4: the portrait overlay's line */
+export const ROTATE_TEXT = 'Turn your device sideways to play';
+/** M9: iPhone Safari (no element fullscreen, not installed): shown once per device */
+export const HOME_TIP = 'Tip: Share → Add to Home Screen plays DYEFIELD full screen.';
+const HOME_TIP_KEY = 'dyefield.homeTip.v1';
+
+/** true while the page is in touch mode (M1: html.df-touch) */
+export function touchModeOn(): boolean {
+  return document.documentElement.classList.contains('df-touch');
+}
+
+/** fn(on) whenever html.df-touch flips (M1 mode switches) → unsubscribe */
+export function watchTouchMode(fn: (on: boolean) => void): () => void {
+  let last = touchModeOn();
+  const mo = new MutationObserver(() => {
+    const on = touchModeOn();
+    if (on === last) return;
+    last = on;
+    fn(on);
+  });
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  return () => mo.disconnect();
+}
+
+type OrientationLock = ScreenOrientation & { lock?: (o: string) => Promise<void> };
+
+/**
+ * M4 fullscreen, for the FULLSCREEN toggles (title corner, pause card). Every call is wrapped: a refusal is silent.
+ * Entering it in touch mode also asks for the landscape lock (Android Chrome honours it in fullscreen only).
+ */
+export const Fullscreen = {
+  /** false on iPhone Safari (no element fullscreen) and in an iframe without allow="fullscreen": the toggles hide */
+  enabled(): boolean {
+    try { return !!document.fullscreenEnabled && typeof document.documentElement.requestFullscreen === 'function'; } catch { return false; }
+  },
+  active(): boolean {
+    try { return !!document.fullscreenElement; } catch { return false; }
+  },
+  async toggle(): Promise<void> {
+    try {
+      if (document.fullscreenElement) { await document.exitFullscreen(); return; }
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      if (touchModeOn()) {
+        try { await (screen.orientation as OrientationLock).lock?.('landscape'); } catch { /* unsupported: the rotate overlay covers it */ }
+      }
+    } catch { /* refused (no gesture, permissions policy): silent */ }
+  },
+  /** fullscreenchange → unsubscribe */
+  onChange(fn: () => void): () => void {
+    document.addEventListener('fullscreenchange', fn);
+    return () => document.removeEventListener('fullscreenchange', fn);
+  },
+};
+
+let homeTip: boolean | null = null;
+const homeTipFns = new Set<(on: boolean) => void>();
+
+/**
+ * M9: the Add-to-Home-Screen tip. Eligible on an iPhone / iPod that is not running the installed web app, offers no
+ * element fullscreen and runs the game top-level (review A-A13: inside a portal's iframe, Add to Home Screen would
+ * install the PORTAL page — DYEFIELD's manifest and apple meta tags only apply top-level). Once per device: the
+ * localStorage flag is written when a tip is actually SHOWN (markHomeTipShown, from the title screen / pause card —
+ * review B-F5: writing it on the first evaluation used it up on a deep-link page that never shows either); it then
+ * stays up for that page until tapped away. Side-effect free.
+ */
+export function homeScreenTip(): boolean {
+  if (homeTip !== null) return homeTip;
+  let eligible = false;
+  try {
+    const nav = navigator as Navigator & { standalone?: boolean };
+    const installed = nav.standalone === true || matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
+    let framed = false;
+    try { framed = window.top !== window.self; } catch { framed = true; }
+    eligible = /iPhone|iPod/.test(nav.userAgent) && !installed && !Fullscreen.enabled() && !framed;
+  } catch { eligible = false; }
+  let seen = false;
+  try { seen = localStorage.getItem(HOME_TIP_KEY) === '1'; } catch { seen = false; }
+  homeTip = eligible && !seen;
+  return homeTip;
+}
+
+let homeTipMarked = false;
+/** the tip is on screen now (title / pause card): remember it for this device (once per device, M9) */
+export function markHomeTipShown(): void {
+  if (!homeTip || homeTipMarked) return;
+  homeTipMarked = true;
+  try { localStorage.setItem(HOME_TIP_KEY, '1'); } catch { /* not remembered: shown again next time */ }
+}
+
+/** the tip was tapped away: every place that shows it hides it */
+export function dismissHomeTip(): void {
+  if (!homeTip) return;
+  homeTip = false;
+  for (const fn of [...homeTipFns]) fn(false);
+}
+
+/** fn(false) when the tip is dismissed → unsubscribe */
+export function onHomeTip(fn: (on: boolean) => void): () => void {
+  homeTipFns.add(fn);
+  return () => { homeTipFns.delete(fn); };
+}
+
+let hygiene = false;
+/**
+ * M5 page hygiene (once per page): iOS pinch gestures never reach the page (gesturestart / change / end prevented);
+ * in touch mode a long-press opens no context menu (text inputs keep theirs); a passive touchstart listener lets
+ * iOS Safari apply :active to a tapped control (the pressed feedback on touch).
+ */
+export function installPageHygiene(): void {
+  if (hygiene) return;
+  hygiene = true;
+  const stop = (e: Event): void => { e.preventDefault(); };
+  for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(t, stop, { passive: false });
+  window.addEventListener('contextmenu', (e) => {
+    if (!touchModeOn()) return;
+    const t = e.target as HTMLElement | null;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    e.preventDefault();
+  }, { capture: true });
+  document.addEventListener('touchstart', () => undefined, { passive: true });
+}
+
+/**
+ * M4: the portrait overlay. Shown while the page is in touch mode and taller than wide ("Turn your device sideways to
+ * play", a turning-phone icon) over everything, cards included. onChange(shown) runs on every change — the first one
+ * a microtask after construction when the page starts in portrait — so main.ts can pause a live match; hiding it never
+ * resumes anything.
+ */
+export class RotateOverlay {
+  readonly root: HTMLElement;
+  private on = false;
+  private readonly onChange: (shown: boolean) => void;
+  private readonly offs: Array<() => void> = [];
+
+  constructor(onChange: (shown: boolean) => void) {
+    this.onChange = onChange;
+    const existing = document.getElementById('df-rotate');
+    this.root = existing ?? el('div', 'df-rotate');
+    this.root.id = 'df-rotate';
+    this.root.setAttribute('role', 'alert');
+    this.root.hidden = true;
+    if (!existing) {
+      const icon = el('div', 'df-rotate-icon');
+      icon.setAttribute('aria-hidden', 'true');
+      icon.innerHTML = ROTATE_SVG;
+      const card = el('div', 'df-rotate-card');
+      card.append(icon, el('p', 'df-rotate-text', ROTATE_TEXT));
+      this.root.append(card);
+      document.body.append(this.root);
+    }
+    const upd = (): void => this.update();
+    window.addEventListener('resize', upd);
+    window.addEventListener('orientationchange', upd);
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', upd);
+    this.offs.push(() => {
+      window.removeEventListener('resize', upd);
+      window.removeEventListener('orientationchange', upd);
+      vv?.removeEventListener('resize', upd);
+    });
+    this.offs.push(watchTouchMode(upd));
+    queueMicrotask(upd);
+  }
+
+  get shown(): boolean { return this.on; }
+
+  private update(): void {
+    const on = touchModeOn() && window.innerHeight > window.innerWidth;
+    if (on === this.on) return;
+    this.on = on;
+    this.root.hidden = !on;
+    try { this.onChange(on); } catch (e) { console.error('[dyefield] rotate overlay', e); }
+  }
+
+  dispose(): void {
+    for (const f of this.offs) f();
+    this.offs.length = 0;
+    this.root.remove();
+  }
+}
+
+/** a phone turning from portrait to landscape (styles.css animates the .ph group; reduced motion shows it turned, static) */
+const ROTATE_SVG = '<svg viewBox="0 0 120 120"><g class="ph">'
+  + '<rect x="38" y="14" width="44" height="80" rx="9" fill="#fff8ec" stroke="#14203a" stroke-width="5"/>'
+  + '<rect x="45" y="24" width="30" height="56" rx="3" fill="#8a7cff"/>'
+  + '<path d="M45 64c6-5 12-5 17 0s12 5 13 1v15H45z" fill="#ff8a1f"/>'
+  + '<circle cx="60" cy="87" r="3" fill="#14203a"/></g>'
+  + '<path d="M22 86a42 42 0 0 0 30 22" fill="none" stroke="#fff8ec" stroke-width="5" stroke-linecap="round"/>'
+  + '<path d="M44 100l10 8-12 5" fill="none" stroke="#fff8ec" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 /**
  * Fill a mode-line element with `text`, split after its ' • ' / ' · ' separators into no-wrap chunks (.df-nw), so a
@@ -68,8 +270,11 @@ export class BootUI {
   private readonly status: HTMLElement;
   private readonly box: HTMLElement;
   private shown = 0;
+  /** M4: the play card reads TAP TO PLAY in touch mode */
+  private touch = touchModeOn();
 
   constructor() {
+    installPageHygiene();
     const existing = document.getElementById('df-boot');
     if (existing) {
       this.root = existing;
@@ -90,6 +295,16 @@ export class BootUI {
     }
     this.root.setAttribute('role', 'status');
     this.root.setAttribute('aria-live', 'polite');
+    this.root.classList.toggle('touch', this.touch);
+    watchTouchMode((on) => this.setTouch(on));
+  }
+
+  /** M4 / M12: touch mode → the play card reads TAP TO PLAY (a tap starts play); kbm → CLICK TO PLAY. Live on the card. */
+  setTouch(on: boolean): void {
+    this.touch = on;
+    this.root.classList.toggle('touch', on);
+    const b = this.box.querySelector<HTMLElement>('#df-play');
+    if (b) b.textContent = on ? PLAY_TAP : PLAY_CLICK;
   }
 
   /**
@@ -143,13 +358,13 @@ export class BootUI {
     this.root.onclick = null;
   }
 
-  /** CLICK TO PLAY: resolves the click handler on a real click anywhere on the card. */
+  /** CLICK TO PLAY (TAP TO PLAY in touch mode): resolves the click handler on a real click / tap anywhere on the card. */
   showPlay(onClick: (e: MouseEvent) => void): void {
     this.card = 'play';
     this.root.classList.remove('gone');
     this.box.className = 'df-card';
     this.box.replaceChildren(wordmark(), modeLine());
-    const btn = el('button', 'df-btn df-play', 'CLICK TO PLAY');
+    const btn = el('button', 'df-btn df-play', this.touch ? PLAY_TAP : PLAY_CLICK);
     btn.type = 'button';
     btn.id = 'df-play';
     this.box.append(btn);

@@ -53,6 +53,8 @@ export interface AppHandles {
   renderInfo(): WebGLInfo | null;
   audio(): unknown;
   juice(): unknown;
+  /** CONTRACT_MOBILE M10: the touch read-back (main.ts) */
+  touch?(): unknown;
 }
 import type { Coverage, MatchMode, MoveState, TeamId } from './core/types.ts';
 import { teamById, hexToRgb01, crewDef, crewIds } from './core/data.ts';
@@ -409,6 +411,14 @@ export function installTestSurface(app: AppStatus, handles?: AppHandles): void {
     },
     juice(): unknown {
       return handles ? handles.juice() : null;
+    },
+    /**
+     * CONTRACT_MOBILE M10: { mode, visible, stick: {x, y, active}, lookRad: {yaw, pitch} (total touch look radians, never
+     * reset), held, buttons: [{id, rect, dimmed}], assist: {slow, dyaw} } plus pinned / latched / active / options /
+     * startedBy / renderer (touch profile, antialias, shadow cap) / rotateOverlay / fullscreen / contextLost.
+     */
+    touch(): unknown {
+      return handles?.touch ? handles.touch() : null;
     },
     // ── harness read-backs (additive)
     kit(): Record<string, unknown> | null {

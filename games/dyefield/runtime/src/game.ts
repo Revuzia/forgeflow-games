@@ -34,10 +34,24 @@
 //     per-crew shares every frame (Painter.coverageByTeam into one reused buffer); the victory slate gets the result's
 //     standings (winner / top 3 / everyone, with %); the victory / defeat stinger follows whether the HUMAN won (a draw
 //     counts as won when the human is among the tied crews). Teams mode takes none of these branches.
+//   * CONTRACT_MOBILE M3 / M4 (input.mode === 'touch'; every branch below is skipped in kbm, so desktop is unchanged):
+//     no pointer lock — CLICK TO PLAY (TAP TO PLAY), RESUME and PLAY AGAIN enter play at once (startedBy 'touch'), a
+//     lost lock never pauses, and a switch to touch mid-play releases a held lock without pausing. The pause triggers
+//     are the overlay's PAUSE button (main.ts → pause()), the page going hidden, pagehide, a window blur (a call, an
+//     app switch) and the rotate overlay (main.ts); nothing ever auto-resumes. Each frame: the overlay's visibility
+//     (play / paused-behind-card, not after the final horn) and meters, the touch look (Input.takeTouchLook) through
+//     the aim assist (touch/aimassist.ts: world.canSee visibility, the human kit's range), haptics on WASHED.
+//     The renderer's touch shadow cap (M7) is applied to the sun here.
+//   * mobile review fixes (2026-09-29; touch mode only, kbm untouched): A-A6 — the system BACK (Android back / edge swipe,
+//     iOS edge swipe) pauses instead of leaving: every play entry by touch pushes one same-document history entry (the
+//     "back trap", armBackTrap) and its popstate pauses a live match (a second back from the pause card leaves; RESUME
+//     re-arms); leaving the match (QUIT / LOBBY / dispose) drops a leftover entry. Leaving full screen (the first Android
+//     back in full screen only exits it) pauses too. A-A10 — the loop renders at most ~60 frames a second on a 90 / 120
+//     / 144 Hz phone (the governor budgets 60 fps; the extra frames were heat and battery).
 
 import * as THREE from 'three';
-import { TICK, MAX_STEPS_PER_FRAME, DEV_BRUSH, COMBAT } from './core/config.ts';
-import { CREW_SLOTS, emptyIntent, type MatchMode, type PlayerIntent, type TeamId } from './core/types.ts';
+import { TICK, MAX_STEPS_PER_FRAME, DEV_BRUSH, COMBAT, CAMERA } from './core/config.ts';
+import { CREW_SLOTS, DEG, emptyIntent, type MatchMode, type PlayerIntent, type TeamId } from './core/types.ts';
 import { WEAPONS, type MapDef } from './core/data.ts';
 import type { MapGeometry } from './core/mapgeo.ts';
 import type { PaintAtlas } from './core/paint/atlas.ts';
@@ -64,6 +78,8 @@ import type { BootUI } from './ui/boot.ts';
 import type { Juice, JuiceCtx } from './ui/juice.ts';
 import type { AudioFrame, GameAudio, ListenerPose } from './audio/index.ts';
 import type { Input } from './input.ts';
+import type { TouchControls } from './touch/controls.ts';
+import { aimAssist, type AimAssistFoe } from './touch/aimassist.ts';
 
 export type Phase = 'boot' | 'loading' | 'ready' | 'play' | 'paused' | 'menu' | 'error';
 
@@ -75,8 +91,9 @@ export interface AppStatus {
   error?: string;
   version: string;
   game: Game | null;
-  /** how play was entered: 'pointerlock' (real click) | 'dev-start' (__DF__.start / ?autostart, no lock yet) */
-  startedBy: 'pointerlock' | 'dev-start' | null;
+  /** how play was entered: 'pointerlock' (real click) | 'dev-start' (__DF__.start / ?autostart, no lock yet) |
+   *  'touch' (CONTRACT_MOBILE M4: TAP TO PLAY / START in touch mode — never a pointer lock) */
+  startedBy: 'pointerlock' | 'dev-start' | 'touch' | null;
   lockErrors: number;
   lockSuccesses: number;
 }
@@ -113,6 +130,8 @@ export interface GameHooks {
   victory?(el: HTMLElement | null): void;
   /** mouse-look multipliers when the camera has no settings fields of its own */
   look?(): { sens: number; invertY: boolean };
+  /** CONTRACT_MOBILE M3: the AIM ASSIST setting (touch mode only; default on) */
+  assist?(): boolean;
 }
 
 export interface GameParts {
@@ -150,6 +169,8 @@ export interface GameParts {
   /** phase 10: the screen-space juice (hit markers, damage vignette + arc, trauma shake, victory confetti) —
    *  match sessions only. It replaces the HUD's old hit marker / vignette and the legacy cam.shake writes. */
   juice?: Juice | null;
+  /** CONTRACT_MOBILE M2: the touch overlay (match sessions; main.ts constructs and disposes it) */
+  touch?: TouchControls | null;
 }
 
 /** player-facing settings the game applies itself */
@@ -182,6 +203,45 @@ const JELLY_ROW = WEAPONS.subs.find((s) => s.id === 'jelly-charge');
 const SUB_COST = numField(JELLY_ROW, 'tankCost', 70);
 const SUB_BLAST = numField(JELLY_ROW, 'blastRadius', 3);
 
+/** review A-A10: touch mode renders at most one frame per this interval (60 fps), less a little jitter slack */
+export const FRAME_CAP_MS = 1000 / 60;
+const FRAME_CAP_SLACK_MS = 2.5;
+
+// ───────────────────────────── review A-A6: the back-button trap (touch) ─────────────────────────────
+/** popstate events our own history.back() (dropBackTrap) will cause: ignored, never a pause */
+let ignorePops = 0;
+let ignoreTimer = 0;
+const TRAP = 'match';
+
+/** a live touch match sits on one extra same-document history entry, so the system back pops it (a popstate: pause)
+ *  instead of leaving the page. Pushed inside a gesture where possible (Chrome skips entries a page added without one). */
+export function armBackTrap(): void {
+  try {
+    const st = history.state as { df?: string } | null;
+    if (st && st.df === TRAP) return;
+    history.pushState({ df: TRAP }, '');
+  } catch { /* sandboxed / unsupported: back leaves, as before */ }
+}
+
+/** leaving the match (QUIT / LOBBY / dispose): step back off a trap entry that is still on top (no extra back press later) */
+export function dropBackTrap(): void {
+  try {
+    const st = history.state as { df?: string } | null;
+    if (!st || st.df !== TRAP) return;
+    ignorePops++;
+    clearTimeout(ignoreTimer);
+    ignoreTimer = window.setTimeout(() => { ignorePops = 0; }, 1500);
+    history.back();
+  } catch { /* unsupported */ }
+}
+
+/** CONTRACT_MOBILE M3: a kit's reach for the aim assist (weapons.json fire.maxRange; the roller's flick reach) */
+export function kitRange(kitId: string): number {
+  const fire = WEAPONS.kits.find((k) => k.id === kitId)?.fire as Record<string, unknown> | undefined;
+  const flick = fire?.['flick'] as Record<string, unknown> | undefined;
+  return numField(fire, 'maxRange', numField(flick, 'reach', 13));
+}
+
 export class Game {
   readonly p: GameParts;
   readonly settings: GameSettings;
@@ -200,6 +260,9 @@ export class Game {
   private time = 0;
   private raf = 0;
   private disposed = false;
+  /** review A-A10: the touch frame cap's current slot (ms, rAF clock; -1 = none) and the rAFs it skipped */
+  private capSlot = -1;
+  capSkips = 0;
   private readonly intents: PlayerIntent[] = [];
   private readonly feet = { x: 0, y: 0, z: 0 };
   private readonly focus = new THREE.Vector3();
@@ -258,6 +321,13 @@ export class Game {
   readonly matchMode: MatchMode;
   /** FFA: the per-crew coverage shares, refreshed each rendered frame (no per-frame allocation) */
   private readonly shareBuf = new Float64Array(CREW_SLOTS);
+  // CONTRACT_MOBILE M3: the aim assist of the last frame (the __DF__.touch() read-back) + its reused inputs
+  readonly assist = { slow: 1, dyaw: 0, dpitch: 0, foes: 0, visible: 0 };
+  private readonly foeBuf: AimAssistFoe[] = [];
+  private readonly assistEye = { x: 0, y: 0, z: 0 };
+  private readonly assistRange: number;
+  /** M7: the sun's authored shadow-map size (the touch cap never raises it) */
+  private shadowBase = 0;
 
   constructor(parts: GameParts, settings: Partial<GameSettings> = {}) {
     this.p = parts;
@@ -274,7 +344,9 @@ export class Game {
       this.fireType.push(kitFireType(r.kit));
       this.range.push(chargeRange(r.kit));
       this.launchSeen.push(0);
+      if (i !== HUMAN) this.foeBuf.push({ x: 0, y: 0, z: 0, visible: false });
     }
+    this.assistRange = kitRange(parts.roster[HUMAN]?.kit ?? parts.config.kit);
     this.world = this.makeWorld();
     this.director = new BotDirector(this.world, parts.nav, parts.config.seed ^ 0x9e3779b9);
     this.juiceCtx = { me: HUMAN, runners: this.world.runners, cam: parts.cam };
@@ -311,14 +383,15 @@ export class Game {
         this.lockReq = 0;
         parts.app.lockSuccesses++;
         this.lockedThisPlay = true;
-        if (this.phase === 'ready' || this.phase === 'paused') this.enterPlay('pointerlock');
-      } else if (this.phase === 'play' && this.lockedThisPlay && !this.matchOver) {
-        this.pause('pointer lock lost');
+        if ((this.phase === 'ready' || this.phase === 'paused') && input.mode !== 'touch') this.enterPlay('pointerlock');
+      } else if (this.phase === 'play' && this.lockedThisPlay && !this.matchOver && input.mode !== 'touch') {
+        this.pause('pointer lock lost');        // CONTRACT_MOBILE M4: a lost lock never pauses in touch mode
       }
     };
     const onLockErr = (): void => { if (!this.disposed) this.lockFailed(this.lockReq, 'pointerlockerror'); };
     // a play session entered without the lock (?autostart / __DF__.start): a click on the view captures the mouse
     const onDown = (): void => {
+      if (input.mode === 'touch') return;
       if (this.phase === 'play' && !this.matchOver && document.pointerLockElement !== canvas && this.lockReq === 0) this.requestLock();
     };
     document.addEventListener('pointerlockchange', onLock);
@@ -329,6 +402,41 @@ export class Game {
       document.removeEventListener('pointerlockerror', onLockErr);
       canvas.removeEventListener('mousedown', onDown);
     });
+    // CONTRACT_MOBILE M4 pause triggers in touch mode: hidden page, pagehide, window blur (a call / an app switch).
+    // The rotate overlay and the PAUSE button come in through pause() from main.ts. Nothing ever auto-resumes.
+    const touchPause = (why: string): void => {
+      if (this.disposed || input.mode !== 'touch') return;
+      if (this.phase === 'play' && !this.matchOver) this.pause(why);
+    };
+    const onHidden = (): void => { if (document.visibilityState === 'hidden') touchPause('hidden'); };
+    const onPageHide = (): void => touchPause('pagehide');
+    const onBlur = (): void => touchPause('blur');
+    // review A-A6: the system BACK pops the trap entry (armBackTrap) — pause, never leave; leaving full screen (Android's
+    // first back in full screen only exits it) pauses as well. No re-push here: a second back from the card leaves.
+    const onPop = (): void => {
+      if (ignorePops > 0) { ignorePops--; return; }
+      touchPause('back');
+    };
+    const onFullscreen = (): void => { if (!document.fullscreenElement) touchPause('fullscreen exit'); };
+    document.addEventListener('visibilitychange', onHidden);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('blur', onBlur);
+    window.addEventListener('popstate', onPop);
+    document.addEventListener('fullscreenchange', onFullscreen);
+    this.offs.push(() => {
+      document.removeEventListener('visibilitychange', onHidden);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('popstate', onPop);
+      document.removeEventListener('fullscreenchange', onFullscreen);
+    });
+    // a hybrid device switched to touch mid-play: free a held pointer lock WITHOUT pausing (the loss is expected)
+    this.offs.push(input.onMode((m) => {
+      if (this.disposed || m !== 'touch') return;
+      this.lockReq = 0;
+      this.lockedThisPlay = false;
+      if (document.pointerLockElement === canvas) document.exitPointerLock();
+    }));
     const api = {
       pause: () => this.pause('api'),
       resume: () => this.resume(),
@@ -396,6 +504,7 @@ export class Game {
     const loop = (now: number): void => {
       if (this.disposed) return;
       this.raf = requestAnimationFrame(loop);
+      if (this.frameCapped(now)) return;
       try {
         this.frame(now);
       } catch (e) {
@@ -406,6 +515,22 @@ export class Game {
     this.raf = requestAnimationFrame(loop);
   }
 
+  /**
+   * Review A-A10: in touch mode the loop renders at most ~60 frames a second — a 90 / 120 / 144 Hz phone runs rAF at the
+   * panel rate, and every extra frame is GPU heat and battery the governor (60 fps target) never asked for. A leaky
+   * bucket: a frame renders once FRAME_CAP_MS (less the jitter slack) has passed since the last slot, and the slot
+   * advances by exactly one interval (so 90 Hz renders 2 of 3 frames, 120 Hz every other one: 60 on average); a stall
+   * resyncs. The sim is time-accumulated, so a skipped rAF loses nothing. kbm: every rAF renders, as before.
+   */
+  private frameCapped(now: number): boolean {
+    if (this.p.input.mode !== 'touch') { this.capSlot = -1; return false; }
+    if (this.capSlot < 0 || now - this.capSlot > FRAME_CAP_MS * 4) { this.capSlot = now; return false; }
+    if (now - this.capSlot < FRAME_CAP_MS - FRAME_CAP_SLACK_MS) { this.capSkips++; return true; }
+    this.capSlot += FRAME_CAP_MS;
+    if (now - this.capSlot > FRAME_CAP_MS) this.capSlot = now;
+    return false;
+  }
+
   /** stop the loop, drop every listener and the world's capsules (the session is being replaced) */
   dispose(): void {
     if (this.disposed) return;
@@ -413,6 +538,7 @@ export class Game {
     cancelAnimationFrame(this.raf);
     for (const f of this.offs) { try { f(); } catch { /* ignore */ } }
     this.offs.length = 0;
+    if (this.mode === 'match') dropBackTrap();   // A-A6: QUIT / LOBBY — no stale trap entry under the lobby
     this.releaseWorld(this.world);
     if (this.victoryShown) this.p.hooks?.victory?.(null);
     if (this.mode === 'lobby' && this.savedFov > 0) {
@@ -439,12 +565,23 @@ export class Game {
     console.error('[dyefield] frame error:', e);
   }
 
-  /** CLICK TO PLAY: ask for pointer lock; play begins on pointerlockchange. */
+  /** CLICK TO PLAY: ask for pointer lock; play begins on pointerlockchange. Touch mode (TAP TO PLAY): play at once. */
   requestPlay(): void {
     if (this.mode === 'lobby' || this.disposed) return;
     if (this.phase !== 'ready' && this.phase !== 'paused') return;
+    if (this.p.input.mode === 'touch') { this.enterPlay('touch'); return; }
     if (document.pointerLockElement === this.p.canvas) { this.enterPlay('pointerlock'); return; }
     this.requestLock();
+  }
+
+  /**
+   * CONTRACT_MOBILE M4: the menus' START in touch mode goes straight to the countdown (no pointer lock exists there).
+   * False outside touch mode or when the match is not ready (main then shows the play card).
+   */
+  beginTouch(): boolean {
+    if (this.mode === 'lobby' || this.disposed || this.phase !== 'ready' || this.p.input.mode !== 'touch') return false;
+    this.enterPlay('touch');
+    return true;
   }
 
   private requestLock(): void {
@@ -505,9 +642,10 @@ export class Game {
     return true;
   }
 
-  private enterPlay(by: 'pointerlock' | 'dev-start'): void {
+  private enterPlay(by: 'pointerlock' | 'dev-start' | 'touch'): void {
     this.p.app.startedBy = by;
     if (by === 'dev-start') this.lockedThisPlay = document.pointerLockElement === this.p.canvas;
+    else if (by === 'touch') { this.lockedThisPlay = false; this.lockReq = 0; armBackTrap(); }   // A-A6 (TAP TO PLAY / RESUME are gestures)
     this.acc = 0;
     this.last = -1;
     this.p.input.releaseAll();
@@ -535,7 +673,11 @@ export class Game {
 
   resume(): void {
     if (this.phase !== 'paused') return;
-    if (this.p.app.startedBy === 'pointerlock') this.requestPlay();
+    // CONTRACT_MOBILE M4: RESUME in touch mode is the tap itself (no lock); a touch-started match resumed with the
+    // mouse (a hybrid device switched back) asks for the lock like a CLICK TO PLAY
+    if (this.p.input.mode === 'touch') { this.enterPlay('touch'); return; }
+    const by = this.p.app.startedBy;
+    if (by === 'pointerlock' || by === 'touch') this.requestPlay();
     else this.enterPlay('dev-start');
   }
 
@@ -574,7 +716,7 @@ export class Game {
     if (this.phase === 'play') {
       p.input.releaseAll();
       p.input.live = true;
-      if (document.pointerLockElement !== p.canvas) this.requestLock();
+      if (document.pointerLockElement !== p.canvas && p.input.mode !== 'touch') this.requestLock();
     }
   }
 
@@ -668,6 +810,7 @@ export class Game {
       if (this.mode === 'match') {
         const m = p.input.takeMouse();
         if (!this.matchOver) this.look(m.dx, m.dy);
+        this.touchLook(dt);
         this.updateAim();
       }
       this.acc += dt;
@@ -680,7 +823,7 @@ export class Game {
       if (this.acc >= TICK) this.acc %= TICK;      // drop the excess debt
     } else if (!this.frozen) {
       this.acc = 0;
-      if (this.mode === 'match') p.input.takeMouse();
+      if (this.mode === 'match') { p.input.takeMouse(); p.input.takeTouchLook(); }
     }
     this.drainEvents();
     this.springLaunches();
@@ -690,9 +833,104 @@ export class Game {
     this.time += vdt;
     const alpha = playing || this.frozen ? Math.min(1, this.acc / TICK) : 1;
     this.matchFlow(vdt);
+    this.touchFrame();
     this.render(vdt, alpha);
     this.sound(vdt);
     p.hooks?.frame?.(dt);
+  }
+
+  // ───────────────────────────── CONTRACT_MOBILE: touch ─────────────────────────────
+  /**
+   * M2: the overlay shows only in touch mode while the match is in play or paused behind the pause card (never
+   * before TAP TO PLAY, never after the final horn: the victory slate's buttons need the taps); its meters follow the
+   * human every frame (setMeters writes the DOM only on a change).
+   */
+  private touchFrame(): void {
+    const tc = this.p.touch;
+    if (!tc || this.mode !== 'match') return;
+    const on = this.p.input.mode === 'touch' && (this.phase === 'play' || this.phase === 'paused') && this.world.phase !== 'ended';
+    tc.setVisible(on);
+    if (!on) return;
+    const me = this.human;
+    tc.setMeters({
+      specialFrac: me.special,
+      specialReady: me.alive && me.specialReady && me.specialActive === '',
+      subReady: me.alive && me.tank >= SUB_COST && me.subCooldown <= 0,
+    });
+  }
+
+  /**
+   * M2 / M3: apply the touch look radians (Input.takeTouchLook) through the aim assist — the slowdown scales the
+   * player's own look, the pull is added on top (never a snap: aimassist.ts caps it at 22°/s). kbm: the drained
+   * radians are dropped and the assist reads neutral.
+   */
+  private touchLook(dt: number): void {
+    const input = this.p.input;
+    const t = input.takeTouchLook();
+    const a = this.assist;
+    a.slow = 1; a.dyaw = 0; a.dpitch = 0; a.foes = 0; a.visible = 0;
+    if (input.mode !== 'touch' || this.matchOver) return;
+    const me = this.human;
+    const cam = this.p.cam;
+    const on = this.p.hooks?.assist ? this.p.hooks.assist() : true;
+    if (on && me.alive && this.world.phase === 'live') {
+      const eye = this.assistEye;
+      const cp = cam.camera.position;
+      eye.x = cp.x; eye.y = cp.y; eye.z = cp.z;
+      const range = this.assistRange + cam.boom;    // the kit's reach from the runner, measured from the camera
+      const r2 = range * range;
+      const rs = this.world.runners;
+      let k = 0;
+      for (let i = 0; i < rs.length; i++) {
+        if (i === HUMAN) continue;
+        const r = rs[i];
+        const f = this.foeBuf[k++];
+        if (!f) break;
+        f.x = r.x; f.y = r.y + r.hitHeight() * 0.5; f.z = r.z;
+        f.visible = false;
+        if (r.team === me.team || !r.alive) continue;
+        a.foes++;
+        const dx = f.x - eye.x, dy = f.y - eye.y, dz = f.z - eye.z;
+        if (dx * dx + dy * dy + dz * dz > r2) continue;   // out of range: no line-of-sight ray
+        f.visible = this.world.canSee(me, r);
+        if (f.visible) a.visible++;
+      }
+      const ts = input.touch;
+      const res = aimAssist({
+        camYaw: cam.yaw, camPitch: cam.pitch, eye, foes: this.foeBuf, range,
+        firing: ts.held.has('fire'), moving: ts.moveX !== 0 || ts.moveZ !== 0 || t.dyaw !== 0 || t.dpitch !== 0,
+        dt, strength: 1,
+      });
+      a.slow = res.slow; a.dyaw = res.dyaw; a.dpitch = res.dpitch;
+    }
+    const dyaw = t.dyaw * a.slow + a.dyaw;
+    const dpitch = t.dpitch * a.slow + a.dpitch;
+    if (dyaw || dpitch) this.addLookRad(dyaw, dpitch);
+  }
+
+  /** turn the follow camera by radians (the camera's own yaw wrap + pitch clamp; touch has no invert-Y) */
+  private addLookRad(dyaw: number, dpitch: number): void {
+    const cam = this.p.cam;
+    const TAU = Math.PI * 2;
+    let y = cam.yaw + dyaw;
+    if (y > Math.PI) y -= TAU;
+    else if (y < -Math.PI) y += TAU;
+    cam.yaw = y;
+    cam.pitch = Math.min(CAMERA.maxPitchDeg * DEG, Math.max(CAMERA.minPitchDeg * DEG, cam.pitch + dpitch));
+  }
+
+  /** M7: the renderer's touch shadow cap on the sun (a changed size re-allocates the map on the next render) */
+  private shadowCap(): void {
+    const sun = this.p.sky.sun;
+    if (!sun?.shadow) return;
+    // the authored size lives on the light (one sky serves the lobby and a match on the same arena)
+    const ud = sun.userData as { dfShadowBase?: number };
+    if (!(ud.dfShadowBase && ud.dfShadowBase > 0)) ud.dfShadowBase = sun.shadow.mapSize.x || 1024;
+    this.shadowBase = ud.dfShadowBase;
+    const want = Math.min(this.shadowBase, this.p.rig.shadowMapCap());
+    if (sun.shadow.mapSize.x === want && sun.shadow.mapSize.y === want) return;
+    sun.shadow.mapSize.set(want, want);
+    if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
   }
 
   /**
@@ -800,7 +1038,10 @@ export class Game {
             players.onWashed(e.victim);
             if (!lobby) hud.killFeed(e.cause === 'sea' || !by ? null : { name: by.name, team: by.team }, { name: v.name, team: v.team });
           }
-          if (e.victim === me) hud.showDeath(e.cause === 'sea' || !by ? null : by.name, by ? by.team : null, WEAPONS.respawnSeconds);
+          if (e.victim === me) {
+            hud.showDeath(e.cause === 'sea' || !by ? null : by.name, by ? by.team : null, WEAPONS.respawnSeconds);
+            if (this.p.input.mode === 'touch') this.p.touch?.vibrate(60);   // CONTRACT_MOBILE M2 haptics
+          }
           break;
         }
         case 'respawn': {
@@ -910,6 +1151,7 @@ export class Game {
   private playAgain(): void {
     if (this.phase !== 'play' && this.phase !== 'paused') return;
     if (this.phase === 'paused') { this.phase = 'play'; this.p.hooks?.paused?.(false, ''); }
+    if (this.p.input.mode === 'touch') armBackTrap();   // A-A6: a back on the victory slate may have used the entry up
     this.restart();
   }
 
@@ -982,6 +1224,7 @@ export class Game {
 
     p.rig.resize(p.cam.camera);
     p.rig.beginFrame();
+    this.shadowCap();
     p.rig.renderer.render(p.scene, p.cam.camera);
     p.hooks?.overlay?.(p.rig.renderer, dt);
     if (lobby) return;

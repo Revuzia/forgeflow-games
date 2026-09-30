@@ -25,8 +25,9 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AUDIO_PAYLOAD_BYTES, MUSIC, REGISTERED_TRACKS, SAMPLE_RATE, SFX, SFX_SPRITE, SPRITE_GUARD_S, type MusicCueId, type SfxId } from '../runtime/src/audio/manifest.ts';
+import { AUDIO_ALT_PAYLOAD_BYTES, AUDIO_PAYLOAD_BYTES, MUSIC, REGISTERED_TRACKS, SAMPLE_RATE, SFX, SFX_SPRITE, SPRITE_GUARD_S, type AltCodec, type MusicCueId, type SfxId } from '../runtime/src/audio/manifest.ts';
 import { loopSlice } from '../runtime/src/audio/seam.ts';
+import { altOffset } from '../runtime/src/audio/engine.ts';
 import { AudioRouter, EVENT_SOUNDS, STATE_SOUNDS, type AudioSink, type LoopCmd, type MusicCmd, type PlayCmd, type SoundId } from '../runtime/src/audio/router.ts';
 import { VoicePool } from '../runtime/src/audio/voices.ts';
 import type { AudioFrame } from '../runtime/src/audio/types.ts';
@@ -73,9 +74,9 @@ function ffprobe(path: string): Probe {
   const duration = Number(j.format.duration), size = Number(j.format.size);
   return { codec: s.codec_name, channels: s.channels, rate: Number(s.sample_rate), duration, size, kbps: (size * 8) / duration / 1000 };
 }
-/** decode to float32 at the file's own rate; channels interleaved */
-function decode(path: string, channels: number): Float32Array {
-  const buf = execFileSync('ffmpeg', ['-v', 'error', '-i', path, '-ac', String(channels), '-f', 'f32le', '-'], { maxBuffer: 1 << 30 });
+/** decode to float32 at the file's own rate; channels interleaved (rawMp4: ignore an MP4 edit list = keep the priming) */
+function decode(path: string, channels: number, rawMp4 = false): Float32Array {
+  const buf = execFileSync('ffmpeg', ['-v', 'error', ...(rawMp4 ? ['-ignore_editlist', '1'] : []), '-i', path, '-ac', String(channels), '-f', 'f32le', '-'], { maxBuffer: 1 << 30 });
   const out = new Float32Array(buf.length / 4);
   for (let i = 0; i < out.length; i++) out[i] = buf.readFloatLE(i * 4);
   return out;
@@ -221,6 +222,82 @@ function fileChecks(): void {
   }
   check('music: sample-exact sections, whole bars, click-free seams in play order, loudness', mBad.length === 0,
     mBad.length ? mBad.join(' · ') : `${mSeam.join(', ')} | ${mRows.join(', ')}`);
+}
+
+// ───────────────────────────────────────── AAC twins (mobile review A-A3) ─────────────────────────────────────────
+/**
+ * Every Ogg has an AAC-LC twin (.m4a) for WebKit before 18.4: it exists with the manifest's size, is AAC at 44.1 kHz with
+ * the Ogg's channels; the edit-list decode has exactly alt.samples frames and lines up with the Ogg decode at lag 0
+ * (normalised correlation of the loudest windows, best of −delay−2 … +delay+2); the raw decode (edit list ignored —
+ * what engine.ts's altOffset handles) has exactly alt.samples + alt.delay; the pad after the Ogg's length is silent;
+ * the twins' total is AUDIO_ALT_PAYLOAD_BYTES and ≤ 8 MB.
+ */
+function altChecks(): void {
+  const rows: Array<{ what: string; ogg: string; alt: AltCodec; ch: number }> = [
+    { what: 'sfx sprite', ogg: fileURLToPath(SFX_SPRITE.url), alt: SFX_SPRITE.alt, ch: 1 },
+  ];
+  for (const cue of Object.keys(MUSIC) as MusicCueId[]) rows.push({ what: `music ${cue}`, ogg: fileURLToPath(MUSIC[cue].url), alt: MUSIC[cue].alt, ch: 2 });
+  const bad: string[] = [];
+  const ok: string[] = [];
+  let total = 0;
+  const mono = (x: Float32Array, ch: number, a: number, n: number): Float32Array => {
+    const o = new Float32Array(n);
+    for (let i = 0; i < n; i++) { let s = 0; for (let c = 0; c < ch; c++) s += x[(a + i) * ch + c] ?? 0; o[i] = s / ch; }
+    return o;
+  };
+  const corr = (u: Float32Array, v: Float32Array): number => {
+    let d = 0, nu = 0, nv = 0;
+    for (let i = 0; i < u.length; i++) { d += u[i] * v[i]; nu += u[i] * u[i]; nv += v[i] * v[i]; }
+    return d / (Math.sqrt(nu * nv) + 1e-12);
+  };
+  for (const r of rows) {
+    const path = fileURLToPath(r.alt.url);
+    if (!existsSync(path)) { bad.push(`${r.what}: missing ${path}`); continue; }
+    const size = statSync(path).size;
+    total += size;
+    if (size !== r.alt.bytes) bad.push(`${r.what}: ${size} B on disk ≠ manifest ${r.alt.bytes}`);
+    const p = ffprobe(path);
+    if (p.codec !== 'aac' || p.channels !== r.ch || p.rate !== SAMPLE_RATE) bad.push(`${r.what}: ${p.codec} ${p.channels} ch ${p.rate} Hz`);
+    const el = decode(path, r.ch), raw = decode(path, r.ch, true), ref = decode(r.ogg, r.ch);
+    const nEl = el.length / r.ch, nRaw = raw.length / r.ch, nRef = ref.length / r.ch;
+    if (nEl !== r.alt.samples) bad.push(`${r.what}: edit-list decode ${nEl} frames ≠ ${r.alt.samples}`);
+    if (nRaw !== r.alt.samples + r.alt.delay) bad.push(`${r.what}: raw decode ${nRaw} frames ≠ ${r.alt.samples} + ${r.alt.delay}`);
+    // the loudest 1 s of the Ogg (away from the ends) against the twin at each lag
+    const win = SAMPLE_RATE;
+    let best = r.alt.delay + 8, bestE = -1;
+    for (let s = r.alt.delay + 8; s + win + r.alt.delay + 8 < nRef; s += win) {
+      let e = 0;
+      for (let i = s; i < s + win; i += 4) for (let c = 0; c < r.ch; c++) e += ref[i * r.ch + c] ** 2;
+      if (e > bestE) { bestE = e; best = s; }
+    }
+    const u = mono(ref, r.ch, best, win);
+    const lags = [-r.alt.delay - 2, -r.alt.delay, -2, -1, 0, 1, 2, r.alt.delay, r.alt.delay + 2];
+    const cs = lags.map((l) => corr(u, mono(el, r.ch, best + l, win)));
+    const top = lags[cs.indexOf(Math.max(...cs))];
+    if (top !== 0) bad.push(`${r.what}: the edit-list decode lines up with the Ogg at lag ${top} (corr ${cs.map((c) => c.toFixed(3)).join('/')})`);
+    const rawC = corr(u, mono(raw, r.ch, best + r.alt.delay, win));
+    if (!(rawC > 0.9)) bad.push(`${r.what}: the raw decode + ${r.alt.delay} priming does not line up (corr ${rawC.toFixed(3)})`);
+    let padPk = 0;
+    for (let i = nRef * r.ch; i < el.length; i++) padPk = Math.max(padPk, Math.abs(el[i]));
+    if (padPk > 0.02) bad.push(`${r.what}: the pad after the Ogg's ${nRef} frames peaks at ${padPk.toFixed(3)}`);
+    ok.push(`${r.what} ${(size / 1024).toFixed(0)} KB, ${nEl} (+${r.alt.delay} raw) frames, corr@0 ${cs[lags.indexOf(0)].toFixed(3)}`);
+  }
+  // engine.ts altOffset (what the browser does with a decode): exact length → 0; the priming kept → skip it; a 48 kHz
+  // resample of either (iOS decodes at the context rate) → the same answer
+  const offBad: string[] = [];
+  for (const r of rows) {
+    const a = r.alt, S = SAMPLE_RATE;
+    const cases: Array<[string, number, number]> = [
+      ['trimmed', a.samples / S, 0], ['untrimmed', (a.samples + a.delay) / S, a.delay / S],
+      ['trimmed@48k', (Math.round(a.samples * 48000 / S) + 1) / 48000, 0], ['untrimmed@48k', (Math.round((a.samples + a.delay) * 48000 / S) - 1) / 48000, a.delay / S],
+    ];
+    for (const [nm, dur, want] of cases) if (altOffset({ duration: dur }, a) !== want) offBad.push(`${r.what} ${nm}: ${altOffset({ duration: dur }, a)} ≠ ${want}`);
+  }
+  if (offBad.length) bad.push(`engine altOffset: ${offBad.join(', ')}`);
+  if (total !== AUDIO_ALT_PAYLOAD_BYTES) bad.push(`twins ${total} B on disk ≠ AUDIO_ALT_PAYLOAD_BYTES ${AUDIO_ALT_PAYLOAD_BYTES}`);
+  if (total > BUDGET) bad.push(`twins ${(total / 1024 / 1024).toFixed(2)} MB > 8 MB`);
+  check('AAC twins (A-A3): exist, AAC 44.1 kHz, sample-exact via the edit list, aligned with the Ogg at lag 0, raw = +priming',
+    bad.length === 0, bad.length ? bad.join(' · ') : `${ok.join(' | ')} | ${(total / 1024 / 1024).toFixed(2)} MB`);
 }
 
 // ───────────────────────────────────────── map / registry / credits ─────────────────────────────────────────
@@ -431,6 +508,7 @@ async function main(): Promise<number> {
     return 2;
   }
   fileChecks();
+  altChecks();
   mapChecks();
   if (!FILES_ONLY) {
     const union: Record<string, number> = {};

@@ -29,6 +29,22 @@
 // as `?crew=violet`, else the LOADOUT pick, default amber — and bots on the other seven), runs MatchWorld in 'ffa',
 // switches the dye shader (setDyeMode) and the minimap raster (setPalette) to the 8-crew palette, and gives the HUD
 // its FFA mode. Teams sessions (and the lobby) take none of these branches.
+//
+// CONTRACT_MOBILE (M1 M2 M4 M7 M10; every branch keys off input.mode, so keyboard + mouse is unchanged): the Input is
+// built BEFORE the renderer so the WebGL context knows the input method at creation (touch + DPR ≥ 2 → antialias off;
+// ?aa=0|1 overrides for measurement) and the renderer's touch profile. A match session builds the TouchControls
+// overlay (settings → options live, PAUSE → the ESC pause path, a minimap tap → the 'map' UI action) and hands it to
+// the Game. Touch mode: START goes straight into the countdown (no pointer-lock request), the play card reads TAP TO
+// PLAY (BootUI.setTouch), and the START / TAP TO PLAY gesture asks for fullscreen + a landscape orientation lock (all
+// silent on failure). The rotate overlay (ui/boot.ts RotateOverlay) pauses a live match when it appears. A lost WebGL
+// context pauses and shows "Graphics were reset by the device" with RELOAD; a restored one reloads. __DF__.touch() is
+// the M10 read-back. Integration (M12): the UI lane's hud.setTouchMode / menus.setTouchMode / BootUI.setTouch /
+// RotateOverlay are called directly on Input.onMode (a hybrid switch) and at session start.
+//
+// Mobile review fixes (2026-09-29): A-A2 START never begins the countdown under the rotate overlay (the play card waits);
+// B-F1 a context lost mid-load keeps the reset card (every flow returns after its last await); A-A4 one fetch of the
+// map GLB feeds both parsers; A-A9 a screen wake lock (touch) through the match session; A-A6 the START gesture pushes
+// the back-button trap entry (game.ts owns the popstate pause).
 
 /// <reference types="vite/client" />
 
@@ -43,7 +59,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mapById, teamById, hexToRgb01, WEAPONS, playableMaps, FFA_CREWS, type LightingPreset, type MapDef } from './core/data.ts';
 import { parseMatchMode, type MatchMode, type TeamId } from './core/types.ts';
-import { loadMapGeometry, type MapGeometry } from './core/mapgeo.ts';
+import { extractMapGeometry, type MapGeometry } from './core/mapgeo.ts';
+import { artUrl, parseGlb } from './core/glb.ts';
 import { buildAtlas, type PaintAtlas } from './core/paint/atlas.ts';
 import { Painter } from './core/paint/painter.ts';
 import { MinimapRaster } from './core/paint/minimap.ts';
@@ -63,16 +80,111 @@ import { Fx, bakeFxModels } from './view/fx.ts';
 import { Hud, applyTeamCssVars, crewLook, type HudKit } from './ui/hud.ts';
 import { createJuice, type Juice } from './ui/juice.ts';
 import { createAudio, type GameAudio } from './audio/index.ts';
-import { BootUI } from './ui/boot.ts';
+import { BootUI, RotateOverlay } from './ui/boot.ts';
 import { Menus, crewColors, type StartSelection } from './ui/menus.ts';
 import { SettingsStore, ProfileStore, type Settings } from './ui/settings.ts';
 import { Mannequin } from './ui/mannequin.ts';
 import { MAP_THUMBS } from './ui/icons.ts';
-import { Input } from './input.ts';
-import { Game, type AppStatus, type GameHooks, type GameMode, type MatchConfig } from './game.ts';
+import { Input, type InputMode } from './input.ts';
+import { TouchControls, type TouchOptions } from './touch/controls.ts';
+import { Game, armBackTrap, type AppStatus, type GameHooks, type GameMode, type MatchConfig } from './game.ts';
 import { installTestSurface, type AppHandles } from './testsurface.ts';
 
-export const VERSION = 'dyefield-1.2.0';
+/** CONTRACT_MOBILE M8 settings → the overlay's options */
+function touchOptions(s: Readonly<Settings>): TouchOptions {
+  return { sens: s.touchSens, scale: s.touchScale, opacity: s.touchOpacity, leftHanded: s.touchLeftHanded, haptics: s.haptics };
+}
+
+/**
+ * CONTRACT_MOBILE M4: on the TAP TO PLAY / START gesture (touch mode), full screen without the browser UI, then a
+ * landscape orientation lock (Android Chrome only locks in full screen). Must run synchronously inside the gesture.
+ * Every failure is silent: iPhone Safari has no element full screen (M9 covers it), desktops refuse the lock.
+ */
+function enterFullscreenLandscape(): void {
+  const lock = (): void => {
+    try {
+      const o = (screen as Screen & { orientation?: ScreenOrientation & { lock?: (o: string) => Promise<void> } }).orientation;
+      const p = o?.lock?.('landscape');
+      if (p && typeof p.catch === 'function') p.catch(() => undefined);
+    } catch { /* unsupported */ }
+  };
+  try {
+    const de = document.documentElement;
+    if (document.fullscreenEnabled && !document.fullscreenElement && typeof de.requestFullscreen === 'function') {
+      const p = de.requestFullscreen({ navigationUI: 'hide' });
+      if (p && typeof p.then === 'function') p.then(lock, () => undefined);
+      else lock();
+    } else lock();
+  } catch { /* unsupported */ }
+}
+
+/**
+ * Review A-A9: keep the screen on while a touch match session loads and runs (Screen Wake Lock). The load after START
+ * runs with no finger on the glass — 25–45 s on a throttled 4G phone, longer than a 30 s auto-lock (iOS Low Power Mode
+ * forces 30 s). Feature-detected and silent on refusal; the browser drops the lock whenever the page is hidden, so it is
+ * taken again on return. Touch only: keyboard + mouse never asks (desktop unchanged). Held for the whole match session
+ * (pause and victory cards included); released on the way back to the lobby and when the graphics context is lost.
+ */
+let wake: WakeLockSentinel | null = null;
+let wantWake = false;
+let wakeRequests = 0;
+function keepAwake(on: boolean): void {
+  wantWake = on;
+  if (!on) {
+    const s = wake;
+    wake = null;
+    s?.release().catch(() => undefined);
+    return;
+  }
+  if (wake || typeof navigator === 'undefined' || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+  try {
+    wakeRequests++;
+    navigator.wakeLock.request('screen').then((s) => {
+      if (!wantWake || wake) { s.release().catch(() => undefined); return; }
+      wake = s;
+      s.addEventListener('release', () => { if (wake === s) wake = null; });
+    }, () => undefined);
+  } catch { /* unsupported / not allowed here */ }
+}
+
+/**
+ * Review A-A4: the map GLB is fetched ONCE per arena and both parsers read the same bytes (the core's geometry
+ * extraction and the view's GLTFLoader). The second request of the old path was not reliably an HTTP-cache hit: a
+ * private tab's memory cache takes no entry over 6.25 MB and an Android WebView's 20 MB disk cache none over 5 MB, so
+ * CINDER (7.3 MB) was downloaded twice, back to back, before TAP TO PLAY. Progress follows the decoded size: the CDN's
+ * X-File-Size when it compresses the body (review A-A5), else Content-Length of an unencoded body.
+ */
+async function fetchMapBytes(def: MapDef, onProgress: (f: number) => void): Promise<ArrayBuffer> {
+  const url = artUrl(`map_${def.id}.glb`);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`[glb] fetch ${url} failed: HTTP ${res.status}`);
+  const xfs = Number(res.headers.get('x-file-size'));
+  const encoded = !!res.headers.get('content-encoding');
+  const total = xfs > 0 ? xfs : !encoded ? Number(res.headers.get('content-length')) : 0;
+  const reader = res.body && total > 0 && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
+  if (!reader) {
+    const buf = await res.arrayBuffer();
+    onProgress(1);
+    return buf;
+  }
+  const chunks: Uint8Array[] = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    chunks.push(value);
+    got += value.byteLength;
+    onProgress(Math.min(1, got / total));
+  }
+  const out = new Uint8Array(got);
+  let o = 0;
+  for (const c of chunks) { out.set(c, o); o += c.byteLength; }
+  onProgress(1);
+  return out.buffer;
+}
+
+export const VERSION = 'dyefield-1.3.0';
 
 declare global {
   interface Window {
@@ -234,7 +346,9 @@ async function loadArena(S: Shared, mapId: string, presetName: string | null, re
   const rep = (status?: string): void => report(prog.geo * 0.16 + prog.atlas * 0.16 + prog.map * 0.3 + prog.nav * 0.2, status);
   rep(`Loading ${def.name ?? def.id}…`);
 
-  const geo = await loadMapGeometry(def);
+  // one fetch feeds both parsers (review A-A4); the download is most of the view's share of the bar too
+  const bytes = await fetchMapBytes(def, (f) => { prog.geo = f; prog.map = 0.85 * f; rep(); });
+  const geo = extractMapGeometry(parseGlb(bytes), def);
   prog.geo = 1;
   rep('Building the paint atlas…');
   await nextFrame();
@@ -253,8 +367,8 @@ async function loadArena(S: Shared, mapId: string, presetName: string | null, re
   const dye = createDyeUniforms(paint);
   if (dye.uColorblind) dye.uColorblind.value = S.settings.get().colorblind ? 1 : 0;
 
-  const map = await loadMapView(S.loader, def, dye, (f) => { prog.map = f; rep(); },
-    { mergeStatic: !(app.dev && params.get('merge') === '0') });
+  const map = await loadMapView(S.loader, def, dye, (f) => { prog.map = Math.max(prog.map, f); rep(); },
+    { mergeStatic: !(app.dev && params.get('merge') === '0'), bytes });
   prog.map = 1;
   if (S.settings.get().colorblind) setPadColorblind(map.root, true);
   const scene = new THREE.Scene();
@@ -314,6 +428,8 @@ interface Session {
   juice: Juice | null;
   /** CONTRACT_FFA F7: the FFA drop pads (FFA match sessions only) */
   ffaPads: FfaPads | null;
+  /** CONTRACT_MOBILE M2: the touch overlay (match sessions only; shown by the Game in touch mode) */
+  touch: TouchControls | null;
   dispose(): void;
 }
 
@@ -383,14 +499,27 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
   };
   const hud = new Hud(uiRoot, { team: humanTeam, minimap: arena.minimap, specialName, roster, youId: 0, kit: hudKit, mode: matchMode });
   hud.slates.setLegend(S.menus.legend());
+  hud.setTouchMode(input.mode === 'touch');     // CONTRACT_MOBILE M4 platform prompts
   // after the HUD: juice's over-layer (hit marker, confetti) sits above the HUD and the slates
   const juice = mode === 'match' ? createJuice(uiRoot, { reduceMotion: st.reduceMotion, colorblind: st.colorblind, mode: matchMode }) : null;
+  // CONTRACT_MOBILE M2: the touch overlay of a match (hidden until the Game shows it in touch mode). PAUSE takes the
+  // ESC path (a live match only); a tap on the minimap is the 'map' UI action.
+  let touch: TouchControls | null = null;
+  if (mode === 'match') {
+    touch = new TouchControls(uiRoot, input.touch, touchOptions(st));
+    touch.setKit(config.kit);
+    touch.onPause(() => {
+      const g = app.game;
+      if (g && !g.isLobby && app.phase === 'play' && !g.matchOver) g.pause('touch pause');
+    });
+    touch.onMap(() => input.emitUi('map', new CustomEvent('df-touch-map')));
+  }
 
   const game = new Game({
     app, def, canvas: S.canvas, rig, scene: arena.scene, cam, sky: arena.sky, water: arena.water, map: arena.map, geo: arena.geo,
     atlas: arena.atlas, painter: arena.painter, minimap: arena.minimap, paint: arena.paint, dye: arena.dye, R: await S.rapier,
     physics: arena.physics, nav: arena.nav, roster, players, fx, hud, boot: S.boot, input, config, mode, hooks,
-    audio: S.audio, juice,
+    audio: S.audio, juice, touch,
   }, { quality: S.quality() });
   app.game = game;
   app.mapId = def.id;
@@ -430,13 +559,14 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
   game.run();
   let disposed = false;
   return {
-    mode, arena, game, players, fx, hud, juice, ffaPads,
+    mode, arena, game, players, fx, hud, juice, ffaPads, touch,
     dispose(): void {
       if (disposed) return;
       disposed = true;
       game.dispose();
       ffaPads?.dispose();                        // re-tags the A/B team pads; the next startSession re-applies the colorblind setting
       if (app.game === game) app.game = null;
+      touch?.dispose();                          // releases every captured touch, removes #df-touch
       // the view modules free their own GPU objects (the runner skeletons' bone textures, the FX disk texture)
       juice?.dispose();
       hud.dispose();
@@ -466,6 +596,9 @@ async function boot(): Promise<void> {
   let qualityOverride: RenderQuality | null = null;
   const effectiveQuality = (): RenderQuality => qualityOverride ?? settings.get().quality;
   let S: Shared | null = null;
+  let rotate: RotateOverlay | null = null;
+  let contextLost = false;
+  let uiMapActions = 0;
   const handles: AppHandles = {
     menus: () => S?.menus ?? null, settings: () => settings, profile: () => profile,
     session: () => (session ? {
@@ -475,6 +608,35 @@ async function boot(): Promise<void> {
     renderInfo: () => (S ? S.rig.renderer.info : null),
     audio: () => audio.stats(),
     juice: () => session?.juice?.readback() ?? null,
+    // CONTRACT_MOBILE M10: { mode, visible, stick {x, y, active}, lookRad {yaw, pitch}, held, buttons [{id, rect, dimmed}],
+    // assist {slow, dyaw} } + the extras a harness needs (pinned, the renderer's touch profile, rotate / fullscreen)
+    touch: () => {
+      if (!S) return null;
+      const inp = S.input;
+      const rb = session?.touch ? session.touch.readback() : null;
+      const g = session?.game ?? null;
+      return {
+        mode: inp.mode, pinned: inp.pinned, htmlClass: document.documentElement.className,
+        visible: rb ? rb.visible : false,
+        stick: rb ? rb.stick : { x: 0, y: 0, active: false },
+        lookRad: rb ? rb.lookRad : { yaw: 0, pitch: 0 },
+        held: rb ? rb.held : [], latched: rb ? rb.latched : [], active: inp.touch.active,
+        buttons: rb ? rb.buttons : [],
+        assist: g ? { slow: g.assist.slow, dyaw: g.assist.dyaw, dpitch: g.assist.dpitch, foes: g.assist.foes, visibleFoes: g.assist.visible }
+          : { slow: 1, dyaw: 0, dpitch: 0, foes: 0, visibleFoes: 0 },
+        options: rb ? { leftHanded: rb.leftHanded, scale: rb.scale, opacity: rb.opacity } : null,
+        startedBy: app.startedBy,
+        renderer: S.rig.mobile(),
+        rotateOverlay: rotate ? rotate.shown : null,
+        fullscreen: !!document.fullscreenElement,
+        contextLost,
+        mapActions: uiMapActions,
+        // review A-A9 / A-A6 read-backs: the screen wake lock and the back-button trap entry
+        wake: { held: !!wake, want: wantWake, requests: wakeRequests },
+        backTrap: (history.state as { df?: string } | null)?.df === 'match',
+        frameCapSkips: g ? g.capSkips : 0,        // A-A10: rAFs the touch 60 fps cap skipped this session
+      };
+    },
   };
   installTestSurface(app, handles);
 
@@ -504,13 +666,48 @@ async function boot(): Promise<void> {
     if (!canvas) throw new Error('#game canvas missing from index.html');
     const uiRoot = document.getElementById('ui') ?? document.body;
 
+    // CONTRACT_MOBILE M1: the input method is known BEFORE the WebGL context exists (M7 antialias + touch profile)
+    const input = new Input(canvas, settings.get().bindings);
+    bootUi.setTouch(input.mode === 'touch');
+    // read-back only: 'map' UI actions seen (the M key or a MAP tap on the minimap). No screen consumes 'map' yet
+    // (KeyM has been bound with no listener since 1.2.0), so the harness proves the MAP tap reaches it here.
+    input.onUi((a) => { if (a === 'map') uiMapActions++; });
+
     // ?quality= overrides the saved setting for this page only (a harness / share link never rewrites the
     // player's settings); changing QUALITY in SETTINGS ends the override
     const qp = params.get('quality');
     qualityOverride = isRenderQuality(qp) ? qp : null;
-    const rig = createRenderer(canvas, (app.dev && params.get('tonemap')) || 'neutral', effectiveQuality());
+    // M7: MSAA off on a touch device with DPR ≥ 2 (fixed at context creation); ?aa=0|1 overrides (A/B measurement)
+    const touchAtBoot = input.mode === 'touch';
+    const aaQ = params.get('aa');
+    const antialias = aaQ === '0' ? false : aaQ === '1' ? true : !(touchAtBoot && (window.devicePixelRatio || 1) >= 2);
+    const rig = createRenderer(canvas, (app.dev && params.get('tonemap')) || 'neutral', effectiveQuality(), { touch: touchAtBoot, antialias });
     const cam = new FollowCamera(canvas.clientWidth / Math.max(1, canvas.clientHeight));
     rig.resize(cam.camera);
+    // M4: a lost WebGL context pauses and says so (a GPU reset, memory pressure, a long time in the background);
+    // a restored context reloads the page — the simplest correct path back
+    canvas.addEventListener('webglcontextlost', (ev) => {
+      ev.preventDefault();
+      if (contextLost) return;
+      contextLost = true;
+      const g = app.game;
+      if (g && !g.isLobby && app.phase === 'play') g.pause('context lost');
+      audio.setPaused(true);
+      keepAwake(false);
+      input.live = false;
+      input.releaseAll();
+      app.phase = 'error';
+      app.error = 'webglcontextlost';
+      S?.menus.hideAll();
+      bootUi.error('Graphics were reset by the device', 'The device reset the game’s graphics (the WebGL context was lost).\nPress RELOAD to continue.');
+      console.warn('[dyefield] webglcontextlost: the graphics context was lost');
+    }, false);
+    canvas.addEventListener('webglcontextrestored', () => { location.reload(); }, false);
+    // review B-F1: the reset card must SURVIVE a flow that was mid-load when the context went (a lost context during the
+    // arena load let startMatch / toLobby / the boot branches finish and replace the card with TAP TO PLAY, the countdown
+    // or the menus over a dead canvas): each flow returns straight after its last await while `contextLost` is set.
+    // review A-A9: the browser releases a wake lock whenever the page is hidden — take it again on return
+    document.addEventListener('visibilitychange', () => { if (wantWake && document.visibilityState === 'visible') keepAwake(true); });
 
     // the shared loads run while the first arena loads
     const sharedProg = { rapier: 0, hero: 0 };
@@ -529,7 +726,6 @@ async function boot(): Promise<void> {
     hero.catch(() => undefined);
     kitArt.catch(() => undefined);
 
-    const input = new Input(canvas, settings.get().bindings);
     const fpsEl = document.createElement('div');
     fpsEl.className = 'df-fps';
     fpsEl.hidden = true;
@@ -556,6 +752,14 @@ async function boot(): Promise<void> {
       },
       victory: (el) => { S!.menus.extraScope = el; },
       look: () => ({ sens: settings.get().sensitivity, invertY: settings.get().invertY }),
+      assist: () => settings.get().aimAssist,
+    };
+
+    /** the play card's gesture: unlock audio; touch mode also goes full screen + landscape (M4) */
+    const playClick = (g: Game) => (): void => {
+      void audio.unlock();
+      if (input.mode === 'touch') { enterFullscreenLandscape(); keepAwake(true); }
+      g.requestPlay();
     };
 
     let fpsT = 0;
@@ -569,13 +773,22 @@ async function boot(): Promise<void> {
     };
 
     const startMatch = async (sel: StartSelection): Promise<void> => {
-      if (busy || !S) return;
+      if (busy || !S || contextLost) return;
       busy = true;
-      // the START press is a user gesture: capture the mouse now, so the countdown can start the moment the arena is ready
-      try {
-        const r = canvas.requestPointerLock({ unadjustedMovement: false } as PointerLockOptions) as unknown;
-        if (r && typeof (r as Promise<void>).then === 'function') (r as Promise<void>).catch(() => undefined);
-      } catch { /* CLICK TO PLAY covers it */ }
+      if (input.mode === 'touch') {
+        // CONTRACT_MOBILE M4: no pointer lock on touch; the START tap is the gesture for full screen + landscape.
+        // Review A-A9: the screen stays on through the untouched load; A-A6: the back-button trap entry is pushed inside
+        // this gesture (the Game re-arms it at every later play entry).
+        enterFullscreenLandscape();
+        keepAwake(true);
+        armBackTrap();
+      } else {
+        // the START press is a user gesture: capture the mouse now, so the countdown can start the moment the arena is ready
+        try {
+          const r = canvas.requestPointerLock({ unadjustedMovement: false } as PointerLockOptions) as unknown;
+          if (r && typeof (r as Promise<void>).then === 'function') (r as Promise<void>).catch(() => undefined);
+        } catch { /* CLICK TO PLAY covers it */ }
+      }
       try {
         const def = mapById(sel.map);
         S.menus.hideAll();
@@ -600,10 +813,17 @@ async function boot(): Promise<void> {
           crew: ffa ? ffaCrew(sel.ffaColor) : sel.crew, devBrush: false, ...(ffa ? { mode: 'ffa' as const } : {}),
         };
         session = await startSession(S, arena, 'match', cfg, hooks, report);
+        if (contextLost) return;                  // B-F1: the reset card stays
         app.phase = 'ready';
         const g = session.game;
-        if (!g.beginWithLock()) bootUi.showPlay(() => { void audio.unlock(); g.requestPlay(); });
+        // touch: straight into the countdown (M4) — unless the phone turned upright while the arena loaded (review A-A2:
+        // the match then started and ran under the rotate overlay, and turning back showed no pause card): the TAP TO
+        // PLAY card waits behind the overlay, which blocks it until the phone turns back. kbm: into the countdown when
+        // the START click's lock is held.
+        const began = input.mode === 'touch' ? (!rotate?.shown && g.beginTouch()) : g.beginWithLock();
+        if (!began) bootUi.showPlay(playClick(g));
       } catch (e) {
+        if (contextLost) return;                  // B-F1: a load that failed on the lost context keeps the reset card
         fail('The match could not start', e);
       } finally {
         busy = false;
@@ -611,8 +831,9 @@ async function boot(): Promise<void> {
     };
 
     const toLobby = async (): Promise<void> => {
-      if (busy || !S) return;
+      if (busy || !S || contextLost) return;
       busy = true;
+      keepAwake(false);                           // A-A9: the menus may let the phone sleep again
       try {
         if (document.pointerLockElement) document.exitPointerLock();
         S.menus.hideAll();
@@ -631,12 +852,14 @@ async function boot(): Promise<void> {
           arena = await loadArena(S, LOBBY_MAP, LOBBY_PRESET, report);
         } else report(1);
         session = await startSession(S, arena, 'lobby', lobbyConfig(), hooks, report);
+        if (contextLost) return;                  // B-F1: the reset card stays
         app.phase = 'menu';
         app.startedBy = null;
         S.menus.showTitle();
         bootUi.hide();
         audio.playMusic('lobby');                 // resets the match's world loops; the harbour ambience returns
       } catch (e) {
+        if (contextLost) return;
         fail('The lobby could not load', e);
       } finally {
         busy = false;
@@ -704,9 +927,33 @@ async function boot(): Promise<void> {
         session?.juice?.setReduceMotion(s.reduceMotion);   // juice also pushes it to the camera every frame
       }
       if (has('volume')) audio.setVolumes(s.volume);
+      // CONTRACT_MOBILE M8: the touch rows apply live (aimAssist is read by the Game every frame)
+      if (has('touchSens') || has('touchScale') || has('touchOpacity') || has('touchLeftHanded') || has('haptics')) {
+        session?.touch?.setOptions(touchOptions(s));
+      }
     };
     settings.on(applySettings);
     applySettings(settings.get(), []);
+
+    // CONTRACT_MOBILE M1: a hybrid device switched input method — the prompts, the play card and the renderer's
+    // profile follow (the overlay itself follows every frame through the Game)
+    const applyMode = (m: InputMode): void => {
+      const on = m === 'touch';
+      bootUi.setTouch(on);
+      menus.setTouchMode(on);
+      session?.hud.setTouchMode(on);
+      rig.setTouchProfile(on);
+    };
+    input.onMode(applyMode);
+    menus.setTouchMode(input.mode === 'touch');
+
+    // CONTRACT_MOBILE M4: portrait on a touch device → the rotate overlay; a live match pauses under it (no auto-resume:
+    // turning back shows the pause card)
+    rotate = new RotateOverlay((shown) => {
+      if (!shown) return;
+      const g = app.game;
+      if (g && !g.isLobby && app.phase === 'play' && !g.matchOver) g.pause('rotate');
+    });
 
     // the LOADOUT mannequin, once the hero + kits are in
     void Promise.all([hero, kitArt]).then(([h, k]) => {
@@ -717,19 +964,25 @@ async function boot(): Promise<void> {
     }).catch((e) => console.warn('[dyefield] mannequin unavailable:', e));
 
     if (DEEP_LINK) {
-      // ── a direct match (harnesses, share links)
+      // ── a direct match (harnesses, share links). A-A9: the wake lock is best effort here (no gesture yet; the spec
+      // does not require one) and asked for again by the TAP TO PLAY tap.
+      if (input.mode === 'touch') keepAwake(true);
       const def = mapById(app.mapId);
       arena = await loadArena(shared, def.id, params.get('preset'), report);
       session = await startSession(shared, arena, 'match', paramConfig(), hooks, report);
+      if (contextLost) return;                    // B-F1: the reset card stays (?autostart included)
+      audio.preload();                            // A-A11: the audio downloads start once the arena no longer needs the bandwidth
       bootUi.progress(1, 'Ready');
       app.phase = 'ready';
       const g = session.game;
-      bootUi.showPlay(() => { void audio.unlock(); g.requestPlay(); });
+      bootUi.showPlay(playClick(g));
       if (params.get('autostart') === '1') g.devStart();
     } else {
       // ── the lobby: Pier 18 at noon behind the menus
       arena = await loadArena(shared, LOBBY_MAP, LOBBY_PRESET, report);
       session = await startSession(shared, arena, 'lobby', lobbyConfig(), hooks, report);
+      if (contextLost) return;                    // B-F1: the reset card stays (the most common entry path)
+      audio.preload();                            // A-A11: after the lobby's map GLB, never beside it
       bootUi.progress(1, 'Ready');
       app.phase = 'menu';
       menus.showTitle();
@@ -737,6 +990,7 @@ async function boot(): Promise<void> {
       audio.playMusic('lobby');                   // queued until the first gesture unlocks the context
     }
   } catch (e) {
+    if (contextLost) return;                      // B-F1: a boot load that failed on the lost context keeps the reset card
     fail('DYEFIELD could not start', e);
   }
 }

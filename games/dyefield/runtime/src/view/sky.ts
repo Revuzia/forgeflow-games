@@ -289,7 +289,6 @@ export function createSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer, pre
   if (lx.lengthSq() < 1e-8) lx.set(1, 0, 0);
   lx.normalize();
   const ly = lz.clone().cross(lx).normalize();
-  const texel = (2 * SUN_SHADOW.half) / SUN_SHADOW.mapSize;
   const fwd = new THREE.Vector3();
   const centre = new THREE.Vector3();
   let drift = 0;
@@ -313,6 +312,10 @@ export function createSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer, pre
       let u = centre.dot(lx);
       let v = centre.dot(ly);
       const d = centre.dot(lz);
+      // the texel of the LIVE shadow map: the touch profile resizes it at runtime (game.ts shadowCap, 1024 → 512), and a
+      // snap to the authored size's texel would move a 512 map in half-texel steps — the edge shimmer snapping exists to
+      // prevent (mobile review B-F4). Desktop keeps SUN_SHADOW.mapSize, so its snap is unchanged.
+      const texel = (2 * SUN_SHADOW.half) / (sun.shadow.mapSize.x || SUN_SHADOW.mapSize);
       u = Math.round(u / texel) * texel;
       v = Math.round(v / texel) * texel;
       centre.set(0, 0, 0).addScaledVector(lx, u).addScaledVector(ly, v).addScaledVector(lz, d);

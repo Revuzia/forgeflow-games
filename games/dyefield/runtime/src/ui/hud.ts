@@ -24,15 +24,24 @@
 // charge ring take the human's colour; the minimap (the raster's 8-colour palette) is north-up with every seen
 // runner's dot in its crew colour and mark SHAPE (◉ circle · ▲ triangle · ■ square · ◆ diamond · ★ star · ✚ cross ·
 // ⬟ pentagon · ⬢ hexagon), so it reads in colorblind modes. Teams mode is unchanged.
+//
+// CONTRACT_MOBILE (UI lane): touch mode (setTouchMode; it also follows html.df-touch) swaps the gauge's and the sub
+// chip's keycap badges for the SPECIAL / SUB buttons' glyphs, the low-tank toast for LOW_TANK_TOAST_TOUCH and the
+// countdown legend for the touch glyphs. The touch layout itself is CSS: the minimap moves right of the PAUSE button,
+// the FFA panel under it, the toast above the bottom edge (top centre on a phone); the phone breakpoint (max-height:
+// 500px) compacts every block and keeps at most 3 kill-feed lines, so the stick and the thumb arc stay clear.
 
 import type { Coverage, MoveState, TeamId } from '../core/types.ts';
 import { TEAMS, TEAMS_RAW, teamById } from '../core/data.ts';
 import type { MinimapRaster } from '../core/paint/minimap.ts';
-import { Slates, waveIcon, crewLook, type CrewLook, type UiMode, type VictoryInfo } from './slates.ts';
+import { Slates, waveIcon, crewLook, touchGlyph, type CrewLook, type UiMode, type VictoryInfo } from './slates.ts';
+import { touchModeOn, watchTouchMode } from './boot.ts';
 
 export { crewLook, ffaCrews, type CrewLook, type UiMode, type FfaVictory, type FfaStanding } from './slates.ts';
 
 export const LOW_TANK_TOAST = 'Tank low — hold SHIFT on your color to drink';
+/** CONTRACT_MOBILE M4: the low-tank toast in touch mode (the brief's SHIFT line above stays exactly as it is on keyboard) */
+export const LOW_TANK_TOAST_TOUCH = 'Tank low — hold SLICK on your color to drink';
 export const FEED_VERB = 'washed';
 
 export interface HudDebug {
@@ -216,6 +225,9 @@ export class Hud {
   private readonly order: number[] = [];
   private lastShareKey = '';
   private readonly ffaInfo = { me: '', rank: 0, top3: [] as Array<{ team: number; name: string; pct: string }> };
+  /** CONTRACT_MOBILE M4: touch-mode prompts (M1 html.df-touch; main.ts also calls setTouchMode) */
+  private touch = false;
+  private touchOff: (() => void) | null = null;
 
   constructor(host: HTMLElement, o: { team: TeamId; minimap: MinimapRaster | null; specialName?: string; roster?: ReadonlyArray<{ id: number; name: string; team: TeamId }>; youId?: number; kit?: HudKit;
     /** CONTRACT_FFA F3: 'ffa' = the FREE-FOR-ALL HUD (default 'teams') */
@@ -414,6 +426,44 @@ export class Hud {
     this.slates = new Slates(host);
     this.slates.mode = this.mode;
     this.redrawMinimap(true);
+    this.setTouchMode(touchModeOn());
+    this.touchOff = watchTouchMode((on) => this.setTouchMode(on));
+  }
+
+  /**
+   * CONTRACT_MOBILE M4 / M12 platform prompts. Touch: the special gauge's and the sub chip's keycap badges show the
+   * SPECIAL / SUB buttons' glyphs, the low-tank toast reads LOW_TANK_TOAST_TOUCH, the countdown legend shows the touch
+   * glyphs. The compact layout that keeps the thumb zones clear is CSS (html.df-touch, @media (max-height: 500px)).
+   */
+  setTouchMode(on: boolean): void {
+    this.touch = on;
+    this.root.classList.toggle('touch', on);
+    const t = on ? LOW_TANK_TOAST_TOUCH : LOW_TANK_TOAST;
+    if (this.toast.textContent !== t) this.toast.textContent = t;
+    this.renderBadges();
+    this.slates.setTouchMode(on);
+  }
+
+  /** the gauge / sub badges: the binding's keycap (kbm) or the touch button's glyph (touch) */
+  private renderBadges(): void {
+    const sk = this.kit?.specialKey ?? '';
+    if (this.touch) {
+      this.gaugeKey.innerHTML = `<i class="tg">${ICONS[this.kit?.specialId ?? ''] ?? touchGlyph('special')}</i>`;
+      this.gaugeKey.classList.add('touch');
+      this.gaugeKey.setAttribute('aria-label', 'tap SPECIAL');
+      this.gaugeKey.hidden = !this.kit;
+      this.subKey.innerHTML = `<i class="tg">${ICONS.jelly}</i>`;
+      this.subKey.classList.add('touch');
+      this.subKey.setAttribute('aria-label', 'tap SUB');
+      return;
+    }
+    this.gaugeKey.classList.remove('touch');
+    this.gaugeKey.textContent = sk;
+    this.gaugeKey.setAttribute('aria-label', `press ${sk}`);
+    this.gaugeKey.hidden = !sk;
+    this.subKey.classList.remove('touch');
+    this.subKey.textContent = this.kit?.subKey ?? '';
+    this.subKey.removeAttribute('aria-label');
   }
 
   /** a crew's look in this HUD's mode (teams: the CSS-var palette classes carry colorblind) */
@@ -421,13 +471,16 @@ export class Hud {
 
   /** remove every DOM node this HUD added (a match session ends) */
   dispose(): void {
+    this.touchOff?.();
+    this.touchOff = null;
     this.root.remove();
     this.slates.root.remove();
   }
 
-  /** SETTINGS rebind mid-match: the special / sub key badges show the new keys */
+  /** SETTINGS rebind mid-match: the special / sub key badges show the new keys (touch mode keeps the glyphs) */
   setKeys(specialKey: string, subKey: string): void {
     if (this.kit) { this.kit.specialKey = specialKey; this.kit.subKey = subKey; }
+    if (this.touch) return;
     this.gaugeKey.textContent = specialKey;
     this.gaugeKey.setAttribute('aria-label', `press ${specialKey}`);
     this.gaugeKey.hidden = !specialKey;
@@ -475,7 +528,10 @@ export class Hud {
     else { e.classList.add('sea'); e.append(waveIcon('df-wave'), who(b)); }
     this.feed.prepend(e);
     this.feedItems.unshift({ e, t: this.clock });
-    while (this.feedItems.length > 5) this.feedItems.pop()!.e.remove();
+    // CONTRACT_MOBILE M6: a phone held sideways (the max-height 500px breakpoint) keeps 3 lines, everything else 5
+    let max = 5;
+    try { if (matchMedia('(max-height: 500px)').matches) max = 3; } catch { /* keep 5 */ }
+    while (this.feedItems.length > max) this.feedItems.pop()!.e.remove();
   }
 
   lowTank(): void {
@@ -696,8 +752,9 @@ export class Hud {
       crests: this.crests.filter(Boolean).map((c) => ({ alive: c.alive, text: c.box.textContent })),
       gauge: this.lastGauge,
       special: { pct: this.lastGauge, ready: this.gauge.classList.contains('full'), name: this.kit?.specialName ?? null,
-        key: this.gaugeKey.hidden ? null : this.gaugeKey.textContent, icon: this.kit?.specialId ?? null },
+        key: this.gaugeKey.hidden ? null : (this.touch ? 'SPECIAL' : this.gaugeKey.textContent), icon: this.kit?.specialId ?? null },
       sub: { ready: this.lastSub === true, grey: this.sub.classList.contains('grey'), key: this.kit?.subKey ?? null, cost: this.kit?.subCost ?? null },
+      touch: this.touch,
       charge: this.kit?.fire === 'charge' ? Math.max(0, this.lastCharge) : null,
       tank: this.lastTank,
       dots: this.dots.filter((d) => d.on).length,

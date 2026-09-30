@@ -13,9 +13,14 @@ WebAudio music + SFX for the lobby and the match. One integration surface: `crea
 | `manifest.ts` | **generated**: asset URLs, sprite regions, music sections, per-sound levels |
 | `CREDITS.json` | **generated**: every track/pack, author and licence, plus ready-made `lines` for the CREDITS screen |
 | `assets/*.ogg` | **generated**: `sfx.ogg` (one mono sprite) + `music_{lobby,match,final,victory,defeat}.ogg` |
+| `assets/*.m4a` | **generated**: the AAC-LC twin of each Ogg (mobile review A-A3: iOS / iPadOS Safari before 18.4 cannot decode Ogg) |
 | `build/build_audio.py` | the generator for the three generated items above |
 
-Payload: 2.6 MB (budget 8 MB). All files are Ogg Vorbis at 44.1 kHz, ≤ 128 kb/s. The files are referenced as
+Payload: 2.6 MB (budget 8 MB). All files are Ogg Vorbis at 44.1 kHz, ≤ 128 kb/s; each has an AAC-LC `.m4a` twin
+(3.1 MB as a set; a device downloads ONE set: the twins only where `canPlayType` says no Ogg or an Ogg decode is
+refused). The twins are encoded from the Ogg's own decode and are sample-exact: `build_audio.py --aac-twins` checks
+the edit-list decode against the Ogg at lag 0, and the engine skips the 1024 priming samples of a decoder that
+ignores the MP4 edit list (manifest `alt.delay`). The files are referenced as
 `new URL('./assets/x.ogg', import.meta.url)`, so Vite emits hashed copies into `dist/assets/`. `publicDir` stays
 `false` and needs no config change.
 
@@ -35,6 +40,9 @@ Payload: 2.6 MB (budget 8 MB). All files are Ogg Vorbis at 44.1 kHz, ≤ 128 kb/
    `void audio.unlock()` inside the first real click handler: the lobby's first menu click, or the
    CLICK TO PLAY card's click before `requestLock()`. `unlock()` never rejects and never blocks. `ui()` also
    unlocks on first use.
+   **Preload** (mobile review A-A11): nothing is fetched at `createAudio`; call `audio.preload()` once the first
+   arena is up (main.ts does), so the sprite + lobby music never share a phone's bandwidth with the map GLB the
+   player is waiting on. `unlock()` also starts the downloads; every audio fetch asks for `priority: 'low'`.
 
 3. **Lobby / menus.**
    * On showing the lobby: `audio.playMusic('lobby')`. The harbour ambience starts too.
@@ -128,7 +136,8 @@ reuses them.
 
 ## Known limits
 
-* Ogg Vorbis: Chrome, Edge and Firefox decode it. On a browser that cannot decode the sprite, the countdown
+* Ogg Vorbis: Chrome, Edge, Firefox and Safari 18.4+ decode it; older WebKit gets the `.m4a` twins (above). On a
+  browser that can decode neither, the countdown
   beeps, ticks, horns and splats fall back to oscillator/noise stand-ins (`engine.fallback`) and everything
   else is silent. `stats().errors` reports the decode failure.
 * Decoded music is ~0.4 MB per second held: the lobby set (57.6 s) or the match set (match + final +

@@ -20,16 +20,29 @@
 // profile. The title's brand line names both modes whichever is picked; the profile card shows the picked one
 // (TEAMS: the crew name, FFA: FREE-FOR-ALL). In FFA the LOADOUT crew toggle becomes a colour pick of the 8 FFA crews (a chip + its mark; bots take the
 // other seven), and the profile card / plate / PLAY kit line / mannequin take the picked colour.
+//
+// CONTRACT_MOBILE (UI lane): touch mode (M1 html.df-touch; setTouchMode) swaps the platform prompts — no keyboard hint
+// bar, HOW TO PLAY's keycaps name the touch buttons and a TOUCH CONTROLS panel (layout diagram + what each does) leads
+// it, the pause card's legend shows the touch glyphs, SETTINGS leads with TOUCH CONTROLS (six rows + a live preview;
+// also on desktop with ?touch=1) and drops the MOUSE card and the key remap. Hover moves focus for a MOUSE only. A
+// FULLSCREEN toggle sits in the title corner and on the pause card (hidden without element fullscreen); iPhone Safari
+// gets the one-time Add-to-Home-Screen tip there instead. The title's brand + profile corner share one flex row, so the
+// corner can never cover the wordmark. The phone-landscape layout is CSS (menus.css @media (max-height: 500px)).
 
 import { WEAPONS, playableMaps, teamById, TEAMS_RAW, type MapDef } from '../core/data.ts';
 import type { TeamId } from '../core/types.ts';
 import type { BotSkill } from '../core/match/roster.ts';
 import { codeLabel, type Action, type Input } from '../input.ts';
 import { RENDER_QUALITIES, type RenderQuality } from '../view/renderer.ts';
-import { cleanName, NAME_MAX, SENS_MAX, SENS_MIN, BOT_SKILL_IDS, type Bindings, type ProfileMode, type ProfileStore, type SettingsStore } from './settings.ts';
-import { crewLook, ffaCrews } from './slates.ts';
+import {
+  cleanName, NAME_MAX, SENS_MAX, SENS_MIN, BOT_SKILL_IDS, TOUCH_SENS_MIN, TOUCH_SENS_MAX, TOUCH_SCALE_MIN, TOUCH_SCALE_MAX,
+  TOUCH_OPACITY_MIN, TOUCH_OPACITY_MAX, type Bindings, type ProfileMode, type ProfileStore, type SettingsStore,
+} from './settings.ts';
+import { crewLook, ffaCrews, touchGlyph, type TouchGlyph } from './slates.ts';
 import { KIT_ICONS, MAP_THUMBS, SVG, roleLabel } from './icons.ts';
-import { MODE_LINE_ALL, MODE_LINE_FFA, fillModeLine } from './boot.ts';
+import {
+  MODE_LINE_ALL, MODE_LINE_FFA, fillModeLine, touchModeOn, watchTouchMode, Fullscreen, homeScreenTip, markHomeTipShown, dismissHomeTip, onHomeTip, HOME_TIP,
+} from './boot.ts';
 import type { Mannequin } from './mannequin.ts';
 import './menus.css';
 
@@ -44,6 +57,85 @@ export const CREDITS_LINE = 'An original 4 v 4 and free-for-all turf-paint shoot
 export const HOW_RULE = 'Dye the court in your crew’s color. When the final horn sounds, the crew with more turf wins.';
 export const HOW_RULE_FFA = 'Free-for-all: every runner is a crew of one. When the final horn sounds, the most turf wins.';
 export const MENU_LABELS = ['PLAY', 'LOADOUT', 'SETTINGS', 'HOW TO PLAY', 'CREDITS'] as const;
+/** CONTRACT_MOBILE M8: the SETTINGS group (touch mode, or ?touch=1) and M4: the HOW TO PLAY panel */
+export const TOUCH_GROUP = 'TOUCH CONTROLS';
+/** CONTRACT_MOBILE M4: the FULLSCREEN toggles (title corner + pause card) */
+export const FULLSCREEN_LABEL = 'FULLSCREEN';
+export const FULLSCREEN_EXIT_LABEL = 'EXIT FULLSCREEN';
+/** ?touch=1: the TOUCH CONTROLS group shows on desktop too (M8) */
+const TOUCH_PARAM = ((): boolean => { try { return new URLSearchParams(location.search).get('touch') === '1'; } catch { return false; } })();
+
+/** the touch button each remappable action maps to (M4 platform prompts: keycaps → the touch button's name) */
+const TOUCH_NAME: Partial<Record<Action, string>> = {
+  fire: 'FIRE', slick: 'SLICK', jump: 'JUMP', sub: 'SUB', special: 'SPECIAL', pause: 'PAUSE',
+  moveF: 'STICK', moveB: 'STICK', moveL: 'STICK', moveR: 'STICK',
+};
+/** the pause card's control legend in touch mode: [glyph, label] (the countdown legend lives in slates.ts) */
+const TOUCH_LEGEND: ReadonlyArray<readonly [TouchGlyph, string]> = [
+  ['stick', 'MOVE'], ['aim', 'AIM'], ['fire', 'FIRE'], ['slick', 'SLICK · DRINK'], ['jump', 'JUMP'], ['sub', 'SUB'], ['special', 'SPECIAL'], ['pause', 'PAUSE'],
+];
+/** HOW TO PLAY's touch panel: [glyph, name, what it does] */
+const TOUCH_HOW: ReadonlyArray<readonly [TouchGlyph, string, string]> = [
+  ['stick', 'MOVE', 'drag anywhere on the left side'],
+  ['aim', 'AIM', 'drag anywhere on the right side'],
+  ['fire', 'FIRE', 'hold it; drag from it to aim while you shoot'],
+  ['slick', 'SLICK', 'hold on your own color to swim and refill'],
+  ['jump', 'JUMP', 'tap to jump'],
+  ['sub', 'SUB', 'throws a JELLY CHARGE'],
+  ['special', 'SPECIAL', 'tap when its ring is full'],
+  ['pause', 'PAUSE', 'top-left corner'],
+];
+
+/**
+ * The touch layout (CONTRACT_MOBILE M2, right-handed): button centre as (px from the right safe edge, px from the bottom
+ * safe edge) and diameter at scale 1 — the same table touch/controls.ts places the live buttons from. Drawn on an
+ * 852 × 393 phone for the HOW TO PLAY diagram and the SETTINGS live preview.
+ */
+const TOUCH_CLUSTER: ReadonlyArray<{ g: TouchGlyph; dx: number; dy: number; d: number }> = [
+  { g: 'jump', dx: 52, dy: 50, d: 64 }, { g: 'fire', dx: 146, dy: 96, d: 88 }, { g: 'slick', dx: 246, dy: 58, d: 64 },
+  { g: 'sub', dx: 126, dy: 202, d: 56 }, { g: 'special', dx: 220, dy: 170, d: 64 },
+];
+const PHONE_W = 852, PHONE_H = 393;
+
+/** an SVG of the touch controls on a landscape phone at `scale` / `opacity` (mirrored when left-handed) */
+export function touchDiagram(o: { scale: number; opacity: number; leftHanded: boolean }): string {
+  const s = Math.max(0.5, Math.min(1.5, o.scale || 1));
+  const op = Math.max(0.2, Math.min(1, o.opacity || 1)).toFixed(2);
+  const lh = !!o.leftHanded;
+  const W = PHONE_W, H = PHONE_H, pad = 18;
+  const X = (fromRight: number): number => (lh ? pad + fromRight : W - pad - fromRight);
+  const inner = (g: TouchGlyph, cx: number, cy: number, d: number, fill: string): string => {
+    const r = Math.max(44, d * s) / 2;                   // a hit target never drops below 44 px (M2)
+    const ic = r * 1.15;
+    const svg = touchGlyph(g).replace('<svg ', `<svg color="#fff8ec" x="${(cx - ic / 2).toFixed(1)}" y="${(cy - ic / 2).toFixed(1)}" width="${ic.toFixed(1)}" height="${ic.toFixed(1)}" `);
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}" stroke="#fff8ec" stroke-width="5"/>${svg}`;
+  };
+  let btns = '';
+  for (const c of TOUCH_CLUSTER) {
+    const fill = c.g === 'fire' ? 'rgba(255,138,31,.85)' : c.g === 'slick' ? 'rgba(31,181,201,.8)' : 'rgba(20,32,58,.7)';
+    btns += inner(c.g, X(c.dx * s), H - pad - c.dy * s, c.d, fill);
+  }
+  const baseR = 60 * s, off = 34 * s + baseR;
+  const sx = lh ? W - pad - off : pad + off, sy = H - pad - off;
+  const stick = `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="${baseR.toFixed(1)}" fill="rgba(20,32,58,.35)" stroke="#fff8ec" stroke-width="5"/>`
+    + `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="${(26 * s).toFixed(1)}" fill="#fff8ec" stroke="#14203a" stroke-width="5"/>`;
+  const pr = Math.max(44, 44 * s) / 2;
+  const pause = inner('pause', pad + 10 + pr, pad + 10 + pr, 44, 'rgba(20,32,58,.75)');
+  // the look side: a dashed drag arc; the move side: its zone
+  const zx = lh ? W * 0.55 : 0;
+  const zone = `<rect x="${zx.toFixed(0)}" y="${(pad + 70).toFixed(0)}" width="${(W * 0.45).toFixed(0)}" height="${(H - pad - 70).toFixed(0)}" fill="rgba(255,248,236,.10)"/>`;
+  const ax = lh ? W * 0.3 : W * 0.66;
+  const arc = `<path d="M${(ax - 70).toFixed(0)} 150q70-60 140 0" fill="none" stroke="#fff8ec" stroke-width="6" stroke-linecap="round" stroke-dasharray="4 14" opacity=".9"/>`
+    + `<path d="M${(ax + 58).toFixed(0)} 128l14 22-26 2" fill="none" stroke="#fff8ec" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true" class="dfm-tdiag"><rect x="3" y="3" width="${W - 6}" height="${H - 6}" rx="46" fill="#2f86dc" stroke="#14203a" stroke-width="6"/>`
+    + `<rect x="3" y="${H * 0.55}" width="${W - 6}" height="${H * 0.45 - 3}" rx="0" fill="#1fb5c9" opacity=".55"/>${zone}${arc}`
+    + `<g opacity="${op}">${stick}${btns}${pause}</g></svg>`;
+}
+
+/** M4 FULLSCREEN toggle icons (enter / exit) */
+const FS_ENTER = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const FS_EXIT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const PHONE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="7" cy="12" r="1.9" fill="currentColor"/><circle cx="17" cy="12" r="1.9" fill="currentColor"/></svg>';
 
 export type Screen = 'title' | 'loadout' | 'play' | 'settings' | 'howto' | 'credits' | 'pause';
 export type UiSound = 'hover' | 'click' | 'back' | 'start';
@@ -207,6 +299,15 @@ export class Menus {
   private readonly howLegend: HTMLElement;
   private readonly confirm: HTMLElement;
   private readonly hints: HTMLElement;
+  // CONTRACT_MOBILE: touch mode (M1 html.df-touch) → platform prompts; FULLSCREEN toggles; the iPhone home-screen tip
+  private touch = touchModeOn();
+  private readonly fsBtns: HTMLButtonElement[] = [];
+  private readonly tips: HTMLElement[] = [];
+  private readonly touchGroup: HTMLElement;
+  private readonly touchPreview: HTMLElement;
+  private readonly howTouchArt: HTMLElement;
+  private lastPreview = '';
+  private lastHowArt = '';
   private pad: PadState = { buttons: [], axisX: 0, axisY: 0, repeatT: 0, dir: '' };
   private padSeen = false;
   private offs: Array<() => void> = [];
@@ -254,7 +355,9 @@ export class Menus {
       b.addEventListener('click', () => { this.sound('click'); fn(); });
       stack.append(b);
     });
-    // profile card (top right)
+    // profile card + FULLSCREEN toggle (top right). CONTRACT_MOBILE M6: they share one flex row with the brand
+    // (.dfm-titlebar), so at any width the corner wraps below the wordmark instead of covering it (the 1.1.0 / 1.2.0
+    // defect).
     const prof = el('div', 'dfm-profile');
     this.profMark = el('span', 'mark');
     const pt = el('div', 'txt');
@@ -262,11 +365,19 @@ export class Menus {
     this.profCrew = el('span', '', '');
     pt.append(this.profName, this.profCrew);
     prof.append(this.profMark, pt);
-    // current-loadout card (bottom right)
+    const corner = el('div', 'dfm-corner');
+    const cornerRow = el('div', 'dfm-corner-row');
+    cornerRow.append(prof, this.fsButton('dfm-fs-title', true));
+    corner.append(cornerRow);
+    const titlebar = el('div', 'dfm-titlebar');
+    titlebar.append(brand, corner);
+    // current-loadout card (bottom right), with the iPhone home-screen tip stacked above it
     this.kitCard = btn('dfm-kitcard', '');
     this.kitCard.id = 'dfm-kitcard';
     this.kitCard.addEventListener('click', () => { this.sound('click'); this.open('loadout'); });
-    title.append(scrim, brand, stack, prof, this.kitCard);
+    const br = el('div', 'dfm-br');
+    br.append(this.tipButton('dfm-tip-title'), this.kitCard);
+    title.append(scrim, titlebar, stack, br);
 
     // ── LOADOUT ───────────────────────────────────────────
     const lo = this.mkScreen('loadout');
@@ -474,7 +585,7 @@ export class Menus {
     resetKeys.addEventListener('click', () => { this.sound('click'); this.endCapture(); this.conflict = null; this.settings.resetBindings(); this.note(''); });
     ctl.append(this.bindNote, resetKeys);
     const right = el('div', 'dfm-set-r');
-    const mouse = el('section', 'dfm-card');
+    const mouse = el('section', 'dfm-card dfm-mousecard');
     mouse.append(el('h3', 'dfm-cap', 'MOUSE'));
     mouse.append(this.slider('sens', 'SENSITIVITY', SENS_MIN, SENS_MAX, 0.05, () => this.settings.get().sensitivity,
       (v) => this.settings.set({ sensitivity: v }), (v) => `${v.toFixed(2)}×`));
@@ -507,7 +618,30 @@ export class Menus {
     access.append(ah);
     const cb = this.toggle('colorblind', 'COLORBLIND MARKS', () => this.settings.get().colorblind, (v) => this.settings.set({ colorblind: v }));
     access.append(cb, this.toggle('motion', 'REDUCE MOTION', () => this.settings.get().reduceMotion, (v) => this.settings.set({ reduceMotion: v })));
-    right.append(mouse, audio, video, access);
+    // CONTRACT_MOBILE M8: TOUCH CONTROLS — six rows + a live preview of the overlay at the current size / opacity /
+    // hand. Shown in touch mode (and on desktop with ?touch=1); every change applies live through settings.on().
+    const tg = el('section', 'dfm-card dfm-touchset');
+    tg.id = 'dfm-touchset';
+    const tgRows = el('div', 'dfm-trows');
+    tgRows.append(
+      this.slider('touch-sens', 'LOOK SPEED', TOUCH_SENS_MIN, TOUCH_SENS_MAX, 0.05, () => this.settings.get().touchSens,
+        (v) => this.settings.set({ touchSens: v }), (v) => `${v.toFixed(2)}×`),
+      this.slider('touch-scale', 'BUTTON SIZE', TOUCH_SCALE_MIN, TOUCH_SCALE_MAX, 0.05, () => this.settings.get().touchScale,
+        (v) => this.settings.set({ touchScale: v }), (v) => `${Math.round(v * 100)}%`),
+      this.slider('touch-opacity', 'OPACITY', TOUCH_OPACITY_MIN, TOUCH_OPACITY_MAX, 0.05, () => this.settings.get().touchOpacity,
+        (v) => this.settings.set({ touchOpacity: v }), (v) => `${Math.round(v * 100)}%`),
+      this.toggle('touch-left', 'LEFT-HANDED', () => this.settings.get().touchLeftHanded, (v) => this.settings.set({ touchLeftHanded: v })),
+      this.toggle('aim-assist', 'AIM ASSIST', () => this.settings.get().aimAssist, (v) => this.settings.set({ aimAssist: v })),
+      this.toggle('haptics', 'VIBRATION', () => this.settings.get().haptics, (v) => this.settings.set({ haptics: v })),
+    );
+    this.touchPreview = el('div', 'dfm-tprev');
+    this.touchPreview.id = 'dfm-touch-preview';
+    this.touchPreview.setAttribute('role', 'img');
+    this.touchPreview.setAttribute('aria-label', 'Preview of the touch controls');
+    tg.append(el('h3', 'dfm-cap', TOUCH_GROUP), this.touchPreview, tgRows);
+    this.touchGroup = tg;
+    tg.hidden = !(this.touch || TOUCH_PARAM);
+    right.append(mouse, audio, video, access, tg);
     cols.append(ctl, right);
     set.append(cols);
 
@@ -530,6 +664,25 @@ export class Menus {
         ['Hit ', ['fire'], ' to shoot, ', ['jump'], ' to jump.']]),
     );
     this.howRule = panels.querySelector('.dfm-howp p');
+    // CONTRACT_MOBILE M4: the touch-controls panel (touch mode; first, full width): the layout diagram + what each does
+    // (its own class, not .dfm-howp: the four numbered panels stay exactly four)
+    const tp = el('article', 'dfm-card dfm-howtouch');
+    tp.id = 'dfm-how-touch';
+    const th = el('h3', '');
+    th.append(svgEl(PHONE_ICON, 'n'), el('span', '', TOUCH_GROUP));
+    this.howTouchArt = el('div', 'tart');
+    const tl = el('ul', 'tlist');
+    for (const [g, name, what] of TOUCH_HOW) {
+      const li = el('li', '');
+      const t = el('span', 'tx');
+      t.append(el('b', '', name), document.createTextNode(` ${what}`));
+      li.append(svgEl(touchGlyph(g), 'dfm-tglyph'), t);
+      tl.append(li);
+    }
+    const tb = el('div', 'tbody');
+    tb.append(this.howTouchArt, tl);
+    tp.append(th, tb);
+    panels.append(tp);
     this.howLegend = el('div', 'dfm-card dfm-howkeys');
     how.append(panels, this.howLegend);
 
@@ -580,9 +733,13 @@ export class Menus {
       b.addEventListener('click', (e) => { e.stopPropagation(); this.sound('click'); fn(); });
       pl.append(b);
     }
+    // CONTRACT_MOBILE M4: FULLSCREEN (hidden without element fullscreen) before QUIT MATCH; M9: the iPhone tip
+    const fsItem = this.fsButton('df-p-fullscreen', false);
+    fsItem.dataset.group = 'pause';
+    pl.insertBefore(fsItem, pl.querySelector('#df-p-quit'));
     this.pauseMsg = el('p', 'dfm-pausemsg', '');
     this.pauseMsg.hidden = true;
-    pl.append(this.pauseMsg);
+    pl.append(this.tipButton('dfm-tip-pause'), this.pauseMsg);
     const pr = el('div', 'dfm-pause-r');
     pr.append(el('h3', 'dfm-cap', 'CONTROLS'));
     this.legendBox = el('div', 'dfm-legend');
@@ -617,16 +774,24 @@ export class Menus {
     const onKey = (e: KeyboardEvent): void => this.onKey(e);
     window.addEventListener('keydown', onKey);
     this.offs.push(() => window.removeEventListener('keydown', onKey));
-    const onOver = (e: Event): void => {
+    // hover moves focus — for a mouse only (CONTRACT_MOBILE M5): a tap's compatibility events never leave focus behind
+    const onOver = (e: PointerEvent): void => {
+      if (e.pointerType !== 'mouse') return;
       const t = (e.target as HTMLElement | null)?.closest?.('[data-nav]') as HTMLElement | null;
       if (!t || t === document.activeElement || !this.inScope(t)) return;
       if (t.tagName === 'INPUT' && (t as HTMLInputElement).type === 'text') return;
       this.focus(t, true);
     };
-    this.root.addEventListener('mouseover', onOver);
+    this.root.addEventListener('pointerover', onOver);
     const onPad = (): void => { this.padSeen = true; this.renderHints(); };
     window.addEventListener('gamepadconnected', onPad);
     this.offs.push(() => window.removeEventListener('gamepadconnected', onPad));
+    // M1: follow html.df-touch (main.ts also calls setTouchMode; both land on the same state); M4 fullscreen; M9 tip
+    this.offs.push(watchTouchMode((on) => this.setTouchMode(on)));
+    this.offs.push(Fullscreen.onChange(() => this.syncFullscreen()));
+    this.offs.push(onHomeTip((on) => { for (const t of this.tips) t.hidden = !on; }));
+    this.root.classList.toggle('touch', this.touch);
+    this.syncFullscreen();
     this.offs.push(this.settings.on(() => this.refresh()));
     this.offs.push(this.profile.on((_p, keys) => {
       this.refresh();
@@ -698,6 +863,92 @@ export class Menus {
     return row;
   }
 
+  /** CONTRACT_MOBILE M4: a FULLSCREEN toggle — the title corner's round icon button, or the pause card's menu item */
+  private fsButton(id: string, icon: boolean): HTMLButtonElement {
+    const b = btn(icon ? 'dfm-fs' : 'dfm-item small dfm-fs-item', '');
+    b.id = id;
+    if (icon) b.innerHTML = FS_ENTER;
+    else b.append(el('span', 'chev', '▶'), el('span', 'lbl', FULLSCREEN_LABEL));
+    b.addEventListener('click', (e) => { e.stopPropagation(); this.sound('click'); void Fullscreen.toggle(); });
+    this.fsBtns.push(b);
+    return b;
+  }
+
+  /** the FULLSCREEN toggles: hidden without element fullscreen (iPhone Safari, an iframe without the permission) */
+  private syncFullscreen(): void {
+    const ok = Fullscreen.enabled();
+    const on = ok && Fullscreen.active();
+    for (const b of this.fsBtns) {
+      b.hidden = !ok;
+      b.setAttribute('aria-pressed', String(on));
+      const label = on ? FULLSCREEN_EXIT_LABEL : FULLSCREEN_LABEL;
+      if (b.classList.contains('dfm-fs')) {
+        b.innerHTML = on ? FS_EXIT : FS_ENTER;
+        b.setAttribute('aria-label', label.toLowerCase().replace(/^./, (c) => c.toUpperCase()));
+        b.title = b.getAttribute('aria-label') ?? '';
+      } else {
+        const l = b.querySelector('.lbl');
+        if (l && l.textContent !== label) l.textContent = label;
+      }
+    }
+  }
+
+  /** CONTRACT_MOBILE M9: the one-line Add-to-Home-Screen tip (iPhone Safari, once per device); its ✕ dismisses it */
+  private tipButton(id: string): HTMLElement {
+    const t = el('div', 'dfm-tip');
+    t.id = id;
+    t.setAttribute('role', 'note');
+    const x = btn('dfm-tip-x', '', false);
+    x.id = `${id}-x`;
+    x.setAttribute('aria-label', 'Dismiss the tip');
+    x.append(el('i', '', '✕'));
+    x.addEventListener('click', (e) => { e.stopPropagation(); this.sound('click'); dismissHomeTip(); });
+    t.append(el('span', 'tx', HOME_TIP), x);
+    t.hidden = !homeScreenTip();
+    this.tips.push(t);
+    return t;
+  }
+
+  /**
+   * CONTRACT_MOBILE M4 / M12 platform prompts. Touch: the keyboard hint bar goes, HOW TO PLAY's keycaps name the touch
+   * buttons and its touch-controls panel shows, the pause card's legend shows the touch glyphs, SETTINGS shows the TOUCH
+   * CONTROLS group (the MOUSE card and the key remap hide: CSS on html.df-touch). kbm: everything as before.
+   */
+  setTouchMode(on: boolean): void {
+    this.touch = on;
+    this.root.classList.toggle('touch', on);
+    this.touchGroup.hidden = !(on || TOUCH_PARAM);
+    this.renderHints();
+    this.renderLegend();
+    this.renderTouchArt();
+    for (const [e, a] of this.howKeys) this.fillKey(e, a);
+  }
+
+  /** a HOW TO PLAY keycap: the binding (kbm) or the touch button's name (touch) */
+  private fillKey(e: HTMLElement, a: Action): void {
+    const t = this.touch ? (TOUCH_NAME[a] ?? this.keyText(a)) : this.keyText(a);
+    if (e.textContent !== t) e.textContent = t;
+    e.classList.toggle('touch', this.touch);
+  }
+
+  /** the SETTINGS live preview + the HOW TO PLAY diagram, at the saved size / opacity / hand (only when they changed) */
+  private renderTouchArt(): void {
+    const s = this.settings.get();
+    const key = `${s.touchScale}|${s.touchOpacity}|${s.touchLeftHanded}`;
+    if (key !== this.lastPreview && !this.touchGroup.hidden) {
+      this.lastPreview = key;
+      this.touchPreview.innerHTML = touchDiagram({ scale: s.touchScale, opacity: s.touchOpacity, leftHanded: s.touchLeftHanded });
+      this.touchPreview.dataset.scale = String(s.touchScale);
+      this.touchPreview.dataset.opacity = String(s.touchOpacity);
+      this.touchPreview.dataset.leftHanded = String(s.touchLeftHanded);
+    }
+    const hk = `${s.touchScale}|${s.touchLeftHanded}`;
+    if (hk !== this.lastHowArt && this.touch) {
+      this.lastHowArt = hk;
+      this.howTouchArt.innerHTML = touchDiagram({ scale: s.touchScale, opacity: 1, leftHanded: s.touchLeftHanded });
+    }
+  }
+
   private howPanel(n: number, title: string, art: string | HTMLElement, paras: Array<string | Array<string | Action[]>>): HTMLElement {
     const p = el('article', 'dfm-card dfm-howp');
     const a = el('div', 'art');
@@ -745,6 +996,7 @@ export class Menus {
     this.root.hidden = false;
     this.root.dataset.context = 'lobby';
     this.show('title');
+    if (homeScreenTip()) markHomeTipShown();       // M9 once per device: counted when a tip is actually on screen (B-F5)
   }
 
   /** the in-match pause card (msg: e.g. a refused pointer lock) */
@@ -757,6 +1009,7 @@ export class Menus {
     this.pauseMsg.hidden = !msg;
     this.confirm.hidden = true;
     this.show('pause');
+    if (homeScreenTip()) markHomeTipShown();       // M9 (B-F5)
   }
 
   setPauseMessage(msg: string): void {
@@ -965,7 +1218,8 @@ export class Menus {
     }
     this.renderKeys();
     this.renderLegend();
-    for (const [e, a] of this.howKeys) e.textContent = this.keyText(a);
+    for (const [e, a] of this.howKeys) this.fillKey(e, a);
+    this.renderTouchArt();
   }
 
   private chip(icon: string, text: string): HTMLElement {
@@ -1156,6 +1410,20 @@ export class Menus {
     ];
     for (const box of [this.legendBox, this.howLegend]) {
       box.replaceChildren();
+      // CONTRACT_MOBILE M4: in touch mode the pause card's legend shows the touch buttons' glyphs (HOW TO PLAY's keyboard
+      // legend hides; its touch panel explains the controls)
+      if (this.touch && box === this.legendBox) {
+        box.classList.add('touch');
+        for (const [g, label] of TOUCH_LEGEND) {
+          const r = el('div', 'dfm-leg');
+          const ks = el('span', 'keys');
+          ks.append(svgEl(touchGlyph(g), 'dfm-tglyph'));
+          r.append(ks, el('span', 'lbl', label));
+          box.append(r);
+        }
+        continue;
+      }
+      box.classList.remove('touch');
       for (const [keys, label] of rows) {
         const r = el('div', 'dfm-leg');
         const ks = el('span', 'keys');
@@ -1177,6 +1445,9 @@ export class Menus {
   private renderHints(): void {
     const h = this.hints;
     h.replaceChildren();
+    // CONTRACT_MOBILE M4: no keyboard hint bar in touch mode
+    h.hidden = this.touch;
+    if (this.touch) return;
     const pad = this.padSeen;
     const pill = (key: string, label: string, icon = false): void => {
       const p = el('span', 'dfm-pill');
@@ -1372,6 +1643,9 @@ export class Menus {
       profile: { ...this.profile.get() }, mannequin: this.mannequin?.info() ?? null,
       modeLine: this.modeText.textContent,
       gamepad: this.padSeen,
+      // CONTRACT_MOBILE read-back: the input mode the menus show, the TOUCH CONTROLS group, the FULLSCREEN toggles, the tip
+      touch: this.touch, touchGroup: !this.touchGroup.hidden, hints: !this.hints.hidden,
+      fullscreen: { enabled: Fullscreen.enabled(), active: Fullscreen.active() }, homeTip: this.tips.some((t) => !t.hidden),
     };
   }
 

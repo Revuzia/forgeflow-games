@@ -173,7 +173,15 @@ hooks on `window.__DF__`).
 `node _harness/probe_nav.ts --map {pier18,lockwell,cinder}` · `node _harness/probe_bots.ts [--map id] [--lineup mixed] [--seeds 1..8]` ·
 `python art/build.py check` · `python _harness/bootcheck.py [--headless] [--base URL]` ·
 `python _harness/menus.py` · `python _harness/playtest.py --map id --kit id` ·
-`python _harness/perfcheck.py --map id` · `python _harness/abperf.py` (interleaved GPU A/B).
+`python _harness/perfcheck.py --map id` · `python _harness/abperf.py` (interleaved GPU A/B) ·
+`python _harness/bootguard.py` · `python _harness/padcheck.py --headless`.
+Mobile (`_spec/CONTRACT_MOBILE.md`): `python _harness/mobile.py --headless` (M11: iPhone SE, iPhone 14, Pixel 7 and
+iPad emulation with real CDP multi-touch, both modes; the mobile review fixes of 2026-09-29 each have a check named
+after their finding, A-A… / B-F…) · `python _harness/layoutcheck.py --headless` (M6 layout on every screen, phones to
+desktop). Audio for WebKit before 18.4 (no Ogg): `python runtime/src/audio/build/build_audio.py --aac-twins` rewrites the
+AAC `.m4a` twin of every Ogg + their manifest fields; `node _harness/probe_audio.ts --files` checks them sample-exact.
+CDN (shared worker `../../workers/games-cdn/src/index.js`, deployed separately with the owner's OK): map GLBs gzip-encoded,
+DYEFIELD's content-hashed assets immutable.
 
 Final QA (G12): all 12 map × kit combinations passed a real-input playtest. On the Intel UHD iGPU at
 1600×900 and a 50 Hz display, every map held ~50 fps with p99 20.7 ms (Pier 18), 23.4 ms (Lockwell,

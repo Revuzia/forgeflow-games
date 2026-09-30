@@ -43,6 +43,26 @@
 // every floor pixel run the full dye / surface shader before being overdrawn. Measured with the
 // frame-interleaved A/B bench (_harness/abperf.py): 4–8 % less GPU time per frame on all three maps.
 // `renderer.dfOpaqueSort` exposes the function so the bench can restore it after a variant.
+//
+// CONTRACT_MOBILE M7 — the touch profile (createRenderer opts.touch, or rig.setTouchProfile on a hybrid switch):
+//   * quality 'auto' STARTS at the regular floor (max(0.75, 0.6 × DPR)) instead of the cap, and the governor above
+//     climbs from there (spare / probe windows); the cap stays min(1.5, DPR).
+//   * shadowMapCap(): 1024 on touch (the sun's map is authored at 1024, view/sky.ts), 512 once the governor has sat
+//     on the floor OVER BUDGET (the last window's p90 > 1.1 × target, the deep-floor test) for SHADOW_DROP_S (5) s of
+//     play; back to 1024 after 5 s with the scale above the floor (it had headroom to climb). "Over budget" matters:
+//     at DPR ≥ 2.5 the regular floor max(0.75, 0.6 × DPR) reaches the cap min(1.5, DPR), so a phone sits "on the
+//     floor" from the first frame even at a steady 60 fps. Infinity off touch (the desktop map is never touched).
+//     game.ts applies it to the scene's sun. Integration fix: at DPR ≥ 2.5 the scale can never leave the floor, so the
+//     "above the floor" way back never opens and one 5 s hitch kept 512 for the rest of the session. 1024 is now also
+//     PROBED again after SHADOW_PROBE_S (15) s within budget at 512; each repeat drop doubles that wait (max 120 s), so
+//     a phone that cannot hold 1024 settles on 512 instead of flipping (the governor's own probe-up pattern).
+//   * antialias is chosen at context creation (it cannot change later): main.ts turns it OFF on a touch device with
+//     DPR ≥ 2 (?aa=0|1 overrides for A/B measurement). At DPR ≥ 2 the drawing buffer is already ≥ 1.2 × CSS px at
+//     the touch floor, so MSAA's cost buys little there. Measured 2026-09-29 (dev box Intel UHD iGPU, headless Chrome,
+//     Pixel-7 emulation 844×390 @ DPR 3 → buffer 1266×585, Pier 18 match, A B A B, 8 s each; the iGPU is shared with
+//     other sessions, so informational): vsync-capped both hold the 50 Hz display (50 fps, p90 20.2 ms); uncapped
+//     (--disable-gpu-vsync --disable-frame-rate-limit) p90 8.4 / 9.0 ms with MSAA vs 5.3 / 7.4 ms without (fps median
+//     99.5 / 120.6 vs 168.1 / 115.5) — roughly 1.6–3 ms of GPU time per frame saved.
 
 import * as THREE from 'three';
 
@@ -54,6 +74,13 @@ export const ABS_MIN_SCALE = 0.75;
 export const DEEP_OF_DPR = 0.6;
 /** seconds (1 s windows) of p90 > 1.1 × target at the regular floor before the deep floor opens */
 export const DEEP_AFTER_S = 3;
+/** CONTRACT_MOBILE M7: the touch shadow-map cap, and the floor-held seconds that drop it to SHADOW_LOW */
+export const SHADOW_TOUCH = 1024;
+export const SHADOW_LOW = 512;
+export const SHADOW_DROP_S = 5;
+/** seconds within budget at 512 before 1024 is tried again (doubled after each repeat drop, up to the max) */
+export const SHADOW_PROBE_S = 15;
+export const SHADOW_PROBE_MAX_S = 120;
 
 export type RenderQuality = 'auto' | 'high' | 'low';
 export const RENDER_QUALITIES: readonly RenderQuality[] = ['auto', 'high', 'low'];
@@ -98,6 +125,21 @@ export interface RendererRig {
   adaptive(): AdaptiveInfo;
   stats(): { calls: number; triangles: number; programs: number; textures: number; geometries: number; scale: number };
   gpu(): string;
+  /** CONTRACT_MOBILE M7: the touch profile on / off (a hybrid device switched input method) */
+  setTouchProfile(on: boolean): void;
+  /** CONTRACT_MOBILE M7: the largest shadow map the sun may use now (Infinity = no cap: desktop) */
+  shadowMapCap(): number;
+  /** CONTRACT_MOBILE M7 read-back: the profile, the context's antialias, the shadow cap, the floor-held seconds, the
+   *  512 drops so far, the current probe wait and the seconds the budget has held (the probe back to 1024) */
+  mobile(): { touch: boolean; antialias: boolean; shadowCap: number; floorHeldS: number; startScale: number;
+    shadowDrops: number; shadowProbeS: number; budgetHeldS: number };
+}
+
+export interface RendererOptions {
+  /** CONTRACT_MOBILE M7 touch profile (start 'auto' at the floor, cap the shadow map) */
+  touch?: boolean;
+  /** the WebGL context's antialias (fixed at creation; default true) */
+  antialias?: boolean;
 }
 
 /** true when this browser can create a WebGL2 context at all (asked the same way the game asks) */
@@ -170,6 +212,8 @@ export class ResolutionGovernor {
   deepMin: number;
   deepOpen = false;
   private floorOverS = 0;
+  /** CONTRACT_MOBILE M7: 'auto' starts at the regular floor instead of the cap (the touch profile) */
+  startLow = false;
 
   constructor(min: number, max: number, deepMin: number = min) {
     this.min = min;
@@ -196,7 +240,12 @@ export class ResolutionGovernor {
     this.floorOverS = 0;
     const p = this.pinned();
     if (p !== null) { this.scale = p; this.last = `quality ${q}`; }
-    else { this.scale = this.max; this.last = 'quality auto'; this.resetWindow(); this.probeAfter = 8; }
+    else {
+      this.scale = this.startLow ? this.min : this.max;
+      this.last = this.startLow ? 'quality auto (touch: from the floor)' : 'quality auto';
+      this.resetWindow();
+      this.probeAfter = 8;
+    }
   }
 
   private pinned(): number | null {
@@ -321,10 +370,12 @@ export function frontToBack(a: THREE.RenderItem, b: THREE.RenderItem): number {
   return (a.groupOrder - b.groupOrder) || (a.renderOrder - b.renderOrder) || (a.z - b.z) || (a.id - b.id);
 }
 
-export function createRenderer(canvas: HTMLCanvasElement, toneMap: string = 'neutral', quality: RenderQuality = 'auto'): RendererRig {
+export function createRenderer(canvas: HTMLCanvasElement, toneMap: string = 'neutral', quality: RenderQuality = 'auto',
+  opts: RendererOptions = {}): RendererRig {
+  const antialias = opts.antialias !== false;
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: true,
+    antialias,
     alpha: false,
     powerPreference: 'high-performance',
     stencil: false,
@@ -333,7 +384,13 @@ export function createRenderer(canvas: HTMLCanvasElement, toneMap: string = 'neu
   if (!renderer.capabilities.isWebGL2) throw new Error('WebGL 2 is required (this context is WebGL 1)');
   const b0 = scaleBounds();
   const gov = new ResolutionGovernor(b0.min, b0.max, b0.deep);
+  let touch = opts.touch === true;
+  gov.startLow = touch;
   gov.setQuality(quality);
+  const startScale = gov.scale;
+  // M7 shadow cap: seconds the governor has held the floor over budget / stayed above the floor / held the budget at
+  // 512 (play time only), the latch, the current probe wait and the drop count
+  let floorS = 0, aboveS = 0, okS = 0, shadowLow = false, probeS = SHADOW_PROBE_S, shadowDrops = 0;
   renderer.setPixelRatio(gov.scale);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = TONE_MAPS[toneMap] ?? THREE.NeutralToneMapping;
@@ -375,12 +432,29 @@ export function createRenderer(canvas: HTMLCanvasElement, toneMap: string = 'neu
     },
     frameTime(ms, playing) {
       gov.frame(ms, playing);
+      if (!touch || !playing || gov.quality !== 'auto' || !(ms > 0) || ms > 250) return;
+      const s = ms / 1000;
+      const atFloor = gov.scale <= gov.min + 1e-6;
+      const over = gov.p90 > 1.1 * gov.targetMs;
+      if (atFloor && over) floorS += s; else floorS = 0;
+      if (atFloor) aboveS = 0; else aboveS += s;
+      if (over) okS = 0; else okS += s;
+      if (!shadowLow && floorS >= SHADOW_DROP_S) {
+        shadowLow = true; okS = 0; shadowDrops++;
+        if (shadowDrops > 1) probeS = Math.min(SHADOW_PROBE_MAX_S, probeS * 2);   // 1024 failed again: wait longer
+      } else if (shadowLow && (aboveS >= SHADOW_DROP_S || okS >= probeS)) {
+        shadowLow = false; floorS = 0;
+      }
     },
     graceFor(seconds) {
       gov.graceFor(seconds);
     },
     setQuality(q) {
       gov.setQuality(q);
+      // review B-F3: a player's QUALITY pick clears the touch shadow latch. frameTime() only runs the shadow bookkeeping
+      // under 'auto', so a 512 cap latched there used to stay for the rest of the page after HIGH (or LOW); back to
+      // 'auto' starts the 1024 → 512 watch afresh
+      floorS = 0; aboveS = 0; okS = 0; shadowLow = false; probeS = SHADOW_PROBE_S; shadowDrops = 0;
     },
     adaptive() {
       return gov.info();
@@ -404,6 +478,22 @@ export function createRenderer(canvas: HTMLCanvasElement, toneMap: string = 'neu
       } catch {
         return 'unknown';
       }
+    },
+    setTouchProfile(on) {
+      if (on === touch) return;
+      touch = on;
+      gov.startLow = on;                          // the next setQuality('auto') starts from there
+      floorS = 0; aboveS = 0; okS = 0; shadowLow = false; probeS = SHADOW_PROBE_S; shadowDrops = 0;
+    },
+    shadowMapCap() {
+      if (!touch) return Infinity;
+      return shadowLow && gov.quality === 'auto' ? SHADOW_LOW : SHADOW_TOUCH;
+    },
+    mobile() {
+      let aa = antialias;
+      try { aa = renderer.getContext().getContextAttributes()?.antialias ?? antialias; } catch { /* lost */ }
+      return { touch, antialias: aa, shadowCap: rig.shadowMapCap(), floorHeldS: Math.round(floorS * 10) / 10, startScale,
+        shadowDrops, shadowProbeS: probeS, budgetHeldS: Math.round(okS * 10) / 10 };
     },
   };
   return rig;

@@ -3,9 +3,14 @@
    --crew / --crew-dye are the player's crew colours (set on .dfm by menus.ts). */
 
 .dfm { position: absolute; inset: 0; z-index: 40; pointer-events: none; font-family: var(--body); color: var(--ink);
-  --crew: var(--sun); --crew-dye: var(--sun-dye); --gut: clamp(22px, 3.4vw, 56px); --top: clamp(16px, 3.2vh, 34px); }
+  --crew: var(--sun); --crew-dye: var(--sun-dye); --gut: clamp(22px, 3.4vw, 56px); --top: clamp(16px, 3.2vh, 34px);
+  /* CONTRACT_MOBILE M6: the side / bottom gutters clear the notch and the home indicator (env() is 0 on desktop, so
+     --gl / --gr = --gut and --gb = 0 there); --wm = the title wordmark size (narrow windows shrink it before it can
+     meet the profile corner) */
+  --gl: max(var(--gut), calc(env(safe-area-inset-left, 0px) + 10px)); --gr: max(var(--gut), calc(env(safe-area-inset-right, 0px) + 10px));
+  --gb: env(safe-area-inset-bottom, 0px); --wm: min(clamp(66px, 8.4vw, 136px), max(40px, calc((100vw - 380px) / 5.2))); }
 .dfm-screen { position: absolute; inset: 0; pointer-events: auto; }
-:where(.dfm) button { font-family: var(--body); color: inherit; -webkit-tap-highlight-color: transparent; }
+:where(.dfm) button { font-family: var(--body); color: inherit; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 .dfm img { -webkit-user-drag: none; user-select: none; }
 .dfm[data-crew="gulf"] img.kiticon { filter: hue-rotate(218deg) saturate(1.05); }
 
@@ -17,28 +22,45 @@
 .dfm-scrim.full { background: radial-gradient(120% 95% at 50% 38%, rgba(10,20,44,.58), rgba(10,20,44,.84)); backdrop-filter: blur(2px); }
 
 /* ───────── title ───────── */
-.dfm-brand { position: absolute; left: var(--gut); top: clamp(22px, 5.4vh, 60px); display: flex; flex-direction: column; align-items: flex-start; gap: 10px; pointer-events: none; }
-.dfm-brand .df-wordmark { font-size: clamp(66px, 8.4vw, 136px); transform: rotate(-3deg); transform-origin: 0 100%;
-  filter: drop-shadow(0 8px 0 rgba(10,20,44,.35)); }
+/* the brand (left) and the profile corner (right) share one flex row: the corner can wrap below the wordmark on a
+   narrow window, never cover it (CONTRACT_MOBILE M6 — the 1.1.0 / 1.2.0 overlap). The brand keeps its old spot: the
+   row sits at the profile card's old top, the brand's margin makes up the difference. */
+.dfm-titlebar { position: absolute; left: var(--gl); right: var(--gr); top: clamp(16px, 3vh, 28px); display: flex; flex-wrap: wrap; align-items: flex-start;
+  gap: 12px 24px; pointer-events: none; }
+.dfm-brand { position: relative; flex: 1 1 0; min-width: min-content; margin-top: calc(clamp(22px, 5.4vh, 60px) - clamp(16px, 3vh, 28px));
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px; pointer-events: none; }
+.dfm-brand .df-wordmark { font-size: var(--wm); transform: rotate(-3deg); transform-origin: 0 100%;
+  filter: drop-shadow(0 8px 0 rgba(10,20,44,.35)); white-space: nowrap; }
 .dfm-brand .df-mode { font-size: clamp(16px, 1.45vw, 22px); margin-left: 6px; box-shadow: 0 4px 0 rgba(10,20,44,.45); }
-.dfm-stack { position: absolute; left: var(--gut); top: calc(clamp(22px, 5.4vh, 60px) + clamp(66px, 8.4vw, 136px) * .9 + clamp(16px, 1.45vw, 22px) + 58px);
+.dfm-stack { position: absolute; left: var(--gl); top: calc(clamp(22px, 5.4vh, 60px) + var(--wm) * .9 + clamp(16px, 1.45vw, 22px) + 58px);
   display: flex; flex-direction: column; gap: clamp(9px, 1.3vh, 14px); width: clamp(300px, 25vw, 400px); }
 .dfm-item { position: relative; display: flex; align-items: center; gap: 0; width: 100%; height: clamp(46px, 6.4vh, 58px); padding: 0 22px 0 18px;
   border-radius: 18px; border: 4px solid var(--ink); background: var(--cream); color: var(--ink); box-shadow: 0 6px 0 var(--ink);
   font: 400 clamp(22px, 2.05vw, 30px)/1 var(--display); letter-spacing: .05em; cursor: pointer; text-align: left;
   transition: transform .14s cubic-bezier(.2,1.5,.4,1), background-color .12s ease, box-shadow .12s ease; }
 .dfm-item .chev { display: inline-block; width: 0; overflow: hidden; font-size: .62em; transition: width .14s ease, margin .14s ease; }
-.dfm-item:focus, .dfm-item:hover { outline: none; background: var(--crew); transform: translateX(12px) rotate(-1deg); box-shadow: 0 8px 0 var(--ink); }
-.dfm-item:focus .chev, .dfm-item:hover .chev { width: 1.1em; margin-right: 6px; }
+/* CONTRACT_MOBILE M5: the focus look is for keyboard / pad / mouse (menus.ts moves focus on a MOUSE hover); in touch mode
+   a tap never leaves it behind. :where() adds no specificity, so every rule keeps its old weight and order; the :hover
+   halves sit in @media (hover: hover) right after their focus rule. */
+:where(html:not(.df-touch)) .dfm-item:focus { outline: none; background: var(--crew); transform: translateX(12px) rotate(-1deg); box-shadow: 0 8px 0 var(--ink); }
+:where(html:not(.df-touch)) .dfm-item:focus .chev { width: 1.1em; margin-right: 6px; }
+@media (hover: hover) {
+  :where(html:not(.df-touch)) .dfm-item:hover { outline: none; background: var(--crew); transform: translateX(12px) rotate(-1deg); box-shadow: 0 8px 0 var(--ink); }
+  :where(html:not(.df-touch)) .dfm-item:hover .chev { width: 1.1em; margin-right: 6px; }
+}
 .dfm-item:active { transform: translateX(12px) translateY(4px); box-shadow: 0 2px 0 var(--ink); }
 .dfm-item-play { height: clamp(62px, 8.6vh, 80px); font-size: clamp(34px, 3.1vw, 46px); color: var(--sun-ink);
   background: linear-gradient(180deg, #ffc27a, var(--sun)); margin-bottom: 4px; }
 .dfm[data-crew="gulf"] .dfm-item-play { background: linear-gradient(180deg, #b7aeff, var(--gulf)); color: var(--gulf-ink); }
-.dfm-item-play:focus, .dfm-item-play:hover { background: linear-gradient(180deg, #ffd9a6, #ff9d45); box-shadow: 0 8px 0 var(--ink), 0 0 0 4px var(--cream); }
-.dfm[data-crew="gulf"] .dfm-item-play:focus, .dfm[data-crew="gulf"] .dfm-item-play:hover { background: linear-gradient(180deg, #d4ceff, #9d90ff); }
+:where(html:not(.df-touch)) .dfm-item-play:focus { background: linear-gradient(180deg, #ffd9a6, #ff9d45); box-shadow: 0 8px 0 var(--ink), 0 0 0 4px var(--cream); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-item-play:hover { background: linear-gradient(180deg, #ffd9a6, #ff9d45); box-shadow: 0 8px 0 var(--ink), 0 0 0 4px var(--cream); } }
+:where(html:not(.df-touch)) .dfm[data-crew="gulf"] .dfm-item-play:focus { background: linear-gradient(180deg, #d4ceff, #9d90ff); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm[data-crew="gulf"] .dfm-item-play:hover { background: linear-gradient(180deg, #d4ceff, #9d90ff); } }
 .dfm-item.small { height: 48px; font-size: 22px; box-shadow: 0 5px 0 var(--ink); }
 
-.dfm-profile { position: absolute; top: clamp(16px, 3vh, 28px); right: var(--gut); display: flex; align-items: center; gap: 12px;
+.dfm-corner { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; pointer-events: none; }
+.dfm-corner-row { display: flex; align-items: center; gap: 12px; }
+.dfm-profile { position: relative; display: flex; align-items: center; gap: 12px;
   padding: 7px 20px 7px 7px; border-radius: 999px; background: var(--cream); border: 4px solid var(--ink); box-shadow: 0 6px 0 var(--ink); pointer-events: none; }
 .dfm-profile .mark { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--crew-dye); color: var(--cream);
   border: 3px solid var(--ink); font: 400 26px/1 var(--display); text-shadow: 0 2px 0 var(--ink); }
@@ -46,10 +68,15 @@
 .dfm-profile b { font: 400 22px/1 var(--display); letter-spacing: .04em; max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dfm-profile span { font: 900 11px/1 var(--body); letter-spacing: .16em; color: var(--ink2); }
 
-.dfm-kitcard { position: absolute; right: var(--gut); bottom: clamp(62px, 9vh, 84px); display: flex; align-items: center; gap: 12px; width: clamp(340px, 27vw, 420px);
+/* bottom right: the loadout card, with the iPhone home-screen tip (when shown) stacked above it */
+.dfm-br { position: absolute; right: var(--gr); bottom: calc(clamp(62px, 9vh, 84px) + var(--gb)); display: flex; flex-direction: column; align-items: flex-end; gap: 12px;
+  pointer-events: none; }
+.dfm-br > * { pointer-events: auto; }
+.dfm-kitcard { position: relative; display: flex; align-items: center; gap: 12px; width: clamp(340px, 27vw, 420px);
   padding: 10px 16px 10px 10px; border-radius: 24px; background: var(--cream); border: 4px solid var(--ink); box-shadow: 0 8px 0 var(--ink);
   cursor: pointer; text-align: left; transition: transform .14s cubic-bezier(.2,1.5,.4,1), box-shadow .12s ease; }
-.dfm-kitcard:focus, .dfm-kitcard:hover { outline: none; transform: translateY(-4px) rotate(-.6deg); box-shadow: 0 12px 0 var(--ink), 0 0 0 4px var(--crew) inset; }
+:where(html:not(.df-touch)) .dfm-kitcard:focus { outline: none; transform: translateY(-4px) rotate(-.6deg); box-shadow: 0 12px 0 var(--ink), 0 0 0 4px var(--crew) inset; }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-kitcard:hover { outline: none; transform: translateY(-4px) rotate(-.6deg); box-shadow: 0 12px 0 var(--ink), 0 0 0 4px var(--crew) inset; } }
 .dfm-kitcard img { flex: none; width: 42%; aspect-ratio: 256 / 176; object-fit: contain; border-radius: 16px;
   background: radial-gradient(closest-side, rgba(255,255,255,.95), rgba(255,255,255,0)), #cdeefa; border: 3px solid var(--ink); }
 .dfm-kitcard .txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -63,7 +90,7 @@
 .dfm-ico svg, .dfm-bigico svg { display: block; width: 100%; height: 100%; }
 
 /* key-hint pills */
-.dfm-hints { position: absolute; right: var(--gut); bottom: clamp(14px, 2.4vh, 22px); display: flex; gap: 8px; pointer-events: none; }
+.dfm-hints { position: absolute; right: var(--gr); bottom: calc(clamp(14px, 2.4vh, 22px) + var(--gb)); display: flex; gap: 8px; pointer-events: none; }
 .dfm-pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px 5px 5px; border-radius: 999px; background: rgba(20,32,58,.86); color: var(--cream);
   font: 800 12.5px/1 var(--body); letter-spacing: .08em; box-shadow: 0 3px 0 rgba(10,20,44,.5); }
 .dfm-pill .pad { width: 24px; height: 16px; color: var(--cream); margin-left: 5px; }
@@ -71,12 +98,13 @@
   border: 2px solid var(--ink); box-shadow: 0 2px 0 var(--ink); font: 400 13px/1 var(--display); letter-spacing: .04em; white-space: nowrap; }
 
 /* ───────── sub-screen header ───────── */
-.dfm-head { position: absolute; left: var(--gut); right: var(--gut); top: var(--top); display: flex; align-items: center; gap: 22px; }
+.dfm-head { position: absolute; left: var(--gl); right: var(--gr); top: var(--top); display: flex; align-items: center; gap: 22px; }
 .dfm-back { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 20px 0 14px; border-radius: 999px; border: 4px solid var(--ink);
   background: var(--cream); box-shadow: 0 5px 0 var(--ink); font: 400 20px/1 var(--display) !important; letter-spacing: .06em; cursor: pointer;
   transition: transform .12s ease, background-color .12s ease; }
 .dfm-back .chev { font-size: 13px; }
-.dfm-back:focus, .dfm-back:hover { outline: none; background: var(--crew); transform: translateX(-4px); }
+:where(html:not(.df-touch)) .dfm-back:focus { outline: none; background: var(--crew); transform: translateX(-4px); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-back:hover { outline: none; background: var(--crew); transform: translateX(-4px); } }
 .dfm-head-t { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .dfm-head h2 { margin: 0; font: 400 clamp(40px, 4.3vw, 66px)/.95 var(--display); color: var(--cream); letter-spacing: .03em;
   -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 0 5px 0 var(--ink); }
@@ -86,7 +114,7 @@
 .dfm-body-top { top: calc(var(--top) + clamp(86px, 12vh, 104px)); }
 
 /* ───────── LOADOUT ───────── */
-.dfm-lo { position: absolute; left: var(--gut); right: var(--gut); top: calc(var(--top) + clamp(88px, 12.4vh, 110px)); bottom: clamp(52px, 8vh, 70px);
+.dfm-lo { position: absolute; left: var(--gl); right: var(--gr); top: calc(var(--top) + clamp(88px, 12.4vh, 110px)); bottom: calc(clamp(52px, 8vh, 70px) + var(--gb));
   display: grid; grid-template-columns: minmax(290px, 24fr) minmax(300px, 27fr) 38fr; gap: clamp(16px, 2vw, 30px); min-height: 0; }
 .dfm-lo-a, .dfm-lo-b { display: flex; flex-direction: column; gap: clamp(10px, 1.6vh, 16px); min-height: 0; }
 .dfm-kits { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(8px, 1.2vh, 12px); }
@@ -99,7 +127,8 @@
 .dfm-kit.on { background: var(--crew); }
 .dfm-kit.on::after { content: '✓'; position: absolute; right: -9px; top: -9px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
   background: var(--ink); color: var(--cream); font: 400 16px/1 var(--display); border: 3px solid var(--cream); }
-.dfm-kit:focus, .dfm-kit:hover { outline: none; transform: translateY(-4px) rotate(-1deg); box-shadow: 0 10px 0 var(--ink), 0 0 0 4px var(--cream); }
+:where(html:not(.df-touch)) .dfm-kit:focus { outline: none; transform: translateY(-4px) rotate(-1deg); box-shadow: 0 10px 0 var(--ink), 0 0 0 4px var(--cream); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-kit:hover { outline: none; transform: translateY(-4px) rotate(-1deg); box-shadow: 0 10px 0 var(--ink), 0 0 0 4px var(--cream); } }
 .dfm-crew .dfm-seg { gap: 8px; }
 .dfm-crewbtn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; border-radius: 999px; border: 4px solid var(--ink);
   background: var(--cream); box-shadow: 0 5px 0 var(--ink); font: 400 18px/1 var(--display) !important; letter-spacing: .05em; cursor: pointer; }
@@ -109,7 +138,8 @@
 .dfm-crewbtn.on.sun { background: var(--sun-dye); color: var(--cream); text-shadow: 0 2px 0 var(--ink); }
 .dfm-crewbtn.on.gulf { background: var(--gulf-dye); color: var(--cream); text-shadow: 0 2px 0 var(--ink); }
 .dfm-crewbtn.on i { color: var(--cream); }
-.dfm-crewbtn:focus, .dfm-crewbtn:hover { outline: none; box-shadow: 0 5px 0 var(--ink), 0 0 0 4px var(--cream); transform: translateY(-2px); }
+:where(html:not(.df-touch)) .dfm-crewbtn:focus { outline: none; box-shadow: 0 5px 0 var(--ink), 0 0 0 4px var(--cream); transform: translateY(-2px); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-crewbtn:hover { outline: none; box-shadow: 0 5px 0 var(--ink), 0 0 0 4px var(--cream); transform: translateY(-2px); } }
 .dfm-lo-a .dfm-crew, .dfm-lo-a .dfm-namebox { display: block; }
 .dfm-lo-a .dfm-cap, .dfm-lo-b .dfm-cap { color: var(--cream); text-shadow: 0 2px 0 var(--ink); }
 .dfm-name { width: 100%; height: 48px; padding: 0 18px; border-radius: 999px; border: 4px solid var(--ink); background: #fff; box-shadow: 0 5px 0 var(--ink);
@@ -146,7 +176,7 @@
 .dfm-plate span { font: 900 12px/1 var(--body); letter-spacing: .14em; color: var(--ink2); white-space: nowrap; }
 
 /* ───────── PLAY → map select ───────── */
-.dfm-maps { position: absolute; left: var(--gut); right: var(--gut); top: calc(var(--top) + clamp(88px, 12.4vh, 110px));
+.dfm-maps { position: absolute; left: var(--gl); right: var(--gr); top: calc(var(--top) + clamp(88px, 12.4vh, 110px));
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(12px, 1.6vw, 26px); }
 .dfm-map { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 9px 9px 13px; border-radius: 24px;
   border: 4px solid var(--ink); background: var(--cream); box-shadow: 0 8px 0 var(--ink); cursor: pointer; text-align: left;
@@ -163,15 +193,17 @@
 .dfm-map.on { background: var(--crew); }
 .dfm-map.on::after { content: '✓'; position: absolute; right: -10px; top: -10px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
   background: var(--ink); color: var(--cream); font: 400 18px/1 var(--display); border: 3px solid var(--cream); }
-.dfm-map:focus, .dfm-map:hover { outline: none; transform: translateY(-6px) rotate(-.8deg); box-shadow: 0 14px 0 var(--ink), 0 0 0 4px var(--cream); }
-.dfm-opts { position: absolute; left: var(--gut); right: var(--gut); bottom: clamp(56px, 8.6vh, 78px); display: grid;
+:where(html:not(.df-touch)) .dfm-map:focus { outline: none; transform: translateY(-6px) rotate(-.8deg); box-shadow: 0 14px 0 var(--ink), 0 0 0 4px var(--cream); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-map:hover { outline: none; transform: translateY(-6px) rotate(-.8deg); box-shadow: 0 14px 0 var(--ink), 0 0 0 4px var(--cream); } }
+.dfm-opts { position: absolute; left: var(--gl); right: var(--gr); bottom: calc(clamp(56px, 8.6vh, 78px) + var(--gb)); display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto; gap: clamp(12px, 1.6vw, 24px); align-items: end; }
 .dfm-opt { background: var(--cream); border: 4px solid var(--ink); border-radius: 22px; box-shadow: 0 6px 0 var(--ink); padding: 12px 16px 14px; min-width: 0; }
 .dfm-seg { display: flex; flex-wrap: wrap; gap: 6px; }
 .dfm-segbtn { height: 40px; padding: 0 16px; border-radius: 999px; border: 3px solid var(--ink); background: #fff; box-shadow: 0 3px 0 var(--ink);
   font: 400 17px/1 var(--display) !important; letter-spacing: .06em; cursor: pointer; transition: transform .1s ease, background-color .1s ease; }
 .dfm-segbtn.on { background: var(--ink); color: var(--cream); }
-.dfm-segbtn:focus, .dfm-segbtn:hover { outline: none; transform: translateY(-2px); box-shadow: 0 5px 0 var(--ink), 0 0 0 3px var(--crew); }
+:where(html:not(.df-touch)) .dfm-segbtn:focus { outline: none; transform: translateY(-2px); box-shadow: 0 5px 0 var(--ink), 0 0 0 3px var(--crew); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-segbtn:hover { outline: none; transform: translateY(-2px); box-shadow: 0 5px 0 var(--ink), 0 0 0 3px var(--crew); } }
 .dfm-seg.small .dfm-segbtn { height: 34px; padding: 0 12px; font-size: 15px !important; }
 .dfm-light { display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 999px; background: var(--ink); color: var(--cream);
   font: 400 16px/1 var(--display); letter-spacing: .08em; }
@@ -182,14 +214,16 @@
 .dfm-playkit .txt { display: flex; flex-direction: column; gap: 4px; }
 .dfm-playkit b { font: 400 19px/1 var(--display); letter-spacing: .04em; }
 .dfm-playkit span { font: 900 11px/1 var(--body); letter-spacing: .12em; color: var(--ink2); }
-.dfm-playkit:focus, .dfm-playkit:hover { outline: none; box-shadow: 0 3px 0 var(--ink), 0 0 0 4px var(--crew); }
+:where(html:not(.df-touch)) .dfm-playkit:focus { outline: none; box-shadow: 0 3px 0 var(--ink), 0 0 0 4px var(--crew); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-playkit:hover { outline: none; box-shadow: 0 3px 0 var(--ink), 0 0 0 4px var(--crew); } }
 .dfm-start { font-size: clamp(34px, 3.2vw, 48px) !important; padding: 18px clamp(40px, 4vw, 64px) 16px !important; border-width: 4px !important;
   box-shadow: 0 8px 0 var(--ink) !important; animation: dfBob 1.8s ease-in-out infinite; }
-.dfm-start:focus, .dfm-start:hover { box-shadow: 0 10px 0 var(--ink), 0 0 0 5px var(--cream) !important; }
+:where(html:not(.df-touch)) .dfm-start:focus { box-shadow: 0 10px 0 var(--ink), 0 0 0 5px var(--cream) !important; }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-start:hover { box-shadow: 0 10px 0 var(--ink), 0 0 0 5px var(--cream) !important; } }
 .dfm[data-crew="gulf"] .dfm-start { background: linear-gradient(180deg, #c9c2ff, var(--gulf)); color: var(--gulf-ink); }
 
 /* ───────── SETTINGS ───────── */
-.dfm-set { position: absolute; left: var(--gut); right: var(--gut); top: calc(var(--top) + clamp(80px, 11vh, 100px)); bottom: clamp(52px, 8vh, 70px);
+.dfm-set { position: absolute; left: var(--gl); right: var(--gr); top: calc(var(--top) + clamp(80px, 11vh, 100px)); bottom: calc(clamp(52px, 8vh, 70px) + var(--gb));
   display: grid; grid-template-columns: minmax(400px, 1fr) minmax(0, 1.05fr); gap: clamp(16px, 2vw, 28px); min-height: 0; }
 .dfm-keys { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; padding-bottom: 12px; }
 .dfm-keys-head { display: flex; justify-content: space-between; align-items: baseline; }
@@ -202,7 +236,8 @@
 .dfm-key.unbound { background: #ffe1dc; border-color: var(--bad); }
 .dfm-key.conflict { background: var(--bad); color: var(--cream); }
 .dfm-key.listening { background: var(--warn); font-size: 12px !important; animation: dfListen .7s ease-in-out infinite; }
-.dfm-key:focus, .dfm-key:hover { outline: none; box-shadow: 0 3px 0 var(--ink), 0 0 0 3px var(--crew); transform: translateY(-1px); }
+:where(html:not(.df-touch)) .dfm-key:focus { outline: none; box-shadow: 0 3px 0 var(--ink), 0 0 0 3px var(--crew); transform: translateY(-1px); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-key:hover { outline: none; box-shadow: 0 3px 0 var(--ink), 0 0 0 3px var(--crew); transform: translateY(-1px); } }
 @keyframes dfListen { 50% { transform: scale(1.05); } }
 .dfm-bindnote { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 30px; margin-top: 6px; font: 800 13px/1.3 var(--body); color: var(--ink2); }
 .dfm-bindnote.warn { color: #9b1d20; }
@@ -210,7 +245,8 @@
 .dfm-small { height: 36px; padding: 0 16px; border-radius: 999px; border: 3px solid var(--ink); background: var(--cream); box-shadow: 0 3px 0 var(--ink);
   font: 400 16px/1 var(--display) !important; letter-spacing: .06em; cursor: pointer; align-self: flex-start; }
 .dfm-small.hot { background: var(--warn); }
-.dfm-small:focus, .dfm-small:hover { outline: none; box-shadow: 0 3px 0 var(--ink), 0 0 0 3px var(--crew); transform: translateY(-1px); }
+:where(html:not(.df-touch)) .dfm-small:focus { outline: none; box-shadow: 0 3px 0 var(--ink), 0 0 0 3px var(--crew); transform: translateY(-1px); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-small:hover { outline: none; box-shadow: 0 3px 0 var(--ink), 0 0 0 3px var(--crew); transform: translateY(-1px); } }
 .dfm-set-r { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(12px, 1.6vh, 18px) clamp(12px, 1.4vw, 18px); align-content: start; min-height: 0; overflow-y: auto; padding-bottom: 12px; }
 .dfm-set-r > section:nth-child(2), .dfm-set-r > section:nth-child(4) { grid-column: 1 / -1; }
 .dfm-set-r > section:nth-child(2) { order: 3; }
@@ -228,7 +264,7 @@
 .dfm-slider input[type="range"]::-moz-range-progress { height: 8px; border-radius: 999px; background: var(--crew-dye); }
 .dfm-slider input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--cream); border: 3px solid var(--ink); }
 .dfm-slider input[type="range"]:focus { outline: none; }
-.dfm-slider input[type="range"]:focus::-webkit-slider-thumb { background: var(--crew); box-shadow: 0 3px 0 var(--ink), 0 0 0 4px var(--cream); }
+:where(html:not(.df-touch)) .dfm-slider input[type="range"]:focus::-webkit-slider-thumb { background: var(--crew); box-shadow: 0 3px 0 var(--ink), 0 0 0 4px var(--cream); }
 .dfm-slider .val { min-width: 48px; text-align: right; font: 400 17px/1 var(--display); font-variant-numeric: tabular-nums; }
 .dfm-switch { position: relative; flex: none; width: 62px; height: 34px; border-radius: 999px; border: 3px solid var(--ink); background: #cfd6e6;
   box-shadow: 0 3px 0 var(--ink); cursor: pointer; transition: background-color .15s ease; }
@@ -236,7 +272,8 @@
   transition: transform .16s cubic-bezier(.2,1.5,.4,1); }
 .dfm-switch.on { background: var(--ok); }
 .dfm-switch.on i { transform: translateX(27px); }
-.dfm-switch:focus, .dfm-switch:hover { outline: none; box-shadow: 0 3px 0 var(--ink), 0 0 0 3px var(--crew); }
+:where(html:not(.df-touch)) .dfm-switch:focus { outline: none; box-shadow: 0 3px 0 var(--ink), 0 0 0 3px var(--crew); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-switch:hover { outline: none; box-shadow: 0 3px 0 var(--ink), 0 0 0 3px var(--crew); } }
 .dfm-toggle .dfm-swatch { display: flex; gap: 4px; margin-left: auto; margin-right: 4px; }
 .dfm-swatch i { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font: 400 15px/1 var(--display); color: var(--cream);
   border: 2px solid var(--ink); text-shadow: 0 1px 0 var(--ink); }
@@ -244,7 +281,7 @@
 .dfm-swatch i.gulf { background: var(--gulf-dye); }
 
 /* ───────── HOW TO PLAY ───────── */
-.dfm-how { position: absolute; left: var(--gut); right: var(--gut); top: calc(var(--top) + clamp(86px, 12vh, 104px)); bottom: clamp(52px, 8vh, 70px);
+.dfm-how { position: absolute; left: var(--gl); right: var(--gr); top: calc(var(--top) + clamp(86px, 12vh, 104px)); bottom: calc(clamp(52px, 8vh, 70px) + var(--gb));
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(12px, 1.6vw, 24px); align-items: start; }
 .dfm-howp { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 16px; }
 .dfm-howp .art { aspect-ratio: 240 / 140; border-radius: 16px; border: 3px solid var(--ink); overflow: hidden; display: grid; place-items: center;
@@ -252,15 +289,16 @@
 .dfm-howp .art svg { width: 100%; height: 100%; display: block; }
 .dfm-howp .kits4 { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; width: 100%; height: 100%; padding: 8px; gap: 4px; min-height: 0; }
 .dfm-howp .kits4 img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
-.dfm-howp h3 { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; font: 400 clamp(17px, 1.5vw, 22px)/1.05 var(--display); letter-spacing: .03em; }
-.dfm-howp h3 .n { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--crew-dye); color: var(--cream);
+:is(.dfm-howp, .dfm-howtouch) h3 { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; font: 400 clamp(17px, 1.5vw, 22px)/1.05 var(--display); letter-spacing: .03em; }
+:is(.dfm-howp, .dfm-howtouch) h3 .n { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--crew-dye); color: var(--cream);
   border: 3px solid var(--ink); font-size: 15px; text-shadow: 0 1px 0 var(--ink); }
 .dfm-howp p { margin: 0; font: 700 clamp(13px, 1.05vw, 15px)/1.42 var(--body); color: var(--ink2); }
 .dfm-howp .dfm-kbd { height: 21px; min-width: 22px; margin: 0 2px; font-size: 12px; vertical-align: 1px; }
 
 /* ───────── CREDITS ───────── */
-.dfm-credits { position: absolute; left: 50%; top: calc(var(--top) + clamp(86px, 12vh, 104px)); transform: translateX(-50%); width: min(920px, calc(100% - 2 * var(--gut)));
-  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 22px 30px 26px; max-height: calc(100% - var(--top) - clamp(86px, 12vh, 104px) - 64px); overflow-y: auto; }
+.dfm-credits { position: absolute; left: 50%; top: calc(var(--top) + clamp(86px, 12vh, 104px)); transform: translateX(-50%); width: min(920px, calc(100% - var(--gl) - var(--gr)));
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 22px 30px 26px; max-height: calc(100% - var(--top) - clamp(86px, 12vh, 104px) - 64px - var(--gb)); overflow-y: auto;
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .df-wordmark.small { font-size: 58px; -webkit-text-stroke: 3px var(--ink); text-shadow: 0 4px 0 var(--ink); }
 .dfm-tagline { margin: 0 0 6px; font: 400 clamp(20px, 1.8vw, 26px)/1.1 var(--display); letter-spacing: .02em; color: var(--ink); text-align: center; }
 .dfm-cgrid { display: grid; grid-template-columns: 1fr 1.25fr 1.1fr; gap: 12px 28px; width: 100%; text-align: left; }
@@ -287,7 +325,8 @@
 .dfm-confirm-card .dfm-row { gap: 16px; margin-top: 6px; }
 .dfm-confirm-card .dfm-small { height: 50px; padding: 0 28px; font-size: 22px !important; align-self: auto; }
 .df-btn.danger { background: linear-gradient(180deg, #ff8f8f, var(--bad)); color: var(--cream); text-shadow: 0 2px 0 var(--ink); }
-.df-btn:focus { outline: none; transform: translateY(-2px); box-shadow: 0 7px 0 var(--ink), 0 0 0 4px var(--cream); }
+:where(html:not(.df-touch)) .df-btn:focus { outline: none; transform: translateY(-2px); box-shadow: 0 7px 0 var(--ink), 0 0 0 4px var(--cream); }
+.df-btn:focus { outline: none; }
 
 /* ───────── victory tally (ui/slates.ts) ───────── */
 .df-tally { display: flex; flex-direction: column; gap: 12px; width: min(620px, 78vw); margin: 4px 0 2px; }
@@ -342,7 +381,7 @@ html.df-cb .dfm[data-crew="gulf"] .dfm-stat .bar i.on { background-image: repeat
 }
 
 /* HOW TO PLAY: the live control legend under the panels */
-.dfm-howkeys { position: absolute; left: var(--gut); right: var(--gut); bottom: clamp(58px, 9vh, 84px); display: flex; flex-wrap: wrap; justify-content: center;
+.dfm-howkeys { position: absolute; left: var(--gl); right: var(--gr); bottom: calc(clamp(58px, 9vh, 84px) + var(--gb)); display: flex; flex-wrap: wrap; justify-content: center;
   gap: 8px 18px; padding: 12px 18px; }
 .dfm-howkeys .dfm-leg { display: inline-flex; gap: 8px; }
 .dfm-howkeys .dfm-leg .lbl { text-align: left; }
@@ -375,10 +414,12 @@ html.df-cb .dfm[data-crew="gulf"] .dfm-stat .bar i.on { background-image: repeat
 .dfm-color.on i { border-color: var(--cream); box-shadow: 0 0 0 2px var(--ink); }
 .dfm-color.on::after { content: '✓'; position: absolute; right: -8px; top: -9px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
   background: var(--ink); color: var(--cream); font: 400 13px/1 var(--display); border: 2px solid var(--cream); }
-.dfm-color:focus, .dfm-color:hover { outline: none; transform: translateY(-2px); box-shadow: 0 7px 0 var(--ink), 0 0 0 4px var(--cream); }
+:where(html:not(.df-touch)) .dfm-color:focus { outline: none; transform: translateY(-2px); box-shadow: 0 7px 0 var(--ink), 0 0 0 4px var(--cream); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-color:hover { outline: none; transform: translateY(-2px); box-shadow: 0 7px 0 var(--ink), 0 0 0 4px var(--cream); } }
 /* the player's FFA colour on the title / PLAY accents (teams keeps its sun / gulf rules) */
 .dfm[data-crew="ffa"] .dfm-item-play, .dfm[data-crew="ffa"] .dfm-start { background: linear-gradient(180deg, var(--crew-gloss), var(--crew)); color: var(--crew-ink); }
-.dfm[data-crew="ffa"] .dfm-item-play:focus, .dfm[data-crew="ffa"] .dfm-item-play:hover { background: linear-gradient(180deg, var(--crew-gloss), var(--crew-dye)); }
+:where(html:not(.df-touch)) .dfm[data-crew="ffa"] .dfm-item-play:focus { background: linear-gradient(180deg, var(--crew-gloss), var(--crew-dye)); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm[data-crew="ffa"] .dfm-item-play:hover { background: linear-gradient(180deg, var(--crew-gloss), var(--crew-dye)); } }
 
 /* the FFA victory slate: winner line, top-3 podium, full standings (slates.ts showFfa) */
 .df-victory.ffa .df-victory-title { text-shadow: 0 4px 0 var(--win); }
@@ -430,4 +471,314 @@ html.df-cb .dfm[data-crew="gulf"] .dfm-stat .bar i.on { background-image: repeat
   .df-podium { height: 200px; --stepMax: 76px; }
   .df-standings { gap: 3px; }
   .df-standings .mk { width: 22px; height: 22px; }
+}
+
+/* ═══════════════════════════ CONTRACT_MOBILE (UI lane) ═══════════════════════════
+   M4 FULLSCREEN toggles + the iPhone home-screen tip (every size), M4 / M8 touch-mode prompts (html.df-touch, set by
+   input.ts), M6 the phone-landscape layout (@media (max-height: 500px), (max-width: 700px) refinements). Desktop at
+   heights > 500 px in kbm mode takes none of the touch / phone rules. */
+
+.dfm-set-r, .dfm-keys, .dfm-how { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+/* FULLSCREEN — the title corner's round icon button (the pause card's is a .dfm-item row) */
+.dfm-fs { flex: none; display: grid; place-items: center; width: 46px; height: 46px; padding: 0; border-radius: 50%; border: 4px solid var(--ink);
+  background: var(--cream); color: var(--ink); box-shadow: 0 5px 0 var(--ink); cursor: pointer; pointer-events: auto;
+  transition: transform .12s ease, background-color .12s ease; }
+.dfm-fs svg { display: block; width: 22px; height: 22px; }
+:where(html:not(.df-touch)) .dfm-fs:focus { outline: none; background: var(--crew); transform: translateY(-2px); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-fs:hover { outline: none; background: var(--crew); transform: translateY(-2px); } }
+.dfm-fs:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--ink); }
+.dfm-fs[aria-pressed="true"] { background: var(--ink); color: var(--cream); }
+
+/* the iPhone Add-to-Home-Screen tip (M9): one line where it fits; its ✕ (a 44 px target) dismisses it */
+.dfm-tip { display: inline-flex; align-items: center; gap: 4px; max-width: min(560px, 100%); min-height: 44px; padding: 0 0 0 16px; border-radius: 24px;
+  border: 3px solid var(--ink); background: var(--warn); color: var(--ink); box-shadow: 0 4px 0 var(--ink); font: 800 14px/1.2 var(--body);
+  text-align: left; pointer-events: auto; }
+.dfm-tip .tx { padding: 6px 0; }
+.dfm-tip-x { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: -3px -3px -3px 0; padding: 0; border: 0; background: none;
+  cursor: pointer; pointer-events: auto; }
+.dfm-tip-x i { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: var(--cream); font: 400 14px/1 var(--display);
+  font-style: normal; }
+.dfm-tip-x:active i { transform: scale(.9); }
+.dfm-pause-l .dfm-tip { align-self: stretch; justify-content: space-between; }
+/* on the title it sits above the loadout card, no wider than the space right of the menu stack */
+.dfm-br > .dfm-tip { max-width: min(560px, calc(100vw - var(--gl) - var(--gr) - clamp(300px, 25vw, 400px) - 28px)); }
+
+/* the touch buttons' glyphs (slates.ts touchGlyph): a small ink disc, like the on-screen button */
+.dfm-tglyph { display: inline-grid; place-items: center; flex: none; width: 30px; height: 30px; padding: 5px; border-radius: 50%; background: rgba(20,32,58,.86);
+  color: var(--cream); border: 2px solid var(--ink); box-shadow: 0 2px 0 var(--ink); }
+.dfm-tglyph svg { display: block; width: 100%; height: 100%; }
+.dfm-kbd.touch { border-radius: 999px; background: rgba(20,32,58,.9); color: var(--cream); padding: 0 8px; }
+
+/* HOW TO PLAY: the touch-controls panel (touch mode only; first, full width) */
+.dfm-howtouch { grid-column: 1 / -1; order: -1; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 16px; }
+html:not(.df-touch) .dfm-howtouch { display: none; }
+.dfm-howtouch h3 .n svg { display: block; width: 18px; height: 18px; }
+.dfm-howtouch .tbody { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 18px; align-items: center; }
+.dfm-howtouch .tart { border-radius: 18px; overflow: hidden; }
+.dfm-howtouch .tart svg { display: block; width: 100%; height: auto; }
+.dfm-howtouch .tlist { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; }
+.dfm-howtouch li { display: flex; align-items: center; gap: 9px; font: 700 13px/1.3 var(--body); color: var(--ink2); }
+.dfm-howtouch li b { font: 400 15px/1 var(--display); letter-spacing: .05em; color: var(--ink); }
+
+/* SETTINGS: TOUCH CONTROLS — the rows beside a live preview of the overlay */
+.dfm-set-r > .dfm-touchset { grid-column: 1 / -1; order: -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 2px 22px; align-items: start; }
+.dfm-touchset > .dfm-cap { grid-column: 1 / -1; }
+.dfm-touchset .dfm-trows { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dfm-touchset .dfm-tprev { grid-column: 2; grid-row: 2; align-self: center; border-radius: 18px; overflow: hidden; }
+.dfm-tprev svg { display: block; width: 100%; height: auto; }
+
+/* ── touch mode (M1 html.df-touch), any size: targets >= 44 px, text >= 12 px, touch prompts ── */
+html.df-touch .dfm-hints, html.df-touch .dfm-howkeys, html.df-touch .dfm-keys, html.df-touch .dfm-mousecard { display: none; }
+html.df-touch .dfm-set { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+html.df-touch .dfm-set-r { max-height: 100%; }
+html.df-touch .dfm-set-r > section:nth-child(2) { grid-column: auto; }
+html.df-touch .dfm-how { overflow-y: auto; align-content: start; padding-bottom: 12px; }
+html.df-touch .dfm-segbtn, html.df-touch .dfm-seg.small .dfm-segbtn, html.df-touch .dfm-light { height: 44px; }
+html.df-touch .dfm-small, html.df-touch .dfm-confirm-card .dfm-small { height: 48px; }
+html.df-touch .dfm-row { min-height: 46px; }
+html.df-touch .dfm-slider input[type="range"] { height: 44px; }
+html.df-touch .dfm-slider input[type="range"]::-webkit-slider-thumb { width: 30px; height: 30px; margin-top: -11px; }
+html.df-touch .dfm-switch { width: 76px; height: 44px; }
+html.df-touch .dfm-switch i { width: 30px; height: 30px; }
+html.df-touch .dfm-switch.on i { transform: translateX(32px); }
+html.df-touch .dfm-kit .role, html.df-touch .dfm-mini .cap, html.df-touch .dfm-map .favors span, html.df-touch .dfm-kitcard .cap, html.df-touch .dfm .chip,
+html.df-touch .dfm-profile span, html.df-touch .dfm-playkit span, html.df-touch .df-ffa-winner .col { font-size: 12px; }
+html.df-touch .dfm-item:active, html.df-touch .dfm-kit:active, html.df-touch .dfm-map:active, html.df-touch .dfm-crewbtn:active, html.df-touch .dfm-color:active,
+html.df-touch .dfm-segbtn:active, html.df-touch .dfm-back:active, html.df-touch .dfm-kitcard:active, html.df-touch .dfm-playkit:active { filter: brightness(.93); }
+html.df-touch .dfm-item:active { transform: translateY(3px); }
+/* SHOW FPS: bottom centre between the stick and the thumb cluster (top-left is the pause button's) */
+html.df-touch .df-fps { left: 50%; top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 4px); transform: translateX(-50%); }
+
+/* a narrow, tall window (a desktop window ≤ 700 px wide, a tablet held upright in kbm): the title flows as a column
+   — brand + corner (which may wrap under the wordmark, never over it), then the menu stack — and drops the loadout
+   card, which has no room beside the stack */
+@media (max-width: 700px) and (min-height: 501px) {
+  .dfm-s-title:not([hidden]) { display: flex; flex-direction: column; align-items: flex-start; gap: 22px;
+    padding: clamp(16px, 3vh, 28px) var(--gr) calc(16px + var(--gb)) var(--gl); overflow-y: auto; overscroll-behavior: contain; }
+  .dfm-s-title .dfm-titlebar, .dfm-s-title .dfm-stack { position: relative; left: auto; right: auto; top: auto; flex: none; }
+  .dfm-s-title .dfm-titlebar { align-self: stretch; }
+  .dfm-s-title .dfm-br { display: none; }
+}
+/* …and when that column is also short (≤ 640 px: 480–560 × 520 put CREDITS under it), the keyboard hint bar goes */
+@media (max-width: 700px) and (min-height: 501px) and (max-height: 640px) {
+  .dfm-hints { display: none; }
+}
+
+/* PLAY at tablet widths (iPad 1024 / 1180; any window ≤ 1200 px): the options in two rows — TIME OF DAY + BOTS, then
+   YOUR KIT + START — instead of squeezing BOTS until its buttons stack (1280 / 1600 keep the one-row layout) */
+@media (max-width: 1200px) {
+  .dfm-opts { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'tod bots' 'kit start'; }
+  .dfm-opts > :nth-child(1) { grid-area: tod; }
+  .dfm-opts > :nth-child(2) { grid-area: bots; }
+  .dfm-opts > :nth-child(3) { grid-area: kit; justify-self: start; }
+  .dfm-opts > :nth-child(4) { grid-area: start; justify-self: end; align-self: center; }
+}
+
+/* ═════ phone landscape: every M0 phone (667 × 375 … 915 × 412); kbm windows that short take it too ═════ */
+@media (max-height: 500px) {
+  .dfm { --gut: 16px; --top: max(8px, env(safe-area-inset-top, 0px)); --wm: clamp(40px, 12.4vh, 58px); }
+  .dfm-hints { display: none; }
+  .dfm-card { border-width: 3px; border-radius: 16px; box-shadow: 0 5px 0 var(--ink); padding: 10px 12px 12px; }
+  .dfm-cap { font-size: 13px; margin-bottom: 5px; }
+
+  /* title */
+  .dfm-titlebar { top: calc(var(--top) + 2px); gap: 8px 16px; }
+  .dfm-brand { margin-top: 4px; gap: 6px; }
+  .dfm-brand .df-wordmark { -webkit-text-stroke-width: 3px; text-shadow: 0 4px 0 var(--ink); filter: drop-shadow(0 5px 0 rgba(10,20,44,.35)); }
+  .dfm-brand .df-mode { font-size: 13px; padding: 5px 12px; gap: 7px; margin-left: 4px; box-shadow: 0 3px 0 rgba(10,20,44,.45); }
+  .dfm-stack { top: calc(var(--top) + 50px + var(--wm) * .9); width: clamp(220px, 33vw, 290px); gap: 7px; }
+  .dfm-item { height: 44px; padding: 0 14px; border-width: 3px; border-radius: 14px; box-shadow: 0 4px 0 var(--ink); font-size: 20px; }
+  .dfm-item-play { height: 52px; font-size: 28px; margin-bottom: 0; }
+  :where(html:not(.df-touch)) .dfm-item:focus { transform: translateX(8px) rotate(-1deg); box-shadow: 0 5px 0 var(--ink); }
+  .dfm-item.small { height: 44px; font-size: 19px; box-shadow: 0 4px 0 var(--ink); }
+  .dfm-corner, .dfm-corner-row { gap: 8px; }
+  .dfm-profile { gap: 8px; padding: 4px 14px 4px 4px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
+  .dfm-profile .mark { width: 36px; height: 36px; border-width: 2px; font-size: 20px; }
+  .dfm-profile b { font-size: 17px; max-width: 11ch; }
+  .dfm-fs { width: 44px; height: 44px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
+  .dfm-tip { font-size: 12.5px; padding-left: 12px; max-width: min(440px, 100%); }
+  .dfm-br { bottom: calc(12px + var(--gb)); gap: 8px; }
+  .dfm-br > .dfm-tip { max-width: min(440px, calc(100vw - var(--gl) - var(--gr) - clamp(220px, 33vw, 290px) - 24px)); }
+  .dfm-kitcard { width: clamp(250px, 40vw, 360px); padding: 6px 12px 6px 6px; gap: 10px; border-width: 3px; border-radius: 18px;
+    box-shadow: 0 5px 0 var(--ink); }
+  .dfm-kitcard img { width: 38%; border-radius: 12px; border-width: 2px; }
+  .dfm-kitcard .txt { gap: 3px; }
+  .dfm-kitcard b { font-size: 19px; }
+  .dfm-kitcard .chips { gap: 4px; margin-top: 2px; }
+
+  /* the sub-screens flow in a column (header, then the body) inside the safe area; a body taller than the phone
+     scrolls inside itself, the page never does */
+  .dfm-screen:is(.dfm-s-play, .dfm-s-loadout, .dfm-s-settings, .dfm-s-howto, .dfm-s-credits):not([hidden]) {
+    display: flex; flex-direction: column; gap: 6px; padding: var(--top) var(--gr) calc(8px + var(--gb)) var(--gl); overflow-y: auto; overscroll-behavior: contain; }
+  .dfm-screen :is(.dfm-head, .dfm-lo, .dfm-maps, .dfm-opts, .dfm-set, .dfm-how, .dfm-howkeys, .dfm-credits) {
+    position: relative; inset: auto; left: auto; right: auto; top: auto; bottom: auto; transform: none; }
+  .dfm-head { flex: none; gap: 12px; min-height: 46px; }
+  .dfm-back { height: 44px; padding: 0 14px 0 10px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); font-size: 17px !important; }
+  .dfm-head-t { gap: 2px; }
+  .dfm-head h2 { font-size: 30px; -webkit-text-stroke-width: 2px; text-shadow: 0 3px 0 var(--ink); }
+  .dfm-hint { font-size: 13px; }
+
+  /* PLAY: header (+ MODE), 4 arena cards, then the options in two rows (one row on a wide phone) */
+  .dfm-s-play { container: dfplay / inline-size; }
+  .dfm-s-play .dfm-hint { display: none; }
+  .dfm-modebox { padding: 3px 4px 3px 12px; gap: 8px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
+  .dfm-modebox .dfm-cap { font-size: 12px; }
+  .dfm-maps { flex: none; gap: 8px; }
+  .dfm-map { gap: 3px; padding: 5px 5px 7px; border-width: 3px; border-radius: 16px; box-shadow: 0 5px 0 var(--ink); }
+  :where(html:not(.df-touch)) .dfm-map:focus { transform: translateY(-3px) rotate(-.6deg); box-shadow: 0 8px 0 var(--ink), 0 0 0 3px var(--cream); }
+  .dfm-map .thumb { aspect-ratio: auto; height: clamp(56px, 19vh, 96px); border-width: 2px; border-radius: 10px; }
+  .dfm-map .name { font-size: 16px; margin-top: 2px; }
+  .dfm-map .type, .dfm-map .favors, .dfm-map .tag { display: none; }
+  .dfm-map.on::after { right: -7px; top: -7px; width: 26px; height: 26px; font-size: 14px; border-width: 2px; }
+  .dfm-opts { flex: none; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'tod bots' 'kit start'; gap: 6px 10px; align-items: stretch; }
+  .dfm-opts > :nth-child(1) { grid-area: tod; }
+  .dfm-opts > :nth-child(2) { grid-area: bots; }
+  .dfm-opts > :nth-child(3) { grid-area: kit; justify-self: start; }
+  .dfm-opts > :nth-child(4) { grid-area: start; justify-self: end; align-self: center; }
+  .dfm-opt { padding: 5px 10px 7px; border-width: 3px; border-radius: 16px; box-shadow: 0 4px 0 var(--ink); }
+  .dfm-opt .dfm-cap { font-size: 12px; margin-bottom: 4px; }
+  .dfm-opts > :nth-child(3) .dfm-cap, .dfm-s-play .dfm-note { display: none; }
+  .dfm-seg { gap: 5px; }
+  .dfm-segbtn { height: 44px; padding: 0 12px; font-size: 15px !important; }
+  .dfm-light { height: 44px; padding: 0 12px; font-size: 14px; }
+  .dfm-playkit { height: 52px; padding: 3px 12px 3px 3px; }
+  .dfm-playkit b { font-size: 17px; white-space: nowrap; }
+  .dfm-playkit span { white-space: nowrap; }
+  .dfm-start { font-size: 30px !important; padding: 10px 34px 9px !important; border-width: 3px !important; box-shadow: 0 6px 0 var(--ink) !important; }
+  :where(html:not(.df-touch)) .dfm-start:focus { box-shadow: 0 7px 0 var(--ink), 0 0 0 4px var(--cream) !important; }
+  @container dfplay (min-width: 960px) {
+    .dfm-opts { grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-areas: 'tod bots kit start'; }
+    .dfm-opts > :nth-child(3) .dfm-cap { display: block; }
+  }
+
+  /* LOADOUT: three columns; the kit + crew column and the stats column scroll inside themselves when short */
+  .dfm-lo { flex: 1 1 auto; min-height: 0; grid-template-columns: minmax(0, 42fr) minmax(0, 30fr) minmax(0, 28fr); grid-template-rows: minmax(0, 1fr); gap: 10px; }
+  .dfm-lo-a, .dfm-lo-b { gap: 8px; overflow-y: auto; overscroll-behavior: contain; padding: 4px 6px 10px 2px; }
+  .dfm-lo-a .dfm-cap, .dfm-lo-b .dfm-cap { font-size: 12px; margin-bottom: 4px; }
+  .dfm-kits { gap: 6px; }
+  .dfm-kit { gap: 2px; padding: 4px 6px 6px; border-width: 3px; border-radius: 14px; box-shadow: 0 4px 0 var(--ink); }
+  :where(html:not(.df-touch)) .dfm-kit:focus { transform: translateY(-2px); box-shadow: 0 6px 0 var(--ink), 0 0 0 3px var(--cream); }
+  .dfm-kit img { height: 32px; }
+  .dfm-kit b { font-size: 14px; }
+  .dfm-kit .role { display: none; }
+  .dfm-kit.on::after { right: -6px; top: -6px; width: 22px; height: 22px; font-size: 12px; border-width: 2px; }
+  .dfm-crewbtn { height: 44px; gap: 6px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); font-size: 15px !important; }
+  .dfm-crewbtn i { font-size: 16px; }
+  .dfm-name { height: 44px; padding: 0 14px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); font-size: 18px; }
+  .dfm-colors { gap: 6px; }
+  .dfm-color { height: 44px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
+  .dfm-stats { gap: 4px; }
+  .dfm-stats-h { flex-wrap: wrap; row-gap: 4px; }
+  .dfm-stats-h b { font-size: 18px; white-space: nowrap; }
+  .dfm-stats-h .role { padding: 3px 8px; font-size: 12px; }
+  .dfm-stat { grid-template-columns: 82px minmax(0, 1fr) 18px; gap: 6px; }
+  .dfm-stat .bar { height: 11px; gap: 2px; }
+  .dfm-stat .val { font-size: 14px; }
+  .dfm-subsp { gap: 8px; }
+  .dfm-mini { gap: 10px; padding: 6px 10px; }
+  .dfm-bigico { width: 40px; height: 40px; padding: 6px; border-width: 2px; }
+  .dfm-mini b { font-size: 16px; }
+  .dfm-mini p { display: none; }
+  .dfm-mini .cap { font-size: 12px; }
+  .dfm-plate { margin-top: -4px; padding: 4px 14px 4px 4px; gap: 8px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
+  .dfm-plate i { width: 30px; height: 30px; border-width: 2px; font-size: 16px; }
+  .dfm-plate { max-width: calc(100% + 8px); }
+  /* a narrow plate gives up the kit name first (the stats card beside it names the kit), never a short player name: on
+     the iPhone 14 (852 px less the 59 px insets) the plate ran ~2 px short and flex-shrink took a fraction of a pixel from
+     the name, which text-overflow drew as "Y…" (integration, mobile gate shot; b 34.97 px wide for 35 px of "YOU") */
+  .dfm-plate i { flex: none; }
+  .dfm-plate b { flex: 0 0 auto; max-width: 62%; font-size: 17px; }
+  .dfm-plate span { font-size: 12px; letter-spacing: .1em; min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+
+  /* SETTINGS: the cards scroll inside the body (touch: TOUCH CONTROLS first) */
+  .dfm-set { flex: 1 1 auto; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 10px; }
+  .dfm-set > .dfm-keys { max-height: none; height: 100%; }
+  .dfm-set-r { height: 100%; gap: 10px; padding: 2px 4px 10px 2px; }
+  .dfm-bind { grid-template-columns: 1fr 84px 84px; gap: 6px; }
+  .dfm-bind .lbl { font-size: 14px; }
+  .dfm-row .lbl { font-size: 14px; }
+  .dfm-slider .val { min-width: 44px; font-size: 15px; }
+  .dfm-set-r > .dfm-touchset { gap: 2px 14px; }
+
+  /* HOW TO PLAY: two columns of compact panels (art beside the text) scrolling inside the body */
+  .dfm-how { flex: 1 1 auto; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; overflow-y: auto; align-content: start; padding: 2px 4px 10px 2px; }
+  .dfm-howp { display: grid; grid-template-columns: minmax(0, 34%) minmax(0, 1fr); align-content: start; column-gap: 12px; row-gap: 4px; padding: 10px 12px; }
+  .dfm-howp .art { grid-row: 1 / span 3; align-self: start; border-radius: 12px; border-width: 2px; }
+  :is(.dfm-howp, .dfm-howtouch) h3 { margin: 0; font-size: 16px; }
+  :is(.dfm-howp, .dfm-howtouch) h3 .n { width: 24px; height: 24px; font-size: 13px; border-width: 2px; }
+  .dfm-howp p { font-size: 12.5px; line-height: 1.35; }
+  .dfm-howtouch { gap: 4px; padding: 10px 12px; }
+  .dfm-howtouch .tbody { grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 12px; margin-top: 6px; }
+  .dfm-howtouch .tlist { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+  .dfm-howtouch li { gap: 7px; font-size: 12px; line-height: 1.2; }
+  .dfm-howtouch li b { font-size: 14px; }
+  .dfm-howtouch .dfm-tglyph { width: 26px; height: 26px; padding: 4px; }
+  .dfm-howkeys { flex: none; gap: 6px 14px; padding: 8px 12px; }
+  .dfm-howkeys .dfm-kbd { height: 22px; font-size: 12px; }
+
+  /* CREDITS */
+  .dfm-credits { flex: 1 1 auto; min-height: 0; width: auto; max-height: none; gap: 6px; padding: 12px 16px 14px; }
+  .df-wordmark.small { font-size: 36px; }
+  .dfm-tagline { margin-bottom: 2px; font-size: 17px; }
+  .dfm-cgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; }
+  .dfm-cgrid .blk p { font-size: 12.5px; }
+
+  /* PAUSE + QUIT confirm */
+  .dfm-s-pause.df-pause { padding-bottom: var(--gb); }
+  .dfm-s-pause .df-pause-card { gap: 18px; padding: 14px 20px 16px; border-width: 3px; border-radius: 22px; box-shadow: 0 6px 0 var(--ink); }
+  .dfm-pause-l { width: 250px; gap: 8px; }
+  .dfm-pause-l h2 { margin: 0; font-size: 36px; text-shadow: 0 3px 0 var(--crew); }
+  .dfm-pause-l .df-btn { font-size: 22px; padding: 10px 20px 9px; }
+  .dfm-pause-r { width: 232px; padding-left: 18px; }
+  .dfm-legend { gap: 5px; }
+  .dfm-leg .lbl { font-size: 14px; }
+  .dfm-legend .dfm-kbd { height: 22px; min-width: 24px; font-size: 12px; }
+  .dfm-legend .dfm-tglyph { width: 26px; height: 26px; padding: 4px; }
+  .dfm-confirm-card { gap: 8px; padding: 16px 24px 18px; }
+  .dfm-confirm-card h2 { font-size: 30px; }
+  .dfm-confirm-card p { font-size: 14px; }
+  .dfm-confirm-card .dfm-small { font-size: 20px !important; }
+
+  /* the loading card's arena */
+  .df-arena { gap: 4px; margin: 0; }
+  .df-arena img { width: auto; height: clamp(64px, 22vh, 112px); border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
+  .df-arena b { font-size: 20px; }
+
+  /* victory tally (teams) + the FFA slate: podium beside the standings in two columns */
+  .df-tally { width: min(520px, 80vw); gap: 8px; }
+  .df-tally .row { grid-template-columns: 28px 100px minmax(0, 1fr) 84px; gap: 8px; }
+  .df-tally .mk { width: 26px; height: 26px; font-size: 14px; border-width: 2px; }
+  .df-tally .nm { font-size: 15px; }
+  .df-tally .track { height: 22px; border-width: 2px; }
+  .df-tally .pct { font-size: 26px; }
+  .df-victory-card.ffa { gap: 8px; padding: 12px 20px 14px; }
+  .df-ffa { width: min(800px, calc(100vw - max(12px, env(safe-area-inset-left, 0px)) - max(12px, env(safe-area-inset-right, 0px)) - 46px)); gap: 8px; }
+  .df-ffa-winner .who { padding: 3px 14px 3px 3px; gap: 7px; }
+  .df-ffa-winner .mk { width: 28px; height: 28px; font-size: 16px; border-width: 2px; }
+  .df-ffa-winner b { font-size: 18px; }
+  .df-ffa-cols { grid-template-columns: minmax(0, .62fr) minmax(0, 1.38fr); gap: 16px; }
+  .df-podium { height: 118px; --stepMax: 40px; gap: 6px; }
+  .df-podium .mk { width: 28px; height: 28px; font-size: 16px; border-width: 2px; box-shadow: 0 2px 0 var(--ink); }
+  .df-podium .r1 .mk { width: 34px; height: 34px; font-size: 19px; }
+  .df-podium .nm { font-size: 13px; }
+  .df-podium .pct { font-size: 13px; }
+  .df-podium .step { border-width: 2px; box-shadow: 0 3px 0 var(--ink); height: calc(12px + var(--h, 0) * var(--stepMax)); }
+  .df-podium .step .rk { margin-top: 2px; font-size: 16px; }
+  .df-standings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(4, auto); grid-auto-flow: column; gap: 4px 14px; }
+  .df-standings .srow { grid-template-columns: 12px 20px minmax(0, 1.1fr) minmax(0, 1fr) 50px; gap: 5px; }
+  .df-standings .rk { font-size: 12px; }
+  .df-standings .mk { width: 20px; height: 20px; font-size: 12px; border-width: 2px; }
+  .df-standings .nm { font-size: 13px; }
+  .df-standings .track { height: 12px; border-width: 2px; }
+  .df-standings .pct { font-size: 14px; }
+  .df-standings .srow.win .pct { font-size: 13px; padding: 2px 5px 1px; }
+}
+@media (max-height: 500px) and (max-width: 700px) {
+  .dfm-head h2 { font-size: 26px; }
+  .dfm-modebox .dfm-cap { display: none; }
+  .dfm-modebox { padding-left: 4px; }
+  .dfm-segbtn { padding: 0 10px; font-size: 14px !important; }
+  .dfm-kitcard .chips { display: none; }
+  .dfm-plate span { display: none; }
 }

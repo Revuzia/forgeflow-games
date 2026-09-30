@@ -12,8 +12,16 @@
 //   sample-accurate start(when, offset, duration)); a cue switch 'at bar' lands on the current section's next
 //   bar line with a 60 ms crossfade. Decoded music is kept per set: {lobby} or {match, final, victory, defeat}.
 // * The voice pool (voices.ts) caps one-shots; loops have their own cap.
+// * Codecs (mobile review A-A3): every asset is Ogg Vorbis with an AAC-LC (.m4a) twin (manifest `alt`). WebKit before
+//   18.4 — every iOS browser up to iOS 18.3 — cannot decode Ogg, so the twin is fetched when canPlayType says no Ogg, and
+//   an Ogg decode that is refused anyway falls back to it once. A twin decoded WITHOUT its MP4 edit list starts with
+//   `delay` priming samples (the build pads the source so that is the only difference): its offset is skipped
+//   everywhere (sprite slices, music sections), so both decoders stay sample-exact.
+// * Loading (mobile review A-A11): nothing is fetched at construction — the sprite + lobby music would share a phone's
+//   bandwidth with the first arena's map GLB while they cannot play before a gesture anyway. main.ts calls preload()
+//   once the first arena is up; the first gesture's unlock() also starts it. Audio fetches ask for low priority.
 
-import { MUSIC, SFX, SFX_SPRITE, SPRITE_GUARD_S, type MusicCueId, type MusicEntry, type SfxId } from './manifest.ts';
+import { MUSIC, SFX, SFX_SPRITE, SPRITE_GUARD_S, SAMPLE_RATE, type AltCodec, type MusicCueId, type MusicEntry, type SfxId } from './manifest.ts';
 import { loopSlice } from './seam.ts';
 import { categoryOf, distModel, MAX_DISTANCE, type AudioSink, type LoopCmd, type MusicCmd, type PlayCmd, type SoundId, type Vec3T } from './router.ts';
 import { VoicePool } from './voices.ts';
@@ -24,10 +32,38 @@ const LOOKAHEAD = 1.2;
 const MATCH_SET: readonly MusicCueId[] = ['match', 'final', 'victory', 'defeat'];
 const LOBBY_SET: readonly MusicCueId[] = ['lobby'];
 
+/** an asset with its AAC twin (SFX_SPRITE, a MUSIC entry) */
+interface Asset { readonly url: string; readonly alt: AltCodec }
+/** fetched bytes; `alt` set when they are the AAC twin */
+interface Fetched { bytes: ArrayBuffer; alt: AltCodec | null }
+/** a decoded asset + the seconds to skip at its start (an AAC twin decoded without its edit list: the priming) */
+interface Decoded { buf: AudioBuffer; off: number }
+
+/** A-A3: can this browser decode Ogg Vorbis at all? (no DOM, e.g. under node: assume yes) */
+function canPlayOgg(): boolean {
+  try {
+    if (typeof document === 'undefined') return true;
+    const a = document.createElement('audio');
+    return typeof a.canPlayType !== 'function' || a.canPlayType('audio/ogg; codecs="vorbis"') !== '';
+  } catch { return true; }
+}
+
+/**
+ * A-A3: the seconds to skip at the start of a decoded AAC twin. A decoder that honours the MP4 edit list returns exactly
+ * `samples`; one that ignores it returns `samples` + `delay` (the build pads the source so the untrimmed decode carries
+ * no end padding) — tell them apart by length, half the priming being the threshold.
+ */
+export function altOffset(buf: Pick<AudioBuffer, 'duration'>, a: AltCodec): number {
+  const expected = a.samples / SAMPLE_RATE, delay = a.delay / SAMPLE_RATE;
+  return buf.duration > expected + delay / 2 ? delay : 0;
+}
+
 interface CueVoice {
   cue: MusicCueId;
   entry: MusicEntry;
   buf: AudioBuffer;
+  /** seconds skipped at the buffer's start (A-A3: an untrimmed AAC twin's priming) */
+  off: number;
   gain: GainNode;
   pos: number;
   nextT: number;
@@ -80,11 +116,14 @@ export class AudioEngine implements AudioSink {
   private musicBus!: GainNode;
   private readonly pool: VoicePool;
   private readonly sfx = new Map<SfxId, AudioBuffer[]>();
-  private spriteBytes: Promise<ArrayBuffer | null> | null = null;
+  private spriteBytes: Promise<Fetched | null> | null = null;
   private spriteReady: Promise<void> | null = null;
-  private readonly musicBytes = new Map<MusicCueId, Promise<ArrayBuffer | null>>();
-  private readonly musicBufs = new Map<MusicCueId, AudioBuffer>();
-  private readonly musicDecoding = new Map<MusicCueId, Promise<AudioBuffer | null>>();
+  private readonly musicBytes = new Map<MusicCueId, Promise<Fetched | null>>();
+  private readonly musicBufs = new Map<MusicCueId, Decoded>();
+  private readonly musicDecoding = new Map<MusicCueId, Promise<Decoded | null>>();
+  /** A-A3: the codec fetched first (canPlayType), and what each decode ended up using (the __DF__.audio() read-back) */
+  private readonly ogg = canPlayOgg();
+  readonly codecs: Record<string, { codec: 'ogg' | 'aac'; off: number; duration: number }> = {};
   private readonly loops = new Map<string, LoopVoice>();
   private cur: CueVoice | null = null;
   private wantCue: MusicCueId | null = null;
@@ -98,8 +137,12 @@ export class AudioEngine implements AudioSink {
 
   constructor(voiceLimit: number) {
     this.pool = new VoicePool(voiceLimit);
-    this.spriteBytes = this.fetchBytes(SFX_SPRITE.url, 'sfx sprite');
-    this.musicBytes.set('lobby', this.fetchBytes(MUSIC.lobby.url, 'music lobby'));
+  }
+
+  /** A-A11: start the sprite + lobby-music downloads (idempotent). main.ts: once the first arena is up; unlock(): always. */
+  preload(): void {
+    if (!this.spriteBytes) this.spriteBytes = this.fetchAsset(SFX_SPRITE, 'sfx sprite');
+    if (!this.musicBytes.has('lobby')) this.musicBytes.set('lobby', this.fetchAsset(MUSIC.lobby, 'music lobby'));
   }
 
   get voices(): number { return this.pool.count; }
@@ -107,6 +150,8 @@ export class AudioEngine implements AudioSink {
   get cue(): MusicCueId | null { return this.cur ? this.cur.cue : null; }
   get loopKeys(): string[] { return [...this.loops.keys()]; }
   get decoded(): string[] { return [...(this.sfx.size ? ['sfx'] : []), ...this.musicBufs.keys()]; }
+  /** A-A11 read-back: the sprite download has been started */
+  get preloaded(): boolean { return this.spriteBytes !== null; }
 
   // ── lifecycle ─────────────────────────────────────────────────────────────────────────────
   /** create (first call) and resume the context; resolves when running or after 1.5 s (never rejects) */
@@ -115,6 +160,7 @@ export class AudioEngine implements AudioSink {
       // before any user activation a new AudioContext starts suspended and Chrome logs a warning: wait for a gesture
       const ua = (globalThis as { navigator?: { userActivation?: { hasBeenActive: boolean } } }).navigator?.userActivation;
       if (!this.ctx && ua && !ua.hasBeenActive) return;
+      this.preload();
       if (!this.ctx) this.build();
       const ctx = this.ctx;
       if (!ctx) return;
@@ -122,7 +168,7 @@ export class AudioEngine implements AudioSink {
         await Promise.race([ctx.resume().catch(() => undefined), new Promise((r) => setTimeout(r, 1500))]);
       }
       if (!this.spriteReady) this.spriteReady = this.decodeSprite();
-      for (const cue of Object.keys(MUSIC) as MusicCueId[]) if (!this.musicBytes.has(cue)) this.musicBytes.set(cue, this.fetchBytes(MUSIC[cue].url, `music ${cue}`));
+      for (const cue of Object.keys(MUSIC) as MusicCueId[]) if (!this.musicBytes.has(cue)) this.musicBytes.set(cue, this.fetchAsset(MUSIC[cue], `music ${cue}`));
       if (this.wantCue && !this.cur) this.musicPlay(this.wantCue, 'now');
     } catch (e) {
       this.fail('unlock', e);
@@ -173,18 +219,56 @@ export class AudioEngine implements AudioSink {
   resume(): void { if (this.ctx && this.ctx.state === 'suspended') void this.ctx.resume().catch(() => undefined); }
 
   // ── loading ───────────────────────────────────────────────────────────────────────────────
-  private fetchBytes(url: string, what: string): Promise<ArrayBuffer | null> {
+  /** low-priority bytes (A-A11: never ahead of the map GLB the player is waiting on); null + fail() on an error */
+  private fetchRaw(url: string, what: string): Promise<ArrayBuffer | null> {
     if (typeof fetch !== 'function') return Promise.resolve(null);
-    return fetch(url).then((r) => { if (!r.ok) throw new Error(`${r.status} ${url}`); return r.arrayBuffer(); })
+    return fetch(url, { priority: 'low' } as RequestInit).then((r) => { if (!r.ok) throw new Error(`${r.status} ${url}`); return r.arrayBuffer(); })
       .catch((e: unknown) => { this.fail(`fetch ${what}`, e); return null; });
+  }
+
+  /** A-A3: the Ogg where this browser can play it, else the AAC twin */
+  private fetchAsset(e: Asset, what: string): Promise<Fetched | null> {
+    const alt = this.ogg ? null : e.alt;
+    return this.fetchRaw(alt ? alt.url : e.url, alt ? `${what} (aac)` : what).then((bytes) => (bytes ? { bytes, alt } : null));
+  }
+
+  /**
+   * A-A3: decode fetched bytes; an Ogg the browser refuses (WebKit before 18.4, whatever canPlayType said) falls back to
+   * the AAC twin once. An AAC decode gets its priming offset (altOffset). Failures land in errors (fail) and return null.
+   */
+  private async decodeAsset(got: Fetched | null, e: Asset, what: string): Promise<Decoded | null> {
+    const ctx = this.ctx;
+    if (!ctx || !got) return null;
+    const note = (d: Decoded, codec: 'ogg' | 'aac'): Decoded => {
+      this.codecs[what] = { codec, off: Math.round(d.off * SAMPLE_RATE), duration: Math.round(d.buf.duration * 1000) / 1000 };
+      return d;
+    };
+    try {
+      const buf = await ctx.decodeAudioData(got.bytes.slice(0));
+      return note({ buf, off: got.alt ? altOffset(buf, got.alt) : 0 }, got.alt ? 'aac' : 'ogg');
+    } catch (err) {
+      if (got.alt) { this.fail(`decode ${what} (aac)`, err); return null; }
+      const bytes = await this.fetchRaw(e.alt.url, `${what} (aac)`);
+      if (!bytes) { this.fail(`decode ${what}`, err); return null; }
+      try {
+        const buf = await ctx.decodeAudioData(bytes);
+        return note({ buf, off: altOffset(buf, e.alt) }, 'aac');
+      } catch (err2) {
+        this.fail(`decode ${what}`, err);
+        this.fail(`decode ${what} (aac)`, err2);
+        return null;
+      }
+    }
   }
 
   private async decodeSprite(): Promise<void> {
     const ctx = this.ctx;
-    const bytes = this.spriteBytes ? await this.spriteBytes : null;
-    if (!ctx || !bytes) return;
+    const got = this.spriteBytes ? await this.spriteBytes : null;
+    if (!ctx || !got) return;
+    const dec = await this.decodeAsset(got, SFX_SPRITE, 'sfx sprite');
+    if (!dec) return;
     try {
-      const full = await ctx.decodeAudioData(bytes.slice(0));
+      const full = dec.buf;
       const sr = full.sampleRate;
       const data = full.getChannelData(0);
       const guard = Math.round(SPRITE_GUARD_S * sr);
@@ -193,7 +277,7 @@ export class AudioEngine implements AudioSink {
         const e = SFX[id];
         const out: AudioBuffer[] = [];
         for (let i = 0; i < e.v.length; i++) {
-          const a = Math.round(e.v[i][0] * sr);
+          const a = Math.round((e.v[i][0] + dec.off) * sr);
           const n = Math.max(1, Math.min(data.length - a, Math.round((e.n[i] / 44100) * sr)));
           const b = ctx.createBuffer(1, n, sr);
           b.copyToChannel(e.loop ? loopSlice(data, a, n, guard, k) : data.subarray(a, a + n), 0);
@@ -202,27 +286,22 @@ export class AudioEngine implements AudioSink {
         this.sfx.set(id, out);
       }
     } catch (e) {
-      this.fail('decode sfx sprite', e);
+      this.fail('slice sfx sprite', e);
     }
   }
 
-  private loadMusic(cue: MusicCueId): Promise<AudioBuffer | null> {
+  private loadMusic(cue: MusicCueId): Promise<Decoded | null> {
     const have = this.musicBufs.get(cue);
     if (have) return Promise.resolve(have);
     const pending = this.musicDecoding.get(cue);
     if (pending) return pending;
     let bytesP = this.musicBytes.get(cue);
-    if (!bytesP) { bytesP = this.fetchBytes(MUSIC[cue].url, `music ${cue}`); this.musicBytes.set(cue, bytesP); }
-    const p = bytesP.then(async (bytes) => {
-      const ctx = this.ctx;
-      if (!bytes || !ctx) return null;
+    if (!bytesP) { bytesP = this.fetchAsset(MUSIC[cue], `music ${cue}`); this.musicBytes.set(cue, bytesP); }
+    const p = bytesP.then(async (got) => {
       try {
-        const buf = await ctx.decodeAudioData(bytes.slice(0));
-        this.musicBufs.set(cue, buf);
-        return buf;
-      } catch (e) {
-        this.fail(`decode music ${cue}`, e);
-        return null;
+        const d = await this.decodeAsset(got, MUSIC[cue], `music ${cue}`);
+        if (d) this.musicBufs.set(cue, d);
+        return d;
       } finally {
         this.musicDecoding.delete(cue);
       }
@@ -431,7 +510,7 @@ export class AudioEngine implements AudioSink {
     });
   }
 
-  private startCue(cue: MusicCueId, buf: AudioBuffer, at: 'now' | 'bar'): void {
+  private startCue(cue: MusicCueId, dec: Decoded, at: 'now' | 'bar'): void {
     const ctx = this.ctx;
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -444,7 +523,7 @@ export class AudioEngine implements AudioSink {
     g.gain.setValueAtTime(0, Math.max(now, t - 0.03));
     g.gain.linearRampToValueAtTime(1, t + 0.03);
     g.connect(this.musicDuck);
-    this.cur = { cue, entry, buf, gain: g, pos: 0, nextT: t, scheduled: [] };
+    this.cur = { cue, entry, buf: dec.buf, off: dec.off, gain: g, pos: 0, nextT: t, scheduled: [] };
     this.pump();
     this.musicSet(cue);
   }
@@ -467,7 +546,7 @@ export class AudioEngine implements AudioSink {
       const src = ctx.createBufferSource();
       src.buffer = c.buf;
       src.connect(c.gain);
-      src.start(c.nextT, s0, dur);
+      src.start(c.nextT, s0 + c.off, dur);         // off: an untrimmed AAC twin's priming (A-A3), else 0
       c.scheduled.push({ src, t0: c.nextT, t1: c.nextT + dur });
       c.nextT += dur;
       c.pos++;

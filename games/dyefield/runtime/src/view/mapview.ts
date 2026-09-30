@@ -85,6 +85,9 @@ const SHORE_SKIP = new Set(['M_plank', 'M_boardwalk', 'M_grate', 'M_belt']);
 export interface MapViewOptions {
   /** merge static solid_/deco_ meshes that share a material (default true) */
   mergeStatic?: boolean;
+  /** the map GLB's bytes when the caller already fetched them (main.ts: one fetch feeds the core's geometry AND this
+   *  view — mobile review A-A4); parsed in place of a second request. The map GLBs carry no external uris / images. */
+  bytes?: ArrayBuffer;
 }
 
 export interface MergeReport {
@@ -562,8 +565,12 @@ export async function loadMapView(loader: GLTFLoader, def: MapDef, dye: DyeUnifo
   options: MapViewOptions = {}): Promise<MapView> {
   const url = artUrl(`map_${def.id}.glb`);
   const gltf = await new Promise<import('three/addons/loaders/GLTFLoader.js').GLTF>((ok, fail) => {
-    loader.load(url, ok, (e) => { if (onProgress && e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total); },
-      (err) => fail(new Error(`failed to load ${url}: ${err instanceof Error ? err.message : String(err)}`)));
+    const bad = (err: unknown): void => fail(new Error(`failed to load ${url}: ${err instanceof Error ? err.message : String(err)}`));
+    if (options.bytes) {
+      loader.parse(options.bytes, '', (g) => { onProgress?.(1); ok(g); }, bad);
+      return;
+    }
+    loader.load(url, ok, (e) => { if (onProgress && e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total); }, bad);
   });
   const root = new THREE.Group();
   root.name = `map_${def.id}`;

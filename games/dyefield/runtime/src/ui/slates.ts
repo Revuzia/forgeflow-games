@@ -15,6 +15,31 @@
 
 import { FFA_CREWS, TEAMS_RAW, teamById } from '../core/data.ts';
 import type { MatchMode, TeamId } from '../core/types.ts';
+import { SVG } from './icons.ts';
+
+/**
+ * CONTRACT_MOBILE M4 platform prompts: the touch buttons' glyphs (24 × 24, currentColor + ink), shared by the HUD's
+ * badges, the countdown legend, the pause card's legend, HOW TO PLAY and the SETTINGS preview.
+ */
+export type TouchGlyph = 'stick' | 'aim' | 'fire' | 'slick' | 'jump' | 'sub' | 'special' | 'pause';
+const GLYPHS: Record<TouchGlyph, string> = {
+  stick: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="2.4"/>'
+    + '<circle cx="12" cy="12" r="4.6" fill="currentColor" stroke="#14203a" stroke-width="1.4"/></svg>',
+  aim: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.4" fill="none" stroke="currentColor" stroke-width="2.4"/>'
+    + '<path d="M5.4 8.2 1.8 12l3.6 3.8M18.6 8.2l3.6 3.8-3.6 3.8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  fire: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l1.9 5 4.6-2.4-1.8 4.9 5.1 1.3-4.6 2.5 2.9 4.4-5.2-.9-.6 5.2L12 18.3l-2.3 4.3-.6-5.2-5.2.9 2.9-4.4-4.6-2.5 5.1-1.3-1.8-4.9 4.6 2.4z" fill="currentColor" stroke="#14203a" stroke-width="1.3" stroke-linejoin="round"/></svg>',
+  slick: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2c3 4 5.6 7.2 5.6 10.4a5.6 5.6 0 0 1-11.2 0C6.4 10.4 9 7.2 12 3.2z" fill="currentColor" stroke="#14203a" stroke-width="1.6" stroke-linejoin="round"/>'
+    + '<path d="M3 20.4c1.5-1.2 3-1.2 4.5 0s3 1.2 4.5 0 3-1.2 4.5 0 3 1.2 4.5 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  jump: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 14.5 12 7.5l7 7" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>'
+    + '<path d="M7 19.5h10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>',
+  sub: SVG['jelly-charge'] ?? '<svg viewBox="0 0 24 24" aria-hidden="true"></svg>',
+  special: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8c.9 4.6 2.6 6.3 7.2 7.2-4.6.9-6.3 2.6-7.2 7.2-.9-4.6-2.6-6.3-7.2-7.2 4.6-.9 6.3-2.6 7.2-7.2z" fill="currentColor" stroke="#14203a" stroke-width="1.4" stroke-linejoin="round"/>'
+    + '<circle cx="18.6" cy="18.4" r="2.2" fill="currentColor" stroke="#14203a" stroke-width="1.2"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4.2" height="14" rx="1.6" fill="currentColor"/><rect x="13.8" y="5" width="4.2" height="14" rx="1.6" fill="currentColor"/></svg>',
+};
+export function touchGlyph(g: TouchGlyph): string { return GLYPHS[g]; }
+/** the countdown legend in touch mode: [glyph, label] pills (the keyboard rows come from menus.legend()) */
+const TOUCH_COUNT_LEGEND: ReadonlyArray<readonly [TouchGlyph, string]> = [['stick', 'move'], ['aim', 'aim'], ['fire', 'fire'], ['slick', 'slick'], ['jump', 'jump']];
 
 /** CONTRACT_FFA F1: the match mode (core/types.ts MatchMode) */
 export type UiMode = MatchMode;
@@ -112,8 +137,10 @@ export class Slates {
   private deathTotal = 3;
   private deathOn = false;
   private deathLastNum = -1;
-  // countdown legend
+  // countdown legend (keyboard rows from main.ts; touch rows built in)
   private readonly legend: HTMLElement;
+  private keyRows: ReadonlyArray<readonly [string, string]> = [];
+  private touch = false;
   // victory
   private readonly victory: HTMLElement;
   private readonly victoryCard: HTMLElement;
@@ -248,8 +275,31 @@ export class Slates {
 
   /** the countdown's control legend: [keycap, label] pills (main.ts passes the live bindings) */
   setLegend(rows: ReadonlyArray<readonly [string, string]>): void {
+    this.keyRows = rows.map((r) => [r[0], r[1]] as const);
+    this.renderLegend();
+  }
+
+  /** CONTRACT_MOBILE M4: touch mode → the countdown legend shows the touch buttons' glyphs instead of the keys */
+  setTouchMode(on: boolean): void {
+    if (this.touch === on) return;
+    this.touch = on;
+    this.renderLegend();
+  }
+
+  private renderLegend(): void {
     this.legend.replaceChildren();
-    for (const [k, v] of rows) {
+    this.legend.classList.toggle('touch', this.touch);
+    if (this.touch) {
+      for (const [g, v] of TOUCH_COUNT_LEGEND) {
+        const pill = el('span', 'k');
+        const i = el('i', 'tg');
+        i.innerHTML = GLYPHS[g];
+        pill.append(i, el('span', '', v));
+        this.legend.append(pill);
+      }
+      return;
+    }
+    for (const [k, v] of this.keyRows) {
       const pill = el('span', 'k');
       pill.append(el('b', '', k), el('span', '', v));
       this.legend.append(pill);

@@ -33,7 +33,28 @@ export interface Settings {
   showFps: boolean;
   /** no screen shake (FollowCamera.reduceMotion / the juice module) */
   reduceMotion: boolean;
+  // ── CONTRACT_MOBILE M8: touch controls (the overlay in runtime/src/touch/; only read in touch mode) ──
+  /** touch look gain (× the M2 look rates), 0.3 … 3 */
+  touchSens: number;
+  /** control size multiplier, 0.8 … 1.3 (hit targets never drop below 44 CSS px) */
+  touchScale: number;
+  /** idle control opacity, 0.35 … 1 (a pressed control is 1.0) */
+  touchOpacity: number;
+  /** mirror the whole layout (stick on the right, buttons on the left) */
+  touchLeftHanded: boolean;
+  /** touch-only aim assist (slowdown + a light rotational pull, touch/aimassist.ts) */
+  aimAssist: boolean;
+  /** navigator.vibrate feedback (a no-op where unsupported, e.g. iOS) */
+  haptics: boolean;
 }
+
+/** CONTRACT_MOBILE M8 ranges */
+export const TOUCH_SENS_MIN = 0.3;
+export const TOUCH_SENS_MAX = 3;
+export const TOUCH_SCALE_MIN = 0.8;
+export const TOUCH_SCALE_MAX = 1.3;
+export const TOUCH_OPACITY_MIN = 0.35;
+export const TOUCH_OPACITY_MAX = 1;
 
 /** CONTRACT_FFA F1: the match mode (mirrors core/types.ts `MatchMode`) */
 export type ProfileMode = 'teams' | 'ffa';
@@ -80,6 +101,7 @@ export function defaultSettings(): Settings {
   return {
     bindings: defaultBindings(), sensitivity: 1, invertY: false, colorblind: false,
     volume: { ...DEFAULT_VOLUMES }, quality: 'auto', showFps: false, reduceMotion: osReducedMotion(),
+    touchSens: 1, touchScale: 1, touchOpacity: 0.75, touchLeftHanded: false, aimAssist: true, haptics: true,
   };
 }
 
@@ -136,6 +158,13 @@ export function sanitizeSettings(raw: unknown): Settings {
     quality: isRenderQuality(r.quality) ? r.quality : d.quality,
     showFps: bool(r.showFps, d.showFps),
     reduceMotion: bool(r.reduceMotion, d.reduceMotion),
+    // CONTRACT_MOBILE M8: an old save has none of these → the defaults (every older field loads unchanged)
+    touchSens: clamp(r.touchSens, TOUCH_SENS_MIN, TOUCH_SENS_MAX, d.touchSens),
+    touchScale: clamp(r.touchScale, TOUCH_SCALE_MIN, TOUCH_SCALE_MAX, d.touchScale),
+    touchOpacity: clamp(r.touchOpacity, TOUCH_OPACITY_MIN, TOUCH_OPACITY_MAX, d.touchOpacity),
+    touchLeftHanded: bool(r.touchLeftHanded, d.touchLeftHanded),
+    aimAssist: bool(r.aimAssist, d.aimAssist),
+    haptics: bool(r.haptics, d.haptics),
   };
 }
 

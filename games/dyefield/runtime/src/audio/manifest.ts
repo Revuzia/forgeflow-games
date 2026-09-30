@@ -63,9 +63,20 @@ export interface SfxEntry {
   /** perceived level of the normalised take (dBFS RMS of its loudest 400 ms); the router levels by category */
   readonly ldb: number;
 }
+/** the AAC-LC (MP4) twin of an Ogg asset, for WebKit before 18.4 (no Ogg decode): `samples` = the decode that honours
+ *  the MP4 edit list; a decoder that ignores it returns `samples` + `delay` priming samples first (engine.ts skips them) */
+export interface AltCodec {
+  readonly url: string;
+  readonly file: string;
+  readonly bytes: number;
+  readonly samples: number;
+  readonly delay: number;
+  readonly kbps: number;
+}
 export interface MusicEntry {
   readonly url: string;
   readonly file: string;
+  readonly alt: AltCodec;
   readonly seconds: number;
   readonly bytes: number;
   readonly kbps: number;
@@ -83,7 +94,7 @@ export interface MusicEntry {
 export const SAMPLE_RATE = 44100;
 /** s of wrap-around written before and after every loop region (seam.ts crossfades the head from it) */
 export const SPRITE_GUARD_S = 0.06;
-export const SFX_SPRITE = { url: new URL('./assets/sfx.ogg', import.meta.url).href, file: 'assets/sfx.ogg', seconds: 64.053129, samples: 2824743, bytes: 496572, kbps: 62.0 } as const;
+export const SFX_SPRITE = { url: new URL('./assets/sfx.ogg', import.meta.url).href, file: 'assets/sfx.ogg', seconds: 64.053129, samples: 2824743, bytes: 496572, kbps: 62.0, alt: { url: new URL('./assets/sfx.m4a', import.meta.url).href, file: 'assets/sfx.m4a', bytes: 541607, samples: 2825216, delay: 1024, kbps: 67.6 } } as const;
 
 export const SFX: { readonly [K in SfxId]: SfxEntry } = {
   ui_hover: { v: [[0.05, 0.011224]], n: [495], loop: false, cat: 'ui', ldb: -17.1 },
@@ -138,6 +149,7 @@ export const SFX: { readonly [K in SfxId]: SfxEntry } = {
 export const MUSIC: { readonly [K in MusicCueId]: MusicEntry } = {
   lobby: {
     url: new URL('./assets/music_lobby.ogg', import.meta.url).href, file: 'assets/music_lobby.ogg',
+    alt: { url: new URL('./assets/music_lobby.m4a', import.meta.url).href, file: 'assets/music_lobby.m4a', bytes: 953593, samples: 2540544, delay: 1024, kbps: 132.4 },
     seconds: 57.599955, bytes: 771825, kbps: 107.2,
     sections: [[0.0, 19.199955, 846718], [19.199955, 19.2, 846720], [38.399955, 19.2, 846720]],
     intro: [], cycle: [0, 1, 0, 1, 2, 1],
@@ -145,6 +157,7 @@ export const MUSIC: { readonly [K in MusicCueId]: MusicEntry } = {
   },
   match: {
     url: new URL('./assets/music_match.ogg', import.meta.url).href, file: 'assets/music_match.ogg',
+    alt: { url: new URL('./assets/music_match.m4a', import.meta.url).href, file: 'assets/music_match.m4a', bytes: 791802, samples: 2117632, delay: 1024, kbps: 131.9 },
     seconds: 48.0, bytes: 633317, kbps: 105.6,
     sections: [[0.0, 16.0, 705600], [16.0, 32.0, 1411200]],
     intro: [], cycle: [0, 1],
@@ -152,6 +165,7 @@ export const MUSIC: { readonly [K in MusicCueId]: MusicEntry } = {
   },
   final: {
     url: new URL('./assets/music_final.ogg', import.meta.url).href, file: 'assets/music_final.ogg',
+    alt: { url: new URL('./assets/music_final.m4a', import.meta.url).href, file: 'assets/music_final.m4a', bytes: 696711, samples: 1814528, delay: 1024, kbps: 135.5 },
     seconds: 41.141973, bytes: 582740, kbps: 113.3,
     sections: [[0.0, 13.713991, 604787], [13.713991, 13.713991, 604787], [27.427982, 13.713991, 604787]],
     intro: [], cycle: [0, 1, 2],
@@ -159,6 +173,7 @@ export const MUSIC: { readonly [K in MusicCueId]: MusicEntry } = {
   },
   victory: {
     url: new URL('./assets/music_victory.ogg', import.meta.url).href, file: 'assets/music_victory.ogg',
+    alt: { url: new URL('./assets/music_victory.m4a', import.meta.url).href, file: 'assets/music_victory.m4a', bytes: 155539, samples: 423936, delay: 1024, kbps: 129.4 },
     seconds: 9.6, bytes: 127788, kbps: 106.5,
     sections: [[0.0, 9.6, 423360]],
     intro: [], cycle: [0],
@@ -166,6 +181,7 @@ export const MUSIC: { readonly [K in MusicCueId]: MusicEntry } = {
   },
   defeat: {
     url: new URL('./assets/music_defeat.ogg', import.meta.url).href, file: 'assets/music_defeat.ogg',
+    alt: { url: new URL('./assets/music_defeat.m4a', import.meta.url).href, file: 'assets/music_defeat.m4a', bytes: 155471, samples: 423936, delay: 1024, kbps: 129.4 },
     seconds: 9.6, bytes: 137321, kbps: 114.4,
     sections: [[0.0, 9.6, 423360]],
     intro: [], cycle: [0],
@@ -175,5 +191,7 @@ export const MUSIC: { readonly [K in MusicCueId]: MusicEntry } = {
 
 /** every shipped audio byte (sprite + music), for the ≤ 8 MB budget */
 export const AUDIO_PAYLOAD_BYTES = 2749563;
+/** the AAC twins' bytes (a device downloads one set: Ogg, or these on WebKit before 18.4) */
+export const AUDIO_ALT_PAYLOAD_BYTES = 3294723;
 /** tracks registered for the slug `dyefield` in state/music_assignments.json */
 export const REGISTERED_TRACKS = ['Travis Rise/SynthWave Music Pack/01_Revelation', 'Travis Rise/SynthWave Music Pack/02_ChasingTheStars', 'Travis Rise/SynthWave Music Pack/05_HyperDrive', 'Travis Rise/SynthWave Music Pack/06_8-bitHero'] as const;

@@ -26,15 +26,27 @@ export function createAudio(opts: AudioOptions = {}): GameAudio {
     return unlocking;
   };
 
-  // first gesture → unlock (the listeners remove themselves once the context runs)
-  const gestures = ['pointerdown', 'keydown', 'touchstart'] as const;
+  // first gesture → unlock. CONTRACT_MOBILE M4: iOS Safari only resumes an AudioContext inside touchend / click (a
+  // touchstart / pointerdown is too early there), so the release gestures are listened to as well. The listeners stay
+  // installed: a gesture while the context is NOT running (iOS interrupts it for a call / Siri / another app's audio,
+  // or a resume on returning to the tab was refused without a gesture) resumes it — a cheap state check otherwise.
+  const gestures = ['pointerdown', 'pointerup', 'keydown', 'touchstart', 'touchend', 'click'] as const;
   const onGesture = (): void => {
-    void unlock().then(() => { if (unlocked) for (const g of gestures) removeEventListener(g, onGesture, true); });
+    if (disposed) return;
+    const st = engine.ctx?.state;
+    if (unlocked && st === 'running') return;
+    if (unlocked && st !== undefined && st !== 'running' && st !== 'closed') {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      unlocking = null;                           // re-arm: the context was interrupted after it had run
+    }
+    void unlock();
   };
   const hasWindow = typeof window !== 'undefined' && typeof addEventListener === 'function';
-  if (hasWindow && opts.autoUnlock !== false) for (const g of gestures) addEventListener(g, onGesture, true);
+  const gestureOpts: AddEventListenerOptions = { capture: true, passive: true };
+  if (hasWindow && opts.autoUnlock !== false) for (const g of gestures) addEventListener(g, onGesture, gestureOpts);
 
-  // tab hidden → suspend the context (music and loops stop instead of droning behind another tab)
+  // tab hidden → suspend the context (music and loops stop instead of droning behind another tab); visible again →
+  // resume (M4; where the platform refuses that without a gesture, the next tap resumes it through onGesture)
   const onVis = (): void => {
     if (!unlocked) return;
     if (document.visibilityState === 'hidden') engine.suspend(); else engine.resume();
@@ -43,6 +55,7 @@ export function createAudio(opts: AudioOptions = {}): GameAudio {
 
   const api: GameAudio = {
     unlock,
+    preload(): void { if (!disposed) engine.preload(); },
     setVolumes(v: Partial<AudioVolumes>): void { engine.setVolumes(v); },
     playMusic(cue: MusicCue, o?: { map?: string }): void { router.music(cue, o?.map, engine); },
     stopMusic(fadeS = 0.6): void { router.stopMusic(fadeS, engine); },
@@ -72,12 +85,13 @@ export function createAudio(opts: AudioOptions = {}): GameAudio {
         stolen: p.stolen, rejected: p.rejected, loops: engine.loopKeys, played: engine.played, playedBus: { ...engine.playedBus },
         counts: { ...router.counts }, loopStarts: { ...router.loopStarts },
         decoded: engine.decoded, errors: [...engine.errors], meter: engine.meterRead(), volumes: engine.volumes, paused: engine.isPaused,
+        preloaded: engine.preloaded, codecs: { ...engine.codecs },
       };
     },
     dispose(): void {
       disposed = true;
       if (hasWindow) {
-        for (const g of gestures) removeEventListener(g, onGesture, true);
+        for (const g of gestures) removeEventListener(g, onGesture, gestureOpts);
         if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVis);
       }
       engine.dispose();

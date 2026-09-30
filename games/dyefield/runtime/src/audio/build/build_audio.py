@@ -5,6 +5,8 @@ runtime/src/audio/manifest.ts and runtime/src/audio/CREDITS.json. Never hand-edi
     python runtime/src/audio/build/build_audio.py                 # full build (music + sfx sprite)
     python runtime/src/audio/build/build_audio.py --cache DIR     # where the Unity-package WAVs are unpacked
     python runtime/src/audio/build/build_audio.py --report FILE   # also write a JSON build report
+    python runtime/src/audio/build/build_audio.py --aac-twins     # only the AAC twins of the Ogg outputs in assets/
+                                                                  # (+ their manifest fields); a full build does this too
 
 Sources (all read-only, on F:\\):
   * music — "SynthWave Music Pack" by Travis Rise (Unity Asset Store), the .unitypackage in
@@ -21,6 +23,8 @@ Outputs:
   * assets/sfx.ogg          one mono 44.1 kHz Ogg Vorbis sprite; every variant's (start, duration) in the
     manifest. Loop regions are written with 60 ms of their own wrap-around on both sides so the codec
     sees continuous signal across the seam.
+  * assets/*.m4a            the AAC-LC twin of each Ogg (mobile review A-A3: WebKit before 18.4 has no Ogg), encoded
+    from the Ogg's own decode, sample-exact through the MP4 edit list (see apply_aac_twins)
   * manifest.ts             generated TypeScript: static `new URL('./assets/..', import.meta.url)` (Vite
     emits hashed files; Node resolves them to file: URLs for the probe), per-sound loudness (ldb) and
     category, per-cue sections/sequence/bpm.
@@ -824,15 +828,165 @@ def write_manifest(sfx: dict, music: dict) -> int:
     return payload
 
 
+# ─────────────────────────────────── AAC twins (mobile review A-A3) ───────────────────────────────────
+# iOS / iPadOS Safari before 18.4 cannot decode Ogg (decodeAudioData rejects it; every iOS browser is WebKit), and the
+# contract's M0 envelope starts at iOS 16.4 — iPhone 8 / X stop at 16.7. Every Ogg output therefore gets an AAC-LC twin
+# in MP4 (.m4a), encoded from the Ogg's OWN decode (the twin is the shipped Ogg, re-encoded; same samples, same
+# offsets), and the manifest carries it as `alt`. The runtime (engine.ts) fetches the twin when canPlayType says no Ogg,
+# and falls back to it when an Ogg decode is refused anyway.
+# Sample exactness: AAC primes the decoder with AAC_DELAY samples. The source is padded with silence so samples +
+# priming is a whole number of 1024-sample frames; the untrimmed decode then has NO end padding. A decoder that honours
+# the MP4 edit list returns exactly `samples`; one that ignores it returns samples + AAC_DELAY — the runtime tells the
+# two apart by length and skips the priming. Every section / region offset stays valid (the pad is silence after the
+# last one). Checked here on every build: the edit-list decode has exactly `samples` and lines up with the Ogg decode at
+# lag 0 (the best of −1024..+1024 by correlation), the raw decode has exactly `samples` + AAC_DELAY.
+AAC_KBPS = {1: 64, 2: 128}      # mono sprite, stereo music
+AAC_DELAY = 1024                # ffmpeg's native AAC encoder priming (measured by the checks below on every build)
+
+
+def _decode_f32(path: str, ch: int, ignore_editlist: bool = False) -> np.ndarray:
+    cmd = ["ffmpeg", "-v", "error"] + (["-ignore_editlist", "1"] if ignore_editlist else []) + [
+        "-i", path, "-f", "f32le", "-ac", str(ch), "-ar", str(SR), "-"]
+    raw = subprocess.run(cmd, capture_output=True, check=True).stdout
+    return np.frombuffer(raw, dtype="<f4").reshape(-1, ch)
+
+
+def _best_lag(ref: np.ndarray, x: np.ndarray, lags: range) -> int:
+    """the lag of x against ref with the highest normalised correlation (mono mix, the loudest 2 s windows)"""
+    a = ref.mean(axis=1)
+    b = x.mean(axis=1)
+    win = 2 * SR
+    starts = sorted(range(AAC_DELAY + 8, max(AAC_DELAY + 9, len(a) - win - AAC_DELAY - 8), win),
+                    key=lambda s: -float(np.sum(a[s:s + win] ** 2)))[:4] or [0]
+    best, best_c = 0, -2.0
+    for lag in lags:
+        c = 0.0
+        for s in starts:
+            u = a[s:s + win]
+            v = b[s + lag:s + lag + len(u)]
+            if len(v) < len(u):
+                continue
+            c += float(np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v) + 1e-12))
+        if c > best_c:
+            best, best_c = lag, c
+    return best
+
+
+def aac_twin(ogg_path: str) -> dict:
+    ch = channels_of(ogg_path)
+    pcm = _decode_f32(ogg_path, ch)
+    n = len(pcm)
+    pad = (-(n + AAC_DELAY)) % 1024
+    samples = n + pad
+    m4a = os.path.splitext(ogg_path)[0] + ".m4a"
+    with tempfile.TemporaryDirectory(prefix="dyefield-aac-") as tmp:
+        src = os.path.join(tmp, "src.f32")
+        np.concatenate([pcm, np.zeros((pad, ch), dtype="<f4")]).astype("<f4").tofile(src)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(SR), "-ac", str(ch), "-i", src,
+                        "-c:a", "aac", "-b:a", f"{AAC_KBPS[ch]}k", "-map_metadata", "-1", "-fflags", "+bitexact",
+                        "-flags:a", "+bitexact", "-movflags", "+faststart", m4a], check=True)
+    el = _decode_f32(m4a, ch)
+    raw = _decode_f32(m4a, ch, ignore_editlist=True)
+    lag = _best_lag(pcm, el, range(-AAC_DELAY - 4, AAC_DELAY + 5))
+    name = os.path.basename(m4a)
+    problems = []
+    if len(el) != samples:
+        problems.append(f"edit-list decode {len(el)} samples ≠ {samples}")
+    if len(raw) != samples + AAC_DELAY:
+        problems.append(f"raw decode {len(raw)} samples ≠ {samples} + {AAC_DELAY} priming")
+    if lag != 0:
+        problems.append(f"edit-list decode lines up with the Ogg at lag {lag}, not 0")
+    if problems:
+        raise SystemExit(f"AAC twin {name}: " + "; ".join(problems))
+    size = os.path.getsize(m4a)
+    info = {"file": "assets/" + name, "bytes": size, "samples": samples, "delay": AAC_DELAY,
+            "kbps": round(size * 8 / 1000 / (samples / SR), 1)}
+    print(f"aac twin {name}: {ch} ch, {samples} samples (+{pad} pad), priming {AAC_DELAY}, {info['kbps']} kb/s, "
+          f"{size / 1024:.0f} KB — edit-list decode exact, lag 0 vs the Ogg", flush=True)
+    return info
+
+
+def alt_ts(a: dict) -> str:
+    return (f"alt: {{ url: new URL({ts_str('./' + a['file'])}, import.meta.url).href, file: {ts_str(a['file'])}, "
+            f"bytes: {a['bytes']}, samples: {a['samples']}, delay: {a['delay']}, kbps: {a['kbps']} }}")
+
+
+ALT_IFACE = [
+    "/** the AAC-LC (MP4) twin of an Ogg asset, for WebKit before 18.4 (no Ogg decode): `samples` = the decode that honours",
+    " *  the MP4 edit list; a decoder that ignores it returns `samples` + `delay` priming samples first (engine.ts skips them) */",
+    "export interface AltCodec {",
+    "  readonly url: string;",
+    "  readonly file: string;",
+    "  readonly bytes: number;",
+    "  readonly samples: number;",
+    "  readonly delay: number;",
+    "  readonly kbps: number;",
+    "}",
+]
+
+
+def apply_aac_twins() -> int:
+    """(re)write every Ogg output's AAC twin and put them in manifest.ts (idempotent: `alt` fields, the AltCodec type,
+    AUDIO_ALT_PAYLOAD_BYTES). Runs after write_manifest in a full build, and alone with --aac-twins (from the Ogg
+    outputs already in assets/)."""
+    with open(MANIFEST_TS, encoding="utf-8") as f:
+        src = f.read()
+    lines = src.split("\n")
+    total = 0
+    # the sprite
+    sp_i = next(i for i, l in enumerate(lines) if l.startswith("export const SFX_SPRITE = {"))
+    sp = aac_twin(os.path.join(ASSETS, "sfx.ogg"))
+    total += sp["bytes"]
+    body = re.sub(r", alt: \{[^}]*\}", "", lines[sp_i])
+    lines[sp_i] = body.replace(" } as const;", ", " + alt_ts(sp) + " } as const;")
+    # the music cues (each entry's url line names its Ogg; its alt line follows it)
+    i = 0
+    while i < len(lines):
+        mm = re.match(r"    url: new URL\('\./assets/(music_[a-z0-9_]+)\.ogg', import\.meta\.url\)\.href, file: ", lines[i])
+        if mm:
+            a = aac_twin(os.path.join(ASSETS, mm.group(1) + ".ogg"))
+            total += a["bytes"]
+            alt_line = "    " + alt_ts(a) + ","
+            if i + 1 < len(lines) and lines[i + 1].startswith("    alt: {"):
+                lines[i + 1] = alt_line
+            else:
+                lines.insert(i + 1, alt_line)
+            i += 1
+        i += 1
+    # the types
+    if not any(l.startswith("export interface AltCodec {") for l in lines):
+        at = next(i for i, l in enumerate(lines) if l.startswith("export interface MusicEntry {"))
+        lines[at:at] = ALT_IFACE
+    me = next(i for i, l in enumerate(lines) if l.startswith("export interface MusicEntry {"))
+    if lines[me + 3] != "  readonly alt: AltCodec;":
+        lines.insert(me + 3, "  readonly alt: AltCodec;")
+    # the alt payload, after the Ogg payload
+    lines = [l for l in lines if not l.startswith("export const AUDIO_ALT_PAYLOAD_BYTES") and
+             l != "/** the AAC twins' bytes (a device downloads one set: Ogg, or these on WebKit before 18.4) */"]
+    pi = next(i for i, l in enumerate(lines) if l.startswith("export const AUDIO_PAYLOAD_BYTES"))
+    lines[pi + 1:pi + 1] = ["/** the AAC twins' bytes (a device downloads one set: Ogg, or these on WebKit before 18.4) */",
+                            f"export const AUDIO_ALT_PAYLOAD_BYTES = {total};"]
+    out = "\n".join(lines)
+    with open(MANIFEST_TS, "w", encoding="utf-8", newline="\n") as f:
+        f.write(out)
+    print(f"aac twins: {total / 1024 / 1024:.2f} MB → {MANIFEST_TS}", flush=True)
+    return total
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache", default=os.path.join(tempfile.gettempdir(), "dyefield-audio-cache"))
     ap.add_argument("--report", default=None)
+    ap.add_argument("--aac-twins", action="store_true",
+                    help="only (re)write the AAC twins of the Ogg outputs already in assets/ and their manifest fields")
     a = ap.parse_args()
     for tool in ("ffmpeg", "ffprobe"):
         if not shutil.which(tool):
             print(f"{tool} not on PATH")
             return 1
+    if a.aac_twins:
+        alt = apply_aac_twins()
+        return 0 if alt <= PAYLOAD_BUDGET else 1
     os.makedirs(ASSETS, exist_ok=True)
     os.makedirs(a.cache, exist_ok=True)
     unpack_music(a.cache)
@@ -840,12 +994,14 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="dyefield-audio-") as tmp:
         music = build_music(a.cache, tmp, report)
         sfx = build_sfx(tmp, report)
-    # drop stale outputs (anything in assets/ this build did not write)
+    # drop stale outputs (anything in assets/ this build did not write; the AAC twins are rewritten below)
     keep = {os.path.basename(m["file"]) for m in music.values()} | {"sfx.ogg"}
+    keep |= {os.path.splitext(k)[0] + ".m4a" for k in keep}
     for f in os.listdir(ASSETS):
         if f not in keep:
             os.remove(os.path.join(ASSETS, f))
     payload = write_manifest(sfx, music)
+    apply_aac_twins()                                   # mobile review A-A3: the AAC twin of every Ogg output
     with open(CREDITS_JSON, "w", encoding="utf-8", newline="\n") as f:
         json.dump(credits(sfx, music), f, indent=2, ensure_ascii=False)
         f.write("\n")
