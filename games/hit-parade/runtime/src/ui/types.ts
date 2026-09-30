@@ -32,6 +32,10 @@ export interface UiFighterSnap {
   actionable?: boolean;
   /** remaining hit/block stun frames (optional; readout fallback) */
   stun?: number;
+  /** CONTRACT 19.7 extras the training driver / readout use (optional) */
+  stateName?: string; moveName?: string; moveKind?: string; airborne?: boolean; crouching?: boolean;
+  /** CONTRACT 28.1: fighter 1 is not on the set in a bonus round */
+  absent?: boolean;
 }
 
 /** CONTRACT 4.6 MatchSnap, the fields the UI reads. */
@@ -46,6 +50,12 @@ export interface UiMatchSnap {
   roundWinner?: number;
   draw?: boolean;
   slowmo?: number | boolean;
+  /** CHANGED(UI) P2: CONTRACT 28.4 BRAWL BREAK / HECKLER TOSS snapshot (SIM) - the fields the HUD / results read */
+  brawl?: UiBrawlSnap;
+}
+export interface UiBrawlSnap {
+  mode: 'brawl' | 'heckler'; score: number; ratings: number; grade: number; mult: number; timeLeft: number;
+  wave?: number; spawned?: number; downed?: number; combo?: number; parries?: number; perfects?: number; hitsTaken?: number;
 }
 
 /** CONTRACT 5.2 Move, the fields the move list / training read. `name` is optional (CHANGED(UI) request). */
@@ -54,6 +64,8 @@ export interface UiMoveDef {
   startup?: number; active?: number; recovery?: number; damage?: number; guard?: string;
   hitstun?: number; blockstun?: number;
   cost?: { showtime?: number; nerve?: number };
+  /** CONTRACT 20.2 informational fields the move list shows */
+  desc?: string; role?: ReadonlyArray<string>;
 }
 
 /** CONTRACT 5.2 fighter file, the fields the UI reads. `difficulty` (1..3) is optional (CHANGED(UI) request). */
@@ -63,8 +75,14 @@ export interface UiFighterDef {
   moves?: Readonly<Record<string, UiMoveDef>>;
   simple?: Readonly<Record<string, unknown>>;
   classic?: ReadonlyArray<{ motion: string; btn: string; move: string }>;
-  unique?: { kind: string };
+  unique?: { kind: string; trait?: string; thresholdPct?: number };
   rival?: string; stage?: string;
+  /** CHANGED(UI) P2 - CONTRACT 26.3 season text (lane FIGHTERS): VS-card line, results quotes, pre-fight lines per
+   *  opponent id (or 'default'), the SEASON ending text */
+  introLine?: string;
+  winQuotes?: ReadonlyArray<string>;
+  banter?: Readonly<Record<string, ReadonlyArray<string>>>;
+  ending?: string;
 }
 
 /** CONTRACT 16 GameData, the fields the UI reads. `stages` is read through ui/data.ts stageList() (shape-tolerant). */
@@ -142,6 +160,17 @@ export interface UiSaveStore { get(): UiSave; set?(patch: Partial<UiSave>): void
 
 /** SHELL Input (CONTRACT 18.3 deps.input): the remap capture sets `suspended` while it listens */
 export interface UiInput { suspended: boolean; releaseAll?(): void }
+
+/** CHANGED(UI) P2: one round of a bout as the Hud logged it from the sim's events + snapshots (Hud.rounds()) */
+export interface RoundLog {
+  round: number;
+  winner: 0 | 1 | -1;
+  how: 'ko' | 'time' | 'perfect' | 'double' | 'draw';
+  /** sim frames from FIGHT to the KO / TIME OVER frame */
+  frames: number;
+  damage: [number, number];
+  maxCombo: [number, number];
+}
 export interface MenusDeps { showcase: UiShowcase | null; settings: UiSettingsStore; save: UiSaveStore; audio: UiAudio | null; input?: UiInput | null }
 
 // ─────────────────────────── what the menus emit / show ───────────────────────────
@@ -183,6 +212,8 @@ export interface MatchResult {
   names?: [string | null, string | null];
   rated?: boolean;
   disconnect?: boolean;
+  /** CHANGED(UI) P2 (CONTRACT 27.3): per-round winners from game.ts BoutStats.rounds */
+  rounds?: ReadonlyArray<{ winner: 0 | 1 | -1; how: 'ko' | 'time' | 'perfect' | 'double' | 'draw' }>;
 }
 
 export type LadderKind = 'bout' | 'rival' | 'miniboss' | 'boss' | 'brawl' | 'heckler';
@@ -190,7 +221,12 @@ export interface LadderView {
   fighter: string; color: number; length: 'season' | 'pilot';
   bouts: ReadonlyArray<{ kind: LadderKind; opponent?: string; result?: 'won' | 'lost' | null }>;
   current: number; score: number; ratings?: number;
+  /** CHANGED(UI) P2: continues used so far (shown when passed) */
+  continues?: number;
 }
+
+/** CHANGED(UI) P2 (CONTRACT 27.2): the NET 19.4 events game.ts forwards to Menus.onlineEvent */
+export type OnlineEventName = 'paired' | 'select' | 'opponentLocked' | 'reveal' | 'rematch' | 'matchEnd' | 'disconnect' | 'end' | 'ratings';
 
 export type CardKind = 'rival' | 'miniboss' | 'boss' | 'brawl' | 'heckler';
 /** a pre-bout card; `seconds` = the bonus round's length (default CONTRACT 4.3: BRAWL BREAK 45, HECKLER TOSS 40) */

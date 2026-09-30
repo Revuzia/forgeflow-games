@@ -10,7 +10,7 @@
 
 import { RollbackSession, type NetEvent, type NetStats, type SimPort, type Transport } from '../core/net/rollback.ts';
 import { PKT, decodeSync, encodeSync } from '../core/net/packet.ts';
-import { P2P_WINDOW, RELAY_DELAY, RELAY_SEND_EVERY, RELAY_WINDOW, hash32, hashString, inputDelayFor } from '../core/net/sync.ts';
+import { P2P_WINDOW, RELAY_DELAY, RELAY_SEND_EVERY, RELAY_WINDOW, hash32, inputDelayFor } from '../core/net/sync.ts';
 import { NET_PROTO, NetPlay, TurnClock, type RealtimeClient } from './netplay.ts';
 import { RtcTransport, type RtcSignal } from './transport_rtc.ts';
 import { RelaySlot, RelayTransport } from './transport_relay.ts';
@@ -70,9 +70,16 @@ export interface OnlineFlowDeps {
   ratings?: boolean;
   /** test only (lab ?lag=): wrap the match transport, e.g. with extra latency */
   wrapTransport?: (t: Transport) => Transport;
+  /** P2 diagnostics (lab / harness ?nettrace=N): keep a session trace of N ticks + the relay flush log */
+  trace?: number;
+  /** P2 A/B only (?relaypace=interval): the P1 relay pacing; default 'bucket' */
+  relayPacing?: 'bucket' | 'interval';
 }
 
-type Ev = 'status' | 'paired' | 'select' | 'opponentLocked' | 'reveal' | 'matchStart' | 'matchEnd' | 'rematch' | 'disconnect' | 'error' | 'end' | 'net';
+/** P2: what 'matchEnd' carries (and `lastMatch`). rated = agreed + both signed in (the report itself is async). */
+export interface OnlineMatchEnd { agreed: boolean; winner: -1 | 0 | 1; reason: string; rated: boolean; stats: NetStats | null; matchId: string; rematch: boolean }
+
+type Ev = 'status' | 'paired' | 'select' | 'opponentLocked' | 'reveal' | 'matchStart' | 'matchEnd' | 'rematch' | 'disconnect' | 'error' | 'end' | 'net' | 'ratings';
 type Cb = (...a: never[]) => void;
 
 /** seen = I hold your HELLO; wait = I am still in my room phase and need a HELLO with seen=true from you. */
@@ -80,6 +87,10 @@ interface Hello { proto: number; build: string; dataHash: number; stateVersion: 
 interface Reveal { fighter: string; color: number; scheme: Scheme; stage: string; seedPart: number; salt: string }
 
 const now = (): number => performance.now();
+/** CHANGED(NET) P2: presence grace outside a bout (NETCODE 3.8 "10 s reconnect grace") */
+export const PRESENCE_GRACE_IDLE_MS = 10000;
+/** CHANGED(NET) P2: a bout that never gets both READYs within this long after matchStart ends the session */
+export const LOAD_TIMEOUT_MS = 120000;
 const rand32 = (): number => { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0]; };
 const randHex = (n: number): string => { const a = new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a, (x) => x.toString(16).padStart(2, '0')).join(''); };
 
@@ -101,6 +112,13 @@ export class OnlineFlow {
   cfg: OnlineMatchCfg | null = null;
   peerName = '';
   pairInfo: unknown = null;
+  /** P2: the last 'matchEnd' payload of this session (null before the first) */
+  lastMatch: OnlineMatchEnd | null = null;
+  /** P2: why the session ended ('' while live) + the status code shown for it */
+  endReason = '';
+  endCode = '';
+  /** P2: the RPC answer of the last rated report (null = none / pending / failed) */
+  ratings: unknown = null;
   readonly log: { t: number; m: string; d?: unknown }[] = [];
 
   private d: OnlineFlowDeps;
@@ -142,16 +160,22 @@ export class OnlineFlow {
   private goSent = false;
   private monitor: ReturnType<typeof setInterval> | null = null;
   private presenceGoneAt = -1;
+  private presenceNoted = false;
+  private loadTimer: ReturnType<typeof setTimeout> | null = null;
   private unstableShown = false;
   private switchingRelay = false;
   private finishReq: { winner: -1 | 0 | 1; frame: number } | null = null;
-  private myResult: { matchId: string; winner: number; frame: number; csFrame: number; cs: number | null } | null = null;
-  private peerResult: { matchId: string; winner: number; frame: number; csFrame: number; cs: number | null } | null = null;
+  private myResult: ResultMsg | null = null;
+  private peerResult: ResultMsg | null = null;
   private resultTimer: ReturnType<typeof setTimeout> | null = null;
   private rematchMine: boolean | null = null;
   private rematchPeerMi = -1;        // matchIndex the peer accepted a rematch after
   private rematchClock = new TurnClock(20);
+  private canRematch = false;
   private visHandler: (() => void) | null = null;
+  private ratedP: Promise<string | null> | null = null;
+  /** the peer's signed-in id from its latest HELLO / READY (null = anonymous) */
+  private peerRated: string | null = null;
 
   constructor(deps: OnlineFlowDeps) {
     this.d = deps;
@@ -166,13 +190,16 @@ export class OnlineFlow {
   private emit(ev: Ev, ...a: unknown[]): void {
     for (const cb of this.handlers.get(ev) ?? []) { try { (cb as (...x: unknown[]) => void)(...a); } catch (e) { console.warn('[online]', ev, e); } }
   }
+  // CHANGED(NET) P2: the status key always wins over extras (P1 passed {code: room} and lost 'net.waiting_peer');
+  // the room code rides as `room`.
   private status(code: string, extra: Record<string, unknown> = {}): void {
     this.note('status ' + code, extra);
-    this.emit('status', { phase: this.phase, code, rttMs: this.rttMs, transport: this.pathKind, ...extra });
+    this.emit('status', { phase: this.phase, rttMs: this.rttMs, transport: this.pathKind, room: this.room, ...extra, code });
   }
   private fail(code: string, extra: Record<string, unknown> = {}): void {
     this.note('error ' + code, extra);
-    this.emit('error', { code, ...extra });
+    this.endCode = code;
+    this.emit('error', { room: this.room, ...extra, code });
   }
   private note(m: string, d?: unknown): void {
     this.log.push({ t: Math.round(now()), m, d });
@@ -180,15 +207,23 @@ export class OnlineFlow {
     if (this.d.log) this.d.log(m, d);
   }
 
+  /** P2: the display name sent in HELLO (<= 24 chars); takes effect for the next session. */
+  setName(name: string): void {
+    const n = String(name ?? '').slice(0, 24);
+    this.d = { ...this.d, name: n };
+    this.np.name = n;
+  }
+
   // ---- entry points -------------------------------------------------------------------------------------
   // One OnlineFlow serves many sessions (game.ts keeps a single Online): every entry point starts from a
   // clean slate, and async continuations of an older session bail out on a `gen` mismatch.
+  // CHANGED(NET) P2: the signed-in lookup (ratings) runs IN THE BACKGROUND beside the lobby / room join (3 s cap); its id
+  // rides in HELLO once known and in every READY. P1 awaited it first, adding a cold esm.sh import to every search.
   async quick(timeoutMs = 60000): Promise<void> {
     const g = this.fresh();
     this.setPhase('searching');
     this.status('net.searching');
-    this.myRated = await this.ratedId();
-    if (g !== this.gen) return;
+    this.lookupRated(g);
     const res = await this.np.quickMatch(timeoutMs);
     if (g !== this.gen) return;
     if (!res) { this.fail('net.no_opponent'); this.end('no-opponent'); return; }
@@ -208,9 +243,8 @@ export class OnlineFlow {
     const g = this.fresh();
     this.room = NetPlay.cleanCode(code);
     this.setPhase('room');
-    this.status('net.waiting_peer', { code: this.room });
-    this.myRated = await this.ratedId();
-    if (g !== this.gen) return;
+    this.status('net.waiting_peer', { room: this.room });
+    this.lookupRated(g);
     await this.np.joinRoom(this.room);
     if (g !== this.gen) return;
     this.onPeer(this.np.peerCount >= 2, this.np.players());
@@ -244,9 +278,17 @@ export class OnlineFlow {
     this.myReveal = null; this.myCommit = ''; this.peerCommit = ''; this.peerReveal = null; this.revealSent = false;
     this.earlyCommit.clear(); this.earlyReveal.clear(); this.lastWinner = -1;
     this.localReady = false; this.peerReadyMi = -1; this.goSent = false;
-    this.presenceGoneAt = -1; this.unstableShown = false; this.switchingRelay = false;
+    this.presenceGoneAt = -1; this.presenceNoted = false; this.unstableShown = false; this.switchingRelay = false;
+    if (this.loadTimer) { clearTimeout(this.loadTimer); this.loadTimer = null; }
     this.finishReq = null; this.myResult = null; this.peerResult = null; this.rematchMine = null; this.rematchPeerMi = -1;
+    this.canRematch = false; this.lastMatch = null; this.endReason = ''; this.endCode = ''; this.ratings = null; this.ratedP = null; this.myRated = null; this.peerRated = null;
     return this.gen;
+  }
+
+  /** Signed-in lookup in the background; the id rides in HELLO when known and in every READY (the peer keeps the latest). */
+  private lookupRated(g: number): void {
+    this.ratedP = this.ratedId();
+    void this.ratedP.then((id) => { if (g === this.gen) { this.myRated = id; this.note('signed in: ' + (id ? 'yes' : 'no')); } });
   }
 
   private async ratedId(): Promise<string | null> {
@@ -254,7 +296,11 @@ export class OnlineFlow {
     try { const p = await Promise.race([currentPlayer(), new Promise<null>((r) => setTimeout(() => r(null), 3000))]); return p ? p.id : null; } catch { return null; }
   }
 
-  private setPhase(p: OnlinePhase): void { this.phase = p; this.note('phase ' + p); }
+  private setPhase(p: OnlinePhase): void {
+    this.phase = p;
+    this.note('phase ' + p);
+    if (p !== 'loading' && this.loadTimer) { clearTimeout(this.loadTimer); this.loadTimer = null; }
+  }
 
   // ---- presence + HELLO ---------------------------------------------------------------------------------
   private onPeer(present: boolean, ids: string[]): void {
@@ -274,13 +320,16 @@ export class OnlineFlow {
     if (!here && this.presenceGoneAt < 0) { this.presenceGoneAt = now(); this.note('peer presence gone'); }
     if (here && this.presenceGoneAt >= 0) { this.presenceGoneAt = -1; this.note('peer presence back'); }
     if (!here && (this.phase === 'select' || this.phase === 'loading' || this.phase === 'result' || this.phase === 'syncing' || this.phase === 'connecting')) {
-      // not in a bout: give the same 5 s grace, then leave
+      // not in a bout: NETCODE 3.8's 10 s reconnect grace, then leave. CHANGED(NET) P2: was 5 s - measured: a starved
+      // page's Supabase socket errored ("netplay error") and its presence left and came back within ~2 min, and the 5 s
+      // grace ended a session in the middle of both peers' bout loading. (The in-match rule is in watch().)
+      const g = this.gen;
       setTimeout(() => {
-        if (this.presenceGoneAt >= 0 && now() - this.presenceGoneAt >= 4900 && this.phase !== 'match' && this.phase !== 'ended') {
+        if (g === this.gen && this.presenceGoneAt >= 0 && now() - this.presenceGoneAt >= PRESENCE_GRACE_IDLE_MS - 100 && this.phase !== 'match' && this.phase !== 'ended') {
           this.fail('net.opponent_left');
           this.end('peer-left');
         }
-      }, 5100);
+      }, PRESENCE_GRACE_IDLE_MS + 100);
     }
   }
 
@@ -293,7 +342,9 @@ export class OnlineFlow {
     if (this.helloTimer) return;
     const send = (): void => {
       if (this.phase !== 'room' && this.phase !== 'searching') { if (this.helloTimer) { clearInterval(this.helloTimer); this.helloTimer = null; } return; }
-      if (++this.helloTries > 12) { if (this.helloTimer) clearInterval(this.helloTimer); this.helloTimer = null; this.fail('net.error', { why: 'hello timeout' }); this.end('hello-timeout'); return; }
+      // CHANGED(NET) P2: 25 tries (was 12): a peer that joins the room late (a starved page resolved its quick-match pairing
+      // 23 s after the other in a measured run) still meets a HELLO; <= 25 Supabase sends per side in the worst case
+      if (++this.helloTries > 25) { if (this.helloTimer) clearInterval(this.helloTimer); this.helloTimer = null; this.fail('net.error', { why: 'hello timeout' }); this.end('hello-timeout'); return; }
       this.np.send('hello', this.hello(!!this.peerHello));
     };
     send();
@@ -311,6 +362,7 @@ export class OnlineFlow {
     }
     const first = !this.peerHello;
     this.peerHello = h;
+    if (typeof h.rated === 'string' && h.rated) this.peerRated = h.rated;
     this.peerName = String(h.name ?? '').slice(0, 24);
     // Answer the first HELLO, and any HELLO whose sender is still waiting in its room phase (those come from the
     // sender's 1 s timer, <= 12 per room). Never answer an answer (wait=false): that was a ping-pong loop.
@@ -339,13 +391,22 @@ export class OnlineFlow {
       void this.rtc.start();
       for (const q of this.rtcQueue.splice(0)) void this.rtc.handleSignal(q);
       myOk = await this.rtc.waitOpen(5000);
-      this.note('rtc open=' + myOk, { signals: this.rtc.signalsSent });
+      // CHANGED(NET) P2: ICE that is still PROGRESSING at 5 s (not failed / closed) gets up to 12 s in all before the relay:
+      // a relayed match holds the ONE project-wide relay slot and 40 Supabase events/s. Measured: two starved headless
+      // Chromes on this machine missed the 5 s mark and fell back to the relay for a whole quick-match bout.
+      if (!myOk && this.rtc.progressing()) {
+        this.note('rtc slow at 5 s (' + this.rtc.state() + '): extending to 12 s');
+        myOk = await this.rtc.waitOpen(7000);
+      }
+      this.note('rtc open=' + myOk, { signals: this.rtc.signalsSent, state: this.rtc.state() });
     }
     let kind: 'rtc' | 'relay' | 'busy';
     if (host) {
       this.np.send('path', { kind: myOk ? 'rtc' : 'relay', tok: this.token });
       let rtcOk = myOk;
-      if (myOk) rtcOk = (await this.latch(() => this.guestPath, 4500)) === 'ok';
+      // CHANGED(NET) P2: 8 s (was 4.5 s) for the guest's verdict: a guest whose own ICE runs late (it may still be in its
+      // extended 12 s wait) must not push the pair onto the one relay slot while its channels are about to open
+      if (myOk) rtcOk = (await this.latch(() => this.guestPath, 8000)) === 'ok';
       kind = rtcOk ? 'rtc' : 'relay';
       if (kind === 'relay') {
         this.slot = new RelaySlot(this.np, this.room);
@@ -371,12 +432,17 @@ export class OnlineFlow {
       void this.rtc.pairInfo().then((p) => { this.pairInfo = p; this.note('pair', p); });
     } else {
       if (this.rtc) { this.rtc.close(); this.rtc = null; }
-      this.relay = new RelayTransport(this.np, { token: this.token, peerToken: this.peerHello ? this.peerHello.token : 0 });
+      this.relay = this.makeRelay();
       this.transport = this.relay;
       this.pathKind = 'relay';
       this.status('net.relay');
     }
     await this.syncPhase();
+  }
+
+  private makeRelay(): RelayTransport {
+    return new RelayTransport(this.np, { token: this.token, peerToken: this.peerHello ? this.peerHello.token : 0, pacing: this.d.relayPacing ?? 'bucket',
+      log: this.d.trace ? Math.max(64, this.d.trace >> 2) : 0 });
   }
 
   /** Resolve with get() once it is non-null (re-checked on every kickLatches), or null after timeoutMs. */
@@ -538,6 +604,17 @@ export class OnlineFlow {
     this.setPhase('loading');
     this.status('net.loading');
     this.localReady = false; this.goSent = false;
+    // CHANGED(NET) P2: loading watchdog - a peer whose bout never loads (crashed tab that keeps its presence) must not
+    // hold this player on the loading card forever
+    if (this.loadTimer) clearTimeout(this.loadTimer);
+    const g = this.gen, mi = this.matchIndex;
+    this.loadTimer = setTimeout(() => {
+      this.loadTimer = null;
+      if (g !== this.gen || mi !== this.matchIndex || this.phase !== 'loading') return;
+      this.ctl('bye', { why: 'load-timeout' });
+      this.fail('net.opponent_left');
+      this.end('load-timeout');
+    }, LOAD_TIMEOUT_MS);
     this.finishReq = null; this.myResult = null; this.peerResult = null;
     this.emit('matchStart', cfg, this.local);
   }
@@ -547,15 +624,25 @@ export class OnlineFlow {
   attachPort(sim: SimPort): RollbackSession {
     if (!this.transport || !this.cfg) throw new Error('online: attach before matchStart');
     if (this.session) this.session = null;
+    // CHANGED(NET) P2: the session ended (or moved on) while this peer was still loading the bout: hand back an inert session
+    // (never started) and repeat 'end' so the game leaves the loading bout for the ONLINE lobby (P1: stuck on frame 0)
+    const stale = this.phase !== 'loading';
     const relay = this.pathKind === 'relay';
     const tr = this.d.wrapTransport ? this.d.wrapTransport(this.transport) : this.transport;
     const s = new RollbackSession(sim, this.local, tr, {
       now, delay: relay ? RELAY_DELAY : this.delay, window: relay ? RELAY_WINDOW : P2P_WINDOW, sendEvery: relay ? RELAY_SEND_EVERY : 1,
       isHost: this.local === 0, startAt: Infinity, epoch: this.matchIndex & 15, onEvent: (e) => this.onNetEvent(e),
+      info: () => this.info() as unknown as Record<string, unknown>, trace: this.d.trace ?? 0,
     });
     this.session = s;
+    if (stale) {
+      this.note('attach after the session left loading (' + this.phase + '): inert session');
+      const reason = this.endReason || 'stale-attach', code = this.endCode || 'net.opponent_left';
+      setTimeout(() => this.emit('end', { reason, code }), 0);
+      return s;
+    }
     this.localReady = true;
-    this.ctl('ready', { mi: this.matchIndex });
+    this.ctl('ready', { mi: this.matchIndex, rated: this.myRated });
     this.maybeGo();
     this.startMonitor();
     this.installVisibility();
@@ -595,10 +682,16 @@ export class OnlineFlow {
     if (!s || this.phase !== 'match') return;
     const st = s.stats();
     const t = now();
+    // CONTRACT §10: presence gone for 5 s = a win for the stayer. CHANGED(NET) P2: only while the peer's inputs have
+    // also stopped (silence >= 1 s): a peer whose Supabase socket drops (presence leaves) while its DataChannel still
+    // delivers inputs is still playing - a tab that closes stops both at once.
     if (this.presenceGoneAt >= 0 && t - this.presenceGoneAt >= 5000) {
-      this.emit('disconnect', { winner: this.local });
-      this.matchOver({ agreed: false, winner: this.local, reason: 'disconnect' }, 'net.disconnect_win');
-      return;
+      if (st.silenceMs >= 1000 || st.status === 'waiting') {
+        this.emit('disconnect', { winner: this.local, reason: 'disconnect' });
+        this.matchOver({ agreed: false, winner: this.local, reason: 'disconnect' }, 'net.disconnect_win');
+        return;
+      }
+      if (!this.presenceNoted) { this.presenceNoted = true; this.note('peer presence gone but inputs still arriving: playing on'); }
     }
     if (st.status === 'unstable' && !this.unstableShown) { this.unstableShown = true; this.status('net.unstable'); }
     if (st.status === 'running') this.unstableShown = false;
@@ -623,7 +716,7 @@ export class OnlineFlow {
 
   private switchToRelay(): void {
     if (!this.session || this.pathKind === 'relay') return;
-    this.relay = new RelayTransport(this.np, { token: this.token, peerToken: this.peerHello ? this.peerHello.token : 0 });
+    this.relay = this.makeRelay();
     this.transport = this.relay;
     this.pathKind = 'relay';
     this.session.setTransport(this.relay, { window: RELAY_WINDOW, sendEvery: RELAY_SEND_EVERY });
@@ -662,9 +755,12 @@ export class OnlineFlow {
     this.watch();
   }
 
+  // CHANGED(NET) P2: match_results.match_id is ONE primary key across every FFG game (migration 0004); P1's 32-bit hash
+  // + index could collide after ~65k matches (a collision = the RPC answers 'already' and the match is never counted).
+  // Now: slug + room + the commit-revealed u32 seed + match index (both peers derive the same string).
   private matchId(): string {
     const c = this.cfg;
-    return (hashString(this.room + ':' + this.matchIndex + ':' + (c ? c.seed : 0)) >>> 0).toString(16).padStart(8, '0') + '-' + this.matchIndex;
+    return 'hp:' + this.room + ':' + ((c ? c.seed : 0) >>> 0).toString(16).padStart(8, '0') + ':' + this.matchIndex;
   }
 
   private sendResult(): void {
@@ -683,14 +779,24 @@ export class OnlineFlow {
     const a = this.myResult, b = this.peerResult;
     if (!a || !b || this.phase !== 'match') return;
     const agreed = a.matchId === b.matchId && a.winner === b.winner && a.frame === b.frame && a.csFrame === b.csFrame && a.cs !== null && a.cs === b.cs;
-    this.matchOver({ agreed, winner: a.winner as -1 | 0 | 1, reason: 'ko' }, agreed ? '' : 'net.result_mismatch');
-    if (agreed && this.myRated && this.peerHello && this.peerHello.rated) {
-      const ids = this.local === 0 ? [this.myRated, this.peerHello.rated] : [this.peerHello.rated, this.myRated];
-      void reportResult(ids[0], ids[1], a.winner as -1 | 0 | 1, a.matchId).then((d) => this.note('ratings', d));
+    // NETCODE 3.6 / 3.9: RATED only when both peers agreed on the sim-derived result AND both are signed in (the RPC is
+    // idempotent by match_id, so both peers report; the answer arrives later as the 'ratings' event, never blocking play)
+    const peerRated = this.peerRated ?? (this.peerHello && this.peerHello.rated) ?? null;
+    const rated = agreed && !!this.myRated && !!peerRated && this.myRated !== peerRated;
+    this.matchOver({ agreed, winner: a.winner as -1 | 0 | 1, reason: 'ko', rated }, agreed ? '' : 'net.result_mismatch');
+    if (rated && this.myRated && peerRated) {
+      const ids = this.local === 0 ? [this.myRated, peerRated] : [peerRated, this.myRated];
+      const g = this.gen;
+      void reportResult(ids[0], ids[1], a.winner as -1 | 0 | 1, a.matchId).then((d) => {
+        this.note('ratings', d);
+        if (g !== this.gen) return;
+        this.ratings = d;
+        this.emit('ratings', { matchId: a.matchId, data: d, ok: d !== null });
+      });
     }
   }
 
-  private matchOver(r: { agreed: boolean; winner: -1 | 0 | 1; reason: string }, code: string): void {
+  private matchOver(r: { agreed: boolean; winner: -1 | 0 | 1; reason: string; rated?: boolean }, code: string): void {
     if (this.phase !== 'match' && this.phase !== 'loading') return;
     if (this.resultTimer) { clearTimeout(this.resultTimer); this.resultTimer = null; }
     this.lastWinner = r.winner;
@@ -700,14 +806,20 @@ export class OnlineFlow {
     // reset rematch state and arm the 20 s clock BEFORE emitting: a listener may call rematch() synchronously
     this.rematchMine = null;
     const canRematch = r.reason !== 'disconnect' && r.reason !== 'forfeit';
+    this.canRematch = canRematch;
     if (canRematch) {
-      this.rematchClock.start(undefined, () => { if (this.phase === 'result') { this.ctl('bye', { why: 'rematch-timeout' }); this.end('rematch-timeout'); } });
+      this.rematchClock.start(undefined, () => { if (this.phase === 'result') { this.ctl('bye', { why: 'rematch-timeout' }); this.fail('net.opponent_left'); this.end('rematch-timeout'); } });
     }
-    this.emit('matchEnd', { ...r, stats: st, matchId: this.matchId() });
+    const me: OnlineMatchEnd = { agreed: r.agreed, winner: r.winner, reason: r.reason, rated: !!r.rated, stats: st, matchId: this.matchId(), rematch: canRematch };
+    this.lastMatch = me;
+    this.emit('matchEnd', me);
   }
 
+  /** CHANGED(NET) P2: after a disconnect / forfeit win there is nobody to rematch: rematch(true) ends the session
+   *  (P1 sent a 'rematch' to nobody and waited forever). */
   rematch(yes: boolean): void {
     if (this.phase !== 'result') return;
+    if (yes && !this.canRematch) { this.end('no-rematch'); return; }
     this.rematchMine = yes;
     this.ctl('rematch', { yes, mi: this.matchIndex });
     if (!yes) { this.ctl('bye', { why: 'no-rematch' }); this.end('no-rematch'); return; }
@@ -773,7 +885,11 @@ export class OnlineFlow {
         else if (mi >= this.matchIndex) this.earlyReveal.set(mi, r);
         break;
       }
-      case 'ready': this.peerReadyMi = Number(d.mi) | 0; this.maybeGo(); break;
+      case 'ready':
+        this.peerReadyMi = Number(d.mi) | 0;
+        if (typeof d.rated === 'string' && d.rated) this.peerRated = d.rated;
+        this.maybeGo();
+        break;
       case 'go': if ((Number(d.mi) | 0) === this.matchIndex) this.onGo(Number(d.inMs) || 800); break;
       case 'result':
         this.peerResult = { matchId: String(d.matchId), winner: Number(d.winner), frame: Number(d.frame), csFrame: Number(d.csFrame), cs: d.cs == null ? null : Number(d.cs) };
@@ -785,8 +901,10 @@ export class OnlineFlow {
         this.maybeRematch();
         break;
       case 'bye':
-        if (this.phase === 'match' || this.phase === 'loading') {
-          this.emit('disconnect', { winner: this.local });
+        // CHANGED(NET) P2: a BYE while the bout is still LOADING ends the session (nobody fought: no forfeit win, which
+        // left a loading peer attaching to a finished match)
+        if (this.phase === 'match') {
+          this.emit('disconnect', { winner: this.local, reason: 'forfeit' });
           this.matchOver({ agreed: false, winner: this.local, reason: 'forfeit' }, 'net.forfeit_win');
         } else if (this.phase !== 'ended') {
           this.fail('net.opponent_left');
@@ -823,12 +941,42 @@ export class OnlineFlow {
       slot?.release();
       if (g === this.gen) { np.cancelSearch(); np.leave(); }
     }, 400);
-    this.emit('end', { reason });
+    this.endReason = reason;
+    this.emit('end', { reason, code: this.endCode });
   }
 
-  stats(): { phase: OnlinePhase; room: string; local: number; transport: string; rttMs: number; delay: number; peer: string; pair: unknown;
-    supabase: { msgs: number; binary: number; dropped: number }; session: NetStats | null } {
-    return { phase: this.phase, room: this.room, local: this.local, transport: this.pathKind, rttMs: this.rttMs, delay: this.delay, peer: this.peerName,
-      pair: this.pairInfo, supabase: { msgs: this.np.sentMsgs, binary: this.np.sentBinary, dropped: this.np.dropped }, session: this.session ? this.session.stats() : null };
+  /** Flow facts without the session (merged into session.stats().online, so __HP__.net() carries them in a bout). */
+  info(): OnlineInfo {
+    return { phase: this.phase, room: this.room, local: this.local, matchIndex: this.matchIndex, transport: this.pathKind, rttMs: this.rttMs, delay: this.delay,
+      peer: this.peerName, pair: this.pairInfo, signedIn: !!this.myRated, peerSignedIn: !!(this.peerRated ?? (this.peerHello && this.peerHello.rated)),
+      supabase: { msgs: this.np.sentMsgs, binary: this.np.sentBinary, dropped: this.np.dropped },
+      relay: this.relay ? this.relay.stats() : null, lastMatch: this.lastMatch ? { ...this.lastMatch, stats: null } : null, ratings: this.ratings,
+      endReason: this.endReason, endCode: this.endCode,
+      result: { mine: this.myResult ? { ...this.myResult } : null, peer: this.peerResult ? { ...this.peerResult } : null },
+      recent: this.log.slice(-30).map((l) => `${l.t} ${l.m}`) };
+  }
+
+  /** Test only (?nettrace=N): the session trace + the relay flush log, with this page's clock origin so a harness can
+   *  line up two browsers' traces (both processes on one machine share the epoch clock). */
+  traceDump(): { timeOrigin: number; local: number; transport: string; session: ReturnType<RollbackSession['traceDump']>; relayFlush: number[][] } | null {
+    const s = this.session;
+    if (!s) return null;
+    return { timeOrigin: typeof performance !== 'undefined' ? performance.timeOrigin : 0, local: this.local, transport: this.pathKind,
+      session: s.traceDump(), relayFlush: this.relay ? this.relay.flushLog.slice() : [] };
+  }
+
+  stats(): OnlineInfo & { session: NetStats | null } {
+    return { ...this.info(), session: this.session ? this.session.stats() : null };
   }
 }
+
+export interface OnlineInfo {
+  phase: OnlinePhase; room: string; local: number; matchIndex: number; transport: string; rttMs: number; delay: number; peer: string; pair: unknown;
+  signedIn: boolean; peerSignedIn: boolean; supabase: { msgs: number; binary: number; dropped: number };
+  relay: ReturnType<RelayTransport['stats']> | null; lastMatch: OnlineMatchEnd | null; ratings: unknown; endReason: string; endCode: string;
+  /** the RESULT messages of the current / last match: {matchId, winner, frame, csFrame, cs} (cs = confirmed checksum at csFrame) */
+  result: { mine: ResultMsg | null; peer: ResultMsg | null };
+  /** the flow's last 30 log lines ("<ms> <note>"): phases, path decisions, rtc / relay notes (diagnostics) */
+  recent: string[];
+}
+interface ResultMsg { matchId: string; winner: number; frame: number; csFrame: number; cs: number | null }

@@ -33,6 +33,13 @@ const GradeShader = {
     uLinesSeed: { value: 0 },
     uAspect: { value: 16 / 9 },
     uGain: { value: 1 },
+    // P2 PRIME TIME: letterbox bars (fraction of the height per bar) and the name slate (an sRGB canvas texture in a uv rect)
+    uLetterbox: { value: 0 },
+    tSlate: { value: null as THREE.Texture | null },
+    uSlateRect: { value: new THREE.Vector4(0, 0, 0, 0) },
+    uSlateA: { value: 0 },
+    // P2 PRIME TIME `freeze_frame`: a TV freeze-frame still (white inset border, a touch desaturated, red REC dot)
+    uBorder: { value: 0 },
   },
   vertexShader: /* glsl */`
     varying vec2 vUv;
@@ -43,6 +50,7 @@ const GradeShader = {
     uniform vec3 uFlashColor; uniform float uFlash; uniform float uVignette;
     uniform float uLines; uniform vec2 uLinesCenter; uniform vec3 uLinesColor; uniform float uLinesInner;
     uniform float uLinesSeed; uniform float uAspect; uniform float uGain;
+    uniform float uLetterbox; uniform sampler2D tSlate; uniform vec4 uSlateRect; uniform float uSlateA; uniform float uBorder;
     varying vec2 vUv;
     float h11( float n ) { return fract( sin( n * 91.3458 ) * 47453.5453 ); }
     void main() {
@@ -66,6 +74,29 @@ const GradeShader = {
         c.rgb = mix( c.rgb, uLinesColor, clamp( lineMask * radial * uLines, 0.0, 1.0 ) );
       }
       c.rgb = mix( c.rgb, uFlashColor, clamp( uFlash, 0.0, 1.0 ) );
+      if ( uBorder > 0.001 ) {
+        float l = dot( c.rgb, vec3( 0.299, 0.587, 0.114 ) );
+        c.rgb = mix( c.rgb, vec3( l ) * vec3( 1.04, 1.0, 0.94 ), 0.45 * uBorder );
+        vec2 q = abs( vUv - 0.5 ) * vec2( uAspect, 1.0 );
+        vec2 lim = vec2( 0.5 * uAspect - 0.035, 0.5 - 0.035 - uLetterbox );
+        float edge = step( lim.x, q.x ) + step( lim.y, q.y );
+        float inner = step( lim.x - 0.012, q.x ) + step( lim.y - 0.012, q.y );
+        c.rgb = mix( c.rgb, vec3( 1.0 ), clamp( inner - edge, 0.0, 1.0 ) * uBorder );
+        vec2 dp = ( vUv - vec2( 0.06, 0.86 - uLetterbox ) ) * vec2( uAspect, 1.0 );
+        c.rgb = mix( c.rgb, vec3( 1.0, 0.05, 0.05 ), ( 1.0 - smoothstep( 0.012, 0.016, length( dp ) ) ) * uBorder );
+      }
+      if ( uLetterbox > 0.0005 ) {
+        float bar = step( vUv.y, uLetterbox ) + step( 1.0 - uLetterbox, vUv.y );
+        c.rgb *= 1.0 - clamp( bar, 0.0, 1.0 );
+      }
+      if ( uSlateA > 0.001 ) {
+        vec2 su = ( vUv - uSlateRect.xy ) / max( uSlateRect.zw, vec2( 1e-4 ) );
+        if ( su.x >= 0.0 && su.x <= 1.0 && su.y >= 0.0 && su.y <= 1.0 ) {
+          vec4 sl = texture2D( tSlate, su );
+          vec3 lin = pow( sl.rgb, vec3( 2.2 ) );
+          c.rgb = mix( c.rgb, lin, sl.a * uSlateA );
+        }
+      }
       gl_FragColor = c;
     }
   `,
@@ -138,6 +169,20 @@ export class Post {
   }
 
   setVignette(v: number): void { this.grade.uniforms.uVignette.value = v; }
+
+  /** P2 PRIME TIME freeze-frame border (0..1) */
+  setBorder(a: number): void { this.grade.uniforms.uBorder.value = Math.max(0, Math.min(1, a)); }
+
+  /** P2 PRIME TIME letterbox: bar height as a fraction of the frame (0 = off) */
+  setLetterbox(f: number): void { this.grade.uniforms.uLetterbox.value = Math.max(0, Math.min(0.2, f)); }
+
+  /** P2 PRIME TIME name slate: an sRGB texture shown in uv rect (x0, y0 from the bottom-left, w, h) at alpha `a` */
+  setSlate(tex: THREE.Texture | null, x: number, y: number, w: number, h: number, a: number): void {
+    const u = this.grade.uniforms;
+    if (tex) u.tSlate.value = tex;
+    (u.uSlateRect.value as THREE.Vector4).set(x, y, w, h);
+    u.uSlateA.value = tex || u.tSlate.value ? Math.max(0, Math.min(1, a)) : 0;
+  }
   setGain(g: number): void { this.grade.uniforms.uGain.value = g; }
 
   render(dt = 1 / 60): void {

@@ -88,12 +88,14 @@ const jf = J.push?.front ?? 0, bf = B.push?.front ?? 0, jcf = J.push?.crouchFron
   let wakeEnd = -1;
   let lastAnim = -1, lastAnimF = -1;
   let relStep = -1;
+  let lastCarry = 0; // CHANGED(SIM) P2: the carry step just before the release (the victim timeline may still slide)
   let prevSt = st(m, 1);
   for (let k = 0; k < 140; k++) {
     step(m, k === 0 ? I.THROW : 0, 0);
     const x = m.s[sb(1) + F.x] / U;
     const s1 = st(m, 1);
     if (prevSt === ST.THROWN && s1 === ST.KNOCKDOWN) relStep = Math.abs(x - prev);
+    else if (s1 === ST.THROWN) lastCarry = Math.abs(x - prev);
     prevSt = s1;
     if (s1 === ST.THROWN || s1 === ST.KNOCKDOWN) {
       maxStep = Math.max(maxStep, Math.abs(x - prev));
@@ -113,7 +115,10 @@ const jf = J.push?.front ?? 0, bf = B.push?.front ?? 0, jcf = J.push?.crouchFron
   t.ok(!anims.has(CL('thrown_f')), 'Clinch Body Shots no longer plays the generic thrown_f');
   const x1 = m.s[sb(1) + F.x] / U;
   t.ok(x1 - x0 > 0.3, 'the victim is carried away from the thrower (no wake-up inside it)', `x ${x0.toFixed(3)} -> ${x1.toFixed(3)}`);
-  t.ok(relStep >= 0 && relStep <= 0.03, 'no teleport at the release (victim step on the release frame <= 3 cm)', `${relStep.toFixed(4)} m`);
+  // CHANGED(SIM) P2: a teleport = a step larger than the carry itself was making (FIGHTERS' P2 victim timeline ends in a
+  // 2x kd_fall_b slide, 4-7 cm per frame); the release frame may continue that motion, never jump beyond it
+  t.ok(relStep >= 0 && relStep <= Math.max(0.03, lastCarry + 0.01), 'no teleport at the release (release step <= max(3 cm, last carry step + 1 cm))',
+    `${relStep.toFixed(4)} m (last carry step ${lastCarry.toFixed(4)} m)`);
   t.ok(maxStep <= 0.15, 'the carry is a continuous path (max per-frame step <= 15 cm: the fast kd_fall_b drop)', `${maxStep.toFixed(4)} m`);
   const wb = data.clips.bruno.clips.wake_b;
   t.ok(wakeEnd >= Math.round(wb.dur * 60) - 2, 'the knockdown ends on the wake clip\'s last frame (no pop to idle)',

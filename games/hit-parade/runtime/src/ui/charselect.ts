@@ -62,6 +62,7 @@ export class CharSelect {
   private blindReveal = false;
   private save: UiSave = {};
   private lastShown = '';
+  private online = { opponent: '', locked: false, secondsLeft: 0 };
 
   constructor(screen: HTMLElement, data: UiGameData, hooks: CsHooks) {
     this.data = data;
@@ -119,6 +120,8 @@ export class CharSelect {
     this.mode = mode;
     this.save = save;
     this.blindReveal = false;
+    if (mode !== 'online') this.online = { opponent: '', locked: false, secondsLeft: 0 };
+    else this.online.locked = false;
     this.buildGrid();
     const p2kind: PState['kind'] = mode === 'season' || mode === 'online' ? 'none' : opponent === 'human' ? 'human' : opponent === 'dummy' ? 'dummy' : 'cpu';
     this.p = [this.blank('human'), this.blank(p2kind)];
@@ -362,11 +365,14 @@ export class CharSelect {
   private renderSide(i: 0 | 1, active: boolean): void {
     const S = this.sides[i];
     const st = this.p[i];
+    if (this.mode === 'online' && i === 1 && !this.blindReveal) { this.renderBlind(S); return; }
+    S.root.classList.remove('blind', 'locked');
+    setText(S.ready, t('cs.ready'));
     S.root.hidden = st.kind === 'none';
     if (st.kind === 'none') return;
     S.root.classList.toggle('active', active && st.step !== 'ready');
     const hidden = this.mode === 'online' && i === 1 && !this.blindReveal;
-    setText(S.tag, st.kind === 'cpu' ? t('cs.cpu') : st.kind === 'dummy' ? t('cs.dummy') : i === 0 ? t('cs.p1') : t('cs.p2'));
+    setText(S.tag, st.kind === 'cpu' ? t('cs.cpu') : st.kind === 'dummy' ? t('cs.dummy') : i === 0 ? t('cs.p1') : this.mode === 'online' && this.online.opponent ? this.online.opponent : t('cs.p2'));
     const stepKey = st.step === 'wait' ? 'cs.step.wait' : `cs.step.${st.step}`;
     setText(S.step, t(stepKey));
     const id = hidden ? null : (st.fighter ?? this.slots[st.cursor]?.id ?? null);
@@ -399,6 +405,59 @@ export class CharSelect {
     S.schemeBtns.forEach((b, k) => { const on = k === st.scheme; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
     S.ready.hidden = st.step !== 'ready';
     S.root.dataset.step = st.step;
+  }
+
+  /**
+   * CHANGED(UI) P2 (CONTRACT 27.2): the opponent's card during an online blind pick - their display name, PICKING / LOCKED
+   * IN, never their fighter (the net layer reveals both picks at once: reveal()).
+   */
+  private renderBlind(S: SideEl): void {
+    S.root.hidden = false;
+    S.root.classList.add('blind');
+    S.root.classList.toggle('locked', this.online.locked);
+    S.root.classList.remove('active');
+    setText(S.tag, this.online.opponent || t('cs.opponent'));
+    setText(S.step, this.online.locked ? t('cs.step.locked') : t('cs.step.picking'));
+    fillPortrait(S.portrait, this.data, 'random');
+    setText(S.name, t('ladder.mystery'));
+    setText(S.persona, this.online.locked ? t('cs.lockedIn') : t('cs.blindNote'));
+    setText(S.arch, '');
+    S.stars.replaceChildren();
+    setText(S.hp, '');
+    S.colors.hidden = true;
+    S.schemeBox.hidden = true;
+    S.ready.hidden = !this.online.locked;
+    setText(S.ready, t('cs.locked'));
+    S.root.dataset.step = this.online.locked ? 'locked' : 'picking';
+  }
+
+  /** CHANGED(UI) P2: online blind-pick facts from the menus (opponent display name, locked, seconds left) */
+  setOnline(o: { opponent: string; locked: boolean; secondsLeft: number }): void {
+    this.online = { ...o };
+    if (this.mode !== 'online') return;
+    const secs = o.secondsLeft > 0 ? t('cs.blindClock', { n: o.secondsLeft }) : '';
+    setText(this.banner, [t('cs.blind'), secs].filter(Boolean).join('  -  '));
+    this.render();
+  }
+
+  opponentLocked(): void { this.online.locked = true; if (this.mode === 'online') this.render(); }
+
+  /** the pick clock ran out: lock P1's cursor fighter (colour / controls as they stand); the normal done() path emits it */
+  forcePick(): null {
+    const st = this.p[0];
+    if (this.mode !== 'online' || st.step === 'ready' || st.kind !== 'human') return null;
+    if (st.step === 'fighter') {
+      this.pickFighter(0);
+      if (st.step === 'fighter') {
+        const k = this.slots.findIndex((s) => s.id !== 'random' && !s.locked);
+        if (k >= 0) { st.cursor = k; this.pickFighter(0); }
+      }
+      if (st.step === 'fighter') return null;
+    }
+    st.step = 'ready';
+    this.render();
+    this.onReady(0);
+    return null;
   }
 
   /** portraits arrived (setPortraits): re-fill every slot and the side cards */

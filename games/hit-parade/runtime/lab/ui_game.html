@@ -1,0 +1,331 @@
+<!doctype html>
+<!-- UI lab page (lane UI, dev only, never linked): a copy of runtime/index.html whose module entry is src/lab/ui_game.ts - the REAL game (main.ts) with the CONTRACT 27 SHELL wiring applied to Game.prototype, so the training driver / online event forwards / MatchResult.rounds are proven before SHELL lands them. Regenerate: sed the entry script of index.html. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>HIT PARADE - UI game lab (real game + CONTRACT 27 wiring)</title>
+<meta name="description" content="HIT PARADE - an original 3D versus fighting game staged as a brutal late-night TV fight show. Pick a contestant, read the frame data, win the ratings.">
+<meta name="theme-color" content="#140d1f">
+<!-- CONTRACT_MOBILE M9: install to the home screen (no service worker, deliberately: deploys are no-store + hash-named) -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HIT PARADE">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='3' y='3' width='58' height='58' rx='14' fill='%23140d1f'/%3E%3Cpath d='M24 9l8 9 8-9' fill='none' stroke='%23ffd23a' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M17 54h6v5h-6zM41 54h6v5h-6z' fill='%23ff2e4d'/%3E%3Crect x='9' y='17' width='46' height='38' rx='8' fill='%23ff2e4d'/%3E%3Crect x='14' y='22' width='36' height='29' rx='5' fill='%23140d1f'/%3E%3Cpath d='M32 26L33.8 32.1L39.4 29.1L36.4 34.7L42.5 36.5L36.4 38.3L39.4 43.9L33.8 40.9L32 47L30.2 40.9L24.6 43.9L27.6 38.3L21.5 36.5L27.6 34.7L24.6 29.1L30.2 32.1z' fill='%23ffd23a'/%3E%3C/svg%3E">
+<style>
+  /* Critical boot-card styles: everything the boot / PRESS START / error cards and the rotate overlay need lives
+     here, so they never depend on the UI lane's stylesheet having loaded (src/ui/boot.ts builds the same nodes). */
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #140d1f; overscroll-behavior: none; touch-action: none;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  #game { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; outline: none; touch-action: none; }
+  #ui { position: fixed; inset: 0; height: 100vh; height: 100dvh; z-index: 10; pointer-events: none; }
+  #hp-boot { position: fixed; inset: 0; height: 100vh; height: 100dvh; z-index: 900; display: grid; place-items: center; color: #fff4e0;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 2px, rgba(0,0,0,0) 2px 4px),
+      radial-gradient(90% 70% at 50% 110%, #7a0d24 0%, #3a0a1e 38%, rgba(20,13,31,0) 70%),
+      radial-gradient(70% 60% at 50% -10%, #3b2a5c 0%, #140d1f 70%); }
+  #hp-boot.gone { display: none; }
+  #hp-boot .hp-card { display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: min(520px, 90vw); max-width: 94vw; padding: 30px 44px 30px;
+    background: #0b0712; border: 4px solid #ffd23a; box-shadow: 10px 10px 0 #ff2e4d; text-align: center; box-sizing: border-box; transform: skewX(-4deg); }
+  #hp-boot .hp-card > * { transform: skewX(4deg); }
+  #hp-boot .hp-wordmark { margin: 0; display: flex; gap: .18em; align-items: baseline; font: italic 400 clamp(52px, 9vw, 108px)/.9 Impact, 'Haettenschweiler', 'Arial Narrow Bold', 'Arial Black', sans-serif;
+    letter-spacing: .02em; -webkit-text-stroke: 3px #0b0712; paint-order: stroke fill; text-shadow: 5px 5px 0 #ff2e4d; }
+  #hp-boot .hp-wordmark .hit { color: #ffd23a; } #hp-boot .hp-wordmark .parade { color: #fff4e0; }
+  #hp-boot .hp-strap { display: inline-flex; align-items: center; gap: 10px; margin: 0; padding: 6px 16px; background: #ff2e4d; color: #fff4e0;
+    font: 700 16px/1.1 'Segoe UI', system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+  #hp-boot .hp-strap i { width: 10px; height: 10px; border-radius: 50%; background: #fff4e0; box-shadow: 0 0 0 3px rgba(255,244,224,.35); flex: none; }
+  #hp-boot .hp-progress { position: relative; width: min(420px, 74vw); height: 16px; background: #2a1f3a; border: 3px solid #fff4e0; overflow: hidden; margin-top: 6px; box-sizing: border-box; }
+  #hp-boot .hp-progress b { position: absolute; left: 0; top: 0; bottom: 0; width: 4%; background: #ffd23a; }
+  #hp-boot .hp-status { min-height: 1.3em; font-weight: 700; font-size: 14px; color: #d8cfe6; letter-spacing: .04em; }
+  #hp-boot h2 { margin: 0; color: #ff5a6e; font: italic 400 30px/1.1 Impact, 'Arial Black', sans-serif; letter-spacing: .03em; }
+  #hp-boot pre { white-space: pre-wrap; text-align: left; max-width: 88vw; max-height: 46vh; overflow: auto; font: 12.5px/1.45 Consolas, monospace; background: #1d1429; color: #ffd9d4; padding: 12px; margin: 0; }
+  #hp-boot .hp-btn { font: italic 400 26px/1 Impact, 'Arial Black', sans-serif; letter-spacing: .06em; padding: 12px 34px; border: 3px solid #0b0712; background: #ffd23a; color: #0b0712;
+    box-shadow: 5px 5px 0 #ff2e4d; cursor: pointer; }
+  #hp-boot .hp-btn:focus-visible { outline: 3px solid #fff4e0; outline-offset: 3px; }
+  #hp-boot .hp-play { font-size: 34px; padding: 14px 44px; animation: hp-pulse 1.1s ease-in-out infinite; }
+  #hp-boot .hp-press-sub { margin: 0; font-size: 14px; font-weight: 700; color: #d8cfe6; letter-spacing: .06em; }
+  @keyframes hp-pulse { 50% { transform: skewX(4deg) scale(1.05); } }
+  @media (prefers-reduced-motion: reduce) { #hp-boot .hp-play { animation: none; } }
+  #hp-rotate { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: #140d1f; color: #fff4e0; font: 700 18px/1.3 'Segoe UI', system-ui, sans-serif; text-align: center; }
+  #hp-rotate[hidden] { display: none; }
+  #hp-rotate .hp-rotate-icon svg { width: 120px; height: 120px; }
+  @media (max-height: 500px) {   /* a phone held sideways: the same card, compact */
+    #hp-boot .hp-card { gap: 8px; min-width: min(420px, 86vw); padding: 14px 24px 16px; border-width: 3px; box-shadow: 6px 6px 0 #ff2e4d; }
+    #hp-boot .hp-wordmark { font-size: clamp(38px, 13vh, 64px); -webkit-text-stroke-width: 2px; text-shadow: 3px 3px 0 #ff2e4d; }
+    #hp-boot .hp-strap { padding: 4px 12px; font-size: 12px; }
+    #hp-boot .hp-progress { height: 12px; margin-top: 2px; }
+    #hp-boot pre { max-height: 28vh; overscroll-behavior: contain; }
+    #hp-boot .hp-play { font-size: 26px; padding: 10px 30px; }
+  }
+</style>
+<script>
+  // ── Boot guard (dyefield runtime/index.html, adapted) ── a small classic script at the end of the authored <head>.
+  // Vite appends the entry <script type="module">, the <link rel="modulepreload"> chunks and the <link rel="stylesheet">
+  // AFTER it, so every listener here exists before any of those can fail. It owns the static #hp-boot card until
+  // src/main.ts calls __HP_BOOT__.handoff(), which removes every listener, timer, probe and observer installed here.
+  //  * LOAD FAILURE -> "HIT PARADE could not load", at once. A <script>/<link> load error does not bubble, so a
+  //    CAPTURE-phase window 'error' listener hears it (own-origin script / modulepreload / stylesheet only). The card
+  //    names the file, one GET of it reports the HTTP status, and the page reloads ONCE by itself (cache-busting
+  //    ?hpretry=a<t>, stripped on the next load; sessionStorage 'hitparade.bootRetry' blocks a second automatic retry
+  //    until a boot reaches handoff): a deploy in progress or a network blip is the likeliest cause. GLBs / audio
+  //    are fetched by main.ts itself after handoff (own error paths).
+  //  * EVALUATION ERROR before handoff (window 'error' / 'unhandledrejection') -> "HIT PARADE could not start".
+  //  * WATCHDOG -> "HIT PARADE did not start" only when the page has been VISIBLE >= 60 s (hidden time does not count)
+  //    AND no file finished for 20 s AND a HEAD probe of a pending entry file got no answer within 10 s (a server
+  //    that answers = a slow download, not a dead one), or at the 240 s visible cap. Until then the status line
+  //    shows "Loading... <size> · <s>", plus "slow connection" after 15 s. If a pending file arrives or main.ts
+  //    starts after all, the loading card comes back (the guard only HIDES the loading card's nodes).
+  //  * Vite's HTML env replacement turns the percent-wrapped DEV key below into true on the dev server only: there
+  //    the cards add the "npm run dev" hint; a built bundle gets a player-facing line + a diagnostic line.
+  //  * TEST ONLY: ?bootguard=<scale> (0.02 .. 1) scales the 60 / 20 / 15 / 240 s thresholds and the probe timeout
+  //    (floor 3 s). Read only here; _harness/bootguard.py drives the slow and stalled paths with it.
+  (function () {
+    var W = window, D = document, L = location, P = W.performance;
+    var now = function () { return P && P.now ? P.now() : Date.now(); };
+    var DEV = '%DEV%' === 'true';
+    var q = null; try { q = new URLSearchParams(L.search); } catch (e) { /* defaults */ }
+    var sc = q ? parseFloat(q.get('bootguard') || '') : NaN, scale = sc > 0 && sc < 1 ? Math.max(0.02, sc) : 1;
+    var VISIBLE = 60000 * scale, QUIET = 20000 * scale, SLOW = 15000 * scale, CAP = 240000 * scale, PROBE = Math.max(3000, 10000 * scale);
+    var HINT_DEV = 'Is the dev server up? Run: npm install && npm run dev';
+    var RK = 'hitparade.bootRetry', store = null;
+    try { store = W.sessionStorage; store.getItem(RK); } catch (e) { store = null; }
+    function unretry(u) { return u.replace(/([?&])hpretry=[^&#]*(&?)/, function (m, a, b) { return b ? a : ''; }).replace(/\?(#|$)/, '$1'); }
+    var rq = q ? q.get('hpretry') || '' : '', autoRetried = rq.charAt(0) === 'a';
+    if (rq) try { history.replaceState(history.state, '', unretry(L.href)); } catch (e) { /* keep the marker */ }
+    var origin = L.protocol + '//' + L.host + '/', dir = L.href.replace(/[?#].*$/, '').replace(/[^\/]*$/, '');
+    function short(u) { u = String(u || ''); return u.indexOf(dir) === 0 ? u.slice(dir.length) : u.replace(/^[a-z]+:\/\/[^\/]+/i, ''); }
+    function size(b) { return b < 104858 ? Math.round(b / 1024) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; }
+    function secs(ms) { return Math.round(ms / 1000) + ' s'; }
+    function isDev() { return DEV || !!D.querySelector('script[src*="/@vite/client"]'); }
+    var over = false, shown = '', mine = [], hid = [], later = null, wrote = false, pend = [];
+
+    // visible time: a hidden tab never runs toward a failure
+    var visMs = 0, visFrom = D.visibilityState === 'visible' ? now() : -1;
+    function visible() { return visMs + (visFrom >= 0 ? now() - visFrom : 0); }
+    function onVis() {
+      if (D.visibilityState === 'visible') { if (visFrom < 0) visFrom = now(); }
+      else if (visFrom >= 0) { visMs += now() - visFrom; visFrom = -1; }
+    }
+
+    // progress from resource timing (our own probes are fetches: never counted)
+    var got = {}, bytes = 0, last = now(), obs = null, polled = 0;
+    function take(list) {
+      for (var i = 0; i < list.length; i++) {
+        var e = list[i], it = e.initiatorType;
+        if (it === 'fetch' || it === 'xmlhttprequest' || it === 'beacon') continue;
+        bytes += e.transferSize || e.encodedBodySize || 0;
+        last = now();
+        if (!(e.responseStatus >= 400)) got[e.name] = 1;
+      }
+    }
+    try { obs = new PerformanceObserver(function (l) { take(l.getEntries()); }); obs.observe({ type: 'resource', buffered: true }); } catch (e) { obs = null; }
+    function poll() { if (obs || !P || !P.getEntriesByType) return; var a = P.getEntriesByType('resource'); take(a.slice(polled)); polled = a.length; }
+    function split() {
+      var r = { loaded: [], pending: [], urls: [] };
+      var els = D.querySelectorAll('script[type="module"][src],link[rel="modulepreload"][href],link[rel="stylesheet"][href]');
+      for (var i = 0; i < els.length; i++) {
+        var u = els[i].src || els[i].href;
+        if (got[u]) r.loaded.push(short(u)); else { r.pending.push(short(u)); r.urls.push(u); }
+      }
+      return r;
+    }
+    function check(url, method, cb) {   // one request for the status line of a card; the body is never read
+      var ctl = W.AbortController ? new AbortController() : null, fin = false, rec = { ctl: ctl, to: 0 };
+      function end(code, text) {
+        if (fin) return; fin = true; clearTimeout(rec.to);
+        try { if (ctl) ctl.abort(); } catch (e) { /* done */ }
+        if (!over) cb(code, text);
+      }
+      rec.to = setTimeout(function () { end(0, 'no answer in ' + secs(PROBE)); }, PROBE);
+      pend.push(rec);
+      try {
+        fetch(url, { method: method, cache: 'no-store', credentials: 'same-origin', signal: ctl ? ctl.signal : undefined }).then(function (r) {
+          var ct = (r.headers.get('content-type') || '').split(';')[0];
+          end(r.status, 'HTTP ' + r.status + (ct ? ' ' + ct : ''));
+        }, function () { end(0, 'network error'); });
+      } catch (e) { end(0, 'network error'); }
+    }
+    function diag(what) {
+      return 'bootguard: ' + what + ' | t ' + secs(now()) + ', visible ' + secs(visible()) + ', ' + size(bytes) + ' received | '
+        + (isDev() ? 'vite dev server' : 'build') + (autoRetried ? ' | after 1 auto-retry' : '') + (scale !== 1 ? ' | scale ' + scale : '');
+    }
+
+    // the card: the loading card's nodes (all but the wordmark) are hidden, never removed
+    function show(kind, title, lines) {
+      var c = D.querySelector('#hp-boot .hp-card');
+      if (!c) { later = [kind, title, lines]; return; }   // <body> not parsed yet: readystatechange shows it
+      later = null;
+      for (var i = 0; i < mine.length; i++) if (mine[i].parentNode) mine[i].parentNode.removeChild(mine[i]);
+      if (!shown) for (var k = c.firstElementChild; k; k = k.nextElementSibling) {
+        if (!k.classList.contains('hp-wordmark') && k.style.display !== 'none') { hid.push(k); k.style.display = 'none'; }
+      }
+      shown = kind;
+      var h = D.createElement('h2'), pre = D.createElement('pre'), b = D.createElement('button');
+      h.textContent = title;
+      pre.textContent = lines.join('\n');
+      b.type = 'button'; b.className = 'hp-btn'; b.textContent = 'RELOAD'; b.onclick = function () { reload(false); };
+      mine = [h, pre, b];
+      for (var j = 0; j < mine.length; j++) c.appendChild(mine[j]);
+    }
+    function restore() {
+      for (var i = 0; i < mine.length; i++) if (mine[i].parentNode) mine[i].parentNode.removeChild(mine[i]);
+      for (var j = 0; j < hid.length; j++) hid[j].style.display = '';
+      mine = []; hid = []; shown = ''; later = null;
+    }
+    function reload(auto) {
+      if (auto) try { if (store) store.setItem(RK, '1'); } catch (e) { /* the URL marker still stops a loop */ }
+      var u = unretry(L.href), h = '', i = u.indexOf('#');
+      if (i >= 0) { h = u.slice(i); u = u.slice(0, i); }
+      L.replace(u + (u.indexOf('?') >= 0 ? '&' : '?') + 'hpretry=' + (auto ? 'a' : 'm') + Date.now() + h);
+    }
+
+    // 1. load failures (capture phase)
+    var failed = [], failKind = '', codes = {}, willRetry = false, retryAt = 0, reloading = false;
+    function canRetry() { if (autoRetried) return false; try { return !store || store.getItem(RK) !== '1'; } catch (e) { return false; } }
+    function onLoadErr(ev) {
+      var t = ev && ev.target;
+      if (over || !t || t === W || !t.tagName) return;
+      var rel = String(t.getAttribute('rel') || '').toLowerCase();
+      var kind = t.tagName === 'SCRIPT' ? 'script' : t.tagName === 'LINK' && (rel === 'modulepreload' || rel === 'stylesheet') ? rel : '';
+      var url = String(t.src || t.href || '');
+      if (!kind || url.indexOf(origin) !== 0) return;   // only the game's own entry files
+      var f = short(url);
+      if (failed.indexOf(f) >= 0) return;
+      failed.push(f);
+      if (!failKind) failKind = kind;
+      if (failed.length === 1 && canRetry()) { willRetry = true; retryAt = now() + 1500; }
+      drawLoad();
+      check(url, 'GET', function (code, text) { codes[f] = text; drawLoad(); });
+    }
+    function drawLoad() {
+      var lines = ['A game file did not download:'];
+      for (var i = 0; i < failed.length; i++) lines.push('  ' + failed[i] + '  (' + (codes[failed[i]] || 'checking...') + ')');
+      lines.push('', isDev() ? HINT_DEV : 'Check your connection, then press RELOAD. If HIT PARADE was just updated, wait a minute and try again.');
+      if (willRetry) lines.push('Retrying once automatically...');
+      lines.push('', diag('load-error ' + failKind));
+      show('load', 'HIT PARADE could not load', lines);
+    }
+
+    // 2. evaluation errors (bubble phase)
+    function failStart(detail) { if (!over && shown !== 'load') show('start', 'HIT PARADE could not start', [String(detail || 'unknown error'), '', diag('error')]); }
+    function onErr(e) { if (!(e && e.target && e.target !== W && e.target.tagName)) failStart((e && e.error && e.error.stack) || (e && e.message) || e); }
+    function onRej(e) { var r = e && e.reason; failStart((r && r.stack) || r); }
+
+    // 3. the watchdog
+    var probing = false, stallN = 0;
+    function stall(why, detail) {
+      var s = split();
+      stallN = s.pending.length;
+      show('stall', 'HIT PARADE did not start', [
+        why === 'cap' ? 'Still not started after ' + secs(visible()) + ' of loading (' + size(bytes) + ' received).'
+          : 'The game files stopped arriving (' + size(bytes) + ' received, nothing new for ' + secs(now() - last) + ').',
+        isDev() ? HINT_DEV : 'Check your connection, then press RELOAD.',
+        '',
+        'Loaded:  ' + (s.loaded.join(', ') || '-'),
+        'Pending: ' + (s.pending.join(', ') || '- (all arrived; the game code is still starting)') + (detail ? '\n         probe ' + detail : ''),
+        '', diag('watchdog ' + why)]);
+    }
+    function probe() {
+      var s = split();
+      if (!s.urls.length) { last = now(); return; }   // every entry file arrived: still importing / evaluating (the cap still applies)
+      probing = true;
+      check(s.urls[0], 'HEAD', function (code, text) {
+        probing = false;
+        if (shown) return;
+        if ((code >= 200 && code < 400) || code === 405 || code === 501) { last = now(); return; }   // it answers: slow, not dead
+        stall('stalled', s.pending[0] + ': ' + text);
+      });
+    }
+    function tick() {
+      if (over) return;
+      poll();
+      var t = now(), vis = visible();
+      if (willRetry && !reloading && t >= retryAt && (codes[failed[0]] || t >= retryAt + 2500)) { reloading = true; reload(true); return; }
+      if (shown === 'stall' && split().pending.length < stallN) restore();   // it was slow after all
+      if (shown || W.__HP_MAIN__) return;
+      var st = D.querySelector('#hp-boot .hp-status');
+      if (st) {
+        var s = 'Loading...' + (t >= 2000 && bytes > 0 ? ' ' + size(bytes) + ' · ' + secs(t) : '') + (vis >= SLOW ? ' - slow connection, still loading' : '');
+        if (st.textContent !== s) { st.textContent = s; wrote = true; }
+      }
+      if (vis >= CAP) stall('cap');
+      else if (vis >= VISIBLE && t - last >= QUIET && !probing) probe();
+    }
+
+    // A bare URL opens the title screen (no mode picked yet: the show strap). A deep link (main.ts DEEP_KEYS) loads ONE
+    // activity, so the strap names its mode exactly as ui/boot.ts BootUI.setMode() will.
+    function mode() {
+      try {
+        if (!q) return;
+        var keys = ['mode', 'p1', 'p2', 'stage', 'seed', 'cpu1', 'cpu2', 'scheme1', 'scheme2', 'autostart', 'room'], deep = false;
+        for (var i = 0; i < keys.length; i++) if (q.has(keys[i])) deep = true;
+        if (!deep) return;
+        var names = { versus: 'VERSUS', arcade: 'THE SEASON', training: 'TRAINING', online: 'ONLINE', brawl: 'BRAWL BREAK', heckler: 'HECKLER TOSS' };
+        var mq = (q.get('mode') || (q.has('room') ? 'online' : 'versus')).trim().toLowerCase();
+        var ms = D.querySelector('#hp-boot .hp-strap span');
+        if (ms) ms.textContent = (names[mq] || 'VERSUS') + ' · LIVE ON KNOCKOUT 13';
+      } catch (e) { /* the module takes over the card anyway */ }
+    }
+    function onReady() { if (D.readyState !== 'loading') { mode(); if (later) show(later[0], later[1], later[2]); } }
+
+    W.addEventListener('error', onLoadErr, true);
+    W.addEventListener('error', onErr);
+    W.addEventListener('unhandledrejection', onRej);
+    D.addEventListener('visibilitychange', onVis);
+    D.addEventListener('readystatechange', onReady);
+    var iv = setInterval(tick, 250);
+
+    W.__HP_BOOT__ = {
+      handoff: function () {
+        if (over) return;
+        mode();
+        over = true;
+        clearInterval(iv);
+        for (var i = 0; i < pend.length; i++) { clearTimeout(pend[i].to); try { if (pend[i].ctl) pend[i].ctl.abort(); } catch (e) { /* done */ } }
+        pend = [];
+        W.removeEventListener('error', onLoadErr, true);
+        W.removeEventListener('error', onErr);
+        W.removeEventListener('unhandledrejection', onRej);
+        D.removeEventListener('visibilitychange', onVis);
+        D.removeEventListener('readystatechange', onReady);
+        if (obs) try { obs.disconnect(); } catch (e) { /* done */ }
+        // main.ts runs, so a missing chunk / a slow load / a stray error was not fatal: back to the loading card.
+        // A missing stylesheet is (the UI would be unstyled): keep its card and use the automatic retry.
+        if (shown === 'load' && failKind === 'stylesheet') {
+          if (willRetry && !reloading) { reloading = true; setTimeout(function () { reload(true); }, Math.max(0, retryAt - now())); }
+          return;
+        }
+        restore();
+        var st = D.querySelector('#hp-boot .hp-status');
+        if (st && wrote) st.textContent = 'Loading...';
+        try { if (store) store.removeItem(RK); } catch (e) { /* done */ }
+      },
+      fail: function (title, detail) { if (!over) show('start', String(title), [String(detail || 'unknown error'), '', diag('fail')]); },
+      info: function () {
+        var s = split();
+        return { dev: isDev(), scale: scale, visibleMs: Math.round(visible()), bytes: bytes, card: shown, failed: failed.slice(),
+                 loaded: s.loaded, pending: s.pending, autoRetried: autoRetried, retrying: reloading, handedOff: over };
+      },
+    };
+  })();
+</script>
+</head>
+<body>
+<canvas id="game" tabindex="-1" aria-label="HIT PARADE - fight view"></canvas>
+<div id="ui"></div>
+
+<div id="hp-boot" class="hp-boot" role="status" aria-live="polite">
+  <div class="hp-card">
+    <h1 class="hp-wordmark" aria-label="HIT PARADE"><span class="hit">HIT</span><span class="parade">PARADE</span></h1>
+    <p class="hp-strap"><i aria-hidden="true"></i><span>LIVE ON KNOCKOUT 13</span></p>
+    <div class="hp-progress"><b></b></div>
+    <div class="hp-status">Loading...</div>
+  </div>
+</div>
+
+<script type="module" src="../src/lab/ui_game.ts"></script>
+</body>
+</html>

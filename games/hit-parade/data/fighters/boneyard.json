@@ -349,7 +349,21 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 52, "adv": 21, "hitF": 40, "swap": false, "air": false, "techable": true, "clip": "three_swings"},
+      "grab": {
+        "frames": 66,
+        "adv": 21,
+        "hitF": 54,
+        "swap": false,
+        "air": false,
+        "techable": true,
+        "clip": "three_swings",
+        "victim": [
+          [0, "hit_high_s", 0.0, 0.15],
+          [12, "hit_high_s", 0.0, 0.6],
+          [37, "hit_body", 0.1, 0.6],
+          [54, "kd_fall_b", 1.04, 1.5]
+        ]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Holds them and delivers three flat-side cleaver smacks.",
@@ -378,7 +392,16 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 46, "adv": 15, "hitF": 30, "swap": true, "air": false, "techable": true, "clip": "over_shoulder"},
+      "grab": {
+        "frames": 46,
+        "adv": 15,
+        "hitF": 28,
+        "swap": true,
+        "air": false,
+        "techable": true,
+        "clip": "over_shoulder",
+        "victim": [[0, "hit_body", 0.0, 0.2], [10, "thrown_b", 0.1, 0.53], [28, "thrown_b", 0.53, 1.2]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Hauls them over his shoulder.",
@@ -924,23 +947,150 @@
       "cinematic": {
         "frames": 170,
         "cue": "boneyard_sunday_roast",
-        "hits": [[8, 500], [32, 600], [50, 600], [70, 300], [90, 300], [128, 2200]],
+        "hits": [[8, 500], [32, 600], [50, 600], [70, 300], [94, 300], [128, 2200]],
         "anim": [
-          [0, "cleaver_swing"],
-          [25, "meat_hook_swing"],
-          [60, "three_swings"],
-          [100, "cleaver_leap"],
-          [145, "taunt_thump"]
+          [0, "cleaver_swing", 0.5, 0.917],
+          [25, "meat_hook_swing", 0.254, 1.485],
+          [60, "three_swings", 0.083, 1.75],
+          [100, "cleaver_leap", 0.3, 1.05],
+          [145, "taunt_thump", 0.5, 0.917]
         ],
-        "victim": [[0, "hit_high_l"], [25, "hit_body"], [60, "hit_high_s"], [100, "hit_air"], [128, "kd_ground_b"]],
-        "shots": [
-          [0, "side_close"],
-          [25, "punch_in"],
-          [60, "over_shoulder"],
-          [100, "low_angle_up"],
-          [128, "top_down"],
-          [145, "crowd_pop"]
+        "victim": [
+          [0, "hit_high_l", 0.0, 0.4],
+          [8, "hit_high_l", 0.0, 0.45],
+          [32, "hit_body", 0.0, 0.35],
+          [50, "hit_high_s", 0.0, 0.5],
+          [70, "hit_high_s", 0.0, 0.5],
+          [94, "hit_body", 0.1, 0.7],
+          [128, "kd_fall_b", 1.25, 1.8667],
+          [148, "kd_ground_b", 0.0, 0.367]
         ],
+        "shots": [[0, "close"], [25, "close"], [60, "over_shoulder"], [100, "low"], [128, "top"], [145, "close"]],
+        "camera": [
+          {
+            "from": 0,
+            "to": 25,
+            "shot": "close",
+            "target": "both",
+            "fovDeg": 32,
+            "dist": 3.0,
+            "height": 1.5,
+            "yawDeg": 15,
+            "ease": "inOut",
+            "lookH": 1.3
+          },
+          {
+            "from": 25,
+            "to": 60,
+            "shot": "close",
+            "target": "defender",
+            "fovDeg": [32, 28],
+            "dist": [2.5, 2.5],
+            "height": 1.6,
+            "yawDeg": 38,
+            "ease": "inOut",
+            "lookH": 1.45
+          },
+          {
+            "from": 60,
+            "to": 100,
+            "shot": "over_shoulder",
+            "target": "defender",
+            "fovDeg": 36,
+            "dist": 2.9,
+            "height": 1.8,
+            "yawDeg": -65,
+            "ease": "inOut",
+            "lookH": 1.4
+          },
+          {
+            "from": 100,
+            "to": 128,
+            "shot": "low",
+            "target": "attacker",
+            "fovDeg": 44,
+            "dist": 3.2,
+            "height": 0.35,
+            "yawDeg": 20,
+            "ease": "inOut",
+            "lookH": 1.9
+          },
+          {
+            "from": 128,
+            "to": 145,
+            "shot": "top",
+            "target": "defender",
+            "fovDeg": 40,
+            "dist": 1.4,
+            "height": 5.4,
+            "yawDeg": 10,
+            "ease": "inOut",
+            "lookH": 0.5
+          },
+          {
+            "from": 145,
+            "to": 170,
+            "shot": "close",
+            "target": "attacker",
+            "fovDeg": 32,
+            "dist": 2.6,
+            "height": 1.55,
+            "yawDeg": 30,
+            "ease": "inOut",
+            "lookH": 1.45
+          }
+        ],
+        "fx": [
+          {"f": 0, "fx": "slate"},
+          {"f": 8, "fx": "impact_m"},
+          {"f": 8, "fx": "sparks"},
+          {"f": 32, "fx": "impact_m"},
+          {"f": 50, "fx": "impact_m"},
+          {"f": 50, "fx": "shake_s"},
+          {"f": 70, "fx": "impact_s"},
+          {"f": 94, "fx": "impact_m"},
+          {"f": 110, "fx": "speed_lines"},
+          {"f": 128, "fx": "impact_l"},
+          {"f": 128, "fx": "splat"},
+          {"f": 128, "fx": "flash"},
+          {"f": 128, "fx": "shake_l"},
+          {"f": 128, "fx": "dust"},
+          {"f": 128, "fx": "freeze_frame"},
+          {"f": 145, "fx": "spot", "target": "attacker"},
+          {"f": 166, "fx": "spot_off"}
+        ],
+        "crowd": [
+          {"f": 8, "react": "gasp"},
+          {"f": 50, "react": "ooh"},
+          {"f": 94, "react": "boo"},
+          {"f": 128, "react": "roar", "ratings": "spike"},
+          {"f": 148, "react": "chant", "ratings": "peak"}
+        ],
+        "pathA": [
+          [8, 0.1, 0],
+          [32, 0.2, 0],
+          [50, 0.3, 0],
+          [94, 0.35, 0],
+          [110, 0.2, 0.3],
+          [120, 0.5, 1.2],
+          [128, 0.9, 0.1],
+          [132, 0.9, 0],
+          [150, 0.8, 0],
+          [168, 0, 0]
+        ],
+        "gapD": [
+          [8, 1.1, 0],
+          [32, 1.0, 0],
+          [50, 1.05, 0],
+          [70, 1.0, 0],
+          [94, 1.0, 0],
+          [110, 1.2, 0],
+          [128, 0.7, 0],
+          [132, 0.9, 0],
+          [168, 1.8, 0]
+        ],
+        "slate": "PRIME TIME - BONEYARD: SUNDAY ROAST",
+        "endPose": "back",
         "endAdv": 19,
         "endGapM": 1.8
       },
@@ -985,5 +1135,14 @@
     "armor": ["5H", "meat_hook_m", "chefs_special"],
     "approach": ["butcher_block_m", "cleaver_drop_l"],
     "meter": "chefs_special"
-  }
+  },
+  "introLine": "Take a number. The butcher's open.",
+  "winQuotes": ["Order up. Tenderized, flat side, well done.", "I hang the good ones in the freezer. You're a keeper.", "No refunds on Block Street."],
+  "banter": {
+    "johnny": ["Your name's hanging in my freezer, rock star. Next to the ribs.", "Tonight I carve the rest of the marquee."],
+    "freak": ["They grew you in my basement. You owe me rent.", "Big cut, tough meat. I've got the cleaver for it."],
+    "ricky": ["Four seasons I tenderized your contestants, Ricky.", "Tonight I work on the host."],
+    "default": ["Step up to the counter.", "Relax. I only use the flat side. Mostly."]
+  },
+  "ending": "BONEYARD hangs the host's sequined jacket in the meat locker next to Johnny Riot's marquee letters and locks the door. KNOCKOUT 13 cancels HIT PARADE and replaces it with a cooking show, and Boneyard is the only chef who stays. His signature dish is called The Sunday Roast. Nobody has ever sent it back."
 }

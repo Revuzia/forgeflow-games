@@ -10,7 +10,10 @@ import { loadGameData } from '../runtime/src/core/data.ts';
 import type { GameData } from '../runtime/src/core/types.ts';
 import { eventsSince } from '../runtime/src/core/sim/events.ts';
 import type { SimEvent } from '../runtime/src/core/sim/events.ts';
-import { STATE_INTS, W, PH } from '../runtime/src/core/sim/layout.ts';
+import { STATE_INTS, W, PH, F, fighterBase } from '../runtime/src/core/sim/layout.ts';
+import { runSyncTest } from '../runtime/src/core/net/sync.ts';
+import { matchPort } from '../runtime/src/core/net/match_port.ts';
+import { uniqueInputs } from './fixtures/simkit.ts';
 
 const t = tester('probe_determinism');
 const FRAMES = 12000;
@@ -122,4 +125,43 @@ try {
   t.note(realNote);
 }
 
-t.done(`fixture final hashes ${hashes.join(' ')}; ${realNote}`);
+// CHANGED(SIM) P2 (CONTRACT §28.6): targeted unique scenarios under rollback (depth 1..8 every frame, GGPO SyncTest over
+// the real sim): each setup puts a unique on the edge (ricky 1 hit above phase 2, rerun / ricky counters, gazza's ball,
+// lotus stance, zambini teleports, krane charge, bonus rounds) and the unique-heavy stream drives it.
+let uniqNote = '';
+try {
+  const real = loadGameData();
+  const scen: { name: string; p1: string; p2: string; mode?: string; setup?: (m: Match) => void }[] = [
+    { name: 'ricky phase 2 edge', p1: 'ricky', p2: 'johnny', setup: (m) => { m.s[fighterBase(0) + F.hp] = Math.trunc((m.cf[0].hpMax * m.cf[0].u.threshold) / 100) + 150; } },
+    { name: 'johnny vs ricky phase edge', p1: 'johnny', p2: 'ricky', setup: (m) => { m.s[fighterBase(1) + F.hp] = Math.trunc((m.cf[1].hpMax * m.cf[1].u.threshold) / 100) + 150; } },
+    { name: 'rerun counters', p1: 'rerun', p2: 'patch' },
+    { name: 'ricky counters', p1: 'ricky', p2: 'spin' },
+    { name: 'gazza ball', p1: 'gazza', p2: 'bruno' },
+    { name: 'lotus stance', p1: 'lotus', p2: 'krane' },
+    { name: 'zambini teleport', p1: 'zambini', p2: 'freak' },
+    { name: 'krane charge', p1: 'krane', p2: 'boneyard' },
+    { name: 'brawl lotus', p1: 'lotus', p2: 'lotus', mode: 'brawl' },
+    { name: 'heckler gazza', p1: 'gazza', p2: 'gazza', mode: 'heckler' },
+  ];
+  let mis = 0;
+  let checks = 0;
+  const bad: string[] = [];
+  for (const sc of scen) {
+    for (const seed of [3, 4]) {
+      const m = newMatch({ data: real, p1: sc.p1, p2: sc.p2, seed, s1: 1, s2: 1, mode: (sc.mode ?? 'versus') as 'versus' });
+      if (sc.setup) sc.setup(m);
+      const a = uniqueInputs(seed * 31 + 7, 8, 1200);
+      const b = uniqueInputs(seed * 57 + 3, 4, 1200);
+      const r = runSyncTest(matchPort(m), 1200, (f, out) => { out[0] = a[f]; out[1] = b[f]; }, 8);
+      checks += r.checks;
+      mis += r.mismatches;
+      if (r.mismatches) bad.push(`${sc.name} seed ${seed} first ${JSON.stringify(r.first)}`);
+    }
+  }
+  t.eq(mis, 0, `unique scenarios under rollback 1..8 every frame: ${scen.length} x 2 seeds x 1200 f, ${checks} checks, 0 mismatches${bad.length ? ' - ' + bad[0] : ''}`);
+  uniqNote = `unique rollback scenarios ${scen.length * 2} (${checks} checks)`;
+} catch (e) {
+  t.ok(false, `unique rollback scenarios crashed: ${String((e as Error).message).split(/\r?\n/)[0]}`);
+}
+
+t.done(`fixture final hashes ${hashes.join(' ')}; ${realNote}; ${uniqNote}`);

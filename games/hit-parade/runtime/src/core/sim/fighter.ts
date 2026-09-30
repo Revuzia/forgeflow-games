@@ -8,19 +8,19 @@
 // hit frame until the defender can act, so on-hit advantage = stun - (active + recovery).
 
 import { ACT, BUF, F, FL, MVF, ST, W } from './layout.ts';
-import { EV, CUE } from './events.ts';
-import { K } from './compile.ts';
+import { EV, CUE, EVX } from './events.ts';
+import { BACT, K, STK, TPD, UK } from './compile.ts';
 import type { CMove } from './compile.ts';
-import { IN, curDir, dirOf, prejumpCancelable, projCount } from './inputs.ts';
+import { IN, curDir, dirOf, prejumpCancelable, projOk } from './inputs.ts';
 import {
   addShowtime, canAfford, canNerve, clearMove, emit, fb, isAirborne, setSt, spendNerve,
 } from './state.ts';
 import type { Match } from './state.ts';
-import { spawnProjectile } from './projectiles.ts';
+import { ballLaunch, spawnProjectile } from './projectiles.ts';
 import { clampToWalls, pushExt, wallLimitX } from './boxes.ts';
 import { KDF, endsFaceDown, victimPose } from './throwpose.ts';
 
-export const CTX = { FREE: 0, CANCEL: 1, AIR: 2, PREJUMP: 3, BLOCKSTUN: 4, PARRY: 5, RUSH: 6 } as const;
+export const CTX = { FREE: 0, CANCEL: 1, AIR: 2, PREJUMP: 3, BLOCKSTUN: 4, PARRY: 5, RUSH: 6, STANCE: 7 } as const;
 
 function clearBuf(s: Int32Array, b: number): void {
   s[b + F.bufA] = ACT.NONE;
@@ -113,7 +113,8 @@ export function freeTick(m: Match, i: number, oppX: number): void {
   s[b + F.flags] &= ~FL.CROUCHING;
   if (dir === 6) {
     if (st !== ST.WALK_F) setSt(m, i, ST.WALK_F);
-    const sp = s[b + F.stF] === 0 ? Math.trunc((cf.walkF * sys.movement.walkFirstFramePct) / 100) : cf.walkF;
+    const wf = walkPct(m, i, cf.walkF);
+    const sp = s[b + F.stF] === 0 ? Math.trunc((wf * sys.movement.walkFirstFramePct) / 100) : wf;
     s[b + F.x] += s[b + F.facing] * sp;
     return;
   }
@@ -124,7 +125,8 @@ export function freeTick(m: Match, i: number, oppX: number): void {
       return;
     }
     if (st !== ST.WALK_B) setSt(m, i, ST.WALK_B);
-    const sp = s[b + F.stF] === 0 ? Math.trunc((cf.walkB * sys.movement.walkFirstFramePct) / 100) : cf.walkB;
+    const wb = walkPct(m, i, cf.walkB);
+    const sp = s[b + F.stF] === 0 ? Math.trunc((wb * sys.movement.walkFirstFramePct) / 100) : wb;
     s[b + F.x] -= s[b + F.facing] * sp;
     return;
   }
@@ -164,7 +166,22 @@ export function startMove(m: Match, i: number, idx: number, flags: number, oppX:
   }
   if (mv.isImpact) emit(m, EV.IMPACT_START, i, 0, 0, 0);
   if (mv.isShove) emit(m, EV.SHOVE, i, 0, 0, 0);
+  if (mv.install) {
+    // CHANGED(SIM) P2 (CONTRACT §28.2 installs)
+    s[b + F.instF] = mv.install.frames;
+    s[b + F.instMv] = idx;
+    emit(m, EVX.INSTALL, i, mv.install.frames, mv.snapId, 0);
+  }
   moveTick(m, i, oppX);
+}
+
+/** CHANGED(SIM) P2: walk speed under an install (walkPct). */
+function walkPct(m: Match, i: number, v: number): number {
+  const s = m.s;
+  const b = fb(i);
+  if (s[b + F.instF] <= 0 || s[b + F.instMv] < 0) return v;
+  const ins = m.cf[i].moves[s[b + F.instMv]].install;
+  return ins ? Math.trunc((v * ins.walkPct) / 100) : v;
 }
 
 /** Pays the move's costs, then starts it. */
@@ -186,6 +203,9 @@ function cancelAllowed(m: Match, i: number, cur: CMove, f: number, t: CMove, buf
     if ((bufF & BUF.CHAIN) !== 0 && cur.chains.indexOf(t.idx) >= 0) return true;
     if (t.isSpecialCat && cur.cSpecial) return true;
     if (t.isSuper && cur.cSuper) return true;
+    // CHANGED(SIM) P2 (CONTRACT §28.2 armorStep): a step also cancels into the grounded "tick" normal (2L / 5L)
+    const tk = m.cf[i].u.tickStr;
+    if (cur.armorStep && tk >= 0 && t.isNormalCat && !t.inAir && !t.chainOnly && t.str === tk) return true;
   }
   // chord replacement: a throw / super right after a normal or one-button special started (<= 1 frame)
   if (f <= 2 && s[b + F.contact] === 0 && (cur.isNormalCat || (s[b + F.mvFlags] & MVF.SIMPLE) !== 0)) {
@@ -216,7 +236,7 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
       if (a === ACT.MOVE) {
         const t = cf.moves[s[b + F.bufM]];
         if (t.airOnly || t.chainOnly || !canAfford(m, i, t)) return false;
-        if (t.proj && projCount(m, i) >= t.proj.limit) return false;
+        if (!projOk(m, i, t)) return false;
         clearBuf(s, b);
         execMove(m, i, t.idx, mvFlags, oppX);
         return true;
@@ -276,9 +296,11 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
       const t = cf.moves[s[b + F.bufM]];
       if (isAirborne(s, b) ? !t.usableAir : t.airOnly) return false;
       if (!canAfford(m, i, t)) return false;
-      if (t.proj && projCount(m, i) >= t.proj.limit) return false;
+      if (!projOk(m, i, t)) return false;
       if (!cancelAllowed(m, i, cur, f, t, bufF)) return false;
       clearBuf(s, b);
+      // CHANGED(SIM) P2: a teleport cancelled after its jump re-faces the opponent first (EX vanish -> special)
+      if (cur.teleport && f >= cur.teleport.f) faceOpponent(s, b, oppX);
       execMove(m, i, t.idx, mvFlags | (s[b + F.mvFlags] & MVF.RUSH), oppX);
       return true;
     }
@@ -287,7 +309,7 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
       const t = cf.moves[s[b + F.bufM]];
       if (!(t.inAir || t.usableAir) || !canAfford(m, i, t)) return false;
       if (t.isNormalCat && (s[b + F.flags] & FL.AIR_USED) !== 0) return false;
-      if (t.proj && projCount(m, i) >= t.proj.limit) return false;
+      if (!projOk(m, i, t)) return false;
       clearBuf(s, b);
       execMove(m, i, t.idx, mvFlags, oppX);
       return true;
@@ -296,7 +318,7 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
       if (a !== ACT.MOVE) return false;
       const t = cf.moves[s[b + F.bufM]];
       if (t.airOnly || !prejumpCancelable(t) || !canAfford(m, i, t)) return false;
-      if (t.proj && projCount(m, i) >= t.proj.limit) return false;
+      if (!projOk(m, i, t)) return false;
       clearBuf(s, b);
       execMove(m, i, t.idx, mvFlags, oppX);
       return true;
@@ -322,6 +344,23 @@ export function tryAct(m: Match, i: number, ctx: number, oppX: number): boolean 
       if (t.airOnly || !(t.isNormalCat || t.kind === K.throw)) return false;
       clearBuf(s, b);
       execMove(m, i, t.idx, mvFlags | MVF.RUSH, oppX);
+      return true;
+    }
+    case CTX.STANCE: {
+      // CHANGED(SIM) P2 (CONTRACT §28.2 stance): follow-ups at once; specials / supers / throws / IMPACT / PARRY leave it
+      if (a === ACT.PARRY) {
+        if (!canNerve(m, i)) return false;
+        clearBuf(s, b);
+        startParry(m, i);
+        return true;
+      }
+      if (a !== ACT.MOVE) return false;
+      const t = cf.moves[s[b + F.bufM]];
+      const follow = (bufF & BUF.STANCE) !== 0 && t.stanceKind === STK.FOLLOW;
+      if (!follow && (t.chainOnly || t.airOnly || !(t.isSpecialCat || t.isSuper || t.isGrab || t.isImpact))) return false;
+      if (!canAfford(m, i, t) || !projOk(m, i, t)) return false;
+      clearBuf(s, b);
+      execMove(m, i, t.idx, mvFlags, oppX);
       return true;
     }
     default:
@@ -375,8 +414,11 @@ export function moveTick(m: Match, i: number, oppX: number): void {
   }
   if (mv.proj && f === mv.startup && (s[b + F.mvFlags] & MVF.SPAWNED) === 0) {
     s[b + F.mvFlags] |= MVF.SPAWNED;
-    spawnProjectile(m, i, mv);
+    // CHANGED(SIM) P2: ball moves kick / flick / re-kick the one ball (CONTRACT §28.2 ball)
+    if (mv.ballAct === BACT.SHOOT || mv.ballAct === BACT.HOVER) ballLaunch(m, i, mv);
+    else spawnProjectile(m, i, mv);
   }
+  if (mv.teleport && f === mv.teleport.f) teleport(m, i, mv, oppX);
   for (let k = 0; k < mv.sfxF.length; k++) if (mv.sfxF[k] === f) emit(m, EV.SFX_CUE, i, mv.sfxI[k], mv.snapId, 0);
   if (f === mv.lastActive + 1 && s[b + F.contact] === 0 && (mv.isStrike || mv.isGrab) && (s[b + F.mvFlags] & MVF.WHIFFED) === 0) {
     s[b + F.mvFlags] |= MVF.WHIFFED;
@@ -392,12 +434,101 @@ function finishMove(m: Match, i: number, oppX: number): void {
     s[b + F.y] = 0;
     s[b + F.flags] &= ~FL.AIRBORNE;
   }
+  const enterStance = k >= 0 && m.cf[i].uk === UK.STANCE && m.cf[i].moves[k].stanceKind === STK.ENTER;
   clearMove(m, i);
   if (isAirborne(s, b)) {
     setSt(m, i, ST.AIR);
     return;
   }
+  if (s[b + F.after] > 0 && s[b + F.st] === ST.ATTACK) {
+    // CHANGED(SIM) P2 (CONTRACT §28.5d): the thrower of a grab-less throw holds while its victim lies (lying hold)
+    const h = s[b + F.after];
+    s[b + F.after] = 0;
+    setSt(m, i, ST.RECOVER);
+    s[b + F.stun] = h;
+    return;
+  }
+  if (enterStance) {
+    // CHANGED(SIM) P2 (CONTRACT §28.2 stance): the enter move put the fighter in the stance
+    s[b + F.flags] &= ~(FL.CROUCHING | FL.PROX | FL.BLOCKING);
+    s[b + F.uniq] = 1;
+    s[b + F.uniq + 1] = 0;
+    s[b + F.uniq + 2] = m.cf[i].u.stMaxF;
+    s[b + F.uniq + 3] = 0;
+    s[b + F.assistStep] = 0;
+    s[b + F.ucnt] = 0;
+    setSt(m, i, ST.STANCE);
+    stanceTick(m, i, oppX);
+    return;
+  }
   enterFree(m, i, oppX);
+}
+
+// ------------------------------------------------------------------ uniques (CHANGED(SIM) P2, CONTRACT §28.2)
+/**
+ * One frame in STANCE: buffered follow-ups / specials first, then down = exit, maxF = timeout exit, holding back walks
+ * back and leaves after blockExitF frames, forward walks. uniq: u1 frames in stance, u3 anim (0 idle 1 walk_f 2 walk_b);
+ * F.assistStep counts the back-hold frames while in the stance (unused by assist routes there).
+ */
+function stanceTick(m: Match, i: number, oppX: number): void {
+  const s = m.s;
+  const b = fb(i);
+  const u = m.cf[i].u;
+  s[b + F.uniq + 1]++;
+  if (tryAct(m, i, CTX.STANCE, oppX)) return;
+  const dir = dirOf(s[b + F.raw], s[b + F.facing]);
+  const down = dir === 1 || dir === 2 || dir === 3;
+  // down held stExitHoldF frames exits (a motion special rolls through down faster and starts from the stance instead)
+  s[b + F.ucnt] = down ? s[b + F.ucnt] + 1 : 0;
+  if (down && s[b + F.ucnt] >= u.stExitHoldF && u.stExit2 >= 0) {
+    s[b + F.ucnt] = 0;
+    startMove(m, i, u.stExit2, 0, oppX);
+    return;
+  }
+  if (down) return;
+  if (s[b + F.uniq + 1] >= u.stMaxF && u.stExitT >= 0) {
+    startMove(m, i, u.stExitT, 0, oppX);
+    return;
+  }
+  if (dir === 4) {
+    s[b + F.assistStep]++;
+    if (s[b + F.assistStep] >= u.stBlockExitF) {
+      s[b + F.assistStep] = 0;
+      enterFree(m, i, oppX);
+      return;
+    }
+    s[b + F.x] -= s[b + F.facing] * u.stWalkB;
+    s[b + F.uniq + 3] = 2;
+    return;
+  }
+  s[b + F.assistStep] = 0;
+  if (dir === 6) {
+    s[b + F.x] += s[b + F.facing] * u.stWalkF;
+    s[b + F.uniq + 3] = 1;
+    return;
+  }
+  s[b + F.uniq + 3] = 0;
+}
+
+/** Teleport on the move's teleport frame (CONTRACT §20.2 / §28.2): behind / front / home, clamped to the walls. */
+function teleport(m: Match, i: number, mv: CMove, oppX: number): void {
+  const s = m.s;
+  const b = fb(i);
+  const tp = mv.teleport;
+  if (!tp) return;
+  const x0 = s[b + F.x];
+  const dx = oppX - x0;
+  const side = dx > 0 ? 1 : dx < 0 ? -1 : s[b + F.facing];
+  let nx = x0;
+  if (tp.to === TPD.BEHIND) nx = oppX + side * tp.gap;
+  else if (tp.to === TPD.FRONT) nx = oppX - side * tp.gap;
+  else nx = -side * m.sys.wall + side * tp.gap;
+  s[b + F.x] = nx;
+  clampToWalls(m, i);
+  s[b + F.pushF] = 0;
+  s[b + F.pushLeft] = 0;
+  if (m.cf[i].uk === UK.TELEPORT) s[b + F.uniq]++;
+  emit(m, EVX.TELEPORT, i, Math.trunc(x0 / 1000), Math.trunc(s[b + F.x] / 1000), tp.to);
 }
 
 // ------------------------------------------------------------------ movement helpers
@@ -600,7 +731,10 @@ function throwRelease(m: Match, i: number): void {
   const lastClip = victimPose(m, i, VP) ? VP[5] : -1;
   throwCarry(m, i);
   const kd = s[b + F.kd] || 1;
-  enterKnockdown(m, i, Math.max(s[b + F.after], 1), kd);
+  // CHANGED(SIM) P2 (CONTRACT §28.5d): an early release hands its lock frames to the knockdown (same advantage)
+  const early = Math.max(0, s[b + F.stun]);
+  s[b + F.thrRel] = 0;
+  enterKnockdown(m, i, Math.max(s[b + F.after], 1) + early, kd);
   s[b + F.kdFace] = KDF.NOFALL | (lastClip >= 0 && endsFaceDown(lastClip) ? KDF.DOWN : 0);
 }
 
@@ -649,9 +783,15 @@ export function fighterUpdate(m: Match, i: number, oppX: number): void {
   if (s[b + F.invS] > 0) s[b + F.invS]--;
   if (s[b + F.invT] > 0) s[b + F.invT]--;
   if (s[b + F.invP] > 0) s[b + F.invP]--;
+  if (s[b + F.instF] > 0 && --s[b + F.instF] === 0) s[b + F.instMv] = -1; // CHANGED(SIM) P2: install timer
   s[b + F.stF]++;
   const st = s[b + F.st];
   switch (st) {
+    case ST.ABSENT:
+      return; // CHANGED(SIM) P2: bonus rounds
+    case ST.STANCE:
+      stanceTick(m, i, oppX); // CHANGED(SIM) P2
+      break;
     case ST.IDLE:
     case ST.CROUCH:
     case ST.WALK_F:
@@ -706,7 +846,8 @@ export function fighterUpdate(m: Match, i: number, oppX: number): void {
       break;
     case ST.THROWN:
       if (s[b + F.techWin] > 0) s[b + F.techWin]--;
-      if (--s[b + F.stun] <= 0) throwRelease(m, i);   // CHANGED(fixer) D3: the carry every lock frame
+      // CHANGED(fixer) D3: the carry every lock frame; CHANGED(SIM) P2: release early by F.thrRel frames (§28.5d)
+      if (--s[b + F.stun] <= s[b + F.thrRel] && s[b + F.techWin] <= 0) throwRelease(m, i);
       else throwCarry(m, i);
       break;
     case ST.PARRY:

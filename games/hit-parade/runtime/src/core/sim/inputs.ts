@@ -10,8 +10,9 @@
 
 import { ACT, BUF, F, FL, HIST, P, PROJ_CAP, ST, W, projBase } from './layout.ts';
 import { H_FROZEN, dashDone, motionDone } from './motion.ts';
-import { K, MO } from './compile.ts';
-import type { CFighter, CMove } from './compile.ts';
+import { K, MO, STK, UK } from './compile.ts';
+import type { CFighter, CMove, CRoute } from './compile.ts';
+import { ballReady } from './projectiles.ts';
 import { canAfford, fb, isAirborne } from './state.ts';
 import type { Match } from './state.ts';
 
@@ -65,23 +66,30 @@ export function recordInput(m: Match, i: number, raw: number, frozen: boolean): 
   ageBtn(s, b + F.ageH, pressed, IN.H);
   ageBtn(s, b + F.ageS, pressed, IN.S);
   if (!frozen) {
-    // charge: back = 1/4/7, down = 1/2/3 (charge persists through stun and dashes)
+    // charge: back = 1/4/7, down = 1/2/3. CHANGED(SIM) P2 (CONTRACT §28.2 charge): in blockstun, hitstun and dashes a
+    // released direction neither loses the charge nor ages its keep window (the charge is kept through them)
     const back = dir === 1 || dir === 4 || dir === 7;
     const down = dir === 1 || dir === 2 || dir === 3;
+    const st = s[b + F.st];
+    const keep = st === ST.BLOCKSTUN || st === ST.HITSTUN || st === ST.DASH_F || st === ST.DASH_B;
+    // a release shorter than the keep window does not lose the charge: re-holding resumes it (the 44 back dash)
+    const keepF = m.cf[i].mw.chargeKeep;
     if (back) {
+      if (s[b + F.chB] === 0 && s[b + F.chBS] > 0 && s[b + F.chBR] <= keepF) s[b + F.chB] = s[b + F.chBS];
       if (s[b + F.chB] < 1000) s[b + F.chB]++;
       s[b + F.chBR] = 0;
       s[b + F.chBS] = s[b + F.chB];
-    } else {
+    } else if (!keep) {
       if (s[b + F.chB] > 0) s[b + F.chBS] = s[b + F.chB];
       s[b + F.chB] = 0;
       if (s[b + F.chBR] < AGE_CAP) s[b + F.chBR]++;
     }
     if (down) {
+      if (s[b + F.chD] === 0 && s[b + F.chDS] > 0 && s[b + F.chDR] <= keepF) s[b + F.chD] = s[b + F.chDS];
       if (s[b + F.chD] < 1000) s[b + F.chD]++;
       s[b + F.chDR] = 0;
       s[b + F.chDS] = s[b + F.chD];
-    } else {
+    } else if (!keep) {
       if (s[b + F.chD] > 0) s[b + F.chDS] = s[b + F.chD];
       s[b + F.chD] = 0;
       if (s[b + F.chDR] < AGE_CAP) s[b + F.chDR]++;
@@ -91,22 +99,40 @@ export function recordInput(m: Match, i: number, raw: number, frozen: boolean): 
   else s[b + F.flags] &= ~FL.ASSIST;
 }
 
-/** Active projectiles owned by fighter `i`. */
+/** Active projectiles owned by fighter `i` (CHANGED(SIM) P2: the ball (kind 1) and heckle objects never count). */
 export function projCount(m: Match, i: number): number {
   const s = m.s;
   let n = 0;
   for (let k = 0; k < PROJ_CAP; k++) {
     const pb = projBase(k);
-    if (s[pb + P.act] !== 0 && s[pb + P.owner] === i) n++;
+    if (s[pb + P.act] !== 0 && s[pb + P.owner] === i && s[pb + P.kind] === 0) n++;
   }
   return n;
+}
+
+/** CHANGED(SIM) P2: is fighter i in phase 2 of a `phases` unique? */
+export function inPhase2(m: Match, i: number): boolean {
+  return m.cf[i].uk === UK.PHASES && m.s[fb(i) + F.uniq] === 2;
+}
+
+/** CHANGED(SIM) P2: the fighter's routing tables for its current phase (CONTRACT §28.2 phases). */
+export function routeOf(m: Match, i: number): CRoute {
+  const cf = m.cf[i];
+  return inPhase2(m, i) ? cf.route2 : cf.route1;
+}
+
+/** Projectile limit / ball availability / phase gate of move `mv` (shared by the parser and the executor). */
+export function projOk(m: Match, i: number, mv: CMove): boolean {
+  if (mv.phase2 && !inPhase2(m, i)) return false;
+  if (mv.ballAct === 1 || mv.ballAct === 2) return ballReady(m, i, mv);
+  if (mv.proj && projCount(m, i) >= mv.proj.limit) return false;
+  return true;
 }
 
 function usable(m: Match, i: number, mv: CMove, air: boolean): boolean {
   if (air ? !mv.usableAir : mv.airOnly) return false;
   if (!canAfford(m, i, mv)) return false;
-  if (mv.proj && projCount(m, i) >= mv.proj.limit) return false;
-  return true;
+  return projOk(m, i, mv);
 }
 
 function setBuf(m: Match, i: number, act: number, mv: number, flags: number, win: number): void {
@@ -140,8 +166,9 @@ export function parseAction(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   const st = s[b + F.st];
-  if (st === ST.INTRO || st === ST.KO || st === ST.WIN || st === ST.LOSE) return;
+  if (st === ST.INTRO || st === ST.KO || st === ST.WIN || st === ST.LOSE || st === ST.ABSENT) return;
   const cf = m.cf[i];
+  const R = routeOf(m, i); // CHANGED(SIM) P2: phase-2 routing for a `phases` fighter
   const sys = m.sys.raw;
   const scheme = m.cfg.p[i].scheme;
   const raw = s[b + F.raw];
@@ -155,7 +182,7 @@ export function parseAction(m: Match, i: number): void {
   const baseWin = scheme === 0 ? sys.buffer.simple : sys.buffer.classic;
   const win = kdCtx ? Math.max(baseWin, sys.buffer.wakeup) : st === ST.HITSTUN || st === ST.BLOCKSTUN ? Math.max(baseWin, sys.buffer.afterStun) : baseWin;
   const chord = sys.buffer.chordFrames - 1;
-  const w = sys.motion;
+  const w = cf.mw; // CHANGED(SIM) P2: per-fighter charge numbers (unique.chargeF / keepF)
   const curMv = s[b + F.mv] >= 0 ? cf.moves[s[b + F.mv]] : null;
 
   // ---------------------------------------------------------------- rekka triggers (CONTRACT 20.2)
@@ -181,28 +208,28 @@ export function parseAction(m: Match, i: number): void {
   }
 
   // ---------------------------------------------------------------- SIMPLE one-button (S)
-  if (scheme === 0 && (pressed & IN.S) !== 0 && air && cf.sAir >= 0 && usable(m, i, cf.moves[cf.sAir], true)) {
-    setBuf(m, i, ACT.MOVE, cf.sAir, BUF.SIMPLE, win);
+  if (scheme === 0 && (pressed & IN.S) !== 0 && air && R.sAir >= 0 && usable(m, i, cf.moves[R.sAir], true)) {
+    setBuf(m, i, ACT.MOVE, R.sAir, BUF.SIMPLE, win);
     return;
   }
   if (scheme === 0 && (pressed & IN.S) !== 0) {
     const hChord = (raw & IN.H) !== 0 && s[b + F.ageH] <= chord;
     if (hChord) {
-      const sup = down ? cf.sup3 : cf.sup1;
+      const sup = down ? R.sup3 : R.sup1;
       if (sup >= 0 && usable(m, i, cf.moves[sup], air)) {
         setBuf(m, i, ACT.MOVE, sup, BUF.SIMPLE, win);
         return;
       }
     }
     if ((raw & IN.ASSIST) !== 0) {
-      const ex = dir === 6 || dir === 9 ? cf.e6 : dir === 4 || dir === 7 ? cf.e4 : down ? cf.e2 : cf.e5;
+      const ex = dir === 6 || dir === 9 ? R.e6 : dir === 4 || dir === 7 ? R.e4 : down ? R.e2 : R.e5;
       if (ex >= 0 && usable(m, i, cf.moves[ex], air)) {
         setBuf(m, i, ACT.MOVE, ex, BUF.SIMPLE, win);
         return;
       }
     }
-    const sp = dir === 6 || dir === 9 ? cf.s6 : dir === 4 || dir === 7 ? cf.s4 : down ? cf.s2 : cf.s5;
-    const spF = sp >= 0 ? sp : cf.s5;
+    const sp = dir === 6 || dir === 9 ? R.s6 : dir === 4 || dir === 7 ? R.s4 : down ? R.s2 : R.s5;
+    const spF = sp >= 0 ? sp : R.s5;
     if (spF >= 0 && usable(m, i, cf.moves[spF], air)) {
       setBuf(m, i, ACT.MOVE, spF, BUF.SIMPLE, win);
       return;
@@ -210,7 +237,7 @@ export function parseAction(m: Match, i: number): void {
   }
   // SIMPLE: H pressed right after S -> super (chord either order)
   if (scheme === 0 && (pressed & IN.H) !== 0 && (raw & IN.S) !== 0 && s[b + F.ageS] <= chord) {
-    const sup = down ? cf.sup3 : cf.sup1;
+    const sup = down ? R.sup3 : R.sup1;
     if (sup >= 0 && usable(m, i, cf.moves[sup], air)) {
       setBuf(m, i, ACT.MOVE, sup, BUF.SIMPLE, win);
       return;
@@ -227,8 +254,8 @@ export function parseAction(m: Match, i: number): void {
     let lastOk = false;
     // EX first (CLASSIC: motion + S)
     if (trigS !== 0) {
-      for (let k = 0; k < cf.specials.length; k++) {
-        const sp = cf.specials[k];
+      for (let k = 0; k < R.specials.length; k++) {
+        const sp = R.specials[k];
         const idx = sp.idx[3];
         if (idx < 0 || sp.motion === MO.DQCF || sp.motion === MO.DQCB) continue;
         if (sp.motion !== lastMotion) {
@@ -243,8 +270,8 @@ export function parseAction(m: Match, i: number): void {
     }
     if (trigLMH !== 0) {
       lastMotion = -1;
-      for (let k = 0; k < cf.specials.length; k++) {
-        const sp = cf.specials[k];
+      for (let k = 0; k < R.specials.length; k++) {
+        const sp = R.specials[k];
         if (sp.motion !== lastMotion) {
           lastMotion = sp.motion;
           lastOk = motionDone(s, b, sp.motion, w);
@@ -283,6 +310,17 @@ export function parseAction(m: Match, i: number): void {
   if (!air && (pressed & IN.IMPACT) !== 0) {
     setBuf(m, i, ACT.MOVE, cf.impact, 0, win);
     return;
+  }
+
+  // ---------------------------------------------------------------- stance follow-ups (CHANGED(SIM) P2, §28.2 stance)
+  // In STANCE (or during a stance enter move, so the press buffers into the stance) L / M / H fire the follow-ups.
+  if (cf.uk === UK.STANCE && (pressed & (IN.L | IN.M | IN.H)) !== 0 && (st === ST.STANCE || (curMv !== null && curMv.stanceKind === STK.ENTER))) {
+    const fb2 = (pressed & IN.H) !== 0 ? 2 : (pressed & IN.M) !== 0 ? 1 : 0;
+    const fu = cf.u.stFollow[fb2];
+    if (fu >= 0 && canAfford(m, i, cf.moves[fu])) {
+      setBuf(m, i, ACT.MOVE, fu, BUF.STANCE, win);
+      return;
+    }
   }
 
   // ---------------------------------------------------------------- assist route (SIMPLE: hold ASSIST + tap L)

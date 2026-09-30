@@ -17,6 +17,16 @@ export type SfxId =
   | 'ui_cash'
   | 'ui_unlock'
   | 'ui_ladder'
+  | 'ui_search'
+  | 'ui_found'
+  | 'ui_join'
+  | 'ui_leave'
+  | 'ui_ready'
+  | 'ui_reveal'
+  | 'ui_code'
+  | 'ui_rematch'
+  | 'ui_disconnect'
+  | 'ui_countdown'
   | 'hit_l'
   | 'hit_m'
   | 'hit_h'
@@ -117,6 +127,57 @@ export type SfxId =
   | 'vo_mon_atk'
   | 'vo_mon_hurt'
   | 'vo_mon_ko'
+  | 'brick_smash'
+  | 'card_riffle'
+  | 'proj_card_saw'
+  | 'card_hit'
+  | 'flame_ignite'
+  | 'proj_flame'
+  | 'flame_hit'
+  | 'gourd_swig'
+  | 'proj_flame_breath'
+  | 'ball_bounce'
+  | 'ball_hit'
+  | 'proj_ball_fire'
+  | 'taser_charge'
+  | 'taser_hit'
+  | 'spot_on'
+  | 'proj_spot'
+  | 'spot_hit'
+  | 'pyro_fuse'
+  | 'proj_pyro'
+  | 'pyro_hit'
+  | 'wpn_cleaver'
+  | 'wpn_baton'
+  | 'wpn_shield'
+  | 'wpn_cane'
+  | 'vo_goon_atk'
+  | 'vo_goon_hurt'
+  | 'vo_goon_down'
+  | 'vo_goon_taunt'
+  | 'goon_spawn'
+  | 'goon_hit'
+  | 'vo_heckle'
+  | 'splat_tomato'
+  | 'heckle_thud'
+  | 'chair_crash'
+  | 'heckle_deflect'
+  | 'cine_open'
+  | 'cine_finish'
+  | 'cine_end'
+  | 'cine_cut'
+  | 'tv_static'
+  | 'magic_poof'
+  | 'magic_tada'
+  | 'trapdoor'
+  | 'light_flicker'
+  | 'order_up'
+  | 'amb_rust_theater'
+  | 'amb_butcher_block'
+  | 'amb_wheel_of_pain'
+  | 'amb_rooftop'
+  | 'amb_control_room'
+  | 'amb_thunder'
   | 'bed_low'
   | 'bed_high'
   | 'bed_stomp'
@@ -128,9 +189,9 @@ export type SfxId =
   | 'crowd_applause'
   | 'crowd_laugh'
   | 'crowd_claps';
-export type SfxCategory = 'ann' | 'bed' | 'bell' | 'block' | 'body' | 'crowd' | 'foley' | 'hit' | 'impact' | 'layer' | 'splat' | 'sting' | 'super' | 'ui' | 'voice' | 'whiff';
+export type SfxCategory = 'amb' | 'ann' | 'bed' | 'bell' | 'block' | 'body' | 'crowd' | 'foley' | 'hit' | 'impact' | 'layer' | 'splat' | 'sting' | 'super' | 'ui' | 'voice' | 'whiff';
 export type SpriteId = 'ui' | 'sfx' | 'crowd';
-export type MusicCueId = 'menu' | 'select' | 'rust_theater' | 'butcher_block' | 'wheel_of_pain' | 'rooftop' | 'control_room' | 'boss' | 'miniboss' | 'win' | 'lose';
+export type MusicCueId = 'menu' | 'select' | 'rust_theater' | 'butcher_block' | 'wheel_of_pain' | 'rooftop' | 'control_room' | 'boss' | 'miniboss' | 'brawl' | 'heckler' | 'win' | 'lose';
 
 /** the AAC-LC (MP4) twin of an Ogg asset, for WebKit before 18.4 (no Ogg decode): `samples` = the decode that honours
  *  the MP4 edit list; a decoder that ignores it returns `samples` + `delay` priming samples first (engine.ts skips them) */
@@ -163,8 +224,8 @@ export const SAMPLE_RATE = 48000;
 export const SPRITE_GUARD_S = 0.06;
 
 export const SPRITES: { readonly [K in SpriteId]: SpriteEntry } = {
-  ui: { url: new URL('./assets/ui.ogg', import.meta.url).href, file: 'assets/ui.ogg', channels: 1, seconds: 9.594625, samples: 460542, bytes: 59393, alt: { url: new URL('./assets/ui.m4a', import.meta.url).href, file: 'assets/ui.m4a', bytes: 85644, samples: 460800, delay: 1024 } },
-  sfx: { url: new URL('./assets/sfx.ogg', import.meta.url).href, file: 'assets/sfx.ogg', channels: 1, seconds: 148.719146, samples: 7138519, bytes: 810917, alt: { url: new URL('./assets/sfx.m4a', import.meta.url).href, file: 'assets/sfx.m4a', bytes: 1205372, samples: 7139328, delay: 1024 } },
+  ui: { url: new URL('./assets/ui.ogg', import.meta.url).href, file: 'assets/ui.ogg', channels: 1, seconds: 15.634875, samples: 750474, bytes: 94962, alt: { url: new URL('./assets/ui.m4a', import.meta.url).href, file: 'assets/ui.m4a', bytes: 119360, samples: 750592, delay: 1024 } },
+  sfx: { url: new URL('./assets/sfx.ogg', import.meta.url).href, file: 'assets/sfx.ogg', channels: 1, seconds: 230.665208, samples: 11071930, bytes: 1254299, alt: { url: new URL('./assets/sfx.m4a', import.meta.url).href, file: 'assets/sfx.m4a', bytes: 1607151, samples: 11072512, delay: 1024 } },
   crowd: { url: new URL('./assets/crowd.ogg', import.meta.url).href, file: 'assets/crowd.ogg', channels: 2, seconds: 56.207146, samples: 2697943, bytes: 438652, alt: { url: new URL('./assets/crowd.m4a', import.meta.url).href, file: 'assets/crowd.m4a', bytes: 589514, samples: 2698240, delay: 1024 } },
 };
 
@@ -177,112 +238,173 @@ export const SFX: { readonly [K in SfxId]: SfxEntry } = {
   ui_start: { sprite: 'ui', v: [[1.969188, 0.965479]], n: [46343], loop: false, cat: 'sting', ldb: -15.7 },
   ui_lock: { sprite: 'ui', v: [[2.984667, 0.950792]], n: [45638], loop: false, cat: 'ui', ldb: -18.4 },
   ui_vs: { sprite: 'ui', v: [[3.985458, 1.423646]], n: [68335], loop: false, cat: 'sting', ldb: -16.6 },
-  ui_pause: { sprite: 'ui', v: [[5.459104, 0.250063]], n: [12003], loop: false, cat: 'ui', ldb: -12.6 },
+  ui_pause: { sprite: 'ui', v: [[5.459104, 0.250063]], n: [12003], loop: false, cat: 'ui', ldb: -13.7 },
   ui_resume: { sprite: 'ui', v: [[5.759167, 0.247583]], n: [11884], loop: false, cat: 'ui', ldb: -15.1 },
   ui_tick: { sprite: 'ui', v: [[6.05675, 0.325375]], n: [15618], loop: false, cat: 'ui', ldb: -19.4 },
-  ui_cash: { sprite: 'ui', v: [[6.432125, 0.617875]], n: [29658], loop: false, cat: 'sting', ldb: -18.4 },
-  ui_unlock: { sprite: 'ui', v: [[7.1, 2.137833]], n: [102616], loop: false, cat: 'sting', ldb: -11.3 },
+  ui_cash: { sprite: 'ui', v: [[6.432125, 0.617875]], n: [29658], loop: false, cat: 'sting', ldb: -19.0 },
+  ui_unlock: { sprite: 'ui', v: [[7.1, 2.137833]], n: [102616], loop: false, cat: 'sting', ldb: -11.6 },
   ui_ladder: { sprite: 'ui', v: [[9.287833, 0.256792]], n: [12326], loop: false, cat: 'ui', ldb: -25.1 },
+  ui_search: { sprite: 'ui', v: [[9.594625, 0.234063]], n: [11235], loop: false, cat: 'ui', ldb: -24.7 },
+  ui_found: { sprite: 'ui', v: [[9.878687, 0.989604]], n: [47501], loop: false, cat: 'sting', ldb: -16.5 },
+  ui_join: { sprite: 'ui', v: [[10.918292, 0.843917]], n: [40508], loop: false, cat: 'ui', ldb: -12.5 },
+  ui_leave: { sprite: 'ui', v: [[11.812208, 0.296896]], n: [14251], loop: false, cat: 'ui', ldb: -11.0 },
+  ui_ready: { sprite: 'ui', v: [[12.159104, 0.320875]], n: [15402], loop: false, cat: 'ui', ldb: -18.5 },
+  ui_reveal: { sprite: 'ui', v: [[12.529979, 1.091479]], n: [52391], loop: false, cat: 'sting', ldb: -16.4 },
+  ui_code: { sprite: 'ui', v: [[13.671458, 0.114479]], n: [5495], loop: false, cat: 'ui', ldb: -19.6 },
+  ui_rematch: { sprite: 'ui', v: [[13.835938, 0.485]], n: [23280], loop: false, cat: 'sting', ldb: -15.3 },
+  ui_disconnect: { sprite: 'ui', v: [[14.370938, 0.876188]], n: [42057], loop: false, cat: 'ui', ldb: -16.4 },
+  ui_countdown: { sprite: 'ui', v: [[15.297125, 0.28775]], n: [13812], loop: false, cat: 'ui', ldb: -23.8 },
   hit_l: { sprite: 'sfx', v: [[0.05, 0.302625], [0.402625, 0.33725], [0.789875, 0.344292], [1.184167, 0.302646], [1.536812, 0.299833], [1.886646, 0.264125]], n: [14526, 16188, 16526, 14527, 14392, 12678], loop: false, cat: 'hit', ldb: -24.4 },
-  hit_m: { sprite: 'sfx', v: [[2.200771, 0.37125], [2.622021, 0.409562], [3.081583, 0.442333], [3.573917, 0.365354], [3.989271, 0.369542], [4.408812, 0.341604]], n: [17820, 19659, 21232, 17537, 17738, 16397], loop: false, cat: 'hit', ldb: -21.4 },
-  hit_h: { sprite: 'sfx', v: [[4.800417, 0.732375], [5.582792, 0.438979], [6.071771, 0.583708], [6.705479, 0.609938], [7.365417, 0.730208], [8.145625, 0.583396]], n: [35154, 21071, 28018, 29277, 35050, 28003], loop: false, cat: 'hit', ldb: -22.0 },
-  hit_sp: { sprite: 'sfx', v: [[8.779021, 0.609333], [9.438354, 0.649396], [10.13775, 0.609333]], n: [29248, 31171, 29248], loop: false, cat: 'super', ldb: -19.3 },
+  hit_m: { sprite: 'sfx', v: [[2.200771, 0.37125], [2.622021, 0.409562], [3.081583, 0.442333], [3.573917, 0.365354], [3.989271, 0.369542], [4.408812, 0.341604]], n: [17820, 19659, 21232, 17537, 17738, 16397], loop: false, cat: 'hit', ldb: -21.5 },
+  hit_h: { sprite: 'sfx', v: [[4.800417, 0.732375], [5.582792, 0.438979], [6.071771, 0.583708], [6.705479, 0.609938], [7.365417, 0.730208], [8.145625, 0.583396]], n: [35154, 21071, 28018, 29277, 35050, 28003], loop: false, cat: 'hit', ldb: -21.9 },
+  hit_sp: { sprite: 'sfx', v: [[8.779021, 0.609333], [9.438354, 0.649396], [10.13775, 0.609333]], n: [29248, 31171, 29248], loop: false, cat: 'super', ldb: -19.8 },
   hit_ctr: { sprite: 'sfx', v: [[10.797083, 0.348938], [11.196021, 0.300292], [11.546313, 0.386042]], n: [16749, 14414, 18530], loop: false, cat: 'layer', ldb: -21.0 },
   hit_pun: { sprite: 'sfx', v: [[11.982354, 0.650958], [12.683312, 0.535833]], n: [31246, 25720], loop: false, cat: 'layer', ldb: -18.4 },
-  whiff_l: { sprite: 'sfx', v: [[13.269146, 0.224042], [13.543188, 0.235021], [13.828208, 0.235833], [14.114042, 0.232521]], n: [10754, 11281, 11320, 11161], loop: false, cat: 'whiff', ldb: -17.3 },
-  whiff_m: { sprite: 'sfx', v: [[14.396562, 0.182271], [14.628833, 0.182958], [14.861792, 0.184792]], n: [8749, 8782, 8870], loop: false, cat: 'whiff', ldb: -17.0 },
-  whiff_h: { sprite: 'sfx', v: [[15.096583, 0.259729], [15.406313, 0.289271], [15.745583, 0.287917]], n: [12467, 13885, 13820], loop: false, cat: 'whiff', ldb: -18.9 },
+  whiff_l: { sprite: 'sfx', v: [[13.269146, 0.224042], [13.543188, 0.235021], [13.828208, 0.235833], [14.114042, 0.232521]], n: [10754, 11281, 11320, 11161], loop: false, cat: 'whiff', ldb: -17.4 },
+  whiff_m: { sprite: 'sfx', v: [[14.396562, 0.182271], [14.628833, 0.182958], [14.861792, 0.184792]], n: [8749, 8782, 8870], loop: false, cat: 'whiff', ldb: -17.4 },
+  whiff_h: { sprite: 'sfx', v: [[15.096583, 0.259729], [15.406313, 0.289271], [15.745583, 0.287917]], n: [12467, 13885, 13820], loop: false, cat: 'whiff', ldb: -18.8 },
   block_l: { sprite: 'sfx', v: [[16.0835, 0.346167], [16.479667, 0.325646], [16.855313, 0.2635]], n: [16616, 15631, 12648], loop: false, cat: 'block', ldb: -23.8 },
-  block_h: { sprite: 'sfx', v: [[17.168813, 0.391146], [17.609958, 0.365438], [18.025396, 0.365646]], n: [18775, 17541, 17551], loop: false, cat: 'block', ldb: -19.6 },
+  block_h: { sprite: 'sfx', v: [[17.168813, 0.391146], [17.609958, 0.365438], [18.025396, 0.365646]], n: [18775, 17541, 17551], loop: false, cat: 'block', ldb: -19.3 },
   throw_grab: { sprite: 'sfx', v: [[18.441042, 0.400313], [18.891354, 0.437812]], n: [19215, 21015], loop: false, cat: 'body', ldb: -22.6 },
-  throw_slam: { sprite: 'sfx', v: [[19.379167, 0.610958], [20.040125, 0.609875]], n: [29326, 29274], loop: false, cat: 'body', ldb: -20.9 },
+  throw_slam: { sprite: 'sfx', v: [[19.379167, 0.610958], [20.040125, 0.609875]], n: [29326, 29274], loop: false, cat: 'body', ldb: -21.0 },
   throw_tech: { sprite: 'sfx', v: [[20.7, 0.592542]], n: [28442], loop: false, cat: 'impact', ldb: -19.8 },
-  parry: { sprite: 'sfx', v: [[21.342542, 0.619979], [22.012521, 0.758771]], n: [29759, 36421], loop: false, cat: 'impact', ldb: -19.4 },
+  parry: { sprite: 'sfx', v: [[21.342542, 0.619979], [22.012521, 0.758771]], n: [29759, 36421], loop: false, cat: 'impact', ldb: -19.2 },
   parry_perfect: { sprite: 'sfx', v: [[22.821292, 0.981833]], n: [47128], loop: false, cat: 'sting', ldb: -16.4 },
-  impact_start: { sprite: 'sfx', v: [[23.853125, 0.830708]], n: [39874], loop: false, cat: 'impact', ldb: -16.3 },
+  impact_start: { sprite: 'sfx', v: [[23.853125, 0.830708]], n: [39874], loop: false, cat: 'impact', ldb: -16.0 },
   impact_armor: { sprite: 'sfx', v: [[24.733833, 0.371771], [25.155604, 1.048396]], n: [17845, 50323], loop: false, cat: 'impact', ldb: -21.9 },
   impact_clash: { sprite: 'sfx', v: [[26.254, 1.919083]], n: [92116], loop: false, cat: 'super', ldb: -19.8 },
   shove: { sprite: 'sfx', v: [[28.223083, 0.566333]], n: [27184], loop: false, cat: 'body', ldb: -20.0 },
-  wall_splat: { sprite: 'sfx', v: [[28.839417, 0.721021], [29.610437, 0.604708], [30.265146, 0.496729]], n: [34609, 29026, 23843], loop: false, cat: 'body', ldb: -24.2 },
+  wall_splat: { sprite: 'sfx', v: [[28.839417, 0.721021], [29.610437, 0.604708], [30.265146, 0.496729]], n: [34609, 29026, 23843], loop: false, cat: 'body', ldb: -24.4 },
   ground_bounce: { sprite: 'sfx', v: [[30.811875, 0.57575], [31.437625, 0.57575]], n: [27636, 27636], loop: false, cat: 'body', ldb: -20.8 },
-  knockdown: { sprite: 'sfx', v: [[32.063375, 0.787875], [32.90125, 0.724042], [33.675292, 0.613812]], n: [37818, 34754, 29463], loop: false, cat: 'body', ldb: -20.3 },
+  knockdown: { sprite: 'sfx', v: [[32.063375, 0.787875], [32.90125, 0.724042], [33.675292, 0.613812]], n: [37818, 34754, 29463], loop: false, cat: 'body', ldb: -20.2 },
   wakeup: { sprite: 'sfx', v: [[34.339104, 0.78725], [35.176354, 0.923292]], n: [37788, 44318], loop: false, cat: 'foley', ldb: -18.0 },
   crumple: { sprite: 'sfx', v: [[36.149646, 1.849354]], n: [88769], loop: false, cat: 'body', ldb: -23.2 },
   dizzy: { sprite: 'sfx', v: [[38.049, 1.590271]], n: [76333], loop: false, cat: 'sting', ldb: -15.8 },
   proj_throw: { sprite: 'sfx', v: [[39.689271, 0.098875], [39.838146, 0.123375]], n: [4746, 5922], loop: false, cat: 'whiff', ldb: -19.8 },
   proj_card: { sprite: 'sfx', v: [[40.011521, 0.406813], [40.468333, 0.405604]], n: [19527, 19469], loop: false, cat: 'whiff', ldb: -24.3 },
   proj_ball: { sprite: 'sfx', v: [[40.923938, 0.248604], [41.222542, 0.299104]], n: [11933, 14357], loop: false, cat: 'impact', ldb: -23.9 },
-  proj_zap: { sprite: 'sfx', v: [[41.571646, 0.705708]], n: [33874], loop: false, cat: 'impact', ldb: -19.9 },
-  proj_fire: { sprite: 'sfx', v: [[42.327354, 0.80625]], n: [38700], loop: false, cat: 'impact', ldb: -15.2 },
-  proj_hit: { sprite: 'sfx', v: [[43.183604, 0.350958], [43.584562, 0.397437]], n: [16846, 19077], loop: false, cat: 'impact', ldb: -18.2 },
+  proj_zap: { sprite: 'sfx', v: [[41.571646, 0.705708]], n: [33874], loop: false, cat: 'impact', ldb: -19.3 },
+  proj_fire: { sprite: 'sfx', v: [[42.327354, 0.80625]], n: [38700], loop: false, cat: 'impact', ldb: -15.4 },
+  proj_hit: { sprite: 'sfx', v: [[43.183604, 0.350958], [43.584562, 0.397437]], n: [16846, 19077], loop: false, cat: 'impact', ldb: -18.3 },
   proj_clash: { sprite: 'sfx', v: [[44.032, 0.619563]], n: [29739], loop: false, cat: 'impact', ldb: -19.3 },
-  super_freeze: { sprite: 'sfx', v: [[44.701563, 0.973042]], n: [46706], loop: false, cat: 'sting', ldb: -15.1 },
-  super_hit: { sprite: 'sfx', v: [[45.724604, 0.609333], [46.383938, 0.973812], [47.40775, 0.807125]], n: [29248, 46743, 38742], loop: false, cat: 'super', ldb: -18.8 },
+  super_freeze: { sprite: 'sfx', v: [[44.701563, 0.973042]], n: [46706], loop: false, cat: 'sting', ldb: -15.4 },
+  super_hit: { sprite: 'sfx', v: [[45.724604, 0.609333], [46.383938, 0.973812], [47.40775, 0.807125]], n: [29248, 46743, 38742], loop: false, cat: 'super', ldb: -18.5 },
   ko_hit: { sprite: 'sfx', v: [[48.264875, 0.973229]], n: [46715], loop: false, cat: 'super', ldb: -20.1 },
   stage_fright: { sprite: 'sfx', v: [[49.288104, 1.892813]], n: [90855], loop: false, cat: 'sting', ldb: -14.6 },
   meter_bar: { sprite: 'sfx', v: [[51.230917, 0.427917]], n: [20540], loop: false, cat: 'ui', ldb: -18.3 },
   meter_full: { sprite: 'sfx', v: [[51.708833, 1.203188]], n: [57753], loop: false, cat: 'sting', ldb: -13.7 },
-  splat: { sprite: 'sfx', v: [[52.962021, 0.249833], [53.261854, 0.535271], [53.847125, 0.574438], [54.471562, 0.497563]], n: [11992, 25693, 27573, 23883], loop: false, cat: 'splat', ldb: -20.6 },
+  splat: { sprite: 'sfx', v: [[52.962021, 0.249833], [53.261854, 0.535271], [53.847125, 0.574438], [54.471562, 0.497563]], n: [11992, 25693, 27573, 23883], loop: false, cat: 'splat', ldb: -20.8 },
   sparks: { sprite: 'sfx', v: [[55.019125, 0.22875], [55.297875, 0.121958]], n: [10980, 5854], loop: false, cat: 'splat', ldb: -16.8 },
   confetti: { sprite: 'sfx', v: [[55.469833, 1.421646], [56.941479, 1.408604]], n: [68239, 67613], loop: false, cat: 'splat', ldb: -19.2 },
   taunt: { sprite: 'sfx', v: [[58.400083, 0.346917], [58.797, 1.777813]], n: [16652, 85335], loop: false, cat: 'sting', ldb: -10.6 },
-  slap: { sprite: 'sfx', v: [[60.624812, 0.306604], [60.981417, 0.310667], [61.342083, 0.276562]], n: [14717, 14912, 13275], loop: false, cat: 'impact', ldb: -19.7 },
+  slap: { sprite: 'sfx', v: [[60.624812, 0.306604], [60.981417, 0.310667], [61.342083, 0.276562]], n: [14717, 14912, 13275], loop: false, cat: 'impact', ldb: -19.6 },
   clang: { sprite: 'sfx', v: [[61.668646, 0.305812], [62.024458, 1.166729]], n: [14679, 56003], loop: false, cat: 'impact', ldb: -17.5 },
   wood_crack: { sprite: 'sfx', v: [[63.241188, 0.555], [63.846187, 0.378104]], n: [26640, 18149], loop: false, cat: 'impact', ldb: -23.6 },
   glass_break: { sprite: 'sfx', v: [[64.274292, 0.719396]], n: [34531], loop: false, cat: 'impact', ldb: -20.7 },
-  explosion: { sprite: 'sfx', v: [[65.043688, 0.641875], [65.735563, 0.379979]], n: [30810, 18239], loop: false, cat: 'super', ldb: -17.5 },
-  goon_down: { sprite: 'sfx', v: [[66.165542, 0.783479], [66.999021, 0.430292]], n: [37607, 20654], loop: false, cat: 'body', ldb: -21.6 },
+  explosion: { sprite: 'sfx', v: [[65.043688, 0.641875], [65.735563, 0.379979]], n: [30810, 18239], loop: false, cat: 'super', ldb: -18.1 },
+  goon_down: { sprite: 'sfx', v: [[66.165542, 0.783479], [66.999021, 0.430292]], n: [37607, 20654], loop: false, cat: 'body', ldb: -21.7 },
   heckle_throw: { sprite: 'sfx', v: [[67.479313, 0.082771], [67.612083, 0.180521]], n: [3973, 8665], loop: false, cat: 'whiff', ldb: -15.5 },
-  heckle_smash: { sprite: 'sfx', v: [[67.842604, 1.367792], [69.260396, 0.860688]], n: [65654, 41313], loop: false, cat: 'impact', ldb: -19.7 },
-  score: { sprite: 'sfx', v: [[70.171083, 1.306146]], n: [62695], loop: false, cat: 'ui', ldb: -20.8 },
+  heckle_smash: { sprite: 'sfx', v: [[67.842604, 1.367792], [69.260396, 0.860688]], n: [65654, 41313], loop: false, cat: 'impact', ldb: -19.9 },
+  score: { sprite: 'sfx', v: [[70.171083, 1.306146]], n: [62695], loop: false, cat: 'ui', ldb: -21.4 },
   bell_round: { sprite: 'sfx', v: [[71.527229, 0.719146]], n: [34519], loop: false, cat: 'bell', ldb: -15.3 },
   bell_ko: { sprite: 'sfx', v: [[72.296375, 0.992208]], n: [47626], loop: false, cat: 'bell', ldb: -12.3 },
   bell_end: { sprite: 'sfx', v: [[73.338583, 2.375667]], n: [114032], loop: false, cat: 'bell', ldb: -13.9 },
   horn: { sprite: 'sfx', v: [[75.76425, 0.944688]], n: [45345], loop: false, cat: 'bell', ldb: -10.2 },
   buzzer: { sprite: 'sfx', v: [[76.758938, 0.949854]], n: [45593], loop: false, cat: 'bell', ldb: -14.7 },
   roar: { sprite: 'sfx', v: [[77.758792, 1.389063]], n: [66675], loop: false, cat: 'voice', ldb: -16.9 },
-  host_laugh: { sprite: 'sfx', v: [[79.197854, 1.631771], [80.879625, 2.197687], [83.127313, 1.431229]], n: [78325, 105489, 68699], loop: false, cat: 'voice', ldb: -16.4 },
+  host_laugh: { sprite: 'sfx', v: [[79.197854, 1.631771], [80.879625, 2.197687], [83.127313, 1.431229]], n: [78325, 105489, 68699], loop: false, cat: 'voice', ldb: -16.5 },
   host_pos: { sprite: 'sfx', v: [[84.608542, 2.021542], [86.680083, 1.683188], [88.413271, 1.667583]], n: [97034, 80793, 80044], loop: false, cat: 'sting', ldb: -12.6 },
   host_neg: { sprite: 'sfx', v: [[90.130854, 1.707208], [91.888063, 1.683917]], n: [81946, 80828], loop: false, cat: 'sting', ldb: -14.4 },
   host_fanfare: { sprite: 'sfx', v: [[93.621979, 1.150208]], n: [55210], loop: false, cat: 'sting', ldb: -14.3 },
-  ann_ready: { sprite: 'sfx', v: [[94.822187, 0.605646]], n: [29071], loop: false, cat: 'ann', ldb: -16.0 },
-  ann_fight: { sprite: 'sfx', v: [[95.477833, 0.597083]], n: [28660], loop: false, cat: 'ann', ldb: -13.7 },
+  ann_ready: { sprite: 'sfx', v: [[94.822187, 0.605646]], n: [29071], loop: false, cat: 'ann', ldb: -15.8 },
+  ann_fight: { sprite: 'sfx', v: [[95.477833, 0.597083]], n: [28660], loop: false, cat: 'ann', ldb: -13.4 },
   ann_timeup: { sprite: 'sfx', v: [[96.124917, 0.739021]], n: [35473], loop: false, cat: 'ann', ldb: -13.6 },
   ann_victory: { sprite: 'sfx', v: [[96.913938, 1.002583]], n: [48124], loop: false, cat: 'ann', ldb: -11.9 },
-  ann_win: { sprite: 'sfx', v: [[97.966521, 1.173583]], n: [56332], loop: false, cat: 'ann', ldb: -11.7 },
-  ann_lose: { sprite: 'sfx', v: [[99.190104, 0.904958]], n: [43438], loop: false, cat: 'ann', ldb: -10.5 },
-  ann_gameover: { sprite: 'sfx', v: [[100.145062, 1.257875]], n: [60378], loop: false, cat: 'ann', ldb: -9.7 },
+  ann_win: { sprite: 'sfx', v: [[97.966521, 1.173583]], n: [56332], loop: false, cat: 'ann', ldb: -11.6 },
+  ann_lose: { sprite: 'sfx', v: [[99.190104, 0.904958]], n: [43438], loop: false, cat: 'ann', ldb: -10.3 },
+  ann_gameover: { sprite: 'sfx', v: [[100.145062, 1.257875]], n: [60378], loop: false, cat: 'ann', ldb: -10.3 },
   ann_wow: { sprite: 'sfx', v: [[101.452938, 0.629021]], n: [30193], loop: false, cat: 'ann', ldb: -12.5 },
   ann_ohyeah: { sprite: 'sfx', v: [[102.131958, 1.051417]], n: [50468], loop: false, cat: 'ann', ldb: -9.6 },
   ann_bonus: { sprite: 'sfx', v: [[103.233375, 0.771417]], n: [37028], loop: false, cat: 'ann', ldb: -13.6 },
-  ann_begin: { sprite: 'sfx', v: [[104.054792, 0.654896]], n: [31435], loop: false, cat: 'ann', ldb: -16.0 },
-  ann_go: { sprite: 'sfx', v: [[104.759687, 0.793375]], n: [38082], loop: false, cat: 'ann', ldb: -11.4 },
+  ann_begin: { sprite: 'sfx', v: [[104.054792, 0.654896]], n: [31435], loop: false, cat: 'ann', ldb: -16.1 },
+  ann_go: { sprite: 'sfx', v: [[104.759687, 0.793375]], n: [38082], loop: false, cat: 'ann', ldb: -11.7 },
   ann_1: { sprite: 'sfx', v: [[105.603062, 0.553646]], n: [26575], loop: false, cat: 'ann', ldb: -14.1 },
   ann_2: { sprite: 'sfx', v: [[106.206708, 0.539521]], n: [25897], loop: false, cat: 'ann', ldb: -11.9 },
   ann_3: { sprite: 'sfx', v: [[106.796229, 0.574313]], n: [27567], loop: false, cat: 'ann', ldb: -13.9 },
-  ann_combo_quad: { sprite: 'sfx', v: [[107.420542, 1.081187]], n: [51897], loop: false, cat: 'ann', ldb: -11.4 },
-  ann_combo_super: { sprite: 'sfx', v: [[108.551729, 1.379646]], n: [66223], loop: false, cat: 'ann', ldb: -10.8 },
-  ann_combo_mega: { sprite: 'sfx', v: [[109.981375, 1.494542]], n: [71738], loop: false, cat: 'ann', ldb: -8.7 },
-  ann_combo_ultra: { sprite: 'sfx', v: [[111.525917, 1.366437]], n: [65589], loop: false, cat: 'ann', ldb: -11.5 },
-  ann_combo_monster: { sprite: 'sfx', v: [[112.942354, 2.087667]], n: [100208], loop: false, cat: 'ann', ldb: -8.9 },
-  vo_m1_atk: { sprite: 'sfx', v: [[115.080021, 0.262688], [115.392708, 0.305021], [115.747729, 0.311875], [116.109604, 0.448417]], n: [12609, 14641, 14970, 21524], loop: false, cat: 'voice', ldb: -14.9 },
+  ann_combo_quad: { sprite: 'sfx', v: [[107.420542, 1.081187]], n: [51897], loop: false, cat: 'ann', ldb: -11.6 },
+  ann_combo_super: { sprite: 'sfx', v: [[108.551729, 1.379646]], n: [66223], loop: false, cat: 'ann', ldb: -11.0 },
+  ann_combo_mega: { sprite: 'sfx', v: [[109.981375, 1.494542]], n: [71738], loop: false, cat: 'ann', ldb: -9.1 },
+  ann_combo_ultra: { sprite: 'sfx', v: [[111.525917, 1.366437]], n: [65589], loop: false, cat: 'ann', ldb: -12.5 },
+  ann_combo_monster: { sprite: 'sfx', v: [[112.942354, 2.087667]], n: [100208], loop: false, cat: 'ann', ldb: -9.3 },
+  vo_m1_atk: { sprite: 'sfx', v: [[115.080021, 0.262688], [115.392708, 0.305021], [115.747729, 0.311875], [116.109604, 0.448417]], n: [12609, 14641, 14970, 21524], loop: false, cat: 'voice', ldb: -15.0 },
   vo_m1_hurt: { sprite: 'sfx', v: [[116.608021, 0.381521], [117.039542, 0.466667], [117.556208, 0.399396], [118.005604, 0.32275]], n: [18313, 22400, 19171, 15492], loop: false, cat: 'voice', ldb: -15.7 },
   vo_m1_ko: { sprite: 'sfx', v: [[118.378354, 1.044]], n: [50112], loop: false, cat: 'voice', ldb: -13.6 },
-  vo_m2_atk: { sprite: 'sfx', v: [[119.472354, 0.269937], [119.792292, 0.250812], [120.093104, 0.277333], [120.420438, 0.269375]], n: [12957, 12039, 13312, 12930], loop: false, cat: 'voice', ldb: -15.0 },
-  vo_m2_hurt: { sprite: 'sfx', v: [[120.739812, 0.347938], [121.13775, 0.519521], [121.707271, 0.214625], [121.971896, 0.516604]], n: [16701, 24937, 10302, 24797], loop: false, cat: 'voice', ldb: -15.9 },
+  vo_m2_atk: { sprite: 'sfx', v: [[119.472354, 0.269937], [119.792292, 0.250812], [120.093104, 0.277333], [120.420438, 0.269375]], n: [12957, 12039, 13312, 12930], loop: false, cat: 'voice', ldb: -14.9 },
+  vo_m2_hurt: { sprite: 'sfx', v: [[120.739812, 0.347938], [121.13775, 0.519521], [121.707271, 0.214625], [121.971896, 0.516604]], n: [16701, 24937, 10302, 24797], loop: false, cat: 'voice', ldb: -16.4 },
   vo_m2_ko: { sprite: 'sfx', v: [[122.5385, 1.421083]], n: [68212], loop: false, cat: 'voice', ldb: -11.3 },
   vo_m3_atk: { sprite: 'sfx', v: [[124.009583, 0.172167], [124.23175, 0.467292], [124.749042, 0.299729], [125.098771, 0.327146]], n: [8264, 22430, 14387, 15703], loop: false, cat: 'voice', ldb: -14.6 },
-  vo_m3_hurt: { sprite: 'sfx', v: [[125.475917, 0.502042], [126.027958, 0.464], [126.541958, 0.568333], [127.160292, 0.789188]], n: [24098, 22272, 27280, 37881], loop: false, cat: 'voice', ldb: -13.1 },
-  vo_m3_ko: { sprite: 'sfx', v: [[127.999479, 1.068354]], n: [51281], loop: false, cat: 'voice', ldb: -14.0 },
-  vo_f1_atk: { sprite: 'sfx', v: [[129.117833, 0.689708], [129.857542, 0.662854], [130.570396, 0.692583], [131.312979, 0.478333]], n: [33106, 31817, 33244, 22960], loop: false, cat: 'voice', ldb: -13.8 },
-  vo_f1_hurt: { sprite: 'sfx', v: [[131.841312, 0.741771], [132.633083, 0.698688], [133.381771, 0.671167], [134.102937, 0.375646]], n: [35605, 33537, 32216, 18031], loop: false, cat: 'voice', ldb: -15.5 },
+  vo_m3_hurt: { sprite: 'sfx', v: [[125.475917, 0.502042], [126.027958, 0.464], [126.541958, 0.568333], [127.160292, 0.789188]], n: [24098, 22272, 27280, 37881], loop: false, cat: 'voice', ldb: -13.3 },
+  vo_m3_ko: { sprite: 'sfx', v: [[127.999479, 1.068354]], n: [51281], loop: false, cat: 'voice', ldb: -14.1 },
+  vo_f1_atk: { sprite: 'sfx', v: [[129.117833, 0.689708], [129.857542, 0.662854], [130.570396, 0.692583], [131.312979, 0.478333]], n: [33106, 31817, 33244, 22960], loop: false, cat: 'voice', ldb: -14.3 },
+  vo_f1_hurt: { sprite: 'sfx', v: [[131.841312, 0.741771], [132.633083, 0.698688], [133.381771, 0.671167], [134.102937, 0.375646]], n: [35605, 33537, 32216, 18031], loop: false, cat: 'voice', ldb: -15.6 },
   vo_f1_ko: { sprite: 'sfx', v: [[134.528583, 1.291813]], n: [62007], loop: false, cat: 'voice', ldb: -11.3 },
   vo_f2_atk: { sprite: 'sfx', v: [[135.870396, 0.489375], [136.409771, 0.582271], [137.042042, 0.272396], [137.364438, 0.398417]], n: [23490, 27949, 13075, 19124], loop: false, cat: 'voice', ldb: -14.3 },
-  vo_f2_hurt: { sprite: 'sfx', v: [[137.812854, 0.233104], [138.095958, 0.275813], [138.421771, 0.186375], [138.658146, 0.257833]], n: [11189, 13239, 8946, 12376], loop: false, cat: 'voice', ldb: -13.4 },
+  vo_f2_hurt: { sprite: 'sfx', v: [[137.812854, 0.233104], [138.095958, 0.275813], [138.421771, 0.186375], [138.658146, 0.257833]], n: [11189, 13239, 8946, 12376], loop: false, cat: 'voice', ldb: -13.6 },
   vo_f2_ko: { sprite: 'sfx', v: [[138.965979, 1.583479]], n: [76007], loop: false, cat: 'voice', ldb: -12.2 },
   vo_mon_atk: { sprite: 'sfx', v: [[140.599458, 0.771188], [141.420646, 0.713187], [142.183833, 0.796562], [143.030396, 0.773833]], n: [37017, 34233, 38235, 37144], loop: false, cat: 'voice', ldb: -16.2 },
-  vo_mon_hurt: { sprite: 'sfx', v: [[143.854229, 0.586333], [144.490563, 0.786375], [145.326938, 0.793729], [146.170667, 0.792271]], n: [28144, 37746, 38099, 38029], loop: false, cat: 'voice', ldb: -13.4 },
+  vo_mon_hurt: { sprite: 'sfx', v: [[143.854229, 0.586333], [144.490563, 0.786375], [145.326938, 0.793729], [146.170667, 0.792271]], n: [28144, 37746, 38099, 38029], loop: false, cat: 'voice', ldb: -13.5 },
   vo_mon_ko: { sprite: 'sfx', v: [[147.012937, 1.656208]], n: [79498], loop: false, cat: 'voice', ldb: -9.8 },
+  brick_smash: { sprite: 'sfx', v: [[148.719146, 0.653271], [149.422417, 0.536438], [150.008854, 0.739792]], n: [31357, 25749, 35510], loop: false, cat: 'impact', ldb: -22.3 },
+  card_riffle: { sprite: 'sfx', v: [[150.798646, 0.334375]], n: [16050], loop: false, cat: 'foley', ldb: -21.6 },
+  proj_card_saw: { sprite: 'sfx', v: [[151.183021, 0.8665]], n: [41592], loop: false, cat: 'whiff', ldb: -23.4 },
+  card_hit: { sprite: 'sfx', v: [[152.099521, 0.385167], [152.534687, 0.284854]], n: [18488, 13673], loop: false, cat: 'impact', ldb: -25.8 },
+  flame_ignite: { sprite: 'sfx', v: [[152.869542, 0.381521]], n: [18313], loop: false, cat: 'foley', ldb: -21.1 },
+  proj_flame: { sprite: 'sfx', v: [[153.301063, 0.648146]], n: [31111], loop: false, cat: 'whiff', ldb: -20.7 },
+  flame_hit: { sprite: 'sfx', v: [[153.999208, 0.749979], [154.799187, 0.789854]], n: [35999, 37913], loop: false, cat: 'impact', ldb: -16.1 },
+  gourd_swig: { sprite: 'sfx', v: [[155.639042, 0.439479]], n: [21095], loop: false, cat: 'foley', ldb: -21.7 },
+  proj_flame_breath: { sprite: 'sfx', v: [[156.128521, 0.825521]], n: [39625], loop: false, cat: 'whiff', ldb: -17.2 },
+  ball_bounce: { sprite: 'sfx', v: [[157.004042, 0.189812], [157.243854, 0.189833], [157.483688, 0.189812], [157.7235, 0.231479]], n: [9111, 9112, 9111, 11111], loop: false, cat: 'impact', ldb: -22.8 },
+  ball_hit: { sprite: 'sfx', v: [[158.004979, 0.696271], [158.75125, 0.655271]], n: [33421, 31453], loop: false, cat: 'impact', ldb: -24.4 },
+  proj_ball_fire: { sprite: 'sfx', v: [[159.456521, 0.456396]], n: [21907], loop: false, cat: 'impact', ldb: -21.3 },
+  taser_charge: { sprite: 'sfx', v: [[159.962917, 0.359771]], n: [17269], loop: false, cat: 'foley', ldb: -14.3 },
+  taser_hit: { sprite: 'sfx', v: [[160.372688, 0.859979]], n: [41279], loop: false, cat: 'impact', ldb: -18.3 },
+  spot_on: { sprite: 'sfx', v: [[161.282667, 0.5765]], n: [27672], loop: false, cat: 'impact', ldb: -18.8 },
+  proj_spot: { sprite: 'sfx', v: [[161.909167, 0.889333]], n: [42688], loop: false, cat: 'whiff', ldb: -17.9 },
+  spot_hit: { sprite: 'sfx', v: [[162.8485, 0.301979]], n: [14495], loop: false, cat: 'impact', ldb: -18.3 },
+  pyro_fuse: { sprite: 'sfx', v: [[163.200479, 0.33775]], n: [16212], loop: false, cat: 'foley', ldb: -13.3 },
+  proj_pyro: { sprite: 'sfx', v: [[163.588229, 0.654312]], n: [31407], loop: false, cat: 'whiff', ldb: -15.9 },
+  pyro_hit: { sprite: 'sfx', v: [[164.292542, 1.022188], [165.364729, 1.022188]], n: [49065, 49065], loop: false, cat: 'impact', ldb: -21.8 },
+  wpn_cleaver: { sprite: 'sfx', v: [[166.436917, 0.509854], [166.996771, 0.535188], [167.581958, 0.535354]], n: [24473, 25689, 25697], loop: false, cat: 'layer', ldb: -20.4 },
+  wpn_baton: { sprite: 'sfx', v: [[168.167313, 0.493729], [168.711042, 0.469938], [169.230979, 0.493729]], n: [23699, 22557, 23699], loop: false, cat: 'layer', ldb: -19.3 },
+  wpn_shield: { sprite: 'sfx', v: [[169.774708, 0.591458], [170.416167, 0.593187]], n: [28390, 28473], loop: false, cat: 'layer', ldb: -21.0 },
+  wpn_cane: { sprite: 'sfx', v: [[171.059354, 0.5965], [171.705854, 0.593958]], n: [28632, 28510], loop: false, cat: 'layer', ldb: -17.8 },
+  vo_goon_atk: { sprite: 'sfx', v: [[172.349813, 0.395021], [172.794833, 0.349062], [173.193896, 0.532708], [173.776604, 0.541875]], n: [18961, 16755, 25570, 26010], loop: false, cat: 'voice', ldb: -16.1 },
+  vo_goon_hurt: { sprite: 'sfx', v: [[174.368479, 0.530937], [174.949417, 0.329], [175.328417, 0.338479], [175.716896, 0.174667]], n: [25485, 15792, 16247, 8384], loop: false, cat: 'voice', ldb: -18.2 },
+  vo_goon_down: { sprite: 'sfx', v: [[175.941563, 0.976667], [176.968229, 0.620125]], n: [46880, 29766], loop: false, cat: 'voice', ldb: -11.0 },
+  vo_goon_taunt: { sprite: 'sfx', v: [[177.638354, 0.870542], [178.558896, 0.538104], [179.147, 0.473729]], n: [41786, 25829, 22739], loop: false, cat: 'voice', ldb: -15.9 },
+  goon_spawn: { sprite: 'sfx', v: [[179.670729, 0.784979]], n: [37679], loop: false, cat: 'body', ldb: -20.7 },
+  goon_hit: { sprite: 'sfx', v: [[180.505708, 0.375521], [180.931229, 0.349417]], n: [18025, 16772], loop: false, cat: 'layer', ldb: -22.8 },
+  vo_heckle: { sprite: 'sfx', v: [[181.330646, 0.470375], [181.851021, 0.883833], [182.784854, 0.483833], [183.318688, 0.693479]], n: [22578, 42424, 23224, 33287], loop: false, cat: 'voice', ldb: -15.3 },
+  splat_tomato: { sprite: 'sfx', v: [[184.062167, 0.688896], [184.801063, 0.634417], [185.485479, 0.690333]], n: [33067, 30452, 33136], loop: false, cat: 'splat', ldb: -20.2 },
+  heckle_thud: { sprite: 'sfx', v: [[186.225812, 0.639792], [186.915604, 0.625833]], n: [30710, 30040], loop: false, cat: 'body', ldb: -27.8 },
+  chair_crash: { sprite: 'sfx', v: [[187.591438, 0.879771], [188.521208, 1.475333]], n: [42229, 70816], loop: false, cat: 'body', ldb: -21.6 },
+  heckle_deflect: { sprite: 'sfx', v: [[190.046542, 0.622958], [190.7195, 0.636771]], n: [29902, 30565], loop: false, cat: 'impact', ldb: -17.7 },
+  cine_open: { sprite: 'sfx', v: [[191.406271, 1.093438]], n: [52485], loop: false, cat: 'sting', ldb: -17.2 },
+  cine_finish: { sprite: 'sfx', v: [[192.549708, 2.193104]], n: [105269], loop: false, cat: 'sting', ldb: -18.9 },
+  cine_end: { sprite: 'sfx', v: [[194.792812, 1.596062]], n: [76611], loop: false, cat: 'sting', ldb: -15.3 },
+  cine_cut: { sprite: 'sfx', v: [[196.438875, 0.40575], [196.894625, 0.399146]], n: [19476, 19159], loop: false, cat: 'whiff', ldb: -27.4 },
+  tv_static: { sprite: 'sfx', v: [[197.343771, 0.598]], n: [28704], loop: false, cat: 'sting', ldb: -13.6 },
+  magic_poof: { sprite: 'sfx', v: [[197.991771, 1.014812]], n: [48711], loop: false, cat: 'sting', ldb: -13.8 },
+  magic_tada: { sprite: 'sfx', v: [[199.056583, 1.669917]], n: [80156], loop: false, cat: 'sting', ldb: -13.3 },
+  trapdoor: { sprite: 'sfx', v: [[200.7765, 0.787438]], n: [37797], loop: false, cat: 'body', ldb: -21.6 },
+  light_flicker: { sprite: 'sfx', v: [[201.613937, 0.644479]], n: [30935], loop: false, cat: 'foley', ldb: -18.9 },
+  order_up: { sprite: 'sfx', v: [[202.308417, 0.884375]], n: [42450], loop: false, cat: 'bell', ldb: -19.7 },
+  amb_rust_theater: { sprite: 'sfx', v: [[203.302792, 4.8]], n: [230400], loop: true, cat: 'amb', ldb: -22.6 },
+  amb_butcher_block: { sprite: 'sfx', v: [[208.272792, 4.7]], n: [225600], loop: true, cat: 'amb', ldb: -20.8 },
+  amb_wheel_of_pain: { sprite: 'sfx', v: [[213.142792, 4.6]], n: [220800], loop: true, cat: 'amb', ldb: -20.9 },
+  amb_rooftop: { sprite: 'sfx', v: [[217.912792, 5.3]], n: [254400], loop: true, cat: 'amb', ldb: -20.6 },
+  amb_control_room: { sprite: 'sfx', v: [[223.382792, 4.8]], n: [230400], loop: true, cat: 'amb', ldb: -20.3 },
+  amb_thunder: { sprite: 'sfx', v: [[228.292792, 2.322417]], n: [111476], loop: false, cat: 'amb', ldb: -18.6 },
   bed_low: { sprite: 'crowd', v: [[0.11, 10.49875]], n: [503940], loop: true, cat: 'bed', ldb: -19.3 },
   bed_high: { sprite: 'crowd', v: [[10.77875, 7.818146]], n: [375271], loop: true, cat: 'bed', ldb: -24.2 },
   bed_stomp: { sprite: 'crowd', v: [[18.766896, 1.245854]], n: [59801], loop: true, cat: 'bed', ldb: -21.4 },
@@ -351,6 +473,18 @@ export const MUSIC: { readonly [K in MusicCueId]: MusicEntry } = {
     seconds: 32.0, samples: 1536000, bytes: 294114,
     loop: true, bpm: 90, bars: 12, lufs: -16.0, track: 'Darkness Behind',
   },
+  brawl: {
+    url: new URL('./assets/music_brawl.ogg', import.meta.url).href, file: 'assets/music_brawl.ogg',
+    alt: { url: new URL('./assets/music_brawl.m4a', import.meta.url).href, file: 'assets/music_brawl.m4a', bytes: 304842, samples: 1418240, delay: 1024 },
+    seconds: 29.538458, samples: 1417846, bytes: 261176,
+    loop: true, bpm: 130.0, bars: 16, lufs: -16.7, track: 'Halloween Rocks',
+  },
+  heckler: {
+    url: new URL('./assets/music_heckler.ogg', import.meta.url).href, file: 'assets/music_heckler.ogg',
+    alt: { url: new URL('./assets/music_heckler.m4a', import.meta.url).href, file: 'assets/music_heckler.m4a', bytes: 198424, samples: 922624, delay: 1024 },
+    seconds: 19.205771, samples: 921877, bytes: 176301,
+    loop: true, bpm: 99.97, bars: 8, lufs: -16.0, track: 'Retro Madness',
+  },
   win: {
     url: new URL('./assets/music_win.ogg', import.meta.url).href, file: 'assets/music_win.ogg',
     alt: { url: new URL('./assets/music_win.m4a', import.meta.url).href, file: 'assets/music_win.m4a', bytes: 83955, samples: 396288, delay: 1024 },
@@ -366,10 +500,10 @@ export const MUSIC: { readonly [K in MusicCueId]: MusicEntry } = {
 };
 
 /** every shipped Ogg byte (sprites + music) */
-export const AUDIO_PAYLOAD_BYTES = 4155872;
+export const AUDIO_PAYLOAD_BYTES = 5072300;
 /** the AAC twins' bytes (a device downloads one set: Ogg, or these on WebKit before 18.4) */
-export const AUDIO_ALT_PAYLOAD_BYTES = 5387795;
+export const AUDIO_ALT_PAYLOAD_BYTES = 6326556;
 /** CONTRACT s9 budget: Ogg + AAC together (everything dist/ carries) */
 export const AUDIO_BUDGET_BYTES = 12000000;
 /** tracks registered for the slug `hit-parade` in state/music_assignments.json */
-export const REGISTERED_TRACKS = ['Travis Rise/SynthWave Music Pack 2/01_Beginning', 'Travis Rise/SynthWave Music Pack 2/02_Outbreak', 'Travis Rise/SynthWave Music Pack 2/03_Disorder', 'Travis Rise/SynthWave Music Pack 2/04_Anxiety', 'Travis Rise/SynthWave Music Pack 2/05_Chasm', 'Travis Rise/SynthWave Music Pack 2/06_Arrival', 'Travis Rise/SynthWave Music Pack/03_DarknessBehind', 'Travis Rise/SynthWave Music Pack/04_ElectricPhase', 'Travis Rise/SynthWave Music Pack/07_RETROWAVE'] as const;
+export const REGISTERED_TRACKS = ['Evil Mind/Halloween Audio Kit/Halloween Rocks', 'Evil Mind/Halloween Audio Kit/Retro Madness', 'Travis Rise/SynthWave Music Pack 2/01_Beginning', 'Travis Rise/SynthWave Music Pack 2/02_Outbreak', 'Travis Rise/SynthWave Music Pack 2/03_Disorder', 'Travis Rise/SynthWave Music Pack 2/04_Anxiety', 'Travis Rise/SynthWave Music Pack 2/05_Chasm', 'Travis Rise/SynthWave Music Pack 2/06_Arrival', 'Travis Rise/SynthWave Music Pack/03_DarknessBehind', 'Travis Rise/SynthWave Music Pack/04_ElectricPhase', 'Travis Rise/SynthWave Music Pack/07_RETROWAVE'] as const;

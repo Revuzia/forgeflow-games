@@ -3,7 +3,7 @@
 // helpers without import cycles through match.ts.)
 
 import type { AnimRef, GameData } from '../types.ts';
-import type { CFighter, CMove, CSys } from './compile.ts';
+import type { CBrawl, CFighter, CMove, CSys } from './compile.ts';
 import { EventRing } from './events.ts';
 import { EV } from './events.ts';
 import { F, FL, ST, W, fighterBase } from './layout.ts';
@@ -41,6 +41,8 @@ export interface Match {
   tab: MatchTables;
   training: boolean;
   arcade: boolean;
+  /** CHANGED(SIM) P2: compiled bonus-round tables in 'brawl' / 'heckler' matches (CONTRACT 28.4), else null */
+  bonus?: CBrawl | null;
 }
 
 export const FB0 = fighterBase(0);

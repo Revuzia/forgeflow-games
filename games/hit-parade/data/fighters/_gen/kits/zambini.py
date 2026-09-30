@@ -1,5 +1,5 @@
 """THE GREAT ZAMBINI - zoner magician (Pro_Magic pack: casts, palms, area attacks)."""
-from kitlib import (Kit, air, crouch, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
+from kitlib import (Kit, air, cam, cinematic, crouch, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
 
 
 def build():
@@ -92,11 +92,20 @@ def build():
     K.add("j.M", "jM", input="j.M", name="Air Card Flick", clip="air_flick", desc="Flung arm air-to-air.")
     K.add("j.H", "jH", input="j.H", name="Levitating Palms", clip="air_double", desc="Double-palm jump-in.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Now You See Me", clip="throw_reach",
-          grab={"frames": 44, "adv": 21, "hitF": 30, "swap": False, "air": False, "techable": True,
-                "clip": "palm_shove"}, desc="Grabs the lapels and blasts them away with both palms.")
+          grab={"frames": 44, "adv": 21, "hitF": 18, "swap": False, "air": False, "techable": True,
+                "clip": "palm_shove",
+                # P2 paired throw: the double palm lands at clip 0.43 s = lock 18 (1.07 s over 44 f); the victim is
+                # blasted off its feet backwards (thrown_f from the lift at 0.30 s: flips, lands on the back at 0.74 s,
+                # ~1 m farther away).
+                "victim": [[0, "hit_high_s", 0.0, 0.15], [18, "thrown_f", 0.3, 1.1]]},
+          desc="Grabs the lapels and blasts them away with both palms.")
     K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Now You Don't", clip="throw_reach",
-          grab={"frames": 48, "adv": 14, "hitF": 28, "swap": True, "air": False, "techable": True,
-                "clip": "spin_fling"}, desc="Spins and flings them behind him.")
+          grab={"frames": 48, "adv": 14, "hitF": 18, "swap": True, "air": False, "techable": True,
+                "clip": "spin_fling",
+                # P2 paired throw: the spinning backfist's arm passes the front at clip 0.63 s = lock 18 (1.67 s over
+                # 48 f); the victim is pulled into the spin (thrown_b 0 -> 0.40 s) and flung face down behind him.
+                "victim": [[0, "hit_high_s", 0.0, 0.15], [6, "thrown_b", 0.0, 0.4], [18, "thrown_b", 0.4, 1.2]]},
+          desc="Spins and flings them behind him.")
 
     # y 1.20 (was 1.25): the card box (0.20 m tall) must reach the crouch line (1.10 m) so crouching does not
     # dodge the zoner's main tool (SF convention: straight projectiles hit crouchers).
@@ -179,14 +188,30 @@ def build():
           invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]},
           move=[[0, 0], [10, 0.6]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],
           juggle={"js": 1, "ji": 0, "jl": 99},
-          cinematic={"frames": 150, "cue": "zambini_prestige", "hits": [[40, 1000], [80, 1500], [120, 2000]],
-                     "anim": [[0, "palm_shove"], [20, "intro_tada"], [60, "flourish_burst"], [100, "vanish"],
-                              [120, "abracadabra"], [135, "win_flourish"]],
-                     "victim": [[0, "hit_high_s"], [20, "dizzy"], [60, "hit_air"], [100, "hit_air"],
-                                [120, "kd_fall_f"], [136, "kd_ground_f"]],
-                     "shots": [[0, "side_close"], [20, "spotlight"], [40, "crowd_pop"], [60, "low_angle_up"],
-                               [100, "wide"], [120, "top_down"], [135, "crowd_pop"]],
-                     "endAdv": 19, "endGapM": 2.5},
+          cinematic=lambda: cinematic(
+              150, "zambini_prestige",
+              hits=[[34, 800], [64, 1200], [118, 2500]],
+              anim=[K.seg(0, "intro_tada", 24, fromS=0.2), K.seg(24, "card_flick", 50, hit=34),
+                    K.seg(50, "flourish_burst", 80, hit=64), K.seg(80, "vanish", 104, rate=2.0),
+                    K.seg(104, "abracadabra", 132, hit=118), K.seg(132, "win_flourish", 150, fromS=0.3)],
+              victim=[[0, "dizzy", 0.0, 0.5], [34, "hit_high_s", 0.0, 0.5], [64, "hit_air", 0.0, 0.7],
+                      [90, "hit_air", 0.7, 1.3], [118, "kd_fall_b", 1.3, 1.8667], [136, "kd_ground_b", 0.0, 0.367]],
+              camera=[cam(0, 24, "close", "attacker", 32, 2.2, 1.55, 30),
+                      cam(24, 50, "over_shoulder", "defender", 36, 2.4, 1.7, -70),
+                      cam(50, 80, "low", "defender", 42, 3.2, 0.4, 20, lookH=1.9),
+                      cam(80, 104, "wide", "both", 40, 5.0, 1.8, 0, lookH=1.5),
+                      cam(104, 132, "top", "defender", 42, 1.5, 5.5, 10, lookH=0.6),
+                      cam(132, 150, "close", "attacker", 32, [2.6, 2.2], 1.5, -20)],
+              fx=[(0, "slate"), (0, "dim"), (0, "spot", "attacker"), (24, "spot_off"), (34, "cards"), (34, "impact_m"),
+                  (64, "fire"), (64, "doves"), (64, "impact_m"), (64, "shake_s"), (80, "smoke", "attacker"),
+                  (96, "smoke", "attacker"), (118, "impact_l"), (118, "flash"), (118, "shake_l"), (118, "dust"),
+                  (118, "freeze_frame"), (120, "undim"), (132, "doves", "attacker")],
+              crowd=[(0, "hush"), (34, "ooh"), (64, "gasp", "up"), (90, "hush"), (118, "roar", "spike"),
+                     (132, "applause", "peak")],
+              pathA=[[96, 0, 0], [97, 0.6, 0], [132, 0.6, 0], [148, 0, 0]],
+              gapD=[[34, 1.0, 0], [64, 1.0, 0.3], [80, 1.3, 1.5], [96, 1.3, 2.0], [97, 0.7, 2.0], [112, 0.7, 1.6],
+                    [120, 0.8, 0], [148, 1.5, 0]],
+              slate="PRIME TIME - THE GREAT ZAMBINI: THE PRESTIGE", endPose="back", endAdv=19, endGapM=1.5),
           desc="PRIME TIME: a palm to the chest, a sheet over the victim, and the big reveal.",
           why="1c Lv3: 10/4/58, -42, 4500, fully invulnerable 1-13.")
 
@@ -198,12 +223,30 @@ def build():
                  {"motion": "623", "btn": "LMH", "move": "flourish_{s}"}]
     K.unique = {"kind": "teleport", "moves": ["vanish_l", "vanish_m", "vanish_h", "vanish_ex"]}
     K.cine_doc = [
-        "f0 PALM (side_close): a light palm to the chest freezes them.",
-        "f20 TA-DA (spotlight): the set dims to one spotlight; a sheet drops over the victim (VIEW prop).",
-        "f40 (crowd_pop) the sheet bursts into doves - 1000.",
-        "f60 FLOURISH (low_angle_up): fire and doves lift the sheet off an empty floor - 1500 at f80.",
-        "f100 VANISH (wide): Zambini drops through the trapdoor; the victim falls from the rafters - 2000 at "
-        "f120.",
-        "f135 BOW (crowd_pop): he reappears for the bow (KD +19).",
+        "f0 TA-DA (close on Zambini, set dimmed, spotlight): the palm froze them; the victim wobbles, dizzy.",
+        "f24 CARD FLICK (over his shoulder): a fan of cards - 800 at f34.",
+        "f50 FLOURISH (low, looking up): fire and doves lift the victim 1.5 m into the air - 1200 at f64.",
+        "f80 VANISH (wide): he drops into a puff of smoke while the victim floats 2.0 m up; a second puff and he is "
+        "standing right under them.",
+        "f104 ABRACADABRA (top-down): the double-fist hammer brings them down from the rafters - 2500 at f118 "
+        "(flash, freeze-frame, dust, lights back up).",
+        "f132 BOW (close on Zambini, doves): opponent face up 1.5 m away (KD +19).",
     ]
+    K.text = dict(
+        introLine="Pick a card. Any card. It will be the last one you pick.",
+        winQuotes=["And for my next trick - you disappear.",
+                   "Every great trick has three acts. You were the second.",
+                   "Applause is optional. Screaming is appreciated."],
+        banter={"gazza": ["Your stray shot ended my dove on live television.",
+                          "Tonight the ball goes in the box. So do you."],
+                "freak": ["A monster in a cage. How very... county fair.",
+                          "I have made bigger things vanish. Mostly assistants."],
+                "ricky": ["We both sell illusions, Ricky. Only one of us is any good at it.",
+                          "Watch closely. The host is about to disappear."],
+                "default": ["Nothing up my sleeves. Almost nothing.",
+                            "Stand right there. Perfect. Hold still for the saw."]},
+        ending="THE GREAT ZAMBINI draws a curtain across the Control Room, taps it twice and pulls it away. The host is "
+               "gone. So are the season, the network logo and the contract vault. Zambini bows to an empty studio and "
+               "walks out through the front door like a normal man. Nobody has seen how the trick ends; he says that "
+               "is the point.")
     return K

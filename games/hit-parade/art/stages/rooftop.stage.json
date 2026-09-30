@@ -1,0 +1,431 @@
+{
+  "id": "rooftop",
+  "name": "CHANNEL 13 ROOFTOP",
+  "status": "built",
+  "glb": "rooftop.glb",
+  "source": "art/stages/rooftop.py",
+  "home": [
+    "patch",
+    "spin",
+    "gazza"
+  ],
+  "look": "the show on the roof of the CHANNEL 13 building on a wet night: bitumen roof with puddles and a worn painted 13 emblem between a brick stair bulkhead and a corrugated machine room; steel barricades, aluminium bleachers packed with the crowd, a big neon HIT PARADE sign, truss floods and string lights; rooftop units, a wooden water tank, the station's lattice mast, the show billboard; the lit city skyline under a purple night sky; rain",
+  "floor": {
+    "y": 0.0,
+    "surface": "wet_bitumen",
+    "fightStrip": {
+      "x": [
+        -8.0,
+        8.0
+      ],
+      "z": [
+        -1.5,
+        1.5
+      ]
+    },
+    "extent": {
+      "x": [
+        -32.0,
+        32.0
+      ],
+      "z": [
+        -30.0,
+        9.0
+      ]
+    }
+  },
+  "walls": {
+    "x": [
+      -8.0,
+      8.0
+    ],
+    "splat": [
+      {
+        "id": 0,
+        "x": -8.0,
+        "normal": [
+          1,
+          0,
+          0
+        ],
+        "z": [
+          -3.4,
+          3.4
+        ],
+        "heightM": 3.55,
+        "surface": "red_brick",
+        "dustColor": "#8a5c50"
+      },
+      {
+        "id": 1,
+        "x": 8.0,
+        "normal": [
+          -1,
+          0,
+          0
+        ],
+        "z": [
+          -3.4,
+          3.4
+        ],
+        "heightM": 3.95,
+        "surface": "corrugated_steel",
+        "dustColor": "#7d8986"
+      }
+    ],
+    "note": "WALL_SPLAT event b = wall id (0 = x -8 stair bulkhead, 1 = x +8 machine room), CONTRACT 17.6"
+  },
+  "spawn": {
+    "distanceM": 2.4,
+    "p1": [
+      -1.2,
+      0.0,
+      0.0
+    ],
+    "p2": [
+      1.2,
+      0.0,
+      0.0
+    ]
+  },
+  "camera": {
+    "vFovDeg": 35.0,
+    "heightM": 1.25,
+    "lookAtY": 1.0,
+    "distanceM": [
+      4.36,
+      7.6
+    ],
+    "pitchDeg": [
+      -2.0,
+      -4.0
+    ],
+    "wallClampX": 8.0,
+    "note": "FIGHTING_DESIGN 7b. Camera x is clamped so the splat wall sits at the screen edge on the fight line: |camX| <= wallClampX - distance * tan(hFov/2). Proof renders: _harness/_reports/stages/rooftop_*.png",
+    "proofShots": [
+      {
+        "id": "near_center",
+        "pos": [
+          0.0,
+          1.25,
+          4.4
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "far_center",
+        "pos": [
+          0.0,
+          1.25,
+          7.6
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "near_corner_r",
+        "pos": [
+          5.53,
+          1.25,
+          4.4
+        ],
+        "look": [
+          5.53,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "far_corner_l",
+        "pos": [
+          -3.74,
+          1.25,
+          7.6
+        ],
+        "look": [
+          -3.74,
+          1.0,
+          0.0
+        ]
+      },
+      {
+        "id": "far_center_phone",
+        "pos": [
+          0.0,
+          1.25,
+          6.22
+        ],
+        "look": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "aspect": 2.1667
+      }
+    ]
+  },
+  "exposure": 1.15,
+  "toneMapping": "neutral",
+  "fog": {
+    "color": "#241d3a",
+    "near": 30.0,
+    "far": 200.0
+  },
+  "environment": {
+    "hdr": "rooftop_env.hdr",
+    "intensity": 0.75,
+    "background": false,
+    "src": "Japan Village JP_Sky_Night_4a.exr (Unity Asset Store EULA), downsampled to 512x256",
+    "backgroundColor": "#161226"
+  },
+  "lights": [
+    {
+      "id": "key",
+      "type": "directional",
+      "color": "#aebfff",
+      "intensity": 2.3,
+      "position": [
+        -6.0,
+        11.0,
+        9.0
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "castShadow": true,
+      "shadow": {
+        "mapSize": 1024,
+        "bias": -0.0004,
+        "normalBias": 0.03,
+        "camera": {
+          "left": -10.0,
+          "right": 10.0,
+          "top": 7.0,
+          "bottom": -4.0,
+          "near": 1.0,
+          "far": 30.0
+        }
+      }
+    },
+    {
+      "id": "rim",
+      "type": "directional",
+      "color": "#ff66b8",
+      "intensity": 1.15,
+      "position": [
+        3.0,
+        6.0,
+        -12.0
+      ],
+      "target": [
+        0.0,
+        1.2,
+        0.0
+      ],
+      "castShadow": false
+    },
+    {
+      "id": "fill",
+      "type": "hemisphere",
+      "sky": "#3a4786",
+      "ground": "#1e1822",
+      "intensity": 0.95
+    },
+    {
+      "id": "neon",
+      "type": "point",
+      "color": "#ff3d9a",
+      "intensity": 22.0,
+      "distance": 11.0,
+      "decay": 2,
+      "position": [
+        0.0,
+        3.9,
+        -7.6
+      ],
+      "flicker": {
+        "amp": 0.06,
+        "hz": 11.0
+      }
+    },
+    {
+      "id": "flood_l",
+      "type": "spot",
+      "color": "#fff0d6",
+      "intensity": 240.0,
+      "distance": 24.0,
+      "decay": 2,
+      "position": [
+        -9.0,
+        4.1,
+        -8.3
+      ],
+      "target": [
+        -1.2,
+        0.6,
+        0.0
+      ],
+      "angleDeg": 24.0,
+      "penumbra": 0.55
+    },
+    {
+      "id": "flood_r",
+      "type": "spot",
+      "color": "#fff0d6",
+      "intensity": 240.0,
+      "distance": 24.0,
+      "decay": 2,
+      "position": [
+        9.0,
+        4.1,
+        -8.3
+      ],
+      "target": [
+        1.2,
+        0.6,
+        0.0
+      ],
+      "angleDeg": 24.0,
+      "penumbra": 0.55
+    },
+    {
+      "id": "door_lamp",
+      "type": "point",
+      "color": "#ffb46a",
+      "intensity": 5.0,
+      "distance": 6.0,
+      "decay": 2,
+      "position": [
+        -7.62,
+        2.8,
+        -0.85
+      ],
+      "flicker": {
+        "amp": 0.08,
+        "hz": 9.0
+      }
+    }
+  ],
+  "lightsNote": "FIXED pool: created once at stage load, never added/removed (shader programs stay warm). No lights are embedded in the GLB. Flicker = view-only intensity modulation.",
+  "crowd": {
+    "atlas": "crowd_atlas.webp",
+    "meta": "crowd_atlas.json",
+    "cols": 12,
+    "rows": 6,
+    "count": 72,
+    "cardHeightM": 2.4,
+    "cardWidthM": 1.2,
+    "anchor": [
+      0.5,
+      0.97917
+    ],
+    "tint": "#c0bce4",
+    "brightness": 0.44,
+    "moods": {
+      "idle": [
+        "watch"
+      ],
+      "cheer": [
+        "cheer",
+        "hype"
+      ],
+      "jeer": [
+        "jeer"
+      ]
+    },
+    "nodes": "GLB empties crowd_<bay>_<row>_<i>: position = feet point, +Z = card facing, uniform scale = card height; extras {bay,row,i,rand,angle}. Generated from the bays below (rows run along world X; x step = spacing, jitter = [x,z] half-ranges from mulberry32(seed); gapPct = share of empty spots).",
+    "bays": [
+      {
+        "id": "stand",
+        "x": [
+          -15.2,
+          15.2
+        ],
+        "spacing": 0.62,
+        "jitter": [
+          0.12,
+          0.06
+        ],
+        "faceYawDeg": 0.0,
+        "rows": [
+          {
+            "z": -4.62,
+            "y": 0.3
+          },
+          {
+            "z": -5.47,
+            "y": 0.6
+          },
+          {
+            "z": -6.32,
+            "y": 0.9
+          },
+          {
+            "z": -7.17,
+            "y": 1.2
+          }
+        ],
+        "seed": 4101,
+        "gapPct": 0.05
+      }
+    ]
+  },
+  "music": "music_stage_rooftop",
+  "musicHint": "AUDIO lane cue 'rooftop' (runtime/src/audio/manifest.ts music_rooftop)",
+  "ambient": "amb_rooftop_rain",
+  "ambientHint": "rain on the roof and on the bleachers, distant traffic and sirens below, crowd bed following SHOWTIME",
+  "dressing": {
+    "animated": [
+      {
+        "what": "rain",
+        "nodes": "rain_fall",
+        "how": "REQUEST to VIEW: node.position.y = -((t * 9.0) % 10.0). The streak cards repeat every 10 m in y (y 0..20), so the wrap is seamless; unlit BLEND material (fogged). Static until VIEW adds it."
+      },
+      {
+        "what": "string lights",
+        "nodes": "string_bulbs",
+        "how": "optional twinkle / chase on emissive intensity"
+      },
+      {
+        "what": "LIVE neon",
+        "nodes": "anim_flicker_live",
+        "how": "existing view hook anim_flicker_* (stage.ts)"
+      },
+      {
+        "what": "crowd",
+        "how": "instanced cards, vertex bob/sway, pose swaps by ratings mood"
+      }
+    ],
+    "splatWallDust": [
+      "#8a5c50",
+      "#7d8986"
+    ],
+    "note": "the HIT PARADE neon letters are static in <id>_set (the show logo never flickers); aviation lights static"
+  },
+  "build": {
+    "bytes": 4215576,
+    "draws": 32,
+    "triangles": 81983,
+    "materials": 31,
+    "textures": 38,
+    "crowdNodes": 187,
+    "extensions": [
+      "EXT_meshopt_compression",
+      "EXT_texture_webp",
+      "KHR_materials_emissive_strength",
+      "KHR_materials_unlit",
+      "KHR_mesh_quantization"
+    ],
+    "envBytes": 233703,
+    "totalBytes": 4449279
+  }
+}

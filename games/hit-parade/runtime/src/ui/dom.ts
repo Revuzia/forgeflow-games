@@ -69,6 +69,18 @@ export function watchTouchMode(fn: (on: boolean) => void): () => void {
   return () => mo.disconnect();
 }
 
+/**
+ * CHANGED(UI) P2: ?dev=1 exposes the live UI modules as window.__HP_UI__ = { menus, hud } so the harnesses can open a screen
+ * the flow cannot reach yet (bonus cards / results while the sim has no BRAWL BREAK) inside the REAL game page.
+ */
+export function exposeDev(key: 'menus' | 'hud', obj: unknown): void {
+  try {
+    if (new URLSearchParams(location.search).get('dev') !== '1') return;
+    const w = window as unknown as { __HP_UI__?: Record<string, unknown> };
+    w.__HP_UI__ = { ...(w.__HP_UI__ ?? {}), [key]: obj };
+  } catch { /* no window */ }
+}
+
 // ─────────────────────────── glyphs ───────────────────────────
 export const ICON = {
   back: '<svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',

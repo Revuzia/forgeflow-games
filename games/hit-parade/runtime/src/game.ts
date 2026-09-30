@@ -358,7 +358,10 @@ export class Game {
     if (!b) return;
     const w = this.d.input.sampleAll(this.words);
     if (b.session) {
-      const r = b.session.tick(w[b.local]);
+      // CHANGED(NET) P2: online the local player is THIS screen's player-1 controls (key set 1, pad slot 0, touch) on BOTH
+      // peers. The guest is sim slot 1, but Input feeds touch and pad 0 into word 0 only - w[b.local] made the guest play
+      // with the P2 key set (arrows / numpad) and ignored its touch overlay and first pad.
+      const r = b.session.tick(w[0]);
       if (r.stalled) b.stalls++;
       return;
     }
@@ -393,7 +396,7 @@ export class Game {
     for (const e of evs) {
       b.stats.event(e, snap, f);
       if (e.type === EV.ROUND_END && b.online) b.online.roundBreak();
-      if (e.type === EV.MATCH_END) this.onMatchEnd(b, snap);
+      if (e.type === EV.MATCH_END) this.onMatchEnd(b, snap, e.frame);   // CHANGED(NET) P2: + the event's own frame
     }
     b.lastSnap = snap;
     b.lastFighters = f;
@@ -437,13 +440,19 @@ export class Game {
     return out;
   }
 
-  private onMatchEnd(b: Bout, snap: MatchSnap): void {
+  private onMatchEnd(b: Bout, snap: MatchSnap, endFrame = snap.frame): void {
     if (b.over) return;
     b.over = true;
     const winner: -1 | 0 | 1 = snap.winner === 0 || snap.winner === 1 ? snap.winner : -1;
     if (b.online) {
-      // online: RESULT agreement first (online 'matchEnd' calls finish); the session keeps ticking meanwhile
-      b.online.finish({ winner, frame: snap.frame, checksum: checksum(b.m) });
+      // online: RESULT agreement first (online 'matchEnd' calls finish); the session keeps ticking meanwhile.
+      // CHANGED(NET) P2: this MATCH_END is never a misprediction: the sim emits it koOutroFrames (90) / timeoverOutroFrames
+      // (120) after the deciding frame and the session never runs more than W (8 / 12) frames past its last confirmed input,
+      // so the KO / time-over that caused it is final. The flow still sends RESULT only once this frame is confirmed.
+      // It is reported at the EVENT's frame: snap.frame is the render-time frame, which differs between the peers (measured:
+      // 2288 vs 2287 -> the RESULT agreement failed although both checksums at frame 2280 were identical).
+      this.onlineEndSeen.set(b, performance.now());
+      b.online.finish({ winner, frame: endFrame, checksum: checksum(b.m) });
       return;
     }
     const my = b.epoch;
@@ -499,7 +508,12 @@ export class Game {
       r.season = { slot: run.index, slots: run.slots.length, kind: slot.kind, opponent: slot.opponent ?? '',
         cleared: (winner === 0 || bonus) && run.index === run.slots.length - 1, continues: run.continues };
     }
-    if (b.online) { r.rated = false; r.disconnect = reason === 'disconnect'; }
+    // CHANGED(NET) P2: RATED = both peers agreed on the sim result, both are signed in (NET 'matchEnd'.rated) AND the ratings
+    // RPC answered (online.info().ratings; it is missing on the live project today -> UNRATED). Was always false.
+    if (b.online) {
+      r.rated = !!b.online.lastMatch?.rated && b.online.info().ratings != null && reason !== 'forfeit';
+      r.disconnect = reason === 'disconnect';
+    }
     return r;
   }
 
@@ -519,9 +533,26 @@ export class Game {
 
   private async afterResults(b: Bout, r: MatchResult, choice: 'rematch' | 'charselect' | 'menu' | 'next'): Promise<void> {
     if (b.online) {
-      if (choice === 'rematch') { b.online.rematch(true); return; }      // the next 'matchStart' starts it
-      b.online.rematch(false);
-      b.online.leave();
+      // CHANGED(NET) P2: REMATCH keeps the results card up (UI §27.2: it becomes the waiting panel) until 'select' opens the
+      // blind select; if the opponent declines / leaves meanwhile, 'end' takes this player to the ONLINE lobby with the
+      // reason (never a dead card). A session that already ended (opponent left / declined, disconnect or forfeit win:
+      // nobody to rematch) goes straight back to the ONLINE lobby.
+      const o = b.online;
+      if (choice === 'rematch' && o.phase === 'result' && o.lastMatch?.rematch !== false) {
+        this.onlineRematchWait = true;
+        o.rematch(true);
+        return;
+      }
+      if (choice === 'rematch') {
+        // nobody to rematch: the opponent left / declined (endCode) or lost by disconnect / forfeit; a player who forfeited
+        // themselves just gets the idle lobby
+        const code = o.info().endCode || (o.lastMatch && !o.lastMatch.rematch ? 'net.opponent_left' : '');
+        o.leave();
+        this.onlineLobby(code);
+        return;
+      }
+      o.rematch(false);
+      o.leave();
       this.toMenus('main');
       return;
     }
@@ -769,33 +800,99 @@ export class Game {
     return o;
   }
 
+  /** CHANGED(NET) P2: MATCH_END seen (real ms) per online bout: the results card keeps the offline pacing (RESULTS_DELAY_MS) */
+  private readonly onlineEndSeen = new WeakMap<Bout, number>();
+  /** CHANGED(NET) P2: REMATCH pressed, waiting for the opponent's answer (the results card stays up, UI §27.2) */
+  private onlineRematchWait = false;
+
+  /** CHANGED(NET) P2: the ONLINE lobby screen with a NET status code (opponent left, waiting for the rematch, ...) */
+  private onlineLobby(code: string): void {
+    // via MAIN so the menus' back stack is title > main > online (BACK must never land on a dead character select)
+    this.toMenus('main');
+    this.d.flow.setScreen('online');
+    this.d.menus.show('online', { status: code ? { code, phase: this.online?.phase ?? 'ended', room: this.online?.room ?? '' } : { st: 'idle' } });
+  }
+
   /** NET §19.4 events -> menus / bouts (the one adapter for the online flow) */
   private onlineWire(o: Online): void {
     const d = this.d;
-    o.on('status', (s) => d.menus.setOnlineStatus(s as unknown as Parameters<Menus['setOnlineStatus']>[0]));
-    o.on('error', (e) => d.menus.setOnlineStatus(e as unknown as Parameters<Menus['setOnlineStatus']>[0]));
-    o.on('select', (() => { d.menus.show('charselect', { mode: 'online', opponent: 'human' }); }) as (p: never) => void);
+    type UiStatus = Parameters<Menus['setOnlineStatus']>[0];
+    // CHANGED(NET) P2: status / error payloads carry the room code as `room` (UI §27: menus fill {code} from it)
+    o.on('status', (s) => d.menus.setOnlineStatus(s as unknown as UiStatus));
+    o.on('error', (e) => d.menus.setOnlineStatus(e as unknown as UiStatus));
+    // CHANGED(NET) P2: every blind select (first match and each rematch) opens from a clean slate: the previous bout (its
+    // results card / frozen last frame) is torn down first; the app phase is 'menu', mode 'online'.
+    o.on('select', (() => {
+      this.onlineRematchWait = false;
+      this.toMenus('charselect', { mode: 'online', opponent: 'human' });
+      d.flow.mode = 'online';
+    }) as (p: never) => void);
     o.on('reveal', ((p: { picks?: Array<{ fighter: string; color: number; scheme: 0 | 1 }> }) => {
       const other = p?.picks?.[o.local === 0 ? 1 : 0];
       if (other) d.menus.revealOpponent({ fighter: other.fighter, color: other.color, scheme: other.scheme });
     }) as unknown as (p: never) => void);
     o.on('matchStart', (cfg, local) => { void this.startBout(cfg, { online: o, local, autostart: true }).catch((e) => this.crash(e)); });
+    // CHANGED(NET) P2: the results card follows RESULT agreement but keeps the offline pacing (KO / win pose for
+    // RESULTS_DELAY_MS after MATCH_END); once it shows, this peer stops ticking the session (agreement means the peer
+    // already holds every input it needs; on the relay a ticking session costs 10 Supabase sends/s for nothing).
     o.on('matchEnd', (r) => {
       const b = this.bout;
-      if (!b || b.online !== o) return;
-      void this.finish(r.winner, r.reason === 'disconnect' ? 'disconnect' : null, -1);
+      if (!b || b.online !== o || b.finished) return;
+      const seen = this.onlineEndSeen.get(b);
+      const wait = r.reason === 'ko' && seen !== undefined ? Math.max(0, RESULTS_DELAY_MS - (performance.now() - seen)) : 0;
+      const my = b.epoch;
+      window.setTimeout(() => {
+        if (my !== this.epoch || this.bout !== b || b.finished) return;
+        void this.finish(r.winner, r.reason === 'disconnect' ? 'disconnect' : null, -1);
+        this.loop.simEnabled = false;
+      }, wait);
     });
+    // CHANGED(NET) P2: an opponent's FORFEIT (BYE mid-match) reads "by forfeit" (forfeit = the leaver), a vanished opponent
+    // (presence gone for the 5 s grace) "by disconnect"; either way the stayer wins.
     o.on('disconnect', (r) => {
       const b = this.bout;
       if (!b || b.online !== o || b.finished) return;
-      void this.finish(r.winner, 'disconnect', -1);
+      if (r.reason === 'forfeit') void this.finish(r.winner, 'forfeit', r.winner === 0 ? 1 : 0);
+      else void this.finish(r.winner, 'disconnect', -1);
+      this.loop.simEnabled = false;
     });
+    // CHANGED(NET) P2: the session ended for a reason this player did not choose (opponent left / declined the rematch /
+    // timed out, version mismatch, no opponent, relay busy ...) while they wait for it (blind select, the rematch wait,
+    // the lobby): back to the ONLINE screen with the reason. A live bout ends through 'matchEnd' / 'disconnect'; a
+    // results card still showing keeps showing (its REMATCH then lands here too, via afterResults).
+    o.on('end', (e) => {
+      if (e.reason === 'leave' || e.reason === 'no-rematch') return;
+      const b = this.bout;
+      // a bout that never started (still waiting for GO: the session ended while the peers loaded) goes to the lobby too;
+      // one that runs ends only through 'matchEnd' / 'disconnect'
+      const notStarted = !!b && b.online === o && !b.finished && (!b.session || b.session.currentFrame() === 0);
+      if (b && b.online === o && !b.finished && !notStarted) return;
+      if (b && b.finished && !this.onlineRematchWait) return;
+      const mr = d.menus.readback() as { screen?: string | null; visible?: boolean };
+      const onSelect = mr.screen === 'charselect' && d.flow.mode === 'online';
+      // still loading the bout (this.bout is null until BoutView.create resolves): the lobby bumps the epoch, so the
+      // pending startBout disposes its view instead of mounting a bout for a finished session
+      const loading = d.flow.phase === 'loading' && d.flow.mode === 'online';
+      if (b || onSelect || loading || this.onlineRematchWait || mr.screen === 'online') {
+        this.onlineRematchWait = false;
+        this.onlineLobby(e.code || 'net.opponent_left');
+      }
+    });
+    // CHANGED(NET) P2: UI §27.2 request - the other NET events reach the lobby / select / results screens as they are
+    // (registered last: the screens this adapter opens above exist when the menus hear the event)
+    const menusEv = d.menus as unknown as { onlineEvent?: (name: string, payload?: unknown) => void };
+    for (const ev of ['paired', 'select', 'opponentLocked', 'reveal', 'rematch', 'matchEnd', 'disconnect', 'end', 'ratings'] as const) {
+      o.on(ev as 'paired', ((p: unknown) => { try { menusEv.onlineEvent?.(ev, p); } catch (e) { console.warn('[hit-parade] menus.onlineEvent', ev, e); } }) as (p: never) => void);
+    }
   }
 
   private async onlineAction(action: 'quick' | 'create' | 'join' | 'cancel', code?: string, name?: string): Promise<void> {
-    if (action === 'cancel') { this.online?.leave(); return; }
+    if (action === 'cancel') { this.onlineRematchWait = false; this.online?.leave(); return; }
     if (name) this.d.save.setOnlineName(name);
     const o = this.ensureOnline();
+    // CHANGED(NET) P2: the display name typed on the ONLINE screen reaches the opponent (was: the name at first use only)
+    const nm = name || this.d.save.get().onlineName;
+    if (nm) o.setName(nm);
     this.d.flow.mode = 'online';
     if (action === 'quick') await o.quick();
     else if (action === 'create') await o.create();

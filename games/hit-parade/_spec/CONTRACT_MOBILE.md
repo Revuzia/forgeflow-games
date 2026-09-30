@@ -208,3 +208,16 @@ title and the pause card — "Tip: Share → Add to Home Screen plays HIT PARADE
 - **VIEW**: M7 renderer profile.
 - Cross-lane calls fixed here: the TouchControls API (M2), `Input.touch` (§18.5), `hud.setTouchMode(on)` /
   `menus.setTouchMode(on)` (both also follow `html.hp-touch` by themselves), the M8 field names.
+
+## CHANGED(UI) P2 (2026-09-30)
+- **M2 labels fit their discs** (P1 verifier: labels overflowed on an iPhone, DPR 3): words of 4+ letters (PARRY, IMPACT,
+  THROW, SUPER, ASSIST) use the condensed face (Bebas Neue); after every layout and once the web fonts load,
+  `TouchControls.fitLabels()` scales a label down (never below 9 px) until its measured glyph box fits the chord of its disc
+  at the label's half height (minus the 3 px ring and 3 px air). Read-back `readback().labels = [{id, w, avail, fs, fit}]`;
+  `mobile.py` gates `labels_fit` / `game_labels_fit` on every device (DPR 2-3).
+- **M6 host caption on touch** (P1 verifier D6: the caption covered the fighters' feet): a one-line subtitle on the bottom
+  edge BELOW the floor line (24 px high at `max(2px, safe-bottom - 14px)`), between the stick's home and the ASSIST chip;
+  measured at 844x390, closest camera: feet end 355 px, the strip starts 364 px. Desktop / kbm: the ticker sits in the top
+  band between the show bug and SCORE (styles.css `.hpb-cap`).
+- **M6 bonus rounds**: BRAWL BREAK / HECKLER TOSS show the bonus panel at the top right in place of P2's bars (fighter 1 is
+  absent), above the button arc.

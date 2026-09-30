@@ -6,11 +6,11 @@
 import type { FighterSnap, GameData, MatchPhase, MatchSnap } from '../types.ts';
 import { ACT, BUF, F, FL, MODE_CODES, P, PH, PH_NAMES, PROJ_CAP, ST, ST_NAMES, STATE_INTS, STATE_INTS_BRAWL, STATE_VERSION, W, projBase } from './layout.ts';
 import { EventRing, EV } from './events.ts';
-import { compileFighter, compileSystem } from './compile.ts';
+import { UK, compileBrawl, compileFighter, compileSystem } from './compile.ts';
 import { recordInput, parseAction } from './inputs.ts';
 import { fighterUpdate, freezeBufferRule, enterKnockdown, PROX_THREAT, proxThreat } from './fighter.ts';
 import { clampToWalls, resolveBodies } from './boxes.ts';
-import { projectilesTick } from './projectiles.ts';
+import { ballPost, projectilesTick } from './projectiles.ts';
 import { applyDamage, comboStep, resolveHits, scaledDamage } from './hits.ts';
 import { resolveThrows } from './throws.ts';
 import { metersTick } from './meters.ts';
@@ -18,7 +18,10 @@ import { animTick } from './anim.ts';
 import { initRound, startKO, startTimeover } from './rounds.ts';
 import { hashInts } from './hash.ts';
 import { M } from './units.ts';
-import { clearMove, emit, fb, gainNerve, nerveMax, setSt } from './state.ts';
+import { clearMove, emit, fb, gainNerve, isFreeState, nerveMax, setSt } from './state.ts';
+import { KDF } from './throwpose.ts';
+import { checkPhases, initUniques, uniquesPost } from './uniques.ts';
+import { brawlFightStep, brawlInit, isBonus, readBrawl } from './brawl.ts';
 import type { Match, MatchCfg, PlayerCfg, Scheme } from './state.ts';
 
 export type { Match, MatchCfg, PlayerCfg, Scheme };
@@ -26,10 +29,12 @@ export { STATE_VERSION };
 
 // ------------------------------------------------------------------ create
 export function createMatch(cfg: MatchCfg, data: GameData): Match {
-  const cf0 = compileFighter(data, cfg.p[0].fighter);
-  const cf1 = compileFighter(data, cfg.p[1].fighter);
-  const sys = compileSystem(data.system);
   const brawl = cfg.mode === 'brawl' || cfg.mode === 'heckler';
+  // CHANGED(SIM) P2 (CONTRACT §28.4): in a bonus round p[1] is only compiled (an unknown id falls back to p[0]'s)
+  const p1Id = brawl && !data.fighters[cfg.p[1].fighter] ? cfg.p[0].fighter : cfg.p[1].fighter;
+  const cf0 = compileFighter(data, cfg.p[0].fighter);
+  const cf1 = compileFighter(data, p1Id);
+  const sys = compileSystem(data.system);
   const s = new Int32Array(brawl ? STATE_INTS_BRAWL : STATE_INTS);
   const events = new EventRing(s, W.evSeq);
   const training = cfg.mode === 'training';
@@ -44,6 +49,7 @@ export function createMatch(cfg: MatchCfg, data: GameData): Match {
     tab: { sfx: sys.sfx, anims: [data.anims[cf0.id] ?? [], data.anims[cf1.id] ?? []] },
     training,
     arcade: cfg.mode === 'arcade',
+    bonus: brawl ? compileBrawl(data) : null,
   };
   s[W.ver] = STATE_VERSION | 0;
   s[W.seed] = cfg.seed | 0;
@@ -52,11 +58,14 @@ export function createMatch(cfg: MatchCfg, data: GameData): Match {
   s[W.roundsNeed] = Math.max(1, cfg.rounds ?? data.system.round.rounds);
   s[W.maxRounds] = Math.max(s[W.roundsNeed] * 2 - 1, data.system.round.maxRounds);
   s[W.timerSetting] = training ? 0 : cfg.timer ?? data.system.round.timer;
+  if (brawl && m.bonus) s[W.timerSetting] = cfg.timer ?? (cfg.mode === 'heckler' ? m.bonus.hSeconds : m.bonus.seconds);
   s[W.round] = 1;
   s[W.winner] = -1;
   s[W.roundWinner] = -1;
   for (let i = 0; i < 2; i++) s[fb(i) + F.animId] = 0;
+  initUniques(m); // CHANGED(SIM) P2
   initRound(m);
+  if (brawl) brawlInit(m); // CHANGED(SIM) P2
   return m;
 }
 
@@ -72,7 +81,7 @@ function introStep(m: Match): void {
   if (s[W.phaseF] >= m.sys.raw.round.introFrames) {
     s[W.phase] = PH.FIGHT;
     s[W.phaseF] = 0;
-    for (let i = 0; i < 2; i++) setSt(m, i, ST.IDLE);
+    for (let i = 0; i < 2; i++) if (s[fb(i) + F.st] !== ST.ABSENT) setSt(m, i, ST.IDLE);
     emit(m, EV.FIGHT, s[W.round], 0, 0, 0);
   }
 }
@@ -106,6 +115,8 @@ function cinematicTick(m: Match): void {
     s[ba + F.stun] = rec;
     const vkd = mv.cinEndAdv > -100000 ? rec + mv.cinEndAdv : m.sys.raw.cinematic.victimKd;
     enterKnockdown(m, d, vkd, 2);
+    // CHANGED(SIM) P2 (§26.1 request): the cinematic already laid the victim down - no second fall from standing
+    s[fb(d) + F.kdFace] = KDF.NOFALL | (mv.cinEndDown ? KDF.DOWN : 0);
     if (mv.cinEndGap >= 0) {
       const bd = fb(d);
       s[bd + F.x] = s[ba + F.x] + s[ba + F.facing] * mv.cinEndGap;
@@ -127,6 +138,7 @@ function fightStep(m: Match, in1: number, in2: number): void {
   parseAction(m, 1);
   if (s[W.cinActive] !== 0) {
     cinematicTick(m);
+    uniquesPost(m);
     animTick(m, 0, false);
     animTick(m, 1, false);
     checkKO(m);
@@ -139,6 +151,7 @@ function fightStep(m: Match, in1: number, in2: number): void {
     freezeBufferRule(m, 0);
     freezeBufferRule(m, 1);
     s[W.freeze]--;
+    uniquesPost(m); // CHANGED(SIM) P2: the phase-lock countdown (unique[1]) runs during its freeze
     if (s[W.freeze] === 0) s[W.freezeKind] = 0;
     animTick(m, 0, false);
     animTick(m, 1, false);
@@ -162,6 +175,11 @@ function fightStep(m: Match, in1: number, in2: number): void {
   projectilesTick(m);
   resolveHits(m);
   resolveThrows(m);
+  // CHANGED(SIM) P2 (CONTRACT §28.2): the ball (knock-away / pickup / respawn), boss phases, unique snapshot mirrors
+  ballPost(m);
+  // (a KO this frame wins over a phase change: the KO itself is started by checkKO below, after the timer, as in P1)
+  if (s[b0 + F.hp] > 0 && s[b1 + F.hp] > 0) checkPhases(m);
+  uniquesPost(m);
   if (frozenScratch[0] === 0) metersTick(m, 0);
   if (frozenScratch[1] === 0) metersTick(m, 1);
   if (s[W.timer] > 0) {
@@ -278,7 +296,8 @@ export function step(m: Match, in1: number, in2: number): void {
       introStep(m);
       break;
     case PH.FIGHT:
-      fightStep(m, in1 | 0, in2 | 0);
+      if (m.bonus) brawlFightStep(m, in1 | 0); // CHANGED(SIM) P2: BRAWL BREAK / HECKLER TOSS (CONTRACT §28.4)
+      else fightStep(m, in1 | 0, in2 | 0);
       break;
     case PH.KO:
       koStep(m);
@@ -387,11 +406,15 @@ export function readFighter(m: Match, i: number): FighterSnap {
       invuln,
       armor,
       counter: s[b + F.counterFlag] !== 0,
-      stance: s[b + F.uniq],
+      stance: st === ST.STANCE ? 1 : 0, // CHANGED(SIM) P2 (§28.1): was unique[0] for every kind
       taunting: st === ST.TAUNT,
       ko: (s[b + F.flags] & FL.KO) !== 0,
     },
     unique: [s[b + F.uniq], s[b + F.uniq + 1], s[b + F.uniq + 2], s[b + F.uniq + 3]],
+    // CHANGED(SIM) P2 (CONTRACT §28.1)
+    install: Math.max(0, s[b + F.instF]),
+    absent: st === ST.ABSENT,
+    actionable: (isFreeState(st) || (st === ST.STANCE && cf.uk === UK.STANCE)) && s[b + F.hitstop] <= 0 && s[W.freeze] <= 0 && s[W.phase] === PH.FIGHT,
   };
 }
 
@@ -406,8 +429,9 @@ export function readMatch(m: Match): MatchSnap {
     if (s[pb + P.act] === 0) continue;
     const owner = s[pb + P.owner];
     const mv = owner === 0 || owner === 1 ? m.cf[owner]?.moves[s[pb + P.mv]] : undefined;
-    proj.push({ slot: k, owner, x: s[pb + P.x] / M, y: s[pb + P.y] / M, vx: (s[pb + P.vx] * 60) / M, moveId: mv ? mv.snapId : -1,
-      kind: s[pb + P.kind], alive: true });
+    const kind = s[pb + P.kind];
+    proj.push({ slot: k, owner, x: s[pb + P.x] / M, y: s[pb + P.y] / M, vx: (s[pb + P.vx] * 60) / M, moveId: kind === 2 ? s[pb + P.mode] : mv ? mv.snapId : -1,
+      kind, alive: true, obj: kind === 1 || kind === 2 ? s[pb + P.mode] : 0 });
   }
   return {
     frame: s[W.frame],
@@ -429,6 +453,7 @@ export function readMatch(m: Match): MatchSnap {
     slowmo: s[W.phase] === PH.KO && s[W.koStop] === 0 && s[W.slowmo] > 0,
     freeze: s[W.freeze],
     proj,
+    ...(isBonus(m) && m.bonus ? { brawl: readBrawl(m) } : {}),
   };
 }
 

@@ -382,12 +382,12 @@
       "grab": {
         "frames": 50,
         "adv": 21,
-        "hitF": 34,
+        "hitF": 36,
         "swap": false,
         "air": false,
         "techable": true,
         "clip": "bear_hug",
-        "victim": [[0, "hit_body", 0.0, 0.35], [17, "hit_body", 0.05, 0.4], [34, "kd_fall_b", 1.0, 1.8667]]
+        "victim": [[0, "hit_body", 0.0, 0.25], [12, "hit_body", 0.25, 0.7], [36, "kd_fall_b", 1.04, 1.5]]
       },
       "role": [],
       "anim": {"clip": "throw_reach"},
@@ -396,7 +396,7 @@
     "throw_b": {
       "kind": "throw",
       "input": "4LM",
-      "name": "Throw-In",
+      "name": "Carousel",
       "strength": "M",
       "startup": 5,
       "active": 3,
@@ -416,10 +416,19 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 52, "adv": 16, "hitF": 40, "swap": true, "air": false, "techable": true, "clip": "throw_in"},
+      "grab": {
+        "frames": 52,
+        "adv": 16,
+        "hitF": 26,
+        "swap": true,
+        "air": false,
+        "techable": true,
+        "clip": "lariat_spin",
+        "victim": [[0, "hit_high_s", 0.0, 0.2], [10, "thrown_b", 0.0, 0.4], [26, "thrown_b", 0.4, 1.2]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Lifts them overhead and hurls them behind."
+      "desc": "Spins them round and flings them behind him."
     },
     "walk_in_l": {
       "kind": "cmdgrab",
@@ -448,11 +457,12 @@
         "rangeM": 1.22,
         "frames": 70,
         "adv": 28,
-        "hitF": 52,
+        "hitF": 26,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "freezer_slam"
+        "clip": "freezer_slam",
+        "victim": [[0, "hit_body", 0.0, 0.3], [9, "thrown_f", 0.15, 0.7], [26, "thrown_f", 0.7, 1.3333]]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -486,11 +496,12 @@
         "rangeM": 1.1,
         "frames": 70,
         "adv": 28,
-        "hitF": 52,
+        "hitF": 26,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "freezer_slam"
+        "clip": "freezer_slam",
+        "victim": [[0, "hit_body", 0.0, 0.3], [9, "thrown_f", 0.15, 0.7], [26, "thrown_f", 0.7, 1.3333]]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -524,11 +535,12 @@
         "rangeM": 0.92,
         "frames": 70,
         "adv": 28,
-        "hitF": 52,
+        "hitF": 26,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "freezer_slam"
+        "clip": "freezer_slam",
+        "victim": [[0, "hit_body", 0.0, 0.3], [9, "thrown_f", 0.15, 0.7], [26, "thrown_f", 0.7, 1.3333]]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -562,11 +574,12 @@
         "rangeM": 1.3,
         "frames": 76,
         "adv": 28,
-        "hitF": 56,
+        "hitF": 28,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "freezer_slam"
+        "clip": "freezer_slam",
+        "victim": [[0, "hit_body", 0.0, 0.3], [10, "thrown_f", 0.15, 0.7], [28, "thrown_f", 0.7, 1.3333]]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -969,11 +982,12 @@
         "rangeM": 0.9,
         "frames": 90,
         "adv": 20,
-        "hitF": 70,
+        "hitF": 28,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "storage_slam"
+        "clip": "storage_slam",
+        "victim": [[0, "hit_body", 0.0, 0.3], [11, "thrown_f", 0.25, 0.7], [28, "thrown_f", 0.7, 1.3333]]
       },
       "role": ["grab", "approach"],
       "anim": {"clip": "storage_run"},
@@ -1010,21 +1024,140 @@
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "bear_hug"
+        "clip": "bear_hug",
+        "victim": [
+          [0, "hit_body", 0.0, 0.3],
+          [24, "hit_body", 0.2, 0.6],
+          [40, "hit_air", 0.2, 0.9],
+          [100, "hit_air", 0.9, 1.3],
+          [128, "thrown_f", 0.3, 0.74],
+          [140, "thrown_f", 0.74, 1.3333]
+        ]
       },
       "cinematic": {
         "frames": 175,
         "cue": "bruno_final_delivery",
-        "hits": [[30, 500], [72, 1000], [140, 3000]],
-        "anim": [[0, "bear_hug"], [40, "lariat_spin"], [70, "lariat_spin"], [100, "freezer_slam"], [150, "win_flex"]],
-        "victim": [[0, "thrown_f"], [100, "hit_air"], [140, "kd_ground_b"]],
-        "shots": [[0, "front_low"], [40, "orbit"], [100, "low_angle_up"], [140, "top_down"], [150, "crowd_pop"]],
+        "hits": [[24, 500], [70, 1000], [140, 3000]],
+        "anim": [
+          [0, "bear_hug", 0.1, 0.767],
+          [40, "lariat_spin", 0.1, 0.9],
+          [70, "lariat_spin", 0.1, 0.9],
+          [100, "throw_in", 0.2, 1.033],
+          [150, "win_flex", 0.8, 1.217]
+        ],
+        "victim": [
+          [0, "hit_body", 0.0, 0.3],
+          [24, "hit_body", 0.2, 0.6],
+          [40, "hit_air", 0.2, 0.9],
+          [100, "hit_air", 0.9, 1.3],
+          [128, "thrown_f", 0.3, 0.74],
+          [140, "thrown_f", 0.74, 1.3333]
+        ],
+        "shots": [[0, "low"], [40, "orbit"], [100, "low"], [128, "wide"], [150, "close"]],
+        "camera": [
+          {
+            "from": 0,
+            "to": 40,
+            "shot": "low",
+            "target": "both",
+            "fovDeg": 38,
+            "dist": 2.8,
+            "height": 0.5,
+            "yawDeg": 20,
+            "ease": "inOut",
+            "lookH": 1.3
+          },
+          {
+            "from": 40,
+            "to": 100,
+            "shot": "orbit",
+            "target": "both",
+            "fovDeg": 40,
+            "dist": 3.4,
+            "height": 1.4,
+            "yawDeg": [-50, 70],
+            "ease": "linear"
+          },
+          {
+            "from": 100,
+            "to": 128,
+            "shot": "low",
+            "target": "attacker",
+            "fovDeg": 44,
+            "dist": 3.2,
+            "height": 0.3,
+            "yawDeg": 25,
+            "ease": "inOut",
+            "lookH": 2.0
+          },
+          {
+            "from": 128,
+            "to": 150,
+            "shot": "wide",
+            "target": "both",
+            "fovDeg": 40,
+            "dist": [4.5, 5.6],
+            "height": 1.6,
+            "yawDeg": 10,
+            "ease": "inOut",
+            "lookH": 1.1
+          },
+          {
+            "from": 150,
+            "to": 175,
+            "shot": "close",
+            "target": "attacker",
+            "fovDeg": 32,
+            "dist": 2.5,
+            "height": 1.6,
+            "yawDeg": 30,
+            "ease": "inOut",
+            "lookH": 1.45
+          }
+        ],
+        "fx": [
+          {"f": 0, "fx": "slate"},
+          {"f": 24, "fx": "impact_m"},
+          {"f": 24, "fx": "shake_s"},
+          {"f": 40, "fx": "speed_lines"},
+          {"f": 70, "fx": "impact_m"},
+          {"f": 70, "fx": "shake_m"},
+          {"f": 100, "fx": "spot", "target": "attacker"},
+          {"f": 128, "fx": "spot_off"},
+          {"f": 128, "fx": "smear", "target": "attacker"},
+          {"f": 140, "fx": "impact_l"},
+          {"f": 140, "fx": "flash"},
+          {"f": 140, "fx": "shake_l"},
+          {"f": 140, "fx": "dust"},
+          {"f": 140, "fx": "freeze_frame"},
+          {"f": 150, "fx": "lights_flicker"}
+        ],
+        "crowd": [
+          {"f": 24, "react": "ooh"},
+          {"f": 70, "react": "roar", "ratings": "up"},
+          {"f": 100, "react": "gasp"},
+          {"f": 140, "react": "roar", "ratings": "spike"},
+          {"f": 150, "react": "cheer", "ratings": "peak"},
+          {"f": 165, "react": "chant"}
+        ],
+        "pathA": [[40, 0.1, 0], [100, 0.1, 0], [128, 0.3, 0], [160, 0, 0]],
+        "gapD": [
+          [10, 0.6, 0],
+          [40, 0.6, 0.3],
+          [70, 0.7, 0.6],
+          [100, 0.4, 1.4],
+          [128, 0.8, 1.6],
+          [134, 2.0, 1.0],
+          [140, 3.0, 0]
+        ],
+        "slate": "PRIME TIME - BRUNO \"THE FRIDGE\": FINAL DELIVERY",
+        "endPose": "back",
         "endAdv": 19,
-        "endGapM": 1.0
+        "endGapM": 3.0
       },
       "role": ["grab"],
       "anim": {"clip": "delivery_reach"},
-      "desc": "PRIME TIME command grab: airplane spin into the freezer slam."
+      "desc": "PRIME TIME command grab: hugged, spun like a carousel, lifted overhead and hurled across the set."
     }
   },
   "simple": {
@@ -1063,5 +1196,14 @@
     "combo": ["2L", "5M", "fridge_door_m"],
     "grab": ["walk_in_l", "walk_in_h"],
     "meter": "cold_storage"
-  }
+  },
+  "introLine": "Thirty flights of stairs, no elevator. You're lighter than a freezer.",
+  "winQuotes": ["Signed, sealed, delivered. No returns.", "I've carried fridges with more fight in them.", "Tip your mover. Or don't. I'll take it anyway."],
+  "banter": {
+    "krane": ["You cuffed me to a meat locker door. I kept the door. Want it back?", "Read me my rights, officer. I'll read you the stairs."],
+    "freak": ["Big, ugly and heavy. You'll lift like a chest freezer.", "Hold still. This is a two-man job, and I'm the only man."],
+    "ricky": ["Twenty years you've paid me in steak, Ricky.", "Tonight I'm collecting the whole cow."],
+    "default": ["Hold still. I'm not paid by the hour.", "You walked in. I'll walk you out. That's the service."]
+  },
+  "ending": "BRUNO \"THE FRIDGE\" carries the host out of the Control Room on one shoulder and the broadcast console on the other. He loads both into his old moving van and drives off before the credits roll. Nobody knows where he delivered them. The network's new office has a walk-in freezer, and it is always locked."
 }

@@ -134,7 +134,9 @@ export class TouchControls {
       e.setAttribute('role', 'button');
       e.setAttribute('aria-label', label);
       const lab = document.createElement('span');
-      lab.className = 'hpt-lbl';
+      // CHANGED(UI) P2 (verifier: labels overflowed their discs on an iPhone, DPR 3): words of 4+ letters use the condensed
+      // face and every label is shrunk to fit its disc (fitLabels, after each layout and once the fonts have loaded)
+      lab.className = label.length >= 4 && id !== 'pause' ? 'hpt-lbl long' : 'hpt-lbl';
       lab.textContent = id === 'pause' ? '' : label;
       if (id === 'pause') lab.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4.2" height="14" rx="1.2" fill="currentColor"/><rect x="13.8" y="5" width="4.2" height="14" rx="1.2" fill="currentColor"/></svg>';
       e.append(lab);
@@ -182,6 +184,8 @@ export class TouchControls {
 
     host.append(root);
     const relayout = (): void => { if (this.visible) this.layout(); };
+    // the label fit measures real glyphs: re-fit once the web fonts are in
+    try { void document.fonts?.ready.then(relayout); } catch { /* no FontFaceSet */ }
     window.addEventListener('resize', relayout);
     window.addEventListener('orientationchange', relayout);
     const vv = window.visualViewport;
@@ -310,6 +314,7 @@ export class TouchControls {
       active: this.state.active, stick: { active: this.stickId !== null }, assist: performance.now() < this.assistUntil,
       leftHanded: this.opts.leftHanded, scale: this.opts.scale, opacity: this.opts.opacity, layout: this.opts.layout,
       buttons, stats: { presses: { ...this.stats.presses }, dirWords: this.stats.dirWords, reads: this.stats.reads },
+      labels: this.visible ? this.labelFit() : [],
     };
   }
 
@@ -365,6 +370,48 @@ export class TouchControls {
     this.homeX = lh ? W - safe.r - off : safe.l + off;
     this.homeY = H - safe.b - off;
     if (this.stickId === null) this.placeStick(this.homeX, this.homeY, 0, 0);
+    this.fitLabels();
+  }
+
+  /**
+   * CHANGED(UI) P2: every label fits inside its disc: the width the text may use is the chord of the disc at the label's
+   * half height (minus the 3 px ring and 3 px air); a label wider than that is scaled down (never below 9 px).
+   */
+  private fitLabels(): void {
+    for (const b of this.btns.values()) {
+      const lab = b.el.firstElementChild as HTMLElement | null;
+      if (!lab || !lab.textContent || b.hidden) continue;
+      const d = b.d * this.opts.scale * (this.layoutScale(b.id));
+      const base = lab.classList.contains('long') ? Math.max(12, d * 0.3) : Math.max(11, d * 0.26);
+      lab.style.fontSize = `${base.toFixed(1)}px`;
+      const r = lab.getBoundingClientRect();
+      if (r.width < 1) continue;
+      const R = Math.max(TOUCH.minTarget, d) / 2 - 6;
+      const hh = r.height / 2;
+      const avail = 2 * Math.sqrt(Math.max(0, R * R - hh * hh));
+      if (r.width > avail) lab.style.fontSize = `${Math.max(9, base * (avail / r.width)).toFixed(1)}px`;
+    }
+  }
+
+  private layoutScale(id: TouchButtonId): number {
+    const L = this.editing ? this.editLayoutDraft : (this.opts.layout ?? {});
+    return L[id]?.s ?? 1;
+  }
+
+  /** read-back for mobile.py: each label's width vs the chord it may use (fit = inside) */
+  labelFit(): Array<{ id: string; w: number; avail: number; fs: number; fit: boolean }> {
+    const out: Array<{ id: string; w: number; avail: number; fs: number; fit: boolean }> = [];
+    for (const b of this.btns.values()) {
+      const lab = b.el.firstElementChild as HTMLElement | null;
+      if (!lab || !lab.textContent || b.hidden) continue;
+      const rl = lab.getBoundingClientRect();
+      const rb = b.el.getBoundingClientRect();
+      const R = rb.width / 2 - 6;
+      const hh = rl.height / 2;
+      const avail = 2 * Math.sqrt(Math.max(0, R * R - hh * hh));
+      out.push({ id: b.id, w: Math.round(rl.width * 10) / 10, avail: Math.round(avail * 10) / 10, fs: parseFloat(lab.style.fontSize) || 0, fit: rl.width <= avail + 0.5 });
+    }
+    return out;
   }
 
   private placeStick(cx: number, cy: number, kx: number, ky: number): void {

@@ -11,52 +11,28 @@ import type { SimEvent, UiFighterSnap, UiMatchSnap } from './types.ts';
 import { EV } from './ev.ts';
 import { chip, dirSvg, div, el, setText } from './dom.ts';
 import { t } from './strings.ts';
+import type { ResetWhere, ScreenBox } from './trainopts.ts';
 
-export type DummyAction = 'stand' | 'crouch' | 'jump' | 'cpu';
-export type DummyGuard = 'none' | 'all' | 'first';
-export type RecordMode = 'off' | 'record' | 'play';
-export interface TrainingOpts {
-  dummy: DummyAction; guard: DummyGuard; cpuLevel: number; record: RecordMode;
-  inputs: boolean; frames: boolean; hitboxes: boolean; meter: 'normal' | 'full'; hpRefill: boolean;
-}
-export const TRAINING_DEFAULTS: Readonly<TrainingOpts> = Object.freeze({
-  dummy: 'stand', guard: 'none', cpuLevel: 3, record: 'off', inputs: true, frames: true, hitboxes: false, meter: 'full', hpRefill: true,
-});
-
-/** in-memory training options (per session); game.ts subscribes and applies them to the dummy / overlays */
-export class TrainingState {
-  private v: TrainingOpts = { ...TRAINING_DEFAULTS };
-  private fns = new Set<(o: TrainingOpts, action: 'change' | 'reset') => void>();
-  get(): TrainingOpts { return { ...this.v }; }
-  set(p: Partial<TrainingOpts>): void {
-    const n = { ...this.v, ...p };
-    n.cpuLevel = Math.max(1, Math.min(8, Math.round(n.cpuLevel)));
-    this.v = n;
-    for (const f of this.fns) f(this.get(), 'change');
-  }
-  /** RESET POSITIONS */
-  reset(): void { for (const f of this.fns) f(this.get(), 'reset'); }
-  on(fn: (o: TrainingOpts, action: 'change' | 'reset') => void): () => void { this.fns.add(fn); return () => this.fns.delete(fn); }
-}
+export { TrainingState, TRAINING_DEFAULTS, RECORD_TICKS } from './trainopts.ts';
+export type { DummyAction, DummyGuard, RecordMode, ResetWhere, TrainingOpts, ScreenBox } from './trainopts.ts';
 
 /** the rows of the TRAINING OPTIONS screen (menus.ts renders them) */
 export type TrainingRow =
   | { kind: 'seg'; key: 'dummy' | 'guard' | 'record' | 'meter'; label: string; opts: ReadonlyArray<readonly [string, string]> }
   | { kind: 'level'; key: 'cpuLevel'; label: string }
-  | { kind: 'toggle'; key: 'inputs' | 'frames' | 'hitboxes' | 'hpRefill'; label: string }
-  | { kind: 'action'; key: 'reset'; label: string };
+  | { kind: 'toggle'; key: 'inputs' | 'frames' | 'hitboxes'; label: string }
+  | { kind: 'reset'; label: string; opts: ReadonlyArray<readonly [ResetWhere, string]> };
 export function trainingRows(): TrainingRow[] {
   return [
     { kind: 'seg', key: 'dummy', label: t('tr.dummy'), opts: [['stand', t('tr.dummy.stand')], ['crouch', t('tr.dummy.crouch')], ['jump', t('tr.dummy.jump')], ['cpu', t('tr.dummy.cpu')]] },
-    { kind: 'seg', key: 'guard', label: t('tr.guard'), opts: [['none', t('tr.guard.none')], ['all', t('tr.guard.all')], ['first', t('tr.guard.first')]] },
+    { kind: 'seg', key: 'guard', label: t('tr.guard'), opts: [['none', t('tr.guard.none')], ['all', t('tr.guard.all')], ['first', t('tr.guard.first')], ['random', t('tr.guard.random')]] },
     { kind: 'level', key: 'cpuLevel', label: t('tr.cpuLevel') },
     { kind: 'seg', key: 'record', label: t('tr.record'), opts: [['off', t('tr.rec.off')], ['record', t('tr.rec.record')], ['play', t('tr.rec.play')]] },
     { kind: 'seg', key: 'meter', label: t('tr.meter'), opts: [['normal', t('tr.meter.normal')], ['full', t('tr.meter.full')]] },
-    { kind: 'toggle', key: 'hpRefill', label: t('tr.hp') },
     { kind: 'toggle', key: 'inputs', label: t('tr.inputs') },
     { kind: 'toggle', key: 'frames', label: t('tr.frames') },
     { kind: 'toggle', key: 'hitboxes', label: t('tr.hitboxes') },
-    { kind: 'action', key: 'reset', label: t('tr.reset') },
+    { kind: 'reset', label: t('tr.reset'), opts: [['mid', t('tr.reset.mid')], ['corner', t('tr.reset.corner')], ['cornered', t('tr.reset.cornered')]] },
   ];
 }
 
@@ -97,8 +73,58 @@ export class InputDisplay {
     this.rowsBox.prepend(r);
     this.rows.unshift({ word: w, frames: 1, el: r, f });
     while (this.rows.length > this.max) { const x = this.rows.pop(); x?.el.remove(); }
+    this.pushes++;
   }
+  /** read-back: input changes shown so far */
+  get count(): number { return this.pushes; }
+  private pushes = 0;
   dispose(): void { this.root.remove(); }
+}
+
+const BOX_STYLE: Readonly<Record<ScreenBox['kind'], [string, string]>> = {
+  hurt: ['rgba(47, 134, 255, .22)', '#5aa2ff'],
+  hit: ['rgba(255, 43, 58, .30)', '#ff4b5a'],
+  push: ['rgba(255, 245, 220, .06)', 'rgba(255, 245, 220, .85)'],
+  proj: ['rgba(255, 210, 26, .28)', '#ffd21a'],
+};
+
+/** CHANGED(UI) P2: the HITBOX overlay canvas over the bout (training; CONTRACT 27.1) */
+export class BoxOverlay {
+  readonly canvas: HTMLCanvasElement;
+  private readonly g: CanvasRenderingContext2D | null;
+  count = 0;
+  constructor(host: HTMLElement) {
+    this.canvas = el('canvas', 'hp-boxes');
+    this.canvas.setAttribute('aria-hidden', 'true');
+    host.prepend(this.canvas);
+    this.g = this.canvas.getContext('2d');
+  }
+  draw(list: ReadonlyArray<ScreenBox>): void {
+    const c = this.canvas;
+    const w = c.clientWidth, h = c.clientHeight;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    const g = this.g;
+    c.hidden = false;
+    this.count = list.length;
+    if (!g) return;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    g.lineWidth = 2;
+    for (const k of ['push', 'hurt', 'proj', 'hit'] as const) {
+      const [fill, line] = BOX_STYLE[k];
+      g.fillStyle = fill;
+      g.strokeStyle = line;
+      g.setLineDash(k === 'push' ? [5, 4] : []);
+      for (const b of list) {
+        if (b.kind !== k) continue;
+        const x = Math.min(b.x0, b.x1), y = Math.min(b.y0, b.y1), bw = Math.abs(b.x1 - b.x0), bh = Math.abs(b.y1 - b.y0);
+        if (k !== 'push') g.fillRect(x, y, bw, bh);
+        g.strokeRect(x + 0.5, y + 0.5, bw, bh);
+      }
+    }
+  }
+  clear(): void { this.count = 0; this.canvas.hidden = true; this.g?.clearRect(0, 0, this.canvas.width, this.canvas.height); }
 }
 
 interface Watch { atk: 0 | 1; block: boolean; t0: number; tA: number | null; tD: number | null }
@@ -140,12 +166,28 @@ export class FrameReadout {
     this.rec.classList.toggle('play', s === 'play');
   }
 
+  /** CHANGED(UI) P2: the training driver measures per SIM TICK (exact) and hands its numbers in; from then on the
+   *  readout shows those and stops sampling at render frames (which can be a frame off when two ticks share a frame) */
+  private external = false;
+  setExact(r: { adv: number | null; block: boolean; startup: number; damage: number; combo: number }): void {
+    this.external = true;
+    setText(this.advLbl, r.block ? `${t('tr.adv')} ${t('tr.onBlock')}` : `${t('tr.adv')} ${t('tr.onHit')}`);
+    setText(this.startup, r.startup > 0 ? `${r.startup}F` : t('misc.none'));
+    setText(this.damage, String(Math.max(0, r.damage)));
+    setText(this.combo, String(Math.max(0, r.combo)));
+    if (r.adv === null) { setText(this.adv, '...'); this.adv.className = ''; return; }
+    setText(this.adv, r.adv > 0 ? `+${r.adv}` : String(r.adv));
+    this.adv.className = r.adv > 0 ? 'plus' : r.adv < 0 ? 'minus' : 'zero';
+    this.last = { adv: r.adv, block: r.block, startup: r.startup, damage: r.damage };
+  }
+
   static actionable(f: UiFighterSnap): boolean {
     if (typeof f.actionable === 'boolean') return f.actionable;
     return (f.stun ?? 0) <= 0 && (f.hitstop ?? 0) <= 0 && (f.moveId ?? -1) < 0;
   }
 
   frame(m: UiMatchSnap, f: readonly [UiFighterSnap, UiFighterSnap], ev: readonly SimEvent[]): void {
+    if (this.external) return;
     for (const e of ev) {
       if (e.type !== EV.HIT && e.type !== EV.BLOCK) continue;
       const atk = e.a === 1 ? 1 : 0;

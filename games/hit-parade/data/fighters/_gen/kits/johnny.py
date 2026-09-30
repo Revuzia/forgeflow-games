@@ -1,5 +1,6 @@
 """JOHNNY RIOT - shoto boxer (CMU boxing takes)."""
-from kitlib import (Kit, air, cmu, crouch, layer, mix, seq, LV1, LV3, LV1_COST, LV3_COST, EX_NERVE)
+from kitlib import (Kit, air, cam, cinematic, cmu, crouch, layer, mix, seq, LV1, LV3, LV1_COST, LV3_COST,
+                    EX_NERVE)
 
 
 def build():
@@ -38,9 +39,11 @@ def build():
     K.clip("low_body", crouch(cmu("body_blow.1")),
            "Crouch Idle legs + CMU body_blow.1 (14_03 dip + rear straight; pilot p06)")
     K.clip("haymaker", cmu("hook.1"), "CMU hook.1 clean (14_03 rear hook, arm swings wide then across; pilot p04)")
-    K.clip("uppercut", cmu("uppercut.2"),
+    K.clip("uppercut", cmu("uppercut.2", rng=(1559, 1595)),
            "CMU uppercut.2 usable (17_10 rear uppercut, fist rises 0.33 m to chin, 7.8 m/s - the fastest "
-           "uppercut in the pool; no clean uppercut exists, CMU_CLIPS 4)")
+           "uppercut in the pool; no clean uppercut exists, CMU_CLIPS 4). P2: window ends at 1595 - the take throws a "
+           "second, LEFT punch right after (bake trace: LeftHand 0.23 -> 0.68 m forward at output f10-15 = source "
+           "1599-1619), which read as a phantom jab in the recovery")
     K.clip("low_blow", crouch(cmu("hook.3")),
            "Crouch Idle legs + CMU hook.3 (14_01 orthodox lead hook, elbow 95): a crouching hook to the knee")
     K.clip("overhand", cmu(take="113_13", rng=(614, 718), contact=662, kind="hand", limb="R_hand"),
@@ -58,29 +61,49 @@ def build():
            "Mixamo goalkeeper overhand throw, release f48 (front pass). Range starts at the last plant step "
            "(the clip has a run-up; root motion is stripped so only a crow-hop step remains)")
     K.clip("encore_upper",
-           layer(mix("Pro_Magic_Pack/Standing Jump", (15, 45)), cmu("uppercut.2"), mode="sync",
+           layer(mix("Pro_Magic_Pack/Standing Jump", (15, 45)), cmu("uppercut.2", rng=(1559, 1595)), mode="sync",
                  why="jump legs (take-off to apex f28) time-scaled under the CMU rear uppercut"),
-           "LAYERED: Pro_Magic Standing Jump f15-45 legs (sync) + CMU uppercut.2 arms = jumping uppercut")
+           "LAYERED: Pro_Magic Standing Jump f15-45 legs (sync) + CMU uppercut.2 arms (window 1559-1595: no phantom "
+           "left punch in the recovery, see `uppercut`) = jumping uppercut")
     K.clip("run_hook",
            layer(mix("Pro_Magic_Pack/Standing Run Forward", (1, 23), loop=True),
                  cmu("hook.2", rng=(256, 350)), mode="loop",
                  why="running legs loop under the fastest CMU hook (11.7 m/s)"),
            "LAYERED: Pro_Magic Standing Run Forward legs (loop) + CMU hook.2 (79_08; tail extended to 350)")
-    K.clip("weave_duck", cmu(take="17_10", rng=(2129, 2166), contact=None, kind="body", limb="body"),
-           "CMU duck_counter.1 first half (17_10 2129-2166: the duck)")
-    K.clip("weave_counter_hook", cmu("duck_counter.1", rng=(2150, 2197)),
-           "CMU duck_counter.1 second half (rising left hook, contact 2176)")
+    K.clip("weave_duck",
+           layer(mix("Pro_Magic_Pack/Standing Idle To Crouch", (1, 22)),
+                 dict(cmu(take="13_17", rng=(4168, 4216), contact=None, kind="getup", limb="body", fist=75),
+                      face="guard"), mode="sync",
+                 why="the shared `crouch` recipe (Idle To Crouch legs + the 13_17 boxing guard) as a quick duck"),
+           "LAYERED (P2): Pro_Magic Standing Idle To Crouch f1-22 legs (sync) + CMU 13_17 boxing guard arms = a guarded "
+           "duck. Was the CMU duck_counter.1 duck (17_10 2129-2166): bake trace RightHand -0.34 m BEHIND the hips at "
+           "0.55 m, swinging to 0.53 m / 1.65 m by the end (the start of the counter hook) - hands flailing, no guard")
+    K.clip("weave_counter_hook", cmu("duck_counter.1", rng=(2150, 2197), contact=2174, limb="R_hand"),
+           "CMU duck_counter.1 second half: rising RIGHT hook. P2: limb R_hand + contact 2174 - the plan said L_hand "
+           "(catalog) but the bake measured the right hand rising -0.37 -> 0.39 m forward / 0.76 -> 1.71 m up, highest "
+           "and farthest forward at output f5-6 (source 2170-2174); the left hand stays back")
     K.clip("sold_out_flurry",
            seq(dict(cmu(take="14_02", rng=(1550, 1632), contact=1567, mirror=True, kind="hand", limb="L_hand"),
                     contacts=[1567, 1593, 1617]),
-               cmu("uppercut.2"), xf=2,
-               why="14_02 jab 1567 / cross 1593 / jab 1617 is one real combo in the take; + rear uppercut"),
-           "SEQ: CMU 14_02 1550-1632 (jab-cross-jab, mirrored) + uppercut.2")
-    K.clip("intro_shadowbox", cmu(take="14_01", rng=(3030, 3110), contact=3043, kind="hand", limb="L_hand"),
-           "CMU 14_01 3030-3110 (jab 3043, cross 3065, jab 3094): shadow-boxing intro")
+               cmu("uppercut.2", rng=(1559, 1595)),
+               dict(cmu(take="13_17", rng=(4168, 4232), contact=None, kind="getup", limb="body", fist=75), face="guard"),
+               xf=2,
+               why="14_02 jab 1567 / cross 1593 / jab 1617 is one real combo in the take; + rear uppercut; + back to the "
+                   "13_17 guard (the shared idle source) for the 52-frame recovery"),
+           "SEQ: CMU 14_02 1550-1632 (jab-cross-jab, mirrored) + uppercut.2 (window 1559-1595, no phantom left punch) + "
+           "CMU 13_17 4168-4232 boxing guard (P2: the recovery returns to guard instead of holding the uppercut 0.2x)")
+    K.clip("intro_shadowbox", dict(cmu(take="14_01", rng=(3030, 3110), contact=3042, kind="hand", limb="R_hand"),
+                                   contacts=[3042, 3066, 3094]),
+           "CMU 14_01 3030-3110: shadow-boxing intro. P2: limb R_hand + punches 3042 (R) / 3066 (L) / 3094 (R) - the "
+           "plan named the LEFT hand for 3043, but the bake trace shows the right hand out first (0.68 m forward at output "
+           "f3), the left at f9 (0.65 m), the right again at f16 (0.79 m)")
     K.clip("win_arms_up", mix("Pro_Magic_Pack/Standing 2H Cast Spell 01", (1, 66)),
            "Mixamo 2H Cast Spell 01 = play-to-the-crowd arms-up pose (MIXAMO_CLIPS taunts)")
-    K.clip("win_wave", mix("Male_Injured_Pack/injured wave idle", (1, 90)), "Mixamo injured wave idle (waves)")
+    K.clip("win_wave", mix("Pro_Sword_and_Shield_Pack/sword and shield power up", (1, 72)),
+           "P2: Mixamo S&S power up = chest out, head back, roaring at the crowd (usable unarmed, MIXAMO_CLIPS rally "
+           "flex). Was Male_Injured 'injured wave idle' = the research's BEG / tap-out plea: bake trace both hands at "
+           "0.73-0.81 m for f0-15 = hunched over, then a pleading wave - not a winner. The clip id stays `win_wave` so "
+           "the published GLB keeps a valid ref until lane ASSETS re-bakes it (G1 --strict fails on a missing win clip)")
     K.clip("taunt_cocky", mix("Gestures_Pack_Basic/being cocky", (1, 87)), "Mixamo being cocky (shrug)")
 
     # ---------------- normals ----------------
@@ -109,16 +132,23 @@ def build():
     K.add("j.M", "jM", input="j.M", name="Air Cross", clip="air_cross", desc="Long jump-in straight.")
     K.add("j.H", "jH", input="j.H", name="Diving Hammer", clip="air_hammer", desc="Downward hammer fist jump-in.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Clinch Body Shots", clip="throw_reach",
-          grab={"frames": 45, "adv": 21, "hitF": 30, "swap": False, "air": False, "techable": True,
+          grab={"frames": 45, "adv": 21, "hitF": 31, "swap": False, "air": False, "techable": True,
                 "clip": "body_burst",
-                # CHANGED(fixer) D3: the victim doubles over on each body shot (body_burst's punch lands on lock frame
-                # 10, the damage shot on 30) and drops backward on the last one (kd_fall_b from its drop to the floor)
-                # - it used to play the generic lift-and-slam thrown_f under a clinch.
-                "victim": [[0, "hit_body", 0.0, 0.2], [10, "hit_body", 0.0, 0.6], [30, "kd_fall_b", 1.0, 1.8667]]},
+                # P2 paired throw: body_burst's three shots land at clip 0.167 / 0.333 / 0.500 s = lock frames 10 / 20 / 31
+                # (0.733 s over 45 f); the victim folds on each and drops on the last (kd_fall_b from the fall at 1.04 s
+                # to lying at 1.5 s: 14 f at 2x, face up). CHANGED(fixer) D3 had shots on 10 and 30 and the whole 0.87 s
+                # fall squeezed into 15 f (3.7x).
+                "victim": [[0, "hit_body", 0.05, 0.2], [10, "hit_body", 0.1, 0.45], [20, "hit_body", 0.15, 0.5],
+                           [31, "kd_fall_b", 1.04, 1.5]]},
           desc="Clinches and digs three body shots.")
     K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Wide Hook Toss", clip="throw_reach",
-          grab={"frames": 48, "adv": 14, "hitF": 26, "swap": True, "air": False, "techable": True,
-                "clip": "hook_fling"},
+          grab={"frames": 48, "adv": 14, "hitF": 22, "swap": True, "air": False, "techable": True,
+                "clip": "hook_fling",
+                # P2 paired throw: the wide hook passes the front at clip 0.50 s = lock frame 22 (1.10 s over 48 f); the
+                # victim is yanked past (thrown_b's forward dive 0-0.40 s) and the hook flips them down behind him
+                # (0.40 s -> lying face down at 0.67 s -> 1.2 s). thrown_b travels +1.30 m forward (monotonic), the sim
+                # scales it to land behind the thrower.
+                "victim": [[0, "hit_high_s", 0.0, 0.2], [8, "thrown_b", 0.0, 0.4], [22, "thrown_b", 0.4, 1.2]]},
           desc="Pulls them past and hooks them the other way.")
 
     # ---------------- specials ----------------
@@ -203,16 +233,34 @@ def build():
           invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]},
           move=[[0, 0], [10, 1.0]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],
           juggle={"js": 1, "ji": 0, "jl": 99},
-          cinematic={"frames": 170, "cue": "johnny_main_event",
-                     "hits": [[8, 400], [24, 400], [42, 500], [62, 250], [70, 250], [78, 250], [100, 900],
-                              [128, 1550]],
-                     "anim": [[0, "jab"], [16, "cross"], [34, "haymaker"], [56, "body_burst"], [92, "uppercut"],
-                              [114, "air_hammer"], [140, "win_arms_up"]],
-                     "victim": [[0, "hit_high_s"], [16, "hit_high_s"], [34, "hit_high_l"], [56, "hit_body"],
-                                [92, "hit_air"], [118, "kd_fall_b"], [134, "kd_ground_b"]],
-                     "shots": [[0, "side_close"], [34, "punch_in"], [56, "front_low"], [92, "low_angle_up"],
-                               [114, "top_down"], [140, "crowd_pop"], [158, "wide"]],
-                     "endAdv": 19, "endGapM": 2.2},
+          cinematic=lambda: cinematic(
+              170, "johnny_main_event",
+              hits=[[7, 400], [24, 400], [42, 500], [62, 250], [70, 250], [78, 250], [99, 900], [128, 1550]],
+              anim=[K.seg(0, "jab", 16, hit=7), K.seg(16, "cross", 34, hit=24), K.seg(34, "haymaker", 56, hit=42),
+                    K.seg(56, "body_burst", 92, hit=62, rate=1.25), K.seg(92, "uppercut", 114, hit=99),
+                    K.seg(114, "air_hammer", 140, hit=128, rate=0.9), K.seg(140, "win_arms_up", 170, fromS=0.2)],
+              victim=[[0, "hit_high_s", 0.0, 0.25], [7, "hit_high_s", 0.0, 0.3], [24, "hit_high_s", 0.0, 0.35],
+                      [42, "hit_high_l", 0.0, 0.55], [62, "hit_body", 0.0, 0.18], [70, "hit_body", 0.05, 0.25],
+                      [78, "hit_body", 0.05, 0.6], [99, "hit_air", 0.0, 0.6], [128, "kd_fall_b", 1.2, 1.8667],
+                      [150, "kd_ground_b", 0.0, 0.367]],
+              camera=[cam(0, 34, "close", "both", 32, 2.6, 1.45, 18),
+                      cam(34, 56, "close", "defender", [30, 26], [1.9, 1.5], 1.6, 38),
+                      cam(56, 92, "low", "both", 40, 2.8, 0.45, -22, lookH=1.1),
+                      cam(92, 114, "low", "defender", 42, 3.0, 0.3, 28, lookH=1.7),
+                      cam(114, 140, "top", "defender", 40, 1.4, 5.5, 12, lookH=0.6),
+                      cam(140, 158, "close", "attacker", 32, [2.4, 2.0], 1.5, [35, 15]),
+                      cam(158, 170, "wide", "both", 38, 6.0, 1.8, 0)],
+              fx=[(0, "slate"), (7, "impact_s"), (24, "impact_s"), (42, "impact_m"), (42, "shake_s"), (62, "impact_s"),
+                  (70, "impact_s"), (78, "impact_m"), (99, "impact_l"), (99, "speed_lines"), (99, "shake_m"),
+                  (128, "impact_l"), (128, "flash"), (128, "shake_l"), (128, "dust"), (128, "freeze_frame"),
+                  (140, "spot", "attacker"), (158, "spot_off"), (158, "confetti")],
+              crowd=[(7, "ooh"), (42, "gasp"), (78, "cheer", "up"), (99, "roar", "up"), (128, "roar", "spike"),
+                     (144, "cheer", "peak"), (160, "chant")],
+              pathA=[[7, 0.1, 0], [24, 0.2, 0], [42, 0.3, 0], [92, 0.35, 0], [118, 0.55, 0.9], [128, 0.8, 0.3],
+                     [134, 0.85, 0], [150, 0.8, 0], [168, 0, 0]],
+              gapD=[[7, 1.0, 0], [42, 1.1, 0], [62, 1.0, 0], [99, 1.0, 0.15], [114, 1.25, 1.1], [124, 1.15, 1.25],
+                    [131, 1.35, 0], [168, 2.2, 0]],
+              slate="PRIME TIME - JOHNNY RIOT: MAIN EVENT", endPose="back", endAdv=19, endGapM=2.2),
           desc="PRIME TIME: a lunging cross that starts a 170-frame beating.",
           why="1c Lv3: 10/4/58, -42 (blockstun 20), 4500, fully invulnerable 1-13.")
 
@@ -227,11 +275,29 @@ def build():
                 "trait": "HEADLINER JAB: 4-frame 5L (+4 on hit) links into itself; on a punish counter (+8) "
                          "it links into 5M. The only light in the cast that links."}
     K.cine_doc = [
-        "f0 JAB (side_close): Johnny steps in, jab snaps the head back - 400.",
-        "f16 CROSS: straight right - 400. f34 HAYMAKER (punch_in): wide hook, crowd gasps - 500.",
-        "f56 BODY BURST (front_low): three body shots fold them over - 3 x 250.",
-        "f92 UPPERCUT (low_angle_up): launches them - 900.",
-        "f114 DIVING HAMMER (top_down): Johnny leaps and hammers them into the floor - 1550.",
-        "f140 ARMS UP (crowd_pop -> wide): the crowd erupts; opponent lies face-up (KD +19).",
+        "f0 JAB (close, both): Johnny steps in behind the lunging cross; the jab snaps the head back - 400 at f7.",
+        "f16 CROSS - 400 at f24. f34 HAYMAKER (punch-in on the face): the crowd gasps - 500 at f42.",
+        "f56 BODY BURST (low): three body shots at 1.25x fold them over - 3 x 250 (f62 / f70 / f78).",
+        "f92 UPPERCUT (low, looking up): launches them 1.1 m - 900 at f99, speed lines.",
+        "f114 DIVING HAMMER (top-down): Johnny leaps 0.9 m and hammers them into the floor - 1550 at f128: flash, "
+        "freeze-frame, dust; the ratings spike.",
+        "f140 ARMS UP (spotlight on Johnny -> wide, confetti): back on his mark; opponent face up (KD +19) at 2.2 m.",
     ]
+    K.text = dict(
+        introLine="Doors open, lights down - and I'm still the headliner.",
+        winQuotes=["Encore? You couldn't even get through the opening act.",
+                   "Put my name back on that marquee. In lights. Big ones.",
+                   "That's the hit single. You just heard it live."],
+        banter={"boneyard": ["You carved my name off the marquee. I came to carve it back.",
+                             "Keep the cleaver in the freezer, butcher. Tonight it's fists and a full house."],
+                "freak": ["They let you off the chain for one episode. Let's keep it short.",
+                          "Nice claws. I've got a four-frame jab and a contract to honor."],
+                "ricky": ["Thirty seasons, Ricky, and you're the only one who read the fine print.",
+                          "I'm not here for the poster. I'm here for my band's name."],
+                "default": ["Front row paid double tonight. Don't waste their money.",
+                            "Lights up, mic check - you're the warm-up act."]},
+        ending="JOHNNY RIOT walks out of the Control Room with the host's microphone in one hand and the lifetime "
+               "contract in the other. He reads it for the first time, laughs, and feeds it to the confetti cannon. "
+               "The band gets its name back on Monday. On Friday the marquee over the Rust Theater lights up one word, "
+               "in every bulb that still works: RIOT.")
     return K

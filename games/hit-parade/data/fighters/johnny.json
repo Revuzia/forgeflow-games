@@ -391,12 +391,17 @@
       "grab": {
         "frames": 45,
         "adv": 21,
-        "hitF": 30,
+        "hitF": 31,
         "swap": false,
         "air": false,
         "techable": true,
         "clip": "body_burst",
-        "victim": [[0, "hit_body", 0.0, 0.2], [10, "hit_body", 0.0, 0.6], [30, "kd_fall_b", 1.0, 1.8667]]
+        "victim": [
+          [0, "hit_body", 0.05, 0.2],
+          [10, "hit_body", 0.1, 0.45],
+          [20, "hit_body", 0.15, 0.5],
+          [31, "kd_fall_b", 1.04, 1.5]
+        ]
       },
       "role": [],
       "anim": {"clip": "throw_reach"},
@@ -426,7 +431,16 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 48, "adv": 14, "hitF": 26, "swap": true, "air": false, "techable": true, "clip": "hook_fling"},
+      "grab": {
+        "frames": 48,
+        "adv": 14,
+        "hitF": 22,
+        "swap": true,
+        "air": false,
+        "techable": true,
+        "clip": "hook_fling",
+        "victim": [[0, "hit_high_s", 0.0, 0.2], [8, "thrown_b", 0.0, 0.4], [22, "thrown_b", 0.4, 1.2]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Pulls them past and hooks them the other way.",
@@ -1063,7 +1077,7 @@
         {"f": [22, 24], "damage": 950, "hitstop": 20}
       ],
       "role": ["reversal"],
-      "anim": {"clip": "sold_out_flurry", "warp": [[0, 0.0], [8, 0.142], [12, 0.358], [16, 0.558], [22, 0.75], [77, 1.3]]},
+      "anim": {"clip": "sold_out_flurry", "warp": [[0, 0.0], [8, 0.142], [12, 0.358], [16, 0.558], [22, 0.75], [77, 1.4]]},
       "sfx": [[1, "crowd_cheer_burst"]],
       "desc": "Invulnerable jab-cross-jab-uppercut rush.",
       "boxes": [
@@ -1100,34 +1114,168 @@
       "cinematic": {
         "frames": 170,
         "cue": "johnny_main_event",
-        "hits": [[8, 400], [24, 400], [42, 500], [62, 250], [70, 250], [78, 250], [100, 900], [128, 1550]],
+        "hits": [[7, 400], [24, 400], [42, 500], [62, 250], [70, 250], [78, 250], [99, 900], [128, 1550]],
         "anim": [
-          [0, "jab"],
-          [16, "cross"],
-          [34, "haymaker"],
-          [56, "body_burst"],
-          [92, "uppercut"],
-          [114, "air_hammer"],
-          [140, "win_arms_up"]
+          [0, "jab", 0.017, 0.283],
+          [16, "cross", 0.008, 0.308],
+          [34, "haymaker", 0.017, 0.383],
+          [56, "body_burst", 0.042, 0.733],
+          [92, "uppercut", 0.0, 0.3],
+          [114, "air_hammer", 0.007, 0.397],
+          [140, "win_arms_up", 0.2, 0.7]
         ],
         "victim": [
-          [0, "hit_high_s"],
-          [16, "hit_high_s"],
-          [34, "hit_high_l"],
-          [56, "hit_body"],
-          [92, "hit_air"],
-          [118, "kd_fall_b"],
-          [134, "kd_ground_b"]
+          [0, "hit_high_s", 0.0, 0.25],
+          [7, "hit_high_s", 0.0, 0.3],
+          [24, "hit_high_s", 0.0, 0.35],
+          [42, "hit_high_l", 0.0, 0.55],
+          [62, "hit_body", 0.0, 0.18],
+          [70, "hit_body", 0.05, 0.25],
+          [78, "hit_body", 0.05, 0.6],
+          [99, "hit_air", 0.0, 0.6],
+          [128, "kd_fall_b", 1.2, 1.8667],
+          [150, "kd_ground_b", 0.0, 0.367]
         ],
-        "shots": [
-          [0, "side_close"],
-          [34, "punch_in"],
-          [56, "front_low"],
-          [92, "low_angle_up"],
-          [114, "top_down"],
-          [140, "crowd_pop"],
-          [158, "wide"]
+        "shots": [[0, "close"], [34, "close"], [56, "low"], [92, "low"], [114, "top"], [140, "close"], [158, "wide"]],
+        "camera": [
+          {
+            "from": 0,
+            "to": 34,
+            "shot": "close",
+            "target": "both",
+            "fovDeg": 32,
+            "dist": 3.0,
+            "height": 1.45,
+            "yawDeg": 18,
+            "ease": "inOut",
+            "lookH": 1.3
+          },
+          {
+            "from": 34,
+            "to": 56,
+            "shot": "close",
+            "target": "defender",
+            "fovDeg": [30, 26],
+            "dist": [2.5, 2.5],
+            "height": 1.6,
+            "yawDeg": 38,
+            "ease": "inOut",
+            "lookH": 1.45
+          },
+          {
+            "from": 56,
+            "to": 92,
+            "shot": "low",
+            "target": "both",
+            "fovDeg": 40,
+            "dist": 2.8,
+            "height": 0.45,
+            "yawDeg": -22,
+            "ease": "inOut",
+            "lookH": 1.1
+          },
+          {
+            "from": 92,
+            "to": 114,
+            "shot": "low",
+            "target": "defender",
+            "fovDeg": 42,
+            "dist": 3.0,
+            "height": 0.3,
+            "yawDeg": 28,
+            "ease": "inOut",
+            "lookH": 1.7
+          },
+          {
+            "from": 114,
+            "to": 140,
+            "shot": "top",
+            "target": "defender",
+            "fovDeg": 40,
+            "dist": 1.4,
+            "height": 5.5,
+            "yawDeg": 12,
+            "ease": "inOut",
+            "lookH": 0.6
+          },
+          {
+            "from": 140,
+            "to": 158,
+            "shot": "close",
+            "target": "attacker",
+            "fovDeg": 32,
+            "dist": [2.5, 2.5],
+            "height": 1.5,
+            "yawDeg": [35, 15],
+            "ease": "inOut",
+            "lookH": 1.45
+          },
+          {
+            "from": 158,
+            "to": 170,
+            "shot": "wide",
+            "target": "both",
+            "fovDeg": 38,
+            "dist": 6.0,
+            "height": 1.8,
+            "yawDeg": 0,
+            "ease": "inOut",
+            "lookH": 1.1
+          }
         ],
+        "fx": [
+          {"f": 0, "fx": "slate"},
+          {"f": 7, "fx": "impact_s"},
+          {"f": 24, "fx": "impact_s"},
+          {"f": 42, "fx": "impact_m"},
+          {"f": 42, "fx": "shake_s"},
+          {"f": 62, "fx": "impact_s"},
+          {"f": 70, "fx": "impact_s"},
+          {"f": 78, "fx": "impact_m"},
+          {"f": 99, "fx": "impact_l"},
+          {"f": 99, "fx": "speed_lines"},
+          {"f": 99, "fx": "shake_m"},
+          {"f": 128, "fx": "impact_l"},
+          {"f": 128, "fx": "flash"},
+          {"f": 128, "fx": "shake_l"},
+          {"f": 128, "fx": "dust"},
+          {"f": 128, "fx": "freeze_frame"},
+          {"f": 140, "fx": "spot", "target": "attacker"},
+          {"f": 158, "fx": "spot_off"},
+          {"f": 158, "fx": "confetti"}
+        ],
+        "crowd": [
+          {"f": 7, "react": "ooh"},
+          {"f": 42, "react": "gasp"},
+          {"f": 78, "react": "cheer", "ratings": "up"},
+          {"f": 99, "react": "roar", "ratings": "up"},
+          {"f": 128, "react": "roar", "ratings": "spike"},
+          {"f": 144, "react": "cheer", "ratings": "peak"},
+          {"f": 160, "react": "chant"}
+        ],
+        "pathA": [
+          [7, 0.1, 0],
+          [24, 0.2, 0],
+          [42, 0.3, 0],
+          [92, 0.35, 0],
+          [118, 0.55, 0.9],
+          [128, 0.8, 0.3],
+          [134, 0.85, 0],
+          [150, 0.8, 0],
+          [168, 0, 0]
+        ],
+        "gapD": [
+          [7, 1.0, 0],
+          [42, 1.1, 0],
+          [62, 1.0, 0],
+          [99, 1.0, 0.15],
+          [114, 1.25, 1.1],
+          [124, 1.15, 1.25],
+          [131, 1.35, 0],
+          [168, 2.2, 0]
+        ],
+        "slate": "PRIME TIME - JOHNNY RIOT: MAIN EVENT",
+        "endPose": "back",
         "endAdv": 19,
         "endGapM": 2.2
       },
@@ -1172,5 +1320,14 @@
     "combo": ["2L", "5M", "hook_m"],
     "zoning": ["brickbat_m"],
     "meter": "sold_out"
-  }
+  },
+  "introLine": "Doors open, lights down - and I'm still the headliner.",
+  "winQuotes": ["Encore? You couldn't even get through the opening act.", "Put my name back on that marquee. In lights. Big ones.", "That's the hit single. You just heard it live."],
+  "banter": {
+    "boneyard": ["You carved my name off the marquee. I came to carve it back.", "Keep the cleaver in the freezer, butcher. Tonight it's fists and a full house."],
+    "freak": ["They let you off the chain for one episode. Let's keep it short.", "Nice claws. I've got a four-frame jab and a contract to honor."],
+    "ricky": ["Thirty seasons, Ricky, and you're the only one who read the fine print.", "I'm not here for the poster. I'm here for my band's name."],
+    "default": ["Front row paid double tonight. Don't waste their money.", "Lights up, mic check - you're the warm-up act."]
+  },
+  "ending": "JOHNNY RIOT walks out of the Control Room with the host's microphone in one hand and the lifetime contract in the other. He reads it for the first time, laughs, and feeds it to the confetti cannon. The band gets its name back on Monday. On Friday the marquee over the Rust Theater lights up one word, in every bulb that still works: RIOT."
 }

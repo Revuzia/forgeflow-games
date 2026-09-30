@@ -266,16 +266,22 @@ html.hp-noflash .hp-call { animation: hp-call-fade 1.5s linear both; }
 .hpb-strap .s { font: 400 max(12px, calc(var(--u) * 1.25)) / 1.1 var(--f-cond); letter-spacing: .06em; }
 .hpb-strap .s:empty { display: none; }
 
-.hpb-cap { position: absolute; left: 50%; bottom: calc(var(--u) * 6.8); width: min(calc(var(--u) * 52), 72%); display: flex; align-items: center; gap: calc(var(--u) * .9); opacity: 0; transform: translateX(-50%); }
+/* CHANGED(UI) P2 (verifier D6): the host caption is a one-line TICKER in the top band between the show bug and SCORE -
+   the band the fight camera keeps clear (Hud.safeTop) - instead of a lower third over the fighters' feet. broadcast.ts
+   shrinks a long line to fit (never below 12 px) before it ellipsizes. */
+.hpb-cap {
+  position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + var(--u) * .9); height: calc(var(--u) * 2.3); min-height: 24px;
+  width: min(calc(var(--u) * 50), calc(100% - var(--u) * 62)); display: flex; align-items: stretch; gap: 0; opacity: 0; transform: translateX(-50%);
+  filter: drop-shadow(var(--shadow));
+}
 .hpb-cap.on { opacity: 1; }
-.hpb-cap .who { flex: none; display: grid; place-items: center; width: calc(var(--u) * 4.4); height: calc(var(--u) * 4.4); border-radius: 50%; background: var(--hp-red); border: var(--line) solid var(--hp-ink); box-shadow: var(--shadow); color: var(--hp-yellow); }
-.hpb-cap .who .hp-ico { width: 58%; height: 58%; }
-.hpb-cap .card { position: relative; flex: 1; min-width: 0; padding: calc(var(--u) * .5) calc(var(--u) * 1.1) calc(var(--u) * .7); background: var(--hp-paper); color: var(--hp-ink); border: var(--line) solid var(--hp-ink); box-shadow: var(--shadow); transform: skewX(-6deg); border-radius: calc(var(--u) * .4); }
-.hpb-cap .card > * { transform: skewX(6deg); }
-.hpb-cap .card::before { content: ''; position: absolute; left: calc(var(--u) * -1.1); top: 42%; border: calc(var(--u) * .55) solid transparent; border-right: calc(var(--u) * .7) solid var(--hp-ink); }
-.hpb-cap .nm { display: flex; gap: .5em; align-items: baseline; font: 400 max(12px, calc(var(--u) * .95)) / 1.2 var(--f-display); color: var(--hp-red-dk); }
-.hpb-cap .nm span { font-family: var(--f-cond); letter-spacing: .1em; color: var(--hp-ink); opacity: .7; }
-.hpb-cap .tx { font: 400 max(14px, calc(var(--u) * 1.55)) / 1.2 var(--f-comic); }
+.hpb-cap .who { flex: none; display: grid; place-items: center; aspect-ratio: 1; height: 100%; background: var(--hp-red); border: var(--line) solid var(--hp-ink); color: var(--hp-yellow); transform: skewX(-12deg); z-index: 1; }
+.hpb-cap .who .hp-ico { width: 64%; height: 64%; transform: skewX(12deg); }
+.hpb-cap .card { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: .55em; margin-left: calc(var(--u) * -.2); padding: 0 calc(var(--u) * 1); background: var(--hp-paper); color: var(--hp-ink); border: var(--line) solid var(--hp-ink); transform: skewX(-12deg); }
+.hpb-cap .card > * { transform: skewX(12deg); }
+.hpb-cap .nm { flex: none; display: flex; gap: .4em; align-items: baseline; font: 400 max(12px, calc(var(--u) * .9)) / 1 var(--f-display); color: var(--hp-red-dk); white-space: nowrap; }
+.hpb-cap .nm span { display: none; }
+.hpb-cap .tx { flex: 1; min-width: 0; font: 400 max(13px, calc(var(--u) * 1.3)) / 1.1 var(--f-comic); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* the episode / card slate: a freeze-frame over the paused game (modal, press any button) */
 .hpb-slate { position: absolute; inset: 0; pointer-events: auto; display: none; }
@@ -342,14 +348,16 @@ html.hp-touch .hp-calls .hp-call:nth-child(n + 3) { display: none; }
 /* P2's combo + callouts stop left of the button arc (its THROW / IMPACT column starts 270 px in from the right edge) */
 html.hp-touch .hp-combo.p2, html.hp-touch .hp-calls.p2 { right: calc(env(safe-area-inset-right, 0px) + 278px); }
 /* the host caption becomes a subtitle between the stick's home and the ASSIST chip; the strap sits under P1's bars */
+/* touch (no top bug row): a one-line subtitle on the bottom edge, BELOW the floor line the fighters stand on (measured at
+   844x390, closest camera: feet end ~352 px, the strip starts at 364 px), between the stick's home and the ASSIST chip */
 html.hp-touch .hpb-cap {
-  top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 6px); transform: none;
+  top: auto; bottom: max(2px, calc(env(safe-area-inset-bottom, 0px) - 14px)); transform: none; height: 24px; min-height: 0;
   left: calc(env(safe-area-inset-left, 0px) + 200px); right: calc(env(safe-area-inset-right, 0px) + 352px); width: auto; max-width: 520px; gap: 6px;
 }
 html.hp-touch .hpb-cap .who { display: none; }
-html.hp-touch .hpb-cap .card { padding: 4px 10px 6px; }
-html.hp-touch .hpb-cap .card::before { display: none; }
-html.hp-touch .hpb-cap .tx { font-size: 14px; }
+html.hp-touch .hpb-cap .card { padding: 0 10px; margin-left: 0; }
+html.hp-touch .hpb-cap .nm { display: none; }
+html.hp-touch .hpb-cap .tx { font-size: 14px; line-height: 1; }
 html.hp-touch .hpb-strap { bottom: auto; top: 74px; left: calc(env(safe-area-inset-left, 0px) + 8px); }
 html.hp-touch .hpb-strap .s { display: none; }
 html.hp-touch .hpb-strap .t { font-size: 14px; }
@@ -376,5 +384,29 @@ html.hp-touch .hp-inputs .row:nth-child(n + 9) { display: none; }
 /* phone landscape without the touch class (a small desktop window): the same compact band */
 @media (max-height: 500px) {
   .hp-show .lbl { display: none; }
-  .hpb-cap { bottom: calc(var(--u) * 7.5); }
 }
+
+/* ─────────────────────────── CHANGED(UI) P2 ─────────────────────────── */
+/* training HITBOX overlay (ui/trainer.ts -> Hud.setBoxes): drawn under the HUD blocks */
+.hp-boxes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+.hp-boxes[hidden] { display: none; }
+.hp-hud .hp-frame { z-index: 1; }
+/* BRAWL BREAK / HECKLER TOSS (CONTRACT 28.4): fighter 1 is absent - its side gives way to the bonus panel */
+.hp-hud.bonus .hp-side.p2, .hp-hud.bonus .hp-show.p2, .hp-hud.bonus .hp-combo.p2, .hp-hud.bonus .hp-calls.p2, .hp-hud.bonus .hp-pips { visibility: hidden; }
+.hp-bonus { position: absolute; top: calc(var(--u) * 3.8); right: calc(var(--u) * 1.2); width: calc(50% - var(--u) * 6); display: grid; justify-items: end; gap: calc(var(--u) * .45); }
+.hp-bonus[hidden] { display: none; }
+.hp-bonus .band { display: flex; align-items: baseline; gap: calc(var(--u) * .7); }
+.hp-bonus .band .lbl { font: 400 max(12px, calc(var(--u) * 1.05)) / 1 var(--f-display); color: var(--hp-yellow); text-shadow: .1em .1em 0 var(--hp-ink); }
+.hp-bonus .mult { padding: 0 .3em; font: 400 max(20px, calc(var(--u) * 3)) / 1 var(--f-digits); color: var(--hp-ink); background: var(--hp-yellow); border: var(--line) solid var(--hp-ink); box-shadow: var(--shadow); transform: skewX(-12deg); }
+.hp-bonus[data-grade="5"] .mult, .hp-bonus[data-grade="6"] .mult { background: var(--hp-pink); color: #fff; }
+.hp-bonus .segs { display: flex; gap: calc(var(--u) * .3); transform: skewX(22deg); }
+.hp-bonus .segs i { width: calc(var(--u) * 3.6); height: calc(var(--u) * 1.1); background: rgba(11, 11, 16, .8); border: var(--line) solid var(--hp-ink); }
+.hp-bonus .segs i.on { background: linear-gradient(90deg, var(--hp-yellow-2), var(--hp-yellow)); }
+.hp-bonus .segs i.on:nth-child(n + 5) { background: linear-gradient(90deg, var(--hp-pink), var(--hp-yellow)); }
+.hp-bonus .stats { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: calc(var(--u) * .5); }
+.hp-bonus .kv { display: inline-flex; align-items: baseline; gap: .45em; padding: .15em .55em; background: rgba(11, 11, 16, .78); border: max(1.5px, calc(var(--u) * .14)) solid var(--hp-ink); font: 400 max(12px, calc(var(--u) * 1)) / 1.1 var(--f-cond); letter-spacing: .08em; }
+.hp-bonus .kv b { font: 400 max(13px, calc(var(--u) * 1.3)) / 1 var(--f-digits); color: var(--hp-yellow); }
+.hp-bonus .combo { padding: .15em .55em; background: var(--hp-red); border: max(1.5px, calc(var(--u) * .14)) solid var(--hp-ink); font: 400 max(12px, calc(var(--u) * 1.1)) / 1.1 var(--f-display); color: #fff; }
+html.hp-touch .hp-bonus { top: calc(env(safe-area-inset-top, 0px) + var(--u) * .6); right: calc(env(safe-area-inset-right, 0px) + var(--u) * .8); }
+/* boss phase 2 callout */
+.hp-call[data-k="phase2"] { background: var(--hp-red-dk); color: var(--hp-yellow); font-size: max(14px, calc(var(--u) * 1.7)); }

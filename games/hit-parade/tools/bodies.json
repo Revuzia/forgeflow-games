@@ -1,24 +1,153 @@
 {
-  "_doc": [
-    "Body registry for tools/build_fighters.py (lane ASSETS). fbx is relative to the Mixamo characters folder.",
-    "heightM is the DEFAULT normalised rest height (top of hair to sole); data/fighters/<id>.json heightM (lane FIGHTERS) overrides it when present.",
-    "hide = regexes of prop meshes removed before export (CONTRACT 5.4). Heights: _research/characters/ROSTER.md target heights where it has one; otherwise a designed value marked 'assumed'."
-  ],
-  "characters_root": "F:/games/forgeflow-games-assets/_downloaded/mixamo/characters",
-  "bodies": {
-    "johnny":   {"fbx": "Ch42_nonPBR.fbx", "heightM": 1.80, "hide": []},
-    "patch":    {"fbx": "Eve By J.Gonzales.fbx", "heightM": 1.72, "hide": []},
-    "bruno":    {"fbx": "Brute.fbx", "heightM": 2.00, "hide": ["^BattleAxe_GEO$"]},
-    "zambini":  {"fbx": "Whiteclown N Hallin.fbx", "heightM": 1.85, "hide": []},
-    "krane":    {"fbx": "Swat.fbx", "heightM": 1.82, "hide": []},
-    "lotus":    {"fbx": "Kachujin G Rosales.fbx", "heightM": 1.75, "hide": ["bow"], "note": "heightM assumed"},
-    "boneyard": {"fbx": "Ch05_nonPBR.fbx", "heightM": 1.90, "hide": []},
-    "spin":     {"fbx": "Ch06_nonPBR.fbx", "heightM": 1.78, "hide": [], "note": "heightM assumed"},
-    "gazza":    {"fbx": "Ch08_nonPBR.fbx", "heightM": 1.80, "hide": []},
-    "rerun":    {"fbx": "Prisoner B Styperek.fbx", "heightM": 1.80, "hide": []},
-    "freak":    {"fbx": "Mutant.fbx", "heightM": 2.40, "hide": []},
-    "ricky":    {"fbx": "Ch40_nonPBR.fbx", "heightM": 1.90, "hide": []}
+ "_doc": [
+  "Body registry for tools/build_fighters.py (lane ASSETS). fbx is relative to the Mixamo characters folder.",
+  "heightM is the DEFAULT normalised rest height (top of hair to sole); data/fighters/<id>.json heightM (lane FIGHTERS) overrides it when present.",
+  "hide = regexes of prop meshes removed before export (CONTRACT 5.4). Heights: _research/characters/ROSTER.md target heights where it has one; otherwise a designed value marked 'assumed'.",
+  "goon_* bodies (BRAWL BREAK studio goons, CONTRACT 4.3.14 / CHANGED(ASSETS) goons): built with `tools/build_fighters.py --goons` (not part of --all), clip plan = _shared.json + tools/clipplan/_goons.json (+ its _override.<id>), budgetMB = the per-GLB size gate, repaint = texture edits applied by tools/goon_repaint.py before the atlas bake (the printed POLICE / SWAT on Ch35 become the show's K13 SECURITY lettering)."
+ ],
+ "characters_root": "F:/games/forgeflow-games-assets/_downloaded/mixamo/characters",
+ "bodies": {
+  "johnny": {
+   "fbx": "Ch42_nonPBR.fbx",
+   "heightM": 1.8,
+   "hide": []
   },
-  "xbot_fbx": "F:/games/forgeflow-games-assets/_downloaded/mixamo/animations/Pro_Melee_Axe_Pack/X Bot.fbx",
-  "mixamo_root": "F:/games/forgeflow-games-assets/_downloaded/mixamo/animations"
+  "patch": {
+   "fbx": "Eve By J.Gonzales.fbx",
+   "heightM": 1.72,
+   "hide": []
+  },
+  "bruno": {
+   "fbx": "Brute.fbx",
+   "heightM": 2.0,
+   "hide": [
+    "^BattleAxe_GEO$"
+   ]
+  },
+  "zambini": {
+   "fbx": "Whiteclown N Hallin.fbx",
+   "heightM": 1.85,
+   "hide": []
+  },
+  "krane": {
+   "fbx": "Swat.fbx",
+   "heightM": 1.82,
+   "hide": []
+  },
+  "lotus": {
+   "fbx": "Kachujin G Rosales.fbx",
+   "heightM": 1.75,
+   "hide": [
+    "bow"
+   ],
+   "note": "heightM assumed"
+  },
+  "boneyard": {
+   "fbx": "Ch05_nonPBR.fbx",
+   "heightM": 1.9,
+   "hide": []
+  },
+  "spin": {
+   "fbx": "Ch06_nonPBR.fbx",
+   "heightM": 1.78,
+   "hide": [],
+   "note": "heightM assumed"
+  },
+  "gazza": {
+   "fbx": "Ch08_nonPBR.fbx",
+   "heightM": 1.8,
+   "hide": []
+  },
+  "rerun": {
+   "fbx": "Prisoner B Styperek.fbx",
+   "heightM": 1.8,
+   "hide": []
+  },
+  "freak": {
+   "fbx": "Mutant.fbx",
+   "heightM": 2.4,
+   "hide": []
+  },
+  "ricky": {
+   "fbx": "Ch40_nonPBR.fbx",
+   "heightM": 1.9,
+   "hide": []
+  },
+  "goon_hardhat": {
+   "fbx": "Ch17_nonPBR.fbx",
+   "heightM": 1.95,
+   "hide": [],
+   "goon": true,
+   "budgetMB": 1.5,
+   "note": "research ROSTER enemy #3 Hardhat (bruiser): white hard hat, hi-vis vest; 1.95 m per the research table; decimate 0.72: the first bake (53,738 tris) compressed to 1,555,032 B > the 1.5 MB goon budget",
+   "decimate": 0.72
+  },
+  "goon_security": {
+   "fbx": "Ch35_nonPBR.fbx",
+   "heightM": 1.85,
+   "hide": [],
+   "goon": true,
+   "budgetMB": 1.5,
+   "note": "research ROSTER enemy #5 Riot Gas (show security): gas mask + helmet; printed POLICE/SWAT repainted",
+   "repaint": {
+    "seed": 1335,
+    "images": {
+     "ch35_1001_diffuse": [
+      {
+       "rect": [
+        520,
+        1555,
+        1232,
+        1930
+       ],
+       "donor": [
+        0,
+        -360
+       ],
+       "text": "SECURITY",
+       "rot": 180,
+       "font": "bebas",
+       "why": "back print SWAT (upside down in UV space)"
+      },
+      {
+       "rect": [
+        466,
+        2778,
+        798,
+        2902
+       ],
+       "donor": null,
+       "text": "K13 SECURITY",
+       "rot": 0,
+       "font": "russo",
+       "why": "chest patch POLICE"
+      },
+      {
+       "rect": [
+        3760,
+        2762,
+        3897,
+        2955
+       ],
+       "donor": null,
+       "text": "K13",
+       "rot": -90,
+       "font": "russo",
+       "why": "shoulder patch SWAT (vertical)"
+      }
+     ]
+    }
+   }
+  },
+  "goon_medic": {
+   "fbx": "Ch16_nonPBR.fbx",
+   "heightM": 1.78,
+   "hide": [],
+   "goon": true,
+   "budgetMB": 1.5,
+   "note": "research ROSTER enemy #7 Scrub (show medic): cyan scrubs, cap, mask"
+  }
+ },
+ "xbot_fbx": "F:/games/forgeflow-games-assets/_downloaded/mixamo/animations/Pro_Melee_Axe_Pack/X Bot.fbx",
+ "mixamo_root": "F:/games/forgeflow-games-assets/_downloaded/mixamo/animations"
 }

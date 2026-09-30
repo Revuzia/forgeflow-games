@@ -21,6 +21,8 @@ export interface ViewFighterSnap {
   flags?: { invuln?: Flag; armor?: Flag; counter?: Flag; stance?: number | boolean; taunting?: Flag; ko?: Flag };
   airborne?: boolean; crouching?: boolean;
   moveName?: string; moveKind?: string;
+  /** P2: frames into the current move (prop show / hide rules) */
+  moveFrame?: number;
 }
 
 /** CONTRACT §4.6 MatchSnap (+ §19.7), the fields the view reads. */
@@ -32,11 +34,26 @@ export interface ViewMatchSnap {
   winner?: number;
   slowmo?: boolean | number;
   freeze?: boolean | number;
-  /** optional projectile list (the view draws what is there; CONTRACT §17.1) */
+  /** optional projectile list (the view draws what is there; CONTRACT §17.1 / §24.10) */
   proj?: ReadonlyArray<ViewProjectile>;
+  /** P2 BRAWL BREAK / HECKLER TOSS (CONTRACT §28.4 MatchSnap.brawl) */
+  brawl?: { mode?: string; score?: number; goons?: ReadonlyArray<ViewGoon> };
 }
 
-export interface ViewProjectile { slot: number; owner: number; x: number; y: number; vx?: number; moveId?: number; alive?: boolean | number }
+/** kind 0 projectile, 1 ball, 2 heckle object (§24.10) */
+export interface ViewProjectile { slot: number; owner: number; x: number; y: number; vx?: number; vy?: number; moveId?: number; kind?: number; alive?: boolean | number; obj?: number | string }
+
+/** CONTRACT §28.4 GoonSnap: a BRAWL BREAK goon as the view reads it (every field but slot / x optional) */
+export interface ViewGoon {
+  slot: number; x: number; y?: number; facing?: number;
+  /** goon body id ('goon_hardhat' ... = lane ASSETS' goon_* GLB) */
+  kind?: number | string; kindIdx?: number;
+  animId?: number; animFrame?: number; prevAnimId?: number; prevAnimFrame?: number; blendT?: number;
+  /** a shared clip name when a pose is reported by name (lab) */
+  clip?: string; clipFrame?: number;
+  hp?: number; hpMax?: number; hitstop?: number; state?: number | string; stateName?: string; telegraph?: boolean; moveName?: string;
+  alive?: boolean | number; down?: boolean | number;
+}
 
 /** CONTRACT §4.1 MatchCfg, the fields the view reads. */
 export interface ViewMatchCfg {
@@ -48,16 +65,24 @@ export interface ViewMatchCfg {
 /** CONTRACT §5.2 Move, the fields the view reads. */
 export interface ViewMove {
   kind?: string;
+  name?: string;
   startup?: number; active?: number; recovery?: number;
   anim?: { clip: string; warp?: ReadonlyArray<ReadonlyArray<number>> };
-  cinematic?: { frames: number; cue?: string };
-  projectile?: { clip?: string; strength?: string };
+  /** §5.2 + §20.2 extras (anim / victim / shots / fx timelines) - view/prime.ts reads them */
+  cinematic?: {
+    frames: number; cue?: string; hits?: ReadonlyArray<ReadonlyArray<number>>;
+    anim?: ReadonlyArray<ReadonlyArray<number | string>>; victim?: ReadonlyArray<ReadonlyArray<number | string>>;
+    shots?: ReadonlyArray<ReadonlyArray<number | string>>; fx?: ReadonlyArray<ReadonlyArray<number | string>>;
+    ratings?: number | ReadonlyArray<number>; endGapM?: number;
+  };
+  projectile?: { clip?: string; strength?: string; speed?: number; life?: number; box?: ReadonlyArray<number>; y?: number; ground?: boolean; vy?: number; g?: number; hits?: number };
   strength?: string;
 }
 
 /** CONTRACT §5.2 fighter file, the fields the view reads. `toon` is an optional VIEW-read override. */
 export interface ViewFighterDef {
   id?: string;
+  name?: string;
   body?: string;
   heightM?: number;
   colors?: ReadonlyArray<{ name?: string; tint?: string | null }>;
@@ -69,7 +94,7 @@ export interface ViewFighterDef {
 }
 
 /** CONTRACT §6.3 per-clip facts (clips.json); the view needs dur and loop. */
-export interface ViewClipFacts { dur: number; frames?: number; contact?: number | null; loop?: boolean }
+export interface ViewClipFacts { dur: number; frames?: number; contact?: number | null; loop?: boolean; marks?: Record<string, number>; apexY?: number | null }
 
 /** CONTRACT §17 rule 2 anim table entry. */
 export interface AnimRef { clip: string; warp: ReadonlyArray<ReadonlyArray<number>> | null; loop: boolean; moveId: number }
@@ -81,6 +106,10 @@ export interface ViewGameData {
   stages?: unknown;
   system?: unknown;
   anims?: Readonly<Record<string, ReadonlyArray<AnimRef>>>;
+  /** data/strings.json (the slate reads `hud.combo.prime`) */
+  strings?: Readonly<Record<string, string>>;
+  /** §28.4 goon anim tables per goon id (34 shared + the goon moves) */
+  goonAnims?: Readonly<Record<string, ReadonlyArray<AnimRef>>>;
 }
 
 /** CONTRACT §17.1 view settings (SHELL maps the player settings onto it, §18.7). Every field optional. */

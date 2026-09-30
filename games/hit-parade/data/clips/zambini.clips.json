@@ -5701,7 +5701,7 @@
    "apexY": null,
    "loop": false,
    "marks": {
-    "slam": 0.7333
+    "slam": 0.4333
    }
   },
   "parry": {
@@ -6442,7 +6442,7 @@
    "apexY": null,
    "loop": false,
    "marks": {
-    "slam": 0.9667
+    "slam": 0.6333
    }
   },
   "taunt_twirl": {

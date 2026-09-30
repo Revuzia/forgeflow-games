@@ -26,7 +26,11 @@ const FORCE_TOY = flag('--toy');
 const DEPTH = opt('--depth', 8);
 
 // ---- sims -------------------------------------------------------------------------------------------
-interface Maker { kind: 'real' | 'toy'; fighters: string[]; make(p1: string, p2: string, seed: number): SimPort; note: string }
+interface Maker {
+  kind: 'real' | 'toy'; fighters: string[]; make(p1: string, p2: string, seed: number): SimPort; note: string;
+  // CHANGED(SIM) P2 (CONTRACT §28.6): unique-heavy streams + bonus rounds (real sim only)
+  makeCfg?(p1: string, p2: string, seed: number, mode: string, s1: 0 | 1, s2: 0 | 1): SimPort;
+}
 
 function firstStage(stages: unknown): string {
   if (Array.isArray(stages)) { const s = stages[0] as { id?: string } | string; return typeof s === 'string' ? s : String(s?.id ?? 'rust_theater'); }
@@ -64,6 +68,11 @@ async function realMaker(): Promise<Maker | { error: string } | null> {
       make(p1: string, p2: string, seed: number): SimPort {
         const m = Mm.createMatch({ mode: 'online', stage, seed, p: [
           { fighter: p1, color: 0, scheme: 0, cpu: -1 }, { fighter: p2, color: 1, scheme: 1, cpu: -1 }] }, data);
+        return Pm.matchPort(m);
+      },
+      makeCfg(p1: string, p2: string, seed: number, mode: string, s1: 0 | 1, s2: 0 | 1): SimPort {
+        const m = Mm.createMatch({ mode, stage, seed, p: [
+          { fighter: p1, color: 0, scheme: s1, cpu: -1 }, { fighter: p2, color: 1, scheme: s2, cpu: -1 }] }, data);
         return Pm.matchPort(m);
       },
     };
@@ -117,17 +126,50 @@ async function main(): Promise<number> {
       }
     }
   }
+  // CHANGED(SIM) P2 (CONTRACT §28.6): unique-heavy streams on every pair (CLASSIC P1 / SIMPLE P2: charge holds, 360, half
+  // circles, 22, 214 + follow-ups, supers) and bonus rounds (BRAWL BREAK / HECKLER TOSS) for every fighter
+  let uRuns = 0, uChecks = 0, uMis = 0, bRuns = 0, bChecks = 0, bMis = 0;
+  let uFirst: unknown = null;
+  if (mk.kind === 'real' && mk.makeCfg) {
+    const Fx = await import(pathToFileURL(resolve(ROOT, '_harness/fixtures/simkit.ts')).href);
+    const UF = opt('--uframes', 600);
+    for (const p1 of mk.fighters) {
+      for (const p2 of mk.fighters) {
+        const sim = mk.makeCfg(p1, p2, 11, 'versus', 1, 0);
+        const a = Fx.uniqueInputs(97 + uRuns * 7, IN.R, UF) as Int32Array;
+        const b = Fx.uniqueInputs(131 + uRuns * 13, IN.L, UF) as Int32Array;
+        const r = runSyncTest(sim, UF, (f, out) => { out[0] = a[f]; out[1] = b[f]; }, DEPTH);
+        uRuns++; uChecks += r.checks; uMis += r.mismatches;
+        if (r.mismatches && !uFirst) uFirst = { p1, p2, ...r.first };
+      }
+    }
+    const BF = opt('--bframes', 1500);
+    for (const p1 of mk.fighters) {
+      for (const mode of ['brawl', 'heckler']) {
+        const sim = mk.makeCfg(p1, p1, 5 + bRuns, mode, 0, 0);
+        const a = Fx.uniqueInputs(211 + bRuns * 17, IN.R, BF) as Int32Array;
+        const r = runSyncTest(sim, BF, (f, out) => { out[0] = a[f]; out[1] = 0; }, DEPTH);
+        bRuns++; bChecks += r.checks; bMis += r.mismatches;
+        if (r.mismatches && !uFirst) uFirst = { p1, mode, ...r.first };
+      }
+    }
+  }
+  checks += uChecks + bChecks;
+  mismatches += uMis + bMis;
+  if (!first && uFirst) first = uFirst;
   // negative control: hidden state must be caught
   const leak = runPair(toyMaker(true), 'toy', 'toy', 3, 1200);
   const controlOk = leak.mismatches > 0;
   Object.assign(report, { sim: mk.kind, note: mk.note, fighters: mk.fighters, frames, seeds, runs: pairs, checks, steps, mismatches, first,
+    uniques: { runs: uRuns, checks: uChecks, mismatches: uMis }, bonus: { runs: bRuns, checks: bChecks, mismatches: bMis },
     stepUsAvg: steps ? Math.round((ms * 1000 / steps) * 100) / 100 : 0, control: { leakyMismatches: leak.mismatches, first: leak.first }, rows });
   write(report);
   const pass = mismatches === 0 && checks > 0 && controlOk;
   const why = mismatches ? ` FIRST ${JSON.stringify(first)}` : !controlOk ? ' negative control (leaky sim) was NOT caught' : '';
   console.log(`${pass ? 'PASS' : 'FAIL'} probe_synctest sim=${mk.kind}${mk.kind === 'toy' ? ' (core/sim/match.ts absent)' : ' [' + mk.note + ']'} runs=${pairs} ` +
     `(${mk.fighters.length}x${mk.fighters.length} pairs x ${seeds} seeds x ${frames} f) rollback 1..${DEPTH} every frame: ` +
-    `checks=${checks} mismatches=${mismatches}; leaky control mismatches=${leak.mismatches}${why}`);
+    `checks=${checks} mismatches=${mismatches}; leaky control mismatches=${leak.mismatches}` +
+    (uRuns ? `; +uniques ${uRuns} pairs (${uChecks} checks, ${uMis} mismatches) +bonus ${bRuns} runs (${bChecks} checks, ${bMis} mismatches)` : '') + why);
   return pass ? 0 : 1;
 }
 

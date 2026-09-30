@@ -109,7 +109,7 @@
   "uppercut": {
     "src": "cmu",
     "file": "17_10",
-    "range": [1559, 1637],
+    "range": [1559, 1595],
     "contact": 1573,
     "mirror": false,
     "speed": 1.0,
@@ -293,7 +293,7 @@
     "kind": "hand",
     "limb": "R_hand",
     "fist": 80,
-    "marks": {"slam": 3284}
+    "marks": {"slam": 3286}
   },
   "hook_fling": {
     "src": "cmu",
@@ -307,7 +307,7 @@
     "limb": "L_hand",
     "fist": 80,
     "_cand": "hook.4",
-    "marks": {"slam": 2928}
+    "marks": {"slam": 2918}
   },
   "brick_throw": {
     "src": "mixamo",
@@ -327,13 +327,13 @@
         "range": [15, 45],
         "contact": null,
         "mirror": false,
-        "speed": 1.5,
+        "speed": 3.333333,
         "loop": false
       },
       "upper": {
         "src": "cmu",
         "file": "17_10",
-        "range": [1559, 1637],
+        "range": [1559, 1595],
         "contact": 1573,
         "mirror": false,
         "speed": 1.0,
@@ -346,9 +346,9 @@
       "split": "Spine",
       "lowerMode": "sync"
     },
-    "_upperFrames": 21,
+    "_upperFrames": 10,
     "_upperContact": 1573,
-    "contact": 20.25,
+    "contact": 26.6667,
     "_why": "jump legs (take-off to apex f28) time-scaled under the CMU rear uppercut",
     "air": "strip"
   },
@@ -386,27 +386,48 @@
     "_why": "running legs loop under the fastest CMU hook (11.7 m/s)"
   },
   "weave_duck": {
-    "src": "cmu",
-    "file": "17_10",
-    "range": [2129, 2166],
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Idle To Crouch",
+        "range": [1, 22],
+        "contact": null,
+        "mirror": false,
+        "speed": 1.75,
+        "loop": false
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "13_17",
+        "range": [4168, 4216],
+        "contact": null,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "getup",
+        "limb": "body",
+        "fist": 75,
+        "face": "guard"
+      },
+      "split": "Spine",
+      "lowerMode": "sync"
+    },
+    "_upperFrames": 13,
+    "_upperContact": null,
     "contact": null,
-    "mirror": false,
-    "speed": 1.0,
-    "loop": false,
-    "kind": "body",
-    "limb": "body",
-    "fist": 0
+    "_why": "the shared `crouch` recipe (Idle To Crouch legs + the 13_17 boxing guard) as a quick duck"
   },
   "weave_counter_hook": {
     "src": "cmu",
     "file": "17_10",
     "range": [2150, 2197],
-    "contact": 2176,
+    "contact": 2174,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
     "kind": "hand",
-    "limb": "L_hand",
+    "limb": "R_hand",
     "fist": 80,
     "_cand": "duck_counter.1"
   },
@@ -430,7 +451,7 @@
       {
         "src": "cmu",
         "file": "17_10",
-        "range": [1559, 1637],
+        "range": [1559, 1595],
         "contact": 1573,
         "mirror": false,
         "speed": 1.0,
@@ -439,23 +460,38 @@
         "limb": "R_hand",
         "fist": 80,
         "_cand": "uppercut.2"
+      },
+      {
+        "src": "cmu",
+        "file": "13_17",
+        "range": [4168, 4232],
+        "contact": null,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "getup",
+        "limb": "body",
+        "fist": 75,
+        "face": "guard"
       }
     ],
     "xf": 2,
     "contact": 1567,
-    "_why": "14_02 jab 1567 / cross 1593 / jab 1617 is one real combo in the take; + rear uppercut"
+    "_why": "14_02 jab 1567 / cross 1593 / jab 1617 is one real combo in the take; + rear uppercut; + back to the 13_17 guard (the shared idle source) for the 52-frame recovery"
   },
   "intro_shadowbox": {
     "src": "cmu",
     "file": "14_01",
     "range": [3030, 3110],
-    "contact": 3043,
+    "contact": 3042,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
     "kind": "hand",
-    "limb": "L_hand",
-    "fist": 80
+    "limb": "R_hand",
+    "fist": 80,
+    "contacts": [3042, 3066, 3094],
+    "marks": {"hit1": 3042, "hit2": 3066, "hit3": 3094}
   },
   "win_arms_up": {
     "src": "mixamo",
@@ -468,8 +504,8 @@
   },
   "win_wave": {
     "src": "mixamo",
-    "file": "Male_Injured_Pack/injured wave idle",
-    "range": [1, 90],
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield power up",
+    "range": [1, 72],
     "contact": null,
     "mirror": false,
     "speed": 1.0,

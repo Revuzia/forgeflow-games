@@ -253,7 +253,8 @@
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 77}
+    "contacts": [30, 60, 80],
+    "marks": {"hit1": 30, "hit2": 60, "hit3": 80, "slam": 80}
   },
   "over_shoulder": {
     "src": "mixamo",
@@ -263,7 +264,7 @@
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 33}
+    "marks": {"slam": 31}
   },
   "meat_hook_swing": {
     "src": "mixamo",

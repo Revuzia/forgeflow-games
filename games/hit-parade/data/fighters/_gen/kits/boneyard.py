@@ -1,5 +1,5 @@
 """BONEYARD - big body with a cleaver (Pro_Melee_Axe pack: the cleaver sits in the axe grip)."""
-from kitlib import (Kit, air, cmu, crouch, layer, mix, LV1, LV3, LV1_COST, LV3_COST)
+from kitlib import (Kit, air, cam, cinematic, cmu, crouch, layer, mix, LV1, LV3, LV1_COST, LV3_COST)
 
 AX = "Pro_Melee_Axe_Pack/"
 
@@ -60,8 +60,10 @@ def build():
     K.clip("air_chop", air(mix(AX + "standing melee attack downward", (8, 45), contact=26)),
            "jump apex legs + overhead chop")
     K.clip("throw_reach", mix("Soccer_Game_Pack/goalkeeper catch (2)", (1, 30), contact=9), "two-hand grab")
-    K.clip("three_swings", mix(AX + "standing melee combo attack ver. 2", (15, 95), contact=30),
-           "Mixamo axe combo ver. 2: three swings f30/60/80 (flat-side smacks on the held victim)")
+    K.clip("three_swings", dict(mix(AX + "standing melee combo attack ver. 2", (15, 95), contact=30),
+                                contacts=[30, 60, 80]),
+           "Mixamo axe combo ver. 2: three swings f30/60/80 (flat-side smacks on the held victim); P2: the three "
+           "swings are declared as marks (the throw and the Lv3 time the victim's reactions on them)")
     K.clip("over_shoulder", mix(AX + "standing disarm over shoulder", (1, 50), contact=10),
            "Mixamo axe disarm over shoulder: hauls something over his shoulder = throw behind")
     K.clip("meat_hook_swing", dict(mix(AX + "standing melee combo attack ver. 3", (15, 70), contact=30),
@@ -111,12 +113,23 @@ def build():
     K.add("j.M", "jM", input="j.M", name="Air Backhand", clip="air_backhand", desc="Air backhand.")
     K.add("j.H", "jH", input="j.H", name="Falling Cleaver", clip="air_chop", desc="Overhead cleaver jump-in.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Three Cuts", clip="throw_reach", damage=1300,
-          grab={"frames": 52, "adv": 21, "hitF": 40, "swap": False, "air": False, "techable": True,
-                "clip": "three_swings"}, desc="Holds them and delivers three flat-side cleaver smacks.",
+          grab={"frames": 66, "adv": 21, "hitF": 54, "swap": False, "air": False, "techable": True,
+                "clip": "three_swings",
+                # P2 paired throw: lock 52 -> 66 (2.67 s of swings at 2.4x, was 3.1x); the smacks land at clip 0.50 /
+                # 1.50 / 2.17 s = lock 12 / 37 / 54: head, body, and the third drops them (kd_fall_b, face up).
+                "victim": [[0, "hit_high_s", 0.0, 0.15], [12, "hit_high_s", 0.0, 0.6], [37, "hit_body", 0.1, 0.6],
+                           [54, "kd_fall_b", 1.04, 1.5]]},
+          desc="Holds them and delivers three flat-side cleaver smacks.",
           why="Big-body throw: 1300.")
     K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Over the Shoulder", clip="throw_reach",
-          damage=1300, grab={"frames": 46, "adv": 15, "hitF": 30, "swap": True, "air": False, "techable": True,
-                             "clip": "over_shoulder"}, desc="Hauls them over his shoulder.",
+          damage=1300, grab={"frames": 46, "adv": 15, "hitF": 28, "swap": True, "air": False, "techable": True,
+                             "clip": "over_shoulder",
+                             # P2 paired throw: he hauls them up (lock 10-17) and over his shoulder (hands above and
+                             # behind the head at lock 17-28, clip 0.6-1.0 s) and turns away; thrown_b flips them over
+                             # (0.10 -> 0.53 s) and slams them face down behind him at lock ~31.
+                             "victim": [[0, "hit_body", 0.0, 0.2], [10, "thrown_b", 0.1, 0.53],
+                                        [28, "thrown_b", 0.53, 1.2]]},
+          desc="Hauls them over his shoulder.",
           why="Big-body throw: 1300.")
 
     hook = {}
@@ -194,15 +207,31 @@ def build():
           clip="roast_swing", invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]},
           move=[[0, 0], [10, 0.8]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],
           juggle={"js": 1, "ji": 0, "jl": 99},
-          cinematic={"frames": 170, "cue": "boneyard_sunday_roast",
-                     "hits": [[8, 500], [32, 600], [50, 600], [70, 300], [90, 300], [128, 2200]],
-                     "anim": [[0, "cleaver_swing"], [25, "meat_hook_swing"], [60, "three_swings"],
-                              [100, "cleaver_leap"], [145, "taunt_thump"]],
-                     "victim": [[0, "hit_high_l"], [25, "hit_body"], [60, "hit_high_s"], [100, "hit_air"],
-                                [128, "kd_ground_b"]],
-                     "shots": [[0, "side_close"], [25, "punch_in"], [60, "over_shoulder"], [100, "low_angle_up"],
-                               [128, "top_down"], [145, "crowd_pop"]],
-                     "endAdv": 19, "endGapM": 1.8},
+          cinematic=lambda: cinematic(
+              170, "boneyard_sunday_roast",
+              hits=[[8, 500], [32, 600], [50, 600], [70, 300], [94, 300], [128, 2200]],
+              anim=[K.seg(0, "cleaver_swing", 25, hit=8), K.seg(25, "meat_hook_swing", 60, hit=32, rate=2.11),
+                    K.seg(60, "three_swings", 100, hit=70, rate=2.5), K.seg(100, "cleaver_leap", 145, hit=128),
+                    K.seg(145, "taunt_thump", 170, fromS=0.5)],
+              victim=[[0, "hit_high_l", 0.0, 0.4], [8, "hit_high_l", 0.0, 0.45], [32, "hit_body", 0.0, 0.35],
+                      [50, "hit_high_s", 0.0, 0.5], [70, "hit_high_s", 0.0, 0.5], [94, "hit_body", 0.1, 0.7],
+                      [128, "kd_fall_b", 1.25, 1.8667], [148, "kd_ground_b", 0.0, 0.367]],
+              camera=[cam(0, 25, "close", "both", 32, 2.5, 1.5, 15),
+                      cam(25, 60, "close", "defender", [32, 28], [2.2, 1.8], 1.6, 38),
+                      cam(60, 100, "over_shoulder", "defender", 36, 2.4, 1.8, -65),
+                      cam(100, 128, "low", "attacker", 44, 3.2, 0.35, 20, lookH=1.9),
+                      cam(128, 145, "top", "defender", 40, 1.4, 5.4, 10, lookH=0.5),
+                      cam(145, 170, "close", "attacker", 32, 2.6, 1.55, 30)],
+              fx=[(0, "slate"), (8, "impact_m"), (8, "sparks"), (32, "impact_m"), (50, "impact_m"), (50, "shake_s"),
+                  (70, "impact_s"), (94, "impact_m"), (110, "speed_lines"), (128, "impact_l"), (128, "splat"),
+                  (128, "flash"), (128, "shake_l"), (128, "dust"), (128, "freeze_frame"), (145, "spot", "attacker"),
+                  (166, "spot_off")],
+              crowd=[(8, "gasp"), (50, "ooh"), (94, "boo"), (128, "roar", "spike"), (148, "chant", "peak")],
+              pathA=[[8, 0.1, 0], [32, 0.2, 0], [50, 0.3, 0], [94, 0.35, 0], [110, 0.2, 0.3], [120, 0.5, 1.2],
+                     [128, 0.9, 0.1], [132, 0.9, 0], [150, 0.8, 0], [168, 0, 0]],
+              gapD=[[8, 1.1, 0], [32, 1.0, 0], [50, 1.05, 0], [70, 1.0, 0], [94, 1.0, 0], [110, 1.2, 0],
+                    [128, 0.7, 0], [132, 0.9, 0], [168, 1.8, 0]],
+              slate="PRIME TIME - BONEYARD: SUNDAY ROAST", endPose="back", endAdv=19, endGapM=1.8),
           desc="PRIME TIME: a cleaver swing that starts the full butchery demonstration (flat-side smacks).",
           why="1c Lv3: 10/4/58, -42, 4500, fully invulnerable 1-13.")
 
@@ -217,9 +246,28 @@ def build():
                 "armored": ["5H", "meat_hook_l", "meat_hook_m", "meat_hook_h", "meat_hook_ex", "butcher_block_l",
                             "butcher_block_m", "butcher_block_h", "butcher_block_ex", "chefs_special"]}
     K.cine_doc = [
-        "f0 CLEAVER SWING (side_close) - 500. f25 MEAT HOOK (punch_in): two swings - 600 + 600.",
-        "f60 THREE CUTS (over_shoulder): holds them on the butcher block, flat-side smacks - 300 + 300.",
-        "f100 CLEAVER DROP (low_angle_up -> top_down): leaps and smashes them through the block - 2200 at f128.",
-        "f145 CHEST THUMP (crowd_pop): 'Order up!' (KD +19).",
+        "f0 CLEAVER SWING (close, sparks) - 500 at f8.",
+        "f25 MEAT HOOK (punch-in on the defender): two swings at 2.1x - 600 + 600 (f32 / f50).",
+        "f60 THREE CUTS (over his shoulder): flat-side smacks on the butcher block - 300 + 300 (f70 / f94); the "
+        "crowd boos the butcher.",
+        "f100 CLEAVER DROP (low, looking up at the 1.2 m leap -> top-down): smashes them flat - 2200 at f128 "
+        "(comic splat, flash, freeze-frame, dust).",
+        "f145 CHEST THUMP (close, spotlight): 'Order up!' Opponent face up at 1.8 m (KD +19).",
     ]
+    K.text = dict(
+        introLine="Take a number. The butcher's open.",
+        winQuotes=["Order up. Tenderized, flat side, well done.",
+                   "I hang the good ones in the freezer. You're a keeper.",
+                   "No refunds on Block Street."],
+        banter={"johnny": ["Your name's hanging in my freezer, rock star. Next to the ribs.",
+                           "Tonight I carve the rest of the marquee."],
+                "freak": ["They grew you in my basement. You owe me rent.",
+                          "Big cut, tough meat. I've got the cleaver for it."],
+                "ricky": ["Four seasons I tenderized your contestants, Ricky.",
+                          "Tonight I work on the host."],
+                "default": ["Step up to the counter.",
+                            "Relax. I only use the flat side. Mostly."]},
+        ending="BONEYARD hangs the host's sequined jacket in the meat locker next to Johnny Riot's marquee letters and "
+               "locks the door. KNOCKOUT 13 cancels HIT PARADE and replaces it with a cooking show, and Boneyard is "
+               "the only chef who stays. His signature dish is called The Sunday Roast. Nobody has ever sent it back.")
     return K

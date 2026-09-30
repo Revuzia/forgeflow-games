@@ -6,6 +6,7 @@
 import { ACT, F, FIGHTER_INTS, FL, HIST, PH, PROJ_CAP, PROJ_INTS, ST, W, projBase } from './layout.ts';
 import { EV, CUE } from './events.ts';
 import { clearMove, emit, fb, nerveMax, setSt } from './state.ts';
+import { resetUniquesForRound } from './uniques.ts';
 import type { Match } from './state.ts';
 
 /** Resets both fighters and the world for the next round (SHOWTIME, uniques, mvInst carry). */
@@ -41,6 +42,8 @@ export function initRound(m: Match): void {
     s[b + F.animInst] = -1;
     s[b + F.blendT] = 6;
     for (let h = 0; h < HIST; h++) s[b + F.hist + h] = 0;
+    s[b + F.instMv] = -1;
+    resetUniquesForRound(m, i); // CHANGED(SIM) P2: per-round unique reset (a boss phase persists, CONTRACT §28.2)
     setSt(m, i, ST.INTRO);
   }
   for (let k = 0; k < PROJ_CAP; k++) {

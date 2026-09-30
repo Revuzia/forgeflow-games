@@ -5,6 +5,10 @@
 // mapping + sRGB) blits it into the region via viewport + scissor. The pose is free-running (menu time, not the sim):
 // 'idle' loops idle, 'intro' plays the fighter's intro clip (else its first win clip), 'win' its first win clip.
 // The fighter wears the same toon material + outline as in a bout, with the chosen colour alternate.
+// P2 (verifier D9): a lit presentation stage - three-point light (warm key with shadow, cool rim from behind, soft
+// front fill), a turntable platform (dark lacquer disc, glowing show-yellow rim ring, contact shadow), the model framed
+// to fill ~86 % of the region height from its real height and the region aspect, and a 3/4 front SWAY (never the back)
+// instead of a full spin.
 
 import * as THREE from 'three';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -33,8 +37,11 @@ export class Showcase {
   private readonly out = new OutputPass();
   private token = 0;
   visible = true;
-  /** turntable speed (rad/s); 0 = hold the 3/4 view */
+  /** sway speed (rad/s of the sway phase); 0 = hold the 3/4 view */
   spin = 0.25;
+  private phase = 0;
+  private readonly key: THREE.DirectionalLight;
+  private readonly ring: THREE.Mesh;
   /** region clear colour (sRGB hex) behind the model */
   backdrop = 0x1d0d1b;
 
@@ -44,16 +51,40 @@ export class Showcase {
     this.data = data ?? null;
     this.scene.name = 'showcase';
     this.scene.background = null;
-    this.scene.add(new THREE.HemisphereLight(0xd8e0ff, 0x30262a, 1.3));
-    const key = new THREE.DirectionalLight(0xfff0dc, 2.6);
-    key.position.set(-2.5, 4, 5);
+    this.scene.add(new THREE.HemisphereLight(0xe4e8ff, 0x3a2830, 1.15));
+    const key = new THREE.DirectionalLight(0xfff0dc, 2.9);
+    key.position.set(-2.2, 4.2, 4.6);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
-    const sc = key.shadow.camera; sc.left = -1.5; sc.right = 1.5; sc.top = 2.5; sc.bottom = -0.5; sc.near = 0.5; sc.far = 15;
+    const sc = key.shadow.camera; sc.left = -1.6; sc.right = 1.6; sc.top = 2.8; sc.bottom = -0.6; sc.near = 0.5; sc.far = 15;
     key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02;
+    this.key = key;
     this.scene.add(key);
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(1.4, 48), new THREE.ShadowMaterial({ opacity: 0.35 }));
+    const rim = new THREE.DirectionalLight(0x9fb8ff, 2.4);          // cool back light: a bright edge against the backdrop
+    rim.position.set(2.6, 3.2, -3.8);
+    this.scene.add(rim);
+    const rim2 = new THREE.DirectionalLight(0xff5fae, 1.1);         // show-magenta kicker from the other side
+    rim2.position.set(-3.2, 1.6, -2.4);
+    this.scene.add(rim2);
+    const fill = new THREE.DirectionalLight(0xffe2c8, 0.55);
+    fill.position.set(1.5, 0.8, 5);
+    this.scene.add(fill);
+    // the turntable platform: lacquered disc + glowing rim ring + a contact-shadow catcher on top
+    const discM = new THREE.MeshStandardMaterial({ color: 0x1a1220, roughness: 0.32, metalness: 0.35 });
+    discM.name = 'showcase-disc';
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.12, 0.1, 64), discM);
+    disc.position.y = -0.05;
+    disc.receiveShadow = true;
+    this.scene.add(disc);
+    const ringM = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.8, 0.12).multiplyScalar(1.6) });
+    ringM.name = 'showcase-ring';
+    this.ring = new THREE.Mesh(new THREE.TorusGeometry(1.08, 0.018, 8, 96), ringM);
+    this.ring.rotation.x = Math.PI / 2;
+    this.ring.position.y = 0.002;
+    this.scene.add(this.ring);
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(1.02, 64), new THREE.ShadowMaterial({ opacity: 0.5 }));
     floor.rotation.x = -Math.PI / 2;
+    floor.position.y = 0.003;
     floor.receiveShadow = true;
     this.scene.add(floor);
     this.camera.position.set(0, 1.05, 5.2);
@@ -88,13 +119,29 @@ export class Showcase {
   frame(dt: number): void {
     if (!this.fv) return;
     this.t += dt;
-    this.yaw += this.spin * dt;
+    this.phase += this.spin * dt;
     const d = this.fv.pose.dur(this.clip);
     const t = this.loop || d <= 0 ? this.t : Math.min(this.t, d - 1e-3);
     this.fv.pose.poseClip(this.clip, t);
+    // a 3/4-front sway (+-32 deg around 20 deg toward the camera-left) - the select screen never shows the back
+    this.yaw = 0.35 + 0.56 * Math.sin(this.phase * 1.6);
     this.fv.root.rotation.set(0, this.yaw, 0);
-    const k = 1.8 / Math.max(1, this.fv.heightM);          // tall bodies framed like the rest
-    this.fv.root.scale.setScalar(Math.min(1, k));
+    this.fv.root.scale.setScalar(1);                       // true size: the camera frames each body (below)
+    (this.ring.material as THREE.MeshBasicMaterial).color.setRGB(1.0, 0.8, 0.12).multiplyScalar(1.35 + 0.35 * Math.sin(this.t * 2.2));
+  }
+
+  /** frame the whole body: ~86 % of the region height (true height), wide enough for the region aspect */
+  private frameCamera(aspect: number): void {
+    const h = this.fv ? this.fv.heightM : 1.8;
+    const half = (this.camera.fov * Math.PI / 180) / 2;
+    const dH = (h * 1.16 / 2) / Math.tan(half);
+    const dW = (1.25 / 2) / (Math.tan(half) * Math.max(0.3, aspect));
+    const dist = Math.max(dH, dW);
+    const lookY = h * 0.5;
+    this.camera.position.set(0, lookY + h * 0.06, dist);
+    this.camera.lookAt(0, lookY, 0);
+    this.key.shadow.camera.top = h + 0.4;
+    this.key.shadow.camera.updateProjectionMatrix();
   }
 
   render(): void {
@@ -111,6 +158,7 @@ export class Showcase {
     }
     this.camera.aspect = R.w / Math.max(1, R.h);
     this.camera.updateProjectionMatrix();
+    this.frameCamera(this.camera.aspect);
     setOutlineViewport(w, h);
     const prevTarget = three.getRenderTarget();
     three.setRenderTarget(this.rt);

@@ -14,6 +14,7 @@ import { addShowtime, clearMove, drainNerve, emit, fb, isAirborne, setSt } from 
 import type { Match } from './state.ts';
 import { applyDamage, comboStep } from './hits.ts';
 import { pushExt } from './boxes.ts';
+import { throwEarlyRelease, throwWakeNeed } from './throwpose.ts';
 
 function inRange(inv: Int32Array, o: number, f: number): boolean {
   return inv[o] > 0 && f >= inv[o] && f <= inv[o + 1];
@@ -37,6 +38,7 @@ export function throwable(m: Match, d: number): boolean {
     case ST.WIN:
     case ST.LOSE:
     case ST.INTRO:
+    case ST.ABSENT:
       return false;
     default:
       break;
@@ -152,6 +154,16 @@ function connect(m: Match, a: number, mv: CMove): void {
     s[bd + F.thrDisp] = d0 + after;
   }
   s[bd + F.after] = Math.max(1, g ? g.adv : mv.hitstun - (mv.active + mv.recovery));
+  // CHANGED(SIM) P2 (CONTRACT §28.5d): leave the lock early (once on the floor) so the knockdown plays the whole wake
+  s[bd + F.thrRel] = throwEarlyRelease(m, d, g ? g.hitF : s[ba + F.throwDmgF]);
+  // still short of a whole wake: a LYING HOLD - the victim lies the missing frames longer and the thrower holds its final
+  // grab pose as long (the advantage is unchanged; the connected throw lasts longer)
+  const hold = Math.max(0, throwWakeNeed(m, d) - (s[bd + F.after] + s[bd + F.thrRel]));
+  if (hold > 0) {
+    s[bd + F.after] += hold;
+    if (g) s[ba + F.stun] += hold;
+    else s[ba + F.after] = hold; // a throw without a grab block: RECOVER for `hold` after its move (fighter.ts finishMove)
+  }
   s[bd + F.kd] = pc ? 2 : mv.kd || 1;
   s[bd + F.techWin] = untech || (g !== null && !g.techable) ? 0 : sys.throw.techWindow;
   s[bd + F.counterFlag] = pc ? 2 : 0;

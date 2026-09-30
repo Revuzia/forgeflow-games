@@ -27,6 +27,10 @@ const REMATCHES = Math.max(0, Math.min(5, Number(q.get('rematch') ?? 0) || 0));
  *  (room code + 'B', or quick match again): game.ts keeps one Online for the whole visit. */
 const AGAIN = q.get('again') === '1';
 let sessionNo = 0;
+/** ?nettrace=N (P2): keep a session trace of N ticks + the relay flush log; dumped into the report at the end. */
+const TRACE = Math.max(0, Math.min(20000, Number(q.get('nettrace') ?? 0) || 0));
+/** ?relaypace=interval (P2 A/B only): the P1 relay pacing (one packet per 100 ms since the last flush). */
+const RELAY_PACING: 'bucket' | 'interval' = q.get('relaypace') === 'interval' ? 'interval' : 'bucket';
 const TAG = (q.get('tag') ?? 'x').replace(/[^a-z0-9_-]/gi, '').slice(0, 16) || 'x';
 const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
 
@@ -35,7 +39,7 @@ interface LabResult {
   syncRttMs: number; syncRtts: number[]; sessionRttMedianMs: number; delay: number; pair: unknown;
   frames: number; target: number; confirmed: number; gameSpeed: number; rollbacks: number; maxRollback: number; rollbackFrames: number;
   stallTicks: number; skipTicks: number; sent: number; recv: number; lossPct: number; reordered: number; desyncs: number;
-  checksumsCompared: number; finalCsFrame: number; finalCs: number | null; agreed: boolean | null; reason: string;
+  checksumsCompared: number; finalCsFrame: number; finalCs: number | null; agreed: boolean | null; reason: string; wallSpeed: number; relay: unknown;
   supabase: { msgs: number; binary: number; dropped: number }; errors: string[]; startedAt: string; ms: number;
   matches: { index: number; seed: number; stage: string; frames: number; finalCs: number | null; agreed: boolean; reason: string; stale: number; desyncs: number }[];
   sessions: { room: string; ok: boolean; finalCs: number | null; matches: number; errors: string[] }[];
@@ -45,7 +49,7 @@ const result: LabResult = {
   tag: TAG, done: false, ok: false, phase: 'idle', room: '', local: -1, transport: 'none', syncRttMs: -1, syncRtts: [], sessionRttMedianMs: -1,
   delay: -1, pair: null, frames: 0, target: FRAMES, confirmed: 0, gameSpeed: 0, rollbacks: 0, maxRollback: 0, rollbackFrames: 0,
   stallTicks: 0, skipTicks: 0, sent: 0, recv: 0, lossPct: 0, reordered: 0, desyncs: 0, checksumsCompared: 0, finalCsFrame: -1, finalCs: null,
-  agreed: null, reason: '', supabase: { msgs: 0, binary: 0, dropped: 0 }, errors: [], startedAt: new Date().toISOString(), ms: 0, matches: [], sessions: [],
+  agreed: null, reason: '', wallSpeed: 0, relay: null, supabase: { msgs: 0, binary: 0, dropped: 0 }, errors: [], startedAt: new Date().toISOString(), ms: 0, matches: [], sessions: [],
 };
 let curSeed = 0;
 let curStage = '';
@@ -79,7 +83,9 @@ function lagged(t: Transport): Transport {
 const flow = new OnlineFlow({
   version: 'netlab-1', dataHash: hashString('toysim-v1'), stateVersion: TOY_STATE_INTS, fighters: ['toy'], stages: ['lab'],
   name: 'lab-' + TAG, forceRelay: q.get('relay') === '1', ratings: false, log: (m, d) => log(m, d), wrapTransport: lagged,
+  trace: TRACE, relayPacing: RELAY_PACING,
 });
+let lastTrace: unknown = null;
 
 let session: RollbackSession | null = null;
 let gen: InputGen | null = null;
@@ -98,7 +104,8 @@ flow.on('matchStart', ((cfg: { seed: number; stage: string }, local: 0 | 1) => {
   result.local = local;
 }) as never);
 flow.on('matchEnd', ((r: { agreed: boolean; reason: string }) => {
-  log('matchEnd', r);
+  log('matchEnd', { ...r, stats: null });
+  if (TRACE) lastTrace = flow.traceDump();
   result.agreed = r.agreed;
   result.reason = r.reason;
   const st = session ? session.stats() : null;
@@ -142,7 +149,9 @@ function snapshot(): void {
     result.maxRollback = ss.maxRollback; result.rollbackFrames = ss.rollbackFrames; result.stallTicks = ss.stallTicks; result.skipTicks = ss.skipTicks;
     result.sent = ss.sent; result.recv = ss.recv; result.lossPct = Math.round(ss.lossPct * 100) / 100; result.reordered = ss.reordered;
     result.desyncs = ss.desyncs; result.checksumsCompared = ss.checksumsCompared; result.sessionRttMedianMs = ss.rttMedianMs;
+    result.wallSpeed = Math.round(ss.wallSpeed * 10000) / 10000;
   }
+  result.relay = st.relay;
   const syncLine = flow.log.find((l) => l.m === 'sync');
   if (syncLine && syncLine.d && typeof syncLine.d === 'object') result.syncRtts = ((syncLine.d as { rtts?: number[] }).rtts ?? []).slice();
   if (session) {
@@ -196,6 +205,7 @@ function complete(): void {
   }
   if (AGAIN) result.sessions.push({ room: result.room, ok: result.ok, finalCs: result.finalCs, matches: result.matches.length, errors: result.errors.slice() });
   if (AGAIN) result.ok = result.ok && result.sessions.length === 2 && result.sessions.every((x) => x.ok);
+  if (TRACE) (result as LabResult & { trace?: unknown }).trace = lastTrace;
   void fetch('/__report/net_lab_' + TAG, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...result, log: logLines }) }).catch(() => { /* no dev server */ });
   setTimeout(() => flow.leave(), 1500);
 }

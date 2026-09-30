@@ -414,10 +414,24 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 50, "adv": 21, "hitF": 36, "swap": false, "air": false, "techable": true, "clip": "book_em"},
+      "grab": {
+        "frames": 56,
+        "adv": 21,
+        "hitF": 44,
+        "swap": false,
+        "air": false,
+        "techable": true,
+        "clip": "book_em",
+        "victim": [
+          [0, "hit_high_s", 0.0, 0.1],
+          [12, "hit_high_s", 0.0, 0.5],
+          [29, "hit_body", 0.1, 0.6],
+          [44, "kd_fall_b", 1.04, 1.5]
+        ]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Holds them with the shield and lays in four baton shots.",
+      "desc": "Holds them with the shield: baton, baton, shield bash.",
       "pushExt": [[0, 0.152], [5, 0.0], [31, 0.013]]
     },
     "throw_b": {
@@ -443,7 +457,16 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 44, "adv": 14, "hitF": 30, "swap": true, "air": false, "techable": true, "clip": "perp_walk"},
+      "grab": {
+        "frames": 50,
+        "adv": 14,
+        "hitF": 30,
+        "swap": true,
+        "air": false,
+        "techable": true,
+        "clip": "perp_walk",
+        "victim": [[0, "hit_high_s", 0.0, 0.2], [8, "thrown_b", 0.05, 0.4], [30, "thrown_b", 0.4, 1.0]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Turns them around and shoves them with the shield.",
@@ -875,7 +898,8 @@
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "cuff_pin"
+        "clip": "cuff_pin",
+        "victim": [[0, "hit_body", 0.0, 0.3], [8, "kd_fall_b", 1.0, 1.5], [24, "kd_ground_b", 0.0, 0.367]]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -914,7 +938,8 @@
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "cuff_pin"
+        "clip": "cuff_pin",
+        "victim": [[0, "hit_body", 0.0, 0.3], [8, "kd_fall_b", 1.0, 1.5], [24, "kd_ground_b", 0.0, 0.367]]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -953,7 +978,8 @@
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "cuff_pin"
+        "clip": "cuff_pin",
+        "victim": [[0, "hit_body", 0.0, 0.3], [8, "kd_fall_b", 1.0, 1.5], [24, "kd_ground_b", 0.0, 0.367]]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -992,7 +1018,8 @@
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "cuff_pin"
+        "clip": "cuff_pin",
+        "victim": [[0, "hit_body", 0.0, 0.3], [8, "kd_fall_b", 1.0, 1.5], [24, "kd_ground_b", 0.0, 0.367]]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -1078,32 +1105,140 @@
       "cinematic": {
         "frames": 165,
         "cue": "krane_riot_act",
-        "hits": [[25, 500], [50, 600], [75, 300], [88, 300], [100, 300], [118, 2500]],
+        "hits": [[28, 500], [53, 600], [78, 300], [90, 300], [101, 300], [118, 2500]],
         "anim": [
-          [0, "shield_block"],
-          [20, "baton_swing"],
-          [45, "baton_chop"],
-          [70, "book_em"],
-          [110, "taser_fire"],
-          [140, "win_holster"]
+          [0, "shield_block", 0.33, 0.567],
+          [20, "baton_swing", 0.3, 0.717],
+          [45, "baton_chop", 0.233, 0.65],
+          [70, "book_em", 0.047, 1.8],
+          [110, "taser_fire", 0.1, 0.6],
+          [140, "win_holster", 0.0, 0.333]
         ],
         "victim": [
-          [0, "hit_high_s"],
-          [20, "hit_high_l"],
-          [45, "hit_body"],
-          [70, "hit_high_s"],
-          [110, "dizzy"],
-          [128, "kd_fall_b"],
-          [145, "kd_ground_b"]
+          [0, "hit_high_s", 0.0, 0.4],
+          [28, "hit_high_l", 0.0, 0.5],
+          [53, "hit_body", 0.0, 0.6],
+          [78, "hit_high_s", 0.0, 0.3],
+          [90, "hit_high_s", 0.0, 0.3],
+          [101, "hit_body", 0.1, 0.6],
+          [118, "hit_air", 0.1, 0.5],
+          [132, "kd_fall_b", 1.1, 1.8667]
         ],
-        "shots": [
-          [0, "side_close"],
-          [20, "punch_in"],
-          [70, "over_shoulder"],
-          [110, "front_low"],
-          [118, "slowmo_hold"],
-          [140, "crowd_pop"]
+        "shots": [[0, "close"], [20, "close"], [45, "low"], [70, "over_shoulder"], [110, "low"], [140, "wide"]],
+        "camera": [
+          {
+            "from": 0,
+            "to": 20,
+            "shot": "close",
+            "target": "both",
+            "fovDeg": 32,
+            "dist": 3.0,
+            "height": 1.5,
+            "yawDeg": 15,
+            "ease": "inOut",
+            "lookH": 1.3
+          },
+          {
+            "from": 20,
+            "to": 45,
+            "shot": "close",
+            "target": "defender",
+            "fovDeg": [32, 28],
+            "dist": [2.5, 2.5],
+            "height": 1.6,
+            "yawDeg": 35,
+            "ease": "inOut",
+            "lookH": 1.45
+          },
+          {
+            "from": 45,
+            "to": 70,
+            "shot": "low",
+            "target": "both",
+            "fovDeg": 40,
+            "dist": 2.8,
+            "height": 0.5,
+            "yawDeg": -20,
+            "ease": "inOut",
+            "lookH": 1.2
+          },
+          {
+            "from": 70,
+            "to": 110,
+            "shot": "over_shoulder",
+            "target": "defender",
+            "fovDeg": 36,
+            "dist": 2.9,
+            "height": 1.8,
+            "yawDeg": -65,
+            "ease": "inOut",
+            "lookH": 1.4
+          },
+          {
+            "from": 110,
+            "to": 140,
+            "shot": "low",
+            "target": "defender",
+            "fovDeg": 40,
+            "dist": [2.6, 2.2],
+            "height": 0.6,
+            "yawDeg": 30,
+            "ease": "inOut",
+            "lookH": 1.3
+          },
+          {
+            "from": 140,
+            "to": 165,
+            "shot": "wide",
+            "target": "both",
+            "fovDeg": 38,
+            "dist": 5.5,
+            "height": 1.7,
+            "yawDeg": 5,
+            "ease": "inOut",
+            "lookH": 1.1
+          }
         ],
+        "fx": [
+          {"f": 0, "fx": "slate"},
+          {"f": 0, "fx": "sparks"},
+          {"f": 28, "fx": "impact_m"},
+          {"f": 53, "fx": "impact_m"},
+          {"f": 53, "fx": "shake_s"},
+          {"f": 78, "fx": "impact_s"},
+          {"f": 90, "fx": "impact_s"},
+          {"f": 101, "fx": "impact_m"},
+          {"f": 110, "fx": "lights_flicker"},
+          {"f": 118, "fx": "electric"},
+          {"f": 118, "fx": "flash"},
+          {"f": 118, "fx": "shake_m"},
+          {"f": 118, "fx": "freeze_frame"},
+          {"f": 132, "fx": "dust"},
+          {"f": 140, "fx": "spot", "target": "attacker"},
+          {"f": 160, "fx": "spot_off"}
+        ],
+        "crowd": [
+          {"f": 0, "react": "boo"},
+          {"f": 28, "react": "ooh"},
+          {"f": 53, "react": "ooh"},
+          {"f": 101, "react": "cheer", "ratings": "up"},
+          {"f": 118, "react": "roar", "ratings": "spike"},
+          {"f": 132, "react": "laugh"},
+          {"f": 145, "react": "cheer", "ratings": "peak"}
+        ],
+        "pathA": [[28, 0.15, 0], [53, 0.3, 0], [78, 0.4, 0], [101, 0.55, 0], [118, 0.5, 0], [150, 0.2, 0], [163, 0, 0]],
+        "gapD": [
+          [28, 1.1, 0],
+          [53, 1.0, 0],
+          [78, 0.95, 0],
+          [101, 1.0, 0],
+          [118, 1.2, 0.2],
+          [128, 1.4, 0.35],
+          [138, 1.6, 0],
+          [163, 2.0, 0]
+        ],
+        "slate": "PRIME TIME - OFFICER KRANE: RIOT ACT",
+        "endPose": "back",
         "endAdv": 19,
         "endGapM": 2.0
       },
@@ -1151,5 +1286,14 @@
     "grab": ["cuff_m"],
     "meter": "backup",
     "charge": true
-  }
+  },
+  "introLine": "You have the right to remain standing. You won't.",
+  "winQuotes": ["Case closed. Book him, then book the ambulance.", "Resisting arrest looks great on camera. Not on you.", "Stay down. That's not advice, that's an order."],
+  "banter": {
+    "bruno": ["You walked off with my cuffs and a meat locker door, Bruno.", "Tonight you come quietly. Or loudly. The paperwork is the same."],
+    "freak": ["Specimen Thirteen, you are in violation of every code in this building.", "Step away from the chains. Slowly. Claws where I can see them."],
+    "ricky": ["Twenty years I kept your crowd in line, Marquee.", "Now I read YOU your rights - live on air."],
+    "default": ["Stage Security. Keep your hands where the cameras can see them.", "Anything you say will be edited and used against you."]
+  },
+  "ending": "OFFICER KRANE cuffs the host to his own mic stand and reads him his rights on a live feed. The network's lawyers arrive in forty seconds; Krane has already seized thirty seasons of contracts as evidence. Internal Affairs gives him a medal and a desk. He hates the desk, so on Friday nights he still walks the Control Room, just in case."
 }

@@ -13,6 +13,9 @@ prepare_body(cfg, work_dir) takes a Mixamo character FBX to a game-ready rig:
   5. join all meshes into one object '<id>_body' (2 primitives max)
   6. apply the FBX object transforms (rot 90 / scale 0.01) and normalise the rest height to
      cfg['heightM'] with the lowest rest vertex on z = 0.
+  optional (lane ASSETS phase 2, goons): cfg['image_overrides'] = {image stem: png} swaps a source texture for its
+  repainted version (tools/goon_repaint.py) BEFORE the atlas bake; cfg['decimate'] = ratio (0..1) collapses the
+  joined body mesh (weights + atlas UVs interpolated) - both absent for the 12 fighters.
 Returns a dict of body facts. ASCII only.
 """
 import math
@@ -222,6 +225,35 @@ def bake_atlas(meshes, fighter_id, work_dir, size=1024):
     return alb, info, {m.name: (minfo[m.name]["alpha"] is not None) for m in mats}
 
 
+def _apply_image_overrides(meshes, overrides):
+    """re-point every image node that samples an overridden source texture (matched by file stem, any case)"""
+    if not overrides:
+        return {}
+    want = {k.lower(): v for k, v in overrides.items()}
+    done = {}
+    for im in list(bpy.data.images):
+        stem = os.path.splitext(os.path.basename(im.filepath.replace("\\", "/")) or im.name)[0].lower()
+        if stem not in want:
+            stem = os.path.splitext(im.name)[0].lower()
+        if stem not in want:
+            continue
+        new = bpy.data.images.load(want[stem])
+        n = 0
+        for o in meshes:
+            for m in o.data.materials:
+                if m and m.node_tree:
+                    for nd in m.node_tree.nodes:
+                        if nd.type == "TEX_IMAGE" and nd.image == im:
+                            nd.image = new
+                            n += 1
+        done[stem] = {"png": want[stem], "nodes": n, "size": list(new.size)}
+    missing = sorted(set(want) - set(done))
+    C.log("image overrides", done, "missing", missing)
+    if missing:
+        raise RuntimeError("image_overrides not found in the FBX: %s" % missing)
+    return done
+
+
 def _make_material(name, img, cutout):
     m = bpy.data.materials.new(name)
     m.use_nodes = True
@@ -298,6 +330,7 @@ def prepare_body(cfg, fighter_id, work_dir, atlas_size=1024):
     C.remove_objects(empties)
     C.log("body", fighter_id, "bones", len(arm.data.bones), "renamed", renamed, "meshes",
           [o.name for o in meshes], "removed", removed)
+    swapped = _apply_image_overrides(meshes, cfg.get("image_overrides") or {})
 
     # ---- transforms: unparent (keep world), scale to heightM, floor at z=0, apply, re-parent
     z0, z1, xr, yr = _world_bounds_rest(meshes)
@@ -355,6 +388,19 @@ def prepare_body(cfg, fighter_id, work_dir, atlas_size=1024):
     idx = np.zeros(len(body.data.polygons), dtype=np.int32)
     body.data.polygons.foreach_get("material_index", idx)
     used = set(int(i) for i in np.unique(idx))
+    decim = None
+    if cfg.get("decimate"):
+        t0 = sum(len(p.vertices) - 2 for p in body.data.polygons)
+        md = body.modifiers.new("hp_decimate", "DECIMATE")
+        md.decimate_type = "COLLAPSE"
+        md.ratio = float(cfg["decimate"])
+        md.use_collapse_triangulate = True
+        _select_only([body], body)
+        bpy.ops.object.modifier_move_to_index(modifier=md.name, index=0)
+        bpy.ops.object.modifier_apply(modifier=md.name)
+        decim = {"ratio": float(cfg["decimate"]), "tris_before": t0,
+                 "tris_after": sum(len(p.vertices) - 2 for p in body.data.polygons)}
+        C.log("decimate", decim)
     arm.name = fighter_id + "_rig"
     arm.data.name = fighter_id + "_rig"
     for m in list(bpy.data.materials):
@@ -368,5 +414,5 @@ def prepare_body(cfg, fighter_id, work_dir, atlas_size=1024):
     facts = {"bones": len(arm.data.bones), "renamed": renamed, "removed_meshes": removed,
              "file_height_m": round(file_h, 4), "scale_k": round(k, 5), "heightM": round(z1b - z0b, 4),
              "tris": tris, "verts": len(body.data.vertices), "material_slots_used": sorted(used),
-             "atlas": ainfo}
+             "atlas": ainfo, "image_overrides": swapped, "decimate": decim}
     return arm, body, facts

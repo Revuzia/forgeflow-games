@@ -51,12 +51,33 @@ export const EV = {
   SCORE: 41,
 } as const;
 
+/**
+ * CHANGED(SIM) P2 (CONTRACT §28.3): event types added with the uniques. Kept OUT of `EV` on purpose: consumers switch
+ * exhaustively over `keyof typeof EV` (audio/router.ts), so growing EV would break their build; they opt in via EVX.
+ */
+export const EVX = {
+  CATCH: 42,
+  TELEPORT: 43,
+  PHASE: 44,
+  BALL: 45,
+  INSTALL: 46,
+} as const;
+
+/** CHANGED(SIM) P2: SCORE `d` reason codes (CONTRACT §28.4). */
+export const SCORE_WHY = {
+  HIT: 1, KO: 2, COMBO: 3, CROWD: 4, PARRY: 5, PERFECT: 6, HECKLE_PARRY: 7, HECKLE_PERFECT: 8, HECKLE_HIT: 9,
+} as const;
+
+/** CHANGED(SIM) P2: BALL `b` codes. */
+export const BALL_EV = { KICK: 0, REBOUND: 1, REST: 2, PICKUP: 3, KNOCKED: 4, RESPAWN: 5, HOVER: 6, LOOSE: 7 } as const;
+
 /** Name of an event type (debug / harness). */
 export const EV_NAMES: Record<number, string> = {};
 for (const k of Object.keys(EV) as (keyof typeof EV)[]) EV_NAMES[EV[k]] = k;
+for (const k of Object.keys(EVX) as (keyof typeof EVX)[]) EV_NAMES[EVX[k]] = k;
 
 /** CAMERA_CUE `b` values. */
-export const CUE = { SUPER_FREEZE: 1, PERFECT_PARRY: 2, KO: 3, CINEMATIC: 4, WALL_SPLAT: 5 } as const;
+export const CUE = { SUPER_FREEZE: 1, PERFECT_PARRY: 2, KO: 3, CINEMATIC: 4, WALL_SPLAT: 5, PHASE: 6 } as const;
 
 /** Strength classes carried in `c` of HIT/BLOCK/... (§17 rule 6). */
 export const SC = { L: 0, M: 1, H: 2, SPECIAL: 3, SUPER: 4, IMPACT: 5, PROJECTILE: 6, THROW: 7 } as const;

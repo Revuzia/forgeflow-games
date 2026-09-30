@@ -7,6 +7,10 @@
 //     angle, plus a threshold; while SHOWTIME intensity (0..1, + event pops) is above its threshold the card shows the
 //     cheer pose - so the house visibly gets on its feet as the ratings climb. `popNow()` makes it jump on big
 //     moments (super, KO, wall splat, perfect parry). Per-card hue shift (skin band kept) and U mirror add variety.
+//   * P2 (verifier D11: "the ~6 people repeat visibly"): every card now varies on five axes - a clothing hue from a wide
+//     palette (skin band kept; 80 % of cards), brightness 0.8-1.08, height +-7 %, an idle pose drawn from watch / jeer
+//     (a third of the house slowly alternates between the two on its own clock) and a cheer pose that alternates
+//     cheer <-> hype while the house is up, so neighbouring copies of one body never move in sync.
 //   * The atlas: lane STAGES' `crowd_atlas.webp` + `crowd_atlas.json` (grid rowIs body, colIs pose*3+angle, poses with
 //     moods, feet anchor, tint, brightness; stages.json crowd). Without one, bakeCrowdAtlas() renders real skinned
 //     characters (posed from their own clips through the toon material + outline) into an sRGB render target.
@@ -24,13 +28,14 @@ export interface CrowdAtlas {
   feet?: number;
   tint?: THREE.Color;
   brightness?: number;
-  /** per person-and-angle: the idle (watching) and cheer cells */
-  groups?: Array<{ idle: number[]; cheer: number[]; angle?: string }>;
+  /** per person-and-angle: the idle (watching), cheer and jeer cells */
+  groups?: Array<{ idle: number[]; cheer: number[]; jeer?: number[]; angle?: string }>;
 }
 
 const VERT = /* glsl */`
-attribute vec4 aCard;   // idle cell, phase, hue, height
-attribute vec4 aCard2;  // cheer cell, threshold, mirror (+1/-1), unused
+attribute vec4 aCard;   // idle cell A, phase, hue, height
+attribute vec4 aCard2;  // cheer cell A, threshold, mirror (+1/-1), idle cell B
+attribute vec4 aCard3;  // cheer cell B, brightness, idle swap rate (Hz, 0 = none), cheer swap rate (Hz)
 uniform float uTime; uniform float uIntensity; uniform float uPop; uniform float uCols; uniform float uRows; uniform float uAspect;
 uniform float uFeet;
 varying vec2 vUv; varying float vHue; varying float vShade;
@@ -52,11 +57,13 @@ void main() {
   q.x += max( q.y, 0.0 ) * sway;
   vec3 wp = base + right * q.x + vec3( 0.0, q.y + hop, 0.0 );
   gl_Position = projectionMatrix * viewMatrix * vec4( wp, 1.0 );
-  float cell = cheer ? aCard2.x : aCard.x;
+  float idleSw = aCard3.z > 0.0 ? step( 0.5, fract( t * aCard3.z + ph * 3.1 ) ) : 0.0;
+  float cheerSw = step( 0.5, fract( t * aCard3.w + ph * 5.7 ) );
+  float cell = cheer ? ( cheerSw > 0.5 ? aCard3.x : aCard2.x ) : ( idleSw > 0.5 ? aCard2.w : aCard.x );
   vec2 cuv = vec2( aCard2.z < 0.0 ? 1.0 - uv.x : uv.x, uv.y );
   vUv = ( vec2( mod( cell, uCols ), uRows - 1.0 - floor( cell / uCols ) ) + cuv ) / vec2( uCols, uRows );
   vHue = aCard.z;
-  vShade = 0.85 + 0.15 * fract( ph * 3.7 );
+  vShade = aCard3.y;
 }
 `;
 const FRAG = /* glsl */`
@@ -102,6 +109,8 @@ export class CrowdView {
     this.count = slots.length;
     const card = new Float32Array(n * 4);
     const card2 = new Float32Array(n * 4);
+    const card3 = new Float32Array(n * 4);
+    const HUES = [0.55, -0.55, 1.1, -1.1, 1.65, -1.65, 2.3, -2.3, 3.0];
     let s = seed * 9301 + 49297;
     const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
     const m = new THREE.Matrix4();
@@ -116,38 +125,52 @@ export class CrowdView {
     this.mesh.name = 'crowd';
     this.mesh.frustumCulled = false;
     const groups = atlas.groups && atlas.groups.length ? atlas.groups : null;
-    const byAngle = new Map<string, Array<{ idle: number[]; cheer: number[]; angle?: string }>>();
+    const byAngle = new Map<string, Array<{ idle: number[]; cheer: number[]; jeer?: number[]; angle?: string }>>();
     for (const g of groups ?? []) if (g.angle) { const l = byAngle.get(g.angle) ?? []; l.push(g); byAngle.set(g.angle, l); }
     for (let i = 0; i < n; i++) {
       const o = slots[i];
       if (o) { o.updateWorldMatrix(true, false); o.matrixWorld.decompose(p, q, sc); } else { p.set(0, -100, 0); sc.set(1, 1, 1); }
       m.makeTranslation(p.x, p.y, p.z);
       this.mesh.setMatrixAt(i, m);
-      let idle: number, cheer: number;
+      let idle: number, cheer: number, idleB: number, cheerB: number;
       let mirrorOk = true;
+      let swap = 0;
       if (groups) {
         // STAGES §21.3: the node's extras `angle` names the atlas view that suits the spot
         const want = o && typeof o.userData.angle === 'string' ? byAngle.get(o.userData.angle as string) : undefined;
         const pool = want && want.length ? want : groups;
         const g = pool[Math.floor(rnd() * pool.length) % pool.length];
         mirrorOk = !g.angle || g.angle === 'front';
-        idle = g.idle[Math.floor(rnd() * g.idle.length) % g.idle.length];
-        cheer = g.cheer.length ? g.cheer[Math.floor(rnd() * g.cheer.length) % g.cheer.length] : idle;
+        const pick = (l: number[] | undefined, d: number) => (l && l.length ? l[Math.floor(rnd() * l.length) % l.length] : d);
+        const watch = pick(g.idle, 0);
+        const jeer = pick(g.jeer, watch);
+        cheer = pick(g.cheer, watch);
+        cheerB = g.cheer.length > 1 ? g.cheer[(g.cheer.indexOf(cheer) + 1) % g.cheer.length] : cheer;
+        // a quarter of the house idles in the jeer pose; a third alternates watch <-> jeer on its own slow clock
+        idle = rnd() < 0.25 ? jeer : watch;
+        idleB = idle === watch ? jeer : watch;
+        swap = rnd() < 0.34 && idleB !== idle ? 0.035 + 0.06 * rnd() : 0;
       } else {
         idle = Math.floor(rnd() * atlas.cells) % atlas.cells;
-        cheer = idle;
+        cheer = idle; idleB = idle; cheerB = idle;
       }
       card[i * 4] = idle;
       card[i * 4 + 1] = rnd();
-      // light hue variety only (the STAGES atlas already has six distinct people; big shifts turned skin green)
-      card[i * 4 + 2] = rnd() < 0.7 ? 0 : (rnd() * 2 - 1) * 0.6;
-      card[i * 4 + 3] = Math.max(0.5, Math.abs(sc.y) || 1.7);
+      // clothing hue from a wide palette (the skin band is kept by hpSkin), 80 % of the cards
+      card[i * 4 + 2] = rnd() < 0.2 ? 0 : HUES[Math.floor(rnd() * HUES.length) % HUES.length] + (rnd() - 0.5) * 0.25;
+      card[i * 4 + 3] = Math.max(0.5, Math.abs(sc.y) || 1.7) * (0.93 + 0.14 * rnd());
       card2[i * 4] = cheer;
       card2[i * 4 + 1] = 0.15 + 0.8 * rnd();
       card2[i * 4 + 2] = mirrorOk && rnd() < 0.5 ? -1 : 1;           // U mirror only on front views (§21.4)
+      card2[i * 4 + 3] = idleB;
+      card3[i * 4] = cheerB;
+      card3[i * 4 + 1] = 0.8 + 0.28 * rnd();
+      card3[i * 4 + 2] = swap;
+      card3[i * 4 + 3] = 0.25 + 0.5 * rnd();
     }
     geo.setAttribute('aCard', new THREE.InstancedBufferAttribute(card, 4));
     geo.setAttribute('aCard2', new THREE.InstancedBufferAttribute(card2, 4));
+    geo.setAttribute('aCard3', new THREE.InstancedBufferAttribute(card3, 4));
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 
@@ -287,17 +310,17 @@ export async function loadCrowdAtlas(imageUrl: string, metaUrl: string | null, c
   const c = meta?.grid?.cols ?? cols, rw = meta?.grid?.rows ?? rows;
   const img = tex.image as { width: number; height: number };
   const anchor = meta?.anchor ?? opts.anchor ?? [0.5, 1];
-  const groups: Array<{ idle: number[]; cheer: number[]; angle?: string }> = [];
+  const groups: Array<{ idle: number[]; cheer: number[]; jeer: number[]; angle?: string }> = [];
   const poses = meta?.poses ?? [], angles = meta?.angles ?? [];
   if (poses.length && angles.length && (meta?.grid?.rowIs ?? 'body') === 'body') {
     for (let r = 0; r < rw; r++) {
       for (let a = 0; a < angles.length; a++) {
-        const idle: number[] = [], cheer: number[] = [];
+        const idle: number[] = [], cheer: number[] = [], jeer: number[] = [];
         poses.forEach((p, pi) => {
           const cell = r * c + pi * angles.length + a;
-          if (p.mood === 'cheer') cheer.push(cell); else if (p.mood === 'idle') idle.push(cell);
+          if (p.mood === 'cheer') cheer.push(cell); else if (p.mood === 'idle') idle.push(cell); else if (p.mood === 'jeer') jeer.push(cell);
         });
-        if (idle.length || cheer.length) groups.push({ idle: idle.length ? idle : cheer, cheer, angle: angles[a].id });
+        if (idle.length || cheer.length) groups.push({ idle: idle.length ? idle : cheer, cheer, jeer, angle: angles[a].id });
       }
     }
   }

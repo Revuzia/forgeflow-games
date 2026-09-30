@@ -11,12 +11,15 @@ export type { FighterSnap, MatchSnap, SimEvent };
 export type MusicCue =
   | 'menu' | 'select' | 'stage' | 'boss' | 'miniboss' | 'win' | 'lose'
   | 'rust_theater' | 'butcher_block' | 'wheel_of_pain' | 'rooftop' | 'control_room'
+  | 'brawl' | 'heckler'
   | 'title' | 'charselect' | 'vs' | 'ladder' | 'results' | 'ending';
 
-/** ui(cue): menu sounds. Aliases: hover = move, select | click = confirm, cancel = back, deny = error */
+/** ui(cue): menu sounds. Aliases: hover = move, select | click = confirm, cancel = back, deny = error. P2 online lobby
+ *  (CONTRACT s9.2.6): search found join leave ready reveal code rematch disconnect countdown */
 export type UiCue =
   | 'move' | 'confirm' | 'back' | 'error' | 'toggle' | 'start' | 'lock' | 'vs' | 'pause' | 'resume'
-  | 'tick' | 'cash' | 'unlock' | 'ladder' | 'hover' | 'select' | 'click' | 'cancel' | 'deny';
+  | 'tick' | 'cash' | 'unlock' | 'ladder' | 'hover' | 'select' | 'click' | 'cancel' | 'deny'
+  | 'search' | 'found' | 'join' | 'leave' | 'ready' | 'reveal' | 'code' | 'rematch' | 'disconnect' | 'countdown';
 
 /** announce(line): lines the flow can call outside the sim (online start sync countdown, bonus-round slates) */
 export type AnnounceLine = '3' | '2' | '1' | 'go' | 'ready' | 'fight' | 'bonus' | 'begin' | 'gameover' | 'victory' | 'win' | 'lose';
@@ -38,6 +41,23 @@ export interface AudioBout {
   local?: number;
   /** Match.tab.sfx: SFX_CUE `b` indexes this list of cue names (CONTRACT s19.8) */
   sfxNames?: readonly string[];
+  /** CHANGED(AUDIO) P2 (CONTRACT s9.2.3): the game data (move tables, stages, bonus-round objects). Omitted = audio reads
+   *  loadGameData() itself (cached; the same object game.ts uses). */
+  data?: AudioGameData;
+}
+
+/** the slice of GameData the audio reads (structural: core/types.ts GameData satisfies it) */
+export interface AudioMoveData {
+  kind: string;
+  name?: string;
+  projectile?: { clip?: string };
+  cinematic?: { cue?: string; hits?: ReadonlyArray<ReadonlyArray<number>> };
+}
+export interface AudioGameData {
+  fighters: Record<string, { moves: Record<string, AudioMoveData> }>;
+  /** data/stages.json ({ stages: [{ id, music?, ambient? }] }, CONTRACT s21); read defensively */
+  stages?: unknown;
+  system?: { heckler?: { objects?: ReadonlyArray<{ id: string }> }; brawl?: { kinds?: ReadonlyArray<{ id: string }> } };
 }
 
 export interface AudioOptions {

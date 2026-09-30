@@ -23,11 +23,12 @@
 // the promise-returning screens: showResults, showPause, showLadder, showCard, showVs, showEnding, showNameEntry.
 
 import type {
-  Action, CardView, LadderView, MatchCfg, MatchResult, MenuIntent, MenusDeps, NetOnlineStatus, OnlineStatus, PlayerControls, Rect, Scheme, UiOnlineStatus,
-  ScreenId, UiGameData, UiSettings, VsView,
+  Action, CardView, LadderView, MatchCfg, MatchResult, MenuIntent, MenusDeps, NetOnlineStatus, OnlineEventName, OnlineStatus, PlayerControls, Rect, Scheme,
+  UiOnlineStatus, ScreenId, UiGameData, UiSettings, VsView,
 } from './types.ts';
+import { banterLines, bonusRules, endingPages, introLine } from './season.ts';
 import { ACTIONS } from './types.ts';
-import { btn, clamp, div, el, flashesReduced, ICON, pulse, setReduceFlashing, setText, svg, touchModeOn, watchTouchMode } from './dom.ts';
+import { btn, clamp, div, el, exposeDev, flashesReduced, ICON, pulse, setReduceFlashing, setText, svg, touchModeOn, watchTouchMode } from './dom.ts';
 import { colorsOf, fighter, fighterName, fillPortrait, stageList, isBoss, onPortraits, playableStage, setPortraits } from './data.ts';
 import { setStrings, t, tOr } from './strings.ts';
 import { buildBug } from './broadcast.ts';
@@ -128,12 +129,21 @@ export class Menus {
   private readonly endBox: HTMLElement;
   private readonly nameBox: HTMLElement;
   private readonly onlineStatus: HTMLElement;
+  private readonly onSteps: HTMLElement;
+  private readonly onRoom: HTMLElement;
+  private readonly onOpp: HTMLElement;
+  private readonly onQual: HTMLElement;
+  /** CHANGED(UI) P2: what the lobby knows about the online session (status payloads + forwarded NET events) */
+  private net: { phase: string; code: string; room: string; transport: string; rttMs: number; opponent: string; locked: boolean; peerRematch: boolean | null; rated: boolean | null; selectLeft: number } =
+    { phase: 'idle', code: '', room: '', transport: '', rttMs: -1, opponent: '', locked: false, peerRematch: null, rated: null, selectLeft: 0 };
+  private selectTimer = 0;
   private readonly onlineCode: HTMLInputElement;
   private readonly onlineName: HTMLInputElement;
   private readonly pauseLegend: HTMLElement;
   private readonly pauseTrainingBtn: HTMLButtonElement;
   private readonly pauseForfeitBtn: HTMLButtonElement;
   private readonly pauseNote: HTMLElement;
+  private trNoteEl: HTMLElement | null = null;
   private readonly keysBox: HTMLElement;
   private readonly bindNote: HTMLElement;
   private readonly touchCard: HTMLElement;
@@ -148,6 +158,9 @@ export class Menus {
   private resolveLadder: ((c: 'go' | 'quit') => void) | null = null;
   private resolveAny: (() => void) | null = null;
   private resolveName: ((s: string) => void) | null = null;
+  /** the results card's countdown (CONTINUE screen) disposer + the last result shown (read-back) */
+  private resDispose: () => void = () => undefined;
+  private lastResult: MatchResult | null = null;
   /** CONTRACT 18.3: a sub-screen opened for the pause card; backing out of its root calls this */
   private subClose: (() => void) | null = null;
   /** the fighter the move list shows by default (the last P1 pick / game.ts's setMoveList) */
@@ -155,9 +168,11 @@ export class Menus {
   private mlScheme: Scheme = 0;
   private anyArmedAt = 0;
   private vsTimer = 0;
+  private endingStep = '';
   private nameLetters = [0, 0, 0];
   private nameSlot = 0;
   private nameSlots: HTMLElement[] = [];
+  private nameMine: HTMLElement | null = null;
   // loop / pads
   private raf = 0;
   private lastPoll = 0;
@@ -234,6 +249,7 @@ export class Menus {
     );
     const sgo = btn('hpm-btn hot hpm-go', t('season.go'));
     sgo.id = 'hpm-season-go';
+    sgo.dataset.row = 'go';
     sgo.addEventListener('click', () => { this.sound('select'); this.flow.kind = 'season'; this.openSelect('season', 'none'); });
     sb.append(sgo);
 
@@ -255,6 +271,7 @@ export class Menus {
     this.updaters.push(() => { cpuRow.hidden = this.flow.opponent !== 'cpu'; });
     const vgo = btn('hpm-btn hot hpm-go', t('versus.go'));
     vgo.id = 'hpm-versus-go';
+    vgo.dataset.row = 'go';
     vgo.addEventListener('click', () => { this.sound('select'); this.flow.kind = 'versus'; this.openSelect('versus', this.flow.opponent); });
     vb.append(vgo);
 
@@ -425,13 +442,27 @@ export class Menus {
         tc.append(this.segRow('tr.cpuLevel', r.label, opts, () => String(this.training.get().cpuLevel), (v) => this.training.set({ cpuLevel: Number(v) }), 'small'));
       } else if (r.kind === 'toggle') tc.append(this.toggle(`tr-${r.key}`, r.label, () => !!this.training.get()[r.key], (v) => this.training.set({ [r.key]: v } as never)));
       else {
-        const b = btn('hpm-btn', r.label);
-        b.id = 'hpm-tr-reset';
-        b.addEventListener('click', () => { this.sound('select'); this.training.reset(); });
-        tc.append(b);
+        // RESET POSITION: MID / CORNER (the dummy cornered) / YOU CORNERED - the driver builds the positioned match and the
+        // bout resumes at once (CONTRACT 27.1)
+        const row = el('div', 'hpm-row wrap hpm-tr-reset');
+        row.append(el('span', 'lbl', r.label));
+        const seg = div('hpm-seg small', row);
+        for (const [where, label] of r.opts) {
+          const b = btn('hpm-segbtn', label);
+          b.id = `hpm-tr-reset-${where}`;
+          b.addEventListener('click', () => { this.sound('select'); this.training.reset(where); this.trNote(t('tr.reset.done', { where: label })); });
+          seg.append(b);
+        }
+        tc.append(row);
       }
     }
-    this.offs.push(this.training.on(() => this.refresh()));
+    this.trNoteEl = el('p', 'hpm-note hpm-tr-note', '');
+    this.trNoteEl.setAttribute('role', 'status');
+    tc.append(this.trNoteEl);
+    this.offs.push(this.training.on((o, action) => {
+      if (action === 'change') this.trNote(o.record === 'record' ? t('tr.rec.hint') : o.record === 'play' ? (this.training.recorded > 0 ? t('tr.play.hint') : t('tr.play.none')) : o.dummy === 'cpu' ? t('tr.cpu.hint', { n: o.cpuLevel }) : '');
+      this.refresh();
+    }));
 
     // ── MOVE LIST ─────────────────────────────────────
     const mls = this.mkScreen('movelist');
@@ -486,12 +517,22 @@ export class Menus {
     this.onlineName.value = this.deps.save.get().onlineName ?? '';
     this.onlineName.addEventListener('change', () => this.deps.save.set?.({ onlineName: this.onlineName.value.trim().slice(0, 16) }));
     side.append(this.onlineName, el('h3', 'hpm-cap', t('on.status')));
+    // CHANGED(UI) P2: the lobby status panel - the flow's steps, the status line (NET codes, strings.json net.*), the room
+    // code to share, the opponent, and the connection (DIRECT / BACKUP LINE + ping bars) (CONTRACT 27.2)
+    this.onSteps = div('hpm-on-steps', side);
+    for (const k of ['search', 'room', 'connect', 'sync', 'select', 'fight'] as const) this.onSteps.append(el('i', `s-${k}`, t(`on.step.${k}`)));
     this.onlineStatus = div('hpm-on-status', side, t('on.st.idle'));
     this.onlineStatus.id = 'hpm-on-status';
     this.onlineStatus.setAttribute('role', 'status');
+    this.onRoom = div('hpm-on-room', side);
+    this.onRoom.hidden = true;
+    this.onOpp = div('hpm-on-opp', side);
+    this.onOpp.hidden = true;
+    this.onQual = div('hpm-on-qual', side);
+    this.onQual.hidden = true;
     const leave = btn('hpm-small', t('on.cancel'));
     leave.id = 'hpm-on-leave';
-    leave.addEventListener('click', () => { this.sound('back'); this.emit({ kind: 'online', action: 'cancel' }); this.setOnlineStatus({ st: 'idle' }); });
+    leave.addEventListener('click', () => { this.sound('back'); this.emit({ kind: 'online', action: 'cancel' }); this.resetNet(); this.setOnlineStatus({ st: 'idle' }); });
     side.append(leave);
 
     // ── CREDITS ───────────────────────────────────────
@@ -561,6 +602,7 @@ export class Menus {
     this.setTouchMode(this.touch);
     this.syncFullscreen();
     this.refresh();
+    exposeDev('menus', this);
   }
 
   // ─────────────────────────── CONTRACT 16 ───────────────────────────
@@ -606,6 +648,7 @@ export class Menus {
 
   hide(): void {
     this.endCapture();
+    this.resDispose();
     this.root.hidden = true;
     this.screen = null;
     this.stack = [];
@@ -618,11 +661,14 @@ export class Menus {
 
   showResults(r: MatchResult): Promise<ResultChoice> {
     this.stack = ['results'];
+    this.resDispose();
     return new Promise<ResultChoice>((resolve) => {
       this.resolveResults = resolve;
-      const btns = buildResults(this.resBox, this.data, r, (c) => this.finishResults(c));
+      const view = buildResults(this.resBox, this.data, r, (c) => this.finishResults(c), this.touch);
+      this.resDispose = view.dispose;
+      this.lastResult = r;
       this.render('results');
-      if (btns[0]) this.focus(btns[0], false);
+      if (view.buttons[0]) this.focus(view.buttons[0], false);
       this.music('results');
     });
   }
@@ -664,10 +710,25 @@ export class Menus {
     return this.anyKeyScreen('card', 0);
   }
 
-  showEnding(p: { fighter: string; score: number; unlocked: string[] }): Promise<void> {
-    this.stack = ['ending'];
-    this.buildEnding(p);
-    return this.anyKeyScreen('ending', 0);
+  /**
+   * CHANGED(UI) P2 (CONTRACT 27.4): the per-fighter ENDING sequence - SEASON FINALE, the fighter's ending text (fighters/<id>
+   * .json `ending`, paged by sentences), RATINGS TOTAL, THE BOARD (the local board incl. this clear), UNLOCKED - one card
+   * per press; resolves after the last card.
+   */
+  async showEnding(p: { fighter: string; score: number; unlocked: string[]; length?: 'season' | 'pilot'; continues?: number }): Promise<void> {
+    const pages = endingPages(this.data, p.fighter);
+    const cards: Array<{ kind: 'finale' | 'text' | 'ratings' | 'board' | 'unlock'; page?: number }> = [{ kind: 'finale' }];
+    pages.forEach((_, i) => cards.push({ kind: 'text', page: i }));
+    cards.push({ kind: 'ratings' });
+    if ((this.deps.save.get().board ?? []).length) cards.push({ kind: 'board' });
+    if (p.unlocked.length) cards.push({ kind: 'unlock' });
+    for (let k = 0; k < cards.length; k++) {
+      this.stack = ['ending'];
+      this.buildEnding(p, cards[k], pages, k, cards.length);
+      this.endingStep = `${cards[k].kind}${cards[k].page !== undefined ? cards[k].page : ''}`;
+      await this.anyKeyScreen('ending', 0);
+    }
+    this.endingStep = '';
   }
 
   showNameEntry(p: { score: number; fighter: string }): Promise<string> {
@@ -687,13 +748,24 @@ export class Menus {
   setOnlineStatus(st0: OnlineStatus): void {
     if (!('st' in st0)) {
       const s = st0 as NetOnlineStatus;
-      // NET's status / error payload: a NET_STRINGS code key + its vars (CONTRACT 19.4)
+      // NET's status / error payload: a NET_STRINGS code key + its vars (CONTRACT 19.4); the room code rides as `room`
       const vars: Record<string, string | number> = {};
       for (const k of Object.keys(s)) { const v = (s as Record<string, unknown>)[k]; if (typeof v === 'string' || typeof v === 'number') vars[k] = v; }
       if (typeof s.rttMs === 'number') vars.rtt = Math.round(s.rttMs);
-      if (typeof s.room === 'string' && !vars.code) vars.code = s.room;
+      if (typeof s.room === 'string') vars.code = s.room;
       setText(this.onlineStatus, tOr(s.code, s.code, vars));
-      this.onlineStatus.dataset.st = /error|mismatch|busy|full|no_|cheat|left/.test(s.code) ? 'failed' : 'searching';
+      const failed = /error|mismatch|busy|full|no_|cheat|left|nocontest/.test(s.code);
+      this.onlineStatus.dataset.st = failed ? 'failed' : s.code === 'net.direct' || s.code === 'net.select' || s.code === 'net.loading' ? 'connected' : 'searching';
+      // CHANGED(UI) P2: remember the session facts the payload carries (connection quality, phase, room)
+      if (typeof s.phase === 'string') this.net.phase = s.phase;
+      if (typeof s.rttMs === 'number' && s.rttMs >= 0) this.net.rttMs = s.rttMs;
+      const tr = (s as { transport?: unknown }).transport;
+      if (typeof tr === 'string') this.net.transport = tr;
+      if (typeof s.room === 'string' && s.room) this.net.room = s.room;
+      this.net.code = s.code;
+      if (s.code === 'net.rematch_asked') this.net.peerRematch = true;
+      if (failed || s.phase === 'ended' || s.phase === 'idle') this.net.peerRematch = null;
+      this.renderNet();
       return;
     }
     const s = st0 as UiOnlineStatus;
@@ -701,6 +773,99 @@ export class Menus {
       : s.st === 'failed' ? t('on.st.failed', { reason: s.reason }) : t(`on.st.${s.st}`);
     setText(this.onlineStatus, txt);
     this.onlineStatus.dataset.st = s.st;
+    if (s.st === 'waiting') { this.net.room = s.code; this.net.phase = 'room'; }
+    else if (s.st === 'searching') this.net.phase = 'searching';
+    else if (s.st === 'connecting') this.net.phase = 'connecting';
+    else if (s.st === 'connected') { this.net.opponent = s.name; this.net.rttMs = s.ping; this.net.phase = 'select'; }
+    else if (s.st === 'relay') this.net.transport = 'relay';
+    else if (s.st === 'idle') this.resetNet();
+    this.renderNet();
+  }
+
+  /**
+   * CHANGED(UI) P2 (CONTRACT 27.2): the NET 19.4 events besides status / error, forwarded by game.ts:
+   * select (opponent name + pick countdown), opponentLocked, rematch (peerWants), matchEnd (rated), end (session over).
+   */
+  onlineEvent(name: OnlineEventName, payload?: unknown): void {
+    const p = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
+    switch (name) {
+      case 'paired': if (typeof p.room === 'string') this.net.room = p.room; this.net.phase = 'connecting'; break;
+      case 'select': {
+        this.net.phase = 'select';
+        this.net.locked = false;
+        this.net.peerRematch = null;
+        if (typeof p.opponent === 'string' && p.opponent) this.net.opponent = p.opponent;
+        const secs = typeof p.seconds === 'number' && p.seconds > 0 ? Math.round(p.seconds) : 30;
+        this.startSelectClock(secs);
+        break;
+      }
+      case 'opponentLocked': this.net.locked = true; this.cs.opponentLocked(); break;
+      case 'reveal': window.clearInterval(this.selectTimer); this.net.phase = 'loading'; break;
+      case 'rematch': this.net.peerRematch = !!p.peerWants; if (p.peerWants) setText(this.onlineStatus, t('net.rematch_asked')); break;
+      case 'matchEnd': this.net.phase = 'result'; this.net.rated = typeof p.rated === 'boolean' ? p.rated : null; break;
+      case 'end': this.net.phase = 'ended'; this.net.peerRematch = null; window.clearInterval(this.selectTimer); break;
+      default: break;
+    }
+    this.renderNet();
+    this.cs.setOnline({ opponent: this.net.opponent, locked: this.net.locked, secondsLeft: this.net.selectLeft });
+    const rb = this.resBox.querySelector<HTMLElement>('.hpm-res-rematch');
+    if (rb) { rb.hidden = this.net.peerRematch !== true; }
+    else if (this.net.peerRematch === true && this.screen === 'results') {
+      const acts = this.resBox.querySelector('.hpm-res-acts');
+      if (acts) { const b = el('div', 'hpm-res-rematch', t('net.rematch_asked')); acts.prepend(b); }
+    }
+  }
+
+  private startSelectClock(secs: number): void {
+    window.clearInterval(this.selectTimer);
+    this.net.selectLeft = secs;
+    this.selectTimer = window.setInterval(() => {
+      this.net.selectLeft = Math.max(0, this.net.selectLeft - 1);
+      this.cs.setOnline({ opponent: this.net.opponent, locked: this.net.locked, secondsLeft: this.net.selectLeft });
+      if (this.net.selectLeft <= 0) {
+        window.clearInterval(this.selectTimer);
+        // time is up: lock the fighter under the cursor (NET picks a random one 1.5 s later otherwise); the select's own
+        // done() path emits the onlinePick intent
+        this.cs.forcePick();
+      }
+    }, 1000);
+  }
+
+  private resetNet(): void {
+    window.clearInterval(this.selectTimer);
+    this.net = { phase: 'idle', code: '', room: '', transport: '', rttMs: -1, opponent: '', locked: false, peerRematch: null, rated: null, selectLeft: 0 };
+    this.renderNet();
+  }
+
+  /** the lobby panel: step ribbon, room code, opponent, connection */
+  private renderNet(): void {
+    const n = this.net;
+    const order = ['search', 'room', 'connect', 'sync', 'select', 'fight'];
+    const at: Record<string, string> = { searching: 'search', room: 'room', connecting: 'connect', syncing: 'sync', select: 'select', loading: 'fight', match: 'fight', result: 'fight' };
+    const k = order.indexOf(at[n.phase] ?? '');
+    [...this.onSteps.children].forEach((c, i) => { c.classList.toggle('done', k >= 0 && i < k); c.classList.toggle('on', i === k); });
+    this.onSteps.hidden = k < 0;
+    const showRoom = !!n.room && (n.phase === 'room' || n.code === 'net.waiting_peer') && n.room.length <= 6;
+    this.onRoom.hidden = !showRoom;
+    if (showRoom) { this.onRoom.replaceChildren(el('span', '', t('on.room')), el('b', '', n.room), el('small', '', t('on.room.share'))); }
+    this.onOpp.hidden = !n.opponent;
+    if (n.opponent) this.onOpp.replaceChildren(el('span', '', t('on.opponent')), el('b', '', n.opponent));
+    this.onQual.hidden = !n.transport || n.transport === 'none';
+    if (!this.onQual.hidden) this.onQual.replaceChildren(this.qualityChip());
+  }
+
+  /** DIRECT LINE / BACKUP LINE + 4 ping bars + the round trip (status rttMs) */
+  private qualityChip(): HTMLElement {
+    const n = this.net;
+    const relay = n.transport === 'relay';
+    const rtt = n.rttMs;
+    const bars = rtt < 0 ? 0 : rtt < 60 ? 4 : rtt < 120 ? 3 : rtt < 200 ? 2 : 1;
+    const c = el('span', `hpm-qual${relay ? ' relay' : ''} b${bars}`);
+    const bx = el('span', 'bars');
+    for (let i = 0; i < 4; i++) bx.append(el('i', i < bars ? 'on' : ''));
+    c.append(bx, el('b', '', relay ? t('on.q.relay') : t('on.q.direct')));
+    if (rtt >= 0) c.append(el('span', 'ms', t('on.q.ms', { n: Math.round(rtt) })));
+    return c;
   }
 
   /** online blind select: the opponent's locked pick (reveals the P2 card) */
@@ -750,6 +915,9 @@ export class Menus {
       conflict: this.conflict ? { ...this.conflict, other: { ...this.conflict.other } } : null, note: this.bindNote.textContent ?? '',
       flow: { ...this.flow, picks: this.flow.picks ? { ...this.flow.picks } : null }, cs: this.cs.readback(), training: this.training.get(),
       touch: this.touch, hints: !this.hints.hidden, gamepad: this.padSeen, showcase: this.showcaseRect(), fullscreen: FS(),
+      ending: this.endingStep, net: { ...this.net },
+      result: this.lastResult ? { mode: this.lastResult.cfg.mode, winner: this.lastResult.winner, rounds: this.resBox.querySelectorAll('.hpm-res-rounds .rr:not(.head)').length,
+        continue: !!this.resBox.querySelector('.hpm-res-cont'), countdown: this.resBox.querySelector('.hpm-res-cont .n')?.textContent ?? null } : null,
     };
   }
 
@@ -794,7 +962,9 @@ export class Menus {
         const d = r.p2 ?? r.p1;
         const tr = this.training.get();
         const stage = this.defaultStage(r.p1.fighter);
-        const cfg: MatchCfg = { mode: 'training', stage, seed, p: [P(r.p1, -1), P(d, tr.dummy === 'cpu' ? tr.cpuLevel : 0)], rounds: 1, timer: 0 };
+        // CHANGED(UI) P2: P2 is no CPU unless DUMMY: CPU (P1 always sent CPU 0 = the TUTOR band, which walked in and attacked a
+        // STAND dummy); the training driver owns the dummy from here (CONTRACT 27.1)
+        const cfg: MatchCfg = { mode: 'training', stage, seed, p: [P(r.p1, -1), P(d, tr.dummy === 'cpu' ? tr.cpuLevel : -1)], rounds: 1, timer: 0 };
         this.emit({ kind: 'training', cfg });
         break;
       }
@@ -875,11 +1045,17 @@ export class Menus {
       fillPortrait(pic, this.data, s.fighter, col?.tint ?? null);
       const plate = div('hpm-vs-plate', side);
       plate.append(el('b', '', fighterName(this.data, s.fighter)), el('span', '', s.label ?? fighter(this.data, s.fighter)?.persona ?? ''));
+      // CHANGED(UI) P2: the fighter's CONTRACT 26.3 introLine as a speech line on the VS card
+      const line = introLine(this.data, s.fighter);
+      if (line) plate.append(el('q', 'intro', line));
     }
     div('hpm-vs-vs', box, t('vs.vs'));
     const bot = div('hpm-vs-bot', box);
     bot.append(el('span', '', t('vs.onset', { stage: tOr(`stage.${v.stage}.name`, v.stage.toUpperCase()) })));
-    if (v.mode === 'online') bot.append(el('span', 'rated', v.rated ? t('vs.rated') : t('vs.unrated')));
+    if (v.mode === 'online') {
+      bot.append(el('span', 'rated', v.rated ? t('vs.rated') : t('vs.unrated')));
+      if (this.net.transport) bot.append(this.qualityChip());
+    }
   }
 
   private buildLadder(v: LadderView): void {
@@ -894,12 +1070,52 @@ export class Menus {
     const sc = div('kv', me);
     sc.append(el('span', '', t('ladder.score')), el('b', '', Math.floor(v.score).toLocaleString('en-US')));
     if (typeof v.ratings === 'number') { const rt = div('kv', me); rt.append(el('span', '', t('ladder.ratings')), el('b', '', `${Math.round(v.ratings)}`)); }
-    const list = div('hpm-lad-list', box);
+    if (typeof v.continues === 'number' && v.continues > 0) { const ct = div('kv', me); ct.append(el('span', '', t('ladder.continues')), el('b', '', String(v.continues))); }
+
+    // CHANGED(UI) P2: real progress - EPISODE n OF N, a track of every slot (cleared / next / ahead), the NEXT UP preview
+    const main = div('hpm-lad-main', box);
+    const episodes = v.bouts.filter((b) => b.kind !== 'brawl' && b.kind !== 'heckler').length;
+    const cur = v.bouts[v.current];
+    const epNow = v.bouts.slice(0, v.current + 1).filter((b) => b.kind !== 'brawl' && b.kind !== 'heckler').length;
+    const prog = div('hpm-lad-prog', main);
+    const bonusNow = cur && (cur.kind === 'brawl' || cur.kind === 'heckler');
+    prog.append(el('b', 'ep', bonusNow ? t(`ladder.${cur.kind}`) : t('ladder.progress', { n: Math.max(1, epNow), of: episodes })));
+    const track = div('hpm-lad-track', prog);
+    v.bouts.forEach((b, k) => {
+      const cell = el('i', `k-${b.kind}${k < v.current ? ' done' : k === v.current ? ' cur' : ''}${b.result === 'lost' ? ' lost' : ''}`);
+      cell.title = b.kind;
+      track.append(cell);
+    });
+    const done = v.bouts.slice(0, v.current).filter((b) => b.result === 'won' || b.result === undefined || b.result === null).length;
+    prog.append(el('span', 'pct', t('ladder.cleared', { n: done, of: v.bouts.length })));
+    if (cur) {
+      const next = div('hpm-card hpm-lad-next', main);
+      next.append(el('span', 'hpm-cap', t('ladder.nextUp')));
+      const isBout = cur.kind !== 'brawl' && cur.kind !== 'heckler';
+      if (isBout && cur.opponent) {
+        const np = div('hp-portrait hpm-lad-npic', next);
+        fillPortrait(np, this.data, cur.opponent);
+        const tx = div('tx', next);
+        const f = fighter(this.data, cur.opponent);
+        tx.append(el('b', 'nm', fighterName(this.data, cur.opponent)), el('span', 'pe', f?.persona ?? ''));
+        const st = f?.stage;
+        if (st) tx.append(el('span', 'st', t('ladder.onStage', { stage: tOr(`stage.${st}.name`, st.toUpperCase()) })));
+        const line = introLine(this.data, cur.opponent);
+        if (line) tx.append(el('q', 'ln', line));
+        if (cur.kind !== 'bout') next.append(el('span', `badge k-${cur.kind}`, t(`ladder.${cur.kind}`)));
+      } else {
+        const np = div('hp-portrait hpm-lad-npic bonus', next);
+        np.append(el('b', 'ini', String(cur.kind === 'heckler' ? 40 : 45)));
+        const tx = div('tx', next);
+        tx.append(el('b', 'nm', t(`card.${cur.kind}.title`)), el('span', 'pe', t(`card.${cur.kind}.body`)));
+      }
+    }
+    const list = div('hpm-lad-list', main);
     let ep = 0;
     v.bouts.forEach((b, k) => {
       const isBout = b.kind !== 'brawl' && b.kind !== 'heckler';
       if (isBout) ep++;
-      const row = div(`hpm-lad-row k-${b.kind}${k === v.current ? ' cur' : ''}${b.result ? ` ${b.result}` : ''}`, list);
+      const row = div(`hpm-lad-row k-${b.kind}${k === v.current ? ' cur' : ''}${b.result ? ` ${b.result}` : k < v.current ? ' won' : ''}`, list);
       row.append(el('span', 'ep', isBout ? t('ladder.ep', { n: ep }) : ''));
       const p2 = div('hp-portrait mini', row);
       const known = b.opponent && (k <= v.current || b.kind === 'rival' || isBoss(b.opponent));
@@ -908,6 +1124,7 @@ export class Menus {
       row.append(el('b', 'nm', isBout ? (known && b.opponent ? fighterName(this.data, b.opponent) : t('ladder.mystery')) : t(`ladder.${b.kind}`)));
       if (b.kind !== 'bout' && isBout) row.append(el('span', 'badge', t(`ladder.${b.kind === 'boss' ? 'boss' : b.kind}`)));
       if (b.result) row.append(el('span', 'res', b.result === 'won' ? t('ladder.won') : t('ladder.lost')));
+      else if (k < v.current) row.append(el('span', 'res', t('ladder.won')));
       else if (k === v.current) row.append(el('span', 'res next', t('ladder.next')));
     });
     const acts = div('hpm-lad-acts', box);
@@ -933,7 +1150,12 @@ export class Menus {
     bug.classList.add('hpm-sc-bug');
     box.append(bug);
     const art = div('hpm-sc-art', box);
-    const pics = c.kind === 'rival' ? [c.a, c.b] : c.kind === 'miniboss' || c.kind === 'boss' ? [c.a] : [];
+    // CHANGED(UI) P2: game.ts passes { a: the player, b: the opponent } for EVERY card (the P1 card drew the PLAYER as
+    // the boss); a boss card without `b` (the lab / older callers) treats `a` as the boss
+    const boss = c.kind === 'miniboss' || c.kind === 'boss';
+    const player = boss ? (c.b ? c.a : undefined) : c.a;
+    const opp = boss ? (c.b ?? c.a) : c.b;
+    const pics = c.kind === 'rival' ? [player, opp] : boss ? [opp] : [];
     for (const id of pics) { const p = div('hp-portrait hpm-sc-pic', art); fillPortrait(p, this.data, id ?? null); }
     if (!pics.length) {
       // BRAWL BREAK 45 s / HECKLER TOSS 40 s (CONTRACT 4.3 item 14): a big seconds badge on the hazard stripes
@@ -944,38 +1166,114 @@ export class Menus {
     const lt = div('hpm-sc-lt', box);
     lt.append(el('span', 'kick', t(`card.${c.kind}.kicker`)));
     const name = (id?: string): string => (id ? fighterName(this.data, id) : '');
-    const head = c.kind === 'rival' ? t('card.rival.title', { a: name(c.a), b: name(c.b) })
-      : c.kind === 'miniboss' ? t('card.miniboss.title', { name: name(c.a) }) : c.kind === 'boss' ? t('card.boss.title', { name: name(c.a) })
+    const head = c.kind === 'rival' ? t('card.rival.title', { a: name(player), b: name(opp) })
+      : c.kind === 'miniboss' ? t('card.miniboss.title', { name: name(opp) }) : c.kind === 'boss' ? t('card.boss.title', { name: name(opp) })
         : t(`card.${c.kind}.title`);
     lt.append(el('div', 'head', head));
-    if (c.kind === 'rival' && c.banter) {
-      const bb = div('hpm-banter', lt);
-      c.banter.forEach((line, i) => { const q = div(`q p${i + 1}`, bb); q.append(el('b', '', name(i === 0 ? c.a : c.b)), el('p', '', line)); });
-    } else {
-      const body = c.kind === 'rival' ? '' : t(`card.${c.kind}.body`);
+    // banter: the caller's two lines, else both sides' CONTRACT 26.3 lines from the fighter files (P1 1, P2 1, P1 2, P2 2)
+    const lines: Array<{ who: 0 | 1; text: string; direction: boolean }> = c.banter
+      ? c.banter.map((text, i) => ({ who: (i % 2) as 0 | 1, text, direction: /^\(.*\)$/.test(text.trim()) }))
+      : c.kind === 'rival' || boss ? (player && opp ? banterLines(this.data, player, opp) : []) : [];
+    if (c.kind !== 'rival') {
+      const body = t(`card.${c.kind}.body`);
       if (body) lt.append(el('div', 'sub', body));
-      if (c.kind === 'boss') lt.append(el('div', 'warn', t('card.boss.warn')));
     }
+    if (c.kind === 'brawl' || c.kind === 'heckler') {
+      const rules = bonusRules(c.kind);
+      if (rules.length) {
+        const ul = el('ul', 'hpm-sc-rules');
+        rules.forEach((r0, i) => { const li = el('li', ''); li.append(el('b', '', String(i + 1)), el('span', '', r0)); ul.append(li); });
+        lt.append(ul);
+      }
+    }
+    box.classList.toggle('talk', lines.length > 0);
+    if (lines.length) {
+      const bb = div('hpm-banter', lt);
+      for (const ln of lines.slice(0, 4)) {
+        const q = div(`q p${ln.who + 1}${ln.direction ? ' dir' : ''}`, bb);
+        q.append(el('b', '', name(ln.who === 0 ? player : opp)), el('p', '', ln.text));
+      }
+    }
+    if (c.kind === 'boss') lt.append(el('div', 'warn', t('card.boss.warn')));
+    if (c.kind === 'boss' && opp && fighter(this.data, opp)?.unique?.kind === 'phases') lt.append(el('div', 'warn two', t('card.boss.phase2')));
     div('hpm-sc-any', box, this.touch ? t('misc.tapAny') : t('card.continue'));
   }
 
-  private buildEnding(p: { fighter: string; score: number; unlocked: string[] }): void {
+  private buildEnding(p: { fighter: string; score: number; unlocked: string[]; continues?: number }, card: { kind: string; page?: number },
+    pages: string[], k: number, n: number): void {
     const box = this.endBox;
     box.replaceChildren();
+    box.dataset.kind = card.kind;
     div('hpm-sc-tint', box);
     const bug = buildBug(t('ending.kicker'));
     bug.classList.add('hpm-sc-bug');
     box.append(bug);
+    const name = fighterName(this.data, p.fighter);
     const art = div('hpm-sc-art', box);
-    const pic = div('hp-portrait hpm-sc-pic', art);
-    fillPortrait(pic, this.data, p.fighter);
     const lt = div('hpm-sc-lt', box);
-    lt.append(el('span', 'kick', t('ending.kicker')), el('div', 'head', t('ending.title', { name: fighterName(this.data, p.fighter) })));
-    lt.append(el('div', 'sub', tOr(`ending.${p.fighter}`, t('ending.default'))));
-    const sc = div('hpm-sc-score', lt);
-    sc.append(el('span', '', t('ending.ratings')), el('b', '', Math.floor(p.score).toLocaleString('en-US')));
-    if (p.unlocked.length) lt.append(el('div', 'warn ok', t('ending.unlock', { names: p.unlocked.map((id) => fighterName(this.data, id)).join(', ') })));
-    div('hpm-sc-any', box, this.touch ? t('misc.tapAny') : t('card.continue'));
+    switch (card.kind) {
+      case 'finale': {
+        const pic = div('hp-portrait hpm-sc-pic', art);
+        fillPortrait(pic, this.data, p.fighter);
+        lt.append(el('span', 'kick', t('ending.finale')), el('div', 'head', t('ending.title', { name })));
+        const line = introLine(this.data, p.fighter);
+        lt.append(el('div', 'sub', line || (fighter(this.data, p.fighter)?.persona ?? '')));
+        break;
+      }
+      case 'text': {
+        const pic = div('hp-portrait hpm-sc-pic', art);
+        fillPortrait(pic, this.data, p.fighter);
+        lt.append(el('span', 'kick', t('ending.epilogue', { n: (card.page ?? 0) + 1, of: pages.length })));
+        lt.append(el('div', 'sub story', pages[card.page ?? 0] ?? ''));
+        break;
+      }
+      case 'ratings': {
+        art.classList.add('bonus');
+        const secs = div('hpm-sc-secs total', art);
+        const v = el('b', '', '0');
+        secs.append(v, el('span', '', t('ending.ratings')));
+        this.countUp(v, Math.max(0, Math.floor(p.score)));
+        lt.append(el('span', 'kick', t('ending.ratingsKick')), el('div', 'head', t('ending.ratingsHead', { name })));
+        // the continues line only when the caller says how many were used (game.ts may not pass it yet)
+        const c = p.continues;
+        lt.append(el('div', 'sub', typeof c !== 'number' ? t('ending.renewed') : c > 0 ? t('ending.continues', { n: c }) : t('ending.noContinues')));
+        break;
+      }
+      case 'board': {
+        art.classList.add('board');
+        const brd = div('hpm-card hpm-board big', art);
+        brd.append(el('h3', 'hpm-cap', t('name.board')));
+        const rows = [...(this.deps.save.get().board ?? [])].sort((a, b) => b.score - a.score).slice(0, 5);
+        let mine = false;
+        rows.forEach((r, i) => {
+          const me = !mine && r.fighter === p.fighter && r.score === Math.floor(p.score);
+          if (me) mine = true;
+          const row = div(`row${me ? ' me' : ''}`, brd);
+          row.append(el('span', 'k', String(i + 1)), el('b', '', r.name), el('span', 'f', fighterName(this.data, r.fighter)), el('span', 'v', r.score.toLocaleString('en-US')));
+        });
+        lt.append(el('span', 'kick', t('ending.boardKick')), el('div', 'head', mine ? t('ending.onBoard') : t('ending.offBoard')));
+        break;
+      }
+      default: {
+        for (const id of p.unlocked.slice(0, 2)) { const pic = div('hp-portrait hpm-sc-pic', art); fillPortrait(pic, this.data, id); }
+        lt.append(el('span', 'kick', t('ending.unlockKick')), el('div', 'head', t('ending.unlock', { names: p.unlocked.map((id) => fighterName(this.data, id)).join(', ') })));
+        lt.append(el('div', 'warn ok', t('ending.unlockSub')));
+      }
+    }
+    div('hpm-sc-page', box, t('ending.page', { n: k + 1, of: n }));
+    div('hpm-sc-any', box, k === n - 1 ? t('ending.wrap') : this.touch ? t('misc.tapAny') : t('card.continue'));
+  }
+
+  /** a number that counts up to `to` over ~1.2 s (the RATINGS TOTAL card) */
+  private countUp(e: HTMLElement, to: number): void {
+    const t0 = performance.now();
+    const dur = flashesReduced() ? 0 : 1200;
+    const step = (now: number): void => {
+      const k = dur ? Math.min(1, (now - t0) / dur) : 1;
+      e.textContent = Math.round(to * (1 - Math.pow(1 - k, 3))).toLocaleString('en-US');
+      if (k < 1 && e.isConnected) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
 
   private buildNameEntry(p: { score: number; fighter: string }): void {
@@ -1002,15 +1300,30 @@ export class Menus {
     done.id = 'hpm-name-done';
     done.addEventListener('click', () => this.finishName());
     card.append(done);
+    // CHANGED(UI) P2: the local board with THIS run slotted in where its score ranks (the name fills in as it is typed)
     const board = div('hpm-card hpm-board', box);
     board.append(el('h3', 'hpm-cap', t('name.board')));
-    const rows = [...(this.deps.save.get().board ?? [])].sort((a, b) => b.score - a.score).slice(0, 5);
-    rows.forEach((r, k) => { const row = div('row', board); row.append(el('span', 'k', String(k + 1)), el('b', '', r.name), el('span', 'v', r.score.toLocaleString('en-US'))); });
+    const all = [...(this.deps.save.get().board ?? [])].map((r) => ({ ...r, me: false }));
+    const mine = { name: '', score: Math.floor(p.score), fighter: p.fighter, me: true };
+    all.push(mine);
+    all.sort((a, b) => b.score - a.score || (a.me ? 1 : 0) - (b.me ? 1 : 0));
+    const rank = all.indexOf(mine);
+    const top = all.slice(0, 5);
+    if (rank >= 5) top.push(mine);
+    this.nameMine = null;
+    top.forEach((r) => {
+      const row = div(`row${r.me ? ' me' : ''}`, board);
+      const nm = el('b', '', r.me ? '' : r.name);
+      row.append(el('span', 'k', String(all.indexOf(r) + 1)), nm, el('span', 'f', fighterName(this.data, r.fighter)), el('span', 'v', r.score.toLocaleString('en-US')));
+      if (r.me) this.nameMine = nm;
+    });
+    board.append(el('p', 'hpm-note rank', rank < 10 ? t('name.rank', { n: rank + 1 }) : t('name.noRank')));
     this.renderName();
   }
 
   private renderName(): void {
     this.nameSlots.forEach((s, i) => { s.textContent = String.fromCharCode(65 + this.nameLetters[i]); s.classList.toggle('on', i === this.nameSlot); });
+    if (this.nameMine) this.nameMine.textContent = this.nameLetters.map((n) => String.fromCharCode(65 + n)).join('');
   }
 
   private finishName(): void {
@@ -1040,7 +1353,36 @@ export class Menus {
     if (r) { this.sound('select'); r(); }
   }
 
-  private finishResults(c: ResultChoice): void { const r = this.resolveResults; this.resolveResults = null; this.sound('select'); if (r) r(c); }
+  private finishResults(c: ResultChoice): void {
+    this.resDispose();
+    const r = this.resolveResults;
+    this.resolveResults = null;
+    this.sound('select');
+    if (r && c === 'rematch' && this.lastResult?.cfg.mode === 'online') this.rematchWaiting();
+    if (r) r(c);
+  }
+
+  /**
+   * CHANGED(UI) P2 (CONTRACT 27.2 / 29.6): online REMATCH keeps the results card up while game.ts asks the peer - the
+   * choices become a waiting panel (OPPONENT WANTS A REMATCH lights up on the peer's yes; 'select' opens the blind pick,
+   * 'end' sends game.ts to the lobby); LEAVE = {kind: 'online', action: 'cancel'} (game.ts leaves the session).
+   */
+  private rematchWaiting(): void {
+    const acts = this.resBox.querySelector<HTMLElement>('.hpm-res-acts');
+    if (!acts) return;
+    acts.replaceChildren();
+    acts.classList.add('waiting');
+    const w = div('hpm-res-wait', acts);
+    w.append(el('b', '', t('res.rematchWait')), el('span', 'dots', '...'));
+    const peer = el('div', 'hpm-res-rematch', t('net.rematch_asked'));
+    peer.hidden = this.net.peerRematch !== true;
+    acts.append(peer);
+    const leave = btn('hpm-btn', t('on.cancel'));
+    leave.id = 'hpm-res-leave';
+    leave.addEventListener('click', () => { this.sound('back'); this.emit({ kind: 'online', action: 'cancel' }); });
+    acts.append(leave);
+    this.focus(leave, false);
+  }
   private finishLadder(c: 'go' | 'quit'): void { const r = this.resolveLadder; this.resolveLadder = null; if (r) r(c); }
   private finishPause(c: PauseChoice): void { const r = this.resolvePause; this.resolvePause = null; if (r) r(c); }
 
@@ -1118,6 +1460,7 @@ export class Menus {
 
   private render(s: ScreenId, from: ScreenId | null = null): void {
     this.endCapture();
+    if (s !== 'results') this.resDispose();
     this.conflict = null;
     this.screen = s;
     for (const [k, e] of this.screens) e.hidden = k !== s;
@@ -1155,6 +1498,9 @@ export class Menus {
   /** a big labelled segmented pick (setup screens): [value, label, sub] */
   private segCard(key: string, label: string, opts: ReadonlyArray<readonly [string, string, string]>, get: () => string, put: (v: string) => void, size = ''): HTMLElement {
     const card = el('div', `hpm-card hpm-segcard ${size}`.trim());
+    // CHANGED(UI) P2 (verifier D14): setup cards are ROWS - up / down steps row to row (onto the row's picked value), left /
+    // right changes the value (menus.move); P1 laid them out two per line, so DOWN from OPPONENT skipped CPU LEVEL
+    card.dataset.row = key;
     card.append(el('h3', 'hpm-cap', label));
     const row = div(`hpm-seg ${size}`.trim(), card);
     row.setAttribute('role', 'radiogroup');
@@ -1500,10 +1846,25 @@ export class Menus {
     if (!items.length) return false;
     const cur = document.activeElement as HTMLElement | null;
     if (!cur || !items.includes(cur)) { this.focus(items.find((e) => e.hasAttribute('data-default')) ?? items[0], true); return true; }
+    // CHANGED(UI) P2 (D14): row screens - up / down go to the adjacent row's picked value (or its first control)
+    const row = cur.closest<HTMLElement>('[data-row]');
+    if (row && (dir === 'up' || dir === 'down')) {
+      const scope = this.activeEl();
+      const rows = scope ? [...scope.querySelectorAll<HTMLElement>('[data-row]')].filter((r) => r.closest('[hidden]') === null && r.getBoundingClientRect().height > 0) : [];
+      const next = rows[rows.indexOf(row) + (dir === 'down' ? 1 : -1)];
+      if (next) {
+        const pickIn = (sel: string): HTMLElement | null => (next.matches(sel) ? next : null) ?? [...next.querySelectorAll<HTMLElement>(sel)].find((e) => items.includes(e)) ?? null;
+        const target = pickIn('.on[data-nav]') ?? pickIn('[data-nav]');
+        if (target) { this.focus(target, true); return true; }
+      }
+      if (!next && dir === 'down') return false;           // up from the first row falls through to the header (BACK)
+    }
+    // left / right stay inside the row (its end is a wall, never a jump into the row above)
+    const rowItems = row && (dir === 'left' || dir === 'right') ? items.filter((e) => row.contains(e)) : null;
     const r0 = cur.getBoundingClientRect();
     const cx = r0.left + r0.width / 2, cy = r0.top + r0.height / 2;
     let best: HTMLElement | null = null, bestS = Infinity;
-    for (const it of items) {
+    for (const it of rowItems ?? items) {
       if (it === cur) continue;
       const r = it.getBoundingClientRect();
       const x = r.left + r.width / 2, y = r.top + r.height / 2;
@@ -1779,6 +2140,8 @@ export class Menus {
     sc.frame(dt);
     sc.render();
   }
+
+  private trNote(s: string): void { if (this.trNoteEl) setText(this.trNoteEl, s); }
 
   private sound(c: UiCue): void { try { this.deps.audio?.ui?.(c); } catch { /* audio is optional */ } }
   private music(c: string): void { try { this.deps.audio?.music?.(c); } catch { /* optional */ } }

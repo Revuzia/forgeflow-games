@@ -35,7 +35,9 @@
   opacity: var(--hpt-o); transition: transform .06s ease, opacity .08s ease, filter .15s ease;
 }
 .hpt-btn.down { opacity: 1; transform: scale(.94) translateY(2px); box-shadow: 0 2px 0 rgba(11, 11, 16, .7); }
-.hpt-lbl { pointer-events: none; font-size: inherit; line-height: 1; letter-spacing: .02em; }
+.hpt-lbl { pointer-events: none; font-size: inherit; line-height: 1; letter-spacing: .02em; white-space: nowrap; }
+/* CHANGED(UI) P2: long words (PARRY / IMPACT / THROW / SUPER / ASSIST) in the condensed face; controls.ts fits every label */
+.hpt-lbl.long { font-family: 'Bebas Neue', 'Oswald', 'Arial Narrow', sans-serif; letter-spacing: .05em; }
 .hpt-lbl svg { width: 22px; height: 22px; display: block; }
 .hpt-l { background: #9fe7ff; }
 .hpt-m { background: #ffe066; }

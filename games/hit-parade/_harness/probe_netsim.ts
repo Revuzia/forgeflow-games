@@ -11,8 +11,14 @@
 // the desync scenario; final confirmed checksums identical on both peers; the relay sends <= 10 packets/s
 // per side; rollbacks actually happened (non-vacuous); packet codec round-trips and rejects malformed input.
 //
-// Usage: node _harness/probe_netsim.ts [--toy] [--frames 3600] [--verbose] [--hide N]
+// P2 (NET): every trace also runs on the relay with rAF-like TICK JITTER (frames 16.7 ms +- noise, 2% long frames with
+// catch-up ticks, exactly the GameLoop accumulator), and the relay pacing is modelled as shipped (token bucket 10/s,
+// burst 2, net/transport_relay.ts). `--pacing interval` models P1's pacing (one packet per 100 ms since the last flush):
+// with jitter it holds packets 0..100 ms - the cause of P1's 91% live relay speed (progress_p2_net.md).
+//
+// Usage: node _harness/probe_netsim.ts [--toy] [--frames 3600] [--verbose] [--hide N] [--pacing bucket|interval] [--sweep]
 //   --hide N  tuning only: P2P D = clamp(ceil(RTT/2/16.67) - N, 1, 4) instead of sync.ts DELAY_HIDE
+//   --sweep   tuning only: DELAY_HIDE 1..4 x every trace x 4 start phases (p2p, jitter on): speed / delay / rollback table
 // Exit 0 = PASS, 1 = FAIL; one summary line; details -> _harness/_reports/probe_netsim.json
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -37,6 +43,7 @@ const VERBOSE = flag('--verbose');
 const FRAMES = opt('--frames', 3600);
 const SPEED_GATE = 0.96;
 const HIDE = args.includes('--hide') ? opt('--hide', 3) : -1;
+const PACING: 'bucket' | 'interval' = args.includes('--pacing') && args[args.indexOf('--pacing') + 1] === 'interval' ? 'interval' : 'bucket';
 const FRAME_MS = 1000 / 60;
 
 // ---- traces -------------------------------------------------------------------------------------------
@@ -99,6 +106,42 @@ async function simFactory(): Promise<{ kind: 'real' | 'toy'; make: Make; note: s
 // ---- one scenario -------------------------------------------------------------------------------------
 interface Scn {
   name: string; trace: Trace; tier: 'p2p' | 'relay'; loss?: number; dup?: number; driftB?: number; corruptAt?: number; seed: number;
+  /** rAF-like tick jitter on both sides (P2) */
+  jitter?: boolean;
+  /** start the trace this many samples in (sweep phases) */
+  phase?: number;
+  /** override DELAY_HIDE for this run (sweep) */
+  hide?: number;
+}
+
+/**
+ * The browser loop's tick times: rAF frames of 16.67 ms + noise (+-~2 ms), 2% long frames (+8..40 ms); every tick due
+ * by a frame's time runs AT that frame (the GameLoop accumulator, <= 5 per frame). Without jitter: exact period.
+ */
+function tickClock(seed: number, start: number, period: number, jitter: boolean): { peek(): number; advance(): void } {
+  let r = seed | 0;
+  const rand = (): number => {
+    const a = (r = (r + 0x6d2b79f5) | 0);
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  let nominal = start;
+  let frameT = start;
+  let due = 0;
+  return {
+    peek(): number {
+      if (!jitter) return nominal;
+      while (frameT < nominal - 1e-9) {
+        let d = FRAME_MS + (rand() + rand() - 1) * 2;
+        if (rand() < 0.02) d += 8 + rand() * 32;
+        frameT += d;
+        due = 0;
+      }
+      return frameT;
+    },
+    advance(): void { nominal += period; due++; if (due >= 5 && jitter) { nominal = Math.max(nominal, frameT + 1e-6); due = 0; } },
+  };
 }
 interface Row {
   name: string; trace: string; tier: string; D: number; W: number; speedA: number; speedB: number; speed: number;
@@ -106,6 +149,7 @@ interface Row {
   depthP50: number; depthP90: number; depthP99: number; rollbacks: number; maxRollback: number; rollbackFramesAvg: number;
   desyncs: number; violations: number; rejected: number; checksumsCompared: number; finalFramesCompared: number; finalEqual: boolean;
   sentPerSecA: number; sentPerSecB: number; rttEstMs: number; framesA: number; framesB: number; events: string[]; pass: boolean; why: string[];
+  jitter: boolean; heldPct: number; holdMsAvg: number; wallSpeed: number;
 }
 
 function histPct(h: Int32Array, p: number): number {
@@ -148,11 +192,15 @@ function divergent(inner: SimPort, at: number): SimPort {
 function run(s: Scn, make: Make): Row {
   let t = 0;
   const relay = s.tier === 'relay';
-  const D = relay ? RELAY_DELAY : HIDE >= 0 ? Math.max(1, Math.min(4, Math.ceil(s.trace.rttMedian / 2 / FRAME_MS) - HIDE)) : inputDelayFor(s.trace.rttMedian);
+  const hide = s.hide ?? HIDE;
+  const D = relay ? RELAY_DELAY : hide >= 0 ? Math.max(1, Math.min(4, Math.ceil(s.trace.rttMedian / 2 / FRAME_MS) - hide)) : inputDelayFor(s.trace.rttMedian);
   const W = relay ? RELAY_WINDOW : P2P_WINDOW;
   const sendEvery = relay ? RELAY_SEND_EVERY : 1;
-  const link = new SimLink({ now: () => t, delayAB: traceDelay(s.trace.ab), delayBA: traceDelay(s.trace.ba), lossPct: s.loss ?? 0,
-    dupPct: s.dup ?? 0, seed: s.seed * 31 + 7, minIntervalMs: relay ? 95 : 0, kind: relay ? 'relay' : 'loop' });
+  const off = (s.phase ?? 0) * FRAME_MS;
+  const ab = traceDelay(s.trace.ab), ba = traceDelay(s.trace.ba);
+  const link = new SimLink({ now: () => t, delayAB: (x) => ab(x + off), delayBA: (x) => ba(x + off), lossPct: s.loss ?? 0,
+    dupPct: s.dup ?? 0, seed: s.seed * 31 + 7, minIntervalMs: relay ? 100 : 0, pacing: relay ? PACING : 'interval', rate: 10, burst: 2,
+    kind: relay ? 'relay' : 'loop' });
   const matchSeed = 1000 + s.seed;
   const simA = make(matchSeed), simB = s.corruptAt ? divergent(make(matchSeed), s.corruptAt) : make(matchSeed);
   const events: string[] = [];
@@ -161,14 +209,15 @@ function run(s: Scn, make: Make): Row {
   const B = new RollbackSession(simB, 1, link.b, { now: () => t, delay: D, window: W, sendEvery, startAt: 12, onEvent: onEv('B') });
   const gA = new InputGen(s.seed * 7 + 1, IN.R), gB = new InputGen(s.seed * 13 + 2, IN.L);
   const periodA = FRAME_MS, periodB = FRAME_MS * (s.driftB ? 60 / s.driftB : 1);
-  let nA = 0, nB = 12;
+  const cA = tickClock(s.seed * 97 + 3, 0, periodA, !!s.jitter), cB = tickClock(s.seed * 89 + 5, 12, periodB, !!s.jitter);
   const tail = 90;
   let guard = 0;
   while (guard++ < (FRAMES + tail) * 6) {
     const fa = A.currentFrame(), fb = B.currentFrame();
     if (fa >= FRAMES + tail && fb >= FRAMES + tail && A.confirmedFrame() >= FRAMES + 45 && B.confirmedFrame() >= FRAMES + 45) break;
-    if (nA <= nB) { t = nA; A.tick(fa < FRAMES ? gA.next() : 0); nA += periodA; }
-    else { t = nB; B.tick(fb < FRAMES ? gB.next() : 0); nB += periodB; }
+    const ta = cA.peek(), tb = cB.peek();
+    if (ta <= tb) { t = ta; A.tick(fa < FRAMES ? gA.next() : 0); cA.advance(); }
+    else { t = tb; B.tick(fb < FRAMES ? gB.next() : 0); cB.advance(); }
   }
   const sa = A.stats(), sb = B.stats();
   // final: every checksum frame both logs still hold must agree
@@ -194,6 +243,10 @@ function run(s: Scn, make: Make): Row {
     checksumsCompared: sa.checksumsCompared + sb.checksumsCompared, finalFramesCompared: compared, finalEqual: equal && compared > 0,
     sentPerSecA: Math.round((link.a.sentInput / secs) * 100) / 100, sentPerSecB: Math.round((link.b.sentInput / secs) * 100) / 100,
     rttEstMs: Math.round(sa.rttMedianMs), framesA: sa.frame, framesB: sb.frame, events, pass: true, why: [],
+    jitter: !!s.jitter,
+    heldPct: link.a.sentInput + link.b.sentInput ? Math.round(((link.a.held + link.b.held) / (link.a.sentInput + link.b.sentInput)) * 1000) / 10 : 0,
+    holdMsAvg: link.a.held + link.b.held ? Math.round(((link.a.holdMsSum + link.b.holdMsSum) / (link.a.sentInput + link.b.sentInput)) * 10) / 10 : 0,
+    wallSpeed: round4(Math.min(sa.wallSpeed, sb.wallSpeed)),
   };
   const why = row.why;
   if (row.speed < SPEED_GATE) why.push(`speed ${(row.speed * 100).toFixed(2)}% < 96%`);
@@ -265,14 +318,17 @@ async function main(): Promise<number> {
   if (!traces.length) { console.log('FAIL probe_netsim: no raw traces in _research/netcode'); return 1; }
   const rows: Row[] = [];
   let seed = 1;
+  if (flag('--sweep')) { sweep(traces, sim.make); return 0; }
   for (const tr of traces) {
     rows.push(run({ name: 'p2p', trace: tr, tier: 'p2p', seed: seed++ }, sim.make));
     rows.push(run({ name: 'relay', trace: tr, tier: 'relay', seed: seed++ }, sim.make));
+    rows.push(run({ name: 'relay+jitter', trace: tr, tier: 'relay', jitter: true, seed: seed++ }, sim.make));
   }
   const worst = traces.slice().sort((a, b) => (b.abP99 + b.baP99) - (a.abP99 + a.baP99))[0];
   rows.push(run({ name: 'loss5+dup3', trace: worst, tier: 'p2p', loss: 5, dup: 3, seed: seed++ }, sim.make));
   rows.push(run({ name: 'relay loss5', trace: worst, tier: 'relay', loss: 5, seed: seed++ }, sim.make));
   rows.push(run({ name: 'drift B 59.7Hz', trace: worst, tier: 'p2p', driftB: 59.7, seed: seed++ }, sim.make));
+  rows.push(run({ name: 'p2p+jitter', trace: worst, tier: 'p2p', jitter: true, seed: seed++ }, sim.make));
   rows.push(run({ name: 'desync@1500', trace: worst, tier: 'p2p', corruptAt: 1500, seed: seed++ }, sim.make));
   rows.push(run({ name: 'relay desync@1500', trace: worst, tier: 'relay', corruptAt: 1500, seed: seed++ }, sim.make));
   const rollbacksTotal = rows.reduce((a, r) => a + r.rollbacks, 0);
@@ -282,7 +338,7 @@ async function main(): Promise<number> {
   write(report);
   if (VERBOSE || !pass) {
     for (const r of rows) {
-      console.log(`${r.pass ? 'ok  ' : 'FAIL'} ${r.name.padEnd(18)} ${r.trace.padEnd(40)} D=${r.D} W=${r.W} speed=${(r.speed * 100).toFixed(2)}% ` +
+      console.log(`${r.pass ? 'ok  ' : 'FAIL'} ${r.name.padEnd(18)} ${r.trace.padEnd(40)} D=${r.D} W=${r.W} speed=${(r.speed * 100).toFixed(2)}% wall=${(r.wallSpeed * 100).toFixed(2)}% held=${r.heldPct}% hold~${r.holdMsAvg}ms ` +
         `depth p50/p90/p99=${r.depthP50}/${r.depthP90}/${r.depthP99} rb=${r.rollbacks} max=${r.maxRollback} desync=${r.desyncs} cs=${r.checksumsCompared} ` +
         `stall=${r.stallTicksA}/${r.stallTicksB} skip=${r.skipTicksA}/${r.skipTicksB} final=${r.finalEqual ? 'eq' : 'NE'}(${r.finalFramesCompared}) pkt/s=${r.sentPerSecA}/${r.sentPerSecB} rtt~${r.rttEstMs}${r.why.length ? ' <- ' + r.why.join('; ') : ''}`);
     }
@@ -291,11 +347,41 @@ async function main(): Promise<number> {
   const tierRows = rows.filter((r) => r.name === 'p2p' || r.name === 'relay');
   const minP2P = Math.min(...tierRows.filter((r) => r.tier === 'p2p').map((r) => r.speed));
   const minRelay = Math.min(...tierRows.filter((r) => r.tier === 'relay').map((r) => r.speed));
+  const jitRows = rows.filter((r) => r.name === 'relay+jitter');
+  const minRelayJ = Math.min(...jitRows.map((r) => r.speed));
+  const heldJ = jitRows.length ? Math.max(...jitRows.map((r) => r.heldPct)) : 0;
   console.log(`${pass ? 'PASS' : 'FAIL'} probe_netsim sim=${sim.kind} [${sim.note}] traces=${traces.length} scenarios=${rows.length} ` +
-    `min speed p2p=${(minP2P * 100).toFixed(2)}% relay=${(minRelay * 100).toFixed(2)}% (gate 96%) rollbacks=${rollbacksTotal} ` +
+    `min speed p2p=${(minP2P * 100).toFixed(2)}% relay=${(minRelay * 100).toFixed(2)}% relay+jitter=${(minRelayJ * 100).toFixed(2)}% (gate 96%; pacing=${PACING}, held<=${heldJ}%) rollbacks=${rollbacksTotal} ` +
     `desync-recovery=${rows.filter((r) => r.name.includes('desync')).every((r) => r.pass) ? 'ok' : 'FAIL'} codec=${codec.length ? 'FAIL' : 'ok'}` +
     (failed.length ? ` failed=[${failed.map((r) => r.name + '@' + r.trace + ': ' + r.why.join(', ')).join(' | ')}]` : ''));
   return pass ? 0 : 1;
+}
+
+/** DELAY_HIDE tuning (NETCODE 3.3 "-3"): hide 1..4 x every trace x 4 start phases, p2p with tick jitter. */
+function sweep(traces: Trace[], make: Make): void {
+  const res: Record<string, unknown>[] = [];
+  for (const hide of [1, 2, 3, 4]) {
+    const speeds: number[] = [], Ds: number[] = [], rbps: number[] = [], rbAvg: number[] = [], depth90: number[] = [];
+    let seed = 500;
+    for (const tr of traces) {
+      for (const phase of [0, 50, 100, 150]) {
+        const r = run({ name: 'sweep', trace: tr, tier: 'p2p', jitter: true, phase, hide, seed: seed++ }, make);
+        speeds.push(r.speed); Ds.push(r.D); rbps.push(r.rollbacks / (2 * FRAMES / 60)); rbAvg.push(r.rollbackFramesAvg); depth90.push(r.depthP90);
+      }
+    }
+    const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
+    const row = { hide, runs: speeds.length, minSpeed: round4(Math.min(...speeds)), meanSpeed: round4(mean(speeds)), below96: speeds.filter((x) => x < 0.96).length,
+      meanD: Math.round(mean(Ds) * 100) / 100, rollbacksPerSidePerSec: Math.round(mean(rbps) * 100) / 100, meanRollbackLen: Math.round(mean(rbAvg) * 100) / 100,
+      meanDepthP90: Math.round(mean(depth90) * 100) / 100 };
+    res.push(row);
+    console.log(`hide=${hide} runs=${row.runs} min speed ${(row.minSpeed * 100).toFixed(2)}% mean ${(row.meanSpeed * 100).toFixed(2)}% below96=${row.below96} ` +
+      `mean D=${row.meanD} rollbacks/side/s=${row.rollbacksPerSidePerSec} mean rollback len=${row.meanRollbackLen} mean depth p90=${row.meanDepthP90}`);
+  }
+  try {
+    const dir = resolve(ROOT, '_harness/_reports');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(resolve(dir, 'probe_netsim_sweep.json'), JSON.stringify({ started: new Date().toISOString(), frames: FRAMES, rows: res }, null, 2) + '\n', 'utf8');
+  } catch { /* best-effort */ }
 }
 
 function write(report: Record<string, unknown>): void {

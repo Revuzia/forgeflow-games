@@ -348,7 +348,21 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 50, "adv": 21, "hitF": 32, "swap": false, "air": false, "techable": true, "clip": "scream_grab"},
+      "grab": {
+        "frames": 50,
+        "adv": 21,
+        "hitF": 26,
+        "swap": false,
+        "air": false,
+        "techable": true,
+        "clip": "scream_grab",
+        "victim": [
+          [0, "hit_high_s", 0.0, 0.3],
+          [14, "hit_high_s", 0.0, 0.5],
+          [26, "hit_high_l", 0.0, 0.6],
+          [38, "kd_fall_b", 1.04, 1.5]
+        ]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Grabs them and screams in their face."
@@ -376,7 +390,16 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 48, "adv": 14, "hitF": 30, "swap": true, "air": false, "techable": true, "clip": "swing_toss"},
+      "grab": {
+        "frames": 48,
+        "adv": 14,
+        "hitF": 24,
+        "swap": true,
+        "air": false,
+        "techable": true,
+        "clip": "swing_toss",
+        "victim": [[0, "hit_high_s", 0.0, 0.2], [10, "thrown_b", 0.05, 0.4], [24, "thrown_b", 0.4, 1.2]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Swings them past with a wild claw."
@@ -701,11 +724,18 @@
         "rangeM": 1.0,
         "frames": 100,
         "adv": 26,
-        "hitF": 60,
+        "hitF": 75,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "neck_bite"
+        "clip": "neck_bite",
+        "victim": [
+          [0, "hit_high_s", 0.0, 0.2],
+          [18, "hit_body", 0.1, 0.6],
+          [40, "hit_body", 0.2, 0.7],
+          [60, "dizzy", 0.4, 1.2],
+          [75, "kd_fall_b", 1.0, 1.55]
+        ]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -739,11 +769,18 @@
         "rangeM": 0.95,
         "frames": 100,
         "adv": 26,
-        "hitF": 60,
+        "hitF": 75,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "neck_bite"
+        "clip": "neck_bite",
+        "victim": [
+          [0, "hit_high_s", 0.0, 0.2],
+          [18, "hit_body", 0.1, 0.6],
+          [40, "hit_body", 0.2, 0.7],
+          [60, "dizzy", 0.4, 1.2],
+          [75, "kd_fall_b", 1.0, 1.55]
+        ]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -777,11 +814,18 @@
         "rangeM": 0.9,
         "frames": 100,
         "adv": 26,
-        "hitF": 60,
+        "hitF": 75,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "neck_bite"
+        "clip": "neck_bite",
+        "victim": [
+          [0, "hit_high_s", 0.0, 0.2],
+          [18, "hit_body", 0.1, 0.6],
+          [40, "hit_body", 0.2, 0.7],
+          [60, "dizzy", 0.4, 1.2],
+          [75, "kd_fall_b", 1.0, 1.55]
+        ]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -815,11 +859,18 @@
         "rangeM": 1.1,
         "frames": 104,
         "adv": 26,
-        "hitF": 62,
+        "hitF": 78,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "neck_bite"
+        "clip": "neck_bite",
+        "victim": [
+          [0, "hit_high_s", 0.0, 0.2],
+          [19, "hit_body", 0.1, 0.6],
+          [42, "hit_body", 0.2, 0.7],
+          [62, "dizzy", 0.4, 1.2],
+          [78, "kd_fall_b", 1.0, 1.55]
+        ]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -1002,11 +1053,18 @@
         "rangeM": 2.5,
         "frames": 90,
         "adv": 23,
-        "hitF": 50,
+        "hitF": 68,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "neck_bite"
+        "clip": "neck_bite",
+        "victim": [
+          [0, "hit_high_s", 0.0, 0.2],
+          [16, "hit_body", 0.1, 0.6],
+          [36, "hit_body", 0.2, 0.7],
+          [54, "dizzy", 0.4, 1.1],
+          [68, "kd_fall_b", 1.0, 1.55]
+        ]
       },
       "tc": true,
       "role": ["grab"],
@@ -1039,12 +1097,119 @@
       "cinematic": {
         "frames": 170,
         "cue": "rerun_series_finale",
-        "hits": [[30, 800], [60, 1200], [100, 1000], [130, 1500]],
-        "anim": [[0, "long_reach"], [25, "neck_bite"], [80, "crawl_run"], [120, "play_dead_fall"], [140, "intro_rise"]],
-        "victim": [[0, "hit_high_s"], [25, "thrown_f"], [80, "kd_ground_f"], [130, "kd_ground_b"]],
-        "shots": [[0, "side_close"], [25, "front_low"], [80, "top_down"], [120, "wide"], [140, "low_angle_up"]],
+        "hits": [[32, 800], [60, 1200], [100, 1000], [128, 1500]],
+        "anim": [
+          [0, "long_reach", 0.57, 0.987],
+          [25, "neck_bite", 0.817, 1.733],
+          [80, "crawl_run", 0.5, 1.167],
+          [120, "rise_claw", 0.1, 0.433],
+          [140, "win_chew", 0.0, 0.5]
+        ],
+        "victim": [
+          [0, "hit_high_s", 0.0, 0.3],
+          [32, "hit_body", 0.0, 0.5],
+          [60, "hit_body", 0.2, 0.8],
+          [80, "crumple", 0.5, 1.75],
+          [100, "kd_ground_f", 0.0, 1.3],
+          [128, "kd_ground_f", 0.0, 1.3]
+        ],
+        "shots": [[0, "close"], [25, "close"], [80, "top"], [120, "low"], [140, "wide"]],
+        "camera": [
+          {
+            "from": 0,
+            "to": 25,
+            "shot": "close",
+            "target": "both",
+            "fovDeg": 32,
+            "dist": 3.0,
+            "height": 1.5,
+            "yawDeg": 15,
+            "ease": "inOut",
+            "lookH": 1.3
+          },
+          {
+            "from": 25,
+            "to": 80,
+            "shot": "close",
+            "target": "both",
+            "fovDeg": [30, 26],
+            "dist": [3.0, 3.0],
+            "height": 1.55,
+            "yawDeg": -35,
+            "ease": "inOut",
+            "lookH": 1.3
+          },
+          {
+            "from": 80,
+            "to": 120,
+            "shot": "top",
+            "target": "both",
+            "fovDeg": 42,
+            "dist": 1.6,
+            "height": 5.0,
+            "yawDeg": 10,
+            "ease": "inOut",
+            "lookH": 0.4
+          },
+          {
+            "from": 120,
+            "to": 140,
+            "shot": "low",
+            "target": "attacker",
+            "fovDeg": 42,
+            "dist": 2.8,
+            "height": 0.3,
+            "yawDeg": 30,
+            "ease": "inOut",
+            "lookH": 1.2
+          },
+          {
+            "from": 140,
+            "to": 170,
+            "shot": "wide",
+            "target": "both",
+            "fovDeg": 38,
+            "dist": 5.4,
+            "height": 1.6,
+            "yawDeg": 0,
+            "ease": "inOut",
+            "lookH": 0.9
+          }
+        ],
+        "fx": [
+          {"f": 0, "fx": "slate"},
+          {"f": 0, "fx": "lights_flicker"},
+          {"f": 32, "fx": "impact_m"},
+          {"f": 32, "fx": "splat"},
+          {"f": 60, "fx": "impact_m"},
+          {"f": 60, "fx": "shake_s"},
+          {"f": 80, "fx": "dim"},
+          {"f": 80, "fx": "smoke"},
+          {"f": 100, "fx": "impact_m"},
+          {"f": 100, "fx": "dust"},
+          {"f": 128, "fx": "impact_l"},
+          {"f": 128, "fx": "flash"},
+          {"f": 128, "fx": "shake_m"},
+          {"f": 128, "fx": "freeze_frame"},
+          {"f": 140, "fx": "undim"},
+          {"f": 140, "fx": "spot", "target": "attacker"},
+          {"f": 165, "fx": "spot_off"}
+        ],
+        "crowd": [
+          {"f": 0, "react": "gasp"},
+          {"f": 32, "react": "gasp"},
+          {"f": 60, "react": "laugh"},
+          {"f": 80, "react": "hush"},
+          {"f": 100, "react": "boo"},
+          {"f": 128, "react": "roar", "ratings": "spike"},
+          {"f": 140, "react": "laugh", "ratings": "peak"}
+        ],
+        "pathA": [[25, 0.1, 0], [80, 0.15, 0], [100, 0.5, 0], [128, 0.6, 0], [140, 0.6, 0], [168, 0, 0]],
+        "gapD": [[25, 0.8, 0], [80, 0.8, 0], [100, 0.9, 0], [128, 1.0, 0], [168, 1.6, 0]],
+        "slate": "PRIME TIME - RERUN: SERIES FINALE",
+        "endPose": "front",
         "endAdv": 19,
-        "endGapM": 2.0
+        "endGapM": 1.6
       },
       "role": ["reversal"],
       "anim": {"clip": "long_reach"},
@@ -1088,5 +1253,14 @@
     "grab": ["last_meal_m"],
     "combo": ["2L", "5M", "grave_crawl_m"],
     "meter": "dead_air"
-  }
+  },
+  "introLine": "Previously... on HIT PARADE... BRAAAINS.",
+  "winQuotes": ["Cancelled? Me? I'm... syndicated.", "Mmmh. Tastes like season one.", "See you... next week. Same time. Same me."],
+  "banter": {
+    "lotus": ["Gourd... was... delicious.", "More... drink. More... gourd."],
+    "freak": ["Big... meal.", "Hnnngh. Leftovers... for a week."],
+    "ricky": ["You... killed me... week three.", "Ratings... good. Now YOU... rerun."],
+    "default": ["Hungry...", "Hold... still... snack."]
+  },
+  "ending": "RERUN bites the host once, gently, on the ankle, and the network's star is back on the air every night of the week - he just can't remember his lines. Rerun takes the corner office and the late-night slot. The show never ends now. It just repeats, and the ratings have never been better."
 }

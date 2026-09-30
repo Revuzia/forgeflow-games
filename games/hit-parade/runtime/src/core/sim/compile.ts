@@ -4,7 +4,7 @@
 // sees a float. Results are cached per GameData object.
 
 import type { FighterDef, GameData, Move, System, Vec2 } from '../types.ts';
-import { SHARED_CLIPS, animGrabId, animIntroId, animTauntId, animWinId, classicMoveId, exIdFor, moveStrength } from '../data.ts';
+import { SHARED_CLIPS, animGrabId, animIntroId, animStanceId, animTauntId, animWinId, classicMoveId, exIdFor, moveStrength } from '../data.ts';
 import { M, mToU, mpsToUpf, mps2ToUpf2 } from './units.ts';
 import { SC } from './events.ts';
 
@@ -21,11 +21,24 @@ const MOTION_CODE: Record<string, number> = {
   '236': MO.QCF, '214': MO.QCB, '623': MO.DP, '421': MO.RDP, '41236': MO.HCF, '63214': MO.HCB, '360': MO.SPD,
   '236236': MO.DQCF, '214214': MO.DQCB, '[4]6': MO.CHG_BF, '[2]8': MO.CHG_DU, '22': MO.DD,
 };
-/** Priority class per motion (lower = checked first). CONTRACT §4.3.9 order, 360 placed after supers. */
-const MOTION_PRIO: Record<number, number> = {
-  [MO.DQCF]: 0, [MO.DQCB]: 0, [MO.SPD]: 1, [MO.DP]: 2, [MO.RDP]: 2, [MO.QCF]: 3, [MO.QCB]: 3,
-  [MO.HCF]: 4, [MO.HCB]: 4, [MO.CHG_BF]: 5, [MO.CHG_DU]: 5, [MO.DD]: 6,
+/**
+ * Priority class per motion (lower = checked first). CHANGED(SIM) P2 (CONTRACT §28.5a): a longer motion that contains a
+ * shorter one wins - supers > 360 > HC > DP > QC > charge > 22 (HC used to sit below QC, so 41236 / 63214 specials could
+ * never come out on kits that also have 236 / 214).
+ */
+export const MOTION_PRIO: Record<number, number> = {
+  [MO.DQCF]: 0, [MO.DQCB]: 0, [MO.SPD]: 1, [MO.HCF]: 2, [MO.HCB]: 2, [MO.DP]: 3, [MO.RDP]: 3, [MO.QCF]: 4, [MO.QCB]: 4,
+  [MO.CHG_BF]: 5, [MO.CHG_DU]: 5, [MO.DD]: 6,
 };
+
+/** CHANGED(SIM) P2: unique kinds (CFighter.uk). */
+export const UK = { NONE: 0, STANCE: 1, CHARGE: 2, BALL: 3, COUNTER: 4, ARMOR_STEP: 5, TELEPORT: 6, PHASES: 7 } as const;
+const UK_CODE: Record<string, number> = { none: 0, stance: 1, charge: 2, ball: 3, counter: 4, armorStep: 5, teleport: 6, phases: 7 };
+/** CHANGED(SIM) P2: Move.stance codes (CMove.stanceKind) and Move.ball.act codes (CMove.ballAct). */
+export const STK = { NONE: 0, ENTER: 1, FOLLOW: 2, EXIT: 3 } as const;
+export const BACT = { NONE: 0, SHOOT: 1, HOVER: 2, SUMMON: 3 } as const;
+/** CHANGED(SIM) P2: teleport destinations (CTeleport.to). */
+export const TPD = { BEHIND: 0, FRONT: 1, HOME: 2 } as const;
 
 // ------------------------------------------------------------------ compiled types
 export interface CProj {
@@ -173,6 +186,16 @@ export interface CMove {
   cinEndGap: number; // -1 = keep positions
   /** CHANGED(fixer) D2: extra push-box front (U) per move frame 0..total+1, null = none */
   pushExt: Int32Array | null;
+  // CHANGED(SIM) P2 uniques (CONTRACT §28.2). `counter` is ONLY present on counter moves (core/ai/boss.ts tests
+  // `counter !== undefined`).
+  counter?: CCounter;
+  teleport: CTeleport | null;
+  stanceKind: number; // STK.*
+  ballAct: number; // BACT.*
+  install: CInstall | null;
+  armorStep: boolean; // listed in the fighter's unique.steps
+  cinEndDown: boolean; // cinematic.endPose "front" (the victim lies face down)
+  hitsTotal: number; // sum of cinematic hits (bonus rounds deal it at once)
 }
 
 export interface CSpecial {
@@ -180,6 +203,78 @@ export interface CSpecial {
   prio: number;
   btnMask: number; // bit0 L bit1 M bit2 H
   idx: [number, number, number, number]; // L, M, H, EX(S)
+}
+
+/** CHANGED(SIM) P2: a counter move's catch (CONTRACT §20.2 `counter`). */
+export interface CCounter {
+  f0: number;
+  f1: number;
+  strike: boolean;
+  proj: boolean;
+  follow: number; // move index started on a catch
+}
+/** CHANGED(SIM) P2: a teleport move (CONTRACT §20.2 `teleport`). */
+export interface CTeleport {
+  f: number;
+  to: number; // TPD.*
+  gap: number; // U
+}
+/** CHANGED(SIM) P2: an install granted by a move (CONTRACT §28.2). */
+export interface CInstall {
+  frames: number;
+  dmgPct: number;
+  walkPct: number;
+}
+
+/** CHANGED(SIM) P2: routing tables (phase 1 = the plain kit; phase 2 = with `phase: 2` moves + `phases` overrides). */
+export interface CRoute {
+  specials: CSpecial[];
+  s5: number; s6: number; s2: number; s4: number;
+  e5: number; e6: number; e2: number; e4: number;
+  sup1: number;
+  sup3: number;
+  sAir: number;
+}
+
+/** CHANGED(SIM) P2: compiled `unique` block (the kit's numbers, system.json `uniques` defaults filled in). */
+export interface CUnique {
+  kind: number; // UK.*
+  // stance
+  stMaxF: number;
+  stBlockExitF: number;
+  stExitHoldF: number; // frames down must be held to exit (system uniques.stance.exitHoldF)
+  stWalkF: number; // U/frame
+  stWalkB: number;
+  stFollow: [number, number, number]; // L, M, H move index (-1 none)
+  stExit2: number;
+  stExitT: number;
+  stHurtW: number; // U (0 = the standing box)
+  stHurtH: number;
+  stHurtY: number;
+  stAnim: [number, number, number]; // idle, walk_f, walk_b anim ids (-1 = shared idle / walk)
+  // charge
+  chargeF: number;
+  keepF: number;
+  standBlockPct: number;
+  // ball
+  respawnF: number;
+  restF: number;
+  pickup: number; // U
+  bounces: number;
+  kickRange: number; // U
+  kickBack: number; // U (a ball this far behind him still counts)
+  wallRest: number; // %
+  looseG: number; // U/f^2
+  deflectVxPct: number;
+  deflectVy: number; // U/f
+  looseFriction: number; // %
+  // counter
+  catchHitstop: number;
+  // armorStep
+  tickStr: number; // 0 L 1 M 2 H, -1 none
+  // phases
+  threshold: number; // %
+  lockF: number;
 }
 
 export interface CFighter {
@@ -234,6 +329,14 @@ export interface CFighter {
   sup3: number;
   sAir: number; // SIMPLE jS (CONTRACT 20.4)
   assist: number[];
+  // CHANGED(SIM) P2 (CONTRACT §28)
+  uk: number; // UK.*
+  u: CUnique;
+  route1: CRoute; // phase 1 routing (= the fields above)
+  route2: CRoute; // phase 2 routing (phases kind; === route1 otherwise)
+  mw: { qc: number; dp: number; hc: number; spd: number; double: number; chargeFrames: number; chargeKeep: number; tap22: number };
+  /** measured hurtbox extents (U) front / back per posture (data/bodies.json, §28.5c); centred when not measured */
+  hurtFS: number; hurtBS: number; hurtFC: number; hurtBC: number; hurtFA: number; hurtBA: number;
   animIntro: number;
   animWin: number;
   animTaunt: number;
@@ -638,6 +741,16 @@ function compileMove(id: string, mv: Move, idx: number, snapId: number, animId: 
     cinEndAdv: mv.cinematic?.endAdv ?? -100000,
     cinEndGap: mv.cinematic?.endGapM !== undefined ? mToU(mv.cinematic.endGapM) : -1,
     pushExt,
+    // CHANGED(SIM) P2 uniques (`counter` is attached by compileFighter once the follow id resolves)
+    teleport: mv.teleport
+      ? { f: mv.teleport.f, to: mv.teleport.to === 'front' ? TPD.FRONT : mv.teleport.to === 'home' ? TPD.HOME : TPD.BEHIND, gap: mToU(mv.teleport.gapM) }
+      : null,
+    stanceKind: mv.stance === 'enter' ? STK.ENTER : mv.stance === 'follow' ? STK.FOLLOW : mv.stance === 'exit' ? STK.EXIT : STK.NONE,
+    ballAct: mv.ball ? (mv.ball.act === 'shoot' ? BACT.SHOOT : mv.ball.act === 'hover' ? BACT.HOVER : mv.ball.act === 'summon' ? BACT.SUMMON : BACT.NONE) : BACT.NONE,
+    install: mv.install ? { frames: mv.install.frames, dmgPct: mv.install.damagePct ?? 100, walkPct: mv.install.walkPct ?? 100 } : null,
+    armorStep: false,
+    cinEndDown: mv.cinematic?.endPose === 'front',
+    hitsTotal: mv.cinematic ? mv.cinematic.hits.reduce((a, h) => a + h[1], 0) : 0,
   };
   cm.chainOnly = cm.chainOnly || mv.tc === true;
   if (grab && grab.swap) cm.throwBack = true;
@@ -676,6 +789,159 @@ function systemThrow(sys: System, back: boolean): Move {
 }
 
 // ------------------------------------------------------------------ fighters
+// ------------------------------------------------------------------ bonus rounds (CHANGED(SIM) P2, CONTRACT §28.4)
+/** Compiled data/system.json `brawl` + `heckler` (U, U/frame, frames). */
+export interface CBrawl {
+  seconds: number;
+  hSeconds: number;
+  maxActive: number;
+  tokens: number;
+  tokenSpacing: number;
+  telegraphMin: number;
+  spawnDist: number;
+  spawnGap: number;
+  waveGap: number;
+  thinkMin: number;
+  thinkMax: number;
+  ringAttack: [number, number];
+  ringApproach: [number, number];
+  hurtW: number;
+  hurtH: number;
+  pushHalf: number;
+  hitstunF: number;
+  kdF: number;
+  wakeF: number;
+  downF: number;
+  maxJuggle: number;
+  kindIds: string[];
+  kindHp: number[];
+  kindWalk: number[]; // U/frame
+  waves: number[][];
+  moves: CMove[]; // goon kit (snapId = index, animId = 34 + index)
+  moveNames: string[];
+  moveRange: number[]; // U: goon centre to the player's near hurt edge where each move is started
+  g: number; // goon juggle gravity U/f^2
+  launchVx: number;
+  launchVy: number;
+  koVx: number;
+  koVy: number;
+  score: CBrawlScore;
+  hk: CHeckler;
+}
+export interface CBrawlScore {
+  hit: number[]; special: number; super: number; throw: number; ko: number; crowd: number; parry: number; perfect: number; comboCashF: number;
+  rStart: number; idleF: number; mult: number[]; decay: number[]; // decay = ratings x100 per frame (x1000 for precision)
+  gHit: number[]; gSpecial: number; gSuper: number; gThrow: number; gKo: number; gCrowd: number; gParry: number; gPerfect: number;
+}
+export interface CHeckler {
+  maxLive: number;
+  distMin: number;
+  distMax: number;
+  spawnY: number;
+  aimY: number;
+  g: number;
+  startF: number;
+  endF: number;
+  jitterF: number;
+  firstF: number;
+  objFlight: number[];
+  objDamage: number[];
+  objW: number[];
+  objH: number[];
+  objIds: string[];
+  hitstun: number;
+  blockstun: number;
+  hitstop: number;
+  parry: number;
+  perfect: number;
+  hitCost: number;
+}
+
+const bCache = new WeakMap<GameData, CBrawl>();
+
+/** Compiles the bonus-round tables (throws one readable error when system.json `brawl` / `heckler` is malformed). */
+export function compileBrawl(data: GameData): CBrawl {
+  const hit = bCache.get(data);
+  if (hit) return hit;
+  const sys = data.system;
+  const cs = compileSystem(sys);
+  const br = sys.brawl;
+  const hk = sys.heckler;
+  if (!br || !hk || !Array.isArray(br.moves) || br.moves.length === 0 || !Array.isArray(br.kinds) || br.kinds.length === 0 || !Array.isArray(br.waves) || br.waves.length === 0) {
+    throw new Error('system.json: brawl { moves, kinds, waves, ... } and heckler { objects, ... } are required for the bonus rounds (CONTRACT 28.4)');
+  }
+  const moves = br.moves.map((mv, k) => compileMove(mv.id, mv, k, k, SHARED_CLIPS.length + k, cs, sys, mToU(0.6)));
+  const r = br.ratings;
+  const decay = r.decayPerSec.map((d) => Math.round((d * 100 * 1000) / 60));
+  const cb: CBrawl = {
+    seconds: br.seconds,
+    hSeconds: hk.seconds,
+    maxActive: Math.max(1, Math.min(8, br.maxActive)),
+    tokens: br.tokens,
+    tokenSpacing: br.tokenSpacingF,
+    telegraphMin: br.telegraphMinF,
+    spawnDist: mToU(br.spawnDistM),
+    spawnGap: br.spawnGapF,
+    waveGap: br.waveGapF,
+    thinkMin: br.thinkF[0],
+    thinkMax: br.thinkF[1],
+    ringAttack: [mToU(br.ringM.attack[0]), mToU(br.ringM.attack[1])],
+    ringApproach: [mToU(br.ringM.approach[0]), mToU(br.ringM.approach[1])],
+    hurtW: mToU(br.goonHurt[0]),
+    hurtH: mToU(br.goonHurt[1]),
+    pushHalf: mToU(br.goonPush[0] / 2),
+    hitstunF: br.hitstunF,
+    kdF: br.kdF,
+    wakeF: br.wakeF,
+    downF: br.downF,
+    maxJuggle: br.maxJuggle,
+    kindIds: br.kinds.map((k) => k.id),
+    kindHp: br.kinds.map((k) => k.hp),
+    kindWalk: br.kinds.map((k) => mpsToUpf(k.walk)),
+    waves: br.waves.map((w) => w.map((x) => Math.max(0, Math.min(br.kinds.length - 1, x | 0)))),
+    moves,
+    moveNames: br.moves.map((m) => m.id),
+    moveRange: br.moves.map((_, k) => mToU(br.moveRangeM[k] ?? 1.0)),
+    g: cs.gJuggle,
+    launchVx: mpsToUpf(3.0),
+    launchVy: mpsToUpf(5.0),
+    koVx: mpsToUpf(2.4),
+    koVy: mpsToUpf(4.2),
+    score: {
+      hit: br.score.hit, special: br.score.special, super: br.score.super, throw: br.score.throw, ko: br.score.ko,
+      crowd: br.score.crowd, parry: br.score.parry, perfect: br.score.perfect, comboCashF: br.score.comboCashF,
+      rStart: Math.round(r.start * 100), idleF: r.idleF, mult: r.mult, decay,
+      gHit: r.gain.hit.map((g) => g * 100), gSpecial: r.gain.special * 100, gSuper: r.gain.super * 100, gThrow: r.gain.throw * 100,
+      gKo: r.gain.ko * 100, gCrowd: r.gain.crowd * 100, gParry: r.gain.parry * 100, gPerfect: r.gain.perfect * 100,
+    },
+    hk: {
+      maxLive: hk.maxLive,
+      distMin: mToU(hk.spawnDistM[0]),
+      distMax: mToU(hk.spawnDistM[1]),
+      spawnY: mToU(hk.spawnY),
+      aimY: mToU(hk.aimY),
+      g: mps2ToUpf2(hk.gravityMps2),
+      startF: hk.cadence.startF,
+      endF: hk.cadence.endF,
+      jitterF: hk.cadence.jitterF,
+      firstF: hk.cadence.firstF,
+      objFlight: hk.objects.map((o) => o.flightF),
+      objDamage: hk.objects.map((o) => o.damage),
+      objW: hk.objects.map((o) => mToU(o.box[0])),
+      objH: hk.objects.map((o) => mToU(o.box[1])),
+      objIds: hk.objects.map((o) => o.id),
+      hitstun: hk.hitstun,
+      blockstun: hk.blockstun,
+      hitstop: hk.hitstop,
+      parry: hk.score.parry,
+      perfect: hk.score.perfect,
+      hitCost: hk.score.hitCost,
+    },
+  };
+  bCache.set(data, cb);
+  return cb;
+}
+
 const fCache = new WeakMap<GameData, Record<string, CFighter>>();
 
 /** Dash travel curve: ease-out over `movePct` of the frames, then stationary. */
@@ -687,6 +953,85 @@ function dashCurve(distU: number, frames: number, movePct: number): Int32Array {
     c[f] = Math.round(distU * (1 - (1 - t) * (1 - t)));
   }
   return c;
+}
+
+/** CHANGED(SIM) P2 (CONTRACT section 28.5c): hurtbox front / back extents (U) per posture; centred when not measured. */
+function hurtExtents(def: FighterDef, data: GameData): Pick<CFighter, 'hurtFS' | 'hurtBS' | 'hurtFC' | 'hurtBC' | 'hurtFA' | 'hurtBA'> {
+  const b = data.bodies ? data.bodies[def.id] : undefined;
+  if (!b) {
+    const hs = mToU(def.hurt.stand[0]) >> 1;
+    const hc = mToU(def.hurt.crouch[0]) >> 1;
+    const ha = mToU(def.hurt.air[0]) >> 1;
+    return { hurtFS: hs, hurtBS: hs, hurtFC: hc, hurtBC: hc, hurtFA: ha, hurtBA: ha };
+  }
+  return {
+    hurtFS: mToU(b.stand[0]), hurtBS: mToU(b.stand[1]), hurtFC: mToU(b.crouch[0]), hurtBC: mToU(b.crouch[1]),
+    hurtFA: mToU(b.air[0]), hurtBA: mToU(b.air[1]),
+  };
+}
+
+/** CHANGED(SIM) P2: the fighter's unique block with system.json uniques defaults (CONTRACT section 28.2). */
+function compileUnique(def: FighterDef, uk: number, ur: Record<string, unknown>, byName: Record<string, number>, sys: System): CUnique {
+  const us = sys.uniques ?? {};
+  const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+  const mv = (n: unknown): number => (typeof n === 'string' && byName[n] !== undefined ? byName[n] : -1);
+  const st = us.stance ?? {};
+  const ch = us.charge ?? {};
+  const bl = us.ball ?? {};
+  const fu = (typeof ur.followups === 'object' && ur.followups !== null ? ur.followups : {}) as Record<string, unknown>;
+  const ex = (typeof ur.exit === 'object' && ur.exit !== null ? ur.exit : {}) as Record<string, unknown>;
+  const walk = (typeof ur.walk === 'object' && ur.walk !== null ? ur.walk : {}) as Record<string, unknown>;
+  // stance hurtbox = the enter move's last hurtOverride (the lean)
+  let hw = 0;
+  let hh = 0;
+  let hy = 0;
+  if (uk === UK.STANCE && Array.isArray(ur.enter)) {
+    for (const n of ur.enter as string[]) {
+      const m = def.moves[n];
+      const ho = m && m.hurtOverride && m.hurtOverride.length > 0 ? m.hurtOverride[m.hurtOverride.length - 1] : null;
+      if (ho) {
+        hw = mToU(ho.w);
+        hh = mToU(ho.h);
+        hy = mToU(ho.y ?? 0);
+        break;
+      }
+    }
+  }
+  const tick = String(us.armorStep?.tickStrength ?? 'L');
+  const ph = us.phases ?? {};
+  return {
+    kind: uk,
+    stMaxF: num(ur.maxF, num(st.maxF, 90)),
+    stBlockExitF: num(ur.blockExitF, num(st.blockExitF, 6)),
+    stExitHoldF: num(ur.exitHoldF, num((st as { exitHoldF?: number }).exitHoldF, 4)),
+    stWalkF: mpsToUpf(num(walk.fwd, def.walk.fwd)),
+    stWalkB: mpsToUpf(num(walk.back, def.walk.back)),
+    stFollow: [mv(fu.L), mv(fu.M), mv(fu.H)],
+    stExit2: mv(ex['2']),
+    stExitT: mv(ex.timeout),
+    stHurtW: hw,
+    stHurtH: hh,
+    stHurtY: hy,
+    stAnim: uk === UK.STANCE ? [animStanceId(def, 0), animStanceId(def, 1), animStanceId(def, 2)] : [-1, -1, -1],
+    chargeF: uk === UK.CHARGE ? num(ur.chargeF, num(ch.chargeF, sys.motion.chargeFrames)) : sys.motion.chargeFrames,
+    keepF: uk === UK.CHARGE ? num(ur.keepF, num(ch.keepF, sys.motion.chargeKeep)) : sys.motion.chargeKeep,
+    standBlockPct: uk === UK.CHARGE ? num(ur.standBlockNervePct, num(ch.standBlockNervePct, 100)) : 100,
+    respawnF: num(ur.respawnF, num(bl.respawnF, 180)),
+    restF: num(ur.restF, num(bl.restF, 240)),
+    pickup: mToU(num(ur.pickupM, num(bl.pickupM, 0.4))),
+    bounces: num(ur.bounces, num(bl.bounces, 1)),
+    kickRange: mToU(num(bl.kickRangeM, 1.1)),
+    kickBack: mToU(num(bl.kickBackM, 0.3)),
+    wallRest: num(bl.wallRestitutionPct, 70),
+    looseG: mps2ToUpf2(num(bl.looseGravityMps2, 16)),
+    deflectVxPct: num(bl.deflectVxPct, -30),
+    deflectVy: mpsToUpf(num(bl.deflectVyMps, 3)),
+    looseFriction: num(bl.looseFrictionPct, 94),
+    catchHitstop: num(us.counter?.catchHitstop, 12),
+    tickStr: uk === UK.ARMOR_STEP ? (tick === 'L' ? 0 : tick === 'M' ? 1 : tick === 'H' ? 2 : -1) : -1,
+    threshold: num(ur.thresholdPct, num(ph.thresholdPct, 50)),
+    lockF: num(ur.lockF, num(ph.lockF, 60)),
+  };
 }
 
 export function compileFighter(data: GameData, id: string): CFighter {
@@ -763,40 +1108,64 @@ export function compileFighter(data: GameData, id: string): CFighter {
       aTable[d * 3 + b] = a;
     }
   }
-  // classic specials
-  const specials: CSpecial[] = [];
-  const idOr = (name: string | undefined): number => (name !== undefined && byName[name] !== undefined && !moves[byName[name]].phase2 ? byName[name] : -1);
-  for (const e of def.classic ?? []) {
-    const code = MOTION_CODE[e.motion];
-    if (!code) continue;
-    let mask = 0;
-    if (e.btn.includes('L')) mask |= 1;
-    if (e.btn.includes('M')) mask |= 2;
-    if (e.btn.includes('H')) mask |= 4;
-    const idx: [number, number, number, number] = [
-      idOr(classicMoveId(e, 'L')), idOr(classicMoveId(e, 'M')), idOr(classicMoveId(e, 'H')),
-      e.move.includes('{s}') || e.btn.includes('S') ? idOr(classicMoveId(e, 'S')) : -1,
-    ];
-    specials.push({ motion: code, prio: MOTION_PRIO[code], btnMask: mask, idx });
-  }
+  // CHANGED(SIM) P2: routing tables per phase (phase 1 never reaches a phase-2 move; phase 2 = the phases kit)
+  const uraw = (def.unique ?? { kind: 'none' }) as Record<string, unknown>;
+  const uk = UK_CODE[String(uraw.kind ?? 'none')] ?? UK.NONE;
   const sm = def.simple ?? {};
-  const sup1 = idOr(sm['S+H'] as string | undefined);
-  const sup3 = idOr(sm['S+H+2'] as string | undefined);
-  if (!specials.some((s) => s.motion === MO.DQCF) && sup1 >= 0) specials.push({ motion: MO.DQCF, prio: 0, btnMask: 7, idx: [sup1, sup1, sup1, sup1] });
-  if (!specials.some((s) => s.motion === MO.DQCB) && sup3 >= 0) specials.push({ motion: MO.DQCB, prio: 0, btnMask: 7, idx: [sup3, sup3, sup3, sup3] });
-  specials.sort((a, b) => a.prio - b.prio);
-  const simpleId = (k: string): number => idOr(sm[k] as string | undefined);
-  const exOf = (k: string, base: number): number => {
-    const explicit = simpleId('A' + k);
-    if (explicit >= 0) return explicit;
-    if (base < 0) return -1;
-    const ex = byName[exIdFor(moves[base].id)];
-    return ex !== undefined ? ex : -1;
+  const buildRoute = (phase2: boolean): CRoute => {
+    const idOrP = (name: string | undefined): number =>
+      name !== undefined && byName[name] !== undefined && (phase2 || !moves[byName[name]].phase2) ? byName[name] : -1;
+    const specials: CSpecial[] = [];
+    for (const e of def.classic ?? []) {
+      const code = MOTION_CODE[e.motion];
+      if (!code) continue;
+      let mask = 0;
+      if (e.btn.includes('L')) mask |= 1;
+      if (e.btn.includes('M')) mask |= 2;
+      if (e.btn.includes('H')) mask |= 4;
+      const idx: [number, number, number, number] = [
+        idOrP(classicMoveId(e, 'L')), idOrP(classicMoveId(e, 'M')), idOrP(classicMoveId(e, 'H')),
+        e.move.includes('{s}') || e.btn.includes('S') ? idOrP(classicMoveId(e, 'S')) : -1,
+      ];
+      if (idx[0] < 0 && idx[1] < 0 && idx[2] < 0 && idx[3] < 0) continue;
+      specials.push({ motion: code, prio: MOTION_PRIO[code], btnMask: mask, idx });
+    }
+    const ov = phase2 && uk === UK.PHASES && typeof uraw.simple === 'object' && uraw.simple !== null ? (uraw.simple as Record<string, string>) : {};
+    const key = (k: string): string | undefined => (ov[k] !== undefined ? ov[k] : (sm[k] as string | undefined));
+    const sup1 = idOrP(key('S+H'));
+    let sup3 = idOrP(key('S+H+2'));
+    if (phase2 && uk === UK.PHASES && typeof uraw.lv3 === 'string' && idOrP(uraw.lv3) >= 0) sup3 = idOrP(uraw.lv3);
+    if (!specials.some((q) => q.motion === MO.DQCF) && sup1 >= 0) specials.push({ motion: MO.DQCF, prio: 0, btnMask: 7, idx: [sup1, sup1, sup1, sup1] });
+    if (!specials.some((q) => q.motion === MO.DQCB) && sup3 >= 0) specials.push({ motion: MO.DQCB, prio: 0, btnMask: 7, idx: [sup3, sup3, sup3, sup3] });
+    specials.sort((a, b) => a.prio - b.prio); // stable: kit order inside one priority class
+    const simpleId = (k: string): number => idOrP(key(k));
+    const exOf = (k: string, base: number): number => {
+      const explicit = simpleId('A' + k);
+      if (explicit >= 0) return explicit;
+      if (base < 0) return -1;
+      const ex = byName[exIdFor(moves[base].id)];
+      return ex !== undefined && (phase2 || !moves[ex].phase2) ? ex : -1;
+    };
+    const s5 = simpleId('5S');
+    const s6 = simpleId('6S');
+    const s2 = simpleId('2S');
+    const s4 = simpleId('4S');
+    return { specials, s5, s6, s2, s4, e5: exOf('5S', s5), e6: exOf('6S', s6), e2: exOf('2S', s2), e4: exOf('4S', s4), sup1, sup3, sAir: simpleId('jS') };
   };
-  const s5 = simpleId('5S');
-  const s6 = simpleId('6S');
-  const s2 = simpleId('2S');
-  const s4 = simpleId('4S');
+  const route1 = buildRoute(false);
+  const route2 = uk === UK.PHASES ? buildRoute(true) : route1;
+  const idOr = (name: string | undefined): number => (name !== undefined && byName[name] !== undefined && !moves[byName[name]].phase2 ? byName[name] : -1);
+  // CHANGED(SIM) P2: counter blocks (follow ids resolve now), armor steps
+  ids.forEach((mid, k) => {
+    const c = def.moves[mid].counter;
+    if (!c) return;
+    const follow = byName[c.follow];
+    moves[k].counter = { f0: c.catch[0], f1: c.catch[1], strike: c.vs.includes('strike'), proj: c.vs.includes('proj'), follow: follow !== undefined ? follow : -1 };
+  });
+  if (uk === UK.ARMOR_STEP && Array.isArray(uraw.steps)) {
+    for (const n of uraw.steps as string[]) if (byName[n] !== undefined) moves[byName[n]].armorStep = true;
+  }
+  const u = compileUnique(def, uk, uraw, byName, sys);
   // body / movement
   const jump = def.jump;
   const N = jump.air;
@@ -860,18 +1229,25 @@ export function compileFighter(data: GameData, id: string): CFighter {
     throwB,
     impact,
     shove,
-    specials,
-    s5, s6, s2, s4,
-    e5: exOf('5S', s5), e6: exOf('6S', s6), e2: exOf('2S', s2), e4: exOf('4S', s4),
-    sup1,
-    sup3,
-    sAir: simpleId('jS'),
+    specials: route1.specials,
+    s5: route1.s5, s6: route1.s6, s2: route1.s2, s4: route1.s4,
+    e5: route1.e5, e6: route1.e6, e2: route1.e2, e4: route1.e4,
+    sup1: route1.sup1,
+    sup3: route1.sup3,
+    sAir: route1.sAir,
     assist: ((sm.assist as string[] | undefined) ?? []).map((n) => idOr(n)).filter((x) => x >= 0),
     animIntro: animIntroId(def),
     animWin: animWinId(def, 0),
     animTaunt: animTauntId(def),
     tauntFrames: tauntClip ? Math.max(30, Math.round(tauntClip.dur * 60)) : 60,
     introFrames: introClip ? Math.round(introClip.dur * 60) : 90,
+    // CHANGED(SIM) P2 (CONTRACT section 28)
+    uk,
+    u,
+    route1,
+    route2,
+    mw: { ...sys.motion, chargeFrames: u.chargeF, chargeKeep: u.keepF },
+    ...hurtExtents(def, data),
   };
   void M;
   cache[id] = cf;

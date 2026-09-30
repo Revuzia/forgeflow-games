@@ -264,12 +264,13 @@
   "book_em": {
     "src": "mixamo",
     "file": "Pro_Sword_and_Shield_Pack/sword and shield slash (2)",
-    "range": [10, 100],
+    "range": [10, 64],
     "contact": 22,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 75}
+    "contacts": [22, 38, 52],
+    "marks": {"hit1": 22, "hit2": 38, "hit3": 52, "slam": 52}
   },
   "perp_walk": {
     "src": "mixamo",
@@ -279,7 +280,7 @@
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 18}
+    "marks": {"slam": 16}
   },
   "taser_fire": {
     "src": "mixamo",

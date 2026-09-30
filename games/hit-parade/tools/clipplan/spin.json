@@ -158,12 +158,12 @@
   "footwork_trip": {
     "src": "mixamo",
     "file": "Breakdance_Pack/breakdance footwork to freeze",
-    "range": [1, 80],
-    "contact": null,
+    "range": [1, 50],
+    "contact": 30,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 54}
+    "marks": {"slam": 30}
   },
   "flair_toss": {
     "src": "mixamo",
@@ -173,7 +173,7 @@
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 34}
+    "marks": {"slam": 36}
   },
   "windmill_l": {
     "src": "seq",

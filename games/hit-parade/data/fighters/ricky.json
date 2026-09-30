@@ -408,7 +408,21 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 54, "adv": 21, "hitF": 40, "swap": false, "air": false, "techable": true, "clip": "three_swings"},
+      "grab": {
+        "frames": 64,
+        "adv": 21,
+        "hitF": 52,
+        "swap": false,
+        "air": false,
+        "techable": true,
+        "clip": "three_swings",
+        "victim": [
+          [0, "hit_high_s", 0.0, 0.1],
+          [9, "hit_high_s", 0.0, 0.6],
+          [35, "hit_body", 0.1, 0.6],
+          [52, "kd_fall_b", 1.04, 1.5]
+        ]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Holds them at cane's length for three swings.",
@@ -437,7 +451,16 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 48, "adv": 15, "hitF": 30, "swap": true, "air": false, "techable": true, "clip": "spin_fling"},
+      "grab": {
+        "frames": 48,
+        "adv": 15,
+        "hitF": 15,
+        "swap": true,
+        "air": false,
+        "techable": true,
+        "clip": "spin_fling",
+        "victim": [[0, "hit_high_s", 0.0, 0.1], [4, "thrown_b", 0.0, 0.4], [15, "thrown_b", 0.4, 1.2]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Spins them past with the cane.",
@@ -1197,10 +1220,10 @@
         {"f": [42, 43], "damage": 900, "hitstop": 20}
       ],
       "role": ["reversal"],
-      "anim": {"clip": "three_swings", "warp": [[0, 0.0], [8, 0.367], [28, 1.467], [42, 2.167], [97, 3.067]]},
+      "anim": {"clip": "three_swings", "warp": [[0, 0.0], [8, 0.367], [28, 1.467], [42, 2.167], [97, 2.667]]},
       "sfx": [[1, "crowd_cheer_burst"]],
       "desc": "Invulnerable three-swing cane routine.",
-      "pushExt": [[0, 0.0], [24, 0.0], [26, 0.133], [27, 0.146], [28, 0.123], [29, 0.016], [30, 0.0], [97, 0.003]]
+      "pushExt": [[0, 0.0], [24, 0.0], [26, 0.133], [27, 0.146], [28, 0.123], [29, 0.016], [30, 0.0], [97, 0.0]]
     },
     "prime_time": {
       "kind": "super3",
@@ -1228,31 +1251,132 @@
       "cinematic": {
         "frames": 170,
         "cue": "ricky_prime_time",
-        "hits": [[20, 700], [50, 900], [80, 1000], [140, 2400]],
+        "hits": [[26, 700], [52, 900], [82, 1000], [140, 2400]],
         "anim": [
-          [0, "showstopper"],
-          [30, "cane_swing"],
-          [60, "three_swings"],
-          [110, "intro_power"],
-          [130, "sledgehammer"],
-          [150, "win_bow"]
+          [0, "showstopper", 0.53, 0.83],
+          [18, "cane_swing", 0.233, 0.633],
+          [42, "three_swings", 0.0, 1.833],
+          [92, "intro_power", 1.2, 1.95],
+          [122, "sledgehammer", 0.267, 0.733],
+          [150, "win_bow", 0.4, 0.733]
         ],
         "victim": [
-          [0, "hit_high_l"],
-          [30, "hit_high_s"],
-          [60, "hit_body"],
-          [110, "dizzy"],
-          [140, "kd_fall_b"],
-          [152, "kd_ground_b"]
+          [0, "hit_high_l", 0.0, 0.4],
+          [26, "hit_high_s", 0.0, 0.4],
+          [52, "hit_high_l", 0.0, 0.5],
+          [82, "hit_body", 0.1, 0.6],
+          [100, "dizzy", 0.4, 1.2],
+          [140, "kd_fall_b", 1.2, 1.8667],
+          [158, "kd_ground_b", 0.0, 0.367]
         ],
-        "shots": [
-          [0, "host_cam"],
-          [30, "side_close"],
-          [60, "punch_in"],
-          [110, "spotlight"],
-          [130, "top_down"],
-          [150, "crowd_pop"]
+        "shots": [[0, "close"], [18, "close"], [42, "over_shoulder"], [92, "low"], [122, "top"], [150, "wide"]],
+        "camera": [
+          {
+            "from": 0,
+            "to": 18,
+            "shot": "close",
+            "target": "attacker",
+            "fovDeg": 30,
+            "dist": 2.5,
+            "height": 1.6,
+            "yawDeg": 35,
+            "ease": "inOut",
+            "lookH": 1.45
+          },
+          {
+            "from": 18,
+            "to": 42,
+            "shot": "close",
+            "target": "defender",
+            "fovDeg": 32,
+            "dist": 2.5,
+            "height": 1.55,
+            "yawDeg": 35,
+            "ease": "inOut",
+            "lookH": 1.45
+          },
+          {
+            "from": 42,
+            "to": 92,
+            "shot": "over_shoulder",
+            "target": "defender",
+            "fovDeg": 36,
+            "dist": 2.9,
+            "height": 1.8,
+            "yawDeg": -65,
+            "ease": "inOut",
+            "lookH": 1.4
+          },
+          {
+            "from": 92,
+            "to": 122,
+            "shot": "low",
+            "target": "attacker",
+            "fovDeg": 40,
+            "dist": 2.6,
+            "height": 0.5,
+            "yawDeg": 20,
+            "ease": "inOut",
+            "lookH": 1.6
+          },
+          {
+            "from": 122,
+            "to": 150,
+            "shot": "top",
+            "target": "defender",
+            "fovDeg": 40,
+            "dist": 1.5,
+            "height": 5.4,
+            "yawDeg": 10,
+            "ease": "inOut",
+            "lookH": 0.5
+          },
+          {
+            "from": 150,
+            "to": 170,
+            "shot": "wide",
+            "target": "both",
+            "fovDeg": 38,
+            "dist": 5.6,
+            "height": 1.8,
+            "yawDeg": 0,
+            "ease": "inOut",
+            "lookH": 1.1
+          }
         ],
+        "fx": [
+          {"f": 0, "fx": "slate"},
+          {"f": 0, "fx": "spot", "target": "attacker"},
+          {"f": 18, "fx": "spot_off"},
+          {"f": 26, "fx": "impact_m"},
+          {"f": 52, "fx": "impact_m"},
+          {"f": 52, "fx": "sparks"},
+          {"f": 82, "fx": "impact_m"},
+          {"f": 82, "fx": "shake_s"},
+          {"f": 92, "fx": "dim"},
+          {"f": 92, "fx": "spot", "target": "attacker"},
+          {"f": 122, "fx": "spot_off"},
+          {"f": 140, "fx": "impact_l"},
+          {"f": 140, "fx": "flash"},
+          {"f": 140, "fx": "shake_l"},
+          {"f": 140, "fx": "dust"},
+          {"f": 140, "fx": "freeze_frame"},
+          {"f": 142, "fx": "undim"},
+          {"f": 150, "fx": "confetti"}
+        ],
+        "crowd": [
+          {"f": 0, "react": "applause"},
+          {"f": 26, "react": "ooh"},
+          {"f": 52, "react": "ooh"},
+          {"f": 82, "react": "cheer", "ratings": "up"},
+          {"f": 92, "react": "hush"},
+          {"f": 140, "react": "roar", "ratings": "spike"},
+          {"f": 150, "react": "applause", "ratings": "peak"}
+        ],
+        "pathA": [[26, 0.1, 0], [52, 0.25, 0], [82, 0.4, 0], [120, 0.35, 0], [140, 0.45, 0], [168, 0, 0]],
+        "gapD": [[26, 1.1, 0], [52, 1.2, 0], [82, 1.15, 0], [100, 1.2, 0], [140, 1.3, 0], [146, 1.6, 0], [168, 2.2, 0]],
+        "slate": "PRIME TIME - RICKY MARQUEE: FOR CAMERA ONE",
+        "endPose": "back",
         "endAdv": 19,
         "endGapM": 2.2
       },
@@ -1290,32 +1414,156 @@
         "cue": "ricky_season_finale",
         "hits": [[25, 800], [60, 1000], [95, 1000], [150, 2500]],
         "anim": [
-          [0, "pyro_slam"],
-          [45, "showstopper"],
-          [80, "spin_fling"],
-          [120, "intro_power"],
-          [140, "sledgehammer"],
-          [160, "win_bow"]
+          [0, "pyro_slam", 0.383, 1.133],
+          [45, "showstopper", 0.283, 0.867],
+          [80, "spin_fling", 0.317, 0.983],
+          [120, "taunt_dismiss", 0.5, 0.833],
+          [140, "sledgehammer", 0.4, 0.817],
+          [165, "win_bow", 0.4, 0.65]
         ],
         "victim": [
-          [0, "hit_body"],
-          [45, "hit_high_l"],
-          [80, "hit_air"],
-          [120, "dizzy"],
-          [150, "kd_fall_b"],
-          [165, "kd_ground_b"]
+          [0, "hit_body", 0.0, 0.4],
+          [25, "hit_air", 0.0, 0.6],
+          [60, "hit_high_l", 0.0, 0.5],
+          [95, "hit_air", 0.1, 0.8],
+          [120, "dizzy", 0.4, 1.0],
+          [150, "kd_fall_b", 1.25, 1.8667],
+          [165, "kd_ground_b", 0.0, 0.367]
         ],
-        "shots": [
-          [0, "wide"],
-          [25, "low_angle_up"],
-          [45, "side_close"],
-          [80, "orbit"],
-          [120, "host_cam"],
-          [150, "slowmo_hold"],
-          [165, "crowd_pop"]
+        "shots": [[0, "wide"], [25, "low"], [45, "close"], [80, "orbit"], [120, "close"], [140, "low"], [165, "wide"]],
+        "camera": [
+          {
+            "from": 0,
+            "to": 25,
+            "shot": "wide",
+            "target": "both",
+            "fovDeg": 40,
+            "dist": 5.2,
+            "height": 1.8,
+            "yawDeg": 0,
+            "ease": "inOut",
+            "lookH": 1.4
+          },
+          {
+            "from": 25,
+            "to": 45,
+            "shot": "low",
+            "target": "defender",
+            "fovDeg": 42,
+            "dist": 3.0,
+            "height": 0.35,
+            "yawDeg": 25,
+            "ease": "inOut",
+            "lookH": 1.7
+          },
+          {
+            "from": 45,
+            "to": 80,
+            "shot": "close",
+            "target": "both",
+            "fovDeg": [32, 28],
+            "dist": [3.0, 3.0],
+            "height": 1.6,
+            "yawDeg": -30,
+            "ease": "inOut",
+            "lookH": 1.3
+          },
+          {
+            "from": 80,
+            "to": 120,
+            "shot": "orbit",
+            "target": "both",
+            "fovDeg": 40,
+            "dist": 3.8,
+            "height": 1.6,
+            "yawDeg": [-40, 60],
+            "ease": "linear"
+          },
+          {
+            "from": 120,
+            "to": 140,
+            "shot": "close",
+            "target": "attacker",
+            "fovDeg": 30,
+            "dist": 2.5,
+            "height": 1.6,
+            "yawDeg": 35,
+            "ease": "inOut",
+            "lookH": 1.45
+          },
+          {
+            "from": 140,
+            "to": 165,
+            "shot": "low",
+            "target": "defender",
+            "fovDeg": 42,
+            "dist": 2.8,
+            "height": 0.4,
+            "yawDeg": -20,
+            "ease": "inOut",
+            "lookH": 1.2
+          },
+          {
+            "from": 165,
+            "to": 180,
+            "shot": "wide",
+            "target": "both",
+            "fovDeg": 40,
+            "dist": 6.0,
+            "height": 2.0,
+            "yawDeg": 0,
+            "ease": "inOut",
+            "lookH": 1.1
+          }
         ],
+        "fx": [
+          {"f": 0, "fx": "slate"},
+          {"f": 0, "fx": "pyro"},
+          {"f": 25, "fx": "impact_m"},
+          {"f": 25, "fx": "fire"},
+          {"f": 25, "fx": "shake_m"},
+          {"f": 60, "fx": "impact_m"},
+          {"f": 60, "fx": "sparks"},
+          {"f": 95, "fx": "impact_m"},
+          {"f": 95, "fx": "sparks"},
+          {"f": 95, "fx": "lights_flicker"},
+          {"f": 120, "fx": "spot", "target": "attacker"},
+          {"f": 140, "fx": "spot_off"},
+          {"f": 140, "fx": "lights_flicker"},
+          {"f": 150, "fx": "impact_l"},
+          {"f": 150, "fx": "flash"},
+          {"f": 150, "fx": "shake_l"},
+          {"f": 150, "fx": "dust"},
+          {"f": 150, "fx": "freeze_frame"},
+          {"f": 165, "fx": "confetti"},
+          {"f": 165, "fx": "pyro"}
+        ],
+        "crowd": [
+          {"f": 0, "react": "roar", "ratings": "up"},
+          {"f": 25, "react": "gasp"},
+          {"f": 60, "react": "ooh"},
+          {"f": 95, "react": "gasp", "ratings": "up"},
+          {"f": 120, "react": "hush"},
+          {"f": 150, "react": "roar", "ratings": "spike"},
+          {"f": 165, "react": "applause", "ratings": "peak"}
+        ],
+        "pathA": [[25, 0, 0], [60, 0.2, 0], [95, 0.35, 0], [140, 0.3, 0], [150, 0.5, 0], [178, 0, 0]],
+        "gapD": [
+          [25, 1.3, 0.5],
+          [40, 1.3, 0],
+          [60, 1.2, 0],
+          [95, 1.4, 0.5],
+          [110, 2.2, 0.8],
+          [120, 2.0, 0],
+          [140, 1.3, 0],
+          [150, 1.1, 0],
+          [156, 1.3, 0],
+          [178, 1.8, 0]
+        ],
+        "slate": "PRIME TIME - RICKY MARQUEE: SEASON FINALE",
+        "endPose": "back",
         "endAdv": 19,
-        "endGapM": 2.5
+        "endGapM": 1.8
       },
       "role": ["reversal"],
       "anim": {"clip": "finale_slam"},
@@ -1369,5 +1617,21 @@
     "combo": ["2M", "5H", "the_hook_m"],
     "phase2": ["pyro_m", "season_finale"],
     "meter": "standing_ovation"
-  }
+  },
+  "introLine": "Ladies and gentlemen... it's ME.",
+  "winQuotes": ["And THAT is why they call it my show.", "Don't touch that dial. We'll be right back - you won't.", "Another contestant, another rerun. Roll credits!"],
+  "banter": {
+    "johnny": ["The Headliner! Your band's name looks lovely on my office wall.", "Sing for me, Johnny. The contract says you have to."],
+    "patch": ["My old floor manager! Who's running the cables tonight?", "Take direction, Patch: fall down, stage left."],
+    "bruno": ["Bruno! Twenty years, and the steak is still on me.", "Carry this, big man: the weight of cancellation."],
+    "zambini": ["Zambini! Still hiding the assistant?", "Here's a trick: I make your career disappear."],
+    "krane": ["Officer! You're supposed to be guarding ME.", "Your badge was a prop, Krane. So is your future."],
+    "lotus": ["Lotus! I wrote that drunk-master bit, you know.", "One more round - on the house. On your head."],
+    "boneyard": ["Boneyard! My favourite butcher.", "Tonight I'm the one holding the cleaver. Figuratively."],
+    "spin": ["The rooftop kid! I made you famous. You're welcome.", "Dance for the camera, Spin. Last dance."],
+    "gazza": ["Gazza! Still no referee, I'm afraid.", "Red card, son. Early bath."],
+    "rerun": ["Rerun! My most profitable death.", "Let's make it a double feature."],
+    "default": ["Welcome to the Season Finale!", "Nobody leaves my show. NOBODY."]
+  },
+  "ending": "RICKY MARQUEE wins his own show. The confetti falls, the ratings peak, and for one second the studio is silent - there is nobody left to host. He signs himself to another lifetime contract before the credits finish. Next Friday: same time, same cane. The season never ends; it only renews."
 }

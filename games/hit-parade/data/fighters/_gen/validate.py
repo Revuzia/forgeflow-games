@@ -317,6 +317,234 @@ def check_plan_entry(fid, cid, e, mix):
 
 SFX = None
 
+# ------------------------------------------------------------------ CHANGED(FIGHTERS) P2: CONTRACT 26 checks
+# lying pose each shared clip ends in, and the clip time from which it already lies (read off the victim-clip render
+# sheet of 2026-09-30: kd_fall_b lies from 1.45 s, thrown_f lands at 0.74 s, thrown_b at 0.67 s, ...)
+LYING = {"kd_fall_b": (1.4, "back"), "thrown_f": (0.73, "back"), "kd_ground_b": (0.0, "back"), "ko_fall": (1.79, "back"),
+         "thrown_b": (0.66, "front"), "kd_fall_f": (1.19, "front"), "kd_ground_f": (0.0, "front"),
+         "crumple": (1.74, "front"), "wall_splat": (1.09, "front")}
+REACT = {"hit_high_s", "hit_high_l", "hit_body", "hit_low", "hit_air", "crumple", "kd_fall_b", "kd_fall_f", "thrown_f",
+         "thrown_b", "wall_splat", "dizzy", "ko_fall", "kd_ground_b", "kd_ground_f"}
+CAM_SHOTS = {"wide", "close", "low", "over_shoulder", "orbit", "top"}
+CAM_TARGETS = {"attacker", "defender", "both"}
+CAM_EASE = {"linear", "in", "out", "inOut", "hold"}
+FX_NAMES = {"impact_s", "impact_m", "impact_l", "splat", "smear", "dust", "shock_ring", "fire", "electric", "sparks",
+            "smoke", "doves", "cards", "ball_trail", "flash", "shake_s", "shake_m", "shake_l", "speed_lines",
+            "zoom_lines", "freeze_frame", "letterbox", "letterbox_off", "slate", "dim", "undim", "spot", "spot_off",
+            "lights_flicker", "pyro", "confetti"}
+FX_TARGETS = {"attacker", "defender", "both", "stage"}
+CROWD_REACTS = {"ooh", "gasp", "cheer", "roar", "boo", "laugh", "hush", "chant", "applause"}
+RATINGS = {"up", "spike", "peak"}
+PLAYABLE = ["johnny", "patch", "bruno", "zambini", "krane", "lotus", "boneyard", "spin", "gazza", "rerun"]
+_CL = {}
+_PEND = {}
+
+
+def clips_of(fid):
+    if fid not in _CL:
+        p = os.path.join(GAME, "data", "clips", fid + ".clips.json")
+        _CL[fid] = json.load(open(p, encoding="utf-8"))["clips"] if os.path.exists(p) else {}
+    return _CL[fid]
+
+
+def pending_of(fid, plan):
+    if fid not in _PEND:
+        bp = os.path.join(GAME, "art", "renders", fid, "_build", "bake.json")
+        out = set()
+        if os.path.exists(bp):
+            baked = json.load(open(bp, encoding="utf-8")).get("clips", {})
+            out = {c for c, e in plan.items() if c not in baked or _strip(e) != _strip(baked[c].get("src", {}))}
+        _PEND[fid] = out
+    return _PEND[fid]
+
+
+def root_at(c, t):
+    r = c.get("root") or []
+    if not r:
+        return 0.0
+    return min(r, key=lambda q: abs(q[0] - t))[1]
+
+
+def check_rows(fid, where, rows, frames, clips, pend, shared_only):
+    """Timeline rows [f0, clip, fromS?, toS?]: sorted, first at 0, inside the span, clip times inside the clip."""
+    if not rows or rows[0][0] != 0:
+        fail(fid, "%s: timeline must start at frame 0" % where)
+    last = -1
+    for e in rows:
+        if len(e) not in (2, 4):
+            fail(fid, "%s: row %s is not [f0, clip] or [f0, clip, fromS, toS]" % (where, e))
+            continue
+        if not (last < e[0] < frames):
+            fail(fid, "%s: row frame %s not increasing inside 0..%d" % (where, e[0], frames - 1))
+        last = e[0]
+        if shared_only and e[1] not in SHARED:
+            fail(fid, "%s: %r is not a shared clip" % (where, e[1]))
+        if len(e) == 4:
+            if not (0 <= e[2] <= e[3]):
+                fail(fid, "%s: row %s has fromS > toS" % (where, e))
+            if e[1] in pend:
+                PENDING.append("%s %s: clip %s awaits a re-bake (clip-time range unchecked)" % (fid, where, e[1]))
+                continue
+            c = clips.get(e[1])
+            if c is None:
+                fail(fid, "%s: clip %r not in clips.json" % (where, e[1]))
+            elif e[3] > c["dur"] + 0.002:
+                fail(fid, "%s: row %s runs past the clip end %.3f s" % (where, e, c["dur"]))
+
+
+def lying_ok(fid, where, row, want=None):
+    lie = LYING.get(row[1])
+    if lie is None:
+        fail(fid, "%s: last segment %r does not end on the floor (CONTRACT 26.2)" % (where, row[1]))
+        return None
+    if len(row) == 4 and row[3] < lie[0] - 1e-6:
+        fail(fid, "%s: last segment %r stops at %.2f s, before the body lies (%.2f s)" % (where, row[1], row[3], lie[0]))
+    if want is not None and lie[1] != want:
+        fail(fid, "%s: endPose %s but the last segment %r ends lying %s" % (where, want, row[1], lie[1]))
+    return lie[1]
+
+
+def num_or_pair(v):
+    if isinstance(v, (int, float)):
+        return [v]
+    if isinstance(v, list) and len(v) == 2 and all(isinstance(x, (int, float)) for x in v):
+        return v
+    return None
+
+
+def check_cinematic_v2(fid, mid, o, c, plan):
+    where = "%s cinematic" % mid
+    for k in ("camera", "fx", "crowd", "pathA", "gapD", "slate", "endPose"):
+        if k not in c:
+            fail(fid, "%s.%s missing (CONTRACT 26.1)" % (where, k))
+            return
+    n = c["frames"]
+    ref = clips_of("johnny")
+    check_rows(fid, where + " anim", c["anim"], n, clips_of(fid), pending_of(fid, plan), False)
+    check_rows(fid, where + " victim", c["victim"], n, ref, set(), True)
+    for f, _ in c["hits"]:
+        seg = [e for e in c["victim"] if e[0] <= f][-1:]
+        if not seg or seg[0][1] not in REACT:
+            fail(fid, "%s: hit frame %d has no reacting victim segment" % (where, f))
+    lying_ok(fid, where + " victim", c["victim"][-1], c["endPose"])
+    cams = c["camera"]
+    if not cams or cams[0]["from"] != 0 or cams[-1]["to"] != n:
+        fail(fid, "%s camera: shots must cover [0, %d)" % (where, n))
+    for a, b in zip(cams, cams[1:]):
+        if a["to"] != b["from"]:
+            fail(fid, "%s camera: gap/overlap between f%d and f%d" % (where, a["to"], b["from"]))
+    for k in cams:
+        tag = "%s camera f%d" % (where, k.get("from", -1))
+        if not (0 <= k["from"] < k["to"] <= n):
+            fail(fid, "%s: bad span %s-%s" % (tag, k["from"], k["to"]))
+        if k["shot"] not in CAM_SHOTS or k["target"] not in CAM_TARGETS or k.get("ease", "inOut") not in CAM_EASE:
+            fail(fid, "%s: shot/target/ease %r/%r/%r" % (tag, k["shot"], k["target"], k.get("ease")))
+        for key, lo, hi in (("fovDeg", 15, 80), ("dist", 0.3, 12), ("height", 0.0, 8.0), ("yawDeg", -150, 150),
+                            ("lookH", 0.0, 3.0), ("roll", -30, 30)):
+            if key not in k:
+                if key in ("fovDeg", "dist", "height", "yawDeg"):
+                    fail(fid, "%s: %s missing" % (tag, key))
+                continue
+            v = num_or_pair(k[key])
+            if v is None or any(not (lo <= x <= hi) for x in v):
+                fail(fid, "%s: %s %r outside %s..%s" % (tag, key, k[key], lo, hi))
+    if c["shots"] != [[k["from"], k["shot"]] for k in cams]:
+        fail(fid, "%s: shots are not generated from camera" % where)
+    for e in c["fx"]:
+        if not (0 <= e["f"] < n) or e["fx"] not in FX_NAMES or e.get("target", "stage") not in FX_TARGETS:
+            fail(fid, "%s fx: bad beat %s" % (where, e))
+    for e in c["crowd"]:
+        if not (0 <= e["f"] < n) or e["react"] not in CROWD_REACTS or e.get("ratings", "up") not in RATINGS:
+            fail(fid, "%s crowd: bad beat %s" % (where, e))
+    for key, end_gap in (("pathA", 0.0), ("gapD", c["endGapM"])):
+        rows = c[key]
+        if not rows:
+            fail(fid, "%s %s: empty" % (where, key))
+            continue
+        last = 0
+        for f, x, y in rows:
+            if not (last < f < n) or y < 0:
+                fail(fid, "%s %s: key f%d (x %.2f, lift %.2f) not increasing inside 1..%d or lift < 0" % (
+                    where, key, f, x, y, n - 1))
+            last = f
+        if abs(rows[-1][1] - end_gap) > 1e-6 or abs(rows[-1][2]) > 1e-6:
+            fail(fid, "%s %s: last key %s must be [f, %.2f, 0] (sim end state)" % (where, key, rows[-1], end_gap))
+    if not isinstance(c["slate"], str) or not c["slate"] or not c["slate"].isascii():
+        fail(fid, "%s: slate must be non-empty ASCII text" % where)
+    g = o.get("grab")
+    if g is not None and g.get("victim") != c["victim"]:
+        fail(fid, "%s: a grab super's grab.victim must equal the cinematic victim timeline" % where)
+
+
+def check_grab_victim(fid, mid, o, g):
+    where = "%s grab.victim" % mid
+    v = g.get("victim")
+    if not v:
+        fail(fid, "%s: missing (CONTRACT 26.2: every throw / command grab has a paired victim timeline)" % where)
+        return
+    if len(v) > 8:
+        fail(fid, "%s: %d segments > 8 (sim limit)" % (where, len(v)))
+    ref = clips_of("johnny")
+    check_rows(fid, where, v, g["frames"], ref, set(), True)
+    lying_ok(fid, where, v[-1])
+    seg = [e for e in v if e[0] <= g["hitF"]][-1:]
+    if not seg or seg[0][1] not in REACT:
+        fail(fid, "%s: damage frame hitF %d is not inside a reacting segment" % (where, g["hitF"]))
+    tw = json.load(open(SYSTEM, encoding="utf-8"))["throw"]["techWindow"]
+    if g.get("techable") and g["hitF"] <= tw:
+        fail(fid, "%s: techable throw deals damage on lock frame %d, inside the %d-frame tech window (probe_data G1)" % (
+            where, g["hitF"], tw))
+    travel = 0.0
+    for e in v:
+        c = ref.get(e[1])
+        if c and len(e) == 4:
+            travel += root_at(c, e[3]) - root_at(c, e[2])
+    if g.get("swap") and travel < 0.5:
+        fail(fid, "%s: side-swap victim travels %.2f m forward in total (< 0.5 m: thrDisp scaling would jerk)" % (
+            where, travel))
+    if not g.get("swap") and travel > 0.1:
+        fail(fid, "%s: forward-throw victim travels %.2f m TOWARD the thrower" % (where, travel))
+    return travel
+
+
+def sentences(t):
+    return len(re.findall(r"[.!?](\s|$)", t))
+
+
+def check_text(fid, d):
+    for k in ("introLine", "winQuotes", "banter", "ending"):
+        if k not in d:
+            fail(fid, "season text: %s missing (CONTRACT 26.3)" % k)
+            return
+    il = d["introLine"]
+    if not isinstance(il, str) or not il or len(il) > 80:
+        fail(fid, "introLine must be 1..80 chars (%d)" % len(il or ""))
+    wq = d["winQuotes"]
+    if not (isinstance(wq, list) and len(wq) == 3 and all(isinstance(x, str) and x for x in wq)):
+        fail(fid, "winQuotes must be 3 non-empty strings")
+    b = d["banter"]
+    if fid == "freak":
+        want = ["default"]
+    elif fid == "ricky":
+        want = PLAYABLE + ["default"]
+    else:
+        want = [d["rival"], "freak", "ricky", "default"]
+    for k in want:
+        v = b.get(k)
+        if not (isinstance(v, list) and len(v) == 2 and all(isinstance(x, str) and x for x in v)):
+            fail(fid, "banter[%s] must be 2 non-empty lines" % k)
+    for k in b:
+        if k not in want:
+            fail(fid, "banter key %r unexpected (want %s)" % (k, want))
+    ns = sentences(d["ending"])
+    if not (3 <= ns <= 5):
+        fail(fid, "ending has %d sentences (3-5)" % ns)
+    blob = json.dumps([il, wq, b, d["ending"]])
+    if not blob.isascii():
+        fail(fid, "season text must be ASCII")
+    say("  season text: intro %d chars, %d win quotes, banter keys %s, ending %d sentences" % (
+        len(il), len(wq), sorted(b), ns))
+
 
 def validate_fighter(fid, mix):
     say("== %s" % fid)
@@ -421,6 +649,10 @@ def validate_fighter(fid, mix):
                     fail(fid, "%s: grab clip %s has no marks.slam (CONTRACT 6.2 THROW PAIR SYNC)" % (mid, g["clip"]))
                 if o["kind"] == "cmdgrab" and "rangeM" not in g:
                     fail(fid, "%s: cmdgrab without grab.rangeM" % mid)
+                tr = check_grab_victim(fid, mid, o, g)
+                if tr is not None:
+                    say("  %-16s grab lock %3d hitF %3d swap %-5s victim %d segs, root travel %+.2f m" % (
+                        mid, g["frames"], g["hitF"], g.get("swap"), len(g.get("victim") or []), tr))
         if o.get("projectile"):
             p = o["projectile"]
             for k in ("speed", "life", "box", "y", "hits", "strength", "clip"):
@@ -437,11 +669,12 @@ def validate_fighter(fid, mix):
                 fail(fid, "%s: cinematic hits sum %d != damage %d" % (mid, sum(x[1] for x in c["hits"]), o["damage"]))
             if any(not (0 <= x[0] < c["frames"]) for x in c["hits"] + c["anim"] + c["victim"] + c["shots"]):
                 fail(fid, "%s: cinematic timeline frame outside 0..%d" % (mid, c["frames"] - 1))
-            for _, cl in c["anim"]:
-                need_clip(cl, mid + " cinematic")
-            for _, cl in c["victim"]:
-                if cl not in SHARED:
-                    fail(fid, "%s: victim clip %r not a shared system clip" % (mid, cl))
+            for e in c["anim"]:
+                need_clip(e[1], mid + " cinematic")
+            for e in c["victim"]:
+                if e[1] not in SHARED:
+                    fail(fid, "%s: victim clip %r not a shared system clip" % (mid, e[1]))
+            check_cinematic_v2(fid, mid, o, c, plan)
         if o["kind"] == "super3" and not o.get("cinematic"):
             fail(fid, "%s: Lv3 without a cinematic block" % mid)
         for tok in o["cancel"]:
@@ -571,7 +804,7 @@ def validate_fighter(fid, mix):
         if o.get("grab"):
             used.add(o["grab"]["clip"])
         if o.get("cinematic"):
-            used |= {c for _, c in o["cinematic"]["anim"]}
+            used |= {e[1] for e in o["cinematic"]["anim"]}
     used |= {d["intro"], d["taunt"], *d["win"]} | set((uq.get("clips") or {}).values())
     unused = [c for c in plan if c not in used and c not in SHARED]
     if unused:
@@ -580,6 +813,7 @@ def validate_fighter(fid, mix):
     say("  normals %d, special families %s%s, clips %d (shared overrides %s)" % (
         normals, sorted(fams), (" + phase-2 %s" % sorted(fams2)) if fams2 else "", len(plan), overrides))
     check_hit_volume(fid, d, plan)
+    check_text(fid, d)
 
 
 def main():

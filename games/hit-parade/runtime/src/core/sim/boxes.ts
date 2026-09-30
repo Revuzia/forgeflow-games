@@ -27,25 +27,39 @@ export function hurtRects(m: Match, i: number, out: Int32Array): number {
   const y = s[b + F.y];
   const p = posture(m, i);
   const box = p === POSTURE.AIR ? cf.hurtAir : p === POSTURE.CROUCH ? cf.hurtCrouch : cf.hurtStand;
-  let bw = box[0];
+  // CHANGED(SIM) P2 (CONTRACT §28.5c): the posture box is measured and asymmetric (front / back along the facing)
+  let front = p === POSTURE.AIR ? cf.hurtFA : p === POSTURE.CROUCH ? cf.hurtFC : cf.hurtFS;
+  let back = p === POSTURE.AIR ? cf.hurtBA : p === POSTURE.CROUCH ? cf.hurtBC : cf.hurtBS;
   let bh = box[1];
   let by = 0;
   const k = s[b + F.mv];
-  if (k >= 0 && s[b + F.st] === ST.ATTACK) {
+  const st = s[b + F.st];
+  if (k >= 0 && st === ST.ATTACK) {
     const mv = cf.moves[k];
     const f = s[b + F.mvF];
     for (let j = 0; j < mv.nHurtOv; j++) {
       const o = j * 5;
       if (f < mv.hurtOv[o] || f > mv.hurtOv[o + 1]) continue;
-      bw = mv.hurtOv[o + 2];
+      front = mv.hurtOv[o + 2] >> 1; // hurtOverride boxes stay centred (§20.2)
+      back = front;
       bh = mv.hurtOv[o + 3];
       by = mv.hurtOv[o + 4];
       break;
     }
+  } else if (st === ST.STANCE && cf.u.stHurtW > 0) {
+    // CHANGED(SIM) P2: the stance lean = the enter move's last hurtOverride
+    front = cf.u.stHurtW >> 1;
+    back = front;
+    bh = cf.u.stHurtH;
+    by = cf.u.stHurtY;
   }
-  const hw = bw >> 1;
-  out[0] = x - hw;
-  out[1] = x + hw;
+  if (s[b + F.facing] >= 0) {
+    out[0] = x - back;
+    out[1] = x + front;
+  } else {
+    out[0] = x - front;
+    out[1] = x + back;
+  }
   out[2] = y + by;
   out[3] = y + by + bh;
   let n = 1;
@@ -151,6 +165,12 @@ export function resolveBodies(m: Match, px0: number, px1: number): void {
   const cf1 = m.cf[1];
   const st0 = s[b0 + F.st];
   const st1 = s[b1 + F.st];
+  if (st1 === ST.ABSENT || st0 === ST.ABSENT) {
+    // CHANGED(SIM) P2: bonus rounds - fighter 1 is not on the set (goon bodies resolve in brawl.ts)
+    if (st0 !== ST.ABSENT) clampToWalls(m, 0);
+    if (st1 !== ST.ABSENT) clampToWalls(m, 1);
+    return;
+  }
   const collide = st0 !== ST.THROWN && st1 !== ST.THROWN && st0 !== ST.CINEMATIC && st1 !== ST.CINEMATIC;
   if (collide) {
     const y0 = s[b0 + F.y];

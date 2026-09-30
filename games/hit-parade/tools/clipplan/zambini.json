@@ -217,7 +217,7 @@
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 52}
+    "marks": {"slam": 43}
   },
   "spin_fling": {
     "src": "mixamo",
@@ -227,7 +227,7 @@
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 39}
+    "marks": {"slam": 29}
   },
   "card_flick": {
     "src": "mixamo",

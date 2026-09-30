@@ -19,13 +19,14 @@
 //
 // Touch mode (html.hp-touch) re-flows the blocks out of the stick zone and the button arc (styles.css).
 
-import type { MatchCfg, MatchStats, SimEvent, UiFighterSnap, UiGameData, UiMatchSnap } from './types.ts';
+import type { MatchCfg, MatchStats, RoundLog, SimEvent, UiFighterSnap, UiGameData, UiMatchSnap } from './types.ts';
 import { EV } from './ev.ts';
 import { Broadcast, buildBug, setBugLine, type CaptionEvent } from './broadcast.ts';
-import { clamp, div, el, pulse, setText, touchModeOn, watchTouchMode } from './dom.ts';
+import { clamp, div, el, exposeDev, pulse, setText, touchModeOn, watchTouchMode } from './dom.ts';
 import { fighterName, fillPortrait, colorsOf, fighter, onPortraits, setPortraits } from './data.ts';
 import { setStrings, t } from './strings.ts';
-import { InputDisplay, FrameReadout, type TrainingOpts } from './training.ts';
+import { InputDisplay, FrameReadout, BoxOverlay, type ScreenBox, type TrainingOpts } from './training.ts';
+import { blankBonus, setBoutLog, type BonusTally } from './tally.ts';
 import './styles.css';
 
 export const SHOWTIME_BAR = 10000;
@@ -67,7 +68,7 @@ export function bannerPace(system: unknown): BannerPace {
   };
 }
 
-type CallKind = 'counter' | 'punish' | 'throwEscape' | 'perfectParry' | 'stageFright' | 'wallSplat' | 'firstBlood';
+type CallKind = 'counter' | 'punish' | 'throwEscape' | 'perfectParry' | 'stageFright' | 'wallSplat' | 'firstBlood' | 'phase2';
 
 interface Side {
   root: HTMLElement;
@@ -127,6 +128,18 @@ export class Hud {
   private lastSuperF: [number, number] = [-1e9, -1e9];
   private inputs: InputDisplay | null = null;
   private frames: FrameReadout | null = null;
+  private boxes: BoxOverlay | null = null;
+  private readonly bonusEl: HTMLElement;
+  private readonly bonusMult: HTMLElement;
+  private readonly bonusSegs: HTMLElement;
+  private readonly bonusStats: HTMLElement;
+  private bonusKey = '';
+  /** CHANGED(UI) P2: the per-round log (CONTRACT 27.3) + the round being played */
+  private roundLog: RoundLog[] = [];
+  private curRound: { round: number; fightF: number; dmg: [number, number]; combo: [number, number]; decided: RoundLog | null } | null = null;
+  private bonus: BonusTally = blankBonus();
+  /** CHANGED(UI) P2: boss phase 2 announced per side this bout (CONTRACT 27.4) */
+  private phase2: [boolean, boolean] = [false, false];
   /** CHANGED(fixer) D4: cached safeTop() (re-measured after mount / resize / touch-mode flips) */
   private safeTopFrac = 0;
   private safeDirty = true;
@@ -153,6 +166,16 @@ export class Hud {
     this.scoreBox.hidden = true;
 
     const bars = div('hp-bars', F);
+    // CHANGED(UI) P2: the bonus-round panel (BRAWL BREAK / HECKLER TOSS, CONTRACT 28.4) takes P2's place - fighter 1 is
+    // absent in a bonus round: RATINGS multiplier band, the round's tallies, the running combo
+    this.bonusEl = div('hp-bonus', F);
+    this.bonusEl.hidden = true;
+    const bl = div('band', this.bonusEl);
+    this.bonusMult = el('b', 'mult', 'x1.0');
+    bl.append(el('span', 'lbl', t('hud.bonus.ratings')), this.bonusMult);
+    this.bonusSegs = div('segs', this.bonusEl);
+    for (let k = 0; k < 7; k++) this.bonusSegs.append(el('i'));
+    this.bonusStats = div('stats', this.bonusEl);
     const s1 = this.mkSide(0);
     const center = div('hp-center', bars);
     const mini = div('hp-minibug', center);
@@ -176,6 +199,7 @@ export class Hud {
     const dirty = (): void => { this.safeDirty = true; };
     window.addEventListener('resize', dirty);
     this.offs.push(() => window.removeEventListener('resize', dirty));
+    exposeDev('hud', this);
   }
 
   /**
@@ -257,6 +281,12 @@ export class Hud {
     this.stats = [blankStats(), blankStats()];
     this.lastHp = [-1, -1];
     this.lastSuperF = [-1e9, -1e9];
+    this.roundLog = [];
+    this.curRound = null;
+    this.bonus = blankBonus();
+    this.phase2 = [false, false];
+    setBoutLog({ cfg, rounds: this.roundLog, bonus: this.bonus });
+    this.setBoxes(null);
     this.broadcast.clear();
     this.broadcast.root.hidden = false;
     this.scoreBox.hidden = cfg.mode !== 'arcade' && cfg.mode !== 'brawl' && cfg.mode !== 'heckler';
@@ -282,6 +312,11 @@ export class Hud {
     }
     this.refreshPortraits();
     this.renderPips([0, 0]);
+    const bonus = cfg.mode === 'brawl' || cfg.mode === 'heckler';
+    this.root.classList.toggle('bonus', bonus);
+    this.bonusEl.hidden = !bonus;
+    this.bonusKey = '';
+    if (bonus) setText(this.sides[1].name, '');
     this.root.hidden = false;
     this.safeDirty = true;
     if (cfg.mode === 'training') this.setTraining({ inputs: true, frames: true });
@@ -293,16 +328,28 @@ export class Hud {
     this.broadcast.clear();
     this.broadcast.root.hidden = true;
     this.setTraining(null);
+    this.setBoxes(null);
     this.cfg = null;
   }
 
   frame(m: UiMatchSnap, f: readonly [UiFighterSnap, UiFighterSnap], ev: readonly SimEvent[]): void {
     if (!this.cfg) return;
     if (m.round !== this.lastRound) { this.lastRound = m.round; this.koThisRound = []; this.timeOverThisRound = false; }
+    // CHANGED(UI) P2: the round's damage / best combo BEFORE this frame's events (the KO frame's last hit counts for the
+    // round it decides)
+    const cr = this.curRound;
+    if (cr && !cr.decided) {
+      for (let i = 0; i < 2; i++) {
+        const o = 1 - i;
+        if (this.lastHp[o] >= 0 && f[o].hp < this.lastHp[o]) cr.dmg[i] += this.lastHp[o] - f[o].hp;
+        if ((f[i].combo | 0) > cr.combo[i]) cr.combo[i] = f[i].combo | 0;
+      }
+    }
     for (const e of ev) this.onEvent(e, m, f);
+    if (m.brawl) this.renderBonus(m.brawl);
     // timer
-    const infinite = this.cfg.timer === 0 || m.timer < 0;
-    const tv = infinite ? t('hud.infinite') : String(Math.max(0, Math.ceil(m.timer)));
+    const infinite = !m.brawl && (this.cfg.timer === 0 || m.timer < 0);
+    const tv = infinite ? t('hud.infinite') : String(Math.max(0, Math.ceil(m.brawl ? m.brawl.timeLeft : m.timer)));
     if (tv !== this.lastTimer) {
       this.lastTimer = tv;
       this.timer.textContent = tv;
@@ -317,9 +364,57 @@ export class Hud {
       const o = f[1 - i];
       if (this.lastHp[1 - i] >= 0 && o.hp < this.lastHp[1 - i]) this.stats[i].damage += this.lastHp[1 - i] - o.hp;
       if ((f[i].combo | 0) > this.stats[i].maxCombo) this.stats[i].maxCombo = f[i].combo | 0;
+      this.watchPhase2(i, f[i]);
     }
     this.lastHp = [f[0].hp, f[1].hp];
     this.frames?.frame(m, f, ev);
+  }
+
+  /**
+   * CHANGED(UI) P2 (CONTRACT 27.4): a two-phase boss (unique.kind 'phases', RICKY) enters phase 2 the first time his HP
+   * drops under unique.thresholdPct % in a bout (CONTRACT 20.3) - the Hud cues the PHASE TWO strap + host line itself.
+   */
+  private watchPhase2(i: 0 | 1, f: UiFighterSnap): void {
+    if (!this.cfg || this.phase2[i] || !(f.hpMax > 0) || !(f.hp > 0)) return;
+    const u = fighter(this.data, this.cfg.p[i].fighter)?.unique;
+    if (!u || u.kind !== 'phases') return;
+    const thr = typeof u.thresholdPct === 'number' && u.thresholdPct > 0 ? u.thresholdPct : 50;
+    if (f.hp * 100 >= thr * f.hpMax) return;
+    this.phase2[i] = true;
+    this.cue('boss_phase2', { name: this.nameOf(i) });
+  }
+
+  /**
+   * CHANGED(UI) P2 (CONTRACT 28.4): the bonus-round HUD from MatchSnap.brawl - SCORE (the sim's running total), the RATINGS
+   * band (grade 0..6 = x1.0 .. x4.0, `mult` percent) and the round's tallies; DOM writes only when a value changed.
+   */
+  private renderBonus(b: NonNullable<UiMatchSnap['brawl']>): void {
+    if (this.score === null) this.setScoreText(b.score);
+    const key = `${b.grade}|${b.mult}|${b.downed}|${b.parries}|${b.perfects}|${b.hitsTaken}|${b.wave}|${b.combo}`;
+    if (key === this.bonusKey) return;
+    this.bonusKey = key;
+    setText(this.bonusMult, `x${(Math.max(100, b.mult) / 100).toFixed(1)}`);
+    [...this.bonusSegs.children].forEach((s, k) => s.classList.toggle('on', k <= b.grade));
+    this.bonusEl.dataset.grade = String(b.grade);
+    const st = b.mode === 'brawl'
+      ? [[t('hud.bonus.downed'), b.downed ?? 0], [t('hud.bonus.wave'), b.wave ?? 0], [t('hud.bonus.hits'), b.hitsTaken ?? 0]]
+      : [[t('hud.bonus.parried'), b.parries ?? 0], [t('hud.bonus.perfect'), b.perfects ?? 0], [t('hud.bonus.hits'), b.hitsTaken ?? 0]];
+    this.bonusStats.replaceChildren(...st.map(([k, v]) => { const d = el('span', 'kv'); d.append(el('span', '', String(k)), el('b', '', String(v))); return d; }));
+    const combo = b.combo ?? 0;
+    if (combo >= 2) this.bonusStats.append(el('span', 'combo', t('hud.hits', { n: combo })));
+  }
+
+  /** CHANGED(UI) P2: the rounds logged so far this bout (winner / how / frames / damage / best combo per side) */
+  rounds(): RoundLog[] { return this.roundLog.map((r) => ({ ...r, damage: [r.damage[0], r.damage[1]], maxCombo: [r.maxCombo[0], r.maxCombo[1]] })); }
+
+  /** CHANGED(UI) P2: bonus-round tallies (goons down, heckles thrown / parried, hits taken) */
+  bonusTally(): BonusTally { return { ...this.bonus }; }
+
+  /** CHANGED(UI) P2 (CONTRACT 27.1): the training HITBOX overlay - screen-space boxes from the training driver; null hides */
+  setBoxes(list: ReadonlyArray<ScreenBox> | null): void {
+    if (!list) { this.boxes?.clear(); return; }
+    if (!this.boxes) this.boxes = new BoxOverlay(this.root);
+    this.boxes.draw(list);
   }
 
   // ─────────────────────────── additive API (CHANGED(UI)) ───────────────────────────
@@ -334,7 +429,11 @@ export class Hud {
   setPortraits(map: Readonly<Record<string, string>>): void { setPortraits(map); }
   /** cue a host caption / strap by name (e.g. 'boss_phase2' when Ricky's phase flips) */
   cue(ev: CaptionEvent, vars: Readonly<Record<string, string | number>> = {}): void {
-    if (ev === 'boss_phase2') this.broadcast.strap('phase2', t('strap.bossPhase2'), t('strap.bossPhase2.sub'), true);
+    if (ev === 'boss_phase2') {
+      this.broadcast.strap('phase2', t('strap.bossPhase2'), t('strap.bossPhase2.sub'), true);
+      const side = this.cfg && fighter(this.data, this.cfg.p[1].fighter)?.unique?.kind === 'phases' ? 1 : 0;
+      this.call(side, 'phase2');
+    }
     this.broadcast.caption(ev, vars);
   }
   /** training overlays (input display + frame data); null removes them */
@@ -347,6 +446,8 @@ export class Hud {
     if (wantFr && !this.frames) this.frames = new FrameReadout(this.frameEl);
     if (!wantFr && this.frames) { this.frames.dispose(); this.frames = null; }
   }
+  /** CHANGED(UI) P2: the training driver's per-tick frame data (exact advantage, the sim's lastDamage / comboDamage) */
+  setReadout(r: { adv: number | null; block: boolean; startup: number; damage: number; combo: number }): void { this.frames?.setExact(r); }
   /** feed the input display (training): the input words the sim stepped with this tick */
   pushInputs(word: number, frame: number): void { this.inputs?.push(word, frame); }
   setRecordState(s: 'off' | 'record' | 'play'): void { this.frames?.setRecord(s); }
@@ -365,6 +466,8 @@ export class Hud {
       mounted: !!this.cfg, timer: this.timer.textContent, pips: this.pips.map((p) => p.querySelectorAll('i.on').length),
       score: this.scoreBox.hidden ? null : this.scoreV.textContent, sides: [side(this.sides[0]), side(this.sides[1])],
       events: this.evLog.slice(-12), broadcast: this.broadcast.readback(), touch: this.root.classList.contains('touch'),
+      rounds: this.rounds(), phase2: [...this.phase2], bonus: { ...this.bonus }, boxes: this.boxes ? this.boxes.count : 0,
+      training: this.frames ? { readout: this.frames.last, inputs: this.inputs ? this.inputs.count : 0 } : null,
     };
   }
 
@@ -520,6 +623,79 @@ export class Hud {
     return perfect ? 'perfect' : comeback ? 'comeback' : 'win';
   }
 
+  /**
+   * CHANGED(UI) P2 (CONTRACT 27.3): the per-round log. ROUND_INTRO opens a round, FIGHT stamps its first live frame, the
+   * KO / TIME OVER frame decides it (MatchSnap.roundWinner is set there; the winner's HP is final there - by ROUND_END
+   * the next round may have refilled it: the same rule as game.ts BoutStats, CHANGED(fixer) D8), ROUND_END files it.
+   */
+  private logRound(e: SimEvent, m: UiMatchSnap, f: readonly [UiFighterSnap, UiFighterSnap]): void {
+    if (!this.cfg || this.cfg.mode === 'training') return;
+    if (e.type === EV.ROUND_INTRO) {
+      this.curRound = { round: e.a > 0 ? e.a : m.round, fightF: -1, dmg: [0, 0], combo: [0, 0], decided: null };
+      return;
+    }
+    const c = this.curRound;
+    if (!c) return;
+    if (e.type === EV.FIGHT) { c.fightF = e.frame; return; }
+    if ((e.type === EV.KO || e.type === EV.TIMEOVER) && !c.decided) {
+      const rw = m.roundWinner === 0 || m.roundWinner === 1 || m.roundWinner === 2 ? m.roundWinner : e.a;
+      const winner: 0 | 1 | -1 = rw === 0 || rw === 1 ? rw : -1;
+      let how: RoundLog['how'] = e.type === EV.TIMEOVER ? 'time' : (e.a < 0 && e.b < 0) ? 'double' : 'ko';
+      if (winner < 0 && how !== 'double') how = 'draw';
+      const wf = winner === 0 || winner === 1 ? f[winner] : null;
+      if (how === 'ko' && wf && wf.hpMax > 0 && wf.hp >= wf.hpMax) how = 'perfect';
+      c.decided = { round: c.round, winner, how, frames: c.fightF >= 0 ? Math.max(0, e.frame - c.fightF) : 0, damage: [c.dmg[0], c.dmg[1]], maxCombo: [c.combo[0], c.combo[1]] };
+      return;
+    }
+    if (e.type === EV.ROUND_END) {
+      const w: 0 | 1 | -1 = e.a === 0 || e.a === 1 ? e.a : -1;
+      this.roundLog.push(c.decided ?? { round: c.round, winner: w, how: w < 0 ? 'draw' : 'ko', frames: c.fightF >= 0 ? Math.max(0, e.frame - c.fightF) : 0, damage: [c.dmg[0], c.dmg[1]], maxCombo: [c.combo[0], c.combo[1]] });
+      this.curRound = null;
+    }
+  }
+
+  /**
+   * CHANGED(UI) P2 (CONTRACT 28.4): a bonus round's banners and callouts. Fighter-index fields carry 8 + slot for a goon and
+   * 2 for a crowd object there, so only the player's own (index 0) plays count; no verdict / KO banners (no KO, the result
+   * is the score); SCORE `c` is the sim's running total.
+   */
+  private bonusEvent(e: SimEvent, m: UiMatchSnap, mode: 'brawl' | 'heckler'): void {
+    const B = this.broadcast;
+    switch (e.type) {
+      case EV.ROUND_INTRO: void B.sweep(t(`hud.bonus.${mode}`), { tone: 'round', cut: true, ms: this.pace.roundMs, sub: t(`hud.bonus.${mode}.sub`) }); break;
+      case EV.FIGHT: void B.sweep(t(`hud.bonus.${mode}.go`), { tone: 'fight', cut: true, ms: this.pace.fightMs }); break;
+      case EV.TIMEOVER: {
+        const score = m.brawl ? m.brawl.score : this.scoreEv;
+        void B.sweep(t('hud.bonus.time'), { tone: 'time', cut: true, ms: this.pace.timeMs + this.pace.timeVerdictMs, sub: t('hud.bonus.final', { n: Math.max(0, Math.floor(score)).toLocaleString('en-US') }) });
+        break;
+      }
+      case EV.COUNTER: if (e.a === 0) this.call(0, 'counter'); break;
+      case EV.PUNISH: if (e.a === 0) this.call(0, 'punish'); break;
+      case EV.PERFECT_PARRY: if (e.b === 0) this.call(0, 'perfectParry'); break;
+      case EV.SCORE:
+        this.scoreEv = typeof e.c === 'number' && e.c >= 0 ? e.c : this.scoreEv + (e.b | 0);
+        if (this.score === null && !m.brawl) this.setScoreText(this.scoreEv);
+        break;
+      default: break;
+    }
+  }
+
+  /** CHANGED(UI) P2: BRAWL BREAK / HECKLER TOSS tallies for the bonus results card (player = P1, the only human side) */
+  private tallyBonus(e: SimEvent): void {
+    const mode = this.cfg?.mode;
+    if (mode !== 'brawl' && mode !== 'heckler') return;
+    const b = this.bonus;
+    switch (e.type) {
+      case EV.GOON_SPAWN: b.goonsSpawned++; break;
+      case EV.GOON_DOWN: b.goonsDown++; break;
+      case EV.HECKLE_THROW: b.heckles++; break;
+      case EV.PARRY: if (e.b === 0) b.parried++; break;
+      case EV.PERFECT_PARRY: if (e.b === 0) { b.parried++; b.perfect++; } break;
+      case EV.HIT: case EV.PROJ_HIT: if (e.b === 0) b.hitsTaken++; break;
+      default: break;
+    }
+  }
+
   private onEvent(e: SimEvent, m: UiMatchSnap, f: readonly [UiFighterSnap, UiFighterSnap]): void {
     const key = `${e.frame}:${e.type}:${e.a}:${e.b}`;
     if (this.seen.has(key)) return;
@@ -530,6 +706,9 @@ export class Hud {
     const P = (v: number): 0 | 1 => (v === 1 ? 1 : 0);
     const both = (atk: 0 | 1) => ({ attacker: this.nameOf(atk), victim: this.nameOf(1 - atk), name: this.nameOf(atk), n: m.round });
     const B = this.broadcast;
+    this.logRound(e, m, f);
+    this.tallyBonus(e);
+    if (this.cfg && (this.cfg.mode === 'brawl' || this.cfg.mode === 'heckler')) { this.bonusEvent(e, m, this.cfg.mode); return; }
     switch (e.type) {
       case EV.ROUND_INTRO: {
         const w0 = m.wins[0] ?? 0, w1 = m.wins[1] ?? 0, last = this.roundsToWin - 1;
@@ -607,7 +786,8 @@ export class Hud {
         break;
       }
       case EV.SCORE:
-        this.scoreEv += Math.max(0, e.b | 0);
+        // CONTRACT 28.4: c = the sim's running total (b = the delta, negative on a penalty)
+        this.scoreEv = typeof e.c === 'number' && e.c > 0 ? e.c : Math.max(0, this.scoreEv + (e.b | 0));
         if (this.score === null) this.setScoreText(this.scoreEv);
         break;
       default: break;

@@ -20,7 +20,10 @@
     "juggle": "FIGHTING_DESIGN 2i (JS/JI/JL; 1 wall splat + 1 ground bounce per combo); gravity = the 4+38+3 / 1.59 m jump arc",
     "pushback": "FIGHTING_DESIGN 2h (light 0.27 m, IMPACT 1.35 m; corner transfer; parry 50/50); M/H/special [R]",
     "super": "FIGHTING_DESIGN 1c/2g/7b (freeze fixed frames, timer frozen) [R] lengths",
-    "boxes": "CONTRACT 5.2 derived box sizes by strength class"
+    "boxes": "CONTRACT 5.2 derived box sizes by strength class; CHANGED(SIM) P2 derive v2 (CONTRACT 28.5b): body-to-effector span, crouch line 1.10 m (FIGHTERS 20.6 measured), class reach floor = FIGHTING_DESIGN 2h table (L 0.85 / 2L 0.81 / M 1.11 / 2M 1.09 / H 1.33 / sweep 1.38 m at 1.80 m)",
+    "uniques": "CHANGED(SIM) P2 (CONTRACT 28.2): defaults for the kits' unique blocks (the kit value wins); counter catch hitstop 12 = CONTRACT 20.2; ball physics [R]",
+    "brawl": "CHANGED(SIM) P2 (CONTRACT 28.4): DESIGN_RESEARCH 1c (enemy telegraphs 30-54 f), 4b/4c (Normal: 2 melee tokens, >= 18 f between grants, 30 f telegraph floor), 6b (points, RATINGS 7 bands x1.0-x4.0, idle decay, -2 grades on a hit, combo cash-out 5 x hits^1.5); 45 s (FIGHTING_DESIGN 9b); goon HP / waves [R]",
+    "heckler": "CHANGED(SIM) P2 (CONTRACT 28.4): FIGHTING_DESIGN 9b (parry objects from the crowd, perfect parries score double, 40 s); DESIGN_RESEARCH 1c thrower 42 f windup / 10 m/s; arcs + cadence [R]"
   },
   "hp": { "default": 10000 },
   "round": {
@@ -128,7 +131,7 @@
     "postStunInvuln": 2, "wakeupInvuln": 1,
     "backThrowOffsetM": 0.7
   },
-  "kd": { "fallFrames": 16, "wakeupFrames": 18, "softLandTotal": 40, "hardLandTotal": 56, "airResetLand": 6, "backRiseM": 0.8, "minTotal": 30 },
+  "kd": { "fallFrames": 16, "wakeupFrames": 18, "softLandTotal": 40, "hardLandTotal": 56, "airResetLand": 6, "backRiseM": 0.8, "minTotal": 30, "throwLieMinF": 6 },
   "juggle": {
     "gravityMps2": 31.71,
     "airReset": [1.2, 3.6],
@@ -147,9 +150,63 @@
   "super": { "freeze1": 30, "freeze3": 45 },
   "cinematic": { "attackerRecover": 30, "victimKd": 49 },
   "projectile": { "spawnXM": 0.6, "screenHalfM": 4.5 },
-  "boxes": { "L": [0.30, 0.25], "M": [0.40, 0.30], "H": [0.50, 0.35] },
+  "boxes": { "L": [0.30, 0.25], "M": [0.40, 0.30], "H": [0.50, 0.35],
+    "nearPadM": 0.10, "shoulderPct": 0.80, "hipsPct": 0.53, "crouchLineM": 1.10, "crouchMarginM": 0.02, "reversalDropMaxM": 0.60,
+    "reachFloorM": { "5L": 0.85, "2L": 0.81, "5M": 1.11, "2M": 1.09, "5H": 1.33, "sweep": 1.38, "refHeightM": 1.80 } },
   "anim": { "blendAttack": 3, "blendHit": 6, "blendLoco": 1, "blendDefault": 2,
     "_kdNote": "CHANGED(fixer) D3: knockdown presentation (core/sim/throwpose.ts). kdFall[clip] = [drop s, floor s] read off the shared clips' mesh-top height (kd_fall_b stands until 1.0 s, floor 1.35 s; kd_fall_f dives at 0.3 s, floor 0.6 s): a KD from standing plays drop..end, a juggle landing floor..end, over <= fallMaxFrames; the wake clip ends on the actionable frame at <= wakeMaxRate x speed.",
     "kdFall": { "kd_fall_b": [1.0, 1.35], "kd_fall_f": [0.3, 0.6] }, "fallMaxFrames": 30, "wakeMaxRate": 2.0 },
-  "training": { "refillDelay": 60 }
+  "training": { "refillDelay": 60 },
+  "uniques": {
+    "stance": { "maxF": 90, "blockExitF": 6, "exitHoldF": 4 },
+    "charge": { "chargeF": 45, "keepF": 10, "standBlockNervePct": 100 },
+    "ball": { "respawnF": 180, "restF": 240, "pickupM": 0.4, "bounces": 1, "kickRangeM": 1.1, "wallRestitutionPct": 70,
+      "looseGravityMps2": 16, "deflectVxPct": -30, "deflectVyMps": 3.0, "looseFrictionPct": 94, "kickBackM": 0.3 },
+    "counter": { "catchHitstop": 12 },
+    "armorStep": { "tickStrength": "L" },
+    "phases": { "thresholdPct": 50, "lockF": 60 }
+  },
+  "brawl": {
+    "seconds": 45, "maxActive": 4, "tokens": 2, "tokenSpacingF": 18, "telegraphMinF": 30,
+    "spawnDistM": 4.2, "spawnGapF": 24, "waveGapF": 50, "thinkF": [10, 28],
+    "ringM": { "attack": [0.95, 1.5], "approach": [2.5, 3.5] },
+    "goonHurt": [0.56, 1.76], "goonPush": [0.44, 1.60],
+    "hitstunF": 14, "kdF": 44, "wakeF": 24, "downF": 90, "maxJuggle": 3,
+    "kinds": [
+      { "id": "goon_hardhat", "hp": 2400, "walk": 1.5 },
+      { "id": "goon_riot", "hp": 3000, "walk": 1.3 },
+      { "id": "goon_scrub", "hp": 1800, "walk": 1.8 }
+    ],
+    "waves": [ [0, 2, 0], [0, 1, 2, 0], [1, 0, 2, 1, 0], [0, 1, 2, 0, 1, 2] ],
+    "moves": [
+      { "id": "jab", "kind": "normal", "input": "5L", "strength": "L", "startup": 30, "active": 4, "recovery": 30,
+        "damage": 300, "hitstop": 9, "hitstun": 16, "blockstun": 12, "guard": "HL",
+        "boxes": [ { "f": [30, 33], "x": 0.72, "y": 1.38, "w": 0.60, "h": 0.40 } ], "move": [[0, 0], [30, 0.15], [33, 0.2]],
+        "pushback": { "hit": 0.3, "block": 0.3 }, "anim": { "clip": "goon_jab" } },
+      { "id": "haymaker", "kind": "normal", "input": "5H", "strength": "H", "startup": 45, "active": 5, "recovery": 40,
+        "damage": 600, "hitstop": 13, "hitstun": 24, "blockstun": 16, "guard": "HL",
+        "boxes": [ { "f": [45, 49], "x": 0.80, "y": 1.30, "w": 0.70, "h": 0.50 } ], "move": [[0, 0], [45, 0.25], [49, 0.35]],
+        "pushback": { "hit": 0.45, "block": 0.5 }, "anim": { "clip": "goon_haymaker" } },
+      { "id": "lunge", "kind": "normal", "input": "6M", "strength": "M", "startup": 36, "active": 6, "recovery": 45,
+        "damage": 500, "hitstop": 11, "hitstun": 20, "blockstun": 14, "guard": "HL",
+        "boxes": [ { "f": [36, 41], "x": 0.75, "y": 1.20, "w": 0.70, "h": 0.60 } ], "move": [[0, 0], [30, 0], [36, 0.5], [41, 1.4]],
+        "pushback": { "hit": 0.4, "block": 0.45 }, "anim": { "clip": "goon_lunge" } }
+    ],
+    "moveRangeM": [1.0, 1.05, 2.2],
+    "score": { "hit": [10, 15, 20], "special": 30, "super": 40, "throw": 80, "ko": 100, "crowd": 150, "parry": 200, "perfect": 400, "comboCashF": 180 },
+    "ratings": { "start": 150, "idleF": 90, "mult": [100, 120, 150, 200, 250, 300, 400], "decayPerSec": [8, 12, 16, 20, 24, 28, 32],
+      "gain": { "hit": [4, 5, 6], "special": 10, "super": 14, "throw": 18, "ko": 20, "crowd": 20, "parry": 35, "perfect": 50 } }
+  },
+  "heckler": {
+    "seconds": 40, "maxLive": 3, "spawnDistM": [3.2, 5.6], "spawnY": 2.7, "aimY": 1.25, "gravityMps2": 12,
+    "cadence": { "startF": 84, "endF": 36, "jitterF": 14, "firstF": 40 },
+    "objects": [
+      { "id": "tomato", "flightF": 66, "damage": 200, "box": [0.26, 0.26] },
+      { "id": "bottle", "flightF": 50, "damage": 300, "box": [0.18, 0.36] },
+      { "id": "shoe", "flightF": 58, "damage": 250, "box": [0.32, 0.20] },
+      { "id": "chair", "flightF": 76, "damage": 500, "box": [0.60, 0.60] }
+    ],
+    "hitstun": 16, "blockstun": 10, "hitstop": 8,
+    "score": { "parry": 200, "perfect": 400, "hitCost": 150 }
+  }
 }

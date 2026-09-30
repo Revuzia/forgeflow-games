@@ -279,20 +279,24 @@ export class Broadcast {
     this.capLast = now;
     this.capShowing = { pri, until: now + CAP_SHOW };
     this.capText.textContent = text;
+    this.fitCaption();
     this.log.push({ ev, text });
     if (this.log.length > 20) this.log.shift();
     this.capEl.classList.add('on');
     if (this.capAnim) this.capAnim.cancel();
     const reduced = flashesReduced();
     try {
-      const tx = document.documentElement.classList.contains('hp-touch') ? '' : 'translateX(-50%) ';
+      const touch = document.documentElement.classList.contains('hp-touch');
+      const tx = touch ? '' : 'translateX(-50%) ';
+      // CHANGED(UI) P2 (D6): the top-band ticker drops in from above; the touch subtitle rises from below
+      const from = touch ? 'translateY(40%)' : 'translateY(-60%)';
       this.capAnim = this.capEl.animate(reduced
         ? [{ opacity: 0 }, { opacity: 1, offset: 0.06 }, { opacity: 1, offset: 0.92 }, { opacity: 0 }]
         : [
-          { opacity: 0, transform: `${tx}translateY(40%) rotate(-2deg)` },
-          { opacity: 1, transform: `${tx}translateY(0) rotate(0deg)`, offset: 0.07 },
+          { opacity: 0, transform: `${tx}${from}` },
+          { opacity: 1, transform: `${tx}translateY(0)`, offset: 0.07 },
           { opacity: 1, transform: `${tx}translateY(0)`, offset: 0.92 },
-          { opacity: 0, transform: `${tx}translateY(20%)` },
+          { opacity: 0, transform: `${tx}${from}` },
         ], { duration: CAP_SHOW, easing: 'cubic-bezier(.3,.8,.3,1)', fill: 'both' });
     } catch { this.capAnim = null; }
     window.clearTimeout(this.capTimer);
@@ -302,6 +306,15 @@ export class Broadcast {
       if (this.capAnim) { this.capAnim.cancel(); this.capAnim = null; }
       this.capShowing = null;
     }, CAP_SHOW);
+  }
+
+  /** CHANGED(UI) P2 (D6): the one-line ticker shrinks a long line to fit (1 px steps, never below 12 px), then ellipsizes */
+  private fitCaption(): void {
+    const e = this.capText;
+    e.style.fontSize = '';
+    if (!e.clientWidth) return;
+    let fs = parseFloat(getComputedStyle(e).fontSize) || 16;
+    for (let i = 0; i < 10 && e.scrollWidth > e.clientWidth + 1 && fs > 12; i++) { fs -= 1; e.style.fontSize = `${fs}px`; }
   }
 
   // ─────────────────────────── slate (modal) ───────────────────────────

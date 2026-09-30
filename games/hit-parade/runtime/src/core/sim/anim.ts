@@ -113,6 +113,12 @@ export function desiredAnim(m: Match, i: number): number {
       return (cf.def.win ?? []).length > 0 ? cf.animWin : A.idle;
     case ST.LOSE:
       return A.timeover_lose;
+    case ST.STANCE: {
+      // CHANGED(SIM) P2 (CONTRACT §28.2 stance): stance idle / walk_f / walk_b entries after the grab entries
+      lastKind = KIND_LOCO;
+      const a = cf.u.stAnim[Math.max(0, Math.min(2, s[b + F.uniq + 3]))];
+      return a >= 0 ? a : A.idle;
+    }
     case ST.GRAB: {
       const k = s[b + F.mv];
       const g = k >= 0 ? cf.moves[k].grab : null;

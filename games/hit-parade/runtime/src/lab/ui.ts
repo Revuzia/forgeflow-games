@@ -323,9 +323,10 @@ async function main(): Promise<void> {
       endBout();
       if (r === 'menu') { menus.show('main'); return; }
     }
-    await menus.showEnding({ fighter, score, unlocked: ['freak', 'ricky'] });
+    // game.ts order (seasonCleared): name entry -> recordClear (the board) -> the ending sequence -> title
     const name = await menus.showNameEntry({ score, fighter });
     save.board = [...(save.board ?? []), { name, score, fighter }];
+    await menus.showEnding({ fighter, score, unlocked: ['freak', 'ricky'] });
     menus.show('title');
   };
   menus.onIntent(async (i) => {
@@ -375,6 +376,30 @@ async function main(): Promise<void> {
       case 'card_brawl': void menus.showCard({ kind: 'brawl' }); break;
       case 'card_heckler': void menus.showCard({ kind: 'heckler' }); break;
       case 'ending': void menus.showEnding({ fighter: 'johnny', score: 1830500, unlocked: ['freak', 'ricky'] }); break;
+      // CHANGED(UI) P2: the ending sequence's later cards (ending_<n> = press through n cards first)
+      case 'ending_text': case 'ending_ratings': case 'ending_board': case 'ending_unlock': {
+        save.board = [...(save.board ?? []), { name: 'JRO', score: 1830500, fighter: 'johnny' }];
+        void menus.showEnding({ fighter: 'johnny', score: 1830500, unlocked: ['freak', 'ricky'] });
+        const want = id.slice(7);
+        for (let i = 0; i < 8 && !String(menus.readback().ending).startsWith(want); i++) {
+          await new Promise((r) => setTimeout(r, 520));
+          window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter', bubbles: true }));
+          await new Promise((r) => setTimeout(r, 80));
+        }
+        break;
+      }
+      case 'results_brawl': void menus.showResults({ ...result(cfgOf('brawl', 'johnny', 'johnny'), 0), score: 14250,
+        match: M({ round: 1, timer: 0, winner: 0, brawl: { mode: 'brawl', score: 14250, ratings: 410, grade: 4, mult: 250, timeLeft: 0, wave: 5, spawned: 17, downed: 13, combo: 0, parries: 1, perfects: 0, hitsTaken: 4 } }),
+        season: { slot: 3, slots: 10, kind: 'brawl', opponent: '', cleared: false, continues: 0 } }); break;
+      case 'results_heckler': void menus.showResults({ ...result(cfgOf('heckler', 'johnny', 'johnny'), 0), score: 6800,
+        match: M({ round: 1, timer: 0, winner: 0, brawl: { mode: 'heckler', score: 6800, ratings: 300, grade: 3, mult: 200, timeLeft: 0, wave: 0, spawned: 0, downed: 0, combo: 0, parries: 14, perfects: 5, hitsTaken: 3 } }),
+        season: { slot: 7, slots: 10, kind: 'heckler', opponent: '', cleared: false, continues: 0 } }); break;
+      case 'results_online_dc': void menus.showResults({ ...result(cfgOf('online', 'johnny', 'lotus'), 0), disconnect: true, rated: false, names: ['YOU', 'SLAMMA_JAMMA'], rounds: [{ winner: 0, how: 'ko' }] }); break;
+      case 'online_room': menus.show('main'); menus.show('online'); menus.setOnlineStatus({ st: 'waiting', code: 'KRTZ' }); break;
+      case 'online_sync': menus.show('main'); menus.show('online'); menus.onlineEvent('paired', { room: 'KRTZ' });
+        menus.setOnlineStatus({ code: 'net.relay', phase: 'syncing', rttMs: 131, transport: 'relay', room: 'KRTZ' }); break;
+      case 'online_blind': menus.show('main'); menus.show('charselect', { mode: 'online', opponent: 'human' }); menus.onlineEvent('select', { seconds: 30, opponent: 'SLAMMA_JAMMA' });
+        menus.onlineEvent('opponentLocked'); break;
       case 'nameentry': void menus.showNameEntry({ score: 1830500, fighter: 'johnny' }); break;
       case 'pause': hudState('mid'); phase = 'paused'; void openPause(false); break;
       case 'training': hudState('training'); phase = 'paused'; void menus.showPause({ training: true }); (document.getElementById('hpm-p-training') as HTMLElement).click(); break;

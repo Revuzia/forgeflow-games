@@ -230,3 +230,62 @@ export function randomInputs(seed: number, frames: number): Int32Array {
   }
   return out;
 }
+
+// ------------------------------------------------------------------ unique-heavy input streams (CHANGED(SIM) P2)
+/**
+ * Deterministic words for ONE player aimed at the uniques (CONTRACT §28): charge holds ([4]6 / [2]8 after 46-70 f), 360,
+ * half circles (41236 / 63214), 22 taps, 214 + follow-up presses (stance / counter / keepy-uppy / vanish), supers
+ * (236236 / 214214), SIMPLE S + direction, ASSIST + S, throws, parries, walks. `fwd` = the screen bit toward the opponent
+ * at the start (P1 RIGHT 8, P2 LEFT 4). Pure function of (seed, fwd, frames).
+ */
+export function uniqueInputs(seed: number, fwd: number, frames: number): Int32Array {
+  const r = mulberry32((seed * 2654435761) | 0);
+  const out = new Int32Array(frames);
+  const back = fwd === 8 ? 4 : 8;
+  const dirW = (d: number): number => {
+    let w = 0;
+    if (d >= 7) w |= 1;
+    if (d <= 3) w |= 2;
+    const h = (d - 1) % 3;
+    if (h === 0) w |= back;
+    if (h === 2) w |= fwd;
+    return w;
+  };
+  const BTN = [16, 32, 64];
+  let f = 0;
+  const put = (w: number, n = 1): void => {
+    for (let k = 0; k < n && f < frames; k++) out[f++] = w;
+  };
+  const seq = (ds: number[], btn: number, each = 1): void => {
+    for (let k = 0; k < ds.length; k++) put(dirW(ds[k]) | (k === ds.length - 1 ? btn : 0), each);
+  };
+  while (f < frames) {
+    const roll = Math.floor(r() * 100);
+    const btn = BTN[Math.floor(r() * 3)];
+    if (roll < 12) {
+      // charge: back or down-back, then forward / up + button
+      const down = r() < 0.4;
+      put(dirW(down ? 1 : 4), 46 + Math.floor(r() * 25));
+      put(dirW(down ? 8 : 6) | btn, 2);
+    } else if (roll < 18) seq([6, 3, 2, 1, 4, 7, 8], btn);
+    else if (roll < 26) seq(r() < 0.5 ? [4, 1, 2, 3, 6] : [6, 3, 2, 1, 4], btn);
+    else if (roll < 32) seq([2, 5, 2], btn);
+    else if (roll < 48) {
+      // 214 + follow-up presses (stance follow-ups, counters, keepy-uppy + re-kick, vanish)
+      seq([2, 1, 4], r() < 0.2 ? 128 : btn);
+      put(0, 8 + Math.floor(r() * 18));
+      put(BTN[Math.floor(r() * 3)], 1);
+      put(0, Math.floor(r() * 10));
+      if (r() < 0.3) seq([2, 3, 6], btn);
+    } else if (roll < 53) seq(r() < 0.5 ? [2, 3, 6, 2, 3, 6] : [2, 1, 4, 2, 1, 4], btn);
+    else if (roll < 63) put(dirW([5, 6, 4, 2][Math.floor(r() * 4)]) | 128 | (r() < 0.2 ? 256 : 0), 1);
+    else if (roll < 67) put(r() < 0.5 ? 512 : 1024, 1 + Math.floor(r() * 6));
+    else if (roll < 71) seq([6, 2, 3], btn);
+    else {
+      const d = [5, 5, 6, 6, 4, 2, 1, 3, 9, 7][Math.floor(r() * 10)];
+      const hold = 1 + Math.floor(r() * 16);
+      for (let k = 0; k < hold && f < frames; k++) out[f++] = dirW(d) | (r() < 0.12 ? BTN[Math.floor(r() * 3)] : 0);
+    }
+  }
+  return out;
+}

@@ -1,7 +1,8 @@
 """HIT PARADE - per-fighter GLB pipeline driver (lane ASSETS, CONTRACT section 6).
 
   python tools/build_fighters.py --fighter johnny            # shared + fighter clipplan
-  python tools/build_fighters.py --all                       # every fighter in tools/bodies.json
+  python tools/build_fighters.py --all                       # every fighter in tools/bodies.json (goons excluded)
+  python tools/build_fighters.py --goons                     # the BRAWL BREAK goons (goon_* bodies, _goons.json plan)
   python tools/build_fighters.py --all --skip johnny,bruno   # the rest (or --fighter a,b,c)
   python tools/build_fighters.py --fighter bruno --shared-only --clips idle,walk_f   (subset, testing)
   python tools/build_fighters.py --fighter johnny --check     # resolve + validate the plan only, no bake
@@ -11,6 +12,9 @@
 Per fighter:
   1. resolve the clip plan: tools/clipplan/_shared.json (lane ASSETS) + tools/clipplan/<id>.json
      (lane FIGHTERS; same id overrides the shared entry for this fighter). Keys starting '_' skipped.
+     goon_* bodies: _shared.json + tools/clipplan/_goons.json (lane ASSETS) + its _override.<id> block.
+  1b. bodies with a `repaint` block (goon_security): tools/goon_repaint.py edits the printed lettering of the
+     source textures (POLICE / SWAT -> K13 SECURITY); the bake swaps those images in before the atlas bake.
      Fighter entries default to contact 'auto'; shared entries to what _shared.json says.
   2. validate every source (Mixamo FBX exists, CMU take exists, authored spec exists)
   3. blender.exe --background --python art/blender/bake_fighter.py -- job.json (blender.exe directly,
@@ -59,8 +63,13 @@ def resolve_plan(fid, shared_only=False):
         plan[k] = dict(v)
         origin[k] = "shared"
     fp = P("tools", "clipplan", fid + ".json")
+    if fid.startswith("goon_"):
+        fp = P("tools", "clipplan", "_goons.json")
     if not shared_only and os.path.exists(fp):
         fplan = load_json(fp)
+        if fid.startswith("goon_"):
+            fplan = dict({k: v for k, v in fplan.items() if not k.startswith("_")},
+                         **(fplan.get("_override") or {}).get(fid, {}))
         for k, v in fplan.items():
             if k.startswith("_"):
                 continue
@@ -242,6 +251,18 @@ def build_one(fid, a, bodies):
         except Exception as ex:  # noqa
             rep["problems"].append("could not read %s: %r" % (fj, ex))
     bcfg["fbx"] = bodies["characters_root"] + "/" + bcfg["fbx"]
+    budget_mb = float(bcfg.get("budgetMB", a.budget_mb))
+    rep["budget_mb"] = budget_mb
+    if bcfg.get("repaint") and not a.from_raw:
+        # texture repaint (goon_security: printed POLICE / SWAT -> K13 SECURITY) before the bake
+        rp = subprocess.run([sys.executable, P("tools", "goon_repaint.py"), fid], capture_output=True, text=True,
+                            encoding="utf-8", errors="replace", env=ENV, timeout=1800)
+        if rp.returncode != 0:
+            rep["problems"].append("repaint failed: " + rp.stderr[-800:])
+            return rep
+        rr = json.loads(rp.stdout.strip().splitlines()[-1])
+        bcfg["image_overrides"] = rr["overrides"]
+        rep["repaint"] = rr.get("report")
     plan, origin = resolve_plan(fid, a.shared_only)
     if a.clips:
         want = set(a.clips.split(","))
@@ -264,7 +285,7 @@ def build_one(fid, a, bodies):
     os.makedirs(build, exist_ok=True)
     job = {"fighter": fid, "body": bcfg, "work_dir": build, "raw_glb": build + "/raw.glb",
            "bake_json": build + "/bake.json", "mixamo_root": bodies["mixamo_root"],
-           "xbot_fbx": bodies["xbot_fbx"], "tools_dir": TOOLS.replace("\\", "/"), "atlas": 1024,
+           "xbot_fbx": bodies["xbot_fbx"], "tools_dir": TOOLS.replace("\\", "/"), "atlas": int(bcfg.get("atlas", 1024)),
            "clips": clips, "layer_attach": a.layer_attach}
     if a.keep_blend:
         job["save_blend"] = build + "/baked.blend"
@@ -299,7 +320,7 @@ def build_one(fid, a, bodies):
     out = P("art", "gltf", "fighters", fid + ".glb")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     tmp_out = build + "/final.glb"
-    comp = compress_glb.compress(build + "/raw.glb", tmp_out, 1024, 85, build + "/qc.glb", True)
+    comp = compress_glb.compress(build + "/raw.glb", tmp_out, int(bcfg.get("atlas", 1024)), 85, build + "/qc.glb", True)
     rep["compress"] = comp["sizes"]
     # ---- clips.json
     clips_json = {"fighter": fid, "generated_by": "tools/build_fighters.py (lane ASSETS) - do not hand-edit",
@@ -312,7 +333,7 @@ def build_one(fid, a, bodies):
                         "textures": facts["textures"], "materials": facts["materials"],
                         "animations": len(facts["animations"])}
     joints = facts["skins"][0]["joints"] if facts["skins"] else 0
-    probs = structural_check(facts, list(clips_json["clips"]), a.budget_mb, joints)
+    probs = structural_check(facts, list(clips_json["clips"]), budget_mb, joints)
     if probs:
         rep["problems"].append({"structural": probs})
     hard = [p for p in probs if "budget" in p or "!=" in p]
@@ -344,6 +365,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fighter")
     ap.add_argument("--all", action="store_true")
+    ap.add_argument("--goons", action="store_true", help="the goon_* bodies (BRAWL BREAK)")
     ap.add_argument("--skip", default="", help="comma list of fighters to leave out (with --all)")
     ap.add_argument("--shared-only", action="store_true")
     ap.add_argument("--clips", default="")
@@ -362,7 +384,9 @@ def main():
     a = ap.parse_args()
     bodies = load_json(P("tools", "bodies.json"))
     if a.all:
-        ids = sorted(bodies["bodies"])
+        ids = sorted(k for k, v in bodies["bodies"].items() if not v.get("goon"))
+    elif a.goons:
+        ids = sorted(k for k, v in bodies["bodies"].items() if v.get("goon"))
     elif a.fighter and "," in a.fighter:
         ids = [x for x in a.fighter.split(",") if x]
     else:
@@ -370,7 +394,7 @@ def main():
     skip = set(x for x in a.skip.split(",") if x)
     ids = [i for i in ids if i not in skip]
     if not ids or ids == [None]:
-        ap.error("--fighter <id>[,<id>...] or --all [--skip a,b]")
+        ap.error("--fighter <id>[,<id>...] or --all [--skip a,b] or --goons")
     bad = 0
     for fid in ids:
         if fid not in bodies["bodies"]:

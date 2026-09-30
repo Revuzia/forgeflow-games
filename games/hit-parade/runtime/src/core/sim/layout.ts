@@ -11,7 +11,8 @@
 import { hash32 } from '../rng.ts';
 
 /** Bump when a field's MEANING changes without the sizes changing. */
-export const LAYOUT_REV = 2; // CHANGED(fixer): 2 = throw carry / knockdown presentation fields, asymmetric push boxes
+export const LAYOUT_REV = 3; // CHANGED(fixer): 2 = throw carry / knockdown presentation fields, asymmetric push boxes
+// CHANGED(SIM) P2: 3 = uniques (stance state, install timer, ball / heckle projectile fields), BRAWL header + goon blocks v2
 
 function builder(): { f: () => number; a: (n: number) => number; size: () => number } {
   let n = 0;
@@ -167,7 +168,11 @@ export const F = {
   kdFace: fb.f(), // knockdown lying pose bits (throwpose.ts KDF): 1 face down, 2 no fall (already down), 4 juggle landing
   thrMv: fb.f(), // victim: the thrower's move index at the connect (the thrower's own F.mv clears when its lock ends first)
   thrSlam: fb.f(), // victim: lock frame of the slam for a throw WITHOUT a grab block (the thrower's damage frame)
-  reserved: fb.a(1),
+  // CHANGED(SIM) P2: uniques (CONTRACT §28)
+  instF: fb.f(), // install frames left (Move.install)
+  instMv: fb.f(), // move index that granted the install (its effects), -1 none
+  thrRel: fb.f(), // victim: throw-lock frames the release comes early by (the knockdown takes them, §28.5d)
+  ucnt: fb.f(), // unique counter (stance: frames down has been held)
 };
 export const FIGHTER_INTS = fb.size();
 
@@ -192,6 +197,11 @@ export const P = {
   inst: pb.f(), // owner's mvInst of the spawning move (combo scaling)
   flags: pb.f(), // owner's mvFlags at spawn (SIMPLE x0.8, RUSH)
   vy: pb.f(), // vertical speed (arcing projectiles)
+  // CHANGED(SIM) P2: per-instance physics (the ball is re-kicked by other moves; heckle objects have no owner move)
+  g: pb.f(), // gravity U/frame^2
+  mode: pb.f(), // kind 1: BALL.* state; kind 2: heckle object type
+  aux: pb.f(), // kind 1: wall rebounds left; kind 2: target x (U)
+  ground: pb.f(), // 1 = rolls on the floor instead of landing
 };
 export const PROJ_INTS = pb.size();
 
@@ -213,7 +223,21 @@ export const BR = {
   downed: bh.f(),
   timeLeft: bh.f(),
   rng: bh.f(),
-  reserved: bh.a(8),
+  // CHANGED(SIM) P2 (brawl.ts)
+  ratings: bh.f(), // RATINGS x100 (0 .. 69999)
+  idle: bh.f(), // frames since the last scoring action (ratings idle decay)
+  combo: bh.f(), // hits in the running combo (cashed out comboCashF after the last hit)
+  comboF: bh.f(), // frames since the combo's last hit
+  lastGrant: bh.f(), // frames since the last attack-token grant
+  waveLeft: bh.f(), // goons still to spawn in this wave
+  spawnCd: bh.f(), // frames until the next spawn may happen
+  parries: bh.f(),
+  perfects: bh.f(),
+  hitsTaken: bh.f(),
+  heckleCd: bh.f(), // frames until the next heckle throw
+  heckles: bh.f(), // heckle objects thrown
+  koCount: bh.f(), // KOs inside the multi-KO window (informational)
+  reserved: bh.a(7),
 };
 export const BRAWL_HEADER_INTS = bh.size();
 const gb = builder();
@@ -235,7 +259,21 @@ export const G = {
   token: gb.f(),
   animId: gb.f(),
   animF: gb.f(),
-  reserved: gb.a(7),
+  // CHANGED(SIM) P2 (brawl.ts)
+  pAnimId: gb.f(),
+  pAnimF: gb.f(),
+  blendT: gb.f(), // 0..6
+  hitInst: gb.f(), // player's mvInst whose hits already landed on this goon
+  hitMask: gb.f(), // hit ids of that instance that landed
+  contact: gb.f(), // this goon's running attack connected (1 hit, 2 blocked / parried)
+  kd: gb.f(), // pending knockdown on landing (juggle)
+  target: gb.f(), // x the goon walks to (U)
+  think: gb.f(), // frames until the next decision
+  seq: gb.f(), // spawn sequence number (deterministic ordering, informational)
+  animInst: gb.f(), // anim restart key
+  jc: gb.f(), // juggle hits taken in the current air time
+  appF: gb.f(), // frames spent walking in with a token (gives up after a while)
+  reserved: gb.a(1),
 };
 export const GOON_INTS = gb.size();
 export const BRAWL_BASE = STATE_INTS;
@@ -287,12 +325,22 @@ export const ST = {
   WIN: 27,
   LOSE: 28,
   GRAB: 29, // attacker holding a landed grab (CONTRACT 20.2 grab.frames)
+  STANCE: 30, // CHANGED(SIM) P2: unique stance (Lotus sway), CONTRACT §28.2
+  ABSENT: 31, // CHANGED(SIM) P2: fighter 1 in brawl / heckler (not on the set)
 } as const;
 export const ST_NAMES: readonly string[] = [
   'intro', 'idle', 'crouch', 'walk_f', 'walk_b', 'prejump', 'air', 'land', 'dash_f', 'dash_b',
   'attack', 'hitstun', 'blockstun', 'juggle', 'knockdown', 'thrown', 'tech', 'parry', 'parry_rec',
   'crumple', 'wall_splat', 'dizzy', 'rush', 'taunt', 'recover', 'cinematic', 'ko', 'win', 'lose', 'grab',
+  'stance', 'absent',
 ];
+
+/** CHANGED(SIM) P2: goon states (G.st, brawl.ts). */
+export const GS = { ENTER: 0, APPROACH: 1, WAIT: 2, ATTACK: 3, HIT: 4, BLOCK: 5, JUGGLE: 6, KD: 7, WAKE: 8, DOWN: 9 } as const;
+export const GS_NAMES: readonly string[] = ['enter', 'approach', 'wait', 'attack', 'hit', 'block', 'juggle', 'knockdown', 'wake', 'down'];
+
+/** CHANGED(SIM) P2: ball states (FighterSnap.unique[0] of a `ball` fighter; P.mode of the kind-1 slot). */
+export const BALL = { FEET: 0, FLYING: 1, HOVER: 2, REST: 3, GONE: 4, LOOSE: 5 } as const;
 
 /** Match phases. */
 export const PH = { INTRO: 0, FIGHT: 1, KO: 2, TIMEOVER: 3, ROUND_END: 4, MATCH_END: 5 } as const;
@@ -322,6 +370,7 @@ export const MVF = {
   WHIFFED: 32, // WHIFF event emitted
   CIN: 64, // cinematic started
   CLASH: 128,
+  CAUGHT: 256, // CHANGED(SIM) P2: caught by a counter move: recovery, no cancel, every hit on it is a punish counter
 } as const;
 
 /** Combo flags on the DEFENDER (F.cFlags). */
@@ -337,7 +386,7 @@ export const CF = {
 export const ACT = { NONE: 0, MOVE: 1, PARRY: 2, DASH_F: 3, DASH_B: 4, TAUNT: 5, ROUTE: 6 } as const;
 
 /** Buffer flags (F.bufF). */
-export const BUF = { SIMPLE: 1, CHAIN: 2, FROM_KD: 4, NEG: 8, FROZEN: 16 } as const;
+export const BUF = { SIMPLE: 1, CHAIN: 2, FROM_KD: 4, NEG: 8, FROZEN: 16, STANCE: 32 } as const;
 
 /** Mode codes (W.mode). */
 export const MODE_CODES: readonly string[] = ['versus', 'arcade', 'training', 'online', 'brawl', 'heckler'];

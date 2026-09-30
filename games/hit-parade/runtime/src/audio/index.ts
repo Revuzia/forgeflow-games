@@ -9,12 +9,23 @@
 //   audio.events(newEvents, readMatch(m), [readFighter(m, 0), readFighter(m, 1)]);         // every rendered frame
 //   audio.setPaused(true|false); audio.bout(null); audio.music('results');                  // pause / leave / results
 
+import { loadGameData } from '../core/data.ts';
 import { AudioEngine } from './engine.ts';
 import { MUSIC, SPRITES, type MusicCueId, type SpriteId } from './manifest.ts';
-import { AudioRouter } from './router.ts';
-import type { AnnounceLine, AudioBout, AudioOptions, AudioStats, AudioVolumes, FighterSnap, GameAudio, MatchSnap, SimEvent, Splatter } from './types.ts';
+import { AudioRouter, boutContext } from './router.ts';
+import type { AnnounceLine, AudioBout, AudioGameData, AudioOptions, AudioStats, AudioVolumes, FighterSnap, GameAudio, MatchSnap, SimEvent, Splatter } from './types.ts';
 
-export type { AnnounceLine, AudioBout, AudioOptions, AudioStats, AudioVolumes, GameAudio, MusicCue, Splatter, UiCue } from './types.ts';
+// CHANGED(AUDIO) P2 (CONTRACT s9.2.3): the move tables / stages / bonus-round objects come from the game data. game.ts
+// does not pass it, so the audio reads loadGameData() itself (cached in core/data.ts: the same object the game built).
+let dataCache: AudioGameData | null | undefined;
+function gameData(): AudioGameData | null {
+  if (dataCache === undefined) {
+    try { dataCache = loadGameData(); } catch { dataCache = null; }
+  }
+  return dataCache;
+}
+
+export type { AnnounceLine, AudioBout, AudioGameData, AudioOptions, AudioStats, AudioVolumes, GameAudio, MusicCue, Splatter, UiCue } from './types.ts';
 
 export function createAudio(opts: AudioOptions = {}): GameAudio {
   const engine = new AudioEngine(opts.voiceLimit ?? 28);
@@ -99,7 +110,7 @@ export function createAudio(opts: AudioOptions = {}): GameAudio {
     setVolumes(v: Partial<AudioVolumes>): void { engine.setVolumes(v); },
     bout(info: AudioBout | null): void {
       if (disposed) return;
-      router.setBout(info, engine);
+      router.setBout(info, engine, info ? boutContext(info, info.data ?? gameData()) : null);
       boutLoaded = info !== null && boutLoaded;
       lastT = -1;
     },

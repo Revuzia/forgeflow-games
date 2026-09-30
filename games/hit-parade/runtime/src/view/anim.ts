@@ -96,6 +96,65 @@ export class PoseDriver {
     L.prevClip = aPrev ? aPrev.getClip().name : ''; L.prevT = tPrev; L.prevW = aPrev ? 1 - w : 0;
   }
 
+  /**
+   * P2 (PRIME TIME / outro blends): pose from an explicit weighted clip list `[{clip, t (s), w}]` (at most 4 entries).
+   * Times are clip seconds already clamped / wrapped by the caller; weights are normalised to sum 1; the same clip
+   * listed twice keeps the heavier entry's time (one action cannot sit at two times) with the summed weight.
+   * Idempotent for identical input (never accumulates mixer time), like pose().
+   */
+  poseWeighted(list: ReadonlyArray<{ clip: string; t: number; w: number }>): void {
+    let sum = 0;
+    const acts: THREE.AnimationAction[] = [];
+    const ts: number[] = [];
+    const ws: number[] = [];
+    for (const e of list) {
+      if (!(e.w > 1e-4)) continue;
+      const a = this.action(e.clip);
+      if (!a) continue;
+      const d = a.getClip().duration;
+      const t = d > 0 ? Math.max(0, Math.min(d, e.t)) : 0;
+      const k = acts.indexOf(a);
+      if (k >= 0) { if (e.w > ws[k]) ts[k] = t; ws[k] += e.w; } else { acts.push(a); ts.push(t); ws.push(e.w); }
+      sum += e.w;
+    }
+    if (!acts.length || sum <= 0) return;
+    for (const a of this.live) if (acts.indexOf(a) < 0) a.setEffectiveWeight(0);
+    for (let i = 0; i < acts.length; i++) { acts[i].time = ts[i]; acts[i].setEffectiveWeight(ws[i] / sum); }
+    this.live = acts;
+    this.mixer.update(0);
+    let top = 0;
+    for (let i = 1; i < acts.length; i++) if (ws[i] > ws[top]) top = i;
+    const L = this.last;
+    L.clip = acts[top].getClip().name; L.t = ts[top]; L.w = ws[top] / sum;
+    const second = acts.length > 1 ? (top === 0 ? 1 : 0) : -1;
+    L.prevClip = second >= 0 ? acts[second].getClip().name : ''; L.prevT = second >= 0 ? ts[second] : 0; L.prevW = second >= 0 ? ws[second] / sum : 0;
+  }
+
+  /** the weighted (clip, seconds) list pose() would apply for a snapshot (P2: lets FighterView mix overlays in) */
+  entriesFor(table: ReadonlyArray<AnimRef>, s: PoseInput, out: Array<{ clip: string; t: number; w: number }>): void {
+    out.length = 0;
+    const cur = this.entry(table, s.animId);
+    if (!cur) return;
+    let w = Number.isFinite(s.blendT) ? s.blendT : 1;
+    w = w < 0 ? 0 : w > 1 ? 1 : w;
+    out.push({ clip: this.has(cur.clip) ? cur.clip : this.fallback, t: animSeconds(cur, s.animFrame, this.dur(cur.clip)), w });
+    if (w < 1) {
+      const prev = this.entry(table, s.prevAnimId);
+      if (prev) out.push({ clip: this.has(prev.clip) ? prev.clip : this.fallback, t: animSeconds(prev, s.prevAnimFrame, this.dur(prev.clip)), w: 1 - w });
+      else out[0].w = 1;
+    }
+  }
+
+  has(name: string): boolean { return !!name && this.clips.has(name); }
+
+  /** clip duration + loop-free sampling helper: seconds clamped into [0, dur] (or wrapped when `loop`) */
+  clipTime(name: string, t: number, loop: boolean): number {
+    const d = this.dur(name);
+    if (!(d > 0)) return 0;
+    if (loop) return ((t % d) + d) % d;
+    return t < 0 ? 0 : t > d ? d : t;
+  }
+
   /** Free-running pose for showcase / crowd baking (NOT sim-driven): clip at seconds t, full weight. */
   poseClip(name: string, t: number): void {
     const a = this.action(name);

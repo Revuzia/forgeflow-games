@@ -1,5 +1,5 @@
 """SPIN - aerial breakdancer (Breakdance pack: floor footwork, flairs, one-hand spin, freezes; CMU jump kicks)."""
-from kitlib import (Kit, air, cmu, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
+from kitlib import (Kit, air, cam, cinematic, cmu, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
 
 BD = "Breakdance_Pack/"
 
@@ -58,8 +58,9 @@ def build():
     K.clip("air_swipe", mix(BD + "breakdance swipes", (66, 86), contact=76), "breakdance swipes leg whip in the air")
     K.clip("jump_kick", cmu("jump_kick.1"), "CMU jump_kick.1 usable (90_05 airborne turning kick, foot 1.76 m)")
     K.clip("throw_reach", mix("Soccer_Game_Pack/goalkeeper catch (2)", (1, 30), contact=9), "two-hand grab")
-    K.clip("footwork_trip", mix(BD + "breakdance footwork to freeze", (1, 80)),
-           "Mixamo footwork to freeze: drags them down into floor work")
+    K.clip("footwork_trip", mix(BD + "breakdance footwork to freeze", (1, 50), contact=30),
+           "Mixamo footwork to freeze f1-50: drops to the floor, lunges and sweeps the leg up at f30 (grab sheet: leg "
+           "sweep at clip 0.99 s). P2: window 1-80 -> 1-50 (the full 2.63 s over a 48-frame lock played at 3.3x)")
     K.clip("flair_toss", mix(BD + "flair (3)", (1, 51), contact=36), "Mixamo flair (3) spin = fling behind")
     K.clip("windmill_l", _windmill(0), "SEQ: flair (3) entry + flair exit f1-40 (chain from MIXAMO_CLIPS)")
     K.clip("windmill_m", _windmill(1), "SEQ: flair entry + 1 flair loop + exit f1-40")
@@ -108,11 +109,19 @@ def build():
     K.add("j.M", "jM", input="j.M", name="Air Swipe", clip="air_swipe", role=["antiair"], desc="Leg whip air-to-air.")
     K.add("j.H", "jH", input="j.H", name="Jump Turning Kick", clip="jump_kick", desc="Turning jump-in.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Footwork Trip", clip="throw_reach",
-          grab={"frames": 48, "adv": 21, "hitF": 32, "swap": False, "air": False, "techable": True,
-                "clip": "footwork_trip"}, desc="Drags them down into his footwork.")
+          grab={"frames": 48, "adv": 21, "hitF": 28, "swap": False, "air": False, "techable": True,
+                "clip": "footwork_trip",
+                # P2 paired throw: footwork_trip (f1-50, 1.63 s over 48 f) drops under them, kicks the shin (lock 12)
+                # and sweeps the legs at clip 0.97 s = lock 28; they topple backwards (kd_fall_b from the drop, face up).
+                "victim": [[0, "hit_high_s", 0.0, 0.2], [12, "hit_low", 0.0, 0.5], [28, "kd_fall_b", 1.0, 1.55]]},
+          desc="Drags them down into his footwork.")
     K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Flair Toss", clip="throw_reach",
-          grab={"frames": 46, "adv": 14, "hitF": 30, "swap": True, "air": False, "techable": True,
-                "clip": "flair_toss"}, desc="Flairs and flings them behind.")
+          grab={"frames": 46, "adv": 14, "hitF": 32, "swap": True, "air": False, "techable": True,
+                "clip": "flair_toss",
+                # P2 paired throw: the flair's leg pass at clip 1.17 s = lock 32 (1.67 s over 46 f) flings them past; the
+                # victim is pulled into the spin (thrown_b 0 -> 0.55 s) and lands face down behind him at lock ~35.
+                "victim": [[0, "hit_high_s", 0.0, 0.15], [8, "thrown_b", 0.0, 0.55], [32, "thrown_b", 0.55, 1.1]]},
+          desc="Flairs and flings them behind.")
 
     wm = {}
     for s_, (st, gaps, rec, dmgs, mv) in {"l": (12, [8], 24, [450, 550], 0.6),
@@ -213,15 +222,34 @@ def build():
           clip="front_kick", invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]},
           move=[[0, 0], [10, 0.8]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],
           juggle={"js": 1, "ji": 0, "jl": 99},
-          cinematic={"frames": 165, "cue": "spin_battle",
-                     "hits": [[8, 400], [28, 300], [34, 300], [55, 600], [80, 700], [108, 900], [134, 1300]],
-                     "anim": [[0, "front_kick"], [22, "swipes"], [48, "flare_sweep"], [72, "butterfly"],
-                              [100, "jump_kick"], [128, "handspin_clip"], [148, "win_freeze"]],
-                     "victim": [[0, "hit_high_s"], [22, "hit_high_l"], [48, "hit_low"], [72, "hit_air"],
-                                [100, "hit_air"], [128, "hit_air"], [140, "kd_fall_b"], [152, "kd_ground_b"]],
-                     "shots": [[0, "side_close"], [22, "front_low"], [48, "top_down"], [72, "low_angle_up"],
-                               [100, "orbit"], [128, "slowmo_hold"], [148, "crowd_pop"]],
-                     "endAdv": 19, "endGapM": 2.2},
+          cinematic=lambda: cinematic(
+              165, "spin_battle",
+              hits=[[8, 400], [30, 300], [36, 300], [55, 600], [80, 700], [108, 900], [134, 1300]],
+              anim=[K.seg(0, "front_kick", 22, hit=8), K.seg(22, "swipes", 48, hit=30, rate=1.7),
+                    K.seg(48, "flare_sweep", 72, hit=55), K.seg(72, "butterfly", 100, hit=80),
+                    K.seg(100, "jump_kick", 128, hit=108), K.seg(128, "handspin_clip", 150, hit=134),
+                    K.seg(150, "win_freeze", 165, fromS=1.0)],
+              victim=[[0, "hit_high_s", 0.0, 0.3], [8, "hit_high_s", 0.0, 0.35], [30, "hit_high_l", 0.0, 0.2],
+                      [36, "hit_high_l", 0.1, 0.4], [55, "hit_air", 0.0, 0.4], [80, "hit_air", 0.3, 0.7],
+                      [108, "hit_air", 0.5, 1.0], [134, "hit_air", 0.6, 1.1], [142, "kd_fall_b", 1.3, 1.8667]],
+              camera=[cam(0, 22, "close", "both", 32, 2.4, 1.4, 15),
+                      cam(22, 48, "low", "both", 40, 2.6, 0.45, -20, lookH=1.1),
+                      cam(48, 72, "top", "both", 42, 1.6, 5.0, 10, lookH=0.4),
+                      cam(72, 100, "low", "defender", 42, 3.0, 0.3, 25, lookH=1.9),
+                      cam(100, 128, "orbit", "both", 40, 3.6, 2.0, [-30, 50], lookH=1.9, ease="linear"),
+                      cam(128, 150, "close", "both", [36, 32], 3.4, 1.3, 30, lookH=1.6),
+                      cam(150, 165, "wide", "both", 38, 5.6, 1.7, 0)],
+              fx=[(0, "slate"), (8, "impact_s"), (30, "impact_s"), (36, "impact_s"), (36, "smear", "attacker"),
+                  (55, "impact_m"), (55, "dust"), (80, "impact_m"), (80, "speed_lines"), (108, "impact_m"),
+                  (108, "shake_s"), (134, "impact_l"), (134, "flash"), (134, "shake_m"), (134, "freeze_frame"),
+                  (150, "spot", "attacker"), (150, "confetti")],
+              crowd=[(8, "ooh"), (30, "cheer"), (55, "ooh", "up"), (80, "cheer", "up"), (108, "roar", "up"),
+                     (134, "roar", "spike"), (150, "chant", "peak")],
+              pathA=[[8, 0.2, 0], [30, 0.35, 0], [55, 0.45, 0], [80, 0.6, 0.5], [92, 0.7, 0], [108, 0.8, 0.8],
+                     [118, 0.9, 0], [134, 0.95, 0.2], [148, 0.9, 0], [163, 0, 0]],
+              gapD=[[8, 1.0, 0], [30, 1.0, 0], [55, 1.0, 0.3], [80, 1.0, 0.9], [100, 1.0, 1.2], [108, 1.0, 1.4],
+                    [128, 1.0, 1.0], [134, 1.0, 0.9], [142, 1.2, 0], [163, 2.2, 0]],
+              slate="PRIME TIME - SPIN: BATTLE OF THE YEAR", endPose="back", endAdv=19, endGapM=2.2),
           desc="PRIME TIME: a front kick opens a full battle round the crowd scores live.",
           why="1c Lv3: 10/4/58, -42, 4500, fully invulnerable 1-13.")
 
@@ -239,9 +267,28 @@ def build():
                          "hurtbox under highs and projectiles; DROP-IN is an air-only dive kick; floatiest jump "
                          "(apex 1.75 m, 40 air frames)."}
     K.cine_doc = [
-        "f0 FRONT KICK (side_close) - 400 at f8. f22 SWIPES (front_low): two leg whips - 300 + 300.",
-        "f48 FLARE SWEEP (top_down): swept off their feet - 600. f72 BUTTERFLY (low_angle_up) - 700.",
-        "f100 JUMP TURNING KICK (orbit) - 900. f128 HANDSPIN (slowmo_hold): legs-up spin juggle - 1300.",
-        "f148 FREEZE (crowd_pop): handstand freeze, the crowd scores 10s (KD +19).",
+        "f0 FRONT KICK (close) - 400 at f8. f22 SWIPES (low): two leg whips at 1.7x - 300 + 300 (f30 / f36).",
+        "f48 FLARE SWEEP (top-down): swept off their feet and up - 600 at f55.",
+        "f72 BUTTERFLY (low, looking up) - 700 at f80. f100 JUMP TURNING KICK (orbit -30 -> +50 deg, both in the "
+        "air) - 900 at f108.",
+        "f128 HANDSPIN (close): the legs-up spin juggles them - 1300 at f134 (flash, freeze-frame).",
+        "f150 FREEZE (wide, spotlight, confetti): handstand freeze, the crowd scores 10s; opponent face up at 2.2 m "
+        "(KD +19).",
     ]
+    K.text = dict(
+        introLine="Cypher's open. Crowd's the judge. You're the warm-up.",
+        winQuotes=["Ten, ten, ten. The judges have spoken.",
+                   "You danced like you were paying rent on the floor.",
+                   "Battle's over. Send me somebody with footwork."],
+        banter={"patch": ["It was ONE headspin through your cue, Patch.",
+                          "Count me in. I'll be done before three."],
+                "freak": ["Big guy, zero rhythm. This is gonna be embarrassing.",
+                          "Try to keep up. The floor is lava, and I'm the lava."],
+                "ricky": ["You filmed my cypher without asking, Ricky.",
+                          "Tonight the crowd votes. Not the network."],
+                "default": ["Circle up. Show me what you got.",
+                            "Nice stance. Shame about the rest."]},
+        ending="SPIN wins the season and the rooftop cypher on the same night; the crowd holds up score cards all the "
+               "way down the fire escape. He wires the host's microphone into a speaker and runs a free battle on the "
+               "roof every Friday. The network sends lawyers. The lawyers stay for the music.")
     return K

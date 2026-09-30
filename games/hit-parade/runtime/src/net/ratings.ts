@@ -40,15 +40,29 @@ export async function currentPlayer(): Promise<{ id: string; username: string } 
   }
 }
 
-/** Report an agreed online result. slot 0 = 'white', slot 1 = 'black'. Returns the RPC data or null. */
+/**
+ * CHANGED(NET) P2: the RPC is defined in supabase/migrations/0004_game_ratings.sql, but a probe of the live project on
+ * 2026-09-30 answered HTTP 404 PGRST202 "Could not find the function public.report_match_result(...)" (the migration
+ * has not been applied). A missing function is remembered for the page session (one failed call, then no more), and
+ * callers treat a null answer as UNRATED. Applying 0004 on the project turns ratings on with no client change.
+ */
+let rpcMissing = false;
+export function ratingsRpcMissing(): boolean { return rpcMissing; }
+
+/** Report an agreed online result. slot 0 = 'white', slot 1 = 'black'. Returns the RPC data or null (not rated). */
 export async function reportResult(slot0Id: string, slot1Id: string, winner: -1 | 0 | 1, matchId: string): Promise<unknown> {
-  if (!slot0Id || !slot1Id || slot0Id === slot1Id) return null;
+  if (!slot0Id || !slot1Id || slot0Id === slot1Id || rpcMissing) return null;
   try {
     const c = await sb();
     const result = winner === 0 ? 'white' : winner === 1 ? 'black' : 'draw';
     const { data, error } = await c.rpc('report_match_result', { p_game: GAME_SLUG, p_white: slot0Id, p_black: slot1Id, p_result: result, p_match_id: matchId });
-    if (error) { console.warn('[ratings] report failed:', error.message); return null; }
-    return data;
+    if (error) {
+      const e = error as { message: string; code?: string };
+      if (e.code === 'PGRST202' || /could not find the function/i.test(e.message)) rpcMissing = true;
+      console.warn('[ratings] report failed:', e.message);
+      return null;
+    }
+    return data ?? {};
   } catch {
     return null;
   }

@@ -206,12 +206,12 @@
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "kind": "foot",
-    "limb": "R_foot",
+    "kind": "knee",
+    "limb": "R_knee",
     "fist": 0,
     "_cand": "knee.1",
     "effector": "RightKnee",
-    "marks": {"slam": 6317}
+    "marks": {"slam": 6271}
   },
   "spin_toss": {
     "src": "cmu",
@@ -225,7 +225,7 @@
     "limb": "R_foot",
     "fist": 0,
     "_cand": "roundhouse.3",
-    "marks": {"slam": 791}
+    "marks": {"slam": 773}
   },
   "cue_kick": {
     "src": "cmu",
@@ -297,12 +297,13 @@
   },
   "slide": {
     "src": "mixamo",
-    "file": "Soccer_Game_Pack/soccer tackle (2)",
-    "range": [5, 54],
-    "contact": 19,
+    "file": "Soccer_Game_Pack/soccer tackle",
+    "range": [12, 60],
+    "contact": 24,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "effector": "LeftFoot"
   },
   "reel_kicks": {
     "src": "seq",

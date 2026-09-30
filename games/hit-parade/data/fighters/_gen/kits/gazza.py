@@ -1,6 +1,6 @@
 """GAZZA - setplay footballer (Soccer_Game_Pack: shots, header, bicycle kick, slide tackle, keepy-uppy;
 CMU 74_xx soccer-style swing kicks)."""
-from kitlib import (Kit, air, cmu, crouch, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
+from kitlib import (Kit, air, cam, cinematic, cmu, crouch, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
 
 SC = "Soccer_Game_Pack/"
 
@@ -44,8 +44,10 @@ def build():
            "CMU punt_kick 74_03 181/226/247 (usable: soccer-style swing kick, low 0.36 m)")
     K.clip("slide_tackle", mix(SC + "soccer tackle", (10, 70), contact=27),
            "Mixamo soccer tackle: feet-first slide, legs along the floor f26-28 (dense render)")
-    K.clip("knee_trap", mix(SC + "kneeing soccerball (2)", (1, 19), contact=9),
-           "Mixamo kneeing soccerball (2): right knee at hip height f9-13 (dense render)")
+    K.clip("knee_trap", dict(mix(SC + "kneeing soccerball (2)", (1, 19), contact=9), effector="RightKnee"),
+           "Mixamo kneeing soccerball (2): right knee at hip height f9-13 (dense render). P2: effector RightKnee - the "
+           "builder named the right FOOT (bake: foot 0.50 m forward at 0.42 m up, knee 0.45 m / 0.98 m) because the toe "
+           "sits 5 cm farther out than the knee, which fails the knee rule; contact_check flagged EXT on the foot")
     K.clip("header", mix(SC + "header soccerball", (15, 45), contact=27),
            "Mixamo header soccerball (weak: head only 1.14 m/s and behind the hips at contact - hitbox hand-set)")
     K.clip("air_knee", mix(SC + "kneeing soccerball", (1, 28), contact=16), "kneeing soccerball played airborne")
@@ -54,10 +56,15 @@ def build():
     K.clip("flying_punt", mix(SC + "goalkeeper drop kick", (55, 95), contact=65),
            "Mixamo goalkeeper drop kick: leg extended forward-up f65-66")
     K.clip("throw_reach", mix(SC + "goalkeeper catch (2)", (1, 30), contact=9), "goalkeeper two-hand catch")
-    K.clip("drop_kick_throw", mix(SC + "goalkeeper drop kick", (40, 118), contact=65),
-           "Mixamo goalkeeper drop kick from the ball drop (f57) = drops them and punts them away")
-    K.clip("keeper_throw", mix(SC + "goalkeeper overhand throw", (20, 86), contact=49),
-           "Mixamo goalkeeper overhand throw (release f49) = bowls them out behind")
+    K.clip("drop_kick_throw", mix(SC + "goalkeeper drop kick", (45, 85), contact=65),
+           "Mixamo goalkeeper drop kick f45-85: the drop, the step and the punt (leg extended f65). P2: window 40-118 -> "
+           "45-85 (the full 2.6 s over a 50-frame lock played at 3.1x; 1.33 s = 1.6x)")
+    K.clip("bicycle_toss", mix(SC + "scissor kick", (5, 80), contact=23),
+           "P2 back throw: Mixamo scissor kick f5-80 with its real height (not ground-locked like the `bicycle` DP clip): "
+           "he falls back and bicycle-kicks the victim over his head (f23), lands on his back and gets up facing the "
+           "other way (net hips yaw +192 deg, mixamo_inventory) = the victim lands BEHIND him and his facing flip at the "
+           "release is seamless. Replaces `keeper_throw` (goalkeeper overhand throw): it bowls FORWARD while a back "
+           "throw's victim lands behind")
     K.clip("shot_kick", mix(SC + "soccer penalty kick", (12, 46), contact=27),
            "Mixamo soccer penalty kick: the plant and strike (front pass f27, foot at 0.42 m); run-up trimmed")
     K.clip("bicycle", mix(SC + "scissor kick", (1, 84), contact=23),
@@ -100,11 +107,21 @@ def build():
           desc="Air-to-air volley.")
     K.add("j.H", "jH", input="j.H", name="Flying Punt", clip="flying_punt", desc="Big flying punt jump-in.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Drop Kick", clip="throw_reach",
-          grab={"frames": 50, "adv": 21, "hitF": 34, "swap": False, "air": False, "techable": True,
-                "clip": "drop_kick_throw"}, desc="Drops them like a ball and punts them away.")
-    K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Keeper's Throw", clip="throw_reach",
-          grab={"frames": 50, "adv": 14, "hitF": 32, "swap": True, "air": False, "techable": True,
-                "clip": "keeper_throw"}, desc="Bowls them out behind him.")
+          grab={"frames": 50, "adv": 21, "hitF": 25, "swap": False, "air": False, "techable": True,
+                "clip": "drop_kick_throw",
+                # P2 paired throw: drop_kick_throw (f45-85, 1.33 s over 50 f) drops them and punts at clip 0.67 s = lock
+                # 25; the victim folds while dropped and is punted up and away (thrown_f from the lift at 0.30 s, flat
+                # on the back at lock ~36).
+                "victim": [[0, "hit_body", 0.0, 0.35], [25, "thrown_f", 0.3, 1.3333]]},
+          desc="Drops them like a ball and punts them away.")
+    K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Overhead Kick", clip="throw_reach",
+          grab={"frames": 64, "adv": 14, "hitF": 15, "swap": True, "air": False, "techable": True,
+                "clip": "bicycle_toss",
+                # P2 paired throw: bicycle_toss (scissor kick f5-80, 2.5 s over 64 f = 2.3x) kicks them over his head at
+                # clip 0.60 s = lock 15; thrown_b flips them over (0.10 -> 0.67 s, lock 8-30) face down behind him while
+                # he lands on his back and gets up turned round.
+                "victim": [[0, "hit_high_s", 0.0, 0.15], [8, "thrown_b", 0.1, 0.67], [30, "thrown_b", 0.67, 1.2]]},
+          desc="Falls back and bicycle-kicks them over his head.")
 
     ball = {"life": 180, "box": [0.30, 0.30], "hits": 1, "clip": "football", "x": 0.6}
     K.special("power_shot", "proj", motion="236",
@@ -178,14 +195,30 @@ def build():
           invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]}, ball={"act": "summon"},
           move=[[0, 0], [10, 0.8]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],
           juggle={"js": 1, "ji": 0, "jl": 99},
-          cinematic={"frames": 165, "cue": "gazza_hat_trick", "hits": [[10, 600], [40, 800], [70, 900], [128, 2200]],
-                     "anim": [[0, "volley"], [30, "shot_kick"], [60, "header"], [90, "keepy"], [110, "bicycle"],
-                              [148, "win_point"]],
-                     "victim": [[0, "hit_body"], [30, "hit_high_l"], [60, "hit_high_s"], [90, "dizzy"],
-                                [128, "kd_fall_b"], [140, "kd_ground_b"]],
-                     "shots": [[0, "side_close"], [30, "front_low"], [60, "punch_in"], [90, "wide"],
-                               [110, "low_angle_up"], [128, "slowmo_hold"], [148, "crowd_pop"]],
-                     "endAdv": 19, "endGapM": 3.0},
+          cinematic=lambda: cinematic(
+              165, "gazza_hat_trick",
+              hits=[[10, 600], [40, 800], [70, 900], [128, 2200]],
+              anim=[K.seg(0, "volley", 30, hit=10), K.seg(30, "shot_kick", 60, hit=40), K.seg(60, "header", 90, hit=70),
+                    K.seg(90, "taunt_keepy", 112, fromS=0.2), K.seg(112, "bicycle_toss", 148, hit=128),
+                    K.seg(148, "win_point", 165, fromS=0.5)],
+              victim=[[0, "hit_body", 0.0, 0.4], [10, "hit_body", 0.0, 0.5], [40, "hit_high_l", 0.0, 0.5],
+                      [70, "hit_high_s", 0.0, 0.5], [90, "dizzy", 0.3, 0.9], [128, "thrown_f", 0.3, 0.74],
+                      [140, "thrown_f", 0.74, 1.3333]],
+              camera=[cam(0, 30, "close", "both", 32, 2.6, 1.3, 15),
+                      cam(30, 60, "low", "both", 38, 2.8, 0.4, -20, lookH=1.1),
+                      cam(60, 90, "close", "defender", [32, 28], [2.1, 1.7], 1.6, 35),
+                      cam(90, 112, "wide", "both", 38, 4.8, 1.6, 0),
+                      cam(112, 140, "low", "attacker", 44, 3.2, 0.3, 25, lookH=1.5),
+                      cam(140, 165, "wide", "both", 38, 6.0, 1.8, 0, lookH=1.1)],
+              fx=[(0, "slate"), (10, "impact_m"), (30, "ball_trail", "attacker"), (40, "impact_m"), (40, "ball_trail"),
+                  (70, "impact_m"), (70, "shake_s"), (112, "speed_lines"), (128, "impact_l"), (128, "ball_trail"),
+                  (128, "flash"), (128, "shake_l"), (128, "freeze_frame"), (140, "dust"), (148, "confetti")],
+              crowd=[(10, "ooh"), (40, "ooh"), (70, "cheer"), (90, "chant", "up"), (128, "roar", "spike"),
+                     (148, "cheer", "peak")],
+              pathA=[[10, 0.1, 0], [40, 0.2, 0], [70, 0.35, 0], [112, 0.3, 0], [148, 0.3, 0], [163, 0, 0]],
+              gapD=[[10, 1.0, 0], [40, 1.2, 0], [70, 1.1, 0], [90, 1.2, 0], [128, 1.1, 0.4], [136, 2.4, 0.3],
+                    [142, 3.0, 0], [163, 3.0, 0]],
+              slate="PRIME TIME - GAZZA: HAT TRICK", endPose="back", endAdv=19, endGapM=3.0),
           desc="PRIME TIME: point-blank volley, a shot to the chest, a header, and the bicycle-kick finale.",
           why="1c Lv3: 10/4/58, -42, 4500, fully invulnerable 1-13.")
 
@@ -198,10 +231,27 @@ def build():
     K.unique = {"kind": "ball", "respawnF": 180, "restF": 240, "pickupM": 0.4,
                 "hover": {"l": 1.2, "m": 1.8, "h": 2.4, "frames": 120}, "bounces": 1}
     K.cine_doc = [
-        "f0 VOLLEY (side_close): point-blank volley into the gut - 600 at f10.",
-        "f30 SHOT (front_low): a fresh ball to the chest - 800 at f40. f60 HEADER (punch_in) - 900 at f70.",
-        "f90 KEEPY-UPPY (wide): juggles the ball over the dazed opponent while the crowd counts.",
-        "f110 BICYCLE KICK (low_angle_up -> slowmo_hold): the ball and the opponent both go in - 2200 at f128.",
-        "f148 POINTING (crowd_pop): 'GOAL!' (KD +19).",
+        "f0 VOLLEY (close): point-blank into the gut - 600 at f10.",
+        "f30 SHOT (low, ball trail): a fresh ball to the chest - 800 at f40. f60 HEADER (punch-in) - 900 at f70.",
+        "f90 KEEPY-UPPY (wide): he juggles over the dazed opponent while the crowd counts.",
+        "f112 BICYCLE KICK (low, looking up): the real overhead kick - 2200 at f128 (ball trail, flash, "
+        "freeze-frame); they fly 1.9 m and land face up.",
+        "f148 POINTING (wide, confetti): 'GOAL!' Opponent face up at 3.0 m (KD +19).",
     ]
+    K.text = dict(
+        introLine="Brought me own ball. Ref's not coming. Kick-off.",
+        winQuotes=["GOAL! And he's gone down like a sack of match programmes.",
+                   "Top bins. Back of the net. Back of your head.",
+                   "Man of the match. Again. Somebody fetch the trophy."],
+        banter={"zambini": ["It was ONE dove, mate, and it was offside.",
+                            "Pull a rabbit out of that hat. Go on. I'll volley it."],
+                "freak": ["Big lad. Bet you can't head a ball, though.",
+                          "I've played Sunday league, son. You're nothing."],
+                "ricky": ["Banned from every ground in the county, and you still booked me.",
+                          "Blow the whistle, Ricky. Final whistle."],
+                "default": ["Mind your ankles. I won't.",
+                            "Two-footed? Me? Never."]},
+        ending="GAZZA knocks the host clean off his own set with a bicycle kick and celebrates with his hoodie over his "
+               "head for eleven minutes. He spends the prize money on a pitch behind the Rust Theater with real "
+               "floodlights and a real referee. He argues with that referee every Sunday. He has never been happier.")
     return K

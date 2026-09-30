@@ -72,7 +72,8 @@ async function loadClient(): Promise<RealtimeClient> {
 }
 type CreateClient = (url: string, key: string, opts?: Record<string, unknown>) => unknown;
 
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+/** 24 letters (no I / O: they read as 1 / 0); 256 % 24 = 16 -> a negligible bias toward the first 16 letters */
+const ROOM_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 export interface NetPlayOpts {
   build: string;
@@ -142,11 +143,18 @@ export class NetPlay {
     return this.sb;
   }
 
+  /**
+   * CHANGED(NET) P2: CREATE ROOM codes are 4 LETTERS (no I / O), the format lane UI's JOIN field and copy take
+   * (`/^[A-Z]{4}$/`, "Type a friend's four-letter code"); P1 made 8 chars with digits, which that field can never
+   * accept. 24^4 = 331,776 codes: fine for a room shared by voice; a stranger guessing a live code can at worst
+   * take the empty second slot (the first two presence ids play, HELLO tokens guard every later message).
+   * Quick-match rooms keep their 8-char ids (never typed). join() accepts any cleanCode() (deep links).
+   */
   static makeCode(): string {
-    const b = new Uint8Array(8);
+    const b = new Uint8Array(4);
     crypto.getRandomValues(b);
     let s = '';
-    for (let i = 0; i < 8; i++) s += CODE_ALPHABET[b[i] % CODE_ALPHABET.length];
+    for (let i = 0; i < 4; i++) s += ROOM_LETTERS[b[i] % ROOM_LETTERS.length];
     return s;
   }
 

@@ -1,5 +1,5 @@
 """BRUNO "THE FRIDGE" - grappler (Soccer goalkeeper grabs + throw-in, axe-pack unarmed swings, CMU grab)."""
-from kitlib import (Kit, air, cmu, crouch, layer, mix, SPECIAL, LV1, LV3, LV1_COST, LV3_COST)
+from kitlib import (Kit, air, cam, cinematic, cmu, crouch, layer, mix, SPECIAL, LV1, LV3, LV1_COST, LV3_COST)
 
 
 def build():
@@ -49,13 +49,18 @@ def build():
     K.clip("air_forearm", air(cmu("cross.4")), "jump apex legs + CMU cross.4")
     K.clip("air_hammer", air(mix("Pro_Melee_Axe_Pack/standing melee attack downward", (10, 45), contact=26)),
            "jump apex legs + Mixamo axe downward hammer-fist (contact f26)")
-    K.clip("fridge_drop", mix("Soccer_Game_Pack/goalkeeper body block", (1, 40), contact=22),
-           "Mixamo goalkeeper body block: the sprawl (body press) part, f1-40")
+    K.clip("fridge_drop", mix("Creature_Pack/mutant jump attack", (40, 62), contact=51),
+           "P2: Mixamo mutant jump attack, the descent: arms overhead, knees tucked, both fists to the floor at f51 in a "
+           "crouched landing = the fridge dropping on you. Was goalkeeper body block f1-40: a sideways sprawl that ends "
+           "rolled onto the back with the legs in the air (QC sheet: lying, legs up at the last two strip frames)")
     K.clip("throw_reach", mix("Soccer_Game_Pack/goalkeeper catch (2)", (1, 30), contact=9),
            "Mixamo goalkeeper catch (2): two-hand grab (throw / command grab whiff)")
     K.clip("delivery_reach", mix("Soccer_Game_Pack/goalkeeper catch (2)", (5, 30), contact=9),
            "goalkeeper catch (2) from f5: the 3-frame Lv3 grab reach")
-    K.clip("bear_hug", cmu("grab_pull.1", rng=(200, 330)), "CMU grab_pull.1 (18_05 lean-back two-arm pull)")
+    K.clip("bear_hug", mix("Soccer_Game_Pack/goalkeeper scoop", (28, 66), contact=34),
+           "P2: Mixamo goalkeeper scoop f28-66: arms wrap low around the waist (f34), lift to the chest (f43) and hold "
+           "it hugged (f51-66) = a bear hug. Was CMU grab_pull.1 (18_05 200-330): QC strip showed the arms flung out "
+           "sideways and the hands BEHIND the body (bake RightHand swing 85-107 deg all clip) - not a hug")
     K.clip("throw_in", mix("Soccer_Game_Pack/throw in", (30, 84), contact=50),
            "Mixamo throw in: victim held overhead f42-47, release f50 (hurled behind)")
     K.clip("freezer_slam", mix("Pro_Magic_Pack/Standing 2H Magic Area Attack 01", (10, 90), contact=40),
@@ -80,9 +85,13 @@ def build():
            "grabbed victim (the axe leap slam is Boneyard's)")
     K.clip("intro_battlecry", mix("Pro_Melee_Axe_Pack/standing taunt battlecry", (1, 86)),
            "Mixamo axe battlecry (crowd hype)")
-    K.clip("taunt_flex", cmu("flex_taunt.1", rng=(241, 480), contact=False),
-           "CMU 79_94 bodybuilder flexes (double biceps)")
-    K.clip("win_flex", cmu("flex_taunt.1", rng=(480, 721), contact=False), "CMU 79_94 most-muscular pose")
+    K.clip("taunt_flex", cmu("flex_taunt.1", rng=(580, 800), contact=False),
+           "P2: CMU 79_94 580-800 = the FRONTAL part of the take: double biceps (f647) into the crab most-muscular "
+           "(f675-762), hips yaw steady within 30 deg (stick sheet). Was 241-480: the subject turns +46 deg then -33 "
+           "deg in that window and kind 'body' aims the clip by the END frame, so the QC game frame showed his BACK")
+    K.clip("win_flex", mix("Creature_Pack/mutant flexing muscles", (45, 105)),
+           "P2: Mixamo mutant flexing muscles f45-105: arms thrown up, then the crab most-muscular (f74-89) - a strongman "
+           "win. Was CMU 79_94 480-721: turned 30 deg away with one arm out = read as a bow (lane ASSETS QC)")
     K.clip("win_nod", mix("Gestures_Pack_Basic/hard head nod", (1, 50)), "Mixamo hard head nod")
 
     # ---------------- normals ----------------
@@ -121,31 +130,42 @@ def build():
           why="Air command normal: 12/10/6 landing, 900, a big active window (body press) paid with 6 landing "
               "frames.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Bear Hug", clip="throw_reach", damage=1300,
-          grab={"frames": 50, "adv": 21, "hitF": 34, "swap": False, "air": False, "techable": True,
+          grab={"frames": 50, "adv": 21, "hitF": 36, "swap": False, "air": False, "techable": True,
                 "clip": "bear_hug",
-                # CHANGED(fixer) D3: bear_hug is a lean-back two-arm pull (no lift): the victim is crushed doubled over
-                # (two squeezes) and dropped backward on the crush (lock frame 34 = the slam mark) - it used to flip
-                # over his shoulders in the generic thrown_f.
-                "victim": [[0, "hit_body", 0.0, 0.35], [17, "hit_body", 0.05, 0.4], [34, "kd_fall_b", 1.0, 1.8667]]},
+                # P2 paired throw (new bear_hug = goalkeeper scoop f28-66, 1.27 s over 50 f): arms wrap at lock frame 5,
+                # lift to the chest at 12, hold hugged 18-50. The victim folds in the wrap, is squeezed doubled over
+                # 12-36 and drops out of the hug on the crush (lock 36: kd_fall_b 1.04 -> lying 1.5 s, face up).
+                "victim": [[0, "hit_body", 0.0, 0.25], [12, "hit_body", 0.25, 0.7], [36, "kd_fall_b", 1.04, 1.5]]},
           desc="Crushes them in a bear hug.", why="Grappler throws deal 1300 (+100 over 1200).")
-    K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Throw-In", clip="throw_reach", damage=1300,
-          grab={"frames": 52, "adv": 16, "hitF": 40, "swap": True, "air": False, "techable": True,
-                "clip": "throw_in"},
-          desc="Lifts them overhead and hurls them behind.", why="Grappler throws deal 1300.")
+    K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Carousel", clip="throw_reach", damage=1300,
+          grab={"frames": 52, "adv": 16, "hitF": 26, "swap": True, "air": False, "techable": True,
+                "clip": "lariat_spin",
+                # P2 paired throw: the throw-in HURLS FORWARD (release f50) while a back throw's victim lands BEHIND him,
+                # so the back throw is now the spinning lariat (axe 360 high, 1.33 s over 52 f): he spins with them and
+                # lets go at the half turn (lock 26); thrown_b carries them past (+1.30 m, monotonic) face down behind.
+                "victim": [[0, "hit_high_s", 0.0, 0.2], [10, "thrown_b", 0.0, 0.4], [26, "thrown_b", 0.4, 1.2]]},
+          desc="Spins them round and flings them behind him.", why="Grappler throws deal 1300.")
 
     # ---------------- specials ----------------
     grab_l = SPECIAL["cmdgrab"]
     walk = {}
     for s in ("l", "m", "h"):
-        walk[s] = dict(grab={"rangeM": grab_l[s]["rangeM"], "frames": 70, "adv": 28, "hitF": 52, "swap": False,
-                             "air": False, "techable": False, "clip": "freezer_slam"})
+        # P2 paired grab: freezer_slam (2.67 s over 70 f) reaches (lock 0), lifts overhead (lock 17) and drives them into
+        # the floor at clip 1.00 s = lock 26 (was hitF 52, when he is already standing up again). Victim: folded in the
+        # grab, lifted and flipped (thrown_f 0.15 -> 0.70 s), flat on the back from lock ~29.
+        walk[s] = dict(grab={"rangeM": grab_l[s]["rangeM"], "frames": 70, "adv": 28, "hitF": 26, "swap": False,
+                             "air": False, "techable": False, "clip": "freezer_slam",
+                             "victim": [[0, "hit_body", 0.0, 0.3], [9, "thrown_f", 0.15, 0.7],
+                                        [26, "thrown_f", 0.7, 1.3333]]})
     K.special("walk_in", motion="360", fam="cmdgrab", kind="cmdgrab",
               common=dict(name="Walk-In Freezer", clip="throw_reach", role=["grab"], sfx=[[1, "grab_cloth"]],
                           desc="360 command grab; L reaches furthest, H hits hardest."),
               per=walk,
               ex=dict(name="Walk-In Freezer (EX)", damage=3500, invuln={"strike": [1, 5]},
-                      grab={"rangeM": 1.30, "frames": 76, "adv": 28, "hitF": 56, "swap": False, "air": False,
-                            "techable": False, "clip": "freezer_slam"},
+                      grab={"rangeM": 1.30, "frames": 76, "adv": 28, "hitF": 28, "swap": False, "air": False,
+                            "techable": False, "clip": "freezer_slam",
+                            "victim": [[0, "hit_body", 0.0, 0.3], [10, "thrown_f", 0.15, 0.7],
+                                       [28, "thrown_f", 0.7, 1.3333]]},
                       desc="Strike-invulnerable 1-5 reversal grab with the longest reach.",
                       why="EX grab: strike invulnerable on startup (the SF6 rule: only OD/supers get true "
                           "invulnerability), 3500, reach 1.30 m."))
@@ -210,26 +230,49 @@ def build():
     K.add("cold_storage", LV1, kind="super1", input="236236", name="Cold Storage", strength="H",
           clip="storage_run", startup=12, active=6, recovery=50, damage=2400, guard="U", hitstun=0, blockstun=0,
           hitstop=0, invuln={"strike": [1, 6]}, move=[[0, 0], [12, 1.8], [17, 2.2]],
-          grab={"rangeM": 0.90, "frames": 90, "adv": 20, "hitF": 70, "swap": False, "air": False,
-                "techable": False, "clip": "storage_slam"},
+          # P2 paired grab: storage_slam (3.40 s over 90 f) dives at lock 11 and splashes onto the floor at clip 1.07 s =
+          # lock 28 (was hitF 70, when he is getting back up); the victim is dragged down and flipped onto its back
+          # under him (thrown_f 0.25 -> 0.70 s), then lies while he rises.
+          grab={"rangeM": 0.90, "frames": 90, "adv": 20, "hitF": 28, "swap": False, "air": False,
+                "techable": False, "clip": "storage_slam",
+                "victim": [[0, "hit_body", 0.0, 0.3], [11, "thrown_f", 0.25, 0.7], [28, "thrown_f", 0.7, 1.3333]]},
           cost={"showtime": LV1_COST}, gain=0, nerve=0, role=["grab", "approach"],
           desc="Running grab; unblockable, jump it.",
           why="Grappler Lv1 is a running command grab (FIGHTING_DESIGN 8c): unblockable, so it gives up the "
               "Lv1 template's 8f startup (12f run, visible) and invulnerability after f6; 2400 because grabs "
               "cannot be scaled by a combo starter.")
+    # P2 Lv3: a grab super (CONTRACT 26.1 grab supers): the sim locks 175 f and carries the victim along grab.victim;
+    # the cinematic block drives VIEW from the lock frame (and a real cinematic if SIM starts one on the connect).
+    fd_victim = [[0, "hit_body", 0.0, 0.3], [24, "hit_body", 0.2, 0.6], [40, "hit_air", 0.2, 0.9],
+                 [100, "hit_air", 0.9, 1.3], [128, "thrown_f", 0.3, 0.74], [140, "thrown_f", 0.74, 1.3333]]
     K.add("final_delivery", LV3, kind="super3", input="214214", name="Final Delivery", strength="H",
           clip="delivery_reach", startup=3, active=3, recovery=58, guard="U", blockstun=0,
           invuln={"strike": [1, 3]}, cost={"showtime": LV3_COST}, gain=0, nerve=0, role=["grab"],
           grab={"rangeM": 1.30, "frames": 175, "adv": 19, "hitF": 140, "swap": False, "air": False,
-                "techable": False, "clip": "bear_hug"},
-          cinematic={"frames": 175, "cue": "bruno_final_delivery", "hits": [[30, 500], [72, 1000], [140, 3000]],
-                     "anim": [[0, "bear_hug"], [40, "lariat_spin"], [70, "lariat_spin"], [100, "freezer_slam"],
-                              [150, "win_flex"]],
-                     "victim": [[0, "thrown_f"], [100, "hit_air"], [140, "kd_ground_b"]],
-                     "shots": [[0, "front_low"], [40, "orbit"], [100, "low_angle_up"], [140, "top_down"],
-                               [150, "crowd_pop"]],
-                     "endAdv": 19, "endGapM": 1.0},
-          desc="PRIME TIME command grab: airplane spin into the freezer slam.",
+                "techable": False, "clip": "bear_hug", "victim": fd_victim},
+          cinematic=lambda: cinematic(
+              175, "bruno_final_delivery",
+              hits=[[24, 500], [70, 1000], [140, 3000]],
+              anim=[K.seg(0, "bear_hug", 40, fromS=0.1), K.seg(40, "lariat_spin", 70, fromS=0.1, rate=1.6),
+                    K.seg(70, "lariat_spin", 100, fromS=0.1, rate=1.6), K.seg(100, "throw_in", 150, hit=128),
+                    K.seg(150, "win_flex", 175, fromS=0.8)],
+              victim=fd_victim,
+              camera=[cam(0, 40, "low", "both", 38, 2.8, 0.5, 20, lookH=1.3),
+                      cam(40, 100, "orbit", "both", 40, 3.4, 1.4, [-50, 70], ease="linear"),
+                      cam(100, 128, "low", "attacker", 44, 3.2, 0.3, 25, lookH=2.0),
+                      cam(128, 150, "wide", "both", 40, [4.5, 5.6], 1.6, 10),
+                      cam(150, 175, "close", "attacker", 32, 2.4, 1.6, 30)],
+              fx=[(0, "slate"), (24, "impact_m"), (24, "shake_s"), (40, "speed_lines"), (70, "impact_m"),
+                  (70, "shake_m"), (100, "spot", "attacker"), (128, "spot_off"), (128, "smear", "attacker"),
+                  (140, "impact_l"), (140, "flash"), (140, "shake_l"), (140, "dust"), (140, "freeze_frame"),
+                  (150, "lights_flicker")],
+              crowd=[(24, "ooh"), (70, "roar", "up"), (100, "gasp"), (140, "roar", "spike"), (150, "cheer", "peak"),
+                     (165, "chant")],
+              pathA=[[40, 0.1, 0], [100, 0.1, 0], [128, 0.3, 0], [160, 0, 0]],
+              gapD=[[10, 0.6, 0], [40, 0.6, 0.3], [70, 0.7, 0.6], [100, 0.4, 1.4], [128, 0.8, 1.6], [134, 2.0, 1.0],
+                    [140, 3.0, 0]],
+              slate='PRIME TIME - BRUNO "THE FRIDGE": FINAL DELIVERY', endPose="back", endAdv=19, endGapM=3.0),
+          desc="PRIME TIME command grab: hugged, spun like a carousel, lifted overhead and hurled across the set.",
           why="Grab Lv3: 3f unblockable grab (post-freeze) instead of the 10f strike template; 4500 total.")
 
     # ---------------- routing ----------------
@@ -243,10 +286,27 @@ def build():
                 "armored": ["brace_l", "brace_m", "brace_h", "brace_ex", "fridge_door_l", "fridge_door_m",
                             "fridge_door_h", "fridge_door_ex"]}
     K.cine_doc = [
-        "f0 BEAR HUG (front_low): Bruno scoops them up - 500 at f30.",
-        "f40 AIRPLANE SPIN (orbit): two full lariat spins with the victim across his shoulders - 1000 at f72.",
-        "f100 FREEZER SLAM (low_angle_up -> top_down): lifts overhead and piledrives into the floor - 3000 at "
-        "f140.",
-        "f150 MOST-MUSCULAR (crowd_pop): Bruno flexes over the body (KD +19).",
+        "f0 BEAR HUG (low, both): Bruno scoops them up and squeezes - 500 at f24.",
+        "f40 CAROUSEL (orbit -50 -> +70 deg): two lariat spins with the victim lifted and flailing - 1000 at f70.",
+        "f100 OVERHEAD (low, looking up, spotlight): the throw-in lift, the victim held 1.4 m up over his head.",
+        "f128 HURL (wide): released across the set - 3000 when they land at f140 (flash, freeze-frame, dust).",
+        "f150 MOST-MUSCULAR (close on Bruno): the crab flex over a body lying face up 3.0 m away (KD +19).",
     ]
+    K.text = dict(
+        introLine="Thirty flights of stairs, no elevator. You're lighter than a freezer.",
+        winQuotes=["Signed, sealed, delivered. No returns.",
+                   "I've carried fridges with more fight in them.",
+                   "Tip your mover. Or don't. I'll take it anyway."],
+        banter={"krane": ["You cuffed me to a meat locker door. I kept the door. Want it back?",
+                          "Read me my rights, officer. I'll read you the stairs."],
+                "freak": ["Big, ugly and heavy. You'll lift like a chest freezer.",
+                          "Hold still. This is a two-man job, and I'm the only man."],
+                "ricky": ["Twenty years you've paid me in steak, Ricky.",
+                          "Tonight I'm collecting the whole cow."],
+                "default": ["Hold still. I'm not paid by the hour.",
+                            "You walked in. I'll walk you out. That's the service."]},
+        ending='BRUNO "THE FRIDGE" carries the host out of the Control Room on one shoulder and the broadcast console '
+               'on the other. He loads both into his old moving van and drives off before the credits roll. Nobody '
+               "knows where he delivered them. The network's new office has a walk-in freezer, and it is always "
+               'locked.')
     return K

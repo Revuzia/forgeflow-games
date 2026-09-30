@@ -101,7 +101,8 @@
     "contact": 9,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "effector": "RightKnee"
   },
   "header": {
     "src": "mixamo",
@@ -155,22 +156,22 @@
   "drop_kick_throw": {
     "src": "mixamo",
     "file": "Soccer_Game_Pack/goalkeeper drop kick",
-    "range": [40, 118],
+    "range": [45, 85],
     "contact": 65,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 93}
+    "marks": {"slam": 65}
   },
-  "keeper_throw": {
+  "bicycle_toss": {
     "src": "mixamo",
-    "file": "Soccer_Game_Pack/goalkeeper overhand throw",
-    "range": [20, 86],
-    "contact": 49,
+    "file": "Soccer_Game_Pack/scissor kick",
+    "range": [5, 80],
+    "contact": 23,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 62}
+    "marks": {"slam": 23}
   },
   "shot_kick": {
     "src": "mixamo",

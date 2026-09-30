@@ -2,7 +2,7 @@
 // SyncTest harness. THREE-free, DOM-free, clock-free (every time value is passed in by the caller).
 //
 // Numbers are binding from _research/NETCODE.md:
-//   * input delay (3.3): P2P D = clamp(ceil((RTT/2)/16.667) - 3, 1, 4); relay D = 4
+//   * input delay (3.3): P2P D = clamp(ceil((RTT/2)/16.667) - DELAY_HIDE, 1, 4) (DELAY_HIDE settled at 2, P2); relay D = 4
 //   * window (3.4): W = 8 on P2P (GGPO MAX_PREDICTION_FRAMES), W = 12 on relay
 //   * time sync (3.4): every 240 frames (GGPO RECOMMENDATION_INTERVAL), if my mean frame advantage exceeds
 //     the peer's by >= 2 frames I skip floor(diff/2) frames (cap 9, GGPO MAX_FRAME_ADVANTAGE), one skip
@@ -21,8 +21,18 @@ export const SYNC_MIN_DIFF = 2;
 export const SYNC_MAX_SKIP = 9;
 export const SYNC_SKIP_GAP = 20;
 export const CHECKSUM_EVERY = 15;
-/** NETCODE 3.3 "-3": frames of one-way latency hidden by rollback instead of delay. Re-tuned by probe_netsim. */
-export const DELAY_HIDE = 3;
+/**
+ * Frames of one-way latency hidden by rollback instead of input delay (NETCODE 3.3 said "-3", to be re-tuned by the
+ * netsim). CHANGED(NET) P2, settled at 2 by `node _harness/probe_netsim.ts --sweep` (8 measured traces x 4 start
+ * phases, rAF tick jitter, real sim; _harness/_reports/probe_netsim_sweep.json, 2026-09-30):
+ *   hide 1: min 96.85% mean 99.40%, 0/32 runs < 96%, mean D 3.75, 5.21 rollbacks/side/s, mean rollback 2.17 f
+ *   hide 2: min 96.85% mean 99.28%, 0/32 runs < 96%, mean D 2.88, 7.51 rollbacks/side/s, mean rollback 2.48 f
+ *   hide 3: min 95.89% mean 99.02%, 2/32 runs < 96%, mean D 1.88, 8.41 rollbacks/side/s, mean rollback 3.15 f
+ *   hide 4: min 93.80% mean 98.52%, 8/32 runs < 96%, mean D 1.13
+ * 3 misses the 96% speed gate on bursty traces; 2 never does (same floor as 1) and adds a frame only for RTT 101-200 ms
+ * (RTT <= 100 ms: D = 1 either way). 1 would add another frame for no speed gain.
+ */
+export const DELAY_HIDE = 2;
 export const DELAY_MIN = 1;
 export const DELAY_MAX = 4;
 

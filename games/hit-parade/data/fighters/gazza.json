@@ -386,11 +386,12 @@
       "grab": {
         "frames": 50,
         "adv": 21,
-        "hitF": 34,
+        "hitF": 25,
         "swap": false,
         "air": false,
         "techable": true,
-        "clip": "drop_kick_throw"
+        "clip": "drop_kick_throw",
+        "victim": [[0, "hit_body", 0.0, 0.35], [25, "thrown_f", 0.3, 1.3333]]
       },
       "role": [],
       "anim": {"clip": "throw_reach"},
@@ -400,7 +401,7 @@
     "throw_b": {
       "kind": "throw",
       "input": "4LM",
-      "name": "Keeper's Throw",
+      "name": "Overhead Kick",
       "strength": "M",
       "startup": 5,
       "active": 3,
@@ -420,10 +421,19 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 50, "adv": 14, "hitF": 32, "swap": true, "air": false, "techable": true, "clip": "keeper_throw"},
+      "grab": {
+        "frames": 64,
+        "adv": 14,
+        "hitF": 15,
+        "swap": true,
+        "air": false,
+        "techable": true,
+        "clip": "bicycle_toss",
+        "victim": [[0, "hit_high_s", 0.0, 0.15], [8, "thrown_b", 0.1, 0.67], [30, "thrown_b", 0.67, 1.2]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Bowls them out behind him.",
+      "desc": "Falls back and bicycle-kicks them over his head.",
       "pushExt": [[0, 0.157], [4, 0.032], [7, 0.004], [24, 0.0], [31, 0.047]]
     },
     "power_shot_l": {
@@ -1099,24 +1109,136 @@
         "frames": 165,
         "cue": "gazza_hat_trick",
         "hits": [[10, 600], [40, 800], [70, 900], [128, 2200]],
-        "anim": [[0, "volley"], [30, "shot_kick"], [60, "header"], [90, "keepy"], [110, "bicycle"], [148, "win_point"]],
+        "anim": [
+          [0, "volley", 0.3, 0.8],
+          [30, "shot_kick", 0.333, 0.833],
+          [60, "header", 0.233, 0.733],
+          [90, "taunt_keepy", 0.2, 0.567],
+          [112, "bicycle_toss", 0.333, 0.933],
+          [148, "win_point", 0.5, 0.783]
+        ],
         "victim": [
-          [0, "hit_body"],
-          [30, "hit_high_l"],
-          [60, "hit_high_s"],
-          [90, "dizzy"],
-          [128, "kd_fall_b"],
-          [140, "kd_ground_b"]
+          [0, "hit_body", 0.0, 0.4],
+          [10, "hit_body", 0.0, 0.5],
+          [40, "hit_high_l", 0.0, 0.5],
+          [70, "hit_high_s", 0.0, 0.5],
+          [90, "dizzy", 0.3, 0.9],
+          [128, "thrown_f", 0.3, 0.74],
+          [140, "thrown_f", 0.74, 1.3333]
         ],
-        "shots": [
-          [0, "side_close"],
-          [30, "front_low"],
-          [60, "punch_in"],
-          [90, "wide"],
-          [110, "low_angle_up"],
-          [128, "slowmo_hold"],
-          [148, "crowd_pop"]
+        "shots": [[0, "close"], [30, "low"], [60, "close"], [90, "wide"], [112, "low"], [140, "wide"]],
+        "camera": [
+          {
+            "from": 0,
+            "to": 30,
+            "shot": "close",
+            "target": "both",
+            "fovDeg": 32,
+            "dist": 3.0,
+            "height": 1.3,
+            "yawDeg": 15,
+            "ease": "inOut",
+            "lookH": 1.3
+          },
+          {
+            "from": 30,
+            "to": 60,
+            "shot": "low",
+            "target": "both",
+            "fovDeg": 38,
+            "dist": 2.8,
+            "height": 0.4,
+            "yawDeg": -20,
+            "ease": "inOut",
+            "lookH": 1.1
+          },
+          {
+            "from": 60,
+            "to": 90,
+            "shot": "close",
+            "target": "defender",
+            "fovDeg": [32, 28],
+            "dist": [2.5, 2.5],
+            "height": 1.6,
+            "yawDeg": 35,
+            "ease": "inOut",
+            "lookH": 1.45
+          },
+          {
+            "from": 90,
+            "to": 112,
+            "shot": "wide",
+            "target": "both",
+            "fovDeg": 38,
+            "dist": 4.8,
+            "height": 1.6,
+            "yawDeg": 0,
+            "ease": "inOut",
+            "lookH": 1.1
+          },
+          {
+            "from": 112,
+            "to": 140,
+            "shot": "low",
+            "target": "attacker",
+            "fovDeg": 44,
+            "dist": 3.2,
+            "height": 0.3,
+            "yawDeg": 25,
+            "ease": "inOut",
+            "lookH": 1.5
+          },
+          {
+            "from": 140,
+            "to": 165,
+            "shot": "wide",
+            "target": "both",
+            "fovDeg": 38,
+            "dist": 6.0,
+            "height": 1.8,
+            "yawDeg": 0,
+            "ease": "inOut",
+            "lookH": 1.1
+          }
         ],
+        "fx": [
+          {"f": 0, "fx": "slate"},
+          {"f": 10, "fx": "impact_m"},
+          {"f": 30, "fx": "ball_trail", "target": "attacker"},
+          {"f": 40, "fx": "impact_m"},
+          {"f": 40, "fx": "ball_trail"},
+          {"f": 70, "fx": "impact_m"},
+          {"f": 70, "fx": "shake_s"},
+          {"f": 112, "fx": "speed_lines"},
+          {"f": 128, "fx": "impact_l"},
+          {"f": 128, "fx": "ball_trail"},
+          {"f": 128, "fx": "flash"},
+          {"f": 128, "fx": "shake_l"},
+          {"f": 128, "fx": "freeze_frame"},
+          {"f": 140, "fx": "dust"},
+          {"f": 148, "fx": "confetti"}
+        ],
+        "crowd": [
+          {"f": 10, "react": "ooh"},
+          {"f": 40, "react": "ooh"},
+          {"f": 70, "react": "cheer"},
+          {"f": 90, "react": "chant", "ratings": "up"},
+          {"f": 128, "react": "roar", "ratings": "spike"},
+          {"f": 148, "react": "cheer", "ratings": "peak"}
+        ],
+        "pathA": [[10, 0.1, 0], [40, 0.2, 0], [70, 0.35, 0], [112, 0.3, 0], [148, 0.3, 0], [163, 0, 0]],
+        "gapD": [
+          [10, 1.0, 0],
+          [40, 1.2, 0],
+          [70, 1.1, 0],
+          [90, 1.2, 0],
+          [128, 1.1, 0.4],
+          [136, 2.4, 0.3],
+          [142, 3.0, 0],
+          [163, 3.0, 0]
+        ],
+        "slate": "PRIME TIME - GAZZA: HAT TRICK",
+        "endPose": "back",
         "endAdv": 19,
         "endGapM": 3.0
       },
@@ -1167,5 +1289,14 @@
     "combo": ["2L", "5M", "power_shot_h"],
     "approach": ["dive_m"],
     "meter": "top_bins"
-  }
+  },
+  "introLine": "Brought me own ball. Ref's not coming. Kick-off.",
+  "winQuotes": ["GOAL! And he's gone down like a sack of match programmes.", "Top bins. Back of the net. Back of your head.", "Man of the match. Again. Somebody fetch the trophy."],
+  "banter": {
+    "zambini": ["It was ONE dove, mate, and it was offside.", "Pull a rabbit out of that hat. Go on. I'll volley it."],
+    "freak": ["Big lad. Bet you can't head a ball, though.", "I've played Sunday league, son. You're nothing."],
+    "ricky": ["Banned from every ground in the county, and you still booked me.", "Blow the whistle, Ricky. Final whistle."],
+    "default": ["Mind your ankles. I won't.", "Two-footed? Me? Never."]
+  },
+  "ending": "GAZZA knocks the host clean off his own set with a bicycle kick and celebrates with his hoodie over his head for eleven minutes. He spends the prize money on a pitch behind the Rust Theater with real floodlights and a real referee. He argues with that referee every Sunday. He has never been happier."
 }

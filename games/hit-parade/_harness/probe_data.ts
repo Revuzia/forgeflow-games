@@ -157,7 +157,20 @@ if (VERBOSE) for (const l of fr.advTable) console.log(`  adv  ${l}`);
   const clip = fx.clips.kit_a.clips['a_5m'];
   t.ok(!!m5.anim?.warp && m5.anim.warp[1][0] === m5.startup && m5.anim.warp[1][1] === clip.contact, 'derived warp maps startup -> clip contact', JSON.stringify(m5.anim?.warp));
   const b = m5.boxes?.[0];
-  t.ok(!!b && b.x === clip.effector!.at[0] && b.y === clip.effector!.at[1] && b.w === fx.system.boxes.M[0] && b.f[0] === m5.startup && b.f[1] === m5.startup + m5.active - 1, 'derived box centred on effector.at, M size, active frames', JSON.stringify(b));
+  // CHANGED(SIM) P2 derive rule v2 (CONTRACT §28.5b): body -> effector span, class reach floor, crouch line (independent
+  // arithmetic from system.json + the fixture kit)
+  const bx = fx.system.boxes as typeof fx.system.boxes & { nearPadM: number; shoulderPct: number; crouchLineM: number; crouchMarginM: number; reachFloorM: Record<string, number> };
+  const kitA = fx.fighters.kit_a;
+  const [ex, ey] = clip.effector!.at;
+  const [cw, ch] = fx.system.boxes.M;
+  const near = Math.min(ex - cw / 2, (kitA.push ? kitA.push.front : kitA.pushbox[0] / 2) - bx.nearPadM);
+  const far = Math.max(ex + cw / 2, (bx.reachFloorM['5M'] * kitA.heightM) / bx.reachFloorM.refHeightM);
+  const sh = kitA.heightM * bx.shoulderPct;
+  const y0 = Math.min(Math.min(ey, sh) - ch / 2, bx.crouchLineM - bx.crouchMarginM);
+  const y1 = Math.max(ey, sh) + ch / 2;
+  const ok4 = (v: number, w: number): boolean => Math.abs(v - w) < 0.0002;
+  t.ok(!!b && ok4(b.x + b.w / 2, far) && ok4(b.x - b.w / 2, near) && ok4(b.y - b.h / 2, y0) && ok4(b.y + b.h / 2, y1) && b.f[0] === m5.startup && b.f[1] === m5.startup + m5.active - 1,
+    `derived box v2: body ${near.toFixed(3)} -> reach ${far.toFixed(3)} m (5M floor), y ${y0.toFixed(3)}..${y1.toFixed(3)} (crouch line), active frames`, JSON.stringify(b));
   t.eq(fx.anims.kit_a.length, 34 + Object.keys(fx.fighters.kit_a.moves).length + 1 + (fx.fighters.kit_a.win ?? []).length + 1, '§17 anim table: 34 shared + moves + intro + wins + taunt');
   t.ok(fx.anims.kit_a[34].moveId === 0 && fx.anims.kit_a[34].clip === fx.fighters.kit_a.moves['5L'].anim!.clip, '§17 anim id 34 = move 0');
 }

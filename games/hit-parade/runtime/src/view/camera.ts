@@ -215,15 +215,22 @@ export class FightCamera {
       let dist = this.dist * (1 - push - 0.15 * w);
       let focusY = this.lookY;
       const holdAt = CAM.koHitstopFrames + CAM.koSlowFrames;
-      if (this.koMatch && t > holdAt) {                   // finish: hold on the winner
-        const h = smooth01((t - holdAt) / 20);
-        focusX += (winner.x - focusX) * h;
-        dist += (3.6 - dist) * h;
-        focusY += (1.15 - focusY) * h;
-      }
       this.look.set(focusX, focusY, 0);
       const ang = CAM.koOrbitDeg * DEG * w * dir;
       this.pos.set(focusX + Math.sin(ang) * dist, this.pos.y, Math.cos(ang) * dist);
+      if (this.koMatch && t > holdAt) {
+        // P2 finish hold: a LOW hero shot on the winner from the side away from the loser. The camera sits at 0.62 m and
+        // looks up at the chest, so the frame's bottom ray stays above ~0.5 m for 10 m: the loser lying on the floor behind
+        // the winner is out of frame (P1: the hold kept the loser's body at the frame edge).
+        const h = smooth01((t - holdAt) / 22);
+        const hx = winner.x - dir * 1.05, hz = 2.55;
+        this.tmpA.set(winner.x + dir * 0.12, Math.max(1.3, (winner.head ?? 1.8) * 0.74), 0);
+        this.tmpB.set(hx, 0.62, hz);
+        this.look.lerp(this.tmpA, h);
+        this.pos.lerp(this.tmpB, h);
+        fovNow = fov + (33 - fov) * h;
+        roll = -dir * 1.5 * DEG * h;
+      }
       mode = 'ko';
     } else if (this.superAt >= 0 && frame - this.superAt < this.superFrames + 12) {
       const t = frame - this.superAt;

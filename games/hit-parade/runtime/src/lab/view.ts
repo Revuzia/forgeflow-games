@@ -409,4 +409,6 @@ async function main(): Promise<void> {
   lab.ready = true;
 }
 
-main().catch(fail);
+// ?sim=1: the real sim + real data drive the view (lab/viewsim.ts); otherwise the scripted-snapshot lab above
+if (Q.get('sim') === '1') import('./viewsim.ts').then((mod) => mod.simMain(fail)).catch(fail);
+else main().catch(fail);

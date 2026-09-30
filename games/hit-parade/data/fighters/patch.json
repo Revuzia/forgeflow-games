@@ -406,7 +406,16 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 46, "adv": 21, "hitF": 30, "swap": false, "air": false, "techable": true, "clip": "clinch_knee"},
+      "grab": {
+        "frames": 46,
+        "adv": 21,
+        "hitF": 16,
+        "swap": false,
+        "air": false,
+        "techable": true,
+        "clip": "clinch_knee",
+        "victim": [[0, "hit_high_s", 0.0, 0.3], [16, "hit_body", 0.15, 0.8], [34, "kd_fall_b", 1.04, 1.5]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Muay Thai clinch, knee to the chest.",
@@ -435,7 +444,16 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 48, "adv": 14, "hitF": 28, "swap": true, "air": false, "techable": true, "clip": "spin_toss"},
+      "grab": {
+        "frames": 48,
+        "adv": 14,
+        "hitF": 19,
+        "swap": true,
+        "air": false,
+        "techable": true,
+        "clip": "spin_toss",
+        "victim": [[0, "hit_high_s", 0.0, 0.25], [10, "thrown_b", 0.05, 0.4], [19, "thrown_b", 0.4, 1.2]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Spins and flings them behind.",
@@ -1243,32 +1261,163 @@
         "cue": "patch_on_air",
         "hits": [[10, 400], [35, 500], [60, 600], [85, 700], [110, 900], [135, 1400]],
         "anim": [
-          [0, "clinch_knee"],
-          [28, "cue_round"],
-          [52, "roundhouse_hi"],
-          [78, "flying_knee"],
-          [102, "jump_kick"],
-          [126, "cue_drop"],
-          [146, "win_high_kick"]
+          [0, "clinch_knee", 0.283, 0.75],
+          [28, "cue_round", 0.133, 0.533],
+          [52, "roundhouse_hi", 0.117, 0.55],
+          [78, "flying_knee", 0.15, 0.55],
+          [102, "jump_kick", 0.225, 0.625],
+          [126, "cue_drop", 0.192, 0.525],
+          [146, "win_high_kick", 0.2, 0.433]
         ],
         "victim": [
-          [0, "thrown_f"],
-          [28, "hit_high_l"],
-          [52, "hit_high_l"],
-          [78, "hit_air"],
-          [102, "hit_air"],
-          [126, "kd_fall_b"],
-          [140, "kd_ground_b"]
+          [0, "hit_body", 0.0, 0.3],
+          [10, "hit_body", 0.0, 0.4],
+          [35, "hit_high_l", 0.0, 0.4],
+          [60, "hit_high_l", 0.1, 0.45],
+          [85, "hit_air", 0.0, 0.4],
+          [110, "hit_air", 0.3, 0.8],
+          [135, "kd_fall_b", 1.25, 1.8667],
+          [148, "kd_ground_b", 0.0, 0.367]
         ],
-        "shots": [
-          [0, "front_low"],
-          [28, "side_close"],
-          [52, "punch_in"],
-          [78, "low_angle_up"],
-          [102, "orbit"],
-          [126, "top_down"],
-          [146, "crowd_pop"]
+        "shots": [[0, "low"], [28, "close"], [52, "close"], [78, "low"], [102, "orbit"], [126, "top"], [146, "wide"]],
+        "camera": [
+          {
+            "from": 0,
+            "to": 28,
+            "shot": "low",
+            "target": "both",
+            "fovDeg": 38,
+            "dist": 2.6,
+            "height": 0.5,
+            "yawDeg": 18,
+            "ease": "inOut",
+            "lookH": 1.2
+          },
+          {
+            "from": 28,
+            "to": 52,
+            "shot": "close",
+            "target": "defender",
+            "fovDeg": 30,
+            "dist": 2.5,
+            "height": 1.55,
+            "yawDeg": 40,
+            "ease": "inOut",
+            "lookH": 1.45
+          },
+          {
+            "from": 52,
+            "to": 78,
+            "shot": "close",
+            "target": "both",
+            "fovDeg": [34, 30],
+            "dist": [3.0, 3.0],
+            "height": 1.6,
+            "yawDeg": -30,
+            "ease": "inOut",
+            "lookH": 1.3
+          },
+          {
+            "from": 78,
+            "to": 102,
+            "shot": "low",
+            "target": "defender",
+            "fovDeg": 42,
+            "dist": 3.0,
+            "height": 0.3,
+            "yawDeg": 25,
+            "ease": "inOut",
+            "lookH": 1.8
+          },
+          {
+            "from": 102,
+            "to": 126,
+            "shot": "orbit",
+            "target": "both",
+            "fovDeg": 40,
+            "dist": 3.4,
+            "height": 2.0,
+            "yawDeg": [30, -40],
+            "ease": "linear",
+            "lookH": 1.8
+          },
+          {
+            "from": 126,
+            "to": 146,
+            "shot": "top",
+            "target": "defender",
+            "fovDeg": 40,
+            "dist": 1.3,
+            "height": 5.2,
+            "yawDeg": 8,
+            "ease": "inOut",
+            "lookH": 0.5
+          },
+          {
+            "from": 146,
+            "to": 160,
+            "shot": "wide",
+            "target": "both",
+            "fovDeg": 38,
+            "dist": 5.5,
+            "height": 1.7,
+            "yawDeg": 0,
+            "ease": "inOut",
+            "lookH": 1.1
+          }
         ],
+        "fx": [
+          {"f": 0, "fx": "slate"},
+          {"f": 10, "fx": "impact_m"},
+          {"f": 35, "fx": "impact_s"},
+          {"f": 60, "fx": "impact_m"},
+          {"f": 60, "fx": "smear", "target": "attacker"},
+          {"f": 85, "fx": "impact_m"},
+          {"f": 85, "fx": "shake_s"},
+          {"f": 102, "fx": "speed_lines"},
+          {"f": 110, "fx": "impact_m"},
+          {"f": 135, "fx": "impact_l"},
+          {"f": 135, "fx": "flash"},
+          {"f": 135, "fx": "shake_l"},
+          {"f": 135, "fx": "dust"},
+          {"f": 135, "fx": "freeze_frame"},
+          {"f": 146, "fx": "spot", "target": "attacker"},
+          {"f": 158, "fx": "spot_off"}
+        ],
+        "crowd": [
+          {"f": 10, "react": "ooh"},
+          {"f": 35, "react": "ooh"},
+          {"f": 60, "react": "gasp"},
+          {"f": 85, "react": "cheer", "ratings": "up"},
+          {"f": 110, "react": "roar", "ratings": "up"},
+          {"f": 135, "react": "roar", "ratings": "spike"},
+          {"f": 146, "react": "chant", "ratings": "peak"}
+        ],
+        "pathA": [
+          [10, 0.1, 0],
+          [35, 0.25, 0],
+          [60, 0.4, 0],
+          [85, 0.5, 0.35],
+          [95, 0.55, 0],
+          [110, 0.7, 0.9],
+          [120, 0.8, 0.9],
+          [135, 0.9, 0.2],
+          [140, 0.9, 0],
+          [158, 0, 0]
+        ],
+        "gapD": [
+          [10, 0.8, 0],
+          [35, 0.9, 0],
+          [60, 1.0, 0],
+          [85, 0.9, 0.3],
+          [100, 1.0, 1.0],
+          [110, 0.9, 1.2],
+          [128, 0.9, 1.0],
+          [136, 1.1, 0],
+          [158, 2.0, 0]
+        ],
+        "slate": "PRIME TIME - PATCH: ON AIR IN 3... 2... 1...",
+        "endPose": "back",
         "endAdv": 19,
         "endGapM": 2.0
       },
@@ -1311,5 +1460,14 @@
     "punish": ["5H", "cue_h"],
     "combo": ["2L", "2L", "cue_l"],
     "meter": "highlight_reel"
-  }
+  },
+  "introLine": "Quiet on set. We're live in three... two...",
+  "winQuotes": ["That's a wrap. Strike the set - and him.", "You missed your cue. Nobody misses my cue.", "Cut to commercial. Somebody mop the floor."],
+  "banter": {
+    "spin": ["You headspun through my live cue. That's a fine AND a firing.", "Places, b-boy. I count three and you're off the air."],
+    "freak": ["Specimen Thirteen, you're on in five. Hit your mark.", "Everybody on this floor takes direction. Even the monster."],
+    "ricky": ["Six seasons I ran your floor, Ricky. I know every blind spot.", "Tonight the cameras keep rolling after the bell."],
+    "default": ["You're blocking my shot. Move, or get moved.", "Three... two... you're done."]
+  },
+  "ending": "PATCH takes the host's headset, counts the whole studio down from three and cuts the feed herself. For one Friday the slot plays static, and it pulls the best ratings in the network's history. By Monday she runs the building. The first new rule is taped to every door: nobody fights when the cameras stop."
 }

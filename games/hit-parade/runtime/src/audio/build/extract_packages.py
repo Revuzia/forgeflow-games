@@ -35,11 +35,16 @@ IMPHENZIA_RX = (
     r"VOICES/(Fighting|Martial_Arts_Male|Grunts_Groans_Hurt|Exclamations|Laugh|Screams)/|"
     r"VOICES/Words_Phrases/(Male_A|Male_B|Female)/|"
     r"MONEY_CASH_CURRENCY/|GORE_SPLATS/|BREAKS_SNAPS/|FABRIC_CLOTHING/|CARTOON/|"
-    r"MUSIC_EFFECTS/[^/]+$|MUSIC_EFFECTS/Solo_Orchestral_Brass/|NOTIFICATIONS/|"
+    r"MUSIC_EFFECTS/(?=[^/]+$)|MUSIC_EFFECTS/Solo_Orchestral_Brass/|NOTIFICATIONS/|"
     r"USER_INTERFACES/(Clicks_Taps|Errors|Notifications|Appear_Disappear|Toggles|Switches|Beeps)/|"
     r"ALARMS/Digital/|FIREWORKS/|HUMAN/(Body|Ringing_Ears|Heartbeat)/|ZAPS/|ELECTRICITY/|CARDS/|SHATTER/|GLASS/|"
     r"WEAPONS/Melee/|TOOLS/Whip/|EXPLOSIONS/(Arcade|Short|Quick)/|CHARGE_UPS_DOWNS/|TIME_WARPS/|"
-    r"FOLEY/(CHURCH_BELL|DOOR_BELLS|COINS)/|ELEMENTS/Fire/|MAGIC_SPELLS/|PUZZLES/|MONSTERS_CREATURES/"
+    r"FOLEY/(CHURCH_BELL|DOOR_BELLS|COINS)/|ELEMENTS/Fire/|MAGIC_SPELLS/|PUZZLES/|MONSTERS_CREATURES/|"
+    # P2 (2026-09-30): stage ambiences (rooftop rain/wind/thunder, butcher-block fridge, control-room hum, neon buzz),
+    # prop foley (camera shutter for the TV cuts, clock ticks, the gourd swig, ball bounces, cleaver chops)
+    r"WIND/|THUNDER/|ELEMENTS/Water/(Rain|Drops)/|AMBIENCES/(SciFi|City)/|"
+    r"MACHINES/(Household_Appliances|Factory|Deep|Generic|Cartoon)/|HVAC/COOLING/|FOLEY/(CAMERA|CLOCKS)/|"
+    r"HUMAN/Eating_Drinking/|SPORTS/Basketball/|TOOLS/Axe/"
     r").*\.(wav|ogg|mp3)$"
 )
 

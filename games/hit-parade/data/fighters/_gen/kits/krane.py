@@ -1,5 +1,5 @@
 """OFFICER KRANE - charge, riot shield + baton (Pro_Sword_and_Shield pack: shield-left, baton-right)."""
-from kitlib import (Kit, air, crouch, layer, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
+from kitlib import (Kit, air, cam, cinematic, crouch, layer, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
 
 SS = "Pro_Sword_and_Shield_Pack/"
 
@@ -67,8 +67,9 @@ def build():
     K.clip("air_chop", air(mix(SS + "sword and shield slash", (8, 40), contact=19)), "jump legs + baton chop")
     K.clip("air_swing", air(mix(SS + "sword and shield attack (2)", (5, 40), contact=18)), "jump legs + swing")
     K.clip("throw_reach", mix("Soccer_Game_Pack/goalkeeper catch (2)", (1, 30), contact=9), "two-hand grab")
-    K.clip("book_em", mix(SS + "sword and shield slash (2)", (10, 100), contact=22),
-           "Mixamo S&S slash (2): four baton swings (f22/38/49/76) = a baton beating")
+    K.clip("book_em", dict(mix(SS + "sword and shield slash (2)", (10, 64), contact=22), contacts=[22, 38, 52]),
+           "Mixamo S&S slash (2) f10-64: baton, baton, shield (front passes f22 / f38 / f52). P2: window 10-100 -> 10-64: "
+           "the full 3.0 s clip played over a 50-frame throw lock at 3.6x (a blur); 1.8 s over 56 f = 1.9x")
     K.clip("perp_walk", mix(SS + "sword and shield 180 turn (2)", (1, 26)),
            "Mixamo S&S 180 turn (2): turns with them and shoves them past (back throw; the clip turns 180, "
            "CONTRACT 20.2 grab.swap)")
@@ -120,11 +121,21 @@ def build():
     K.add("j.M", "jM", input="j.M", name="Air Chop", clip="air_chop", desc="Air baton chop.")
     K.add("j.H", "jH", input="j.H", name="Air Swing", clip="air_swing", desc="Wide air baton swing.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Book 'Em", clip="throw_reach",
-          grab={"frames": 50, "adv": 21, "hitF": 36, "swap": False, "air": False, "techable": True,
-                "clip": "book_em"}, desc="Holds them with the shield and lays in four baton shots.")
+          grab={"frames": 56, "adv": 21, "hitF": 44, "swap": False, "air": False, "techable": True,
+                "clip": "book_em",
+                # P2 paired throw: book_em (f10-64, 1.8 s over 56 f) lands baton / baton / shield at lock 12 / 29 / 44;
+                # the head snaps, the body folds, and the shield shot drops them (kd_fall_b 1.04 -> 1.5 s, face up).
+                "victim": [[0, "hit_high_s", 0.0, 0.1], [12, "hit_high_s", 0.0, 0.5], [29, "hit_body", 0.1, 0.6],
+                           [44, "kd_fall_b", 1.04, 1.5]]},
+          desc="Holds them with the shield: baton, baton, shield bash.")
     K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Perp Walk", clip="throw_reach",
-          grab={"frames": 44, "adv": 14, "hitF": 30, "swap": True, "air": False, "techable": True,
-                "clip": "perp_walk"}, desc="Turns them around and shoves them with the shield.")
+          grab={"frames": 50, "adv": 14, "hitF": 30, "swap": True, "air": False, "techable": True,
+                "clip": "perp_walk",
+                # P2 paired throw: the 180 turn (0.83 s over 50 f) walks them round him; the shove at lock 30 sends them
+                # face down behind him (thrown_b 0.40 -> 1.0 s at 1.8x). He ends turned 180 deg = the sim's facing flip
+                # at the release is seamless. Lock 44 -> 50: the whole landing had played in 14 f (3.4x).
+                "victim": [[0, "hit_high_s", 0.0, 0.2], [8, "thrown_b", 0.05, 0.4], [30, "thrown_b", 0.4, 1.0]]},
+          desc="Turns them around and shoves them with the shield.")
 
     taser = {"life": 180, "box": [0.30, 0.25], "y": 1.20, "hits": 1, "clip": "taser_bolt", "x": 0.6}
     K.special("taser", "proj", motion="[4]6",
@@ -170,8 +181,12 @@ def build():
                       desc="Two hits of armor, 2 hits, -2 on block.", why="EX: 2-hit armor, 2 hits, -2."))
     cuff = {}
     for s, (rng, dmg) in {"l": (0.95, 1600), "m": (0.90, 1800), "h": (0.85, 2000)}.items():
+        # P2 paired grab: shield-checked onto their back (kd_fall_b from the drop, lock 8-24), pinned flat while he
+        # kneels behind the shield; the cuffs click on lock 40.
         cuff[s] = dict(damage=dmg, grab={"rangeM": rng, "frames": 60, "adv": 24, "hitF": 40, "swap": False,
-                                         "air": False, "techable": False, "clip": "cuff_pin"})
+                                         "air": False, "techable": False, "clip": "cuff_pin",
+                                         "victim": [[0, "hit_body", 0.0, 0.3], [8, "kd_fall_b", 1.0, 1.5],
+                                                    [24, "kd_ground_b", 0.0, 0.367]]})
     K.special("cuff", None, motion="214", kind="cmdgrab",
               common=dict(name="Under Arrest", clip="throw_reach", startup=6, active=3, recovery=40, hitstun=0,
                           blockstun=0, hitstop=0, guard="U", gain=2000, nerve=0, pb=(0.0, 0.0), role=["grab"],
@@ -182,7 +197,9 @@ def build():
               per=cuff,
               ex=dict(name="Under Arrest (EX)", damage=2200, invuln={"strike": [1, 6]},
                       grab={"rangeM": 1.10, "frames": 64, "adv": 24, "hitF": 42, "swap": False, "air": False,
-                            "techable": False, "clip": "cuff_pin"},
+                            "techable": False, "clip": "cuff_pin",
+                            "victim": [[0, "hit_body", 0.0, 0.3], [8, "kd_fall_b", 1.0, 1.5],
+                                       [24, "kd_ground_b", 0.0, 0.367]]},
                       desc="Strike-invulnerable grab, longer reach.", why="EX: strike invulnerable 1-6, 1.10 m."))
 
     K.add("backup", LV1, kind="super1", input="236236", name="Backup's Here", strength="H", clip="backup_combo",
@@ -200,15 +217,32 @@ def build():
           invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]},
           move=[[0, 0], [10, 0.8]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],
           juggle={"js": 1, "ji": 0, "jl": 99},
-          cinematic={"frames": 165, "cue": "krane_riot_act",
-                     "hits": [[25, 500], [50, 600], [75, 300], [88, 300], [100, 300], [118, 2500]],
-                     "anim": [[0, "shield_block"], [20, "baton_swing"], [45, "baton_chop"], [70, "book_em"],
-                              [110, "taser_fire"], [140, "win_holster"]],
-                     "victim": [[0, "hit_high_s"], [20, "hit_high_l"], [45, "hit_body"], [70, "hit_high_s"],
-                                [110, "dizzy"], [128, "kd_fall_b"], [145, "kd_ground_b"]],
-                     "shots": [[0, "side_close"], [20, "punch_in"], [70, "over_shoulder"], [110, "front_low"],
-                               [118, "slowmo_hold"], [140, "crowd_pop"]],
-                     "endAdv": 19, "endGapM": 2.0},
+          cinematic=lambda: cinematic(
+              165, "krane_riot_act",
+              hits=[[28, 500], [53, 600], [78, 300], [90, 300], [101, 300], [118, 2500]],
+              anim=[K.seg(0, "shield_block", 20, fromS=0.33), K.seg(20, "baton_swing", 45, hit=28),
+                    K.seg(45, "baton_chop", 70, hit=53), K.seg(70, "book_em", 110, hit=78, rate=2.65),
+                    K.seg(110, "taser_fire", 140, hit=118), K.seg(140, "win_holster", 165, fromS=0.0, rate=0.8)],
+              victim=[[0, "hit_high_s", 0.0, 0.4], [28, "hit_high_l", 0.0, 0.5], [53, "hit_body", 0.0, 0.6],
+                      [78, "hit_high_s", 0.0, 0.3], [90, "hit_high_s", 0.0, 0.3], [101, "hit_body", 0.1, 0.6],
+                      [118, "hit_air", 0.1, 0.5], [132, "kd_fall_b", 1.1, 1.8667]],
+              camera=[cam(0, 20, "close", "both", 32, 2.4, 1.5, 15),
+                      cam(20, 45, "close", "defender", [32, 28], [2.1, 1.7], 1.6, 35),
+                      cam(45, 70, "low", "both", 40, 2.8, 0.5, -20, lookH=1.2),
+                      cam(70, 110, "over_shoulder", "defender", 36, 2.3, 1.7, -65),
+                      cam(110, 140, "low", "defender", 40, [2.6, 2.2], 0.6, 30, lookH=1.3),
+                      cam(140, 165, "wide", "both", 38, 5.5, 1.7, 5)],
+              fx=[(0, "slate"), (0, "sparks"), (28, "impact_m"), (53, "impact_m"), (53, "shake_s"), (78, "impact_s"),
+                  (90, "impact_s"), (101, "impact_m"), (110, "lights_flicker"), (118, "electric"), (118, "flash"),
+                  (118, "shake_m"), (118, "freeze_frame"), (132, "dust"), (140, "spot", "attacker"),
+                  (160, "spot_off")],
+              crowd=[(0, "boo"), (28, "ooh"), (53, "ooh"), (101, "cheer", "up"), (118, "roar", "spike"),
+                     (132, "laugh"), (145, "cheer", "peak")],
+              pathA=[[28, 0.15, 0], [53, 0.3, 0], [78, 0.4, 0], [101, 0.55, 0], [118, 0.5, 0], [150, 0.2, 0],
+                     [163, 0, 0]],
+              gapD=[[28, 1.1, 0], [53, 1.0, 0], [78, 0.95, 0], [101, 1.0, 0], [118, 1.2, 0.2], [128, 1.4, 0.35],
+                    [138, 1.6, 0], [163, 2.0, 0]],
+              slate="PRIME TIME - OFFICER KRANE: RIOT ACT", endPose="back", endAdv=19, endGapM=2.0),
           desc="PRIME TIME: a shield bash that starts a full riot-control sequence ending in a taser jolt.",
           why="1c Lv3: 10/4/58, -42, 4500, fully invulnerable 1-13.")
 
@@ -220,10 +254,28 @@ def build():
                  {"motion": "214", "btn": "LMH", "move": "cuff_{s}"}]
     K.unique = {"kind": "charge", "chargeF": 45, "keepF": 10, "standBlockNervePct": 50}
     K.cine_doc = [
-        "f0 SHIELD BASH (side_close): the shield slams them upright.",
-        "f20 BATON SWING (punch_in) - 500 at f25. f45 BATON CHOP (body) - 600 at f50.",
-        "f70 BOOK 'EM (over_shoulder): three baton shots - 3 x 300.",
-        "f110 TASER (front_low -> slowmo_hold): barbs from the shield, a comic full-body jolt - 2500 at f118.",
-        "f140 HOLSTER (crowd_pop): he holsters the baton over the twitching body (KD +19).",
+        "f0 SHIELD BASH (close, sparks): the crowd boos the cop as the shield slams them upright.",
+        "f20 BATON SWING (punch-in on the face) - 500 at f28. f45 BATON CHOP (low) - 600 at f53.",
+        "f70 BOOK 'EM (over his shoulder): baton, baton, shield at 2.65x - 3 x 300 (f78 / f90 / f101).",
+        "f110 TASER (low): barbs from the shield, lights flicker, a comic full-body jolt lifts them - 2500 at f118 "
+        "(electric arcs, flash, freeze-frame); the crowd laughs as they drop.",
+        "f140 HOLSTER (wide, spotlight): he holsters the baton over a body lying face up at 2.0 m (KD +19).",
     ]
+    K.text = dict(
+        introLine="You have the right to remain standing. You won't.",
+        winQuotes=["Case closed. Book him, then book the ambulance.",
+                   "Resisting arrest looks great on camera. Not on you.",
+                   "Stay down. That's not advice, that's an order."],
+        banter={"bruno": ["You walked off with my cuffs and a meat locker door, Bruno.",
+                          "Tonight you come quietly. Or loudly. The paperwork is the same."],
+                "freak": ["Specimen Thirteen, you are in violation of every code in this building.",
+                          "Step away from the chains. Slowly. Claws where I can see them."],
+                "ricky": ["Twenty years I kept your crowd in line, Marquee.",
+                          "Now I read YOU your rights - live on air."],
+                "default": ["Stage Security. Keep your hands where the cameras can see them.",
+                            "Anything you say will be edited and used against you."]},
+        ending="OFFICER KRANE cuffs the host to his own mic stand and reads him his rights on a live feed. The "
+               "network's lawyers arrive in forty seconds; Krane has already seized thirty seasons of contracts as "
+               "evidence. Internal Affairs gives him a medal and a desk. He hates the desk, so on Friday nights he "
+               "still walks the Control Room, just in case.")
     return K

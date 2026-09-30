@@ -18,6 +18,11 @@ export interface LinkOpts {
   seed?: number;
   /** relay-style coalescing: at most one input packet per this many ms per side (latest wins). */
   minIntervalMs?: number;
+  /** P2: how the relay pacing is modelled (net/transport_relay.ts): 'interval' = P1 (one packet per minIntervalMs since
+   *  the last flush), 'bucket' = P2 token bucket (`rate`/s, `burst`). Default 'interval' when minIntervalMs > 0. */
+  pacing?: 'interval' | 'bucket';
+  rate?: number;
+  burst?: number;
   kind?: 'loop' | 'relay';
 }
 
@@ -32,7 +37,12 @@ export class LoopEndpoint implements Transport {
   private link: SimLink;
   private toB: boolean;
   private pending: Uint8Array | null = null;
+  private pendingSince = 0;
   private lastFlush = -Infinity;
+  private tokens = 0;
+  private tokensAt = -1;
+  held = 0;
+  holdMsSum = 0;
   lastCtlAt = -Infinity;
 
   constructor(link: SimLink, toB: boolean, kind: 'loop' | 'relay') {
@@ -41,17 +51,36 @@ export class LoopEndpoint implements Transport {
     this.kind = kind;
   }
 
+  /** may a packet go out now (pacing model)? */
+  private canSend(now: number): boolean {
+    const L = this.link;
+    if (L.pacing === 'bucket') {
+      if (this.tokensAt < 0) this.tokens = L.burst;
+      else this.tokens = Math.min(L.burst, this.tokens + ((now - this.tokensAt) / 1000) * L.rate);
+      this.tokensAt = now;
+      return this.tokens >= 1;
+    }
+    const iv = L.minIntervalMs;
+    return !(iv > 0 && now - this.lastFlush < iv);
+  }
+
+  private flush(b: Uint8Array, now: number, since: number): void {
+    this.lastFlush = now;
+    if (this.link.pacing === 'bucket') this.tokens = Math.max(0, this.tokens - 1);
+    if (now - since > 0) { this.held++; this.holdMsSum += now - since; }
+    this.sentInput++;
+    this.link.deliver(this.toB, b, false);
+  }
+
   sendInput(b: Uint8Array): void {
-    const iv = this.link.minIntervalMs;
     const now = this.link.now();
-    if (iv > 0 && now - this.lastFlush < iv) {
+    if (this.pending || !this.canSend(now)) {
       if (this.pending) this.coalesced++;
+      else this.pendingSince = now;
       this.pending = b;                               // latest wins (it carries every un-acked input)
       return;
     }
-    this.lastFlush = now;
-    this.sentInput++;
-    this.link.deliver(this.toB, b, false);
+    this.flush(b, now, now);
   }
 
   sendCtl(b: Uint8Array): void {
@@ -61,13 +90,10 @@ export class LoopEndpoint implements Transport {
 
   drain(cb: (b: Uint8Array, ctl: boolean, at?: number) => void): void {
     const now = this.link.now();
-    const iv = this.link.minIntervalMs;
-    if (this.pending && now - this.lastFlush >= iv) {
+    if (this.pending && this.canSend(now)) {
       const b = this.pending;
       this.pending = null;
-      this.lastFlush = now;
-      this.sentInput++;
-      this.link.deliver(this.toB, b, false);
+      this.flush(b, now, this.pendingSince);
     }
     if (this.inbox.length === 0) return;
     const due: Item[] = [];
@@ -85,6 +111,9 @@ export class SimLink {
   readonly b: LoopEndpoint;
   readonly now: () => number;
   readonly minIntervalMs: number;
+  readonly pacing: 'interval' | 'bucket';
+  readonly rate: number;
+  readonly burst: number;
   private o: LinkOpts;
   private rng: number;
   private seq = 0;
@@ -95,6 +124,9 @@ export class SimLink {
     this.o = o;
     this.now = o.now;
     this.minIntervalMs = o.minIntervalMs ?? 0;
+    this.pacing = o.pacing ?? 'interval';
+    this.rate = o.rate ?? 10;
+    this.burst = o.burst ?? 2;
     this.rng = (o.seed ?? 12345) | 0;
     const kind = o.kind ?? 'loop';
     this.a = new LoopEndpoint(this, true, kind);

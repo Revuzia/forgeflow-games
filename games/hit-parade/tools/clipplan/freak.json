@@ -90,8 +90,8 @@
   "jump_claw": {
     "src": "mixamo",
     "file": "Creature_Pack/mutant jumping",
-    "range": [20, 60],
-    "contact": 32,
+    "range": [22, 60],
+    "contact": 37,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
@@ -190,22 +190,22 @@
   "crush": {
     "src": "mixamo",
     "file": "Creature_Pack/mutant flexing muscles",
-    "range": [1, 133],
+    "range": [40, 105],
     "contact": 65,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 89}
+    "marks": {"slam": 75}
   },
   "fling": {
     "src": "mixamo",
     "file": "Creature_Pack/mutant swiping",
-    "range": [1, 73],
+    "range": [20, 70],
     "contact": 41,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 47}
+    "marks": {"slam": 41}
   },
   "crusher_leap_clip": {
     "src": "mixamo",
@@ -262,7 +262,7 @@
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 72}
+    "marks": {"slam": 51}
   },
   "meltdown_clip": {
     "src": "seq",

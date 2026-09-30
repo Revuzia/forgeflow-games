@@ -11,9 +11,12 @@ Refuses to run (exit 3, says why) while another automated Chrome is alive (a chr
 would be contaminated. --wait-clear N polls up to N seconds first; --force-beside-others measures anyway, labels the
 result CONTAMINATED and exits 4.
 
-Flow: load /lab/view.html at 1600x900, wait for __LAB__.ready (BoutView.create incl. warm-up), then __LAB__.perf(S, scene):
-the lab plays the scripted scene in real time (the super script = super freeze -> the 150-frame Lv3 cinematic with
-super hits, FX, dim, crowd; looped), records EVERY requestAnimationFrame delta page-side and the renderer counters.
+Flow (default, P2 --lab sim): load /lab/view.html?sim=1 at 1600x900 - the REAL sim + REAL data drive BoutView - set up
+`--p1` vs `--p2` (johnny vs bruno), record the Lv3 script (walk in, PRIME TIME), then __LAB__.perf(S, from, to) replays
+the super freeze + the whole cinematic in real time (one sim step + one view frame per rAF, looped) and records EVERY
+requestAnimationFrame delta page-side and the renderer counters. `--lab scripted` = the P1 scripted-snapshot lab scene.
+`--ab N`: the machine is shared - N interleaved windows of the cinematic (A) and of the same bout standing idle (B) in one
+page, so contamination hits both alike; prints both distributions and the A/B p99 ratio (a RELATIVE number, labelled).
 With ?prof=1 (always on here) the blocktooth FrameProf adds CPU sections and GPU timer-query times per frame.
 Prints frames, avg fps, frame-time p50 / p90 / p99 / max, draw calls, triangles, programs, GPU string, the load split
 and the machine load at the time (CPU %, other GPU users) so a contaminated number is visible as such.
@@ -90,6 +93,10 @@ def main():
     ap.add_argument("--force-beside-others", action="store_true")
     ap.add_argument("--wait", type=float, default=900.0, help="seconds to wait for the lab to be ready")
     ap.add_argument("--uncapped", action="store_true", help="--disable-gpu-vsync --disable-frame-rate-limit")
+    ap.add_argument("--lab", default="sim", choices=["sim", "scripted"], help="sim = real sim + data (P2 default)")
+    ap.add_argument("--p1", default="johnny")
+    ap.add_argument("--p2", default="bruno")
+    ap.add_argument("--ab", type=int, default=0, help="interleave N A/B windows (cinematic vs idle) of --seconds each")
     args = ap.parse_args()
     name = "perfcheck_%s" % (args.label or (args.scene + ("_headless" if args.headless else "_headed")))
     extra = FLAGS + (["--disable-gpu-vsync", "--disable-frame-rate-limit"] if args.uncapped else [])
@@ -128,7 +135,7 @@ def main():
         errors = []
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
-        q = "&".join(["scene=idle", "frame=1", "prof=1", "hud=0"] + args.query)
+        q = "&".join((["sim=1", "p1=" + args.p1, "p2=" + args.p2] if args.lab == "sim" else ["scene=idle", "frame=1"]) + ["prof=1", "hud=0"] + args.query)
         t1 = time.time()
         pg.goto(args.base.rstrip("/") + "/lab/view.html?" + q)
         while time.time() - t1 < args.wait:
@@ -141,7 +148,35 @@ def main():
         rep["readyS"] = round(time.time() - t1, 1)
         rep["lab"] = pg.evaluate("() => window.__LAB__.info()")
         rep["loadBefore"] = machine_load()
-        res = pg.evaluate("([s, n]) => window.__LAB__.perf(n, s)", [args.scene, args.seconds])
+        if args.lab == "sim":
+            sc = pg.evaluate("() => window.__LAB__.prime()")
+            rep["script"] = sc
+            c0 = sc.get("cineAt", -1) if sc.get("cineAt", -1) >= 0 else sc.get("lockAt", -1)
+            if c0 is None or c0 < 0:
+                raise RuntimeError("no PRIME TIME cinematic started: %s" % json.dumps(sc))
+            a0, a1 = max(0, sc.get("pressAt", c0) - 4), (sc.get("endAt", c0 + 180) or c0 + 180)
+            rep["window"] = [a0, a1]
+            if args.ab > 0:
+                wins = []
+                for k in range(args.ab):
+                    ra = pg.evaluate("([n, a, b]) => window.__LAB__.perf(n, a, b)", [args.seconds, a0, a1])
+                    rb = pg.evaluate("([n, a, b]) => window.__LAB__.perf(n, a, b)", [args.seconds, 30, max(31, a0 - 10)])
+                    for r_ in (ra, rb):
+                        r_.pop("prof", None)
+                    wins.append({"A": ra, "B": rb})
+                    print("ab %d  A cinematic p50 %.2f p99 %.2f (%d fr) | B idle p50 %.2f p99 %.2f (%d fr)" % (
+                        k, ra["p50"], ra["p99"], ra["frames"], rb["p50"], rb["p99"], rb["frames"]), flush=True)
+                rep["ab"] = wins
+                res = dict(wins[-1]["A"])
+                ap99 = sorted(w["A"]["p99"] for w in wins)[len(wins) // 2]
+                bp99 = sorted(w["B"]["p99"] for w in wins)[len(wins) // 2]
+                rep["abSummary"] = {"medianA_p99": ap99, "medianB_p99": bp99, "ratio": round(ap99 / max(0.01, bp99), 3)}
+            else:
+                res = pg.evaluate("([n, a, b]) => window.__LAB__.perf(n, a, b)", [args.seconds, a0, a1])
+            res["scene"] = "prime %s vs %s" % (args.p1, args.p2)
+            res["seconds"] = args.seconds
+        else:
+            res = pg.evaluate("([s, n]) => window.__LAB__.perf(n, s)", [args.scene, args.seconds])
         rep["loadAfter"] = machine_load()
         prof = res.pop("prof", None) or {}
         rep["perf"] = res
@@ -183,6 +218,9 @@ def main():
     if rep.get("pageErrors"):
         print("page errors  : %s" % " | ".join(rep["pageErrors"][:3]))
     print("report       : %s" % out)
+    if rep.get("abSummary"):
+        print("A/B (RELATIVE, contaminated box): median p99 cinematic %.2f ms vs idle %.2f ms -> ratio %.3f" % (
+            rep["abSummary"]["medianA_p99"], rep["abSummary"]["medianB_p99"], rep["abSummary"]["ratio"]))
     if args.gate_p99 is not None and (p.get("p99") or 1e9) > args.gate_p99:
         print("RESULT: FAIL - frame-time p99 %.2f ms > %.1f ms" % (p.get("p99") or 0, args.gate_p99))
         return 1

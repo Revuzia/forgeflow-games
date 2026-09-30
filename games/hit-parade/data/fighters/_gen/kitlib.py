@@ -29,6 +29,91 @@ SHARED = ["idle", "walk_f", "walk_b", "crouch", "crouch_idle", "jump_up", "jump_
           "wall_splat", "thrown_f", "thrown_b", "dizzy", "ko_fall", "timeover_lose", "parry",
           "impact_windup", "shove"]
 
+
+def _shared_times():
+    """CHANGED(FIGHTERS) P2: (dur s, [contact s]) and marks of the shared clips, read off a baked body (lane ASSETS bakes
+    the same shared sources on every body, so durations and marks are identical: kd_fall_b 1.867 s on johnny, bruno and
+    freak alike). Used to time cinematic / throw victim segments."""
+    p = os.path.join(GAME, "data", "clips", "johnny.clips.json")
+    if not os.path.exists(p):
+        return {}, {}
+    cl = json.load(open(p, encoding="utf-8"))["clips"]
+    t, mk = {}, {}
+    for k in SHARED:
+        c = cl.get(k)
+        if c:
+            t[k] = (c["dur"], [c["contact"]] if c.get("contact") is not None else [])
+            mk[k] = dict(c.get("marks") or {})
+    return t, mk
+
+
+SHARED_TIMES, SHARED_MARKS = _shared_times()
+# the shared victim clips' end poses (CONTRACT 26.2): lying face up / face down when the clip ends
+LIE_UP = ("kd_fall_b", "thrown_f", "kd_ground_b", "ko_fall")
+LIE_DOWN = ("thrown_b", "kd_fall_f", "kd_ground_f", "crumple", "wall_splat")
+# reaction clips (a cinematic hit frame must fall inside one of these victim segments)
+REACT = ("hit_high_s", "hit_high_l", "hit_body", "hit_low", "hit_air", "crumple", "kd_fall_b", "kd_fall_f",
+         "thrown_f", "thrown_b", "wall_splat", "dizzy", "ko_fall", "kd_ground_b", "kd_ground_f")
+CAM_SHOTS = ("wide", "close", "low", "over_shoulder", "orbit", "top")
+CAM_TARGETS = ("attacker", "defender", "both")
+CAM_EASE = ("linear", "in", "out", "inOut", "hold")
+FX_NAMES = ("impact_s", "impact_m", "impact_l", "splat", "smear", "dust", "shock_ring", "fire", "electric", "sparks",
+            "smoke", "doves", "cards", "ball_trail", "flash", "shake_s", "shake_m", "shake_l", "speed_lines",
+            "zoom_lines", "freeze_frame", "letterbox", "letterbox_off", "slate", "dim", "undim", "spot", "spot_off",
+            "lights_flicker", "pyro", "confetti")
+CROWD_REACTS = ("ooh", "gasp", "cheer", "roar", "boo", "laugh", "hush", "chant", "applause")
+RATINGS = ("up", "spike", "peak")
+
+
+# Framing floors (P2, measured on the cinepreview renders of 2026-09-30: at FOV 30-32 a camera sees 0.54 x dist of height,
+# so a 'close' at 1.5-2.1 m looking at the chest (1.2 m) cut every head and an over-the-shoulder at 2.3 m filled half the
+# frame with the attacker's back). Values are for a 1.80 m body; VIEW scales lookH / dist by the target's height
+# (CONTRACT 26.1 amendment).
+FRAMING = {
+    ("close", "single"): {"minDist": 2.5, "lookH": 1.45},
+    ("close", "both"): {"minDist": 3.0, "lookH": 1.3},
+    ("over_shoulder", "single"): {"minDist": 2.9, "minHeight": 1.8, "lookH": 1.4},
+    ("over_shoulder", "both"): {"minDist": 3.2, "minHeight": 1.8, "lookH": 1.3},
+    ("wide", "single"): {"minDist": 4.5, "lookH": 1.1},
+    ("wide", "both"): {"minDist": 4.5, "lookH": 1.1},
+}
+
+
+def _floor(v, lo):
+    return max(v, lo) if isinstance(v, (int, float)) else [max(x, lo) for x in v]
+
+
+def cam(fr, to, shot, target, fov, dist, height, yaw, ease="inOut", **kw):
+    """One camera shot of a cinematic (CONTRACT 26.1 `camera`); FRAMING floors applied to close / over-the-shoulder /
+    wide shots (a shot's explicit lookH wins)."""
+    fr_ = FRAMING.get((shot, "both" if target == "both" else "single"), {})
+    if "minDist" in fr_:
+        dist = _floor(dist, fr_["minDist"])
+    if "minHeight" in fr_:
+        height = _floor(height, fr_["minHeight"])
+    d = {"from": int(fr), "to": int(to), "shot": shot, "target": target, "fovDeg": fov, "dist": dist,
+         "height": height, "yawDeg": yaw, "ease": ease}
+    if "lookH" not in kw and "lookH" in fr_:
+        d["lookH"] = fr_["lookH"]
+    for k in ("lookH", "roll", "blend"):
+        if k in kw:
+            d[k] = kw[k]
+    return d
+
+
+def cinematic(frames, cue, hits, anim, victim, camera, fx, crowd, pathA, gapD, slate, endPose, endAdv=19,
+              endGapM=2.0):
+    """CONTRACT 26.1 cinematic v2 block; `shots` is generated from `camera` (old readers)."""
+    return {"frames": int(frames), "cue": cue, "hits": [[int(f), int(d)] for f, d in hits], "anim": anim,
+            "victim": victim, "shots": [[c["from"], c["shot"]] for c in camera], "camera": camera,
+            "fx": [{"f": int(f), "fx": x} if t is None else {"f": int(f), "fx": x, "target": t}
+                   for f, x, t in [(e + (None,))[:3] for e in fx]],
+            "crowd": [{"f": int(f), "react": r} if g is None else {"f": int(f), "react": r, "ratings": g}
+                      for f, r, g in [(e + (None,))[:3] for e in crowd]],
+            "pathA": [[int(f), round(x, 3), round(y, 3)] for f, x, y in pathA],
+            "gapD": [[int(f), round(x, 3), round(y, 3)] for f, x, y in gapD],
+            "slate": slate, "endPose": endPose, "endAdv": int(endAdv), "endGapM": endGapM}
+
 # --------------------------------------------------------------------------------------------------
 # Frame-data templates. Normals = FIGHTING_DESIGN 1b rows (checked against
 # tools/research/fg_template_check.py MOVES by validate.py). Specials/supers = 1c rows.
@@ -488,6 +573,45 @@ class Kit:
         o["desc"] = m.get("desc", "")
         return o
 
+    # ---- CHANGED(FIGHTERS) P2: cinematic v2 + grab victim timelines (CONTRACT 26)
+    def resolve(self):
+        """Evaluate deferred move fields (a `cinematic` given as a callable): they read clip times, which fit() may have
+        just changed, so build.py calls this right after fit()."""
+        for mid in self.order:
+            m = self.moves[mid]
+            for k in ("cinematic",):
+                if callable(m.get(k)):
+                    m[k] = m[k]()
+            g = m.get("grab")
+            if g is not None and callable(g.get("victim")):
+                g["victim"] = g["victim"]()
+
+    def clip_times(self, cid):
+        """(dur s, [contact s ...]) of a clip as the next bake will produce it: the fighter's plan entry (after fit()),
+        else a shared clip (durations are identical on every body: shared sources baked per body)."""
+        if cid in self.clips:
+            return entry_seconds(self.clips[cid])
+        if cid in SHARED_TIMES:
+            return SHARED_TIMES[cid]
+        raise ValueError("%s: unknown clip %s" % (self.info["id"], cid))
+
+    def seg(self, f0, cid, f1, hit=None, k=0, rate=1.0, fromS=None):
+        """Attacker / victim sub-clip [f0, clip, fromS, toS] over cinematic (or lock) frames f0..f1. `hit` = the frame the
+        clip's k-th contact must land on (the start is back-computed at `rate` clip-s per 60 f); else from `fromS` (0)."""
+        dur, cs = self.clip_times(cid)
+        span = (f1 - f0) / 60.0 * rate
+        if hit is not None:
+            c = cs[k]
+            a = c - (hit - f0) / 60.0 * rate
+            if a < -0.034:   # up to one 30 fps frame early is clamped to the clip start
+                raise ValueError("%s seg %s: contact %.3f cannot land on f%d from f%d at rate %.2f" % (
+                    self.info["id"], cid, c, hit, f0, rate))
+            a = max(0.0, a)
+        else:
+            a = fromS or 0.0
+        b = min(dur, a + span)
+        return [int(f0), cid, round(a, 3), round(b, 3)]
+
     def to_json(self):
         i = self.info
         uq = dict(self.unique)
@@ -508,6 +632,13 @@ class Kit:
              "simple": self.simple, "classic": self.classic, "unique": uq,
              "intro": i["intro"], "win": i["win"], "taunt": i["taunt"], "rival": i["rival"],
              "stage": i["stage"], "cpu": i["cpu"]}
+        # CHANGED(FIGHTERS) P2 (CONTRACT 26.3): season text, rendered by UI
+        t = getattr(self, "text", None)
+        if t:
+            d["introLine"] = t["introLine"]
+            d["winQuotes"] = list(t["winQuotes"])
+            d["banter"] = dict(t["banter"])
+            d["ending"] = t["ending"]
         return d
 
     def clipplan(self):

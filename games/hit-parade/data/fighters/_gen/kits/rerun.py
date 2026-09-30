@@ -1,6 +1,6 @@
 """RERUN - counter zombie (Scary_Zombie_Pack; Prisoner body has NO right-hand finger bones -> claws / open hands,
 CMU punches with fist 0)."""
-from kitlib import (Kit, air, cmu, crouch, layer, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
+from kitlib import (Kit, air, cam, cinematic, cmu, crouch, layer, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
 
 ZB = "Scary_Zombie_Pack/"
 
@@ -50,10 +50,16 @@ def build():
     K.clip("air_lurch", air(mix(ZB + "zombie attack", (15, 55), contact=33)), "jump apex legs + claw")
     K.clip("air_reach", air(mix(ZB + "zombie neck bite", (8, 40), contact=25)), "jump apex legs + double claw")
     K.clip("throw_reach", mix(ZB + "zombie neck bite", (16, 45), contact=23), "zombie neck bite reach (grab whiff)")
-    K.clip("bite_lunge", mix(ZB + "zombie neck bite", (22, 60), contact=23),
-           "zombie neck bite from the grab frame: the 1-frame DEAD AIR BITE connect")
-    K.clip("scream_grab", mix(ZB + "zombie scream", (1, 85), contact=30), "grabs and screams in their face")
-    K.clip("swing_toss", mix(ZB + "zombie attack", (1, 76), contact=30), "wild swing flings them past")
+    K.clip("bite_lunge", dict(mix(ZB + "zombie neck bite", (22, 60), contact=23), effector="RightHand"),
+           "zombie neck bite from the grab frame: the 1-frame DEAD AIR BITE connect. P2: effector RightHand - the arms "
+           "reach at f23 (MIXAMO_CLIPS: RightHand +31 deg); the builder had picked the LEFT KNEE (0.43 m, 0.55 m up) as "
+           "the fastest limb (contact_check LIMB: LeftFoot 2.98x faster)")
+    K.clip("scream_grab", mix(ZB + "zombie scream", (15, 70), contact=30),
+           "grabs and screams in their face (hunched scream f41-53). P2: window 1-85 -> 15-70 (the full 2.8 s over a "
+           "50-frame lock played at 3.4x; 1.83 s = 2.2x)")
+    K.clip("swing_toss", mix(ZB + "zombie attack", (10, 50), contact=30),
+           "wild swing flings them past (arm through the front at f30). P2: window 1-76 -> 10-50 (2.5 s over 48 f was "
+           "3.1x; 1.33 s = 1.7x)")
     K.clip("play_dead_fall", mix(ZB + "zombie death", (5, 45)),
            "Mixamo zombie death: flails and falls on the back (lying from ~f56 measured; f45 = on the floor)")
     K.clip("rise_claw", mix(ZB + "zombie attack", (20, 55), contact=33),
@@ -68,8 +74,10 @@ def build():
     K.clip("neck_bite", dict(mix(ZB + "zombie neck bite", (1, 123), contact=23), contacts=[23, 29]),
            "Mixamo zombie neck bite: arms grab f23, head lunge f29, shoves away f93-107")
     K.clip("arise_leap", layer(mix("Pro_Magic_Pack/Standing Jump", (15, 45)),
-                               mix(ZB + "zombie scream", (15, 45), contact=30), mode="sync"),
-           "LAYERED: jump legs + zombie scream arms = leaping claw anti-air")
+                               mix(ZB + "zombie scream", (15, 45), contact=23), mode="sync"),
+           "LAYERED: jump legs + zombie scream arms = leaping claw anti-air. P2: upper contact 30 -> 23 (the hands' top, "
+           "as the P1 scream_up fix): at 30 the bake had the arms falling (LeftHand 0.74 m up); the top is output f6-8, "
+           "1.44 m (contact_check EXT)")
     K.clip("intro_rise", cmu("getup_back.1", contact=False),
            "CMU getup_back.1 clean (140_08 flat on the back -> sit -> crouch -> stand): rises from the dead")
     K.clip("win_chew", mix(ZB + "zombie biting (2)", (1, 70)), "crouched chewing")
@@ -103,11 +111,20 @@ def build():
     K.add("j.M", "jM", input="j.M", name="Air Claw", clip="air_lurch", desc="Air claw.")
     K.add("j.H", "jH", input="j.H", name="Pounce", clip="air_reach", desc="Double-claw pounce.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="In Your Face", clip="throw_reach",
-          grab={"frames": 50, "adv": 21, "hitF": 32, "swap": False, "air": False, "techable": True,
-                "clip": "scream_grab"}, desc="Grabs them and screams in their face.")
+          grab={"frames": 50, "adv": 21, "hitF": 26, "swap": False, "air": False, "techable": True,
+                "clip": "scream_grab",
+                # P2 paired throw: scream_grab (f15-70, 1.83 s over 50 f) grabs (lock 14) and screams hunched in their face
+                # from lock 26; the victim recoils from the blast (hit_high_l, root -0.7 m) and falls back at lock 38.
+                "victim": [[0, "hit_high_s", 0.0, 0.3], [14, "hit_high_s", 0.0, 0.5], [26, "hit_high_l", 0.0, 0.6],
+                           [38, "kd_fall_b", 1.04, 1.5]]},
+          desc="Grabs them and screams in their face.")
     K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Graveyard Swing", clip="throw_reach",
-          grab={"frames": 48, "adv": 14, "hitF": 30, "swap": True, "air": False, "techable": True,
-                "clip": "swing_toss"}, desc="Swings them past with a wild claw.")
+          grab={"frames": 48, "adv": 14, "hitF": 24, "swap": True, "air": False, "techable": True,
+                "clip": "swing_toss",
+                # P2 paired throw: the wild claw passes the front at clip 0.67 s = lock 24 (f10-50, 1.33 s over 48 f);
+                # the victim is dragged past (thrown_b 0.05 -> 0.40 s) and dumped face down behind him.
+                "victim": [[0, "hit_high_s", 0.0, 0.2], [10, "thrown_b", 0.05, 0.4], [24, "thrown_b", 0.4, 1.2]]},
+          desc="Swings them past with a wild claw.")
 
     pd = {}
     for s, (c1, rec, fol) in {"l": (20, 26, "grave_rise"), "m": (24, 30, "grave_rise"),
@@ -153,10 +170,16 @@ def build():
                       hurtOverride=[{"f": [3, 31], "w": 1.0, "h": 0.60}],
                       desc="Projectile-invulnerable crawl, two bites, -4 on block.",
                       why="EX: projectile invulnerable 1-20, 2 bites 14 frames apart, -4."))
+    # P2 paired grab: neck_bite (4.07 s over 100 f) grabs at clip 0.73 s (lock 18), lunges for the bite at 0.93 s (23),
+    # gnaws, and shoves them away at 3.07 s (lock 75 - was hitF 60, mid-gnaw); the victim is held, bitten, dazed, and
+    # falls back from the shove (kd_fall_b from the drop, face up).
     lm = {}
     for s, (rng, dmg) in {"l": (1.00, 2200), "m": (0.95, 2400), "h": (0.90, 2600)}.items():
-        lm[s] = dict(damage=dmg, grab={"rangeM": rng, "frames": 100, "adv": 26, "hitF": 60, "swap": False,
-                                       "air": False, "techable": False, "clip": "neck_bite"})
+        lm[s] = dict(damage=dmg, grab={"rangeM": rng, "frames": 100, "adv": 26, "hitF": 75, "swap": False,
+                                       "air": False, "techable": False, "clip": "neck_bite",
+                                       "victim": [[0, "hit_high_s", 0.0, 0.2], [18, "hit_body", 0.1, 0.6],
+                                                  [40, "hit_body", 0.2, 0.7], [60, "dizzy", 0.4, 1.2],
+                                                  [75, "kd_fall_b", 1.0, 1.55]]})
     K.special("last_meal", None, motion="63214", kind="cmdgrab",
               common=dict(name="Last Meal", clip="throw_reach", startup=5, active=3, recovery=48, hitstun=0,
                           blockstun=0, hitstop=0, guard="U", gain=3000, nerve=0, pb=(0.0, 0.0), role=["grab"],
@@ -166,8 +189,11 @@ def build():
                               "and damage than Bruno's (1.00/0.95/0.90 m, 2200-2600) and less whiff recovery (48)."),
               per=lm,
               ex=dict(name="Last Meal (EX)", damage=2800, invuln={"strike": [1, 5]},
-                      grab={"rangeM": 1.10, "frames": 104, "adv": 26, "hitF": 62, "swap": False, "air": False,
-                            "techable": False, "clip": "neck_bite"},
+                      grab={"rangeM": 1.10, "frames": 104, "adv": 26, "hitF": 78, "swap": False, "air": False,
+                            "techable": False, "clip": "neck_bite",
+                            "victim": [[0, "hit_high_s", 0.0, 0.2], [19, "hit_body", 0.1, 0.6],
+                                       [42, "hit_body", 0.2, 0.7], [62, "dizzy", 0.4, 1.2],
+                                       [78, "kd_fall_b", 1.0, 1.55]]},
                       desc="Strike-invulnerable grab, 1.10 m.", why="EX: strike invulnerable 1-5."))
     ar = {}
     for s, (st, rec, dmg, inv) in {"l": (8, 28, 900, 10), "m": (9, 31, 1000, 7), "h": (10, 34, 1100, 5)}.items():
@@ -196,21 +222,38 @@ def build():
     K.add("dead_air_bite", None, kind="special", input="236236>catch", name="Dead Air Bite", strength="H", tc=True,
           clip="bite_lunge", startup=1, active=3, recovery=20, damage=2000, hitstun=0, blockstun=0, hitstop=0,
           guard="U", gain=0, nerve=0, pb=(0.0, 0.0), role=["grab"],
-          grab={"rangeM": 2.5, "frames": 90, "adv": 23, "hitF": 50, "swap": False, "air": False, "techable": False,
-                "clip": "neck_bite"},
+          grab={"rangeM": 2.5, "frames": 90, "adv": 23, "hitF": 68, "swap": False, "air": False, "techable": False,
+                "clip": "neck_bite",
+                # P2 paired grab: the same neck bite over 90 f: grab lock 16, bite 21, shove lock 68 (was hitF 50)
+                "victim": [[0, "hit_high_s", 0.0, 0.2], [16, "hit_body", 0.1, 0.6], [36, "hit_body", 0.2, 0.7],
+                           [54, "dizzy", 0.4, 1.1], [68, "kd_fall_b", 1.0, 1.55]]},
           desc="The Lv1 follow-up: lunges 2.5 m and bites (unblockable, 2000).",
           why="Lv1 damage (2000) delivered as an unblockable 2.5 m grab so a caught attacker cannot escape it.")
     K.add("series_finale", LV3, kind="super3", input="214214", name="Series Finale", strength="H", clip="long_reach",
           invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]}, move=[[0, 0], [10, 0.8]],
           cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"], juggle={"js": 1, "ji": 0, "jl": 99},
-          cinematic={"frames": 170, "cue": "rerun_series_finale",
-                     "hits": [[30, 800], [60, 1200], [100, 1000], [130, 1500]],
-                     "anim": [[0, "long_reach"], [25, "neck_bite"], [80, "crawl_run"], [120, "play_dead_fall"],
-                              [140, "intro_rise"]],
-                     "victim": [[0, "hit_high_s"], [25, "thrown_f"], [80, "kd_ground_f"], [130, "kd_ground_b"]],
-                     "shots": [[0, "side_close"], [25, "front_low"], [80, "top_down"], [120, "wide"],
-                               [140, "low_angle_up"]],
-                     "endAdv": 19, "endGapM": 2.0},
+          cinematic=lambda: cinematic(
+              170, "rerun_series_finale",
+              hits=[[32, 800], [60, 1200], [100, 1000], [128, 1500]],
+              anim=[K.seg(0, "long_reach", 25, fromS=0.57), K.seg(25, "neck_bite", 80, hit=32, k=1),
+                    K.seg(80, "crawl_run", 120, hit=100), K.seg(120, "rise_claw", 140, hit=128),
+                    K.seg(140, "win_chew", 170)],
+              victim=[[0, "hit_high_s", 0.0, 0.3], [32, "hit_body", 0.0, 0.5], [60, "hit_body", 0.2, 0.8],
+                      [80, "crumple", 0.5, 1.75], [100, "kd_ground_f", 0.0, 1.3], [128, "kd_ground_f", 0.0, 1.3]],
+              camera=[cam(0, 25, "close", "both", 32, 2.4, 1.5, 15),
+                      cam(25, 80, "close", "both", [30, 26], [2.0, 1.6], 1.55, -35),
+                      cam(80, 120, "top", "both", 42, 1.6, 5.0, 10, lookH=0.4),
+                      cam(120, 140, "low", "attacker", 42, 2.8, 0.3, 30, lookH=1.2),
+                      cam(140, 170, "wide", "both", 38, 5.4, 1.6, 0, lookH=0.9)],
+              fx=[(0, "slate"), (0, "lights_flicker"), (32, "impact_m"), (32, "splat"), (60, "impact_m"),
+                  (60, "shake_s"), (80, "dim"), (80, "smoke"), (100, "impact_m"), (100, "dust"), (128, "impact_l"),
+                  (128, "flash"), (128, "shake_m"), (128, "freeze_frame"), (140, "undim"), (140, "spot", "attacker"),
+                  (165, "spot_off")],
+              crowd=[(0, "gasp"), (32, "gasp"), (60, "laugh"), (80, "hush"), (100, "boo"), (128, "roar", "spike"),
+                     (140, "laugh", "peak")],
+              pathA=[[25, 0.1, 0], [80, 0.15, 0], [100, 0.5, 0], [128, 0.6, 0], [140, 0.6, 0], [168, 0, 0]],
+              gapD=[[25, 0.8, 0], [80, 0.8, 0], [100, 0.9, 0], [128, 1.0, 0], [168, 1.6, 0]],
+              slate="PRIME TIME - RERUN: SERIES FINALE", endPose="front", endAdv=19, endGapM=1.6),
           desc="PRIME TIME: grabs, bites, drags them into a trapdoor grave - and climbs back out alone.",
           why="1c Lv3: 10/4/58, -42, 4500, fully invulnerable 1-13.")
 
@@ -222,10 +265,28 @@ def build():
                  {"motion": "214", "btn": "LMH", "move": "play_dead_{s}"}]
     K.unique = {"kind": "counter", "moves": ["play_dead_l", "play_dead_m", "play_dead_h", "play_dead_ex", "dead_air"]}
     K.cine_doc = [
-        "f0 LONG REACH (side_close): both claws catch the collar.",
-        "f25 NECK BITE (front_low): the comic gnaw - 800 at f30; head lunge - 1200 at f60.",
-        "f80 CRAWL (top_down): a Rust Theater trapdoor opens; he drags them in on all fours - 1000 at f100.",
-        "f120 PLAY DEAD (wide): he drops in after them; the lid slams - 1500 at f130.",
-        "f140 RISE (low_angle_up): the lid creaks open and Rerun climbs back out alone (KD +19).",
+        "f0 LONG REACH (close, lights flicker): both claws catch the collar.",
+        "f25 NECK BITE (close, over his side): the head lunge - 800 at f32 (comic splat); the gnaw - 1200 at f60, "
+        "the crowd laughs.",
+        "f80 CRAWL (top-down, lights down, smoke): the victim crumples face down; he crawls up their legs and bites an "
+        "ankle - 1000 at f100.",
+        "f120 GRAVE RISE (low, looking up): snaps up off the floor into a claw - 1500 at f128 (flash, freeze-frame).",
+        "f140 CHEWING (wide, lights up, spotlight): he squats over them, chewing; opponent face DOWN at 1.6 m (KD +19).",
     ]
+    K.text = dict(
+        introLine="Previously... on HIT PARADE... BRAAAINS.",
+        winQuotes=["Cancelled? Me? I'm... syndicated.",
+                   "Mmmh. Tastes like season one.",
+                   "See you... next week. Same time. Same me."],
+        banter={"lotus": ["Gourd... was... delicious.",
+                          "More... drink. More... gourd."],
+                "freak": ["Big... meal.",
+                          "Hnnngh. Leftovers... for a week."],
+                "ricky": ["You... killed me... week three.",
+                          "Ratings... good. Now YOU... rerun."],
+                "default": ["Hungry...",
+                            "Hold... still... snack."]},
+        ending="RERUN bites the host once, gently, on the ankle, and the network's star is back on the air every night "
+               "of the week - he just can't remember his lines. Rerun takes the corner office and the late-night slot. "
+               "The show never ends now. It just repeats, and the ratings have never been better.")
     return K

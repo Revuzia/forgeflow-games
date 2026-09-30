@@ -60,10 +60,20 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   idles/walks/blocks (Krane shield, Freak hunch, Rerun zombie, Spin uprock, Ricky cane, Boneyard cleaver, Bruno
   goalkeeper ready stance, Gazza offensive idle). Lotus's drunk sway idle/walks are stance clips
   (`unique.clips`), not overrides.
-- **Camera shot vocabulary** for `cinematic.shots` (view/cinematics.ts): `side_close`, `punch_in`, `front_low`,
-  `low_angle_up`, `top_down`, `over_shoulder`, `orbit`, `crowd_pop` (cut to crowd / ratings spike), `wide`,
-  `slowmo_hold` (hold the frame, time slows), `host_cam` (Ricky's host camera), `spotlight` (single spotlight,
-  set dimmed).
+- **Lv3 PRIME TIME cinematics (CONTRACT 26.1, v2, P2):** each Lv3 carries attacker / victim sub-clip timelines
+  `[f0, clip, fromS, toS]` (strike clips aligned so the clip contact lands on its `hits` frame: `Kit.seg(hit=...)`),
+  root paths (`pathA` attacker offset, `gapD` defender gap; the last keys match the sim's end state), a contiguous camera
+  shot list (`wide | close | low | over_shoulder | orbit | top` on `attacker | defender | both`, with fov / dist / height /
+  yaw, numbers or [start, end] eased; `kitlib.cam()` framing floors), FX beats, crowd / ratings beats, a TV slate line
+  and the defender's end pose. Numbers are for 1.80 m bodies; VIEW scales by the target's height and keeps grounded
+  bodies apart by their push fronts (CONTRACT 26.5). Legacy `shots` = generated `[from, shot]`.
+- **Paired throws (CONTRACT 26.2, P2):** every throw, command grab and grab super has a `grab.victim` timeline on the
+  shared victim clips, and `grab.hitF` sits on the attacker clip's visible impact (read off grab-clip render sheets):
+  holds show hit reactions on each strike, the final segment ends lying (face up: kd_fall_b / thrown_f; face down:
+  thrown_b / crumple), side swaps travel forward >= 0.5 m (thrown_b), techable throws deal damage after the 9-frame tech
+  window. Verified in the real sim (scratch throwcheck: all 31 grabs x 3 victim bodies).
+- **Season text (CONTRACT 26.3, P2):** `introLine`, `winQuotes` (3), `banter` (rival / freak / ricky / default; Ricky
+  vs every contestant; the Freak's lines are stage directions), `ending` (3-5 sentences), listed per fighter below.
 
 ## AUTHORED motions (keyframed on X Bot, 30 fps; the only two in the roster)
 
@@ -149,8 +159,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.L` | Air Jab | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | jL |  |
 | `j.M` | Air Cross | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Diving Hammer | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | jH |  |
-| `throw_f` | Clinch Body Shots | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 45 f, dmg at f30, same side.  |
-| `throw_b` | Wide Hook Toss | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f26, swap sides.  |
+| `throw_f` | Clinch Body Shots | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 45 f, dmg at f31, same side; victim f0 hit_body 0.05-0.20 s, f10 hit_body 0.10-0.45 s, f20 hit_body 0.15-0.50 s, f31 kd_fall_b 1.04-1.50 s.  |
+| `throw_b` | Wide Hook Toss | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f22, swap sides; victim f0 hit_high_s 0.00-0.20 s, f8 thrown_b 0.00-0.40 s, f22 thrown_b 0.40-1.20 s.  |
 | `brickbat_l` | Brickbat | 236L | 16 | 1 | 31 | 47 | -1 | -5 | 600 | HL | 8 | super | - | proj_l |  |
 | `brickbat_m` | Brickbat | 236M | 14 | 1 | 33 | 47 | -3 | -7 | 600 | HL | 8 | super | - | proj_m |  |
 | `brickbat_h` | Brickbat | 236H | 12 | 1 | 35 | 47 | -5 | -9 | 600 | HL | 8 | super | - | proj_h |  |
@@ -190,10 +200,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `brickbat_m` Brickbat: Hurls a brick. L slow, H fast. (projectile 6.0 m/s, 1 hit(s), y 1.25 m)
 - `brickbat_h` Brickbat: Hurls a brick. L slow, H fast. (projectile 7.5 m/s, 1 hit(s), y 1.25 m)
 - `brickbat_ex` Brickbat (EX): Two bricks at once: 2 hits, fastest startup. (projectile 7.5 m/s, 2 hit(s), y 1.25 m)
-- `encore_l` Encore: Jumping uppercut; air-invulnerable anti-air. (hit volume: bottom lowered 0.48 m to the crouch line 1.10 m (clips.json `encore_upper` effector RightHand))
-- `encore_m` Encore: Jumping uppercut; air-invulnerable anti-air. (hit volume: bottom lowered 0.51 m to the crouch line 1.10 m (clips.json `encore_upper` effector RightHand))
-- `encore_h` Encore: Jumping uppercut; air-invulnerable anti-air. (hit volume: bottom lowered 0.53 m to the crouch line 1.10 m (clips.json `encore_upper` effector RightHand))
-- `encore_ex` Encore (EX): Fully invulnerable 2-hit uppercut. (hit volume: bottom lowered 0.53 m to the crouch line 1.10 m (clips.json `encore_upper` effector RightHand))
+- `encore_l` Encore: Jumping uppercut; air-invulnerable anti-air. (hit volume: bottom lowered 0.48 m to the crouch line 1.10 m (clips.json `encore_upper` effector RightHand); PENDING RE-BAKE: clip `encore_upper` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
+- `encore_m` Encore: Jumping uppercut; air-invulnerable anti-air. (hit volume: bottom lowered 0.51 m to the crouch line 1.10 m (clips.json `encore_upper` effector RightHand); PENDING RE-BAKE: clip `encore_upper` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
+- `encore_h` Encore: Jumping uppercut; air-invulnerable anti-air. (hit volume: bottom lowered 0.53 m to the crouch line 1.10 m (clips.json `encore_upper` effector RightHand); PENDING RE-BAKE: clip `encore_upper` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
+- `encore_ex` Encore (EX): Fully invulnerable 2-hit uppercut. (hit volume: bottom lowered 0.53 m to the crouch line 1.10 m (clips.json `encore_upper` effector RightHand); PENDING RE-BAKE: clip `encore_upper` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
 - `hook_l` Headline Hook: Running hook; ends every confirm. (hit volume: bottom lowered 0.10 m to the crouch line 1.10 m (clips.json `run_hook` effector RightHand))
 - `hook_m` Headline Hook: Running hook; ends every confirm. (hit volume: bottom lowered 0.07 m to the crouch line 1.10 m (clips.json `run_hook` effector RightHand))
 - `hook_h` Headline Hook: Running hook; ends every confirm. (hit volume: bottom lowered 0.05 m to the crouch line 1.10 m (clips.json `run_hook` effector RightHand))
@@ -202,21 +212,35 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `weave_m` Weave: Ducks under high attacks and projectiles; any attack button counters with a rising hook.
 - `weave_h` Weave: Ducks under high attacks and projectiles; any attack button counters with a rising hook.
 - `weave_ex` Weave (EX): Strike-invulnerable weave.
-- `weave_counter` Counter Hook: Rising hook out of a Weave; knocks down, -7 on block. (hit volume: bottom lowered 0.36 m to the crouch line 1.10 m (clips.json `weave_counter_hook` effector RightHand))
-- `sold_out` Sold Out: Invulnerable jab-cross-jab-uppercut rush. (hit volume: bottom lowered 0.20 m to the crouch line 1.10 m (clips.json `sold_out_flurry` effector LeftHand))
+- `weave_counter` Counter Hook: Rising hook out of a Weave; knocks down, -7 on block. (hit volume: bottom lowered 0.36 m to the crouch line 1.10 m (clips.json `weave_counter_hook` effector RightHand); PENDING RE-BAKE: clip `weave_counter_hook` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
+- `sold_out` Sold Out: Invulnerable jab-cross-jab-uppercut rush. (hit volume: bottom lowered 0.20 m to the crouch line 1.10 m (clips.json `sold_out_flurry` effector LeftHand); PENDING RE-BAKE: clip `sold_out_flurry` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
 - `main_event` Main Event: PRIME TIME: a lunging cross that starts a 170-frame beating. (hit volume: bottom lowered 0.24 m to the crouch line 1.10 m (clips.json `cross` effector RightHand))
 
 **Lv3 PRIME TIME cinematic `main_event` (Main Event)** - 170 frames (<= 180), cue `johnny_main_event`, damage 400+400+500+250+250+250+900+1550 = 4500, ends KD +19 at 2.2 m.
 
-- f0 JAB (side_close): Johnny steps in, jab snaps the head back - 400.
-- f16 CROSS: straight right - 400. f34 HAYMAKER (punch_in): wide hook, crowd gasps - 500.
-- f56 BODY BURST (front_low): three body shots fold them over - 3 x 250.
-- f92 UPPERCUT (low_angle_up): launches them - 900.
-- f114 DIVING HAMMER (top_down): Johnny leaps and hammers them into the floor - 1550.
-- f140 ARMS UP (crowd_pop -> wide): the crowd erupts; opponent lies face-up (KD +19).
-- attacker clips: f0 `jab`, f16 `cross`, f34 `haymaker`, f56 `body_burst`, f92 `uppercut`, f114 `air_hammer`, f140 `win_arms_up`
-- victim clips: f0 `hit_high_s`, f16 `hit_high_s`, f34 `hit_high_l`, f56 `hit_body`, f92 `hit_air`, f118 `kd_fall_b`, f134 `kd_ground_b`
-- camera shots: f0 side_close, f34 punch_in, f56 front_low, f92 low_angle_up, f114 top_down, f140 crowd_pop, f158 wide
+- f0 JAB (close, both): Johnny steps in behind the lunging cross; the jab snaps the head back - 400 at f7.
+- f16 CROSS - 400 at f24. f34 HAYMAKER (punch-in on the face): the crowd gasps - 500 at f42.
+- f56 BODY BURST (low): three body shots at 1.25x fold them over - 3 x 250 (f62 / f70 / f78).
+- f92 UPPERCUT (low, looking up): launches them 1.1 m - 900 at f99, speed lines.
+- f114 DIVING HAMMER (top-down): Johnny leaps 0.9 m and hammers them into the floor - 1550 at f128: flash, freeze-frame, dust; the ratings spike.
+- f140 ARMS UP (spotlight on Johnny -> wide, confetti): back on his mark; opponent face up (KD +19) at 2.2 m.
+- slate: "PRIME TIME - JOHNNY RIOT: MAIN EVENT"; defender ends lying back
+- attacker clips: f0 `jab` 0.02-0.28 s, f16 `cross` 0.01-0.31 s, f34 `haymaker` 0.02-0.38 s, f56 `body_burst` 0.04-0.73 s, f92 `uppercut` 0.00-0.30 s, f114 `air_hammer` 0.01-0.40 s, f140 `win_arms_up` 0.20-0.70 s
+- victim clips: f0 `hit_high_s` 0.00-0.25 s, f7 `hit_high_s` 0.00-0.30 s, f24 `hit_high_s` 0.00-0.35 s, f42 `hit_high_l` 0.00-0.55 s, f62 `hit_body` 0.00-0.18 s, f70 `hit_body` 0.05-0.25 s, f78 `hit_body` 0.05-0.60 s, f99 `hit_air` 0.00-0.60 s, f128 `kd_fall_b` 1.20-1.87 s, f150 `kd_ground_b` 0.00-0.37 s
+- camera: f0-34 close on both (fov 32, dist 3.0, h 1.45, yaw 18, lookH 1.3); f34-56 close on defender (fov [30, 26], dist [2.5, 2.5], h 1.6, yaw 38, lookH 1.45); f56-92 low on both (fov 40, dist 2.8, h 0.45, yaw -22, lookH 1.1); f92-114 low on defender (fov 42, dist 3.0, h 0.3, yaw 28, lookH 1.7); f114-140 top on defender (fov 40, dist 1.4, h 5.5, yaw 12, lookH 0.6); f140-158 close on attacker (fov 32, dist [2.5, 2.5], h 1.5, yaw [35, 15], lookH 1.45); f158-170 wide on both (fov 38, dist 6.0, h 1.8, yaw 0, lookH 1.1)
+- fx: f0 slate, f7 impact_s, f24 impact_s, f42 impact_m, f42 shake_s, f62 impact_s, f70 impact_s, f78 impact_m, f99 impact_l, f99 speed_lines, f99 shake_m, f128 impact_l, f128 flash, f128 shake_l, f128 dust, f128 freeze_frame, f140 spot@attacker, f158 spot_off, f158 confetti
+- crowd: f7 ooh, f42 gasp, f78 cheer/up, f99 roar/up, f128 roar/spike, f144 cheer/peak, f160 chant
+- attacker path (f, dx, lift m): [7 0.10 0.00] [24 0.20 0.00] [42 0.30 0.00] [92 0.35 0.00] [118 0.55 0.90] [128 0.80 0.30] [134 0.85 0.00] [150 0.80 0.00] [168 0.00 0.00]; defender gap (f, gap, lift m): [7 1.00 0.00] [42 1.10 0.00] [62 1.00 0.00] [99 1.00 0.15] [114 1.25 1.10] [124 1.15 1.25] [131 1.35 0.00] [168 2.20 0.00]
+
+**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
+
+- intro: "Doors open, lights down - and I'm still the headliner."
+- win quotes: "Encore? You couldn't even get through the opening act." / "Put my name back on that marquee. In lights. Big ones." / "That's the hit single. You just heard it live."
+- banter vs `boneyard`: "You carved my name off the marquee. I came to carve it back." ... "Keep the cleaver in the freezer, butcher. Tonight it's fists and a full house."
+- banter vs `freak`: "They let you off the chain for one episode. Let's keep it short." ... "Nice claws. I've got a four-frame jab and a contract to honor."
+- banter vs `ricky`: "Thirty seasons, Ricky, and you're the only one who read the fine print." ... "I'm not here for the poster. I'm here for my band's name."
+- banter vs `default`: "Front row paid double tonight. Don't waste their money." ... "Lights up, mic check - you're the warm-up act."
+- ending: JOHNNY RIOT walks out of the Control Room with the host's microphone in one hand and the lifetime contract in the other. He reads it for the first time, laughs, and feeds it to the confetti cannon. The band gets its name back on Monday. On Friday the marquee over the Rust Theater lights up one word, in every bulb that still works: RIOT.
 
 **Animation sources** (`tools/clipplan/johnny.json`; every `anim.clip`, grab clip, cinematic clip, intro, win and taunt; ranges shown after the automatic fit).
 
@@ -227,7 +251,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `cross` | 5M, main_event, main_event (cine) | CMU 13_17 (cross.1) f222-300 contact 239 | CMU cross.1 clean (13_17, 7.6 m/s; pilot p03) |
 | `low_body` | 2M | LAYER lower[Mixamo `Pro_Magic_Pack/Crouch Idle` f1-42, hold f1] + upper[CMU 14_03 (body_blow.1) f3232-3270 contact 3245] | Crouch Idle legs + CMU body_blow.1 (14_03 dip + rear straight; pilot p06) |
 | `haymaker` | 5H, main_event (cine) | CMU 14_03 (hook.1) f4060-4148 contact 4078 | CMU hook.1 clean (14_03 rear hook, arm swings wide then across; pilot p04) |
-| `uppercut` | 2H, main_event (cine) | CMU 17_10 (uppercut.2) f1559-1637 contact 1573 | CMU uppercut.2 usable (17_10 rear uppercut, fist rises 0.33 m to chin, 7.8 m/s - the fastest uppercut in the pool; no clean uppercut exists, CMU_CLIPS 4) |
+| `uppercut` | 2H, main_event (cine) | CMU 17_10 (uppercut.2) f1559-1595 contact 1573 | CMU uppercut.2 usable (17_10 rear uppercut, fist rises 0.33 m to chin, 7.8 m/s - the fastest uppercut in the pool; no clean uppercut exists, CMU_CLIPS 4). P2: window ends at 1595 - the take throws a second, LEFT punch right after (bake trace: LeftHand 0.23 -> 0.68 m forward at output f10-15 = source 1599-1619), which read as a phantom jab in the recovery |
 | `low_blow` | 3H | LAYER lower[Mixamo `Pro_Magic_Pack/Crouch Idle` f1-42, hold f1] + upper[CMU 14_01 (hook.3) f3490-3565 contact 3509] | Crouch Idle legs + CMU hook.3 (14_01 orthodox lead hook, elbow 95): a crouching hook to the knee |
 | `overhand` | 6H | CMU 113_13 f614-718 contact 662 | CMU overhand (113_13 614/662/718, reviewed usable: downward-angled straight 4.8 m/s) |
 | `air_jab` | j.L | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[CMU 13_18 (jab.2) f1427-1495 contact 1445 MIRROR] | jump apex legs + CMU jab.2 (13_18, mirrored; pilot p02) |
@@ -237,14 +261,14 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `body_burst` | throw_f (grab), main_event (cine) | CMU 14_03 f3225-3310 contact 3245 | CMU 14_03 3225-3310: three consecutive body blows (segments 3245/3265/3285) = clinch body shots |
 | `hook_fling` | throw_b (grab) | CMU 14_01 (hook.4) f2857-2986 contact 2917 | CMU hook.4 clean (14_01 wide left hook, arm swings out and across) |
 | `brick_throw` | brickbat_l, brickbat_m, brickbat_h, brickbat_ex | Mixamo `Soccer_Game_Pack/goalkeeper overhand throw` f36-72 contact f48 | Mixamo goalkeeper overhand throw, release f48 (front pass). Range starts at the last plant step (the clip has a run-up; root motion is stripped so only a crow-hop step remains) |
-| `encore_upper` | encore_l, encore_m, encore_h, encore_ex | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f15-45, sync] + upper[CMU 17_10 (uppercut.2) f1559-1637 contact 1573] | LAYERED: Pro_Magic Standing Jump f15-45 legs (sync) + CMU uppercut.2 arms = jumping uppercut |
+| `encore_upper` | encore_l, encore_m, encore_h, encore_ex | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f15-45, sync] + upper[CMU 17_10 (uppercut.2) f1559-1595 contact 1573] | LAYERED: Pro_Magic Standing Jump f15-45 legs (sync) + CMU uppercut.2 arms (window 1559-1595: no phantom left punch in the recovery, see `uppercut`) = jumping uppercut |
 | `run_hook` | hook_l, hook_m, hook_h, hook_ex | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Run Forward` f1-23, loop] + upper[CMU 79_08 (hook.2) f256-350 contact 314] | LAYERED: Pro_Magic Standing Run Forward legs (loop) + CMU hook.2 (79_08; tail extended to 350) |
-| `weave_duck` | weave_l, weave_m, weave_h, weave_ex | CMU 17_10 f2129-2166 | CMU duck_counter.1 first half (17_10 2129-2166: the duck) |
-| `weave_counter_hook` | weave_counter | CMU 17_10 (duck_counter.1) f2150-2197 contact 2176 | CMU duck_counter.1 second half (rising left hook, contact 2176) |
-| `sold_out_flurry` | sold_out | SEQ [CMU 14_02 f1550-1632 contact 1567 MIRROR] + [CMU 17_10 (uppercut.2) f1559-1637 contact 1573] | SEQ: CMU 14_02 1550-1632 (jab-cross-jab, mirrored) + uppercut.2 |
-| `intro_shadowbox` | intro | CMU 14_01 f3030-3110 contact 3043 | CMU 14_01 3030-3110 (jab 3043, cross 3065, jab 3094): shadow-boxing intro |
+| `weave_duck` | weave_l, weave_m, weave_h, weave_ex | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Idle To Crouch` f1-22, sync] + upper[CMU 13_17 f4168-4216] | LAYERED (P2): Pro_Magic Standing Idle To Crouch f1-22 legs (sync) + CMU 13_17 boxing guard arms = a guarded duck. Was the CMU duck_counter.1 duck (17_10 2129-2166): bake trace RightHand -0.34 m BEHIND the hips at 0.55 m, swinging to 0.53 m / 1.65 m by the end (the start of the counter hook) - hands flailing, no guard |
+| `weave_counter_hook` | weave_counter | CMU 17_10 (duck_counter.1) f2150-2197 contact 2174 | CMU duck_counter.1 second half: rising RIGHT hook. P2: limb R_hand + contact 2174 - the plan said L_hand (catalog) but the bake measured the right hand rising -0.37 -> 0.39 m forward / 0.76 -> 1.71 m up, highest and farthest forward at output f5-6 (source 2170-2174); the left hand stays back |
+| `sold_out_flurry` | sold_out | SEQ [CMU 14_02 f1550-1632 contact 1567 MIRROR] + [CMU 17_10 (uppercut.2) f1559-1595 contact 1573] + [CMU 13_17 f4168-4232] | SEQ: CMU 14_02 1550-1632 (jab-cross-jab, mirrored) + uppercut.2 (window 1559-1595, no phantom left punch) + CMU 13_17 4168-4232 boxing guard (P2: the recovery returns to guard instead of holding the uppercut 0.2x) |
+| `intro_shadowbox` | intro | CMU 14_01 f3030-3110 contact 3042 | CMU 14_01 3030-3110: shadow-boxing intro. P2: limb R_hand + punches 3042 (R) / 3066 (L) / 3094 (R) - the plan named the LEFT hand for 3043, but the bake trace shows the right hand out first (0.68 m forward at output f3), the left at f9 (0.65 m), the right again at f16 (0.79 m) |
 | `win_arms_up` | main_event (cine), win | Mixamo `Pro_Magic_Pack/Standing 2H Cast Spell 01` f1-66 | Mixamo 2H Cast Spell 01 = play-to-the-crowd arms-up pose (MIXAMO_CLIPS taunts) |
-| `win_wave` | win | Mixamo `Male_Injured_Pack/injured wave idle` f1-90 | Mixamo injured wave idle (waves) |
+| `win_wave` | win | Mixamo `Pro_Sword_and_Shield_Pack/sword and shield power up` f1-72 | P2: Mixamo S&S power up = chest out, head back, roaring at the crowd (usable unarmed, MIXAMO_CLIPS rally flex). Was Male_Injured 'injured wave idle' = the research's BEG / tap-out plea: bake trace both hands at 0.73-0.81 m for f0-15 = hunched over, then a pleading wave - not a winner. The clip id stays `win_wave` so the published GLB keeps a valid ref until lane ASSETS re-bakes it (G1 --strict fails on a missing win clip) |
 | `taunt_cocky` | taunt | Mixamo `Gestures_Pack_Basic/being cocky` f1-87 | Mixamo being cocky (shrug) |
 
 **CPU.** `{"style": "balanced", "rangeM": [1.4, 2.6], "pokes": ["5M", "2M"], "antiAir": ["encore_l", "2H"], "punish": ["5H", "hook_h"], "combo": ["2L", "5M", "hook_m"], "zoning": ["brickbat_m"], "meter": "sold_out"}`. **Intro** `intro_shadowbox`, **win** `win_arms_up`, `win_wave`, **taunt** `taunt_cocky`.
@@ -295,8 +319,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.L` | Air Jab | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | jL |  |
 | `j.M` | Flying Side Kick | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Jump Turning Kick | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | jH |  |
-| `throw_f` | Plum Knees | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 46 f, dmg at f30, same side.  |
-| `throw_b` | Spin Toss | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f28, swap sides.  |
+| `throw_f` | Plum Knees | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 46 f, dmg at f16, same side; victim f0 hit_high_s 0.00-0.30 s, f16 hit_body 0.15-0.80 s, f34 kd_fall_b 1.04-1.50 s.  |
+| `throw_b` | Spin Toss | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f19, swap sides; victim f0 hit_high_s 0.00-0.25 s, f10 thrown_b 0.05-0.40 s, f19 thrown_b 0.40-1.20 s.  |
 | `cue_l` | Cue Kick | 236L | 10 | 3 | 18 | 30 | +1 | -5 | 700 | HL | 13 | chain:cue2 super | - | custom | Rekka opener (FIGHTING_DESIGN 8c rushdown): rush-class startups 10/12/14 but no knockdown: +1/-1/-3 on hit, -5/-7/-9 on block, always cancelable into CUE 2. |
 | `cue_m` | Cue Kick | 236M | 12 | 3 | 20 | 34 | -1 | -7 | 750 | HL | 13 | chain:cue2 super | - | custom | Rekka opener (FIGHTING_DESIGN 8c rushdown): rush-class startups 10/12/14 but no knockdown: +1/-1/-3 on hit, -5/-7/-9 on block, always cancelable into CUE 2. |
 | `cue_h` | Cue Kick | 236H | 14 | 3 | 22 | 38 | -3 | -9 | 800 | HL | 13 | chain:cue2 super | - | custom | Rekka opener (FIGHTING_DESIGN 8c rushdown): rush-class startups 10/12/14 but no knockdown: +1/-1/-3 on hit, -5/-7/-9 on block, always cancelable into CUE 2. |
@@ -349,24 +373,38 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `spotlight_m` Spotlight: Rising flip kick. NOT invulnerable (trades); the EX is.
 - `spotlight_h` Spotlight: Rising flip kick. NOT invulnerable (trades); the EX is.
 - `spotlight_ex` Spotlight (EX): Fully invulnerable flip kick. (hit volume: bottom lowered 0.51 m to the crouch line 1.10 m (clips.json `flip_kick` effector RightFoot))
-- `slide_l` Floor Slide: Low-profile slide under projectiles; low, knocks down.
-- `slide_m` Floor Slide: Low-profile slide under projectiles; low, knocks down.
-- `slide_h` Floor Slide: Low-profile slide under projectiles; low, knocks down.
-- `slide_ex` Floor Slide (EX): Projectile-invulnerable slide, -6 on block.
+- `slide_l` Floor Slide: Low-profile slide under projectiles; low, knocks down. (PENDING RE-BAKE: clip `slide` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
+- `slide_m` Floor Slide: Low-profile slide under projectiles; low, knocks down. (PENDING RE-BAKE: clip `slide` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
+- `slide_h` Floor Slide: Low-profile slide under projectiles; low, knocks down. (PENDING RE-BAKE: clip `slide` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
+- `slide_ex` Floor Slide (EX): Projectile-invulnerable slide, -6 on block. (PENDING RE-BAKE: clip `slide` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
 - `highlight_reel` Highlight Reel: Invulnerable three-kick flurry ending in a jump kick. (hand-set hit volume f8-9 x 0.75 y 1.42 w 0.50 h 0.65, f19-20 x 0.79 y 1.10 w 0.54 h 0.35, f30-33 x 0.72 y 1.06 w 0.50 h 0.53)
 - `on_air` On Air: PRIME TIME: a teep that starts a juggle she counts down live.
 
 **Lv3 PRIME TIME cinematic `on_air` (On Air)** - 160 frames (<= 180), cue `patch_on_air`, damage 400+500+600+700+900+1400 = 4500, ends KD +19 at 2.0 m.
 
-- f0 PLUM (front_low): clinch and a knee to the chest - 400 at f10.
-- f28 HEAD SNAP (side_close): left head kick - 500. f52 HEAD KICK (punch_in): right head kick - 600.
-- f78 FLYING KNEE (low_angle_up): knee launches them - 700.
-- f102 JUMP TURNING KICK (orbit): mid-air kick keeps them up - 900.
-- f126 CURTAIN DROP (top_down): axe-style jump kick slams them down - 1400.
-- f146 HIGH KICK POSE (crowd_pop): 'and... we're clear' (KD +19).
-- attacker clips: f0 `clinch_knee`, f28 `cue_round`, f52 `roundhouse_hi`, f78 `flying_knee`, f102 `jump_kick`, f126 `cue_drop`, f146 `win_high_kick`
-- victim clips: f0 `thrown_f`, f28 `hit_high_l`, f52 `hit_high_l`, f78 `hit_air`, f102 `hit_air`, f126 `kd_fall_b`, f140 `kd_ground_b`
-- camera shots: f0 front_low, f28 side_close, f52 punch_in, f78 low_angle_up, f102 orbit, f126 top_down, f146 crowd_pop
+- f0 PLUM (low front): she clinches off the teep and knees the chest - 400 at f10.
+- f28 HEAD SNAP (close on the defender) - 500 at f35. f52 HEAD KICK (close, over her side, smear) - 600 at f60.
+- f78 FLYING KNEE (low, looking up): the hop launches them 1.0 m - 700 at f85.
+- f102 JUMP TURNING KICK (orbit 30 -> -40 deg, both in the air) keeps them up - 900 at f110.
+- f126 CURTAIN DROP (top-down): the axe kick slams them down - 1400 at f135 (flash, freeze-frame, dust).
+- f146 HIGH KICK POSE (wide, spotlight): the crowd chants the count; opponent face up at 2.0 m (KD +19).
+- slate: "PRIME TIME - PATCH: ON AIR IN 3... 2... 1..."; defender ends lying back
+- attacker clips: f0 `clinch_knee` 0.28-0.75 s, f28 `cue_round` 0.13-0.53 s, f52 `roundhouse_hi` 0.12-0.55 s, f78 `flying_knee` 0.15-0.55 s, f102 `jump_kick` 0.23-0.62 s, f126 `cue_drop` 0.19-0.53 s, f146 `win_high_kick` 0.20-0.43 s
+- victim clips: f0 `hit_body` 0.00-0.30 s, f10 `hit_body` 0.00-0.40 s, f35 `hit_high_l` 0.00-0.40 s, f60 `hit_high_l` 0.10-0.45 s, f85 `hit_air` 0.00-0.40 s, f110 `hit_air` 0.30-0.80 s, f135 `kd_fall_b` 1.25-1.87 s, f148 `kd_ground_b` 0.00-0.37 s
+- camera: f0-28 low on both (fov 38, dist 2.6, h 0.5, yaw 18, lookH 1.2); f28-52 close on defender (fov 30, dist 2.5, h 1.55, yaw 40, lookH 1.45); f52-78 close on both (fov [34, 30], dist [3.0, 3.0], h 1.6, yaw -30, lookH 1.3); f78-102 low on defender (fov 42, dist 3.0, h 0.3, yaw 25, lookH 1.8); f102-126 orbit on both (fov 40, dist 3.4, h 2.0, yaw [30, -40], lookH 1.8); f126-146 top on defender (fov 40, dist 1.3, h 5.2, yaw 8, lookH 0.5); f146-160 wide on both (fov 38, dist 5.5, h 1.7, yaw 0, lookH 1.1)
+- fx: f0 slate, f10 impact_m, f35 impact_s, f60 impact_m, f60 smear@attacker, f85 impact_m, f85 shake_s, f102 speed_lines, f110 impact_m, f135 impact_l, f135 flash, f135 shake_l, f135 dust, f135 freeze_frame, f146 spot@attacker, f158 spot_off
+- crowd: f10 ooh, f35 ooh, f60 gasp, f85 cheer/up, f110 roar/up, f135 roar/spike, f146 chant/peak
+- attacker path (f, dx, lift m): [10 0.10 0.00] [35 0.25 0.00] [60 0.40 0.00] [85 0.50 0.35] [95 0.55 0.00] [110 0.70 0.90] [120 0.80 0.90] [135 0.90 0.20] [140 0.90 0.00] [158 0.00 0.00]; defender gap (f, gap, lift m): [10 0.80 0.00] [35 0.90 0.00] [60 1.00 0.00] [85 0.90 0.30] [100 1.00 1.00] [110 0.90 1.20] [128 0.90 1.00] [136 1.10 0.00] [158 2.00 0.00]
+
+**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
+
+- intro: "Quiet on set. We're live in three... two..."
+- win quotes: "That's a wrap. Strike the set - and him." / "You missed your cue. Nobody misses my cue." / "Cut to commercial. Somebody mop the floor."
+- banter vs `spin`: "You headspun through my live cue. That's a fine AND a firing." ... "Places, b-boy. I count three and you're off the air."
+- banter vs `freak`: "Specimen Thirteen, you're on in five. Hit your mark." ... "Everybody on this floor takes direction. Even the monster."
+- banter vs `ricky`: "Six seasons I ran your floor, Ricky. I know every blind spot." ... "Tonight the cameras keep rolling after the bell."
+- banter vs `default`: "You're blocking my shot. Move, or get moved." ... "Three... two... you're done."
+- ending: PATCH takes the host's headset, counts the whole studio down from three and cuts the feed herself. For one Friday the slot plays static, and it pulls the best ratings in the network's history. By Monday she runs the building. The first new rule is taped to every door: nobody fights when the cameras stop.
 
 **Animation sources** (`tools/clipplan/patch.json`; every `anim.clip`, grab clip, cinematic clip, intro, win and taunt; ranges shown after the automatic fit).
 
@@ -384,14 +422,14 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `flying_side` | j.M | CMU 135_11 (side_kick.2) f1278-1355 contact 1307 | CMU side_kick.2 clean (135_11 left yoko-geri) played airborne |
 | `jump_kick` | j.H, on_air (cine) | CMU 90_06 (jump_kick.2) f392-482 contact 435 | CMU jump_kick.2 usable (90_06 airborne turning kick, foot 1.65 m) - a real airborne kick |
 | `throw_reach` | throw_f, throw_b | Mixamo `Soccer_Game_Pack/goalkeeper catch (2)` f2-30 contact f9 | Mixamo goalkeeper catch (2) two-hand grab (throw whiff) |
-| `clinch_knee` | throw_f (grab), on_air (cine) | CMU 86_06 (knee.1) f6218-6368 contact 6272 | CMU knee.1 clean (86_06: hands grab and pull down, knee to the chest; pilot p09). Effector RightKnee: the builder measured the right FOOT (lane ASSETS flag) |
+| `clinch_knee` | throw_f (grab), on_air (cine) | CMU 86_06 (knee.1) f6218-6368 contact 6272 | CMU knee.1 clean (86_06: hands grab and pull down, knee to the chest; pilot p09). Effector RightKnee: the builder measured the right FOOT (lane ASSETS flag). P2: kind knee / limb R_knee (was the catalog's foot / R_foot): the CMU facing is aimed from the KNEE, the striking point of a clinch knee |
 | `spin_toss` | throw_b (grab) | CMU 135_07 (roundhouse.3) f735-828 contact 772 | CMU roundhouse.3 clean (135_07 R head kick, 104 deg turn): swings them past, turning kick |
 | `cue_kick` | cue_l, cue_m, cue_h, cue_ex | CMU 144_05 (front_kick.1) f330-428 contact 360 | CMU front_kick.1 clean (144_05 guard stance 1.05 m, returns to stance; pilot p07) |
 | `cue_round` | cue2, on_air (cine) | CMU 135_07 (roundhouse.2) f412-502 contact 442 | CMU roundhouse.2 clean (135_07 LEFT head kick) |
 | `cue_drop` | cue3_oh, on_air (cine) | CMU 90_07 (jump_kick.3) f658-748 contact 699 | CMU jump_kick.3 usable (90_07 airborne turning kick) = CUE 3 overhead |
 | `flying_knee` | stage_dive_l, stage_dive_m, stage_dive_h, stage_dive_ex, on_air (cine) | CMU 86_06 (knee.2) f6495-6627 contact 6527 | CMU knee.2 clean (86_06 knee) played on a hop |
 | `flip_kick` | spotlight_l, spotlight_m, spotlight_h, spotlight_ex | CMU 113_13 (front_kick.5) f950-1087 contact 991 | CMU front_kick.5 clean (113_13 high snap kick 1.29 m) played rising = flip-kick anti-air |
-| `slide` | slide_l, slide_m, slide_h, slide_ex | Mixamo `Soccer_Game_Pack/soccer tackle (2)` f5-54 contact f19 | Mixamo soccer tackle (2) diving slide takedown (on the floor at f19, up by f47); borrowed from the Soccer pack because CMU has no slide |
+| `slide` | slide_l, slide_m, slide_h, slide_ex | Mixamo `Soccer_Game_Pack/soccer tackle` f12-60 contact f24 | P2: Mixamo soccer tackle f12-60, FEET-FIRST: the lead (left) foot skims in low at f24 (Gazza's bake of the same source: LeftFoot 0.82 m forward, 0.27 m up at output f13) = a low slide that hits the shins. Was soccer tackle (2), a HEAD-first dive: at its contact she sat on the floor with the effector on her raised hand (QC game frames), so the low was a hand swipe |
 | `reel_kicks` | highlight_reel | SEQ [CMU 144_06 (front_kick.3) f890-960 contact 920] + [CMU 135_01 (roundhouse.4) f3730-3807 contact 3760] + [CMU 90_05 (jump_kick.1) f262-333 contact 282] | SEQ of three CMU kicks: front kick (144_06), turning kick (135_01), jump turning kick (90_05) |
 | `intro_point` | intro | Mixamo `Gestures_Pack_Basic/angry gesture` f1-66 | Mixamo angry gesture (points) |
 | `win_dismiss` | win | Mixamo `Gestures_Pack_Basic/look away gesture` f1-55 | Mixamo look away gesture |
@@ -446,12 +484,12 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.M` | Flying Forearm | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Hammer Down | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | jH |  |
 | `j.2H` | Fridge Drop | j.2H | 12 | 10 | 6 | 27 | air 20 | air 16 | 900 | H | 13 | - | - | jH | (startup 10->12; active 6->10; recovery 3->6; hitstun 19->20; blockstun 15->16; damage 800->900) Air command normal: 12/10/6 landing, 900, a big active window (body press) paid with 6 landing frames. |
-| `throw_f` | Bear Hug | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1300 | U | 0 | - | - | THROW_F | grab: range 0.77 m, lock 50 f, dmg at f34, same side. (damage 1200->1300) Grappler throws deal 1300 (+100 over 1200). |
-| `throw_b` | Throw-In | 4LM | 5 | 3 | 23 | 30 | KD +16 | - | 1300 | U | 0 | - | - | THROW_B | grab: range 0.77 m, lock 52 f, dmg at f40, swap sides. (damage 1200->1300) Grappler throws deal 1300. |
-| `walk_in_l` | Walk-In Freezer | 360L | 5 | 3 | 54 | 61 | KD +28 | - | 2500 | U | 0 | - | - | cmdgrab_l | grab: range 1.22 m, lock 70 f, dmg at f52, same side.  |
-| `walk_in_m` | Walk-In Freezer | 360M | 5 | 3 | 54 | 61 | KD +28 | - | 2900 | U | 0 | - | - | cmdgrab_m | grab: range 1.1 m, lock 70 f, dmg at f52, same side.  |
-| `walk_in_h` | Walk-In Freezer | 360H | 5 | 3 | 54 | 61 | KD +28 | - | 3300 | U | 0 | - | - | cmdgrab_h | grab: range 0.92 m, lock 70 f, dmg at f52, same side.  |
-| `walk_in_ex` | Walk-In Freezer (EX) | 360S | 5 | 3 | 54 | 61 | KD +28 | - | 3500 | U | 0 | - | strike 1-5 | cmdgrab_h | grab: range 1.3 m, lock 76 f, dmg at f56, same side. (damage 3300->3500) EX grab: strike invulnerable on startup (the SF6 rule: only OD/supers get true invulnerability), 3500, reach 1.30 m. |
+| `throw_f` | Bear Hug | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1300 | U | 0 | - | - | THROW_F | grab: range 0.77 m, lock 50 f, dmg at f36, same side; victim f0 hit_body 0.00-0.25 s, f12 hit_body 0.25-0.70 s, f36 kd_fall_b 1.04-1.50 s. (damage 1200->1300) Grappler throws deal 1300 (+100 over 1200). |
+| `throw_b` | Carousel | 4LM | 5 | 3 | 23 | 30 | KD +16 | - | 1300 | U | 0 | - | - | THROW_B | grab: range 0.77 m, lock 52 f, dmg at f26, swap sides; victim f0 hit_high_s 0.00-0.20 s, f10 thrown_b 0.00-0.40 s, f26 thrown_b 0.40-1.20 s. (damage 1200->1300) Grappler throws deal 1300. |
+| `walk_in_l` | Walk-In Freezer | 360L | 5 | 3 | 54 | 61 | KD +28 | - | 2500 | U | 0 | - | - | cmdgrab_l | grab: range 1.22 m, lock 70 f, dmg at f26, same side; victim f0 hit_body 0.00-0.30 s, f9 thrown_f 0.15-0.70 s, f26 thrown_f 0.70-1.33 s.  |
+| `walk_in_m` | Walk-In Freezer | 360M | 5 | 3 | 54 | 61 | KD +28 | - | 2900 | U | 0 | - | - | cmdgrab_m | grab: range 1.1 m, lock 70 f, dmg at f26, same side; victim f0 hit_body 0.00-0.30 s, f9 thrown_f 0.15-0.70 s, f26 thrown_f 0.70-1.33 s.  |
+| `walk_in_h` | Walk-In Freezer | 360H | 5 | 3 | 54 | 61 | KD +28 | - | 3300 | U | 0 | - | - | cmdgrab_h | grab: range 0.92 m, lock 70 f, dmg at f26, same side; victim f0 hit_body 0.00-0.30 s, f9 thrown_f 0.15-0.70 s, f26 thrown_f 0.70-1.33 s.  |
+| `walk_in_ex` | Walk-In Freezer (EX) | 360S | 5 | 3 | 54 | 61 | KD +28 | - | 3500 | U | 0 | - | strike 1-5 | cmdgrab_h | grab: range 1.3 m, lock 76 f, dmg at f28, same side; victim f0 hit_body 0.00-0.30 s, f10 thrown_f 0.15-0.70 s, f28 thrown_f 0.70-1.33 s. (damage 3300->3500) EX grab: strike invulnerable on startup (the SF6 rule: only OD/supers get true invulnerability), 3500, reach 1.30 m. |
 | `fridge_door_l` | Fridge Door | 236L | 16 | 4 | 24 | 43 | KD +30 | -8 | 1000 | HL | 15 | super | armor 1x 3-15 | custom | Armored rush (FIGHTING_DESIGN 8c 'BODY BLOCK armour'): rush class slowed to 16/18/20 for 1 hit of armor, -8/-10/-12 on block, KD +30. |
 | `fridge_door_m` | Fridge Door | 236M | 18 | 4 | 26 | 47 | KD +30 | -10 | 1100 | HL | 15 | super | armor 1x 3-17 | custom | Armored rush (FIGHTING_DESIGN 8c 'BODY BLOCK armour'): rush class slowed to 16/18/20 for 1 hit of armor, -8/-10/-12 on block, KD +30. |
 | `fridge_door_h` | Fridge Door | 236H | 20 | 4 | 28 | 51 | KD +30 | -12 | 1200 | HL | 15 | super | armor 1x 3-19 | custom | Armored rush (FIGHTING_DESIGN 8c 'BODY BLOCK armour'): rush class slowed to 16/18/20 for 1 hit of armor, -8/-10/-12 on block, KD +30. |
@@ -464,8 +502,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `brace_m` | Brace | 22M | 3 | 16 | 10 | 28 | - | - | 0 | HL | 0 | whiff special | armor 1x 3-18 | custom | armorStep unique (CONTRACT 5.3): FIGHTING_DESIGN 8c 'armored step (1 hit armor, 18f)'. |
 | `brace_h` | Brace | 22H | 3 | 16 | 12 | 30 | - | - | 0 | HL | 0 | whiff special | armor 1x 3-18 | custom | armorStep unique (CONTRACT 5.3): FIGHTING_DESIGN 8c 'armored step (1 hit armor, 18f)'. |
 | `brace_ex` | Brace (EX) | 22S | 1 | 20 | 8 | 28 | - | - | 0 | HL | 0 | whiff special | armor 2x 1-20 | custom | EX: 2-hit armor from frame 1. |
-| `cold_storage` | Cold Storage | 236236 | 12 | 6 | 50 | 67 | KD +20 | - | 2400 | U | 0 | - | strike 1-6 | custom | grab: range 0.9 m, lock 90 f, dmg at f70, same side. Grappler Lv1 is a running command grab (FIGHTING_DESIGN 8c): unblockable, so it gives up the Lv1 template's 8f startup (12f run, visible) and invulnerability after f6; 2400 because grabs cannot be scaled by a combo starter. |
-| `final_delivery` | Final Delivery | 214214 | 3 | 3 | 58 | 63 | KD +19 | - | 4500 | U | 0 | - | strike 1-3 | custom | grab: range 1.3 m, lock 175 f, dmg at f140, same side. Grab Lv3: 3f unblockable grab (post-freeze) instead of the 10f strike template; 4500 total. |
+| `cold_storage` | Cold Storage | 236236 | 12 | 6 | 50 | 67 | KD +20 | - | 2400 | U | 0 | - | strike 1-6 | custom | grab: range 0.9 m, lock 90 f, dmg at f28, same side; victim f0 hit_body 0.00-0.30 s, f11 thrown_f 0.25-0.70 s, f28 thrown_f 0.70-1.33 s. Grappler Lv1 is a running command grab (FIGHTING_DESIGN 8c): unblockable, so it gives up the Lv1 template's 8f startup (12f run, visible) and invulnerability after f6; 2400 because grabs cannot be scaled by a combo starter. |
+| `final_delivery` | Final Delivery | 214214 | 3 | 3 | 58 | 63 | KD +19 | - | 4500 | U | 0 | - | strike 1-3 | custom | grab: range 1.3 m, lock 175 f, dmg at f140, same side; victim f0 hit_body 0.00-0.30 s, f24 hit_body 0.20-0.60 s, f40 hit_air 0.20-0.90 s, f100 hit_air 0.90-1.30 s, f128 thrown_f 0.30-0.74 s, f140 thrown_f 0.74-1.33 s. Grab Lv3: 3f unblockable grab (post-freeze) instead of the 10f strike template; 4500 total. |
 
 **Move notes.**
 
@@ -481,7 +519,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `j.H` Hammer Down: Double-fist jump-in.
 - `j.2H` Fridge Drop: Body press straight down; covers the space under him.
 - `throw_f` Bear Hug: Crushes them in a bear hug.
-- `throw_b` Throw-In: Lifts them overhead and hurls them behind.
+- `throw_b` Carousel: Spins them round and flings them behind him.
 - `walk_in_l` Walk-In Freezer: 360 command grab; L reaches furthest, H hits hardest.
 - `walk_in_m` Walk-In Freezer: 360 command grab; L reaches furthest, H hits hardest.
 - `walk_in_h` Walk-In Freezer: 360 command grab; L reaches furthest, H hits hardest.
@@ -499,17 +537,32 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `brace_h` Brace: Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT).
 - `brace_ex` Brace (EX): Two hits of armor from frame 1.
 - `cold_storage` Cold Storage: Running grab; unblockable, jump it.
-- `final_delivery` Final Delivery: PRIME TIME command grab: airplane spin into the freezer slam.
+- `final_delivery` Final Delivery: PRIME TIME command grab: hugged, spun like a carousel, lifted overhead and hurled across the set.
 
-**Lv3 PRIME TIME cinematic `final_delivery` (Final Delivery)** - 175 frames (<= 180), cue `bruno_final_delivery`, damage 500+1000+3000 = 4500, ends KD +19 at 1.0 m.
+**Lv3 PRIME TIME cinematic `final_delivery` (Final Delivery)** - 175 frames (<= 180), cue `bruno_final_delivery`, damage 500+1000+3000 = 4500, ends KD +19 at 3.0 m.
 
-- f0 BEAR HUG (front_low): Bruno scoops them up - 500 at f30.
-- f40 AIRPLANE SPIN (orbit): two full lariat spins with the victim across his shoulders - 1000 at f72.
-- f100 FREEZER SLAM (low_angle_up -> top_down): lifts overhead and piledrives into the floor - 3000 at f140.
-- f150 MOST-MUSCULAR (crowd_pop): Bruno flexes over the body (KD +19).
-- attacker clips: f0 `bear_hug`, f40 `lariat_spin`, f70 `lariat_spin`, f100 `freezer_slam`, f150 `win_flex`
-- victim clips: f0 `thrown_f`, f100 `hit_air`, f140 `kd_ground_b`
-- camera shots: f0 front_low, f40 orbit, f100 low_angle_up, f140 top_down, f150 crowd_pop
+- f0 BEAR HUG (low, both): Bruno scoops them up and squeezes - 500 at f24.
+- f40 CAROUSEL (orbit -50 -> +70 deg): two lariat spins with the victim lifted and flailing - 1000 at f70.
+- f100 OVERHEAD (low, looking up, spotlight): the throw-in lift, the victim held 1.4 m up over his head.
+- f128 HURL (wide): released across the set - 3000 when they land at f140 (flash, freeze-frame, dust).
+- f150 MOST-MUSCULAR (close on Bruno): the crab flex over a body lying face up 3.0 m away (KD +19).
+- slate: "PRIME TIME - BRUNO "THE FRIDGE": FINAL DELIVERY"; defender ends lying back
+- attacker clips: f0 `bear_hug` 0.10-0.77 s, f40 `lariat_spin` 0.10-0.90 s, f70 `lariat_spin` 0.10-0.90 s, f100 `throw_in` 0.20-1.03 s, f150 `win_flex` 0.80-1.22 s
+- victim clips: f0 `hit_body` 0.00-0.30 s, f24 `hit_body` 0.20-0.60 s, f40 `hit_air` 0.20-0.90 s, f100 `hit_air` 0.90-1.30 s, f128 `thrown_f` 0.30-0.74 s, f140 `thrown_f` 0.74-1.33 s
+- camera: f0-40 low on both (fov 38, dist 2.8, h 0.5, yaw 20, lookH 1.3); f40-100 orbit on both (fov 40, dist 3.4, h 1.4, yaw [-50, 70]); f100-128 low on attacker (fov 44, dist 3.2, h 0.3, yaw 25, lookH 2.0); f128-150 wide on both (fov 40, dist [4.5, 5.6], h 1.6, yaw 10, lookH 1.1); f150-175 close on attacker (fov 32, dist 2.5, h 1.6, yaw 30, lookH 1.45)
+- fx: f0 slate, f24 impact_m, f24 shake_s, f40 speed_lines, f70 impact_m, f70 shake_m, f100 spot@attacker, f128 spot_off, f128 smear@attacker, f140 impact_l, f140 flash, f140 shake_l, f140 dust, f140 freeze_frame, f150 lights_flicker
+- crowd: f24 ooh, f70 roar/up, f100 gasp, f140 roar/spike, f150 cheer/peak, f165 chant
+- attacker path (f, dx, lift m): [40 0.10 0.00] [100 0.10 0.00] [128 0.30 0.00] [160 0.00 0.00]; defender gap (f, gap, lift m): [10 0.60 0.00] [40 0.60 0.30] [70 0.70 0.60] [100 0.40 1.40] [128 0.80 1.60] [134 2.00 1.00] [140 3.00 0.00]
+
+**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
+
+- intro: "Thirty flights of stairs, no elevator. You're lighter than a freezer."
+- win quotes: "Signed, sealed, delivered. No returns." / "I've carried fridges with more fight in them." / "Tip your mover. Or don't. I'll take it anyway."
+- banter vs `krane`: "You cuffed me to a meat locker door. I kept the door. Want it back?" ... "Read me my rights, officer. I'll read you the stairs."
+- banter vs `freak`: "Big, ugly and heavy. You'll lift like a chest freezer." ... "Hold still. This is a two-man job, and I'm the only man."
+- banter vs `ricky`: "Twenty years you've paid me in steak, Ricky." ... "Tonight I'm collecting the whole cow."
+- banter vs `default`: "Hold still. I'm not paid by the hour." ... "You walked in. I'll walk you out. That's the service."
+- ending: BRUNO "THE FRIDGE" carries the host out of the Control Room on one shoulder and the broadcast console on the other. He loads both into his old moving van and drives off before the credits roll. Nobody knows where he delivered them. The network's new office has a walk-in freezer, and it is always locked.
 
 **Animation sources** (`tools/clipplan/bruno.json`; every `anim.clip`, grab clip, cinematic clip, intro, win and taunt; ranges shown after the automatic fit).
 
@@ -526,20 +579,20 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `air_chop` | j.L | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[CMU 86_06 f4653-4734 contact 4682] | jump apex legs + CMU downward chop |
 | `air_forearm` | j.M | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[CMU 14_01 (cross.4) f2592-2656 contact 2608] | jump apex legs + CMU cross.4 |
 | `air_hammer` | j.H | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Pro_Melee_Axe_Pack/standing melee attack downward` f13-38 contact f26] | jump apex legs + Mixamo axe downward hammer-fist (contact f26) |
-| `fridge_drop` | j.2H | Mixamo `Soccer_Game_Pack/goalkeeper body block` f6-40 contact f22 | Mixamo goalkeeper body block: the sprawl (body press) part, f1-40 |
+| `fridge_drop` | j.2H | Mixamo `Creature_Pack/mutant jump attack` f40-62 contact f51 | P2: Mixamo mutant jump attack, the descent: arms overhead, knees tucked, both fists to the floor at f51 in a crouched landing = the fridge dropping on you. Was goalkeeper body block f1-40: a sideways sprawl that ends rolled onto the back with the legs in the air (QC sheet: lying, legs up at the last two strip frames) |
 | `throw_reach` | throw_f, throw_b, walk_in_l, walk_in_m, walk_in_h, walk_in_ex | Mixamo `Soccer_Game_Pack/goalkeeper catch (2)` f2-30 contact f9 | Mixamo goalkeeper catch (2): two-hand grab (throw / command grab whiff) |
 | `delivery_reach` | final_delivery | Mixamo `Soccer_Game_Pack/goalkeeper catch (2)` f5-30 contact f9 | goalkeeper catch (2) from f5: the 3-frame Lv3 grab reach |
-| `bear_hug` | throw_f (grab), final_delivery (grab), final_delivery (cine) | CMU 18_05 (grab_pull.1) f200-330 contact 301 | CMU grab_pull.1 (18_05 lean-back two-arm pull) |
-| `throw_in` | throw_b (grab) | Mixamo `Soccer_Game_Pack/throw in` f30-84 contact f50 | Mixamo throw in: victim held overhead f42-47, release f50 (hurled behind) |
-| `freezer_slam` | walk_in_l (grab), walk_in_m (grab), walk_in_h (grab), walk_in_ex (grab), final_delivery (cine) | Mixamo `Pro_Magic_Pack/Standing 2H Magic Area Attack 01` f10-90 contact f40 | Mixamo 2H Magic Area Attack 01: both fists driven down to the floor at f40 (dense render) = the piledriver slam holding the victim (Great_Sword two-handed clips stay with Ricky) |
+| `bear_hug` | throw_f (grab), final_delivery (grab), final_delivery (cine) | Mixamo `Soccer_Game_Pack/goalkeeper scoop` f28-66 contact f34 | P2: Mixamo goalkeeper scoop f28-66: arms wrap low around the waist (f34), lift to the chest (f43) and hold it hugged (f51-66) = a bear hug. Was CMU grab_pull.1 (18_05 200-330): QC strip showed the arms flung out sideways and the hands BEHIND the body (bake RightHand swing 85-107 deg all clip) - not a hug |
+| `throw_in` | final_delivery (cine) | Mixamo `Soccer_Game_Pack/throw in` f30-84 contact f50 | Mixamo throw in: victim held overhead f42-47, release f50 (hurled behind) |
+| `freezer_slam` | walk_in_l (grab), walk_in_m (grab), walk_in_h (grab), walk_in_ex (grab) | Mixamo `Pro_Magic_Pack/Standing 2H Magic Area Attack 01` f10-90 contact f40 | Mixamo 2H Magic Area Attack 01: both fists driven down to the floor at f40 (dense render) = the piledriver slam holding the victim (Great_Sword two-handed clips stay with Ricky) |
 | `fridge_shove` | fridge_door_l, fridge_door_m, fridge_door_h, fridge_door_ex | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Run Forward` f1-23, loop] + upper[Mixamo `Pro_Magic_Pack/Standing 2H Magic Attack 02` f28-62 contact f43] | LAYERED: running legs + Mixamo 2H Magic Attack 02 double-palm shove (front pass f43, 0.92 m) |
-| `lariat_spin` | lariat_l, lariat_m, lariat_h, lariat_ex, final_delivery (cine) | Mixamo `Pro_Melee_Axe_Pack/standing melee attack 360 high` f20-60 contact f32 | Mixamo axe 360 high: spinning clothesline, arms flung wide (front pass f32) |
+| `lariat_spin` | throw_b (grab), lariat_l, lariat_m, lariat_h, lariat_ex, final_delivery (cine) | Mixamo `Pro_Melee_Axe_Pack/standing melee attack 360 high` f20-60 contact f32 | Mixamo axe 360 high: spinning clothesline, arms flung wide (front pass f32) |
 | `brace_step` | brace_l, brace_m, brace_h, brace_ex | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Walk Forward` f1-35, sync] + upper[Mixamo `Pro_Melee_Axe_Pack/standing block idle` f1-36] | LAYERED: walk-forward legs + axe block idle arms (hands at face) = armored step |
 | `storage_run` | cold_storage | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Run Forward` f1-23, loop] + upper[Mixamo `Soccer_Game_Pack/goalkeeper catch (2)` f1-30 contact f9] | LAYERED: running legs + goalkeeper grab arms (running grab) |
 | `storage_slam` | cold_storage (grab) | Mixamo `Soccer_Game_Pack/goalkeeper body block (3)` f1-103 contact f33 | Mixamo goalkeeper body block (3): long sprawl onto the floor and back up = full body splash on the grabbed victim (the axe leap slam is Boneyard's) |
 | `intro_battlecry` | intro | Mixamo `Pro_Melee_Axe_Pack/standing taunt battlecry` f1-86 | Mixamo axe battlecry (crowd hype) |
-| `taunt_flex` | taunt | CMU 79_94 (flex_taunt.1) f241-480 | CMU 79_94 bodybuilder flexes (double biceps) |
-| `win_flex` | final_delivery (cine), win | CMU 79_94 (flex_taunt.1) f480-721 | CMU 79_94 most-muscular pose |
+| `taunt_flex` | taunt | CMU 79_94 (flex_taunt.1) f580-800 | P2: CMU 79_94 580-800 = the FRONTAL part of the take: double biceps (f647) into the crab most-muscular (f675-762), hips yaw steady within 30 deg (stick sheet). Was 241-480: the subject turns +46 deg then -33 deg in that window and kind 'body' aims the clip by the END frame, so the QC game frame showed his BACK |
+| `win_flex` | final_delivery (cine), win | Mixamo `Creature_Pack/mutant flexing muscles` f45-105 | P2: Mixamo mutant flexing muscles f45-105: arms thrown up, then the crab most-muscular (f74-89) - a strongman win. Was CMU 79_94 480-721: turned 30 deg away with one arm out = read as a bow (lane ASSETS QC) |
 | `win_nod` | win | Mixamo `Gestures_Pack_Basic/hard head nod` f1-50 | Mixamo hard head nod |
 
 **CPU.** `{"style": "grappler", "rangeM": [0.6, 1.4], "approach": ["brace_m", "fridge_door_l"], "pokes": ["2M", "5M"], "antiAir": ["lariat_l", "2H"], "punish": ["walk_in_h", "5H"], "combo": ["2L", "5M", "fridge_door_m"], "grab": ["walk_in_l", "walk_in_h"], "meter": "cold_storage"}`. **Intro** `intro_battlecry`, **win** `win_flex`, `win_nod`, **taunt** `taunt_flex`.
@@ -589,8 +642,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.L` | Air Palm | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | jL |  |
 | `j.M` | Air Card Flick | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Levitating Palms | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | jH |  |
-| `throw_f` | Now You See Me | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 44 f, dmg at f30, same side.  |
-| `throw_b` | Now You Don't | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f28, swap sides.  |
+| `throw_f` | Now You See Me | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 44 f, dmg at f18, same side; victim f0 hit_high_s 0.00-0.15 s, f18 thrown_f 0.30-1.10 s.  |
+| `throw_b` | Now You Don't | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f18, swap sides; victim f0 hit_high_s 0.00-0.15 s, f6 thrown_b 0.00-0.40 s, f18 thrown_b 0.40-1.20 s.  |
 | `card_fan_l` | Card Fan | 236L | 16 | 1 | 31 | 47 | -1 | -5 | 500 | HL | 8 | super | - | proj_l | (damage 600->500) Zoner projectile is his neutral: 500 (-100) for faster speeds 5.0/6.5/8.0 m/s (template 4.5/6/7.5). |
 | `card_fan_m` | Card Fan | 236M | 14 | 1 | 33 | 47 | -3 | -7 | 500 | HL | 8 | super | - | proj_m | (damage 600->500) Zoner projectile is his neutral: 500 (-100) for faster speeds 5.0/6.5/8.0 m/s (template 4.5/6/7.5). |
 | `card_fan_h` | Card Fan | 236H | 12 | 1 | 35 | 47 | -5 | -9 | 500 | HL | 8 | super | - | proj_h | (damage 600->500) Zoner projectile is his neutral: 500 (-100) for faster speeds 5.0/6.5/8.0 m/s (template 4.5/6/7.5). |
@@ -643,17 +696,31 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `grand_illusion` Grand Illusion: A giant spinning card-saw: 5-hit projectile, invulnerable startup. (projectile 7.0 m/s, 5 hit(s), y 1.10 m)
 - `the_prestige` The Prestige: PRIME TIME: a palm to the chest, a sheet over the victim, and the big reveal. (hit volume: bottom lowered 0.21 m to the crouch line 1.10 m; near edge pulled back 0.12 m to point-blank reach 0.65 m (clips.json `palm_shove` effector RightHand))
 
-**Lv3 PRIME TIME cinematic `the_prestige` (The Prestige)** - 150 frames (<= 180), cue `zambini_prestige`, damage 1000+1500+2000 = 4500, ends KD +19 at 2.5 m.
+**Lv3 PRIME TIME cinematic `the_prestige` (The Prestige)** - 150 frames (<= 180), cue `zambini_prestige`, damage 800+1200+2500 = 4500, ends KD +19 at 1.5 m.
 
-- f0 PALM (side_close): a light palm to the chest freezes them.
-- f20 TA-DA (spotlight): the set dims to one spotlight; a sheet drops over the victim (VIEW prop).
-- f40 (crowd_pop) the sheet bursts into doves - 1000.
-- f60 FLOURISH (low_angle_up): fire and doves lift the sheet off an empty floor - 1500 at f80.
-- f100 VANISH (wide): Zambini drops through the trapdoor; the victim falls from the rafters - 2000 at f120.
-- f135 BOW (crowd_pop): he reappears for the bow (KD +19).
-- attacker clips: f0 `palm_shove`, f20 `intro_tada`, f60 `flourish_burst`, f100 `vanish`, f120 `abracadabra`, f135 `win_flourish`
-- victim clips: f0 `hit_high_s`, f20 `dizzy`, f60 `hit_air`, f100 `hit_air`, f120 `kd_fall_f`, f136 `kd_ground_f`
-- camera shots: f0 side_close, f20 spotlight, f40 crowd_pop, f60 low_angle_up, f100 wide, f120 top_down, f135 crowd_pop
+- f0 TA-DA (close on Zambini, set dimmed, spotlight): the palm froze them; the victim wobbles, dizzy.
+- f24 CARD FLICK (over his shoulder): a fan of cards - 800 at f34.
+- f50 FLOURISH (low, looking up): fire and doves lift the victim 1.5 m into the air - 1200 at f64.
+- f80 VANISH (wide): he drops into a puff of smoke while the victim floats 2.0 m up; a second puff and he is standing right under them.
+- f104 ABRACADABRA (top-down): the double-fist hammer brings them down from the rafters - 2500 at f118 (flash, freeze-frame, dust, lights back up).
+- f132 BOW (close on Zambini, doves): opponent face up 1.5 m away (KD +19).
+- slate: "PRIME TIME - THE GREAT ZAMBINI: THE PRESTIGE"; defender ends lying back
+- attacker clips: f0 `intro_tada` 0.20-0.60 s, f24 `card_flick` 0.30-0.73 s, f50 `flourish_burst` 0.20-0.70 s, f80 `vanish` 0.00-0.80 s, f104 `abracadabra` 0.50-0.97 s, f132 `win_flourish` 0.30-0.60 s
+- victim clips: f0 `dizzy` 0.00-0.50 s, f34 `hit_high_s` 0.00-0.50 s, f64 `hit_air` 0.00-0.70 s, f90 `hit_air` 0.70-1.30 s, f118 `kd_fall_b` 1.30-1.87 s, f136 `kd_ground_b` 0.00-0.37 s
+- camera: f0-24 close on attacker (fov 32, dist 2.5, h 1.55, yaw 30, lookH 1.45); f24-50 over_shoulder on defender (fov 36, dist 2.9, h 1.8, yaw -70, lookH 1.4); f50-80 low on defender (fov 42, dist 3.2, h 0.4, yaw 20, lookH 1.9); f80-104 wide on both (fov 40, dist 5.0, h 1.8, yaw 0, lookH 1.5); f104-132 top on defender (fov 42, dist 1.5, h 5.5, yaw 10, lookH 0.6); f132-150 close on attacker (fov 32, dist [2.6, 2.5], h 1.5, yaw -20, lookH 1.45)
+- fx: f0 slate, f0 dim, f0 spot@attacker, f24 spot_off, f34 cards, f34 impact_m, f64 fire, f64 doves, f64 impact_m, f64 shake_s, f80 smoke@attacker, f96 smoke@attacker, f118 impact_l, f118 flash, f118 shake_l, f118 dust, f118 freeze_frame, f120 undim, f132 doves@attacker
+- crowd: f0 hush, f34 ooh, f64 gasp/up, f90 hush, f118 roar/spike, f132 applause/peak
+- attacker path (f, dx, lift m): [96 0.00 0.00] [97 0.60 0.00] [132 0.60 0.00] [148 0.00 0.00]; defender gap (f, gap, lift m): [34 1.00 0.00] [64 1.00 0.30] [80 1.30 1.50] [96 1.30 2.00] [97 0.70 2.00] [112 0.70 1.60] [120 0.80 0.00] [148 1.50 0.00]
+
+**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
+
+- intro: "Pick a card. Any card. It will be the last one you pick."
+- win quotes: "And for my next trick - you disappear." / "Every great trick has three acts. You were the second." / "Applause is optional. Screaming is appreciated."
+- banter vs `gazza`: "Your stray shot ended my dove on live television." ... "Tonight the ball goes in the box. So do you."
+- banter vs `freak`: "A monster in a cage. How very... county fair." ... "I have made bigger things vanish. Mostly assistants."
+- banter vs `ricky`: "We both sell illusions, Ricky. Only one of us is any good at it." ... "Watch closely. The host is about to disappear."
+- banter vs `default`: "Nothing up my sleeves. Almost nothing." ... "Stand right there. Perfect. Hold still for the saw."
+- ending: THE GREAT ZAMBINI draws a curtain across the Control Room, taps it twice and pulls it away. The host is gone. So are the season, the network logo and the contract vault. Zambini bows to an empty studio and walks out through the front door like a normal man. Nobody has seen how the trick ends; he says that is the point.
 
 **Animation sources** (`tools/clipplan/zambini.json`; every `anim.clip`, grab clip, cinematic clip, intro, win and taunt; ranges shown after the automatic fit).
 
@@ -670,9 +737,9 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `air_flick` | j.M | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Pro_Magic_Pack/Standing 1H Magic Attack 01` f19-41 contact f29] | jump apex legs + 1H Attack 01 flung arm (front pass f29) |
 | `air_double` | j.H | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Pro_Magic_Pack/Standing 2H Magic Attack 01` f26-51 contact f39] | jump apex legs + double palm |
 | `throw_reach` | throw_f, throw_b | Mixamo `Soccer_Game_Pack/goalkeeper catch (2)` f2-30 contact f9 | two-hand grab |
-| `palm_shove` | throw_f (grab), grand_illusion, the_prestige, the_prestige (cine) | Mixamo `Pro_Magic_Pack/Standing 2H Magic Attack 02` f30-62 contact f43 | Mixamo 2H Magic Attack 02 double-palm shove (front pass f43) |
+| `palm_shove` | throw_f (grab), grand_illusion, the_prestige | Mixamo `Pro_Magic_Pack/Standing 2H Magic Attack 02` f30-62 contact f43 | Mixamo 2H Magic Attack 02 double-palm shove (front pass f43) |
 | `spin_fling` | throw_b (grab) | Mixamo `Pro_Magic_Pack/Standing 1H Magic Attack 01` f10-60 contact f29 | Mixamo 1H Magic Attack 01 spinning backfist, arms flung wide = spin and fling |
-| `card_flick` | card_fan_l, card_fan_m, card_fan_h, card_fan_ex | Mixamo `Pro_Magic_Pack/Standing 1H Magic Attack 01` f15-50 contact f29 | Mixamo 1H Magic Attack 01: the arm flings forward at f29 = card release |
+| `card_flick` | card_fan_l, card_fan_m, card_fan_h, card_fan_ex, the_prestige (cine) | Mixamo `Pro_Magic_Pack/Standing 1H Magic Attack 01` f15-50 contact f29 | Mixamo 1H Magic Attack 01: the arm flings forward at f29 = card release |
 | `flash_cast` | flash_paper_l, flash_paper_m, flash_paper_h, flash_paper_ex | Mixamo `Pro_Magic_Pack/standing 1H cast spell 01` f8-45 contact f22 | Mixamo standing 1H cast spell 01 (RightHand peak f22) = underhand flame lob |
 | `vanish` | vanish_l, vanish_m, vanish_h, vanish_ex, the_prestige (cine) | Mixamo `Pro_Magic_Pack/Standing Idle To Crouch` f1-29 | Mixamo Standing Idle To Crouch: drops into the trapdoor (the view's smoke hides the teleport; the 6-frame blend pops him back up) |
 | `flourish_burst` | flourish_l, flourish_m, flourish_h, flourish_ex, the_prestige (cine) | Mixamo `Pro_Magic_Pack/Standing 2H Magic Area Attack 02` f35-70 contact f48 | Mixamo 2H Area Attack 02 radial burst, arms flung wide (front pass f48) |
@@ -730,8 +797,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.L` | Air Poke | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | jL |  |
 | `j.M` | Air Chop | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Air Swing | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | jH |  |
-| `throw_f` | Book 'Em | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 50 f, dmg at f36, same side.  |
-| `throw_b` | Perp Walk | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 44 f, dmg at f30, swap sides.  |
+| `throw_f` | Book 'Em | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 56 f, dmg at f44, same side; victim f0 hit_high_s 0.00-0.10 s, f12 hit_high_s 0.00-0.50 s, f29 hit_body 0.10-0.60 s, f44 kd_fall_b 1.04-1.50 s.  |
+| `throw_b` | Perp Walk | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 50 f, dmg at f30, swap sides; victim f0 hit_high_s 0.00-0.20 s, f8 thrown_b 0.05-0.40 s, f30 thrown_b 0.40-1.00 s.  |
 | `taser_l` | Taser Shot | [4]6L | 10 | 1 | 30 | 40 | +3 | -3 | 550 | HL | 8 | super | - | proj_l | (startup 16->10; recovery 31->30; hitstun 31->34; blockstun 27->28; damage 600->550) Charge projectile = the Sonic Boom row (1a/1c: startup 10, recovery 30, +3/-3, 550): charge time pays for the speed. |
 | `taser_m` | Taser Shot | [4]6M | 10 | 1 | 30 | 40 | +3 | -3 | 550 | HL | 8 | super | - | proj_m | (startup 14->10; recovery 33->30; hitstun 31->34; blockstun 27->28; damage 600->550) Charge projectile = the Sonic Boom row (1a/1c: startup 10, recovery 30, +3/-3, 550): charge time pays for the speed. |
 | `taser_h` | Taser Shot | [4]6H | 10 | 1 | 30 | 40 | +3 | -3 | 550 | HL | 8 | super | - | proj_h | (startup 12->10; recovery 35->30; hitstun 31->34; blockstun 27->28; damage 600->550) Charge projectile = the Sonic Boom row (1a/1c: startup 10, recovery 30, +3/-3, 550): charge time pays for the speed. |
@@ -744,10 +811,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `shield_rush_m` | Shield Rush | 236M | 12 | 4 | 22 | 37 | KD +33 | -6 | 1000 | HL | 13 | super | - | rush_m |  |
 | `shield_rush_h` | Shield Rush | 236H | 14 | 4 | 28 | 45 | KD +37 | -12 | 1100 | HL | 13 | super | armor 1x 3-13 | rush_h | FIGHTING_DESIGN 8c 'SHIELD RUSH ... armor on H': the H version trades the rush template's throw invulnerability for 1 hit of armor (the shield). |
 | `shield_rush_ex` | Shield Rush (EX) | 236S | 10 | 8 | 20 | 37 | KD +30 | -2 | 1200 | HL | 13 | super | armor 2x 1-12 | rush_h | hits: f10 500, f16 700. (startup 14->10; active 4->8; recovery 28->20; damage 1100->1200) EX: 2-hit armor, 2 hits, -2. |
-| `cuff_l` | Under Arrest | 214L | 6 | 3 | 40 | 48 | KD +24 | - | 1600 | U | 0 | - | - | custom | grab: range 0.95 m, lock 60 f, dmg at f40, same side. Short-range command grab (not a grappler's 360): 6/3/40, reach 0.95/0.90/0.85 m, 1600-2000, KD +24 - weaker than Bruno's on every axis. |
-| `cuff_m` | Under Arrest | 214M | 6 | 3 | 40 | 48 | KD +24 | - | 1800 | U | 0 | - | - | custom | grab: range 0.9 m, lock 60 f, dmg at f40, same side. Short-range command grab (not a grappler's 360): 6/3/40, reach 0.95/0.90/0.85 m, 1600-2000, KD +24 - weaker than Bruno's on every axis. |
-| `cuff_h` | Under Arrest | 214H | 6 | 3 | 40 | 48 | KD +24 | - | 2000 | U | 0 | - | - | custom | grab: range 0.85 m, lock 60 f, dmg at f40, same side. Short-range command grab (not a grappler's 360): 6/3/40, reach 0.95/0.90/0.85 m, 1600-2000, KD +24 - weaker than Bruno's on every axis. |
-| `cuff_ex` | Under Arrest (EX) | 214S | 6 | 3 | 40 | 48 | KD +24 | - | 2200 | U | 0 | - | strike 1-6 | custom | grab: range 1.1 m, lock 64 f, dmg at f42, same side. EX: strike invulnerable 1-6, 1.10 m. |
+| `cuff_l` | Under Arrest | 214L | 6 | 3 | 40 | 48 | KD +24 | - | 1600 | U | 0 | - | - | custom | grab: range 0.95 m, lock 60 f, dmg at f40, same side; victim f0 hit_body 0.00-0.30 s, f8 kd_fall_b 1.00-1.50 s, f24 kd_ground_b 0.00-0.37 s. Short-range command grab (not a grappler's 360): 6/3/40, reach 0.95/0.90/0.85 m, 1600-2000, KD +24 - weaker than Bruno's on every axis. |
+| `cuff_m` | Under Arrest | 214M | 6 | 3 | 40 | 48 | KD +24 | - | 1800 | U | 0 | - | - | custom | grab: range 0.9 m, lock 60 f, dmg at f40, same side; victim f0 hit_body 0.00-0.30 s, f8 kd_fall_b 1.00-1.50 s, f24 kd_ground_b 0.00-0.37 s. Short-range command grab (not a grappler's 360): 6/3/40, reach 0.95/0.90/0.85 m, 1600-2000, KD +24 - weaker than Bruno's on every axis. |
+| `cuff_h` | Under Arrest | 214H | 6 | 3 | 40 | 48 | KD +24 | - | 2000 | U | 0 | - | - | custom | grab: range 0.85 m, lock 60 f, dmg at f40, same side; victim f0 hit_body 0.00-0.30 s, f8 kd_fall_b 1.00-1.50 s, f24 kd_ground_b 0.00-0.37 s. Short-range command grab (not a grappler's 360): 6/3/40, reach 0.95/0.90/0.85 m, 1600-2000, KD +24 - weaker than Bruno's on every axis. |
+| `cuff_ex` | Under Arrest (EX) | 214S | 6 | 3 | 40 | 48 | KD +24 | - | 2200 | U | 0 | - | strike 1-6 | custom | grab: range 1.1 m, lock 64 f, dmg at f42, same side; victim f0 hit_body 0.00-0.30 s, f8 kd_fall_b 1.00-1.50 s, f24 kd_ground_b 0.00-0.37 s. EX: strike invulnerable 1-6, 1.10 m. |
 | `backup` | Backup's Here | 236236 | 8 | 23 | 54 | 84 | KD +23 | -30 | 2000 | HL | 20 | - | strike 1-10, throw 1-10 | custom | hits: f8 600, f18 600, f30 800. 1c Lv1 for a charge fighter: invulnerable 1-10 and NO charge input (FIGHTING_DESIGN 8c 'Lv1 charge-less shield bash (reversal)'); 3 hits 10-12 frames apart (one per clip contact), recovery 54 -> -30 on block. |
 | `riot_act` | Riot Act | 214214 | 10 | 4 | 58 | 71 | cine, KD +19 | -42 | 4500 | HL | 0 | - | strike 1-13, throw 1-13, air 1-13, proj 1-13 | custom | 1c Lv3: 10/4/58, -42, 4500, fully invulnerable 1-13. |
 
@@ -765,7 +832,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `j.L` Air Poke: Air baton poke.
 - `j.M` Air Chop: Air baton chop.
 - `j.H` Air Swing: Wide air baton swing.
-- `throw_f` Book 'Em: Holds them with the shield and lays in four baton shots.
+- `throw_f` Book 'Em: Holds them with the shield: baton, baton, shield bash.
 - `throw_b` Perp Walk: Turns them around and shoves them with the shield.
 - `taser_l` Taser Shot: Charge projectile ([4]6): 10f, +3 hit / -3 block point blank. (projectile 4.5 m/s, 1 hit(s), y 1.20 m)
 - `taser_m` Taser Shot: Charge projectile ([4]6): 10f, +3 hit / -3 block point blank. (projectile 6.0 m/s, 1 hit(s), y 1.20 m)
@@ -788,14 +855,28 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Lv3 PRIME TIME cinematic `riot_act` (Riot Act)** - 165 frames (<= 180), cue `krane_riot_act`, damage 500+600+300+300+300+2500 = 4500, ends KD +19 at 2.0 m.
 
-- f0 SHIELD BASH (side_close): the shield slams them upright.
-- f20 BATON SWING (punch_in) - 500 at f25. f45 BATON CHOP (body) - 600 at f50.
-- f70 BOOK 'EM (over_shoulder): three baton shots - 3 x 300.
-- f110 TASER (front_low -> slowmo_hold): barbs from the shield, a comic full-body jolt - 2500 at f118.
-- f140 HOLSTER (crowd_pop): he holsters the baton over the twitching body (KD +19).
-- attacker clips: f0 `shield_block`, f20 `baton_swing`, f45 `baton_chop`, f70 `book_em`, f110 `taser_fire`, f140 `win_holster`
-- victim clips: f0 `hit_high_s`, f20 `hit_high_l`, f45 `hit_body`, f70 `hit_high_s`, f110 `dizzy`, f128 `kd_fall_b`, f145 `kd_ground_b`
-- camera shots: f0 side_close, f20 punch_in, f70 over_shoulder, f110 front_low, f118 slowmo_hold, f140 crowd_pop
+- f0 SHIELD BASH (close, sparks): the crowd boos the cop as the shield slams them upright.
+- f20 BATON SWING (punch-in on the face) - 500 at f28. f45 BATON CHOP (low) - 600 at f53.
+- f70 BOOK 'EM (over his shoulder): baton, baton, shield at 2.65x - 3 x 300 (f78 / f90 / f101).
+- f110 TASER (low): barbs from the shield, lights flicker, a comic full-body jolt lifts them - 2500 at f118 (electric arcs, flash, freeze-frame); the crowd laughs as they drop.
+- f140 HOLSTER (wide, spotlight): he holsters the baton over a body lying face up at 2.0 m (KD +19).
+- slate: "PRIME TIME - OFFICER KRANE: RIOT ACT"; defender ends lying back
+- attacker clips: f0 `shield_block` 0.33-0.57 s, f20 `baton_swing` 0.30-0.72 s, f45 `baton_chop` 0.23-0.65 s, f70 `book_em` 0.05-1.80 s, f110 `taser_fire` 0.10-0.60 s, f140 `win_holster` 0.00-0.33 s
+- victim clips: f0 `hit_high_s` 0.00-0.40 s, f28 `hit_high_l` 0.00-0.50 s, f53 `hit_body` 0.00-0.60 s, f78 `hit_high_s` 0.00-0.30 s, f90 `hit_high_s` 0.00-0.30 s, f101 `hit_body` 0.10-0.60 s, f118 `hit_air` 0.10-0.50 s, f132 `kd_fall_b` 1.10-1.87 s
+- camera: f0-20 close on both (fov 32, dist 3.0, h 1.5, yaw 15, lookH 1.3); f20-45 close on defender (fov [32, 28], dist [2.5, 2.5], h 1.6, yaw 35, lookH 1.45); f45-70 low on both (fov 40, dist 2.8, h 0.5, yaw -20, lookH 1.2); f70-110 over_shoulder on defender (fov 36, dist 2.9, h 1.8, yaw -65, lookH 1.4); f110-140 low on defender (fov 40, dist [2.6, 2.2], h 0.6, yaw 30, lookH 1.3); f140-165 wide on both (fov 38, dist 5.5, h 1.7, yaw 5, lookH 1.1)
+- fx: f0 slate, f0 sparks, f28 impact_m, f53 impact_m, f53 shake_s, f78 impact_s, f90 impact_s, f101 impact_m, f110 lights_flicker, f118 electric, f118 flash, f118 shake_m, f118 freeze_frame, f132 dust, f140 spot@attacker, f160 spot_off
+- crowd: f0 boo, f28 ooh, f53 ooh, f101 cheer/up, f118 roar/spike, f132 laugh, f145 cheer/peak
+- attacker path (f, dx, lift m): [28 0.15 0.00] [53 0.30 0.00] [78 0.40 0.00] [101 0.55 0.00] [118 0.50 0.00] [150 0.20 0.00] [163 0.00 0.00]; defender gap (f, gap, lift m): [28 1.10 0.00] [53 1.00 0.00] [78 0.95 0.00] [101 1.00 0.00] [118 1.20 0.20] [128 1.40 0.35] [138 1.60 0.00] [163 2.00 0.00]
+
+**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
+
+- intro: "You have the right to remain standing. You won't."
+- win quotes: "Case closed. Book him, then book the ambulance." / "Resisting arrest looks great on camera. Not on you." / "Stay down. That's not advice, that's an order."
+- banter vs `bruno`: "You walked off with my cuffs and a meat locker door, Bruno." ... "Tonight you come quietly. Or loudly. The paperwork is the same."
+- banter vs `freak`: "Specimen Thirteen, you are in violation of every code in this building." ... "Step away from the chains. Slowly. Claws where I can see them."
+- banter vs `ricky`: "Twenty years I kept your crowd in line, Marquee." ... "Now I read YOU your rights - live on air."
+- banter vs `default`: "Stage Security. Keep your hands where the cameras can see them." ... "Anything you say will be edited and used against you."
+- ending: OFFICER KRANE cuffs the host to his own mic stand and reads him his rights on a live feed. The network's lawyers arrive in forty seconds; Krane has already seized thirty seasons of contracts as evidence. Internal Affairs gives him a medal and a desk. He hates the desk, so on Friday nights he still walks the Control Room, just in case.
 
 **Animation sources** (`tools/clipplan/krane.json`; every `anim.clip`, grab clip, cinematic clip, intro, win and taunt; ranges shown after the automatic fit).
 
@@ -820,7 +901,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `air_chop` | j.M | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Pro_Sword_and_Shield_Pack/sword and shield slash` f9-31 contact f19] | jump legs + baton chop |
 | `air_swing` | j.H | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Pro_Sword_and_Shield_Pack/sword and shield attack (2)` f5-30 contact f18] | jump legs + swing |
 | `throw_reach` | throw_f, throw_b, cuff_l, cuff_m, cuff_h, cuff_ex | Mixamo `Soccer_Game_Pack/goalkeeper catch (2)` f1-30 contact f9 | two-hand grab |
-| `book_em` | throw_f (grab), riot_act (cine) | Mixamo `Pro_Sword_and_Shield_Pack/sword and shield slash (2)` f10-100 contact f22 | Mixamo S&S slash (2): four baton swings (f22/38/49/76) = a baton beating |
+| `book_em` | throw_f (grab), riot_act (cine) | Mixamo `Pro_Sword_and_Shield_Pack/sword and shield slash (2)` f10-64 contact f22 | Mixamo S&S slash (2) f10-64: baton, baton, shield (front passes f22 / f38 / f52). P2: window 10-100 -> 10-64: the full 3.0 s clip played over a 50-frame throw lock at 3.6x (a blur); 1.8 s over 56 f = 1.9x |
 | `perp_walk` | throw_b (grab) | Mixamo `Pro_Sword_and_Shield_Pack/sword and shield 180 turn (2)` f1-26 | Mixamo S&S 180 turn (2): turns with them and shoves them past (back throw; the clip turns 180, CONTRACT 20.2 grab.swap) |
 | `taser_fire` | taser_l, taser_m, taser_h, taser_ex, riot_act (cine) | Mixamo `Pro_Sword_and_Shield_Pack/sword and shield casting (2)` f1-32 contact f8 | Mixamo S&S casting (2): the shield hand thrusts forward (LeftHand f8) = taser fired from the shield |
 | `baton_flip_rise` | baton_flip_l, baton_flip_m, baton_flip_h, baton_flip_ex | LAYER lower[Mixamo `Pro_Sword_and_Shield_Pack/sword and shield jump (2)` f1-30, sync] + upper[Mixamo `Pro_Sword_and_Shield_Pack/sword and shield slash (3)` f17-45 contact f25] | LAYERED: S&S jump (2) legs (apex f16 measured) + rising baton swing = flip anti-air |
@@ -880,8 +961,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.L` | Air Palm | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | jL |  |
 | `j.M` | Flying Front Kick | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Flying High Kick | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | jH |  |
-| `throw_f` | Palm Launch | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 44 f, dmg at f30, same side.  |
-| `throw_b` | Wild Swing Toss | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 46 f, dmg at f28, swap sides.  |
+| `throw_f` | Palm Launch | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 44 f, dmg at f28, same side; victim f0 hit_high_s 0.00-0.10 s, f7 thrown_f 0.25-1.10 s.  |
+| `throw_b` | Wild Swing Toss | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 46 f, dmg at f28, swap sides; victim f0 hit_high_s 0.00-0.12 s, f8 thrown_b 0.10-1.20 s.  |
 | `sway_l` | Drunken Sway | 214L | 4 | 10 | 4 | 17 | - | - | 0 | HL | 0 | - | low-prof 4-13 | custom | Stance entry (CONTRACT 5.3): 4/10/4 then the stance; the lean (0.40 x 1.30 m) dodges highs only, so lows and throws beat it. |
 | `sway_m` | Drunken Sway | 214M | 4 | 10 | 4 | 17 | - | - | 0 | HL | 0 | - | low-prof 4-13 | custom | Stance entry (CONTRACT 5.3): 4/10/4 then the stance; the lean (0.40 x 1.30 m) dodges highs only, so lows and throws beat it. |
 | `sway_h` | Drunken Sway | 214H | 4 | 10 | 4 | 17 | - | - | 0 | HL | 0 | - | low-prof 4-13 | custom | Stance entry (CONTRACT 5.3): 4/10/4 then the stance; the lean (0.40 x 1.30 m) dodges highs only, so lows and throws beat it. |
@@ -937,14 +1018,28 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Lv3 PRIME TIME cinematic `happy_hour` (Happy Hour)** - 160 frames (<= 180), cue `lotus_happy_hour`, damage 400+600+700+900+1900 = 4500, ends KD +19 at 2.4 m.
 
-- f0 LUNGE PALM (side_close) - 400 at f8. f22 SWIG (spotlight): she stops for a long drink; the victim wobbles (dizzy).
-- f40 DRUNKEN ROUNDHOUSE (punch_in) - 600. f64 AXE KICK (over_shoulder) - 700.
-- f90 LOTUS RISING (low_angle_up): flying knee launches - 900.
-- f115 DRAGON PALM (front_low -> slowmo_hold): the flame jet blasts them across the set - 1900 at f122.
-- f140 WOBBLE (crowd_pop): she staggers away, sober as a judge (KD +19).
-- attacker clips: f0 `lunge_palm`, f22 `sway_enter`, f40 `drunk_round`, f64 `axe_kick`, f90 `rising_knee`, f115 `dragon_palm`, f140 `win_sway`
-- victim clips: f0 `hit_high_s`, f22 `dizzy`, f40 `hit_high_l`, f64 `hit_high_l`, f90 `hit_air`, f115 `hit_air`, f128 `kd_fall_b`, f144 `kd_ground_b`
-- camera shots: f0 side_close, f22 spotlight, f40 punch_in, f64 over_shoulder, f90 low_angle_up, f115 front_low, f122 slowmo_hold, f140 crowd_pop
+- f0 LUNGE PALM (close) - 400 at f8. f22 SWIG (close on Lotus, spotlight): she stops for a long drink while the victim wobbles, dizzy; the crowd laughs.
+- f40 DRUNKEN ROUNDHOUSE (punch-in, smear) - 600 at f48. f64 AXE KICK (over her shoulder) - 700 at f72.
+- f90 LOTUS RISING (low, looking up): the flying knee launches them 1.3 m - 900 at f98.
+- f115 DRAGON'S BREATH (low, across the set): the flame jet blasts them 1.6 m away, flipping - 1900 at f124 (fire, flash, freeze-frame).
+- f140 WOBBLE (wide, neon flicker): she staggers off, sober as a judge; opponent face up at 2.4 m (KD +19).
+- slate: "PRIME TIME - LOTUS LIU: HAPPY HOUR"; defender ends lying back
+- attacker clips: f0 `lunge_palm` 0.03-0.39 s, f22 `sway_enter` 0.00-0.30 s, f40 `drunk_round` 0.17-0.57 s, f64 `axe_kick` 0.14-0.57 s, f90 `rising_knee` 0.13-0.55 s, f115 `dragon_palm` 0.45-0.87 s, f140 `win_sway` 0.30-0.63 s
+- victim clips: f0 `hit_high_s` 0.00-0.30 s, f8 `hit_high_s` 0.00-0.40 s, f22 `dizzy` 0.30-0.90 s, f48 `hit_high_l` 0.00-0.45 s, f72 `hit_high_l` 0.10-0.50 s, f98 `hit_air` 0.00-0.60 s, f124 `thrown_f` 0.30-0.74 s, f134 `thrown_f` 0.74-1.33 s
+- camera: f0-22 close on both (fov 32, dist 3.0, h 1.45, yaw 15, lookH 1.3); f22-40 close on attacker (fov 30, dist 2.5, h 1.5, yaw 40, lookH 1.45); f40-64 close on defender (fov [32, 28], dist [2.5, 2.5], h 1.55, yaw 35, lookH 1.45); f64-90 over_shoulder on defender (fov 36, dist 2.9, h 1.8, yaw -65, lookH 1.4); f90-115 low on both (fov 42, dist 3.0, h 0.3, yaw 25, lookH 1.7); f115-140 low on defender (fov 40, dist 3.4, h 0.7, yaw -15, lookH 1.6); f140-160 wide on both (fov 38, dist 5.6, h 1.7, yaw 0, lookH 1.1)
+- fx: f0 slate, f8 impact_s, f22 spot@attacker, f40 spot_off, f48 impact_m, f48 smear@attacker, f72 impact_m, f72 shake_s, f98 impact_l, f98 speed_lines, f124 fire, f124 impact_l, f124 flash, f124 shake_l, f124 freeze_frame, f134 dust, f140 lights_flicker
+- crowd: f8 ooh, f22 laugh, f48 ooh, f72 gasp, f98 cheer/up, f124 roar/spike, f144 applause/peak
+- attacker path (f, dx, lift m): [8 0.20 0.00] [48 0.30 0.00] [72 0.45 0.00] [98 0.55 0.60] [108 0.60 0.90] [115 0.60 0.20] [118 0.60 0.00] [150 0.20 0.00] [158 0.00 0.00]; defender gap (f, gap, lift m): [8 1.00 0.00] [48 1.05 0.00] [72 1.00 0.00] [98 0.90 0.50] [110 1.00 1.30] [120 1.00 1.00] [124 1.20 0.90] [134 2.60 0.00] [158 2.40 0.00]
+
+**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
+
+- intro: "Just one drink. For the cameras. Hic."
+- win quotes: "Sober as a judge. You, however, are seeing two of me." / "Eleven movies of stunts, and you fell for the oldest one." / "Last call. You're cut off."
+- banter vs `rerun`: "You ate my lucky gourd on the Wheel of Pain." ... "Tonight I pour you back into your grave."
+- banter vs `freak`: "You smell like a basement and bad ideas." ... "Easy, big fella. I lead, you fall."
+- banter vs `ricky`: "You wrote the drunk-master gag into my contract, Ricky." ... "Tonight I stick to the script - right up until your jaw."
+- banter vs `default`: "Don't mind me, I'm a little unsteady. Hic." ... "Swing away. I'll be somewhere else."
+- ending: LOTUS LIU stumbles out of the Control Room with the host's sequined jacket over one shoulder and the gourd back on her hip - Rerun coughed it up in the elevator. She sells the jacket, buys the Wheel of Pain set and turns it into a noodle bar. The gourd hangs over the door. Nobody knows what is inside it, and she still has not had a drink.
 
 **Animation sources** (`tools/clipplan/lotus.json`; every `anim.clip`, grab clip, cinematic clip, intro, win and taunt; ranges shown after the automatic fit).
 
@@ -1027,8 +1122,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.L` | Air Jab | j.L | 6 | 7 | 3 | 15 | air 13 | air 9 | 300 | H | 9 | - | - | jL | (startup 5->6) Big body: startup 6. |
 | `j.M` | Air Backhand | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Falling Cleaver | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | jH |  |
-| `throw_f` | Three Cuts | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1300 | U | 0 | - | - | THROW_F | grab: range 0.68 m, lock 52 f, dmg at f40, same side. (damage 1200->1300) Big-body throw: 1300. |
-| `throw_b` | Over the Shoulder | 4LM | 5 | 3 | 23 | 30 | KD +15 | - | 1300 | U | 0 | - | - | THROW_B | grab: range 0.68 m, lock 46 f, dmg at f30, swap sides. (damage 1200->1300) Big-body throw: 1300. |
+| `throw_f` | Three Cuts | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1300 | U | 0 | - | - | THROW_F | grab: range 0.68 m, lock 66 f, dmg at f54, same side; victim f0 hit_high_s 0.00-0.15 s, f12 hit_high_s 0.00-0.60 s, f37 hit_body 0.10-0.60 s, f54 kd_fall_b 1.04-1.50 s. (damage 1200->1300) Big-body throw: 1300. |
+| `throw_b` | Over the Shoulder | 4LM | 5 | 3 | 23 | 30 | KD +15 | - | 1300 | U | 0 | - | - | THROW_B | grab: range 0.68 m, lock 46 f, dmg at f28, swap sides; victim f0 hit_body 0.00-0.20 s, f10 thrown_b 0.10-0.53 s, f28 thrown_b 0.53-1.20 s. (damage 1200->1300) Big-body throw: 1300. |
 | `meat_hook_l` | Meat Hook | 236L | 18 | 11 | 24 | 52 | KD +30 | -6 | 1100 | HL | 15 | super | armor 1x 4-17 | custom | hits: f18 500, f27 600. FIGHTING_DESIGN 8c MEAT HOOK (slow 2-hit armored heavy, 22f, wall splat): L 18 / M 22 / H 26 startup with armor through startup (H 2 hits), -6 on block, KD +30. |
 | `meat_hook_m` | Meat Hook | 236M | 22 | 11 | 24 | 56 | KD +30 | -6 | 1200 | HL | 15 | super | armor 1x 4-21 | custom | hits: f22 550, f31 650. FIGHTING_DESIGN 8c MEAT HOOK (slow 2-hit armored heavy, 22f, wall splat): L 18 / M 22 / H 26 startup with armor through startup (H 2 hits), -6 on block, KD +30. |
 | `meat_hook_h` | Meat Hook | 236H | 26 | 11 | 24 | 60 | KD +30 | -6 | 1300 | HL | 15 | super | armor 2x 4-25 | custom | hits: f26 600, f35 700. FIGHTING_DESIGN 8c MEAT HOOK (slow 2-hit armored heavy, 22f, wall splat): L 18 / M 22 / H 26 startup with armor through startup (H 2 hits), -6 on block, KD +30. |
@@ -1083,13 +1178,28 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Lv3 PRIME TIME cinematic `sunday_roast` (Sunday Roast)** - 170 frames (<= 180), cue `boneyard_sunday_roast`, damage 500+600+600+300+300+2200 = 4500, ends KD +19 at 1.8 m.
 
-- f0 CLEAVER SWING (side_close) - 500. f25 MEAT HOOK (punch_in): two swings - 600 + 600.
-- f60 THREE CUTS (over_shoulder): holds them on the butcher block, flat-side smacks - 300 + 300.
-- f100 CLEAVER DROP (low_angle_up -> top_down): leaps and smashes them through the block - 2200 at f128.
-- f145 CHEST THUMP (crowd_pop): 'Order up!' (KD +19).
-- attacker clips: f0 `cleaver_swing`, f25 `meat_hook_swing`, f60 `three_swings`, f100 `cleaver_leap`, f145 `taunt_thump`
-- victim clips: f0 `hit_high_l`, f25 `hit_body`, f60 `hit_high_s`, f100 `hit_air`, f128 `kd_ground_b`
-- camera shots: f0 side_close, f25 punch_in, f60 over_shoulder, f100 low_angle_up, f128 top_down, f145 crowd_pop
+- f0 CLEAVER SWING (close, sparks) - 500 at f8.
+- f25 MEAT HOOK (punch-in on the defender): two swings at 2.1x - 600 + 600 (f32 / f50).
+- f60 THREE CUTS (over his shoulder): flat-side smacks on the butcher block - 300 + 300 (f70 / f94); the crowd boos the butcher.
+- f100 CLEAVER DROP (low, looking up at the 1.2 m leap -> top-down): smashes them flat - 2200 at f128 (comic splat, flash, freeze-frame, dust).
+- f145 CHEST THUMP (close, spotlight): 'Order up!' Opponent face up at 1.8 m (KD +19).
+- slate: "PRIME TIME - BONEYARD: SUNDAY ROAST"; defender ends lying back
+- attacker clips: f0 `cleaver_swing` 0.50-0.92 s, f25 `meat_hook_swing` 0.25-1.49 s, f60 `three_swings` 0.08-1.75 s, f100 `cleaver_leap` 0.30-1.05 s, f145 `taunt_thump` 0.50-0.92 s
+- victim clips: f0 `hit_high_l` 0.00-0.40 s, f8 `hit_high_l` 0.00-0.45 s, f32 `hit_body` 0.00-0.35 s, f50 `hit_high_s` 0.00-0.50 s, f70 `hit_high_s` 0.00-0.50 s, f94 `hit_body` 0.10-0.70 s, f128 `kd_fall_b` 1.25-1.87 s, f148 `kd_ground_b` 0.00-0.37 s
+- camera: f0-25 close on both (fov 32, dist 3.0, h 1.5, yaw 15, lookH 1.3); f25-60 close on defender (fov [32, 28], dist [2.5, 2.5], h 1.6, yaw 38, lookH 1.45); f60-100 over_shoulder on defender (fov 36, dist 2.9, h 1.8, yaw -65, lookH 1.4); f100-128 low on attacker (fov 44, dist 3.2, h 0.35, yaw 20, lookH 1.9); f128-145 top on defender (fov 40, dist 1.4, h 5.4, yaw 10, lookH 0.5); f145-170 close on attacker (fov 32, dist 2.6, h 1.55, yaw 30, lookH 1.45)
+- fx: f0 slate, f8 impact_m, f8 sparks, f32 impact_m, f50 impact_m, f50 shake_s, f70 impact_s, f94 impact_m, f110 speed_lines, f128 impact_l, f128 splat, f128 flash, f128 shake_l, f128 dust, f128 freeze_frame, f145 spot@attacker, f166 spot_off
+- crowd: f8 gasp, f50 ooh, f94 boo, f128 roar/spike, f148 chant/peak
+- attacker path (f, dx, lift m): [8 0.10 0.00] [32 0.20 0.00] [50 0.30 0.00] [94 0.35 0.00] [110 0.20 0.30] [120 0.50 1.20] [128 0.90 0.10] [132 0.90 0.00] [150 0.80 0.00] [168 0.00 0.00]; defender gap (f, gap, lift m): [8 1.10 0.00] [32 1.00 0.00] [50 1.05 0.00] [70 1.00 0.00] [94 1.00 0.00] [110 1.20 0.00] [128 0.70 0.00] [132 0.90 0.00] [168 1.80 0.00]
+
+**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
+
+- intro: "Take a number. The butcher's open."
+- win quotes: "Order up. Tenderized, flat side, well done." / "I hang the good ones in the freezer. You're a keeper." / "No refunds on Block Street."
+- banter vs `johnny`: "Your name's hanging in my freezer, rock star. Next to the ribs." ... "Tonight I carve the rest of the marquee."
+- banter vs `freak`: "They grew you in my basement. You owe me rent." ... "Big cut, tough meat. I've got the cleaver for it."
+- banter vs `ricky`: "Four seasons I tenderized your contestants, Ricky." ... "Tonight I work on the host."
+- banter vs `default`: "Step up to the counter." ... "Relax. I only use the flat side. Mostly."
+- ending: BONEYARD hangs the host's sequined jacket in the meat locker next to Johnny Riot's marquee letters and locks the door. KNOCKOUT 13 cancels HIT PARADE and replaces it with a cooking show, and Boneyard is the only chef who stays. His signature dish is called The Sunday Roast. Nobody has ever sent it back.
 
 **Animation sources** (`tools/clipplan/boneyard.json`; every `anim.clip`, grab clip, cinematic clip, intro, win and taunt; ranges shown after the automatic fit).
 
@@ -1111,7 +1221,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `air_backhand` | j.M | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Pro_Melee_Axe_Pack/standing melee attack backhand` f22-44 contact f32] | jump apex legs + rising backhand |
 | `air_chop` | j.H | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Pro_Melee_Axe_Pack/standing melee attack downward` f13-38 contact f26] | jump apex legs + overhead chop |
 | `throw_reach` | throw_f, throw_b | Mixamo `Soccer_Game_Pack/goalkeeper catch (2)` f2-30 contact f9 | two-hand grab |
-| `three_swings` | throw_f (grab), sunday_roast (cine) | Mixamo `Pro_Melee_Axe_Pack/standing melee combo attack ver. 2` f15-95 contact f30 | Mixamo axe combo ver. 2: three swings f30/60/80 (flat-side smacks on the held victim) |
+| `three_swings` | throw_f (grab), sunday_roast (cine) | Mixamo `Pro_Melee_Axe_Pack/standing melee combo attack ver. 2` f15-95 contact f30 | Mixamo axe combo ver. 2: three swings f30/60/80 (flat-side smacks on the held victim); P2: the three swings are declared as marks (the throw and the Lv3 time the victim's reactions on them) |
 | `over_shoulder` | throw_b (grab) | Mixamo `Pro_Melee_Axe_Pack/standing disarm over shoulder` f1-50 contact f10 | Mixamo axe disarm over shoulder: hauls something over his shoulder = throw behind |
 | `meat_hook_swing` | meat_hook_l, meat_hook_m, meat_hook_h, meat_hook_ex, sunday_roast (cine) | Mixamo `Pro_Melee_Axe_Pack/standing melee combo attack ver. 3` f15-70 contact f30 | Mixamo axe combo ver. 3: two swings, front passes f30 and f49 |
 | `cleaver_leap` | cleaver_drop_l, cleaver_drop_m, cleaver_drop_h, cleaver_drop_ex, sunday_roast (cine) | Mixamo `Pro_Melee_Axe_Pack/standing melee run jump attack` f30-83 contact f53 | Mixamo axe run jump attack: leap, hands meet overhead, crouched landing smash f53 |
@@ -1174,8 +1284,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.L` | Air Jab | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | jL |  |
 | `j.M` | Air Swipe | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Jump Turning Kick | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | jH |  |
-| `throw_f` | Footwork Trip | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 48 f, dmg at f32, same side.  |
-| `throw_b` | Flair Toss | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 46 f, dmg at f30, swap sides.  |
+| `throw_f` | Footwork Trip | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 48 f, dmg at f28, same side; victim f0 hit_high_s 0.00-0.20 s, f12 hit_low 0.00-0.50 s, f28 kd_fall_b 1.00-1.55 s.  |
+| `throw_b` | Flair Toss | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 46 f, dmg at f32, swap sides; victim f0 hit_high_s 0.00-0.15 s, f8 thrown_b 0.00-0.55 s, f32 thrown_b 0.55-1.10 s.  |
 | `windmill_l` | Windmill | 236L | 12 | 10 | 24 | 45 | KD +30 | -8 | 1000 | HL | 13 | super | low-prof 6-22 | custom | hits: f12 450, f20 550. Multi-hit spin (Breakdance flair chain): one hit per leg pass (entry, 2 per flair loop, exit) at ~2.5x, -8/-10/-12 on block, KD +30 from the last hit. |
 | `windmill_m` | Windmill | 236M | 13 | 34 | 26 | 72 | KD +30 | -10 | 1100 | HL | 13 | super | low-prof 6-47 | custom | hits: f13 250, f24 250, f37 300, f45 300. Multi-hit spin (Breakdance flair chain): one hit per leg pass (entry, 2 per flair loop, exit) at ~2.5x, -8/-10/-12 on block, KD +30 from the last hit. |
 | `windmill_h` | Windmill | 236H | 14 | 57 | 28 | 98 | KD +30 | -12 | 1200 | HL | 13 | super | low-prof 6-71 | custom | hits: f14 200, f25 200, f38 200, f48 200, f61 200, f69 200. Multi-hit spin (Breakdance flair chain): one hit per leg pass (entry, 2 per flair loop, exit) at ~2.5x, -8/-10/-12 on block, KD +30 from the last hit. |
@@ -1230,13 +1340,28 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Lv3 PRIME TIME cinematic `battle_of_the_year` (Battle of the Year)** - 165 frames (<= 180), cue `spin_battle`, damage 400+300+300+600+700+900+1300 = 4500, ends KD +19 at 2.2 m.
 
-- f0 FRONT KICK (side_close) - 400 at f8. f22 SWIPES (front_low): two leg whips - 300 + 300.
-- f48 FLARE SWEEP (top_down): swept off their feet - 600. f72 BUTTERFLY (low_angle_up) - 700.
-- f100 JUMP TURNING KICK (orbit) - 900. f128 HANDSPIN (slowmo_hold): legs-up spin juggle - 1300.
-- f148 FREEZE (crowd_pop): handstand freeze, the crowd scores 10s (KD +19).
-- attacker clips: f0 `front_kick`, f22 `swipes`, f48 `flare_sweep`, f72 `butterfly`, f100 `jump_kick`, f128 `handspin_clip`, f148 `win_freeze`
-- victim clips: f0 `hit_high_s`, f22 `hit_high_l`, f48 `hit_low`, f72 `hit_air`, f100 `hit_air`, f128 `hit_air`, f140 `kd_fall_b`, f152 `kd_ground_b`
-- camera shots: f0 side_close, f22 front_low, f48 top_down, f72 low_angle_up, f100 orbit, f128 slowmo_hold, f148 crowd_pop
+- f0 FRONT KICK (close) - 400 at f8. f22 SWIPES (low): two leg whips at 1.7x - 300 + 300 (f30 / f36).
+- f48 FLARE SWEEP (top-down): swept off their feet and up - 600 at f55.
+- f72 BUTTERFLY (low, looking up) - 700 at f80. f100 JUMP TURNING KICK (orbit -30 -> +50 deg, both in the air) - 900 at f108.
+- f128 HANDSPIN (close): the legs-up spin juggles them - 1300 at f134 (flash, freeze-frame).
+- f150 FREEZE (wide, spotlight, confetti): handstand freeze, the crowd scores 10s; opponent face up at 2.2 m (KD +19).
+- slate: "PRIME TIME - SPIN: BATTLE OF THE YEAR"; defender ends lying back
+- attacker clips: f0 `front_kick` 0.26-0.62 s, f22 `swipes` 0.31-1.03 s, f48 `flare_sweep` 0.38-0.67 s, f72 `butterfly` 0.18-0.65 s, f100 `jump_kick` 0.12-0.58 s, f128 `handspin_clip` 0.20-0.57 s, f150 `win_freeze` 1.00-1.25 s
+- victim clips: f0 `hit_high_s` 0.00-0.30 s, f8 `hit_high_s` 0.00-0.35 s, f30 `hit_high_l` 0.00-0.20 s, f36 `hit_high_l` 0.10-0.40 s, f55 `hit_air` 0.00-0.40 s, f80 `hit_air` 0.30-0.70 s, f108 `hit_air` 0.50-1.00 s, f134 `hit_air` 0.60-1.10 s, f142 `kd_fall_b` 1.30-1.87 s
+- camera: f0-22 close on both (fov 32, dist 3.0, h 1.4, yaw 15, lookH 1.3); f22-48 low on both (fov 40, dist 2.6, h 0.45, yaw -20, lookH 1.1); f48-72 top on both (fov 42, dist 1.6, h 5.0, yaw 10, lookH 0.4); f72-100 low on defender (fov 42, dist 3.0, h 0.3, yaw 25, lookH 1.9); f100-128 orbit on both (fov 40, dist 3.6, h 2.0, yaw [-30, 50], lookH 1.9); f128-150 close on both (fov [36, 32], dist 3.4, h 1.3, yaw 30, lookH 1.6); f150-165 wide on both (fov 38, dist 5.6, h 1.7, yaw 0, lookH 1.1)
+- fx: f0 slate, f8 impact_s, f30 impact_s, f36 impact_s, f36 smear@attacker, f55 impact_m, f55 dust, f80 impact_m, f80 speed_lines, f108 impact_m, f108 shake_s, f134 impact_l, f134 flash, f134 shake_m, f134 freeze_frame, f150 spot@attacker, f150 confetti
+- crowd: f8 ooh, f30 cheer, f55 ooh/up, f80 cheer/up, f108 roar/up, f134 roar/spike, f150 chant/peak
+- attacker path (f, dx, lift m): [8 0.20 0.00] [30 0.35 0.00] [55 0.45 0.00] [80 0.60 0.50] [92 0.70 0.00] [108 0.80 0.80] [118 0.90 0.00] [134 0.95 0.20] [148 0.90 0.00] [163 0.00 0.00]; defender gap (f, gap, lift m): [8 1.00 0.00] [30 1.00 0.00] [55 1.00 0.30] [80 1.00 0.90] [100 1.00 1.20] [108 1.00 1.40] [128 1.00 1.00] [134 1.00 0.90] [142 1.20 0.00] [163 2.20 0.00]
+
+**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
+
+- intro: "Cypher's open. Crowd's the judge. You're the warm-up."
+- win quotes: "Ten, ten, ten. The judges have spoken." / "You danced like you were paying rent on the floor." / "Battle's over. Send me somebody with footwork."
+- banter vs `patch`: "It was ONE headspin through your cue, Patch." ... "Count me in. I'll be done before three."
+- banter vs `freak`: "Big guy, zero rhythm. This is gonna be embarrassing." ... "Try to keep up. The floor is lava, and I'm the lava."
+- banter vs `ricky`: "You filmed my cypher without asking, Ricky." ... "Tonight the crowd votes. Not the network."
+- banter vs `default`: "Circle up. Show me what you got." ... "Nice stance. Shame about the rest."
+- ending: SPIN wins the season and the rooftop cypher on the same night; the crowd holds up score cards all the way down the fire escape. He wires the host's microphone into a speaker and runs a free battle on the roof every Friday. The network sends lawyers. The lawyers stay for the music.
 
 **Animation sources** (`tools/clipplan/spin.json`; every `anim.clip`, grab clip, cinematic clip, intro, win and taunt; ranges shown after the automatic fit).
 
@@ -1254,7 +1379,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `air_swipe` | j.M | Mixamo `Breakdance_Pack/breakdance swipes` f66-86 contact f76 | breakdance swipes leg whip in the air |
 | `jump_kick` | j.H, battle_of_the_year (cine) | CMU 90_05 (jump_kick.1) f252-330 contact 282 | CMU jump_kick.1 usable (90_05 airborne turning kick, foot 1.76 m) |
 | `throw_reach` | throw_f, throw_b | Mixamo `Soccer_Game_Pack/goalkeeper catch (2)` f2-30 contact f9 | two-hand grab |
-| `footwork_trip` | throw_f (grab) | Mixamo `Breakdance_Pack/breakdance footwork to freeze` f1-80 | Mixamo footwork to freeze: drags them down into floor work |
+| `footwork_trip` | throw_f (grab) | Mixamo `Breakdance_Pack/breakdance footwork to freeze` f1-50 contact f30 | Mixamo footwork to freeze f1-50: drops to the floor, lunges and sweeps the leg up at f30 (grab sheet: leg sweep at clip 0.99 s). P2: window 1-80 -> 1-50 (the full 2.63 s over a 48-frame lock played at 3.3x) |
 | `flair_toss` | throw_b (grab) | Mixamo `Breakdance_Pack/flair (3)` f1-51 contact f36 | Mixamo flair (3) spin = fling behind |
 | `windmill_l` | windmill_l | SEQ [Mixamo `Breakdance_Pack/flair (3)` f34-51 contact f43] + [Mixamo `Breakdance_Pack/flair` f1-40 contact f5] | SEQ: flair (3) entry + flair exit f1-40 (chain from MIXAMO_CLIPS) |
 | `windmill_m` | windmill_m | SEQ [Mixamo `Breakdance_Pack/flair (3)` f34-51 contact f43] + [Mixamo `Breakdance_Pack/flair (2)` f1-31 contact f8] + [Mixamo `Breakdance_Pack/flair` f1-40 contact f5] | SEQ: flair entry + 1 flair loop + exit f1-40 |
@@ -1317,8 +1442,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.L` | Air Knee | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | jL |  |
 | `j.M` | Flying Volley | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Flying Punt | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | jH |  |
-| `throw_f` | Drop Kick | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 50 f, dmg at f34, same side.  |
-| `throw_b` | Keeper's Throw | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 50 f, dmg at f32, swap sides.  |
+| `throw_f` | Drop Kick | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 50 f, dmg at f25, same side; victim f0 hit_body 0.00-0.35 s, f25 thrown_f 0.30-1.33 s.  |
+| `throw_b` | Overhead Kick | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 64 f, dmg at f15, swap sides; victim f0 hit_high_s 0.00-0.15 s, f8 thrown_b 0.10-0.67 s, f30 thrown_b 0.67-1.20 s.  |
 | `power_shot_l` | Power Shot | 236L | 16 | 1 | 31 | 47 | -1 | -5 | 600 | L | 8 | super | - | proj_l | (guard HL->L) L is a ground roller: guard L (must be blocked crouching). |
 | `power_shot_m` | Power Shot | 236M | 14 | 1 | 33 | 47 | -3 | -7 | 600 | HL | 8 | super | - | proj_m |  |
 | `power_shot_h` | Power Shot | 236H | 12 | 1 | 35 | 47 | -5 | -9 | 600 | HL | 8 | super | - | proj_h |  |
@@ -1346,13 +1471,13 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `2M` Grass Cutter: Standing low swing kick along the grass: long low, but he stays tall.
 - `5H` Volley: Big front volley. (hit volume: near edge pulled back 0.13 m to point-blank reach 0.66 m (clips.json `volley` effector RightFoot))
 - `2H` Slide Tackle: Feet-first slide tackle from range (travels 1.2 m). (hit volume: near edge pulled back 0.11 m to point-blank reach 0.66 m (clips.json `slide_tackle` effector LeftFoot))
-- `4M` Knee Trap: Quick short knee (+2/-3).
+- `4M` Knee Trap: Quick short knee (+2/-3). (PENDING RE-BAKE: clip `knee_trap` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
 - `6H` Diving Header: Hopping header onto the head: overhead. (hand-set hit volume f20-22 x 0.55 y 1.36 w 0.40 h 0.72)
 - `j.L` Air Knee: Air knee.
 - `j.M` Flying Volley: Air-to-air volley.
 - `j.H` Flying Punt: Big flying punt jump-in.
 - `throw_f` Drop Kick: Drops them like a ball and punts them away.
-- `throw_b` Keeper's Throw: Bowls them out behind him.
+- `throw_b` Overhead Kick: Falls back and bicycle-kicks them over his head.
 - `power_shot_l` Power Shot: Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off the wall. (projectile 5.0 m/s, 1 hit(s), y 0.15 m; ball shoot)
 - `power_shot_m` Power Shot: Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off the wall. (projectile 7.0 m/s, 1 hit(s), y 1.00 m; ball shoot)
 - `power_shot_h` Power Shot: Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off the wall. (projectile 5.5 m/s, 1 hit(s), y 0.30 m, arc; ball shoot)
@@ -1374,14 +1499,28 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Lv3 PRIME TIME cinematic `hat_trick` (Hat Trick)** - 165 frames (<= 180), cue `gazza_hat_trick`, damage 600+800+900+2200 = 4500, ends KD +19 at 3.0 m.
 
-- f0 VOLLEY (side_close): point-blank volley into the gut - 600 at f10.
-- f30 SHOT (front_low): a fresh ball to the chest - 800 at f40. f60 HEADER (punch_in) - 900 at f70.
-- f90 KEEPY-UPPY (wide): juggles the ball over the dazed opponent while the crowd counts.
-- f110 BICYCLE KICK (low_angle_up -> slowmo_hold): the ball and the opponent both go in - 2200 at f128.
-- f148 POINTING (crowd_pop): 'GOAL!' (KD +19).
-- attacker clips: f0 `volley`, f30 `shot_kick`, f60 `header`, f90 `keepy`, f110 `bicycle`, f148 `win_point`
-- victim clips: f0 `hit_body`, f30 `hit_high_l`, f60 `hit_high_s`, f90 `dizzy`, f128 `kd_fall_b`, f140 `kd_ground_b`
-- camera shots: f0 side_close, f30 front_low, f60 punch_in, f90 wide, f110 low_angle_up, f128 slowmo_hold, f148 crowd_pop
+- f0 VOLLEY (close): point-blank into the gut - 600 at f10.
+- f30 SHOT (low, ball trail): a fresh ball to the chest - 800 at f40. f60 HEADER (punch-in) - 900 at f70.
+- f90 KEEPY-UPPY (wide): he juggles over the dazed opponent while the crowd counts.
+- f112 BICYCLE KICK (low, looking up): the real overhead kick - 2200 at f128 (ball trail, flash, freeze-frame); they fly 1.9 m and land face up.
+- f148 POINTING (wide, confetti): 'GOAL!' Opponent face up at 3.0 m (KD +19).
+- slate: "PRIME TIME - GAZZA: HAT TRICK"; defender ends lying back
+- attacker clips: f0 `volley` 0.30-0.80 s, f30 `shot_kick` 0.33-0.83 s, f60 `header` 0.23-0.73 s, f90 `taunt_keepy` 0.20-0.57 s, f112 `bicycle_toss` 0.33-0.93 s, f148 `win_point` 0.50-0.78 s
+- victim clips: f0 `hit_body` 0.00-0.40 s, f10 `hit_body` 0.00-0.50 s, f40 `hit_high_l` 0.00-0.50 s, f70 `hit_high_s` 0.00-0.50 s, f90 `dizzy` 0.30-0.90 s, f128 `thrown_f` 0.30-0.74 s, f140 `thrown_f` 0.74-1.33 s
+- camera: f0-30 close on both (fov 32, dist 3.0, h 1.3, yaw 15, lookH 1.3); f30-60 low on both (fov 38, dist 2.8, h 0.4, yaw -20, lookH 1.1); f60-90 close on defender (fov [32, 28], dist [2.5, 2.5], h 1.6, yaw 35, lookH 1.45); f90-112 wide on both (fov 38, dist 4.8, h 1.6, yaw 0, lookH 1.1); f112-140 low on attacker (fov 44, dist 3.2, h 0.3, yaw 25, lookH 1.5); f140-165 wide on both (fov 38, dist 6.0, h 1.8, yaw 0, lookH 1.1)
+- fx: f0 slate, f10 impact_m, f30 ball_trail@attacker, f40 impact_m, f40 ball_trail, f70 impact_m, f70 shake_s, f112 speed_lines, f128 impact_l, f128 ball_trail, f128 flash, f128 shake_l, f128 freeze_frame, f140 dust, f148 confetti
+- crowd: f10 ooh, f40 ooh, f70 cheer, f90 chant/up, f128 roar/spike, f148 cheer/peak
+- attacker path (f, dx, lift m): [10 0.10 0.00] [40 0.20 0.00] [70 0.35 0.00] [112 0.30 0.00] [148 0.30 0.00] [163 0.00 0.00]; defender gap (f, gap, lift m): [10 1.00 0.00] [40 1.20 0.00] [70 1.10 0.00] [90 1.20 0.00] [128 1.10 0.40] [136 2.40 0.30] [142 3.00 0.00] [163 3.00 0.00]
+
+**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
+
+- intro: "Brought me own ball. Ref's not coming. Kick-off."
+- win quotes: "GOAL! And he's gone down like a sack of match programmes." / "Top bins. Back of the net. Back of your head." / "Man of the match. Again. Somebody fetch the trophy."
+- banter vs `zambini`: "It was ONE dove, mate, and it was offside." ... "Pull a rabbit out of that hat. Go on. I'll volley it."
+- banter vs `freak`: "Big lad. Bet you can't head a ball, though." ... "I've played Sunday league, son. You're nothing."
+- banter vs `ricky`: "Banned from every ground in the county, and you still booked me." ... "Blow the whistle, Ricky. Final whistle."
+- banter vs `default`: "Mind your ankles. I won't." ... "Two-footed? Me? Never."
+- ending: GAZZA knocks the host clean off his own set with a bicycle kick and celebrates with his hoodie over his head for eleven minutes. He spends the prize money on a pitch behind the Rust Theater with real floodlights and a real referee. He argues with that referee every Sunday. He has never been happier.
 
 **Animation sources** (`tools/clipplan/gazza.json`; every `anim.clip`, grab clip, cinematic clip, intro, win and taunt; ranges shown after the automatic fit).
 
@@ -1394,22 +1533,22 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `crouch_jab` | 2L | LAYER lower[Mixamo `Pro_Magic_Pack/Crouch Idle` f1-42, hold f1] + upper[CMU 13_18 (jab.2) f1427-1495 contact 1445 MIRROR] | Crouch Idle legs + jab |
 | `grass_cutter` | 2M | CMU 74_03 f181-247 contact 226 | CMU punt_kick 74_03 181/226/247 (usable: soccer-style swing kick, low 0.36 m) |
 | `slide_tackle` | 2H | Mixamo `Soccer_Game_Pack/soccer tackle` f11-63 contact f27 | Mixamo soccer tackle: feet-first slide, legs along the floor f26-28 (dense render) |
-| `knee_trap` | 4M | Mixamo `Soccer_Game_Pack/kneeing soccerball (2)` f1-19 contact f9 | Mixamo kneeing soccerball (2): right knee at hip height f9-13 (dense render) |
+| `knee_trap` | 4M | Mixamo `Soccer_Game_Pack/kneeing soccerball (2)` f1-19 contact f9 | Mixamo kneeing soccerball (2): right knee at hip height f9-13 (dense render). P2: effector RightKnee - the builder named the right FOOT (bake: foot 0.50 m forward at 0.42 m up, knee 0.45 m / 0.98 m) because the toe sits 5 cm farther out than the knee, which fails the knee rule; contact_check flagged EXT on the foot |
 | `header` | 6H, hat_trick (cine) | Mixamo `Soccer_Game_Pack/header soccerball` f15-45 contact f27 | Mixamo header soccerball (weak: head only 1.14 m/s and behind the hips at contact - hitbox hand-set) |
 | `air_knee` | j.L | Mixamo `Soccer_Game_Pack/kneeing soccerball` f9-28 contact f16 | kneeing soccerball played airborne |
 | `flying_volley` | j.M | Mixamo `Soccer_Game_Pack/strike foward jog` f8-30 contact f18 | Mixamo strike foward jog (running kick, front pass f18 at 1.15 m) played airborne |
 | `flying_punt` | j.H | Mixamo `Soccer_Game_Pack/goalkeeper drop kick` f55-77 contact f65 | Mixamo goalkeeper drop kick: leg extended forward-up f65-66 |
 | `throw_reach` | throw_f, throw_b | Mixamo `Soccer_Game_Pack/goalkeeper catch (2)` f2-30 contact f9 | goalkeeper two-hand catch |
-| `drop_kick_throw` | throw_f (grab) | Mixamo `Soccer_Game_Pack/goalkeeper drop kick` f40-118 contact f65 | Mixamo goalkeeper drop kick from the ball drop (f57) = drops them and punts them away |
-| `keeper_throw` | throw_b (grab) | Mixamo `Soccer_Game_Pack/goalkeeper overhand throw` f20-86 contact f49 | Mixamo goalkeeper overhand throw (release f49) = bowls them out behind |
+| `drop_kick_throw` | throw_f (grab) | Mixamo `Soccer_Game_Pack/goalkeeper drop kick` f45-85 contact f65 | Mixamo goalkeeper drop kick f45-85: the drop, the step and the punt (leg extended f65). P2: window 40-118 -> 45-85 (the full 2.6 s over a 50-frame lock played at 3.1x; 1.33 s = 1.6x) |
+| `bicycle_toss` | throw_b (grab), hat_trick (cine) | Mixamo `Soccer_Game_Pack/scissor kick` f5-80 contact f23 | P2 back throw: Mixamo scissor kick f5-80 with its real height (not ground-locked like the `bicycle` DP clip): he falls back and bicycle-kicks the victim over his head (f23), lands on his back and gets up facing the other way (net hips yaw +192 deg, mixamo_inventory) = the victim lands BEHIND him and his facing flip at the release is seamless. Replaces `keeper_throw` (goalkeeper overhand throw): it bowls FORWARD while a back throw's victim lands behind |
 | `shot_kick` | power_shot_l, power_shot_m, power_shot_h, power_shot_ex, top_bins, hat_trick (cine) | Mixamo `Soccer_Game_Pack/soccer penalty kick` f12-46 contact f27 | Mixamo soccer penalty kick: the plant and strike (front pass f27, foot at 0.42 m); run-up trimmed |
-| `bicycle` | bicycle_l, bicycle_m, bicycle_h, bicycle_ex, hat_trick (cine) | Mixamo `Soccer_Game_Pack/scissor kick` f12-84 contact f23 | Mixamo scissor kick: foot at the top f23 (measured hips apex f23), lands on the back, up by f84 |
-| `keepy` | keepy_l, keepy_m, keepy_h, keepy_ex, hat_trick (cine) | Mixamo `Soccer_Game_Pack/kick up soccerball` f7-41 contact f20 | Mixamo kick up soccerball (flick f20) |
+| `bicycle` | bicycle_l, bicycle_m, bicycle_h, bicycle_ex | Mixamo `Soccer_Game_Pack/scissor kick` f12-84 contact f23 | Mixamo scissor kick: foot at the top f23 (measured hips apex f23), lands on the back, up by f84 |
+| `keepy` | keepy_l, keepy_m, keepy_h, keepy_ex | Mixamo `Soccer_Game_Pack/kick up soccerball` f7-41 contact f20 | Mixamo kick up soccerball (flick f20) |
 | `dive_roll` | dive_l, dive_m, dive_h, dive_ex | Mixamo `Soccer_Game_Pack/goalkeeper diving save (2)` f20-80 | Mixamo goalkeeper diving save (2): forward dive-roll, back up by f97 |
 | `intro_flick` | intro | Mixamo `Soccer_Game_Pack/kick up soccerball` f1-41 | flicks the ball up |
 | `win_point` | hat_trick (cine), win | Mixamo `Soccer_Game_Pack/goalkeeper directing` f1-120 | points and directs |
 | `win_juggle` | win | Mixamo `Soccer_Game_Pack/stall soccerball (4)` f1-56 | stalls the ball |
-| `taunt_keepy` | taunt | Mixamo `Soccer_Game_Pack/stall soccerball (2)` f1-65 | keepy-uppy stall |
+| `taunt_keepy` | hat_trick (cine), taunt | Mixamo `Soccer_Game_Pack/stall soccerball (2)` f1-65 | keepy-uppy stall |
 
 **CPU.** `{"style": "setplay", "rangeM": [1.8, 3.5], "zoning": ["power_shot_m", "power_shot_l"], "setup": ["keepy_m"], "antiAir": ["bicycle_l", "j.M"], "pokes": ["5M", "2M"], "punish": ["5H", "bicycle_h"], "combo": ["2L", "5M", "power_shot_h"], "approach": ["dive_m"], "meter": "top_bins"}`. **Intro** `intro_flick`, **win** `win_point`, `win_juggle`, **taunt** `taunt_keepy`.
 
@@ -1458,8 +1597,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.L` | Air Swat | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | jL |  |
 | `j.M` | Air Claw | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Pounce | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | jH |  |
-| `throw_f` | In Your Face | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 50 f, dmg at f32, same side.  |
-| `throw_b` | Graveyard Swing | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f30, swap sides.  |
+| `throw_f` | In Your Face | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 50 f, dmg at f26, same side; victim f0 hit_high_s 0.00-0.30 s, f14 hit_high_s 0.00-0.50 s, f26 hit_high_l 0.00-0.60 s, f38 kd_fall_b 1.04-1.50 s.  |
+| `throw_b` | Graveyard Swing | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f24, swap sides; victim f0 hit_high_s 0.00-0.20 s, f10 thrown_b 0.05-0.40 s, f24 thrown_b 0.40-1.20 s.  |
 | `play_dead_l` | Play Dead | 214L | 4 | 17 | 26 | 46 | - | - | 0 | HL | 0 | - | low-prof 14-40, catch 4-20 | custom | counter unique (CONTRACT 5.3: PLAY DEAD catches strikes f4-20): L 4-20, M 4-24 (longer, more recovery), H 4-20 into the stronger GRAVE RISE; lying from f14 (0.40 m) so late highs whiff; throws and projectiles beat it. |
 | `play_dead_m` | Play Dead | 214M | 4 | 21 | 30 | 54 | - | - | 0 | HL | 0 | - | low-prof 14-40, catch 4-24 | custom | counter unique (CONTRACT 5.3: PLAY DEAD catches strikes f4-20): L 4-20, M 4-24 (longer, more recovery), H 4-20 into the stronger GRAVE RISE; lying from f14 (0.40 m) so late highs whiff; throws and projectiles beat it. |
 | `play_dead_h` | Play Dead | 214H | 4 | 17 | 28 | 48 | - | - | 0 | HL | 0 | - | low-prof 14-40, catch 4-20 | custom | counter unique (CONTRACT 5.3: PLAY DEAD catches strikes f4-20): L 4-20, M 4-24 (longer, more recovery), H 4-20 into the stronger GRAVE RISE; lying from f14 (0.40 m) so late highs whiff; throws and projectiles beat it. |
@@ -1470,16 +1609,16 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `grave_crawl_m` | Grave Crawl | 236M | 18 | 3 | 22 | 42 | KD +30 | -9 | 900 | L | 15 | super | low-prof 3-21 | custom | Low-profile approach (0.60 m from f3): 16/18/20 startup, -9 on block, KD +30. |
 | `grave_crawl_h` | Grave Crawl | 236H | 20 | 3 | 22 | 44 | KD +30 | -9 | 1000 | L | 15 | super | low-prof 3-23 | custom | Low-profile approach (0.60 m from f3): 16/18/20 startup, -9 on block, KD +30. |
 | `grave_crawl_ex` | Grave Crawl (EX) | 236S | 15 | 16 | 18 | 48 | KD +30 | -4 | 1200 | L | 15 | super | proj 1-20, low-prof 3-31 | custom | hits: f15 500, f29 700. EX: projectile invulnerable 1-20, 2 bites 14 frames apart, -4. |
-| `last_meal_l` | Last Meal | 63214L | 5 | 3 | 48 | 55 | KD +26 | - | 2200 | U | 0 | - | - | custom | grab: range 1.0 m, lock 100 f, dmg at f60, same side. Counter fighter's answer to blockers: a half-circle (not 360) grab with less reach and damage than Bruno's (1.00/0.95/0.90 m, 2200-2600) and less whiff recovery (48). |
-| `last_meal_m` | Last Meal | 63214M | 5 | 3 | 48 | 55 | KD +26 | - | 2400 | U | 0 | - | - | custom | grab: range 0.95 m, lock 100 f, dmg at f60, same side. Counter fighter's answer to blockers: a half-circle (not 360) grab with less reach and damage than Bruno's (1.00/0.95/0.90 m, 2200-2600) and less whiff recovery (48). |
-| `last_meal_h` | Last Meal | 63214H | 5 | 3 | 48 | 55 | KD +26 | - | 2600 | U | 0 | - | - | custom | grab: range 0.9 m, lock 100 f, dmg at f60, same side. Counter fighter's answer to blockers: a half-circle (not 360) grab with less reach and damage than Bruno's (1.00/0.95/0.90 m, 2200-2600) and less whiff recovery (48). |
-| `last_meal_ex` | Last Meal (EX) | 63214S | 5 | 3 | 48 | 55 | KD +26 | - | 2800 | U | 0 | - | strike 1-5 | custom | grab: range 1.1 m, lock 104 f, dmg at f62, same side. EX: strike invulnerable 1-5. |
+| `last_meal_l` | Last Meal | 63214L | 5 | 3 | 48 | 55 | KD +26 | - | 2200 | U | 0 | - | - | custom | grab: range 1.0 m, lock 100 f, dmg at f75, same side; victim f0 hit_high_s 0.00-0.20 s, f18 hit_body 0.10-0.60 s, f40 hit_body 0.20-0.70 s, f60 dizzy 0.40-1.20 s, f75 kd_fall_b 1.00-1.55 s. Counter fighter's answer to blockers: a half-circle (not 360) grab with less reach and damage than Bruno's (1.00/0.95/0.90 m, 2200-2600) and less whiff recovery (48). |
+| `last_meal_m` | Last Meal | 63214M | 5 | 3 | 48 | 55 | KD +26 | - | 2400 | U | 0 | - | - | custom | grab: range 0.95 m, lock 100 f, dmg at f75, same side; victim f0 hit_high_s 0.00-0.20 s, f18 hit_body 0.10-0.60 s, f40 hit_body 0.20-0.70 s, f60 dizzy 0.40-1.20 s, f75 kd_fall_b 1.00-1.55 s. Counter fighter's answer to blockers: a half-circle (not 360) grab with less reach and damage than Bruno's (1.00/0.95/0.90 m, 2200-2600) and less whiff recovery (48). |
+| `last_meal_h` | Last Meal | 63214H | 5 | 3 | 48 | 55 | KD +26 | - | 2600 | U | 0 | - | - | custom | grab: range 0.9 m, lock 100 f, dmg at f75, same side; victim f0 hit_high_s 0.00-0.20 s, f18 hit_body 0.10-0.60 s, f40 hit_body 0.20-0.70 s, f60 dizzy 0.40-1.20 s, f75 kd_fall_b 1.00-1.55 s. Counter fighter's answer to blockers: a half-circle (not 360) grab with less reach and damage than Bruno's (1.00/0.95/0.90 m, 2200-2600) and less whiff recovery (48). |
+| `last_meal_ex` | Last Meal (EX) | 63214S | 5 | 3 | 48 | 55 | KD +26 | - | 2800 | U | 0 | - | strike 1-5 | custom | grab: range 1.1 m, lock 104 f, dmg at f78, same side; victim f0 hit_high_s 0.00-0.20 s, f19 hit_body 0.10-0.60 s, f42 hit_body 0.20-0.70 s, f62 dizzy 0.40-1.20 s, f78 kd_fall_b 1.00-1.55 s. EX: strike invulnerable 1-5. |
 | `arise_l` | Arise | 623L | 8 | 6 | 28 | 41 | KD launch | -14 | 900 | HL | 15 | super | air 1-10 | custom | Anti-air (DP-lite): 8/9/10 startup, air-invulnerable 1-10/1-7/1-5, -14/-17/-20. |
 | `arise_m` | Arise | 623M | 9 | 6 | 31 | 45 | KD launch | -17 | 1000 | HL | 15 | super | air 1-7 | custom | Anti-air (DP-lite): 8/9/10 startup, air-invulnerable 1-10/1-7/1-5, -14/-17/-20. |
 | `arise_h` | Arise | 623H | 10 | 6 | 34 | 49 | KD launch | -20 | 1100 | HL | 15 | super | air 1-5 | custom | Anti-air (DP-lite): 8/9/10 startup, air-invulnerable 1-10/1-7/1-5, -14/-17/-20. |
 | `arise_ex` | Arise (EX) | 623S | 7 | 6 | 32 | 44 | KD launch | -18 | 1300 | HL | 15 | super | strike 1-9, throw 1-9, air 1-9, proj 1-9 | custom | EX: fully invulnerable 1-9. |
 | `dead_air` | Dead Air | 236236 | 4 | 27 | 30 | 60 | - | - | 0 | HL | 0 | - | low-prof 14-40, catch 1-30 | custom | Counter archetype Lv1 (FIGHTING_DESIGN 8c 'Lv1 counter super'): catch 1-30 vs strikes and projectiles; the damage lives in DEAD AIR BITE; loses to throws. |
-| `dead_air_bite` | Dead Air Bite | 236236>catch | 1 | 3 | 20 | 23 | KD +23 | - | 2000 | U | 0 | - | - | custom | grab: range 2.5 m, lock 90 f, dmg at f50, same side. Lv1 damage (2000) delivered as an unblockable 2.5 m grab so a caught attacker cannot escape it. |
+| `dead_air_bite` | Dead Air Bite | 236236>catch | 1 | 3 | 20 | 23 | KD +23 | - | 2000 | U | 0 | - | - | custom | grab: range 2.5 m, lock 90 f, dmg at f68, same side; victim f0 hit_high_s 0.00-0.20 s, f16 hit_body 0.10-0.60 s, f36 hit_body 0.20-0.70 s, f54 dizzy 0.40-1.10 s, f68 kd_fall_b 1.00-1.55 s. Lv1 damage (2000) delivered as an unblockable 2.5 m grab so a caught attacker cannot escape it. |
 | `series_finale` | Series Finale | 214214 | 10 | 4 | 58 | 71 | cine, KD +19 | -42 | 4500 | HL | 0 | - | strike 1-13, throw 1-13, air 1-13, proj 1-13 | custom | 1c Lv3: 10/4/58, -42, 4500, fully invulnerable 1-13. |
 
 **Move notes.**
@@ -1513,21 +1652,35 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `arise_l` Arise: Leaping screaming claw anti-air.
 - `arise_m` Arise: Leaping screaming claw anti-air.
 - `arise_h` Arise: Leaping screaming claw anti-air.
-- `arise_ex` Arise (EX): Fully invulnerable leap.
+- `arise_ex` Arise (EX): Fully invulnerable leap. (PENDING RE-BAKE: clip `arise_leap` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
 - `dead_air` Dead Air: Counter super: plays dead for 30 frames; any strike or projectile is answered with a lunge-bite. (counter {"catch": [1, 30], "vs": ["strike", "proj"], "follow": "dead_air_bite"})
 - `dead_air_bite` Dead Air Bite: The Lv1 follow-up: lunges 2.5 m and bites (unblockable, 2000).
 - `series_finale` Series Finale: PRIME TIME: grabs, bites, drags them into a trapdoor grave - and climbs back out alone. (hit volume: bottom lowered 0.04 m to the crouch line 1.10 m (clips.json `long_reach` effector LeftHand))
 
-**Lv3 PRIME TIME cinematic `series_finale` (Series Finale)** - 170 frames (<= 180), cue `rerun_series_finale`, damage 800+1200+1000+1500 = 4500, ends KD +19 at 2.0 m.
+**Lv3 PRIME TIME cinematic `series_finale` (Series Finale)** - 170 frames (<= 180), cue `rerun_series_finale`, damage 800+1200+1000+1500 = 4500, ends KD +19 at 1.6 m.
 
-- f0 LONG REACH (side_close): both claws catch the collar.
-- f25 NECK BITE (front_low): the comic gnaw - 800 at f30; head lunge - 1200 at f60.
-- f80 CRAWL (top_down): a Rust Theater trapdoor opens; he drags them in on all fours - 1000 at f100.
-- f120 PLAY DEAD (wide): he drops in after them; the lid slams - 1500 at f130.
-- f140 RISE (low_angle_up): the lid creaks open and Rerun climbs back out alone (KD +19).
-- attacker clips: f0 `long_reach`, f25 `neck_bite`, f80 `crawl_run`, f120 `play_dead_fall`, f140 `intro_rise`
-- victim clips: f0 `hit_high_s`, f25 `thrown_f`, f80 `kd_ground_f`, f130 `kd_ground_b`
-- camera shots: f0 side_close, f25 front_low, f80 top_down, f120 wide, f140 low_angle_up
+- f0 LONG REACH (close, lights flicker): both claws catch the collar.
+- f25 NECK BITE (close, over his side): the head lunge - 800 at f32 (comic splat); the gnaw - 1200 at f60, the crowd laughs.
+- f80 CRAWL (top-down, lights down, smoke): the victim crumples face down; he crawls up their legs and bites an ankle - 1000 at f100.
+- f120 GRAVE RISE (low, looking up): snaps up off the floor into a claw - 1500 at f128 (flash, freeze-frame).
+- f140 CHEWING (wide, lights up, spotlight): he squats over them, chewing; opponent face DOWN at 1.6 m (KD +19).
+- slate: "PRIME TIME - RERUN: SERIES FINALE"; defender ends lying front
+- attacker clips: f0 `long_reach` 0.57-0.99 s, f25 `neck_bite` 0.82-1.73 s, f80 `crawl_run` 0.50-1.17 s, f120 `rise_claw` 0.10-0.43 s, f140 `win_chew` 0.00-0.50 s
+- victim clips: f0 `hit_high_s` 0.00-0.30 s, f32 `hit_body` 0.00-0.50 s, f60 `hit_body` 0.20-0.80 s, f80 `crumple` 0.50-1.75 s, f100 `kd_ground_f` 0.00-1.30 s, f128 `kd_ground_f` 0.00-1.30 s
+- camera: f0-25 close on both (fov 32, dist 3.0, h 1.5, yaw 15, lookH 1.3); f25-80 close on both (fov [30, 26], dist [3.0, 3.0], h 1.55, yaw -35, lookH 1.3); f80-120 top on both (fov 42, dist 1.6, h 5.0, yaw 10, lookH 0.4); f120-140 low on attacker (fov 42, dist 2.8, h 0.3, yaw 30, lookH 1.2); f140-170 wide on both (fov 38, dist 5.4, h 1.6, yaw 0, lookH 0.9)
+- fx: f0 slate, f0 lights_flicker, f32 impact_m, f32 splat, f60 impact_m, f60 shake_s, f80 dim, f80 smoke, f100 impact_m, f100 dust, f128 impact_l, f128 flash, f128 shake_m, f128 freeze_frame, f140 undim, f140 spot@attacker, f165 spot_off
+- crowd: f0 gasp, f32 gasp, f60 laugh, f80 hush, f100 boo, f128 roar/spike, f140 laugh/peak
+- attacker path (f, dx, lift m): [25 0.10 0.00] [80 0.15 0.00] [100 0.50 0.00] [128 0.60 0.00] [140 0.60 0.00] [168 0.00 0.00]; defender gap (f, gap, lift m): [25 0.80 0.00] [80 0.80 0.00] [100 0.90 0.00] [128 1.00 0.00] [168 1.60 0.00]
+
+**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
+
+- intro: "Previously... on HIT PARADE... BRAAAINS."
+- win quotes: "Cancelled? Me? I'm... syndicated." / "Mmmh. Tastes like season one." / "See you... next week. Same time. Same me."
+- banter vs `lotus`: "Gourd... was... delicious." ... "More... drink. More... gourd."
+- banter vs `freak`: "Big... meal." ... "Hnnngh. Leftovers... for a week."
+- banter vs `ricky`: "You... killed me... week three." ... "Ratings... good. Now YOU... rerun."
+- banter vs `default`: "Hungry..." ... "Hold... still... snack."
+- ending: RERUN bites the host once, gently, on the ankle, and the network's star is back on the air every night of the week - he just can't remember his lines. Rerun takes the corner office and the late-night slot. The show never ends now. It just repeats, and the ratings have never been better.
 
 **Animation sources** (`tools/clipplan/rerun.json`; every `anim.clip`, grab clip, cinematic clip, intro, win and taunt; ranges shown after the automatic fit).
 
@@ -1546,17 +1699,17 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `air_lurch` | j.M | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Scary_Zombie_Pack/zombie attack` f23-45 contact f33] | jump apex legs + claw |
 | `air_reach` | j.H | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Scary_Zombie_Pack/zombie neck bite` f12-37 contact f25] | jump apex legs + double claw |
 | `throw_reach` | throw_f, throw_b, last_meal_l, last_meal_m, last_meal_h, last_meal_ex | Mixamo `Scary_Zombie_Pack/zombie neck bite` f16-45 contact f23 | zombie neck bite reach (grab whiff) |
-| `bite_lunge` | dead_air_bite | Mixamo `Scary_Zombie_Pack/zombie neck bite` f22-53 contact f23 | zombie neck bite from the grab frame: the 1-frame DEAD AIR BITE connect |
-| `scream_grab` | throw_f (grab) | Mixamo `Scary_Zombie_Pack/zombie scream` f1-85 contact f30 | grabs and screams in their face |
-| `swing_toss` | throw_b (grab) | Mixamo `Scary_Zombie_Pack/zombie attack` f1-76 contact f30 | wild swing flings them past |
-| `play_dead_fall` | play_dead_l, play_dead_m, play_dead_h, play_dead_ex, dead_air, series_finale (cine) | Mixamo `Scary_Zombie_Pack/zombie death` f5-45 | Mixamo zombie death: flails and falls on the back (lying from ~f56 measured; f45 = on the floor) |
-| `rise_claw` | grave_rise, grave_rise_big | Mixamo `Scary_Zombie_Pack/zombie attack` f26-55 contact f33 | zombie attack claw from mid-swing: snaps up from the floor into the claw (6-frame view blend) |
+| `bite_lunge` | dead_air_bite | Mixamo `Scary_Zombie_Pack/zombie neck bite` f22-53 contact f23 | zombie neck bite from the grab frame: the 1-frame DEAD AIR BITE connect. P2: effector RightHand - the arms reach at f23 (MIXAMO_CLIPS: RightHand +31 deg); the builder had picked the LEFT KNEE (0.43 m, 0.55 m up) as the fastest limb (contact_check LIMB: LeftFoot 2.98x faster) |
+| `scream_grab` | throw_f (grab) | Mixamo `Scary_Zombie_Pack/zombie scream` f15-70 contact f30 | grabs and screams in their face (hunched scream f41-53). P2: window 1-85 -> 15-70 (the full 2.8 s over a 50-frame lock played at 3.4x; 1.83 s = 2.2x) |
+| `swing_toss` | throw_b (grab) | Mixamo `Scary_Zombie_Pack/zombie attack` f10-50 contact f30 | wild swing flings them past (arm through the front at f30). P2: window 1-76 -> 10-50 (2.5 s over 48 f was 3.1x; 1.33 s = 1.7x) |
+| `play_dead_fall` | play_dead_l, play_dead_m, play_dead_h, play_dead_ex, dead_air | Mixamo `Scary_Zombie_Pack/zombie death` f5-45 | Mixamo zombie death: flails and falls on the back (lying from ~f56 measured; f45 = on the floor) |
+| `rise_claw` | grave_rise, grave_rise_big, series_finale (cine) | Mixamo `Scary_Zombie_Pack/zombie attack` f26-55 contact f33 | zombie attack claw from mid-swing: snaps up from the floor into the claw (6-frame view blend) |
 | `crawl_run` | grave_crawl_l, grave_crawl_m, grave_crawl_h, series_finale (cine) | SEQ [Mixamo `Scary_Zombie_Pack/running crawl` f1-20] + [Mixamo `Scary_Zombie_Pack/zombie biting (2)` f14-40 contact f22] | SEQ: one four-limb running-crawl loop + crouched ankle bite |
 | `crawl_run_ex` | grave_crawl_ex | SEQ [Mixamo `Scary_Zombie_Pack/running crawl` f1-20] + [Mixamo `Scary_Zombie_Pack/zombie biting (2)` f14-40 contact f22] + [Mixamo `Scary_Zombie_Pack/zombie biting (2)` f14-40 contact f22] | SEQ: crawl loop + two ankle bites |
 | `neck_bite` | last_meal_l (grab), last_meal_m (grab), last_meal_h (grab), last_meal_ex (grab), dead_air_bite (grab), series_finale (cine) | Mixamo `Scary_Zombie_Pack/zombie neck bite` f1-123 contact f23 | Mixamo zombie neck bite: arms grab f23, head lunge f29, shoves away f93-107 |
-| `arise_leap` | arise_l, arise_m, arise_h, arise_ex | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f15-45, sync] + upper[Mixamo `Scary_Zombie_Pack/zombie scream` f18-45 contact f30] | LAYERED: jump legs + zombie scream arms = leaping claw anti-air |
-| `intro_rise` | series_finale (cine), intro | CMU 140_08 (getup_back.1) f174-651 | CMU getup_back.1 clean (140_08 flat on the back -> sit -> crouch -> stand): rises from the dead |
-| `win_chew` | win | Mixamo `Scary_Zombie_Pack/zombie biting (2)` f1-70 | crouched chewing |
+| `arise_leap` | arise_l, arise_m, arise_h, arise_ex | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f15-45, sync] + upper[Mixamo `Scary_Zombie_Pack/zombie scream` f15-45 contact f23] | LAYERED: jump legs + zombie scream arms = leaping claw anti-air. P2: upper contact 30 -> 23 (the hands' top, as the P1 scream_up fix): at 30 the bake had the arms falling (LeftHand 0.74 m up); the top is output f6-8, 1.44 m (contact_check EXT) |
+| `intro_rise` | intro | CMU 140_08 (getup_back.1) f174-651 | CMU getup_back.1 clean (140_08 flat on the back -> sit -> crouch -> stand): rises from the dead |
+| `win_chew` | series_finale (cine), win | Mixamo `Scary_Zombie_Pack/zombie biting (2)` f1-70 | crouched chewing |
 | `win_idle` | win | Mixamo `Scary_Zombie_Pack/zombie idle` f1-129 | zombie idle sway |
 | `taunt_scream` | taunt | Mixamo `Scary_Zombie_Pack/zombie scream` f1-85 | feral scream (MIXAMO_CLIPS taunts) |
 
@@ -1607,8 +1760,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.L` | Air Claw | j.L | 6 | 7 | 3 | 15 | air 13 | air 9 | 300 | H | 9 | - | - | jL | (startup 5->6) Startup 6 (monster). |
 | `j.M` | Air Swipe | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Falling Slam | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 900 | H | 13 | - | - | jH | (damage 800->900) Boss jump-in 900. |
-| `throw_f` | Crusher Hug | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1400 | U | 0 | - | - | THROW_F | grab: range 0.7 m, lock 60 f, dmg at f40, same side. (damage 1200->1400) Boss throw: 1400. |
-| `throw_b` | Specimen Toss | 4LM | 5 | 3 | 23 | 30 | KD +15 | - | 1400 | U | 0 | - | - | THROW_B | grab: range 0.7 m, lock 50 f, dmg at f32, swap sides. (damage 1200->1400) Boss throw: 1400. |
+| `throw_f` | Crusher Hug | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1400 | U | 0 | - | - | THROW_F | grab: range 0.7 m, lock 60 f, dmg at f32, same side; victim f0 hit_body 0.00-0.25 s, f16 hit_body 0.20-0.75 s, f46 kd_fall_b 1.04-1.50 s. (damage 1200->1400) Boss throw: 1400. |
+| `throw_b` | Specimen Toss | 4LM | 5 | 3 | 23 | 30 | KD +15 | - | 1400 | U | 0 | - | - | THROW_B | grab: range 0.7 m, lock 50 f, dmg at f21, swap sides; victim f0 hit_high_s 0.00-0.15 s, f8 thrown_b 0.05-0.40 s, f21 thrown_b 0.40-1.20 s. (damage 1200->1400) Boss throw: 1400. |
 | `crusher_leap_l` | Crusher Leap | 214L | 28 | 4 | 20 | 51 | KD +30 | -8 | 1200 | H | 15 | - | armor 2x 1-27 | custom | Boss leap slam (FIGHTING_DESIGN 8c ENFORCER tools): 28/32/36f (reactable), 2-hit armor through the leap, overhead, -8 on block, KD +30. |
 | `crusher_leap_m` | Crusher Leap | 214M | 32 | 4 | 20 | 55 | KD +30 | -8 | 1300 | H | 15 | - | armor 2x 1-31 | custom | Boss leap slam (FIGHTING_DESIGN 8c ENFORCER tools): 28/32/36f (reactable), 2-hit armor through the leap, overhead, -8 on block, KD +30. |
 | `crusher_leap_h` | Crusher Leap | 214H | 36 | 4 | 20 | 59 | KD +30 | -8 | 1400 | H | 15 | - | armor 2x 1-35 | custom | Boss leap slam (FIGHTING_DESIGN 8c ENFORCER tools): 28/32/36f (reactable), 2-hit armor through the leap, overhead, -8 on block, KD +30. |
@@ -1621,10 +1774,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `roar_m` | Roar | 22M | 20 | 6 | 24 | 49 | KD launch | -10 | 600 | HL | 13 | - | proj 1-25, armor 2x 1-19 | custom | Boss 'get off me' tool: 20f startup, 2-hit armor, projectile invulnerable 1-25, a 2.0/2.4/2.8 m box around it, -10 on block. |
 | `roar_h` | Roar | 22H | 20 | 6 | 24 | 49 | KD launch | -10 | 700 | HL | 13 | - | proj 1-25, armor 2x 1-19 | custom | Boss 'get off me' tool: 20f startup, 2-hit armor, projectile invulnerable 1-25, a 2.0/2.4/2.8 m box around it, -10 on block. |
 | `roar_ex` | Roar (EX) | 22S | 12 | 6 | 24 | 41 | KD launch | -10 | 900 | HL | 13 | - | proj 1-25, armor 99x 1-17 | custom | EX: 12f, super armor. |
-| `specimen_grab_l` | Specimen Grab | 360L | 5 | 3 | 50 | 57 | KD +28 | - | 2600 | U | 0 | - | - | cmdgrab_l | grab: range 1.3 m, lock 80 f, dmg at f51, same side. (recovery 54->50; damage 2500->2600) Boss command grab: reach +0.08..+0.18 m over the template (its 2.40 m arms), damage +100 per strength, whiff recovery 50. |
-| `specimen_grab_m` | Specimen Grab | 360M | 5 | 3 | 50 | 57 | KD +28 | - | 3000 | U | 0 | - | - | cmdgrab_m | grab: range 1.2 m, lock 80 f, dmg at f51, same side. (recovery 54->50; damage 2900->3000) Boss command grab: reach +0.08..+0.18 m over the template (its 2.40 m arms), damage +100 per strength, whiff recovery 50. |
-| `specimen_grab_h` | Specimen Grab | 360H | 5 | 3 | 50 | 57 | KD +28 | - | 3400 | U | 0 | - | - | cmdgrab_h | grab: range 1.1 m, lock 80 f, dmg at f51, same side. (recovery 54->50; damage 3300->3400) Boss command grab: reach +0.08..+0.18 m over the template (its 2.40 m arms), damage +100 per strength, whiff recovery 50. |
-| `specimen_grab_ex` | Specimen Grab (EX) | 360S | 5 | 3 | 50 | 57 | KD +28 | - | 3700 | U | 0 | - | strike 1-5 | cmdgrab_h | grab: range 1.4 m, lock 84 f, dmg at f53, same side. (recovery 54->50; damage 3300->3700) EX: strike invulnerable 1-5. |
+| `specimen_grab_l` | Specimen Grab | 360L | 5 | 3 | 50 | 57 | KD +28 | - | 2600 | U | 0 | - | - | cmdgrab_l | grab: range 1.3 m, lock 80 f, dmg at f36, same side; victim f0 hit_body 0.00-0.30 s, f10 hit_high_l 0.00-0.30 s, f18 dizzy 0.30-1.00 s, f36 kd_fall_b 1.25-1.87 s. (recovery 54->50; damage 2500->2600) Boss command grab: reach +0.08..+0.18 m over the template (its 2.40 m arms), damage +100 per strength, whiff recovery 50. |
+| `specimen_grab_m` | Specimen Grab | 360M | 5 | 3 | 50 | 57 | KD +28 | - | 3000 | U | 0 | - | - | cmdgrab_m | grab: range 1.2 m, lock 80 f, dmg at f36, same side; victim f0 hit_body 0.00-0.30 s, f10 hit_high_l 0.00-0.30 s, f18 dizzy 0.30-1.00 s, f36 kd_fall_b 1.25-1.87 s. (recovery 54->50; damage 2900->3000) Boss command grab: reach +0.08..+0.18 m over the template (its 2.40 m arms), damage +100 per strength, whiff recovery 50. |
+| `specimen_grab_h` | Specimen Grab | 360H | 5 | 3 | 50 | 57 | KD +28 | - | 3400 | U | 0 | - | - | cmdgrab_h | grab: range 1.1 m, lock 80 f, dmg at f36, same side; victim f0 hit_body 0.00-0.30 s, f10 hit_high_l 0.00-0.30 s, f18 dizzy 0.30-1.00 s, f36 kd_fall_b 1.25-1.87 s. (recovery 54->50; damage 3300->3400) Boss command grab: reach +0.08..+0.18 m over the template (its 2.40 m arms), damage +100 per strength, whiff recovery 50. |
+| `specimen_grab_ex` | Specimen Grab (EX) | 360S | 5 | 3 | 50 | 57 | KD +28 | - | 3700 | U | 0 | - | strike 1-5 | cmdgrab_h | grab: range 1.4 m, lock 84 f, dmg at f38, same side; victim f0 hit_body 0.00-0.30 s, f11 hit_high_l 0.00-0.30 s, f19 dizzy 0.30-1.00 s, f38 kd_fall_b 1.25-1.87 s. (recovery 54->50; damage 3300->3700) EX: strike invulnerable 1-5. |
 | `meltdown` | Meltdown | 236236 | 10 | 27 | 50 | 86 | KD +23 | -28 | 2200 | HL | 20 | - | throw 1-10, armor 99x 1-34 | custom | hits: f10 600, f22 600, f34 1000. Boss Lv1: super armor 1-34 (not invulnerable - throws beat it), 2200 (boss damage), hits 12 frames apart (three separate swings in the clip), -28 on block. |
 | `specimen_13` | Specimen 13 | 214214 | 10 | 4 | 58 | 71 | cine, KD +19 | -42 | 5000 | HL | 0 | - | strike 1-13, throw 1-13, air 1-13, proj 1-13 | custom | Boss Lv3: 5000 (+500 over the 4500 template; inside the SF6 range 2600-5300), otherwise 10/4/58. |
 
@@ -1659,18 +1812,29 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `specimen_grab_h` Specimen Grab: 360 command grab with the longest reach in the game.
 - `specimen_grab_ex` Specimen Grab (EX): Strike-invulnerable 1-5, 1.40 m.
 - `meltdown` Meltdown: Super-armored three-swipe rampage.
-- `specimen_13` Specimen 13: PRIME TIME: grabbed, slammed twice, roared at and hurled into the wall.
+- `specimen_13` Specimen 13: PRIME TIME: grabbed, crushed, hammered into the floor twice, roared at and hurled across the set.
 
 **Lv3 PRIME TIME cinematic `specimen_13` (Specimen 13)** - 175 frames (<= 180), cue `freak_specimen_13`, damage 800+900+1000+2300 = 5000, ends KD +19 at 3.5 m.
 
-- f0 CRYSTAL SWIPE (side_close): the claw connects.
-- f25 CRUSHER HUG (front_low): lifts them off the floor - 800 at f35.
-- f55 / f85 HAMMER DOWN x2 (top_down): slams them into the floor twice - 900 + 1000.
-- f120 ROAR (low_angle_up): roars in the dazed opponent's face; the set lights flicker.
-- f140 FLING (wide -> slowmo_hold): hurls them into the set wall - 2300 at f150 (wall splat).
-- attacker clips: f0 `crystal_swipe`, f25 `crush`, f55 `hammer_down`, f85 `hammer_down`, f120 `roar_wave`, f140 `fling`
-- victim clips: f0 `hit_high_l`, f25 `thrown_f`, f65 `kd_ground_b`, f120 `dizzy`, f140 `hit_air`, f150 `wall_splat`
-- camera shots: f0 side_close, f25 front_low, f55 top_down, f120 low_angle_up, f140 wide, f150 slowmo_hold
+- f0 CRYSTAL SWIPE (close): the claw connects.
+- f25 CRUSHER HUG (low): lifts them 0.4 m off the floor and squeezes - 800 at f40.
+- f55 / f85 HAMMER DOWN x2 (top-down from 6 m): slams them flat, then again while they lie - 900 + 1000 (f70 / f100, dust).
+- f115 ROAR (close on the Freak): a shock ring, the set lights flicker; the victim staggers up, dazed.
+- f140 FLING (wide): hurled 2.5 m across the set - 2300 at f150 (flash, freeze-frame); lands face up at 3.5 m (KD +19).
+- slate: "PRIME TIME - THE FREAK: SPECIMEN 13"; defender ends lying back
+- attacker clips: f0 `crystal_swipe` 0.53-0.95 s, f25 `crush` 0.58-1.08 s, f55 `hammer_down` 0.45-0.95 s, f85 `hammer_down` 0.45-0.95 s, f115 `roar_wave` 0.10-0.52 s, f140 `fling` 0.53-1.12 s
+- victim clips: f0 `hit_high_l` 0.00-0.40 s, f25 `hit_body` 0.00-0.30 s, f40 `hit_body` 0.20-0.80 s, f70 `kd_fall_b` 1.20-1.87 s, f100 `kd_ground_b` 0.00-0.37 s, f115 `wake_b` 0.20-1.23 s, f130 `dizzy` 0.50-1.00 s, f150 `thrown_f` 0.30-0.74 s, f162 `thrown_f` 0.74-1.33 s
+- camera: f0-25 close on both (fov 34, dist 3.4, h 1.6, yaw 25, lookH 1.1); f25-55 low on both (fov 40, dist 3.6, h 0.5, yaw 25, lookH 1.4); f55-115 top on defender (fov 42, dist 1.6, h 6.0, yaw 10, lookH 0.4); f115-140 close on attacker (fov 34, dist [2.9, 2.5], h 1.6, yaw 35, lookH 1.05); f140-175 wide on both (fov 40, dist [5.0, 6.2], h 1.8, yaw 5, lookH 1.1)
+- fx: f0 slate, f25 impact_m, f40 impact_m, f40 shake_s, f70 impact_l, f70 dust, f70 shake_m, f100 impact_l, f100 dust, f100 shake_m, f115 lights_flicker, f115 shock_ring@attacker, f115 shake_m, f150 impact_l, f150 flash, f150 shake_l, f150 freeze_frame, f164 dust
+- crowd: f0 gasp, f40 gasp, f70 ooh, f100 ooh/up, f115 hush, f150 roar/spike, f164 gasp/peak
+- attacker path (f, dx, lift m): [25 0.10 0.00] [55 0.20 0.00] [70 0.30 0.30] [78 0.35 0.00] [100 0.35 0.00] [140 0.20 0.00] [150 0.25 0.00] [173 0.00 0.00]; defender gap (f, gap, lift m): [25 0.90 0.00] [40 0.80 0.40] [55 0.90 0.20] [70 1.20 0.00] [115 1.20 0.00] [150 1.00 0.00] [158 2.60 0.60] [164 3.50 0.00] [173 3.50 0.00]
+
+**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
+
+- intro: "(The chains snap. Something in the dark breathes.)"
+- win quotes: "(It sniffs the floor where you fell. Then it roars.)" / "(It drags its chains back into the dark.)" / "(Specimen 13 flexes. The studio lights flicker.)"
+- banter vs `default`: "(A low growl rattles the camera rigs.)" ... "(RRRRAAAAGH.)"
+- ending: THE FREAK smashes through the Control Room wall and walks out into the city with its chains trailing behind it. The network offers a reward for its return; nobody claims it. Weeks later a rooftop camera catches Specimen 13 watching the sunrise over Channel 13, perfectly still. For the first time in its life, nobody is filming it on purpose.
 
 **Animation sources** (`tools/clipplan/freak.json`; every `anim.clip`, grab clip, cinematic clip, intro, win and taunt; ranges shown after the automatic fit).
 
@@ -1683,14 +1847,14 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `crystal_swipe` | 5H, specimen_13, specimen_13 (cine) | Mixamo `Creature_Pack/mutant swiping` f25-60 contact f41 | Mixamo mutant swiping: overhead claw haymaker, torso whips down f40, reach f41 (dense render) |
 | `low_claw` | 2L | LAYER lower[Mixamo `Pro_Magic_Pack/Crouch Idle` f1-42, hold f1] + upper[Mixamo `Creature_Pack/mutant punch` f1-22 contact f9] | Crouch Idle legs + claw hook |
 | `floor_slam` | 2M | Mixamo `Creature_Pack/jump attack` f40-70 contact f51 | Mixamo jump attack landing: hands to the floor f51 = low slam |
-| `jump_claw` | 2H | Mixamo `Creature_Pack/mutant jumping` f20-60 contact f32 | Mixamo mutant jumping: arms up on the rise (RightHand f32) = anti-air |
+| `jump_claw` | 2H | Mixamo `Creature_Pack/mutant jumping` f22-60 contact f37 | Mixamo mutant jumping: arms up on the rise = anti-air. P2: contact 32 -> 37: at 32 both claws were spread 0.9 m to the SIDES at 0.97-1.10 m (bake trace, contact_check EXT + LAT); at 37 they rise in front (RightHand 0.76 m forward, 1.74 m up, 0.41 m out) |
 | `hammer_down` | 6H, specimen_13 (cine) | Mixamo `Creature_Pack/mutant jump attack` f30-70 contact f51 | Mixamo mutant jump attack (in-place): leap slam, hands to the floor f51 |
 | `air_claw` | j.L | LAYER lower[Mixamo `Creature_Pack/mutant jumping` f1-87, hold f49] + upper[Mixamo `Creature_Pack/mutant punch` f1-22 contact f9] | LAYERED: mutant jumping apex legs (f49 measured) + claw hook |
 | `air_swipe` | j.M | LAYER lower[Mixamo `Creature_Pack/mutant jumping` f1-87, hold f49] + upper[Mixamo `Creature_Pack/mutant swiping` f31-53 contact f41] | LAYERED: mutant jumping apex legs + overhead swipe |
 | `air_slam` | j.H | Mixamo `Creature_Pack/mutant jump attack` f40-60 contact f51 | descending half of the leap slam |
 | `throw_reach` | throw_f, throw_b, specimen_grab_l, specimen_grab_m, specimen_grab_h, specimen_grab_ex | Mixamo `Creature_Pack/mutant punch` f2-34 contact f9 | claw reach (grab whiff): full hook |
-| `crush` | throw_f (grab), specimen_13 (cine) | Mixamo `Creature_Pack/mutant flexing muscles` f1-133 contact f65 | Mixamo mutant flexing muscles = crushes the victim in a bear hug |
-| `fling` | throw_b (grab), specimen_13 (cine) | Mixamo `Creature_Pack/mutant swiping` f1-73 contact f41 | overhead swipe flings them behind |
+| `crush` | throw_f (grab), specimen_13 (cine) | Mixamo `Creature_Pack/mutant flexing muscles` f40-105 contact f65 | Mixamo mutant flexing muscles f40-105 = crushes the victim in a bear hug (hunched squeeze f55-95). P2: window 1-133 -> 40-105 (4.4 s over a 60-frame lock played at 4.4x; 2.17 s = 2.2x) |
+| `fling` | throw_b (grab), specimen_13 (cine) | Mixamo `Creature_Pack/mutant swiping` f20-70 contact f41 | overhead swipe flings them behind (claw through the front at f41). P2: window 1-73 -> 20-70 (2.4 s over 50 f was 2.9x; 1.67 s = 2x) |
 | `crusher_leap_clip` | crusher_leap_l, crusher_leap_m, crusher_leap_h, crusher_leap_ex | Mixamo `Creature_Pack/jump attack` f9-83 contact f51 | Mixamo jump attack: leap GROUND SLAM (hips 0.47-2.58 m, travel 2.26 m, hands to the floor f51) |
 | `claw_rush_clip` | claw_rush_l, claw_rush_m, claw_rush_h, claw_rush_ex | LAYER lower[Mixamo `Creature_Pack/mutant run` f1-27, loop] + upper[Mixamo `Creature_Pack/mutant swiping` f25-60 contact f41] | LAYERED: mutant run legs + overhead swipe |
 | `roar_wave` | roar_l, roar_m, roar_h, roar_ex, specimen_13 (cine) | Mixamo `Creature_Pack/mutant roaring` f20-66 contact f27 | Mixamo mutant roaring (RightHand f27) |
@@ -1751,8 +1915,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.L` | Air Thrust | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | jL |  |
 | `j.M` | Air Chop | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Air Sledgehammer | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | jH |  |
-| `throw_f` | Three-Act Beating | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1300 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 54 f, dmg at f40, same side. (damage 1200->1300) Boss throw: 1300. |
-| `throw_b` | Exit Stage Left | 4LM | 5 | 3 | 23 | 30 | KD +15 | - | 1300 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f30, swap sides. (damage 1200->1300) Boss throw: 1300. |
+| `throw_f` | Three-Act Beating | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1300 | U | 0 | - | - | THROW_F | grab: range 0.6 m, lock 64 f, dmg at f52, same side; victim f0 hit_high_s 0.00-0.10 s, f9 hit_high_s 0.00-0.60 s, f35 hit_body 0.10-0.60 s, f52 kd_fall_b 1.04-1.50 s. (damage 1200->1300) Boss throw: 1300. |
+| `throw_b` | Exit Stage Left | 4LM | 5 | 3 | 23 | 30 | KD +15 | - | 1300 | U | 0 | - | - | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f15, swap sides; victim f0 hit_high_s 0.00-0.10 s, f4 thrown_b 0.00-0.40 s, f15 thrown_b 0.40-1.20 s. (damage 1200->1300) Boss throw: 1300. |
 | `spotlight_l` | Spotlight | 236L | 16 | 1 | 31 | 47 | -1 | -5 | 600 | HL | 8 | super | - | proj_l | Boss projectile: template frames, beams 5.0/6.5/8.0 m/s. |
 | `spotlight_m` | Spotlight | 236M | 14 | 1 | 33 | 47 | -3 | -7 | 600 | HL | 8 | super | - | proj_m | Boss projectile: template frames, beams 5.0/6.5/8.0 m/s. |
 | `spotlight_h` | Spotlight | 236H | 12 | 1 | 35 | 47 | -5 | -9 | 600 | HL | 8 | super | - | proj_h | Boss projectile: template frames, beams 5.0/6.5/8.0 m/s. |
@@ -1788,7 +1952,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `2H` Cane Twirl: Chest-high twirl: anti-air. (hand-set hit volume f9-12 x 0.60 y 1.80 w 0.70 h 0.50)
 - `3H` The Hook: Vaudeville hook: a sliding low cane swing that drags them in and down.
 - `4M` Stage Kick: Kick while holding the cane. (hit volume: near edge pulled back 0.25 m to point-blank reach 0.73 m (clips.json `stage_kick` effector RightFoot))
-- `6H` Sledgehammer: Two-hand overhead cane smash. (hit volume: bottom lowered 0.06 m to the crouch line 1.10 m (clips.json `sledgehammer` effector LeftHand))
+- `6H` Sledgehammer: Two-hand overhead cane smash. (hit volume: bottom lowered 0.06 m to the crouch line 1.10 m (clips.json `sledgehammer` effector LeftHand); PENDING RE-BAKE: clip `sledgehammer` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
 - `j.L` Air Thrust: Air cane thrust.
 - `j.M` Air Chop: Air cane chop.
 - `j.H` Air Sledgehammer: Overhead cane jump-in.
@@ -1802,7 +1966,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `commercial_break_m` Commercial Break: Parry-counter: 'We'll be right back' - catches a strike and answers with the sledgehammer. (counter {"catch": [3, 18], "vs": ["strike"], "follow": "commercial_hit"})
 - `commercial_break_h` Commercial Break: Parry-counter: 'We'll be right back' - catches a strike and answers with the sledgehammer. (counter {"catch": [3, 22], "vs": ["strike"], "follow": "commercial_hit"})
 - `commercial_break_ex` Commercial Break (EX): Catches strikes and projectiles from frame 1. (counter {"catch": [1, 24], "vs": ["strike", "proj"], "follow": "commercial_hit"})
-- `commercial_hit` Back After This: The counter's sledgehammer (after a COMMERCIAL BREAK catch). (hit volume: bottom lowered 0.03 m to the crouch line 1.10 m (clips.json `counter_smash` effector LeftHand))
+- `commercial_hit` Back After This: The counter's sledgehammer (after a COMMERCIAL BREAK catch). (hit volume: bottom lowered 0.03 m to the crouch line 1.10 m (clips.json `counter_smash` effector LeftHand); PENDING RE-BAKE: clip `counter_smash` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
 - `mic_drop_l` Mic Drop: Leaping cane swing anti-air.
 - `mic_drop_m` Mic Drop: Leaping cane swing anti-air.
 - `mic_drop_h` Mic Drop: Leaping cane swing anti-air.
@@ -1815,25 +1979,50 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `pyro_m` Pyro: PHASE 2: the cane slams the floor and a line of stage pyro races along it (2 hits). (projectile 4.5 m/s, 2 hit(s), y 0.70 m; phase 2 only)
 - `pyro_h` Pyro: PHASE 2: the cane slams the floor and a line of stage pyro races along it (2 hits). (projectile 5.5 m/s, 2 hit(s), y 0.70 m; phase 2 only)
 - `pyro_ex` Pyro (EX): Three-hit pyro line. (projectile 5.5 m/s, 3 hit(s), y 0.70 m; phase 2 only)
-- `standing_ovation` Standing Ovation: Invulnerable three-swing cane routine.
+- `standing_ovation` Standing Ovation: Invulnerable three-swing cane routine. (PENDING RE-BAKE: clip `three_swings` - plan changed since the published bake (box from the previous bake's effector until the re-bake))
 - `prime_time` Prime Time: PRIME TIME (phase 1): the host's cane routine for camera one.
 - `season_finale` Season Finale: PHASE 2 Lv3: the whole set - pyro columns, a falling lighting rig and the confetti cannon. (phase 2 only)
 
 **Lv3 PRIME TIME cinematic `prime_time` (Prime Time)** - 170 frames (<= 180), cue `ricky_prime_time`, damage 700+900+1000+2400 = 5000, ends KD +19 at 2.2 m.
 
-- PRIME TIME (phase 1, 170 f): f0 host_cam: 'Ladies and gentlemen...' SHOWSTOPPER - 700 at f20; f30 CANE SWING - 900 at f50; f60 THREE-ACT BEATING (punch_in) - 1000 at f80; f110 POWER-UP (spotlight): the set goes dark except his spotlight; f130 SLEDGEHAMMER (top_down) - 2400 at f140; f150 BOW (crowd_pop).
-- SEASON FINALE (phase 2, 180 f): f0 wide: the cane slams the floor, pyro columns erupt - 800 at f25; f45 SHOWSTOPPER - 1000 at f60; f80 SPIN FLING (orbit) into the lighting rig - 1000 at f95; f120 host_cam: 'And that's our season!'; f140 SLEDGEHAMMER as the rig falls (slowmo_hold) - 2500 at f150; f160 BOW under the confetti cannon (crowd_pop).
-- attacker clips: f0 `showstopper`, f30 `cane_swing`, f60 `three_swings`, f110 `intro_power`, f130 `sledgehammer`, f150 `win_bow`
-- victim clips: f0 `hit_high_l`, f30 `hit_high_s`, f60 `hit_body`, f110 `dizzy`, f140 `kd_fall_b`, f152 `kd_ground_b`
-- camera shots: f0 host_cam, f30 side_close, f60 punch_in, f110 spotlight, f130 top_down, f150 crowd_pop
+- PRIME TIME (phase 1, 170 f): f0 close on the host (spotlight) as the SHOWSTOPPER follows through; f18 CANE SWING - 700 at f26; f42 THREE-ACT BEATING (over his shoulder, 2.2x) - 900 at f52, 1000 at f82; f92 POWER-UP (low, set dark, spotlight) while the victim wobbles; f122 SLEDGEHAMMER (top-down) - 2400 at f140 (flash, freeze-frame); f150 BOW under confetti (wide). Face up at 2.2 m.
+- SEASON FINALE (phase 2, 180 f): f0 wide: the cane hits the floor, pyro columns erupt; f25 the blast lifts them - 800; f45 SHOWSTOPPER (close) - 1000 at f60; f80 SPIN FLING (orbit) into the lighting rig - 1000 at f95, lights flicker; f120 host close-up: 'And that's our season!'; f140 SLEDGEHAMMER (low) as the rig comes down - 2500 at f150 (flash, freeze-frame); f165 BOW under the confetti cannon and a last pyro burst. Face up at 1.8 m.
+- slate: "PRIME TIME - RICKY MARQUEE: FOR CAMERA ONE"; defender ends lying back
+- attacker clips: f0 `showstopper` 0.53-0.83 s, f18 `cane_swing` 0.23-0.63 s, f42 `three_swings` 0.00-1.83 s, f92 `intro_power` 1.20-1.95 s, f122 `sledgehammer` 0.27-0.73 s, f150 `win_bow` 0.40-0.73 s
+- victim clips: f0 `hit_high_l` 0.00-0.40 s, f26 `hit_high_s` 0.00-0.40 s, f52 `hit_high_l` 0.00-0.50 s, f82 `hit_body` 0.10-0.60 s, f100 `dizzy` 0.40-1.20 s, f140 `kd_fall_b` 1.20-1.87 s, f158 `kd_ground_b` 0.00-0.37 s
+- camera: f0-18 close on attacker (fov 30, dist 2.5, h 1.6, yaw 35, lookH 1.45); f18-42 close on defender (fov 32, dist 2.5, h 1.55, yaw 35, lookH 1.45); f42-92 over_shoulder on defender (fov 36, dist 2.9, h 1.8, yaw -65, lookH 1.4); f92-122 low on attacker (fov 40, dist 2.6, h 0.5, yaw 20, lookH 1.6); f122-150 top on defender (fov 40, dist 1.5, h 5.4, yaw 10, lookH 0.5); f150-170 wide on both (fov 38, dist 5.6, h 1.8, yaw 0, lookH 1.1)
+- fx: f0 slate, f0 spot@attacker, f18 spot_off, f26 impact_m, f52 impact_m, f52 sparks, f82 impact_m, f82 shake_s, f92 dim, f92 spot@attacker, f122 spot_off, f140 impact_l, f140 flash, f140 shake_l, f140 dust, f140 freeze_frame, f142 undim, f150 confetti
+- crowd: f0 applause, f26 ooh, f52 ooh, f82 cheer/up, f92 hush, f140 roar/spike, f150 applause/peak
+- attacker path (f, dx, lift m): [26 0.10 0.00] [52 0.25 0.00] [82 0.40 0.00] [120 0.35 0.00] [140 0.45 0.00] [168 0.00 0.00]; defender gap (f, gap, lift m): [26 1.10 0.00] [52 1.20 0.00] [82 1.15 0.00] [100 1.20 0.00] [140 1.30 0.00] [146 1.60 0.00] [168 2.20 0.00]
 
-**Lv3 PRIME TIME cinematic `season_finale` (Season Finale)** - 180 frames (<= 180), cue `ricky_season_finale`, damage 800+1000+1000+2500 = 5300, ends KD +19 at 2.5 m.
+**Lv3 PRIME TIME cinematic `season_finale` (Season Finale)** - 180 frames (<= 180), cue `ricky_season_finale`, damage 800+1000+1000+2500 = 5300, ends KD +19 at 1.8 m.
 
-- PRIME TIME (phase 1, 170 f): f0 host_cam: 'Ladies and gentlemen...' SHOWSTOPPER - 700 at f20; f30 CANE SWING - 900 at f50; f60 THREE-ACT BEATING (punch_in) - 1000 at f80; f110 POWER-UP (spotlight): the set goes dark except his spotlight; f130 SLEDGEHAMMER (top_down) - 2400 at f140; f150 BOW (crowd_pop).
-- SEASON FINALE (phase 2, 180 f): f0 wide: the cane slams the floor, pyro columns erupt - 800 at f25; f45 SHOWSTOPPER - 1000 at f60; f80 SPIN FLING (orbit) into the lighting rig - 1000 at f95; f120 host_cam: 'And that's our season!'; f140 SLEDGEHAMMER as the rig falls (slowmo_hold) - 2500 at f150; f160 BOW under the confetti cannon (crowd_pop).
-- attacker clips: f0 `pyro_slam`, f45 `showstopper`, f80 `spin_fling`, f120 `intro_power`, f140 `sledgehammer`, f160 `win_bow`
-- victim clips: f0 `hit_body`, f45 `hit_high_l`, f80 `hit_air`, f120 `dizzy`, f150 `kd_fall_b`, f165 `kd_ground_b`
-- camera shots: f0 wide, f25 low_angle_up, f45 side_close, f80 orbit, f120 host_cam, f150 slowmo_hold, f165 crowd_pop
+- PRIME TIME (phase 1, 170 f): f0 close on the host (spotlight) as the SHOWSTOPPER follows through; f18 CANE SWING - 700 at f26; f42 THREE-ACT BEATING (over his shoulder, 2.2x) - 900 at f52, 1000 at f82; f92 POWER-UP (low, set dark, spotlight) while the victim wobbles; f122 SLEDGEHAMMER (top-down) - 2400 at f140 (flash, freeze-frame); f150 BOW under confetti (wide). Face up at 2.2 m.
+- SEASON FINALE (phase 2, 180 f): f0 wide: the cane hits the floor, pyro columns erupt; f25 the blast lifts them - 800; f45 SHOWSTOPPER (close) - 1000 at f60; f80 SPIN FLING (orbit) into the lighting rig - 1000 at f95, lights flicker; f120 host close-up: 'And that's our season!'; f140 SLEDGEHAMMER (low) as the rig comes down - 2500 at f150 (flash, freeze-frame); f165 BOW under the confetti cannon and a last pyro burst. Face up at 1.8 m.
+- slate: "PRIME TIME - RICKY MARQUEE: SEASON FINALE"; defender ends lying back
+- attacker clips: f0 `pyro_slam` 0.38-1.13 s, f45 `showstopper` 0.28-0.87 s, f80 `spin_fling` 0.32-0.98 s, f120 `taunt_dismiss` 0.50-0.83 s, f140 `sledgehammer` 0.40-0.82 s, f165 `win_bow` 0.40-0.65 s
+- victim clips: f0 `hit_body` 0.00-0.40 s, f25 `hit_air` 0.00-0.60 s, f60 `hit_high_l` 0.00-0.50 s, f95 `hit_air` 0.10-0.80 s, f120 `dizzy` 0.40-1.00 s, f150 `kd_fall_b` 1.25-1.87 s, f165 `kd_ground_b` 0.00-0.37 s
+- camera: f0-25 wide on both (fov 40, dist 5.2, h 1.8, yaw 0, lookH 1.4); f25-45 low on defender (fov 42, dist 3.0, h 0.35, yaw 25, lookH 1.7); f45-80 close on both (fov [32, 28], dist [3.0, 3.0], h 1.6, yaw -30, lookH 1.3); f80-120 orbit on both (fov 40, dist 3.8, h 1.6, yaw [-40, 60]); f120-140 close on attacker (fov 30, dist 2.5, h 1.6, yaw 35, lookH 1.45); f140-165 low on defender (fov 42, dist 2.8, h 0.4, yaw -20, lookH 1.2); f165-180 wide on both (fov 40, dist 6.0, h 2.0, yaw 0, lookH 1.1)
+- fx: f0 slate, f0 pyro, f25 impact_m, f25 fire, f25 shake_m, f60 impact_m, f60 sparks, f95 impact_m, f95 sparks, f95 lights_flicker, f120 spot@attacker, f140 spot_off, f140 lights_flicker, f150 impact_l, f150 flash, f150 shake_l, f150 dust, f150 freeze_frame, f165 confetti, f165 pyro
+- crowd: f0 roar/up, f25 gasp, f60 ooh, f95 gasp/up, f120 hush, f150 roar/spike, f165 applause/peak
+- attacker path (f, dx, lift m): [25 0.00 0.00] [60 0.20 0.00] [95 0.35 0.00] [140 0.30 0.00] [150 0.50 0.00] [178 0.00 0.00]; defender gap (f, gap, lift m): [25 1.30 0.50] [40 1.30 0.00] [60 1.20 0.00] [95 1.40 0.50] [110 2.20 0.80] [120 2.00 0.00] [140 1.30 0.00] [150 1.10 0.00] [156 1.30 0.00] [178 1.80 0.00]
+
+**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
+
+- intro: "Ladies and gentlemen... it's ME."
+- win quotes: "And THAT is why they call it my show." / "Don't touch that dial. We'll be right back - you won't." / "Another contestant, another rerun. Roll credits!"
+- banter vs `johnny`: "The Headliner! Your band's name looks lovely on my office wall." ... "Sing for me, Johnny. The contract says you have to."
+- banter vs `patch`: "My old floor manager! Who's running the cables tonight?" ... "Take direction, Patch: fall down, stage left."
+- banter vs `bruno`: "Bruno! Twenty years, and the steak is still on me." ... "Carry this, big man: the weight of cancellation."
+- banter vs `zambini`: "Zambini! Still hiding the assistant?" ... "Here's a trick: I make your career disappear."
+- banter vs `krane`: "Officer! You're supposed to be guarding ME." ... "Your badge was a prop, Krane. So is your future."
+- banter vs `lotus`: "Lotus! I wrote that drunk-master bit, you know." ... "One more round - on the house. On your head."
+- banter vs `boneyard`: "Boneyard! My favourite butcher." ... "Tonight I'm the one holding the cleaver. Figuratively."
+- banter vs `spin`: "The rooftop kid! I made you famous. You're welcome." ... "Dance for the camera, Spin. Last dance."
+- banter vs `gazza`: "Gazza! Still no referee, I'm afraid." ... "Red card, son. Early bath."
+- banter vs `rerun`: "Rerun! My most profitable death." ... "Let's make it a double feature."
+- banter vs `default`: "Welcome to the Season Finale!" ... "Nobody leaves my show. NOBODY."
+- ending: RICKY MARQUEE wins his own show. The confetti falls, the ratings peak, and for one second the studio is silent - there is nobody left to host. He signs himself to another lifetime contract before the credits finish. Next Friday: same time, same cane. The season never ends; it only renews.
 
 **Animation sources** (`tools/clipplan/ricky.json`; every `anim.clip`, grab clip, cinematic clip, intro, win and taunt; ranges shown after the automatic fit).
 
@@ -1848,25 +2037,25 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `low_tap` | 2L | LAYER lower[Mixamo `Great_Sword_Pack/great sword crouching (3)` f1-56, hold f1] + upper[Mixamo `Great_Sword_Pack/great sword attack` f10-33 contact f17] | LAYERED: great sword crouching (3) legs (hips 0.49 m measured) + cane thrust |
 | `low_cane` | 2M | Mixamo `Great_Sword_Pack/great sword slash (5)` f4-40 contact f16 | Mixamo great sword slash (5): low crouch swing (hips 0.49-0.62 m) |
 | `cane_twirl` | 2H | Mixamo `Great_Sword_Pack/great sword high spin attack` f1-40 contact f7 | Mixamo great sword high spin: both hands up in front = anti-air twirl. Contact f7 + effector RightHand (2026-09-30): bake trace hands 1.68 / 1.61 m, 0.42 / 0.56 m forward, lateral < 0.1 m; at the old f11 the hands were already swinging 0.36 m to the side and the builder picked the RightKnee (0.64 m) as the effector |
-| `sledgehammer` | 6H, prime_time (cine), season_finale (cine) | Mixamo `Great_Sword_Pack/great sword slash (4)` f25-55 contact f43 | Mixamo great sword slash (4): sledgehammer overhead chop, impact f41-43 (dense render) |
+| `sledgehammer` | 6H, prime_time (cine), season_finale (cine) | Mixamo `Great_Sword_Pack/great sword slash (4)` f25-55 contact f42 | Mixamo great sword slash (4): sledgehammer overhead chop, impact f41-43 (dense render). P2: contact 43 -> 42 = the measured front pass on the baked body (bake: hands farthest forward at output f17 = source 42, LeftHand 0.59 m / 1.45 m; at 43 already falling to 1.31 m). contact_check's EXT flag stays: the arms keep extending DOWN for 4 more frames after the cane head has crossed the opponent (prop reach, not a late fist) |
 | `stage_kick` | 4M | Mixamo `Great_Sword_Pack/great sword kick` f7-45 contact f19 | Mixamo great sword kick (holding the cane), front pass f19 (1.07 m) |
 | `hook_slide` | 3H, the_hook_l, the_hook_m, the_hook_h, the_hook_ex | Mixamo `Great_Sword_Pack/great sword slide attack` f17-65 contact f38 | Mixamo great sword slide attack: kneeling lunge swing, second front pass f38 = the vaudeville hook |
 | `air_jab` | j.L | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Great_Sword_Pack/great sword attack` f10-30 contact f17] | jump legs + cane thrust |
 | `air_swing` | j.M | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Great_Sword_Pack/great sword slash` f9-31 contact f19] | jump legs + chop |
-| `air_hammer` | j.H | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Great_Sword_Pack/great sword slash (4)` f30-55 contact f43] | jump legs + sledgehammer |
+| `air_hammer` | j.H | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Great_Sword_Pack/great sword slash (4)` f27-52 contact f40] | jump legs + sledgehammer. P2: contact 43 -> 40 = the measured front pass of the air version (bake: hands 0.70 m forward at output f10 = source 40; at 43 they were 0.58 m forward at 0.89 m, dropping) |
 | `throw_reach` | throw_f, throw_b | Mixamo `Soccer_Game_Pack/goalkeeper catch (2)` f2-30 contact f9 | two-hand grab |
-| `three_swings` | throw_f (grab), standing_ovation, prime_time (cine) | Mixamo `Great_Sword_Pack/great sword slash (2)` f15-107 contact f26 | Mixamo great sword slash (2): three two-hand swings (front passes f25/f53/f81) |
+| `three_swings` | throw_f (grab), standing_ovation, prime_time (cine) | Mixamo `Great_Sword_Pack/great sword slash (2)` f15-95 contact f26 | Mixamo great sword slash (2): three two-hand swings (front passes f25/f53/f81). P2: window 15-107 -> 15-95 (the tail after the third swing; 3.07 s over the 54-frame throw lock was 3.4x, now 2.67 s over 64 f = 2.5x) |
 | `spin_fling` | throw_b (grab), season_finale (cine) | Mixamo `Great_Sword_Pack/great sword high spin attack` f1-57 contact f18 | Mixamo great sword high spin (full): 360 swing flings them behind |
 | `spotlight_cast` | spotlight_l, spotlight_m, spotlight_h, spotlight_ex | Mixamo `Great_Sword_Pack/great sword attack` f1-37 contact f17 | great sword attack thrust: the cane's head fires the spotlight beam |
 | `catch_pose` | commercial_break_l, commercial_break_m, commercial_break_h, commercial_break_ex | Mixamo `Great_Sword_Pack/great sword blocking` f1-16 | Mixamo great sword blocking: cane held horizontal = COMMERCIAL BREAK catch |
 | `mic_drop_leap` | mic_drop_l, mic_drop_m, mic_drop_h, mic_drop_ex | LAYER lower[Mixamo `Great_Sword_Pack/great sword jump (2)` f1-28, sync] + upper[Mixamo `Great_Sword_Pack/great sword slash (3)` f17-56 contact f27] | LAYERED: great sword jump (2) legs (apex f10 measured) + horizontal swing = leaping anti-air |
-| `counter_smash` | commercial_hit | Mixamo `Great_Sword_Pack/great sword slash (4)` f35-55 contact f43 | great sword slash (4) sledgehammer, fitted separately for the 6-frame counter follow-up |
+| `counter_smash` | commercial_hit | Mixamo `Great_Sword_Pack/great sword slash (4)` f34-55 contact f42 | great sword slash (4) sledgehammer, fitted separately for the 6-frame counter follow-up. P2: contact 43 -> 42 (the measured front pass, as `sledgehammer`) |
 | `finale_slam` | season_finale | Mixamo `Great_Sword_Pack/great sword casting` f59-110 contact f72 | great sword casting floor smash, fitted separately for the 10-frame Lv3 trigger |
 | `pyro_slam` | pyro_l, pyro_m, pyro_h, pyro_ex, season_finale (cine) | Mixamo `Great_Sword_Pack/great sword casting` f48-110 contact f72 | Mixamo great sword casting: smashes the cane into the floor (f72) = triggers the pyro line |
-| `intro_power` | prime_time (cine), season_finale (cine), intro | Mixamo `Great_Sword_Pack/great sword power up` f1-94 | cane power-up flourish |
+| `intro_power` | prime_time (cine), intro | Mixamo `Great_Sword_Pack/great sword power up` f1-94 | cane power-up flourish |
 | `win_bow` | prime_time (cine), season_finale (cine), win | Mixamo `Gestures_Pack_Basic/happy hand gesture` f1-83 | host gesture |
 | `win_cane` | win | Mixamo `Great_Sword_Pack/great sword idle (3)` f1-109 | cane idle (3) |
-| `taunt_dismiss` | taunt | Mixamo `Gestures_Pack_Basic/dismissing gesture` f1-99 | dismissive host wave |
+| `taunt_dismiss` | season_finale (cine), taunt | Mixamo `Gestures_Pack_Basic/dismissing gesture` f1-99 | dismissive host wave |
 
 **CPU.** `{"style": "boss_showman", "rangeM": [1.4, 3.2], "zoning": ["spotlight_m"], "antiAir": ["mic_drop_l", "2H"], "counter": ["commercial_break_m"], "punish": ["5H", "the_hook_h"], "combo": ["2M", "5H", "the_hook_m"], "phase2": ["pyro_m", "season_finale"], "meter": "standing_ovation"}`. **Intro** `intro_power`, **win** `win_bow`, `win_cane`, **taunt** `taunt_dismiss`.
 

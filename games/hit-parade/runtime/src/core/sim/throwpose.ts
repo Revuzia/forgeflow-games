@@ -116,11 +116,18 @@ export function victimPose(m: Match, d: number, out: Int32Array): boolean {
   const s = m.s;
   const bd = fb(d);
   if (s[bd + F.st] !== ST.THROWN) return false;
+  const tot = Math.max(1, s[bd + F.tot]);
+  return victimPoseAt(m, d, Math.max(0, Math.min(tot, tot - s[bd + F.stun])), out);
+}
+
+/** victimPose at an explicit lock frame `lf` (the lock must be set up: F.tot, F.thrMv, F.thrSlam, F.thrDisp). */
+function victimPoseAt(m: Match, d: number, lf: number, out: Int32Array): boolean {
+  const s = m.s;
+  const bd = fb(d);
   const n = segments(m, d);
   if (n <= 0) return false;
   const vcf = m.cf[d];
   const tot = Math.max(1, s[bd + F.tot]);
-  const lf = Math.max(0, Math.min(tot, tot - s[bd + F.stun]));
   let cur = 0;
   while (cur + 1 < n && lf >= SF0[cur + 1]) cur++;
   const f0 = SF0[cur];
@@ -147,6 +154,62 @@ export function victimPose(m: Match, d: number, out: Int32Array): boolean {
   out[4] = total;
   out[5] = SCL[n - 1];
   return true;
+}
+
+const VQ = new Int32Array(6);
+
+/** Knockdown frames the victim of the lock just set up needs for a whole wake (face down after a thrown_b-type end). */
+export function throwWakeNeed(m: Match, d: number): number {
+  const s = m.s;
+  const tot = Math.max(1, s[fb(d) + F.tot]);
+  const faceDown = victimPoseAt(m, d, tot, VQ) ? endsFaceDown(VQ[5]) : false;
+  return wakeNeedFrames(m, d, faceDown);
+}
+
+/** Knockdown frames the wake clip of this body needs to play whole at <= wakeMaxRate (+ kd.throwLieMinF lying). */
+export function wakeNeedFrames(m: Match, d: number, faceDown: boolean): number {
+  const cf = m.cf[d];
+  const wDur = durMs(cf, faceDown ? CLIP.wake_f : CLIP.wake_b);
+  const w1x = Math.max(1, Math.trunc((wDur * 60) / 1000));
+  const lie = (m.sys.raw.kd as { throwLieMinF?: number }).throwLieMinF ?? 6;
+  return Math.ceil((w1x * 100) / Math.max(100, cf.wakeRate100)) + lie;
+}
+
+/**
+ * CHANGED(SIM) P2 (CONTRACT §28.5d): how many lock frames the victim of the lock just set up may leave EARLY so its
+ * knockdown (F.after + those frames) fits the whole wake clip: the release lock frame is the first one >= L - shortfall
+ * where the victim is on the floor (thrown_* past its slam mark, kd_fall_* past its floor time, kd_ground_*) and its
+ * carry has (within 1 cm) finished, never before the damage frame + 2. Returns 0 when nothing fits (unchanged P1 path).
+ */
+export function throwEarlyRelease(m: Match, d: number, dmgLf: number): number {
+  const s = m.s;
+  const bd = fb(d);
+  const tot = Math.max(1, s[bd + F.tot]);
+  if (!victimPoseAt(m, d, tot, VQ)) return 0;
+  const need = throwWakeNeed(m, d);
+  const after = s[bd + F.after];
+  if (after >= need) return 0;
+  const endDisp = VQ[3];
+  const vcf = m.cf[d];
+  const lo = Math.max(tot - (need - after), dmgLf + 2);
+  for (let lf = lo; lf < tot; lf++) {
+    if (!victimPoseAt(m, d, lf, VQ)) return 0;
+    const clip = VQ[0];
+    const tMs = Math.trunc((VQ[1] * 1000) / 60);
+    let floor = false;
+    if (clip === CLIP.kd_ground_b || clip === CLIP.kd_ground_f) floor = true;
+    else if (clip === CLIP.thrown_f || clip === CLIP.thrown_b) {
+      const c = vcf.vclips[clip];
+      const slam = c && c.slamMs >= 0 ? c.slamMs : Math.trunc((durMs(vcf, clip) * 55) / 100);
+      floor = tMs >= slam;
+    } else if (clip === CLIP.kd_fall_b || clip === CLIP.kd_fall_f) floor = tMs >= vcf.kdFallMs[clip === CLIP.kd_fall_f ? 3 : 1];
+    if (!floor || Math.abs(VQ[3] - endDisp) > 1000) continue;
+    // the carry must be (nearly) at rest here: no visible step at the release (<= 1 cm to the end, <= 1 cm next frame)
+    const d0 = VQ[3];
+    if (!victimPoseAt(m, d, lf + 1, VQ) || Math.abs(VQ[3] - d0) > 1000) continue;
+    return tot - lf;
+  }
+  return 0;
 }
 
 /**

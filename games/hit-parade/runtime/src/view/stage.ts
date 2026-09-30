@@ -13,6 +13,12 @@
 //   * Crowd slots: `crowd_*` empties from the GLB (§17.1); the fallback set generates bleacher rows.
 //   * Stage dressing hooks: nodes named `anim_spin_*` rotate about their local Y, `anim_flicker_*` flicker their
 //     emissive; stage walls "react" through fx.ts dust on splats.
+//   * P2 (CHANGED VIEW, CONTRACT §26.6): stages.json `dressing.animated[]` entries with a `kind` drive view-side dressing:
+//     spin (wheels), flicker (neon), chase (marquee bulbs), flame, sway (hooks / hanging lamps), blink (tally lights),
+//     scroll (tickers), screen (CRT / monitor banks showing a live HUD-like feed of the bout), rain (instanced streaks +
+//     floor splashes), steam (vents). Entries without a `kind` (P1 free text) keep working by node name.
+//   * P2 marquee glare: emissive sign faces / bulb strips brighter than `GLARE_CAP` are graded down at load (the Rust
+//     Theater sign face burned out to white behind the round timer).
 //   * FALLBACK (lab, or a stage GLB that is not there yet): a procedural studio set (canvas-textured floor strip, back
 //     wall, side walls at x = +-8 m as splat surfaces). `fallback = true` and a console warning - it is a stand-in for
 //     the STAGES lane's art, never the shipped look.
@@ -30,6 +36,36 @@ export interface StageDef {
     brightness?: number; cardHeightM?: number };
   lights?: LightSpec[];
   environment?: { hdr?: string; intensity?: number; background?: boolean; backgroundColor?: string };
+  dressing?: { animated?: DressingSpec[] };
+}
+
+/** CONTRACT §26.6: one animated-dressing entry (stages.json `dressing.animated[]`) */
+export interface DressingSpec {
+  kind?: 'spin' | 'flicker' | 'chase' | 'flame' | 'sway' | 'blink' | 'scroll' | 'screen' | 'rain' | 'steam';
+  /** node-name glob ('wheel_*', 'neon_*' ...) */
+  nodes?: string;
+  axis?: 'x' | 'y' | 'z';
+  rpm?: number; hz?: number; amp?: number; deg?: number; speed?: number; spacing?: number; dropout?: number;
+  content?: 'hud' | 'static' | 'bars' | 'logo';
+  area?: { x: [number, number]; z: [number, number]; top?: number };
+  rate?: number; color?: string; size?: number;
+  at?: Array<[number, number, number]>;
+  what?: string; how?: string;
+}
+
+/** emissive strength a sign / bulb material may keep (anything above is graded down at load: marquee glare) */
+export const GLARE_CAP = 1.6;
+
+export interface StageFrameCtx {
+  /** fighter names + hp fractions for monitor feeds */
+  hp?: [number, number];
+  names?: [string, string];
+  timer?: number;
+  time?: number;
+}
+
+function globRe(glob: string): RegExp {
+  return new RegExp('^' + glob.split('*').map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$', 'i');
 }
 
 /** tolerant read of data/stages.json: {stages:[{id..}]} | {stages:{id:{..}}} | [{id..}] | {id:{..}} */
@@ -173,6 +209,122 @@ export interface LightSpec {
 }
 
 interface Flicker { light: THREE.Light; base: number; amp: number; hz: number; phase: number }
+interface DressNode { o: THREE.Object3D; spec: DressingSpec; phase: number; base?: THREE.Euler; mats?: Array<{ m: THREE.MeshStandardMaterial | THREE.MeshBasicMaterial; base: number; col?: THREE.Color }> }
+
+/** one live monitor feed texture (shared by every `screen` node of a stage) */
+class ScreenFeed {
+  readonly canvas = document.createElement('canvas');
+  readonly tex: THREE.CanvasTexture;
+  readonly content: string;
+  /** panels side by side (a bank of monitors mapped by a planar projection shares one canvas) */
+  readonly panels: string[];
+  private acc = 1;
+  private n = 0;
+  private content0 = 'hud';
+  constructor(content: string, panels = 1) {
+    this.content = content;
+    const order = [content, content === 'hud' ? 'names' : 'hud', 'static', 'bars', 'logo', 'hud'];
+    this.panels = Array.from({ length: Math.max(1, panels) }, (_, i) => order[i % order.length]);
+    this.canvas.width = 256 * this.panels.length; this.canvas.height = 160;
+    this.tex = new THREE.CanvasTexture(this.canvas);
+    this.tex.colorSpace = THREE.SRGBColorSpace;
+    this.draw({});
+  }
+  update(dt: number, ctx: StageFrameCtx): void {
+    this.acc += dt;
+    if (this.acc < 0.1) return;                              // 10 Hz: a CRT feed, not a second renderer
+    this.acc = 0;
+    this.draw(ctx);
+  }
+  private draw(ctx: StageFrameCtx): void {
+    const g = this.canvas.getContext('2d')!;
+    this.n++;
+    for (let i = 0; i < this.panels.length; i++) {
+      g.save(); g.translate(i * 256, 0); g.beginPath(); g.rect(0, 0, 256, 160); g.clip();
+      this.content0 = this.panels[i];
+      this.drawPanel(g, ctx, i);
+      g.restore();
+    }
+    this.tex.needsUpdate = true;
+  }
+
+  private drawPanel(g: CanvasRenderingContext2D, ctx: StageFrameCtx, idx: number): void {
+    const W = 256, H = 160;
+    const content = this.content0;
+    g.fillStyle = '#06080c'; g.fillRect(0, 0, W, H);
+    if (content === 'names') {
+      const nm = ctx.names ?? ['', ''];
+      g.fillStyle = '#ffd21a'; g.fillRect(0, 22, W, 44); g.fillStyle = '#e8122d'; g.fillRect(0, 94, W, 44);
+      g.fillStyle = '#111'; g.font = 'bold 26px Impact, sans-serif'; g.textAlign = 'center'; g.fillText(nm[0].slice(0, 14), W / 2, 54);
+      g.fillStyle = '#fff'; g.fillText(nm[1].slice(0, 14), W / 2, 126);
+      g.fillStyle = 'rgba(255,255,255,0.8)'; g.font = 'bold 16px Impact, sans-serif'; g.fillText('VS', W / 2, 86);
+    } else if (content === 'static') {
+      for (let k = 0; k < 900; k++) { const v = (Math.sin(k * 12.9898 + (this.n + idx * 7) * 78.233) * 43758.5453) % 1; g.fillStyle = `rgba(220,230,255,${Math.abs(v) * 0.6})`; g.fillRect((k * 37 + this.n * 13) % W, (k * 11 + this.n * 7) % H, 2, 2); }
+    } else if (content === 'bars') {
+      const cols = ['#c0c0c0', '#c0c000', '#00c0c0', '#00c000', '#c000c0', '#c00000', '#0000c0'];
+      cols.forEach((c, k) => { g.fillStyle = c; g.fillRect((k * W) / 7, 0, W / 7 + 1, H * 0.72); });
+      g.fillStyle = '#111'; g.fillRect(0, H * 0.72, W, H * 0.28);
+    } else if (content === 'logo') {
+      g.fillStyle = '#ffd21a'; g.font = 'bold 44px Impact, sans-serif'; g.textAlign = 'center'; g.fillText('K13', W / 2, H / 2 + 14);
+      g.strokeStyle = '#e8122d'; g.lineWidth = 6; g.strokeRect(20, 20, W - 40, H - 40);
+    } else {
+      // 'hud': a live bout feed - two health bars, the clock, a blinking LIVE dot, a sweeping scan bar
+      const hp = ctx.hp ?? [1, 1];
+      g.fillStyle = '#10141c'; g.fillRect(8, 8, W - 16, 30);
+      g.fillStyle = '#ffd21a'; g.fillRect(12, 14, (W / 2 - 22) * Math.max(0, hp[0]), 18);
+      g.fillRect(W - 12 - (W / 2 - 22) * Math.max(0, hp[1]), 14, (W / 2 - 22) * Math.max(0, hp[1]), 18);
+      g.fillStyle = '#fff'; g.font = 'bold 20px Impact, sans-serif'; g.textAlign = 'center';
+      g.fillText(ctx.timer !== undefined && ctx.timer >= 0 ? String(ctx.timer) : '--', W / 2, 32);
+      g.font = 'bold 15px Impact, sans-serif'; g.textAlign = 'left';
+      if (ctx.names) { g.fillText(ctx.names[0].slice(0, 12), 12, 56); g.textAlign = 'right'; g.fillText(ctx.names[1].slice(0, 12), W - 12, 56); }
+      if (this.n % 10 < 6) { g.fillStyle = '#e8122d'; g.beginPath(); g.arc(22, H - 20, 7, 0, 7); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'left'; g.fillText('LIVE', 34, H - 14); }
+      g.fillStyle = 'rgba(120,200,255,0.18)'; g.fillRect(0, (this.n * 9) % H, W, 14);
+    }
+    g.fillStyle = 'rgba(0,0,0,0.28)';
+    for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);              // scanlines
+  }
+  dispose(): void { this.tex.dispose(); }
+}
+
+/** instanced rain streaks over an area (one draw call) */
+class RainView {
+  readonly mesh: THREE.InstancedMesh;
+  private readonly u = { uTime: { value: 0 }, uTop: { value: 7 }, uColor: { value: new THREE.Color(0.7, 0.8, 1.0) } };
+  constructor(spec: DressingSpec) {
+    const n = Math.max(100, Math.min(2400, spec.rate ?? 1200));
+    const area = spec.area ?? { x: [-12, 12] as [number, number], z: [-8, 3] as [number, number], top: 7 };
+    this.u.uTop.value = area.top ?? 7;
+    if (spec.color) this.u.uColor.value.set(spec.color);
+    const geo = new THREE.PlaneGeometry(0.012, 0.42);
+    const off = new Float32Array(n * 4);
+    let sd = 5;
+    const r = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
+    for (let i = 0; i < n; i++) { off[i * 4] = area.x[0] + (area.x[1] - area.x[0]) * r(); off[i * 4 + 1] = area.z[0] + (area.z[1] - area.z[0]) * r(); off[i * 4 + 2] = r(); off[i * 4 + 3] = 7 + 4 * r(); }
+    geo.setAttribute('aRain', new THREE.InstancedBufferAttribute(off, 4));
+    const mat = new THREE.ShaderMaterial({
+      name: 'stage-rain', uniforms: this.u, transparent: true, depthWrite: false, fog: false,
+      vertexShader: /* glsl */`
+        attribute vec4 aRain; uniform float uTime; uniform float uTop; varying float vA;
+        void main() {
+          float y = uTop - mod( uTime * aRain.w + aRain.z * uTop, uTop );
+          vec3 base = vec3( aRain.x + 0.35 * sin( aRain.z * 40.0 ), y, aRain.y );
+          vec4 mv = viewMatrix * vec4( base, 1.0 );
+          mv.xy += position.xy;
+          vA = 0.35 + 0.35 * aRain.z;
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: /* glsl */`
+        uniform vec3 uColor; varying float vA;
+        void main() { gl_FragColor = vec4( uColor, vA ); }`,
+    });
+    this.mesh = new THREE.InstancedMesh(geo, mat, n);
+    this.mesh.name = 'stage-rain';
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 12;
+  }
+  update(t: number): void { this.u.uTime.value = t; }
+  dispose(): void { this.mesh.geometry.dispose(); (this.mesh.material as THREE.Material).dispose(); }
+}
 
 export class StageView {
   readonly group = new THREE.Group();
@@ -184,13 +336,24 @@ export class StageView {
   crowd: THREE.Object3D[] = [];
   private keyOffset = new THREE.Vector3(-3.5, 6.7, 6.0);
   private keyTargetY = 0.8;
-  private shadowHalf = { l: -6, r: 6 };
   private spinners: THREE.Object3D[] = [];
   private flickers: THREE.Mesh[] = [];
   private lightFlicker: Flicker[] = [];
   private flames: THREE.Object3D[] = [];
+  /** P2 name hooks: `rain_*` streak-card nodes scroll down and wrap every 10 m (STAGES-B rooftop request) */
+  private rainNodes: Array<{ o: THREE.Object3D; y0: number }> = [];
+  private dress: DressNode[] = [];
+  private screens: ScreenFeed[] = [];
+  private rain: RainView | null = null;
+  private steam: Array<{ at: [number, number, number]; rate: number; size: number; acc: number; color: THREE.Color }> = [];
+  private chaseU: Array<{ value: number }> = [];
   private t = 0;
   private env: THREE.Texture | null = null;
+  /** view-only full light-pool flicker (PRIME TIME `lights_flicker` beats), seconds left */
+  private flickerAll = 0;
+  private lightsDimmed = false;
+  /** measured read-back: glare grading + dressing hooks */
+  readonly report = { glareGraded: [] as string[], dressing: [] as string[] };
 
   private constructor(def: StageDef) {
     this.def = def;
@@ -212,11 +375,7 @@ export class StageView {
         case 'hemisphere': L = new THREE.HemisphereLight(new THREE.Color(s.sky ?? '#ffffff'), new THREE.Color(s.ground ?? '#444444'), s.intensity ?? 1); break;
         case 'ambient': L = new THREE.AmbientLight(col, s.intensity ?? 1); break;
         case 'point': L = new THREE.PointLight(col, s.intensity ?? 1, s.distance ?? 0, s.decay ?? 2); break;
-        case 'spot': {
-          const sp = new THREE.SpotLight(col, s.intensity ?? 1, s.distance ?? 0, (s.angleDeg ?? 30) * Math.PI / 180, s.penumbra ?? 0, s.decay ?? 2);
-          L = sp;
-          break;
-        }
+        case 'spot': L = new THREE.SpotLight(col, s.intensity ?? 1, s.distance ?? 0, (s.angleDeg ?? 30) * Math.PI / 180, s.penumbra ?? 0, s.decay ?? 2); break;
         default: L = new THREE.DirectionalLight(col, s.intensity ?? 1);
       }
       L.name = 'light_' + (s.id ?? s.type + k++);
@@ -243,6 +402,7 @@ export class StageView {
         this.keyTargetY = t[1];
       }
       if (s.flicker && s.flicker.amp > 0) this.lightFlicker.push({ light: L, base: L.intensity, amp: s.flicker.amp, hz: s.flicker.hz || 7, phase: k * 1.7 });
+      L.userData.base0 = L.intensity;
       this.lights.push(L);
       this.group.add(L);
     }
@@ -284,12 +444,156 @@ export class StageView {
         }
       } catch (e) { console.warn('[view] stage environment HDR failed:', e); }
     }
+    v.gradeGlare();
+    v.bindScreensByName();
     v.group.traverse((o) => {
       if (/^anim_spin_/i.test(o.name)) v.spinners.push(o);
-      if (/^anim_flicker_/i.test(o.name) && (o as THREE.Mesh).isMesh) v.flickers.push(o as THREE.Mesh);
+      if (/^anim_flicker_/i.test(o.name)) o.traverse((x) => { if ((x as THREE.Mesh).isMesh && !v.flickers.includes(x as THREE.Mesh)) v.flickers.push(x as THREE.Mesh); });
       if (/^flame_/i.test(o.name)) v.flames.push(o);
+      if (/^rain_/i.test(o.name)) v.rainNodes.push({ o, y0: o.position.y });
     });
+    if (v.rainNodes.length) v.report.dressing.push(`rain scroll ${v.rainNodes.map((r) => r.o.name).join(',')}`);
+    v.buildDressing();
     return v;
+  }
+
+  /**
+   * P2 monitors by NAME (the brief's "monitor screens with live HUD-like content"): mesh nodes whose name contains crt /
+   * monitor / screen get the live feed as an unlit screen. Screens without UVs (control_room's 4-screen bank) get a planar
+   * UV over their local X/Y bounds, one feed panel per screen along X (panel count = the mesh's disconnected groups by x).
+   */
+  private bindScreensByName(): void {
+    const hits: THREE.Mesh[] = [];
+    this.group.traverse((o) => { if ((o as THREE.Mesh).isMesh && /(^|_)(crt|monitor|screen)s?(_|$)/i.test(o.name)) hits.push(o as THREE.Mesh); });
+    for (const m of hits) {
+      const geo = m.geometry;
+      const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+      geo.computeBoundingBox();
+      const bb = geo.boundingBox!;
+      // count screens along x: gaps in the sorted x of the vertices wider than 4 % of the span
+      const xs: number[] = [];
+      for (let i = 0; i < pos.count; i++) xs.push(pos.getX(i));
+      xs.sort((a, b) => a - b);
+      const span = Math.max(1e-6, bb.max.x - bb.min.x);
+      const cuts: number[] = [];
+      for (let i = 1; i < xs.length; i++) if (xs[i] - xs[i - 1] > span * 0.04) cuts.push((xs[i] + xs[i - 1]) / 2);
+      const panels = cuts.length + 1;
+      if (!geo.getAttribute('uv')) {
+        const uv = new Float32Array(pos.count * 2);
+        const hy = Math.max(1e-6, bb.max.y - bb.min.y);
+        const edges = [bb.min.x, ...cuts, bb.max.x];
+        for (let i = 0; i < pos.count; i++) {
+          const x = pos.getX(i), y = pos.getY(i);
+          let k = 0;
+          while (k < panels - 1 && x > edges[k + 1]) k++;
+          const u0 = (x - edges[k]) / Math.max(1e-6, edges[k + 1] - edges[k]);
+          uv[i * 2] = (k + Math.max(0, Math.min(1, u0))) / panels;
+          uv[i * 2 + 1] = (y - bb.min.y) / hy;
+        }
+        geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      }
+      const feed = new ScreenFeed('hud', panels);
+      this.screens.push(feed);
+      const sm = new THREE.MeshBasicMaterial({ map: feed.tex, toneMapped: false, fog: false });
+      sm.name = 'stage-screen';
+      m.material = sm;
+      this.flickers = this.flickers.filter((f) => f !== m);
+      this.report.dressing.push(`screen ${m.name} x${panels} (by name)`);
+    }
+  }
+
+  /** P2: marquee glare - sign faces / bulbs with emissive above GLARE_CAP are graded down (the view's grade, not the art) */
+  private gradeGlare(): void {
+    const seen = new Set<THREE.Material>();
+    this.group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      for (const mat of (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshStandardMaterial[]) {
+        if (!mat || seen.has(mat) || !mat.emissive) continue;
+        seen.add(mat);
+        const e = mat.emissiveIntensity * Math.max(mat.emissive.r, mat.emissive.g, mat.emissive.b);
+        if (/sign|bulb|marquee|lens/i.test(mat.name) && e > GLARE_CAP) {
+          const k = GLARE_CAP / e;
+          mat.emissiveIntensity *= /sign/i.test(mat.name) ? k * 0.8 : k;
+          this.report.glareGraded.push(`${mat.name} ${e.toFixed(2)} -> ${(mat.emissiveIntensity * Math.max(mat.emissive.r, mat.emissive.g, mat.emissive.b)).toFixed(2)}`);
+        }
+      }
+    });
+  }
+
+  /** P2: stages.json dressing.animated[] -> view-side animation hooks (CONTRACT §26.6) */
+  private buildDressing(): void {
+    const list = this.def.dressing?.animated ?? [];
+    let k = 0;
+    for (const spec of list) {
+      const kind = spec.kind;
+      if (!kind) continue;
+      if (kind === 'rain') { this.rain = new RainView(spec); this.group.add(this.rain.mesh); this.report.dressing.push('rain'); continue; }
+      if (kind === 'steam') {
+        for (const at of spec.at ?? []) this.steam.push({ at, rate: spec.rate ?? 1, size: spec.size ?? 0.8, acc: 0, color: new THREE.Color(spec.color ?? '#d8dde6') });
+        this.report.dressing.push(`steam x${(spec.at ?? []).length}`);
+        continue;
+      }
+      if (!spec.nodes) continue;
+      const re = globRe(spec.nodes);
+      const hits: THREE.Object3D[] = [];
+      this.group.traverse((o) => { if (o.name && re.test(o.name)) hits.push(o); });
+      if (!hits.length) { this.report.dressing.push(`${kind} ${spec.nodes}: no nodes`); continue; }
+      let feed: ScreenFeed | null = null;
+      if (kind === 'screen') { feed = new ScreenFeed(spec.content ?? 'hud'); this.screens.push(feed); }
+      for (const o of hits) {
+        const d: DressNode = { o, spec, phase: (k++ * 1.618) % 6.283, base: o.rotation.clone() };
+        const mats: NonNullable<DressNode['mats']> = [];
+        o.traverse((x) => {
+          const mm = x as THREE.Mesh;
+          if (!mm.isMesh) return;
+          if (feed) {
+            const sm = new THREE.MeshBasicMaterial({ map: feed.tex, toneMapped: false, fog: false });
+            sm.name = 'stage-screen';
+            mm.material = sm;
+            return;
+          }
+          for (const mat of (Array.isArray(mm.material) ? mm.material : [mm.material]) as THREE.MeshStandardMaterial[]) {
+            if (kind === 'chase' && mat.emissive) this.chaseMaterial(mat);
+            mats.push({ m: mat, base: mat.emissiveIntensity ?? 1, col: (mat as unknown as THREE.MeshBasicMaterial).color?.clone() });
+          }
+        });
+        d.mats = mats;
+        this.dress.push(d);
+      }
+      this.report.dressing.push(`${kind} ${spec.nodes} x${hits.length}`);
+    }
+    // free-text entries (P1 / STAGES-A / STAGES-B "optional chase pattern"): every `*bulbs` node chases by name
+    // (marquee_bulbs on four sets, the rooftop's string_bulbs)
+    if (!list.some((s) => s.kind === 'chase')) {
+      const named: string[] = [];
+      this.group.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!/bulbs$/i.test(o.name)) return;
+        o.traverse((x) => {
+          const mm = x as THREE.Mesh;
+          if (mm.isMesh) for (const mat of (Array.isArray(mm.material) ? mm.material : [mm.material]) as THREE.MeshStandardMaterial[]) if (mat.emissive && !mat.userData.hpChase) { mat.userData.hpChase = true; this.chaseMaterial(mat); }
+        });
+        named.push(o.name);
+        void m;
+      });
+      if (named.length) this.report.dressing.push(`chase ${named.join(',')} (by name)`);
+    }
+  }
+
+  /** a running-light chase on an emissive material: bulbs brighten in waves along world x (one uniform, no new mesh) */
+  private chaseMaterial(mat: THREE.MeshStandardMaterial): void {
+    const u = { value: 0 };
+    this.chaseU.push(u);
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.uChaseT = u;
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vChaseW;')
+        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvChaseW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vChaseW; uniform float uChaseT;')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= 0.45 + 0.75 * smoothstep( 0.2, 0.9, sin( ( vChaseW.x + vChaseW.y ) * 5.0 - uChaseT * 7.0 ) * 0.5 + 0.5 );');
+    };
+    mat.customProgramCacheKey = () => 'hp-chase';
+    mat.needsUpdate = true;
   }
 
   applyTo(scene: THREE.Scene, renderer: THREE.WebGLRenderer): void {
@@ -312,24 +616,92 @@ export class StageView {
     this.key.target.updateMatrixWorld();
   }
 
-  update(dt: number): void {
+  /** PRIME TIME `lights_flicker`: the whole light pool stutters for `seconds` (view only) */
+  flicker(seconds: number): void { this.flickerAll = Math.max(this.flickerAll, seconds); }
+
+  update(dt: number, ctx: StageFrameCtx = {}, spawnSteam?: (at: THREE.Vector3, size: number, color: THREE.Color) => void): void {
     this.t += dt;
     for (const s of this.spinners) s.rotation.y += dt * 0.8;
-    for (const m of this.flickers) {
-      const on = Math.sin(this.t * 23.0) + Math.sin(this.t * 7.3) > -1.6 ? 1 : 0.35;
+    for (let i = 0; i < this.flickers.length; i++) {
+      const m = this.flickers[i];
+      const ph = i * 1.37;
+      const on = Math.sin(this.t * 23.0 + ph) + Math.sin(this.t * 7.3 + ph * 2.1) > -1.6 ? 1 : 0.35;
+      const std = m.material as THREE.MeshStandardMaterial;
+      if (std && std.emissive && (std.emissiveIntensity > 0 || m.userData.baseE !== undefined)) {
+        // lit materials (neon tubes, CRT faces): flicker the emissive strength (P1 only touched unlit colours)
+        if (m.userData.baseE === undefined) m.userData.baseE = std.emissiveIntensity;
+        std.emissiveIntensity = (m.userData.baseE as number) * (on < 1 ? 0.3 : 0.92 + 0.08 * Math.sin(this.t * 61 + ph));
+        continue;
+      }
       const mat = m.material as THREE.MeshBasicMaterial;
       if (mat && mat.color) { if (m.userData.base === undefined) m.userData.base = mat.color.clone(); mat.color.copy(m.userData.base as THREE.Color).multiplyScalar(on); }
     }
+    for (const r of this.rainNodes) r.o.position.y = r.y0 - ((this.t * 9.0) % 10.0);
+    const all = this.flickerAll > 0 ? (Math.sin(this.t * 61) + Math.sin(this.t * 23.7) > 0.2 ? 0.25 : 1.0) : 1;
+    this.flickerAll = Math.max(0, this.flickerAll - dt);
     for (const f of this.lightFlicker) {
       const n = Math.sin(this.t * f.hz * 6.283 + f.phase) * 0.6 + Math.sin(this.t * f.hz * 2.71 * 6.283 + f.phase * 2.3) * 0.4;
-      f.light.intensity = f.base * (1 + f.amp * n);
+      f.light.intensity = f.base * (1 + f.amp * n) * all;
+    }
+    if (all !== 1 || this.lightsDimmed) {
+      for (const L of this.lights) if (!this.lightFlicker.some((x) => x.light === L)) L.intensity = (L.userData.base0 as number) * all;
+      this.lightsDimmed = all !== 1;
     }
     for (let i = 0; i < this.flames.length; i++) {
       const o = this.flames[i];
       if (o.userData.baseScale === undefined) o.userData.baseScale = o.scale.y;
       o.scale.y = (o.userData.baseScale as number) * (1 + 0.12 * Math.sin(this.t * 17 + i * 2.1) + 0.06 * Math.sin(this.t * 41 + i));
     }
+    for (const u of this.chaseU) u.value = this.t;
+    for (const d of this.dress) {
+      const s = d.spec, t = this.t;
+      switch (s.kind) {
+        case 'spin': {
+          const a = (s.rpm ?? 6) / 60 * 6.2832 * dt;
+          const ax = s.axis ?? 'z';
+          if (ax === 'x') d.o.rotation.x += a; else if (ax === 'y') d.o.rotation.y += a; else d.o.rotation.z += a;
+          break;
+        }
+        case 'sway': {
+          const a = (s.deg ?? 5) * Math.PI / 180 * Math.sin(t * (s.hz ?? 0.4) * 6.2832 + d.phase);
+          d.o.rotation.z = (d.base?.z ?? 0) + a;
+          break;
+        }
+        case 'flicker': case 'blink': case 'flame': {
+          let k: number;
+          if (s.kind === 'blink') k = Math.sin(t * (s.hz ?? 1) * 6.2832 + d.phase) > 0 ? 1 : 0.08;
+          else if (s.kind === 'flame') k = 1 + 0.18 * Math.sin(t * 17 + d.phase) + 0.08 * Math.sin(t * 41 + d.phase * 2);
+          else {
+            const n = Math.sin(t * (s.hz ?? 7) * 6.2832 + d.phase) * 0.6 + Math.sin(t * (s.hz ?? 7) * 2.3 * 6.2832 + d.phase * 1.7) * 0.4;
+            const drop = Math.sin(t * 3.1 + d.phase * 3) > 1 - 2 * (s.dropout ?? 0.04) ? 0.1 : 1;
+            k = drop * (1 + (s.amp ?? 0.25) * n);
+          }
+          for (const mm of d.mats ?? []) {
+            const std = mm.m as THREE.MeshStandardMaterial;
+            if (std.emissive) std.emissiveIntensity = mm.base * k;
+            else if (mm.col) (mm.m as THREE.MeshBasicMaterial).color.copy(mm.col).multiplyScalar(k);
+          }
+          if (s.kind === 'flame') d.o.scale.y = (d.base ? 1 : 1) * (0.92 + 0.16 * k);
+          break;
+        }
+        case 'scroll': {
+          for (const mm of d.mats ?? []) { const mp = (mm.m as THREE.MeshStandardMaterial).map; if (mp) { mp.wrapS = THREE.RepeatWrapping; mp.offset.x = (t * (s.speed ?? 0.15)) % 1; } }
+          break;
+        }
+        default: break;
+      }
+    }
+    for (const sc of this.screens) sc.update(dt, ctx);
+    this.rain?.update(this.t);
+    if (spawnSteam) {
+      for (const st of this.steam) {
+        st.acc += dt * st.rate * 8;
+        while (st.acc >= 1) { st.acc -= 1; spawnSteam(new THREE.Vector3(st.at[0], st.at[1], st.at[2]), st.size, st.color); }
+      }
+    }
   }
+
+  raining(): boolean { return !!this.rain; }
 
   dispose(): void {
     this.group.traverse((o) => {
@@ -340,6 +712,8 @@ export class StageView {
         for (const x of mats) { (x as THREE.MeshStandardMaterial).map?.dispose(); x.dispose(); }
       }
     });
+    for (const s of this.screens) s.dispose();
+    this.rain?.dispose();
     this.key?.shadow.map?.dispose();
     this.env?.dispose();
     this.group.removeFromParent();

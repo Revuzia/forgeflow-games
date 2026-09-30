@@ -1,5 +1,5 @@
 """PATCH - rushdown kickboxer (CMU kicks + Muay Thai knees, the two AUTHORED crouch kicks)."""
-from kitlib import (Kit, air, authored, cmu, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
+from kitlib import (Kit, air, authored, cam, cinematic, cmu, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
 
 
 def build():
@@ -50,8 +50,8 @@ def build():
            "CMU jump_kick.2 usable (90_06 airborne turning kick, foot 1.65 m) - a real airborne kick")
     K.clip("throw_reach", mix("Soccer_Game_Pack/goalkeeper catch (2)", (1, 30), contact=9),
            "Mixamo goalkeeper catch (2) two-hand grab (throw whiff)")
-    K.clip("clinch_knee", dict(cmu("knee.1"), effector="RightKnee"),
-           "CMU knee.1 clean (86_06: hands grab and pull down, knee to the chest; pilot p09). Effector RightKnee: the builder measured the right FOOT (lane ASSETS flag)")
+    K.clip("clinch_knee", dict(cmu("knee.1", kind="knee", limb="R_knee"), effector="RightKnee"),
+           "CMU knee.1 clean (86_06: hands grab and pull down, knee to the chest; pilot p09). Effector RightKnee: the builder measured the right FOOT (lane ASSETS flag). P2: kind knee / limb R_knee (was the catalog's foot / R_foot): the CMU facing is aimed from the KNEE, the striking point of a clinch knee")
     K.clip("spin_toss", cmu("roundhouse.3", rng=(735, 828)),
            "CMU roundhouse.3 clean (135_07 R head kick, 104 deg turn): swings them past, turning kick")
     K.clip("cue_kick", cmu("front_kick.1", rng=(330, 428)),
@@ -61,9 +61,11 @@ def build():
     K.clip("flying_knee", cmu("knee.2", rng=(6495, 6627)), "CMU knee.2 clean (86_06 knee) played on a hop")
     K.clip("flip_kick", cmu("front_kick.5", rng=(950, 1087)),
            "CMU front_kick.5 clean (113_13 high snap kick 1.29 m) played rising = flip-kick anti-air")
-    K.clip("slide", mix("Soccer_Game_Pack/soccer tackle (2)", (5, 54), contact=19),
-           "Mixamo soccer tackle (2) diving slide takedown (on the floor at f19, up by f47); borrowed from the "
-           "Soccer pack because CMU has no slide")
+    K.clip("slide", dict(mix("Soccer_Game_Pack/soccer tackle", (12, 60), contact=24), effector="LeftFoot"),
+           "P2: Mixamo soccer tackle f12-60, FEET-FIRST: the lead (left) foot skims in low at f24 (Gazza's bake of the "
+           "same source: LeftFoot 0.82 m forward, 0.27 m up at output f13) = a low slide that hits the shins. Was soccer "
+           "tackle (2), a HEAD-first dive: at its contact she sat on the floor with the effector on her raised hand "
+           "(QC game frames), so the low was a hand swipe")
     K.clip("reel_kicks",
            seq(cmu("front_kick.3", rng=(890, 960)), cmu("roundhouse.4", rng=(3730, 3807)),
                cmu("jump_kick.1", rng=(262, 333)), xf=2),
@@ -102,11 +104,20 @@ def build():
           desc="Air-to-air side kick.")
     K.add("j.H", "jH", input="j.H", name="Jump Turning Kick", clip="jump_kick", desc="Big turning jump-in.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Plum Knees", clip="throw_reach",
-          grab={"frames": 46, "adv": 21, "hitF": 30, "swap": False, "air": False, "techable": True,
-                "clip": "clinch_knee"}, desc="Muay Thai clinch, knee to the chest.")
+          grab={"frames": 46, "adv": 21, "hitF": 16, "swap": False, "air": False, "techable": True,
+                "clip": "clinch_knee",
+                # P2 paired throw: the plum pulls the head down (lock 0-16), the knee lands at clip 0.45 s = lock 16
+                # (1.27 s over 46 f); the victim folds on it, stays doubled while the knee is held up (16-34) and drops
+                # back when she lets go (kd_fall_b 1.04 -> 1.5 s, face up).
+                "victim": [[0, "hit_high_s", 0.0, 0.3], [16, "hit_body", 0.15, 0.8], [34, "kd_fall_b", 1.04, 1.5]]},
+          desc="Muay Thai clinch, knee to the chest.")
     K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Spin Toss", clip="throw_reach",
-          grab={"frames": 48, "adv": 14, "hitF": 28, "swap": True, "air": False, "techable": True,
-                "clip": "spin_toss"}, desc="Spins and flings them behind.")
+          grab={"frames": 48, "adv": 14, "hitF": 19, "swap": True, "air": False, "techable": True,
+                "clip": "spin_toss",
+                # P2 paired throw: the turning head kick lands at clip 0.31 s = lock 19 (0.80 s over 48 f); the victim is
+                # swung past (thrown_b 0.05 -> 0.40 s) and the kick sends them face down behind her.
+                "victim": [[0, "hit_high_s", 0.0, 0.25], [10, "thrown_b", 0.05, 0.4], [19, "thrown_b", 0.4, 1.2]]},
+          desc="Spins and flings them behind.")
 
     # ---------------- specials ----------------
     K.special("cue", None, motion="236",
@@ -214,15 +225,34 @@ def build():
           invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]},
           move=[[0, 0], [10, 0.8]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],
           juggle={"js": 1, "ji": 0, "jl": 99},
-          cinematic={"frames": 160, "cue": "patch_on_air",
-                     "hits": [[10, 400], [35, 500], [60, 600], [85, 700], [110, 900], [135, 1400]],
-                     "anim": [[0, "clinch_knee"], [28, "cue_round"], [52, "roundhouse_hi"], [78, "flying_knee"],
-                              [102, "jump_kick"], [126, "cue_drop"], [146, "win_high_kick"]],
-                     "victim": [[0, "thrown_f"], [28, "hit_high_l"], [52, "hit_high_l"], [78, "hit_air"],
-                                [102, "hit_air"], [126, "kd_fall_b"], [140, "kd_ground_b"]],
-                     "shots": [[0, "front_low"], [28, "side_close"], [52, "punch_in"], [78, "low_angle_up"],
-                               [102, "orbit"], [126, "top_down"], [146, "crowd_pop"]],
-                     "endAdv": 19, "endGapM": 2.0},
+          cinematic=lambda: cinematic(
+              160, "patch_on_air",
+              hits=[[10, 400], [35, 500], [60, 600], [85, 700], [110, 900], [135, 1400]],
+              anim=[K.seg(0, "clinch_knee", 28, hit=10), K.seg(28, "cue_round", 52, hit=35),
+                    K.seg(52, "roundhouse_hi", 78, hit=60), K.seg(78, "flying_knee", 102, hit=85),
+                    K.seg(102, "jump_kick", 126, hit=110), K.seg(126, "cue_drop", 146, hit=135),
+                    K.seg(146, "win_high_kick", 160, fromS=0.2)],
+              victim=[[0, "hit_body", 0.0, 0.3], [10, "hit_body", 0.0, 0.4], [35, "hit_high_l", 0.0, 0.4],
+                      [60, "hit_high_l", 0.1, 0.45], [85, "hit_air", 0.0, 0.4], [110, "hit_air", 0.3, 0.8],
+                      [135, "kd_fall_b", 1.25, 1.8667], [148, "kd_ground_b", 0.0, 0.367]],
+              camera=[cam(0, 28, "low", "both", 38, 2.6, 0.5, 18, lookH=1.2),
+                      cam(28, 52, "close", "defender", 30, 2.0, 1.55, 40),
+                      cam(52, 78, "close", "both", [34, 30], [2.4, 2.0], 1.6, -30),
+                      cam(78, 102, "low", "defender", 42, 3.0, 0.3, 25, lookH=1.8),
+                      cam(102, 126, "orbit", "both", 40, 3.4, 2.0, [30, -40], lookH=1.8, ease="linear"),
+                      cam(126, 146, "top", "defender", 40, 1.3, 5.2, 8, lookH=0.5),
+                      cam(146, 160, "wide", "both", 38, 5.5, 1.7, 0)],
+              fx=[(0, "slate"), (10, "impact_m"), (35, "impact_s"), (60, "impact_m"), (60, "smear", "attacker"),
+                  (85, "impact_m"), (85, "shake_s"), (102, "speed_lines"), (110, "impact_m"), (135, "impact_l"),
+                  (135, "flash"), (135, "shake_l"), (135, "dust"), (135, "freeze_frame"), (146, "spot", "attacker"),
+                  (158, "spot_off")],
+              crowd=[(10, "ooh"), (35, "ooh"), (60, "gasp"), (85, "cheer", "up"), (110, "roar", "up"),
+                     (135, "roar", "spike"), (146, "chant", "peak")],
+              pathA=[[10, 0.1, 0], [35, 0.25, 0], [60, 0.4, 0], [85, 0.5, 0.35], [95, 0.55, 0], [110, 0.7, 0.9],
+                     [120, 0.8, 0.9], [135, 0.9, 0.2], [140, 0.9, 0], [158, 0, 0]],
+              gapD=[[10, 0.8, 0], [35, 0.9, 0], [60, 1.0, 0], [85, 0.9, 0.3], [100, 1.0, 1.0], [110, 0.9, 1.2],
+                    [128, 0.9, 1.0], [136, 1.1, 0], [158, 2.0, 0]],
+              slate="PRIME TIME - PATCH: ON AIR IN 3... 2... 1...", endPose="back", endAdv=19, endGapM=2.0),
           desc="PRIME TIME: a teep that starts a juggle she counts down live.",
           why="1c Lv3: 10/4/58, -42, 4500, fully invulnerable 1-13.")
 
@@ -236,11 +266,27 @@ def build():
                 "trait": "RED LIGHT REKKA: CUE KICK chains into CUE 2, then CUE 3 overhead (236) or low (214). "
                          "Fastest walk (2.28 m/s) and longest dash (1.43 m); lowest HP (9500), no projectile."}
     K.cine_doc = [
-        "f0 PLUM (front_low): clinch and a knee to the chest - 400 at f10.",
-        "f28 HEAD SNAP (side_close): left head kick - 500. f52 HEAD KICK (punch_in): right head kick - 600.",
-        "f78 FLYING KNEE (low_angle_up): knee launches them - 700.",
-        "f102 JUMP TURNING KICK (orbit): mid-air kick keeps them up - 900.",
-        "f126 CURTAIN DROP (top_down): axe-style jump kick slams them down - 1400.",
-        "f146 HIGH KICK POSE (crowd_pop): 'and... we're clear' (KD +19).",
+        "f0 PLUM (low front): she clinches off the teep and knees the chest - 400 at f10.",
+        "f28 HEAD SNAP (close on the defender) - 500 at f35. f52 HEAD KICK (close, over her side, smear) - 600 at f60.",
+        "f78 FLYING KNEE (low, looking up): the hop launches them 1.0 m - 700 at f85.",
+        "f102 JUMP TURNING KICK (orbit 30 -> -40 deg, both in the air) keeps them up - 900 at f110.",
+        "f126 CURTAIN DROP (top-down): the axe kick slams them down - 1400 at f135 (flash, freeze-frame, dust).",
+        "f146 HIGH KICK POSE (wide, spotlight): the crowd chants the count; opponent face up at 2.0 m (KD +19).",
     ]
+    K.text = dict(
+        introLine="Quiet on set. We're live in three... two...",
+        winQuotes=["That's a wrap. Strike the set - and him.",
+                   "You missed your cue. Nobody misses my cue.",
+                   "Cut to commercial. Somebody mop the floor."],
+        banter={"spin": ["You headspun through my live cue. That's a fine AND a firing.",
+                         "Places, b-boy. I count three and you're off the air."],
+                "freak": ["Specimen Thirteen, you're on in five. Hit your mark.",
+                          "Everybody on this floor takes direction. Even the monster."],
+                "ricky": ["Six seasons I ran your floor, Ricky. I know every blind spot.",
+                          "Tonight the cameras keep rolling after the bell."],
+                "default": ["You're blocking my shot. Move, or get moved.",
+                            "Three... two... you're done."]},
+        ending="PATCH takes the host's headset, counts the whole studio down from three and cuts the feed herself. For "
+               "one Friday the slot plays static, and it pulls the best ratings in the network's history. By Monday "
+               "she runs the building. The first new rule is taped to every door: nobody fights when the cameras stop.")
     return K

@@ -149,6 +149,20 @@ export class RtcTransport implements Transport {
     for (const cb of w) cb(ok);
   }
 
+  /** P2: ICE + signalling state for logs ("ice/connection/signaling") */
+  state(): string {
+    const pc = this.pc;
+    return pc ? `${pc.iceConnectionState}/${pc.connectionState}/${pc.signalingState}` : 'none';
+  }
+
+  /** P2: still worth waiting for (not failed / closed / disconnected)? */
+  progressing(): boolean {
+    const pc = this.pc;
+    if (!pc || this.closed) return false;
+    const ice = pc.iceConnectionState;
+    return ice !== 'failed' && ice !== 'closed' && ice !== 'disconnected' && pc.connectionState !== 'failed';
+  }
+
   isOpen(): boolean {
     return !!this.dcIn && !!this.dcCtl && this.dcIn.readyState === 'open' && this.dcCtl.readyState === 'open';
   }

@@ -6939,7 +6939,7 @@
    "apexY": null,
    "loop": false,
    "marks": {
-    "slam": 1.0667
+    "slam": 1.0
    }
   },
   "parry": {
@@ -8394,7 +8394,33 @@
    "apexY": null,
    "loop": false,
    "marks": {
-    "slam": 2.0667
+    "hit1": 0.5,
+    "hit2": 1.5,
+    "hit3": 2.1667,
+    "slam": 2.1667
+   },
+   "marksAt": {
+    "hit1": {
+     "bone": "RightHand",
+     "at": [
+      0.8114,
+      1.1106
+     ]
+    },
+    "hit2": {
+     "bone": "LeftHand",
+     "at": [
+      0.5361,
+      1.0324
+     ]
+    },
+    "hit3": {
+     "bone": "RightHand",
+     "at": [
+      1.1032,
+      0.9076
+     ]
+    }
    }
   },
   "throw_reach": {

@@ -219,7 +219,7 @@
     "limb": "R_hand",
     "fist": 80,
     "_cand": "lunge_punch.1",
-    "marks": {"slam": 365}
+    "marks": {"slam": 360}
   },
   "wild_toss": {
     "src": "cmu",

@@ -5,8 +5,8 @@
 // throws.ts, so a strike landing on the same frame as a throw wins.
 
 import { CF, F, FL, MVF, P, PROJ_CAP, ST, W, projBase } from './layout.ts';
-import { EV, CUE, SC } from './events.ts';
-import { GD } from './compile.ts';
+import { EV, CUE, SC, EVX } from './events.ts';
+import { GD, UK } from './compile.ts';
 import type { CMove } from './compile.ts';
 import { hitRect, hurtRects, pushExt, rectsOverlap } from './boxes.ts';
 import { IN } from './inputs.ts';
@@ -14,10 +14,10 @@ import {
   addShowtime, clearMove, drainNerve, emit, fb, gainNerve, isAirborne, setSt,
 } from './state.ts';
 import type { Match } from './state.ts';
-import { enterKnockdown } from './fighter.ts';
+import { enterKnockdown, startMove } from './fighter.ts';
 import { killProjectile } from './projectiles.ts';
 
-export const OUT = { NONE: 0, HIT: 1, BLOCK: 2, PARRY: 3, PPARRY: 4, ARMOR: 5, CLASH: 6 } as const;
+export const OUT = { NONE: 0, HIT: 1, BLOCK: 2, PARRY: 3, PPARRY: 4, ARMOR: 5, CLASH: 6, CATCH: 7 } as const;
 
 // ------------------------------------------------------------------ scratch records (rewritten every frame)
 const R_CAP = 16;
@@ -57,6 +57,7 @@ function vulnerable(m: Match, d: number, mv: CMove, attackerAir: boolean, proj: 
     case ST.KNOCKDOWN:
     case ST.THROWN:
     case ST.TECH:
+    case ST.ABSENT:
       return false;
     default:
       break;
@@ -121,7 +122,8 @@ function collectProjectiles(m: Match): void {
   const s = m.s;
   for (let k = 0; k < PROJ_CAP; k++) {
     const pb = projBase(k);
-    if (s[pb + P.act] === 0 || s[pb + P.hitCd] > 0) continue;
+    // CHANGED(SIM) P2: heckle objects (kind 2) resolve in brawl.ts; a loose / resting ball (0 hits) is harmless
+    if (s[pb + P.act] === 0 || s[pb + P.hitCd] > 0 || s[pb + P.kind] === 2 || s[pb + P.hits] <= 0) continue;
     const o = s[pb + P.owner];
     const d = 1 - o;
     const mv = m.cf[o].moves[s[pb + P.mv]];
@@ -168,6 +170,7 @@ export function counterKind(m: Match, d: number, mv: CMove | null): number {
   const s = m.s;
   const bd = fb(d);
   const st = s[bd + F.st];
+  if (st === ST.ATTACK && (s[bd + F.mvFlags] & MVF.CAUGHT) !== 0) return 2; // CHANGED(SIM) P2: caught by a counter
   if (st === ST.ATTACK) {
     const dmv = m.cf[d].moves[s[bd + F.mv]];
     if (mv && mv.isImpact && dmv.isImpact) return 2;
@@ -193,10 +196,14 @@ function outcomeOf(m: Match, r: number): number {
   if (st === ST.ATTACK) {
     const dmv = m.cf[d].moves[s[bd + F.mv]];
     const f = s[bd + F.mvF];
+    const cc = dmv.counter;
     if (rProj[r] < 0 && mv.isImpact && dmv.isImpact) {
       // IMPACT vs IMPACT on the same frame: clash (the other side's record exists too)
       for (let q = 0; q < rN; q++) if (q !== r && rAtt[q] === d && rProj[q] < 0 && m.cf[d].moves[rMove[q]].isImpact) return OUT.CLASH;
-    } else if (s[bd + F.armorLeft] > 0 && f >= dmv.armorF0 && f <= dmv.armorF1 && !mv.armorBreak) {
+    }
+    // CHANGED(SIM) P2 (CONTRACT §20.2 / §28.2 counter): a listed hit on the catch frames is nullified
+    if (cc && f >= cc.f0 && f <= cc.f1 && (rProj[r] >= 0 ? cc.proj : cc.strike)) return OUT.CATCH;
+    if (!(rProj[r] < 0 && mv.isImpact && dmv.isImpact) && s[bd + F.armorLeft] > 0 && f >= dmv.armorF0 && f <= dmv.armorF1 && !mv.armorBreak) {
       return OUT.ARMOR;
     }
   }
@@ -413,7 +420,7 @@ function applyHit(m: Match, r: number): void {
   // stun / onHit / pushback of the move apply to the final hit
   const nonFinal = !proj && hid < mv.nHid - 1;
   const base = proj ? mv.damage : mv.hidDmg[hid];
-  const dmg = scaledDamage(m, d, mv, base, pct, counter, (rFlags[r] & MVF.SIMPLE) !== 0, false);
+  const dmg = installDamage(m, a, scaledDamage(m, d, mv, base, pct, counter, (rFlags[r] & MVF.SIMPLE) !== 0, false));
   applyDamage(m, d, dmg, mv.isShove); // SHOVE damage is grey HP only (FIGHTING_DESIGN 2f)
   s[bd + F.cCount]++;
   s[bd + F.counterFlag] = counter;
@@ -534,7 +541,9 @@ function applyBlock(m: Match, r: number): void {
   }
   s[bd + F.nerveBlk] = sys.nerve.blockRegenStop;
   if (!nonFinal) {
-    drainNerve(m, d, mv.nerveDrain);
+    // CHANGED(SIM) P2 (CONTRACT §28.2 charge): a riot shield - standing block drains standBlockNervePct % only
+    const dcf = m.cf[d];
+    drainNerve(m, d, dcf.uk === UK.CHARGE && !crouchG ? Math.trunc((mv.nerveDrain * dcf.u.standBlockPct) / 100) : mv.nerveDrain);
     addShowtime(m, a, Math.trunc((mv.gainShow * sys.showtime.blockPct) / 100));
     addShowtime(m, d, Math.trunc((mv.gainShow * sys.showtime.defBlockPct) / 100));
     s[bd + F.pushLeft] = dir * mv.pushBlock;
@@ -611,6 +620,50 @@ function applyParry(m: Match, r: number, perfect: boolean): void {
   emit(m, EV.PARRY, a, d, sc, cm(rCy[r]));
 }
 
+/** CHANGED(SIM) P2: an install's damagePct on the attacker's hits (CONTRACT §28.2). */
+function installDamage(m: Match, a: number, dmg: number): number {
+  const s = m.s;
+  const ba = fb(a);
+  if (s[ba + F.instF] <= 0 || s[ba + F.instMv] < 0) return dmg;
+  const ins = m.cf[a].moves[s[ba + F.instMv]].install;
+  if (!ins || ins.dmgPct === 100) return dmg;
+  return Math.max(dmg > 0 ? 1 : 0, Math.trunc((dmg * ins.dmgPct) / 100));
+}
+
+/**
+ * CHANGED(SIM) P2 (CONTRACT §20.2 / §28.2 counter): the defender's counter move caught this hit. The attacker gets the
+ * catch hitstop, jumps to its last active frame (recovery next), cannot cancel and counts as punish-countered until its
+ * move ends; a projectile is destroyed; the counter's follow-up starts at once.
+ */
+function applyCatch(m: Match, r: number): void {
+  const s = m.s;
+  const a = rAtt[r];
+  const d = rVic[r];
+  const ba = fb(a);
+  const bd = fb(d);
+  const mv = m.cf[a].moves[rMove[r]];
+  const dmv = m.cf[d].moves[s[bd + F.mv]];
+  const cc = dmv.counter;
+  const proj = rProj[r] >= 0;
+  if (!cc) return;
+  if (proj) {
+    killProjectile(m, rProj[r]);
+  } else if (s[ba + F.mv] === rMove[r]) {
+    const hs = m.cf[d].u.catchHitstop;
+    if (s[ba + F.hitstop] < hs) s[ba + F.hitstop] = hs;
+    if (s[ba + F.mvF] < mv.lastActive) s[ba + F.mvF] = mv.lastActive;
+    s[ba + F.mvFlags] |= MVF.CAUGHT | MVF.NOCANCEL;
+    if (s[ba + F.contact] === 0) s[ba + F.contactF] = s[ba + F.mvF];
+    s[ba + F.contact] = 2;
+    s[ba + F.hitMask] = -1;
+  }
+  emit(m, EVX.CATCH, d, a, proj ? SC.PROJECTILE : mv.sc, proj ? 1 : 0);
+  if (cc.follow >= 0) {
+    const oppX = s[ba + F.x];
+    startMove(m, d, cc.follow, 0, oppX);
+  }
+}
+
 function applyArmor(m: Match, r: number): void {
   const s = m.s;
   const sys = m.sys.raw;
@@ -680,6 +733,9 @@ export function resolveHits(m: Match): void {
         break;
       case OUT.CLASH:
         applyClash(m, r);
+        break;
+      case OUT.CATCH:
+        applyCatch(m, r);
         break;
       default:
         break;

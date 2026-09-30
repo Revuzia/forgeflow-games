@@ -33,7 +33,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from menus import LabServer, HarnessError, lab_url, save_report, shot, wait_ready, ROOT, INIT_JS, READ_MENUS, READ_TOUCH  # noqa: E402
+from menus import LabServer, HarnessError, lab_url, save_report, shot, wait_ready, ROOT, INIT_JS, READ_MENUS, READ_TOUCH, LAB_PORT  # noqa: E402
 from layoutcheck import DEVICES, check_page  # noqa: E402
 
 for _s in (sys.stdout, sys.stderr):
@@ -115,6 +115,15 @@ def names(word: int) -> str:
     return "|".join(k for k, v in BIT.items() if word & v) or "neutral"
 
 
+def label_fit(R: "Run", t: dict, d: dict, prefix: str = "") -> None:
+    """CHANGED(UI) P2 (P1 verifier: touch labels overflowed their discs on an iPhone, DPR 3): every visible label's width
+    fits the chord of its disc at the label's half height (TouchControls.labelFit read-back, real glyph boxes)."""
+    labels = t.get("labels") or []
+    bad = [f"{x['id']} {x['w']}>{x['avail']}" for x in labels if not x.get("fit")]
+    worst = min((x["avail"] - x["w"] for x in labels), default=0)
+    R.ok(f"{prefix}labels_fit", bool(labels) and not bad, f"dpr={d['dpr']} labels={len(labels)} min spare={worst:.1f}px overflow={bad}")
+
+
 def lab_device(page, cdp, dev: str, results: list) -> None:
     R = Run(page, dev, results)
     T = Touch(cdp)
@@ -127,6 +136,7 @@ def lab_device(page, cdp, dev: str, results: list) -> None:
     R.ok("boot_layout", not lay["problems"], f"problems={[p['msg'] for p in lay['problems']][:3]}")
     small = [b["id"] for b in t.get("buttons", []) if b["id"] != "stick" and min(b["rect"]["w"], b["rect"]["h"]) < 44 - 0.5]
     R.ok("targets_44", not small, f"small={small}")
+    label_fit(R, t, d)
     # 2 stick (home = the drawn base centre; the drag starts there)
     sb = R.btn("stick")["rect"]
     sx, sy = sb["x"] + sb["w"] / 2, sb["y"] + sb["h"] / 2
@@ -270,6 +280,7 @@ def game_device(page, cdp, dev: str, results: list, base: str) -> None:
     t = R.touch()
     R.ok("game_overlay_visible", page.evaluate("document.documentElement.classList.contains('hp-touch')") and t.get("visible") is True,
          f"visible={t.get('visible')} buttons={len(t.get('buttons', []))}", snap=True)
+    label_fit(R, t, d, "game_")
     # stick right -> P1 walks
     sb = (R.btn("stick") or {}).get("rect")
     if sb:
@@ -319,7 +330,7 @@ def run(args) -> int:
     results: list = []
     errors: list = []
     t0 = time.time()
-    srv = LabServer() if (not args.base and not args.game) else None
+    srv = LabServer() if not args.base else None
     try:
         if srv:
             srv.__enter__()
@@ -342,7 +353,7 @@ def run(args) -> int:
                     except Exception as e:
                         errors.append(f"{dev} safe-area override unsupported: {e}")
                 if args.game:
-                    game_device(page, cdp, dev, results, args.base or "http://localhost:5320/")
+                    game_device(page, cdp, dev, results, args.base or f"http://localhost:{LAB_PORT}/")
                     ctx.close()
                     continue
                 page.goto(args.base or lab_url(None, "hud=mid&touch=1"), wait_until="load")
@@ -357,14 +368,14 @@ def run(args) -> int:
             browser.close()
     except HarnessError as e:
         print(f"[mobile] HARNESS ERROR: {e}")
-        save_report("mobile", {"verdict": "ERROR", "error": str(e), "results": results})
+        save_report("mobile_game" if args.game else "mobile", {"verdict": "ERROR", "error": str(e), "results": results})
         return 2
     finally:
         if srv:
             srv.__exit__(None, None, None)
     failed = [r for r in results if not r["ok"]]
     verdict = "PASS" if not failed and not errors else "FAIL"
-    path = save_report("mobile", {"verdict": verdict, "seconds": round(time.time() - t0, 1), "failed": failed, "errors": errors[:40], "results": results})
+    path = save_report("mobile_game" if args.game else "mobile", {"verdict": verdict, "seconds": round(time.time() - t0, 1), "failed": failed, "errors": errors[:40], "results": results})
     print(f"[mobile] {verdict}: {len(results) - len(failed)}/{len(results)} checks, {len(errors)} page errors -> {os.path.relpath(path, ROOT)}")
     return 0 if verdict == "PASS" else 1
 

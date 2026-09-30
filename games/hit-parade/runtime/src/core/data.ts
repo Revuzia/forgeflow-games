@@ -11,7 +11,7 @@
 // go to GameData.warnings, which probe_data prints.
 
 import type {
-  AnimRef, BoxDef, ClassicEntry, ClipInfo, ClipsFile, FighterDef, GameData, Move, SimpleMap, System, Vec2,
+  AnimRef, BodyExt, BoxDef, ClassicEntry, ClipInfo, ClipsFile, FighterDef, GameData, Move, SimpleMap, System, Vec2,
 } from './types.ts';
 import { hashString } from './sim/hash.ts';
 
@@ -40,6 +40,8 @@ export interface RawData {
   ladder?: unknown;
   cpu?: unknown;
   strings?: unknown;
+  /** CHANGED(SIM) P2: data/bodies.json (measured hurtbox extents, CONTRACT §28.5c) */
+  bodies?: unknown;
 }
 
 // ------------------------------------------------------------------ file collection
@@ -120,6 +122,7 @@ export function rawFromFiles(files: FileMap): RawData {
   raw.ladder = files['ladder.json'];
   raw.cpu = files['cpu.json'];
   raw.strings = files['strings.json'];
+  raw.bodies = files['bodies.json'];
   return raw;
 }
 
@@ -207,7 +210,25 @@ function normaliseClips(id: string, raw: unknown, errs: string[]): ClipsFile | n
       root: Array.isArray(c.root) ? (c.root.filter(isVec2) as Vec2[]) : [],
       apexY: isNum(c.apexY) ? c.apexY : null,
       loop: c.loop === true,
+      // CHANGED(SIM) P2: marks (throw slam sync read them; they were dropped here) + per-hit effector points (§6.3)
+      ...(isObj(c.marks) ? { marks: numRecord(c.marks) } : {}),
+      ...(isObj(c.marksAt) ? { marksAt: marksAtOf(c.marksAt) } : {}),
     } satisfies ClipInfo;
+  }
+  return out;
+}
+
+function numRecord(o: Record<string, unknown>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const k of Object.keys(o)) if (isNum(o[k])) out[k] = o[k] as number;
+  return out;
+}
+function marksAtOf(o: Record<string, unknown>): Record<string, { bone: string; at: Vec2 }> {
+  const out: Record<string, { bone: string; at: Vec2 }> = {};
+  for (const k of Object.keys(o)) {
+    const v = o[k];
+    if (isObj(v) && isVec2(v.at)) out[k] = { bone: String(v.bone ?? ''), at: v.at as Vec2 };
+    else if (isVec2(v)) out[k] = { bone: '', at: v as Vec2 };
   }
   return out;
 }
@@ -373,7 +394,109 @@ function validateMove(where: string, id: string, mv: unknown, moves: Record<stri
     const c = mv.cinematic;
     if ((c.endAdv !== undefined && !isInt(c.endAdv)) || (c.endGapM !== undefined && !isNum(c.endGapM))) errs.push(`${where}.cinematic: endAdv integer, endGapM metres`);
   }
+  // CHANGED(SIM) P2: unique move blocks (CONTRACT §20.2, §28.2)
+  const total = isInt(mv.startup) && isInt(mv.active) && isInt(mv.recovery) ? mv.startup + mv.active + mv.recovery - 1 : 0;
+  if (mv.counter !== undefined) {
+    const c = mv.counter;
+    if (!isObj(c) || !isRange(c.catch) || !Array.isArray(c.vs) || !c.vs.every((v) => v === 'strike' || v === 'proj') || typeof c.follow !== 'string') {
+      errs.push(`${where}.counter: {catch: [a, b], vs: ["strike"(, "proj")], follow: moveId}`);
+    } else {
+      if (!(c.follow in moves)) errs.push(`${where}.counter.follow: no move "${c.follow}"`);
+      if (total > 0 && (c.catch as number[])[1] > total) errs.push(`${where}.counter.catch ends after the move (${total} frames)`);
+    }
+  }
+  if (mv.teleport !== undefined) {
+    const tp = mv.teleport;
+    if (!isObj(tp) || !isInt(tp.f) || tp.f < 1 || (total > 0 && tp.f > total) || !['behind', 'front', 'home'].includes(String(tp.to)) || !isNum(tp.gapM) || tp.gapM < 0) {
+      errs.push(`${where}.teleport: {f: 1..total, to: behind|front|home, gapM >= 0}`);
+    }
+  }
+  if (mv.stance !== undefined && !['enter', 'follow', 'exit'].includes(String(mv.stance))) errs.push(`${where}.stance: enter|follow|exit`);
+  if (mv.ball !== undefined && (!isObj(mv.ball) || !['shoot', 'hover', 'summon'].includes(String(mv.ball.act)))) errs.push(`${where}.ball: {act: shoot|hover|summon}`);
+  if (mv.ball !== undefined && isObj(mv.ball) && (mv.ball.act === 'shoot' || mv.ball.act === 'hover') && mv.projectile === undefined) errs.push(`${where}.ball: a ${String(mv.ball.act)} move needs its projectile block (ball launch numbers)`);
+  if (mv.phase !== undefined && mv.phase !== 1 && mv.phase !== 2) errs.push(`${where}.phase: 1 | 2`);
+  if (mv.install !== undefined) {
+    const ins = mv.install;
+    if (!isObj(ins) || !isInt(ins.frames) || ins.frames < 1 || (ins.damagePct !== undefined && !isNum(ins.damagePct)) || (ins.walkPct !== undefined && !isNum(ins.walkPct))) {
+      errs.push(`${where}.install: {frames >= 1, damagePct?, walkPct?}`);
+    }
+  }
+  if (mv.role !== undefined && !Array.isArray(mv.role) && typeof mv.role !== 'string') errs.push(`${where}.role: array of tags`);
   void id;
+}
+
+/** CHANGED(SIM) P2 (CONTRACT §20.3, §28.2): the fighter's `unique` block - kinds and the move ids they name. */
+function validateUnique(w: string, u: unknown, moves: Record<string, unknown>, errs: string[]): void {
+  if (u === undefined) return;
+  if (!isObj(u) || typeof u.kind !== 'string') {
+    errs.push(`${w}.unique: {kind, ...}`);
+    return;
+  }
+  const kinds = ['none', 'stance', 'charge', 'ball', 'counter', 'armorStep', 'teleport', 'phases'];
+  if (!kinds.includes(u.kind)) {
+    errs.push(`${w}.unique.kind "${u.kind}": one of ${kinds.join('|')}`);
+    return;
+  }
+  const ids = (v: unknown, field: string): void => {
+    if (v === undefined) return;
+    if (!Array.isArray(v)) {
+      errs.push(`${w}.unique.${field}: array of move ids`);
+      return;
+    }
+    for (const x of v) if (typeof x !== 'string' || !(x in moves)) errs.push(`${w}.unique.${field}: no move "${String(x)}"`);
+  };
+  const one = (v: unknown, field: string): void => {
+    if (v !== undefined && (typeof v !== 'string' || !(v in moves))) errs.push(`${w}.unique.${field}: no move "${String(v)}"`);
+  };
+  switch (u.kind) {
+    case 'stance': {
+      ids(u.enter, 'enter');
+      if (!Array.isArray(u.enter) || u.enter.length === 0) errs.push(`${w}.unique.enter: at least one enter move`);
+      const fu = u.followups;
+      if (!isObj(fu)) errs.push(`${w}.unique.followups: {L, M, H}`);
+      else for (const b of ['L', 'M', 'H']) one(fu[b], `followups.${b}`);
+      const ex = u.exit;
+      if (!isObj(ex)) errs.push(`${w}.unique.exit: {"2", timeout}`);
+      else {
+        one(ex['2'], 'exit.2');
+        one(ex.timeout, 'exit.timeout');
+      }
+      if (u.maxF !== undefined && (!isInt(u.maxF) || u.maxF < 1)) errs.push(`${w}.unique.maxF: integer >= 1`);
+      if (u.blockExitF !== undefined && (!isInt(u.blockExitF) || u.blockExitF < 1)) errs.push(`${w}.unique.blockExitF: integer >= 1`);
+      if (u.walk !== undefined && (!isObj(u.walk) || !isNum(u.walk.fwd) || !isNum(u.walk.back))) errs.push(`${w}.unique.walk: {fwd, back} m/s`);
+      break;
+    }
+    case 'charge':
+      for (const k of ['chargeF', 'keepF']) if (u[k] !== undefined && (!isInt(u[k]) || (u[k] as number) < 0)) errs.push(`${w}.unique.${k}: integer >= 0`);
+      if (u.standBlockNervePct !== undefined && !isNum(u.standBlockNervePct)) errs.push(`${w}.unique.standBlockNervePct: number`);
+      break;
+    case 'ball':
+      for (const k of ['respawnF', 'restF', 'bounces']) if (u[k] !== undefined && (!isInt(u[k]) || (u[k] as number) < 0)) errs.push(`${w}.unique.${k}: integer >= 0`);
+      if (u.pickupM !== undefined && !isNum(u.pickupM)) errs.push(`${w}.unique.pickupM: metres`);
+      break;
+    case 'counter':
+      ids(u.moves, 'moves');
+      break;
+    case 'armorStep':
+      ids(u.steps, 'steps');
+      ids(u.armored, 'armored');
+      break;
+    case 'teleport':
+      ids(u.moves, 'moves');
+      break;
+    case 'phases':
+      ids(u.moves, 'moves');
+      one(u.lv3, 'lv3');
+      if (u.thresholdPct !== undefined && (!isNum(u.thresholdPct) || u.thresholdPct <= 0 || u.thresholdPct >= 100)) errs.push(`${w}.unique.thresholdPct: 0 < pct < 100`);
+      if (u.lockF !== undefined && (!isInt(u.lockF) || u.lockF < 0)) errs.push(`${w}.unique.lockF: integer >= 0`);
+      if (u.simple !== undefined) {
+        if (!isObj(u.simple)) errs.push(`${w}.unique.simple: {"6S": moveId, ...}`);
+        else for (const k of Object.keys(u.simple)) one(u.simple[k], `simple.${k}`);
+      }
+      break;
+    default:
+      break;
+  }
 }
 
 /** Resolves a classic entry's move id for a button ('L'|'M'|'H'|'S'). */
@@ -459,9 +582,15 @@ function validateFighter(fid: string, raw: unknown, errs: string[], warns: strin
   }
   for (const k of ['intro', 'taunt']) if (raw[k] !== undefined && typeof raw[k] !== 'string') errs.push(`${w}.${k}: clip name string`);
   if (raw.win !== undefined && (!Array.isArray(raw.win) || !raw.win.every((x) => typeof x === 'string'))) errs.push(`${w}.win: array of clip names`);
+  validateUnique(w, raw.unique, moves, errs); // CHANGED(SIM) P2
   if (errs.length !== n0) return null;
   const def = clone(raw) as unknown as FighterDef;
   def.id = fid;
+  // CHANGED(SIM) P2: `role` is a tag list (§20.2); a lone string becomes [string]
+  for (const k of Object.keys(def.moves)) {
+    const r = def.moves[k].role as unknown;
+    if (typeof r === 'string') def.moves[k].role = [r];
+  }
   return def;
 }
 
@@ -474,6 +603,71 @@ function isStrikeKind(mv: Move): boolean {
 }
 
 const DEFAULT_REACH: Record<'L' | 'M' | 'H', Vec2> = { L: [0.7, 1.25], M: [0.88, 1.2], H: [1.05, 1.2] };
+
+function rolesOf(mv: Move): string[] {
+  const r = mv.role as unknown;
+  return Array.isArray(r) ? r.map(String) : typeof r === 'string' ? [r] : [];
+}
+
+/** FIGHTING_DESIGN 2h reach-floor class of a ground normal ('' = none: air, command, anti-air, specials). */
+function reachClass(mv: Move, roles: string[]): string {
+  if (mv.kind !== 'normal' && mv.kind !== 'command') return '';
+  const inp = (mv.input ?? '').trim();
+  if (inp.startsWith('j.') || inp.includes('>')) return '';
+  if (roles.includes('antiair')) return '';
+  if (roles.includes('sweep')) return 'sweep';
+  return inp === '5L' || inp === '2L' || inp === '5M' || inp === '2M' || inp === '5H' ? inp : '';
+}
+
+/**
+ * CHANGED(SIM) P2 derive rule v2 (CONTRACT §28.5b, replaces "one box centred on the effector"): per hit window a box that
+ * spans from the body (push front - nearPad) to the effector + half the class width, and vertically from the limb's root
+ * (shoulder for hands / head, hips for feet / knees) to the effector +- half the class height; grounded non-anti-air
+ * strikes reach the crouch line; the FIGHTING_DESIGN 2h ground-normal classes reach at least their template reach scaled
+ * by height. Returns null when the move has no clip effector (the caller falls back to the default reach).
+ */
+export function deriveBoxesV2(def: FighterDef, id: string, mv: Move, clip: ClipInfo | undefined, clips: ClipsFile | null, sys: System): BoxDef[] | null {
+  if (!clip || !clip.effector) return null;
+  const bx = sys.boxes as System['boxes'] & {
+    nearPadM?: number; shoulderPct?: number; hipsPct?: number; crouchLineM?: number; crouchMarginM?: number; reversalDropMaxM?: number;
+    reachFloorM?: Record<string, number>;
+  };
+  const st = mv.kind === 'super1' || mv.kind === 'super3' ? 'H' : moveStrength(id, mv);
+  const [cw, ch] = bx[st];
+  const H = def.heightM;
+  const pushFront = def.push ? def.push.front : def.pushbox[0] / 2;
+  const nearPad = bx.nearPadM ?? 0.1;
+  const shoulderY = H * (bx.shoulderPct ?? 0.8);
+  const hipsY = clips && clips.hipsM !== undefined ? clips.hipsM : H * (bx.hipsPct ?? 0.53);
+  const roles = rolesOf(mv);
+  const inp = (mv.input ?? '').trim();
+  const air = inp.startsWith('j.') || mv.air === true;
+  const antiair = roles.includes('antiair');
+  const reversal = roles.includes('reversal');
+  const high = roles.includes('high');
+  const crouchLine = (bx.crouchLineM ?? 1.1) - (bx.crouchMarginM ?? 0.02);
+  const rc = reachClass(mv, roles);
+  const floorM = rc && bx.reachFloorM && bx.reachFloorM[rc] !== undefined ? (bx.reachFloorM[rc] * H) / (bx.reachFloorM.refHeightM ?? 1.8) : 0;
+  const ranges: [number, number][] = mv.hits && mv.hits.length > 0 ? mv.hits.map((h) => [h.f[0], h.f[1]] as [number, number]) : [[mv.startup, mv.startup + mv.active - 1]];
+  const out: BoxDef[] = [];
+  ranges.forEach((f, k) => {
+    const mk = clip.marksAt ? clip.marksAt[`hit${k + 1}`] : undefined;
+    const at = mk ? mk.at : clip.effector!.at;
+    const bone = (mk && mk.bone) || clip.effector!.bone || '';
+    const rootY = /Foot|Toe|Knee|Leg/.test(bone) ? hipsY : shoulderY;
+    const near = Math.min(at[0] - cw / 2, pushFront - nearPad);
+    let far = at[0] + cw / 2;
+    if (floorM > far) far = floorM;
+    let y0 = Math.min(at[1], rootY) - ch / 2;
+    const y1 = Math.max(at[1], rootY) + ch / 2;
+    if (!air && !antiair && !high) y0 = Math.min(y0, crouchLine);
+    else if (!air && antiair && reversal && k === 0) y0 = Math.min(y0, Math.max(y0 - (bx.reversalDropMaxM ?? 0.6), crouchLine));
+    if (y0 < 0) y0 = 0;
+    const r4 = (v: number): number => Math.round(v * 10000) / 10000;
+    out.push({ f, x: r4((near + far) / 2), y: r4((y0 + y1) / 2), w: r4(far - near), h: r4(y1 - y0) });
+  });
+  return out;
+}
 
 function derive(def: FighterDef, clips: ClipsFile | null, sys: System, warns: string[]): void {
   const w = `fighters/${def.id}.json`;
@@ -492,16 +686,20 @@ function derive(def: FighterDef, clips: ClipsFile | null, sys: System, warns: st
         }
       }
     }
-    if (!mv.boxes && isStrikeKind(mv)) {
-      const st = mv.kind === 'super1' || mv.kind === 'super3' ? 'H' : moveStrength(id, mv);
-      const size = sys.boxes[st];
-      let at: Vec2 | null = clip && clip.effector ? clip.effector.at : null;
-      if (!at) {
-        at = DEFAULT_REACH[st];
+    // CHANGED(SIM) P2: `boxSrc: "hitVolume"` boxes are FIGHTERS' copy of the v1 derived box (widened) -> re-derived (v2)
+    const rederive = mv.boxSrc === 'hitVolume' && isStrikeKind(mv);
+    if ((!mv.boxes || rederive) && isStrikeKind(mv)) {
+      const v2 = deriveBoxesV2(def, id, mv, clip, clips, sys);
+      if (v2) {
+        mv.boxes = v2;
+      } else if (!mv.boxes) {
+        const st = mv.kind === 'super1' || mv.kind === 'super3' ? 'H' : moveStrength(id, mv);
+        const size = sys.boxes[st];
+        const at = DEFAULT_REACH[st];
         warns.push(`${w} moves.${id}: no boxes and no clip effector -> default ${st} box at ${at[0]} m`);
+        const ranges: [number, number][] = mv.hits && mv.hits.length > 0 ? mv.hits.map((h) => [h.f[0], h.f[1]] as [number, number]) : [[mv.startup, mv.startup + mv.active - 1]];
+        mv.boxes = ranges.map((f) => ({ f, x: at[0], y: at[1], w: size[0], h: size[1] }) satisfies BoxDef);
       }
-      const ranges: [number, number][] = mv.hits && mv.hits.length > 0 ? mv.hits.map((h) => [h.f[0], h.f[1]] as [number, number]) : [[mv.startup, mv.startup + mv.active - 1]];
-      mv.boxes = ranges.map((f) => ({ f, x: at![0], y: at![1], w: size[0], h: size[1] }) satisfies BoxDef);
     }
   }
 }
@@ -531,7 +729,77 @@ function buildAnims(def: FighterDef, clips: ClipsFile | null): AnimRef[] {
     const dur = ci ? ci.dur : g.frames / 60;
     out.push({ clip, warp: [[0, 0], [g.frames, dur]], loop: false, moveId: k });
   });
+  // CHANGED(SIM) P2 (CONTRACT §28.2): stance clips (idle, walk_f, walk_b) after the grab entries
+  for (const c of stanceClipNames(def)) out.push({ clip: c, warp: null, loop: loopOf(c, true), moveId: -1 });
   return out;
+}
+
+/** CHANGED(SIM) P2: a stance fighter's `unique.clips` in anim-table order (idle, walk_f, walk_b); [] otherwise. */
+export function stanceClipNames(def: FighterDef): string[] {
+  const u = def.unique as { kind?: string; clips?: Record<string, unknown> } | undefined;
+  if (!u || u.kind !== 'stance' || !isObj(u.clips)) return [];
+  const c = u.clips;
+  const name = (k: string): string => (typeof c[k] === 'string' ? (c[k] as string) : '');
+  return [name('idle'), name('walk_f'), name('walk_b')];
+}
+
+/** CHANGED(SIM) P2: anim id of stance clip k (0 idle, 1 walk_f, 2 walk_b) = after taunt + grab entries; -1 = none. */
+export function animStanceId(def: FighterDef, k: number): number {
+  if (stanceClipNames(def).length === 0) return -1;
+  let grabs = 0;
+  for (const id of Object.keys(def.moves)) if (def.moves[id].grab) grabs++;
+  return animTauntId(def) + 1 + grabs + k;
+}
+
+/**
+ * CHANGED(SIM) P2 (CONTRACT §28.4): goon anim table (§17 rule 2 layout on the goon's own clips): 34 shared clips, then
+ * the `brawl.moves` in order (warp = [0,0] [startup, contact] [total, dur] from data/clips/<goonId>.clips.json when it
+ * exists, else linear over the move at 1 clip-s per 60 f).
+ */
+function buildGoonAnims(sys: System, clipsAll: Record<string, ClipsFile>): Record<string, AnimRef[]> {
+  const out: Record<string, AnimRef[]> = {};
+  const br = sys.brawl;
+  if (!br || !Array.isArray(br.kinds) || !Array.isArray(br.moves)) return out;
+  for (const kind of br.kinds) {
+    const cf = clipsAll[kind.id] ?? null;
+    const tab: AnimRef[] = [];
+    for (const c of SHARED_CLIPS) tab.push({ clip: c, warp: null, loop: cf?.clips[c]?.loop ?? LOOPING_SHARED.has(c), moveId: -1 });
+    br.moves.forEach((mv, k) => {
+      const clip = mv.anim?.clip ?? '';
+      const ci = cf?.clips[clip];
+      const total1 = mv.startup + mv.active + mv.recovery;
+      let warp: [number, number][] | null = null;
+      if (ci && ci.dur > 0) {
+        warp = ci.contact !== null && ci.contact > 0 && ci.contact < ci.dur ? [[0, 0], [mv.startup, ci.contact], [total1, ci.dur]] : [[0, 0], [total1, ci.dur]];
+      }
+      tab.push({ clip, warp, loop: false, moveId: k });
+    });
+    out[kind.id] = tab;
+  }
+  return out;
+}
+
+function parseBodies(raw: unknown, warns: string[]): Record<string, BodyExt> {
+  const out: Record<string, BodyExt> = {};
+  if (raw === undefined) return out;
+  const src = isObj(raw) && isObj(raw.fighters) ? raw.fighters : null;
+  if (!src) {
+    warns.push('bodies.json: no "fighters" object (hurtboxes stay centred)');
+    return out;
+  }
+  for (const id of Object.keys(src)) {
+    const b = parseBodyExt(src[id]);
+    if (b) out[id] = b;
+    else warns.push(`bodies.json fighters.${id}: need {stand, crouch, air} as [front, back] metres`);
+  }
+  return out;
+}
+
+function parseBodyExt(v: unknown): BodyExt | null {
+  if (!isObj(v)) return null;
+  const ok = (p: unknown): p is Vec2 => isVec2(p) && p[0] >= 0 && p[1] >= 0;
+  if (!ok(v.stand) || !ok(v.crouch) || !ok(v.air)) return null;
+  return { stand: v.stand, crouch: v.crouch, air: v.air };
 }
 
 /** Anim id of the grab (connect) clip of move `moveKey` (§19.10), or -1. */
@@ -585,6 +853,16 @@ export function buildGameData(raw: RawData): GameData {
   }
   const strings: Record<string, string> = {};
   if (isObj(raw.strings)) for (const k of Object.keys(raw.strings)) if (typeof raw.strings[k] === 'string') strings[k] = raw.strings[k] as string;
+  // CHANGED(SIM) P2: measured hurtbox extents (fighter JSON `hurtBody` wins over data/bodies.json), goon anim tables
+  const bodies = parseBodies(raw.bodies, warns);
+  for (const fid of Object.keys(fighters)) {
+    const hb = fighters[fid].hurtBody;
+    if (hb !== undefined) {
+      const b = parseBodyExt(hb);
+      if (b) bodies[fid] = b;
+      else warns.push(`fighters/${fid}.json hurtBody: need {stand, crouch, air} as [front, back] metres (ignored)`);
+    }
+  }
   return {
     system,
     fighters,
@@ -595,6 +873,8 @@ export function buildGameData(raw: RawData): GameData {
     strings,
     anims,
     warnings: warns,
+    bodies,
+    goonAnims: buildGoonAnims(system, clips),
   };
 }
 

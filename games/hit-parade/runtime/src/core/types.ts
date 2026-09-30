@@ -44,6 +44,9 @@ export interface CinematicDef {
   shots?: [number, string][];
   endAdv?: number;
   endGapM?: number;
+  /** CHANGED(SIM) P2: §26.1 how the defender lies at the end ('back' | 'front'); the sim starts the KD without a fall */
+  endPose?: string;
+  [key: string]: unknown;
 }
 
 export interface Move {
@@ -92,12 +95,23 @@ export interface Move {
   stance?: string;
   ball?: { act: string };
   phase?: number;
-  role?: string[] | string;
+  role?: string[]; // CHANGED(SIM) P2: a tag list (§20.2); the loader turns a lone string into [string]
   name?: string;
   desc?: string;
   /** CHANGED(fixer) D2: extra push-box FRONT extent (m) over the fighter's neutral front, per move frame (piecewise
    *  linear, >= 0): the clip's measured forward lean (data/fighters/_gen, art/blender/measure_body.py) */
   pushExt?: Vec2[];
+  /** CHANGED(SIM) P2 (CONTRACT §28.2): install granted when the move starts */
+  install?: { frames: number; damagePct?: number; walkPct?: number };
+  /** informational (FIGHTERS §20.6): "hitVolume" = the v1 derived box widened; SIM re-derives those (§28.5b) */
+  boxSrc?: string;
+}
+
+/** CHANGED(SIM) P2 (CONTRACT §28.5c): measured posture extents [front, back] in metres from the root along the facing. */
+export interface BodyExt {
+  stand: Vec2;
+  crouch: Vec2;
+  air: Vec2;
 }
 
 /** §20.2 one hit of a multi-hit move. */
@@ -161,6 +175,8 @@ export interface FighterDef {
   /** CHANGED(fixer) D2: measured push-box extents (m) from the root along the facing: front / back standing and
    *  crouching (omitted = pushbox[0] / 2 each side, the symmetric box) */
   push?: { front: number; back: number; crouchFront?: number; crouchBack?: number };
+  /** CHANGED(SIM) P2 (CONTRACT §28.5c): measured hurtbox extents (wins over data/bodies.json) */
+  hurtBody?: BodyExt;
   colors?: { name: string; tint: string | null }[];
   moves: Record<string, Move>;
   simple: SimpleMap;
@@ -185,6 +201,8 @@ export interface ClipInfo {
   apexY: number | null;
   loop: boolean;
   marks?: Record<string, number>;
+  /** CHANGED(SIM) P2: per-mark effector points (§6.3 CHANGED(ASSETS) part 2) - derive v2 uses one per `hits` entry */
+  marksAt?: Record<string, { bone: string; at: Vec2 }>;
 }
 
 export interface ClipsFile {
@@ -281,7 +299,53 @@ export interface System {
     wakeMaxRate?: number;
   };
   training: { refillDelay: number };
+  /** CHANGED(SIM) P2 (CONTRACT §28): unique defaults, bonus rounds */
+  uniques?: UniquesSys;
+  brawl?: BrawlSys;
+  heckler?: HecklerSys;
   [key: string]: unknown;
+}
+
+/** CHANGED(SIM) P2: data/system.json `uniques` (defaults; a kit's unique block wins). */
+export interface UniquesSys {
+  stance?: { maxF?: number; blockExitF?: number; exitHoldF?: number };
+  charge?: { chargeF?: number; keepF?: number; standBlockNervePct?: number };
+  ball?: {
+    respawnF?: number; restF?: number; pickupM?: number; bounces?: number; kickRangeM?: number; wallRestitutionPct?: number;
+    looseGravityMps2?: number; deflectVxPct?: number; deflectVyMps?: number; looseFrictionPct?: number; kickBackM?: number;
+  };
+  counter?: { catchHitstop?: number };
+  armorStep?: { tickStrength?: string };
+  phases?: { thresholdPct?: number; lockF?: number };
+}
+
+/** CHANGED(SIM) P2: a goon move = an ordinary Move plus its id. */
+export type GoonMoveDef = Move & { id: string };
+
+/** CHANGED(SIM) P2: data/system.json `brawl` (BRAWL BREAK). */
+export interface BrawlSys {
+  seconds: number; maxActive: number; tokens: number; tokenSpacingF: number; telegraphMinF: number;
+  spawnDistM: number; spawnGapF: number; waveGapF: number; thinkF: [number, number];
+  ringM: { attack: [number, number]; approach: [number, number] };
+  goonHurt: Vec2; goonPush: Vec2; hitstunF: number; kdF: number; wakeF: number; downF: number; maxJuggle: number;
+  kinds: { id: string; hp: number; walk: number }[];
+  waves: number[][];
+  moves: GoonMoveDef[];
+  moveRangeM: number[];
+  score: { hit: number[]; special: number; super: number; throw: number; ko: number; crowd: number; parry: number; perfect: number; comboCashF: number };
+  ratings: {
+    start: number; idleF: number; mult: number[]; decayPerSec: number[];
+    gain: { hit: number[]; special: number; super: number; throw: number; ko: number; crowd: number; parry: number; perfect: number };
+  };
+}
+
+/** CHANGED(SIM) P2: data/system.json `heckler` (HECKLER TOSS). */
+export interface HecklerSys {
+  seconds: number; maxLive: number; spawnDistM: [number, number]; spawnY: number; aimY: number; gravityMps2: number;
+  cadence: { startF: number; endF: number; jitterF: number; firstF: number };
+  objects: { id: string; flightF: number; damage: number; box: Vec2 }[];
+  hitstun: number; blockstun: number; hitstop: number;
+  score: { parry: number; perfect: number; hitCost: number };
 }
 
 // ------------------------------------------------------------------ other data files (owned by other lanes)
@@ -309,6 +373,10 @@ export interface GameData {
   anims: Record<string, AnimRef[]>;
   /** Non-fatal load findings (missing clips files, derived fallbacks). probe_data prints them. */
   warnings: string[];
+  /** CHANGED(SIM) P2 (CONTRACT §28.5c): measured hurtbox extents per fighter id (data/bodies.json) */
+  bodies: Record<string, BodyExt>;
+  /** CHANGED(SIM) P2 (CONTRACT §28.4): goon anim tables per goon id (§17 rule 2 layout: 34 shared + 3 goon moves) */
+  goonAnims: Record<string, AnimRef[]>;
 }
 
 // ------------------------------------------------------------------ snapshots (§4.6 + §19.7)
@@ -352,6 +420,53 @@ export interface FighterSnap {
   crouching: boolean;
   flags: FighterFlags;
   unique: [number, number, number, number];
+  /** CHANGED(SIM) P2 (CONTRACT §28.1) */
+  install?: number;
+  absent?: boolean;
+  actionable?: boolean;
+}
+
+/** CHANGED(SIM) P2 (CONTRACT §28.4): one goon of BRAWL BREAK. */
+export interface GoonSnap {
+  slot: number;
+  kind: string;
+  kindIdx: number;
+  x: number;
+  y: number;
+  facing: number;
+  state: number;
+  stateName: string;
+  animId: number;
+  animFrame: number;
+  prevAnimId: number;
+  prevAnimFrame: number;
+  blendT: number;
+  hp: number;
+  hpMax: number;
+  hitstop: number;
+  telegraph: boolean;
+  token: boolean;
+  moveName: string;
+  down: boolean;
+}
+
+/** CHANGED(SIM) P2 (CONTRACT §28.4): bonus-round state. */
+export interface BrawlSnap {
+  mode: 'brawl' | 'heckler';
+  score: number;
+  ratings: number;
+  grade: number;
+  mult: number;
+  timeLeft: number;
+  timeLeftF: number;
+  wave: number;
+  spawned: number;
+  downed: number;
+  combo: number;
+  parries: number;
+  perfects: number;
+  hitsTaken: number;
+  goons: GoonSnap[];
 }
 
 export type MatchPhase = 'intro' | 'fight' | 'ko' | 'timeover' | 'roundEnd' | 'matchEnd';
@@ -371,7 +486,9 @@ export interface MatchSnap {
   freeze: number;
   /** CHANGED(integrator): live projectiles for the view (§17.1 request; metres, vx in m/s, moveId per §17 rule 1,
    *  kind 0 projectile / 1 ball / 2 heckle object). Read-only copy; never part of the state or the checksum. */
-  proj?: Array<{ slot: number; owner: number; x: number; y: number; vx: number; moveId: number; kind: number; alive: boolean }>;
+  proj?: Array<{ slot: number; owner: number; x: number; y: number; vx: number; moveId: number; kind: number; alive: boolean; obj?: number }>;
+  /** CHANGED(SIM) P2 (CONTRACT §28.4): present in `brawl` / `heckler` matches */
+  brawl?: BrawlSnap;
 }
 
 /** §4.5 / §18.1 */

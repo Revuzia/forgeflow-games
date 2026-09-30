@@ -1,6 +1,6 @@
 """THE FREAK - mini boss, armored monster (Creature_Pack: mutant punch/swiping/jump attacks/roar/flex).
 Mutant rig has no finger bones: hands stay in the bind (claw) shape."""
-from kitlib import (Kit, cmu, crouch, layer, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
+from kitlib import (Kit, cam, cinematic, cmu, crouch, layer, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
 
 CR = "Creature_Pack/"
 
@@ -49,8 +49,10 @@ def build():
     K.clip("low_claw", crouch(mix(CR + "mutant punch", (1, 22), contact=9)), "Crouch Idle legs + claw hook")
     K.clip("floor_slam", mix(CR + "jump attack", (40, 70), contact=51),
            "Mixamo jump attack landing: hands to the floor f51 = low slam")
-    K.clip("jump_claw", mix(CR + "mutant jumping", (20, 60), contact=32),
-           "Mixamo mutant jumping: arms up on the rise (RightHand f32) = anti-air")
+    K.clip("jump_claw", mix(CR + "mutant jumping", (20, 60), contact=37),
+           "Mixamo mutant jumping: arms up on the rise = anti-air. P2: contact 32 -> 37: at 32 both claws were spread "
+           "0.9 m to the SIDES at 0.97-1.10 m (bake trace, contact_check EXT + LAT); at 37 they rise in front "
+           "(RightHand 0.76 m forward, 1.74 m up, 0.41 m out)")
     K.clip("hammer_down", mix(CR + "mutant jump attack", (30, 70), contact=51),
            "Mixamo mutant jump attack (in-place): leap slam, hands to the floor f51")
     K.clip("air_claw", layer(jump_legs(), mix(CR + "mutant punch", (1, 22), contact=9), mode="hold", lower_frame=49),
@@ -59,9 +61,12 @@ def build():
                               lower_frame=49), "LAYERED: mutant jumping apex legs + overhead swipe")
     K.clip("air_slam", mix(CR + "mutant jump attack", (40, 60), contact=51), "descending half of the leap slam")
     K.clip("throw_reach", mix(CR + "mutant punch", (1, 34), contact=9), "claw reach (grab whiff): full hook")
-    K.clip("crush", mix(CR + "mutant flexing muscles", (1, 133), contact=65),
-           "Mixamo mutant flexing muscles = crushes the victim in a bear hug")
-    K.clip("fling", mix(CR + "mutant swiping", (1, 73), contact=41), "overhead swipe flings them behind")
+    K.clip("crush", mix(CR + "mutant flexing muscles", (40, 105), contact=65),
+           "Mixamo mutant flexing muscles f40-105 = crushes the victim in a bear hug (hunched squeeze f55-95). P2: window "
+           "1-133 -> 40-105 (4.4 s over a 60-frame lock played at 4.4x; 2.17 s = 2.2x)")
+    K.clip("fling", mix(CR + "mutant swiping", (20, 70), contact=41),
+           "overhead swipe flings them behind (claw through the front at f41). P2: window 1-73 -> 20-70 (2.4 s over "
+           "50 f was 2.9x; 1.67 s = 2x)")
     K.clip("crusher_leap_clip", mix(CR + "jump attack", (1, 115), contact=51),
            "Mixamo jump attack: leap GROUND SLAM (hips 0.47-2.58 m, travel 2.26 m, hands to the floor f51)")
     K.clip("claw_rush_clip", layer(mix(CR + "mutant run", (1, 27), loop=True),
@@ -107,10 +112,16 @@ def build():
     K.add("j.H", "jH", input="j.H", name="Falling Slam", clip="air_slam", damage=900, desc="Two-claw falling slam.",
           why="Boss jump-in 900.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Crusher Hug", clip="throw_reach", damage=1400,
-          grab={"frames": 60, "adv": 21, "hitF": 40, "swap": False, "air": False, "techable": True, "clip": "crush"},
+          grab={"frames": 60, "adv": 21, "hitF": 32, "swap": False, "air": False, "techable": True, "clip": "crush",
+                # P2 paired throw: crush (f40-105, 2.17 s over 60 f) squeezes hunched from lock 14 to 51, hardest at
+                # lock 32 (src 75); the victim is held folded, crushed, then dropped (kd_fall_b, face up) at lock 46.
+                "victim": [[0, "hit_body", 0.0, 0.25], [16, "hit_body", 0.2, 0.75], [46, "kd_fall_b", 1.04, 1.5]]},
           desc="Crushes them in a bear hug.", why="Boss throw: 1400.")
     K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Specimen Toss", clip="throw_reach", damage=1400,
-          grab={"frames": 50, "adv": 15, "hitF": 32, "swap": True, "air": False, "techable": True, "clip": "fling"},
+          grab={"frames": 50, "adv": 15, "hitF": 21, "swap": True, "air": False, "techable": True, "clip": "fling",
+                # P2 paired throw: the overhead swipe passes the front at clip 0.70 s = lock 21 (f20-70); the victim is
+                # hauled over (thrown_b 0.05 -> 0.40 s) and flung face down behind it.
+                "victim": [[0, "hit_high_s", 0.0, 0.15], [8, "thrown_b", 0.05, 0.4], [21, "thrown_b", 0.4, 1.2]]},
           desc="Flings them over its shoulder.", why="Boss throw: 1400.")
 
     lp = {}
@@ -160,8 +171,14 @@ def build():
                       why="EX: 12f, super armor."))
     sg = {}
     for s, (rng, dmg) in {"l": (1.30, 2600), "m": (1.20, 3000), "h": (1.10, 3400)}.items():
-        sg[s] = dict(damage=dmg, grab={"rangeM": rng, "frames": 80, "adv": 28, "hitF": 51, "swap": False,
-                                       "air": False, "techable": False, "clip": "grab_slam"})
+        # P2 paired grab: grab_slam (3.7 s over 80 f) rakes them (lock 10), leaps 2 m up (lock 18-30) and crashes down
+        # at clip 1.67 s = lock 36 (was hitF 51, when it is already rising). The victim cannot be carried up (the sim
+        # carry is horizontal), so it is raked, left dazed under the leap and flattened by the landing (kd_fall_b from
+        # the floor impact).
+        sg[s] = dict(damage=dmg, grab={"rangeM": rng, "frames": 80, "adv": 28, "hitF": 36, "swap": False,
+                                       "air": False, "techable": False, "clip": "grab_slam",
+                                       "victim": [[0, "hit_body", 0.0, 0.3], [10, "hit_high_l", 0.0, 0.3],
+                                                  [18, "dizzy", 0.3, 1.0], [36, "kd_fall_b", 1.25, 1.8667]]})
     K.special("specimen_grab", "cmdgrab", motion="360", kind="cmdgrab",
               common=dict(name="Specimen Grab", clip="throw_reach", recovery=50, role=["grab"], sfx=[[1, "grab_cloth"]],
                           desc="360 command grab with the longest reach in the game.",
@@ -169,8 +186,10 @@ def build():
                               "damage +100 per strength, whiff recovery 50."),
               per=sg,
               ex=dict(name="Specimen Grab (EX)", damage=3700, invuln={"strike": [1, 5]},
-                      grab={"rangeM": 1.40, "frames": 84, "adv": 28, "hitF": 53, "swap": False, "air": False,
-                            "techable": False, "clip": "grab_slam"},
+                      grab={"rangeM": 1.40, "frames": 84, "adv": 28, "hitF": 38, "swap": False, "air": False,
+                            "techable": False, "clip": "grab_slam",
+                            "victim": [[0, "hit_body", 0.0, 0.3], [11, "hit_high_l", 0.0, 0.3], [19, "dizzy", 0.3, 1.0],
+                                       [38, "kd_fall_b", 1.25, 1.8667]]},
                       desc="Strike-invulnerable 1-5, 1.40 m.", why="EX: strike invulnerable 1-5."))
 
     K.add("meltdown", LV1, kind="super1", input="236236", name="Meltdown", strength="H", clip="meltdown_clip",
@@ -187,16 +206,32 @@ def build():
           damage=5000, invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]},
           move=[[0, 0], [10, 0.8]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],
           juggle={"js": 1, "ji": 0, "jl": 99},
-          cinematic={"frames": 175, "cue": "freak_specimen_13",
-                     "hits": [[35, 800], [65, 900], [95, 1000], [150, 2300]],
-                     "anim": [[0, "crystal_swipe"], [25, "crush"], [55, "hammer_down"], [85, "hammer_down"],
-                              [120, "roar_wave"], [140, "fling"]],
-                     "victim": [[0, "hit_high_l"], [25, "thrown_f"], [65, "kd_ground_b"], [120, "dizzy"],
-                                [140, "hit_air"], [150, "wall_splat"]],
-                     "shots": [[0, "side_close"], [25, "front_low"], [55, "top_down"], [120, "low_angle_up"],
-                               [140, "wide"], [150, "slowmo_hold"]],
-                     "endAdv": 19, "endGapM": 3.5},
-          desc="PRIME TIME: grabbed, slammed twice, roared at and hurled into the wall.",
+          cinematic=lambda: cinematic(
+              175, "freak_specimen_13",
+              hits=[[40, 800], [70, 900], [100, 1000], [150, 2300]],
+              anim=[K.seg(0, "crystal_swipe", 25, fromS=0.53), K.seg(25, "crush", 55, hit=40),
+                    K.seg(55, "hammer_down", 85, hit=70), K.seg(85, "hammer_down", 115, hit=100),
+                    K.seg(115, "roar_wave", 140, fromS=0.1), K.seg(140, "fling", 175, hit=150)],
+              victim=[[0, "hit_high_l", 0.0, 0.4], [25, "hit_body", 0.0, 0.3], [40, "hit_body", 0.2, 0.8],
+                      [70, "kd_fall_b", 1.2, 1.8667], [100, "kd_ground_b", 0.0, 0.367], [115, "wake_b", 0.2, 1.2333],
+                      [130, "dizzy", 0.5, 1.0], [150, "thrown_f", 0.3, 0.74], [162, "thrown_f", 0.74, 1.3333]],
+              camera=[cam(0, 25, "close", "both", 34, 3.4, 1.6, 25, lookH=1.1),
+                      cam(25, 55, "low", "both", 40, 3.6, 0.5, 25, lookH=1.4),
+                      cam(55, 115, "top", "defender", 42, 1.6, 6.0, 10, lookH=0.4),
+                      cam(115, 140, "close", "attacker", 34, [2.9, 2.5], 1.6, 35, lookH=1.05),
+                      cam(140, 175, "wide", "both", 40, [5.0, 6.2], 1.8, 5)],
+              fx=[(0, "slate"), (25, "impact_m"), (40, "impact_m"), (40, "shake_s"), (70, "impact_l"), (70, "dust"),
+                  (70, "shake_m"), (100, "impact_l"), (100, "dust"), (100, "shake_m"), (115, "lights_flicker"),
+                  (115, "shock_ring", "attacker"), (115, "shake_m"), (150, "impact_l"), (150, "flash"),
+                  (150, "shake_l"), (150, "freeze_frame"), (164, "dust")],
+              crowd=[(0, "gasp"), (40, "gasp"), (70, "ooh"), (100, "ooh", "up"), (115, "hush"), (150, "roar", "spike"),
+                     (164, "gasp", "peak")],
+              pathA=[[25, 0.1, 0], [55, 0.2, 0], [70, 0.3, 0.3], [78, 0.35, 0], [100, 0.35, 0], [140, 0.2, 0],
+                     [150, 0.25, 0], [173, 0, 0]],
+              gapD=[[25, 0.9, 0], [40, 0.8, 0.4], [55, 0.9, 0.2], [70, 1.2, 0], [115, 1.2, 0], [150, 1.0, 0],
+                    [158, 2.6, 0.6], [164, 3.5, 0], [173, 3.5, 0]],
+              slate="PRIME TIME - THE FREAK: SPECIMEN 13", endPose="back", endAdv=19, endGapM=3.5),
+          desc="PRIME TIME: grabbed, crushed, hammered into the floor twice, roared at and hurled across the set.",
           why="Boss Lv3: 5000 (+500 over the 4500 template; inside the SF6 range 2600-5300), otherwise 10/4/58.")
 
     K.simple = {"5S": "claw_rush_m", "6S": "crusher_leap_m", "2S": "roar_m", "4S": "specimen_grab_m",
@@ -209,11 +244,26 @@ def build():
                 "armored": ["5H", "6H", "crusher_leap_l", "crusher_leap_m", "crusher_leap_h", "crusher_leap_ex",
                             "claw_rush_l", "claw_rush_m", "claw_rush_h", "claw_rush_ex", "roar_l", "roar_m", "roar_h",
                             "roar_ex", "meltdown"]}
+    # camera note: THE FREAK hunches (idle mesh top 2.01 m on a 2.40 m body, CONTRACT 26.5 scales lookH by 2.40 / 1.80),
+    # so its close shots look at 1.05-1.1 m (-> 1.4-1.5 m scaled), not the 1.3-1.45 m framing floor
     K.cine_doc = [
-        "f0 CRYSTAL SWIPE (side_close): the claw connects.",
-        "f25 CRUSHER HUG (front_low): lifts them off the floor - 800 at f35.",
-        "f55 / f85 HAMMER DOWN x2 (top_down): slams them into the floor twice - 900 + 1000.",
-        "f120 ROAR (low_angle_up): roars in the dazed opponent's face; the set lights flicker.",
-        "f140 FLING (wide -> slowmo_hold): hurls them into the set wall - 2300 at f150 (wall splat).",
+        "f0 CRYSTAL SWIPE (close): the claw connects.",
+        "f25 CRUSHER HUG (low): lifts them 0.4 m off the floor and squeezes - 800 at f40.",
+        "f55 / f85 HAMMER DOWN x2 (top-down from 6 m): slams them flat, then again while they lie - 900 + 1000 "
+        "(f70 / f100, dust).",
+        "f115 ROAR (close on the Freak): a shock ring, the set lights flicker; the victim staggers up, dazed.",
+        "f140 FLING (wide): hurled 2.5 m across the set - 2300 at f150 (flash, freeze-frame); lands face up at 3.5 m "
+        "(KD +19).",
     ]
+    K.text = dict(
+        introLine="(The chains snap. Something in the dark breathes.)",
+        winQuotes=["(It sniffs the floor where you fell. Then it roars.)",
+                   "(It drags its chains back into the dark.)",
+                   "(Specimen 13 flexes. The studio lights flicker.)"],
+        banter={"default": ["(A low growl rattles the camera rigs.)",
+                            "(RRRRAAAAGH.)"]},
+        ending="THE FREAK smashes through the Control Room wall and walks out into the city with its chains trailing "
+               "behind it. The network offers a reward for its return; nobody claims it. Weeks later a rooftop camera "
+               "catches Specimen 13 watching the sunrise over Channel 13, perfectly still. For the first time in its "
+               "life, nobody is filming it on purpose.")
     return K

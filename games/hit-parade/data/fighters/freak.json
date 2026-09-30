@@ -363,7 +363,16 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 60, "adv": 21, "hitF": 40, "swap": false, "air": false, "techable": true, "clip": "crush"},
+      "grab": {
+        "frames": 60,
+        "adv": 21,
+        "hitF": 32,
+        "swap": false,
+        "air": false,
+        "techable": true,
+        "clip": "crush",
+        "victim": [[0, "hit_body", 0.0, 0.25], [16, "hit_body", 0.2, 0.75], [46, "kd_fall_b", 1.04, 1.5]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Crushes them in a bear hug.",
@@ -392,7 +401,16 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 50, "adv": 15, "hitF": 32, "swap": true, "air": false, "techable": true, "clip": "fling"},
+      "grab": {
+        "frames": 50,
+        "adv": 15,
+        "hitF": 21,
+        "swap": true,
+        "air": false,
+        "techable": true,
+        "clip": "fling",
+        "victim": [[0, "hit_high_s", 0.0, 0.15], [8, "thrown_b", 0.05, 0.4], [21, "thrown_b", 0.4, 1.2]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Flings them over its shoulder.",
@@ -836,11 +854,17 @@
         "rangeM": 1.3,
         "frames": 80,
         "adv": 28,
-        "hitF": 51,
+        "hitF": 36,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "grab_slam"
+        "clip": "grab_slam",
+        "victim": [
+          [0, "hit_body", 0.0, 0.3],
+          [10, "hit_high_l", 0.0, 0.3],
+          [18, "dizzy", 0.3, 1.0],
+          [36, "kd_fall_b", 1.25, 1.8667]
+        ]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -875,11 +899,17 @@
         "rangeM": 1.2,
         "frames": 80,
         "adv": 28,
-        "hitF": 51,
+        "hitF": 36,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "grab_slam"
+        "clip": "grab_slam",
+        "victim": [
+          [0, "hit_body", 0.0, 0.3],
+          [10, "hit_high_l", 0.0, 0.3],
+          [18, "dizzy", 0.3, 1.0],
+          [36, "kd_fall_b", 1.25, 1.8667]
+        ]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -914,11 +944,17 @@
         "rangeM": 1.1,
         "frames": 80,
         "adv": 28,
-        "hitF": 51,
+        "hitF": 36,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "grab_slam"
+        "clip": "grab_slam",
+        "victim": [
+          [0, "hit_body", 0.0, 0.3],
+          [10, "hit_high_l", 0.0, 0.3],
+          [18, "dizzy", 0.3, 1.0],
+          [36, "kd_fall_b", 1.25, 1.8667]
+        ]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -953,11 +989,17 @@
         "rangeM": 1.4,
         "frames": 84,
         "adv": 28,
-        "hitF": 53,
+        "hitF": 38,
         "swap": false,
         "air": false,
         "techable": false,
-        "clip": "grab_slam"
+        "clip": "grab_slam",
+        "victim": [
+          [0, "hit_body", 0.0, 0.3],
+          [11, "hit_high_l", 0.0, 0.3],
+          [19, "dizzy", 0.3, 1.0],
+          [38, "kd_fall_b", 1.25, 1.8667]
+        ]
       },
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
@@ -1037,37 +1079,147 @@
       "cinematic": {
         "frames": 175,
         "cue": "freak_specimen_13",
-        "hits": [[35, 800], [65, 900], [95, 1000], [150, 2300]],
+        "hits": [[40, 800], [70, 900], [100, 1000], [150, 2300]],
         "anim": [
-          [0, "crystal_swipe"],
-          [25, "crush"],
-          [55, "hammer_down"],
-          [85, "hammer_down"],
-          [120, "roar_wave"],
-          [140, "fling"]
+          [0, "crystal_swipe", 0.53, 0.947],
+          [25, "crush", 0.583, 1.083],
+          [55, "hammer_down", 0.45, 0.95],
+          [85, "hammer_down", 0.45, 0.95],
+          [115, "roar_wave", 0.1, 0.517],
+          [140, "fling", 0.533, 1.117]
         ],
         "victim": [
-          [0, "hit_high_l"],
-          [25, "thrown_f"],
-          [65, "kd_ground_b"],
-          [120, "dizzy"],
-          [140, "hit_air"],
-          [150, "wall_splat"]
+          [0, "hit_high_l", 0.0, 0.4],
+          [25, "hit_body", 0.0, 0.3],
+          [40, "hit_body", 0.2, 0.8],
+          [70, "kd_fall_b", 1.2, 1.8667],
+          [100, "kd_ground_b", 0.0, 0.367],
+          [115, "wake_b", 0.2, 1.2333],
+          [130, "dizzy", 0.5, 1.0],
+          [150, "thrown_f", 0.3, 0.74],
+          [162, "thrown_f", 0.74, 1.3333]
         ],
-        "shots": [
-          [0, "side_close"],
-          [25, "front_low"],
-          [55, "top_down"],
-          [120, "low_angle_up"],
-          [140, "wide"],
-          [150, "slowmo_hold"]
+        "shots": [[0, "close"], [25, "low"], [55, "top"], [115, "close"], [140, "wide"]],
+        "camera": [
+          {
+            "from": 0,
+            "to": 25,
+            "shot": "close",
+            "target": "both",
+            "fovDeg": 34,
+            "dist": 3.4,
+            "height": 1.6,
+            "yawDeg": 25,
+            "ease": "inOut",
+            "lookH": 1.1
+          },
+          {
+            "from": 25,
+            "to": 55,
+            "shot": "low",
+            "target": "both",
+            "fovDeg": 40,
+            "dist": 3.6,
+            "height": 0.5,
+            "yawDeg": 25,
+            "ease": "inOut",
+            "lookH": 1.4
+          },
+          {
+            "from": 55,
+            "to": 115,
+            "shot": "top",
+            "target": "defender",
+            "fovDeg": 42,
+            "dist": 1.6,
+            "height": 6.0,
+            "yawDeg": 10,
+            "ease": "inOut",
+            "lookH": 0.4
+          },
+          {
+            "from": 115,
+            "to": 140,
+            "shot": "close",
+            "target": "attacker",
+            "fovDeg": 34,
+            "dist": [2.9, 2.5],
+            "height": 1.6,
+            "yawDeg": 35,
+            "ease": "inOut",
+            "lookH": 1.05
+          },
+          {
+            "from": 140,
+            "to": 175,
+            "shot": "wide",
+            "target": "both",
+            "fovDeg": 40,
+            "dist": [5.0, 6.2],
+            "height": 1.8,
+            "yawDeg": 5,
+            "ease": "inOut",
+            "lookH": 1.1
+          }
         ],
+        "fx": [
+          {"f": 0, "fx": "slate"},
+          {"f": 25, "fx": "impact_m"},
+          {"f": 40, "fx": "impact_m"},
+          {"f": 40, "fx": "shake_s"},
+          {"f": 70, "fx": "impact_l"},
+          {"f": 70, "fx": "dust"},
+          {"f": 70, "fx": "shake_m"},
+          {"f": 100, "fx": "impact_l"},
+          {"f": 100, "fx": "dust"},
+          {"f": 100, "fx": "shake_m"},
+          {"f": 115, "fx": "lights_flicker"},
+          {"f": 115, "fx": "shock_ring", "target": "attacker"},
+          {"f": 115, "fx": "shake_m"},
+          {"f": 150, "fx": "impact_l"},
+          {"f": 150, "fx": "flash"},
+          {"f": 150, "fx": "shake_l"},
+          {"f": 150, "fx": "freeze_frame"},
+          {"f": 164, "fx": "dust"}
+        ],
+        "crowd": [
+          {"f": 0, "react": "gasp"},
+          {"f": 40, "react": "gasp"},
+          {"f": 70, "react": "ooh"},
+          {"f": 100, "react": "ooh", "ratings": "up"},
+          {"f": 115, "react": "hush"},
+          {"f": 150, "react": "roar", "ratings": "spike"},
+          {"f": 164, "react": "gasp", "ratings": "peak"}
+        ],
+        "pathA": [
+          [25, 0.1, 0],
+          [55, 0.2, 0],
+          [70, 0.3, 0.3],
+          [78, 0.35, 0],
+          [100, 0.35, 0],
+          [140, 0.2, 0],
+          [150, 0.25, 0],
+          [173, 0, 0]
+        ],
+        "gapD": [
+          [25, 0.9, 0],
+          [40, 0.8, 0.4],
+          [55, 0.9, 0.2],
+          [70, 1.2, 0],
+          [115, 1.2, 0],
+          [150, 1.0, 0],
+          [158, 2.6, 0.6],
+          [164, 3.5, 0],
+          [173, 3.5, 0]
+        ],
+        "slate": "PRIME TIME - THE FREAK: SPECIMEN 13",
+        "endPose": "back",
         "endAdv": 19,
         "endGapM": 3.5
       },
       "role": ["reversal"],
       "anim": {"clip": "crystal_swipe"},
-      "desc": "PRIME TIME: grabbed, slammed twice, roared at and hurled into the wall."
+      "desc": "PRIME TIME: grabbed, crushed, hammered into the floor twice, roared at and hurled across the set."
     }
   },
   "simple": {
@@ -1107,5 +1259,11 @@
     "grab": ["specimen_grab_m"],
     "armor": ["5H", "6H", "claw_rush_m", "crusher_leap_m"],
     "meter": "meltdown"
-  }
+  },
+  "introLine": "(The chains snap. Something in the dark breathes.)",
+  "winQuotes": ["(It sniffs the floor where you fell. Then it roars.)", "(It drags its chains back into the dark.)", "(Specimen 13 flexes. The studio lights flicker.)"],
+  "banter": {
+    "default": ["(A low growl rattles the camera rigs.)", "(RRRRAAAAGH.)"]
+  },
+  "ending": "THE FREAK smashes through the Control Room wall and walks out into the city with its chains trailing behind it. The network offers a reward for its return; nobody claims it. Weeks later a rooftop camera catches Specimen 13 watching the sunrise over Channel 13, perfectly still. For the first time in its life, nobody is filming it on purpose."
 }

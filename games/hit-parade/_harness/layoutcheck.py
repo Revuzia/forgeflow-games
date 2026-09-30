@@ -55,11 +55,15 @@ DEVICES = {
 }
 MENU_STEPS = ["title", "main", "season", "versus", "charselect", "charselect_season", "stage", "vs", "results", "results_arcade",
               "ladder", "card_rival", "card_boss", "card_miniboss", "card_brawl", "card_heckler", "ending", "nameentry",
-              "pause", "training", "movelist", "settings", "online", "credits", "confirm"]
+              "pause", "training", "movelist", "settings", "online", "credits", "confirm",
+              # CHANGED(UI) P2: the ending sequence's cards, bonus / online results, the online lobby states, the blind pick
+              "ending_text", "ending_ratings", "ending_board", "results_brawl", "results_heckler", "results_online_dc",
+              "online_room", "online_sync", "online_blind"]
 HUD_STEPS = ["hud_intro", "hud_mid", "hud_fright", "hud_super", "hud_parry", "hud_ko", "hud_arcade", "hud_training"]
 ALL_STEPS = MENU_STEPS + HUD_STEPS
 # how long each step settles before it is measured / shot (sweeps and captions animate in)
-SETTLE = {"hud_intro": 0.55, "hud_mid": 0.9, "hud_fright": 0.9, "hud_super": 0.9, "hud_parry": 0.5, "hud_ko": 0.45, "hud_arcade": 0.6, "hud_training": 0.9, "stage": 1.0}
+SETTLE = {"hud_intro": 0.55, "hud_mid": 0.9, "hud_fright": 0.9, "hud_super": 0.9, "hud_parry": 0.5, "hud_ko": 0.45, "hud_arcade": 0.6, "hud_training": 0.9, "stage": 1.0,
+         "ending_text": 2.4, "ending_ratings": 4.0, "ending_board": 4.8, "online_blind": 1.2}
 
 LAYOUT_JS = r"""
 (opt) => {

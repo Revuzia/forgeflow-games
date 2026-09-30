@@ -62,7 +62,16 @@ export interface SessionOpts {
   unstableMs?: number;
   silentMs?: number;
   onEvent?: (e: NetEvent) => void;
+  /** P2 (NET): extra fields merged into stats() as `online` (the flow's phase / room / path; read by __HP__.net()). */
+  info?: () => Record<string, unknown>;
+  /** P2 (NET): record a diagnostic trace of the last `trace` ticks + packets (traceDump(); lab / harness only). */
+  trace?: number;
 }
+
+/** P2 (NET) diagnostic trace (traceDump()). Times are on the session clock (opts.now). Rows:
+ *  ticks [t, frame, rc, remoteMax, kind 0 advanced / 1 stalled / 2 skipped / 3 waiting, delay];
+ *  sent  [t, seq, newestLocalFrame, count]; recv [arrivalT, seq, newestRemoteFrame, localFrameAtArrival]. */
+export interface SessionTrace { ticks: number[][]; sent: number[][]; recv: number[][]; startedAt: number }
 
 export type NetEvent =
   | { kind: 'desync'; frame: number; local: number; remote: number; count: number; at: number }
@@ -92,6 +101,8 @@ export interface NetStats {
   skipTicks: number;
   ticks: number;
   gameSpeed: number;          // frames advanced / ticks since start (1 = no stalls)
+  /** P2: frames advanced / (60 x seconds since start): the speed a player sees, incl. ticks the local loop never ran */
+  wallSpeed: number;
   sent: number;
   recv: number;
   bytesSent: number;
@@ -106,6 +117,8 @@ export interface NetStats {
   lastChecksumFrame: number;
   violations: number;
   peerAway: boolean;
+  /** P2: SessionOpts.info() when given (online flow: phase, room, path, supabase counters) */
+  online?: Record<string, unknown>;
 }
 
 const RING = 256;
@@ -120,6 +133,9 @@ export class RollbackSession {
   private tr: Transport;
   private now: () => number;
   private onEvent: ((e: NetEvent) => void) | null;
+  private info: (() => Record<string, unknown>) | null;
+  private traceCap: number;
+  private tr0: SessionTrace | null = null;
   private delay: number;
   private win: number;
   private sendEvery: number;
@@ -200,6 +216,9 @@ export class RollbackSession {
     this.tr = transport;
     this.now = opts.now;
     this.onEvent = opts.onEvent ?? null;
+    this.info = opts.info ?? null;
+    this.traceCap = Math.max(0, (opts.trace ?? 0) | 0);
+    if (this.traceCap > 0) this.tr0 = { ticks: [], sent: [], recv: [], startedAt: -1 };
     this.delay = Math.max(0, opts.delay | 0);
     this.win = Math.max(1, (opts.window ?? P2P_WINDOW) | 0);
     this.sendEvery = Math.max(1, (opts.sendEvery ?? 1) | 0);
@@ -231,9 +250,13 @@ export class RollbackSession {
     const now = this.now();
     this.receive(now);
     if (!this.started) {
-      if (!(now >= this.startAt)) return { advanced: 0, stalled: false };
+      if (!(now >= this.startAt)) {
+        if (this.tr0) this.traceTick(now, 3);
+        return { advanced: 0, stalled: false };
+      }
       this.started = true;
       this.startedAt = now;
+      if (this.tr0) this.tr0.startedAt = now;
       if (this.status === 'waiting') this.status = 'running';
     }
     if (this.rollbackTo < this.frame) this.rollback();
@@ -246,10 +269,12 @@ export class RollbackSession {
     this.st.ticks++;
     let advanced = 0;
     let stalled = false;
+    let skipped = false;
     if (this.status === 'nocontest') {
       stalled = true;
     } else if (this.sync.tick()) {
       this.st.skipTicks++;
+      skipped = true;
     } else if (this.frame - this.rc > this.win) {
       stalled = true;
       this.st.stallTicks++;
@@ -263,10 +288,29 @@ export class RollbackSession {
       advanced = 1;
     }
     this.stalledNow = stalled;
+    if (this.tr0) this.traceTick(now, advanced ? 0 : skipped ? 2 : 1);
     if (this.remoteMax >= this.delay) this.sync.addLocal(this.localAdvantage());
     if (this.st.ticks % this.sendEvery === 0) this.sendInputs(now);
     this.updateStatus(now);
     return { advanced, stalled };
+  }
+
+  /** P2 diagnostic trace (null unless opts.trace > 0): copies of the recorded rows. */
+  traceDump(): SessionTrace | null {
+    const t = this.tr0;
+    return t ? { ticks: t.ticks.slice(), sent: t.sent.slice(), recv: t.recv.slice(), startedAt: t.startedAt } : null;
+  }
+
+  private traceTick(now: number, kind: number): void {
+    const t = this.tr0 as SessionTrace;
+    t.ticks.push([Math.round(now * 10) / 10, this.frame, this.rc, this.remoteMax, kind, this.delay]);
+    if (t.ticks.length > this.traceCap) t.ticks.splice(0, t.ticks.length - this.traceCap);
+  }
+
+  private traceRow(list: number[][], row: number[]): void {
+    list.push(row);
+    const cap = this.traceCap >> 1;
+    if (list.length > cap) list.splice(0, list.length - cap);
   }
 
   /** Set when frame 0 may run (clock of opts.now). Used by the online flow after the GO message. */
@@ -319,6 +363,9 @@ export class RollbackSession {
   stats(): NetStats {
     const now = this.now();
     const expected = this.seqMax >= this.seqFirst && this.seqFirst >= 0 ? this.seqMax - this.seqFirst + 1 : 0;
+    const wallTicks = this.started ? (now - this.startedAt) / FRAME_MS : 0;
+    let online: Record<string, unknown> | undefined;
+    if (this.info) { try { online = this.info(); } catch { online = undefined; } }
     return {
       transport: this.tr.kind,
       status: this.status,
@@ -337,6 +384,7 @@ export class RollbackSession {
       skipTicks: this.st.skipTicks,
       ticks: this.st.ticks,
       gameSpeed: this.st.ticks > 0 ? this.st.advanced / this.st.ticks : 1,
+      wallSpeed: wallTicks >= 1 ? Math.min(1.5, this.st.advanced / wallTicks) : 1,
       sent: this.st.sent,
       recv: this.st.recv,
       bytesSent: this.st.bytesSent,
@@ -351,6 +399,7 @@ export class RollbackSession {
       lastChecksumFrame: this.st.lastChecksumFrame,
       violations: this.st.violations,
       peerAway: this.peerAway,
+      ...(online ? { online } : {}),
     };
   }
 
@@ -515,6 +564,7 @@ export class RollbackSession {
       if (rtt < 10000) this.rtt.add(rtt);
     }
     this.sync.addRemote(p.advantage);
+    if (this.tr0) this.traceRow(this.tr0.recv, [Math.round(now * 10) / 10, p.seq, last, this.frame]);
     for (let k = 0; k < p.count; k++) this.addRemote(p.startFrame + k, p.inputs[k]);
     if (p.csFrame >= 0) this.onRemoteChecksum(p.csFrame, p.checksum);
   }
@@ -706,6 +756,7 @@ export class RollbackSession {
       flags, seq: this.seq, startFrame: start, ackFrame: this.rc, advantage: this.remoteMax >= this.delay ? this.localAdvantage() : 0,
       tsLow: nowMs & 0xffff, echoTs: this.remoteTs >= 0 ? this.remoteTs : 0, echoHold: hold, csFrame, checksum,
     }, this.inLocal, start, n, MASK);
+    if (this.tr0) this.traceRow(this.tr0.sent, [Math.round(now * 10) / 10, this.seq, start + n - 1, n]);
     this.seq = (this.seq + 1) & 0xffff;
     this.tr.sendInput(b);
     this.st.sent++;

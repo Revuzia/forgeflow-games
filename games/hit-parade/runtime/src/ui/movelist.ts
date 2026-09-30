@@ -1,20 +1,23 @@
-// HIT PARADE - MOVE LIST (lane UI; CONTRACT section 8): per fighter, in SIMPLE and CLASSIC notation, read from
-// data/fighters/<id>.json (`moves`, `simple`, `classic`, `unique`; CONTRACT 5.2). Sections: SUPERS, SPECIALS, EX SPECIALS,
-// ASSIST COMBO (SIMPLE), COMMAND NORMALS, THROWS, UNIQUE, SYSTEM (universal verbs). Directions render as SVG arrows
-// (numpad notation, 6 = forward), buttons as chips. A move's display name is strings.json `move.<fighter>.<moveId>`
-// (CONTRACT 20.1: the UI mirrors the fighter files' `name` there), else the move's `name`, else the id tidied up
-// (brickbat_m -> BRICKBAT); its note is the move's `desc`. Startup and damage columns come straight from the move data.
+// HIT PARADE - MOVE LIST (lane UI; CONTRACT section 8, 27): per fighter, generated from data/fighters/<id>.json (`moves`,
+// `simple`, `classic`, `unique`; CONTRACT 5.2 / 19.2 / 20). The picked control type (SIMPLE / CLASSIC tab) leads every row
+// and the OTHER control type's input for the same move is shown under it, so both notations are always on screen.
+// Sections: the fighter's UNIQUE MECHANIC card (what the mechanic does, how to use it - strings ml.how.<kind> - the
+// fighter's own trait line and the moves that use it), SUPERS, SPECIALS, EX SPECIALS, ASSIST COMBO (SIMPLE), COMMAND
+// NORMALS, THROWS, SYSTEM (universal verbs). Directions render as SVG arrows (numpad notation, 6 = forward), buttons as
+// chips. Columns: startup, damage and the on-block advantage (blockstun - (active + recovery), SF6 convention) straight
+// from the move data. CHANGED(UI) P2: a move's display name is the fighter file's `name` (FIGHTERS' source of truth),
+// then strings.json `move.<fighter>.<moveId>` (the menus.py --sync-strings mirror), then the id tidied up.
 
 import type { Scheme, UiFighterDef, UiGameData, UiMoveDef } from './types.ts';
 import { btn, chip, dirSvg, div, el } from './dom.ts';
 import { has, tOr, t } from './strings.ts';
 
 type Part = { d?: number; held?: number; b?: string; plus?: boolean; text?: string };
-interface Row { name: string; parts: Part[]; startup?: number; damage?: number; note?: string }
+interface Row { name: string; parts: Part[]; alt?: Part[]; startup?: number; damage?: number; block?: number; note?: string; id?: string }
 
 export function prettyMove(id: string, m?: UiMoveDef | null, fid = ''): string {
-  if (fid) { const k = `move.${fid}.${id}`; if (has(k)) return t(k); }
   if (m?.name) return m.name.toUpperCase();
+  if (fid) { const k = `move.${fid}.${id}`; if (has(k)) return t(k); }
   return id.replace(/\{s\}/g, '').replace(/_(l|m|h|ex|lv\d)$/i, '').replace(/[_-]+/g, ' ').trim().toUpperCase();
 }
 
@@ -43,8 +46,8 @@ export function parseNotation(s: string): Part[] {
   return out;
 }
 
-function renderParts(parts: Part[]): HTMLElement {
-  const box = el('span', 'hpm-note');
+function renderParts(parts: Part[], cls = 'hpm-note'): HTMLElement {
+  const box = el('span', cls);
   for (const p of parts) {
     if (p.plus) { box.append(el('span', 'plus', '+')); continue; }
     if (p.text) { box.append(el('span', 'txt', p.text)); continue; }
@@ -70,12 +73,23 @@ function simpleParts(key: string): Part[] {
   return parseNotation(key);
 }
 
-function moveRow(f: UiFighterDef, moveId: string, parts: Part[], note?: string): Row {
+const family = (id: string): string => id.replace(/\{s\}/g, 'm').replace(/_(l|m|h|ex)$/i, '');
+
+function moveRow(f: UiFighterDef, moveId: string, parts: Part[], note?: string, alt?: Part[]): Row {
   const id = f.moves?.[moveId] ? moveId : moveId.replace(/\{s\}/g, 'm');
   const m = f.moves?.[id] ?? null;
-  const desc = (m as { desc?: unknown } | null)?.desc;
+  const desc = m?.desc;
   const n = [note, typeof desc === 'string' ? desc : ''].filter(Boolean).join(' - ');
-  return { name: prettyMove(id, m, f.id), parts, startup: m?.startup, damage: m?.damage, note: n || undefined };
+  const active = m?.active ?? 0, recovery = m?.recovery ?? 0;
+  const block = m && typeof m.blockstun === 'number' && m.blockstun > 0 && m.kind !== 'throw' && m.kind !== 'cmdgrab' && m.kind !== 'super3'
+    ? m.blockstun - (active + recovery) : undefined;
+  return { name: prettyMove(id, m, f.id), parts, alt, startup: m?.startup, damage: m?.damage, block, note: n || undefined, id };
+}
+
+/** the SIMPLE key routing to a move family (5S / 6S / 2S / 4S), if any */
+function simpleKeyFor(simple: Record<string, unknown>, fam: string): string | null {
+  for (const k of ['5S', '6S', '2S', '4S']) { const v = simple[k]; if (typeof v === 'string' && family(v) === fam) return k; }
+  return null;
 }
 
 export function buildRows(f: UiFighterDef, scheme: Scheme): Array<[string, Row[]]> {
@@ -85,15 +99,22 @@ export function buildRows(f: UiFighterDef, scheme: Scheme): Array<[string, Row[]
   const classic = f.classic ?? [];
   const ids = Object.keys(moves);
   const ofKind = (...k: string[]): string[] => ids.filter((id) => k.includes(moves[id].kind));
+  const classicFor = (fam: string): { motion: string; btn: string } | null => {
+    const c = classic.find((x) => family(x.move) === fam && x.btn !== 'S');
+    return c ? { motion: c.motion, btn: c.btn } : null;
+  };
+  const cParts = (c: { motion: string; btn: string }): Part[] => [...parseNotation(c.motion), { plus: true }, ...(c.btn === 'S' ? [{ b: 'S' }] : c.btn.length > 1 ? [{ b: 'LMH' }] : [{ b: c.btn }])];
 
   // supers
   const sup: Row[] = [];
+  const lv1 = [...parseNotation('236236'), { plus: true }, { b: 'LMH' }];
+  const lv3 = [...parseNotation('214214'), { plus: true }, { b: 'LMH' }];
   if (scheme === 0) {
-    if (typeof simple['S+H'] === 'string') sup.push(moveRow(f, simple['S+H'] as string, simpleParts('S+H'), t('ml.lv1')));
-    if (typeof simple['S+H+2'] === 'string') sup.push(moveRow(f, simple['S+H+2'] as string, simpleParts('S+H+2'), t('ml.lv3')));
+    if (typeof simple['S+H'] === 'string') sup.push(moveRow(f, simple['S+H'] as string, simpleParts('S+H'), t('ml.lv1'), lv1));
+    if (typeof simple['S+H+2'] === 'string') sup.push(moveRow(f, simple['S+H+2'] as string, simpleParts('S+H+2'), t('ml.lv3'), lv3));
   } else {
-    for (const id of ofKind('super1')) sup.push(moveRow(f, id, [...parseNotation('236236'), { plus: true }, { b: 'LMH' }], t('ml.lv1')));
-    for (const id of ofKind('super3')) sup.push(moveRow(f, id, [...parseNotation('214214'), { plus: true }, { b: 'LMH' }], t('ml.lv3')));
+    for (const id of ofKind('super1')) sup.push(moveRow(f, id, lv1, t('ml.lv1'), simpleParts('S+H')));
+    for (const id of ofKind('super3')) sup.push(moveRow(f, id, lv3, t('ml.lv3'), simpleParts('S+H+2')));
   }
   if (sup.length) secs.push([t('ml.supers'), sup]);
 
@@ -101,21 +122,27 @@ export function buildRows(f: UiFighterDef, scheme: Scheme): Array<[string, Row[]
   const spc: Row[] = [];
   const ex: Row[] = [];
   if (scheme === 0) {
-    for (const k of ['5S', '6S', '2S', '4S']) if (typeof simple[k] === 'string') spc.push(moveRow(f, simple[k] as string, simpleParts(k)));
+    for (const k of ['5S', '6S', '2S', '4S']) {
+      if (typeof simple[k] !== 'string') continue;
+      const c = classicFor(family(simple[k] as string));
+      spc.push(moveRow(f, simple[k] as string, simpleParts(k), undefined, c ? cParts(c) : undefined));
+    }
     for (const k of ['5S', '6S', '2S', '4S']) {
       if (typeof simple[k] !== 'string') continue;
       // CONTRACT 19.2: EX = the routed id with a trailing _l|_m|_h replaced by _ex (explicit A5S.. keys override)
       const explicit = simple[`A${k}`];
       const exId = typeof explicit === 'string' ? explicit : (simple[k] as string).replace(/_(l|m|h)$/i, '_ex');
-      if (moves[exId]) ex.push(moveRow(f, exId, [{ b: 'ASSIST' }, { plus: true }, ...simpleParts(k)], t('ml.nerve', { n: 2 })));
+      const c = classicFor(family(exId));
+      if (moves[exId]) ex.push(moveRow(f, exId, [{ b: 'ASSIST' }, { plus: true }, ...simpleParts(k)], t('ml.nerve', { n: 2 }), c ? [...parseNotation(c.motion), { plus: true }, { b: 'S' }] : undefined));
     }
   } else {
     for (const c of classic) {
       const btnParts: Part[] = c.btn === 'S' ? [{ b: 'S' }] : c.btn.length > 1 ? [{ b: 'LMH' }] : [{ b: c.btn }];
-      if (c.btn !== 'S') spc.push(moveRow(f, c.move, [...parseNotation(c.motion), { plus: true }, ...btnParts]));
+      const sk = simpleKeyFor(simple, family(c.move));
+      if (c.btn !== 'S') spc.push(moveRow(f, c.move, [...parseNotation(c.motion), { plus: true }, ...btnParts], undefined, sk ? simpleParts(sk) : undefined));
       // CONTRACT 19.2: motion + S = the `{s}` -> ex id whenever it exists
       const exId = c.move.includes('{s}') ? c.move.replace('{s}', 'ex') : c.btn === 'S' ? c.move : '';
-      if (exId && moves[exId]) ex.push(moveRow(f, exId, [...parseNotation(c.motion), { plus: true }, { b: 'S' }], t('ml.nerve', { n: 2 })));
+      if (exId && moves[exId]) ex.push(moveRow(f, exId, [...parseNotation(c.motion), { plus: true }, { b: 'S' }], t('ml.nerve', { n: 2 }), sk ? [{ b: 'ASSIST' }, { plus: true }, ...simpleParts(sk)] : undefined));
     }
   }
   if (spc.length) secs.push([t('ml.specials'), spc]);
@@ -134,15 +161,25 @@ export function buildRows(f: UiFighterDef, scheme: Scheme): Array<[string, Row[]
   // throws
   const thr = ofKind('throw', 'cmdgrab').map((id) => moveRow(f, id, parseNotation(moves[id].input ?? 'L+M')));
   if (thr.length) secs.push([t('ml.throws'), thr]);
-
-  // unique: the kind's label + the fighter's trait line (strings trait.<fighter> first, then the data's `trait`)
-  if (f.unique && f.unique.kind) {
-    const k = f.unique.kind;
-    const raw = (f.unique as { trait?: unknown }).trait;
-    const trait = tOr(`trait.${f.id}`, typeof raw === 'string' ? raw : '');
-    if (k !== 'none' || trait) secs.push([t('ml.unique'), [{ name: k === 'none' ? (f.persona ?? f.name).toUpperCase() : tOr(`ml.unique.${k}`, k.toUpperCase()), parts: [], note: trait || undefined }]]);
-  }
   return secs;
+}
+
+/** the fighter's UNIQUE MECHANIC: title, how it works (strings ml.how.<kind>), the fighter's trait, the moves that use it */
+export function uniqueCard(f: UiFighterDef): { title: string; how: string; trait: string; moves: string[] } | null {
+  const u = f.unique as ({ kind: string; trait?: string } & Record<string, unknown>) | undefined;
+  if (!u || !u.kind) return null;
+  const trait = typeof u.trait === 'string' && u.trait ? u.trait : tOr(`trait.${f.id}`, '');
+  const head = trait.includes(':') ? trait.slice(0, trait.indexOf(':')).trim() : '';
+  const title = head || (u.kind === 'none' ? (f.persona ?? f.name).toUpperCase() : tOr(`ml.unique.${u.kind}`, u.kind.toUpperCase()));
+  const body = trait.includes(':') ? trait.slice(trait.indexOf(':') + 1).trim() : trait;
+  const lists: unknown[] = [u.moves, u.enter, u.steps, u.armored].filter(Array.isArray);
+  const ids: string[] = [];
+  for (const l of lists) for (const id of l as unknown[]) if (typeof id === 'string' && !ids.includes(family(id))) ids.push(family(id));
+  const names = ids.slice(0, 6).map((id) => {
+    const real = f.moves?.[id] ? id : Object.keys(f.moves ?? {}).find((k) => family(k) === id) ?? id;
+    return prettyMove(real, f.moves?.[real] ?? null, f.id);
+  });
+  return { title, how: tOr(`ml.how.${u.kind}`, ''), trait: body, moves: [...new Set(names)] };
 }
 
 export function systemRows(): Row[] {
@@ -197,20 +234,40 @@ export class MoveList {
     this.body.replaceChildren();
     const secs = f ? buildRows(f, scheme) : [];
     if (!secs.length) this.body.append(el('p', 'hpm-ml-empty', t('ml.noData')));
-    if (scheme === 0 && secs.length) this.body.append(el('p', 'hpm-ml-tip', t('ml.simpleDmg')));
+    // the fighter's unique mechanic leads the list
+    const u = f ? uniqueCard(f) : null;
+    if (u) {
+      const card = div('hpm-ml-unique', this.body);
+      card.append(el('span', 'kick', t('ml.unique')), el('b', 'tt', u.title));
+      if (u.trait) card.append(el('p', 'trait', u.trait));
+      if (u.how) card.append(el('p', 'how', u.how));
+      if (u.moves.length) { const mv = div('mv', card); mv.append(el('span', 'k', t('ml.unique.moves'))); for (const n of u.moves) mv.append(el('span', 'tag', n)); }
+    }
+    if (secs.length) this.body.append(el('p', 'hpm-ml-tip', scheme === 0 ? t('ml.simpleDmg') : t('ml.classicTip')));
     secs.push([t('ml.system'), systemRows()]);
+    const colHead = (): HTMLElement => {
+      const h = div('hpm-ml-row head', this.body);
+      h.append(el('span', 'nm', ''), el('span', 'in', scheme === 0 ? t('ml.simple') : t('ml.classic')), el('span', 'fd', t('ml.col.startup')), el('span', 'fd', t('ml.col.dmg')), el('span', 'fd', t('ml.col.block')));
+      return h;
+    };
+    let first = true;
     for (const [title, rows] of secs) {
       const sec = div('hpm-ml-sec', this.body);
       sec.append(el('h4', 'hpm-cap', title));
+      if (first) { sec.append(colHead()); first = false; }
       for (const r of rows) {
         const row = div('hpm-ml-row', sec);
+        if (r.id) row.dataset.move = r.id;
         const nm = el('div', 'nm');
         nm.append(el('b', '', r.name));
         if (r.note) nm.append(el('span', 'note', r.note));
-        row.append(nm, renderParts(r.parts));
-        const fd = el('span', 'fd', typeof r.startup === 'number' ? `${r.startup}F` : '');
-        const dm = el('span', 'fd', typeof r.damage === 'number' ? String(r.damage) : '');
-        row.append(fd, dm);
+        const inp = el('div', 'in');
+        inp.append(renderParts(r.parts));
+        if (r.alt) { const a = el('span', 'alt'); a.append(el('span', 'k', scheme === 0 ? t('ml.classic') : t('ml.simple')), renderParts(r.alt, 'hpm-note small')); inp.append(a); }
+        row.append(nm, inp);
+        row.append(el('span', 'fd', typeof r.startup === 'number' ? `${r.startup}F` : ''), el('span', 'fd', typeof r.damage === 'number' ? String(r.damage) : ''));
+        const b = el('span', `fd adv${typeof r.block === 'number' ? (r.block > 0 ? ' plus' : r.block < 0 ? ' minus' : '') : ''}`, typeof r.block === 'number' ? (r.block > 0 ? `+${r.block}` : String(r.block)) : '');
+        row.append(b);
       }
     }
   }

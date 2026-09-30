@@ -233,9 +233,9 @@
   },
   "fridge_drop": {
     "src": "mixamo",
-    "file": "Soccer_Game_Pack/goalkeeper body block",
-    "range": [6, 40],
-    "contact": 22,
+    "file": "Creature_Pack/mutant jump attack",
+    "range": [40, 62],
+    "contact": 51,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
@@ -260,18 +260,14 @@
     "loop": false
   },
   "bear_hug": {
-    "src": "cmu",
-    "file": "18_05",
-    "range": [200, 330],
-    "contact": 301,
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper scoop",
+    "range": [28, 66],
+    "contact": 34,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "kind": "body",
-    "limb": "body",
-    "fist": 0,
-    "_cand": "grab_pull.1",
-    "marks": {"slam": 290}
+    "marks": {"slam": 55}
   },
   "throw_in": {
     "src": "mixamo",
@@ -280,8 +276,7 @@
     "contact": 50,
     "mirror": false,
     "speed": 1.0,
-    "loop": false,
-    "marks": {"slam": 72}
+    "loop": false
   },
   "freezer_slam": {
     "src": "mixamo",
@@ -291,7 +286,7 @@
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 69}
+    "marks": {"slam": 40}
   },
   "fridge_shove": {
     "src": "layer",
@@ -328,7 +323,8 @@
     "contact": 32,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 40}
   },
   "brace_step": {
     "src": "layer",
@@ -394,7 +390,7 @@
     "mirror": false,
     "speed": 1.0,
     "loop": false,
-    "marks": {"slam": 80}
+    "marks": {"slam": 33}
   },
   "intro_battlecry": {
     "src": "mixamo",
@@ -408,7 +404,7 @@
   "taunt_flex": {
     "src": "cmu",
     "file": "79_94",
-    "range": [241, 480],
+    "range": [580, 800],
     "contact": null,
     "mirror": false,
     "speed": 1.0,
@@ -419,17 +415,13 @@
     "_cand": "flex_taunt.1"
   },
   "win_flex": {
-    "src": "cmu",
-    "file": "79_94",
-    "range": [480, 721],
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant flexing muscles",
+    "range": [45, 105],
     "contact": null,
     "mirror": false,
     "speed": 1.0,
-    "loop": false,
-    "kind": "body",
-    "limb": "body",
-    "fist": 0,
-    "_cand": "flex_taunt.1"
+    "loop": false
   },
   "win_nod": {
     "src": "mixamo",

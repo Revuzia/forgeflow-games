@@ -13,6 +13,8 @@ Sources (read-only, local disk; the Unity packages are unpacked by build/extract
   * Travis Rise "SynthWave Music Pack 2" + "SynthWave Music Pack" tracks 03/04/07 (Unity Asset Store)
     - F:/games/unity-assets/Travis Rise__SynthWave Music Pack 2/ and Travis Rise__SynthWave Music Pack/
     (pack 1 tracks 01/02/05/06 are dyefield's: never read here)
+  * Evil Mind "Halloween Audio Kit" (Unity Asset Store) - "Halloween Rocks" + "Retro Madness", the P2 bonus-round cues
+    (F:/games/unity-assets/Evil Mind__Halloween Audio Kit Music Ambience Effects/)
   * Daniel Gooding "Action RPG Characters" (Unity Asset Store) - female fighter efforts
   * Kenney "Impact Sounds" (CC0), Sonniss #GameAudioGDC 2024 (royalty free) - a few layers
   * offline-synthesised layers (numpy; fixed seeds): the game-show buzzer
@@ -71,13 +73,14 @@ IMP = "F:/games/unity-assets/Imphenzia__Universal Sound FX/Assets/Universal Soun
 TR2 = "F:/games/unity-assets/Travis Rise__SynthWave Music Pack 2/Assets/Music/TR_SYNTHWAVE_2"
 TR1 = "F:/games/unity-assets/Travis Rise__SynthWave Music Pack/Assets/Music/TR_SYNTHWAVE"
 DG = "F:/games/unity-assets/Daniel Gooding__Action RPG Characters/Assets/Action RPG Characters/Vocal Files"
+EMH = "F:/games/unity-assets/Evil Mind__Halloween Audio Kit Music Ambience Effects/Assets/Halloween Audio Kit"
 FFA = "F:/games/forgeflow-games-assets"
 SONNISS = FFA + "/sonniss-gdc2024"
 K_IMP = FFA + "/impact-sounds/Audio"
 
 # encoder settings (kb/s). Opus VBR; AAC-LC twins (ffmpeg native encoder)
 OPUS_KBPS = {"ui": 40, "sfx": 40, "crowd": 56, "music": 64}
-AAC_KBPS = {"ui": 56, "sfx": 56, "crowd": 80, "music": 80}
+AAC_KBPS = {"ui": 48, "sfx": 48, "crowd": 80, "music": 80}   # P2: ui/sfx twins 56 -> 48 kb/s (budget; the twin serves WebKit < 18.4 only)
 SPRITE_CH = {"ui": 1, "sfx": 1, "crowd": 2}
 PAYLOAD_BUDGET = 12_000_000          # CONTRACT s9: shipped audio <= 12 MB - checked on Ogg + AAC together
 TP_TARGET = -1.5                     # pre-encode true peak
@@ -88,7 +91,7 @@ LEAD_DB = -30.0                      # lead-in trim / gate threshold, dB below t
 LEAD_GATE_MS = 8.0                   # decoded lead-in allowed (3 ms pre-roll + codec smear)
 SILENCE_DB = -45.0                   # 'silence' threshold for the no-dead-air gate of soft-onset sounds
 SOFT_ONSET_MS = 40.0                 # voices / crowd / stings may swell in (a breath, a laugh) - never dead air
-SOFT_CATS = {"voice", "ann", "crowd", "sting", "ui", "splat", "foley"}
+SOFT_CATS = {"voice", "ann", "crowd", "sting", "ui", "splat", "foley", "amb"}   # P2: stage ambience (thunder rolls in)
 GUARD = 0.06                         # s of wrap-around written around each sprite loop region
 GAP = 0.05                           # s of silence between sprite regions
 
@@ -314,6 +317,25 @@ def loop_xfade(seg: np.ndarray, L: int, X: int) -> np.ndarray:
         fi, fo = fi[:, None], fo[:, None]
     out[:X] = seg[:X] * fi + seg[L:L + X] * fo
     return out
+
+
+def limit(x: np.ndarray, ceiling_db: float, look: float = 0.004, release: float = 0.12) -> np.ndarray:
+    """transparent-ish lookahead peak limiter (stereo-linked): gain = min(1, ceiling / (max |x| over the next `look` s)),
+    smoothed with a one-pole release and never above the instantaneous requirement. Used on dense music masters whose
+    peaks would otherwise keep them under their LUFS target (P2: Halloween Rocks). Apply to a loop via circular()."""
+    from scipy.ndimage import maximum_filter1d, uniform_filter1d
+    a = np.abs(x).max(axis=1) if x.ndim == 2 else np.abs(x)
+    L = max(2, n_of(look))
+    env = maximum_filter1d(a, size=2 * L + 1, mode="nearest")      # lookahead: the reduction starts L samples early
+    need = np.minimum(1.0, db2(ceiling_db) / np.maximum(env, 1e-9))
+    need = uniform_filter1d(need, size=L, mode="nearest")          # attack ramp (inside the lookahead window)
+    k = math.exp(-1.0 / (release * SR))
+    g = np.empty_like(need)
+    cur = 1.0
+    for i, t in enumerate(need.tolist()):                          # instant attack, exponential release
+        cur = t if t < cur else t + (cur - t) * k
+        g[i] = cur
+    return x * (g[:, None] if x.ndim == 2 else g)
 
 
 def step995(x: np.ndarray) -> float:
@@ -620,7 +642,167 @@ def build_table() -> dict:
         lambda: ST("CROWDS/Hall/AUDIENCE_Clapping_Hall_06", maxdur=3.0))
     add("crowd_laugh", "crowd", "crowd", lambda: ST(f"{A}/AUDIENCE_Hahaha_03"), lambda: ST(f"{A}/AUDIENCE_Hahaha_01"))
     add("crowd_claps", "crowd", "crowd", lambda: ST(f"{A}/AUDIENCE_Claps_Multi_02"))
+    build_table_p2(add, P, L)
     return T
+
+
+def seamless(x: np.ndarray, X: float = 0.1) -> np.ndarray:
+    """a designed loop made click-free at its own wrap (its tail crossfaded into its head), so np.tile of it has no seams"""
+    n = min(n_of(X), len(x) // 4)
+    return loop_xfade(x, len(x) - n, n)
+
+
+def tile_to(x: np.ndarray, sec: float) -> np.ndarray:
+    n = n_of(sec)
+    reps = int(math.ceil(n / len(x)))
+    return np.tile(x, reps)[:n] if x.ndim == 1 else np.tile(x, (reps, 1))[:n]
+
+
+def far(x: np.ndarray) -> np.ndarray:
+    """a shout from the stands: band-limited + two quiet slap echoes (the hall), so it reads as crowd, not as a fighter"""
+    y = lp(hp(x, 180, 2), 4200, 2)
+    return mix((y, 0, 0), (y, 0.055, -11), (y, 0.13, -17))
+
+
+def build_table_p2(add, P, L) -> None:
+    """lane AUDIO P2 content (CONTRACT s9.2): projectiles by clip, prop / weapon layers, goons, heckle objects, PRIME TIME
+    stingers, online-lobby UI cues, stage ambiences. Every id is referenced by router.ts (PROJ_SOUNDS, WEAPON_SOUNDS,
+    CINE_BEATS, AMBIENT_BY_STAGE, UI_ALIASES, SFX_CUE_ALIASES, STATE_SOUNDS); probe_audio.ts proves both directions."""
+    I_ = lambda rel: I(rel)
+    # -- projectiles: wind-up (the move's frame-0 SFX_CUE) / release (PROJ_SPAWN) / impact (PROJ_HIT), router.ts PROJ_SOUNDS
+    add("brick_smash", "sfx", "impact", *[(lambda r=r, c=c: mix((P(f"IMPACTS/Bricks/IMPACT_Brick_vs_Brick_RR{r}"), 0, 0), (P(f"BREAKS_SNAPS/{c}"), 0.002, -5),
+                                                                (P(f"IMPACTS/Bricks/IMPACT_Brick_vs_Hard_Ground_RR{r}"), 0.035, -8), (P("THUDS_THUMPS/THUD_Bright_02"), 0, -7)))
+                                           for r, c in (("1", "BREAK_Crunch_03"), ("2", "BREAK_Crunch_04"), ("3", "BREAK_Loud_Short_Crack"))], excite_db=-7)
+    add("card_riffle", "sfx", "foley", lambda: L("CARDS/CARDS_Shuffle_01", maxdur=0.34))
+    add("proj_card_saw", "sfx", "whiff", lambda: mix((L("CARDS/CARDS_Deal_01_loop", maxdur=0.9), 0, 0), (L("WHOOSHES/Air/WHOOSH_Air_Blade_RR1"), 0.0, -3),
+                                                     (L("MAGIC_SPELLS/MAGIC_SPELL_Metallic_Layers_Whoosh", maxdur=0.9), 0.02, -12)))
+    add("card_hit", "sfx", "impact", *[(lambda s=s, d=d: mix((P(f"BREAKS_SNAPS/SNAP_Generic_0{s}"), 0, 0), (L(f"CARDS/CARDS_Deal_02_RR{d}"), 0.0, -2),
+                                                             (P("IMPACTS/Slap/SLAP_Hand_Face_04"), 0.002, -8))) for s, d in (("2", "3"), ("4", "5"))])
+    add("flame_ignite", "sfx", "foley", lambda: L("MAGIC_SPELLS/MAGIC_SPELL_Flame_02", maxdur=0.45))
+    add("proj_flame", "sfx", "whiff", lambda: mix((L("MAGIC_SPELLS/MAGIC_SPELL_Flame_03", maxdur=1.0), 0, 0), (L("WHOOSHES/Classic/WHOOSH_Wide_Deep_Slow"), 0.02, -6)))
+    add("flame_hit", "sfx", "impact", *[(lambda fl=fl, e=e: mix((L(f"MAGIC_SPELLS/{fl}", maxdur=0.8), 0, 0), (P(f"EXPLOSIONS/Short/{e}", maxdur=0.7), 0, -5),
+                                                                (P("IMPACTS/Generic/IMPACT_Generic_06"), 0, -7)))
+                                         for fl, e in (("MAGIC_SPELL_Flame_Mechanical_01", "EXPLOSION_Short_Smooth_Clean_Deep"), ("MAGIC_SPELL_Flame_04", "EXPLOSION_Short_Bright_Kickback"))],
+        excite_db=-8)
+    add("gourd_swig", "sfx", "foley", lambda: mix((L("HUMAN/Eating_Drinking/DRINK_Surple", maxdur=0.26), 0, 0), (L("HUMAN/Eating_Drinking/EAT_Swallow", maxdur=0.3), 0.16, -3)))
+    add("proj_flame_breath", "sfx", "whiff", lambda: mix((L("CARTOON/POP_Mouth"), 0, -4), (L("MAGIC_SPELLS/MAGIC_SPELL_Flame_04", maxdur=0.9), 0.01, 0),
+                                                         (L("MAGIC_SPELLS/MAGIC_SPELL_Flame_01", maxdur=0.6), 0.04, -6)))
+    add("ball_bounce", "sfx", "impact", *[(lambda r=r: mix((P(f"SPORTS/Soccer/SOCCER_Bounce_Ball_0{r}", maxdur=0.5), 0, 0), (P("THUDS_THUMPS/THUD_Bright_01"), 0, -9)))
+                                           for r in ("1", "2", "3", "4")], excite_db=-6)
+    add("ball_hit", "sfx", "impact", *[(lambda k=k: mix((P(f"SPORTS/Soccer/SOCCER_Kick_Ball_{k}"), 0, 0), (P("THUDS_THUMPS/THUD_Bright_02"), 0.002, -3),
+                                                        (L("CARTOON/CARTOON_Boing_01"), 0.03, -16))) for k in ("05", "07")], excite_db=-7)
+    add("proj_ball_fire", "sfx", "impact", lambda: mix((P("SPORTS/Soccer/SOCCER_Kick_Ball_03"), 0, 0), (P("SPORTS/Boxing/BOXING_Pad_02"), 0, -8),
+                                                       (L("MAGIC_SPELLS/MAGIC_SPELL_Flame_03", maxdur=0.9), 0.01, -3)), excite_db=-6)
+    add("taser_charge", "sfx", "foley", lambda: mix((src(I_("CHARGE_UPS_DOWNS/CHARGE_Sci-Fi_High_Pass_Sweep_12_Semi_Up_500ms"), align="none", maxdur=0.34), 0, -2),
+                                                    (L("ELECTRICITY/ELECTRICITY_Sparks_01", maxdur=0.34), 0.03, -9)))
+    add("taser_hit", "sfx", "impact", lambda: mix((P("ZAPS/ZAP_Deep_02"), 0, 0), (L("ELECTRICITY/ELECTRICITY_Sparks_02", maxdur=0.7), 0.0, -3),
+                                                  (src(I_("ELECTRICITY/ELECTRICITY_Distorted_Fizzy_loop"), align="none", maxdur=0.55), 0.02, -9)), excite_db=-8)
+    add("spot_on", "sfx", "impact", lambda: mix((P("IMPACTS/Metal/IMPACT_Metal_Medium_Hollow_Single"), 0, -2), (P("THUDS_THUMPS/THUD_Dark_03_Short"), 0, -6),
+                                                (src(I_("ELECTRICITY/ELECTRICITY_Subtle_loop"), align="none", maxdur=0.55), 0.03, -9)), excite_db=-8)
+    add("proj_spot", "sfx", "whiff", lambda: mix((L("MAGIC_SPELLS/MAGIC_SPELL_Energy_Beam_03", maxdur=0.9), 0, 0),
+                                                 (src(I_("ELECTRICITY/ELECTRICITY_Subtle_loop"), align="none", maxdur=0.9), 0.0, -7)))
+    add("spot_hit", "sfx", "impact", lambda: mix((P("ZAPS/ZAP_Bright_02"), 0, 0), (P("GLASS/GLASS_Hit_01"), 0.004, -3), (L("ELECTRICITY/ELECTRICITY_Spark_03"), 0.01, -6)))
+    add("pyro_fuse", "sfx", "foley", lambda: L("FIREWORKS/FIREWORKS_Fuse_Hissing_01", maxdur=0.34))
+    add("proj_pyro", "sfx", "whiff", lambda: mix((L("FIREWORKS/FIREWORKS_Rocket_Launch_Crop_RR1", maxdur=0.7), 0, 0),
+                                                 (L("MAGIC_SPELLS/MAGIC_SPELL_Flame_Mechanical_01", maxdur=0.6), 0.02, -6)))
+    add("pyro_hit", "sfx", "impact", *[(lambda r=r, e=e: mix((P(f"FIREWORKS/FIREWORKS_Rocket_Explode_RR{r}", maxdur=0.9), 0, 0),
+                                                             (P(f"EXPLOSIONS/Short/{e}", maxdur=0.7), 0, -4), (L("FIREWORKS/FIREWORKS_Rocket_Explode_Sparkle", maxdur=1.0), 0.05, -12)))
+                                        for r, e in (("1", "EXPLOSION_Short_Bright_Kickback"), ("3", "EXPLOSION_Short_Impact_Explosion"))], excite_db=-6)
+    # -- weapon / prop layers on HIT / BLOCK (router.ts WEAPON_RULES + WEAPON_SOUNDS). Cleaver = comic flat-side smack, no gore.
+    add("wpn_cleaver", "sfx", "layer", *[(lambda a=a, m=m: mix((P(f"TOOLS/Axe/AXE_Chop_Wood_0{a}", maxdur=0.55), 0, -2), (P(f"IMPACTS/Metal/{m}", maxdur=0.55), 0.002, -9),
+                                                               (P("IMPACTS/Slap/SLAP_Hand_Face_01"), 0, -6)))
+                                          for a, m in (("1", "IMPACT_Metal_Cling_Deep_Damped"), ("2", "IMPACT_Metal_Cling_Deep"), ("4", "IMPACT_Metal_Cling_Deep_Damped"))], excite_db=-8)
+    add("wpn_baton", "sfx", "layer", *[(lambda c=c, w=w: mix((P(f"WEAPONS/Melee/Club/CLUB_Impact_0{c}", maxdur=0.5), 0, 0), (P(f"WEAPONS/Melee/Blunt/BLUNT_Swing_Hit_Wood_0{w}", maxdur=0.5), 0.002, -5),
+                                                             (P("IMPACTS/Slap/SLAP_Hand_Face_03"), 0.001, -9)))
+                                        for c, w in (("1", "2"), ("2", "4"), ("1", "6"))], excite_db=-8)   # CLUB_Impact_03 is sub-dominated (0.75 < 150 Hz)
+    add("wpn_shield", "sfx", "layer", *[(lambda m=m: mix((P("WEAPONS/Melee/Hammer/HAMMER_Hit_Metal_Armor", maxdur=0.6), 0, -1), (P(f"IMPACTS/Metal/{m}", maxdur=0.6), 0.002, -3),
+                                                         (P("IMPACTS/Metal/IMPACT_Metal_Large_Rattle", maxdur=0.6), 0.01, -11)))
+                                         for m in ("IMPACT_Metal_Hit_Large_Sheet_Metal", "IMPACT_Metal_Hit_Sheet_Metal_RR2")], excite_db=-7)
+    add("wpn_cane", "sfx", "layer", *[(lambda c=c: mix((P("IMPACTS/Metal/IMPACT_Metal_Crowbar_Hard_Surface", maxdur=0.6), 0, -2), (P(f"IMPACTS/Metal/{c}"), 0.002, -5),
+                                                       (P("SPORTS/Boxing/BOXING_Pad_02"), 0, -8))) for c in ("IMPACT_Metal_Cling_Bright", "IMPACT_Metal_Cling_Dual_Tone")],
+        excite_db=-8)
+    # -- BRAWL BREAK goons (router voice bank 'goon' = players' index 2 + slot, CONTRACT s9.2.7)
+    VF, VG, WB, WA = "VOICES/Fighting", "VOICES/Grunts_Groans_Hurt", "VOICES/Words_Phrases/Male_B", "VOICES/Words_Phrases/Male_A"
+    add("vo_goon_atk", "sfx", "voice", *[(lambda n=n: L(f"{VF}/FIGHTING_Chant_Short_Male_{n}", maxdur=0.55)) for n in ("01_RR1", "01_RR2", "02", "03")])
+    add("vo_goon_hurt", "sfx", "voice", *[(lambda n=n: L(f"{VG}/GRUNT_Male_B_Hurt_Short_0{n}", maxdur=0.6)) for n in ("5", "6", "7", "8")])
+    add("vo_goon_down", "sfx", "voice", lambda: L(f"{VG}/GROAN_Male_Hurt_Long_Pain", maxdur=1.0), lambda: L("VOICES/Screams/SCREAM_Male_B_05", maxdur=1.0))
+    add("vo_goon_taunt", "sfx", "voice", lambda: L(f"{WB}/VOICE_Male_B_ShutUp_01"), lambda: L(f"{WB}/VOICE_Male_B_Stop_It_01"), lambda: L(f"{WB}/VOICE_Male_B_Attack_Deep_01"))
+    add("goon_spawn", "sfx", "body", lambda: mix((P("IMPACTS/Metal/IMPACT_Metal_Hit_Sheet_Metal_RR1"), 0, -2), (P("THUDS_THUMPS/THUD_Dark_02"), 0.004, -4),
+                                                 (L("FABRIC_CLOTHING/FABRIC_Movement_Fast_01"), 0.05, -9)), excite_db=-7)
+    add("goon_hit", "sfx", "layer", *[(lambda s=s: mix((P(f"THUDS_THUMPS/THUD_Squishy_0{s}"), 0, 0), (P("SPORTS/Boxing/BOXING_Punch_03"), 0, -4))) for s in ("1", "5")],
+        excite_db=-7)
+    # -- HECKLER TOSS: shouts from the stands + one landing sound per object (system.json heckler.objects: tomato, bottle,
+    #    shoe, chair; the bottle is the P1 heckle_smash; router.ts HECKLE_OBJ_SOUNDS)
+    add("vo_heckle", "sfx", "voice", *[(lambda w=w: far(L(f"{WA}/{w}"))) for w in ("VOICE_MALE_Hey_2_Aggressive", "VOICE_MALE_Get_Out_1_Aggressive",
+                                                                                   "VOICE_MALE_Quit_It_1_US", "VOICE_MALE_Stop_It_1")])
+    add("splat_tomato", "sfx", "splat", *[(lambda s=s, t=t: mix((P(f"GORE_SPLATS/SPLAT_Generic_{s}", pre=0.004, maxdur=0.7), 0, 0), (P(f"THUDS_THUMPS/THUD_Squishy_0{t}", maxdur=0.6), 0, -4)))
+                                           for s, t in (("04", "1"), ("05", "2"), ("07", "3"))])
+    add("heckle_thud", "sfx", "body", *[(lambda t=t: mix((P(f"THUDS_THUMPS/THUD_Bright_0{t}"), 0, 0), (P("SPORTS/Boxing/BOXING_Pad_01"), 0, -5),
+                                                         (L("FABRIC_CLOTHING/FABRIC_Flap_03"), 0.01, -9))) for t in ("1", "3")], excite_db=-7)
+    add("chair_crash", "sfx", "body", *[(lambda w=w, c=c: mix((P(f"IMPACTS/Wood/IMPACT_Wood_Plank_On_Wood_Pile_{w}"), 0, 0), (P(f"BREAKS_SNAPS/{c}"), 0.004, -4),
+                                                              (P("THUDS_THUMPS/THUD_Dark_02"), 0, -5)))
+                                         for w, c in (("04_Multiple", "BREAK_Crunch_04"), ("15_Multiple", "BREAK_Loud_Short_Crack"))], excite_db=-6)
+    add("heckle_deflect", "sfx", "impact", *[(lambda b=b: mix((P(f"WEAPONS/Melee/Blunt/BLUNT_Swing_Hit_Generic_0{b}"), 0, 0), (L("WHOOSHES/Classic/WHOOSH_Short_02"), 0.01, -9),
+                                                              (L("CARTOON/CARTOON_Boing_02"), 0.02, -15))) for b in ("2", "5")], excite_db=-8)
+    # -- PRIME TIME stingers + cinematic beat sounds (router.ts CINE_BEATS)
+    ME = "MUSIC_EFFECTS"
+    add("cine_open", "sfx", "sting", lambda: mix((L("TIME_WARPS/TIME_WARP_Start_03", maxdur=1.1), 0, -3), (L("PUZZLES/PUZZLE_Success_Brass_Stab_Wet"), 0.0, 0),
+                                                 (L("FOLEY/CAMERA/CAMERA_Shutter_01"), 0.0, -7)))
+    add("cine_finish", "sfx", "sting", lambda: mix((L(f"{ME}/MUSIC_EFFECT_Orchestral_Battle_Neutral", maxdur=2.2), 0, 0),
+                                                   (P("EXPLOSIONS/Short/EXPLOSION_Short_Bang_Reverb", maxdur=1.2), 0, -7)))
+    add("cine_end", "sfx", "sting", lambda: mix((L("TIME_WARPS/TIME_WARP_Stop_03", maxdur=1.0), 0, -4), (L(f"{ME}/MUSIC_EFFECT_Platform_Positive_03a_Fast", maxdur=1.6), 0.05, 0)))
+    add("cine_cut", "sfx", "whiff", *[(lambda s=s: mix((L("WHOOSHES/Classic/WHOOSH_Short_02"), 0, -2), (L(f"FOLEY/CAMERA/CAMERA_Shutter_0{s}"), 0.0, 0))) for s in ("2", "3")])
+    add("tv_static", "sfx", "sting", lambda: src(I_("AMBIENCES/SciFi/AMBIENCE_SciFi_Static_Tonal_loop"), align="none", maxdur=0.6))
+    add("magic_poof", "sfx", "sting", lambda: mix((L("CARTOON/CARTOON_Vanish_01", maxdur=1.0), 0, 0), (L("CARTOON/CARTOON_Magic_01", maxdur=1.0), 0.02, -5)))
+    add("magic_tada", "sfx", "sting", lambda: mix((L("CARTOON/CARTOON_Magic_01", maxdur=0.8), 0, -2), (L("MUSIC_EFFECTS/Solo_Orchestral_Brass/MUSIC_EFFECT_Orchestral_Brass_Positive_02", maxdur=1.6), 0.08, 0)))
+    add("trapdoor", "sfx", "body", lambda: mix((P("IMPACTS/Wood/IMPACT_Wood_Plank_On_Wood_Pile_06_Short"), 0, 0), (P("THUDS_THUMPS/THUD_Dark_02"), 0.004, -4),
+                                               (L("FABRIC_CLOTHING/FABRIC_Flap_02"), 0.02, -10)), excite_db=-7)
+    add("light_flicker", "sfx", "foley", lambda: mix((L("ELECTRICITY/ELECTRICITY_Sparks_01", maxdur=0.6), 0, 0),
+                                                     (src(I_("ELECTRICITY/ELECTRICITY_Fuzzy_Spikey_loop"), align="none", maxdur=0.6), 0.05, -6)))
+    add("order_up", "sfx", "bell", lambda: L("FOLEY/DOOR_BELLS/DOOR_BELL_Ding_Dong_01", maxdur=0.9))
+    # -- online lobby UI cues (ui sprite; router.ts UI_ALIASES, CONTRACT s9.2.6)
+    UN, UB, UA = "USER_INTERFACES/Notifications", "USER_INTERFACES/Beeps", "USER_INTERFACES/Appear_Disappear"
+    add("ui_search", "ui", "ui", lambda: L("NOTIFICATIONS/NOTIFICATION_Subtle_03", maxdur=0.5))
+    add("ui_found", "ui", "sting", lambda: mix((L(f"{UN}/UI_Notification_Four_Rising_Taps_01", maxdur=0.8), 0, 0), (L("PUZZLES/PUZZLE_Success_Brass_Stab_Wet", maxdur=0.7), 0.3, -4)))
+    add("ui_join", "ui", "ui", lambda: L(f"{UN}/UI_Notification_Double_Tap_Soft_Bells_01", maxdur=0.9))
+    add("ui_leave", "ui", "ui", lambda: L(f"{UB}/UI_Beep_Double_Clean_Down"))
+    add("ui_ready", "ui", "ui", lambda: mix((P("SPORTS/Boxing/BOXING_Pad_04"), 0, 0), (L(f"{UB}/UI_Beep_Single_Clean_Distinct"), 0.0, -6)), excite_db=-8)
+    add("ui_reveal", "ui", "sting", lambda: mix((L(f"{UA}/UI_Animate_Zap_Swoosh_Appear"), 0, -2), (L("PUZZLES/PUZZLE_Success_Brass_Stab_Wet"), 0.12, -6)))
+    add("ui_code", "ui", "ui", lambda: L(f"{UA}/UI_3_Clicks_02_Appear"))
+    add("ui_rematch", "ui", "sting", lambda: L("PUZZLES/PUZZLE_Success_Guitar_1_Fast_Three_Note_Climb_Dry", maxdur=1.4))
+    add("ui_disconnect", "ui", "ui", lambda: L(f"{UN}/UI_Notification_Denied_03", maxdur=0.9))
+    add("ui_countdown", "ui", "ui", lambda: L("NOTIFICATIONS/NOTIFICATION_Click_05", maxdur=0.3))
+    # -- stage ambiences (mono loops in the sfx sprite, crowd bus; router.ts AMBIENT_BY_STAGE). Designed loops are made
+    #    seamless first, tiled to the loop length, spot sounds baked in at fixed offsets.
+    def amb(parts: list, sec: float) -> np.ndarray:
+        out = np.zeros(n_of(sec))
+        for rel, g, kind, at in parts:
+            x = mono_of(src(I_(rel), align="none"))
+            if kind == "loop":
+                y = tile_to(seamless(x), sec)
+            else:
+                y = np.zeros(n_of(sec))
+                x = trim_tail(x, -50.0)
+                o = n_of(at)
+                k = min(len(x), len(y) - o)
+                y[o:o + k] = x[:k]
+            out += y * db2(g)
+        return out
+    add("amb_rust_theater", "sfx", "amb", lambda: amb([("ELEMENTS/Fire/FIRE_Campfire_Calm_01_loop", 0, "loop", 0), ("ELEMENTS/Fire/FIRE_Campfire_Calm_02_loop", -4, "loop", 0)], 5.0),
+        loop=True, note="torch crackle")
+    add("amb_butcher_block", "sfx", "amb", lambda: amb([("MACHINES/Household_Appliances/APPLIANCE_Fridge_Hum_06_Interior_Freezer_loop", 0, "loop", 0),
+                                                         ("ELEMENTS/Water/Drops/DROP_Designed", -9, "spot", 1.1), ("ELEMENTS/Water/Drops/DROP_Designed", -14, "spot", 3.55)], 4.9),
+        loop=True, note="walk-in freezer hum + drips")
+    add("amb_wheel_of_pain", "sfx", "amb", lambda: amb([("ELECTRICITY/ELECTRICITY_Subtle_loop", -2, "loop", 0),
+                                                         ("FOLEY/CLOCKS/CLOCK_Grandfather_Clock_02_Tick_RR1", -9, "spot", 0.6), ("FOLEY/CLOCKS/CLOCK_Grandfather_Clock_02_Tick_RR2", -11, "spot", 1.8),
+                                                         ("FOLEY/CLOCKS/CLOCK_Grandfather_Clock_02_Tick_RR4", -9, "spot", 3.0), ("FOLEY/CLOCKS/CLOCK_Grandfather_Clock_02_Tick_RR6", -11, "spot", 4.2)], 4.8),
+        loop=True, note="neon buzz + the wheel's ratchet ticks")
+    add("amb_rooftop", "sfx", "amb", lambda: amb([("ELEMENTS/Water/Rain/RAIN_Suburban_Medium_loop", 0, "loop", 0), ("WIND/WIND_Storm_Blowing_Deep_01_loop", -7, "loop", 0)], 5.5),
+        loop=True, note="night rain + wind (thunder one-shots: amb_thunder)")
+    add("amb_control_room", "sfx", "amb", lambda: amb([("AMBIENCES/SciFi/AMBIENCE_SciFi_Hum_03_loop", 0, "loop", 0), ("HVAC/COOLING/COOLING_AC_Airconditioner_01_loop", -9, "loop", 0),
+                                                        (f"{UB}/UI_Beep_Single_Subtle_Muffled", -17, "spot", 1.7), (f"{UB}/UI_Beep_Double_Quick_Deep_Muffled", -19, "spot", 3.9)], 5.0),
+        loop=True, note="equipment hum + air handling + monitor beeps")
+    add("amb_thunder", "sfx", "amb", lambda: L("THUNDER/THUNDER_Rumble_01", maxdur=2.4, fout=0.9))
 
 
 def decorrelate(x: np.ndarray) -> np.ndarray:
@@ -642,6 +824,18 @@ MUSIC = {
     "control_room": {"track": "Chasm", "pack": 2, "file": TR2 + "/05_Chasm/05_TR_Chasm_FULL.wav", "bpm": 100, "t0": 144.90, "bars": 16, "loop": True, "lufs": -16.0},
     "boss": {"track": "Anxiety", "pack": 2, "file": TR2 + "/04_Anxiety/04_TR_Anxiety_FULL.wav", "bpm": 100, "t0": 51.02, "bars": 16, "loop": True, "lufs": -15.5},
     "miniboss": {"track": "Darkness Behind", "pack": 1, "file": TR1 + "/03_DarknessBehind/03_TR_DarknessBehind_FULL.wav", "bpm": 90, "t0": 126.00, "bars": 12, "loop": True, "lufs": -16.0},
+    # P2 bonus rounds (CONTRACT s9.2.1): unused Evil Mind tracks (registry lists none of them; no other FFG game uses them).
+    # Bar grids measured on the decoded mp3 (spectral-flux comb over BPM +-2 at 0.01 steps, downbeat = the strongest of the
+    # 4 beat phases; P2 lane report): Halloween Rocks 130.01 BPM, bar lines at 1.163 s + k * 1.846 s, 4-bar breaks at bars
+    # 7 / 11 / 23 / 27 -> the 16 bars 12..27 (t0 = bar 12) end on the break that leads back into bar 12 (next-bar spectral
+    # similarity 0.995, per-bar RMS std 0.93 dB). Retro Madness 99.97 BPM, bar lines at 0.895 s + k * 2.4007 s -> bars 1..8
+    # (t0 = bar 1; the pad section starts on bar 9, so the loop never cuts it; similarity 0.992, std 0.45 dB).
+    "brawl": {"track": "Halloween Rocks", "author": "Evil Mind", "packname": "Halloween Audio Kit (Music, Ambience, Effects)",
+              "registry": "Evil Mind/Halloween Audio Kit/Halloween Rocks", "file": EMH + "/Music/Halloween Rocks.mp3", "bpm": 130.0, "t0": 23.315,
+              "bars": 16, "loop": True, "lufs": -16.0, "limit": True},
+    "heckler": {"track": "Retro Madness", "author": "Evil Mind", "packname": "Halloween Audio Kit (Music, Ambience, Effects)",
+                "registry": "Evil Mind/Halloween Audio Kit/Retro Madness", "file": EMH + "/Music/Retro Madness.mp3", "bpm": 99.97, "t0": 3.296,
+                "bars": 8, "loop": True, "lufs": -16.0},
     # results jingles: the last bars + ring-out of two of the same tracks (no extra track is used for them)
     "win": {"track": "Outbreak", "pack": 2, "file": TR2 + "/02_Outbreak/02_TR_Outbreak_FULL.wav", "bpm": 100, "t0": 210.75, "dur": 8.25, "loop": False, "lufs": -15.0,
             "fin": 0.03, "fout": 1.2},
@@ -652,8 +846,17 @@ XFADE = 0.06
 
 
 def registry_key(m: dict) -> str:
+    if m.get("registry"):
+        return m["registry"]
     folder = os.path.basename(os.path.dirname(m["file"]))
     return f"Travis Rise/SynthWave Music Pack{' 2' if m['pack'] == 2 else ''}/{folder}"
+
+
+def music_meta(m: dict) -> tuple[str, str]:
+    """(author, pack name) of a music source"""
+    if m.get("author"):
+        return m["author"], m["packname"]
+    return "Travis Rise", "SynthWave Music Pack 2" if m["pack"] == 2 else "SynthWave Music Pack"
 
 
 def build_music(tmp: str, report: dict, only: str | None) -> dict:
@@ -680,16 +883,38 @@ def build_music(tmp: str, report: dict, only: str | None) -> dict:
             raw_seam = seam = 0.0
             bars = 0
         i_lufs, tp = ebur128(x, True)
+        limited = 0.0
+        if m.get("limit") and (m["lufs"] - i_lufs) > TP_TARGET - true_peak_db(x):
+            # a dense master whose peaks would hold it under its LUFS target: level it, then a lookahead limiter
+            # (circular, so the loop wrap stays continuous) takes the peaks down to 0.5 dB under the pre-encode target
+            y = x * db2(m["lufs"] - i_lufs)
+            before = true_peak_db(y)
+            x = circular(y, lambda z: limit(z, TP_TARGET - 0.5))
+            limited = round(before - true_peak_db(x), 2)
+            i_lufs, _ = ebur128(x, True)
         gain = min(m["lufs"] - i_lufs, TP_TARGET - true_peak_db(x))
         x = x * db2(gain)
         wav = os.path.join(tmp, f"music_{cue}.wav")
-        write_wav(wav, x)
-        encode_opus(wav, ogg, OPUS_KBPS["music"], 2)
+        # lossy codecs overshoot a dense master (P2: Halloween Rocks' AAC twin read -0.7 dBTP at TP_TARGET): measure the
+        # decoded Opus AND its AAC twin, pull the cue down by the excess (+0.2 dB), re-encode; at most 4 passes
+        for _pass in range(4):
+            write_wav(wav, x)
+            encode_opus(wav, ogg, OPUS_KBPS["music"], 2)
+            tp_o = ebur128(ogg, True)[1]
+            tp_a = aac_twin(ogg, AAC_KBPS["music"], quiet=True)["tp"]
+            excess = max(tp_o, tp_a) - (TP_LIMIT - 0.2)
+            if excess <= 0:
+                break
+            x = x * db2(-(excess + 0.2))
+            gain -= excess + 0.2
+            print(f"  music {cue}: decoded tp Opus {tp_o:.2f} / AAC {tp_a:.2f} dBTP -> -{excess + 0.2:.2f} dB, re-encode", flush=True)
         dec = decode_file(ogg, 2)
         lufs_after, tp_after = ebur128(ogg, True)
+        author, packname = music_meta(m)
         info = {"file": f"assets/music_{cue}.ogg", "seconds": round(len(x) / SR, 6), "samples": len(x), "decoded": len(dec), "bytes": os.path.getsize(ogg),
-                "bpm": m["bpm"], "bars": bars, "loop": m["loop"], "lufs": round(lufs_after, 1), "tp": round(tp_after, 1), "gain_db": round(gain, 2),
-                "track": m["track"], "registry": registry_key(m), "t0": m["t0"], "seam_ratio": round(seam, 3), "raw_cut_seam_ratio": round(raw_seam, 2)}
+                "bpm": m["bpm"], "bars": bars, "loop": m["loop"], "lufs": round(lufs_after, 1), "tp": round(tp_after, 1), "gain_db": round(gain, 2), "limiter_db": limited,
+                "track": m["track"], "registry": registry_key(m), "author": author, "pack": packname, "t0": m["t0"], "seam_ratio": round(seam, 3),
+                "raw_cut_seam_ratio": round(raw_seam, 2)}
         out[cue] = info
         print(f"music {cue:14s} {m['track']:16s} {len(x) / SR:7.2f} s  {info['bytes'] / 1024:6.0f} KB  {lufs_after:6.1f} LUFS  tp {tp_after:5.1f}  "
               f"seam {seam:.2f} (raw cut {raw_seam:.1f})  decoded {len(dec)}/{len(x)}", flush=True)
@@ -804,12 +1029,15 @@ def build_sprite(name: str, table: dict, tmp: str, report: dict) -> dict:
         parts[sid] = xs
         entries[sid] = {"loop": d["loop"], "cat": d["cat"], "sprite": name, "credit": sorted(credit), "measure": meas_all, "note": d["note"]}
     # encode; lossy codecs overshoot bright / noisy takes by up to ~2 dB: measure every region in the decoded Opus AND the
-    # decoded AAC twin, pull the offenders down by their excess (+0.2 dB), re-encode; at most 5 passes
+    # decoded AAC twin, pull the offenders down by their excess (+0.2 dB), re-encode. P2: the AAC bit reservoir couples
+    # neighbouring regions, so a trim can push a neighbour over: up to 10 passes, the margin growing 0.1 dB per pass after
+    # the 3rd (P2 build 3 stopped at the old 5-pass cap with vo_goon_taunt#0 at -0.95 dBTP in the AAC twin)
     ogg = os.path.join(ASSETS, f"{name}.ogg")
     tpo: dict = {}
     tpa: dict = {}
     trims = {sid: [0.0] * len(parts[sid]) for sid in order}
-    for attempt in range(5):
+    for attempt in range(10):
+        margin = 0.2 + 0.1 * max(0, attempt - 2)
         sprite, where = assemble(order, parts, table, ch)
         wav = os.path.join(tmp, f"{name}.wav")
         write_wav(wav, sprite)
@@ -823,8 +1051,8 @@ def build_sprite(name: str, table: dict, tmp: str, report: dict) -> dict:
             for k in range(len(parts[sid])):
                 excess = max(tpo[sid][k], tpa[sid][k]) - (TP_LIMIT - 0.2)
                 if excess > 0:
-                    parts[sid][k] = parts[sid][k] * db2(-(excess + 0.2))
-                    trims[sid][k] += excess + 0.2
+                    parts[sid][k] = parts[sid][k] * db2(-(excess + margin))
+                    trims[sid][k] += excess + margin
                     fixes += 1
         print(f"  sprite {name} pass {attempt + 1}: {fixes} regions over {TP_LIMIT - 0.2:.1f} dBTP after Opus/AAC", flush=True)
         if fixes == 0:
@@ -954,12 +1182,22 @@ def credits(sprites: dict, music: dict) -> dict:
         p["sounds"].sort()
     tracks: dict[str, dict] = {}
     for cue, m in music.items():
-        t = tracks.setdefault(m["track"], {"title": m["track"], "cues": [], "pack": "SynthWave Music Pack 2" if "Pack 2" in m["registry"] else "SynthWave Music Pack",
-                                           "author": "Travis Rise", "source": "Unity Asset Store", "license": UAS, "registry": m["registry"]})
+        author = m.get("author") or "Travis Rise"
+        pack = m.get("pack") or ("SynthWave Music Pack 2" if "Pack 2" in m["registry"] else "SynthWave Music Pack")
+        t = tracks.setdefault(m["track"], {"title": m["track"], "cues": [], "pack": pack, "author": author, "source": "Unity Asset Store", "license": UAS,
+                                           "registry": m["registry"]})
         t["cues"].append(cue)
     sonniss_authors = sorted({v["author"] for k, v in packs.items() if k.startswith("sonniss:")})
+    by_author: dict[str, list[str]] = {}
+    for t in tracks.values():
+        by_author.setdefault(t["author"], []).append(t["title"])
+    music_lines = []
+    for author, titles in by_author.items():
+        pk = sorted({t["pack"] for t in tracks.values() if t["author"] == author})
+        where = "SynthWave Music Pack 1 + 2" if author == "Travis Rise" else " + ".join(pk)
+        music_lines.append("Music: " + ", ".join(f"\"{t}\"" for t in titles) + f" by {author} ({where}, Unity Asset Store)")
     lines = [
-        "Music: " + ", ".join(f"\"{t}\"" for t in tracks) + " by Travis Rise (SynthWave Music Pack 1 + 2, Unity Asset Store)",
+        *music_lines,
         "Sound effects, crowd and announcer: \"Universal Sound FX\" by Imphenzia (Unity Asset Store)",
         "Fighter voices: \"Action RPG Characters\" by Daniel Gooding (Unity Asset Store)",
     ]

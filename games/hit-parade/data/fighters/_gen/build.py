@@ -64,7 +64,17 @@ def write(path, text):
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="ascii", newline="\n") as fh:
         fh.write(text)
-    os.replace(tmp, path)
+    # CHANGED(FIGHTERS) P2: on Windows a concurrent reader (another lane's dev server / probe) can hold the target open
+    # for a moment and os.replace fails with WinError 5; retry for up to ~3 s instead of aborting the build
+    import time
+    for attempt in range(30):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 29:
+                raise
+            time.sleep(0.1)
 
 
 # ------------------------------------------------------------------------------------ source checks
@@ -193,9 +203,12 @@ def check_kit(K):
             err("%s %s: grab clip %r not in the clip plan" % (fid, mid, g["clip"]))
         c = m.get("cinematic")
         if c:
-            for _, cl in c.get("anim", []):
-                if cl not in K.clips:
-                    err("%s %s: cinematic clip %r not in the clip plan" % (fid, mid, cl))
+            for e in c.get("anim", []):
+                if e[1] not in K.clips and e[1] not in L.SHARED:
+                    err("%s %s: cinematic clip %r not in the clip plan" % (fid, mid, e[1]))
+            for e in c.get("victim", []):
+                if e[1] not in L.SHARED:
+                    err("%s %s: cinematic victim clip %r is not a shared clip" % (fid, mid, e[1]))
     for cid, e in K.clips.items():
         check_entry(fid, cid, e)
     for k in ("intro", "taunt"):
@@ -324,9 +337,11 @@ def fighter_md(K):
             note = ("hits: %s. " % ", ".join("f%d %d" % (x["f"][0], x["damage"]) for x in o["hits"])) + note
         if o.get("grab"):
             g = o["grab"]
-            note = ("grab: range %s m, lock %d f, dmg at f%d, %s. " % (
+            vic = "; victim " + ", ".join("f%d %s %.2f-%.2f s" % (v[0], v[1], v[2], v[3]) if len(v) >= 4 else
+                                          "f%d %s" % (v[0], v[1]) for v in g["victim"]) if g.get("victim") else ""
+            note = ("grab: range %s m, lock %d f, dmg at f%d, %s%s. " % (
                 g.get("rangeM", J["throwRangeM"]), g["frames"], g["hitF"],
-                "swap sides" if g["swap"] else "same side")) + note
+                "swap sides" if g["swap"] else "same side", vic)) + note
         A("| `%s` | %s | %s | %d | %d | %d | %d | %s | %s | %d | %s | %d | %s | %s | %s | %s |" % (
             mid, md_escape(o["name"]), md_escape(o["input"]), o["startup"], o["active"], o["recovery"], tot, oh,
             ob, o["damage"], o["guard"], o["hitstop"], md_escape(" ".join(o["cancel"])) or "-",
@@ -375,9 +390,39 @@ def fighter_md(K):
         A("")
         for line in getattr(K, "cine_doc", []):
             A("- %s" % line)
-        A("- attacker clips: %s" % ", ".join("f%d `%s`" % (f, cl) for f, cl in c["anim"]))
-        A("- victim clips: %s" % ", ".join("f%d `%s`" % (f, cl) for f, cl in c["victim"]))
-        A("- camera shots: %s" % ", ".join("f%d %s" % (f, s) for f, s in c["shots"]))
+        def tl(rows):
+            return ", ".join("f%d `%s`%s" % (e[0], e[1], (" %.2f-%.2f s" % (e[2], e[3])) if len(e) >= 4 else "")
+                             for e in rows)
+        A("- slate: \"%s\"; defender ends lying %s" % (c.get("slate", ""), c.get("endPose", "?")))
+        A("- attacker clips: %s" % tl(c["anim"]))
+        A("- victim clips: %s" % tl(c["victim"]))
+        if c.get("camera"):
+            A("- camera: %s" % "; ".join(
+                "f%d-%d %s on %s (fov %s, dist %s, h %s, yaw %s%s)" % (
+                    k["from"], k["to"], k["shot"], k["target"], k["fovDeg"], k["dist"], k["height"], k["yawDeg"],
+                    (", lookH %s" % k["lookH"]) if "lookH" in k else "") for k in c["camera"]))
+        else:
+            A("- camera shots: %s" % ", ".join("f%d %s" % (f, s_) for f, s_ in c["shots"]))
+        if c.get("fx"):
+            A("- fx: %s" % ", ".join("f%d %s%s" % (e["f"], e["fx"], ("@" + e["target"]) if "target" in e else "")
+                                     for e in c["fx"]))
+        if c.get("crowd"):
+            A("- crowd: %s" % ", ".join("f%d %s%s" % (e["f"], e["react"], ("/" + e["ratings"]) if "ratings" in e
+                                                        else "") for e in c["crowd"]))
+        if c.get("pathA"):
+            A("- attacker path (f, dx, lift m): %s; defender gap (f, gap, lift m): %s" % (
+                " ".join("[%d %.2f %.2f]" % tuple(e) for e in c["pathA"]),
+                " ".join("[%d %.2f %.2f]" % tuple(e) for e in c["gapD"])))
+        A("")
+    # CHANGED(FIGHTERS) P2: season text (CONTRACT 26.3)
+    if J.get("introLine"):
+        A("**Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).")
+        A("")
+        A("- intro: \"%s\"" % J["introLine"])
+        A("- win quotes: %s" % " / ".join("\"%s\"" % q for q in J["winQuotes"]))
+        for k, v in J["banter"].items():
+            A("- banter vs `%s`: \"%s\" ... \"%s\"" % (k, v[0], v[1]))
+        A("- ending: %s" % J["ending"])
         A("")
     # animation sources
     A("**Animation sources** (`tools/clipplan/%s.json`; every `anim.clip`, grab clip, cinematic clip, intro, "
@@ -392,8 +437,8 @@ def fighter_md(K):
         if m.get("grab") and m["grab"].get("clip"):
             users.setdefault(m["grab"]["clip"], []).append(mid + " (grab)")
         if m.get("cinematic"):
-            for _, cl in m["cinematic"]["anim"]:
-                users.setdefault(cl, []).append(mid + " (cine)")
+            for e in m["cinematic"]["anim"]:
+                users.setdefault(e[1], []).append(mid + " (cine)")
     for k in ("intro", "taunt"):
         users.setdefault(K.info[k], []).append(k)
     for w in K.info["win"]:
@@ -473,10 +518,20 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   idles/walks/blocks (Krane shield, Freak hunch, Rerun zombie, Spin uprock, Ricky cane, Boneyard cleaver, Bruno
   goalkeeper ready stance, Gazza offensive idle). Lotus's drunk sway idle/walks are stance clips
   (`unique.clips`), not overrides.
-- **Camera shot vocabulary** for `cinematic.shots` (view/cinematics.ts): `side_close`, `punch_in`, `front_low`,
-  `low_angle_up`, `top_down`, `over_shoulder`, `orbit`, `crowd_pop` (cut to crowd / ratings spike), `wide`,
-  `slowmo_hold` (hold the frame, time slows), `host_cam` (Ricky's host camera), `spotlight` (single spotlight,
-  set dimmed).
+- **Lv3 PRIME TIME cinematics (CONTRACT 26.1, v2, P2):** each Lv3 carries attacker / victim sub-clip timelines
+  `[f0, clip, fromS, toS]` (strike clips aligned so the clip contact lands on its `hits` frame: `Kit.seg(hit=...)`),
+  root paths (`pathA` attacker offset, `gapD` defender gap; the last keys match the sim's end state), a contiguous camera
+  shot list (`wide | close | low | over_shoulder | orbit | top` on `attacker | defender | both`, with fov / dist / height /
+  yaw, numbers or [start, end] eased; `kitlib.cam()` framing floors), FX beats, crowd / ratings beats, a TV slate line
+  and the defender's end pose. Numbers are for 1.80 m bodies; VIEW scales by the target's height and keeps grounded
+  bodies apart by their push fronts (CONTRACT 26.5). Legacy `shots` = generated `[from, shot]`.
+- **Paired throws (CONTRACT 26.2, P2):** every throw, command grab and grab super has a `grab.victim` timeline on the
+  shared victim clips, and `grab.hitF` sits on the attacker clip's visible impact (read off grab-clip render sheets):
+  holds show hit reactions on each strike, the final segment ends lying (face up: kd_fall_b / thrown_f; face down:
+  thrown_b / crumple), side swaps travel forward >= 0.5 m (thrown_b), techable throws deal damage after the 9-frame tech
+  window. Verified in the real sim (scratch throwcheck: all 31 grabs x 3 victim bodies).
+- **Season text (CONTRACT 26.3, P2):** `introLine`, `winQuotes` (3), `banter` (rival / freak / ricky / default; Ricky
+  vs every contestant; the Freak's lines are stage directions), `ending` (3-5 sentences), listed per fighter below.
 
 ## AUTHORED motions (keyframed on X Bot, 30 fps; the only two in the roster)
 
@@ -606,8 +661,11 @@ def hit_volume(K, J, clips, pending):
             boxes = [dict(b) for b in o["boxes"]]
         else:
             if clip in pending:
-                problems.append(("PENDING", mid, clip, "plan changed since the published bake"))
-                continue
+                # CHANGED(FIGHTERS) P2: keep the box from the PREVIOUS bake's effector until lane ASSETS re-bakes (dropping
+                # it made the sim fall back to the bare fist box meanwhile); validate.py lists it PENDING, build.py
+                # recomputes it after the bake
+                problems.append(("PENDING", mid, clip, "plan changed since the published bake (box from the previous "
+                                                       "bake's effector until the re-bake)"))
             c = clips["clips"].get(clip) if clips else None
             if not c or not c.get("effector"):
                 continue
@@ -721,6 +779,7 @@ def main():
     print("point blank: ROSTER_DEF_MIN (min push front + hurt half) =", L.ROSTER_DEF_MIN)
     for fid, K in built:
         K.fit()
+        K.resolve()   # CHANGED(FIGHTERS) P2: cinematic timelines read the fitted clip times
         check_kit(K)
         airborne, grounded = set(), set()
         for mid in K.order:

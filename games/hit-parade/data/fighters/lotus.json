@@ -380,7 +380,16 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 44, "adv": 21, "hitF": 30, "swap": false, "air": false, "techable": true, "clip": "palm_launch"},
+      "grab": {
+        "frames": 44,
+        "adv": 21,
+        "hitF": 28,
+        "swap": false,
+        "air": false,
+        "techable": true,
+        "clip": "palm_launch",
+        "victim": [[0, "hit_high_s", 0.0, 0.1], [7, "thrown_f", 0.25, 1.1]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Grabs the collar and launches them with a lunging palm.",
@@ -409,7 +418,16 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 46, "adv": 14, "hitF": 28, "swap": true, "air": false, "techable": true, "clip": "wild_toss"},
+      "grab": {
+        "frames": 46,
+        "adv": 14,
+        "hitF": 28,
+        "swap": true,
+        "air": false,
+        "techable": true,
+        "clip": "wild_toss",
+        "victim": [[0, "hit_high_s", 0.0, 0.12], [8, "thrown_b", 0.1, 1.2]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Swings them past with a wild hook.",
@@ -1026,36 +1044,165 @@
       "cinematic": {
         "frames": 160,
         "cue": "lotus_happy_hour",
-        "hits": [[8, 400], [48, 600], [72, 700], [98, 900], [122, 1900]],
+        "hits": [[8, 400], [48, 600], [72, 700], [98, 900], [124, 1900]],
         "anim": [
-          [0, "lunge_palm"],
-          [22, "sway_enter"],
-          [40, "drunk_round"],
-          [64, "axe_kick"],
-          [90, "rising_knee"],
-          [115, "dragon_palm"],
-          [140, "win_sway"]
+          [0, "lunge_palm", 0.025, 0.392],
+          [22, "sway_enter", 0.0, 0.3],
+          [40, "drunk_round", 0.167, 0.567],
+          [64, "axe_kick", 0.142, 0.575],
+          [90, "rising_knee", 0.133, 0.55],
+          [115, "dragon_palm", 0.45, 0.867],
+          [140, "win_sway", 0.3, 0.633]
         ],
         "victim": [
-          [0, "hit_high_s"],
-          [22, "dizzy"],
-          [40, "hit_high_l"],
-          [64, "hit_high_l"],
-          [90, "hit_air"],
-          [115, "hit_air"],
-          [128, "kd_fall_b"],
-          [144, "kd_ground_b"]
+          [0, "hit_high_s", 0.0, 0.3],
+          [8, "hit_high_s", 0.0, 0.4],
+          [22, "dizzy", 0.3, 0.9],
+          [48, "hit_high_l", 0.0, 0.45],
+          [72, "hit_high_l", 0.1, 0.5],
+          [98, "hit_air", 0.0, 0.6],
+          [124, "thrown_f", 0.3, 0.74],
+          [134, "thrown_f", 0.74, 1.3333]
         ],
-        "shots": [
-          [0, "side_close"],
-          [22, "spotlight"],
-          [40, "punch_in"],
-          [64, "over_shoulder"],
-          [90, "low_angle_up"],
-          [115, "front_low"],
-          [122, "slowmo_hold"],
-          [140, "crowd_pop"]
+        "shots": [[0, "close"], [22, "close"], [40, "close"], [64, "over_shoulder"], [90, "low"], [115, "low"], [140, "wide"]],
+        "camera": [
+          {
+            "from": 0,
+            "to": 22,
+            "shot": "close",
+            "target": "both",
+            "fovDeg": 32,
+            "dist": 3.0,
+            "height": 1.45,
+            "yawDeg": 15,
+            "ease": "inOut",
+            "lookH": 1.3
+          },
+          {
+            "from": 22,
+            "to": 40,
+            "shot": "close",
+            "target": "attacker",
+            "fovDeg": 30,
+            "dist": 2.5,
+            "height": 1.5,
+            "yawDeg": 40,
+            "ease": "inOut",
+            "lookH": 1.45
+          },
+          {
+            "from": 40,
+            "to": 64,
+            "shot": "close",
+            "target": "defender",
+            "fovDeg": [32, 28],
+            "dist": [2.5, 2.5],
+            "height": 1.55,
+            "yawDeg": 35,
+            "ease": "inOut",
+            "lookH": 1.45
+          },
+          {
+            "from": 64,
+            "to": 90,
+            "shot": "over_shoulder",
+            "target": "defender",
+            "fovDeg": 36,
+            "dist": 2.9,
+            "height": 1.8,
+            "yawDeg": -65,
+            "ease": "inOut",
+            "lookH": 1.4
+          },
+          {
+            "from": 90,
+            "to": 115,
+            "shot": "low",
+            "target": "both",
+            "fovDeg": 42,
+            "dist": 3.0,
+            "height": 0.3,
+            "yawDeg": 25,
+            "ease": "inOut",
+            "lookH": 1.7
+          },
+          {
+            "from": 115,
+            "to": 140,
+            "shot": "low",
+            "target": "defender",
+            "fovDeg": 40,
+            "dist": 3.4,
+            "height": 0.7,
+            "yawDeg": -15,
+            "ease": "inOut",
+            "lookH": 1.6
+          },
+          {
+            "from": 140,
+            "to": 160,
+            "shot": "wide",
+            "target": "both",
+            "fovDeg": 38,
+            "dist": 5.6,
+            "height": 1.7,
+            "yawDeg": 0,
+            "ease": "inOut",
+            "lookH": 1.1
+          }
         ],
+        "fx": [
+          {"f": 0, "fx": "slate"},
+          {"f": 8, "fx": "impact_s"},
+          {"f": 22, "fx": "spot", "target": "attacker"},
+          {"f": 40, "fx": "spot_off"},
+          {"f": 48, "fx": "impact_m"},
+          {"f": 48, "fx": "smear", "target": "attacker"},
+          {"f": 72, "fx": "impact_m"},
+          {"f": 72, "fx": "shake_s"},
+          {"f": 98, "fx": "impact_l"},
+          {"f": 98, "fx": "speed_lines"},
+          {"f": 124, "fx": "fire"},
+          {"f": 124, "fx": "impact_l"},
+          {"f": 124, "fx": "flash"},
+          {"f": 124, "fx": "shake_l"},
+          {"f": 124, "fx": "freeze_frame"},
+          {"f": 134, "fx": "dust"},
+          {"f": 140, "fx": "lights_flicker"}
+        ],
+        "crowd": [
+          {"f": 8, "react": "ooh"},
+          {"f": 22, "react": "laugh"},
+          {"f": 48, "react": "ooh"},
+          {"f": 72, "react": "gasp"},
+          {"f": 98, "react": "cheer", "ratings": "up"},
+          {"f": 124, "react": "roar", "ratings": "spike"},
+          {"f": 144, "react": "applause", "ratings": "peak"}
+        ],
+        "pathA": [
+          [8, 0.2, 0],
+          [48, 0.3, 0],
+          [72, 0.45, 0],
+          [98, 0.55, 0.6],
+          [108, 0.6, 0.9],
+          [115, 0.6, 0.2],
+          [118, 0.6, 0],
+          [150, 0.2, 0],
+          [158, 0, 0]
+        ],
+        "gapD": [
+          [8, 1.0, 0],
+          [48, 1.05, 0],
+          [72, 1.0, 0],
+          [98, 0.9, 0.5],
+          [110, 1.0, 1.3],
+          [120, 1.0, 1.0],
+          [124, 1.2, 0.9],
+          [134, 2.6, 0],
+          [158, 2.4, 0]
+        ],
+        "slate": "PRIME TIME - LOTUS LIU: HAPPY HOUR",
+        "endPose": "back",
         "endAdv": 19,
         "endGapM": 2.4
       },
@@ -1106,5 +1253,14 @@
     "combo": ["2L", "5M", "dragon_breath_m"],
     "mixup": ["sway_oh", "sway_low", "sway_hop"],
     "meter": "bottoms_up"
-  }
+  },
+  "introLine": "Just one drink. For the cameras. Hic.",
+  "winQuotes": ["Sober as a judge. You, however, are seeing two of me.", "Eleven movies of stunts, and you fell for the oldest one.", "Last call. You're cut off."],
+  "banter": {
+    "rerun": ["You ate my lucky gourd on the Wheel of Pain.", "Tonight I pour you back into your grave."],
+    "freak": ["You smell like a basement and bad ideas.", "Easy, big fella. I lead, you fall."],
+    "ricky": ["You wrote the drunk-master gag into my contract, Ricky.", "Tonight I stick to the script - right up until your jaw."],
+    "default": ["Don't mind me, I'm a little unsteady. Hic.", "Swing away. I'll be somewhere else."]
+  },
+  "ending": "LOTUS LIU stumbles out of the Control Room with the host's sequined jacket over one shoulder and the gourd back on her hip - Rerun coughed it up in the elevator. She sells the jacket, buys the Wheel of Pain set and turns it into a noodle bar. The gourd hangs over the door. Nobody knows what is inside it, and she still has not had a drink."
 }

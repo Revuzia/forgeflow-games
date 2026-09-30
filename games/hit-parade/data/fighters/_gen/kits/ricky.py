@@ -1,6 +1,6 @@
 """RICKY MARQUEE - boss, two-phase showman (Great_Sword_Pack = two-handed clips -> his mic-cane is held in both
 hands; Gestures for the host; one Pro_Magic-free kit)."""
-from kitlib import (Kit, air, crouch, layer, mix, LV1, LV3, LV1_COST, LV3_COST)
+from kitlib import (Kit, air, cam, cinematic, crouch, layer, mix, LV1, LV3, LV1_COST, LV3_COST)
 
 GS = "Great_Sword_Pack/"
 GE = "Gestures_Pack_Basic/"
@@ -51,18 +51,24 @@ def build():
            "Mixamo great sword slash (5): low crouch swing (hips 0.49-0.62 m)")
     K.clip("cane_twirl", dict(mix(GS + "great sword high spin attack", (1, 40), contact=7), effector="RightHand"),
            "Mixamo great sword high spin: both hands up in front = anti-air twirl. Contact f7 + effector RightHand (2026-09-30): bake trace hands 1.68 / 1.61 m, 0.42 / 0.56 m forward, lateral < 0.1 m; at the old f11 the hands were already swinging 0.36 m to the side and the builder picked the RightKnee (0.64 m) as the effector")
-    K.clip("sledgehammer", mix(GS + "great sword slash (4)", (25, 55), contact=43),
-           "Mixamo great sword slash (4): sledgehammer overhead chop, impact f41-43 (dense render)")
+    K.clip("sledgehammer", mix(GS + "great sword slash (4)", (25, 55), contact=42),
+           "Mixamo great sword slash (4): sledgehammer overhead chop, impact f41-43 (dense render). P2: contact 43 -> 42 "
+           "= the measured front pass on the baked body (bake: hands farthest forward at output f17 = source 42, "
+           "LeftHand 0.59 m / 1.45 m; at 43 already falling to 1.31 m). contact_check's EXT flag stays: the arms keep "
+           "extending DOWN for 4 more frames after the cane head has crossed the opponent (prop reach, not a late fist)")
     K.clip("stage_kick", mix(GS + "great sword kick", (5, 46), contact=19),
            "Mixamo great sword kick (holding the cane), front pass f19 (1.07 m)")
     K.clip("hook_slide", mix(GS + "great sword slide attack", (1, 65), contact=38),
            "Mixamo great sword slide attack: kneeling lunge swing, second front pass f38 = the vaudeville hook")
     K.clip("air_jab", air(mix(GS + "great sword attack", (5, 37), contact=17)), "jump legs + cane thrust")
     K.clip("air_swing", air(mix(GS + "great sword slash", (8, 39), contact=19)), "jump legs + chop")
-    K.clip("air_hammer", air(mix(GS + "great sword slash (4)", (25, 55), contact=43)), "jump legs + sledgehammer")
+    K.clip("air_hammer", air(mix(GS + "great sword slash (4)", (25, 55), contact=40)),
+           "jump legs + sledgehammer. P2: contact 43 -> 40 = the measured front pass of the air version (bake: hands "
+           "0.70 m forward at output f10 = source 40; at 43 they were 0.58 m forward at 0.89 m, dropping)")
     K.clip("throw_reach", mix("Soccer_Game_Pack/goalkeeper catch (2)", (1, 30), contact=9), "two-hand grab")
-    K.clip("three_swings", dict(mix(GS + "great sword slash (2)", (15, 107), contact=26), contacts=[26, 59, 80]),
-           "Mixamo great sword slash (2): three two-hand swings (front passes f25/f53/f81)")
+    K.clip("three_swings", dict(mix(GS + "great sword slash (2)", (15, 95), contact=26), contacts=[26, 59, 80]),
+           "Mixamo great sword slash (2): three two-hand swings (front passes f25/f53/f81). P2: window 15-107 -> 15-95 "
+           "(the tail after the third swing; 3.07 s over the 54-frame throw lock was 3.4x, now 2.67 s over 64 f = 2.5x)")
     K.clip("spin_fling", mix(GS + "great sword high spin attack", (1, 57), contact=18),
            "Mixamo great sword high spin (full): 360 swing flings them behind")
     K.clip("spotlight_cast", mix(GS + "great sword attack", (1, 37), contact=17),
@@ -72,8 +78,9 @@ def build():
     K.clip("mic_drop_leap", layer(mix(GS + "great sword jump (2)", (1, 28)),
                                   mix(GS + "great sword slash (3)", (10, 56), contact=27), mode="sync"),
            "LAYERED: great sword jump (2) legs (apex f10 measured) + horizontal swing = leaping anti-air")
-    K.clip("counter_smash", mix(GS + "great sword slash (4)", (25, 55), contact=43),
-           "great sword slash (4) sledgehammer, fitted separately for the 6-frame counter follow-up")
+    K.clip("counter_smash", mix(GS + "great sword slash (4)", (25, 55), contact=42),
+           "great sword slash (4) sledgehammer, fitted separately for the 6-frame counter follow-up. P2: contact 43 -> "
+           "42 (the measured front pass, as `sledgehammer`)")
     K.clip("finale_slam", mix(GS + "great sword casting", (40, 110), contact=72),
            "great sword casting floor smash, fitted separately for the 10-frame Lv3 trigger")
     K.clip("pyro_slam", mix(GS + "great sword casting", (40, 110), contact=72),
@@ -110,12 +117,21 @@ def build():
     K.add("j.M", "jM", input="j.M", name="Air Chop", clip="air_swing", desc="Air cane chop.")
     K.add("j.H", "jH", input="j.H", name="Air Sledgehammer", clip="air_hammer", desc="Overhead cane jump-in.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Three-Act Beating", clip="throw_reach", damage=1300,
-          grab={"frames": 54, "adv": 21, "hitF": 40, "swap": False, "air": False, "techable": True,
-                "clip": "three_swings"}, desc="Holds them at cane's length for three swings.",
+          grab={"frames": 64, "adv": 21, "hitF": 52, "swap": False, "air": False, "techable": True,
+                "clip": "three_swings",
+                # P2 paired throw: three_swings (f15-95, 2.67 s over 64 f) swings at clip 0.37 / 1.47 / 2.17 s = lock 9 /
+                # 35 / 52: head, body, and the third drops them (kd_fall_b, face up). Lock 54 -> 64 (was 3.4x).
+                "victim": [[0, "hit_high_s", 0.0, 0.1], [9, "hit_high_s", 0.0, 0.6], [35, "hit_body", 0.1, 0.6],
+                           [52, "kd_fall_b", 1.04, 1.5]]},
+          desc="Holds them at cane's length for three swings.",
           why="Boss throw: 1300.")
     K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Exit Stage Left", clip="throw_reach", damage=1300,
-          grab={"frames": 48, "adv": 15, "hitF": 30, "swap": True, "air": False, "techable": True,
-                "clip": "spin_fling"}, desc="Spins them past with the cane.", why="Boss throw: 1300.")
+          grab={"frames": 48, "adv": 15, "hitF": 15, "swap": True, "air": False, "techable": True,
+                "clip": "spin_fling",
+                # P2 paired throw: the high spin's swing passes the front at clip 0.57 s = lock 15 (1.87 s over 48 f); the
+                # victim is pulled into the spin (thrown_b 0 -> 0.40 s) and thrown face down behind him.
+                "victim": [[0, "hit_high_s", 0.0, 0.1], [4, "thrown_b", 0.0, 0.4], [15, "thrown_b", 0.4, 1.2]]},
+          desc="Spins them past with the cane.", why="Boss throw: 1300.")
 
     beam = {"life": 180, "box": [0.50, 0.50], "y": 1.30, "hits": 1, "clip": "spotlight_beam", "x": 0.8}
     K.special("spotlight", "proj", motion="236",
@@ -204,29 +220,63 @@ def build():
           damage=5000, invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]},
           move=[[0, 0], [10, 0.8]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],
           juggle={"js": 1, "ji": 0, "jl": 99},
-          cinematic={"frames": 170, "cue": "ricky_prime_time", "hits": [[20, 700], [50, 900], [80, 1000], [140, 2400]],
-                     "anim": [[0, "showstopper"], [30, "cane_swing"], [60, "three_swings"], [110, "intro_power"],
-                              [130, "sledgehammer"], [150, "win_bow"]],
-                     "victim": [[0, "hit_high_l"], [30, "hit_high_s"], [60, "hit_body"], [110, "dizzy"],
-                                [140, "kd_fall_b"], [152, "kd_ground_b"]],
-                     "shots": [[0, "host_cam"], [30, "side_close"], [60, "punch_in"], [110, "spotlight"],
-                               [130, "top_down"], [150, "crowd_pop"]],
-                     "endAdv": 19, "endGapM": 2.2},
+          cinematic=lambda: cinematic(
+              170, "ricky_prime_time",
+              hits=[[26, 700], [52, 900], [82, 1000], [140, 2400]],
+              anim=[K.seg(0, "showstopper", 18, fromS=0.53), K.seg(18, "cane_swing", 42, hit=26),
+                    K.seg(42, "three_swings", 92, hit=52, rate=2.2), K.seg(92, "intro_power", 122, fromS=1.2, rate=1.5),
+                    K.seg(122, "sledgehammer", 150, hit=140), K.seg(150, "win_bow", 170, fromS=0.4)],
+              victim=[[0, "hit_high_l", 0.0, 0.4], [26, "hit_high_s", 0.0, 0.4], [52, "hit_high_l", 0.0, 0.5],
+                      [82, "hit_body", 0.1, 0.6], [100, "dizzy", 0.4, 1.2], [140, "kd_fall_b", 1.2, 1.8667],
+                      [158, "kd_ground_b", 0.0, 0.367]],
+              camera=[cam(0, 18, "close", "attacker", 30, 2.0, 1.6, 35),
+                      cam(18, 42, "close", "defender", 32, 2.0, 1.55, 35),
+                      cam(42, 92, "over_shoulder", "defender", 36, 2.5, 1.8, -65),
+                      cam(92, 122, "low", "attacker", 40, 2.6, 0.5, 20, lookH=1.6),
+                      cam(122, 150, "top", "defender", 40, 1.5, 5.4, 10, lookH=0.5),
+                      cam(150, 170, "wide", "both", 38, 5.6, 1.8, 0)],
+              fx=[(0, "slate"), (0, "spot", "attacker"), (18, "spot_off"), (26, "impact_m"), (52, "impact_m"),
+                  (52, "sparks"), (82, "impact_m"), (82, "shake_s"), (92, "dim"), (92, "spot", "attacker"),
+                  (122, "spot_off"), (140, "impact_l"), (140, "flash"), (140, "shake_l"), (140, "dust"),
+                  (140, "freeze_frame"), (142, "undim"), (150, "confetti")],
+              crowd=[(0, "applause"), (26, "ooh"), (52, "ooh"), (82, "cheer", "up"), (92, "hush"),
+                     (140, "roar", "spike"), (150, "applause", "peak")],
+              pathA=[[26, 0.1, 0], [52, 0.25, 0], [82, 0.4, 0], [120, 0.35, 0], [140, 0.45, 0], [168, 0, 0]],
+              gapD=[[26, 1.1, 0], [52, 1.2, 0], [82, 1.15, 0], [100, 1.2, 0], [140, 1.3, 0], [146, 1.6, 0],
+                    [168, 2.2, 0]],
+              slate="PRIME TIME - RICKY MARQUEE: FOR CAMERA ONE", endPose="back", endAdv=19, endGapM=2.2),
           desc="PRIME TIME (phase 1): the host's cane routine for camera one.",
           why="Boss Lv3: 5000 (inside the SF6 2600-5300 range), 10/4/58.")
     K.add("season_finale", LV3, kind="super3", input="214214", name="Season Finale", strength="H", clip="finale_slam",
           damage=5300, phase=2, invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]},
           move=[[0, 0], [10, 0.5]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],
           juggle={"js": 1, "ji": 0, "jl": 99},
-          cinematic={"frames": 180, "cue": "ricky_season_finale",
-                     "hits": [[25, 800], [60, 1000], [95, 1000], [150, 2500]],
-                     "anim": [[0, "pyro_slam"], [45, "showstopper"], [80, "spin_fling"], [120, "intro_power"],
-                              [140, "sledgehammer"], [160, "win_bow"]],
-                     "victim": [[0, "hit_body"], [45, "hit_high_l"], [80, "hit_air"], [120, "dizzy"],
-                                [150, "kd_fall_b"], [165, "kd_ground_b"]],
-                     "shots": [[0, "wide"], [25, "low_angle_up"], [45, "side_close"], [80, "orbit"],
-                               [120, "host_cam"], [150, "slowmo_hold"], [165, "crowd_pop"]],
-                     "endAdv": 19, "endGapM": 2.5},
+          cinematic=lambda: cinematic(
+              180, "ricky_season_finale",
+              hits=[[25, 800], [60, 1000], [95, 1000], [150, 2500]],
+              anim=[K.seg(0, "pyro_slam", 45, hit=25), K.seg(45, "showstopper", 80, hit=60),
+                    K.seg(80, "spin_fling", 120, hit=95), K.seg(120, "taunt_dismiss", 140, fromS=0.5),
+                    K.seg(140, "sledgehammer", 165, hit=150), K.seg(165, "win_bow", 180, fromS=0.4)],
+              victim=[[0, "hit_body", 0.0, 0.4], [25, "hit_air", 0.0, 0.6], [60, "hit_high_l", 0.0, 0.5],
+                      [95, "hit_air", 0.1, 0.8], [120, "dizzy", 0.4, 1.0], [150, "kd_fall_b", 1.25, 1.8667],
+                      [165, "kd_ground_b", 0.0, 0.367]],
+              camera=[cam(0, 25, "wide", "both", 40, 5.2, 1.8, 0, lookH=1.4),
+                      cam(25, 45, "low", "defender", 42, 3.0, 0.35, 25, lookH=1.7),
+                      cam(45, 80, "close", "both", [32, 28], [2.4, 2.0], 1.6, -30),
+                      cam(80, 120, "orbit", "both", 40, 3.8, 1.6, [-40, 60], ease="linear"),
+                      cam(120, 140, "close", "attacker", 30, 1.9, 1.6, 35),
+                      cam(140, 165, "low", "defender", 42, 2.8, 0.4, -20, lookH=1.2),
+                      cam(165, 180, "wide", "both", 40, 6.0, 2.0, 0)],
+              fx=[(0, "slate"), (0, "pyro"), (25, "impact_m"), (25, "fire"), (25, "shake_m"), (60, "impact_m"),
+                  (60, "sparks"), (95, "impact_m"), (95, "sparks"), (95, "lights_flicker"), (120, "spot", "attacker"),
+                  (140, "spot_off"), (140, "lights_flicker"), (150, "impact_l"), (150, "flash"), (150, "shake_l"),
+                  (150, "dust"), (150, "freeze_frame"), (165, "confetti"), (165, "pyro")],
+              crowd=[(0, "roar", "up"), (25, "gasp"), (60, "ooh"), (95, "gasp", "up"), (120, "hush"),
+                     (150, "roar", "spike"), (165, "applause", "peak")],
+              pathA=[[25, 0, 0], [60, 0.2, 0], [95, 0.35, 0], [140, 0.3, 0], [150, 0.5, 0], [178, 0, 0]],
+              gapD=[[25, 1.3, 0.5], [40, 1.3, 0], [60, 1.2, 0], [95, 1.4, 0.5], [110, 2.2, 0.8], [120, 2.0, 0],
+                    [140, 1.3, 0], [150, 1.1, 0], [156, 1.3, 0], [178, 1.8, 0]],
+              slate="PRIME TIME - RICKY MARQUEE: SEASON FINALE", endPose="back", endAdv=19, endGapM=1.8),
           desc="PHASE 2 Lv3: the whole set - pyro columns, a falling lighting rig and the confetti cannon.",
           why="Phase-2 Lv3 'that uses the arena' (FIGHTING_DESIGN 8c): 5300 = the SF6 Lv3 maximum, 180 frames.")
 
@@ -243,12 +293,43 @@ def build():
                 "moves": ["pyro_l", "pyro_m", "pyro_h", "pyro_ex", "season_finale"], "lv3": "season_finale",
                 "simple": {"6S": "pyro_m"}}
     K.cine_doc = [
-        "PRIME TIME (phase 1, 170 f): f0 host_cam: 'Ladies and gentlemen...' SHOWSTOPPER - 700 at f20; f30 CANE "
-        "SWING - 900 at f50; f60 THREE-ACT BEATING (punch_in) - 1000 at f80; f110 POWER-UP (spotlight): the set "
-        "goes dark except his spotlight; f130 SLEDGEHAMMER (top_down) - 2400 at f140; f150 BOW (crowd_pop).",
-        "SEASON FINALE (phase 2, 180 f): f0 wide: the cane slams the floor, pyro columns erupt - 800 at f25; "
-        "f45 SHOWSTOPPER - 1000 at f60; f80 SPIN FLING (orbit) into the lighting rig - 1000 at f95; f120 "
-        "host_cam: 'And that's our season!'; f140 SLEDGEHAMMER as the rig falls (slowmo_hold) - 2500 at f150; "
-        "f160 BOW under the confetti cannon (crowd_pop).",
+        "PRIME TIME (phase 1, 170 f): f0 close on the host (spotlight) as the SHOWSTOPPER follows through; f18 CANE "
+        "SWING - 700 at f26; f42 THREE-ACT BEATING (over his shoulder, 2.2x) - 900 at f52, 1000 at f82; f92 POWER-UP "
+        "(low, set dark, spotlight) while the victim wobbles; f122 SLEDGEHAMMER (top-down) - 2400 at f140 (flash, "
+        "freeze-frame); f150 BOW under confetti (wide). Face up at 2.2 m.",
+        "SEASON FINALE (phase 2, 180 f): f0 wide: the cane hits the floor, pyro columns erupt; f25 the blast lifts "
+        "them - 800; f45 SHOWSTOPPER (close) - 1000 at f60; f80 SPIN FLING (orbit) into the lighting rig - 1000 at f95, "
+        "lights flicker; f120 host close-up: 'And that's our season!'; f140 SLEDGEHAMMER (low) as the rig comes down - "
+        "2500 at f150 (flash, freeze-frame); f165 BOW under the confetti cannon and a last pyro burst. Face up at 1.8 m.",
     ]
+    K.text = dict(
+        introLine="Ladies and gentlemen... it's ME.",
+        winQuotes=["And THAT is why they call it my show.",
+                   "Don't touch that dial. We'll be right back - you won't.",
+                   "Another contestant, another rerun. Roll credits!"],
+        banter={"johnny": ["The Headliner! Your band's name looks lovely on my office wall.",
+                           "Sing for me, Johnny. The contract says you have to."],
+                "patch": ["My old floor manager! Who's running the cables tonight?",
+                          "Take direction, Patch: fall down, stage left."],
+                "bruno": ["Bruno! Twenty years, and the steak is still on me.",
+                          "Carry this, big man: the weight of cancellation."],
+                "zambini": ["Zambini! Still hiding the assistant?",
+                            "Here's a trick: I make your career disappear."],
+                "krane": ["Officer! You're supposed to be guarding ME.",
+                          "Your badge was a prop, Krane. So is your future."],
+                "lotus": ["Lotus! I wrote that drunk-master bit, you know.",
+                          "One more round - on the house. On your head."],
+                "boneyard": ["Boneyard! My favourite butcher.",
+                             "Tonight I'm the one holding the cleaver. Figuratively."],
+                "spin": ["The rooftop kid! I made you famous. You're welcome.",
+                         "Dance for the camera, Spin. Last dance."],
+                "gazza": ["Gazza! Still no referee, I'm afraid.",
+                          "Red card, son. Early bath."],
+                "rerun": ["Rerun! My most profitable death.",
+                          "Let's make it a double feature."],
+                "default": ["Welcome to the Season Finale!",
+                            "Nobody leaves my show. NOBODY."]},
+        ending="RICKY MARQUEE wins his own show. The confetti falls, the ratings peak, and for one second the studio is "
+               "silent - there is nobody left to host. He signs himself to another lifetime contract before the credits "
+               "finish. Next Friday: same time, same cane. The season never ends; it only renews.")
     return K

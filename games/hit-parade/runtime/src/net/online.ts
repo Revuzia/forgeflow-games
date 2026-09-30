@@ -5,16 +5,21 @@
 //   on the sim's MATCH_END: online.finish({ winner, frame, checksum }) (only once its frame is confirmed:
 //   session.confirmedFrame() >= frame; online waits for that itself before sending RESULT).
 // The flow itself lives in online_flow.ts (SimPort-based, testable with the toy sim on the lab page).
+//
+// CHANGED(NET) P2: `info()` (flow facts; also inside session.stats().online), `lastMatch`, `netStats()` returns the
+// flow facts ({ online }) when no session exists, events 'end' ({ reason, code }) and 'ratings'; the 'matchEnd' payload
+// carries `rated` + `rematch`. Deep-link test switches ?nettrace=N (session trace) and ?relaypace=interval (P1 relay
+// pacing, A/B only) are read here.
 
 import { STATE_VERSION, type Match, type MatchCfg } from '../core/sim/match.ts';
 import { matchPort } from '../core/net/match_port.ts';
 import type { NetStats, RollbackSession } from '../core/net/rollback.ts';
 import { hashString } from '../core/net/sync.ts';
-import { NET_STRINGS, OnlineFlow, type OnlinePhase, type OnlinePick } from './online_flow.ts';
+import { NET_STRINGS, OnlineFlow, type OnlineInfo, type OnlineMatchEnd, type OnlinePhase, type OnlinePick } from './online_flow.ts';
 import { NetPlay } from './netplay.ts';
 
 export { NET_STRINGS };
-export type { OnlinePhase, OnlinePick };
+export type { OnlineInfo, OnlineMatchEnd, OnlinePhase, OnlinePick };
 
 export interface OnlineDeps {
   /** GameData (core/data.ts): fighters, stages, system, clips are hashed for the HELLO data check. */
@@ -39,6 +44,8 @@ export interface Online {
   readonly session: RollbackSession | null;
   readonly local: 0 | 1;
   readonly room: string;
+  /** the last 'matchEnd' payload of the current session (null before one) */
+  readonly lastMatch: OnlineMatchEnd | null;
   quick(): Promise<void>;
   create(): Promise<string>;
   join(code: string): Promise<void>;
@@ -48,14 +55,23 @@ export interface Online {
   roundBreak(): void;
   rematch(yes: boolean): void;
   leave(): void;
+  /** P2: display name for the opponent (next session's HELLO) */
+  setName(name: string): void;
   stats(): ReturnType<OnlineFlow['stats']>;
-  netStats(): NetStats | null;
+  info(): OnlineInfo;
+  /** session stats (+ `online` flow facts) during a match, else `{ online }` (flow facts), null before any session */
+  netStats(): NetStats | { online: OnlineInfo } | null;
+  /** test only: the session trace (?nettrace=N) + the relay flush log */
+  trace(): unknown;
   on(ev: 'matchStart', cb: (cfg: MatchCfg, local: 0 | 1) => void): Online;
-  on(ev: 'status', cb: (s: { phase: OnlinePhase; code: string; rttMs: number; transport: string; [k: string]: unknown }) => void): Online;
-  on(ev: 'error', cb: (e: { code: string; [k: string]: unknown }) => void): Online;
-  on(ev: 'matchEnd', cb: (r: { agreed: boolean; winner: -1 | 0 | 1; reason: string; stats: NetStats | null; matchId: string }) => void): Online;
-  on(ev: 'disconnect', cb: (r: { winner: 0 | 1 }) => void): Online;
-  on(ev: 'paired' | 'select' | 'opponentLocked' | 'reveal' | 'rematch' | 'end' | 'net', cb: (p: never) => void): Online;
+  on(ev: 'status', cb: (s: { phase: OnlinePhase; code: string; rttMs: number; transport: string; room?: string; [k: string]: unknown }) => void): Online;
+  on(ev: 'error', cb: (e: { code: string; room?: string; [k: string]: unknown }) => void): Online;
+  on(ev: 'matchEnd', cb: (r: OnlineMatchEnd) => void): Online;
+  /** the opponent left mid-match: `reason` 'disconnect' (presence gone 5 s) | 'forfeit' (BYE) - the stayer wins */
+  on(ev: 'disconnect', cb: (r: { winner: 0 | 1; reason?: 'disconnect' | 'forfeit' }) => void): Online;
+  on(ev: 'end', cb: (r: { reason: string; code: string }) => void): Online;
+  on(ev: 'ratings', cb: (r: { matchId: string; data: unknown; ok: boolean }) => void): Online;
+  on(ev: 'paired' | 'select' | 'opponentLocked' | 'reveal' | 'rematch' | 'net', cb: (p: never) => void): Online;
 }
 
 /** Stage ids from a stages.json of unknown shape (array of {id}, {stages:[...]}, or an id-keyed object). */
@@ -76,17 +92,20 @@ export function gameDataHash(data: OnlineDeps['data']): number {
   return hashString(json);
 }
 
-/** Deep-link switches: ?room=CODE (join) and ?relay=1 (force the relay tier, test only). */
-export function readOnlineParams(search = typeof location !== 'undefined' ? location.search : ''): { room: string | null; relay: boolean } {
+/** Deep-link switches: ?room=CODE (join), ?relay=1 (force the relay tier, test only), ?nettrace=N (session trace, test
+ *  only), ?relaypace=interval (P1 relay pacing, A/B test only). */
+export function readOnlineParams(search = typeof location !== 'undefined' ? location.search : ''): { room: string | null; relay: boolean; trace: number; relayPacing: 'bucket' | 'interval' } {
   const q = new URLSearchParams(search);
   const room = q.get('room');
-  return { room: room ? NetPlay.cleanCode(room) : null, relay: q.get('relay') === '1' };
+  const tr = Math.max(0, Math.min(20000, Number(q.get('nettrace') ?? 0) || 0));
+  return { room: room ? NetPlay.cleanCode(room) : null, relay: q.get('relay') === '1', trace: tr, relayPacing: q.get('relaypace') === 'interval' ? 'interval' : 'bucket' };
 }
 
 export function createOnline(deps: OnlineDeps): Online {
   const fighters = deps.fighters ?? Object.keys(deps.data.fighters).filter((id) => id !== 'freak' && id !== 'ricky');
   let stages = stageIds(deps.data.stages);
   if (!stages.length) stages = ['rust_theater'];
+  const qp = readOnlineParams();
   const flow = new OnlineFlow({
     version: deps.version,
     dataHash: gameDataHash(deps.data),
@@ -94,14 +113,17 @@ export function createOnline(deps: OnlineDeps): Online {
     fighters,
     stages,
     name: deps.name,
-    forceRelay: deps.forceRelay ?? readOnlineParams().relay,
+    forceRelay: deps.forceRelay ?? qp.relay,
     log: deps.log,
+    trace: qp.trace,
+    relayPacing: qp.relayPacing,
   });
   const api: Online = {
     get phase() { return flow.phase; },
     get session() { return flow.session; },
     get local() { return flow.local; },
     get room() { return flow.room; },
+    get lastMatch() { return flow.lastMatch; },
     quick: () => flow.quick(),
     create: () => flow.create(),
     join: (code: string) => flow.join(code),
@@ -111,8 +133,11 @@ export function createOnline(deps: OnlineDeps): Online {
     roundBreak: () => flow.roundBreak(),
     rematch: (yes: boolean) => flow.rematch(yes),
     leave: () => flow.leave(),
+    setName: (name: string) => flow.setName(name),
     stats: () => flow.stats(),
-    netStats: () => (flow.session ? flow.session.stats() : null),
+    info: () => flow.info(),
+    netStats: () => (flow.session ? flow.session.stats() : flow.phase === 'idle' ? null : { online: flow.info() }),
+    trace: () => flow.traceDump(),
     on(ev: string, cb: (...a: never[]) => void): Online {
       flow.on(ev as never, cb);
       return api;

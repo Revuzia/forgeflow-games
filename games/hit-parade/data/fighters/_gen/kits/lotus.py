@@ -1,5 +1,5 @@
 """LOTUS LIU - stance drunken fist (Male_Drunk sway stance, CMU karate kicks/knees/lunges, Pro_Magic palm)."""
-from kitlib import (Kit, air, authored, cmu, crouch, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
+from kitlib import (Kit, air, authored, cam, cinematic, cmu, crouch, mix, seq, LV1, LV3, LV1_COST, LV3_COST)
 
 DR = "Male_Drunk_Pack/"
 
@@ -98,11 +98,22 @@ def build():
     K.add("j.M", "jM", input="j.M", name="Flying Front Kick", clip="flying_front", desc="Air front kick.")
     K.add("j.H", "jH", input="j.H", name="Flying High Kick", clip="flying_front_hi", desc="Long flying kick.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Palm Launch", clip="throw_reach",
-          grab={"frames": 44, "adv": 21, "hitF": 30, "swap": False, "air": False, "techable": True,
-                "clip": "palm_launch"}, desc="Grabs the collar and launches them with a lunging palm.")
+          grab={"frames": 44, "adv": 21, "hitF": 28, "swap": False, "air": False, "techable": True,
+                "clip": "palm_launch",
+                # P2 paired throw: the lunging palm lands at clip 0.13 s = lock 7 (0.93 s over 44 f) and the rest of the
+                # clip is her held lunge; the victim is launched off it (thrown_f from the lift at 0.25 s at 1.4x) and the
+                # damage lands when they hit the floor (thrown_f 0.74 s = lock 28: a hitF inside the 9-frame tech window
+                # fails G1, probe_data).
+                "victim": [[0, "hit_high_s", 0.0, 0.1], [7, "thrown_f", 0.25, 1.1]]},
+          desc="Grabs the collar and launches them with a lunging palm.")
     K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Wild Swing Toss", clip="throw_reach",
           grab={"frames": 46, "adv": 14, "hitF": 28, "swap": True, "air": False, "techable": True,
-                "clip": "wild_toss"}, desc="Swings them past with a wild hook.")
+                "clip": "wild_toss",
+                # P2 paired throw: the wild rear hook passes the front at clip 0.12 s = lock 8 (0.70 s over 46 f); it
+                # swings them past her (thrown_b 0.10 -> 1.2 s at 1.7x) face down behind; damage on the landing
+                # (thrown_b 0.67 s = lock 28, after the 9-frame tech window).
+                "victim": [[0, "hit_high_s", 0.0, 0.12], [8, "thrown_b", 0.1, 1.2]]},
+          desc="Swings them past with a wild hook.")
 
     K.special("sway", None, motion="214",
               common=dict(name="Drunken Sway", clip="sway_enter", damage=0, hitstun=0, blockstun=0, hitstop=0,
@@ -187,15 +198,34 @@ def build():
           invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]},
           move=[[0, 0], [10, 0.8]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],
           juggle={"js": 1, "ji": 0, "jl": 99},
-          cinematic={"frames": 160, "cue": "lotus_happy_hour",
-                     "hits": [[8, 400], [48, 600], [72, 700], [98, 900], [122, 1900]],
-                     "anim": [[0, "lunge_palm"], [22, "sway_enter"], [40, "drunk_round"], [64, "axe_kick"],
-                              [90, "rising_knee"], [115, "dragon_palm"], [140, "win_sway"]],
-                     "victim": [[0, "hit_high_s"], [22, "dizzy"], [40, "hit_high_l"], [64, "hit_high_l"],
-                                [90, "hit_air"], [115, "hit_air"], [128, "kd_fall_b"], [144, "kd_ground_b"]],
-                     "shots": [[0, "side_close"], [22, "spotlight"], [40, "punch_in"], [64, "over_shoulder"],
-                               [90, "low_angle_up"], [115, "front_low"], [122, "slowmo_hold"], [140, "crowd_pop"]],
-                     "endAdv": 19, "endGapM": 2.4},
+          cinematic=lambda: cinematic(
+              160, "lotus_happy_hour",
+              hits=[[8, 400], [48, 600], [72, 700], [98, 900], [124, 1900]],
+              anim=[K.seg(0, "lunge_palm", 22, hit=8), K.seg(22, "sway_enter", 40),
+                    K.seg(40, "drunk_round", 64, hit=48), K.seg(64, "axe_kick", 90, hit=72),
+                    K.seg(90, "rising_knee", 115, hit=98), K.seg(115, "dragon_palm", 140, hit=124),
+                    K.seg(140, "win_sway", 160, fromS=0.3)],
+              victim=[[0, "hit_high_s", 0.0, 0.3], [8, "hit_high_s", 0.0, 0.4], [22, "dizzy", 0.3, 0.9],
+                      [48, "hit_high_l", 0.0, 0.45], [72, "hit_high_l", 0.1, 0.5], [98, "hit_air", 0.0, 0.6],
+                      [124, "thrown_f", 0.3, 0.74], [134, "thrown_f", 0.74, 1.3333]],
+              camera=[cam(0, 22, "close", "both", 32, 2.4, 1.45, 15),
+                      cam(22, 40, "close", "attacker", 30, 1.9, 1.5, 40),
+                      cam(40, 64, "close", "defender", [32, 28], [2.1, 1.7], 1.55, 35),
+                      cam(64, 90, "over_shoulder", "defender", 36, 2.3, 1.8, -65),
+                      cam(90, 115, "low", "both", 42, 3.0, 0.3, 25, lookH=1.7),
+                      cam(115, 140, "low", "defender", 40, 3.4, 0.7, -15, lookH=1.6),
+                      cam(140, 160, "wide", "both", 38, 5.6, 1.7, 0)],
+              fx=[(0, "slate"), (8, "impact_s"), (22, "spot", "attacker"), (40, "spot_off"), (48, "impact_m"),
+                  (48, "smear", "attacker"), (72, "impact_m"), (72, "shake_s"), (98, "impact_l"), (98, "speed_lines"),
+                  (124, "fire"), (124, "impact_l"), (124, "flash"), (124, "shake_l"), (124, "freeze_frame"),
+                  (134, "dust"), (140, "lights_flicker")],
+              crowd=[(8, "ooh"), (22, "laugh"), (48, "ooh"), (72, "gasp"), (98, "cheer", "up"), (124, "roar", "spike"),
+                     (144, "applause", "peak")],
+              pathA=[[8, 0.2, 0], [48, 0.3, 0], [72, 0.45, 0], [98, 0.55, 0.6], [108, 0.6, 0.9], [115, 0.6, 0.2],
+                     [118, 0.6, 0], [150, 0.2, 0], [158, 0, 0]],
+              gapD=[[8, 1.0, 0], [48, 1.05, 0], [72, 1.0, 0], [98, 0.9, 0.5], [110, 1.0, 1.3], [120, 1.0, 1.0],
+                    [124, 1.2, 0.9], [134, 2.6, 0], [158, 2.4, 0]],
+              slate="PRIME TIME - LOTUS LIU: HAPPY HOUR", endPose="back", endAdv=19, endGapM=2.4),
           desc="PRIME TIME: a lunging palm, a long swig, and a drunken beating that ends in a fire blast.",
           why="1c Lv3: 10/4/58, -42, 4500, fully invulnerable 1-13.")
 
@@ -210,11 +240,29 @@ def build():
                 "walk": {"fwd": 1.60, "back": 1.10},
                 "clips": {"idle": "sway_idle", "walk_f": "sway_walk", "walk_b": "sway_walk_b"}}
     K.cine_doc = [
-        "f0 LUNGE PALM (side_close) - 400 at f8. f22 SWIG (spotlight): she stops for a long drink; the "
-        "victim wobbles (dizzy).",
-        "f40 DRUNKEN ROUNDHOUSE (punch_in) - 600. f64 AXE KICK (over_shoulder) - 700.",
-        "f90 LOTUS RISING (low_angle_up): flying knee launches - 900.",
-        "f115 DRAGON PALM (front_low -> slowmo_hold): the flame jet blasts them across the set - 1900 at f122.",
-        "f140 WOBBLE (crowd_pop): she staggers away, sober as a judge (KD +19).",
+        "f0 LUNGE PALM (close) - 400 at f8. f22 SWIG (close on Lotus, spotlight): she stops for a long drink while "
+        "the victim wobbles, dizzy; the crowd laughs.",
+        "f40 DRUNKEN ROUNDHOUSE (punch-in, smear) - 600 at f48. f64 AXE KICK (over her shoulder) - 700 at f72.",
+        "f90 LOTUS RISING (low, looking up): the flying knee launches them 1.3 m - 900 at f98.",
+        "f115 DRAGON'S BREATH (low, across the set): the flame jet blasts them 1.6 m away, flipping - 1900 at f124 "
+        "(fire, flash, freeze-frame).",
+        "f140 WOBBLE (wide, neon flicker): she staggers off, sober as a judge; opponent face up at 2.4 m (KD +19).",
     ]
+    K.text = dict(
+        introLine="Just one drink. For the cameras. Hic.",
+        winQuotes=["Sober as a judge. You, however, are seeing two of me.",
+                   "Eleven movies of stunts, and you fell for the oldest one.",
+                   "Last call. You're cut off."],
+        banter={"rerun": ["You ate my lucky gourd on the Wheel of Pain.",
+                          "Tonight I pour you back into your grave."],
+                "freak": ["You smell like a basement and bad ideas.",
+                          "Easy, big fella. I lead, you fall."],
+                "ricky": ["You wrote the drunk-master gag into my contract, Ricky.",
+                          "Tonight I stick to the script - right up until your jaw."],
+                "default": ["Don't mind me, I'm a little unsteady. Hic.",
+                            "Swing away. I'll be somewhere else."]},
+        ending="LOTUS LIU stumbles out of the Control Room with the host's sequined jacket over one shoulder and the "
+               "gourd back on her hip - Rerun coughed it up in the elevator. She sells the jacket, buys the Wheel of "
+               "Pain set and turns it into a noodle bar. The gourd hangs over the door. Nobody knows what is inside it, "
+               "and she still has not had a drink.")
     return K

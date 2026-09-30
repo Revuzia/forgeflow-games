@@ -11,10 +11,11 @@ Targets
   --lab (default)  runtime/lab/ui.html on the UI lane's dev server (port 5324, started here with HP_FROZEN=1 when it is
                    not already running, stopped at the end). The lab mounts the real Hud / Menus / TouchControls and
                    emulates game.ts's flow (ladder, cards, VS, a scripted bout, results, pause, ending).
-  --game           the integrated game (SHELL's server, default http://localhost:5320/?dev=1). Read-back comes from
-                   window.__HP__ (menus()/state()); the walk covers title -> main -> every setup screen, character
-                   select, stage, settings, online, credits and the pause card of a real bout. (Integration: run it once
-                   the shell wires Menus; screens after a real bout start depend on the shell's flow.)
+  --game           CHANGED(UI) P2: the integrated game (runtime/index.html on the same :5324 server, ?dev=1). Read-back from
+                   window.__HP__ (menus()/hud()/state()); real keys through title -> main -> SEASON / VERSUS setup rows
+                   (D14) -> character select -> stage -> a REAL bout vs CPU -> pause -> MOVE LIST (unique card, both
+                   notations) -> FORFEIT -> results -> TRAINING bout -> TRAINING OPTIONS -> EXIT -> ONLINE -> CREDITS,
+                   zero flow violations; then the synthetic-pad pass. Report: _reports/menus_game.json.
 
 Run:  python _harness/menus.py [--sizes 1600x900,844x390] [--no-pad] [--headed] [--base URL]
 Also: python _harness/menus.py --sync-strings   mirror data/fighters/*.json move `name`s into data/strings.json as
@@ -247,13 +248,21 @@ def walk_lab(page, size: str, results: list) -> None:
     time.sleep(2.5)
     w.check("results_boss", w.wait_screen("results", 8), snap=False)
     w.key("Enter")
-    w.check("ending", w.wait_screen("ending", 6))
-    time.sleep(0.5)
-    w.key("Enter")
+    # CHANGED(UI) P2: game.ts order - name entry (the board rank), then the ending SEQUENCE (one card per press)
     w.check("nameentry", w.wait_screen("nameentry", 6))
     for k in ("KeyA", "KeyC", "KeyE"):
         w.key(k)
     w.key("Enter")
+    w.check("ending", w.wait_screen("ending", 6))
+    cards = []
+    for _ in range(9):
+        time.sleep(0.55)
+        st = w.m()
+        if st.get("screen") != "ending":
+            break
+        cards.append(st.get("ending"))
+        w.key("Enter")
+    w.check("ending_sequence", len(cards) >= 4 and cards[0] == "finale" and "ratings" in cards and "board" in cards, f"cards={cards}", snap=False)
     w.check("title_after_season", w.wait_screen("title", 6), snap=False)
 
     # VERSUS vs CPU: setup -> select P1 + CPU -> stage -> VS -> bout -> results
@@ -262,6 +271,12 @@ def walk_lab(page, size: str, results: list) -> None:
     w.focus_to("hpm-main-versus")
     w.key("Enter")
     w.check("versus", w.wait_screen("versus"))
+    # CHANGED(UI) P2 (verifier D14): one row per setting - DOWN from OPPONENT lands on CPU LEVEL, then ROUNDS, TIMER, GO
+    seq = []
+    for _ in range(4):
+        w.key("ArrowDown")
+        seq.append(w.m().get("focus"))
+    w.check("versus_rows_d14", seq == ["hpm-versus-cpuLevel-3", "hpm-versus-rounds-2", "hpm-versus-timer-99", "hpm-versus-go"], f"down x4 -> {seq}", snap=False)
     w.check("versus_go", w.focus_to("hpm-versus-go"), snap=False)
     w.key("Enter")
     w.check("charselect_versus", w.wait_screen("charselect"), snap=False)
@@ -368,6 +383,108 @@ def walk_lab(page, size: str, results: list) -> None:
     w.check("title_back", w.wait_screen("title"), snap=False)
 
 
+def walk_game(page, size: str, results: list) -> None:
+    """CHANGED(UI) P2: the INTEGRATED game (index.html, real menus + real bouts) walked by real keys."""
+    w = Walk(page, size, results)
+    step = lambda n: f"game_{n}"  # noqa: E731
+    w.check(step("title"), w.wait_screen("title", 30))
+    w.key("Enter")
+    w.check(step("main"), w.wait_screen("main") and w.m().get("focus") == "hpm-main-season")
+    # SEASON setup: rows (D14)
+    w.key("Enter")
+    w.check(step("season"), w.wait_screen("season"))
+    seq = []
+    for _ in range(2):
+        w.key("ArrowDown")
+        seq.append(w.m().get("focus"))
+    w.check(step("season_rows"), seq == ["hpm-season-diff-1", "hpm-season-go"], f"down x2 -> {seq}", snap=False)
+    w.key("Escape")
+    w.wait_screen("main")
+    # VERSUS setup rows (D14), CPU level 1, then a REAL bout
+    w.focus_to("hpm-main-versus")
+    w.key("Enter")
+    w.check(step("versus"), w.wait_screen("versus"))
+    seq = []
+    for _ in range(4):
+        w.key("ArrowDown")
+        seq.append(w.m().get("focus"))
+    w.check(step("versus_rows_d14"), seq == ["hpm-versus-cpuLevel-3", "hpm-versus-rounds-2", "hpm-versus-timer-99", "hpm-versus-go"], f"down x4 -> {seq}", snap=False)
+    w.key("ArrowUp", 3)
+    w.key("ArrowLeft", 2)
+    w.key("Enter")
+    lvl = w.m().get("flow", {}).get("cpuLevel")
+    w.focus_to("hpm-versus-go")
+    w.key("Enter")
+    w.check(step("charselect_versus"), w.wait_screen("charselect"), f"cpu level {lvl}")
+    w.key("Enter", 3, 0.25)
+    w.key("ArrowRight", 2)
+    w.key("Enter", 2, 0.25)
+    w.check(step("stage"), w.wait_screen("stage", 8))
+    time.sleep(0.6)
+    w.key("Enter")
+    t0 = time.time()
+    while time.time() - t0 < 60 and (page.evaluate("window.__HP__.state().phase") != "bout"):
+        time.sleep(0.2)
+    time.sleep(2.5)
+    hud = page.evaluate(READ_HUD) or {}
+    w.check(step("bout_hud"), bool(hud.get("mounted")), f"timer={hud.get('timer')}")
+    w.key("Escape")
+    w.check(step("pause"), w.wait_screen("pause"))
+    w.focus_to("hpm-p-movelist", "ArrowDown")
+    w.key("Enter")
+    ok = w.wait_screen("movelist") and page.evaluate("!!document.querySelector('#hp-menus .hpm-ml-unique') && !!document.querySelector('#hp-menus .hpm-ml-row .alt')")
+    w.check(step("movelist"), ok, "unique card + both notations")
+    w.key("Escape")
+    w.check(step("pause_back"), w.wait_screen("pause"), snap=False)
+    w.focus_to("hpm-p-forfeit")
+    w.key("Enter")
+    w.check(step("confirm_forfeit"), bool(w.m().get("confirm")), snap=False)
+    w.key("ArrowRight")
+    w.key("Enter")
+    w.check(step("results_forfeit"), w.wait_screen("results", 12))
+    w.focus_to("hpm-res-menu", "ArrowRight")
+    w.key("Enter")
+    w.check(step("main_after_results"), w.wait_screen("main", 12), snap=False)
+    # TRAINING: select P1 + the dummy -> a real training bout -> TRAINING OPTIONS (P2 rows) -> EXIT
+    w.focus_to("hpm-main-training")
+    w.key("Enter")
+    w.check(step("charselect_training"), w.wait_screen("charselect"), snap=False)
+    w.key("Enter", 3, 0.25)
+    w.key("Enter", 2, 0.25)
+    t0 = time.time()
+    while time.time() - t0 < 60 and (page.evaluate("window.__HP__.state().phase") != "bout"):
+        time.sleep(0.2)
+    time.sleep(1.5)
+    has = page.evaluate("!!document.querySelector('#hp-hud .hp-inputs') && !!document.querySelector('#hp-hud .hp-frames')")
+    w.check(step("training_hud"), has, "input display + frame data")
+    w.key("Escape")
+    w.wait_screen("pause")
+    w.focus_to("hpm-p-training")
+    w.key("Enter")
+    rows = page.evaluate("['hpm-tr-guard-random','hpm-tr-reset-mid','hpm-tr-reset-corner','hpm-tr-reset-cornered','hpm-tr-record-record','hpm-tr-hitboxes'].every((id) => !!document.getElementById(id))")
+    w.check(step("training_options"), w.wait_screen("training") and rows, "guard RANDOM, RESET x3, RECORD, HITBOXES")
+    w.key("Escape")
+    w.wait_screen("pause")
+    w.focus_to("hpm-p-forfeit")
+    w.key("Enter")
+    w.check(step("main_after_training"), w.wait_screen("main", 12), snap=False)
+    # ONLINE lobby (no network action) + CREDITS
+    w.focus_to("hpm-main-online")
+    w.key("Enter")
+    w.check(step("online"), w.wait_screen("online"))
+    w.key("Escape")
+    w.wait_screen("main")
+    w.focus_to("hpm-main-credits")
+    w.key("Enter")
+    w.check(step("credits"), w.wait_screen("credits"), snap=False)
+    w.key("Escape")
+    w.wait_screen("main")
+    w.key("Escape")
+    w.check(step("title_back"), w.wait_screen("title"), snap=False)
+    viol = page.evaluate("window.__HP__.state().flowViolations")
+    w.check(step("flow_violations"), viol == 0, f"violations={viol}", snap=False)
+
+
 def walk_pad(page, results: list, size: str) -> None:
     """A / B / d-pad through the synthetic Standard gamepad (the menus poll navigator.getGamepads())."""
     w = Walk(page, size, results)
@@ -398,7 +515,7 @@ def run(args) -> int:
     results: list = []
     errors: list = []
     sizes = [s.strip() for s in args.sizes.split(",") if s.strip()]
-    ctx_srv = LabServer() if (not args.game and not args.base) else None
+    ctx_srv = LabServer() if not args.base else None
     started = time.time()
     try:
         if ctx_srv:
@@ -413,14 +530,16 @@ def run(args) -> int:
                 page = ctx.new_page()
                 page.on("console", lambda m, s=size: errors.append(f"{s} console.{m.type}: {m.text}") if m.type == "error" else None)
                 page.on("pageerror", lambda e, s=size: errors.append(f"{s} pageerror: {e}"))
-                url = args.base if args.base else lab_url(None, "touch=1" if phone else "")
+                game_url = f"http://localhost:{LAB_PORT}/?dev=1" + ("&touch=1" if phone else "")
+                url = args.base if args.base else (game_url if args.game else lab_url(None, "touch=1" if phone else ""))
                 print(f"[menus] {size} -> {url}")
                 page.goto(url, wait_until="load")
                 wait_ready(page)
                 time.sleep(0.6)
                 if args.game:
-                    raise HarnessError("--game: the integrated walk runs once SHELL wires Menus (see the module doc)")
-                walk_lab(page, size, results)
+                    walk_game(page, size, results)
+                else:
+                    walk_lab(page, size, results)
                 if not args.no_pad and not phone:
                     walk_pad(page, results, size)
                 errors.extend(f"{size} {e}" for e in (page.evaluate("window.__hpErrors || []") or []))
@@ -428,7 +547,7 @@ def run(args) -> int:
             browser.close()
     except HarnessError as e:
         print(f"[menus] HARNESS ERROR: {e}")
-        save_report("menus", {"verdict": "ERROR", "error": str(e), "results": results})
+        save_report("menus_game" if args.game else "menus", {"verdict": "ERROR", "error": str(e), "results": results})
         return 2
     finally:
         if ctx_srv:
@@ -439,7 +558,7 @@ def run(args) -> int:
         "verdict": verdict, "seconds": round(time.time() - started, 1), "steps": len(results), "failed": failed,
         "errors": errors[:50], "results": results,
     }
-    path = save_report("menus", rep)
+    path = save_report("menus_game" if args.game else "menus", rep)
     print(f"[menus] {verdict}: {len(results) - len(failed)}/{len(results)} steps, {len(errors)} page errors -> {os.path.relpath(path, ROOT)}")
     for e in errors[:10]:
         print("   ", e)

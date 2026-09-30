@@ -5,7 +5,8 @@
 //   versus state <= 1024 ints.
 // Timings use performance.now() in the HARNESS only (the sim never reads a clock). Other agents may
 // load this machine; the numbers printed are what was measured this run.
-import { newMatch, randomInputs, tester, fixtureData } from './fixtures/simkit.ts';
+import { newMatch, randomInputs, tester, fixtureData, uniqueInputs } from './fixtures/simkit.ts';
+import { loadGameData } from '../runtime/src/core/data.ts';
 import { step, save, load, checksum } from '../runtime/src/core/sim/match.ts';
 import type { Match } from '../runtime/src/core/sim/match.ts';
 import { STATE_INTS, W, PH, P, PROJ_CAP, projBase } from '../runtime/src/core/sim/layout.ts';
@@ -58,6 +59,44 @@ t.ok(p99 <= BUDGET.stepMs, `step p99 ${(p99 * 1000).toFixed(1)} us <= ${BUDGET.s
 t.ok(mean <= BUDGET.stepMs, `step mean ${(mean * 1000).toFixed(2)} us`);
 t.ok(maxProj >= 1, `projectiles were live during the run (max ${maxProj})`);
 
+// CHANGED(SIM) P2: the real 12 kits with unique-heavy streams (ball, stance, counters, teleports, phases) and the bonus
+// rounds (4 goons / heckle arcs); same 0.25 ms budget
+function measure(mk: () => Match, streams: (f: number) => [number, number], frames: number): { mean: number; p99: number; max: number } {
+  const ts = new Float64Array(frames);
+  let mm = mk();
+  for (let f = 0; f < frames; f++) {
+    const [a, b] = streams(f);
+    const q0 = performance.now();
+    step(mm, a, b);
+    ts[f] = performance.now() - q0;
+    if (mm.s[W.phase] === PH.MATCH_END) mm = mk();
+  }
+  let s0 = 0;
+  for (let i = 0; i < frames; i++) s0 += ts[i];
+  return { mean: s0 / frames, p99: pct(ts, 0.99), max: pct(ts, 1) };
+}
+let realNote = '';
+try {
+  const real = loadGameData();
+  const ids = Object.keys(real.fighters).sort();
+  const UF = 1500;
+  const ua = uniqueInputs(5, 8, UF * ids.length);
+  const ub = uniqueInputs(6, 4, UF * ids.length);
+  let k = 0;
+  const vs = measure(() => { const id = ids[k++ % ids.length]; return newMatch({ data: real, p1: id, p2: ids[(k * 5) % ids.length], seed: k, s1: 1, s2: 0, skipIntro: false }); },
+    (f) => [ua[f], ub[f]], UF * ids.length);
+  // warm the bonus paths, then measure
+  measure(() => newMatch({ data: real, p1: 'johnny', p2: 'johnny', mode: 'brawl', seed: 1, skipIntro: false, s1: 0 }), (f) => [ua[f], 0], 2000);
+  let kb = 0;
+  const br = measure(() => newMatch({ data: real, p1: ids[kb++ % ids.length], p2: 'johnny', mode: kb % 2 ? 'brawl' : 'heckler', seed: kb, skipIntro: false, s1: 0 }),
+    (f) => [ua[f], 0], 6000);
+  t.ok(vs.p99 <= BUDGET.stepMs, `real kits + unique streams: step p99 ${(vs.p99 * 1000).toFixed(1)} us <= ${BUDGET.stepMs * 1000} us (mean ${(vs.mean * 1000).toFixed(2)} us)`);
+  t.ok(br.p99 <= BUDGET.stepMs, `bonus rounds (4 goons / heckle arcs): step p99 ${(br.p99 * 1000).toFixed(1)} us <= ${BUDGET.stepMs * 1000} us (mean ${(br.mean * 1000).toFixed(2)} us)`);
+  realNote = `; real+uniques p99 ${(vs.p99 * 1000).toFixed(1)} us, bonus p99 ${(br.p99 * 1000).toFixed(1)} us`;
+} catch (e) {
+  t.ok(false, `real-data perf run crashed: ${String((e as Error).message).split(/\r?\n/)[0]}`);
+}
+
 // save + checksum
 const m = newMatch({ seed: 3 });
 const inp = randomInputs(3, 600);
@@ -81,4 +120,4 @@ const loadUs = ((performance.now() - t1) * 1000) / ITER;
 t.ok(perOp <= BUDGET.saveChecksumUs, `save + checksum ${perOp.toFixed(3)} us <= ${BUDGET.saveChecksumUs} us`);
 t.ok(STATE_INTS <= BUDGET.stateIntsCap, `state ${STATE_INTS} ints (${STATE_INTS * 4} bytes) <= ${BUDGET.stateIntsCap}`);
 
-t.done(`step mean ${(mean * 1000).toFixed(2)} us p50 ${(p50 * 1000).toFixed(1)} us p99 ${(p99 * 1000).toFixed(1)} us max ${(max * 1000).toFixed(1)} us over ${n} steps; save+checksum ${perOp.toFixed(3)} us; load ${loadUs.toFixed(3)} us; state ${STATE_INTS} ints [x${acc & 1}]`);
+t.done(`step mean ${(mean * 1000).toFixed(2)} us p50 ${(p50 * 1000).toFixed(1)} us p99 ${(p99 * 1000).toFixed(1)} us max ${(max * 1000).toFixed(1)} us over ${n} steps; save+checksum ${perOp.toFixed(3)} us; load ${loadUs.toFixed(3)} us; state ${STATE_INTS} ints [x${acc & 1}]${realNote}`);
