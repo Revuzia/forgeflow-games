@@ -177,13 +177,16 @@ class LayerSampler(object):
         Db, _ = self.up.ev.eval(min(self.up.f1, fu))
         if self.up.mirror:
             Db, _ = _mirror(Db, Vector())
-        if self.up_yaw is not None:
-            Db = {s: self.up_yaw @ m for s, m in Db.items()}
         att = Da["Hips"] @ Db["Hips"].inverted()
         if self.attach == "yaw":
             att = swing_about_z(att)
         elif self.attach == "world":
             att = Matrix.Identity(3)
+        if self.up_yaw is not None:
+            # the contact aim turns the ALREADY-attached upper about the world vertical (through the spine
+            # base): heights are preserved. Part 2 turned B before the lean-attach, so the lean re-projected
+            # the arm: boneyard air_backhand's fist rose 25 cm (1.04 -> 1.28 m) from a 28.7 deg turn.
+            att = self.up_yaw @ att
         D = {}
         for s in Da:
             if s in C.LOWER_BODY:
@@ -198,6 +201,29 @@ def _slerp3(a, b, w):
     if qa.dot(qb) < 0.0:
         qb.negate()
     return qa.slerp(qb, w).to_matrix()
+
+
+def _hips_yaw(R3):
+    """(yaw about world Z in radians, reliability) of a world rotation delta (swing-twist about Z)."""
+    q = R3.to_quaternion()
+    return 2.0 * math.atan2(q.z, q.w), math.sqrt(q.w * q.w + q.z * q.z)
+
+
+def _xfade(Dp, Dc, w):
+    """Seq crossfade of two poses (bone world deltas). The body's YAW is interpolated once along the
+    shortest signed angle and every bone's yaw-free pose is slerped under it, so all bones turn together
+    (part 2 re-run: per-bone shortest-path slerps across a large yaw change sent bones different ways -
+    krane backup_combo Spine1 turned 179 deg in ONE frame between segments aimed 147 deg apart). Falls back
+    to per-bone slerps when either hips rotation is nearly upside-down (yaw ill-defined: handstands)."""
+    yp, rp = _hips_yaw(Dp["Hips"])
+    yc, rc = _hips_yaw(Dc["Hips"])
+    if min(rp, rc) < 0.35:
+        return {s: _slerp3(Dp[s], Dc[s], w) for s in Dc if s in Dp}
+    dy = (yc - yp + math.pi) % (2.0 * math.pi) - math.pi
+    Z = Vector((0.0, 0.0, 1.0))
+    Ip, Ic = Matrix.Rotation(-yp, 3, Z), Matrix.Rotation(-yc, 3, Z)
+    Rw = Matrix.Rotation(yp + w * dy, 3, Z)
+    return {s: Rw @ _slerp3(Ip @ Dp[s], Ic @ Dc[s], w) for s in Dc if s in Dp}
 
 
 class SeqSampler(object):
@@ -256,8 +282,7 @@ class SeqSampler(object):
             hp = hp + self._off[prev]
             w = (k - self.starts[cur]) / float(self.xf)
             w = w * w * (3.0 - 2.0 * w)
-            D = {s: _slerp3(Dp[s], Dc[s], w) for s in Dc if s in Dp}
-            return D, hp.lerp(hc, w)
+            return _xfade(Dp, Dc, w), hp.lerp(hc, w)
         return Dc, hc
 
     def locate(self, i, out_frame_in_segment):
@@ -376,6 +401,203 @@ def retarget(sampler, tgt, opts=None):
     locs = [tgt.hips_rrest_inv @ (h - tgt.rest_hips) for h in hips_list]
     return {"n": n, "quats": quats, "hips_loc": locs, "root": root, "apex_strip": apex,
             "ratio": ratio, "lifts": lifts}
+
+
+# ---------------------------------------------------------------------------- extremity sanitiser
+# CMU mocap has no hand tracking worth the name (2 wrist markers + 1 finger marker): the hand bone of a CMU
+# clip swings 85-138 deg off the forearm for whole stretches (johnny uppercut f0-f2 138 deg, bruno bear_hug
+# 85-107 deg all clip) and snaps 106-169 deg in ONE frame (marker swaps; johnny cross twists 66 deg on its
+# contact frame only). Measured over all 12 fighters (58,548 clip-frames): single-frame hand steps > 70 deg
+# = 20 CMU frames vs 7 Mixamo frames; toes bend up to 97 deg (CMU) and 58 deg makes a rigid boot render as a
+# fin (bruno win_flex). Rules (all angles are the bone's LOCAL rotation vs bind, i.e. relative to its parent):
+WRIST_MAX_SWING = 80.0    # hand bent further than this off the forearm = invalid frame (anatomical ~70-80)
+WRIST_MAX_TWIST = 100.0   # hand twist about its own axis (CMU forearms never twist: the hand carries pronation)
+WRIST_SPIKE = 45.0        # one-frame excursion out (> this) AND back (> 30), neighbours close = invalid frame
+WRIST_STEP = 50.0         # a remaining single-frame snap above this is spread over the 4 frames around it
+TOE_MAX = 45.0            # toe bend vs the foot, every source (shoes / boots)
+
+
+def _ang(a, b):
+    d = math.degrees(a.rotation_difference(b).angle)
+    return min(d, 360.0 - d)
+
+
+def _tw_quat(deg):
+    t = math.radians(deg) * 0.5
+    return Quaternion((math.cos(t), 0.0, math.sin(t), 0.0))
+
+
+def _twist_y(q):
+    """q = swing @ twist(local Y = the bone axis). Returns (twist deg, swing quat, swing deg)."""
+    t = math.degrees(2.0 * math.atan2(q.y, q.w))
+    sw = q @ _tw_quat(t).inverted()
+    return t, sw, math.degrees(2.0 * math.acos(min(1.0, abs(sw.w))))
+
+
+def _limit(q, max_deg):
+    """q scaled toward identity so its rotation angle is <= max_deg (same axis)."""
+    if q.w < 0.0:
+        q = -q
+    a = math.degrees(2.0 * math.acos(min(1.0, q.w)))
+    if a <= max_deg:
+        return q.copy()
+    return Quaternion().slerp(q, max_deg / a)
+
+
+def _cont(qs):
+    """Hemisphere-continuous copy starting with w >= 0 (so the twist angle is continuous from ~0)."""
+    if not qs:
+        return []
+    first = qs[0].copy() if qs[0].w >= 0.0 else -qs[0]
+    return C.quat_list_fix([first] + [q.copy() for q in qs[1:]])
+
+
+# per-bone rules for CMU-sourced clips: (max swing off the parent or None, max twist or None, spike out
+# threshold, spike back threshold, snap-spread step or None). Hands as measured above; FEET: the ankle
+# cannot bend > ~80 deg off the shin (gazza grass_cutter, CMU 74_03, swung the right foot 121-152 deg and
+# twisted it +-140-158 deg for f5-f7: a broken ankle mid-spin); every other limb / spine bone gets the
+# one-frame spike rule only (out > 60 AND back > 40 with the neighbours close), which a real motion never
+# satisfies at 30 fps.
+CMU_RULES = {
+    "Hand": (WRIST_MAX_SWING, WRIST_MAX_TWIST, WRIST_SPIKE, 30.0, WRIST_STEP),
+    "Foot": (80.0, None, WRIST_SPIKE, 30.0, WRIST_STEP),
+    "other": (None, None, 60.0, 40.0, None),
+}
+CMU_SPIKE_BONES = ("Shoulder", "Arm", "ForeArm", "UpLeg", "Leg", "Spine", "Spine1", "Spine2", "Neck", "Head")
+
+
+def _sanitize_bone(qs0, rule, protect):
+    """One bone's local quaternion track -> (new track, report). See sanitize_wrists / CMU_RULES."""
+    max_sw, max_tw, sp_hi, sp_lo, step_max = rule
+    qs = _cont(qs0)
+    n = len(qs)
+    before = max(_ang(qs[k - 1], qs[k]) for k in range(1, n))
+    sw_deg = [_twist_y(q)[2] for q in qs]
+    bad = [max_sw is not None and a > max_sw for a in sw_deg]
+    for run in (1, 2):
+        # a 1- or 2-frame excursion: out > sp_hi / back > sp_lo (either order) while the frames on both sides
+        # are close to each other. johnny air_cross f3: out 57, back 39, f2 -> f4 19 deg apart (1 frame);
+        # lotus tornado_hop LeftUpLeg f7-f8: thigh twist +46 -> -85 -> -103 -> +50 (2 frames, 116 / 157 deg)
+        for k in range(1, n - run):
+            s1 = _ang(qs[k - 1], qs[k])
+            s2 = _ang(qs[k + run - 1], qs[k + run])
+            s02 = _ang(qs[k - 1], qs[k + run])
+            if max(s1, s2) > sp_hi and min(s1, s2) > sp_lo and s02 < 0.6 * min(s1, s2):
+                for j in range(k, k + run):
+                    bad[j] = True
+    good = [k for k in range(n) if not bad[k]]
+    out = [q.copy() for q in qs]
+    mode = "interp"
+    if not good:
+        mode = "scaled"
+        for k in range(n):
+            t, sw, _ = _twist_y(qs[k])
+            out[k] = _limit(sw, max_sw * 0.75) @ _tw_quat(t) if max_sw else qs[k].copy()
+    else:
+        for k in range(n):
+            if not bad[k]:
+                continue
+            lo = max([g for g in good if g < k], default=None)
+            hi = min([g for g in good if g > k], default=None)
+            if lo is None:
+                out[k] = qs[hi].copy()
+            elif hi is None:
+                out[k] = qs[lo].copy()
+            else:
+                out[k] = qs[lo].slerp(qs[hi], (k - lo) / float(hi - lo))
+    out = _cont(out)
+    clamped = 0
+    if max_tw is not None:
+        for k in range(n):
+            t, sw, _ = _twist_y(out[k])
+            if abs(t) > max_tw:
+                out[k] = sw @ _tw_quat(max(-max_tw, min(max_tw, t)))
+                clamped += 1
+        out = _cont(out)
+    spread = 0
+    if step_max is not None:
+        done = set()
+        for _ in range(6):
+            steps = [(_ang(out[k - 1], out[k]), k) for k in range(1, n) if k not in done]
+            if not steps or max(steps)[0] <= step_max:
+                break
+            k = max(steps)[1]
+            done.add(k)
+            a, z = max(0, k - 3), min(n - 1, k + 2)
+            pa = [f for f in protect if a < f < k]      # protected frames before the snap: start after them
+            pz = [f for f in protect if k <= f < z]     # at / after the snap: end on them
+            a = max(pa + [a])
+            z = min(pz + [z])
+            if z - a < 2:
+                continue
+            qa, qz = out[a], out[z]
+            for j in range(a + 1, z):
+                w = (j - a) / float(z - a)
+                out[j] = qa.slerp(qz, w * w * (3.0 - 2.0 * w))
+            spread += 1
+        out = _cont(out)
+    changed = [k for k in range(n) if _ang(out[k], qs[k]) > 0.5]
+    after = max(_ang(out[k - 1], out[k]) for k in range(1, n))
+    return out, {"mode": mode, "invalid": sum(bad), "twist_clamped": clamped, "spread": spread,
+                 "changed_frames": len(changed), "max_step_before": round(before, 1),
+                 "max_step_after": round(after, 1), "max_swing_before": round(max(sw_deg), 1)}
+
+
+def sanitize_wrists(res, protect=None, bones="hands"):
+    """CMU-sourced joints (CMU_RULES). Hands: invalid frames (swing > WRIST_MAX_SWING, one-frame spikes) are
+    re-interpolated between the nearest valid frames (held at the clip ends); a clip with no valid frame gets
+    its swing scaled into 0.75 x range; twist clamped to +-WRIST_MAX_TWIST; any remaining snap > WRIST_STEP is
+    spread (smoothstep slerp over [k-3, k+2]). `protect` = output frames the spread must not move (the frames
+    the contact / strike marks interpolate between): the window is cut at them, so a VALID contact pose stays
+    exactly as the source had it (lotus lunge_palm's contact moved 5 cm when a snap two frames earlier was
+    spread across it); an INVALID contact frame (a spike on the contact itself: johnny cross) is still
+    repaired. bones="all" adds the feet (swing > 80 invalid) and the one-frame spike rule on every limb and
+    spine bone. Fingers / toes are children and follow. Edits res['quats'] in place; returns a report of the
+    bones it changed (hands always listed)."""
+    protect = set(protect or ())
+    rep = {}
+    jobs = [(side + "Hand", CMU_RULES["Hand"]) for side in ("Left", "Right")]
+    if bones == "all":
+        jobs += [(side + "Foot", CMU_RULES["Foot"]) for side in ("Left", "Right")]
+        for bn in CMU_SPIKE_BONES:
+            if bn.startswith(("Spine", "Neck", "Head")):
+                jobs.append((bn, CMU_RULES["other"]))
+            else:
+                jobs += [(side + bn, CMU_RULES["other"]) for side in ("Left", "Right")]
+    for short, rule in jobs:
+        b = C.PFX + short
+        if b not in res["quats"] or len(res["quats"][b]) < 2:
+            continue
+        out, r = _sanitize_bone(res["quats"][b], rule, protect)
+        res["quats"][b] = out
+        if short.endswith("Hand") or r["changed_frames"]:
+            rep[short] = r
+    return rep
+
+
+def clamp_toes(res, max_deg=TOE_MAX):
+    """Toe bend limited to max_deg (every source). The foot effector is the ToeBase HEAD, which the toe's
+    own rotation does not move; the floor fix runs afterwards on the real mesh."""
+    rep = {}
+    for side in ("Left", "Right"):
+        b = C.PFX + side + "ToeBase"
+        if b not in res["quats"]:
+            continue
+        qs = res["quats"][b]
+        n_c, worst = 0, 0.0
+        out = []
+        for q in qs:
+            a = math.degrees(2.0 * math.acos(min(1.0, abs(q.w))))
+            worst = max(worst, a)
+            if a > max_deg:
+                out.append(_limit(q, max_deg))
+                n_c += 1
+            else:
+                out.append(q)
+        if n_c:
+            res["quats"][b] = C.quat_list_fix(out)
+            rep[side + "ToeBase"] = {"clamped_frames": n_c, "max_before": round(worst, 1)}
+    return rep
 
 
 def write_action(tgt, name, res):
@@ -504,21 +726,54 @@ def measure(tgt, res, plan, frames_P):
             c_exact = float(c_frame)
         out["contact"] = round(c_exact / float(FPS), 4)
         out["contact_frame"] = c_frame
-        a = int(math.floor(c_exact))
-        b = min(n - 1, a + 1)
-        w = c_exact - a
-        if w > 1e-6 and b != a:
-            # the pose AT the exact time, joints slerped like three.js samples it (a linear chord between
-            # the two frames' points was up to 6.6 cm off on johnny's run_hook, a 11.7 m/s hook)
-            qs = {bn: res["quats"][bn][a].slerp(res["quats"][bn][b], w) for bn in tgt.order}
-            Pi = tgt.fk(qs, res["hips_loc"][a].lerp(res["hips_loc"][b], w))
-            p = eff_point(tgt, Pi, eff_name)[0]
-        else:
-            p = eff_point(tgt, frames_P[a], eff_name)[0]
+        p = point_at(tgt, res, frames_P, c_exact, eff_name)
         out["effector"] = {"bone": eff_name, "at": to_local(p)}
     # apexY: the lift the ground-lock removed (air='strip' clips: the clip's own jump height, which
     # the sim's y replaces). Other clips keep their vertical motion in the pose: null.
     out["apexY"] = res.get("apex_strip")
+    return out
+
+
+def point_at(tgt, res, frames_P, t_frame, eff_name):
+    """World point of an effector at a (fractional) output frame: the pose AT that time with the joints
+    slerped like three.js samples it (a linear chord between the two frames' points was up to 6.6 cm off
+    on johnny's run_hook, a 11.7 m/s hook)."""
+    n = res["n"]
+    t_frame = max(0.0, min(float(n - 1), float(t_frame)))
+    a = int(math.floor(t_frame))
+    b = min(n - 1, a + 1)
+    w = t_frame - a
+    if w > 1e-6 and b != a:
+        qs = {bn: res["quats"][bn][a].slerp(res["quats"][bn][b], w) for bn in tgt.order}
+        Pi = tgt.fk(qs, res["hips_loc"][a].lerp(res["hips_loc"][b], w))
+        return eff_point(tgt, Pi, eff_name)[0]
+    return eff_point(tgt, frames_P[a], eff_name)[0]
+
+
+def mark_points(tgt, res, frames_P, marks, clip_eff, cands=None):
+    """Per strike mark (name starting 'hit'): {bone, at} measured like effector.at. The bone = among the
+    candidate limbs moving at >= 0.4x the fastest one's peak speed in [f-4, f+1], the one farthest FORWARD at
+    the mark (the clip effector wins ties within 5 cm). A speed-only rule picked johnny sold_out_flurry's
+    retracting jab hand (0.18 m out) for the cross hits."""
+    n = res["n"]
+    hips = [P[tgt.hips].translation for P in frames_P]
+    out = {}
+    names = cands or ("RightHand", "LeftHand", "RightFoot", "LeftFoot", "RightKnee", "LeftKnee")
+    sp = {e: _speeds(tgt, frames_P, hips, n, e) for e in names if C.PFX + EFFECTORS[e][1] in frames_P[0]}
+    if clip_eff and clip_eff not in sp and C.PFX + EFFECTORS[clip_eff][1] in frames_P[0]:
+        sp[clip_eff] = _speeds(tgt, frames_P, hips, n, clip_eff)
+    for nm, f in marks:
+        if not nm.startswith("hit"):
+            continue
+        k = int(round(max(0.0, min(n - 1.0, f))))
+        lo, hi = max(0, k - 4), min(n - 1, k + 1)
+        peak = {e: max(s[lo:hi + 1]) for e, s in sp.items()}
+        top = max(peak.values())
+        pts = {e: to_local(point_at(tgt, res, frames_P, f, e)) for e in peak if peak[e] >= 0.4 * top}
+        bone = max(sorted(pts), key=lambda e: pts[e][0])
+        if clip_eff in pts and pts[clip_eff][0] >= pts[bone][0] - 0.05:
+            bone = clip_eff
+        out[nm] = {"bone": bone, "at": pts[bone]}
     return out
 
 

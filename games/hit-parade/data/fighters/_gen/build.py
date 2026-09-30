@@ -59,9 +59,12 @@ def fmt(o, ind=0, depth=0):
 
 
 def write(path, text):
+    """Atomic write (temp + replace): lane ASSETS' builder may read a clip plan while this runs."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="ascii", newline="\n") as fh:
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="ascii", newline="\n") as fh:
         fh.write(text)
+    os.replace(tmp, path)
 
 
 # ------------------------------------------------------------------------------------ source checks
@@ -239,7 +242,7 @@ def src_text(e, top=True):
 def fighter_md(K):
     i = K.info
     d = i["doc"]
-    J = K.to_json()
+    J = getattr(K, "final_json", None) or K.to_json()
     fid = i["id"]
     lines = []
     A = lines.append
@@ -349,6 +352,17 @@ def fighter_md(K):
             extra.append("ball %s" % o["ball"]["act"])
         if o.get("phase"):
             extra.append("phase %d only" % o["phase"])
+        hv = HITVOL.get(fid, {"notes": {}, "problems": []})
+        if mid in hv["notes"]:
+            extra.append("hit volume: " + hv["notes"][mid])
+        elif "boxes" in K.moves[mid]:
+            extra.append("hand-set hit volume %s" % ", ".join(
+                "f%d-%d x %.2f y %.2f w %.2f h %.2f" % (b["f"][0], b["f"][1], b["x"], b["y"], b["w"], b["h"])
+                for b in o["boxes"]))
+        for pk, pm, pc, pd in hv["problems"]:
+            if pm == mid:
+                extra.append("%s: clip `%s` - %s" % ("PENDING RE-BAKE" if pk == "PENDING" else "HIT-VOLUME DEFECT",
+                                                     pc, pd))
         A("- `%s` %s: %s%s" % (mid, o["name"], o["desc"], (" (" + "; ".join(extra) + ")") if extra else ""))
     A("")
     # cinematic
@@ -423,9 +437,25 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   SHOWTIME; `chipPct` 25 on specials/supers applies only in STAGE FRIGHT (3a).
 - **Notation**: numpad, facing-relative. Normals are keyed by their CONTRACT 19.1 `input` (`5L`, `2M`, `j.H`,
   `6H`). Specials `<name>_l|_m|_h|_ex`; SIMPLE 5S/6S/2S/4S route the M version (x0.8), ASSIST+S+dir the EX.
-- **Hurtboxes from body height** (FIGHTERS [R]): stand h = 0.95 H, crouch h = 0.60 H, air h = 0.62 H; width =
-  build factor x H (slim 0.27, average 0.30, heavy 0.34, monster 0.36); crouch width x1.15, air x0.95; pushbox =
-  0.85 x stand width by 0.90 x stand height.
+- **Hurtboxes** (FIGHTERS [M], 2026-09-30): stand / crouch heights are MEASURED on the baked bodies - Blender 5.1
+  mesh max-up of lane ASSETS' raw.glb, median of 7 frames of the `idle` / `crouch_idle` clip that fighter plays
+  (crouch clamped to stand; Freak's hunched crouch measures above his idle). The first rule (crouch 0.60 H) sat
+  0.13-0.29 m below every real crouch pose. Air h = 0.62 H (tucked jump); width = build factor x H (slim 0.27,
+  average 0.30, heavy 0.34, monster 0.36); crouch width x1.15, air x0.95; pushbox = 0.85 x stand width by 0.90 x
+  stand height.
+- **Hit volumes / crouch-reach rule** (FIGHTERS [M]): SIM derives each strike's box centred on the clips.json
+  effector at contact (L 0.30x0.25, M 0.40x0.30, H/supers 0.50x0.35 m). Every grounded strike that is not an
+  anti-air must reach the **crouch line 1.10 m** (lowest measured crouch top, Krane 1.159 m, minus 0.05): SF-style
+  mids, overheads, projectiles and supers hit crouching opponents. It must also hit a TOUCHING opponent: the box's
+  near edge sits within point-blank reach ((own pushbox + 0.39) / 2 + 0.23 - 0.10 m: the slimmest defender's
+  hurtbox far edge when the pushboxes touch, minus 0.10). The build widens a derived box to that limb volume (top,
+  far reach and frames unchanged; `boxSrc: "hitVolume"`); lowering a box more than 0.50 m means the clip is aimed
+  over every crouch, and the clip is fixed instead. Measured in the real sim before the rules: 53 of 307 damaging
+  ground moves whiffed crouching opponents (incl. overheads, 2 projectile families and 6 supers) and Freak's
+  long-arm rushes and Lv1 connected only from 2.4-3.2 m. Pure anti-airs are exempt; a reversal anti-air (the DPs)
+  must reach both with its FIRST hit (cap 0.60 m - the rising arm sweeps that space). Anti-air normals with a poor
+  effector carry hand-set boxes (listed per move). Weapon props (baton, cleaver, mic-cane) are not in the effector point; their extra reach is not
+  modelled yet (open item).
 - **Clip sources**: Mixamo pack clips at the MIXAMO_CLIPS.md contact frames (front pass for strikes at a target
   ahead, render-judged frame for slams and releases); CMU segments from CMU_CLIPS.md / best_candidates.json
   (mirror = southpaw take made orthodox); LAYER = legs from clip A + Spine-up from clip B (crouch and air attacks:
@@ -480,6 +510,164 @@ def overview_md(kits):
     return lines
 
 
+# ------------------------------------------------------------------------------------ hit volumes
+# Hit-volume rules (2026-09-30, measured in the real sim - see ROSTER.md conventions). SIM derives a strike's
+# box centred on the clips.json effector at contact (core/data.ts derive, CONTRACT 5.2), i.e. only the fist /
+# foot. For every grounded strike that is not an anti-air the build widens that box to the limb volume:
+#  - CROUCH REACH: bottom lowered to kitlib.CROUCH_LINE_M (SF-structure mids, overheads, projectiles and supers
+#    hit crouching opponents); top unchanged; lowering more than kitlib.BOX_EXT_CAP_M is a clip defect (the
+#    strike is aimed over every crouching head: fix the clip, do not stretch the box).
+#  - POINT BLANK: near edge pulled back to kitlib.point_blank_near_max(pushbox) (the arm/leg between the body
+#    and the effector is there; a touching opponent must be hit); far edge (reach) unchanged.
+# Pure anti-airs are exempt; `reversal` anti-airs (DPs) apply both rules to their FIRST hit with the 0.60 m cap.
+# Emitted boxes are tagged `boxSrc: "hitVolume"`. Hand-set kit boxes must already satisfy both (build error).
+# Clips whose plan entry differs from the entry the published bake used (art/renders/<id>/_build/bake.json
+# `src`) are PENDING: their clips.json effector is stale, so no box is emitted until lane ASSETS re-bakes and
+# this build runs again. Multi-hit moves: SIM derives every hit's box at the FIRST contact's effector (clips.json
+# has one effector); per-hit points need ASSETS `marksAt` (requested, CONTRACT 20.6).
+SYS = json.load(open(os.path.join(L.GAME, "data", "system.json"), encoding="utf-8"))
+PENDING = {}     # fid -> {clip ids}
+HITVOL = {}      # fid -> {"notes": {mid: text}, "problems": [(kind, mid, clip, detail)]}
+
+
+def load_clips(fid):
+    p = os.path.join(L.GAME, "data", "clips", fid + ".clips.json")
+    if not os.path.exists(p):
+        return None
+    with open(p, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _strip(o):
+    if isinstance(o, dict):
+        # `marks` only add named times (e.g. THROW PAIR SYNC slam); they never move the pose or the effector
+        return {k: _strip(v) for k, v in o.items() if not k.startswith("_") and k not in ("id", "marks")}
+    if isinstance(o, list):
+        return [_strip(x) for x in o]
+    if isinstance(o, float) and o == int(o):
+        return int(o)
+    return o
+
+
+def baked_pending(fid, plan):
+    """Plan clip ids whose entry differs from the one the last bake used (None = no bake record)."""
+    p = os.path.join(L.GAME, "art", "renders", fid, "_build", "bake.json")
+    if not os.path.exists(p):
+        return None
+    with open(p, encoding="utf-8") as fh:
+        baked = json.load(fh).get("clips", {})
+    out = set()
+    for cid, be in plan.items():
+        b = baked.get(cid)
+        if b is None or _strip(be) != _strip(b.get("src", {})):
+            out.add(cid)
+    return out
+
+
+def is_strike(o):
+    """SIM core/data.ts isStrikeKind."""
+    if o["kind"] in ("throw", "cmdgrab") or o.get("grab") or o.get("projectile"):
+        return False
+    if o.get("cinematic"):
+        return True
+    return o.get("damage", 0) > 0 or any(h["damage"] > 0 for h in o.get("hits", []))
+
+
+def lift_at(o, f):
+    pts = o.get("moveY")
+    if not pts:
+        return 0.0
+    if f <= pts[0][0]:
+        return pts[0][1]
+    for (a, ya), (b, yb) in zip(pts, pts[1:]):
+        if a <= f <= b:
+            return ya + (yb - ya) * (f - a) / float(b - a) if b > a else yb
+    return pts[-1][1]
+
+
+def hit_volume(K, J, clips, pending):
+    """Crouch-reach + point-blank rules on every grounded non-anti-air strike (see the block comment above)."""
+    fid = K.info["id"]
+    line = L.CROUCH_LINE_M
+    near_max = round(L.point_blank_near_max(J["pushbox"][0], (J.get("push") or {}).get("front")), 3)
+    notes, problems = {}, []
+    for mid in K.order:
+        o = J["moves"][mid]
+        if not is_strike(o) or o["input"].startswith("j.") or o.get("air") is True:
+            continue
+        roles = o.get("role", [])
+        # pure anti-airs are exempt; a `reversal` (wake-up / invincible) must also hit a crouching or touching
+        # opponent, even when it is an anti-air too (SF convention: the DP's rising arm starts low)
+        if ("antiair" in roles and "reversal" not in roles) or "high" in roles:
+            continue
+        clip = o["anim"]["clip"]
+        hand = "boxes" in o
+        if hand:
+            boxes = [dict(b) for b in o["boxes"]]
+        else:
+            if clip in pending:
+                problems.append(("PENDING", mid, clip, "plan changed since the published bake"))
+                continue
+            c = clips["clips"].get(clip) if clips else None
+            if not c or not c.get("effector"):
+                continue
+            st = "H" if o["kind"] in ("super1", "super3") else o["strength"]
+            w, h = SYS["boxes"][st]
+            x, y = c["effector"]["at"]
+            ranges = [hh["f"] for hh in o["hits"]] if o.get("hits") else [[o["startup"], o["startup"] + o["active"] - 1]]
+            boxes = [{"f": list(r), "x": x, "y": y, "w": w, "h": h} for r in ranges]
+        ext_y, ext_x, bad = 0.0, 0.0, None
+        rev = "antiair" in roles   # (reversal too, else skipped above): first hit only, reversal cap
+        cap = L.REV_EXT_CAP_M if rev else L.BOX_EXT_CAP_M
+        for bi, b in enumerate(boxes):
+            if rev and bi > 0:
+                continue
+            lift = lift_at(o, b["f"][0])
+            bottom = lift + b["y"] - b["h"] / 2.0
+            near = b["x"] - b["w"] / 2.0
+            if hand:
+                if bottom > line + 1e-9:
+                    bad = "hand-set box bottom %.2f m (world, lift %.2f) above the crouch line %.2f m" % (bottom, lift, line)
+                elif near > near_max + 1e-9:
+                    bad = "hand-set box near edge %.2f m beyond point-blank reach %.2f m" % (near, near_max)
+                if bad:
+                    break
+                continue
+            if bottom > line + 1e-9:
+                ext = bottom - line
+                if ext > cap + 1e-9:
+                    bad = "derived box bottom %.2f m needs %.2f m (> cap %.2f): strike aimed over every crouch" % (
+                        bottom, ext, cap)
+                    break
+                top = b["y"] + b["h"] / 2.0
+                nb = line - lift
+                b["y"], b["h"] = (top + nb) / 2.0, top - nb
+                ext_y = max(ext_y, ext)
+            if near > near_max + 1e-9:
+                far = b["x"] + b["w"] / 2.0
+                b["x"], b["w"] = (near_max + far) / 2.0, far - near_max
+                ext_x = max(ext_x, near - near_max)
+            for k in ("x", "y", "w", "h"):
+                b[k] = round(b[k], 3)
+        if bad:
+            if hand:
+                err("%s %s: %s" % (fid, mid, bad))
+            problems.append(("HAND" if hand else "CLIP", mid, clip, bad))
+            continue
+        if ext_y > 0 or ext_x > 0:
+            o["boxes"] = boxes
+            o["boxSrc"] = "hitVolume"
+            parts = []
+            if ext_y > 0:
+                parts.append("bottom lowered %.2f m to the crouch line %.2f m" % (ext_y, line))
+            if ext_x > 0:
+                parts.append("near edge pulled back %.2f m to point-blank reach %.2f m" % (ext_x, near_max))
+            notes[mid] = "%s (clips.json `%s` effector %s)" % ("; ".join(parts), clip,
+                                                                clips["clips"][clip]["effector"]["bone"])
+    HITVOL[fid] = {"notes": notes, "problems": problems}
+    return notes, problems
+
+
 def timing_report(K, J, out):
     """Clip playback speed per warp segment (clip seconds / sim seconds). The warp is the move's explicit one,
     else SIM's derived [[0,0],[S,contact],[S+A+R,dur]] (core/data.ts derive). > 3.5x reads as a blur, < 0.4x
@@ -517,14 +705,23 @@ def timing_report(K, J, out):
 def main():
     kits = []
     timing = []
+    built = []
     for fid in IDS:
         if not os.path.exists(os.path.join(HERE, "kits", fid + ".py")):
             print("SKIP (no kit source yet)", fid)
             continue
-        K = importlib.import_module(fid).build()
+        built.append((fid, importlib.import_module(fid).build()))
+    # CHANGED(fixer) D2: the slimmest touching defender over the whole roster (measured push fronts + hurtbox halves)
+    dm = []
+    for fid, K in built:
+        pe = L.push_extents(fid)
+        if pe:
+            dm.append(pe["front"] + L.hurtboxes(K.info)["stand"][0] / 2.0)
+    L.ROSTER_DEF_MIN = round(min(dm), 3) if len(dm) == len(built) and dm else None
+    print("point blank: ROSTER_DEF_MIN (min push front + hurt half) =", L.ROSTER_DEF_MIN)
+    for fid, K in built:
         K.fit()
         check_kit(K)
-        write(os.path.join(OUT_FIGHTERS, fid + ".json"), fmt(K.to_json()) + "\n")
         airborne, grounded = set(), set()
         for mid in K.order:
             m = K.moves[mid]
@@ -536,10 +733,58 @@ def main():
             if cid in airborne and cid not in grounded:
                 be["air"] = "strip"   # the sim owns the height (jump arc / moveY): no lift baked into the clip
             plan[cid] = be
+        # THROW PAIR SYNC (CONTRACT 6.2, lane ASSETS): every attacker grab clip declares marks.slam = the source
+        # frame the clip shows on the damage frame (grab.hitF) under the linear lock warp (CONTRACT 19.10), so
+        # the view lands the victim's thrown_f / thrown_b floor impact on the damage frame without re-timing the
+        # attacker. First grab move using the clip decides; later users that differ are reported.
+        slam_from = {}
+        for mid in K.order:
+            g = K.moves[mid].get("grab")
+            if not g or not g.get("clip") or g["clip"] not in plan:
+                continue
+            e = plan[g["clip"]]
+            if e.get("src") not in ("mixamo", "cmu"):
+                err("%s %s: grab clip %s src %s - slam mark needs a mixamo/cmu entry" % (fid, mid, g["clip"],
+                                                                                       e.get("src")))
+                continue
+            fps = 30.0 if e["src"] == "mixamo" else 120.0
+            f0, f1 = e["range"]
+            dur, _ = L.entry_seconds(e)
+            slam = int(round(f0 + (g["hitF"] / float(g["frames"])) * dur * fps * float(e.get("speed", 1.0))))
+            slam = max(f0, min(f1, slam))
+            if g["clip"] in slam_from:
+                if abs(slam - e["marks"]["slam"]) > 3 * (fps / 30.0):
+                    print("   note: %s grab clip %s slam %d from %s; %s would put it at %d" % (
+                        fid, g["clip"], e["marks"]["slam"], slam_from[g["clip"]], mid, slam))
+                continue
+            e.setdefault("marks", {})["slam"] = slam
+            slam_from[g["clip"]] = mid
+        pend = baked_pending(fid, plan)
+        PENDING[fid] = pend if pend is not None else set()
+        J = K.to_json()
+        if J.get("push") is None:
+            J.pop("push", None)
+        notes, probs = hit_volume(K, J, load_clips(fid), PENDING[fid])
+        # CHANGED(fixer) D2: per-move push-box front extension from the clip's measured lean (kitlib.push_ext_curve)
+        cfile = load_clips(fid)
+        n_ext = 0
+        for mid in K.order:
+            o = J["moves"][mid]
+            pe_curve = L.push_ext_curve(fid, o, cfile)
+            if pe_curve:
+                o["pushExt"] = pe_curve
+                n_ext += 1
+        K.final_json = J
+        write(os.path.join(OUT_FIGHTERS, fid + ".json"), fmt(J) + "\n")
         write(os.path.join(OUT_CLIPPLAN, fid + ".json"), fmt(plan) + "\n")
         kits.append(K)
-        nflag = timing_report(K, K.to_json(), timing)
-        print("built", fid, "moves", len(K.order), "clips", len(K.clips), "timing flags", nflag)
+        nflag = timing_report(K, J, timing)
+        print("built", fid, "moves", len(K.order), "clips", len(K.clips), "timing flags", nflag,
+              "| push", J.get("push"), "| pushExt moves", n_ext,
+              "| hit-volume boxes", len(notes), "| hit-volume problems", len(probs),
+              "| clips pending re-bake", sorted(PENDING[fid]) if pend is not None else "no bake record")
+        for p in probs:
+            print("   ", p[0], p[1], p[2], "-", p[3])
     body = HEADER.split("\n") + authored_md() + overview_md(kits)
     for K in kits:
         body += fighter_md(K)

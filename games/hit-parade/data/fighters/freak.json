@@ -3,6 +3,7 @@
   "name": "THE FREAK",
   "persona": "Specimen 13",
   "archetype": "boss_armor",
+  "difficulty": 2,
   "body": "Mutant",
   "heightM": 2.4,
   "hp": 11500,
@@ -25,11 +26,17 @@
   },
   "throwRangeM": 0.7,
   "hurt": {
-    "stand": [0.86, 2.28],
-    "crouch": [0.99, 1.44],
+    "stand": [0.86, 2.01],
+    "crouch": [0.99, 2.01],
     "air": [0.82, 1.49]
   },
-  "pushbox": [0.73, 2.05],
+  "pushbox": [0.85, 1.81],
+  "push": {
+    "front": 0.747,
+    "back": 0.106,
+    "crouchFront": 0.733,
+    "crouchBack": 0.045
+  },
   "colors": [
     {"name": "Specimen 13", "tint": null},
     {"name": "Cobalt Crystal", "tint": "#1e88e5"},
@@ -62,7 +69,10 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
       "anim": {"clip": "claw_jab"},
-      "desc": "Short claw hook."
+      "desc": "Short claw hook.",
+      "boxes": [{"f": [6, 8], "x": 0.939, "y": 1.253, "w": 0.3, "h": 0.306}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.041], [3, 0.047], [5, 0.0], [19, 0.0]]
     },
     "2L": {
       "kind": "normal",
@@ -89,7 +99,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
       "anim": {"clip": "low_claw"},
-      "desc": "Crouching claw to the shin."
+      "desc": "Crouching claw to the shin.",
+      "pushExt": [[0, 0.192], [3, 0.18], [4, 0.139], [5, 0.0], [18, 0.0]]
     },
     "5M": {
       "kind": "normal",
@@ -116,7 +127,10 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
       "anim": {"clip": "wild_swing"},
-      "desc": "Wild looping swing."
+      "desc": "Wild looping claw chop, downward across the body.",
+      "boxes": [{"f": [10, 12], "x": 1.083, "y": 1.286, "w": 0.4, "h": 0.372}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.041], [3, 0.06], [7, 0.0], [30, 0.0]]
     },
     "2M": {
       "kind": "normal",
@@ -143,7 +157,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
       "anim": {"clip": "floor_slam"},
-      "desc": "Slams both claws on the floor (low)."
+      "desc": "Slams both claws on the floor (low).",
+      "pushExt": [[0, 0.0], [6, 0.0], [10, 0.227], [13, 0.29], [18, 0.274], [26, 0.304], [29, 0.277]]
     },
     "5H": {
       "kind": "normal",
@@ -199,7 +214,19 @@
       "moveY": [[0, 0], [6, 0.2], [11, 0.4], [24, 0.0]],
       "role": ["antiair"],
       "anim": {"clip": "jump_claw"},
-      "desc": "Hops up with both claws: anti-air."
+      "desc": "Hops up with both claws: anti-air.",
+      "pushExt": [
+        [0, 0.285],
+        [5, 0.29],
+        [10, 0.247],
+        [16, 0.0],
+        [22, 0.015],
+        [25, 0.183],
+        [28, 0.241],
+        [30, 0.236],
+        [34, 0.061],
+        [37, 0.101]
+      ]
     },
     "6H": {
       "kind": "command",
@@ -227,7 +254,8 @@
       "role": ["overhead"],
       "anim": {"clip": "hammer_down"},
       "sfx": [[14, "whoosh_heavy"]],
-      "desc": "Leaping two-claw slam: armored overhead."
+      "desc": "Leaping two-claw slam: armored overhead.",
+      "pushExt": [[0, 0.0], [18, 0.0], [19, 0.029], [20, 0.117], [21, 0.117], [23, 0.219], [26, 0.277], [44, 0.273]]
     },
     "j.L": {
       "kind": "normal",
@@ -254,7 +282,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "air_claw"},
-      "desc": "Air claw."
+      "desc": "Air claw.",
+      "pushExt": [[0, 0.113], [3, 0.097], [5, 0.0], [16, 0.0]]
     },
     "j.M": {
       "kind": "normal",
@@ -308,7 +337,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "air_slam"},
-      "desc": "Two-claw falling slam."
+      "desc": "Two-claw falling slam.",
+      "pushExt": [[0, 0.0], [5, 0.0], [6, 0.029], [8, 0.176], [11, 0.27], [19, 0.267]]
     },
     "throw_f": {
       "kind": "throw",
@@ -336,7 +366,8 @@
       "grab": {"frames": 60, "adv": 21, "hitF": 40, "swap": false, "air": false, "techable": true, "clip": "crush"},
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Crushes them in a bear hug."
+      "desc": "Crushes them in a bear hug.",
+      "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [24, 0.0], [31, 0.041]]
     },
     "throw_b": {
       "kind": "throw",
@@ -364,7 +395,8 @@
       "grab": {"frames": 50, "adv": 15, "hitF": 32, "swap": true, "air": false, "techable": true, "clip": "fling"},
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Flings them over its shoulder."
+      "desc": "Flings them over its shoulder.",
+      "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [24, 0.0], [31, 0.041]]
     },
     "crusher_leap_l": {
       "kind": "special",
@@ -393,7 +425,22 @@
       "role": ["overhead", "approach"],
       "anim": {"clip": "crusher_leap_clip"},
       "sfx": [[4, "whoosh_heavy"]],
-      "desc": "Leaps across the stage and slams down: armored, overhead, very punishable."
+      "desc": "Leaps across the stage and slams down: armored, overhead, very punishable.",
+      "pushExt": [
+        [0, 0.173],
+        [2, 0.238],
+        [4, 0.236],
+        [6, 0.155],
+        [8, 0.0],
+        [24, 0.0],
+        [25, 0.03],
+        [28, 0.236],
+        [29, 0.264],
+        [40, 0.29],
+        [47, 0.189],
+        [51, 0.0],
+        [52, 0.0]
+      ]
     },
     "crusher_leap_m": {
       "kind": "special",
@@ -422,7 +469,22 @@
       "role": ["overhead", "approach"],
       "anim": {"clip": "crusher_leap_clip"},
       "sfx": [[4, "whoosh_heavy"]],
-      "desc": "Leaps across the stage and slams down: armored, overhead, very punishable."
+      "desc": "Leaps across the stage and slams down: armored, overhead, very punishable.",
+      "pushExt": [
+        [0, 0.173],
+        [2, 0.238],
+        [4, 0.242],
+        [7, 0.155],
+        [9, 0.0],
+        [28, 0.0],
+        [30, 0.092],
+        [31, 0.213],
+        [33, 0.264],
+        [44, 0.29],
+        [51, 0.189],
+        [55, 0.0],
+        [56, 0.0]
+      ]
     },
     "crusher_leap_h": {
       "kind": "special",
@@ -451,7 +513,22 @@
       "role": ["overhead", "approach"],
       "anim": {"clip": "crusher_leap_clip"},
       "sfx": [[4, "whoosh_heavy"]],
-      "desc": "Leaps across the stage and slams down: armored, overhead, very punishable."
+      "desc": "Leaps across the stage and slams down: armored, overhead, very punishable.",
+      "pushExt": [
+        [0, 0.173],
+        [3, 0.238],
+        [6, 0.22],
+        [8, 0.155],
+        [10, 0.0],
+        [32, 0.0],
+        [33, 0.03],
+        [34, 0.163],
+        [37, 0.264],
+        [48, 0.29],
+        [55, 0.189],
+        [59, 0.0],
+        [60, 0.0]
+      ]
     },
     "crusher_leap_ex": {
       "kind": "ex",
@@ -480,7 +557,20 @@
       "role": ["overhead", "approach"],
       "anim": {"clip": "crusher_leap_clip"},
       "sfx": [[4, "whoosh_heavy"]],
-      "desc": "Faster leap, ground bounce."
+      "desc": "Faster leap, ground bounce.",
+      "pushExt": [
+        [0, 0.173],
+        [2, 0.238],
+        [5, 0.202],
+        [7, 0.0],
+        [22, 0.0],
+        [25, 0.236],
+        [26, 0.264],
+        [37, 0.29],
+        [44, 0.189],
+        [48, 0.0],
+        [49, 0.0]
+      ]
     },
     "claw_rush_l": {
       "kind": "special",
@@ -508,7 +598,8 @@
       "role": ["approach"],
       "anim": {"clip": "claw_rush_clip"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Armored running claw swipe."
+      "desc": "Armored running claw swipe.",
+      "pushExt": [[0, 0.0], [4, 0.0], [7, 0.111], [9, 0.133], [10, 0.104], [11, 0.0], [38, 0.0]]
     },
     "claw_rush_m": {
       "kind": "special",
@@ -536,7 +627,8 @@
       "role": ["approach"],
       "anim": {"clip": "claw_rush_clip"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Armored running claw swipe."
+      "desc": "Armored running claw swipe.",
+      "pushExt": [[0, 0.0], [5, 0.0], [8, 0.111], [10, 0.133], [13, 0.0], [42, 0.0]]
     },
     "claw_rush_h": {
       "kind": "special",
@@ -564,7 +656,8 @@
       "role": ["approach"],
       "anim": {"clip": "claw_rush_clip"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Armored running claw swipe."
+      "desc": "Armored running claw swipe.",
+      "pushExt": [[0, 0.0], [6, 0.0], [9, 0.111], [11, 0.133], [12, 0.104], [13, 0.034], [15, 0.0], [50, 0.0]]
     },
     "claw_rush_ex": {
       "kind": "ex",
@@ -593,7 +686,8 @@
       "role": ["approach"],
       "anim": {"clip": "claw_rush_clip"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Super-armored 2-hit rush, -2 on block."
+      "desc": "Super-armored 2-hit rush, -2 on block.",
+      "pushExt": [[0, 0.0], [4, 0.0], [7, 0.111], [9, 0.133], [10, 0.104], [11, 0.0], [42, 0.0]]
     },
     "roar_l": {
       "kind": "special",
@@ -622,7 +716,8 @@
       "role": ["reversal"],
       "anim": {"clip": "roar_wave"},
       "sfx": [[20, "crowd_cheer_burst"]],
-      "desc": "Shockwave roar all around it: blows opponents away, projectile-invulnerable."
+      "desc": "Shockwave roar all around it: blows opponents away, projectile-invulnerable.",
+      "pushExt": [[0, 0.0], [45, 0.0], [50, 0.144]]
     },
     "roar_m": {
       "kind": "special",
@@ -651,7 +746,8 @@
       "role": ["reversal"],
       "anim": {"clip": "roar_wave"},
       "sfx": [[20, "crowd_cheer_burst"]],
-      "desc": "Shockwave roar all around it: blows opponents away, projectile-invulnerable."
+      "desc": "Shockwave roar all around it: blows opponents away, projectile-invulnerable.",
+      "pushExt": [[0, 0.0], [45, 0.0], [50, 0.144]]
     },
     "roar_h": {
       "kind": "special",
@@ -680,7 +776,8 @@
       "role": ["reversal"],
       "anim": {"clip": "roar_wave"},
       "sfx": [[20, "crowd_cheer_burst"]],
-      "desc": "Shockwave roar all around it: blows opponents away, projectile-invulnerable."
+      "desc": "Shockwave roar all around it: blows opponents away, projectile-invulnerable.",
+      "pushExt": [[0, 0.0], [45, 0.0], [50, 0.144]]
     },
     "roar_ex": {
       "kind": "ex",
@@ -709,7 +806,8 @@
       "role": ["reversal"],
       "anim": {"clip": "roar_wave"},
       "sfx": [[20, "crowd_cheer_burst"]],
-      "desc": "Fast super-armored roar."
+      "desc": "Fast super-armored roar.",
+      "pushExt": [[0, 0.0], [37, 0.0], [42, 0.144]]
     },
     "specimen_grab_l": {
       "kind": "cmdgrab",
@@ -747,7 +845,8 @@
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "360 command grab with the longest reach in the game."
+      "desc": "360 command grab with the longest reach in the game.",
+      "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [44, 0.0], [49, 0.037], [58, 0.041]]
     },
     "specimen_grab_m": {
       "kind": "cmdgrab",
@@ -785,7 +884,8 @@
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "360 command grab with the longest reach in the game."
+      "desc": "360 command grab with the longest reach in the game.",
+      "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [44, 0.0], [49, 0.037], [58, 0.041]]
     },
     "specimen_grab_h": {
       "kind": "cmdgrab",
@@ -823,7 +923,8 @@
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "360 command grab with the longest reach in the game."
+      "desc": "360 command grab with the longest reach in the game.",
+      "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [44, 0.0], [49, 0.037], [58, 0.041]]
     },
     "specimen_grab_ex": {
       "kind": "ex",
@@ -861,7 +962,8 @@
       "role": ["grab"],
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "Strike-invulnerable 1-5, 1.40 m."
+      "desc": "Strike-invulnerable 1-5, 1.40 m.",
+      "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [44, 0.0], [49, 0.037], [58, 0.041]]
     },
     "meltdown": {
       "kind": "super1",
@@ -894,7 +996,20 @@
       "role": ["reversal"],
       "anim": {"clip": "meltdown_clip", "warp": [[0, 0.0], [10, 0.533], [22, 1.033], [34, 1.7], [87, 2.767]]},
       "sfx": [[1, "crowd_cheer_burst"]],
-      "desc": "Super-armored three-swipe rampage."
+      "desc": "Super-armored three-swipe rampage.",
+      "pushExt": [
+        [0, 0.0],
+        [3, 0.013],
+        [6, 0.086],
+        [7, 0.065],
+        [8, 0.0],
+        [16, 0.0],
+        [17, 0.053],
+        [18, 0.055],
+        [21, 0.0],
+        [79, 0.0],
+        [87, 0.047]
+      ]
     },
     "specimen_13": {
       "kind": "super3",
@@ -973,7 +1088,8 @@
   "unique": {
     "kind": "armorStep",
     "steps": [],
-    "armored": ["5H", "6H", "crusher_leap_l", "crusher_leap_m", "crusher_leap_h", "crusher_leap_ex", "claw_rush_l", "claw_rush_m", "claw_rush_h", "claw_rush_ex", "roar_l", "roar_m", "roar_h", "roar_ex", "meltdown"]
+    "armored": ["5H", "6H", "crusher_leap_l", "crusher_leap_m", "crusher_leap_h", "crusher_leap_ex", "claw_rush_l", "claw_rush_m", "claw_rush_h", "claw_rush_ex", "roar_l", "roar_m", "roar_h", "roar_ex", "meltdown"],
+    "trait": "BOSS ARMOR: 5H, 6H and every special take 2 hits of armor; 2.40 m reach and 11,500 HP."
   },
   "intro": "intro_roar",
   "win": ["win_roar", "win_idle"],

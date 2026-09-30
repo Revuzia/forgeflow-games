@@ -100,14 +100,15 @@
     "src": "cmu",
     "file": "135_02",
     "range": [3088, 3176],
-    "contact": 3121,
+    "contact": 3128,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
     "kind": "foot",
     "limb": "R_foot",
     "fist": 0,
-    "_cand": "knee.5"
+    "_cand": "knee.5",
+    "effector": "RightKnee"
   },
   "wobble_palm": {
     "src": "cmu",
@@ -217,7 +218,8 @@
     "kind": "hand",
     "limb": "R_hand",
     "fist": 80,
-    "_cand": "lunge_punch.1"
+    "_cand": "lunge_punch.1",
+    "marks": {"slam": 365}
   },
   "wild_toss": {
     "src": "cmu",
@@ -230,7 +232,8 @@
     "kind": "hand",
     "limb": "R_hand",
     "fist": 80,
-    "_cand": "hook.5"
+    "_cand": "hook.5",
+    "marks": {"slam": 2025}
   },
   "sway_enter": {
     "src": "mixamo",

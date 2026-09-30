@@ -73,6 +73,9 @@ export interface UiGameData {
   stages?: unknown;
   strings?: Readonly<Record<string, string>>;
   ladder?: unknown;
+  /** CHANGED(fixer) D1: data/system.json - the HUD paces its round banners to `round.{introFrames, koHitstop,
+   *  koSlowmoFrames, koOutroFrames, timeoverOutroFrames}` (read shape-tolerantly; defaults when absent) */
+  system?: unknown;
 }
 
 // ─────────────────────────── deps the menus take (CONTRACT 16 Menus constructor) ───────────────────────────

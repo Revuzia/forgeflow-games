@@ -61,6 +61,7 @@ export function resolveProfile(row: Obj, table: Obj, name: string, level: number
   const rules = isObj(table.rules) ? table.rules : {};
   const share = isObj(rules.parryShare) ? rules.parryShare : {};
   const adapt = isObj(rules.adaptAggression) ? rules.adaptAggression : {};
+  const press = isObj(rules.press) ? rules.press : {};
   const parry = tier(PARRY_TIERS, row.parry, 0);
   const adaptAggro = row.aggression === 'adapts';
   const floor = n(rules, 'reactFloor', 18);
@@ -83,6 +84,7 @@ export function resolveProfile(row: Obj, table: Obj, name: string, level: number
     aggression: adaptAggro ? n(adapt, 'base', 0.6) : n(row, 'aggression', 0.4),
     adaptAggro,
     guard: n(row, 'guard', 0.3),
+    respect: n(row, 'respect', 0),
     thinkF: Math.max(1, Math.round(n(row, 'thinkF', 16))),
     delayF: Math.max(0, Math.round(n(row, 'delayF', 0))),
     antiZone: n(row, 'antiZone', 0),
@@ -94,6 +96,10 @@ export function resolveProfile(row: Obj, table: Obj, name: string, level: number
     adapt: { base: n(adapt, 'base', 0.6), span: n(adapt, 'span', 0.25), min: n(adapt, 'min', 0.4), max: n(adapt, 'max', 0.8) },
     backRise: n(rules, 'backRise', 0.25),
     wakeReversal: n(rules, 'wakeReversal', 0.2),
+    press: {
+      rate: n(press, 'rate', 0.1),
+      windowF: Math.max(2, Math.round(n(press, 'windowF', 32))),
+    },
   };
 }
 

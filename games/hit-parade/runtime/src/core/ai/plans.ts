@@ -60,7 +60,7 @@ export function neutralPlan(b: Brain): Decision {
   }
 
   const aggro = b.rnd() < b.aggression();
-  const closeU = kit.cf.pushHalf + op.cf.pushHalf + kit.cf.throwRange + 8000;
+  const closeU = kit.cf.pushFS + op.cf.pushFS + kit.cf.throwRange + 8000; // CHANGED(fixer) D2: push-box fronts
   const pokes = usableIn(b, kit.lists.pokes.length > 0 ? kit.lists.pokes : kit.roles.poke ?? [], true);
   const zoning = (kit.lists.zoning.length > 0 ? kit.lists.zoning : kit.projMoves).filter((k) => b.canUse(k));
   const opThreat = b.opReach + (me.cf.hurtStand[0] >> 1) + 25000;
@@ -99,6 +99,34 @@ export function neutralPlan(b: Brain): Decision {
   // the opponent is stuck in a long recovery out of reach (a projectile it threw, a whiffed special): move in
   if (!keepAway0 && op.st === ST.ATTACK && op.cm && !op.air && op.mvF > op.cm.lastActive && op.cm.total - op.mvF >= 14 && d > 150000 && b.rnd() < 0.5 + st.walkIn * 0.5) {
     return { t: 'steps', steps: [{ d: 6, b: 0 }, { d: 5, b: 0 }, { d: 6, b: 0 }] };
+  }
+
+  // respect a presser (FIGHTING_DESIGN §12 "block+punish beats mash"): the opponent has been pressing buttons
+  // (visible move starts, brain.opPressing) and is free to press again, and I am inside the range the buttons
+  // it has been pressing cover by the time they are active (its walk-in included, brain.pressZone). Walking,
+  // dashing or starting a slower button there loses to the next press; a player who has seen the pattern
+  // (the profile's `respect` chance, one roll per decision) swings a longer button where the walk-in will meet
+  // it (brain.spacePoke) or holds a guard and lets block -> interrupt / whiff punish (brain.punishTick) do
+  // the work. Outside that zone it still pokes / zones / jumps as its style says.
+  // frames until the opponent can press again (0 = free now); a travel that arrives after that walks into it
+  let opBusy = 99;
+  if (op.st === ST.IDLE || op.st === ST.CROUCH || op.st === ST.WALK_F || op.st === ST.WALK_B || op.st === ST.DASH_F || op.st === ST.DASH_B) opBusy = 0;
+  else if (op.st === ST.ATTACK && !op.air && op.cm !== null) opBusy = op.mvF <= op.cm.lastActive ? 0 : op.cm.total - op.mvF + 1;
+  else if (op.st === ST.LAND || op.st === ST.RECOVER || op.st === ST.PARRY_REC || op.st === ST.BLOCKSTUN || op.st === ST.HITSTUN) opBusy = op.stun;
+  const respect = P.respect > 0 && b.opPressing() && b.rnd() < P.respect;
+  const pressZone = respect ? b.pressZone() : 0;
+  /** would moving `travel` U over `frames` frames put me inside a presser's zone once it can press again? */
+  const intoPress = (travel: number, frames: number): boolean => respect && opBusy <= frames && d - travel <= pressZone;
+  const dashTravel = kit.cf.dashF[kit.cf.dashFFrames] ?? 0;
+  const dashFrames = kit.cf.dashFFrames + 2;
+  if (intoPress(0, 2)) {
+    const sp = opBusy === 0 ? b.spacePoke() : -1;
+    if (sp >= 0) {
+      b.stats.spacePokes++;
+      return { t: 'route', steps: [sp].concat(P.route >= 3 ? b.followUps(sp).slice(-1) : []) };
+    }
+    b.stats.respects++;
+    return { t: 'guard', crouch: b.chooseGuardCrouch(), frames: Math.max(4, think >> 1) };
   }
 
   // charge fighters keep their charge (down-back = back AND down charge, and a crouch guard)
@@ -161,17 +189,17 @@ export function neutralPlan(b: Brain): Decision {
       const dec = choose(b, [
         [st.poke, () => { const p = pick(b, pokes); return p !== undefined ? { t: 'move', idx: p } : null; }],
         [st.approach, () => { const a = pick(b, approach); return a !== undefined ? { t: 'move', idx: a } : null; }],
-        [st.dash, () => (cornerBehind || d > 120000 ? { t: 'steps', steps: [{ d: 6, b: 0 }, { d: 5, b: 0 }, { d: 6, b: 0 }] } : null)],
+        [st.dash, () => ((cornerBehind || d > 120000) && !intoPress(dashTravel, dashFrames) ? { t: 'steps', steps: [{ d: 6, b: 0 }, { d: 5, b: 0 }, { d: 6, b: 0 }] } : null)],
         [jumpIn ? st.jump : 0, () => { b.stats.jumps++; return { t: 'steps', steps: [{ d: 9, b: 0 }, { d: 9, b: 0 }] }; }],
-        [st.walkIn, () => ({ t: 'hold', d: 6, frames: think })],
+        [st.walkIn, () => (intoPress(kit.cf.walkF * think, think) ? null : { t: 'hold', d: 6, frames: think })],
         [st.air > 0 && jumpIn ? st.air : 0, () => { b.stats.jumps++; return { t: 'steps', steps: [{ d: 9, b: 0 }, { d: 9, b: 0 }] }; }],
       ]);
       if (dec) return dec;
     } else {
       const approach = usableIn(b, kit.lists.approach, true);
       const dec = choose(b, [
-        [st.walkIn + 0.1, () => ({ t: 'hold', d: 6, frames: think + 6 })],
-        [st.dash, () => ({ t: 'steps', steps: [{ d: 6, b: 0 }, { d: 5, b: 0 }, { d: 6, b: 0 }] })],
+        [st.walkIn + 0.1, () => (intoPress(kit.cf.walkF * (think + 6), think + 6) ? null : { t: 'hold', d: 6, frames: think + 6 })],
+        [st.dash, () => (intoPress(dashTravel, dashFrames) ? null : { t: 'steps', steps: [{ d: 6, b: 0 }, { d: 5, b: 0 }, { d: 6, b: 0 }] })],
         [st.approach, () => { const a = pick(b, approach); return a !== undefined ? { t: 'move', idx: a } : null; }],
         [st.jump * 0.5, () => { b.stats.jumps++; return { t: 'steps', steps: [{ d: 9, b: 0 }, { d: 9, b: 0 }] }; }],
       ]);
@@ -190,7 +218,7 @@ export function neutralPlan(b: Brain): Decision {
     const setup = usableIn(b, kit.lists.setup, false);
     if (setup.length > 0) return { t: 'move', idx: setup[0] };
   }
-  if (d > kit.rangeHi && b.rnd() < st.walkIn + 0.2) return { t: 'hold', d: 6, frames: think };
+  if (d > kit.rangeHi && !intoPress(kit.cf.walkF * think, think) && b.rnd() < st.walkIn + 0.2) return { t: 'hold', d: 6, frames: think };
   if (d < kit.rangeLo && !cornerBehind && b.rnd() < st.backOff + 0.1) return { t: 'hold', d: 4, frames: think };
   if (d <= opThreat + 60000 && b.rnd() < P.guard) return guard(think);
   return { t: 'none', frames: think };

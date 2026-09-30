@@ -9,8 +9,12 @@ keys, only meshopt missing because Blender cannot decode it) and, per clip:
   * finger curl (hand -> middle finger, deg) at the strip frames: >= 60 reads as a closed fist
   * renders a 4-frame strip (3/4 front view) + the contact frame (or middle frame) from the GAME
     camera side (P1 view: the fighter faces screen-right, camera on its right side)
-  * renders 5 GAME-camera frames at 300x400: c-6, c-3, c, c+3, c+8 around the contact (a red ball at
-    clips.json effector.at on c: the fist / foot must sit on it) or 5 evenly spread frames
+  * renders 5 GAME-camera frames at 380x400: c-6, c-3, c, c+3, c+8 around the contact (a red ball at
+    clips.json effector.at on c: the fist / foot must sit on it) or 5 evenly spread frames; framed
+    0.20 m ahead of the body so a 1.0 m reach stays inside the frame (part 2: 300 px cut fists at 0.8 m)
+  * flip metric: the largest single-frame LOCAL rotation step of any body bone (hands included,
+    fingers / hair / eyes excluded) with its bone + frame, and the max hand swing / toe bend vs bind
+    (a 106-169 deg one-frame hand snap is CMU marker garbage; sanitised in hp_retarget part 2)
 Also renders a textured EEVEE turntable (8 yaws + 2 head close-ups) of the idle frame 0 to check the
 atlas and the hair/lash cutout. Writes <out>/qc.json and PNGs; tools/qc_sheet.py composes sheets.
 ASCII only.
@@ -35,7 +39,9 @@ ONLY = set(argv[3].split(",")) if len(argv) > 3 and argv[3] else None
 os.makedirs(OUT, exist_ok=True)
 FPS = 30
 W, H = 220, 300
-GW, GH = 300, 400   # game-camera frames around the contact (qc_sheet moves_NN.png)
+GW, GH = 380, 400   # game-camera frames around the contact (qc_sheet moves_NN.png)
+GAME_AHEAD = 0.20   # game-camera target this far ahead of the body (model forward = -Y)
+STEP_BONES_SKIP = ("Thumb", "Index", "Middle", "Ring", "Pinky", "_End", "Eye", "Hair", "Weapon")
 
 
 def setup():
@@ -108,6 +114,15 @@ def angle(a, b):
 
 def curl(arm, side):
     return angle(bone_dir(arm, C.PFX + side + "Hand"), bone_dir(arm, C.PFX + side + "HandMiddle2"))
+
+
+def swing_deg(q):
+    """Swing part (off the bone's own Y axis) of a local rotation, degrees."""
+    t = 2.0 * math.atan2(q.y, q.w)
+    tw_w, tw_y = math.cos(t / 2.0), math.sin(t / 2.0)
+    # swing = q @ twist^-1 ; only its w is needed: w = q.w*tw_w + q.y*tw_y
+    w = q.w * tw_w + q.y * tw_y
+    return math.degrees(2.0 * math.acos(min(1.0, abs(w))))
 
 
 def build_stage(height):
@@ -201,6 +216,10 @@ def main():
     out = {"glb": GLB, "clips": {}, "actions_in_glb": sorted(a.name for a in bpy.data.actions)}
     arms = ["LeftArm", "RightArm", "LeftForeArm", "RightForeArm"]
     rest_d = {b: rest_dir(arm, C.PFX + b) for b in arms}
+    step_bones = [pb for pb in arm.pose.bones
+                  if pb.name != C.PFX + "Hips" and not any(t in pb.name for t in STEP_BONES_SKIP)]
+    hand_pb = [arm.pose.bones.get(C.PFX + s + "Hand") for s in ("Left", "Right")]
+    toe_pb = [arm.pose.bones.get(C.PFX + s + "ToeBase") for s in ("Left", "Right")]
     for cid, meta in clips["clips"].items():
         if ONLY and cid not in ONLY:
             continue
@@ -211,9 +230,25 @@ def main():
         assign(arm, act)
         n = int(meta["frames"])
         lows, highs, tpose = [], [], []
+        prevq, step = None, (0.0, None, None)
+        hsw, tmax = [0.0, 0.0], [0.0, 0.0]
         for f in range(n):
             bpy.context.scene.frame_set(f)
             bpy.context.view_layer.update()
+            cur = {pb.name: pb.matrix_basis.to_quaternion() for pb in step_bones}
+            if prevq:
+                for nm, q in cur.items():
+                    d = math.degrees(prevq[nm].rotation_difference(q).angle)
+                    d = min(d, 360.0 - d)
+                    if d > step[0]:
+                        step = (d, C.strip(nm), f)
+            prevq = cur
+            for i in range(2):
+                if hand_pb[i] is not None:
+                    hsw[i] = max(hsw[i], swing_deg(hand_pb[i].matrix_basis.to_quaternion()))
+                if toe_pb[i] is not None:
+                    qt = toe_pb[i].matrix_basis.to_quaternion()
+                    tmax[i] = max(tmax[i], math.degrees(2.0 * math.acos(min(1.0, abs(qt.w)))))
             lo, hi = lowest_highest(meshes)
             lows.append(round(lo, 4))
             highs.append(round(hi, 4))
@@ -245,6 +280,7 @@ def main():
         eff = meta.get("effector") or {}
         cam.data.ortho_scale = height * 1.25
         bpy.context.scene.render.resolution_x, bpy.context.scene.render.resolution_y = GW, GH
+        gtgt = (tgt[0], tgt[1] - GAME_AHEAD, tgt[2])
         for k, f in enumerate(gfr):
             bpy.context.scene.frame_set(f)
             bpy.context.view_layer.update()
@@ -254,7 +290,7 @@ def main():
                 # camera side (-X = model right) so the ortho game view always shows it
                 MARK.location = (-0.6, -float(eff["at"][0]), float(eff["at"][1]))
             MARK.hide_render = not on
-            aim(cam, tgt, -90.0, 4.0)
+            aim(cam, gtgt, -90.0, 4.0)
             render(os.path.join(OUT, "%s__g%d.png" % (cid, k)))
         MARK.hide_render = True
         cam.data.ortho_scale = height * 1.45
@@ -266,8 +302,11 @@ def main():
             "sink_frames_lt_-0.03": sum(1 for v in lows if v < -0.03),
             "float_frames_gt_0.03": sum(1 for v in lows if v > 0.03),
             "finger_curl_deg_LR": {str(k): [round(x, 1) if x is not None else None for x in v] for k, v in curls.items()},
+            "max_step_deg": round(step[0], 1), "step_bone": step[1], "step_frame": step[2],
+            "hand_swing_max_LR": [round(x, 1) for x in hsw], "toe_max_LR": [round(x, 1) for x in tmax],
         }
-        C.log("QC", cid, "low %.3f..%.3f" % (min(lows), max(lows)), "tpose", len(tpose))
+        C.log("QC", cid, "low %.3f..%.3f" % (min(lows), max(lows)), "tpose", len(tpose),
+              "step %.1f %s f%s" % (step[0], step[1], step[2]))
     # ---- textured turntable (EEVEE) of idle frame 0
     try:
         idle = action_for("idle") or (bpy.data.actions[0] if bpy.data.actions else None)

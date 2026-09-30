@@ -6,8 +6,8 @@
 //   vertical floor  = ((1.8 + 0.45) / 2 + 0.25) / tan(vFOV/2)            = 4.36 m at 35 deg
 //   horizontal need = (s/2 + 0.35 body + 0.9 margin) / (aspect * tan(vFOV/2))   (s = separation)
 // which reproduces the research table (16:9: s 1.8 -> 4.36, 3 -> 4.91, 4 -> 5.80, 6 -> 7.58 m); a phone's wider aspect
-// frames tighter by itself. Jumps PAN (look-at and camera rise together so the higher head stays below the top 12 %),
-// they never zoom. The set walls at x = +-8 m stay at the screen edge (mid-X clamp).
+// frames tighter by itself. Jumps PAN (look-at and camera rise together so the higher fighter's top stays below the HUD
+// band - `safeTop`, CHANGED(fixer) D4 - or the top 12 % without a HUD); they zoom only when top-to-feet cannot fit. The set walls at x = +-8 m stay at the screen edge (mid-X clamp).
 // Smoothing: asymmetric asymptotic averaging, frame-rate independent: alpha = 1 - (1 - a)^(dt*60); distance a = 0.15
 // zooming OUT, 0.04 zooming IN (fast out / slow in); mid-X 0.2; look-Y 0.12.
 // Shake (Eiserloh, research §5a/§5c): ROTATIONAL only, trauma 0..1, +0.10 light / +0.20 heavy / +0.35 IMPACT or punish
@@ -32,8 +32,10 @@ export const CAM = {
   wallX: 8.0,
   /** metres of set wall kept visible past each wall when clamped */
   wallShow: 0.4,
-  /** head must stay below the top 12 % of the frame */
+  /** head must stay below the top 12 % of the frame (when no HUD safe area was given, see FightCamera.safeTop) */
   topMargin: 0.12,
+  /** CHANGED(fixer) D4: clearance under the HUD band (fraction of the frame height) */
+  safePad: 0.015,
   /** ... and the lower fighter's feet above the bottom 4 % */
   bottomMargin: 0.04,
   aOut: 0.15, aIn: 0.04, aX: 0.2, aY: 0.12,
@@ -58,6 +60,26 @@ export interface CinePose { pos: THREE.Vector3; look: THREE.Vector3; fov: number
 function ease(a: number, dt: number): number { return 1 - Math.pow(1 - a, Math.max(0, dt) * 60); }
 function smooth01(t: number): number { const x = t < 0 ? 0 : t > 1 ? 1 : t; return x * x * (3 - 2 * x); }
 
+/**
+ * CHANGED(fixer) D4: the lowest look-at height that keeps world height `top` (on the fight plane) at or below the screen
+ * line `safeTop` (fraction of the frame height from the top) for the constant-pitch rig: camera at look + `delta`, `d` m
+ * from the plane. Exact for any x on the plane (camera-space depth does not depend on x): NDC y = tan(angle to the point
+ * relative to the view axis) / tan(vfov / 2).
+ */
+export function lookFloorFor(top: number, d: number, vfovDeg: number, delta: number, safeTop: number): number {
+  const t = Math.tan(vfovDeg * DEG / 2);
+  const aMax = Math.atan((1 - 2 * safeTop) * t);          // max angle above the view axis
+  const pitch = Math.atan(delta / d);                      // view axis below horizontal
+  return top - delta - d * Math.tan(aMax - pitch);
+}
+/** the highest look-at height that keeps world height `feet` at or above the bottom margin (fraction from the bottom) */
+export function lookCeilFor(feet: number, d: number, vfovDeg: number, delta: number, bottom: number): number {
+  const t = Math.tan(vfovDeg * DEG / 2);
+  const aMin = Math.atan((1 - 2 * bottom) * t);            // max angle below the view axis
+  const pitch = Math.atan(delta / d);
+  return feet - delta - d * Math.tan(-aMin - pitch);
+}
+
 /** CONTRACT §7b distance for a separation (m) at an aspect (w/h) and vFOV (deg) */
 export function distanceFor(sep: number, aspect: number, vfovDeg = CAM.vfov): number {
   const t = Math.tan(vfovDeg * DEG / 2);
@@ -73,6 +95,8 @@ export class FightCamera {
   variant: 'versus' | 'brawl' = 'versus';
   trauma = 0;
   shakeScale = 1;
+  /** CHANGED(fixer) D4: fraction of the frame height covered by the top HUD band (0 = unknown -> CAM.topMargin) */
+  safeTop = 0;
   /** smoothed rig state */
   dist = CAM.dMin;
   midX = 0;
@@ -137,17 +161,21 @@ export class FightCamera {
     if (brawl) dT *= CAM.brawl.closer;
     const baseLook = brawl ? CAM.brawl.lookY : CAM.lookY;
     const baseCamY = brawl ? CAM.brawl.camY : CAM.camY;
-    // jump pan: keep the higher head inside the top 12 % while the lower fighter's feet stay inside the bottom 4 %.
-    // Pan first (research 7b: jumps pan, they do not zoom); only when head-to-feet no longer fits the frame at this
-    // distance (a full-apex jump at point-blank range: 3.4 m of fighter vs a 2.75 m frame) does the camera ease out.
-    const head = Math.max(f[0].head, f[1].head);
+    // jump pan: keep the higher fighter's top (head, or raised hands) below the HUD band while the lower fighter's feet
+    // stay inside the bottom 4 %. Pan first (research 7b: jumps pan, they do not zoom); only when top-to-feet no longer
+    // fits the frame at this distance (a full-apex jump at point-blank range) does the camera ease out.
+    // CHANGED(fixer) D4: the top line is the HUD's measured bottom edge (`safeTop`, from game.ts; was a fixed 12 % while the
+    // bars + NERVE strip cover ~17 % at 16:9, so an apex jump put the jumper's head behind the P1 bar), the pan is solved
+    // with the camera's real pitch, and the pan UP is a hard floor on the smoothed look height (a 0.12 ease used to lag
+    // the rising head by ~0.3 m at the apex); only the settle back down is eased.
+    const top = Math.max(f[0].head, f[1].head);
     const feet = Math.min(f[0].y, f[1].y);
-    const tanH = Math.tan(fov * DEG / 2);
-    const upK = 1 - 2 * CAM.topMargin, downK = 1 - 2 * CAM.bottomMargin;
-    const needHalf = (head - feet) / (upK + downK);
-    if (needHalf > dT * tanH) dT = Math.min(CAM.dMax * 1.2, needHalf / tanH);
-    const halfH = dT * tanH;
-    const lookYT = Math.max(baseLook, Math.min(head - upK * halfH, feet + downK * halfH));
+    const delta = baseCamY - baseLook;                      // camera height above the look-at point (constant pitch rig)
+    const safeTop = this.safeTop > 0 ? Math.min(0.4, this.safeTop + CAM.safePad) : CAM.topMargin;
+    const panFloor = (d: number): number => lookFloorFor(top, d, fov, delta, safeTop);
+    const panCeil = (d: number): number => lookCeilFor(feet, d, fov, delta, CAM.bottomMargin);
+    for (let k = 0; k < 24 && panFloor(dT) > panCeil(dT) && dT < CAM.dMax * 1.25; k++) dT = Math.min(CAM.dMax * 1.25, dT * 1.04);
+    const lookYT = Math.max(baseLook, Math.min(panFloor(dT), panCeil(dT)));
     // wall clamp
     let midT = (f[0].x + f[1].x) / 2;
     const halfW = dT * Math.tan(fov * DEG / 2) * aspect;
@@ -159,6 +187,11 @@ export class FightCamera {
       this.dist += (dT - this.dist) * ease(dT > this.dist ? CAM.aOut : CAM.aIn, dt);
       this.midX += (midT - this.midX) * ease(CAM.aX, dt);
       this.lookY += (lookYT - this.lookY) * ease(CAM.aY, dt);
+      // the airborne fighter's head never slips under the HUD while the smoothing catches up (at the ACTUAL distance).
+      // Head beats feet here: while the zoom-out is still catching up, the grounded fighter's feet may dip under the
+      // bottom margin for a few frames; the jumper (what the other player must read to anti-air) stays in full view.
+      const floorNow = panFloor(this.dist);
+      if (this.lookY < floorNow) this.lookY = floorNow;
     }
     this.wasCine = !!this.cine;
     // rig pose

@@ -1,8 +1,12 @@
 // HIT PARADE - the broadcast package (lane UI; CONTRACT section 8, 16). Pattern: blocktooth/src/ui/broadcast.ts.
 //   buildBug   the show bug: HIT PARADE logo + red LIVE pill (blinking dot) + an episode line. Used by the HUD, the title
 //              and the slates.
-//   sweep      a full-width banner band (ROUND 1, FIGHT!, K.O., TIME OVER, PERFECT, <NAME> WINS). Queued and sequential:
-//              ROUND 1 always finishes before FIGHT! starts. Non-blocking; resolves when that sweep is gone.
+//   sweep      a full-width banner band (ROUND 1, FIGHT!, K.O., TIME OVER, PERFECT, <NAME> WINS). Queued and sequential;
+//              non-blocking; resolves when that sweep is gone. CHANGED(fixer) D1: `cut: true` drops the showing sweep and
+//              everything queued (their promises resolve) and plays at once - the HUD cuts on every sim phase change
+//              (KO / TIME OVER / ROUND_INTRO / FIGHT) so a banner never outlives the phase it belongs to (a fixed-duration
+//              queue used to play '<NAME> WINS', 'ROUND 2' and 'FIGHT!' up to 3 s into the live round). `onStart` runs
+//              when that sweep actually starts (host captions paced to their banner).
 //   strap      the stage manager's lower third (RATINGS SPIKE, MATCH POINT, PHASE TWO ...). Queued, deduped by key,
 //              urgent ones jump the queue, at most 3 waiting.
 //   caption    the host's caption card (RICKY MARQUEE). Lines come from data/captions.json pools by event; a line never
@@ -56,7 +60,8 @@ export function setBugLine(bug: HTMLElement, line: string): void {
 }
 
 interface Strap { key: string; title: string; sub: string; urgent: boolean }
-interface SweepJob { text: string; sub: string; tone: SweepTone; ms: number; done: () => void }
+interface SweepJob { text: string; sub: string; tone: SweepTone; ms: number; done: () => void; onStart: (() => void) | null }
+export interface SweepOpts { tone?: SweepTone; sub?: string; ms?: number; cut?: boolean; onStart?: () => void }
 
 export class Broadcast {
   readonly root: HTMLElement;
@@ -138,12 +143,25 @@ export class Broadcast {
   }
 
   // ─────────────────────────── sweeps ───────────────────────────
-  sweep(text: string, o: { tone?: SweepTone; sub?: string; ms?: number } = {}): Promise<void> {
+  sweep(text: string, o: SweepOpts = {}): Promise<void> {
     const tone = o.tone ?? 'round';
+    if (o.cut) this.cutSweeps();
     return new Promise<void>((done) => {
-      this.sweeps.push({ text, sub: o.sub ?? '', tone, ms: o.ms ?? SWEEP_MS[tone], done });
+      const ms = Math.max(200, Math.round(o.ms ?? SWEEP_MS[tone]));
+      this.sweeps.push({ text, sub: o.sub ?? '', tone, ms, done, onStart: o.onStart ?? null });
       this.pumpSweep();
     });
+  }
+
+  /** CHANGED(fixer) D1: drop the showing sweep and the queue now (their promises resolve); straps / captions stay */
+  cutSweeps(): void {
+    const pending = [...this.sweeps];
+    if (this.sweeping) pending.unshift(this.sweeping);
+    this.sweeps = [];
+    this.sweeping = null;
+    if (this.sweepAnim) { this.sweepAnim.onfinish = null; this.sweepAnim.cancel(); this.sweepAnim = null; }
+    this.sweepEl.classList.remove('on');
+    for (const j of pending) j.done();
   }
 
   private pumpSweep(): void {
@@ -151,6 +169,7 @@ export class Broadcast {
     const job = this.sweeps.shift() as SweepJob;
     const ep = this.epoch;
     this.sweeping = job;
+    if (job.onStart) { try { job.onStart(); } catch (e) { console.warn('[hit-parade] sweep onStart', e); } }
     this.sweepText.textContent = job.text;
     this.sweepSub.textContent = job.sub;
     this.sweepEl.dataset.tone = job.tone;
@@ -339,13 +358,7 @@ export class Broadcast {
   // ─────────────────────────── clear ───────────────────────────
   clear(): void {
     this.epoch++;
-    const pending = [...this.sweeps];
-    if (this.sweeping) pending.unshift(this.sweeping);
-    this.sweeps = [];
-    this.sweeping = null;
-    if (this.sweepAnim) { this.sweepAnim.cancel(); this.sweepAnim = null; }
-    this.sweepEl.classList.remove('on');
-    for (const j of pending) j.done();
+    this.cutSweeps();
     this.straps = [];
     this.strapShowing = null;
     if (this.strapAnim) { this.strapAnim.cancel(); this.strapAnim = null; }

@@ -78,6 +78,8 @@ export class BoutView {
   private readonly camF: [CamFighter, CamFighter] = [{ x: 0, y: 0, head: 1.8 }, { x: 0, y: 0, head: 1.8 }];
   private pendingHits = new Map<string, { kind: HitKind; rank: number; ev: ViewEvent }>();
   private lastSnaps: [ViewFighterSnap, ViewFighterSnap] | null = null;
+  /** CHANGED(fixer) D4: screen-y fraction (from the top) of each fighter's top, last frame */
+  readonly lastTops: [number, number] = [0, 0];
   warmMs = 0;
   warmSplit: Record<string, number> = {};
   loadSplit: Record<string, number> = {};
@@ -161,6 +163,12 @@ export class BoutView {
       programs: this.r.three.info.programs?.length ?? 0 };
   }
 
+  /**
+   * CHANGED(fixer) D4: the screen band the HUD covers at the top (fraction of the frame height, 0 = none). The camera's
+   * jump pan keeps an airborne fighter's head below it (game.ts passes Hud.safeTop() each frame; cheap, cached there).
+   */
+  setSafeArea(top: number): void { this.cam.safeTop = Number.isFinite(top) ? Math.max(0, Math.min(0.45, top)) : 0; }
+
   setSettings(s: ViewSettings): void {
     this.settings = { ...this.settings, ...Object.fromEntries(Object.entries(s).filter(([, v]) => v !== undefined)) } as Required<ViewSettings>;
     this.fx.mode = this.settings.splatter;
@@ -170,8 +178,15 @@ export class BoutView {
     this.post.setBloom(this.settings.bloom);
   }
 
-  private hitPos(att: ViewFighterSnap, vic: ViewFighterSnap, vicView: FighterView, dcm: number, out: THREE.Vector3): number {
+  private hitPos(att: ViewFighterSnap, vic: ViewFighterSnap, vicView: FighterView, dcm: number, out: THREE.Vector3, sc = -1): number {
     const dir = Math.sign(vic.x - att.x) || (att.facing < 0 ? -1 : 1);
+    if (sc === 7) {
+      // CHANGED(fixer) D7: a throw's damage lands on the victim's BODY - the thrown clip has carried it off its root
+      // x and down to the floor, so the fixed contact height (d = 100 cm at the root) floated the spark in mid-air
+      vicView.chest(out);
+      out.z = Math.max(out.z, 0) + 0.12;
+      return dir;
+    }
     const y = dcm > 0 ? vic.y + dcm / 100 : vicView.chest(out).y;
     out.set(vic.x - dir * 0.18, y, 0.12);
     return dir;
@@ -252,7 +267,7 @@ export class BoutView {
     // collapsed strikes: one burst per (frame, attacker, victim) of the strongest kind
     for (const { kind, ev: e } of this.pendingHits.values()) {
       const vi = e.b === 1 ? 1 : 0, ai = 1 - vi;
-      const dir = this.hitPos(p(ai), p(vi), F[vi], e.d, this.tmp);
+      const dir = this.hitPos(p(ai), p(vi), F[vi], e.d, this.tmp, e.c);
       this.fx.hit(kind, e.c, this.tmp, dir);
       F[vi].victim = true;
       F[vi].flash(kind === 'punish' ? 0.55 : kind === 'counter' ? 0.5 : 0.4,
@@ -277,6 +292,14 @@ export class BoutView {
       this.lastRound = m.round;
     }
     if (ev.length) this.events(m, snaps, ev);
+    // CHANGED(fixer) D3: a side-swap throw victim (thrown_b, then its face-down landing) passes in FRONT of the thrower
+    for (let i = 0; i < 2; i++) {
+      const fv = this.fighters[i];
+      const e = snaps[i].animId >= 0 ? fv.table[snaps[i].animId] : undefined;
+      const swapPose = !!e && (e.clip === 'thrown_b' || (fv.zTarget > 0 && e.clip === 'kd_ground_f'));
+      const dx = Math.abs(snaps[i].x - snaps[1 - i].x);
+      fv.zTarget = swapPose ? 0.55 * Math.max(0, Math.min(1, 1.6 - dx)) : 0;
+    }
     this.fighters[0].update(snaps[0], dt, this.realTime);
     this.fighters[1].update(snaps[1], dt, this.realTime);
     // cinematic camera from the sim's cinematic frame
@@ -297,9 +320,16 @@ export class BoutView {
     // camera
     for (let i = 0; i < 2; i++) {
       const c = this.camF[i];
-      c.x = snaps[i].x; c.y = snaps[i].y; c.head = this.fighters[i].headY();
+      // CHANGED(fixer) D4: an airborne fighter's top includes raised hands (grounded: the head only, so an uppercut's fist
+      // does not bob the camera)
+      c.x = snaps[i].x; c.y = snaps[i].y; c.head = snaps[i].y > 0.02 ? this.fighters[i].topY() : this.fighters[i].headY();
     }
     this.cam.update(dt, this.camF, this.r.css.x / Math.max(1, this.r.css.y), m.frame, ts);
+    // CHANGED(fixer) D4 read-back: where each fighter's top lands on screen (fraction of the frame height from the top)
+    for (let i = 0; i < 2; i++) {
+      this.tmp.set(this.camF[i].x, this.camF[i].head, 0).project(this.cam.camera);
+      this.lastTops[i] = Math.round(((1 - this.tmp.y) / 2) * 1000) / 1000;
+    }
     // the dim plane goes just behind the farther fighter along the camera's view (fighters stay lit in any shot)
     const cc = this.cam.camera;
     cc.getWorldDirection(this.tmp);
@@ -338,6 +368,13 @@ export class BoutView {
     this.lastRound = -1;
     this.pendingHits.clear();
     for (const f of this.fighters) { f.victim = false; f.flash(0, 0xffffff, 0.001); }
+  }
+
+  /** CHANGED(fixer) D4: small per-frame camera read-back (test surface `state().cam`) */
+  camReadback(): Record<string, unknown> {
+    const L = this.cam.last;
+    return { mode: L.mode, dist: Math.round(L.dist * 1000) / 1000, lookY: Math.round(L.lookY * 1000) / 1000, safeTop: this.cam.safeTop,
+      tops: [...this.lastTops], topY: [Math.round(this.camF[0].head * 1000) / 1000, Math.round(this.camF[1].head * 1000) / 1000] };
   }
 
   /** read-back for the test surface / lab */

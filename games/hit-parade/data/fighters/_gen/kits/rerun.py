@@ -42,9 +42,9 @@ def build():
            "Mixamo zombie biting (2): crouched head bite (hips 0.41-0.46 m, Head f22)")
     K.clip("crawl_claw", mix(ZB + "zombie crawl", (1, 40), contact=10),
            "Mixamo zombie crawl: prone reaching claw along the floor (hips 0.09-0.26 m, RightHand f10)")
-    K.clip("scream_up", mix(ZB + "zombie scream", (15, 45), contact=30),
-           "Mixamo zombie scream: arms flung up (LeftHand f30) = upward flail anti-air")
-    K.clip("drop_headbutt", mix(ZB + "zombie neck bite", (20, 45), contact=32),
+    K.clip("scream_up", mix(ZB + "zombie scream", (15, 45), contact=23),
+           "Mixamo zombie scream: arms flung up = upward flail anti-air. Contact f23 = hands at the top (bake trace LeftHand 1.21 m, 0.42 m forward); the old f30 was the arms falling back to 0.75 m")
+    K.clip("drop_headbutt", dict(mix(ZB + "zombie neck bite", (20, 45), contact=32), effector="Head"),
            "Mixamo zombie neck bite head lunge (front pass f32, 1.48 m) = overhead headbutt")
     K.clip("air_swat", air(cmu("jab.3", mirror=True, fist=0)), "jump apex legs + open-hand swat")
     K.clip("air_lurch", air(mix(ZB + "zombie attack", (15, 55), contact=33)), "jump apex legs + claw")
@@ -93,11 +93,12 @@ def build():
           desc="Double-claw lunge: his longest button (1.35 m).",
           why="Longest reach in his kit: startup 12->13.")
     K.add("2H", "AA", name="Scream Claw", clip="scream_up", juggle={"js": 1, "ji": 1, "jl": 0},
+          boxes=[{"f": [9, 12], "x": 0.45, "y": 1.35, "w": 0.50, "h": 0.45}],
           cancel=["special", "super"], desc="Arms flung up in a scream: anti-air.")
     K.add("6H", "OH", input="6H", kind="command", name="Drop-Dead Headbutt", clip="drop_headbutt",
-          boxes=[{"f": [18, 20], "x": 0.45, "y": 1.45, "w": 0.40, "h": 0.40}],
+          boxes=[{"f": [18, 20], "x": 0.45, "y": 1.375, "w": 0.40, "h": 0.55}],
           desc="Lunging headbutt from above: overhead.",
-          why="Overhead template; hand-set box on the head lunge (front pass f32: 0.43 m ahead, 1.48 m high).")
+          why="Overhead template; hand-set box on the head lunge (front pass f32: 0.43 m ahead, 1.48 m high), top 1.65 m, bottom at the 1.10 m crouch line (head + shoulders dropping: an overhead must hit a crouching blocker).")
     K.add("j.L", "jL", input="j.L", name="Air Swat", clip="air_swat", desc="Air swat.")
     K.add("j.M", "jM", input="j.M", name="Air Claw", clip="air_lurch", desc="Air claw.")
     K.add("j.H", "jH", input="j.H", name="Pounce", clip="air_reach", desc="Double-claw pounce.")

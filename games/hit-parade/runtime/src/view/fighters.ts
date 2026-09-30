@@ -36,6 +36,7 @@ export class FighterView {
   /** mirror the model when facing -1 (view setting, default on) */
   mirror = true;
   private readonly head: THREE.Object3D | null;
+  private readonly hands: THREE.Object3D[];
   private readonly chestBone: THREE.Object3D | null;
   private readonly bonesByName = new Map<string, THREE.Object3D>();
   private flashAmt = 0;
@@ -71,6 +72,7 @@ export class FighterView {
     });
     this.model.traverse((o) => { if ((o as THREE.Bone).isBone) this.bonesByName.set(o.name, o); });
     this.head = this.bonesByName.get('mixamorigHead') ?? null;
+    this.hands = ['mixamorigLeftHand', 'mixamorigRightHand'].map((n) => this.bonesByName.get(n)).filter((b): b is THREE.Object3D => !!b);
     this.chestBone = this.bonesByName.get('mixamorigSpine2') ?? this.bonesByName.get('mixamorigSpine1') ?? null;
     this.pose = new PoseDriver(this.model, asset.clips);
   }
@@ -104,9 +106,19 @@ export class FighterView {
   /**
    * Apply one snapshot. `dt` real seconds; `time` real seconds (the shake clock); `timeScale` 0.25 in KO slow-mo.
    */
+  /**
+   * CHANGED(fixer) D3: presentation-only depth offset (m, toward the camera). BoutView sets the target while a side-swap
+   * throw carries this fighter PAST the thrower (thrown_b) so the tumbling body passes in front of the thrower instead of
+   * through it (2D fighters layer the victim over the thrower); eased in / out in real time, never touches the sim.
+   */
+  zTarget = 0;
+  private zNow = 0;
+
   update(s: ViewFighterSnap, dt: number, time: number): void {
     const facing = s.facing < 0 ? -1 : 1;
-    this.root.position.set(s.x, s.y, 0);
+    this.zNow += (this.zTarget - this.zNow) * Math.min(1, dt * 10);
+    if (Math.abs(this.zNow) < 1e-4) this.zNow = 0;
+    this.root.position.set(s.x, s.y, this.zNow);
     // yaw +-90 deg from facing (CONTRACT §2); facing -1 also MIRRORS the model (local X scale -1, SF4-6 convention,
     // §17.1) so both sides show the same silhouette to the camera. Equivalent to reflecting the facing +1 pose in x.
     const mirror = this.mirror && facing < 0;
@@ -152,6 +164,13 @@ export class FighterView {
   headY(): number {
     if (this.head) { this.head.getWorldPosition(this.mp); return this.mp.y + 0.24 * (this.heightM / 1.8); }   // head bone -> hair top
     return this.root.position.y + this.heightM;
+  }
+
+  /** CHANGED(fixer) D4: the silhouette top for the camera = head top, or a raised hand (jump clips throw the arms up) */
+  topY(): number {
+    let y = this.headY();
+    for (const b of this.hands) { b.getWorldPosition(this.mp); y = Math.max(y, this.mp.y + 0.06 * (this.heightM / 1.8)); }
+    return y;
   }
 
   /** world chest position (FX anchor) */

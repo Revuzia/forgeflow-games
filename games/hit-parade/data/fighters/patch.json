@@ -3,6 +3,7 @@
   "name": "PATCH",
   "persona": "The Floor Manager",
   "archetype": "rushdown",
+  "difficulty": 2,
   "body": "Eve By J.Gonzales",
   "heightM": 1.72,
   "hp": 9500,
@@ -25,11 +26,17 @@
   },
   "throwRangeM": 0.6,
   "hurt": {
-    "stand": [0.46, 1.63],
-    "crouch": [0.53, 1.03],
+    "stand": [0.46, 1.67],
+    "crouch": [0.53, 1.22],
     "air": [0.44, 1.07]
   },
-  "pushbox": [0.39, 1.47],
+  "pushbox": [0.36, 1.5],
+  "push": {
+    "front": 0.258,
+    "back": 0.101,
+    "crouchFront": 0.37,
+    "crouchBack": 0.088
+  },
   "colors": [
     {"name": "Floor Manager", "tint": null},
     {"name": "Red Light", "tint": "#c8102e"},
@@ -63,7 +70,9 @@
       "role": ["poke"],
       "anim": {"clip": "jab"},
       "sfx": [[3, "whoosh_light"]],
-      "desc": "Jab; chains into 2L."
+      "desc": "Jab; chains into 2L.",
+      "boxes": [{"f": [5, 7], "x": 0.718, "y": 1.325, "w": 0.3, "h": 0.45}],
+      "boxSrc": "hitVolume"
     },
     "2L": {
       "kind": "normal",
@@ -90,7 +99,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
       "anim": {"clip": "toe_kick"},
-      "desc": "Crouching toe kick (low)."
+      "desc": "Crouching toe kick (low).",
+      "boxes": [{"f": [5, 7], "x": 0.843, "y": 0.086, "w": 0.43, "h": 0.25}],
+      "boxSrc": "hitVolume"
     },
     "5M": {
       "kind": "normal",
@@ -118,7 +129,10 @@
       "role": ["poke"],
       "anim": {"clip": "teep"},
       "sfx": [[5, "whoosh_light"]],
-      "desc": "Push kick; long reach, pushes blockers out."
+      "desc": "Push kick; long reach, pushes blockers out.",
+      "boxes": [{"f": [8, 10], "x": 0.848, "y": 1.054, "w": 0.441, "h": 0.3}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.079], [4, 0.073], [10, 0.117], [16, 0.085], [19, 0.01], [27, 0.0]]
     },
     "2M": {
       "kind": "normal",
@@ -145,7 +159,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
       "anim": {"clip": "shin_kick"},
-      "desc": "Crouching low roundhouse; cancel into the CUE KICK rekka."
+      "desc": "Crouching low roundhouse; cancel into the CUE KICK rekka.",
+      "boxes": [{"f": [8, 10], "x": 0.895, "y": 0.264, "w": 0.533, "h": 0.3}],
+      "boxSrc": "hitVolume"
     },
     "5H": {
       "kind": "normal",
@@ -173,7 +189,26 @@
       "role": [],
       "anim": {"clip": "roundhouse_hi"},
       "sfx": [[8, "whoosh_heavy"]],
-      "desc": "Head-high roundhouse."
+      "desc": "Head-high roundhouse.",
+      "boxes": [{"f": [12, 14], "x": 0.877, "y": 1.383, "w": 0.5, "h": 0.565}],
+      "boxSrc": "hitVolume",
+      "pushExt": [
+        [0, 0.01],
+        [2, 0.022],
+        [3, 0.08],
+        [5, 0.112],
+        [8, 0.099],
+        [11, 0.13],
+        [13, 0.11],
+        [14, 0.043],
+        [15, 0.043],
+        [16, 0.0],
+        [19, 0.0],
+        [20, 0.061],
+        [22, 0.096],
+        [28, 0.02],
+        [35, 0.0]
+      ]
     },
     "2H": {
       "kind": "normal",
@@ -202,7 +237,9 @@
       "role": ["sweep", "low"],
       "anim": {"clip": "leg_kick"},
       "sfx": [[7, "whoosh_heavy"]],
-      "desc": "Standing Muay Thai leg kick that knocks down; long, but she stands tall."
+      "desc": "Standing Muay Thai leg kick that knocks down; long, but she stands tall.",
+      "boxes": [{"f": [11, 13], "x": 0.898, "y": 0.719, "w": 0.54, "h": 0.35}],
+      "boxSrc": "hitVolume"
     },
     "6M": {
       "kind": "command",
@@ -229,7 +266,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["approach"],
       "anim": {"clip": "step_knee"},
-      "desc": "Stepping knee: +2 on hit, -4 on block, travels 0.5 m."
+      "desc": "Stepping knee: +2 on hit, -4 on block, travels 0.5 m.",
+      "pushExt": [[0, 0.102], [5, 0.157], [14, 0.161], [34, 0.023]]
     },
     "4H": {
       "kind": "command",
@@ -256,7 +294,10 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "side_kick_back"},
-      "desc": "Long spinning back kick; her furthest button (+2/-3)."
+      "desc": "Long spinning back kick; her furthest button (+2/-3).",
+      "boxes": [{"f": [16, 18], "x": 0.909, "y": 1.327, "w": 0.563, "h": 0.454}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.08], [1, 0.08], [2, 0.127], [12, 0.154], [18, 0.125], [20, 0.0], [27, 0.002], [34, 0.068], [39, 0.06]]
     },
     "j.L": {
       "kind": "normal",
@@ -283,7 +324,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "air_jab"},
-      "desc": "Air jab."
+      "desc": "Air jab.",
+      "pushExt": [[0, 0.034], [15, 0.043]]
     },
     "j.M": {
       "kind": "normal",
@@ -310,7 +352,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["antiair"],
       "anim": {"clip": "flying_side"},
-      "desc": "Air-to-air side kick."
+      "desc": "Air-to-air side kick.",
+      "pushExt": [[0, 0.0], [1, 0.0], [3, 0.11], [6, 0.176], [7, 0.174], [9, 0.024], [10, 0.0], [16, 0.023]]
     },
     "j.H": {
       "kind": "normal",
@@ -337,7 +380,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "jump_kick"},
-      "desc": "Big turning jump-in."
+      "desc": "Big turning jump-in.",
+      "pushExt": [[0, 0.109], [2, 0.154], [6, 0.01], [7, 0.113], [9, 0.144], [10, 0.098], [11, 0.009], [19, 0.0]]
     },
     "throw_f": {
       "kind": "throw",
@@ -365,7 +409,8 @@
       "grab": {"frames": 46, "adv": 21, "hitF": 30, "swap": false, "air": false, "techable": true, "clip": "clinch_knee"},
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Muay Thai clinch, knee to the chest."
+      "desc": "Muay Thai clinch, knee to the chest.",
+      "pushExt": [[0, 0.094], [4, 0.0], [31, 0.001]]
     },
     "throw_b": {
       "kind": "throw",
@@ -393,7 +438,8 @@
       "grab": {"frames": 48, "adv": 14, "hitF": 28, "swap": true, "air": false, "techable": true, "clip": "spin_toss"},
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Spins and flings them behind."
+      "desc": "Spins and flings them behind.",
+      "pushExt": [[0, 0.094], [4, 0.0], [31, 0.001]]
     },
     "cue_l": {
       "kind": "special",
@@ -421,7 +467,10 @@
       "role": ["approach"],
       "anim": {"clip": "cue_kick"},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "Rekka part 1: stepping front kick; 236 again for CUE 2."
+      "desc": "Rekka part 1: stepping front kick; 236 again for CUE 2.",
+      "boxes": [{"f": [10, 12], "x": 0.845, "y": 1.27, "w": 0.433, "h": 0.341}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.083], [3, 0.082], [6, 0.03], [9, 0.069], [16, 0.034], [19, 0.087], [22, 0.064], [24, 0.0], [31, 0.0]]
     },
     "cue_m": {
       "kind": "special",
@@ -449,7 +498,10 @@
       "role": ["approach"],
       "anim": {"clip": "cue_kick"},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "Rekka part 1: stepping front kick; 236 again for CUE 2."
+      "desc": "Rekka part 1: stepping front kick; 236 again for CUE 2.",
+      "boxes": [{"f": [12, 14], "x": 0.87, "y": 1.283, "w": 0.483, "h": 0.366}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.083], [4, 0.082], [7, 0.03], [11, 0.069], [18, 0.034], [22, 0.087], [25, 0.064], [27, 0.0], [35, 0.0]]
     },
     "cue_h": {
       "kind": "special",
@@ -477,7 +529,21 @@
       "role": ["approach"],
       "anim": {"clip": "cue_kick"},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "Rekka part 1: stepping front kick; 236 again for CUE 2."
+      "desc": "Rekka part 1: stepping front kick; 236 again for CUE 2.",
+      "boxes": [{"f": [14, 16], "x": 0.895, "y": 1.295, "w": 0.533, "h": 0.391}],
+      "boxSrc": "hitVolume",
+      "pushExt": [
+        [0, 0.083],
+        [4, 0.082],
+        [5, 0.047],
+        [8, 0.03],
+        [13, 0.069],
+        [21, 0.034],
+        [25, 0.087],
+        [28, 0.064],
+        [30, 0.0],
+        [39, 0.0]
+      ]
     },
     "cue_ex": {
       "kind": "ex",
@@ -505,7 +571,10 @@
       "role": ["approach"],
       "anim": {"clip": "cue_kick"},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "Armored, -2 on block."
+      "desc": "Armored, -2 on block.",
+      "boxes": [{"f": [9, 11], "x": 0.895, "y": 1.295, "w": 0.533, "h": 0.391}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.083], [3, 0.082], [5, 0.03], [8, 0.069], [14, 0.034], [17, 0.087], [21, 0.0], [28, 0.0]]
     },
     "cue2": {
       "kind": "special",
@@ -535,7 +604,22 @@
       "role": [],
       "anim": {"clip": "cue_round"},
       "sfx": [[3, "whoosh_heavy"]],
-      "desc": "Rekka part 2: left head kick (+1/-7); 236 = CUE 3 overhead, 214 = CUE 3 low."
+      "desc": "Rekka part 2: left head kick (+1/-7); 236 = CUE 3 overhead, 214 = CUE 3 low.",
+      "boxes": [{"f": [9, 11], "x": 0.851, "y": 1.396, "w": 0.445, "h": 0.591}],
+      "boxSrc": "hitVolume",
+      "pushExt": [
+        [0, 0.032],
+        [4, 0.125],
+        [6, 0.106],
+        [8, 0.138],
+        [10, 0.116],
+        [12, 0.0],
+        [16, 0.0],
+        [18, 0.061],
+        [20, 0.058],
+        [23, 0.003],
+        [32, 0.0]
+      ]
     },
     "cue3_oh": {
       "kind": "special",
@@ -566,7 +650,26 @@
       "role": ["overhead"],
       "anim": {"clip": "cue_drop"},
       "sfx": [[10, "whoosh_heavy"]],
-      "desc": "Rekka finisher: jumping overhead kick, knocks down, -4 on block."
+      "desc": "Rekka finisher: jumping overhead kick, knocks down, -4 on block.",
+      "boxes": [{"f": [18, 21], "x": 0.717, "y": 1.082, "w": 0.5, "h": 0.565}],
+      "boxSrc": "hitVolume",
+      "pushExt": [
+        [0, 0.108],
+        [4, 0.137],
+        [6, 0.11],
+        [8, 0.013],
+        [9, 0.013],
+        [11, 0.031],
+        [12, 0.093],
+        [13, 0.093],
+        [14, 0.134],
+        [16, 0.15],
+        [18, 0.127],
+        [19, 0.052],
+        [20, 0.052],
+        [21, 0.0],
+        [40, 0.0]
+      ]
     },
     "cue3_lo": {
       "kind": "special",
@@ -596,7 +699,10 @@
       "role": ["low"],
       "anim": {"clip": "leg_kick"},
       "sfx": [[7, "whoosh_heavy"]],
-      "desc": "Rekka finisher: low leg kick, knocks down, -13 on block."
+      "desc": "Rekka finisher: low leg kick, knocks down, -13 on block.",
+      "boxes": [{"f": [12, 14], "x": 0.898, "y": 0.719, "w": 0.54, "h": 0.35}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.0], [1, 0.051], [3, 0.091], [7, 0.108], [25, 0.08], [29, 0.0], [41, 0.0]]
     },
     "stage_dive_l": {
       "kind": "special",
@@ -625,7 +731,8 @@
       "role": ["overhead", "approach"],
       "anim": {"clip": "flying_knee"},
       "sfx": [[4, "whoosh_heavy"]],
-      "desc": "Hopping flying knee: an overhead that hops over lows."
+      "desc": "Hopping flying knee: an overhead that hops over lows.",
+      "pushExt": [[0, 0.167], [4, 0.208], [20, 0.246], [37, 0.112]]
     },
     "stage_dive_m": {
       "kind": "special",
@@ -654,7 +761,8 @@
       "role": ["overhead", "approach"],
       "anim": {"clip": "flying_knee"},
       "sfx": [[4, "whoosh_heavy"]],
-      "desc": "Hopping flying knee: an overhead that hops over lows."
+      "desc": "Hopping flying knee: an overhead that hops over lows.",
+      "pushExt": [[0, 0.167], [7, 0.217], [22, 0.246], [40, 0.112]]
     },
     "stage_dive_h": {
       "kind": "special",
@@ -683,7 +791,8 @@
       "role": ["overhead", "approach"],
       "anim": {"clip": "flying_knee"},
       "sfx": [[4, "whoosh_heavy"]],
-      "desc": "Hopping flying knee: an overhead that hops over lows."
+      "desc": "Hopping flying knee: an overhead that hops over lows.",
+      "pushExt": [[0, 0.167], [5, 0.208], [24, 0.246], [43, 0.112]]
     },
     "stage_dive_ex": {
       "kind": "ex",
@@ -713,7 +822,13 @@
       "role": ["overhead", "approach"],
       "anim": {"clip": "flying_knee"},
       "sfx": [[4, "whoosh_heavy"]],
-      "desc": "Two-hit dive, +2 on block."
+      "desc": "Two-hit dive, +2 on block.",
+      "boxes": [
+        {"f": [18, 19], "x": 0.376, "y": 0.869, "w": 0.5, "h": 0.604},
+        {"f": [24, 25], "x": 0.376, "y": 0.996, "w": 0.5, "h": 0.35}
+      ],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.167], [6, 0.217], [18, 0.246], [38, 0.112]]
     },
     "spotlight_l": {
       "kind": "special",
@@ -742,7 +857,8 @@
       "role": ["antiair"],
       "anim": {"clip": "flip_kick"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Rising flip kick. NOT invulnerable (trades); the EX is."
+      "desc": "Rising flip kick. NOT invulnerable (trades); the EX is.",
+      "pushExt": [[0, 0.066], [2, 0.0], [5, 0.0], [6, 0.073], [7, 0.103], [16, 0.071], [24, 0.13], [35, 0.0], [43, 0.0]]
     },
     "spotlight_m": {
       "kind": "special",
@@ -771,7 +887,19 @@
       "role": ["antiair"],
       "anim": {"clip": "flip_kick"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Rising flip kick. NOT invulnerable (trades); the EX is."
+      "desc": "Rising flip kick. NOT invulnerable (trades); the EX is.",
+      "pushExt": [
+        [0, 0.066],
+        [2, 0.0],
+        [5, 0.0],
+        [6, 0.011],
+        [8, 0.103],
+        [18, 0.071],
+        [27, 0.13],
+        [31, 0.109],
+        [38, 0.012],
+        [48, 0.0]
+      ]
     },
     "spotlight_h": {
       "kind": "special",
@@ -800,7 +928,8 @@
       "role": ["antiair"],
       "anim": {"clip": "flip_kick"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Rising flip kick. NOT invulnerable (trades); the EX is."
+      "desc": "Rising flip kick. NOT invulnerable (trades); the EX is.",
+      "pushExt": [[0, 0.066], [3, 0.0], [6, 0.0], [7, 0.011], [9, 0.103], [20, 0.071], [30, 0.13], [44, 0.0], [53, 0.0]]
     },
     "spotlight_ex": {
       "kind": "ex",
@@ -829,7 +958,21 @@
       "role": ["antiair", "reversal"],
       "anim": {"clip": "flip_kick"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Fully invulnerable flip kick."
+      "desc": "Fully invulnerable flip kick.",
+      "boxes": [{"f": [7, 12], "x": 0.876, "y": 1.232, "w": 0.5, "h": 0.863}],
+      "boxSrc": "hitVolume",
+      "pushExt": [
+        [0, 0.066],
+        [2, 0.0],
+        [5, 0.0],
+        [6, 0.073],
+        [7, 0.103],
+        [17, 0.071],
+        [27, 0.13],
+        [31, 0.109],
+        [38, 0.012],
+        [49, 0.0]
+      ]
     },
     "slide_l": {
       "kind": "special",
@@ -858,7 +1001,21 @@
       "role": ["low", "lowprofile", "approach"],
       "anim": {"clip": "slide"},
       "sfx": [[3, "whoosh_light"]],
-      "desc": "Low-profile slide under projectiles; low, knocks down."
+      "desc": "Low-profile slide under projectiles; low, knocks down.",
+      "pushExt": [
+        [0, 0.15],
+        [2, 0.129],
+        [4, 0.064],
+        [14, 0.107],
+        [18, 0.058],
+        [21, 0.166],
+        [22, 0.236],
+        [25, 0.257],
+        [31, 0.042],
+        [35, 0.096],
+        [37, 0.036],
+        [40, 0.0]
+      ]
     },
     "slide_m": {
       "kind": "special",
@@ -887,7 +1044,22 @@
       "role": ["low", "lowprofile", "approach"],
       "anim": {"clip": "slide"},
       "sfx": [[3, "whoosh_light"]],
-      "desc": "Low-profile slide under projectiles; low, knocks down."
+      "desc": "Low-profile slide under projectiles; low, knocks down.",
+      "pushExt": [
+        [0, 0.15],
+        [5, 0.064],
+        [16, 0.102],
+        [21, 0.058],
+        [25, 0.236],
+        [28, 0.257],
+        [29, 0.245],
+        [31, 0.139],
+        [34, 0.039],
+        [36, 0.051],
+        [38, 0.104],
+        [42, 0.002],
+        [44, 0.0]
+      ]
     },
     "slide_h": {
       "kind": "special",
@@ -916,7 +1088,22 @@
       "role": ["low", "lowprofile", "approach"],
       "anim": {"clip": "slide"},
       "sfx": [[3, "whoosh_light"]],
-      "desc": "Low-profile slide under projectiles; low, knocks down."
+      "desc": "Low-profile slide under projectiles; low, knocks down.",
+      "pushExt": [
+        [0, 0.15],
+        [6, 0.064],
+        [19, 0.107],
+        [23, 0.058],
+        [28, 0.236],
+        [31, 0.257],
+        [32, 0.245],
+        [34, 0.139],
+        [37, 0.039],
+        [40, 0.051],
+        [42, 0.104],
+        [45, 0.017],
+        [48, 0.0]
+      ]
     },
     "slide_ex": {
       "kind": "ex",
@@ -945,7 +1132,24 @@
       "role": ["low", "lowprofile", "approach"],
       "anim": {"clip": "slide"},
       "sfx": [[3, "whoosh_light"]],
-      "desc": "Projectile-invulnerable slide, -6 on block."
+      "desc": "Projectile-invulnerable slide, -6 on block.",
+      "pushExt": [
+        [0, 0.15],
+        [4, 0.072],
+        [12, 0.107],
+        [15, 0.071],
+        [17, 0.125],
+        [18, 0.206],
+        [21, 0.257],
+        [22, 0.245],
+        [25, 0.066],
+        [26, 0.039],
+        [28, 0.051],
+        [29, 0.104],
+        [30, 0.096],
+        [31, 0.036],
+        [34, 0.0]
+      ]
     },
     "highlight_reel": {
       "kind": "super1",
@@ -975,11 +1179,41 @@
         {"f": [19, 20], "damage": 600, "hitstop": 9},
         {"f": [30, 33], "damage": 900, "hitstop": 20}
       ],
-      "moveY": [[0, 0], [24, 0.0], [30, 0.6], [38, 0.0]],
+      "moveY": [[0, 0], [24, 0.0], [30, 0.3], [38, 0.0]],
+      "boxes": [
+        {"f": [8, 9], "x": 0.75, "y": 1.4225, "w": 0.5, "h": 0.645},
+        {"f": [19, 20], "x": 0.79, "y": 1.1, "w": 0.54, "h": 0.35},
+        {"f": [30, 33], "x": 0.72, "y": 1.0625, "w": 0.5, "h": 0.525}
+      ],
       "role": ["reversal"],
       "anim": {"clip": "reel_kicks", "warp": [[0, 0.0], [8, 0.25], [19, 0.783], [30, 1.3], [85, 1.733]]},
       "sfx": [[1, "crowd_cheer_burst"]],
-      "desc": "Invulnerable three-kick flurry ending in a jump kick."
+      "desc": "Invulnerable three-kick flurry ending in a jump kick.",
+      "pushExt": [
+        [0, 0.097],
+        [1, 0.107],
+        [3, 0.004],
+        [4, 0.0],
+        [12, 0.0],
+        [13, 0.081],
+        [14, 0.085],
+        [15, 0.016],
+        [16, 0.032],
+        [17, 0.101],
+        [19, 0.064],
+        [20, 0.0],
+        [22, 0.0],
+        [24, 0.085],
+        [26, 0.016],
+        [27, 0.137],
+        [28, 0.105],
+        [29, 0.148],
+        [32, 0.123],
+        [33, 0.042],
+        [36, 0.042],
+        [37, 0.0],
+        [85, 0.0]
+      ]
     },
     "on_air": {
       "kind": "super3",
@@ -1040,7 +1274,8 @@
       },
       "role": ["reversal"],
       "anim": {"clip": "teep"},
-      "desc": "PRIME TIME: a teep that starts a juggle she counts down live."
+      "desc": "PRIME TIME: a teep that starts a juggle she counts down live.",
+      "pushExt": [[0, 0.079], [6, 0.073], [11, 0.12], [28, 0.108], [42, 0.065], [46, 0.01], [72, 0.0]]
     }
   },
   "simple": {

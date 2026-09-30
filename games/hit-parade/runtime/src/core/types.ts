@@ -95,6 +95,9 @@ export interface Move {
   role?: string[] | string;
   name?: string;
   desc?: string;
+  /** CHANGED(fixer) D2: extra push-box FRONT extent (m) over the fighter's neutral front, per move frame (piecewise
+   *  linear, >= 0): the clip's measured forward lean (data/fighters/_gen, art/blender/measure_body.py) */
+  pushExt?: Vec2[];
 }
 
 /** §20.2 one hit of a multi-hit move. */
@@ -114,6 +117,10 @@ export interface GrabDef {
   air?: boolean;
   techable?: boolean;
   clip?: string;
+  /** CHANGED(fixer) D3: the victim's animation over the lock: [lockFrame, sharedClip, fromS?, toS?] segments (each runs
+   *  until the next one starts, or the lock ends; fromS / toS = the clip range it plays - toS omitted = 1 clip-second per
+   *  60 frames from fromS). Omitted = thrown_f / thrown_b (swap) with its slam mark on hitF, ending at release. */
+  victim?: [number, string, number?, number?][];
 }
 
 export interface ClassicEntry {
@@ -151,6 +158,9 @@ export interface FighterDef {
   throwRangeM: number;
   hurt: { stand: Vec2; crouch: Vec2; air: Vec2 };
   pushbox: Vec2;
+  /** CHANGED(fixer) D2: measured push-box extents (m) from the root along the facing: front / back standing and
+   *  crouching (omitted = pushbox[0] / 2 each side, the symmetric box) */
+  push?: { front: number; back: number; crouchFront?: number; crouchBack?: number };
   colors?: { name: string; tint: string | null }[];
   moves: Record<string, Move>;
   simple: SimpleMap;
@@ -174,6 +184,7 @@ export interface ClipInfo {
   root: Vec2[];
   apexY: number | null;
   loop: boolean;
+  marks?: Record<string, number>;
 }
 
 export interface ClipsFile {
@@ -260,7 +271,15 @@ export interface System {
   cinematic: { attackerRecover: number; victimKd: number };
   projectile: { spawnXM: number; screenHalfM: number };
   boxes: { L: Vec2; M: Vec2; H: Vec2 };
-  anim: { blendAttack: number; blendHit: number; blendLoco: number; blendDefault: number };
+  anim: {
+    blendAttack: number; blendHit: number; blendLoco: number; blendDefault: number;
+    /** CHANGED(fixer) D3: knockdown presentation. kdFall[clip] = [dropS, groundS]: when the shared fall clip starts to
+     *  drop / hits the floor (a KD from standing plays dropS..end, a juggle landing groundS..end, over at most
+     *  fallMaxFrames); the wake clip ends exactly on the actionable frame, played at <= wakeMaxRate x speed. */
+    kdFall?: Record<string, [number, number]>;
+    fallMaxFrames?: number;
+    wakeMaxRate?: number;
+  };
   training: { refillDelay: number };
   [key: string]: unknown;
 }
@@ -350,6 +369,9 @@ export interface MatchSnap {
   roundWinner: number; // -1 none, 0 | 1, 2 draw round
   slowmo: boolean;
   freeze: number;
+  /** CHANGED(integrator): live projectiles for the view (§17.1 request; metres, vx in m/s, moveId per §17 rule 1,
+   *  kind 0 projectile / 1 ball / 2 heckle object). Read-only copy; never part of the state or the checksum. */
+  proj?: Array<{ slot: number; owner: number; x: number; y: number; vx: number; moveId: number; kind: number; alive: boolean }>;
 }
 
 /** §4.5 / §18.1 */

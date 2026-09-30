@@ -108,8 +108,14 @@ function g1(data: GameData, glbDir: string | null): { issues: Issue[]; moves: nu
       const launch = (mv.onHit?.launch?.[1] ?? 0) > 0;
       const strike = (mv.damage ?? 0) > 0 && mv.kind !== 'throw' && mv.kind !== 'cmdgrab' && !mv.projectile && !mv.cinematic;
       if (strike && mv.hitstun !== undefined && mv.blockstun !== undefined) {
-        const onHit = mv.hitstun - (mv.active + mv.recovery);
-        const onBlock = mv.blockstun - (mv.active + mv.recovery);
+        // CHANGED(integrator), per the CONTRACT 20.6 request (FIGHTERS): a `hits` move applies its stun from the FINAL hit
+        // (20.2 / 19.11), so advantage = stun - (frames left after the last hit's first frame). Single-hit moves: last
+        // hit frame = startup -> stun - (active + recovery), unchanged. Measured in the real sim: spin 5H blocked = -3.
+        const hitsArr = (mv as { hits?: Array<{ f: [number, number] }> }).hits;
+        const lastF = Array.isArray(hitsArr) && hitsArr.length ? hitsArr[hitsArr.length - 1].f[0] : mv.startup;
+        const after = total - lastF;
+        const onHit = mv.hitstun - after;
+        const onBlock = mv.blockstun - after;
         advTable.push(`${where}: ${mv.startup}/${mv.active}/${mv.recovery} hit ${kd ? 'KD' : ''}${onHit >= 0 ? '+' : ''}${onHit} block ${onBlock >= 0 ? '+' : ''}${onBlock}`);
         if (!kd && mv.blockstun > mv.hitstun) issues.push({ level: 'error', msg: `${where}: blockstun ${mv.blockstun} > hitstun ${mv.hitstun}` });
         const juggleOnly = mv.onHit?.groundBounce === true || mv.onHit?.crumple === true;

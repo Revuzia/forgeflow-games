@@ -344,7 +344,17 @@ function validateMove(where: string, id: string, mv: unknown, moves: Record<stri
     if (!isObj(g) || !isInt(g.frames) || g.frames < 1 || !isInt(g.adv) || !isInt(g.hitF) || g.hitF < 1 || (g.rangeM !== undefined && !isNum(g.rangeM))) {
       errs.push(`${where}.grab: {frames >= 1, adv, hitF >= 1, rangeM?, swap?, air?, techable?, clip?}`);
     } else if (g.hitF > g.frames) errs.push(`${where}.grab.hitF ${g.hitF} > frames ${g.frames}`);
+    // CHANGED(fixer) D3: grab.victim = [[lockFrame, sharedClip, fromS?, toS?], ...]
+    if (isObj(g) && g.victim !== undefined) {
+      if (!Array.isArray(g.victim) || g.victim.length === 0) errs.push(`${where}.grab.victim: non-empty [[lockFrame, sharedClip, fromS?, toS?], ...]`);
+      else g.victim.forEach((v, i) => {
+        if (!Array.isArray(v) || !isInt(v[0]) || typeof v[1] !== 'string' || !SHARED_CLIPS.includes(v[1]) || (v[2] !== undefined && !isNum(v[2])) || (v[3] !== undefined && !isNum(v[3]))) {
+          errs.push(`${where}.grab.victim[${i}]: [lockFrame, sharedClip (one of the shared clips), fromS?, toS?]`);
+        }
+      });
+    }
   }
+  if (mv.pushExt !== undefined && (!Array.isArray(mv.pushExt) || !mv.pushExt.every(isVec2))) errs.push(`${where}.pushExt: [[frame, metres], ...]`);
   if (mv.trigger !== undefined) {
     const tr = mv.trigger;
     if (!isObj(tr)) errs.push(`${where}.trigger: {classic?: {motion, btn}, simple?}`);
@@ -400,6 +410,14 @@ function validateFighter(fid: string, raw: unknown, errs: string[], warns: strin
   if (!isNum(raw.throwRangeM) || raw.throwRangeM <= 0) errs.push(`${w}.throwRangeM: number > 0 required`);
   if (!isObj(raw.hurt) || !isVec2(raw.hurt.stand) || !isVec2(raw.hurt.crouch) || !isVec2(raw.hurt.air)) errs.push(`${w}.hurt: {stand, crouch, air} as [w, h] required`);
   if (!isVec2(raw.pushbox)) errs.push(`${w}.pushbox: [w, h] required`);
+  // CHANGED(fixer) D2: measured push extents (optional)
+  if (raw.push !== undefined) {
+    const pu = raw.push as Record<string, unknown>;
+    if (!isObj(pu) || !isNum(pu.front) || !isNum(pu.back) || (pu.front as number) <= 0 || (pu.back as number) < 0 ||
+      (pu.crouchFront !== undefined && !isNum(pu.crouchFront)) || (pu.crouchBack !== undefined && !isNum(pu.crouchBack))) {
+      errs.push(`${w}.push: {front > 0, back >= 0, crouchFront?, crouchBack?} (metres)`);
+    }
+  }
   if (!isObj(raw.moves) || Object.keys(raw.moves).length === 0) {
     errs.push(`${w}.moves: non-empty object required`);
     return null;

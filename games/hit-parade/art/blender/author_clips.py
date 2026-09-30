@@ -13,7 +13,9 @@ Model-space axes (the fighter faces Blender -Y = glTF +Z):
       pitch +deg  bends the top of the bone FORWARD   (about world +X)
       yaw   +deg  turns toward the model's LEFT       (about world +Z)
       roll  +deg  leans the top toward the model's RIGHT (about world -Y)
-      hips  [fwd, up, right] metres at X Bot scale (x hip ratio on the body)
+      hips  [fwd, up, right] metres at X Bot scale (x hip ratio on the body). The fwd/right part is
+            the clip's ONLY horizontal travel (-> clips.json `root`): a keyed spec drops its base
+            poses' own library hips travel (spec "base_travel": true keeps it). Track specs keep theirs.
 Between keys: base poses and offsets are slerped per bone with the arriving key's easing
 ('smooth' default, 'linear', 'in', 'out'). A clip may instead give a 'track' (a library clip range
 sampled per output frame) as its base, with the keys adding offsets only.
@@ -385,6 +387,37 @@ class AuthorSampler(object):
             self._pose_cache[bk] = (D, h)
         return self._pose_cache[bk]
 
+    def _interp_local(self, Da, Dz, w):
+        """Blend two base poses PARENT-RELATIVE (root in world): each bone's local rotation is slerped
+        and the world pose rebuilt top-down. Slerping every bone's WORLD delta on its own let a parent
+        and child take different ways round a large turn: thrown_b (the body flips between keys f5 and
+        f12 / f12 and f20) twisted the left toe 150 deg and the right foot 171 deg off bind for 3-4
+        frames (measured on johnny, part-1 re-run). Keys themselves are unchanged (w = 0 / 1)."""
+        if w <= 0.0:
+            return Da
+        if w >= 1.0:
+            return Dz
+        R = self.rest
+        Wa, Wz, W, D = {}, {}, {}, {}
+        for s in self.order:
+            if s not in Da or s not in Dz:
+                continue
+            wa = Da[s] @ R[s]
+            wz = Dz[s] @ R[s]
+            Wa[s], Wz[s] = wa, wz
+            p = self.parent.get(s)
+            if p in W:
+                la = Wa[p].transposed() @ wa
+                lz = Wz[p].transposed() @ wz
+                W[s] = W[p] @ _slerp_m(la, lz, w)
+            else:
+                W[s] = _slerp_m(wa, wz, w)
+            D[s] = W[s] @ R[s].transposed()
+        for s in Da:
+            if s not in D:
+                D[s] = _slerp_m(Da[s], Dz.get(s, Da[s]), w)
+        return D
+
     def _key_bk(self, i):
         """Effective base of key i (its own, else the nearest keyed neighbour's, as sample() does)."""
         for j in [i] + list(range(i + 1, len(self.keys))) + list(range(i - 1, -1, -1)):
@@ -482,14 +515,25 @@ class AuthorSampler(object):
             bb = _bkey(b) or ba
             Da, ha = self._basepose(ba)
             Dz, hz = self._basepose(bb)
-            Db = {s: _slerp_m(Da[s], Dz[s], w) for s in Da}
+            if self.spec.get("interp") == "world":
+                Db = {s: _slerp_m(Da[s], Dz[s], w) for s in Da}
+            else:
+                Db = self._interp_local(Da, Dz, w)
             hb = ha.lerp(hz, w)
         # offsets
         I3 = Matrix.Identity(3)
         own = {}
         for s in set(a["_own"]) | set(b["_own"]):
             own[s] = _slerp_m(a["_own"].get(s, I3), b["_own"].get(s, I3), w)
-        hoff = hb + a["_hips"].lerp(b["_hips"], w)
+        hs = a["_hips"].lerp(b["_hips"], w)
+        hoff = hb + hs
+        if not self.track and not self.spec.get("base_travel"):
+            # ROOT RULE: the spec `hips` is the ONLY horizontal travel of a keyed spec. A base pose is a
+            # frame of some library clip and carries that clip's own hips travel (thrown_b's soccer-trip
+            # bases ran the root to +4.9 m before the fallen-idle base snapped it back to +1.3 m). The
+            # pose never depends on it (retarget strips horizontal hips into clips.json `root`) and the
+            # IK solve above still uses the full base hips, so only `root` changes. Vertical is kept.
+            hoff = Vector((hs.x, hs.y, hoff.z))
         acc = {}
         D = {}
         for s in self.order:

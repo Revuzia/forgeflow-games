@@ -3,6 +3,7 @@
   "name": "RERUN",
   "persona": "The Contestant Who Won't Stay Cancelled",
   "archetype": "counter",
+  "difficulty": 2,
   "body": "Prisoner B Styperek",
   "heightM": 1.8,
   "hp": 10000,
@@ -25,11 +26,17 @@
   },
   "throwRangeM": 0.6,
   "hurt": {
-    "stand": [0.54, 1.71],
-    "crouch": [0.62, 1.08],
+    "stand": [0.54, 1.66],
+    "crouch": [0.62, 1.22],
     "air": [0.51, 1.12]
   },
-  "pushbox": [0.46, 1.54],
+  "pushbox": [0.54, 1.49],
+  "push": {
+    "front": 0.486,
+    "back": 0.053,
+    "crouchFront": 0.427,
+    "crouchBack": 0.034
+  },
   "colors": [
     {"name": "Death Row", "tint": null},
     {"name": "Solitary", "tint": "#37474f"},
@@ -62,7 +69,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
       "anim": {"clip": "swat"},
-      "desc": "Open-hand swat."
+      "desc": "Open-hand swat.",
+      "boxes": [{"f": [5, 7], "x": 0.822, "y": 1.355, "w": 0.3, "h": 0.51}],
+      "boxSrc": "hitVolume"
     },
     "2L": {
       "kind": "normal",
@@ -89,7 +98,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
       "anim": {"clip": "ankle_bite"},
-      "desc": "Crouching bite at the ankle."
+      "desc": "Crouching bite at the ankle.",
+      "pushExt": [[0, 0.239], [7, 0.318], [17, 0.243]]
     },
     "5M": {
       "kind": "normal",
@@ -145,7 +155,8 @@
       "hurtOverride": [{"f": [4, 22], "w": 0.95, "h": 0.45}],
       "role": ["poke", "low", "lowprofile"],
       "anim": {"clip": "crawl_claw"},
-      "desc": "Drops prone and claws along the floor: goes UNDER high pokes; -4 on block."
+      "desc": "Drops prone and claws along the floor: goes UNDER high pokes; -4 on block.",
+      "pushExt": [[0, 0.155], [3, 0.117], [7, 0.116], [15, 0.235], [30, 0.285]]
     },
     "5H": {
       "kind": "normal",
@@ -172,7 +183,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "long_reach"},
-      "desc": "Double-claw lunge: his longest button (1.35 m)."
+      "desc": "Double-claw lunge: his longest button (1.35 m).",
+      "boxes": [{"f": [13, 15], "x": 0.489, "y": 1.297, "w": 0.5, "h": 0.395}],
+      "boxSrc": "hitVolume"
     },
     "2H": {
       "kind": "normal",
@@ -197,9 +210,11 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
+      "boxes": [{"f": [9, 12], "x": 0.45, "y": 1.35, "w": 0.5, "h": 0.45}],
       "role": ["antiair"],
       "anim": {"clip": "scream_up"},
-      "desc": "Arms flung up in a scream: anti-air."
+      "desc": "Arms flung up in a scream: anti-air.",
+      "pushExt": [[0, 0.0], [14, 0.0], [21, 0.214], [34, 0.262]]
     },
     "6H": {
       "kind": "command",
@@ -224,7 +239,7 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "boxes": [{"f": [18, 20], "x": 0.45, "y": 1.45, "w": 0.4, "h": 0.4}],
+      "boxes": [{"f": [18, 20], "x": 0.45, "y": 1.375, "w": 0.4, "h": 0.55}],
       "role": ["overhead"],
       "anim": {"clip": "drop_headbutt"},
       "desc": "Lunging headbutt from above: overhead."
@@ -565,7 +580,8 @@
       "role": ["low", "lowprofile", "approach"],
       "anim": {"clip": "crawl_run", "warp": [[0, 0.0], [16, 0.833], [41, 1.433]]},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "Four-limb crawl under everything, then an ankle bite (low, knockdown)."
+      "desc": "Four-limb crawl under everything, then an ankle bite (low, knockdown).",
+      "pushExt": [[0, 0.291], [11, 0.281], [12, 0.186], [20, 0.26], [41, 0.18]]
     },
     "grave_crawl_m": {
       "kind": "special",
@@ -594,7 +610,8 @@
       "role": ["low", "lowprofile", "approach"],
       "anim": {"clip": "crawl_run", "warp": [[0, 0.0], [18, 0.833], [43, 1.433]]},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "Four-limb crawl under everything, then an ankle bite (low, knockdown)."
+      "desc": "Four-limb crawl under everything, then an ankle bite (low, knockdown).",
+      "pushExt": [[0, 0.291], [12, 0.281], [14, 0.186], [17, 0.235], [22, 0.26], [43, 0.18]]
     },
     "grave_crawl_h": {
       "kind": "special",
@@ -623,7 +640,8 @@
       "role": ["low", "lowprofile", "approach"],
       "anim": {"clip": "crawl_run", "warp": [[0, 0.0], [20, 0.833], [45, 1.433]]},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "Four-limb crawl under everything, then an ankle bite (low, knockdown)."
+      "desc": "Four-limb crawl under everything, then an ankle bite (low, knockdown).",
+      "pushExt": [[0, 0.291], [14, 0.281], [15, 0.186], [24, 0.26], [45, 0.18]]
     },
     "grave_crawl_ex": {
       "kind": "ex",
@@ -653,7 +671,8 @@
       "role": ["low", "lowprofile", "approach"],
       "anim": {"clip": "crawl_run_ex", "warp": [[0, 0.0], [15, 0.833], [29, 1.633], [49, 2.233]]},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "Projectile-invulnerable crawl, two bites, -4 on block."
+      "desc": "Projectile-invulnerable crawl, two bites, -4 on block.",
+      "pushExt": [[0, 0.291], [10, 0.281], [12, 0.191], [17, 0.26], [25, 0.18], [32, 0.26], [49, 0.18]]
     },
     "last_meal_l": {
       "kind": "cmdgrab",
@@ -834,7 +853,8 @@
       "role": ["antiair"],
       "anim": {"clip": "arise_leap"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Leaping screaming claw anti-air."
+      "desc": "Leaping screaming claw anti-air.",
+      "pushExt": [[0, 0.0], [6, 0.0], [8, 0.07], [13, 0.078], [16, 0.125], [42, 0.156]]
     },
     "arise_m": {
       "kind": "special",
@@ -863,7 +883,8 @@
       "role": ["antiair"],
       "anim": {"clip": "arise_leap"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Leaping screaming claw anti-air."
+      "desc": "Leaping screaming claw anti-air.",
+      "pushExt": [[0, 0.0], [7, 0.0], [9, 0.07], [15, 0.078], [18, 0.125], [46, 0.156]]
     },
     "arise_h": {
       "kind": "special",
@@ -892,7 +913,8 @@
       "role": ["antiair"],
       "anim": {"clip": "arise_leap"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Leaping screaming claw anti-air."
+      "desc": "Leaping screaming claw anti-air.",
+      "pushExt": [[0, 0.0], [8, 0.0], [10, 0.07], [16, 0.078], [20, 0.125], [50, 0.156]]
     },
     "arise_ex": {
       "kind": "ex",
@@ -921,7 +943,8 @@
       "role": ["antiair", "reversal"],
       "anim": {"clip": "arise_leap"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Fully invulnerable leap."
+      "desc": "Fully invulnerable leap.",
+      "pushExt": [[0, 0.0], [6, 0.0], [7, 0.07], [13, 0.078], [16, 0.125], [45, 0.156]]
     },
     "dead_air": {
       "kind": "super1",
@@ -1025,7 +1048,9 @@
       },
       "role": ["reversal"],
       "anim": {"clip": "long_reach"},
-      "desc": "PRIME TIME: grabs, bites, drags them into a trapdoor grave - and climbs back out alone."
+      "desc": "PRIME TIME: grabs, bites, drags them into a trapdoor grave - and climbs back out alone.",
+      "boxes": [{"f": [10, 13], "x": 0.489, "y": 1.297, "w": 0.5, "h": 0.395}],
+      "boxSrc": "hitVolume"
     }
   },
   "simple": {
@@ -1045,7 +1070,8 @@
   ],
   "unique": {
     "kind": "counter",
-    "moves": ["play_dead_l", "play_dead_m", "play_dead_h", "play_dead_ex", "dead_air"]
+    "moves": ["play_dead_l", "play_dead_m", "play_dead_h", "play_dead_ex", "dead_air"],
+    "trait": "PLAY DEAD: drops to the floor and catches strikes on frames 4-20, then rises into a counter."
   },
   "intro": "intro_rise",
   "win": ["win_chew", "win_idle"],

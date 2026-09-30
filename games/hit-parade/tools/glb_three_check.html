@@ -28,6 +28,10 @@ const res = { ok: false, clips: {} };
 window.__RESULT__ = null;
 const EFF = { RightHand: 'RightHandMiddle1', LeftHand: 'LeftHandMiddle1', RightFoot: 'RightToeBase',
   LeftFoot: 'LeftToeBase', RightKnee: 'RightLeg', LeftKnee: 'LeftLeg', Head: 'HeadTop_End' };
+// the bake's fallback bone when the point bone is absent (hp_retarget.EFFECTORS alt): freak has no finger bones
+const EFF_ALT = { RightHand: 'RightHand', LeftHand: 'LeftHand', RightFoot: 'RightFoot', LeftFoot: 'LeftFoot',
+  RightKnee: 'RightLeg', LeftKnee: 'LeftLeg', Head: 'Head' };
+const effBone = (root, key) => root.getObjectByName('mixamorig' + EFF[key]) || root.getObjectByName('mixamorig' + EFF_ALT[key]);
 try {
   const cj = await (await fetch(q.get('cj'), { cache: 'no-store' })).json();
   const names = Object.keys(cj.clips);
@@ -91,14 +95,28 @@ try {
     const r = { t: +t.toFixed(4), minY: +box.min.y.toFixed(4), maxY: +box.max.y.toFixed(4), tracks: clip.tracks.length,
       dur: +clip.duration.toFixed(4) };
     if (c.effector) {
-      const b = root.getObjectByName('mixamorig' + EFF[c.effector.bone]);
+      const b = effBone(root, c.effector.bone);
       if (b) { b.getWorldPosition(tmp); r.effectorThree = [+tmp.x.toFixed(4), +tmp.y.toFixed(4)];   // x = forward when facing +X
-        r.effectorJson = c.effector.at; }
+        r.effectorJson = c.effector.at; } else { r.effectorMissing = c.effector.bone; }
     }
     res.clips[n] = r;
     const x = (i % cols) * TW, y = (rows - 1 - Math.floor(i / cols)) * TH;
     renderer.setViewport(x, y, TW, TH); renderer.setScissor(x, y, TW, TH);
     renderer.render(scene, cam);
+    // per strike mark points (clips.json marksAt, CONTRACT 6.3): the bone at each mark time vs the json point
+    if (c.marksAt && c.marks) {
+      r.marksAt = {};
+      for (const [mk, pt] of Object.entries(c.marksAt)) {
+        if (c.marks[mk] == null) { r.marksAt[mk] = { error: 'no mark time' }; continue; }
+        act.time = c.marks[mk];
+        mixer.update(0);
+        root.updateMatrixWorld(true);
+        const mb = effBone(root, pt.bone);
+        if (!mb) { r.marksAt[mk] = { error: 'no bone ' + pt.bone }; continue; }
+        mb.getWorldPosition(tmp);
+        r.marksAt[mk] = { three: [+tmp.x.toFixed(4), +tmp.y.toFixed(4)], json: pt.at };
+      }
+    }
   });
   res.png = renderer.domElement.toDataURL('image/png');
   res.names = names; res.cols = cols; res.tile = [TW, TH];

@@ -89,6 +89,8 @@
   "cs.random": "RANDOM",
   "cs.locked": "LOCKED",
   "cs.lockedHint": "Clear THE SEASON to unlock",
+  "cs.soon": "COMING SOON",
+  "cs.soonHint": "Still in hair and makeup - coming soon",
   "cs.color": "COLOR",
   "cs.scheme": "CONTROLS",
   "cs.simple": "SIMPLE",

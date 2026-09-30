@@ -24,9 +24,25 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   SHOWTIME; `chipPct` 25 on specials/supers applies only in STAGE FRIGHT (3a).
 - **Notation**: numpad, facing-relative. Normals are keyed by their CONTRACT 19.1 `input` (`5L`, `2M`, `j.H`,
   `6H`). Specials `<name>_l|_m|_h|_ex`; SIMPLE 5S/6S/2S/4S route the M version (x0.8), ASSIST+S+dir the EX.
-- **Hurtboxes from body height** (FIGHTERS [R]): stand h = 0.95 H, crouch h = 0.60 H, air h = 0.62 H; width =
-  build factor x H (slim 0.27, average 0.30, heavy 0.34, monster 0.36); crouch width x1.15, air x0.95; pushbox =
-  0.85 x stand width by 0.90 x stand height.
+- **Hurtboxes** (FIGHTERS [M], 2026-09-30): stand / crouch heights are MEASURED on the baked bodies - Blender 5.1
+  mesh max-up of lane ASSETS' raw.glb, median of 7 frames of the `idle` / `crouch_idle` clip that fighter plays
+  (crouch clamped to stand; Freak's hunched crouch measures above his idle). The first rule (crouch 0.60 H) sat
+  0.13-0.29 m below every real crouch pose. Air h = 0.62 H (tucked jump); width = build factor x H (slim 0.27,
+  average 0.30, heavy 0.34, monster 0.36); crouch width x1.15, air x0.95; pushbox = 0.85 x stand width by 0.90 x
+  stand height.
+- **Hit volumes / crouch-reach rule** (FIGHTERS [M]): SIM derives each strike's box centred on the clips.json
+  effector at contact (L 0.30x0.25, M 0.40x0.30, H/supers 0.50x0.35 m). Every grounded strike that is not an
+  anti-air must reach the **crouch line 1.10 m** (lowest measured crouch top, Krane 1.159 m, minus 0.05): SF-style
+  mids, overheads, projectiles and supers hit crouching opponents. It must also hit a TOUCHING opponent: the box's
+  near edge sits within point-blank reach ((own pushbox + 0.39) / 2 + 0.23 - 0.10 m: the slimmest defender's
+  hurtbox far edge when the pushboxes touch, minus 0.10). The build widens a derived box to that limb volume (top,
+  far reach and frames unchanged; `boxSrc: "hitVolume"`); lowering a box more than 0.50 m means the clip is aimed
+  over every crouch, and the clip is fixed instead. Measured in the real sim before the rules: 53 of 307 damaging
+  ground moves whiffed crouching opponents (incl. overheads, 2 projectile families and 6 supers) and Freak's
+  long-arm rushes and Lv1 connected only from 2.4-3.2 m. Pure anti-airs are exempt; a reversal anti-air (the DPs)
+  must reach both with its FIRST hit (cap 0.60 m - the rising arm sweeps that space). Anti-air normals with a poor
+  effector carry hand-set boxes (listed per move). Weapon props (baton, cleaver, mic-cane) are not in the effector point; their extra reach is not
+  modelled yet (open item).
 - **Clip sources**: Mixamo pack clips at the MIXAMO_CLIPS.md contact frames (front pass for strikes at a target
   ahead, render-judged frame for slams and releases); CMU segments from CMU_CLIPS.md / best_candidates.json
   (mirror = southpaw take made orthodox); LAYER = legs from clip A + Spine-up from clip B (crouch and air attacks:
@@ -55,8 +71,8 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
 ### `crouch_toe_kick` - 18 frames, contact f6, base `Pro_Magic_Pack/Crouch Idle.fbx`
 
 - f1: Crouch Idle f1 pose unchanged (hips 0.56 m, weight centred).
-- f4: Front (right) knee chambers: RightUpLeg flexed 45 deg forward of the crouch pose, RightLeg (shin) folded back so the foot sits under the knee 10 cm off the floor; torso leans back 5 deg.
-- f6: CONTACT: right leg extends straight forward, foot 6 cm above the floor at ~0.75 m in front of the hips, toes pointed (RightFoot plantar-flexed 35 deg); left leg and hips unchanged; lead hand stays up in guard.
+- f4: Front knee chambers (the LEFT leg is the front leg of the shared crouch - lane ASSETS measured; the spec in art/blender/author_clips.py uses it): UpLeg flexed 45 deg forward of the crouch pose, shin folded back so the foot sits under the knee 10 cm off the floor; torso leans back 5 deg.
+- f6: CONTACT: front leg extends straight forward, foot 6 cm above the floor at ~0.75 m in front of the hips, toes pointed (RightFoot plantar-flexed 35 deg); left leg and hips unchanged; lead hand stays up in guard.
 - f8: Hold the extension (same pose as f6, toes relax 10 deg).
 - f12: Right leg folds back to the chamber pose of f4.
 - f18: Back to Crouch Idle f1 pose (loops cleanly into crouch_idle).
@@ -101,7 +117,7 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
 
 **Rivalry.** Boneyard carved Johnny's name off the Rust Theater marquee with a cleaver. Johnny wants the sign back.
 
-**Stats.** HP 10000 | walk 2.12 / 1.44 m/s | dash 1.06 m (18f) / 0.68 m (23f) | jump 4+38+3, apex 1.59 m, forward 1.43 m | throw range 0.60 m | hurtbox stand [0.54, 1.71], crouch [0.62, 1.08], air [0.51, 1.12] m | pushbox [0.46, 1.54] m | build `average`.
+**Stats.** HP 10000 | walk 2.12 / 1.44 m/s | dash 1.06 m (18f) / 0.68 m (23f) | jump 4+38+3, apex 1.59 m, forward 1.43 m | throw range 0.60 m | hurtbox stand [0.54, 1.71], crouch [0.62, 1.27], air [0.51, 1.12] m | pushbox [0.41, 1.54] m | build `average`.
 
 **Unique (`unique.kind` = `none`).** `{"kind": "none", "trait": "HEADLINER JAB: 4-frame 5L (+4 on hit) links into itself; on a punish counter (+8) it links into 5M. The only light in the cast that links."}`
 
@@ -157,38 +173,38 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Move notes.**
 
-- `5L` Lead Jab: 4-frame jab; links into itself, chains into 2L.
-- `2L` Shin Jab: Low jab to the knee; chains and cancels.
-- `5M` Cross: Straight right; his best mid-range button.
+- `5L` Lead Jab: 4-frame jab; links into itself, chains into 2L. (hit volume: bottom lowered 0.17 m to the crouch line 1.10 m; near edge pulled back 0.05 m to point-blank reach 0.69 m (clips.json `jab` effector LeftHand))
+- `2L` Shin Jab: Low jab to the knee; chains and cancels. (hit volume: near edge pulled back 0.02 m to point-blank reach 0.69 m (clips.json `crouch_jab` effector LeftHand))
+- `5M` Cross: Straight right; his best mid-range button. (hit volume: bottom lowered 0.27 m to the crouch line 1.10 m (clips.json `cross` effector RightHand))
 - `2M` Knee Breaker: Crouching straight to the knee; cancel into HEADLINE HOOK.
-- `5H` Haymaker: Wide rear hook.
+- `5H` Haymaker: Wide rear hook. (hit volume: bottom lowered 0.28 m to the crouch line 1.10 m (clips.json `haymaker` effector RightHand))
 - `2H` Rising Uppercut: Anti-air uppercut.
 - `3H` Low Blow: Crouching hook to the knee that drops them (low, knockdown).
-- `6H` Overhand Right: Looping overhand; must be blocked standing.
+- `6H` Overhand Right: Looping overhand; must be blocked standing. (hit volume: bottom lowered 0.19 m to the crouch line 1.10 m (clips.json `overhand` effector RightHand))
 - `j.L` Air Jab: Fast air-to-air jab.
 - `j.M` Air Cross: Long jump-in straight.
 - `j.H` Diving Hammer: Downward hammer fist jump-in.
 - `throw_f` Clinch Body Shots: Clinches and digs three body shots.
 - `throw_b` Wide Hook Toss: Pulls them past and hooks them the other way.
-- `brickbat_l` Brickbat: Hurls a brick. L slow, H fast. (projectile 4.5 m/s, 1 hit(s), y 1.35 m)
-- `brickbat_m` Brickbat: Hurls a brick. L slow, H fast. (projectile 6.0 m/s, 1 hit(s), y 1.35 m)
-- `brickbat_h` Brickbat: Hurls a brick. L slow, H fast. (projectile 7.5 m/s, 1 hit(s), y 1.35 m)
-- `brickbat_ex` Brickbat (EX): Two bricks at once: 2 hits, fastest startup. (projectile 7.5 m/s, 2 hit(s), y 1.35 m)
-- `encore_l` Encore: Jumping uppercut; air-invulnerable anti-air.
-- `encore_m` Encore: Jumping uppercut; air-invulnerable anti-air.
-- `encore_h` Encore: Jumping uppercut; air-invulnerable anti-air.
-- `encore_ex` Encore (EX): Fully invulnerable 2-hit uppercut.
-- `hook_l` Headline Hook: Running hook; ends every confirm.
-- `hook_m` Headline Hook: Running hook; ends every confirm.
-- `hook_h` Headline Hook: Running hook; ends every confirm.
-- `hook_ex` Headline Hook (EX): Armored two-hook rush, -2 on block.
+- `brickbat_l` Brickbat: Hurls a brick. L slow, H fast. (projectile 4.5 m/s, 1 hit(s), y 1.25 m)
+- `brickbat_m` Brickbat: Hurls a brick. L slow, H fast. (projectile 6.0 m/s, 1 hit(s), y 1.25 m)
+- `brickbat_h` Brickbat: Hurls a brick. L slow, H fast. (projectile 7.5 m/s, 1 hit(s), y 1.25 m)
+- `brickbat_ex` Brickbat (EX): Two bricks at once: 2 hits, fastest startup. (projectile 7.5 m/s, 2 hit(s), y 1.25 m)
+- `encore_l` Encore: Jumping uppercut; air-invulnerable anti-air. (hit volume: bottom lowered 0.48 m to the crouch line 1.10 m (clips.json `encore_upper` effector RightHand))
+- `encore_m` Encore: Jumping uppercut; air-invulnerable anti-air. (hit volume: bottom lowered 0.51 m to the crouch line 1.10 m (clips.json `encore_upper` effector RightHand))
+- `encore_h` Encore: Jumping uppercut; air-invulnerable anti-air. (hit volume: bottom lowered 0.53 m to the crouch line 1.10 m (clips.json `encore_upper` effector RightHand))
+- `encore_ex` Encore (EX): Fully invulnerable 2-hit uppercut. (hit volume: bottom lowered 0.53 m to the crouch line 1.10 m (clips.json `encore_upper` effector RightHand))
+- `hook_l` Headline Hook: Running hook; ends every confirm. (hit volume: bottom lowered 0.10 m to the crouch line 1.10 m (clips.json `run_hook` effector RightHand))
+- `hook_m` Headline Hook: Running hook; ends every confirm. (hit volume: bottom lowered 0.07 m to the crouch line 1.10 m (clips.json `run_hook` effector RightHand))
+- `hook_h` Headline Hook: Running hook; ends every confirm. (hit volume: bottom lowered 0.05 m to the crouch line 1.10 m (clips.json `run_hook` effector RightHand))
+- `hook_ex` Headline Hook (EX): Armored two-hook rush, -2 on block. (hit volume: bottom lowered 0.05 m to the crouch line 1.10 m (clips.json `run_hook` effector RightHand))
 - `weave_l` Weave: Ducks under high attacks and projectiles; any attack button counters with a rising hook.
 - `weave_m` Weave: Ducks under high attacks and projectiles; any attack button counters with a rising hook.
 - `weave_h` Weave: Ducks under high attacks and projectiles; any attack button counters with a rising hook.
 - `weave_ex` Weave (EX): Strike-invulnerable weave.
-- `weave_counter` Counter Hook: Rising hook out of a Weave; knocks down, -7 on block.
-- `sold_out` Sold Out: Invulnerable jab-cross-jab-uppercut rush.
-- `main_event` Main Event: PRIME TIME: a lunging cross that starts a 170-frame beating.
+- `weave_counter` Counter Hook: Rising hook out of a Weave; knocks down, -7 on block. (hit volume: bottom lowered 0.36 m to the crouch line 1.10 m (clips.json `weave_counter_hook` effector RightHand))
+- `sold_out` Sold Out: Invulnerable jab-cross-jab-uppercut rush. (hit volume: bottom lowered 0.20 m to the crouch line 1.10 m (clips.json `sold_out_flurry` effector LeftHand))
+- `main_event` Main Event: PRIME TIME: a lunging cross that starts a 170-frame beating. (hit volume: bottom lowered 0.24 m to the crouch line 1.10 m (clips.json `cross` effector RightHand))
 
 **Lv3 PRIME TIME cinematic `main_event` (Main Event)** - 170 frames (<= 180), cue `johnny_main_event`, damage 400+400+500+250+250+250+900+1550 = 4500, ends KD +19 at 2.2 m.
 
@@ -247,7 +263,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Rivalry.** Spin crashed her live cue with a headspin on the rooftop set. She counts him down every time.
 
-**Stats.** HP 9500 | walk 2.28 / 1.49 m/s | dash 1.43 m (17f) / 0.84 m (22f) | jump 4+36+3, apex 1.50 m, forward 1.55 m | throw range 0.60 m | hurtbox stand [0.46, 1.63], crouch [0.53, 1.03], air [0.44, 1.07] m | pushbox [0.39, 1.47] m | build `slim`.
+**Stats.** HP 9500 | walk 2.28 / 1.49 m/s | dash 1.43 m (17f) / 0.84 m (22f) | jump 4+36+3, apex 1.50 m, forward 1.55 m | throw range 0.60 m | hurtbox stand [0.46, 1.67], crouch [0.53, 1.22], air [0.44, 1.07] m | pushbox [0.36, 1.5] m | build `slim`.
 
 **Unique (`unique.kind` = `none`).** `{"kind": "none", "trait": "RED LIGHT REKKA: CUE KICK chains into CUE 2, then CUE 3 overhead (236) or low (214). Fastest walk (2.28 m/s) and longest dash (1.43 m); lowest HP (9500), no projectile."}`
 
@@ -300,44 +316,44 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `slide_m` | Floor Slide | 22M | 14 | 8 | 22 | 43 | KD +30 | -12 | 900 | L | 13 | super | low-prof 4-22 | custom | Anti-zoning tool: low profile from frame 4 (0.45 m tall), -10/-12/-14 on block. |
 | `slide_h` | Floor Slide | 22H | 16 | 8 | 24 | 47 | KD +30 | -14 | 1000 | L | 13 | super | low-prof 4-24 | custom | Anti-zoning tool: low profile from frame 4 (0.45 m tall), -10/-12/-14 on block. |
 | `slide_ex` | Floor Slide (EX) | 22S | 10 | 8 | 16 | 33 | KD +30 | -6 | 1200 | L | 13 | super | proj 1-24, low-prof 3-18 | custom | EX: projectile-invulnerable 1-24 and -6 on block. |
-| `highlight_reel` | Highlight Reel | 236236 | 8 | 26 | 51 | 84 | KD +23 | -30 | 2000 | HL | 20 | - | strike 1-10, throw 1-10 | custom | hits: f8 500, f19 600, f30 900. 1c Lv1: invulnerable 1-10, 3 hits (9/9/20 hitstop), recovery 51 -> -30 on block, KD +23. |
+| `highlight_reel` | Highlight Reel | 236236 | 8 | 26 | 51 | 84 | KD +23 | -30 | 2000 | HL | 20 | - | strike 1-10, throw 1-10 | custom | hits: f8 500, f19 600, f30 900. 1c Lv1: invulnerable 1-10, 3 hits (9/9/20 hitstop), recovery 51 -> -30 on block, KD +23. Hand-set per-hit boxes (2026-09-30) at each kick's strike point from the bake trace (right foot 0.75/1.57 m, right foot ~0.81/1.10 m, left foot ~0.72/1.15 m), each reaching the 1.10 m crouch line; jump-kick hop 0.6 -> 0.3 m. Before: SIM derived all three boxes at the first kick's point, so the hopping third kick sat at 1.99-2.34 m and the super dropped its finisher (sim: 2/3 hits standing, 0/3 crouching). |
 | `on_air` | On Air | 214214 | 10 | 4 | 58 | 71 | cine, KD +19 | -42 | 4500 | HL | 0 | - | strike 1-13, throw 1-13, air 1-13, proj 1-13 | custom | 1c Lv3: 10/4/58, -42, 4500, fully invulnerable 1-13. |
 
 **Move notes.**
 
-- `5L` Lead Jab: Jab; chains into 2L.
-- `2L` Toe Kick: Crouching toe kick (low).
-- `5M` Teep: Push kick; long reach, pushes blockers out.
-- `2M` Shin Kick: Crouching low roundhouse; cancel into the CUE KICK rekka.
-- `5H` Head Kick: Head-high roundhouse.
-- `2H` Leg Kick: Standing Muay Thai leg kick that knocks down; long, but she stands tall.
+- `5L` Lead Jab: Jab; chains into 2L. (hit volume: bottom lowered 0.20 m to the crouch line 1.10 m (clips.json `jab` effector LeftHand))
+- `2L` Toe Kick: Crouching toe kick (low). (hit volume: near edge pulled back 0.13 m to point-blank reach 0.63 m (clips.json `toe_kick` effector LeftFoot))
+- `5M` Teep: Push kick; long reach, pushes blockers out. (hit volume: near edge pulled back 0.04 m to point-blank reach 0.63 m (clips.json `teep` effector RightFoot))
+- `2M` Shin Kick: Crouching low roundhouse; cancel into the CUE KICK rekka. (hit volume: near edge pulled back 0.13 m to point-blank reach 0.63 m (clips.json `shin_kick` effector RightFoot))
+- `5H` Head Kick: Head-high roundhouse. (hit volume: bottom lowered 0.21 m to the crouch line 1.10 m (clips.json `roundhouse_hi` effector RightFoot))
+- `2H` Leg Kick: Standing Muay Thai leg kick that knocks down; long, but she stands tall. (hit volume: near edge pulled back 0.04 m to point-blank reach 0.63 m (clips.json `leg_kick` effector RightFoot))
 - `6M` Step Knee: Stepping knee: +2 on hit, -4 on block, travels 0.5 m.
-- `4H` Back Kick: Long spinning back kick; her furthest button (+2/-3).
+- `4H` Back Kick: Long spinning back kick; her furthest button (+2/-3). (hit volume: bottom lowered 0.10 m to the crouch line 1.10 m; near edge pulled back 0.06 m to point-blank reach 0.63 m (clips.json `side_kick_back` effector RightFoot))
 - `j.L` Air Jab: Air jab.
 - `j.M` Flying Side Kick: Air-to-air side kick.
 - `j.H` Jump Turning Kick: Big turning jump-in.
 - `throw_f` Plum Knees: Muay Thai clinch, knee to the chest.
 - `throw_b` Spin Toss: Spins and flings them behind.
-- `cue_l` Cue Kick: Rekka part 1: stepping front kick; 236 again for CUE 2.
-- `cue_m` Cue Kick: Rekka part 1: stepping front kick; 236 again for CUE 2.
-- `cue_h` Cue Kick: Rekka part 1: stepping front kick; 236 again for CUE 2.
-- `cue_ex` Cue Kick (EX): Armored, -2 on block.
-- `cue2` Cue 2: Head Snap: Rekka part 2: left head kick (+1/-7); 236 = CUE 3 overhead, 214 = CUE 3 low.
-- `cue3_oh` Cue 3: Curtain Drop: Rekka finisher: jumping overhead kick, knocks down, -4 on block.
-- `cue3_lo` Cue 3: Trapdoor: Rekka finisher: low leg kick, knocks down, -13 on block.
+- `cue_l` Cue Kick: Rekka part 1: stepping front kick; 236 again for CUE 2. (hit volume: bottom lowered 0.09 m to the crouch line 1.10 m; near edge pulled back 0.13 m to point-blank reach 0.63 m (clips.json `cue_kick` effector RightFoot))
+- `cue_m` Cue Kick: Rekka part 1: stepping front kick; 236 again for CUE 2. (hit volume: bottom lowered 0.07 m to the crouch line 1.10 m; near edge pulled back 0.08 m to point-blank reach 0.63 m (clips.json `cue_kick` effector RightFoot))
+- `cue_h` Cue Kick: Rekka part 1: stepping front kick; 236 again for CUE 2. (hit volume: bottom lowered 0.04 m to the crouch line 1.10 m; near edge pulled back 0.03 m to point-blank reach 0.63 m (clips.json `cue_kick` effector RightFoot))
+- `cue_ex` Cue Kick (EX): Armored, -2 on block. (hit volume: bottom lowered 0.04 m to the crouch line 1.10 m; near edge pulled back 0.03 m to point-blank reach 0.63 m (clips.json `cue_kick` effector RightFoot))
+- `cue2` Cue 2: Head Snap: Rekka part 2: left head kick (+1/-7); 236 = CUE 3 overhead, 214 = CUE 3 low. (hit volume: bottom lowered 0.29 m to the crouch line 1.10 m; near edge pulled back 0.05 m to point-blank reach 0.63 m (clips.json `cue_round` effector LeftFoot))
+- `cue3_oh` Cue 3: Curtain Drop: Rekka finisher: jumping overhead kick, knocks down, -4 on block. (hit volume: bottom lowered 0.21 m to the crouch line 1.10 m (clips.json `cue_drop` effector LeftFoot))
+- `cue3_lo` Cue 3: Trapdoor: Rekka finisher: low leg kick, knocks down, -13 on block. (hit volume: near edge pulled back 0.04 m to point-blank reach 0.63 m (clips.json `leg_kick` effector RightFoot))
 - `stage_dive_l` Stage Dive: Hopping flying knee: an overhead that hops over lows.
 - `stage_dive_m` Stage Dive: Hopping flying knee: an overhead that hops over lows.
 - `stage_dive_h` Stage Dive: Hopping flying knee: an overhead that hops over lows.
-- `stage_dive_ex` Stage Dive (EX): Two-hit dive, +2 on block.
+- `stage_dive_ex` Stage Dive (EX): Two-hit dive, +2 on block. (hit volume: bottom lowered 0.25 m to the crouch line 1.10 m (clips.json `flying_knee` effector RightKnee))
 - `spotlight_l` Spotlight: Rising flip kick. NOT invulnerable (trades); the EX is.
 - `spotlight_m` Spotlight: Rising flip kick. NOT invulnerable (trades); the EX is.
 - `spotlight_h` Spotlight: Rising flip kick. NOT invulnerable (trades); the EX is.
-- `spotlight_ex` Spotlight (EX): Fully invulnerable flip kick.
+- `spotlight_ex` Spotlight (EX): Fully invulnerable flip kick. (hit volume: bottom lowered 0.51 m to the crouch line 1.10 m (clips.json `flip_kick` effector RightFoot))
 - `slide_l` Floor Slide: Low-profile slide under projectiles; low, knocks down.
 - `slide_m` Floor Slide: Low-profile slide under projectiles; low, knocks down.
 - `slide_h` Floor Slide: Low-profile slide under projectiles; low, knocks down.
 - `slide_ex` Floor Slide (EX): Projectile-invulnerable slide, -6 on block.
-- `highlight_reel` Highlight Reel: Invulnerable three-kick flurry ending in a jump kick.
+- `highlight_reel` Highlight Reel: Invulnerable three-kick flurry ending in a jump kick. (hand-set hit volume f8-9 x 0.75 y 1.42 w 0.50 h 0.65, f19-20 x 0.79 y 1.10 w 0.54 h 0.35, f30-33 x 0.72 y 1.06 w 0.50 h 0.53)
 - `on_air` On Air: PRIME TIME: a teep that starts a juggle she counts down live.
 
 **Lv3 PRIME TIME cinematic `on_air` (On Air)** - 160 frames (<= 180), cue `patch_on_air`, damage 400+500+600+700+900+1400 = 4500, ends KD +19 at 2.0 m.
@@ -368,7 +384,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `flying_side` | j.M | CMU 135_11 (side_kick.2) f1278-1355 contact 1307 | CMU side_kick.2 clean (135_11 left yoko-geri) played airborne |
 | `jump_kick` | j.H, on_air (cine) | CMU 90_06 (jump_kick.2) f392-482 contact 435 | CMU jump_kick.2 usable (90_06 airborne turning kick, foot 1.65 m) - a real airborne kick |
 | `throw_reach` | throw_f, throw_b | Mixamo `Soccer_Game_Pack/goalkeeper catch (2)` f2-30 contact f9 | Mixamo goalkeeper catch (2) two-hand grab (throw whiff) |
-| `clinch_knee` | throw_f (grab), on_air (cine) | CMU 86_06 (knee.1) f6218-6368 contact 6272 | CMU knee.1 clean (86_06: hands grab and pull down, knee to the chest; pilot p09) |
+| `clinch_knee` | throw_f (grab), on_air (cine) | CMU 86_06 (knee.1) f6218-6368 contact 6272 | CMU knee.1 clean (86_06: hands grab and pull down, knee to the chest; pilot p09). Effector RightKnee: the builder measured the right FOOT (lane ASSETS flag) |
 | `spin_toss` | throw_b (grab) | CMU 135_07 (roundhouse.3) f735-828 contact 772 | CMU roundhouse.3 clean (135_07 R head kick, 104 deg turn): swings them past, turning kick |
 | `cue_kick` | cue_l, cue_m, cue_h, cue_ex | CMU 144_05 (front_kick.1) f330-428 contact 360 | CMU front_kick.1 clean (144_05 guard stance 1.05 m, returns to stance; pilot p07) |
 | `cue_round` | cue2, on_air (cine) | CMU 135_07 (roundhouse.2) f412-502 contact 442 | CMU roundhouse.2 clean (135_07 LEFT head kick) |
@@ -398,7 +414,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Rivalry.** Officer Krane once cuffed Bruno to a meat locker door. Bruno took the door with him.
 
-**Stats.** HP 11000 | walk 1.64 / 1.13 m/s | dash 0.76 m (21f) / 0.54 m (25f) | jump 4+42+4, apex 1.45 m, forward 1.30 m | throw range 0.77 m | hurtbox stand [0.68, 1.9], crouch [0.78, 1.2], air [0.65, 1.24] m | pushbox [0.58, 1.71] m | build `heavy`.
+**Stats.** HP 11000 | walk 1.64 / 1.13 m/s | dash 0.76 m (21f) / 0.54 m (25f) | jump 4+42+4, apex 1.45 m, forward 1.30 m | throw range 0.77 m | hurtbox stand [0.68, 1.75], crouch [0.78, 1.39], air [0.65, 1.24] m | pushbox [0.67, 1.57] m | build `heavy`.
 
 **Unique (`unique.kind` = `armorStep`).** `{"kind": "armorStep", "steps": ["brace_l", "brace_m", "brace_h", "brace_ex"], "armored": ["brace_l", "brace_m", "brace_h", "brace_ex", "fridge_door_l", "fridge_door_m", "fridge_door_h", "fridge_door_ex"]}`
 
@@ -453,13 +469,13 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Move notes.**
 
-- `5L` Knife-Edge Chop: Wrestling chop.
+- `5L` Knife-Edge Chop: Wrestling chop. (hit volume: bottom lowered 0.10 m to the crouch line 1.10 m (clips.json `chop` effector RightHand))
 - `2L` Low Straight: Crouching straight; the tick into WALK-IN FREEZER.
-- `5M` Forearm Smash: Heavy straight forearm.
+- `5M` Forearm Smash: Heavy straight forearm. (hit volume: bottom lowered 0.45 m to the crouch line 1.10 m (clips.json `forearm` effector RightHand))
 - `2M` Low Forearm: Crouching body forearm; cancel into FRIDGE DOOR.
-- `5H` Haymaker: The reference's big haymaker.
-- `2H` Goalpost: Both arms swing up: anti-air.
-- `6H` Big Boot: Push kick; wall-splats a cornered opponent.
+- `5H` Haymaker: The reference's big haymaker. (hit volume: bottom lowered 0.04 m to the crouch line 1.10 m (clips.json `haymaker` effector RightHand))
+- `2H` Goalpost: Both arms swing up: anti-air. (hand-set hit volume f10-13 x 0.30 y 1.90 w 0.70 h 0.50)
+- `6H` Big Boot: Push kick; wall-splats a cornered opponent. (hit volume: bottom lowered 0.00 m to the crouch line 1.10 m (clips.json `big_boot` effector RightFoot))
 - `j.L` Air Chop: Air chop.
 - `j.M` Flying Forearm: Air forearm.
 - `j.H` Hammer Down: Double-fist jump-in.
@@ -470,14 +486,14 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `walk_in_m` Walk-In Freezer: 360 command grab; L reaches furthest, H hits hardest.
 - `walk_in_h` Walk-In Freezer: 360 command grab; L reaches furthest, H hits hardest.
 - `walk_in_ex` Walk-In Freezer (EX): Strike-invulnerable 1-5 reversal grab with the longest reach.
-- `fridge_door_l` Fridge Door: Armored running double-palm shove; wall-splats in the corner.
-- `fridge_door_m` Fridge Door: Armored running double-palm shove; wall-splats in the corner.
-- `fridge_door_h` Fridge Door: Armored running double-palm shove; wall-splats in the corner.
-- `fridge_door_ex` Fridge Door (EX): Two hits of armor, -4 on block.
-- `lariat_l` Double-Door Lariat: Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable.
-- `lariat_m` Double-Door Lariat: Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable.
-- `lariat_h` Double-Door Lariat: Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable.
-- `lariat_ex` Double-Door Lariat (EX): Fully invulnerable 3-hit lariat.
+- `fridge_door_l` Fridge Door: Armored running double-palm shove; wall-splats in the corner. (hit volume: bottom lowered 0.47 m to the crouch line 1.10 m (clips.json `fridge_shove` effector RightHand))
+- `fridge_door_m` Fridge Door: Armored running double-palm shove; wall-splats in the corner. (hit volume: bottom lowered 0.45 m to the crouch line 1.10 m (clips.json `fridge_shove` effector RightHand))
+- `fridge_door_h` Fridge Door: Armored running double-palm shove; wall-splats in the corner. (hit volume: bottom lowered 0.42 m to the crouch line 1.10 m (clips.json `fridge_shove` effector RightHand))
+- `fridge_door_ex` Fridge Door (EX): Two hits of armor, -4 on block. (hit volume: bottom lowered 0.42 m to the crouch line 1.10 m (clips.json `fridge_shove` effector RightHand))
+- `lariat_l` Double-Door Lariat: Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable. (hit volume: bottom lowered 0.10 m to the crouch line 1.10 m (clips.json `lariat_spin` effector RightHand))
+- `lariat_m` Double-Door Lariat: Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable. (hit volume: bottom lowered 0.07 m to the crouch line 1.10 m (clips.json `lariat_spin` effector RightHand))
+- `lariat_h` Double-Door Lariat: Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable. (hit volume: bottom lowered 0.05 m to the crouch line 1.10 m (clips.json `lariat_spin` effector RightHand))
+- `lariat_ex` Double-Door Lariat (EX): Fully invulnerable 3-hit lariat. (hit volume: bottom lowered 0.05 m to the crouch line 1.10 m (clips.json `lariat_spin` effector RightHand))
 - `brace_l` Brace: Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT).
 - `brace_m` Brace: Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT).
 - `brace_h` Brace: Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT).
@@ -505,7 +521,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `haymaker` | 5H | Mixamo `Pro_Melee_Axe_Pack/standing melee attack horizontal` f16-52 contact f29 | Mixamo axe horizontal = the reference's big haymaker; front pass f29 (reach 0.77 m) |
 | `low_straight` | 2L | LAYER lower[Mixamo `Pro_Magic_Pack/Crouch Idle` f1-42, hold f1] + upper[CMU 14_03 (cross.3) f1748-1822 contact 1763] | Crouch Idle legs + CMU cross.3 (14_03, 8.2 m/s) |
 | `low_forearm` | 2M | LAYER lower[Mixamo `Pro_Magic_Pack/Crouch Idle` f1-42, hold f1] + upper[CMU 13_17 (body_blow.4) f4603-4692 contact 4620] | Crouch Idle legs + CMU body_blow.4 (13_17 lead body shot with a dip) |
-| `goalpost` | 2H | Mixamo `Pro_Magic_Pack/Standing 2H Cast Spell 01` f8-40 contact f21 | Mixamo 2H Cast Spell 01 arms thrown overhead (RightHand peak f21) = double-arm anti-air |
+| `goalpost` | 2H | Mixamo `Pro_Magic_Pack/Standing 2H Cast Spell 01` f1-34 contact f12 | Mixamo 2H Cast Spell 01 arms thrown overhead = double-arm anti-air. Contact f12 = both hands at the top (bake trace: 1.96 / 2.03 m, 0.07 / 0.28 m forward). Was f21 (the speed peak), which is the arms SLAMMING DOWN to 0.73 m - lane ASSETS flagged it and the jump-in test hit only landing opponents (8/88) |
 | `big_boot` | 6H | Mixamo `Pro_Melee_Axe_Pack/standing melee attack kick ver. 1` f8-40 contact f22 | Mixamo axe kick ver. 1 = front push kick (knockback into wall-splat); front pass f22 |
 | `air_chop` | j.L | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[CMU 86_06 f4653-4734 contact 4682] | jump apex legs + CMU downward chop |
 | `air_forearm` | j.M | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[CMU 14_01 (cross.4) f2592-2656 contact 2608] | jump apex legs + CMU cross.4 |
@@ -542,7 +558,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Rivalry.** Gazza's stray shot popped Zambini's prize dove on live TV. Zambini has not forgiven the ball.
 
-**Stats.** HP 9500 | walk 1.26 / 1.13 m/s | dash 1.10 m (19f) / 0.75 m (24f) | jump 4+42+3, apex 1.70 m, forward 1.30 m | throw range 0.60 m | hurtbox stand [0.56, 1.76], crouch [0.64, 1.11], air [0.53, 1.15] m | pushbox [0.47, 1.58] m | build `average`.
+**Stats.** HP 9500 | walk 1.26 / 1.13 m/s | dash 1.10 m (19f) / 0.75 m (24f) | jump 4+42+3, apex 1.70 m, forward 1.30 m | throw range 0.60 m | hurtbox stand [0.56, 1.74], crouch [0.64, 1.33], air [0.53, 1.15] m | pushbox [0.42, 1.57] m | build `average`.
 
 **Unique (`unique.kind` = `teleport`).** `{"kind": "teleport", "moves": ["vanish_l", "vanish_m", "vanish_h", "vanish_ex"]}`
 
@@ -596,11 +612,11 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Move notes.**
 
-- `5L` Palm Flick: Quick palm.
-- `2L` Low Palm: Crouching palm to the shin.
-- `5M` Spear Hand: Long straight-arm spear hand: the zoner's longest poke.
-- `2M` Low Spear: Long crouching spear hand (low); cancel into CARD FAN.
-- `5H` Double Palm: Double palm that shoves them back to his range.
+- `5L` Palm Flick: Quick palm. (hit volume: bottom lowered 0.11 m to the crouch line 1.10 m; near edge pulled back 0.09 m to point-blank reach 0.65 m (clips.json `palm_flick` effector RightHand))
+- `2L` Low Palm: Crouching palm to the shin. (hit volume: near edge pulled back 0.22 m to point-blank reach 0.65 m (clips.json `low_palm` effector RightHand))
+- `5M` Spear Hand: Long straight-arm spear hand: the zoner's longest poke. (hit volume: bottom lowered 0.03 m to the crouch line 1.10 m; near edge pulled back 0.25 m to point-blank reach 0.65 m (clips.json `spear_hand` effector RightHand))
+- `2M` Low Spear: Long crouching spear hand (low); cancel into CARD FAN. (hit volume: near edge pulled back 0.24 m to point-blank reach 0.65 m (clips.json `low_spear` effector RightHand))
+- `5H` Double Palm: Double palm that shoves them back to his range. (hit volume: near edge pulled back 0.18 m to point-blank reach 0.65 m (clips.json `double_palm` effector RightHand))
 - `2H` Rising Palm: Rising palm anti-air.
 - `6H` Abracadabra: Two-fist hammer onto the head: overhead.
 - `j.L` Air Palm: Air palm.
@@ -608,10 +624,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `j.H` Levitating Palms: Double-palm jump-in.
 - `throw_f` Now You See Me: Grabs the lapels and blasts them away with both palms.
 - `throw_b` Now You Don't: Spins and flings them behind him.
-- `card_fan_l` Card Fan: Flicked playing cards; fast and straight. (projectile 5.0 m/s, 1 hit(s), y 1.25 m)
-- `card_fan_m` Card Fan: Flicked playing cards; fast and straight. (projectile 6.5 m/s, 1 hit(s), y 1.25 m)
-- `card_fan_h` Card Fan: Flicked playing cards; fast and straight. (projectile 8.0 m/s, 1 hit(s), y 1.25 m)
-- `card_fan_ex` Card Fan (EX): A full deck: 3 hits. (projectile 8.0 m/s, 3 hit(s), y 1.25 m)
+- `card_fan_l` Card Fan: Flicked playing cards; fast and straight. (projectile 5.0 m/s, 1 hit(s), y 1.20 m)
+- `card_fan_m` Card Fan: Flicked playing cards; fast and straight. (projectile 6.5 m/s, 1 hit(s), y 1.20 m)
+- `card_fan_h` Card Fan: Flicked playing cards; fast and straight. (projectile 8.0 m/s, 1 hit(s), y 1.20 m)
+- `card_fan_ex` Card Fan (EX): A full deck: 3 hits. (projectile 8.0 m/s, 3 hit(s), y 1.20 m)
 - `flash_paper_l` Flash Paper: Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump. (projectile 1.0 m/s, 1 hit(s), y 1.60 m, arc)
 - `flash_paper_m` Flash Paper: Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump. (projectile 2.6 m/s, 1 hit(s), y 1.60 m, arc)
 - `flash_paper_h` Flash Paper: Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump. (projectile 4.3 m/s, 1 hit(s), y 1.60 m, arc)
@@ -620,12 +636,12 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `vanish_m` Vanishing Act: Trapdoor: reappears 0.9 m IN FRONT of the opponent. (teleport {"f": 17, "to": "front", "gapM": 0.9})
 - `vanish_h` Vanishing Act: Trapdoor: escapes to 1.0 m from his own wall. (teleport {"f": 17, "to": "home", "gapM": 1.0})
 - `vanish_ex` Vanishing Act (EX): Instant: invulnerable from frame 1, reappears behind, cancelable into a special. (teleport {"f": 10, "to": "behind", "gapM": 0.8})
-- `flourish_l` Flourish: Burst of flame and doves above and around him; not invulnerable (EX is).
-- `flourish_m` Flourish: Burst of flame and doves above and around him; not invulnerable (EX is).
-- `flourish_h` Flourish: Burst of flame and doves above and around him; not invulnerable (EX is).
-- `flourish_ex` Flourish (EX): Fully invulnerable burst.
+- `flourish_l` Flourish: Burst of flame and doves above and around him; not invulnerable (EX is). (hand-set hit volume f9-13 x 0.30 y 1.70 w 1.20 h 1.00)
+- `flourish_m` Flourish: Burst of flame and doves above and around him; not invulnerable (EX is). (hand-set hit volume f10-14 x 0.40 y 1.70 w 1.30 h 1.00)
+- `flourish_h` Flourish: Burst of flame and doves above and around him; not invulnerable (EX is). (hand-set hit volume f11-15 x 0.50 y 1.75 w 1.40 h 1.10)
+- `flourish_ex` Flourish (EX): Fully invulnerable burst. (hand-set hit volume f8-12 x 0.30 y 1.40 w 1.60 h 1.60)
 - `grand_illusion` Grand Illusion: A giant spinning card-saw: 5-hit projectile, invulnerable startup. (projectile 7.0 m/s, 5 hit(s), y 1.10 m)
-- `the_prestige` The Prestige: PRIME TIME: a palm to the chest, a sheet over the victim, and the big reveal.
+- `the_prestige` The Prestige: PRIME TIME: a palm to the chest, a sheet over the victim, and the big reveal. (hit volume: bottom lowered 0.21 m to the crouch line 1.10 m; near edge pulled back 0.12 m to point-blank reach 0.65 m (clips.json `palm_shove` effector RightHand))
 
 **Lv3 PRIME TIME cinematic `the_prestige` (The Prestige)** - 150 frames (<= 180), cue `zambini_prestige`, damage 1000+1500+2000 = 4500, ends KD +19 at 2.5 m.
 
@@ -681,7 +697,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Rivalry.** Krane cuffed Bruno to a meat locker door; Bruno walked off with the door. Krane wants his cuffs back.
 
-**Stats.** HP 10000 | walk 1.94 / 1.44 m/s | dash 1.18 m (19f) / 0.56 m (24f) | jump 4+39+3, apex 1.55 m, forward 1.40 m | throw range 0.60 m | hurtbox stand [0.55, 1.73], crouch [0.63, 1.09], air [0.52, 1.13] m | pushbox [0.46, 1.56] m | build `average`.
+**Stats.** HP 10000 | walk 1.94 / 1.44 m/s | dash 1.18 m (19f) / 0.56 m (24f) | jump 4+39+3, apex 1.55 m, forward 1.40 m | throw range 0.60 m | hurtbox stand [0.55, 1.67], crouch [0.63, 1.16], air [0.52, 1.13] m | pushbox [0.57, 1.5] m | build `average`.
 
 **Unique (`unique.kind` = `charge`).** `{"kind": "charge", "chargeF": 45, "keepF": 10, "standBlockNervePct": 50}`
 
@@ -737,15 +753,15 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Move notes.**
 
-- `5L` Baton Poke: Quick baton jab.
+- `5L` Baton Poke: Quick baton jab. (hit volume: bottom lowered 0.46 m to the crouch line 1.10 m (clips.json `baton_poke` effector RightHand))
 - `2L` Low Poke: Crouching baton poke to the shin (holds down-back charge).
-- `5M` Baton Chop: Vertical baton chop.
+- `5M` Baton Chop: Vertical baton chop. (hit volume: near edge pulled back 0.05 m to point-blank reach 0.69 m (clips.json `baton_chop` effector RightHand))
 - `2M` Knee Rap: Crouching baton rap; cancel into TASER SHOT while charging.
-- `5H` Baton Swing: Horizontal baton swing.
+- `5H` Baton Swing: Horizontal baton swing. (hit volume: bottom lowered 0.01 m to the crouch line 1.10 m (clips.json `baton_swing` effector RightHand))
 - `2H` Rising Baton: Rising baton anti-air.
 - `4H` Shield Bash: Shield shove; pushes them out to taser range (+4/-1).
-- `6M` Front Boot: Front kick, longer than 5M.
-- `6H` Nightstick Drop: Hopping overhead chop.
+- `6M` Front Boot: Front kick, longer than 5M. (hit volume: near edge pulled back 0.14 m to point-blank reach 0.69 m (clips.json `boot` effector RightFoot))
+- `6H` Nightstick Drop: Hopping overhead chop. (hit volume: bottom lowered 0.00 m to the crouch line 1.10 m (clips.json `hop_chop` effector RightHand))
 - `j.L` Air Poke: Air baton poke.
 - `j.M` Air Chop: Air baton chop.
 - `j.H` Air Swing: Wide air baton swing.
@@ -758,7 +774,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `baton_flip_l` Baton Flip: Charge anti-air ([2]8): rising baton flip, air-invulnerable.
 - `baton_flip_m` Baton Flip: Charge anti-air ([2]8): rising baton flip, air-invulnerable.
 - `baton_flip_h` Baton Flip: Charge anti-air ([2]8): rising baton flip, air-invulnerable.
-- `baton_flip_ex` Baton Flip (EX): Fully invulnerable 2-hit flip.
+- `baton_flip_ex` Baton Flip (EX): Fully invulnerable 2-hit flip. (hit volume: bottom lowered 0.35 m to the crouch line 1.10 m (clips.json `baton_flip_rise` effector RightHand))
 - `shield_rush_l` Shield Rush: Shield-first charge (no charge input needed).
 - `shield_rush_m` Shield Rush: Shield-first charge (no charge input needed).
 - `shield_rush_h` Shield Rush: Shield-first charge (no charge input needed).
@@ -794,7 +810,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `baton_poke` | 5L | Mixamo `Pro_Sword_and_Shield_Pack/sword and shield attack (4)` f8-31 contact f15 | Mixamo S&S attack (4): quick 1H baton poke, auto contact f15 (in place) |
 | `baton_chop` | 5M, riot_act (cine) | Mixamo `Pro_Sword_and_Shield_Pack/sword and shield slash` f8-40 contact f19 | Mixamo S&S slash: vertical baton chop, front pass f19 |
 | `baton_swing` | 5H, riot_act (cine) | Mixamo `Pro_Sword_and_Shield_Pack/sword and shield attack (2)` f5-40 contact f18 | Mixamo S&S attack (2): horizontal swing, front pass f18 (root travel stripped) |
-| `low_poke` | 2L | LAYER lower[Mixamo `Pro_Sword_and_Shield_Pack/sword and shield crouch idle` f1-73, hold f1] + upper[Mixamo `Pro_Sword_and_Shield_Pack/sword and shield attack (4)` f8-31 contact f15] | S&S crouch idle legs + baton poke |
+| `low_poke` | 2L | LAYER lower[Mixamo `Pro_Sword_and_Shield_Pack/sword and shield crouch idle` f1-73, hold f1] + upper[Mixamo `Pro_Sword_and_Shield_Pack/sword and shield attack (3)` f16-39 contact f23] | S&S crouch idle legs + S&S attack (3) upper: the dipping low baton thrust (inventory hit f23 RightHand 0.81 m, hips 0.65 m) on crouched legs = a shin poke. Replaced the attack (4) upper (2026-09-30): that poke is aimed at head height, so on crouched legs it still landed at 1.42 m and the LOW never hit a crouching opponent in the sim (connect matrix) |
 | `knee_rap` | 2M | Mixamo `Pro_Sword_and_Shield_Pack/sword and shield slash (5)` f8-40 contact f19 | Mixamo S&S slash (5): crouched 1H swing (hips 0.45-0.61 m) = low baton rap |
 | `rising_baton` | 2H | Mixamo `Pro_Sword_and_Shield_Pack/sword and shield slash (3)` f13-45 contact f25 | Mixamo S&S slash (3): rising 1H swing, arm high by f30 (front pass f25) |
 | `shield_block` | 4H, riot_act, riot_act (cine) | Mixamo `Pro_Sword_and_Shield_Pack/sword and shield block` f1-18 contact f11 | Mixamo S&S block: left forearm (shield) thrust forward = shield bash |
@@ -832,7 +848,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Rivalry.** Rerun ate her lucky gourd on the Wheel of Pain. She wants it back - or at least wants him to regret it.
 
-**Stats.** HP 9500 | walk 2.12 / 1.44 m/s | dash 1.30 m (18f) / 0.80 m (23f) | jump 4+37+3, apex 1.60 m, forward 1.45 m | throw range 0.60 m | hurtbox stand [0.46, 1.61], crouch [0.53, 1.02], air [0.44, 1.05] m | pushbox [0.39, 1.45] m | build `slim`.
+**Stats.** HP 9500 | walk 2.12 / 1.44 m/s | dash 1.30 m (18f) / 0.80 m (23f) | jump 4+37+3, apex 1.60 m, forward 1.45 m | throw range 0.60 m | hurtbox stand [0.46, 1.62], crouch [0.53, 1.16], air [0.44, 1.05] m | pushbox [0.38, 1.46] m | build `slim`.
 
 **Unique (`unique.kind` = `stance`).** `{"kind": "stance", "name": "sway", "enter": ["sway_l", "sway_m", "sway_h", "sway_ex"], "maxF": 90, "followups": {"L": "sway_low", "M": "sway_oh", "H": "sway_hop"}, "exit": {"2": "sway_exit", "timeout": "sway_exit"}, "blockExitF": 6, "walk": {"fwd": 1.6, "back": 1.1}, "clips": {"idle": "sway_idle", "walk_f": "sway_walk", "walk_b": "sway_walk_b"}}`
 
@@ -882,19 +898,19 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `sway_oh` | Axe Kick | sway>M | 18 | 3 | 18 | 38 | +2 | -4 | 800 | H | 13 | - | - | custom | Stance overhead: 18f (reactable), +2/-4. |
 | `sway_hop` | Tornado Hop | sway>H | 16 | 4 | 16 | 35 | +4 | -2 | 900 | HL | 13 | - | throw 1-19 | custom | Stance hop: airborne from f3 (beats lows and throws), +4/-2. |
 | `sway_exit` | Sober Up | sway>2 | 1 | 1 | 6 | 7 | - | - | 0 | HL | 0 | - | - | custom | Stance exit: 8 frames total. |
-| `bottoms_up` | Bottoms Up | 236236 | 8 | 31 | 52 | 90 | KD +23 | -30 | 2000 | HL | 20 | - | strike 1-10, throw 1-10 | custom | hits: f8 500, f22 600, f36 900. 1c Lv1: invulnerable 1-10; hits spaced 14 frames apart (the clip holds three separate CMU moves); recovery 52 -> -30 on block. |
+| `bottoms_up` | Bottoms Up | 236236 | 8 | 31 | 52 | 90 | KD +23 | -30 | 2000 | HL | 20 | - | strike 1-10, throw 1-10 | custom | hits: f8 500, f22 600, f36 900. 1c Lv1: invulnerable 1-10; hits spaced 14 frames apart (the clip holds three separate CMU moves); recovery 52 -> -30 on block. Hand-set per-hit boxes (2026-09-30) at each strike point from the bake trace (palm 0.66/1.24 m, kick 0.80/1.09 m, knee rise ~0.71/1.26 m), each reaching the 1.10 m crouch line; knee hop 0.6 -> 0.3 m (SIM derives every hit at the first contact point, which put the hopping third hit at 1.67-2.01 m). |
 | `happy_hour` | Happy Hour | 214214 | 10 | 4 | 58 | 71 | cine, KD +19 | -42 | 4500 | HL | 0 | - | strike 1-13, throw 1-13, air 1-13, proj 1-13 | custom | 1c Lv3: 10/4/58, -42, 4500, fully invulnerable 1-13. |
 
 **Move notes.**
 
-- `5L` Tipsy Jab: Jab.
-- `2L` Low Palm: Crouching palm to the shin.
+- `5L` Tipsy Jab: Jab. (hit volume: bottom lowered 0.19 m to the crouch line 1.10 m (clips.json `jab5` effector LeftHand))
+- `2L` Low Palm: Crouching palm to the shin. (hit volume: near edge pulled back 0.06 m to point-blank reach 0.61 m (clips.json `low_palm` effector LeftHand))
 - `5M` Staggering Palm: Lunging palm that steps in 0.25 m.
-- `2M` Shin Kick: Crouching low roundhouse.
+- `2M` Shin Kick: Crouching low roundhouse. (hit volume: near edge pulled back 0.11 m to point-blank reach 0.61 m (clips.json `shin_kick` effector RightFoot))
 - `5H` Drunken Roundhouse: Curving turning kick.
-- `2H` Knee Lift: Knee-lift anti-air.
+- `2H` Knee Lift: Knee-lift anti-air. (hand-set hit volume f9-12 x 0.35 y 1.20 w 0.45 h 0.50)
 - `6M` Wobble Palm: Stumbling step-in palm (+2/-4).
-- `4H` Lean-Away Kick: Leans away from high attacks and kicks back (+3/-2).
+- `4H` Lean-Away Kick: Leans away from high attacks and kicks back (+3/-2). (hit volume: near edge pulled back 0.04 m to point-blank reach 0.61 m (clips.json `lean_kick` effector LeftFoot))
 - `j.L` Air Palm: Air palm.
 - `j.M` Flying Front Kick: Air front kick.
 - `j.H` Flying High Kick: Long flying kick.
@@ -912,11 +928,11 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `rising_lotus_m` Lotus Rising: Rising flying knee; air-invulnerable anti-air.
 - `rising_lotus_h` Lotus Rising: Rising flying knee; air-invulnerable anti-air.
 - `rising_lotus_ex` Lotus Rising (EX): Fully invulnerable 2-hit knee.
-- `sway_low` Tipsy Toe Kick: SWAY follow-up (L): stumbling low toe kick, knocks down, -9 on block. (stance follow)
-- `sway_oh` Axe Kick: SWAY follow-up (M): crescent axe kick overhead, +2 / -4. (stance follow)
+- `sway_low` Tipsy Toe Kick: SWAY follow-up (L): stumbling low toe kick, knocks down, -9 on block. (stance follow; hit volume: near edge pulled back 0.05 m to point-blank reach 0.61 m (clips.json `gourd_sweep` effector RightFoot))
+- `sway_oh` Axe Kick: SWAY follow-up (M): crescent axe kick overhead, +2 / -4. (stance follow; hit volume: bottom lowered 0.39 m to the crouch line 1.10 m (clips.json `axe_kick` effector RightFoot))
 - `sway_hop` Tornado Hop: SWAY follow-up (H): throw-invulnerable hop over lows into a tornado kick. (stance follow)
 - `sway_exit` Sober Up: Leaves SWAY (press down, or after 90 frames). (stance exit)
-- `bottoms_up` Bottoms Up: A swig, then palm, turning kick and rising knee - invulnerable startup.
+- `bottoms_up` Bottoms Up: A swig, then palm, turning kick and rising knee - invulnerable startup. (hand-set hit volume f8-9 x 0.66 y 1.24 w 0.50 h 0.35, f22-23 x 0.79 y 1.09 w 0.53 h 0.35, f36-38 x 0.71 y 1.12 w 0.50 h 0.64)
 - `happy_hour` Happy Hour: PRIME TIME: a lunging palm, a long swig, and a drunken beating that ends in a fire blast.
 
 **Lv3 PRIME TIME cinematic `happy_hour` (Happy Hour)** - 160 frames (<= 180), cue `lotus_happy_hour`, damage 400+600+700+900+1900 = 4500, ends KD +19 at 2.4 m.
@@ -939,7 +955,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `drunk_round` | 5H, happy_hour (cine) | CMU 135_01 (roundhouse.4) f3724-3807 contact 3760 | CMU roundhouse.4 usable (135_01 turning kick 1.12 m, curved path) |
 | `low_palm` | 2L | LAYER lower[Mixamo `Pro_Magic_Pack/Crouch Idle` f1-42, hold f1] + upper[CMU 17_10 (jab.5) f1581-1640 contact 1609] | Crouch Idle legs + CMU jab.5 |
 | `shin_kick` | 2M | AUTHORED `crouch_shin_kick` (24 f @30, contact f9) over [Mixamo `Pro_Magic_Pack/Crouch Idle` f1-42] | AUTHORED crouch low roundhouse (shared authored motion) |
-| `knee_lift` | 2H | CMU 135_02 (knee.5) f3088-3176 contact 3121 | CMU knee.5 usable (135_02 kata knee-lift from back stance) = anti-air knee |
+| `knee_lift` | 2H | CMU 135_02 (knee.5) f3088-3176 contact 3128 | CMU knee.5 usable (135_02 kata knee-lift from back stance) = anti-air knee. Contact 3128 + effector RightKnee (2026-09-30): the knee tops out there (bake trace 1.14 m); the research contact 3121 measured the FOOT at 0.76 m, so the derived box sat at shin height and only hit landing opponents |
 | `wobble_palm` | 6M | CMU 135_09 f1886-1932 contact 1914 | CMU lunge_punch 135_09 1886/1914/1932 (left oi-zuki, usable) = stumbling step palm |
 | `lean_kick` | 4H | CMU 143_24 (side_kick.3) f263-342 contact 297 | CMU side_kick.3 clean (143_24 left 0.84 m, torso leans away) |
 | `air_palm` | j.L | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[CMU 135_06 (lunge_punch.2) f2034-2105 contact 2053] | jump apex legs + lunge palm arms |
@@ -980,7 +996,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Rivalry.** Johnny wants his marquee name back; Boneyard wants Johnny on the menu.
 
-**Stats.** HP 10500 | walk 1.80 / 1.20 m/s | dash 0.95 m (20f) / 0.60 m (25f) | jump 4+40+4, apex 1.50 m, forward 1.35 m | throw range 0.68 m | hurtbox stand [0.65, 1.8], crouch [0.74, 1.14], air [0.61, 1.18] m | pushbox [0.55, 1.62] m | build `heavy`.
+**Stats.** HP 10500 | walk 1.80 / 1.20 m/s | dash 0.95 m (20f) / 0.60 m (25f) | jump 4+40+4, apex 1.50 m, forward 1.35 m | throw range 0.68 m | hurtbox stand [0.65, 1.75], crouch [0.74, 1.44], air [0.61, 1.18] m | pushbox [0.56, 1.57] m | build `heavy`.
 
 **Unique (`unique.kind` = `armorStep`).** `{"kind": "armorStep", "steps": ["butcher_block_l", "butcher_block_m", "butcher_block_h", "butcher_block_ex"], "armored": ["5H", "meat_hook_l", "meat_hook_m", "meat_hook_h", "meat_hook_ex", "butcher_block_l", "butcher_block_m", "butcher_block_h", "butcher_block_ex", "chefs_special"]}`
 
@@ -1034,9 +1050,9 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Move notes.**
 
-- `5L` Gauntlet Jab: Spiked-gauntlet jab.
+- `5L` Gauntlet Jab: Spiked-gauntlet jab. (hit volume: bottom lowered 0.31 m to the crouch line 1.10 m (clips.json `gauntlet_jab` effector LeftHand))
 - `2L` Boot Stomp: Stamps on the toes (low).
-- `5M` Snap Kick: Front snap kick.
+- `5M` Snap Kick: Front snap kick. (hit volume: near edge pulled back 0.11 m to point-blank reach 0.77 m (clips.json `snap_kick` effector RightFoot))
 - `2M` Low Cleaver: Crouching cleaver swing (low); cancel into MEAT HOOK.
 - `5H` Cleaver Swing: Armored overhand cleaver swing (1 hit of armor on frames 5-13).
 - `2H` Rising Backhand: Rising backhand anti-air (his only one).
@@ -1050,7 +1066,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `meat_hook_m` Meat Hook: Slow armored two-swing heavy; wall-splats in the corner.
 - `meat_hook_h` Meat Hook: Slow armored two-swing heavy; wall-splats in the corner.
 - `meat_hook_ex` Meat Hook (EX): Faster, 2-hit armor from frame 1, -3 on block.
-- `cleaver_drop_l` Cleaver Drop: Leaping overhead cleaver smash (hops over lows).
+- `cleaver_drop_l` Cleaver Drop: Leaping overhead cleaver smash (hops over lows). (hit volume: near edge pulled back 0.00 m to point-blank reach 0.77 m (clips.json `cleaver_leap` effector LeftHand))
 - `cleaver_drop_m` Cleaver Drop: Leaping overhead cleaver smash (hops over lows).
 - `cleaver_drop_h` Cleaver Drop: Leaping overhead cleaver smash (hops over lows).
 - `cleaver_drop_ex` Cleaver Drop (EX): Leap + landing shockwave, ground bounce.
@@ -1124,7 +1140,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Rivalry.** He headspun through Patch's live cue on the rooftop set. She still counts him down.
 
-**Stats.** HP 9500 | walk 2.20 / 1.50 m/s | dash 1.20 m (17f) / 0.90 m (21f) | jump 4+40+3, apex 1.75 m, forward 1.60 m | throw range 0.60 m | hurtbox stand [0.48, 1.67], crouch [0.55, 1.06], air [0.45, 1.09] m | pushbox [0.4, 1.5] m | build `slim`.
+**Stats.** HP 9500 | walk 2.20 / 1.50 m/s | dash 1.20 m (17f) / 0.90 m (21f) | jump 4+40+3, apex 1.75 m, forward 1.60 m | throw range 0.60 m | hurtbox stand [0.48, 1.62], crouch [0.55, 1.27], air [0.45, 1.09] m | pushbox [0.42, 1.46] m | build `slim`.
 
 **Unique (`unique.kind` = `none`).** `{"kind": "none", "trait": "LOW PROFILE + AIR: floor normals (2L/2M/2H), WINDMILL and SIX STEP shrink his hurtbox under highs and projectiles; DROP-IN is an air-only dive kick; floatiest jump (apex 1.75 m, 40 air frames)."}`
 
@@ -1181,19 +1197,19 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Move notes.**
 
-- `5L` Toprock Jab: Jab out of the uprock.
+- `5L` Toprock Jab: Jab out of the uprock. (hit volume: bottom lowered 0.18 m to the crouch line 1.10 m (clips.json `jab` effector LeftHand))
 - `2L` Floor Tap: Drops to the floor and taps the shin; low profile.
-- `5M` Front Kick: Long front kick.
+- `5M` Front Kick: Long front kick. (hit volume: bottom lowered 0.37 m to the crouch line 1.10 m (clips.json `front_kick` effector LeftFoot))
 - `2M` Footwork Sweep: Floor footwork leg sweep (low, no knockdown), low profile.
 - `5H` Swipes: Two whipping leg swipes.
 - `2H` Flare Sweep: Flair leg sweep, low profile.
-- `6M` Butterfly Kick: Jump spin kick overhead that hops over lows.
+- `6M` Butterfly Kick: Jump spin kick overhead that hops over lows. (hit volume: bottom lowered 0.36 m to the crouch line 1.10 m (clips.json `butterfly` effector RightFoot))
 - `j.L` Air Jab: Air jab.
 - `j.M` Air Swipe: Leg whip air-to-air.
 - `j.H` Jump Turning Kick: Turning jump-in.
 - `throw_f` Footwork Trip: Drags them down into his footwork.
 - `throw_b` Flair Toss: Flairs and flings them behind.
-- `windmill_l` Windmill: Flair spin through the opponent (2/4/6 hits), low profile.
+- `windmill_l` Windmill: Flair spin through the opponent (2/4/6 hits), low profile. (hit volume: near edge pulled back 0.04 m to point-blank reach 0.69 m (clips.json `windmill_l` effector LeftFoot))
 - `windmill_m` Windmill: Flair spin through the opponent (2/4/6 hits), low profile.
 - `windmill_h` Windmill: Flair spin through the opponent (2/4/6 hits), low profile.
 - `windmill_ex` Windmill (EX): Projectile-invulnerable 6-hit windmill, -6 on block.
@@ -1210,7 +1226,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `drop_in_h` Drop-In: Air-only dive kick (214 or S in the air): L steep, H flat and far.
 - `drop_in_ex` Drop-In (EX): Fast, far dive, +3 more on block.
 - `cypher` Cypher: Invulnerable 6-hit flair cyclone.
-- `battle_of_the_year` Battle of the Year: PRIME TIME: a front kick opens a full battle round the crowd scores live.
+- `battle_of_the_year` Battle of the Year: PRIME TIME: a front kick opens a full battle round the crowd scores live. (hit volume: bottom lowered 0.35 m to the crouch line 1.10 m (clips.json `front_kick` effector LeftFoot))
 
 **Lv3 PRIME TIME cinematic `battle_of_the_year` (Battle of the Year)** - 165 frames (<= 180), cue `spin_battle`, damage 400+300+300+600+700+900+1300 = 4500, ends KD +19 at 2.2 m.
 
@@ -1269,7 +1285,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Rivalry.** His stray shot popped Zambini's prize dove on live TV. Zambini swears revenge on the ball.
 
-**Stats.** HP 10000 | walk 2.00 / 1.40 m/s | dash 1.00 m (18f) / 0.75 m (23f) | jump 4+38+3, apex 1.62 m, forward 1.45 m | throw range 0.60 m | hurtbox stand [0.54, 1.71], crouch [0.62, 1.08], air [0.51, 1.12] m | pushbox [0.46, 1.54] m | build `average`.
+**Stats.** HP 10000 | walk 2.00 / 1.40 m/s | dash 1.00 m (18f) / 0.75 m (23f) | jump 4+38+3, apex 1.62 m, forward 1.45 m | throw range 0.60 m | hurtbox stand [0.54, 1.79], crouch [0.62, 1.28], air [0.51, 1.12] m | pushbox [0.39, 1.61] m | build `average`.
 
 **Unique (`unique.kind` = `ball`).** `{"kind": "ball", "respawnF": 180, "restF": 240, "pickupM": 0.4, "hover": {"l": 1.2, "m": 1.8, "h": 2.4, "frames": 120}, "bounces": 1}`
 
@@ -1324,14 +1340,14 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Move notes.**
 
-- `5L` Jab: Pub-brawler jab.
-- `2L` Low Jab: Crouching jab.
-- `5M` Snap Kick: Front snap kick.
+- `5L` Jab: Pub-brawler jab. (hit volume: bottom lowered 0.30 m to the crouch line 1.10 m; near edge pulled back 0.02 m to point-blank reach 0.66 m (clips.json `jab` effector LeftHand))
+- `2L` Low Jab: Crouching jab. (hit volume: near edge pulled back 0.14 m to point-blank reach 0.66 m (clips.json `crouch_jab` effector LeftHand))
+- `5M` Snap Kick: Front snap kick. (hit volume: near edge pulled back 0.15 m to point-blank reach 0.66 m (clips.json `snap_kick` effector RightFoot))
 - `2M` Grass Cutter: Standing low swing kick along the grass: long low, but he stays tall.
-- `5H` Volley: Big front volley.
-- `2H` Slide Tackle: Feet-first slide tackle from range (travels 1.2 m).
+- `5H` Volley: Big front volley. (hit volume: near edge pulled back 0.13 m to point-blank reach 0.66 m (clips.json `volley` effector RightFoot))
+- `2H` Slide Tackle: Feet-first slide tackle from range (travels 1.2 m). (hit volume: near edge pulled back 0.11 m to point-blank reach 0.66 m (clips.json `slide_tackle` effector LeftFoot))
 - `4M` Knee Trap: Quick short knee (+2/-3).
-- `6H` Diving Header: Hopping header onto the head: overhead.
+- `6H` Diving Header: Hopping header onto the head: overhead. (hand-set hit volume f20-22 x 0.55 y 1.36 w 0.40 h 0.72)
 - `j.L` Air Knee: Air knee.
 - `j.M` Flying Volley: Air-to-air volley.
 - `j.H` Flying Punt: Big flying punt jump-in.
@@ -1354,7 +1370,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `dive_h` Simulation: A theatrical forward dive-roll under projectiles and high attacks.
 - `dive_ex` Simulation (EX): Strike-invulnerable dive.
 - `top_bins` Top Bins: Flicks up a fresh ball and smashes a 5-hit flaming shot; invulnerable startup. (projectile 8.0 m/s, 5 hit(s), y 1.00 m; ball summon)
-- `hat_trick` Hat Trick: PRIME TIME: point-blank volley, a shot to the chest, a header, and the bicycle-kick finale. (ball summon)
+- `hat_trick` Hat Trick: PRIME TIME: point-blank volley, a shot to the chest, a header, and the bicycle-kick finale. (ball summon; hit volume: near edge pulled back 0.13 m to point-blank reach 0.66 m (clips.json `volley` effector RightFoot))
 
 **Lv3 PRIME TIME cinematic `hat_trick` (Hat Trick)** - 165 frames (<= 180), cue `gazza_hat_trick`, damage 600+800+900+2200 = 4500, ends KD +19 at 3.0 m.
 
@@ -1411,7 +1427,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Rivalry.** He ate Lotus Liu's lucky gourd on the Wheel of Pain. He does not remember doing it.
 
-**Stats.** HP 10000 | walk 1.80 / 1.30 m/s | dash 1.00 m (19f) / 0.80 m (24f) | jump 4+40+3, apex 1.55 m, forward 1.35 m | throw range 0.60 m | hurtbox stand [0.54, 1.71], crouch [0.62, 1.08], air [0.51, 1.12] m | pushbox [0.46, 1.54] m | build `average`.
+**Stats.** HP 10000 | walk 1.80 / 1.30 m/s | dash 1.00 m (19f) / 0.80 m (24f) | jump 4+40+3, apex 1.55 m, forward 1.35 m | throw range 0.60 m | hurtbox stand [0.54, 1.66], crouch [0.62, 1.22], air [0.51, 1.12] m | pushbox [0.54, 1.49] m | build `average`.
 
 **Unique (`unique.kind` = `counter`).** `{"kind": "counter", "moves": ["play_dead_l", "play_dead_m", "play_dead_h", "play_dead_ex", "dead_air"]}`
 
@@ -1438,7 +1454,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `2M` | Crawl Claw | 2M | 10 | 3 | 17 | 29 | +2 | -4 | 600 | L | 11 | special super | low-prof 4-22 | 2M | (startup 8->10; recovery 15->17) Signature footsie tool: prone 0.45 m low profile 4-22 beats high pokes, so it is slower (10f) and -4 on block (recovery 17). |
 | `5H` | Long Reach | 5H | 13 | 3 | 20 | 35 | +2 | -3 | 800 | HL | 13 | special super | - | H | (startup 12->13) Longest reach in his kit: startup 12->13. |
 | `2H` | Scream Claw | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | AA |  |
-| `6H` | Drop-Dead Headbutt | 6H | 18 | 3 | 17 | 37 | +2 | -4 | 600 | H | 11 | - | - | OH | Overhead template; hand-set box on the head lunge (front pass f32: 0.43 m ahead, 1.48 m high). |
+| `6H` | Drop-Dead Headbutt | 6H | 18 | 3 | 17 | 37 | +2 | -4 | 600 | H | 11 | - | - | OH | Overhead template; hand-set box on the head lunge (front pass f32: 0.43 m ahead, 1.48 m high), top 1.65 m, bottom at the 1.10 m crouch line (head + shoulders dropping: an overhead must hit a crouching blocker). |
 | `j.L` | Air Swat | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | jL |  |
 | `j.M` | Air Claw | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | jM |  |
 | `j.H` | Pounce | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | jH |  |
@@ -1468,13 +1484,13 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Move notes.**
 
-- `5L` Swat: Open-hand swat.
+- `5L` Swat: Open-hand swat. (hit volume: bottom lowered 0.26 m to the crouch line 1.10 m (clips.json `swat` effector LeftHand))
 - `2L` Ankle Bite: Crouching bite at the ankle.
 - `5M` Lurch Claw: Wild one-arm claw.
 - `2M` Crawl Claw: Drops prone and claws along the floor: goes UNDER high pokes; -4 on block.
-- `5H` Long Reach: Double-claw lunge: his longest button (1.35 m).
-- `2H` Scream Claw: Arms flung up in a scream: anti-air.
-- `6H` Drop-Dead Headbutt: Lunging headbutt from above: overhead.
+- `5H` Long Reach: Double-claw lunge: his longest button (1.35 m). (hit volume: bottom lowered 0.04 m to the crouch line 1.10 m (clips.json `long_reach` effector LeftHand))
+- `2H` Scream Claw: Arms flung up in a scream: anti-air. (hand-set hit volume f9-12 x 0.45 y 1.35 w 0.50 h 0.45)
+- `6H` Drop-Dead Headbutt: Lunging headbutt from above: overhead. (hand-set hit volume f18-20 x 0.45 y 1.38 w 0.40 h 0.55)
 - `j.L` Air Swat: Air swat.
 - `j.M` Air Claw: Air claw.
 - `j.H` Pounce: Double-claw pounce.
@@ -1500,7 +1516,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `arise_ex` Arise (EX): Fully invulnerable leap.
 - `dead_air` Dead Air: Counter super: plays dead for 30 frames; any strike or projectile is answered with a lunge-bite. (counter {"catch": [1, 30], "vs": ["strike", "proj"], "follow": "dead_air_bite"})
 - `dead_air_bite` Dead Air Bite: The Lv1 follow-up: lunges 2.5 m and bites (unblockable, 2000).
-- `series_finale` Series Finale: PRIME TIME: grabs, bites, drags them into a trapdoor grave - and climbs back out alone.
+- `series_finale` Series Finale: PRIME TIME: grabs, bites, drags them into a trapdoor grave - and climbs back out alone. (hit volume: bottom lowered 0.04 m to the crouch line 1.10 m (clips.json `long_reach` effector LeftHand))
 
 **Lv3 PRIME TIME cinematic `series_finale` (Series Finale)** - 170 frames (<= 180), cue `rerun_series_finale`, damage 800+1200+1000+1500 = 4500, ends KD +19 at 2.0 m.
 
@@ -1524,7 +1540,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `long_reach` | 5H, series_finale, series_finale (cine) | Mixamo `Scary_Zombie_Pack/zombie neck bite` f8-40 contact f25 | Mixamo zombie neck bite: both arms reach out f23-25 = long double-claw lunge |
 | `ankle_bite` | 2L | Mixamo `Scary_Zombie_Pack/zombie biting (2)` f15-38 contact f22 | Mixamo zombie biting (2): crouched head bite (hips 0.41-0.46 m, Head f22) |
 | `crawl_claw` | 2M | Mixamo `Scary_Zombie_Pack/zombie crawl` f1-36 contact f10 | Mixamo zombie crawl: prone reaching claw along the floor (hips 0.09-0.26 m, RightHand f10) |
-| `scream_up` | 2H | Mixamo `Scary_Zombie_Pack/zombie scream` f18-45 contact f30 | Mixamo zombie scream: arms flung up (LeftHand f30) = upward flail anti-air |
+| `scream_up` | 2H | Mixamo `Scary_Zombie_Pack/zombie scream` f15-45 contact f23 | Mixamo zombie scream: arms flung up = upward flail anti-air. Contact f23 = hands at the top (bake trace LeftHand 1.21 m, 0.42 m forward); the old f30 was the arms falling back to 0.75 m |
 | `drop_headbutt` | 6H | Mixamo `Scary_Zombie_Pack/zombie neck bite` f20-45 contact f32 | Mixamo zombie neck bite head lunge (front pass f32, 1.48 m) = overhead headbutt |
 | `air_swat` | j.L | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[CMU 14_03 (jab.3) f469-541 contact 489 MIRROR] | jump apex legs + open-hand swat |
 | `air_lurch` | j.M | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Jump` f1-71, hold f28] + upper[Mixamo `Scary_Zombie_Pack/zombie attack` f23-45 contact f33] | jump apex legs + claw |
@@ -1560,7 +1576,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Rivalry.** None - it is the network's property. It fights whoever reaches episode 7.
 
-**Stats.** HP 11500 | walk 1.80 / 1.20 m/s | dash 0.90 m (22f) / 0.60 m (26f) | jump 5+42+5, apex 1.55 m, forward 1.40 m | throw range 0.70 m | hurtbox stand [0.86, 2.28], crouch [0.99, 1.44], air [0.82, 1.49] m | pushbox [0.73, 2.05] m | build `monster`.
+**Stats.** HP 11500 | walk 1.80 / 1.20 m/s | dash 0.90 m (22f) / 0.60 m (26f) | jump 5+42+5, apex 1.55 m, forward 1.40 m | throw range 0.70 m | hurtbox stand [0.86, 2.01], crouch [0.99, 2.01], air [0.82, 1.49] m | pushbox [0.85, 1.81] m | build `monster`.
 
 **Unique (`unique.kind` = `armorStep`).** `{"kind": "armorStep", "steps": [], "armored": ["5H", "6H", "crusher_leap_l", "crusher_leap_m", "crusher_leap_h", "crusher_leap_ex", "claw_rush_l", "claw_rush_m", "claw_rush_h", "claw_rush_ex", "roar_l", "roar_m", "roar_h", "roar_ex", "meltdown"]}`
 
@@ -1614,9 +1630,9 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Move notes.**
 
-- `5L` Claw Jab: Short claw hook.
+- `5L` Claw Jab: Short claw hook. (hit volume: bottom lowered 0.06 m to the crouch line 1.10 m (clips.json `claw_jab` effector RightHand))
 - `2L` Low Claw: Crouching claw to the shin.
-- `5M` Wild Swing: Wild looping swing.
+- `5M` Wild Swing: Wild looping claw chop, downward across the body. (hit volume: bottom lowered 0.07 m to the crouch line 1.10 m (clips.json `wild_swing` effector RightHand))
 - `2M` Floor Slam: Slams both claws on the floor (low).
 - `5H` Crystal Swipe: Overhead claw haymaker with 2 hits of armor.
 - `2H` Jumping Claw: Hops up with both claws: anti-air.
@@ -1634,10 +1650,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `claw_rush_m` Claw Rush: Armored running claw swipe.
 - `claw_rush_h` Claw Rush: Armored running claw swipe.
 - `claw_rush_ex` Claw Rush (EX): Super-armored 2-hit rush, -2 on block.
-- `roar_l` Roar: Shockwave roar all around it: blows opponents away, projectile-invulnerable.
-- `roar_m` Roar: Shockwave roar all around it: blows opponents away, projectile-invulnerable.
-- `roar_h` Roar: Shockwave roar all around it: blows opponents away, projectile-invulnerable.
-- `roar_ex` Roar (EX): Fast super-armored roar.
+- `roar_l` Roar: Shockwave roar all around it: blows opponents away, projectile-invulnerable. (hand-set hit volume f20-25 x 0.30 y 1.00 w 2.00 h 2.00)
+- `roar_m` Roar: Shockwave roar all around it: blows opponents away, projectile-invulnerable. (hand-set hit volume f20-25 x 0.30 y 1.00 w 2.40 h 2.00)
+- `roar_h` Roar: Shockwave roar all around it: blows opponents away, projectile-invulnerable. (hand-set hit volume f20-25 x 0.30 y 1.00 w 2.80 h 2.00)
+- `roar_ex` Roar (EX): Fast super-armored roar. (hand-set hit volume f12-17 x 0.30 y 1.00 w 3.00 h 2.20)
 - `specimen_grab_l` Specimen Grab: 360 command grab with the longest reach in the game.
 - `specimen_grab_m` Specimen Grab: 360 command grab with the longest reach in the game.
 - `specimen_grab_h` Specimen Grab: 360 command grab with the longest reach in the game.
@@ -1663,7 +1679,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `idle` | shared override | Mixamo `Creature_Pack/mutant idle` f1-390 | OVERRIDE shared idle: hunched brute idle |
 | `walk_f` | shared override | Mixamo `Creature_Pack/mutant walking` f1-44 | OVERRIDE shared walk_f: mutant walk (loop 1.2 deg) |
 | `claw_jab` | 5L | Mixamo `Creature_Pack/mutant punch` f1-22 contact f9 | Mixamo mutant punch opening: the hook passes the front at f9 (front pass; rig-proof clip) |
-| `wild_swing` | 5M | CMU 80_10 f379-412 contact 395 | CMU haymaker 80_10 379/395/412 (usable: wild looping swing) on the monster body |
+| `wild_swing` | 5M | CMU 86_06 (hammer_chop.1) f4868-4944 contact 4894 | CMU hammer_chop.1 (86_06 4868/4894/4944, usable: diagonal downward chop 9.1 m/s, contact 0.34 m below the chest), open claw. Replaced the 80_10 haymaker (2026-09-30): on the 2.4 m body that swing never came below 2.03 m (bake trace), so 5M whiffed every opponent in the sim (connect matrix 0/36) |
 | `crystal_swipe` | 5H, specimen_13, specimen_13 (cine) | Mixamo `Creature_Pack/mutant swiping` f25-60 contact f41 | Mixamo mutant swiping: overhead claw haymaker, torso whips down f40, reach f41 (dense render) |
 | `low_claw` | 2L | LAYER lower[Mixamo `Pro_Magic_Pack/Crouch Idle` f1-42, hold f1] + upper[Mixamo `Creature_Pack/mutant punch` f1-22 contact f9] | Crouch Idle legs + claw hook |
 | `floor_slam` | 2M | Mixamo `Creature_Pack/jump attack` f40-70 contact f51 | Mixamo jump attack landing: hands to the floor f51 = low slam |
@@ -1701,7 +1717,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Rivalry.** Everyone's. He picks the rivals.
 
-**Stats.** HP 13000 | walk 2.12 / 1.44 m/s | dash 1.20 m (18f) / 0.80 m (23f) | jump 4+38+3, apex 1.59 m, forward 1.43 m | throw range 0.60 m | hurtbox stand [0.57, 1.8], crouch [0.66, 1.14], air [0.54, 1.18] m | pushbox [0.48, 1.62] m | build `average`.
+**Stats.** HP 13000 | walk 2.12 / 1.44 m/s | dash 1.20 m (18f) / 0.80 m (23f) | jump 4+38+3, apex 1.59 m, forward 1.43 m | throw range 0.60 m | hurtbox stand [0.57, 1.79], crouch [0.66, 1.26], air [0.54, 1.18] m | pushbox [0.44, 1.61] m | build `average`.
 
 **Unique (`unique.kind` = `phases`).** `{"kind": "phases", "thresholdPct": 50, "lockF": 60, "cue": "ricky_phase2", "moves": ["pyro_l", "pyro_m", "pyro_h", "pyro_ex", "season_finale"], "lv3": "season_finale", "simple": {"6S": "pyro_m"}}`
 
@@ -1764,15 +1780,15 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Move notes.**
 
-- `5L` Cane Jab: Two-hand cane butt thrust.
+- `5L` Cane Jab: Two-hand cane butt thrust. (hit volume: bottom lowered 0.30 m to the crouch line 1.10 m (clips.json `cane_jab` effector RightHand))
 - `2L` Tap Dance: Crouching cane tap to the ankle.
-- `5M` Cane Swing: Diagonal cane chop.
+- `5M` Cane Swing: Diagonal cane chop. (hit volume: bottom lowered 0.26 m to the crouch line 1.10 m (clips.json `cane_swing` effector RightHand))
 - `2M` Low Cane: Low sweeping cane swing.
 - `5H` Showstopper: Big horizontal cane swing.
-- `2H` Cane Twirl: Chest-high twirl: anti-air.
+- `2H` Cane Twirl: Chest-high twirl: anti-air. (hand-set hit volume f9-12 x 0.60 y 1.80 w 0.70 h 0.50)
 - `3H` The Hook: Vaudeville hook: a sliding low cane swing that drags them in and down.
-- `4M` Stage Kick: Kick while holding the cane.
-- `6H` Sledgehammer: Two-hand overhead cane smash.
+- `4M` Stage Kick: Kick while holding the cane. (hit volume: near edge pulled back 0.25 m to point-blank reach 0.73 m (clips.json `stage_kick` effector RightFoot))
+- `6H` Sledgehammer: Two-hand overhead cane smash. (hit volume: bottom lowered 0.06 m to the crouch line 1.10 m (clips.json `sledgehammer` effector LeftHand))
 - `j.L` Air Thrust: Air cane thrust.
 - `j.M` Air Chop: Air cane chop.
 - `j.H` Air Sledgehammer: Overhead cane jump-in.
@@ -1786,11 +1802,11 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `commercial_break_m` Commercial Break: Parry-counter: 'We'll be right back' - catches a strike and answers with the sledgehammer. (counter {"catch": [3, 18], "vs": ["strike"], "follow": "commercial_hit"})
 - `commercial_break_h` Commercial Break: Parry-counter: 'We'll be right back' - catches a strike and answers with the sledgehammer. (counter {"catch": [3, 22], "vs": ["strike"], "follow": "commercial_hit"})
 - `commercial_break_ex` Commercial Break (EX): Catches strikes and projectiles from frame 1. (counter {"catch": [1, 24], "vs": ["strike", "proj"], "follow": "commercial_hit"})
-- `commercial_hit` Back After This: The counter's sledgehammer (after a COMMERCIAL BREAK catch).
+- `commercial_hit` Back After This: The counter's sledgehammer (after a COMMERCIAL BREAK catch). (hit volume: bottom lowered 0.03 m to the crouch line 1.10 m (clips.json `counter_smash` effector LeftHand))
 - `mic_drop_l` Mic Drop: Leaping cane swing anti-air.
 - `mic_drop_m` Mic Drop: Leaping cane swing anti-air.
 - `mic_drop_h` Mic Drop: Leaping cane swing anti-air.
-- `mic_drop_ex` Mic Drop (EX): Fully invulnerable.
+- `mic_drop_ex` Mic Drop (EX): Fully invulnerable. (hit volume: bottom lowered 0.28 m to the crouch line 1.10 m (clips.json `mic_drop_leap` effector LeftHand))
 - `the_hook_l` Get The Hook: Sliding low hook that drags them across the floor to him (low, knockdown).
 - `the_hook_m` Get The Hook: Sliding low hook that drags them across the floor to him (low, knockdown).
 - `the_hook_h` Get The Hook: Sliding low hook that drags them across the floor to him (low, knockdown).
@@ -1831,7 +1847,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `showstopper` | 5H, prime_time, prime_time (cine), season_finale (cine) | Mixamo `Great_Sword_Pack/great sword slash (3)` f11-56 contact f27 | Mixamo great sword slash (3): horizontal two-hand swing, front pass f27 |
 | `low_tap` | 2L | LAYER lower[Mixamo `Great_Sword_Pack/great sword crouching (3)` f1-56, hold f1] + upper[Mixamo `Great_Sword_Pack/great sword attack` f10-33 contact f17] | LAYERED: great sword crouching (3) legs (hips 0.49 m measured) + cane thrust |
 | `low_cane` | 2M | Mixamo `Great_Sword_Pack/great sword slash (5)` f4-40 contact f16 | Mixamo great sword slash (5): low crouch swing (hips 0.49-0.62 m) |
-| `cane_twirl` | 2H | Mixamo `Great_Sword_Pack/great sword high spin attack` f1-40 contact f11 | Mixamo great sword high spin: arms extended at chest height, front pass f11 (1.49 m) = anti-air twirl |
+| `cane_twirl` | 2H | Mixamo `Great_Sword_Pack/great sword high spin attack` f1-40 contact f7 | Mixamo great sword high spin: both hands up in front = anti-air twirl. Contact f7 + effector RightHand (2026-09-30): bake trace hands 1.68 / 1.61 m, 0.42 / 0.56 m forward, lateral < 0.1 m; at the old f11 the hands were already swinging 0.36 m to the side and the builder picked the RightKnee (0.64 m) as the effector |
 | `sledgehammer` | 6H, prime_time (cine), season_finale (cine) | Mixamo `Great_Sword_Pack/great sword slash (4)` f25-55 contact f43 | Mixamo great sword slash (4): sledgehammer overhead chop, impact f41-43 (dense render) |
 | `stage_kick` | 4M | Mixamo `Great_Sword_Pack/great sword kick` f7-45 contact f19 | Mixamo great sword kick (holding the cane), front pass f19 (1.07 m) |
 | `hook_slide` | 3H, the_hook_l, the_hook_m, the_hook_h, the_hook_ex | Mixamo `Great_Sword_Pack/great sword slide attack` f17-65 contact f38 | Mixamo great sword slide attack: kneeling lunge swing, second front pass f38 = the vaudeville hook |

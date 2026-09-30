@@ -38,6 +38,35 @@ const LOW_HP = 0.25;
 const COMBO_HOLD_MS = 1300;
 const CALL_MS = 1600;
 
+/**
+ * CHANGED(fixer) D1: round-transition banner pacing, derived from the SIM's phase lengths (data/system.json `round`), so
+ * each banner fits the phase it announces and the next phase CUTS it (Broadcast.sweep cut):
+ *   KO        K.O. over the KO hitstop + slow-mo, then the round verdict (PERFECT / <NAME> WINS / DRAW) over the win-pose outro
+ *   TIME OVER TIME OVER then the verdict, sharing the time-over outro
+ *   INTRO     ROUND n (FINAL ROUND) inside the intro;  FIGHT  FIGHT! the moment the sim goes live
+ * Before: a fixed-duration queue (K.O. 1500 / PERFECT 1700 / WINS 1700 / ROUND 1150 / FIGHT 800 ms) queued the verdict at
+ * ROUND_END - one sim frame before the next ROUND_INTRO - so '<NAME> WINS', 'ROUND 2' and 'FIGHT!' played up to 3.15 s
+ * into the live round (verifier D1).
+ */
+export interface BannerPace { roundMs: number; fightMs: number; koMs: number; koVerdictMs: number; timeMs: number; timeVerdictMs: number }
+export function bannerPace(system: unknown): BannerPace {
+  const r = (system && typeof system === 'object' ? (system as Record<string, unknown>).round : null) as Record<string, unknown> | null;
+  const n = (k: string, d: number): number => { const v = r ? r[k] : undefined; return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : d; };
+  const ms = (frames: number): number => (frames * 1000) / 60;
+  const intro = ms(n('introFrames', 90));
+  const ko = ms(n('koHitstop', 30) + n('koSlowmoFrames', 45));
+  const koOut = ms(n('koOutroFrames', 90));
+  const to = ms(n('timeoverOutroFrames', 120));
+  return {
+    roundMs: Math.max(600, Math.min(1150, intro - 250)),
+    fightMs: 800,
+    koMs: Math.max(700, ko),
+    koVerdictMs: Math.max(700, koOut - 60),
+    timeMs: Math.max(600, to * 0.45),
+    timeVerdictMs: Math.max(600, to * 0.55 - 60),
+  };
+}
+
 type CallKind = 'counter' | 'punish' | 'throwEscape' | 'perfectParry' | 'stageFright' | 'wallSplat' | 'firstBlood';
 
 interface Side {
@@ -89,17 +118,24 @@ export class Hud {
   private lastRound = 0;
   private koThisRound: number[] = [];
   private timeOverThisRound = false;
+  /** CHANGED(fixer) D1: this round's verdict banner is out (KO / TIME OVER announce it; ROUND_END only as a fallback) */
+  private verdictOut = false;
+  private readonly pace: BannerPace;
   private offs: Array<() => void> = [];
   private stats: [MatchStats, MatchStats] = [blankStats(), blankStats()];
   private lastHp: [number, number] = [-1, -1];
   private lastSuperF: [number, number] = [-1e9, -1e9];
   private inputs: InputDisplay | null = null;
   private frames: FrameReadout | null = null;
+  /** CHANGED(fixer) D4: cached safeTop() (re-measured after mount / resize / touch-mode flips) */
+  private safeTopFrac = 0;
+  private safeDirty = true;
   /** read-back: the last 40 events handled (after dedupe) as [frame, type, a, b] */
   private readonly evLog: Array<[number, number, number, number]> = [];
 
   constructor(root: HTMLElement, data: UiGameData) {
     this.data = data;
+    this.pace = bannerPace(data.system);
     setStrings(data.strings);
     const R = this.root = el('div', 'hp-hud');
     R.id = 'hp-hud';
@@ -137,6 +173,28 @@ export class Hud {
     this.setTouchMode(touchModeOn());
     this.offs.push(watchTouchMode((on) => this.setTouchMode(on)));
     this.offs.push(onPortraits(() => this.refreshPortraits()));
+    const dirty = (): void => { this.safeDirty = true; };
+    window.addEventListener('resize', dirty);
+    this.offs.push(() => window.removeEventListener('resize', dirty));
+  }
+
+  /**
+   * CHANGED(fixer) D4: how much of the screen the top HUD band covers (0..1 of the HUD root's height: the bottom of the
+   * show bug + health bars + NERVE strip + timer / pips). The fight camera keeps an airborne fighter's head below it
+   * (game.ts -> BoutView.setSafeArea). Measured only when the layout may have changed (mount, resize, touch mode).
+   */
+  safeTop(): number {
+    if (!this.safeDirty || this.root.hidden) return this.safeTopFrac;
+    const r = this.root.getBoundingClientRect();
+    if (r.height < 1) return this.safeTopFrac;
+    let bottom = 0;
+    for (const e of this.frameEl.querySelectorAll('.hp-top, .hp-bars')) {
+      const b = e.getBoundingClientRect();
+      if (b.height > 0) bottom = Math.max(bottom, b.bottom - r.top);
+    }
+    this.safeTopFrac = Math.max(0, Math.min(0.45, bottom / r.height));
+    this.safeDirty = false;
+    return this.safeTopFrac;
   }
 
   private mkSide(i: 0 | 1): Side {
@@ -193,6 +251,7 @@ export class Hud {
     this.lastRound = 0;
     this.koThisRound = [];
     this.timeOverThisRound = false;
+    this.verdictOut = false;
     this.score = null;
     this.scoreEv = 0;
     this.stats = [blankStats(), blankStats()];
@@ -224,6 +283,7 @@ export class Hud {
     this.refreshPortraits();
     this.renderPips([0, 0]);
     this.root.hidden = false;
+    this.safeDirty = true;
     if (cfg.mode === 'training') this.setTraining({ inputs: true, frames: true });
     else this.setTraining(null);
   }
@@ -291,7 +351,7 @@ export class Hud {
   pushInputs(word: number, frame: number): void { this.inputs?.push(word, frame); }
   setRecordState(s: 'off' | 'record' | 'play'): void { this.frames?.setRecord(s); }
 
-  setTouchMode(on: boolean): void { this.root.classList.toggle('touch', on); }
+  setTouchMode(on: boolean): void { this.root.classList.toggle('touch', on); this.safeDirty = true; }
 
   /** this match's per-player numbers so far (game.ts puts them in MatchResult.stats) */
   tally(): [MatchStats, MatchStats] { return [{ ...this.stats[0] }, { ...this.stats[1] }]; }
@@ -436,6 +496,30 @@ export class Hud {
     return this.names[i] ?? fighterName(this.data, p.fighter);
   }
 
+  /**
+   * CHANGED(fixer) D1: queue this round's verdict banner (after the K.O. / TIME OVER one) + its host line.
+   * Winner: MatchSnap.roundWinner (0 | 1, 2 = draw) while it is set, else the event payload `fallback` (-1 / 2 = draw).
+   * PERFECT is judged on the winner's HP now (KO / TIME OVER frame) - by ROUND_END the next round may have refilled it.
+   */
+  private verdict(m: UiMatchSnap, f: readonly [UiFighterSnap, UiFighterSnap], fallback: number, ms: number): 'draw' | 'perfect' | 'comeback' | 'win' | null {
+    if (this.verdictOut) return null;
+    this.verdictOut = true;
+    const B = this.broadcast;
+    const snapW = typeof m.roundWinner === 'number' && m.roundWinner >= 0 && m.roundWinner <= 2 ? m.roundWinner : -1;
+    const rw = snapW >= 0 ? snapW : fallback;
+    if (rw !== 0 && rw !== 1) {
+      void B.sweep(t('hud.draw'), { tone: 'win', ms });
+      return 'draw';
+    }
+    const wf = f[rw];
+    const perfect = wf.hpMax > 0 && wf.hp >= wf.hpMax;
+    const comeback = !perfect && wf.hpMax > 0 && wf.hp / wf.hpMax < LOW_HP;
+    const wins = t('hud.wins', { name: this.nameOf(rw) });
+    if (perfect) void B.sweep(t('hud.perfect'), { tone: 'win', sub: wins, ms });
+    else void B.sweep(wins, { tone: 'win', ms });
+    return perfect ? 'perfect' : comeback ? 'comeback' : 'win';
+  }
+
   private onEvent(e: SimEvent, m: UiMatchSnap, f: readonly [UiFighterSnap, UiFighterSnap]): void {
     const key = `${e.frame}:${e.type}:${e.a}:${e.b}`;
     if (this.seen.has(key)) return;
@@ -450,7 +534,11 @@ export class Hud {
       case EV.ROUND_INTRO: {
         const w0 = m.wins[0] ?? 0, w1 = m.wins[1] ?? 0, last = this.roundsToWin - 1;
         const final = w0 === last && w1 === last && last > 0;
-        void B.sweep(final ? t('hud.finalRound') : t('hud.round', { n: m.round }), { tone: 'round' });
+        // CHANGED(fixer) D1: a new round cuts whatever is left of the last round's banners
+        this.verdictOut = false;
+        this.timeOverThisRound = false;
+        this.koThisRound = [];
+        void B.sweep(final ? t('hud.finalRound') : t('hud.round', { n: e.a > 0 ? e.a : m.round }), { tone: 'round', cut: true, ms: this.pace.roundMs });
         if (final) B.caption('final_round', both(0));
         else if (last > 0 && (w0 === last || w1 === last)) {
           const leader = w0 === last ? 0 : 1;
@@ -459,7 +547,8 @@ export class Hud {
         } else B.caption('round_start', both(0));
         break;
       }
-      case EV.FIGHT: void B.sweep(t('hud.fight'), { tone: 'fight' }); break;
+      // CHANGED(fixer) D1: FIGHT! lands on the frame the sim goes live, whatever was still showing
+      case EV.FIGHT: void B.sweep(t('hud.fight'), { tone: 'fight', cut: true, ms: this.pace.fightMs }); break;
       case EV.HIT:
         if (!this.firstBlood) { this.firstBlood = true; this.call(P(e.a), 'firstBlood'); B.caption('first_blood', both(P(e.a))); }
         break;
@@ -486,27 +575,30 @@ export class Hud {
       case EV.STAGE_FRIGHT_ON: this.call(P(e.a), 'stageFright'); B.caption('stage_fright', { ...both(P(e.a)), name: this.nameOf(P(e.a)) }); break;
       case EV.KO: {
         const dbl = e.a < 0 || e.b < 0 || (f[0].hp <= 0 && f[1].hp <= 0);
-        if (this.koThisRound.length === 0) void B.sweep(dbl ? t('hud.doubleKo') : t('hud.ko'), { tone: 'ko' });
+        const first = this.koThisRound.length === 0;
         this.koThisRound.push(e.b);
-        if (!dbl) B.caption('ko', { winner: this.nameOf(P(e.a)), loser: this.nameOf(P(e.b)) });
+        if (!first) break;
+        // CHANGED(fixer) D1: K.O. over the hitstop + slow-mo, the verdict over the win-pose outro (the sim decides the
+        // round on the KO frame: MatchSnap.roundWinner and the winner's HP are final in this frame)
+        void B.sweep(dbl ? t('hud.doubleKo') : t('hud.ko'), { tone: 'ko', cut: true, ms: this.pace.koMs });
+        const v = this.verdict(m, f, dbl ? -1 : e.a, this.pace.koVerdictMs);
+        // one host line for the KO (the caption rules would drop a second one while it shows): the round's story
+        const cv = { winner: this.nameOf(P(e.a)), loser: this.nameOf(P(e.b)) };
+        if (v === 'draw') B.caption('draw', both(0));
+        else if (!dbl) B.caption(v === 'perfect' ? 'perfect_round' : v === 'comeback' ? 'comeback' : 'ko', cv);
         break;
       }
       case EV.TIMEOVER:
         this.timeOverThisRound = true;
-        void B.sweep(t('hud.timeOver'), { tone: 'time' });
+        void B.sweep(t('hud.timeOver'), { tone: 'time', cut: true, ms: this.pace.timeMs });
         B.caption('time_over', both(0));
+        this.verdict(m, f, e.a, this.pace.timeVerdictMs);
         break;
       case EV.ROUND_END: {
-        const rw = typeof m.roundWinner === 'number' && m.roundWinner >= 0 ? m.roundWinner : e.a;
-        if (rw !== 0 && rw !== 1) { void B.sweep(t('hud.draw'), { tone: 'win' }); B.caption('draw', both(0)); break; }
-        const w = rw, l = 1 - w;
-        const wf = f[w];
-        const cv = { winner: this.nameOf(w), loser: this.nameOf(l) };
-        const perfect = wf.hpMax > 0 && wf.hp >= wf.hpMax;
-        if (perfect) { void B.sweep(t('hud.perfect'), { tone: 'win' }); B.caption('perfect_round', cv); }
-        else if (wf.hpMax > 0 && wf.hp / wf.hpMax < LOW_HP) B.caption('comeback', cv);
-        else if (this.timeOverThisRound) B.caption('round_end', cv);
-        void B.sweep(t('hud.wins', { name: this.nameOf(w) }), { tone: 'win' });
+        // the verdict is normally out since the KO / TIME OVER frame; a round that ended any other way gets it now
+        // (ROUND_END a = the round winner 0 | 1, 2 = draw, CONTRACT 19 / rounds.ts)
+        const v = this.verdict(m, f, e.a, this.pace.koVerdictMs);
+        if (v === 'draw') B.caption('draw', both(0));
         break;
       }
       case EV.MATCH_END: {

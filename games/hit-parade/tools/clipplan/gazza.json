@@ -159,7 +159,8 @@
     "contact": 65,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 93}
   },
   "keeper_throw": {
     "src": "mixamo",
@@ -168,7 +169,8 @@
     "contact": 49,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 62}
   },
   "shot_kick": {
     "src": "mixamo",

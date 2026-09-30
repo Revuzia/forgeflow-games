@@ -110,7 +110,11 @@ def build():
     K.add("j.H", "jH", input="j.H", name="Diving Hammer", clip="air_hammer", desc="Downward hammer fist jump-in.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Clinch Body Shots", clip="throw_reach",
           grab={"frames": 45, "adv": 21, "hitF": 30, "swap": False, "air": False, "techable": True,
-                "clip": "body_burst"},
+                "clip": "body_burst",
+                # CHANGED(fixer) D3: the victim doubles over on each body shot (body_burst's punch lands on lock frame
+                # 10, the damage shot on 30) and drops backward on the last one (kd_fall_b from its drop to the floor)
+                # - it used to play the generic lift-and-slam thrown_f under a clinch.
+                "victim": [[0, "hit_body", 0.0, 0.2], [10, "hit_body", 0.0, 0.6], [30, "kd_fall_b", 1.0, 1.8667]]},
           desc="Clinches and digs three body shots.")
     K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Wide Hook Toss", clip="throw_reach",
           grab={"frames": 48, "adv": 14, "hitF": 26, "swap": True, "air": False, "techable": True,
@@ -118,7 +122,9 @@ def build():
           desc="Pulls them past and hooks them the other way.")
 
     # ---------------- specials ----------------
-    brick = {"life": 180, "box": [0.35, 0.30], "y": 1.35, "hits": 1, "strength": "M", "clip": "brick", "x": 0.6}
+    # y 1.25 (was 1.35): the brick box must reach the crouch line (1.10 m) - a 1.35 m brick sailed over every
+    # measured crouch (1.16-1.44 m); 1.25 is also where the hand releases it (brick_throw effector 1.20 m).
+    brick = {"life": 180, "box": [0.35, 0.30], "y": 1.25, "hits": 1, "strength": "M", "clip": "brick", "x": 0.6}
     K.special("brickbat", motion="236", fam="proj",
               common=dict(name="Brickbat", clip="brick_throw", cancel=["super"], role=["projectile"],
                           sfx=[[0, "whoosh_light"]], desc="Hurls a brick. L slow, H fast."),

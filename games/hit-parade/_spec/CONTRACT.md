@@ -409,13 +409,48 @@ each = `{ "<clipId>": { "src": "mixamo|cmu|layer",
     patch step_knee now report the knee; kicks and floor sweeps keep the foot. An explicit plan `effector` wins.
   - `effector.at` at a fractional contact time is the pose AT that time with the joints slerped (what three.js
     samples), not a chord between two baked frames (johnny run_hook differed by 6.6 cm).
+  - CHANGED(ASSETS) part 2 re-run - EXTREMITIES (hp_retarget.sanitize_wrists / clamp_toes, every bake): CMU mocap
+    hands are marker garbage in places (measured over all 12 fighters: single-frame hand steps > 70° = 20 CMU frames vs
+    7 Mixamo; johnny uppercut's wrist bent 126-138° for f0-f2; johnny cross twisted 66° on its contact frame only;
+    bruno bear_hug 85-107° all clip). For clips whose hands come from CMU (cmu, a layer with a cmu upper, a seq with a
+    cmu segment): frames with the hand > 80° off the forearm or a one-frame excursion are re-interpolated between the
+    nearest valid frames, twist is clamped to ±100°, remaining snaps > 50°/frame are spread over 4 frames. Toes are
+    limited to 45° vs the foot on every clip (bruno win_flex bent a boot 58°). Clips whose legs come from CMU too
+    (cmu, seq with a cmu segment) also get: FEET with the ankle > 80° off the shin re-interpolated (gazza
+    grass_cutter swung the foot 121-152° for 3 frames), and the 1- or 2-frame excursion rule (out > 60°, back
+    > 40°, neighbours close) on every limb and spine bone (lotus tornado_hop's thigh twisted 157° for 2 frames).
+    The snap spread never moves the frames the contact / strike marks sample (a VALID contact pose stays as the
+    source had it); an INVALID contact frame is still repaired. Plan opt-outs: `"wrist": "raw"`, `"toes": "raw"`.
+    bake.json records `extremities` per clip. Contact frames of some CMU strikes changed because the garbage sat on
+    the contact frame (effector.at moved 2-19 cm; list in the part-2 report); lane FIGHTERS re-runs
+    `data/fighters/_gen/build.py` for `boxSrc: hitVolume` boxes on those moves (§20.6).
+  - CHANGED(ASSETS) part 2 re-run - AIM and SEQ fixes: an AUTO-picked striking hand > 90° off forward at contact
+    while the other hand is out in front (≤ 60°) is the wrong hand: the other hand becomes the effector (bake.json
+    `aim.effector_switch`); a hand behind the body never counts as the second hand of a two-handed (mid-hands)
+    aim; a layered SEQ segment is aimed by turning its upper only (as aim_clip does). Measured: krane
+    backup_combo had been turned 143° (the fighter ran backward) and shield_block / shield_charge 86° / 72°; now
+    LeftHand (the shield arm) at 30-39°. The seq crossfade interpolates the body yaw once along the shortest angle
+    and slerps yaw-free bone poses under it (per-bone slerps across a large yaw change sent bones different ways:
+    krane backup_combo Spine1 turned 179° in one frame, spin six_step_ex 154°, patch reel_kicks 163°). A LAYERED
+    aim now turns the already-attached upper body about the vertical through the spine base, so strike heights
+    are exactly the unaimed heights (turning the upper before the lean-attach had raised boneyard air_backhand's
+    fist 25 cm and krane air_poke's 16 cm); only x_fwd / lateral change.
   - authored specs gain `upper` (layered base), `ik` (two-bone leg IK to an ankle target / "base" = planted)
     and `aim` keys (art/blender/author_clips.py header). `crouch_toe_kick` / `crouch_shin_kick` exist: the toe
     kick uses the FRONT leg of the shared crouch, which is the LEFT leg (FIGHTERS' text said right).
 - CHANGED(ASSETS): THROW PAIR SYNC. `thrown_f` / `thrown_b` are the victim halves. Victim frame 0 = the
   throw connects (= the attacker throw clip's `contact`); victim `marks.slam` = the victim hits the
   floor (thrown_f 0.733 s, lands on the back, ends in the kd_ground_b pose, ~1.2 m backward travel
-  in `root`; thrown_b 0.667 s, lands face-down, ends in the kd_ground_f pose, ~1.4 m forward). An
+  in `root`; thrown_b 0.667 s, lands face-down, ends in the kd_ground_f pose, ~1.4 m forward).
+  CHANGED(ASSETS) part-1 re-run: authored (`src: "author"`) clips' `root` = the spec `hips` travel ONLY; the
+  library base poses' own hips travel is no longer added (thrown_b's root used to run to +4.9 m and snap back
+  to +1.3 m; thrown_f ended −1.92 m). Poses/GLB tracks unchanged (per-frame effector traces bit-identical);
+  only `root` of wall_splat / thrown_f / thrown_b / parry / shove / impact_windup (+ FIGHTERS' authored crouch
+  kicks) changed. Measured root at the end: johnny thrown_f −1.100 m, thrown_b +1.302 m, wall_splat 0 (−0.257 m
+  into the wall at the splat); bruno −1.284 / +1.520 / 0 (−0.300). Nothing consumes `root` for throws today.
+  Authored base poses are now blended PARENT-RELATIVE between keys (was: every bone's world delta slerped on its
+  own, which twisted thrown_b's right foot 171° / left toe 150° off bind for 3-4 frames and spun shove's left
+  hand 157° in one frame); key poses, contacts and effector points are unchanged. An
   attacker throw clip in a fighter clipplan declares its own `marks: {"slam": <source frame>}`; the
   view warps each clip so both slam marks land on the same sim frame. `wall_splat` has `marks.splat`.
 
@@ -431,6 +466,12 @@ Per clip: `{ "dur": s, "frames": n, "contact": s|null, "effector": {"bone": "Rig
   farthest forward) unless the clipplan gives a frame. Effector points: hands = `<Side>HandMiddle1`
   head (knuckles), feet = `<Side>ToeBase` head, knees = `<Side>Leg` head, head = `HeadTop_End`.
   `apexY` is non-null only for ground-locked (`air: "strip"`) clips. Optional `marks: {name: s}`.
+- CHANGED(ASSETS) part 2 re-run (answers the §20.6 request; additive): optional `marksAt: {"hit1": {"bone", "at":
+  [x_fwd, y_up]}, ...}` on every clip with strike marks (names starting `hit`), measured exactly like `effector.at`
+  (slerped pose at the exact mark time). `bone` = among the limbs moving at ≥ 0.4× the fastest one's speed in
+  [f−4, f+1] around the mark, the one farthest forward (the clip effector wins ties within 5 cm) - so a flurry that
+  alternates hands names each hand (johnny sold_out_flurry: hit1/hit3 LeftHand, hit2/hit4 RightHand). SIM may derive
+  one box per `hits` entry from it; nothing reads it yet.
   Measured on johnny/bruno: three.js bone positions match `effector.at` to 0.4 mm with the root at
   yaw +90 (x_fwd = world +X).
 
@@ -1007,15 +1048,45 @@ glob never sees it) → emits `data/fighters/<id>.json`, `tools/clipplan/<id>.js
      count (`_upperFrames`; hold = range `[lowerFrame, lowerFrame+1]`), and the layer `contact` is expressed in
      LOWER source frames (`_upperContact` keeps the upper's frame). validate.py checks both.
    - seq: `"seq": [<entry>, ...], "xf": 2` - concatenated in order, segment k starts where k-1 ends minus `xf`
-     frames (30 fps) of crossfade; `contact` = first segment's. **Needs builder support (ASSETS):** used by 13
-     clips - the multi-hit supers (johnny `sold_out_flurry`, patch `reel_kicks`, krane `backup_combo`, lotus
-     `bottoms_seq`, freak `meltdown_clip`), Spin's flair chains (`windmill_l`, `windmill_m`, `windmill_h`,
-     `cypher_clip`, `handspin_clip`, `six_step_ex_clip`) and rerun `crawl_run`, `crawl_run_ex`. Segment durations follow the
-     builder's frame counts (CMU windows get an extra end frame when not a multiple of 4).
+     frames (30 fps) of crossfade; `contact` = first segment's. Supported by the builder since ASSETS part 2
+     (§6.2): used by 13 clips - the multi-hit supers (johnny `sold_out_flurry`, patch `reel_kicks`, krane
+     `backup_combo`, lotus `bottoms_seq`, freak `meltdown_clip`), Spin's flair chains (`windmill_l`, `windmill_m`,
+     `windmill_h`, `cypher_clip`, `handspin_clip`, `six_step_ex_clip`) and rerun `crawl_run`, `crawl_run_ex`. Segment
+     durations follow the builder's frame counts (CMU windows get an extra end frame when not a multiple of 4).
    - author: `"src": "author", "file": "crouch_toe_kick" | "crouch_shin_kick", "frames": n, "contact": k`
-     (0-based output frame) + `_base` / `_keys` (the key poses, also in `_spec/ROSTER.md`). **Needs the two
-     specs added to `art/blender/author_clips.py` AUTHORED (ASSETS)** - the only authored motions in the roster
-     (CMU has no crouch-kick class).
+     (0-based output frame) + `_base` / `_keys` (the key poses, also in `_spec/ROSTER.md`). Both specs exist in
+     `art/blender/author_clips.py` (ASSETS part 2) - the only authored motions in the roster (CMU has no
+     crouch-kick class).
+   - `effector` (bone key of ASSETS' EFFECTORS: RightHand/LeftHand/RightFoot/LeftFoot/RightKnee/LeftKnee/Head) may
+     be set on any entry, including a layer entry (build.py passes it through), when the auto pick would name the
+     wrong limb (lotus `knee_lift` = RightKnee, ricky `cane_twirl` = RightHand).
+6. **CHANGED(FIGHTERS) part 2 (2026-09-30) - hurtboxes and hit volumes, measured in the real sim** (additive; no
+   signature changes; SIM / VIEW / AI read the same fields as before):
+   - **Hurtbox heights are measured**, not a height ratio: `hurt.stand[1]` / `hurt.crouch[1]` = median mesh top of
+     the `idle` / `crouch_idle` clip the fighter plays (Blender on ASSETS' raw.glb, 7 frames; crouch clamped to
+     stand). The old rule (crouch 0.60 H) sat 0.13-0.29 m under every real crouch pose. Widths unchanged.
+   - **Crouch line 1.10 m** (lowest measured crouch top, krane 1.159, minus 0.05) and **point-blank reach**
+     `(pushbox_w + 0.39) / 2 + 0.23 - 0.10` m (the slimmest defender touching). Every grounded strike that is not
+     `role: antiair` (or the informational `role: high` = whiffs crouchers by design; unused today) has a box reaching
+     both; an anti-air that is also `role: reversal` (the DPs) must reach both with its FIRST hit (extension cap 0.60 m:
+     the rising arm sweeps that space during the first active frames). Where SIM's derived box (§5.2: centred on the clips.json effector) does not, `build.py` writes the SAME box
+     widened (bottom lowered / near edge pulled back; top, reach, frames unchanged) as explicit `boxes` and tags the
+     move with the informational `"boxSrc": "hitVolume"`. Those boxes are computed from `data/clips/<id>.clips.json`:
+     **after every lane ASSETS re-bake run `python data/fighters/_gen/build.py` and `validate.py`** (the validator
+     fails on a `hitVolume` box that no longer matches the effector, and lists clips whose plan changed since the
+     published bake as PENDING). Straight projectiles also reach the line (`projectile.y - box_h / 2 <= 1.10`).
+     Before: 53 of 307 damaging ground moves whiffed crouching opponents in the sim (incl. overheads, johnny /
+     zambini projectiles and 6 supers); freak 5M never connected; krane's low 2L never hit a crouch.
+   - Request to lane SIM (G1): `probe_data.ts` computes a `hits` move's block advantage as `blockstun - (active +
+     recovery)`, but the sim applies stun from the FINAL hit (§20.2, adopted in §19.11): advantage =
+     `stun - (startup + active + recovery - hits[last].f[0])`. Measured in the real sim: spin `5H` blocked = -3
+     (data -3), probe_data says -8 and fails `--strict` on it (the only G1 failure).
+   - Request to lane ASSETS: per-mark effector points in clips.json (e.g. `"marksAt": {"hit1": [x_fwd, y_up], ...}`,
+     measured like `effector.at`), and to lane SIM: derive one box per `hits` entry at its mark's point when present.
+     Today every hit of a multi-hit move is derived at the FIRST contact's point (one effector per clip), so kits hand-
+     set per-hit boxes where it matters (patch `highlight_reel`, lotus `bottoms_up`).
+   - Open: weapon props (baton, cleaver, mic-cane) are attached at runtime and are not in the effector point, so a
+     weapon strike's box ends at the hand; prop reach is not modelled yet (needs the prop lengths from §6.4).
    - A fighter plan MAY define a shared clip id (§6.2 list, e.g. Krane's shield `idle`/`block_high`); the
      fighter entry wins over `_shared.json` for that body (the builder already does this).
    - Keys starting with `_` (`_why`, `_cand`, `_upperFrames`, `_upperContact`, `_base`, `_keys`) are informational;
@@ -1151,3 +1222,121 @@ without imports), `_spec/CONTRACT_MOBILE.md` (touch), lab `runtime/lab/ui.html` 
    input-blind, read-only, reaction clock) gate and the acceptance numbers are reported only.
 8. **Training** (SHELL / UI note): `?mode=training` defaults P2 to CPU 0 = the TUTOR band, which walks in and attacks
    (aggression 0.2) - a still dummy is no CPU at all (`cpu: -1`) plus the UI's dummy options.
+9. CHANGED(AI) 2026-09-30 (additive, AI-internal; no other lane consumes it): **respect a presser**. `cpu.json`
+   `rules.press {rate 0.10, windowF 32}` = the opponent counts as PRESSING when the share of its free ground frames
+   inside its own fast-button zone that ended in an attack start (EMA, time constant windowF) is >= rate (built from
+   visible move starts only; measured: masher 0.09-0.33, CPU L6 0.002-0.10). Profile lever `respect` (level rows and
+   personas; default 0 = off and no RNG roll) = chance per neutral decision to respect a presser inside the range of
+   the buttons it has been pressing (its last 6 visible ground strikes): swing the most damaging normal of mine that
+   meets it where its walk-in stops, at least 2 f before any of those buttons (`brain.spacePoke`), else hold a guard -
+   and never walk / dash into that zone. ON for the harness `optimal` persona (0.9); OFF for all CPU levels and the
+   novice (a P4 lever: 10-seed test vs the masher gave L4 4->5, L6 4->5, L8 7->6 wins, no clear gain). With it at 0
+   the CPU levels play bit-identically to before (probe_personas level lines identical on 60 seeds). `BrainStats`
+   gains `respects`, `spacePokes`. Walking is not in `F.vx` (the sim moves walkers by walk speed), so the brain
+   derives closing speed from the visible WALK_F / DASH_F state and the opponent's known walk / dash speeds.
+
+## §24 CHANGED(integrator): P1 integration (2026-09-30; additive, no signature broken)
+Cross-lane edits made so the lanes fit together; each file carries a `CHANGED(integrator)` note at the change.
+1. **Audio wiring (game.ts, per §9.1):** a mounted bout calls `audio.bout({fighters, stage, mode, local, sfxNames: m.tab.sfx})`,
+   `setSplatter(settings.gore)` (and on change), `preload()` (no ids = the bout set), `music('stage')`; every rendered frame
+   `events(ev, m, [f0, f1])`; pause / resume `setPaused(true|false)`; teardown `bout(null)`. `local` = the human side vs a
+   CPU, `-1` for local 2P, the online side online. (Was: `preload([stage, fighters])` and no `bout()`.)
+2. **Pause keys:** a pause key that pauses the bout consumes its KeyboardEvent (`preventDefault`); Input listens in the
+   capture phase and the menus in the bubble phase, so ESC used to pause and the same keydown resumed at once on the
+   card. The menus seed each pad's previous buttons when their loop starts (`startLoop`), so the START that paused is not
+   also a fresh press on the pause card.
+3. **Touch overlay wired:** main.ts creates `TouchControls(uiRoot, input.touch, settings-derived opts)`; `onPause` -> the ESC
+   pause path; `onLayout` -> `settings.set({touchLayout})`; touch settings apply live. `GameDeps.touch?` : game.ts shows the
+   overlay only while a bout steps in touch mode and feeds `setMeters` from the local fighter each frame.
+4. **Test surface (§12 + UI §22.7):** `__HP__.menus()` / `__HP__.hud()` (= readback()), `__HP__.touch()` now also carries the
+   overlay read-back, `__HP__.dev.touchWord()` (= `TouchControls.readWord()`, dev only).
+5. **Character-select 3D Showcase in the game:** the Showcase renders into the `#game` canvas UNDER the DOM and every menu
+   screen paints an opaque backdrop, so the model was invisible in the integrated game (the UI lab used a DOM stub). While
+   the select screen drives the Showcase, the screen moves its backdrop to `::before` with a CSS mask hole at
+   `showcaseRect()` (`.hpm-s-charselect.hpm-3d`, CSS vars `--sc-x/-y/-w/-h`, set by menus.ts). `Showcase.backdrop` (sRGB hex,
+   default `0x1d0d1b`) = the region's opaque clear colour (the context is `alpha:false`).
+6. **Portraits (UI §22.3):** `Showcase.portrait(fighterId, color = 0, size = 256): Promise<string | null>` renders a
+   head-and-shoulders PNG data URL (toon material + outline, idle pose, transparent background) into its own targets.
+   `app/portraits.ts` `PortraitQueue` (SHELL area) renders them one at a time and hands each to `menus.setPortraits()`:
+   `need(id)` (hovered select fighter, both bout fighters) jumps the queue; `all(ids)` renders the roster in the background
+   1.5 s after boot and waits while a bout loads / steps. `GameDeps.portraits?`.
+7. **COMING SOON slots:** `ui/data.ts hasAssets(data, id)` = the fighter's GLB is in the build (Vite glob of
+   `art/gltf/fighters/*.glb`, URL only) AND its clips table loaded (true outside Vite). A fighter without assets is a locked
+   `soon` slot labelled `cs.soon` (hint `cs.soonHint`, strings.json) - never a broken slot; THE SEASON roster (game.ts) skips
+   it. Today all 12 fighters have assets, so no slot shows it.
+8. **Harness:** `_harness/playtest.py` (G6, lane AI's file, never written) now exists: menus -> VERSUS -> CPU L1 -> a full
+   best-of-3 bout by REAL keys (walk, jab, special, throw, parry, IMPACT, super) with HUD / audio / results = sim checks,
+   then REMATCH -> ESC pause / resume -> FORFEIT -> MAIN MENU. `bootcheck.py` G4: a projectile special counts (PROJ_HIT c = 6,
+   §17 rule 6); the walk is judged on the frames P1 spends in walk_f (>= 0.3 m, up to 3 x 0.9 s holds toward P2) and each
+   jab first walks back into range - the live CPU knocks P1 down, throws it across and pushes it between checks.
+   `probe_data.ts`: a `hits` move's advantage is measured from the FINAL hit's first frame (the §20.6 request): spin 5H
+   blocked = -3, as the sim measures.
+9. **Asset repair:** the working copy of `runtime/src/audio/assets/sfx.m4a` had one flipped bit (offset 880466; same size
+   and mtime, so git status missed it) and failed probe_audio's AAC decode; restored from a fresh `aac_twin()` encode that
+   is byte-identical to the committed blob (md5 b85f8ce3cfbaf93082ce081624e39fe0).
+10. **`MatchSnap.proj` (SIM, the §17.1 request):** `readMatch()` returns `proj: [{ slot, owner, x, y (m), vx (m/s), moveId (§17
+   rule 1), kind (0 projectile, 1 ball, 2 heckle), alive }]` for every active projectile slot (a read-only copy, never in
+   the state or the checksum; core/types.ts `MatchSnap.proj?`). The view's `FxSystem.projectiles()` draws it; before this a
+   projectile special flew invisibly in the game.
+11. **`todo` stages (§21.1 fallback):** `ui/data.ts StageRow.built` (stages.json `status !== 'todo'`) and
+   `playableStage(data, id)` (= id when built, else the first built stage). game.ts applies it to every bout (THE SEASON
+   home stages, training, deep links, online - both peers compute the same) and to the season VS card; the stage select
+   shows todo stages as COMING SOON (not selectable) and RANDOM picks among built stages only. Before: bruno's home stage
+   `butcher_block` (no GLB) loaded the view's primitive stand-in set.
+12. **Pointer input on the menus:** `runtime/index.html` gives `#ui` `pointer-events: none` (the HUD must never eat input) and
+   the menus root inherited it, so no mouse click or touch tap reached a menu in the integrated game (the UI lab host does
+   not set it). `.hpm { pointer-events: auto }` (menus.css). `_harness/mobile.py --game` now runs (was a stub): the touch
+   overlay in a real deep-linked bout on 5 devices.
+13. **THE SEASON bonus slots:** the sim has no BRAWL BREAK / HECKLER TOSS yet (no core/sim/brawl.ts, no GOON_SPAWN /
+   HECKLE_THROW emitters), so game.ts `BONUS_ROUNDS_IN_SIM = false` passes over bonus slots (recorded as played, 0 points)
+   instead of staging a mirror bout against an idle clone. SIM flips it with the P3 modes.
+14. **EXIT TRAINING:** the training pause card's forfeit button (EXIT TRAINING, no confirm) goes straight to the main menu,
+   as the UI lab flow does; no "BY FORFEIT" results card for a practice session.
+
+## §25 CHANGED(fixer): P1 verifier fixes (2026-09-30; additive except where marked, every file carries `CHANGED(fixer)` notes)
+1. **Round banners follow the sim phases (D1, ui/broadcast.ts, ui/hud.ts):** `Broadcast.sweep(text, {tone, sub, ms, cut, onStart})`
+   - `cut: true` drops the showing sweep + queue (their promises resolve) and plays at once; `cutSweeps()`. The HUD cuts on
+   ROUND_INTRO / FIGHT / KO / TIMEOVER and queues the round VERDICT (PERFECT with `<NAME> WINS` as sub / `<NAME> WINS` / DRAW)
+   on the KO / TIMEOVER frame (the sim decides the round there; ROUND_END is one frame before the next ROUND_INTRO). Durations
+   come from `system.json round` (`bannerPace()`): K.O. = koHitstop + koSlowmoFrames, verdict = koOutroFrames - 60 ms, TIME
+   OVER / verdict share timeoverOutroFrames, ROUND n <= introFrames - 250 ms, FIGHT! 800 ms. `UiGameData.system?` added.
+2. **Stats / snapshots (D8, D10):** game.ts BoutStats records the round winner + PERFECT on the KO / TIMEOVER frame and uses
+   ROUND_END `a` (0 | 1, 2 = draw); `readFighter().hp` is clamped >= 0 (the state keeps overkill; checksums unchanged).
+3. **Camera vs HUD (D4):** `Hud.safeTop(): number` (fraction of the HUD root height covered by `.hp-top` + `.hp-bars`, measured on
+   mount / resize / touch-mode change); `BoutView.setSafeArea(top)` (game.ts calls it every rendered frame);
+   `FightCamera.safeTop`. The jump pan is solved with the rig's real pitch (`lookFloorFor` / `lookCeilFor`) so an airborne
+   fighter's top (head, or raised hands while airborne: `FighterView.topY()`) stays under `safeTop + 0.015`; the pan UP is a
+   hard floor at the actual camera distance (head beats feet while the zoom-out catches up). `state().cam` read-back
+   (`BoutView.camReadback()`: lookY, dist, safeTop, tops[] = each fighter's top as a screen fraction).
+4. **Portraits (D5):** `PortraitQueue` renders at `portraitSize()` = the largest display (0.95 x min(vh, 0.62 vw) x DPR,
+   rounded up to 128 px, 512..1536; 896 at 1600x900) instead of 256; `Showcase.portrait` uses alpha-to-coverage on cutouts and
+   returns WebP (PNG where the browser has no WebP encoder).
+5. **Measured, asymmetric push boxes (D2) - fighters/<id>.json gains (FIGHTERS generator writes, SIM reads):**
+   `push: { front, back, crouchFront, crouchBack }` (m from the root along the facing; `pushbox[0]` = front + back) and per move
+   `pushExt: [[frame, m], ...]` (extra FRONT extent from the clip's measured lean, piecewise linear, >= 0). Source:
+   `art/blender/measure_body.py` -> `tools/measure/<id>.body_all.json` (98th-percentile forward / backward extent of the skinned
+   CORE vertices - hips, spine, neck, head, shoulders, thighs - per clip frame); rules in `data/fighters/_gen/kitlib.py`
+   (stand front = max(median idle, median walk_f), back = max(median idle, median walk_b), crouch = median crouch_idle; pushExt
+   kept >= 0.04 m). SIM `core/sim/boxes.ts`: `pushExt(m, i, dir)` / `wallLimitX` / `clampToWalls` / `pushGap` replace every use of
+   the symmetric half-width (bodies, walls, pushback transfer, proximity guard, wall splat / near-wall, cinematic end gap, grab
+   range front-to-front); `CFighter.pushFS/BS/FC/BC`, `CMove.pushExt`. Without `push` the box is the old symmetric one (fixture
+   kits unchanged). Point-blank rule (kitlib + validate.py): a box must start within `push.front + ROSTER_DEF_MIN - 0.10`
+   (ROSTER_DEF_MIN = min over the roster of push.front + hurt.stand[0] / 2 = 0.47). AI range estimates use `pushFS`.
+   After an ASSETS re-bake: run measure_body.py (@all) for the changed fighters, then build.py + validate.py.
+6. **Throw victims + knockdown presentation (D3, D7) - `core/sim/throwpose.ts`:**
+   - `grab.victim?: [[lockFrame, sharedClip, fromS?, toS?], ...]` (FIGHTERS data; each segment until the next or the release;
+     toS omitted = 1 clip-s per 60 f). Default (no victim): `thrown_f` / `thrown_b` (swap) with its `marks.slam` on `grab.hitF`
+     and its end on the release (non-grab throws: slam on the damage frame). johnny / bruno `throw_f` carry victim timelines.
+   - During the lock the victim's x follows the segments' clips.json `root` travel from the connect x (`F.thrX`) along its own
+     facing; a side swap scales that path so the victim lands behind the thrower at max(backThrowOffsetM, thrower front +
+     victim back + 0.05 m) (`F.thrDisp`). No teleport at the release; the victim keeps its facing while it lies (the free state
+     re-faces it after the wake-up); face-down endings (thrown_b, kd_fall_f, crumple) lie / rise face down (`F.kdFace`).
+   - THROWN / KNOCKDOWN anims: the sim writes a VIRTUAL anim frame = round(clip seconds x 60) (§17 rule 3 still holds for the
+     view: shared clips sample `animFrame / 60`). KD = fall clip from its drop (standing) or floor impact (juggle landing) to its
+     end over <= `anim.fallMaxFrames`, lying loop, wake clip ending exactly on the actionable frame at <= `anim.wakeMaxRate` x
+     (system.json `anim.kdFall` = [drop s, floor s] per fall clip). Fields `F.thrX, F.thrDisp, F.tot, F.kdFace`; LAYOUT_REV 2.
+   - View: a side-swap victim passes IN FRONT of the thrower (`FighterView.zTarget`, presentation-only depth offset); a throw's
+     damage spark / splatter spawns at the victim's chest bone (was root x at a fixed 1.0 m).
+7. **Harness:** playtest.py's jab verb passes only on a landed jab (HIT / COUNTER / PUNISH), walk-ins stop when the gap stops
+   closing (bodies touching). §13 G2 note: `probe_uniques.ts` does not exist (uniques are not in the sim, §19.14); G2 = the
+   probes run_probes discovers.

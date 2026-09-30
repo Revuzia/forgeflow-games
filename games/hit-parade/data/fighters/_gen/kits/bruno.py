@@ -40,8 +40,8 @@ def build():
     K.clip("low_straight", crouch(cmu("cross.3")), "Crouch Idle legs + CMU cross.3 (14_03, 8.2 m/s)")
     K.clip("low_forearm", crouch(cmu("body_blow.4")),
            "Crouch Idle legs + CMU body_blow.4 (13_17 lead body shot with a dip)")
-    K.clip("goalpost", mix("Pro_Magic_Pack/Standing 2H Cast Spell 01", (5, 40), contact=21),
-           "Mixamo 2H Cast Spell 01 arms thrown overhead (RightHand peak f21) = double-arm anti-air")
+    K.clip("goalpost", mix("Pro_Magic_Pack/Standing 2H Cast Spell 01", (1, 34), contact=12),
+           "Mixamo 2H Cast Spell 01 arms thrown overhead = double-arm anti-air. Contact f12 = both hands at the top (bake trace: 1.96 / 2.03 m, 0.07 / 0.28 m forward). Was f21 (the speed peak), which is the arms SLAMMING DOWN to 0.73 m - lane ASSETS flagged it and the jump-in test hit only landing opponents (8/88)")
     K.clip("big_boot", mix("Pro_Melee_Axe_Pack/standing melee attack kick ver. 1", (8, 40), contact=22),
            "Mixamo axe kick ver. 1 = front push kick (knockback into wall-splat); front pass f22")
     K.clip("air_chop", air(cmu(take="86_06", rng=(4653, 4734), contact=4682, kind="hand", limb="R_hand")),
@@ -104,6 +104,7 @@ def build():
           cancel=["special", "super"], sfx=[[8, "whoosh_heavy"]], desc="The reference's big haymaker.",
           why="Grappler damage lever: 900 (+100) paid with startup 13 and recovery 21 (+1 hit / -4 block).")
     K.add("2H", "AA", name="Goalpost", clip="goalpost", startup=10, recovery=22,
+          boxes=[{"f": [10, 13], "x": 0.30, "y": 1.90, "w": 0.70, "h": 0.50}],
           juggle={"js": 1, "ji": 1, "jl": 0}, cancel=["special", "super"], desc="Both arms swing up: anti-air.",
           why="Big-body anti-air one frame slower (10/4/22 -> +1/-7); still an anti-air class exemption.")
     K.add("6H", "CMD", input="6H", kind="command", name="Big Boot", clip="big_boot", startup=15, recovery=21,
@@ -121,7 +122,11 @@ def build():
               "frames.")
     K.add("throw_f", "THROW_F", input="LM", kind="throw", name="Bear Hug", clip="throw_reach", damage=1300,
           grab={"frames": 50, "adv": 21, "hitF": 34, "swap": False, "air": False, "techable": True,
-                "clip": "bear_hug"},
+                "clip": "bear_hug",
+                # CHANGED(fixer) D3: bear_hug is a lean-back two-arm pull (no lift): the victim is crushed doubled over
+                # (two squeezes) and dropped backward on the crush (lock frame 34 = the slam mark) - it used to flip
+                # over his shoulders in the generic thrown_f.
+                "victim": [[0, "hit_body", 0.0, 0.35], [17, "hit_body", 0.05, 0.4], [34, "kd_fall_b", 1.0, 1.8667]]},
           desc="Crushes them in a bear hug.", why="Grappler throws deal 1300 (+100 over 1200).")
     K.add("throw_b", "THROW_B", input="4LM", kind="throw", name="Throw-In", clip="throw_reach", damage=1300,
           grab={"frames": 52, "adv": 16, "hitF": 40, "swap": True, "air": False, "techable": True,

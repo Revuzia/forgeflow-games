@@ -206,9 +206,10 @@ AUTHORED = {
         "base": mix("Pro_Magic_Pack/Crouch Idle", (1, 42), loop=True),
         "keys": [
             [1, "Crouch Idle f1 pose unchanged (hips 0.56 m, weight centred)."],
-            [4, "Front (right) knee chambers: RightUpLeg flexed 45 deg forward of the crouch pose, RightLeg "
-                "(shin) folded back so the foot sits under the knee 10 cm off the floor; torso leans back 5 deg."],
-            [6, "CONTACT: right leg extends straight forward, foot 6 cm above the floor at ~0.75 m in front of "
+            [4, "Front knee chambers (the LEFT leg is the front leg of the shared crouch - lane ASSETS measured; "
+                "the spec in art/blender/author_clips.py uses it): UpLeg flexed 45 deg forward of the crouch pose, "
+                "shin folded back so the foot sits under the knee 10 cm off the floor; torso leans back 5 deg."],
+            [6, "CONTACT: front leg extends straight forward, foot 6 cm above the floor at ~0.75 m in front of "
                 "the hips, toes pointed (RightFoot plantar-flexed 35 deg); left leg and hips unchanged; lead "
                 "hand stays up in guard."],
             [8, "Hold the extension (same pose as f6, toes relax 10 deg)."],
@@ -316,7 +317,7 @@ def builder_entry(e):
             e["contact"] = round(lo["range"][0] + k_c * lo["speed"], 4)
         else:
             e["contact"] = None
-        for k in ("_why", "air", "loop", "floor"):
+        for k in ("_why", "air", "loop", "floor", "effector", "aim", "limb_lock"):
             if k in orig:
                 e[k] = orig[k]
     return e
@@ -489,7 +490,11 @@ class Kit:
 
     def to_json(self):
         i = self.info
+        uq = dict(self.unique)
+        if "trait" not in uq:
+            uq["trait"] = TRAITS[i["id"]]
         d = {"id": i["id"], "name": i["name"], "persona": i["persona"], "archetype": i["archetype"],
+             "difficulty": int(i["doc"]["difficulty"]),
              "body": i["body"], "heightM": i["heightM"], "hp": i["hp"],
              "walk": {"fwd": i["walk"][0], "back": i["walk"][1]},
              "dash": {"fwd": i["dash"][0], "back": i["dash"][1], "fwdFrames": i["dash"][2],
@@ -497,9 +502,10 @@ class Kit:
              "jump": {"prejump": i["jump"][0], "air": i["jump"][1], "landing": i["jump"][2],
                       "apexM": i["jump"][3], "fwdM": i["jump"][4]},
              "throwRangeM": i["throwRangeM"], "hurt": hurtboxes(i), "pushbox": pushbox(i),
+             "push": push_extents(i["id"]),
              "colors": [{"name": n, "tint": t} for n, t in i["colors"]],
              "moves": {mid: self.emit_move(mid) for mid in self.order},
-             "simple": self.simple, "classic": self.classic, "unique": self.unique,
+             "simple": self.simple, "classic": self.classic, "unique": uq,
              "intro": i["intro"], "win": i["win"], "taunt": i["taunt"], "rival": i["rival"],
              "stage": i["stage"], "cpu": i["cpu"]}
         return d
@@ -542,25 +548,206 @@ class Kit:
         return changed
 
 
+# One-line unique traits (CONTRACT 22.5: UI mirrors unique.trait into strings.json as trait.<fighter>);
+# johnny / patch / spin carry theirs in the kit's `none` block.
+TRAITS = {
+    "bruno": "ARMOR STEP: BRACE walks through one hit into WALK-IN FREEZER or a 2L tick; FRIDGE DOOR walls them in.",
+    "boneyard": "ARMOR: 5H, MEAT HOOK and BUTCHER'S BLOCK absorb a hit; big damage per touch, no DP.",
+    "freak": "BOSS ARMOR: 5H, 6H and every special take 2 hits of armor; 2.40 m reach and 11,500 HP.",
+    "gazza": "THE BALL: one ball on screen - shoot it, park it with KEEPY-UPPY, volley it later; one wall rebound.",
+    "krane": "CHARGE + RIOT SHIELD: [4]6 and [2]8 specials; blocking standing drains half the NERVE.",
+    "lotus": "SWAY STANCE: leans out of high attacks; L low, M overhead, H hop over lows.",
+    "rerun": "PLAY DEAD: drops to the floor and catches strikes on frames 4-20, then rises into a counter.",
+    "ricky": "TWO PHASES: below 50% HP the set goes live - PYRO fire lines and a second Lv3, SEASON FINALE.",
+    "zambini": "VANISHING ACT: trapdoor teleport behind the opponent or home to his corner; keeps you at 3-5 m.",
+}
+
+
 # --------------------------------------------------------------------------------------------------
-# Hurtboxes from body height (FIGHTERS [R]): stand h = 0.95 H (head top), crouch h = 0.60 H,
-# air h = 0.62 H (tucked jump). Width = build factor x H: slim 0.27, average 0.30, heavy 0.34,
-# monster 0.36. Crouch w = 1.15 stand w, air w = 0.95 stand w. Pushbox = 0.85 stand w x 0.90 stand h.
+# Hurtboxes. Heights are MEASURED on the baked bodies (FIGHTERS [M], 2026-09-30): Blender 5.1 headless,
+# mesh max-up of lane ASSETS' art/renders/<id>/_build/raw.glb, median of 7 evenly spaced frames of the
+# posture clip each fighter actually plays - `idle` (stand) and `crouch_idle` (crouch), shared or the
+# fighter's override (scratch pose_tops.py; numbers in _harness/_reports/progress_fighters.md). The first
+# kit rule (crouch 0.60 H) sat 0.13-0.29 m BELOW every measured crouch pose, so standing strikes, overheads,
+# projectiles and supers whiffed over crouching bodies that visibly stood taller. Crouch is clamped to the
+# stand height (Freak's hunched mutant crouch measures 2.085 m, above his 2.013 m idle). Air h = 0.62 H
+# (tucked jump; jump clips are ground-locked, not measurable this way). Width = build factor x H: slim 0.27,
+# average 0.30, heavy 0.34, monster 0.36; crouch w = 1.15 stand w, air w = 0.95 stand w.
+# Pushbox = 0.85 stand w x 0.90 stand h.
 # --------------------------------------------------------------------------------------------------
 BUILD = {"slim": 0.27, "average": 0.30, "heavy": 0.34, "monster": 0.36}
+# id: (idle median top m, crouch_idle median top m)
+POSTURE_M = {
+    "johnny": (1.712, 1.271), "patch": (1.674, 1.215), "bruno": (1.745, 1.387), "zambini": (1.744, 1.328),
+    "krane": (1.665, 1.159), "lotus": (1.623, 1.164), "boneyard": (1.747, 1.438), "spin": (1.619, 1.270),
+    "gazza": (1.795, 1.280), "rerun": (1.662, 1.219), "freak": (2.013, 2.085), "ricky": (1.793, 1.265),
+}
+# The crouch line: the lowest measured crouch top in the roster (krane 1.159) minus 0.05 m. A grounded strike
+# that is meant to hit crouching opponents must reach at least this low (build.py crouch-reach rule).
+CROUCH_LINE_M = 1.10
+BOX_EXT_CAP_M = 0.50
+# Reversal anti-airs (DPs): only the FIRST hit must reach crouch / point blank (later hits are the airborne rise);
+# its cap is 0.60 m because the rising arm sweeps up through that space during the first active frames while
+# the clip contact (the fist at the top) sits higher.
+REV_EXT_CAP_M = 0.60
+# Point-blank reach: bodies touching = pushbox fronts together. Against the slimmest body in the roster
+# (pushbox 0.39 m, stand hurtbox 0.46 m wide: lotus / patch) the defender's hurtbox far edge is then
+# (pb_attacker + 0.39) / 2 + 0.23 ahead of the attacker; a strike's box must start at least 0.10 m inside it
+# or the move whiffs a touching opponent (measured: Freak's 1.16 m claw rushes / Meltdown only connected from
+# 2.4-3.2 m, nothing closer).
+PB_MIN_M, HURT_HALF_MIN_M, PB_MARGIN_M = 0.39, 0.23, 0.10
+# CHANGED(fixer) D2: with measured, asymmetric push boxes "touching" = the attacker's push FRONT + the defender's push FRONT
+# apart; the defender's hurtbox (centred on its root) then reaches front_att + (front_def + hurt_half_def). build.py sets
+# ROSTER_DEF_MIN = the smallest (front_def + hurt_half_def) in the roster (the slimmest touching defender).
+ROSTER_DEF_MIN = None
+
+
+def point_blank_near_max(pb_w, front=None):
+    """Box near-edge limit (m, from the attacker's root) that still hits the slimmest TOUCHING defender by PB_MARGIN_M.
+    With `front` (the attacker's measured push front) and ROSTER_DEF_MIN set: front + ROSTER_DEF_MIN - margin; else the
+    symmetric-box rule (pb_w + 0.39) / 2 + 0.23 - margin."""
+    if front is not None and ROSTER_DEF_MIN is not None:
+        return front + ROSTER_DEF_MIN - PB_MARGIN_M
+    return (pb_w + PB_MIN_M) / 2.0 + HURT_HALF_MIN_M - PB_MARGIN_M
+
+
+def posture_tops(i):
+    st, cr = POSTURE_M[i["id"]]
+    return round(st, 2), round(min(cr, st), 2)
 
 
 def hurtboxes(i):
     h = i["heightM"]
     w = BUILD[i["build"]] * h
-    return {"stand": [round(w, 2), round(0.95 * h, 2)], "crouch": [round(1.15 * w, 2), round(0.60 * h, 2)],
+    st, cr = posture_tops(i)
+    return {"stand": [round(w, 2), st], "crouch": [round(1.15 * w, 2), cr],
             "air": [round(0.95 * w, 2), round(0.62 * h, 2)]}
 
 
 def pushbox(i):
+    """[w, h]. CHANGED(fixer) D2: w = measured front + back (push_extents) when the body is measured, else the old
+    build-factor guess (0.85 x stand width)."""
     h = i["heightM"]
+    st, _ = posture_tops(i)
+    pe = push_extents(i["id"])
+    if pe:
+        return [round(pe["front"] + pe["back"], 2), round(0.90 * st, 2)]
     w = BUILD[i["build"]] * h
-    return [round(0.85 * w, 2), round(0.90 * 0.95 * h, 2)]
+    return [round(0.85 * w, 2), round(0.90 * st, 2)]
+
+
+# --------------------------------------------------------------------------------------------------
+# CHANGED(fixer) D2: push boxes MEASURED on the baked bodies. The build-factor box (0.85 x 0.30 H, centred on the root)
+# let two neutral bodies overlap by 0.3-0.4 m at the minimum separation (verifier D2: johnny vs bruno stopped 0.52 m apart,
+# Johnny's head inside Bruno's hunched chest). art/blender/measure_body.py evaluates the skinned mesh of every clip per
+# baked frame (lane ASSETS qc.glb) and records the 98th-percentile forward / backward extent of the CORE vertices (hips,
+# spine, neck, head, shoulders, thighs - arms, shins and feet may overlap an opponent as in any 2D / 2.5D fighter) into
+# tools/measure/<id>.body_all.json. Rules:
+#   stand front = max(median over idle frames, median over walk_f frames) (the poses bodies meet in; a walk-in peak
+#                 may kiss, an idle pair never overlaps); stand back = max(median idle back, median walk_b back)
+#   crouch front / back = median over crouch_idle frames (the sim uses them while FL.CROUCHING)
+#   pushExt (per move) = the move clip's core front over the stand (or crouch, for 1/2/3 normals) front, mapped through
+#                 the move's anim warp to sim frames, kept when it reaches >= 0.04 m, simplified to a <= 0.02 m error
+# --------------------------------------------------------------------------------------------------
+MEASURE_DIR = os.path.join(GAME, "tools", "measure")
+PUSHEXT_MIN_M = 0.04
+PUSHEXT_TOL_M = 0.02
+_MEASURED = {}
+
+
+def body_measure(fid):
+    if fid not in _MEASURED:
+        p = os.path.join(MEASURE_DIR, fid + ".body_all.json")
+        _MEASURED[fid] = json.load(open(p, encoding="utf-8")) if os.path.exists(p) else None
+    return _MEASURED[fid]
+
+
+def _median(xs):
+    ys = sorted(xs)
+    n = len(ys)
+    if n == 0:
+        return 0.0
+    return ys[n // 2] if n % 2 else 0.5 * (ys[n // 2 - 1] + ys[n // 2])
+
+
+def push_extents(fid):
+    """{"front", "back", "crouchFront", "crouchBack"} (m) or None when the body has no measurement."""
+    mb = body_measure(fid)
+    if not mb:
+        return None
+    c = mb["clips"]
+
+    def med(clip, key):
+        r = c.get(clip)
+        return _median(r[key]) if r and not r.get("missing") and r.get(key) else None
+
+    fr = [v for v in (med("idle", "core_front"), med("walk_f", "core_front")) if v is not None]
+    bk = [v for v in (med("idle", "core_back"), med("walk_b", "core_back")) if v is not None]
+    if not fr or not bk:
+        return None
+    front, back = max(fr), max(bk)
+    cf, cb = med("crouch_idle", "core_front"), med("crouch_idle", "core_back")
+    out = {"front": round(front, 3), "back": round(back, 3)}
+    out["crouchFront"] = round(cf if cf is not None else front, 3)
+    out["crouchBack"] = round(cb if cb is not None else back, 3)
+    return out
+
+
+def _pwl(pts, x):
+    if x <= pts[0][0]:
+        return pts[0][1]
+    for (a, ya), (b, yb) in zip(pts, pts[1:]):
+        if x <= b:
+            return ya if b == a else ya + (yb - ya) * (x - a) / float(b - a)
+    return pts[-1][1]
+
+
+def _simplify(pts, tol):
+    """Douglas-Peucker on [frame, value] points."""
+    if len(pts) <= 2:
+        return pts
+    a, b = pts[0], pts[-1]
+    worst, wi = -1.0, -1
+    for k in range(1, len(pts) - 1):
+        f, v = pts[k]
+        t = (f - a[0]) / float(b[0] - a[0]) if b[0] != a[0] else 0.0
+        e = abs(v - (a[1] + (b[1] - a[1]) * t))
+        if e > worst:
+            worst, wi = e, k
+    if worst <= tol:
+        return [a, b]
+    return _simplify(pts[:wi + 1], tol)[:-1] + _simplify(pts[wi:], tol)
+
+
+def push_ext_curve(fid, o, clips_file):
+    """The move's pushExt [[frame, m], ...] or None (see the block comment above)."""
+    mb = body_measure(fid)
+    pe = push_extents(fid)
+    if not mb or not pe or not clips_file:
+        return None
+    clip = o.get("anim", {}).get("clip")
+    r = mb["clips"].get(clip)
+    ci = clips_file["clips"].get(clip)
+    if not r or r.get("missing") or not ci:
+        return None
+    total1 = o["startup"] + o["active"] + o["recovery"]
+    warp = o["anim"].get("warp")
+    if not warp:
+        dur, con = ci["dur"], ci.get("contact")
+        warp = [[0, 0.0], [o["startup"], con], [total1, dur]] if con is not None and 0 < con < dur else [[0, 0.0], [total1, dur]]
+    inp = o.get("input", "")
+    crouch = o["kind"] in ("normal", "command") and not inp.startswith("j.") and inp[:1] in ("1", "2", "3")
+    base = pe["crouchFront"] if crouch else pe["front"]
+    cfr = r["core_front"]
+    pts = []
+    for f in range(0, total1 + 1):
+        t = _pwl(warp, f)
+        k = max(0, min(len(cfr) - 1, int(round(t * 30.0))))
+        pts.append([f, max(0.0, cfr[k] - base)])
+    if max(v for _, v in pts) < PUSHEXT_MIN_M:
+        return None
+    sp = _simplify(pts, PUSHEXT_TOL_M)
+    return [[int(f), round(v, 3)] for f, v in sp]
 
 
 # --------------------------------------------------------------------------------------------------

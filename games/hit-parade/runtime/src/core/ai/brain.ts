@@ -53,6 +53,8 @@ export interface Profile {
   aggression: number;
   adaptAggro: boolean;
   guard: number;
+  /** chance per neutral decision to respect a presser (plans.ts): guard / space-poke instead of walking into it; 0 = never (no roll) */
+  respect: number;
   thinkF: number;
   delayF: number;
   /** extra jump-over share of reacted projectiles + dash-in chance between them (cpu.json [R]) */
@@ -65,6 +67,21 @@ export interface Profile {
   adapt: { base: number; span: number; min: number; max: number };
   backRise: number;
   wakeReversal: number;
+  /**
+   * cpu.json rules.press: the opponent counts as PRESSING when the share of its free frames inside its own
+   * fast-button zone that ended in an attack start (an EMA with time constant `windowF` frames) is >= `rate`
+   */
+  press: { rate: number; windowF: number };
+}
+
+/** how many of the opponent's recent ground strikes the brain remembers (the buttons it actually presses) */
+export const OPSEEN = 6;
+
+/** horizontal reach (U) of a compiled strike: box front + authored travel up to that box */
+export function cmReach(cm: CMove): number {
+  let r = 0;
+  for (let k = 0; k < cm.nBox; k++) r = Math.max(r, cm.boxes[k * 7 + 2] + (cm.boxes[k * 7 + 4] >> 1) + cm.curve[Math.min(cm.boxes[k * 7], cm.curve.length - 1)]);
+  return r;
 }
 
 export interface StyleParams {
@@ -144,12 +161,16 @@ export interface BrainStats {
   impacts: number;
   throws: number;
   jumps: number;
+  /** neutral decisions that held a guard because the opponent was pressing (plans.ts respect rule) */
+  respects: number;
+  /** footsies pokes swung into a presser's walk-in (plans.ts respect rule, brain.spacePoke) */
+  spacePokes: number;
 }
 
 function blankStats(): BrainStats {
   return {
     frames: 0, threats: 0, reacted: 0, blocksChosen: 0, parries: 0, aaChosen: 0, aaFired: 0, punishes: 0, whiffPunishes: 0, interrupts: 0,
-    routes: 0, routeSteps: 0, drops: 0, techTries: 0, supers: 0, tools: 0, impacts: 0, throws: 0, jumps: 0,
+    routes: 0, routeSteps: 0, drops: 0, techTries: 0, supers: 0, tools: 0, impacts: 0, throws: 0, jumps: 0, respects: 0, spacePokes: 0,
   };
 }
 
@@ -210,6 +231,18 @@ export class Brain {
   opReach = 100000;
   /** opponent's fastest ground strike startup (frames; its frame data, known like any player knows it) */
   opFastest = 99;
+  /** longest reach (U) among the opponent's ground normals within 3 f of its fastest startup (its "fast buttons") */
+  opFastReach = 80000;
+  /** EMA: share of the opponent's free frames inside its fast-button zone that ended in an attack start */
+  opPressRate = 0;
+  private opPrevSt = -1;
+  /** reach (U) / startup (f) of the opponent's last OPSEEN ground strikes (visible move starts) */
+  private seenReach = new Int32Array(OPSEEN);
+  private seenStart = new Int32Array(OPSEEN);
+  private seenN = 0;
+  private seenK = 0;
+  /** my kit has a back-charge special (a full back charge turns forward + button into it) */
+  chargeKit = false;
   private shoveKey = -1;
   private lastDecision: Decision | null = null;
 
@@ -226,6 +259,7 @@ export class Brain {
     this.m = m;
     this.i = i;
     this.kit = buildKit(m.data, m.cf[i], m.cfg.p[i].scheme);
+    this.chargeKit = this.kit.moves.some((mi) => mi.recipe !== null && mi.recipe.charge === 1);
     this.seen = newSeen(m, i);
     const st = this.styleTable[this.kit.rawStyle] ?? this.styleTable[this.kit.style];
     if (st) this.style = st;
@@ -244,6 +278,13 @@ export class Brain {
     let fast = 99;
     for (const cm of ocf.moves) if (cm.isStrike && cm.snapId >= 0 && !cm.inAir && !cm.chainOnly && cm.costShow === 0 && cm.costNerve === 0 && cm.startup < fast) fast = cm.startup;
     this.opFastest = fast;
+    // the reach of its fast buttons (the ones that beat a slower poke started at the same time)
+    let fr = 0;
+    for (const cm of ocf.moves) {
+      if (!cm.isStrike || !cm.isNormalCat || cm.snapId < 0 || cm.inAir || cm.chainOnly || cm.startup > fast + 3) continue;
+      fr = Math.max(fr, cmReach(cm));
+    }
+    this.opFastReach = Math.max(80000, fr);
     this.bound = true;
   }
 
@@ -271,6 +312,125 @@ export class Brain {
    */
   ready(start: number): boolean {
     return this.seen.frame - start >= this.profile.reactF - 1;
+  }
+  /**
+   * Has the opponent been PRESSING buttons - does it start an attack almost as soon as it is free inside the
+   * range of its fast buttons (opPressRate >= rules.press.rate)? Built from the states it watched (the
+   * opponent's move starts), never from input words; it persists across rounds (a player remembers).
+   */
+  opPressing(): boolean {
+    return this.opPressRate >= this.profile.press.rate;
+  }
+
+  /**
+   * Centre distance (U) inside which the buttons the opponent has been pressing reach me before a slower
+   * button of mine is out: per button (its last OPSEEN visible ground strikes; its kit's fast buttons until it
+   * has shown 3) reach + my hurt half + its walk over that startup (+2 f), plus 0.15 m.
+   */
+  pressZone(): number {
+    const me = this.seen.me;
+    const op = this.seen.op;
+    const hurt = Math.max(me.cf.hurtStand[0], me.cf.hurtCrouch[0]) >> 1;
+    const walk = op.cf.walkF;
+    if (this.seenN < 3) return this.opFastReach + hurt + walk * (this.opFastest + 2) + 15000;
+    let z = 0;
+    for (let k = 0; k < this.seenN; k++) z = Math.max(z, this.seenReach[k] + hurt + walk * (this.seenStart[k] + 2));
+    return z + 15000;
+  }
+
+  /**
+   * Footsies vs a presser: the most damaging ground normal of mine whose box meets the opponent where its
+   * visible walk brings it, at least 2 frames before any button it has been pressing could be active from
+   * where it gets into range. -1 if none (then the planner guards).
+   */
+  spacePoke(): number {
+    const s = this.seen;
+    const me = s.me;
+    const op = s.op;
+    if (me.air || op.air) return -1;
+    const d = s.dist;
+    // walking / dashing is not in the velocity fields (the sim moves walkers by their walk speed): the closing
+    // speed comes from the visible state and the opponent's known walk / dash speeds. For safety a free
+    // opponent may start walking in on any frame: its full forward walk speed at least.
+    const cf = op.cf;
+    const dashV = cf.dashFFrames > 0 ? Math.floor((cf.dashF[cf.dashFFrames] ?? 0) / cf.dashFFrames) : 0;
+    const closingNow = op.st === ST.WALK_F ? cf.walkF : op.st === ST.DASH_F ? dashV : 0;
+    const closing = Math.max(closingNow, cf.walkF);
+    // my widest body (a crouching normal widens it): the opponent's buttons reach me from there
+    const hurt = Math.max(me.cf.hurtStand[0], me.cf.hurtCrouch[0]) >> 1;
+    const n = this.seenN >= 3 ? this.seenN : 0;
+    // a presser stops walking to press once its longest button reaches me: the walk-in ends there
+    let stopAt = 0;
+    if (n === 0) stopAt = this.opFastReach + hurt;
+    else for (let j = 0; j < n; j++) stopAt = Math.max(stopAt, this.seenReach[j] + hurt);
+    // a full back charge turns forward + button into a charge special (the recipe would not be this normal)
+    const charged = this.chargeKit && me.chB >= this.m.sys.raw.motion.chargeFrames;
+    let best = -1;
+    let bestDmg = -1;
+    for (const k of this.kit.groundStrikes) {
+      const mi = this.kit.moves[k];
+      if (!mi.normal || mi.inert || mi.proj || mi.grab || !this.canUse(k)) continue;
+      const st0 = mi.recipe!.steps[0];
+      if (charged && (st0.d === 6 || st0.d === 3 || st0.d === 9)) continue;
+      const t = this.connectsAt(k, closingNow, stopAt);
+      if (t < 0) continue;
+      let safe = true;
+      const check = (r: number, su: number): void => {
+        const c = r + hurt;
+        const tin = d <= c ? 0 : Math.ceil((d - c) / closing);
+        if (t > tin + su - 2) safe = false;
+      };
+      if (n === 0) check(this.opFastReach, this.opFastest);
+      else for (let j = 0; j < n; j++) check(this.seenReach[j], this.seenStart[j]);
+      if (safe && mi.damage > bestDmg) {
+        best = k;
+        bestDmg = mi.damage;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Earliest frame from now (recipe lag + move frame - 1) at which `idx`'s box overlaps the GROUNDED
+   * opponent closing in at `closing` U/frame (its visible walk / dash) until the centre distance is `stopAt`
+   * (where it stops to press); -1 if none. Ground vs ground only.
+   */
+  private connectsAt(idx: number, closing: number, stopAt: number): number {
+    const s = this.seen;
+    const me = s.me;
+    const op = s.op;
+    const mi = this.kit.moves[idx];
+    const cm = mi.cm;
+    if (cm.nBox === 0 || me.air || op.air) return -1;
+    const lag = mi.recipe ? mi.recipe.lag : 1;
+    const fc = me.facing;
+    // the presser may be in a crouching button by my active frame: the box must meet its crouching body too
+    const cur = op.crouch ? op.cf.hurtCrouch : op.cf.hurtStand;
+    const oh: [number, number] = [Math.min(cur[0], op.cf.hurtCrouch[0]), Math.min(cur[1], op.cf.hurtCrouch[1])];
+    const ohw = oh[0] >> 1;
+    const side = me.x >= op.x ? 1 : -1; // the opponent is on the -side of me
+    const d0 = Math.abs(me.x - op.x);
+    let best = -1;
+    for (let j = 0; j < cm.nBox; j++) {
+      const q = j * 7;
+      const bx = cm.boxes[q + 2];
+      const by = cm.boxes[q + 3];
+      const bw2 = cm.boxes[q + 4] >> 1;
+      const bh2 = cm.boxes[q + 5] >> 1;
+      for (let fr = cm.boxes[q]; fr <= cm.boxes[q + 1]; fr++) {
+        const kk = lag + fr - 1;
+        if (best >= 0 && kk >= best) break;
+        const dk = d0 > stopAt ? Math.max(stopAt, d0 - closing * kk) : d0;
+        const px = me.x - side * dk;
+        const hx = me.x + fc * cm.curve[Math.min(fr, cm.curve.length - 1)] + fc * bx;
+        const hy = (cm.yCurve ? cm.yCurve[Math.min(fr, cm.yCurve.length - 1)] : 0) + by;
+        if (hx + bw2 < px - ohw || hx - bw2 > px + ohw) continue;
+        if (hy + bh2 < op.y || hy - bh2 > op.y + oh[1]) continue;
+        best = kk;
+        break;
+      }
+    }
+    return best;
   }
   aggression(): number {
     const P = this.profile;
@@ -350,8 +510,9 @@ export class Brain {
     if (mi.proj) return true;
     const d = dist ?? this.seen.dist;
     if (mi.grab) {
-      if (mi.grabGap >= 0) return d - this.kit.cf.pushHalf - this.seen.op.cf.pushHalf <= mi.grabGap - 2000;
-      return d <= mi.grabReach + this.seen.op.cf.pushHalf - 2000;
+      // CHANGED(fixer) D2: push-box fronts (asymmetric boxes)
+      if (mi.grabGap >= 0) return d - this.kit.cf.pushFS - this.seen.op.cf.pushFS <= mi.grabGap - 2000;
+      return d <= mi.grabReach + this.seen.op.cf.pushFS - 2000;
     }
     if (mi.reach <= 0) return false;
     if (dist === undefined && mi.cm.nBox > 0) return this.connects(idx);
@@ -521,6 +682,13 @@ export class Brain {
           resp: RESP.NONE, decided: false, acted: false, blocked: false, whiffAt: -1, punished: false, tool: -1,
         };
         this.stats.threats++;
+        const cm = op.cm;
+        if (!op.air && cm.isStrike && cm.nBox > 0 && cm.proj === null && !cm.isGrab && !cm.isImpact && !cm.isSuper) {
+          this.seenReach[this.seenK] = cmReach(cm);
+          this.seenStart[this.seenK] = cm.startup;
+          this.seenK = (this.seenK + 1) % OPSEEN;
+          if (this.seenN < OPSEEN) this.seenN++;
+        }
       }
       const t = this.strike;
       if (t.whiffAt < 0 && op.contact === 0 && op.mvF > op.cm.lastActive) t.whiffAt = s.frame;
@@ -552,6 +720,15 @@ export class Brain {
     if (attacking && !this.opWasAttacking) this.opPassive = this.opPassive * 0.9;
     else if (!attacking && s.frame % 30 === 0) this.opPassive = this.opPassive * 0.97 + 0.03;
     this.opWasAttacking = attacking;
+    // press-rate bookkeeping (plans.ts respect rule): each frame the opponent was free on the ground inside the
+    // range of its fast buttons either stayed free or started an attack; a masher starts one within a few frames
+    const ps = this.opPrevSt;
+    this.opPrevSt = op.st;
+    const wasFree = ps === ST.IDLE || ps === ST.CROUCH || ps === ST.WALK_F || ps === ST.WALK_B;
+    if (wasFree && !op.air && s.dist <= this.opFastReach + (s.me.cf.hurtStand[0] >> 1) + 20000) {
+      const started = attacking ? 1 : 0;
+      this.opPressRate += (started - this.opPressRate) / this.profile.press.windowF;
+    }
   }
 
   /** my state changed: learn the opponent's mixups (visible outcomes), mark blocked threats */

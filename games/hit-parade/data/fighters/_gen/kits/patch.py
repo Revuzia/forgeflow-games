@@ -50,8 +50,8 @@ def build():
            "CMU jump_kick.2 usable (90_06 airborne turning kick, foot 1.65 m) - a real airborne kick")
     K.clip("throw_reach", mix("Soccer_Game_Pack/goalkeeper catch (2)", (1, 30), contact=9),
            "Mixamo goalkeeper catch (2) two-hand grab (throw whiff)")
-    K.clip("clinch_knee", cmu("knee.1"),
-           "CMU knee.1 clean (86_06: hands grab and pull down, knee to the chest; pilot p09)")
+    K.clip("clinch_knee", dict(cmu("knee.1"), effector="RightKnee"),
+           "CMU knee.1 clean (86_06: hands grab and pull down, knee to the chest; pilot p09). Effector RightKnee: the builder measured the right FOOT (lane ASSETS flag)")
     K.clip("spin_toss", cmu("roundhouse.3", rng=(735, 828)),
            "CMU roundhouse.3 clean (135_07 R head kick, 104 deg turn): swings them past, turning kick")
     K.clip("cue_kick", cmu("front_kick.1", rng=(330, 428)),
@@ -203,10 +203,13 @@ def build():
                 {"f": [30, 33], "damage": 900, "hitstop": 20}],
           warp="auto",
           invuln={"strike": [1, 10], "throw": [1, 10]}, move=[[0, 0], [8, 0.5], [19, 1.1], [30, 1.6]],
-          moveY=[[0, 0], [24, 0.0], [30, 0.6], [38, 0.0]], kd="soft", juggle={"js": 1, "ji": 0, "jl": 99},
+          moveY=[[0, 0], [24, 0.0], [30, 0.3], [38, 0.0]], kd="soft", juggle={"js": 1, "ji": 0, "jl": 99},
+          boxes=[{"f": [8, 9], "x": 0.75, "y": 1.4225, "w": 0.50, "h": 0.645},
+                 {"f": [19, 20], "x": 0.79, "y": 1.10, "w": 0.54, "h": 0.35},
+                 {"f": [30, 33], "x": 0.72, "y": 1.0625, "w": 0.50, "h": 0.525}],
           cost={"showtime": LV1_COST}, gain=0, nerve=600, role=["reversal"], sfx=[[1, "crowd_cheer_burst"]],
           desc="Invulnerable three-kick flurry ending in a jump kick.",
-          why="1c Lv1: invulnerable 1-10, 3 hits (9/9/20 hitstop), recovery 51 -> -30 on block, KD +23.")
+          why="1c Lv1: invulnerable 1-10, 3 hits (9/9/20 hitstop), recovery 51 -> -30 on block, KD +23. Hand-set per-hit boxes (2026-09-30) at each kick's strike point from the bake trace (right foot 0.75/1.57 m, right foot ~0.81/1.10 m, left foot ~0.72/1.15 m), each reaching the 1.10 m crouch line; jump-kick hop 0.6 -> 0.3 m. Before: SIM derived all three boxes at the first kick's point, so the hopping third kick sat at 1.99-2.34 m and the super dropped its finisher (sim: 2/3 hits standing, 0/3 crouching).")
     K.add("on_air", LV3, kind="super3", input="214214", name="On Air", strength="H", clip="teep",
           invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]},
           move=[[0, 0], [10, 0.8]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],

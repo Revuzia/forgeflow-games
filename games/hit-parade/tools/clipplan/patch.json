@@ -28,8 +28,8 @@
     },
     "_keys": [
       [1, "Crouch Idle f1 pose unchanged (hips 0.56 m, weight centred)."],
-      [4, "Front (right) knee chambers: RightUpLeg flexed 45 deg forward of the crouch pose, RightLeg (shin) folded back so the foot sits under the knee 10 cm off the floor; torso leans back 5 deg."],
-      [6, "CONTACT: right leg extends straight forward, foot 6 cm above the floor at ~0.75 m in front of the hips, toes pointed (RightFoot plantar-flexed 35 deg); left leg and hips unchanged; lead hand stays up in guard."],
+      [4, "Front knee chambers (the LEFT leg is the front leg of the shared crouch - lane ASSETS measured; the spec in art/blender/author_clips.py uses it): UpLeg flexed 45 deg forward of the crouch pose, shin folded back so the foot sits under the knee 10 cm off the floor; torso leans back 5 deg."],
+      [6, "CONTACT: front leg extends straight forward, foot 6 cm above the floor at ~0.75 m in front of the hips, toes pointed (RightFoot plantar-flexed 35 deg); left leg and hips unchanged; lead hand stays up in guard."],
       [8, "Hold the extension (same pose as f6, toes relax 10 deg)."],
       [12, "Right leg folds back to the chamber pose of f4."],
       [18, "Back to Crouch Idle f1 pose (loops cleanly into crouch_idle)."]
@@ -209,7 +209,9 @@
     "kind": "foot",
     "limb": "R_foot",
     "fist": 0,
-    "_cand": "knee.1"
+    "_cand": "knee.1",
+    "effector": "RightKnee",
+    "marks": {"slam": 6317}
   },
   "spin_toss": {
     "src": "cmu",
@@ -222,7 +224,8 @@
     "kind": "foot",
     "limb": "R_foot",
     "fist": 0,
-    "_cand": "roundhouse.3"
+    "_cand": "roundhouse.3",
+    "marks": {"slam": 791}
   },
   "cue_kick": {
     "src": "cmu",

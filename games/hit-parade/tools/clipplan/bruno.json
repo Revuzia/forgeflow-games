@@ -113,8 +113,8 @@
   "goalpost": {
     "src": "mixamo",
     "file": "Pro_Magic_Pack/Standing 2H Cast Spell 01",
-    "range": [8, 40],
-    "contact": 21,
+    "range": [1, 34],
+    "contact": 12,
     "mirror": false,
     "speed": 1.0,
     "loop": false
@@ -270,7 +270,8 @@
     "kind": "body",
     "limb": "body",
     "fist": 0,
-    "_cand": "grab_pull.1"
+    "_cand": "grab_pull.1",
+    "marks": {"slam": 290}
   },
   "throw_in": {
     "src": "mixamo",
@@ -279,7 +280,8 @@
     "contact": 50,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 72}
   },
   "freezer_slam": {
     "src": "mixamo",
@@ -288,7 +290,8 @@
     "contact": 40,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 69}
   },
   "fridge_shove": {
     "src": "layer",
@@ -390,7 +393,8 @@
     "contact": 33,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 80}
   },
   "intro_battlecry": {
     "src": "mixamo",

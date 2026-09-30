@@ -106,11 +106,23 @@ def main():
             lows = {n: c["minY"] for n, c in r["clips"].items() if "minY" in c}
             eff = {n: (c["effectorThree"], c["effectorJson"]) for n, c in r["clips"].items() if "effectorThree" in c}
             effd = max([abs(a[0] - b[0]) + abs(a[1] - b[1]) for a, b in eff.values()] or [0.0])
+            mks = [(n, mk, v) for n, c in r["clips"].items() for mk, v in (c.get("marksAt") or {}).items()]
+            mk_err = [(n, mk, v["error"]) for n, mk, v in mks if "error" in v]
+            mkd = max([abs(v["three"][0] - v["json"][0]) + abs(v["three"][1] - v["json"][1])
+                       for n, mk, v in mks if "three" in v] or [0.0])
+            eff_missing = [n for n, c in r["clips"].items() if "effectorMissing" in c]
+            if eff_missing or mk_err:
+                errs = list(errs)
+                if eff_missing:
+                    errs.append("effector bone not found: %s" % eff_missing[:5])
+                if mk_err:
+                    errs.append("marksAt: %s" % mk_err[:3])
             ok = (not r["missingInGlb"]) and (not r["extraInGlb"]) and r["skinnedMeshes"] >= 1 and not errs
             print("[three]", fid, "OK" if ok else "FAIL", "load %dms" % r["loadMs"], "anims", len(r["animations"]),
                   "missing", r["missingInGlb"], "extra", r["extraInGlb"], "skinned", r["skinnedMeshes"], "bones", r["maxBones"],
                   "minY range %.3f..%.3f" % (min(lows.values()), max(lows.values())),
-                  "effector |three-json| max %.4f m" % effd, "materials", r["materials"], "errors", errs[:3])
+                  "effector |three-json| max %.4f m over %d clips" % (effd, len(eff)),
+                  "marksAt %d points |three-json| max %.4f m errors %s" % (len(mks), mkd, mk_err[:3]), "materials", r["materials"], "errors", errs[:3])
             if not ok:
                 bad += 1
         br.close()

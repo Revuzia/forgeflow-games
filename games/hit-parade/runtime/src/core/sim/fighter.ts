@@ -17,6 +17,8 @@ import {
 } from './state.ts';
 import type { Match } from './state.ts';
 import { spawnProjectile } from './projectiles.ts';
+import { clampToWalls, pushExt, wallLimitX } from './boxes.ts';
+import { KDF, endsFaceDown, victimPose } from './throwpose.ts';
 
 export const CTX = { FREE: 0, CANCEL: 1, AIR: 2, PREJUMP: 3, BLOCKSTUN: 4, PARRY: 5, RUSH: 6 } as const;
 
@@ -81,7 +83,8 @@ export function proxThreat(m: Match, i: number): boolean {
   const mv = m.cf[o].moves[k];
   if (!mv.isStrike || s[bo + F.mvF] > mv.lastActive) return false;
   const dx = Math.abs(s[bo + F.x] - s[fb(i) + F.x]);
-  return dx <= mv.maxReach + m.sys.proxGuard + m.cf[i].pushHalf;
+  // CHANGED(fixer) D2: the defender's push-box edge toward the attacker (asymmetric boxes)
+  return dx <= mv.maxReach + m.sys.proxGuard + pushExt(m, i, s[bo + F.x] >= s[fb(i) + F.x] ? 1 : -1);
 }
 
 /** Free grounded fighter: act from the buffer, or move by the held direction. */
@@ -525,6 +528,9 @@ function juggleTick(m: Match, i: number): void {
   }
   setSt(m, i, ST.KNOCKDOWN);
   s[b + F.stun] = s[b + F.kd] === 2 ? sys.kd.hardLandTotal : sys.kd.softLandTotal;
+  s[b + F.tot] = s[b + F.stun]; // CHANGED(fixer) D3: KD presentation (throwpose.ts): a juggle LANDS (floor-impact part)
+  s[b + F.kdFace] = KDF.LANDED;
+  s[b + F.wake] = 0;
   emit(m, EV.KNOCKDOWN, i, s[b + F.kd], 0, 0);
 }
 
@@ -539,6 +545,8 @@ export function enterKnockdown(m: Match, i: number, total: number, kind: number)
   s[b + F.vy] = 0;
   setSt(m, i, ST.KNOCKDOWN);
   s[b + F.stun] = Math.max(1, total);
+  s[b + F.tot] = s[b + F.stun]; // CHANGED(fixer) D3: KD presentation (throwpose.ts); callers may set F.kdFace after
+  s[b + F.kdFace] = 0;
   s[b + F.kd] = kind;
   s[b + F.wake] = 0;
   emit(m, EV.KNOCKDOWN, i, kind, 0, 0);
@@ -558,35 +566,45 @@ function kdTick(m: Match, i: number, oppX: number): void {
     s[b + F.wake] = 2 | back;
     emit(m, EV.WAKEUP, i, back, 0, 0);
   }
-  if ((s[b + F.wake] & 1) !== 0 && left < wf) s[b + F.x] -= s[b + F.facing] * Math.trunc(m.sys.backRise / wf);
+  // CHANGED(fixer) D3: back rise = away from the opponent (a face-down victim after a back throw faces away from it)
+  if ((s[b + F.wake] & 1) !== 0 && left < wf) s[b + F.x] += (s[b + F.x] >= oppX ? 1 : -1) * Math.trunc(m.sys.backRise / wf);
   if (left <= 0) {
     s[b + F.invT] = Math.max(s[b + F.invT], sys.throw.wakeupInvuln);
     enterFree(m, i, oppX);
   }
 }
 
-/** Throw lock over for the victim: knockdown remainder (+ side switch on back throws). */
+const VP = new Int32Array(6);
+
+/**
+ * CHANGED(fixer) D3: the throw carry - the victim's x follows its lock segments' clip root travel (throwpose.ts), from
+ * the anchor at the connect frame, along the victim's own facing, clamped to the walls. Runs every lock frame.
+ */
+function throwCarry(m: Match, i: number): void {
+  const s = m.s;
+  const b = fb(i);
+  if (!victimPose(m, i, VP)) return;
+  s[b + F.x] = s[b + F.thrX] + s[b + F.facing] * VP[3];
+  clampToWalls(m, i);
+}
+
+/**
+ * Throw lock over for the victim: knockdown remainder. CHANGED(fixer) D3: no teleport - the carry already put the victim
+ * where its clip landed (behind the thrower on a side swap); the victim keeps its facing while it lies (its body lies the
+ * way the clip threw it; the free state re-faces it after the wake-up); face-down endings lie / rise face down; the
+ * victim is already on the floor, so the knockdown shows no fall.
+ */
 function throwRelease(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
-  const o = 1 - i;
-  const bo = fb(o);
-  if (s[bo + F.throwDir] === 1) {
-    // side swap: the victim lands on the far side of the thrower (positions only, so the update
-    // order of the two fighters never matters)
-    const side = s[b + F.x] <= s[bo + F.x] ? 1 : -1;
-    const lim = m.sys.wall - m.cf[i].pushHalf;
-    s[b + F.x] = Math.max(-lim, Math.min(lim, s[bo + F.x] + side * m.sys.backThrowOff));
-    s[b + F.facing] = -side;
-  }
+  const lastClip = victimPose(m, i, VP) ? VP[5] : -1;
+  throwCarry(m, i);
   const kd = s[b + F.kd] || 1;
   enterKnockdown(m, i, Math.max(s[b + F.after], 1), kd);
+  s[b + F.kdFace] = KDF.NOFALL | (lastClip >= 0 && endsFaceDown(lastClip) ? KDF.DOWN : 0);
 }
 
 // ------------------------------------------------------------------ pushback
-function wallLimit(m: Match, i: number): number {
-  return m.sys.wall - m.cf[i].pushHalf;
-}
 
 function applyPush(m: Match, i: number): void {
   const s = m.s;
@@ -597,22 +615,24 @@ function applyPush(m: Match, i: number): void {
   s[b + F.pushLeft] -= amt;
   s[b + F.pushF] = pf - 1;
   let nx = s[b + F.x] + amt;
-  const lim = wallLimit(m, i);
+  // CHANGED(fixer) D2: per-side wall limits (asymmetric push boxes)
+  const hi = wallLimitX(m, i, 1);
+  const lo = wallLimitX(m, i, -1);
   let excess = 0;
-  if (nx > lim) {
-    excess = nx - lim;
-    nx = lim;
-  } else if (nx < -lim) {
-    excess = nx + lim;
-    nx = -lim;
+  if (nx > hi) {
+    excess = nx - hi;
+    nx = hi;
+  } else if (nx < lo) {
+    excess = nx - lo;
+    nx = lo;
   }
   s[b + F.x] = nx;
   if (excess !== 0 && (s[b + F.flags] & FL.PUSHX) !== 0) {
     const bo = fb(1 - i);
     const ost = s[bo + F.st];
     if (!isAirborne(s, bo) && ost !== ST.THROWN && ost !== ST.KNOCKDOWN) {
-      const lo = wallLimit(m, 1 - i);
-      s[bo + F.x] = Math.max(-lo, Math.min(lo, s[bo + F.x] - excess));
+      s[bo + F.x] -= excess;
+      clampToWalls(m, 1 - i);
     }
   }
   if (s[b + F.pushF] === 0) {
@@ -686,13 +706,17 @@ export function fighterUpdate(m: Match, i: number, oppX: number): void {
       break;
     case ST.THROWN:
       if (s[b + F.techWin] > 0) s[b + F.techWin]--;
-      if (--s[b + F.stun] <= 0) throwRelease(m, i);
+      if (--s[b + F.stun] <= 0) throwRelease(m, i);   // CHANGED(fixer) D3: the carry every lock frame
+      else throwCarry(m, i);
       break;
     case ST.PARRY:
       parryTick(m, i, oppX);
       break;
     case ST.CRUMPLE:
-      if (--s[b + F.stun] <= 0) enterKnockdown(m, i, m.sys.raw.kd.softLandTotal, 1);
+      if (--s[b + F.stun] <= 0) {
+        enterKnockdown(m, i, m.sys.raw.kd.softLandTotal, 1);
+        s[b + F.kdFace] = KDF.NOFALL | KDF.DOWN; // CHANGED(fixer) D3: the crumple clip already put the body face down
+      }
       break;
     case ST.WALL_SPLAT:
       if (--s[b + F.stun] <= 0) enterKnockdown(m, i, m.sys.raw.wallSplat.fallTotal, 1);

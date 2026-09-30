@@ -86,6 +86,53 @@ export function hitRect(m: Match, i: number, mv: CMove, j: number, out: Int32Arr
   out[o + 3] = cy + h2;
 }
 
+/**
+ * CHANGED(fixer) D2: push-box extent of fighter `i` from its root toward world direction `dir` (+1 = +x, -1 = -x), U.
+ * The box is asymmetric: `front` along the facing, `back` behind (fighters/<id>.json `push`, measured on the baked
+ * bodies; a hunched big body leans far ahead of its hips), crouching extents while crouched, plus the running move's
+ * measured forward lean (`pushExt`) on the front. Without `push` data front = back = pushbox width / 2 (the old box).
+ */
+export function pushExt(m: Match, i: number, dir: number): number {
+  const s = m.s;
+  const b = fb(i);
+  const cf = m.cf[i];
+  const crouch = (s[b + F.flags] & FL.CROUCHING) !== 0 && (s[b + F.flags] & FL.AIRBORNE) === 0;
+  const front = s[b + F.facing] * dir > 0;
+  if (!front) return crouch ? cf.pushBC : cf.pushBS;
+  let e = crouch ? cf.pushFC : cf.pushFS;
+  const k = s[b + F.mv];
+  if (k >= 0 && s[b + F.st] === ST.ATTACK) {
+    const t = cf.moves[k].pushExt;
+    if (t) e += t[Math.max(0, Math.min(t.length - 1, s[b + F.mvF]))];
+  }
+  return e;
+}
+
+/** CHANGED(fixer) D2: the x limit of fighter `i` at the wall on side `dir` (+1 right wall, -1 left wall), U (signed) */
+export function wallLimitX(m: Match, i: number, dir: number): number {
+  return dir > 0 ? m.sys.wall - pushExt(m, i, 1) : -(m.sys.wall - pushExt(m, i, -1));
+}
+
+/** CHANGED(fixer) D2: clamp fighter `i` between its two wall limits */
+export function clampToWalls(m: Match, i: number): void {
+  const s = m.s;
+  const b = fb(i);
+  const hi = wallLimitX(m, i, 1);
+  const lo = wallLimitX(m, i, -1);
+  if (s[b + F.x] > hi) s[b + F.x] = hi;
+  else if (s[b + F.x] < lo) s[b + F.x] = lo;
+}
+
+/** CHANGED(fixer) D2: gap between the two push boxes' facing edges (U; negative = overlap), x only */
+export function pushGap(m: Match): number {
+  const s = m.s;
+  const x0 = s[fb(0) + F.x];
+  const x1 = s[fb(1) + F.x];
+  const l = x0 <= x1 ? 0 : 1;
+  const r = 1 - l;
+  return Math.abs(x1 - x0) - pushExt(m, l, 1) - pushExt(m, r, -1);
+}
+
 export function rectsOverlap(a: Int32Array, ao: number, bArr: Int32Array, bo: number): boolean {
   return a[ao] < bArr[bo + 1] && bArr[bo] < a[ao + 1] && a[ao + 2] < bArr[bo + 3] && bArr[bo + 2] < a[ao + 3];
 }
@@ -104,8 +151,6 @@ export function resolveBodies(m: Match, px0: number, px1: number): void {
   const cf1 = m.cf[1];
   const st0 = s[b0 + F.st];
   const st1 = s[b1 + F.st];
-  const lim0 = m.sys.wall - cf0.pushHalf;
-  const lim1 = m.sys.wall - cf1.pushHalf;
   const collide = st0 !== ST.THROWN && st1 !== ST.THROWN && st0 !== ST.CINEMATIC && st1 !== ST.CINEMATIC;
   if (collide) {
     const y0 = s[b0 + F.y];
@@ -114,25 +159,28 @@ export function resolveBodies(m: Match, px0: number, px1: number): void {
     if (yOverlap) {
       const x0 = s[b0 + F.x];
       const x1 = s[b1 + F.x];
-      const minD = cf0.pushHalf + cf1.pushHalf;
+      const zeroLeft = x0 < x1 || (x0 === x1 && s[b0 + F.facing] > 0);
+      const li = zeroLeft ? 0 : 1;
+      const ri = 1 - li;
+      // CHANGED(fixer) D2: asymmetric boxes - the left fighter's right edge vs the right fighter's left edge
+      const minD = pushExt(m, li, 1) + pushExt(m, ri, -1);
       const dist = Math.abs(x0 - x1);
       if (dist < minD) {
         const ov = minD - dist;
-        const zeroLeft = x0 < x1 || (x0 === x1 && s[b0 + F.facing] > 0);
-        const l = zeroLeft ? b0 : b1;
-        const r = zeroLeft ? b1 : b0;
-        const limL = zeroLeft ? lim0 : lim1;
-        const limR = zeroLeft ? lim1 : lim0;
+        const l = fb(li);
+        const r = fb(ri);
+        const limL = wallLimitX(m, li, -1);
+        const limR = wallLimitX(m, ri, 1);
         let xl = s[l + F.x] - (ov - (ov >> 1));
         let xr = s[r + F.x] + (ov >> 1);
-        if (xl < -limL) {
-          xr += -limL - xl;
-          xl = -limL;
+        if (xl < limL) {
+          xr += limL - xl;
+          xl = limL;
         }
         if (xr > limR) {
           xl -= xr - limR;
           xr = limR;
-          if (xl < -limL) xl = -limL;
+          if (xl < limL) xl = limL;
         }
         s[l + F.x] = xl;
         s[r + F.x] = xr;
@@ -140,10 +188,8 @@ export function resolveBodies(m: Match, px0: number, px1: number): void {
     }
   }
   // walls
-  if (s[b0 + F.x] > lim0) s[b0 + F.x] = lim0;
-  else if (s[b0 + F.x] < -lim0) s[b0 + F.x] = -lim0;
-  if (s[b1 + F.x] > lim1) s[b1 + F.x] = lim1;
-  else if (s[b1 + F.x] < -lim1) s[b1 + F.x] = -lim1;
+  clampToWalls(m, 0);
+  clampToWalls(m, 1);
   // separation cap
   const x0 = s[b0 + F.x];
   const x1 = s[b1 + F.x];

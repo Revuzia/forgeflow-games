@@ -28,6 +28,18 @@ export function fighterName(data: UiGameData, id: string): string {
 
 export function isBoss(id: string): boolean { return id in BOSSES; }
 
+// CHANGED(integrator): "never a broken slot" (P1 acceptance). The fighters whose baked GLB is in the build (Vite glob,
+// URLs only - the GLBs are the same hashed files view/assets.ts emits) AND whose clips table loaded; any other fighter in
+// data/fighters shows as COMING SOON (locked). Outside Vite (node) the glob throws -> every fighter counts as present.
+let FIGHTER_GLBS: Record<string, unknown> = {};
+try { FIGHTER_GLBS = import.meta.glob('../../../art/gltf/fighters/*.glb', { eager: true, query: '?url', import: 'default' }); } catch { FIGHTER_GLBS = {}; }
+const GLB_IDS = new Set(Object.keys(FIGHTER_GLBS).map((k) => k.replace(/^.*\//, '').replace(/\.glb$/, '')));
+export function hasAssets(data: UiGameData, id: string): boolean {
+  if (GLB_IDS.size === 0) return true;
+  const clips = (data as UiGameData & { clips?: Readonly<Record<string, unknown>> }).clips;
+  return GLB_IDS.has(id) && (!clips || !!clips[id]);
+}
+
 /** bosses unlock after a Season clear (CONTRACT 8 save: unlocks (freak, ricky)); everyone else is always open */
 export function isUnlocked(save: UiSave, id: string): boolean {
   if (!isBoss(id)) return true;
@@ -64,7 +76,7 @@ export function colorsOf(f: UiFighterDef | null): ColorOpt[] {
   return [{ name: 'ORIGINAL', tint: null }, { name: 'ALT', tint: '#3a7bd5' }];
 }
 
-export interface StageRow { id: string; name: string; tag: string }
+export interface StageRow { id: string; name: string; tag: string; /** CHANGED(integrator): false = stages.json status 'todo' */ built: boolean }
 /**
  * stages.json in any of the shapes a stages lane might write: {stages:[{id,...}]}, [{id,...}], {<id>:{...}}. Names and
  * taglines come from strings (stage.<id>.name / .tag) first - ALL copy lives in strings.json - then the data's own name.
@@ -73,23 +85,39 @@ export function stageList(data: UiGameData): StageRow[] {
   const raw = data.stages as unknown;
   const ids: string[] = [];
   const names: Record<string, string> = {};
-  const push = (id: unknown, name?: unknown): void => {
+  const todo = new Set<string>();
+  const push = (id: unknown, name?: unknown, status?: unknown): void => {
     if (typeof id !== 'string' || !id || ids.includes(id)) return;
     ids.push(id);
     if (typeof name === 'string') names[id] = name;
+    if (status === 'todo') todo.add(id);
   };
-  if (Array.isArray(raw)) for (const s of raw) push((s as { id?: unknown })?.id, (s as { name?: unknown })?.name);
+  const row = (s: unknown): void => { const o = s as { id?: unknown; name?: unknown; status?: unknown } | null; push(o?.id, o?.name, o?.status); };
+  if (Array.isArray(raw)) for (const s of raw) row(s);
   else if (raw && typeof raw === 'object') {
     const o = raw as Record<string, unknown>;
-    if (Array.isArray(o.stages)) for (const s of o.stages) push((s as { id?: unknown })?.id, (s as { name?: unknown })?.name);
-    else for (const k of Object.keys(o)) if (o[k] && typeof o[k] === 'object') push(k, (o[k] as { name?: unknown }).name);
+    if (Array.isArray(o.stages)) for (const s of o.stages) row(s);
+    else for (const k of Object.keys(o)) if (o[k] && typeof o[k] === 'object') push(k, (o[k] as { name?: unknown }).name, (o[k] as { status?: unknown }).status);
   }
   if (!ids.length) ids.push(...STAGE_ORDER);
   return ids.map((id) => ({
     id,
     name: tOr(`stage.${id}.name`, names[id] ?? id.replace(/_/g, ' ').toUpperCase()),
     tag: tOr(`stage.${id}.tag`, ''),
+    built: !todo.has(id),
   }));
+}
+
+/**
+ * CHANGED(integrator): CONTRACT §21.1 "a `todo` stage has no glb on disk yet (callers fall back to a built stage)":
+ * `id` when that stage is built, else the first built stage (else `id`). game.ts applies it to every bout (home stages
+ * of the ladder / training / deep links); the stage select shows todo stages as COMING SOON.
+ */
+export function playableStage(data: UiGameData, id: string): string {
+  const list = stageList(data);
+  const hit = list.find((s) => s.id === id);
+  if (hit && hit.built) return id;
+  return list.find((s) => s.built)?.id ?? id;
 }
 
 // ─────────────────────────── portraits ───────────────────────────

@@ -3,6 +3,7 @@
   "name": "SPIN",
   "persona": "The B-Boy",
   "archetype": "aerial",
+  "difficulty": 3,
   "body": "Ch06_nonPBR",
   "heightM": 1.76,
   "hp": 9500,
@@ -25,11 +26,17 @@
   },
   "throwRangeM": 0.6,
   "hurt": {
-    "stand": [0.48, 1.67],
-    "crouch": [0.55, 1.06],
+    "stand": [0.48, 1.62],
+    "crouch": [0.55, 1.27],
     "air": [0.45, 1.09]
   },
-  "pushbox": [0.4, 1.5],
+  "pushbox": [0.42, 1.46],
+  "push": {
+    "front": 0.323,
+    "back": 0.099,
+    "crouchFront": 0.443,
+    "crouchBack": 0.086
+  },
   "colors": [
     {"name": "Hoodie Black", "tint": null},
     {"name": "Rooftop Red", "tint": "#d32f2f"},
@@ -62,7 +69,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
       "anim": {"clip": "jab"},
-      "desc": "Jab out of the uprock."
+      "desc": "Jab out of the uprock.",
+      "boxes": [{"f": [5, 7], "x": 0.743, "y": 1.317, "w": 0.3, "h": 0.433}],
+      "boxSrc": "hitVolume"
     },
     "2L": {
       "kind": "normal",
@@ -117,7 +126,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
       "anim": {"clip": "front_kick"},
-      "desc": "Long front kick."
+      "desc": "Long front kick.",
+      "boxes": [{"f": [9, 11], "x": 0.513, "y": 1.437, "w": 0.4, "h": 0.674}],
+      "boxSrc": "hitVolume"
     },
     "2M": {
       "kind": "normal",
@@ -174,7 +185,8 @@
       "role": [],
       "anim": {"clip": "swipes"},
       "sfx": [[8, "whoosh_heavy"]],
-      "desc": "Two whipping leg swipes."
+      "desc": "Two whipping leg swipes.",
+      "pushExt": [[0, 0.13], [2, 0.212], [5, 0.0], [40, 0.0]]
     },
     "2H": {
       "kind": "normal",
@@ -202,7 +214,8 @@
       "hurtOverride": [{"f": [4, 20], "w": 0.9, "h": 0.8}],
       "role": ["sweep", "low"],
       "anim": {"clip": "flare_sweep"},
-      "desc": "Flair leg sweep, low profile."
+      "desc": "Flair leg sweep, low profile.",
+      "pushExt": [[0, 0.267], [5, 0.198], [6, 0.158], [7, 0.03], [8, 0.0], [38, 0.0]]
     },
     "6M": {
       "kind": "command",
@@ -230,7 +243,29 @@
       "moveY": [[0, 0], [8, 0.6], [18, 0.3], [21, 0.0]],
       "role": ["overhead"],
       "anim": {"clip": "butterfly"},
-      "desc": "Jump spin kick overhead that hops over lows."
+      "desc": "Jump spin kick overhead that hops over lows.",
+      "boxes": [{"f": [18, 20], "x": 0.814, "y": 1.129, "w": 0.4, "h": 0.658}],
+      "boxSrc": "hitVolume",
+      "pushExt": [
+        [0, 0.133],
+        [1, 0.27],
+        [2, 0.27],
+        [3, 0.389],
+        [6, 0.42],
+        [7, 0.314],
+        [8, 0.314],
+        [9, 0.084],
+        [10, 0.084],
+        [11, 0.0],
+        [26, 0.0],
+        [28, 0.327],
+        [29, 0.402],
+        [30, 0.384],
+        [31, 0.23],
+        [32, 0.23],
+        [33, 0.018],
+        [38, 0.0]
+      ]
     },
     "j.L": {
       "kind": "normal",
@@ -339,7 +374,8 @@
       "grab": {"frames": 48, "adv": 21, "hitF": 32, "swap": false, "air": false, "techable": true, "clip": "footwork_trip"},
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Drags them down into his footwork."
+      "desc": "Drags them down into his footwork.",
+      "pushExt": [[0, 0.134], [4, 0.004], [5, 0.0], [31, 0.02]]
     },
     "throw_b": {
       "kind": "throw",
@@ -367,7 +403,8 @@
       "grab": {"frames": 46, "adv": 14, "hitF": 30, "swap": true, "air": false, "techable": true, "clip": "flair_toss"},
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Flairs and flings them behind."
+      "desc": "Flairs and flings them behind.",
+      "pushExt": [[0, 0.134], [4, 0.004], [5, 0.0], [31, 0.02]]
     },
     "windmill_l": {
       "kind": "special",
@@ -397,7 +434,24 @@
       "role": ["lowprofile", "approach"],
       "anim": {"clip": "windmill_l", "warp": [[0, 0.0], [12, 0.3], [20, 0.633], [46, 1.8]]},
       "sfx": [[4, "whoosh_light"]],
-      "desc": "Flair spin through the opponent (2/4/6 hits), low profile."
+      "desc": "Flair spin through the opponent (2/4/6 hits), low profile.",
+      "boxes": [
+        {"f": [12, 13], "x": 0.863, "y": 0.111, "w": 0.34, "h": 0.25},
+        {"f": [20, 21], "x": 0.863, "y": 0.111, "w": 0.34, "h": 0.25}
+      ],
+      "boxSrc": "hitVolume",
+      "pushExt": [
+        [0, 0.088],
+        [5, 0.0],
+        [24, 0.0],
+        [25, 0.085],
+        [28, 0.193],
+        [34, 0.301],
+        [35, 0.283],
+        [37, 0.045],
+        [38, 0.0],
+        [46, 0.0]
+      ]
     },
     "windmill_m": {
       "kind": "special",
@@ -432,7 +486,27 @@
       "role": ["lowprofile", "approach"],
       "anim": {"clip": "windmill_m", "warp": [[0, 0.0], [13, 0.3], [24, 0.733], [37, 1.267], [45, 1.567], [73, 2.733]]},
       "sfx": [[4, "whoosh_light"]],
-      "desc": "Flair spin through the opponent (2/4/6 hits), low profile."
+      "desc": "Flair spin through the opponent (2/4/6 hits), low profile.",
+      "pushExt": [
+        [0, 0.088],
+        [6, 0.0],
+        [27, 0.0],
+        [29, 0.084],
+        [34, 0.205],
+        [35, 0.307],
+        [36, 0.317],
+        [38, 0.229],
+        [40, 0.011],
+        [49, 0.0],
+        [50, 0.035],
+        [51, 0.126],
+        [52, 0.156],
+        [60, 0.301],
+        [62, 0.236],
+        [63, 0.157],
+        [64, 0.0],
+        [73, 0.0]
+      ]
     },
     "windmill_h": {
       "kind": "special",
@@ -472,7 +546,33 @@
         "warp": [[0, 0.0], [14, 0.3], [25, 0.733], [38, 1.267], [48, 1.667], [61, 2.2], [69, 2.5], [99, 3.667]]
       },
       "sfx": [[4, "whoosh_light"]],
-      "desc": "Flair spin through the opponent (2/4/6 hits), low profile."
+      "desc": "Flair spin through the opponent (2/4/6 hits), low profile.",
+      "pushExt": [
+        [0, 0.088],
+        [6, 0.0],
+        [28, 0.0],
+        [30, 0.084],
+        [35, 0.205],
+        [36, 0.307],
+        [37, 0.317],
+        [39, 0.229],
+        [40, 0.136],
+        [41, 0.0],
+        [51, 0.0],
+        [53, 0.084],
+        [58, 0.205],
+        [59, 0.307],
+        [60, 0.317],
+        [62, 0.229],
+        [64, 0.011],
+        [73, 0.0],
+        [78, 0.193],
+        [85, 0.301],
+        [87, 0.236],
+        [89, 0.045],
+        [90, 0.0],
+        [99, 0.0]
+      ]
     },
     "windmill_ex": {
       "kind": "ex",
@@ -512,7 +612,33 @@
         "warp": [[0, 0.0], [10, 0.3], [21, 0.733], [34, 1.267], [44, 1.667], [57, 2.2], [65, 2.5], [89, 3.667]]
       },
       "sfx": [[4, "whoosh_light"]],
-      "desc": "Projectile-invulnerable 6-hit windmill, -6 on block."
+      "desc": "Projectile-invulnerable 6-hit windmill, -6 on block.",
+      "pushExt": [
+        [0, 0.088],
+        [4, 0.0],
+        [24, 0.0],
+        [26, 0.084],
+        [31, 0.205],
+        [32, 0.307],
+        [33, 0.317],
+        [35, 0.229],
+        [36, 0.136],
+        [37, 0.0],
+        [47, 0.0],
+        [49, 0.084],
+        [54, 0.205],
+        [55, 0.307],
+        [56, 0.317],
+        [58, 0.229],
+        [60, 0.011],
+        [68, 0.0],
+        [71, 0.156],
+        [78, 0.301],
+        [79, 0.283],
+        [81, 0.045],
+        [82, 0.0],
+        [89, 0.0]
+      ]
     },
     "handspin_l": {
       "kind": "special",
@@ -776,7 +902,8 @@
       "role": ["low", "lowprofile", "approach"],
       "anim": {"clip": "six_step_ex_clip", "warp": [[0, 0.0], [12, 0.4], [20, 0.633], [31, 1.133], [49, 1.767]]},
       "sfx": [[3, "whoosh_light"]],
-      "desc": "Three lows, -2 on block."
+      "desc": "Three lows, -2 on block.",
+      "pushExt": [[0, 0.0], [44, 0.0], [49, 0.095]]
     },
     "drop_in_l": {
       "kind": "special",
@@ -936,7 +1063,37 @@
         "warp": [[0, 0.0], [8, 0.3], [19, 0.733], [32, 1.267], [42, 1.667], [55, 2.2], [63, 2.5], [118, 3.667]]
       },
       "sfx": [[1, "crowd_cheer_burst"]],
-      "desc": "Invulnerable 6-hit flair cyclone."
+      "desc": "Invulnerable 6-hit flair cyclone.",
+      "pushExt": [
+        [0, 0.088],
+        [4, 0.0],
+        [22, 0.0],
+        [24, 0.084],
+        [29, 0.205],
+        [30, 0.307],
+        [31, 0.317],
+        [33, 0.229],
+        [34, 0.136],
+        [35, 0.0],
+        [45, 0.0],
+        [47, 0.084],
+        [52, 0.205],
+        [53, 0.307],
+        [54, 0.317],
+        [56, 0.229],
+        [58, 0.011],
+        [71, 0.0],
+        [73, 0.035],
+        [75, 0.126],
+        [78, 0.177],
+        [93, 0.301],
+        [95, 0.283],
+        [97, 0.157],
+        [98, 0.157],
+        [99, 0.045],
+        [100, 0.0],
+        [118, 0.0]
+      ]
     },
     "battle_of_the_year": {
       "kind": "super3",
@@ -998,7 +1155,9 @@
       },
       "role": ["reversal"],
       "anim": {"clip": "front_kick"},
-      "desc": "PRIME TIME: a front kick opens a full battle round the crowd scores live."
+      "desc": "PRIME TIME: a front kick opens a full battle round the crowd scores live.",
+      "boxes": [{"f": [10, 13], "x": 0.513, "y": 1.449, "w": 0.5, "h": 0.699}],
+      "boxSrc": "hitVolume"
     }
   },
   "simple": {

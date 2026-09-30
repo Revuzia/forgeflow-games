@@ -35,6 +35,8 @@ export class Showcase {
   visible = true;
   /** turntable speed (rad/s); 0 = hold the 3/4 view */
   spin = 0.25;
+  /** region clear colour (sRGB hex) behind the model */
+  backdrop = 0x1d0d1b;
 
   constructor(r: Renderer, a: Assets, data?: ViewGameData) {
     this.r = r;
@@ -112,7 +114,9 @@ export class Showcase {
     setOutlineViewport(w, h);
     const prevTarget = three.getRenderTarget();
     three.setRenderTarget(this.rt);
-    three.setClearColor(0x000000, 0);
+    // CHANGED(integrator): an opaque backdrop (the menus' ink purple): the context has alpha:false, so the region's clear
+    // colour IS what shows through the character-select mask hole (was transparent black -> a black box)
+    three.setClearColor(this.backdrop, 1);
     three.clear(true, true, true);
     three.render(this.scene, this.camera);
     // blit into the region (y from the bottom in GL)
@@ -127,6 +131,88 @@ export class Showcase {
     three.setRenderTarget(prevTarget);
     three.setClearColor(0x0b0a10, 1);
     setOutlineViewport(this.r.buffer.x, this.r.buffer.y);
+  }
+
+  /**
+   * CHANGED(integrator): a head-and-shoulders portrait (PNG data URL, transparent background) of the fighter in colour
+   * `color`, idle pose, 3/4 view, same toon material + outline as in a bout. UI (CONTRACT §22.3) shows these in the
+   * select grid / side cards / HUD / VS / results instead of the initials badge. Renders into its own targets and
+   * restores the renderer state; the shared canvas is not touched. null when the asset cannot load.
+   */
+  async portrait(fighterId: string, color = 0, size = 256): Promise<string | null> {
+    let asset;
+    try { asset = await this.a.fighter(fighterId); } catch { return null; }
+    const def = this.data?.fighters[fighterId];
+    const fv = new FighterView(this.a, asset, [], def, color, true);
+    // CHANGED(fixer) D5: hair / lash cutouts (alphaTest) are not smoothed by MSAA; alpha-to-coverage turns their edges into
+    // MSAA coverage in the 4x target, so the large hero portraits (VS splash / results, ~850 CSS px) have no stair-steps.
+    fv.model.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      for (const mat of (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as THREE.Material[]) {
+        if (mat && mat.alphaTest > 0) { mat.alphaToCoverage = true; mat.needsUpdate = true; }
+      }
+    });
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0xd8e0ff, 0x30262a, 1.5));
+    const key = new THREE.DirectionalLight(0xfff0dc, 2.8);
+    key.position.set(-1.8, 3, 4);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0xffd21a, 1.2);
+    rim.position.set(2.5, 2, -2);
+    scene.add(rim);
+    scene.add(fv.root);
+    const three = this.r.three;
+    const rtA = new THREE.WebGLRenderTarget(size, size, { type: THREE.HalfFloatType, samples: 4 });
+    const rtB = new THREE.WebGLRenderTarget(size, size, { type: THREE.UnsignedByteType });
+    try {
+      fv.pose.poseClip('idle', 0.4);
+      fv.root.rotation.set(0, 0.42, 0);
+      fv.root.updateMatrixWorld(true);
+      const head = fv.bone('Head');
+      const hp = new THREE.Vector3(0, fv.heightM * 0.9, 0);
+      if (head) head.getWorldPosition(hp);
+      const cam = new THREE.PerspectiveCamera(26, 1, 0.05, 20);
+      // CHANGED(fixer) D5: aim a little higher (was hp.y - 0.1: tall / forward-leaning heads touched the top edge)
+      const look = new THREE.Vector3(hp.x * 0.6, hp.y - 0.07, hp.z * 0.6);
+      cam.position.set(look.x + 0.18, look.y + 0.06, look.z + 1.45);
+      cam.lookAt(look);
+      const prevTarget = three.getRenderTarget();
+      const prevClear = new THREE.Color();
+      three.getClearColor(prevClear);
+      const prevAlpha = three.getClearAlpha();
+      setOutlineViewport(size, size);
+      three.setRenderTarget(rtA);
+      three.setClearColor(0x000000, 0);
+      three.clear(true, true, true);
+      three.render(scene, cam);
+      this.out.renderToScreen = false;
+      this.out.render(three, rtB, rtA, 0, false);
+      const px = new Uint8Array(size * size * 4);
+      three.readRenderTargetPixels(rtB, 0, 0, size, size, px);
+      three.setRenderTarget(prevTarget);
+      three.setClearColor(prevClear, prevAlpha);
+      setOutlineViewport(this.r.buffer.x, this.r.buffer.y);
+      const c = document.createElement('canvas');
+      c.width = size; c.height = size;
+      const g = c.getContext('2d');
+      if (!g) return null;
+      const img = g.createImageData(size, size);
+      for (let y = 0; y < size; y++) {              // GL rows are bottom-up
+        img.data.set(px.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4);
+      }
+      g.putImageData(img, 0, 0);
+      // CHANGED(fixer) D5: WebP with alpha (~10x smaller than PNG at hero sizes); a browser without a WebP encoder returns
+      // PNG from the same call (the data URL's own mime says which)
+      return c.toDataURL('image/webp', 0.92);
+    } catch (e) {
+      console.warn('[hit-parade] portrait', fighterId, e);
+      return null;
+    } finally {
+      fv.dispose();
+      rtA.dispose();
+      rtB.dispose();
+    }
   }
 
   dispose(): void {

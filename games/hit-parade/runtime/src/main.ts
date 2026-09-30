@@ -34,6 +34,8 @@ import { SaveStore } from './ui/save.ts';
 import { Input } from './input.ts';
 import { Flow } from './app/flow.ts';
 import { installTestSurface } from './testsurface.ts';
+import { TouchControls } from './touch/controls.ts';
+import { PortraitQueue } from './app/portraits.ts';
 
 export const VERSION = 'hit-parade-0.1.0';
 
@@ -115,6 +117,8 @@ async function boot(): Promise<void> {
   const c0 = settings.get().controls;
   const input = new Input({ keys: [c0[0].keys, c0[1].keys], pads: [c0[0].pad, c0[1].pad] });
   let game: Game | null = null;
+  let menusUi: Menus | null = null;
+  let touchUi: TouchControls | null = null;
   let renderer: Renderer | null = null;
   let audio: GameAudio | null = null;
   let contextLost = false;
@@ -131,6 +135,8 @@ async function boot(): Promise<void> {
       bout: !!game?.bout, frozen: game?.frozen ?? false, gameFps: game ? Math.round(game.fps * 10) / 10 : 0,
       matchPhase: game?.bout ? (game.matchInfo()?.phase ?? null) : null,
       season: game?.season ? { index: game.season.index, slots: game.season.slots.length, continues: game.season.continues } : null,
+      // CHANGED(fixer) D4: camera read-back (look height, the HUD safe line, each fighter's top on screen)
+      cam: game?.bout ? game.bout.view.camReadback() : null,
       contextLost,
     }),
     canvas: () => canvas,
@@ -151,6 +157,11 @@ async function boot(): Promise<void> {
     freeze: (on) => { game?.setFrozen(on); },
     goto: (screen) => { if (!game) throw new Error('game not ready'); game.toMenus(screen as Parameters<Game['toMenus']>[0]); },
     cpu: (p, level) => { if (!game) throw new Error('game not ready'); game.setCpu(p, level); },
+    // CHANGED(integrator): UI §22.7 read-backs for menus.py / layoutcheck.py / mobile.py --game
+    menus: () => menusUi?.readback() ?? null,
+    hud: () => game?.hud.readback() ?? null,
+    touchUi: () => touchUi?.readback() ?? null,
+    touchWord: () => { if (!touchUi) throw new Error('touch overlay not ready'); return touchUi.readWord(); },
   });
 
   const fail = (title: string, e: unknown): void => {
@@ -208,9 +219,28 @@ async function boot(): Promise<void> {
     for (const t of ['pointerdown', 'keydown', 'touchend', 'click'] as const) window.addEventListener(t, unlock, { capture: true, passive: true });
     bootUi.progress(0.5, 'Warming up the crowd...');
     const showcase = new Showcase(r, assets, data);
-    const menus = new Menus(uiRoot, data, { showcase, settings, save, audio: au });
-    const g = new Game({ data, renderer: r, assets, audio: au, menus, hudRoot: uiRoot, input, settings, save, boot: bootUi, flow, version: VERSION, dev: DEV });
+    // CHANGED(integrator): portraits (UI §22.3) rendered by the Showcase; the select screen's hovered fighter jumps the queue
+    let portraits: PortraitQueue | null = null;
+    const showcaseDep = {
+      show: (id: string, color: number, pose: 'idle' | 'intro' | 'win'): Promise<void> => { portraits?.need(id); return showcase.show(id, color, pose); },
+      frame: (dt: number): void => showcase.frame(dt),
+      render: (): void => showcase.render(),
+      setRect: (rc: { x: number; y: number; w: number; h: number } | null): void => showcase.setRect(rc),
+      hide: (): void => showcase.hide(),
+    };
+    const menus = new Menus(uiRoot, data, { showcase: showcaseDep, settings, save, audio: au, input });
+    portraits = new PortraitQueue(showcase, (map) => menus.setPortraits(map));
+    portraits.allowed = () => flow.phase !== 'bout' && flow.phase !== 'loading' && flow.phase !== 'ready';
+    // CHANGED(integrator): the touch overlay (lane UI) writes input.touch (CONTRACT §18.5); game.ts shows it in bouts
+    const s0 = settings.get();
+    const touch = new TouchControls(uiRoot, input.touch, { scale: s0.touchScale, opacity: s0.touchOpacity, leftHanded: s0.touchLeftHanded,
+      haptics: s0.haptics, layout: s0.touchLayout });
+    touchUi = touch;
+    const g = new Game({ data, renderer: r, assets, audio: au, menus, hudRoot: uiRoot, input, settings, save, boot: bootUi, flow, version: VERSION, dev: DEV, touch, portraits });
     game = g;
+    menusUi = menus;
+    touch.onPause(() => { g.pause('touch', 0); });
+    touch.onLayout((l) => { settings.set({ touchLayout: Object.keys(l).length ? l : null }); });
 
     // the fps chip (SETTINGS show FPS); inline styles: it never depends on a stylesheet
     const fpsEl = document.createElement('div');
@@ -232,12 +262,15 @@ async function boot(): Promise<void> {
       if (has('volume')) au.setVolumes(s.volume);
       if (has('quality') && !all && !qOverride) r.setQuality(s.quality);
       if (has('showFps')) fpsEl.hidden = !s.showFps;
+      if (has('touchScale') || has('touchOpacity') || has('touchLeftHanded') || has('haptics') || (has('touchLayout') && !all)) {
+        touch.setOptions({ scale: s.touchScale, opacity: s.touchOpacity, leftHanded: s.touchLeftHanded, haptics: s.haptics, layout: s.touchLayout });
+      }
     };
     settings.on(apply);
     apply(settings.get(), []);
 
     // CONTRACT_MOBILE M1 / M4: a hybrid device switched input method; portrait on touch pauses a live bout
-    const applyMode = (m: 'kbm' | 'touch'): void => { bootUi.setTouch(m === 'touch'); menus.setTouchMode(m === 'touch'); };
+    const applyMode = (m: 'kbm' | 'touch'): void => { bootUi.setTouch(m === 'touch'); menus.setTouchMode(m === 'touch'); g.hud.setTouchMode(m === 'touch'); };
     input.onMode(applyMode);
     applyMode(input.mode);
     new RotateOverlay((shown) => { if (shown) g.pause('rotate'); });
@@ -260,6 +293,8 @@ async function boot(): Promise<void> {
     } else {
       g.toMenus('title');
     }
+    // the whole roster's portraits, in the background (waits while a bout loads / steps)
+    window.setTimeout(() => { portraits?.all(Object.keys(data.fighters)); }, 1500);
   } catch (e) {
     if (contextLost) return;          // a load that failed on the lost context keeps the reset card
     fail('HIT PARADE could not start', e);

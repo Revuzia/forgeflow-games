@@ -20,6 +20,17 @@ def font(sz):
     return ImageFont.load_default()
 
 
+STEP_WARN = 60.0   # a single-frame local bone rotation above this is drawn red (flip / snap lead)
+
+
+def step_txt(m):
+    if m.get("max_step_deg") is None:
+        return ""
+    return "  step %.0f deg %s f%s  hand sw L/R %d/%d  toe L/R %d/%d" % (
+        m["max_step_deg"], m.get("step_bone"), m.get("step_frame"),
+        m["hand_swing_max_LR"][0], m["hand_swing_max_LR"][1], m["toe_max_LR"][0], m["toe_max_LR"][1])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("qc_dir")
@@ -48,7 +59,9 @@ def main():
             cu = m["finger_curl_deg_LR"].get(str(m["game_frame"]))
             if cu:
                 sub += "  curl L/R %s/%s" % tuple("-" if v is None else int(v) for v in cu)
-            d.text((6, y + 18), sub, fill=(200, 200, 210), font=f2)
+            sub += step_txt(m)
+            d.text((6, y + 18), sub, fill=(255, 130, 110) if m.get("max_step_deg", 0) > STEP_WARN else (200, 200, 210),
+                   font=f2)
             for k in range(5):
                 p = os.path.join(a.qc_dir, "%s__%s.png" % (cid, ("s%d" % k) if k < 4 else "game"))
                 if k < 4 and k >= len(fr):
@@ -63,7 +76,7 @@ def main():
         sheet.save(out)
         sheets.append(out)
     # moves sheets: 5 game-camera frames per clip (c-6, c-3, c, c+3, c+8 with the effector ball on c)
-    gw, gh = 300, 400
+    gw, gh = 380, 400
     per = max(1, a.per - 2)
     gclips = [c for c in clips if q["clips"][c].get("game_frames")]
     for si in range(0, len(gclips), per):
@@ -79,8 +92,9 @@ def main():
             txt = "%s  %df  game camera  frames %s%s" % (cid, m["frames"], ",".join(str(x) for x in gf),
                                                          ("  CONTACT f%d (red ball = effector.at)" % cf) if cf is not None else "")
             d.text((6, y + 2), txt, fill=(255, 220, 90), font=f1)
-            d.text((6, y + 18), "low %.3f..%.3f m  tpose %d%s" % (m["lowest_min"], m["lowest_max"], len(m["tpose_frames"]), eff),
-                   fill=(200, 200, 210), font=f2)
+            d.text((6, y + 18), "low %.3f..%.3f m  tpose %d%s%s" % (m["lowest_min"], m["lowest_max"], len(m["tpose_frames"]), eff,
+                                                                     step_txt(m)),
+                   fill=(255, 130, 110) if m.get("max_step_deg", 0) > STEP_WARN else (200, 200, 210), font=f2)
             for k in range(5):
                 p = os.path.join(a.qc_dir, "%s__g%d.png" % (cid, k))
                 if os.path.exists(p):

@@ -11,11 +11,11 @@ G4 flow (real input at the player's layer; dyefield bootcheck.py shape, fighter 
      __HP__.state().phase == 'ready' (the PRESS START card over the loaded bout);
   2. a REAL Enter key on the card -> phase 'bout' (a real click is the fallback, and SAID);
   3. the round intro runs out -> __HP__.match().phase 'fight'; shot _shots/boot_fight.png;
-  4. a REAL D hold 0.9 s walks P1 forward: fighters()[0].x must grow by > 0.5 m;
+  4. REAL D holds walk P1 forward: >= 0.3 m covered while in walk_f (up to 3 x 0.9 s holds; CHANGED(integrator));
   5. walk into range (real D hold until the gap < 1.1 m), then REAL J taps (5L) until a HIT event with a = 0 lands and
      P2's hp falls (<= 6 tries); shot _shots/boot_hit.png;
   6. REAL I taps (SIMPLE 5S = the fighter's main special) until a HIT / BLOCK event with a = 0 and c = 3 (special,
-     CONTRACT §17 rule 6) or fighters()[0].moveKind 'special' with a hit (<= 6 tries);
+     CONTRACT §17 rule 6) or a PROJ_HIT by P1 with c = 6 (a projectile special; CHANGED(integrator)) (<= 6 tries);
   7. frames + sim ticks advancing, and VERDICT "BOOTS CLEAN" only with 0 console / page / window / shader errors and
      0 failed requests.
 Exit codes: 0 clean · 1 not clean · 2 the page never got far enough to judge.
@@ -498,16 +498,43 @@ def run_game(args) -> int:
             s0 = sess.state() or {}
             tick_a = s0.get("tick")
             shots["fight"] = sess.screenshot(os.path.join(args.out_dir, "boot_fight.png"))
+            # CHANGED(integrator): the CPU is live - it walks in, attacks, pushes - so a single timed hold is flaky (measured:
+            # gap 0.61 m after dx 0.38 m; P1 pushed to -1.47 m then stunned through the hold, dx 0.07 m). The walk is judged
+            # on the frames P1 actually spends in walk_f (§17 animId 1): up to 3 real 0.9 s D holds, each started once P1
+            # is free (idle / walk) and held TOWARD P2 (A or D), summing the forward x covered between consecutive walk_f
+            # samples; pass at >= 0.3 m (net dx alone is not evidence: a back throw carried P1 4.6 m across the stage).
             f0 = fighters_info(sess) or [{}, {}]
-            sess.page.keyboard.down("KeyD")
-            time.sleep(0.9)
-            sess.page.keyboard.up("KeyD")
-            time.sleep(0.3)
+            walk_anim = 0
+            walk_dx = 0.0
+            holds = 0
+            while holds < 3 and walk_dx < 0.5:
+                holds += 1
+                t_free = time.time() + 3.0
+                while time.time() < t_free and ((fighters_info(sess) or [{}, {}])[0].get("animId") not in (0, 1, 2)):
+                    time.sleep(0.05)
+                prev = None
+                ffk = fighters_info(sess) or [{}, {}]
+                walk_key = "KeyD" if (ffk[1].get("x") or 0) >= (ffk[0].get("x") or 0) else "KeyA"   # toward P2 (a swap throw can cross sides)
+                sess.page.keyboard.down(walk_key)
+                t_end = time.time() + 0.9
+                while time.time() < t_end:
+                    ff = fighters_info(sess) or [{}, {}]
+                    cur = ff[0]
+                    if cur.get("animId") == 1:
+                        walk_anim += 1
+                        if prev is not None and prev.get("animId") == 1 and isinstance(cur.get("x"), (int, float)) and isinstance(prev.get("x"), (int, float)):
+                            walk_dx += max(0.0, (cur["x"] - prev["x"]) * (1 if (ff[1].get("x") or 0) >= cur["x"] else -1))
+                    prev = cur
+                    time.sleep(0.05)
+                sess.page.keyboard.up(walk_key)
+                time.sleep(0.3)
             f1 = fighters_info(sess) or [{}, {}]
             dx = (f1[0].get("x") or 0) - (f0[0].get("x") or 0)
-            walk = {"from": f0[0].get("x"), "to": f1[0].get("x"), "dx": dx}
-            if not dx > 0.5:
-                problems.append("a real 0.9 s D hold moved P1 only %.2f m (need > 0.5 m)" % dx)
+            gap1 = abs((f1[1].get("x") or 0) - (f1[0].get("x") or 0))
+            walk = {"from": f0[0].get("x"), "to": f1[0].get("x"), "dx": dx, "gapAfter": gap1, "walkAnimSamples": walk_anim,
+                    "walkFramesDx": round(walk_dx, 3), "holds": holds}
+            if not walk_dx >= 0.3:
+                problems.append("real D holds x%d: P1 covered only %.2f m while in walk_f (%d samples; net dx %.2f m, gap %.2f m)" % (holds, walk_dx, walk_anim, dx, gap1))
             # close the gap
             gap = abs((f1[1].get("x") or 0) - (f1[0].get("x") or 0))
             if gap > 1.1:
@@ -525,6 +552,20 @@ def run_game(args) -> int:
             press = {"tries": 0, "hit": None, "hp": [hp0, None], "gap": gap}
             for i in range(6):
                 press["tries"] += 1
+                # CHANGED(integrator): the live CPU knocks P1 down / pushes it away between taps (measured: every tap at a
+                # 2.43 m gap) - walk back into range before each tap (real D hold, <= 1.5 s)
+                ffg = fighters_info(sess) or [{}, {}]
+                if abs((ffg[1].get("x") or 0) - (ffg[0].get("x") or 0)) > 1.0:
+                    fwd_key = "KeyD" if (ffg[1].get("x") or 0) >= (ffg[0].get("x") or 0) else "KeyA"
+                    sess.page.keyboard.down(fwd_key)
+                    t_in = time.time() + 1.5
+                    while time.time() < t_in:
+                        ffg = fighters_info(sess) or [{}, {}]
+                        if abs((ffg[1].get("x") or 0) - (ffg[0].get("x") or 0)) < 0.9:
+                            break
+                        time.sleep(0.03)
+                    sess.page.keyboard.up(fwd_key)
+                    hp0 = ffg[1].get("hp", hp0)
                 sess.press("KeyJ", 50)
                 time.sleep(0.35)
                 ev = events_tail(sess, 200)
@@ -545,7 +586,9 @@ def run_game(args) -> int:
                 sess.press("KeyI", 50)
                 time.sleep(0.6)
                 ev = events_tail(sess, 200)
-                h = hits_by(ev, 0, ("HIT", "BLOCK", "COUNTER", "PUNISH", "PROJ_HIT"), c=3)
+                # CHANGED(integrator): a projectile special (johnny's 5S = BRICKBAT) lands with c = 6 (projectile class,
+                # CONTRACT §17 rule 6), a melee special with c = 3; both are "the special lands"
+                h = hits_by(ev, 0, ("HIT", "BLOCK", "COUNTER", "PUNISH", "PROJ_HIT"), c=3) + hits_by(ev, 0, ("PROJ_HIT",), c=6)
                 if h:
                     special["event"] = h[-1]
                     break

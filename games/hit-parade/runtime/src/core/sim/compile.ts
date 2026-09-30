@@ -51,6 +51,25 @@ export interface CGrab {
   air: boolean;
   techable: boolean;
   animId: number;
+  /** CHANGED(fixer) D3: victim segments over the lock (compiled grab.victim, or the default thrown_f / thrown_b pair).
+   *  Segment k runs from lock frame vF0[k] to vF0[k + 1] (the last to `frames`), shows shared clip vClip[k] (anim id)
+   *  from clip time vT0[k] to vT1[k] (ms; V_SLAM / V_END resolve on the VICTIM's clip, V_OPEN = 1 clip-s per 60 f). */
+  vF0: Int32Array;
+  vClip: Int32Array;
+  vT0: Int32Array;
+  vT1: Int32Array;
+}
+/** CHANGED(fixer) D3: symbolic victim clip times (resolved against the victim's own clips.json) */
+export const V_SLAM = -1;
+export const V_END = -2;
+export const V_OPEN = -3;
+
+/** CHANGED(fixer) D3: a shared clip as the sim needs it for victim / knockdown timing (per fighter body) */
+export interface CVClip {
+  durMs: number;
+  slamMs: number; // marks.slam, else -1
+  /** clips.json root (forward travel, U) sampled per 1/60 s: rootV[v] at v / 60 s, v = 0 .. last */
+  rootV: Int32Array;
 }
 
 /** CONTRACT 20.2 special rekka trigger: the input that fires this chain-only move in the parent's window. */
@@ -152,6 +171,8 @@ export interface CMove {
   phase2: boolean;
   cinEndAdv: number; // -100000 = system default
   cinEndGap: number; // -1 = keep positions
+  /** CHANGED(fixer) D2: extra push-box front (U) per move frame 0..total+1, null = none */
+  pushExt: Int32Array | null;
 }
 
 export interface CSpecial {
@@ -186,7 +207,20 @@ export interface CFighter {
   hurtAir: [number, number];
   pushW: number;
   pushH: number;
+  /** (front + back) / 2 standing - legacy symmetric half-width (CHANGED(fixer) D2: use the extents below) */
   pushHalf: number;
+  /** CHANGED(fixer) D2: push-box extents from the root (U): standing front / back, crouching front / back */
+  pushFS: number;
+  pushBS: number;
+  pushFC: number;
+  pushBC: number;
+  /** CHANGED(fixer) D3: shared victim / knockdown clips of THIS body, by shared anim id (null = not in clips.json) */
+  vclips: (CVClip | null)[];
+  /** CHANGED(fixer) D3: system.json anim.kdFall in ms: [kd_fall_b drop, kd_fall_b floor, kd_fall_f drop, kd_fall_f floor] */
+  kdFallMs: Int32Array;
+  /** CHANGED(fixer) D3: system.json anim.fallMaxFrames / wakeMaxRate (x100) */
+  kdFallMax: number;
+  wakeRate100: number;
   gTable: Int16Array; // ground normals [dir 0..9][btn 0..2]
   aTable: Int16Array; // air normals
   throwF: number;
@@ -457,15 +491,46 @@ function compileMove(id: string, mv: Move, idx: number, snapId: number, animId: 
   ho.forEach((h, i) => hurtOv.set([h.f[0], h.f[1], mToU(h.w), mToU(h.h), mToU(h.y ?? 0)], i * 5));
   let grab: CGrab | null = null;
   if (mv.grab) {
+    const gd = mv.grab;
+    const swap = gd.swap === true;
+    // CHANGED(fixer) D3: victim segments. Default: thrown_f / thrown_b with its slam mark on hitF (the attacker clip's
+    // slam = the damage frame in the kit data) and its end on the release, so the victim lands WITH the attacker's slam
+    // and is lying in the clip's end pose (= kd_ground_*) when the knockdown starts.
+    const segs: [number, number, number, number][] = [];
+    const clipId = (n: string): number => SHARED_CLIPS.indexOf(n);
+    if (gd.victim && gd.victim.length > 0) {
+      const vs = [...gd.victim].sort((p, q) => p[0] - q[0]);
+      for (const v of vs) {
+        const c = clipId(v[1]);
+        if (c < 0) throw new Error(`move ${id}: grab.victim clip "${v[1]}" is not a shared clip`);
+        const t0 = v[2] !== undefined ? Math.round(v[2] * 1000) : 0;
+        const t1 = v[3] !== undefined ? Math.round(v[3] * 1000) : V_OPEN;
+        segs.push([Math.max(0, Math.min(gd.frames, v[0])), c, t0, t1]);
+      }
+      if (segs[0][0] > 0) segs.unshift([0, segs[0][1], segs[0][2], segs[0][2]]);
+    } else {
+      const c = clipId(swap ? 'thrown_b' : 'thrown_f');
+      const hitF = Math.max(1, Math.min(gd.frames - 1, gd.hitF));
+      segs.push([0, c, 0, V_SLAM], [hitF, c, V_SLAM, V_END]);
+    }
     grab = {
-      frames: mv.grab.frames,
-      adv: mv.grab.adv,
-      hitF: mv.grab.hitF,
-      swap: mv.grab.swap === true,
-      air: mv.grab.air === true,
-      techable: mv.grab.techable !== undefined ? mv.grab.techable : kind === K.throw,
+      frames: gd.frames,
+      adv: gd.adv,
+      hitF: gd.hitF,
+      swap,
+      air: gd.air === true,
+      techable: gd.techable !== undefined ? gd.techable : kind === K.throw,
       animId: grabAnim,
+      vF0: Int32Array.from(segs.map((q) => q[0])),
+      vClip: Int32Array.from(segs.map((q) => q[1])),
+      vT0: Int32Array.from(segs.map((q) => q[2])),
+      vT1: Int32Array.from(segs.map((q) => q[3])),
     };
+  }
+  let pushExt: Int32Array | null = null;
+  if (mv.pushExt && mv.pushExt.some((q) => q[1] > 0)) {
+    pushExt = new Int32Array(total + 2);
+    for (let f = 0; f <= total + 1; f++) pushExt[f] = Math.max(0, mToU(pwl(mv.pushExt, f)));
   }
   let trigger: CTrigger | null = null;
   if (mv.trigger) {
@@ -572,6 +637,7 @@ function compileMove(id: string, mv: Move, idx: number, snapId: number, animId: 
     phase2: mv.phase === 2,
     cinEndAdv: mv.cinematic?.endAdv ?? -100000,
     cinEndGap: mv.cinematic?.endGapM !== undefined ? mToU(mv.cinematic.endGapM) : -1,
+    pushExt,
   };
   cm.chainOnly = cm.chainOnly || mv.tc === true;
   if (grab && grab.swap) cm.throwBack = true;
@@ -766,7 +832,28 @@ export function compileFighter(data: GameData, id: string): CFighter {
     hurtAir: [mToU(def.hurt.air[0]), mToU(def.hurt.air[1])],
     pushW: mToU(def.pushbox[0]),
     pushH: mToU(def.pushbox[1]),
-    pushHalf: mToU(def.pushbox[0] / 2),
+    pushHalf: mToU(def.push ? (def.push.front + def.push.back) / 2 : def.pushbox[0] / 2),
+    // CHANGED(fixer) D2: measured extents (fighters/<id>.json `push`), else the symmetric pushbox
+    pushFS: mToU(def.push ? def.push.front : def.pushbox[0] / 2),
+    pushBS: mToU(def.push ? def.push.back : def.pushbox[0] / 2),
+    pushFC: mToU(def.push ? def.push.crouchFront ?? def.push.front : def.pushbox[0] / 2),
+    pushBC: mToU(def.push ? def.push.crouchBack ?? def.push.back : def.pushbox[0] / 2),
+    vclips: SHARED_CLIPS.map((name) => {
+      const c = data.clips[id]?.clips[name];
+      if (!c || !(c.dur > 0)) return null;
+      const n = Math.max(1, Math.round(c.dur * 60));
+      const rootV = new Int32Array(n + 1);
+      const root = c.root ?? [];
+      for (let v = 0; v <= n; v++) rootV[v] = root.length ? mToU(pwl(root, v / 60)) : 0;
+      const slam = c.marks && typeof c.marks.slam === 'number' ? Math.round(c.marks.slam * 1000) : -1;
+      return { durMs: Math.round(c.dur * 1000), slamMs: slam, rootV };
+    }),
+    kdFallMs: Int32Array.from([
+      Math.round((sys.anim.kdFall?.kd_fall_b?.[0] ?? 0) * 1000), Math.round((sys.anim.kdFall?.kd_fall_b?.[1] ?? 0) * 1000),
+      Math.round((sys.anim.kdFall?.kd_fall_f?.[0] ?? 0) * 1000), Math.round((sys.anim.kdFall?.kd_fall_f?.[1] ?? 0) * 1000),
+    ]),
+    kdFallMax: sys.anim.fallMaxFrames ?? 30,
+    wakeRate100: Math.round((sys.anim.wakeMaxRate ?? 2) * 100),
     gTable,
     aTable,
     throwF,

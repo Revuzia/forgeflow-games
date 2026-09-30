@@ -28,15 +28,16 @@
   },
   "wild_swing": {
     "src": "cmu",
-    "file": "80_10",
-    "range": [379, 412],
-    "contact": 395,
+    "file": "86_06",
+    "range": [4868, 4944],
+    "contact": 4894,
     "mirror": false,
     "speed": 1.0,
     "loop": false,
     "kind": "hand",
     "limb": "R_hand",
-    "fist": 0
+    "fist": 0,
+    "_cand": "hammer_chop.1"
   },
   "crystal_swipe": {
     "src": "mixamo",
@@ -193,7 +194,8 @@
     "contact": 65,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 89}
   },
   "fling": {
     "src": "mixamo",
@@ -202,7 +204,8 @@
     "contact": 41,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 47}
   },
   "crusher_leap_clip": {
     "src": "mixamo",
@@ -258,7 +261,8 @@
     "contact": 51,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 72}
   },
   "meltdown_clip": {
     "src": "seq",

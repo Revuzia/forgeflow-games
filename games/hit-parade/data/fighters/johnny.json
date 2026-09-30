@@ -3,6 +3,7 @@
   "name": "JOHNNY RIOT",
   "persona": "The Headliner",
   "archetype": "shoto",
+  "difficulty": 1,
   "body": "Ch42_nonPBR",
   "heightM": 1.8,
   "hp": 10000,
@@ -26,10 +27,16 @@
   "throwRangeM": 0.6,
   "hurt": {
     "stand": [0.54, 1.71],
-    "crouch": [0.62, 1.08],
+    "crouch": [0.62, 1.27],
     "air": [0.51, 1.12]
   },
-  "pushbox": [0.46, 1.54],
+  "pushbox": [0.41, 1.54],
+  "push": {
+    "front": 0.317,
+    "back": 0.095,
+    "crouchFront": 0.477,
+    "crouchBack": 0.081
+  },
   "colors": [
     {"name": "Headliner", "tint": null},
     {"name": "Encore", "tint": "#2a6bd6"},
@@ -63,7 +70,9 @@
       "role": ["poke"],
       "anim": {"clip": "jab"},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "4-frame jab; links into itself, chains into 2L."
+      "desc": "4-frame jab; links into itself, chains into 2L.",
+      "boxes": [{"f": [4, 6], "x": 0.862, "y": 1.311, "w": 0.351, "h": 0.422}],
+      "boxSrc": "hitVolume"
     },
     "2L": {
       "kind": "normal",
@@ -91,7 +100,9 @@
       "role": ["poke", "low"],
       "anim": {"clip": "crouch_jab"},
       "sfx": [[3, "whoosh_light"]],
-      "desc": "Low jab to the knee; chains and cancels."
+      "desc": "Low jab to the knee; chains and cancels.",
+      "boxes": [{"f": [5, 7], "x": 0.848, "y": 0.845, "w": 0.321, "h": 0.25}],
+      "boxSrc": "hitVolume"
     },
     "5M": {
       "kind": "normal",
@@ -119,7 +130,10 @@
       "role": ["poke"],
       "anim": {"clip": "cross"},
       "sfx": [[5, "whoosh_light"]],
-      "desc": "Straight right; his best mid-range button."
+      "desc": "Straight right; his best mid-range button.",
+      "boxes": [{"f": [8, 10], "x": 0.862, "y": 1.385, "w": 0.4, "h": 0.569}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.023], [8, 0.064], [15, 0.0], [21, 0.043], [24, 0.001], [27, 0.0]]
     },
     "2M": {
       "kind": "normal",
@@ -147,7 +161,8 @@
       "role": ["poke", "low"],
       "anim": {"clip": "low_body"},
       "sfx": [[5, "whoosh_light"]],
-      "desc": "Crouching straight to the knee; cancel into HEADLINE HOOK."
+      "desc": "Crouching straight to the knee; cancel into HEADLINE HOOK.",
+      "pushExt": [[0, 0.045], [8, 0.09], [14, 0.056], [17, 0.005], [26, 0.0]]
     },
     "5H": {
       "kind": "normal",
@@ -175,7 +190,10 @@
       "role": [],
       "anim": {"clip": "haymaker"},
       "sfx": [[8, "whoosh_heavy"]],
-      "desc": "Wide rear hook."
+      "desc": "Wide rear hook.",
+      "boxes": [{"f": [12, 14], "x": 0.625, "y": 1.413, "w": 0.5, "h": 0.626}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.0], [10, 0.036], [22, 0.009], [28, 0.051], [35, 0.034]]
     },
     "2H": {
       "kind": "normal",
@@ -259,7 +277,9 @@
       "role": ["overhead"],
       "anim": {"clip": "overhand"},
       "sfx": [[12, "whoosh_heavy"]],
-      "desc": "Looping overhand; must be blocked standing."
+      "desc": "Looping overhand; must be blocked standing.",
+      "boxes": [{"f": [18, 20], "x": 0.737, "y": 1.346, "w": 0.4, "h": 0.493}],
+      "boxSrc": "hitVolume"
     },
     "j.L": {
       "kind": "normal",
@@ -286,7 +306,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "air_jab"},
-      "desc": "Fast air-to-air jab."
+      "desc": "Fast air-to-air jab.",
+      "pushExt": [[0, 0.078], [3, 0.102], [15, 0.074]]
     },
     "j.M": {
       "kind": "normal",
@@ -313,7 +334,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "air_cross"},
-      "desc": "Long jump-in straight."
+      "desc": "Long jump-in straight.",
+      "pushExt": [[0, 0.011], [5, 0.056], [10, 0.002], [16, 0.015]]
     },
     "j.H": {
       "kind": "normal",
@@ -340,7 +362,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "air_hammer"},
-      "desc": "Downward hammer fist jump-in."
+      "desc": "Downward hammer fist jump-in.",
+      "pushExt": [[0, 0.157], [11, 0.114], [16, 0.007], [19, 0.003]]
     },
     "throw_f": {
       "kind": "throw",
@@ -365,10 +388,20 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 45, "adv": 21, "hitF": 30, "swap": false, "air": false, "techable": true, "clip": "body_burst"},
+      "grab": {
+        "frames": 45,
+        "adv": 21,
+        "hitF": 30,
+        "swap": false,
+        "air": false,
+        "techable": true,
+        "clip": "body_burst",
+        "victim": [[0, "hit_body", 0.0, 0.2], [10, "hit_body", 0.0, 0.6], [30, "kd_fall_b", 1.0, 1.8667]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Clinches and digs three body shots."
+      "desc": "Clinches and digs three body shots.",
+      "pushExt": [[0, 0.134], [4, 0.005], [5, 0.0], [26, 0.0], [31, 0.028]]
     },
     "throw_b": {
       "kind": "throw",
@@ -396,7 +429,8 @@
       "grab": {"frames": 48, "adv": 14, "hitF": 26, "swap": true, "air": false, "techable": true, "clip": "hook_fling"},
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Pulls them past and hooks them the other way."
+      "desc": "Pulls them past and hooks them the other way.",
+      "pushExt": [[0, 0.134], [4, 0.005], [5, 0.0], [26, 0.0], [31, 0.028]]
     },
     "brickbat_l": {
       "kind": "special",
@@ -424,7 +458,7 @@
       "projectile": {
         "life": 180,
         "box": [0.35, 0.3],
-        "y": 1.35,
+        "y": 1.25,
         "hits": 1,
         "strength": "L",
         "clip": "brick",
@@ -434,7 +468,8 @@
       "role": ["projectile"],
       "anim": {"clip": "brick_throw"},
       "sfx": [[0, "whoosh_light"]],
-      "desc": "Hurls a brick. L slow, H fast."
+      "desc": "Hurls a brick. L slow, H fast.",
+      "pushExt": [[0, 0.009], [8, 0.0], [10, 0.045], [15, 0.088], [18, 0.156], [24, 0.199], [37, 0.068], [48, 0.122]]
     },
     "brickbat_m": {
       "kind": "special",
@@ -462,7 +497,7 @@
       "projectile": {
         "life": 180,
         "box": [0.35, 0.3],
-        "y": 1.35,
+        "y": 1.25,
         "hits": 1,
         "strength": "M",
         "clip": "brick",
@@ -472,7 +507,8 @@
       "role": ["projectile"],
       "anim": {"clip": "brick_throw"},
       "sfx": [[0, "whoosh_light"]],
-      "desc": "Hurls a brick. L slow, H fast."
+      "desc": "Hurls a brick. L slow, H fast.",
+      "pushExt": [[0, 0.009], [7, 0.0], [15, 0.135], [22, 0.199], [36, 0.068], [48, 0.122]]
     },
     "brickbat_h": {
       "kind": "special",
@@ -500,7 +536,7 @@
       "projectile": {
         "life": 180,
         "box": [0.35, 0.3],
-        "y": 1.35,
+        "y": 1.25,
         "hits": 1,
         "strength": "H",
         "clip": "brick",
@@ -510,7 +546,8 @@
       "role": ["projectile"],
       "anim": {"clip": "brick_throw"},
       "sfx": [[0, "whoosh_light"]],
-      "desc": "Hurls a brick. L slow, H fast."
+      "desc": "Hurls a brick. L slow, H fast.",
+      "pushExt": [[0, 0.009], [6, 0.0], [13, 0.135], [21, 0.199], [29, 0.144], [34, 0.072], [48, 0.122]]
     },
     "brickbat_ex": {
       "kind": "ex",
@@ -538,7 +575,7 @@
       "projectile": {
         "life": 180,
         "box": [0.35, 0.3],
-        "y": 1.35,
+        "y": 1.25,
         "hits": 2,
         "strength": "H",
         "clip": "brick",
@@ -548,7 +585,8 @@
       "role": ["projectile"],
       "anim": {"clip": "brick_throw"},
       "sfx": [[0, "whoosh_light"]],
-      "desc": "Two bricks at once: 2 hits, fastest startup."
+      "desc": "Two bricks at once: 2 hits, fastest startup.",
+      "pushExt": [[0, 0.009], [6, 0.011], [13, 0.156], [19, 0.199], [30, 0.072], [42, 0.122]]
     },
     "encore_l": {
       "kind": "special",
@@ -577,7 +615,10 @@
       "role": ["antiair", "reversal", "launcher"],
       "anim": {"clip": "encore_upper"},
       "sfx": [[1, "whoosh_heavy"]],
-      "desc": "Jumping uppercut; air-invulnerable anti-air."
+      "desc": "Jumping uppercut; air-invulnerable anti-air.",
+      "boxes": [{"f": [5, 14], "x": 0.585, "y": 1.366, "w": 0.3, "h": 0.731}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.024], [15, 0.0], [26, 0.11], [28, 0.11], [29, 0.07], [31, 0.07], [32, 0.023], [34, 0.012], [48, 0.033]]
     },
     "encore_m": {
       "kind": "special",
@@ -606,7 +647,24 @@
       "role": ["antiair", "reversal", "launcher"],
       "anim": {"clip": "encore_upper"},
       "sfx": [[1, "whoosh_heavy"]],
-      "desc": "Jumping uppercut; air-invulnerable anti-air."
+      "desc": "Jumping uppercut; air-invulnerable anti-air.",
+      "boxes": [{"f": [6, 15], "x": 0.585, "y": 1.353, "w": 0.4, "h": 0.806}],
+      "boxSrc": "hitVolume",
+      "pushExt": [
+        [0, 0.024],
+        [3, 0.0],
+        [18, 0.0],
+        [22, 0.055],
+        [28, 0.066],
+        [29, 0.109],
+        [32, 0.11],
+        [34, 0.11],
+        [35, 0.07],
+        [37, 0.07],
+        [38, 0.023],
+        [41, 0.012],
+        [58, 0.033]
+      ]
     },
     "encore_h": {
       "kind": "special",
@@ -635,7 +693,24 @@
       "role": ["antiair", "reversal", "launcher"],
       "anim": {"clip": "encore_upper"},
       "sfx": [[1, "whoosh_heavy"]],
-      "desc": "Jumping uppercut; air-invulnerable anti-air."
+      "desc": "Jumping uppercut; air-invulnerable anti-air.",
+      "boxes": [{"f": [7, 16], "x": 0.585, "y": 1.341, "w": 0.5, "h": 0.881}],
+      "boxSrc": "hitVolume",
+      "pushExt": [
+        [0, 0.024],
+        [3, 0.0],
+        [21, 0.0],
+        [25, 0.055],
+        [32, 0.066],
+        [33, 0.109],
+        [36, 0.11],
+        [39, 0.11],
+        [40, 0.07],
+        [42, 0.07],
+        [43, 0.023],
+        [47, 0.012],
+        [66, 0.033]
+      ]
     },
     "encore_ex": {
       "kind": "ex",
@@ -665,7 +740,27 @@
       "role": ["antiair", "reversal", "launcher"],
       "anim": {"clip": "encore_upper"},
       "sfx": [[1, "whoosh_heavy"]],
-      "desc": "Fully invulnerable 2-hit uppercut."
+      "desc": "Fully invulnerable 2-hit uppercut.",
+      "boxes": [
+        {"f": [6, 7], "x": 0.585, "y": 1.341, "w": 0.5, "h": 0.881},
+        {"f": [12, 15], "x": 0.5852, "y": 1.6061, "w": 0.5, "h": 0.35}
+      ],
+      "boxSrc": "hitVolume",
+      "pushExt": [
+        [0, 0.024],
+        [3, 0.0],
+        [20, 0.0],
+        [24, 0.055],
+        [31, 0.066],
+        [32, 0.109],
+        [35, 0.11],
+        [38, 0.11],
+        [39, 0.07],
+        [41, 0.07],
+        [42, 0.023],
+        [46, 0.012],
+        [65, 0.033]
+      ]
     },
     "hook_l": {
       "kind": "special",
@@ -693,7 +788,10 @@
       "role": ["approach"],
       "anim": {"clip": "run_hook"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Running hook; ends every confirm."
+      "desc": "Running hook; ends every confirm.",
+      "boxes": [{"f": [10, 13], "x": 0.83, "y": 1.275, "w": 0.3, "h": 0.35}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.191], [4, 0.219], [8, 0.18], [11, 0.081], [18, 0.036], [30, 0.007], [34, 0.048]]
     },
     "hook_m": {
       "kind": "special",
@@ -721,7 +819,10 @@
       "role": ["approach"],
       "anim": {"clip": "run_hook"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Running hook; ends every confirm."
+      "desc": "Running hook; ends every confirm.",
+      "boxes": [{"f": [12, 15], "x": 0.83, "y": 1.287, "w": 0.4, "h": 0.375}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.191], [4, 0.226], [9, 0.197], [13, 0.081], [29, 0.006], [38, 0.048]]
     },
     "hook_h": {
       "kind": "special",
@@ -749,7 +850,10 @@
       "role": ["approach"],
       "anim": {"clip": "run_hook"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Running hook; ends every confirm."
+      "desc": "Running hook; ends every confirm.",
+      "boxes": [{"f": [14, 17], "x": 0.83, "y": 1.3, "w": 0.5, "h": 0.4}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.191], [5, 0.226], [9, 0.185], [11, 0.197], [15, 0.081], [25, 0.036], [40, 0.007], [46, 0.048]]
     },
     "hook_ex": {
       "kind": "ex",
@@ -778,7 +882,13 @@
       "role": ["approach"],
       "anim": {"clip": "run_hook"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Armored two-hook rush, -2 on block."
+      "desc": "Armored two-hook rush, -2 on block.",
+      "boxes": [
+        {"f": [10, 11], "x": 0.83, "y": 1.3, "w": 0.5, "h": 0.4},
+        {"f": [16, 17], "x": 0.83, "y": 1.3, "w": 0.5, "h": 0.4}
+      ],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.191], [4, 0.219], [8, 0.18], [11, 0.081], [19, 0.036], [33, 0.007], [38, 0.048]]
     },
     "weave_l": {
       "kind": "special",
@@ -919,7 +1029,9 @@
       "trigger": {"classic": {"motion": "", "btn": "LMH"}, "simple": "LMH"},
       "role": ["reversal"],
       "anim": {"clip": "weave_counter_hook"},
-      "desc": "Rising hook out of a Weave; knocks down, -7 on block."
+      "desc": "Rising hook out of a Weave; knocks down, -7 on block.",
+      "boxes": [{"f": [6, 8], "x": 0.395, "y": 1.454, "w": 0.5, "h": 0.708}],
+      "boxSrc": "hitVolume"
     },
     "sold_out": {
       "kind": "super1",
@@ -953,7 +1065,14 @@
       "role": ["reversal"],
       "anim": {"clip": "sold_out_flurry", "warp": [[0, 0.0], [8, 0.142], [12, 0.358], [16, 0.558], [22, 0.75], [77, 1.3]]},
       "sfx": [[1, "crowd_cheer_burst"]],
-      "desc": "Invulnerable jab-cross-jab-uppercut rush."
+      "desc": "Invulnerable jab-cross-jab-uppercut rush.",
+      "boxes": [
+        {"f": [8, 9], "x": 0.726, "y": 1.376, "w": 0.5, "h": 0.553},
+        {"f": [12, 13], "x": 0.726, "y": 1.376, "w": 0.5, "h": 0.553},
+        {"f": [16, 17], "x": 0.726, "y": 1.376, "w": 0.5, "h": 0.553},
+        {"f": [22, 24], "x": 0.726, "y": 1.376, "w": 0.5, "h": 0.553}
+      ],
+      "boxSrc": "hitVolume"
     },
     "main_event": {
       "kind": "super3",
@@ -1014,7 +1133,10 @@
       },
       "role": ["reversal"],
       "anim": {"clip": "cross"},
-      "desc": "PRIME TIME: a lunging cross that starts a 170-frame beating."
+      "desc": "PRIME TIME: a lunging cross that starts a 170-frame beating.",
+      "boxes": [{"f": [10, 13], "x": 0.862, "y": 1.397, "w": 0.5, "h": 0.594}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.023], [10, 0.064], [31, 0.0], [42, 0.001], [51, 0.043], [72, 0.0]]
     }
   },
   "simple": {

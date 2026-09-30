@@ -169,6 +169,8 @@ html.hp-noflash .hp-nerve-lbl.fright { animation: none; }
 .hp-timer.low { color: var(--hp-red); }
 .hp-pips { display: flex; gap: calc(var(--u) * 1.4); }
 .hp-pips > span { display: flex; gap: calc(var(--u) * .35); }
+/* CHANGED(fixer) D11: P2's pips fill from the outer (right) edge, mirroring P1's */
+.hp-pips > span.p2 { flex-direction: row-reverse; }
 .hp-pips i { width: calc(var(--u) * 1.05); height: calc(var(--u) * 1.05); transform: rotate(45deg); background: var(--hp-ink-2); border: max(1.5px, calc(var(--u) * .16)) solid var(--hp-paper); box-shadow: .12em .12em 0 var(--hp-ink); }
 .hp-pips .p1 i.on { background: var(--hp-yellow); }
 .hp-pips .p2 i.on { background: var(--hp-yellow); }

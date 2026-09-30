@@ -3,6 +3,7 @@
   "name": "BRUNO \"THE FRIDGE\"",
   "persona": "The Walk-In",
   "archetype": "grappler",
+  "difficulty": 3,
   "body": "Brute",
   "heightM": 2.0,
   "hp": 11000,
@@ -25,11 +26,17 @@
   },
   "throwRangeM": 0.77,
   "hurt": {
-    "stand": [0.68, 1.9],
-    "crouch": [0.78, 1.2],
+    "stand": [0.68, 1.75],
+    "crouch": [0.78, 1.39],
     "air": [0.65, 1.24]
   },
-  "pushbox": [0.58, 1.71],
+  "pushbox": [0.67, 1.57],
+  "push": {
+    "front": 0.558,
+    "back": 0.108,
+    "crouchFront": 0.498,
+    "crouchBack": 0.074
+  },
   "colors": [
     {"name": "Fridge", "tint": null},
     {"name": "Freezer Burn", "tint": "#6fc3df"},
@@ -63,7 +70,9 @@
       "role": ["poke"],
       "anim": {"clip": "chop"},
       "sfx": [[3, "slap"]],
-      "desc": "Wrestling chop."
+      "desc": "Wrestling chop.",
+      "boxes": [{"f": [6, 8], "x": 0.86, "y": 1.273, "w": 0.3, "h": 0.346}],
+      "boxSrc": "hitVolume"
     },
     "2L": {
       "kind": "normal",
@@ -118,7 +127,9 @@
       "role": ["poke"],
       "anim": {"clip": "forearm"},
       "sfx": [[5, "whoosh_light"]],
-      "desc": "Heavy straight forearm."
+      "desc": "Heavy straight forearm.",
+      "boxes": [{"f": [9, 11], "x": 0.841, "y": 1.473, "w": 0.4, "h": 0.746}],
+      "boxSrc": "hitVolume"
     },
     "2M": {
       "kind": "normal",
@@ -145,7 +156,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
       "anim": {"clip": "low_forearm"},
-      "desc": "Crouching body forearm; cancel into FRIDGE DOOR."
+      "desc": "Crouching body forearm; cancel into FRIDGE DOOR.",
+      "pushExt": [[0, 0.027], [3, 0.043], [6, 0.1], [10, 0.102], [16, 0.036], [27, 0.0]]
     },
     "5H": {
       "kind": "normal",
@@ -173,7 +185,9 @@
       "role": [],
       "anim": {"clip": "haymaker"},
       "sfx": [[8, "whoosh_heavy"]],
-      "desc": "The reference's big haymaker."
+      "desc": "The reference's big haymaker.",
+      "boxes": [{"f": [13, 15], "x": 0.893, "y": 1.294, "w": 0.5, "h": 0.387}],
+      "boxSrc": "hitVolume"
     },
     "2H": {
       "kind": "normal",
@@ -198,6 +212,7 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
+      "boxes": [{"f": [10, 13], "x": 0.3, "y": 1.9, "w": 0.7, "h": 0.5}],
       "role": ["antiair"],
       "anim": {"clip": "goalpost"},
       "desc": "Both arms swing up: anti-air."
@@ -228,7 +243,9 @@
       "role": ["wallsplat"],
       "anim": {"clip": "big_boot"},
       "sfx": [[9, "whoosh_heavy"]],
-      "desc": "Push kick; wall-splats a cornered opponent."
+      "desc": "Push kick; wall-splats a cornered opponent.",
+      "boxes": [{"f": [15, 17], "x": 1.039, "y": 1.277, "w": 0.5, "h": 0.353}],
+      "boxSrc": "hitVolume"
     },
     "j.L": {
       "kind": "normal",
@@ -336,7 +353,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "fridge_drop"},
-      "desc": "Body press straight down; covers the space under him."
+      "desc": "Body press straight down; covers the space under him.",
+      "pushExt": [[0, 0.0], [8, 0.07], [11, 0.0], [28, 0.0]]
     },
     "throw_f": {
       "kind": "throw",
@@ -361,7 +379,16 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "grab": {"frames": 50, "adv": 21, "hitF": 34, "swap": false, "air": false, "techable": true, "clip": "bear_hug"},
+      "grab": {
+        "frames": 50,
+        "adv": 21,
+        "hitF": 34,
+        "swap": false,
+        "air": false,
+        "techable": true,
+        "clip": "bear_hug",
+        "victim": [[0, "hit_body", 0.0, 0.35], [17, "hit_body", 0.05, 0.4], [34, "kd_fall_b", 1.0, 1.8667]]
+      },
       "role": [],
       "anim": {"clip": "throw_reach"},
       "desc": "Crushes them in a bear hug."
@@ -572,7 +599,9 @@
       "role": ["approach", "wallsplat"],
       "anim": {"clip": "fridge_shove"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Armored running double-palm shove; wall-splats in the corner."
+      "desc": "Armored running double-palm shove; wall-splats in the corner.",
+      "boxes": [{"f": [16, 19], "x": 0.888, "y": 1.462, "w": 0.3, "h": 0.724}],
+      "boxSrc": "hitVolume"
     },
     "fridge_door_m": {
       "kind": "special",
@@ -600,7 +629,9 @@
       "role": ["approach", "wallsplat"],
       "anim": {"clip": "fridge_shove"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Armored running double-palm shove; wall-splats in the corner."
+      "desc": "Armored running double-palm shove; wall-splats in the corner.",
+      "boxes": [{"f": [18, 21], "x": 0.888, "y": 1.474, "w": 0.4, "h": 0.749}],
+      "boxSrc": "hitVolume"
     },
     "fridge_door_h": {
       "kind": "special",
@@ -628,7 +659,9 @@
       "role": ["approach", "wallsplat"],
       "anim": {"clip": "fridge_shove"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Armored running double-palm shove; wall-splats in the corner."
+      "desc": "Armored running double-palm shove; wall-splats in the corner.",
+      "boxes": [{"f": [20, 23], "x": 0.888, "y": 1.487, "w": 0.5, "h": 0.774}],
+      "boxSrc": "hitVolume"
     },
     "fridge_door_ex": {
       "kind": "ex",
@@ -656,7 +689,9 @@
       "role": ["approach", "wallsplat"],
       "anim": {"clip": "fridge_shove"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Two hits of armor, -4 on block."
+      "desc": "Two hits of armor, -4 on block.",
+      "boxes": [{"f": [16, 19], "x": 0.888, "y": 1.487, "w": 0.5, "h": 0.774}],
+      "boxSrc": "hitVolume"
     },
     "lariat_l": {
       "kind": "special",
@@ -685,7 +720,12 @@
       "role": ["antiair", "reversal"],
       "anim": {"clip": "lariat_spin"},
       "sfx": [[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
-      "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable."
+      "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable.",
+      "boxes": [
+        {"f": [8, 10], "x": 0.848, "y": 1.273, "w": 0.3, "h": 0.346},
+        {"f": [16, 18], "x": 0.8484, "y": 1.3215, "w": 0.3, "h": 0.25}
+      ],
+      "boxSrc": "hitVolume"
     },
     "lariat_m": {
       "kind": "special",
@@ -714,7 +754,12 @@
       "role": ["antiair", "reversal"],
       "anim": {"clip": "lariat_spin"},
       "sfx": [[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
-      "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable."
+      "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable.",
+      "boxes": [
+        {"f": [9, 11], "x": 0.848, "y": 1.286, "w": 0.4, "h": 0.371},
+        {"f": [17, 19], "x": 0.8484, "y": 1.3215, "w": 0.4, "h": 0.3}
+      ],
+      "boxSrc": "hitVolume"
     },
     "lariat_h": {
       "kind": "special",
@@ -743,7 +788,12 @@
       "role": ["antiair", "reversal"],
       "anim": {"clip": "lariat_spin"},
       "sfx": [[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
-      "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable."
+      "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable.",
+      "boxes": [
+        {"f": [10, 12], "x": 0.848, "y": 1.298, "w": 0.5, "h": 0.396},
+        {"f": [18, 20], "x": 0.8484, "y": 1.3215, "w": 0.5, "h": 0.35}
+      ],
+      "boxSrc": "hitVolume"
     },
     "lariat_ex": {
       "kind": "ex",
@@ -776,7 +826,13 @@
       "role": ["antiair", "reversal"],
       "anim": {"clip": "lariat_spin"},
       "sfx": [[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
-      "desc": "Fully invulnerable 3-hit lariat."
+      "desc": "Fully invulnerable 3-hit lariat.",
+      "boxes": [
+        {"f": [8, 10], "x": 0.848, "y": 1.298, "w": 0.5, "h": 0.396},
+        {"f": [13, 15], "x": 0.8484, "y": 1.3215, "w": 0.5, "h": 0.35},
+        {"f": [17, 19], "x": 0.8484, "y": 1.3215, "w": 0.5, "h": 0.35}
+      ],
+      "boxSrc": "hitVolume"
     },
     "brace_l": {
       "kind": "special",
@@ -989,7 +1045,8 @@
   "unique": {
     "kind": "armorStep",
     "steps": ["brace_l", "brace_m", "brace_h", "brace_ex"],
-    "armored": ["brace_l", "brace_m", "brace_h", "brace_ex", "fridge_door_l", "fridge_door_m", "fridge_door_h", "fridge_door_ex"]
+    "armored": ["brace_l", "brace_m", "brace_h", "brace_ex", "fridge_door_l", "fridge_door_m", "fridge_door_h", "fridge_door_ex"],
+    "trait": "ARMOR STEP: BRACE walks through one hit into WALK-IN FREEZER or a 2L tick; FRIDGE DOOR walls them in."
   },
   "intro": "intro_battlecry",
   "win": ["win_flex", "win_nod"],

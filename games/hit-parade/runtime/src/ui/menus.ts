@@ -28,7 +28,7 @@ import type {
 } from './types.ts';
 import { ACTIONS } from './types.ts';
 import { btn, clamp, div, el, flashesReduced, ICON, pulse, setReduceFlashing, setText, svg, touchModeOn, watchTouchMode } from './dom.ts';
-import { colorsOf, fighter, fighterName, fillPortrait, stageList, isBoss, onPortraits, setPortraits } from './data.ts';
+import { colorsOf, fighter, fighterName, fillPortrait, stageList, isBoss, onPortraits, playableStage, setPortraits } from './data.ts';
 import { setStrings, t, tOr } from './strings.ts';
 import { buildBug } from './broadcast.ts';
 import { CharSelect, type CsAct, type CsResult, type CsPick } from './charselect.ts';
@@ -808,15 +808,16 @@ export class Menus {
   private defaultStage(fid: string): string {
     const list = stageList(this.data);
     const home = fighter(this.data, fid)?.stage;
-    return home && list.some((s) => s.id === home) ? home : (list[0]?.id ?? 'rust_theater');
+    return playableStage(this.data, home && list.some((s) => s.id === home) ? home : (list[0]?.id ?? 'rust_theater'));
   }
 
   private buildStages(): void {
     const box = this.stageBox;
     box.replaceChildren();
     const list = stageList(this.data);
-    const mk = (id: string, name: string, tag: string, k: number): HTMLButtonElement => {
-      const b = btn('hpm-stagecard', '');
+    const built = list.filter((s) => s.built);                 // CHANGED(integrator): todo stages = COMING SOON
+    const mk = (id: string, name: string, tag: string, k: number, soon = false): HTMLButtonElement => {
+      const b = btn(soon ? 'hpm-stagecard soon' : 'hpm-stagecard', '');
       b.id = `hpm-stage-${id}`;
       b.dataset.stage = id;
       if (k === 0) b.dataset.default = '';
@@ -824,16 +825,19 @@ export class Menus {
       if (id === 'random') art.append(svg(ICON.dice, 'dice'));
       art.append(el('span', 'no', id === 'random' ? '?' : String(k).padStart(2, '0')));
       b.append(el('b', 'nm', name), el('span', 'tg', tag));
+      if (soon) b.append(el('span', 'soon', t('cs.soon')));     // outside .art: the art is greyed, the label is not
       b.addEventListener('click', () => {
+        if (soon) { this.sound('error'); return; }
         this.sound('select');
-        const real = id === 'random' ? list[Math.floor(Math.random() * list.length)].id : id;
+        const pool = built.length ? built : list;
+        const real = id === 'random' ? pool[Math.floor(Math.random() * pool.length)].id : id;
         this.flow.stage = real;
         void this.startVersus(real);
       });
       box.append(b);
       return b;
     };
-    list.forEach((s, k) => mk(s.id, s.name, s.tag, k + 1));
+    list.forEach((s, k) => mk(s.id, s.name, s.tag, k + 1, !s.built));
     mk('random', t('stage.random'), t('stage.random.tag'), 0);
     // RANDOM last in the row, but focused first
     const first = box.querySelector<HTMLElement>(`#hpm-stage-${list[0]?.id}`);
@@ -1632,6 +1636,16 @@ export class Menus {
   // ─────────────────────────── loop: pads + showcase ───────────────────────────
   private startLoop(): void {
     if (this.raf) return;
+    // CHANGED(integrator): seed each pad's previous buttons with what is held NOW, so a button already down when a screen
+    // appears is not a fresh press. Measured before: pad START paused a bout (SHELL Input edge) and the pause card's first
+    // poll saw the same START as a new press -> 'resume' (every other START press left the bout running).
+    try {
+      const list = typeof navigator.getGamepads === 'function' ? [...navigator.getGamepads()] : [];
+      list.filter((g): g is Gamepad => !!g && g.connected).forEach((gp, pi) => {
+        const st = this.pads[pi] ?? (this.pads[pi] = { prev: [], dir: '', repeatT: 0 });
+        st.prev = gp.buttons.map((b) => b.pressed || b.value > 0.5);
+      });
+    } catch { /* no Gamepad API */ }
     this.lastT = performance.now();
     const tick = (now: number): void => {
       this.raf = 0;
@@ -1732,7 +1746,27 @@ export class Menus {
   private showcaseRegion(on: boolean): void {
     const sc = this.deps.showcase;
     if (!sc || !this.driveShowcase) return;
-    if (!on) { if (this.lastShowcase) { sc.setRect?.(null); sc.hide?.(); this.lastShowcase = null; } }
+    if (!on) {
+      if (this.lastShowcase) { sc.setRect?.(null); sc.hide?.(); this.lastShowcase = null; }
+      this.screens.get('charselect')?.classList.remove('hpm-3d');
+    }
+  }
+
+  /**
+   * CHANGED(integrator): the Showcase draws into the shared #game canvas UNDER this DOM, and every screen paints an opaque
+   * backdrop, so in the game the 3D model was never visible (the UI lab used a DOM stub). While the select screen drives
+   * the Showcase it moves its backdrop to ::before with a CSS mask hole at the showcase rect (menus.css .hpm-3d).
+   */
+  private showcaseHole(r: Rect): void {
+    const scr = this.screens.get('charselect');
+    if (!scr) return;
+    const b = scr.getBoundingClientRect();
+    const st = scr.style;
+    st.setProperty('--sc-x', `${Math.round(r.x - b.left)}px`);
+    st.setProperty('--sc-y', `${Math.round(r.y - b.top)}px`);
+    st.setProperty('--sc-w', `${Math.round(r.w)}px`);
+    st.setProperty('--sc-h', `${Math.round(r.h)}px`);
+    scr.classList.add('hpm-3d');
   }
 
   private driveShowcaseFrame(dt: number): void {
@@ -1741,7 +1775,7 @@ export class Menus {
     const r = this.showcaseRect();
     if (!r) return;
     const l = this.lastShowcase;
-    if (!l || l.x !== r.x || l.y !== r.y || l.w !== r.w || l.h !== r.h) { sc.setRect?.(r); this.lastShowcase = r; }
+    if (!l || l.x !== r.x || l.y !== r.y || l.w !== r.w || l.h !== r.h) { sc.setRect?.(r); this.lastShowcase = r; this.showcaseHole(r); }
     sc.frame(dt);
     sc.render();
   }

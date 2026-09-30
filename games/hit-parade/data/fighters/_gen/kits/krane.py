@@ -51,8 +51,8 @@ def build():
            "Mixamo S&S slash: vertical baton chop, front pass f19")
     K.clip("baton_swing", mix(SS + "sword and shield attack (2)", (5, 40), contact=18),
            "Mixamo S&S attack (2): horizontal swing, front pass f18 (root travel stripped)")
-    K.clip("low_poke", crouch(mix(SS + "sword and shield attack (4)", (4, 31), contact=15), lower=ss_crouch),
-           "S&S crouch idle legs + baton poke")
+    K.clip("low_poke", crouch(mix(SS + "sword and shield attack (3)", (1, 53), contact=23), lower=ss_crouch),
+           "S&S crouch idle legs + S&S attack (3) upper: the dipping low baton thrust (inventory hit f23 RightHand 0.81 m, hips 0.65 m) on crouched legs = a shin poke. Replaced the attack (4) upper (2026-09-30): that poke is aimed at head height, so on crouched legs it still landed at 1.42 m and the LOW never hit a crouching opponent in the sim (connect matrix)")
     K.clip("knee_rap", mix(SS + "sword and shield slash (5)", (5, 40), contact=19),
            "Mixamo S&S slash (5): crouched 1H swing (hips 0.45-0.61 m) = low baton rap")
     K.clip("rising_baton", mix(SS + "sword and shield slash (3)", (10, 45), contact=25),

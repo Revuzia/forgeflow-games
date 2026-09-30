@@ -13,6 +13,7 @@ import type { CMove } from './compile.ts';
 import { addShowtime, clearMove, drainNerve, emit, fb, isAirborne, setSt } from './state.ts';
 import type { Match } from './state.ts';
 import { applyDamage, comboStep } from './hits.ts';
+import { pushExt } from './boxes.ts';
 
 function inRange(inv: Int32Array, o: number, f: number): boolean {
   return inv[o] > 0 && f >= inv[o] && f <= inv[o + 1];
@@ -75,10 +76,14 @@ function grabCandidate(m: Match, a: number): CMove | null {
   const d = 1 - a;
   if (mv.grab && mv.grab.air ? !airGrabbable(m, d) : !throwable(m, d)) return null;
   const dx = Math.abs(s[ba + F.x] - s[fb(d) + F.x]);
+  // CHANGED(fixer) D2: the push-box edges that face each other (asymmetric boxes)
+  const toD = s[fb(d) + F.x] >= s[ba + F.x] ? 1 : -1;
+  const eA = pushExt(m, a, toD);
+  const eD = pushExt(m, d, -toD);
   if (mv.grabGap >= 0) {
     // CONTRACT 20.2: pushbox front to pushbox front within rangeM (throws: throwRangeM)
-    if (dx - m.cf[a].pushHalf - m.cf[d].pushHalf > mv.grabGap) return null;
-  } else if (dx > mv.grabReach + m.cf[d].pushHalf) return null;
+    if (dx - eA - eD > mv.grabGap) return null;
+  } else if (dx > mv.grabReach + eD) return null;
   return mv;
 }
 
@@ -132,6 +137,20 @@ function connect(m: Match, a: number, mv: CMove): void {
   setSt(m, d, ST.THROWN);
   s[bd + F.flags] &= ~(FL.AIRBORNE | FL.CROUCHING | FL.PROX | FL.BLOCKING);
   s[bd + F.stun] = g ? g.frames : mv.total - f + 1;
+  // CHANGED(fixer) D3: the carry (throwpose.ts): anchor + lock length; a side-swap throw ends the victim behind the
+  // thrower clear of both push-box fronts (the thrower turns to face it; the lying victim keeps its facing until it rises)
+  s[bd + F.tot] = s[bd + F.stun];
+  s[bd + F.thrX] = s[bd + F.x];
+  s[bd + F.kdFace] = 0;
+  s[bd + F.thrDisp] = 0;
+  s[bd + F.thrMv] = s[ba + F.mv];
+  s[bd + F.thrSlam] = g ? g.hitF : s[ba + F.throwDmgF];
+  if (mv.throwBack) {
+    const d0 = Math.abs(s[bd + F.x] - s[ba + F.x]);
+    // clear of both FRONTS: once the victim is up it turns to face the thrower (no push-apart pop at that turn)
+    const after = Math.max(m.sys.backThrowOff, m.cf[a].pushFS + m.cf[d].pushFS + 2000);
+    s[bd + F.thrDisp] = d0 + after;
+  }
   s[bd + F.after] = Math.max(1, g ? g.adv : mv.hitstun - (mv.active + mv.recovery));
   s[bd + F.kd] = pc ? 2 : mv.kd || 1;
   s[bd + F.techWin] = untech || (g !== null && !g.techable) ? 0 : sys.throw.techWindow;

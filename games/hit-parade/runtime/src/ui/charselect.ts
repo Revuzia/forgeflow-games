@@ -12,7 +12,7 @@
 
 import type { Rect, Scheme, UiGameData, UiSave } from './types.ts';
 import { btn, div, el, svg, ICON, setText, pulse } from './dom.ts';
-import { archetypeLabel, colorsOf, difficulty, fighter, fighterIds, fillPortrait, isBoss, isUnlocked, BOSSES } from './data.ts';
+import { archetypeLabel, colorsOf, difficulty, fighter, fighterIds, fillPortrait, hasAssets, isBoss, isUnlocked, BOSSES } from './data.ts';
 import { t } from './strings.ts';
 
 export type CsMode = 'season' | 'versus' | 'training' | 'online';
@@ -156,7 +156,8 @@ export class CharSelect {
     this.cells.clear();
     this.grid.replaceChildren();
     const add = (id: string, col: number, row: number, span: number): void => {
-      const locked = id !== 'random' && !isUnlocked(this.save, id);
+      const soon = id !== 'random' && !hasAssets(this.data, id);              // CHANGED(integrator): no baked assets yet
+      const locked = soon || (id !== 'random' && !isUnlocked(this.save, id));
       const b = btn('hpm-slot', '', false);
       b.dataset.id = id;
       b.id = `hpm-slot-${id}`;
@@ -168,7 +169,8 @@ export class CharSelect {
       const nm = el('span', 'nm', id === 'random' ? t('cs.random') : (fighter(this.data, id)?.name ?? id.toUpperCase()));
       b.append(nm);
       if (isBoss(id)) b.append(el('span', 'boss', BOSSES[id] === 'boss' ? t('cs.boss') : t('cs.miniboss')));
-      if (locked) { b.classList.add('locked'); b.append(svg(ICON.lock, 'lock')); b.title = t('cs.lockedHint'); }
+      if (soon) { b.classList.add('locked', 'soon'); b.append(el('span', 'soon', t('cs.soon'))); b.title = t('cs.soonHint'); }
+      else if (locked) { b.classList.add('locked'); b.append(svg(ICON.lock, 'lock')); b.title = t('cs.lockedHint'); }
       b.append(el('i', 'cur c1', t('cs.p1')), el('i', 'cur c2', t('cs.p2')));
       const idx = this.slots.length;
       b.addEventListener('click', () => this.onClick(idx));
@@ -265,7 +267,7 @@ export class CharSelect {
     const st = this.p[i];
     const s = this.slots[st.cursor];
     if (!s) return;
-    if (s.locked) { this.hooks.sound('error'); this.flashNote(t('cs.lockedHint')); pulse(s.el, [{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'none' }], 180); return; }
+    if (s.locked) { this.hooks.sound('error'); this.flashNote(t(s.el.classList.contains('soon') ? 'cs.soonHint' : 'cs.lockedHint')); pulse(s.el, [{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'none' }], 180); return; }
     let id = s.id;
     if (id === 'random') {
       const pool = this.slots.filter((x) => x.id !== 'random' && !x.locked && !isBoss(x.id)).map((x) => x.id);

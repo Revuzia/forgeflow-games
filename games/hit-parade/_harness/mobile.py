@@ -17,8 +17,9 @@ TouchControls over the scripted bout. Per device:
   6 edit      EDIT LAYOUT: drag L by (-40, -30) -> DONE -> settings.touchLayout.l = {dx -40, dy -30} and L moved
   7 menus     taps: title -> main -> VERSUS -> BACK -> main (the menus take touches, 44 px targets)
   8 hygiene   a pinch keeps visualViewport.scale 1; the page never scrolls; a long-press selects nothing
---game (integration): the shell's ?touch=1&mode=versus&p1=johnny&p2=bruno&cpu2=1&autostart=1&dev=1 deep link: the stick
-walks P1 (x changes >= 0.3 m), an L tap produces a HIT or WHIFF event, PAUSE -> card -> RESUME, portrait -> rotate overlay.
+--game (integration, CHANGED(integrator): implemented): the shell's ?touch=1&mode=versus&p1=johnny&p2=bruno&autostart=1&dev=1
+deep link (P2 idle): the overlay shows, the stick walks P1 (x changes >= 0.3 m), an L tap produces a HIT or WHIFF event,
+PAUSE -> card -> a tap on RESUME, portrait -> rotate overlay pauses the bout.
 Screenshots: _shots/mobile_<device>_<step>.png. Report: _harness/_reports/mobile.json. Exit 0 PASS, 1 FAIL, 2 error.
 Run:  python _harness/mobile.py --headless [--devices se,p844,iphone14,pixel7,ipad]
 """
@@ -249,13 +250,76 @@ def lab_menus_by_tap(page, cdp, dev: str, results: list) -> None:
     R.ok("tap_back", scr() == "main", f"screen={scr()}")
 
 
+def game_device(page, cdp, dev: str, results: list, base: str) -> None:
+    """CHANGED(integrator): the --game path (the shell now wires TouchControls, CONTRACT §24.3): a real deep-linked bout
+    in touch mode, driven by CDP touches only."""
+    R = Run(page, dev, results)
+    T = Touch(cdp)
+    d = DEVICES[dev]
+    # P2 is an idle dummy (no cpu2): a live CPU can stun P1 through every tap (measured: 4 L taps, 0 attacks on iphone14)
+    url = base.rstrip("/") + "/?touch=1&mode=versus&p1=johnny&p2=bruno&stage=rust_theater&seed=1&autostart=1&dev=1"
+    page.goto(url, wait_until="load")
+    phase = lambda: page.evaluate("(() => { try { return __HP__.state().phase; } catch (e) { return null; } })()")  # noqa: E731
+    mphase = lambda: page.evaluate("(() => { try { const m = __HP__.match(); return m ? m.phase : null; } catch (e) { return null; } })()")  # noqa: E731
+    fx = lambda: page.evaluate("(() => { try { return __HP__.fighters()[0].x; } catch (e) { return null; } })()")  # noqa: E731
+    t0 = time.time()
+    while time.time() - t0 < 90 and not (phase() == "bout" and mphase() == "fight"):
+        time.sleep(0.25)
+    R.ok("game_bout_fight", phase() == "bout" and mphase() == "fight", f"phase={phase()} match={mphase()}")
+    time.sleep(0.8)
+    t = R.touch()
+    R.ok("game_overlay_visible", page.evaluate("document.documentElement.classList.contains('hp-touch')") and t.get("visible") is True,
+         f"visible={t.get('visible')} buttons={len(t.get('buttons', []))}", snap=True)
+    # stick right -> P1 walks
+    sb = (R.btn("stick") or {}).get("rect")
+    if sb:
+        sx, sy = sb["x"] + sb["w"] / 2, sb["y"] + sb["h"] / 2
+        x0 = fx()
+        T.down(1, sx, sy)
+        T.move(1, sx + sb["w"] * 0.4, sy)
+        time.sleep(0.8)
+        x1 = fx()
+        T.up(1)
+        R.ok("game_stick_walks", isinstance(x0, (int, float)) and isinstance(x1, (int, float)) and x1 - x0 >= 0.3, f"P1 x {x0} -> {x1}")
+    else:
+        R.ok("game_stick_walks", False, "no stick rect in __HP__.touch()")
+    # L tap -> an attack event by P1
+    n0 = page.evaluate("__HP__.events(512).filter(e => e.a === 0 && ['HIT','WHIFF','BLOCK','COUNTER','PUNISH'].includes(e.typeName)).length")
+    lx, ly = R.centre("l")
+    got = 0
+    for _ in range(4):
+        T.tap(lx, ly, 0.06)
+        time.sleep(0.45)
+        got = page.evaluate("__HP__.events(512).filter(e => e.a === 0 && ['HIT','WHIFF','BLOCK','COUNTER','PUNISH'].includes(e.typeName)).length") - n0
+        if got > 0:
+            break
+    R.ok("game_tap_L_attacks", got > 0, f"new P1 HIT/WHIFF/BLOCK events: {got}")
+    # PAUSE button -> the pause card -> tap RESUME
+    px, py = R.centre("pause")
+    T.tap(px, py, 0.06)
+    time.sleep(0.6)
+    R.ok("game_pause_button", phase() == "paused", f"phase={phase()}", snap=True)
+    rect = page.evaluate("(() => { const b = document.getElementById('hpm-p-resume'); if (!b) return null; const r = b.getBoundingClientRect(); return {x: r.x + r.width / 2, y: r.y + r.height / 2}; })()")
+    if rect:
+        T.tap(rect["x"], rect["y"], 0.06)
+        time.sleep(0.6)
+    R.ok("game_resume_tap", phase() == "bout", f"phase={phase()} resume={rect}")
+    # portrait -> the rotate overlay pauses the bout
+    page.set_viewport_size({"width": d["h"], "height": d["w"]})
+    time.sleep(0.8)
+    shown = page.evaluate("(() => { const e = document.getElementById('hp-rotate'); return !!e && !e.hidden; })()")
+    R.ok("game_portrait_rotate_pauses", shown and phase() == "paused", f"rotate overlay={shown} phase={phase()}", snap=True)
+    page.set_viewport_size({"width": d["w"], "height": d["h"]})
+    time.sleep(0.3)
+
+
 def run(args) -> int:
     from playwright.sync_api import sync_playwright
     devices = [d.strip() for d in args.devices.split(",") if d.strip()]
     results: list = []
     errors: list = []
     t0 = time.time()
-    srv = LabServer() if not args.base else None
+    srv = LabServer() if (not args.base and not args.game) else None
     try:
         if srv:
             srv.__enter__()
@@ -278,7 +342,9 @@ def run(args) -> int:
                     except Exception as e:
                         errors.append(f"{dev} safe-area override unsupported: {e}")
                 if args.game:
-                    raise HarnessError("--game: the touch bout runs once the shell wires TouchControls + __HP__.touch() (integration)")
+                    game_device(page, cdp, dev, results, args.base or "http://localhost:5320/")
+                    ctx.close()
+                    continue
                 page.goto(args.base or lab_url(None, "hud=mid&touch=1"), wait_until="load")
                 wait_ready(page)
                 time.sleep(1.0)

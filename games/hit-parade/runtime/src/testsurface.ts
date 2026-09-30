@@ -48,6 +48,11 @@ export interface TestHooks {
   freeze?(on: boolean): void;
   goto?(screen: string): void;
   cpu?(p: 0 | 1, level: number): void;
+  /** CHANGED(integrator): UI §22.7 read-backs (menus / hud / touch overlay) + dev.touchWord */
+  menus?(): unknown;
+  hud?(): unknown;
+  touchUi?(): unknown;
+  touchWord?(): number;
 }
 
 export interface HpSurface {
@@ -62,6 +67,8 @@ export interface HpSurface {
   net(): unknown;
   touch(): unknown;
   input(): Record<string, unknown> | null;
+  menus(): unknown;
+  hud(): unknown;
   dev: {
     startMatch(cfg: unknown): unknown;
     setInputs(p: number, word: number, frames: number): void;
@@ -71,6 +78,7 @@ export interface HpSurface {
     freeze(on: boolean): void;
     goto(screen: string): void;
     cpu(p: number, level: number): void;
+    touchWord(): number;
   };
 }
 
@@ -148,7 +156,13 @@ export function installTestSurface(h: TestHooks): HpSurface {
     },
     audio: () => safe(() => h.audio(), null),
     net: () => safe(() => h.net(), null),
-    touch: () => safe(() => h.touch(), null),
+    touch: () => safe(() => {
+      const base = h.touch();
+      const ui = h.touchUi ? h.touchUi() : null;
+      return ui && base && typeof base === 'object' ? { ...(base as Record<string, unknown>), overlay: ui, ...(ui as Record<string, unknown>) } : base;
+    }, null),
+    menus: () => safe(() => (h.menus ? h.menus() : null), null),
+    hud: () => safe(() => (h.hud ? h.hud() : null), null),
     input() {
       const i = h.input();
       if (!i) return null;
@@ -172,6 +186,7 @@ export function installTestSurface(h: TestHooks): HpSurface {
       freeze(on) { devOnly('freeze'); need('freeze')(!!on); },
       goto(screen) { devOnly('goto'); need('goto')(String(screen)); },
       cpu(p, level) { devOnly('cpu'); need('cpu')(player(p), Number(level)); },
+      touchWord() { devOnly('touchWord'); return need('touchWord')(); },
     },
   };
   window.__HP__ = api;

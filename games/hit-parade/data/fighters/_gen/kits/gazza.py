@@ -91,7 +91,7 @@ def build():
           why="Short fast command normal: 7/3/15, +2/-3 (reach 0.45 m).")
     K.add("6H", "OH", input="6H", kind="command", name="Diving Header", clip="header", startup=20,
           moveY=[[0, 0], [8, 0.3], [20, 0.1], [22, 0.0]],
-          boxes=[{"f": [20, 22], "x": 0.55, "y": 1.55, "w": 0.40, "h": 0.35}],
+          boxes=[{"f": [20, 22], "x": 0.55, "y": 1.3625, "w": 0.40, "h": 0.725}],
           desc="Hopping header onto the head: overhead.",
           why="Header overhead: 20f on a small hop; the box is hand-set because the head is behind the hips at "
               "the clip contact (MIXAMO_CLIPS header note).")

@@ -3,6 +3,7 @@
   "name": "GAZZA",
   "persona": "Goal Line",
   "archetype": "setplay",
+  "difficulty": 3,
   "body": "Ch08_nonPBR",
   "heightM": 1.8,
   "hp": 10000,
@@ -25,11 +26,17 @@
   },
   "throwRangeM": 0.6,
   "hurt": {
-    "stand": [0.54, 1.71],
-    "crouch": [0.62, 1.08],
+    "stand": [0.54, 1.79],
+    "crouch": [0.62, 1.28],
     "air": [0.51, 1.12]
   },
-  "pushbox": [0.46, 1.54],
+  "pushbox": [0.39, 1.61],
+  "push": {
+    "front": 0.294,
+    "back": 0.097,
+    "crouchFront": 0.455,
+    "crouchBack": 0.025
+  },
   "colors": [
     {"name": "Sunday League", "tint": null},
     {"name": "Home Kit", "tint": "#c62828"},
@@ -62,7 +69,10 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
       "anim": {"clip": "jab"},
-      "desc": "Pub-brawler jab."
+      "desc": "Pub-brawler jab.",
+      "boxes": [{"f": [5, 7], "x": 0.822, "y": 1.377, "w": 0.316, "h": 0.554}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.037], [5, 0.054], [8, 0.001], [17, 0.02]]
     },
     "2L": {
       "kind": "normal",
@@ -89,7 +99,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
       "anim": {"clip": "crouch_jab"},
-      "desc": "Crouching jab."
+      "desc": "Crouching jab.",
+      "boxes": [{"f": [5, 7], "x": 0.882, "y": 0.931, "w": 0.437, "h": 0.25}],
+      "boxSrc": "hitVolume"
     },
     "5M": {
       "kind": "normal",
@@ -116,7 +128,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
       "anim": {"clip": "snap_kick"},
-      "desc": "Front snap kick."
+      "desc": "Front snap kick.",
+      "boxes": [{"f": [9, 11], "x": 0.937, "y": 1.106, "w": 0.547, "h": 0.3}],
+      "boxSrc": "hitVolume"
     },
     "2M": {
       "kind": "normal",
@@ -172,7 +186,9 @@
       "role": [],
       "anim": {"clip": "volley"},
       "sfx": [[8, "whoosh_heavy"]],
-      "desc": "Big front volley."
+      "desc": "Big front volley.",
+      "boxes": [{"f": [12, 14], "x": 0.981, "y": 1.018, "w": 0.635, "h": 0.35}],
+      "boxSrc": "hitVolume"
     },
     "2H": {
       "kind": "normal",
@@ -201,7 +217,9 @@
       "role": ["sweep", "low", "lowprofile"],
       "anim": {"clip": "slide_tackle"},
       "sfx": [[4, "whoosh_light"]],
-      "desc": "Feet-first slide tackle from range (travels 1.2 m)."
+      "desc": "Feet-first slide tackle from range (travels 1.2 m).",
+      "boxes": [{"f": [12, 14], "x": 0.967, "y": 0.538, "w": 0.606, "h": 0.35}],
+      "boxSrc": "hitVolume"
     },
     "4M": {
       "kind": "command",
@@ -254,7 +272,7 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "moveY": [[0, 0], [8, 0.3], [20, 0.1], [22, 0.0]],
-      "boxes": [{"f": [20, 22], "x": 0.55, "y": 1.55, "w": 0.4, "h": 0.35}],
+      "boxes": [{"f": [20, 22], "x": 0.55, "y": 1.3625, "w": 0.4, "h": 0.725}],
       "role": ["overhead"],
       "anim": {"clip": "header"},
       "desc": "Hopping header onto the head: overhead."
@@ -284,7 +302,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "air_knee"},
-      "desc": "Air knee."
+      "desc": "Air knee.",
+      "pushExt": [[0, 0.072], [7, 0.026], [15, 0.092]]
     },
     "j.M": {
       "kind": "normal",
@@ -338,7 +357,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "flying_punt"},
-      "desc": "Big flying punt jump-in."
+      "desc": "Big flying punt jump-in.",
+      "pushExt": [[0, 0.082], [3, 0.0], [19, 0.004]]
     },
     "throw_f": {
       "kind": "throw",
@@ -374,7 +394,8 @@
       },
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Drops them like a ball and punts them away."
+      "desc": "Drops them like a ball and punts them away.",
+      "pushExt": [[0, 0.157], [4, 0.032], [7, 0.004], [24, 0.0], [31, 0.047]]
     },
     "throw_b": {
       "kind": "throw",
@@ -402,7 +423,8 @@
       "grab": {"frames": 50, "adv": 14, "hitF": 32, "swap": true, "air": false, "techable": true, "clip": "keeper_throw"},
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Bowls them out behind him."
+      "desc": "Bowls them out behind him.",
+      "pushExt": [[0, 0.157], [4, 0.032], [7, 0.004], [24, 0.0], [31, 0.047]]
     },
     "power_shot_l": {
       "kind": "special",
@@ -442,7 +464,8 @@
       "role": ["projectile"],
       "anim": {"clip": "shot_kick"},
       "sfx": [[0, "ball_kick"]],
-      "desc": "Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off the wall."
+      "desc": "Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off the wall.",
+      "pushExt": [[0, 0.076], [5, 0.0], [48, 0.0]]
     },
     "power_shot_m": {
       "kind": "special",
@@ -481,7 +504,8 @@
       "role": ["projectile"],
       "anim": {"clip": "shot_kick"},
       "sfx": [[0, "ball_kick"]],
-      "desc": "Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off the wall."
+      "desc": "Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off the wall.",
+      "pushExt": [[0, 0.076], [5, 0.0], [48, 0.0]]
     },
     "power_shot_h": {
       "kind": "special",
@@ -522,7 +546,8 @@
       "role": ["projectile", "antiair"],
       "anim": {"clip": "shot_kick"},
       "sfx": [[0, "ball_kick"]],
-      "desc": "Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off the wall."
+      "desc": "Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off the wall.",
+      "pushExt": [[0, 0.076], [4, 0.0], [48, 0.0]]
     },
     "power_shot_ex": {
       "kind": "ex",
@@ -561,7 +586,8 @@
       "role": ["projectile"],
       "anim": {"clip": "shot_kick"},
       "sfx": [[0, "ball_kick"]],
-      "desc": "Curling 2-hit shot."
+      "desc": "Curling 2-hit shot.",
+      "pushExt": [[0, 0.076], [4, 0.0], [42, 0.0]]
     },
     "bicycle_l": {
       "kind": "special",
@@ -716,7 +742,8 @@
       },
       "role": ["antiair", "projectile"],
       "anim": {"clip": "keepy"},
-      "desc": "Juggles the ball above him (1.2 / 1.8 / 2.4 m) for 2 s: an anti-air trap; POWER SHOT then volleys it from there."
+      "desc": "Juggles the ball above him (1.2 / 1.8 / 2.4 m) for 2 s: an anti-air trap; POWER SHOT then volleys it from there.",
+      "pushExt": [[0, 0.0], [11, 0.002], [25, 0.189], [29, 0.092]]
     },
     "keepy_m": {
       "kind": "special",
@@ -754,7 +781,8 @@
       },
       "role": ["antiair", "projectile"],
       "anim": {"clip": "keepy"},
-      "desc": "Juggles the ball above him (1.2 / 1.8 / 2.4 m) for 2 s: an anti-air trap; POWER SHOT then volleys it from there."
+      "desc": "Juggles the ball above him (1.2 / 1.8 / 2.4 m) for 2 s: an anti-air trap; POWER SHOT then volleys it from there.",
+      "pushExt": [[0, 0.0], [11, 0.002], [25, 0.189], [29, 0.092]]
     },
     "keepy_h": {
       "kind": "special",
@@ -792,7 +820,8 @@
       },
       "role": ["antiair", "projectile"],
       "anim": {"clip": "keepy"},
-      "desc": "Juggles the ball above him (1.2 / 1.8 / 2.4 m) for 2 s: an anti-air trap; POWER SHOT then volleys it from there."
+      "desc": "Juggles the ball above him (1.2 / 1.8 / 2.4 m) for 2 s: an anti-air trap; POWER SHOT then volleys it from there.",
+      "pushExt": [[0, 0.0], [11, 0.002], [25, 0.189], [29, 0.092]]
     },
     "keepy_ex": {
       "kind": "ex",
@@ -830,7 +859,8 @@
       },
       "role": ["antiair", "projectile"],
       "anim": {"clip": "keepy"},
-      "desc": "3-second hover, 2 hits."
+      "desc": "3-second hover, 2 hits.",
+      "pushExt": [[0, 0.0], [12, 0.025], [15, 0.095], [23, 0.189], [27, 0.092]]
     },
     "dive_l": {
       "kind": "special",
@@ -858,7 +888,21 @@
       "hurtOverride": [{"f": [3, 24], "w": 0.9, "h": 0.6}],
       "role": ["lowprofile", "approach"],
       "anim": {"clip": "dive_roll"},
-      "desc": "A theatrical forward dive-roll under projectiles and high attacks."
+      "desc": "A theatrical forward dive-roll under projectiles and high attacks.",
+      "pushExt": [
+        [0, 0.096],
+        [7, 0.0],
+        [11, 0.108],
+        [13, 0.275],
+        [15, 0.262],
+        [17, 0.185],
+        [19, 0.211],
+        [21, 0.175],
+        [31, 0.203],
+        [33, 0.263],
+        [37, 0.311],
+        [40, 0.283]
+      ]
     },
     "dive_m": {
       "kind": "special",
@@ -886,7 +930,21 @@
       "hurtOverride": [{"f": [3, 24], "w": 0.9, "h": 0.6}],
       "role": ["lowprofile", "approach"],
       "anim": {"clip": "dive_roll"},
-      "desc": "A theatrical forward dive-roll under projectiles and high attacks."
+      "desc": "A theatrical forward dive-roll under projectiles and high attacks.",
+      "pushExt": [
+        [0, 0.096],
+        [7, 0.0],
+        [9, 0.03],
+        [11, 0.108],
+        [14, 0.275],
+        [15, 0.276],
+        [18, 0.185],
+        [19, 0.205],
+        [22, 0.168],
+        [31, 0.191],
+        [39, 0.311],
+        [42, 0.283]
+      ]
     },
     "dive_h": {
       "kind": "special",
@@ -914,7 +972,23 @@
       "hurtOverride": [{"f": [3, 24], "w": 0.9, "h": 0.6}],
       "role": ["lowprofile", "approach"],
       "anim": {"clip": "dive_roll"},
-      "desc": "A theatrical forward dive-roll under projectiles and high attacks."
+      "desc": "A theatrical forward dive-roll under projectiles and high attacks.",
+      "pushExt": [
+        [0, 0.096],
+        [7, 0.0],
+        [9, 0.019],
+        [10, 0.071],
+        [12, 0.108],
+        [13, 0.188],
+        [15, 0.275],
+        [17, 0.249],
+        [18, 0.187],
+        [20, 0.205],
+        [23, 0.168],
+        [34, 0.203],
+        [40, 0.307],
+        [44, 0.283]
+      ]
     },
     "dive_ex": {
       "kind": "ex",
@@ -942,7 +1016,20 @@
       "hurtOverride": [{"f": [1, 24], "w": 0.9, "h": 0.6}],
       "role": ["lowprofile", "approach"],
       "anim": {"clip": "dive_roll"},
-      "desc": "Strike-invulnerable dive."
+      "desc": "Strike-invulnerable dive.",
+      "pushExt": [
+        [0, 0.096],
+        [6, 0.0],
+        [9, 0.095],
+        [11, 0.236],
+        [12, 0.276],
+        [15, 0.185],
+        [16, 0.205],
+        [18, 0.168],
+        [27, 0.203],
+        [32, 0.307],
+        [35, 0.283]
+      ]
     },
     "top_bins": {
       "kind": "super1",
@@ -981,7 +1068,8 @@
       "role": ["projectile", "reversal"],
       "anim": {"clip": "shot_kick"},
       "sfx": [[0, "crowd_cheer_burst"]],
-      "desc": "Flicks up a fresh ball and smashes a 5-hit flaming shot; invulnerable startup."
+      "desc": "Flicks up a fresh ball and smashes a 5-hit flaming shot; invulnerable startup.",
+      "pushExt": [[0, 0.076], [3, 0.0], [55, 0.0]]
     },
     "hat_trick": {
       "kind": "super3",
@@ -1034,7 +1122,9 @@
       },
       "role": ["reversal"],
       "anim": {"clip": "volley"},
-      "desc": "PRIME TIME: point-blank volley, a shot to the chest, a header, and the bicycle-kick finale."
+      "desc": "PRIME TIME: point-blank volley, a shot to the chest, a header, and the bicycle-kick finale.",
+      "boxes": [{"f": [10, 13], "x": 0.981, "y": 1.018, "w": 0.635, "h": 0.35}],
+      "boxSrc": "hitVolume"
     }
   },
   "simple": {
@@ -1058,7 +1148,8 @@
     "restF": 240,
     "pickupM": 0.4,
     "hover": {"l": 1.2, "m": 1.8, "h": 2.4, "frames": 120},
-    "bounces": 1
+    "bounces": 1,
+    "trait": "THE BALL: one ball on screen - shoot it, park it with KEEPY-UPPY, volley it later; one wall rebound."
   },
   "intro": "intro_flick",
   "win": ["win_point", "win_juggle"],

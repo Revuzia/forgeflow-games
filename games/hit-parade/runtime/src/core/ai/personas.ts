@@ -9,7 +9,9 @@
 //   zoner    projectile spam: fires whenever its projectile is available, walks back to keep range.
 //   novice   a normal player whose every input arrives 400 ms (24 f) late (data/cpu.json personas.novice).
 //   optimal  fast human reactions (10 f), blocks everything it can see, punishes everything punishable
-//            with the best route, perfect execution (personas.optimal).
+//            with the best route, perfect execution, and respects a presser (personas.optimal respect 0.9:
+//            inside the range of the buttons a masher keeps pressing it swings a longer normal into the
+//            walk-in or holds a guard, instead of walking / dashing / pressing a slower button into it).
 
 import CPU_JSON from '../../../../data/cpu.json' with { type: 'json' };
 import type { Brain, Decision } from './brain.ts';

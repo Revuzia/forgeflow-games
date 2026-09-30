@@ -69,8 +69,8 @@
   "scream_up": {
     "src": "mixamo",
     "file": "Scary_Zombie_Pack/zombie scream",
-    "range": [18, 45],
-    "contact": 30,
+    "range": [15, 45],
+    "contact": 23,
     "mirror": false,
     "speed": 1.0,
     "loop": false
@@ -82,7 +82,8 @@
     "contact": 32,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "effector": "Head"
   },
   "air_swat": {
     "src": "layer",
@@ -209,7 +210,8 @@
     "contact": 30,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 55}
   },
   "swing_toss": {
     "src": "mixamo",
@@ -218,7 +220,8 @@
     "contact": 30,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 48}
   },
   "play_dead_fall": {
     "src": "mixamo",
@@ -306,7 +309,7 @@
     "speed": 1.0,
     "loop": false,
     "contacts": [23, 29],
-    "marks": {"hit1": 23, "hit2": 29}
+    "marks": {"hit1": 23, "hit2": 29, "slam": 74}
   },
   "arise_leap": {
     "src": "layer",

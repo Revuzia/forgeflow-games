@@ -38,7 +38,8 @@ def build():
     K.clip("drunk_round", cmu("roundhouse.4"), "CMU roundhouse.4 usable (135_01 turning kick 1.12 m, curved path)")
     K.clip("low_palm", crouch(cmu("jab.5", rng=(1579, 1640))), "Crouch Idle legs + CMU jab.5")
     K.clip("shin_kick", authored("crouch_shin_kick"), "AUTHORED crouch low roundhouse (shared authored motion)")
-    K.clip("knee_lift", cmu("knee.5"), "CMU knee.5 usable (135_02 kata knee-lift from back stance) = anti-air knee")
+    K.clip("knee_lift", dict(cmu("knee.5", contact=3128), effector="RightKnee"),
+           "CMU knee.5 usable (135_02 kata knee-lift from back stance) = anti-air knee. Contact 3128 + effector RightKnee (2026-09-30): the knee tops out there (bake trace 1.14 m); the research contact 3121 measured the FOOT at 0.76 m, so the derived box sat at shin height and only hit landing opponents")
     K.clip("wobble_palm", cmu(take="135_09", rng=(1886, 1932), contact=1914, kind="hand", limb="L_hand"),
            "CMU lunge_punch 135_09 1886/1914/1932 (left oi-zuki, usable) = stumbling step palm")
     K.clip("lean_kick", cmu("side_kick.3"), "CMU side_kick.3 clean (143_24 left 0.84 m, torso leans away)")
@@ -83,6 +84,7 @@ def build():
     K.add("5H", "H", name="Drunken Roundhouse", clip="drunk_round", startup=13, cancel=["special", "super"],
           desc="Curving turning kick.", why="Turning kick with a curved path: startup 12->13.")
     K.add("2H", "AA", name="Knee Lift", clip="knee_lift", juggle={"js": 1, "ji": 1, "jl": 0},
+          boxes=[{"f": [9, 12], "x": 0.35, "y": 1.20, "w": 0.45, "h": 0.50}],
           cancel=["special", "super"], desc="Knee-lift anti-air.")
     K.add("6M", "CMD", input="6M", kind="command", name="Wobble Palm", clip="wobble_palm", startup=14, recovery=17,
           hitstun=22, blockstun=16, damage=700, move=[[0, 0], [14, 0.4]], role=["approach"],
@@ -170,11 +172,17 @@ def build():
           hits=[{"f": [8, 9], "damage": 500, "hitstop": 9}, {"f": [22, 23], "damage": 600, "hitstop": 9},
                 {"f": [36, 38], "damage": 900, "hitstop": 20}],
           warp="auto", invuln={"strike": [1, 10], "throw": [1, 10]}, move=[[0, 0], [8, 0.5], [22, 1.0], [36, 1.4]],
-          moveY=[[0, 0], [30, 0.0], [36, 0.6], [46, 0.0]], kd="soft", juggle={"js": 1, "ji": 0, "jl": 99},
+          moveY=[[0, 0], [30, 0.0], [36, 0.3], [46, 0.0]], kd="soft", juggle={"js": 1, "ji": 0, "jl": 99},
+          boxes=[{"f": [8, 9], "x": 0.66, "y": 1.24, "w": 0.50, "h": 0.35},
+                 {"f": [22, 23], "x": 0.785, "y": 1.09, "w": 0.53, "h": 0.35},
+                 {"f": [36, 38], "x": 0.71, "y": 1.1175, "w": 0.50, "h": 0.635}],
           cost={"showtime": LV1_COST}, gain=0, nerve=600, role=["reversal"], sfx=[[1, "crowd_cheer_burst"]],
           desc="A swig, then palm, turning kick and rising knee - invulnerable startup.",
           why="1c Lv1: invulnerable 1-10; hits spaced 14 frames apart (the clip holds three separate CMU "
-              "moves); recovery 52 -> -30 on block.")
+              "moves); recovery 52 -> -30 on block. Hand-set per-hit boxes (2026-09-30) at each strike point "
+              "from the bake trace (palm 0.66/1.24 m, kick 0.80/1.09 m, knee rise ~0.71/1.26 m), each reaching the "
+              "1.10 m crouch line; knee hop 0.6 -> 0.3 m (SIM derives every hit at the first contact point, which "
+              "put the hopping third hit at 1.67-2.01 m).")
     K.add("happy_hour", LV3, kind="super3", input="214214", name="Happy Hour", strength="H", clip="lunge_palm",
           invuln={"strike": [1, 13], "throw": [1, 13], "air": [1, 13], "proj": [1, 13]},
           move=[[0, 0], [10, 0.8]], cost={"showtime": LV3_COST}, gain=0, nerve=7500, role=["reversal"],

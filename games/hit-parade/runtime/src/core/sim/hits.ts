@@ -8,7 +8,7 @@ import { CF, F, FL, MVF, P, PROJ_CAP, ST, W, projBase } from './layout.ts';
 import { EV, CUE, SC } from './events.ts';
 import { GD } from './compile.ts';
 import type { CMove } from './compile.ts';
-import { hitRect, hurtRects, rectsOverlap } from './boxes.ts';
+import { hitRect, hurtRects, pushExt, rectsOverlap } from './boxes.ts';
 import { IN } from './inputs.ts';
 import {
   addShowtime, clearMove, drainNerve, emit, fb, gainNerve, isAirborne, setSt,
@@ -271,7 +271,8 @@ function nearWall(m: Match, d: number, dir: number, range: number): boolean {
   const s = m.s;
   const bd = fb(d);
   const wallX = dir > 0 ? m.sys.wall : -m.sys.wall;
-  return Math.abs(wallX - s[bd + F.x]) - m.cf[d].pushHalf <= range;
+  // CHANGED(fixer) D2: the victim's push-box edge on the wall side
+  return Math.abs(wallX - s[bd + F.x]) - pushExt(m, d, dir > 0 ? 1 : -1) <= range;
 }
 
 function toJuggle(m: Match, d: number, vx: number, vy: number): void {
@@ -294,7 +295,7 @@ function toWallSplat(m: Match, a: number, d: number, dir: number): void {
   setSt(m, d, ST.WALL_SPLAT);
   s[bd + F.stun] = m.sys.raw.wallSplat.frames;
   s[bd + F.flags] &= ~(FL.AIRBORNE | FL.CROUCHING);
-  s[bd + F.x] = (dir > 0 ? m.sys.wall : -m.sys.wall) - dir * m.cf[d].pushHalf;
+  s[bd + F.x] = (dir > 0 ? m.sys.wall : -m.sys.wall) - dir * pushExt(m, d, dir > 0 ? 1 : -1); // CHANGED(fixer) D2
   s[bd + F.vx] = 0;
   s[bd + F.vy] = 0;
   s[bd + F.pushF] = 0;

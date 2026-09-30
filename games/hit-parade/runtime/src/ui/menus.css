@@ -6,6 +6,9 @@
 .hpm {
   position: absolute; inset: 0; z-index: 40; overflow: hidden; color: var(--hp-paper); font-family: var(--f-body);
   -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none;
+  /* CHANGED(integrator): the game's #ui host is pointer-events:none (index.html), which the menus inherited - no mouse
+     click or touch tap ever reached a menu in the integrated game (the UI lab host did not set it) */
+  pointer-events: auto;
 }
 .hpm[hidden] { display: none !important; }
 .hpm * { box-sizing: border-box; }
@@ -209,6 +212,25 @@ html.hp-noflash .hpm-press { animation: none; }
 
 /* ─────────────────────────── CHARACTER SELECT ─────────────────────────── */
 .hpm-s-charselect { gap: calc(var(--u) * .8); }
+/* CHANGED(integrator): the 3D Showcase renders into the #game canvas below this screen; while it runs (.hpm-3d, set by
+   menus.ts with the rect in --sc-*) the opaque backdrop moves onto ::before with a mask hole over the showcase region. */
+.hpm-s-charselect.hpm-3d { background: transparent; }
+.hpm-s-charselect.hpm-3d::before {
+  opacity: 1;
+  background: repeating-linear-gradient(-28deg, rgba(255, 210, 26, .045) 0 calc(var(--u) * 1.4), transparent calc(var(--u) * 1.4) calc(var(--u) * 2.8)),
+    var(--halftone), radial-gradient(120% 90% at 30% 10%, #50162c, #0b0b10 60%);
+  background-size: auto, calc(var(--u) * .8) calc(var(--u) * .8), auto;
+  -webkit-mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  -webkit-mask-size: 100% 100%, var(--sc-w, 0px) var(--sc-h, 0px);
+  mask-size: 100% 100%, var(--sc-w, 0px) var(--sc-h, 0px);
+  -webkit-mask-position: 0 0, var(--sc-x, 0px) var(--sc-y, 0px);
+  mask-position: 0 0, var(--sc-x, 0px) var(--sc-y, 0px);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
 .hpm-cs { flex: 1; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: calc(var(--u) * .9); }
 .hpm-cs-banner { grid-row: 1; justify-self: center; padding: .2em .8em; background: var(--hp-ink); border: var(--line) solid var(--hp-yellow); font: 400 max(12px, calc(var(--u) * 1.1)) / 1.2 var(--f-body); }
 .hpm-cs-banner[hidden] { display: none; }
@@ -258,6 +280,8 @@ html.hp-noflash .hpm-press { animation: none; }
 .hpm-slot .nm { position: absolute; left: 0; right: 0; bottom: 0; padding: .15em .2em; background: rgba(11, 11, 16, .82); font: 400 max(12px, calc(var(--u) * .78)) / 1.05 var(--f-cond); letter-spacing: .05em; color: var(--hp-paper); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transform: skewX(8deg); }
 .hpm-slot .boss { position: absolute; left: 50%; top: calc(var(--u) * -.6); transform: translateX(-50%) skewX(8deg); padding: 0 .35em; background: var(--hp-red-dk); color: #fff; font: 400 max(12px, calc(var(--u) * .7)) / 1.3 var(--f-display); white-space: nowrap; border: 1px solid var(--hp-ink); z-index: 2; }
 .hpm-slot.locked .hp-portrait { filter: grayscale(1) brightness(.35); }
+/* CHANGED(integrator): a fighter without baked assets = COMING SOON (never a broken slot) */
+.hpm-slot .soon { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%) skewX(-10deg); padding: .1em .45em; background: var(--hp-ink); color: var(--hp-yellow); border: 1px solid var(--hp-yellow); font: 400 max(12px, calc(var(--u) * .75)) / 1.2 var(--f-display); white-space: nowrap; z-index: 2; }
 .hpm-slot .lock { position: absolute; left: 50%; top: 42%; width: calc(var(--u) * 2.4); height: calc(var(--u) * 2.4); transform: translate(-50%, -50%) skewX(8deg); color: var(--hp-paper); }
 .hpm-slot .cur { position: absolute; top: calc(var(--u) * .2); display: none; padding: 0 .3em; font: 400 max(12px, calc(var(--u) * .8)) / 1.3 var(--f-display); font-style: normal; color: #fff; border: 1px solid var(--hp-ink); z-index: 3; transform: skewX(8deg); }
 .hpm-slot .cur.c1 { left: calc(var(--u) * .2); background: var(--hp-p1); }
@@ -285,6 +309,10 @@ html.hp-noflash .hpm-press { animation: none; }
 .art.s-control_room { background-image: var(--halftone), linear-gradient(160deg, #0f2a1f 0%, #103a2b 45%, #ff2b3a 100%); }
 .art.s-random { background-image: var(--halftone), linear-gradient(160deg, #2a2a38, #0b0b10); }
 .hpm-stagecard .nm { padding: 0 calc(var(--u) * 1); font: 400 max(14px, calc(var(--u) * 1.5)) / 1.1 var(--f-display); color: var(--hp-paper); }
+.hpm-stagecard.soon .art { filter: grayscale(1) brightness(.45); }
+.hpm-stagecard.soon .nm, .hpm-stagecard.soon .tg { opacity: .55; }
+.hpm-stagecard { position: relative; }
+.hpm-stagecard > .soon { position: absolute; left: 50%; top: calc(var(--u) * 5.5); transform: translate(-50%, -50%) skewX(-10deg); padding: .1em .6em; background: var(--hp-ink); color: var(--hp-yellow); border: 1px solid var(--hp-yellow); font: 400 max(12px, calc(var(--u) * 1.1)) / 1.2 var(--f-display); white-space: nowrap; }
 .hpm-stagecard .tg { padding: 0 calc(var(--u) * 1); font: 400 max(12px, calc(var(--u) * 1.1)) / 1.25 var(--f-body); color: var(--hp-paper); opacity: .8; }
 .hpm-stagecard:focus, .hpm-stagecard:hover { border-color: var(--hp-yellow); box-shadow: 0 0 0 max(2px, calc(var(--u) * .25)) var(--hp-yellow), calc(var(--u) * .6) calc(var(--u) * .6) 0 var(--hp-red); transform: skewX(-6deg) translateY(calc(var(--u) * -.4)); }
 

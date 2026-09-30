@@ -148,6 +148,8 @@
   "cinematic": { "attackerRecover": 30, "victimKd": 49 },
   "projectile": { "spawnXM": 0.6, "screenHalfM": 4.5 },
   "boxes": { "L": [0.30, 0.25], "M": [0.40, 0.30], "H": [0.50, 0.35] },
-  "anim": { "blendAttack": 3, "blendHit": 6, "blendLoco": 1, "blendDefault": 2 },
+  "anim": { "blendAttack": 3, "blendHit": 6, "blendLoco": 1, "blendDefault": 2,
+    "_kdNote": "CHANGED(fixer) D3: knockdown presentation (core/sim/throwpose.ts). kdFall[clip] = [drop s, floor s] read off the shared clips' mesh-top height (kd_fall_b stands until 1.0 s, floor 1.35 s; kd_fall_f dives at 0.3 s, floor 0.6 s): a KD from standing plays drop..end, a juggle landing floor..end, over <= fallMaxFrames; the wake clip ends on the actionable frame at <= wakeMaxRate x speed.",
+    "kdFall": { "kd_fall_b": [1.0, 1.35], "kd_fall_f": [0.3, 0.6] }, "fallMaxFrames": 30, "wakeMaxRate": 2.0 },
   "training": { "refillDelay": 60 }
 }

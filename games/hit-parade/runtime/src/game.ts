@@ -48,9 +48,18 @@ import { enterFullscreenLandscape, type BootUI } from './ui/boot.ts';
 import { viewSettings, type SettingsStore } from './ui/settings.ts';
 import type { SaveStore } from './ui/save.ts';
 import type { Input } from './input.ts';
+import type { TouchControls } from './touch/controls.ts';
+import { hasAssets, playableStage } from './ui/data.ts';
+import type { PortraitQueue } from './app/portraits.ts';
 
 /** after MATCH_END the KO slow-mo + win pose play this long (real ms) before the results card */
 export const RESULTS_DELAY_MS = 2600;
+/**
+ * CHANGED(integrator): the sim has no BRAWL BREAK / HECKLER TOSS yet (CONTRACT §4.3.14: no core/sim/brawl.ts, no goon or
+ * heckle emitters), so a bonus slot would be a mirror bout against an idle clone. Until SIM lands them THE SEASON passes
+ * over bonus slots (recorded as played, 0 points). Flip to true with the sim modes (P3).
+ */
+export const BONUS_ROUNDS_IN_SIM = false;
 /** rollback depth margin for the event reader (frames) */
 const EVENT_MARGIN = 16;
 
@@ -68,6 +77,11 @@ export interface GameDeps {
   flow: Flow;
   version: string;
   dev: boolean;
+  /** CHANGED(integrator): the touch overlay (lane UI touch/controls.ts, CONTRACT_MOBILE M2); shown in touch mode while a
+   *  bout steps, fed the local player's meters each frame. Optional (labs / kbm-only pages pass nothing). */
+  touch?: TouchControls | null;
+  /** CHANGED(integrator): fighter portraits for the HUD / menus (app/portraits.ts over VIEW's Showcase.portrait) */
+  portraits?: PortraitQueue | null;
 }
 
 export interface BoutCtx {
@@ -93,6 +107,10 @@ class BoutStats {
   private hp: [number, number] = [-1, -1];
   private roundKo: 'ko' | 'double' | null = null;
   private roundTime = false;
+  /** CHANGED(fixer) D8: the round's winner + PERFECT, captured on the KO / TIME OVER frame (the sim decides the round
+   *  there). ROUND_END is one sim frame before the next ROUND_INTRO resets MatchSnap.roundWinner and refills HP, and a
+   *  rendered frame often holds both, so reading them at ROUND_END recorded KO rounds as {winner: -1, how: 'draw'}. */
+  private pending: { winner: 0 | 1 | -1; perfect: boolean } | null = null;
 
   /** per rendered frame: hp falls = damage dealt by the other player; combo peaks */
   frame(f: readonly [FighterSnap, FighterSnap]): void {
@@ -121,16 +139,27 @@ class BoutStats {
       case EV.SUPER_FREEZE: if (a !== null) this.supers[a]++; break;
       case EV.WALL_SPLAT: if (a !== null) this.wallSplats[a === 0 ? 1 : 0]++; break;   // a = the victim
       case EV.SCORE: if (a !== null) this.score[a] += Math.max(0, e.b | 0); break;
-      case EV.KO: this.roundKo = e.a < 0 && e.b < 0 ? 'double' : 'ko'; break;
-      case EV.TIMEOVER: this.roundTime = true; break;
+      case EV.KO: case EV.TIMEOVER: {
+        if (e.type === EV.KO) { if (this.roundKo) break; this.roundKo = e.a < 0 && e.b < 0 ? 'double' : 'ko'; }
+        else this.roundTime = true;
+        // MatchSnap.roundWinner is set on this frame (0 | 1, 2 = draw); the event payload is the fallback
+        const rw = m.roundWinner === 0 || m.roundWinner === 1 || m.roundWinner === 2 ? m.roundWinner : e.a;
+        const w: 0 | 1 | -1 = rw === 0 || rw === 1 ? rw : -1;
+        const wf = w === 0 || w === 1 ? f[w] : null;
+        this.pending = { winner: w, perfect: !!wf && wf.hpMax > 0 && wf.hp >= wf.hpMax };
+        break;
+      }
       case EV.ROUND_END: {
-        const w: 0 | 1 | null = m.roundWinner === 0 || m.roundWinner === 1 ? m.roundWinner : null;
+        // ROUND_END a = the round winner (0 | 1, 2 = draw) straight from the sim state (rounds.ts roundEndStep)
+        const wEv: 0 | 1 | -1 = e.a === 0 || e.a === 1 ? e.a : -1;
+        const w = this.pending ? this.pending.winner : wEv;
         let how: 'ko' | 'time' | 'perfect' | 'double' | 'draw' = this.roundKo === 'double' ? 'double' : this.roundTime ? 'time' : 'ko';
-        if (w === null && how !== 'double') how = 'draw';
-        if (w !== null && how === 'ko' && f[w].hp >= f[w].hpMax) how = 'perfect';
-        this.rounds.push({ winner: w ?? -1, how });
+        if (w < 0 && how !== 'double') how = 'draw';
+        if (w >= 0 && how === 'ko' && this.pending?.perfect) how = 'perfect';
+        this.rounds.push({ winner: w, how });
         this.roundKo = null;
         this.roundTime = false;
+        this.pending = null;
         break;
       }
       default: break;
@@ -196,7 +225,10 @@ export class Game {
     this.loop.simEnabled = false;
     this.loop.onError = (e) => this.crash(e);
     d.menus.onIntent((i) => { void this.intent(i); });
-    this.offs.push(d.input.onUi((a, p) => { if (a === 'pause') this.onPauseKey(p); }));
+    // CHANGED(integrator): a pause key that pauses CONSUMES its event (preventDefault). Input listens in the capture
+    // phase, so without this the same ESC keydown reached the menus' bubble-phase handler right after showPause() had
+    // rendered the card, and ESC-on-the-card = resume: the bout never stayed paused (measured: phase stayed 'bout').
+    this.offs.push(d.input.onUi((a, p, e) => { if (a === 'pause' && this.onPauseKey(p)) e?.preventDefault(); }));
     const onHidden = (): void => { if (document.visibilityState === 'hidden') this.autoPause('hidden'); };
     const onPageHide = (): void => this.autoPause('pagehide');
     const onBlur = (): void => { if (d.input.mode === 'touch') this.autoPause('blur'); };
@@ -212,6 +244,7 @@ export class Game {
       if (this.bout && (keys.includes('gore') || keys.includes('screenShake') || keys.includes('reduceFlashing') || keys.includes('cinematics') || keys.includes('bloom'))) {
         this.bout.view.setSettings(viewSettings(s));
       }
+      if (keys.includes('gore')) { try { d.audio.setSplatter(s.gore); } catch { /* audio is optional */ } }
     }));
   }
 
@@ -240,6 +273,9 @@ export class Game {
   /** load a bout (loading card) -> PRESS START (or straight in with ctx.autostart) */
   async startBout(cfg: MatchCfg, ctx: BoutCtx = {}): Promise<void> {
     const d = this.d;
+    // CHANGED(integrator): a `todo` stage (no GLB yet, §21.1) plays on the first built stage - never the view's stand-in set
+    const stage = playableStage(d.data as unknown as Parameters<typeof playableStage>[0], cfg.stage);
+    if (stage !== cfg.stage) cfg = { ...cfg, stage };
     this.teardown();
     const my = ++this.epoch;
     d.flow.mode = cfg.mode;
@@ -252,6 +288,8 @@ export class Game {
     if (my !== this.epoch) { view.dispose(); return; }
     d.boot.progress(0.9, 'Warming up the cameras...');
     view.setSettings(viewSettings(d.settings.get()));
+    d.portraits?.need(cfg.p[0].fighter);                  // HUD portraits (both GLBs are loaded now)
+    d.portraits?.need(cfg.p[1].fighter);
     const m = createMatch(cfg, d.data);
     const local: 0 | 1 = ctx.local ?? 0;
     const cpus: [Cpu | null, Cpu | null] = [null, null];
@@ -268,8 +306,7 @@ export class Game {
       seen: new Map(), lastFrame: 0, over: false, finished: false, pausedBy: local, pauseSeq: 0, lastSnap: null, lastFighters: null, stalls: 0,
     };
     this.installPauseApi();
-    try { d.audio.preload([cfg.stage, cfg.p[0].fighter, cfg.p[1].fighter]); } catch (e) { console.warn('[hit-parade] audio.preload', e); }
-    try { d.audio.music(cfg.p[1].fighter === 'ricky' || cfg.p[0].fighter === 'ricky' ? 'boss' : cfg.stage); } catch { /* audio is optional */ }
+    this.audioBout(cfg, m, ctx, local, cpus);
     d.boot.progress(1, 'Ready');
     // the first picture behind the card: the posed intro frame
     this.frame(0);
@@ -283,6 +320,24 @@ export class Game {
         this.enterBout(via);
       });
     }
+  }
+
+  /**
+   * CHANGED(integrator): AUDIO §9.1 wiring - bout() mounts the voices / stage music / crowd bed, preload() with no ids
+   * fetches the bout set (sfx + crowd sprites), music('stage') resolves boss / miniboss / the stage track, and the gore
+   * setting drives the splatter sounds. (Was: preload([stage, fighters]) - fighter ids are not audio ids - and no bout().)
+   */
+  private audioBout(cfg: MatchCfg, m: Match, ctx: BoutCtx, local: 0 | 1, cpus: [Cpu | null, Cpu | null]): void {
+    const a = this.d.audio;
+    const humans = (cfg.p[0].cpu < 0 ? 1 : 0) + (cfg.p[1].cpu < 0 ? 1 : 0);
+    const who = ctx.online ? local : humans === 2 ? -1 : cpus[0] && !cpus[1] ? 1 : 0;
+    try {
+      a.bout({ fighters: [cfg.p[0].fighter, cfg.p[1].fighter], stage: cfg.stage, mode: cfg.mode, local: who, sfxNames: m.tab.sfx });
+      a.setSplatter(this.d.settings.get().gore);
+      a.setPaused(false);
+      a.preload();
+      a.music('stage');
+    } catch (e) { console.warn('[hit-parade] audio bout', e); }
   }
 
   /** the bout starts stepping */
@@ -342,10 +397,22 @@ export class Game {
     }
     b.lastSnap = snap;
     b.lastFighters = f;
+    // CHANGED(fixer) D4: the camera keeps airborne heads below the HUD band (Hud.safeTop() is cached, measured on layout change)
+    b.view.setSafeArea(this.hud.safeTop());
     b.view.frame(snap, f, evs, dt);
     this.hud.frame(snap, f, evs);
-    try { d.audio.events(evs, snap); } catch (e) { console.warn('[hit-parade] audio.events', e); }
+    this.touchFrame(b, f);
+    try { d.audio.events(evs, snap, f); } catch (e) { console.warn('[hit-parade] audio.events', e); }
     b.view.render();
+  }
+
+  /** the touch overlay: visible only while the bout steps in touch mode (hidden on pause / results / menus) */
+  private touchFrame(b: Bout, f: readonly [FighterSnap, FighterSnap]): void {
+    const t = this.d.touch;
+    if (!t) return;
+    const on = this.d.input.mode === 'touch' && this.d.flow.phase === 'bout' && !b.finished;
+    t.setVisible(on);
+    if (on) { const me = f[b.local]; t.setMeters({ showtime: me.showtime, nerve: me.nerve, stageFright: !!me.stageFright }); }
   }
 
   /** NEW events since the last rendered frame (§18.1 eventsSince + dedupe; rollback re-emits) */
@@ -466,9 +533,11 @@ export class Game {
   }
 
   // ───────────────────────────── pause ─────────────────────────────
-  private onPauseKey(p: 0 | 1): void {
+  /** true when the key paused the bout (the caller then consumes the key event) */
+  private onPauseKey(p: 0 | 1): boolean {
     const ph = this.d.flow.phase;
-    if (ph === 'bout' && this.bout && !this.bout.finished) this.pause('key', p);
+    if (ph === 'bout' && this.bout && !this.bout.finished) { this.pause('key', p); return this.d.flow.phase === 'paused'; }
+    return false;
   }
 
   private autoPause(why: string): void {
@@ -488,6 +557,7 @@ export class Game {
     d.input.live = false;                                 // ... with neutral words: the card's keys never move the fighter
     d.input.releaseAll();
     d.flow.go('paused', why);
+    try { d.audio.setPaused(true); } catch { /* audio is optional */ }
     void this.pauseCard(b, seq);
   }
 
@@ -503,6 +573,9 @@ export class Game {
     }
     if (b !== this.bout || seq !== b.pauseSeq || d.flow.phase !== 'paused') return;   // stale card (resumed / torn down)
     if (choice === 'resume') { this.resume(); return; }
+    // CHANGED(integrator): in TRAINING the button is EXIT TRAINING (UI §22.2, no confirm): straight back to the main menu,
+    // no results card for a practice session (the UI lab's flow; before, a "BY FORFEIT" results card appeared)
+    if (choice === 'forfeit' && b.cfg.mode === 'training') { this.toMenus('main'); return; }
     if (choice === 'forfeit') { void this.forfeit(b.pausedBy); return; }
     // settings / move list: a sub-screen of the pause card; backing out re-opens the card (CONTRACT §18.3)
     d.menus.show(choice, {
@@ -518,6 +591,7 @@ export class Game {
     b.pauseSeq++;
     d.menus.hide();
     d.flow.go('bout', 'resume');
+    try { d.audio.setPaused(false); } catch { /* audio is optional */ }
     d.input.releaseAll();
     d.input.live = true;
     this.loop.simEnabled = !this.frozen;
@@ -550,13 +624,14 @@ export class Game {
   // ───────────────────────────── THE SEASON ─────────────────────────────
   private roster(): SeasonRoster {
     const f = this.d.data.fighters;
-    const ids = Object.keys(f);
+    // CHANGED(integrator): only fighters whose baked assets are in the build (ui/data.ts hasAssets) enter the ladder
+    const ids = Object.keys(f).filter((id) => hasAssets(this.d.data as unknown as Parameters<typeof hasAssets>[0], id));
     return {
       playable: ids.filter((id) => id !== 'freak' && id !== 'ricky'),
       miniboss: 'freak', boss: 'ricky',
       rival: (id) => {
         const r = f[id]?.rival;
-        return typeof r === 'string' && r && r !== '-' && f[r] ? r : null;
+        return typeof r === 'string' && r && r !== '-' && f[r] && ids.includes(r) ? r : null;
       },
     };
   }
@@ -599,6 +674,12 @@ export class Game {
     this.teardown(false);
     const slot = run.current();
     if (!slot) { await this.seasonCleared(run); return; }
+    if (!BONUS_ROUNDS_IN_SIM && (slot.kind === 'brawl' || slot.kind === 'heckler')) {
+      console.info(`[hit-parade] season: ${slot.kind} bonus round skipped (not in the sim yet)`);
+      run.record(true);
+      await this.seasonSlot(run);
+      return;
+    }
     if (d.flow.phase !== 'menu') d.flow.go('menu', 'season ladder');
     d.flow.setScreen('ladder');
     d.boot.hide();
@@ -618,7 +699,7 @@ export class Game {
       if (my !== this.epoch) return;
     }
     const opp = slot.opponent ?? init.fighter;
-    const stage = slot.stage ?? this.stageFor(slot.opponent, this.firstStage());
+    const stage = playableStage(this.d.data as unknown as Parameters<typeof playableStage>[0], slot.stage ?? this.stageFor(slot.opponent, this.firstStage()));
     const cfg: MatchCfg = {
       mode: slot.kind === 'brawl' ? 'brawl' : slot.kind === 'heckler' ? 'heckler' : 'arcade',
       stage, seed: run.slotSeed(),
@@ -730,8 +811,10 @@ export class Game {
     this.d.input.live = false;
     this.d.input.releaseAll();
     this.removePauseApi();
+    try { this.d.touch?.setVisible(false); } catch { /* ignore */ }
     if (!b) return;
     this.bout = null;
+    try { this.d.audio.setPaused(false); this.d.audio.bout(null); } catch (e) { console.warn('[hit-parade] audio.bout(null)', e); }
     try { this.hud.unmount(); } catch (e) { console.warn('[hit-parade] hud.unmount', e); }
     try { b.view.dispose(); } catch (e) { console.warn('[hit-parade] view.dispose', e); }
   }

@@ -42,8 +42,8 @@ def build():
                                                                     "(loop 1.2 deg)")
     K.clip("claw_jab", mix(CR + "mutant punch", (1, 22), contact=9),
            "Mixamo mutant punch opening: the hook passes the front at f9 (front pass; rig-proof clip)")
-    K.clip("wild_swing", cmu(take="80_10", rng=(379, 412), contact=395, kind="hand", limb="R_hand", fist=0),
-           "CMU haymaker 80_10 379/395/412 (usable: wild looping swing) on the monster body")
+    K.clip("wild_swing", cmu("hammer_chop.1", fist=0),
+           "CMU hammer_chop.1 (86_06 4868/4894/4944, usable: diagonal downward chop 9.1 m/s, contact 0.34 m below the chest), open claw. Replaced the 80_10 haymaker (2026-09-30): on the 2.4 m body that swing never came below 2.03 m (bake trace), so 5M whiffed every opponent in the sim (connect matrix 0/36)")
     K.clip("crystal_swipe", mix(CR + "mutant swiping", (25, 60), contact=41),
            "Mixamo mutant swiping: overhead claw haymaker, torso whips down f40, reach f41 (dense render)")
     K.clip("low_claw", crouch(mix(CR + "mutant punch", (1, 22), contact=9)), "Crouch Idle legs + claw hook")
@@ -86,7 +86,7 @@ def build():
     K.add("2L", "2L", name="Low Claw", clip="low_claw", startup=6, cancel=["chain:2L", "special", "super"],
           role=["poke", "low"], desc="Crouching claw to the shin.", why="Startup 6 (monster).")
     K.add("5M", "M", name="Wild Swing", clip="wild_swing", startup=10, recovery=17, damage=700,
-          cancel=["special", "super"], role=["poke"], desc="Wild looping swing.",
+          cancel=["special", "super"], role=["poke"], desc="Wild looping claw chop, downward across the body.",
           why="Monster medium: 10/3/17, 700 (+2/-4).")
     K.add("2M", "2M", name="Floor Slam", clip="floor_slam", startup=11, damage=700, cancel=["special", "super"],
           role=["poke", "low"], desc="Slams both claws on the floor (low).", why="11f, 700 (+4/-2).")

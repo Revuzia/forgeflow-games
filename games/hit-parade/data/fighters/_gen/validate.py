@@ -10,6 +10,12 @@ tools/research/fg_template_check.py convention, and checks:
   - routing: simple/classic ids resolve ({s} expansion), EX ids, assist ids, chain targets, tc reachability
   - every anim.clip / grab clip / cinematic clip / intro / win / taunt / stance clip exists in the fighter's
     clip plan or the shared set; clip-plan sources inside the measured source lengths
+  - hit volumes (ROSTER.md conventions, 2026-09-30): crouch hurtbox <= stand; every grounded non-anti-air
+    strike's box (explicit, else SIM-derived from data/clips/<id>.clips.json) reaches the 1.10 m crouch line
+    (world height incl. moveY) and starts within point-blank reach; straight projectiles reach the line;
+    `boxSrc: hitVolume` boxes still match the clips.json effector (stale after a re-bake -> rerun build.py);
+    box frames inside the active frames. Clips whose plan differs from the published bake
+    (art/renders/<id>/_build/bake.json src) are reported PENDING (lane ASSETS re-bake), not failed.
 Writes _harness/_reports/fighters_validate.txt. Exit 0 = PASS, 1 = FAIL.
 Usage: python data/fighters/_gen/validate.py
 """
@@ -64,6 +70,130 @@ TOP_REQ = ["id", "name", "persona", "archetype", "body", "heightM", "hp", "walk"
 ROUTER = os.path.join(GAME, "runtime", "src", "audio", "router.ts")
 OUT = []
 FAILS = []
+PENDING = []
+# hit-volume constants (duplicated from the ROSTER.md conventions on purpose: this validator never imports the
+# kit sources). Crouch line = lowest measured crouch top (krane 1.159 m) - 0.05; point blank = the slimmest
+# defender (pushbox 0.39, hurtbox half 0.23) touching, minus 0.10 m.
+CROUCH_LINE, EXT_CAP = 1.10, 0.50
+SYSTEM = os.path.join(GAME, "data", "system.json")
+
+
+ROSTER_DEF_MIN = None   # CHANGED(fixer) D2: min(push.front + hurt.stand[0] / 2) over data/fighters/*.json (main)
+
+
+def pb_near_max(pb_w, front=None):
+    """CHANGED(fixer) D2: with measured push boxes, touching = push front + push front apart, so a box must start
+    within front + ROSTER_DEF_MIN - 0.10 m (the slimmest touching defender); else the symmetric-box rule."""
+    if front is not None and ROSTER_DEF_MIN is not None:
+        return front + ROSTER_DEF_MIN - 0.10
+    return (pb_w + 0.39) / 2.0 + 0.23 - 0.10
+
+
+def _strip(o):
+    if isinstance(o, dict):
+        # `marks` only add named times (e.g. THROW PAIR SYNC slam); they never move the pose or the effector
+        return {k: _strip(v) for k, v in o.items() if not k.startswith("_") and k not in ("id", "marks")}
+    if isinstance(o, list):
+        return [_strip(x) for x in o]
+    if isinstance(o, float) and o == int(o):
+        return int(o)
+    return o
+
+
+def lift_at(o, f):
+    pts = o.get("moveY")
+    if not pts:
+        return 0.0
+    if f <= pts[0][0]:
+        return pts[0][1]
+    for (a, ya), (b, yb) in zip(pts, pts[1:]):
+        if a <= f <= b:
+            return ya + (yb - ya) * (f - a) / float(b - a) if b > a else yb
+    return pts[-1][1]
+
+
+def check_hit_volume(fid, d, plan):
+    moves = d["moves"]
+    if d["hurt"]["crouch"][1] > d["hurt"]["stand"][1]:
+        fail(fid, "crouch hurtbox %.2f taller than stand %.2f" % (d["hurt"]["crouch"][1], d["hurt"]["stand"][1]))
+    cp = os.path.join(GAME, "data", "clips", fid + ".clips.json")
+    if not os.path.exists(cp):
+        say("  hit volumes: clips.json not generated yet - skipped")
+        return
+    clips = json.load(open(cp, encoding="utf-8"))["clips"]
+    sysb = json.load(open(SYSTEM, encoding="utf-8"))["boxes"]
+    bp = os.path.join(GAME, "art", "renders", fid, "_build", "bake.json")
+    pending = set()
+    if os.path.exists(bp):
+        baked = json.load(open(bp, encoding="utf-8")).get("clips", {})
+        pending = {c for c, e in plan.items() if c not in baked or _strip(e) != _strip(baked[c].get("src", {}))}
+    near_max = pb_near_max(d["pushbox"][0], (d.get("push") or {}).get("front"))
+    n_ok = n_explicit = 0
+    for mid, o in moves.items():
+        last_act = o["startup"] + o["active"] - 1
+        for b in o.get("boxes", []):
+            if not (o["startup"] <= b["f"][0] <= b["f"][1] <= last_act):
+                fail(fid, "%s: box frames %s outside the active frames %d-%d" % (mid, b["f"], o["startup"], last_act))
+        pj = o.get("projectile")
+        roles = set(o.get("role", []))
+        ground = not (o["input"].startswith("j.") or o.get("air") is True)
+        if pj and ground and "antiair" not in roles and not pj.get("g") and not pj.get("vy"):
+            if pj["y"] - pj["box"][1] / 2.0 > CROUCH_LINE + 1e-6:
+                fail(fid, "%s: projectile box bottom %.2f m above the crouch line %.2f" % (
+                    mid, pj["y"] - pj["box"][1] / 2.0, CROUCH_LINE))
+        strike = not (o["kind"] in ("throw", "cmdgrab") or o.get("grab") or pj) and bool(
+            o.get("cinematic") or o["damage"] > 0)
+        if not strike or not ground or "high" in roles or ("antiair" in roles and "reversal" not in roles):
+            continue
+        clip = o["anim"]["clip"]
+        c = clips.get(clip)
+        if "boxes" in o:
+            boxes = o["boxes"]
+            n_explicit += 1
+            if o.get("boxSrc") == "hitVolume":
+                if clip in pending:
+                    PENDING.append("%s %s: boxSrc hitVolume on clip %s that awaits a re-bake" % (fid, mid, clip))
+                elif c and c.get("effector"):
+                    st = "H" if o["kind"] in ("super1", "super3") else o["strength"]
+                    w, h = sysb[st]
+                    ex, ey = c["effector"]["at"]
+                    for b in boxes:
+                        if abs(b["x"] + b["w"] / 2 - (ex + w / 2)) > 0.011 or                                 abs(b["y"] + b["h"] / 2 - (ey + h / 2)) > 0.011:
+                            fail(fid, "%s: hitVolume box no longer matches clips.json %s effector %s (re-run "
+                                      "build.py)" % (mid, clip, c["effector"]["at"]))
+                            break
+        else:
+            if clip in pending:
+                PENDING.append("%s %s: clip %s awaits a lane ASSETS re-bake (plan changed); derived box is stale" % (
+                    fid, mid, clip))
+                continue
+            if not c or not c.get("effector"):
+                continue
+            st = "H" if o["kind"] in ("super1", "super3") else o["strength"]
+            w, h = sysb[st]
+            ranges = [x["f"] for x in o["hits"]] if o.get("hits") else [[o["startup"], last_act]]
+            boxes = [{"f": r, "x": c["effector"]["at"][0], "y": c["effector"]["at"][1], "w": w, "h": h}
+                     for r in ranges]
+        bad = None
+        rev = "antiair" in roles   # reversal anti-air: only the first (grounded) hit must reach
+        for bi, b in enumerate(boxes):
+            if rev and bi > 0:
+                continue
+            bottom = lift_at(o, b["f"][0]) + b["y"] - b["h"] / 2.0
+            if bottom > CROUCH_LINE + 0.002:   # 0.002: boxes are written at 3 decimals
+                bad = "box bottom %.2f m (world) above the crouch line %.2f m - whiffs crouching opponents" % (
+                    bottom, CROUCH_LINE)
+                break
+            if b["x"] - b["w"] / 2.0 > near_max + 0.002:
+                bad = "box near edge %.2f m beyond point-blank reach %.2f m - whiffs a touching opponent" % (
+                    b["x"] - b["w"] / 2.0, near_max)
+                break
+        if bad:
+            fail(fid, "%s: %s" % (mid, bad))
+        else:
+            n_ok += 1
+    say("  hit volumes: %d grounded strikes reach crouch + point blank (%d with explicit boxes); pending clips %s" % (
+        n_ok, n_explicit, sorted(pending) or "none"))
 
 
 def sfx_names():
@@ -287,6 +417,8 @@ def validate_fighter(fid, mix):
                 if g.get("hitF", 0) >= g.get("frames", 0):
                     fail(fid, "%s: grab.hitF >= frames" % mid)
                 need_clip(g.get("clip"), mid + " grab")
+                if g.get("clip") in plan and "slam" not in (plan[g["clip"]].get("marks") or {}):
+                    fail(fid, "%s: grab clip %s has no marks.slam (CONTRACT 6.2 THROW PAIR SYNC)" % (mid, g["clip"]))
                 if o["kind"] == "cmdgrab" and "rangeM" not in g:
                     fail(fid, "%s: cmdgrab without grab.rangeM" % mid)
         if o.get("projectile"):
@@ -447,6 +579,7 @@ def validate_fighter(fid, mix):
     overrides = [c for c in plan if c in SHARED]
     say("  normals %d, special families %s%s, clips %d (shared overrides %s)" % (
         normals, sorted(fams), (" + phase-2 %s" % sorted(fams2)) if fams2 else "", len(plan), overrides))
+    check_hit_volume(fid, d, plan)
 
 
 def main():
@@ -468,6 +601,17 @@ def main():
     if not ok:
         FAILS.append("template rows punishable")
     fids = [f[:-5] for f in sorted(os.listdir(FDIR)) if f.endswith(".json")]
+    global ROSTER_DEF_MIN
+    dm = []
+    for fid in fids:
+        fd = json.load(open(os.path.join(FDIR, fid + ".json"), encoding="utf-8"))
+        pu = fd.get("push")
+        if isinstance(pu, dict) and isinstance(pu.get("front"), (int, float)):
+            dm.append(pu["front"] + fd["hurt"]["stand"][0] / 2.0)
+            if not (pu["front"] > 0 and pu.get("back", -1) >= 0 and abs(pu["front"] + pu["back"] - fd["pushbox"][0]) <= 0.011):
+                FAILS.append("%s: push %s inconsistent with pushbox %s (front + back = width)" % (fid, pu, fd["pushbox"]))
+    ROSTER_DEF_MIN = round(min(dm), 3) if dm and len(dm) == len(fids) else None
+    say("point blank: ROSTER_DEF_MIN (min push front + hurt half) = %s" % ROSTER_DEF_MIN)
     for fid in fids:
         if fid not in ROSTER:
             FAILS.append("unknown fighter file %s" % fid)
@@ -478,6 +622,9 @@ def main():
     say("fighters validated: %d/%d%s" % (len(fids), len(ROSTER), (" (missing %s)" % missing) if missing else ""))
     if missing:
         FAILS.append("missing fighter files: %s" % missing)
+    say("PENDING lane ASSETS re-bake (not failures; re-run build.py + this validator after the bake): %d" % len(PENDING))
+    for p in PENDING:
+        say("  - " + p)
     say("RESULT: %s (%d failure(s))" % ("PASS" if not FAILS else "FAIL", len(FAILS)))
     for f in FAILS:
         say("  - " + f)

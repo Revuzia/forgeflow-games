@@ -3,8 +3,8 @@
   "_src": {
     "levels": "FIGHTING_DESIGN.md section 10 table, verbatim: reaction delay to a VISIBLE startup (frames), block chance once reacted, guess weights on unreactable mixups (adapt), anti-air, punish a move <= -5 on block, punish route, throw tech (a guess), parry use, meter use, NERVE management, execution drop, aggression. L8 aggression 'adapts'.",
     "styles": "[R] lane AI: plan weights per fighter cpu.style (plans.ts); boss_armor / boss_showman are the two boss plans (their fighters JSON styles), every other style name maps through kit.ts STYLE_ALIAS.",
-    "levels_R": "[R] lane AI additions (not in the research table): guard = chance the CPU holds a guard posture in neutral while inside the opponent's threat range (the only way ANY player blocks a move faster than their reaction); thinkF = frames between neutral decisions; antiZone = extra share of reacted projectiles the CPU jumps over (on top of the style jumpProj) and its chance to dash in between projectiles; meter tier 'cancel' is kept for L7/L8 because the table's 'all' there follows L6's 'all + cancel supers'.",
-    "rules": "[R] whiffReactPct = whiff punishes need this % of the level's reaction delay after the whiff becomes visible (block punishes need none: the move was already blocked); parryShare = fraction of the block chance spent on a parry instead of a block, per parry tier; counterImpactNerve = NERVE bars needed for a counter-IMPACT; avoidFrightNerve = below this many NERVE bars an 'avoid' CPU stops spending NERVE.",
+"levels_R": "[R] lane AI additions (not in the research table): guard = chance the CPU holds a guard posture in neutral while inside the opponent's threat range (the only way ANY player blocks a move faster than their reaction); respect (optional, default 0 = off, no RNG roll) = chance per neutral decision to respect a PRESSER (rules.press) inside the range of the buttons it has been pressing: swing a longer normal into its walk-in or hold a guard instead of walking / dashing / pressing a slower button into it - on for the harness 'optimal' persona (0.9); a P4 lever for the levels (measured 2026-09-30, 10 seeds vs the masher persona: L4 4->5, L6 4->5, L8 7->6 wins, i.e. no clear gain, and it reshuffles level-vs-level RNG, so the levels ship with 0); thinkF = frames between neutral decisions; antiZone = extra share of reacted projectiles the CPU jumps over (on top of the style jumpProj) and its chance to dash in between projectiles; meter tier 'cancel' is kept for L7/L8 because the table's 'all' there follows L6's 'all + cancel supers'.",
+    "rules": "[R] whiffReactPct = whiff punishes need this % of the level's reaction delay after the whiff becomes visible (block punishes need none: the move was already blocked); parryShare = fraction of the block chance spent on a parry instead of a block, per parry tier; counterImpactNerve = NERVE bars needed for a counter-IMPACT; avoidFrightNerve = below this many NERVE bars an 'avoid' CPU stops spending NERVE; press = the opponent counts as PRESSING when the share of its free ground frames inside its own fast-button zone that ended in an attack start (EMA, time constant windowF frames) is >= rate - then, inside the range its fast buttons cover, a CPU holds a guard with its level guard chance instead of walking / dashing / pressing a slower button into it (plans.ts respect rule).",
     "personas": "CONTRACT 11 / FIGHTING_DESIGN 12 harness personas; novice = 400 ms (24 f) delayed inputs; optimal = fast human reactions (10 f, top of the KI 12-19 f band) with perfect execution, blocks what it can see, punishes everything punishable.",
     "boss": "FIGHTING_DESIGN 10 rules: bosses get TOOLS (armor, counter moves, phases), never faster reactions than L8."
   },
@@ -28,7 +28,8 @@
     "avoidFrightNerve": 2,
     "adaptAggression": { "base": 0.6, "span": 0.25, "min": 0.4, "max": 0.8 },
     "backRise": 0.25,
-    "wakeReversal": 0.2
+    "wakeReversal": 0.2,
+    "press": { "rate": 0.10, "windowF": 32 }
   },
   "styles": {
     "shoto": { "throw": 0.25, "poke": 0.45, "jump": 0.06, "dash": 0.10, "walkIn": 0.45, "zone": 0.35, "approach": 0.10, "grab": 0, "armor": 0, "counter": 0, "backOff": 0.15, "jumpProj": 0.15, "mix": 0.20, "air": 0, "setup": 0, "escape": 0, "charge": false },
@@ -46,7 +47,7 @@
   },
   "personas": {
     "novice": { "delayF": 24, "antiZone": 0.1, "reactF": 1, "block": 0.7, "guessAdapt": 0, "antiAir": 0.4, "punish": 0.4, "route": "chainSpecial", "tech": 0.1, "parry": "never", "meter": "lv1", "nerve": "avoid", "drop": 0.25, "aggression": 0.45, "guard": 0.4, "thinkF": 14 },
-    "optimal": { "delayF": 0, "antiZone": 0.5, "reactF": 10, "block": 1.0, "guessAdapt": 0.3, "antiAir": 1.0, "punish": 1.0, "route": "bestMeter", "tech": 0.5, "parry": "projectiles", "meter": "cancel", "nerve": "counterImpact", "drop": 0, "aggression": 0.5, "guard": 0.9, "thinkF": 8 },
+    "optimal": { "delayF": 0, "antiZone": 0.5, "reactF": 10, "block": 1.0, "guessAdapt": 0.3, "antiAir": 1.0, "punish": 1.0, "route": "bestMeter", "tech": 0.5, "parry": "projectiles", "meter": "cancel", "nerve": "counterImpact", "drop": 0, "aggression": 0.5, "guard": 0.9, "respect": 0.9, "thinkF": 8 },
     "masher": { "pressMin": 2, "pressMax": 4, "rangeM": 1.4 },
     "turtle": { "reactF": 10 },
     "jumper": { "jumpM": 2.4 },

@@ -162,7 +162,8 @@
     "contact": null,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 54}
   },
   "flair_toss": {
     "src": "mixamo",
@@ -171,7 +172,8 @@
     "contact": 36,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 34}
   },
   "windmill_l": {
     "src": "seq",

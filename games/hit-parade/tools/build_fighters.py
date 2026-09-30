@@ -20,6 +20,7 @@ Per fighter:
      rotation + Hips translation only, texture <= 1024, size <= budget
   6. data/clips/<id>.clips.json (generated; never hand-edited)
   7. QC: art/blender/qc_render.py + tools/qc_sheet.py -> art/renders/<id>/qc/sheet_NN.png, turntable.png
+     (re-run alone: python tools/qc_render.py --fighter <id>, same as --qc-only)
 Writes art/renders/<id>/build_report.json. Exit 1 if any fighter failed a hard check.
 Never runs `claude -p`, never calls paid APIs. ASCII only.
 """
@@ -177,7 +178,8 @@ CLIPS_META = {
     "root": "[[t, dx_fwd_m], ...] one row per baked frame: the hips' forward travel since frame 0 that was STRIPPED from the clip (the GLB keeps the hips above the root); the sim's `move` curve can be derived from it",
     "apexY": "for clips baked with air='strip' (jumps): the lift that was removed so the feet stay at the root (the clip's own jump height); null otherwise",
     "loop": "true = plays cyclically (loopBlend eased the last frames into frame 0)",
-    "marks": "optional named sync times in seconds (throw victims: grab / slam; wall_splat: splat)",
+    "marks": "optional named sync times in seconds (throw victims: grab / slam; wall_splat: splat; multi-hit strikes: hit1..hitN)",
+    "marksAt": "optional, per strike mark (names starting 'hit'): {bone, at: [x_fwd, y_up]} the striking point at that mark, measured exactly like effector.at (bone = the clip effector unless another limb is > 1.6x faster around the mark)",
     "body": "heightM = rest height top of hair to sole; hipsM = rest Hips head height; handReachM = lateral distance hips -> middle fingertip in the T-pose bind; footReachM = hip joint -> toe tip (leg length)",
 }
 
@@ -201,7 +203,9 @@ def run_qc(fid, a, build, rep):
                 summ[cid] = m
                 continue
             summ[cid] = {"low": [m["lowest_min"], m["lowest_max"]], "tpose": len(m["tpose_frames"]),
-                         "sink3cm": m["sink_frames_lt_-0.03"], "float3cm": m["float_frames_gt_0.03"]}
+                         "sink3cm": m["sink_frames_lt_-0.03"], "float3cm": m["float_frames_gt_0.03"],
+                         "max_step_deg": m.get("max_step_deg"), "step_bone": m.get("step_bone"),
+                         "step_frame": m.get("step_frame")}
         rep["qc"] = summ
         rep["qc_turntable"] = q.get("turntable", q.get("turntable_error"))
         sp = subprocess.run([sys.executable, P("tools", "qc_sheet.py"), qdir, fid], capture_output=True,

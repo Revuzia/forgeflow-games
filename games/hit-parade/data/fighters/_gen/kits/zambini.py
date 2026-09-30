@@ -98,7 +98,9 @@ def build():
           grab={"frames": 48, "adv": 14, "hitF": 28, "swap": True, "air": False, "techable": True,
                 "clip": "spin_fling"}, desc="Spins and flings them behind him.")
 
-    card = {"life": 180, "box": [0.30, 0.20], "y": 1.25, "hits": 1, "clip": "card", "x": 0.6}
+    # y 1.20 (was 1.25): the card box (0.20 m tall) must reach the crouch line (1.10 m) so crouching does not
+    # dodge the zoner's main tool (SF convention: straight projectiles hit crouchers).
+    card = {"life": 180, "box": [0.30, 0.20], "y": 1.20, "hits": 1, "clip": "card", "x": 0.6}
     K.special("card_fan", "proj", motion="236",
               common=dict(name="Card Fan", clip="card_flick", damage=500, cancel=["super"], role=["projectile"],
                           sfx=[[0, "card_throw"]], desc="Flicked playing cards; fast and straight.",

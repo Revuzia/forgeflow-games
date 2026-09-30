@@ -292,7 +292,8 @@
     "loop": false,
     "kind": "hand",
     "limb": "R_hand",
-    "fist": 80
+    "fist": 80,
+    "marks": {"slam": 3284}
   },
   "hook_fling": {
     "src": "cmu",
@@ -305,7 +306,8 @@
     "kind": "hand",
     "limb": "L_hand",
     "fist": 80,
-    "_cand": "hook.4"
+    "_cand": "hook.4",
+    "marks": {"slam": 2928}
   },
   "brick_throw": {
     "src": "mixamo",

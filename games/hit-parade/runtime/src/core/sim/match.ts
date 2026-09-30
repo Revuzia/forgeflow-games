@@ -4,12 +4,12 @@
 // hashes it. Snapshots (readFighter / readMatch) are the only thing the view / UI read.
 
 import type { FighterSnap, GameData, MatchPhase, MatchSnap } from '../types.ts';
-import { ACT, BUF, F, FL, MODE_CODES, PH, PH_NAMES, ST, ST_NAMES, STATE_INTS, STATE_INTS_BRAWL, STATE_VERSION, W } from './layout.ts';
+import { ACT, BUF, F, FL, MODE_CODES, P, PH, PH_NAMES, PROJ_CAP, ST, ST_NAMES, STATE_INTS, STATE_INTS_BRAWL, STATE_VERSION, W, projBase } from './layout.ts';
 import { EventRing, EV } from './events.ts';
 import { compileFighter, compileSystem } from './compile.ts';
 import { recordInput, parseAction } from './inputs.ts';
 import { fighterUpdate, freezeBufferRule, enterKnockdown, PROX_THREAT, proxThreat } from './fighter.ts';
-import { resolveBodies } from './boxes.ts';
+import { clampToWalls, resolveBodies } from './boxes.ts';
 import { projectilesTick } from './projectiles.ts';
 import { applyDamage, comboStep, resolveHits, scaledDamage } from './hits.ts';
 import { resolveThrows } from './throws.ts';
@@ -108,8 +108,8 @@ function cinematicTick(m: Match): void {
     enterKnockdown(m, d, vkd, 2);
     if (mv.cinEndGap >= 0) {
       const bd = fb(d);
-      const lim = m.sys.wall - m.cf[d].pushHalf;
-      s[bd + F.x] = Math.max(-lim, Math.min(lim, s[ba + F.x] + s[ba + F.facing] * mv.cinEndGap));
+      s[bd + F.x] = s[ba + F.x] + s[ba + F.facing] * mv.cinEndGap;
+      clampToWalls(m, d); // CHANGED(fixer) D2: per-side wall limits
     }
   }
 }
@@ -369,7 +369,8 @@ export function readFighter(m: Match, i: number): FighterSnap {
     prevAnimFrame: s[b + F.pAnimF],
     blendT: Math.min(1, s[b + F.blendT] / 6),
     animSec: animSeconds(m, i, animId, animF),
-    hp: s[b + F.hp],
+    // CHANGED(fixer) D10: the snapshot never reports overkill (the state keeps it; checksums unchanged)
+    hp: Math.max(0, s[b + F.hp]),
     hpMax: cf.hpMax,
     greyHp: s[b + F.grey],
     showtime: s[b + F.showtime],
@@ -397,6 +398,17 @@ export function readFighter(m: Match, i: number): FighterSnap {
 export function readMatch(m: Match): MatchSnap {
   const s = m.s;
   const t = s[W.timer];
+  // CHANGED(integrator): the live projectile list the view draws (§17.1 MatchSnap.proj request; was missing, so a
+  // projectile special flew invisibly in the game)
+  const proj: NonNullable<MatchSnap['proj']> = [];
+  for (let k = 0; k < PROJ_CAP; k++) {
+    const pb = projBase(k);
+    if (s[pb + P.act] === 0) continue;
+    const owner = s[pb + P.owner];
+    const mv = owner === 0 || owner === 1 ? m.cf[owner]?.moves[s[pb + P.mv]] : undefined;
+    proj.push({ slot: k, owner, x: s[pb + P.x] / M, y: s[pb + P.y] / M, vx: (s[pb + P.vx] * 60) / M, moveId: mv ? mv.snapId : -1,
+      kind: s[pb + P.kind], alive: true });
+  }
   return {
     frame: s[W.frame],
     phase: (PH_NAMES[s[W.phase]] ?? 'fight') as MatchPhase,
@@ -416,6 +428,7 @@ export function readMatch(m: Match): MatchSnap {
     roundWinner: s[W.roundWinner],
     slowmo: s[W.phase] === PH.KO && s[W.koStop] === 0 && s[W.slowmo] > 0,
     freeze: s[W.freeze],
+    proj,
   };
 }
 

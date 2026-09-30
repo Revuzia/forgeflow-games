@@ -11,7 +11,7 @@
 import { hash32 } from '../rng.ts';
 
 /** Bump when a field's MEANING changes without the sizes changing. */
-export const LAYOUT_REV = 1;
+export const LAYOUT_REV = 2; // CHANGED(fixer): 2 = throw carry / knockdown presentation fields, asymmetric push boxes
 
 function builder(): { f: () => number; a: (n: number) => number; size: () => number } {
   let n = 0;
@@ -160,7 +160,14 @@ export const F = {
   after: fb.f(), // knockdown frames that follow a throw lock
   throwDmg: fb.f(), // pending throw damage (thrower side)
   animInst: fb.f(), // mvInst the current move anim belongs to
-  reserved: fb.a(3),
+  // CHANGED(fixer) D3: throw carry + knockdown presentation
+  thrX: fb.f(), // victim x when the throw lock started (the carry anchor, U)
+  thrDisp: fb.f(), // victim: forward (own facing) displacement the carry ends on (U); 0 = the clip root as is
+  tot: fb.f(), // total frames of the current timed state (THROWN lock / KNOCKDOWN), set on entry
+  kdFace: fb.f(), // knockdown lying pose bits (throwpose.ts KDF): 1 face down, 2 no fall (already down), 4 juggle landing
+  thrMv: fb.f(), // victim: the thrower's move index at the connect (the thrower's own F.mv clears when its lock ends first)
+  thrSlam: fb.f(), // victim: lock frame of the slam for a throw WITHOUT a grab block (the thrower's damage frame)
+  reserved: fb.a(1),
 };
 export const FIGHTER_INTS = fb.size();
 

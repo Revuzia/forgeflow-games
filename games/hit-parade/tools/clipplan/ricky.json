@@ -96,10 +96,11 @@
     "src": "mixamo",
     "file": "Great_Sword_Pack/great sword high spin attack",
     "range": [1, 40],
-    "contact": 11,
+    "contact": 7,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "effector": "RightHand"
   },
   "sledgehammer": {
     "src": "mixamo",
@@ -242,7 +243,7 @@
     "speed": 1.0,
     "loop": false,
     "contacts": [26, 59, 80],
-    "marks": {"hit1": 26, "hit2": 59, "hit3": 80}
+    "marks": {"hit1": 26, "hit2": 59, "hit3": 80, "slam": 83}
   },
   "spin_fling": {
     "src": "mixamo",
@@ -251,7 +252,8 @@
     "contact": 18,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 36}
   },
   "spotlight_cast": {
     "src": "mixamo",

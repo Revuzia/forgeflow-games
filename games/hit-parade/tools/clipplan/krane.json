@@ -94,9 +94,9 @@
       },
       "upper": {
         "src": "mixamo",
-        "file": "Pro_Sword_and_Shield_Pack/sword and shield attack (4)",
-        "range": [8, 31],
-        "contact": 15,
+        "file": "Pro_Sword_and_Shield_Pack/sword and shield attack (3)",
+        "range": [16, 39],
+        "contact": 23,
         "mirror": false,
         "speed": 1.0,
         "loop": false
@@ -106,7 +106,7 @@
       "lowerFrame": 1
     },
     "_upperFrames": 24,
-    "_upperContact": 15,
+    "_upperContact": 23,
     "contact": 1.3043,
     "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
   },
@@ -268,7 +268,8 @@
     "contact": 22,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 75}
   },
   "perp_walk": {
     "src": "mixamo",
@@ -277,7 +278,8 @@
     "contact": null,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 18}
   },
   "taser_fire": {
     "src": "mixamo",
@@ -352,7 +354,8 @@
     "contact": null,
     "mirror": false,
     "speed": 1.0,
-    "loop": false
+    "loop": false,
+    "marks": {"slam": 14}
   },
   "backup_combo": {
     "src": "seq",

@@ -292,6 +292,34 @@ def entry_effector(e):
     return None
 
 
+def hands_from_cmu(e):
+    """True when the clip's hands come from CMU mocap (a cmu entry, a layer whose upper is cmu, a seq with
+    any cmu segment): those get hp_retarget.sanitize_wrists. Authored clips keep their keyed hands."""
+    e = norm_entry(e)
+    src = e.get("src", "mixamo")
+    if src == "cmu":
+        return True
+    if src == "layer":
+        return hands_from_cmu(e["layer"]["upper"])
+    if src == "seq":
+        return any(hands_from_cmu(x) for x in e["seq"])
+    return False
+
+
+def cmu_body(e):
+    """True when the clip's LEGS come from CMU too (a cmu entry, a seq with a cmu segment; a layer's legs come
+    from its lower): feet + limb spikes are sanitised as well as the hands."""
+    e = norm_entry(e)
+    src = e.get("src", "mixamo")
+    if src == "cmu":
+        return True
+    if src == "layer":
+        return cmu_body(e["layer"]["lower"])
+    if src == "seq":
+        return any(cmu_body(x) for x in e["seq"])
+    return False
+
+
 def effector_cands(e):
     """A layered strike comes from the upper body: only the hands (and head) are candidates."""
     src = e.get("src", "mixamo")
@@ -322,6 +350,21 @@ def bake_pass(e, smp, tgt, body, cid):
     """retarget -> action -> floor fix -> FK -> contact / effector measurement for one sampler."""
     opts = {"air": e.get("air"), "loopBlend": e.get("loopBlend", 0)}
     res = R.retarget(smp, tgt, opts)
+    # extremities (hp_retarget: CMU hand data is marker garbage in places; shoes do not bend 58+ deg)
+    xs = {}
+    if hands_from_cmu(e) and e.get("wrist") != "raw":
+        # frames the contact / strike marks sample (floor + ceil of each explicit time) stay untouched by the
+        # snap spread; an invalid (spike / broken) contact frame is still repaired
+        c0, mk0 = entry_points(e, smp)
+        prot = set()
+        for t in [c0] + [f for _, f in mk0]:
+            if _num(t):
+                t = max(0.0, min(res["n"] - 1.0, float(t)))
+                prot.update({int(math.floor(t)), int(math.ceil(t))})
+        xs["wrist"] = R.sanitize_wrists(res, prot, "all" if cmu_body(e) else "hands")
+    if e.get("toes") != "raw":
+        xs["toes"] = R.clamp_toes(res)
+    res["extremities"] = xs
     act = R.write_action(tgt, cid, res)
     # floor mode: the plan's, else an authored spec's own default (a crouch kick lifts the
     # planted foot, so the body settles onto the rear toes: "plant"), else clamp
@@ -354,6 +397,7 @@ def aim_seq(e, smp, tgt, P):
     n = len(P)
     recs = []
     changed = False
+    switched = {}
     for i, (x, g) in enumerate(zip(e["seq"], smp.segs)):
         x = norm_entry(x)
         c, _ = entry_points(x, g)
@@ -361,26 +405,68 @@ def aim_seq(e, smp, tgt, P):
             continue
         cf = max(0, min(n - 1, int(round(smp.starts[i] + c))))
         eff = entry_effector(x)
+        explicit = bool(eff)
         if not eff:
             hips_all = [Pk[tgt.hips].translation for Pk in P]
             eff = R._fastest(tgt, P, hips_all, n, effector_cands(x), (max(0, cf - 4), min(n - 1, cf + 1)))[0]
         if not eff:
             continue
-        hips = P[cf][tgt.hips].translation
-        v = R.eff_point(tgt, P[cf], eff)[0] - hips
-        v.z = 0.0
-        deg = math.degrees(math.atan2(-v.x, -v.y))
+        v, deg = _aim_vec(tgt, P[cf], eff)
         rec = {"segment": i, "frame": cf, "effector": eff, "deg": round(deg, 1), "dist_m": round(v.length, 3)}
+        sw = None if explicit else _hand_switch(tgt, P[cf], eff, deg)
+        if sw:
+            rec.update({"effector_switch": "%s -> %s" % (eff, sw[0]), "deg_before": rec["deg"]})
+            eff, v, deg = sw
+            rec.update({"effector": eff, "deg": round(deg, 1), "dist_m": round(v.length, 3)})
+            switched[i] = eff
+            changed = True
         if v.length >= AIM_MIN_DIST and abs(deg) > AIM_MIN_DEG:
-            smp.segs[i] = R.YawSampler(g, R.yaw_to_front(v))
+            Rz = R.yaw_to_front(v)
+            if isinstance(g, R.LayerSampler):
+                # a layered segment turns its UPPER only, like aim_clip (krane backup_combo's run-in legs
+                # were turned 143 deg with the whole segment: the fighter ran backward)
+                g.up_yaw = Rz
+                rec["scope"] = "upper"
+            else:
+                smp.segs[i] = R.YawSampler(g, Rz)
             rec["aimed"] = True
             changed = True
         recs.append(rec)
     if not changed:
         return None
     smp._off = None
-    return {"deg": max((r["deg"] for r in recs if r.get("aimed")), key=abs), "point": "segments",
-            "scope": "segments", "segments": recs, "effector_before": None, "_sampler": smp}
+    out = {"deg": max([r["deg"] for r in recs if r.get("aimed")] or [0.0], key=abs), "point": "segments",
+           "scope": "segments", "segments": recs, "effector_before": None, "_sampler": smp}
+    if switched:
+        e2 = dict(e)
+        e2["seq"] = [dict(norm_entry(x), effector=switched[i]) if i in switched else x for i, x in enumerate(e["seq"])]
+        out["_entry"] = e2
+    return out
+
+
+AIM_SWITCH_DEG = 90.0   # an auto-picked striking hand this far off forward at contact = probably the wrong hand
+AIM_SWITCH_OK = 60.0    # ... if the other hand is out in front (within this, >= AIM_MIN_DIST) it is the striker
+
+
+def _aim_vec(tgt, Pc, eff):
+    hips = Pc[tgt.hips].translation
+    v = R.eff_point(tgt, Pc, eff)[0] - hips
+    v.z = 0.0
+    return v, math.degrees(math.atan2(-v.x, -v.y))
+
+
+def _hand_switch(tgt, Pc, eff, deg):
+    """An AUTO-picked hand that is > AIM_SWITCH_DEG off forward at contact while the other hand is out in
+    front (<= AIM_SWITCH_OK, >= AIM_MIN_DIST): the other hand strikes (the fastest-limb pick caught the rear
+    hand pulling back; krane backup_combo's shield push: LeftHand 0.63 m out at 30 deg, RightHand 0.41 m
+    BEHIND - the aim turned the fighter 143 deg to face it). Returns (other, vec, deg) or None."""
+    if eff not in ("RightHand", "LeftHand") or abs(deg) <= AIM_SWITCH_DEG:
+        return None
+    other = "LeftHand" if eff == "RightHand" else "RightHand"
+    vo, dego = _aim_vec(tgt, Pc, other)
+    if vo.length >= AIM_MIN_DIST and abs(dego) <= AIM_SWITCH_OK:
+        return other, vo, dego
+    return None
 
 
 def aim_clip(e, smp, tgt, P, m):
@@ -414,7 +500,18 @@ def aim_clip(e, smp, tgt, P, m):
 
     eff = m["effector"]["bone"]
     ev, ed, edeg = hv(R.eff_point(tgt, Pc, eff)[0])
+    switch = None
+    if not e.get("effector"):
+        sw = _hand_switch(tgt, Pc, eff, edeg)
+        if sw:
+            switch = "%s -> %s" % (eff, sw[0])
+            eff = sw[0]
+            ev, ed, edeg = hv(R.eff_point(tgt, Pc, eff)[0])
     if ed < AIM_MIN_DIST or abs(edeg) <= AIM_MIN_DEG:
+        if switch:
+            return {"deg": 0.0, "point": eff, "dist_m": round(ed, 3), "scope": "none", "effector_switch": switch,
+                    "effector_deg": round(edeg, 1), "effector_before": m["effector"], "_sampler": smp,
+                    "_entry": dict(e, effector=eff)}
         return None
     two = src == "cmu" and e.get("kind") in ("body", "getup", None)
     if not two and eff in ("RightHand", "LeftHand"):
@@ -432,6 +529,10 @@ def aim_clip(e, smp, tgt, P, m):
         po = R.eff_point(tgt, Pc, other)[0] - hips
         he, ho = Vector((pe.x, pe.y, 0.0)).length, Vector((po.x, po.y, 0.0)).length
         two = spd(other) >= 0.6 * spd(eff) or (ho >= 0.6 * he and ho > 0.3 and abs(pe.z - po.z) < 0.3)
+        # a hand BEHIND the body (> 90 deg off forward) is not the second striking hand: krane shield_block's
+        # baton hand pulling back 0.46 m behind made the mid-hands point 86 deg sideways and turned the clip
+        if two and abs(math.degrees(math.atan2(-po.x, -po.y))) > AIM_SWITCH_DEG:
+            two = False
     if two:
         v, dist, deg = hv((R.eff_point(tgt, Pc, "RightHand")[0] + R.eff_point(tgt, Pc, "LeftHand")[0]) * 0.5)
         if dist < AIM_MIN_DIST or abs(deg) <= AIM_MIN_DEG:
@@ -448,8 +549,12 @@ def aim_clip(e, smp, tgt, P, m):
     else:
         new = R.YawSampler(smp, Rz)
         scope = "clip"
-    return {"deg": round(deg, 1), "point": what, "dist_m": round(dist, 3), "scope": scope,
-            "effector_deg": round(edeg, 1), "effector_before": m["effector"], "_sampler": new}
+    out = {"deg": round(deg, 1), "point": what, "dist_m": round(dist, 3), "scope": scope,
+           "effector_deg": round(edeg, 1), "effector_before": m["effector"], "_sampler": new}
+    if switch:
+        out["effector_switch"] = switch
+        out["_entry"] = dict(e, effector=eff)
+    return out
 
 
 def mesh_lowest(body):
@@ -590,7 +695,8 @@ def main():
             aim = aim_clip(e, smp, tgt, P, m)
             if aim:
                 smp = aim.pop("_sampler")
-                res, act, fl, P, m, mk_out = bake_pass(e, smp, tgt, body, cid)
+                e_b = aim.pop("_entry", None) or e   # effector switched by the aim (auto-picked wrong hand)
+                res, act, fl, P, m, mk_out = bake_pass(e_b, smp, tgt, body, cid)
                 aim["effector_after"] = m["effector"]
                 C.log("AIM", cid, json.dumps(aim))
             order_first = order_first or act
@@ -603,7 +709,13 @@ def main():
                      "loop": bool(e.get("loop", False))}
             if marks:
                 entry["marks"] = marks
+                # per strike mark effector point (lane FIGHTERS request, CONTRACT 20.6 -> 6.3 marksAt)
+                mpts = R.mark_points(tgt, res, P, [(mk, max(0.0, min(n - 1.0, mf))) for mk, mf in mk_out],
+                                     (m.get("effector") or {}).get("bone"), effector_cands(e))
+                if mpts:
+                    entry["marksAt"] = mpts
             report["clips"][cid] = {"clip": entry, "contact_frame": m.get("contact_frame"), "floor": fl, "aim": aim, "effector_note": m.get("effector_note"),
+                                    "extremities": res.get("extremities"),
                                     "ratio": round(res["ratio"], 4), "src": e,
                                     "secs": round(time.time() - tc, 2), "trace": effector_trace(tgt, P)}
             if not fk_checked and n > 2:

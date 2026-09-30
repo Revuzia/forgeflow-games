@@ -185,9 +185,11 @@ function pairFor(seed: number): [string, string] {
 }
 
 /** runs `hero` (persona / CPU factory) vs `foe` per seed, alternating sides; returns hero wins + results */
-function series(label: string, hero: (f: string, seed: number) => Cpu, foe: (f: string, seed: number) => Cpu, heroFighter: (s: number) => string, foeFighter: (s: number) => string): { wins: number; draws: number; n: number; res: Result[] } {
+function series(label: string, hero: (f: string, seed: number) => Cpu, foe: (f: string, seed: number) => Cpu, heroFighter: (s: number) => string, foeFighter: (s: number) => string): { wins: number; draws: number; n: number; res: Result[]; respects: number; spacePokes: number } {
   let wins = 0;
   let draws = 0;
+  let respects = 0;
+  let spacePokes = 0;
   const res: Result[] = [];
   let cpuUs = 0;
   for (const sd of seeds) {
@@ -197,6 +199,8 @@ function series(label: string, hero: (f: string, seed: number) => Cpu, foe: (f: 
     const H: Side = { cpu: hero(hf, sd * 1009 + 1), fighter: hf, scheme: 0 };
     const O: Side = { cpu: foe(ff, sd * 2003 + 2), fighter: ff, scheme: sd % 3 === 0 ? 1 : 0 };
     const r = heroP1 ? runMatch(H, O, sd) : runMatch(O, H, sd);
+    respects += H.cpu.brain.stats.respects;
+    spacePokes += H.cpu.brain.stats.spacePokes;
     const heroIdx = heroP1 ? 0 : 1;
     if (r.winner === heroIdx) wins++;
     else if (r.winner < 0) draws++;
@@ -205,7 +209,7 @@ function series(label: string, hero: (f: string, seed: number) => Cpu, foe: (f: 
     if (VERBOSE) console.log(`    ${label} seed ${sd}: ${hf}${heroP1 ? '(P1)' : '(P2)'} vs ${ff} -> ${r.winner === heroIdx ? 'WIN' : r.winner < 0 ? 'DRAW' : 'loss'} rounds ${r.wins.join('-')} frames ${r.frames} hits ${r.hits[heroIdx]}/${r.hits[1 - heroIdx]} blocks(by hero) ${r.blocks[heroIdx]} aa ${r.aaHits[heroIdx]} throws ${r.throws[heroIdx]}/${r.throws[1 - heroIdx]}`);
   }
   if (VERBOSE) console.log(`    ${label}: cpu ${(cpuUs / seeds.length).toFixed(1)} us/call`);
-  return { wins, draws, n: seeds.length, res };
+  return { wins, draws, n: seeds.length, res, respects, spacePokes };
 }
 
 const persona = (name: PersonaName) => (f: string, seed: number): Cpu => createPersona(name, f, seed);
@@ -328,7 +332,7 @@ const foeF = (s: number): string => pairFor(s)[1];
   const r = series('A1 optimal vs masher', persona('optimal'), persona('masher'), heroF, foeF);
   const blocks = r.res.reduce((t, x, k) => t + x.blocks[seeds[k] % 2 === 1 ? 0 : 1], 0);
   const pun = r.res.reduce((t, x, k) => t + x.punishes[seeds[k] % 2 === 1 ? 0 : 1], 0);
-  accept('A1 block+punish beats mash', r.wins >= Math.ceil(0.8 * r.n), `optimal won ${pct(r.wins, r.n)} vs masher (draws ${r.draws}); optimal blocked ${blocks} hits, landed ${pun} punish counters`);
+  accept('A1 block+punish beats mash', r.wins >= Math.ceil(0.8 * r.n), `optimal won ${pct(r.wins, r.n)} vs masher (draws ${r.draws}); optimal blocked ${blocks} hits, landed ${pun} punish counters, respected the presser ${r.respects} times, swung ${r.spacePokes} space pokes into its walk-in`);
 }
 {
   const r = series('A2 optimal vs jumper', persona('optimal'), persona('jumper'), heroF, foeF);

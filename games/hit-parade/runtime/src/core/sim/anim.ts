@@ -8,6 +8,7 @@ import { F, FL, ST, W } from './layout.ts';
 import { SHARED_CLIPS } from '../data.ts';
 import { fb } from './state.ts';
 import type { Match } from './state.ts';
+import { knockdownPose, victimPose } from './throwpose.ts';
 
 // shared clip ids (§17 rule 2)
 export const A = {
@@ -123,10 +124,45 @@ export function desiredAnim(m: Match, i: number): number {
   }
 }
 
+const TP = new Int32Array(6);
+
+/**
+ * CHANGED(fixer) D3: THROWN / KNOCKDOWN show shared clips at a sim-chosen clip time (throwpose.ts): the anim frame is a
+ * VIRTUAL frame = round(clip seconds * 60), so the view's animFrame / 60 (§17 rule 3) samples that time. A new victim
+ * segment (e.g. a second body shot) restarts with a blend like any anim switch.
+ */
+function timedTick(m: Match, i: number, advance: boolean, want: number, vf: number, inst: number): void {
+  const s = m.s;
+  const b = fb(i);
+  if (want !== s[b + F.animId] || s[b + F.animInst] !== inst) {
+    const an = m.sys.raw.anim;
+    s[b + F.pAnimId] = s[b + F.animId];
+    s[b + F.pAnimF] = s[b + F.animF];
+    s[b + F.animId] = want;
+    s[b + F.animF] = vf;
+    s[b + F.animInst] = inst;
+    s[b + F.blendStep] = an.blendHit;
+    s[b + F.blendT] = an.blendHit >= 6 ? 6 : 0;
+    return;
+  }
+  s[b + F.animF] = vf;
+  if (advance && s[b + F.blendT] < 6) s[b + F.blendT] = Math.min(6, s[b + F.blendT] + s[b + F.blendStep]);
+}
+
 /** Updates the anim cursor of fighter `i` (end of every step). */
 export function animTick(m: Match, i: number, advance: boolean): void {
   const s = m.s;
   const b = fb(i);
+  const st = s[b + F.st];
+  if (st === ST.THROWN && victimPose(m, i, TP)) {
+    timedTick(m, i, advance, TP[0], TP[1], -1000 - TP[2]);
+    return;
+  }
+  if (st === ST.KNOCKDOWN) {
+    knockdownPose(m, i, TP);
+    timedTick(m, i, advance, TP[0], TP[1], -2000 - TP[2]);
+    return;
+  }
   const want = desiredAnim(m, i);
   const kind = lastKind;
   const moveAnim = kind === KIND_MOVE;

@@ -49,8 +49,8 @@ def build():
            "LAYERED: great sword crouching (3) legs (hips 0.49 m measured) + cane thrust")
     K.clip("low_cane", mix(GS + "great sword slash (5)", (1, 44), contact=16),
            "Mixamo great sword slash (5): low crouch swing (hips 0.49-0.62 m)")
-    K.clip("cane_twirl", mix(GS + "great sword high spin attack", (1, 40), contact=11),
-           "Mixamo great sword high spin: arms extended at chest height, front pass f11 (1.49 m) = anti-air twirl")
+    K.clip("cane_twirl", dict(mix(GS + "great sword high spin attack", (1, 40), contact=7), effector="RightHand"),
+           "Mixamo great sword high spin: both hands up in front = anti-air twirl. Contact f7 + effector RightHand (2026-09-30): bake trace hands 1.68 / 1.61 m, 0.42 / 0.56 m forward, lateral < 0.1 m; at the old f11 the hands were already swinging 0.36 m to the side and the builder picked the RightKnee (0.64 m) as the effector")
     K.clip("sledgehammer", mix(GS + "great sword slash (4)", (25, 55), contact=43),
            "Mixamo great sword slash (4): sledgehammer overhead chop, impact f41-43 (dense render)")
     K.clip("stage_kick", mix(GS + "great sword kick", (5, 46), contact=19),
@@ -94,6 +94,7 @@ def build():
     K.add("5H", "H", name="Showstopper", clip="showstopper", cancel=["special", "super"], sfx=[[8, "whoosh_heavy"]],
           desc="Big horizontal cane swing.")
     K.add("2H", "AA", name="Cane Twirl", clip="cane_twirl", juggle={"js": 1, "ji": 1, "jl": 0},
+          boxes=[{"f": [9, 12], "x": 0.60, "y": 1.80, "w": 0.70, "h": 0.50}],
           cancel=["special", "super"], desc="Chest-high twirl: anti-air.")
     K.add("3H", "SWEEP", input="3H", kind="command", name="The Hook", clip="hook_slide", startup=14,
           move=[[0, 0], [14, 0.8]], launch=[-2.0, 0.0], cancel=[],

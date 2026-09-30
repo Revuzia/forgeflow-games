@@ -3,6 +3,7 @@
   "name": "THE GREAT ZAMBINI",
   "persona": "The Act",
   "archetype": "zoner",
+  "difficulty": 2,
   "body": "Whiteclown N Hallin",
   "heightM": 1.85,
   "hp": 9500,
@@ -25,11 +26,17 @@
   },
   "throwRangeM": 0.6,
   "hurt": {
-    "stand": [0.56, 1.76],
-    "crouch": [0.64, 1.11],
+    "stand": [0.56, 1.74],
+    "crouch": [0.64, 1.33],
     "air": [0.53, 1.15]
   },
-  "pushbox": [0.47, 1.58],
+  "pushbox": [0.42, 1.57],
+  "push": {
+    "front": 0.28,
+    "back": 0.14,
+    "crouchFront": 0.424,
+    "crouchBack": 0.138
+  },
   "colors": [
     {"name": "Top Hat", "tint": null},
     {"name": "Rabbit White", "tint": "#e8e8e8"},
@@ -62,7 +69,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
       "anim": {"clip": "palm_flick"},
-      "desc": "Quick palm."
+      "desc": "Quick palm.",
+      "boxes": [{"f": [5, 7], "x": 0.845, "y": 1.278, "w": 0.389, "h": 0.356}],
+      "boxSrc": "hitVolume"
     },
     "2L": {
       "kind": "normal",
@@ -89,7 +98,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
       "anim": {"clip": "low_palm"},
-      "desc": "Crouching palm to the shin."
+      "desc": "Crouching palm to the shin.",
+      "boxes": [{"f": [5, 7], "x": 0.909, "y": 0.75, "w": 0.518, "h": 0.25}],
+      "boxSrc": "hitVolume"
     },
     "5M": {
       "kind": "normal",
@@ -116,7 +127,10 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
       "anim": {"clip": "spear_hand"},
-      "desc": "Long straight-arm spear hand: the zoner's longest poke."
+      "desc": "Long straight-arm spear hand: the zoner's longest poke.",
+      "boxes": [{"f": [9, 11], "x": 0.973, "y": 1.265, "w": 0.646, "h": 0.33}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.0], [7, 0.01], [8, 0.217], [10, 0.265], [18, 0.216], [29, 0.235]]
     },
     "2M": {
       "kind": "normal",
@@ -143,7 +157,10 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
       "anim": {"clip": "low_spear"},
-      "desc": "Long crouching spear hand (low); cancel into CARD FAN."
+      "desc": "Long crouching spear hand (low); cancel into CARD FAN.",
+      "boxes": [{"f": [9, 11], "x": 0.97, "y": 1.066, "w": 0.639, "h": 0.3}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.0], [6, 0.005], [8, 0.085], [10, 0.11], [27, 0.081]]
     },
     "5H": {
       "kind": "normal",
@@ -170,7 +187,10 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "double_palm"},
-      "desc": "Double palm that shoves them back to his range."
+      "desc": "Double palm that shoves them back to his range.",
+      "boxes": [{"f": [12, 14], "x": 0.988, "y": 1.245, "w": 0.676, "h": 0.35}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.0], [8, 0.001], [11, 0.282], [14, 0.308], [23, 0.257], [29, 0.105], [35, 0.006]]
     },
     "2H": {
       "kind": "normal",
@@ -224,7 +244,18 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["overhead"],
       "anim": {"clip": "abracadabra"},
-      "desc": "Two-fist hammer onto the head: overhead."
+      "desc": "Two-fist hammer onto the head: overhead.",
+      "pushExt": [
+        [0, 0.0],
+        [14, 0.0],
+        [15, 0.019],
+        [16, 0.147],
+        [18, 0.247],
+        [20, 0.302],
+        [23, 0.323],
+        [29, 0.303],
+        [39, 0.022]
+      ]
     },
     "j.L": {
       "kind": "normal",
@@ -251,7 +282,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "air_palm"},
-      "desc": "Air palm."
+      "desc": "Air palm.",
+      "pushExt": [[0, 0.007], [4, 0.005], [7, 0.044], [15, 0.042]]
     },
     "j.M": {
       "kind": "normal",
@@ -278,7 +310,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "air_flick"},
-      "desc": "Flung arm air-to-air."
+      "desc": "Flung arm air-to-air.",
+      "pushExt": [[0, 0.0], [2, 0.0], [4, 0.068], [16, 0.089]]
     },
     "j.H": {
       "kind": "normal",
@@ -305,7 +338,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "air_double"},
-      "desc": "Double-palm jump-in."
+      "desc": "Double-palm jump-in.",
+      "pushExt": [[0, 0.0], [3, 0.0], [5, 0.035], [9, 0.22], [19, 0.168]]
     },
     "throw_f": {
       "kind": "throw",
@@ -333,7 +367,8 @@
       "grab": {"frames": 44, "adv": 21, "hitF": 30, "swap": false, "air": false, "techable": true, "clip": "palm_shove"},
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Grabs the lapels and blasts them away with both palms."
+      "desc": "Grabs the lapels and blasts them away with both palms.",
+      "pushExt": [[0, 0.224], [4, 0.078], [10, 0.014], [22, 0.0], [31, 0.079]]
     },
     "throw_b": {
       "kind": "throw",
@@ -361,7 +396,8 @@
       "grab": {"frames": 48, "adv": 14, "hitF": 28, "swap": true, "air": false, "techable": true, "clip": "spin_fling"},
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Spins and flings them behind him."
+      "desc": "Spins and flings them behind him.",
+      "pushExt": [[0, 0.224], [4, 0.078], [10, 0.014], [22, 0.0], [31, 0.079]]
     },
     "card_fan_l": {
       "kind": "special",
@@ -386,20 +422,12 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "projectile": {
-        "life": 180,
-        "box": [0.3, 0.2],
-        "y": 1.25,
-        "hits": 1,
-        "clip": "card",
-        "x": 0.6,
-        "speed": 5.0,
-        "strength": "L"
-      },
+      "projectile": {"life": 180, "box": [0.3, 0.2], "y": 1.2, "hits": 1, "clip": "card", "x": 0.6, "speed": 5.0, "strength": "L"},
       "role": ["projectile"],
       "anim": {"clip": "card_flick"},
       "sfx": [[0, "card_throw"]],
-      "desc": "Flicked playing cards; fast and straight."
+      "desc": "Flicked playing cards; fast and straight.",
+      "pushExt": [[0, 0.0], [10, 0.0], [37, 0.087], [48, 0.025]]
     },
     "card_fan_m": {
       "kind": "special",
@@ -424,20 +452,12 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "projectile": {
-        "life": 180,
-        "box": [0.3, 0.2],
-        "y": 1.25,
-        "hits": 1,
-        "clip": "card",
-        "x": 0.6,
-        "speed": 6.5,
-        "strength": "M"
-      },
+      "projectile": {"life": 180, "box": [0.3, 0.2], "y": 1.2, "hits": 1, "clip": "card", "x": 0.6, "speed": 6.5, "strength": "M"},
       "role": ["projectile"],
       "anim": {"clip": "card_flick"},
       "sfx": [[0, "card_throw"]],
-      "desc": "Flicked playing cards; fast and straight."
+      "desc": "Flicked playing cards; fast and straight.",
+      "pushExt": [[0, 0.0], [9, 0.0], [36, 0.087], [48, 0.025]]
     },
     "card_fan_h": {
       "kind": "special",
@@ -462,20 +482,12 @@
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "projectile": {
-        "life": 180,
-        "box": [0.3, 0.2],
-        "y": 1.25,
-        "hits": 1,
-        "clip": "card",
-        "x": 0.6,
-        "speed": 8.0,
-        "strength": "H"
-      },
+      "projectile": {"life": 180, "box": [0.3, 0.2], "y": 1.2, "hits": 1, "clip": "card", "x": 0.6, "speed": 8.0, "strength": "H"},
       "role": ["projectile"],
       "anim": {"clip": "card_flick"},
       "sfx": [[0, "card_throw"]],
-      "desc": "Flicked playing cards; fast and straight."
+      "desc": "Flicked playing cards; fast and straight.",
+      "pushExt": [[0, 0.0], [36, 0.087], [48, 0.025]]
     },
     "card_fan_ex": {
       "kind": "ex",
@@ -500,20 +512,12 @@
       "cost": {"showtime": 0, "nerve": 20000},
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
-      "projectile": {
-        "life": 180,
-        "box": [0.4, 0.4],
-        "y": 1.25,
-        "hits": 3,
-        "clip": "card",
-        "x": 0.6,
-        "speed": 8.0,
-        "strength": "H"
-      },
+      "projectile": {"life": 180, "box": [0.4, 0.4], "y": 1.2, "hits": 3, "clip": "card", "x": 0.6, "speed": 8.0, "strength": "H"},
       "role": ["projectile"],
       "anim": {"clip": "card_flick"},
       "sfx": [[0, "card_throw"]],
-      "desc": "A full deck: 3 hits."
+      "desc": "A full deck: 3 hits.",
+      "pushExt": [[0, 0.0], [31, 0.087], [42, 0.025]]
     },
     "flash_paper_l": {
       "kind": "special",
@@ -701,7 +705,8 @@
       "teleport": {"f": 17, "to": "behind", "gapM": 0.8},
       "role": ["approach"],
       "anim": {"clip": "vanish"},
-      "desc": "Trapdoor: reappears 0.8 m BEHIND the opponent (14f recovery)."
+      "desc": "Trapdoor: reappears 0.8 m BEHIND the opponent (14f recovery).",
+      "pushExt": [[0, 0.001], [21, 0.106], [40, 0.133]]
     },
     "vanish_m": {
       "kind": "special",
@@ -729,7 +734,8 @@
       "teleport": {"f": 17, "to": "front", "gapM": 0.9},
       "role": ["approach"],
       "anim": {"clip": "vanish"},
-      "desc": "Trapdoor: reappears 0.9 m IN FRONT of the opponent."
+      "desc": "Trapdoor: reappears 0.9 m IN FRONT of the opponent.",
+      "pushExt": [[0, 0.001], [21, 0.106], [40, 0.133]]
     },
     "vanish_h": {
       "kind": "special",
@@ -757,7 +763,8 @@
       "teleport": {"f": 17, "to": "home", "gapM": 1.0},
       "role": ["escape"],
       "anim": {"clip": "vanish"},
-      "desc": "Trapdoor: escapes to 1.0 m from his own wall."
+      "desc": "Trapdoor: escapes to 1.0 m from his own wall.",
+      "pushExt": [[0, 0.001], [21, 0.106], [40, 0.133]]
     },
     "vanish_ex": {
       "kind": "ex",
@@ -785,7 +792,8 @@
       "teleport": {"f": 10, "to": "behind", "gapM": 0.8},
       "role": ["approach"],
       "anim": {"clip": "vanish"},
-      "desc": "Instant: invulnerable from frame 1, reappears behind, cancelable into a special."
+      "desc": "Instant: invulnerable from frame 1, reappears behind, cancelable into a special.",
+      "pushExt": [[0, 0.001], [14, 0.106], [26, 0.133]]
     },
     "flourish_l": {
       "kind": "special",
@@ -939,7 +947,8 @@
       "role": ["projectile", "reversal"],
       "anim": {"clip": "palm_shove"},
       "sfx": [[0, "crowd_cheer_burst"]],
-      "desc": "A giant spinning card-saw: 5-hit projectile, invulnerable startup."
+      "desc": "A giant spinning card-saw: 5-hit projectile, invulnerable startup.",
+      "pushExt": [[0, 0.0], [5, 0.0], [8, 0.194], [13, 0.235], [39, 0.223], [55, 0.139]]
     },
     "the_prestige": {
       "kind": "super3",
@@ -998,7 +1007,10 @@
       },
       "role": ["reversal"],
       "anim": {"clip": "palm_shove"},
-      "desc": "PRIME TIME: a palm to the chest, a sheet over the victim, and the big reveal."
+      "desc": "PRIME TIME: a palm to the chest, a sheet over the victim, and the big reveal.",
+      "boxes": [{"f": [10, 13], "x": 0.962, "y": 1.378, "w": 0.623, "h": 0.555}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.0], [6, 0.0], [9, 0.194], [12, 0.229], [50, 0.223], [72, 0.139]]
     }
   },
   "simple": {
@@ -1018,7 +1030,8 @@
   ],
   "unique": {
     "kind": "teleport",
-    "moves": ["vanish_l", "vanish_m", "vanish_h", "vanish_ex"]
+    "moves": ["vanish_l", "vanish_m", "vanish_h", "vanish_ex"],
+    "trait": "VANISHING ACT: trapdoor teleport behind the opponent or home to his corner; keeps you at 3-5 m."
   },
   "intro": "intro_tada",
   "win": ["win_flourish", "win_ack"],

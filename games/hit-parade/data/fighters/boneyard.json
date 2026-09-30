@@ -3,6 +3,7 @@
   "name": "BONEYARD",
   "persona": "The Butcher of Block Street",
   "archetype": "bigbody",
+  "difficulty": 1,
   "body": "Ch05_nonPBR",
   "heightM": 1.9,
   "hp": 10500,
@@ -25,11 +26,17 @@
   },
   "throwRangeM": 0.68,
   "hurt": {
-    "stand": [0.65, 1.8],
-    "crouch": [0.74, 1.14],
+    "stand": [0.65, 1.75],
+    "crouch": [0.74, 1.44],
     "air": [0.61, 1.18]
   },
-  "pushbox": [0.55, 1.62],
+  "pushbox": [0.56, 1.57],
+  "push": {
+    "front": 0.398,
+    "back": 0.159,
+    "crouchFront": 0.459,
+    "crouchBack": 0.126
+  },
   "colors": [
     {"name": "Butcher", "tint": null},
     {"name": "Bone White", "tint": "#ece6d6"},
@@ -62,7 +69,10 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
       "anim": {"clip": "gauntlet_jab"},
-      "desc": "Spiked-gauntlet jab."
+      "desc": "Spiked-gauntlet jab.",
+      "boxes": [{"f": [6, 8], "x": 0.796, "y": 1.382, "w": 0.3, "h": 0.565}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.0], [16, 0.0], [17, 0.072], [19, 0.095]]
     },
     "2L": {
       "kind": "normal",
@@ -117,7 +127,9 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
       "anim": {"clip": "snap_kick"},
-      "desc": "Front snap kick."
+      "desc": "Front snap kick.",
+      "boxes": [{"f": [9, 11], "x": 1.021, "y": 1.07, "w": 0.506, "h": 0.3}],
+      "boxSrc": "hitVolume"
     },
     "2M": {
       "kind": "normal",
@@ -144,7 +156,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke", "low"],
       "anim": {"clip": "low_cleaver"},
-      "desc": "Crouching cleaver swing (low); cancel into MEAT HOOK."
+      "desc": "Crouching cleaver swing (low); cancel into MEAT HOOK.",
+      "pushExt": [[0, 0.0], [9, 0.0], [11, 0.027], [12, 0.072], [14, 0.085], [23, 0.001], [28, 0.0]]
     },
     "5H": {
       "kind": "normal",
@@ -227,7 +240,8 @@
       "role": ["overhead"],
       "anim": {"clip": "chop_down"},
       "sfx": [[12, "whoosh_heavy"]],
-      "desc": "Overhead cleaver chop (+2/-4)."
+      "desc": "Overhead cleaver chop (+2/-4).",
+      "pushExt": [[0, 0.0], [20, 0.0], [29, 0.072], [40, 0.009]]
     },
     "j.L": {
       "kind": "normal",
@@ -254,7 +268,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "air_jab"},
-      "desc": "Air jab."
+      "desc": "Air jab.",
+      "pushExt": [[0, 0.024], [4, 0.016], [7, 0.051], [14, 0.0], [16, 0.059]]
     },
     "j.M": {
       "kind": "normal",
@@ -281,7 +296,8 @@
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
       "anim": {"clip": "air_backhand"},
-      "desc": "Air backhand."
+      "desc": "Air backhand.",
+      "pushExt": [[0, 0.033], [4, 0.197], [5, 0.211], [6, 0.0], [16, 0.0]]
     },
     "j.H": {
       "kind": "normal",
@@ -336,7 +352,8 @@
       "grab": {"frames": 52, "adv": 21, "hitF": 40, "swap": false, "air": false, "techable": true, "clip": "three_swings"},
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Holds them and delivers three flat-side cleaver smacks."
+      "desc": "Holds them and delivers three flat-side cleaver smacks.",
+      "pushExt": [[0, 0.114], [4, 0.0], [31, 0.006]]
     },
     "throw_b": {
       "kind": "throw",
@@ -364,7 +381,8 @@
       "grab": {"frames": 46, "adv": 15, "hitF": 30, "swap": true, "air": false, "techable": true, "clip": "over_shoulder"},
       "role": [],
       "anim": {"clip": "throw_reach"},
-      "desc": "Hauls them over his shoulder."
+      "desc": "Hauls them over his shoulder.",
+      "pushExt": [[0, 0.114], [4, 0.0], [31, 0.006]]
     },
     "meat_hook_l": {
       "kind": "special",
@@ -509,7 +527,10 @@
       "role": ["overhead", "approach"],
       "anim": {"clip": "cleaver_leap"},
       "sfx": [[6, "whoosh_heavy"]],
-      "desc": "Leaping overhead cleaver smash (hops over lows)."
+      "desc": "Leaping overhead cleaver smash (hops over lows).",
+      "boxes": [{"f": [20, 22], "x": 0.92, "y": 0.456, "w": 0.303, "h": 0.25}],
+      "boxSrc": "hitVolume",
+      "pushExt": [[0, 0.0], [17, 0.0], [19, 0.247], [20, 0.323], [21, 0.346], [24, 0.318], [29, 0.344], [39, 0.221]]
     },
     "cleaver_drop_m": {
       "kind": "special",
@@ -538,7 +559,8 @@
       "role": ["overhead", "approach"],
       "anim": {"clip": "cleaver_leap"},
       "sfx": [[6, "whoosh_heavy"]],
-      "desc": "Leaping overhead cleaver smash (hops over lows)."
+      "desc": "Leaping overhead cleaver smash (hops over lows).",
+      "pushExt": [[0, 0.0], [21, 0.0], [23, 0.247], [24, 0.323], [25, 0.348], [29, 0.317], [34, 0.344], [45, 0.221]]
     },
     "cleaver_drop_h": {
       "kind": "special",
@@ -567,7 +589,19 @@
       "role": ["overhead", "approach"],
       "anim": {"clip": "cleaver_leap"},
       "sfx": [[6, "whoosh_heavy"]],
-      "desc": "Leaping overhead cleaver smash (hops over lows)."
+      "desc": "Leaping overhead cleaver smash (hops over lows).",
+      "pushExt": [
+        [0, 0.0],
+        [24, 0.0],
+        [25, 0.116],
+        [26, 0.116],
+        [27, 0.247],
+        [28, 0.323],
+        [29, 0.348],
+        [33, 0.317],
+        [39, 0.344],
+        [51, 0.221]
+      ]
     },
     "cleaver_drop_ex": {
       "kind": "ex",
@@ -597,7 +631,8 @@
       "role": ["overhead", "approach"],
       "anim": {"clip": "cleaver_leap"},
       "sfx": [[6, "whoosh_heavy"]],
-      "desc": "Leap + landing shockwave, ground bounce."
+      "desc": "Leap + landing shockwave, ground bounce.",
+      "pushExt": [[0, 0.0], [16, 0.0], [17, 0.247], [18, 0.323], [19, 0.348], [23, 0.318], [32, 0.334], [44, 0.221]]
     },
     "ham_slam_l": {
       "kind": "special",
@@ -625,7 +660,18 @@
       "role": ["low", "launcher"],
       "anim": {"clip": "ham_spin"},
       "sfx": [[4, "whoosh_heavy"]],
-      "desc": "Spinning low cleaver swing that bounces them for a juggle."
+      "desc": "Spinning low cleaver swing that bounces them for a juggle.",
+      "pushExt": [
+        [0, 0.0],
+        [12, 0.002],
+        [13, 0.084],
+        [15, 0.177],
+        [18, 0.249],
+        [20, 0.231],
+        [25, 0.091],
+        [29, 0.023],
+        [45, 0.0]
+      ]
     },
     "ham_slam_m": {
       "kind": "special",
@@ -653,7 +699,8 @@
       "role": ["low", "launcher"],
       "anim": {"clip": "ham_spin"},
       "sfx": [[4, "whoosh_heavy"]],
-      "desc": "Spinning low cleaver swing that bounces them for a juggle."
+      "desc": "Spinning low cleaver swing that bounces them for a juggle.",
+      "pushExt": [[0, 0.0], [13, 0.0], [18, 0.215], [20, 0.249], [23, 0.231], [28, 0.091], [32, 0.023], [49, 0.0]]
     },
     "ham_slam_h": {
       "kind": "special",
@@ -681,7 +728,8 @@
       "role": ["low", "launcher"],
       "anim": {"clip": "ham_spin"},
       "sfx": [[4, "whoosh_heavy"]],
-      "desc": "Spinning low cleaver swing that bounces them for a juggle."
+      "desc": "Spinning low cleaver swing that bounces them for a juggle.",
+      "pushExt": [[0, 0.0], [15, 0.002], [20, 0.215], [23, 0.249], [35, 0.023], [53, 0.0]]
     },
     "ham_slam_ex": {
       "kind": "ex",
@@ -710,7 +758,8 @@
       "role": ["low", "launcher"],
       "anim": {"clip": "ham_spin"},
       "sfx": [[4, "whoosh_heavy"]],
-      "desc": "Two spins, -11 on block."
+      "desc": "Two spins, -11 on block.",
+      "pushExt": [[0, 0.0], [10, 0.002], [11, 0.034], [12, 0.123], [14, 0.215], [17, 0.249], [29, 0.023], [47, 0.0]]
     },
     "butcher_block_l": {
       "kind": "special",
@@ -918,7 +967,8 @@
   "unique": {
     "kind": "armorStep",
     "steps": ["butcher_block_l", "butcher_block_m", "butcher_block_h", "butcher_block_ex"],
-    "armored": ["5H", "meat_hook_l", "meat_hook_m", "meat_hook_h", "meat_hook_ex", "butcher_block_l", "butcher_block_m", "butcher_block_h", "butcher_block_ex", "chefs_special"]
+    "armored": ["5H", "meat_hook_l", "meat_hook_m", "meat_hook_h", "meat_hook_ex", "butcher_block_l", "butcher_block_m", "butcher_block_h", "butcher_block_ex", "chefs_special"],
+    "trait": "ARMOR: 5H, MEAT HOOK and BUTCHER'S BLOCK absorb a hit; big damage per touch, no DP."
   },
   "intro": "intro_look",
   "win": ["win_shoulder", "win_look2"],
