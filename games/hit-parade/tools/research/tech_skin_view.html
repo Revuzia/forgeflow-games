@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tech skin view</title>
+<!-- TECH_REUSE lane: loads ONE skinned GLB with three 0.186 (dyefield's node_modules) + GLTFLoader + MeshoptDecoder,
+     plays a named clip, freezes it at ?t= seconds, renders a fixed camera, exposes the frame as a PNG data URL
+     (window.__RESULT__). Query: ?glb=<url>&clip=<name>&t=<sec>&cam=x,y,z&tgt=x,y,z  ASCII only. -->
+<style>html,body{margin:0;background:#000}canvas{display:block}</style>
+<script type="importmap">
+{ "imports": {
+  "three": "/dyefield/node_modules/three/build/three.module.js",
+  "three/addons/": "/dyefield/node_modules/three/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
+const q = new URLSearchParams(location.search);
+const W = 640, H = 800;
+const res = { ok: false };
+window.__RESULT__ = null;
+try {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(W, H);
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  document.body.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.0);
+  sun.position.set(2, 4, 3);
+  scene.add(sun);
+
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  const t0 = performance.now();
+  const gltf = await loader.loadAsync(q.get('glb'));
+  res.loadMs = Math.round(performance.now() - t0);
+  const root = gltf.scene;
+  scene.add(root);
+  let skinned = 0, bones = 0;
+  root.traverse((o) => { if (o.isSkinnedMesh) { skinned++; bones = Math.max(bones, o.skeleton.bones.length); o.frustumCulled = false; } });
+  res.skinnedMeshes = skinned;
+  res.maxBones = bones;
+  const skels = new Set(), boneSets = [];
+  root.traverse((o) => { if (o.isSkinnedMesh) { skels.add(o.skeleton); boneSets.push(o.skeleton.bones); } });
+  res.skeletons = skels.size;
+  res.bonesShared = boneSets.every((bs) => bs.length === boneSets[0].length && bs.every((b, i) => b === boneSets[0][i]));
+  res.clips = gltf.animations.map((a) => a.name + ':' + a.tracks.length + ':' + a.duration.toFixed(3));
+
+  const mixer = new THREE.AnimationMixer(root);
+  const name = q.get('clip') || 'clip';
+  const clip = gltf.animations.find((a) => a.name === name);
+  if (!clip) throw new Error('clip not found: ' + name);
+  const action = mixer.clipAction(clip);
+  action.play();
+  mixer.setTime(parseFloat(q.get('t') || '0'));
+  root.updateMatrixWorld(true);
+
+  const box = new THREE.Box3().setFromObject(root, true);   // precise: applies the skinning
+  res.box = { min: box.min.toArray().map((v) => +v.toFixed(4)), max: box.max.toArray().map((v) => +v.toFixed(4)) };
+
+  const cam = new THREE.PerspectiveCamera(35, W / H, 0.01, 100);
+  const cp = (q.get('cam') || '0,1.1,3.6').split(',').map(Number);
+  const tp = (q.get('tgt') || '0,0.9,0').split(',').map(Number);
+  cam.position.set(cp[0], cp[1], cp[2]);
+  cam.lookAt(tp[0], tp[1], tp[2]);
+  renderer.render(scene, cam);
+  res.png = renderer.domElement.toDataURL('image/png');
+  res.programs = renderer.info.programs ? renderer.info.programs.length : null;
+  res.ok = true;
+} catch (e) {
+  res.error = String(e && e.stack || e);
+}
+window.__RESULT__ = res;
+</script>
+</body>
+</html>

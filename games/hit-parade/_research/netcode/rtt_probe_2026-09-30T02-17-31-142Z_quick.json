@@ -1,0 +1,391 @@
+{
+  "tool": "hit-parade/tools/research/net_rtt_probe.mjs",
+  "started": "2026-09-30T02:17:31.142Z",
+  "finished": "2026-09-30T02:18:10.239Z",
+  "quick": true,
+  "realtime_js": "2.103.2",
+  "node": "v22.20.0",
+  "topic": "ffg:hit-parade-nettest:PNJKNA5F",
+  "endpoint": "wss://wugoxdewcdxzfppgzohy.supabase.co/realtime/v1/websocket?apikey=<anon>&eventsPerSecond=1&vsn=2.0.0",
+  "plan": {
+    "baselineHz": 2,
+    "baselineSec": 10,
+    "burstHz": 60,
+    "burstN": 200,
+    "gapHz": 1,
+    "gapSec": 10,
+    "graceMs": 3000
+  },
+  "declared_params": {
+    "A": {
+      "eventsPerSecond": 1
+    },
+    "B": {}
+  },
+  "connect": {
+    "a_subscribed_ms": 550,
+    "b_subscribed_ms": 510,
+    "presence": {
+      "a_sees_both_ms_after_track": 708,
+      "b_sees_both_ms_after_track": 209
+    }
+  },
+  "heartbeat_rtt_ms": {
+    "A": {
+      "n": 7,
+      "min": 37,
+      "median": 41,
+      "p90": 72,
+      "p99": 72,
+      "max": 72,
+      "mean": 46,
+      "stddev": 11.35,
+      "jitter_mean_abs_delta": 15
+    },
+    "B": {
+      "n": 7,
+      "min": 39,
+      "median": 44,
+      "p90": 71,
+      "p99": 71,
+      "max": 71,
+      "mean": 47.14,
+      "stddev": 10.06,
+      "jitter_mean_abs_delta": 7.5
+    }
+  },
+  "phases": [
+    {
+      "phase": "baseline",
+      "kind": "json",
+      "target_hz": 2,
+      "sent": 20,
+      "achieved_send_hz": 2,
+      "send_interval_ms": {
+        "n": 19,
+        "min": 490.83,
+        "median": 499.9,
+        "p90": 508.11,
+        "p99": 508.16,
+        "max": 508.16,
+        "mean": 500,
+        "stddev": 5.41,
+        "jitter_mean_abs_delta": 7.24
+      },
+      "rtt_ms": {
+        "n": 20,
+        "min": 77.35,
+        "median": 83.59,
+        "p90": 92.28,
+        "p99": 105.81,
+        "max": 105.81,
+        "mean": 86.17,
+        "stddev": 6.36,
+        "jitter_mean_abs_delta": 5.82
+      },
+      "one_way_a_to_b_ms": {
+        "n": 20,
+        "min": 38.54,
+        "median": 42.33,
+        "p90": 47.61,
+        "p99": 60.45,
+        "max": 60.45,
+        "mean": 43.69,
+        "stddev": 4.83,
+        "jitter_mean_abs_delta": 4.04
+      },
+      "one_way_b_to_a_ms": {
+        "n": 20,
+        "min": 38.81,
+        "median": 41.95,
+        "p90": 45.35,
+        "p99": 47.31,
+        "max": 47.31,
+        "mean": 42.47,
+        "stddev": 2.43,
+        "jitter_mean_abs_delta": 2.74
+      },
+      "lost_a_to_b": 0,
+      "lost_b_to_a": 0,
+      "loss_pct": 0,
+      "out_of_order_at_b": 0,
+      "out_of_order_at_a": 0,
+      "duplicates_at_b": 0,
+      "duplicates_at_a": 0,
+      "window": [
+        1943,
+        11443
+      ]
+    },
+    {
+      "phase": "burst_json",
+      "kind": "json",
+      "target_hz": 60,
+      "sent": 200,
+      "achieved_send_hz": 59.98,
+      "send_interval_ms": {
+        "n": 199,
+        "min": 4.31,
+        "median": 16.67,
+        "p90": 21.92,
+        "p99": 28.9,
+        "max": 29.89,
+        "mean": 16.67,
+        "stddev": 4.31,
+        "jitter_mean_abs_delta": 6.01
+      },
+      "rtt_ms": {
+        "n": 200,
+        "min": 77.51,
+        "median": 84.1,
+        "p90": 95.48,
+        "p99": 161.15,
+        "max": 174.8,
+        "mean": 88.07,
+        "stddev": 13.74,
+        "jitter_mean_abs_delta": 6.83
+      },
+      "one_way_a_to_b_ms": {
+        "n": 200,
+        "min": 37.04,
+        "median": 41.45,
+        "p90": 49.42,
+        "p99": 93.23,
+        "max": 115.99,
+        "mean": 43.96,
+        "stddev": 9.43,
+        "jitter_mean_abs_delta": 4.68
+      },
+      "one_way_b_to_a_ms": {
+        "n": 200,
+        "min": 38.48,
+        "median": 41.88,
+        "p90": 48.59,
+        "p99": 92.27,
+        "max": 122.48,
+        "mean": 44.11,
+        "stddev": 8.92,
+        "jitter_mean_abs_delta": 4.18
+      },
+      "lost_a_to_b": 0,
+      "lost_b_to_a": 0,
+      "loss_pct": 0,
+      "out_of_order_at_b": 1,
+      "out_of_order_at_a": 1,
+      "duplicates_at_b": 0,
+      "duplicates_at_a": 0,
+      "window": [
+        14453,
+        17771
+      ],
+      "wire": {
+        "a_tx_frame_bytes": {
+          "n": 201,
+          "min": 36,
+          "median": 125,
+          "p90": 127,
+          "p99": 127,
+          "max": 127,
+          "mean": 125.09,
+          "stddev": 6.5,
+          "jitter_mean_abs_delta": 0.91
+        },
+        "b_rx_frame_bytes": {
+          "n": 201,
+          "min": 63,
+          "median": 119,
+          "p90": 121,
+          "p99": 121,
+          "max": 121,
+          "mean": 119.6,
+          "stddev": 4.18,
+          "jitter_mean_abs_delta": 0.59
+        }
+      }
+    },
+    {
+      "phase": "gap",
+      "kind": "json",
+      "target_hz": 1,
+      "sent": 10,
+      "achieved_send_hz": 1,
+      "send_interval_ms": {
+        "n": 9,
+        "min": 759.38,
+        "median": 1001.85,
+        "p90": 1235.35,
+        "p99": 1235.35,
+        "max": 1235.35,
+        "mean": 1000.85,
+        "stddev": 112.29,
+        "jitter_mean_abs_delta": 122.51
+      },
+      "rtt_ms": {
+        "n": 10,
+        "min": 80.3,
+        "median": 83.53,
+        "p90": 89.53,
+        "p99": 91.39,
+        "max": 91.39,
+        "mean": 84.72,
+        "stddev": 3.17,
+        "jitter_mean_abs_delta": 3.98
+      },
+      "one_way_a_to_b_ms": {
+        "n": 10,
+        "min": 39.55,
+        "median": 40.77,
+        "p90": 44.31,
+        "p99": 44.67,
+        "max": 44.67,
+        "mean": 41.72,
+        "stddev": 1.89,
+        "jitter_mean_abs_delta": 2.06
+      },
+      "one_way_b_to_a_ms": {
+        "n": 10,
+        "min": 40.17,
+        "median": 41.94,
+        "p90": 44.85,
+        "p99": 50.99,
+        "max": 50.99,
+        "mean": 43.01,
+        "stddev": 3,
+        "jitter_mean_abs_delta": 3.71
+      },
+      "lost_a_to_b": 0,
+      "lost_b_to_a": 0,
+      "loss_pct": 0,
+      "out_of_order_at_b": 0,
+      "out_of_order_at_a": 0,
+      "duplicates_at_b": 0,
+      "duplicates_at_a": 0,
+      "window": [
+        20774,
+        29782
+      ]
+    },
+    {
+      "phase": "burst_bin",
+      "kind": "binary",
+      "target_hz": 60,
+      "sent": 200,
+      "achieved_send_hz": 59.92,
+      "send_interval_ms": {
+        "n": 199,
+        "min": 4.42,
+        "median": 16.28,
+        "p90": 23.45,
+        "p99": 29.9,
+        "max": 30.03,
+        "mean": 16.69,
+        "stddev": 4.66,
+        "jitter_mean_abs_delta": 5.86
+      },
+      "rtt_ms": {
+        "n": 200,
+        "min": 76.51,
+        "median": 87.34,
+        "p90": 109.33,
+        "p99": 169.41,
+        "max": 182.48,
+        "mean": 92.75,
+        "stddev": 17.89,
+        "jitter_mean_abs_delta": 8.51
+      },
+      "one_way_a_to_b_ms": {
+        "n": 200,
+        "min": 38.14,
+        "median": 43.04,
+        "p90": 54.38,
+        "p99": 101.97,
+        "max": 131.31,
+        "mean": 46.68,
+        "stddev": 12.02,
+        "jitter_mean_abs_delta": 6.1
+      },
+      "one_way_b_to_a_ms": {
+        "n": 200,
+        "min": 38,
+        "median": 42.91,
+        "p90": 51.82,
+        "p99": 115.02,
+        "max": 120.92,
+        "mean": 46.06,
+        "stddev": 11.22,
+        "jitter_mean_abs_delta": 5.15
+      },
+      "lost_a_to_b": 0,
+      "lost_b_to_a": 0,
+      "loss_pct": 0,
+      "out_of_order_at_b": 1,
+      "out_of_order_at_a": 1,
+      "duplicates_at_b": 0,
+      "duplicates_at_a": 0,
+      "window": [
+        32800,
+        36121
+      ],
+      "wire": {
+        "a_tx_frame_bytes": {
+          "n": 201,
+          "min": 37,
+          "median": 69,
+          "p90": 69,
+          "p99": 69,
+          "max": 69,
+          "mean": 68.84,
+          "stddev": 2.25,
+          "jitter_mean_abs_delta": 0.32
+        },
+        "b_rx_frame_bytes": {
+          "n": 201,
+          "min": 63,
+          "median": 63,
+          "p90": 63,
+          "p99": 63,
+          "max": 64,
+          "mean": 63,
+          "stddev": 0.07,
+          "jitter_mean_abs_delta": 0.01
+        },
+        "b_rx_binary_frames": 200,
+        "non_arraybuffer_payloads_at_b": 0,
+        "non_arraybuffer_payloads_at_a": 0
+      }
+    }
+  ],
+  "status_events": {
+    "A": [
+      [
+        711.1331,
+        "SUBSCRIBED"
+      ],
+      [
+        39253.5078,
+        "CLOSED"
+      ]
+    ],
+    "B": [
+      [
+        718.8871,
+        "SUBSCRIBED"
+      ],
+      [
+        39254.6646,
+        "CLOSED"
+      ]
+    ]
+  },
+  "throttle_signals": [
+    [
+      39253.5078,
+      "CLOSED"
+    ],
+    [
+      39254.6646,
+      "CLOSED"
+    ]
+  ],
+  "tenant_events_spent_est": 1720
+}

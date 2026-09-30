@@ -1,0 +1,221 @@
+{
+ "clip": "F:/games/forgeflow-games-assets/_downloaded/mixamo/animations/Creature_Pack/mutant punch.fbx",
+ "body": "F:/games/forgeflow-games-assets/_downloaded/mixamo/characters/Prisoner B Styperek.fbx",
+ "frames": [
+  5,
+  11,
+  19
+ ],
+ "ratio": 1.0434224548804623,
+ "hidden": [],
+ "identity_test": {
+  "ok": true,
+  "worst": 6.258487701416016e-07,
+  "bone": "mixamorig:RightHandThumb3"
+ },
+ "metrics": {
+  "xbot": {
+   "5": {
+    "lowest_vertex_z_m": -0.003,
+    "striker_rel_hips_over_hipheight": [
+     -0.389,
+     0.062,
+     0.003
+    ],
+    "hips_z_m": 0.8406
+   },
+   "11": {
+    "lowest_vertex_z_m": -0.002,
+    "striker_rel_hips_over_hipheight": [
+     0.563,
+     -0.291,
+     0.21
+    ],
+    "hips_z_m": 0.7907
+   },
+   "19": {
+    "lowest_vertex_z_m": -0.0033,
+    "striker_rel_hips_over_hipheight": [
+     0.575,
+     -0.086,
+     0.186
+    ],
+    "hips_z_m": 0.7767
+   }
+  },
+  "naive_blender": {
+   "5": {
+    "lowest_vertex_z_m": 0.0211,
+    "striker_rel_hips_over_hipheight": [
+     -0.352,
+     -0.101,
+     0.094
+    ],
+    "hips_z_m": 0.8854
+   },
+   "11": {
+    "lowest_vertex_z_m": 0.017,
+    "striker_rel_hips_over_hipheight": [
+     0.636,
+     -0.299,
+     0.376
+    ],
+    "hips_z_m": 0.8363
+   },
+   "19": {
+    "lowest_vertex_z_m": 0.0173,
+    "striker_rel_hips_over_hipheight": [
+     0.658,
+     -0.043,
+     0.358
+    ],
+    "hips_z_m": 0.824
+   }
+  },
+  "naive_three_raw": {
+   "5": {
+    "lowest_vertex_z_m": -0.0726,
+    "striker_rel_hips_over_hipheight": [
+     -0.376,
+     0.041,
+     -0.017
+    ],
+    "hips_z_m": 0.8406
+   },
+   "11": {
+    "lowest_vertex_z_m": -0.0691,
+    "striker_rel_hips_over_hipheight": [
+     0.554,
+     -0.269,
+     0.203
+    ],
+    "hips_z_m": 0.7907
+   },
+   "19": {
+    "lowest_vertex_z_m": -0.0682,
+    "striker_rel_hips_over_hipheight": [
+     0.557,
+     -0.048,
+     0.179
+    ],
+    "hips_z_m": 0.7767
+   }
+  },
+  "naive_three": {
+   "5": {
+    "lowest_vertex_z_m": 0.0055,
+    "striker_rel_hips_over_hipheight": [
+     -0.38,
+     -0.03,
+     0.156
+    ],
+    "hips_z_m": 0.8771
+   },
+   "11": {
+    "lowest_vertex_z_m": 0.0083,
+    "striker_rel_hips_over_hipheight": [
+     0.583,
+     -0.302,
+     0.384
+    ],
+    "hips_z_m": 0.825
+   },
+   "19": {
+    "lowest_vertex_z_m": 0.0079,
+    "striker_rel_hips_over_hipheight": [
+     0.607,
+     -0.07,
+     0.358
+    ],
+    "hips_z_m": 0.8105
+   }
+  },
+  "retarget_dw": {
+   "5": {
+    "lowest_vertex_z_m": 0.226,
+    "striker_rel_hips_over_hipheight": [
+     -0.372,
+     -0.054,
+     0.123
+    ],
+    "hips_z_m": 1.0924
+   },
+   "11": {
+    "lowest_vertex_z_m": 0.2298,
+    "striker_rel_hips_over_hipheight": [
+     0.614,
+     -0.314,
+     0.35
+    ],
+    "hips_z_m": 1.0402
+   },
+   "19": {
+    "lowest_vertex_z_m": 0.2297,
+    "striker_rel_hips_over_hipheight": [
+     0.637,
+     -0.07,
+     0.326
+    ],
+    "hips_z_m": 1.0257
+   }
+  },
+  "retarget": {
+   "5": {
+    "lowest_vertex_z_m": 0.0107,
+    "striker_rel_hips_over_hipheight": [
+     -0.372,
+     -0.054,
+     0.123
+    ],
+    "hips_z_m": 0.8771
+   },
+   "11": {
+    "lowest_vertex_z_m": 0.0146,
+    "striker_rel_hips_over_hipheight": [
+     0.614,
+     -0.314,
+     0.35
+    ],
+    "hips_z_m": 0.825
+   },
+   "19": {
+    "lowest_vertex_z_m": 0.0145,
+    "striker_rel_hips_over_hipheight": [
+     0.637,
+     -0.07,
+     0.326
+    ],
+    "hips_z_m": 0.8105
+   }
+  },
+  "hybrid": {
+   "5": {
+    "lowest_vertex_z_m": 0.0107,
+    "striker_rel_hips_over_hipheight": [
+     -0.372,
+     -0.054,
+     0.123
+    ],
+    "hips_z_m": 0.8771
+   },
+   "11": {
+    "lowest_vertex_z_m": 0.0146,
+    "striker_rel_hips_over_hipheight": [
+     0.614,
+     -0.314,
+     0.35
+    ],
+    "hips_z_m": 0.825
+   },
+   "19": {
+    "lowest_vertex_z_m": 0.0145,
+    "striker_rel_hips_over_hipheight": [
+     0.637,
+     -0.07,
+     0.326
+    ],
+    "hips_z_m": 0.8105
+   }
+  }
+ }
+}

@@ -81,3 +81,28 @@ games/dyefield/art/__pycache__/
 games/dyefield/art/blender/__pycache__/
 games/dyefield/art/renders/_wip/
 games/dyefield/art/renders/*.png
+
+# 2026-09-29 — HIT PARADE (games/hit-parade): Vite/TS versus fighter + Blender-baked fighter GLBs
+# (art/gltf GLBs ARE tracked). Research evidence is kept as text only; renders/GLBs/scratch are not.
+games/hit-parade/node_modules/
+games/hit-parade/dist/
+games/hit-parade/_shots/
+games/hit-parade/_harness/_reports/
+games/hit-parade/_harness/__pycache__/
+games/hit-parade/_harness/scratch/
+games/hit-parade/art/renders/
+games/hit-parade/art/blender/__pycache__/
+games/hit-parade/tools/__pycache__/
+games/hit-parade/tools/research/__pycache__/
+games/hit-parade/_research/**/*.glb
+games/hit-parade/_research/**/*.png
+games/hit-parade/_research/**/*.jpg
+games/hit-parade/_research/**/*.wav
+games/hit-parade/_research/**/*.ogg
+games/hit-parade/_research/**/_work/
+games/hit-parade/_research/**/_batches/
+games/hit-parade/_research/**/renders/
+games/hit-parade/_research/audio/_*.txt
+games/hit-parade/_research/audio/_*.log
+games/hit-parade/_research/environment/unitypackage_listings/
+games/hit-parade/_research/environment/texlists/

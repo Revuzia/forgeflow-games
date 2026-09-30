@@ -1,0 +1,24 @@
+{
+  "name": "hit-parade",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "HIT PARADE - a 3D versus fighting game (arcade ladder, local + online PVP) framed as a live TV fight show. Three.js + TypeScript + Vite. `npm install && npm run dev`.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "probe": "node _harness/run_probes.ts",
+    "check": "npm run typecheck && npm run probe"
+  },
+  "dependencies": {
+    "three": "0.186.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/three": "0.186.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.0"
+  }
+}

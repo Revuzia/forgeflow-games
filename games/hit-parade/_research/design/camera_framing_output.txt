@@ -1,0 +1,21 @@
+UE5 template: hFOV 90 @16:9 -> vFOV 58.7 deg; fill of 1.8 m at 4.0 m = 40%
+
+vFOV | dist for 60%% fill | 50%% | 40%% | hFOV@16:9 | hFOV@19.5:9
+  45 |   3.62 m |   4.35 m |   5.43 m |  72.7 |  83.8
+  50 |   3.22 m |   3.86 m |   4.83 m |  79.3 |  90.6
+  55 |   2.88 m |   3.46 m |   4.32 m |  85.6 |  96.9
+  60 |   2.60 m |   3.12 m |   3.90 m |  91.5 | 102.7
+  65 |   2.35 m |   2.83 m |   3.53 m |  97.1 | 108.2
+
+Group framing: distance so a ring of radius R around the hero fits horizontally (15% margin)
+R(m) | vFOV55@16:9 | vFOV60@16:9 | vFOV60@9:19.5 portrait
+ 2.0 |   2.49 m |   2.24 m |   8.63 m
+ 3.0 |   3.73 m |   3.36 m |  12.95 m
+ 4.0 |   4.97 m |   4.48 m |  17.26 m
+ 5.0 |   6.21 m |   5.60 m |  21.58 m
+ 6.0 |   7.46 m |   6.72 m |  25.89 m
+
+vFOV 55 at 3.0 m -> hero fills 58% of frame height
+vFOV 55 at 2.2 m -> hero fills 79% of frame height
+vFOV 60 at 5.0 m -> hero fills 31% of frame height
+vFOV 50 at 2.2 m -> hero fills 88% of frame height

@@ -1,0 +1,82 @@
+[
+ {
+  "name": "p00_tpose_check_13_17",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": -0.067
+ },
+ {
+  "name": "p01_jab_L_mirrored_14_02",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": -0.032
+ },
+ {
+  "name": "p02_jab_L_mirrored_13_18",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": 0.027
+ },
+ {
+  "name": "p03_cross_R_13_17",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": -0.018
+ },
+ {
+  "name": "p04_hook_R_14_03",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": -0.053
+ },
+ {
+  "name": "p05_uppercut_R_mirrored_14_02",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": 0.005
+ },
+ {
+  "name": "p06_bodyblow_R_14_03",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": -0.026
+ },
+ {
+  "name": "p07_frontkick_R_144_05",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": 0.005
+ },
+ {
+  "name": "p08_roundhouse_R_135_07",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": 0.029
+ },
+ {
+  "name": "p09_knee_R_86_06",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": 0.011
+ },
+ {
+  "name": "p10_getup_back_140_08",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": 0.039
+ },
+ {
+  "name": "p11_getup_front_139_16",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": -0.047
+ },
+ {
+  "name": "p12_fall_forward_90_16",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": 0.012
+ },
+ {
+  "name": "p13_hook_R_79_08",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": 0.029
+ },
+ {
+  "name": "p14_sidekick_R_135_11",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": 0.037
+ },
+ {
+  "name": "p15_fall_backward_90_18",
+  "max_dir_err_deg": 0.0,
+  "min_foot_z": 0.019
+ }
+]

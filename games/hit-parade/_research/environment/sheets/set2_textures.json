@@ -1,0 +1,281 @@
+[
+ {
+  "label": "Blink Boss_Floor_1",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GEN floor_mosaic",
+  "albedo": "F:/games/forgeflow-games-assets/generated-materials/floor_mosaic_albedo.webp",
+  "normal": "F:/games/forgeflow-games-assets/generated-materials/floor_mosaic_normal.webp",
+  "rough": "F:/games/forgeflow-games-assets/generated-materials/floor_mosaic_rough.webp",
+  "lic": "original (xAI-gen)",
+  "albedo_size": [
+   1024,
+   1024
+  ],
+  "normal_size": [
+   1024,
+   1024
+  ],
+  "rough_size": [
+   1024,
+   1024
+  ]
+ },
+ {
+  "label": "GEN floor_marble",
+  "albedo": "F:/games/forgeflow-games-assets/generated-materials/floor_marble_albedo.webp",
+  "normal": "F:/games/forgeflow-games-assets/generated-materials/floor_marble_normal.webp",
+  "rough": "F:/games/forgeflow-games-assets/generated-materials/floor_marble_rough.webp",
+  "lic": "original (xAI-gen)",
+  "albedo_size": [
+   1024,
+   1024
+  ],
+  "normal_size": [
+   1024,
+   1024
+  ],
+  "rough_size": [
+   1024,
+   1024
+  ]
+ },
+ {
+  "label": "PH anti_skid_tiles",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/anti_skid_tiles/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/anti_skid_tiles/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH anti_slip_concrete",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/anti_slip_concrete/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/anti_slip_concrete/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH beige_wall_001",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/beige_wall_001/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/beige_wall_001/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "PH beige_wall_002",
+  "albedo": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/beige_wall_002/diffuse.jpg",
+  "rough": "F:/games/forgeflow-games-assets/_downloaded/polyhaven-textures/beige_wall_002/rough.jpg",
+  "lic": "CC0 (Poly Haven)",
+  "albedo_size": [
+   2048,
+   512
+  ],
+  "rough_size": [
+   2048,
+   512
+  ]
+ },
+ {
+  "label": "JP JP_Wall_Interior_Wall",
+  "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Wall_Interior_Wall/JP_Wall_Interior_Wall_A.tga",
+  "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Wall_Interior_Wall/JP_Wall_Interior_Wall_N.tga",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "JP JP_Floor",
+  "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Floor/JP_Floor_A.tga",
+  "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Floor/JP_Floor_N.tga",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "JP JP_Ceiling",
+  "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Celling/JP_Ceiling_A.tga",
+  "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Celling/JP_Ceiling_N.tga",
+  "lic": "Unity Asset Store EULA",
+  "tile": true,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "JP JP_Trim_Sheet",
+  "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Trim_Sheet_01/JP_Trim_Sheet_A.tga",
+  "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Trim_Sheet_01/JP_Trim_Sheet_N.tga",
+  "lic": "Unity Asset Store EULA",
+  "tile": false,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "JP JP_Garage_Door_01",
+  "albedo": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Garage_Door_01/JP_Garage_Door_01_A.tga",
+  "normal": "F:/games/unity-assets/Art Equilibrium__Japan Village/Assets/Japan_Village_ArtE/Source/Textures/House/JP_Garage_Door_01/JP_Garage_Door_01_N.tga",
+  "lic": "Unity Asset Store EULA",
+  "tile": false,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Metal_Gate",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Metal_Gate/Metal_Gate_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Metal_Gate/Metal_Gate_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Metal_Gate/Metal_Gate_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Melting_Metal",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Melting_Metal/Melting_Metal_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Melting_Metal/Melting_Metal_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Melting_Metal/Melting_Metal_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GEN iron_plate",
+  "albedo": "F:/games/forgeflow-games-assets/generated-materials/iron_plate_albedo.webp",
+  "normal": "F:/games/forgeflow-games-assets/generated-materials/iron_plate_normal.webp",
+  "rough": "F:/games/forgeflow-games-assets/generated-materials/iron_plate_rough.webp",
+  "lic": "original (xAI-gen)",
+  "albedo_size": [
+   1024,
+   1024
+  ],
+  "normal_size": [
+   1024,
+   1024
+  ],
+  "rough_size": [
+   1024,
+   1024
+  ]
+ },
+ {
+  "label": "QFP T_Trim_Metal (trim)",
+  "albedo": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Textures/T_Trim_Metal_BaseColor.png",
+  "normal": "F:/games/forgeflow-games-assets/3d-models/fantasy-props-mega/Textures/T_Trim_Metal_Normal.png",
+  "lic": "CC0 (Quaternius)",
+  "tile": false,
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Cracked_Concrete_Floor",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Cracked_Concrete_Floor/Cracked_Concrete_Floor_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Cracked_Concrete_Floor/Cracked_Concrete_Floor_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Cracked_Concrete_Floor/Cracked_Concrete_Floor_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ }
+]

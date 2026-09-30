@@ -1,0 +1,51 @@
+{
+  "tool": "hit-parade/tools/research/net_state_bench.mjs",
+  "at": "2026-09-30T02:27:48.663Z",
+  "node": "v22.20.0",
+  "v8": "12.4.254.21-node.33",
+  "cpu_note": "desktop dev machine; median of 7 trials, microseconds per op",
+  "ring_slots": 10,
+  "typed_array_rows": [
+    {
+      "state_kb": 1,
+      "save_us": 0.043,
+      "restore_us": 0.039,
+      "checksum_fnv1a_us": 1.515,
+      "checksum_mix32_us": 0.486
+    },
+    {
+      "state_kb": 2,
+      "save_us": 0.06,
+      "restore_us": 0.046,
+      "checksum_fnv1a_us": 2.926,
+      "checksum_mix32_us": 0.98
+    },
+    {
+      "state_kb": 4,
+      "save_us": 0.113,
+      "restore_us": 0.078,
+      "checksum_fnv1a_us": 6.134,
+      "checksum_mix32_us": 1.927
+    },
+    {
+      "state_kb": 8,
+      "save_us": 0.245,
+      "restore_us": 0.183,
+      "checksum_fnv1a_us": 12.137,
+      "checksum_mix32_us": 4.032
+    },
+    {
+      "state_kb": 16,
+      "save_us": 0.346,
+      "restore_us": 0.346,
+      "checksum_fnv1a_us": 23.955,
+      "checksum_mix32_us": 7.715
+    }
+  ],
+  "object_graph": {
+    "json_bytes": 3779,
+    "structuredClone_us": 215.613,
+    "json_roundtrip_us": 154.805
+  },
+  "sink": 0
+}

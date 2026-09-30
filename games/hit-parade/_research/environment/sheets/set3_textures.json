@@ -1,0 +1,211 @@
+[
+ {
+  "label": "Blink Boss_Floor_2",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_2/Boss_Floor_2_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_2/Boss_Floor_2_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_2/Boss_Floor_2_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Boss_Floor_1",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Boss_Floor_1/Boss_Floor_1_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Dwarven_Wall",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Wall/Dwarven_Wall_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Wall/Dwarven_Wall_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Wall/Dwarven_Wall_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Golden_Wall",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Golden_Wall/Golden_Wall_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Golden_Wall/Golden_Wall_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Golden_Wall/Golden_Wall_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Pure_Gold",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Pure_Gold/Pure_Gold_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Pure_Gold/Pure_Gold_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Pure_Gold/Pure_Gold_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Dwarven_Casting_Wall",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Casting_Wall/Dwarven_Casting_Wall_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Casting_Wall/Dwarven_Casting_Wall_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Casting_Wall/Dwarven_Casting_Wall_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "Blink Stone_Gate",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Stone_Gate/Stone_Gate_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Stone_Gate/Stone_Gate_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Stone_Gate/Stone_Gate_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ },
+ {
+  "label": "GEN floor_marble",
+  "albedo": "F:/games/forgeflow-games-assets/generated-materials/floor_marble_albedo.webp",
+  "normal": "F:/games/forgeflow-games-assets/generated-materials/floor_marble_normal.webp",
+  "rough": "F:/games/forgeflow-games-assets/generated-materials/floor_marble_rough.webp",
+  "lic": "original (xAI-gen)",
+  "albedo_size": [
+   1024,
+   1024
+  ],
+  "normal_size": [
+   1024,
+   1024
+  ],
+  "rough_size": [
+   1024,
+   1024
+  ]
+ },
+ {
+  "label": "GEN floor_mosaic",
+  "albedo": "F:/games/forgeflow-games-assets/generated-materials/floor_mosaic_albedo.webp",
+  "normal": "F:/games/forgeflow-games-assets/generated-materials/floor_mosaic_normal.webp",
+  "rough": "F:/games/forgeflow-games-assets/generated-materials/floor_mosaic_rough.webp",
+  "lic": "original (xAI-gen)",
+  "albedo_size": [
+   1024,
+   1024
+  ],
+  "normal_size": [
+   1024,
+   1024
+  ],
+  "rough_size": [
+   1024,
+   1024
+  ]
+ },
+ {
+  "label": "GEN bronze_worn",
+  "albedo": "F:/games/forgeflow-games-assets/generated-materials/bronze_worn_albedo.webp",
+  "normal": "F:/games/forgeflow-games-assets/generated-materials/bronze_worn_normal.webp",
+  "rough": "F:/games/forgeflow-games-assets/generated-materials/bronze_worn_rough.webp",
+  "lic": "original (xAI-gen)",
+  "albedo_size": [
+   1024,
+   1024
+  ],
+  "normal_size": [
+   1024,
+   1024
+  ],
+  "rough_size": [
+   1024,
+   1024
+  ]
+ },
+ {
+  "label": "Blink Dwarven_Ground",
+  "albedo": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Ground/Dwarven_Ground_BaseColor.png",
+  "normal": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Ground/Dwarven_Ground_Normal.png",
+  "rough": "F:/games/unity-assets/Blink__Stylized Dungeon Textures - RPG Environment/Assets/Blink/Art/Textures/StylizedDungeonTextures/Dwarven_Ground/Dwarven_Ground_Roughness.png",
+  "lic": "Unity Asset Store EULA",
+  "albedo_size": [
+   2048,
+   2048
+  ],
+  "normal_size": [
+   2048,
+   2048
+  ],
+  "rough_size": [
+   2048,
+   2048
+  ]
+ }
+]
