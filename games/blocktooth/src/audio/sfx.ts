@@ -1285,10 +1285,11 @@ export class Sfx {
         boom(b, b.o, b.t, 0.3, 0.7); blip(b, b.o, b.t, 'sawtooth', 300, 0.1, 0.2, 60, 0.002, 1500);
         return;
       }
-      case 'breath': {
+      case 'breath': {   // IRON GULLY AUGER BLAST / CORDON-2 BACKFIRE — both machines: a high-pressure jet + grit hiss
         const b = this.voice('impact', 3, 1.6, s.g * 0.6, s.pan, 0.3); if (!b) return;
         whoosh(b, b.o, b.t, 1.3, 3500, 1200, 0.8, 0.9, 'white');
-        creature(b, b.o, b.t, 1.2, [[0, 70], [0.6, 80], [1.2, 55]], 'a', 0.45, { growl: 0.4, breath: 0.9, fscale: 0.7 });
+        burst(b, b.o, b.t, 'white', 'bandpass', 2400, 1.1, 0.02, 1.0, 0.45, 700);
+        crackle(b, b.o, b.t + 0.05, 1.1, 40, 3800, 1.4, 0.3);
         return;
       }
       case 'hook': {
@@ -1357,7 +1358,7 @@ export class Sfx {
         burst(b, b.o, b.t, 'brown', 'lowpass', 900, 1, 0.005, 0.3, 0.7, 150);
         return;
       }
-      case 'plate': {   // IRON GULLY scrap plate crash
+      case 'plate': {   // IRON GULLY road plate crash (flung off the spreader)
         if (!this.gate('boom', now)) return;
         const b = this.voice('boom', 2, 0.9, s.g * 0.5, s.pan, 0.25); if (!b) return;
         clang(b, b.o, b.t, rnd(90, 130), 1.73, 6, 0.7, 0.6);
@@ -1483,30 +1484,65 @@ export class Sfx {
         const a = gn(b); envAHR(a.gain, b.t, 0.15, 0.1, 0.7, 0.2); wire(o, flt(b, 'lowpass', 900), a, b.o);
         return;
       }
-      case 'coneBreath': {   // the inhale (the breath itself lands on telegraphFire)
+      // -- IRON GULLY, the HALVARD snow-clearance walker: every cue is machinery (no creature voice) --
+      case 'coneBreath': {   // AUGER BLAST spin-up (the blast itself lands on telegraphFire / the breath impact)
         const b = this.voice('bossAtk', 3, 1.8, g * 0.5, s.pan, 0.3); if (!b) return;
-        whoosh(b, b.o, b.t, 1.6, 250, 1600, 1.4, 0.8);
-        creature(b, b.o, b.t + 0.2, 1.2, [[0, 55], [1.2, 70]], 'u', 0.3, { growl: 0.3, breath: 1.0, fscale: 0.65 });
+        this.augerSpin(b, b.t, 1.6, 0.4);
         return;
       }
-      case 'pawSlam': case 'ridgeCharge': case 'breathSlam': {
-        const dur = attack === 'pawSlam' ? 0.9 : 1.3;
-        const b = this.voice('bossAtk', 3, dur + 0.4, g * 0.6, s.pan, 0.35); if (!b) return;
-        creature(b, b.o, b.t, dur, [[0, 60], [0.15, 82], [dur, 50]], 'a', 0.85, { growl: 0.45, growlHz: 24, breath: 0.6, fscale: 0.62, grit: 0.6 });
-        if (attack === 'ridgeCharge') rumble(b, b.o, b.t + 0.2, 0.3, 0.6, 0.5, 300, 100, 0.5);
+      case 'pawSlam': {   // DOUBLE STAMP: pneumatic hiss + the hydraulic pump rising + straining steel (the stamps land as impacts)
+        const b = this.voice('bossAtk', 3, 1.4, g * 0.6, s.pan, 0.3); if (!b) return;
+        burst(b, b.o, b.t, 'white', 'highpass', 2800, 0.7, 0.03, 0.5, 0.5);
+        const o = osc(b, 'square', 70, b.t, b.t + 1.2); sweep(o.frequency, b.t, 70, 190, 1.1);
+        const a = gn(b); envAHR(a.gain, b.t, 0.2, 0.15, 0.8, 0.2); wire(o, flt(b, 'lowpass', 700), a, b.o);
+        this.metalGroan(b, b.t + 0.1, 1.0, 55, 40, 0.35);
         return;
       }
-      case 'plateVolley': {   // plates tear loose
-        const b = this.voice('bossAtk', 3, 1.0, g * 0.45, s.pan, 0.3); if (!b) return;
-        for (let i = 0; i < 5; i++) clang(b, b.o, b.t + i * 0.07, rnd(160, 320), rnd(1.3, 2.6), 5, 0.4, 0.4);
+      case 'ridgeCharge': {   // PLOUGH RUN: diesel rev, the two-tone municipal air horn, blade scrape + rumble
+        const b = this.voice('bossAtk', 3, 2.2, g * 0.6, s.pan, 0.35); if (!b) return;
+        const o = osc(b, 'sawtooth', 42, b.t, b.t + 1.4); sweep(o.frequency, b.t, 42, 95, 1.1);
+        const a = gn(b); envAHR(a.gain, b.t, 0.25, 0.15, 0.9, 0.35); wire(o, mkGrit(b.ac, 0.6), flt(b, 'lowpass', 800), a, b.o);
+        this.airHorn(b, b.t + 0.25, 0.9, 0.4);
+        burst(b, b.o, b.t + 0.9, 'pink', 'bandpass', 800, 1.4, 0.2, 1.1, 0.3, 500);
+        rumble(b, b.o, b.t + 0.2, 0.3, 0.6, 0.5, 300, 100, 0.5);
+        return;
+      }
+      case 'breathSlam': {   // WHITEOUT: the auger spin-up, then the stamp's hydraulic hiss
+        const b = this.voice('bossAtk', 3, 2.0, g * 0.55, s.pan, 0.3); if (!b) return;
+        this.augerSpin(b, b.t, 1.5, 0.38);
+        burst(b, b.o, b.t + 1.4, 'white', 'highpass', 2800, 0.7, 0.03, 0.45, 0.4);
+        return;
+      }
+      case 'plateVolley': {   // PLATE SPREADER: the spinner whirrs up, then the plates clang off it
+        const b = this.voice('bossAtk', 3, 1.2, g * 0.45, s.pan, 0.3); if (!b) return;
+        const o = osc(b, 'triangle', 80, b.t, b.t + 0.9); sweep(o.frequency, b.t, 80, 320, 0.7);
+        const a = gn(b); envAHR(a.gain, b.t, 0.3, 0.3, 0.3, 0.3); wire(o, mkGrit(b.ac, 0.3), flt(b, 'bandpass', 500, 1.2), a, b.o);
+        for (let i = 0; i < 5; i++) clang(b, b.o, b.t + 0.15 + i * 0.07, rnd(160, 320), rnd(1.3, 2.6), 5, 0.4, 0.4);
         return;
       }
       default: {
         const b = this.voice('bossAtk', 3, 1.2, g * 0.45, s.pan, 0.3); if (!b) return;
-        if (this.bossId === 'irongully') creature(b, b.o, b.t, 0.9, [[0, 65], [0.2, 80], [0.9, 50]], 'o', 0.7, { growl: 0.4, fscale: 0.65 });
+        if (this.bossId === 'irongully') this.airHorn(b, b.t, 0.9, 0.4);
         else this.horn(b, b.t, 0.6, 0.4);
       }
     }
+  }
+
+  /** IRON GULLY auger spin-up: a turbine whine sweeping up through an opening lowpass + an accelerating tick train. */
+  private augerSpin(b: B, t: number, dur: number, amp: number): void {
+    const o = osc(b, 'sawtooth', 160, t, t + dur + 0.05); sweep(o.frequency, t, 160, 1300, dur);
+    const lp = flt(b, 'lowpass', 500, 1.4); sweep(lp.frequency, t, 500, 3800, dur);
+    const a = gn(b); envAHR(a.gain, t, amp, dur * 0.6, dur * 0.3, dur * 0.1);
+    wire(o, mkGrit(b.ac, 0.35), lp, a, b.o);
+    crackle(b, b.o, t, dur * 0.5, 7, 2200, 2, amp * 0.8, true);
+    crackle(b, b.o, t + dur * 0.5, dur * 0.5, 16, 2600, 2, amp * 0.9, true);
+  }
+
+  /** IRON GULLY two-tone municipal air horn: a low chord, then a step up (not RAMROD's dissonant truck horn). */
+  private airHorn(b: B, t: number, dur: number, amp: number): void {
+    const h = dur * 0.5;
+    brass(b, b.o, t, [46, 53], h * 0.95, amp, 0.6);
+    brass(b, b.o, t + h, [49, 56], h, amp, 0.6);
   }
 
   /** Straining steel: a low saw with an FM creak through a resonant band + grit. */
@@ -1523,10 +1559,16 @@ export class Sfx {
     if (this.bossId === 'parkade6') { this.parkadeHit(part, x, z); return; }
     const s = this.spatial(x, z);
     const b = this.voice('bossHit', 1, 0.5, Math.max(0.4, s.g) * 0.3, s.pan, 0.2); if (!b) return;
-    if (this.bossId === 'irongully') {
-      thump(b, b.o, b.t, 120, 55, 0.18, 0.8);
-      if (part === 'sail') clang(b, b.o, b.t, rnd(200, 280), 2.41, 5, 0.35, 0.5);
-      else burst(b, b.o, b.t, 'white', 'bandpass', part === 'head' ? 1400 : 700, 1.5, 0.001, 0.06, 0.6);
+    if (this.bossId === 'irongully') {   // a machine: spinner ring, turret housing clang, hollow hopper boom + grit rattle
+      if (part === 'sail') clang(b, b.o, b.t, rnd(300, 380), 2.41, 5, 0.35, 0.5);
+      else if (part === 'head') {
+        clang(b, b.o, b.t, rnd(260, 320), 1.41, 5, 0.3, 0.55);
+        burst(b, b.o, b.t, 'white', 'bandpass', 1800, 1.2, 0.001, 0.04, 0.35);
+      } else {
+        thump(b, b.o, b.t, 110, 50, 0.2, 0.7);
+        clang(b, b.o, b.t, part.startsWith('leg') ? rnd(140, 180) : rnd(90, 120), 1.41, 4, 0.4, 0.45);
+        crackle(b, b.o, b.t + 0.02, 0.18, 6, 2200, 1.4, 0.25);
+      }
     } else {
       const leg = part.startsWith('leg');
       clang(b, b.o, b.t, leg ? rnd(140, 190) : rnd(230, 320), 1.41, 5, 0.35, 0.7);
@@ -1537,8 +1579,11 @@ export class Sfx {
   private stagger(): void {
     if (this.bossId === 'parkade6') { this.parkadeJam(); return; }
     const b = this.voice('stagger', 4, 2.2, 0.6, 0, 0.35); if (!b) return;
-    if (this.bossId === 'irongully') {
-      creature(b, b.o, b.t, 1.7, [[0, 95], [0.3, 88], [1.7, 52]], 'o', 0.85, { growl: 0.5, growlHz: 18, breath: 0.4, fscale: 0.62 });
+    if (this.bossId === 'irongully') {   // the spinner jams: straining steel, its whine falling, a hydraulic release
+      this.metalGroan(b, b.t, 1.8, 58, 36, 0.75);
+      const o = osc(b, 'sawtooth', 900, b.t, b.t + 1.6); sweep(o.frequency, b.t, 900, 90, 1.5);
+      const a = gn(b); envAHR(a.gain, b.t, 0.2, 0.05, 0.9, 0.6); wire(o, flt(b, 'bandpass', 700, 1.5), a, b.o);
+      burst(b, b.o, b.t + 1.1, 'white', 'highpass', 2400, 0.7, 0.05, 0.7, 0.45);
     } else {
       this.metalGroan(b, b.t, 1.8, 58, 36, 0.8);
       burst(b, b.o, b.t + 1.2, 'white', 'highpass', 2400, 0.7, 0.05, 0.6, 0.4);   // hydraulic release
@@ -1552,13 +1597,29 @@ export class Sfx {
     this.eng.duck(STING_DUCK.bossDown[0], STING_DUCK.bossDown[1], STING_DUCK.bossDown[2]);
     const t = b.t;
     if (this.bossId === 'irongully') {
-      creature(b, b.o, t, 2.2, [[0, 90], [0.3, 110], [2.2, 38]], 'a', 0.8, { growl: 0.45, growlHz: 16, breath: 0.6, fscale: 0.6 });
-    } else {
-      const fm = mkFM(b.ac, 330, 1.41, 4, t, t + 2.2);
-      b.srcs.push(fm.car, fm.mod);
-      sweep(fm.car.frequency, t, 330, 60, 2.0);
-      const a = gn(b); envAHR(a.gain, t, 0.35, 0.1, 1.0, 1.0); wire(fm.car, a, b.o);
+      // machine collapse, in step with bossview's GU_FAIL_T: the rotors cut (the diesel knocks out, the turbine
+      // whine falls), each hydraulic leg fails with a pressure hiss + a heavy steel clank (0.3 / 0.65 / 1.0 / 1.35 s),
+      // grit pours and rattles over the rim, and the hopper belly-flops onto the road (≈ 1.8 s)
+      const knocks = [0, 0.16, 0.36];
+      for (let i = 0; i < knocks.length; i++) thump(b, b.o, t + knocks[i], 72, 40, 0.18, 0.5 - i * 0.1, 'triangle');
+      const o = osc(b, 'sawtooth', 700, t, t + 1.8); sweep(o.frequency, t, 700, 60, 1.6);
+      const a = gn(b); envAHR(a.gain, t, 0.3, 0.03, 0.4, 1.2); wire(o, flt(b, 'lowpass', 1600), a, b.o);
+      const fail = [0.3, 0.65, 1.0, 1.35];
+      for (let i = 0; i < fail.length; i++) {
+        burst(b, b.o, t + fail[i], 'white', 'highpass', 2400, 0.6, 0.01, 0.32, 0.26);
+        thump(b, b.o, t + fail[i] + 0.1, 58, 28, 0.24, 0.5, 'triangle');
+      }
+      burst(b, b.o, t + 0.45, 'brown', 'lowpass', 900, 0.7, 0.2, 1.6, 0.4);     // grit pour
+      crackle(b, b.o, t + 0.5, 1.5, 22, 1800, 1.0, 0.35);                        // gravel rattle
+      boom(b, b.o, t + 1.8, 1.8, 0.9);
+      rumble(b, b.o, t + 1.85, 0.1, 1.0, 1.6, 1400, 100, 0.8);
+      crackle(b, b.o, t + 1.9, 1.6, 30, 1200, 1.1, 0.4);
+      return;
     }
+    const fm = mkFM(b.ac, 330, 1.41, 4, t, t + 2.2);
+    b.srcs.push(fm.car, fm.mod);
+    sweep(fm.car.frequency, t, 330, 60, 2.0);
+    const a = gn(b); envAHR(a.gain, t, 0.35, 0.1, 1.0, 1.0); wire(fm.car, a, b.o);
     boom(b, b.o, t + 1.2, 1.8, 0.9);
     rumble(b, b.o, t + 1.25, 0.1, 1.0, 1.6, 1400, 100, 0.8);
     crackle(b, b.o, t + 1.3, 1.6, 30, 1200, 1.1, 0.4);

@@ -9,9 +9,12 @@
 //     the WINCH windup and runs a taut cable to the titan while the leash holds (plus an x-ray
 //     hazard-banded line, always visible, whose bands march toward the boom — WINCH LEASH reads
 //     even when the titan's body hides the real cable).
-//   * IRON GULLY — pale ridge-backed quadruped (~70 m): heavy barrel torso with a frost-caked
-//     hide, beaked head with a hinged lower beak and icy eyes, a tall SAIL of riveted scrap
-//     plates on bony spines along the spine, a thick two-part tail, four IK legs with clawed paws.
+//   * IRON GULLY — HALVARD snow-clearance walker (~70 m): a road gritter + V-plough at kaiju
+//     scale — charcoal grit hopper with an ochre load and an amber beacon bar, a flush blower
+//     turret with a spinning auger in a lit intake (AUGER BLAST), a hinged V-plough (PLOUGH RUN),
+//     a plate magazine under a vermilion spreader spinner (PLATE SPREADER; the FRACTURE weak point,
+//     crack seams glow with the meter), four crab-splayed hydraulic stamp legs (DOUBLE STAMP) as
+//     3 instanced meshes with per-leg instFlash. A machine: no face, jaw, hide, claws or tail.
 // Animation reads boss.attack / attackT / phase / staggerT / introT / data.* and the live boss
 // telegraphs, so every body wind-up is timed by the SAME windup as the paint on the floor.
 // Part hit flash per collider group (bossHit events), 3 px ink hulls, shadows. Zero per-frame
@@ -21,7 +24,7 @@ import * as THREE from 'three';
 import type { BossId, BossState, World } from '../core/types.ts';
 import { isGateId } from '../core/types.ts';
 import { SIM_DT } from '../core/config.ts';
-import { clamp, easeInCubic, easeOutCubic, lerp, smoothstep, wrapAngle } from '../core/math.ts';
+import { clamp, easeInCubic, easeOutBack, easeOutCubic, lerp, smoothstep, wrapAngle } from '../core/math.ts';
 import { BIOMES } from '../data/biomes.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from '../render/viewtypes.ts';
 import { addOutline, INK } from '../render/materials.ts';
@@ -41,9 +44,9 @@ const RIG_IDS = ['caisson4', 'irongully', 'parkade6', 'stencil1', 'cordon2', 'sw
 /** CONTRACT §6.1: titans / bosses 3.0 px ink. */
 const OUTLINE_W = 3.0;
 /**
- * fx2 (critic r2/057–058): IRON GULLY's pale, frost-caked hide barely separates from WHITE STACKS snow at Size IV
+ * fx2 (critic r2/057–058): a boss hull that is pale on top barely separates from WHITE STACKS snow at Size IV
  * zoom. On that biome only, the rig swaps its 3 px ink hulls for SNOW_OUTLINE_W px ones (a second hull per mesh,
- * built once; exactly one of the two is visible, so the draw count is unchanged) and its hide is shaded down to
+ * built once; exactly one of the two is visible, so the draw count is unchanged) and its hull paint is shaded down to
  * SNOW_HIDE_MUL (material colour × vertex colour; the lamp glow is emissive and keeps its glare).
  */
 const SNOW_OUTLINE_W = 5.5;
@@ -179,6 +182,10 @@ export interface BossRig {
   /** IRON GULLY on WHITE STACKS: the default 3 px hulls and the thick snow hulls (see SNOW_OUTLINE_W) */
   inkThin?: THREE.Object3D[];
   inkSnow?: THREE.Object3D[];
+  /** instanced legs (IRON GULLY): LegRig.upper/lower/foot point at these and are posed per instance */
+  legInst?: { upper: THREE.InstancedMesh; lower: THREE.InstancedMesh; foot: THREE.InstancedMesh; flash: THREE.InstancedBufferAttribute };
+  /** IRON GULLY defeat: grit chunks pouring over the hopper rim (instanced, hidden while alive) */
+  grit?: THREE.InstancedMesh;
 }
 
 function mkMesh(geo: THREE.BufferGeometry, mat: THREE.Material, name: string, shadow = true): THREE.Mesh {
@@ -466,229 +473,263 @@ function buildCaisson(glowMul: number): BossRig {
   };
 }
 
-// ─────────────────────────────── IRON GULLY ───────────────────────────────
+// ─────────────────────────────── IRON GULLY (HALVARD snow-clearance walker) ───────────────────────────────
+// A road gritter + V-plough built at kaiju scale on four hydraulic stamp legs (owner rule 2026-09-29: bosses are
+// ROBOTS). Authored facing +Z around the sim's colliders (ai/bosses/irongully.ts, untouched): body r20 y 18–50 =
+// the grit hopper; head r8 @ z 34, y 28–50 = the blower turret (intake face at z ≈ 40 = the cone origin); sail r10
+// @ z −6, y 48–70 = the plate magazine + spreader spinner (the weak point, crack seams glow with FRACTURE); legs r6
+// @ (±14, ±20) = crab-splayed stamp legs (3 instanced meshes, per-leg instFlash — the PARKADE-6 idiom).
+// Dark hull on snow (≈ 10:1 vs #eef2f6; the old pale hide was 1.4:1), vermilion / ochre accents, no frost on tops.
+// 9 meshes → 18 draws including hulls.
 const G = {
-  pale: '#d4cfc1', paleS: '#aeb3b6', slate: '#7a8591', slateD: '#56606c', belly: '#c9c6bb',
-  frost: '#f3f7fc', ice: '#c2e2f0', horn: '#39333f', hornL: '#58516a', eye: '#9fe8ff', throat: '#a4f2ff',
-  rust: '#9c4a2c', rustL: '#bd6a3c', steel: '#8b95a0', steelD: '#5f6873', paint: '#e4dac2', rivet: '#2a2730',
-  bone: '#e8dfc8',
+  hull: '#3b4856', hullL: '#56636f', dark: '#252c35', black: '#1b2027',
+  verm: '#d8432a', vermD: '#a83220', ochre: '#a8703a', ochreD: '#86552a', ochreL: '#bd8546',
+  cream: '#f2efe6', chrome: '#aeb6bf', chromeD: '#7d8792', amber: '#ffb43a', lampW: '#fff0c8',
+  intake: '#8ff6ff', seam: '#ff8a3a', tail: '#ff4a3a',
 } as const;
 
 const GU = {
-  bodyY: 32,
-  hip: [[12.5, -3, 17], [-12.5, -3, 17], [11.5, -2, -19], [-11.5, -2, -19]] as const,
-  foot: [[15.5, 3.2, 19], [-15.5, 3.2, 19], [14.5, 3.2, -20], [-14.5, 3.2, -20]] as const,
-  L1: 15.5, L2: 14,
-  neck: [0, 9, 22] as const, head: [0, -1.5, 6] as const, jaw: [0, -4.2, 1] as const,
-  sail: [0, 13, -6] as const, headScale: 1.25, tail: [0, 5, -30] as const,
+  bodyY: 34,
+  hip: [[13, -9, 18], [-13, -9, 18], [13, -9, -18], [-13, -9, -18]] as const,
+  foot: [[19.5, 3.4, 21], [-19.5, 3.4, 21], [19.5, 3.4, -21], [-19.5, 3.4, -21]] as const,
+  L1: 13, L2: 16,
+  /** turret slew bearing (body-local): drum centre at root (0, 38, 31.5) */
+  neck: [0, 4, 24] as const,
+  /** auger hub in turret space: the intake face sits at root z ≈ 39.5 (the sim's cone origin is z 40) */
+  auger: [0, 0, 15.3] as const,
+  /** plough hinge (body-local) = root y 16 */
+  blade: [0, -18, 25] as const,
+  /** magazine base (body-local) = root (0, 48, −6): the sail collider's floor */
+  sail: [0, 14, -6] as const,
+  /** spreader-disc hub on the magazine */
+  spin: [0, 13.2, 0] as const,
 };
+/** blade hinge pitch: carried (walk) → down on the ground (PLOUGH RUN / stagger / defeat) */
+const GU_BLADE_UP = -0.3, GU_BLADE_DOWN = 0.02;
+/** carried plough lift (m) on the lift rams: blade 0 → +LIFT, blade ≥ 1 → on the road */
+const GU_BLADE_LIFT = 7;
+/** defeat: the step (0–3) at which each leg (FL, FR, BL, BR) loses pressure — FL, BR, FR, BL */
+const GU_DOWN_ORDER = [0, 2, 3, 1] as const;
+/** defeat: when each failure step hits (s) and how long a ram takes to dump (s) — the 4th lands at 1.35 + 0.4;
+ *  the chassis drops GU_COLLAPSE_DY so the skid frame (body-local y −18) sits on the road */
+const GU_FAIL_T = [0.3, 0.65, 1.0, 1.35] as const;
+const GU_FAIL_S = 0.4;
+const GU_COLLAPSE_DY = 16;
+/** defeat grit spill: chunk count, pour start (s, just after the first ram fails), spacing (s), gravity (m/s²) */
+const GU_GRIT_N = 28, GU_GRIT_T0 = 0.4, GU_GRIT_DT = 0.05, GU_GRIT_G = 34;
 
-interface Sec { z: number; hw: number; hh: number; cy: number }
-/** Loft along +Z through elliptical sections (via a loft along Y rotated +90° about X). */
-function loftZ(f: Facet, secs: readonly Sec[], n: number, side: string | readonly string[],
-  o: { top?: string | null; bottom?: string | null; face?: (band: number, seg: number) => string | undefined; glow?: number } = {},
-  m?: THREE.Matrix4): void {
-  const rot = PI / n;
-  const rings = secs.map((s) => ({ y: s.z, pts: ngon(n, s.hw, s.hh, rot, 0, -s.cy) }));
-  const base = M(0, 0, 0, PI / 2);
-  f.loft(rings, { side, top: o.top, bottom: o.bottom, face: o.face, glow: o.glow }, m ? new THREE.Matrix4().multiplyMatrices(m, base) : base);
-}
+/** hopper half-width at body-local y (the tub flares toward the top) */
+const hopW = (y: number) => 11.5 + 4 * (y + 13) / 26.5;
 
-/** Hide colouring by facing, for n = 10 lofts: top pale, upper flank pale, lower flank slate, underside shadowed. */
-function hide10(_band: number, seg: number): string {
-  if (seg === 0 || seg === 8 || seg === 9) return G.belly;
-  if (seg === 1 || seg === 7) return G.slate;
-  return G.pale;
-}
-function hide8(_band: number, seg: number): string {
-  if (seg === 0 || seg === 7) return G.belly;
-  if (seg === 1 || seg === 6) return G.slate;
-  return G.pale;
-}
-
-/** Tiny deterministic hash stream for the scrap sail (build-time only). */
-function lcg(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
-}
-
-function guBody(f: Facet): void {
-  const from = f.mark();
-  loftZ(f, [
-    { z: -31, hw: 5, hh: 5, cy: 5 },
-    { z: -26, hw: 11, hh: 10.5, cy: 4 },
-    { z: -16, hw: 14.5, hh: 13.5, cy: 3 },
-    { z: -4, hw: 15.5, hh: 14.5, cy: 3.5 },
-    { z: 8, hw: 16.5, hh: 16, cy: 5.5 },
-    { z: 17, hw: 15.5, hh: 15.5, cy: 7 },
-    { z: 24, hw: 12.5, hh: 12.5, cy: 6.5 },
-    { z: 29, hw: 8, hh: 9, cy: 6 },
-  ], 10, G.pale, { face: hide10 });
-  // bony ridge knobs along the spine outside the sail (neck end + rump)
-  // the ridge: a continuous bony keel down the spine (fore and aft of the sail) with knuckle lumps
-  const keel: [number, number][] = [[29.5, 13.6], [25, 18.8], [19, 22.6], [13, 23.8], [-18, 18.8], [-24, 15], [-29, 10.2], [-31.5, 7.2]];
-  for (let i = 0; i < keel.length - 1; i++) {
-    if (i === 3) continue;                                   // the sail root carries the ridge here
-    const [za, ya] = keel[i], [zb, yb] = keel[i + 1];
-    f.beam(0, ya, za, 0, yb, zb, 2.6, 2.2, G.bone, { ch: 0.5, taper: 0.9 });
-    f.box(3.4, 1.8, 2.6, G.bone, M(0, ya + 0.5, za, -0.2), { ch: 0.6, tw: 0.6, td: 0.7 });
+function guChassis(f: Facet): void {
+  // skid frame under the hopper
+  f.box(24, 5, 50, G.dark, M(0, -15.5, -2), { ch: 1.2 });
+  // the grit hopper: a trapezoid tub, vermilion band, black rim
+  const ring = (y: number) => rect(hopW(y) * 2, 44 + 8 * (y + 13) / 26.5, 2.2, 0, -2);
+  f.loft([
+    { y: -13, pts: ring(-13) }, { y: -5, pts: ring(-5) }, { y: -3, pts: ring(-3) },
+    { y: 12.2, pts: ring(12.2) }, { y: 13.5, pts: ring(13.5) },
+  ], { side: [G.hull, G.verm, G.hull, G.black], top: G.hullL, bottom: G.dark });
+  // vermilion / cream chevrons under the rim, on the (leaning) walls: sides, front, back
+  const slope = 4 / 26.5, hz = 23.96;
+  f.mirrorX(() => f.group(M(hopW(0) + 0.05, 0, -2, slope, PI / 2, 0), () => f.hazard(-23, 23, 8.8, 11.6, 0.3, 16, G.verm, G.cream)));
+  f.group(M(0, 0, -2 + hz + 0.05, slope, 0, 0), () => f.hazard(-12.6, 12.6, 8.8, 11.6, 0.3, 9, G.verm, G.cream));
+  f.group(M(0, 0, -2 - hz - 0.05, slope, PI, 0), () => f.hazard(-12.6, 12.6, 8.8, 11.6, 0.3, 9, G.verm, G.cream));
+  // stiffening ribs down the flanks (lean with the tub wall)
+  f.mirrorX(() => {
+    for (const z of [-20, -8, 4, 16]) f.box(1.1, 23, 1.8, G.hullL, M(hopW(0) + 0.45, 0.5, z, 0, 0, -0.151), { ch: 0.3 });
+    f.beam(hopW(13.5) - 0.4, 14.3, -27, hopW(13.5) - 0.4, 14.3, 23, 0.5, 0.5, G.chrome);            // grab rail
+  });
+  // the grit load: an ochre field framed by the dark rim, with shovel-heaped mounds
+  f.box(hopW(13.5) * 2 - 5.4, 2.2, 46.5, G.ochre, M(0, 14.4, -2), { ch: 1.6, tw: 0.93, td: 0.96 });
+  f.box(10, 2.8, 9, G.ochreL, M(-6.5, 16.8, 13), { tw: 0.3, td: 0.35 });
+  f.box(8, 2.2, 8, G.ochreD, M(7, 16.5, 16.5), { tw: 0.3, td: 0.3 });
+  f.box(9, 2.4, 8, G.ochreL, M(5, 16.6, -21), { tw: 0.3, td: 0.35 });
+  // amber beacon bar across the front rim (body glow = the beacon pulse)
+  f.box(21, 1.4, 2.4, G.black, M(0, 14.6, 22.6), { ch: 0.3 });
+  for (const x of [-8.4, -2.8, 2.8, 8.4]) f.cyl(1.0, 0.9, 1.8, 8, G.amber, M(x, 16.1, 22.6), { glow: 1 });
+  // front deck carrying the turret's slewing ring
+  f.box(17, 3.2, 12, G.dark, M(0, -6.8, 26), { ch: 1 });
+  f.box(17.3, 1.0, 12.3, G.verm, M(0, -5.6, 26));
+  // push frame down to the plough hinge
+  f.mirrorX(() => {
+    f.beam(9, -13.5, 20, 6, -18, 25, 2.2, 2.2, G.dark, { ch: 0.3 });
+    f.beam(10, -8.5, 22, 5.5, -17.2, 25.5, 1.1, 1.1, G.chrome, { seg: 6 });                            // lift ram
+  });
+  f.cyl(1.5, 1.5, 15, 8, G.chromeD, M(0, -18, 25, 0, 0, PI / 2));
+  // hip housings at the four corners (vermilion band)
+  for (const h of GU.hip) {
+    f.box(8, 10, 9, G.dark, M(h[0] * 1.02, -8, h[2]), { ch: 1.2, top: G.hull });
+    f.box(8.4, 1.6, 9.4, G.verm, M(h[0] * 1.02, -4.6, h[2]));
   }
-  // shoulder armour: scrap plates bolted into the hide (they match the sail)
+  // rear engine block: radiator grille, hazard band, tail lamps, two exhaust stacks
+  f.box(22, 13, 9, G.hull, M(0, -3.5, -31.5), { ch: 1.2, top: G.dark });
+  for (let i = 0; i < 6; i++) f.box(17, 0.8, 0.5, G.black, M(0, -8.4 + i * 1.7, -36.1));
+  f.group(M(0, 0, -36.05, 0, PI), () => f.hazard(-10.4, 10.4, 1.2, 2.8, 0.3, 12, G.verm, G.cream));
   f.mirrorX(() => {
-    f.box(0.8, 7, 9, G.rust, M(15.4, 12, 12, 0, 0.08, -0.35), { ch: 0.4 });
-    f.box(0.8, 5.5, 7, G.steelD, M(15.9, 6, 4, 0, -0.1, -0.22), { ch: 0.4 });
-    for (const [y, z] of [[14.6, 15.4], [14.6, 8.6], [9.4, 15.4], [9.4, 8.6]] as const) f.box(0.6, 0.6, 0.6, G.rivet, M(15.9, y, z, 0, 0, -0.35));
+    f.box(1.8, 1.4, 0.6, G.tail, M(9, -1.2, -36.2), { glow: 1 });
+    f.cyl(1.4, 1.4, 16, 8, G.black, M(7, 10, -30));
+    f.box(3.4, 0.6, 3.4, G.dark, M(7, 18.4, -30.4, -0.35));
+    f.box(2, 3, 2, G.dark, M(7, 1.5, -30), { ch: 0.3 });
   });
-  f.frost(from, G.ice, 0.3, 0.25, 11);
-  f.frost(from, G.frost, 0.52, 0.6, 3);
 }
 
-function guNeck(f: Facet): void {
-  const from = f.mark();
-  loftZ(f, [
-    { z: -4, hw: 9.8, hh: 9.5, cy: 0.5 },
-    { z: 2, hw: 8.6, hh: 8.4, cy: 0 },
-    { z: 7.5, hw: 7.2, hh: 7.4, cy: -1.5 },
-  ], 10, G.pale, { face: hide10 });
-  f.cyl(2.2, 0.2, 3.4, 5, G.bone, M(0, 8.4, 1, -0.4));
-  f.frost(from, G.frost, 0.5, 0.55, 5);
-}
-
-function guHead(f: Facet): void {
-  const from = f.mark();
-  loftZ(f, [
-    { z: -2.5, hw: 6.4, hh: 6.4, cy: 0.5 },
-    { z: 2.5, hw: 7.3, hh: 6.9, cy: 0.6 },
-    { z: 6.5, hw: 6.4, hh: 5.9, cy: 0.1 },
-    { z: 9.5, hw: 4.8, hh: 4.4, cy: -0.6 },
-  ], 8, G.pale, { face: hide8, bottom: G.slate });
-  // upper beak: dark horn, hooked down at the tip
-  loftZ(f, [
-    { z: 8.6, hw: 4.5, hh: 3.6, cy: 0.1 },
-    { z: 11.6, hw: 3.4, hh: 2.9, cy: -0.4 },
-    { z: 14.2, hw: 1.9, hh: 2.1, cy: -1.5 },
-    { z: 15.8, hw: 0.6, hh: 0.9, cy: -3.3 },
-  ], 6, [G.hornL, G.horn, G.horn], { top: G.horn });
-  f.mirrorX(() => f.box(0.5, 0.6, 1.4, G.rivet, M(1.5, 1.4, 12.2, -0.3)));           // nostril slits
-  // eyes: dark socket + icy glowing lens, heavy brow ridge
+function guBlade(f: Facet): void {
+  // V-plough in hinge space (hinge = root y 16; the cutting edge meets the road when the blade is down). Built to
+  // read at gameplay distance even when the walker faces the titan (the camera then looks at it past the titan):
+  //   * wide — apex forward at z ≈ 23, wings back to x ±24.8 (well past the hopper and the stamp pads), so both
+  //     wing tips stick out on either side of a titan standing in front of it;
+  //   * tall — a 17 m vermilion mouldboard, carried GU_BLADE_LIFT higher while walking (applyPose), so it rides
+  //     in front of the turret nose and over a Size IV titan's feet in the 3/4 top-down view;
+  //   * the mouldboard's top curls forward into a 7 m deflector lip striped cream / vermilion ON TOP: from above
+  //     the plough draws a bright V chevron on the road plan, the one shape that says "snow plough" at any zoom;
+  //   * two tall plough-guide rods (cream, vermilion bands) with striped marker flags and big amber lamps at the
+  //     wing tips, and an amber apex lamp — they pulse with the beacon (body glow) and stand ~24 m above the blade,
+  //     beside and above the titan's silhouette.
+  const YAW = 0.6, HL = 15, CX = 12.4, CZ = 14.5, H = 17, CY = -7.5;
+  const tipX = CX + HL * Math.cos(YAW), tipZ = CZ - HL * Math.sin(YAW), apexZ = CZ + HL * Math.sin(YAW);
+  const top = CY + H / 2;
   f.mirrorX(() => {
-    f.box(1.4, 3.1, 3.4, G.horn, M(6.35, 1.7, 4.6, 0, 0.25), { ch: 0.4 });
-    f.box(0.9, 1.5, 2.3, G.eye, M(6.9, 1.6, 4.8, 0, 0.25), { glow: 1, ch: 0.3 });
-    f.beam(5.8, 4.4, 1.2, 6.9, 3.4, 7.8, 2.1, 1.7, G.bone, { ch: 0.4, taper: 0.7 });
-    // swept crest horns
-    f.beam(4.4, 4.6, 0.4, 7.4, 9.2, -8.6, 2.8, 2.4, G.bone, { taper: 0.25, ch: 0.5 });
-  });
-  // throat / breath chamber (only visible with the beak open)
-  f.box(6.2, 1.2, 8.5, G.throat, M(0, -4.4, 6.6), { glow: 1 });
-  f.frost(from, G.frost, 0.55, 0.6, 7);
-}
-
-function guJaw(f: Facet): void {
-  loftZ(f, [
-    { z: -0.5, hw: 5.2, hh: 2.3, cy: 0 },
-    { z: 5.5, hw: 4.4, hh: 2.1, cy: -0.2 },
-    { z: 10.5, hw: 2.6, hh: 1.5, cy: 0.3 },
-    { z: 13.2, hw: 0.8, hh: 0.8, cy: 0.9 },
-  ], 6, [G.horn, G.hornL, G.horn], { top: G.throat, bottom: G.slateD });
-}
-
-function guSail(f: Facet): void {
-  // ONE continuous sail of riveted scrap: plates shingle-overlap in a gently waving surface
-  // (relief head-on), a ragged top edge, raked bone spines poking through above it.
-  const r = lcg(0x6a11);
-  const H = (z: number) => 28 * Math.pow(Math.max(0, 1 - (z / 25.5) * (z / 25.5)), 0.75);
-  const wave = (z: number) => 1.7 * Math.sin(z * 0.33 + 0.4);
-  const plateCols = [G.rust, G.rustL, G.steel, G.steelD, G.paint, G.rust, P.navy, G.steel, G.rustL];
-  const colW = 5.6, z0 = -22.4, nCols = 8;
-  for (let c = 0; c < nCols; c++) {
-    const zc = z0 + colW * (c + 0.5);
-    const top = H(zc) + (r() - 0.35) * 2.2;
-    let y = -1.5, k = 0;
-    while (y < top - 0.6) {
-      const ph = Math.min(6.2 + r() * 1.4, top - y + 1.2);
-      const pw = colW + 1.1 + r() * 0.5;
-      const col = plateCols[Math.floor(r() * plateCols.length)];
-      const isTop = y + ph >= top - 0.6;
-      const tilt = (r() - 0.5) * (isTop ? 0.2 : 0.06);
-      const bend = isTop ? (r() - 0.5) * 0.35 : (r() - 0.5) * 0.05;
-      const off = wave(zc) + (((c + k) & 1) ? 0.32 : -0.32);
-      f.group(M(off, y + ph / 2, zc + (r() - 0.5) * 0.5, tilt, (r() - 0.5) * 0.06, bend), () => {
-        f.box(0.9, ph, pw, col, undefined, { ch: 0.28 });
-        if (col === G.paint) {
-          f.group(M(0.46, 0, 0, 0, PI / 2), () => f.hazard(-pw * 0.42, pw * 0.42, -ph * 0.2, ph * 0.1, 0.08, 5, P.org, P.navyD));
-          f.group(M(-0.46, 0, 0, 0, -PI / 2), () => f.hazard(-pw * 0.42, pw * 0.42, -ph * 0.2, ph * 0.1, 0.08, 5, P.org, P.navyD));
-        }
-        for (const sx of [0.47, -0.47]) for (const yy of [ph / 2 - 0.7, -ph / 2 + 0.7]) for (const zz of [pw / 2 - 0.7, 0, -pw / 2 + 0.7]) {
-          f.box(0.3, 0.5, 0.5, G.rivet, M(sx, yy, zz));
-        }
+    f.group(M(CX, CY, CZ, -0.12, YAW, 0), () => {
+      f.box(HL * 2 + 0.2, H, 1.6, G.verm, undefined, { ch: 0.2 });
+      f.group(M(0, 0, 0.8), () => f.hazard(-HL + 0.4, HL - 0.4, 1.2, 5.2, 0.25, 12, G.cream, G.verm));
+      f.box(HL * 2 + 0.4, 1.6, 2.2, G.black, M(0, -H / 2 + 0.8, 0.2));                          // cutting edge
+      // the mouldboard's top curls FORWARD into a 7 m deflector lip, tipped up toward the camera and striped
+      // cream / vermilion on top: the broad bright V that reads from the 3/4 top-down view
+      f.group(M(0, H / 2 + 0.3, 2.6, -0.25, 0, 0), () => {
+        f.box(HL * 2 + 0.4, 1.0, 7.0, G.verm, undefined, { ch: 0.2, bottom: G.vermD });
+        f.group(M(0, 0.5, 3.5, -PI / 2, 0, 0), () => f.hazard(-HL, HL, 0, 7.0, 0.3, 16, G.cream, G.verm));
+        f.box(HL * 2 + 0.6, 1.3, 0.9, G.black, M(0, 0.2, 3.7));                                   // lip edge
+        // retroreflective strip along the lip (lit by the beacon pulse): stays bright even in the hopper's shadow
+        f.box(HL * 2 - 0.4, 0.5, 1.0, G.cream, M(0, 0.85, 2.6), { glow: 1 });
       });
-      y += ph - 0.9;
-      k++;
-    }
-  }
-  // raked bone spines, each poking a few metres above the ragged edge
-  for (let i = 0; i <= nCols; i += 1) {
-    const z = z0 + colW * i;
-    const h = H(z) + 2.2 + r() * 2.2;
-    f.beam(wave(z), -3, z, wave(z) * 0.6, h, z - 2.2, 2.3, 2.3, G.bone, { taper: 0.22, ch: 0.45 });
-  }
-  // a riveted spar along the sail root ties it to the spine
-  f.beam(wave(-20), 1.2, -23, wave(20), 1.2, 23, 1.6, 1.6, G.steelD);
-  f.frost(0, G.frost, 0.62, 0.7, 9);
+      for (const x of [-8, -2.7, 2.7, 8]) f.box(1.4, H - 2, 1.4, G.dark, M(x, 0, -1.2));
+    });
+    f.beam(4.5, 0, 0, 8.8, -8, 12, 2.2, 2.2, G.dark, { ch: 0.3 });                                 // push arm
+    // plough-guide rod at the wing tip: banded rod + amber lamp
+    const RH = 24;
+    f.beam(tipX - 0.8, top, tipZ + 0.3, tipX - 0.2, top + RH, tipZ - 0.3, 1.7, 1.7, G.cream, { seg: 6 });
+    for (const y of [6, 12, 18]) f.box(2.3, 2.2, 2.3, G.verm, M(tipX - 0.8 + 0.6 * y / RH, top + y, tipZ + 0.3 - 0.6 * y / RH));
+    // marker flag: a striped panel standing out from the rod (outward), then the lamp on top
+    f.group(M(tipX + 0.6, top + RH - 5.5, tipZ - 0.3, 0, 0, 0), () => {
+      f.box(6.4, 4.4, 0.5, G.black, M(3.2, 0, 0));
+      f.group(M(0.1, 0, 0.25), () => f.hazard(0.1, 6.3, -2.0, 2.0, 0.2, 5, G.verm, G.cream));
+      f.group(M(6.3, 0, -0.25, 0, PI, 0), () => f.hazard(0.0, 6.2, -2.0, 2.0, 0.2, 5, G.verm, G.cream));
+    });
+    f.box(3.6, 3.6, 3.6, G.amber, M(tipX - 0.2, top + RH + 1.6, tipZ - 0.3), { glow: 1, ch: 0.8 });
+    f.box(1.4, 1.4, 1.4, G.amber, M(tipX + 0.4, -1.4, tipZ + 0.2), { glow: 1 });                  // wing-tip lamp
+  });
+  f.cyl(1.5, 1.5, H + 0.4, 6, G.dark, M(0, CY, apexZ - 0.4));                                     // apex post
+  f.box(2.8, 2.2, 2.8, G.amber, M(0, top + 3.4, apexZ + 1.2), { glow: 1, ch: 0.5 });              // apex lamp
 }
 
-function guTail1(f: Facet): void {
-  const from = f.mark();
-  loftZ(f, [
-    { z: 1, hw: 6.8, hh: 6.8, cy: 0 },
-    { z: -7, hw: 5.6, hh: 5.3, cy: -1.2 },
-    { z: -13.5, hw: 4.3, hh: 4.1, cy: -2.8 },
-  ], 10, G.pale, { face: hide10 });
-  for (const [z, y] of [[-2, 6.4], [-7.5, 4.9], [-12.5, 3.2]] as const) f.box(3, 1.1, 3.8, G.bone, M(0, y, z, -0.16), { ch: 0.5, tw: 0.7, td: 0.8 });
-  f.frost(from, G.frost, 0.5, 0.55, 13);
+function guTurret(f: Facet): void {
+  // blower turret (origin = slew bearing): a flush drum along +Z, the lit auger intake at the front, a lamp
+  // ring (the tell counter), headlamps, the discharge chute + deflector on top, the motor box behind
+  f.cyl(6, 6.6, 2.4, 10, G.dark, M(0, -7.6, 6));
+  f.cyl(7, 7, 13, 12, G.hullL, M(0, 0, 7.5, PI / 2), { bottom: G.dark });
+  f.cyl(7.35, 7.35, 1.3, 12, G.verm, M(0, 0, 4, PI / 2));
+  f.cyl(7.35, 7.35, 1.3, 12, G.verm, M(0, 0, 10.2, PI / 2));
+  f.cyl(7.7, 7.7, 1.3, 12, G.black, M(0, 0, 14.2, PI / 2));
+  f.cyl(6.3, 6.3, 0.3, 12, G.intake, M(0, 0, 14.95, PI / 2), { glow: 1 });
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * PI * 2 + PI / 8;
+    f.box(1.1, 1.1, 0.6, G.amber, M(Math.sin(a) * 7.05, Math.cos(a) * 7.05, 15.05), { glow: 1 });
+  }
+  f.mirrorX(() => {
+    f.box(2.8, 2, 1.6, G.black, M(4.4, 6.3, 12.2));
+    f.box(2.1, 1.3, 0.5, G.lampW, M(4.4, 6.3, 13.1), { glow: 1 });
+    f.beam(6.6, -1, 1, 6.6, -1, 13, 0.7, 0.7, G.chrome, { seg: 6 });
+  });
+  f.beam(0, 5.8, 5, 0, 12.6, 8, 3.6, 3.6, G.verm, { seg: 8 });
+  f.box(4.6, 1.5, 6.4, G.dark, M(0, 13.4, 10, 0.38), { ch: 0.3 });
+  f.box(9.5, 9, 6, G.dark, M(0, 0.5, -1.8), { ch: 1, top: G.hull });
+  f.group(M(0, 0, -4.82, 0, PI), () => f.hazard(-4.5, 4.5, 1.8, 3.2, 0.2, 6, G.verm, G.cream));
 }
 
-function guTail2(f: Facet): void {
-  const from = f.mark();
-  loftZ(f, [
-    { z: 0.5, hw: 4.3, hh: 4.1, cy: 0 },
-    { z: -7, hw: 2.9, hh: 2.7, cy: -1.5 },
-    { z: -14, hw: 0.8, hh: 0.9, cy: -3.4 },
-  ], 10, G.pale, { face: hide10 });
-  for (const [z, y] of [[-2.5, 3.6], [-8, 2.1]] as const) f.box(2.2, 0.9, 3, G.bone, M(0, y, z, -0.2), { ch: 0.4, tw: 0.7, td: 0.8 });
-  f.frost(from, G.frost, 0.5, 0.5, 17);
+function guAuger(f: Facet): void {
+  // auger rotor (spins about +Z): hub cone + three swept vanes, one vermilion so the spin reads
+  f.cyl(2.2, 0.5, 3, 8, G.verm, M(0, 0, 1.5, PI / 2));
+  for (let k = 0; k < 3; k++) {
+    f.group(M(0, 0, 0.6, 0, 0, (k / 3) * PI * 2), () => f.box(1.4, 5.2, 0.9, k === 0 ? G.verm : G.cream, M(0, 3.5, 0, 0, 0.55, 0.3), { ch: 0.2 }));
+  }
+}
+
+function guMagazine(f: Facet): void {
+  // plate magazine (origin = base on the hopper roof): a cassette of steel road plates on edge between dark
+  // corner posts and clad flanks; the flank crack seams glow with FRACTURE (sail glow)
+  f.box(15, 2, 15, G.dark, M(0, 1, 0), { ch: 1 });
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) f.box(1.9, 12, 1.9, G.dark, M(sx * 6.4, 7, sz * 6.4));
+  for (let i = 0; i < 6; i++) {
+    const z = -5 + i * 2;
+    f.box(11, 9.6, 0.9, i % 2 ? G.hullL : G.chromeD, M(0, 7.2, z), { ch: 0.15 });
+    f.box(11, 0.8, 1.0, G.verm, M(0, 12.3, z));
+  }
+  f.mirrorX(() => {
+    f.box(0.7, 10, 12.6, G.hull, M(6.8, 7.2, 0));
+    const S: readonly (readonly [number, number])[] = [[3, -5.2], [5.6, -1.6], [7.4, -3.2], [10.4, 1.2], [8.6, 3.6], [11.4, 5.4]];
+    for (let i = 0; i < S.length - 1; i++) f.beam(7.2, S[i][0], S[i][1], 7.2, S[i + 1][0], S[i + 1][1], 0.45, 0.3, G.seam, { glow: 1 });
+  });
+  f.group(M(0, 7.2, 6.95), () => {
+    f.beam(-4, -3, 0, -1, 0.5, 0, 0.45, 0.3, G.seam, { glow: 1 });
+    f.beam(-1, 0.5, 0, 2.5, -1.5, 0, 0.45, 0.3, G.seam, { glow: 1 });
+    f.beam(2.5, -1.5, 0, 4.2, 3.4, 0, 0.45, 0.3, G.seam, { glow: 1 });
+  });
+  f.cyl(3, 3.4, 1.6, 8, G.dark, M(0, 12.6, 0));
+}
+
+function guSpinner(f: Facet): void {
+  // spreader disc (spins about Y): a big flat vermilion disc with cream radial vanes, one black
+  f.cyl(1.2, 1.2, 3, 8, G.chromeD, M(0, 0.5, 0));
+  f.cyl(11, 10.4, 1.2, 16, G.verm, M(0, 2.4, 0), { bottom: G.vermD });
+  for (let k = 0; k < 6; k++) {
+    f.group(M(0, 3.6, 0, 0, (k / 6) * PI * 2, 0), () => f.box(1.2, 1.4, 8.4, k === 0 ? G.black : G.cream, M(0.6, 0, 5.8, 0, 0.2, 0), { ch: 0.2 }));
+  }
+  f.cyl(2.5, 1.6, 1.8, 8, G.dark, M(0, 4, 0));
 }
 
 function guUpper(f: Facet, L: number): void {
-  // hip → knee along +Y (authored "down the leg"): heavy muscled column
+  // hip → knee strut along +Y, +Z = the knee (pole) side: box girder, hydraulic cylinder on top, knuckles
+  f.cyl(3.8, 3.8, 6.6, 10, G.verm, M(0, 0, 0, 0, 0, PI / 2), { top: G.dark, bottom: G.dark });
   f.loft([
-    { y: -1.5, pts: ngon(8, 5.4, 5.8, PI / 8) },
-    { y: L * 0.35, pts: ngon(8, 4.9, 5.4, PI / 8) },
-    { y: L * 0.8, pts: ngon(8, 3.9, 4.1, PI / 8) },
-    { y: L, pts: ngon(8, 3.6, 3.8, PI / 8) },
-  ], { side: [G.pale, G.paleS, G.slate], top: G.slate, bottom: G.pale });
-  f.cyl(4.1, 4.1, 7.6, 8, G.slate, M(0, L, 0, 0, 0, PI / 2), { top: G.slateD, bottom: G.slateD });
+    { y: -1, pts: rect(6, 6, 1) },
+    { y: L * 0.35, pts: rect(5.8, 5.8, 1) },
+    { y: L, pts: rect(4.6, 4.6, 0.8) },
+  ], { side: G.dark, top: G.dark, bottom: G.dark });
+  f.box(6.3, 1.6, 6.3, G.verm, M(0, L * 0.45, 0));
+  f.beam(0, 1.5, 3.9, 0, L * 0.62, 3.8, 2.3, 2.3, G.hull, { seg: 8 });
+  f.beam(0, L * 0.62, 3.8, 0, L - 1.6, 3.0, 1.2, 1.2, G.chrome, { seg: 6 });
+  f.cyl(3.5, 3.5, 6.4, 10, G.verm, M(0, L, 0, 0, 0, PI / 2), { top: G.dark, bottom: G.dark });
+  f.cyl(1.3, 1.3, 7.2, 8, G.chromeD, M(0, L, 0, 0, 0, PI / 2));
 }
 
 function guLower(f: Facet, L: number): void {
+  // knee → ankle: dark ram sleeve, chrome piston rod, vermilion collar, an amber pressure lamp
   f.loft([
-    { y: 0, pts: ngon(8, 3.7, 3.9, PI / 8) },
-    { y: L * 0.55, pts: ngon(8, 3.2, 3.4, PI / 8) },
-    { y: L * 0.78, pts: ngon(8, 3.3, 3.5, PI / 8) },
-    { y: L * 0.86, pts: ngon(8, 3.6, 3.8, PI / 8) },
-    { y: L, pts: ngon(8, 3.4, 3.6, PI / 8) },
-  ], { side: [G.slate, G.slate, G.horn, G.slateD], top: G.slateD, bottom: G.slate });
+    { y: 0, pts: rect(5.4, 5.4, 1) },
+    { y: L * 0.55, pts: rect(5.0, 5.0, 1) },
+  ], { side: G.hull, top: G.dark, bottom: G.dark });
+  f.box(5.8, 1.4, 5.8, G.verm, M(0, L * 0.12, 0));
+  f.cyl(1.9, 1.9, L * 0.44, 8, G.chrome, M(0, L * 0.74, 0));
+  f.box(1.4, 1.4, 0.5, G.amber, M(0, L * 0.32, 2.75), { glow: 1 });
+  f.cyl(2.5, 2.5, 2.4, 8, G.dark, M(0, L, 0));
 }
 
-function guPaw(f: Facet): void {
-  // origin at the ankle; broad pad, three horn claws forward (+Z = body forward)
+function guPad(f: Facet): void {
+  // square stamp pad (origin = ankle, 3.4 m above the ground): black sole, vermilion band, chevrons
+  f.cyl(2.4, 2.8, 2.0, 8, G.dark, M(0, -0.6, 0));
   f.loft([
-    { y: -3.2, pts: rect(8.6, 9.6, 2.2, 0, 1.2) },
-    { y: -1.4, pts: rect(9.4, 10.4, 2.4, 0, 1.2) },
-    { y: 1.2, pts: rect(7, 7.6, 2, 0, 0.4) },
-  ], { side: [G.slateD, G.slate], top: G.slate, bottom: G.slateD });
-  for (const x of [-2.8, 0, 2.8]) f.beam(x, -1.2, 5.6, x * 1.1, -3.2, 8.6, 1.9, 1.7, G.horn, { taper: 0.2, ch: 0.3 });
-  f.box(4, 0.8, 0.8, G.ice, M(0, 1.3, 3.2), { ch: 0.2 });
+    { y: -3.4, pts: rect(10.4, 10.4, 1.5) },
+    { y: -2.3, pts: rect(10.9, 10.9, 1.6) },
+    { y: -1.3, pts: rect(10.9, 10.9, 1.6) },
+    { y: -0.5, pts: rect(9, 9, 1.3) },
+  ], { side: [G.black, G.verm, G.dark], top: G.dark, bottom: G.black });
+  for (let k = 0; k < 4; k++) f.group(M(0, 0, 0, 0, (k / 4) * PI * 2), () => f.hazard(-4, 4, -2.25, -1.35, 0.2, 5, G.verm, G.cream, M(0, 0, 5.45)));
+}
+
+/** grit chunk (unit ≈ 1 m): a squashed ochre lump, darker underside */
+function guGrit(f: Facet): void {
+  f.box(1, 0.7, 0.9, G.ochre, M(0, 0, 0, 0.3, 0.5, 0.2), { ch: 0.25, top: G.ochreL, bottom: G.ochreD });
 }
 
 function buildGully(glowMul: number): BossRig {
@@ -698,54 +739,76 @@ function buildGully(glowMul: number): BossRig {
   root.add(body);
   const groups: Record<string, FlashGroup> = {
     body: mkGroup(glowMul), head: mkGroup(glowMul * 1.2), sail: mkGroup(glowMul),
+    // the four leg flash groups are bookkeeping (bossHit targets): their flash is copied into instFlash per leg
     legFL: mkGroup(glowMul), legFR: mkGroup(glowMul), legBL: mkGroup(glowMul), legBR: mkGroup(glowMul),
   };
+  const legMat = makeFoeMaterial(true);
+  legMat.userData.bt.uGlowMul.value = glowMul;
+  groups.legs = { mat: legMat, flash: 0, glowBase: glowMul };
   const meshes: THREE.Mesh[] = [];
-  const bld = (fn: (f: Facet) => void) => { const f = new Facet(); f.jitter = 0.04; fn(f); return f.build(); };
-  const add = (parent: THREE.Object3D, m: THREE.Mesh) => { parent.add(m); meshes.push(m); return m; };
+  const bld = (fn: (f: Facet) => void) => { const f = new Facet(); f.jitter = 0.03; fn(f); return f.build(); };
+  const add = <T extends THREE.Mesh>(parent: THREE.Object3D, m: T): T => { parent.add(m); meshes.push(m); return m; };
   const joint = (parent: THREE.Object3D, name: string, p: readonly number[]) => {
     const j = new THREE.Group(); j.name = name; j.position.set(p[0], p[1], p[2]); parent.add(j); return j;
   };
 
-  add(body, mkMesh(bld(guBody), groups.body.mat, 'gu:torso'));
-  const neck = joint(body, 'gu:neck', GU.neck);
-  add(neck, mkMesh(bld(guNeck), groups.body.mat, 'gu:neckM'));
-  const head = joint(neck, 'gu:head', GU.head);
-  head.scale.setScalar(GU.headScale);
-  add(head, mkMesh(bld(guHead), groups.head.mat, 'gu:headM'));
-  const jaw = joint(head, 'gu:jaw', GU.jaw);
-  add(jaw, mkMesh(bld(guJaw), groups.head.mat, 'gu:jawM'));
-  const sail = joint(body, 'gu:sail', GU.sail);
-  add(sail, mkMesh(bld(guSail), groups.sail.mat, 'gu:sailM'));
-  const tail1 = joint(body, 'gu:tail1', GU.tail);
-  add(tail1, mkMesh(bld(guTail1), groups.body.mat, 'gu:tail1M'));
-  const tail2 = joint(tail1, 'gu:tail2', [0, -2.8, -13]);
-  add(tail2, mkMesh(bld(guTail2), groups.body.mat, 'gu:tail2M'));
+  add(body, mkMesh(bld(guChassis), groups.body.mat, 'gu:chassis'));
+  const blade = joint(body, 'gu:blade', GU.blade);
+  add(blade, mkMesh(bld(guBlade), groups.body.mat, 'gu:plough'));
+  const neck = joint(body, 'gu:turret', GU.neck);
+  add(neck, mkMesh(bld(guTurret), groups.head.mat, 'gu:turretM'));
+  const auger = joint(neck, 'gu:auger', GU.auger);
+  add(auger, mkMesh(bld(guAuger), groups.head.mat, 'gu:augerM', false));
+  const sail = joint(body, 'gu:magazine', GU.sail);
+  add(sail, mkMesh(bld(guMagazine), groups.sail.mat, 'gu:magazineM'));
+  const spin = joint(sail, 'gu:spinner', GU.spin);
+  add(spin, mkMesh(bld(guSpinner), groups.sail.mat, 'gu:spinnerM'));
 
-  const upG = bld((f) => guUpper(f, GU.L1)), loG = bld((f) => guLower(f, GU.L2)), ftG = bld(guPaw);
+  // legs: 3 instanced meshes (upper / lower / pad), per-leg flash through instFlash
+  const upG = bld((f) => guUpper(f, GU.L1)), loG = bld((f) => guLower(f, GU.L2)), ftG = bld(guPad);
+  const flash = new THREE.InstancedBufferAttribute(new Float32Array(4), 1);
+  flash.setUsage(THREE.DynamicDrawUsage);
+  for (const g of [upG, loG, ftG]) g.setAttribute('instFlash', flash);
+  const I = new THREE.Matrix4();
+  const inst = (geo: THREE.BufferGeometry, name: string) => {
+    const m = new THREE.InstancedMesh(geo, legMat, 4);
+    m.name = name; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
+    m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    for (let i = 0; i < 4; i++) m.setMatrixAt(i, I);
+    addOutline(m, OUTLINE_W);
+    return m;
+  };
+  const upper = add(root, inst(upG, 'gu:legUpper'));
+  const lower = add(root, inst(loG, 'gu:legLower'));
+  const foot = add(root, inst(ftG, 'gu:legPad'));
   const names = ['legFL', 'legFR', 'legBL', 'legBR'];
-  const offs = [0, 0.5, 0.75, 0.25];            // lateral-sequence walk: LF, RH, RF, LH
+  const offs = [0, 0.5, 0.75, 0.25];            // crawl: FL, BR, FR, BL
   const legs: LegRig[] = [];
   for (let i = 0; i < 4; i++) {
     const h = GU.hip[i], ft = GU.foot[i];
-    const mat = groups[names[i]].mat;
-    const upper = add(root, mkMesh(upG, mat, `gu:${names[i]}:upper`));
-    const lower = add(root, mkMesh(loG, mat, `gu:${names[i]}:lower`));
-    const foot = add(root, mkMesh(ftG, mat, `gu:${names[i]}:paw`));
-    for (const m of [upper, lower, foot]) m.matrixAutoUpdate = false;
-    const front = i < 2;
     legs.push({
       name: names[i], hip: new THREE.Vector3(h[0], h[1], h[2]), rest: new THREE.Vector3(ft[0], ft[1], ft[2]),
       L1: GU.L1, L2: GU.L2,
-      // front elbows fold back, hind knees fold forward (a quadruped, not a biped)
-      pole: new THREE.Vector3(Math.sign(h[0]) * 0.25, 0, front ? -1 : 1).normalize(), off: offs[i],
+      // knees ride outward and up (a crab-splayed machine leg, never an animal elbow / hock)
+      pole: new THREE.Vector3(Math.sign(h[0]), 1.1, Math.sign(h[2]) * 0.15).normalize(), off: offs[i],
       upper, lower, foot, flinch: 0,
     });
   }
-  const joints: Record<string, THREE.Object3D> = { neck, head, jaw, sail, tail1, tail2 };
+  // defeat grit spill: GU_GRIT_N chunks in the leg material (zero instFlash), hidden until the collapse
+  const grG = bld(guGrit);
+  grG.setAttribute('instFlash', new THREE.InstancedBufferAttribute(new Float32Array(GU_GRIT_N), 1));
+  const grit = new THREE.InstancedMesh(grG, legMat, GU_GRIT_N);
+  grit.name = 'gu:grit'; grit.castShadow = false; grit.receiveShadow = false; grit.frustumCulled = false;
+  grit.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  for (let i = 0; i < GU_GRIT_N; i++) grit.setMatrixAt(i, I);
+  addOutline(grit, OUTLINE_W);
+  grit.visible = false;
+  add(root, grit);
+  const joints: Record<string, THREE.Object3D> = { neck, auger, blade, sail, spin };
   return {
     id: 'irongully', root, body, bodyY: GU.bodyY, legs, groups, groupKeys: Object.keys(groups), joints, meshes,
-    stride: 30, duty: 0.62, liftH: 6, rMean: 24, walkSpeed: 9, footYawOut: false,
+    stride: 24, duty: 0.7, liftH: 5, rMean: 26, walkSpeed: 9, footYawOut: false,
+    legInst: { upper, lower, foot, flash }, grit,
   };
 }
 
@@ -753,8 +816,9 @@ function buildGully(glowMul: number): BossRig {
 interface Pose {
   dy: number; pitch: number; roll: number; twist: number;          // body joint
   luff: number; byaw: number; trolley: number; cabPitch: number; drum: number;   // CAISSON-4
-  neck: number; neckYaw: number; head: number; jaw: number;        // IRON GULLY
-  sailRise: number; sailShake: number; sailTilt: number; tail: number;
+  neck: number; neckYaw: number; head: number; jaw: number;        // IRON GULLY: turret pitch / slew (head, jaw, tail unused)
+  sailRise: number; sailShake: number; sailTilt: number; tail: number;   // magazine lift / rattle, spinner tilt
+  spin: number; auger: number; blade: number; beacon: number; seam: number;  // spinner + auger rad/s, plough 0..1, beacon strobe, FRACTURE seams
   glow: number;                                                     // face lamps / eyes+throat multiplier
   dim: number;                                                      // 1 = all lamps on, 0 = dead
 }
@@ -762,6 +826,7 @@ function newPose(): Pose {
   return {
     dy: 0, pitch: 0, roll: 0, twist: 0, luff: C4.boomRest, byaw: 0, trolley: 30, cabPitch: 0, drum: 0,
     neck: 0, neckYaw: 0, head: 0, jaw: 0.04, sailRise: 0, sailShake: 0, sailTilt: 0, tail: 0, glow: 1, dim: 1,
+    spin: 1.4, auger: 0, blade: 0, beacon: 0, seam: 0,
   };
 }
 const REST: Pose = newPose();
@@ -787,6 +852,11 @@ function copyPose(d: Pose, s: Pose): void {
   d.sailShake = s.sailShake;
   d.sailTilt = s.sailTilt;
   d.tail = s.tail;
+  d.spin = s.spin;
+  d.auger = s.auger;
+  d.blade = s.blade;
+  d.beacon = s.beacon;
+  d.seam = s.seam;
   d.glow = s.glow;
   d.dim = s.dim;
 }
@@ -809,6 +879,11 @@ function smoothPose(c: Pose, t: Pose, k: number): void {
   c.sailShake += (t.sailShake - c.sailShake) * k;
   c.sailTilt += (t.sailTilt - c.sailTilt) * k;
   c.tail += (t.tail - c.tail) * k;
+  c.spin += (t.spin - c.spin) * k;
+  c.auger += (t.auger - c.auger) * k;
+  c.blade += (t.blade - c.blade) * k;
+  c.beacon += (t.beacon - c.beacon) * k;
+  c.seam += (t.seam - c.seam) * k;
   c.glow += (t.glow - c.glow) * k;
   c.dim += (t.dim - c.dim) * k;
 }
@@ -817,10 +892,11 @@ const e3 = easeOutCubic;
 /** 0→1→0 bump over [a, b]. */
 const bump = (t: number, a: number, b: number) => (t <= a || t >= b ? 0 : Math.sin(((t - a) / (b - a)) * PI));
 /** hash flicker 0..1 */
+/** stable 0..1 hash (build-free, allocation-free) */
+const hash01 = (n: number) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
 const flick = (t: number) => { const v = Math.sin(t * 91.7) * Math.sin(t * 37.3 + 1.7); return 0.5 + 0.5 * v; };
 
 const C4_PLAIN = ['body', 'boom', 'legFL', 'legFR', 'legBL', 'legBR'] as const;
-const GU_PLAIN = ['body', 'sail', 'legFL', 'legFR', 'legBL', 'legBR'] as const;
 const HOOK_HANG = 20;           // m of cable under the boom tip at rest
 const CABLE_T = 1.1;            // cable thickness (m) — the 3 px hull carries it at Size V zoom
 /** WINCH LEASH x-ray cable: constant on-screen width (px) of the hazard core and of its ink rim. */
@@ -886,6 +962,9 @@ export class BossView implements ViewModule {
   private deadT = -1;
   private roarT = 0;
   private drumA = 0;
+  /** IRON GULLY rotor angles (integrated from the smoothed pose rates) */
+  private spinA = 0;
+  private augerA = 0;
   private attackKey = '';
   private tw = new Map<string, number>();
   private hookPos = new THREE.Vector3();
@@ -982,11 +1061,14 @@ export class BossView implements ViewModule {
     this.show(null);
   }
 
-  /** IRON GULLY vs snow (see SNOW_OUTLINE_W): thick ink hulls + a shaded-down hide on WHITE STACKS, else as built. */
+  /** IRON GULLY vs snow (see SNOW_OUTLINE_W): thick ink hulls + shaded-down hull paint on WHITE STACKS, else as built. */
   private snowLook(r: BossRig, snow: boolean): void {
     if (!r.inkSnow) {
       r.inkThin = []; r.inkSnow = [];
       for (const m of r.meshes) {
+        // the plough keeps its 3 px hull on snow: a thick hull (and its neighbours') swallowed the striped lip — the
+        // one top-down read of the blade — and the dark machine no longer needs the snow hull to separate it
+        if (m.name === 'gu:plough') continue;
         for (const c of m.children) if (c.userData.isOutline) r.inkThin.push(c);
         const h = addOutline(m, SNOW_OUTLINE_W);
         h.visible = false;
@@ -1040,7 +1122,7 @@ export class BossView implements ViewModule {
     copyPose(this.cur, REST);
     copyPose(this.tgt, REST);
     for (let i = 0; i < 4; i++) { this.curX[i].set(0, 0, 0); this.tgtX[i].set(0, 0, 0); }
-    this.deadT = -1; this.roarT = 0; this.drumA = 0; this.attackKey = ''; this.tw.clear();
+    this.deadT = -1; this.roarT = 0; this.drumA = 0; this.spinA = 0; this.augerA = 0; this.attackKey = ''; this.tw.clear();
     this.hookInit = false; this.hookVel.set(0, 0, 0);
     this.drops[0] = this.drops[1] = this.drops[2] = null;
     this.pkPose.reset(); this.pkChainN = 0; this.pkTowW = 1.5;
@@ -1109,7 +1191,8 @@ export class BossView implements ViewModule {
     copyPose(t, REST);
     for (let i = 0; i < 4; i++) this.tgtX[i].set(0, 0, 0);
     if (b.id === 'caisson4') this.poseCaisson(w, b, r); else this.poseGully(w, b, r);
-    const k = 1 - Math.exp(-dt * (this.deadT >= 0 ? 3 : 11));
+    // defeat eases slowly for CAISSON-4's topple; IRON GULLY's collapse keys its own jolts (poseGully) → stays sharp
+    const k = 1 - Math.exp(-dt * (this.deadT >= 0 && b.id !== 'irongully' ? 3 : 11));
     SM.k = k;
     smoothPose(this.cur, t, SM.k);
     for (let i = 0; i < 4; i++) this.curX[i].lerp(this.tgtX[i], k);
@@ -1383,43 +1466,68 @@ export class BossView implements ViewModule {
     }
   }
 
-  // ─────────────────────────────── IRON GULLY poses ───────────────────────────────
+  // ─────────────────────────────── IRON GULLY poses (snow-clearance walker) ───────────────────────────────
   private poseGully(w: World, b: BossState, r: BossRig): void {
     const t = this.tgt, X = this.tgtX, time = this.time, tA = this.tA;
     const mk = this.mk;
     const ph = this.gait.phase * PI * 2;
     const charging = (b.data.charge ?? 0) > 0;
-    // idle / walk: heavy bob, shoulder roll, head bob against the gait, tail sway, breathing
-    t.dy = -1.3 * mk * Math.abs(Math.sin(ph * 2)) + Math.sin(time * 0.8) * 0.45;
-    t.roll = Math.sin(ph) * 0.035 * mk;
-    t.twist = Math.sin(ph) * 0.03 * mk;
-    t.neck = 0.06 * Math.sin(ph * 2 + 0.6) * mk + Math.sin(time * 0.8 + 0.4) * 0.03;
-    t.neckYaw = Math.sin(time * 0.33) * 0.12 * (1 - mk);
-    t.head = -0.04 * Math.sin(ph * 2) * mk;
-    t.jaw = 0.04 + 0.03 * Math.max(0, Math.sin(time * 0.8));
-    t.tail = Math.sin(ph + 1.2) * 0.2 * mk + Math.sin(time * 0.6) * 0.08;
-    t.sailShake = 0; t.sailRise = 0; t.sailTilt = Math.sin(ph) * 0.02 * mk;
+    // idle / walk: a LEVEL machine — diesel shiver, a hard plant dip per footfall (no roll, twist or sway),
+    // the turret sweeping its headlamps like a searchlight, the spreader idling, the beacon pulsing slowly
+    t.dy = -0.7 * mk * Math.abs(Math.sin(ph * 2)) + (Math.sin(time * 41) * 0.12 + Math.sin(time * 27.3) * 0.08) * (1 - 0.6 * mk);
+    t.pitch = Math.sin(ph * 2) * 0.008 * mk;
+    t.neck = 0.04;
+    t.neckYaw = Math.sin(time * 0.45) * 0.24 * (1 - mk);
+    t.spin = 1.4; t.auger = 0; t.blade = 0; t.beacon = 0; t.seam = b.meter; t.glow = 1;
 
     if (this.deadT >= 0) {
-      const kd = easeInCubic(clamp(this.deadT / 3, 0, 1));
-      t.dy = -21 * kd; t.roll = 0.44 * kd; t.pitch = 0.12 * kd; t.neck = 0.62 * kd; t.head = 0.25 * kd; t.jaw = 0.42 * kd;
-      t.sailTilt = 0.22 * kd; t.tail = 0.3 * kd; t.neckYaw = 0.25 * kd;
-      t.dim = this.deadT < 1.4 ? flick(time) * (1 - this.deadT / 1.4) : 0;
-      for (let i = 0; i < 4; i++) { const L = r.legs[i]; X[i].set(Math.sign(L.rest.x) * 8 * kd, 0, Math.sign(L.rest.z) * 3 * kd); }
+      // defeat — a MACHINE COLLAPSE, on the road by ~2.1 s: a shudder as the rotors cut out, then the hydraulic
+      // legs fail one at a time (FL, BR, FR, BL, GU_FAIL_T) — each failing ram dumps its corner with a hard jolt,
+      // its pad kicks outward and the chassis lurches toward it — grit pours over the rim on the side that went
+      // first (gullyGrit), the spinner tips off its shaft, and the hopper belly-flops nose-first onto the plough.
+      const d = this.deadT;
+      t.spin = 0; t.auger = 0; t.blade = 1.15; t.beacon = 1;
+      t.sailTilt = 0.5 * e3(clamp((d - 0.15) / 0.6, 0, 1));
+      t.sailRise = -4 * e3(clamp((d - 0.4) / 1.2, 0, 1));
+      let sum = 0, pr = 0, rl = 0;
+      for (let i = 0; i < 4; i++) {
+        const L = r.legs[i];
+        const q = d - GU_FAIL_T[GU_DOWN_ORDER[i]];
+        const ki = q <= 0 ? 0 : q >= GU_FAIL_S ? 1 : easeOutBack(q / GU_FAIL_S);
+        sum += ki;
+        pr += Math.sign(L.rest.z) * ki;          // a failing FRONT corner pitches the nose down
+        rl -= Math.sign(L.rest.x) * ki;          // a failing +x corner drops the +x side (+roll lifts +x: Rz)
+        X[i].set(Math.sign(L.rest.x) * 8 * ki, 0, Math.sign(L.rest.z) * 3.5 * ki);
+      }
+      const all = sum * 0.25;
+      const shud = d < 0.4 ? Math.sin(time * 47) * 0.6 * (1 - d / 0.4) : 0;
+      t.dy = -GU_COLLAPSE_DY * all + shud;
+      t.pitch = 0.1 * pr + 0.09 * all;           // ends nose-down on the blade
+      t.roll = 0.11 * rl + 0.06 * all;           // ends listing to one side
+      t.neck = 0.5 * all; t.neckYaw = 0.3 * all;
+      t.dim = d < 1.2 ? flick(time) * (1 - d / 1.2) : 0;
+      t.seam = d < 0.9 ? 1.4 * flick(time * 1.3) : 0;
       return;
     }
     if (b.staggerT > 0) {
+      // FRACTURE full: the spinner jams on a bent shaft, the seams flare, hydraulic pressure drops (sag, splay,
+      // the plough drops), the turret droops, the auger coughs, the lamps and the beacon flicker
       const s = smoothstep(0, 0.5, 5 - b.staggerT) * smoothstep(0, 0.6, b.staggerT);
-      t.dy = -9 * s; t.pitch = 0.1 * s; t.roll = Math.sin(time * 1.1) * 0.07 * s;
-      t.neck = 0.55 * s; t.head = 0.2 * s; t.jaw = 0.22 + 0.08 * Math.sin(time * 5);
-      t.sailTilt = 0.14 * s; t.sailShake = 0.02 * s; t.glow = lerp(1, 0.3 + 0.7 * flick(time), s);
-      for (let i = 0; i < 4; i++) { const L = r.legs[i]; X[i].set(Math.sign(L.rest.x) * 3 * s, 0, 0); }
+      t.dy = -9 * s; t.pitch = 0.08 * s; t.roll = Math.sin(time * 1.1) * 0.05 * s;
+      t.neck = 0.04 + 0.32 * s; t.neckYaw = Math.sin(time * 2.3) * 0.1 * s;
+      t.spin = lerp(1.4, 0, s); t.sailTilt = 0.16 * s; t.sailShake = 0.02 * s;
+      t.blade = 1.1 * s; t.seam = lerp(b.meter, 1.2 + 0.4 * flick(time), s);
+      t.glow = lerp(1, 0.3 + 0.7 * flick(time), s); t.beacon = s;
+      t.auger = 4 * s * flick(time * 0.7);
+      for (let i = 0; i < 4; i++) { const L = r.legs[i]; X[i].set(Math.sign(L.rest.x) * 3.5 * s, 0, Math.sign(L.rest.z) * 1.5 * s); }
       return;
     }
     if (b.introT > 0 || this.roarT > 0) {
+      // start-up / phase beat: the plough lifts, the turret sweeps, lamps + beacon go full, rotors rev (air horn)
       const rt = b.introT > 0 ? (b.introT < 1.6 ? bump(1.6 - b.introT, 0, 1.6) : 0) : bump(1.6 - this.roarT, 0, 1.6);
-      t.neck -= 0.42 * rt; t.head -= 0.2 * rt; t.jaw = Math.max(t.jaw, 0.8 * rt); t.glow = 1 + 2.5 * rt;
-      t.neckYaw += Math.sin(time * 9) * 0.06 * rt; t.sailShake = Math.max(t.sailShake, 0.03 * rt);
+      t.blade -= 0.6 * rt; t.glow = 1 + 2.5 * rt; t.beacon = Math.max(t.beacon, rt);
+      t.neckYaw += Math.sin(time * 2.2) * 0.35 * rt; t.neck -= 0.08 * rt;
+      t.spin += 6 * rt; t.auger += 10 * rt; t.sailShake = Math.max(t.sailShake, 0.02 * rt);
     }
 
     switch (b.attack) {
@@ -1432,27 +1540,29 @@ export class BossView implements ViewModule {
         break;
       }
       case 'plateVolley': {
+        // PLATE SPREADER: the magazine jacks up and feeds; the spinner revs to a blur and flings the plates
         const launch = bump(tA, 0, 0.55);
         const rattle = Math.exp(-tA * 1.4);
-        t.sailRise = 4.5 * launch; t.sailShake = 0.05 * rattle; t.dy = -2.2 * launch; t.pitch = 0.05 * launch;
-        t.neck = 0.12 * launch; t.head = -0.25 * rattle; t.jaw = 0.3 * launch; t.glow = 1 + 1.2 * rattle;
+        t.sailRise = 4.5 * launch; t.sailShake = 0.04 * rattle; t.dy = -1.6 * launch; t.pitch = 0.03 * launch;
+        t.spin = 3 + 19 * rattle; t.glow = 1 + 0.8 * rattle; t.beacon = rattle;
         break;
       }
       case 'ridgeCharge': {
+        // PLOUGH RUN: the V-blade drops onto the road, the chassis squats nose-down, the front rams tamp
         const W = this.windup(w, b, 'ridgeCharge', 1.5, false);
         if (tA < W && !charging) {
           const p = e3(clamp(tA / W, 0, 1));
-          t.neck = 0.36 * p; t.head = 0.1 * p; t.pitch = 0.12 * p; t.dy = -2.8 * p; t.sailTilt = 0; t.jaw = 0.15 * p;
-          t.glow = 1 + 1.6 * p; t.tail = 0.25 * Math.sin(time * 6) * p;
-          const sc = Math.sin(clamp(tA / W, 0, 1) * PI * 5);          // front paw scrapes the snow
-          X[0].set(0, 1.6 * Math.abs(sc) * p, -4 * sc * p);
+          t.blade = 1.05 * p; t.pitch = 0.1 * p; t.dy = -2.8 * p; t.neck = 0.04 + 0.08 * p; t.glow = 1 + 1.6 * p;
+          t.beacon = 1; t.auger = 6 * p;
+          const sc = Math.sin(clamp(tA / W, 0, 1) * PI * 6);            // front rams tamp alternately (revving)
+          X[0].set(0, 2.4 * Math.max(0, sc) * p, 0); X[1].set(0, 2.4 * Math.max(0, -sc) * p, 0);
         } else if (charging) {
-          t.neck = 0.3; t.head = 0.08; t.pitch = 0.08; t.jaw = 0.3; t.glow = 2.2; t.tail = 0.12 * Math.sin(time * 10);
-          t.dy += -1.2 * Math.abs(Math.sin(ph * 2));
+          t.blade = 1.05; t.pitch = 0.07; t.neck = 0.12; t.auger = 18; t.glow = 2.2; t.beacon = 1;
+          t.dy = -1.6 - 0.8 * Math.abs(Math.sin(ph * 2));
         } else {
           const q = Math.max(0, tA - (b.data.chargeEnd ?? tA));
           const skid = Math.exp(-q * 2.5);
-          t.pitch = -0.1 * skid; t.neck = 0.15 * skid; t.neckYaw = Math.sin(time * 9) * 0.16 * skid; t.jaw = 0.25 * skid;
+          t.pitch = -0.08 * skid; t.neckYaw = Math.sin(time * 9) * 0.14 * skid; t.blade = 1.05 * skid; t.beacon = skid;
         }
         break;
       }
@@ -1463,42 +1573,44 @@ export class BossView implements ViewModule {
     }
   }
 
+  /** AUGER BLAST: the turret trains, the auger spins up to a blur, the intake + lamp ring ramp, the nose dips. */
   private gullyBreath(w: World, b: BossState): void {
     const t = this.tgt, time = this.time, tA = this.tA;
     const W = this.windup(w, b, 'coneBreath', 1.8);
     const act = 1.2;
     if (tA < W) {
-      const p = e3(clamp(tA / W, 0, 1));
-      t.neck = -0.34 * p; t.head = -0.16 * p; t.jaw = 0.12 + 0.28 * p; t.dy = 1.6 * p; t.pitch = -0.06 * p;
-      t.glow = 1 + 3.2 * p; t.sailShake = 0.012 * p;
+      const u = clamp(tA / W, 0, 1), p = e3(u);
+      t.neck = 0.04 + 0.05 * p; t.pitch = 0.05 * p; t.dy = -1.2 * p; t.auger = 2 + 30 * u * u;
+      t.glow = 1 + 3.2 * p; t.beacon = p; t.blade = 0.3 * p; t.sailShake = 0.006 * p;
     } else if (tA < W + act) {
       const q = tA - W;
       const thrust = e3(clamp(q / 0.2, 0, 1));
-      t.neck = lerp(-0.34, 0.2, thrust); t.head = lerp(-0.16, 0.06, thrust); t.jaw = 0.8; t.pitch = 0.05 * thrust;
-      t.glow = 4 + 0.8 * flick(time); t.neckYaw = Math.sin(time * 17) * 0.025; t.dy = 0.5;
+      t.neck = 0.09; t.pitch = lerp(0.05, -0.035, thrust); t.dy = -0.6; t.auger = 34;
+      t.glow = 4 + 0.8 * flick(time); t.neckYaw = Math.sin(time * 17) * 0.025; t.beacon = 1; t.blade = 0.3;
     } else {
       const q = tA - W - act;
       const c = Math.exp(-q * 3);
-      t.neck = 0.2 * c; t.jaw = 0.1 + 0.6 * c; t.glow = 1 + 2 * c;
+      t.auger = 20 * c; t.glow = 1 + 2 * c; t.beacon = c;
     }
   }
 
+  /** DOUBLE STAMP: front rams lift and drive down (inner ring), then the hydraulics dump the chassis (outer ring). */
   private gullySlam(w: World, b: BossState): void {
     const t = this.tgt, X = this.tgtX, tS = this.tS;
     const W = this.windup(w, b, 'pawSlamInner', 1.3);
     const gap = 0.5;
     if (tS < W) {
       const p = e3(clamp(tS / W, 0, 1));
-      t.pitch = -0.44 * p; t.dy = 6.5 * p; t.neck = -0.3 * p; t.head = -0.12 * p; t.jaw = 0.45 * p; t.glow = 1 + 1.5 * p;
-      t.tail = -0.25 * p;
-      X[0].set(1.2 * p, 19 * p, 7 * p); X[1].set(-1.2 * p, 19 * p, 7 * p);
-      X[2].set(0, 0, 3 * p); X[3].set(0, 0, 3 * p);                // hind paws brace forward under the weight
+      t.pitch = -0.3 * p; t.dy = 5 * p; t.neck = 0.04 - 0.12 * p; t.glow = 1 + 1.5 * p; t.beacon = p; t.blade = -0.4 * p;
+      X[0].set(1.5 * p, 19 * p, 6 * p); X[1].set(-1.5 * p, 19 * p, 6 * p);
+      X[2].set(0, 0, 3 * p); X[3].set(0, 0, 3 * p);                // hind pads brace forward under the weight
     } else {
       const q = tS - W;
       const slam = q < 0.1 ? 1 - q / 0.1 * 0.2 : Math.exp(-(q - 0.1) * 3) * 0.8;
       const second = bump(q, gap - 0.05, gap + 0.35);
-      t.pitch = 0.09 * slam - 0.02 * second; t.dy = -3.2 * slam - 2.2 * second; t.neck = 0.18 * slam + 0.22 * second;
-      t.jaw = 0.2 + 0.5 * second; t.glow = 1 + 1.8 * second; t.sailShake = 0.04 * Math.max(slam, second);
+      t.pitch = 0.07 * slam - 0.02 * second; t.dy = -2.6 * slam - 3.4 * second; t.neck = 0.04 + 0.12 * slam + 0.1 * second;
+      t.glow = 1 + 1.2 * slam + 1.8 * second; t.sailShake = 0.04 * Math.max(slam, second); t.beacon = 1;
+      t.blade = 0.5 * second;
       X[0].set(0, 0, 2 * slam); X[1].set(0, 0, 2 * slam);
     }
   }
@@ -1514,21 +1626,33 @@ export class BossView implements ViewModule {
       this.applyCrane(r);
     } else {
       J.neck.rotation.set(c.neck, c.neckYaw, 0, 'YXZ');
-      J.head.rotation.set(c.head, 0, 0);
-      J.jaw.rotation.set(clamp(c.jaw, 0, 0.9), 0, 0);
+      this.augerA += c.auger * dt;
+      this.spinA += Math.min(22, c.spin) * dt;
+      if (this.augerA > 1e4) this.augerA %= PI * 2;
+      if (this.spinA > 1e4) this.spinA %= PI * 2;
+      J.auger.rotation.set(0, 0, this.augerA);
+      J.blade.rotation.set(lerp(GU_BLADE_UP, GU_BLADE_DOWN, clamp(c.blade, -0.8, 1.2)), 0, 0);
+      // carried plough rides 5 m up on its lift rams (reads over the titan); down on the road for PLOUGH RUN etc.
+      J.blade.position.y = GU.blade[1] + GU_BLADE_LIFT * (1 - clamp(c.blade, 0, 1));
       const shake = c.sailShake;
       J.sail.position.set(0, GU.sail[1] + c.sailRise, GU.sail[2]);
-      J.sail.rotation.set(Math.sin(time * 21) * shake * 0.5, 0, c.sailTilt + Math.sin(time * 17.3) * shake);
-      J.tail1.rotation.set(0.05 + Math.abs(c.tail) * 0.1, c.tail, 0, 'YXZ');
-      J.tail2.rotation.set(0.1, c.tail * 1.4, 0, 'YXZ');
-      const gh = r.groups.head;
-      gh.mat.userData.bt.uGlowMul.value = gh.glowBase * Math.max(0, c.glow) * dimK;
-      for (const k of GU_PLAIN) r.groups[k].mat.userData.bt.uGlowMul.value = r.groups[k].glowBase * dimK;
+      J.sail.rotation.set(Math.sin(time * 21) * shake * 0.5, 0, Math.sin(time * 17.3) * shake);
+      // spinner: spin about its shaft, tipped by sailTilt (a bent shaft wobbles while jammed)
+      J.spin.rotation.set(c.sailTilt, this.spinA, c.sailTilt * 0.5 * Math.sin(time * 3), 'YXZ');
+      const G2 = r.groups;
+      G2.head.mat.userData.bt.uGlowMul.value = G2.head.glowBase * Math.max(0, c.glow) * dimK;
+      // body glow = the beacon bar + blade marker lamps: a slow pulse at idle, a fast strobe in a tell
+      const bs = 0.5 + 0.5 * Math.sin(time * (1.6 + 12 * clamp(c.beacon, 0, 1)));
+      G2.body.mat.userData.bt.uGlowMul.value = G2.body.glowBase * (0.3 + 0.9 * bs * bs) * dimK;
+      // sail glow = the magazine crack seams: FRACTURE made visible on the weak point
+      G2.sail.mat.userData.bt.uGlowMul.value = G2.sail.glowBase * (0.05 + 2.4 * clamp(c.seam, 0, 1.6)) * dimK;
+      G2.legs.mat.userData.bt.uGlowMul.value = G2.legs.glowBase * dimK;
     }
     r.body.updateMatrix();
 
     // legs: gait foot targets + pose extras → two-bone IK in root space
     const g = this.gait;
+    const LI = r.legInst;
     GS.mk = this.deadT >= 0 ? 0 : this.mk;
     for (let i = 0; i < r.legs.length; i++) {
       const L = r.legs[i];
@@ -1546,6 +1670,15 @@ export class BossView implements ViewModule {
         _v2.set(px * pl * n2, 1.6 * n2, pz * pl * n2);
       } else _v2.copy(L.pole);
       solveLeg(_hip, _foot, L, _v2, _knee, _foot);   // Fo may alias F (read before write)
+      if (LI) {
+        // instanced machine legs: stamp pads stay level (a hint of toe-up while swinging), per-leg flash
+        segMatrix(_hip, _knee, _v2, _m); LI.upper.setMatrixAt(i, _m);
+        segMatrix(_knee, _foot, _v2, _m); LI.lower.setMatrixAt(i, _m);
+        _q.setFromEuler(_e.set(liftFrac * 0.12, 0, 0, 'YXZ'));
+        _m.compose(_foot, _q, _s.set(1, 1, 1)); LI.foot.setMatrixAt(i, _m);
+        (LI.flash.array as Float32Array)[i] = r.groups[L.name].mat.userData.bt.uFlash.value;
+        continue;
+      }
       segMatrix(_hip, _knee, _v2, L.upper.matrix);
       segMatrix(_knee, _foot, _v2, L.lower.matrix);
       const yaw = r.footYawOut ? Math.atan2(L.rest.x, L.rest.z) : 0;
@@ -1553,6 +1686,42 @@ export class BossView implements ViewModule {
       L.foot.matrix.compose(_foot, _q, _s.set(1, 1, 1));
       L.upper.matrixWorldNeedsUpdate = true; L.lower.matrixWorldNeedsUpdate = true; L.foot.matrixWorldNeedsUpdate = true;
     }
+    if (LI) {
+      LI.upper.instanceMatrix.needsUpdate = true; LI.lower.instanceMatrix.needsUpdate = true;
+      LI.foot.instanceMatrix.needsUpdate = true; LI.flash.needsUpdate = true;
+    }
+    if (r.grit) this.gullyGrit(r, r.grit);
+  }
+
+  /**
+   * IRON GULLY defeat: the grit load pours over the rim on the side whose ram failed first (FL: +x, front half) —
+   * chunk j leaves the rim at GU_GRIT_T0 + j·GU_GRIT_DT, arcs outward under gravity and comes to rest on the road
+   * (a heap building beside the wreck). Rim points follow the live chassis; hidden (0 draws) while alive.
+   */
+  private gullyGrit(r: BossRig, m: THREE.InstancedMesh): void {
+    const d = this.deadT;
+    if (d < GU_GRIT_T0) { if (m.visible) m.visible = false; return; }
+    m.visible = true;
+    const bm = r.body.matrix;
+    for (let j = 0; j < GU_GRIT_N; j++) {
+      const u = d - GU_GRIT_T0 - j * GU_GRIT_DT;
+      const h1 = hash01(j * 3 + 1), h2 = hash01(j * 3 + 2), h3 = hash01(j * 3 + 3);
+      if (u <= 0) { _s.set(0, 0, 0); _m.compose(_v0.set(0, 0, 0), _q.identity(), _s); m.setMatrixAt(j, _m); continue; }
+      // rim point (body-local): the +x wall's top edge, front two thirds, plus the front rim's +x half
+      if (j % 4 === 3) _v0.set(2 + h1 * 11, 14.8, 22.8);
+      else _v0.set(hopW(13.5) + 0.4, 14.8, -6 + h1 * 26);
+      _v0.applyMatrix4(bm);
+      const vx = j % 4 === 3 ? 2 + 3 * h2 : 5 + 6 * h2, vz = j % 4 === 3 ? 5 + 5 * h2 : (h3 - 0.3) * 4, vy = 1 + 3 * h3;
+      // time to reach the heap height (0.6 m): y0 + vy·t − g/2·t² = 0.6
+      const y0 = _v0.y - 0.6, tl = (vy + Math.sqrt(vy * vy + 2 * GU_GRIT_G * Math.max(0, y0))) / GU_GRIT_G;
+      const tt = u < tl ? u : tl;
+      _v1.set(_v0.x + vx * tt, u < tl ? _v0.y + vy * tt - 0.5 * GU_GRIT_G * tt * tt : 0.6, _v0.z + vz * tt);
+      const sc = 1.6 + 1.6 * h1;
+      _q.setFromEuler(_e.set(tt * (4 + 6 * h2), h3 * 6.28, tt * (3 + 5 * h1), 'YXZ'));
+      _m.compose(_v1, _q, _s.set(sc, sc, sc));
+      m.setMatrixAt(j, _m);
+    }
+    m.instanceMatrix.needsUpdate = true;
   }
 
   private applyCrane(r: BossRig): void {

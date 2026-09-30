@@ -180,6 +180,8 @@ function shade(c: THREE.Color, k: number): THREE.Color {
   return o.lerp(new THREE.Color(1, 1, 1), Math.min(1, k - 1));
 }
 function mix(a: THREE.Color, b: THREE.Color, t: number): THREE.Color { return a.clone().lerp(b, t); }
+/** relative luminance of a linear-space colour (Rec. 709 weights) */
+function lumOf(c: THREE.Color): number { return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
 
 // ─────────────────────────────── geometry builder ───────────────────────────────
 /** Skin binding: weight w on bone b, (1 − w) on bone a. */
@@ -1030,16 +1032,23 @@ function buildMolo(K: TitanColors = TITAN_COLORS.molo): Parts {
 // back along the neck, and the sails' cyan cross-spars. Indigo lives on the flanks, legs and face.
 function buildVoltkite(K: TitanColors = TITAN_COLORS.voltkite, custom = false): Parts {
   const S2 = C(K.secondary), B = C(K.belly), G = C(K.glow), A = C(K.accent);
+  // TITAN PASS (UX): a LIGHT unlock colourway (colourway 2 SLEET: #dfe6ee hide, #ffffff belly) read white-on-white on
+  // WHITE STACKS snow (gamecam mean luminance 184 vs the canonical 108; HARN shot tp_volt_colour2_III). It keeps its
+  // white belly, pale sail edge, cyan bolt / mane / spars, and takes a STEEL hide (its own secondary pulled toward
+  // storm slate) under a darker slate saddle + teal-slate sails, so the back the game camera sees is mid-dark with
+  // the cyan glow on top. Dark colourways (SODIUM LAMP) and the canonical palette are untouched.
+  const light = custom && lumOf(C(K.primary)) > 0.4;
+  const slate = C('#1d2838');
   // an unlock colourway's hide is lifted 0.4 of the way to its belly: SODIUM LAMP's near-black primary
   // (#2b2622) otherwise leaves 0.42 of the game-camera silhouette dark (bar <= 0.40, TITAN PASS §3.1)
-  const P = custom ? mix(C(K.primary), B, 0.4) : C(K.primary);
+  const P = light ? mix(S2, slate, 0.5) : custom ? mix(C(K.primary), B, 0.4) : C(K.primary);
   const nose = C('#14152e'), mouth = C('#4a2352'), tooth = C('#f4f2ff'), claw = C('#dfe3ff');
   const innerEar = custom ? mix(B, C('#ffffff'), 0.3) : C('#c9b8f2');
   const tipC = mix(G, C('#ffffff'), 0.6);
   // canonical belly lavender, reused on the back; an unlock colourway (custom) lifts its saddle and sail membranes
   // toward its glow so a dark palette (SODIUM LAMP) still reads at the game camera (TITAN PASS §3.1 bars)
-  const saddle = custom ? mix(B, G, 0.2) : B;
-  const membrane = custom ? mix(B, G, 0.38) : mix(B, P, 0.12);
+  const saddle = light ? mix(P, slate, 0.35) : custom ? mix(B, G, 0.2) : B;
+  const membrane = light ? mix(G, P, 0.7) : custom ? mix(B, G, 0.38) : mix(B, P, 0.12);
   const flankLo = mix(P, B, 0.35);
   const rig = new Rig();
   const body = new Geo(), eyes = new Geo(), mane = new Geo(), kite = new Geo();

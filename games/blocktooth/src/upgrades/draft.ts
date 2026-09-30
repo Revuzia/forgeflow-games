@@ -28,7 +28,8 @@
 //     tally.rerolls++.
 //   * banishCard: the slot is refilled in place with ONE roll of the same kind avoiding the other offered
 //     ids (rng.loot); empty refill → the offer shrinks; the last card of a 1-card offer is refused.
-//     Banishing the held card clears the hold and refunds its charge. tally.banishes++.
+//     Banishing the held card clears the hold and refunds its charge. tally.banishes++. TITAN PASS: refused on
+//     a card the titan already owns (banishOwned; see the D1 notes below).
 //   * lockCard: toggle. Setting spends a charge (lockLeft > 0 needed); unlocking refunds it; locking
 //     another card moves the hold (no refund, no extra charge). tally.locks counts charges in use.
 //   * pickUpgrade: an evolution deletes owned[base] and takes the base's place in `order`;
@@ -99,6 +100,13 @@ export const OFFER_SIZE = 3;
 //     is dropped at delivery and its LOCK charge refunded; a ready evolution fills a short offer before any padding
 //     (no draw); the rest is padded with OVERFLOW rewards, most-needed first (overflowOrder, pure function).
 //   * OVERFLOW rewards cannot be rerolled, banished or locked; picking one consumes the draft like a card.
+//   * BANISH is refused on a card you OWN (banishOwned; UI reason STR.draft.banishOwned). Banish = "out of the pool";
+//     for an owned card that froze it at its level while it kept its slot forever — a dead slot by player choice
+//     (seen in Chrome, TITAN PASS: substation_hum banished at LV 1 with the slots full). The other rule on the table,
+//     "banishing an owned card frees its slot", was rejected: keeping the card and opening a slot turns every BANISH
+//     charge (2, +RED TAPE) into a 9th / 10th card — more power, against the SLOT_CAP choice — and scrapping the card
+//     instead needs an un-apply path the upgrade engine does not have. Unowned cards (NEW, the SHARES A SLOT half,
+//     ONE-OFF cards, ready evolutions) banish as before. The gate bot never banishes, so GATE 2 is unchanged.
 //   * maxStacks (data/upgrades.ts, upgrades_v2.ts): with 8 slots a run's ~40 drafts must land on 8 cards, so 119
 //     cards whose every stack adds power (a stat effect, or a trigger with a STACK_SCALED_KEYS param) got +1 max
 //     stack (2→3 / 3→4 / 4→5; 1→2-3 for 5 single-stack cards with a scaling effect); u_rolling_closure and
@@ -519,13 +527,15 @@ export function hasPendingDraft(w: World): boolean {
  * BANISH `id` from the open offer: out of the pool for the rest of the run; its slot is refilled in place
  * with one roll of the same draft kind that avoids the other offered cards (rng.loot). Empty refill → the
  * offer is one card shorter. Returns the new offer, or null when not allowed (no open offer containing
- * `id`, no BANISH charge left, or it is the last card of a 1-card offer with nothing to refill it).
+ * `id`, no BANISH charge left, an OVERFLOW reward, a card the titan already OWNS (banishOwned), or it is the
+ * last card of a 1-card offer with nothing to refill it). A refusal changes nothing (charges, lists, rng).
  */
 export function banishCard(w: World, id: string): string[] | null {
   const U = w.upgrades;
   const offer = U.offer;
   if (!offer || offer.length === 0 || !offer.includes(id) || !((U.banishLeft ?? 0) > 0)) return null;
   if (isOverflowReward(id)) return null;                                // D1: an OVERFLOW reward cannot be banished
+  if (banishOwned(w, id)) return null;                                  // an owned card keeps its slot: never banished
   const chest = OFFER_IS_CHEST.get(U) ?? (U.chestDrafts > 0 && U.pendingDrafts === 0);
   const slot = offer.indexOf(id);
   if (!U.banished) U.banished = [];
@@ -546,6 +556,11 @@ export function banishCard(w: World, id: string): string[] | null {
   if (DELIVERED.get(U) === id) DELIVERED.delete(U);
   U.offer = next;
   return next;
+}
+
+/** TITAN PASS (UX): BANISH refuses `id` because the titan already owns it (header note at the top of this file). */
+export function banishOwned(w: World, id: string): boolean {
+  return (w.upgrades.owned[id] ?? 0) > 0;
 }
 
 /**

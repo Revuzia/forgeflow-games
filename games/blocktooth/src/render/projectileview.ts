@@ -8,7 +8,7 @@
 //   rocket      cream body, red nose, fins + tail flame + puffy smoke trail (HOPPER)
 //   shell       brass slug + long tracer                      (TORTOISE)
 //   mortar      olive finned round on its arc + thin smoke    (STILT MORTAR)
-//   plate       riveted scrap plate tumbling on its arc       (IRON GULLY)
+//   plate       steel road plate (tread, vermilion edge) flung off the spreader, tumbling (IRON GULLY)
 //   carLob      a parked toy car flung off the roof deck, tumbling end over end (PARKADE-6, v2 lane L7)
 //   hookDrop    hazard-striped crane hook on a cable          (CAISSON-4)
 //   seed        green spinning pods with a blossom tip        (BRIARWICK bloom turrets)
@@ -205,32 +205,40 @@ function mortarGeo(): THREE.BufferGeometry {
 
 function plateGeo(): THREE.BufferGeometry {
   const g = new Geo();
-  // irregular riveted plate in XZ (≈ 2 m across at unit scale), thickness 0.12 along Y
-  const N = 7;
-  const rad = [1.0, 0.86, 0.97, 0.8, 0.93, 0.84, 0.95];
-  const top: number[] = [], bot: number[] = [];
-  for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2 + 0.2;
-    top.push(Math.sin(a) * rad[i], 0.06, Math.cos(a) * rad[i]);
-    bot.push(Math.sin(a) * rad[i], -0.06, Math.cos(a) * rad[i]);
+  // IRON GULLY's PLATE SPREADER load: a steel road plate (a trench cover off a highway crew's trailer), ≈ 2 × 1.4
+  // at unit scale, 0.14 thick. Top: charcoal steel with a raised diamond tread, a vermilion border and cream /
+  // vermilion hazard bands on the short ends, two chrome lifting eyes. Underside: dark hull steel crossed by
+  // two vermilion stiffeners, so either face reads as a machine part while it tumbles (never a scrap of hide).
+  const HX = 1.0, HZ = 0.7, HY = 0.07;
+  g.box(0, 0, 0, HX, HY, HZ, '#aeb6bf');                                           // chrome-bright rolled edges
+  g.box(0, HY + 0.004, 0, HX - 0.1, 0.006, HZ - 0.1, '#46525e');                    // top deck
+  g.box(0, -HY - 0.004, 0, HX - 0.06, 0.006, HZ - 0.06, '#2f3a45');                 // underside
+  // vermilion border strips on the long edges of the top
+  for (const sz of [-1, 1]) g.box(0, HY + 0.01, sz * (HZ - 0.06), HX - 0.06, 0.01, 0.045, '#d8432a');
+  // diamond tread: raised lugs in a staggered grid
+  for (let i = 0; i < 7; i++) {
+    for (let j = 0; j < 5; j++) {
+      const x = -0.66 + i * 0.22 + (j % 2 ? 0.11 : 0);
+      const z = -0.46 + j * 0.23;
+      if (x > 0.72) continue;
+      g.box(x, HY + 0.018, z, 0.055, 0.012, 0.03, '#6f7a85');
+    }
   }
-  for (let i = 0; i < N; i++) {
-    const j = (i + 1) % N;
-    const rust = i === 2 || i === 3;
-    _c.set(rust ? '#9c5a3c' : '#c7ccd1'); const ct = _c.clone();
-    _c.set('#8e969e'); const cb = _c.clone();
-    _c.set(i % 2 ? '#eef2f6' : '#a9b1b8'); const ce = _c.clone();
-    g.tri(0, 0.06, 0, top[i * 3], top[i * 3 + 1], top[i * 3 + 2], top[j * 3], top[j * 3 + 1], top[j * 3 + 2], ct, 0, 0, 0);
-    g.tri(0, -0.06, 0, bot[i * 3], bot[i * 3 + 1], bot[i * 3 + 2], bot[j * 3], bot[j * 3 + 1], bot[j * 3 + 2], cb, 0, 0, 0);
-    g.tri(top[i * 3], top[i * 3 + 1], top[i * 3 + 2], bot[i * 3], bot[i * 3 + 1], bot[i * 3 + 2], bot[j * 3], bot[j * 3 + 1], bot[j * 3 + 2], ce, 0, 0, 0);
-    g.tri(top[i * 3], top[i * 3 + 1], top[i * 3 + 2], bot[j * 3], bot[j * 3 + 1], bot[j * 3 + 2], top[j * 3], top[j * 3 + 1], top[j * 3 + 2], ce, 0, 0, 0);
+  // hazard bands on the short ends (alternating cream / vermilion blocks)
+  for (const sx of [-1, 1]) {
+    for (let k = 0; k < 5; k++) {
+      const z = -0.52 + k * 0.26;
+      g.box(sx * (HX - 0.1), HY + 0.014, z, 0.07, 0.012, 0.12, k % 2 ? '#d8432a' : '#f2efe6');
+    }
   }
-  // rivets + a weld seam
-  for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2 + 0.2 + 0.45;
-    g.box(Math.sin(a) * 0.68, 0.085, Math.cos(a) * 0.68, 0.05, 0.03, 0.05, '#5d6670');
+  // lifting eyes (chrome loops) near the long edges
+  for (const sx of [-1, 1]) {
+    g.box(sx * 0.42, HY + 0.07, 0, 0.1, 0.05, 0.022, '#aeb6bf');
+    g.box(sx * 0.42 - 0.08, HY + 0.035, 0, 0.022, 0.03, 0.022, '#7d8792');
+    g.box(sx * 0.42 + 0.08, HY + 0.035, 0, 0.022, 0.03, 0.022, '#7d8792');
   }
-  g.box(0, 0.075, 0.05, 0.6, 0.018, 0.035, '#7d858d');
+  // underside stiffeners
+  for (const sx of [-1, 1]) g.box(sx * 0.45, -HY - 0.04, 0, 0.06, 0.035, HZ - 0.1, '#d8432a');
   return g.build(true);
 }
 

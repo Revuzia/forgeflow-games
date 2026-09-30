@@ -1,35 +1,36 @@
-// BLOCKTOOTH — IRON GULLY, the pale ridge-backed quadruped of WHITE STACKS (ai lane, CONTRACT §10).
+// BLOCKTOOTH — IRON GULLY, the HALVARD snow-clearance walker of WHITE STACKS (ai lane, CONTRACT §10): a road
+// gritter + V-plough on four hydraulic stamp legs — a machine, never a creature (owner rule 2026-09-29).
 // THREE-free, DOM-free, deterministic (world.rng.boss only).
 //
-// Body: body r20 · beaked head r8 (hp ×1.6, FRACTURE ×2.0) · scrap-plate sail r10 (FRACTURE ×2.5)
-// · 4 legs r6. Footwork: closes to 50–80 m at 9 m/s, always facing the titan.
+// Body: chassis r20 · blower turret r8 (hp ×1.6, FRACTURE ×2.0) · spreader spinner on the plate magazine r10
+// (sim part id 'sail', FRACTURE ×2.5) · 4 stamp legs r6. Footwork: closes to 50–80 m at 9 m/s, always facing the titan.
 // Attacks — §10's shapes, AUTHORED IN TITAN HEIGHTS (PC-02, same rule as CAISSON-4): H = the titan's
 // height at spawn (bossH), R = its radius (0.42 H); windups are fairWindup (0.35 s reaction + 0.15 s
 // acceleration + the shape's walk-out ÷ this titan's walk speed × ESCAPE_K[phase]). §10's metre sizes
 // left a Size V titan (H 60, ≈ 53 m/s) untouched by 94–100 % of tells. Size V numbers for H 60:
-//   P1  coneBreath  cone half 28°, reach 3.0 H (180 m) from the beak, windup from the cheaper walk-out
+//   P1  coneBreath  AUGER BLAST: cone half 28°, reach 3.0 H (180 m) from the blower nozzle, windup from the cheaper walk-out
 //                   (sideways d·sin 28° + R, or out past the reach), then 1.2 s active (dps); leaves
-//                   frost hazards (slow) along the sightline
-//       pawSlam     ring 0–1.1 H (66 m), then ring 1.1–2.0 H (66–120 m) 0.5 s later (both painted at
+//                   brine-slush hazards (kind 'frost', slow) along the sightline
+//       pawSlam     DOUBLE STAMP: ring 0–1.1 H (66 m), then ring 1.1–2.0 H (66–120 m) 0.5 s later (both painted at
 //                   once — different bands, so they read as a sequence). The inner windup is long
 //                   enough to walk straight out past BOTH rings (inner windup + 0.5 s ≥ the walk-out
 //                   of the outer band) — or dash through the ring.
 //   P2  + plateVolley  6–10 lobbed 'plate' projectiles with circle tells r 0.4 H around the titan's lead
 //                   (first on it, the rest ≥ 1 H apart inside 1.7 H), windup from r + R
-//       + ridgeCharge  lane w 0.7 H, long enough to pass the titan by 1.5 H (3–5.5 H), then it charges
+//       + ridgeCharge  PLOUGH RUN: lane w 0.7 H, long enough to pass the titan by 1.5 H (3–5.5 H), then it charges
 //                   down the lane at 1.25 H/s (contact dmg, side-swipe shove, flattens the city)
-//   P3  breath→slam combo (breathSlam: the slam rings are painted only after the breath ends);
+//   P3  WHITEOUT, the blast→stamp combo (breathSlam: the slam rings are painted only after the breath ends);
 //       plate volley density ×2
 //   SCRAP FLICK (anti dash-spam, no attack id — it is a reflex, not a procedure): a dash is answered
-//                   by one plate flicked from the sail to just past the dash end (r 0.5 H), windup a fair
+//                   by one plate flicked from the spinner to just past the dash end (r 0.5 H), windup a fair
 //                   walk-out from dead centre (never tighter, even in P3). P1 answers only a hot dash
 //                   (a second one inside ≈ 2.5 s); P2+ any dash, at most every 8 / 6 / 5 s ÷ dash heat (≤ 2×),
 //                   and every dash out of live boss paint (≥ 0.8 s apart; bosses/index.ts watchDash).
 //                   A bruise: base 8 (≈ 130–195 at Size V).
 // Measured (fullrun-policy bot port, god, 5 seeds, LV 34): tells landed VOLT-KITE 4.3 %, MOLO 10.8 %.
-// No single hit takes more than HIT_CAP of the titan's max HP (a paw slam was 1 080 at Size V — more
+// No single hit takes more than HIT_CAP of the titan's max HP (a DOUBLE STAMP was 1 080 at Size V — more
 // than a whole VOLT-KITE — so once tells can land, a lapse must be a bruise, not a death).
-// Default subtitle "CRACK THE SAIL — BUILD FRACTURE" (data/bosses.ts).
+// Default subtitle "CRACK THE SPINNER - BUILD FRACTURE" (data/bosses.ts).
 
 import type { BossState, World } from '../../core/types.ts';
 import { TAU, clamp, dist, dist2 } from '../../core/math.ts';
@@ -89,8 +90,8 @@ export function create(w: World): BossState {
   return b;
 }
 
-/** Beak tip (breath origin), world XZ. */
-function beak(b: BossState): { x: number; z: number } {
+/** Blower nozzle tip (AUGER BLAST origin), world XZ. */
+function nozzle(b: BossState): { x: number; z: number } {
   return localToWorld(b, 0, 40, TMP);
 }
 
@@ -142,7 +143,7 @@ function aim(w: World, b: BossState, jitter: number, windup: number): number {
 
 function castBreath(w: World, b: BossState): void {
   const T = w.titan, H = bossH(w, b);
-  const o = beak(b);
+  const o = nozzle(b);
   const ox = o.x, oz = o.z;
   const r = BREATH.rH * H, d = dist(ox, oz, T.x, T.z);
   // walk-out: the cheaper of sideways out of the sightline and outward past the reach
@@ -155,7 +156,7 @@ function castBreath(w: World, b: BossState): void {
     onFire: (w2) => {
       if (!b.alive) return;
       b.data.breath = 1;
-      // frost patches settle along the sightline (slow only — they mark where the breath went)
+      // brine-slush patches settle along the sightline (slow only — they mark where the blast went)
       const fx = Math.sin(dir), fz = Math.cos(dir);
       const Bd = w2.city.bounds;
       for (let k = 0; k < 4; k++) {

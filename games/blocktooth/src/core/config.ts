@@ -70,11 +70,11 @@
 //     every hit capped at 55 % of the titan's max HP (caisson4.ts / irongully.ts HIT_CAP). CAISSON-4:
 //     hookLane 486/567/729 · P1 hookDrop 486 · trolley drop –/265/340 · dash-follow 130/151/194 ·
 //     boomSweep –/643/826 · legStomp –/–/1021 · IRON GULLY:
-//     paw slam 972 (inner) · plate 486/567/729 · scrap flick 130/151/194 · ridge charge –/1323/1701
+//     DOUBLE STAMP 972 (inner) · plate 486/567/729 · scrap flick 130/151/194 · PLOUGH RUN –/1323/1701
 //     (titan V hp: VOLT 810 · BRIAR 1080 · MOLO 1260 (armor 10) · HEARTH 1530 (armor 20), before upgrades)
 //   GEOMETRY (PC-02): every boss tell is authored in TITAN HEIGHTS H (bosses/index.ts bossH), not §10's
 //     metres — hook drop r .55H · hook lane w .5H · winch oval 1.4H×1.0H · boom 2.6H · stomp rig+1.0H ·
-//     paw rings 1.1H/2.0H · breath 3.0H · plates r .4H · charge lane w .7H. Windups are fairWindup:
+//     stamp rings 1.1H/2.0H · auger blast 3.0H · plates r .4H · plough lane w .7H. Windups are fairWindup:
 //     0.35 s reaction + 0.15 s accel + walk-out ÷ the titan's walk speed × ESCAPE_K 1.1/1.0/0.9 per phase.
 //     Anti dash-spam: a dash is answered by a drop just past its end (walkable, k 1) — P1 only a hot dash;
 //     P2+ every dash out of live boss paint too (bosses/index.ts watchDash).
@@ -454,15 +454,15 @@ export function viewFootprint(pitchDeg: number, aspect = 16 / 9): { n: number; f
 
 /** BOSS FRAMING: while a boss is alive the default-zoom view keeps the boss rig, every live boss
  *  telegraph AND the titan in frame (16:9): first by widening the auto distance (never below the
- *  curve); when the fight is lopsided (a paw-slam ring 2 H around a boss 60 m away, a 3 H breath cone)
+ *  curve); when the fight is lopsided (a DOUBLE STAMP ring 2 H around a boss 60 m away, a 3 H AUGER BLAST cone)
  *  the look target also slides toward the fight's centre, which frames the same paint from far closer
- *  than widening alone (a paw slam needed the 2× cap without the slide). Measured at LV 37, curve 617 m
+ *  than widening alone (a DOUBLE STAMP needed the 2× cap without the slide). Measured at LV 37, curve 617 m
  *  (_harness/scratch/view/bossframe.py, tell 70–92 % through its windup, every framed point in view):
- *  paw slam 659 m · breath cone 618 m · boom sweep, leg stomp, winch, ridge charge 617 m (the curve).
+ *  DOUBLE STAMP 659 m · AUGER BLAST cone 618 m · boom sweep, leg stomp, winch, PLOUGH RUN 617 m (the curve).
  *  (At the round-1 362 m curve the same attacks needed 428–647 m.)
  *  margin — × the tightest fit (screen-edge breathing room + the corner HUD panels + the camera's lead)
  *  topNdc — nothing framed above this height of the frame (ndc y): the boss nameplate + hint bar sit
- *           across the top ~20 % of the screen and hid the titan's head in a paw-slam shot
+ *           across the top ~20 % of the screen and hid the titan's head in a DOUBLE STAMP shot
  *  maxMul — never wider than this × the curve (a boss walking in from 230 m, a far chase)
  *  The widening is HELD with hysteresis (stepFrameHold — generic, the gatekeeper / miniboss fights
  *  reuse it with the same constants): it widens at once to whatever the fight needs (the rig follows at
@@ -850,8 +850,14 @@ export const ENEMY_HP_PER_MIN = 0.18;
  *  grows ×45 from Size I to V while the minute ramp only gives ×2.5, so without this every heavy
  *  died before its first shot at Size IV–V (measured: 0–4 hostile paints per 100 s). */
 export const ENEMY_HP_RANK_MUL: readonly number[] = [1, 1, 1.4, 2.6, 4.5];
-/** × hostile damage by the titan's rank, on top of RANKS[rank].hpMul (§5.4). */
-export const ENEMY_DMG_RANK_MUL: readonly number[] = [1, 1, 1, 1.8, 1.8];
+/** × hostile damage by the titan's rank, on top of RANKS[rank].hpMul (§5.4).
+ *  Size IV–V 1.8 → 2.4 (BAL, 2026-09-29, GATE 2 walkover guard): with 1.8 the harness bot died in 0 of 12 runs on
+ *  both metas. Swept (lane BAL, _harness/scratch/fin/BAL): boss knobs, BOSS_SPAWN_MUL 0.7, aim lead IV .75/.9, RAMROD
+ *  cadence 45 s × 5, spawn budget IV 2.6/3.2 and pre-boss-only pressure (this × up to 3.4 with BOSS_SPAWN_MUL .25–.35)
+ *  gave 0 full-meta deaths; the bot only dies to add fire at Size IV (a VOLT-KITE rammed/shelled before the city
+ *  boss; a MOLO shelled + breathed in IRON GULLY's fight). 2.2 → 0 deaths, 2.3 / 2.4 → 1 + 1. The player-like set
+ *  sits at the B11 floor with it (P-human 82 / 96 at 2.4, 76 at 2.3 — the per-seed outcome is chaotic). */
+export const ENEMY_DMG_RANK_MUL: readonly number[] = [1, 1, 1, 2.4, 2.4];
 /** Engagement reach grows with the titan: effective range = EnemyDef.range + this × titan height (m).
  *  A 60 m titan is a target a tank can hit from the edge of the screen; without it the heavies
  *  crawled 20 s from the spawn ring before they could fire and the titan had eaten its way off. */

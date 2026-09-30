@@ -19,22 +19,27 @@
 // (upgrades/draft.ts cardSlot): NEW — TAKES A SLOT (n/8) · UPGRADE LV a → b · SHARES A SLOT · ONE-OFF — NO SLOT.
 // OVERFLOW rewards (slots full, nothing left to deepen) are OFF THE RECORD cards; they cannot be banished, locked
 // or rerolled, and an all-overflow draft swaps the header for NOTHING NEW TO FILE.
+// TITAN PASS (UX): BANISH is refused on a card you already own (upgrades/draft.ts banishOwned) — its ✕ corner is
+// greyed with the reason as its tooltip, and a press (X · hold pad Y · ✕) wiggles it and flashes the stamp
+// CAN'T BANISH — YOU OWN IT on the card for REFUSE_NOTE_MS.
 
 import type { Input } from '../core/input.ts';
-import type { UpgradeDef, World } from '../core/types.ts';
+import type { OverflowRewardId, UpgradeDef, World } from '../core/types.ts';
 import type { DraftCtx, DraftResultV2, GlyphId } from '../v2types.ts';
 import { DRAFT_V2 } from '../core/config.ts';
 import { UPGRADE_BY_ID } from '../data/upgrades.ts';
 import { TITANS } from '../data/titans.ts';
 import { STR } from '../data/strings.ts';
 import { SCREENS } from '../data/strings_screens.ts';
-import { OVERFLOW, SLOT_CAP, cardSlot, deliveredHold, isOverflowReward, recipeHint, slotsFull, slotsUsed } from '../upgrades/draft.ts';
+import { OVERFLOW, SLOT_CAP, banishOwned, cardSlot, deliveredHold, isOverflowReward, recipeHint, slotsFull, slotsUsed } from '../upgrades/draft.ts';
 import { familyColor, glyphSvg, iconFor } from './icons.ts';
 import {
   type ModalSession, type UiPress, clearEl, div, el, fmt, keyChip, onTap, pulse, runModal, wrapIndex, flashesReduced,
 } from './dom.ts';
 
 type Reopen = 'banish' | 'lock' | null;
+/** how long the CAN'T BANISH — YOU OWN IT stamp stays on a card after a refused press */
+const REFUSE_NOTE_MS = 1800;
 
 export class DraftScreen {
   private readonly input: Input;
@@ -51,6 +56,8 @@ export class DraftScreen {
   private readonly rerollLeft: HTMLElement;
   private cards: HTMLElement[] = [];
   private ids: string[] = [];
+  /** per offered slot: the titan already owns this card (BANISH refused, upgrades/draft.ts banishOwned) */
+  private owned: boolean[] = [];
   private sel = 0;
   private ctx: DraftCtx = { rerollsLeft: 0, banishLeft: 0, lockLeft: 0, locked: null, newIds: [] };
   private openedAt = 0;
@@ -112,6 +119,7 @@ export class DraftScreen {
     const ids = offer.filter((id) => !!id).slice(0, 3);
     const prevIds = this.lastIds;
     this.ids = ids;
+    this.owned = ids.map((id) => banishOwned(w, id));
     this.sel = reopen ? Math.max(0, Math.min(ids.length - 1, this.lastSel)) : 0;
     const U = w.upgrades;
     const chest = U.pendingDrafts <= 0 && U.chestDrafts > 0;
@@ -268,6 +276,7 @@ export class DraftScreen {
     if (!s || s.done || i < 0 || i >= this.ids.length) return;
     if (performance.now() - this.openedAt < DRAFT_V2.banishArmS * 1000) return;
     const card = this.cards[i];
+    if (this.owned[i]) { this.refuseOwned(i); return; }
     if (this.ctx.banishLeft <= 0 || this.ids.length <= 1 || isOverflowReward(this.ids[i])) { this.refuse(card, '.bt2-corner.b'); return; }
     this.cancelHold();
     this.select(i);
@@ -304,10 +313,25 @@ export class DraftScreen {
     pulse(b ?? card, [{ transform: 'translateX(-8%)' }, { transform: 'translateX(8%)' }, { transform: 'none' }], 200);
   }
 
+  /** BANISH refused on an owned card: the ✕ wiggles and the card flashes its reason stamp. */
+  private refuseOwned(i: number): void {
+    const card = this.cards[i];
+    if (!card) return;
+    this.cancelHold();
+    this.refuse(card, '.bt2-corner.b');
+    const note = card.querySelector('.bt3-refusenote') as HTMLElement | null;
+    if (!note) return;
+    note.classList.add('show');
+    const tok = String(performance.now());
+    note.dataset.tok = tok;
+    setTimeout(() => { if (note.dataset.tok === tok) note.classList.remove('show'); }, REFUSE_NOTE_MS);
+  }
+
   // ── pad-Y hold → BANISH ──
   private startHold(): void {
     if (!this.session || this.session.done || !this.cards.length) return;
     if (performance.now() - this.openedAt < DRAFT_V2.banishArmS * 1000) return;   // mash guard
+    if (this.owned[this.sel]) { this.refuseOwned(this.sel); return; }
     if (this.ctx.banishLeft <= 0 || this.ids.length <= 1 || isOverflowReward(this.ids[this.sel])) { this.refuse(this.cards[this.sel], '.bt2-corner.b'); return; }
     this.hold = { t0: performance.now(), i: this.sel };
     this.cards[this.sel].classList.add('is-holding');
@@ -355,7 +379,7 @@ export class DraftScreen {
     const slotTxt = slot === 'new' ? `${STR.draft.slotNew} (${Math.round(slotsUsed(w)) + 1}/${SLOT_CAP})`
       : slot === 'upgrade' ? `${STR.draft.slotUpgrade} LV ${owned} → ${next}`
         : slot === 'shared' ? STR.draft.slotShared
-          : slot === 'free' ? slotFreeText()
+          : slot === 'free' ? STR.draft.slotFree
             : '';
     if (slotTxt) {
       const st = div(`bt3-slottab s-${slot}`, tabs, slotTxt);
@@ -366,8 +390,10 @@ export class DraftScreen {
     // v2 corner buttons (focused card): ✕ BANISH · ▣ LOCK — plus the pad-hold fill ring
     const corners = div('bt2-corners', card);
     const bb = el('button', 'bt2-corner b', '✕');
-    bb.type = 'button'; bb.tabIndex = -1; bb.title = SCREENS.draft.banish;
-    bb.classList.toggle('off', this.ctx.banishLeft <= 0);
+    const mine = banishOwned(w, id);
+    bb.type = 'button'; bb.tabIndex = -1; bb.title = mine ? STR.draft.banishOwned : SCREENS.draft.banish;
+    bb.classList.toggle('off', this.ctx.banishLeft <= 0 || mine);
+    bb.classList.toggle('owned', mine);
     corners.appendChild(bb);
     const lb = el('button', 'bt2-corner l', '▣');
     lb.type = 'button'; lb.tabIndex = -1; lb.title = SCREENS.draft.lock;
@@ -378,6 +404,7 @@ export class DraftScreen {
     bb.addEventListener('mousedown', (ev) => { ev.preventDefault(); ev.stopPropagation(); });
     lb.addEventListener('mousedown', (ev) => { ev.preventDefault(); ev.stopPropagation(); });
     div('bt2-holdring', card);
+    if (mine) div('bt3-refusenote', card, STR.draft.banishOwnedShort).setAttribute('aria-live', 'polite');
 
     const paper = div('bt-dossier-paper', card);
     div('bt-dossier-stamp', paper, evo ? SCREENS.draft.evoStamp : STR.draft.rarity[rarity]);
@@ -450,7 +477,7 @@ export class DraftScreen {
   }
 
   /** D1 OVERFLOW reward card (never owned, no slot): OFF THE RECORD stamp, STR.draft.overflow name / desc. */
-  private buildOverflowCard(id: string, i: number): HTMLElement {
+  private buildOverflowCard(id: OverflowRewardId, i: number): HTMLElement {
     const card = el('button', 'bt-dossier r-common ovf');
     card.type = 'button';
     card.tabIndex = -1;
@@ -468,7 +495,7 @@ export class DraftScreen {
     const txt = overflowText(id);
     const nameRow = div('bt2-dname', paper);
     const g = el('span', 'bt2-glyph dg');
-    g.innerHTML = glyphSvg(OVF_GLYPH[id] ?? 'plus', OVF_COLOR[id] ?? '#ffd166');
+    g.innerHTML = glyphSvg(OVF_GLYPH[id], OVF_COLOR[id]);
     nameRow.appendChild(g);
     div('bt-dossier-name', nameRow, txt.name);
     div('bt-dossier-rule', paper);
@@ -483,17 +510,14 @@ export class DraftScreen {
 }
 
 // ── D1 OVERFLOW rewards: glyph, colour, text ({n} = the rounded percentage from upgrades/draft.ts OVERFLOW) ──
-const OVF_GLYPH: Record<string, GlyphId> = { ovf_sick_day: 'bandage', ovf_hot_tip: 'megaphone', ovf_hard_hat: 'plate' };
-const OVF_COLOR: Record<string, string> = { ovf_sick_day: '#ff6f5e', ovf_hot_tip: '#ffd166', ovf_hard_hat: '#4fb3b0' };
-const OVF_PCT: Record<string, number> = {
+const OVF_GLYPH: Record<OverflowRewardId, GlyphId> = { ovf_sick_day: 'bandage', ovf_hot_tip: 'megaphone', ovf_hard_hat: 'plate' };
+const OVF_COLOR: Record<OverflowRewardId, string> = { ovf_sick_day: '#ff6f5e', ovf_hot_tip: '#ffd166', ovf_hard_hat: '#4fb3b0' };
+const OVF_PCT: Record<OverflowRewardId, number> = {
   ovf_sick_day: OVERFLOW.sickDayHeal, ovf_hot_tip: OVERFLOW.hotTipUproar, ovf_hard_hat: OVERFLOW.hardHatShield,
 };
-function overflowText(id: string): { name: string; desc: string } {
-  const t = (STR.draft.overflow as Record<string, { name: string; desc: string } | undefined>)[id] ?? { name: id.toUpperCase(), desc: '' };
-  return { name: t.name, desc: fmt(t.desc, { n: Math.round(100 * (OVF_PCT[id] ?? 0)) }) };
-}
-function slotFreeText(): string {
-  return STR.draft.slotFree;
+function overflowText(id: OverflowRewardId): { name: string; desc: string } {
+  const t = STR.draft.overflow[id];
+  return { name: t.name, desc: fmt(t.desc, { n: Math.round(100 * OVF_PCT[id]) }) };
 }
 
 const SLOT_CSS = `
@@ -519,6 +543,15 @@ const SLOT_CSS = `
 .bt-dossier.ovf .bt-dossier-paper { background: repeating-linear-gradient(135deg, #fbf5e6 0 calc(var(--u) * 1.4), #f3e6c4 calc(var(--u) * 1.4) calc(var(--u) * 2.8)); }
 .bt-dossier.ovf .bt-dossier-stamp { color: var(--red); border-color: var(--red); }
 .bt-dossier.ovf .bt2-corners { display: none !important; }
+.bt2-corner.b.owned { text-decoration: line-through; }
+.bt3-refusenote {
+  position: absolute; left: 6%; right: 6%; top: 38%; z-index: 6; pointer-events: none; opacity: 0;
+  transform: rotate(-6deg) scale(.9); transition: opacity .12s, transform .12s;
+  font-family: var(--f-display); font-size: calc(var(--u) * 1.15); line-height: 1.05; letter-spacing: .04em; text-align: center;
+  color: var(--cream); background: var(--red); border: calc(var(--u) * .2) solid var(--ink); padding: calc(var(--u) * .35) calc(var(--u) * .5);
+  box-shadow: calc(var(--u) * .25) calc(var(--u) * .25) 0 var(--ink);
+}
+.bt3-refusenote.show { opacity: 1; transform: rotate(-6deg) scale(1); }
 .bt-draft.ovf .bt-draft-title { color: var(--gold); text-shadow: calc(var(--u) * .4) calc(var(--u) * .4) 0 var(--red); }
 `;
 let slotCssOn = false;

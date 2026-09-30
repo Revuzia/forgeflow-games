@@ -42,6 +42,10 @@
 //   1c "LV 25, nothing started → no late call, no nudge" → no late call, START CALL ×N; 4 LOCK dedupe and 5 BANISH
 //   empty-refill setups banish instead of maxing (same 4 / 3-card pools, slots free); 8 "one draw per offered card"
 //   → per offered CARD (OVERFLOW padding is drawless, asserted in 12).
+//   Assert REPLACED by the finish pass (lane UX rule change, applied by Gate): 12 "banish refill while full keeps 3 cards,
+//   none new" banished an OWNED card, which BANISH now refuses (upgrades/draft.ts banishOwned) -> (a) BANISH on an owned
+//   card is refused with charge / banished / tally / offer / rng untouched + (b) the same refill rule on the unowned
+//   SHARES-A-SLOT half while full (3 cards, none new, one charge spent).
 
 import type { TitanId, UpgradeDef, World } from '../src/core/types.ts';
 
@@ -891,17 +895,31 @@ section('12. D1 BUILD SLOTS (FEATURES_V2 §7.7)');
         `a held card that would need a new slot is dropped, LOCK refunded (${o2.join(',')}; lockLeft ${L} → ${w.upgrades.lockLeft})`);
     } else ok(false, `setup: need 2 new cards in the offer (${o.join(',')})`);
   }
-  // banish refill while full keeps OFFER_SIZE (padding), never a new card
+  // banish while full. TITAN PASS (UX): BANISH refuses a card the titan OWNS (upgrades/draft.ts banishOwned: banished, it
+  // froze at its level in a slot it could never leave). Replaces "banish refill while full keeps 3 cards, none new", which
+  // banished an OWNED card: (a) that is now refused with nothing moved; (b) the refill rule is kept on the one unowned card a
+  // full draft can show, the SHARES-A-SLOT half of a started recipe.
   {
     const w = fresh('hearthback', 409);
-    for (const r of EVOLUTIONS) w.upgrades.banished.push(r.id);
-    const plain = plainOf(w, SLOT_CAP);
+    const r = EVOLUTIONS.find((x) => { const u = UPGRADE_BY_ID[x.id]; return (!u.titan || u.titan === 'hearthback') && !u.locked && isEligible(w, UPGRADE_BY_ID[x.base]) && isEligible(w, UPGRADE_BY_ID[x.with]); })!;
+    for (const e of EVOLUTIONS) if (e.id !== r.id) w.upgrades.banished.push(e.id);
+    applyUpgrade(w, r.base);
+    const plain = plainOf(w, SLOT_CAP - 1);
     for (const id of plain) applyUpgrade(w, id);
-    for (const u of UPGRADES) if (isEligible(w, u) && !plain.includes(u.id)) w.upgrades.banished.push(u.id);
+    ok(slotsFull(w) && cardSlot(w, r.with) === 'shared', `setup: slots full (${slotsUsed(w)}), ${r.with} shares ${r.base}'s slot`);
+    for (const u of UPGRADES) if (isEligible(w, u) && !plain.includes(u.id) && u.id !== r.base && u.id !== r.with) w.upgrades.banished.push(u.id);
     w.upgrades.pendingDrafts = 1; w.upgrades.banishLeft = 5;
     const o = rollOffer(w);
-    const b = banishCard(w, o.find((id) => !isOverflowReward(id))!);
-    ok(!!b && b.length === OFFER_SIZE && b.every((id) => cardSlot(w, id) !== 'new'), `banish refill while full keeps ${OFFER_SIZE} cards, none new (${o.join(',')} → ${b ? b.join(',') : 'null'})`);
+    const own = o.find((id) => (w.upgrades.owned[id] ?? 0) > 0)!;
+    const bl = w.upgrades.banishLeft, bn = w.upgrades.banished.length, tb = w.tally.banishes;
+    const c = countLoot(w);
+    ok(!!own && DR.banishOwned(w, own) && banishCard(w, own) === null && w.upgrades.banishLeft === bl && w.upgrades.banished.length === bn &&
+      w.tally.banishes === tb && w.upgrades.offer === o && c.n === 0,
+      `BANISH on an OWNED card is refused: charge, banished list, tally, offer and rng untouched (${own} in ${o.join(',')})`);
+    w.upgrades.offer = [r.with, ...o.filter((id) => id !== r.with && !isOverflowReward(id)).slice(0, OFFER_SIZE - 1)];
+    const b = banishCard(w, r.with);
+    ok(!!b && b.length === OFFER_SIZE && !b.includes(r.with) && b.every((id) => cardSlot(w, id) !== 'new') && w.upgrades.banishLeft === bl - 1,
+      `banishing the unowned shared half while full refills in place: ${OFFER_SIZE} cards, none new (${b ? b.join(',') : 'null'})`);
   }
   // START CALL: off once a half is owned, off when slots are full
   {

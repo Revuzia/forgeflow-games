@@ -17,8 +17,12 @@
 //          other titans keep the turret plant above.
 //   spore  healing spore cloud — soft green haze with a dotted swirling rim, translucent puffs
 //          drifting round the edge and motes rising.
-//   frost  ice zone — pale fern-cracked decal with a bright rim and ink edge (reads on snow),
+//   frost  ice zone (titan cards) — pale fern-cracked decal with a bright rim and ink edge (reads on snow),
 //          faceted ice crystals that grow in and melt away.
+//   frost  IRON GULLY's AUGER BLAST (owner 'boss') — BRINE SLUSH, not ice: a dirty grey-brown wet slush decal
+//          with ochre grit flecks, a dark meltwater edge and a slow brine sheen; slush lumps heaped where the
+//          spray landed; while the blast runs (the patch's first ~1.3 s) a stream of brine droplets and grit
+//          arcs from the walker's blower intake (boss root + 40 m forward, 38 m up) onto each patch.
 //   fire / oil — generic: scorch + flickering flame tongues / dark slick with an iridescent sheen.
 //   paint  STENCIL-1's WET PAINT (GATEKEEPERS §3.4, lane K2a) — a glossy white road-paint coat with a drifting
 //          wet sheen and a dashed safety-yellow border, an ink hairline so it reads on snow; it dulls as it
@@ -58,6 +62,10 @@ const END_FADE_S = 0.6;
 const PINK_FALLBACK = '#ff4fa0';
 const SHAPE_ID = { circle: 0, ring: 1, cone: 2, lane: 3, oval: 4, capsule: 5 } as const;
 const MAX_TURRETS = 32;
+/** IRON GULLY brine spray: how long a fresh slush patch is fed by the auger stream (the AUGER BLAST's 1.2 s active
+ *  plus a short tail), and the blower intake height on the rig (bossview GU: drum centre ≈ 38 m) */
+const SPRAY_S = 1.3;
+const IG_INTAKE_Y = 38;
 /** TITAN PASS pods (CONTRACT §8 BRIARWICK): POP-UP PARK volley pods fly this long before they land (fx draws the
  *  arc meanwhile); the husk splits into the blossom over POD_OPEN_S once ripe; halo radius in body heights */
 const VOLLEY_FLIGHT_S = 0.3;
@@ -182,7 +190,41 @@ vec4 paint(vec2 L, float sd, float R, float t, float seed, float aa, float life)
   return vec4(col, 0.97 * inside);
 }`,
   frost: /* glsl */ `
-vec4 paint(vec2 L, float sd, float R, float t, float seed, float aa, float life) {
+// IRON GULLY (hostile frost): brine slush thrown by the auger — wet grey-brown slush, grit flecks, meltwater edge
+vec4 slushPaint(vec2 L, float sd, float R, float t, float seed, float aa) {
+  float n = vnoise(L / (R * 0.3) + seed * 11.0);
+  float e = sd + (n - 0.5) * R * 0.22;
+  float inkW = max(1.5 * aa, uPx * 1.3);
+  float inside = 1.0 - smoothstep(-aa, aa, e);
+  float ink = (1.0 - inside) * (1.0 - smoothstep(inkW - aa, inkW + aa, e));
+  if (inside + ink <= 0.001) return vec4(0.0);
+  float m = vnoise(L / (R * 0.11) + seed * 3.0);
+  vec3 slush = mix(lin(vec3(0.44, 0.43, 0.41)), lin(vec3(0.66, 0.65, 0.62)), smoothstep(0.25, 0.8, m));
+  // splash streaks radiating from the centre (the spray hit it hard)
+  float ang = atan(L.x, L.y);
+  float streak = stripe(ang * 1.5915 * 4.0 + vnoise(L / (R * 0.5)) * 1.5 + seed * 7.0, 0.12) * smoothstep(0.15, 0.9, length(L) / R);
+  slush = mix(slush, lin(vec3(0.34, 0.33, 0.32)), streak * 0.55);
+  // grit flecks: ochre + dark granules on a fine cell grid
+  vec2 cs = vec2(max(R * 0.06, uPx * 3.2));
+  vec2 cell = floor(L / cs);
+  vec2 fc = fract(L / cs) - 0.5 - (hash2(cell + seed) - 0.5) * 0.6;
+  float hq = hash1(cell + seed * 1.7);
+  float gr = 1.0 - smoothstep(0.16, 0.24, length(fc));
+  if (hq > 0.72) slush = mix(slush, lin(vec3(0.66, 0.44, 0.23)), gr);
+  else if (hq > 0.55) slush = mix(slush, lin(vec3(0.16, 0.16, 0.17)), gr * 0.8);
+  // a slow brine sheen drifting across the wet surface
+  float sheen = smoothstep(0.72, 0.95, vnoise(L / (R * 0.22) + vec2(t * 0.12, -t * 0.08)));
+  slush = mix(slush, lin(vec3(0.86, 0.9, 0.93)), sheen * 0.45);
+  // dark meltwater edge inside the ink
+  float edgeW = max(3.0 * aa, uPx * 2.6);
+  float edge = inside * smoothstep(-edgeW - R * 0.06, -aa, e);
+  vec3 col = mix(slush, lin(vec3(0.24, 0.27, 0.3)), edge * 0.75);
+  float a = mix(0.86, 0.95, edge);
+  col = mix(col, uInk, ink);
+  a = mix(a * inside, 0.6, ink);
+  return vec4(col, a);
+}
+vec4 icePaint(vec2 L, float sd, float R, float t, float seed, float aa) {
   float n = vnoise(L / (R * 0.28) + seed * 11.0);
   float e = sd + (n - 0.5) * R * 0.14;
   float inkW = max(1.5 * aa, uPx * 1.3);
@@ -205,6 +247,10 @@ vec4 paint(vec2 L, float sd, float R, float t, float seed, float aa, float life)
   col = mix(col, uInk, ink);
   a = mix(a * inside, 0.6, ink);
   return vec4(col, a);
+}
+// one return per function: an early return ahead of the ice path left ANGLE/D3D warning X4000 (f_paint)
+vec4 paint(vec2 L, float sd, float R, float t, float seed, float aa, float life) {
+  return vD.w > 0.5 ? slushPaint(L, sd, R, t, seed, aa) : icePaint(L, sd, R, t, seed, aa);
 }`,
   spore: /* glsl */ `
 vec4 paint(vec2 L, float sd, float R, float t, float seed, float aa, float life) {
@@ -644,6 +690,13 @@ function crystalGeo(): THREE.BufferGeometry {
     (ring, seg) => (ring >= 3 ? '#f4fbff' : seg % 2 ? '#bfe6ff' : '#9fd4f5'), 0.3);
   return g.build(true);
 }
+/** IRON GULLY brine slush lump (unit radius, squashed): wet grey slush with ochre grit and dark granules */
+function slushGeo(): THREE.BufferGeometry {
+  const g = new Geo();
+  g.rock(1, 1, 0.28, 7, 0.42, (ny, i) => (ny > 0.5 ? (i % 5 === 0 ? '#a8703a' : i % 3 === 0 ? '#d9dde0' : '#b9bdbf')
+    : ny > -0.1 ? (i % 4 === 0 ? '#86552a' : '#8f918f') : '#5d6063'));
+  return g.build(true);
+}
 function bubbleGeo(): THREE.BufferGeometry {
   const g = new Geo();
   g.rock(1, 1, 0.08, 2, 1, (ny) => (ny > 0.35 ? '#ffd166' : ny > -0.2 ? '#ffb13b' : '#ff7a2e'));
@@ -749,6 +802,8 @@ export class HazardView implements ViewModule {
   private readonly husks: IM;
   private readonly podPetals: IM;
   private readonly crystals: IM;
+  /** IRON GULLY brine slush lumps (hostile frost) */
+  private readonly slush: IM;
   private readonly bubbles: IM;
   private readonly flames: IM;
   private readonly puffs: IM;
@@ -766,6 +821,10 @@ export class HazardView implements ViewModule {
   private drawnN = 0;
   /** view time of this frame (the decal writer reads the pod ramps with it) */
   private lastNow = 0;
+  /** IRON GULLY blower intake this frame (world x / z; igOn = 0 when no live IRON GULLY) — the brine spray source */
+  private igX = 0;
+  private igZ = 0;
+  private igOn = 0;
   get drawn(): number { return this.drawnN; }
 
   // scratch
@@ -851,6 +910,7 @@ export class HazardView implements ViewModule {
     this.husks = mk('podHusk', huskGeo(), toon, MAX_TURRETS * 3, 1.4, true);
     this.podPetals = mk('podPetal', podPetalGeo(), toon, MAX_TURRETS * 5, 1.4, true);
     this.crystals = mk('crystal', crystalGeo(), toon, 320, 1.4, false);
+    this.slush = mk('slush', slushGeo(), toon, 160, 1.4, false);
     this.bubbles = mk('bubble', bubbleGeo(), basic, 256, 0, false);
     this.flames = mk('flame', flameGeo(), basic, 256, 1.2, false);
     this.puffs = mk('sporePuff', puffGeo(), puffMat, 512, 0, false, 7);
@@ -899,7 +959,7 @@ export class HazardView implements ViewModule {
   private imList: IM[] | null = null;
   /** every instanced dressing mesh (cached: no per-frame allocation) */
   private ims(): IM[] {
-    if (!this.imList) this.imList = [this.mound, this.stem, this.pod, this.petals, this.leaves, this.bulbs, this.husks, this.podPetals, this.crystals, this.bubbles, this.flames, this.puffs];
+    if (!this.imList) this.imList = [this.mound, this.stem, this.pod, this.petals, this.leaves, this.bulbs, this.husks, this.podPetals, this.crystals, this.slush, this.bubbles, this.flames, this.puffs];
     return this.imList;
   }
 
@@ -925,6 +985,13 @@ export class HazardView implements ViewModule {
     for (let i = 0; i < ev.length; i++) {
       if (ev[i].type === 'runEnd' && this.endAt < 0) { this.endAt = now; break; }
     }
+    // IRON GULLY's blower intake (the sim's cone origin: 40 m ahead of the root), for the brine spray streams
+    const gb = w.boss;
+    if (gb && gb.id === 'irongully' && gb.alive) {
+      const ga = Math.min(1, Math.max(0, f.alpha));
+      const gx = gb.px + (gb.x - gb.px) * ga, gz = gb.pz + (gb.z - gb.pz) * ga;
+      this.igX = gx + Math.sin(gb.heading) * 40; this.igZ = gz + Math.cos(gb.heading) * 40; this.igOn = 1;
+    } else this.igOn = 0;
     // run over: the sim is stopped with hazards still alive — fade the whole stage out
     const endK = this.endK = this.endAt >= 0 ? clamp01(1 - (now - this.endAt) / END_FADE_S) : 1;
 
@@ -976,7 +1043,7 @@ export class HazardView implements ViewModule {
         case 'magma': this.drawMagma(r, fade, px, now, lvl); break;
         case 'bloom': if (turrets++ < MAX_TURRETS) { if (r.pod) this.drawPod(r, fade, px, now); else this.drawBloom(r, fade, px, now); } break;
         case 'spore': this.drawSpore(r, fade, px, now, lvl); break;
-        case 'frost': this.drawFrost(r, fade, px, now, lvl); break;
+        case 'frost': if (r.owner === 'titan') this.drawFrost(r, fade, px, now, lvl); else this.drawSlush(r, fade, px, now, lvl); break;
         case 'fire': this.drawFire(r, fade, px, now, lvl); break;
         case 'oil': break;
         case 'paint': break;   // GATEKEEPERS: decal only (lane K2a)
@@ -1440,6 +1507,65 @@ export class HazardView implements ViewModule {
     void now;
   }
 
+  // ─────────────────────────────── IRON GULLY brine slush + auger spray ───────────────────────────────
+  /** heaped slush lumps where the spray landed (grow in as it lands, slump + sink as the patch runs out), and
+   *  while the AUGER BLAST runs (the patch's first SPRAY_S) a stream of brine droplets + grit from the intake */
+  private drawSlush(r: HzRec, fade: number, px: number, now: number, lvl: number): void {
+    const R = Math.max(r.size, px * 4);
+    const n = lvl === 0 ? 4 : lvl === 1 ? 6 : 8;
+    const grow = clamp01(r.t / 0.7);
+    const melt = clamp01((1.0 - (r.life - r.t)) / 1.2);
+    const g = grow * (1 - 0.7 * melt) * (r.goneAt >= 0 ? fade : this.endK);
+    if (g > 0.001) {
+      for (let i = 0; i < n; i++) {
+        const ang = h3(r.id, i, 61) * Math.PI * 2;
+        const rad = Math.sqrt(h3(r.id, i, 62)) * R * 0.78;
+        const wdt = R * (0.1 + 0.1 * h3(r.id, i, 63)) * (0.55 + 0.45 * g);
+        const hgt = wdt * (0.9 + 0.6 * h3(r.id, i, 64)) * g;
+        if (hgt < px * 0.6) continue;
+        this.e.set(0, h3(r.id, i, 65) * 6.28, 0);
+        this.q.setFromEuler(this.e);
+        this.v.set(r.x + Math.sin(ang) * rad, -hgt * 0.25 - melt * hgt * 0.4, r.z + Math.cos(ang) * rad);
+        this.s.set(wdt * (1 + 0.3 * h3(r.id, i, 66)), hgt, wdt);
+        this.put(this.slush, this.v, this.q, this.s);
+      }
+    }
+    // the spray stream (only while a live IRON GULLY is blasting: the patch is fresh)
+    if (this.igOn === 0 || r.t >= SPRAY_S || r.goneAt >= 0) return;
+    const sk = (r.t < SPRAY_S - 0.2 ? 1 : (SPRAY_S - r.t) / 0.2) * this.endK;
+    const ox = this.igX, oz = this.igZ;
+    const dx = r.x - ox, dz = r.z - oz;
+    const L = Math.sqrt(dx * dx + dz * dz);
+    const arc = Math.min(22, L * 0.18);
+    // the jet: a slate-grey brine stream arcing from the intake onto the patch (6 widening, wobbling segments)
+    const iL = 1 / Math.max(L, 1e-3);
+    let x0 = ox, y0 = IG_INTAKE_Y, z0 = oz;
+    for (let k = 1; k <= 6; k++) {
+      const u = k / 6;
+      const wob = Math.sin(now * 13 + k * 1.7 + r.id) * 1.2 * u;
+      const x1 = ox + dx * u - dz * iL * wob, z1 = oz + dz * u + dx * iL * wob;
+      const y1 = IG_INTAKE_Y * (1 - u) + 0.8 * u + Math.sin(u * Math.PI) * arc;
+      this.ribbon(x0, y0, z0, x1, y1, z1, Math.max(1.6 + 3.4 * u, px * 3), 0.45, 0.56, 0.66, sk * 0.62);
+      x0 = x1; y0 = y1; z0 = z1;
+    }
+    const m = lvl === 0 ? 10 : lvl === 1 ? 14 : 18;
+    for (let i = 0; i < m; i++) {
+      const u = (now * (1.3 + 0.5 * h3(r.id, i, 71)) + h3(r.id, i, 72)) % 1;
+      const ja = h3(r.id, i, 73) * Math.PI * 2, jr = Math.sqrt(h3(r.id, i, 74)) * R * 0.75;
+      const ex = r.x + Math.sin(ja) * jr, ez = r.z + Math.cos(ja) * jr;
+      const x = ox + (ex - ox) * u, z = oz + (ez - oz) * u;
+      const y = IG_INTAKE_Y * (1 - u) + 0.8 * u + Math.sin(u * Math.PI) * arc;
+      // brine: a wet slate-grey (reads against white snow, unlike a white snow plume); grit: ochre + dark granules
+      const grit = i % 3 === 2;
+      const a = sk * (grit ? 0.95 : 0.85) * (u > 0.85 ? (1 - u) / 0.15 : 1);
+      // sized to the walker (a fixed 70 m rig), not to the patch: a chunky plume, fanning out as it flies
+      if (grit) {
+        if (i % 2) this.dot(x, y, z, Math.max(1.6 + 0.8 * u, px * 3), 0.66, 0.44, 0.23, a);
+        else this.dot(x, y, z, Math.max(1.4 + 0.6 * u, px * 3), 0.2, 0.2, 0.22, a);
+      } else this.dot(x, y, z, Math.max(3.2 + 3.5 * u, px * 5), 0.45, 0.56, 0.66, a);
+    }
+  }
+
   // ─────────────────────────────── fire tongues ───────────────────────────────
   private drawFire(r: HzRec, fade: number, px: number, now: number, lvl: number): void {
     const R = Math.max(r.size, px * 4);
@@ -1463,7 +1589,7 @@ export class HazardView implements ViewModule {
   counts(): Record<string, number> {
     const out: Record<string, number> = {};
     for (const k of HKINDS) out[k] = this.decals.get(k)?.n ?? 0;
-    out.bolts = this.ribbons.n; out.crystals = this.crystals.n; out.petals = this.petals.n;
+    out.bolts = this.ribbons.n; out.crystals = this.crystals.n; out.slush = this.slush.n; out.petals = this.petals.n;
     return out;
   }
 }

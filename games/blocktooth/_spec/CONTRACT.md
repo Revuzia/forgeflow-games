@@ -58,8 +58,10 @@ real TV network/callsign (NHK, CNN, BBC, Fox…), and any survivor-like upgrade 
 Vampire Survivors / Brotato / Halls of Torment / Hades / Risk of Rain (e.g. "Spinach",
 "Hollow Heart", "Empty Tome", "Clover", "Attractorb", "Candelabrador"). "Kaiju" as a genre word
 is allowed in docs only, never on screen. No upright dinosaur-with-dorsal-plates silhouettes:
-MOLO is a LOW, SPRAWLING quadruped monitor; IRON GULLY is a beaked, ridge-backed QUADRUPED
-with a scrap-plate sail.
+MOLO is a LOW, SPRAWLING quadruped monitor. Every boss is a MACHINE, never a monster (owner rule
+2026-09-29): IRON GULLY is a HALVARD snow-clearance walker (a road gritter + V-plough on four
+crab-splayed hydraulic stamp legs: V-plough, blower turret, grit hopper, spreader spinner), low and
+wide with no neck, never the famous tall snow-walker silhouette.
 
 **Name bible (use exactly these):**
 
@@ -78,7 +80,7 @@ with a scrap-plate sail.
 | Biome 2 | **WHITE STACKS** — snowed industrial park, dishes, tanks | boss IRON GULLY |
 | Biome 3 | **LOCKWATER** — flooded container port at night | boss CAISSON-4 |
 | Boss A | **CAISSON-4** — four-legged harbor crane-mech | meter **STRAIN** |
-| Boss B | **IRON GULLY** — pale ridge-backed titan, beaked head, scrap-plate sail | meter **FRACTURE** |
+| Boss B | **IRON GULLY** — HALVARD SNOW-CLEARANCE WALKER: V-plough, blower turret, grit hopper, spreader spinner, four stamp legs | meter **FRACTURE** |
 | Enemies | CROSSING WARDEN (android) · PICKET SQUAD · GNAT (drone) · HOPPER (buggy) · BULWARK (APC) · TORTOISE (tank) · STILT MORTAR (walker) · RAMROD (elite breach-dozer) | contractor: **HALVARD CIVIL DEFENSE** |
 | Tabloid masthead | THE WARD SEVEN WITNESS | |
 
@@ -207,7 +209,7 @@ shake  : trauma model (amplitude² falloff 1.6/s); heavy footstep adds H·0.02·
 Worked numbers (auto, first → last level of each Size): D = 33.9→54.9 / 82.8→134 / 173→265 / 331→457 /
 560→617 m; vertical view extent D·k = 18.2→29.4 / 44.4→71.7 / 92.7→142 / 177→245 / 300→331 m.
 dAbsMax 880 m binds the zoom-out from LV 34 (Size V tops out at ≈ 1.4–1.6×; the whole district fits).
-Boss framing at LV 37 (curve 617 m): only the paw slam widens (659 m); every other attack fits the curve.
+Boss framing at LV 37 (curve 617 m): only IRON GULLY's DOUBLE STAMP (`pawSlam`) widens (659 m); every other attack fits the curve.
 Telegraph x-ray (render/telegraphview.ts): never drawn through the titan's own body volume (bind-pose
 box in model space + 10 %, ray-tested per fragment) — the ground decal carries the warning there.
 Every LOD / fog / shadow / traffic / civilian consumer follows the ACTUAL distance (`rig.distance`,
@@ -580,7 +582,7 @@ Nameplate subtitle = the active attack's subtitle, else the default mechanic hin
 > `fairWindup()` = 0.35 s reaction + 0.15 s acceleration + walk-out distance ÷ the titan's current max
 > speed × ESCAPE_K[phase]. Examples: CAISSON-4 hookDrop r 0.55H, hookLane w 0.5H, winch oval
 > 1.4H × 1.0H pulling 0.4H/s, boomSweep reach 2.6H; IRON GULLY coneBreath reach 3.0H, pawSlam rings
-> 0–1.1H and 1.1–2.0H, plates r 0.4H, ridge charge lane w 0.7H. Both bosses answer dash-spam with a
+> 0–1.1H and 1.1–2.0H, plates r 0.4H, PLOUGH RUN (`ridgeCharge`) lane w 0.7H. Both bosses answer dash-spam with a
 > readable drop at the dash end (`watchDash`). Boss HP now `BossDef.hp × BOSS_HP_SCALE` (1.15 at
 > Size V), a per-hit cap of 0.55 × titan max HP, and structural fatigue after 90 s. Source of truth:
 > `src/ai/bosses/{index,caisson4,irongully}.ts` + the BOSS rows of the config.ts table.
@@ -599,18 +601,29 @@ r8 (hpMul 0.5), cab r6 (hpMul 1.5).
   cycle 30 % faster; `hookLane` ×2 back-to-back.
 * Default subtitle: "BREAK THE LEGS — BUILD STRAIN".
 
-**IRON GULLY** (hp 170 000, height 70 m) — pale ridge-backed quadruped titan, beaked head,
-a SAIL of riveted scrap plates along the spine, frost-caked hide. Closes to 50–80 m, 9 m/s.
-Parts: body r20, head r8 (hpMul 1.6, strainMul 2.0), sail r10 (strainMul 2.5), 4 legs r6.
-* P1 `coneBreath` — "CONE BREATH — GET OUT OF ITS SIGHTLINE": cone half 28°, r 140, 1.8 s windup
-  then 1.2 s active (dps), leaves `frost` hazards (slow). `pawSlam` — "PAW SLAM — DASH THROUGH THE
-  RING": ring 0–60 m at 1.3 s then a second ring 60–110 m 0.5 s later (dash i-frames or stand in
-  the gap).
-* P2 + `plateVolley` — "SCRAP PLATES — WATCH THE SHADOWS": 6–10 lobbed `plate` projectiles
-  with circle tells r 12 around the titan, 1.6 s. `ridgeCharge` — "RIDGE CHARGE — SIDESTEP THE
-  LANE": lane len 180, w 30, 1.5 s, then it charges along it.
-* P3: breath→slam combo; plate volley density ×2.
-* Default subtitle: "CRACK THE SAIL — BUILD FRACTURE".
+**IRON GULLY** (hp 170 000, height 70 m; nameplate "HALVARD CIVIL DEFENSE · HALVARD SNOW-CLEARANCE
+WALKER") — HALVARD winter works' road gritter + V-plough at kaiju scale on four crab-splayed hydraulic
+stamp legs: a vermilion V-plough in front, a flush blower turret with a spinning auger in a lit intake,
+a charcoal grit hopper with an ochre load and an amber beacon bar, a plate magazine topped by a vermilion
+spreader SPINNER (the weak point; its crack seams glow with FRACTURE), a rear engine block with two
+exhaust stacks. Closes to 50–80 m, 9 m/s. Parts (sim ids unchanged): body r20 = the hopper, head r8
+(hpMul 1.6, strainMul 2.0) = the blower turret, sail r10 (strainMul 2.5) = the plate magazine + spinner,
+4 legs r6 = the stamp legs. Move ids are the sim's (`coneBreath`, `pawSlam`, …); the names are the
+machine's.
+* P1 `coneBreath` — "AUGER BLAST — GET OUT OF ITS SIGHTLINE": cone half 28°, r 140, 1.8 s windup
+  then 1.2 s active (dps), sprays brine slush (`frost` hazards, slow; drawn as grey-brown slush with
+  grit, not ice). `pawSlam` — "DOUBLE STAMP — DASH THROUGH THE RING": the front rams stamp (ring
+  0–60 m at 1.3 s), then the hydraulics dump the whole chassis (ring 60–110 m 0.5 s later; dash
+  i-frames or stand in the gap).
+* P2 + `plateVolley` — "PLATE SPREADER — WATCH THE SHADOWS": the spinner flings 6–10 lobbed `plate`
+  projectiles (steel road plates) with circle tells r 12 around the titan, 1.6 s. `ridgeCharge` —
+  "PLOUGH RUN — SIDESTEP THE LANE": lane len 180, w 30, 1.5 s (the blade drops onto the road), then it
+  charges along it; the V-plough's side throw is the shove.
+* P3: `breathSlam` "WHITEOUT" — AUGER BLAST then DOUBLE STAMP; plate volley density ×2.
+* Stagger: the spinner jams, hydraulic pressure drops (sag, splay, blade down). Defeat: a machine
+  collapse — the legs fail one at a time (FL, BR, FR, BL), grit pours over the rim, the hopper lands on
+  the road by ≈ 2 s.
+* Default subtitle: "CRACK THE SPINNER — BUILD FRACTURE".
 
 ---
 
@@ -801,7 +814,7 @@ Owner / orchestrator decisions that override the plan text: **D1** "tier" = card
 counterplay = design B **SPACE-DENIAL rings** (GATEKEEPERS §3.6; `dr/B/dash_read.patch`); design A (dash lock) is
 rejected. **D3** BRIARWICK = kit C with the hook renamed **POP-UP PARK** (§8); VOLT-KITE = the "storm-hound drake under
 twin kite sails" remodel + kit set (§8). MOLO / HEARTHBACK: no change except card text that must match the code.
-IRON GULLY breath capped at HIT_CAP in total.
+IRON GULLY AUGER BLAST (`coneBreath`) capped at HIT_CAP in total.
 
 All lanes edit the SAME working tree: a lane edits only the files in its row; a file shared by two rows is edited with
 targeted edits in the named region only, never rewritten. Prototypes are env-gated — the port strips every

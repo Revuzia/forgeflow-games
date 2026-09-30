@@ -9,8 +9,9 @@ Alert") panics on air. HALVARD CIVIL DEFENSE sends androids, drones, buggies, AP
 artillery walkers, and an elite breach-dozer. Every Size ceiling has a **HEIGHT LIMIT**: at LV 7, 16
 and 27 a **gatekeeper** (STENCIL-1, CORDON-2, SWITCHBOARD-5) holds the titan at its Size until it is
 beaten, and at LV 35 each city's own containment boss guards the last breach: **PARKADE-6** (a
-walking multi-storey car park, GRID-EAST), **IRON GULLY** (WHITE STACKS) or **CAISSON-4**
-(LOCKWATER). Its kill is the **VICTORY FINALE**: the last MASS BREACH to Size V and a short rampage.
+walking multi-storey car park, GRID-EAST), **IRON GULLY** (a snow-clearance walker, WHITE STACKS) or
+**CAISSON-4** (a caisson crane, LOCKWATER). Every miniboss and boss is a HALVARD **machine**, never a
+monster: the titan is the only monster in town. Its kill is the **VICTORY FINALE**: the last MASS BREACH to Size V and a short rampage.
 Level-ups open 3-card **MUTATION REPORT** drafts. The run ends on the front page of *THE WARD SEVEN
 WITNESS*: **THE CITY GOT SMALLER.** A clear can be pushed on into **EXTENDED COVERAGE** (endless).
 
@@ -38,6 +39,44 @@ cinematic opening (the **WARD-7 STREET CAM**).
 The gatekeepers (`_spec/GATEKEEPERS.md`, rev 2) add the three Size gates, the city boss re-scaled to
 fight a Size IV titan, the VICTORY FINALE, and gatekeeper rematches in EXTENDED COVERAGE (see
 [Gatekeepers](#gatekeepers-the-height-limit) below).
+
+The titan pass (`_spec/CONTRACT.md` §8 / §16, `_spec/FEATURES_V2.md` §7.7–§7.8, `_spec/GATEKEEPERS.md` §3.6)
+adds BRIARWICK's seed-pod kit, the VOLT-KITE remodel, **build slots** in the draft and the bosses'
+space-denial rings (see [Titan pass](#titan-pass-titans-build-slots-rings) below).
+
+---
+
+## Titan pass: titans, build slots, rings
+
+* **BRIARWICK** (horned garden-beast with a seed ruff; kit `titans/kits/briarwick.ts`). **BURR LASH**
+  (every 1.0 s, 3.2 body-heights, 5.8 at Size I) plants a **SEED POD** where it lands. Pods ripen in 2 s
+  and burst when anything touches them (18 dmg, tangles foes, heals a little) and set off ripe pods
+  nearby, each link 10 % harder. The HOOK **POP-UP PARK** (Space, 8 s): a horn-stamp ring burst, 4 ripe
+  seeds thrown at the nearest foes, then every pod within 12 body-heights goes off in one rolling
+  chain. The DASH **BRAMBLE BOUND** drops 2 pods. The SEED POD cap is 10 (the GREENBELT DECREE replants
+  the garden as 10 pods). The ACTIVE panel shows `PODS n · RIPE n`; a chain calls `×5 / ×8 / ×12 / ×16 /
+  ×20 IN BLOOM!`. Goal **FULL BLOOM**: one pop chains 15 more pods in one run (`cascadeBest` ≥ 15).
+* **VOLT-KITE** remodel: a storm-hound drake under twin kite sails with a static mane. **FORK-ARC**
+  jumps 3.8 body-heights and forks to 3 more; every 2nd strike **GROUNDS** a short LIVE WIRE, which
+  RECAST: DETONATE (Space) blows with the dash wires. Its three palettes are the canonical indigo,
+  SODIUM LAMP and SLEET (a steel hide under a slate saddle, so it reads on WHITE STACKS snow).
+* **Build slots** (`upgrades/draft.ts`, FEATURES_V2 §7.7). A run holds **8** distinct cards (`SLOTS n/8`
+  in the draft header). Each card carries a tab: **NEW — TAKES A SLOT**, **UPGRADE LV a → b**, **SHARES
+  A SLOT** (the missing half of a started evolution recipe: a recipe's two halves share one slot, and the
+  evolution keeps it) or **ONE-OFF — NO SLOT** (a card with 1 stack files outside the slots). Once the
+  slots are full (`SLOTS FULL — UPGRADES ONLY`), drafts offer only cards that need no new slot. Every
+  draft still shows 3: when nothing is left to deepen, the offer is padded with **OFF THE RECORD**
+  rewards: **SICK DAY** (heal 25 % max HP), **HOT TIP** (UPROAR +35 %), **HARD HAT** (a shield of
+  30 % max HP). They cannot be rerolled, banished or locked. **BANISH never works on a card you own**
+  (it would freeze the card in a slot it can never leave): the ✕ is struck through and a press shows
+  `CAN'T BANISH — YOU OWN IT`.
+* **Space-denial rings** (GATEKEEPERS §3.6), the counter to dash spam. Some circle tells carry a ring
+  around the same centre that fires with them: a straight dash out of the circle lands in the ring,
+  while a titan that walks out and stops stands in a dry moat between the two. The rigs answer with
+  space and never touch the dash itself: STENCIL-1's paint SPLASH (and its dash answer in phase 3),
+  CORDON-2's dash answer (phase 2+), SWITCHBOARD-5's RINGBACK, PARKADE-6's SKID dash answer.
+* **Cards**: 8 slots made card LEVEL matter, so 119 cards gained a max stack; MOLO's CURB BITE text now
+  says 22 dmg (the code's value).
 
 ---
 
@@ -127,7 +166,7 @@ blank canvas. If boot fails, a "TECHNICAL DIFFICULTIES" card shows the error.
 | pause (never ends a run) | Esc / P | Start |
 | menus: move / confirm / back | arrows · Enter · Esc | d-pad · A · B |
 | draft: pick card / reroll | 1 / 2 / 3 (or ←→ + Enter) · R | A · X |
-| draft: **BANISH** the focused card (removed for the run; the slot refills) | X | hold Y 0.6 s (a tap does nothing) |
+| draft: **BANISH** the focused card (removed for the run; the slot refills; refused on a card you own) | X | hold Y 0.6 s (a tap does nothing) |
 | draft: **LOCK** / unlock the focused card (held into the next draft) | C | LB |
 | title / select: open **GOALS & RECORDS** | G | X |
 | goals screen: tabs / rows / back | ← → · ↑ ↓ · Esc | d-pad · B |
@@ -198,8 +237,10 @@ boot → title ⇄ GOALS & RECORDS
   closest unlock, and two more rows under the titans pick the **starting perk** (one per run, `none`
   always available) and the titan's **palette** (the portrait re-renders in it).
 * **Draft** (v2 additions): an evolution appears as a RESTRUCTURED card when its recipe is ready;
-  BANISH (X) removes the focused card for the rest of the run and refills the slot, LOCK (C) holds it
-  into the next draft; the charges left are shown in the header, new cards carry a NEW ribbon.
+  BANISH (X) removes the focused card for the rest of the run and refills the slot (never a card you
+  already own), LOCK (C) holds it into the next draft; the charges left are shown in the header, new
+  cards carry a NEW ribbon. Titan pass: the header counts `SLOTS n/8` and every card shows its slot tab
+  (see [Titan pass](#titan-pass-titans-build-slots-rings)).
 * **Pause** (v2): the LOADOUT panel lists every owned card with its glyph, stacks and text, the
   perk, and the banish / lock charges left. **Settings** gained *Reduce motion* and
   *Opening: OFF / SHORT / FULL*.
@@ -365,8 +406,8 @@ shake  : trauma model (amplitude², decay 1.6/s), off when Settings → screen s
   through the rig's camera. It widens the distance (never below the curve, at most 2× it) and, when the
   fight is lopsided, slides the look target toward the fight's centre. The widening is held 1.6 s and
   released at 1/s, so the camera does not pump with every attack. Measured at LV 37 (curve 617 m,
-  `bossframe.py`, the tell 70–92 % through its windup, MOLO): paw slam 659 m (the only one that widens,
-  1.07×) · breath cone 618 m · boom sweep, leg stomp, winch, ridge charge on the curve itself (617 m) —
+  `bossframe.py`, the tell 70–92 % through its windup, MOLO): IRON GULLY's DOUBLE STAMP 659 m (the only one that
+  widens, 1.07×) · AUGER BLAST cone 618 m · boom sweep, leg stomp, winch, PLOUGH RUN on the curve itself (617 m) —
   every framed point in view, 0 outside, the widest tell at |ndc| 0.79.
 * **Telegraph x-ray vs the titan** (`render/telegraphview.ts`): hostile paint is x-rayed through
   whatever hides it (a boss cone behind towers still reads), EXCEPT through the titan's own body — a
@@ -399,7 +440,9 @@ so they have been replaced. Every boss tell is authored in **titan heights**. `b
 ranks up mid-fight. Current shapes:
 
 * CAISSON-4: hook drop r 0.55 H, hook lane w 0.5 H, winch oval 1.4 H × 1.0 H, boom sweep 2.6 H, leg stomp rig + 1.0 H
-* IRON GULLY: cone breath 3.0 H, paw-slam rings 0–1.1 H and 1.1–2.0 H, plates r 0.4 H, ridge-charge lane w 0.7 H
+* IRON GULLY (a gritter and V-plough on four hydraulic stamp legs): AUGER BLAST cone 3.0 H, DOUBLE STAMP rings 0–1.1 H
+  and 1.1–2.0 H, spreader plates r 0.4 H, PLOUGH RUN lane w 0.7 H (sim ids `coneBreath` / `pawSlam` / `plateVolley` /
+  `ridgeCharge`; the AUGER BLAST spray deals at most 55 % of max HP in total)
 
 Every windup comes from `fairWindup()`: 0.35 s reaction + 0.15 s acceleration + the walk-out
 distance ÷ the titan's current top speed × `ESCAPE_K` (1.1 / 1.0 / 0.9 for phases 1 / 2 / 3).

@@ -442,7 +442,7 @@ pulse. Radii are fractions of R. Enemies are hit with `enemiesInShape` + `damage
 | **MOLO** (SMASH TANK) | **STREET SWALLOW**: the street caves into a sinkhole mouth and MOLO gulps the block's crowd | 0.55 s | 0.0–0.9 s PULL: `magnetAll(w, R)` once; every crushable enemy inside R is dragged toward the jaws at 0.4 R/s and takes 20 base/s (5 Hz ticks, kind `bite`). **0.9 s SNAP**: circle [0, 0.55] **200** + ring [0.55, 1.0] **190** (kind `bite`, knock 0.3 H/s outward) | on SNAP: heal 12 % maxHp + shield 10 % maxHp (`upgrades.shield`) |
 | **VOLT-KITE** (CHAIN ASSASSIN) | **GRIDLOCK SURGE**: the static mane grounds into every streetlight at once | 0.4 s | 4 pulses at 0 / 0.25 / 0.5 / 0.75 s, each circle [0, 1.0] **50** (kind `arc`), stun 0.3 s. The view draws arcs to the 40 nearest; damage hits everything inside R | at blast start: 6 radial LIVE WIRES (hazard `wire`, owner titan, capsule from the titan out to min(0.6 R, 6 H), r 0.25 H × area, life wireDuration + 2 s, same `data` keys voltkite.ts writes, plus `ult: 1`). The oldest wires go first to respect the cap of 6. HOOK right after = a full-screen detonation combo. Detonations until `tally.ultWireUntilT` (the fire time + the wires' life) do not count toward the SIX-WAY SPLICE goal (§8.2) |
 | **HEARTHBACK** (ERUPTION FORTRESS) | **CALDERA BLOWOUT**: the dome shell erupts in three rings | 0.6 s | ring [0, 0.45] **200** at 0 s · ring [0.4, 0.75] **190** at 0.3 s · ring [0.7, 1.0] **190** at 0.6 s (kind `vent`, knock 0.6 H/s). The bands overlap, so the seams take two rings | all rings × (1 + 0.6 × shell fill), fill = `kit.stored / kit.cap`; the SHELL is **not** emptied. 6 `magma` hazards (circle r 0.5 H, 5 s, 12 base dps) evenly on the 0.55 R circle |
-| **BRIARWICK** (AREA CONTROL) | **GREENBELT DECREE**: a bramble wave rolls out and roots the block | 0.5 s | thorn wave expands 0 → R over 0.6 s; damage at 0.3 s: circle [0, 1.0] **190** (kind `vine`), root = `stun` 3 s, then `slowT` 3 s at `slowMul` 0.6 | **`stat(w,'turretCap')` blooms** (10) evenly on the 0.4 R circle — TITAN PASS: BRIARWICK's base `turretCap` is 10 and kit C adopts every decree bloom as an **unripe seed pod** under the rooted foes (they ripen in 2 s and go off on them; a POP-UP PARK right after detonates the rest; mechanics otherwise unchanged) (the engine's `doBloom` data keys + `wild: 1`, life 14 s). They go through the normal cap: the decree **replants** the garden, replacing the oldest turrets, so none is culled the tick it appears (rev 1 spawned 6 against a base cap of 4). `wild` blooms do not count toward the pre-TITAN-PASS FULL BLOOM metric `bloomsBest`; whether decree-seeded chains count toward its TITAN PASS metric `cascadeBest` is lane DATA's recorded decision (§8.2). Heal 20 % maxHp over 4 s (`ult.heal` pool) |
+| **BRIARWICK** (AREA CONTROL) | **GREENBELT DECREE**: a bramble wave rolls out and roots the block | 0.5 s | thorn wave expands 0 → R over 0.6 s; damage at 0.3 s: circle [0, 1.0] **190** (kind `vine`), root = `stun` 3 s, then `slowT` 3 s at `slowMul` 0.6 | **`stat(w,'turretCap')` blooms** (10) evenly on the 0.4 R circle — TITAN PASS: BRIARWICK's base `turretCap` is 10 and kit C adopts every decree bloom as an **unripe seed pod** under the rooted foes (they ripen in 2 s and go off on them; a POP-UP PARK right after detonates the rest; mechanics otherwise unchanged) (the engine's `doBloom` data keys + `wild: 1`, life 14 s). They go through the normal cap: the decree **replants** the garden, replacing the oldest turrets, so none is culled the tick it appears (rev 1 spawned 6 against a base cap of 4). `wild` blooms do not count toward the pre-TITAN-PASS FULL BLOOM metric `bloomsBest`; whether decree-seeded chains count toward its TITAN PASS metric `cascadeBest` is lane DATA's recorded decision (§8.2): they **COUNT**. Heal 20 % maxHp over 4 s (`ult.heal` pool) |
 
 `UltDef` (data file): `{id, name, burst, desc, roarS, blastS, pulses[]}`. The extras are code in
 `meta/ultimate.ts`, switched on titan id. Events: `ultFire` at the roar start (x, z, r),
@@ -956,7 +956,12 @@ draft only deepens them.
    * ready evolutions keep arriving through the unchanged EVOLUTION step (§7.4 step 4), because an evolution never
      needs a new slot.
    Chest drafts take rare+ from that pool first, then its commons (the existing top-up). REROLL and the BANISH refill
-   roll from the same restricted pool. A LOCKed card that would now need a new slot is dropped at delivery and its LOCK
+   roll from the same restricted pool. **BANISH is refused on a card you own** (`banishOwned`, full or not; TITAN PASS
+   UX): banish means "out of the pool", which for an owned card froze it at its level in a slot it could never leave —
+   a dead slot (seen in Chrome: `substation_hum` banished at LV 1 with the slots full). "Banishing an owned card frees
+   its slot" was rejected: keeping the card and opening a slot makes every BANISH charge (2, + RED TAPE) a 9th / 10th
+   card, and scrapping it needs an un-apply path the upgrade engine does not have. Unowned cards (NEW, the SHARES A
+   SLOT half, ONE-OFF cards, ready evolutions) banish as before; the refusal spends no charge and makes no draw. A LOCKed card that would now need a new slot is dropped at delivery and its LOCK
    charge is **refunded** (the slot rule made it undeliverable, not the player). **Every draft shows 3**: a short
    slot-full offer is topped up first with a ready evolution (no draw), then with OVERFLOW rewards (rule 5, most-needed
    first, no draw); it is never padded with a card that needs a new slot (slots8 had shown 2.4 cards per late offer).
@@ -987,8 +992,11 @@ draft only deepens them.
    * header counter `SLOTS {n}/{cap}` on every draft; when full, the banner `SLOTS FULL — UPGRADES ONLY`;
    * per card: `new` → **NEW — TAKES A SLOT** (it replaces the plain `NEW` flag on unowned cards; the profile
      NEW-unlock ribbon of §7.5 is a different thing and stays); `upgrade` → **UPGRADE** (the STACKS pips show the next
-     level); `shared` → **SHARES A SLOT** (next to the existing TOWARD / COMPLETES recipe hint); `evolution` → the
-     existing RESTRUCTURED card;
+     level); `shared` → **SHARES A SLOT** (next to the existing TOWARD / COMPLETES recipe hint); `free` → **ONE-OFF —
+     NO SLOT**; `evolution` → the existing RESTRUCTURED card; `overflow` → **OFF THE RECORD**;
+   * an owned card's BANISH corner (✕) is greyed and struck through, its tooltip is `STR.draft.banishOwned`; pressing
+     BANISH on it (X · hold pad Y · ✕) wiggles the ✕ and flashes the stamp **CAN'T BANISH — YOU OWN IT** on the card
+     (`STR.draft.banishOwnedShort`, 1.8 s);
    * overflow draft: header `NOTHING NEW TO FILE` / `EVERY SLOT IS FILED AND FINAL — TAKE A PERK OF THE JOB`, cards
      stamped `OFF THE RECORD` with the names / descriptions of `STR.draft.overflow[id]` (`{n}` = the rounded percentage
      from `OVERFLOW`); the REROLL / BANISH / LOCK controls are hidden.
@@ -1253,7 +1261,7 @@ Only `game.ts` calls either (through `SelectRunOpts.portraitFor`, §8.4), so L10
 | City | Boss | Why |
 |---|---|---|
 | GRID-EAST (day, commercial blocks) | **PARKADE-6** (new) | a commercial district's own municipal machine |
-| WHITE STACKS | IRON GULLY (unchanged) | |
+| WHITE STACKS | IRON GULLY (sim unchanged; since 2026-09-29 drawn as the HALVARD SNOW-CLEARANCE WALKER — a road gritter + V-plough on four hydraulic stamp legs, CONTRACT §10) | the district's own winter-works machine |
 | LOCKWATER | **CAISSON-4** (unchanged; it is a harbour crane rig and wades in from the harbour) | |
 L3 flips `BIOMES.grideast.boss` from `'caisson4'` to `'parkade6'` as the **last** step of its lane (end
 of C1), after its probes pass and the GATE 2 rows for GRID-EAST pass with PARKADE-6. **Why in C1 and not

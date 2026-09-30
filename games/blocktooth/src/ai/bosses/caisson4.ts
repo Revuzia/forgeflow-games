@@ -23,7 +23,8 @@
 //                  — the hook falls on a cable: a lobbed 'hookDrop' projectile paints its own circle
 //   P2+ hookDrop → TROLLEY RUN: 3 (P3: 4) drops r 0.5 H in a row along the titan's track, 1.5 r apart,
 //                  the far one first; reversing or stopping does not clear it — stepping off the
-//                  rail (r + R sideways) or a dash does.
+//                  rail (r + R sideways) or a dash does. The rail sits 0.3 r toward the rig (BAL): the
+//                  exit is always AWAY from the gantry.
 //   P2  + winchLeash  oval rx 1.4 H / rz 1.0 H (84 × 60 m radii) around the titan, rotated toward the
 //                  boss, 2.2 s; it TRACKS the titan's half lead (≤ 1.1 × its walk speed) until the last
 //                  0.9 / 0.8 s, then locks: nobody walks out of 60 m + in 0.9 s — dash when it
@@ -80,7 +81,7 @@ const HOOK_LANE = { wH: 0.5, pastH: 1.6, minLenH: 3, maxLenH: 6.5, dmg: 30, reco
 const HOOK_DROP = { rH: 0.55, dmg: 30, y: 70, recover: 0.6, min: 1.1, max: 2.2 };
 /** P2+ trolley run: drops per run by phase, drop r, spacing (× drop r) along the track, landing stagger (s).
  *  dmg: base per trolley drop — they DO land now, so each is a bruise (≈ 260–340 at Size V). */
-const TROLLEY = { n: [0, 1, 3, 4] as const, rH: 0.5, spacingR: 1.5, stagger: 0.12, dmg: 14 };
+const TROLLEY = { n: [0, 1, 3, 4] as const, rH: 0.5, spacingR: 1.5, stagger: 0.12, dmg: 14, inR: 0.3 };
 const WINCH = { rxH: 1.4, rzH: 1.0, windup: 2.2, leashS: 3, pullH: 0.4, strainPerS: 0.12, miss: 0.5, lock: [0, 0, 0.9, 0.8] as const, trackMul: 1.1 };
 const BOOM = { half: (35 * Math.PI) / 180, rH: 2.6, dmg: 34, recover: 0.8, min: 1.1, max: 2.2 };
 /** Stomp ring outer radius = RIG_R + rH × H (reaches past the keep-out wall). */
@@ -288,7 +289,18 @@ function startAttack(w: World, b: BossState, id: string): void {
       if (fl > 1e-3) { fx /= fl; fz /= fl; } else { fx = Math.sin(a); fz = Math.cos(a); }
       // P1: one hook on the lead point. P2+: the run is centred between the titan and its lead
       // point, so it covers where it is AND where it is going (a stop or a U-turn is still inside).
-      const cx = drops > 1 ? (T.x + L.x) / 2 : L.x, cz = drops > 1 ? (T.z + L.z) / 2 : L.z;
+      let cx = drops > 1 ? (T.x + L.x) / 2 : L.x, cz = drops > 1 ? (T.z + L.z) / 2 : L.z;
+      if (drops > 1) {
+        // BAL (6c walker fairness): the rail runs on the GANTRY side of the titan's track, TROLLEY.inR × r toward
+        // the rig, so the way off it is unambiguous -- step away from the rig (every hook's own escape points
+        // that way too). A titan circling at the keep-out wall had a rail centred on it: half of it lay in the
+        // wall band, the per-hook escapes cancelled and a walker dithered ~0.7 s (BRIARWICK 16/47 hooks landed,
+        // 23.8 %). Still inside the rail by 0.7 r + R, so stopping or reversing does not clear it; the windup
+        // keeps the full r + R walk-out.
+        let px = -fz, pz = fx;
+        if (px * (b.x - T.x) + pz * (b.z - T.z) < 0) { px = -px; pz = -pz; }
+        cx += px * TROLLEY.inR * r; cz += pz * TROLLEY.inR * r;
+      }
       const tx = cx + Math.sin(a) * j, tz = cz + Math.cos(a) * j;
       beginAttack(w, b, id, tx, tz);
       b.data.tx = tx; b.data.tz = tz;

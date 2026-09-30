@@ -11,7 +11,9 @@
 //     open   = drawer out 12 m past the booth face (0, 43, r 8, y 30–40, hp ×2.0, strain ×4) — the nearest
 //              part surface for a titan in front of the booth, so the planar nearestBossPart picks it.
 // Footwork: keepRange(max(70, keep-out + 4), 130, 7 m/s, 0.8 rad/s), the booth always turned toward the
-//   titan; while the till is out it turns at HALF rate (the drawer holds its line — get in front of it).
+//   titan; while the till is out the rig PARKS inside its band (no side-strafe, booth squared to the titan
+//   at full turn rate) and only turns at HALF rate when it has to re-range or aim (BAL fix: probe_boss3 MOLO
+//   open-till share 34.7 % -> 44.4 % on the final BAL tree; the strafe was carrying the drawer off a slow titan's line).
 // Keep-out (hard wall, bosses/index.ts pushTitanOut): RIG_R 33 + titan r + 10 (≈ 68 m at Size V).
 //   Nose keep-out as CAISSON-4 (a MOLO facing the rig must not push its head through the decks).
 // Entrance: reverses in from the nearest city edge (entryPoint), rear first, then swings its booth round
@@ -166,7 +168,12 @@ export function step(w: World, b: BossState): void {
   const open = (b.data.tillOpen ?? 0) > 0;
   if (!b.attack) {
     const minD = Math.max(MIN_D, keepOutM(w) + 4);
-    keepRange(w, b, minD, Math.max(MAX_D, minD + 60), WALK, TURN * (open ? 0.5 : 1));
+    const maxD = Math.max(MAX_D, minD + 60);
+    const d = Math.hypot(T.x - b.x, T.z - b.z);
+    // BAL: while the till is out the rig PARKS inside its band (no side-strafe carrying the drawer off the
+    // titan's line) and keeps the booth squared to the titan -- the open till is the obvious target
+    if (open && d >= minD && d <= maxD) turnBoss(b, Math.atan2(T.x - b.x, T.z - b.z), TURN, w.dt);
+    else keepRange(w, b, minD, maxD, WALK, TURN * (open ? 0.5 : 1));
     if (b.cd <= 0) decide(w, b);
   } else {
     b.data.speed = 0;

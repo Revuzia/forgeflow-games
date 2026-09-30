@@ -96,7 +96,7 @@ reissue(d), "call waiting", "lines down", "tipped", "line crossed", "hang up", "
 Heavy Tread / Tripwire / Overgrowth Ordinance), "VARIANCE" (Zoning Variance, Hinge Variance),
 "WAIVER" (Speed Bump Waiver), "APPEAL" (Appeals Process), "PAPERWORK" (goal PAPERWORK), "SIGNAL"
 (goal SIGNAL BOOST), "INSPECTION" (perk SAFETY INSPECTION), "REPEALED" (Weed Ordinance Repealed),
-"ASPHALT" (an existing card), "CONE" (IRON GULLY's CONE BREATH), "BARRIER" (PARKADE-6's BARRIER ARM),
+"ASPHALT" (an existing card), "CONE" (IRON GULLY's old CONE BREATH, now AUGER BLAST), "BARRIER" (PARKADE-6's BARRIER ARM),
 "PYLON" (a city prop kind), and "DISPATCH" (the title of an existing video game).
 
 ---
@@ -538,8 +538,8 @@ DOWN** (4.5 s): the dishes droop, ×2 damage, and every add it summoned that is 
   (`render/hazardview.ts`).
 
 ### 3.5 Why these are original and distinct
-* From the city bosses: CAISSON-4 is a crane (hook lanes, winch oval), IRON GULLY a beast (breath cone,
-  paw rings, plates, charge), PARKADE-6 a walking car park (car lobs, arm cone, tow chain, deck rings).
+* From the city bosses: CAISSON-4 is a crane (hook lanes, winch oval), IRON GULLY a snow-clearance walker (auger
+  blast cone, double-stamp rings, spreader plates, plough run), PARKADE-6 a walking car park (car lobs, arm cone, tow chain, deck rings).
   The gatekeepers are street vehicles and street equipment at street scale, with different verbs: paint
   lanes and a refill window; a turning wall and a rear weak point; summoned adds, a rotating weak-point
   crown and a chase.

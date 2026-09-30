@@ -26,20 +26,22 @@ export const BOSSES: Record<BossId, BossDef> = {
       { id: 'legStomp', name: 'LEG STOMP', subtitle: 'LEG STOMP — CLEAR THE RING', phase: 3 },
     ],
   },
+  // WHITE STACKS' boss: HALVARD's road gritter + V-plough on four hydraulic stamp legs (a machine — owner rule
+  // 2026-09-29); weak point the spreader SPINNER on the plate magazine (sim: ai/bosses/irongully.ts, part 'sail')
   irongully: {
     id: 'irongully',
     name: 'IRON GULLY',
-    title: 'THE PALE RIDGE OF THE STACKS',
+    title: 'HALVARD SNOW-CLEARANCE WALKER',
     meterName: 'FRACTURE',
     role: 'main', slot: 4, kicker: '',
     hp: 215000,
     height: 70,
     attacks: [
-      { id: 'coneBreath', name: 'CONE BREATH', subtitle: 'CONE BREATH — GET OUT OF ITS SIGHTLINE', phase: 1 },
-      { id: 'pawSlam', name: 'PAW SLAM', subtitle: 'PAW SLAM — DASH THROUGH THE RING', phase: 1 },
-      { id: 'plateVolley', name: 'SCRAP PLATES', subtitle: 'SCRAP PLATES — WATCH THE SHADOWS', phase: 2 },
-      { id: 'ridgeCharge', name: 'RIDGE CHARGE', subtitle: 'RIDGE CHARGE — SIDESTEP THE LANE', phase: 2 },
-      { id: 'breathSlam', name: 'WHITEOUT COMBO', subtitle: 'WHITEOUT — LEAVE THE SIGHTLINE, THEN DASH THE RING', phase: 3 },
+      { id: 'coneBreath', name: 'AUGER BLAST', subtitle: 'AUGER BLAST — GET OUT OF ITS SIGHTLINE', phase: 1 },
+      { id: 'pawSlam', name: 'DOUBLE STAMP', subtitle: 'DOUBLE STAMP — DASH THROUGH THE RING', phase: 1 },
+      { id: 'plateVolley', name: 'PLATE SPREADER', subtitle: 'PLATE SPREADER — WATCH THE SHADOWS', phase: 2 },
+      { id: 'ridgeCharge', name: 'PLOUGH RUN', subtitle: 'PLOUGH RUN — SIDESTEP THE LANE', phase: 2 },
+      { id: 'breathSlam', name: 'WHITEOUT', subtitle: 'WHITEOUT — LEAVE THE SIGHTLINE, THEN DASH THE RING', phase: 3 },
     ],
   },
   // v2 (FEATURES_V2 §10.2) — GRID-EAST's boss: a walking multi-storey car park; weak point the TILL (ai/bosses/parkade6.ts)
@@ -110,7 +112,7 @@ export const BOSSES: Record<BossId, BossDef> = {
 /** Nameplate subtitle when no attack is active (the default mechanic hint, §10). */
 export const BOSS_DEFAULT_SUBTITLE: Record<BossId, string> = {
   caisson4: 'BREAK THE LEGS — BUILD STRAIN',
-  irongully: 'CRACK THE SAIL — BUILD FRACTURE',
+  irongully: 'CRACK THE SPINNER — BUILD FRACTURE',
   parkade6: 'HIT THE TILL WHEN THE DECK OPENS — BUILD JAM',
   // GATEKEEPERS (§3.1–§3.3)
   stencil1: 'WAIT FOR THE REFILL — HIT THE DRUM',

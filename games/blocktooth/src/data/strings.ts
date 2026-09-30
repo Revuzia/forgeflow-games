@@ -212,6 +212,11 @@ export const STR = {
     slotCount: 'SLOTS {n}/{cap}',
     /** header banner once every slot is taken */
     slotsFull: 'SLOTS FULL — UPGRADES ONLY',
+    /** BANISH refused on a card you already own (upgrades/draft.ts banishOwned): it keeps its slot and its level.
+     *  Shown on the card when X / hold pad Y / the ✕ corner is pressed, and as the ✕ corner's tooltip. */
+    banishOwned: "YOU OWN THIS ONE — IT KEEPS ITS SLOT. BANISH ONLY WORKS ON CARDS YOU DON'T HAVE",
+    /** short form for the card stamp */
+    banishOwnedShort: "CAN'T BANISH — YOU OWN IT",
     /** OVERFLOW draft (nothing offerable): header + stamp + the three rewards (types.ts OverflowRewardId).
      *  {n} = the percentage the draft lane's OVERFLOW constants give. */
     overflowTitle: 'NOTHING NEW TO FILE',

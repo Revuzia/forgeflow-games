@@ -318,7 +318,7 @@
 .bt-hook-name { font-family: var(--f-display); font-size: calc(var(--u) * 1.05); letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bt-hook .bt-key, .bt-dash .bt-key { color: var(--navy); }
 .bt-lvflash {
-  position: absolute; left: 50%; top: 0; opacity: 0; pointer-events: none; white-space: nowrap;
+  position: absolute; left: 50%; top: auto; bottom: 100%; opacity: 0; pointer-events: none; white-space: nowrap;
   font-family: var(--f-display); font-size: calc(var(--u) * 2.6); color: var(--gold); letter-spacing: .04em;
   -webkit-text-stroke: calc(var(--u) * .14) var(--ink); paint-order: stroke fill;
   text-shadow: calc(var(--u) * .22) calc(var(--u) * .22) 0 var(--ink);
