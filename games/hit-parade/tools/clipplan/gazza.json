@@ -1,0 +1,246 @@
+{
+  "idle": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/offensive idle",
+    "range": [1, 316],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "jab": {
+    "src": "cmu",
+    "file": "13_18",
+    "range": [1427, 1495],
+    "contact": 1445,
+    "mirror": true,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "L_hand",
+    "fist": 80,
+    "_cand": "jab.2"
+  },
+  "snap_kick": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee attack kick ver. 2",
+    "range": [12, 40],
+    "contact": 24,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "volley": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield kick",
+    "range": [5, 37],
+    "contact": 19,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "crouch_jab": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Crouch Idle",
+        "range": [1, 2],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.058823,
+        "loop": false
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "13_18",
+        "range": [1427, 1495],
+        "contact": 1445,
+        "mirror": true,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "L_hand",
+        "fist": 80,
+        "_cand": "jab.2"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 1
+    },
+    "_upperFrames": 18,
+    "_upperContact": 1445,
+    "contact": 1.2647,
+    "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
+  },
+  "grass_cutter": {
+    "src": "cmu",
+    "file": "74_03",
+    "range": [181, 247],
+    "contact": 226,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "foot",
+    "limb": "R_foot",
+    "fist": 0
+  },
+  "slide_tackle": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/soccer tackle",
+    "range": [11, 63],
+    "contact": 27,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "knee_trap": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/kneeing soccerball (2)",
+    "range": [1, 19],
+    "contact": 9,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "header": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/header soccerball",
+    "range": [15, 45],
+    "contact": 27,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "air": "strip"
+  },
+  "air_knee": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/kneeing soccerball",
+    "range": [9, 28],
+    "contact": 16,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "air": "strip"
+  },
+  "flying_volley": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/strike foward jog",
+    "range": [8, 30],
+    "contact": 18,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "air": "strip"
+  },
+  "flying_punt": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper drop kick",
+    "range": [55, 77],
+    "contact": 65,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "air": "strip"
+  },
+  "throw_reach": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper catch (2)",
+    "range": [2, 30],
+    "contact": 9,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "drop_kick_throw": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper drop kick",
+    "range": [40, 118],
+    "contact": 65,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "keeper_throw": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper overhand throw",
+    "range": [20, 86],
+    "contact": 49,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "shot_kick": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/soccer penalty kick",
+    "range": [12, 46],
+    "contact": 27,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "bicycle": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/scissor kick",
+    "range": [12, 84],
+    "contact": 23,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "air": "strip"
+  },
+  "keepy": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/kick up soccerball",
+    "range": [7, 41],
+    "contact": 20,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "dive_roll": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper diving save (2)",
+    "range": [20, 80],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "intro_flick": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/kick up soccerball",
+    "range": [1, 41],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_point": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper directing",
+    "range": [1, 120],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_juggle": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/stall soccerball (4)",
+    "range": [1, 56],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "taunt_keepy": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/stall soccerball (2)",
+    "range": [1, 65],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  }
+}

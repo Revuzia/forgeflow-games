@@ -1,0 +1,485 @@
+{
+  "jab": {
+    "src": "cmu",
+    "file": "14_02",
+    "range": [4937, 5004],
+    "contact": 4953,
+    "mirror": true,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "L_hand",
+    "fist": 80,
+    "_cand": "jab.1"
+  },
+  "crouch_jab": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Crouch Idle",
+        "range": [1, 2],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.0625,
+        "loop": false
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "14_02",
+        "range": [3520, 3582],
+        "contact": 3534,
+        "mirror": true,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "L_hand",
+        "fist": 80,
+        "_cand": "jab.4"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 1
+    },
+    "_upperFrames": 17,
+    "_upperContact": 3534,
+    "contact": 1.2188,
+    "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
+  },
+  "cross": {
+    "src": "cmu",
+    "file": "13_17",
+    "range": [222, 300],
+    "contact": 239,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "R_hand",
+    "fist": 80,
+    "_cand": "cross.1"
+  },
+  "low_body": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Crouch Idle",
+        "range": [1, 2],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.1,
+        "loop": false
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "14_03",
+        "range": [3232, 3270],
+        "contact": 3245,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "R_hand",
+        "fist": 80,
+        "_cand": "body_blow.1"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 1
+    },
+    "_upperFrames": 11,
+    "_upperContact": 3245,
+    "contact": 1.325,
+    "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
+  },
+  "haymaker": {
+    "src": "cmu",
+    "file": "14_03",
+    "range": [4060, 4148],
+    "contact": 4078,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "R_hand",
+    "fist": 80,
+    "_cand": "hook.1"
+  },
+  "uppercut": {
+    "src": "cmu",
+    "file": "17_10",
+    "range": [1559, 1637],
+    "contact": 1573,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "R_hand",
+    "fist": 80,
+    "_cand": "uppercut.2"
+  },
+  "low_blow": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Crouch Idle",
+        "range": [1, 2],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.052631,
+        "loop": false
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "14_01",
+        "range": [3490, 3565],
+        "contact": 3509,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "L_hand",
+        "fist": 80,
+        "_cand": "hook.3"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 1
+    },
+    "_upperFrames": 20,
+    "_upperContact": 3509,
+    "contact": 1.25,
+    "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
+  },
+  "overhand": {
+    "src": "cmu",
+    "file": "113_13",
+    "range": [614, 718],
+    "contact": 662,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "R_hand",
+    "fist": 80
+  },
+  "air_jab": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.058823,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "13_18",
+        "range": [1427, 1495],
+        "contact": 1445,
+        "mirror": true,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "L_hand",
+        "fist": 80,
+        "_cand": "jab.2"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 18,
+    "_upperContact": 1445,
+    "contact": 28.2647,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_cross": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.0625,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "14_02",
+        "range": [2808, 2870],
+        "contact": 2822,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "R_hand",
+        "fist": 80,
+        "_cand": "cross.2"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 17,
+    "_upperContact": 2822,
+    "contact": 28.2188,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_hammer": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.052631,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "86_06",
+        "range": [4868, 4942],
+        "contact": 4894,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "R_hand",
+        "fist": 80,
+        "_cand": "hammer_chop.1"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 20,
+    "_upperContact": 4894,
+    "contact": 28.3421,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "throw_reach": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper catch (2)",
+    "range": [2, 30],
+    "contact": 9,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "body_burst": {
+    "src": "cmu",
+    "file": "14_03",
+    "range": [3225, 3310],
+    "contact": 3245,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "R_hand",
+    "fist": 80
+  },
+  "hook_fling": {
+    "src": "cmu",
+    "file": "14_01",
+    "range": [2857, 2986],
+    "contact": 2917,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "L_hand",
+    "fist": 80,
+    "_cand": "hook.4"
+  },
+  "brick_throw": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper overhand throw",
+    "range": [36, 72],
+    "contact": 48,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "encore_upper": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [15, 45],
+        "contact": null,
+        "mirror": false,
+        "speed": 1.5,
+        "loop": false
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "17_10",
+        "range": [1559, 1637],
+        "contact": 1573,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "R_hand",
+        "fist": 80,
+        "_cand": "uppercut.2"
+      },
+      "split": "Spine",
+      "lowerMode": "sync"
+    },
+    "_upperFrames": 21,
+    "_upperContact": 1573,
+    "contact": 20.25,
+    "_why": "jump legs (take-off to apex f28) time-scaled under the CMU rear uppercut",
+    "air": "strip"
+  },
+  "run_hook": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Run Forward",
+        "range": [1, 23],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.916666,
+        "loop": true
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "79_08",
+        "range": [256, 350],
+        "contact": 314,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "R_hand",
+        "fist": 80,
+        "_cand": "hook.2"
+      },
+      "split": "Spine",
+      "lowerMode": "loop"
+    },
+    "_upperFrames": 25,
+    "_upperContact": 314,
+    "contact": 14.2917,
+    "_why": "running legs loop under the fastest CMU hook (11.7 m/s)"
+  },
+  "weave_duck": {
+    "src": "cmu",
+    "file": "17_10",
+    "range": [2129, 2166],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "body",
+    "limb": "body",
+    "fist": 0
+  },
+  "weave_counter_hook": {
+    "src": "cmu",
+    "file": "17_10",
+    "range": [2150, 2197],
+    "contact": 2176,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "L_hand",
+    "fist": 80,
+    "_cand": "duck_counter.1"
+  },
+  "sold_out_flurry": {
+    "src": "seq",
+    "seq": [
+      {
+        "src": "cmu",
+        "file": "14_02",
+        "range": [1550, 1632],
+        "contact": 1567,
+        "mirror": true,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "L_hand",
+        "fist": 80,
+        "contacts": [1567, 1593, 1617],
+        "marks": {"hit1": 1567, "hit2": 1593, "hit3": 1617}
+      },
+      {
+        "src": "cmu",
+        "file": "17_10",
+        "range": [1559, 1637],
+        "contact": 1573,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "R_hand",
+        "fist": 80,
+        "_cand": "uppercut.2"
+      }
+    ],
+    "xf": 2,
+    "contact": 1567,
+    "_why": "14_02 jab 1567 / cross 1593 / jab 1617 is one real combo in the take; + rear uppercut"
+  },
+  "intro_shadowbox": {
+    "src": "cmu",
+    "file": "14_01",
+    "range": [3030, 3110],
+    "contact": 3043,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "L_hand",
+    "fist": 80
+  },
+  "win_arms_up": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 2H Cast Spell 01",
+    "range": [1, 66],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_wave": {
+    "src": "mixamo",
+    "file": "Male_Injured_Pack/injured wave idle",
+    "range": [1, 90],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "taunt_cocky": {
+    "src": "mixamo",
+    "file": "Gestures_Pack_Basic/being cocky",
+    "range": [1, 87],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  }
+}

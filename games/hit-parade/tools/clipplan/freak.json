@@ -1,0 +1,352 @@
+{
+  "idle": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant idle",
+    "range": [1, 390],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "walk_f": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant walking",
+    "range": [1, 44],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "claw_jab": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant punch",
+    "range": [1, 22],
+    "contact": 9,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "wild_swing": {
+    "src": "cmu",
+    "file": "80_10",
+    "range": [379, 412],
+    "contact": 395,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "R_hand",
+    "fist": 0
+  },
+  "crystal_swipe": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant swiping",
+    "range": [25, 60],
+    "contact": 41,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "low_claw": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Crouch Idle",
+        "range": [1, 2],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.047619,
+        "loop": false
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Creature_Pack/mutant punch",
+        "range": [1, 22],
+        "contact": 9,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 1
+    },
+    "_upperFrames": 22,
+    "_upperContact": 9,
+    "contact": 1.381,
+    "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
+  },
+  "floor_slam": {
+    "src": "mixamo",
+    "file": "Creature_Pack/jump attack",
+    "range": [40, 70],
+    "contact": 51,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "jump_claw": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant jumping",
+    "range": [20, 60],
+    "contact": 32,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "air": "strip"
+  },
+  "hammer_down": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant jump attack",
+    "range": [30, 70],
+    "contact": 51,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "air_claw": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Creature_Pack/mutant jumping",
+        "range": [49, 50],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.047619,
+        "loop": false,
+        "_why": "apex f49 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Creature_Pack/mutant punch",
+        "range": [1, 22],
+        "contact": 9,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 49
+    },
+    "_upperFrames": 22,
+    "_upperContact": 9,
+    "contact": 49.381,
+    "air": "strip"
+  },
+  "air_swipe": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Creature_Pack/mutant jumping",
+        "range": [49, 50],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.045454,
+        "loop": false,
+        "_why": "apex f49 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Creature_Pack/mutant swiping",
+        "range": [31, 53],
+        "contact": 41,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 49
+    },
+    "_upperFrames": 23,
+    "_upperContact": 41,
+    "contact": 49.4545,
+    "air": "strip"
+  },
+  "air_slam": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant jump attack",
+    "range": [40, 60],
+    "contact": 51,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "air": "strip"
+  },
+  "throw_reach": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant punch",
+    "range": [2, 34],
+    "contact": 9,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "crush": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant flexing muscles",
+    "range": [1, 133],
+    "contact": 65,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "fling": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant swiping",
+    "range": [1, 73],
+    "contact": 41,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "crusher_leap_clip": {
+    "src": "mixamo",
+    "file": "Creature_Pack/jump attack",
+    "range": [9, 83],
+    "contact": 51,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "air": "strip"
+  },
+  "claw_rush_clip": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Creature_Pack/mutant run",
+        "range": [1, 27],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.742857,
+        "loop": true
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Creature_Pack/mutant swiping",
+        "range": [25, 60],
+        "contact": 41,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "loop"
+    },
+    "_upperFrames": 36,
+    "_upperContact": 41,
+    "contact": 12.8857
+  },
+  "roar_wave": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant roaring",
+    "range": [20, 66],
+    "contact": 27,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "grab_slam": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant jump attack",
+    "range": [1, 112],
+    "contact": 51,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "meltdown_clip": {
+    "src": "seq",
+    "seq": [
+      {
+        "src": "layer",
+        "layer": {
+          "lower": {
+            "src": "mixamo",
+            "file": "Creature_Pack/mutant run",
+            "range": [1, 27],
+            "contact": null,
+            "mirror": false,
+            "speed": 1.04,
+            "loop": true
+          },
+          "upper": {
+            "src": "mixamo",
+            "file": "Creature_Pack/mutant swiping",
+            "range": [25, 50],
+            "contact": 41,
+            "mirror": false,
+            "speed": 1.0,
+            "loop": false
+          },
+          "split": "Spine",
+          "lowerMode": "loop"
+        },
+        "_upperFrames": 26,
+        "_upperContact": 41,
+        "contact": 17.64
+      },
+      {
+        "src": "mixamo",
+        "file": "Creature_Pack/mutant punch",
+        "range": [1, 20],
+        "contact": 9,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      {
+        "src": "mixamo",
+        "file": "Creature_Pack/mutant swiping",
+        "range": [30, 73],
+        "contact": 41,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      }
+    ],
+    "xf": 2,
+    "contact": 41
+  },
+  "intro_roar": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant roaring",
+    "range": [1, 162],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_roar": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant roaring",
+    "range": [60, 162],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_idle": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant idle (2)",
+    "range": [1, 158],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "taunt_flex": {
+    "src": "mixamo",
+    "file": "Creature_Pack/mutant flexing muscles",
+    "range": [1, 133],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  }
+}

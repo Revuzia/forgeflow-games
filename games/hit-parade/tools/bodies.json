@@ -1,0 +1,24 @@
+{
+  "_doc": [
+    "Body registry for tools/build_fighters.py (lane ASSETS). fbx is relative to the Mixamo characters folder.",
+    "heightM is the DEFAULT normalised rest height (top of hair to sole); data/fighters/<id>.json heightM (lane FIGHTERS) overrides it when present.",
+    "hide = regexes of prop meshes removed before export (CONTRACT 5.4). Heights: _research/characters/ROSTER.md target heights where it has one; otherwise a designed value marked 'assumed'."
+  ],
+  "characters_root": "F:/games/forgeflow-games-assets/_downloaded/mixamo/characters",
+  "bodies": {
+    "johnny":   {"fbx": "Ch42_nonPBR.fbx", "heightM": 1.80, "hide": []},
+    "patch":    {"fbx": "Eve By J.Gonzales.fbx", "heightM": 1.72, "hide": []},
+    "bruno":    {"fbx": "Brute.fbx", "heightM": 2.00, "hide": ["^BattleAxe_GEO$"]},
+    "zambini":  {"fbx": "Whiteclown N Hallin.fbx", "heightM": 1.85, "hide": []},
+    "krane":    {"fbx": "Swat.fbx", "heightM": 1.82, "hide": []},
+    "lotus":    {"fbx": "Kachujin G Rosales.fbx", "heightM": 1.75, "hide": ["bow"], "note": "heightM assumed"},
+    "boneyard": {"fbx": "Ch05_nonPBR.fbx", "heightM": 1.90, "hide": []},
+    "spin":     {"fbx": "Ch06_nonPBR.fbx", "heightM": 1.78, "hide": [], "note": "heightM assumed"},
+    "gazza":    {"fbx": "Ch08_nonPBR.fbx", "heightM": 1.80, "hide": []},
+    "rerun":    {"fbx": "Prisoner B Styperek.fbx", "heightM": 1.80, "hide": []},
+    "freak":    {"fbx": "Mutant.fbx", "heightM": 2.40, "hide": []},
+    "ricky":    {"fbx": "Ch40_nonPBR.fbx", "heightM": 1.90, "hide": []}
+  },
+  "xbot_fbx": "F:/games/forgeflow-games-assets/_downloaded/mixamo/animations/Pro_Melee_Axe_Pack/X Bot.fbx",
+  "mixamo_root": "F:/games/forgeflow-games-assets/_downloaded/mixamo/animations"
+}

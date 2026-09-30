@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "_src": {
+    "season": "CONTRACT 11 + FIGHTING_DESIGN 9b: 8 episodes = 4 random (Ep 1-4) with BRAWL BREAK after Ep 3, Ep 5 RIVAL, Ep 6 random, HECKLER TOSS after Ep 6, Ep 7 MINI BOSS THE FREAK, Ep 8 BOSS RICKY MARQUEE. Levels are the Normal ladder (L2 L3 L3 L4 L5 L5 L6 L6); bosses get tools, not faster reactions (data/cpu.json boss).",
+    "pilot": "FIGHTING_DESIGN 9b: Ep 1-3 random (L2 L3 L4), BRAWL BREAK after Ep 2, Ep 4 MINI BOSS, Ep 5 BOSS.",
+    "slots": "Read by runtime/src/app/flow.ts ladderSpecs(): kind bout|rival|miniboss|boss|brawl|heckler, level = Normal CPU level (0 for bonus rounds), optional opponent (fighter id), optional stage (absent = the opponent's home stage, fighters/<id>.json stage). Random opponents are drawn without replacement from the playable roster minus the player and (when a rival slot exists) the rival, with the run seed.",
+    "difficulty": "FIGHTING_DESIGN 9b: Easy -2 levels, Hard +2, clamped 0..8 (menus index 0/1/2 -> shift -2/0/+2 in game.ts).",
+    "rivals": "CONTRACT 5.4 roster table (rival column); each pair has a banter card (data/strings.json banter.<a>.<b>, lane UI copy).",
+    "continues": "FIGHTING_DESIGN 9b: unlimited; a continue resets the episode's RATINGS; the boss bout restarts whole (his phase 2 persists only inside one bout)."
+  },
+  "season": [
+    { "kind": "bout", "level": 2 },
+    { "kind": "bout", "level": 3 },
+    { "kind": "bout", "level": 3 },
+    { "kind": "brawl", "level": 0 },
+    { "kind": "bout", "level": 4 },
+    { "kind": "rival", "level": 5 },
+    { "kind": "bout", "level": 5 },
+    { "kind": "heckler", "level": 0 },
+    { "kind": "miniboss", "level": 6, "opponent": "freak" },
+    { "kind": "boss", "level": 6, "opponent": "ricky" }
+  ],
+  "pilot": [
+    { "kind": "bout", "level": 2 },
+    { "kind": "bout", "level": 3 },
+    { "kind": "brawl", "level": 0 },
+    { "kind": "bout", "level": 4 },
+    { "kind": "miniboss", "level": 6, "opponent": "freak" },
+    { "kind": "boss", "level": 6, "opponent": "ricky" }
+  ],
+  "difficulty": { "easy": -2, "normal": 0, "hard": 2, "minLevel": 0, "maxLevel": 8 },
+  "bouts": { "rounds": 2, "timer": 99, "arcadeTieCpuWins": true },
+  "bonus": {
+    "brawl": { "mode": "brawl", "seconds": 45, "card": "brawl" },
+    "heckler": { "mode": "heckler", "seconds": 40, "card": "heckler" }
+  },
+  "continues": { "unlimited": true, "resetEpisodeRatings": true, "bossRestartsBout": true },
+  "miniBoss": "freak",
+  "boss": "ricky",
+  "rivals": [
+    { "fighter": "johnny", "rival": "boneyard", "banter": ["banter.johnny.boneyard", "banter.boneyard.johnny"] },
+    { "fighter": "patch", "rival": "spin", "banter": ["banter.patch.spin", "banter.spin.patch"] },
+    { "fighter": "bruno", "rival": "krane", "banter": ["banter.bruno.krane", "banter.krane.bruno"] },
+    { "fighter": "zambini", "rival": "gazza", "banter": ["banter.zambini.gazza", "banter.gazza.zambini"] },
+    { "fighter": "krane", "rival": "bruno", "banter": ["banter.krane.bruno", "banter.bruno.krane"] },
+    { "fighter": "lotus", "rival": "rerun", "banter": ["banter.lotus.rerun", "banter.rerun.lotus"] },
+    { "fighter": "boneyard", "rival": "johnny", "banter": ["banter.boneyard.johnny", "banter.johnny.boneyard"] },
+    { "fighter": "spin", "rival": "patch", "banter": ["banter.spin.patch", "banter.patch.spin"] },
+    { "fighter": "gazza", "rival": "zambini", "banter": ["banter.gazza.zambini", "banter.zambini.gazza"] },
+    { "fighter": "rerun", "rival": "lotus", "banter": ["banter.rerun.lotus", "banter.lotus.rerun"] }
+  ],
+  "cards": {
+    "rival": { "kicker": "card.rival.kicker", "title": "card.rival.title" },
+    "miniboss": { "kicker": "card.miniboss.kicker", "title": "card.miniboss.title", "body": "card.miniboss.body" },
+    "boss": { "kicker": "card.boss.kicker", "title": "card.boss.title", "body": "card.boss.body", "warn": "card.boss.warn" },
+    "brawl": { "kicker": "card.brawl.kicker", "title": "card.brawl.title", "body": "card.brawl.body" },
+    "heckler": { "kicker": "card.heckler.kicker", "title": "card.heckler.title", "body": "card.heckler.body" }
+  },
+  "endings": {
+    "johnny": "ending.johnny",
+    "patch": "ending.patch",
+    "bruno": "ending.bruno",
+    "zambini": "ending.zambini",
+    "krane": "ending.krane",
+    "lotus": "ending.lotus",
+    "boneyard": "ending.boneyard",
+    "spin": "ending.spin",
+    "gazza": "ending.gazza",
+    "rerun": "ending.rerun",
+    "freak": "ending.freak",
+    "ricky": "ending.ricky",
+    "default": "ending.default"
+  },
+  "unlocks": { "seasonClear": ["freak", "ricky"] }
+}

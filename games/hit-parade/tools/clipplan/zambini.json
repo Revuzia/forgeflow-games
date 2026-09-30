@@ -1,0 +1,302 @@
+{
+  "palm_flick": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 1H Magic Attack 02",
+    "range": [14, 37],
+    "contact": 21,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "spear_hand": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 2H Magic Attack 03",
+    "range": [23, 60],
+    "contact": 35,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "double_palm": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 2H Magic Attack 01",
+    "range": [24, 62],
+    "contact": 39,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "low_palm": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Crouch Idle",
+        "range": [1, 2],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.043478,
+        "loop": false
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing 1H Magic Attack 02",
+        "range": [14, 37],
+        "contact": 21,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 1
+    },
+    "_upperFrames": 24,
+    "_upperContact": 21,
+    "contact": 1.3043,
+    "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
+  },
+  "low_spear": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Crouch Idle",
+        "range": [1, 2],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.027777,
+        "loop": false
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing 2H Magic Attack 03",
+        "range": [23, 59],
+        "contact": 35,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 1
+    },
+    "_upperFrames": 37,
+    "_upperContact": 35,
+    "contact": 1.3333,
+    "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
+  },
+  "rising_palm": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 2H Magic Attack 05",
+    "range": [52, 84],
+    "contact": 64,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "abracadabra": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 2H Magic Area Attack 01",
+    "range": [18, 60],
+    "contact": 40,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "air_palm": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.05,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing 1H Magic Attack 02",
+        "range": [14, 34],
+        "contact": 21,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 21,
+    "_upperContact": 21,
+    "contact": 28.35,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_flick": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.045454,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing 1H Magic Attack 01",
+        "range": [19, 41],
+        "contact": 29,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 23,
+    "_upperContact": 29,
+    "contact": 28.4545,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_double": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.04,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing 2H Magic Attack 01",
+        "range": [26, 51],
+        "contact": 39,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 26,
+    "_upperContact": 39,
+    "contact": 28.52,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "throw_reach": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper catch (2)",
+    "range": [2, 30],
+    "contact": 9,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "palm_shove": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 2H Magic Attack 02",
+    "range": [30, 62],
+    "contact": 43,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "spin_fling": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 1H Magic Attack 01",
+    "range": [10, 60],
+    "contact": 29,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "card_flick": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 1H Magic Attack 01",
+    "range": [15, 50],
+    "contact": 29,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "flash_cast": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/standing 1H cast spell 01",
+    "range": [8, 45],
+    "contact": 22,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "vanish": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing Idle To Crouch",
+    "range": [1, 29],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "flourish_burst": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 2H Magic Area Attack 02",
+    "range": [35, 70],
+    "contact": 48,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "intro_tada": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 2H Cast Spell 01",
+    "range": [1, 66],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_flourish": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/standing 1H cast spell 01",
+    "range": [1, 69],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_ack": {
+    "src": "mixamo",
+    "file": "Gestures_Pack_Basic/acknowledging",
+    "range": [1, 48],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "taunt_twirl": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing Idle 03",
+    "range": [60, 130],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  }
+}

@@ -1,0 +1,1250 @@
+{
+ "heightM": 1.8,
+ "hipsM": 0.954,
+ "handReachM": 0.75,
+ "footReachM": 0.95,
+ "clips": {
+  "idle": {
+   "dur": 2,
+   "frames": 60,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     2,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": true
+  },
+  "walk_f": {
+   "dur": 1,
+   "frames": 30,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": true
+  },
+  "walk_b": {
+   "dur": 1,
+   "frames": 30,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": true
+  },
+  "crouch": {
+   "dur": 0.2,
+   "frames": 6,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.2,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "crouch_idle": {
+   "dur": 2,
+   "frames": 60,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     2,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": true
+  },
+  "jump_up": {
+   "dur": 0.75,
+   "frames": 23,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.75,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "jump_f": {
+   "dur": 0.75,
+   "frames": 23,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.75,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "jump_b": {
+   "dur": 0.75,
+   "frames": 23,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.75,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "land": {
+   "dur": 0.1,
+   "frames": 3,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.1,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "dash_f": {
+   "dur": 0.3,
+   "frames": 9,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.3,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "dash_b": {
+   "dur": 0.38,
+   "frames": 11,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.38,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "block_high": {
+   "dur": 0.3,
+   "frames": 9,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.3,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "block_low": {
+   "dur": 0.3,
+   "frames": 9,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.3,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "hit_high_s": {
+   "dur": 0.4,
+   "frames": 12,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.4,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "hit_high_l": {
+   "dur": 0.5,
+   "frames": 15,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.5,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "hit_body": {
+   "dur": 0.45,
+   "frames": 14,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.45,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "hit_low": {
+   "dur": 0.4,
+   "frames": 12,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.4,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "hit_air": {
+   "dur": 0.8,
+   "frames": 24,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.8,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "crumple": {
+   "dur": 1.2,
+   "frames": 36,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     1.2,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "kd_fall_b": {
+   "dur": 0.5,
+   "frames": 15,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.5,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "kd_fall_f": {
+   "dur": 0.5,
+   "frames": 15,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.5,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "kd_ground_b": {
+   "dur": 1,
+   "frames": 30,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": true
+  },
+  "kd_ground_f": {
+   "dur": 1,
+   "frames": 30,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": true
+  },
+  "wake_b": {
+   "dur": 0.3,
+   "frames": 9,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.3,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "wake_f": {
+   "dur": 0.3,
+   "frames": 9,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.3,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "wall_splat": {
+   "dur": 0.6,
+   "frames": 18,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.6,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "thrown_f": {
+   "dur": 0.6,
+   "frames": 18,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.6,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "thrown_b": {
+   "dur": 0.6,
+   "frames": 18,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.6,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "dizzy": {
+   "dur": 2,
+   "frames": 60,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     2,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": true
+  },
+  "ko_fall": {
+   "dur": 1.2,
+   "frames": 36,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     1.2,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "timeover_lose": {
+   "dur": 2,
+   "frames": 60,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     2,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "parry": {
+   "dur": 0.4,
+   "frames": 12,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.4,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "impact_windup": {
+   "dur": 1.05,
+   "frames": 32,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     1.05,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "shove": {
+   "dur": 0.8,
+   "frames": 24,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.8,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_5l": {
+   "dur": 0.367,
+   "frames": 11,
+   "contact": 0.11,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.7,
+     1.25
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.367,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_5m": {
+   "dur": 0.55,
+   "frames": 17,
+   "contact": 0.17,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.9,
+     1.3
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.55,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_tc5h": {
+   "dur": 0.683,
+   "frames": 20,
+   "contact": 0.2,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     1,
+     1.2
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.683,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_5h": {
+   "dur": 0.683,
+   "frames": 20,
+   "contact": 0.3,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     1.08,
+     1.3
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.683,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_2l": {
+   "dur": 0.383,
+   "frames": 11,
+   "contact": 0.125,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.66,
+     0.35
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.383,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_2m": {
+   "dur": 0.533,
+   "frames": 16,
+   "contact": 0.17,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.84,
+     0.3
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.533,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_2h": {
+   "dur": 0.667,
+   "frames": 20,
+   "contact": 0.185,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.45,
+     1.75
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.667,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_3h": {
+   "dur": 0.717,
+   "frames": 22,
+   "contact": 0.2,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     1.1,
+     0.2
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.717,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_4h": {
+   "dur": 0.75,
+   "frames": 23,
+   "contact": 0.26,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.85,
+     1.1
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.75,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_6h": {
+   "dur": 0.733,
+   "frames": 22,
+   "contact": 0.32,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.8,
+     1.2
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.733,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_jl": {
+   "dur": 0.467,
+   "frames": 14,
+   "contact": 0.125,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.45,
+     0.9
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.467,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_jm": {
+   "dur": 0.517,
+   "frames": 16,
+   "contact": 0.155,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.5,
+     0.7
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.517,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_jh": {
+   "dur": 0.6,
+   "frames": 18,
+   "contact": 0.2,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.55,
+     0.55
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.6,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_throw_f": {
+   "dur": 0.617,
+   "frames": 19,
+   "contact": 0.125,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.9,
+     1.3
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.617,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_throw_b": {
+   "dur": 0.617,
+   "frames": 19,
+   "contact": 0.125,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.9,
+     1.3
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.617,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_brick": {
+   "dur": 0.9,
+   "frames": 27,
+   "contact": 0.29,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.9,
+     1.3
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.9,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_upper": {
+   "dur": 0.9,
+   "frames": 27,
+   "contact": 0.125,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.45,
+     1.45
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.9,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_hook": {
+   "dur": 0.65,
+   "frames": 20,
+   "contact": 0.2,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.6,
+     1.2
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.65,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_weave": {
+   "dur": 0.517,
+   "frames": 16,
+   "contact": 0.065,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.9,
+     1.3
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.517,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_sold_out": {
+   "dur": 1.15,
+   "frames": 35,
+   "contact": 0.17,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.7,
+     1.3
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     1.15,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_main_event": {
+   "dur": 1.3,
+   "frames": 39,
+   "contact": 0.2,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.7,
+     1.2
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     1.3,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_duck": {
+   "dur": 0.517,
+   "frames": 16,
+   "contact": 0.065,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.9,
+     1.3
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.517,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_duck_counter": {
+   "dur": 0.583,
+   "frames": 17,
+   "contact": 0.14,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.7,
+     1.2
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.583,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_dive": {
+   "dur": 0.833,
+   "frames": 25,
+   "contact": 0.17,
+   "effector": {
+    "bone": "RightHand",
+    "at": [
+     0.35,
+     0.3
+    ]
+   },
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     0.833,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_intro": {
+   "dur": 2,
+   "frames": 60,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     2,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_win1": {
+   "dur": 2,
+   "frames": 60,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     2,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  },
+  "a_taunt": {
+   "dur": 2,
+   "frames": 60,
+   "contact": null,
+   "effector": null,
+   "root": [
+    [
+     0,
+     0
+    ],
+    [
+     2,
+     0
+    ]
+   ],
+   "apexY": null,
+   "loop": false
+  }
+ }
+}

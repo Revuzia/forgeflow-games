@@ -89,7 +89,7 @@ games/hit-parade/
   art/        blender/*.py (headless sources)  gltf/fighters/<id>.glb  gltf/props/*.glb
               gltf/stages/*.glb  renders/ (QA, gitignored)  src/ (pointers/manifests to F:\ sources)
   tools/      build_fighters.py (Blender batch driver)  compress_glb.py  cmu_retarget.py
-              clipplan.json (which source clip feeds which fighter clip, §6.2)  research/
+              clipplan/_shared.json (ASSETS: shared system clips) clipplan/<fighter>.json (FIGHTERS)  research/
   runtime/    Vite root
     index.html   (boot guard adapted from dyefield)
     public/      game_meta.json thumbnail.png manifest.webmanifest icons/
@@ -283,7 +283,10 @@ perfect parry/IMPACT/SHOVE/throw numbers, pushback table, stage walls ±8.0 m, s
 - `anim.warp` maps sim frames to clip seconds piecewise-linearly; the **startup frame must map to
   the clip's contact time** (from clips.json `contact`), so the pose at first-active = impact pose
   (doctrine: view strike frame aligned to the sim).
-- Hitboxes default from clips.json `effector` at contact (§6.3) and are then tuned by hand.
+- `anim.warp` and `boxes` are OPTIONAL. If omitted, `core/data.ts` derives them at load from
+  clips.json: warp = [[0,0],[startup, contact],[startup+active+recovery, dur]]; boxes = one box
+  centred on `effector.at` at contact, size by strength class (L 0.30x0.25, M 0.40x0.30,
+  H 0.50x0.35 m), active over the move's active frames. Hand-tuned values override.
 - Frame data starts from the FIGHTING_DESIGN §1b/§1c templates; deviations are per-kit decisions
   recorded in `_spec/ROSTER.md` with the reason.
 - Shared system anims (hit reactions, block, knockdown, wakeup, thrown, crumple, wall splat,
@@ -329,6 +332,26 @@ strikes f4-20), `armorStep` (Bruno/Boneyard/Freak), `teleport` (Zambini), `phase
 - Budget per fighter GLB ≤ 3.0 MB (target 2.0). Textures: one 1024 albedo + normal max; drop
   specular/gloss. Hair/lashes alpha → `alphaTest` (named material suffix `_cutout`).
 - Clip names inside the GLB are exactly the clip ids in clips.json.
+- CHANGED(ASSETS): what the GLB actually contains (additive clarification, no signature broken):
+  - ONE skinned mesh `<id>_body` with ≤ 2 primitives: material `<id>_skin` (OPAQUE) and
+    `<id>_cutout` (alphaMode MASK, cutoff 0.5 → three `alphaTest 0.5`). Both sample ONE 1024 RGBA
+    albedo ATLAS (webp) re-baked (Cycles) from every source material; alpha is only meaningful on
+    `_cutout`. No normal map is shipped (the cel look is albedo-driven; "normal max" stays allowed).
+  - Armature node `<id>_rig`; bones are `mixamorig:<Bone>` in the file, which three's GLTFLoader
+    sanitises to `mixamorig<Bone>` (colon dropped) — find bones by that name. Brute keeps its extra
+    bones (Hair1-4, eyes, Weapon) at bind.
+  - Rest pose: height = `heightM` (data/fighters/<id>.json if present, else tools/bodies.json), lowest
+    vertex on y = 0, facing +Z.
+  - EVERY clip carries a rotation track for EVERY joint plus exactly one `mixamorig:Hips` translation
+    track (no partial clips → no stale bones when the view blends). Hips horizontal travel is
+    stripped (the hips stay above the rest hips x/z in every frame; the forward travel is clips.json
+    `root`); hips vertical is kept (crouch, falls), except jump clips which are ground-locked
+    (feet at the root, the removed lift = `apexY`) because the sim owns airborne height.
+  - Every clip is floor-checked on the real skinned mesh at bake time (hips raised where it would sink).
+  - CHANGED(ASSETS) part 2: size facts. The part-1 strip step left the samplers (and accessors) of every dropped
+    scale / non-Hips translation channel in the file (ricky: 11505 samplers for 3894 channels, a 1.9 MB glTF
+    JSON chunk in a 3.3 MB GLB). Fixed (tools/glb_post.mjs strip disposes unused samplers): ricky 3,304,208 →
+    2,204,176 bytes. Nothing the runtime reads changed (same channels, same clip names).
 
 ### §6.2 Clip set per fighter
 Shared system clips (same id for every fighter, sources chosen once and baked per body):
@@ -337,15 +360,79 @@ block_high, block_low, hit_high_s, hit_high_l, hit_body, hit_low, hit_air, crump
 kd_fall_f, kd_ground_b, kd_ground_f, wake_b, wake_f, wall_splat, thrown_f, thrown_b (victim),
 dizzy (stage fright stun), ko_fall, timeover_lose, parry, impact_windup, shove`.
 Fighter clips: every `moves.*.anim.clip` + `intro`, `win*`, `taunt`, cinematic sub-clips.
-`tools/clipplan.json` = `{ "<fighter>": { "<clipId>": { "src": "mixamo|cmu|layer",
+`tools/clipplan/_shared.json` (lane ASSETS) and `tools/clipplan/<fighter>.json` (lane FIGHTERS),
+each = `{ "<clipId>": { "src": "mixamo|cmu|layer",
 "file": "...", "range": [f0,f1], "mirror": false, "layer": {"lower": "...", "upper": "..."},
-"speed": 1.0 } } }` — authored by lane FIGHTERS from `_research/animations/*` findings.
+"speed": 1.0 } }` — sources chosen from `_research/animations/*` findings.
+- CHANGED(ASSETS): clipplan additions (all optional, additive): `src: "author"` (a keyed world-space
+  pose spec in `art/blender/author_clips.py`, retargeted like any source); `layer.lower` / `layer.upper`
+  may be a full entry object (e.g. a CMU source) instead of a string; `loop`, `loopBlend` (frames eased
+  into frame 0), `air` (`"strip"` ground-lock | `"hold"` hips height held), `floor` (`"clamp"` default |
+  `"plant"` | `"none"`), `contact` (`null` | `"auto"` | SOURCE frame), `effector` (bone), `marks`
+  `{name: source frame}`; CMU entries also take `kind`, `limb`, `fist`, `face` (`"guard"`) exactly as
+  `tools/cmu_retarget.py` (a numeric `contact` also aims the CMU facing). Keys starting `_` are
+  ignored. A fighter clipplan entry whose id equals a shared id OVERRIDES the shared clip for that
+  fighter only. Fighter entries default to `contact: "auto"`. NOT supported yet: `src: "seq"` (used
+  in FIGHTERS' johnny.json) — ASSETS part 2 decides (the driver reports it as an invalid entry).
+- CHANGED(ASSETS) part 2 (builder behaviour; no signature broken, every field optional):
+  - `src: "seq"` IS supported (hp_retarget.SeqSampler), exactly §20.5: segment k starts on output frame
+    start(k-1) + n(k-1) − 1 − `xf` (30 fps), the xf+1 overlap frames crossfade (smoothstep), horizontal hips
+    travel continues across segments (root accumulates). clips.json `contact` = the contact of the first
+    segment that HAS one (its own field, converted through that segment; rerun crawl_run's run-in segment has
+    none, its bite does); `marks` = every segment's contacts in order as
+    `hit1..hitN` (+ other named segment marks) - the same list lane FIGHTERS' kitlib.entry_seconds builds.
+    Measured: johnny sold_out_flurry = 40 frames = 1.3 s, contact 0.1417 s (warp says 0.142 / 1.3).
+  - layer `attach`: `"yaw"` (DEFAULT) | `"full"` | `"world"` - how the upper body is re-attached to the lower's
+    hips. "yaw" applies only the tilt of lowerHips·upperHips⁻¹ (swing about world up), so the upper keeps its own
+    world yaw = its attack line. The part-1 behaviour ("full") carried the upper clip's bladed-pelvis yaw into
+    the result (measured: bruno air_chop fist 0.23 m behind the body, johnny air_cross 0.44 m reach vs 0.87 m).
+  - explicit numeric `contact` → clips.json `contact` is the EXACT converted time (not rounded to a baked
+    frame); `effector.at` is interpolated between the two neighbouring frames. `effector` defaults: the plan's
+    `effector`, else a CMU entry's `limb` (+`kind`), else (layer) the upper's, else (seq) the first segment's,
+    else the fastest limb in [c−4, c+1] (layered strikes: hands only).
+  - CMU limb verification: when the plan's `limb` is not the one moving (other side > 2× faster and > 4 m/s in
+    [c−16, c+4] source frames) the clip is baked with the measured side (facing + effector) and bake.json records
+    `_limb_check` / `_limb_resolved`; `limb_lock: true` skips it.
+  - floor `"clamp"` (default) also SETTLES a clip whose lowest vertex never touches the floor (whole clip
+    lowered by its smallest gap). An authored spec may carry its own default `floor` (crouch_toe_kick: "plant").
+  - CONTACT AIM: the opponent is always straight ahead, so when a strike's aim point at contact is > 25° off
+    the forward axis (seen from above, from the hips, ≥ 0.20 m out) the clip is turned about the vertical so it
+    lands straight ahead - the whole clip, or only the UPPER body of a layer. Aim point = the effector, or the
+    mid-point of both hands for two-handed moves (other hand ≥ 0.6× the effector's speed, or both hands out at
+    a similar height) and CMU `body` grabs. Not applied to `author` / `seq` clips or entries with `"aim": false`.
+    bake.json records `aim` {deg, point, scope, effector_before/after}. The turn also re-projects `root`.
+    Measured: bruno storage_slam (a sideways goalkeeper dive) turned −76.6°, effector x_fwd 0.39 → 1.05 m.
+    `seq` clips are aimed PER SEGMENT (each segment with a contact; the xf crossfade pivots between them):
+    spin handspin_clip toe 0.93 m behind the body → 0.92 m in front; windmill_l/m/h lateral 0.58 m → 0.
+  - KNEE strikes: a derived foot effector becomes `<Side>Knee` when, at contact, the knee is ≥ 0.15 m above the
+    toe and the toe is no farther out from the hips than the knee (rotation-invariant). gazza air_knee and
+    patch step_knee now report the knee; kicks and floor sweeps keep the foot. An explicit plan `effector` wins.
+  - `effector.at` at a fractional contact time is the pose AT that time with the joints slerped (what three.js
+    samples), not a chord between two baked frames (johnny run_hook differed by 6.6 cm).
+  - authored specs gain `upper` (layered base), `ik` (two-bone leg IK to an ankle target / "base" = planted)
+    and `aim` keys (art/blender/author_clips.py header). `crouch_toe_kick` / `crouch_shin_kick` exist: the toe
+    kick uses the FRONT leg of the shared crouch, which is the LEFT leg (FIGHTERS' text said right).
+- CHANGED(ASSETS): THROW PAIR SYNC. `thrown_f` / `thrown_b` are the victim halves. Victim frame 0 = the
+  throw connects (= the attacker throw clip's `contact`); victim `marks.slam` = the victim hits the
+  floor (thrown_f 0.733 s, lands on the back, ends in the kd_ground_b pose, ~1.2 m backward travel
+  in `root`; thrown_b 0.667 s, lands face-down, ends in the kd_ground_f pose, ~1.4 m forward). An
+  attacker throw clip in a fighter clipplan declares its own `marks: {"slam": <source frame>}`; the
+  view warps each clip so both slam marks land on the same sim frame. `wall_splat` has `marks.splat`.
 
 ### §6.3 `data/clips/<id>.clips.json` (generated)
 Per clip: `{ "dur": s, "frames": n, "contact": s|null, "effector": {"bone": "RightHand",
 "at": [x_fwd, y_up] metres fighter-local at contact} | null, "root": [[t, dx_fwd_m], ...],
 "apexY": m|null, "loop": bool }` plus body facts `{ "heightM", "hipsM", "handReachM",
 "footReachM" }`. Contact = end-effector speed peak/extension rule from the research lanes.
+- CHANGED(ASSETS): file layout = `{ "fighter": id, "generated_by": "...", "fps": 30, "body": {heightM,
+  hipsM, handReachM, footReachM}, "clips": { "<clipId>": {dur, frames, contact, effector, root, apexY,
+  loop, marks?} }, "_meta": {field definitions} }`. `dur = (frames − 1) / 30`. `root` has one row per
+  baked frame. Contact uses the FRONT-PASS refinement (the frame in [c−8, c+3] where the effector is
+  farthest forward) unless the clipplan gives a frame. Effector points: hands = `<Side>HandMiddle1`
+  head (knuckles), feet = `<Side>ToeBase` head, knees = `<Side>Leg` head, head = `HeadTop_End`.
+  `apexY` is non-null only for ground-locked (`air: "strip"`) clips. Optional `marks: {name: s}`.
+  Measured on johnny/bruno: three.js bone positions match `effector.at` to 0.4 mm with the root at
+  yaw +90 (x_fwd = world +X).
 
 ### §6.4 Props, stages, crowd
 - Props GLBs (`art/gltf/props/`): riot shield, baton, cleaver, football, brick, playing card,
@@ -415,6 +502,36 @@ boo one-shots, host stings, round announcer stingers (bell, air horn), UI). Musi
 select, one track per stage, boss, results/ending jingle; unused tracks only
 (`state/music_assignments.json`). Shipped audio ≤ 12 MB total. Credits generated.
 
+### §9.1 CHANGED(AUDIO): the audio API game.ts / UI / settings call (extends §16, breaks nothing)
+- `createAudio(opts?)` -> `GameAudio` (`audio/index.ts`, types in `audio/types.ts`): the §16 members `unlock()`,
+  `preload(ids?)`, `events(ev, m)`, `music(cue | null)`, `ui(cue)`, `setVolumes(v)`, `stats()` plus
+  `bout(info | null)`, `setPaused(b)`, `setSplatter('splatter'|'sparks'|'confetti')`, `announce(line)`, `unlocked`, `dispose()`.
+- `events(ev, m, f?)`: optional third arg `f = [readFighter(m,0), readFighter(m,1)]` (stereo pan by x, crowd bed from
+  SHOWTIME, combo calls). Audio dedupes `(frame,type,a,b)` itself as well (rollback re-emits are harmless).
+- `bout({ fighters: [id0, id1], stage, mode?, local? /* 0|1 = this screen's player, -1 local 2P */, sfxNames?: m.tab.sfx })`
+  when a match mounts (voices, stage music, crowd beds); `bout(null)` when it ends. `preload()` with no ids = the bout
+  set (sfx + crowd sprites); the first `events()` call starts it if the integrator did not.
+- `music(cue)`: `'menu' | 'select' | 'stage' | 'boss' | 'miniboss' | 'win' | 'lose' | <stage id>` (5 stage ids of
+  §5.4); aliases `title`=menu, `charselect|vs|ladder`=select, `results|ending`=win/lose from `local` + the winner,
+  `music_stage_<id>` / `music_<cue>` (the ids `data/stages.json` `music` uses); `null` stops. `'stage'` = the bout's
+  stage, `boss` when RICKY fights, `miniboss` when THE FREAK fights. The stage `ambient` (e.g. `amb_theater_crowd`)
+  is the automatic crowd bed of `bout()`.
+- `ui(cue)`: `move confirm back error toggle start lock vs pause resume tick cash unlock ladder` (aliases `hover`,
+  `select`, `click`, `cancel`, `deny`). `announce(line)`: `3 2 1 go ready fight bonus begin gameover victory win lose`.
+- Volumes `{ master, music, sfx, crowd, voice }` 0..1 (settings "audio buses"); `__HP__.audio()` = `audio.stats()`.
+- **SFX_CUE vocabulary** (move data `sfx: [[frame, name]]`): a name resolves through `SFX_CUE_ALIASES` in
+  `audio/router.ts` = the `_research/audio/AUDIO_KIT.md` role names (`punch_light punch_heavy kick body_blow_thud
+  bone_crunch slap whoosh_light whoosh_heavy grab_cloth body_fall wall_slam wet_splat glass_break metal_pipe_clang
+  wooden_bat_crack electric_zap fire_whoosh explosion air_horn bell_ding cash_register buzzer jingle_sting
+  crowd_cheer_burst crowd_boo crowd_gasp_ooh crowd_applause crowd_laugh voice_efforts ...`), the verbs `kiai grunt
+  scream laugh whistle card_throw ball_kick zap stomp clang smash`, or any sprite sound id. `probe_audio.ts` fails on
+  a name in `data/fighters/*.json` that does not resolve.
+- Event fields audio reads beyond §17.6 (from the SIM emit sites): WHIFF `c` strength class; METER_BAR `b` bars now;
+  THROW `c` 1 = punish-counter; TIMEOVER `a` round winner. Round flow plays from ROUND_INTRO / FIGHT / ROUND_END /
+  MATCH_END when SIM emits them, else from `MatchSnap.phase` transitions (once per round either way).
+- Assets (generated by `audio/build/build_audio.py`): `audio/assets/{ui,sfx,crowd}.ogg` Opus sprites + `music_<cue>.ogg`,
+  each with an AAC `.m4a` twin (a device downloads one set). Nothing is fetched at `createAudio()`.
+
 ## §10 Net contract (lane NET) — per NETCODE.md
 - Transport tier 1: WebRTC DataChannel `{ordered:false, maxRetransmits:0}`, public STUN, signalling
   over the vendored NetPlay room channel `ffg:hit-parade:<CODE>` (presence + broadcast, NOT 60 Hz).
@@ -454,6 +571,10 @@ k,v), freeze(on), goto(screen), cpu(p, level) } }` — dev functions throw unles
 Deep links: `?mode=versus&p1=johnny&p2=bruno&stage=rust_theater&seed=1&cpu2=3&autostart=1&dev=1`.
 
 ## §13 Gates
+`npm run probe` = `node _harness/run_probes.ts` (owned by SIM): it auto-discovers and runs every
+`_harness/probe_*.ts` (each exits 0 = PASS, 1 = FAIL, prints one summary line) — lanes add probes
+by adding files, never by editing the runner.
+
 | gate | command | pass |
 |---|---|---|
 | G0 types | `npm run typecheck` | 0 errors |
@@ -474,14 +595,62 @@ Deep links: `?mode=versus&p1=johnny&p2=bruno&stage=rust_theater&seed=1&cpu2=3&au
 |---|---|---|
 | SHELL | package.json, tsconfig, vite.config.ts, runtime/index.html, runtime/public/*, src/main.ts, game.ts, input.ts, testsurface.ts, app/*, ui/boot.ts, ui/settings.ts, ui/save.ts, _harness/common.py, bootcheck.py, bootguard.py, README.md | 5320 |
 | SIM | src/core/** except core/ai and core/net, data/system.json, _harness/probe_{determinism,synctest,moves,hits,block,throws,meters,rounds,projectiles,uniques,motion,data}.ts | - |
-| ASSETS | art/**, tools/** (except clipplan.json content decisions), data/clips/** | - |
-| FIGHTERS | data/fighters/**, tools/clipplan.json, _spec/ROSTER.md | - |
+| ASSETS | art/** (except stage sources), tools/** (except tools/clipplan/<fighter>.json), data/clips/** | - |
+| FIGHTERS | data/fighters/**, tools/clipplan/<fighter>.json, _spec/ROSTER.md | - |
 | VIEW | src/view/**, _harness/lookshots.py, perfcheck.py | 5323 |
 | UI | src/ui/** except boot/settings/save, src/touch/**, data/strings.json, data/captions.json, _spec/CONTRACT_MOBILE.md, _harness/menus.py, layoutcheck.py, mobile.py | 5324 |
 | AUDIO | src/audio/**, runtime/public/audio/** (if used) | - |
 | NET | src/core/net/**, src/net/**, _harness/probe_netsim.ts, online2.py | 5325 |
 | AI | src/core/ai/**, data/cpu.json, data/ladder.json, _harness/probe_personas.ts, probe_season.ts, playtest.py | 5326 |
-| STAGES | art/stages sources + stage GLBs (sub-lane of ASSETS), data/stages.json | - |
+| STAGES | art/stages/** (sources), art/gltf/stages/**, data/stages.json | 5327 |
+
+## §16 Module APIs (what game.ts wires together — SHELL owns game.ts/flow.ts)
+Lab pages: any lane may create dev-only test pages `runtime/lab/<lane>.html` + `runtime/src/lab/<lane>.ts`
+(never linked from index.html, so never in the build) to test its modules in isolation.
+```ts
+// core/data.ts (SIM) — loads + validates all JSON; THREE-free
+export interface GameData { system: System; fighters: Record<string, FighterDef>; clips: Record<string, ClipsFile>;
+                            stages: StagesFile; ladder: LadderFile; cpu: CpuFile; strings: Record<string,string> }
+export function loadGameData(): GameData;             // static JSON imports (bundled)
+
+// view/renderer.ts (VIEW)
+export class Renderer { constructor(canvas: HTMLCanvasElement, opts: {quality: 'low'|'med'|'high', touch: boolean});
+  readonly three: THREE.WebGLRenderer; resize(): void; info(): RenderInfo; dispose(): void; }
+// view/assets.ts (VIEW) — GLB cache with MeshoptDecoder; per-fighter body+clips, props, stages
+export class Assets { constructor(base: URL); fighter(id: string): Promise<FighterAsset>; stage(id: string): Promise<StageAsset>;
+  prop(id: string): Promise<THREE.Object3D>; preload(ids: string[]): Promise<void>; }
+// view/bout.ts (VIEW) — the 3D presentation of one match
+export class BoutView {
+  static create(r: Renderer, a: Assets, cfg: MatchCfg, data: GameData): Promise<BoutView>;   // loads stage + both fighters, warms shaders
+  frame(m: MatchSnap, f: [FighterSnap, FighterSnap], ev: SimEvent[], dtReal: number): void;  // once per rendered frame; ev = NEW (deduped) events
+  render(): void; setSettings(s: ViewSettings): void; dispose(): void; }
+// view/showcase.ts (VIEW) — char-select / VS-screen 3D model turntable in a given canvas region
+export class Showcase { constructor(r: Renderer, a: Assets); show(fighterId: string, color: number, pose: 'idle'|'intro'|'win'): Promise<void>; frame(dt: number): void; render(): void; }
+
+// ui/hud.ts (UI)
+export class Hud { constructor(root: HTMLElement, data: GameData); mount(cfg: MatchCfg): void; unmount(): void;
+  frame(m: MatchSnap, f: [FighterSnap, FighterSnap], ev: SimEvent[]): void; }
+// ui/menus.ts (UI) — every non-bout screen; emits intents, never starts a match itself
+export type MenuIntent = { kind: 'startMatch', cfg: MatchCfg } | { kind: 'startSeason', fighter: string, color: number, scheme: Scheme, length: 'season'|'pilot', difficulty: number }
+  | { kind: 'online', action: 'quick'|'create'|'join', code?: string } | { kind: 'training', cfg: MatchCfg } | { kind: 'quitToTitle' };
+export class Menus { constructor(root: HTMLElement, data: GameData, deps: { showcase: Showcase, settings: SettingsStore, save: SaveStore, audio: GameAudio });
+  show(screen: ScreenId, params?: unknown): void; hide(): void; onIntent(cb: (i: MenuIntent) => void): void;
+  showResults(r: MatchResult): Promise<'rematch'|'charselect'|'menu'|'next'>; showPause(): Promise<'resume'|'settings'|'forfeit'|'movelist'>; }
+// ui/broadcast.ts (UI) — TV straps, host captions, slates; driven by events
+// audio/index.ts (AUDIO)
+export function createAudio(): GameAudio;  // GameAudio: unlock(), preload(ids), events(ev: SimEvent[], m: MatchSnap), music(cue: string|null), ui(cue), setVolumes(v), stats()
+// core/ai/cpu.ts (AI)
+export function createCpu(level: number, fighterId: string, seed: number): Cpu;  // Cpu.input(m: Match, playerIndex: number): number (16-bit word)
+// net/online.ts (NET)
+export function createOnline(deps): Online;  // Online: quick(), create(), join(code), on('matchStart', cfg => ...), session: RollbackSession
+// core/net/rollback.ts (NET)  -- CHANGED(NET): first arg is a structural SimPort, see §19.1
+export class RollbackSession { constructor(sim: SimPort /* was m: Match */, local: 0|1, transport: Transport, opts: SessionOpts);
+  tick(localInput: number): { advanced: number, stalled: boolean };  // called at 60 Hz by the loop
+  stats(): NetStats; }
+```
+The loop (app/loop.ts) runs the sim at exactly 60 Hz; offline: `step(m, input1, input2)` per tick
+(input from `input.ts` / touch / CPU); online: `session.tick(localInput)`. Rendering reads
+snapshots after the ticks of that frame. Hitstop/slow-mo are SIM counters, never loop timeScale.
 
 ## §15 Phases (each ends with gates green + commit + push; no stopping between phases)
 - P1 Foundation: SHELL skeleton boots; SIM core systems + probes with 2 test kits (johnny, bruno);
@@ -493,3 +662,492 @@ Deep links: `?mode=versus&p1=johnny&p2=bruno&stage=rust_theater&seed=1&cpu2=3&au
 - P4 Feel + balance: persona playtests, real-input playtests, critic lanes, fixes.
 - P5 Ship: mobile, perf, cover, build, deploy (unpublished), live verification (boot + a bout on
   the CDN + an online bout between two browsers on the CDN).
+
+## §17 CHANGED(VIEW): view-facing encodings (SIM, VIEW, UI and AUDIO must agree)
+The snapshot fields in §4.6 carry integer ids whose meaning §4 left open. VIEW reads them this way; SIM
+writes them this way (VIEW implements the same rule in `view/animtable.ts` and switches to SIM's table
+automatically when `GameData.anims` exists):
+1. **moveId** (FighterSnap, fighter state) = index of the move in `Object.keys(def.moves)` (the JSON text
+   order of `fighters/<id>.json` `moves`); `-1` = no move.
+2. **animId / prevAnimId** = index into the per-fighter anim table (`-1` = none, renders idle):
+   - `0..33` = the shared system clips in the exact §6.2 order: idle 0, walk_f 1, walk_b 2, crouch 3,
+     crouch_idle 4, jump_up 5, jump_f 6, jump_b 7, land 8, dash_f 9, dash_b 10, block_high 11, block_low 12,
+     hit_high_s 13, hit_high_l 14, hit_body 15, hit_low 16, hit_air 17, crumple 18, kd_fall_b 19, kd_fall_f 20,
+     kd_ground_b 21, kd_ground_f 22, wake_b 23, wake_f 24, wall_splat 25, thrown_f 26, thrown_b 27, dizzy 28,
+     ko_fall 29, timeover_lose 30, parry 31, impact_windup 32, shove 33;
+   - `34 + k` = move `k` of rule 1 (entry = that move's `anim.clip` + `anim.warp`, derived per §5.2 when omitted);
+   - then `intro`, each `win[i]` in order, then `taunt` (intro and taunt entries ALWAYS exist - clip `''`
+     renders idle - as core/data.ts builds them; SIM §19.10 then appends one grab entry per grab move).
+   Entry shape (optional `GameData.anims: Record<fighterId, AnimRef[]>` from core/data.ts):
+   `interface AnimRef { clip: string; warp: [number, number][] | null; loop: boolean; moveId: number /* -1 system */ }`.
+3. **animFrame / prevAnimFrame** = sim frames since that anim started; NOT advanced during hitstop or super
+   freeze (the attacker holds the impact pose). View: `seconds = warp ? pwl(warp, animFrame) : animFrame / 60`
+   (loop clips wrap by `dur`, one-shots clamp to `dur`).
+4. **blendT** (FighterSnap) = weight of the CURRENT anim, a float in [0, 1] (1 = no blend). The state may store
+   frames-since-switch (0..6) and `readFighter` converts (`min(1, t / 6)`); the prev anim samples at
+   `prevAnimFrame`.
+5. **MatchSnap.cinematic.cueId** = the moveId (rule 1) of the Lv3 move that started the cinematic, in the
+   cinematic fighter's move list; `cinematic.frame` runs `0 .. cinematic.frames-1`. The view looks up the
+   camera track by that move's `cinematic.cue` string (`view/cinematics.ts`), else plays the generic track
+   stretched to exactly `cinematic.frames`.
+6. **SimEvent payloads** VIEW reads (`a` actor, `b` target, player index 0/1; numbers come from `EV` in
+   core/sim/events.ts, never hard-coded by consumers):
+   - HIT, BLOCK, COUNTER, PUNISH, PARRY, PERFECT_PARRY, SUPER_HIT, PROJ_HIT: `a` attacker, `b` victim,
+     `c` strength class (0 L, 1 M, 2 H, 3 special, 4 super, 5 IMPACT, 6 projectile, 7 throw),
+     `d` contact height in cm (hitbox centre y, fighter-local; 0 = unknown -> view uses 120 cm).
+   - THROW, THROW_TECH: `a` thrower, `b` victim. KNOCKDOWN, WAKEUP, CRUMPLE, GROUND_BOUNCE, STAGE_FRIGHT_ON/OFF,
+     IMPACT_START, IMPACT_ARMOR, TAUNT: `a` fighter. WALL_SPLAT: `a` victim, `b` wall (0 = x -8 m, 1 = x +8 m).
+     SUPER_FREEZE: `a` fighter, `b` level (1 | 3). CINEMATIC_START/END: `a` fighter, `b` cueId (rule 5).
+     KO: `a` winner, `b` loser, `c` 1 on the match-deciding KO. PROJ_SPAWN/PROJ_CLASH: `a` owner, `b` slot,
+     `c` moveId. IMPACT_CLASH: `a`,`b` fighters.
+7. The view never interprets `FighterSnap.state` numbers; it uses animId/animFrame, `hitstop`, `flags`.
+   Unknown / out-of-range ids render the idle entry (the view never throws on data).
+
+### §17.1 CHANGED(VIEW): view types and asset conventions
+- `ViewSettings = { splatter: 'splatter'|'sparks'|'confetti'; screenShake: number /* 0..1 */;
+  reduceFlashing: boolean; cinematicCamera: 'full'|'short'; bloom: boolean }` (view/bout.ts exports it;
+  UI settings map onto it).
+- `RenderInfo = { calls, triangles, programs, textures, geometries, scale, quality, gpu }` (view/renderer.ts).
+- `Assets` constructor `base` is OPTIONAL (not a break): omitted = the Vite-resolved `art/gltf/` URLs
+  (a `new URL(template-with-${id}, import.meta.url)` per kind, hashed in dist); labs may pass a base
+  or `setUrl(kind, id, url)` overrides.
+- `BoutView.frame()` also accepts `ev` entries shaped `{frame, type, a, b, c, d}` (the §4.5 ring entries).
+- Stage GLB (lane STAGES) conventions the view reads: optional empties `crowd_*` (crowd card placements;
+  the card faces the node's +Z; node scale = card height in m), optional `cam_*` empties (ignored for now);
+  punctual lights in the GLB join the fixed light pool (they must exist at load and are never added/removed).
+  From `data/stages.json` the view reads only (per stage id): optional `glb` (file name in `art/gltf/stages/`,
+  default `<id>.glb`), optional `exposure`, `fog: {color, near, far}`, `crowd: {atlas, cols, rows, count}`
+  (atlas file in `art/gltf/stages/`). Anything missing falls back to the view's defaults.
+- Prop GLB (lane ASSETS) attach metadata = glTF extras on the root node: `{ "attach": { "bone": "RightHand",
+  "pos": [x, y, z] /* m, bone space */, "rotDeg": [x, y, z] } }`; the view solves the prop's WORLD transform
+  from the bone's full world basis each frame (scale stripped).
+- CHANGED(VIEW) presentation only (no sim effect): a fighter with `facing = -1` is drawn with yaw -90 deg AND a
+  mirrored model (local X scale -1, the SF4-6 convention) so both sides show the same silhouette to the camera;
+  `FighterView.mirror = false` turns it off. Bloom defaults OFF (`ViewSettings.bloom`, quality 'high' only): it
+  costs 8 extra programs in the warm-up on the iGPU. The view reads the STAGES §21 fields `lights`,
+  `environment` and `crowd.{meta, anchor, tint, brightness}` in addition to the list above.
+- CHANGED(VIEW) request to SIM (optional field, breaks nothing): projectile visuals read
+  `MatchSnap.proj?: { slot, owner, x, y, vx?, moveId?, alive? }[]` (metres). SIM's MatchSnap has no projectile list
+  yet, so the view draws no projectiles until it exists (the FX hook `FxSystem.projectiles()` is ready).
+
+## §18 CHANGED(SHELL): what game.ts / main.ts / testsurface.ts call beyond §16
+None of these break an existing signature; each is the ONE place game.ts adapts if the owner shipped a
+different shape (game.ts keeps every such call in a small named adapter function).
+1. **Events (SIM, core/sim/events.ts):** `export interface SimEvent { frame: number; type: number; a: number;
+   b: number; c: number; d: number }` and `export function eventsSince(ring: EventRing, frame: number,
+   out: SimEvent[]): number` = append every event still in the ring with `ev.frame >= frame`, oldest first,
+   return how many were appended. game.ts calls it once per rendered frame from `lastSeenFrame - 16` and
+   dedupes by `(frame,type,a,b)` (rollback re-emits), then hands only NEW events to BoutView/Hud/audio.
+   game.ts adapter: `drainEvents()`.
+2. **Dev writes (SIM, core/sim/match.ts):** `export function devSet(m: Match, p: 0 | 1, key: 'hp' | 'showtime'
+   | 'nerve', v: number): void` - test surface only (`__HP__.dev.setHp / setMeter`, `?dev=1`), never in
+   normal play or online. game.ts adapter: `devWrite()`.
+3. **Menus (UI, ui/menus.ts) types game.ts builds or passes:**
+   - `ScreenId` must include `'title' | 'main' | 'charselect' | 'ladder' | 'online' | 'settings' | 'movelist'
+     | 'ending'` (game.ts shows only these; UI may add more).
+   - `export interface MatchResult { cfg: MatchCfg; winner: -1 | 0 | 1 /* -1 draw */; wins: [number, number];
+     frames: number; forfeit: -1 | 0 | 1 /* the player who forfeited */; fighters: [FighterSnap, FighterSnap];
+     match: MatchSnap; season?: { slot: number; slots: number; kind: string; opponent: string; cleared: boolean;
+     continues: number } }` - built by game.ts from the sim snapshots only (results numbers = sim). UI's
+     ui/types.ts adds the optional `stats: [MatchStats, MatchStats]`, `score`, `best`, `names`, `rated`,
+     `disconnect`; game.ts fills `stats` (its own event tallies), `names`, `score` + `season` (THE SEASON),
+     `rated` / `disconnect` (online).
+   - THE SEASON screens game.ts drives: `showLadder(LadderView)`, `showCard(CardView)` (rival / miniboss / boss /
+     brawl / heckler), `showVs(VsView)`, `showResults`, `showNameEntry`, `showEnding({ fighter, score, unlocked })`.
+     `startSeason.difficulty` is the menus' INDEX 0 EASY / 1 NORMAL / 2 HARD; game.ts turns it into the ladder
+     shift -2 / 0 / +2 (FIGHTING_DESIGN §9b).
+   - A sub-screen opened from the pause card: `show('settings' | 'movelist', { from: 'pause', onClose: () =>
+     void })`; menus call `onClose` when the player backs out and game.ts re-opens the pause card. ESC or pad
+     START on the pause card = 'resume'.
+   - Season end: `show('ending', { fighter, length, score })`; dismissing it emits `{ kind: 'quitToTitle' }`.
+   - Deps object: `{ showcase, settings, save, audio }` (as §16). The key-remap capture announces itself with a
+     window `hp:capture` CustomEvent `{ on }`; SHELL's Input suspends while `on` (no `input` dep needed).
+   - Settings shape the menus read/write (ui/settings.ts, persisted in `hitparade.save.v1`): `controls: [P1, P2]`
+     each `{ scheme: 0 | 1, keys: Record<Action, string[]>, pad: Record<Action, number[]> }` with Action ids
+     `up down left right l m h s assist throw parry impact taunt pause` (<= 3 keys / buttons each; one owner per
+     key across both players), `volume {master, music, sfx, voice, crowd}`, `gore`, `screenShake` 0..1,
+     `reduceFlashing`, `cinematics`, `bloom`, `quality 'low'|'med'|'high'`, `showFps`, `touchScale`,
+     `touchOpacity`, `touchLeftHanded`, `touchScheme 'pad'|'swipe'`, `touchLayout {id: {dx, dy, s}} | null`,
+     `haptics`, `language 'en'`. SaveStore.get() also carries `unlocks {freak, ricky}`, `seasonClears`,
+     `bestScores`, `board`, `onlineName`; `set({ onlineName })`.
+4. **Online (NET, net/online.ts):** `createOnline({ data, version, settings, save })`; the event is
+   `on('matchStart', (cfg: MatchCfg, local: 0 | 1) => void)`; game.ts then creates the Match and calls
+   `online.attach(m: Match): RollbackSession` (the session binds the transport the lobby opened);
+   `online.leave()` on forfeit / quit; `on('matchEnd' | 'disconnect', ...)` optional. Online bouts have no
+   sim pause (NETCODE 3.8): ESC opens the pause card while the session keeps ticking.
+5. **Touch (UI touch/controls.ts writes, SHELL input.ts owns):** `export interface TouchState { held: number;
+   latched: number; active: number }` - §4.4 word bits (`held` = bits the overlay holds now; `latched` = bits
+   pressed since the last tick, OR-ed in by the overlay; `active` = touches down). `Input.touch` is that
+   object; it feeds player 0 only and is consumed at each sim tick.
+6. **App phase** (`__HP__.state().phase`, app/flow.ts): `'boot' | 'loading' | 'title' | 'menu' | 'ready' |
+   'bout' | 'paused' | 'results' | 'error'`. `ready` = a bout is loaded behind the PRESS START card (deep
+   links without `autostart=1`); `bout` = the sim is stepping.
+7. **Settings -> ViewSettings** (SHELL maps, §17.1): `gore` -> `splatter`, `screenShake` (0..1) ->
+   `screenShake`, `reduceFlashing`, `cinematics` -> `cinematicCamera`, `bloom`.
+
+## §19 CHANGED(NET): net-facing interfaces (game.ts, UI and the probes build against these)
+1. **SimPort** (`core/net/rollback.ts`). `RollbackSession` never imports the sim: it drives a structural port
+   `interface SimPort { readonly stateInts: number; step(in1: number, in2: number): void;
+   save(slot: Int32Array): void; load(slot: Int32Array): void; checksum(): number }`.
+   `core/net/match_port.ts` exports `matchPort(m: Match): SimPort` (wraps §4.1 step/save/load/checksum).
+   game.ts never needs it: `online.attach(m)` (§18.4) adapts the Match itself. Probes may pass the toy sim
+   (`core/net/toysim.ts`). `SessionOpts.now: () => number` (ms) is injected - core never reads a clock.
+2. **Transport** (`core/net/rollback.ts`): `{ readonly kind: 'rtc'|'relay'|'loop'; sendInput(b: Uint8Array);
+   sendCtl(b: Uint8Array); drain(cb: (b: Uint8Array, ctl: boolean) => void) }`. Packets are the NETCODE 3.2
+   binary layout (`core/net/packet.ts`). The session sends one INPUT packet every `sendEvery` ticks
+   (1 on RTC, 6 on relay); the relay transport additionally coalesces to <= 10 packets/s (latest wins).
+3. **NetStats** (`session.stats()`, also `__HP__.net()`): `{ transport, frame, delay, window, rttMs,
+   rttMedianMs, depth, remoteConfirmed, rollbacks, rollbackFrames, maxRollback, stallTicks, skipTicks,
+   ticks, gameSpeed, sent, recv, bytesSent, bytesRecv, lossPct, reordered, silenceMs, desyncs,
+   checksumsCompared, lastChecksumFrame, violations, peerAway, status: 'waiting'|'running'|'unstable'|
+   'silent'|'nocontest' }`.
+4. **Online** (`net/online.ts`, extends §18.4 without breaking it): `createOnline(deps: { data, version,
+   settings?, save?, name? })` -> `Online` with `quick(): Promise<void>`, `create(): Promise<string /*code*/>`,
+   `join(code: string): Promise<void>`, `pick(p: { fighter: string; color: number; scheme: Scheme;
+   stage?: string })` (blind commit-reveal; call once the 'select' event fired), `attach(m: Match):
+   RollbackSession`, `finish(r: { winner: -1|0|1; frame: number; checksum: number })` (when the sim's
+   MATCH_END fires), `rematch(yes: boolean)`, `leave()`, `stats()`, `readonly phase`, `readonly session`,
+   `readonly local`. Events (`on(name, cb)`): `'status' ({ phase, code, rttMs?, transport? })`,
+   `'paired' ({ room, host })`, `'select' ({ seconds, opponent, fighters })`, `'opponentLocked' ()`,
+   `'reveal' ({ picks })`, `'matchStart' (cfg: MatchCfg, local: 0|1)` (cfg.mode = 'online'),
+   `'matchEnd' ({ agreed, winner, reason })`, `'rematch' ({ peerWants })`, `'disconnect' ({ winner })`,
+   `'error' ({ code })`. All user-facing text is a `code` key the UI resolves in `data/strings.json`
+   (keys listed in `net/online.ts` `NET_STRINGS`; lane UI owns the copy).
+5. Deep links (read by net/online.ts helpers, wired by SHELL): `?room=CODE` = join that room; `?relay=1` =
+   force the relay tier (test only).
+6. **Probe ownership note**: `_harness/probe_synctest.ts` is written by NET (orchestrator lane brief): it runs
+   core/net's SyncTest (roll back 1..8 frames every frame) over the REAL `core/sim/match.ts` when it exists,
+   all fighter pairs; SIM's own determinism gate stays `probe_determinism.ts`. When `data/` fails
+   `loadGameData()` validation it falls back to SIM's fixture kits (`_harness/fixtures/simkit.ts`) and says so.
+7. CHANGED(NET) additions (none breaks 1-6; numbering note: `§19 CHANGED(SIM)` below reuses the number, so NET
+   items are cited as "NET §19.x"):
+   - `Transport.drain(cb: (b, ctl, at?: number) => void)`: optional arrival time on the session clock
+     (sharper RTT); omitted = drain time.
+   - INPUT flags b4-b7 and control-packet byte 2 carry the **match epoch** (`matchIndex & 15`,
+     `SessionOpts.epoch`); a rematch on the same transport drops the previous match's packets
+     (`NetStats.stale` counts them). `NetStats` also has `confirmed` (every state <= it is final) and `stale`.
+   - Session extras: `setStartAt(t)` (online GO), `proposeDelay(D)` (host, applies on both at one frame),
+     `setTransport(t, {window, sendEvery})` (mid-match relay switch), `setAway(b)` (tab hidden),
+     `checksumAt(f)`, `confirmedFrame()`, `currentFrame()`, `inputLog(from, to)`.
+   - Online semantics: `finish()` may be called on MATCH_END at once - online sends RESULT only when
+     `session.confirmedFrame() >= frame`; **keep calling `session.tick()` until 'matchEnd'** (the peer needs
+     your confirmations). `roundBreak()` (host, optional) re-derives D between rounds. ONE `Online` serves
+     many sessions: `quick/create/join` reset all per-session state (game.ts keeps a single instance).
+     `readOnlineParams()` parses the deep links; `NET_STRINGS` = the code -> default EN copy table.
+   - Test-only hooks (lab/harness, never in play): `OnlineFlowDeps.wrapTransport`, `OnlineFlow.devKillDirect()`.
+
+## §19 CHANGED(SIM): sim-side rules the fighter JSON, view, UI, AI and NET rely on
+SIM adopts §17 (ids, anim table, blendT, cueId, event payloads) and §18.1/§18.2 (`eventsSince`, `devSet`)
+exactly. Additions below never break a §4/§5 signature.
+1. **Routing of normals, command normals and throws is by the Move `input` field** (for these kinds
+   `input` is NOT informational): `5L 5M 5H` stand, `2L 2M 2H` crouch, `j.L j.M j.H` air (`j.2H` = air
+   command normal), command normals `6H 4M 3H ...` (digit = facing-relative numpad; a 6X/4X command
+   normal wins over 5X while that direction is held, 3X/1X over 2X). A target-combo part uses
+   `"input": "5M>5H"`: reachable ONLY through the previous move's `cancel` entry `chain:<moveId>`, triggered
+   by the last token (`5H`). Throws: kind `throw`, `input` `LM` (forward) / `4LM` (back); missing throws
+   fall back to system.json `throw` numbers (probe_data warns).
+2. **Specials** route through `classic` and `simple`. `motion` strings: `236 214 623 421 41236 63214 360
+   236236 214214 [4]6 [2]8 22` (facing-relative; DP accepts 323/6236 shortcuts). Classic `{s}` placeholder:
+   L→`l`, M→`m`, H→`h`, S→`ex`; S (EX) is accepted whenever the `ex` id exists; `btn` lists the L/M/H buttons
+   that trigger; an entry without `{s}` maps every listed button to that one id. CLASSIC supers: 236236 +
+   any attack → `simple["S+H"]`, 214214 + any attack → `simple["S+H+2"]` unless a classic entry uses that
+   motion. SIMPLE: `5S 6S 2S 4S` (1S/3S → 2S; airborne only when the move has `"air": true`); `S+H`
+   neutral/forward/back = Lv1, `S+H` with any down = Lv3 (`S+H+2`); EX = ASSIST+S+dir = the routed id with
+   a trailing `_l|_m|_h` replaced by `_ex` (explicit keys `A5S A6S A2S A4S` override); one-button
+   specials/supers deal x0.8 (`system.simple.damagePct`). Motions on L/M/H also work in SIMPLE at full damage.
+   `assist` = move ids: hold ASSIST + tap L starts step 0 when free; each further tap advances while the
+   current route move has connected (hit or block) and is inside its cancel window; whiff resets to step 0.
+3. **KD hitstun:** for `onHit.kd` soft|hard WITHOUT an upward launch, `hitstun` = total frames from the hit
+   until the defender can act again (fall + lying + wakeup), so on-hit advantage is still
+   `hitstun − (active + recovery)` (sweep 10/3/24 KD +33 → hitstun 60). With a launch, juggle physics and
+   system.json `kd` decide.
+4. **Meters in Move:** `gain.showtime` = attacker gain on hit (on block 50%; defender gets 70% of it when hit,
+   25% when blocking; none on whiff); `gain.nerveCost` = NERVE drained from the DEFENDER when the move is
+   blocked (omitted → system.json `nerve.blockDrain` by strength); `cost.{showtime,nerve}` = paid by the user
+   when the move starts.
+5. **Optional Move fields SIM reads:** `strength` (`"L"|"M"|"H"`, default from the input button / id
+   suffix / kind), `air` (special usable airborne), `armorBreak` (bool), `starter` (`"light"` forces the
+   light-starter scaling table; default: L normals and 2M), `projectile.limit` (default 1), `projectile.x`
+   (spawn metres forward; default 0.6), `multi` (frames between hits inside one box's active range; default 0 =
+   each box hits once).
+6. **System moves** (IMPACT, SHOVE, PARRY, RUSH, default throws) take their numbers from system.json and the
+   shared clips `impact_windup`, `shove`, `parry`, `dash_f`; a fighter may override IMPACT/SHOVE frame data with
+   moves named `impact` / `shove` (kind `system`). In snapshots a system move reports moveId −1 and
+   `moveName` `'impact'|'shove'|'parry'|'rush'|'throw_f'|'throw_b'`.
+7. **Snapshot additions:** FighterSnap `+ moveName: string, moveKind: string, stun: number, animSec: number
+   (seconds per §17 rule 3, convenience), comboDamage: number, lastDamage: number, airborne: boolean,
+   crouching: boolean`. MatchSnap: `phase` is `'intro'|'fight'|'ko'|'timeover'|'roundEnd'|'matchEnd'`;
+   `winner` = −1 while undecided and on a drawn match (`draw: true`); `+ roundWinner, freeze, draw`.
+8. **Events memory:** the 64-entry ring lives on `Match.events` (outside the Int32Array); the write cursor
+   `W.evSeq` is IN the state, so a rollback rewinds it and re-emits. KO on a double KO: `a = b = −1`.
+   SFX_CUE: `a` fighter, `b` index into `Match.tab.sfx`, `c` moveId. CAMERA_CUE: `a` fighter, `b` cue
+   (`CUE` in events.ts: 1 super freeze, 2 perfect parry, 3 KO, 4 cinematic, 5 wall splat).
+9. **Data loading:** `loadGameData()` works in Vite (`import.meta.glob` over `data/**/*.json`) and in Node
+   (fs via `process.getBuiltinModule`), so Node probes of every lane can call it. `buildGameData(raw)` is
+   exported for fixtures. `GameData.anims` (§17 rule 2) is always built. `dataHash(data)` (uint32 over the
+   compiled integer tables) is exported for NET's HELLO; `STATE_VERSION` from core/sim/layout.ts.
+10. **Anim table extension (VIEW reads it through `GameData.anims`):** after `taunt`, one entry per move that
+   has a §20 `grab` block, in move order: `{ clip: grab.clip, warp: [[0,0],[grab.frames, clip dur]],
+   moveId }`. While a landed grab locks (fighter state `GRAB` = 29), `animId` points at that entry and
+   `animFrame` counts lock frames. Victims show `thrown_f` / `thrown_b` (swap).
+11. **§20 (FIGHTERS) adopted by the sim:** `hits` (per-hit damage / hitstop; non-final hits hold the defender
+   until the next hit's first frame + 2 with no KD / launch / pushback; one attack for scaling), `moveY`
+   (scripted root height, airborne while > 0), `airVel` (dive from `startup`, ends on landing with
+   `recovery` landing frames), `hurtOverride`, `grab` (lock `frames`, damage on lock frame `hitF`, release at
+   `+adv`, `swap`, `air`, `techable`, `rangeM` pushbox front to front), `tc` + special `trigger`, `jS`,
+   `air: true` = air-only, `cinematic.endAdv` / `endGapM`, projectile `vy` / `g` / `ground`. A `throw`
+   WITHOUT a grab block uses the same pushbox-front reach against `throwRangeM`; its victim is locked until
+   the thrower's move ends and then knocked down for `hitstun − (active + recovery)`.
+   NOT yet in the sim (item 13, uniques): `counter`, `teleport`, `stance`, `ball`, `phase` — moves marked
+   `phase: 2` are never routed until the phases unique lands; the others run as their plain frame data.
+12. **Motion priority as built:** EX > supers (236236 / 214214) > **360** > DP (623 / 421) > QC > HC > charge >
+   22 > throw / parry / IMPACT > assist route > normals > taunt > dash. 360 sits above DP/QC on purpose: with the
+   §4b "any 3 of 4 cardinals" leniency a 360 always contains a QC, so a lower 360 could never come out
+   (a walked-back 4 + 236 inside 32 frames is a 360 on a kit that has both). A 236236 without meter falls
+   through to whatever the sequence contains (623 → DP before QC).
+13. **G1 strictness:** `node _harness/probe_data.ts` always FAILS on fixture problems and REPORTS the real
+   data/ (errors / template warnings / pending clip, GLB and string refs) in its summary line; the phase gate
+   runs `node _harness/probe_data.ts --strict`, which also fails on real-data issues.
+14. **Probes:** `probe_synctest.ts` is NET's (§19 NET item 6) and runs this sim over every real pair; SIM's
+   save / load / re-step-every-frame check lives in `probe_determinism.ts`. `probe_uniques.ts` is not written
+   (item 13 not built yet).
+
+## §20 CHANGED(FIGHTERS): fighter-data and clip-plan additions (all optional; §5/§6/§19 unchanged)
+Source of truth for every kit: `data/fighters/_gen/` (python, no `.json` inside, so the `data/**/*.json`
+glob never sees it) → emits `data/fighters/<id>.json`, `tools/clipplan/<id>.json`, `_spec/ROSTER.md`.
+1. **Ids.** Normals are keyed by their §19.1 `input` (`5L`, `2M`, `j.H`, `6H`, TC parts `5M>5H`); throws are
+   `throw_f` (`input` `LM`) and `throw_b` (`4LM`); EVERY special has `<name>_l|_m|_h|_ex` so §19.2 `{s}` and
+   SIMPLE EX routing always resolve; supers and follow-up parts use a plain name. Every move carries
+   `strength`, `move` (`[[0,0]]` = stationary) and `name` (English display name; UI mirrors it into
+   `strings.json` as `move.<fighter>.<moveId>`).
+2. **Optional Move fields** (absent = no effect):
+   - `hits`: `[{ "f": [a,b], "damage": n, "hitstop": n }]` one entry per hit (move frames, 1 = first frame);
+     each entry is one hit with its own box window (derived box per entry when `boxes` is omitted). The move's
+     `damage` = the sum (informational). Non-final hits hold the defender in hit/blockstun until the next
+     entry's first frame + 2; `hitstun`/`blockstun`/`onHit`/`pushback` apply to the final hit; all entries
+     count as ONE attack for damage scaling. (`multi` from §19.5 stays valid for evenly spaced equal hits.)
+   - `moveY`: `[[frame, metres]]` attacker root height above the floor (piecewise linear). Frames with height
+     > 0 are airborne (air hurtbox, juggle rules, throws whiff). Used by DPs, hops, flips, leaps.
+   - `airVel`: `[vx, vy]` m/s set at `startup` for `"air": true` specials (dive kicks); the move ends on
+     landing, then `recovery` landing frames.
+   - `hurtOverride`: `[{ "f": [a,b], "w": m, "h": m, "y": m }]` replaces the base hurtbox on those frames
+     (low profile, crawl, lying, lean); `y` = bottom above the floor (default 0).
+   - `grab` (kind `throw` | `cmdgrab`, or a super that grabs): `{ "rangeM", "frames", "adv", "hitF", "swap",
+     "air", "techable", "clip" }`. Connects on an active frame when the defender's pushbox front is within
+     `rangeM` of the attacker's pushbox front (`throw` without `rangeM` → fighter `throwRangeM`); both fighters
+     lock for `frames`, the attacker plays `grab.clip` linearly over them, damage lands on lock frame `hitF`,
+     release leaves the defender knocked down so the attacker is `adv` frames ahead; `swap` = sides swap
+     (back throw; attacker facing flips at release, the clip may itself turn 180); `air` = catches airborne
+     opponents only; `techable` = the 9-frame tech applies (normal throws true, command grabs false). Victim
+     plays shared `thrown_f` (swap false) / `thrown_b` (swap true). On whiff `anim.clip` plays through recovery.
+     Validator arithmetic for grabs uses `adv` (not hitstun).
+   - `tc`: true = reachable only through a parent's `chain:<id>`. Special rekka parts add
+     `trigger: { "classic": { "motion": "236", "btn": "LMH" }, "simple": "6S" }` (the input that fires the
+     chain inside the parent's cancel window); normal target combos keep §19.1 (`"input": "5M>5H"`).
+   - `counter`: `{ "catch": [a,b], "vs": ["strike"] | ["strike","proj"], "follow": "<moveId>" }` - a listed
+     hit arriving on catch frames is nullified (attacker gets 12 hitstop, then is in recovery = punish
+     counter) and `follow` starts at once. Throws and cmd grabs beat it.
+   - `teleport`: `{ "f": n, "to": "behind" | "front" | "home", "gapM": m }` - on move frame f the fighter's x
+     becomes opponent.x + side*gapM (behind = far side of the opponent, front = own side, home = own wall
+     + gapM), clamped to the walls; facing re-resolves on the next free frame.
+   - `stance`: `"enter" | "follow" | "exit"` (Lotus, see 3). `ball`: `{ "act": "shoot" | "hover" | "summon" }`
+     (Gazza, see 3). `phase`: 2 = exists only in Ricky's phase 2.
+   - `cinematic` extras: `anim` `[[f0, "<clipId>"], ...]` attacker clip timeline (clip starts at f0, 1 clip
+     second per 60 frames), `victim` `[[f0, "<shared clip id>"], ...]`, `shots` `[[f0, "<shot>"], ...]`
+     camera beats for view/cinematics.ts (shot names in `_spec/ROSTER.md`), `endAdv` (attacker advantage at
+     the end, defender knocked down), `endGapM` (separation at the end).
+   - `desc`: one-line description (informational; UI move-list source).
+   - `role`: informational tag list (`antiair`, `sweep`, `overhead`, `poke`, `launcher`, `reversal`,
+     `projectile`, `approach`, `wallsplat`, `low`, `lowprofile`, `grab`, `escape`) - the G1 punishability
+     exemption (sweep / antiair) and CPU move picking (lane AI) read it.
+   - `classic[]` entries may carry an informational `note`; a move id ending in `_l|_m|_h|_ex` is ALWAYS a
+     strength of a special family (follow-ups use other names, e.g. `grave_rise_big`).
+3. **`unique` blocks** (numbers the uniques' probes check):
+   - `{ "kind": "none", "trait": "<text>" }` (johnny, patch, spin; their identity is in the move data).
+   - `stance` (lotus): `{ "name", "enter": [ids], "maxF", "followups": { "L": id, "M": id, "H": id },
+     "exit": { "2": id, "timeout": id }, "blockExitF", "walk": { "fwd", "back" }, "clips": { "idle", "walk_f",
+     "walk_b" } }` - enter moves put the fighter in the stance after their recovery; in stance L/M/H fire the
+     follow-ups (§19 cancel rules don't apply), 2 or `maxF` exits, holding back exits to block after
+     `blockExitF` frames.
+   - `charge` (krane): `{ "chargeF": 45, "keepF": 10, "standBlockNervePct": 50 }` - blocking STANDING drains
+     only that % of the normal NERVE block drain (riot shield).
+   - `ball` (gazza): `{ "respawnF", "restF", "pickupM", "hover": { "l", "m", "h", "frames" }, "bounces" }` -
+     one ball entity in the projectile block: shots fire it, it rebounds off a wall `bounces` times, rests on
+     the floor `restF` frames (walking within `pickupM` traps it back), hover = keepy-uppy hitbox above Gazza;
+     an opponent strike on the ball knocks it away (respawns at his feet after `respawnF`).
+   - `counter` (rerun): `{ "moves": [ids] }` - the per-move `counter` blocks hold the numbers.
+   - `armorStep` (bruno, boneyard, freak): `{ "steps": [ids], "armored": [ids] }` - move-level `armor` holds
+     the numbers; steps may `whiff`-cancel into the listed chains.
+   - `teleport` (zambini): `{ "moves": [ids] }` - move-level `teleport` blocks.
+   - `phases` (ricky): `{ "thresholdPct": 50, "lockF": 60, "cue": "ricky_phase2", "moves": [ids with phase 2],
+     "lv3": "<moveId used by S+H+2 in phase 2>", "simple": { "6S": "<moveId>" } }` - first drop below 50% HP
+     in any round: both fighters lock `lockF` frames (camera cue), then the phase-2 moves exist for the rest
+     of the bout and `simple` overrides those SIMPLE keys (CLASSIC keeps every motion).
+4. **SIMPLE air key:** `"jS": "<moveId>"` = S while airborne (must be `air: true`); ground keys unchanged.
+   A classic motion may map to a ground move and an `air: true` move at the same time (airborne picks the air one).
+5. **Clip plan entries** (`tools/clipplan/<fighter>.json`, extends §6.2). The emitted entries follow lane
+   ASSETS' live builder (`tools/build_fighters.py` -> `art/blender/bake_fighter.py`, read 2026-09-29) so they bake
+   without translation; intent fields ride along as extras:
+   `{ "<clipId>": { "src": "mixamo"|"cmu"|"layer"|"seq"|"author", "file", "range": [f0,f1], "contact",
+   "mirror", "speed", "loop", "air", "marks", ... } }`
+   - mixamo `file` = `"<Pack>/<clip>"` (NO `.fbx`; the builder appends it) under
+     `F:/games/forgeflow-games-assets/_downloaded/mixamo/animations/`, `range` 1-based source frames at 30 fps.
+     cmu `file` = take id (`"14_02"`), `range` source frames at 120 fps, plus `kind` (hand|foot|knee|getup|fall|
+     body), `limb` (post-mirror, e.g. `L_hand`), `fist` (deg of finger curl; 0 = open hand).
+   - `contact` = authoritative strike frame in SOURCE frames (research front-pass frame for strikes, render-
+     judged frame for slams/releases); the builder writes clips.json `contact` from it. Multi-hit sources add
+     `marks: {"hit1": f, "hit2": f, ...}` (source frames; the builder converts them to clips.json marks seconds)
+     and the same list as `contacts`; fighter data derives multi-hit `anim.warp` from them.
+   - `air: "strip"` on every clip the sim plays airborne (jump normals, moves with `moveY`, `air: true`): the sim
+     owns the height, so the clip's own lift is removed (ASSETS option; clips.json `apexY` keeps it).
+   - layer: `"layer": { "lower": <entry>, "upper": <entry>, "split": "Spine", "lowerMode": "hold"|"loop"|"sync",
+     "lowerFrame": f }`. Intent: legs from `lower`, Spine-up from `upper`, the result plays at the UPPER's own
+     timing. Emitted form for the builder (whose LayerSampler warps the upper onto the lower's frame count and
+     converts `contact` through the lower): the lower's `speed` is set so it yields exactly the upper's frame
+     count (`_upperFrames`; hold = range `[lowerFrame, lowerFrame+1]`), and the layer `contact` is expressed in
+     LOWER source frames (`_upperContact` keeps the upper's frame). validate.py checks both.
+   - seq: `"seq": [<entry>, ...], "xf": 2` - concatenated in order, segment k starts where k-1 ends minus `xf`
+     frames (30 fps) of crossfade; `contact` = first segment's. **Needs builder support (ASSETS):** used by 13
+     clips - the multi-hit supers (johnny `sold_out_flurry`, patch `reel_kicks`, krane `backup_combo`, lotus
+     `bottoms_seq`, freak `meltdown_clip`), Spin's flair chains (`windmill_l`, `windmill_m`, `windmill_h`,
+     `cypher_clip`, `handspin_clip`, `six_step_ex_clip`) and rerun `crawl_run`, `crawl_run_ex`. Segment durations follow the
+     builder's frame counts (CMU windows get an extra end frame when not a multiple of 4).
+   - author: `"src": "author", "file": "crouch_toe_kick" | "crouch_shin_kick", "frames": n, "contact": k`
+     (0-based output frame) + `_base` / `_keys` (the key poses, also in `_spec/ROSTER.md`). **Needs the two
+     specs added to `art/blender/author_clips.py` AUTHORED (ASSETS)** - the only authored motions in the roster
+     (CMU has no crouch-kick class).
+   - A fighter plan MAY define a shared clip id (§6.2 list, e.g. Krane's shield `idle`/`block_high`); the
+     fighter entry wins over `_shared.json` for that body (the builder already does this).
+   - Keys starting with `_` (`_why`, `_cand`, `_upperFrames`, `_upperContact`, `_base`, `_keys`) are informational;
+     nested `<entry>` objects use the same fields.
+
+
+## §21 CHANGED(STAGES): stages.json schema, stage GLB nodes, crowd atlas (extends §6.4 / §17.1, breaks nothing)
+Everything §17.1 says the view reads is unchanged (`glb`, `exposure`, `fog`, `crowd: {atlas, cols, rows, count}`,
+`crowd_*` empties). This section pins the rest so VIEW/AUDIO/UI/SIM probes can build against it.
+1. **File shape:** `data/stages.json = { version: 1, units, budget, stages: StageDef[] }` - an ARRAY in ladder/select
+   order (UI `stageList()` already reads `{stages:[...]}`). A stage is found by `stages.find(s => s.id === id)`.
+   `status: 'built' | 'todo'`; a `todo` stage has no `glb` on disk yet (callers fall back to a built stage).
+2. **StageDef (built)** - all metres in game axes (§2), light intensities in three.js r186 physical units:
+   `id, name, status, glb, source, home: fighterId[], look,`
+   `floor: { y, surface, fightStrip: {x:[-8,8], z:[-1.5,1.5]}, extent: {x, z} },`
+   `walls: { x: [-8, 8], splat: [{ id /* = WALL_SPLAT b, §17.6 */, x, normal, z: [z0,z1], heightM, surface, dustColor }] },`
+   `spawn: { distanceM, p1: [x,y,z], p2 },  camera: { vFovDeg, heightM, lookAtY, distanceM: [min,max], pitchDeg,`
+   `wallClampX, proofShots: [{id, pos, look, aspect?}] },  exposure, toneMapping: 'neutral',`
+   `fog: { color, near, far }  (three.js linear THREE.Fog),`
+   `environment: { hdr /* file in art/gltf/stages/, IBL only */, intensity /* scene.environmentIntensity */,`
+   `background: false, backgroundColor },`
+   `lights: LightDef[]  - the FIXED pool, created once at stage load, never added/removed; NO lights in the GLB:`
+   `  { id, type: 'directional', color, intensity, position, target, castShadow, shadow?: { mapSize, bias,`
+   `    normalBias, camera: {left,right,top,bottom,near,far} } }`
+   `  { id, type: 'hemisphere', sky, ground, intensity }`
+   `  { id, type: 'point', color, intensity /* cd */, distance, decay, position, flicker?: { amp, hz } }`
+   `  { id, type: 'spot', color, intensity, distance, decay, position, target, angleDeg /* = SpotLight.angle, half-cone */, penumbra }`
+   `  flicker = view-only intensity modulation (never touches the sim).`
+   `crowd: { atlas, meta, cols, rows, count, cardHeightM, cardWidthM, anchor: [u, v_from_top], tint, brightness,`
+   `  moods: { idle: pose[], cheer: pose[], jeer: pose[] }, bays: [{ id, x: [x0,x1], spacing, jitter: [jx,jz],`
+   `  faceYawDeg, rows: [{z, y}], seed }] },`
+   `music /* cue id AUDIO maps */, musicHint, ambient, ambientHint, dressing: { animated: [...] },`
+   `build: { bytes, draws, triangles, materials, textures, crowdNodes, extensions, envBytes }  (measured, generated).`
+3. **Stage GLB nodes:** `crowd_<bay>_<row>_<i>` empties (190 in rust_theater): translation = the FEET point on the
+   floor/tier, rotation = card facing (+Z of the node), uniform scale = card height (m); glTF extras
+   `{ bay, row, i, rand /* 0..1 */, angle: 'front'|'left'|'right' /* which atlas view column suits the spot */ }`.
+   Animated dressing meshes are separate named nodes: `flame_torches` (both torch flames), `marquee_bulbs`.
+   Everything else is one static mesh `<id>_set` (one primitive per material). No lights, no cameras.
+4. **Crowd atlas** `art/gltf/stages/crowd_atlas.webp` + `crowd_atlas.json` (shared by all stages): grid of `cols x rows`
+   cells (rows = bodies, cols = pose*3 + angle); each cell covers `metresPerCellWidth x metresPerCellHeight`
+   (1.2 x 2.4 m) with the feet at `anchor` (cell-normalised, v DOWN from the cell top). `cells[]` gives `rect` (px),
+   `uv` = [u0, v0, u1, v1] in glTF/three UV space (v up, flipY texture), `body, pose, angle, restHeightM`. Colours are
+   already toon-shaded + outlined in sRGB: draw with an unlit material, `alphaTest 0.5`, `toneMapped: false`,
+   colour = `tint x brightness`; cards may be mirrored in U when `angle === 'front'`. Reference implementation of the
+   card placement / cell pick / UV remap: `runtime/src/lab/stages.ts` (dev lab, lane STAGES).
+
+## §22 CHANGED(UI): UI-side additions (all additive; §8 / §16 / §18.3 signatures unchanged)
+Source of truth: `runtime/src/ui/types.ts` (structural types: the SIM / SHELL / VIEW / AUDIO objects satisfy them
+without imports), `_spec/CONTRACT_MOBILE.md` (touch), lab `runtime/lab/ui.html` (every screen + HUD state).
+1. **Hud** (ui/hud.ts) beyond §16: `setScore(n | null)` (arcade score; null = sum SCORE events), `setNames([a, b])`
+   (online display names), `setEpisodeLine(s)` (the bug's line), `setPortraits({id: url})`, `cue(captionEvent, vars)`
+   (e.g. `'boss_phase2'` when Ricky flips), `setTraining({inputs, frames} | null)` + `pushInputs(word, frame)` +
+   `setRecordState('off'|'record'|'play')` (training overlays; `mount()` turns them on for `mode: 'training'`),
+   `tally(): [MatchStats, MatchStats]` (per-match numbers from the deduped events + snapshots), `setTouchMode(on)`,
+   `readback()`, `readonly broadcast: Broadcast`. Event payloads read exactly per §17 rule 6 / §19.8; round / match
+   winners from `MatchSnap.roundWinner / winner`; the combo counter reads the ATTACKER's `combo` / `comboDamage`;
+   `timer < 0` = infinite. **SCORE** (not fixed by SIM): the HUD reads `a` = player, `b` = points - SIM please confirm.
+2. **Menus** (ui/menus.ts) beyond §16 / §18.3: `ScreenId` = `'title'|'main'|'season'|'versus'|'charselect'|'stage'|'vs'|
+   'results'|'ladder'|'card'|'ending'|'nameentry'|'pause'|'settings'|'training'|'movelist'|'online'|'credits'`;
+   `show('charselect', {mode: 'season'|'versus'|'training'|'online', opponent?})`, `show('movelist', {fighter?, scheme?,
+   from?, onClose?})`, `show('online', {status})`; `showPause({training?, online?, fighter?, scheme?})` resolves
+   'resume' | 'forfeit' | 'settings' | 'movelist' (TRAINING OPTIONS is a pause-stack child inside the menus; its values
+   live in `menus.training: TrainingState` - `get()`, `set()`, `on((opts, 'change'|'reset') => ...)`);
+   `showResults` resolves 'next' for an arcade win / bonus round; `showVs(v, autoMs = 2600)`; `setOnlineStatus(s)` also
+   takes NET's `{ code, ...vars }` payload (codes resolved in strings.json); `revealOpponent(pick)` (blind select);
+   `setMoveList(fighter, scheme)`; `setPortraits({id: url})`; `showcaseRect(): Rect | null`; `confirm(title, body, yes,
+   no): Promise<boolean>`; `setTouchMode(on)`; `update(dt)` (optional: the menus poll pads + drive the Showcase with
+   their own rAF while visible); `readback()`. **MenuIntent** adds `{kind: 'onlinePick', fighter, color, scheme}` (the
+   blind-select lock-in) and `online.action 'cancel'` (+ optional `name`). Optional dep `input: {suspended, releaseAll?}`
+   is honoured when passed (the `hp:capture` event is always sent).
+3. **Showcase** (VIEW, optional methods): `setRect(r | null)` - the menus pass the character-select region (CSS px)
+   each frame it changes, `null` on leave; `hide()`. While the select screen shows, the menus call `frame(dt)` +
+   `render()` from their loop unless `menus.driveShowcase = false` (then game.ts renders it, reading `showcaseRect()`).
+   Portraits: the menus / HUD show `setPortraits` images; until a fighter has one, a comic initials badge stands in -
+   VIEW is asked to render head-and-shoulder portraits from the Showcase (idle pose) and hand them in.
+4. **FighterSnap `actionable?: boolean`** (SIM request, optional): true when the fighter can act. The training
+   frame-advantage readout uses it; without it the fallback is `stun <= 0 && hitstop <= 0 && moveId < 0`.
+5. **Fighter data** (FIGHTERS, optional): `difficulty` 1..3 (select-screen stars; fallback by archetype). Move names:
+   `python _harness/menus.py --sync-strings` mirrors every move `name` into strings.json as `move.<fighter>.<moveId>`
+   and `unique.trait` as `trait.<fighter>` (§20.1); the move list prefers those keys.
+6. **Audio cues** the UI sends (AUDIO): `ui('move'|'select'|'back'|'start'|'error')`; `music('menu')` on title / main,
+   `music('charselect')` on the select screen, `music('results')` on results.
+7. **Test surface** (SHELL): please expose `__HP__.menus()` / `__HP__.hud()` / `__HP__.touch()` (= the modules'
+   `readback()`) and `__HP__.dev.touchWord()` (= `touch.readWord()`): `_harness/menus.py --game`, `layoutcheck.py
+   --base`, `mobile.py --game` read them at integration.
+8. **CardView** `{kind, a?, b?, banter?, seconds?}` (`seconds` = bonus length from the ladder, default 45 / 40),
+   **LadderView** `{fighter, color, length, bouts: [{kind, opponent?, result?}], current, score, ratings?}`,
+   **VsView** `{p: [{fighter, color, label?}, ...], stage, mode, episode?, kind?, rated?}`.
+
+## §23 CHANGED(AI): CPU, personas, cpu.json, ladder.json (additive; §11 / §16 unchanged)
+1. **`core/ai/cpu.ts`**: `createCpu(level, fighterId, seed): Cpu` exactly as §16. `Cpu = { level, fighter,
+   input(m, p): number, prepare(m, p): void, brain }`. `input` = the §4.4 word for player `p` this frame; call it
+   once per sim frame BEFORE `step` (game.ts does); it returns 0 in `brawl` / `heckler` / `online` matches (the goons
+   and heckle objects are sim-driven; the CPU never runs online). `prepare(m, p)` (optional to call) = the one-time
+   warm-up: it measures the fighter's input recipes in a private sandbox Match (3-60 ms per fighter + scheme per
+   GameData, cached) - SHELL may call it right after `createMatch` while the loading card is up so the first tick
+   of a bout does not pay it; it never touches the match state. The CPU plays the control scheme of its own
+   `PlayerCfg.scheme` (SIMPLE one-button specials or CLASSIC motions, both measured).
+2. **What the CPU reads**: `m.data.cpu` (GameData.cpu = data/cpu.json; the same file is bundled into cpu.ts as the
+   fallback for GameData built without it), `m.cf[i]` compiled moves (read-only), `m.cfg`, and the state ONLY through
+   `core/ai/sense.ts`. It never writes to the state and never reads the opponent's input-derived fields (raw, prevRaw,
+   hHead, hist, bufA/bufM/bufAge/bufWin/bufF, ageL..ageS, chB..chDR); `probe_personas` H2/H3 prove both every run.
+3. **Reaction semantics** (FIGHTING_DESIGN §10 "reaction delay to a VISIBLE startup"): the response is in place
+   `reactF` frames after the attacker's first startup frame is shown = on the attacker's move frame `reactF + 1`
+   (sim frames; a super freeze or hitstop counts as watchable time). L8 (18 f) blocks a 19 f overhead on reaction,
+   not an 18 f one (e.g. johnny 6H is 18 f); a faster move is blocked only by an already-held guard (a guess). If the
+   design wants L8 to react to 18 f overheads, set L8 `reactF` 17 and `rules.reactFloor` 17 in cpu.json (data only).
+   One latched roll per incoming attack (move instance / jump / projectile); the punish decision is its own latched roll.
+4. **`data/cpu.json`**: `levels[0..8]` = the FIGHTING_DESIGN §10 table verbatim (`reactF, block, guessAdapt, antiAir,
+   punish, route 'jab'|'single'|'two'|'chainSpecial'|'bnb'|'bnbMeter'|'bestMeterless'|'bestMeter'|'bestCorner', tech,
+   parry 'never'|'rare'|'projectiles'|'slow'|'perfect'|'rush'|'baits', meter 'never'|'ex'|'lv1'|'all'|'cancel', nerve
+   'none'|'avoid'|'burnout'|'impactReads'|'counterImpact', drop, aggression (number | 'adapts')`) plus the lane's [R]
+   levers `guard` (neutral guard posture), `thinkF`, `antiZone`; `rules` (reactFloor, whiffReactPct, parryShare per
+   tier, slowStrikeStartup, avoidFrightNerve, adaptAggression, backRise, wakeReversal); `styles` = plan weights per
+   fighter `cpu.style` (`balanced` -> shoto; `boss_armor`, `boss_showman` have their own rows); `personas` (harness);
+   `boss` = tools per boss id (`freak: armor`, `ricky: counter + phases`; tools never make reactions faster).
+5. **Fighter JSON `cpu` block** (FIGHTERS, as shipped): `style`, `rangeM [lo, hi]` (preferred spacing), move-id lists
+   `pokes antiAir punish combo zoning approach grab armor counter mixup setup escape air phase2`, `meter`. Lists are
+   resolved to MEASURED recipes (`core/ai/kit.ts`); a move the sim cannot start from neutral, or a move with no hitbox /
+   projectile / grab (a stance entry, a teleport / counter move while those uniques are not in the sim) is never thrown
+   out as an attack. The counter tool (Rerun PLAY DEAD, Ricky COMMERCIAL BREAK) switches on by itself once the compiled
+   move carries the §20 `counter` block.
+6. **`data/ladder.json`**: `season` / `pilot` slot arrays exactly as app/flow.ts `ladderSpecs()` reads them (`{kind,
+   level, opponent?, stage?}`, Normal levels L2 L3 L3 BRAWL L4 RIVAL-L5 L5 HECKLER FREAK-L6 RICKY-L6; PILOT L2 L3 BRAWL L4
+   FREAK-L6 RICKY-L6) plus reference data for UI / SHELL: `difficulty {easy -2, normal 0, hard 2, minLevel, maxLevel}`,
+   `bouts {rounds, timer, arcadeTieCpuWins}`, `bonus.{brawl,heckler} {mode, seconds 45 / 40, card}`, `continues
+   {unlimited, resetEpisodeRatings, bossRestartsBout}`, `miniBoss`, `boss`, `rivals [{fighter, rival, banter:
+   [stringKey, stringKey]}]` (the §5.4 rival column; same as fighters/<id>.json `rival`), `cards.<kind>` string keys,
+   `endings.<fighterId>` string keys (+ `default`), `unlocks.seasonClear`.
+7. **Harness**: `core/ai/personas.ts` `createPersona('masher'|'turtle'|'jumper'|'zoner'|'novice'|'optimal', fighter,
+   seed): Cpu` (harness only - the game never imports it). `node _harness/probe_personas.ts --seeds 1..20` = G3 (the §11
+   acceptance numbers gate); with no args (as run_probes runs it) = smoke: seeds 1..3, the honesty checks (determinism,
+   input-blind, read-only, reaction clock) gate and the acceptance numbers are reported only.
+8. **Training** (SHELL / UI note): `?mode=training` defaults P2 to CPU 0 = the TUTOR band, which walks in and attacks
+   (aggression 0.2) - a still dummy is no CPU at all (`cpu: -1`) plus the UI's dummy options.

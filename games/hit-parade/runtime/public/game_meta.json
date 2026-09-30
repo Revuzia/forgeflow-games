@@ -1,0 +1,21 @@
+{
+  "title": "HIT PARADE",
+  "short_description": "HIT PARADE - a 3D versus fighting game staged as a late-night TV fight show. Two contestants, one condemned set, best of three rounds, and every hit plays to the crowd.",
+  "description": "LIVE ON KNOCKOUT 13.\n\nEvery Friday night an underground network takes over the airwaves with HIT PARADE, a no-rules fight show shot on condemned sets across a rotting city. Contestants sign up for money, revenge or fame. The cameras never cut away.\n\nHIT PARADE is a 3D-rendered versus fighting game played on a single fight line, Street Fighter style: walk, dash, jump, crouch, block by holding back, and trade light, medium and heavy attacks plus a special button. Bouts are best of three rounds on a 99-second clock.\n\nThis early build of the show has two contestants:\n- JOHNNY RIOT, the headliner: a boxer with a straight-ahead toolkit.\n- BRUNO \"THE FRIDGE\": a big-bodied grappler who wants you close.\n\nTwo players share one keyboard, or each takes a gamepad.\n\nTwo control types with the same timing underneath: SIMPLE (the special button plus a direction) and CLASSIC (motion inputs).\n\nComic violence only: hits land with a hard freeze and a red cartoon splash, never realistic gore.",
+  "genre": "fighting",
+  "sub_genre": "3D versus fighter (2.5D)",
+  "difficulty": "medium",
+  "controls_keyboard": "P1: W A S D move, jump (W or SPACE) and crouch; hold back to block · J light · K medium · L heavy · I special · U assist (hold) · H throw · O parry · P impact · ESC pause. P2 on the same keyboard: arrow keys · Numpad 1 / 2 / 3 light / medium / heavy · Numpad 5 special · Numpad 4 assist · Numpad 0 throw · Numpad 6 parry · Numpad + impact",
+  "controls_gamepad": "Standard gamepad: left stick or d-pad move · X light · Y medium · RB heavy · A special · B assist (hold) · LT throw · LB parry · RT impact · START pause",
+  "tags": [
+    "3d",
+    "fighting",
+    "versus",
+    "local-multiplayer",
+    "2-player",
+    "gamepad",
+    "tv-show",
+    "comic-violence"
+  ],
+  "art_direction": "Key art for a late-night TV fight show, built as stylised 3D with cel-shaded characters and thick ink outlines. Two fighters square off on a condemned studio set: a lean boxer in taped fists and a sleeveless shirt throwing a straight right, and a huge slab of a grappler with a shaved head, arms wide, ready to grab. Blue-painted stone brick walls, iron-banded doors, harsh studio spotlights, a shadowy crowd behind a rope line, light haze. A red LIVE bug and a slanted yellow ratings frame suggest the broadcast without readable text. Saturated palette: ink purple-black #140d1f, signal red #ff2e4d, marquee yellow #ffd23a, cream #fff4e0. Punchy, comic energy with a motion-smear on the swing and a small cartoon impact star; no gore. No text, no logos, no ships, no pirates, no nautical props."
+}

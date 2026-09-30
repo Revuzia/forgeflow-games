@@ -17,7 +17,7 @@
 import { defineConfig, type Plugin } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, relative } from 'node:path';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -114,6 +114,51 @@ function harnessEndpoints(): Plugin {
   };
 }
 
+/**
+ * HP_SHELL_ENTRY=1 (harness only: `_harness/bootguard.py --shell-only`): index.html's `/src/main.ts` resolves to
+ * `runtime/src/lab/shell_entry.ts` - a boot that uses the REAL boot guard, BootUI, settings, save, input, loop, flow
+ * and __HP__ but none of the other lanes' modules - so the boot-guard cases can run before (or without) the full game
+ * graph. Never set for a real build or deploy.
+ */
+function shellEntry(): Plugin {
+  const target = resolve(ROOT, 'runtime', 'src', 'lab', 'shell_entry.ts');
+  const main = resolve(ROOT, 'runtime', 'src', 'main.ts').replace(/\\/g, '/').toLowerCase();
+  return {
+    name: 'hit-parade-shell-entry',
+    enforce: 'pre',
+    resolveId(id) {
+      const norm = id.split('?')[0].replace(/\\/g, '/');
+      if (norm === '/src/main.ts' || norm.toLowerCase() === main) return target;
+      return null;
+    },
+  };
+}
+
+/**
+ * HP_LAB_STUBS=1 (harness only: `_harness/bootcheck.py --stubs`): while another lane's module does not exist yet, an
+ * import of it resolves to a dev-only stand-in under runtime/src/lab/ so the REAL shell + the lanes that did land can
+ * be exercised end to end. A module that exists is always used as is (the stub never shadows real code). Never set
+ * for a real build or deploy.
+ */
+const LAB_STUBS: Record<string, string> = {
+  'runtime/src/core/ai/cpu.ts': 'runtime/src/lab/stub_cpu.ts',
+};
+function labStubs(): Plugin {
+  return {
+    name: 'hit-parade-lab-stubs',
+    enforce: 'pre',
+    resolveId(id, importer) {
+      if (!importer || !id.startsWith('.')) return null;
+      const abs = resolve(dirname(importer.split('?')[0]), id.split('?')[0]);
+      const rel = relative(ROOT, abs).replace(/\\/g, '/');
+      const stub = LAB_STUBS[rel];
+      if (!stub || existsSync(abs)) return null;
+      console.warn(`[hit-parade] HP_LAB_STUBS: ${rel} is missing - using ${stub}`);
+      return resolve(ROOT, stub);
+    },
+  };
+}
+
 export default defineConfig({
   root: resolve(ROOT, 'runtime'),
   base: './',
@@ -121,7 +166,11 @@ export default defineConfig({
   // Vite copies it into dist/ verbatim.
   publicDir: resolve(ROOT, 'runtime', 'public'),
   clearScreen: false,
-  plugins: [harnessEndpoints()],
+  plugins: [
+    harnessEndpoints(),
+    ...(process.env.HP_SHELL_ENTRY === '1' ? [shellEntry()] : []),
+    ...(process.env.HP_LAB_STUBS === '1' ? [labStubs()] : []),
+  ],
   css: { postcss: { plugins: [] } },
   server: {
     port: 5320,

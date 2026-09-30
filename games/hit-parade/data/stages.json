@@ -1,0 +1,731 @@
+{
+  "version": 1,
+  "units": "metres; game/glTF axes: +X fight line, +Y up, camera on +Z looking toward -Z",
+  "budget": {
+    "bytesPerStage": 6000000,
+    "drawsStage": 150,
+    "drawsWithCrowd": 250
+  },
+  "stages": [
+    {
+      "id": "rust_theater",
+      "name": "THE RUST THEATER",
+      "status": "built",
+      "glb": "rust_theater.glb",
+      "source": "art/stages/rust_theater.py",
+      "home": [
+        "johnny",
+        "rerun"
+      ],
+      "look": "condemned vaudeville theatre turned fight pit: blue-painted brick pit walls with iron-banded doors and wall torches, stone floor; bleacher crowd behind the pit; torn red-velvet proscenium, opera boxes and a bulb marquee on the old stage behind",
+      "floor": {
+        "y": 0.0,
+        "surface": "stone",
+        "fightStrip": {
+          "x": [
+            -8.0,
+            8.0
+          ],
+          "z": [
+            -1.5,
+            1.5
+          ]
+        },
+        "extent": {
+          "x": [
+            -12.0,
+            12.0
+          ],
+          "z": [
+            -3.2,
+            8.0
+          ]
+        }
+      },
+      "walls": {
+        "x": [
+          -8.0,
+          8.0
+        ],
+        "splat": [
+          {
+            "id": 0,
+            "x": -8.0,
+            "normal": [
+              1,
+              0,
+              0
+            ],
+            "z": [
+              -3.2,
+              3.0
+            ],
+            "heightM": 4.2,
+            "surface": "blue_brick",
+            "dustColor": "#7d8fb0"
+          },
+          {
+            "id": 1,
+            "x": 8.0,
+            "normal": [
+              -1,
+              0,
+              0
+            ],
+            "z": [
+              -3.2,
+              3.0
+            ],
+            "heightM": 4.2,
+            "surface": "blue_brick",
+            "dustColor": "#7d8fb0"
+          }
+        ],
+        "note": "WALL_SPLAT event b = wall id (0 = x -8, 1 = x +8), CONTRACT 17.6"
+      },
+      "spawn": {
+        "distanceM": 2.4,
+        "p1": [
+          -1.2,
+          0.0,
+          0.0
+        ],
+        "p2": [
+          1.2,
+          0.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "vFovDeg": 35.0,
+        "heightM": 1.25,
+        "lookAtY": 1.0,
+        "distanceM": [
+          4.36,
+          7.6
+        ],
+        "pitchDeg": [
+          -2.0,
+          -4.0
+        ],
+        "wallClampX": 8.0,
+        "note": "FIGHTING_DESIGN 7b. Camera x is clamped so the splat wall sits at the screen edge on the fight line: |camX| <= wallClampX - distance * tan(hFov/2). Proof renders: _harness/_reports/stages/rust_theater_*.png",
+        "proofShots": [
+          {
+            "id": "near_center",
+            "pos": [
+              0.0,
+              1.25,
+              4.4
+            ],
+            "look": [
+              0.0,
+              1.0,
+              0.0
+            ]
+          },
+          {
+            "id": "far_center",
+            "pos": [
+              0.0,
+              1.25,
+              7.6
+            ],
+            "look": [
+              0.0,
+              1.0,
+              0.0
+            ]
+          },
+          {
+            "id": "near_corner_r",
+            "pos": [
+              5.53,
+              1.25,
+              4.4
+            ],
+            "look": [
+              5.53,
+              1.0,
+              0.0
+            ]
+          },
+          {
+            "id": "far_corner_l",
+            "pos": [
+              -3.74,
+              1.25,
+              7.6
+            ],
+            "look": [
+              -3.74,
+              1.0,
+              0.0
+            ]
+          },
+          {
+            "id": "far_center_phone",
+            "pos": [
+              0.0,
+              1.25,
+              6.22
+            ],
+            "look": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "aspect": 2.1667
+          }
+        ]
+      },
+      "exposure": 1.0,
+      "toneMapping": "neutral",
+      "fog": {
+        "color": "#17121d",
+        "near": 15.0,
+        "far": 50.0
+      },
+      "environment": {
+        "hdr": "rust_theater_env.hdr",
+        "intensity": 0.28,
+        "background": false,
+        "src": "Poly Haven afrikaans_church_interior_2k.hdr (CC0), downsampled to 512x256",
+        "backgroundColor": "#0b0910"
+      },
+      "lights": [
+        {
+          "id": "key",
+          "type": "directional",
+          "color": "#ffd8ab",
+          "intensity": 2.6,
+          "position": [
+            -5.0,
+            10.0,
+            8.0
+          ],
+          "target": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "castShadow": true,
+          "shadow": {
+            "mapSize": 1024,
+            "bias": -0.0004,
+            "normalBias": 0.03,
+            "camera": {
+              "left": -10.0,
+              "right": 10.0,
+              "top": 7.0,
+              "bottom": -4.0,
+              "near": 1.0,
+              "far": 30.0
+            }
+          }
+        },
+        {
+          "id": "rim",
+          "type": "directional",
+          "color": "#86a8ff",
+          "intensity": 1.9,
+          "position": [
+            4.0,
+            7.0,
+            -10.0
+          ],
+          "target": [
+            0.0,
+            1.2,
+            0.0
+          ],
+          "castShadow": false
+        },
+        {
+          "id": "fill",
+          "type": "hemisphere",
+          "sky": "#5b6fa6",
+          "ground": "#3b2621",
+          "intensity": 0.9
+        },
+        {
+          "id": "torch_l",
+          "type": "point",
+          "color": "#ff8a36",
+          "intensity": 7.0,
+          "distance": 9.0,
+          "decay": 2,
+          "position": [
+            -7.74,
+            2.5,
+            -0.15
+          ],
+          "flicker": {
+            "amp": 0.22,
+            "hz": 7.0
+          }
+        },
+        {
+          "id": "torch_r",
+          "type": "point",
+          "color": "#ff8a36",
+          "intensity": 7.0,
+          "distance": 9.0,
+          "decay": 2,
+          "position": [
+            7.74,
+            2.5,
+            -0.15
+          ],
+          "flicker": {
+            "amp": 0.22,
+            "hz": 6.3
+          }
+        },
+        {
+          "id": "stage_wash",
+          "type": "spot",
+          "color": "#ff9d7e",
+          "intensity": 130.0,
+          "distance": 32.0,
+          "decay": 2,
+          "position": [
+            0.0,
+            9.0,
+            -3.0
+          ],
+          "target": [
+            0.0,
+            5.0,
+            -10.6
+          ],
+          "angleDeg": 44.0,
+          "penumbra": 0.65
+        },
+        {
+          "id": "marquee",
+          "type": "point",
+          "color": "#ffcf85",
+          "intensity": 14.0,
+          "distance": 9.0,
+          "decay": 2,
+          "position": [
+            0.0,
+            4.0,
+            -15.2
+          ],
+          "flicker": {
+            "amp": 0.05,
+            "hz": 13.0
+          }
+        }
+      ],
+      "lightsNote": "FIXED pool: created once at stage load, never added/removed (shader programs stay warm). No lights are embedded in the GLB. Flicker = view-only intensity modulation.",
+      "crowd": {
+        "atlas": "crowd_atlas.webp",
+        "meta": "crowd_atlas.json",
+        "cols": 12,
+        "rows": 6,
+        "count": 72,
+        "cardHeightM": 2.4,
+        "cardWidthM": 1.2,
+        "anchor": [
+          0.5,
+          0.97917
+        ],
+        "tint": "#d2c3bd",
+        "brightness": 0.54,
+        "moods": {
+          "idle": [
+            "watch"
+          ],
+          "cheer": [
+            "cheer",
+            "hype"
+          ],
+          "jeer": [
+            "jeer"
+          ]
+        },
+        "nodes": "GLB empties crowd_<bay>_<row>_<i>: position = feet point, +Z = card facing, uniform scale = card height; extras {bay,row,i,rand,angle}. Generated from the bays below (rows run along world X; x step = spacing, jitter = [x,z] half-ranges from mulberry32(seed); card yaw = faceYawDeg about +Y).",
+        "bays": [
+          {
+            "id": "pit",
+            "x": [
+              -13.6,
+              13.6
+            ],
+            "spacing": 0.62,
+            "jitter": [
+              0.14,
+              0.08
+            ],
+            "faceYawDeg": 0.0,
+            "rows": [
+              {
+                "z": -4.1,
+                "y": 0.3
+              },
+              {
+                "z": -4.9,
+                "y": 0.6
+              },
+              {
+                "z": -5.7,
+                "y": 0.9
+              },
+              {
+                "z": -6.5,
+                "y": 1.2
+              }
+            ],
+            "seed": 1301
+          },
+          {
+            "id": "box_l1",
+            "x": [
+              -10.8,
+              -8.4
+            ],
+            "spacing": 0.8,
+            "jitter": [
+              0.1,
+              0.05
+            ],
+            "faceYawDeg": 22.0,
+            "rows": [
+              {
+                "z": -9.62,
+                "y": 3.0
+              }
+            ],
+            "seed": 1302
+          },
+          {
+            "id": "box_l2",
+            "x": [
+              -10.8,
+              -8.4
+            ],
+            "spacing": 0.8,
+            "jitter": [
+              0.1,
+              0.05
+            ],
+            "faceYawDeg": 22.0,
+            "rows": [
+              {
+                "z": -9.62,
+                "y": 5.6
+              }
+            ],
+            "seed": 1303
+          },
+          {
+            "id": "box_r1",
+            "x": [
+              8.4,
+              10.8
+            ],
+            "spacing": 0.8,
+            "jitter": [
+              0.1,
+              0.05
+            ],
+            "faceYawDeg": -22.0,
+            "rows": [
+              {
+                "z": -9.62,
+                "y": 3.0
+              }
+            ],
+            "seed": 1304
+          },
+          {
+            "id": "box_r2",
+            "x": [
+              8.4,
+              10.8
+            ],
+            "spacing": 0.8,
+            "jitter": [
+              0.1,
+              0.05
+            ],
+            "faceYawDeg": -22.0,
+            "rows": [
+              {
+                "z": -9.62,
+                "y": 5.6
+              }
+            ],
+            "seed": 1305
+          }
+        ]
+      },
+      "music": "music_stage_rust_theater",
+      "musicHint": "AUDIO_KIT music_stage pick 'Halloween Rocks' (Evil Mind, rock, 129 BPM) - AUDIO lane maps the id",
+      "ambient": "amb_theater_crowd",
+      "ambientHint": "crowd bed that follows SHOWTIME/ratings + torch crackle near the walls",
+      "dressing": {
+        "animated": [
+          {
+            "what": "torch flames",
+            "nodes": "flame_*",
+            "how": "view-side flicker (scale/emissive) synced to torch_l/r flicker"
+          },
+          {
+            "what": "marquee bulbs",
+            "nodes": "marquee_bulbs",
+            "how": "optional chase pattern on emissive intensity"
+          },
+          {
+            "what": "crowd",
+            "how": "instanced cards, vertex bob/sway, pose swaps by ratings mood"
+          }
+        ],
+        "splatWallDust": "#7d8fb0"
+      },
+      "build": {
+        "bytes": 2369040,
+        "draws": 24,
+        "triangles": 98840,
+        "materials": 23,
+        "textures": 33,
+        "crowdNodes": 190,
+        "extensions": [
+          "EXT_meshopt_compression",
+          "EXT_texture_webp",
+          "KHR_materials_emissive_strength",
+          "KHR_mesh_quantization"
+        ],
+        "envBytes": 419127
+      }
+    },
+    {
+      "id": "butcher_block",
+      "name": "BUTCHER BLOCK",
+      "status": "todo",
+      "glb": "butcher_block.glb",
+      "home": [
+        "bruno",
+        "boneyard",
+        "freak"
+      ],
+      "look": "cooking-show meat locker (no gore beyond comic splatter)",
+      "kit": {
+        "verdict": "THIN - no white ceramic tile, no brushed steel, no meat hooks, no hanging carcasses, no walk-in freezer",
+        "models": [
+          "mno_Fridge_1",
+          "mno_Fridge_2",
+          "mno_Fridge_4",
+          "mno_Gas_stove_1",
+          "mno_Kitchen_Cabinet_3",
+          "mno_Kitchen_Hood_1",
+          "fant_meat",
+          "fant_knife",
+          "fant_safe_door",
+          "jp_JP_Water_Heater",
+          "jp_JP_Propane",
+          "thb_TH_Shipping_Metal_Crate_01A",
+          "lpu_Meat_Haunch_A",
+          "fant_hook_01"
+        ],
+        "textures": [
+          "Blink Boss_Floor_1",
+          "GEN floor_marble",
+          "PolyHaven anti_slip_concrete",
+          "JapanVillage JP_Ceiling",
+          "QFP T_Trim_Metal (grey metal trim sheet)"
+        ],
+        "hdri": [
+          "ph_abandoned_factory_canteen_01",
+          "ph_abandoned_tiled_room"
+        ],
+        "procedural": [
+          "white subway/square tile (procedural grout shader + per-tile tint + grime mask)",
+          "brushed stainless steel counters/prep tables (bevelled boxes + anisotropic brushed-steel shader)",
+          "meat hooks on rails + chains (simple torus/curve metal)",
+          "hanging carcass / meat sides (organic - hardest; needs sculpt or generator, not in library)",
+          "walk-in freezer door + strip curtain",
+          "cooking-show counter set with host desk"
+        ],
+        "src": "_research/environment/env_kit.json sets.2_butcher_block + ENV_KIT.md"
+      }
+    },
+    {
+      "id": "wheel_of_pain",
+      "name": "WHEEL OF PAIN",
+      "status": "todo",
+      "glb": "wheel_of_pain.glb",
+      "home": [
+        "zambini",
+        "lotus"
+      ],
+      "look": "neon game-show floor with the giant wheel",
+      "kit": {
+        "verdict": "VERY THIN - no game-show hardware in the library; textures only",
+        "models": [
+          "lpu_Trophy_Gold_Big",
+          "lpu_Stage_Truss",
+          "lpu_Stage_Platform_Big",
+          "lpu_Light_Moving",
+          "lpu_Spotlight",
+          "lpu_Tv_Camera",
+          "lpu_Microphone_Stand",
+          "mno_Neon_Sign_4",
+          "tcy_Billboard_4A",
+          "qmd_Trapdoor"
+        ],
+        "textures": [
+          "Blink Dwarven_Casting_Wall",
+          "Blink Golden_Wall",
+          "Blink Boss_Floor_1",
+          "GameBuffs Marble_Surface_20",
+          "Blink Stone_Gate",
+          "GameBuffs Roman_Patterned_Floor_1"
+        ],
+        "hdri": [
+          "ph_aft_lounge",
+          "ph_adams_place_bridge"
+        ],
+        "procedural": [
+          "GIANT SPINNING WHEEL (hero prop: segmented disc, bulb-ringed rim, pegs, flapper, emissive segment labels - fully procedural)",
+          "contestant podiums (bevelled + emissive name panels)",
+          "trapdoors (flush floor panels, hazard stripes, hinge animation)",
+          "light rigs / truss + marquee bulb strips (instanced)",
+          "glossy black stage floor with LED strips (shader)",
+          "audience bleachers"
+        ],
+        "src": "_research/environment/env_kit.json sets.3_wheel_of_pain + ENV_KIT.md"
+      }
+    },
+    {
+      "id": "rooftop",
+      "name": "CHANNEL 13 ROOFTOP",
+      "status": "todo",
+      "glb": "rooftop.glb",
+      "home": [
+        "patch",
+        "spin",
+        "gazza"
+      ],
+      "look": "night rooftop, rain, neon CHANNEL 13 sign",
+      "kit": {
+        "verdict": "GOOD - Japan Village + SICS Toon City cover AC units, tanks, vents, antenna, billboards, railings; rain + neon tubes procedural",
+        "models": [
+          "jp_JP_Conditioner_01",
+          "jp_JP_Conditioner_03",
+          "jp_JP_Conditioner_05",
+          "jp_JP_Conditioner_07",
+          "jp_JP_Propane",
+          "jp_JP_Water_Heater",
+          "jp_JP_Electric_Meter_01",
+          "jp_JP_Gas_Meter_01",
+          "jp_JP_Electric_Post_01",
+          "jp_JP_Railing",
+          "jp_JP_Fence_Metal_4m",
+          "jp_JP_Hatch_01",
+          "jp_JP_Grid_01",
+          "jp_JP_Cable_Mounting_01",
+          "tcy_Water_Tank_1A",
+          "tcy_Water_Tank_1B",
+          "tcy_Air_Vent_1A",
+          "tcy_Antenna_1A",
+          "tcy_Billboard_1A",
+          "tcy_Billboard_3A",
+          "tcy_Emergency_Stairs_1A",
+          "tcy_Skylight_1A",
+          "tcy_Industrial_Ventilation_1A",
+          "tcy_Light_Projector_1A",
+          "thb_TH_Roof_Service_Entrance_01A",
+          "thb_TH_Pipe_Cluster_01A",
+          "syc_Prop_Billboard_Roof_01",
+          "syc_Bld_Roof_Access_01",
+          "lpu_Water_Tower_Big",
+          "tcy_Billboard_2A"
+        ],
+        "textures": [
+          "PolyHaven bitumen",
+          "PolyHaven asphalt_02",
+          "PolyHaven asphalt_pit_lane",
+          "GameBuffs Cracked_Asphalt_5",
+          "PolyHaven asbestos_sheet_02",
+          "JapanVillage JP_Concrete",
+          "JapanVillage JP_Red_Brick",
+          "JapanVillage JP_Road_Hatches"
+        ],
+        "hdri": [
+          "jp_Sky_Night_4a",
+          "acr_Toon_sky_79",
+          "acr_Toon_sky_80"
+        ],
+        "procedural": [
+          "rain (particles + wet-floor roughness/ripple normal)",
+          "neon tube signs (emissive tube along spline - show logo 'CHANNEL 13' must be original)",
+          "distant city skyline cards (Kenney low-detail buildings need the colormap wired - 4 GLBs rendered magenta = missing texture)",
+          "roof parapet walls (modular box + JP_Red_Brick/JP_Concrete)"
+        ],
+        "src": "_research/environment/env_kit.json sets.4_channel13_rooftop + ENV_KIT.md"
+      }
+    },
+    {
+      "id": "control_room",
+      "name": "THE CONTROL ROOM",
+      "status": "todo",
+      "glb": "control_room.glb",
+      "home": [
+        "krane",
+        "ricky"
+      ],
+      "look": "finale under the studio: CRT banks, pipes, boiler (boss stage)",
+      "kit": {
+        "verdict": "MIXED - pipes/tanks/valves/cables/meters covered; CRT monitor banks, boiler, metal grating floor are gaps",
+        "models": [
+          "thb_TH_Giant_Pipe_Straight_Regular_01A",
+          "thb_TH_Giant_Pipe_Corner_Side_01A",
+          "thb_TH_Pipe_Cluster_01A",
+          "thb_TH_Liquid_Tank_01A",
+          "thb_TH_Metal_Stairs_01A",
+          "syd_Gen_Bld_Pipe_Valve_01",
+          "syd_Env_Grate_Ground_01",
+          "syd_Env_Door_Bars_01",
+          "syd_Gen_Prop_Chain_01",
+          "vpw_Cable_trunk",
+          "vpw_Bunch_of_wires",
+          "vpw_Damaged_wires",
+          "vpw_Counter",
+          "jp_JP_Electric_Meter_01",
+          "jp_JP_Gas_Meter_01",
+          "jp_JP_Cable_Mounting_01",
+          "jpc_speaker01_1",
+          "jpc_screen01_1",
+          "lpu_Television_Old",
+          "mno_TV_1",
+          "vpl_Lamp_5"
+        ],
+        "textures": [
+          "Blink Cracked_Concrete_Floor",
+          "PolyHaven asbestos_sheet",
+          "JapanVillage JP_Concrete",
+          "JapanVillage JP_Road_Hatches",
+          "JapanVillage JP_Meters",
+          "GEN bronze_worn"
+        ],
+        "hdri": [
+          "ph_abandoned_garage",
+          "ph_aircraft_workshop_01",
+          "ph_abandoned_bakery"
+        ],
+        "procedural": [
+          "CRT MONITOR BANKS (hero: rounded-box CRT with curved emissive screen, scanline shader, instanced racks - Poly Haven Television_01 is a broken stub)",
+          "boiler (riveted cylinder + gauges + firebox glow; Toon Harbor Liquid_Tank is a stand-in)",
+          "metal grating / catwalk floor (alpha-cut grate shader) + diamond plate",
+          "host's control desk / mixing console",
+          "steam vents (particles)"
+        ],
+        "src": "_research/environment/env_kit.json sets.5_control_room + ENV_KIT.md"
+      }
+    }
+  ]
+}

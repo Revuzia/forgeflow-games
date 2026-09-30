@@ -1,0 +1,380 @@
+{
+  "idle": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie idle",
+    "range": [1, 129],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "walk_f": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie walk",
+    "range": [1, 122],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "swat": {
+    "src": "cmu",
+    "file": "14_03",
+    "range": [469, 546],
+    "contact": 489,
+    "mirror": true,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "L_hand",
+    "fist": 0,
+    "_cand": "jab.3"
+  },
+  "lurch": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie attack",
+    "range": [21, 55],
+    "contact": 33,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "long_reach": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie neck bite",
+    "range": [8, 40],
+    "contact": 25,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "ankle_bite": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie biting (2)",
+    "range": [15, 38],
+    "contact": 22,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "crawl_claw": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie crawl",
+    "range": [1, 36],
+    "contact": 10,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "scream_up": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie scream",
+    "range": [18, 45],
+    "contact": 30,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "drop_headbutt": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie neck bite",
+    "range": [20, 45],
+    "contact": 32,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "air_swat": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.055555,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "14_03",
+        "range": [469, 541],
+        "contact": 489,
+        "mirror": true,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "L_hand",
+        "fist": 0,
+        "_cand": "jab.3"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 19,
+    "_upperContact": 489,
+    "contact": 28.2778,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_lurch": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.045454,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Scary_Zombie_Pack/zombie attack",
+        "range": [23, 45],
+        "contact": 33,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 23,
+    "_upperContact": 33,
+    "contact": 28.4545,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_reach": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.04,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Scary_Zombie_Pack/zombie neck bite",
+        "range": [12, 37],
+        "contact": 25,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 26,
+    "_upperContact": 25,
+    "contact": 28.52,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "throw_reach": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie neck bite",
+    "range": [16, 45],
+    "contact": 23,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "bite_lunge": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie neck bite",
+    "range": [22, 53],
+    "contact": 23,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "scream_grab": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie scream",
+    "range": [1, 85],
+    "contact": 30,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "swing_toss": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie attack",
+    "range": [1, 76],
+    "contact": 30,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "play_dead_fall": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie death",
+    "range": [5, 45],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "rise_claw": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie attack",
+    "range": [26, 55],
+    "contact": 33,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "crawl_run": {
+    "src": "seq",
+    "seq": [
+      {
+        "src": "mixamo",
+        "file": "Scary_Zombie_Pack/running crawl",
+        "range": [1, 20],
+        "contact": null,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": true
+      },
+      {
+        "src": "mixamo",
+        "file": "Scary_Zombie_Pack/zombie biting (2)",
+        "range": [14, 40],
+        "contact": 22,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      }
+    ],
+    "xf": 2,
+    "contact": null
+  },
+  "crawl_run_ex": {
+    "src": "seq",
+    "seq": [
+      {
+        "src": "mixamo",
+        "file": "Scary_Zombie_Pack/running crawl",
+        "range": [1, 20],
+        "contact": null,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": true
+      },
+      {
+        "src": "mixamo",
+        "file": "Scary_Zombie_Pack/zombie biting (2)",
+        "range": [14, 40],
+        "contact": 22,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      {
+        "src": "mixamo",
+        "file": "Scary_Zombie_Pack/zombie biting (2)",
+        "range": [14, 40],
+        "contact": 22,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      }
+    ],
+    "xf": 2,
+    "contact": null
+  },
+  "neck_bite": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie neck bite",
+    "range": [1, 123],
+    "contact": 23,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "contacts": [23, 29],
+    "marks": {"hit1": 23, "hit2": 29}
+  },
+  "arise_leap": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [15, 45],
+        "contact": null,
+        "mirror": false,
+        "speed": 1.111111,
+        "loop": false
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Scary_Zombie_Pack/zombie scream",
+        "range": [18, 45],
+        "contact": 30,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "sync"
+    },
+    "_upperFrames": 28,
+    "_upperContact": 30,
+    "contact": 28.3333,
+    "air": "strip"
+  },
+  "intro_rise": {
+    "src": "cmu",
+    "file": "140_08",
+    "range": [174, 651],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "getup",
+    "limb": "body",
+    "fist": 0,
+    "_cand": "getup_back.1"
+  },
+  "win_chew": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie biting (2)",
+    "range": [1, 70],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_idle": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie idle",
+    "range": [1, 129],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "taunt_scream": {
+    "src": "mixamo",
+    "file": "Scary_Zombie_Pack/zombie scream",
+    "range": [1, 85],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "_src": {
+    "levels": "FIGHTING_DESIGN.md section 10 table, verbatim: reaction delay to a VISIBLE startup (frames), block chance once reacted, guess weights on unreactable mixups (adapt), anti-air, punish a move <= -5 on block, punish route, throw tech (a guess), parry use, meter use, NERVE management, execution drop, aggression. L8 aggression 'adapts'.",
+    "styles": "[R] lane AI: plan weights per fighter cpu.style (plans.ts); boss_armor / boss_showman are the two boss plans (their fighters JSON styles), every other style name maps through kit.ts STYLE_ALIAS.",
+    "levels_R": "[R] lane AI additions (not in the research table): guard = chance the CPU holds a guard posture in neutral while inside the opponent's threat range (the only way ANY player blocks a move faster than their reaction); thinkF = frames between neutral decisions; antiZone = extra share of reacted projectiles the CPU jumps over (on top of the style jumpProj) and its chance to dash in between projectiles; meter tier 'cancel' is kept for L7/L8 because the table's 'all' there follows L6's 'all + cancel supers'.",
+    "rules": "[R] whiffReactPct = whiff punishes need this % of the level's reaction delay after the whiff becomes visible (block punishes need none: the move was already blocked); parryShare = fraction of the block chance spent on a parry instead of a block, per parry tier; counterImpactNerve = NERVE bars needed for a counter-IMPACT; avoidFrightNerve = below this many NERVE bars an 'avoid' CPU stops spending NERVE.",
+    "personas": "CONTRACT 11 / FIGHTING_DESIGN 12 harness personas; novice = 400 ms (24 f) delayed inputs; optimal = fast human reactions (10 f, top of the KI 12-19 f band) with perfect execution, blocks what it can see, punishes everything punishable.",
+    "boss": "FIGHTING_DESIGN 10 rules: bosses get TOOLS (armor, counter moves, phases), never faster reactions than L8."
+  },
+  "levels": [
+    { "level": 0, "name": "TUTOR", "reactF": 60, "block": 0.6, "guessAdapt": 0, "antiAir": 0.1, "punish": 0, "route": "jab", "tech": 0, "parry": "never", "meter": "never", "nerve": "none", "drop": 0.5, "aggression": 0.2, "guard": 0.3, "thinkF": 30, "antiZone": 0 },
+    { "level": 1, "name": "ROOKIE", "reactF": 48, "block": 0.10, "guessAdapt": 0, "antiAir": 0.05, "punish": 0.05, "route": "single", "tech": 0, "parry": "never", "meter": "never", "nerve": "none", "drop": 0.4, "aggression": 0.3, "guard": 0.05, "thinkF": 26, "antiZone": 0 },
+    { "level": 2, "name": "LOCAL", "reactF": 42, "block": 0.25, "guessAdapt": 0, "antiAir": 0.15, "punish": 0.15, "route": "two", "tech": 0.10, "parry": "never", "meter": "ex", "nerve": "none", "drop": 0.3, "aggression": 0.35, "guard": 0.15, "thinkF": 22, "antiZone": 0 },
+    { "level": 3, "name": "REGULAR", "reactF": 36, "block": 0.40, "guessAdapt": 0, "antiAir": 0.30, "punish": 0.30, "route": "chainSpecial", "tech": 0.20, "parry": "rare", "meter": "lv1", "nerve": "avoid", "drop": 0.2, "aggression": 0.4, "guard": 0.25, "thinkF": 18, "antiZone": 0 },
+    { "level": 4, "name": "CONTENDER", "reactF": 32, "block": 0.55, "guessAdapt": 0.10, "antiAir": 0.45, "punish": 0.45, "route": "bnb", "tech": 0.30, "parry": "projectiles", "meter": "lv1", "nerve": "burnout", "drop": 0.15, "aggression": 0.45, "guard": 0.35, "thinkF": 16, "antiZone": 0.1 },
+    { "level": 5, "name": "HEADLINER", "reactF": 28, "block": 0.65, "guessAdapt": 0.15, "antiAir": 0.60, "punish": 0.60, "route": "bnbMeter", "tech": 0.40, "parry": "slow", "meter": "all", "nerve": "impactReads", "drop": 0.1, "aggression": 0.5, "guard": 0.45, "thinkF": 14, "antiZone": 0.15 },
+    { "level": 6, "name": "PRIME TIME", "reactF": 24, "block": 0.75, "guessAdapt": 0.20, "antiAir": 0.70, "punish": 0.75, "route": "bestMeterless", "tech": 0.45, "parry": "perfect", "meter": "cancel", "nerve": "counterImpact", "drop": 0.05, "aggression": 0.55, "guard": 0.55, "thinkF": 12, "antiZone": 0.2 },
+    { "level": 7, "name": "SYNDICATED", "reactF": 21, "block": 0.85, "guessAdapt": 0.25, "antiAir": 0.80, "punish": 0.85, "route": "bestMeter", "tech": 0.50, "parry": "rush", "meter": "cancel", "nerve": "counterImpact", "drop": 0.02, "aggression": 0.6, "guard": 0.6, "thinkF": 10, "antiZone": 0.25 },
+    { "level": 8, "name": "HALL OF FAME", "reactF": 18, "block": 0.90, "guessAdapt": 0.30, "antiAir": 0.85, "punish": 0.90, "route": "bestCorner", "tech": 0.55, "parry": "baits", "meter": "cancel", "nerve": "counterImpact", "drop": 0, "aggression": "adapts", "guard": 0.65, "thinkF": 9, "antiZone": 0.3 }
+  ],
+  "rules": {
+    "reactFloor": 18,
+    "whiffReactPct": 50,
+    "parryShare": { "never": 0, "rare": 0.08, "projectiles": 0.4, "slow": 0.3, "perfect": 0.35, "rush": 0.35, "baits": 0.35 },
+    "slowStrikeStartup": 14,
+    "counterImpactNerve": 1,
+    "avoidFrightNerve": 2,
+    "adaptAggression": { "base": 0.6, "span": 0.25, "min": 0.4, "max": 0.8 },
+    "backRise": 0.25,
+    "wakeReversal": 0.2
+  },
+  "styles": {
+    "shoto": { "throw": 0.25, "poke": 0.45, "jump": 0.06, "dash": 0.10, "walkIn": 0.45, "zone": 0.35, "approach": 0.10, "grab": 0, "armor": 0, "counter": 0, "backOff": 0.15, "jumpProj": 0.15, "mix": 0.20, "air": 0, "setup": 0, "escape": 0, "charge": false },
+    "rushdown": { "throw": 0.35, "poke": 0.50, "jump": 0.08, "dash": 0.30, "walkIn": 0.80, "zone": 0, "approach": 0.30, "grab": 0, "armor": 0, "counter": 0, "backOff": 0.02, "jumpProj": 0.30, "mix": 0.35, "air": 0, "setup": 0, "escape": 0, "charge": false },
+    "grappler": { "throw": 0.30, "poke": 0.35, "jump": 0.05, "dash": 0.12, "walkIn": 0.80, "zone": 0, "approach": 0.15, "grab": 0.45, "armor": 0.10, "counter": 0, "backOff": 0, "jumpProj": 0.25, "mix": 0.10, "air": 0, "setup": 0, "escape": 0, "charge": false },
+    "zoner": { "throw": 0.20, "poke": 0.35, "jump": 0.02, "dash": 0.02, "walkIn": 0.10, "zone": 0.70, "approach": 0, "grab": 0, "armor": 0, "counter": 0, "backOff": 0.50, "jumpProj": 0.05, "mix": 0.10, "air": 0, "setup": 0, "escape": 0.35, "charge": false },
+    "charge": { "throw": 0.20, "poke": 0.40, "jump": 0.02, "dash": 0.05, "walkIn": 0.25, "zone": 0.55, "approach": 0.10, "grab": 0.15, "armor": 0, "counter": 0, "backOff": 0.20, "jumpProj": 0.05, "mix": 0.10, "air": 0, "setup": 0, "escape": 0, "charge": true },
+    "stance": { "throw": 0.25, "poke": 0.45, "jump": 0.06, "dash": 0.15, "walkIn": 0.50, "zone": 0.25, "approach": 0.20, "grab": 0, "armor": 0, "counter": 0, "backOff": 0.10, "jumpProj": 0.20, "mix": 0.35, "air": 0, "setup": 0, "escape": 0, "charge": false },
+    "bigbody": { "throw": 0.25, "poke": 0.45, "jump": 0.03, "dash": 0.08, "walkIn": 0.55, "zone": 0, "approach": 0.15, "grab": 0.20, "armor": 0.30, "counter": 0, "backOff": 0.05, "jumpProj": 0.10, "mix": 0.20, "air": 0, "setup": 0, "escape": 0, "charge": false },
+    "aerial": { "throw": 0.20, "poke": 0.35, "jump": 0.22, "dash": 0.20, "walkIn": 0.50, "zone": 0, "approach": 0.25, "grab": 0, "armor": 0, "counter": 0, "backOff": 0.05, "jumpProj": 0.35, "mix": 0.25, "air": 0.45, "setup": 0, "escape": 0, "charge": false },
+    "setplay": { "throw": 0.20, "poke": 0.40, "jump": 0.05, "dash": 0.10, "walkIn": 0.35, "zone": 0.45, "approach": 0.10, "grab": 0, "armor": 0, "counter": 0, "backOff": 0.20, "jumpProj": 0.10, "mix": 0.15, "air": 0, "setup": 0.30, "escape": 0, "charge": false },
+    "counter": { "throw": 0.25, "poke": 0.40, "jump": 0.04, "dash": 0.08, "walkIn": 0.35, "zone": 0, "approach": 0.15, "grab": 0.20, "armor": 0, "counter": 0.35, "backOff": 0.10, "jumpProj": 0.15, "mix": 0.15, "air": 0, "setup": 0, "escape": 0, "charge": false },
+    "boss_armor": { "throw": 0.30, "poke": 0.45, "jump": 0.03, "dash": 0.10, "walkIn": 0.60, "zone": 0, "approach": 0.20, "grab": 0.30, "armor": 0.40, "counter": 0, "backOff": 0, "jumpProj": 0.10, "mix": 0.20, "air": 0, "setup": 0, "escape": 0, "charge": false },
+    "boss_showman": { "throw": 0.25, "poke": 0.45, "jump": 0.04, "dash": 0.10, "walkIn": 0.35, "zone": 0.35, "approach": 0.15, "grab": 0, "armor": 0, "counter": 0.30, "backOff": 0.20, "jumpProj": 0.10, "mix": 0.25, "air": 0, "setup": 0, "escape": 0, "charge": false }
+  },
+  "personas": {
+    "novice": { "delayF": 24, "antiZone": 0.1, "reactF": 1, "block": 0.7, "guessAdapt": 0, "antiAir": 0.4, "punish": 0.4, "route": "chainSpecial", "tech": 0.1, "parry": "never", "meter": "lv1", "nerve": "avoid", "drop": 0.25, "aggression": 0.45, "guard": 0.4, "thinkF": 14 },
+    "optimal": { "delayF": 0, "antiZone": 0.5, "reactF": 10, "block": 1.0, "guessAdapt": 0.3, "antiAir": 1.0, "punish": 1.0, "route": "bestMeter", "tech": 0.5, "parry": "projectiles", "meter": "cancel", "nerve": "counterImpact", "drop": 0, "aggression": 0.5, "guard": 0.9, "thinkF": 8 },
+    "masher": { "pressMin": 2, "pressMax": 4, "rangeM": 1.4 },
+    "turtle": { "reactF": 10 },
+    "jumper": { "jumpM": 2.4 },
+    "zoner": { "keepM": 3.2 }
+  },
+  "boss": {
+    "freak": { "tool": "armor", "armorRate": 0.5, "aggressionBonus": 0.1 },
+    "ricky": { "tool": "counter", "counterRate": 0.35, "thresholdPct": 50, "phase2Aggression": 0.15 }
+  }
+}

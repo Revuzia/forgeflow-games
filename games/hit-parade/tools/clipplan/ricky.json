@@ -1,0 +1,366 @@
+{
+  "idle": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword idle",
+    "range": [1, 61],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "walk_f": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword walk",
+    "range": [1, 42],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "walk_b": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword walk (2)",
+    "range": [1, 40],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "cane_jab": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword attack",
+    "range": [10, 33],
+    "contact": 17,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "cane_swing": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword slash",
+    "range": [8, 39],
+    "contact": 19,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "showstopper": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword slash (3)",
+    "range": [11, 56],
+    "contact": 27,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "low_tap": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Great_Sword_Pack/great sword crouching (3)",
+        "range": [1, 2],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.043478,
+        "loop": false
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Great_Sword_Pack/great sword attack",
+        "range": [10, 33],
+        "contact": 17,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 1
+    },
+    "_upperFrames": 24,
+    "_upperContact": 17,
+    "contact": 1.3043,
+    "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
+  },
+  "low_cane": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword slash (5)",
+    "range": [4, 40],
+    "contact": 16,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "cane_twirl": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword high spin attack",
+    "range": [1, 40],
+    "contact": 11,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "sledgehammer": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword slash (4)",
+    "range": [25, 55],
+    "contact": 43,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "stage_kick": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword kick",
+    "range": [7, 45],
+    "contact": 19,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "hook_slide": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword slide attack",
+    "range": [17, 65],
+    "contact": 38,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "air_jab": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.05,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Great_Sword_Pack/great sword attack",
+        "range": [10, 30],
+        "contact": 17,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 21,
+    "_upperContact": 17,
+    "contact": 28.35,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_swing": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.045454,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Great_Sword_Pack/great sword slash",
+        "range": [9, 31],
+        "contact": 19,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 23,
+    "_upperContact": 19,
+    "contact": 28.4545,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_hammer": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.04,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Great_Sword_Pack/great sword slash (4)",
+        "range": [30, 55],
+        "contact": 43,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 26,
+    "_upperContact": 43,
+    "contact": 28.52,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "throw_reach": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper catch (2)",
+    "range": [2, 30],
+    "contact": 9,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "three_swings": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword slash (2)",
+    "range": [15, 107],
+    "contact": 26,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "contacts": [26, 59, 80],
+    "marks": {"hit1": 26, "hit2": 59, "hit3": 80}
+  },
+  "spin_fling": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword high spin attack",
+    "range": [1, 57],
+    "contact": 18,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "spotlight_cast": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword attack",
+    "range": [1, 37],
+    "contact": 17,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "catch_pose": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword blocking",
+    "range": [1, 16],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "mic_drop_leap": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Great_Sword_Pack/great sword jump (2)",
+        "range": [1, 28],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.692307,
+        "loop": false
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Great_Sword_Pack/great sword slash (3)",
+        "range": [17, 56],
+        "contact": 27,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "sync"
+    },
+    "_upperFrames": 40,
+    "_upperContact": 27,
+    "contact": 7.9231,
+    "air": "strip"
+  },
+  "counter_smash": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword slash (4)",
+    "range": [35, 55],
+    "contact": 43,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "finale_slam": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword casting",
+    "range": [59, 110],
+    "contact": 72,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "pyro_slam": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword casting",
+    "range": [48, 110],
+    "contact": 72,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "intro_power": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword power up",
+    "range": [1, 94],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_bow": {
+    "src": "mixamo",
+    "file": "Gestures_Pack_Basic/happy hand gesture",
+    "range": [1, 83],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_cane": {
+    "src": "mixamo",
+    "file": "Great_Sword_Pack/great sword idle (3)",
+    "range": [1, 109],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "taunt_dismiss": {
+    "src": "mixamo",
+    "file": "Gestures_Pack_Basic/dismissing gesture",
+    "range": [1, 99],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  }
+}

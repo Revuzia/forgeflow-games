@@ -1,0 +1,465 @@
+{
+  "idle": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield idle",
+    "range": [1, 109],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "walk_f": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield walk",
+    "range": [1, 34],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "walk_b": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield walk (2)",
+    "range": [1, 39],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "block_high": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield block idle",
+    "range": [1, 42],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "block_low": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield crouch block idle",
+    "range": [1, 9],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "crouch_idle": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield crouch idle",
+    "range": [1, 73],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "baton_poke": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield attack (4)",
+    "range": [8, 31],
+    "contact": 15,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "baton_chop": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield slash",
+    "range": [8, 40],
+    "contact": 19,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "baton_swing": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield attack (2)",
+    "range": [5, 40],
+    "contact": 18,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "low_poke": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Sword_and_Shield_Pack/sword and shield crouch idle",
+        "range": [1, 2],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.043478,
+        "loop": false
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Sword_and_Shield_Pack/sword and shield attack (4)",
+        "range": [8, 31],
+        "contact": 15,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 1
+    },
+    "_upperFrames": 24,
+    "_upperContact": 15,
+    "contact": 1.3043,
+    "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
+  },
+  "knee_rap": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield slash (5)",
+    "range": [8, 40],
+    "contact": 19,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "rising_baton": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield slash (3)",
+    "range": [13, 45],
+    "contact": 25,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "shield_block": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield block",
+    "range": [1, 18],
+    "contact": 11,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "boot": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield kick",
+    "range": [7, 37],
+    "contact": 19,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "hop_chop": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield attack",
+    "range": [20, 60],
+    "contact": 35,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "air": "strip"
+  },
+  "air_poke": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.05,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Sword_and_Shield_Pack/sword and shield attack (4)",
+        "range": [8, 28],
+        "contact": 15,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 21,
+    "_upperContact": 15,
+    "contact": 28.35,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_chop": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.045454,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Sword_and_Shield_Pack/sword and shield slash",
+        "range": [9, 31],
+        "contact": 19,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 23,
+    "_upperContact": 19,
+    "contact": 28.4545,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_swing": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.04,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Sword_and_Shield_Pack/sword and shield attack (2)",
+        "range": [5, 30],
+        "contact": 18,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 26,
+    "_upperContact": 18,
+    "contact": 28.52,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "throw_reach": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper catch (2)",
+    "range": [1, 30],
+    "contact": 9,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "book_em": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield slash (2)",
+    "range": [10, 100],
+    "contact": 22,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "perp_walk": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield 180 turn (2)",
+    "range": [1, 26],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "taser_fire": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield casting (2)",
+    "range": [1, 32],
+    "contact": 8,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "baton_flip_rise": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Sword_and_Shield_Pack/sword and shield jump (2)",
+        "range": [1, 30],
+        "contact": null,
+        "mirror": false,
+        "speed": 1.035714,
+        "loop": false
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Sword_and_Shield_Pack/sword and shield slash (3)",
+        "range": [17, 45],
+        "contact": 25,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "sync"
+    },
+    "_upperFrames": 29,
+    "_upperContact": 25,
+    "contact": 9.2857,
+    "air": "strip"
+  },
+  "shield_charge": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Sword_and_Shield_Pack/sword and shield run",
+        "range": [1, 22],
+        "contact": null,
+        "mirror": false,
+        "speed": 1.235294,
+        "loop": true
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Sword_and_Shield_Pack/sword and shield block",
+        "range": [1, 18],
+        "contact": 11,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "loop"
+    },
+    "_upperFrames": 18,
+    "_upperContact": 11,
+    "contact": 13.3529
+  },
+  "cuff_pin": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield crouch block (2)",
+    "range": [1, 21],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "backup_combo": {
+    "src": "seq",
+    "seq": [
+      {
+        "src": "layer",
+        "layer": {
+          "lower": {
+            "src": "mixamo",
+            "file": "Pro_Sword_and_Shield_Pack/sword and shield run",
+            "range": [1, 22],
+            "contact": null,
+            "mirror": false,
+            "speed": 1.235294,
+            "loop": true
+          },
+          "upper": {
+            "src": "mixamo",
+            "file": "Pro_Sword_and_Shield_Pack/sword and shield block",
+            "range": [1, 18],
+            "contact": 11,
+            "mirror": false,
+            "speed": 1.0,
+            "loop": false
+          },
+          "split": "Spine",
+          "lowerMode": "loop"
+        },
+        "_upperFrames": 18,
+        "_upperContact": 11,
+        "contact": 13.3529
+      },
+      {
+        "src": "layer",
+        "layer": {
+          "lower": {
+            "src": "mixamo",
+            "file": "Pro_Sword_and_Shield_Pack/sword and shield run",
+            "range": [1, 22],
+            "contact": null,
+            "mirror": false,
+            "speed": 1.235294,
+            "loop": true
+          },
+          "upper": {
+            "src": "mixamo",
+            "file": "Pro_Sword_and_Shield_Pack/sword and shield block",
+            "range": [1, 18],
+            "contact": 11,
+            "mirror": false,
+            "speed": 1.0,
+            "loop": false
+          },
+          "split": "Spine",
+          "lowerMode": "loop"
+        },
+        "_upperFrames": 18,
+        "_upperContact": 11,
+        "contact": 13.3529
+      },
+      {
+        "src": "mixamo",
+        "file": "Pro_Sword_and_Shield_Pack/sword and shield attack (2)",
+        "range": [5, 40],
+        "contact": 18,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      }
+    ],
+    "xf": 2,
+    "contact": 11
+  },
+  "intro_draw": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/draw sword 2",
+    "range": [1, 24],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_holster": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sheath sword 2",
+    "range": [1, 25],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_rally": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield idle (4)",
+    "range": [1, 76],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "taunt_rally": {
+    "src": "mixamo",
+    "file": "Pro_Sword_and_Shield_Pack/sword and shield power up",
+    "range": [1, 72],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  }
+}

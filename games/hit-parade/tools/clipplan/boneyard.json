@@ -1,0 +1,380 @@
+{
+  "idle": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing idle",
+    "range": [1, 55],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "walk_f": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing walk forward",
+    "range": [1, 41],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "walk_b": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing walk back",
+    "range": [1, 42],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "block_high": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing block idle",
+    "range": [1, 51],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "crouch_idle": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/crouch idle",
+    "range": [1, 51],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "gauntlet_jab": {
+    "src": "cmu",
+    "file": "13_17",
+    "range": [1191, 1275],
+    "contact": 1211,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "L_hand",
+    "fist": 80,
+    "_cand": "jab.6"
+  },
+  "snap_kick": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee attack kick ver. 2",
+    "range": [12, 40],
+    "contact": 24,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "cleaver_swing": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee combo attack ver. 1",
+    "range": [41, 80],
+    "contact": 60,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "stomp": {
+    "src": "cmu",
+    "file": "135_01",
+    "range": [2979, 3081],
+    "contact": 3019,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "foot",
+    "limb": "R_foot",
+    "fist": 0,
+    "_cand": "stomp.1"
+  },
+  "low_cleaver": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Melee_Axe_Pack/crouch idle",
+        "range": [1, 2],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.027777,
+        "loop": false
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Melee_Axe_Pack/standing melee attack horizontal",
+        "range": [16, 52],
+        "contact": 29,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 1
+    },
+    "_upperFrames": 37,
+    "_upperContact": 29,
+    "contact": 1.3611,
+    "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
+  },
+  "rising_backhand": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee attack backhand",
+    "range": [19, 60],
+    "contact": 32,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "chop_down": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee attack downward",
+    "range": [8, 45],
+    "contact": 26,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "air_jab": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.055555,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "13_17",
+        "range": [1191, 1263],
+        "contact": 1211,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "L_hand",
+        "fist": 80,
+        "_cand": "jab.6"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 19,
+    "_upperContact": 1211,
+    "contact": 28.2778,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_backhand": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.045454,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Melee_Axe_Pack/standing melee attack backhand",
+        "range": [22, 44],
+        "contact": 32,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 23,
+    "_upperContact": 32,
+    "contact": 28.4545,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_chop": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.04,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Melee_Axe_Pack/standing melee attack downward",
+        "range": [13, 38],
+        "contact": 26,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 26,
+    "_upperContact": 26,
+    "contact": 28.52,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "throw_reach": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper catch (2)",
+    "range": [2, 30],
+    "contact": 9,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "three_swings": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee combo attack ver. 2",
+    "range": [15, 95],
+    "contact": 30,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "over_shoulder": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing disarm over shoulder",
+    "range": [1, 50],
+    "contact": 10,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "meat_hook_swing": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee combo attack ver. 3",
+    "range": [15, 70],
+    "contact": 30,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "contacts": [30, 49],
+    "marks": {"hit1": 30, "hit2": 49}
+  },
+  "cleaver_leap": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee run jump attack",
+    "range": [30, 83],
+    "contact": 53,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "air": "strip"
+  },
+  "ham_spin": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee attack 360 low",
+    "range": [10, 60],
+    "contact": 30,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "block_step": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Melee_Axe_Pack/standing walk forward",
+        "range": [1, 41],
+        "contact": null,
+        "mirror": false,
+        "speed": 1.142857,
+        "loop": true
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Melee_Axe_Pack/standing block idle",
+        "range": [1, 36],
+        "contact": null,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": true
+      },
+      "split": "Spine",
+      "lowerMode": "sync"
+    },
+    "_upperFrames": 36,
+    "_upperContact": null,
+    "contact": null
+  },
+  "roast_swing": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee combo attack ver. 1",
+    "range": [47, 80],
+    "contact": 60,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "chefs_combo": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee combo attack ver. 1",
+    "range": [47, 141],
+    "contact": 60,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "contacts": [60, 88],
+    "marks": {"hit1": 60, "hit2": 88}
+  },
+  "intro_look": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing idle looking ver. 1",
+    "range": [1, 150],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_shoulder": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/unarmed equip over shoulder",
+    "range": [1, 51],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_look2": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing idle looking ver. 2",
+    "range": [1, 120],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "taunt_thump": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing taunt chest thump",
+    "range": [1, 77],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  }
+}

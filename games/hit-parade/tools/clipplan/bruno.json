@@ -1,0 +1,439 @@
+{
+  "idle": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper idle",
+    "range": [1, 140],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "chop": {
+    "src": "cmu",
+    "file": "86_06",
+    "range": [4653, 4734],
+    "contact": 4682,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "R_hand",
+    "fist": 80
+  },
+  "forearm": {
+    "src": "cmu",
+    "file": "14_01",
+    "range": [2592, 2666],
+    "contact": 2608,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "R_hand",
+    "fist": 80,
+    "_cand": "cross.4"
+  },
+  "haymaker": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee attack horizontal",
+    "range": [16, 52],
+    "contact": 29,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "low_straight": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Crouch Idle",
+        "range": [1, 2],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.052631,
+        "loop": false
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "14_03",
+        "range": [1748, 1822],
+        "contact": 1763,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "R_hand",
+        "fist": 80,
+        "_cand": "cross.3"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 1
+    },
+    "_upperFrames": 20,
+    "_upperContact": 1763,
+    "contact": 1.1974,
+    "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
+  },
+  "low_forearm": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Crouch Idle",
+        "range": [1, 2],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.043478,
+        "loop": false
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "13_17",
+        "range": [4603, 4692],
+        "contact": 4620,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "L_hand",
+        "fist": 80,
+        "_cand": "body_blow.4"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 1
+    },
+    "_upperFrames": 24,
+    "_upperContact": 4620,
+    "contact": 1.1848,
+    "_why": "crouch normal: legs held in Crouch Idle, arms from the strike clip"
+  },
+  "goalpost": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 2H Cast Spell 01",
+    "range": [8, 40],
+    "contact": 21,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "big_boot": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee attack kick ver. 1",
+    "range": [8, 40],
+    "contact": 22,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "air_chop": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.047619,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "86_06",
+        "range": [4653, 4734],
+        "contact": 4682,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "R_hand",
+        "fist": 80
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 22,
+    "_upperContact": 4682,
+    "contact": 28.3452,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_forearm": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.0625,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "14_01",
+        "range": [2592, 2656],
+        "contact": 2608,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "R_hand",
+        "fist": 80,
+        "_cand": "cross.4"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 17,
+    "_upperContact": 2608,
+    "contact": 28.25,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_hammer": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.04,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Melee_Axe_Pack/standing melee attack downward",
+        "range": [13, 38],
+        "contact": 26,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 26,
+    "_upperContact": 26,
+    "contact": 28.52,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "fridge_drop": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper body block",
+    "range": [6, 40],
+    "contact": 22,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "air": "strip"
+  },
+  "throw_reach": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper catch (2)",
+    "range": [2, 30],
+    "contact": 9,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "delivery_reach": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper catch (2)",
+    "range": [5, 30],
+    "contact": 9,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "bear_hug": {
+    "src": "cmu",
+    "file": "18_05",
+    "range": [200, 330],
+    "contact": 301,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "body",
+    "limb": "body",
+    "fist": 0,
+    "_cand": "grab_pull.1"
+  },
+  "throw_in": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/throw in",
+    "range": [30, 84],
+    "contact": 50,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "freezer_slam": {
+    "src": "mixamo",
+    "file": "Pro_Magic_Pack/Standing 2H Magic Area Attack 01",
+    "range": [10, 90],
+    "contact": 40,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "fridge_shove": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Run Forward",
+        "range": [1, 23],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.647058,
+        "loop": true
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing 2H Magic Attack 02",
+        "range": [28, 62],
+        "contact": 43,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "loop"
+    },
+    "_upperFrames": 35,
+    "_upperContact": 43,
+    "contact": 10.7059
+  },
+  "lariat_spin": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing melee attack 360 high",
+    "range": [20, 60],
+    "contact": 32,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "brace_step": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Walk Forward",
+        "range": [1, 35],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.971428,
+        "loop": true
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Pro_Melee_Axe_Pack/standing block idle",
+        "range": [1, 36],
+        "contact": null,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": true
+      },
+      "split": "Spine",
+      "lowerMode": "sync"
+    },
+    "_upperFrames": 36,
+    "_upperContact": null,
+    "contact": null
+  },
+  "storage_run": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Run Forward",
+        "range": [1, 23],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.75862,
+        "loop": true
+      },
+      "upper": {
+        "src": "mixamo",
+        "file": "Soccer_Game_Pack/goalkeeper catch (2)",
+        "range": [1, 30],
+        "contact": 9,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      "split": "Spine",
+      "lowerMode": "loop"
+    },
+    "_upperFrames": 30,
+    "_upperContact": 9,
+    "contact": 7.069
+  },
+  "storage_slam": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper body block (3)",
+    "range": [1, 103],
+    "contact": 33,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "intro_battlecry": {
+    "src": "mixamo",
+    "file": "Pro_Melee_Axe_Pack/standing taunt battlecry",
+    "range": [1, 86],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "taunt_flex": {
+    "src": "cmu",
+    "file": "79_94",
+    "range": [241, 480],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "body",
+    "limb": "body",
+    "fist": 0,
+    "_cand": "flex_taunt.1"
+  },
+  "win_flex": {
+    "src": "cmu",
+    "file": "79_94",
+    "range": [480, 721],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "body",
+    "limb": "body",
+    "fist": 0,
+    "_cand": "flex_taunt.1"
+  },
+  "win_nod": {
+    "src": "mixamo",
+    "file": "Gestures_Pack_Basic/hard head nod",
+    "range": [1, 50],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  }
+}

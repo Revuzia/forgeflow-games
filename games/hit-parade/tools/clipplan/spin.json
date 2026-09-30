@@ -1,0 +1,457 @@
+{
+  "idle": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/breakdance uprock var 1",
+    "range": [1, 64],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": true
+  },
+  "jab": {
+    "src": "cmu",
+    "file": "14_02",
+    "range": [3520, 3582],
+    "contact": 3534,
+    "mirror": true,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "hand",
+    "limb": "L_hand",
+    "fist": 80,
+    "_cand": "jab.4"
+  },
+  "front_kick": {
+    "src": "cmu",
+    "file": "144_09",
+    "range": [855, 997],
+    "contact": 902,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "foot",
+    "limb": "L_foot",
+    "fist": 0,
+    "_cand": "front_kick.6"
+  },
+  "swipes": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/breakdance swipes",
+    "range": [60, 91],
+    "contact": 76,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "contacts": [76, 81],
+    "marks": {"hit1": 76, "hit2": 81}
+  },
+  "floor_tap": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/breakdance footwork 2",
+    "range": [4, 27],
+    "contact": 11,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "footwork_sweep": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/breakdance footwork 1",
+    "range": [44, 66],
+    "contact": 56,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "flare_sweep": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/flair (3)",
+    "range": [31, 51],
+    "contact": 46,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "butterfly": {
+    "src": "cmu",
+    "file": "88_06",
+    "range": [30, 140],
+    "contact": 68,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "foot",
+    "limb": "R_foot",
+    "fist": 0,
+    "_cand": "spin_kick.1",
+    "air": "strip"
+  },
+  "air_jab": {
+    "src": "layer",
+    "layer": {
+      "lower": {
+        "src": "mixamo",
+        "file": "Pro_Magic_Pack/Standing Jump",
+        "range": [28, 29],
+        "contact": null,
+        "mirror": false,
+        "speed": 0.0625,
+        "loop": false,
+        "_why": "apex f28 measured"
+      },
+      "upper": {
+        "src": "cmu",
+        "file": "14_02",
+        "range": [3520, 3582],
+        "contact": 3534,
+        "mirror": true,
+        "speed": 1.0,
+        "loop": false,
+        "kind": "hand",
+        "limb": "L_hand",
+        "fist": 80,
+        "_cand": "jab.4"
+      },
+      "split": "Spine",
+      "lowerMode": "hold",
+      "lowerFrame": 28
+    },
+    "_upperFrames": 17,
+    "_upperContact": 3534,
+    "contact": 28.2188,
+    "_why": "air normal: legs held at the measured jump apex (f28), arms from the strike clip",
+    "air": "strip"
+  },
+  "air_swipe": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/breakdance swipes",
+    "range": [66, 86],
+    "contact": 76,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "air": "strip"
+  },
+  "jump_kick": {
+    "src": "cmu",
+    "file": "90_05",
+    "range": [252, 330],
+    "contact": 282,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "foot",
+    "limb": "L_foot",
+    "fist": 0,
+    "_cand": "jump_kick.1",
+    "air": "strip"
+  },
+  "throw_reach": {
+    "src": "mixamo",
+    "file": "Soccer_Game_Pack/goalkeeper catch (2)",
+    "range": [2, 30],
+    "contact": 9,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "footwork_trip": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/breakdance footwork to freeze",
+    "range": [1, 80],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "flair_toss": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/flair (3)",
+    "range": [1, 51],
+    "contact": 36,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "windmill_l": {
+    "src": "seq",
+    "seq": [
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair (3)",
+        "range": [34, 51],
+        "contact": 43,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair",
+        "range": [1, 40],
+        "contact": 5,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      }
+    ],
+    "xf": 2,
+    "contact": 43
+  },
+  "windmill_m": {
+    "src": "seq",
+    "seq": [
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair (3)",
+        "range": [34, 51],
+        "contact": 43,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair (2)",
+        "range": [1, 31],
+        "contact": 8,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "contacts": [8, 24],
+        "marks": {"hit1": 8, "hit2": 24}
+      },
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair",
+        "range": [1, 40],
+        "contact": 5,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      }
+    ],
+    "xf": 2,
+    "contact": 43
+  },
+  "windmill_h": {
+    "src": "seq",
+    "seq": [
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair (3)",
+        "range": [34, 51],
+        "contact": 43,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair (2)",
+        "range": [1, 31],
+        "contact": 8,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "contacts": [8, 24],
+        "marks": {"hit1": 8, "hit2": 24}
+      },
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair (2)",
+        "range": [1, 31],
+        "contact": 8,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "contacts": [8, 24],
+        "marks": {"hit1": 8, "hit2": 24}
+      },
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair",
+        "range": [1, 40],
+        "contact": 5,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      }
+    ],
+    "xf": 2,
+    "contact": 43
+  },
+  "handspin_clip": {
+    "src": "seq",
+    "seq": [
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/breakdance 1990",
+        "range": [10, 26],
+        "contact": 19,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/breakdance 1990 (2)",
+        "range": [1, 16],
+        "contact": 8,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "contacts": [8],
+        "marks": {"hit1": 8}
+      },
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/breakdance 1990 (2)",
+        "range": [1, 16],
+        "contact": 8,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "contacts": [8],
+        "marks": {"hit1": 8}
+      }
+    ],
+    "xf": 1,
+    "contact": 19,
+    "air": "strip"
+  },
+  "six_step_clip": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/breakdance footwork 3",
+    "range": [8, 60],
+    "contact": 20,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "contacts": [20, 27],
+    "marks": {"hit1": 20, "hit2": 27}
+  },
+  "six_step_ex_clip": {
+    "src": "seq",
+    "seq": [
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/breakdance footwork 3",
+        "range": [8, 34],
+        "contact": 20,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "contacts": [20, 27],
+        "marks": {"hit1": 20, "hit2": 27}
+      },
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/breakdance footwork 2",
+        "range": [1, 30],
+        "contact": 11,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      }
+    ],
+    "xf": 2,
+    "contact": 20
+  },
+  "dive_kick": {
+    "src": "cmu",
+    "file": "144_10",
+    "range": [915, 1035],
+    "contact": 955,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false,
+    "kind": "foot",
+    "limb": "L_foot",
+    "fist": 0,
+    "air": "strip"
+  },
+  "cypher_clip": {
+    "src": "seq",
+    "seq": [
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair (3)",
+        "range": [34, 51],
+        "contact": 43,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      },
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair (2)",
+        "range": [1, 31],
+        "contact": 8,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "contacts": [8, 24],
+        "marks": {"hit1": 8, "hit2": 24}
+      },
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair (2)",
+        "range": [1, 31],
+        "contact": 8,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false,
+        "contacts": [8, 24],
+        "marks": {"hit1": 8, "hit2": 24}
+      },
+      {
+        "src": "mixamo",
+        "file": "Breakdance_Pack/flair",
+        "range": [1, 40],
+        "contact": 5,
+        "mirror": false,
+        "speed": 1.0,
+        "loop": false
+      }
+    ],
+    "xf": 2,
+    "contact": 43
+  },
+  "intro_uprock": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/breakdance uprock var 1 start",
+    "range": [1, 46],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_freeze": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/breakdance freezes",
+    "range": [1, 202],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "win_ending": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/breakdance ending 1",
+    "range": [1, 196],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  },
+  "taunt_uprock": {
+    "src": "mixamo",
+    "file": "Breakdance_Pack/breakdance uprock (2)",
+    "range": [1, 109],
+    "contact": null,
+    "mirror": false,
+    "speed": 1.0,
+    "loop": false
+  }
+}

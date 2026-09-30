@@ -1,0 +1,363 @@
+// HIT PARADE — shared data + snapshot types (CONTRACT §4.6, §5, §16, §17, §19). THREE-free.
+
+export type Vec2 = [number, number];
+export type FrameRange = [number, number];
+
+// ------------------------------------------------------------------ fighter data (§5.2)
+export interface BoxDef {
+  f: FrameRange; // move frames (1-based, inclusive)
+  x: number; // metres forward of the fighter origin (box centre)
+  y: number; // metres up (box centre)
+  w: number;
+  h: number;
+}
+
+export type MoveKind =
+  | 'normal' | 'command' | 'special' | 'ex' | 'super1' | 'super3'
+  | 'throw' | 'cmdgrab' | 'projectile' | 'system';
+export type Guard = 'HL' | 'H' | 'L' | 'U';
+export type KdKind = 'none' | 'soft' | 'hard';
+export type Strength = 'L' | 'M' | 'H';
+
+export interface ProjectileDef {
+  speed: number; // m/s
+  life: number; // frames
+  box: Vec2; // [w, h] metres
+  y: number; // metres
+  hits?: number;
+  strength?: string;
+  clip?: string;
+  limit?: number; // per-fighter on-screen limit (default 1)
+  x?: number; // spawn metres forward (default system.projectile.spawnXM)
+  vy?: number; // m/s initial vertical speed (arcing projectile)
+  g?: number; // m/s² gravity on the projectile
+  ground?: boolean; // rolls along the floor instead of despawning on touchdown
+}
+
+export interface CinematicDef {
+  frames: number;
+  cue: string;
+  hits: Vec2[]; // [cinematic frame, damage]
+  // §20.2 extras: view-side timelines + the end state the sim applies
+  anim?: [number, string][];
+  victim?: [number, string][];
+  shots?: [number, string][];
+  endAdv?: number;
+  endGapM?: number;
+}
+
+export interface Move {
+  kind: MoveKind;
+  input?: string;
+  startup: number;
+  active: number;
+  recovery: number;
+  damage?: number;
+  chipPct?: number;
+  hitstop?: number;
+  hitstun?: number;
+  blockstun?: number;
+  guard?: Guard;
+  boxes?: BoxDef[];
+  hurtExt?: BoxDef[];
+  move?: Vec2[]; // [frame, metres forward] piecewise linear
+  pushback?: { hit?: number; block?: number };
+  cancel?: string[];
+  juggle?: { js?: number; ji?: number; jl?: number };
+  onHit?: { kd?: KdKind; launch?: Vec2; wallSplat?: boolean; groundBounce?: boolean; crumple?: boolean };
+  gain?: { showtime?: number; nerveCost?: number };
+  cost?: { showtime?: number; nerve?: number };
+  invuln?: { strike?: FrameRange; throw?: FrameRange; air?: FrameRange; proj?: FrameRange };
+  armor?: { hits: number; f: FrameRange };
+  projectile?: ProjectileDef;
+  cinematic?: CinematicDef;
+  anim?: { clip: string; warp?: Vec2[] };
+  sfx?: [number, string][];
+  // optional (CONTRACT §19.5)
+  strength?: Strength;
+  air?: boolean;
+  armorBreak?: boolean;
+  starter?: 'light';
+  multi?: number;
+  // optional (CONTRACT §20.2, lane FIGHTERS)
+  hits?: HitDef[];
+  moveY?: Vec2[];
+  airVel?: Vec2;
+  hurtOverride?: { f: FrameRange; w: number; h: number; y?: number }[];
+  grab?: GrabDef;
+  tc?: boolean;
+  trigger?: { classic?: { motion: string; btn: string }; simple?: string };
+  counter?: { catch: FrameRange; vs: string[]; follow: string };
+  teleport?: { f: number; to: string; gapM: number };
+  stance?: string;
+  ball?: { act: string };
+  phase?: number;
+  role?: string[] | string;
+  name?: string;
+  desc?: string;
+}
+
+/** §20.2 one hit of a multi-hit move. */
+export interface HitDef {
+  f: FrameRange;
+  damage: number;
+  hitstop?: number;
+}
+
+/** §20.2 grab block (throws, command grabs, grab supers). */
+export interface GrabDef {
+  rangeM?: number; // pushbox front to pushbox front
+  frames: number; // lock length from the connect frame
+  adv: number; // attacker advantage after the release (defender knocked down)
+  hitF: number; // lock frame the damage lands on (1 = connect frame)
+  swap?: boolean;
+  air?: boolean;
+  techable?: boolean;
+  clip?: string;
+}
+
+export interface ClassicEntry {
+  motion: string;
+  btn: string;
+  move: string;
+}
+
+export interface SimpleMap {
+  '5S'?: string;
+  '6S'?: string;
+  '2S'?: string;
+  '4S'?: string;
+  'S+H'?: string;
+  'S+H+2'?: string;
+  A5S?: string;
+  A6S?: string;
+  A2S?: string;
+  A4S?: string;
+  assist?: string[];
+  [key: string]: string | string[] | undefined;
+}
+
+export interface FighterDef {
+  id: string;
+  name: string;
+  persona?: string;
+  archetype?: string;
+  body?: string;
+  heightM: number;
+  hp: number;
+  walk: { fwd: number; back: number };
+  dash: { fwd: number; back: number; fwdFrames: number; backFrames: number };
+  jump: { prejump: number; air: number; landing: number; apexM: number; fwdM: number };
+  throwRangeM: number;
+  hurt: { stand: Vec2; crouch: Vec2; air: Vec2 };
+  pushbox: Vec2;
+  colors?: { name: string; tint: string | null }[];
+  moves: Record<string, Move>;
+  simple: SimpleMap;
+  classic: ClassicEntry[];
+  unique?: { kind: string; [key: string]: unknown };
+  intro?: string;
+  win?: string[];
+  taunt?: string;
+  rival?: string;
+  stage?: string;
+  cpu?: { style?: string; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+// ------------------------------------------------------------------ clips (§6.3, generated by ASSETS)
+export interface ClipInfo {
+  dur: number;
+  frames: number;
+  contact: number | null;
+  effector: { bone: string; at: Vec2 } | null;
+  root: Vec2[];
+  apexY: number | null;
+  loop: boolean;
+}
+
+export interface ClipsFile {
+  heightM?: number;
+  hipsM?: number;
+  handReachM?: number;
+  footReachM?: number;
+  /** Normalised by core/data.ts: every clip, whether the file nests them under `clips` or not. */
+  clips: Record<string, ClipInfo>;
+}
+
+// ------------------------------------------------------------------ system.json (§5.1)
+export type StrengthTable = { L: number; M: number; H: number; [k: string]: number };
+
+export interface System {
+  version: number;
+  hp: { default: number };
+  round: {
+    timer: number; rounds: number; maxRounds: number; introFrames: number; koHitstop: number;
+    koSlowmoFrames: number; koSlowmoEvery: number; koOutroFrames: number; timeoverOutroFrames: number;
+    startDistanceM: number;
+  };
+  stage: { wallM: number; separationCapM: number };
+  movement: {
+    walkFirstFramePct: number; dashTapMax: number; dashGapMax: number; dashMovePct: number;
+    backDashThrowInvuln: FrameRange; crouchHurtFrame: number; crouchTransFrames: number; proxGuardM: number;
+  };
+  jump: { prejump: number; air: number; landing: number; apexM: number; fwdM: number };
+  buffer: { classic: number; simple: number; dash: number; wakeup: number; afterStun: number; chordFrames: number };
+  motion: { qc: number; dp: number; hc: number; spd: number; double: number; chargeFrames: number; chargeKeep: number; tap22: number };
+  hitstop: StrengthTable & { special: number; projectile: number; impact: number; superHit: number; superLast: number; throw: number; pcHeavyBonus: number };
+  hitstun: StrengthTable & { special: number; projectile: number; blockstunDelta: number };
+  counter: { chFrames: number; chDamagePct: number; pcFrames: number; pcDamagePct: number; pcThrowDamagePct: number };
+  scaling: {
+    general: number[]; light: number[]; superMinPct: { super1: number; super3: number };
+    perfectParryPct: number; rushPct: number; comboThrowPct: number;
+  };
+  simple: { damagePct: number };
+  grey: { delay: number; regenPerFrame: number };
+  showtime: {
+    bar: number; bars: number; blockPct: number; defHitPct: number; defBlockPct: number; techGain: number;
+    gain: StrengthTable & { special: number; throw: number; projectile: number };
+    super1Cost: number; super3Cost: number;
+  };
+  nerve: {
+    bar: number; bars: number; regen: number; regenStunAir: number; walkFwdBonus: number;
+    blockDrain: StrengthTable & { special: number; super: number; projectile: number; impact: number };
+    blockRegenStop: number; spendCooldown: number; whiffParryCooldown: number;
+    exCost: number; impactCost: number; shoveCost: number; rushCost: number; hitGain: number;
+  };
+  stageFright: { regen: number; blockstunBonus: number; chipPct: number; cornerImpactStun: number; stunScalePct: number; cornerRangeM: number };
+  parry: {
+    active: number; perfectFrames: number; recovery: number; costStart: number; costStartFrame: number;
+    drainPerFrame: number; drainFromFrame: number; refund: { projectile: number; strike: number; super: number };
+    perfectFreeze: number; perfectInvulnAfter: number; projPerfectRecovery: number;
+  };
+  rush: { startup: number; speedMps: number; frames: number; recovery: number; advBonus: number };
+  impact: {
+    startup: number; active: number; recovery: number; damage: number; hitstop: number; hitstun: number;
+    blockstun: number; armorHits: number; armorFrames: FrameRange; box: { x: number; y: number; w: number; h: number };
+    travel: Vec2[]; pushbackHitM: number; pushbackBlockM: number; splatRangeM: number;
+  };
+  shove: {
+    startup: number; active: number; recovery: number; damage: number; hitstop: number; hitstun: number;
+    blockstun: number; invuln: FrameRange; box: { x: number; y: number; w: number; h: number };
+    pushbackHitM: number; pushbackBlockM: number;
+  };
+  throw: {
+    startup: number; active: number; recovery: number; rangeM: number; damage: number; hitstunF: number;
+    hitstunB: number; techWindow: number; techFrames: number; techPushM: number; damageFrame: number;
+    postStunInvuln: number; wakeupInvuln: number; backThrowOffsetM: number;
+  };
+  kd: { fallFrames: number; wakeupFrames: number; softLandTotal: number; hardLandTotal: number; airResetLand: number; backRiseM: number; minTotal: number };
+  juggle: {
+    gravityMps2: number; airReset: Vec2; pop: Vec2;
+    defaults: Record<'normal' | 'special' | 'super', { js: number; ji: number; jl: number }>;
+  };
+  wallSplat: { frames: number; rangeM: number; fallTotal: number };
+  groundBounce: { vyMps: number };
+  crumple: { frames: number };
+  pushback: StrengthTable & { frames: number; special: number; super: number; projectile: number };
+  cancel: { graceAfterActive: number };
+  super: { freeze1: number; freeze3: number };
+  cinematic: { attackerRecover: number; victimKd: number };
+  projectile: { spawnXM: number; screenHalfM: number };
+  boxes: { L: Vec2; M: Vec2; H: Vec2 };
+  anim: { blendAttack: number; blendHit: number; blendLoco: number; blendDefault: number };
+  training: { refillDelay: number };
+  [key: string]: unknown;
+}
+
+// ------------------------------------------------------------------ other data files (owned by other lanes)
+export type StagesFile = Record<string, unknown>;
+export type LadderFile = Record<string, unknown>;
+export type CpuFile = Record<string, unknown>;
+
+/** §17 rule 2: one entry of the per-fighter anim table. */
+export interface AnimRef {
+  clip: string;
+  warp: [number, number][] | null;
+  loop: boolean;
+  moveId: number; // -1 = system / intro / win / taunt
+}
+
+export interface GameData {
+  system: System;
+  fighters: Record<string, FighterDef>;
+  clips: Record<string, ClipsFile>;
+  stages: StagesFile;
+  ladder: LadderFile;
+  cpu: CpuFile;
+  strings: Record<string, string>;
+  /** §17 rule 2 anim tables, per fighter id. */
+  anims: Record<string, AnimRef[]>;
+  /** Non-fatal load findings (missing clips files, derived fallbacks). probe_data prints them. */
+  warnings: string[];
+}
+
+// ------------------------------------------------------------------ snapshots (§4.6 + §19.7)
+export interface FighterFlags {
+  invuln: boolean;
+  armor: boolean;
+  counter: boolean;
+  stance: number;
+  taunting: boolean;
+  ko: boolean;
+}
+
+export interface FighterSnap {
+  x: number; // metres
+  y: number; // metres
+  facing: number; // +1 | -1
+  state: number;
+  stateName: string;
+  moveId: number; // §17 rule 1, -1 none
+  moveName: string; // move key, or system move name, '' none
+  moveKind: string;
+  moveFrame: number;
+  animId: number;
+  animFrame: number;
+  prevAnimId: number;
+  prevAnimFrame: number;
+  blendT: number; // 0..1 weight of the current anim
+  animSec: number; // convenience: seconds into animId's clip per §17 rule 3
+  hp: number;
+  hpMax: number;
+  greyHp: number;
+  showtime: number;
+  nerve: number;
+  stageFright: boolean;
+  combo: number; // hits this fighter is currently landing
+  comboDamage: number;
+  lastDamage: number;
+  hitstop: number;
+  stun: number;
+  airborne: boolean;
+  crouching: boolean;
+  flags: FighterFlags;
+  unique: [number, number, number, number];
+}
+
+export type MatchPhase = 'intro' | 'fight' | 'ko' | 'timeover' | 'roundEnd' | 'matchEnd';
+
+export interface MatchSnap {
+  frame: number;
+  phase: MatchPhase;
+  phaseFrame: number;
+  round: number;
+  timer: number; // seconds shown (ceil); -1 = infinite
+  wins: [number, number];
+  cinematic: { active: boolean; fighter: number; cueId: number; frame: number; frames: number };
+  winner: number; // -1 undecided / drawn match
+  draw: boolean;
+  roundWinner: number; // -1 none, 0 | 1, 2 draw round
+  slowmo: boolean;
+  freeze: number;
+}
+
+/** §4.5 / §18.1 */
+export interface SimEvent {
+  frame: number;
+  type: number;
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+}

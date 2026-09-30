@@ -1,0 +1,121 @@
+{
+  "mixamoRoot": "F:/games/forgeflow-games-assets/_downloaded/mixamo",
+  "cell": {
+    "w": 256,
+    "h": 512,
+    "supersample": 2,
+    "frameM": [
+      -0.05,
+      2.35
+    ],
+    "widthM": 1.2
+  },
+  "toon": {
+    "bands": [
+      [
+        0.0,
+        0.52
+      ],
+      [
+        0.09,
+        0.8
+      ],
+      [
+        0.3,
+        1.0
+      ]
+    ],
+    "rimBlend": 0.35,
+    "rimAt": 0.72,
+    "rimColor": [
+      0.2,
+      0.15,
+      0.1
+    ],
+    "outlineM": 0.009
+  },
+  "bodies": {
+    "Ch02": {
+      "file": "Ch02_nonPBR.fbx",
+      "look": "orange cat sweatshirt, denim shorts"
+    },
+    "Ch26": {
+      "file": "Ch26_nonPBR.fbx",
+      "look": "striped top, cuffed jeans"
+    },
+    "Ch01": {
+      "file": "Ch01_nonPBR.fbx",
+      "look": "white polo, blue jeans"
+    },
+    "Ch23": {
+      "file": "Ch23_nonPBR.fbx",
+      "look": "black blazer, blue shirt"
+    },
+    "Ch21": {
+      "file": "Ch21_nonPBR.fbx",
+      "look": "navy blouse, caramel trousers"
+    },
+    "Ch22": {
+      "file": "Ch22_nonPBR.fbx",
+      "look": "white tee, jeans"
+    }
+  },
+  "clips": {
+    "throw_in": "Soccer_Game_Pack/throw in.fbx",
+    "battlecry": "Pro_Melee_Axe_Pack/standing taunt battlecry.fbx",
+    "chest_thump": "Pro_Melee_Axe_Pack/standing taunt chest thump.fbx",
+    "gk_directing": "Soccer_Game_Pack/goalkeeper directing.fbx",
+    "gk_directing2": "Soccer_Game_Pack/goalkeeper directing (2).fbx",
+    "flex": "Creature_Pack/mutant flexing muscles.fbx",
+    "power_up": "Pro_Sword_and_Shield_Pack/sword and shield power up.fbx",
+    "angry": "Gestures_Pack_Basic/angry gesture.fbx",
+    "happy": "Gestures_Pack_Basic/happy hand gesture.fbx",
+    "cocky": "Gestures_Pack_Basic/being cocky.fbx",
+    "cast2h": "Pro_Magic_Pack/Standing 2H Cast Spell 01.fbx",
+    "area2h": "Pro_Magic_Pack/Standing 2H Magic Area Attack 01.fbx",
+    "idle03": "Pro_Magic_Pack/Standing Idle 03.fbx",
+    "gk_catch": "Soccer_Game_Pack/goalkeeper catch.fbx"
+  },
+  "previewSamples": 6,
+  "poses": [
+    {
+      "id": "cheer",
+      "mood": "cheer",
+      "clip": "cast2h",
+      "frame": 50
+    },
+    {
+      "id": "hype",
+      "mood": "cheer",
+      "clip": "throw_in",
+      "frame": 36
+    },
+    {
+      "id": "jeer",
+      "mood": "jeer",
+      "clip": "gk_directing2",
+      "frame": 97
+    },
+    {
+      "id": "watch",
+      "mood": "idle",
+      "clip": "cocky",
+      "frame": 23
+    }
+  ],
+  "angles": [
+    {
+      "id": "front",
+      "yawDeg": 0
+    },
+    {
+      "id": "left",
+      "yawDeg": -35
+    },
+    {
+      "id": "right",
+      "yawDeg": 35
+    }
+  ],
+  "webpQuality": 82
+}
