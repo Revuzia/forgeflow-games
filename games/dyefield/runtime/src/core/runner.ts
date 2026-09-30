@@ -33,6 +33,17 @@
 //     no air steering, no coyote jump, no wall grab) until the next landing; a 0.4 s re-trigger lock.
 //     Gravity is MOVE.gravity (15), the value the art lane verified the df_land arcs against.
 //   * OOB: feet inside any oob_ volume (AABB) → the sea (inSea; MatchWorld washes with cause 'sea').
+//
+// CHANGED(WASHOUT) (CONTRACT_WASHOUT §W1): two read-outs MatchWorld writes — lastHitBy (the foe behind the last damaging
+// hit, for the WASHOUT sea credit) and protectedT (WASHOUT spawn protection; knock() is ignored while it runs). Both reset
+// on respawn(); neither is read by the TURF tick or mixed into the TURF world hash.
+// CHANGED(SPAWNS) (CONTRACT_FFA_SPAWNS §S2–§S4): FFA has no owned pads — the FFA drop-pad options are gone (no own pad =
+// no pad slick / refill, no `otherPads` push-out); only the teams' ownPad / enemyPad remain. spawnSite is a read-out
+// MatchWorld writes (FFA: the site of the latest spawn); protectedT also runs in FFA (both rules).
+// CHANGED(CONTROLS) (CONTRACT_CONTROLS §C2): popOut() — the SPECIAL press surfaces the runner at once (slick form and
+// surfacing end, a wall is let go) so the special starts on the press tick; specialHeld / specialBuf / specialBufShort are
+// the press edge + 0.35 s wait that combat/specials.ts keeps here (reset on respawn — specialHeld to TRUE, so a key held
+// through a wash or the countdown needs a release before it counts as a press; never hashed).
 
 import type { MatchMode, MoveState, PlayerIntent, Side, TeamId } from './types.ts';
 import type { CharacterBody, PhysicsWorld } from './physics.ts';
@@ -57,8 +68,6 @@ export interface RunnerOptions {
   ownPad?: PadZone | null;
   /** enemy team pad: this runner is pushed back out of it */
   enemyPad?: PadZone | null;
-  /** CHANGED(CORE) (CONTRACT_FFA §F6): FFA — every other runner's drop pad; this runner is pushed out of each */
-  otherPads?: readonly PadZone[] | null;
   /** CHANGED(CORE): the match mode (FFA → `enemy` = 0: every other crew is a foe) */
   mode?: MatchMode;
   /** standalone default true: below killY → respawn at once. MatchWorld passes false and washes (cause 'sea'). */
@@ -129,7 +138,20 @@ export class Runner {
   special = 0;
   firing = false;
   lastAttacker = -1;
+  /** s since the last damaging hit (regen clock; WASHOUT sea credit window) */
   lastHitT = 1e9;
+  /** CHANGED(WASHOUT) (CONTRACT_WASHOUT §W1): the foe whose hit was the last damaging hit (−1: none, or a hit with no foe
+   *  behind it). Written by MatchWorld on every damaging hit together with lastHitT; a WASHOUT sea wash credits this foe
+   *  when lastHitT ≤ washout.seaCreditSeconds. Never read in TURF (not in the world hash). */
+  lastHitBy = -1;
+  /** CHANGED(WASHOUT): s of spawn protection left (set on a respawn; cleared by an action that happens — the kit fires, a
+   *  sub is thrown, a special starts — by dealing damage from any source, by a wash, and at the horn): no damage, no wash,
+   *  no knockback while > 0. Always 0 while dead. CHANGED(SPAWNS): WASHOUT (both modes) and FFA (both rules); always 0 in
+   *  TEAMS TURF. */
+  protectedT = 0;
+  /** CHANGED(SPAWNS) (CONTRACT_FFA_SPAWNS §S2): FFA — the index into MatchWorld.spawnSites of the site this runner last
+   *  spawned at (match start or respawn; kept while it is dead); −1 in teams. Written by MatchWorld only. */
+  spawnSite = -1;
   washes = 0; washedCount = 0; painted = 0;
   landings = 0; jumps = 0;
 
@@ -203,6 +225,13 @@ export class Runner {
   leapT = 0;
   /** @internal gravity during the leap */
   leapG = 0;
+  // ── CHANGED(CONTROLS) (CONTRACT_CONTROLS §C2): the SPECIAL press (combat/specials.ts stepSpecialInput) ──
+  /** @internal intent.special was held on the last kit tick (a press = its rising edge); respawn() sets it true */
+  specialHeld = true;
+  /** @internal ticks the latest press still waits to start the special (0: none) */
+  specialBuf = 0;
+  /** @internal that press was made with the meter short: 'denied' if it is still short when the wait runs out */
+  specialBufShort = false;
 
   // ── phase 7–8 map features (CHANGED(MAPSIM)) ──
   /** spring flight in progress: pure ballistic (no air drag / steering) until the next landing */
@@ -225,8 +254,6 @@ export class Runner {
   readonly physics: PhysicsWorld | null;
   ownPad: PadZone | null;
   enemyPad: PadZone | null;
-  /** CHANGED(CORE): FFA — the other runners' drop pads (pushed out of each); [] in teams */
-  otherPads: readonly PadZone[];
   readonly autoRespawn: boolean;
   readonly devBrush: boolean;
   fireMoveMul: number;
@@ -262,7 +289,6 @@ export class Runner {
     this.physics = opts.physics ?? null;
     this.ownPad = opts.ownPad ?? null;
     this.enemyPad = opts.enemyPad ?? null;
-    this.otherPads = opts.otherPads ?? [];
     this.autoRespawn = opts.autoRespawn ?? true;
     this.devBrush = opts.devBrush ?? false;
     this.fireMoveMul = opts.fireMoveMul ?? 1;
@@ -310,6 +336,8 @@ export class Runner {
     this.firing = false;
     this.lastAttacker = -1;
     this.lastHitT = 1e9;
+    this.lastHitBy = -1;
+    this.protectedT = 0;      // CHANGED(WASHOUT/SPAWNS): MatchWorld grants protection after a WASHOUT or FFA respawn
     this.inSea = false;
     this.fireCd = 0;
     this.dryCd = 0;
@@ -321,6 +349,11 @@ export class Runner {
     this.pressFlicked = false; this.prevFireHeld = false;
     this.subCooldown = 0;
     this.leaping = false; this.slamPending = false; this.leapT = 0;
+    // CHANGED(CONTROLS): no press survives a wash. specialHeld starts TRUE (skeptic fix 2026-09-30): a SPECIAL key held
+    // through the wash + respawn, or through the countdown (the constructor calls respawn), is not a new press — a real
+    // press needs a release first, so no 'denied' fires without one; a held key still asks every tick (the level
+    // request), so holding it with a full meter starts the special as before
+    this.specialHeld = true; this.specialBuf = 0; this.specialBufShort = false;
     this.ballistic = false; this.springLock = 0; this.onConveyor = -1; this.inOob = false;
     this.respawns++;
   }
@@ -348,6 +381,26 @@ export class Runner {
     return this.alive && !this.slickForm && this.tall && this.surfacing <= 0 && this.state !== 'wallslick' && !this.leaping;
   }
 
+  /** CHANGED(CONTROLS) (CONTRACT_CONTROLS §C2): surface AT ONCE for the special. The slick form and the surfacing end now
+   *  (one 'slick' off event through `host`), and a wall is let go (the runner drops off it: state 'air', no re-grab for
+   *  0.2 s). The capsule must regrow first: with no head clearance nothing changes and this returns false. True → the runner
+   *  is in the tall form, surfaced and off the wall (canFire() unless it is dead or leaping). */
+  popOut(host: { emit(e: SimEvent): void } | null): boolean {
+    if (!this.alive) return false;
+    if (!this.tall && !this.tryGrow()) return false;
+    if (this.slickForm) {
+      this.slickForm = false;
+      this.offDyeT = 0;
+      if (host) host.emit({ t: 'slick', pid: this.id, on: false, wall: false });
+    }
+    this.surfacing = 0;
+    if (this.state === 'wallslick') { this.state = 'air'; this.wallCd = 0.2; this.grounded = false; }
+    else if (this.state === 'slick') this.state = 'walk';   // 'slick' is own dye (enemy dye surfaces at once)
+    this.hidden = false;
+    this.refilling = false;
+    return true;
+  }
+
   /** WELLSPRING take-off: straight up at vy with its own gravity g; intents are ignored until it lands. */
   startLeap(vy: number, g: number): void {
     if (this.state === 'wallslick') { this.state = 'air'; this.wallCd = 0.2; }
@@ -362,9 +415,11 @@ export class Runner {
     this.jumpBuf = 0;
   }
 
-  /** An impulse (m/s): replaces the horizontal velocity, lifts the runner off the ground. Leapers ignore it. */
+  /** An impulse (m/s): replaces the horizontal velocity, lifts the runner off the ground. Leapers ignore it, and so
+   *  does a runner under spawn protection (CHANGED(WASHOUT); CHANGED(SPAWNS): WASHOUT and FFA — protectedT is always 0
+   *  in TEAMS TURF). */
   knock(vx: number, vy: number, vz: number): void {
-    if (!this.alive || this.leaping) return;
+    if (!this.alive || this.leaping || this.protectedT > 0) return;
     if (this.state === 'wallslick') { this.state = 'air'; this.wallCd = 0.2; }
     this.ballistic = false;
     this.vx = vx; this.vz = vz;
@@ -602,12 +657,10 @@ export class Runner {
       }
     }
 
-    // ── enemy pad: cancel inward velocity and shove outward (no spawn camping). CHANGED(CORE): FFA — the same for
-    //    every other runner's drop pad (otherPads; empty in teams, so the teams tick is unchanged)
-    const nOther = this.otherPads.length;
-    for (let pi = -1; pi < nOther; pi++) {
-      const ep = pi < 0 ? this.enemyPad : this.otherPads[pi];
-      if (!ep) continue;
+    // ── enemy pad: cancel inward velocity and shove outward (no spawn camping). CHANGED(SPAWNS): teams only — the FFA
+    //    drop-pad push-out (otherPads) is gone with the pads (the teams tick runs exactly the same arithmetic)
+    const ep = this.enemyPad;
+    if (ep) {
       const ddx = this.x - ep.x, ddz = this.z - ep.z;
       const d = Math.hypot(ddx, ddz);
       const R = ep.r + MOVE.radius;

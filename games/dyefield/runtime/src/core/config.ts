@@ -168,6 +168,12 @@ export const KITS = {
   leapMaxSeconds: 2.5,     // a leap still airborne after this slams wherever it is
   knockbackUp: 0.45,       // vertical share of the knockback impulse (lifts the foe so it carries)
   ringSpacing: 0.6,        // m between ring splats along the circle
+  // ── the SPECIAL press (CHANGED(CONTROLS), CONTRACT_CONTROLS §C2; combat/specials.ts stepSpecialInput) ──
+  specialBufferSeconds: 0.35, // a press that cannot start the special YET (mid-air; the meter about to fill; no head room
+                              // to pop out) waits this long and starts on the first tick it can (the standard action buffer)
+  specialReachPaint: 5,    // meter points (≈ weighted m²) a press may be short of, ON TOP of one wash (weapons.json
+                           // specialCharge.pointsPerWash), and still wait for the fill: ≈ 0.35 s of the fastest steady
+                           // painting (SHEET-DRUM 2.1 m × 4.4 m/s ≈ 9 m²/s). Further short → 'denied' at once.
 };
 
 /** Match flow (CONTRACT §10.1). */

@@ -2,7 +2,22 @@
 // CONTRACT_P6_11 §18.1). THREE-free, DOM-free, deterministic. Numbers: data/weapons.json specials[];
 // knobs: config.ts KITS. The meter itself fills in MatchWorld (paint + washes, per specialCharge).
 //
-//   start       intent.special + specialReady + canFire + no special running → meter 0, 'special' start.
+//   start       CHANGED(CONTROLS) (CONTRACT_CONTROLS §C2) — "the special always answers":
+//               * a request = intent.special held this tick, or a press (its rising edge) at most
+//                 KITS.specialBufferSeconds ago that has not started anything yet. A key held through a wash + respawn
+//                 or through the countdown is no press (Runner.respawn sets specialHeld: a release comes first), so it
+//                 never draws a 'denied'; held with a full meter it still starts the special (the level request);
+//               * it starts when the meter is full (specialReady, special ≥ 1), no special runs, the runner is alive,
+//                 not leaping, and ON A SURFACE: grounded in any form (walking, slogging, slicked, surfacing) or on a
+//                 wall. Slicked / surfacing / on a wall / not tall → popOut() first (the slick form and surfacing end
+//                 now, the wall is let go); no head room to regrow → it waits. Then meter 0, 'special' start, the same
+//                 tick: CLOUDBURST throws, WELLSPRING leaps from there;
+//               * mid-air a request waits (the buffer: it starts on the landing tick if that is within the window);
+//               * a press with the meter short by more than one wash + KITS.specialReachPaint points → 'special'
+//                 denied at once, no wait. Short by less → it waits for the fill; still short when the wait runs out
+//                 → 'denied' then. A full meter is never denied (a mid-air press that never lands in time just lapses).
+//               Pre-§C2 the press needed canFire() on the press tick: slicked / surfacing / on a wall dropped it
+//               silently, and mid-air (tall) started it in the air.
 //   CLOUDBURST  kind 4 thrown at KITS.cloudPitchDeg (speed solved) at the aim point, clamped to throwRange.
 //               On landing (state HOVER) it rises in KITS.cloudRiseSeconds to hoverHeight over the floor
 //               below, then rains `duration` s: dropsPerSecond drops at uniform points of the soakRadius
@@ -21,6 +36,7 @@ import type { PlayerIntent, TeamId } from '../types.ts';
 import { DEG } from '../types.ts';
 import { hash32 } from '../rng.ts';
 import { COMBAT, KITS, TICK } from '../config.ts';
+import { WEAPONS } from '../data.ts';
 import type { CastHit } from '../physics.ts';
 import type { Runner } from '../runner.ts';
 import type { CloudDef, SpecialDef, WellDef } from './defs.ts';
@@ -33,9 +49,62 @@ export interface SpecialHost extends KitHost {
   specialRng(pid: number): () => number;
 }
 
-/** Try to start runner `r`'s special this tick. Returns true when it started. */
+/** CHANGED(CONTROLS): ticks a SPECIAL press waits (KITS.specialBufferSeconds in whole ticks: 21) */
+export function specialBufferTicks(): number { return Math.max(1, Math.round(KITS.specialBufferSeconds / TICK)); }
+
+/** CHANGED(CONTROLS): meter points a press may be short of and still wait for the fill (one wash + KITS.specialReachPaint) */
+export function specialReachPoints(): number {
+  const w = WEAPONS.specialCharge['pointsPerWash'];
+  return (Number.isFinite(w) ? w : 20) + KITS.specialReachPaint;
+}
+
+/** CHANGED(CONTROLS): the meter is full and the special may start (the 'ready' event has fired) */
+export function specialFull(r: Runner): boolean { return r.specialReady && r.special >= 1; }
+
+/** CHANGED(CONTROLS): runner `r` could start a special this tick, the meter aside — alive, not leaping, none running, and
+ *  on a surface (grounded in any form, or on a wall). Mid-air it cannot (yet). */
+export function specialStance(r: Runner): boolean {
+  return r.alive && !r.leaping && r.specialActive === '' && (r.grounded || r.state === 'wallslick');
+}
+
+/** Try to start runner `r`'s special this tick (CHANGED(CONTROLS): the press rules in the header). Returns true when it
+ *  started. Call once per live tick for every living runner, after it moved (MatchWorld step 3). */
 export function stepSpecialInput(r: Runner, intent: PlayerIntent, sp: SpecialDef | null, variant: number, host: SpecialHost): boolean {
-  if (!sp || !intent.special || !r.specialReady || r.special < 1 || r.specialActive !== '' || !r.canFire()) return false;
+  const held = !!intent.special;
+  const pressed = held && !r.specialHeld;
+  r.specialHeld = held;
+  if (!sp) return false;
+  if (pressed) {
+    const full = specialFull(r);
+    if (full || (r.specialActive === '' && (1 - r.special) * sp.chargePoints <= specialReachPoints() + 1e-9)) {
+      r.specialBuf = specialBufferTicks();                 // wait: mid-air, no head room, or the meter about to fill
+      r.specialBufShort = !full;
+    } else {
+      r.specialBuf = 0;
+      r.specialBufShort = false;
+      host.emit({ t: 'special', pid: r.id, id: sp.id, phase: 'denied', x: r.x, y: r.y, z: r.z });
+    }
+  }
+  if ((held || r.specialBuf > 0) && specialFull(r) && specialStance(r)) {
+    const pop = r.slickForm || r.surfacing > 0 || r.state === 'wallslick' || !r.isTall;
+    if (!pop || r.popOut(host)) {
+      r.specialBuf = 0;
+      r.specialBufShort = false;
+      startSpecial(r, intent, sp, variant, host);
+      return true;
+    }
+  }
+  if (r.specialBuf > 0 && !pressed) {
+    r.specialBuf--;
+    if (r.specialBuf === 0 && r.specialBufShort) {
+      r.specialBufShort = false;
+      if (!specialFull(r)) host.emit({ t: 'special', pid: r.id, id: sp.id, phase: 'denied', x: r.x, y: r.y, z: r.z });
+    }
+  }
+  return false;
+}
+
+function startSpecial(r: Runner, intent: PlayerIntent, sp: SpecialDef, variant: number, host: SpecialHost): void {
   r.special = 0;
   r.specialReady = false;
   r.specialActive = sp.id;
@@ -44,7 +113,6 @@ export function stepSpecialInput(r: Runner, intent: PlayerIntent, sp: SpecialDef
   host.emit({ t: 'special', pid: r.id, id: sp.id, phase: 'start', x: r.x, y: r.y, z: r.z });
   if (sp.type === 'cloudburst') throwCloud(r, intent, sp, variant, host);
   else startWell(r, sp);
-  return true;
 }
 
 /** End runner `r`'s running special (emits 'special' end at x, y, z). */

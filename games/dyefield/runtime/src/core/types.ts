@@ -31,6 +31,20 @@ export function parseMatchMode(raw: string | null | undefined, fallback: MatchMo
   return fallback;
 }
 
+/** CHANGED(WASHOUT) (CONTRACT_WASHOUT §W1): the match RULE, orthogonal to the MODE. TURF (the default, the shipped game):
+ *  the most floor covered wins. WASHOUT: the most credited washes wins (paint still moves, refills and charges). */
+export type MatchRule = 'turf' | 'washout';
+export const MATCH_RULES: readonly MatchRule[] = ['turf', 'washout'];
+
+/** A rule from a query param / CLI flag / saved setting (case-insensitive; 'wash-out' / 'kills' / 'deathmatch' → 'washout',
+ *  'paint' → 'turf'); anything else → `fallback`. */
+export function parseMatchRule(raw: string | null | undefined, fallback: MatchRule = 'turf'): MatchRule {
+  const k = (raw ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+  if (k === 'washout' || k === 'wash-out' || k === 'wash' || k === 'kills' || k === 'deathmatch') return 'washout';
+  if (k === 'turf' || k === 'paint' || k === 'turf-war') return 'turf';
+  return fallback;
+}
+
 export interface Vec3 { x: number; y: number; z: number }
 
 /** Yaw convention (everywhere): radians, 0 faces +Z, +π/2 faces +X. forward = (sin yaw, 0, cos yaw). */

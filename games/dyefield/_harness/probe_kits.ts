@@ -3,6 +3,12 @@
 // driven by scripted PlayerIntents through MatchWorld.step (fire / sub / special held, stick, aim points);
 // positions between checks are set with the dev teleport. Every expected number is read from
 // data/weapons.json (geometry knobs from config.ts KITS), never re-typed here.
+// CHANGED(CONTROLS) (CONTRACT_CONTROLS §C4, node part): "the special always answers" — a SPECIAL tap while slicked /
+// surfacing / on a wall pops out and starts on the press tick, WELLSPRING leaps from a slick, a mid-air tap waits for the
+// landing (≤ KITS.specialBufferSeconds; an earlier tap lapses, a held key fires on landing), 95 % + a wash inside the window
+// starts, 95 % unfilled → 'denied' at the window's end, 50 % → 'denied' at once, a press mid-leap → 'denied', and
+// MatchWorld.stats counts the outcomes. Skeptic fix (2026-09-30): SPECIAL held through a wash + respawn, and held through
+// the countdown, is no new press (no 'denied' without a release; held with a full meter it still starts).
 //
 //   node _harness/probe_kits.ts            # G10 kits
 //   node _harness/probe_kits.ts --verbose
@@ -793,6 +799,315 @@ async function main(): Promise<number> {
     run(S(0.6));
     check('WELLSPRING: the knocked foe carries away from the slam', Math.hypot(near.x - rx, near.z - rz) > 2 + 2.0,
       `foe now ${f2(Math.hypot(near.x - rx, near.z - rz))} m from the slam (was 2.00)`);
+  }
+
+  // ═══════════════════ THE SPECIAL ALWAYS ANSWERS (CONTRACT_CONTROLS §C2 / §C4, CHANGED(CONTROLS)) ═══════════════════
+  // Each press below is a TAP (intent.special on one tick), the way a player presses Q, unless it says "held".
+  {
+    const BUF = S(KITS.specialBufferSeconds);
+    const YAW_NX = -Math.PI / 2;
+    const fill = (r: Runner, v: number): void => { r.special = v; r.specialReady = v >= 1; };
+    const patch = (x: number, z: number, rad = 2.6): void => {
+      painter.splat(x, 0.02, z, { radius: rad, team: 1, nx: 0, ny: 1, nz: 0, minFacing: 0.3, seed: Math.round(Math.abs(x * 97 + z * 13) * 100) });
+    };
+    const wallPatch = (zc: number): void => {                  // own-dyed side-deck inner wall (x = −20), as probe_swim
+      for (const y of [0.35, 0.95, 1.55, 1.95]) for (const dz of [-1.0, 0, 1.0]) {
+        painter.splat(-20, y, zc + dz, { radius: 0.9, team: 1, nx: 1, ny: 0, nz: 0, minFacing: 0.35, seed: Math.round((y + dz) * 1000) });
+      }
+    };
+    const sp = (pid: number, phase: string, from: number): Array<{ e: Ev<'special'>; tick: number }> =>
+      takeT('special', from).filter((x) => x.e.pid === pid && x.e.phase === phase);
+    const settle = (r: Runner): void => {                        // let a running special finish (a cell rains ~7 s)
+      reset(intents[r.id], r.yaw);
+      let g = 0;
+      while ((r.specialActive !== '' || r.leaping) && g++ < S(12)) tick();
+      run(S(0.2));
+    };
+    const tap = (it: PlayerIntent): number => { it.special = true; tick(); it.special = false; return world.tick; };
+    const cloudOf = (pid: number): boolean => { for (let i = 0; i < P.count; i++) if (P.kind[i] === KIND_CLOUD && P.owner[i] === pid) return true; return false; };
+    const st0 = { ...world.stats };
+    fresh();
+    waitAlive(...FOES);
+    park(...FOES);
+
+    // C4.1 slicked (SHIFT held on own dye) → pops out + CLOUDBURST on the press tick
+    {
+      const me = MIST, it = intents[3];
+      patch(-14, -24);
+      place(me, -14, 0, -24, 0);
+      run(S(0.3), () => { it.slick = true; });
+      const before = `state ${me.state}, slickForm ${me.slickForm}, tall ${me.isTall}, canFire ${me.canFire()}`;
+      const wasSlick = me.slickForm && me.state === 'slick' && !me.canFire();
+      fill(me, 1);
+      aimAt(it, -14, 0, -16);
+      const ev0 = events.length;
+      const pt = tap(it);                                        // SHIFT still held on the press tick
+      const st = sp(3, 'start', ev0), off = takeT('slick', ev0).filter((x) => x.e.pid === 3 && !x.e.on);
+      const after = { slick: me.slickForm, surf: me.surfacing, tall: me.isTall, act: me.specialActive, meter: me.special, cloud: cloudOf(3) };
+      check('SPECIAL while slicked (SHIFT held on own dye): starts on the press tick and ends the slick (pops out: tall, surfaced, no wait); CLOUDBURST thrown',
+        wasSlick && st.length === 1 && st[0].tick === pt && off.length === 1 && off[0].tick === pt && !after.slick && after.surf === 0
+          && after.tall && after.act === 'cloudburst' && after.meter === 0 && after.cloud,
+        `before: ${before}; start ${st.length ? `on tick +${st[0].tick - pt}` : 'none'}, 'slick' off ${off.length ? `on tick +${off[0].tick - pt}` : 'none'}; after: slickForm ${after.slick}, surfacing ${after.surf}, tall ${after.tall}, specialActive '${after.act}', meter ${after.meter}, cell in flight ${after.cloud}`);
+      settle(me);
+    }
+
+    // C4.2 surfacing (SHIFT just released) → starts on the press tick
+    {
+      const me = NEEDLE, it = intents[1];
+      patch(-17.5, -24);
+      place(me, -17.5, 0, -24, 0);
+      run(S(0.3), () => { it.slick = true; });
+      const wasSlick = me.slickForm;
+      it.slick = false;
+      tick();                                                    // the release tick: surfacing starts (7 ticks)
+      const surf0 = me.surfacing, cf0 = me.canFire(), before = `slickForm ${me.slickForm}, surfacing ${f3(me.surfacing)} s, canFire ${cf0}`;
+      fill(me, 1);
+      aimAt(it, -17.5, 0, -16);
+      const ev0 = events.length;
+      const pt = tap(it);
+      const st = sp(1, 'start', ev0);
+      check('SPECIAL while surfacing (SHIFT released a tick ago): starts on the press tick, the surfacing ends at once',
+        wasSlick && surf0 > 1.5 * TICK && !cf0 && !me.slickForm && st.length === 1 && st[0].tick === pt && me.surfacing === 0 && me.specialActive === 'cloudburst' && cloudOf(1),
+        `before the press: ${before}; start ${st.length ? `on tick +${st[0].tick - pt}` : 'none'}; after: surfacing ${me.surfacing}, specialActive '${me.specialActive}', cell in flight ${cloudOf(1)}`);
+      settle(me);
+    }
+
+    // C2 wall-slick → drops off the wall + CLOUDBURST on the press tick (not in the §C4 list; §C2 names it)
+    {
+      const me = MIST, it = intents[3];
+      wallPatch(-3);
+      place(me, -18.3, 0, -3, YAW_NX);
+      let g = 0;
+      while (!(me.state === 'wallslick' && me.y > 0.6) && g++ < S(1.5)) { it.yaw = YAW_NX; it.moveZ = 1; it.slick = true; tick(); }
+      const onWall = me.state === 'wallslick', y0 = me.y;
+      fill(me, 1);
+      aimAt(it, -14, 0, -3);
+      const ev0 = events.length;
+      const pt = tap(it);                                        // stick + SHIFT still pushing into the wall
+      const st = sp(3, 'start', ev0);
+      const stateAt = me.state, slickAt = me.slickForm;
+      run(S(0.1), () => { it.yaw = YAW_NX; it.moveZ = 1; it.slick = true; });
+      const regrab = me.state === 'wallslick';
+      reset(it, YAW_NX);
+      check('SPECIAL on a wall (wall-slick): drops off the wall and starts on the press tick (CLOUDBURST thrown)',
+        onWall && st.length === 1 && st[0].tick === pt && stateAt === 'air' && !slickAt && me.specialActive === 'cloudburst' && cloudOf(3) && !regrab,
+        `on the wall at y ${f2(y0)} (${onWall}); start ${st.length ? `on tick +${st[0].tick - pt}` : 'none'}; right after: state ${stateAt}, slickForm ${slickAt}; 0.1 s later still pushing: on the wall again ${regrab}`);
+      settle(me);
+    }
+
+    // C4.3 mid-air: a tap ≤ 0.35 s before the landing waits and starts on the landing tick (WELLSPRING leaps from the floor)
+    {
+      const me = POP, it = intents[2];
+      fresh();
+      place(me, -12, 0, -20, 0);
+      const y0 = me.y;
+      fill(me, 1);
+      it.jump = true; tick(); it.jump = false;
+      let g = 0;
+      while (!(me.vy < 0 && me.y < y0 + 0.5) && g++ < S(2)) tick();
+      const airAt = `y +${f2(me.y - y0)} m, vy ${f2(me.vy)}, state ${me.state}, canFire ${me.canFire()}`;
+      const inAir = me.state === 'air' && !me.grounded && me.canFire();
+      const ev0 = events.length;
+      const pt = tap(it);
+      const atPress = sp(2, 'start', ev0).length;
+      g = 0;
+      while (sp(2, 'start', ev0).length === 0 && g++ < S(1)) tick();
+      const st = sp(2, 'start', ev0)[0], land = takeT('land', ev0).find((x) => x.e.pid === 2);
+      const waited = st ? (st.tick - pt) * TICK : NaN;
+      run(S(0.1));
+      const leapUp = me.leaping || me.y > y0 + 0.3;
+      check('SPECIAL mid-air (a tap): waits, then starts on the landing tick within 0.35 s of the press (WELLSPRING leaps from the floor)',
+        inAir && atPress === 0 && !!st && !!land && st.tick === land.tick && waited <= KITS.specialBufferSeconds + 1e-9 && leapUp && sp(2, 'denied', ev0).length === 0,
+        `pressed in the air (${airAt}; the pre-§C2 rule would have started it there); start at the press ${atPress}; landed ${land ? `+${land.tick - pt}` : '—'} ticks, started ${st ? `+${st.tick - pt}` : '—'} ticks (${f3(waited)} s ≤ ${KITS.specialBufferSeconds}); leaping after ${leapUp}`);
+      settle(me);
+
+      // the buffer is 0.35 s: a tap right after take-off (the landing ≈ 0.8 s away) lapses — a HELD key fires on landing
+      place(me, -12, 0, -20, 0);
+      fill(me, 1);
+      it.jump = true; tick(); it.jump = false;
+      run(2);
+      const ev1 = events.length;
+      const pt1 = tap(it);
+      g = 0;
+      while (!me.grounded && g++ < S(2)) tick();
+      const landT = world.tick;
+      run(S(0.2));
+      const lapsed = sp(2, 'start', ev1).length === 0 && sp(2, 'denied', ev1).length === 0 && me.specialReady && me.special === 1;
+      const keptMeter = me.special, lapStarts = sp(2, 'start', ev1).length, lapDenied = sp(2, 'denied', ev1).length;
+      place(me, -12, 0, -20, 0);
+      const ev2 = events.length;
+      it.jump = true; tick(); it.jump = false;
+      const hp = world.tick;
+      g = 0;
+      while (sp(2, 'start', ev2).length === 0 && g++ < S(2)) { it.special = true; tick(); }
+      it.special = false;
+      const st2 = sp(2, 'start', ev2)[0], land2 = takeT('land', ev2).find((x) => x.e.pid === 2);
+      check('SPECIAL mid-air: a tap more than 0.35 s before the landing lapses (no start, no denied, meter kept); held through the landing it starts on the landing tick',
+        lapsed && (landT - pt1) * TICK > KITS.specialBufferSeconds && !!st2 && !!land2 && st2.tick === land2.tick,
+        `tap ${f3((landT - pt1) * TICK)} s before the landing: start ${lapStarts}, denied ${lapDenied}, meter ${f2(keptMeter)} kept; held from take-off: landed +${land2 ? land2.tick - hp : '—'}, started +${st2 ? st2.tick - hp : '—'} ticks`);
+      settle(me);
+      park(me);
+    }
+
+    // C4.4 the meter at 95 %, filled inside the window by a wash → the waiting press starts; C4.4b not filled → 'denied' at expiry
+    {
+      const me = MIST, it = intents[3];
+      fresh();
+      waitAlive(...FOES);
+      place(me, -14, 0, -24, 0);
+      fill(me, 0.95);
+      aimAt(it, -14, 0, -16);
+      const short = (1 - me.special) * CLOUD.chargePoints;
+      const ev0 = events.length;
+      const pt = tap(it);
+      const quiet = sp(3, 'start', ev0).length === 0 && sp(3, 'denied', ev0).length === 0;
+      run(S(0.15));
+      const foe = FOES[2];
+      world.devDamage(foe.id, 200, 3);                           // MIST washes a foe: + pointsPerWash → full, 'ready'
+      const fillT = world.tick;
+      let g = 0;
+      while (sp(3, 'start', ev0).length === 0 && g++ < BUF) tick();
+      const st = sp(3, 'start', ev0)[0], rd = sp(3, 'ready', ev0)[0];
+      check('SPECIAL at 95 % that fills within 0.35 s (a wash): the press waits, then starts on the first full tick (no denied)',
+        quiet && !!rd && !!st && st.tick === fillT + 1 && (st.tick - pt) * TICK <= KITS.specialBufferSeconds + 1e-9 && sp(3, 'denied', ev0).length === 0 && me.specialActive === 'cloudburst',
+        `short ${f2(short)} pts (≤ wait reach ${f2(WEAPONS.specialCharge['pointsPerWash'] + KITS.specialReachPaint)}); nothing at the press ${quiet}; washed a foe +${fillT - pt} ticks → ready ${rd ? `+${rd.tick - pt}` : '—'}, start ${st ? `+${st.tick - pt}` : '—'} ticks (${st ? f3((st.tick - pt) * TICK) : '—'} s)`);
+      settle(me);
+      waitAlive(...FOES);
+      park(...FOES);
+      fill(me, 0.95);
+      const ev1 = events.length;
+      const pt1 = tap(it);
+      run(BUF + S(0.3));
+      const dn = sp(3, 'denied', ev1);
+      check('SPECIAL at 95 % that does NOT fill: the press waits 0.35 s, then \'denied\' (no start, meter kept)',
+        dn.length === 1 && dn[0].tick === pt1 + BUF && sp(3, 'start', ev1).length === 0 && me.special === 0.95 && dn[0].e.id === 'cloudburst',
+        `denied ${dn.length}× at +${dn[0] ? dn[0].tick - pt1 : '—'} ticks (window ${BUF}); starts ${sp(3, 'start', ev1).length}; meter ${f2(me.special)}`);
+      reset(it, 0);
+    }
+
+    // C4.5 the meter at 50 % → 'denied' on the press tick, nothing starts
+    {
+      const me = MIST, it = intents[3];
+      fill(me, 0.5);
+      const ev0 = events.length;
+      const pt = tap(it);
+      run(S(0.6));
+      const dn = sp(3, 'denied', ev0);
+      check('SPECIAL at 50 %: \'denied\' on the press tick {t: special, pid, id, phase: denied}, no start, meter unchanged',
+        dn.length === 1 && dn[0].tick === pt && dn[0].e.id === 'cloudburst' && sp(3, 'start', ev0).length === 0 && me.special === 0.5 && me.specialActive === '',
+        `denied ${dn.length}× at +${dn[0] ? dn[0].tick - pt : '—'} ticks (short ${f2(0.5 * CLOUD.chargePoints)} pts > reach ${f2(WEAPONS.specialCharge['pointsPerWash'] + KITS.specialReachPaint)}); starts ${sp(3, 'start', ev0).length}; meter ${me.special}`);
+    }
+
+    // C4.6 WELLSPRING from a slick leaps (SHEET-DRUM); a press mid-leap is denied, never a second start
+    {
+      const me = DRUM, it = intents[0];
+      fresh();
+      patch(-12, -20);
+      place(me, -12, 0, -20, 0);
+      run(S(0.3), () => { it.slick = true; });
+      const wasSlick = me.slickForm && me.state === 'slick';
+      const y0 = me.y;
+      fill(me, 1);
+      const ev0 = events.length;
+      const pt = tap(it);
+      const leapAt = me.leaping, slickAt = me.slickForm;
+      let maxY = me.y, g = 0, midDen = -1;
+      while (take('ring', ev0).filter((e) => e.pid === 0).length === 0 && g++ < S(3)) {
+        if (g === S(0.25)) { midDen = events.length; it.special = true; } else it.special = false;
+        tick();
+        maxY = Math.max(maxY, me.y);
+      }
+      it.special = false;
+      const st = sp(0, 'start', ev0), ring = take('ring', ev0).filter((e) => e.pid === 0);
+      const midDenied = midDen >= 0 ? sp(0, 'denied', midDen).length : -1;
+      check('WELLSPRING from a slick: the press pops out and leaps on the press tick (apex leapHeight, slam ring)',
+        wasSlick && st.length === 1 && st[0].tick === pt && leapAt && !slickAt && Math.abs(maxY - y0 - WELL.leapHeight) < 0.1 && ring.length === 1,
+        `slicked ${wasSlick}; start ${st.length ? `+${st[0].tick - pt}` : 'none'} ticks, leaping ${leapAt}, slickForm ${slickAt}; apex +${f3(maxY - y0)} m (leapHeight ${WELL.leapHeight}); ring ${ring.length}`);
+      check('SPECIAL never while leaping / a special runs: a press mid-leap is \'denied\' (meter 0), no second start',
+        midDenied === 1 && st.length === 1,
+        `mid-leap press → denied ${midDenied}; starts ${st.length}`);
+      settle(me);
+    }
+    const d = (k: keyof typeof st0): number => (world.stats[k] as number) - (st0[k] as number);
+    log(`special stats: pops ${d('specialPops')} buffered ${d('specialBuffered')} denied ${d('specialDenied')} early ${d('specialRuleEarly')} late ${d('specialRuleLate')}`);
+    check('MatchWorld.stats counts the §C2 outcomes of the presses above (4 pop-outs, 2 starts from the buffer, 3 denied, 6 early starts vs the pre-§C2 rule, late ticks while held mid-air)',
+      d('specialPops') === 4 && d('specialBuffered') === 2 && d('specialDenied') === 3 && d('specialRuleEarly') === 6 && d('specialRuleLate') >= 2,
+      `specialPops +${d('specialPops')}, specialBuffered +${d('specialBuffered')}, specialDenied +${d('specialDenied')}, specialRuleEarly +${d('specialRuleEarly')}, specialRuleLate +${d('specialRuleLate')}`);
+
+    // skeptic fix (2026-09-30): SPECIAL HELD through a wash + respawn is no new press (Runner.respawn sets specialHeld) —
+    // no 'denied' after the respawn without a release; held with a full meter it still starts; release + press → 'denied'
+    {
+      const me = MIST, it = intents[3];
+      fresh();
+      waitAlive(...FOES);
+      park(...FOES);
+      place(me, -14, 0, -24, 0);
+      fill(me, 0.5);
+      aimAt(it, -14, 0, -16);
+      const ev0 = events.length;
+      it.special = true; tick();                                 // a real press at 50 % → 'denied' on this tick
+      const pt = world.tick;
+      const deniedAtPress = sp(3, 'denied', ev0).filter((x) => x.tick === pt).length;
+      const resp0 = me.respawns;
+      world.devDamage(me.id, 200, FOES[0].id);                   // washed while SPECIAL is still held
+      const washedAlive = me.alive;
+      let g = 0;
+      while (me.respawns === resp0 && g++ < S(6)) { it.special = true; tick(); }
+      const respT = world.tick;
+      run(S(1), () => { it.special = true; });                   // still held 1 s after the respawn
+      const meterAfter = me.special;
+      const deniedAfter = sp(3, 'denied', ev0).filter((x) => x.tick > pt).length;
+      fill(me, 1);                                               // full while STILL held (no release since the press)
+      const evF = events.length;
+      it.special = true; tick();
+      const heldStart = sp(3, 'start', evF).length, heldTick = world.tick;
+      settle(me);
+      it.special = false; tick();                                // release, then a real press at 50 %
+      fill(me, 0.5);
+      const evP = events.length;
+      const pt2 = tap(it);
+      const dn2 = sp(3, 'denied', evP);
+      check('SPECIAL held through a wash + respawn: no \'denied\' after the respawn without a release (no new press); held with a full meter it still starts; release + press → \'denied\' on the press tick',
+        deniedAtPress === 1 && !washedAlive && me.respawns === resp0 + 1 && deniedAfter === 0 && heldStart === 1
+          && dn2.length === 1 && dn2[0].tick === pt2 && sp(3, 'start', evP).length === 0,
+        `press at 50 %: denied ${deniedAtPress} on the press tick; washed (alive ${washedAlive}) → respawned +${respT - pt} ticks, held on through it and 1 s after: denied since the press ${deniedAfter} (meter ${f2(meterAfter)}); meter filled while held → start ${heldStart}× (tick +${heldTick - respT} after the respawn); released, pressed at 50 %: denied ${dn2.length}× ${dn2[0] ? `at +${dn2[0].tick - pt2}` : ''}`);
+      reset(it, 0);
+    }
+
+    // skeptic fix (2026-09-30): SPECIAL HELD through the countdown (from construction) is no press at the live start — no
+    // 'denied' with the meter empty; a runner holding it with a full meter starts on the first live tick; release + press
+    // → 'denied'. Its own world (countdown 3 s) on its own physics / painter, so the world above is not touched
+    {
+      const physics2 = new PhysicsWorld(R, geo);
+      const painter2 = new Painter(buildAtlas(geo.paint, geo.atlasSize, { wallWeight: sc.wallWeight, floorMinNy: sc.floorMinNy }));
+      const w2 = new MatchWorld({ def, geo, physics: physics2, painter: painter2, roster, seed: 6, countdownS: 3, durationS: 60 });
+      const in2: PlayerIntent[] = w2.runners.map((r) => { const i = emptyIntent(); i.yaw = r.yaw; return i; });
+      const ev2: SimEvent[] = [];
+      const t2: number[] = [];
+      const step2 = (): void => { w2.step(in2); const n0 = ev2.length; w2.drainEvents(ev2); for (let i = n0; i < ev2.length; i++) t2.push(w2.tick); };
+      const sp2 = (pid: number, phase: string): number[] => {
+        const out: number[] = [];
+        for (let i = 0; i < ev2.length; i++) { const e = ev2[i]; if (e.t === 'special' && e.pid === pid && e.phase === phase) out.push(t2[i]); }
+        return out;
+      };
+      const EMPTY = w2.runners[3], FULL = w2.runners[1];         // both CLOUDBURST kits (MIST-RASP, NEEDLE-GLINT)
+      const cd0 = w2.phase;
+      FULL.special = 1; FULL.specialReady = true;
+      let g = 0;
+      while (w2.phase === 'countdown' && g++ < S(5)) { in2[3].special = true; in2[1].special = true; step2(); }
+      const liveT = w2.tick;
+      for (let k = 0; k < S(1); k++) { in2[3].special = true; in2[1].special = true; step2(); }
+      const emptyDenied = sp2(3, 'denied').length, fullStart = sp2(1, 'start');
+      in2[3].special = false; step2();                           // release, then a real press
+      in2[3].special = true; step2();
+      const pt = w2.tick;
+      in2[3].special = false; step2();
+      const pressDenied = sp2(3, 'denied');
+      check('SPECIAL held through the countdown: no \'denied\' at the live start with the meter empty (no press without a release); held with a full meter it starts on the first live tick; release + press → \'denied\'',
+        cd0 === 'countdown' && emptyDenied === 0 && fullStart.length === 1 && fullStart[0] === liveT + 1 && pressDenied.length === 1 && pressDenied[0] === pt,
+        `phase at construction ${cd0}; live from tick ${liveT}; empty meter held through the countdown + 1 s: denied ${emptyDenied}; full meter held: start ${fullStart.length}× ${fullStart.length ? `at live +${fullStart[0] - liveT}` : ''}; released + pressed: denied ${pressDenied.length}× ${pressDenied.length ? `at +${pressDenied[0] - pt}` : ''}`);
+      physics2.dispose();
+    }
   }
 
   // ═══════════════════ read-outs / pool kinds ═══════════════════

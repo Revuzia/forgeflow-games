@@ -134,6 +134,13 @@ export const EVENT_SOUNDS: { readonly [K in SimEventType]: EventSoundSpec } = {
   roll: { ids: ['roll_loop'], note: 'SHEET-DRUM rolling loop while the drum is down' },
   flick: { ids: ['flick'], note: 'SHEET-DRUM flick windup' },
   ring: { ids: ['slam'], note: 'WELLSPRING slam' },
+  // CHANGED(WASHOUT) (CORE lane, typecheck only): the kill-confirm chime for the human's credited wash is already played by
+  // its 'washed' event (by === me — a WASHOUT sea wash carries the credited foe as `by`), so 'score' itself stays silent
+  // and the chime never doubles (CONTRACT_WASHOUT §W7: reuse the kill-confirm sound)
+  score: { ids: [], note: 'WASHOUT credited wash: silent (the washed event already plays confirm for the human\'s wash)' },
+  // CHANGED(SPAWNS) (CORE lane, typecheck only): an FFA spawn at a site — the 'respawn' event of the same respawn already
+  // plays the spout, so 'spawn' itself stays silent (the UI stage may give the drop-in marker its own sound)
+  spawn: { ids: [], note: 'FFA spawn at a site: silent (the respawn event already plays the spout)' },
 };
 
 /** sounds driven by state rather than an event (update()) or by the API */
@@ -417,6 +424,10 @@ export class AudioRouter {
           this.play(sink, 'slam', { x: e.x, y: e.y, z: e.z }, 1, this.jit(0.03), 7);
           this.big(e.x, e.y, e.z);
           break;
+        case 'score':
+          break;   // CHANGED(WASHOUT): silent — see EVENT_SOUNDS.score
+        case 'spawn':
+          break;   // CHANGED(SPAWNS): silent — see EVENT_SOUNDS.spawn
         default: {
           const never: never = e;
           void never;
