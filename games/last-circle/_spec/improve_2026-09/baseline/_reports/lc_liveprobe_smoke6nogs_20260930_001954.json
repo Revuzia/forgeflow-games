@@ -1,0 +1,1183 @@
+{
+ "args": {
+  "maps": "ashgrid",
+  "reps": 1,
+  "seed": 1234,
+  "menu": 4.0,
+  "drop": 5.0,
+  "ground": 6.0,
+  "again": 5.0,
+  "slice": 8.0,
+  "real": 1.5,
+  "max_slices": 2,
+  "width": 1600,
+  "height": 900,
+  "headed": false,
+  "profile": "dgpu-uncapped",
+  "uncapped": false,
+  "no_again": true,
+  "no_gpushare": true,
+  "label": "smoke6nogs"
+ },
+ "url": "http://127.0.0.1:8790/games/last-circle/index.html",
+ "results": [
+  {
+   "map": "ashgrid",
+   "seed": 1234,
+   "rep": 1,
+   "windows": {
+    "menu": {
+     "worst": [
+      {
+       "cpu": 642.2,
+       "upd": 0.4,
+       "rnd": 641.8,
+       "calls": 292,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      },
+      {
+       "cpu": 488.4,
+       "upd": 0.4,
+       "rnd": 488,
+       "calls": 282,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      },
+      {
+       "cpu": 184.9,
+       "upd": 0.3,
+       "rnd": 184.6,
+       "calls": 292,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      },
+      {
+       "cpu": 152.8,
+       "upd": 0.3,
+       "rnd": 152.5,
+       "calls": 293,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      },
+      {
+       "cpu": 12.0,
+       "upd": 1.4,
+       "rnd": 10.6,
+       "calls": 282,
+       "dProg": null,
+       "dTex": null,
+       "dGeo": null,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": null
+      },
+      {
+       "cpu": 7.9,
+       "upd": 0.2,
+       "rnd": 7.7,
+       "calls": 292,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      },
+      {
+       "cpu": 6.8,
+       "upd": 0.3,
+       "rnd": 6.5,
+       "calls": 282,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      },
+      {
+       "cpu": 6.8,
+       "upd": 1.9,
+       "rnd": 4.9,
+       "calls": 282,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0,
+       "alive": -1,
+       "dAlive": 0
+      }
+     ],
+     "framesWithNewPrograms": 0,
+     "framesWithNewTextures": 0,
+     "framesWithNewGeometries": 1,
+     "cpu_over50ms": 4,
+     "cpu_over100ms": 4,
+     "shadowTris_med": 43335,
+     "frames": 67,
+     "seconds": 2.37,
+     "avgFps": 28.2,
+     "p50": 7.199999999999818,
+     "p95": 174.86000000000004,
+     "p99": 543.8800000000008,
+     "max": 650.8000000000002,
+     "over20": 0.0746,
+     "over33": 0.0746,
+     "cpuUpd_p50": 0.3,
+     "cpuUpd_p99": 1.5700000000000016,
+     "cpuRender_p50": 4.9,
+     "cpuRender_p99": 540.2920000000005,
+     "cpuFrame_p50": 5.3,
+     "cpuFrame_p95": 110.56000000000041,
+     "cpuFrame_p99": 540.6920000000005,
+     "cpuFrame_max": 642.1999999999999,
+     "calls_med": 292,
+     "calls_max": 293,
+     "scene_med": 278,
+     "shadow_med": 61,
+     "tris_med": 92550,
+     "tris_max": 92574,
+     "programs": 19,
+     "programs_start": 19,
+     "geometries": 202,
+     "textures": 16,
+     "heapMB_start": 34.3,
+     "heapMB_end": 36.1,
+     "heapMB_max": 38.2,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 1,
+     "phase_start": "menu",
+     "phase_end": "menu",
+     "alive_start": null,
+     "alive_end": null,
+     "pAlive_end": null,
+     "pGlide_end": null,
+     "sceneChildren": 5,
+     "preFrame": [
+      0.1,
+      2545.2,
+      281,
+      267,
+      61,
+      92446,
+      43335,
+      19,
+      16,
+      197,
+      0,
+      -1,
+      2102.6
+     ],
+     "gpu": null
+    },
+    "_drop_state_start": {
+     "phase": "drop",
+     "t": 0.177,
+     "alive": 50,
+     "player": {
+      "hp": 100,
+      "shield": 0,
+      "pos": {
+       "x": 0,
+       "y": 251.79234710410876,
+       "z": 0
+      },
+      "weapon": "pistol"
+     },
+     "map": "ashgrid",
+     "mode": "standard",
+     "seed": 1234
+    },
+    "drop": {
+     "worst": [
+      {
+       "cpu": 393.0,
+       "upd": 7.2,
+       "rnd": 385.8,
+       "calls": 268,
+       "dProg": 1,
+       "dTex": 4,
+       "dGeo": 1,
+       "matchT": 0.37,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 29.9,
+       "upd": 3.6,
+       "rnd": 26.3,
+       "calls": 270,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0.51,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 25.9,
+       "upd": 8,
+       "rnd": 17.9,
+       "calls": 270,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0.54,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 24.9,
+       "upd": 3.9,
+       "rnd": 21,
+       "calls": 270,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0.48,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 23.2,
+       "upd": 7,
+       "rnd": 16.2,
+       "calls": 270,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0.62,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 22.0,
+       "upd": 3.8,
+       "rnd": 18.2,
+       "calls": 268,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0.42,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 20.6,
+       "upd": 3.1,
+       "rnd": 17.5,
+       "calls": 271,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0.76,
+       "alive": 50,
+       "dAlive": 0
+      },
+      {
+       "cpu": 18.6,
+       "upd": 4.9,
+       "rnd": 13.7,
+       "calls": 271,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 0.7,
+       "alive": 50,
+       "dAlive": 0
+      }
+     ],
+     "framesWithNewPrograms": 1,
+     "framesWithNewTextures": 1,
+     "framesWithNewGeometries": 1,
+     "cpu_over50ms": 1,
+     "cpu_over100ms": 1,
+     "shadowTris_med": 8747171.0,
+     "frames": 30,
+     "seconds": 4.62,
+     "avgFps": 6.5,
+     "p50": 17.69999999999709,
+     "p95": 36.01999999999971,
+     "p99": 2899.2040000000065,
+     "max": 4068.600000000006,
+     "over20": 0.4333,
+     "over33": 0.1,
+     "cpuUpd_p50": 3.0,
+     "cpuUpd_p99": 7.768000000000001,
+     "cpuRender_p50": 13.55,
+     "cpuRender_p99": 281.5450000000003,
+     "cpuFrame_p50": 16.700000000000003,
+     "cpuFrame_p95": 28.1,
+     "cpuFrame_p99": 287.7010000000003,
+     "cpuFrame_max": 393.0,
+     "calls_med": 270.0,
+     "calls_max": 271,
+     "scene_med": 256.0,
+     "shadow_med": 88.0,
+     "tris_med": 10973789.0,
+     "tris_max": 10973791,
+     "programs": 76,
+     "programs_start": 75,
+     "geometries": 383,
+     "textures": 75,
+     "heapMB_start": 141.8,
+     "heapMB_end": 153.6,
+     "heapMB_max": 153.6,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 50,
+     "phase_start": "drop",
+     "phase_end": "drop",
+     "alive_start": 50,
+     "alive_end": 50,
+     "pAlive_end": true,
+     "pGlide_end": true,
+     "sceneChildren": 9,
+     "preFrame": [
+      47,
+      19,
+      268,
+      254,
+      87,
+      10961851,
+      8741216,
+      75,
+      71,
+      382,
+      0.25,
+      50,
+      40956.3
+     ],
+     "gpu": null
+    },
+    "ground": {
+     "worst": [
+      {
+       "cpu": 1987.1,
+       "upd": 3.5,
+       "rnd": 1983.6,
+       "calls": 286,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 30.94,
+       "alive": 48,
+       "dAlive": 0
+      },
+      {
+       "cpu": 1209.2,
+       "upd": 3.3,
+       "rnd": 1205.9,
+       "calls": 286,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 30.4,
+       "alive": 48,
+       "dAlive": 0
+      },
+      {
+       "cpu": 966.4,
+       "upd": 2.4,
+       "rnd": 964,
+       "calls": 286,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 31.3,
+       "alive": 48,
+       "dAlive": 0
+      },
+      {
+       "cpu": 41.8,
+       "upd": 4.2,
+       "rnd": 37.6,
+       "calls": 286,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 30.99,
+       "alive": 48,
+       "dAlive": 0
+      },
+      {
+       "cpu": 39.0,
+       "upd": 5.3,
+       "rnd": 33.7,
+       "calls": 286,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 31.04,
+       "alive": 48,
+       "dAlive": 0
+      },
+      {
+       "cpu": 30.0,
+       "upd": 4.8,
+       "rnd": 25.2,
+       "calls": 286,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 31.11,
+       "alive": 48,
+       "dAlive": 0
+      },
+      {
+       "cpu": 20.6,
+       "upd": 4,
+       "rnd": 16.6,
+       "calls": 286,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 30.66,
+       "alive": 48,
+       "dAlive": 0
+      },
+      {
+       "cpu": 19.2,
+       "upd": 4.7,
+       "rnd": 14.5,
+       "calls": 286,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 31.09,
+       "alive": 48,
+       "dAlive": 0
+      }
+     ],
+     "framesWithNewPrograms": 0,
+     "framesWithNewTextures": 0,
+     "framesWithNewGeometries": 0,
+     "cpu_over50ms": 3,
+     "cpu_over100ms": 3,
+     "shadowTris_med": 782473.0,
+     "frames": 92,
+     "seconds": 5.58,
+     "avgFps": 16.5,
+     "p50": 15.350000000002183,
+     "p95": 38.75999999999697,
+     "p99": 1281.3220000000028,
+     "max": 1987.300000000003,
+     "over20": 0.163,
+     "over33": 0.087,
+     "cpuUpd_p50": 3.7,
+     "cpuUpd_p99": 6.2,
+     "cpuRender_p50": 11.4,
+     "cpuRender_p99": 1275.8930000000028,
+     "cpuFrame_p50": 15.2,
+     "cpuFrame_p95": 34.050000000000026,
+     "cpuFrame_p99": 1279.2110000000027,
+     "cpuFrame_max": 1987.1,
+     "calls_med": 286.0,
+     "calls_max": 286,
+     "scene_med": 272.0,
+     "shadow_med": 79.0,
+     "tris_med": 8249031.0,
+     "tris_max": 8249031,
+     "programs": 78,
+     "programs_start": 78,
+     "geometries": 439,
+     "textures": 93,
+     "heapMB_start": 172.4,
+     "heapMB_end": 174.1,
+     "heapMB_max": 174.3,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 50,
+     "phase_start": "match",
+     "phase_end": "match",
+     "alive_start": 48,
+     "alive_end": 48,
+     "pAlive_end": true,
+     "pGlide_end": false,
+     "sceneChildren": 9,
+     "preFrame": [
+      3.6,
+      1325.5,
+      281,
+      267,
+      79,
+      8249021,
+      782473,
+      78,
+      93,
+      439,
+      30.03,
+      48,
+      52326.2
+     ],
+     "gpu": null
+    },
+    "endgame_realframes": {
+     "worst": [
+      {
+       "cpu": 822.2,
+       "upd": 4,
+       "rnd": 818.2,
+       "calls": 280,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 40.04,
+       "alive": 43,
+       "dAlive": 0
+      },
+      {
+       "cpu": 87.7,
+       "upd": 4,
+       "rnd": 83.7,
+       "calls": 280,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 40.19,
+       "alive": 43,
+       "dAlive": 0
+      },
+      {
+       "cpu": 59.5,
+       "upd": 51.2,
+       "rnd": 8.3,
+       "calls": 280,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 39.83,
+       "alive": 43,
+       "dAlive": 0
+      },
+      {
+       "cpu": 23.3,
+       "upd": 9.7,
+       "rnd": 13.6,
+       "calls": 281,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 48.59,
+       "alive": 37,
+       "dAlive": 0
+      },
+      {
+       "cpu": 22.1,
+       "upd": 8.7,
+       "rnd": 13.4,
+       "calls": 280,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 48.54,
+       "alive": 37,
+       "dAlive": -6
+      },
+      {
+       "cpu": 20.1,
+       "upd": 5.3,
+       "rnd": 14.8,
+       "calls": 281,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 48.72,
+       "alive": 37,
+       "dAlive": 0
+      },
+      {
+       "cpu": 19.7,
+       "upd": 11.7,
+       "rnd": 8,
+       "calls": 280,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 39.94,
+       "alive": 43,
+       "dAlive": 0
+      },
+      {
+       "cpu": 19.5,
+       "upd": 5.6,
+       "rnd": 13.9,
+       "calls": 280,
+       "dProg": 0,
+       "dTex": 0,
+       "dGeo": 0,
+       "matchT": 40.4,
+       "alive": 43,
+       "dAlive": 0
+      }
+     ],
+     "framesWithNewPrograms": 0,
+     "framesWithNewTextures": 0,
+     "framesWithNewGeometries": 0,
+     "cpu_over50ms": 3,
+     "cpu_over100ms": 1,
+     "shadowTris_med": 776518.0,
+     "frames": 54,
+     "seconds": 2.99,
+     "avgFps": 18.1,
+     "p50": 14.799999999999272,
+     "p95": 285.5149999999998,
+     "p99": 737.9279999999981,
+     "max": 829.3000000000029,
+     "over20": 0.2407,
+     "over33": 0.1111,
+     "cpuUpd_p50": 4.25,
+     "cpuUpd_p99": 29.47500000000011,
+     "cpuRender_p50": 10.05,
+     "cpuRender_p99": 414.22500000000207,
+     "cpuFrame_p50": 14.799999999999999,
+     "cpuFrame_p95": 32.349999999999994,
+     "cpuFrame_p99": 418.22500000000207,
+     "cpuFrame_max": 822.2,
+     "calls_med": 280.0,
+     "calls_max": 285,
+     "scene_med": 266.0,
+     "shadow_med": 78.0,
+     "tris_med": 6179706.0,
+     "tris_max": 7839881,
+     "programs": 78,
+     "programs_start": 78,
+     "geometries": 439,
+     "textures": 93,
+     "heapMB_start": 177.1,
+     "heapMB_end": 149.5,
+     "heapMB_max": 177.1,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 50,
+     "phase_start": "match",
+     "phase_end": "match",
+     "alive_start": 43,
+     "alive_end": 37,
+     "pAlive_end": true,
+     "pGlide_end": false,
+     "sceneChildren": 9
+    }
+   },
+   "notes": [
+    "endgame: match not over after 2 slices (sim t=48.5, alive=37) - post-match / PLAY AGAIN skipped"
+   ],
+   "automated_chromes_at_start": [
+    {
+     "pid": 34260,
+     "headless": true
+    },
+    {
+     "pid": 31240,
+     "headless": true
+    },
+    {
+     "pid": 15624,
+     "headless": true
+    },
+    {
+     "pid": 47884,
+     "headless": true
+    },
+    {
+     "pid": 24556,
+     "headless": false
+    },
+    {
+     "pid": 48376,
+     "headless": false
+    },
+    {
+     "pid": 41344,
+     "headless": false
+    },
+    {
+     "pid": 29796,
+     "headless": false
+    },
+    {
+     "pid": 50216,
+     "headless": true
+    },
+    {
+     "pid": 36152,
+     "headless": true
+    },
+    {
+     "pid": 44272,
+     "headless": true
+    },
+    {
+     "pid": 44304,
+     "headless": true
+    }
+   ],
+   "boot_cold": {
+    "lastResponses": [
+     [
+      "/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap",
+      4376,
+      4888,
+      573
+     ],
+     [
+      "/games/last-circle/assets/chars/meshy/soldier.glb",
+      4469,
+      4529,
+      1958836
+     ],
+     [
+      "/games/last-circle/assets/props/pine.glb",
+      4449,
+      4459,
+      93688
+     ],
+     [
+      "/games/last-circle/assets/props/tree.glb",
+      4448,
+      4459,
+      158708
+     ],
+     [
+      "/games/last-circle/assets/props/rocks.glb",
+      4449,
+      4458,
+      48840
+     ],
+     [
+      "/games/last-circle/assets/props/palm.glb",
+      4448,
+      4455,
+      118032
+     ]
+    ],
+    "cdnCount": 17,
+    "cdnLastEnd": 694,
+    "localLastEnd": 4529,
+    "longtasks": {
+     "n": 2,
+     "ms": 6086,
+     "max": 5839,
+     "over250": 1
+    },
+    "marks": {
+     "splashSeen": 27.700000002980232,
+     "__LC__": 4585.4000000059605,
+     "canvas": 4585.4000000059605,
+     "__FFG3D__": 6659.29999999702,
+     "splashGone": 7157.9000000059605
+    },
+    "paint": {},
+    "dcl": 82.3,
+    "load": 84.2,
+    "resources": 44,
+    "transferMB": 3.5,
+    "encodedMB": 3.49,
+    "glbCount": 5,
+    "glbMB": 2.27,
+    "wall_s": 7.43
+   },
+   "boot_warm": {
+    "lastResponses": [
+     [
+      "/games/last-circle/assets/chars/meshy/soldier.glb",
+      1100,
+      1102,
+      1958836
+     ],
+     [
+      "/games/last-circle/assets/props/pine.glb",
+      1072,
+      1074,
+      93688
+     ],
+     [
+      "/games/last-circle/assets/props/rocks.glb",
+      1071,
+      1073,
+      48840
+     ],
+     [
+      "/games/last-circle/assets/props/tree.glb",
+      1071,
+      1072,
+      158708
+     ],
+     [
+      "/games/last-circle/assets/props/palm.glb",
+      1070,
+      1071,
+      118032
+     ],
+     [
+      "/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap",
+      1011,
+      1012,
+      573
+     ]
+    ],
+    "cdnCount": 17,
+    "cdnLastEnd": 109,
+    "localLastEnd": 1102,
+    "longtasks": {
+     "n": 2,
+     "ms": 1295,
+     "max": 1123,
+     "over250": 1
+    },
+    "marks": {
+     "splashSeen": 22.5,
+     "__LC__": 1138.7999999970198,
+     "canvas": 1138.9000000059605,
+     "__FFG3D__": 1327.9000000059605,
+     "splashGone": 1650
+    },
+    "paint": {
+     "first-paint": 240,
+     "first-contentful-paint": 240
+    },
+    "dcl": 77,
+    "load": 77.2,
+    "resources": 43,
+    "transferMB": 0,
+    "encodedMB": 3.49,
+    "glbCount": 5,
+    "glbMB": 2.27,
+    "wall_s": 2.37
+   },
+   "instrument": "ok",
+   "gl": {
+    "renderer": "ANGLE (NVIDIA, NVIDIA RTX A2000 Laptop GPU (0x000025B8) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "webgl2": true,
+    "maxTex": 16384,
+    "dpr": 1,
+    "pixelRatio": 1,
+    "graphics": "medium",
+    "shadow": true,
+    "bloom": true
+   },
+   "load": {
+    "ms": 27711,
+    "err": null,
+    "tl": [
+     {
+      "t": 0,
+      "tag": "start",
+      "phase": "menu",
+      "mapNew": false,
+      "actors": 0,
+      "mixers": 1,
+      "programs": 19,
+      "textures": 16,
+      "geometries": 202
+     },
+     {
+      "t": 5874,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": false,
+      "actors": 0,
+      "mixers": 0,
+      "programs": 26,
+      "textures": 25,
+      "geometries": 264
+     },
+     {
+      "t": 7277,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": false,
+      "actors": 0,
+      "mixers": 0,
+      "programs": 32,
+      "textures": 25,
+      "geometries": 265
+     },
+     {
+      "t": 10031,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": false,
+      "actors": 0,
+      "mixers": 0,
+      "programs": 33,
+      "textures": 25,
+      "geometries": 266
+     },
+     {
+      "t": 12618,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": false,
+      "actors": 0,
+      "mixers": 0,
+      "programs": 36,
+      "textures": 26,
+      "geometries": 288
+     },
+     {
+      "t": 13536,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 1,
+      "programs": 42,
+      "textures": 28,
+      "geometries": 311
+     },
+     {
+      "t": 13800,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 0,
+      "programs": 43,
+      "textures": 28,
+      "geometries": 318
+     },
+     {
+      "t": 17646,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 1,
+      "programs": 45,
+      "textures": 40,
+      "geometries": 323
+     },
+     {
+      "t": 17707,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 2,
+      "programs": 45,
+      "textures": 40,
+      "geometries": 323
+     },
+     {
+      "t": 17944,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 1,
+      "programs": 45,
+      "textures": 40,
+      "geometries": 323
+     },
+     {
+      "t": 18398,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 0,
+      "programs": 45,
+      "textures": 40,
+      "geometries": 323
+     },
+     {
+      "t": 21579,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 2,
+      "programs": 45,
+      "textures": 40,
+      "geometries": 323
+     },
+     {
+      "t": 27686,
+      "tag": "",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 50,
+      "programs": 71,
+      "textures": 41,
+      "geometries": 325
+     },
+     {
+      "t": 27711,
+      "tag": "resolved",
+      "phase": "lobby",
+      "mapNew": true,
+      "actors": 50,
+      "mixers": 50,
+      "programs": 71,
+      "textures": 41,
+      "geometries": 326
+     }
+    ],
+    "phase": "lobby",
+    "map": "ashgrid",
+    "wall_s": 27.85
+   },
+   "lobby_skip_s": 2.068,
+   "land_ff": {
+    "wall_s": 3.53,
+    "state": {
+     "landed": true,
+     "s": {
+      "phase": "match",
+      "t": 29.13429999998271,
+      "alive": 49,
+      "player": {
+       "hp": 100,
+       "shield": 0,
+       "pos": {
+        "x": 0,
+        "y": 5.725378596968164,
+        "z": -23.687618445263773
+       },
+       "weapon": "pistol"
+      },
+      "map": "ashgrid",
+      "mode": "standard",
+      "seed": 1234
+     }
+    }
+   },
+   "endgame": {
+    "wall_s": 5.12,
+    "over": false,
+    "slices": 2,
+    "trace_head": [
+     {
+      "t": 39.8,
+      "alive": 43,
+      "phase": "match",
+      "hp": 93,
+      "ffMs": 593
+     },
+     {
+      "t": 48.5,
+      "alive": 37,
+      "phase": "match",
+      "hp": 52,
+      "ffMs": 612
+     }
+    ],
+    "trace_tail": [
+     {
+      "t": 39.8,
+      "alive": 43,
+      "phase": "match",
+      "hp": 93,
+      "ffMs": 593
+     },
+     {
+      "t": 48.5,
+      "alive": 37,
+      "phase": "match",
+      "hp": 52,
+      "ffMs": 612
+     }
+    ],
+    "state": {
+     "phase": "match",
+     "t": 48.937666666651445,
+     "alive": 37,
+     "player": {
+      "hp": 52,
+      "shield": 0,
+      "pos": {
+       "x": 0,
+       "y": 5.725378596968164,
+       "z": -23.687618445263773
+      },
+      "weapon": "pistol"
+     },
+     "map": "ashgrid",
+     "mode": "standard",
+     "seed": 1234
+    }
+   },
+   "postmatch_panel_s": null,
+   "window_errors": [],
+   "console": {
+    "boot_cold": {
+     "error": 1,
+     "warning": 0,
+     "samples": [
+      "[error] Failed to load resource: the server responded with a status of 404 (File not found) @http://127.0.0.1:8790/favicon.ico:0"
+     ]
+    },
+    "load": {
+     "error": 3,
+     "warning": 237,
+     "samples": [
+      "[error] Failed to load resource: the server responded with a status of 404 (File not found) @http://127.0.0.1:8790/favicon.ico:0",
+      "[error] Failed to load resource: net::ERR_CONNECTION_REFUSED @http://127.0.0.1:8790/games/last-circle/assets/chars/meshy/viper_rifle_walk.glb:0",
+      "[error] Failed to load resource: net::ERR_CONNECTION_REFUSED @http://127.0.0.1:8790/games/last-circle/assets/chars/meshy/viper_rifle_run.glb:0",
+      "[warning] [chars] clip load failed viper rifle_walk TypeError: Failed to fetch\n    at FileLoader.load (https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:26904:3)\n    at GLTFLoader.load (https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/loaders/GLTFLoader.js:241:10)\n    at https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:26773:10\n    at new Promise (<anonymous>)\n    at GLTFLoader.loadAsync (https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:26771:10)\n    at http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/player.js?v=1789530264:242:42\n    at Array.map @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/player.js?v=1789530264:246",
+      "[warning] [chars] clip load failed viper rifle_run TypeError: Failed to fetch\n    at FileLoader.load (https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:26904:3)\n    at GLTFLoader.load (https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/loaders/GLTFLoader.js:241:10)\n    at https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:26773:10\n    at new Promise (<anonymous>)\n    at GLTFLoader.loadAsync (https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:26771:10)\n    at http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/player.js?v=1789530264:242:42\n    at Array.map  @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/player.js?v=1789530264:246",
+      "[warning] [rig] soldier FAILS the skeleton contract \u2014 missing: [Hips, Spine02, Spine01, Spine, Head, RightArm, RightForeArm, RightHand, LeftArm, LeftForeArm, LeftHand, RightUpLeg, RightLeg, RightFoot, LeftUpLeg, LeftLeg, LeftFoot, neck|Neck], skinnedMeshes: 1, handBone: NONE. Downstream: pose.js aim chain and the weapon holder will misbehave on this rig. @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/rig_pipeline.js?v=1789530264:88"
+     ]
+    },
+    "endgame": {
+     "error": 0,
+     "warning": 24,
+     "samples": [
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandMiddle4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandRing4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandPinky4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandMiddle4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandRing4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandPinky4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264"
+     ]
+    }
+   },
+   "pageerrors": [],
+   "pageerror_count": 0,
+   "reqfail": [
+    [
+     "load",
+     "FAILED http://127.0.0.1:8790/games/last-circle/assets/chars/meshy/viper_rifle_walk.glb net::ERR_CONNECTION_REFUSED"
+    ],
+    [
+     "load",
+     "FAILED http://127.0.0.1:8790/games/last-circle/assets/chars/meshy/viper_rifle_run.glb net::ERR_CONNECTION_REFUSED"
+    ]
+   ],
+   "run_wall_s": 76.0,
+   "browser_version": "154.0.8037.58"
+  }
+ ]
+}

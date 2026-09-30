@@ -1,0 +1,650 @@
+{
+ "args": {
+  "maps": "ashgrid",
+  "reps": 1,
+  "seed": 1234,
+  "menu": 3.0,
+  "drop": 4.0,
+  "ground": 5.0,
+  "again": 3.0,
+  "slice": 8.0,
+  "real": 1.5,
+  "max_slices": 4,
+  "width": 1600,
+  "height": 900,
+  "headed": false,
+  "profile": "dgpu-uncapped",
+  "uncapped": false,
+  "no_again": false,
+  "label": "smoke4"
+ },
+ "url": "http://127.0.0.1:8790/games/last-circle/index.html",
+ "results": [
+  {
+   "map": "ashgrid",
+   "seed": 1234,
+   "rep": 1,
+   "windows": {
+    "menu": {
+     "frames": 28,
+     "seconds": 3.68,
+     "avgFps": 7.6,
+     "p50": 7.450000000000273,
+     "p95": 395.4349999999994,
+     "p99": 2034.4010000000007,
+     "max": 2599.7,
+     "over20": 0.1786,
+     "over33": 0.1786,
+     "cpuUpd_p50": 0.2,
+     "cpuUpd_p99": 0.3719999999999999,
+     "cpuRender_p50": 5.2,
+     "cpuRender_p99": 2485.8599999999997,
+     "cpuFrame_p50": 5.4,
+     "cpuFrame_p95": 1526.3200000000024,
+     "cpuFrame_p99": 2486.0159999999996,
+     "cpuFrame_max": 2596.0,
+     "calls_med": 293,
+     "calls_max": 293,
+     "scene_med": 279,
+     "shadow_med": 61,
+     "tris_med": 92574,
+     "tris_max": 92574,
+     "programs": 19,
+     "programs_start": 19,
+     "geometries": 205,
+     "textures": 16,
+     "heapMB_start": 21.5,
+     "heapMB_end": 37.2,
+     "heapMB_max": 37.2,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 1,
+     "phase_start": "menu",
+     "phase_end": "menu",
+     "alive_start": null,
+     "alive_end": null,
+     "pAlive_end": null,
+     "pGlide_end": null,
+     "sceneChildren": 5,
+     "gpu": {
+      "samples": 3,
+      "cpu_total_pct": 92.5,
+      "chrome_all": 33.0,
+      "others": 75.2,
+      "top_others": [
+       [
+        "dwm",
+        40.7
+       ],
+       [
+        "WUDFHost",
+        30.7
+       ],
+       [
+        "claude",
+        3.8
+       ],
+       [
+        "StartMenuExperienceHost",
+        0
+       ]
+      ]
+     }
+    },
+    "_drop_state_start": {
+     "phase": "drop",
+     "t": 0.18000000000000002,
+     "alive": 50,
+     "player": {
+      "hp": 100,
+      "shield": 0,
+      "pos": {
+       "x": 0,
+       "y": 251.77149400774553,
+       "z": 0
+      },
+      "weapon": "pistol"
+     },
+     "map": "ashgrid",
+     "mode": "standard",
+     "seed": 1234
+    },
+    "drop": {
+     "frames": 19,
+     "seconds": 0.31,
+     "avgFps": 60.4,
+     "p50": 16.0,
+     "p95": 25.759999999999867,
+     "p99": 31.23199999999881,
+     "max": 32.599999999998545,
+     "over20": 0.2105,
+     "over33": 0.0,
+     "cpuUpd_p50": 3.2,
+     "cpuUpd_p99": 34.912999999999954,
+     "cpuRender_p50": 11.05,
+     "cpuRender_p99": 13.233999999999998,
+     "cpuFrame_p50": 14.05,
+     "cpuFrame_p95": 19.475000000000023,
+     "cpuFrame_p99": 46.454999999999956,
+     "cpuFrame_max": 53.2,
+     "calls_med": 268.0,
+     "calls_max": 268,
+     "scene_med": 254.0,
+     "shadow_med": 87.0,
+     "tris_med": 10961879.0,
+     "tris_max": 10961879,
+     "programs": 76,
+     "programs_start": 76,
+     "geometries": 375,
+     "textures": 74,
+     "heapMB_start": 165.6,
+     "heapMB_end": 175,
+     "heapMB_max": 175,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 50,
+     "phase_start": "drop",
+     "phase_end": "drop",
+     "alive_start": 50,
+     "alive_end": 50,
+     "pAlive_end": true,
+     "pGlide_end": true,
+     "sceneChildren": 9,
+     "gpu": {
+      "samples": 4,
+      "cpu_total_pct": 84.3,
+      "chrome_all": 9.9,
+      "others": 115.6,
+      "top_others": [
+       [
+        "dwm",
+        56.8
+       ],
+       [
+        "WUDFHost",
+        42.9
+       ],
+       [
+        "claude",
+        15.9
+       ],
+       [
+        "WhatsApp.Root",
+        0
+       ]
+      ]
+     }
+    },
+    "ground": {
+     "frames": 93,
+     "seconds": 4.2,
+     "avgFps": 22.2,
+     "p50": 19.69999999999709,
+     "p95": 35.03999999999651,
+     "p99": 383.54799999998846,
+     "max": 2148.199999999997,
+     "over20": 0.4409,
+     "over33": 0.1398,
+     "cpuUpd_p50": 5.05,
+     "cpuUpd_p99": 10.89599999999998,
+     "cpuRender_p50": 13.4,
+     "cpuRender_p99": 1179.7079999999928,
+     "cpuFrame_p50": 18.9,
+     "cpuFrame_p95": 26.934999999999988,
+     "cpuFrame_p99": 1184.1899999999928,
+     "cpuFrame_max": 2148.6,
+     "calls_med": 285.0,
+     "calls_max": 285,
+     "scene_med": 271.0,
+     "shadow_med": 79.0,
+     "tris_med": 7616579.0,
+     "tris_max": 7616579,
+     "programs": 78,
+     "programs_start": 78,
+     "geometries": 432,
+     "textures": 96,
+     "heapMB_start": 147.5,
+     "heapMB_end": 166.6,
+     "heapMB_max": 168.2,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 50,
+     "phase_start": "match",
+     "phase_end": "match",
+     "alive_start": 49,
+     "alive_end": 49,
+     "pAlive_end": true,
+     "pGlide_end": false,
+     "sceneChildren": 9,
+     "gpu": {
+      "samples": 5,
+      "cpu_total_pct": 81.9,
+      "chrome_all": 22.6,
+      "others": 97.0,
+      "top_others": [
+       [
+        "dwm",
+        49.6
+       ],
+       [
+        "WUDFHost",
+        40.8
+       ],
+       [
+        "claude",
+        6.6
+       ],
+       [
+        "WhatsApp.Root",
+        0
+       ]
+      ]
+     }
+    },
+    "endgame_realframes": {
+     "frames": 100,
+     "seconds": 11.27,
+     "avgFps": 8.9,
+     "p50": 15.150000000001455,
+     "p95": 321.83000000001067,
+     "p99": 1741.6920000000182,
+     "max": 5275.199999999997,
+     "over20": 0.27,
+     "over33": 0.13,
+     "cpuUpd_p50": 3.9,
+     "cpuUpd_p99": 18.8,
+     "cpuRender_p50": 10.6,
+     "cpuRender_p99": 3168.5,
+     "cpuFrame_p50": 14.399999999999999,
+     "cpuFrame_p95": 80.80000000000001,
+     "cpuFrame_p99": 3171.6,
+     "cpuFrame_max": 5286.7,
+     "calls_med": 271,
+     "calls_max": 275,
+     "scene_med": 257,
+     "shadow_med": 78,
+     "tris_med": 7047831,
+     "tris_max": 7329269,
+     "programs": 78,
+     "programs_start": 78,
+     "geometries": 432,
+     "textures": 97,
+     "heapMB_start": 161.8,
+     "heapMB_end": 164.4,
+     "heapMB_max": 174.3,
+     "dpr": 1,
+     "buf": [
+      1600,
+      900
+     ],
+     "mixers": 50,
+     "phase_start": "match",
+     "phase_end": "match",
+     "alive_start": 47,
+     "alive_end": 29,
+     "pAlive_end": true,
+     "pGlide_end": false,
+     "sceneChildren": 9
+    }
+   },
+   "notes": [
+    "endgame: match not over after 4 slices (sim t=67.0, alive=29) - post-match / PLAY AGAIN skipped"
+   ],
+   "automated_chromes_at_start": [
+    {
+     "pid": 41600,
+     "headless": true
+    },
+    {
+     "pid": 39552,
+     "headless": true
+    },
+    {
+     "pid": 34260,
+     "headless": true
+    },
+    {
+     "pid": 42872,
+     "headless": true
+    },
+    {
+     "pid": 31240,
+     "headless": true
+    },
+    {
+     "pid": 26928,
+     "headless": true
+    },
+    {
+     "pid": 11132,
+     "headless": false
+    },
+    {
+     "pid": 40040,
+     "headless": false
+    },
+    {
+     "pid": 14332,
+     "headless": true
+    },
+    {
+     "pid": 46392,
+     "headless": false
+    },
+    {
+     "pid": 38248,
+     "headless": false
+    },
+    {
+     "pid": 40356,
+     "headless": true
+    }
+   ],
+   "boot_cold": {
+    "lastResponses": [
+     [
+      "/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap",
+      9280,
+      9746,
+      573
+     ],
+     [
+      "/games/last-circle/assets/chars/meshy/soldier.glb",
+      9373,
+      9422,
+      1958836
+     ],
+     [
+      "/games/last-circle/assets/props/pine.glb",
+      9351,
+      9361,
+      93688
+     ],
+     [
+      "/games/last-circle/assets/props/tree.glb",
+      9350,
+      9360,
+      158708
+     ],
+     [
+      "/games/last-circle/assets/props/rocks.glb",
+      9350,
+      9359,
+      48840
+     ],
+     [
+      "/games/last-circle/assets/props/palm.glb",
+      9350,
+      9356,
+      118032
+     ]
+    ],
+    "cdnCount": 17,
+    "cdnLastEnd": 562,
+    "localLastEnd": 9422,
+    "longtasks": {
+     "n": 2,
+     "ms": 9887,
+     "max": 9711,
+     "over250": 1
+    },
+    "marks": {
+     "splashSeen": 33.1000000089407,
+     "__LC__": 9506,
+     "canvas": 9506,
+     "__FFG3D__": 10494.79999999702,
+     "splashGone": 12686.90000000596
+    },
+    "paint": {},
+    "dcl": 59,
+    "load": 61.5,
+    "resources": 44,
+    "transferMB": 3.5,
+    "encodedMB": 3.49,
+    "glbCount": 5,
+    "glbMB": 2.27,
+    "wall_s": 12.8
+   },
+   "boot_warm": {
+    "lastResponses": [
+     [
+      "/games/last-circle/assets/chars/meshy/soldier.glb",
+      638,
+      640,
+      1958836
+     ],
+     [
+      "/games/last-circle/assets/props/pine.glb",
+      621,
+      622,
+      93688
+     ],
+     [
+      "/games/last-circle/assets/props/rocks.glb",
+      621,
+      622,
+      48840
+     ],
+     [
+      "/games/last-circle/assets/props/tree.glb",
+      620,
+      621,
+      158708
+     ],
+     [
+      "/games/last-circle/assets/props/palm.glb",
+      620,
+      621,
+      118032
+     ],
+     [
+      "/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap",
+      564,
+      566,
+      573
+     ]
+    ],
+    "cdnCount": 17,
+    "cdnLastEnd": 120,
+    "localLastEnd": 640,
+    "longtasks": {
+     "n": 2,
+     "ms": 824,
+     "max": 630,
+     "over250": 1
+    },
+    "marks": {
+     "splashSeen": 26.900000005960464,
+     "__LC__": 669.5,
+     "canvas": 669.5999999940395,
+     "__FFG3D__": 841,
+     "splashGone": 1055.5
+    },
+    "paint": {
+     "first-paint": 532,
+     "first-contentful-paint": 532
+    },
+    "dcl": 75.2,
+    "load": 75.4,
+    "resources": 43,
+    "transferMB": 0,
+    "encodedMB": 3.49,
+    "glbCount": 5,
+    "glbMB": 2.27,
+    "wall_s": 1.89
+   },
+   "instrument": "ok",
+   "gl": {
+    "renderer": "ANGLE (NVIDIA, NVIDIA RTX A2000 Laptop GPU (0x000025B8) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "webgl2": true,
+    "maxTex": 16384,
+    "dpr": 1,
+    "pixelRatio": 1,
+    "graphics": "medium",
+    "shadow": true,
+    "bloom": true
+   },
+   "load": {
+    "ms": 21898.4,
+    "phase": "lobby",
+    "map": "ashgrid",
+    "wall_s": 21.94
+   },
+   "lobby_skip_s": 5.11,
+   "land_ff": {
+    "wall_s": 13.06,
+    "state": {
+     "landed": true,
+     "s": {
+      "phase": "match",
+      "t": 28.87000000000057,
+      "alive": 49,
+      "player": {
+       "hp": 100,
+       "shield": 0,
+       "pos": {
+        "x": 0,
+        "y": 5.727009162906904,
+        "z": -23.57347531079969
+       },
+       "weapon": "pistol"
+      },
+      "map": "ashgrid",
+      "mode": "standard",
+      "seed": 1234
+     }
+    }
+   },
+   "endgame": {
+    "wall_s": 31.99,
+    "over": false,
+    "slices": 4,
+    "trace_head": [
+     {
+      "t": 41.2,
+      "alive": 44,
+      "phase": "match",
+      "hp": 86,
+      "ffMs": 752
+     },
+     {
+      "t": 49.8,
+      "alive": 37,
+      "phase": "match",
+      "hp": 38,
+      "ffMs": 470
+     },
+     {
+      "t": 58.2,
+      "alive": 32,
+      "phase": "match",
+      "hp": 38,
+      "ffMs": 234
+     }
+    ],
+    "trace_tail": [
+     {
+      "t": 41.2,
+      "alive": 44,
+      "phase": "match",
+      "hp": 86,
+      "ffMs": 752
+     },
+     {
+      "t": 49.8,
+      "alive": 37,
+      "phase": "match",
+      "hp": 38,
+      "ffMs": 470
+     },
+     {
+      "t": 58.2,
+      "alive": 32,
+      "phase": "match",
+      "hp": 38,
+      "ffMs": 234
+     },
+     {
+      "t": 67.0,
+      "alive": 29,
+      "phase": "match",
+      "hp": 38,
+      "ffMs": 294
+     }
+    ],
+    "state": {
+     "phase": "match",
+     "t": 67.24953333333505,
+     "alive": 29,
+     "player": {
+      "hp": 38,
+      "shield": 0,
+      "pos": {
+       "x": 0,
+       "y": 5.727009162906904,
+       "z": -23.57347531079969
+      },
+      "weapon": "pistol"
+     },
+     "map": "ashgrid",
+     "mode": "standard",
+     "seed": 1234
+    }
+   },
+   "postmatch_panel_s": null,
+   "window_errors": [],
+   "console": {
+    "boot_cold": {
+     "error": 1,
+     "warning": 0,
+     "samples": [
+      "[error] Failed to load resource: the server responded with a status of 404 (File not found) @http://127.0.0.1:8790/favicon.ico:0"
+     ]
+    },
+    "load": {
+     "error": 2,
+     "warning": 236,
+     "samples": [
+      "[error] Failed to load resource: the server responded with a status of 404 (File not found) @http://127.0.0.1:8790/favicon.ico:0",
+      "[error] Failed to load resource: net::ERR_CONNECTION_REFUSED @http://127.0.0.1:8790/games/last-circle/assets/chars/meshy/viper_dance.glb:0",
+      "[warning] [chars] clip load failed viper dance TypeError: Failed to fetch\n    at FileLoader.load (https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:26904:3)\n    at GLTFLoader.load (https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/loaders/GLTFLoader.js:241:10)\n    at https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:26773:10\n    at new Promise (<anonymous>)\n    at GLTFLoader.loadAsync (https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:26771:10)\n    at http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/player.js?v=1789530264:242:42\n    at Array.map (<an @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/player.js?v=1789530264:246",
+      "[warning] [rig] soldier FAILS the skeleton contract \u2014 missing: [Hips, Spine02, Spine01, Spine, Head, RightArm, RightForeArm, RightHand, LeftArm, LeftForeArm, LeftHand, RightUpLeg, RightLeg, RightFoot, LeftUpLeg, LeftLeg, LeftFoot, neck|Neck], skinnedMeshes: 1, handBone: NONE. Downstream: pose.js aim chain and the weapon holder will misbehave on this rig. @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/rig_pipeline.js?v=1789530264:88",
+      "[warning] [rig] soldier attachment issues: [weapon holder parented to \"mixamorigRightHand\" \u2014 legal: RightHand, FistR] @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/rig_pipeline.js?v=1789530264:177",
+      "[warning] [rig] athlete FAILS the skeleton contract \u2014 missing: [Hips, Spine02, Spine01, Spine, Head, RightArm, RightForeArm, RightHand, LeftArm, LeftForeArm, LeftHand, RightUpLeg, RightLeg, RightFoot, LeftUpLeg, LeftLeg, LeftFoot, neck|Neck], skinnedMeshes: 1, handBone: NONE. Downstream: pose.js aim chain and the weapon holder will misbehave on this rig. @http://127.0.0.1:8790/games/last-circle/runtime/3d/royale/rig_pipeline.js?v=1789530264:88"
+     ]
+    },
+    "endgame": {
+     "error": 0,
+     "warning": 24,
+     "samples": [
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandMiddle4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandRing4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigRightHandPinky4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandMiddle4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandRing4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264",
+      "[warning] THREE.PropertyBinding: No target node found for track: mixamorigLeftHandPinky4.quaternion. @https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.core.js:32264"
+     ]
+    }
+   },
+   "pageerrors": [],
+   "pageerror_count": 0,
+   "reqfail": [
+    [
+     "load",
+     "FAILED http://127.0.0.1:8790/games/last-circle/assets/chars/meshy/viper_dance.glb net::ERR_CONNECTION_REFUSED"
+    ]
+   ],
+   "run_wall_s": 131.3,
+   "browser_version": "154.0.8037.58"
+  }
+ ]
+}

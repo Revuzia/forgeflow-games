@@ -1,0 +1,412 @@
+{
+ "map": "ashgrid",
+ "N": 5,
+ "arms": {
+  "BUSY": [
+   {
+    "block_ms": 800,
+    "first3": [
+     21.1,
+     9.7,
+     12.9
+    ],
+    "n": 41,
+    "max": 1106.6,
+    "median": 12.9
+   },
+   {
+    "block_ms": 1500,
+    "first3": [
+     12.7,
+     18.3,
+     18.2
+    ],
+    "n": 36,
+    "max": 818,
+    "median": 21.3
+   },
+   {
+    "block_ms": 519,
+    "first3": [
+     9.6,
+     11.2,
+     14.4
+    ],
+    "n": 38,
+    "max": 2535.6,
+    "median": 12.8
+   },
+   {
+    "block_ms": 585,
+    "first3": [
+     10.8,
+     21.6,
+     8.4
+    ],
+    "n": 61,
+    "max": 827.4,
+    "median": 10.9
+   },
+   {
+    "block_ms": 300,
+    "first3": [
+     16.1,
+     20,
+     13.5
+    ],
+    "n": 44,
+    "max": 1758.5,
+    "median": 11.3
+   }
+  ],
+  "FF": [
+   {
+    "block_ms": 1500,
+    "first3": [
+     11.9,
+     17.1,
+     10.1
+    ],
+    "n": 71,
+    "max": 534.6,
+    "median": 11.3
+   },
+   {
+    "block_ms": 519,
+    "first3": [
+     19.4,
+     11.3,
+     16.3
+    ],
+    "n": 33,
+    "max": 1286.1,
+    "median": 14.8
+   },
+   {
+    "block_ms": 585,
+    "first3": [
+     31.9,
+     12.3,
+     4147
+    ],
+    "n": 3,
+    "max": 4147,
+    "median": 31.9
+   },
+   {
+    "block_ms": 296,
+    "first3": [
+     8.2,
+     16.5,
+     10
+    ],
+    "n": 23,
+    "max": 2836.2,
+    "median": 11.3
+   },
+   {
+    "block_ms": 320,
+    "first3": [
+     22.8,
+     15.3,
+     14.3
+    ],
+    "n": 27,
+    "max": 1356.6,
+    "median": 13.6
+   }
+  ],
+  "FREE": [
+   {
+    "block_ms": 0,
+    "first3": [
+     21,
+     18.2,
+     16.2
+    ],
+    "n": 47,
+    "max": 3338.3,
+    "median": 16.2
+   },
+   {
+    "block_ms": 0,
+    "first3": [
+     11.1,
+     11.9,
+     9.1
+    ],
+    "n": 35,
+    "max": 23.7,
+    "median": 11.9
+   },
+   {
+    "block_ms": 0,
+    "first3": [
+     16.4,
+     10.9,
+     9.5
+    ],
+    "n": 48,
+    "max": 1626.6,
+    "median": 12.05
+   },
+   {
+    "block_ms": 0,
+    "first3": [
+     58.1,
+     34.7,
+     20
+    ],
+    "n": 6,
+    "max": 2843.1,
+    "median": 43.05
+   },
+   {
+    "block_ms": 0,
+    "first3": [
+     19.1,
+     67.3,
+     18.7
+    ],
+    "n": 55,
+    "max": 1115.1,
+    "median": 13.6
+   }
+  ]
+ },
+ "census_landed": {
+  "groups": {
+   "fx": {
+    "meshes": 0,
+    "skinned": 0,
+    "inst": 2,
+    "instCount": 1088,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 1
+   },
+   "menu3d": {
+    "meshes": 0,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 0
+   },
+   "map": {
+    "meshes": 196,
+    "skinned": 0,
+    "inst": 32,
+    "instCount": 4492,
+    "sprites": 128,
+    "points": 0,
+    "lines": 0,
+    "textures": 17
+   },
+   "storm": {
+    "meshes": 1,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 1
+   },
+   "loot": {
+    "meshes": 110,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 66,
+    "points": 0,
+    "lines": 0,
+    "textures": 12
+   },
+   "actors": {
+    "meshes": 3,
+    "skinned": 50,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 2,
+    "points": 0,
+    "lines": 0,
+    "textures": 15
+   },
+   "(scene) HemisphereLight": {
+    "meshes": 0,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 0
+   },
+   "(scene) DirectionalLight": {
+    "meshes": 0,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 0
+   },
+   "(scene) Object3D": {
+    "meshes": 0,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 0
+   }
+  },
+  "texturesReferenced": 46,
+  "rendererTextures": 92,
+  "rendererGeometries": 494,
+  "programs": 74,
+  "t": 28.567900000006528,
+  "alive": 50,
+  "lootItems": null
+ },
+ "census_end": {
+  "groups": {
+   "fx": {
+    "meshes": 0,
+    "skinned": 0,
+    "inst": 2,
+    "instCount": 1088,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 1
+   },
+   "menu3d": {
+    "meshes": 0,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 0
+   },
+   "map": {
+    "meshes": 196,
+    "skinned": 0,
+    "inst": 32,
+    "instCount": 4493,
+    "sprites": 128,
+    "points": 0,
+    "lines": 0,
+    "textures": 17
+   },
+   "storm": {
+    "meshes": 1,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 1
+   },
+   "loot": {
+    "meshes": 197,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 93,
+    "points": 0,
+    "lines": 0,
+    "textures": 34
+   },
+   "actors": {
+    "meshes": 2,
+    "skinned": 3,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 12
+   },
+   "projectiles": {
+    "meshes": 0,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 0
+   },
+   "(scene) HemisphereLight": {
+    "meshes": 0,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 0
+   },
+   "(scene) DirectionalLight": {
+    "meshes": 0,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 0
+   },
+   "(scene) Object3D": {
+    "meshes": 0,
+    "skinned": 0,
+    "inst": 0,
+    "instCount": 0,
+    "sprites": 0,
+    "points": 0,
+    "lines": 0,
+    "textures": 0
+   }
+  },
+  "texturesReferenced": 59,
+  "rendererTextures": 131,
+  "rendererGeometries": 556,
+  "programs": 75,
+  "t": 312.5967666666181,
+  "alive": 2,
+  "lootItems": null
+ },
+ "summary": {
+  "BUSY": {
+   "first_frame_median": 12.7,
+   "first_frame_max": 21.1,
+   "window_max_median": 1106.6,
+   "frames_per_2s_median": 41,
+   "block_ms_median": 585
+  },
+  "FF": {
+   "first_frame_median": 19.4,
+   "first_frame_max": 31.9,
+   "window_max_median": 1356.6,
+   "frames_per_2s_median": 27,
+   "block_ms_median": 519
+  },
+  "FREE": {
+   "first_frame_median": 19.1,
+   "first_frame_max": 58.1,
+   "window_max_median": 1626.6,
+   "frames_per_2s_median": 47,
+   "block_ms_median": 0
+  }
+ }
+}
