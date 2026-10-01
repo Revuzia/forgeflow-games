@@ -132,6 +132,7 @@ import {
   clamp, clamp01, lerp, damp, dampAngle, smoothstep, mulberry32, numOr, TAU,
 } from '../core/util.js';
 import { TUNE } from '../core/tuning.js';
+import { carryables, holdCarried } from './carry.js';
 
 /* ═════════════════════════════════ constants ═════════════════════════════════ */
 
@@ -367,6 +368,30 @@ const IDLE_LOOK_AFTER = 4.0;
 
 /** Ceiling on the idle look-around head yaw, radians. */
 const LOOK_YAW_MAX = 0.58;
+
+/* ── stage 1: the new clips (sm64_bar.md §1/§7 — "34 clips, no reactions") ── */
+/** Idle variants, seconds of stillness: a stretch once, then sit down and stay. */
+const IDLE_STRETCH_AT = 10.0;
+const IDLE_STRETCH_LEN = 2.6;
+const IDLE_SIT_AT = 15.5;
+const IDLE_SIT_IN = 0.9;
+/** Themed idles (shiver in the cold, pant in the heat) start after this. */
+const IDLE_THEMED_AT = 2.5;
+/** Look-at: creatures / carryables within this range turn the head. */
+const LOOK_AT_RANGE = 9.0;
+const LOOK_AT_PITCH_MAX = 0.38;
+/** Turn-in-place: facing rate (rad/s) above which the feet shuffle round. */
+const TURN_SHUFFLE_RATE = 1.6;
+/** After a hard landing, a head shake plays over the first idle frames. */
+const HARDLAND_SHAKE_T = 0.5;
+/** Crest celebration phases (seconds from the clear edge). */
+const CELEB_CROUCH = 0.22;
+const CELEB_HOP = 0.62;
+/** Anims the head may turn toward a nearby creature in (never mid-flip). */
+const LOOK_AT_ANIMS = {
+  idle: 1, run: 1, crouch: 1, crouchwalk: 1, land: 1, skid: 1, bonk: 1,
+  ledgeHang: 1, throw: 1, fall: 1, jump1: 1, swimIdle: 1,
+};
 
 /** Blink cadence, seconds. */
 const BLINK_MIN = 3.0;
@@ -2011,6 +2036,27 @@ export class Hero {
        shifts. */
     this._climbPh = 0;
     this._wallPh = 0;
+
+    /* stage 1 clips */
+    this._ledgePh = 0;          // shimmy hand-over-hand clock
+    this._turnRate = 0;         // damped facing rate, rad/s (+ = turning left)
+    this._turnPh = 0;           // turn-in-place shuffle clock
+    this._prevFacing = 0;
+    this._lookW = 0;            // look-at blend
+    this._lookAtYaw = 0;        // head yaw toward the nearest creature, hero-local
+    this._lookAtPitch = 0;
+    this._lookScanT = 0;        // look-at target rescan cadence
+    this._lookTgt = null;
+    this._lookEye = 0;          // pupils' share of the look-at, -1..1
+    this._squint = 0;           // eyes narrowed (hurt / joy / cold / heat)
+    this._celebT = -1;          // seconds into the crest celebration (-1 = none)
+    this._wasClear = false;
+    this._shakeHeadT = 0;       // post-hard-landing head shake
+    this._noIK = false;         // a pose that owns its own feet (sitting)
+    this._carryW = 0;           // carry overlay blend
+    this._prevCarrying = null;
+    this._stretchDone = false;  // the idle stretch plays once per idle
+    this._surf = null;          // the walked surface ('snow' / 'ice' shiver)
 
     this._squash = 1;
     this._squashTgt = 1;
@@ -3846,15 +3892,47 @@ export class Hero {
 
     let anim = p && typeof p.anim === 'string' ? p.anim : (p && typeof p.state === 'string' ? p.state : 'idle');
     if (p && p.dead) anim = 'dead';
+
+    /* THE CREST CELEBRATION. The Game freezes the body while it celebrates
+       (`state === 'clear'`, game.js onCrest) but keeps the hero animating, so the
+       dance is the hero's to play: a crouch, a spinning hop with a fist to the sky,
+       then fist pumps — and the voice's "yi-pa-HAA!" on the edge. */
+    const game = p && p.world ? p.world.game : null;
+    const clear = !!(game && game.state === 'clear');
+    if (clear && !this._wasClear) {
+      this._celebT = 0;
+      const v = p && p.voice;
+      if (v && typeof v.bark === 'function') { try { v.bark('crest'); } catch (e) { /* voice never breaks the hero */ } }
+    }
+    this._wasClear = clear;
+    let celebrating = false;
+    if (clear && grounded && !(p && p.dead)) {
+      celebrating = true;
+      this._celebT += d;
+      anim = 'celebrate';
+    } else if (!clear) {
+      this._celebT = -1;
+    }
+
     this._prevAnim = this._anim;
     this._anim = anim;
-    this._animT = p ? numOr(p.animT, this._animT + d) : this._animT + d;
+    this._animT = celebrating ? this._celebT : (p ? numOr(p.animT, this._animT + d) : this._animT + d);
     if (anim !== this._prevAnim && !p) this._animT = 0;
+    if (this._prevAnim === 'hardLand' && anim !== 'hardLand') this._shakeHeadT = HARDLAND_SHAKE_T;
+    else if (this._shakeHeadT > 0) this._shakeHeadT -= d;
+
+    /* facing rate: turn-in-place shuffle + turn lean (wrapped, clamped, damped) */
+    let dfac = facing - this._prevFacing;
+    dfac -= TAU * Math.round(dfac / TAU);
+    this._prevFacing = facing;
+    const frate = d > 1e-5 ? clamp(dfac / d, -20, 20) : 0;
+    this._turnRate = damp(this._turnRate, frate, 10, d);
 
     // ground normal (for the foot plant); the controller may not publish one
     const gn = p && (p.groundNormal || p.groundN);
     if (gn && typeof gn.y === 'number') this._groundN.set(gn.x || 0, gn.y, gn.z || 0);
     else this._groundN.set(0, 1, 0);
+    this._surf = p && typeof p.surface === 'string' ? p.surface : null;
     if (this._groundN.lengthSq() < 1e-6) this._groundN.set(0, 1, 0);
 
     // ---- bookkeeping the cycles need ------------------------------------
@@ -3876,7 +3954,8 @@ export class Hero {
     this._lean = damp(this._lean, this._leanTgt, 9, d);
 
     this._breathe += d * (1.15 + this._speedN * 0.9);
-    if (anim === 'idle' && this._speed < 0.2) this._idleT += d; else this._idleT = 0;
+    if (anim === 'idle' && this._speed < 0.2 && !(p && p.carrying)) this._idleT += d;
+    else { this._idleT = 0; this._stretchDone = false; }
 
     // ---- squash / stretch triggers ---------------------------------------
     this._updateSquash(d, anim, vy);
@@ -3892,6 +3971,9 @@ export class Hero {
 
     // ---- world transform is final; children can now be resolved ----------
     this.root.updateMatrixWorld(true);
+
+    // ---- the carried object sits in the mittens (zero lag) ---------------
+    if (p && p.carrying) this._holdCarried(p, d, facing, anim);
 
     // ---- secondary -------------------------------------------------------
     this._updateFace(d, anim);
@@ -3925,6 +4007,8 @@ export class Hero {
     this._flipDrvY = false;
     this._flipDrvZ = false;
     this._rootPitchDrv = false;
+    this._noIK = false;
+    this._squint = 0;
     // NOT cleared: b.cx/cy/cz and the cyclic root channels. A writer that does
     // not claim the layer this frame simply leaves `_cycTgt` at 0, and the
     // envelope fades the last cyclic pose out over ~1/13 s.
@@ -4052,7 +4136,7 @@ export class Hero {
         this._squash = this._squashTgt;
       } else if (a === 'jump1' || a === 'jump2' || a === 'jump3' ||
                  a === 'longjump' || a === 'backflip' || a === 'sideflip' ||
-                 a === 'wallkick' || a === 'dive') {
+                 a === 'wallkick' || a === 'dive' || a === 'slideKick') {
         this._squashTgt = STRETCH_JUMP;
         this._squash = STRETCH_JUMP;
       }
@@ -4125,7 +4209,19 @@ export class Hero {
       case 'poundLand': this._posePoundLand(t); break;
 
       case 'land': this._poseLand(t, false); break;
-      case 'hardLand': this._poseLand(t, true); break;
+      case 'hardLand': this._poseHardLand(t); break;
+
+      /* ---- stage 1 verbs ---- */
+      case 'punch1': this._posePunch(t, 1); break;
+      case 'punch2': this._posePunch(t, -1); break;
+      case 'kick': this._poseKick(t); break;
+      case 'airKick': this._poseAirKick(t); break;
+      case 'slideKick': this._poseSlideKick(t, horiz); break;
+      case 'ledgeHang': this._poseLedgeHang(dt, player); break;
+      case 'ledgeClimb': this._poseLedgeClimb(t, player); break;
+      case 'pickup': this._posePickup(t, player); break;
+      case 'throw': this._poseThrow(t); break;
+      case 'celebrate': this._poseCelebrate(t); break;
 
       case 'slopeSlide': this._poseSlopeSlide(horiz); break;
 
@@ -4170,12 +4266,483 @@ export class Hero {
      * bonk author their own stance out of the same speed and are excluded.
      */
     if (this._grounded && anim !== 'crouch' && anim !== 'slide' && anim !== 'dive' &&
-        anim !== 'skid' && anim !== 'pivot' && anim !== 'bonk' && anim !== 'slopeSlide') {
+        anim !== 'skid' && anim !== 'pivot' && anim !== 'bonk' && anim !== 'slopeSlide' &&
+        anim !== 'punch1' && anim !== 'punch2' && anim !== 'kick' && anim !== 'slideKick' &&
+        anim !== 'pickup' && anim !== 'throw' && anim !== 'celebrate') {
       this._rootPitch -= sn * 0.24;                 // −pitch = nose forward
       this._rootY += -sn * 0.020;                   // ...and settle a little
     }
 
+    /* ---- stage 1 overlays: they layer on whatever the state wrote ---- */
+    this._overlayTurn(anim, dt);
+    this._overlayCarry(anim, player);
+    this._overlayThrowAir(anim, player);
+    this._overlayHurt(anim, player);
+    this._overlayLookAt(anim, player, dt);
+    if (this._shakeHeadT > 0 && (anim === 'idle' || anim === 'run' || anim === 'land')) {
+      /* the post-hard-landing "shake it off" — a fast, decaying head shake */
+      const k = this._shakeHeadT / HARDLAND_SHAKE_T;
+      B.head.ty += Math.sin(this._shakeHeadT * 34) * 0.30 * k;
+      B.head.tz += Math.sin(this._shakeHeadT * 34 + 1.2) * 0.08 * k;
+      this._squint = Math.max(this._squint, 0.55 * k);
+    }
+
     void vx; void vz;
+  }
+
+  /* ─────────────────────── stage 1: the new clips ─────────────────────── */
+
+  /**
+   * PUNCH (side = +1 right jab, −1 left cross). Wind, strike, recover over the
+   * strike's 0.30 s: the striking fist goes dead ahead at shoulder height with the
+   * torso twisting INTO it, the other fist guards the chin, the lead foot steps.
+   */
+  _posePunch(t, side) {
+    const B = this.B;
+    const u = clamp01(t / 0.30);
+    const wind = 1 - smoothstep(0.0, 0.16, u);
+    const hit = smoothstep(0.08, 0.30, u) * (1 - smoothstep(0.62, 1.0, u));
+    const st = side > 0 ? this._arms[0] : this._arms[1];     // striking arm
+    const gd = side > 0 ? this._arms[1] : this._arms[0];     // guard arm
+    const lead = side > 0 ? this._legs[1] : this._legs[0];   // opposite foot steps in
+    const back = side > 0 ? this._legs[0] : this._legs[1];
+    // striking arm: cocked back at the elbow, then driven straight out ahead
+    st.ua.tx = lerp(-0.35, 1.52, hit) * (1 - wind * 0.3) + 0.06 * wind;
+    st.ua.tz = side * lerp(0.28, 0.06, hit);
+    st.la.tx = lerp(1.65, 0.04, hit);
+    st.hd.tx = lerp(0.3, -0.05, hit);
+    // guard: fist up by the chin
+    gd.ua.tx = 0.95; gd.ua.tz = -side * 0.30;
+    gd.la.tx = 1.95; gd.hd.tx = 0.25;
+    // the twist into the blow, and back
+    B.chest.ty = side * (0.28 * wind - 0.42 * hit);
+    B.spine.ty = side * (0.10 * wind - 0.16 * hit);
+    B.hips.ty = side * (-0.08 * hit);
+    B.head.ty = side * 0.18 * hit;                           // eyes stay on the target
+    B.chest.tx = -0.10 * hit;
+    // a boxer's step
+    lead.ul.tx = 0.34 * hit; lead.ll.tx = -0.32 * hit; lead.ft.tx = 0.10;
+    back.ul.tx = -0.22 * hit; back.ll.tx = -0.20; back.ft.tx = 0.18 * hit;
+    this._rootPitch = -0.10 * hit;
+    this._rootY -= 0.05 + 0.03 * hit;
+    this._squint = 0.2 * hit;
+  }
+
+  /** KICK — the combo's finisher: chamber the knee, snap the boot out, recover. */
+  _poseKick(t) {
+    const B = this.B;
+    const u = clamp01(t / 0.46);
+    const chamber = smoothstep(0.0, 0.2, u) * (1 - smoothstep(0.24, 0.40, u));
+    const ext = smoothstep(0.18, 0.40, u) * (1 - smoothstep(0.66, 1.0, u));
+    // kicking leg (R): knee up, then the leg shoots straight out ahead
+    B.upperLegR.tx = 1.35 * chamber + 1.52 * ext;
+    B.lowerLegR.tx = -1.95 * chamber - 0.06 * ext;
+    B.footR.tx = 0.35 * chamber - 0.25 * ext;
+    // support leg bends a touch
+    B.upperLegL.tx = 0.18 * (chamber + ext); B.lowerLegL.tx = -0.30 * (chamber + ext);
+    B.footL.tx = 0.12;
+    // arms flung out for balance
+    B.upperArmR.tx = -0.5 * ext + 0.3 * chamber; B.upperArmR.tz = 0.55 + 0.55 * ext;
+    B.upperArmL.tx = 0.6 * ext + 0.4 * chamber; B.upperArmL.tz = -0.55 - 0.45 * ext;
+    B.lowerArmR.tx = 0.6; B.lowerArmL.tx = 0.8;
+    B.chest.ty = -0.22 * ext;
+    B.hips.ty = 0.12 * ext;
+    this._rootPitch = 0.18 * ext;                // lean back off the kick
+    this._rootY -= 0.04 * chamber;
+    B.head.tx = -0.12 * ext;
+    this._squint = 0.35 * ext;
+  }
+
+  /** AIR KICK — one leg snapped out ahead, the other tucked, arms thrown back. */
+  _poseAirKick(t) {
+    const B = this.B;
+    const k = smoothstep(0, 0.07, t) * (1 - smoothstep(0.30, 0.40, t));
+    B.upperLegR.tx = 1.40 * k; B.lowerLegR.tx = -0.08 * k; B.footR.tx = -0.30 * k;
+    B.upperLegL.tx = 0.95 * k; B.lowerLegL.tx = -1.90 * k; B.footL.tx = 0.40 * k;
+    B.upperArmR.tx = -0.95 * k; B.upperArmL.tx = -0.95 * k;
+    B.upperArmR.tz = 0.95 * k; B.upperArmL.tz = -0.95 * k;
+    B.lowerArmR.tx = 0.5; B.lowerArmL.tx = 0.5;
+    B.chest.ty = -0.25 * k;
+    this._rootPitch = 0.34 * k;
+    B.head.tx = -0.20 * k;
+    this._squint = 0.3 * k;
+  }
+
+  /**
+   * SLIDE KICK — thrown onto the back and hip, the leading boot out in front
+   * along the ground, the trailing leg folded, one hand skimming the floor.
+   */
+  _poseSlideKick(t, horiz) {
+    const B = this.B;
+    const k = smoothstep(0, 0.10, t);
+    const skid = Math.sin(t * 30) * 0.03 * clamp01(horiz / 6);
+    this._rootPitch = 1.05 * k;                  // +pitch = lying BACK
+    this._rootPitchDrv = true;
+    this._rootRoll += 0.32 * k;
+    this._rootY -= 0.40 * k;
+    B.upperLegR.tx = 0.30 * k + skid; B.lowerLegR.tx = -0.04 * k; B.footR.tx = -0.45 * k;
+    B.upperLegL.tx = 1.10 * k; B.lowerLegL.tx = -1.55 * k; B.footL.tx = 0.30 * k;
+    B.upperLegL.tz = -0.20 * k;
+    B.upperArmL.tx = -0.70 * k; B.upperArmL.tz = -0.55 * k; B.lowerArmL.tx = 0.25;  // hand on the floor
+    B.upperArmR.tx = 1.60 * k; B.upperArmR.tz = 0.65 * k; B.lowerArmR.tx = 0.9;    // up for balance
+    B.spine.tx = -0.30 * k; B.chest.tx = -0.25 * k;         // curl up off the floor
+    B.neck.tx = -0.25 * k; B.head.tx = -0.45 * k;           // eyes down the slide
+    this._squint = 0.3 * k;
+  }
+
+  /**
+   * LEDGE HANG — both mittens over the lip, arms up and straight, body close to
+   * the face, legs dangling; SHIMMY swings hand over hand toward `ledgeDir`.
+   * The rig is nudged toward the wall and up so the hands meet the lip the
+   * controller hangs him from (LEDGE_HANG_H, lip at head height).
+   */
+  _poseLedgeHang(dt, player) {
+    const B = this.B;
+    const dir = player ? numOr(player.ledgeDir, 0) : 0;
+    if (dir !== 0) this._ledgePh += dt * 9.0;
+    const ph = this._ledgePh;
+    const sh = dir !== 0 ? Math.sin(ph) : 0;
+    const sway = Math.sin(this._breathe * 1.3) * 0.05;
+    this._rootZ -= 0.13;                         // chest to the wall (−Z is forward)
+    this._rootY += 0.05;
+    this._rootPitch = -0.12;
+    this._rootRoll += dir * 0.06 + sh * 0.05;
+    // arms: up and forward to the lip (tx ~2.5 points the tip up-and-ahead)
+    B.upperArmR.tx = 2.50 + (dir > 0 ? Math.max(0, sh) : Math.max(0, -sh)) * 0.10;
+    B.upperArmL.tx = 2.50 + (dir > 0 ? Math.max(0, -sh) : Math.max(0, sh)) * 0.10;
+    B.upperArmR.tz = 0.30 + dir * 0.18 * (0.5 + 0.5 * sh);
+    B.upperArmL.tz = -0.30 + dir * 0.18 * (0.5 - 0.5 * sh);
+    B.lowerArmR.tx = 0.08; B.lowerArmL.tx = 0.08;
+    B.handR.tx = 0.75; B.handL.tx = 0.75;        // mittens curled over the lip
+    // legs dangle, swaying; shimmy walks them along the wall
+    B.upperLegR.tx = 0.14 + sway + Math.max(0, sh) * 0.25; B.upperLegL.tx = 0.06 - sway + Math.max(0, -sh) * 0.25;
+    B.upperLegR.tz = 0.05 + dir * 0.10; B.upperLegL.tz = -0.05 + dir * 0.10;
+    B.lowerLegR.tx = -0.30 - Math.max(0, sh) * 0.35; B.lowerLegL.tx = -0.18 - Math.max(0, -sh) * 0.35;
+    B.footR.tx = -0.35; B.footL.tx = -0.35;
+    B.spine.tx = 0.06; B.chest.tx = 0.08;
+    B.neck.tx = 0.12; B.head.tx = 0.10 + sway * 0.4;   // chin up, peering over
+    B.head.ty = dir * 0.35;                            // look where he shimmies
+  }
+
+  /**
+   * LEDGE CLIMB — the pull-up (arms drive down, a knee comes up onto the lip),
+   * then the stand. `u` follows the controller's own climb clock so the body
+   * and the pose finish together; a mantle is the same shape, faster.
+   */
+  _poseLedgeClimb(t, player) {
+    const B = this.B;
+    const dur = player ? numOr(player._ledgeClimbDur, 0.46) : 0.46;
+    const u = clamp01(t / Math.max(0.05, dur));
+    const pull = smoothstep(0.0, 0.45, u) * (1 - smoothstep(0.62, 0.92, u));
+    const reach = 1 - smoothstep(0.0, 0.35, u);
+    const knee = smoothstep(0.25, 0.55, u) * (1 - smoothstep(0.72, 1.0, u));
+    this._rootZ -= 0.13 * reach;
+    this._rootPitch = -0.12 * reach - 0.45 * pull;           // over the lip
+    // arms: from overhead grip to pushing down on the lip beside the hips
+    B.upperArmR.tx = 2.5 * reach + 0.25 * pull; B.upperArmL.tx = 2.5 * reach + 0.25 * pull;
+    B.upperArmR.tz = 0.30 + 0.25 * pull; B.upperArmL.tz = -0.30 - 0.25 * pull;
+    B.lowerArmR.tx = 0.10 * reach + 1.10 * pull; B.lowerArmL.tx = 0.10 * reach + 1.10 * pull;
+    B.handR.tx = 0.6 * reach; B.handL.tx = 0.6 * reach;
+    // the right knee comes up onto the lip, the left leg follows
+    B.upperLegR.tx = 1.45 * knee + 0.15 * reach; B.lowerLegR.tx = -2.0 * knee - 0.3 * reach;
+    B.upperLegL.tx = 0.45 * pull + 0.1 * reach; B.lowerLegL.tx = -0.8 * pull - 0.2 * reach;
+    B.footR.tx = 0.4 * knee; B.footL.tx = -0.3 * reach;
+    B.spine.tx = 0.18 * pull; B.chest.tx = 0.14 * pull;
+    B.head.tx = 0.15 * reach - 0.1 * pull;
+    this._squint = 0.4 * pull;
+  }
+
+  /**
+   * PICK UP / PUT DOWN — bend at the knees, both mittens to the object in front,
+   * then lift it up over the head (a put-down plays the same path backwards).
+   */
+  _posePickup(t, player) {
+    const B = this.B;
+    const put = !!(player && player._putting);
+    let u = clamp01(t / 0.26);
+    if (put) u = 1 - u;
+    const bend = smoothstep(0.0, 0.40, u) * (1 - smoothstep(0.45, 0.9, u));
+    const lift = smoothstep(0.40, 1.0, u);
+    this._rootPitch = -0.55 * bend;
+    this._rootY -= 0.28 * bend;
+    B.upperLegR.tx = 0.95 * bend; B.upperLegL.tx = 0.95 * bend;
+    B.lowerLegR.tx = -1.35 * bend; B.lowerLegL.tx = -1.35 * bend;
+    B.footR.tx = 0.45 * bend; B.footL.tx = 0.45 * bend;
+    // arms: down to the object, then overhead (the carry grip)
+    const armTx = lerp(1.05, 2.75, lift) * (bend > lift ? 1 : 1);
+    B.upperArmR.tx = armTx * Math.max(bend, lift); B.upperArmL.tx = armTx * Math.max(bend, lift);
+    B.upperArmR.tz = 0.34 + 0.08 * lift; B.upperArmL.tz = -0.34 - 0.08 * lift;
+    B.lowerArmR.tx = lerp(0.15, 0.60, lift); B.lowerArmL.tx = lerp(0.15, 0.60, lift);
+    B.handR.tx = 0.4; B.handL.tx = 0.4;
+    B.spine.tx = -0.10 * bend; B.head.tx = -0.25 * bend + 0.10 * lift;
+    this._squint = 0.35 * bend;
+  }
+
+  /** THROW — the load goes back over the head, then the whole body whips forward. */
+  _poseThrow(t) {
+    const B = this.B;
+    const u = clamp01(t / 0.28);
+    const back = smoothstep(0, 0.2, u) * (1 - smoothstep(0.2, 0.42, u));
+    const whip = smoothstep(0.18, 0.45, u) * (1 - smoothstep(0.7, 1.0, u));
+    B.upperArmR.tx = 2.75 + 0.45 * back - 1.55 * whip; B.upperArmL.tx = 2.75 + 0.45 * back - 1.55 * whip;
+    B.upperArmR.tz = 0.30; B.upperArmL.tz = -0.30;
+    B.lowerArmR.tx = 0.6 + 0.5 * back - 0.55 * whip; B.lowerArmL.tx = 0.6 + 0.5 * back - 0.55 * whip;
+    this._rootPitch = 0.18 * back - 0.30 * whip;
+    B.spine.tx = 0.10 * back - 0.20 * whip;
+    B.upperLegL.tx = 0.45 * whip; B.lowerLegL.tx = -0.35 * whip;   // the step into it
+    B.upperLegR.tx = -0.25 * whip;
+    B.head.tx = 0.15 * back;
+    this._squint = 0.3 * whip;
+  }
+
+  /**
+   * CREST GET — a crouch, a hop with a full spin and a fist to the sky, then fist
+   * pumps and a bounce for as long as the Game holds the celebration.
+   */
+  _poseCelebrate(t) {
+    const B = this.B;
+    const crouch = smoothstep(0, CELEB_CROUCH * 0.8, t) * (1 - smoothstep(CELEB_CROUCH * 0.8, CELEB_CROUCH, t));
+    const hopU = clamp01((t - CELEB_CROUCH) / (CELEB_HOP - CELEB_CROUCH));
+    const inHop = t > CELEB_CROUCH && t < CELEB_HOP;
+    const pose = smoothstep(CELEB_CROUCH, CELEB_CROUCH + 0.12, t);
+    // the crouch
+    this._poseCrouchOverlay(0.55 * crouch);
+    this._rootY -= 0.20 * crouch;
+    // the hop: an arc on the rig, and one full turn
+    if (inHop) {
+      this._rootY += Math.sin(hopU * Math.PI) * 0.42;
+      this._flipYaw = TAU * smoothstep(0, 1, hopU);
+      this._flipDrvY = true;
+      this._flipDecay = 0.3;
+    }
+    // after the hop: fist pumps and a springy bounce
+    const after = t > CELEB_HOP ? t - CELEB_HOP : 0;
+    const pump = after > 0 ? Math.sin(after * 11) : 0;
+    const bounce = after > 0 ? Math.abs(Math.sin(after * 5.5)) : 0;
+    this._rootY += bounce * 0.06;
+    // right fist to the sky, left arm out in the V
+    B.upperArmR.tx = pose * (2.95 + pump * 0.18); B.upperArmR.tz = pose * 0.25;
+    B.lowerArmR.tx = pose * (0.05 + Math.max(0, -pump) * 0.6);
+    B.handR.tx = pose * 0.2;
+    B.upperArmL.tx = pose * 2.25; B.upperArmL.tz = -pose * 0.95;
+    B.lowerArmL.tx = pose * 0.15;
+    B.upperLegR.tx = inHop ? 0.9 * Math.sin(hopU * Math.PI) : 0.05 * bounce;
+    B.lowerLegR.tx = inHop ? -1.4 * Math.sin(hopU * Math.PI) : -0.1 * bounce;
+    B.upperLegL.tx = inHop ? 0.3 * Math.sin(hopU * Math.PI) : 0;
+    B.lowerLegL.tx = inHop ? -0.5 * Math.sin(hopU * Math.PI) : 0;
+    B.chest.tx = 0.10 * pose;                      // chest out
+    B.head.tx = 0.30 * pose;                       // face up to the crest
+    B.head.tz = 0.10 * pump * pose;
+    this._squint = 0.55 * pose;                    // a beaming squint
+    this._noIK = inHop;
+  }
+
+  /**
+   * HARD LANDING — a three-point landing: one knee down, a mitten planted on the
+   * floor ahead, the other arm thrown back; a head shake follows on the way up.
+   */
+  _poseHardLand(t) {
+    const B = this.B;
+    const f = clamp01(t / Math.max(0.06, TUNE.hardLandLag));
+    const k = 1 - smoothstep(0.55, 1.0, f);
+    this._rootY -= 0.44 * k;
+    this._rootPitch = -0.30 * k;
+    B.upperLegR.tx = 1.45 * k; B.lowerLegR.tx = -2.25 * k; B.footR.tx = 0.80 * k;  // knee down
+    B.upperLegL.tx = 0.55 * k; B.lowerLegL.tx = -1.30 * k; B.footL.tx = 0.60 * k;
+    B.upperLegL.tz = -0.22 * k; B.upperLegR.tz = 0.10 * k;
+    B.upperArmR.tx = 1.10 * k; B.upperArmR.tz = 0.20 * k; B.lowerArmR.tx = 0.20 * k;   // hand on the floor
+    B.handR.tx = -0.5 * k;
+    B.upperArmL.tx = -0.85 * k; B.upperArmL.tz = -0.85 * k; B.lowerArmL.tx = 0.4;      // arm thrown back
+    B.spine.tx = 0.30 * k; B.chest.tx = 0.22 * k;
+    B.head.tx = -0.10 * k;
+    this._squint = 0.8 * k;
+  }
+
+  /**
+   * Turn-in-place + turn lean. Standing (or creeping) while the facing swings,
+   * the feet shuffle round under a body whose head leads and hips lag; at a
+   * walk the chest twists into the turn. The run keeps the contract's lean.
+   */
+  _overlayTurn(anim, dt) {
+    if (!this._grounded) return;
+    if (anim !== 'idle' && anim !== 'run' && anim !== 'crouch' && anim !== 'crouchwalk') return;
+    const B = this.B;
+    const r = this._turnRate;
+    const slow = 1 - clamp01((this._speed - 0.8) / 2.4);        // 1 standing .. 0 by a jog
+    const k = clamp((Math.abs(r) - TURN_SHUFFLE_RATE * 0.5) / (TURN_SHUFFLE_RATE * 2), 0, 1) * slow;
+    const turn = clamp(r / 8, -1, 1);
+    // the head leads, the shoulders follow, the hips lag
+    B.head.ty += turn * 0.38 * slow;
+    B.chest.ty += turn * 0.20 * slow;
+    B.hips.ty += -turn * 0.16 * slow;
+    if (k <= 0.01) return;
+    this._turnPh += Math.abs(r) * dt * 1.3;
+    if (this._turnPh > 1e4) this._turnPh -= 1e4;
+    const s = Math.sin(this._turnPh * 2.2);
+    B.upperLegR.tx += Math.max(0, s) * 0.42 * k; B.lowerLegR.tx -= Math.max(0, s) * 0.70 * k;
+    B.upperLegL.tx += Math.max(0, -s) * 0.42 * k; B.lowerLegL.tx -= Math.max(0, -s) * 0.70 * k;
+    B.upperLegR.tz += turn * 0.10 * k; B.upperLegL.tz += turn * 0.10 * k;
+    this._rootRoll += turn * 0.05 * k;
+    this._rootY += Math.abs(s) * 0.015 * k;
+  }
+
+  /**
+   * CARRY — whatever the legs do (idle, carry-walk, jump, fall), the arms hold
+   * the load up over the head and the gait waddles under the weight. The arm
+   * swing of the run cycle is cancelled, not blended over.
+   */
+  _overlayCarry(anim, player) {
+    const carrying = !!(player && player.carrying);
+    if (!carrying || anim === 'pickup' || anim === 'throw' || anim === 'dead') return;
+    const B = this.B;
+    const bob = Math.sin(this._breathe * 1.5) * 0.04;
+    B.upperArmR.tx = 2.72 + bob; B.upperArmL.tx = 2.72 + bob;
+    B.upperArmR.tz = 0.40; B.upperArmL.tz = -0.40;
+    B.lowerArmR.tx = 0.62; B.lowerArmL.tx = 0.62;
+    B.handR.tx = 0.45; B.handL.tx = 0.45;
+    B.upperArmR.cx = 0; B.upperArmL.cx = 0; B.lowerArmR.cx = 0; B.lowerArmL.cx = 0;
+    B.chest.cy = 0; B.chest.tx = 0.06; B.spine.tx = -0.02;
+    B.head.tx += 0.08;
+    // the waddle: a heavier side-to-side roll on the stride
+    if (anim === 'run' || anim === 'crouchwalk') {
+      const walkMix = clamp01((this._speed - 0.3) / (TUNE.speedWalk - 0.2));
+      this._rootRoll += Math.sin(this._phase) * 0.09 * walkMix;
+      this._rootY -= 0.03 * walkMix;
+    }
+  }
+
+  /** An AIR throw has no state of its own: the arms whip forward for 0.3 s. */
+  _overlayThrowAir(anim, player) {
+    if (this._grounded || !player) return;
+    const tt = numOr(player.throwT, 9);
+    if (tt > 0.32) return;
+    const B = this.B;
+    const whip = smoothstep(0, 0.10, tt) * (1 - smoothstep(0.18, 0.32, tt));
+    B.upperArmR.tx = lerp(B.upperArmR.tx, 1.2, whip); B.upperArmL.tx = lerp(B.upperArmL.tx, 1.2, whip);
+    B.lowerArmR.tx = lerp(B.lowerArmR.tx, 0.1, whip); B.lowerArmL.tx = lerp(B.lowerArmL.tx, 0.1, whip);
+    void anim;
+  }
+
+  /**
+   * HURT — a critter's shove: the head snaps back, the arms fly up to guard, the
+   * body recoils and the eyes squeeze shut, fading out over the reaction.
+   */
+  _overlayHurt(anim, player) {
+    if (!player || anim === 'dead') return;
+    const h = numOr(player.hurtT, 0);
+    if (h <= 0) return;
+    const B = this.B;
+    const w = smoothstep(0, 0.18, h) * clamp01(h / 0.55 + 0.25);
+    const jolt = Math.sin(h * 40) * 0.05 * w;
+    B.head.tx = lerp(B.head.tx, 0.40, w) + jolt;
+    B.neck.tx = lerp(B.neck.tx, 0.20, w);
+    B.chest.tx = lerp(B.chest.tx, 0.30, w);
+    B.upperArmR.tx = lerp(B.upperArmR.tx, 1.85, w); B.upperArmL.tx = lerp(B.upperArmL.tx, 1.65, w);
+    B.upperArmR.tz = lerp(B.upperArmR.tz, 0.55, w); B.upperArmL.tz = lerp(B.upperArmL.tz, -0.65, w);
+    B.lowerArmR.tx = lerp(B.lowerArmR.tx, 1.55, w); B.lowerArmL.tx = lerp(B.lowerArmL.tx, 1.45, w);
+    this._rootPitch += 0.22 * w;
+    this._rootRoll += jolt;
+    this._squint = Math.max(this._squint, 0.9 * w);
+  }
+
+  /**
+   * LOOK-AT — Nim notices things: the nearest creature (or a carryable) within
+   * LOOK_AT_RANGE turns his head and eyes, with the chest taking a share of a
+   * wide look. Rescanned 6x a second, blended in and out, never during a flip.
+   * Allocation-free (world arrays are walked, nothing is collected).
+   */
+  _overlayLookAt(anim, player, dt) {
+    const B = this.B;
+    const allowed = LOOK_AT_ANIMS[anim] === 1 && this._idleT < IDLE_SIT_AT;
+    this._lookScanT -= dt;
+    if (this._lookScanT <= 0) {
+      this._lookScanT = 0.16;
+      this._lookTgt = allowed ? this._findLookTarget(player) : null;
+    }
+    const tg = this._lookTgt;
+    let want = 0;
+    if (allowed && tg && tg.pos) {
+      const rp = this.root.position;
+      const dx = tg.pos.x - rp.x, dz = tg.pos.z - rp.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 0.3 && dist < LOOK_AT_RANGE) {
+        const yawTo = Math.atan2(-dx, -dz);
+        let rel = yawTo - this.root.rotation.y;
+        rel -= TAU * Math.round(rel / TAU);
+        if (Math.abs(rel) < 1.9) {                         // not over his own shoulder
+          want = 1 - smoothstep(LOOK_AT_RANGE * 0.7, LOOK_AT_RANGE, dist);
+          this._lookAtYaw = damp(this._lookAtYaw, clamp(rel, -1.1, 1.1), 7, dt);
+          const dy = (tg.pos.y + 0.3) - (rp.y + 1.25);
+          this._lookAtPitch = damp(this._lookAtPitch, clamp(Math.atan2(dy, dist), -LOOK_AT_PITCH_MAX, LOOK_AT_PITCH_MAX), 7, dt);
+        }
+      }
+    }
+    this._lookW = damp(this._lookW, want, 5, dt);
+    const w = this._lookW;
+    if (w < 0.01) { this._lookEye = 0; return; }
+    const yaw = this._lookAtYaw * w;
+    B.head.ty += clamp(yaw, -LOOK_YAW_MAX, LOOK_YAW_MAX);
+    B.neck.ty += clamp(yaw * 0.35, -0.3, 0.3);
+    /* past the head's own range the chest turns too */
+    const over = yaw > LOOK_YAW_MAX ? yaw - LOOK_YAW_MAX : (yaw < -LOOK_YAW_MAX ? yaw + LOOK_YAW_MAX : 0);
+    B.chest.ty += over * 0.8;
+    B.head.tx += this._lookAtPitch * w;
+    this._lookEye = clamp(yaw / LOOK_YAW_MAX, -1, 1);
+  }
+
+  /** Nearest creature / loose carryable within LOOK_AT_RANGE (no allocation). */
+  _findLookTarget(player) {
+    const w = player && player.world;
+    const rp = this.root.position;
+    let best = null, bestD = LOOK_AT_RANGE * LOOK_AT_RANGE;
+    const cr = w && w.critters;
+    if (cr && cr.length) {
+      for (let i = 0; i < cr.length; i++) {
+        const c = cr[i];
+        if (!c || c.enabled === false || c.alive === false || !c.pos) continue;
+        if (c.state === 'squished' || c.state === 'dead' || c.state === 'gone') continue;
+        const dx = c.pos.x - rp.x, dy = c.pos.y - rp.y, dz = c.pos.z - rp.z;
+        const d2 = dx * dx + dz * dz + dy * dy * 0.5;
+        if (d2 < bestD) { bestD = d2; best = c; }
+      }
+    }
+    const reg = carryables();
+    for (let i = 0; i < reg.length; i++) {
+      const o = reg[i];
+      if (!o || !o.pos || o === (player && player.carrying) || o.carryable !== true) continue;
+      const dx = o.pos.x - rp.x, dz = o.pos.z - rp.z;
+      const d2 = (dx * dx + dz * dz) * 2.2;                // prefer a creature over a crate
+      if (d2 < bestD) { bestD = d2; best = o; }
+    }
+    return best;
+  }
+
+  /**
+   * Put the carried object in the mittens: the wrist midpoint, lifted by the
+   * object's half size. Publishes it to the controller (`carryHand`, used next
+   * frame for logic — the throw's release point) and places the object NOW so it
+   * never trails the hands. During a lift / put-down it blends from / to the floor
+   * on the same curve the controller uses.
+   */
+  _holdCarried(p, dt, facing, anim) {
+    const o = p.carrying;
+    if (!o) return;
+    _v0.setFromMatrixPosition(this.bones.handR.matrixWorld);
+    _v1.setFromMatrixPosition(this.bones.handL.matrixWorld);
+    _v0.add(_v1).multiplyScalar(0.5);
+    const half = typeof o.size === 'number' ? o.size * 0.5 : 0.25;
+    _v0.y += half * 0.92 + 0.07;
+    if (p.carryHand && typeof p.carryHand.copy === 'function') { p.carryHand.copy(_v0); p.carryHandValid = true; }
+    if (anim === 'pickup') {
+      const u = clamp01(numOr(p.stateT, 0) / 0.26);
+      if (p._putting && p._carryTo) {
+        _v0.lerp(p._carryTo, smoothstep(0.35, 0.80, u));
+      } else if (p._carryFrom) {
+        _v2.copy(p._carryFrom).lerp(_v0, smoothstep(0.30, 0.75, u));
+        _v0.copy(_v2);
+      }
+    }
+    holdCarried(o, p, _v0, facing, dt);
   }
 
   /**
@@ -4292,6 +4859,128 @@ export class Hero {
     } else {
       this._lookYaw = damp(this._lookYaw, 0, 6, Math.max(dt, 1 / 120));
     }
+
+    /* ---- stage 1: idle VARIANTS (only the real idle state, not the run's
+       standing fallback). Plain realms: a stretch at 10 s, then he sits down at
+       15.5 s and stays sat. The cold (rime, snow, ice) shivers and the furnace
+       (ember) pants, from 2.5 s, and both sit the same way later. ---- */
+    if (this._anim !== 'idle') return;
+    const it = this._idleT;
+    const surf = this._surf;
+    const cold = this.themeId === 'rime' || surf === 'snow' || surf === 'ice';
+    const hot = this.themeId === 'ember';
+    if (it > IDLE_THEMED_AT && (cold || hot)) {
+      const w = smoothstep(IDLE_THEMED_AT, IDLE_THEMED_AT + 0.6, it) * (1 - smoothstep(IDLE_SIT_AT, IDLE_SIT_AT + 0.4, it) * (hot ? 1 : 0));
+      if (cold) this._poseShiver(w); else if (w > 0.01) this._posePant(w, it);
+    } else if (!cold && !hot) {
+      const sT = it - IDLE_STRETCH_AT;
+      if (sT > 0 && sT < IDLE_STRETCH_LEN) this._poseStretch(sT);
+    }
+    if (it > IDLE_SIT_AT) this._poseSit(smoothstep(IDLE_SIT_AT, IDLE_SIT_AT + IDLE_SIT_IN, it), it - IDLE_SIT_AT, cold);
+  }
+
+  /** Idle STRETCH: arms up over the head, a lean back, a yawn and a side bend. */
+  _poseStretch(sT) {
+    const B = this.B;
+    const w = smoothstep(0, 0.55, sT) * (1 - smoothstep(IDLE_STRETCH_LEN - 0.7, IDLE_STRETCH_LEN, sT));
+    const side = Math.sin(sT * 1.6) * 0.14;
+    B.upperArmR.tx = lerp(B.upperArmR.tx, 3.02, w); B.upperArmL.tx = lerp(B.upperArmL.tx, 3.02, w);
+    B.upperArmR.tz = lerp(B.upperArmR.tz, 0.32, w); B.upperArmL.tz = lerp(B.upperArmL.tz, -0.32, w);
+    B.lowerArmR.tx = lerp(B.lowerArmR.tx, 0.02, w); B.lowerArmL.tx = lerp(B.lowerArmL.tx, 0.02, w);
+    B.handR.tx = lerp(B.handR.tx, -0.35, w); B.handL.tx = lerp(B.handL.tx, -0.35, w);
+    B.spine.tx += 0.14 * w; B.chest.tx += 0.10 * w;
+    B.chest.tz += side * w;
+    B.head.tx += 0.38 * w;
+    this._rootPitch += 0.12 * w;
+    this._rootY += 0.025 * w;
+    this._squint = Math.max(this._squint, 0.75 * w);         // the yawn
+  }
+
+  /**
+   * Idle SIT: down onto the ground, legs out, leaning back on the hands with the
+   * boots swinging — or, in the cold, knees hugged to the chest. After half a
+   * minute he starts to nod off.
+   */
+  _poseSit(w, sT, cold) {
+    const B = this.B;
+    if (w <= 0.001) return;
+    this._noIK = true;
+    this._rootY -= 0.47 * w;
+    this._rootPitch += (cold ? -0.10 : 0.10) * w;
+    const swing = Math.sin(sT * 2.1);
+    B.upperLegR.tx = lerp(B.upperLegR.tx, cold ? 1.85 : 1.45, w);
+    B.upperLegL.tx = lerp(B.upperLegL.tx, cold ? 1.85 : 1.45, w);
+    B.upperLegR.tz = lerp(B.upperLegR.tz, 0.14, w); B.upperLegL.tz = lerp(B.upperLegL.tz, -0.14, w);
+    B.lowerLegR.tx = lerp(B.lowerLegR.tx, cold ? -2.1 : -0.40 + swing * 0.18, w);
+    B.lowerLegL.tx = lerp(B.lowerLegL.tx, cold ? -2.1 : -0.40 - swing * 0.18, w);
+    B.footR.tx = lerp(B.footR.tx, cold ? 0.4 : 0.05, w); B.footL.tx = lerp(B.footL.tx, cold ? 0.4 : 0.05, w);
+    if (cold) {
+      /* arms wrapped round the knees, forehead down */
+      B.upperArmR.tx = lerp(B.upperArmR.tx, 1.05, w); B.upperArmL.tx = lerp(B.upperArmL.tx, 1.05, w);
+      B.upperArmR.tz = lerp(B.upperArmR.tz, 0.18, w); B.upperArmL.tz = lerp(B.upperArmL.tz, -0.18, w);
+      B.lowerArmR.tx = lerp(B.lowerArmR.tx, 1.45, w); B.lowerArmL.tx = lerp(B.lowerArmL.tx, 1.45, w);
+      B.spine.tx += -0.25 * w; B.head.tx += -0.30 * w;
+    } else {
+      /* leaning back on both hands */
+      B.upperArmR.tx = lerp(B.upperArmR.tx, -0.62, w); B.upperArmL.tx = lerp(B.upperArmL.tx, -0.62, w);
+      B.upperArmR.tz = lerp(B.upperArmR.tz, 0.42, w); B.upperArmL.tz = lerp(B.upperArmL.tz, -0.42, w);
+      B.lowerArmR.tx = lerp(B.lowerArmR.tx, 0.10, w); B.lowerArmL.tx = lerp(B.lowerArmL.tx, 0.10, w);
+      B.spine.tx += 0.06 * w;
+      B.head.tx += 0.06 * w;
+    }
+    /* nodding off */
+    const drowsy = smoothstep(14, 18, sT);
+    if (drowsy > 0) {
+      const nod = Math.max(0, Math.sin(sT * 0.9)) * drowsy;
+      B.head.tx += -0.35 * nod * w;
+      this._squint = Math.max(this._squint, (0.55 + 0.35 * nod) * drowsy * w);
+    }
+  }
+
+  /** SHIVER (the cold): hunched, arms hugged across the chest, a fast tremble. */
+  _poseShiver(w) {
+    const B = this.B;
+    if (w <= 0.001) return;
+    const tr = Math.sin(this._breathe * 38);
+    B.upperArmR.tx = lerp(B.upperArmR.tx, 0.78, w); B.upperArmL.tx = lerp(B.upperArmL.tx, 0.70, w);
+    B.upperArmR.tz = lerp(B.upperArmR.tz, -0.02, w); B.upperArmL.tz = lerp(B.upperArmL.tz, 0.02, w);
+    B.lowerArmR.tx = lerp(B.lowerArmR.tx, 2.0, w); B.lowerArmL.tx = lerp(B.lowerArmL.tx, 1.9, w);
+    B.upperLegR.tz = lerp(B.upperLegR.tz, -0.05, w); B.upperLegL.tz = lerp(B.upperLegL.tz, 0.05, w);
+    B.chest.tx += -0.10 * w; B.head.tx += -0.20 * w;
+    this._rootRoll += tr * 0.02 * w;
+    B.hips.ty += tr * 0.03 * w;
+    B.head.ty += Math.sin(this._breathe * 31) * 0.05 * w;
+    this._rootY -= 0.04 * w;
+    this._squint = Math.max(this._squint, 0.4 * w);
+  }
+
+  /** PANT (the furnace): hands on the knees, chest heaving, wiping the brow now and then. */
+  _posePant(w, it) {
+    const B = this.B;
+    const br = Math.sin(this._breathe * 5.2);
+    this._rootPitch -= 0.28 * w;
+    B.spine.tx += -0.26 * w;
+    B.chest.tx += (-0.12 + br * 0.06) * w;
+    B.upperLegR.tx = lerp(B.upperLegR.tx, 0.42, w); B.upperLegL.tx = lerp(B.upperLegL.tx, 0.42, w);
+    B.lowerLegR.tx = lerp(B.lowerLegR.tx, -0.60, w); B.lowerLegL.tx = lerp(B.lowerLegL.tx, -0.60, w);
+    B.footR.tx = lerp(B.footR.tx, 0.18, w); B.footL.tx = lerp(B.footL.tx, 0.18, w);
+    B.upperArmR.tx = lerp(B.upperArmR.tx, 0.82, w); B.upperArmL.tx = lerp(B.upperArmL.tx, 0.82, w);
+    B.upperArmR.tz = lerp(B.upperArmR.tz, 0.28, w); B.upperArmL.tz = lerp(B.upperArmL.tz, -0.28, w);
+    B.lowerArmR.tx = lerp(B.lowerArmR.tx, 0.30, w); B.lowerArmL.tx = lerp(B.lowerArmL.tx, 0.30, w);
+    B.head.tx += 0.42 * w; B.neck.tx += 0.12 * w;
+    this._rootY -= (0.08 + br * 0.012) * w;
+    /* the brow wipe, every 5.5 s */
+    const cyc = it % 5.5;
+    const wipe = smoothstep(3.5, 3.85, cyc) * (1 - smoothstep(4.8, 5.2, cyc)) * w;
+    if (wipe > 0) {
+      B.upperArmR.tx = lerp(B.upperArmR.tx, 2.30, wipe);
+      B.upperArmR.tz = lerp(B.upperArmR.tz, -0.10, wipe);
+      B.lowerArmR.tx = lerp(B.lowerArmR.tx, 1.75, wipe);
+      B.handR.tz = Math.sin(cyc * 9) * 0.5 * wipe;
+      this._rootPitch += 0.22 * wipe;
+      B.spine.tx += 0.20 * wipe;
+    }
+    this._squint = Math.max(this._squint, 0.3 * w);
   }
 
   /**
@@ -4361,6 +5050,18 @@ export class Hero {
       B.hips.ty = this._lean * 0.35;
       B.chest.ty = -this._lean * 0.40;
     }
+    /* stage 1: a skid is FRICTION — the planted boot chatters on the ground and
+       the arms windmill for balance, fading as the speed goes */
+    const t = this._animT;
+    const sp = clamp01(this._speed / 6);
+    B.footR.tx += Math.sin(t * 42) * 0.10 * sp;
+    B.lowerLegR.tx += Math.sin(t * 42 + 0.8) * 0.06 * sp;
+    B.upperArmR.tx += Math.sin(t * 10) * 0.35 * sp;
+    B.upperArmL.tx += Math.sin(t * 10 + 2.2) * 0.35 * sp;
+    B.upperArmR.tz += Math.cos(t * 10) * 0.12 * sp;
+    B.upperArmL.tz -= Math.cos(t * 10 + 2.2) * 0.12 * sp;
+    this._rootRoll += Math.sin(t * 19) * 0.03 * sp;
+    this._squint = 0.3 * sp;
   }
 
   _poseCrouch(k) { this._poseCrouchOverlay(k); this._rootY -= 0.30 * k; }
@@ -5081,9 +5782,10 @@ export class Hero {
   _applyFootPlant(dt) {
     const legs = this._legs;
     const a = this._anim;
-    const off = !this._grounded ||
+    const off = !this._grounded || this._noIK ||
       a === 'slide' || a === 'dive' || a === 'dead' || a === 'cannon' ||
-      a === 'swim' || a === 'swimIdle' || a === 'swimDive' || a === 'climb';
+      a === 'swim' || a === 'swimIdle' || a === 'swimDive' || a === 'climb' ||
+      a === 'kick' || a === 'slideKick' || a === 'ledgeClimb' || a === 'hardLand';
     if (off) {
       // release the foot lock smoothly — a snap on take-off is very visible
       legs[0].penY = damp(legs[0].penY, 0, 16, dt);
@@ -5260,6 +5962,8 @@ export class Hero {
     // dead / hard land: eyes squeezed shut, no random blink needed
     if (anim === 'dead') closed = 1;
     else if (anim === 'hardLand' || anim === 'poundLand') closed = Math.max(closed, 0.75);
+    // stage 1: the pose writers' squint (hurt, joy, effort, cold, heat, drowsy)
+    if (this._squint > closed) closed = Math.min(0.92, this._squint);
 
     const open = 1 - closed * 0.94;
     this._eyePivot.scale.set(1, open, 1);
@@ -5269,7 +5973,7 @@ export class Hero {
     // pivot is at the HEAD origin, so a rotation here is an arc of radius 0.21:
     // the old 0.34 rad slid the irises 71 mm and threw them off the eyeballs
     // entirely. PUPIL_LOOK_* keep the dart inside the 47 mm lens.
-    const wantX = clamp(this._lean, -1, 1) * 0.42 + this._lookYaw * 0.55;
+    const wantX = clamp(this._lean, -1, 1) * 0.42 + this._lookYaw * 0.55 + this._lookEye * 0.6;
     const wantY = clamp(-this._rootPitch * 0.8, -0.5, 0.5);
     this._pupilX = damp(this._pupilX, wantX, 11, dt);
     this._pupilY = damp(this._pupilY, wantY, 11, dt);

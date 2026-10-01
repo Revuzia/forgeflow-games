@@ -109,6 +109,31 @@
  *  fly           →  fall           ground contact / setFly(false)
  *  any           →  dead           kill(cause) ('death')
  *
+ *  STAGE 1 VERBS (sm64_bar.md §1 — "no punch, kick, grab, throw or ledge-grab").
+ *  The ACTION button is the existing DIVE binding (KeyF / KeyX, pad X) read by
+ *  context, the SM64 way; `input.attackPressed` / `input.grabPressed` are honoured
+ *  too if the input lane ever adds dedicated keys. NOT ONE JUMP NUMBER CHANGES: every
+ *  row below is entered from a press or a contact the old machine ignored.
+ *  idle/run/…    →  punch1         action↓, grounded, sp < dive.minSpeed, nothing to lift
+ *  punch1        →  punch2         action↓ inside the chain window     (→ idle/run at end)
+ *  punch2        →  kick           action↓ inside the chain window
+ *  run/crouchwalk→  slideKick      crouch‸ + action↓ at sp ≥ dive.minSpeed (was a dive)
+ *  slideKick     →  jump1 (hop)    jump↓ on the ground phase · → land when it runs out
+ *  jumps, fall   →  airKick        action↓ airborne BELOW the air-dive speed (else: dive)
+ *  idle/walk     →  pickup         action↓ with a carryable in front of the hands
+ *  (carrying)    →  throw          action↓ (ground: a 0.28 s throw state; air: instant)
+ *  (carrying)    →  pickup (put)   crouch↓ grounded: set it down in front
+ *  jumps, fall,  →  ledgeHang      FALLING into a fresh wall contact whose lip is
+ *   wallslide/…                     between feet+0.10 and head+0.30 (a jump that fell
+ *                                   SHORT), lip walkable, room to stand on it
+ *                →  ledgeClimb     …same, lip within 0.95 m of the feet: a quick mantle
+ *  ledgeHang     →  ledgeClimb     jump↓, or the stick held into the wall
+ *                →  fall           stick away / crouch↓ (regrab locked 0.35 s)
+ *                (shimmy)          stick sideways: slide along the lip, re-probed per substep
+ *  ledgeClimb    →  idle/run       stood up on the lip
+ *  any           →  (hurt)         stun() from a critter: `hurtT` reaction + 'hurt' event,
+ *                                   drops whatever is carried
+ *
  * -----------------------------------------------------------------------------
  * 4. ANALOG LAW (measured by _harness/feelcheck.py)
  * -----------------------------------------------------------------------------
@@ -129,7 +154,8 @@
  * 5. WHAT OTHER MODULES READ
  * -----------------------------------------------------------------------------
  *  hero.js      : renderPos, facing, anim, animT, speedNorm, leanX, airborneT,
- *                 groundedT, vel, grounded, state, heroFade
+ *                 groundedT, vel, grounded, state, heroFade, carrying, carryT,
+ *                 throwT, hurtT, ledgeDir, ledgeN, attackHitT, voice, world
  *  camera.js    : renderPos, facing, vel, state, grounded, submerged, headPos
  *  critters.js  : pos, vel, capsule, dead, kill(), stun(), radius, height
  *  collectibles : pos, capsule, radius, height, power, dead
@@ -144,6 +170,8 @@ import {
   Emitter, Ring, clamp, lerp, moveTowardAngle, wrapAngle, shortestAngle,
   headingFromYaw, yawFromHeading,
 } from '../core/util.js';
+import { Voice } from '../core/voice.js';
+import { findCarryable, holdCarried, updateCarryables, carryables, HOLD_Y } from './carry.js';
 
 /* ===========================================================================
  * Module constants — everything TUNE deliberately does not own.
@@ -486,6 +514,83 @@ const CLIMB_REGRAB_LOCK = 0.45;
  */
 const CLIMB_TOP_CLEAR = 0.15;
 
+/* ===========================================================================
+ * STAGE 1 VERBS — strikes, the ledge grab, carrying. Presentation/plumbing
+ * numbers the contract's TUNE does not own; none of them is read by any jump.
+ * ======================================================================== */
+
+/**
+ * The three-hit ground combo and the air kick. `hitA..hitB` is the ACTIVE window
+ * (seconds into the state) during which the strike point is tested every substep
+ * until something registers; `reach` is metres ahead of the capsule axis, `y` the
+ * strike height above the feet, `r` the strike radius, `lunge` the forward shove
+ * (m/s) the body carries into the blow. `chain` is the follow-up the next press buys.
+ */
+const ATK = {
+  punch1: { dur: 0.30, hitA: 0.05, hitB: 0.16, reach: 0.70, r: 0.55, y: 0.95, lunge: 1.9, chain: 'punch2' },
+  punch2: { dur: 0.30, hitA: 0.05, hitB: 0.16, reach: 0.72, r: 0.55, y: 0.95, lunge: 1.9, chain: 'kick' },
+  kick:   { dur: 0.46, hitA: 0.09, hitB: 0.24, reach: 0.92, r: 0.70, y: 0.55, lunge: 2.8, chain: null },
+  airKick: { dur: 0.40, hitA: 0.04, hitB: 0.30, reach: 0.66, r: 0.66, y: 0.45, lunge: 0, chain: null },
+};
+/** A follow-up press is TAKEN from here on (an earlier one is queued until then). */
+const ATTACK_CHAIN_OPEN = 0.10;
+/** Stick authority (fraction of the ground turn rate) while a strike aims. */
+const ATTACK_AIM_TURN = 0.55;
+/** Aiming is only allowed for this long into a strike, then the blow is committed. */
+const ATTACK_AIM_T = 0.06;
+/** Hit-stop (s) and its time scale on a strike that registered. */
+const ATTACK_HITSTOP_S = 0.07;
+const ATTACK_HITSTOP_SCALE = 0.25;
+
+/** SLIDE KICK — crouch-run + action: a low, feet-first lunge that slides out. */
+const SLIDEKICK_SPEED = 10.5;       // m/s along the facing (never below the carried speed)
+const SLIDEKICK_VY = 3.2;           // the low hop into it (apex ~0.15 m)
+const SLIDEKICK_FRICTION = 7.0;     // m/s² on the ground phase
+const SLIDEKICK_END = 1.4;          // the slide runs out below this
+const SLIDEKICK_HOP_T = 0.12;       // ground-phase time before a jump becomes the hop
+const SLIDEKICK_HIT_R = 0.75;
+const SLIDEKICK_HIT_CD = 0.25;      // one creature is not hit twice by one slide
+
+/**
+ * LEDGE GRAB — it may only ever HELP a jump that fell short.
+ *  • only while FALLING (vel.y ≤ 0) out of an airborne jump-family / fall state,
+ *    never out of a dive, a pound, a swim, a climb, a cannon or a glide;
+ *  • only on a FRESH wall contact this substep, heading into the wall (stick, or
+ *    facing with the stick not pulling away);
+ *  • only if the lip is ABOVE the feet (feet+LEDGE_MIN_UP) — a hero whose boots
+ *    clear it lands on it the ordinary way — and within the hands' reach
+ *    (head + LEDGE_REACH_UP), walkable (n.y ≥ LEDGE_MIN_NY) and has room to stand.
+ * The feelcheck kick shaft is 16 m tall and the ladder tops out ~14.1 m, so the
+ * window never meets its lip; the 10 m kick wall likewise (measured, see stage1_hero.md).
+ */
+const LEDGE_FROM = {
+  fall: 1, jump1: 1, jump2: 1, jump3: 1, wallslide: 1, wallkick: 1,
+  sideflip: 1, backflip: 1, longjump: 1, climbKick: 1, airKick: 1,
+};
+const LEDGE_MIN_UP = 0.10;          // lip at least this far above the feet
+const LEDGE_REACH_UP = 0.30;        // hands reach this far above the head
+const LEDGE_MANTLE_BELOW = 0.95;    // lip within this of the feet: mantle straight over
+const LEDGE_HANG_H = 1.42;          // feet this far below the lip while hanging (head at the lip)
+const LEDGE_PROBE_IN = 0.16;        // the lip probe looks down this far past the wall face
+const LEDGE_MIN_NY = 0.75;          // the lip's top must be walkable
+const LEDGE_MAX_FALL = 18.0;        // m/s — faster than this the hands cannot close
+const LEDGE_SNAP_RATE = 6.5;        // m/s the hang settles onto its grip point
+const LEDGE_SHIMMY = 1.35;          // m/s along the lip
+const LEDGE_CLIMB_T = 0.46;         // stick-in climb
+const LEDGE_QUICK_T = 0.32;         // jump climb
+const LEDGE_MANTLE_T = 0.26;        // the fall-short mantle
+const LEDGE_HOLD_IN = 0.14;         // stick held into the wall this long to climb
+const LEDGE_REGRAB_LOCK = 0.35;     // after a drop
+const LEDGE_SKIN = 0.03;            // hang gap between the capsule and the face
+
+/** CARRY. */
+const CARRY_SPEED_MUL = 0.80;       // ground target while carrying (x (1 - heavy*0.5))
+const PICKUP_T = 0.26;              // bend, grab, lift
+const THROW_T = 0.28;               // grounded throw state
+const THROW_FWD = 9.0;              // m/s along the facing, + half the carrier's ground speed
+const THROW_UP = 5.0;               // m/s up, + a third of any rise
+const HURT_T = 0.55;                // the hurt reaction's life
+
 /** Every state the machine can be in. Exported for harnesses. */
 export const STATES = Object.freeze([
   'idle', 'run', 'skid', 'pivot', 'bonk', 'crouch', 'crouchwalk',
@@ -493,10 +598,17 @@ export const STATES = Object.freeze([
   'dive', 'slide', 'slideRecover', 'wallslide', 'wallkick',
   'poundHang', 'poundFall', 'poundLand', 'land', 'hardLand', 'slopeSlide',
   'swimIdle', 'swim', 'swimDive', 'climb', 'climbKick', 'cannon', 'fly', 'dead',
+  // stage 1 verbs
+  'punch1', 'punch2', 'kick', 'airKick', 'slideKick',
+  'ledgeHang', 'ledgeClimb', 'pickup', 'throw',
 ]);
 
 /** States that commit the arc: air control is reduced and never re-aimed. */
-const COMMITTED = { longjump: 1, dive: 1 };
+const COMMITTED = { longjump: 1, dive: 1, slideKick: 1 };
+/** Grounded strike states (the combo). */
+const GROUND_STRIKE = { punch1: 1, punch2: 1, kick: 1 };
+/** Grounded, short, input-light states that end on a clock. */
+const GROUND_BRIEF = { punch1: 1, punch2: 1, kick: 1, pickup: 1, throw: 1 };
 /** States that ignore ordinary ground/air locomotion entirely. */
 const NO_LOCOMOTION = {
   poundHang: 1, poundFall: 1, poundLand: 1, hardLand: 1,
@@ -521,6 +633,19 @@ const _pa = new THREE.Vector3();
 const _pb = new THREE.Vector3();
 const _va = new THREE.Vector3();
 const _vb = new THREE.Vector3();
+/* stage 1 verbs */
+const _hitPos = new THREE.Vector3();
+const _hitDir = new THREE.Vector3();
+const _rayO = new THREE.Vector3();
+const _rayD = new THREE.Vector3();
+const _rayHit = { t: 0, normal: new THREE.Vector3(0, 1, 0), collider: null, heightfield: null };
+const _DOWN = new THREE.Vector3(0, -1, 0);
+const _UP = new THREE.Vector3(0, 1, 0);
+const _throwV = new THREE.Vector3();
+/** Ledge probe result — one shared record, read before the next probe. */
+const _lp = { lipY: 0, face: 0, n: 0, col: null };
+/** Strike snapshot of one critter (did the hit register?). */
+const _snapC = { state: '', hp: 0, stagger: 0, alive: true };
 
 /** Reusable options objects for audio/particles — never allocate to call them. */
 const _sfxOpt = { gain: 1, rate: 1, impact: 0, power: 0 };
@@ -565,6 +690,9 @@ const _fbRes = {
 
 /** Horizontal magnitude without allocating a vector. */
 function hyp2(x, z) { return Math.sqrt(x * x + z * z); }
+
+/** Clamped smoothstep on [0, 1]. */
+function sm01(x) { const t = x < 0 ? 0 : (x > 1 ? 1 : x); return t * t * (3 - 2 * t); }
 
 /**
  * Quake-style directional acceleration: project the current velocity onto the
@@ -685,6 +813,28 @@ export class Player {
     this.lastLandImpact = 0;
     this.lastJumpKind = null;
 
+    /* ── stage 1 verbs (published; hero.js reads them) ─────────────────── */
+    /** The object Nim is carrying (carry.js contract), or null. */
+    this.carrying = null;
+    /** Seconds since the pick-up (0 while not carrying). */
+    this.carryT = 0;
+    /** Seconds since the last throw (large when none) — the hero's throw overlay. */
+    this.throwT = 9;
+    /** Seconds of hurt reaction left (critter knockback). */
+    this.hurtT = 0;
+    /** Seconds since a strike last registered (the hero's follow-through flourish). */
+    this.attackHitT = 9;
+    /** Shimmy direction while hanging: −1 left, 0 still, +1 right (hero-local). */
+    this.ledgeDir = 0;
+    /** The hung wall's outward normal and lip height. */
+    this.ledgeN = new THREE.Vector3();
+    this.ledgeY = 0;
+    /** Nim's voice (core/voice.js) — every event below is forwarded to it. */
+    this.voice = new Voice(audio || null);
+    /** Hands position the HERO publishes each frame for the carried object. */
+    this.carryHand = new THREE.Vector3();
+    this.carryHandValid = false;
+
     /** Death rewind: 0.4 s of {x,y,z,facing} at 60 Hz, SLOT mode (no alloc). */
     this.history = new Ring(HIST_N, histSlot);
 
@@ -716,6 +866,24 @@ export class Player {
     this._crouchGraceT = 0;     // long-jump grace after the crouch press (CROUCH_GRACE)
     this._crouchSpeed = 0;      // the speed carried INTO that crouch press
 
+    /* stage 1 verbs */
+    this._atkHit = false;       // this strike already registered
+    this._atkQueued = false;    // a follow-up press arrived before the chain window
+    this._slideHitCd = 0;       // slide-kick re-hit guard
+    this._wallHitStep = false;  // a wall was touched THIS substep (ledge grab)
+    this._ledgeLockT = 0;       // regrab lock after a drop
+    this._ledgeInT = 0;         // stick held into the wall while hanging
+    this._ledgeMantle = false;  // the climb is a fall-short mantle
+    this._ledgeClimbDur = LEDGE_CLIMB_T;
+    this._ledgeProbeT = 0;      // re-probe cadence while hanging
+    this._ledgeHang = new THREE.Vector3();
+    this._ledgeStand = new THREE.Vector3();
+    this._ledgeFrom = new THREE.Vector3();
+    this._carryFrom = new THREE.Vector3();
+    this._carryTo = new THREE.Vector3();
+    this._carryHold = new THREE.Vector3();
+    this._putting = false;      // the 'pickup' state is a PUT-DOWN
+
     this._cutArmed = false;     // a cuttable jump is rising
     this._cutPending = false;   // released before jumpHoldMin — cut when it expires
     this._fellFromJump = false; // hard landings only come from FALLS
@@ -745,6 +913,8 @@ export class Player {
     this._crouchHeld = false;
     this._divePressLatch = false;
     this._poundPressLatch = false;
+    this._crouchPressLatch = false;
+    this._attackPressLatch = false;
     this._camYaw = 0;
 
     /* ── resolved wish (world space, unit) ─────────────────────────────── */
@@ -792,7 +962,11 @@ export class Player {
     this.killYOverride = null;
     this.killY = -1e5;
 
-    this.stats = { jumps: 0, wallKicks: 0, dives: 0, pounds: 0, deaths: 0, distance: 0, steps: 0 };
+    this.stats = {
+      jumps: 0, wallKicks: 0, dives: 0, pounds: 0, deaths: 0, distance: 0, steps: 0,
+      punches: 0, kicks: 0, slideKicks: 0, airKicks: 0, strikes: 0, strikeHits: 0,
+      ledgeGrabs: 0, ledgeClimbs: 0, ledgeDrops: 0, pickups: 0, throws: 0, puts: 0, hurts: 0,
+    };
 
     /* ── dev/harness hook ─────────────────────────────────────────────── */
     const self = this;
@@ -941,6 +1115,25 @@ export class Player {
     this._poundPressLatch = false;
     this._jumpHeld = false;
     this._crouchHeld = false;
+    this._crouchPressLatch = false;
+    this._attackPressLatch = false;
+
+    /* stage 1 verbs: a respawn drops whatever was carried and forgets every grip */
+    if (this.carrying) this._releaseCarried(false);
+    this.carryT = 0;
+    this.throwT = 9;
+    this.hurtT = 0;
+    this.attackHitT = 9;
+    this.ledgeDir = 0;
+    this.ledgeN.set(0, 0, 0);
+    this._atkHit = false;
+    this._atkQueued = false;
+    this._slideHitCd = 0;
+    this._wallHitStep = false;
+    this._ledgeLockT = 0;
+    this._ledgeInT = 0;
+    this._putting = false;
+    this.carryHandValid = false;
 
     this.history.clear();
     this._pushHistory();
@@ -971,6 +1164,7 @@ export class Player {
     this.bufferT = 0;
     this.coyoteT = 0;
     this._acc = 0;
+    if (this.carrying) this._releaseCarried(false);
     this.stats.deaths++;
     this.prevPos.copy(this.pos);
     this.renderPos.copy(this.pos);
@@ -984,12 +1178,31 @@ export class Player {
     }
   }
 
-  /** Bumbler knockback stun (critters.js calls `stun(seconds)`). */
+  /**
+   * Bumbler knockback stun (critters.js calls `stun(seconds)` after writing the
+   * knockback into `vel`). This is also THE HURT: the reaction clock, the 'hurt'
+   * event (voice, hero flinch), and a hit knocks whatever is carried out of the
+   * hands and the grip off a ledge — the critter's shove already owns `vel`.
+   */
   stun(seconds) {
     const t = +seconds;
     if (!isFinite(t) || t <= 0) return;
     if (t > this.stunT) this.stunT = t;
     this.bufferT = 0;
+    if (this.dead) return;
+    if (this.hurtT <= 0.1) {
+      this.hurtT = HURT_T;
+      this.stats.hurts++;
+      this._ev('hurt', this.pos);
+    }
+    if (this.carrying) this._releaseCarried(true);
+    const st = this.state;
+    if (st === 'ledgeHang' || st === 'ledgeClimb') {
+      this._ledgeLockT = LEDGE_REGRAB_LOCK;
+      this._setState('fall');
+    } else if (GROUND_BRIEF[st] === 1) {
+      this._setState(this.grounded ? 'idle' : 'fall');
+    }
   }
 
   /** Set the active power hat id (collectibles read `player.power`). */
@@ -999,6 +1212,7 @@ export class Player {
   _heavy() { return this.power === 'metal'; }
 
   dispose() {
+    if (this.carrying) this._releaseCarried(false);
     if (this.events && typeof this.events.clear === 'function') {
       try { this.events.clear(); } catch (err) { /* optional API */ }
     }
@@ -1058,6 +1272,7 @@ export class Player {
    */
   enterCannon(def) {
     if (this.dead || !def) return;
+    if (this.carrying) this._releaseCarried(false);
     this._cannon = def;
     readVec(def.p || def.mouth, this.pos, this.pos.x, this.pos.y, this.pos.z);
     this.prevPos.copy(this.pos);
@@ -1106,6 +1321,8 @@ export class Player {
       this.renderPos.copy(this.pos);
       this._wind.set(0, 0, 0);
       this._impulse.set(0, 0, 0);
+      this._attackPressLatch = false;
+      this._crouchPressLatch = false;
       return;
     }
 
@@ -1136,12 +1353,26 @@ export class Player {
       this._pushHistory();
     }
 
+    /* ---- stage 1: the carried object rides the hands; loose ones fly ---- */
+    if (dt > 0) {
+      if (this.carrying) {
+        this._carryHoldPoint(this._carryHold);
+        holdCarried(this.carrying, this, this._carryHold, this.facing, dt);
+      }
+      if (carryables().length) updateCarryables(dt, this);
+      if (this.voice) this.voice.update(dt, this);
+    }
+
     this._wind.set(0, 0, 0);
     this._impulse.set(0, 0, 0);
     this._jumpPressLatch = false;
     this._jumpReleaseLatch = false;
     this._divePressLatch = false;
     this._poundPressLatch = false;
+    this._crouchPressLatch = false;
+    this._attackPressLatch = false;
+    this._actUsed = false;
+    this._crouchUsed = false;
   }
 
   /**
@@ -1168,8 +1399,11 @@ export class Player {
       /* The crouch EDGE remembers the run it interrupted (CROUCH_GRACE): the
          long-jump test reads this speed while the grace runs, so crouch-then-
          jump at a human's pace still fires the move the sign teaches. */
-      if (inp.crouchPressed) { this._crouchGraceT = CROUCH_GRACE; this._crouchSpeed = this.speed; }
+      if (inp.crouchPressed) { this._crouchGraceT = CROUCH_GRACE; this._crouchSpeed = this.speed; this._crouchPressLatch = true; }
       if (inp.divePressed) this._divePressLatch = true;
+      /* A dedicated attack / grab binding, if the input lane ever adds one, reads
+         exactly like the dive button's context (the SM64 "B"). */
+      if (inp.attackPressed || inp.grabPressed) this._attackPressLatch = true;
       /* pound and crouch share ControlLeft/KeyC in DEFAULT_BINDINGS; input.js
          already ORs them into `pound`. A dive press in the same frame WINS
          (contract §11: "Diving with the pound button held is NOT a pound"). */
@@ -1236,12 +1470,26 @@ export class Player {
       if (this._flyT <= 0 && this.state === 'fly') this._setState('fall');
     }
     if (this._jumpT < 10) this._jumpT += dt;
+    if (this.hurtT > 0) this.hurtT -= dt;
+    if (this._ledgeLockT > 0) this._ledgeLockT -= dt;
+    if (this._slideHitCd > 0) this._slideHitCd -= dt;
+    if (this.throwT < 9) this.throwT += dt;
+    if (this.attackHitT < 9) this.attackHitT += dt;
+    if (this.carrying) this.carryT += dt;
+    if (this._comboT > 0) { this._comboT -= dt; if (this._comboT <= 0) this._comboNext = null; }
+    this._wallHitStep = false;
 
     /* ---- 2. wish direction (camera-relative) --------------------------- */
     this._resolveWish();
 
     /* ---- 3. stance ----------------------------------------------------- */
     this._resolveStance();
+
+    /* ---- 3b. hanging / climbing a ledge owns the whole substep ---------- */
+    if (this.state === 'ledgeHang' || this.state === 'ledgeClimb') {
+      this._ledgeSubstep(dt, wasX, wasZ);
+      return;
+    }
 
     /* ---- 4. state entry decisions driven by buttons -------------------- */
     this._preMove(dt);
@@ -1298,6 +1546,9 @@ export class Player {
     /* ---- 13. read the contacts ----------------------------------------- */
     this._readContacts(res, wasGrounded, preVy, dt);
 
+    /* ---- 13b. a jump that fell short catches the lip (LEDGE_*) ---------- */
+    if (this._wallHitStep && !this.grounded && this.vel.y <= 0) this._tryLedgeGrab();
+
     /* ---- 14. gravity, second half -------------------------------------- */
     if (this._skipGravHalf) this._skipGravHalf = false;
     else this._grav(dt * 0.5);
@@ -1333,6 +1584,9 @@ export class Player {
       this.groundedT = 0;
       this.airborneT += dt;
     }
+
+    /* ---- 17b. strikes land where the body ended this substep ----------- */
+    this._strikeTick();
 
     /* ---- 18. late state resolution (what the hero plays) --------------- */
     this._postState();
@@ -1411,8 +1665,9 @@ export class Player {
        `crouching` (see _postState), so reading them back here would latch the
        hero into a permanent crouch the moment the button came up. */
     const wantLow = st === 'dive' || st === 'slide' || st === 'slideRecover' ||
-      st === 'poundLand' ||
-      (this._crouchHeld && this.grounded && st !== 'slopeSlide');
+      st === 'poundLand' || st === 'slideKick' ||
+      (this._crouchHeld && this.grounded && st !== 'slopeSlide' && !this.carrying &&
+        GROUND_BRIEF[st] !== 1);
 
     if (wantLow === this.crouching) return;
 
@@ -1491,10 +1746,31 @@ export class Player {
       this._setState('fall');
     } else if (st === 'swimDive' && this.stateT >= SWIM_DIVE_TIME) {
       this._setState('swim');
+    } else if (GROUND_STRIKE[st] === 1) {
+      /* the combo: a press queued before the window opens is honoured AT the window */
+      const a = ATK[st];
+      if (a.chain && this._atkQueued && this.stateT >= ATTACK_CHAIN_OPEN) this._doAttack(a.chain);
+      else if (this.stateT >= a.dur) {
+        this._comboNext = a.chain;
+        this._comboT = a.chain ? 0.16 : 0;
+        this._setState(this._wmag > 0 ? 'run' : 'idle');
+      }
+    } else if (st === 'pickup' && this.stateT >= PICKUP_T) {
+      this._endPickup();
+    } else if (st === 'throw' && this.stateT >= THROW_T) {
+      this._setState(this._wmag > 0 ? 'run' : 'idle');
     }
 
     /* Stun locks everything except gravity and existing momentum. */
     if (this.stunT > 0) return;
+
+    /* Carrying: crouch sets it down in front (the SM64 "Z" while holding). */
+    if (this.carrying && this._crouchPressLatch && !this._crouchUsed && this.grounded &&
+      GROUND_BRIEF[st] !== 1) {
+      this._crouchUsed = true;
+      this._doPutDown();
+      return;
+    }
 
     /* Cannon: aim with the stick, JUMP fires. */
     if (st === 'cannon') {
@@ -1508,16 +1784,21 @@ export class Player {
 
     /* Ground pound: crouch/pound pressed while airborne, and not already
        committed to a dive. A dive press in the same frame wins (§11). */
-    if (this._poundPressLatch && !this._divePressLatch && !this.grounded && (!this.inWater || this._heavy()) &&
-      st !== 'poundHang' && st !== 'poundFall' && st !== 'climb' && st !== 'cannon' && st !== 'dive') {
+    if (this._poundPressLatch && !this._divePressLatch && !this._attackPressLatch && !this.grounded &&
+      (!this.inWater || this._heavy()) && !this.carrying &&
+      st !== 'poundHang' && st !== 'poundFall' && st !== 'climb' && st !== 'cannon' && st !== 'dive' &&
+      st !== 'slideKick') {
       this._doPound();
       return;
     }
 
-    /* Dive: ground or air, at speed. */
-    if (this._divePressLatch && st !== 'dive' && st !== 'slide' && st !== 'poundHang' && st !== 'poundFall') {
-      if (this.inWater && !this._heavy()) this._doSwimDash();
-      else if (this.speed >= TUNE.dive.minSpeed || (!this.grounded && this.speed >= TUNE.dive.minSpeed * 0.6)) this._doDive();
+    /* THE ACTION BUTTON (the dive binding, read by context — see _actButton):
+       throw · swim dash · pick up · slide kick · DIVE (unchanged gate) · punch
+       combo · air kick. Once per press; the latch survives into later substeps
+       of the frame only to keep the pound-vs-dive precedence above. */
+    if ((this._divePressLatch || this._attackPressLatch) && !this._actUsed &&
+      st !== 'dive' && st !== 'slide' && st !== 'poundHang' && st !== 'poundFall') {
+      if (this._actButton()) this._actUsed = true;
     }
 
     /* Jump family — buffered, so a press just before landing still fires. */
@@ -1565,8 +1846,19 @@ export class Player {
       return;
     }
 
+    /* --- slide kick: a jump on its ground phase is the belly-slide hop -- */
+    if (st === 'slideKick') {
+      if (this.grounded && this.stateT >= SLIDEKICK_HOP_T) {
+        this._doSlideHop();
+        this.bufferT = 0;
+      }
+      return;                     // in its air phase the press stays buffered
+    }
+
     /* --- hard landing locks the jump (that is the punishment) --------- */
     if (st === 'hardLand') return;
+    /* --- bending to lift or set down: committed, the buffer waits ------ */
+    if (st === 'pickup') return;
 
     /* --- quicksand: mash to escape ------------------------------------ */
     if (this._inQuicksand) {
@@ -1577,7 +1869,11 @@ export class Player {
 
     /* --- grounded (or inside coyote time) ----------------------------- */
     if (this.grounded || this.coyoteT > 0) {
-      if (this._crouchHeld) {
+      if (this.carrying) {
+        /* Hands full: a plain single jump, never a chain or a crouch combo. */
+        this.jumpCount = 0; this._chainT = 0; this._chainSpeed = 0;
+        this._doJump();
+      } else if (this._crouchHeld) {
         /* CROUCH_GRACE: judge the move on the run the crouch interrupted. */
         const sp = (this._crouchGraceT > 0 && this._crouchSpeed > this.speed) ? this._crouchSpeed : this.speed;
         if (sp >= TUNE.longJump.minSpeed) this._doLongJump();
@@ -1735,7 +2031,7 @@ export class Player {
 
   /** True when a fresh, near-vertical wall contact is still kickable. */
   _canWallKick() {
-    if (this.grounded || this.inWater) return false;
+    if (this.grounded || this.inWater || this.carrying) return false;
     if (this._wallLockT > 0) return false;
     if (this._wallT <= WALL_MEM - TUNE.wallKick.window) return false;   // outside the window
     if (this.wallN.x === 0 && this.wallN.z === 0) return false;
@@ -1869,6 +2165,650 @@ export class Player {
     if (c && c.ref && typeof c.ref.onFire === 'function') { try { c.ref.onFire(this); } catch (err) { /* hazard owns its own errors */ } }
   }
 
+  /* =========================================================================
+   * STAGE 1 VERBS — the action button, strikes, carrying, the ledge grab
+   * ====================================================================== */
+
+  /**
+   * THE ACTION BUTTON, read by context — Super Mario 64's B button, on the dive
+   * binding this game already has (KeyF / KeyX, pad X). In order:
+   *   carrying          -> throw (ground or air)
+   *   in water          -> swim dash (unchanged)
+   *   in the combo      -> queue / take the next hit
+   *   grounded, slow    -> pick up the carryable in front of the hands, if any
+   *   crouch-run        -> slide kick
+   *   fast enough       -> DIVE — the old gate, word for word: sp >= dive.minSpeed
+   *                        on the ground, >= 0.6 of it in the air
+   *   grounded, slow    -> punch (or the combo's next hit inside its grace)
+   *   airborne, slow    -> air kick (once per airtime)
+   * @returns {boolean} whether the press was spent
+   */
+  _actButton() {
+    const st = this.state;
+    if (this.carrying) {
+      if (st === 'pickup' || st === 'throw' || st === 'climb' || st === 'cannon' || this.inWater) return false;
+      this._doThrow();
+      return true;
+    }
+    if (this.inWater && !this._heavy()) { this._doSwimDash(); return true; }
+    if (st === 'cannon' || st === 'climb' || st === 'ledgeHang' || st === 'ledgeClimb') return false;
+
+    if (this.grounded) {
+      if (GROUND_STRIKE[st] === 1) {
+        const a = ATK[st];
+        if (a.chain) {
+          if (this.stateT >= ATTACK_CHAIN_OPEN) this._doAttack(a.chain);
+          else this._atkQueued = true;
+        }
+        return true;
+      }
+      if (st === 'pickup' || st === 'throw' || st === 'slideKick') return false;
+      if (this.speed < TUNE.dive.minSpeed && this.stunT <= 0) {
+        const o = findCarryable(this);
+        if (o && this._doPickup(o)) return true;
+      }
+      if (this._crouchHeld && this.speed >= TUNE.dive.minSpeed && st !== 'slopeSlide') {
+        this._doSlideKick();
+        return true;
+      }
+      if (this.speed >= TUNE.dive.minSpeed) { this._doDive(); return true; }
+      if (!this.crouching && (st === 'idle' || st === 'run' || st === 'skid' || st === 'bonk' || st === 'land')) {
+        this._doAttack(this._comboT > 0 && this._comboNext ? this._comboNext : 'punch1');
+        return true;
+      }
+      return false;
+    }
+
+    /* airborne */
+    if (st === 'slideKick' || st === 'airKick') return false;
+    if (this.speed >= TUNE.dive.minSpeed * 0.6) { this._doDive(); return true; }
+    if (!this._airKickUsed && (st === 'jump1' || st === 'jump2' || st === 'jump3' || st === 'fall' ||
+      st === 'backflip' || st === 'sideflip' || st === 'wallkick' || st === 'climbKick')) {
+      this._doAirKick();
+      return true;
+    }
+    return false;
+  }
+
+  /** One hit of the ground combo (punch1 -> punch2 -> kick). */
+  _doAttack(name) {
+    const a = ATK[name];
+    if (!a) return;
+    /* aim: the press turns Nim part of the way to the stick (a strike you can point) */
+    if (this._wmag > 0) this.facing = moveTowardAngle(this.facing, yawFromHeading(this._wx, this._wz), 0.9);
+    if (this.state === name) this.stateT = 0;
+    this._setState(name);
+    this._atkHit = false;
+    this._atkQueued = false;
+    this._comboT = 0;
+    this._comboNext = null;
+    this._stepDist = 0;
+    if (name === 'kick') {
+      this.stats.kicks++;
+      this._ev('kick', this.pos);
+      this._sfx('dive', 0.55);
+    } else {
+      this.stats.punches++;
+      this._ev('punch', name === 'punch2' ? 2 : 1, this.pos);
+      this._sfx('dive', 0.35);
+    }
+  }
+
+  /** Air kick: a snapped leg in mid-air. No lift — the arc is the jump's, untouched. */
+  _doAirKick() {
+    this._airKickUsed = true;
+    this._setState('airKick');
+    this._atkHit = false;
+    this.stats.airKicks++;
+    this._ev('airKick', this.pos);
+    this._sfx('dive', 0.45);
+  }
+
+  /** SLIDE KICK — a low, feet-first lunge out of a crouch-run that slides out. */
+  _doSlideKick() {
+    headingFromYaw(this.facing, _fwd);
+    const sp = Math.max(this.speed, SLIDEKICK_SPEED);
+    this.vel.x = _fwd.x * sp;
+    this.vel.z = _fwd.z * sp;
+    this.vel.y = SLIDEKICK_VY;
+    this.jumpCount = 0;
+    this._chainT = 0;
+    this.grounded = false;
+    this._noGroundT = NO_GROUND_AFTER_JUMP;
+    this.coyoteT = 0;
+    this.bufferT = 0;
+    this._fellFromJump = true;
+    this._cutArmed = false;
+    this._cutPending = false;
+    this._slideHitCd = 0;
+    this._setState('slideKick');
+    this.stats.slideKicks++;
+    this._ev('slideKick', this.pos);
+    this._sfx('dive', 0.7);
+    _fxOpt.strength = 0.8; _fxOpt.surface = this.surface; _fxOpt.count = 6; _fxOpt.speed = sp;
+    this._fxBurst('slideDust', this.pos, _fxOpt);
+  }
+
+  /**
+   * Test the live strike every substep of its active window until it lands.
+   * Allocation-free.
+   */
+  _strikeTick() {
+    const st = this.state;
+    const a = ATK[st];
+    if (a) {
+      if (this._atkHit || this.stateT < a.hitA || this.stateT > a.hitB) return;
+      headingFromYaw(this.facing, _fwd);
+      const x = this.pos.x + _fwd.x * a.reach;
+      const y = this.pos.y + a.y;
+      const z = this.pos.z + _fwd.z * a.reach;
+      const n = this.strikeAt(x, y, z, a.r, st, _fwd.x, _fwd.z, null);
+      if (n > 0) { this._atkHit = true; this._strikeFeedback(st === 'kick' || st === 'airKick' ? 1 : 0.7); }
+      return;
+    }
+    if (st === 'slideKick' && this._slideHitCd <= 0 && this.speed > 3) {
+      headingFromYaw(this.facing, _fwd);
+      const n = this.strikeAt(this.pos.x + _fwd.x * 0.55, this.pos.y + 0.35, this.pos.z + _fwd.z * 0.55,
+        SLIDEKICK_HIT_R, 'slideKick', _fwd.x, _fwd.z, null);
+      if (n > 0) { this._slideHitCd = SLIDEKICK_HIT_CD; this._strikeFeedback(0.9); }
+      return;
+    }
+    /* THE DIVE IS A BODY BLOW. critters.js has always had `onDive(player)` (the
+       bumbler squishes on it) and nothing ever called it; a dive or a belly
+       slide now reaches it through the same dispatch. */
+    if ((st === 'dive' || st === 'slide') && this._slideHitCd <= 0 && this.speed > 2) {
+      const n = this.strikeAt(this.pos.x, this.pos.y + 0.4, this.pos.z, 0.6, 'dive', this.vel.x, this.vel.z, null);
+      if (n > 0) { this._slideHitCd = SLIDEKICK_HIT_CD; this._strikeFeedback(0.8); }
+    }
+  }
+
+  /**
+   * THE STRIKE DISPATCH — shared by punches, kicks, the slide kick, the dive and
+   * a thrown carryable (carry.js calls it on its thrower). Everything within `r`
+   * (+ the target's own `hitRadius`, default 0.6) of the strike point is offered
+   * the blow through the critter registry's EXISTING entry points:
+   *   c.onAttack(player, pos, kind, dir) -> truthy   if a creature defines it (the
+   *                                                  creatures lane's own hook);
+   *   else c.onDive(player)          for body blows ('dive', 'slideKick');
+   *        c.onPound(player, pos)    for everything but the dive — at the fist /
+   *                                  boot / crate, never for the gnasher (its
+   *                                  `onPound` is the POST pound that frees it);
+   *   carryables: o.onStrike(player, kind, pos, dir).
+   * A blow COUNTS when the target's state / hp / stagger / alive changed.
+   * @returns {number} how many targets it registered on. Allocation-free.
+   */
+  strikeAt(x, y, z, r, kind, dx, dz, source) {
+    let hits = 0;
+    _hitPos.set(x, y, z);
+    const dl = Math.sqrt((dx || 0) * (dx || 0) + (dz || 0) * (dz || 0));
+    if (dl > 1e-6) _hitDir.set(dx / dl, 0, dz / dl); else headingFromYaw(this.facing, _hitDir);
+    const w = this.world;
+    const cr = w ? w.critters : null;
+    if (cr && cr.length) {
+      for (let i = 0; i < cr.length; i++) {
+        const c = cr[i];
+        if (!c || c === source || c === this.carrying || c.enabled === false || c.alive === false) continue;
+        const cp = c.pos;
+        if (!cp || typeof cp.x !== 'number') continue;
+        const rr = r + (typeof c.hitRadius === 'number' ? c.hitRadius : 0.6);
+        const ex = cp.x - x, ez = cp.z - z, ey = cp.y - y;
+        if (ex * ex + ez * ez > rr * rr || ey < -1.7 || ey > 1.7) continue;
+        if (this._strikeCritter(c, kind)) hits++;
+      }
+    }
+    const reg = carryables();
+    for (let i = 0; i < reg.length; i++) {
+      const o = reg[i];
+      if (!o || o === source || o === this.carrying || typeof o.onStrike !== 'function' || !o.pos) continue;
+      const rr = r + (typeof o.carryRadius === 'number' ? o.carryRadius : 0.4);
+      const ex = o.pos.x - x, ez = o.pos.z - z, ey = o.pos.y - y;
+      if (ex * ex + ez * ez > rr * rr || ey < -1.2 || ey > 1.2) continue;
+      let ok = false;
+      try { ok = !!o.onStrike(this, kind, _hitPos, _hitDir); } catch (err) { ok = false; }
+      if (ok) hits++;
+    }
+    if (hits) this.stats.strikeHits += hits;
+    return hits;
+  }
+
+  /** Offer one blow to one creature; true if it registered. Allocation-free. */
+  _strikeCritter(c, kind) {
+    if (typeof c.onAttack === 'function') {
+      let r = false;
+      try { r = c.onAttack(this, _hitPos, kind, _hitDir); } catch (err) { r = false; }
+      return !!r;
+    }
+    _snapC.state = c.state; _snapC.hp = c.hp; _snapC.alive = c.alive;
+    _snapC.stagger = typeof c.stagger === 'number' ? c.stagger : 0;
+    try {
+      if ((kind === 'dive' || kind === 'slideKick') && typeof c.onDive === 'function') c.onDive(this);
+      if (kind !== 'dive' && c.kind !== 'gnasher' && typeof c.onPound === 'function') c.onPound(this, _hitPos);
+    } catch (err) { /* a creature threw: the sim goes on */ }
+    return c.state !== _snapC.state || c.hp !== _snapC.hp || c.alive !== _snapC.alive ||
+      (typeof c.stagger === 'number' && c.stagger > _snapC.stagger + 0.01);
+  }
+
+  /** A strike landed: spark, a thump, hit-stop, a nudge of the lens, a buzz. */
+  _strikeFeedback(k) {
+    this.attackHitT = 0;
+    _fxOpt.strength = k; _fxOpt.surface = 'stone'; _fxOpt.count = 8; _fxOpt.speed = 6;
+    this._fxBurst('spark', _hitPos, _fxOpt);
+    this._sfx('land_hard', 0.35 + 0.3 * k);
+    const g = this.world && this.world.game;
+    if (g) {
+      try { if (g.impacts && typeof g.impacts.slowmo === 'function') g.impacts.slowmo(ATTACK_HITSTOP_SCALE, ATTACK_HITSTOP_S); } catch (err) { /* noop */ }
+      try { if (g.cam && typeof g.cam.shake === 'function') g.cam.shake(0.10 + 0.08 * k, 120); } catch (err) { /* noop */ }
+    }
+    const inp = this.input;
+    try { if (inp && typeof inp.rumble === 'function') inp.rumble(0.35 * k, 0.5 * k, 70); } catch (err) { /* noop */ }
+    this._ev('strikeHit', this.state, _hitPos);
+  }
+
+  /* ---- carrying ---------------------------------------------------------- */
+
+  /** Lift `o` (carry.js contract). */
+  _doPickup(o) {
+    let ok = false;
+    try { ok = typeof o.onPickup === 'function' ? o.onPickup(this) !== false : true; } catch (err) { ok = false; }
+    if (!ok) return false;
+    this.carrying = o;
+    this.carryT = 0;
+    this._putting = false;
+    if (o.pos && typeof o.pos.x === 'number') this._carryFrom.copy(o.pos); else this._carryFrom.copy(this.pos);
+    const dx = this._carryFrom.x - this.pos.x, dz = this._carryFrom.z - this.pos.z;
+    if (hyp2(dx, dz) > 0.05) this.facing = yawFromHeading(dx, dz);
+    this.vel.x *= 0.3; this.vel.z *= 0.3;
+    this._setState('pickup');
+    this.stats.pickups++;
+    this._ev('pickup', o, this.pos);
+    this._sfx('land_soft', 0.4);
+    return true;
+  }
+
+  /** Set the carried object down in front (crouch while carrying). */
+  _doPutDown() {
+    const o = this.carrying;
+    if (!o) return;
+    headingFromYaw(this.facing, _fwd);
+    const half = (typeof o.size === 'number' ? o.size : 0.5) * 0.5;
+    let d = this.radius + half + 0.12;
+    const bp = this.world && this.world.broadphase;
+    if (bp && typeof bp.raycast === 'function') {
+      _rayO.set(this.pos.x, this.pos.y + half + 0.05, this.pos.z);
+      _rayD.set(_fwd.x, 0, _fwd.z);
+      try { if (bp.raycast(_rayO, _rayD, d + half, _rayHit)) d = Math.max(0, Math.min(d, _rayHit.t - half - 0.02)); } catch (err) { /* noop */ }
+    }
+    this._carryTo.set(this.pos.x + _fwd.x * d, this.pos.y + half + 0.01, this.pos.z + _fwd.z * d);
+    if (o.pos && typeof o.pos.x === 'number') this._carryFrom.copy(o.pos); else this._carryHoldPoint(this._carryFrom);
+    this._putting = true;
+    this.vel.x *= 0.3; this.vel.z *= 0.3;
+    this._setState('pickup');
+    this.stats.puts++;
+    this._ev('putDown', o, this.pos);
+  }
+
+  /** The bend is over: a pick-up is now held; a put-down is released on the floor. */
+  _endPickup() {
+    if (this._putting) {
+      const o = this.carrying;
+      this.carrying = null;
+      this._putting = false;
+      this.carryT = 0;
+      if (o) {
+        try {
+          if (typeof o.onDrop === 'function') o.onDrop(this, this._carryTo);
+          else if (typeof o.onThrow === 'function') { _throwV.set(0, 0, 0); o.onThrow(this, _throwV); }
+        } catch (err) { /* the object owns its errors */ }
+      }
+    }
+    this._setState(this._wmag > 0 ? 'run' : 'idle');
+  }
+
+  /** Throw what is carried: forward and up, plus half the carrier's own speed. */
+  _doThrow() {
+    const o = this.carrying;
+    if (!o) return;
+    this.carrying = null;
+    this._putting = false;
+    this.carryT = 0;
+    headingFromYaw(this.facing, _fwd);
+    const f = THROW_FWD + hyp2(this.vel.x, this.vel.z) * 0.5;
+    _throwV.set(_fwd.x * f, THROW_UP + Math.max(0, this.vel.y) * 0.33, _fwd.z * f);
+    /* release from the hands, a little ahead of the face so it never clips the head */
+    if (o.pos && typeof o.pos.x === 'number') {
+      o.pos.x += _fwd.x * 0.25; o.pos.z += _fwd.z * 0.25;
+    }
+    try { if (typeof o.onThrow === 'function') o.onThrow(this, _throwV); } catch (err) { /* noop */ }
+    this.throwT = 0;
+    if (this.grounded) this._setState('throw');
+    this.stats.throws++;
+    this._ev('throw', o, this.pos);
+    this._sfx('dive', 0.5);
+  }
+
+  /** Lose the carried object (a hit, a death, water, a ladder). */
+  _releaseCarried(knocked) {
+    const o = this.carrying;
+    if (!o) return;
+    this.carrying = null;
+    this._putting = false;
+    this.carryT = 0;
+    if (knocked) {
+      headingFromYaw(this.facing, _fwd);
+      _throwV.set(-_fwd.x * 1.5, 2.5, -_fwd.z * 1.5);
+    } else {
+      _throwV.set(0, 0, 0);
+    }
+    try { if (typeof o.onThrow === 'function') o.onThrow(this, _throwV); } catch (err) { /* noop */ }
+    if (this.state === 'pickup' || this.state === 'throw') this._setState(this.grounded ? 'idle' : 'fall');
+  }
+
+  /**
+   * Where the carried object's centre goes this frame: the hero's hands when the
+   * hero published them last frame (`carryHand`), else over the head; blended in
+   * from the floor during a lift and out to the floor during a put-down.
+   */
+  _carryHoldPoint(out) {
+    const o = this.carrying;
+    const rp = this.renderPos;
+    if (this.carryHandValid) out.copy(this.carryHand);
+    else out.set(rp.x, rp.y + (o && typeof o.carryHoldY === 'number' ? o.carryHoldY : HOLD_Y), rp.z);
+    if (this.state === 'pickup') {
+      let u = clamp(this.stateT / PICKUP_T, 0, 1);
+      if (this._putting) {
+        u = sm01((u - 0.35) / 0.45);
+        out.lerp(this._carryTo, u);
+      } else {
+        u = sm01((u - 0.30) / 0.45);
+        _va.copy(this._carryFrom).lerp(out, u);
+        out.copy(_va);
+      }
+    }
+    this.carryHandValid = false;       // the hero re-publishes it every frame
+    return out;
+  }
+
+  /* ---- the ledge grab ------------------------------------------------------ */
+
+  /**
+   * The lip in front of a hero at feet (px, py, pz) facing INTO a wall along
+   * (inx, inz): finds the face, then looks DOWN just past it from above the
+   * hands' reach. Writes `_lp` {lipY, face (m from the capsule axis), col}.
+   * Allocation-free.
+   */
+  _probeLedge(px, py, pz, inx, inz) {
+    const w = this.world;
+    const bp = w && w.broadphase;
+    if (!bp || typeof bp.raycast !== 'function') return false;
+    let face = this.radius + 0.02;
+    try {
+      _rayO.set(px, py + Math.min(this.height * 0.5, 0.75), pz);
+      _rayD.set(inx, 0, inz);
+      if (bp.raycast(_rayO, _rayD, this.radius + 0.45, _rayHit) && _rayHit.t > 0.02) face = _rayHit.t;
+
+      const top = py + this.height + LEDGE_REACH_UP + 0.05;
+      const q = face + LEDGE_PROBE_IN;
+      _rayO.set(px + inx * q, top, pz + inz * q);
+      if (!bp.raycast(_rayO, _DOWN, top - (py + LEDGE_MIN_UP), _rayHit)) return false;
+      if (_rayHit.t < 0.02) return false;                 // the wall goes on past the reach
+      if (_rayHit.normal.y < LEDGE_MIN_NY) return false;  // a slope, not a lip
+      const c = _rayHit.collider;
+      if (c && (c.group === 'critter' || c.solid === false || c.active === false)) return false;
+      const lipY = top - _rayHit.t;
+
+      /* the face exactly under the lip (a battered wall, a chamfered edge) */
+      _rayO.set(px, lipY - 0.06, pz);
+      if (bp.raycast(_rayO, _rayD, face + LEDGE_PROBE_IN + 0.05, _rayHit) && _rayHit.t > 0.01) face = _rayHit.t;
+      _lp.lipY = lipY; _lp.face = face; _lp.col = c;
+    } catch (err) { return false; }
+    return true;
+  }
+
+  /** Is there floor within `tol` of `y` under (x, z)? */
+  _floorNear(x, y, z, tol) {
+    const bp = this.world && this.world.broadphase;
+    if (!bp || typeof bp.raycast !== 'function') return false;
+    _rayO.set(x, y + 0.4, z);
+    try {
+      if (!bp.raycast(_rayO, _DOWN, 0.4 + tol, _rayHit)) return false;
+    } catch (err) { return false; }
+    return _rayHit.t > 0.01 && Math.abs((_rayO.y - _rayHit.t) - y) <= tol;
+  }
+
+  /** Nothing solid within `dist` along (dx, dz) at hip and chest height of a body at feet (x, y, z). */
+  _sideClear(x, y, z, dx, dz, dist) {
+    const bp = this.world && this.world.broadphase;
+    if (!bp || typeof bp.raycast !== 'function') return true;
+    _rayD.set(dx, 0, dz);
+    try {
+      _rayO.set(x, y + 0.45, z);
+      if (bp.raycast(_rayO, _rayD, dist, _rayHit)) return false;
+      _rayO.set(x, y + 1.10, z);
+      if (bp.raycast(_rayO, _rayD, dist, _rayHit)) return false;
+    } catch (err) { return true; }
+    return true;
+  }
+
+  /** Nothing solid between y0 and y1 over (x, z) (two rays: axis and toward the wall). */
+  _columnClear(x, y0, z, y1, inx, inz) {
+    const bp = this.world && this.world.broadphase;
+    if (!bp || typeof bp.raycast !== 'function' || !(y1 > y0)) return true;
+    try {
+      _rayO.set(x, y0, z);
+      if (bp.raycast(_rayO, _UP, y1 - y0, _rayHit)) return false;
+      const k = this.radius * 0.8;
+      _rayO.set(x + inx * k, y0, z + inz * k);
+      if (bp.raycast(_rayO, _UP, y1 - y0, _rayHit)) return false;
+    } catch (err) { return true; }
+    return true;
+  }
+
+  /**
+   * Called on a substep that touched a wall while falling. Grabs only a lip the
+   * jump fell SHORT of (see LEDGE_*): hangs from it, or mantles straight over a
+   * low one. Never touches a jump that was going to land anyway.
+   */
+  _tryLedgeGrab() {
+    const st = this.state;
+    if (LEDGE_FROM[st] !== 1 || this.carrying || this.inWater || this.dead) return false;
+    if (this._ledgeLockT > 0 || this.stunT > 0) return false;
+    const vy = this.vel.y;
+    if (vy > 0 || vy < -LEDGE_MAX_FALL) return false;
+    const n = this.wallN;
+    const nl = hyp2(n.x, n.z);
+    if (nl < 0.5) return false;
+    const inx = -n.x / nl, inz = -n.z / nl;
+    const wishIn = this._wmag > 0 ? this._wx * inx + this._wz * inz : 0;
+    headingFromYaw(this.facing, _fwd);
+    const faceIn = _fwd.x * inx + _fwd.z * inz;
+    if (!(wishIn > 0.35 || (faceIn > 0.55 && wishIn > -0.2))) return false;
+    const wr = this._wallRef;
+    if (wr && (wr.group === 'critter' || wr.solid === false)) return false;
+    const p = this.pos;
+    if (!this._probeLedge(p.x, p.y, p.z, inx, inz)) return false;
+    const lipY = _lp.lipY;
+    const up = lipY - p.y;
+    if (up < LEDGE_MIN_UP || up > this.height + LEDGE_REACH_UP) return false;
+
+    const face = _lp.face;
+    const hangOff = face - this.radius - LEDGE_SKIN;
+    const standOff = face + this.radius + 0.06;
+    this._ledgeHang.set(p.x + inx * hangOff, lipY - LEDGE_HANG_H, p.z + inz * hangOff);
+    this._ledgeStand.set(p.x + inx * standOff, lipY + 0.01, p.z + inz * standOff);
+    /* floor to stand on, level with the lip, and room for the body up there */
+    if (!this._floorNear(this._ledgeStand.x, lipY, this._ledgeStand.z, 0.2)) return false;
+    if (!this._capsuleClear(this._ledgeStand.x, lipY + 0.02, this._ledgeStand.z, this.radius, this.height)) return false;
+    /* and the column the climb rises through, from the head up to standing height */
+    const headY = Math.max(p.y, this._ledgeHang.y) + this.height;
+    if (!this._columnClear(this._ledgeHang.x, headY, this._ledgeHang.z, lipY + this.height + 0.02, inx, inz)) return false;
+
+    this.ledgeN.set(-inx, 0, -inz);
+    this.ledgeY = lipY;
+    this.facing = yawFromHeading(inx, inz);
+    this.vel.set(0, 0, 0);
+    this.jumpCount = 0; this._chainT = 0; this._chainSpeed = 0;
+    this._cutArmed = false; this._cutPending = false;
+    this._fellFromJump = false;
+    this.coyoteT = 0;
+    this._launchT = 0;
+    this._wallT = 0;
+    this.ledgeDir = 0;
+    this._ledgeInT = 0;
+    this._ledgeProbeT = 0.1;
+    this.stats.ledgeGrabs++;
+    this._ev('ledgeGrab', this.pos, lipY);
+    if (up <= LEDGE_MANTLE_BELOW) {
+      this._startLedgeClimb(LEDGE_MANTLE_T, true);
+    } else {
+      this._setState('ledgeHang');
+      this._sfx('land_soft', 0.45);
+      _fxOpt.strength = 0.35; _fxOpt.surface = 'stone'; _fxOpt.count = 4; _fxOpt.speed = 1;
+      _hitPos.set(this._ledgeHang.x + inx * 0.2, lipY, this._ledgeHang.z + inz * 0.2);
+      this._fxBurst('dust', _hitPos, _fxOpt);
+    }
+    return true;
+  }
+
+  _startLedgeClimb(dur, mantle) {
+    this._ledgeFrom.copy(this.pos);
+    this._ledgeClimbDur = dur;
+    this._ledgeMantle = !!mantle;
+    this.vel.set(0, 0, 0);
+    this.ledgeDir = 0;
+    this._setState('ledgeClimb');
+    this.stats.ledgeClimbs++;
+    this._ev('ledgeClimb', this.pos, !!mantle);
+    this._sfx('step_stone', 0.55);
+  }
+
+  _ledgeDrop() {
+    const nx = this.ledgeN.x, nz = this.ledgeN.z;
+    this.pos.x += nx * 0.04; this.pos.z += nz * 0.04;
+    this.vel.set(nx * 1.2, -0.5, nz * 1.2);
+    this._launchSpeed = 1.2;
+    this._ledgeLockT = LEDGE_REGRAB_LOCK;
+    this._fellFromJump = false;               // dropping off is a FALL
+    this.ledgeDir = 0;
+    this._setState('fall');
+    this.stats.ledgeDrops++;
+    this._ev('ledgeDrop', this.pos);
+  }
+
+  /**
+   * One substep of hanging or climbing. Owns the body entirely (no gravity, no
+   * locomotion); the resolver still runs with zero velocity so kills, crushers
+   * and volumes are honest. Allocation-free.
+   */
+  _ledgeSubstep(dt, wasX, wasZ) {
+    const pos = this.pos;
+    this.vel.set(0, 0, 0);
+    this.grounded = false;
+    const inx = -this.ledgeN.x, inz = -this.ledgeN.z;
+    const h = this._ledgeHang, s = this._ledgeStand;
+
+    if (this.state === 'ledgeHang') {
+      /* settle onto the grip */
+      const dx = h.x - pos.x, dy = h.y - pos.y, dz = h.z - pos.z;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const step = LEDGE_SNAP_RATE * dt;
+      if (d <= step) pos.copy(h);
+      else { const k = step / d; pos.x += dx * k; pos.y += dy * k; pos.z += dz * k; }
+
+      const wm = this._wmag;
+      const wIn = wm > 0 ? this._wx * inx + this._wz * inz : 0;
+      const tx = -inz, tz = inx;                        // along the lip, to Nim's right
+      const wSide = wm > 0 ? this._wx * tx + this._wz * tz : 0;
+      this.ledgeDir = 0;
+      if (this.bufferT > 0 && this.stateT > 0.05) {
+        this.bufferT = 0;
+        this._startLedgeClimb(LEDGE_QUICK_T, false);
+      } else if ((this._crouchPressLatch && !this._crouchUsed) || (wm > 0.3 && wIn < -0.5)) {
+        this._crouchUsed = true;
+        this._ledgeDrop();
+      } else {
+        this._ledgeInT = (wm > 0.3 && wIn > 0.55) ? this._ledgeInT + dt : 0;
+        if (this._ledgeInT >= LEDGE_HOLD_IN && this.stateT > 0.18) {
+          this._startLedgeClimb(LEDGE_CLIMB_T, false);
+        } else if (wm > 0.3 && Math.abs(wSide) > 0.4 && this.stateT > 0.12 && d <= step * 2) {
+          /* SHIMMY: step along the lip, re-probing it at the new spot */
+          const sgn = wSide > 0 ? 1 : -1;
+          const mv = sgn * LEDGE_SHIMMY * (wm > 1 ? 1 : wm) * dt;
+          const cx = h.x + tx * mv, cz = h.z + tz * mv;
+          if (this._probeLedge(cx, h.y, cz, inx, inz) && Math.abs(_lp.lipY - this.ledgeY) < 0.25 &&
+            _lp.face < this.radius + 0.3) {
+            const lipY = _lp.lipY, face = _lp.face;
+            const hangOff = face - this.radius - LEDGE_SKIN, standOff = face + this.radius + 0.06;
+            const sx = cx + inx * standOff, sz = cz + inz * standOff;
+            if (this._floorNear(sx, lipY, sz, 0.2) &&
+              this._sideClear(h.x, h.y, h.z, tx * sgn, tz * sgn, this.radius + Math.abs(mv))) {
+              h.set(cx + inx * hangOff, lipY - LEDGE_HANG_H, cz + inz * hangOff);
+              s.set(sx, lipY + 0.01, sz);
+              this.ledgeY = lipY;
+              pos.x = h.x; pos.z = h.z;
+              this.ledgeDir = sgn;
+            }
+          }
+        }
+        /* the lip may move, sink or vanish (movers, breakables, vanish blocks) */
+        this._ledgeProbeT -= dt;
+        if (this.state === 'ledgeHang' && this._ledgeProbeT <= 0) {
+          this._ledgeProbeT = 0.1;
+          if (!this._probeLedge(h.x, h.y, h.z, inx, inz) || Math.abs(_lp.lipY - this.ledgeY) > 0.3) {
+            this._ledgeDrop();
+          } else if (Math.abs(_lp.lipY - this.ledgeY) > 0.002) {
+            const dl = _lp.lipY - this.ledgeY;
+            this.ledgeY = _lp.lipY; h.y += dl; s.y += dl;
+          }
+        }
+      }
+    }
+
+    if (this.state === 'ledgeClimb') {
+      const u = clamp(this.stateT / Math.max(0.05, this._ledgeClimbDur), 0, 1);
+      const f = this._ledgeFrom;
+      const RISE = 0.58;
+      if (u < RISE) {
+        const k = sm01(u / RISE);
+        pos.x = f.x + (h.x - f.x) * k;
+        pos.z = f.z + (h.z - f.z) * k;
+        pos.y = f.y + (s.y + 0.03 - f.y) * k;
+      } else {
+        const k = sm01((u - RISE) / (1 - RISE));
+        pos.x = h.x + (s.x - h.x) * k;
+        pos.z = h.z + (s.z - h.z) * k;
+        pos.y = s.y + 0.03 + Math.sin(k * Math.PI) * 0.05;
+      }
+      if (u >= 1) {
+        pos.copy(s);
+        this.grounded = true;
+        this.groundedT = 0;
+        this.coyoteT = 0;
+        this.jumpCount = 0;
+        this._chainT = 0;
+        this._fellFromJump = false;
+        this._stepDist = 0;
+        this._setState(this._wmag > 0 ? 'run' : 'idle');
+      }
+    }
+
+    /* the resolver, with zero velocity: honest kills / crushers / volumes */
+    this.vel.set(0, 0, 0);
+    const res = this._collide(dt);
+    this._lastRes = res;
+    this._killTests(res);
+    if (this.dead) return;
+    if (this.state !== 'ledgeHang' && this.state !== 'ledgeClimb' && res && res.grounded) this.grounded = true;
+
+    const moved = hyp2(pos.x - wasX, pos.z - wasZ);
+    this.stats.distance += moved;
+    this._prevSpeed = this.speed;
+    this.speed = 0;
+    if (this.grounded) { this.airborneT = 0; this.groundedT += dt; }
+    else { this.groundedT = 0; this.airborneT += dt; }
+    this.anim = this.state;
+    this.animT = this.stateT;
+  }
+
   /**
    * Variable jump height. The full `jumpV` is guaranteed for `jumpHoldMin`
    * seconds no matter when the button comes up, so a tap never produces a
@@ -1918,8 +2858,63 @@ export class Player {
     }
     if (st === 'slopeSlide') { this._slopeMove(dt); return; }
     if (st === 'slide') { this._slideMove(dt); return; }
+    if (st === 'slideKick') {
+      if (this.grounded) this._slideKickMove(dt); else this._airMove(dt);
+      return;
+    }
+    if (this.grounded && (st === 'punch1' || st === 'punch2' || st === 'kick' || st === 'pickup')) {
+      this._strikeMove(dt);
+      return;
+    }
     if (this.grounded) this._groundMove(dt);
     else this._airMove(dt);
+  }
+
+  /**
+   * The body under a ground strike or a lift: the blow LUNGES (the strike's
+   * `lunge` along the facing, braked back at `decelGround` once it has landed),
+   * the facing can be aimed for the first ATTACK_AIM_T, and a lift bleeds to a stop.
+   */
+  _strikeMove(dt) {
+    const vel = this.vel;
+    const st = this.state;
+    const a = ATK[st];
+    if (a && this.stateT < ATTACK_AIM_T && this._wmag > 0) {
+      this.facing = moveTowardAngle(this.facing, yawFromHeading(this._wx, this._wz),
+        TUNE.turnRateSlow * ATTACK_AIM_TURN * dt);
+    }
+    const want = (a && this.stateT < a.hitB) ? a.lunge : 0;
+    headingFromYaw(this.facing, _fwd);
+    const tx = _fwd.x * want, tz = _fwd.z * want;
+    const dx = tx - vel.x, dz = tz - vel.z;
+    const d = hyp2(dx, dz);
+    const rate = TUNE.decelGround * dt;
+    if (d <= rate || d < 1e-6) { vel.x = tx; vel.z = tz; }
+    else { const k = rate / d; vel.x += dx * k; vel.z += dz * k; }
+  }
+
+  /** SLIDE KICK, ground phase: friction, a little steering, then up onto the feet. */
+  _slideKickMove(dt) {
+    const vel = this.vel;
+    const sp = hyp2(vel.x, vel.z);
+    const fr = (this.surface === 'ice' ? TUNE.ice.friction : SLIDEKICK_FRICTION) * dt;
+    if (sp <= fr || sp < 1e-5) { vel.x = 0; vel.z = 0; }
+    else { const k = (sp - fr) / sp; vel.x *= k; vel.z *= k; }
+    if (this._wmag > 0 && sp > 0.5) {
+      this.facing = moveTowardAngle(this.facing, yawFromHeading(this._wx, this._wz), TUNE.turnRateFast * 0.4 * dt);
+      headingFromYaw(this.facing, _fwd);
+      const s2 = hyp2(vel.x, vel.z);
+      vel.x = _fwd.x * s2; vel.z = _fwd.z * s2;
+    }
+    if (this._scrapeT <= 0) {
+      this._scrapeT = 0.08;
+      _fxOpt.strength = clamp(sp / SLIDEKICK_SPEED, 0.15, 1);
+      _fxOpt.surface = this.surface;
+      _fxOpt.count = 4;
+      _fxOpt.speed = sp;
+      this._fxBurst('slideDust', this.pos, _fxOpt);
+    }
+    if (sp < SLIDEKICK_END && this.stateT >= 0.25) this._setState('land');
   }
 
   /**
@@ -1986,6 +2981,11 @@ export class Player {
        (the landing dip used to drop a crouch-run to 4.50 x 0.85 = 3.83 m/s and
        swallow the long jump for the 0.05 s after every landing). */
     if (this.crouching && target > CROUCH_RUN_CAP) target = CROUCH_RUN_CAP;
+    /* Hands full: a slower, careful walk (nothing changes with empty hands). */
+    if (this.carrying) {
+      const hv = typeof this.carrying.carryHeavy === 'number' ? clamp(this.carrying.carryHeavy, 0, 1) : 0.2;
+      target *= CARRY_SPEED_MUL * (1 - hv * 0.5);
+    }
     /* SPEED PAD HOLD (BOOST_TIME): the pad's power is the floor of the target,
        stick or no stick, easing back to a run over the last BOOST_FADE. */
     if (this._boostT > 0) {
@@ -2404,6 +3404,7 @@ export class Player {
 
   _startClimb(v) {
     if (this._climbVol === v) return;
+    if (this.carrying) this._releaseCarried(false);
     this._climbVol = v;
     this._climbY = this.pos.y;
     this._climbStallT = 0;
@@ -2434,7 +3435,8 @@ export class Player {
     if (h <= 0) return;
     const st = this.state;
     if (st === 'climb' || st === 'cannon' ||
-      st === 'poundHang' || st === 'poundFall' || st === 'dead') return;
+      st === 'poundHang' || st === 'poundFall' || st === 'dead' ||
+      st === 'ledgeHang' || st === 'ledgeClimb') return;
 
     const vel = this.vel;
     if (this.inWater) {
@@ -2582,12 +3584,13 @@ export class Player {
         this._wallRef = walls[bestI].collider || null;
         this._wallT = WALL_MEM;
         hitWall = true;
+        this._wallHitStep = true;
       }
     }
     if (this._wallT <= 0) { this.wallN.set(0, 0, 0); this._wallRef = null; }
 
     /* A dive or a belly slide that hits a wall recovers instead of grinding. */
-    if (hitWall && (this.state === 'dive' || this.state === 'slide')) {
+    if (hitWall && (this.state === 'dive' || this.state === 'slide' || this.state === 'slideKick')) {
       const into = -(this.vel.x * this.wallN.x + this.vel.z * this.wallN.z);
       if (into > SLIDE_WALL_DOT * Math.max(this.speed, 1)) {
         this.vel.x = 0; this.vel.z = 0;
@@ -2683,12 +3686,22 @@ export class Player {
     this._qsMash = 0;
     this._stepDist = STEP_WALK * 0.55;
     this.wallN.set(0, 0, 0);
+    this._airKickUsed = false;
+    this._ledgeLockT = 0;
 
     const st = this.state;
     const hard = impact >= TUNE.hardLandSpeed && !this._fellFromJump;
 
     if (st === 'poundFall') {
       this._onPoundLand(surface, props);
+      return;
+    }
+    if (st === 'slideKick') {
+      /* the kick's hop is over: it slides out on the ground, no landing lag */
+      this._chainT = 0;
+      this.jumpCount = 0;
+      this._fellFromJump = false;
+      this._ev('land', impact, surface, false);
       return;
     }
     if (st === 'dive') {
@@ -2870,7 +3883,8 @@ export class Player {
   _evalWallSlide(dt) {
     const st = this.state;
     if (this.grounded || this.inWater || st === 'climb' || st === 'cannon' ||
-      st === 'poundFall' || st === 'poundHang' || st === 'dive') {
+      st === 'poundFall' || st === 'poundHang' || st === 'dive' || st === 'slideKick' ||
+      (st === 'airKick' && this.stateT < ATK.airKick.dur) || this.carrying) {
       if (st === 'wallslide') this._setState('fall');
       return;
     }
@@ -2934,6 +3948,8 @@ export class Player {
     this._waterSurfaceY = res && isFinite(res.waterSurfaceY) ? res.waterSurfaceY : NaN;
 
     if (water && !wasWater) {
+      if (this.carrying) this._releaseCarried(false);
+      if (this.state === 'ledgeHang' || this.state === 'ledgeClimb') this._setState('fall');
       const enterSpeed = Math.abs(this.vel.y);
       const heavy = this._heavy();
       if (!heavy) this._setState(enterSpeed > 6 ? 'swimDive' : 'swimIdle');
@@ -3156,7 +4172,7 @@ export class Player {
     this.sliding = name === 'slide' || name === 'slopeSlide';
     if (name === 'jump1' || name === 'jump2' || name === 'jump3' ||
       name === 'longjump' || name === 'backflip' || name === 'sideflip' ||
-      name === 'wallkick' || name === 'dive') {
+      name === 'wallkick' || name === 'dive' || name === 'slideKick') {
       this._launchSpeed = hyp2(this.vel.x, this.vel.z);
     }
   }
@@ -3244,7 +4260,8 @@ export class Player {
         } else this._setState('idle');
       } else if (st === 'fall' || st === 'jump1' || st === 'jump2' || st === 'jump3' ||
         st === 'wallslide' || st === 'wallkick' || st === 'longjump' ||
-        st === 'backflip' || st === 'sideflip' || st === 'fly' || st === 'climbKick') {
+        st === 'backflip' || st === 'sideflip' || st === 'fly' || st === 'climbKick' ||
+        st === 'airKick') {
         /* Reached the ground without _onLand seeing it (a snap): normalise. */
         this._setState(this._wmag > 0 ? 'run' : 'idle');
       }
@@ -3252,9 +4269,12 @@ export class Player {
       /* jump3 keeps its somersault for the whole arc; jump1/2 tuck then fall. */
       if ((st === 'jump1' || st === 'jump2') && this.vel.y <= 0) this._setState('fall');
       else if ((st === 'backflip' || st === 'sideflip') && this.vel.y <= 0 && this.stateT > 0.25) this._setState('fall');
+      else if (st === 'airKick' && this.stateT >= ATK.airKick.dur) this._setState('fall');
       else if (st === 'idle' || st === 'run' || st === 'skid' || st === 'pivot' ||
         st === 'bonk' || st === 'crouch' || st === 'crouchwalk' || st === 'land' ||
-        st === 'slideRecover') {
+        st === 'slideRecover' || GROUND_BRIEF[st] === 1) {
+        /* a strike, a lift or a throw walked off an edge: it is a fall now */
+        if (st === 'pickup' && this._putting) this._endPickup();
         this._setState('fall');
       }
     }
@@ -3277,6 +4297,22 @@ export class Player {
       case 'poundHang': this._doPound(); return;
       case 'wallkick': this._doWallKick(); return;
       case 'dead': this.kill('forced'); return;
+      case 'punch1': case 'punch2': case 'kick': this._doAttack(name); return;
+      case 'airKick': this._doAirKick(); return;
+      case 'slideKick': this._doSlideKick(); return;
+      case 'ledgeHang': case 'ledgeClimb':
+        /* a flat forced hang grips where the hero IS (harness only): lip at head height */
+        headingFromYaw(this.facing, _fwd);
+        this.ledgeN.set(-_fwd.x, 0, -_fwd.z);
+        this.ledgeY = this.pos.y + LEDGE_HANG_H;
+        this._ledgeHang.copy(this.pos);
+        this._ledgeFrom.copy(this.pos);
+        this._ledgeStand.set(this.pos.x + _fwd.x * 0.8, this.ledgeY + 0.01, this.pos.z + _fwd.z * 0.8);
+        this._ledgeClimbDur = LEDGE_CLIMB_T;
+        this._ledgeProbeT = 1e9;
+        this.vel.set(0, 0, 0);
+        this._setState(name);
+        return;
       default:
         if (STATES.indexOf(name) >= 0) this._setState(name);
     }
@@ -3367,8 +4403,13 @@ export class Player {
 
   _ev(name, a, b, c) {
     const e = this.events;
-    if (!e || typeof e.emit !== 'function') return;
-    try { e.emit(name, a, b, c); } catch (err) { /* a listener threw; the sim goes on */ }
+    if (e && typeof e.emit === 'function') {
+      try { e.emit(name, a, b, c); } catch (err) { /* a listener threw; the sim goes on */ }
+    }
+    /* THE VOICE hears every event directly — not as an Emitter listener, so
+       `_hasListener()` (the standalone-harness audio fallback) is untouched. */
+    const v = this.voice;
+    if (v) v.onEvent(name, a, b, c);
   }
 
   _hasListener(name) {
@@ -3415,5 +4456,11 @@ Player.prototype._hopping = false;
 Player.prototype._lastRes = null;
 Player.prototype._cannonPitch = 0.6;
 Player.prototype._leanPrevFacing = undefined;
+/* stage 1 verbs */
+Player.prototype._actUsed = false;
+Player.prototype._crouchUsed = false;
+Player.prototype._airKickUsed = false;
+Player.prototype._comboT = 0;
+Player.prototype._comboNext = null;
 
 export default Player;
