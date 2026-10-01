@@ -8,6 +8,10 @@
 // with its own launch FX (when a slot appears), trail, and impact / destroy FX (PROJ_HIT / PROJ_CLASH events, or the slot
 // vanishing). Pools are built at construction for the types this match can produce, so everything is warmed.
 // Pure presentation: positions come from the snapshot every frame; spin / wobble run on sim-frame-derived time.
+// CHANGED(VIEW3D) (§35.4 / §35.13 item 9): projectiles fly in the ground plane - world (x, y, z) and the travel yaw from
+// the snapshot. Each body's authored 1D pose (travel along +-x, face toward +z) is turned onto its own frame: X = d x the
+// travel direction with d = the screen side of the travel (so the face stays toward the camera), and the FX basis is set
+// to that frame for its launch / trail / impact FX (restored to the camera basis after).
 
 import * as THREE from 'three';
 import { FxSystem, C, CONFETTI } from './fx.ts';
@@ -136,7 +140,9 @@ interface Inst {
   pool: THREE.Mesh | null;
   busy: boolean;
 }
-interface Live { inst: Inst; owner: number; x: number; y: number; vx: number; age: number; lastMark: number; seen: number }
+interface Live { inst: Inst; owner: number; x: number; y: number; z: number; vx: number; age: number; lastMark: number; lastMarkZ: number; seen: number;
+  /** CHANGED(VIEW3D): unit travel direction (planar) and the screen side sign of the travel */
+  ux: number; uz: number; d: number }
 
 const TYPE_COLOR: Record<ProjType, number> = {
   brick: 0x8a3019, card: 0xfbf8f0, saw_card: 0xd8dde6, flame: 0xff6a10, flame_breath: 0xff6a10, taser_bolt: 0x9ad8ff, football: 0xf4f2ec,
@@ -158,6 +164,13 @@ export class ProjectileView {
   private readonly v0 = new THREE.Vector3();
   private readonly v1 = new THREE.Vector3();
   private readonly v2 = new THREE.Vector3();
+  private readonly v3 = new THREE.Vector3();
+  private readonly qY = new THREE.Quaternion();
+  private readonly eul = new THREE.Euler();
+  private static readonly UP = new THREE.Vector3(0, 1, 0);
+  /** the camera basis saved while a projectile's own basis is set */
+  private camRx = 1;
+  private camRz = 0;
   readonly stats = { spawned: 0, destroyed: 0, impacts: 0, types: [] as string[], assets: [] as string[] };
 
   constructor(scene: THREE.Scene, fx: FxSystem, fighters: [FighterView, FighterView], data: ViewGameData, cfg: ViewMatchCfg) {
@@ -330,25 +343,32 @@ export class ProjectileView {
     return out;
   }
 
+  /** CHANGED(VIEW3D): the projectile's own FX basis (X = d x travel) */
+  private useBasis(l: Live): void { this.fx.setBasis(l.d * l.ux, l.d * l.uz); }
+  /** world point (x, y, z) + a LOCAL offset in the current FX basis */
+  private at(x: number, y: number, z: number, ox: number, oy: number, oz: number, out: THREE.Vector3): THREE.Vector3 {
+    return this.fx.offset(this.v3.set(x, y, z), ox, oy, oz, out);
+  }
+
   private launch(t: ProjType, l: Live): void {
     this.stats.spawned++;
-    const d = l.vx >= 0 ? 1 : -1;
-    const at = this.v0.set(l.x, l.y, 0.05);
+    const d = l.d;
+    const at = this.at(l.x, l.y, l.z, 0, 0, 0.05, this.v0);
     switch (t) {
       case 'brick': this.fx.dust(this.hand(l.owner, 'RightHand', this.v1), 0.35); break;
       case 'card': case 'saw_card': this.fx.sparkle(at, 12); break;
       case 'taser_bolt': this.fx.electric(this.hand(l.owner, 'LeftHand', this.v1), 0.6); break;
       case 'flame': case 'fireball_football': this.fx.fireBurst(at, 0.45); break;
-      case 'football': this.fx.dust(this.v1.set(l.x - d * 0.2, 0.05, 0.1), 0.4); break;
-      case 'spotlight_beam': this.fx.glowAt(this.v1.set(l.x, 5.2, -0.1), 1.2, 0xfff2c4, 0.25); this.fx.sparkle(at, 10, 0xfff2c4); break;
-      case 'pyro_line': this.fx.fireBurst(this.v1.set(l.x, 0.2, 0.05), 0.5); break;
+      case 'football': this.fx.dust(this.at(l.x, 0.05, l.z, -d * 0.2, 0, 0.1, this.v1), 0.4); break;
+      case 'spotlight_beam': this.fx.glowAt(this.at(l.x, 5.2, l.z, 0, 0, -0.1, this.v1), 1.2, 0xfff2c4, 0.25); this.fx.sparkle(at, 10, 0xfff2c4); break;
+      case 'pyro_line': this.fx.fireBurst(this.at(l.x, 0.2, l.z, 0, 0, 0.05, this.v1), 0.5); break;
       default: break;
     }
   }
 
-  /** impact / destroy FX at (x, y) for a type; `hit` = it connected with a body */
-  burst(t: ProjType, x: number, y: number, dir: number, hit: boolean): void {
-    const at = this.v0.set(x, y, 0.08);
+  /** impact / destroy FX at (x, y, z) for a type; `hit` = it connected with a body; `dir` along the current FX basis X */
+  burst(t: ProjType, x: number, y: number, dir: number, hit: boolean, z = 0): void {
+    const at = this.at(x, y, z, 0, 0, 0.08, this.v0);
     switch (t) {
       case 'brick': this.fx.debris(at, TYPE_COLOR.brick, 16, dir * -0.6); this.fx.dust(at, 0.7, new THREE.Color(0.55, 0.32, 0.25)); break;
       case 'card': this.fx.cards(at, 12, -dir); this.fx.sparkle(at, 10); break;
@@ -358,8 +378,13 @@ export class ProjectileView {
       case 'taser_bolt': this.fx.electric(at, 1.2); break;
       case 'football': this.fx.dust(at, 0.5); this.fx.sparkle(at, 6, 0xffffff); break;
       case 'spotlight_beam': this.fx.screenFlash(0.25, 0xfff2c4); this.fx.sparkle(at, 20, 0xfff2c4); this.fx.glowAt(at, 2.2, 0xfff2c4, 0.2); break;
-      case 'pyro_line': this.fx.fireBurst(this.v1.set(x, 0.4, 0.05), 0.9); break;
-      case 'tomato': this.fx.debris(at, 0xd7261e, 18, -dir, C.BLOB_A); this.fx.floorMark(x + dir * -0.3, 0.2, 0.5, C.BLOB_B, 0xa01010, 5); break;
+      case 'pyro_line': this.fx.fireBurst(this.at(x, 0.4, z, 0, 0, 0.05, this.v1), 0.9); break;
+      case 'tomato': {
+        this.fx.debris(at, 0xd7261e, 18, -dir, C.BLOB_A);
+        const m = this.at(x, 0, z, dir * -0.3, 0, 0.2, this.v1);
+        this.fx.floorMark(m.x, m.z, 0.5, C.BLOB_B, 0xa01010, 5);
+        break;
+      }
       case 'bottle': this.fx.debris(at, 0x4fae5c, 16, -dir, C.SHARD); this.fx.sparkle(at, 8, 0xcff7d6); break;
       case 'shoe': this.fx.dust(at, 0.5); break;
       case 'chair': this.fx.metalSparks(at, -dir, 1.0); this.fx.debris(at, 0x9aa2ad, 8, -dir, C.SHARD); break;
@@ -373,73 +398,111 @@ export class ProjectileView {
     let best: Live | null = null;
     if (e.type === EV.PROJ_CLASH) best = this.live.get(e.b) ?? null;
     if (!best) {
-      const vic = this.fighters[e.b === 1 ? 1 : 0].root.position.x;
+      const vp = this.fighters[e.b === 1 ? 1 : 0].root.position;
       let bd = 1e9;
-      for (const l of this.live.values()) if (l.owner === e.a && Math.abs(l.x - vic) < bd) { bd = Math.abs(l.x - vic); best = l; }
+      for (const l of this.live.values()) {
+        const dd = Math.hypot(l.x - vp.x, l.z - vp.z);
+        if (l.owner === e.a && dd < bd) { bd = dd; best = l; }
+      }
     }
     if (!best) return;
     this.stats.impacts++;
-    this.burst(best.inst.type, best.x, best.y, best.vx >= 0 ? 1 : -1, e.type === EV.PROJ_HIT);
+    const sx = this.fx.basis.rx, sz = this.fx.basis.rz;
+    this.useBasis(best);
+    this.burst(best.inst.type, best.x, best.y, 1, e.type === EV.PROJ_HIT, best.z);
+    this.fx.basis.rx = sx; this.fx.basis.rz = sz;
     best.seen = -1;                                          // consumed: no second "fizzle" burst when the slot vanishes
   }
 
   /** once per rendered frame: place every live projectile, trails, launch + vanish FX */
+  /** CHANGED(VIEW3D): the travel direction of a snapshot entry (yaw, else its velocity, else the last one) -> l.ux / uz / d */
+  private travel(l: Live, p: ViewProjectile, px: number, pz: number): void {
+    let ux = 0, uz = 0;
+    const vx = p.vx ?? (p.x - px) * 60, vz = p.vz ?? ((p.z ?? 0) - pz) * 60;
+    const sp = Math.hypot(vx, vz);
+    if (sp > 0.05) { ux = vx / sp; uz = vz / sp; }
+    else if (typeof p.yaw === 'number' && Number.isFinite(p.yaw)) { ux = Math.sin(p.yaw); uz = Math.cos(p.yaw); }   // a hovering ball
+    if (ux === 0 && uz === 0) { ux = l.ux || 1; uz = l.uz || 0; }
+    l.ux = ux; l.uz = uz;
+    // d = the screen side of the travel against the CAMERA's R (the saved basis), so the 1D face stays toward the camera
+    const s = ux * this.camRx + uz * this.camRz;
+    l.d = Math.abs(s) > 0.05 ? (s > 0 ? 1 : -1) : (l.d || 1);
+  }
+
   frame(list: ReadonlyArray<ViewProjectile> | undefined, dt: number, simFrame: number): void {
     this.frameNo++;
     const t = simFrame / 60;
     const present = new Set<number>();
+    this.camRx = this.fx.basis.rx; this.camRz = this.fx.basis.rz;
     for (const p of list ?? []) {
       if (p.alive === false || p.alive === 0) continue;
       present.add(p.slot);
       const type = this.typeFor(p);
       let l = this.live.get(p.slot);
       if (l && l.inst.type !== type) { this.hide(l.inst); l.inst.busy = false; this.live.delete(p.slot); l = undefined; }
+      const pz = p.z ?? 0;
+      let fresh = false;
       if (!l) {
-        l = { inst: this.acquire(type), owner: p.owner, x: p.x, y: p.y, vx: p.vx ?? 0, age: 0, lastMark: p.x, seen: this.frameNo };
+        l = { inst: this.acquire(type), owner: p.owner, x: p.x, y: p.y, z: pz, vx: p.vx ?? 0, age: 0, lastMark: p.x, lastMarkZ: pz, seen: this.frameNo, ux: 0, uz: 0, d: 1 };
         this.live.set(p.slot, l);
-        this.launch(type, l);
+        fresh = true;
       }
+      this.travel(l, p, l.x, l.z);
       const vx = p.vx ?? (p.x - l.x) * 60;
-      l.vx = Math.abs(vx) > 0.01 ? vx : l.vx; l.x = p.x; l.y = p.y; l.age += dt; l.seen = this.frameNo;
+      l.vx = Math.abs(vx) > 0.01 ? vx : l.vx; l.x = p.x; l.y = p.y; l.z = pz; l.age += dt; l.seen = this.frameNo;
+      this.useBasis(l);
+      if (fresh) this.launch(type, l);
       this.place(l, type, t, dt, p);
     }
     for (const [slot, l] of this.live) {
       if (present.has(slot)) continue;
-      if (l.seen !== -1) { this.burst(l.inst.type, l.x, l.y, l.vx >= 0 ? 1 : -1, false); this.stats.destroyed++; }
+      if (l.seen !== -1) { this.useBasis(l); this.burst(l.inst.type, l.x, l.y, 1, false, l.z); this.stats.destroyed++; }
       this.hide(l.inst); l.inst.busy = false; this.live.delete(slot);
     }
+    this.fx.basis.rx = this.camRx; this.fx.basis.rz = this.camRz;
+  }
+
+  /** CHANGED(VIEW3D): turn the authored 1D pose (Euler a, b, c about travel +-x) onto the projectile's frame */
+  private orient(o: THREE.Object3D, l: Live, a: number, b: number, c: number): void {
+    this.eul.set(a, b, c);
+    o.quaternion.setFromEuler(this.eul);
+    // rotation about Y mapping +X onto d x travel: (cos psi, 0, -sin psi) = (d ux, 0, d uz)
+    this.qY.setFromAxisAngle(ProjectileView.UP, Math.atan2(-l.d * l.uz, l.d * l.ux));
+    o.quaternion.premultiply(this.qY);
   }
 
   private place(l: Live, type: ProjType, t: number, dt: number, p: ViewProjectile): void {
     const i = l.inst, o = i.obj;
-    const d = l.vx >= 0 ? 1 : -1;
+    const d = l.d;
     const y = type === 'football' || type === 'fireball_football' ? Math.max(0.11, l.y) : l.y;
+    // distance along the travel in the body's frame (rolling balls), from the snapshot position
+    const along = d * (l.x * l.ux + l.z * l.uz);
     o.visible = true;
-    o.position.set(l.x, y, 0.05);
-    o.rotation.set(0, 0, 0);
+    o.position.set(l.x, y, l.z);
+    this.orient(o, l, 0, 0, 0);
     const trailV = this.v1.set(-d * this.fx.rr(0.3, 1.0), this.fx.rr(-0.2, 0.3), this.fx.rr(-0.2, 0.2));
     switch (type) {
       case 'brick':
-        o.rotation.set(0.3, 0.25, -t * 14 * d);
+        this.orient(o, l, 0.3, 0.25, -t * 14 * d);
         if (this.fx.rr(0, 1) < 0.5) this.fx.trail(o.position, trailV, 0.12, 0x8d7b6c, C.DUST, 0.35, false, 1.8, -0.3, 1.5, 0.35);
         break;
       case 'card':
-        o.rotation.set(-0.35, 0.2 * d, -t * 20 * d);
+        this.orient(o, l, -0.35, 0.2 * d, -t * 20 * d);
         if (this.fx.rr(0, 1) < 0.7) this.fx.trail(o.position, trailV, 0.07, 0xffd65a, C.STAR5, 0.4, true, 0.2);
         break;
       case 'saw_card':
-        o.rotation.set(-0.25, 0.15 * d, -t * 34 * d);
+        this.orient(o, l, -0.25, 0.15 * d, -t * 34 * d);
         this.fx.trail(o.position, trailV, 0.06, 0xfff0b0, C.STREAK, 0.18, true, 0.3);
         if (this.fx.rr(0, 1) < 0.4) this.fx.glowAt(o.position, 1.1, 0xbfd8ff, 0.05, 0.35);
         break;
       case 'football': {
         const rolling = l.y < 0.2;
-        o.rotation.set(0, 0, -(l.x / 0.11) * (rolling ? 1 : 0.6));
+        this.orient(o, l, 0, 0, -(along / 0.11) * (rolling ? 1 : 0.6));
         if (!rolling && this.fx.rr(0, 1) < 0.3) this.fx.trail(o.position, trailV, 0.08, 0xffffff, C.STREAK, 0.12, true, 0.2);
         break;
       }
       case 'fireball_football':
-        o.rotation.set(0, 0, -(l.x / 0.11));
+        this.orient(o, l, 0, 0, -(along / 0.11));
         for (let k = 0; k < 3; k++) {
           this.v2.set(-d * this.fx.rr(1.5, 3.0), this.fx.rr(0.2, 1.0), this.fx.rr(-0.3, 0.3));
           this.fx.trail(o.position, this.v2, this.fx.rr(0.18, 0.3), k === 0 ? 0xffdc70 : 0xff6a10, C.FLAME, 0.3, true, 2.4, -1.5, 2.2, 0.85);
@@ -459,23 +522,24 @@ export class ProjectileView {
         o.visible = false;
         const f = this.fighters[l.owner === 1 ? 1 : 0];
         const mouth = this.v2;
-        if (!f.bonePos('Head', mouth)) f.chest(mouth);
-        mouth.x += d * 0.18; mouth.y -= 0.05; mouth.z = 0.05;
-        const len = Math.max(0.4, Math.abs(l.x - mouth.x) + 0.35);
+        if (!f.bonePos('Head', this.v1)) f.chest(this.v1);
+        this.fx.offset(this.v1, d * 0.18, -0.05, 0, mouth);
+        const len = Math.max(0.4, Math.hypot(l.x - mouth.x, l.z - mouth.z) + 0.35);
         this.fx.flameJet(mouth, d, len, 1.1, dt);
         break;
       }
       case 'taser_bolt': {
-        o.rotation.set(0, d > 0 ? 0 : Math.PI, 0);
+        this.orient(o, l, 0, d > 0 ? 0 : Math.PI, 0);
         const w = i.wire!;
         w.visible = true;
         const a = this.hand(l.owner, 'LeftHand', this.v2);
         const pos = w.geometry.getAttribute('position') as THREE.BufferAttribute;
         const n = pos.count;
+        const span = Math.hypot(l.x - a.x, l.z - a.z);
         for (let k = 0; k < n; k++) {
           const u = k / (n - 1);
-          const sag = -0.12 * Math.sin(Math.PI * u) * Math.min(1, Math.abs(l.x - a.x) / 2);
-          pos.setXYZ(k, a.x + (l.x - a.x) * u, a.y + (y - a.y) * u + sag, 0.05);
+          const sag = -0.12 * Math.sin(Math.PI * u) * Math.min(1, span / 2);
+          pos.setXYZ(k, a.x + (l.x - a.x) * u, a.y + (y - a.y) * u + sag, a.z + (l.z - a.z) * u);
         }
         pos.needsUpdate = true;
         if (this.fx.rr(0, 1) < 0.35) this.fx.arc(a, o.position, 0.8);
@@ -485,23 +549,23 @@ export class ProjectileView {
       case 'spotlight_beam': {
         const b = i.beam!, pl = i.pool!;
         b.visible = true; pl.visible = true;
-        b.position.set(l.x, 0, -0.05);
+        this.at(l.x, 0, l.z, 0, 0, -0.05, b.position);
         (b.material as THREE.ShaderMaterial).uniforms.uAlpha.value = 0.55 + 0.1 * Math.sin(t * 30);
-        if (i.head) { i.head.visible = true; i.head.position.set(l.x, 5.6, -0.05); }
-        pl.position.set(l.x, 0.012, 0.05);
-        this.fx.glowAt(this.v2.set(l.x, y, 0.1), 0.7, 0xfff2c4, 0.04, 0.8);
+        if (i.head) { i.head.visible = true; this.at(l.x, 5.6, l.z, 0, 0, -0.05, i.head.position); }
+        this.at(l.x, 0.012, l.z, 0, 0, 0.05, pl.position);
+        this.fx.glowAt(this.at(l.x, y, l.z, 0, 0, 0.1, this.v2), 0.7, 0xfff2c4, 0.04, 0.8);
         if (this.fx.rr(0, 1) < 0.5) this.fx.trail(this.v2, trailV, 0.06, 0xfff2c4, C.TWINKLE, 0.35, true, 0.2);
         break;
       }
       case 'pyro_line': {
         o.visible = false;
-        this.fx.fireColumn(l.x, 0.05, 1.4, dt, 1.2);
-        if (Math.abs(l.x - l.lastMark) > 0.45) { l.lastMark = l.x; this.fx.floorMark(l.x, 0.05, 0.6, C.SCORCH, 0x140a06, 4, 0.7); }
+        this.fx.fireColumn(l.x, l.z, 1.4, dt, 1.2);
+        if (Math.hypot(l.x - l.lastMark, l.z - l.lastMarkZ) > 0.45) { l.lastMark = l.x; l.lastMarkZ = l.z; this.fx.floorMark(l.x, l.z, 0.6, C.SCORCH, 0x140a06, 4, 0.7); }
         break;
       }
       case 'tomato': case 'bottle': case 'shoe': case 'chair': {
         const spin = type === 'chair' ? 6 : type === 'bottle' ? 11 : 9;
-        o.rotation.set(t * 3, t * 2, -t * spin * d);
+        this.orient(o, l, t * 3, t * 2, -t * spin * d);
         if (type === 'tomato' && this.fx.rr(0, 1) < 0.2) this.fx.trail(o.position, trailV, 0.04, 0xd7261e, C.DROP, 0.4, false, 0.6, 9.8, 0.5, 0.9);
         break;
       }
@@ -512,7 +576,7 @@ export class ProjectileView {
     if (i.shadow) {
       i.shadow.visible = true;
       const h = Math.max(0, y);
-      i.shadow.position.set(l.x, 0.009, 0.05);
+      i.shadow.position.set(l.x, 0.009, l.z);
       const s = type === 'saw_card' ? 1.2 : type === 'chair' ? 1.4 : 0.55;
       i.shadow.scale.setScalar(s * (1 + h * 0.3));
       (i.shadow.material as THREE.MeshBasicMaterial).opacity = Math.max(0.12, 0.7 - h * 0.25);
@@ -522,7 +586,8 @@ export class ProjectileView {
 
   /** read-back (lab / harness) */
   info(): Record<string, unknown> {
-    return { ...this.stats, live: [...this.live.entries()].map(([slot, l]) => ({ slot, type: l.inst.type, x: +l.x.toFixed(2), y: +l.y.toFixed(2) })) };
+    return { ...this.stats, live: [...this.live.entries()].map(([slot, l]) => ({ slot, type: l.inst.type, x: +l.x.toFixed(2), y: +l.y.toFixed(2), z: +l.z.toFixed(2),
+      travelDeg: Math.round(Math.atan2(l.ux, l.uz) * 180 / Math.PI), d: l.d, pos: [+l.inst.obj.position.x.toFixed(2), +l.inst.obj.position.z.toFixed(2)] })) };
   }
 
   reset(): void {

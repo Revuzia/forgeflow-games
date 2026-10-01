@@ -154,12 +154,15 @@ function makeScript(name: string, sep: number): Script {
         [{ at: 0, anim: A.idle, x: 0.75 }, { at: 32, anim: A.kd_fall_b, x: (t) => lerp(0.75, 2.1, t / 45) }, { at: 200, anim: A.wake_b }, { at: 300, anim: A.idle }],
       ],
     };
+    // CHANGED(integrator) 3D: the pair stands at the 5.5 m RING wall (was x 6.2 / 7.35-7.55 = the legacy 8 m 1D walls, which
+    // now lie OUTSIDE the ring: the G5 shot showed both bodies waist-deep in the theatre's stage apron) and the event carries
+    // the §35.13 payload: rust_theater sector 4 (contact at +X), inward normal 270 deg, contact (550, 0) cm
     case 'wallsplat': return {
       frames: 150, warps: [{ start: 32, end: 50, rate: 0 }],
-      ev: [[32, 'HIT', 0, 1, 2, 130], [34, 'WALL_SPLAT', 1, 1, 0, 0]],
+      ev: [[32, 'HIT', 0, 1, 2, 130], [34, 'WALL_SPLAT', 1, 4 + 256 * 270, 550, 0]],
       p: [
-        [{ at: 0, anim: A.idle, x: 6.2 }, { at: 20, anim: A.kick }, { at: 75, anim: A.idle }],
-        [{ at: 0, anim: A.idle, x: 7.35 }, { at: 32, anim: A.hit_l, x: 7.55 }, { at: 120, anim: A.idle }],
+        [{ at: 0, anim: A.idle, x: 3.75 }, { at: 20, anim: A.kick }, { at: 75, anim: A.idle }],
+        [{ at: 0, anim: A.idle, x: 4.8 }, { at: 32, anim: A.hit_l, x: 5.0 }, { at: 120, anim: A.idle }],
       ],
     };
     case 'super': return {

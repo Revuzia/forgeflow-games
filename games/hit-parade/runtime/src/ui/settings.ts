@@ -9,8 +9,12 @@
 //   controls       per player [P1, P2]: { scheme 0 SIMPLE (default) | 1 CLASSIC (CONTRACT §1), keys (input.ts Action
 //                  -> KeyboardEvent.code[], <= 3), pad (Action -> Standard-mapping button index[], <= 3) } - the
 //                  shape lane UI's settings screen reads (ui/types.ts PlayerControls, action ids up/down/left/right/
-//                  l/m/h/s/assist/throw/parry/impact/taunt/pause). A key belongs to ONE action of ONE player (a
-//                  saved conflict from an old build: P1 first, then P2, the first keeps it).
+//                  l/m/h/s/assist/throw/parry/impact/taunt/pause + CHANGED(UI3D) stepIn/stepOut, CONTRACT §35.2). A key
+//                  belongs to ONE action of ONE player (a saved conflict from an old build: P1 first, then P2, the first
+//                  keeps it). CHANGED(UI3D): an action the save does not name (the 3D stepIn / stepOut in a pre-3D save)
+//                  takes its default keys / pad slots only where no SAVED binding already holds them, so an old remap
+//                  (e.g. Q on TAUNT) is never taken away by the new defaults. Pad slots 17..20 = the right stick
+//                  (input.ts PAD.RS_*, PAD_SLOTS 21).
 //   volume         master / music / sfx / voice / crowd, 0..1 (audio.setVolumes takes this object)
 //   gore           'splatter' (comic red, default) | 'sparks' | 'confetti' (owner rule: a settings toggle)
 //   screenShake    0..1 camera-shake scale (0 = off)
@@ -27,7 +31,7 @@
 //
 // `viewSettings(s)` maps onto view/bout.ts ViewSettings (§17.1) - the one place that mapping lives.
 
-import { ACTIONS, PAD_BUTTONS, defaultKeys, defaultPad, type Action, type KeyBindings, type PadBindings } from '../input.ts';
+import { ACTIONS, PAD_SLOTS, defaultKeys, defaultPad, type Action, type KeyBindings, type PadBindings } from '../input.ts';
 import { SaveStore } from './save.ts';
 
 export type Scheme = 0 | 1;
@@ -126,6 +130,8 @@ export const CODE_RE = /^(Key[A-Z]|Digit\d|Numpad(\d|Add|Subtract|Multiply|Divid
 /** both players' key bindings (raw[p] = one player's keys): valid codes, <= 3 per action, one owner per code (P1 first) */
 export function sanitizeKeys(raw: ReadonlyArray<unknown>): [KeyBindings, KeyBindings] {
   const out: [KeyBindings, KeyBindings] = [defaultKeys(0), defaultKeys(1)];
+  // CHANGED(UI3D): which actions the save names (the rest keep their defaults, but only on keys nobody saved)
+  const saved: [Set<Action>, Set<Action>] = [new Set(), new Set()];
   for (const p of [0, 1] as const) {
     const r = raw[p];
     if (!r || typeof r !== 'object') continue;
@@ -134,28 +140,41 @@ export function sanitizeKeys(raw: ReadonlyArray<unknown>): [KeyBindings, KeyBind
       const v = o[a];
       if (!Array.isArray(v)) continue;
       out[p][a] = [...new Set(v.filter((c): c is string => typeof c === 'string' && CODE_RE.test(c)))].slice(0, 3);
+      saved[p].add(a);
     }
   }
   const seen = new Set<string>();
-  for (const p of [0, 1] as const) {
-    for (const a of ACTIONS) out[p][a] = out[p][a].filter((c) => { if (seen.has(c)) return false; seen.add(c); return true; });
+  for (const pass of [true, false]) {
+    for (const p of [0, 1] as const) {
+      for (const a of ACTIONS) {
+        if (saved[p].has(a) !== pass) continue;
+        out[p][a] = out[p][a].filter((c) => { if (seen.has(c)) return false; seen.add(c); return true; });
+      }
+    }
   }
   return out;
 }
 
-/** one player's pad bindings: button indices 0..16, <= 3 per action, one action per button */
+/** one player's pad bindings: slots 0..20 (CHANGED(UI3D): 17..20 = the right stick), <= 3 per action, one action per slot */
 export function sanitizePad(raw: unknown): PadBindings {
   const out = defaultPad();
+  const saved = new Set<Action>();
   if (raw && typeof raw === 'object') {
     const o = raw as Record<string, unknown>;
     for (const a of ACTIONS) {
       const v = o[a];
       if (!Array.isArray(v)) continue;
-      out[a] = [...new Set(v.filter((b): b is number => typeof b === 'number' && Number.isInteger(b) && b >= 0 && b < PAD_BUTTONS))].slice(0, 3);
+      out[a] = [...new Set(v.filter((b): b is number => typeof b === 'number' && Number.isInteger(b) && b >= 0 && b < PAD_SLOTS))].slice(0, 3);
+      saved.add(a);
     }
   }
   const seen = new Set<number>();
-  for (const a of ACTIONS) out[a] = out[a].filter((b) => { if (seen.has(b)) return false; seen.add(b); return true; });
+  for (const pass of [true, false]) {
+    for (const a of ACTIONS) {
+      if (saved.has(a) !== pass) continue;
+      out[a] = out[a].filter((b) => { if (seen.has(b)) return false; seen.add(b); return true; });
+    }
+  }
   return out;
 }
 
@@ -266,7 +285,7 @@ export class SettingsStore {
 
   /** a pad binding: `button` becomes button `slot` of (p, action) and leaves p's other actions */
   bindPad(p: 0 | 1, action: Action, button: number, slot = 0): boolean {
-    if (!Number.isInteger(button) || button < 0 || button >= PAD_BUTTONS) return false;
+    if (!Number.isInteger(button) || button < 0 || button >= PAD_SLOTS) return false;
     const controls = clone(this.value.controls);
     for (const a of ACTIONS) controls[p].pad[a] = controls[p].pad[a].filter((b) => b !== button);
     const list = controls[p].pad[action];

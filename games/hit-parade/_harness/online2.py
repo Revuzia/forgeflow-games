@@ -44,6 +44,7 @@ Exit 0 = PASS, 1 = FAIL. Report -> _harness/_reports/online2_lab[_variant].json 
 """
 import argparse
 import json
+import math
 import os
 import secrets
 import socket
@@ -303,7 +304,24 @@ def print_trace_analysis(an):
 # ─────────────────────────────── --game: the REAL game in two Chromes ───────────────────────────────
 # P1 keyboard set (runtime/src/input.ts DEFAULT_KEYS; common.P1_KEYS). Online, BOTH peers play with these keys (game.ts
 # feeds word 0 = this screen's player-1 controls to the session).
-GK = {"up": "KeyW", "down": "KeyS", "left": "KeyA", "right": "KeyD", "l": "KeyJ", "m": "KeyK", "h": "KeyL", "s": "KeyI", "pause": "Escape"}
+GK = {"up": "KeyW", "down": "KeyS", "left": "KeyA", "right": "KeyD", "l": "KeyJ", "m": "KeyK", "h": "KeyL", "s": "KeyI", "pause": "Escape",
+      "stepin": "KeyQ", "stepout": "KeyE"}   # CHANGED(integrator) 3D: STEP IN / STEP OUT (CONTRACT §35.2)
+
+
+def g_step_kind(fs):
+    """CHANGED(integrator) 3D: a FighterSnap's step kind ('none' | 'sidestep' | 'sidewalk' | 'settle')"""
+    st = (fs or {}).get("step") or {}
+    return st.get("kind") or "none"
+
+
+def g_step_check(checks, label, rep, bots):
+    """CHANGED(integrator) 3D: both peers' players stepped by real keys AND each peer's sim showed the OTHER peer's fighter
+    in a SIDESTEP / SIDEWALK (its STEP bits reached this peer only over the rollback session); the agreement gates (same
+    winner, identical checksums, 0 desyncs) then prove both sims agreed with them"""
+    rep["steps"] = {"taps": [b.step_taps for b in bots], "localStepSamples": [b.local_step_samples for b in bots],
+                    "remoteStepSamples": [b.remote_step_samples for b in bots]}
+    checks.append((label + ": STEP over rollback (each peer saw the remote fighter sidestep / circle)",
+                   all(x > 0 for x in rep["steps"]["taps"]) and all(x > 0 for x in rep["steps"]["remoteStepSamples"]), json.dumps(rep["steps"])))
 GAME_PORTS = (5325, 5330)
 
 READ_TICK = """() => { try { const h = window.__HP__; if (!h) return null; const st = h.state(); const n = h.net();
@@ -533,6 +551,11 @@ class Bot:
         self.block_left = 0
         self.i = 0
         self.presses = 0
+        # CHANGED(integrator) 3D: STEP taps by real Q / E keys, and how often THIS peer's sim showed the REMOTE fighter
+        # (the other peer's player) / its own fighter in a SIDESTEP / SIDEWALK
+        self.step_taps = 0
+        self.remote_step_samples = 0
+        self.local_step_samples = 0
 
     def step(self, s, info):
         f, loc = info.get("f"), info.get("local")
@@ -541,9 +564,17 @@ class Bot:
             s.hold(set())
             return
         me, op = f[loc], f[1 - loc]
-        fwd = GK["right"] if op["x"] >= me["x"] else GK["left"]
+        # CHANGED(integrator) 3D: forward = the player's SCREEN side sign (FighterSnap.facing, the sim's LEFT / RIGHT mapping
+        # under camN); the gap is planar (x, z) - the x order means nothing once the pair has circled
+        fc = me.get("facing")
+        fc = fc if fc in (-1, 1) else (1 if op["x"] >= me["x"] else -1)
+        fwd = GK["right"] if fc >= 0 else GK["left"]
         back = GK["left"] if fwd == GK["right"] else GK["right"]
-        gap = abs(op["x"] - me["x"])
+        gap = math.hypot(op["x"] - me["x"], (op.get("z") or 0.0) - (me.get("z") or 0.0))
+        if g_step_kind(op) in ("sidestep", "sidewalk"):
+            self.remote_step_samples += 1
+        if g_step_kind(me) in ("sidestep", "sidewalk"):
+            self.local_step_samples += 1
         if self.release_next:                                   # attack keys up (a held button never re-triggers)
             self.release_next = False
             s.hold({k for k in s.held if k in (GK["right"], GK["left"], GK["down"])})
@@ -553,6 +584,12 @@ class Bot:
             s.hold({back})
             return
         reach = 1.15 if self.style == "rush" else 1.5
+        # CHANGED(integrator) 3D: now and then a sidestep tap (STEP IN / OUT alternate) from neutral range
+        if 0.9 < gap < 2.6 and self.r.random() < 0.08 and (me.get("stateName") or "") in ("idle", "walk_f", "walk_b"):
+            s.hold({GK["stepin"] if self.step_taps % 2 == 0 else GK["stepout"]})
+            self.step_taps += 1
+            self.release_next = True
+            return
         if gap > reach:
             s.hold({fwd})
             return
@@ -712,6 +749,7 @@ def scen_quick(A, B, opts, out):
     rep["timeline"] = g_play([A, B], bots, opts.bout_timeout)
     rep["bout_s"] = round(time.time() - t0, 1)
     rep["presses"] = [bots[0].presses, bots[1].presses]
+    g_step_check(checks, rep["name"], rep, bots)
     na, nb = A.net(), B.net()
     rep["a"], rep["b"] = g_netsum(na), g_netsum(nb)
     rep["perf"] = g_perf_delta(pf0, [A.perf(), B.perf()])
@@ -827,6 +865,7 @@ def scen_code(A, B, opts, out):
     rep["timeline"] = g_play([A, B], bots, opts.bout_timeout)
     rep["bout_s"] = round(time.time() - t0, 1)
     rep["presses"] = [bots[0].presses, bots[1].presses]
+    g_step_check(checks, rep["name"], rep, bots)
     na, nb = A.net(), B.net()
     rep["a"], rep["b"] = g_netsum(na), g_netsum(nb)
     rep["perf"] = g_perf_delta(pf0, [A.perf(), B.perf()])

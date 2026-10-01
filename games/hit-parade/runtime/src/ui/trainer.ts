@@ -21,14 +21,23 @@
 //   guard RANDOM       a seeded 50 % roll per attack instance (a new move start of P1)
 // RECORD stores the words relative to the dummy's facing (forward / back), so PLAYBACK from either side replays the same
 // motions. The input display gets P1's word (facing-relative, 6 = forward) every tick.
+//
+// CHANGED(UI3D) (CONTRACT §35.2 / §35.13, the 3D ring):
+//   * words keep the STEP bits (mask 0x1fff -> 0x7fff): P1 can sidestep / circle in training, RECORD / PLAYBACK carry them
+//     (STEP_IN / STEP_OUT are camera-relative, so they replay as recorded; only LEFT / RIGHT are re-mapped by facing)
+//   * DUMMY: SIDESTEPS = a tap of STEP every 45 free ticks, alternating IN / OUT (practise HOMING vs LINEAR moves);
+//     DUMMY: CIRCLES = the dummy holds STEP and circle-walks round you (3 s, a short stop, then the other way). GUARD
+//     modes apply on top (holding back cancels circling into block, the sim's rule)
+//   * RESET CORNER / CORNERED walk along the spawn axis until the walker is stuck on the RING wall (planar distance)
+//   * the HITBOX overlay reads the sim's world volumes (match.ts readBoxes: hurt cylinders, oriented hit boxes, the push
+//     circle; projectiles in their travel frame) and projects them in 3D, so it stays right off the spawn line
 
 import type { FighterSnap, GameData, MatchSnap } from '../core/types.ts';
 import type { Match, MatchCfg } from '../core/sim/match.ts';
-import { hurtRects, hitRect, pushExt } from '../core/sim/boxes.ts';
-import { F, P, PROJ_CAP, ST, projBase } from '../core/sim/layout.ts';
+import { readBoxes as simBoxes } from '../core/sim/match.ts';
+import { P, PROJ_CAP, projBase } from '../core/sim/layout.ts';
 import { EV, eventsSince } from '../core/sim/events.ts';
 import type { SimEvent } from '../core/types.ts';
-import { fb } from '../core/sim/state.ts';
 import { M as METRE } from '../core/sim/units.ts';
 import { RECORD_TICKS, type ResetWhere, type TrainingOpts, type TrainingState, type ScreenBox } from './trainopts.ts';
 
@@ -54,9 +63,16 @@ export interface TrainerHud {
 export interface Readout { adv: number | null; block: boolean; startup: number; damage: number; combo: number }
 export type Projector = (x: number, y: number, z: number) => [number, number] | null;
 
-export const BIT = { UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8 } as const;
-const WORD = 0x1fff;
-const FREE_STATES = new Set(['idle', 'crouch', 'walk_f', 'walk_b', 'land', 'dash_f', 'dash_b']);
+export const BIT = { UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, STEP_IN: 1 << 13, STEP_OUT: 1 << 14 } as const;
+/** CHANGED(UI3D): every word bit incl. STEP (CONTRACT §35.13.3) */
+const WORD = 0x7fff;
+/** DUMMY: SIDESTEPS - ticks between taps (while free) and how long a tap holds the bit */
+const SIDESTEP_EVERY = 45;
+const SIDESTEP_TAP = 2;
+/** DUMMY: CIRCLES - hold STEP this long, stop, then circle the other way */
+const CIRCLE_HOLD = 180;
+const CIRCLE_REST = 24;
+const FREE_STATES = new Set(['idle', 'crouch', 'walk_f', 'walk_b', 'land', 'dash_f', 'dash_b', 'sidewalk', 'step_end']);
 const HURT_STATES = new Set(['hitstun', 'juggle', 'knockdown', 'crumple', 'wall_splat', 'thrown', 'dizzy']);
 const FIRST_DISARM_F = 40;
 const PLAYBACK_GAP_F = 30;
@@ -108,6 +124,9 @@ export class TrainingDriver {
   private lastAtkFrame = 0;
   private randomBlock = false;
   private lastHp = -1;
+  // CHANGED(UI3D): DUMMY: SIDESTEPS / CIRCLES pattern clock + which way the next step goes (0 = IN, 1 = OUT)
+  private stepClock = 0;
+  private stepSide = 0;
   // record / playback
   private readonly rec = new Int32Array(RECORD_TICKS);
   private recLen = 0;
@@ -140,6 +159,7 @@ export class TrainingDriver {
     this.m = m;
     this.rng = mulberry32((cfg.seed ^ 0x51ed270b) >>> 0);
     this.firstArmed = false; this.freeCalm = 0; this.lastAtkKey = ''; this.randomBlock = false; this.lastHp = -1;
+    this.stepClock = 0; this.stepSide = 0;
     this.recording = false; this.playIdx = 0; this.playGap = 0; this.resetWhere = null;
     this.lastEvFrame = this.sim.readMatch(m).frame; this.watch = null; this.lastReadout = null;
     // a deep link with a CPU on P2 (?cpu2=n) starts in DUMMY: CPU at that level
@@ -183,6 +203,7 @@ export class TrainingDriver {
     this.stats.resets++;
     this.stats.lastReset = where;
     this.playIdx = 0; this.playGap = 0; this.firstArmed = false; this.freeCalm = 0; this.lastHp = -1;
+    this.stepClock = 0; this.stepSide = 0;
     return m;
   }
 
@@ -193,18 +214,20 @@ export class TrainingDriver {
     const m = s.createMatch(cfg, this.data);
     for (let k = 0; k < 900 && s.readMatch(m).phase !== 'fight'; k++) s.step(m, 0, 0);
     if (where !== 'mid') {
-      // corner = the dummy (P2, right of P1 at the start) walks back into its wall while P1 follows;
-      // cornered = P1 walks back into its own wall while the dummy follows
+      // corner = the dummy (P2, screen-right of P1 at the start) walks back into the ring wall along the spawn axis while
+      // P1 follows; cornered = P1 walks back into the wall behind it while the dummy follows. CHANGED(UI3D): planar
+      // (x, z) distances - the walk runs along the line between the fighters, i.e. the stage's spawn axis (§35.2)
       const dir = where === 'corner' ? BIT.RIGHT : BIT.LEFT;
       const wall = where === 'corner' ? 1 : 0;
-      let lastX = Number.NaN;
+      let lastX = Number.NaN, lastZ = Number.NaN;
       let still = 0;
       for (let k = 0; k < 900; k++) {
         const a = s.readFighter(m, 0), b = s.readFighter(m, 1);
         const w = wall === 1 ? b : a;
-        still = Math.abs(w.x - lastX) < 0.0005 ? still + 1 : 0;
-        lastX = w.x;
-        const gap = Math.abs(b.x - a.x);
+        const wz = w.z ?? 0;
+        still = Math.hypot(w.x - lastX, wz - lastZ) < 0.0005 ? still + 1 : 0;
+        lastX = w.x; lastZ = wz;
+        const gap = Math.hypot(b.x - a.x, (b.z ?? 0) - (a.z ?? 0));
         const stuck = still >= 3;
         if (stuck && gap <= CORNER_GAP_M + 0.05) break;
         const wallWord = stuck ? 0 : dir;
@@ -340,7 +363,7 @@ export class TrainingDriver {
       this.stats.cpuTicks++;
       return this.cpu ? this.cpu.input(m, 1) & WORD : 0;
     }
-    const base = o.dummy === 'crouch' ? BIT.DOWN : o.dummy === 'jump' ? BIT.UP : 0;
+    const base = o.dummy === 'crouch' ? BIT.DOWN : o.dummy === 'jump' ? BIT.UP : o.dummy === 'sidesteps' || o.dummy === 'circles' ? this.stepWord(o.dummy, f1) : 0;
     const th = this.threat(f0, f1, ms);
     // AFTER FIRST HIT: armed by a hit on the dummy, disarmed after a calm spell
     const hurt = HURT_STATES.has(f1.stateName) || (this.lastHp >= 0 && f1.hp < this.lastHp);
@@ -359,6 +382,33 @@ export class TrainingDriver {
     return base;
   }
 
+  /**
+   * CHANGED(UI3D): DUMMY: SIDESTEPS - once the dummy has been free SIDESTEP_EVERY ticks it taps STEP (IN, then OUT next
+   * time) for SIDESTEP_TAP ticks; DUMMY: CIRCLES - it holds STEP CIRCLE_HOLD ticks (a sidewalk round P1), rests
+   * CIRCLE_REST ticks, then circles the other way.
+   */
+  private stepWord(mode: 'sidesteps' | 'circles', f1: FighterSnap): number {
+    const side = this.stepSide === 0 ? BIT.STEP_IN : BIT.STEP_OUT;
+    if (mode === 'circles') {
+      const t = this.stepClock++;
+      if (t < CIRCLE_HOLD) return side;
+      if (t >= CIRCLE_HOLD + CIRCLE_REST) { this.stepClock = 0; this.stepSide ^= 1; }
+      return 0;
+    }
+    const free = FREE_STATES.has(f1.stateName) && f1.hitstop <= 0;
+    if (this.stepClock >= SIDESTEP_EVERY) {
+      // the tap: held SIDESTEP_TAP ticks, then the clock restarts on the other side
+      const k = this.stepClock - SIDESTEP_EVERY;
+      this.stepClock++;
+      if (k < SIDESTEP_TAP) return side;
+      this.stepClock = 0;
+      this.stepSide ^= 1;
+      return 0;
+    }
+    if (free) this.stepClock++;
+    return 0;
+  }
+
   /** is P1 threatening the dummy right now, and must it be blocked standing */
   private threat(f0: FighterSnap, f1: FighterSnap, ms: MatchSnap): { any: boolean; high: boolean } {
     const attacking = f0.stateName === 'attack' && (f0.moveId >= 0 || !!f0.moveName);
@@ -371,7 +421,9 @@ export class TrainingDriver {
     let proj = false;
     for (const p of ms.proj ?? []) {
       if (p.owner !== 0 || p.alive === false) continue;
-      const toward = (f1.x - p.x) * (p.vx ?? 0) > 0 || Math.abs(f1.x - p.x) < 1.2;
+      // CHANGED(UI3D): planar - flying toward the dummy (x, z), or already close
+      const dx = f1.x - p.x, dz = (f1.z ?? 0) - (p.z ?? 0);
+      const toward = dx * (p.vx ?? 0) + dz * (p.vz ?? 0) > 0 || Math.hypot(dx, dz) < 1.2;
       if (toward) { proj = true; break; }
     }
     if (proj && !attacking && this.lastAtkKey === '') { this.lastAtkKey = 'proj'; this.randomBlock = this.rng() < 0.5; }
@@ -395,9 +447,15 @@ export class TrainingDriver {
     }
     const out: ScreenBox[] = [];
     for (const r of readBoxes(this.m)) {
-      const a = project(r.x0, r.y0, 0), b = project(r.x1, r.y1, 0);
-      if (!a || !b) continue;
-      out.push({ kind: r.kind, x0: a[0], y0: a[1], x1: b[0], y1: b[1] });
+      // CHANGED(UI3D): every corner / rim point through the fight camera; the box on screen = their bounding rect
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, ok = true;
+      for (const [px, py, pz] of r.pts) {
+        const q = project(px, py, pz);
+        if (!q) { ok = false; break; }
+        if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0];
+        if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1];
+      }
+      if (ok && x1 >= x0) out.push({ kind: r.kind, x0, y0, x1, y1 });
     }
     this.boxesOn = true;
     this.hud?.setBoxes(out);
@@ -408,39 +466,53 @@ export class TrainingDriver {
   }
 }
 
-/** world boxes in metres (x = the fight line, y = up): hurt, active hit, push, projectile - read from the sim state */
-export interface WorldBox { kind: ScreenBox['kind']; x0: number; y0: number; x1: number; y1: number }
-const HR = new Int32Array(24);
-const BX = new Int32Array(4);
+/**
+ * CHANGED(UI3D): world volumes in metres (x, y up, z), read from the sim (core/sim/match.ts readBoxes = the §27.1 request
+ * SIM3D landed): each as the 3D points whose screen projection bounds it - hurt cylinders and the push circle as two rims
+ * of RIM points (feet and top), active hit boxes and projectiles as the 8 corners of their oriented box (forward x
+ * lateral x height in the attacker's / the projectile's travel frame).
+ */
+export interface WorldBox { kind: ScreenBox['kind']; pts: Array<[number, number, number]> }
+const RIM = 12;
+function cylPts(x: number, z: number, r: number, y0: number, y1: number): Array<[number, number, number]> {
+  const out: Array<[number, number, number]> = [];
+  for (let k = 0; k < RIM; k++) {
+    const a = (k / RIM) * Math.PI * 2;
+    const px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r;
+    out.push([px, y0, pz], [px, y1, pz]);
+  }
+  return out;
+}
+/** an oriented box: centre (cx, cz), yaw in radians (0 = +Z, + toward +X), half length along the forward, half lateral */
+function boxPts(cx: number, cz: number, yaw: number, half: number, lat: number, y0: number, y1: number): Array<[number, number, number]> {
+  const fx = Math.sin(yaw), fz = Math.cos(yaw);
+  const rx = fz, rz = -fx;
+  const out: Array<[number, number, number]> = [];
+  for (const f of [-half, half]) for (const l of [-lat, lat]) for (const y of [y0, y1]) out.push([cx + fx * f + rx * l, y, cz + fz * f + rz * l]);
+  return out;
+}
+const YAW_RAD = (Math.PI * 2) / 65536;
 export function readBoxes(m: Match): WorldBox[] {
   const s = m.s;
   const out: WorldBox[] = [];
   const u = (v: number): number => v / METRE;
   for (let i = 0; i < 2; i++) {
-    const b = fb(i);
-    const x = s[b + F.x], y = s[b + F.y];
-    const n = hurtRects(m, i, HR);
-    for (let k = 0; k < n; k++) out.push({ kind: 'hurt', x0: u(HR[k * 4]), x1: u(HR[k * 4 + 1]), y0: u(HR[k * 4 + 2]), y1: u(HR[k * 4 + 3]) });
-    // push box: the asymmetric front / back extents (CHANGED(fixer) D2) over the posture box's height
-    const top = n > 0 ? HR[3] : y;
-    out.push({ kind: 'push', x0: u(x - pushExt(m, i, -1)), x1: u(x + pushExt(m, i, 1)), y0: u(y), y1: u(top) });
-    const k = s[b + F.mv];
-    if (k >= 0 && s[b + F.st] === ST.ATTACK) {
-      const mv = m.cf[i].moves[k];
-      const f = s[b + F.mvF];
-      for (let j = 0; j < mv.nBox; j++) {
-        const o = j * 7;
-        if (f < mv.boxes[o] || f > mv.boxes[o + 1]) continue;
-        hitRect(m, i, mv, j, BX, 0);
-        out.push({ kind: 'hit', x0: u(BX[0]), x1: u(BX[1]), y0: u(BX[2]), y1: u(BX[3]) });
-      }
-    }
+    const bx = simBoxes(m, i);
+    let lo = Infinity, hi = -Infinity;
+    for (const h of bx.hurt) { out.push({ kind: 'hurt', pts: cylPts(h.x, h.z, h.r, h.y0, h.y1) }); lo = Math.min(lo, h.y0); hi = Math.max(hi, h.y1); }
+    if (!Number.isFinite(lo)) { lo = 0; hi = 1.7; }
+    out.push({ kind: 'push', pts: cylPts(bx.push.x, bx.push.z, bx.push.r, lo, hi) });
+    for (const h of bx.hit) out.push({ kind: 'hit', pts: boxPts(h.x, h.z, h.yaw, h.len / 2, h.lat, h.y0, h.y1) });
   }
   for (let k = 0; k < PROJ_CAP; k++) {
     const pb = projBase(k);
     if (s[pb + P.act] === 0) continue;
-    const px = s[pb + P.x], py = s[pb + P.y], w2 = s[pb + P.w] >> 1, h2 = s[pb + P.h] >> 1;
-    out.push({ kind: 'proj', x0: u(px - w2), x1: u(px + w2), y0: u(py - h2), y1: u(py + h2) });
+    const owner = s[pb + P.owner], mvI = s[pb + P.mv];
+    const mv = owner >= 0 && owner < 2 && mvI >= 0 ? m.cf[owner]?.moves[mvI] : undefined;
+    const w2 = s[pb + P.w] >> 1, h2 = s[pb + P.h] >> 1;
+    const lat = mv?.proj ? mv.proj.lat : w2;
+    const y = s[pb + P.y];
+    out.push({ kind: 'proj', pts: boxPts(u(s[pb + P.x]), u(s[pb + P.z]), s[pb + P.yaw] * YAW_RAD, u(w2), u(lat), u(y - h2), u(y + h2)) });
   }
   return out;
 }

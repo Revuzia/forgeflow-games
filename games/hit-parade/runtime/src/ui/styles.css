@@ -47,6 +47,8 @@
 .hp-chip[data-b="h"] { background: #ff8a7a; }
 .hp-chip[data-b="s"], .hp-chip[data-b="sp"] { background: var(--hp-pink); color: #fff; }
 .hp-chip[data-b="assist"] { background: var(--hp-teal); }
+/* CHANGED(UI3D): the STEP chips (move list, HOW TO PLAY, input display) - violet like the touch STEP pair */
+.hp-chip.step { background: #c9a6ff; color: var(--hp-ink); }
 .hp-ico { display: inline-grid; place-items: center; }
 .hp-ico svg { width: 100%; height: 100%; display: block; }
 
@@ -379,6 +381,14 @@ html.hp-touch .hp-frames .kv { gap: 5px; }
 html.hp-touch .hp-frames .adv b { font-size: 16px; }
 html.hp-touch .hp-inputs { top: 128px; }
 html.hp-touch .hp-inputs .row:nth-child(n + 9) { display: none; }
+/* CHANGED(UI3D) (CONTRACT §35.2): the STEP IN / OUT pair sits above the stick (left edge, 30..158 px in, 168..224 px up at
+   scale 1): P1's combo, callouts and the training input display start right of it (176 px in; in training the combo and
+   callouts also clear the input display). Left-handed: the pair is on the right edge - P2's side moves in the same way. */
+html.hp-touch .hp-combo.p1, html.hp-touch .hp-calls.p1 { left: calc(env(safe-area-inset-left, 0px) + 176px); }
+html.hp-touch .hp-inputs { left: calc(env(safe-area-inset-left, 0px) + 176px); }
+html.hp-touch .hp-hud.training .hp-combo.p1, html.hp-touch .hp-hud.training .hp-calls.p1 { left: calc(env(safe-area-inset-left, 0px) + 188px + var(--u) * 11); }
+html.hp-touch:has(#hp-touch.lh) .hp-combo.p2, html.hp-touch:has(#hp-touch.lh) .hp-calls.p2 { right: calc(env(safe-area-inset-right, 0px) + 176px); }
+html.hp-touch:has(#hp-touch.lh) .hp-inputs { left: auto; right: calc(env(safe-area-inset-right, 0px) + 176px); }
 /* the left-handed layout mirrors the thumb arc: nothing else in the HUD sits low enough to care */
 
 /* phone landscape without the touch class (a small desktop window): the same compact band */

@@ -10,7 +10,10 @@
 //   * Score popups: SCORE events (a = player, b = points; UI §22.1) become popups anchored at the last downed goon / parried
 //     object / the player's chest; `BoutView.popups()` returns them with live SCREEN positions every frame, for the UI to
 //     draw (the view draws no text itself: copy stays in the UI's strings).
-//   * The camera frames the player plus the goons within reach (BoutView feeds the BRAWL rig the cluster extents).
+//   * The camera frames the player plus the goons within reach (BoutView feeds the BRAWL rig the goons' ground points).
+//   * CHANGED(VIEW3D) (§35.8 / §35.13 item 10): goons come from every bearing - each is placed at its snapshot (x, y, z)
+//     with its yaw (mirrored by facing like a fighter). The old depth stagger (the 1D sim kept every goon on the line)
+//     only applies to a snapshot without z (the 1D labs).
 
 import * as THREE from 'three';
 import type { Assets, FighterAsset } from './assets.ts';
@@ -26,7 +29,7 @@ const TINTS = [0, 0.35, -0.3, 0.7, -0.6, 1.1, -1.0, 1.6];
 const POOL_PER_KIND = 4;
 
 /** a score popup for the UI: points (negative = a heckle hit), reason = SCORE `d` (§28.4), screen x / y (0..1, y down) */
-export interface Popup { id: number; points: number; player: number; reason: number; total: number; x: number; y: number; wx: number; wy: number; age: number }
+export interface Popup { id: number; points: number; player: number; reason: number; total: number; x: number; y: number; wx: number; wy: number; wz: number; age: number }
 
 /** depth stagger (m) for goons waiting in the approach ring, per slot: a wave on one side of the line does not read as
  *  one body walking through another (the sim keeps goons on the fight line; an attacking goon comes back to z 0) */
@@ -108,6 +111,7 @@ export class BrawlView {
   private nextId = 1;
   private readonly tmp = new THREE.Vector3();
   private lastDown = new THREE.Vector3(0, 1.1, 0);
+  private readonly tmp2 = new THREE.Vector3();
   private tables: Readonly<Record<string, ReadonlyArray<AnimRef>>> = {};
   /** borrowed = a goon shown on another kind's body (pool of that kind exhausted); 0 is the expectation */
   readonly stats = { goons: 0, downs: 0, popups: 0, kinds: [] as string[], borrowed: 0, drawn: 0 };
@@ -154,7 +158,8 @@ export class BrawlView {
     const zt = this.zTargets;
     zt.clear();
     const order = (list ?? []).filter((s) => !(s.alive === false || s.alive === 0)).sort((a, b) => Math.abs(a.x - px) - Math.abs(b.x - px));
-    for (let i = 0; i < order.length; i++) {
+    const is3d = (list ?? []).some((s) => typeof s.z === 'number');
+    for (let i = 0; i < order.length && !is3d; i++) {
       const s = order[i];
       const onLine = !!s.token || !!s.telegraph || (s.hitstop ?? 0) > 0 || s.down === true || s.down === 1 || /^(hit|kd|ko|wake|block)/.test(s.stateName ?? '');
       let z = onLine ? 0 : STAGGER[s.slot % STAGGER.length];
@@ -174,14 +179,19 @@ export class BrawlView {
         if (!g) { g = this.goons.find((x) => !x.alive); if (g && want && !this.fallback) this.stats.borrowed++; }
         if (!g) continue;
         g.alive = true; g.downFor = 0; g.simKind = want ?? '';
-        g.z = STAGGER[s.slot % STAGGER.length];
+        g.z = is3d ? 0 : STAGGER[s.slot % STAGGER.length];
         this.bySlot.set(s.slot, g);
       }
       const facing = (s.facing ?? 1) < 0 ? -1 : 1;
       g.root.visible = true;
-      g.z += ((zt.get(s.slot) ?? 0) - g.z) * Math.min(1, dt * 5);
-      g.root.position.set(s.x, s.y ?? 0, g.z);
-      g.root.rotation.set(0, facing * 90 * DEG, 0);
+      if (is3d) {
+        g.z = 0;
+        g.root.position.set(s.x, s.y ?? 0, s.z ?? 0);
+      } else {
+        g.z += ((zt.get(s.slot) ?? 0) - g.z) * Math.min(1, dt * 5);
+        g.root.position.set(s.x, s.y ?? 0, g.z);
+      }
+      g.root.rotation.set(0, typeof s.yaw === 'number' && Number.isFinite(s.yaw) ? s.yaw : facing * 90 * DEG, 0);
       g.root.scale.set(facing < 0 ? -1 : 1, 1, 1);
       const down = s.down === true || s.down === 1;
       const table = typeof s.kind === 'string' ? this.tables[s.kind] : undefined;
@@ -214,16 +224,17 @@ export class BrawlView {
     const g = this.bySlot.get(slot);
     if (!g) return;
     this.stats.downs++;
-    this.tmp.set(g.root.position.x, 1.0, 0.1);
+    const r = g.root.position;
+    this.fx.offset(this.tmp2.set(r.x, 1.0, r.z), 0, 0, 0.1, this.tmp);
     this.lastDown.copy(this.tmp);
-    this.fx.dust(this.tmp.set(g.root.position.x, 0.05, 0.1), 1.2);
+    this.fx.dust(this.fx.offset(this.tmp2.set(r.x, 0.05, r.z), 0, 0, 0.1, this.tmp), 1.2);
     this.fx.sparkle(this.lastDown, 18);
   }
 
   /** a SCORE event (§28.4: b delta, c running total, d reason): a popup at `at`, else the last goon down */
   score(points: number, player: number, at: THREE.Vector3 | null, reason = 0, total = 0): void {
     const w = at ?? this.lastDown;
-    this.popupsL.push({ id: this.nextId++, points, player, reason, total, x: 0, y: 0, wx: w.x, wy: w.y + 0.4, age: 0 });
+    this.popupsL.push({ id: this.nextId++, points, player, reason, total, x: 0, y: 0, wx: w.x, wy: w.y + 0.4, wz: w.z, age: 0 });
     if (this.popupsL.length > 12) this.popupsL.shift();
     this.stats.popups++;
   }
@@ -232,7 +243,7 @@ export class BrawlView {
   updatePopups(dt: number, cam: THREE.Camera): void {
     for (const p of this.popupsL) {
       p.age += dt;
-      this.tmp.set(p.wx, p.wy + p.age * 0.6, 0).project(cam);
+      this.tmp.set(p.wx, p.wy + p.age * 0.6, p.wz).project(cam);
       p.x = Math.round((this.tmp.x * 0.5 + 0.5) * 1000) / 1000;
       p.y = Math.round((0.5 - this.tmp.y * 0.5) * 1000) / 1000;
     }
@@ -247,7 +258,7 @@ export class BrawlView {
       if (!ps) { ps = this.pops.find((x) => x.id < 0); if (!ps) continue; ps.id = p.id; ps.paint(p.points); }
       const pop = p.age < 0.12 ? 0.6 + 0.4 * (p.age / 0.12) * 1.25 : 1;
       ps.sprite.visible = true;
-      ps.sprite.position.set(p.wx, p.wy + 0.25 + p.age * 0.6 + (k % 2) * 0.18, 0.4);
+      this.fx.offset(this.tmp2.set(p.wx, p.wy + 0.25 + p.age * 0.6 + (k % 2) * 0.18, p.wz), 0, 0, 0.4, ps.sprite.position);
       ps.sprite.scale.set(0.95 * pop, 0.475 * pop, 1);
       (ps.sprite.material as THREE.SpriteMaterial).opacity = Math.max(0, Math.min(1, (1.4 - p.age) / 0.4));
       this.stats.drawn++;
@@ -260,19 +271,36 @@ export class BrawlView {
   goonChest(slot: number, out: THREE.Vector3): boolean {
     const g = this.bySlot.get(slot);
     if (!g) return false;
-    out.set(g.root.position.x, g.root.position.y + g.heightM * 0.68, g.root.position.z + 0.1);
+    const r = g.root.position;
+    this.fx.offset(this.tmp2.set(r.x, r.y + g.heightM * 0.68, r.z), 0, 0, 0.1, out);
     return true;
   }
 
-  /** live goon x positions (camera framing) */
+  /** CHANGED(VIEW3D): a goon's ground position (null = no live goon in that slot) */
+  goonPos(slot: number, out: THREE.Vector3): boolean {
+    const g = this.bySlot.get(slot);
+    if (!g || !g.alive) return false;
+    out.copy(g.root.position);
+    return true;
+  }
+
+  /** live goon x positions (camera framing, 1D) */
   goonXs(out: number[]): number[] {
     out.length = 0;
     for (const g of this.bySlot.values()) if (g.alive && g.root.visible) out.push(g.root.position.x);
     return out;
   }
 
+  /** CHANGED(VIEW3D): live goon ground points [x, z] (the BRAWL camera frames them with the player) */
+  goonPts(out: Array<[number, number]>): Array<[number, number]> {
+    out.length = 0;
+    for (const g of this.bySlot.values()) if (g.alive && g.root.visible && g.downFor < 0.6) out.push([g.root.position.x, g.root.position.z]);
+    return out;
+  }
+
   info(): Record<string, unknown> {
-    const live = [...this.bySlot].map(([slot, g]) => ({ slot, sim: g.simKind, body: g.kindId, clip: g.pose.last.clip, h: +g.heightM.toFixed(2), vis: g.root.visible }));
+    const live = [...this.bySlot].map(([slot, g]) => ({ slot, sim: g.simKind, body: g.kindId, clip: g.pose.last.clip, h: +g.heightM.toFixed(2), vis: g.root.visible,
+      x: +g.root.position.x.toFixed(2), z: +g.root.position.z.toFixed(2), yawDeg: Math.round(g.root.rotation.y * 180 / Math.PI) }));
     return { ...this.stats, fallback: this.fallback, active: this.bySlot.size, popups: this.popupsL.length, live };
   }
 

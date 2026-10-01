@@ -14,7 +14,7 @@
 //   S3 bonus rounds   BRAWL BREAK and HECKLER TOSS for all 12 fighters in the sim exactly as game.ts stages them (mode
 //                     brawl / heckler, P2 = the player's own id at cpu 0 - absent): the round runs to MATCH_END, winner 0,
 //                     a scripted player scores (> 0), the CPU gives word 0 in both modes
-//   S4 boss phases    RICKY (the boss slot's CPU L6) in an arcade bout: phase 2 fires (PHASE event) the first time he drops
+//   S4 boss phases    RICKY (the boss slot's CPU L6) in an arcade bout (first to 3 rounds, CHANGED(AI3D)): phase 2 fires (PHASE event) the first time he drops
 //                     below 50 %, stays for the later rounds (unique u0 = 2), his CPU plays the phase-2 recipe table and
 //                     starts phase-2 moves (PYRO / SEASON FINALE) after it
 //   S5 full runs      a PILOT for every fighter and a SEASON for 3 fighters, slot by slot as game.ts runs them (arcade
@@ -176,25 +176,32 @@ function runMatch(cfg: MatchCfg, w0: (m: Match, f: number) => number, w1: (m: Ma
   const ms = readMatch(m);
   return { winner: ms.winner, frames: ms.frame, ev, m };
 }
-/** the scripted bonus-round player: jabs toward the nearest goon (brawl), parries objects that come close (heckler) */
+/**
+ * the scripted bonus-round player: walks to the goon it is locked on and jabs (brawl), parries objects that come close
+ * (heckler). CHANGED(AI3D) (CONTRACT §35.8 / §35.17): in the 3D ring the goons come from every bearing, so distances are
+ * PLANAR and "toward the goon" is FORWARD - the sim walks the player along the line to its soft-lock goon (BrawlSnap.target,
+ * else the nearest live goon) and the player faces it (the old x-only distance + LEFT / RIGHT toward the goon's x walked
+ * past goons off the line: 1-3 fighters scored 0).
+ */
 function bonusPlayer(): (m: Match, f: number) => number {
-  let t = 0;
   return (m: Match, f: number): number => {
     const snap = readMatch(m);
     const me = readFighter(m, 0);
-    t++;
+    const mz = me.z ?? 0;
     if (snap.brawl?.mode === 'heckler') {
       // hold PARRY while an object is about to arrive (a held parry is live; tapping it spends the recovery)
-      const near = (snap.proj ?? []).some((p) => p.kind === 2 && Math.abs(p.x - me.x) < 1.3);
+      const near = (snap.proj ?? []).some((p) => p.kind === 2 && Math.hypot(p.x - me.x, (p.z ?? 0) - mz) < 1.3);
       return near ? 1024 : 0;
     }
-    const goons = snap.brawl?.goons ?? [];
-    let best: { x: number } | null = null;
-    for (const g of goons) if (!g.down && (!best || Math.abs(g.x - me.x) < Math.abs(best.x - me.x))) best = g;
+    const goons = (snap.brawl?.goons ?? []).filter((g) => !g.down);
+    if (goons.length === 0) return 0;
+    const planar = (g: { x: number; z?: number }): number => Math.hypot(g.x - me.x, (g.z ?? 0) - mz);
+    const tgt = snap.brawl?.target ?? -1;
+    let best = goons.find((g) => g.slot === tgt) ?? null;
+    if (!best) for (const g of goons) if (!best || planar(g) < planar(best)) best = g;
     if (!best) return 0;
-    const dx = best.x - me.x;
-    const toward = dx > 0 ? 8 : 4;
-    if (Math.abs(dx) > 0.9) return toward;
+    const forward = m.s[fighterBase(0) + F.facing] >= 0 ? 8 : 4; // RIGHT / LEFT = forward = toward the locked goon
+    if (planar(best) > 0.9) return forward;
     return f % 6 === 0 ? 16 : f % 6 === 3 ? 32 : 0; // L, then M
   };
 }
@@ -228,7 +235,10 @@ function bonusPlayer(): (m: Match, f: number) => number {
   const notes: string[] = [];
   for (let sd = 1; sd <= 4; sd++) {
     const hero = ['johnny', 'patch', 'lotus', 'boneyard'][sd - 1];
-    const cfg: MatchCfg = { mode: 'arcade', stage: playableStage(data as never, homeStage(BOSS)), seed: 900 + sd, p: [{ fighter: hero, color: 0, scheme: 0, cpu: -1 }, { fighter: BOSS, color: 0, scheme: 0, cpu: 6 }] };
+    // CHANGED(AI3D): first to 3 rounds (game.ts plays first to 2). In the 5.5 m ring the L8 hero ends RICKY's bouts sooner
+    // (SIM3D §35.13 item 14: 2-0 sweeps, phase-2 moves in 2/4 bouts), so a 2-0 bout left too little phase-2 time to observe;
+    // the phase rules under test are per round (u0 persists), so a longer bout observes the same mechanics for longer
+    const cfg: MatchCfg = { mode: 'arcade', stage: playableStage(data as never, homeStage(BOSS)), seed: 900 + sd, rounds: 3, p: [{ fighter: hero, color: 0, scheme: 0, cpu: -1 }, { fighter: BOSS, color: 0, scheme: 0, cpu: 6 }] };
     const player = createCpu(8, hero, sd * 3);
     const boss = createCpu(6, BOSS, sd * 5);
     let phaseAt = -1;
@@ -290,7 +300,11 @@ function bonusPlayer(): (m: Match, f: number) => number {
     let bouts = 0;
     let bonus = 0;
     let guard = 0;
-    while (!run.done && guard++ < 80) {
+    // CHANGED(AI3D): the loop guard is a runaway stop, not a difficulty gate - 400 slots (was 80). Measured in the 3D ring
+    // (scratch ai3d_freak.ts, 30-40 seeds on butcher_block): the 'optimal' stand-in beats THE FREAK L6 as boneyard 0-1 / 30-40,
+    // as johnny / gazza 1-3 / 30, with or without the ring levers on either side - a boneyard PILOT needs ~40 continues
+    // on average, so 80 slots failed by chance (P ~ 24 %); 400 slots leave P < 0.1 %
+    while (!run.done && guard++ < 400) {
       const slot = run.current()!;
       const isBonus = slot.kind === 'brawl' || slot.kind === 'heckler';
       const opp = slot.opponent ?? fighter;

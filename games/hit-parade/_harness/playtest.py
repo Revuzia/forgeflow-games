@@ -17,9 +17,12 @@ Flow (every step asserted; a failed step is reported with what was seen):
   3. character select: the slot list must hold johnny and bruno (and every slot is a fighter in data or 'random'; bosses
      are locked); P1 picks johnny (fighter, colour, controls), the CPU cursor moves to bruno (fighter, colour)
   4. stage select: RUST THEATER; VS splash; the bout starts (phase 'bout', match phase 'fight')
-  5. the bout, real keys only: walk (D/A), jab (J), special (I), throw (H), parry (hold O into the CPU's attack),
-     IMPACT (P), super (I+L = SIMPLE S+H) once SHOWTIME >= 1 bar; then fight to the finish (walk in, ASSIST auto-combo
-     U + J taps, throws, block by holding back when the CPU attacks). HUD read-back checked during the bout: HP bars
+  5. the bout, real keys only: walk (D/A), SIDESTEP (tap Q = STEP_IN / E = STEP_OUT) and CIRCLE-WALK (hold E: the 3D ring,
+     CONTRACT §35.2, CHANGED(AI3D) - shots pt_circle_a/b/c from three angles of the orbit), jab (J), special (I), throw (H),
+     parry (hold O into the CPU's attack), IMPACT (P), super (I+L = SIMPLE S+H) once SHOWTIME >= 1 bar; then fight to the
+     finish (walk in, ASSIST auto-combo U + J taps, throws, block by holding back when the CPU attacks, a sidestep tap
+     every few seconds). Distances are PLANAR (x, z) and forward = P1's facing sign, as the sim maps LEFT / RIGHT
+     (CHANGED(AI3D)). HUD read-back checked during the bout: HP bars
      follow the sim, NERVE / SHOWTIME present, timer counting, round pips, combo counter, captions. Audio: unlocked,
      a music cue, hit sounds played, a crowd loop running.
   6. MATCH_END -> results card; the results numbers (winner, rounds won, damage) must equal the sim's (__HP__.match()).
@@ -31,6 +34,7 @@ never got far enough to judge.
 """
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -40,7 +44,9 @@ from common import (SHOTS, HarnessError, Session, add_common_args, build_url, di
                     fighters_info, match_info, preflight_chromes, print_diagnostics, save_report, wait_match_phase, wait_warm)
 
 K = {"up": "KeyW", "down": "KeyS", "left": "KeyA", "right": "KeyD", "l": "KeyJ", "m": "KeyK", "h": "KeyL", "s": "KeyI",
-     "assist": "KeyU", "throw": "KeyH", "parry": "KeyO", "impact": "KeyP", "pause": "Escape"}
+     "assist": "KeyU", "throw": "KeyH", "parry": "KeyO", "impact": "KeyP", "pause": "Escape",
+     # CHANGED(AI3D): the §35.2 default STEP keys (CONTRACT §35.16 item 2: P1 Q = STEP_IN, E = STEP_OUT)
+     "stepin": "KeyQ", "stepout": "KeyE"}
 
 READ_MENUS = "() => { try { return window.__HP__ && __HP__.menus ? __HP__.menus() : null; } catch (e) { return null; } }"
 READ_HUD = "() => { try { return window.__HP__ && __HP__.hud ? __HP__.hud() : null; } catch (e) { return null; } }"
@@ -129,15 +135,52 @@ class Player:
 
 
 def fwd_back(f):
-    """(forward key, back key) for P1 from the fighters' x"""
-    if (f[1]["x"] - f[0]["x"]) >= 0:
+    """(forward key, back key) for P1. CHANGED(AI3D): from P1's facing sign (FighterSnap.facing = the screen side its
+    forward points to under the camera basis - exactly how the sim maps LEFT / RIGHT); the x order is meaningless once
+    the pair has circled (the old rule walked P1 away from the CPU after a circle-walk)"""
+    fc = f[0].get("facing")
+    if fc is None:
+        fc = 1 if (f[1]["x"] - f[0]["x"]) >= 0 else -1
+    if fc >= 0:
         return K["right"], K["left"]
     return K["left"], K["right"]
+
+
+def planar(a, b):
+    """CHANGED(AI3D): ground-plane distance (m) between two snapshots with x / z (z defaults 0)"""
+    return math.hypot(a["x"] - b["x"], (a.get("z") or 0.0) - (b.get("z") or 0.0))
+
+
+def bearing(c, p):
+    """CHANGED(AI3D): yaw-convention bearing (deg) of p seen from c: 0 = +Z, 90 = +X"""
+    return math.degrees(math.atan2(p["x"] - c["x"], (p.get("z") or 0.0) - (c.get("z") or 0.0)))
+
+
+def ang_diff(a, b):
+    return abs((a - b + 180.0) % 360.0 - 180.0)
+
+
+def step_kind(fs):
+    st = (fs or {}).get("step") or {}
+    return st.get("kind") or ("sidestep" if fs.get("stateName") == "sidestep" else "sidewalk" if fs.get("stateName") == "sidewalk" else "none")
 
 
 def by(evs, names, a=None, b=None, c=None):
     return [e for e in evs if e.get("typeName") in names and (a is None or e.get("a") == a) and (b is None or e.get("b") == b)
             and (c is None or e.get("c") in (c if isinstance(c, (list, tuple, set)) else (c,)))]
+
+
+def sim_speed(sess, secs=3.0):
+    """CHANGED(integrator) 3D (G6 stability): the loop's real tick rate as a fraction of 60 Hz over `secs` of wall time
+    (__HP__.state().tick); None when unreadable. A starved page (other processes at 100 % CPU) runs the sim far slower
+    than real time and every timed real-key verb fails - measured, G6 run 4: 1166 frames in 663 s = 1.8 frames/s."""
+    a = (sess.state() or {}).get("tick")
+    t0 = time.time()
+    time.sleep(secs)
+    b = (sess.state() or {}).get("tick")
+    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+        return None
+    return round((b - a) / ((time.time() - t0) * 60.0), 3)
 
 
 def run(args) -> int:
@@ -248,6 +291,7 @@ def run(args) -> int:
                 S.check("round1_fight", okf, "match phase %s" % mph)
                 if not okf:
                     fatal = "the round never reached 'fight'"
+                    report.setdefault("simSpeed", {})["intro"] = sim_speed(sess)   # CHANGED(integrator) 3D: starved or stuck?
             else:
                 fatal = "the bout never started (phase %r)" % ph
         # ---------------------------------------------------------------- 5. the bout
@@ -255,6 +299,7 @@ def run(args) -> int:
             notes = []
             wait_warm(sess, notes, "bout start")
             report["notes"] = notes
+            report.setdefault("simSpeed", {})["boutStart"] = sim_speed(sess)
             P.shot("fight")
             P.new_events()
             bout = play_bout(P, S, args, verbs)
@@ -289,8 +334,18 @@ def run(args) -> int:
                 S.check("results_damage_eq_sim", dmg == st.get("damage"), "dom damage=%s sim (hp-drop tally)=%s" % (dmg, st.get("damage")))
                 S.check("results_buttons", dom.get("buttons") == ["hpm-res-rematch", "hpm-res-charselect", "hpm-res-menu"], dom.get("buttons"))
                 report["resultsSim"] = {"winner": sim_w, "wins": sim_wins, "stats": st, "frame": mi.get("frame")}
+                # CHANGED(integrator) 3D (G6 stability): the results cue is polled for up to 3 s (one read right after the
+                # card failed as cue=None on a 6.5 fps page in the P2 run - the card's music request lands a few frames later)
+                # + the engine's lastCue (audio/engine.ts): win / lose are one-shot stingers (8.25 / 10.6 s) and `cue` goes null
+                # when they end - G6 run 2 (3D) read cue=None after a lost bout. The cue must be the one for P1's result.
+                want_cue = "win" if sim_w == 0 else "lose"
                 au = P.audio()
-                S.check("audio_results_music", au.get("cue") in ("win", "lose"), "cue=%s" % au.get("cue"))
+                t_au = time.time()
+                while want_cue not in (au.get("cue"), au.get("lastCue")) and time.time() - t_au < 3.0:
+                    time.sleep(0.1)
+                    au = P.audio()
+                S.check("audio_results_music", want_cue in (au.get("cue"), au.get("lastCue")),
+                        "want %s: cue=%s lastCue=%s (after %.1f s)" % (want_cue, au.get("cue"), au.get("lastCue"), time.time() - t_au))
             else:
                 fatal = "no results card"
         # ---------------------------------------------------------------- 7. rematch -> pause / resume -> forfeit -> menu
@@ -315,9 +370,15 @@ def run(args) -> int:
             P.shot("pause")
             P.key(K["pause"])                              # ESC on the card = resume (CONTRACT §18.3)
             okb, ph = sess.wait_phase("bout", 5)
-            time.sleep(0.8)
+            # CHANGED(integrator) 3D (G6 stability): the sim must advance after the resume - polled for up to 4 s (a fixed
+            # 0.8 s read failed as "simFrame 30 -> 30" on a 6.5 fps page in the P2 run)
+            t_r = time.time()
+            time.sleep(0.3)
             fr2 = P.m().get("simFrame")
-            S.check("esc_resume", okb and isinstance(fr2, int) and isinstance(fr1, int) and fr2 > fr1, "phase=%s simFrame %s -> %s" % (ph, fr1, fr2))
+            while not (isinstance(fr2, int) and isinstance(fr1, int) and fr2 > fr1) and time.time() - t_r < 4.0:
+                time.sleep(0.1)
+                fr2 = P.m().get("simFrame")
+            S.check("esc_resume", okb and isinstance(fr2, int) and isinstance(fr1, int) and fr2 > fr1, "phase=%s simFrame %s -> %s (%.1f s)" % (ph, fr1, fr2, time.time() - t_r))
             P.key(K["pause"])
             sess.wait_phase("paused", 5)
             P.wait_screen("pause", 5)
@@ -359,7 +420,7 @@ def run(args) -> int:
     print("=" * 84)
     print("verbs        : %s" % json.dumps({k: (v.get("ok"), v.get("how")) for k, v in verbs.items()}))
     if bout:
-        print("bout         : %s" % json.dumps({k: bout.get(k) for k in ("rounds", "winner", "wins", "frames", "seconds", "meterHelp", "keyPresses")}, default=str))
+        print("bout         : %s" % json.dumps({k: bout.get(k) for k in ("rounds", "winner", "wins", "frames", "seconds", "meterHelp", "hpHelp", "keyPresses")}, default=str))
     print("-" * 84)
     print_diagnostics(diag)
     print("=" * 84)
@@ -368,7 +429,16 @@ def run(args) -> int:
     report.update({"steps": S.items, "verbs": verbs, "diagnostics": diag, "fatal": fatal, "timeline": tl[-20:],
                    "events": [{k: e.get(k) for k in ("frame", "typeName", "a", "b", "c", "d")} for e in P.log[-400:]]})
     ok = not fatal and not problems and not dp
-    report["verdict"] = "PASS" if ok else "FAIL"
+    # CHANGED(integrator) 3D (G6 stability): a STARVED page cannot run a real-time gate - the sim speed at the bout start
+    # (3 s of ticks) or over the whole bout (frames / (seconds x 60)) below 0.5 of real time makes a failing run
+    # INCONCLUSIVE (exit 3, SAID, never a pass); a run that passed anyway stays a pass
+    sp = report.get("simSpeed") or {}
+    if bout and bout.get("seconds"):
+        sp["bout"] = round((bout.get("frames") or 0) / (bout["seconds"] * 60.0), 3)
+    starved = [k for k, v in sp.items() if isinstance(v, (int, float)) and v < 0.5]
+    report["simSpeed"] = sp
+    report["verdict"] = "PASS" if ok else ("INCONCLUSIVE" if starved else "FAIL")
+    print("sim speed    : %s (fraction of 60 Hz real time)%s" % (json.dumps(sp), "  STARVED: %s" % starved if starved else ""))
     for s in problems:
         print("   X step %s: %s" % (s["step"], s["detail"] if isinstance(s["detail"], str) else json.dumps(s["detail"], default=str)))
     for p in dp:
@@ -377,7 +447,9 @@ def run(args) -> int:
         print("FATAL        : %s" % fatal)
     print("report       : %s" % save_report("playtest", report, args.base))
     print("steps        : %d passed, %d failed" % (len(S.items) - len(problems), len(problems)))
-    print("RESULT: %s" % ("OK" if ok else "FAIL"))
+    print("RESULT: %s" % ("OK" if ok else ("INCONCLUSIVE (the page was starved below half real time - rerun on an idle machine)" if starved else "FAIL")))
+    if not ok and starved:
+        return 3
     if fatal:
         return 2
     return 0 if ok else 1
@@ -404,7 +476,26 @@ def play_bout(P, S, args, verbs):
             return
         verbs[verb] = {"ok": bool(ok), "how": how, "t": round(time.time() - t_start, 1)}
 
+    # CHANGED(integrator) 3D (G6 stability): HP HELP during the VERB phase only (SAID in the report, like the meter help):
+    # the verbs (walk, sidestep, circle-walk, jab, special, throw, IMPACT, the 25 s parry window) leave P1 passive for long
+    # stretches and the bot's verbs hurt the CPU too - G6 run 9: CPU L1 bruno won 2-0 in 52 s before the verbs finished, so
+    # the super / HUD / audio checks never ran. While the verb phase runs, a fighter below 40 % hp is refilled to its max
+    # (__HP__.dev.setHp); the rest of the bout runs without help and decides the winner.
+    hp_help = {"refills": [], "on": True, "t": 0.0}
+
+    def keep_alive():
+        if not hp_help["on"] or time.time() - hp_help["t"] < 0.25:
+            return
+        hp_help["t"] = time.time()
+        f = P.f() or []
+        for i, fs in enumerate(f[:2]):
+            hm, hpv = fs.get("hpMax") or 0, fs.get("hp")
+            if hm and isinstance(hpv, (int, float)) and 0 < hpv < 0.4 * hm:
+                okh, _ = s.hp("dev.setHp", i, hm)
+                hp_help["refills"].append({"p": i, "from": hpv, "ok": okh})
+
     def fight_now():
+        keep_alive()
         return (P.m().get("phase") == "fight") and s.phase() == "bout"
 
     def evs_since(n0):
@@ -414,7 +505,7 @@ def play_bout(P, S, args, verbs):
         f = P.f()
         if not f:
             return None, None
-        return abs(f[1]["x"] - f[0]["x"]), f
+        return planar(f[0], f[1]), f  # CHANGED(AI3D): planar
 
     def walk_in(max_s=2.5, gap_to=0.9):
         t0 = time.time()
@@ -440,16 +531,127 @@ def play_bout(P, S, args, verbs):
         return g
 
     # ---------- verb: walk
-    g0, f0 = gap_now()
-    fk, bk = fwd_back(f0)
-    x0 = f0[0]["x"]
-    s.hold({fk})
-    time.sleep(0.6)
-    f1 = P.f()
-    s.hold(set())
-    dxw = (f1[0]["x"] - x0) * (1 if fk == K["right"] else -1)
-    mark("walk", dxw > 0.2, "real %s hold 0.6 s: P1 x %.2f -> %.2f (%.2f m forward)" % (fk, x0, f1[0]["x"], dxw))
-    P.new_events()
+    # CHANGED(AI3D): measured along the line to the CPU (planar) and only over a hold P1 actually walked through - a CPU
+    # throw / hit in the 0.6 s (measured: L1 bruno threw P1 on frame 132 of round 1, carrying it 1.04 m back) retries
+    for attempt in range(4):
+        if (verbs.get("walk") or {}).get("ok") or not fight_now():
+            break
+        t_free = time.time() + 4.0
+        while time.time() < t_free:
+            f0 = P.f() or [{}, {}]
+            if (f0[0].get("stateName") or "") in ("idle", "walk_f", "walk_b", "crouch"):
+                break
+            time.sleep(0.03)
+        g0, f0 = gap_now()
+        if f0 is None:
+            break
+        fk, bk = fwd_back(f0)
+        x0, z0 = f0[0]["x"], (f0[0].get("z") or 0.0)
+        ux, uz = f0[1]["x"] - x0, (f0[1].get("z") or 0.0) - z0
+        ul = math.hypot(ux, uz) or 1.0
+        states = set()
+        s.hold({fk})
+        t_w = time.time()
+        while time.time() - t_w < 0.6:
+            ff = P.f()
+            if ff:
+                states.add(ff[0].get("stateName") or "")
+            time.sleep(0.03)
+        f1 = P.f() or f0
+        s.hold(set())
+        dxw = ((f1[0]["x"] - x0) * ux + ((f1[0].get("z") or 0.0) - z0) * uz) / ul
+        clean = states <= {"idle", "walk_f"}
+        mark("walk", clean and dxw > 0.2, "real %s hold 0.6 s: P1 (%.2f, %.2f) -> (%.2f, %.2f): %.2f m toward the CPU; P1 states %s%s" %
+             (fk, x0, z0, f1[0]["x"], f1[0].get("z") or 0.0, dxw, sorted(states), "" if clean else " (interrupted - retry)"))
+        P.new_events()
+
+    # ---------- CHANGED(AI3D) verbs: sidestep (tap Q / E) + circle-walk (hold E) - the 3D ring, real keys
+    def wait_free(max_s=3.0):
+        t0 = time.time()
+        while time.time() - t0 < max_s and fight_now():
+            ff = P.f() or [{}, {}]
+            if (ff[0].get("stateName") or "") in ("idle", "walk_f", "walk_b", "crouch"):
+                return ff
+            time.sleep(0.03)
+        return P.f()
+
+    for attempt in range(4):
+        if (verbs.get("sidestep") or {}).get("ok") or not fight_now():
+            break
+        fa = wait_free()
+        if not fa:
+            break
+        key = "stepin" if attempt % 2 == 0 else "stepout"
+        p0, o0 = dict(fa[0]), dict(fa[1])
+        d0 = planar(p0, o0)
+        kinds = set()
+        presses[key] = presses.get(key, 0) + 1
+        s.press(K[key], 60)
+        t_end = time.time() + 0.45
+        while time.time() < t_end:
+            ff = P.f()
+            if ff:
+                kinds.add(step_kind(ff[0]))
+            time.sleep(0.02)
+        ff = P.f() or [p0, o0]
+        moved = planar(ff[0], p0)
+        d1 = planar(ff[0], ff[1])
+        turn = ang_diff(bearing(o0, p0), bearing(ff[1], ff[0]))
+        ok = "sidestep" in kinds and moved >= 0.3 and abs(d1 - d0) <= 0.25
+        mark("sidestep", ok, "tap %s: step kinds %s; P1 moved %.2f m, distance to the CPU %.2f -> %.2f m, bearing around it turned %.0f deg" %
+             (K[key], sorted(kinds), moved, d0, d1, turn))
+        P.new_events()
+        time.sleep(0.3)
+
+    for attempt in range(3):
+        if (verbs.get("circle") or {}).get("ok") or not fight_now():
+            break
+        fa = wait_free()
+        if not fa:
+            break
+        m0 = P.m() or {}
+        p0, o0 = dict(fa[0]), dict(fa[1])
+        d0 = planar(p0, o0)
+        b0 = bearing(o0, p0)
+        cam0 = m0.get("camN")
+        kinds = set()
+        dists = []
+        shots = []
+        key = "stepout" if attempt % 2 == 0 else "stepin"
+        presses[key] = presses.get(key, 0) + 1
+        s.hold({K[key]})
+        t0c = time.time()
+        marks = [0.25, 1.0, 1.75]
+        while time.time() - t0c < 1.9:
+            ff = P.f()
+            if ff:
+                k = step_kind(ff[0])
+                kinds.add(k)
+                if k == "sidewalk":
+                    dists.append(planar(ff[0], ff[1]))
+            if marks and time.time() - t0c >= marks[0]:
+                tag = "abc"[3 - len(marks)]
+                P.shot("circle_%s" % tag)
+                shots.append(tag)
+                marks.pop(0)
+            time.sleep(0.03)
+        while marks:
+            tag = "abc"[3 - len(marks)]
+            P.shot("circle_%s" % tag)
+            shots.append(tag)
+            marks.pop(0)
+        ff = P.f() or [p0, o0]
+        m1 = P.m() or {}
+        s.hold(set())
+        turn = ang_diff(b0, bearing(ff[1], ff[0]))
+        cam1 = m1.get("camN")
+        camturn = ang_diff(math.degrees(math.atan2(cam0[0], cam0[1])), math.degrees(math.atan2(cam1[0], cam1[1]))) if cam0 and cam1 else None
+        spread = (max(dists) - min(dists)) if dists else None
+        ok = "sidewalk" in kinds and turn >= 30.0 and spread is not None and spread <= 0.3
+        mark("circle", ok, "hold %s 1.9 s: step kinds %s; P1 circled %.0f deg around the CPU (distance %.2f m at start, %s during the walk), sim camN turned %s deg; shots pt_circle_%s" %
+             (K[key], sorted(kinds), turn, d0, ("%.2f-%.2f m" % (min(dists), max(dists))) if dists else "-", ("%.0f" % camturn) if camturn is not None else "?", "/".join(shots)))
+        P.new_events()
+        time.sleep(0.4)
 
     # ---------- verb: jab (J) at range
     walk_in(3.0, 0.8)
@@ -473,9 +675,14 @@ def play_bout(P, S, args, verbs):
             mark("jab", False, "J -> WHIFF only so far")
         walk_in(1.0, 0.7)
     # ---------- verb: special (I = SIMPLE 5S)
-    for _ in range(5):
+    # CHANGED(integrator) 3D (G6 stability): each press waits until P1 is free (G6 run 2: 5 presses all landed while the live
+    # CPU had P1 in hitstun / knockdown -> "never attempted"), up to 8 presses
+    for _ in range(8):
+        if not fight_now():
+            break
+        wait_free(3.0)
         n0 = len(P.log)
-        time.sleep(0.3)
+        time.sleep(0.1)
         press("s", 50, 0.7)
         P.new_events()
         sp = by(evs_since(n0), ("PROJ_SPAWN",), a=0) + by(evs_since(n0), ("HIT", "BLOCK", "COUNTER", "PUNISH", "PROJ_HIT"), a=0, c=(3, 6))
@@ -513,12 +720,23 @@ def play_bout(P, S, args, verbs):
     # so holding O into the CPU's walk_in_h is not a parry test (measured in the fixer G6 run: the only attack L1 Bruno
     # threw in the window was his 360 grab). Grab moves come from the opponent's fighter data.
     grab_moves = set()
+    opp_moves = {}
     try:
         opp_id = ((P.m().get("p") or [{}, {}])[1] or {}).get("fighter")
         fd = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "fighters", "%s.json" % opp_id), encoding="utf-8"))
-        grab_moves = {k for k, mv in fd.get("moves", {}).items() if mv.get("grab") or mv.get("kind") in ("throw", "cmdgrab")}
+        opp_moves = fd.get("moves", {})
+        grab_moves = {k for k, mv in opp_moves.items() if mv.get("grab") or mv.get("kind") in ("throw", "cmdgrab")}
     except Exception:
         pass
+
+    def parry_timing(opp):
+        """CHANGED(integrator) 3D (G6 stability): press PARRY (12 active frames, system.json parry.active) when the CPU's
+        move is 3..12 frames from its first active frame (its startup from data/fighters), so the parry's active frames
+        cover the hit despite the bot's 2-6 frame real-time latency; a move without startup data: the old moveFrame < 10"""
+        mv = opp_moves.get(opp.get("moveName") or "") or {}
+        su = int(mv.get("startup") or 0)
+        mf = int(opp.get("moveFrame") or 0)
+        return 3 <= su - mf <= 12 if su > 0 else mf < 10
     parry_try_until = time.time() + 25.0
     while time.time() < parry_try_until and fight_now():
         g, f = gap_now()
@@ -528,7 +746,7 @@ def play_bout(P, S, args, verbs):
             walk_in(1.5, 1.3)
             continue
         opp = f[1]
-        attacking = ((opp.get("moveKind") or "") not in ("", "none", "system", "throw", "cmdgrab") and opp.get("moveFrame", 99) < 14
+        attacking = ((opp.get("moveKind") or "") not in ("", "none", "system", "throw", "cmdgrab") and parry_timing(opp)
                      and opp.get("moveName") not in ("parry",) and opp.get("moveName") not in grab_moves)
         if attacking:
             n0 = len(P.log)
@@ -564,7 +782,11 @@ def play_bout(P, S, args, verbs):
                           "stateEntered": mv == "parry", "t": round(time.time() - t_start, 1)}
 
     # ---------- the rest of the bout + super when the meter is full
+    hp_help["on"] = False
+    parry_tries = []
+    parry_wait_until = time.time() + 40.0
     last_hud = time.time()
+    last_step = time.time()
     super_done = False
     shots_taken = set()
     rounds_seen = 0
@@ -593,7 +815,7 @@ def play_bout(P, S, args, verbs):
             time.sleep(0.05)
             continue
         me, opp = f[0], f[1]
-        g = abs(opp["x"] - me["x"])
+        g = planar(me, opp)  # CHANGED(AI3D): planar
         fk, bk = fwd_back(f)
         # HUD + audio read-backs, once a second
         if time.time() - last_hud > 1.0:
@@ -648,10 +870,44 @@ def play_bout(P, S, args, verbs):
             continue
         # block when the CPU attacks at range
         oatk = (opp.get("moveKind") or "") not in ("", "none") and opp.get("moveFrame", 99) < 10 and g < 1.8
+        # CHANGED(AI3D): the parry verb, if the 25 s window above saw no parryable CPU attack, is tried on the next one here
+        # (hold O instead of back; throws / command grabs / grab supers beat a parry, so they are blocked as before)
+        parryable = ((opp.get("moveKind") or "") not in ("", "none", "system", "throw", "cmdgrab") and g < 1.8 and parry_timing(opp)
+                     and opp.get("moveName") not in grab_moves)
+        if parryable and not (verbs.get("parry") or {}).get("ok") and me.get("moveName") in (None, "", "none") and (me.get("stun") or 0) <= 0:
+            n0 = len(P.log)
+            s.hold({K["parry"]})
+            time.sleep(0.45)
+            s.hold(set())
+            P.new_events()
+            pe = by(evs_since(n0), ("PARRY", "PERFECT_PARRY"), b=0)
+            parry_tries.append({"move": opp.get("moveName"), "frame": opp.get("moveFrame"), "parried": bool(pe)})
+            if pe:
+                verbs["parry"] = {"ok": True, "how": "hold O into the CPU's %s -> %s (a=%s b=0), later in the bout (try %d)" % (opp.get("moveName"), pe[0]["typeName"], pe[0].get("a"), len(parry_tries)),
+                                  "t": round(time.time() - t_start, 1)}
+            else:
+                v = verbs.get("parry") or {}
+                v["laterTries"] = parry_tries[-6:]
+                verbs["parry"] = v
+            continue
+        # CHANGED(integrator) 3D (G6 stability): while the parry verb is still open (CPU L1 throws only ~10 strikes in a bout),
+        # P1 stands its ground at close range for up to 40 s of the rest of the bout instead of pressing - its own offense kept
+        # the CPU in hitstun / blockstun, so no parryable attack came (G6 run 7: 0 parries in 87 s)
+        if not (verbs.get("parry") or {}).get("ok") and g < 1.6 and time.time() < parry_wait_until:
+            s.hold(set())
+            time.sleep(0.03)
+            continue
         if oatk and me.get("moveName") in (None, "", "none") and (me.get("stun") or 0) <= 0:
             s.hold({bk})
             time.sleep(0.25)
             s.hold(set())
+            continue
+        # CHANGED(AI3D): a sidestep tap every ~4 s from neutral at mid range (the ring is part of the bout, not a demo)
+        if 1.1 < g < 2.6 and (me.get("stateName") or "") in ("idle", "walk_f", "walk_b") and time.time() - last_step > 4.0:
+            last_step = time.time()
+            key = "stepin" if presses.get("stepin", 0) <= presses.get("stepout", 0) else "stepout"
+            s.hold(set())
+            press(key, 60, 0.3)
             continue
         if g > 0.95:
             s.hold({fk})
@@ -675,10 +931,10 @@ def play_bout(P, S, args, verbs):
     rends = by(P.log, ("ROUND_END",))
     mend = by(P.log, ("MATCH_END",))
     res = {"rounds": len(rends), "kos": len(kos), "matchEnd": bool(mend), "winner": mi.get("winner"), "wins": mi.get("wins"),
-           "frames": mi.get("frame"), "seconds": round(time.time() - t_start, 1), "meterHelp": meter_help, "keyPresses": presses,
+           "frames": mi.get("frame"), "seconds": round(time.time() - t_start, 1), "meterHelp": meter_help, "hpHelp": hp_help["refills"], "keyPresses": presses,
            "hud": hud_checks, "audio": audio_checks}
     # ---- verdicts for the bout
-    for v in ("walk", "jab", "special", "throw", "parry", "impact", "super"):
+    for v in ("walk", "sidestep", "circle", "jab", "special", "throw", "parry", "impact", "super"):
         e = verbs.get(v) or {"ok": False, "how": "never attempted (bout ended first)"}
         S.check("verb_" + v, e.get("ok"), e.get("how"))
     S.check("bout_best_of_3_to_the_end", bool(mend) and len(rends) >= 2 and max(mi.get("wins") or [0, 0]) == 2,
@@ -755,9 +1011,9 @@ class SeasonBot:
             return self.bonus_keys(f, m)
         if (m or {}).get("phase") != "fight":
             return set()
-        dx = op["x"] - me["x"]
-        d = abs(dx)
-        fk, bk = (K["right"], K["left"]) if dx >= 0 else (K["left"], K["right"])
+        # CHANGED(AI3D): planar distance; forward / back from P1's facing sign (the sim's LEFT / RIGHT mapping)
+        d = planar(me, op)
+        fk, bk = fwd_back(f)
         self.phase ^= 1
         st, ost = me.get("stateName"), op.get("stateName")
         # thrown: tech (a throw press while the tech window is open)
@@ -782,8 +1038,10 @@ class SeasonBot:
         # projectiles flying at me
         for p in (m or {}).get("proj") or []:
             if p.get("owner") == 1 and p.get("kind") in (0, 1):
-                toward = (me["x"] - p["x"]) * (p.get("vx") or 0) > 0
-                if toward and abs(me["x"] - p["x"]) < 2.6:
+                # CHANGED(AI3D): approaching in the plane (closing velocity) and near
+                rx, rz = me["x"] - p["x"], (me.get("z") or 0.0) - (p.get("z") or 0.0)
+                toward = rx * (p.get("vx") or 0) + rz * (p.get("vz") or 0) > 0
+                if toward and math.hypot(rx, rz) < 2.6:
                     return {bk, K["down"]}
         # a jump coming in: SIMPLE 2S (down + S) anti-air
         if op.get("airborne") and ost in ("air", "prejump") and d < 2.0:
@@ -804,6 +1062,9 @@ class SeasonBot:
             return {fk}
         # close and neutral: mostly the ASSIST route, some throws, some guarding
         t = int(me.get("x", 0) * 97 + (m or {}).get("frame", 0)) % 10
+        # CHANGED(AI3D): now and then a sidestep tap from neutral (STEP_IN / STEP_OUT alternate)
+        if t == 9 and me.get("stateName") in ("idle", "walk_f", "walk_b") and d > 1.0:
+            return {K["stepin"]} if (m or {}).get("frame", 0) % 2 == 0 else {K["stepout"]}
         if t < 5:
             return {K["assist"], K["l"]} if self.phase else {K["assist"]}
         if t < 7 and d < 0.95:
@@ -815,22 +1076,28 @@ class SeasonBot:
         br = (m or {}).get("brawl") or {}
         self.phase ^= 1
         if br.get("mode") == "heckler":
-            near = [p for p in ((m or {}).get("proj") or []) if p.get("kind") == 2 and abs(p["x"] - me["x"]) < 1.3]
+            near = [p for p in ((m or {}).get("proj") or []) if p.get("kind") == 2 and planar(p, me) < 1.3]
             return {K["parry"]} if near else set()
         goons = [g for g in (br.get("goons") or []) if not g.get("down")]
         if not goons:
             return set()
-        g = min(goons, key=lambda q: abs(q["x"] - me["x"]))
-        dx = g["x"] - me["x"]
-        toward = K["right"] if dx > 0 else K["left"]
-        if abs(dx) > 0.9:
+        # CHANGED(AI3D) (CONTRACT §35.8): goons come from every bearing - the locked goon (BrawlSnap.target, else the
+        # nearest by planar distance); the sim walks P1 along the line to it, so "toward it" = forward (P1's facing)
+        tgt = br.get("target")
+        g = next((q for q in goons if q.get("slot") == tgt), None) or min(goons, key=lambda q: planar(q, me))
+        toward = K["right"] if (me.get("facing") or 1) >= 0 else K["left"]
+        if planar(g, me) > 0.9:
             return {toward}
         return {K["l"]} if self.phase else {K["m"]}
 
 
-def season_bout(P, S, args, tag, report, slot_kind):
-    """one bout (or bonus round) of THE SEASON, played by the SeasonBot through real keys; returns a summary dict"""
+def season_bout(P, S, args, tag, report, slot_kind, help_pct=0):
+    """one bout (or bonus round) of THE SEASON, played by the SeasonBot through real keys; returns a summary dict.
+    CHANGED(integrator) 3D: help_pct > 0 = DEV ASSIST (said in every report line): at each round's FIGHT the CPU's hp is set to
+    help_pct % of its max through __HP__.dev.setHp (the G6 dev.setMeter precedent) - only for a slot the bot already lost
+    `--slot-help` times (THE FREAK wall, CONTRACT §35.19)."""
     s = P.s
+    helped_rounds = []
     mi = P.m()
     p = mi.get("p") or [{}, {}]
     me_id, opp_id = p[0].get("fighter"), p[1].get("fighter")
@@ -859,6 +1126,11 @@ def season_bout(P, S, args, tag, report, slot_kind):
         if m.get("phase") == "matchEnd":
             s.hold(set())
             break
+        if help_pct > 0 and m.get("phase") == "fight" and m.get("round") not in helped_rounds and m.get("mode") == "arcade":
+            hmax = (f[1] or {}).get("hpMax") or 0
+            if hmax:
+                s.hp("dev.setHp", 1, int(hmax * help_pct / 100))
+                helped_rounds.append(m.get("round"))
         want = bot.keys(f, m)
         if want != last_keys:
             s.hold(want)
@@ -881,7 +1153,8 @@ def season_bout(P, S, args, tag, report, slot_kind):
     br = snap.get("brawl") or {}
     return {"tag": tag, "kind": slot_kind, "mode": snap.get("mode"), "p1": me_id, "p2": opp_id, "cpu": p[1].get("cpu"),
             "winner": snap.get("winner"), "wins": snap.get("wins"), "frames": frames, "seconds": round(time.time() - t0, 1),
-            "decisions": n_dec, "score": br.get("score"), "phaseEvent": phase_seen, "matchEnd": snap.get("phase") == "matchEnd"}
+            "decisions": n_dec, "score": br.get("score"), "phaseEvent": phase_seen, "matchEnd": snap.get("phase") == "matchEnd",
+            "devHelp": {"cpuHpPct": help_pct, "rounds": helped_rounds} if help_pct > 0 else None}
 
 
 def run_season(args) -> int:
@@ -960,6 +1233,7 @@ def run_season(args) -> int:
         # ---------------------------------------------------------------- the ladder, slot by slot
         seen_index = -1
         continues = 0
+        slot_losses = {}
         guard = 0
         while not fatal and guard < args.max_slots:
             guard += 1
@@ -1017,8 +1291,13 @@ def run_season(args) -> int:
             wait_warm(sess, notes, "slot %s" % idx)
             shot("bout_%d" % idx)
             P.new_events()
-            res = season_bout(P, S, args, "slot%d" % idx, report, kind)
+            # CHANGED(integrator) 3D: DEV ASSIST only after --slot-help losses on THIS slot (off by default; said in the report)
+            hp_help = args.help_hp_pct if args.slot_help and slot_losses.get(idx, 0) >= args.slot_help and want_mode == "arcade" else 0
+            res = season_bout(P, S, args, "slot%d" % idx, report, kind, hp_help)
             res["slot"] = idx
+            if hp_help:
+                report.setdefault("devAssist", []).append({"slot": idx, "kind": kind, "afterLosses": slot_losses.get(idx, 0), "cpuHpPct": hp_help,
+                                                           "rounds": (res.get("devHelp") or {}).get("rounds"), "winner": res.get("winner")})
             report["slots"].append(res)
             bouts_played += 1
             if want_mode != "arcade":
@@ -1027,18 +1306,57 @@ def run_season(args) -> int:
                 boss_phase = res.get("phaseEvent")
             ok, ph = sess.wait_phase("results", 25)
             okr = ok and P.wait_screen("results", 10)
-            time.sleep(0.6)
-            shot("results_%d" % idx)
+            lost = res.get("winner") != 0 and want_mode == "arcade"
+            # CHANGED(integrator) 3D: a LOST bout shows the CONTINUE card, whose countdown runs in REAL seconds
+            # (ui/results.ts CONTINUE_SECONDS 10; time-out = END THE SEASON -> main menu). The P2 run read the card, slept,
+            # took a screenshot under load and pressed CONTINUE > 10 s later: the season had ended and the harness died on
+            # the main menu (FATAL "slot -1 ... the bout never started"). Now: on a loss the card is read and CONTINUE is
+            # pressed at once (the shot only while >= 5 s remain), then the SAME slot must come back on the ladder.
+            time.sleep(0.1 if lost else 0.6)
             rb = P.menus().get("result") or {}
+            cd0 = rb.get("countdown")
+            # a lost bout: NO screenshot before CONTINUE (one CDP capture under load took ~6 s: run 1 pressed at "4" of 10);
+            # the card's read-back (winner, continue, countdown) is the evidence, the ladder it returns to is shot below
+            if not lost:
+                shot("results_%d" % idx)
             S.check("slot_%d_results" % idx, okr and res.get("matchEnd") and rb.get("winner") == res.get("winner"),
-                    "results card winner=%s sim winner=%s wins=%s score=%s %.0f s %d decisions" % (rb.get("winner"), res.get("winner"), res.get("wins"), res.get("score"), res.get("seconds") or 0, res.get("decisions") or 0))
+                    "results card winner=%s sim winner=%s wins=%s score=%s %.0f s %d decisions%s%s" % (rb.get("winner"), res.get("winner"), res.get("wins"), res.get("score"),
+                    res.get("seconds") or 0, res.get("decisions") or 0, (" continue card %s, countdown %s" % (rb.get("continue"), cd0)) if lost else "",
+                    (" DEV-ASSISTED (CPU hp set to %d %% at FIGHT of rounds %s)" % (hp_help, (res.get("devHelp") or {}).get("rounds"))) if hp_help else ""))
             seen_index = idx
             if args.max_bouts and bouts_played >= args.max_bouts:
                 break
-            if res.get("winner") != 0 and want_mode == "arcade":
+            if lost:
                 continues += 1
+                slot_losses[idx] = slot_losses.get(idx, 0) + 1
                 seen_index = idx - 1         # the same slot comes again
-            P.key("Enter")                   # NEXT EPISODE / CONTINUE (the default button)
+                cd1 = (P.menus().get("result") or {}).get("countdown")
+                P.key("Enter")               # CONTINUE (the default button)
+                t_c = time.time()
+                back = None
+                while time.time() - t_c < 15:
+                    mm = P.menus()
+                    scr = mm.get("screen") if mm.get("visible") else None
+                    if scr in ("ladder", "card", "vs") or (sess.state() or {}).get("phase") == "bout":
+                        back = scr or "bout"
+                        break
+                    if scr in ("main", "title"):
+                        back = scr
+                        break
+                    time.sleep(0.1)
+                idx2 = ((sess.state() or {}).get("season") or {}).get("index")
+                okc = back in ("ladder", "card", "vs", "bout") and idx2 == idx
+                if okc:
+                    shot("continue_%d_%d" % (idx, continues))
+                S.check("slot_%d_continue_%d" % (idx, continues), okc,
+                        "lost the bout -> CONTINUE pressed with the countdown at %s (card showed %s): back on %s, season index %s (want %s)"
+                        % (cd1, cd0, back, idx2, idx))
+                report.setdefault("continueLog", []).append({"slot": idx, "countdownAtPress": cd1, "back": back, "index": idx2})
+                if not okc:
+                    fatal = "slot %s: CONTINUE after a lost bout did not bring the slot back (screen %r, season index %r)" % (idx, back, idx2)
+                    break
+                continue
+            P.key("Enter")                   # NEXT EPISODE (the default button)
             time.sleep(0.5)
         report["continues"] = continues
         # ---------------------------------------------------------------- the ending
@@ -1095,6 +1413,8 @@ def run_season(args) -> int:
         print("   X %s" % p)
     if fatal:
         print("FATAL        : %s" % fatal)
+    if report.get("devAssist"):
+        print("DEV ASSIST   : %s (CPU hp set by __HP__.dev.setHp after %d losses on a slot - NOT an unassisted clear)" % (json.dumps(report["devAssist"]), args.slot_help))
     print("time control : %s" % ("REAL-TIME (no stepping)" if args.realtime else "sim frozen + stepped %d frames per key decision (__HP__.dev.freeze / dev.step); keys = real key events" % args.step_frames))
     print("report       : %s" % save_report("playtest_season", report, args.base))
     print("steps        : %d passed, %d failed%s" % (len(S.items) - len(problems), len(problems), " (SMOKE: first %d bout(s) only)" % args.max_bouts if args.max_bouts else ""))
@@ -1121,6 +1441,9 @@ def main() -> int:
     ap.add_argument("--step-frames", type=int, default=2, help="sim frames per key decision while stepping")
     ap.add_argument("--realtime", action="store_true", help="no sim stepping (real-time bot, weak)")
     ap.add_argument("--season-bout-budget", type=float, default=900.0, help="seconds per season bout (default 900)")
+    # CHANGED(integrator) 3D: an explicit, reported DEV ASSIST for a slot the scripted bot cannot clear (THE FREAK wall, §35.19)
+    ap.add_argument("--slot-help", type=int, default=0, help="after this many losses on one slot, set the CPU's hp to --help-hp-pct at each round's FIGHT (0 = off)")
+    ap.add_argument("--help-hp-pct", type=int, default=35, help="CPU hp %% for --slot-help (default 35)")
     args = ap.parse_args()
     if args.season:
         return run_season(args)

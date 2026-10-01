@@ -1,7 +1,8 @@
 // HIT PARADE - the TRAINING OPTIONS model (lane UI; CONTRACT 8, 27.1). DOM-free (the training driver and its Node probe
 // load it); ui/training.ts re-exports it next to the options screen rows and the HUD overlays.
 
-export type DummyAction = 'stand' | 'crouch' | 'jump' | 'cpu';
+/** CHANGED(UI3D): + 'sidesteps' (taps STEP every 45 free ticks, IN / OUT in turn) and 'circles' (circle-walks round you) - CONTRACT §35.2 */
+export type DummyAction = 'stand' | 'crouch' | 'jump' | 'sidesteps' | 'circles' | 'cpu';
 export type DummyGuard = 'none' | 'all' | 'first' | 'random';
 export type RecordMode = 'off' | 'record' | 'play';
 export type ResetWhere = 'mid' | 'corner' | 'cornered';

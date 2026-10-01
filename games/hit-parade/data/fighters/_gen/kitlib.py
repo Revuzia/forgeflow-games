@@ -203,7 +203,9 @@ MOVE_KINDS = ("normal", "command", "special", "ex", "super1", "super3", "throw",
 # --------------------------------------------------------------------------------------------------
 TRACK_FULL = 180        # deg / frame: snap (any re-face in one frame)
 HOMING_RATE = 20        # deg / frame through the last active frame: a sidestep sweeps <= ~6 deg / f at 1 m, a sidewalk ~1.7
-TRACK_LEAD = {"normal": 4, "command": 4, "throw": 4}   # until = startup - lead; everything else (specials, supers) 6
+# CHANGED(STEPTUNE) (CONTRACT 35.15): normals / command normals 4 -> 6 (designer decision: a READ sidestep evades a straight
+# normal; measured steppable table in _harness/probe_3d.ts section 3b); throws keep 4 (they start on frame 5: until 1 either way)
+TRACK_LEAD = {"normal": 6, "command": 6, "throw": 4}   # until = max(1, startup - lead); everything else (specials, supers) 6
 TRACK_LEAD_DEFAULT = 6
 LAT_BY_STRENGTH = {"L": 0.15, "M": 0.18, "H": 0.22}
 LAT_SWEEP = 0.45

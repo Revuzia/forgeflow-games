@@ -51,6 +51,7 @@ button centres measured from the right / bottom SAFE edges (`TOUCH` + `CLUSTER` 
 | SUPER | 50, 244 | 64 | the S+H macro; shown only while SHOWTIME holds ≥ 1 bar, pulses at 3 (`setMeters`) |
 | ASSIST | 318, 40 | 52 | a tap latches ASSIST for 1 s (holding a modifier while tapping L is awkward on glass); held = held |
 | PAUSE | top centre, max(96 px, 20 % of the height) below the top safe edge | 44 | on release inside the button (+12 px slop) → `onPause` handlers (the ESC pause path) |
+| STEP IN / STEP OUT (CHANGED(UI3D)) | 58, 196 / 130, 196 from the LEFT (stick-side) safe edge, mirrored when left-handed | 56 | bit 13 STEP_IN (circle away from the camera) / bit 14 STEP_OUT (toward it), CONTRACT §35.2: a tap = sidestep, a hold = circle-walk round the ring (the sim tells them apart by hold time); 14 px over the stick base |
 
 Closest pairs keep ≥ 12 px of gap at scale 1 (e.g. H↔M 84 px apart vs 72 px of radii).
 
@@ -221,3 +222,15 @@ title and the pause card — "Tip: Share → Add to Home Screen plays HIT PARADE
   band between the show bug and SCORE (styles.css `.hpb-cap`).
 - **M6 bonus rounds**: BRAWL BREAK / HECKLER TOSS show the bonus panel at the top right in place of P2's bars (fighter 1 is
   absent), above the button arc.
+
+## CHANGED(UI3D) (2026-09-30, the 3D ring - CONTRACT §35.2 / §35.16)
+- **M2 STEP pair:** `stepin` / `stepout` buttons above the stick home (table above), part of `TouchLayout` / EDIT LAYOUT and of
+  `readback().buttons`; violet discs with an orbit arc (IN's bows up = away from the camera, OUT's bows down). `readWord()` and
+  `TouchState` carry bits 13 / 14 (mask 0x7fff); input.ts SOCD drops both-held to neutral.
+- **M6:** P1's combo counter, callouts and the training input display start 176 px in from the left safe edge (right of the
+  STEP pair); left-handed, P2's combo / callouts and the input display move in from the right the same way. The pause CONTROLS
+  legend leads with the IN / OUT discs (one row: SIDESTEP / HOLD: CIRCLE).
+- **M11 gates added:** `mobile.py` - taps on IN / OUT set exactly bit 13 / 14; a held IN stays held across reads and clears on
+  release; stick + OUT together (2 touches); the pair sits above the stick base; EDIT LAYOUT drags IN; `--game`: a held IN
+  circle-walks P1 round P2 (sidewalk, distance kept, >= 30 deg) and an OUT tap sidesteps (dir 'out'). `layoutcheck.py` -
+  `howto` and `movelist_patch` screens on every device.

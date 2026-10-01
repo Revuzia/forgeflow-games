@@ -10,6 +10,8 @@
 //   * `anim` / `victim` [[f0, clip, fromS?, toS?]] - clip seconds fromS -> toS over the segment (toS omitted = 1 clip-s
 //     per 60 frames from fromS), 4-frame crossfades; `pathA` [[f, dx, lift]] attacker root offset; `gapD` [[f, gap, lift]]
 //     defender root = attacker view root + facing x gap (implicit first key = the actual gap), both wall-clamped;
+//   CHANGED(VIEW3D): all of it in LINE SPACE (x along the attacker's fight line, z toward the camera, origin at the
+//   attacker's root) - BoutView maps line space onto the 3D ring through a frame frozen at the cinematic start;
 //   * `camera` [{from, to, shot, target, fovDeg, dist, height, yawDeg, ease, roll?, lookH?, blend?}] (numbers or
 //     [start, end] eased across the shot); `fx` [{f, fx, target?}] and `crowd` [{f, react, ratings?}] beats; `slate` text.
 // cinematic v1 (P1 data: `anim` [[f0, clip]], `victim`, `shots` vocabulary names) - the view infers the rest:
@@ -306,6 +308,9 @@ export interface PrimeBegin {
   /** push-box fronts (m) of the attacker / defender: the §26.5 no-overlap floor for the v2 gap while both are grounded */
   frontA?: number; frontV?: number;
   simVictim?: boolean;
+  /** CHANGED(VIEW3D): metres from the attacker to where the victim's root must stop along its forward (the ring wall - its
+   *  clearance), measured by BoutView in 3D; absent = the 1D x = +-7.55 rule */
+  wallDist?: number;
 }
 
 function remapper(ref: number[], refN: number, hits: number[], n: number): (f: number) => number {
@@ -455,7 +460,9 @@ export function compilePlan(b: PrimeBegin): PrimePlan {
     else if (s.clip === 'hit_air' && i > 0 && vic[i - 1].carry && !hits.some((h) => h[0] >= s.f0 && h[0] < s.f0 + 8)) s.carry = 2;
   }
   const wallSide = b.facing > 0 ? 1 : 0;
-  const wallDist = b.facing > 0 ? 7.55 - b.ax : b.ax + 7.55;
+  // CHANGED(VIEW3D): the room ahead of the attacker = BoutView's ring ray along its forward (victim root clearance kept);
+  // the 1D labs fall back to the old x = +-8 m walls
+  const wallDist = typeof b.wallDist === 'number' && Number.isFinite(b.wallDist) ? Math.max(0.5, b.wallDist) : b.facing > 0 ? 7.55 - b.ax : b.ax + 7.55;
   const endGap = Math.max(0.5, Math.min(def.endGapM ?? 2.0, wallDist));
   const G = new Float32Array(N), Y = new Float32Array(N), carry = new Uint8Array(N);
   const AX = new Float32Array(N), AY = new Float32Array(N);

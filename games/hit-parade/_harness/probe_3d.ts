@@ -7,13 +7,15 @@
 //   index + inward normal), projectile dodged by a step, aimed projectiles, Gazza's ball reflection off the ring,
 //   throw front arc +-70 deg, throw carry along the thrower's yaw, back throw lands behind, BRAWL goons + heckle arcs
 //   from all sides, soft lock, determinism + save/load re-step with random STEP streams, snapshot fields.
+//   CHANGED(STEPTUNE) (CONTRACT §35.15): section 3b = the front-loaded step curve + the measured STEPPABLE TABLE (move
+//   classes x 1.2 / 2.0 m, step-start windows relative to the attack's frame 1) + a roster sweep of all 12 kits.
 import { readFileSync, readdirSync } from 'node:fs';
 import { I, ROOT, dirBits, evs, fixtureData, newMatch, place, place3, run, sb, stepInputs, tester } from './fixtures/simkit.ts';
 import { buildGameData, loadGameData, STEP_CLIPS } from '../runtime/src/core/data.ts';
 import type { GameData } from '../runtime/src/core/types.ts';
 import { checksum, load, readFighter, readMatch, save, step } from '../runtime/src/core/sim/match.ts';
 import type { Match } from '../runtime/src/core/sim/match.ts';
-import { BALL, BR, BRAWL_BASE, F, G, GOON_CAP, P, PROJ_CAP, ST, STATE_INTS, W, goonBase, projBase } from '../runtime/src/core/sim/layout.ts';
+import { ACT, BALL, BR, BRAWL_BASE, F, G, GOON_CAP, P, PROJ_CAP, ST, STATE_INTS, W, goonBase, projBase } from '../runtime/src/core/sim/layout.ts';
 import { BALL_EV, EV, EVX } from '../runtime/src/core/sim/events.ts';
 import {
   Q, SIN_Q, cosQ, dirToYaw, divRound, isqrt, mulQ, rot, sinQ, sinTableHash, yawDelta, degToYaw,
@@ -377,7 +379,10 @@ function stepVs5H(data: GameData): { hit: number; whiff: number } {
   t.eq(late, 0, 'no tracking after track.until (frames 7..14 keep the yaw)');
   const cm = m.cf[0].moves[m.cf[0].gTable[5 * 3 + 2]];
   const d = m.cf[0].moves.find((x) => x.id === '5M')!;
-  t.ok(cm.trackUntil === 6 && cm.trackRate === rate && d.trackUntil === Math.max(1, d.startup - 4), `compiled: 5H until 6 rate ${cm.trackRate}; default normal 5M until startup - 4 = ${d.trackUntil}`);
+  // CHANGED(STEPTUNE) (CONTRACT §35.15): the default normal lead is 6 (was 4); throws keep until 1 (startup 5)
+  const thr = m.cf[0].moves[m.cf[0].throwF];
+  t.ok(cm.trackUntil === 6 && cm.trackRate === rate && d.trackUntil === Math.max(1, d.startup - 6) && thr.trackUntil === Math.max(1, thr.startup - 6),
+    `compiled: 5H until 6 rate ${cm.trackRate}; default normal 5M until startup - 6 = ${d.trackUntil} (startup ${d.startup}); throw until ${thr.trackUntil}`);
   const sp = m.cf[0].moves.find((x) => x.id === 'hook_m')!;
   const hm = DHOM.fighters.kit_a.moves['5H'];
   t.ok(sp.trackUntil === Math.max(1, sp.startup - 6), `default special until startup - 6 = ${sp.trackUntil}`);
@@ -391,6 +396,235 @@ function stepVs5H(data: GameData): { hit: number; whiff: number } {
   const inside = boxCyl(0, 0, sinQ(16384), cosQ(16384), 100000, 20000, 18000, 100000, 130000, 100000, 47999, 30000, 0, 180000);
   const outside = boxCyl(0, 0, sinQ(16384), cosQ(16384), 100000, 20000, 18000, 100000, 130000, 100000, 48001, 30000, 0, 180000);
   t.ok(inside && !outside, 'hit box lateral half-depth + hurt radius: 0.47999 m off the line hits, 0.48001 m misses');
+}
+
+// ================================================================= 3b. STEPPABLE TABLE (CHANGED(STEPTUNE), CONTRACT §35.15)
+// The designer's step tuning: (1) a FRONT-LOADED sidestep (60-65 % of the 0.85 m arc in the first 6 frames, ease-out to
+// frame 15); (2) normals / command normals track to startup - 6 like the specials. Goal: a READ step (started a few frames
+// before the attack's active frames) evades straight normals, linear moves and straight projectiles, never a HOMING move,
+// and a late step (reaction) is still hit. Measured here in the real sim with the real kits: the attacker's move is started
+// by a clean buffer poke on frame 0 (its mvF 1), the defender (johnny, idle, no guard) taps STEP_IN on frame `off`
+// (negative = before the attack starts); evaded = no HIT / BLOCK / PROJ_HIT / THROW from the attacker for the whole move.
+{
+  // --- the step curve itself
+  const sys0 = newMatch({ data: D0 }).sys;
+  const cv = Array.from(sys0.stepCurve);
+  const D = cv[cv.length - 1];
+  let easing = true;
+  for (let f = 1; f < cv.length; f++) {
+    const d = cv[f] - cv[f - 1];
+    if (d <= 0 || (f > 1 && d > cv[f - 1] - cv[f - 2])) easing = false;
+  }
+  const pct6 = (cv[6] / D) * 100;
+  t.ok(cv.length === 16 && D === 85000, `sidestep curve: 15 frames, ${(D / U).toFixed(3)} m in total`);
+  t.ok(pct6 >= 60 && pct6 <= 65, `front-loaded: ${pct6.toFixed(1)} % of the arc in the first 6 frames (designer target 60-65 %)`);
+  t.ok(easing, `ease-out: it moves on every frame 1..15 and never speeds up (per-frame cm ${cv.slice(1).map((v, k) => ((v - cv[k]) / 1000).toFixed(1)).join(' ')})`);
+
+  // --- steppable windows (real data)
+  let real: GameData | null = null;
+  try {
+    real = loadGameData();
+  } catch (e) {
+    t.ok(false, `steppable table: real data/ not loadable: ${String((e as Error).message).split('\n')[0]}`);
+  }
+  if (real) {
+    const R = real;
+    const DEF = 'johnny';
+    const trial = (att: string, mid: string, dM: number, off: number | null, bit: number): { hits: number; started: boolean } => {
+      const m = newMatch({ data: R, p1: att, p2: DEF, stage: 'rust_theater' });
+      place(m, -dM / 2, dM / 2);
+      run(m, 2, 0, 0);
+      const idx = m.cf[0].moves.findIndex((x) => x.id === mid);
+      if (idx < 0) return { hits: -1, started: false };
+      const mvc = m.cf[0].moves[idx];
+      const b0 = sb(0);
+      m.s[b0 + F.showtime] = 30000; // meter for EX / supers / IMPACT (the table is about geometry)
+      m.s[b0 + F.nerve] = 60000;
+      const from = m.frame();
+      let started = false;
+      for (let k = off === null ? 0 : Math.min(0, off); k <= mvc.total + 40; k++) {
+        if (k === 0) {
+          m.s[b0 + F.bufA] = ACT.MOVE;
+          m.s[b0 + F.bufM] = idx;
+          m.s[b0 + F.bufAge] = 0;
+          m.s[b0 + F.bufWin] = 8;
+          m.s[b0 + F.bufF] = 0;
+        }
+        step(m, 0, off !== null && k === off ? bit : 0);
+        if (k === 0) started = m.s[b0 + F.st] === ST.ATTACK && m.s[b0 + F.mv] === idx && m.s[b0 + F.mvF] === 1;
+      }
+      const hits = evs(m, from).filter((e) => e.a === 0 && (e.type === EV.HIT || e.type === EV.BLOCK || e.type === EV.PROJ_HIT || e.type === EV.THROW)).length;
+      return { hits, started };
+    };
+    interface Win { reach: boolean; started: boolean; offs: number[]; startup: number; until: number; label: string }
+    const windowOf = (att: string, mid: string, dM: number, bit: number = I.STEP_IN): Win => {
+      const mvc = newMatch({ data: R, p1: att, p2: DEF }).cf[0].moves.find((x) => x.id === mid);
+      const w: Win = { reach: false, started: false, offs: [], startup: mvc?.startup ?? 0, until: mvc?.trackUntil ?? 0, label: `${att} ${mid}` };
+      if (!mvc) return w;
+      const ctrl = trial(att, mid, dM, null, 0);
+      w.started = ctrl.started;
+      w.reach = ctrl.started && ctrl.hits > 0;
+      if (!w.reach) return w;
+      for (let o = -26; o <= mvc.startup + 1; o++) if (trial(att, mid, dM, o, bit).hits === 0) w.offs.push(o);
+      return w;
+    };
+    /** latest evading start, in frames before the first active frame (frame startup - 1 of the attack) */
+    const latest = (w: Win): number => w.startup - 1 - w.offs[w.offs.length - 1];
+    const fmt = (w: Win): string => {
+      if (!w.started) return 'NOT STARTED';
+      if (!w.reach) return 'out of reach';
+      if (w.offs.length === 0) return 'never';
+      const rs: string[] = [];
+      for (let q = 0; q < w.offs.length; ) {
+        let e = q;
+        while (e + 1 < w.offs.length && w.offs[e + 1] === w.offs[e] + 1) e++;
+        rs.push(q === e ? `${w.offs[q]}` : `${w.offs[q]}..${w.offs[e]}`);
+        q = e + 1;
+      }
+      return `${rs.join(',')} (${w.offs.length} f; ${w.startup - 1 - w.offs[0]}..${latest(w)} f before active)`;
+    };
+    // class -> candidate moves (the first that reaches at a distance is measured there)
+    const ROWS: { cls: string; c: [string, string][]; kind: 'read' | 'never' | 'info' }[] = [
+      { cls: '5L straight', c: [['krane', '5L']], kind: 'read' },
+      { cls: '5M straight', c: [['krane', '5M']], kind: 'read' },
+      { cls: '5H straight', c: [['zambini', '5H'], ['freak', '5H']], kind: 'read' },
+      { cls: '6H overhead', c: [['krane', '6H']], kind: 'read' },
+      { cls: 'homing 5H', c: [['krane', '5H'], ['bruno', 'lariat_h']], kind: 'never' },
+      { cls: 'sweep (homing)', c: [['johnny', '3H'], ['ricky', '3H']], kind: 'never' },
+      { cls: 'sweep (linear)', c: [['gazza', '2H']], kind: 'read' },
+      { cls: 'linear special', c: [['johnny', 'hook_m']], kind: 'read' },
+      { cls: 'projectile straight', c: [['johnny', 'brickbat_m']], kind: 'read' },
+      { cls: 'projectile aimed', c: [['zambini', 'card_fan_m']], kind: 'info' },
+      { cls: 'IMPACT (system)', c: [['johnny', '__impact']], kind: 'info' },
+    ];
+    const table: string[] = [];
+    const byCls: Record<string, Record<string, Win>> = {};
+    for (const row of ROWS) {
+      const cells: string[] = [];
+      byCls[row.cls] = {};
+      for (const dM of [1.2, 2.0]) {
+        let w: Win | null = null;
+        for (const [att, mid] of row.c) {
+          w = windowOf(att, mid, dM);
+          if (w.reach) break;
+        }
+        byCls[row.cls][dM.toFixed(1)] = w!;
+        cells.push(`${dM.toFixed(1)} m ${w!.label} s${w!.startup} until ${w!.until}: ${fmt(w!)}`);
+      }
+      table.push(`${row.cls.padEnd(20)} | ${cells.join(' | ')}`);
+    }
+    // symmetry: STEP_OUT gives the same window as STEP_IN (5M / 5H / linear special at 1.2 m)
+    const symm = [['krane', '5M'], ['zambini', '5H'], ['johnny', 'hook_m']].every(([a, mm]) => fmt(windowOf(a, mm, 1.2, I.STEP_OUT)) === fmt(windowOf(a, mm, 1.2)));
+    console.log('  STEPPABLE TABLE (step start frame relative to the attack\'s frame 1; defender johnny, STEP_IN; "f before active" = frames');
+    console.log('  from the step start to the first active frame):');
+    for (const l of table) console.log(`    ${l}`);
+    const W12 = (c: string): Win => byCls[c]['1.2'];
+    const W20 = (c: string): Win => byCls[c]['2.0'];
+    const readOk = (w: Win): boolean => w.reach && w.offs.length > 0 && latest(w) >= 3;
+    for (const c of ['5L straight', '5M straight', '5H straight', '6H overhead']) {
+      t.ok(readOk(W12(c)), `${c} at 1.2 m: a READ step evades it and a late one (< 3 f before active) is hit -> ${fmt(W12(c))}`);
+    }
+    t.ok(readOk(W20('5H straight')), `5H straight at 2.0 m (the one that reaches: ${W20('5H straight').label}) -> ${fmt(W20('5H straight'))}`);
+    for (const c of ['homing 5H', 'sweep (homing)']) {
+      const ok = [W12(c), W20(c)].every((w) => w.reach && w.offs.length === 0);
+      t.ok(ok, `${c}: never evaded (1.2 m ${W12(c).label} ${fmt(W12(c))}; 2.0 m ${W20(c).label} ${fmt(W20(c))})`);
+    }
+    for (const c of ['linear special', 'projectile straight']) {
+      t.ok(W12(c).offs.length > 0 && W20(c).offs.length > 0, `${c}: steppable at 1.2 m (${fmt(W12(c))}) and 2.0 m (${fmt(W20(c))})`);
+    }
+    t.ok(W12('sweep (linear)').offs.length > 0, `sweep (linear) at 1.2 m: steppable (${fmt(W12('sweep (linear)'))})`);
+    t.ok(W12('projectile aimed').reach && W12('projectile aimed').offs.length === 0, `aimed projectile at 1.2 m: never (aimed at the spawn frame; 2.0 m ${fmt(W20('projectile aimed'))})`);
+    t.ok(symm, 'STEP_OUT evades exactly like STEP_IN (5M / 5H / linear special windows identical)');
+
+    // --- the whole roster at 1.2 m: every ground strike / projectile move of the 12 kits
+    interface Agg { n: number; ev: number; oor: number; sizes: number[]; minLatest: number; fastMiss: string[] }
+    const agg: Record<string, Agg> = {};
+    for (const id of Object.keys(R.fighters).sort()) {
+      const cf = newMatch({ data: R, p1: id, p2: DEF }).cf[0];
+      for (const mvc of cf.moves) {
+        const o = R.fighters[id].moves[mvc.id];
+        if (!o || mvc.inAir || mvc.stepAtk || mvc.chainOnly || o.kind === 'system') continue;
+        if (!(mvc.isStrike || o.projectile)) continue;
+        const cls = o.projectile ? (o.projectile.aimed ? 'projectile aimed' : 'projectile straight') : mvc.homing ? 'homing' : mvc.linear ? 'linear' : o.kind === 'normal' || o.kind === 'command' ? 'normal (default track)' : 'special (default track)';
+        const a = (agg[cls] ??= { n: 0, ev: 0, oor: 0, sizes: [], minLatest: 99, fastMiss: [] });
+        const w = windowOf(id, mvc.id, 1.2);
+        if (!w.reach) {
+          a.oor++;
+          continue;
+        }
+        a.n++;
+        if (w.offs.length > 0) {
+          a.ev++;
+          a.sizes.push(w.offs.length);
+          a.minLatest = Math.min(a.minLatest, latest(w));
+        } else if (cls !== 'homing' && cls !== 'projectile aimed') a.fastMiss.push(`${id} ${mvc.id} s${mvc.startup}`);
+      }
+    }
+    const aggLines = Object.entries(agg).map(([c, a]) => {
+      a.sizes.sort((x, y) => x - y);
+      const med = a.sizes.length ? a.sizes[Math.floor(a.sizes.length / 2)] : 0;
+      return `${c}: ${a.ev}/${a.n} steppable (median window ${med} f, latest start ${a.minLatest === 99 ? '-' : a.minLatest} f before active; ${a.oor} out of reach)${a.fastMiss.length ? ' never: ' + a.fastMiss.join(', ') : ''}`;
+    });
+    console.log('  roster at 1.2 m (12 kits, ground strikes + projectiles):');
+    for (const l of aggLines) console.log(`    ${l}`);
+    const h = agg['homing'];
+    t.ok(!!h && h.n >= 40 && h.ev === 0, `roster: 0 of ${h?.n} reachable HOMING moves is ever evaded by a sidestep`);
+    const pa = agg['projectile aimed'];
+    t.ok(!pa || pa.ev === 0, `roster: 0 of ${pa?.n ?? 0} aimed projectiles is evaded at 1.2 m`);
+    // every non-homing strike / straight projectile that is not a 4-6 frame move is steppable on a read, and none is steppable
+    // once the step starts within 2 frames of the first active frame (the late / reaction step)
+    const slowMiss = ['normal (default track)', 'special (default track)', 'linear', 'projectile straight'].flatMap((c) => (agg[c]?.fastMiss ?? []).filter((s) => Number(/ s(\d+)$/.exec(s)![1]) >= 7));
+    t.ok(slowMiss.length === 0, `roster: every non-homing move with startup >= 7 is steppable on a read (exceptions: ${slowMiss.join(', ') || 'none'})`);
+    // (default-tracking SPECIALS are report-only here: the EX rushes - hook_ex, shield_rush_ex, claw_rush_ex - carry past a
+    // stepper like the linear L / M / H versions, so a step 2 f before their first active frame still whiffs them)
+    const minLate = agg['normal (default track)']?.minLatest ?? 99;
+    t.ok(minLate >= 3, `roster: a default-tracking normal is never evaded by a step started < 3 f before its active frames (min ${minLate})`);
+    // --- the DEFENDER's body decides too (report): the hurt cylinder radius = (front + back) / 2 of the measured body
+    // (boxes.ts hurtCyls), so long / lurching bodies are wide across the attack line and need more lateral travel
+    const defLines: string[] = [];
+    let homingAny = 0;
+    const winVs = (att: string, mid: string, def: string, dM = 1.2): string => {
+      const tr = (off: number | null): number => {
+        const m = newMatch({ data: R, p1: att, p2: def, stage: 'rust_theater' });
+        place(m, -dM / 2, dM / 2);
+        run(m, 2, 0, 0);
+        const idx = m.cf[0].moves.findIndex((x) => x.id === mid);
+        const total = m.cf[0].moves[idx].total;
+        const b0 = sb(0);
+        const from = m.frame();
+        for (let k = off === null ? 0 : Math.min(0, off); k <= total + 40; k++) {
+          if (k === 0) {
+            m.s[b0 + F.bufA] = ACT.MOVE;
+            m.s[b0 + F.bufM] = idx;
+            m.s[b0 + F.bufAge] = 0;
+            m.s[b0 + F.bufWin] = 8;
+            m.s[b0 + F.bufF] = 0;
+          }
+          step(m, 0, off !== null && k === off ? I.STEP_IN : 0);
+        }
+        return evs(m, from).filter((e) => e.a === 0 && (e.type === EV.HIT || e.type === EV.BLOCK)).length;
+      };
+      if (tr(null) === 0) return 'out of reach';
+      const ev: number[] = [];
+      for (let o = -26; o <= 20; o++) if (tr(o) === 0) ev.push(o);
+      return ev.length ? `${ev[0]}..${ev[ev.length - 1]} (${ev.length} f)` : 'never';
+    };
+    for (const def of Object.keys(R.fighters).sort()) {
+      const cf = newMatch({ data: R, p1: def, p2: def }).cf[0];
+      const r = (cf.hurtFS + cf.hurtBS) / 2 / U;
+      const hm = winVs('krane', '5H', def);
+      if (hm !== 'never') homingAny++;
+      // equal gap: the defender's hurt FRONT 0.84 m from the attacker's root (= johnny at 1.2 m), so big bodies are not
+      // simply measured at point-blank range
+      const dg = Math.round((0.84 + cf.hurtFS / U) * 100) / 100;
+      defLines.push(`${def} (hurt r ${r.toFixed(2)} m, front ${(cf.hurtFS / U).toFixed(2)} m): 1.2 m: krane 5L ${winVs('krane', '5L', def)}, krane 5M ${winVs('krane', '5M', def)}, zambini 5H ${winVs('zambini', '5H', def)}, johnny hook_m ${winVs('johnny', 'hook_m', def)}, homing krane 5H ${hm} | equal gap (${dg.toFixed(2)} m): 5L ${winVs('krane', '5L', def, dg)}, 5M ${winVs('krane', '5M', def, dg)}, 5H ${winVs('zambini', '5H', def, dg)}`);
+    }
+    console.log('  by DEFENDER (STEP_IN; the body decides the lateral clearance: hurt cylinder radius + how far its front reaches toward');
+    console.log('  the attacker, i.e. toward the pivot of the circling step):');
+    for (const l of defLines) console.log(`    ${l}`);
+    t.ok(homingAny === 0, `the homing krane 5H is never evaded by any of the 12 defender bodies (${homingAny} evaded)`);
+    t.note(`steppable table: ${table.join(' || ')} || roster: ${aggLines.join(' || ')} || by defender: ${defLines.join(' || ')}`);
+  }
 }
 
 // ================================================================= 4. ring collision + wall splat (circle + octagon)

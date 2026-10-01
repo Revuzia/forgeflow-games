@@ -14,6 +14,10 @@
 //   SUPER   64, the S+H macro, shown only while SHOWTIME holds >= 1 bar (pulses at 3);
 //   ASSIST  a chip: a tap latches ASSIST for 1 s (holding a modifier while tapping is awkward on glass); held = held.
 //   PAUSE   44, top centre under the timer -> onPause handlers (game.ts routes them into the ESC pause path).
+//   STEP    CHANGED(UI3D) (CONTRACT §35.2): two 56 px buttons ABOVE the stick's home - IN (circle away from the camera, bit 13
+//           STEP_IN) and OUT (toward it, bit 14 STEP_OUT). A tap = SIDESTEP, a hold = SIDEWALK (circle-walk round the ring);
+//           the sim tells the two apart by how long the bit is held, the overlay only holds / latches it like any button.
+//           Anchored to the stick side (left edge; the right edge when left-handed), part of EDIT LAYOUT like the rest.
 // A press stays alive while the thumb slides off the button (captured) until it lifts. TouchState is CONTRACT 18.5:
 // `held` = the bits held right now (stick direction + buttons + the ASSIST latch), `latched` = bits pressed since the
 // last tick (OR-ed in here, cleared by input.ts at each tick), so a tap shorter than one tick still reaches the sim.
@@ -22,23 +26,29 @@
 
 import './touch.css';
 
-export type TouchButtonId = 'l' | 'm' | 'h' | 's' | 'parry' | 'impact' | 'throw' | 'super' | 'assist' | 'pause';
+export type TouchButtonId = 'l' | 'm' | 'h' | 's' | 'parry' | 'impact' | 'throw' | 'super' | 'assist' | 'pause' | 'stepin' | 'stepout';
 export type TouchLayout = Record<string, { dx: number; dy: number; s: number }>;
 export interface TouchOptions { scale: number; opacity: number; leftHanded: boolean; haptics: boolean; layout: TouchLayout | null }
 /** CONTRACT 18.5 (input.ts owns the instance as `Input.touch`): TouchControls writes, input.ts consumes it each tick */
 export interface TouchState { held: number; latched: number; active: number }
 export function createTouchState(): TouchState { return { held: 0, latched: 0, active: 0 }; }
 
-/** CONTRACT 4.4 bits */
-export const BIT = { UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, L: 16, M: 32, H: 64, S: 128, ASSIST: 256, THROW: 512, PARRY: 1024, IMPACT: 2048 } as const;
+/** CONTRACT 4.4 bits (+ CHANGED(UI3D) §35.2 STEP_IN 13 / STEP_OUT 14) */
+export const BIT = { UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, L: 16, M: 32, H: 64, S: 128, ASSIST: 256, THROW: 512, PARRY: 1024, IMPACT: 2048, STEP_IN: 8192, STEP_OUT: 16384 } as const;
+/** CHANGED(UI3D): every defined word bit (0x1fff -> 0x7fff: the STEP bits reach input.ts) */
+export const WORD_MASK = 0x7fff;
 
 export const TOUCH = {
   moveZone: 0.45, stickBase: 120, stickKnob: 52, deadzone: 0.15, minTarget: 44, scaleMin: 0.8, scaleMax: 1.3,
   opacityMin: 0.35, opacityMax: 1, hapticPress: 8, assistLatchMs: 1000, editScaleMin: 0.7, editScaleMax: 1.5,
 } as const;
 
-/** the right-hand cluster at scale 1: centre (px from the right safe edge, px from the bottom safe edge), diameter */
-const CLUSTER: ReadonlyArray<{ id: Exclude<TouchButtonId, 'pause'>; dx: number; dy: number; d: number; bits: number; label: string }> = [
+/**
+ * the right-hand cluster at scale 1: centre (px from the right safe edge, px from the bottom safe edge), diameter.
+ * CHANGED(UI3D): `left: true` entries (the STEP pair) are measured from the LEFT safe edge instead - the stick's side, above
+ * its home (stick home centre = 94 px in / 94 px up, base radius 60: the pair sits 14 px over the base's top edge, 16 px apart).
+ */
+const CLUSTER: ReadonlyArray<{ id: Exclude<TouchButtonId, 'pause'>; dx: number; dy: number; d: number; bits: number; label: string; left?: boolean }> = [
   { id: 's', dx: 62, dy: 70, d: 84, bits: BIT.S, label: 'SP' },
   { id: 'h', dx: 150, dy: 44, d: 72, bits: BIT.H, label: 'H' },
   { id: 'm', dx: 156, dy: 128, d: 72, bits: BIT.M, label: 'M' },
@@ -48,6 +58,8 @@ const CLUSTER: ReadonlyArray<{ id: Exclude<TouchButtonId, 'pause'>; dx: number; 
   { id: 'throw', dx: 240, dy: 172, d: 60, bits: BIT.THROW, label: 'THROW' },
   { id: 'super', dx: 50, dy: 244, d: 64, bits: BIT.S | BIT.H, label: 'SUPER' },
   { id: 'assist', dx: 318, dy: 40, d: 52, bits: BIT.ASSIST, label: 'ASSIST' },
+  { id: 'stepin', dx: 58, dy: 196, d: 56, bits: BIT.STEP_IN, label: 'IN', left: true },
+  { id: 'stepout', dx: 130, dy: 196, d: 56, bits: BIT.STEP_OUT, label: 'OUT', left: true },
 ];
 const PAUSE_D = 44;
 const PAUSE_TOP = 96;            // pause centre, px below the top safe edge (under the HUD timer + pips; >= 20 % of the height)
@@ -258,7 +270,7 @@ export class TouchControls {
     this.state.latched = 0;
     this.stats.reads++;
     if (w & 15) this.stats.dirWords++;
-    return w & 0x1fff;
+    return w & WORD_MASK;
   }
 
   onPause(fn: () => void): () => void { this.pauseFns.push(fn); return () => { const i = this.pauseFns.indexOf(fn); if (i >= 0) this.pauseFns.splice(i, 1); }; }
@@ -356,7 +368,9 @@ export class TouchControls {
       const o = L[c.id];
       const d = Math.max(TOUCH.minTarget, c.d * s * (o?.s ?? 1));
       const dx = (lh ? -1 : 1) * (o?.dx ?? 0);
-      const cx = (lh ? safe.l + c.dx * s : W - safe.r - c.dx * s) + dx;
+      // CHANGED(UI3D): the STEP pair hangs off the stick's edge (left; right when left-handed), the rest off the other
+      const fromLeft = !!c.left !== lh;
+      const cx = (fromLeft ? safe.l + c.dx * s : W - safe.r - c.dx * s) + dx;
       const cy = H - safe.b - c.dy * s + (o?.dy ?? 0);
       place(b, cx, cy, d);
     }

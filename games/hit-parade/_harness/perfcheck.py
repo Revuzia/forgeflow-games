@@ -7,6 +7,8 @@
     python _harness/perfcheck.py --headless --query crowd=0 --label nocrowd   # A/B knobs: crowd=0 outline=0 post=0 bloom=1
     python _harness/perfcheck.py --stages rust_theater,butcher_block,wheel_of_pain,rooftop,control_room --gate-p99 33
                                                             # P2: the super cinematic on every set, one page, p50 / p99 per stage
+    python _harness/perfcheck.py --stages ... --circle 60   # CHANGED(VIEW3D): the pair circles 60 f first (fight line ~40 deg off
+                                                            #   the spawn axis): the super on a diagonal of the 3D ring
 
 Refuses to run (exit 3, says why) while another automated Chrome is alive (a chrome.exe browser process with
 --remote-debugging-pipe or --enable-automation and no --type=): a second automated Chrome shares the GPU and the numbers
@@ -99,6 +101,7 @@ def main():
     ap.add_argument("--p1", default="johnny")
     ap.add_argument("--p2", default="bruno")
     ap.add_argument("--ab", type=int, default=0, help="interleave N A/B windows (cinematic vs idle) of --seconds each")
+    ap.add_argument("--circle", type=int, default=0, help="CHANGED(VIEW3D) --lab sim: frames of STEP_IN before the walk-in (diagonal line)")
     ap.add_argument("--stages", default="", help="--lab sim: comma list of stage ids measured one after another in the same page "
                     "(the super cinematic on each set; per-stage p50 / p99 table; the gate applies to the worst p99)")
     args = ap.parse_args()
@@ -156,7 +159,7 @@ def main():
             per = {}
             for sid in [x for x in args.stages.split(",") if x]:
                 su = pg.evaluate("([a, b, s]) => window.__LAB__.setup(a, b, {stage: s})", [args.p1, args.p2, sid])
-                sc = pg.evaluate("() => window.__LAB__.prime()")
+                sc = pg.evaluate("(o) => window.__LAB__.prime(o)", {"circle": args.circle})
                 c0 = sc.get("cineAt", -1) if sc.get("cineAt", -1) >= 0 else sc.get("lockAt", -1)
                 if c0 is None or c0 < 0:
                     raise RuntimeError("no PRIME TIME cinematic started on %s: %s" % (sid, json.dumps(sc)))
@@ -172,6 +175,7 @@ def main():
                 for key in ("p50", "p90", "p99", "max", "avgFps"):
                     r_[key] = med([w[0][key] for w in wins])
                 r_["window"] = [a0, a1]
+                r_["lineDegAtCine"] = sc.get("lineDegAtCine")
                 r_["stageFallback"] = su.get("stageFallback")
                 r_["prof"] = {k: pf.get(k) for k in ("gpuSupported", "gpuP", "cpuP", "mean")}
                 if args.ab > 0:
@@ -179,8 +183,8 @@ def main():
                     r_["idleP50"] = med([w[1]["p50"] for w in wins]); r_["idleP99"] = med([w[1]["p99"] for w in wins])
                     r_["ratioP99"] = round(r_["p99"] / max(0.01, r_["idleP99"]), 3)
                 per[sid] = r_
-                print("stage %-14s frames %4d avg %5.1f fps | p50 %6.2f p90 %6.2f p99 %6.2f max %6.2f ms | calls %s tris %s | gpu p %s%s" % (
-                    sid, r_["frames"], r_["avgFps"], r_["p50"], r_["p90"], r_["p99"], r_["max"], r_.get("calls"), r_.get("triangles"),
+                print("stage %-14s line %5s deg | frames %4d avg %5.1f fps | p50 %6.2f p90 %6.2f p99 %6.2f max %6.2f ms | calls %s tris %s | gpu p %s%s" % (
+                    sid, r_.get("lineDegAtCine"), r_["frames"], r_["avgFps"], r_["p50"], r_["p90"], r_["p99"], r_["max"], r_.get("calls"), r_.get("triangles"),
                     json.dumps(r_["prof"].get("gpuP")),
                     (" | idle p50 %.2f p99 %.2f -> A/B p99 ratio %.3f (median of %d interleaved)" % (r_["idleP50"], r_["idleP99"], r_["ratioP99"], len(wins))) if args.ab > 0 else ""), flush=True)
             rep["stages"] = per
@@ -190,7 +194,7 @@ def main():
             res["scene"] = "prime %s vs %s, worst stage %s" % (args.p1, args.p2, worst)
             res["seconds"] = args.seconds
         elif args.lab == "sim":
-            sc = pg.evaluate("() => window.__LAB__.prime()")
+            sc = pg.evaluate("(o) => window.__LAB__.prime(o)", {"circle": args.circle})
             rep["script"] = sc
             c0 = sc.get("cineAt", -1) if sc.get("cineAt", -1) >= 0 else sc.get("lockAt", -1)
             if c0 is None or c0 < 0:

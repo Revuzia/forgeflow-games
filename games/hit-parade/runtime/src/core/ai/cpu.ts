@@ -19,6 +19,7 @@ import type { NeutralPlanner, Profile, StyleParams } from './brain.ts';
 import { neutralPlan } from './plans.ts';
 import { bossTools } from './boss.ts';
 import { UniqueTools, uniqueRates } from './uniques.ts';
+import { WORD_MASK } from './pad.ts';
 
 export interface Cpu {
   readonly level: number;
@@ -103,6 +104,11 @@ export function resolveProfile(row: Obj, table: Obj, name: string, level: number
       rate: n(press, 'rate', 0.1),
       windowF: Math.max(2, Math.round(n(press, 'windowF', 32))),
     },
+    // CHANGED(AI3D) (CONTRACT §35.9 / §35.17): the 3D ring levers (default 0 = off: no roll, no sandbox run)
+    step: n(row, 'step', 0),
+    stepGuess: n(row, 'stepGuess', 0),
+    circle: n(row, 'circle', 0),
+    antiStep: n(row, 'antiStep', 0),
   };
 }
 
@@ -153,7 +159,7 @@ class LevelCpu implements Cpu {
     const mode = m.cfg.mode;
     if (mode === 'brawl' || mode === 'heckler' || mode === 'online') return 0;
     this.configure(m, playerIndex);
-    return this.brain.input(m, playerIndex) & 0x1fff;
+    return this.brain.input(m, playerIndex) & WORD_MASK; // CHANGED(AI3D): bits 13 / 14 (STEP) reach the sim
   }
 
   private configure(m: Match, playerIndex: number): void {
@@ -193,7 +199,7 @@ export function createBrainCpu(profile: Profile, fighter: string, seed: number, 
     input(m: Match, p: number): number {
       const mode = m.cfg.mode;
       if (mode === 'brawl' || mode === 'heckler' || mode === 'online') return 0;
-      return brain.input(m, p) & 0x1fff;
+      return brain.input(m, p) & WORD_MASK; // CHANGED(AI3D)
     },
     prepare(m: Match, p: number): void {
       if (!brain.bound || brain.m !== m || brain.i !== p) brain.bind(m, p);

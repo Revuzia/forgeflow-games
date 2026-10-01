@@ -72,14 +72,16 @@ CONSOLE_IGNORE = ("favicon.ico",)
 
 # CONTRACT §4.4 input word bits (mirrors runtime/src/input.ts BIT)
 BIT = {"UP": 1, "DOWN": 2, "LEFT": 4, "RIGHT": 8, "L": 16, "M": 32, "H": 64, "S": 128, "ASSIST": 256,
-       "THROW": 512, "PARRY": 1024, "IMPACT": 2048, "TAUNT": 4096}
+       "THROW": 512, "PARRY": 1024, "IMPACT": 2048, "TAUNT": 4096,
+       # CHANGED(integrator) 3D (CONTRACT §35.2 / §35.16 item 1): the STEP bits
+       "STEP_IN": 8192, "STEP_OUT": 16384}
 # default P1 / P2 keyboard bindings (runtime/src/input.ts DEFAULT_KEYS) as Playwright key names
 P1_KEYS = {"up": "KeyW", "down": "KeyS", "left": "KeyA", "right": "KeyD", "l": "KeyJ", "m": "KeyK", "h": "KeyL",
            "s": "KeyI", "assist": "KeyU", "throw": "KeyH", "parry": "KeyO", "impact": "KeyP", "taunt": "KeyY",
-           "pause": "Escape"}
+           "pause": "Escape", "stepin": "KeyQ", "stepout": "KeyE"}
 P2_KEYS = {"up": "ArrowUp", "down": "ArrowDown", "left": "ArrowLeft", "right": "ArrowRight", "l": "Numpad1",
            "m": "Numpad2", "h": "Numpad3", "s": "Numpad5", "assist": "Numpad4", "throw": "Numpad0", "parry": "Numpad6",
-           "impact": "NumpadAdd", "taunt": "NumpadMultiply"}
+           "impact": "NumpadAdd", "taunt": "NumpadMultiply", "stepin": "Numpad7", "stepout": "Numpad9"}
 # Standard-mapping pad button indices
 PAD = {"A": 0, "B": 1, "X": 2, "Y": 3, "LB": 4, "RB": 5, "LT": 6, "RT": 7, "SELECT": 8, "START": 9, "L3": 10, "R3": 11,
        "UP": 12, "DOWN": 13, "LEFT": 14, "RIGHT": 15, "HOME": 16}

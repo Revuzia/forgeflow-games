@@ -17,6 +17,10 @@ TouchControls over the scripted bout. Per device:
   6 edit      EDIT LAYOUT: drag L by (-40, -30) -> DONE -> settings.touchLayout.l = {dx -40, dy -30} and L moved
   7 menus     taps: title -> main -> VERSUS -> BACK -> main (the menus take touches, 44 px targets)
   8 hygiene   a pinch keeps visualViewport.scale 1; the page never scrolls; a long-press selects nothing
+  CHANGED(UI3D) (CONTRACT §35.2, the 3D ring): taps on STEP IN / STEP OUT set bit 13 / 14 (in `buttons`); a held STEP stays
+  held across reads (= the sim's circle-walk) and clears on release; stick + STEP together (2 touches); the STEP pair sits
+  above the stick (no overlap with its base); EDIT LAYOUT drags STEP IN too. --game adds: a held STEP IN circle-walks P1
+  round P2 (sidewalk, distance kept, >= 30 deg) and a STEP OUT tap sidesteps (state sidestep, dir 'out').
 --game (integration, CHANGED(integrator): implemented): the shell's ?touch=1&mode=versus&p1=johnny&p2=bruno&autostart=1&dev=1
 deep link (P2 idle): the overlay shows, the stick walks P1 (x changes >= 0.3 m), an L tap produces a HIT or WHIFF event,
 PAUSE -> card -> a tap on RESUME, portrait -> rotate overlay pauses the bout.
@@ -42,8 +46,10 @@ for _s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-BIT = {"UP": 1, "DOWN": 2, "LEFT": 4, "RIGHT": 8, "L": 16, "M": 32, "H": 64, "S": 128, "ASSIST": 256, "THROW": 512, "PARRY": 1024, "IMPACT": 2048}
-BTN_BITS = {"l": BIT["L"], "m": BIT["M"], "h": BIT["H"], "s": BIT["S"], "parry": BIT["PARRY"], "impact": BIT["IMPACT"], "throw": BIT["THROW"]}
+BIT = {"UP": 1, "DOWN": 2, "LEFT": 4, "RIGHT": 8, "L": 16, "M": 32, "H": 64, "S": 128, "ASSIST": 256, "THROW": 512, "PARRY": 1024, "IMPACT": 2048,
+       "STEP_IN": 8192, "STEP_OUT": 16384}
+BTN_BITS = {"l": BIT["L"], "m": BIT["M"], "h": BIT["H"], "s": BIT["S"], "parry": BIT["PARRY"], "impact": BIT["IMPACT"], "throw": BIT["THROW"],
+            "stepin": BIT["STEP_IN"], "stepout": BIT["STEP_OUT"]}
 READ_WORD = "(() => { const L = window.__UILAB__; if (L) return L.readWord(); const H = window.__HP__; return H && H.dev && H.dev.touchWord ? H.dev.touchWord() : -1; })()"
 
 
@@ -164,7 +170,7 @@ def lab_device(page, cdp, dev: str, results: list) -> None:
         x, y = R.centre(bid)
         T.tap(x, y, 0.02)
         w = R.word()
-        R.ok(f"tap_{bid}", w & 0xFFF == bit, f"word={names(w)}")
+        R.ok(f"tap_{bid}", w & 0x7FFF == bit, f"word={names(w)}")
     sup = R.btn("super")
     if sup:
         R.word()
@@ -183,6 +189,33 @@ def lab_device(page, cdp, dev: str, results: list) -> None:
     time.sleep(0.8)
     w3 = R.word()
     R.ok("assist_latch_1s", bool(w1 & BIT["ASSIST"]) and bool(w2 & BIT["ASSIST"]) and not (w3 & BIT["ASSIST"]), f"t0={names(w1)} t0.45={names(w2)} t1.25={names(w3)}")
+    # CHANGED(UI3D): STEP - the pair sits above the stick base; a held STEP stays held (circle-walk), clears on release;
+    # stick + STEP together
+    si, so = R.btn("stepin"), R.btn("stepout")
+    above = bool(si and so) and all(b["rect"]["y"] + b["rect"]["h"] <= sb["y"] + 0.5 and b["rect"]["x"] + b["rect"]["w"] > sb["x"] - 40 and b["rect"]["x"] < sb["x"] + sb["w"] + 40 for b in (si, so))
+    R.ok("step_pair_above_stick", above, f"stepin={si and si['rect']} stepout={so and so['rect']} stick={sb}")
+    R.word()
+    x, y = R.centre("stepin")
+    T.down(8, x, y)
+    time.sleep(0.05)
+    w1 = R.word()
+    time.sleep(0.3)
+    w2 = R.word()
+    T.up(8)
+    time.sleep(0.05)
+    w3 = R.word()
+    R.ok("step_hold_held", (w1 & BIT["STEP_IN"]) and (w2 & BIT["STEP_IN"]) and not (w3 & (BIT["STEP_IN"] | BIT["STEP_OUT"])), f"t0={names(w1)} t0.3={names(w2)} released={names(w3)}")
+    T.down(1, sx, sy)
+    T.move(1, sx - rad * 0.8, sy)
+    x, y = R.centre("stepout")
+    T.down(9, x, y)
+    time.sleep(0.05)
+    w = R.word()
+    act = R.touch().get("active")
+    R.ok("stick_plus_step", (w & (BIT["LEFT"] | BIT["STEP_OUT"])) == (BIT["LEFT"] | BIT["STEP_OUT"]) and act == 2, f"word={names(w)} active={act}", snap=True)
+    T.up(9); T.up(1)
+    time.sleep(0.05)
+    R.word()
     # 4 multi-touch: stick right + L + H
     T.down(1, sx, sy)
     T.move(1, sx + rad * 0.8, sy)
@@ -223,6 +256,19 @@ def lab_device(page, cdp, dev: str, results: list) -> None:
     lay_l = (page.evaluate("window.__UILAB__.settings().touchLayout") or {}).get("l") or {}
     nx, ny = R.centre("l")
     R.ok("edit_layout_saved", abs(lay_l.get("dx", 0) + 40) <= 2 and abs(lay_l.get("dy", 0) + 30) <= 2 and abs((nx - lx) + 40) <= 3, f"saved={lay_l} moved=({nx - lx:.0f},{ny - ly:.0f})")
+    # CHANGED(UI3D): the STEP buttons are in the layout editor too (drag STEP IN by (+30, -20))
+    page.evaluate("window.__UILAB__.editLayout(true)")
+    time.sleep(0.15)
+    ix, iy = R.centre("stepin")
+    T.down(4, ix, iy)
+    T.move(4, ix + 30, iy - 20, 6)
+    T.up(4)
+    done = page.evaluate("(() => { const b = document.querySelector('#hp-touch .hpt-ebtn.done').getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}; })()")
+    T.tap(done["x"], done["y"])
+    time.sleep(0.2)
+    lay_s = (page.evaluate("window.__UILAB__.settings().touchLayout") or {}).get("stepin") or {}
+    nx, ny = R.centre("stepin")
+    R.ok("edit_layout_step", abs(lay_s.get("dx", 0) - 30) <= 2 and abs(lay_s.get("dy", 0) + 20) <= 2 and abs((nx - ix) - 30) <= 3, f"saved={lay_s} moved=({nx - ix:.0f},{ny - iy:.0f})")
     # 8 hygiene
     T.down(5, W * 0.5 - 40, H * 0.5)
     T.down(6, W * 0.5 + 40, H * 0.5)
@@ -305,6 +351,39 @@ def game_device(page, cdp, dev: str, results: list, base: str) -> None:
         if got > 0:
             break
     R.ok("game_tap_L_attacks", got > 0, f"new P1 HIT/WHIFF/BLOCK events: {got}")
+    # CHANGED(UI3D): a held STEP IN circle-walks P1 round P2; a STEP OUT tap sidesteps
+    rd = lambda: page.evaluate("(() => { const f = __HP__.fighters(); const a = f[0], b = f[1]; return { st: a.stateName, dir: a.step ? a.step.dir : '', ang: Math.atan2(a.x - b.x, a.z - b.z) * 180 / Math.PI, d: Math.hypot(a.x - b.x, a.z - b.z) }; })()")  # noqa: E731
+    time.sleep(0.6)
+    if R.btn("stepin") and R.btn("stepout"):
+        a0 = rd()
+        x, y = R.centre("stepin")
+        T.down(1, x, y)
+        sts, dists = set(), []
+        for _ in range(12):
+            time.sleep(0.12)
+            r = rd()
+            sts.add(r["st"])
+            if r["st"] == "sidewalk":
+                dists.append(r["d"])
+        a1 = rd()
+        T.up(1)
+        sweep = abs(((a1["ang"] - a0["ang"]) + 180) % 360 - 180)
+        R.ok("game_step_in_circles", "sidewalk" in sts and sweep >= 30 and bool(dists) and max(dists) - min(dists) < 0.05,
+             f"states={sorted(sts)} swept={sweep:.0f} deg distance={min(dists) if dists else 0:.3f}..{max(dists) if dists else 0:.3f} m", snap=True)
+        time.sleep(0.5)
+        x, y = R.centre("stepout")
+        T.tap(x, y, 0.05)
+        seen = None
+        for _ in range(10):
+            r = rd()
+            if r["st"] == "sidestep":
+                seen = r
+                break
+            time.sleep(0.03)
+        R.ok("game_step_out_tap_sidesteps", bool(seen) and seen["dir"] == "out", f"seen={seen}")
+        time.sleep(0.5)
+    else:
+        R.ok("game_step_in_circles", False, "no STEP buttons in __HP__.touch()")
     # PAUSE button -> the pause card -> tap RESUME
     px, py = R.centre("pause")
     T.tap(px, py, 0.06)

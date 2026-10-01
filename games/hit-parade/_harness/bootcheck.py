@@ -16,6 +16,9 @@ G4 flow (real input at the player's layer; dyefield bootcheck.py shape, fighter 
      P2's hp falls (<= 6 tries); shot _shots/boot_hit.png;
   6. REAL I taps (SIMPLE 5S = the fighter's main special) until a HIT / BLOCK event with a = 0 and c = 3 (special,
      CONTRACT §17 rule 6) or a PROJ_HIT by P1 with c = 6 (a projectile special; CHANGED(integrator)) (<= 6 tries);
+  6b. CHANGED(integrator) 3D (CONTRACT §35.10): a REAL Q tap -> P1 SIDESTEP, moved >= 0.3 m, P1 yaw + sim camN turn >= 5 deg;
+     a REAL E hold 1.6 s -> SIDEWALK, the bearing around P2 + the camN sweep + P1's yaw >= 30 deg (<= 3 tries each); shots
+     _shots/boot_step_before / boot_step_tap / boot_step_circle.png; distances are planar (x, z) everywhere;
   7. frames + sim ticks advancing, and VERDICT "BOOTS CLEAN" only with 0 console / page / window / shader errors and
      0 failed requests.
 Exit codes: 0 clean · 1 not clean · 2 the page never got far enough to judge.
@@ -37,6 +40,7 @@ failed, 3 = none failed but one could not be measured on this machine, e.g. rAF 
 """
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -46,7 +50,30 @@ from common import (BIT, P1_KEYS, P2_KEYS, PAD, SHOTS, HarnessError, Session, ad
                     cpu_load, diag_problems, events_tail, fighters_info, is_local, match_info, preflight_chromes,
                     print_diagnostics, save_report, wait_match_phase, wait_warm)
 
-ALL_BITS = 0x1FFF
+ALL_BITS = 0x7FFF   # CHANGED(integrator) 3D: bits 13 / 14 = STEP_IN / STEP_OUT (CONTRACT §35.16 item 1)
+
+
+# CHANGED(integrator) 3D: ground-plane geometry helpers for the ring (FighterSnap x / z in m, yaw in radians, camN [x, z])
+def planar(a, b):
+    return math.hypot((a.get("x") or 0.0) - (b.get("x") or 0.0), (a.get("z") or 0.0) - (b.get("z") or 0.0))
+
+
+def ang_deg(a, b):
+    """smallest |a - b| between two angles in degrees"""
+    return abs((a - b + 180.0) % 360.0 - 180.0)
+
+
+def cam_deg(cam):
+    """camN [x, z] -> yaw-convention degrees (0 = +Z, 90 = +X)"""
+    return math.degrees(math.atan2(cam[0], cam[1])) if cam and len(cam) >= 2 else None
+
+
+def fwd_key(ff):
+    """P1's forward key from its SCREEN side sign (FighterSnap.facing, the sim's LEFT / RIGHT mapping under camN)"""
+    fc = ff[0].get("facing")
+    if fc is None:
+        fc = 1 if (ff[1].get("x") or 0) >= (ff[0].get("x") or 0) else -1
+    return "KeyD" if fc >= 0 else "KeyA"
 
 
 # ─────────────────────────────── the SHELL lab ───────────────────────────────
@@ -440,6 +467,112 @@ def hits_by(evs, a, types, c=None):
     return out
 
 
+def wait_free(sess, max_s=3.0):
+    """P1 free to act (idle / walks / crouch) -> the fighters snapshot (or the last one seen)"""
+    t0 = time.time()
+    ff = None
+    while time.time() - t0 < max_s:
+        ff = fighters_info(sess) or [{}, {}]
+        if (ff[0].get("stateName") or "") in ("idle", "walk_f", "walk_b", "crouch"):
+            return ff
+        time.sleep(0.03)
+    return ff or [{}, {}]
+
+
+def step_kind(fs):
+    st = (fs or {}).get("step") or {}
+    return st.get("kind") or {"sidestep": "sidestep", "sidewalk": "sidewalk", "step_end": "settle"}.get((fs or {}).get("stateName"), "none")
+
+
+def _deg(v):
+    return round(math.degrees(v), 1) if isinstance(v, (int, float)) else None
+
+
+def step_checks(sess, args, shots):
+    """CHANGED(integrator) 3D: G4's ring step. (a) a REAL Q tap (P1 STEP_IN): P1 enters SIDESTEP, moves >= 0.3 m in the
+    plane, its yaw turns (auto-face around P2) and the sim's camN turns (>= 5 deg each); (b) a REAL E hold of 1.6 s
+    (STEP_OUT): P1 enters SIDEWALK, its bearing around P2 turns >= 30 deg, the camN sweep >= 30 deg and P1's yaw >= 30 deg.
+    Up to 3 tries each (the live CPU can hit P1 out of a step). Every number is read from __HP__ (fighters / match)."""
+    out = {"tap": None, "hold": None, "problems": []}
+    kb = sess.page.keyboard
+    for attempt in range(3):
+        ff = wait_free(sess)
+        m0 = match_info(sess) or {}
+        p0, o0 = dict(ff[0]), dict(ff[1])
+        y0, c0 = p0.get("yaw"), cam_deg(m0.get("camN"))
+        kinds = set()
+        if attempt == 0:
+            shots["step_before"] = sess.screenshot(os.path.join(args.out_dir, "boot_step_before.png"))
+        sess.press(P1_KEYS["stepin"], 60)
+        t_end = time.time() + 0.5
+        while time.time() < t_end:
+            fs = fighters_info(sess)
+            if fs:
+                kinds.add(step_kind(fs[0]))
+            time.sleep(0.02)
+        f1 = fighters_info(sess) or [p0, o0]
+        m1 = match_info(sess) or {}
+        y1, c1 = f1[0].get("yaw"), cam_deg(m1.get("camN"))
+        r = {"try": attempt + 1, "key": P1_KEYS["stepin"], "kinds": sorted(kinds), "moved": round(planar(f1[0], p0), 3),
+             "dist": [round(planar(p0, o0), 3), round(planar(f1[0], f1[1]), 3)], "yawDeg": [_deg(y0), _deg(y1)],
+             "camNDeg": [round(c0, 1) if c0 is not None else None, round(c1, 1) if c1 is not None else None]}
+        r["yawTurn"] = round(ang_deg(math.degrees(y0), math.degrees(y1)), 1) if isinstance(y0, (int, float)) and isinstance(y1, (int, float)) else None
+        r["camTurn"] = round(ang_deg(c0, c1), 1) if c0 is not None and c1 is not None else None
+        r["ok"] = "sidestep" in kinds and r["moved"] >= 0.3 and (r["yawTurn"] or 0) >= 5.0 and (r["camTurn"] or 0) >= 5.0
+        out["tap"] = r
+        if r["ok"]:
+            shots["step_tap"] = sess.screenshot(os.path.join(args.out_dir, "boot_step_tap.png"))
+            break
+        time.sleep(0.4)
+    if not (out["tap"] or {}).get("ok"):
+        out["problems"].append("real Q tap (STEP_IN): no sidestep with yaw + camN turning in 3 tries (%s)" % json.dumps(out["tap"]))
+    time.sleep(0.4)
+    for attempt in range(3):
+        ff = wait_free(sess)
+        m0 = match_info(sess) or {}
+        p0, o0 = dict(ff[0]), dict(ff[1])
+        y0, c0 = p0.get("yaw"), cam_deg(m0.get("camN"))
+        b0 = math.degrees(math.atan2((p0.get("x") or 0) - (o0.get("x") or 0), (p0.get("z") or 0) - (o0.get("z") or 0)))
+        kinds, dists, cam_sweep, last_c = set(), [], 0.0, c0
+        kb.down(P1_KEYS["stepout"])
+        t0 = time.time()
+        while time.time() - t0 < 1.6:
+            fs = fighters_info(sess)
+            mm = match_info(sess) or {}
+            if fs:
+                k = step_kind(fs[0])
+                kinds.add(k)
+                if k == "sidewalk":
+                    dists.append(planar(fs[0], fs[1]))
+            cc = cam_deg(mm.get("camN"))
+            if cc is not None and last_c is not None:
+                cam_sweep += ((cc - last_c + 180.0) % 360.0) - 180.0
+            if cc is not None:
+                last_c = cc
+            time.sleep(0.03)
+        circle_shot = sess.screenshot(os.path.join(args.out_dir, "boot_step_circle.png"))
+        kb.up(P1_KEYS["stepout"])
+        f1 = fighters_info(sess) or [p0, o0]
+        m1 = match_info(sess) or {}
+        y1, c1 = f1[0].get("yaw"), cam_deg(m1.get("camN"))
+        b1 = math.degrees(math.atan2((f1[0].get("x") or 0) - (f1[1].get("x") or 0), (f1[0].get("z") or 0) - (f1[1].get("z") or 0)))
+        r = {"try": attempt + 1, "key": P1_KEYS["stepout"], "heldS": 1.6, "kinds": sorted(kinds), "bearingTurn": round(ang_deg(b0, b1), 1),
+             "camSweepDeg": round(cam_sweep, 1), "camTurn": round(ang_deg(c0, c1), 1) if c0 is not None and c1 is not None else None,
+             "yawDeg": [_deg(y0), _deg(y1)],
+             "yawTurn": round(ang_deg(math.degrees(y0), math.degrees(y1)), 1) if isinstance(y0, (int, float)) and isinstance(y1, (int, float)) else None,
+             "distWalk": [round(min(dists), 3), round(max(dists), 3)] if dists else None,
+             "camNDeg": [round(c0, 1) if c0 is not None else None, round(c1, 1) if c1 is not None else None]}
+        r["ok"] = "sidewalk" in kinds and r["bearingTurn"] >= 30.0 and abs(r["camSweepDeg"]) >= 30.0 and (r["yawTurn"] or 0) >= 30.0
+        out["hold"] = r
+        shots["step_circle"] = circle_shot
+        if r["ok"]:
+            break
+        time.sleep(0.5)
+    if not (out["hold"] or {}).get("ok"):
+        out["problems"].append("real E hold (STEP_OUT): no circle-walk turning bearing / camN / yaw >= 30 deg in 3 tries (%s)" % json.dumps(out["hold"]))
+    return out
+
+
 def run_game(args) -> int:
     url = build_url(args.base, mode="versus", p1="johnny", p2="bruno", stage="rust_theater", seed=1, cpu2=args.cpu, dev=1)
     report = {"url": url, "headless": args.headless}
@@ -514,7 +647,7 @@ def run_game(args) -> int:
                     time.sleep(0.05)
                 prev = None
                 ffk = fighters_info(sess) or [{}, {}]
-                walk_key = "KeyD" if (ffk[1].get("x") or 0) >= (ffk[0].get("x") or 0) else "KeyA"   # toward P2 (a swap throw can cross sides)
+                walk_key = fwd_key(ffk)   # toward P2 (CHANGED(integrator) 3D: by P1's screen side sign, not the x order)
                 sess.page.keyboard.down(walk_key)
                 t_end = time.time() + 0.9
                 while time.time() < t_end:
@@ -523,30 +656,34 @@ def run_game(args) -> int:
                     if cur.get("animId") == 1:
                         walk_anim += 1
                         if prev is not None and prev.get("animId") == 1 and isinstance(cur.get("x"), (int, float)) and isinstance(prev.get("x"), (int, float)):
-                            walk_dx += max(0.0, (cur["x"] - prev["x"]) * (1 if (ff[1].get("x") or 0) >= cur["x"] else -1))
+                            # CHANGED(integrator) 3D: progress = the step's displacement along the line to P2 (planar)
+                            ux, uz = (ff[1].get("x") or 0) - prev["x"], (ff[1].get("z") or 0) - (prev.get("z") or 0)
+                            un = math.hypot(ux, uz) or 1.0
+                            walk_dx += max(0.0, ((cur["x"] - prev["x"]) * ux + ((cur.get("z") or 0) - (prev.get("z") or 0)) * uz) / un)
                     prev = cur
                     time.sleep(0.05)
                 sess.page.keyboard.up(walk_key)
                 time.sleep(0.3)
             f1 = fighters_info(sess) or [{}, {}]
             dx = (f1[0].get("x") or 0) - (f0[0].get("x") or 0)
-            gap1 = abs((f1[1].get("x") or 0) - (f1[0].get("x") or 0))
+            gap1 = planar(f1[0], f1[1])
             walk = {"from": f0[0].get("x"), "to": f1[0].get("x"), "dx": dx, "gapAfter": gap1, "walkAnimSamples": walk_anim,
                     "walkFramesDx": round(walk_dx, 3), "holds": holds}
             if not walk_dx >= 0.3:
                 problems.append("real D holds x%d: P1 covered only %.2f m while in walk_f (%d samples; net dx %.2f m, gap %.2f m)" % (holds, walk_dx, walk_anim, dx, gap1))
             # close the gap
-            gap = abs((f1[1].get("x") or 0) - (f1[0].get("x") or 0))
+            gap = planar(f1[0], f1[1])
             if gap > 1.1:
-                sess.page.keyboard.down("KeyD")
+                gk = fwd_key(f1)
+                sess.page.keyboard.down(gk)
                 end = time.time() + 3.0
                 while time.time() < end:
                     ff = fighters_info(sess) or [{}, {}]
-                    gap = abs((ff[1].get("x") or 0) - (ff[0].get("x") or 0))
+                    gap = planar(ff[0], ff[1])
                     if gap < 1.1:
                         break
                     time.sleep(0.03)
-                sess.page.keyboard.up("KeyD")
+                sess.page.keyboard.up(gk)
             # 5L until a HIT by P1 and P2's hp falls
             hp0 = ((fighters_info(sess) or [{}, {}])[1]).get("hp")
             press = {"tries": 0, "hit": None, "hp": [hp0, None], "gap": gap}
@@ -555,16 +692,16 @@ def run_game(args) -> int:
                 # CHANGED(integrator): the live CPU knocks P1 down / pushes it away between taps (measured: every tap at a
                 # 2.43 m gap) - walk back into range before each tap (real D hold, <= 1.5 s)
                 ffg = fighters_info(sess) or [{}, {}]
-                if abs((ffg[1].get("x") or 0) - (ffg[0].get("x") or 0)) > 1.0:
-                    fwd_key = "KeyD" if (ffg[1].get("x") or 0) >= (ffg[0].get("x") or 0) else "KeyA"
-                    sess.page.keyboard.down(fwd_key)
+                if planar(ffg[0], ffg[1]) > 1.0:
+                    fk = fwd_key(ffg)
+                    sess.page.keyboard.down(fk)
                     t_in = time.time() + 1.5
                     while time.time() < t_in:
                         ffg = fighters_info(sess) or [{}, {}]
-                        if abs((ffg[1].get("x") or 0) - (ffg[0].get("x") or 0)) < 0.9:
+                        if planar(ffg[0], ffg[1]) < 0.9:
                             break
                         time.sleep(0.03)
-                    sess.page.keyboard.up(fwd_key)
+                    sess.page.keyboard.up(fk)
                     hp0 = ffg[1].get("hp", hp0)
                 sess.press("KeyJ", 50)
                 time.sleep(0.35)
@@ -594,6 +731,12 @@ def run_game(args) -> int:
                     break
             if not special["event"]:
                 problems.append("real I (SIMPLE 5S) taps x%d never landed a special-class (c = 3) HIT / BLOCK by P1" % special["tries"])
+            # CHANGED(integrator) 3D (CONTRACT §35.2 / §35.3 / §35.10): a REAL Q tap = SIDESTEP and a REAL held E =
+            # SIDEWALK (circle-walk) in the real game; P1's yaw and the sim's camera basis camN must turn
+            step3d = step_checks(sess, args, shots)
+            report["step3d"] = step3d
+            for p in step3d["problems"]:
+                problems.append(p)
             adv = sess.frames_advancing(3.0)
             s1 = sess.state() or {}
             tick_b = s1.get("tick")
@@ -617,6 +760,9 @@ def run_game(args) -> int:
     print("walk         : %s" % json.dumps(walk))
     print("5L           : %s" % json.dumps(press, default=str))
     print("5S special   : %s" % json.dumps(special, default=str))
+    st3 = report.get("step3d") or {}
+    print("Q sidestep   : %s" % json.dumps(st3.get("tap"), default=str))
+    print("E circle     : %s" % json.dumps(st3.get("hold"), default=str))
     print("frames       : %s -> %s (%s)" % (adv[1], adv[2], "advancing" if adv[0] else "STALLED"))
     print("sim ticks    : %s -> %s (%s)" % (tick_a, tick_b, "advancing" if sim_adv else "STALLED"))
     for k, v in shots.items():

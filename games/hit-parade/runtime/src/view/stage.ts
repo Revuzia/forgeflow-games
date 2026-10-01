@@ -638,10 +638,10 @@ export class StageView {
     renderer.toneMappingExposure = this.def.exposure ?? 1.0;
   }
 
-  /** keep the key light's shadow box on the action (called with the camera's mid-X) */
-  followShadow(midX: number): void {
+  /** keep the key light's shadow box on the action (called with the camera's midpoint; CHANGED(VIEW3D): + z on the ring) */
+  followShadow(midX: number, midZ = 0): void {
     if (!this.key) return;
-    this.key.target.position.set(midX, this.keyTargetY, 0);
+    this.key.target.position.set(midX, this.keyTargetY, midZ);
     this.key.position.copy(this.key.target.position).add(this.keyOffset);
     this.key.target.updateMatrixWorld();
   }

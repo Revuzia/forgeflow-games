@@ -525,7 +525,11 @@ function compileStep(sys: System): Pick<CSys, 'ringR' | 'againstWall' | 'camMinS
   const tr = sys.track ?? {};
   const frames = Math.max(2, Math.trunc(st.frames ?? 15));
   const dist = mToU(st.distM ?? 0.85);
-  const movePct = st.movePct ?? 80;
+  // CHANGED(STEPTUNE) (CONTRACT §35.15): default 100 = a FRONT-LOADED quadratic ease-out over all 15 frames (64 % of the
+  // arc in the first 6 frames, then easing to a stop on frame 15; the designer's 60-65 % target). SIM3D built 80 (75 % in 6,
+  // still from frame 13). The travel a defender makes between the attacker's last tracking frame and its first active
+  // frame decides what a step evades (steppable table: probe_3d section 3b).
+  const movePct = st.movePct ?? 100;
   // ease-out over movePct of the frames (like the dash), then still: cumulative travel at step frame f (index 0..frames)
   const curve = new Int32Array(frames + 1);
   const fm = Math.max(1, Math.round((frames * movePct) / 100));
@@ -546,7 +550,9 @@ function compileStep(sys: System): Pick<CSys, 'ringR' | 'againstWall' | 'camMinS
     stepBufferF: Math.max(1, Math.trunc(st.bufferF ?? 9)),
     sidewalk: mpsToUpf(st.walkMps ?? 1.8),
     stepSettle: Math.max(1, Math.trunc(st.settleF ?? 4)),
-    trackNormalOff: Math.trunc(tr.normalUntilOffset ?? 4),
+    // CHANGED(STEPTUNE) (CONTRACT §35.15): normals / command normals / system moves track to startup - 6 like the
+    // specials (was - 4), so a READ sidestep evades a straight normal; throws start on frame 5 (until stays 1)
+    trackNormalOff: Math.trunc(tr.normalUntilOffset ?? 6),
     trackSpecialOff: Math.trunc(tr.specialUntilOffset ?? 6),
   };
 }

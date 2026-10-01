@@ -24,7 +24,8 @@ export type TrainingRow =
   | { kind: 'reset'; label: string; opts: ReadonlyArray<readonly [ResetWhere, string]> };
 export function trainingRows(): TrainingRow[] {
   return [
-    { kind: 'seg', key: 'dummy', label: t('tr.dummy'), opts: [['stand', t('tr.dummy.stand')], ['crouch', t('tr.dummy.crouch')], ['jump', t('tr.dummy.jump')], ['cpu', t('tr.dummy.cpu')]] },
+    // CHANGED(UI3D): SIDESTEPS / CIRCLES - the dummy steps off the line or circle-walks (practise HOMING vs LINEAR moves)
+    { kind: 'seg', key: 'dummy', label: t('tr.dummy'), opts: [['stand', t('tr.dummy.stand')], ['crouch', t('tr.dummy.crouch')], ['jump', t('tr.dummy.jump')], ['sidesteps', t('tr.dummy.sidesteps')], ['circles', t('tr.dummy.circles')], ['cpu', t('tr.dummy.cpu')]] },
     { kind: 'seg', key: 'guard', label: t('tr.guard'), opts: [['none', t('tr.guard.none')], ['all', t('tr.guard.all')], ['first', t('tr.guard.first')], ['random', t('tr.guard.random')]] },
     { kind: 'level', key: 'cpuLevel', label: t('tr.cpuLevel') },
     { kind: 'seg', key: 'record', label: t('tr.record'), opts: [['off', t('tr.rec.off')], ['record', t('tr.rec.record')], ['play', t('tr.rec.play')]] },
@@ -37,7 +38,7 @@ export function trainingRows(): TrainingRow[] {
 }
 
 // ─────────────────────────── input word helpers (CONTRACT 4.4) ───────────────────────────
-export const IN = { UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, L: 16, M: 32, H: 64, S: 128, ASSIST: 256, THROW: 512, PARRY: 1024, IMPACT: 2048, TAUNT: 4096 } as const;
+export const IN = { UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, L: 16, M: 32, H: 64, S: 128, ASSIST: 256, THROW: 512, PARRY: 1024, IMPACT: 2048, TAUNT: 4096, STEP_IN: 8192, STEP_OUT: 16384 } as const;
 
 /** numpad direction of a word (screen-relative: 6 = right) */
 export function numpadDir(w: number): number {
@@ -48,6 +49,8 @@ export function numpadDir(w: number): number {
 }
 const BTN_BITS: ReadonlyArray<readonly [number, string]> = [
   [IN.L, 'L'], [IN.M, 'M'], [IN.H, 'H'], [IN.S, 'S'], [IN.ASSIST, 'A'], [IN.THROW, 'T'], [IN.PARRY, 'P'], [IN.IMPACT, 'I'],
+  // CHANGED(UI3D): the STEP bits (CONTRACT §35.2) as IN / OUT chips
+  [IN.STEP_IN, 'IN'], [IN.STEP_OUT, 'OUT'],
 ];
 
 export class InputDisplay {
@@ -61,7 +64,7 @@ export class InputDisplay {
     this.rowsBox = div('rows', this.root);
   }
   push(word: number, _frame: number): void {
-    const w = word & 0x1fff;
+    const w = word & 0x7fff;           // CHANGED(UI3D): incl. the STEP bits
     const top = this.rows[0];
     if (top && top.word === w) { top.frames++; setText(top.f, String(Math.min(99, top.frames))); return; }
     const r = el('div', 'row');
@@ -69,7 +72,7 @@ export class InputDisplay {
     const d = el('span', 'd');
     d.innerHTML = dirSvg(numpadDir(w));
     r.append(f, d);
-    for (const [bit, label] of BTN_BITS) if (w & bit) r.append(chip(label, label === 'S' ? '' : ''));
+    for (const [bit, label] of BTN_BITS) if (w & bit) r.append(chip(label, bit >= IN.STEP_IN ? 'step' : ''));
     this.rowsBox.prepend(r);
     this.rows.unshift({ word: w, frames: 1, el: r, f });
     while (this.rows.length > this.max) { const x = this.rows.pop(); x?.el.remove(); }

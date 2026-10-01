@@ -23,7 +23,10 @@ const PRIOR = [0.6, 0.25, 1.0, 0.35, 0.3, 0.3];
 
 interface Pending {
   at: number; // frame the observation becomes known
-  kind: number; // 0 action (k = HK), 1 in-range sample (v = 0/1), 2 wake sample, 3 after-block sample, 4 strike height
+  // 0 action (k = HK), 1 in-range sample (v = 0/1), 2 wake sample, 3 after-block sample, 4 strike height,
+  // CHANGED(AI3D): 5 neutral action near me (v = 1 a step / circle-walk, 0 an attack / dash / jump),
+  // 6 its ground strike's 3D class (k = 0 straight, 1 linear, 2 homing)
+  kind: number;
   k: number;
   v: number;
 }
@@ -46,6 +49,14 @@ export class Habits {
   pressureRate = 0.5;
   /** EMA share of its close ground strikes that are HIGH (every box above the crouch line: a duck / weave beats it) */
   highRate = 0.4;
+  /**
+   * CHANGED(AI3D) (§35.9): EMA share of its neutral actions near me that were a SIDESTEP / SIDEWALK start (vs an attack,
+   * dash or jump start) - "he steps a lot": answer with homing moves (cpu.antiStep). 0.1 = the prior.
+   */
+  stepRate = 0.1;
+  /** CHANGED(AI3D): EMA share of its ground strikes near me that were LINEAR (a read sidestep beats them) / HOMING */
+  linearRate = 0.2;
+  homingRate = 0.25;
   private q: Pending[] = [];
   private win: number;
   private sampleOpen = -1; // frame the current in-range sample started (-1 none)
@@ -120,6 +131,16 @@ export class Habits {
     }
   }
 
+  /** CHANGED(AI3D): a neutral action of the opponent near me: `step` = it started a SIDESTEP / SIDEWALK (else an attack...) */
+  neutralAction(f: number, step: boolean): void {
+    this.q.push({ at: f + this.delay, kind: 5, k: 0, v: step ? 1 : 0 });
+  }
+
+  /** CHANGED(AI3D): the 3D class of one of its ground strikes near me (0 straight, 1 linear, 2 homing) */
+  strikeClass(f: number, k: number): void {
+    this.q.push({ at: f + this.delay, kind: 6, k, v: 1 });
+  }
+
   /** commits every observation whose delay has passed (call once per frame, before reading) */
   tick(f: number): void {
     let n = 0;
@@ -133,7 +154,12 @@ export class Habits {
       } else if (p.kind === 1) this.attackRate += (p.v - this.attackRate) * 0.15;
       else if (p.kind === 2) this.wakeRate += (p.v - this.wakeRate) * 0.3;
       else if (p.kind === 3) this.pressureRate += (p.v - this.pressureRate) * 0.25;
-      else this.highRate += (p.v - this.highRate) * 0.15;
+      else if (p.kind === 4) this.highRate += (p.v - this.highRate) * 0.15;
+      else if (p.kind === 5) this.stepRate += (p.v - this.stepRate) * 0.2; // CHANGED(AI3D)
+      else {
+        this.linearRate += ((p.k === 1 ? 1 : 0) - this.linearRate) * 0.15;
+        this.homingRate += ((p.k === 2 ? 1 : 0) - this.homingRate) * 0.15;
+      }
     }
     if (n > 0) this.q.splice(0, n);
   }

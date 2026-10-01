@@ -566,15 +566,19 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   vs every contestant; the Freak's lines are stage directions), `ending` (3-5 sentences), listed per fighter below.
 - **3D ring (CONTRACT 35.4 / 35.12, lane FIGHTERS3D):** the fight is a 360-degree ring; fighters sidestep (15 f, 0.85 m
   arc) and circle-walk. Every move carries `track {until, rate}` (the last frame the attacker turns toward the opponent,
-  degrees per frame); class defaults: normals / throws track to startup - 4, specials / supers to startup - 6, at 180
-  deg / f (snap). **HOMING** moves track through their last active frame at 20 deg / f and are 0.60 m deep across the
+  degrees per frame); class defaults: normals, command normals, specials and supers track to startup - 6 (throws to
+  startup - 4; CHANGED(STEPTUNE) 35.15: normals were startup - 4), at 180 deg / f (snap). **HOMING** moves track through their last active frame at 20 deg / f and are 0.60 m deep across the
   attack line: they catch a stepper (wide hooks and roundhouses, low roundhouses, sweeps, spins / flairs / lariats,
   command-grab reach arcs, counter follow-ups, most supers). **LINEAR** moves face the opponent on frame 1 and never turn
   (rushes, charge moves, leaps and dives, straight non-aimed projectile throws, lunges): a sidestep during their startup
   beats them, and the stepper punishes from the side. Default moves track through most of their startup and then
-  freeze (straight punches' later frames): in the plain step geometry (0.85 m in 15 f at constant speed, hurt radius
-  0.25 m, 1.2 m apart) a step that starts from 4 frames before a LINEAR move through its startup - 8 evades it, while
-  default and HOMING moves are never evaded (FIGHTERS3D model, not the sim; SIM3D's step curve decides the real window).
+  freeze (straight punches' later frames). Measured in the sim (lane STEPTUNE, CONTRACT 35.15, probe_3d steppable table:
+  front-loaded step = 64 % of its 0.85 m arc in the first 6 frames, 1.2 m apart, johnny defending): a READ step -
+  started 4-8 frames before the first active frame - evades a default normal (52 of 53, median window 4 frames; the
+  4-frame johnny 5L is the exception) and a LINEAR move (median window 20 frames); a step started less than 3 frames
+  before a default normal's active frames is hit; HOMING moves (and aimed projectiles at 1.2 m) are never evaded. The
+  defender's body matters as much: the big bodies (boneyard, bruno, freak, krane, rerun, spin) never step a straight
+  normal with the 0.85 m step, only linear moves (CONTRACT 35.15 item 7).
   `lateralM` = each box's half-depth across the attack line (L 0.15,
   M 0.18 by button for normals; specials / EX / supers 0.22; sweeps 0.45, homing 0.60 unless noted). Projectiles: **AIMED** = launched at the opponent on
   the spawn frame (the step has to come after the release); straight = along the thrower's yaw (steppable on

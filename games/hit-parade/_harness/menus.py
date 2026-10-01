@@ -17,6 +17,11 @@ Targets
                    notations) -> FORFEIT -> results -> TRAINING bout -> TRAINING OPTIONS -> EXIT -> ONLINE -> CREDITS,
                    zero flow violations; then the synthetic-pad pass. Report: _reports/menus_game.json.
 
+CHANGED(UI3D) (CONTRACT §35.2, the 3D ring): SETTINGS shows STEP IN / STEP OUT (Q / E, pad RS-UP / RS-DOWN) and remaps them
+by real keys; the pad pass captures RIGHT-STICK directions into pad slots (TAUNT <- RS-LEFT, STEP IN <- RS-DOWN = a SWAP
+with STEP OUT); HOW TO PLAY (main menu guide card) opens by keys and lists the ring rows with the player's keys; --game also
+holds Q in a real bout (P1 circle-walks) and finds the SIDESTEPS / CIRCLES dummy options.
+
 Run:  python _harness/menus.py [--sizes 1600x900,844x390] [--no-pad] [--headed] [--base URL]
 Also: python _harness/menus.py --sync-strings   mirror data/fighters/*.json move `name`s into data/strings.json as
       move.<fighter>.<moveId> (CONTRACT 20.1) and the unique `trait` as trait.<fighter>; prints what changed.
@@ -322,13 +327,24 @@ def walk_lab(page, size: str, results: list) -> None:
     w.focus_to("hpm-p-settings")
     w.key("Enter")
     w.check("settings", w.wait_screen("settings"))
-    # key remap: P1 LIGHT key slot -> capture -> Q; then a conflict (J onto MEDIUM) -> SWAP prompt -> cancel
+    # CHANGED(UI3D): the STEP rows (keys Q / E, pad RS-UP / RS-DOWN) before any remap
+    lbl = page.evaluate("['hpm-key-stepIn-0','hpm-key-stepOut-0','hpm-key-stepIn-pad','hpm-key-stepOut-pad'].map((id) => { const e = document.getElementById(id); return e ? e.textContent.trim() : null; })")
+    w.check("settings_step_rows", lbl == ["Q", "E", "RS-UP", "RS-DOWN"], f"STEP IN / OUT key, pad = {lbl}", snap=False)
+    # key remap: P1 LIGHT key slot -> capture -> Z (CHANGED(UI3D): Q is STEP IN now); then a conflict (W onto MEDIUM) -> SWAP
+    # prompt -> cancel
     w.check("remap_focus", w.focus_to("hpm-key-l-0"), snap=False)
     w.key("Enter")
     w.check("remap_capture", (w.m().get("capture") or "").startswith("0:l:"), f"capture={w.m().get('capture')}")
-    w.key("KeyQ")
+    w.key("KeyZ")
     time.sleep(0.2)
-    w.check("remap_assigned", "Q" in (w.m().get("note") or ""), f"note={w.m().get('note')}")
+    w.check("remap_assigned", "Z" in (w.m().get("note") or ""), f"note={w.m().get('note')}")
+    # CHANGED(UI3D): remap STEP IN's key: X
+    w.check("remap_step_focus", w.focus_to("hpm-key-stepIn-0", "ArrowUp"), snap=False)
+    w.key("Enter")
+    w.key("KeyX")
+    time.sleep(0.2)
+    got = page.evaluate("(document.getElementById('hpm-key-stepIn-0') || {}).textContent")
+    w.check("remap_step_in", "X" in (w.m().get("note") or "") and (got or "").strip() == "X", f"note={w.m().get('note')} slot={got!r}")
     w.focus_to("hpm-key-m-0")
     w.key("Enter")
     w.key("KeyW")                                             # W is P1's UP -> conflict
@@ -379,8 +395,32 @@ def walk_lab(page, size: str, results: list) -> None:
     w.check("credits", w.wait_screen("credits"))
     w.key("Escape")
     w.check("main_back", w.wait_screen("main"), snap=False)
+    # CHANGED(UI3D): HOW TO PLAY from the main menu's guide card (right of the stack)
+    walk_howto(w, "")
     w.key("Escape")
     w.check("title_back", w.wait_screen("title"), snap=False)
+
+
+def walk_howto(w: "Walk", prefix: str) -> None:
+    """CHANGED(UI3D): main -> HOW TO PLAY by keys (the guide card's button) -> the 4 blocks, THE RING rows with the player's
+    STEP keys -> Esc back to main with the focus on the button"""
+    page = w.page
+    w.check(f"{prefix}howto_focus", w.focus_to("hpm-main-howto", "ArrowRight", 3), snap=False)
+    w.key("Enter")
+    info = page.evaluate("""(() => { const b = document.querySelector('#hp-menus .hpm-s-howto .hpm-howto'); if (!b) return null;
+      const secs = [...b.querySelectorAll('.hpm-how-sec')].map((e) => e.dataset.sec);
+      const ring = b.querySelector('.hpm-how-sec.ring');
+      return { secs, ringRows: ring ? ring.querySelectorAll('.hpm-how-row').length : 0, ringText: ring ? ring.textContent : '',
+        keys: ring ? [...ring.querySelectorAll('kbd, .tbtn')].map((k) => k.textContent.trim()) : [] }; })()""") or {}
+    keys = info.get("keys") or []
+    touch = page.evaluate("document.documentElement.classList.contains('hp-touch')")
+    want = ["IN", "OUT"] if touch else []
+    ok = (w.wait_screen("howto") and info.get("secs") == ["move", "ring", "attack", "defend"] and info.get("ringRows", 0) >= 5
+          and "SIDESTEP" in info.get("ringText", "") and "CIRCLE WALK" in info.get("ringText", "") and "STEP ATTACK" in info.get("ringText", "")
+          and all(k in keys for k in want) and len(keys) >= 4)
+    w.check(f"{prefix}howto", ok, f"secs={info.get('secs')} ring rows={info.get('ringRows')} ring keys={keys[:8]}")
+    w.key("Escape")
+    w.check(f"{prefix}howto_back", w.wait_screen("main") and w.m().get("focus") == "hpm-main-howto", snap=False)
 
 
 def walk_game(page, size: str, results: list) -> None:
@@ -428,6 +468,19 @@ def walk_game(page, size: str, results: list) -> None:
     time.sleep(2.5)
     hud = page.evaluate(READ_HUD) or {}
     w.check(step("bout_hud"), bool(hud.get("mounted")), f"timer={hud.get('timer')}")
+    # CHANGED(UI3D): a real Q hold in the bout = STEP IN: P1 circle-walks (the sim's sidewalk state, z leaves the line)
+    if not page.evaluate("document.documentElement.classList.contains('hp-touch')"):
+        rd = "(() => { const f = __HP__.fighters()[0]; return [f.stateName, f.z]; })()"
+        z0 = page.evaluate(rd)[1]
+        page.keyboard.down("KeyQ")
+        seen = set()
+        for _ in range(10):
+            time.sleep(0.1)
+            seen.add(page.evaluate(rd)[0])
+        z1 = page.evaluate(rd)[1]
+        page.keyboard.up("KeyQ")
+        w.check(step("bout_step_q"), "sidewalk" in seen and abs(z1 - z0) > 0.3, f"states={sorted(seen)} P1 z {z0:.2f} -> {z1:.2f}")
+        time.sleep(0.4)
     w.key("Escape")
     w.check(step("pause"), w.wait_screen("pause"))
     w.focus_to("hpm-p-movelist", "ArrowDown")
@@ -461,8 +514,8 @@ def walk_game(page, size: str, results: list) -> None:
     w.wait_screen("pause")
     w.focus_to("hpm-p-training")
     w.key("Enter")
-    rows = page.evaluate("['hpm-tr-guard-random','hpm-tr-reset-mid','hpm-tr-reset-corner','hpm-tr-reset-cornered','hpm-tr-record-record','hpm-tr-hitboxes'].every((id) => !!document.getElementById(id))")
-    w.check(step("training_options"), w.wait_screen("training") and rows, "guard RANDOM, RESET x3, RECORD, HITBOXES")
+    rows = page.evaluate("['hpm-tr-guard-random','hpm-tr-reset-mid','hpm-tr-reset-corner','hpm-tr-reset-cornered','hpm-tr-record-record','hpm-tr-hitboxes','hpm-tr-dummy-sidesteps','hpm-tr-dummy-circles'].every((id) => !!document.getElementById(id))")
+    w.check(step("training_options"), w.wait_screen("training") and rows, "guard RANDOM, RESET x3, RECORD, HITBOXES, DUMMY SIDESTEPS / CIRCLES")
     w.key("Escape")
     w.wait_screen("pause")
     w.focus_to("hpm-p-forfeit")
@@ -479,6 +532,7 @@ def walk_game(page, size: str, results: list) -> None:
     w.check(step("credits"), w.wait_screen("credits"), snap=False)
     w.key("Escape")
     w.wait_screen("main")
+    walk_howto(w, "game_")
     w.key("Escape")
     w.check(step("title_back"), w.wait_screen("title"), snap=False)
     viol = page.evaluate("window.__HP__.state().flowViolations")
@@ -507,6 +561,38 @@ def walk_pad(page, results: list, size: str) -> None:
     tap(1)
     w.check("pad_B_back", w.wait_screen("main"), snap=False)
     w.check("pad_hint", bool(w.m().get("gamepad")), "gamepad seen -> A / B pill", snap=True)
+    # CHANGED(UI3D): the pad capture takes RIGHT-STICK directions (virtual pad slots 17..20): SETTINGS by d-pad + A, then
+    # TAUNT's pad slot <- RS-LEFT (free) and STEP IN's pad slot <- RS-DOWN (= STEP OUT's: the SWAP prompt, A = SWAP)
+    w.check("pad_to_settings", w.focus_to("hpm-main-settings"), snap=False)
+    tap(0)
+    w.check("pad_settings", w.wait_screen("settings"), snap=False)
+
+    def stick_capture(slot_id: str, ax: int, val: float) -> None:
+        w.focus_to(slot_id, "ArrowDown", 20)
+        tap(0)                                                        # A on the pad slot = capture
+        time.sleep(0.15)
+        page.evaluate(f"window.__pad.axes[{ax}] = {val}")
+        time.sleep(0.2)
+        page.evaluate(f"window.__pad.axes[{ax}] = 0")
+        time.sleep(0.2)
+
+    stick_capture("hpm-key-taunt-pad", 2, -1.0)
+    got = page.evaluate("(document.getElementById('hpm-key-taunt-pad') || {}).textContent")
+    w.check("pad_capture_rs_left", (got or "").strip() == "RS-LEFT", f"TAUNT pad slot = {got!r} note={w.m().get('note')}", snap=False)
+    stick_capture("hpm-key-stepIn-pad", 3, 1.0)
+    conflict = w.m().get("conflict") or {}
+    w.check("pad_capture_rs_down_conflict", conflict.get("value") == 18 and (conflict.get("other") or {}).get("action") == "stepOut", f"conflict={conflict}", snap=True)
+    tap(0)                                                            # A on SWAP (focused)
+    time.sleep(0.2)
+    lab = page.evaluate("['hpm-key-stepIn-pad','hpm-key-stepOut-pad'].map((id) => (document.getElementById(id) || {}).textContent)")
+    w.check("pad_capture_swap", [x.strip() if x else x for x in lab] == ["RS-DOWN", "RS-UP"], f"STEP IN / OUT pad = {lab}", snap=False)
+    w.check("pad_reset_focus", w.focus_to("hpm-reset-keys", "ArrowDown", 30), snap=False)
+    tap(0)
+    time.sleep(0.2)
+    lab = page.evaluate("['hpm-key-stepIn-pad','hpm-key-stepOut-pad','hpm-key-taunt-pad'].map((id) => (document.getElementById(id) || {}).textContent)")
+    w.check("pad_reset_defaults", [x.strip() if x else x for x in lab] == ["RS-UP", "RS-DOWN", "SELECT"], f"after RESET = {lab}", snap=False)
+    tap(1)
+    w.check("pad_B_back_settings", w.wait_screen("main"), snap=False)
     page.evaluate("window.__pad.connected = false")
 
 

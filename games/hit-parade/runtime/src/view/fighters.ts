@@ -1,6 +1,7 @@
 // HIT PARADE - one fighter on screen (CONTRACT §7 "Pose from state", §2 facing, §6.4 props, §17).
 //
-//   root  (world: x, y from the snapshot, z 0; yaw +90 deg facing +x / -90 deg facing -x - the GLB faces +Z at rest)
+//   root  (world: x, y, z + yaw from the snapshot - CHANGED(VIEW3D), SIM3D §35.13; the 1D labs: z 0, yaw +-90 deg from
+//          facing - the GLB faces +Z at rest)
 //    └ model (SkeletonUtils clone of the GLB; height-normalised to the fighter's heightM when the file disagrees by
 //             more than 3 %; the view-only hitstop SHAKE offsets it +-2 cm along the fight line at 30 Hz)
 // Pose: PoseDriver writes the pose from (animId, animFrame, prevAnimId, prevAnimFrame, blendT) each frame - never from
@@ -75,7 +76,7 @@ export class FighterView {
   private readonly mixed: PoseItem[] = [];
   private readonly startupOf = new Map<string, number>();
   /** read-back for the lab / harness */
-  readonly last = { shake: 0, facing: 1, x: 0, y: 0, clip: '', t: 0, w: 1, props: 0, propsShown: 0, override: '' };
+  readonly last = { shake: 0, facing: 1, x: 0, y: 0, z: 0, yawDeg: 0, mirror: false, clip: '', t: 0, w: 1, props: 0, propsShown: 0, override: '' };
 
   constructor(assets: Assets, asset: FighterAsset, table: ReadonlyArray<AnimRef>, def: ViewFighterDef | undefined, color = 0, outline = true) {
     this.id = asset.id;
@@ -100,6 +101,8 @@ export class FighterView {
     this.chestBone = this.bonesByName.get('mixamorigSpine2') ?? this.bonesByName.get('mixamorigSpine1') ?? null;
     this.pose = new PoseDriver(this.model, asset.clips);
     for (const [kk, m] of Object.entries(def?.moves ?? {})) if (typeof m.startup === 'number') this.startupOf.set(kk, m.startup);
+    const swap = (c: string): string => (/^side(step|walk)_[lr]$/.test(c) ? c.slice(0, -1) + (c.endsWith('_l') ? 'r' : 'l') : c);
+    this.tableMir = table.some((e) => /^side(step|walk)_[lr]$/.test(e.clip)) ? table.map((e) => ({ ...e, clip: swap(e.clip) })) : table;
   }
 
   bone(name: string): THREE.Object3D | null { return this.bonesByName.get(name) ?? this.bonesByName.get('mixamorig' + name) ?? null; }
@@ -140,6 +143,14 @@ export class FighterView {
    */
   zTarget = 0;
   private zNow = 0;
+  /** CHANGED(VIEW3D): the planar unit vector toward the camera (the zTarget offset direction; BoutView sets it) */
+  readonly towardCam = new THREE.Vector3(0, 0, 1);
+  /**
+   * CHANGED(VIEW3D): the anim table with the §35.5 step clips' _l / _r swapped, used while the model is MIRRORED: the sim
+   * picks sidestep_l / sidewalk_l for a step toward the fighter's OWN left, and a mirrored rig's left leg is drawn on its
+   * right, so the mirrored body plays the _r clip to move its visible legs the way the root moves.
+   */
+  private readonly tableMir: ReadonlyArray<AnimRef>;
 
   /** Apply one snapshot (+ an optional presentation override). `dt` real seconds; `time` real seconds (the shake clock). */
   update(s: ViewFighterSnap, dt: number, time: number, ov?: FighterOverride | null): void {
@@ -147,17 +158,22 @@ export class FighterView {
     this.zNow += (this.zTarget - this.zNow) * Math.min(1, dt * 10);
     if (Math.abs(this.zNow) < 1e-4) this.zNow = 0;
     this.root.visible = ov?.visible !== false;
-    this.root.position.set(ov?.x ?? s.x, ov?.y ?? s.y, (ov?.z ?? 0) + this.zNow);
-    // yaw +-90 deg from facing (CONTRACT §2); facing -1 also MIRRORS the model (local X scale -1, SF4-6 convention,
-    // §17.1) so both sides show the same silhouette to the camera. Equivalent to reflecting the facing +1 pose in x.
+    // CHANGED(VIEW3D): world (x, y, z) from the snapshot (SIM3D); the presentation depth offset runs toward the camera
+    const tc = this.towardCam;
+    this.root.position.set((ov?.x ?? s.x) + tc.x * this.zNow, ov?.y ?? s.y, (ov?.z ?? s.z ?? 0) + tc.z * this.zNow);
+    // yaw: the snapshot's body yaw (SIM3D, radians = rotation.y) - else +-90 deg from facing (the 1D labs); facing -1 also
+    // MIRRORS the model (local X scale -1, SF4-6 convention, §17.1) so both screen sides show the same silhouette to the
+    // camera. The mirror is about the body's own forward axis, so it holds at any yaw.
     const mirror = this.mirror && facing < 0;
-    this.root.rotation.set(0, ov?.yaw ?? facing * 90 * DEG, 0);
+    const yaw = ov?.yaw ?? (typeof s.yaw === 'number' && Number.isFinite(s.yaw) ? s.yaw : facing * 90 * DEG);
+    this.root.rotation.set(0, yaw, 0);
     this.root.scale.set(mirror ? -1 : 1, 1, 1);
+    const table = mirror ? this.tableMir : this.table;
     if (ov?.list && ov.list.length) {
       this.pose.poseWeighted(ov.list);
       this.last.override = 'list';
     } else if (ov?.blend && ov.blend.w > 0.001) {
-      this.pose.entriesFor(this.table, s, this.entries);
+      this.pose.entriesFor(table, s, this.entries);
       const k = Math.min(1, ov.blend.w);
       this.mixed.length = 0;
       for (const e of this.entries) this.mixed.push({ clip: e.clip, t: e.t, w: e.w * (1 - k) });
@@ -165,7 +181,7 @@ export class FighterView {
       this.pose.poseWeighted(this.mixed);
       this.last.override = 'blend';
     } else {
-      this.pose.pose(this.table, s);
+      this.pose.pose(table, s);
       this.last.override = '';
     }
     // victim shake: +-2 cm along the fight line at 30 Hz while the hitstop lasts (view only)
@@ -206,7 +222,8 @@ export class FighterView {
       }
     }
     const L = this.last;
-    L.shake = shake; L.facing = facing; L.x = this.root.position.x; L.y = this.root.position.y;
+    L.shake = shake; L.facing = facing; L.x = this.root.position.x; L.y = this.root.position.y; L.z = this.root.position.z;
+    L.yawDeg = Math.round(((yaw * 180 / Math.PI) % 360 + 360) % 360 * 10) / 10; L.mirror = mirror;
     L.clip = this.pose.last.clip; L.t = this.pose.last.t; L.w = this.pose.last.w;
     L.props = this.props.length; L.propsShown = shown;
   }
@@ -227,7 +244,7 @@ export class FighterView {
   /** world chest position (FX anchor) */
   chest(out = new THREE.Vector3()): THREE.Vector3 {
     if (this.chestBone) return this.chestBone.getWorldPosition(out);
-    return out.set(this.root.position.x, this.root.position.y + this.heightM * 0.7, 0);
+    return out.set(this.root.position.x, this.root.position.y + this.heightM * 0.7, this.root.position.z);
   }
 
   /** world position of a named bone (FX / prop anchors); false when the body has no such bone */
@@ -241,14 +258,16 @@ export class FighterView {
   /** the body's facing on the floor plane (unit XZ), from the shoulder line - follows spins in a clip */
   forward(out: THREE.Vector3): THREE.Vector3 {
     const l = this.bone('LeftShoulder') ?? this.bone('LeftArm'), r = this.bone('RightShoulder') ?? this.bone('RightArm');
-    if (!l || !r) return out.set(this.root.scale.x < 0 ? -1 : 1, 0, 0);
+    if (!l || !r) { const y = this.root.rotation.y; return out.set(Math.sin(y), 0, Math.cos(y)); }
     l.getWorldPosition(this.mp); r.getWorldPosition(out);
     const dx = out.x - this.mp.x, dz = out.z - this.mp.z;           // R - L
     // character facing +Z has its right shoulder at -X: forward = up x (R - L); a mirrored model flips the handedness
     const s = this.root.scale.x < 0 ? -1 : 1;
     out.set(dz * s, 0, -dx * s);
     const n = Math.hypot(out.x, out.z);
-    return n > 1e-5 ? out.multiplyScalar(1 / n) : out.set(1, 0, 0);
+    if (n > 1e-5) return out.multiplyScalar(1 / n);
+    const y = this.root.rotation.y;
+    return out.set(Math.sin(y), 0, Math.cos(y));
   }
 
   /** read-back of attached props (lab / harness) */

@@ -17,7 +17,7 @@ tools/research/fg_template_check.py convention, and checks:
     box frames inside the active frames. Clips whose plan differs from the published bake
     (art/renders/<id>/_build/bake.json src) are reported PENDING (lane ASSETS re-bake), not failed.
   - CHANGED(FIGHTERS3D) 3D ring fields (CONTRACT 35.12): every move's track {until, rate} matches its class (homing =
-    last active frame at 20 deg/f, linear = frame 1, else startup - 4 / - 6 at 180), homing strikes >= 0.40 m deep,
+    last active frame at 20 deg/f, linear = frame 1, else startup - 6 (throws - 4) at 180), homing strikes >= 0.40 m deep,
     lateralM on every strike and only there, projectile aimed + lateralM, step-attacks (SS.<btn>, role stepatk; patch
     and spin must have one), every fighter has a reliable homing tool and an antistep move, cpu antiStep / stepAttack
     refs resolve, and _spec/ROSTER.md carries each fighter's "3D ring play" section.
@@ -513,7 +513,7 @@ def check_grab_victim(fid, mid, o, g):
 
 
 # ------------------------------------------------------------------ CHANGED(FIGHTERS3D): CONTRACT 35.4 / 35.12 checks
-TRACK_LEAD = {"normal": 4, "command": 4, "throw": 4}   # until = max(1, startup - lead); other kinds 6
+TRACK_LEAD = {"normal": 6, "command": 6, "throw": 4}   # until = max(1, startup - lead); other kinds 6 (CHANGED(STEPTUNE) 35.15: normal / command 4 -> 6)
 HOMING_RATE, TRACK_FULL = 20, 180
 LAT_RANGE, PROJ_LAT_RANGE = (0.10, 1.50), (0.10, 0.80)
 STEP_ATTACK_REQUIRED = ("patch", "spin")

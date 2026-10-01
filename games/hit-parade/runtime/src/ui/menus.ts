@@ -21,6 +21,12 @@
 // VERSUS (opponent / CPU level / rounds / timer -> select -> stage -> VS splash -> startMatch), TRAINING (select P1 +
 // dummy -> training), ONLINE (lobby -> online intents; blind select -> onlinePick). The integrator drives the rest with
 // the promise-returning screens: showResults, showPause, showLadder, showCard, showVs, showEnding, showNameEntry.
+//
+// CHANGED(UI3D) (CONTRACT §35.2 / §35.16, the 3D ring): the remap list carries STEP IN / STEP OUT (keys P1 Q / E, P2 Num7 /
+// Num9, pad RIGHT STICK up / down = virtual pad slots 17 / 18 - the pad capture sees right-stick pushes as those slots);
+// the pause CONTROLS legend has a STEP row (keys, or the touch IN / OUT buttons); HOW TO PLAY (screen 'howto', from the main
+// menu's guide card) explains walking, the ring (sidestep, circle-walk, step-attacks, HOMING vs LINEAR, the wall), attacks
+// and defence with the player's own bindings (keys, pad or touch); TRAINING OPTIONS notes the SIDESTEPS / CIRCLES dummies.
 
 import type {
   Action, CardView, LadderView, MatchCfg, MatchResult, MenuIntent, MenusDeps, NetOnlineStatus, OnlineEventName, OnlineStatus, PlayerControls, Rect, Scheme,
@@ -49,16 +55,18 @@ export function defaultControls(p: 0 | 1): PlayerControls {
     keys: {
       up: ['KeyW', 'Space'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], l: ['KeyJ'], m: ['KeyK'], h: ['KeyL'], s: ['KeyI'],
       assist: ['KeyU'], throw: ['KeyH'], parry: ['KeyO'], impact: ['KeyP'], taunt: ['KeyY'], pause: ['Escape'],
+      stepIn: ['KeyQ'], stepOut: ['KeyE'],
     },
-    pad: { up: [12], down: [13], left: [14], right: [15], l: [2], m: [3], h: [5], s: [0], assist: [1], throw: [6], parry: [4], impact: [7], taunt: [8], pause: [9] },
+    pad: { up: [12], down: [13], left: [14], right: [15], l: [2], m: [3], h: [5], s: [0], assist: [1], throw: [6], parry: [4], impact: [7], taunt: [8], pause: [9], stepIn: [17], stepOut: [18] },
   };
   return {
     scheme: 0,
     keys: {
       up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], l: ['Numpad1'], m: ['Numpad2'], h: ['Numpad3'],
       s: ['Numpad5'], assist: ['Numpad4'], throw: ['Numpad0'], parry: ['Numpad6'], impact: ['NumpadAdd'], taunt: ['NumpadMultiply'], pause: [],
+      stepIn: ['Numpad7'], stepOut: ['Numpad9'],
     },
-    pad: { up: [12], down: [13], left: [14], right: [15], l: [2], m: [3], h: [5], s: [0], assist: [1], throw: [6], parry: [4], impact: [7], taunt: [8], pause: [9] },
+    pad: { up: [12], down: [13], left: [14], right: [15], l: [2], m: [3], h: [5], s: [0], assist: [1], throw: [6], parry: [4], impact: [7], taunt: [8], pause: [9], stepIn: [17], stepOut: [18] },
   };
 }
 
@@ -76,7 +84,25 @@ export function codeLabel(code: string): string {
   };
   return named[code] ?? code.toUpperCase();
 }
-const PAD_NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'SELECT', 'START', 'L3', 'R3', 'D-UP', 'D-DOWN', 'D-LEFT', 'D-RIGHT', 'HOME'];
+/** CHANGED(UI3D): 17..20 = the right stick's four directions (input.ts PAD.RS_*: bindable like buttons) */
+const PAD_NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'SELECT', 'START', 'L3', 'R3', 'D-UP', 'D-DOWN', 'D-LEFT', 'D-RIGHT', 'HOME',
+  'RS-UP', 'RS-DOWN', 'RS-LEFT', 'RS-RIGHT'];
+/** CHANGED(UI3D): the pad's buttons + the right stick as virtual slots 17..20 (8-way sectors, 30 % radial dead zone = input.ts) */
+function padSlots(gp: Gamepad): boolean[] {
+  const now = gp.buttons.map((b) => b.pressed || b.value > 0.5);
+  while (now.length < 17) now.push(false);
+  now.length = 17;
+  const x = gp.axes[2] ?? 0, y = gp.axes[3] ?? 0;
+  let up = false, down = false, left = false, right = false;
+  if (Math.hypot(x, y) >= 0.3) {
+    const sec = ((Math.round((Math.atan2(-y, x) * 180) / Math.PI / 45) % 8) + 8) % 8;   // 0 R, 1 UR, 2 U, 3 UL, 4 L, 5 DL, 6 D, 7 DR
+    up = sec >= 1 && sec <= 3; down = sec >= 5 && sec <= 7; left = sec >= 3 && sec <= 5; right = sec === 7 || sec <= 1;
+  }
+  now.push(up, down, left, right);
+  return now;
+}
+/** CHANGED(UI3D): the touch overlay's label for an action (HOW TO PLAY / legend in touch mode) */
+const TOUCH_LABEL: Partial<Record<Action, string>> = { l: 'touch.l', m: 'touch.m', h: 'touch.h', s: 'touch.s', assist: 'touch.assist', throw: 'touch.throw', parry: 'touch.parry', impact: 'touch.impact', stepIn: 'touch.stepin', stepOut: 'touch.stepout' };
 export function padLabel(i: number | undefined): string { return i === undefined ? t('misc.none') : (PAD_NAMES[i] ?? `B${i}`); }
 
 const VOL_DEFAULT = { master: 0.8, music: 0.5, sfx: 0.9, crowd: 0.7, voice: 0.9 };       // = SHELL settings DEFAULT_VOLUMES
@@ -147,6 +173,9 @@ export class Menus {
   private readonly keysBox: HTMLElement;
   private readonly bindNote: HTMLElement;
   private readonly touchCard: HTMLElement;
+  /** CHANGED(UI3D): the HOW TO PLAY body (rebuilt on refresh: bindings / device can change) */
+  private readonly howBox: HTMLElement;
+  private howKey = '';
   private readonly fsBtns: HTMLButtonElement[] = [];
   private setPlayer: 0 | 1 = 0;
   private keyBtns = new Map<string, HTMLButtonElement>();
@@ -226,6 +255,12 @@ export class Menus {
     this.mainDescTitle = el('h3', 'hpm-guide-t', '');
     this.mainDesc = el('p', 'hpm-guide-d', '');
     card.append(this.mainDescTitle, this.mainDesc);
+    // CHANGED(UI3D): HOW TO PLAY - the ring's STEP controls are new to every player
+    const howBtn = btn('hpm-btn hpm-howbtn', t('how.title'));
+    howBtn.id = 'hpm-main-howto';
+    howBtn.addEventListener('click', () => { this.sound('select'); this.show('howto'); });
+    howBtn.addEventListener('focus', () => { setText(this.mainDescTitle, t('how.title')); setText(this.mainDesc, t('how.sub')); });
+    card.append(howBtn);
     items.forEach(([k, fn], i) => {
       const b = btn(`hpm-item${i === 0 ? ' hot' : ''}`, '');
       b.id = `hpm-main-${k}`;
@@ -460,9 +495,15 @@ export class Menus {
     this.trNoteEl.setAttribute('role', 'status');
     tc.append(this.trNoteEl);
     this.offs.push(this.training.on((o, action) => {
-      if (action === 'change') this.trNote(o.record === 'record' ? t('tr.rec.hint') : o.record === 'play' ? (this.training.recorded > 0 ? t('tr.play.hint') : t('tr.play.none')) : o.dummy === 'cpu' ? t('tr.cpu.hint', { n: o.cpuLevel }) : '');
+      if (action === 'change') this.trNote(o.record === 'record' ? t('tr.rec.hint') : o.record === 'play' ? (this.training.recorded > 0 ? t('tr.play.hint') : t('tr.play.none')) : o.dummy === 'cpu' ? t('tr.cpu.hint', { n: o.cpuLevel })
+        : o.dummy === 'sidesteps' ? t('tr.sidesteps.hint') : o.dummy === 'circles' ? t('tr.circles.hint') : '');
       this.refresh();
     }));
+
+    // ── HOW TO PLAY (CHANGED(UI3D)) ───────────────────
+    const hws = this.mkScreen('howto');
+    hws.append(this.header(t('how.title'), t('how.hint')));
+    this.howBox = div('hpm-card hpm-howto hpm-scroll', hws);
 
     // ── MOVE LIST ─────────────────────────────────────
     const mls = this.mkScreen('movelist');
@@ -1475,7 +1516,7 @@ export class Menus {
     if (from) {
       const map: Partial<Record<ScreenId, string>> = s === 'pause'
         ? { settings: 'hpm-p-settings', movelist: 'hpm-p-movelist', training: 'hpm-p-training' }
-        : { season: 'hpm-main-season', versus: 'hpm-main-versus', online: 'hpm-main-online', settings: 'hpm-main-settings', credits: 'hpm-main-credits', charselect: s === 'main' ? 'hpm-main-training' : '' };
+        : { season: 'hpm-main-season', versus: 'hpm-main-versus', online: 'hpm-main-online', settings: 'hpm-main-settings', credits: 'hpm-main-credits', howto: 'hpm-main-howto', charselect: s === 'main' ? 'hpm-main-training' : '' };
       const id = map[from];
       if (id) target = scr.querySelector<HTMLElement>(`#${id}`);
     }
@@ -1635,6 +1676,7 @@ export class Menus {
     for (const [v, b] of sp) { const on = Number(v) === this.setPlayer; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }
     this.renderKeys();
     this.renderLegend();
+    if (this.screen === 'howto') this.renderHowto();
     this.touchCard.hidden = !this.touch && !TOUCH_PARAM;
   }
 
@@ -1777,6 +1819,11 @@ export class Menus {
     box.replaceChildren();
     box.classList.toggle('touch', this.touch);
     if (this.touch) {
+      // CHANGED(UI3D): the STEP pair first (one row: IN + OUT), then the buttons
+      const sr = div('hpm-leg', box);
+      const sk = el('span', 'keys');
+      sk.append(el('span', 'tbtn t-stepin', t('touch.stepin')), el('span', 'tbtn t-stepout', t('touch.stepout')));
+      sr.append(sk, el('span', 'lbl', t('hint.step')));
       for (const [k, label] of [['touch.l', 'act.l'], ['touch.m', 'act.m'], ['touch.h', 'act.h'], ['touch.s', 'act.s'], ['touch.parry', 'act.parry'], ['touch.impact', 'act.impact'], ['touch.throw', 'act.throw'], ['touch.assist', 'act.assist']] as const) {
         const r = div('hpm-leg', box);
         r.append(el('span', `tbtn t-${k.split('.')[1]}`, t(k)), el('span', 'lbl', t(label)));
@@ -1787,6 +1834,8 @@ export class Menus {
     const k = (a: Action): string => codeLabel(c.keys[a]?.[0] ?? '');
     const rows: Array<[string[], string]> = [
       [[k('up'), k('left'), k('down'), k('right')], t('hint.move')],
+      // CHANGED(UI3D): STEP IN / OUT (tap = sidestep, hold = circle-walk)
+      [[k('stepIn'), k('stepOut')], t('hint.step')],
       [[k('l')], t('act.l')], [[k('m')], t('act.m')], [[k('h')], t('act.h')], [[k('s')], t('act.s')],
       [[k('assist')], t('act.assist')], [[k('throw')], t('act.throw')], [[k('parry')], t('act.parry')], [[k('impact')], t('act.impact')],
     ];
@@ -1795,6 +1844,77 @@ export class Menus {
       const ks = el('span', 'keys');
       for (const key of keys) ks.append(el('kbd', 'hpm-kbd', key));
       r.append(ks, el('span', 'lbl', label));
+    }
+  }
+
+  /**
+   * CHANGED(UI3D): HOW TO PLAY - four blocks (MOVE, THE RING, ATTACK, DEFEND); every row = the player's own inputs (P1 keys,
+   * + the pad's once one was seen, or the touch buttons in touch mode) and what they do. Rebuilt only when that changes.
+   */
+  private renderHowto(): void {
+    const c = this.controls(0);
+    const key = `${this.touch ? 't' : 'k'}${this.padSeen ? 'p' : ''}:${JSON.stringify(c.keys)}:${JSON.stringify(c.pad)}`;
+    if (key === this.howKey) return;
+    this.howKey = key;
+    const box = this.howBox;
+    box.replaceChildren();
+    type Tok = Action | '+' | '/' | 'hold' | 'stick' | 'homing' | 'linear' | 'wall';
+    const tok = (a: Tok): HTMLElement => {
+      if (a === '+' || a === '/') return el('span', 'op', a);
+      if (a === 'hold') return el('span', 'op word', t('ml.hold'));
+      if (a === 'homing' || a === 'linear') return el('span', `hpm-ml-tag ${a}`, t(`ml.tag.${a}`));
+      if (a === 'wall') return el('span', 'hpm-ml-tag wall', t('how.tag.wall'));
+      if (a === 'stick') return el('span', 'tbtn', t('how.stick'));
+      if (this.touch) {
+        const tl = TOUCH_LABEL[a];
+        if (tl) return el('span', `tbtn t-${tl.split('.')[1]}`, t(tl));
+        return el('span', 'tbtn', t('how.stick'));
+      }
+      const w = el('span', 'k');
+      w.append(el('kbd', 'hpm-kbd', codeLabel(c.keys[a]?.[0] ?? '')));
+      const pb = c.pad[a]?.[0];
+      if (this.padSeen && typeof pb === 'number') w.append(el('kbd', 'hpm-kbd pad', padLabel(pb)));
+      return w;
+    };
+    const dirs = (...a: Action[]): Tok[] => (this.touch ? ['stick'] : a);
+    const secs: Array<[string, string, Array<[Tok[], string, string]>]> = [
+      ['move', t('how.move'), [
+        [dirs('left', 'right'), t('how.walk'), t('how.walk.d')],
+        [dirs('up', 'down'), t('how.jump'), t('how.jump.d')],
+        [dirs('right', 'right'), t('how.dash'), t('how.dash.d')],
+      ]],
+      ['ring', t('how.ring'), [
+        [['stepIn', '/', 'stepOut'], t('how.sidestep'), t('how.sidestep.d')],
+        [['hold', 'stepIn', '/', 'stepOut'], t('how.circle'), t('how.circle.d')],
+        [['stepIn', '+', 'h'], t('how.stepatk'), t('how.stepatk.d')],
+        [['homing'], t('how.homing'), t('how.homing.d')],
+        [['linear'], t('how.linear'), t('how.linear.d')],
+        [['wall'], t('how.wall'), t('how.wall.d')],
+      ]],
+      ['attack', t('how.attack'), [
+        [['l', 'm', 'h'], t('how.normals'), t('how.normals.d')],
+        [['s'], t('how.special'), t('how.special.d')],
+        [['s', '+', 'h'], t('how.super'), t('how.super.d')],
+        [['assist'], t('how.assist'), t('how.assist.d')],
+      ]],
+      ['defend', t('how.defend'), [
+        [['throw'], t('how.throw'), t('how.throw.d')],
+        [['parry'], t('how.parry'), t('how.parry.d')],
+        [['impact'], t('how.impact'), t('how.impact.d')],
+      ]],
+    ];
+    for (const [id, title, rows] of secs) {
+      const sec = div(`hpm-how-sec ${id}`, box);
+      sec.dataset.sec = id;
+      sec.append(el('h3', 'hpm-cap', title));
+      for (const [toks, name, desc] of rows) {
+        const r = div('hpm-how-row', sec);
+        const ks = el('span', 'keys');
+        for (const x of toks) ks.append(tok(x));
+        const tx = el('span', 'tx');
+        tx.append(el('b', '', name), el('span', 'd', desc));
+        r.append(ks, tx);
+      }
     }
   }
 
@@ -2004,7 +2124,7 @@ export class Menus {
       const list = typeof navigator.getGamepads === 'function' ? [...navigator.getGamepads()] : [];
       list.filter((g): g is Gamepad => !!g && g.connected).forEach((gp, pi) => {
         const st = this.pads[pi] ?? (this.pads[pi] = { prev: [], dir: '', repeatT: 0 });
-        st.prev = gp.buttons.map((b) => b.pressed || b.value > 0.5);
+        st.prev = padSlots(gp);
       });
     } catch { /* no Gamepad API */ }
     this.lastT = performance.now();
@@ -2033,7 +2153,7 @@ export class Menus {
     if (!this.padSeen) { this.padSeen = true; this.renderHints(); }
     pads.forEach((gp, pi) => {
       const st = this.pads[pi] ?? (this.pads[pi] = { prev: [], dir: '', repeatT: 0 });
-      const now = gp.buttons.map((b) => b.pressed || b.value > 0.5);
+      const now = padSlots(gp);                           // CHANGED(UI3D): buttons + the right stick (17..20)
       const prev = st.prev;                               // edges against LAST frame's buttons (read before replacing)
       const pressed = (i: number): boolean => !!now[i] && !prev[i];
       const newly = now.findIndex((v, i) => v && !prev[i]);

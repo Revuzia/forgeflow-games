@@ -45,6 +45,8 @@ const SPEED_GATE = 0.96;
 const HIDE = args.includes('--hide') ? opt('--hide', 3) : -1;
 const PACING: 'bucket' | 'interval' = args.includes('--pacing') && args[args.indexOf('--pacing') + 1] === 'interval' ? 'interval' : 'bucket';
 const FRAME_MS = 1000 / 60;
+/** CHANGED(integrator) 3D: the real sim reports STEP states (set by simFactory) */
+let STEP_STATES = false;
 
 // ---- traces -------------------------------------------------------------------------------------------
 interface Trace { tag: string; ab: number[]; ba: number[]; rttMedian: number; abMed: number; baMed: number; abP99: number; baP99: number }
@@ -96,8 +98,14 @@ async function simFactory(): Promise<{ kind: 'real' | 'toy'; make: Make; note: s
     const p2 = ids.includes('bruno') ? 'bruno' : ids[ids.length - 1];
     const st = data.stages;
     const stage = Array.isArray(st) ? (st[0]?.id ?? st[0]) : st && Array.isArray(st.stages) ? st.stages[0].id : Object.keys(st ?? {})[0] ?? 'rust_theater';
-    return { kind: 'real', note: `real sim ${p1} vs ${p2} @ ${stage}, data=${src}`, make: (seed: number) => Pm.matchPort(Mm.createMatch({ mode: 'online', stage, seed,
-      p: [{ fighter: p1, color: 0, scheme: 0, cpu: -1 }, { fighter: p2, color: 1, scheme: 1, cpu: -1 }] }, data)) };
+    // CHANGED(integrator) 3D: the port also answers which fighters are in a STEP state (SIDESTEP / SIDEWALK, §35.13 item 2)
+    return { kind: 'real', note: `real sim ${p1} vs ${p2} @ ${stage}, data=${src}`, make: (seed: number) => {
+      const m = Mm.createMatch({ mode: 'online', stage, seed, p: [{ fighter: p1, color: 0, scheme: 0, cpu: -1 }, { fighter: p2, color: 1, scheme: 1, cpu: -1 }] }, data);
+      const port = Pm.matchPort(m) as SimPort & { stepStates?: () => [boolean, boolean] };
+      const isStep = (i: 0 | 1): boolean => { const n = Mm.readFighter(m, i).stateName; return n === 'sidestep' || n === 'sidewalk'; };
+      port.stepStates = () => [isStep(0), isStep(1)];
+      return port;
+    } };
   } catch (e) {
     return { ...toy, error: e instanceof Error ? e.message : String(e) };
   }
@@ -150,6 +158,8 @@ interface Row {
   desyncs: number; violations: number; rejected: number; checksumsCompared: number; finalFramesCompared: number; finalEqual: boolean;
   sentPerSecA: number; sentPerSecB: number; rttEstMs: number; framesA: number; framesB: number; events: string[]; pass: boolean; why: string[];
   jitter: boolean; heldPct: number; holdMsAvg: number; wallSpeed: number;
+  /** CHANGED(integrator) 3D: remote STEP words simulated on A / B, and remote-fighter STEP-state frames among them */
+  stepWords: [number, number]; stepFrames: [number, number];
 }
 
 function histPct(h: Int32Array, p: number): number {
@@ -189,6 +199,31 @@ function divergent(inner: SimPort, at: number): SimPort {
   };
 }
 
+/**
+ * CHANGED(integrator) 3D (CONTRACT §35.10 / §35.13 item 3): counts, on one peer's sim, the steps whose REMOTE player's
+ * word carries a STEP bit (13 / 14) - those bits reached this peer only through the INPUT packets + rollback (a
+ * prediction repeats a received word) - and the confirmed-or-predicted frames the remote fighter spent in SIDESTEP /
+ * SIDEWALK. With the final checksums equal on both peers this proves the STEP bits travel over rollback netplay.
+ */
+interface StepSpy { remoteStepWords: number; remoteStepFrames: number }
+function stepSpy(inner: SimPort & { stepStates?: () => [boolean, boolean] }, local: 0 | 1, spy: StepSpy): SimPort {
+  const STEP = 0x6000;
+  return {
+    stateInts: inner.stateInts,
+    step(a: number, b: number): void {
+      inner.step(a, b);
+      const rw = local === 0 ? b : a;
+      if (rw & STEP) {
+        spy.remoteStepWords++;
+        if (inner.stepStates && inner.stepStates()[local === 0 ? 1 : 0]) spy.remoteStepFrames++;
+      }
+    },
+    save: (slot: Int32Array) => inner.save(slot),
+    load: (slot: Int32Array) => inner.load(slot),
+    checksum: () => inner.checksum(),
+  };
+}
+
 function run(s: Scn, make: Make): Row {
   let t = 0;
   const relay = s.tier === 'relay';
@@ -202,12 +237,15 @@ function run(s: Scn, make: Make): Row {
     dupPct: s.dup ?? 0, seed: s.seed * 31 + 7, minIntervalMs: relay ? 100 : 0, pacing: relay ? PACING : 'interval', rate: 10, burst: 2,
     kind: relay ? 'relay' : 'loop' });
   const matchSeed = 1000 + s.seed;
-  const simA = make(matchSeed), simB = s.corruptAt ? divergent(make(matchSeed), s.corruptAt) : make(matchSeed);
+  // CHANGED(integrator) 3D: both sims are spied for remote STEP words; both input streams carry STEP taps / holds
+  const spyA: StepSpy = { remoteStepWords: 0, remoteStepFrames: 0 }, spyB: StepSpy = { remoteStepWords: 0, remoteStepFrames: 0 };
+  const simA = stepSpy(make(matchSeed), 0, spyA);
+  const simB = s.corruptAt ? divergent(stepSpy(make(matchSeed), 1, spyB), s.corruptAt) : stepSpy(make(matchSeed), 1, spyB);
   const events: string[] = [];
   const onEv = (side: string) => (e: NetEvent) => { if (events.length < 40) events.push(side + ':' + JSON.stringify(e)); };
   const A = new RollbackSession(simA, 0, link.a, { now: () => t, delay: D, window: W, sendEvery, startAt: 0, onEvent: onEv('A') });
   const B = new RollbackSession(simB, 1, link.b, { now: () => t, delay: D, window: W, sendEvery, startAt: 12, onEvent: onEv('B') });
-  const gA = new InputGen(s.seed * 7 + 1, IN.R), gB = new InputGen(s.seed * 13 + 2, IN.L);
+  const gA = new InputGen(s.seed * 7 + 1, IN.R, true), gB = new InputGen(s.seed * 13 + 2, IN.L, true);
   const periodA = FRAME_MS, periodB = FRAME_MS * (s.driftB ? 60 / s.driftB : 1);
   const cA = tickClock(s.seed * 97 + 3, 0, periodA, !!s.jitter), cB = tickClock(s.seed * 89 + 5, 12, periodB, !!s.jitter);
   const tail = 90;
@@ -247,6 +285,7 @@ function run(s: Scn, make: Make): Row {
     heldPct: link.a.sentInput + link.b.sentInput ? Math.round(((link.a.held + link.b.held) / (link.a.sentInput + link.b.sentInput)) * 1000) / 10 : 0,
     holdMsAvg: link.a.held + link.b.held ? Math.round(((link.a.holdMsSum + link.b.holdMsSum) / (link.a.sentInput + link.b.sentInput)) * 10) / 10 : 0,
     wallSpeed: round4(Math.min(sa.wallSpeed, sb.wallSpeed)),
+    stepWords: [spyA.remoteStepWords, spyB.remoteStepWords], stepFrames: [spyA.remoteStepFrames, spyB.remoteStepFrames],
   };
   const why = row.why;
   if (row.speed < SPEED_GATE) why.push(`speed ${(row.speed * 100).toFixed(2)}% < 96%`);
@@ -257,6 +296,9 @@ function run(s: Scn, make: Make): Row {
     if (!events.some((e) => e.includes('"recovered"'))) why.push('no recovery event');
   } else if (row.desyncs) why.push(`desyncs ${row.desyncs}`);
   if (row.violations) why.push(`violations ${row.violations}`);
+  // CHANGED(integrator) 3D: the STEP bits must arrive on BOTH peers (and, with the real sim, put the remote fighter in a step)
+  if (!(row.stepWords[0] > 0 && row.stepWords[1] > 0)) why.push(`remote STEP words ${row.stepWords.join('/')} (STEP bits lost on the wire)`);
+  if (STEP_STATES && !(row.stepFrames[0] > 0 && row.stepFrames[1] > 0)) why.push(`remote STEP-state frames ${row.stepFrames.join('/')}`);
   if (row.rejected) why.push(`rejected ${row.rejected}`);
   if (relay && (row.sentPerSecA > 10.5 || row.sentPerSecB > 10.5)) why.push(`relay rate ${row.sentPerSecA}/${row.sentPerSecB} pkt/s > 10`);
   if (sa.status === 'nocontest' || sb.status === 'nocontest') why.push('no contest');
@@ -269,7 +311,7 @@ function round4(x: number): number { return Math.round(x * 10000) / 10000; }
 // ---- packet codec checks (NETCODE 6 N1, folded in) ----------------------------------------------------
 function codecChecks(): string[] {
   const errs: string[] = [];
-  const r = new InputGen(99, IN.R);
+  const r = new InputGen(99, IN.R, true);   // CHANGED(integrator) 3D: the words carry STEP bits 13 / 14 too
   const ring = new Int32Array(256);
   const out = newInputPacket();
   for (let it = 0; it < 2000; it++) {
@@ -307,6 +349,7 @@ function codecChecks(): string[] {
 async function main(): Promise<number> {
   const traces = loadTraces();
   const sim = await simFactory();
+  STEP_STATES = sim.kind === 'real';
   const report: Record<string, unknown> = { tool: '_harness/probe_netsim.ts', started: new Date().toISOString(), frames: FRAMES, sim: sim.kind, note: sim.note };
   if (sim.error) {
     report.error = sim.error;
@@ -340,7 +383,8 @@ async function main(): Promise<number> {
     for (const r of rows) {
       console.log(`${r.pass ? 'ok  ' : 'FAIL'} ${r.name.padEnd(18)} ${r.trace.padEnd(40)} D=${r.D} W=${r.W} speed=${(r.speed * 100).toFixed(2)}% wall=${(r.wallSpeed * 100).toFixed(2)}% held=${r.heldPct}% hold~${r.holdMsAvg}ms ` +
         `depth p50/p90/p99=${r.depthP50}/${r.depthP90}/${r.depthP99} rb=${r.rollbacks} max=${r.maxRollback} desync=${r.desyncs} cs=${r.checksumsCompared} ` +
-        `stall=${r.stallTicksA}/${r.stallTicksB} skip=${r.skipTicksA}/${r.skipTicksB} final=${r.finalEqual ? 'eq' : 'NE'}(${r.finalFramesCompared}) pkt/s=${r.sentPerSecA}/${r.sentPerSecB} rtt~${r.rttEstMs}${r.why.length ? ' <- ' + r.why.join('; ') : ''}`);
+        `stall=${r.stallTicksA}/${r.stallTicksB} skip=${r.skipTicksA}/${r.skipTicksB} final=${r.finalEqual ? 'eq' : 'NE'}(${r.finalFramesCompared}) pkt/s=${r.sentPerSecA}/${r.sentPerSecB} rtt~${r.rttEstMs} ` +
+        `step words=${r.stepWords.join('/')} frames=${r.stepFrames.join('/')}${r.why.length ? ' <- ' + r.why.join('; ') : ''}`);
     }
     if (codec.length) console.log('codec: ' + codec.join('; '));
   }
@@ -352,7 +396,8 @@ async function main(): Promise<number> {
   const heldJ = jitRows.length ? Math.max(...jitRows.map((r) => r.heldPct)) : 0;
   console.log(`${pass ? 'PASS' : 'FAIL'} probe_netsim sim=${sim.kind} [${sim.note}] traces=${traces.length} scenarios=${rows.length} ` +
     `min speed p2p=${(minP2P * 100).toFixed(2)}% relay=${(minRelay * 100).toFixed(2)}% relay+jitter=${(minRelayJ * 100).toFixed(2)}% (gate 96%; pacing=${PACING}, held<=${heldJ}%) rollbacks=${rollbacksTotal} ` +
-    `desync-recovery=${rows.filter((r) => r.name.includes('desync')).every((r) => r.pass) ? 'ok' : 'FAIL'} codec=${codec.length ? 'FAIL' : 'ok'}` +
+    `desync-recovery=${rows.filter((r) => r.name.includes('desync')).every((r) => r.pass) ? 'ok' : 'FAIL'} codec=${codec.length ? 'FAIL' : 'ok'} ` +
+    `STEP over rollback: remote step words ${rows.reduce((a, r) => a + r.stepWords[0] + r.stepWords[1], 0)}, remote step-state frames ${rows.reduce((a, r) => a + r.stepFrames[0] + r.stepFrames[1], 0)} (every scenario both peers)` +
     (failed.length ? ` failed=[${failed.map((r) => r.name + '@' + r.trace + ': ' + r.why.join(', ')).join(' | ')}]` : ''));
   return pass ? 0 : 1;
 }

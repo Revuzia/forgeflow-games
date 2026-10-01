@@ -133,7 +133,9 @@ export class UniqueTools {
     if (!p) return false;
     const u = me.cf.u;
     const dxF = (p.x - me.x) * me.facing;
-    return dxF >= -u.kickBack && dxF <= u.kickRange;
+    // CHANGED(AI3D): + the sim's sideways rule (within kickRange / 2 of his forward line - §35.13 item 9); p.lat is off the
+    // fight line, which is his forward while he faces the opponent
+    return dxF >= -u.kickBack && dxF <= u.kickRange && Math.abs(p.lat) <= u.kickRange >> 1;
   }
 
   private myBall(b: Brain): ProjView | null {

@@ -135,10 +135,14 @@ class ShowmanTools implements BossTools {
     // the showman's SPOTLIGHT from mid range (his fights happen at 1-2 m, inside the shoto style's far zoning line);
     // phase 2: the set is live - PYRO fire lines too (the fighter JSON cpu.phase2 projectiles)
     const d = b.seen.dist;
-    if (d < 190000 || b.projEta() < 999) return null;
+    if (b.projEta() < 999) return null;
     const p2 = this.phase(b) === 2;
-    const pyro = p2 ? b.kit.lists.phase2.filter((k) => b.kit.moves[k].proj && b.canUse(k)) : [];
-    if (pyro.length > 0 && b.rnd() < 0.15) return { t: 'move', idx: pyro[Math.floor(b.rnd() * pyro.length)] };
+    // CHANGED(AI3D) (CONTRACT §35.17): in the 5.5 m ring the fight stays at 1.4-2 m (no 8 m strip to back off along), so
+    // the phase-2 PYRO fire line (aimed: it follows a stepper) comes from the showman's own range (cpu.rangeM low end),
+    // not only from beyond 1.9 m - else phase 2 can pass without a single PYRO (probe_season S4, measured 2/4 bouts)
+    const pyro = p2 && d >= Math.min(b.kit.rangeLo, 190000) ? b.kit.lists.phase2.filter((k) => b.kit.moves[k].proj && b.canUse(k)) : [];
+    if (pyro.length > 0 && b.rnd() < (d < 190000 ? 0.12 : 0.15)) return { t: 'move', idx: pyro[Math.floor(b.rnd() * pyro.length)] };
+    if (d < 190000) return null;
     const spot = b.kit.lists.zoning.filter((k) => b.canUse(k));
     if (spot.length > 0 && b.rnd() < 0.08) return { t: 'move', idx: spot[0] };
     return null;

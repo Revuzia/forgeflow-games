@@ -60,6 +60,16 @@
 .hpt-assist { background: rgba(11, 11, 16, .72); color: #1fe0c0; border-color: #1fe0c0; }
 .hpt-assist.down { background: #1fe0c0; color: var(--hpt-ink); }
 .hpt-pause { background: rgba(11, 11, 16, .72); color: var(--hpt-paper); border-color: var(--hpt-paper); }
+/* CHANGED(UI3D) (CONTRACT §35.2): the STEP pair over the stick - violet discs with an orbit arc (tap = sidestep, hold = circle);
+   IN's arc bows up (away from the camera), OUT's bows down (toward it) */
+.hpt-stepin, .hpt-stepout { background: #c9a6ff; }
+.hpt-stepin::after, .hpt-stepout::after {
+  content: ''; position: absolute; left: 22%; right: 22%; height: 26%; pointer-events: none;
+  border: 2px solid rgba(11, 11, 16, .55); border-radius: 50%;
+}
+.hpt-stepin::after { top: 9%; border-bottom-color: transparent; border-left-color: transparent; border-right-color: transparent; }
+.hpt-stepout::after { bottom: 9%; border-top-color: transparent; border-left-color: transparent; border-right-color: transparent; }
+.hpt-stepin.down, .hpt-stepout.down { background: #e2d0ff; }
 .hpt-btn.dim { filter: grayscale(.9) brightness(.7); }
 @media (prefers-reduced-motion: reduce) { .hpt-super.max { animation: none; } .hpt-btn, .hpt-stick { transition: none; } }
 html.hp-noflash .hpt-super.max { animation: none; }

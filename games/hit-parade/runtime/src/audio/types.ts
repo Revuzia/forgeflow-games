@@ -75,6 +75,8 @@ export interface AudioStats {
   state: string;
   /** the music cue playing (manifest cue id) */
   cue: string | null;
+  /** CHANGED(integrator) 3D: the last music cue that STARTED (stays after a one-shot stinger ends; optional for stand-ins) */
+  lastCue?: string | null;
   voices: number;
   peakVoices: number;
   stolen: number;

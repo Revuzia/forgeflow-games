@@ -7,13 +7,18 @@
 // chips. Columns: startup, damage and the on-block advantage (blockstun - (active + recovery), SF6 convention) straight
 // from the move data. CHANGED(UI) P2: a move's display name is the fighter file's `name` (FIGHTERS' source of truth),
 // then strings.json `move.<fighter>.<moveId>` (the menus.py --sync-strings mirror), then the id tidied up.
+// CHANGED(UI3D) (CONTRACT §35.2 / §35.12, the 3D ring): step-attacks (`input "SS.<btn>"`) render as STEP + <btn> in their own
+// STEP ATTACKS section; every row carries a HOMING / LINEAR tag from the fighter data (`moves[id].homing` / `.linear`);
+// HOMING NORMALS lists the fighter's homing normals (its step-catchers - normals are not listed elsewhere); SYSTEM gains
+// SIDESTEP (tap STEP IN / OUT), CIRCLE WALK (hold STEP) and STEP ATTACK; a tip line says what HOMING / LINEAR mean.
 
 import type { Scheme, UiFighterDef, UiGameData, UiMoveDef } from './types.ts';
 import { btn, chip, dirSvg, div, el } from './dom.ts';
 import { has, tOr, t } from './strings.ts';
 
-type Part = { d?: number; held?: number; b?: string; plus?: boolean; text?: string };
-interface Row { name: string; parts: Part[]; alt?: Part[]; startup?: number; damage?: number; block?: number; note?: string; id?: string }
+/** CHANGED(UI3D): `step` = a STEP chip ('any' = STEP IN or OUT, 'in' / 'out' = that one) */
+type Part = { d?: number; held?: number; b?: string; plus?: boolean; text?: string; step?: 'any' | 'in' | 'out' };
+interface Row { name: string; parts: Part[]; alt?: Part[]; startup?: number; damage?: number; block?: number; note?: string; id?: string; tags?: Array<'homing' | 'linear'> }
 
 export function prettyMove(id: string, m?: UiMoveDef | null, fid = ''): string {
   if (m?.name) return m.name.toUpperCase();
@@ -21,10 +26,11 @@ export function prettyMove(id: string, m?: UiMoveDef | null, fid = ''): string {
   return id.replace(/\{s\}/g, '').replace(/_(l|m|h|ex|lv\d)$/i, '').replace(/[_-]+/g, ' ').trim().toUpperCase();
 }
 
-/** "236" / "[4]6" / "5S" / "S+H+2" / "L+M" -> parts */
+/** "236" / "[4]6" / "5S" / "S+H+2" / "L+M" / CHANGED(UI3D) "SS.H" (a step-attack: STEP + H) -> parts */
 export function parseNotation(s: string): Part[] {
   const out: Part[] = [];
   let i = 0;
+  if (s.startsWith('SS.')) { out.push({ step: 'any' }, { plus: true }); i = 3; }
   const btnRe = /^(LMH|L|M|H|S|SP|ASSIST|PARRY|IMPACT|THROW|TAUNT|P|K)/i;
   while (i < s.length) {
     const c = s[i];
@@ -50,6 +56,7 @@ function renderParts(parts: Part[], cls = 'hpm-note'): HTMLElement {
   const box = el('span', cls);
   for (const p of parts) {
     if (p.plus) { box.append(el('span', 'plus', '+')); continue; }
+    if (p.step) { box.append(chip(p.step === 'in' ? t('ml.stepIn') : p.step === 'out' ? t('ml.stepOut') : t('ml.step'), 'step')); continue; }
     if (p.text) { box.append(el('span', 'txt', p.text)); continue; }
     if (p.b) {
       if (p.b === 'LMH') { box.append(chip('L'), el('span', 'slash', '/'), chip('M'), el('span', 'slash', '/'), chip('H')); continue; }
@@ -83,8 +90,12 @@ function moveRow(f: UiFighterDef, moveId: string, parts: Part[], note?: string, 
   const active = m?.active ?? 0, recovery = m?.recovery ?? 0;
   const block = m && typeof m.blockstun === 'number' && m.blockstun > 0 && m.kind !== 'throw' && m.kind !== 'cmdgrab' && m.kind !== 'super3'
     ? m.blockstun - (active + recovery) : undefined;
-  return { name: prettyMove(id, m, f.id), parts, alt, startup: m?.startup, damage: m?.damage, block, note: n || undefined, id };
+  const tags: Array<'homing' | 'linear'> = m?.homing ? ['homing'] : m?.linear ? ['linear'] : [];
+  return { name: prettyMove(id, m, f.id), parts, alt, startup: m?.startup, damage: m?.damage, block, note: n || undefined, id, tags };
 }
+
+/** CHANGED(UI3D): a step-attack's input (`SS.<btn>`, CONTRACT §35.12.5) */
+export const isStepAttack = (m: UiMoveDef | undefined): boolean => typeof m?.input === 'string' && m.input.startsWith('SS.');
 
 /** the SIMPLE key routing to a move family (5S / 6S / 2S / 4S), if any */
 function simpleKeyFor(simple: Record<string, unknown>, fam: string): string | null {
@@ -154,9 +165,17 @@ export function buildRows(f: UiFighterDef, scheme: Scheme): Array<[string, Row[]
     secs.push([t('ml.assist'), [{ name: chain.map((id) => prettyMove(id, moves[id], f.id)).join(' > '), parts: [{ b: 'ASSIST' }, { plus: true }, { b: 'L' }, { b: 'L' }, { b: 'L' }], note: t('ml.assist.d') }]]);
   }
 
+  // CHANGED(UI3D): step-attacks (STEP + button, from a sidestep or while circling) lead the normals
+  const stp = ids.filter((id) => isStepAttack(moves[id])).map((id) => moveRow(f, id, parseNotation(moves[id].input ?? ''), t('ml.stepatk.d')));
+  if (stp.length) secs.push([t('ml.stepatk'), stp]);
+
   // command normals
-  const cmd = ofKind('command').map((id) => moveRow(f, id, parseNotation(moves[id].input ?? '')));
+  const cmd = ofKind('command').filter((id) => !isStepAttack(moves[id])).map((id) => moveRow(f, id, parseNotation(moves[id].input ?? '')));
   if (cmd.length) secs.push([t('ml.normals'), cmd]);
+
+  // CHANGED(UI3D): the homing normals (plain 5X / 2X / j.X are not listed elsewhere) = the fighter's step-catchers
+  const hom = ofKind('normal').filter((id) => moves[id].homing).map((id) => moveRow(f, id, parseNotation(moves[id].input ?? id)));
+  if (hom.length) secs.push([t('ml.homingNormals'), hom]);
 
   // throws
   const thr = ofKind('throw', 'cmdgrab').map((id) => moveRow(f, id, parseNotation(moves[id].input ?? 'L+M')));
@@ -193,6 +212,10 @@ export function systemRows(): Row[] {
     { name: t('ml.sys.impact'), parts: [{ b: 'IMPACT' }], note: t('ml.sys.impact.d') },
     { name: t('ml.sys.shove'), parts: P('M+H'), note: t('ml.sys.shove.d') },
     { name: t('ml.sys.dash'), parts: [...P('66'), { text: '/' }, ...P('44')], note: t('ml.sys.dash.d') },
+    // CHANGED(UI3D) (CONTRACT §35.2): the ring verbs
+    { name: t('ml.sys.sidestep'), parts: [{ step: 'in' }, { text: '/' }, { step: 'out' }], note: t('ml.sys.sidestep.d') },
+    { name: t('ml.sys.circle'), parts: [{ text: t('ml.hold') }, { step: 'in' }, { text: '/' }, { step: 'out' }], note: t('ml.sys.circle.d') },
+    { name: t('ml.sys.stepatk'), parts: [{ step: 'any' }, { text: '>' }, { b: 'LMH' }], note: t('ml.sys.stepatk.d') },
   ];
 }
 
@@ -244,6 +267,13 @@ export class MoveList {
       if (u.moves.length) { const mv = div('mv', card); mv.append(el('span', 'k', t('ml.unique.moves'))); for (const n of u.moves) mv.append(el('span', 'tag', n)); }
     }
     if (secs.length) this.body.append(el('p', 'hpm-ml-tip', scheme === 0 ? t('ml.simpleDmg') : t('ml.classicTip')));
+    // CHANGED(UI3D): what the HOMING / LINEAR tags mean (CONTRACT §35.4)
+    if (secs.length) {
+      const tip = el('p', 'hpm-ml-tip ring');
+      tip.append(el('span', 'hpm-ml-tag homing', t('ml.tag.homing')), document.createTextNode(` ${t('ml.tip.homing')} `),
+        el('span', 'hpm-ml-tag linear', t('ml.tag.linear')), document.createTextNode(` ${t('ml.tip.linear')}`));
+      this.body.append(tip);
+    }
     secs.push([t('ml.system'), systemRows()]);
     const colHead = (): HTMLElement => {
       const h = div('hpm-ml-row head', this.body);
@@ -259,7 +289,11 @@ export class MoveList {
         const row = div('hpm-ml-row', sec);
         if (r.id) row.dataset.move = r.id;
         const nm = el('div', 'nm');
-        nm.append(el('b', '', r.name));
+        const nb = el('b', '', r.name);
+        // CHANGED(UI3D): HOMING / LINEAR tag from the fighter data
+        for (const tg of r.tags ?? []) nb.append(el('span', `hpm-ml-tag ${tg}`, t(`ml.tag.${tg}`)));
+        if (r.tags?.length) row.dataset.track = r.tags[0];
+        nm.append(nb);
         if (r.note) nm.append(el('span', 'note', r.note));
         const inp = el('div', 'in');
         inp.append(renderParts(r.parts));

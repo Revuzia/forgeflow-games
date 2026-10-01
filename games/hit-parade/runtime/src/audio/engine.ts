@@ -112,6 +112,9 @@ export class AudioEngine implements AudioSink {
   get voices(): number { return this.pool.count; }
   get poolStats(): { peak: number; stolen: number; rejected: number } { return { peak: this.pool.peak, stolen: this.pool.stolen, rejected: this.pool.rejected }; }
   get cue(): MusicCueId | null { return this.cur ? this.cur.cue : null; }
+  /** CHANGED(integrator) 3D (G6 stability): the last music cue that actually STARTED (a one-shot stinger such as win / lose
+   *  clears `cue` when it ends, so a harness reading after the 8-11 s stinger saw null) */
+  lastCue: MusicCueId | null = null;
   get loopKeys(): string[] { return [...this.loops.keys()]; }
   get decoded(): string[] { return [...this.spritesDone, ...[...this.musicBufs.keys()].map((c) => `music_${c}`)]; }
   get preloaded(): string[] { return [...this.spriteBytes.keys(), ...[...this.musicBytes.keys()].map((c) => `music_${c}`)]; }
@@ -477,6 +480,7 @@ export class AudioEngine implements AudioSink {
     }
     src.connect(g);
     this.cur = { cue, src, gain: g };
+    this.lastCue = cue;
   }
 
   private stopCue(c: CueVoice, fade: number): void {

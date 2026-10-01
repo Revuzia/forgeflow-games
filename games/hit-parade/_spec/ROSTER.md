@@ -76,15 +76,19 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   vs every contestant; the Freak's lines are stage directions), `ending` (3-5 sentences), listed per fighter below.
 - **3D ring (CONTRACT 35.4 / 35.12, lane FIGHTERS3D):** the fight is a 360-degree ring; fighters sidestep (15 f, 0.85 m
   arc) and circle-walk. Every move carries `track {until, rate}` (the last frame the attacker turns toward the opponent,
-  degrees per frame); class defaults: normals / throws track to startup - 4, specials / supers to startup - 6, at 180
-  deg / f (snap). **HOMING** moves track through their last active frame at 20 deg / f and are 0.60 m deep across the
+  degrees per frame); class defaults: normals, command normals, specials and supers track to startup - 6 (throws to
+  startup - 4; CHANGED(STEPTUNE) 35.15: normals were startup - 4), at 180 deg / f (snap). **HOMING** moves track through their last active frame at 20 deg / f and are 0.60 m deep across the
   attack line: they catch a stepper (wide hooks and roundhouses, low roundhouses, sweeps, spins / flairs / lariats,
   command-grab reach arcs, counter follow-ups, most supers). **LINEAR** moves face the opponent on frame 1 and never turn
   (rushes, charge moves, leaps and dives, straight non-aimed projectile throws, lunges): a sidestep during their startup
   beats them, and the stepper punishes from the side. Default moves track through most of their startup and then
-  freeze (straight punches' later frames): in the plain step geometry (0.85 m in 15 f at constant speed, hurt radius
-  0.25 m, 1.2 m apart) a step that starts from 4 frames before a LINEAR move through its startup - 8 evades it, while
-  default and HOMING moves are never evaded (FIGHTERS3D model, not the sim; SIM3D's step curve decides the real window).
+  freeze (straight punches' later frames). Measured in the sim (lane STEPTUNE, CONTRACT 35.15, probe_3d steppable table:
+  front-loaded step = 64 % of its 0.85 m arc in the first 6 frames, 1.2 m apart, johnny defending): a READ step -
+  started 4-8 frames before the first active frame - evades a default normal (52 of 53, median window 4 frames; the
+  4-frame johnny 5L is the exception) and a LINEAR move (median window 20 frames); a step started less than 3 frames
+  before a default normal's active frames is hit; HOMING moves (and aimed projectiles at 1.2 m) are never evaded. The
+  defender's body matters as much: the big bodies (boneyard, bruno, freak, krane, rerun, spin) never step a straight
+  normal with the 0.85 m step, only linear moves (CONTRACT 35.15 item 7).
   `lateralM` = each box's half-depth across the attack line (L 0.15,
   M 0.18 by button for normals; specials / EX / supers 0.22; sweeps 0.45, homing 0.60 unless noted). Projectiles: **AIMED** = launched at the opponent on
   the spawn frame (the step has to come after the release); straight = along the thrower's yaw (steppable on
@@ -175,15 +179,15 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `5L` | Lead Jab | 5L | 4 | 3 | 9 | 15 | +4 | -2 | 300 | HL | 9 | chain:5L chain:2L special super | - | tracks to f1, lat 0.15 | L | (startup 5->4; hitstun 15->16) Shoto trait (FIGHTING_DESIGN 8c 'one 4f jab'): startup 5->4 and hitstun 15->16 make it +4 on hit so it links into itself (1-frame link) and +8 on punish counter into 5M. |
 | `2L` | Shin Jab | 2L | 5 | 3 | 9 | 16 | +3 | -2 | 250 | L | 9 | chain:5L chain:2L special super | - | tracks to f1, lat 0.15 | 2L |  |
-| `5M` | Cross | 5M | 8 | 3 | 16 | 26 | +3 | -3 | 600 | HL | 11 | special super | - | tracks to f4, lat 0.18 | M |  |
-| `2M` | Knee Breaker | 2M | 8 | 3 | 15 | 25 | +4 | -2 | 600 | L | 11 | special super | - | tracks to f4, lat 0.18 | 2M |  |
+| `5M` | Cross | 5M | 8 | 3 | 16 | 26 | +3 | -3 | 600 | HL | 11 | special super | - | tracks to f2, lat 0.18 | M |  |
+| `2M` | Knee Breaker | 2M | 8 | 3 | 15 | 25 | +4 | -2 | 600 | L | 11 | special super | - | tracks to f2, lat 0.18 | 2M |  |
 | `5H` | Haymaker | 5H | 12 | 3 | 20 | 34 | +2 | -3 | 800 | HL | 13 | special super | - | HOMING 20/f to f14, lat 0.60 | H | 3D: wide rear hook (CMU hook.1 swings out then across): homing, his safe tool vs a stepper |
-| `2H` | Rising Uppercut | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | tracks to f5, lat 0.22 | AA |  |
+| `2H` | Rising Uppercut | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | tracks to f3, lat 0.22 | AA |  |
 | `3H` | Low Blow | 3H | 10 | 3 | 24 | 36 | KD +33 | -11 | 900 | L | 13 | - | - | HOMING 20/f to f12, lat 0.45 | SWEEP | Johnny's 2H is the anti-air, so the sweep lives on 3H (CONTRACT 1: crouch H = anti-air OR sweep per fighter). |
-| `6H` | Overhand Right | 6H | 18 | 3 | 17 | 37 | +2 | -4 | 600 | H | 11 | - | - | tracks to f14, lat 0.18 | OH |  |
+| `6H` | Overhand Right | 6H | 18 | 3 | 17 | 37 | +2 | -4 | 600 | H | 11 | - | - | tracks to f12, lat 0.18 | OH |  |
 | `j.L` | Air Jab | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL |  |
-| `j.M` | Air Cross | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f3, lat 0.18 | jM |  |
-| `j.H` | Diving Hammer | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f6, lat 0.22 | jH |  |
+| `j.M` | Air Cross | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
+| `j.H` | Diving Hammer | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f4, lat 0.22 | jH |  |
 | `throw_f` | Clinch Body Shots | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.6 m, lock 45 f, dmg at f31, same side; victim f0 hit_body 0.05-0.20 s, f10 hit_body 0.10-0.45 s, f20 hit_body 0.15-0.50 s, f31 kd_fall_b 1.04-1.50 s.  |
 | `throw_b` | Wide Hook Toss | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f22, swap sides; victim f0 hit_high_s 0.00-0.20 s, f8 thrown_b 0.00-0.40 s, f22 thrown_b 0.40-1.20 s.  |
 | `brickbat_l` | Brickbat | 236L | 16 | 1 | 31 | 47 | -1 | -5 | 600 | HL | 8 | super | - | LINEAR, proj straight lat 0.17 | proj_l | 3D: shoto fireball = the classic step bait: thrown straight along his frame-1 facing |
@@ -342,7 +346,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `5L` | Lead Jab | 5L | 5 | 3 | 9 | 16 | +3 | -2 | 300 | HL | 9 | chain:5L chain:2L special super | - | tracks to f1, lat 0.15 | L |  |
 | `2L` | Toe Kick | 2L | 5 | 3 | 9 | 16 | +3 | -2 | 250 | L | 9 | chain:5L chain:2L special super | - | tracks to f1, lat 0.15 | 2L |  |
-| `5M` | Teep | 5M | 8 | 3 | 16 | 26 | +3 | -3 | 600 | HL | 11 | special super | - | tracks to f4, lat 0.18 | M |  |
+| `5M` | Teep | 5M | 8 | 3 | 16 | 26 | +3 | -3 | 600 | HL | 11 | special super | - | tracks to f2, lat 0.18 | M |  |
 | `2M` | Shin Kick | 2M | 8 | 3 | 15 | 25 | +4 | -2 | 600 | L | 11 | special super | - | HOMING 20/f to f10, lat 0.40 | 2M | 3D: low roundhouse (authored: the leg whips round at shin height): homing anti-step poke; 0.40 m deep, not the 0.60 of a full spin (an 8f -2 low must stay answerable) |
 | `5H` | Head Kick | 5H | 12 | 3 | 20 | 34 | +2 | -3 | 800 | HL | 13 | special super | - | HOMING 20/f to f14, lat 0.60 | H | 3D: head-high roundhouse (CMU roundhouse.1): homing, her safe tool vs a stepper |
 | `2H` | Leg Kick | 2H | 11 | 3 | 24 | 37 | KD +33 | -11 | 900 | L | 13 | - | low-prof 1-37 | HOMING 20/f to f13, lat 0.45 | SWEEP | (startup 10->11) Kickboxer sweep is a STANDING leg kick (no low profile: hurtOverride = stand box) - a readable trade for its reach; startup 10->11 for the full turning kick. |
@@ -350,8 +354,8 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `4H` | Back Kick | 4H | 16 | 3 | 20 | 38 | +2 | -3 | 800 | HL | 13 | - | - | LINEAR, lat 0.22 | CMD | 3D: the spin only chambers it: the strike is a straight back-kick thrust (CMU side_kick.1), LINEAR - her longest button, beaten by a read step; wall-splats a cornered opponent (the 0.60 m pushback carries) |
 | `SS.H` | Blindside Kick | SS.H | 13 | 3 | 18 | 33 | KD +30 | -2 | 900 | HL | 13 | super | - | HOMING 20/f to f15, lat 0.60 | CMD | (startup 16->13; recovery 20->18; hitstun 25->51; blockstun 20->19; damage 800->900) STEP-ATTACK: H out of a sidestep (from step frame 11) or a circle-walk. 13/3/18 (the CMD 16/3/20 minus the frames the step already spent), 900, KD +30 and wall splat on hit, -2 on block: the reward for stepping a linear move. 3D: homing turning kick into the flank (CMU roundhouse.3, 104 deg turn); wall-splats at the ring |
 | `j.L` | Air Jab | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL |  |
-| `j.M` | Flying Side Kick | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f3, lat 0.18 | jM |  |
-| `j.H` | Jump Turning Kick | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f6, lat 0.22 | jH |  |
+| `j.M` | Flying Side Kick | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
+| `j.H` | Jump Turning Kick | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f4, lat 0.22 | jH |  |
 | `throw_f` | Plum Knees | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.6 m, lock 46 f, dmg at f16, same side; victim f0 hit_high_s 0.00-0.30 s, f16 hit_body 0.15-0.80 s, f34 kd_fall_b 1.04-1.50 s.  |
 | `throw_b` | Spin Toss | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f19, swap sides; victim f0 hit_high_s 0.00-0.25 s, f10 thrown_b 0.05-0.40 s, f19 thrown_b 0.40-1.20 s.  |
 | `cue_l` | Cue Kick | 236L | 10 | 3 | 18 | 30 | +1 | -5 | 700 | HL | 13 | chain:cue2 super | - | LINEAR, lat 0.22 | custom | Rekka opener (FIGHTING_DESIGN 8c rushdown): rush-class startups 10/12/14 but no knockdown: +1/-1/-3 on hit, -5/-7/-9 on block, always cancelable into CUE 2. 3D: stepping front-kick rush: linear |
@@ -514,17 +518,17 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 | id | name | input | S | A | R | total | on hit | on block | dmg | guard | stop | cancel | inv/armor | 3D | tpl | deviation / design note |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `5L` | Knife-Edge Chop | 5L | 6 | 3 | 10 | 18 | +2 | -3 | 300 | HL | 9 | chain:2L special super | - | tracks to f2, lat 0.15 | L | (startup 5->6; recovery 9->10) Big-body buttons are a frame slower (FIGHTING_DESIGN 8b principle: trade speed for HP/damage): 6/3/10 keeps +2 hit / -3 block. |
-| `2L` | Low Straight | 2L | 6 | 3 | 9 | 17 | +3 | -2 | 250 | L | 9 | chain:2L special super | - | tracks to f2, lat 0.15 | 2L | (startup 5->6) Startup 6 (big body); still +3/-2 so tick-throws work. |
-| `5M` | Forearm Smash | 5M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | special super | - | tracks to f5, lat 0.18 | M | (startup 8->9; recovery 16->17) 9/3/17 (+2/-4): one frame slower at both ends for a big body; -4 stays unpunishable. |
-| `2M` | Low Forearm | 2M | 9 | 3 | 15 | 26 | +4 | -2 | 600 | L | 11 | special super | - | tracks to f5, lat 0.18 | 2M | (startup 8->9) Startup 9 (big body). |
+| `5L` | Knife-Edge Chop | 5L | 6 | 3 | 10 | 18 | +2 | -3 | 300 | HL | 9 | chain:2L special super | - | tracks to f1, lat 0.15 | L | (startup 5->6; recovery 9->10) Big-body buttons are a frame slower (FIGHTING_DESIGN 8b principle: trade speed for HP/damage): 6/3/10 keeps +2 hit / -3 block. |
+| `2L` | Low Straight | 2L | 6 | 3 | 9 | 17 | +3 | -2 | 250 | L | 9 | chain:2L special super | - | tracks to f1, lat 0.15 | 2L | (startup 5->6) Startup 6 (big body); still +3/-2 so tick-throws work. |
+| `5M` | Forearm Smash | 5M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | special super | - | tracks to f3, lat 0.18 | M | (startup 8->9; recovery 16->17) 9/3/17 (+2/-4): one frame slower at both ends for a big body; -4 stays unpunishable. |
+| `2M` | Low Forearm | 2M | 9 | 3 | 15 | 26 | +4 | -2 | 600 | L | 11 | special super | - | tracks to f3, lat 0.18 | 2M | (startup 8->9) Startup 9 (big body). |
 | `5H` | Haymaker | 5H | 13 | 3 | 21 | 36 | +1 | -4 | 900 | HL | 13 | special super | - | HOMING 20/f to f15, lat 0.60 | H | (startup 12->13; recovery 20->21; damage 800->900) Grappler damage lever: 900 (+100) paid with startup 13 and recovery 21 (+1 hit / -4 block). 3D: axe-pack horizontal swing (unarmed): a wide haymaker, homing |
-| `2H` | Goalpost | 2H | 10 | 4 | 22 | 35 | +1 | -7 | 800 | HL | 13 | special super | - | tracks to f6, lat 0.22 | AA | (startup 9->10; recovery 21->22) Big-body anti-air one frame slower (10/4/22 -> +1/-7); still an anti-air class exemption. |
-| `6H` | Big Boot | 6H | 15 | 3 | 21 | 38 | +1 | -4 | 800 | HL | 13 | - | - | tracks to f11, lat 0.22 | CMD | (startup 16->15; recovery 20->21) Command normal 16/3/20 -> 15/3/21 (+1/-4); big hit pushback 0.9 m so it only splats near a wall. |
-| `j.L` | Air Chop | j.L | 6 | 7 | 3 | 15 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f2, lat 0.15 | jL | (startup 5->6) Startup 6 (big body). |
-| `j.M` | Flying Forearm | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f3, lat 0.18 | jM |  |
-| `j.H` | Hammer Down | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f6, lat 0.22 | jH |  |
-| `j.2H` | Fridge Drop | j.2H | 12 | 10 | 6 | 27 | air 20 | air 16 | 900 | H | 13 | - | - | tracks to f8, lat 0.22 | jH | (startup 10->12; active 6->10; recovery 3->6; hitstun 19->20; blockstun 15->16; damage 800->900) Air command normal: 12/10/6 landing, 900, a big active window (body press) paid with 6 landing frames. |
+| `2H` | Goalpost | 2H | 10 | 4 | 22 | 35 | +1 | -7 | 800 | HL | 13 | special super | - | tracks to f4, lat 0.22 | AA | (startup 9->10; recovery 21->22) Big-body anti-air one frame slower (10/4/22 -> +1/-7); still an anti-air class exemption. |
+| `6H` | Big Boot | 6H | 15 | 3 | 21 | 38 | +1 | -4 | 800 | HL | 13 | - | - | tracks to f9, lat 0.22 | CMD | (startup 16->15; recovery 20->21) Command normal 16/3/20 -> 15/3/21 (+1/-4); big hit pushback 0.9 m so it only splats near a wall. |
+| `j.L` | Air Chop | j.L | 6 | 7 | 3 | 15 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL | (startup 5->6) Startup 6 (big body). |
+| `j.M` | Flying Forearm | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
+| `j.H` | Hammer Down | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f4, lat 0.22 | jH |  |
+| `j.2H` | Fridge Drop | j.2H | 12 | 10 | 6 | 27 | air 20 | air 16 | 900 | H | 13 | - | - | tracks to f6, lat 0.22 | jH | (startup 10->12; active 6->10; recovery 3->6; hitstun 19->20; blockstun 15->16; damage 800->900) Air command normal: 12/10/6 landing, 900, a big active window (body press) paid with 6 landing frames. |
 | `throw_f` | Bear Hug | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1300 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.77 m, lock 50 f, dmg at f36, same side; victim f0 hit_body 0.00-0.25 s, f12 hit_body 0.25-0.70 s, f36 kd_fall_b 1.04-1.50 s. (damage 1200->1300) Grappler throws deal 1300 (+100 over 1200). |
 | `throw_b` | Carousel | 4LM | 5 | 3 | 23 | 30 | KD +16 | - | 1300 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.77 m, lock 52 f, dmg at f26, swap sides; victim f0 hit_high_s 0.00-0.20 s, f10 thrown_b 0.00-0.40 s, f26 thrown_b 0.40-1.20 s. (damage 1200->1300) Grappler throws deal 1300. |
 | `walk_in_l` | Walk-In Freezer | 360L | 5 | 3 | 54 | 61 | KD +28 | - | 2500 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_l | grab: range 1.22 m, lock 70 f, dmg at f26, same side; victim f0 hit_body 0.00-0.30 s, f9 thrown_f 0.15-0.70 s, f26 thrown_f 0.70-1.33 s.  3D: command grab reach arc: homes through its active frames (a stepper is grabbed) |
@@ -682,14 +686,14 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `5L` | Palm Flick | 5L | 5 | 3 | 9 | 16 | +3 | -2 | 300 | HL | 9 | chain:5L special super | - | tracks to f1, lat 0.15 | L |  |
 | `2L` | Low Palm | 2L | 5 | 3 | 9 | 16 | +3 | -2 | 250 | L | 9 | chain:2L special super | - | tracks to f1, lat 0.15 | 2L |  |
-| `5M` | Spear Hand | 5M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | special super | - | tracks to f5, lat 0.18 | M | (startup 8->9; recovery 16->17) Zoner long poke (FIGHTING_DESIGN 8c: longest medium): +1 startup / +1 recovery (+2/-4) for reach. |
-| `2M` | Low Spear | 2M | 9 | 3 | 15 | 26 | +4 | -2 | 600 | L | 11 | special super | - | tracks to f5, lat 0.18 | 2M | (startup 8->9) Long low poke: startup 9 pays for the reach. |
-| `5H` | Double Palm | 5H | 12 | 3 | 20 | 34 | +2 | -3 | 800 | HL | 13 | special super | - | tracks to f8, lat 0.22 | H | 3D: straight double palm (tracks to f8); the shove wall-splats at the ring edge (3D wall game) |
-| `2H` | Rising Palm | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | tracks to f5, lat 0.22 | AA |  |
-| `6H` | Abracadabra | 6H | 20 | 3 | 16 | 38 | +3 | -3 | 600 | H | 11 | - | - | tracks to f16, lat 0.18 | OH | (startup 18->20; recovery 17->16) Zoner's overhead is slower (20f) with 1 less recovery (+3/-3): a surprise tool, not a mixup engine. |
+| `5M` | Spear Hand | 5M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | special super | - | tracks to f3, lat 0.18 | M | (startup 8->9; recovery 16->17) Zoner long poke (FIGHTING_DESIGN 8c: longest medium): +1 startup / +1 recovery (+2/-4) for reach. |
+| `2M` | Low Spear | 2M | 9 | 3 | 15 | 26 | +4 | -2 | 600 | L | 11 | special super | - | tracks to f3, lat 0.18 | 2M | (startup 8->9) Long low poke: startup 9 pays for the reach. |
+| `5H` | Double Palm | 5H | 12 | 3 | 20 | 34 | +2 | -3 | 800 | HL | 13 | special super | - | tracks to f6, lat 0.22 | H | 3D: straight double palm (tracks to f8); the shove wall-splats at the ring edge (3D wall game) |
+| `2H` | Rising Palm | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | tracks to f3, lat 0.22 | AA |  |
+| `6H` | Abracadabra | 6H | 20 | 3 | 16 | 38 | +3 | -3 | 600 | H | 11 | - | - | tracks to f14, lat 0.18 | OH | (startup 18->20; recovery 17->16) Zoner's overhead is slower (20f) with 1 less recovery (+3/-3): a surprise tool, not a mixup engine. |
 | `j.L` | Air Palm | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL |  |
-| `j.M` | Air Card Flick | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f3, lat 0.18 | jM |  |
-| `j.H` | Levitating Palms | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f6, lat 0.22 | jH |  |
+| `j.M` | Air Card Flick | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
+| `j.H` | Levitating Palms | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f4, lat 0.22 | jH |  |
 | `throw_f` | Now You See Me | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.6 m, lock 44 f, dmg at f18, same side; victim f0 hit_high_s 0.00-0.15 s, f18 thrown_f 0.30-1.10 s.  |
 | `throw_b` | Now You Don't | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f18, swap sides; victim f0 hit_high_s 0.00-0.15 s, f6 thrown_b 0.00-0.40 s, f18 thrown_b 0.40-1.20 s.  |
 | `card_fan_l` | Card Fan | 236L | 16 | 1 | 31 | 47 | -1 | -5 | 500 | HL | 8 | super | - | tracks to f10, proj AIMED lat 0.30 | proj_l | (damage 600->500) Zoner projectile is his neutral: 500 (-100) for faster speeds 5.0/6.5/8.0 m/s (template 4.5/6/7.5). 3D: the zoner's neutral: AIMED on the release frame (a step must come after the throw); the flicked fan is 0.30 m deep |
@@ -842,16 +846,16 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `5L` | Baton Poke | 5L | 5 | 3 | 9 | 16 | +3 | -2 | 300 | HL | 9 | chain:5L chain:2L special super | - | tracks to f1, lat 0.15 | L |  |
 | `2L` | Low Poke | 2L | 5 | 3 | 9 | 16 | +3 | -2 | 250 | L | 9 | chain:2L chain:5L special super | - | tracks to f1, lat 0.15 | 2L |  |
-| `5M` | Baton Chop | 5M | 8 | 3 | 16 | 26 | +3 | -3 | 600 | HL | 11 | special super | - | tracks to f4, lat 0.18 | M |  |
-| `2M` | Knee Rap | 2M | 8 | 3 | 15 | 25 | +4 | -2 | 600 | L | 11 | special super | - | tracks to f4, lat 0.18 | 2M |  |
+| `5M` | Baton Chop | 5M | 8 | 3 | 16 | 26 | +3 | -3 | 600 | HL | 11 | special super | - | tracks to f2, lat 0.18 | M |  |
+| `2M` | Knee Rap | 2M | 8 | 3 | 15 | 25 | +4 | -2 | 600 | L | 11 | special super | - | tracks to f2, lat 0.18 | 2M |  |
 | `5H` | Baton Swing | 5H | 12 | 3 | 20 | 34 | +2 | -3 | 800 | HL | 13 | special super | - | HOMING 20/f to f14, lat 0.60 | H | 3D: horizontal baton swing: homing - the anti-step strike |
-| `2H` | Rising Baton | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | tracks to f5, lat 0.22 | AA |  |
-| `4H` | Shield Bash | 4H | 14 | 3 | 20 | 36 | +4 | -1 | 800 | HL | 13 | - | - | tracks to f10, lat 0.22 | CMD | (startup 16->14; hitstun 25->27; blockstun 20->22) Charge-friendly command normal (hold back): 14f, +4 hit / -1 block, big block pushback 0.9 m so it resets to his range instead of starting pressure. 3D: straight shield shove (tracks to f10); wall-splats at the ring edge |
-| `6M` | Front Boot | 6M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | - | - | tracks to f5, lat 0.18 | M | (startup 8->9; recovery 16->17) Kick command normal: 9/3/17 (+2/-4) for 1.06 m reach. |
-| `6H` | Nightstick Drop | 6H | 18 | 3 | 17 | 37 | +2 | -4 | 600 | H | 11 | - | - | tracks to f14, lat 0.18 | OH |  |
+| `2H` | Rising Baton | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | tracks to f3, lat 0.22 | AA |  |
+| `4H` | Shield Bash | 4H | 14 | 3 | 20 | 36 | +4 | -1 | 800 | HL | 13 | - | - | tracks to f8, lat 0.22 | CMD | (startup 16->14; hitstun 25->27; blockstun 20->22) Charge-friendly command normal (hold back): 14f, +4 hit / -1 block, big block pushback 0.9 m so it resets to his range instead of starting pressure. 3D: straight shield shove (tracks to f10); wall-splats at the ring edge |
+| `6M` | Front Boot | 6M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | - | - | tracks to f3, lat 0.18 | M | (startup 8->9; recovery 16->17) Kick command normal: 9/3/17 (+2/-4) for 1.06 m reach. |
+| `6H` | Nightstick Drop | 6H | 18 | 3 | 17 | 37 | +2 | -4 | 600 | H | 11 | - | - | tracks to f12, lat 0.18 | OH |  |
 | `j.L` | Air Poke | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL |  |
-| `j.M` | Air Chop | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f3, lat 0.18 | jM |  |
-| `j.H` | Air Swing | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f6, lat 0.22 | jH |  |
+| `j.M` | Air Chop | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
+| `j.H` | Air Swing | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f4, lat 0.22 | jH |  |
 | `throw_f` | Book 'Em | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.6 m, lock 56 f, dmg at f44, same side; victim f0 hit_high_s 0.00-0.10 s, f12 hit_high_s 0.00-0.50 s, f29 hit_body 0.10-0.60 s, f44 kd_fall_b 1.04-1.50 s.  |
 | `throw_b` | Perp Walk | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.6 m, lock 50 f, dmg at f30, swap sides; victim f0 hit_high_s 0.00-0.20 s, f8 thrown_b 0.05-0.40 s, f30 thrown_b 0.40-1.00 s.  |
 | `taser_l` | Taser Shot | [4]6L | 10 | 1 | 30 | 40 | +3 | -3 | 550 | HL | 8 | super | - | LINEAR, proj straight lat 0.15 | proj_l | (startup 16->10; recovery 31->30; hitstun 31->34; blockstun 27->28; damage 600->550) Charge projectile = the Sonic Boom row (1a/1c: startup 10, recovery 30, +3/-3, 550): charge time pays for the speed. 3D: charge move: fires straight along his frame-1 facing (a step beats it) |
@@ -1014,15 +1018,15 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `5L` | Tipsy Jab | 5L | 5 | 3 | 9 | 16 | +3 | -2 | 300 | HL | 9 | chain:5L chain:2L special super | - | tracks to f1, lat 0.15 | L |  |
 | `2L` | Low Palm | 2L | 5 | 3 | 9 | 16 | +3 | -2 | 250 | L | 9 | chain:2L chain:5L special super | - | tracks to f1, lat 0.15 | 2L |  |
-| `5M` | Staggering Palm | 5M | 8 | 3 | 16 | 26 | +3 | -3 | 600 | HL | 11 | special super | - | tracks to f4, lat 0.18 | M |  |
+| `5M` | Staggering Palm | 5M | 8 | 3 | 16 | 26 | +3 | -3 | 600 | HL | 11 | special super | - | tracks to f2, lat 0.18 | M |  |
 | `2M` | Shin Kick | 2M | 8 | 3 | 15 | 25 | +4 | -2 | 600 | L | 11 | special super | - | HOMING 20/f to f10, lat 0.40 | 2M | 3D: low roundhouse (authored crouch_shin_kick): homing anti-step poke, 0.40 m deep |
 | `5H` | Drunken Roundhouse | 5H | 13 | 3 | 20 | 35 | +2 | -3 | 800 | HL | 13 | special super | - | HOMING 20/f to f15, lat 0.60 | H | (startup 12->13) Turning kick with a curved path: startup 12->13. 3D: curving turning kick: homing |
-| `2H` | Knee Lift | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | tracks to f5, lat 0.22 | AA |  |
+| `2H` | Knee Lift | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | tracks to f3, lat 0.22 | AA |  |
 | `6M` | Wobble Palm | 6M | 14 | 3 | 17 | 33 | +2 | -4 | 700 | HL | 13 | - | - | LINEAR, lat 0.22 | CMD | (startup 16->14; recovery 20->17; hitstun 25->22; blockstun 20->16; damage 800->700) Approach command normal: 0.4 m step, 14/3/17, 700. 3D: a stumble along her line: linear; the palm wall-splats at the ring edge |
-| `4H` | Lean-Away Kick | 4H | 15 | 3 | 20 | 37 | +2 | -3 | 800 | HL | 13 | - | low-prof 3-14 | tracks to f11, lat 0.22 | CMD | (startup 16->15) Drunken evasion normal: upper body leans out of high attacks on frames 3-14 (hurtOverride), startup 16->15. |
+| `4H` | Lean-Away Kick | 4H | 15 | 3 | 20 | 37 | +2 | -3 | 800 | HL | 13 | - | low-prof 3-14 | tracks to f9, lat 0.22 | CMD | (startup 16->15) Drunken evasion normal: upper body leans out of high attacks on frames 3-14 (hurtOverride), startup 16->15. |
 | `j.L` | Air Palm | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL |  |
-| `j.M` | Flying Front Kick | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f3, lat 0.18 | jM |  |
-| `j.H` | Flying High Kick | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f6, lat 0.22 | jH |  |
+| `j.M` | Flying Front Kick | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
+| `j.H` | Flying High Kick | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f4, lat 0.22 | jH |  |
 | `throw_f` | Palm Launch | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.6 m, lock 44 f, dmg at f28, same side; victim f0 hit_high_s 0.00-0.10 s, f7 thrown_f 0.25-1.10 s.  |
 | `throw_b` | Wild Swing Toss | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.6 m, lock 46 f, dmg at f28, swap sides; victim f0 hit_high_s 0.00-0.12 s, f8 thrown_b 0.10-1.20 s.  |
 | `sway_l` | Drunken Sway | 214L | 4 | 10 | 4 | 17 | - | - | 0 | HL | 0 | - | low-prof 4-13 | tracks to f1 | custom | Stance entry (CONTRACT 5.3): 4/10/4 then the stance; the lean (0.40 x 1.30 m) dodges highs only, so lows and throws beat it. |
@@ -1181,16 +1185,16 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 | id | name | input | S | A | R | total | on hit | on block | dmg | guard | stop | cancel | inv/armor | 3D | tpl | deviation / design note |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `5L` | Gauntlet Jab | 5L | 6 | 3 | 10 | 18 | +2 | -3 | 300 | HL | 9 | chain:2L special super | - | tracks to f2, lat 0.15 | L | (startup 5->6; recovery 9->10) Big-body lights are a frame slower: 6/3/10 (+2/-3). |
-| `2L` | Boot Stomp | 2L | 7 | 3 | 9 | 18 | +3 | -2 | 250 | L | 9 | chain:2L special super | low-prof 1-16 | tracks to f3, lat 0.15 | 2L | (startup 5->7) The stomp needs its knee lift (startup 7) and he stays tall (standing hurtbox). |
-| `5M` | Snap Kick | 5M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | special super | - | tracks to f5, lat 0.18 | M | (startup 8->9; recovery 16->17) Big body: 9/3/17 (+2/-4). |
+| `5L` | Gauntlet Jab | 5L | 6 | 3 | 10 | 18 | +2 | -3 | 300 | HL | 9 | chain:2L special super | - | tracks to f1, lat 0.15 | L | (startup 5->6; recovery 9->10) Big-body lights are a frame slower: 6/3/10 (+2/-3). |
+| `2L` | Boot Stomp | 2L | 7 | 3 | 9 | 18 | +3 | -2 | 250 | L | 9 | chain:2L special super | low-prof 1-16 | tracks to f1, lat 0.15 | 2L | (startup 5->7) The stomp needs its knee lift (startup 7) and he stays tall (standing hurtbox). |
+| `5M` | Snap Kick | 5M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | special super | - | tracks to f3, lat 0.18 | M | (startup 8->9; recovery 16->17) Big body: 9/3/17 (+2/-4). |
 | `2M` | Low Cleaver | 2M | 10 | 3 | 15 | 27 | +4 | -2 | 700 | L | 11 | special super | - | HOMING 20/f to f12, lat 0.40 | 2M | (startup 8->10; damage 600->700) Cleaver weight: startup 10 for 700 damage. 3D: crouching cleaver swing: homing anti-step low, 0.40 m deep |
-| `5H` | Cleaver Swing | 5H | 14 | 3 | 21 | 37 | +1 | -4 | 1000 | HL | 13 | special super | armor 1x 5-13 | tracks to f10, lat 0.22 | H | (startup 12->14; recovery 20->21; damage 800->1000) Big-body armored heavy (FIGHTING_DESIGN 8c): 14/3/21, 1000, +1/-4, 1 hit of armor 5-13. |
-| `2H` | Rising Backhand | 2H | 10 | 4 | 22 | 35 | +1 | -7 | 800 | HL | 13 | special super | - | tracks to f6, lat 0.22 | AA | (startup 9->10; recovery 21->22) Big body: 10/4/22 (+1/-7). |
-| `6H` | Tenderizer | 6H | 20 | 3 | 17 | 39 | +2 | -4 | 800 | H | 11 | - | - | tracks to f16, lat 0.18 | OH | (startup 18->20; damage 600->800) Cleaver overhead: 20f and 800 (the weight is in the startup). |
-| `j.L` | Air Jab | j.L | 6 | 7 | 3 | 15 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f2, lat 0.15 | jL | (startup 5->6) Big body: startup 6. |
-| `j.M` | Air Backhand | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f3, lat 0.18 | jM |  |
-| `j.H` | Falling Cleaver | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f6, lat 0.22 | jH |  |
+| `5H` | Cleaver Swing | 5H | 14 | 3 | 21 | 37 | +1 | -4 | 1000 | HL | 13 | special super | armor 1x 5-13 | tracks to f8, lat 0.22 | H | (startup 12->14; recovery 20->21; damage 800->1000) Big-body armored heavy (FIGHTING_DESIGN 8c): 14/3/21, 1000, +1/-4, 1 hit of armor 5-13. |
+| `2H` | Rising Backhand | 2H | 10 | 4 | 22 | 35 | +1 | -7 | 800 | HL | 13 | special super | - | tracks to f4, lat 0.22 | AA | (startup 9->10; recovery 21->22) Big body: 10/4/22 (+1/-7). |
+| `6H` | Tenderizer | 6H | 20 | 3 | 17 | 39 | +2 | -4 | 800 | H | 11 | - | - | tracks to f14, lat 0.18 | OH | (startup 18->20; damage 600->800) Cleaver overhead: 20f and 800 (the weight is in the startup). |
+| `j.L` | Air Jab | j.L | 6 | 7 | 3 | 15 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL | (startup 5->6) Big body: startup 6. |
+| `j.M` | Air Backhand | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
+| `j.H` | Falling Cleaver | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f4, lat 0.22 | jH |  |
 | `throw_f` | Three Cuts | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1300 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.68 m, lock 66 f, dmg at f54, same side; victim f0 hit_high_s 0.00-0.15 s, f12 hit_high_s 0.00-0.60 s, f37 hit_body 0.10-0.60 s, f54 kd_fall_b 1.04-1.50 s. (damage 1200->1300) Big-body throw: 1300. |
 | `throw_b` | Over the Shoulder | 4LM | 5 | 3 | 23 | 30 | KD +15 | - | 1300 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.68 m, lock 46 f, dmg at f28, swap sides; victim f0 hit_body 0.00-0.20 s, f10 thrown_b 0.10-0.53 s, f28 thrown_b 0.53-1.20 s. (damage 1200->1300) Big-body throw: 1300. |
 | `meat_hook_l` | Meat Hook | 236L | 18 | 11 | 24 | 52 | KD +30 | -6 | 1100 | HL | 15 | super | armor 1x 4-17 | HOMING 20/f to f28, lat 0.60 | custom | hits: f18 500, f27 600. FIGHTING_DESIGN 8c MEAT HOOK (slow 2-hit armored heavy, 22f, wall splat): L 18 / M 22 / H 26 startup with armor through startup (H 2 hits), -6 on block, KD +30. 3D: two wide cleaver swings: homing through all active frames (a step into the slow startup is hooked) |
@@ -1352,15 +1356,15 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `5L` | Toprock Jab | 5L | 5 | 3 | 9 | 16 | +3 | -2 | 300 | HL | 9 | chain:5L chain:2L special super | - | tracks to f1, lat 0.15 | L |  |
 | `2L` | Floor Tap | 2L | 5 | 3 | 9 | 16 | +3 | -2 | 250 | L | 9 | chain:2L special super | low-prof 3-14 | tracks to f1, lat 0.15 | 2L |  |
-| `5M` | Front Kick | 5M | 9 | 3 | 16 | 27 | +3 | -3 | 600 | HL | 11 | special super | - | tracks to f5, lat 0.18 | M | (startup 8->9) Kick: startup 8->9 (+2/-4) for 1.37 m. |
+| `5M` | Front Kick | 5M | 9 | 3 | 16 | 27 | +3 | -3 | 600 | HL | 11 | special super | - | tracks to f3, lat 0.18 | M | (startup 8->9) Kick: startup 8->9 (+2/-4) for 1.37 m. |
 | `2M` | Footwork Sweep | 2M | 9 | 3 | 15 | 26 | +4 | -2 | 600 | L | 11 | special super | low-prof 3-18 | HOMING 20/f to f11, lat 0.40 | 2M | (startup 8->9) Low-profile floor poke: startup 9. 3D: floor footwork leg sweep: homing anti-step low, 0.40 m deep |
 | `5H` | Swipes | 5H | 12 | 7 | 21 | 39 | +2 | -3 | 850 | HL | 13 | special super | - | HOMING 20/f to f18, lat 0.60 | H | hits: f12 400, f17 450. (active 3->7; recovery 20->21; damage 800->850) Two-hit heavy (the clip whips both legs): active 7, recovery 21 keeps +2/-3 from the last hit; 850 over 2 hits. 3D: two whipping leg swipes: homing, his safe tool vs a stepper |
 | `2H` | Flare Sweep | 2H | 11 | 3 | 24 | 37 | KD +33 | -11 | 900 | L | 13 | - | low-prof 4-20 | HOMING 20/f to f13, lat 0.60 | SWEEP | (startup 10->11) Flair sweep: startup 11 (drops onto the hands first), low profile 4-20. 3D: a flair: homing sweep, 0.60 m deep (the legs circle, not a 0.45 m foot sweep) |
 | `6M` | Butterfly Kick | 6M | 18 | 3 | 17 | 37 | +2 | -4 | 600 | H | 11 | - | - | HOMING 20/f to f20, lat 0.60 | OH | Overhead template 18/3/17 on a hop (airborne 1-20, beats lows). 3D: jump spin kick on the spot (no travel): a spinning kick, homing |
 | `SS.H` | Flank Flair | SS.H | 10 | 3 | 21 | 33 | KD +33 | -8 | 900 | L | 13 | super | low-prof 3-20 | HOMING 20/f to f12, lat 0.60 | SWEEP | (recovery 24->21; hitstun 60->57) STEP-ATTACK: H out of a sidestep (from step frame 11) or a circle-walk. The sweep template 10/3/24 with recovery 21 (-8 on block instead of -11, KD +33 kept: hitstun 57) and a 0.3 m slide into the flank: the reward for stepping a linear move, safer than 2H but only reachable from a step. 3D: homing flair sweep (a spin, 0.60 m deep) into the flank, low profile 3-20 |
 | `j.L` | Air Jab | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL |  |
-| `j.M` | Air Swipe | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f3, lat 0.18 | jM |  |
-| `j.H` | Jump Turning Kick | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f6, lat 0.22 | jH |  |
+| `j.M` | Air Swipe | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
+| `j.H` | Jump Turning Kick | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f4, lat 0.22 | jH |  |
 | `throw_f` | Footwork Trip | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.6 m, lock 48 f, dmg at f28, same side; victim f0 hit_high_s 0.00-0.20 s, f12 hit_low 0.00-0.50 s, f28 kd_fall_b 1.00-1.55 s.  |
 | `throw_b` | Flair Toss | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.6 m, lock 46 f, dmg at f32, swap sides; victim f0 hit_high_s 0.00-0.15 s, f8 thrown_b 0.00-0.55 s, f32 thrown_b 0.55-1.10 s.  |
 | `windmill_l` | Windmill | 236L | 12 | 10 | 24 | 45 | KD +30 | -8 | 1000 | HL | 13 | super | low-prof 6-22 | HOMING 20/f to f21, lat 0.60 | custom | hits: f12 450, f20 550. Multi-hit spin (Breakdance flair chain): one hit per leg pass (entry, 2 per flair loop, exit) at ~2.5x, -8/-10/-12 on block, KD +30 from the last hit. 3D: flair spin: homing through every leg pass, 0.60 m deep (H / EX wall-splat) |
@@ -1518,15 +1522,15 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `5L` | Jab | 5L | 5 | 3 | 9 | 16 | +3 | -2 | 300 | HL | 9 | chain:5L chain:2L special super | - | tracks to f1, lat 0.15 | L |  |
 | `2L` | Low Jab | 2L | 5 | 3 | 9 | 16 | +3 | -2 | 250 | L | 9 | chain:2L chain:5L special super | - | tracks to f1, lat 0.15 | 2L |  |
-| `5M` | Snap Kick | 5M | 9 | 3 | 16 | 27 | +3 | -3 | 600 | HL | 11 | special super | - | tracks to f5, lat 0.18 | M | (startup 8->9) Kick: startup 8->9 (+2/-4). |
+| `5M` | Snap Kick | 5M | 9 | 3 | 16 | 27 | +3 | -3 | 600 | HL | 11 | special super | - | tracks to f3, lat 0.18 | M | (startup 8->9) Kick: startup 8->9 (+2/-4). |
 | `2M` | Grass Cutter | 2M | 10 | 3 | 15 | 27 | +4 | -2 | 600 | L | 11 | special super | low-prof 1-27 | HOMING 20/f to f12, lat 0.40 | 2M | (startup 8->10) Footballer low: a standing soccer swing kick (low, 0.36 m) with a standing hurtbox; startup 10. 3D: soccer swing kick along the grass: homing anti-step low, 0.40 m deep |
-| `5H` | Volley | 5H | 12 | 3 | 20 | 34 | +2 | -3 | 800 | HL | 13 | special super | - | tracks to f8, lat 0.22 | H | 3D: straight front kick (tracks to f8); wall-splats at the ring edge (3D wall game) |
+| `5H` | Volley | 5H | 12 | 3 | 20 | 34 | +2 | -3 | 800 | HL | 13 | special super | - | tracks to f6, lat 0.22 | H | 3D: straight front kick (tracks to f8); wall-splats at the ring edge (3D wall game) |
 | `2H` | Slide Tackle | 2H | 12 | 3 | 24 | 38 | KD +33 | -11 | 900 | L | 13 | - | low-prof 6-20 | LINEAR, lat 0.45 | SWEEP | (startup 10->12) Slide sweep: travels 1.2 m during a 12-frame startup (10->12), low profile 6-20. 3D: a 1.2 m feet-first slide cannot turn: linear (not the homing sweep default) |
-| `4M` | Knee Trap | 4M | 7 | 3 | 15 | 24 | +2 | -3 | 600 | HL | 11 | special super | - | tracks to f3, lat 0.18 | M | (startup 8->7; recovery 16->15; hitstun 22->20; blockstun 16->15) Short fast command normal: 7/3/15, +2/-3 (reach 0.45 m). |
-| `6H` | Diving Header | 6H | 20 | 3 | 17 | 39 | +2 | -4 | 600 | H | 11 | - | - | tracks to f16, lat 0.18 | OH | (startup 18->20) Header overhead: 20f on a small hop; the box is hand-set because the head is behind the hips at the clip contact (MIXAMO_CLIPS header note). |
+| `4M` | Knee Trap | 4M | 7 | 3 | 15 | 24 | +2 | -3 | 600 | HL | 11 | special super | - | tracks to f1, lat 0.18 | M | (startup 8->7; recovery 16->15; hitstun 22->20; blockstun 16->15) Short fast command normal: 7/3/15, +2/-3 (reach 0.45 m). |
+| `6H` | Diving Header | 6H | 20 | 3 | 17 | 39 | +2 | -4 | 600 | H | 11 | - | - | tracks to f14, lat 0.18 | OH | (startup 18->20) Header overhead: 20f on a small hop; the box is hand-set because the head is behind the hips at the clip contact (MIXAMO_CLIPS header note). |
 | `j.L` | Air Knee | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL |  |
-| `j.M` | Flying Volley | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f3, lat 0.18 | jM |  |
-| `j.H` | Flying Punt | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f6, lat 0.22 | jH |  |
+| `j.M` | Flying Volley | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
+| `j.H` | Flying Punt | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f4, lat 0.22 | jH |  |
 | `throw_f` | Drop Kick | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.6 m, lock 50 f, dmg at f25, same side; victim f0 hit_body 0.00-0.35 s, f25 thrown_f 0.30-1.33 s.  |
 | `throw_b` | Overhead Kick | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.6 m, lock 64 f, dmg at f15, swap sides; victim f0 hit_high_s 0.00-0.15 s, f8 thrown_b 0.10-0.67 s, f30 thrown_b 0.67-1.20 s.  |
 | `power_shot_l` | Power Shot | 236L | 16 | 1 | 31 | 47 | -1 | -5 | 600 | L | 8 | super | - | tracks to f10, proj AIMED lat 0.15 | proj_l | (guard HL->L) L is a ground roller: guard L (must be blocked crouching). 3D: the roller is AIMED at the opponent's feet |
@@ -1682,13 +1686,13 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `5L` | Swat | 5L | 5 | 3 | 9 | 16 | +3 | -2 | 300 | HL | 9 | chain:5L chain:2L special super | - | tracks to f1, lat 0.15 | L |  |
 | `2L` | Ankle Bite | 2L | 5 | 3 | 9 | 16 | +3 | -2 | 250 | L | 9 | chain:2L special super | - | tracks to f1, lat 0.15 | 2L |  |
 | `5M` | Lurch Claw | 5M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | special super | - | HOMING 20/f to f11, lat 0.60 | M | (startup 8->9; recovery 16->17) Zombie wind-up: 9/3/17 (+2/-4). 3D: wild one-arm claw swing: homing anti-step poke |
-| `2M` | Crawl Claw | 2M | 10 | 3 | 17 | 29 | +2 | -4 | 600 | L | 11 | special super | low-prof 4-22 | tracks to f6, lat 0.18 | 2M | (startup 8->10; recovery 15->17) Signature footsie tool: prone 0.45 m low profile 4-22 beats high pokes, so it is slower (10f) and -4 on block (recovery 17). |
+| `2M` | Crawl Claw | 2M | 10 | 3 | 17 | 29 | +2 | -4 | 600 | L | 11 | special super | low-prof 4-22 | tracks to f4, lat 0.18 | 2M | (startup 8->10; recovery 15->17) Signature footsie tool: prone 0.45 m low profile 4-22 beats high pokes, so it is slower (10f) and -4 on block (recovery 17). |
 | `5H` | Long Reach | 5H | 13 | 3 | 20 | 35 | +2 | -3 | 800 | HL | 13 | special super | - | LINEAR, lat 0.22 | H | (startup 12->13) Longest reach in his kit: startup 12->13. 3D: a straight double-claw lunge: linear (a read step beats his longest button); wall-splats at the ring |
-| `2H` | Scream Claw | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | tracks to f5, lat 0.22 | AA |  |
-| `6H` | Drop-Dead Headbutt | 6H | 18 | 3 | 17 | 37 | +2 | -4 | 600 | H | 11 | - | - | tracks to f14, lat 0.18 | OH | Overhead template; hand-set box on the head lunge (front pass f32: 0.43 m ahead, 1.48 m high), top 1.65 m, bottom at the 1.10 m crouch line (head + shoulders dropping: an overhead must hit a crouching blocker). |
+| `2H` | Scream Claw | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | tracks to f3, lat 0.22 | AA |  |
+| `6H` | Drop-Dead Headbutt | 6H | 18 | 3 | 17 | 37 | +2 | -4 | 600 | H | 11 | - | - | tracks to f12, lat 0.18 | OH | Overhead template; hand-set box on the head lunge (front pass f32: 0.43 m ahead, 1.48 m high), top 1.65 m, bottom at the 1.10 m crouch line (head + shoulders dropping: an overhead must hit a crouching blocker). |
 | `j.L` | Air Swat | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL |  |
-| `j.M` | Air Claw | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f3, lat 0.18 | jM |  |
-| `j.H` | Pounce | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f6, lat 0.22 | jH |  |
+| `j.M` | Air Claw | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
+| `j.H` | Pounce | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f4, lat 0.22 | jH |  |
 | `throw_f` | In Your Face | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.6 m, lock 50 f, dmg at f26, same side; victim f0 hit_high_s 0.00-0.30 s, f14 hit_high_s 0.00-0.50 s, f26 hit_high_l 0.00-0.60 s, f38 kd_fall_b 1.04-1.50 s.  |
 | `throw_b` | Graveyard Swing | 4LM | 5 | 3 | 23 | 30 | KD +14 | - | 1200 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f24, swap sides; victim f0 hit_high_s 0.00-0.20 s, f10 thrown_b 0.05-0.40 s, f24 thrown_b 0.40-1.20 s.  |
 | `play_dead_l` | Play Dead | 214L | 4 | 17 | 26 | 46 | - | - | 0 | HL | 0 | - | low-prof 14-40, catch 4-20 | tracks to f1 | custom | counter unique (CONTRACT 5.3: PLAY DEAD catches strikes f4-20): L 4-20, M 4-24 (longer, more recovery), H 4-20 into the stronger GRAVE RISE; lying from f14 (0.40 m) so late highs whiff; throws and projectiles beat it. |
@@ -1849,16 +1853,16 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 | id | name | input | S | A | R | total | on hit | on block | dmg | guard | stop | cancel | inv/armor | 3D | tpl | deviation / design note |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `5L` | Claw Jab | 5L | 6 | 3 | 10 | 18 | +2 | -3 | 300 | HL | 9 | chain:2L special super | - | tracks to f2, lat 0.15 | L | (startup 5->6; recovery 9->10) Monster lights are a frame slower: 6/3/10 (+2/-3). |
-| `2L` | Low Claw | 2L | 6 | 3 | 9 | 17 | +3 | -2 | 250 | L | 9 | chain:2L special super | - | tracks to f2, lat 0.15 | 2L | (startup 5->6) Startup 6 (monster). |
+| `5L` | Claw Jab | 5L | 6 | 3 | 10 | 18 | +2 | -3 | 300 | HL | 9 | chain:2L special super | - | tracks to f1, lat 0.15 | L | (startup 5->6; recovery 9->10) Monster lights are a frame slower: 6/3/10 (+2/-3). |
+| `2L` | Low Claw | 2L | 6 | 3 | 9 | 17 | +3 | -2 | 250 | L | 9 | chain:2L special super | - | tracks to f1, lat 0.15 | 2L | (startup 5->6) Startup 6 (monster). |
 | `5M` | Wild Swing | 5M | 10 | 3 | 17 | 29 | +2 | -4 | 700 | HL | 11 | special super | - | HOMING 20/f to f12, lat 0.60 | M | (startup 8->10; recovery 16->17; damage 600->700) Monster medium: 10/3/17, 700 (+2/-4). 3D: looping claw chop across the body: homing anti-step tool |
-| `2M` | Floor Slam | 2M | 11 | 3 | 15 | 28 | +4 | -2 | 700 | L | 11 | special super | - | tracks to f7, lat 0.18 | 2M | (startup 8->11; damage 600->700) 11f, 700 (+4/-2). |
-| `5H` | Crystal Swipe | 5H | 15 | 3 | 21 | 38 | +1 | -4 | 1100 | HL | 13 | special super | armor 2x 5-14 | tracks to f11, lat 0.22 | H | (startup 12->15; recovery 20->21; damage 800->1100) Boss armored heavy (FIGHTING_DESIGN 8c ENFORCER: 2-hit armor on heavies): 15/3/21, 1100, +1/-4. |
-| `2H` | Jumping Claw | 2H | 11 | 4 | 22 | 36 | +1 | -7 | 800 | HL | 13 | special super | - | tracks to f7, lat 0.22 | AA | (startup 9->11; recovery 21->22) Monster anti-air: 11/4/22 (+1/-7) on a small hop. |
-| `6H` | Hammer Down | 6H | 24 | 3 | 17 | 43 | +2 | -4 | 1000 | H | 11 | - | armor 2x 5-23 | tracks to f20, lat 0.18 | OH | (startup 18->24; damage 600->1000) Boss overhead: 24f (reactable) with 2-hit armor 5-23 and 1000 damage. |
-| `j.L` | Air Claw | j.L | 6 | 7 | 3 | 15 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f2, lat 0.15 | jL | (startup 5->6) Startup 6 (monster). |
-| `j.M` | Air Swipe | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f3, lat 0.18 | jM |  |
-| `j.H` | Falling Slam | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 900 | H | 13 | - | - | tracks to f6, lat 0.22 | jH | (damage 800->900) Boss jump-in 900. |
+| `2M` | Floor Slam | 2M | 11 | 3 | 15 | 28 | +4 | -2 | 700 | L | 11 | special super | - | tracks to f5, lat 0.18 | 2M | (startup 8->11; damage 600->700) 11f, 700 (+4/-2). |
+| `5H` | Crystal Swipe | 5H | 15 | 3 | 21 | 38 | +1 | -4 | 1100 | HL | 13 | special super | armor 2x 5-14 | tracks to f9, lat 0.22 | H | (startup 12->15; recovery 20->21; damage 800->1100) Boss armored heavy (FIGHTING_DESIGN 8c ENFORCER: 2-hit armor on heavies): 15/3/21, 1100, +1/-4. |
+| `2H` | Jumping Claw | 2H | 11 | 4 | 22 | 36 | +1 | -7 | 800 | HL | 13 | special super | - | tracks to f5, lat 0.22 | AA | (startup 9->11; recovery 21->22) Monster anti-air: 11/4/22 (+1/-7) on a small hop. |
+| `6H` | Hammer Down | 6H | 24 | 3 | 17 | 43 | +2 | -4 | 1000 | H | 11 | - | armor 2x 5-23 | tracks to f18, lat 0.18 | OH | (startup 18->24; damage 600->1000) Boss overhead: 24f (reactable) with 2-hit armor 5-23 and 1000 damage. |
+| `j.L` | Air Claw | j.L | 6 | 7 | 3 | 15 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL | (startup 5->6) Startup 6 (monster). |
+| `j.M` | Air Swipe | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
+| `j.H` | Falling Slam | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 900 | H | 13 | - | - | tracks to f4, lat 0.22 | jH | (damage 800->900) Boss jump-in 900. |
 | `throw_f` | Crusher Hug | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1400 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.7 m, lock 60 f, dmg at f32, same side; victim f0 hit_body 0.00-0.25 s, f16 hit_body 0.20-0.75 s, f46 kd_fall_b 1.04-1.50 s. (damage 1200->1400) Boss throw: 1400. |
 | `throw_b` | Specimen Toss | 4LM | 5 | 3 | 23 | 30 | KD +15 | - | 1400 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.7 m, lock 50 f, dmg at f21, swap sides; victim f0 hit_high_s 0.00-0.15 s, f8 thrown_b 0.05-0.40 s, f21 thrown_b 0.40-1.20 s. (damage 1200->1400) Boss throw: 1400. |
 | `crusher_leap_l` | Crusher Leap | 214L | 28 | 4 | 20 | 51 | KD +30 | -8 | 1200 | H | 15 | - | armor 2x 1-27 | LINEAR, lat 0.22 | custom | Boss leap slam (FIGHTING_DESIGN 8c ENFORCER tools): 28/32/36f (reactable), 2-hit armor through the leap, overhead, -8 on block, KD +30. 3D: a 1.5-3.5 m leap along its frame-1 line: linear (step it and punish) |
@@ -2011,16 +2015,16 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `5L` | Cane Jab | 5L | 5 | 3 | 9 | 16 | +3 | -2 | 300 | HL | 9 | chain:5L chain:2L special super | - | tracks to f1, lat 0.15 | L |  |
 | `2L` | Tap Dance | 2L | 5 | 3 | 9 | 16 | +3 | -2 | 250 | L | 9 | chain:2L special super | - | tracks to f1, lat 0.15 | 2L |  |
-| `5M` | Cane Swing | 5M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | special super | - | tracks to f5, lat 0.18 | M | (startup 8->9; recovery 16->17) Cane weight: 9/3/17 (+2/-4). |
+| `5M` | Cane Swing | 5M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | special super | - | tracks to f3, lat 0.18 | M | (startup 8->9; recovery 16->17) Cane weight: 9/3/17 (+2/-4). |
 | `2M` | Low Cane | 2M | 9 | 3 | 15 | 26 | +4 | -2 | 600 | L | 11 | special super | - | HOMING 20/f to f11, lat 0.40 | 2M | (startup 8->9) Startup 9 (long cane). 3D: low sweeping cane swing: homing anti-step low, 0.40 m deep |
 | `5H` | Showstopper | 5H | 12 | 3 | 20 | 34 | +2 | -3 | 800 | HL | 13 | special super | - | HOMING 20/f to f14, lat 0.60 | H | 3D: big horizontal cane swing: homing; wall-splats at the ring edge (3D wall game) |
-| `2H` | Cane Twirl | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | tracks to f5, lat 0.22 | AA |  |
+| `2H` | Cane Twirl | 2H | 9 | 4 | 21 | 33 | +2 | -6 | 800 | HL | 13 | special super | - | tracks to f3, lat 0.22 | AA |  |
 | `3H` | The Hook | 3H | 14 | 3 | 24 | 40 | KD +33 | -11 | 900 | L | 13 | - | - | HOMING 20/f to f16, lat 0.45 | SWEEP | (startup 10->14) Sweep on 3H (2H is the anti-air); the hook slides 0.8 m (startup 14) and pulls the victim toward him on hit (launch vx -2.0 m/s). |
-| `4M` | Stage Kick | 4M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | - | - | tracks to f5, lat 0.18 | M | (startup 8->9; recovery 16->17) 9/3/17 (+2/-4). |
-| `6H` | Sledgehammer | 6H | 20 | 3 | 17 | 39 | +2 | -4 | 800 | H | 11 | - | - | tracks to f16, lat 0.18 | OH | (startup 18->20; damage 600->800) Overhead with a two-hand weapon: 20f and 800. |
+| `4M` | Stage Kick | 4M | 9 | 3 | 17 | 28 | +2 | -4 | 600 | HL | 11 | - | - | tracks to f3, lat 0.18 | M | (startup 8->9; recovery 16->17) 9/3/17 (+2/-4). |
+| `6H` | Sledgehammer | 6H | 20 | 3 | 17 | 39 | +2 | -4 | 800 | H | 11 | - | - | tracks to f14, lat 0.18 | OH | (startup 18->20; damage 600->800) Overhead with a two-hand weapon: 20f and 800. |
 | `j.L` | Air Thrust | j.L | 5 | 7 | 3 | 14 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL |  |
-| `j.M` | Air Chop | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f3, lat 0.18 | jM |  |
-| `j.H` | Air Sledgehammer | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f6, lat 0.22 | jH |  |
+| `j.M` | Air Chop | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
+| `j.H` | Air Sledgehammer | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 800 | H | 13 | - | - | tracks to f4, lat 0.22 | jH |  |
 | `throw_f` | Three-Act Beating | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1300 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.6 m, lock 64 f, dmg at f52, same side; victim f0 hit_high_s 0.00-0.10 s, f9 hit_high_s 0.00-0.60 s, f35 hit_body 0.10-0.60 s, f52 kd_fall_b 1.04-1.50 s. (damage 1200->1300) Boss throw: 1300. |
 | `throw_b` | Exit Stage Left | 4LM | 5 | 3 | 23 | 30 | KD +15 | - | 1300 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.6 m, lock 48 f, dmg at f15, swap sides; victim f0 hit_high_s 0.00-0.10 s, f4 thrown_b 0.00-0.40 s, f15 thrown_b 0.40-1.20 s. (damage 1200->1300) Boss throw: 1300. |
 | `spotlight_l` | Spotlight | 236L | 16 | 1 | 31 | 47 | -1 | -5 | 600 | HL | 8 | super | - | LINEAR, proj straight lat 0.25 | proj_l | Boss projectile: template frames, beams 5.0/6.5/8.0 m/s. 3D: a beam straight along the cane: linear, not aimed (step bait) |

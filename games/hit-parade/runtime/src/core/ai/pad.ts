@@ -7,12 +7,17 @@
 
 export const B = {
   UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, L: 16, M: 32, H: 64, S: 128, ASSIST: 256, THROW: 512, PARRY: 1024, IMPACT: 2048, TAUNT: 4096,
+  // CHANGED(AI3D) (CONTRACT §35.2 / §35.13 item 3): bit 13 STEP_IN (circle away from the camera), bit 14 STEP_OUT (toward it)
+  STEP_IN: 8192, STEP_OUT: 16384,
 } as const;
 
 /** Buttons that only act on a fresh press (the pad inserts a release frame between two presses). */
 export const PRESS_BITS = B.L | B.M | B.H | B.S | B.THROW | B.IMPACT | B.TAUNT;
 export const DIR_BITS = B.UP | B.DOWN | B.LEFT | B.RIGHT;
-export const WORD_MASK = 0x1fff;
+/** CHANGED(AI3D): the CPU word carries bits 0..14 (STEP_IN / STEP_OUT included; was 0x1fff) - core/sim/inputs.ts WORD_BITS */
+export const WORD_MASK = 0x7fff;
+/** CHANGED(AI3D): the two STEP bits (held = the sim decides tap / circle-walk by the hold time; never a press edge) */
+export const STEP_BITS = B.STEP_IN | B.STEP_OUT;
 
 /** Facing-relative numpad direction -> screen bits (facing +1 = forward is RIGHT). */
 export function dirBits(d: number, facing: number): number {

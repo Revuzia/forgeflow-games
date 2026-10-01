@@ -4,7 +4,14 @@
 //
 // The word (CONTRACT §4.4): bit0 UP · bit1 DOWN · bit2 LEFT · bit3 RIGHT (screen-relative; the sim converts to
 // back/forward with `facing`) · bit4 L · bit5 M · bit6 H · bit7 S · bit8 ASSIST · bit9 THROW macro · bit10 PARRY
-// macro · bit11 IMPACT · bit12 TAUNT · bits 13-15 always 0.
+// macro · bit11 IMPACT · bit12 TAUNT · bit13 STEP_IN · bit14 STEP_OUT (CONTRACT §35.2 / §35.13.3) · bit15 always 0.
+//
+//   * CHANGED(UI3D) (CONTRACT §35.2, §35.16): the 3D ring's STEP controls. STEP_IN circles AWAY from the camera, STEP_OUT
+//     TOWARD it (the sim resolves both against its camera basis); a tap = SIDESTEP, a hold = SIDEWALK (circle-walk). Both
+//     held = neutral (SOCD, cleaned here like L+R). WORD_MASK 0x1fff -> 0x7fff, actions `stepIn` / `stepOut` (remappable),
+//     default keys P1 Q / E, P2 Num7 / Num9, gamepad RIGHT STICK up / down (virtual pad slots PAD.RS_UP / RS_DOWN = 17 / 18:
+//     the right stick through the same 8-way sectors + 30 % radial dead zone as the left stick; the up family = STEP_IN,
+//     the down family = STEP_OUT, pure left / right = nothing). A pad binding may also name a real button.
 //
 //   * SOCD cleaning happens HERE, before the word is formed (CONTRACT §4.3.9 / FIGHTING_DESIGN §4b):
 //     LEFT + RIGHT = neutral, UP + DOWN = neutral. It runs on the merged word (keyboard OR pad OR touch), so a
@@ -17,12 +24,12 @@
 //     this layer only sets the macro bits when a dedicated THROW / PARRY key or pad button is pressed.
 //   * Default bindings = FIGHTING_DESIGN §5a / §5b SIMPLE rows with the four-button model (CONTRACT §1):
 //       P1 keyboard: W A S D (Space = up too) · J L · K M · L H · I S(PECIAL) · U ASSIST · H THROW · O PARRY ·
-//                    P IMPACT · Y TAUNT · Esc pause
+//                    P IMPACT · Y TAUNT · Q STEP IN · E STEP OUT · Esc pause
 //       P2 keyboard: arrows · Num1 L · Num2 M · Num3 H · Num5 S · Num4 ASSIST · Num0 THROW · Num6 PARRY ·
-//                    Num+ IMPACT · Num* TAUNT
+//                    Num+ IMPACT · Num* TAUNT · Num7 STEP IN · Num9 STEP OUT
 //       Gamepad (Standard mapping): X/Square L · Y/Triangle M · RB H · A/Cross SPECIAL · B/Circle ASSIST ·
 //                    LT THROW · LB PARRY · RT IMPACT · SELECT/Back TAUNT · START pause · d-pad + left stick move
-//                    (8-way sectors of 45 deg, 30 % radial dead zone)
+//                    (8-way sectors of 45 deg, 30 % radial dead zone) · right stick up / down STEP IN / OUT
 //     CLASSIC uses the same buttons (the scheme only changes how the SIM parses the word). Every binding is
 //     remappable per player (settings.ts sanitises and persists them; setBindings applies them live).
 //   * Gamepads: `navigator.getGamepads()` is polled ONCE per tick (sampleAll). Pad slot p (0 = P1, 1 = P2) is
@@ -45,24 +52,30 @@ export const BIT = {
   UP: 1 << 0, DOWN: 1 << 1, LEFT: 1 << 2, RIGHT: 1 << 3,
   L: 1 << 4, M: 1 << 5, H: 1 << 6, S: 1 << 7,
   ASSIST: 1 << 8, THROW: 1 << 9, PARRY: 1 << 10, IMPACT: 1 << 11, TAUNT: 1 << 12,
+  // CHANGED(UI3D): CONTRACT §35.2 / §35.13.3 (core/config.ts INPUT, core/sim/inputs.ts IN)
+  STEP_IN: 1 << 13, STEP_OUT: 1 << 14,
 } as const;
-/** every defined bit (13-15 reserved, always 0) */
-export const WORD_MASK = 0x1fff;
+/** every defined bit (CHANGED(UI3D): 0x1fff -> 0x7fff, bits 13 / 14 = STEP; bit 15 reserved, always 0) */
+export const WORD_MASK = 0x7fff;
 const DIRS = BIT.UP | BIT.DOWN | BIT.LEFT | BIT.RIGHT;
+const STEPS = BIT.STEP_IN | BIT.STEP_OUT;
 
 /** the sim actions (one word bit each) */
-export type SimAction = 'up' | 'down' | 'left' | 'right' | 'l' | 'm' | 'h' | 's' | 'assist' | 'throw' | 'parry' | 'impact' | 'taunt';
+export type SimAction = 'up' | 'down' | 'left' | 'right' | 'l' | 'm' | 'h' | 's' | 'assist' | 'throw' | 'parry' | 'impact' | 'taunt' | 'stepIn' | 'stepOut';
 /** UI actions (one-shot callbacks, never in the word) */
 export type UiAction = 'pause';
 export type Action = SimAction | UiAction;
 
-export const SIM_ACTIONS: readonly SimAction[] = ['up', 'down', 'left', 'right', 'l', 'm', 'h', 's', 'assist', 'throw', 'parry', 'impact', 'taunt'];
-export const ACTIONS: readonly Action[] = [...SIM_ACTIONS, 'pause'];
+export const SIM_ACTIONS: readonly SimAction[] = ['up', 'down', 'left', 'right', 'l', 'm', 'h', 's', 'assist', 'throw', 'parry', 'impact', 'taunt', 'stepIn', 'stepOut'];
+/** CHANGED(UI3D): the 3D actions come LAST (after 'pause'), so a saved pre-3D binding keeps its key over a new default
+ *  (settings.ts sanitizeKeys also lets every saved binding win over a defaulted action) */
+export const ACTIONS: readonly Action[] = ['up', 'down', 'left', 'right', 'l', 'm', 'h', 's', 'assist', 'throw', 'parry', 'impact', 'taunt', 'pause', 'stepIn', 'stepOut'];
 
 export const ACTION_BIT: Readonly<Record<SimAction, number>> = {
   up: BIT.UP, down: BIT.DOWN, left: BIT.LEFT, right: BIT.RIGHT,
   l: BIT.L, m: BIT.M, h: BIT.H, s: BIT.S,
   assist: BIT.ASSIST, throw: BIT.THROW, parry: BIT.PARRY, impact: BIT.IMPACT, taunt: BIT.TAUNT,
+  stepIn: BIT.STEP_IN, stepOut: BIT.STEP_OUT,
 };
 
 /** KeyboardEvent.code per action */
@@ -75,28 +88,32 @@ export const DEFAULT_KEYS: readonly [Readonly<KeyBindings>, Readonly<KeyBindings
     up: ['KeyW', 'Space'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'],
     l: ['KeyJ'], m: ['KeyK'], h: ['KeyL'], s: ['KeyI'],
     assist: ['KeyU'], throw: ['KeyH'], parry: ['KeyO'], impact: ['KeyP'], taunt: ['KeyY'],
-    pause: ['Escape'],
+    pause: ['Escape'], stepIn: ['KeyQ'], stepOut: ['KeyE'],
   },
   {
     up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'],
     l: ['Numpad1'], m: ['Numpad2'], h: ['Numpad3'], s: ['Numpad5'],
     assist: ['Numpad4'], throw: ['Numpad0'], parry: ['Numpad6'], impact: ['NumpadAdd'], taunt: ['NumpadMultiply'],
-    pause: [],
+    pause: [], stepIn: ['Numpad7'], stepOut: ['Numpad9'],
   },
 ];
 
-/** Standard Gamepad mapping indices */
+/** Standard Gamepad mapping indices (+ CHANGED(UI3D): virtual slots 17..20 = the right stick's 4 directions) */
 export const PAD = {
   A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, SELECT: 8, START: 9, L3: 10, R3: 11,
   UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15, HOME: 16,
+  RS_UP: 17, RS_DOWN: 18, RS_LEFT: 19, RS_RIGHT: 20,
 } as const;
+/** real Standard-mapping buttons read from Gamepad.buttons */
 export const PAD_BUTTONS = 17;
+/** CHANGED(UI3D): bindable pad slots = the 17 buttons + the right stick's up / down / left / right (17..20) */
+export const PAD_SLOTS = 21;
 
 export const DEFAULT_PAD: Readonly<PadBindings> = {
   up: [PAD.UP], down: [PAD.DOWN], left: [PAD.LEFT], right: [PAD.RIGHT],
   l: [PAD.X], m: [PAD.Y], h: [PAD.RB], s: [PAD.A],
   assist: [PAD.B], throw: [PAD.LT], parry: [PAD.LB], impact: [PAD.RT], taunt: [PAD.SELECT],
-  pause: [PAD.START],
+  pause: [PAD.START], stepIn: [PAD.RS_UP], stepOut: [PAD.RS_DOWN],
 };
 
 /** left-stick radial dead zone (FIGHTING_DESIGN §5b: 30 %) */
@@ -112,7 +129,8 @@ const KEY_NAMES: Record<string, string> = {
   Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\', BracketLeft: '[', BracketRight: ']',
   Minus: '-', Equal: '=',
 };
-const PAD_NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'SELECT', 'START', 'L3', 'R3', 'D-UP', 'D-DOWN', 'D-LEFT', 'D-RIGHT', 'HOME'];
+const PAD_NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'SELECT', 'START', 'L3', 'R3', 'D-UP', 'D-DOWN', 'D-LEFT', 'D-RIGHT', 'HOME',
+  'RS-UP', 'RS-DOWN', 'RS-LEFT', 'RS-RIGHT'];
 
 /** a KeyboardEvent.code as a short keycap label: KeyJ -> J, Numpad1 -> NUM 1, ArrowUp -> UP */
 export function codeLabel(code: string): string {
@@ -142,11 +160,12 @@ export function defaultPad(): PadBindings {
   return out;
 }
 
-/** SOCD cleaning (CONTRACT §4.4): L+R = neutral, U+D = neutral; bits 13-15 cleared */
+/** SOCD cleaning (CONTRACT §4.4): L+R = neutral, U+D = neutral, CHANGED(UI3D) STEP_IN+STEP_OUT = neutral (§35.2); bit 15 cleared */
 export function socd(word: number): number {
   let w = word & WORD_MASK;
   if ((w & BIT.LEFT) && (w & BIT.RIGHT)) w &= ~(BIT.LEFT | BIT.RIGHT);
   if ((w & BIT.UP) && (w & BIT.DOWN)) w &= ~(BIT.UP | BIT.DOWN);
+  if ((w & STEPS) === STEPS) w &= ~STEPS;
   return w;
 }
 
@@ -156,7 +175,7 @@ export function describeWord(word: number): string {
   const num = (u ? (l ? 7 : r ? 9 : 8) : d ? (l ? 1 : r ? 3 : 2) : l ? 4 : r ? 6 : 5);
   const btn: string[] = [];
   const names: Array<[number, string]> = [[BIT.L, 'L'], [BIT.M, 'M'], [BIT.H, 'H'], [BIT.S, 'S'], [BIT.ASSIST, 'AS'],
-    [BIT.THROW, 'THROW'], [BIT.PARRY, 'PARRY'], [BIT.IMPACT, 'IMPACT'], [BIT.TAUNT, 'TAUNT']];
+    [BIT.THROW, 'THROW'], [BIT.PARRY, 'PARRY'], [BIT.IMPACT, 'IMPACT'], [BIT.TAUNT, 'TAUNT'], [BIT.STEP_IN, 'STEP-IN'], [BIT.STEP_OUT, 'STEP-OUT']];
   for (const [b, n] of names) if (word & b) btn.push(n);
   return String(num) + (btn.length ? ' ' + btn.join('+') : '');
 }
@@ -221,7 +240,7 @@ export class Input {
   private readonly held = new Set<string>();
   private readonly latched: [number, number] = [0, 0];
   private readonly padBits: [number, number] = [0, 0];
-  private readonly padPrev: [Uint8Array, Uint8Array] = [new Uint8Array(PAD_BUTTONS), new Uint8Array(PAD_BUTTONS)];
+  private readonly padPrev: [Uint8Array, Uint8Array] = [new Uint8Array(PAD_SLOTS), new Uint8Array(PAD_SLOTS)];
   private readonly padSlot: [number | null, number | null] = [null, null];
   private readonly forced: Array<{ word: number; ticks: number } | null> = [null, null];
   private readonly lastWord: [number, number] = [0, 0];
@@ -393,11 +412,17 @@ export class Input {
       const map = this.pads[p];
       let bits = 0;
       const n = Math.min(pad.buttons.length, PAD_BUTTONS);
-      const now = new Uint8Array(PAD_BUTTONS);
+      const now = new Uint8Array(PAD_SLOTS);
       for (let i = 0; i < n; i++) {
         const b = pad.buttons[i];
         if (b && (b.pressed || b.value > PAD_PRESS)) now[i] = 1;
       }
+      // CHANGED(UI3D): the right stick (axes 2 / 3) as 4 virtual slots, same sectors + dead zone as the left stick
+      const rs = stickBits(pad.axes.length > 2 ? pad.axes[2] : 0, pad.axes.length > 3 ? pad.axes[3] : 0);
+      if (rs & BIT.UP) now[PAD.RS_UP] = 1;
+      if (rs & BIT.DOWN) now[PAD.RS_DOWN] = 1;
+      if (rs & BIT.LEFT) now[PAD.RS_LEFT] = 1;
+      if (rs & BIT.RIGHT) now[PAD.RS_RIGHT] = 1;
       for (const a of SIM_ACTIONS) {
         for (const i of map[a] ?? []) if (now[i]) { bits |= ACTION_BIT[a]; break; }
       }
@@ -405,7 +430,7 @@ export class Input {
       // START (or whatever 'pause' is bound to): one UI action per press edge
       for (const i of map.pause ?? []) if (now[i] && !prev[i]) this.emitUi('pause', p, null);
       let any = false;
-      for (let i = 0; i < PAD_BUTTONS; i++) { if (now[i] && !prev[i]) any = true; prev[i] = now[i]; }
+      for (let i = 0; i < PAD_SLOTS; i++) { if (now[i] && !prev[i]) any = true; prev[i] = now[i]; }
       if (any || (bits & DIRS)) this.dev[p] = 'gamepad';
       this.padBits[p] = bits;
     }
@@ -454,6 +479,8 @@ export class Input {
       if (held & BIT.LEFT) extra &= ~BIT.RIGHT;
       if (held & BIT.UP) extra &= ~BIT.DOWN;
       if (held & BIT.DOWN) extra &= ~BIT.UP;
+      if (held & BIT.STEP_IN) extra &= ~BIT.STEP_OUT;       // CHANGED(UI3D): the same rule for the STEP pair
+      if (held & BIT.STEP_OUT) extra &= ~BIT.STEP_IN;
       let w = socd(held | extra);
       this.latched[p] = 0;
       if (p === 0) this.touch.latched = 0;

@@ -129,7 +129,7 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["poke"],
-      "track": {"until": 5, "rate": 180},
+      "track": {"until": 3, "rate": 180},
       "lateralM": 0.18,
       "anim": {"clip": "front_kick"},
       "desc": "Long front kick.",
@@ -371,7 +371,7 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": ["antiair"],
-      "track": {"until": 3, "rate": 180},
+      "track": {"until": 1, "rate": 180},
       "lateralM": 0.18,
       "anim": {"clip": "air_swipe"},
       "desc": "Leg whip air-to-air."
@@ -400,7 +400,7 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "role": [],
-      "track": {"until": 6, "rate": 180},
+      "track": {"until": 4, "rate": 180},
       "lateralM": 0.22,
       "anim": {"clip": "jump_kick"},
       "desc": "Turning jump-in."

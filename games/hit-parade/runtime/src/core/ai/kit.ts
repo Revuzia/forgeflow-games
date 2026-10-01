@@ -33,9 +33,10 @@ export interface Recipe {
   /**
    * CHANGED(AI) P2: where the recipe works. '' = from neutral (measured in the sandbox); 'chain' = only inside the
    * parent move's cancel window (rekka / weave trigger, target combo; the route executor knows); 'stance' = only in
-   * STANCE (Lotus follow-ups: the button alone).
+   * STANCE (Lotus follow-ups: the button alone). CHANGED(AI3D): 'step' = a step-attack ("SS.<btn>", §35.12.5): its
+   * button while in SIDESTEP (from step frame 9) / SIDEWALK - the brain steps first (brain.stepAttackLag).
    */
-  ctx: '' | 'chain' | 'stance';
+  ctx: '' | 'chain' | 'stance' | 'step';
 }
 
 /** CHANGED(AI) P2: what a unique move does for the planner (uniques.ts). */
@@ -98,12 +99,22 @@ export interface MoveInfo {
   revInv: boolean;
   /** phase-2-only move (Ricky) */
   phase2: boolean;
+  // ---- CHANGED(AI3D) (CONTRACT §35.12 FIGHTERS3D items 1-2, §35.15): 3D tracking class
+  /** tracks through its active frames (never stepped, §35.15 table) */
+  homing: boolean;
+  /** faces on frame 1 only (a read / reaction sidestep evades it over a long window) */
+  linear: boolean;
+  /** last re-facing move frame (compiled track.until) */
+  trackUntil: number;
+  /** a step-attack (input "SS.<btn>"): only out of SIDESTEP / SIDEWALK */
+  stepAtk: boolean;
 }
 
 export type ListName = 'pokes' | 'antiAir' | 'punish' | 'combo' | 'zoning' | 'approach' | 'grab' | 'armor' | 'counter'
-  | 'mixup' | 'setup' | 'escape' | 'air' | 'phase2';
+  | 'mixup' | 'setup' | 'escape' | 'air' | 'phase2' | 'antiStep';
+// CHANGED(AI3D): + `antiStep` (fighter JSON cpu.antiStep, §35.12.8: what to throw at a stepper)
 export const LIST_NAMES: readonly ListName[] = ['pokes', 'antiAir', 'punish', 'combo', 'zoning', 'approach', 'grab', 'armor', 'counter',
-  'mixup', 'setup', 'escape', 'air', 'phase2'];
+  'mixup', 'setup', 'escape', 'air', 'phase2', 'antiStep'];
 
 export interface Kit {
   id: string;
@@ -137,6 +148,14 @@ export interface Kit {
   phase: number;
   /** usable move indexes by tool kind */
   tools: Record<string, number[]>;
+  /**
+   * CHANGED(AI3D): step-attacks by button (L / M / H; -1 none) - compiled CFighter.stepAtk with a ctx 'step' recipe;
+   * `stepAttack` = the fighter JSON cpu.stepAttack hint resolved ("SS.H" -> its move index, -1 none)
+   */
+  stepAtk: number[];
+  stepAttack: number;
+  /** CHANGED(AI3D): usable homing ground strikes from neutral (the stepper answer when no antiStep entry reaches) */
+  homingStrikes: number[];
   /** calibration report (probe) */
   report: { candidates: number; recipes: number; usable: number; unusable: string[] };
 }
@@ -355,6 +374,10 @@ export function buildKit(data: GameData, cf: CFighter, scheme: Scheme, phase = 1
       const tsteps = triggerSteps(cm, scheme);
       if (tsteps) recipe = { steps: tsteps, lag: tsteps.length, air: cm.inAir, charge: 0, simple: scheme === 0, label: `trigger ${cm.id}`, ctx: 'chain' };
     }
+    // CHANGED(AI3D): a step-attack = its button while stepping (the sim routes it from SIDESTEP frame 9 / SIDEWALK)
+    if (!recipe && cm.stepAtk && cm.inBtn >= 0 && cm.inBtn <= 2) {
+      recipe = { steps: [{ d: 5, b: BTN[cm.inBtn] }], lag: 1, air: false, charge: 0, simple: false, label: `SS.${BTN_NAME[cm.inBtn]}`, ctx: 'step' };
+    }
     if (!recipe && cm.chainOnly && cm.inBtn >= 0) {
       // target-combo / chain part: only valid inside the parent's window (the route executor knows)
       recipe = { steps: [{ d: cm.inDir, b: BTN[cm.inBtn] }], lag: 1, air: cm.inAir, charge: 0, simple: false, label: `chain ${cm.id}`, ctx: 'chain' };
@@ -417,6 +440,10 @@ export function buildKit(data: GameData, cf: CFighter, scheme: Scheme, phase = 1
       projInv1: cm.inv[7],
       revInv: cm.inv[0] > 0 && cm.inv[0] <= 1 && cm.inv[1] >= cm.startup,
       phase2: cm.phase2,
+      homing: cm.homing,
+      linear: cm.linear,
+      trackUntil: cm.trackUntil,
+      stepAtk: cm.stepAtk,
     };
   });
   const byId: Record<string, number> = {};
@@ -448,6 +475,12 @@ export function buildKit(data: GameData, cf: CFighter, scheme: Scheme, phase = 1
   const route = ph === 2 ? cf.route2 : cf.route1;
   const tools: Record<string, number[]> = {};
   for (const mi of moves) if (mi.tool !== '' && mi.recipe) (tools[mi.tool] ??= []).push(mi.idx);
+  // CHANGED(AI3D): step-attacks (per button) + the JSON hint, homing ground strikes
+  const stepAtk = [0, 1, 2].map((bt) => (usable(cf.stepAtk[bt] ?? -1) ? cf.stepAtk[bt] : -1));
+  const hint = typeof cpu.stepAttack === 'string' ? cpu.stepAttack : '';
+  const hm = /^SS\.([LMH])$/.exec(hint);
+  const stepAttack = hm ? stepAtk[BTN_NAME.indexOf(hm[1])] : stepAtk.find((k) => k >= 0) ?? -1;
+  const homingStrikes = groundStrikes.filter((k) => moves[k].homing && moves[k].recipe!.ctx === '' && !moves[k].inert);
   const kit: Kit = {
     id: cf.id, scheme, cf, def, moves, byId, lists, roles, style, rawStyle: String(cpu.style ?? style),
     rangeLo: Math.round(rng[0] * 100000), rangeHi: Math.round(rng[1] * 100000),
@@ -462,6 +495,9 @@ export function buildKit(data: GameData, cf: CFighter, scheme: Scheme, phase = 1
     uk: cf.uk,
     phase: ph,
     tools,
+    stepAtk,
+    stepAttack,
+    homingStrikes,
     report: { candidates: cands.length, recipes: best.filter((r) => r !== null).length, usable: moves.filter((mi) => mi.recipe).length, unusable },
   };
   per.set(key, kit);

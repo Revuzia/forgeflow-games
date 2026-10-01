@@ -33,7 +33,8 @@ import { AUDIO_ALT_PAYLOAD_BYTES, AUDIO_BUDGET_BYTES, AUDIO_PAYLOAD_BYTES, MUSIC
 import { loopSlice } from '../runtime/src/audio/seam.ts';
 import { altOffset, oggOffset } from '../runtime/src/audio/engine.ts';
 import { AMBIENT_BY_STAGE, AudioRouter, CINE_BEATS, EVENT_SOUNDS, EXTRA_EVENT_SOUNDS, GOON_VOICE_RATE, HECKLE_OBJ_SOUNDS, PROJ_SOUNDS, SFX_CUE_ALIASES,
-  STATE_SOUNDS, UI_ALIASES, WEAPON_SOUNDS, boutContext, goonVoiceRate, resolveCue, type AudioSink, type BoutCtx, type LoopCmd, type MusicCmd, type PlayCmd } from '../runtime/src/audio/router.ts';
+  STATE_SOUNDS, UI_ALIASES, WALL_SURFACE_LAYER, WEAPON_SOUNDS, boutContext, goonVoiceRate, resolveCue, type AudioSink, type BoutCtx, type LoopCmd, type MusicCmd,
+  type PlayCmd } from '../runtime/src/audio/router.ts';
 import { VoicePool } from '../runtime/src/audio/voices.ts';
 import { EV, EVX, SC, eventsSince } from '../runtime/src/core/sim/events.ts';
 import type { FighterSnap, GameData, MatchSnap, SimEvent } from '../runtime/src/core/types.ts';
@@ -518,6 +519,61 @@ function syntheticRouter(): void {
   if (VERBOSE) console.log(`    plays: ${Object.entries(sink.plays).sort().map(([k, v]) => `${k}:${v}`).join(' ')}\n    culled: ${JSON.stringify(r.culled)}`);
 }
 
+// ------------------------------------------------------------------------------------- 3D ring (CHANGED(integrator) 3D)
+/**
+ * CHANGED(integrator) 3D (CONTRACT §35.13 item 7, §35.11.2): WALL_SPLAT carries the ring contact point (c / d cm); the
+ * router pans the thud at that point along the camera's screen-right R = (camN.z, -camN.x) and layers the stage's ring
+ * surface (WALL_SURFACE_LAYER). Every real stage of data/stages.json: a contact on the screen-right wall pans right, the
+ * same contact with the camera on the other side pans left; the surface layer plays where the stage's surface has one.
+ */
+function ring3dRouter(): void {
+  class PanSink extends MockSink {
+    readonly pans: Record<string, number[]> = {};
+    play(c: PlayCmd): void { super.play(c); (this.pans[c.id] ??= []).push(c.pan); }
+  }
+  const stagesJson = readJson<{ stages: Array<{ id: string; ring?: { surface?: string } }> }>(resolve(GAME, 'data', 'stages.json'));
+  const bad: string[] = [];
+  const rows: string[] = [];
+  if (!stagesJson) { check('router 3D: WALL_SPLAT contact pan + ring surface layer (every stage)', false, 'data/stages.json unreadable'); return; }
+  const f: [FighterSnap, FighterSnap] = [fakeFighter(-1.2), fakeFighter(1.2)];
+  const ring = { shape: 'circle' as const, radius: 5.5, sides: 16, rot: 0, centre: [0, 0] as [number, number] };
+  let frame = 100;
+  for (const st of stagesJson.stages) {
+    const r = new AudioRouter(11);
+    const sink = new PanSink();
+    const b: AudioBout = { fighters: ['johnny', 'bruno'], stage: st.id, mode: 'versus', local: 0, sfxNames: [] };
+    r.setBout(b, sink, boutContext(b, { fighters: {}, stages: stagesJson }));
+    r.onEvents([], fakeMatch(1, { phase: 'fight', camN: [0, 1], ring }), f, sink);
+    const want = st.ring?.surface ? WALL_SURFACE_LAYER[st.ring.surface] : undefined;
+    // camera on +Z (R = +X): a contact at x +5.5 m (the screen-right wall); then camera on -Z (R = -X): the same point
+    const pans: number[] = [];
+    for (const camN of [[0, 1], [0, -1]] as Array<[number, number]>) {
+      for (let i = 0; i < 120; i++) { r.update(1 / 60, sink); sink.t += 1 / 60; }
+      frame += 200;
+      const n0 = sink.pans.wall_splat?.length ?? 0;
+      r.onEvents([{ frame, type: EV.WALL_SPLAT, a: 1, b: 4 + 256 * 270, c: 550, d: 0 }], fakeMatch(frame, { camN, ring }), f, sink);
+      const p = sink.pans.wall_splat?.[n0];
+      pans.push(typeof p === 'number' ? p : NaN);
+    }
+    if (!(pans[0] > 0.3)) bad.push(`${st.id}: contact on the screen-right wall panned ${pans[0]}`);
+    if (!(pans[1] < -0.3)) bad.push(`${st.id}: camera on the other side panned ${pans[1]}`);
+    const layerPlays = want ? (sink.plays[want[0]] ?? 0) : 0;
+    if (want && layerPlays !== 2) bad.push(`${st.id}: surface ${st.ring?.surface} layer ${want[0]} played ${layerPlays}x (want 2)`);
+    if (!want && ((sink.plays.clang ?? 0) || (sink.plays.glass_break ?? 0))) bad.push(`${st.id}: ${st.ring?.surface ?? 'no surface'} played a layer`);
+    if (sink.bad.length) bad.push(...sink.bad.slice(0, 3));
+    rows.push(`${st.id} ${st.ring?.surface ?? '-'} pan ${pans.map((x) => x.toFixed(2)).join('/')} layer ${want ? `${want[0]} x${layerPlays}` : 'none'}`);
+  }
+  // a 1D snapshot (no ring / camN): the victim's pan, as before
+  const r1 = new AudioRouter(12);
+  const s1 = new PanSink();
+  r1.setBout({ fighters: ['johnny', 'bruno'], stage: 'rust_theater', mode: 'versus', local: 0, sfxNames: [] }, s1);
+  r1.onEvents([{ frame: 50, type: EV.WALL_SPLAT, a: 1, b: 1, c: 0, d: 0 }], fakeMatch(50), f, s1);
+  const p1d = s1.pans.wall_splat?.[0];
+  if (!(typeof p1d === 'number' && p1d > 0)) bad.push(`1D WALL_SPLAT (victim P2 at x +1.2) panned ${p1d}`);
+  check('router 3D: WALL_SPLAT pans at the ring contact point (camN screen-right) + the ring surface layer, every stage; 1D keeps the victim pan',
+    bad.length === 0, bad.length ? bad.join(' | ') : `${rows.join('; ')}; 1D pan ${typeof p1d === 'number' ? p1d.toFixed(2) : p1d}`);
+}
+
 // ------------------------------------------------------------------------------------------------ real sim bouts
 type SimMod = typeof import('../runtime/src/core/sim/match.ts');
 interface BoutRun { note: string; frames: number; phases: string[]; emitted: Record<string, number>; handled: Record<string, number>; plays: Record<string, number>;
@@ -803,6 +859,7 @@ try {
     await timed('map', mapChecks);
     await timed('data', dataChecks);
     await timed('synthetic', syntheticRouter);
+    await timed('ring3d', ring3dRouter);
     await timed('bonus+cinema', bonusAndCinema);
     await timed('bouts', realBouts);
   }

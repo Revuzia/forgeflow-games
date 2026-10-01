@@ -58,7 +58,13 @@ MENU_STEPS = ["title", "main", "season", "versus", "charselect", "charselect_sea
               "pause", "training", "movelist", "settings", "online", "credits", "confirm",
               # CHANGED(UI) P2: the ending sequence's cards, bonus / online results, the online lobby states, the blind pick
               "ending_text", "ending_ratings", "ending_board", "results_brawl", "results_heckler", "results_online_dc",
-              "online_room", "online_sync", "online_blind"]
+              "online_room", "online_sync", "online_blind",
+              # CHANGED(UI3D): HOW TO PLAY (the ring's STEP controls) and a move list with a step-attack + HOMING / LINEAR tags
+              "howto", "movelist_patch"]
+# CHANGED(UI3D): steps the lab has no deep link for: (lab screen to open, element to click on it)
+STEP_NAV = {"howto": ("main", "hpm-main-howto")}
+# CHANGED(UI3D): steps that are a lab screen + extra query
+STEP_QUERY = {"movelist_patch": "screen=movelist&fighter=patch"}
 HUD_STEPS = ["hud_intro", "hud_mid", "hud_fright", "hud_super", "hud_parry", "hud_ko", "hud_arcade", "hud_training"]
 ALL_STEPS = MENU_STEPS + HUD_STEPS
 # how long each step settles before it is measured / shot (sweeps and captions animate in)
@@ -258,12 +264,15 @@ def run(args) -> int:
                         errs.append(f"safe-area override unsupported: {e}")
                 drep: dict = {"steps": {}, "errors": errs}
                 for step in steps:
-                    q = ("hud=" + step[4:]) if step.startswith("hud_") else ("screen=" + step)
+                    q = ("hud=" + step[4:]) if step.startswith("hud_") else STEP_QUERY.get(step) or ("screen=" + STEP_NAV.get(step, (step, ""))[0])
                     if d["mobile"]:
                         q += "&touch=1"
                     url = args.base or lab_url(None, q)
                     page.goto(url, wait_until="load")
                     wait_ready(page)
+                    if step in STEP_NAV:
+                        page.wait_for_timeout(300)
+                        page.evaluate("(id) => { const e = document.getElementById(id); if (e) e.click(); }", STEP_NAV[step][1])
                     time.sleep(SETTLE.get(step, 0.7))
                     res = check_page(page, f"{dev}:{step}")
                     path = shot(page, f"layout_{dev}_{step}")

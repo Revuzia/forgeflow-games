@@ -2,7 +2,8 @@
 
 > Every hit's a hit.
 
-**HIT PARADE** is an original 3D-rendered versus fighting game (one fight line, Street Fighter structure) wearing a
+**HIT PARADE** is an original 3D ring versus fighting game (Tekken / Soul Calibur family: the two fighters face each
+other inside a 360-degree ring, sidestep and circle-walk around each other, and the camera orbits the pair) wearing a
 brutal late-night TV-show skin: an arcade ladder vs the CPU up to a mini boss and the host himself, local versus,
 online versus with rollback netcode, and training. Comic splatter (or sparks / confetti), never realistic gore.
 
@@ -61,11 +62,14 @@ Any deep-link key skips the title screen; a bare URL opens it.
 | PARRY (= M+H) | O | Num 6 | LB |
 | IMPACT | P | Num + | RT |
 | TAUNT | Y | Num * | SELECT |
+| STEP IN / STEP OUT (tap = sidestep, hold = circle-walk) | Q / E | Num 7 / Num 9 | right stick up / down |
 | pause | Esc | - | START |
 
 SIMPLE (special button + direction) and CLASSIC (motion inputs) share every timing window; the control type is a
 per-player setting. Blocking is holding back. The input layer cleans SOCD (left+right = neutral, up+down = neutral)
-and latches every press for at least one 60 Hz tick.
+and latches every press for at least one 60 Hz tick; STEP IN + STEP OUT held together = neutral too. STEP IN circles
+away from the camera, STEP OUT toward it (CONTRACT §35.2); LEFT / RIGHT stay screen-relative as the camera orbits.
+Touch: two STEP buttons (IN / OUT) above the stick.
 
 ## Layout (CONTRACT §3)
 

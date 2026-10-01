@@ -782,3 +782,37 @@ html.hp-noflash .hpm-res-rematch { animation: none; }
   .hpm-ml-row .alt { display: none; }
   .hpm-vs-plate .intro { font-size: 13px; max-width: 280px; }
 }
+
+/* ─────────────────────────── CHANGED(UI3D): the 3D ring - HOW TO PLAY, move-list tags, STEP legend ─────────────────────────── */
+.hpm-howbtn { justify-self: start; margin-top: calc(var(--u) * .4); }
+.hpm-howto { flex: 1; width: 100%; max-width: calc(var(--u) * 110); margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--u) * 44), 1fr)); align-content: start; gap: calc(var(--u) * 1.2) calc(var(--u) * 2); }
+.hpm-how-sec { display: grid; gap: calc(var(--u) * .45); align-content: start; padding: calc(var(--u) * .8) calc(var(--u) * 1); background: rgba(255, 245, 220, .04); border-left: calc(var(--u) * .35) solid var(--hp-yellow); }
+.hpm-how-sec.ring { background: rgba(155, 92, 255, .14); border-left-color: var(--hp-purple); grid-row: span 2; }
+.hpm-how-sec.ring .hpm-cap { color: #d9c2ff; }
+.hpm-how-row { display: grid; grid-template-columns: calc(var(--u) * 9.5) minmax(0, 1fr); align-items: center; gap: calc(var(--u) * .9); min-height: calc(var(--u) * 3); }
+.hpm-how-row .keys { display: flex; flex-wrap: wrap; align-items: center; gap: .3em; }
+.hpm-how-row .keys .k { display: inline-flex; gap: .2em; }
+.hpm-how-row .keys .op { font: 400 max(12px, calc(var(--u) * 1)) / 1 var(--f-display); color: var(--hp-yellow); }
+.hpm-how-row .keys .op.word { font-family: var(--f-cond); letter-spacing: .08em; color: var(--hp-paper); }
+.hpm-how-row .hpm-kbd.pad { background: var(--hp-ink); color: var(--hp-paper); border-color: var(--hp-paper); }
+.hpm-how-row .tbtn, .hpm-leg .tbtn.t-stepin, .hpm-leg .tbtn.t-stepout { display: inline-grid; place-items: center; min-width: 2.6em; height: 2.2em; padding: 0 .4em; border-radius: 99px; background: rgba(11, 11, 16, .8); border: max(1.5px, calc(var(--u) * .16)) solid var(--hp-paper); font: 400 max(12px, calc(var(--u) * .9)) / 1 var(--f-display); }
+.hpm-how-row .tbtn.t-stepin, .hpm-how-row .tbtn.t-stepout, .hpm-leg .tbtn.t-stepin, .hpm-leg .tbtn.t-stepout { background: #c9a6ff; color: var(--hp-ink); border-color: var(--hp-ink); }
+.hpm-leg .keys .tbtn + .tbtn { margin-left: .3em; }
+.hpm-how-row .tx { display: grid; gap: .1em; min-width: 0; }
+.hpm-how-row .tx b { font: 400 max(14px, calc(var(--u) * 1.15)) / 1.1 var(--f-display); }
+.hpm-how-row .tx .d { font: 400 max(12px, calc(var(--u) * 1)) / 1.25 var(--f-body); opacity: .85; }
+/* HOMING / LINEAR tags (move list rows, the tip line, HOW TO PLAY) */
+.hpm-ml-tag { display: inline-block; margin-left: .45em; padding: .08em .4em; vertical-align: .12em; border: 1px solid currentColor; border-radius: .25em; font: 400 max(12px, calc(var(--u) * .78)) / 1.1 var(--f-display); letter-spacing: .04em; }
+.hpm-how-row .keys .hpm-ml-tag { margin-left: 0; font-size: max(12px, calc(var(--u) * .9)); }
+.hpm-ml-tag.homing { color: #ffd166; background: rgba(255, 209, 102, .12); }
+.hpm-ml-tag.linear { color: #7fd8ff; background: rgba(127, 216, 255, .12); }
+.hpm-ml-tag.wall { color: #ff9a86; background: rgba(255, 154, 134, .12); }
+.hpm-ml-tip.ring .hpm-ml-tag { margin-left: 0; }
+@media (max-height: 500px) {
+  .hpm-howbtn { min-height: 44px; font-size: 14px; }
+  .hpm-howto { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .hpm-how-sec.ring { grid-row: auto; }
+  .hpm-how-row { grid-template-columns: 128px minmax(0, 1fr); min-height: 30px; }
+  .hpm-how-row .tx b { font-size: 14px; }
+  .hpm-how-row .tx .d { font-size: 12px; }
+}

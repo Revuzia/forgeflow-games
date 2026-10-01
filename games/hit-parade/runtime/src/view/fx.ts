@@ -7,8 +7,12 @@
 //     birth time, life, sizes, spin, colour, atlas cell, gravity, drag, velocity-stretch); the vertex shader integrates
 //     the ballistic path and billboards the quad (or stretches it along its screen-space velocity), so the CPU cost is
 //     the spawn only. Dead instances collapse to zero size. FX time runs at the slow-mo rate (KO x0.25, PRIME TIME holds).
-//   * Decals: one InstancedMesh of oriented quads (wall-splat splats on the set walls at x = +-8 m, floor splats, floor
-//     cracks) that fade out; polygon offset against z-fighting.
+//   * Decals: one InstancedMesh of oriented quads (wall-splat splats on the ring wall at the sim's contact point, floor
+//     splats, floor cracks) that fade out; polygon offset against z-fighting.
+//   * CHANGED(VIEW3D) the FX BASIS: every particle velocity and every authored offset is written in a local basis
+//     (x = the "hit direction" axis, y up, z = toward the camera) and rotated to world at spawn. BoutView sets it each
+//     frame to the camera's screen-right R / normal N (the 1D look of every spray holds at any fight-line angle); a hit /
+//     projectile / wall splat may set its own axis for one call (setBasis + restore). Positions given by callers are WORLD.
 //   * Screen layer (view/post.ts GradePass): flash, speed lines / finish-zoom lines around the impact's screen point.
 //   * Background dim for super freezes / cinematics: a camera-facing black plane parked just behind the fighters' depth,
 //     so the set darkens and the fighters stay lit (no mask pass needed).
@@ -305,8 +309,13 @@ void main() {
 }
 `;
 
+/** CHANGED(VIEW3D): the FX basis shared by the pools: X = (rx, 0, rz) unit, Y up, Z = (-rz, 0, rx) */
+interface Basis { rx: number; rz: number }
+
 class ParticlePool {
   readonly mesh: THREE.InstancedMesh;
+  /** CHANGED(VIEW3D): velocities are LOCAL to this basis (set by FxSystem) */
+  basis: Basis = { rx: 1, rz: 0 };
   private readonly cap: number;
   private next = 0;
   private readonly aP0: THREE.InstancedBufferAttribute;
@@ -351,7 +360,8 @@ class ParticlePool {
     const i = this.next;
     this.next = (this.next + 1) % this.cap;
     this.aP0.setXYZW(i, p.x, p.y, p.z, time);
-    this.aV.setXYZW(i, v.x, v.y, v.z, life);
+    const b = this.basis;
+    this.aV.setXYZW(i, b.rx * v.x - b.rz * v.z, v.y, b.rz * v.x + b.rx * v.z, life);
     this.aS.setXYZW(i, s0, s1, rot, spin);
     this.aC.setXYZW(i, col.r, col.g, col.b, alpha);
     this.aX.setXYZW(i, cell, grav, drag, stretch);
@@ -544,6 +554,10 @@ export class FxSystem {
   /** spotlight target (0 = off): world x of the lit fighter + strength 0..1 (BoutView sets it each frame) */
   spotTarget = 0;
   spotX = 0;
+  /** CHANGED(VIEW3D): world z of the spotlight */
+  spotZ = 0;
+  /** CHANGED(VIEW3D): the FX basis (X axis on the ground; Z = toward the camera), shared with both particle pools */
+  readonly basis: Basis = { rx: 1, rz: 0 };
   private seed = 12345;
   private readonly v0 = new THREE.Vector3();
   private readonly v1 = new THREE.Vector3();
@@ -564,6 +578,7 @@ export class FxSystem {
     this.add = new ParticlePool(2048, this.atlas, true, 'fx-add');
     this.alpha = new ParticlePool(2048, this.atlas, false, 'fx-alpha');
     this.decals = new DecalPool(64, this.atlas);
+    this.add.basis = this.basis; this.alpha.basis = this.basis;
     this.group.add(this.add.mesh, this.alpha.mesh, this.decals.mesh);
     const dm = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false, fog: false });
     dm.name = 'fx-dim';
@@ -601,6 +616,18 @@ export class FxSystem {
   }
 
   private rnd(): number { this.seed = (this.seed * 16807) % 2147483647; return this.seed / 2147483647; }
+
+  /** CHANGED(VIEW3D): set the FX basis X axis (planar, normalised here); Z = toward the camera = (-X.z, X.x) */
+  setBasis(rx: number, rz: number): void {
+    const l = Math.hypot(rx, rz);
+    if (l < 1e-6) return;
+    this.basis.rx = rx / l; this.basis.rz = rz / l;
+  }
+  /** a LOCAL offset (x along the basis X, y up, z toward the camera) added to a world point -> out */
+  offset(at: THREE.Vector3, x: number, y: number, z: number, out: THREE.Vector3): THREE.Vector3 {
+    const b = this.basis;
+    return out.set(at.x + b.rx * x - b.rz * z, at.y + y, at.z + b.rz * x + b.rx * z);
+  }
   rr(a: number, b: number): number { return a + (b - a) * this.rnd(); }
 
   private burst(pool: ParticlePool, at: THREE.Vector3, n: number, speed: [number, number], dirX: number, spread: number,
@@ -715,31 +742,51 @@ export class FxSystem {
     if (amount >= 0.9) {                                   // a few floor stains where the paint lands
       const m = Math.min(4, Math.round(amount * 2));
       for (let i = 0; i < m; i++) {
-        this.v0.set(at.x + dir * this.rr(0.3, 1.3), 0.004, this.rr(-0.5, 0.5));
+        this.offset(at, dir * this.rr(0.3, 1.3), 0, this.rr(-0.5, 0.5), this.v0).y = 0.004;
         this.decals.add(this.time + 0.25, this.v0, this.v1.set(0, 1, 0), this.rr(0.25, 0.5) * amount, this.rr(0, 6.28),
           this.rnd() < 0.5 ? C.BLOB_A : C.BLOB_B, COL.red, 0.9, 7);
       }
     }
   }
 
-  /** a wall splat on the set wall (side 0 = x -8, 1 = x +8) at height y */
-  wallSplat(side: number, y: number, z = 0): void {
+  /**
+   * CHANGED(VIEW3D): a wall splat on the RING boundary. (px, pz) = the contact point on the wall's inner face (the sim's
+   * WALL_SPLAT c / d), (nx, nz) = the wall's INWARD normal, y = the victim's chest height, solidTop = the height of the
+   * paintable wall (ring3d.ringSolidTop: brick / tile / panel = the wall top, the control room's kick panels 0.42 m, a cable
+   * railing 0 = the paint lands on the floor at its foot). The splat sprays back into the ring along the normal.
+   */
+  wallSplat(px: number, pz: number, nx: number, nz: number, y: number, solidTop: number, dustColor?: THREE.Color | null): void {
     this.stats.wall++;
-    const x = side === 0 ? -8 + 0.02 : 8 - 0.02;
-    const nx = side === 0 ? 1 : -1;
-    const at = new THREE.Vector3(x, y, z);
+    const l = Math.hypot(nx, nz) || 1;
+    nx /= l; nz /= l;
     const cell = this.mode === 'sparks' ? C.SCORCH : C.WALL_SPLAT;
     const col = this.mode === 'splatter' ? COL.red : this.mode === 'sparks' ? new THREE.Color(0.08, 0.05, 0.04) : CONFETTI[Math.floor(this.rnd() * 6)];
-    this.decals.add(this.time, at, new THREE.Vector3(nx, 0, 0), 1.35, this.rr(-0.4, 0.4), cell, col, 0.95, 9);
-    if (this.mode === 'confetti') {
-      for (let i = 0; i < 3; i++) {
-        this.decals.add(this.time, new THREE.Vector3(x, y + this.rr(-0.4, 0.4), z + this.rr(-0.5, 0.5)), new THREE.Vector3(nx, 0, 0),
-          0.45, this.rr(0, 6), C.CONF_RECT, CONFETTI[Math.floor(this.rnd() * CONFETTI.length)], 0.9, 9);
+    const nrm = new THREE.Vector3(nx, 0, nz);
+    const tx = -nz, tz = nx;                                // along the wall
+    if (solidTop > 0.25) {
+      const size = Math.min(1.35, solidTop * 0.95);
+      const cy = Math.max(size * 0.45, Math.min(solidTop - size * 0.42, y));
+      this.decals.add(this.time, new THREE.Vector3(px + nx * 0.02, cy, pz + nz * 0.02), nrm, size, this.rr(-0.4, 0.4), cell, col, 0.95, 9);
+      if (this.mode === 'confetti') {
+        for (let i = 0; i < 3; i++) {
+          const a = this.rr(-0.5, 0.5);
+          this.decals.add(this.time, new THREE.Vector3(px + nx * 0.025 + tx * a, Math.max(0.2, Math.min(solidTop - 0.2, cy + this.rr(-0.3, 0.3))), pz + nz * 0.025 + tz * a), nrm,
+            0.4, this.rr(0, 6), C.CONF_RECT, CONFETTI[Math.floor(this.rnd() * CONFETTI.length)], 0.9, 9);
+        }
       }
     }
-    this.dust(new THREE.Vector3(x + nx * 0.2, y, z), 1.2);
-    this.splatter(new THREE.Vector3(x + nx * 0.15, y, z), nx, 1.4);
-    this.one(this.add, new THREE.Vector3(x + nx * 0.1, y, z), 0.2, 0.6, 1.8, COL.hitCore, 0.9, C.POW, this.rr(0, 6));
+    // the floor at the wall's foot catches paint too (all of it on a railing)
+    const solid = solidTop > 0.25;
+    this.decals.add(this.time + 0.2, new THREE.Vector3(px + nx * (solid ? 0.35 : 0.5), 0.006, pz + nz * (solid ? 0.35 : 0.5)), new THREE.Vector3(0, 1, 0),
+      solid ? 0.55 : 1.15, this.rr(0, 6.28), this.rnd() < 0.5 ? C.BLOB_A : C.BLOB_B, this.mode === 'splatter' ? COL.red : col, 0.9, 8);
+    // spray + dust + POW leave the wall along the inward normal (one-call basis)
+    const sx = this.basis.rx, sz = this.basis.rz;
+    this.setBasis(nx, nz);
+    const at = new THREE.Vector3(px + nx * 0.2, y, pz + nz * 0.2);
+    this.dust(at, 1.2, dustColor ?? undefined);
+    this.splatter(at.set(px + nx * 0.15, y, pz + nz * 0.15), 1, 1.4);
+    this.one(this.add, at.set(px + nx * 0.1, y, pz + nz * 0.1), 0.2, 0.6, 1.8, COL.hitCore, 0.9, C.POW, this.rr(0, 6));
+    this.basis.rx = sx; this.basis.rz = sz;
   }
 
   /** dust puffs (wall hits, knockdowns, ground bounces); `color` overrides the stage-neutral grey-brown */
@@ -804,7 +851,7 @@ export class FxSystem {
         hot ? COL.fireCore : this.rnd() < 0.5 ? COL.fire : COL.fireDeep, hot ? 0.9 : 0.8, C.FLAME, -1.5, 2.4, 0);
     }
     if (this.rnd() < 0.6 * amount) {
-      this.v2.set(at.x + dir * len * this.rr(0.6, 1.0), at.y + this.rr(0, 0.3), at.z);
+      this.offset(at, dir * len * this.rr(0.6, 1.0), this.rr(0, 0.3), 0, this.v2);
       this.v0.set(dir * this.rr(0.5, 1.5), this.rr(0.6, 1.4), this.rr(-0.3, 0.3));
       const s = this.rr(0.35, 0.6);
       this.alpha.spawn(this.time, this.v2, this.v0, this.rr(0.8, 1.3), s, s * 2.4, this.rr(0, 6), this.rr(-0.6, 0.6), COL.smoke, 0.45, C.SMOKE, -0.6, 1.2, 0);
@@ -849,11 +896,12 @@ export class FxSystem {
     const n = Math.max(1, Math.round(3 * amount));
     const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
     const len = Math.max(0.05, Math.hypot(dx, dy, dz));
+    const sx = dx * this.basis.rx + dz * this.basis.rz;      // the screen-horizontal part (the bolt sprite's roll)
     for (let i = 0; i < n; i++) {
       const t = (i + this.rnd()) / n;
       this.v2.set(a.x + dx * t + this.rr(-0.06, 0.06), a.y + dy * t + this.rr(-0.08, 0.08), a.z + dz * t);
-      this.add.spawn(this.time, this.v2, this.v0.set(dx / len * 0.01, dy / len * 0.01, 0), 0.06, len / n * 1.3, len / n * 1.1,
-        Math.atan2(dy, dx) + this.rr(-0.3, 0.3), 0, this.rnd() < 0.5 ? COL.elecCore : COL.elec, 1, C.BOLT, 0, 0, 0);
+      this.add.spawn(this.time, this.v2, this.v0.set(sx / len * 0.01, dy / len * 0.01, 0), 0.06, len / n * 1.3, len / n * 1.1,
+        Math.atan2(dy, sx) + this.rr(-0.3, 0.3), 0, this.rnd() < 0.5 ? COL.elecCore : COL.elec, 1, C.BOLT, 0, 0, 0);
     }
   }
 
@@ -863,7 +911,7 @@ export class FxSystem {
     this.one(this.add, at, 0.14, 0.3 * amount, 1.0 * amount, COL.elecCore, 1, C.SPARK_X, this.rr(0, 6));
     this.one(this.add, at, 0.2, 0.3, 1.3 * amount, COL.elec, 0.9, C.RING_DASH, this.rr(0, 6));
     for (let i = 0; i < Math.round(6 * amount); i++) {
-      this.v2.set(at.x + this.rr(-0.35, 0.35), at.y + this.rr(-0.5, 0.5), at.z + 0.05);
+      this.offset(at, this.rr(-0.35, 0.35), this.rr(-0.5, 0.5), 0.05, this.v2);
       this.add.spawn(this.time, this.v2, this.v0.set(0, 0, 0), this.rr(0.05, 0.1), this.rr(0.25, 0.45), this.rr(0.2, 0.35), this.rr(0, 6.28), 0,
         this.rnd() < 0.5 ? COL.elecCore : COL.elec, 1, C.BOLT, 0, 0, 0);
     }
@@ -931,11 +979,12 @@ export class FxSystem {
     this.burst(this.add, at, Math.round(14 * amount), [3, 6], 1, 1, [0.2, 0.4], [0.04, 0.07], 0.3, this.c0, 0.9, C.STREAK, 0, 2.5, 0.12);
   }
 
-  /** confetti raining over the set around x (finishers, crowd pops, season finale) */
-  confettiRain(x: number, width = 7, n = 90): void {
+  /** confetti raining over the set around a floor point (finishers, crowd pops, season finale); CHANGED(VIEW3D): a world
+   *  point, the spread along the FX basis (width across the screen, -2.5 .. +1.2 m in depth) */
+  confettiRain(at: THREE.Vector3, width = 7, n = 90): void {
     this.stats.beats++;
     for (let i = 0; i < n; i++) {
-      this.v2.set(x + this.rr(-width / 2, width / 2), this.rr(4.2, 6.0), this.rr(-2.5, 1.2));
+      this.offset(at, this.rr(-width / 2, width / 2), 0, this.rr(-2.5, 1.2), this.v2).y = this.rr(4.2, 6.0);
       this.v0.set(this.rr(-0.8, 0.8), this.rr(-1.5, 0.5), this.rr(-0.3, 0.3));
       const s = this.rr(0.07, 0.13);
       const cell = this.rnd() < 0.5 ? C.CONF_RECT : this.rnd() < 0.6 ? C.CONF_RIB : C.STAR5;
@@ -944,11 +993,11 @@ export class FxSystem {
     }
   }
 
-  /** a shower of sparks falling from height y (lighting-rig hit, overhead pyro) */
-  sparkShower(x: number, y: number, width = 2, n = 50): void {
+  /** a shower of sparks falling from a world point (lighting-rig hit, overhead pyro); CHANGED(VIEW3D): world point */
+  sparkShower(at: THREE.Vector3, width = 2, n = 50): void {
     this.stats.beats++;
     for (let i = 0; i < n; i++) {
-      this.v2.set(x + this.rr(-width / 2, width / 2), y + this.rr(-0.2, 0.2), this.rr(-0.8, 0.5));
+      this.offset(at, this.rr(-width / 2, width / 2), this.rr(-0.2, 0.2), this.rr(-0.8, 0.5), this.v2);
       this.v0.set(this.rr(-1.5, 1.5), this.rr(-1, 2.5), this.rr(-0.5, 0.5));
       this.add.spawn(this.time + this.rr(0, 0.25), this.v2, this.v0, this.rr(0.6, 1.2), this.rr(0.03, 0.06), 0.02, 0, 0,
         this.rnd() < 0.4 ? COL.fireCore : COL.gold, 1, C.STREAK, 9.8, 0.3, 0.12);
@@ -1035,9 +1084,9 @@ export class FxSystem {
     const on = this.spotNow > 0.01;
     this.spot.visible = on; this.spotPool.visible = on;
     if (on) {
-      this.spot.position.set(this.spotX, 0, -0.05);
+      this.spot.position.set(this.spotX, 0, this.spotZ);
       (this.spot.material as THREE.ShaderMaterial).uniforms.uAlpha.value = 0.55 * this.spotNow;
-      this.spotPool.position.set(this.spotX, 0.012, 0);
+      this.spotPool.position.set(this.spotX, 0.012, this.spotZ);
       (this.spotPool.material as THREE.MeshBasicMaterial).opacity = 0.7 * this.spotNow;
     }
   }

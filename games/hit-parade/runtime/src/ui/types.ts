@@ -66,6 +66,10 @@ export interface UiMoveDef {
   cost?: { showtime?: number; nerve?: number };
   /** CONTRACT 20.2 informational fields the move list shows */
   desc?: string; role?: ReadonlyArray<string>;
+  /** CHANGED(UI3D) (CONTRACT §35.12 FIGHTERS3D): the move tracks a stepper (HOMING) / never turns after frame 1 (LINEAR) */
+  homing?: boolean; linear?: boolean;
+  track?: { until?: number; rate?: number };
+  projectile?: { aimed?: boolean };
 }
 
 /** CONTRACT 5.2 fighter file, the fields the UI reads. `difficulty` (1..3) is optional (CHANGED(UI) request). */
@@ -110,8 +114,9 @@ export interface UiShowcase {
 /** AUDIO GameAudio (CONTRACT 9 / 16), the calls the UI makes. */
 export interface UiAudio { ui?(cue: string): void; music?(cue: string | null): void }
 
-/** the remappable actions, in the order the SETTINGS list shows them (CHANGED(UI): SHELL's input.ts uses these ids) */
-export const ACTIONS = ['up', 'down', 'left', 'right', 'l', 'm', 'h', 's', 'assist', 'throw', 'parry', 'impact', 'taunt', 'pause'] as const;
+/** the remappable actions, in the order the SETTINGS list shows them (CHANGED(UI): SHELL's input.ts uses these ids;
+ *  CHANGED(UI3D): + stepIn / stepOut = the CONTRACT §35.2 STEP controls, listed after the directions) */
+export const ACTIONS = ['up', 'down', 'left', 'right', 'stepIn', 'stepOut', 'l', 'm', 'h', 's', 'assist', 'throw', 'parry', 'impact', 'taunt', 'pause'] as const;
 export type Action = typeof ACTIONS[number];
 
 /** one player's controls: KeyboardEvent.code per action (up to 2) + Standard-mapping pad button indices (up to 1) */
@@ -186,7 +191,9 @@ export type MenuIntent =
 
 export type ScreenId =
   | 'title' | 'main' | 'season' | 'versus' | 'charselect' | 'stage' | 'vs' | 'results' | 'ladder' | 'card' | 'ending'
-  | 'nameentry' | 'pause' | 'settings' | 'training' | 'movelist' | 'online' | 'credits';
+  | 'nameentry' | 'pause' | 'settings' | 'training' | 'movelist' | 'online' | 'credits'
+  /** CHANGED(UI3D): HOW TO PLAY (walk / the ring: sidestep, circle-walk, step-attacks, homing vs linear / attack / defend) */
+  | 'howto';
 
 /** per-player tallies the HUD keeps from the sim's own events + snapshots (Hud.tally(); CHANGED(UI) MatchResult.stats) */
 export interface MatchStats {

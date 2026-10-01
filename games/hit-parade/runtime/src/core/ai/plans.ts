@@ -8,10 +8,16 @@
 // (keep away, projectile cadence, escape), charge (sit in down-back, charge specials), stance, bigbody
 // (armored moves as reads), aerial (jumps + air specials), setplay (setups at mid range), counter (waits,
 // counter stance as a reaction tool - see brain.decideStrike). The aggression lever decides attack vs wait.
+//
+// CHANGED(AI3D) (CONTRACT §35.9 / §35.17): the ring (ringPlan below) - circle-walk off my wall, a READ sidestep vs a
+// linear-happy opponent (patch / spin ride a step-attack on it), homing / antiStep pokes vs a stepper, circle the
+// opponent onto its wall. Every distance / wall rule above reads the fight-line projection (sense.ts), so the plans
+// keep working anywhere in the ring.
 
 import { ST } from '../sim/layout.ts';
 import type { Brain, Decision } from './brain.ts';
 import { B } from './pad.ts';
+import { planCircle, stepOrder } from './ring3d.ts';
 
 const M = 100000;
 
@@ -54,6 +60,64 @@ export function guardChance(b: Brain, base: number): number {
   const pA = b.habits.attackRate;
   const g = (1 - P.habit) * base + P.habit * Math.min(1, P.block * 2) * pA;
   return Math.max(0, Math.min(0.95, g));
+}
+
+/** CHANGED(AI3D): is the opponent free to act this frame (it may start an attack on any frame) */
+function opFreeNow(st: number): boolean {
+  return st === ST.IDLE || st === ST.CROUCH || st === ST.WALK_F || st === ST.WALK_B || st === ST.SIDESTEP || st === ST.SIDEWALK || st === ST.STEP_END;
+}
+
+/**
+ * CHANGED(AI3D) (§35.9): the ring options of a neutral decision, or null. All honest: geometry I can see (ring3d.ts),
+ * habits committed after my reaction delay (habits.ts), the opponent's visible state.
+ */
+export function ringPlan(b: Brain, aggro: boolean, opThreat: number): Decision | null {
+  const s = b.seen;
+  const P = b.profile;
+  const op = s.op;
+  const kit = b.kit;
+  const d = s.dist;
+  const h = b.habits;
+  const opFree = opFreeNow(op.st);
+  if (op.st === ST.KNOCKDOWN || op.air || s.me.air) return null;
+  // (1) my back on the ring wall (along the fight line): circle-walk until there is room behind me again - not into a
+  // running attack, and inside its range less often the more it attacks there (its habit: a circle-walk is no guard)
+  const opSwinging = op.st === ST.ATTACK && op.cm !== null && op.mvF <= op.cm.lastActive;
+  const inRange = d <= opThreat + 20000;
+  if (P.circle > 0 && s.backU < 130000 && !opSwinging && b.rnd() < P.circle * (inRange ? 1 - h.attackRate : 1)) {
+    const pl = planCircle(b.m, s, 'escape', 180000, 80);
+    if (pl) {
+      b.stats.circlesEscape++;
+      return { t: 'circle', bit: pl.bit, frames: pl.frames <= b.m.sys.stepFrames ? 1 : pl.frames, atk: -1 };
+    }
+  }
+  // (2) it steps a lot near me (visible starts, habits.stepRate): a homing / cpu.antiStep move where one reaches
+  if (P.antiStep > 0 && opFree && h.stepRate > 0.15 && b.rnd() < P.antiStep * Math.min(1, h.stepRate * 2.5) * (aggro ? 1 : 0.5)) {
+    const k = b.antiStepPick();
+    if (k >= 0) {
+      b.stats.antiSteps++;
+      return { t: 'move', idx: k };
+    }
+  }
+  // (3) a READ sidestep inside its range vs its linear habit (a step a few frames before a linear move's active frames
+  // evades it, STEPTUNE §35.15; vs a homing-happy opponent less often); patch / spin ride their step-attack on it
+  if (P.stepGuess > 0 && opFree && d <= opThreat + 40000 && d > kit.cf.pushFS + op.cf.pushFS + 15000) {
+    const p = P.stepGuess * (0.4 + 3 * P.habit * h.linearRate) * (1 - h.homingRate);
+    if (b.rnd() < p) {
+      b.stats.stepGuesses++;
+      const [bit] = stepOrder(b.m, s);
+      return { t: 'circle', bit, frames: 1, atk: aggro && kit.stepAttack >= 0 ? kit.stepAttack : -1 };
+    }
+  }
+  // (4) circle the opponent onto ITS wall from mid range (its back then takes the pushback / the wall splat)
+  if (P.circle > 0 && aggro && s.opBackU > 220000 && s.backU > 150000 && d > 130000 && d < 320000 && b.rnd() < P.circle * 0.3) {
+    const pl = planCircle(b.m, s, 'corner', 110000, 60);
+    if (pl) {
+      b.stats.circlesCorner++;
+      return { t: 'circle', bit: pl.bit, frames: pl.frames <= b.m.sys.stepFrames ? 1 : pl.frames, atk: -1 };
+    }
+  }
+  return null;
 }
 
 export function neutralPlan(b: Brain): Decision {
@@ -118,6 +182,12 @@ export function neutralPlan(b: Brain): Decision {
   // the opponent is stuck in a long recovery out of reach (a projectile it threw, a whiffed special): move in
   if (!keepAway0 && op.st === ST.ATTACK && op.cm && !op.air && op.mvF > op.cm.lastActive && op.cm.total - op.mvF >= 14 && d > 150000 && b.rnd() < 0.5 + st.walkIn * 0.5) {
     return { t: 'steps', steps: [{ d: 6, b: 0 }, { d: 5, b: 0 }, { d: 6, b: 0 }] };
+  }
+
+  // CHANGED(AI3D): the ring (circle off my wall, anti-step, read steps, circle it onto its wall)
+  {
+    const r = ringPlan(b, aggro, opThreat);
+    if (r) return r;
   }
 
   // respect a presser (FIGHTING_DESIGN §12 "block+punish beats mash"): the opponent has been pressing buttons
@@ -192,6 +262,13 @@ export function neutralPlan(b: Brain): Decision {
   if (aggro && !(keepAway && d >= kit.rangeLo)) {
     if (d <= closeU) {
       const grabs = usableIn(b, kit.lists.grab, true);
+      // CHANGED(AI3D): a command-grab SUPER (Bruno COLD STORAGE) is a grab too - thrown out up close when the meter policy
+      // spends it (a spare bar: 3 bars, or the latched Lv1 spend roll; never while saving toward Lv3)
+      for (const sp of [kit.sup1, kit.sup3]) {
+        if (sp < 0 || !kit.moves[sp].grab || grabs.indexOf(sp) >= 0 || !b.canUse(sp) || !b.inReach(sp)) continue;
+        const lv3 = kit.moves[sp].super === 3;
+        if (lv3 ? b.showBars() >= 3 : b.showBars() >= 3 || b.spendLv1) grabs.push(sp);
+      }
       const mix = usableIn(b, (kit.roles.low ?? []).concat(kit.roles.overhead ?? []), true).filter((k) => kit.moves[k].normal || kit.moves[k].special);
       const armor = usableIn(b, kit.lists.armor, true);
       const dec = choose(b, [

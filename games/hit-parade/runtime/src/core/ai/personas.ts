@@ -12,16 +12,24 @@
 //            with the best route, perfect execution, and respects a presser (personas.optimal respect 0.9:
 //            inside the range of the buttons a masher keeps pressing it swings a longer normal into the
 //            walk-in or holds a guard, instead of walking / dashing / pressing a slower button into it).
+//   CHANGED(AI3D) (CONTRACT §35.17) - the 3D ring personas:
+//   stepper  sidesteps a lot: inside the opponent's range it taps a READ sidestep most decisions (the side with room
+//            behind it), else a quick poke; on reaction (18 f) it steps every attack a step can still evade (the same
+//            sandbox check as the CPU) and blocks the rest 60 %; punishes every whiff it can reach (out of the step too).
+//   circler  circle-walks all the time: holds STEP for 30-70 frames each way around the opponent, pokes when one
+//            reaches; 18 f reactions, blocks 60 %.
 
 import CPU_JSON from '../../../../data/cpu.json' with { type: 'json' };
 import type { Brain, Decision } from './brain.ts';
+import { cmReach } from './brain.ts';
 import { createBrainCpu, levelProfile, resolveProfile } from './cpu.ts';
 import type { Cpu, Profile } from './cpu.ts';
 import { neutralPlan } from './plans.ts';
 import { ST } from '../sim/layout.ts';
+import { stepBitFor, stepOrder } from './ring3d.ts';
 
-export type PersonaName = 'masher' | 'turtle' | 'jumper' | 'zoner' | 'novice' | 'optimal';
-export const PERSONAS: readonly PersonaName[] = ['masher', 'turtle', 'jumper', 'zoner', 'novice', 'optimal'];
+export type PersonaName = 'masher' | 'turtle' | 'jumper' | 'zoner' | 'novice' | 'optimal' | 'stepper' | 'circler';
+export const PERSONAS: readonly PersonaName[] = ['masher', 'turtle', 'jumper', 'zoner', 'novice', 'optimal', 'stepper', 'circler'];
 
 type Obj = Record<string, unknown>;
 const TABLE = CPU_JSON as unknown as Obj;
@@ -89,6 +97,48 @@ function zonerPlan(b: Brain): Decision {
   return { t: 'hold', d: 5, frames: 4 };
 }
 
+// CHANGED(AI3D): the ring personas
+function pokesInReach(b: Brain): number[] {
+  const kit = b.kit;
+  const list = kit.lists.pokes.length > 0 ? kit.lists.pokes : kit.lights;
+  return list.filter((k) => !kit.moves[k].inert && b.canUse(k) && b.inReach(k));
+}
+
+/** centre distance (U) inside which the opponent's longest LINEAR ground strike reaches me (its frame data) */
+function opLinearReach(b: Brain): number {
+  const s = b.seen;
+  let r = 0;
+  for (const cm of s.op.cf.moves) if (cm.linear && cm.isStrike && cm.nBox > 0 && !cm.inAir && cm.snapId >= 0) r = Math.max(r, cmReach(cm));
+  return r + (s.me.cf.hurtStand[0] >> 1);
+}
+
+function stepperPlan(b: Brain): Decision {
+  const cfg = PERS.stepper;
+  const s = b.seen;
+  const near = Math.max(b.opThreatU(), opLinearReach(b)) + Math.round(num(cfg, 'rangeM', 0.4) * 100000);
+  if (s.dist > near) return { t: 'hold', d: 6, frames: 6 };
+  if (b.rnd() < num(cfg, 'tapRate', 0.6)) {
+    b.stats.stepGuesses++;
+    const [bit] = stepOrder(b.m, s);
+    return { t: 'circle', bit, frames: 1, atk: -1 };
+  }
+  const p = pokesInReach(b);
+  if (p.length > 0) return { t: 'move', idx: p[Math.floor(b.rnd() * p.length)] };
+  return { t: 'guard', crouch: false, frames: 8 };
+}
+
+function circlerPlan(b: Brain): Decision {
+  const cfg = PERS.circler;
+  const s = b.seen;
+  const p = pokesInReach(b);
+  if (p.length > 0 && b.rnd() < num(cfg, 'pokeRate', 0.35)) return { t: 'move', idx: p[Math.floor(b.rnd() * p.length)] };
+  if (s.dist > b.opThreatU() + 100000) return { t: 'hold', d: 6, frames: 8 };
+  const lo = num(cfg, 'circleMin', 30);
+  const hi = num(cfg, 'circleMax', 70);
+  const frames = lo + Math.floor(b.rnd() * (hi - lo + 1));
+  return { t: 'circle', bit: stepBitFor(s, b.rnd() < 0.5 ? 1 : -1), frames, atk: -1 };
+}
+
 /** A harness persona playing `fighter`, seeded. */
 export function createPersona(name: PersonaName, fighter: string, seed: number): Cpu {
   switch (name) {
@@ -106,6 +156,10 @@ export function createPersona(name: PersonaName, fighter: string, seed: number):
       return createBrainCpu(blind('zoner', 4), fighter, seed, zonerPlan);
     case 'novice':
       return createBrainCpu(resolveProfile(PERS.novice ?? {}, TABLE, 'novice', -1), fighter, seed, neutralPlan);
+    case 'stepper':
+      return createBrainCpu(resolveProfile(PERS.stepper ?? {}, TABLE, 'stepper', -1), fighter, seed, stepperPlan);
+    case 'circler':
+      return createBrainCpu(resolveProfile(PERS.circler ?? {}, TABLE, 'circler', -1), fighter, seed, circlerPlan);
     case 'optimal':
     default:
       return createBrainCpu(resolveProfile(PERS.optimal ?? {}, TABLE, 'optimal', -1), fighter, seed, neutralPlan);

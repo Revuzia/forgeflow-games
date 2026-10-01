@@ -16,15 +16,30 @@
 //   * Execution drops: garbled motions, dropped links, late presses at the level's rate.
 //   * Bosses get tools (boss.ts), never faster reactions than the L8 floor.
 // The brain emits §4.4 input words only; it never writes to the state.
+//
+// CHANGED(AI3D) (CONTRACT §35.9, §35.15, §35.17) - the 3D ring. sense.ts projects everything onto the fight line, so the
+// 1D rules above hold off the spawn line. Added on the same honesty rules:
+//   * SIDESTEP on reaction (RESP.STEP): a reacted LINEAR / straight strike or an incoming projectile is answered with a
+//     sidestep (share `step` of the reaction chance, the SAME latched roll) only when a step started NOW still takes
+//     me off it - played in a sandbox from the visible situation (ring3d.ts StepOracle): never vs homing moves, and on
+//     an 18-60 f reaction mostly vs slow linear moves and projectiles at range (STEPTUNE §35.15 table).
+//   * READ steps (plans.ts): a sidestep in the opponent's range as a guess from its LINEAR habit (habits.linearRate).
+//   * the whiff of a stepped move is punished from the side: punishTick also runs from SIDESTEP (from step frame 9,
+//     the sim's buffer) and SIDEWALK; patch / spin step-attacks (SS.H, ctx 'step' recipes) are route candidates there.
+//   * a STEPPING opponent: a visible SIDEWALK is answered on the reaction clock (latched roll < `antiStep`) with a
+//     homing / cpu.antiStep move that reaches; a step HABIT (habits.stepRate) turns pokes into homing moves (plans.ts).
+//   * circle-walks (a held STEP; Decision 'circle'): off my wall, and the opponent onto its wall (plans.ts + ring3d.ts);
+//     reactions still run while circling (back = the sim's circle -> block cancel).
 
 import type { Match } from '../sim/state.ts';
 import type { CMove } from '../sim/compile.ts';
 import { UK } from '../sim/compile.ts';
 import { F, PH, ST, fighterBase } from '../sim/layout.ts';
 import { mulberry32 } from '../rng.ts';
-import { B, Pad, awayBits } from './pad.ts';
+import { B, Pad, STEP_BITS, awayBits } from './pad.ts';
 import type { Step } from './pad.ts';
-import { isFree, newSeen, sense } from './sense.ts';
+import { isFree, isStep, newSeen, sense } from './sense.ts';
+import { StepOracle, stepOrder } from './ring3d.ts';
 import type { FView, Seen } from './sense.ts';
 import { buildKit, cancelsInto } from './kit.ts';
 import type { Kit, MoveInfo, Recipe } from './kit.ts';
@@ -80,6 +95,15 @@ export interface Profile {
    * fast-button zone that ended in an attack start (an EMA with time constant `windowF` frames) is >= `rate`
    */
   press: { rate: number; windowF: number };
+  // ---- CHANGED(AI3D) (cpu.json levels / personas; default 0 = off, no RNG roll, no sandbox run)
+  /** share of the reaction (block) chance spent on a SIDESTEP when a step started now evades the reacted attack */
+  step: number;
+  /** chance per neutral decision in the opponent's range to sidestep as a READ (x its linear habit x habit weight) */
+  stepGuess: number;
+  /** chance per neutral decision to circle-walk off my wall (and, x 0.3, to circle the opponent onto its wall) */
+  circle: number;
+  /** chance to answer a visibly circling opponent / a step habit with a homing (cpu.antiStep) move */
+  antiStep: number;
 }
 
 /** how many of the opponent's recent ground strikes the brain remembers (the buttons it actually presses) */
@@ -104,7 +128,7 @@ export const DEFAULT_STYLE: StyleParams = {
 };
 
 /** Responses a reaction can pick (latched per threat). */
-export const RESP = { NONE: 0, BLOCK: 1, PARRY: 2, AA: 3, IMPACT: 4, THROW: 5, TOOL: 6, JUMP: 7, BACKDASH: 8 } as const;
+export const RESP = { NONE: 0, BLOCK: 1, PARRY: 2, AA: 3, IMPACT: 4, THROW: 5, TOOL: 6, JUMP: 7, BACKDASH: 8, STEP: 9 } as const;
 
 export type Decision =
   | { t: 'hold'; d: number; frames: number }
@@ -112,6 +136,9 @@ export type Decision =
   | { t: 'move'; idx: number }
   | { t: 'route'; steps: number[] }
   | { t: 'steps'; steps: Step[] }
+  // CHANGED(AI3D): hold STEP bit `bit` for `frames` frames (1 = a sidestep tap, > 15 = a circle-walk); `atk` = a step-attack
+  // (move index) to fire from the step when it reaches, -1 none
+  | { t: 'circle'; bit: number; frames: number; atk: number }
   | { t: 'none'; frames: number };
 
 export interface Threat {
@@ -128,6 +155,8 @@ export interface Threat {
   whiffAt: number;
   punished: boolean;
   tool: number; // move index a TOOL response uses
+  /** CHANGED(AI3D): the STEP bit a RESP.STEP response taps */
+  stepBit: number;
 }
 
 interface JumpThreat {
@@ -194,6 +223,27 @@ export interface BrainStats {
   evadeReads: number;
   /** Lv3 punishes on a full meter */
   lv3Cash: number;
+  // CHANGED(AI3D)
+  /** reaction sidesteps started vs strikes / vs projectiles */
+  stepsReact: number;
+  stepsProj: number;
+  /** read sidesteps (plans.ts, linear habit) */
+  stepGuesses: number;
+  /** strikes / projectiles of the opponent that ended without touching me while I was stepping (sidestep / circle-walk) */
+  stepEvades: number;
+  /** of those: LINEAR moves */
+  linearEvades: number;
+  /** circle-walks started: off my wall / the opponent onto its wall */
+  circlesEscape: number;
+  circlesCorner: number;
+  /** homing / antiStep answers to a stepping opponent (reaction to its visible circle-walk + habit pokes) */
+  antiSteps: number;
+  /** step-attacks started (SS.<btn>) */
+  stepAttacks: number;
+  /** punishes started out of a sidestep / circle-walk */
+  sidePunishes: number;
+  /** sandbox runs of the step oracle */
+  oracleRuns: number;
 }
 
 function blankStats(): BrainStats {
@@ -202,6 +252,8 @@ function blankStats(): BrainStats {
     routes: 0, routeSteps: 0, drops: 0, techTries: 0, supers: 0, tools: 0, impacts: 0, throws: 0, jumps: 0, respects: 0, spacePokes: 0,
     uniques: 0, counterReads: 0, stepReads: 0, rekicks: 0, uniqueCancels: 0, stances: 0, stanceFollows: 0, rekkas: 0, habitGuards: 0,
     throwEscapes: 0, superKills: 0, wakeSupers: 0, evadeReads: 0, lv3Cash: 0,
+    stepsReact: 0, stepsProj: 0, stepGuesses: 0, stepEvades: 0, linearEvades: 0, circlesEscape: 0, circlesCorner: 0, antiSteps: 0,
+    stepAttacks: 0, sidePunishes: 0, oracleRuns: 0,
   };
 }
 
@@ -291,6 +343,23 @@ export class Brain {
   /** the latched "spend a Lv1 now" roll (rolled once each time my bar count changes, never per frame) */
   spendLv1 = false;
   private lastBars = -1;
+  // ---- CHANGED(AI3D)
+  /** the sandbox that answers "does a step now evade it" (ring3d.ts) */
+  readonly oracle = new StepOracle();
+  /**
+   * the running step plan: hold `bit` until frame `until` (a tap = 1 frame), fire step-attack `atk` from the step when it
+   * reaches (-1 none); `started` = the step began (the plan ends when I am free again)
+   */
+  circle: { bit: number; until: number; atk: number; started: boolean } | null = null;
+  /** the opponent's visible step (start frame key) + the latched anti-step roll for it */
+  private opStepKey = -1;
+  private opStepRoll = 1;
+  private opStepDone = false;
+  private projStepB = new Int32Array(12);
+  /** the opponent move instance / projectile slot+inst that was live while I stepped (evade bookkeeping) */
+  private stepWatch = -1;
+  private stepWatchLinear = false;
+  private stepWatchTouched = false;
 
   constructor(profile: Profile, seed: number, style: StyleParams | null = null) {
     this.profile = profile;
@@ -335,6 +404,7 @@ export class Brain {
       fr = Math.max(fr, cmReach(cm));
     }
     this.opFastReach = Math.max(80000, fr);
+    if (this.profile.step > 0) this.oracle.warm(m); // CHANGED(AI3D): the step oracle's sandbox (never touches m)
     this.bound = true;
   }
 
@@ -555,6 +625,15 @@ export class Brain {
     if (r.ctx === 'stance' && me.st !== ST.STANCE) return false;
     if (r.ctx === 'chain' && !(me.st === ST.ATTACK && me.cm !== null && me.cm.chains.indexOf(idx) >= 0)) return false;
     if (r.ctx === '' && me.st === ST.STANCE && !(cm.isSpecialCat || cm.isSuper || cm.isGrab || cm.isImpact)) return false;
+    // CHANGED(AI3D): step-attacks only out of a step; while stepping, a plain one-button normal whose button has a
+    // step-attack comes out as the step-attack (the sim's routing, §35.12.5), so it is not that normal there
+    const stepping = me.st === ST.SIDESTEP || me.st === ST.SIDEWALK;
+    if (r.ctx === 'step' && !stepping) return false;
+    if (stepping && r.ctx === '' && cm.isNormalCat && r.steps.length === 1) {
+      const bt = r.steps[0].b;
+      const k = bt & B.H ? 2 : bt & B.M ? 1 : bt & B.L ? 0 : -1;
+      if (k >= 0 && this.kit.stepAtk[k] >= 0) return false;
+    }
     if (r.air !== me.air) return false;
     if (cm.costShow > 0 && me.show < cm.costShow) return false;
     if (cm.costNerve > 0 && !this.nerveOk(cm.costNerve)) return false;
@@ -705,7 +784,14 @@ export class Brain {
   }
 
   private out(step: Step | null): number {
-    return this.pad.out(step, this.seen.me.facing);
+    const me = this.seen.me;
+    // CHANGED(AI3D): a press out of SIDEWALK keeps the circling STEP held on that frame (a released STEP ends the walk
+    // into the STEP_END settle before the press could act - core/sim/fighter.ts sidewalkTick)
+    if (step && me.st === ST.SIDEWALK && (step.b & ~STEP_BITS) !== 0 && (step.b & STEP_BITS) === 0) {
+      const held = this.m.s[fighterBase(this.i) + F.stepIn] !== 0 ? B.STEP_IN : B.STEP_OUT;
+      step = { d: step.d, b: step.b | held, raw: step.raw };
+    }
+    return this.pad.out(step, me.facing);
   }
 
   // ------------------------------------------------------------------ the per-frame entry
@@ -726,6 +812,7 @@ export class Brain {
     }
     if (s.cin) return this.out(null);
     this.track();
+    this.evadeBook();
     this.habits.tick(s.frame);
     const bars = this.showBars();
     if (bars !== this.lastBars) {
@@ -791,12 +878,16 @@ export class Brain {
       const u = this.uniq.busy(this);
       if (u) return this.out(u);
     }
+    // CHANGED(AI3D): sidestep / circle-walk / settle
+    if (isStep(st)) return this.out(this.stepTick());
     if (!isFree(st)) {
       // busy (own move, dash, landing, recovery): hold the guard a decided reaction wants, so the first
       // free frame already blocks; otherwise nothing
       return this.out(st === ST.ATTACK ? null : this.reactGuard());
     }
     // ---- free on the ground
+    // CHANGED(AI3D): the step plan ended with the step (or never started before its last frame)
+    if (this.circle && (this.circle.started || s.frame >= this.circle.until)) this.circle = null;
     if (this.punishTick()) return this.out(this.pad.shift());
     // CHANGED(AI) P2: the first free frame after my blockstun: a counter read vs its frame-trap habit (uniques.ts)
     if (prev === ST.BLOCKSTUN && this.blockReadKey !== s.frame) {
@@ -811,6 +902,7 @@ export class Brain {
     const r = this.reactTick();
     if (r) return this.out(r);
     if (this.confirmTick()) return this.out(this.pad.shift());
+    if (this.circle && !this.circle.started && s.frame < this.circle.until) return this.out({ d: 5, b: this.circle.bit });
     if (this.pad.busy) return this.out(this.pad.shift());
     return this.out(this.neutralTick());
   }
@@ -830,6 +922,9 @@ export class Brain {
     this.kdKey = -1;
     this.airKey = -1;
     this.lastMySt = -1;
+    this.circle = null; // CHANGED(AI3D)
+    this.opStepKey = -1;
+    this.stepWatch = -1;
   }
 
   // ------------------------------------------------------------------ threat tracking (visible only)
@@ -851,11 +946,12 @@ export class Brain {
             let lo = 1 << 30;
             for (let k = 0; k < cm0.nBox; k++) lo = Math.min(lo, cm0.boxes[k * 7 + 3] - (cm0.boxes[k * 7 + 5] >> 1));
             this.habits.strikeHeight(s.frame, lo >= 105000);
+            this.habits.strikeClass(s.frame, cm0.homing ? 2 : cm0.linear ? 1 : 0); // CHANGED(AI3D)
           }
         }
         this.strike = {
           inst: op.inst, mv: op.mv, cm: op.cm, start: s.frame - Math.max(0, op.mvF - 1), roll: this.rnd(), pRoll: this.rnd(),
-          resp: RESP.NONE, decided: false, acted: false, blocked: false, whiffAt: -1, punished: false, tool: -1,
+          resp: RESP.NONE, decided: false, acted: false, blocked: false, whiffAt: -1, punished: false, tool: -1, stepBit: 0,
         };
         this.stats.threats++;
         const cm = op.cm;
@@ -911,6 +1007,17 @@ export class Brain {
     // range of its fast buttons either stayed free or started an attack; a masher starts one within a few frames
     const ps = this.opPrevSt;
     this.opPrevSt = op.st;
+    // CHANGED(AI3D): its visible steps - the start (one latched anti-step roll per step) + its neutral habit near me
+    if (op.st === ST.SIDESTEP && ps !== ST.SIDESTEP && ps !== ST.SIDEWALK) {
+      this.opStepKey = s.frame - Math.max(0, op.stF);
+      this.opStepRoll = this.rnd();
+      this.opStepDone = false;
+    } else if (op.st !== ST.SIDESTEP && op.st !== ST.SIDEWALK) this.opStepKey = -1;
+    if (ps !== op.st && s.dist <= this.opThreatU() + 60000) {
+      const fromFree = ps === ST.IDLE || ps === ST.CROUCH || ps === ST.WALK_F || ps === ST.WALK_B;
+      if (op.st === ST.SIDESTEP && fromFree) this.habits.neutralAction(s.frame, true);
+      else if (fromFree && ((op.st === ST.ATTACK && !op.air) || op.st === ST.DASH_F || op.st === ST.DASH_B || op.st === ST.PREJUMP)) this.habits.neutralAction(s.frame, false);
+    }
     const wasFree = ps === ST.IDLE || ps === ST.CROUCH || ps === ST.WALK_F || ps === ST.WALK_B;
     if (wasFree && !op.air && s.dist <= this.opFastReach + (s.me.cf.hurtStand[0] >> 1) + 20000) {
       const started = attacking ? 1 : 0;
@@ -927,7 +1034,10 @@ export class Brain {
       if (k) this.pushMix(k);
     }
     if (st === ST.THROWN) this.pushMix(3);
-    if (st === ST.HITSTUN || st === ST.BLOCKSTUN || st === ST.THROWN || st === ST.KNOCKDOWN) this.hold = null;
+    if (st === ST.HITSTUN || st === ST.BLOCKSTUN || st === ST.THROWN || st === ST.KNOCKDOWN) {
+      this.hold = null;
+      this.circle = null; // CHANGED(AI3D)
+    }
     void prev;
   }
 
@@ -946,7 +1056,21 @@ export class Brain {
     const s = this.seen;
     const sys = this.m.sys.raw;
     let resp: number = RESP.NONE;
-    if (cm.isImpact) {
+    // CHANGED(AI3D): a sidestep that still takes me off this attack (share `step` of the reaction chance, the SAME roll;
+    // never vs homing moves / cinematics / projectile throws (the projectile itself: projGuard); the sandbox plays it
+    // from the visible situation - ring3d.ts StepOracle). Tools / uniques answer first.
+    const stepOk = P.step > 0 && r < P.block * P.step && !cm.homing && cm.cin === null && cm.proj === null && isFree(s.me.st) && !s.me.air;
+    const tryStep = (): boolean => {
+      if (!stepOk) return false;
+      const bit = this.stepEvadeBit(t);
+      if (bit === 0) return false;
+      resp = RESP.STEP;
+      t.stepBit = bit;
+      return true;
+    };
+    if (cm.isImpact && tryStep()) {
+      // stepped
+    } else if (cm.isImpact) {
       if (P.nerve >= 4 && r < P.block) {
         if (this.kit.throwF >= 0 && this.inReach(this.kit.throwF)) resp = RESP.THROW;
         else if (this.kit.impact >= 0 && this.nerveOk(sys.nerve.impactCost)) resp = RESP.IMPACT;
@@ -973,6 +1097,7 @@ export class Brain {
           t.tool = u;
         }
       }
+      if (resp === RESP.NONE) tryStep();
       if (resp === RESP.NONE) {
         const slow = cm.startup >= P.slowStartup;
         const parryOk = P.parry >= 4 || (P.parry >= 3 && slow) || P.parry === 1;
@@ -1026,7 +1151,7 @@ export class Brain {
     const P = this.profile;
     for (let k = 0; k < s.nProj; k++) {
       const p = s.proj[k];
-      if (p.owner === this.i) continue;
+      if (p.owner === this.i || p.miss) continue; // CHANGED(AI3D): its straight path already passes beside me
       const toward = (me.x - p.x) * p.vx > 0;
       if (!toward || p.vx === 0) continue;
       if (!this.ready(this.projStart[p.slot])) continue;
@@ -1039,8 +1164,14 @@ export class Brain {
         // CHANGED(AI) P2: a unique answer first (a counter that catches projectiles, a teleport through it, a duck /
         // dive under it - uniques.ts), inside the block chance with the SAME latched roll
         const u = r < P.block && isFree(me.st) ? this.uniq.proj(this, p, Math.floor(eta), r / Math.max(0.01, P.block), false) : -1;
+        // CHANGED(AI3D): a sidestep off its line (share `step` of the block chance; the sandbox checks it evades)
+        let sb = 0;
+        if (u === -1 && P.step > 0 && r < P.block * P.step && isFree(me.st) && !me.air) sb = this.projStepBit(eta);
         if (u !== -1) resp = RESP.TOOL;
-        else if (share > 0 && r < P.block * share && this.nerveOk(this.m.sys.raw.parry.costStart)) resp = RESP.PARRY;
+        else if (sb !== 0) {
+          resp = RESP.STEP;
+          this.projStepB[p.slot] = sb;
+        } else if (share > 0 && r < P.block * share && this.nerveOk(this.m.sys.raw.parry.costStart)) resp = RESP.PARRY;
         else if (r < P.block * Math.min(1, this.style.jumpProj + P.antiZone) && s.dist > 180000) resp = RESP.JUMP;
         else if (r < P.block) resp = RESP.BLOCK;
         else resp = RESP.NONE;
@@ -1057,6 +1188,17 @@ export class Brain {
         }
         if (go === -2 && eta > 3) continue;
         this.projResp[p.slot] = RESP.BLOCK; // the window passed / not free: block it
+        resp = RESP.BLOCK;
+      }
+      if (resp === RESP.STEP) {
+        if (isFree(me.st)) {
+          const bit = this.projStepB[p.slot];
+          this.projResp[p.slot] = RESP.NONE;
+          this.stats.stepsProj++;
+          this.circle = { bit, until: s.frame + 1, atk: -1, started: false };
+          return { d: 5, b: bit };
+        }
+        this.projResp[p.slot] = RESP.BLOCK; // not free any more: block it
         resp = RESP.BLOCK;
       }
       if (resp === RESP.JUMP) {
@@ -1185,6 +1327,14 @@ export class Brain {
               return this.pad.shift();
             }
             return null;
+          case RESP.STEP: // CHANGED(AI3D): tap the step the oracle found (one frame; the sim plays the 15-frame arc)
+            if (!t.acted) {
+              t.acted = true;
+              this.stats.stepsReact++;
+              this.circle = { bit: t.stepBit, until: s.frame + 1, atk: -1, started: false };
+              return { d: 5, b: t.stepBit };
+            }
+            return null;
           default:
             break;
         }
@@ -1205,6 +1355,20 @@ export class Brain {
         if (s.dist < 200000 && s.op.vy <= 0) return this.guardStep(s.op.x, false);
       }
       if (j.decided && j.resp === RESP.BLOCK && s.dist < 220000) return this.guardStep(s.op.x, false);
+    }
+    // CHANGED(AI3D): a visibly circling opponent, on the reaction clock (a 15 f sidestep is over before any reaction can
+    // land; a held circle-walk is not): one latched roll per step; a homing / cpu.antiStep move once it reaches
+    const op = s.op;
+    if ((op.st === ST.SIDESTEP || op.st === ST.SIDEWALK) && this.opStepKey >= 0 && !this.opStepDone && this.ready(this.opStepKey)) {
+      if (this.opStepRoll >= P.antiStep) this.opStepDone = true;
+      else {
+        const k = this.antiStepPick();
+        if (k >= 0 && this.startMove(k, false)) {
+          this.opStepDone = true;
+          this.stats.antiSteps++;
+          return this.pad.shift();
+        }
+      }
     }
     this.parryPress = false;
     return this.projGuard();
@@ -1359,7 +1523,7 @@ export class Brain {
     let best = 999;
     for (let k = 0; k < s.nProj; k++) {
       const p = s.proj[k];
-      if (p.owner === this.i || p.vx === 0) continue;
+      if (p.owner === this.i || p.vx === 0 || p.miss) continue; // CHANGED(AI3D): p.miss = passes beside me
       if ((s.me.x - p.x) * p.vx <= 0) continue;
       const r = this.projResp[p.slot];
       if (this.projKey[p.slot] < 0 || r < 0 || r === RESP.NONE) continue;
@@ -1385,7 +1549,7 @@ export class Brain {
     const s = this.seen;
     for (let k = 0; k < s.nProj; k++) {
       const p = s.proj[k];
-      if (p.owner === this.i || p.vx === 0) continue;
+      if (p.owner === this.i || p.vx === 0 || p.miss) continue; // CHANGED(AI3D)
       if ((s.me.x - p.x) * p.vx <= 0) continue;
       const gap = Math.abs(s.me.x - p.x) - (p.w >> 1) - (s.me.cf.hurtStand[0] >> 1);
       if (gap / Math.abs(p.vx) <= frames) return true;
@@ -1493,7 +1657,8 @@ export class Brain {
     const op = s.op;
     const sameMove = (op.st === ST.ATTACK && op.inst === t.inst) || op.st === ST.LAND || op.st === ST.RECOVER;
     if (!sameMove) return false;
-    const rem = this.opRecovery();
+    // CHANGED(AI3D): out of a sidestep the first action comes out on step frame 11 (presses buffer from 9)
+    const rem = this.opRecovery() - this.stepWait();
     if (rem <= 0) return false;
     if (!t.blocked) {
       // a whiff: visible from the first recovery frame; needs part of the reaction delay
@@ -1699,6 +1864,8 @@ export class Brain {
       // same motion as the PARENT special (negative edge) and overwrites the buffered chain (core/sim/inputs.ts;
       // measured: CLASSIC 236M during CUE 1's hitstop -> no CUE 2; after it -> CUE 2)
       if (r.k > 0 && rc.ctx === 'chain' && rc.steps.length > 1 && me.hitstop > 0) return;
+      // CHANGED(AI3D): a sidestep ignores presses before step frame 9 (core/sim/inputs.ts parseAction)
+      if (me.st === ST.SIDESTEP && me.stF + 2 < this.m.sys.stepBufferF) return;
       const costOk = (mi.cm.costShow === 0 || me.show >= mi.cm.costShow) && (mi.cm.costNerve === 0 || me.nerve > 0);
       if (!costOk) {
         this.route = null;
@@ -1776,6 +1943,147 @@ export class Brain {
     }
   }
 
+  // ------------------------------------------------------------------ 3D ring (CHANGED(AI3D))
+  /** frames a press made now waits before it can act out of my running sidestep (0 elsewhere) */
+  stepWait(): number {
+    const me = this.seen.me;
+    if (me.st !== ST.SIDESTEP) return 0;
+    return Math.max(0, this.m.sys.stepAttackF - (me.stF + 2));
+  }
+
+  /**
+   * The STEP bit (STEP_IN / STEP_OUT) of a sidestep started NOW that the reacted strike `t` does not touch - and that
+   * it WOULD touch if I stood still - or 0. The sense with more room behind it is tried first.
+   */
+  private stepEvadeBit(t: Threat): number {
+    const s = this.seen;
+    const rem = Math.max(6, Math.min(90, t.cm.total - s.op.mvF + 3));
+    const o = this.oracle;
+    const r0 = o.runs;
+    let bit = 0;
+    if (o.touched(this.m, this.i, () => 0, rem, t.inst) >= 0) {
+      for (const b of stepOrder(this.m, s)) {
+        if (o.touched(this.m, this.i, (k) => (k === 0 ? b : 0), rem, t.inst) < 0) {
+          bit = b;
+          break;
+        }
+      }
+    }
+    this.stats.oracleRuns += o.runs - r0;
+    return bit;
+  }
+
+  /** the STEP bit of a sidestep started now that the incoming projectiles (arriving in ~`eta` f) all miss, or 0 */
+  private projStepBit(eta: number): number {
+    const s = this.seen;
+    const rem = Math.max(8, Math.min(90, eta + 30));
+    const o = this.oracle;
+    const r0 = o.runs;
+    let bit = 0;
+    if (o.touched(this.m, this.i, () => 0, rem, -1) >= 0) {
+      for (const b of stepOrder(this.m, s)) {
+        if (o.touched(this.m, this.i, (k) => (k === 0 ? b : 0), rem, -1) < 0) {
+          bit = b;
+          break;
+        }
+      }
+    }
+    this.stats.oracleRuns += o.runs - r0;
+    return bit;
+  }
+
+  /** a homing / cpu.antiStep move that reaches the opponent now (fastest first; aimed projectiles count), or -1 */
+  antiStepPick(): number {
+    const kit = this.kit;
+    let best = -1;
+    let bt = 1 << 30;
+    for (const k of kit.lists.antiStep.concat(kit.homingStrikes)) {
+      const mi = kit.moves[k];
+      if (mi.inert || !this.canUse(k)) continue;
+      const rc = this.rcp(k)!;
+      if (rc.ctx !== '' || rc.air) continue;
+      if (mi.proj ? !(mi.cm.proj && mi.cm.proj.aimed) : !this.inReach(k)) continue;
+      const tt = this.timeToActive(k) + this.projTravel(k);
+      if (tt < bt) {
+        bt = tt;
+        best = k;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Evade bookkeeping (stats only): an opponent strike started in reach while I was stepping / circling, that ended
+   * without touching me, is an evade (linear ones counted apart).
+   */
+  private evadeBook(): void {
+    const s = this.seen;
+    const me = s.me;
+    const op = s.op;
+    const stepping = me.st === ST.SIDESTEP || me.st === ST.SIDEWALK;
+    const touchedMe = me.st === ST.HITSTUN || me.st === ST.BLOCKSTUN || me.st === ST.JUGGLE || me.st === ST.KNOCKDOWN || me.st === ST.THROWN || me.st === ST.CRUMPLE || me.st === ST.WALL_SPLAT;
+    if (this.stepWatch >= 0) {
+      if (touchedMe) this.stepWatchTouched = true;
+      const sameMove = op.st === ST.ATTACK && op.inst === this.stepWatch && op.cm !== null;
+      const over = !sameMove || (op.cm !== null && op.mvF > op.cm.lastActive);
+      if (over) {
+        if (!this.stepWatchTouched && !(sameMove && op.contact !== 0)) {
+          this.stats.stepEvades++;
+          if (this.stepWatchLinear) this.stats.linearEvades++;
+        }
+        this.stepWatch = -1;
+      }
+    }
+    if (this.stepWatch < 0 && stepping && op.st === ST.ATTACK && op.cm && !op.air && op.cm.isStrike && op.cm.nBox > 0 && op.mvF <= op.cm.lastActive) {
+      if (op.inst !== this.lastWatched && s.dist <= cmReach(op.cm) + (me.cf.hurtStand[0] >> 1) + 30000) {
+        this.lastWatched = op.inst;
+        this.stepWatch = op.inst;
+        this.stepWatchLinear = op.cm.linear;
+        this.stepWatchTouched = false;
+      }
+    }
+  }
+  private lastWatched = -1;
+
+  /**
+   * One frame in SIDESTEP / SIDEWALK / STEP_END: reactions (a decided block = back, which leaves a circle-walk into the
+   * guard; a sidestep blocks from step frame 12), the whiff punish from the side and a planned step-attack once presses
+   * act (step frame 9+ / SIDEWALK), else keep holding the step plan's bit until it ends.
+   */
+  private stepTick(): Step | null {
+    const s = this.seen;
+    const me = s.me;
+    const c = this.circle;
+    if (c) c.started = true;
+    const g = this.reactGuard();
+    if (g) {
+      this.circle = null;
+      return g;
+    }
+    if (me.st === ST.STEP_END) return null;
+    const canPress = me.st === ST.SIDEWALK || me.stF + 2 >= this.m.sys.stepBufferF;
+    if (canPress) {
+      if (this.punishTick()) {
+        this.stats.sidePunishes++;
+        this.circle = null;
+        return this.pad.shift();
+      }
+      if (c && c.atk >= 0) {
+        const k = c.atk;
+        if (this.canUse(k) && this.inReachFrom(k, this.stepWait() + 1)) {
+          c.atk = -1;
+          this.circle = null;
+          if (this.startMove(k, false)) {
+            this.stats.stepAttacks++;
+            return this.pad.shift();
+          }
+        } else if (me.st === ST.SIDESTEP && me.stF + 2 >= this.m.sys.stepFrames) c.atk = -1; // out of reach: let it go
+      }
+    }
+    if (c && s.frame < c.until) return { d: 5, b: c.bit };
+    return null;
+  }
+
   // ------------------------------------------------------------------ air
   private airTick(): Step | null {
     const s = this.seen;
@@ -1819,6 +2127,9 @@ export class Brain {
       }
       if (this.pad.busy) return this.pad.shift();
     }
+    // CHANGED(AI3D): a step plan (tap / circle-walk) - its first frame starts the sidestep from the free state
+    const c = this.circle;
+    if (c && !c.started && s.frame < c.until) return { d: 5, b: c.bit };
     const h = this.hold;
     if (!h) return null;
     if (h.guard) return this.guardStep(s.op.x, h.crouch);
@@ -1849,6 +2160,10 @@ export class Brain {
         this.hold = null;
         this.pad.push(dec.steps);
         break;
+      case 'circle': // CHANGED(AI3D)
+        this.hold = null;
+        this.circle = { bit: dec.bit, until: f + Math.max(1, dec.frames), atk: dec.atk, started: false };
+        break;
       default:
         this.hold = null;
         break;
@@ -1861,7 +2176,7 @@ export class Brain {
     return {
       decision: d ? d.t + ('idx' in d ? ':' + this.kit.moves[d.idx]?.id : '') : '-',
       route: this.route ? this.route.steps.map((k) => this.kit.moves[k].id).join('>') + '@' + this.route.k : '-',
-      hold: this.hold ? (this.hold.guard ? 'guard' + (this.hold.crouch ? '1' : '4') : 'd' + this.hold.d) : '-',
+      hold: this.circle ? `step${this.circle.bit === B.STEP_IN ? 'IN' : 'OUT'}@${this.circle.until}` : this.hold ? (this.hold.guard ? 'guard' + (this.hold.crouch ? '1' : '4') : 'd' + this.hold.d) : '-',
     };
   }
 }

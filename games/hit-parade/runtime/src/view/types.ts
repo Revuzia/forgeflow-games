@@ -23,7 +23,15 @@ export interface ViewFighterSnap {
   moveName?: string; moveKind?: string;
   /** P2: frames into the current move (prop show / hide rules) */
   moveFrame?: number;
+  /** CHANGED(VIEW3D) (SIM3D §35.13 item 11): world z (m), body yaw (radians = three.js rotation.y), step state */
+  z?: number;
+  yaw?: number;
+  step?: { kind?: string; frame?: number; side?: number; dir?: string };
+  absent?: boolean;
 }
+
+/** CHANGED(VIEW3D) (SIM3D §35.13 item 11): MatchSnap.ring */
+export interface ViewRing { shape: string; radius: number; sides: number; rot: number; centre: ReadonlyArray<number> }
 
 /** CONTRACT §4.6 MatchSnap (+ §19.7), the fields the view reads. */
 export interface ViewMatchSnap {
@@ -37,15 +45,22 @@ export interface ViewMatchSnap {
   /** optional projectile list (the view draws what is there; CONTRACT §17.1 / §24.10) */
   proj?: ReadonlyArray<ViewProjectile>;
   /** P2 BRAWL BREAK / HECKLER TOSS (CONTRACT §28.4 MatchSnap.brawl) */
-  brawl?: { mode?: string; score?: number; goons?: ReadonlyArray<ViewGoon> };
+  brawl?: { mode?: string; score?: number; goons?: ReadonlyArray<ViewGoon>; target?: number };
+  /** CHANGED(VIEW3D) (SIM3D §35.3 / §35.13): the camera normal [x, z] (unit) and the ring; absent = the 1D +Z camera */
+  camN?: ReadonlyArray<number>;
+  ring?: ViewRing;
+  timer?: number;
 }
 
-/** kind 0 projectile, 1 ball, 2 heckle object (§24.10) */
-export interface ViewProjectile { slot: number; owner: number; x: number; y: number; vx?: number; vy?: number; moveId?: number; kind?: number; alive?: boolean | number; obj?: number | string }
+/** kind 0 projectile, 1 ball, 2 heckle object (§24.10); CHANGED(VIEW3D): + world z, vz (m/s), travel yaw (radians) */
+export interface ViewProjectile { slot: number; owner: number; x: number; y: number; vx?: number; vy?: number; moveId?: number; kind?: number; alive?: boolean | number; obj?: number | string;
+  z?: number; vz?: number; yaw?: number }
 
 /** CONTRACT §28.4 GoonSnap: a BRAWL BREAK goon as the view reads it (every field but slot / x optional) */
 export interface ViewGoon {
   slot: number; x: number; y?: number; facing?: number;
+  /** CHANGED(VIEW3D): world z (m) and yaw (radians) from SIM3D */
+  z?: number; yaw?: number;
   /** goon body id ('goon_hardhat' ... = lane ASSETS' goon_* GLB) */
   kind?: number | string; kindIdx?: number;
   animId?: number; animFrame?: number; prevAnimId?: number; prevAnimFrame?: number; blendT?: number;

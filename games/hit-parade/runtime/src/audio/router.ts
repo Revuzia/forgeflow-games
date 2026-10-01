@@ -234,7 +234,20 @@ export interface BoutCtx {
   readonly heckleObjects: readonly string[];
   /** BRAWL BREAK goon ids by kind index (system.json brawl.kinds) */
   readonly goonKinds: readonly string[];
+  /** CHANGED(integrator) 3D (§35.11.2): the stage's ring `surface` (stages.json ring.surface), else null */
+  readonly wallSurface?: string | null;
 }
+
+/**
+ * CHANGED(integrator) 3D (§35.6 / §35.11.2): the ring boundary's material layer under the WALL_SPLAT thud - what the
+ * victim actually hits on each arena: [sound, gain, rate]. blue_brick (RUST THEATER) is the brick thud itself.
+ */
+export const WALL_SURFACE_LAYER: Readonly<Record<string, readonly [SfxId, number, number]>> = {
+  steel_rail: ['clang', 0.7, 1.0],          // CONTROL ROOM: riveted kick panels + yellow rails
+  cable_railing: ['clang', 0.45, 0.72],     // ROOFTOP: three steel cables between posts (a low twang)
+  neon_panel: ['glass_break', 0.4, 1.15],   // WHEEL OF PAIN: neon panels
+  white_tile: ['glass_break', 0.3, 1.3],    // BUTCHER BLOCK: cracked white tile
+};
 
 export function weaponFor(fighter: string, key: string, name: string, kind: string): WeaponKind | null {
   if (kind === 'super1' || kind === 'super3') return null;
@@ -243,13 +256,15 @@ export function weaponFor(fighter: string, key: string, name: string, kind: stri
 }
 
 /** data/stages.json entry by id, read defensively (GameData types stages.json as Record<string, unknown>) */
-function stageEntry(stages: unknown, id: string): { music?: string; ambient?: string } | null {
+function stageEntry(stages: unknown, id: string): { music?: string; ambient?: string; surface?: string } | null {
   const list = stages && typeof stages === 'object' ? (stages as { stages?: unknown }).stages : undefined;
   if (!Array.isArray(list)) return null;
   for (const s of list) {
     if (s && typeof s === 'object' && (s as { id?: unknown }).id === id) {
-      const o = s as { music?: unknown; ambient?: unknown };
-      return { music: typeof o.music === 'string' ? o.music : undefined, ambient: typeof o.ambient === 'string' ? o.ambient : undefined };
+      const o = s as { music?: unknown; ambient?: unknown; ring?: { surface?: unknown } };
+      // CHANGED(integrator) 3D: + the ring's surface (§35.11.2)
+      const surface = o.ring && typeof o.ring === 'object' && typeof o.ring.surface === 'string' ? o.ring.surface : undefined;
+      return { music: typeof o.music === 'string' ? o.music : undefined, ambient: typeof o.ambient === 'string' ? o.ambient : undefined, surface };
     }
   }
   return null;
@@ -284,7 +299,8 @@ export function boutContext(b: AudioBout, data: AudioGameData | null | undefined
   else ambient = AMBIENT_BY_STAGE[b.stage] ?? null;
   const heckleObjects = (data?.system?.heckler?.objects ?? []).map((o) => o.id);
   const goonKinds = (data?.system?.brawl?.kinds ?? []).map((k) => k.id);
-  return { moves, stageMusic, ambient, heckleObjects: heckleObjects.length ? heckleObjects : HECKLE_OBJ_ORDER, goonKinds };
+  return { moves, stageMusic, ambient, heckleObjects: heckleObjects.length ? heckleObjects : HECKLE_OBJ_ORDER, goonKinds,
+    wallSurface: st?.surface ?? null };
 }
 
 // ------------------------------------------------------------------------------------------------------ the event map
@@ -306,7 +322,8 @@ export const EVENT_SOUNDS: { readonly [K in keyof typeof EV]: EventSoundSpec } =
   PUNISH: { ids: ['hit_pun', 'crowd_ooh'], note: 'crunch + low boom layer; the crowd reacts to a heavy punish' },
   KNOCKDOWN: { ids: ['knockdown'], note: 'body fall at the victim' },
   WAKEUP: { ids: ['wakeup'], note: 'cloth rustle (quiet)' },
-  WALL_SPLAT: { ids: ['wall_splat', 'splat', 'sparks', 'confetti', 'crowd_ooh'], note: 'brick + thud + comic splatter by the gore setting + crowd' },
+  WALL_SPLAT: { ids: ['wall_splat', 'clang', 'glass_break', 'splat', 'sparks', 'confetti', 'crowd_ooh'],
+    note: 'brick + thud + the ring surface layer (steel / cable clang, tile / neon glass) panned at the contact point + comic splatter by the gore setting + crowd' },
   GROUND_BOUNCE: { ids: ['ground_bounce', 'crowd_ouch'], note: 'thud + brick + a tiny spring; the crowd winces' },
   CRUMPLE: { ids: ['crumple', 'dizzy', 'crowd_ouch'], note: 'slow fold + cartoon wobble + crowd "ouch"' },
   PROJ_SPAWN: { ids: ['proj_throw', 'proj_card', 'proj_card_saw', 'proj_flame', 'proj_flame_breath', 'proj_ball', 'proj_ball_fire', 'proj_zap', 'proj_pyro', 'proj_spot', 'proj_fire'],
@@ -580,13 +597,21 @@ export class AudioRouter {
         break;
       case 'KNOCKDOWN': this.play(sink, 'knockdown', 1, this.jit(0.05), this.pan(e.a), 5); break;
       case 'WAKEUP': this.play(sink, 'wakeup', 0.8, this.jit(0.06), this.pan(e.a), 1); break;
-      case 'WALL_SPLAT':
-        this.play(sink, 'wall_splat', 1, this.jit(0.04), this.pan(e.a), 8);
-        this.splat(sink, this.pan(e.a), true);
+      case 'WALL_SPLAT': {
+        // CHANGED(integrator) 3D (§35.13 item 7): the 3D payload - c / d = the contact point on the ring wall (cm) - pans the
+        // thud where the camera shows the wall; the ring surface adds its material layer (WALL_SURFACE_LAYER). A 1D
+        // snapshot (no ring / camN) keeps the victim's pan.
+        const p3 = this.match?.ring && this.match.camN && Number.isFinite(e.c) && Number.isFinite(e.d) && (e.c !== 0 || e.d !== 0);
+        const wp = p3 ? this.panPt(e.c / 100, e.d / 100) : this.pan(e.a);
+        this.play(sink, 'wall_splat', 1, this.jit(0.04), wp, 8);
+        const layer = this.ctx?.wallSurface ? WALL_SURFACE_LAYER[this.ctx.wallSurface] : undefined;
+        if (layer) this.play(sink, layer[0], layer[1], layer[2] * this.jit(0.04), wp, 6, 'sfx', 0.01);
+        this.splat(sink, wp, true);
         this.crowdShot(sink, 'crowd_ooh', 6, 0.08);
         sink.duck(0.25, 0.6, 1);
         this.excite += 0.25;
         break;
+      }
       case 'GROUND_BOUNCE':
         this.play(sink, 'ground_bounce', 1, this.jit(0.04), this.pan(e.a), 6);
         this.crowdShot(sink, 'crowd_ouch', 3, 0.12);
@@ -1060,7 +1085,7 @@ export class AudioRouter {
     return f ? this.move(i, f.moveId)?.weapon ?? null : null;
   }
 
-  private goonSnap(i: number): { x: number; kind: string; kindIdx: number } | null {
+  private goonSnap(i: number): { x: number; z?: number; kind: string; kindIdx: number } | null {
     const gs = this.match?.brawl?.goons;
     if (!gs) return null;
     const slot = i - GOON_BASE;
@@ -1135,11 +1160,25 @@ export class AudioRouter {
     return Math.max(-0.6, Math.min(0.6, (x - this.centreX()) * 0.18));
   }
 
+  /**
+   * CHANGED(VIEW3D) (§35.3, the 3D ring): a body's pan = its offset along the camera's SCREEN-RIGHT R = (camN.z, -camN.x)
+   * from the listener (the midpoint / the player), so WALL_SPLAT and every fighter / goon event pans with what the orbiting
+   * camera shows. No camN (1D labs) = the old world-x rule; payload-only positions (heckles, trapdoor) keep panX.
+   */
+  private panPt(x: number, z: number | undefined): number {
+    const f = this.fighters, n = this.match?.camN;
+    if (!f || !n || n.length < 2 || !Number.isFinite(x)) return this.panX(x);
+    const solo = this.bonus || f[1].absent;
+    const cx = solo ? f[0].x : (f[0].x + f[1].x) / 2, cz = solo ? (f[0].z ?? 0) : ((f[0].z ?? 0) + (f[1].z ?? 0)) / 2;
+    const s = (x - cx) * n[1] - ((z ?? 0) - cz) * n[0];
+    return Math.max(-0.6, Math.min(0.6, s * 0.18));
+  }
+
   private pan(i: number): number {
     const f = this.fighters;
     if (!f) return 0;
-    if (i === 0 || i === 1) return this.panX(f[i].x);
-    if (i >= GOON_BASE) { const g = this.goonSnap(i); return g ? this.panX(g.x) : 0; }
+    if (i === 0 || i === 1) return this.panPt(f[i].x, f[i].z);
+    if (i >= GOON_BASE) { const g = this.goonSnap(i); return g ? this.panPt(g.x, g.z) : 0; }
     return 0;
   }
 

@@ -8,6 +8,12 @@
     python _harness/lookshots.py --game                # P2: the REAL game page (/?mode=...&dev=1, frozen, one tick per
                                                        #   rendered frame): gprops (props + projectiles per fighter), gbrawl,
                                                        #   gheckler (real goon GLBs, popups), gstage (dressing live values)
+    python _harness/lookshots.py --game --only g3d     # CHANGED(VIEW3D): the 3D ring in the REAL game - circling (7 camera
+                                                       #   angles), a sidestep dodging a projectile, a ring wall splat, PRIME
+                                                       #   TIME on a diagonal, the 5 arenas (P2 circling: mirrored step clips),
+                                                       #   BRAWL from all bearings. STEP (input bits 13/14) goes through
+                                                       #   __HP__.dev.setInputs when input.ts WORD_MASK carries them, else a
+                                                       #   dev-page patch of Input.sampleAll ORs them in (reported as stepDrive)
     python _harness/lookshots.py --sim                 # P2: REAL sim + REAL data drive the view (lab view.html?sim=1):
                                                        #   prime (a strip per fighter's Lv3 PRIME TIME), proj (every
                                                        #   projectile type), props, lineup (12), showcase, ko, brawl,
@@ -223,6 +229,9 @@ def main():
     ap.add_argument("--fighters", default="", help="--sim: comma list of fighter ids (default all 12)")
     ap.add_argument("--stages", default="rust_theater,butcher_block,wheel_of_pain,rooftop,control_room", help="--sim stage group ids")
     ap.add_argument("--game", action="store_true", help="P2: the REAL game page (deep link + __HP__ dev surface), groups: %s" % ",".join(GAME_GROUPS))
+    ap.add_argument("--g3d", default="", help="CHANGED(VIEW3D) --game --only g3d: comma list of parts (default all): " + ",".join(G3D_PARTS))
+    ap.add_argument("--circle", type=int, default=0, help="CHANGED(VIEW3D) --sim prime / proj: frames of STEP_IN after FIGHT before the action "
+                    "(the fight line turns off the spawn axis: 60 f ~ 45 deg) - PRIME TIME / projectiles on a diagonal line")
     args = ap.parse_args()
     if args.game:
         if args.prefix == "view":
@@ -372,7 +381,7 @@ def sim_main(args):
                 vic = "johnny" if fid == "bruno" else "bruno"
                 key = fid + ("_phase2" if ph2 else "")
                 setup(fid, vic)
-                s = p.js("(o) => window.__LAB__.prime(o)", {"phase2": ph2})
+                s = p.js("(o) => window.__LAB__.prime(o)", {"phase2": ph2, "circle": args.circle})
                 start = s.get("cineAt", -1) if s.get("cineAt", -1) >= 0 else s.get("lockAt", -1)
                 row = {"script": s, "frames": []}
                 g[key] = row
@@ -382,6 +391,8 @@ def sim_main(args):
                     continue
                 info = goto(start + 1)
                 pr = info.get("prime") or {}
+                row["line"] = {"lineDegAtCine": s.get("lineDegAtCine"), "cineFrame": info.get("cineFrame"), "camN": info.get("camN")}
+                log("prime %-16s fight line %s deg at the cinematic (circle %d f), cine frame %s" % (key, s.get("lineDegAtCine"), args.circle, json.dumps(info.get("cineFrame"))))
                 shots = pr.get("shots") or []
                 n = pr.get("frames") or 150
                 picks = []
@@ -402,8 +413,11 @@ def sim_main(args):
                     pr = info.get("prime") or {}
                     path = shoot("prime_%s_f%03d" % (key, cf))
                     paths.append(path)
-                    row["frames"].append({"cf": cf, "shot": nm, "cam": info["camera"]["mode"], "prime": {k: pr.get(k) for k in ("f", "shot", "att", "vic", "gap", "vy", "carry", "freeze", "slate", "letterbox", "dim", "spot", "guard", "camTarget")},
-                                          "fighters": [{k: x.get(k) for k in ("x", "y", "clip", "t", "propsShown", "override")} for x in info.get("fighters", [])], "fx": info.get("fx")})
+                    camr = info.get("camera") or {}
+                    row["frames"].append({"cf": cf, "shot": nm, "cam": camr.get("mode"), "camPos": camr.get("pos"), "camLook": camr.get("look"), "camFov": camr.get("fov"),
+                                          "occl": {k: camr.get(k) for k in ("raise", "pull", "clearPull", "occluded", "camR")},
+                                          "prime": {k: pr.get(k) for k in ("f", "shot", "att", "vic", "gap", "vy", "carry", "freeze", "slate", "letterbox", "dim", "spot", "guard", "camTarget")},
+                                          "fighters": [{k: x.get(k) for k in ("x", "y", "z", "yawDeg", "clip", "t", "propsShown", "override")} for x in info.get("fighters", [])], "fx": info.get("fx")})
                     gd = pr.get("guard") or {}
                     log("prime %-16s cf %3d %-14s att %-26s vic %-26s gap %.2f vy %.2f guard d%.2f fov+%.1f cr%.2f" % (key, cf, nm, ",".join(pr.get("att") or [])[:26], ",".join(pr.get("vic") or [])[:26], pr.get("gap") or 0, pr.get("vy") or 0, gd.get("dolly") or 0, gd.get("fov") or 0, gd.get("crouch") or 0))
                 if end is not None and end >= 0:
@@ -413,9 +427,9 @@ def sim_main(args):
                     steps = []
                     for hf in range(end - 3, end + 13):
                         hi = goto(hf)
-                        xy = [(fz.get("x") or 0, fz.get("y") or 0) for fz in hi.get("fighters", [])]
+                        xy = [(fz.get("x") or 0, fz.get("y") or 0, fz.get("z") or 0) for fz in hi.get("fighters", [])]
                         if prev is not None and len(xy) == 2:
-                            steps.append({"f": hf - end, "dx": [round(abs(xy[i][0] - prev[i][0]), 3) for i in range(2)], "dy": [round(abs(xy[i][1] - prev[i][1]), 3) for i in range(2)],
+                            steps.append({"f": hf - end, "dx": [round(((xy[i][0] - prev[i][0]) ** 2 + (xy[i][2] - prev[i][2]) ** 2) ** 0.5, 3) for i in range(2)], "dy": [round(abs(xy[i][1] - prev[i][1]), 3) for i in range(2)],
                                           "clip": [fz.get("clip") for fz in hi.get("fighters", [])]})
                         prev = xy
                     mx = max((max(s_["dx"] + s_["dy"]) for s_ in steps), default=0)
@@ -435,7 +449,7 @@ def sim_main(args):
                 if fid not in only_f:
                     continue
                 setup(fid, "bruno")
-                s = p.js("([k, o]) => window.__LAB__.special(k, o)", [key, {"phase2": ph2, "after": 150}])
+                s = p.js("([k, o]) => window.__LAB__.special(k, o)", [key, {"phase2": ph2, "after": 150, "circle": args.circle}])
                 sp = s.get("spawnAt", -1)
                 row = {"script": s, "frames": []}
                 g[label] = row
@@ -505,7 +519,7 @@ def sim_main(args):
             log("showcase strip %s" % rep["groups"]["showcase_strip"])
         if "ko" in groups:
             setup("johnny", "bruno", rounds=1)
-            s = p.js("() => window.__LAB__.ko()")
+            s = p.js("(o) => window.__LAB__.ko(o)", {"circle": args.circle})
             ko = s.get("koAt", -1)
             g = rep["groups"]["ko"] = {"script": s, "frames": []}
             if ko is None or ko < 0:
@@ -515,8 +529,8 @@ def sim_main(args):
                 for k in [4, 40, 80, 130, 190, 250]:
                     info = goto(ko + k)
                     paths.append(shoot("ko_%03d" % k))
-                    g["frames"].append({"k": k, "cam": info["camera"], "tops": None})
-                    log("ko +%3d cam %s d=%.2f" % (k, info["camera"]["mode"], info["camera"]["dist"]))
+                    g["frames"].append({"k": k, "cam": info["camera"], "tops": None, "lineDeg": info.get("lineDeg")})
+                    log("ko +%3d cam %s d=%.2f line %s deg yaw %s pos %s" % (k, info["camera"]["mode"], info["camera"]["dist"], info.get("lineDeg"), info["camera"].get("yawDeg"), info["camera"].get("pos")))
                 g["strip"] = strip(paths, os.path.join(SHOTS, "%s_ko_strip.png" % pre), cols=3)
         for mode in ("brawl", "heckler"):
             if mode not in groups:
@@ -587,7 +601,8 @@ def sim_main(args):
 # game's own frame() (events drained, FX, props, HUD). View read-back: window.__HP_VIEW__ (dev-only handle set by
 # BoutView.create). Shots: __HP__.shot(name) (the game's canvas -> /__shot -> _shots/<name>.png).
 
-GAME_GROUPS = ["gprops", "gbrawl", "gheckler", "gstage"]
+GAME_GROUPS = ["gprops", "gbrawl", "gheckler", "gstage", "g3d"]
+G3D_PARTS = ["circle", "dodge", "splat", "prime", "arenas", "brawl"]
 GAME_PROJ = {  # fighter -> [(label, word, hold frames, phase2)]
     "johnny": [("brick", 128, 2, False)],
     "zambini": [("card_fan", 128, 2, False), ("flame", 4 | 128, 2, False), ("saw_card", 128 | 64, 2, False)],
@@ -645,6 +660,71 @@ window.__LK__ = {
   },
   view() { return window.__HP_VIEW__ ? window.__HP_VIEW__.info() : null; },
   popups() { return window.__HP_VIEW__ ? window.__HP_VIEW__.popups() : []; },
+  // ── CHANGED(VIEW3D) g3d helpers ──
+  /** STEP drive: setInputs when input.ts WORD_MASK carries bits 13/14, else patch Input.sampleAll (dev page only) */
+  async ensureStep() {
+    const m = await import('/src/input.ts');
+    const mask = m.WORD_MASK;
+    if (mask & 0x6000) { window.__HP_STEPMODE__ = 'setInputs'; return { mask, mode: 'setInputs' }; }
+    if (!m.Input.prototype.__hpStepPatched) {
+      const orig = m.Input.prototype.sampleAll;
+      window.__HP_STEP__ = [{ bits: 0, n: 0 }, { bits: 0, n: 0 }];
+      m.Input.prototype.sampleAll = function (out) {
+        const r = orig.call(this, out);
+        for (const p of [0, 1]) { const s = window.__HP_STEP__[p]; if (s.n > 0) { r[p] |= s.bits; s.n--; } }
+        return r;
+      };
+      m.Input.prototype.__hpStepPatched = true;
+    }
+    window.__HP_STEPMODE__ = 'patch';
+    return { mask, mode: 'patch' };
+  },
+  press(p, word, n) {
+    if (word) window.__HP__.dev.setInputs(p, word & 0x7fff, n);
+    if (window.__HP_STEPMODE__ === 'patch' && (word & 0x6000)) window.__HP_STEP__[p] = { bits: word & 0x6000, n };
+  },
+  snap() {
+    const m = window.__HP__.match() || {};
+    const f = window.__HP__.fighters() || [];
+    const v = window.__HP_VIEW__ ? window.__HP_VIEW__.info() : {};
+    const r3 = (x) => Math.round((x || 0) * 1000) / 1000;
+    return {
+      simFrame: m.simFrame, phase: m.phase, camN: m.camN, cinematic: m.cinematic, ring: m.ring,
+      line: f.length === 2 ? Math.round(Math.atan2(f[1].x - f[0].x, (f[1].z || 0) - (f[0].z || 0)) * 1800 / Math.PI) / 10 : null,
+      f: f.map((x) => ({ x: r3(x.x), y: r3(x.y), z: r3(x.z), yawDeg: Math.round((x.yaw || 0) * 1800 / Math.PI) / 10, facing: x.facing, hp: x.hp, st: x.stateName, step: x.step, move: x.moveName })),
+      cam: v.camera, view: (v.fighters || []).map((x) => ({ clip: x.clip, mirror: x.mirror, yawDeg: x.yawDeg, x: r3(x.x), z: r3(x.z) })),
+      proj: v.proj, splat: v.splat, fx: v.fx, prime: v.prime, cineFrame: v.cineFrame, brawl: v.brawl, ring3: v.ring,
+      proj3: (m.proj || []).map((q) => ({ slot: q.slot, owner: q.owner, kind: q.kind, x: r3(q.x), y: r3(q.y), z: r3(q.z), yawDeg: Math.round((q.yaw || 0) * 1800 / Math.PI) / 10 })),
+      goons: ((m.brawl || {}).goons || []).map((g) => ({ slot: g.slot, kind: g.kind, x: r3(g.x), z: r3(g.z), yawDeg: Math.round((g.yaw || 0) * 1800 / Math.PI) / 10, st: g.stateName })),
+    };
+  },
+  /** n presented ticks with words for both players (each tick: press, step 1, one rendered frame) */
+  async stepP(n, w0, w1) {
+    for (let i = 0; i < n; i++) {
+      window.__LK__.press(0, w0 || 0, 1); window.__LK__.press(1, w1 || 0, 1);
+      window.__HP__.dev.step(1);
+      await new Promise((r) => requestAnimationFrame(() => r()));
+    }
+    return window.__HP__.match()?.simFrame ?? -1;
+  },
+  /** rendered frames with the sim frozen (the camera eases onto the current snapshot) */
+  async settle(n) { for (let i = 0; i < n; i++) await new Promise((r) => requestAnimationFrame(() => r())); },
+  evs(n) { return (window.__HP__.events(n || 64) || []); },
+  /** a HARNESS-ONLY top-down picture of the ring around the pair (not the game camera): screen-up = away from the game
+   *  camera (-camN), so left / right read as in the game shot; the game camera is restored right after */
+  async overhead(name, h) {
+    const v = window.__HP_VIEW__ && window.__HP_VIEW__.view; if (!v) return null;
+    const f = window.__HP__.fighters() || [], m = window.__HP__.match() || {};
+    const n = m.camN || [0, 1];
+    const mx = (f[0].x + f[1].x) / 2, mz = ((f[0].z || 0) + (f[1].z || 0)) / 2;
+    const c = v.cam.camera;
+    const keep = { p: c.position.clone(), q: c.quaternion.clone(), fov: c.fov, up: c.up.clone() };
+    c.position.set(mx, h || 7.0, mz); c.up.set(-n[0], 0, -n[1]); c.fov = 52; c.updateProjectionMatrix();
+    c.lookAt(mx, 0, mz); c.updateMatrixWorld();
+    const r = await window.__HP__.shot(name);
+    c.position.copy(keep.p); c.quaternion.copy(keep.q); c.up.copy(keep.up); c.fov = keep.fov; c.updateProjectionMatrix(); c.updateMatrixWorld();
+    return r;
+  },
 };
 """
 
@@ -890,6 +970,253 @@ def game_main(args):
                         boot()
             if paths:
                 rep["groups"]["gstage_strip"] = strip(paths, os.path.join(SHOTS, "%s_gstage_strip.png" % pre), cols=2)
+        if "g3d" in groups:
+            g = rep["groups"]["g3d"] = {}
+            parts = [x for x in (args.g3d.split(",") if args.g3d else G3D_PARTS) if x]
+            EVW = {"WALL_SPLAT": 14, "PROJ_SPAWN": 17, "PROJ_HIT": 18, "CINEMATIC_START": 26}
+            STEP_IN, STEP_OUT, RIGHT, LEFT, DOWN, Hb, Sb = 8192, 16384, 8, 4, 2, 64, 128
+            sd = js("() => window.__LK__.ensureStep()")
+            g["stepDrive"] = sd
+            log("g3d STEP drive: %s (input.ts WORD_MASK 0x%04x)" % (sd.get("mode"), sd.get("mask", 0)))
+            snapf = lambda: js("() => window.__LK__.snap()")
+
+            def stepP(n, w0=0, w1=0):
+                return js("([n, a, b]) => window.__LK__.stepP(n, a, b)", [n, w0, w1])
+
+            def fight(cfg):
+                start(cfg)
+                js("() => window.__LK__.ensureStep()")
+                stepP(4)
+
+            def camline(sn):
+                c = sn.get("cam") or {}
+                return "line %6s cam yaw %7s (camN yaw %7s) d %.2f pos %s raise %s pull %s occl %s" % (
+                    sn.get("line"), c.get("yawDeg"), c.get("yawTDeg"), c.get("dist") or 0, c.get("pos"), c.get("raise"), c.get("pull"), c.get("occluded"))
+
+            def part(name, fn):
+                for attempt in (0, 1):
+                    try:
+                        fn()
+                        return
+                    except Exception as e:
+                        if attempt or not lost(e):
+                            fails.append("g3d %s: %s" % (name, str(e).splitlines()[0][:300]))
+                            return
+                        log("g3d %s: WebGL context lost - page reloaded, retried" % name)
+                        time.sleep(3)
+                        boot()
+                        js("() => window.__LK__.ensureStep()")
+
+            def p_circle():
+                row = g["circle"] = {"frames": []}
+                fight({"mode": "versus", "stage": "rust_theater", "seed": 1, "p": [{"fighter": "johnny", "cpu": -1}, {"fighter": "bruno", "cpu": -1}]})
+                yaws = []
+                for k in range(7):
+                    if k:
+                        stepP(75, STEP_IN, 0)
+                    sn = snapf()
+                    path = shot("g3d_circle_%d" % k)
+                    yaws.append((sn.get("cam") or {}).get("yawDeg"))
+                    row["frames"].append({"k": k, "path": path, "snap": sn})
+                    log("g3d circle %d %s | P1 %s step %s view %s | P2 view %s" % (k, camline(sn), sn["f"][0]["st"], json.dumps(sn["f"][0].get("step")),
+                        json.dumps(sn["view"][0]), json.dumps(sn["view"][1])))
+                row["camYaws"] = yaws
+                spread = sorted(set(int(round(float(y or 0))) // 30 for y in yaws))
+                row["angleBins30"] = spread
+                if len(spread) < 6:
+                    fails.append("g3d circle: only %d distinct 30-deg camera bins over 7 shots (%s)" % (len(spread), yaws))
+                row["strip"] = strip([fr["path"] for fr in row["frames"]], os.path.join(SHOTS, "%s_g3d_circle_strip.png" % pre), cols=4)
+
+            def p_dodge():
+                row = g["dodge"] = {"frames": []}
+                fight({"mode": "versus", "stage": "rust_theater", "seed": 1, "p": [{"fighter": "bruno", "cpu": -1}, {"fighter": "johnny", "cpu": -1}]})
+                stepP(30, STEP_IN, 0)                        # off the spawn axis first: the throw flies along a diagonal
+                stepP(14)
+                hp0 = snapf()["f"][0]["hp"]
+                # P2 (johnny, facing screen-left) 5S = BRICKBAT, then P1 taps STEP_IN the tick the brick leaves the hand
+                spawn = -1
+                for k in range(60):
+                    stepP(1, 0, Sb if k < 2 else 0)
+                    sn = snapf()
+                    if sn["proj3"]:
+                        spawn = k
+                        break
+                if spawn < 0:
+                    raise RuntimeError("no brick spawned")
+                row["spawnSnap"] = snapf()
+                before = js("(n) => window.__LK__.evs(n)", 256)
+                best = None
+                for k in range(40):
+                    stepP(1, STEP_IN if k < 3 else 0, 0)
+                    sn = snapf()
+                    pj = sn["proj3"]
+                    dd = None
+                    if pj:
+                        q = pj[0]; me = sn["f"][0]
+                        dd = ((q["x"] - me["x"]) ** 2 + (q["z"] - me["z"]) ** 2) ** 0.5
+                        if best is None or dd < best[0]:
+                            best = (dd, k, sn)
+                    if k in (3, 7) or (dd is not None and best[1] == k and dd < 0.9):
+                        row["frames"].append({"k": k, "path": shot("g3d_dodge_k%02d" % k), "snap": sn})
+                        if dd is not None and best[1] == k and dd < 0.9:
+                            ov = js("(n) => window.__LK__.overhead(n)", "%s_g3d_dodge_k%02d_overhead_harness" % (pre, k))
+                            row["overhead"] = (ov or {}).get("path")
+                    if not pj and k > 4:
+                        break
+                stepP(10)
+                after = js("(n) => window.__LK__.evs(n)", 256)
+                fresh = [e for e in after if e not in before]
+                hits = [e for e in fresh if e.get("type") == EVW["PROJ_HIT"]]
+                hp1 = snapf()["f"][0]["hp"]
+                row.update({"spawnK": spawn, "closest": {"m": round(best[0], 3), "k": best[1], "snap": best[2]} if best else None, "projHits": hits, "hp": [hp0, hp1]})
+                row["frames"].append({"k": "after", "path": shot("g3d_dodge_after"), "snap": snapf()})
+                log("g3d dodge: brick spawn k%d, closest approach %.3f m at k%s (P1 step %s), PROJ_HIT %d, P1 hp %s -> %s" % (
+                    spawn, best[0] if best else -1, best[1] if best else "-", json.dumps(best[2]["f"][0].get("step")) if best else "-", len(hits), hp0, hp1))
+                if hits or hp1 != hp0:
+                    fails.append("g3d dodge: the sidestep did not evade (PROJ_HIT %d, hp %s -> %s)" % (len(hits), hp0, hp1))
+                row["strip"] = strip([fr["path"] for fr in row["frames"]], os.path.join(SHOTS, "%s_g3d_dodge_strip.png" % pre), cols=4)
+
+            def p_splat():
+                row = g["splat"] = {"frames": []}
+                fight({"mode": "versus", "stage": "rust_theater", "seed": 1, "p": [{"fighter": "bruno", "cpu": -1}, {"fighter": "johnny", "cpu": -1}]})
+                stepP(40, STEP_OUT, 0)                       # the line turns ~30 deg: the wall is met off the spawn axis
+                stepP(10)
+                before = js("(n) => window.__LK__.evs(n)", 256)
+                splat = None
+                pushed = 0
+                for rnd in range(6):
+                    # walk P2 back toward the ring (bruno walks into johnny; johnny holds back = walks away), then 6H
+                    for k in range(160):
+                        sn = snapf()
+                        rg = sn.get("ring") or {}
+                        r = rg.get("radius", 5.5)
+                        v = sn["f"][1]
+                        if r - (v["x"] ** 2 + v["z"] ** 2) ** 0.5 < 0.85:
+                            break
+                        stepP(1, RIGHT, RIGHT if v["facing"] < 0 else LEFT)   # P2 holds BACK (screen side away from P1)
+                        pushed += 1
+                    # SIMPLE 6S = bruno FRIDGE DOOR (onHit.wallSplat, wallSplat.rangeM 0.9)
+                    sn0 = snapf()
+                    stepP(1, RIGHT | Sb, 0); stepP(1, RIGHT | Sb, 0)
+                    seen = []
+                    for k in range(50):
+                        stepP(1)
+                        evk = [e for e in js("(n) => window.__LK__.evs(n)", 64) if e not in before]
+                        seen += [e.get("type") for e in evk if e.get("type") not in seen]
+                        ev = [e for e in evk if e.get("type") == EVW["WALL_SPLAT"]]
+                        if ev:
+                            splat = ev[-1]
+                            break
+                        if k == 12:
+                            sk = snapf()
+                    v = sn0["f"][1]
+                    rg = sn0.get("ring") or {}
+                    row.setdefault("rounds", []).append({"p2WallGap": round(rg.get("radius", 5.5) - (v["x"] ** 2 + v["z"] ** 2) ** 0.5, 3), "p1Move": sk["f"][0]["move"] if not splat else "", "events": seen})
+                    log("g3d splat round %d: P2 %.2f m from the ring, P1 move %s, new event types %s" % (rnd, row["rounds"][-1]["p2WallGap"], row["rounds"][-1]["p1Move"], seen))
+                    if splat:
+                        break
+                    stepP(30)
+                if not splat:
+                    raise RuntimeError("no WALL_SPLAT after %d pushes" % pushed)
+                sn = snapf()
+                row["event"] = splat
+                row["frames"].append({"k": 0, "path": shot("g3d_splat_0"), "snap": sn})
+                stepP(20)
+                sn2 = snapf()
+                row["frames"].append({"k": 20, "path": shot("g3d_splat_20"), "snap": sn2})
+                stepP(45)
+                sn3 = snapf()
+                row["frames"].append({"k": 65, "path": shot("g3d_splat_65"), "snap": sn3})
+                log("g3d splat +20: %s | +65: %s" % (camline(sn2), camline(sn3)))
+                js("(n) => window.__LK__.settle(n)", 2)
+                b = splat.get("b", 0)
+                row["decoded"] = {"wall": b & 255, "normalDeg": b >> 8, "contactCm": [splat.get("c"), splat.get("d")]}
+                row["viewSplat"] = sn.get("splat")
+                log("g3d splat: WALL_SPLAT %s -> wall %d normal %d deg contact (%s, %s) cm; view placed %s; fx.wall %s; %s" % (
+                    json.dumps(splat), b & 255, b >> 8, splat.get("c"), splat.get("d"), json.dumps(sn.get("splat")), (sn.get("fx") or {}).get("wall"), camline(sn)))
+                if not sn.get("splat"):
+                    fails.append("g3d splat: the view did not place the splat")
+                row["strip"] = strip([fr["path"] for fr in row["frames"]], os.path.join(SHOTS, "%s_g3d_splat_strip.png" % pre), cols=3)
+
+            def p_prime():
+                row = g["prime"] = {"frames": []}
+                fid = args.fighters.split(",")[0] if args.fighters else "johnny"
+                fight({"mode": "versus", "stage": "rust_theater", "seed": 1, "p": [{"fighter": fid, "cpu": -1}, {"fighter": "bruno" if fid != "bruno" else "johnny", "cpu": -1}]})
+                stepP(60, STEP_IN, 0)
+                stepP(10)
+                for k in range(150):
+                    sn = snapf()
+                    a, b = sn["f"][0], sn["f"][1]
+                    if ((a["x"] - b["x"]) ** 2 + (a["z"] - b["z"]) ** 2) ** 0.5 <= 0.95:
+                        break
+                    stepP(1, RIGHT, 0)
+                stepP(4)
+                js("() => window.__HP__.dev.setMeter(0, 'showtime', 30000)")
+                stepP(2)
+                row["lineAtPress"] = snapf().get("line")
+                stepP(2, DOWN | Sb | Hb, 0)
+                st = -1
+                for k in range(120):
+                    stepP(1)
+                    sn = snapf()
+                    if (sn.get("cinematic") or {}).get("active"):
+                        st = k
+                        break
+                if st < 0:
+                    raise RuntimeError("no PRIME TIME cinematic started (line %s)" % row["lineAtPress"])
+                n = (sn.get("cinematic") or {}).get("frames") or 150
+                done = 0
+                for cf in [12, int(n * 0.3), int(n * 0.55), int(n * 0.8)]:
+                    stepP(max(0, cf - done)); done = cf
+                    s2 = snapf()
+                    pr = s2.get("prime") or {}
+                    row["frames"].append({"cf": cf, "path": shot("g3d_prime_cf%03d" % cf), "snap": s2})
+                    log("g3d prime %s cf %3d shot %-8s cineFrame %s guard %s | %s" % (fid, cf, pr.get("shot"), json.dumps(s2.get("cineFrame")), json.dumps(pr.get("guard")), camline(s2)))
+                row["fighter"] = fid
+                row["frames"] and log("g3d prime: fight line %s deg at the press (spawn axis 90)" % row["lineAtPress"])
+                row["strip"] = strip([fr["path"] for fr in row["frames"]], os.path.join(SHOTS, "%s_g3d_prime_strip.png" % pre), cols=4)
+
+            def p_arenas():
+                row = g["arenas"] = {}
+                paths = []
+                for sid in args.stages.split(","):
+                    fight({"mode": "versus", "stage": sid, "seed": 1, "p": [{"fighter": "johnny", "cpu": -1}, {"fighter": "bruno", "cpu": -1}]})
+                    stepP(6)
+                    sa = snapf()
+                    pa = shot("g3d_arena_%s_a" % sid)
+                    stepP(110, 0, STEP_IN)                   # P2 (mirrored) circles: the swapped step clip shows
+                    sb = snapf()
+                    pb = shot("g3d_arena_%s_b" % sid)
+                    paths += [pa, pb]
+                    row[sid] = {"a": sa, "b": sb, "paths": [pa, pb]}
+                    log("g3d arena %-13s a: %s" % (sid, camline(sa)))
+                    log("g3d arena %-13s b: %s | P2 sim step %s view %s ring %s" % (sid, camline(sb), json.dumps(sb["f"][1].get("step")), json.dumps(sb["view"][1]), json.dumps(sb.get("ring3"))))
+                    v = sb["view"][1]
+                    side = (sb["f"][1].get("step") or {}).get("side", 0)
+                    want = None
+                    if (sb["f"][1].get("step") or {}).get("kind") == "sidewalk":
+                        own = "sidewalk_l" if side < 0 else "sidewalk_r"
+                        want = (own[:-1] + ("r" if own.endswith("l") else "l")) if v.get("mirror") else own
+                        if v.get("clip") != want:
+                            fails.append("g3d arena %s: P2 sidewalk clip %s (mirror %s, sim side %s) expected %s" % (sid, v.get("clip"), v.get("mirror"), side, want))
+                    row[sid]["expectClip"] = want
+                row["strip"] = strip(paths, os.path.join(SHOTS, "%s_g3d_arenas_strip.png" % pre), cols=2)
+
+            def p_brawl():
+                row = g["brawl"] = {"frames": []}
+                fight({"mode": "brawl", "stage": "rust_theater", "seed": 1, "p": [{"fighter": "johnny", "cpu": -1}, {"fighter": "bruno", "cpu": -1}]})
+                done = 0
+                for f in [150, 260, 380, 500]:
+                    while done < f:
+                        stepP(1, 16 if done % 24 < 2 else 0, 0)
+                        done += 1
+                    sn = snapf()
+                    row["frames"].append({"f": f, "path": shot("g3d_brawl_%03d" % f), "snap": sn})
+                    log("g3d brawl f%d goons %s | %s" % (f, json.dumps(sn.get("goons")), camline(sn)))
+                row["strip"] = strip([fr["path"] for fr in row["frames"]], os.path.join(SHOTS, "%s_g3d_brawl_strip.png" % pre), cols=2)
+
+            for nm in parts:
+                part(nm, {"circle": p_circle, "dodge": p_dodge, "splat": p_splat, "prime": p_prime, "arenas": p_arenas, "brawl": p_brawl}[nm])
     except Exception as e:
         probs.append("harness error: %s" % str(e).splitlines()[0][:600])
     finally:
