@@ -72,6 +72,10 @@ LOOP files only: the pack's START files are not sample-aligned with the LOOPs (m
   Chrome's module burst gets `net::ERR_CONNECTION_REFUSED` (util.js, tuning.js, post.js measured) and the page sticks at
   INITIALISING. Workaround (no shared file edited): a private server for this lane with `request_queue_size = 256`,
   scratchpad `lane_server.py`, `http://127.0.0.1:8797/...`, passed to bootcheck/musiccheck via --url/--base.
+- PORT CLASH, found at the end: another lane's `serve_cam.py` (pid 36044, started 21:08:59) also listens on
+  127.0.0.1:8797; Windows SO_REUSEADDR (allow_reuse_address=True) let both bind, so from 21:09 my requests may have been
+  answered by either server. Every music response byte count equals the committed file (keep.ogg 1,063,866 ...), so
+  the evidence holds; my server is stopped now. Next lane-private server: pick a port and check `netstat` first.
 - Under that load bootcheck's leave_title (fixed 45 s) timed out while the click was still loading the Keep; the
   state sampled after settle was 'keep', 0 console / page / window errors, 0 shader diagnostics.
 
