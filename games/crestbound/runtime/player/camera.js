@@ -1446,6 +1446,16 @@ export class FollowCamera {
         return Object.assign({ live: self._cwLive(self._broadphase()), allowed: self._cwAllowed,
                                sweeps: self._sweepN, fallbacks: self._sweepFallbackN }, self._cw.info());
       },
+      /** A/B switch at runtime (harness): false = the whisker fan answers everything, as before Rapier. */
+      setSweep(on) { self._cwAllowed = !!on && camRapierAllowed(); return self._cwAllowed; },
+      /** Is this broadphase collider in the Rapier mirror (answered by the sweep)? */
+      cwHas(c) { return !!(c && self._cw.ready && self._cw.isMirrored(c)); },
+      /** One raw sweep against the mirror (harness): centre travel before contact, -1 = clear. */
+      sweep(o, d, r, maxD) {
+        const t = self._cw.sweep(o.x, o.y, o.z, d.x, d.y, d.z, r, maxD);
+        const h = self._cw.hit;
+        return { t, n: t >= 0 ? [h.nx, h.ny, h.nz] : null, box: !!(t >= 0 && h.box), hf: !!(t >= 0 && h.hf) };
+      },
       state() {
         return {
           cwLive: self._cwLive(self._broadphase()),

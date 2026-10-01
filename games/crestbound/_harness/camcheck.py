@@ -113,7 +113,8 @@ HEADLESS_FLAGS = [f for f in FLAGS if not f.startswith("--use-angle")] + [
     "--use-gl=angle", "--use-angle=swiftshader",
 ]
 
-CHECK_NAMES = ["wall", "shaft", "framing", "longjump", "dive", "occlusion", "recenter", "peek"]
+CHECK_NAMES = ["wall", "shaft", "framing", "longjump", "dive", "occlusion", "recenter", "peek",
+               "thinpost", "volumes", "onscreen", "rapier"]
 
 
 def launch_headless(p):
@@ -292,6 +293,57 @@ async () => {
     await wait(700);
     if (P.dead) throw new Error('hero died on the test slab (killY/bounds?) at ' + JSON.stringify([x,y,z]));
   };
+
+  // ---- THE SWEPT SPHERE and THE HERO ON SCREEN (stage 1 camera lane, 2026-09-30)
+  // Every row below is evidence for the swept sphere only if the camera-only
+  // Rapier mirror (runtime/world/camworld.js) is LIVE while it runs. It loads
+  // after gameplay has rendered, so wait for it, then prove the mirror holds
+  // the rig at the exact contact distance before anything is measured.
+  const cwInfo = () => (cam.__test.camworld ? cam.__test.camworld() : null);
+  let cw0 = cwInfo();
+  { const tw = performance.now();
+    while (cw0 && cw0.allowed && !cw0.live && performance.now() - tw < 90000) { await frame(); cw0 = cwInfo(); } }
+  const rapierAt = {};
+  if (cw0) {
+    out.notes.camworld0 = {live: cw0.live, allowed: cw0.allowed, boxes: cw0.boxes, heightfields: cw0.heightfields,
+                           buildMs: Math.round(cw0.buildMs || 0), buildFrames: cw0.buildFrames,
+                           worstBuildFrameMs: +(cw0.worstBuildFrameMs || 0).toFixed(2),
+                           loadMs: cw0.loader && cw0.loader.readyMs > 0 ? Math.round(cw0.loader.readyMs - cw0.loader.startMs) : null};
+    for (let k = 0; k < 6; k++) await frame();          // the membership watch mirrors the rig added above
+    rapierAt.rigMirrored = RIG.filter((c) => cam.__test.cwHas && cam.__test.cwHas(c)).length;
+    rapierAt.rig = RIG.length;
+    // one raw sweep across the slab into the wall face: centre travel = gap - radius
+    const sw = cam.__test.sweep ? cam.__test.sweep({x: WALL_X - 6, y: TEST.y + 1.5, z: TEST.z}, {x: 1, y: 0, z: 0}, C.collideRadius, 10) : {t: -2};
+    rapierAt.sweepT = +(+sw.t).toFixed(4);
+    rapierAt.sweepWant = +((WALL_FACE - (WALL_X - 6)) - C.collideRadius).toFixed(4);
+    rapierAt.sweepHitBox = !!sw.box;
+    rapierAt.sweeps0 = cwInfo().sweeps; rapierAt.fallbacks0 = cwInfo().fallbacks;
+  }
+  // THE HERO IS NEVER OFF SCREEN: one sampler across every row of this routine.
+  // A frame counts when the follow camera owns the shot (not peek / death /
+  // cinematic) and the lens is outside the hero (dist >= 0.35, camera.js
+  // HERO_GUARD_NEAR_M: inside him is the first-person commit, not a framing).
+  const ons = {frames: 0, off: 0, run: 0, worst: 0, at: null, tPrev: performance.now(), on: true};
+  const onsV = new THREE.Vector3();
+  const onsLoop = () => {
+    if (!ons.on) return;
+    const now = performance.now(), dtS = Math.min(0.05, (now - ons.tPrev) / 1000); ons.tPrev = now;
+    try {
+      syncP();
+      const s = cam.__test.state();
+      if (P && !P.dead && s.mode === 'follow' && !s.peek && !s.cinematic && !s.death && s.dist >= 0.35) {
+        const rp = P.renderPos || P.pos;
+        onsV.set(rp.x, rp.y + (TUNE.height || 1.5) * 0.55, rp.z).project(tcam);
+        ons.frames++;
+        if (!(Math.abs(onsV.x) <= 1 && Math.abs(onsV.y) <= 1 && onsV.z <= 1)) {
+          ons.off++; ons.run += dtS;
+          if (ons.run >= ons.worst) { ons.worst = ons.run; ons.at = {hero: [+rp.x.toFixed(2), +rp.y.toFixed(2), +rp.z.toFixed(2)], ndc: [+onsV.x.toFixed(2), +onsV.y.toFixed(2), +onsV.z.toFixed(3)], dist: +s.dist.toFixed(2), yaw: +s.yaw.toFixed(2), pitch: +s.pitch.toFixed(2), state: P.state, guardK: +(s.guardK || 0).toFixed(2)}; }
+        } else ons.run = 0;
+      } else ons.run = 0;
+    } catch (e) { /* a frame the routine is between rows */ }
+    requestAnimationFrame(onsLoop);
+  };
+  requestAnimationFrame(onsLoop);
 
   try {
     // ================= 1. WALL: camera never clips ==========================
@@ -597,9 +649,149 @@ async () => {
       const s2 = cs();
       out.notes.afterPeek = {mode: s2.mode, fov: +s2.fov.toFixed(2), dist: +s2.dist.toFixed(2)};
     }
+
+    // ================= 8. THINPOST: the gap a ray fan leaves ================
+    // A 0.10 m post stood 3 m behind the focus, 0.125 m off the line to the lens:
+    // BETWEEN the centre whisker and the next one (camera.js WHISKER_M 0.25), so
+    // no ray of the fan touches it while the lens sphere (collideRadius 0.35)
+    // passes it at 0.075 m. The swept sphere's invariant is that the lens could have TRAVELLED
+    // from the focus to where it is without entering geometry: every point of
+    // the focus->lens segment stays >= collideRadius from the post. Measured with
+    // the sweep (gated) and, as the before, with the fan alone (`setSweep(false)`).
+    {
+      const PH = 0.05, POST_OFF = 0.125;
+      const segClear = (s, post) => {
+        let m = Infinity;
+        for (let i = 0; i <= 40; i++) {
+          const k = i / 40;
+          _v.set(s.focus[0] + (s.pos[0] - s.focus[0]) * k, s.focus[1] + (s.pos[1] - s.focus[1]) * k, s.focus[2] + (s.pos[2] - s.focus[2]) * k);
+          const d = post.distanceToPoint(_v);
+          if (d < m) m = d;
+        }
+        return m;
+      };
+      const runPost = async (sweepOn) => {
+        if (cam.__test.setSweep) cam.__test.setSweep(sweepOn);
+        await place(30, TEST.y, TEST.z, FACE_PLUS_X);
+        const s0 = cs();
+        // the lens line as the camera poses it: from the focus, back along the posed heading
+        const fx = s0.focus[0], fz = s0.focus[2];
+        const bx = s0.pos[0] - fx, bz = s0.pos[2] - fz, bl = Math.hypot(bx, bz) || 1;
+        const ux = bx / bl, uz = bz / bl;                     // focus -> lens, flat
+        const rx = -uz, rz = ux;                              // a side of that line
+        const post = new Collider({center: new THREE.Vector3(fx + ux * 3.0 + rx * POST_OFF, TEST.y + 3, fz + uz * 3.0 + rz * POST_OFF),
+                                   half: new THREE.Vector3(PH, 3, PH), surface: 'stone', userData: 'camcheck-post'});
+        if (typeof post.update === 'function') post.update();
+        for (const bp of bps) { bp.add(post); if (typeof bp.refresh === 'function') bp.refresh(post); }
+        let minClear = Infinity, minDist = Infinity, maxDist = 0, frames = 0, mirrored = false;
+        try {
+          await wait(900);                                    // the mirror picks the post up; the camera settles
+          mirrored = !!(cam.__test.cwHas && cam.__test.cwHas(post));
+          const t0 = performance.now();
+          while ((performance.now() - t0 < 1200 || frames < 30) && performance.now() - t0 < 20000) {
+            await frame();
+            const s = cs();
+            const c = segClear(s, post);
+            if (c < minClear) minClear = c;
+            minDist = Math.min(minDist, s.dist); maxDist = Math.max(maxDist, s.dist);
+            frames++;
+          }
+        } finally {
+          for (const bp of bps) { try { bp.remove(post); } catch (e) {} }
+        }
+        return {sweep: sweepOn, mirrored, frames, segClear_m: +minClear.toFixed(3), dist: [+minDist.toFixed(2), +maxDist.toFixed(2)]};
+      };
+      const before = await runPost(false);
+      const after = await runPost(true);
+      if (cam.__test.setSweep) cam.__test.setSweep(true);
+      const ok = after.frames > 20 && after.mirrored && after.segClear_m >= C.collideRadius - 0.03;
+      pass('thinpost', ok, {after, before, needClear_m: +(C.collideRadius - 0.03).toFixed(2)});
+      await wait(300);
+    }
+
+    // ================= 9. VOLUMES: authored framing, entered on foot ========
+    // Three camera volumes in the course-def schema (camera.js docstring rule 6)
+    // on a lane of the slab; the hero WALKS into each one on the W key. A tight
+    // volume pulls the follow distance to its `dist`, a fixed volume holds its
+    // yaw, an orbit volume turns the lens onto the axis->hero line; the player's
+    // own orbit (E) wins and the volume takes the angle back after the manual
+    // idle; leaving every volume gives the ordinary follow back.
+    {
+      const LZ = TEST.z + 6, Y0 = TEST.y;
+      const FIX_YAW = wrap(FACE_PLUS_X + 0.8);
+      const AX = [50, LZ + 4];
+      cam.setVolumes([
+        {id: 'cc-tight', mode: 'tight', p: [22, Y0 + 1, LZ], s: [8, 4, 8], dist: 3.0},
+        {id: 'cc-fixed', mode: 'fixed', p: [36, Y0 + 1, LZ], s: [8, 4, 8], yaw: FIX_YAW},
+        {id: 'cc-orbit', mode: 'orbit', p: [50, Y0, LZ], r: 4, h: 6, center: AX},
+      ]);
+      const R = {};
+      try {
+        // W until the hero is IN (the volume reports itself) or past its centre,
+        // then let go: a volume that turns the camera also turns a camera-
+        // relative W, so the measurement is taken standing, not curving away.
+        const walkInto = async (x0, xc, id) => {
+          await place(x0, Y0, LZ, FACE_PLUS_X);
+          const t0 = performance.now();
+          down('KeyW');
+          while (P.pos.x < xc && cs().vol !== id && performance.now() - t0 < 8000) await frame();
+          up('KeyW');
+          await wait(1800);
+          syncP();
+          return cs();
+        };
+        let s = await walkInto(14, 22, 'cc-tight');
+        R.tight = {vol: s.vol, dist: +s.dist.toFixed(2), want: 3.0, hero: [+P.pos.x.toFixed(2), +P.pos.z.toFixed(2)]};
+        const tightOk = s.vol === 'cc-tight' && Math.abs(s.dist - 3.0) <= 0.35;
+        s = await walkInto(28, 36, 'cc-fixed');
+        R.fixed = {vol: s.vol, yaw: +cam.yaw.toFixed(3), want: +FIX_YAW.toFixed(3), err: +Math.abs(dAng(cam.yaw, FIX_YAW)).toFixed(3),
+                   dist: +s.dist.toFixed(2), hero: [+P.pos.x.toFixed(2), +P.pos.z.toFixed(2)]};
+        const fixedOk = s.vol === 'cc-fixed' && R.fixed.err <= 0.08;
+        down('KeyE'); await wait(300); up('KeyE'); await frame();
+        const pushed = Math.abs(dAng(cam.yaw, FIX_YAW));
+        await wait(1200 + 1600);
+        const back = Math.abs(dAng(cam.yaw, FIX_YAW));
+        R.manual = {pushed: +pushed.toFixed(3), back: +back.toFixed(3)};
+        const manualOk = pushed >= 0.15 && back <= 0.08;
+        s = await walkInto(42, 50, 'cc-orbit');
+        syncP();
+        const wantO = Math.atan2(-(AX[0] - P.pos.x), -(AX[1] - P.pos.z));
+        R.orbit = {vol: s.vol, yaw: +cam.yaw.toFixed(3), want: +wantO.toFixed(3), err: +Math.abs(dAng(cam.yaw, wantO)).toFixed(3),
+                   hero: [+P.pos.x.toFixed(2), +P.pos.z.toFixed(2)]};
+        const orbitOk = s.vol === 'cc-orbit' && R.orbit.err <= 0.12;
+        await place(57.5, Y0, LZ, FACE_PLUS_X);
+        await wait(1500);
+        s = cs();
+        R.exit = {vol: s.vol, dist: +s.dist.toFixed(2)};
+        const exitOk = s.vol === null && s.dist >= C.dist - 0.5;
+        pass('volumes', tightOk && fixedOk && manualOk && orbitOk && exitOk, R);
+      } finally {
+        cam.setVolumes(null);
+      }
+      await wait(300);
+    }
+
+    // ================= verdicts that span every row ========================
+    ons.on = false;
+    pass('onscreen', ons.frames > 200 && ons.off === 0,
+         {frames: ons.frames, offscreenFrames: ons.off, worstRun_s: +ons.worst.toFixed(3), worstAt: ons.at});
+    {
+      const cw1 = cwInfo();
+      const sweeps = cw1 ? cw1.sweeps - (rapierAt.sweeps0 || 0) : 0;
+      const fallbacks = cw1 ? cw1.fallbacks - (rapierAt.fallbacks0 || 0) : 0;
+      const ok = !!(cw0 && cw0.live && cw1 && cw1.live && !cw1.failed) &&
+                 rapierAt.rigMirrored === rapierAt.rig &&
+                 Math.abs(rapierAt.sweepT - rapierAt.sweepWant) <= 0.01 && rapierAt.sweepHitBox &&
+                 sweeps > 200;
+      pass('rapier', ok, Object.assign({}, rapierAt, {sweeps, fallbacks, errors: cw1 ? cw1.errors : null,
+                                                      demoted: cw1 ? cw1.demoted : null, adds: cw1 ? cw1.adds : null,
+                                                      removes: cw1 ? cw1.removes : null}));
+    }
   } catch (e) {
     out.error = String(e && e.stack || e);
   } finally {
+    ons.on = false;
+    try { if (cam.__test.setSweep) cam.__test.setSweep(true); if (cam.setVolumes) cam.setVolumes(null); } catch (e) {}
     cleanup();
     try { if (origin) { P.__test.teleport(_v.set(origin[0], origin[1], origin[2]));
                         if (P.__test.setVel) P.__test.setVel(_v.set(0,0,0));
@@ -643,13 +835,41 @@ INTERIOR_STATIONS = {
     "verdant-1/@fort":    dict(p=(-9.4, 9.08, -30.4), yaw=0.0, mode="still", note="a corner of the fort interior (playtest verdant-1)"),
     "rime-1/@belfry":     dict(p=(0.0, 15.1, -47.0), yaw=0.0, mode="kick", walls=((0.0, -49.0), (0.0, -45.0)), note="the bell tower shaft, 3.20 m clear (rime-1 #2)"),
     "azure-1/@cistern":   dict(p=(0.0, 5.0, -34.5), yaw=math.pi / 2, mode="kick", walls=((-2.5, -34.5), (2.5, -34.5)), note="the cistern shaft, 3.20 m clear (azure-1 #4)"),
-    "verdant-2/@kickshaft": dict(p=(-7.4, 18.6, -7.4), yaw=math.pi, mode="kick", walls=((-7.4, -9.0), (-7.4, -5.8)), note="the wall-kick shaft floor (verdant-2 #27)"),
+    "verdant-2/@kickshaft": dict(p=(-7.4, 18.6, -7.4), yaw=math.pi, mode="kick", walls=((-7.4, -9.0), (-7.4, -5.8)), ab=True, note="the wall-kick shaft floor (verdant-2 #27)"),
     "verdant-2/@midwalk": dict(p=(8.2, 21.4, -3.0), yaw=0.0, mode="still", note="the middle wall walk (verdant-2 #27)"),
     "azure-2/@turning":   dict(p=(-6.0, 17.0, 4.0), yaw=0.0, mode="still", note="the turning room, the 7.4 m floor bar sweeping (owner: a clockwork room)"),
     "azure-2/@cog":       dict(p=(-11.0, 0.0, 14.0), yaw=0.0, mode="still", hold=True, note="beside the great cog, its arm sweeping through the line of sight (azure-2 #1); HELD on the point — the cog carries an unpinned hero out of the station"),
     "azure-2/@cogdeath":  dict(p=(-19.0, 0.0, 8.0), yaw=0.0, mode="death", cause="crush", note="a death in the gear yard: the death cam shows the hero and the cause"),
     "rime-3/@icecave":    dict(p=(-24.5, 0.1, -17.5), yaw=math.pi / 2, mode="still", note="the ice chamber behind the frozen fall (rime-3 #21)"),
     "azure-3/@isle":      dict(p=(0.0, 21.0, 64.4), yaw=0.0, mode="still", note="the sunken isle beside the crest cage (azure-3 #1)"),
+    # ---- stage 1 camera lane (2026-09-30): the places the Super Mario 64 audit
+    # (_spec/audit_2026_09_29/sm64_bar.md section 2) photographed. `ab` runs the
+    # row twice: first with the whisker fan alone (`setSweep(false)`, reported as
+    # `before`, not gated), then with the swept sphere (gated).
+    # The fort's fallen ramp (ROUTE C): the auditor's runner stood UNDER it,
+    # pressed on the east wall, camera yaw -1.8 (lens toward the wall) and the
+    # camera sat at 0.12 m on grass for 120+ frames (frames/sm64/data/bailey.log
+    # lines 62-65). Posed at that exact point and yaw, then DRIVEN twice: running
+    # in under the ramp to the wall, and from the wall along it into the corner.
+    "verdant-1/@fortramp": dict(p=(11.38, 9.0, -23.85), yaw=-1.8, mode="still", ab=True,
+                                note="under the fallen ramp on the fort's east wall, yaw -1.8 (SM64 audit bailey/031: dist 0.12)"),
+    "verdant-1/@ramprun":  dict(p=(20.5, 9.0, -25.6), yaw=1.76, mode="route", ab=True,
+                                route=[[[], 0.5], [["KeyW"], 2.6], [["KeyS"], 0.25], [[], 0.4], [["KeyW"], 0.8], [[], 1.5]],
+                                note="run in under the ramp to the east wall, pivot, push again (the auditor's ROUTE C)"),
+    "verdant-1/@rampwall": dict(p=(11.6, 9.0, -23.85), yaw=-1.57, camYaw=-1.8, mode="route", ab=True,
+                                route=[[[], 0.6], [["KeyS"], 0.8], [[], 1.0], [["KeyW"], 0.35], [["KeyS"], 0.5], [[], 2.0]],
+                                note="from the wall under the ramp, lens on the wall side, run at the camera into the corner"),
+    # The granary (verdant-3 #26, STILL REPRODUCES in the replay verdicts): at
+    # the ridge-stair foot on the granary's NORTH wall with the camera south of
+    # him, the lens went INSIDE the building. Posed there, then DRIVEN on the
+    # ordinary approach from cp-granary; the lens may never enter the
+    # granary's interior (x -14..-2, z -20.5..-11.5, 13.6..21.6 minus its walls).
+    "verdant-3/@granary":  dict(p=(-6.0, 13.92, -20.95), yaw=0.0, mode="still", ab=True,
+                                note="the ridge-stair foot on the granary's north wall, camera south (verdant-3 #26)"),
+    "verdant-3/@granaryrun": dict(p=(4.0, 13.6, -14.0), yaw=0.395, mode="route", ab=True,
+                                  forbid=(-13.5, 13.6, -20.0, -2.5, 21.6, -12.0),
+                                  route=[[[], 0.5], [["KeyW"], 0.95], [["KeyA"], 0.9], [[], 3.0]],
+                                  note="the approach from cp-granary round the granary's north-east corner (verdant-3 #26)"),
 }
 DEFAULT_STATIONS += list(INTERIOR_STATIONS.keys())
 ROOM_PITCH_MAX = 1.05           # rad — posed pitch cap in a room: defaultPitch 0.22 + the 0.68 room lift + the close lift
@@ -1199,6 +1419,131 @@ async (o) => {
 }
 """
 
+# A ROUTE (stage 1 camera lane, 2026-09-30): the places the Super Mario 64 audit
+# photographed the camera failing are DRIVEN, not posed: a list of
+# [keys, seconds] segments through real KeyboardEvents (seconds of GAME time,
+# `engine.elapsed`, so a loaded box does not shorten a segment), sampled every
+# frame with the kick row's rules: the lens never inside a still solid
+# (KICK_MIN_CLEAR_M), the hero never erased, never off screen longer than
+# KICK_OFFSCREEN_MAX_S, never ghosted under KICK_UNDER_D longer than
+# KICK_UNDER_MAX_S, the game's own probe never blocked longer than 0.3 s, and,
+# where the station names one, the lens never inside a FORBID box (a
+# building's interior the camera must not be put in).
+ROUTE_JS = r"""
+async (o) => {
+  const A = globalThis.CRESTBOUND, G = A && A.game, THREE = A && A.THREE;
+  if (!G || !THREE) return {error: 'no game/THREE'};
+  const frame = () => new Promise(r => requestAnimationFrame(r));
+  let P = G.player;
+  const syncP = () => { if (G.player && G.player !== P) P = G.player; return P; };
+  const cam = G.cam || G.camera, tcam = A.engine && A.engine.camera, C = G.course;
+  if (!cam || !tcam || !C || !C.broadphase) return {error: 'no cam / engine.camera / course.broadphase'};
+  if (G.state === 'paused' && G.resume) G.resume();
+  const st = o.st;
+  let TUNE;
+  try { TUNE = (await import(new URL('runtime/core/tuning.js', location.href).href)).TUNE; }
+  catch (e) { return {error: 'could not import tuning.js: ' + e}; }
+  const target = () => document.querySelector('canvas') || document;
+  const key = (type, code) => {
+    const k = code === 'Space' ? ' ' : (code.startsWith('Key') ? code.slice(3).toLowerCase() : code);
+    target().dispatchEvent(new KeyboardEvent(type, {code, key: k, bubbles: true, cancelable: true}));
+  };
+  const KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ControlLeft', 'KeyQ', 'KeyE', 'KeyF'];
+  const allUp = () => KEYS.forEach((c) => key('keyup', c));
+  const el = () => (A.engine && typeof A.engine.elapsed === 'number') ? A.engine.elapsed : performance.now() / 1000;
+  const _v = new THREE.Vector3();
+  const camPos = new THREE.Vector3(), head = new THREE.Vector3(), dir = new THREE.Vector3(), ndc = new THREE.Vector3();
+  const items = C.broadphase.items || [];
+  const fb = st.forbid || null;
+  let frames = 0, minDist = Infinity, maxFade = 0, erased = 0, offscreen = 0, solidViol = 0, minClear = Infinity, forbidFrames = 0;
+  let underRun = 0, worstUnder = 0, gameRun = 0, worstGame = 0, tPrev = performance.now();
+  const curRun = []; let worstUnderRun = null;
+  let offRun = 0, worstOff = 0, nearestSolid = null, minDistAt = null;
+  const states = {};
+  const sample = () => {
+    syncP();
+    frames++;
+    const now = performance.now(), dtS = Math.min(0.05, (now - tPrev) / 1000); tPrev = now;
+    const s = cam.__test.state();
+    tcam.getWorldPosition(camPos);
+    const rp = P.renderPos || P.pos;
+    states[P.state] = (states[P.state] || 0) + 1;
+    head.set(rp.x, rp.y + (TUNE.height || 1.5) * 0.9, rp.z);
+    let clear = Infinity, what = null;
+    for (let i = 0; i < items.length; i++) {
+      const c = items[i];
+      if (!c || !c.active || c.solid === false || c.group === 'critter' || c.group === 'hazard') continue;
+      const d = typeof c.distanceToPoint === 'function' ? c.distanceToPoint(camPos) : Infinity;
+      if (d < clear) { clear = d; what = c; }
+    }
+    if (clear < minClear) { minClear = clear; nearestSolid = what ? {center: what.center.toArray().map(v => +v.toFixed(2)), half: what.half.toArray().map(v => +v.toFixed(2)), lens: camPos.toArray().map(v => +v.toFixed(2))} : null; }
+    if (clear < o.kickMinClear) solidViol++;
+    if (fb && camPos.x > fb[0] && camPos.y > fb[1] && camPos.z > fb[2] && camPos.x < fb[3] && camPos.y < fb[4] && camPos.z < fb[5]) forbidFrames++;
+    if (s.dist < minDist) { minDist = s.dist; minDistAt = {frame: frames, dist: +s.dist.toFixed(2), yaw: +s.yaw.toFixed(2), pitch: +s.pitch.toFixed(2), yawSlide: +(s.yawSlide || 0).toFixed(2), pitchSlide: +(s.pitchSlide || 0).toFixed(2), hero: [+rp.x.toFixed(2), +rp.y.toFixed(2), +rp.z.toFixed(2)], state: P.state, fade: +(s.heroFade || 0).toFixed(2)}; }
+    maxFade = Math.max(maxFade, s.heroFade || 0);
+    if ((s.heroFade || 0) >= 0.999 && s.dist >= o.fpDist + 0.05) erased++;
+    ndc.set(rp.x, rp.y + (TUNE.height || 1.5) * 0.5, rp.z).project(tcam);
+    const off = Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1 || ndc.z > 1;
+    if (off) offscreen++;
+    offRun = off ? offRun + dtS : 0;
+    if (offRun > worstOff) worstOff = offRun;
+    underRun = s.dist < o.kickUnderD - 1e-3 ? underRun + dtS : 0;
+    if (underRun > 0) curRun.push({f: frames, d: +s.dist.toFixed(2), ys: +(s.yawSlide || 0).toFixed(2), ps: +(s.pitchSlide || 0).toFixed(2), st: P.state, fade: +(s.heroFade || 0).toFixed(2)});
+    else curRun.length = 0;
+    if (underRun > worstUnder) { worstUnder = underRun; worstUnderRun = curRun.slice(-14); }
+    dir.copy(camPos).sub(head);
+    const len = dir.length();
+    let gHit = false;
+    if (len > 0.3 && typeof cam.probeClear === 'function') {
+      dir.multiplyScalar(1 / len);
+      if (cam.probeClear(head, dir, len - 0.05) >= 0.05) gHit = true;
+    }
+    gameRun = gHit ? gameRun + dtS : 0;
+    if (gameRun > worstGame) worstGame = gameRun;
+  };
+  try {
+    allUp();
+    syncP();
+    if (P.dead && G.respawn) { G.respawn(); for (let k = 0; k < 30; k++) await frame(); syncP(); }
+    P.__test.teleport(_v.set(st.p.x, st.p.y + o.interiorLift, st.p.z));
+    if (P.__test.setVel) P.__test.setVel(_v.set(0, 0, 0));
+    if (typeof st.yaw === 'number' && P.__test.setFacing) P.__test.setFacing(st.yaw);
+    if (cam.mode !== 'follow' && 'mode' in cam) cam.mode = 'follow';
+    if (typeof cam.snapToPlayer === 'function') cam.snapToPlayer();
+    const cy = typeof st.camYaw === 'number' ? st.camYaw : st.yaw;
+    if (typeof cy === 'number') { cam.__test.setYaw(cy); cam.__test.setPitch(TUNE.cam.defaultPitch); }
+    for (let k = 0; k < o.settle; k++) await frame();
+    if (typeof cy === 'number') cam.__test.setYaw(cy);
+    const cw0 = cam.__test.camworld ? cam.__test.camworld() : null;
+    let held = [];
+    for (const seg of st.route) {
+      const keys = seg[0], secs = seg[1];
+      for (const c of held) if (keys.indexOf(c) < 0) key('keyup', c);
+      for (const c of keys) if (held.indexOf(c) < 0) key('keydown', c);
+      held = keys.slice();
+      const s0 = el(), w0 = performance.now();
+      while (el() - s0 < secs && performance.now() - w0 < 30000) { await frame(); sample(); }
+    }
+    allUp();
+    const cw1 = cam.__test.camworld ? cam.__test.camworld() : null;
+    const ok = frames > 40 && solidViol === 0 && erased === 0 && worstOff <= o.kickOffMax &&
+               worstGame <= 0.3 && worstUnder <= o.kickUnderMax && forbidFrames === 0;
+    return {ok, mode: 'route', frames, states,
+            minDist: +minDist.toFixed(3), worstUnderMinDist_s: +worstUnder.toFixed(3), kickUnderMax_s: o.kickUnderMax, underD_m: o.kickUnderD,
+            minSolidClear_m: minClear === Infinity ? null : +minClear.toFixed(3), minClearKick_m: o.kickMinClear, solidViolFrames: solidViol,
+            forbidFrames, maxHeroFade: +maxFade.toFixed(3), erasedFrames: erased, heroOffscreenFrames: offscreen,
+            worstOffscreenRun_s: +worstOff.toFixed(3), offscreenMax_s: o.kickOffMax,
+            worstGameRun_s: +worstGame.toFixed(3), nearestSolid, minDistAt, worstUnderRun,
+            sweeps: cw0 && cw1 ? cw1.sweeps - cw0.sweeps : null, fallbacks: cw0 && cw1 ? cw1.fallbacks - cw0.fallbacks : null,
+            hero: [+P.pos.x.toFixed(2), +P.pos.y.toFixed(2), +P.pos.z.toFixed(2)], diedOnStation: !!P.dead};
+  } catch (e) {
+    return {error: String(e && e.stack || e)};
+  } finally {
+    allUp();
+  }
+}
+"""
+
 # A DEATH where the hero stands: the death cam must show the drawn hero (the
 # rewind ghost is the hero mesh, not player.pos) with the lens clear of solids,
 # and the follow camera must be back behind him right after the swap.
@@ -1322,6 +1667,32 @@ def goto_course(pg, cid, wait_s=40):
     pg.wait_for_timeout(1200)
 
 
+# what a `before` (whisker fan only) run reports next to the gated row
+AB_KEYS = ("ok", "frames", "camDist", "minDist", "heroOffscreenFrames", "worstOffscreenRun_s", "maxHeroFade",
+           "erasedFrames", "solidViolFrames", "minSolidClear_m", "worstUnderMinDist_s", "worstGameRun_s",
+           "worstVisRun_s", "forbidFrames", "maxPitch", "minDistAt")
+
+
+def wait_camworld(pg, timeout_s=120):
+    """Wait for the camera's Rapier mirror of the current course; returns its info."""
+    deadline = time.time() + timeout_s
+    info = None
+    while time.time() < deadline:
+        try:
+            info = pg.evaluate("(() => { const c = CRESTBOUND.game.cam; return c && c.__test && c.__test.camworld ? c.__test.camworld() : null; })()")
+        except Exception:
+            info = None
+        if not info or not info.get("allowed") or info.get("live") or info.get("failed"):
+            break
+        pg.wait_for_timeout(400)
+    if not info:
+        return None
+    return {"live": info.get("live"), "allowed": info.get("allowed"), "failed": info.get("failed"),
+            "boxes": info.get("boxes"), "heightfields": info.get("heightfields"),
+            "buildMs": round(info.get("buildMs") or 0), "buildFrames": info.get("buildFrames"),
+            "worstBuildFrameMs": round(info.get("worstBuildFrameMs") or 0, 2)}
+
+
 def run_stations(pg, stations, settle, frames, vis_every, min_clear, shots_dir):
     """Drive every `course/station` row; returns {row: result}."""
     out = {}
@@ -1339,6 +1710,10 @@ def run_stations(pg, stations, settle, frames, vis_every, min_clear, shots_dir):
             for n in names:
                 out["%s/%s" % (cid, n)] = {"error": "__dev.goto(%s) failed: %s" % (cid, str(e)[:200])}
             continue
+        # The swept sphere answers only once the camera-only Rapier mirror of THIS
+        # course is live (it rebuilds on a course change, under a per-frame
+        # budget): a row sampled before that would measure the whisker fan.
+        cw = wait_camworld(pg)
         try:
             table = pg.evaluate(STATION_LIST_JS)
         except Exception as e:
@@ -1357,8 +1732,9 @@ def run_stations(pg, stations, settle, frames, vis_every, min_clear, shots_dir):
                     continue
                 st = {"name": n, "kind": "interior", "p": {"x": spec["p"][0], "y": spec["p"][1], "z": spec["p"][2]},
                       "yaw": spec.get("yaw"), "walls": [list(w) for w in spec.get("walls", ())], "cause": spec.get("cause"),
-                      "hold": bool(spec.get("hold"))}
-                js = {"still": STATION_JS, "kick": KICK_JS, "death": DEATH_JS}[spec.get("mode", "still")]
+                      "hold": bool(spec.get("hold")), "camYaw": spec.get("camYaw"),
+                      "route": spec.get("route"), "forbid": list(spec["forbid"]) if spec.get("forbid") else None}
+                js = {"still": STATION_JS, "kick": KICK_JS, "death": DEATH_JS, "route": ROUTE_JS}[spec.get("mode", "still")]
                 # a dead hero (the placement landed in a hazard) is respawned before the row runs
                 try:
                     if pg.evaluate("!!(CRESTBOUND.game.player && CRESTBOUND.game.player.dead)"):
@@ -1372,10 +1748,52 @@ def run_stations(pg, stations, settle, frames, vis_every, min_clear, shots_dir):
                 if not st:
                     out[row] = {"error": "station %s not found on %s (have %s)" % (n, cid, sorted(k for k in (table or {}) if k != "error")[:12])}
                     continue
+            before = None
+            spec_ab = n.startswith("@") and bool(INTERIOR_STATIONS.get(row, {}).get("ab"))
+            if spec_ab:
+                # the BEFORE: the same row with the whisker fan alone (not gated)
+                try:
+                    pg.evaluate("CRESTBOUND.game.cam.__test.setSweep(false)")
+                    b = pg.evaluate(js, dict(opts, st=st))
+                    before = {k: b.get(k) for k in AB_KEYS if isinstance(b, dict) and k in b} if isinstance(b, dict) else {"error": "no result"}
+                    if isinstance(b, dict) and b.get("error"):
+                        before = {"error": str(b["error"])[:200]}
+                except Exception as e:
+                    before = {"error": str(e)[:200]}
+                finally:
+                    try:
+                        pg.evaluate("CRESTBOUND.game.cam.__test.setSweep(true)")
+                    except Exception:
+                        pass
+                    wait_camworld(pg, timeout_s=60)
+                    if shots_dir:
+                        try:
+                            pg.screenshot(path=os.path.join(shots_dir, "camcheck_%s_%s_before.png" % (cid, n)))
+                        except Exception:
+                            pass
+                try:
+                    if pg.evaluate("!!(CRESTBOUND.game.player && CRESTBOUND.game.player.dead)"):
+                        pg.evaluate("CRESTBOUND.game.respawn && CRESTBOUND.game.respawn()")
+                        pg.wait_for_timeout(1500)
+                except Exception:
+                    pass
+            try:
+                live = bool(pg.evaluate("CRESTBOUND.game.cam.__test.camworld().live"))
+            except Exception:
+                live = None
             try:
                 res = pg.evaluate(js, dict(opts, st=st))
             except Exception as e:
                 res = {"error": str(e)[:400]}
+            if isinstance(res, dict):
+                res["cwLive"] = live
+                res["cw"] = cw
+                if cw and cw.get("allowed") and not live and not res.get("error"):
+                    # a row the sweep did not answer is not evidence for the sweep
+                    res["ok"] = False
+                    res["cwNotLive"] = True
+                if before is not None:
+                    res["before"] = before
             if isinstance(res, dict) and n.startswith("@"):
                 res["note"] = INTERIOR_STATIONS[row].get("note")
             if shots_dir:
@@ -1414,6 +1832,106 @@ def leave_title(pg, timeout=150):
     return False
 
 
+# ---------------------------------------------------------------------------
+# BOOT A/B (stage 1 camera lane, 2026-09-30): does loading Rapier stall the
+# first frame? The page is booted with `camrapier=0` (the camera never asks for
+# Rapier: the before) and without it (the after), `runs` times each, and the
+# same three numbers are read off a requestAnimationFrame clock installed
+# before any page script runs: navigation -> the first frame drawn in a live
+# game state; the worst and median frame of the first 120 live frames; and the
+# worst frame inside Rapier's own load window (import + init, camworld.js
+# loader timestamps). The STRUCTURAL claim is gated: in the after, the Rapier
+# import starts only AFTER the first live frame was drawn, and in the before it
+# never starts. The timings are INFORMATION: on a box at 100 % CPU they move by
+# seconds between identical runs (HARNESS_NOTES "Chrome contention").
+BOOT_AB_INIT = r"""
+(() => {
+  const T = new Float64Array(30000); let n = 0, firstPlay = -1, firstPlayFrame = -1;
+  const LT = [];
+  try { new PerformanceObserver((l) => { for (const e of l.getEntries()) LT.push([e.startTime, e.duration]); }).observe({entryTypes: ['longtask']}); } catch (e) {}
+  window.__bootab = { T, LT, get n() { return n; }, get firstPlay() { return firstPlay; }, get firstPlayFrame() { return firstPlayFrame; } };
+  const loop = () => {
+    if (n < T.length) T[n++] = performance.now();
+    if (firstPlay < 0) { try { const s = globalThis.CRESTBOUND && CRESTBOUND.game && CRESTBOUND.game.state;
+      if (s === 'keep' || s === 'playing') { firstPlay = performance.now(); firstPlayFrame = n; } } catch (e) {} }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+})();
+"""
+
+BOOT_AB_READ = r"""
+() => {
+  const w = window.__bootab, T = w.T, n = w.n;
+  const med = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
+  const c = CRESTBOUND.game.cam, ci = c && c.__test && c.__test.camworld ? c.__test.camworld() : {};
+  const L = ci.loader || {};
+  const first = []; for (let i = w.firstPlayFrame + 1; i < Math.min(n, w.firstPlayFrame + 121); i++) first.push(T[i] - T[i - 1]);
+  let lw = null;
+  if (L.startMs > 0 && L.readyMs > 0) {
+    let worst = 0; const sub = [];
+    for (let i = 1; i < n; i++) if (T[i] >= L.startMs && T[i - 1] <= L.readyMs) { const d = T[i] - T[i - 1]; sub.push(d); if (d > worst) worst = d; }
+    const lt = w.LT.filter(([s, d]) => s + d >= L.startMs && s <= L.readyMs).map(([s, d]) => +d.toFixed(1));
+    lw = {loadMs: +(L.readyMs - L.startMs).toFixed(1), framesInWindow: sub.length, worstFrame: +worst.toFixed(1), longTasks: lt};
+  }
+  return {navToFirstLive_ms: w.firstPlay > 0 ? +w.firstPlay.toFixed(0) : null,
+          first120: {worst: first.length ? +Math.max(...first).toFixed(1) : null, median: first.length ? +med(first).toFixed(1) : null, n: first.length},
+          loaderState: L.state || null, loaderStartMs: L.startMs > 0 ? +L.startMs.toFixed(0) : null,
+          loaderStartAfterFirstLive: (L.startMs > 0 && w.firstPlay > 0) ? L.startMs > w.firstPlay : null,
+          loadWindow: lw, mirror: {live: ci.live, boxes: ci.boxes, buildMs: ci.buildMs ? Math.round(ci.buildMs) : null, worstBuildFrameMs: ci.worstBuildFrameMs}};
+}
+"""
+
+
+def boot_ab(p, url, runs, headless):
+    """Boot the page with and without Rapier; returns (rows, ok)."""
+    rows = []
+    sep = "&" if "?" in url else "?"
+    for label, extra in (("before (camrapier=0)", sep + "camrapier=0"), ("after (Rapier)", "")):
+        for r in range(runs):
+            br = launch_headless(p) if headless else p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
+            try:
+                pg = br.new_page(viewport={"width": 1280, "height": 720})
+                pg.add_init_script(BOOT_AB_INIT)
+                pg.goto(url + extra, wait_until="load", timeout=90_000)
+                deadline = time.time() + 240
+                while time.time() < deadline:
+                    try:
+                        if pg.evaluate("!!(globalThis.CRESTBOUND && CRESTBOUND.game)"):
+                            break
+                    except Exception:
+                        pass
+                    pg.wait_for_timeout(400)
+                leave_title(pg, timeout=300)
+                # after: until the mirror is live; before: the same settle
+                deadline = time.time() + 90
+                while time.time() < deadline:
+                    try:
+                        if pg.evaluate("(() => { const c = CRESTBOUND.game.cam; const i = c && c.__test && c.__test.camworld && c.__test.camworld(); return !!(i && (i.live || !i.allowed)); })()"):
+                            break
+                    except Exception:
+                        pass
+                    pg.wait_for_timeout(400)
+                pg.wait_for_timeout(3000)
+                row = pg.evaluate(BOOT_AB_READ)
+            except Exception as e:
+                row = {"error": str(e)[:300]}
+            finally:
+                br.close()
+            row["variant"] = label
+            row["run"] = r + 1
+            rows.append(row)
+    ok = True
+    for row in rows:
+        if row.get("error"):
+            ok = False
+        elif row["variant"].startswith("after"):
+            ok = ok and row.get("loaderStartAfterFirstLive") is True and (row.get("mirror") or {}).get("live") is True
+        else:
+            ok = ok and row.get("loaderState") in ("idle", None)
+    return rows, ok
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default=DEFAULT_URL)
@@ -1430,7 +1948,19 @@ def main() -> int:
     ap.add_argument("--stations-only", action="store_true", help="run only the station rows")
     ap.add_argument("--station-frames", type=int, default=STATION_FRAMES)
     ap.add_argument("--station-settle", type=int, default=STATION_SETTLE_FRAMES)
+    ap.add_argument("--boot-ab", type=int, default=0, metavar="RUNS",
+                    help="only the boot A/B: boot RUNS times with camrapier=0 and RUNS times with Rapier, report boot-to-first-frame")
     args = ap.parse_args()
+    if args.boot_ab:
+        with sync_playwright() as p:
+            rows, ok = boot_ab(p, args.url, args.boot_ab, args.headless)
+        print("=" * 72)
+        print("BOOT A/B  URL: %s" % args.url)
+        for r in rows:
+            print("  %-22s run %d  %s" % (r.get("variant"), r.get("run", 0), json.dumps({k: v for k, v in r.items() if k not in ("variant", "run")}, sort_keys=True)))
+        print("=" * 72)
+        print("VERDICT: %s" % ("RAPIER OFF THE FIRST-FRAME PATH" if ok else "BOOT A/B FAILS"))
+        return 0 if ok else 1
     stations = [] if args.no_stations else [s.strip() for s in args.stations.split(",") if s.strip()]
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
@@ -1560,7 +2090,8 @@ def main() -> int:
                                   "worstOffscreenRun_s", "offscreenMax_s", "underD_m",
                                   "deaths", "deadFrames", "deadOffscreenFrames", "deadSolidViolFrames", "deadErasedFrames",
                                   "deadNotDeathModeFrames", "deadNotDeathModeFramesInfo", "deadCauseOffscreenFrames",
-                                  "deadGhostFrames", "minSolidClearDead_m", "deadDist", "recoveredAfterFrames") if k in r}
+                                  "deadGhostFrames", "minSolidClearDead_m", "deadDist", "recoveredAfterFrames",
+                                  "forbidFrames", "sweeps", "fallbacks", "cwLive", "cwNotLive", "before") if k in r}
         if not ok:
             for k in ("nearestSolid", "worstGameHit", "worstVisualHit", "perHeading", "maxPitchAt", "minDistAt", "worstUnderRun", "sample"):
                 if k in r: keep[k] = r[k]
