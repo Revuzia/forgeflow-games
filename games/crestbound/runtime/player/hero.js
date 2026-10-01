@@ -184,6 +184,12 @@ function foldTurns(a) { return a - TAU * Math.round(a / TAU); }
 
 /** Blend rates — the contract's critically-damped spring constants. */
 const BONE_LAMBDA = 14;
+/**
+ * Stage 1: a STRIKE's bones chase their targets at this rate instead. At 14 a
+ * 0.30 s jab reached ~45 % of its extension by the hit frame (measured: the
+ * mitten at belt height in the punch portrait) — a punch is a snap, not a sway.
+ */
+const STRIKE_LAMBDA = 38;
 const ROOT_LAMBDA = 18;
 const SQUASH_LAMBDA = 13;
 
@@ -2060,6 +2066,8 @@ export class Hero {
 
     this._squash = 1;
     this._squashTgt = 1;
+    /** Per-frame bone spring rate: a strike claims a stiffer one (STRIKE_LAMBDA). */
+    this._boneLambda = BONE_LAMBDA;
 
     // flips are driven, not sprung — see the header
     this._flipPitch = 0;
@@ -4009,6 +4017,7 @@ export class Hero {
     this._rootPitchDrv = false;
     this._noIK = false;
     this._squint = 0;
+    this._boneLambda = BONE_LAMBDA;
     // NOT cleared: b.cx/cy/cz and the cyclic root channels. A writer that does
     // not claim the layer this frame simply leaves `_cycTgt` at 0, and the
     // envelope fades the last cyclic pose out over ~1/13 s.
@@ -4028,11 +4037,12 @@ export class Hero {
     const B = this._bones;
     this._cycW = damp(this._cycW, this._cycTgt, CYC_LAMBDA, dt);
     const w = this._cycW;
+    const L = this._boneLambda > 0 ? this._boneLambda : BONE_LAMBDA;
     for (let i = 0; i < B.length; i++) {
       const b = B[i];
-      b.bx = damp(b.bx, b.tx, BONE_LAMBDA, dt);
-      b.by = dampAngle(b.by, b.ty, BONE_LAMBDA, dt);
-      b.bz = damp(b.bz, b.tz, BONE_LAMBDA, dt);
+      b.bx = damp(b.bx, b.tx, L, dt);
+      b.by = dampAngle(b.by, b.ty, L, dt);
+      b.bz = damp(b.bz, b.tz, L, dt);
       const r = b.o.rotation;
       r.x = b.bx + b.cx * w;
       r.y = b.by + b.cy * w;
@@ -4299,6 +4309,7 @@ export class Hero {
    */
   _posePunch(t, side) {
     const B = this.B;
+    this._boneLambda = STRIKE_LAMBDA;
     const u = clamp01(t / 0.30);
     const wind = 1 - smoothstep(0.0, 0.16, u);
     const hit = smoothstep(0.08, 0.30, u) * (1 - smoothstep(0.62, 1.0, u));
@@ -4331,6 +4342,7 @@ export class Hero {
   /** KICK — the combo's finisher: chamber the knee, snap the boot out, recover. */
   _poseKick(t) {
     const B = this.B;
+    this._boneLambda = STRIKE_LAMBDA;
     const u = clamp01(t / 0.46);
     const chamber = smoothstep(0.0, 0.2, u) * (1 - smoothstep(0.24, 0.40, u));
     const ext = smoothstep(0.18, 0.40, u) * (1 - smoothstep(0.66, 1.0, u));
@@ -4356,6 +4368,7 @@ export class Hero {
   /** AIR KICK — one leg snapped out ahead, the other tucked, arms thrown back. */
   _poseAirKick(t) {
     const B = this.B;
+    this._boneLambda = STRIKE_LAMBDA;
     const k = smoothstep(0, 0.07, t) * (1 - smoothstep(0.30, 0.40, t));
     B.upperLegR.tx = 1.40 * k; B.lowerLegR.tx = -0.08 * k; B.footR.tx = -0.30 * k;
     B.upperLegL.tx = 0.95 * k; B.lowerLegL.tx = -1.90 * k; B.footL.tx = 0.40 * k;
@@ -4481,6 +4494,7 @@ export class Hero {
   /** THROW — the load goes back over the head, then the whole body whips forward. */
   _poseThrow(t) {
     const B = this.B;
+    this._boneLambda = STRIKE_LAMBDA;
     const u = clamp01(t / 0.28);
     const back = smoothstep(0, 0.2, u) * (1 - smoothstep(0.2, 0.42, u));
     const whip = smoothstep(0.18, 0.45, u) * (1 - smoothstep(0.7, 1.0, u));
