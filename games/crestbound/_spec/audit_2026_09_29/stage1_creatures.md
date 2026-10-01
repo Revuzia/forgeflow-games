@@ -300,3 +300,8 @@ after it and fought the same: 3 hits, 25.8 s.)
   at 77-94 % CPU (34-43 chrome processes); the course sim alone (trace) runs 900 frames x 6 stations in 0.5-8.6 s.
 - The puffer's pop needs a hero who lands on the ball slowly: the air floor (AIR_KEEP_FRAC 0.45, movement feel, not
   touched) keeps ~half the launch speed, so a fast landing bounces him off sideways (tries 1-3 of the 07:15 run).
+- A death AFTER a boss is beaten revives it: course.resetFrom(cp) -> _resetCritters -> boss.reset() (dormant, full
+  hp), exactly as the Warden has always behaved; the spawned boss crest stays. Seen in the Hoarhorn record (bot fell
+  in the channel on the way to the crest: its final state reads 'dormant', hp 3, AFTER bossDown + trigger 'boss'
+  + crest taken). Stage 2 may want a beaten boss to stay down for the rest of the visit (a course-side flag; the
+  boss would need a `keepDown` honoured in `_reset`) — a design call, not changed here.
