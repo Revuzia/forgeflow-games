@@ -79,6 +79,7 @@ const TYPE_TAG = {
    mission layer is this module's, so its rules ride with it (injected once). */
 const MISSION_CSS_ID = 'cb-card-missions-css';
 const MISSION_CSS = `
+.cb-card.cc-leaving{ display:flex; pointer-events:none; }
 .cc-crests .cc-mtile{ position:relative; cursor:pointer; user-select:none; transition:transform .16s var(--e-out,ease),
   border-color .16s, background .16s, box-shadow .16s; }
 .cc-crests .cc-mtile:hover{ border-color:rgba(243,233,210,.26); }
@@ -472,6 +473,7 @@ export class CourseCard {
       padNav.acquire(this._padHandler);
       if (UIRegistry.hud && typeof UIRegistry.hud.hideFor === 'function') UIRegistry.hud.hideFor('card');
     }
+    this.el.classList.remove('cc-leaving');
     this.el.classList.add('on');
 
     animateOnce(this.el, [{ opacity: 0 }, { opacity: 1 }], { duration: 200 });
@@ -517,8 +519,17 @@ export class CourseCard {
     this._open = false;
     padNav.release(this._padHandler);
     if (this._keyHandler) { window.removeEventListener('keydown', this._keyHandler, true); this._keyHandler = null; }
+    /* `.on` MEANS OPEN, from this instant. It used to come off only in the fade's
+       onfinish, and on a starved frame clock that fired SECONDS late (measured,
+       missions lane 2026-09-30: 2.2 s after a cancel the card still read `.on`),
+       so anything asking "is the card up?" heard yes, sent its ESC to a card that
+       was gone, and the Keep paused (gatecheck: "cancelling the card returns
+       control: state='paused'", then every later gate row). The fade now runs
+       under `cc-leaving`, which only keeps the element painted. */
+    this.el.classList.remove('on');
+    this.el.classList.add('cc-leaving');
     const a = animateOnce(this.el, [{ opacity: 1 }, { opacity: 0 }], { duration: 180 });
-    const done = () => { if (!this._open) this.el.classList.remove('on'); };
+    const done = () => { this.el.classList.remove('cc-leaving'); };
     if (a) a.onfinish = done; else done();
     popCapture(this.game, false);
     if (UIRegistry.hud && typeof UIRegistry.hud.showFor === 'function') UIRegistry.hud.showFor('card');

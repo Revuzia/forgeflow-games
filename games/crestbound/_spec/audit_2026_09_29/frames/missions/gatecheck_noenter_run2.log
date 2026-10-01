@@ -1,0 +1,87 @@
+== TITLE (shipping build) ==
+
+== TITLE (?dev=1) ==
+
+== UNLOCK-ALL HATCH ==
+
+== GATE PLACEMENT ==
+  FAIL  azure-2: there is floor to stand on in front of it  dropped at the authored stand-out spot [-22.1, 0.05, 22] and ended [-22.1, 0.13, 22] (grounded=False)
+
+== GATE-OPENS CINEMATIC ==
+
+-- verdant-1  (requires 0 crests, painting)
+
+-- verdant-2  (requires 1 crest, painting)
+
+-- verdant-3  (requires 3 crests, painting)
+
+-- ember-1  (requires 5 crests, painting)
+
+-- ember-2  (requires 8 crests, painting)
+
+-- ember-3  (requires 12 crests, painting)
+
+-- ember-4  (requires 15 crests, painting)
+
+-- rime-1  (requires 18 crests, painting)
+  FAIL  rime-1: cancelling the card (offset +0.0 m) returns control  state='paused'
+  FAIL  rime-1: walk-in (offset -1.0 m) raises the course card  state=paused pos=[-10.1, 6.47, -19] prompt='' {"idx": 7, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 4.61}
+  FAIL  rime-1: walk-in (offset +1.0 m) raises the course card  state=paused pos=[-10.1, 6.47, -21] prompt='' {"idx": 7, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 4.61}
+
+-- rime-2  (requires 22 crests, painting)
+  FAIL  rime-2: sealed walk-in (offset +0.0 m) refuses  state=paused cardOpen=False
+  FAIL  rime-2: sealed walk-in (offset +0.0 m) says what it needs  nothing readable named 22 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  rime-2: sealed walk-in (offset -1.0 m) refuses  state=paused cardOpen=False
+  FAIL  rime-2: sealed walk-in (offset -1.0 m) says what it needs  nothing readable named 22 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  rime-2: sealed walk-in (offset +1.0 m) refuses  state=paused cardOpen=False
+  FAIL  rime-2: sealed walk-in (offset +1.0 m) says what it needs  nothing readable named 22 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  rime-2: walk-in (offset +0.0 m) raises the course card  state=paused pos=[-10.1, 6.47, -28] prompt='' {"idx": 8, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.61}
+  FAIL  rime-2: walk-in (offset -1.0 m) raises the course card  state=paused pos=[-10.1, 6.47, -27] prompt='' {"idx": 8, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 4.61}
+  FAIL  rime-2: walk-in (offset +1.0 m) raises the course card  state=paused pos=[-10.1, 6.47, -29] prompt='' {"idx": 8, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 4.61}
+
+-- rime-3  (requires 26 crests, painting)
+  FAIL  rime-3: sealed walk-in (offset +0.0 m) refuses  state=paused cardOpen=False
+  FAIL  rime-3: sealed walk-in (offset +0.0 m) says what it needs  nothing readable named 26 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  rime-3: sealed walk-in (offset -1.0 m) refuses  state=paused cardOpen=False
+  FAIL  rime-3: sealed walk-in (offset -1.0 m) says what it needs  nothing readable named 26 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  rime-3: sealed walk-in (offset +1.0 m) refuses  state=paused cardOpen=False
+  FAIL  rime-3: sealed walk-in (offset +1.0 m) says what it needs  nothing readable named 26 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  rime-3: walk-in (offset +0.0 m) raises the course card  state=paused pos=[0, 6.47, -32.7] prompt='' {"idx": 9, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.61}
+  FAIL  rime-3: walk-in (offset -1.0 m) raises the course card  state=paused pos=[-1, 6.47, -32.7] prompt='' {"idx": 9, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 4.61}
+  FAIL  rime-3: walk-in (offset +1.0 m) raises the course card  state=paused pos=[1, 6.47, -32.7] prompt='' {"idx": 9, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 4.61}
+
+-- azure-1  (requires 30 crests, glass)
+  FAIL  azure-1: sealed walk-in (offset +0.0 m) refuses  state=paused cardOpen=False
+  FAIL  azure-1: sealed walk-in (offset +0.0 m) says what it needs  nothing readable named 30 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  azure-1: sealed walk-in (offset -1.0 m) refuses  state=paused cardOpen=False
+  FAIL  azure-1: sealed walk-in (offset -1.0 m) says what it needs  nothing readable named 30 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  azure-1: sealed walk-in (offset +1.0 m) refuses  state=paused cardOpen=False
+  FAIL  azure-1: sealed walk-in (offset +1.0 m) says what it needs  nothing readable named 30 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  azure-1: walk-in (offset +0.0 m) raises the course card  state=paused pos=[24.1, 0.17, 30] prompt='' {"idx": 10, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.61}
+  FAIL  azure-1: walk-in (offset -1.0 m) raises the course card  state=paused pos=[24.1, 0.17, 29] prompt='' {"idx": 10, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 4.61}
+  FAIL  azure-1: walk-in (offset +1.0 m) raises the course card  state=paused pos=[24.1, 0.17, 31] prompt='' {"idx": 10, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 4.61}
+
+-- azure-2  (requires 35 crests, glass)
+  FAIL  azure-2: sealed walk-in (offset +0.0 m) refuses  state=paused cardOpen=False
+  FAIL  azure-2: sealed walk-in (offset +0.0 m) says what it needs  nothing readable named 35 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  azure-2: sealed walk-in (offset -1.0 m) refuses  state=paused cardOpen=False
+  FAIL  azure-2: sealed walk-in (offset -1.0 m) says what it needs  nothing readable named 35 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  azure-2: sealed walk-in (offset +1.0 m) refuses  state=paused cardOpen=False
+  FAIL  azure-2: sealed walk-in (offset +1.0 m) says what it needs  nothing readable named 35 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  azure-2: walk-in (offset +0.0 m) raises the course card  state=paused pos=[-22.1, 0.17, 22] prompt='' {"idx": 11, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.61}
+  FAIL  azure-2: walk-in (offset -1.0 m) raises the course card  state=paused pos=[-22.1, 0.17, 23] prompt='' {"idx": 11, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 4.61}
+  FAIL  azure-2: walk-in (offset +1.0 m) raises the course card  state=paused pos=[-22.1, 0.17, 21] prompt='' {"idx": 11, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 4.61}
+
+-- azure-3  (requires 40 crests, door)
+  FAIL  azure-3: sealed walk-in (offset +0.0 m) refuses  state=paused cardOpen=False
+  FAIL  azure-3: sealed walk-in (offset +0.0 m) says what it needs  nothing readable named 40 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  azure-3: sealed walk-in (offset -0.6 m) refuses  state=paused cardOpen=False
+  FAIL  azure-3: sealed walk-in (offset -0.6 m) says what it needs  nothing readable named 40 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  azure-3: sealed walk-in (offset +0.6 m) refuses  state=paused cardOpen=False
+  FAIL  azure-3: sealed walk-in (offset +0.6 m) says what it needs  nothing readable named 40 crests while this gate was near -- it said '' (everything on screen during the walk: '')
+  FAIL  azure-3: walk-in (offset +0.0 m) raises the course card  state=paused pos=[-17, 12.77, 36.5] prompt='' {"idx": 12, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.61}
+  FAIL  azure-3: walk-in (offset -0.6 m) raises the course card  state=paused pos=[-16.4, 12.77, 36.5] prompt='' {"idx": 12, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.97}
+  FAIL  azure-3: walk-in (offset +0.6 m) raises the course card  state=paused pos=[-17.6, 12.77, 36.5] prompt='' {"idx": 12, "near": -1, "suppressed": -1, "dwell": 0, "locked": false, "loading": false, "gateOpenT": -1, "deathT": -1, "insideVolume": false, "volumeActive": true, "d2": 3.97}
+
+GATECHECK FAILED  263 passed, 49 failed  (411s)
+exit 1

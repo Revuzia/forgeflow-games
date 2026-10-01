@@ -134,3 +134,25 @@ edited only to author two missions - see below).
   def), verdant-1 79/80 (cp4 respawn 1258 ms; median 684 <= 700 now passes), gates 6/6. Only wall-stamped
   respawn rows ever fail and they flip run to run on the same build => load. Log loopcheck_run3.log.
 - coursecard.js: padDirNow() made closure-free (padOn helper).
+- gatecheck --no-enter run 2 (23:02, CPU 65 %): 1 floor row (azure-2, ended +0.08 m, wall wait) and then
+  "rime-1: cancelling the card (offset +0.0 m) returns control state='paused'" — and the harness never
+  resumes, so every later rime/azure row failed in 'paused' (log gatecheck_noenter_run2.log). Same symptom
+  as run 1's azure-3 row. Investigating because the card is this lane's:
+  * _ms_pauseprobe.py (gatecheck's own place/walk_in on the LIVE loop + real Escape, Game.pause wrapped,
+    window keydown listeners before and after the card): 12 cycles on rime-1 / azure-3 / rime-2, all back
+    to 'keep', ZERO pauses; the Escape keydown NEVER reached the window bubble phase (input.js's listener),
+    i.e. the card consumes it. Not reproduced outside a full gatecheck run.
+  * next: the same Game.pause instrumentation INSIDE a full gatecheck run ($TEMP gatecheck_diag.py).
+- ROOT CAUSE of "cancelling the card returns control: state='paused'" (gatecheck_diag_paused_cause.log, a full
+  gatecheck run with Game.pause + card.close/_choose + every key and state change logged):
+  the card's close() removed `.on` only in the 180 ms fade's onfinish; on the starved frame clock that
+  fired > 2 s late. gatecheck's walk_in reads `.cb-card.on` as "card open", so the NEXT walk broke out
+  after 141 ms (state still 'keep', no card), "raised" was true, and its Escape went to the Keep:
+  window bubble -> input.js latched pause -> _readInputActions -> pause('input') -> every later row
+  'paused'. FIX (coursecard.js close()): `.on` comes off at once; the fade runs under `cc-leaving`
+  (display only, pointer-events none). `.on` now means open, exactly when `_open` is true.
+- gatecheck --no-enter after the close fix (23:35-23:44, CPU 100 %): 240 passed, 54 failed, ZERO "returns
+  control" failures and no 'paused' cascade (log gatecheck_noenter_after_closefix.log). The 54: 35 walk-ins
+  + 14 sealed walk-ins whose hero never reached the trigger inside gatecheck's 3.4 s WALL budget (event log:
+  W held 3.4-3.5 s, state never left 'keep', hero moved < 0.1 m at verdant-2) + 5 floor drops (900 ms wall).
+  The same rows hand-stepped: _ms_gateprobe.py 42/42.
