@@ -807,7 +807,7 @@
 
     // ── shooters / action ──
     "vector-storm": "twinstick",
-    "last-circle": "shooter",
+    "last-circle": "native",
     "blackridge": "shooter",
     "neon-veil": ["shooter", { buttons: [B("FIRE", "Mouse0"), B("BURN", "Mouse2"), B("SHLD", "KeyF")] }],
     "ember-sanctum": "action",
