@@ -182,8 +182,16 @@ async () => {
   let P = G.player;
   const syncP = () => { if (G.player && G.player !== P) P = G.player; return P; };
   const frame = () => new Promise(r => requestAnimationFrame(r));
-  const wait = async (ms) => { const t0 = performance.now();
-                               while (performance.now() - t0 < ms) await frame(); };
+  // GAME time, not wall time (HARNESS_NOTES "Chrome contention": engine.js caps
+  // dt, so on a loaded box a wall-clock budget starves every timed row — the
+  // stage-1 run measured 5 frames in the framing row's 5 s and 10 in the shaft
+  // row's 1.6 s at ~2 fps). Every timed loop below reads `simMs()`, with a
+  // wall-clock runaway guard (`wallOk`) so a paused engine cannot hang the row.
+  const simMs = () => (A.engine && typeof A.engine.elapsed === 'number') ? A.engine.elapsed * 1000 : performance.now();
+  const W0 = {t: performance.now()};
+  const wallOk = (w0, ms) => performance.now() - w0 < Math.max(30000, ms * 40);
+  const wait = async (ms) => { const t0 = simMs(), w0 = performance.now();
+                               while (simMs() - t0 < ms && wallOk(w0, ms)) await frame(); };
   const target = () => document.querySelector('canvas') || document;
   const key = (type, code) => {
     const k = code === 'Space' ? ' ' : (code.startsWith('Key') ? code.slice(3).toLowerCase() : code);
@@ -323,11 +331,11 @@ async () => {
   // A frame counts when the follow camera owns the shot (not peek / death /
   // cinematic) and the lens is outside the hero (dist >= 0.35, camera.js
   // HERO_GUARD_NEAR_M: inside him is the first-person commit, not a framing).
-  const ons = {frames: 0, off: 0, run: 0, worst: 0, at: null, tPrev: performance.now(), on: true};
+  const ons = {frames: 0, off: 0, run: 0, worst: 0, at: null, tPrev: simMs(), on: true};
   const onsV = new THREE.Vector3();
   const onsLoop = () => {
     if (!ons.on) return;
-    const now = performance.now(), dtS = Math.min(0.05, (now - ons.tPrev) / 1000); ons.tPrev = now;
+    const now = simMs(), dtS = Math.min(0.05, (now - ons.tPrev) / 1000); ons.tPrev = now;
     try {
       syncP();
       const s = cam.__test.state();
@@ -418,10 +426,10 @@ async () => {
       await wait(700);
       const NEAR_FLOOR = 0.05;
       let minDist = Infinity, minHead = Infinity, maxFade = 0, nearFrames = 0, inWall = 0, frames = 0;
-      let occRun = 0, occWorst = 0, tPrev = performance.now();
+      let occRun = 0, occWorst = 0, tPrev = simMs();
       down('Space'); await frame(); await frame(); up('Space');
-      const t0 = performance.now();
-      while (performance.now() - t0 < 1600) {
+      const t0 = simMs(), w0 = performance.now();
+      while (simMs() - t0 < 1600 && wallOk(w0, 1600)) {
         await frame();
         syncP();
         const s = cs();
@@ -437,7 +445,7 @@ async () => {
           if (s.pos[1] < TEST.y + SH_H * 2) inWall++;
         }
         // continuous occlusion, in seconds, same rule as the occlusion row
-        const now = performance.now(), dtS = (now - tPrev) / 1000; tPrev = now;
+        const now = simMs(), dtS = (now - tPrev) / 1000; tPrev = now;
         let blocked = false;
         if (bps[0] && typeof bps[0].raycast === 'function' && hd > 0.5) {
           _v.set(hx - s.pos[0], hy - s.pos[1], hz - s.pos[2]).normalize();
@@ -449,7 +457,9 @@ async () => {
         frames++;
       }
       allUp();
-      const ok = frames > 40 && minDist >= C.minDist - 1e-3 && nearFrames === 0 &&
+      // >= 30 samples of the 1.6 s jump: engine.js caps dt at 1/20 s, so a starved
+      // box still yields 32 frames of GAME time here, and 30 cover the ladder.
+      const ok = frames >= 30 && minDist >= C.minDist - 1e-3 && nearFrames === 0 &&
                  inWall === 0 && maxFade < 1e-3 && occWorst <= 0.3;
       pass('shaft', ok, {frames, minDist: +minDist.toFixed(3), minDistBudget: C.minDist,
                          minHeadDist: +minHead.toFixed(3), nearFrames, lensInWallFrames: inWall,
@@ -463,9 +473,10 @@ async () => {
       await place(-30, TEST.y, TEST.z, FACE_PLUS_X);
       await wait(400);
       const x0 = P.pos.x;
-      let maxX = 0, maxY = 0, travelled = 0, frames = 0, t0 = performance.now();
+      let maxX = 0, maxY = 0, travelled = 0, frames = 0, t0 = simMs();
+      const w0f = performance.now();
       down('KeyW');
-      while (travelled < 12 && performance.now() - t0 < 5000) {
+      while (travelled < 12 && simMs() - t0 < 5000 && wallOk(w0f, 5000)) {
         await frame();
         syncP();
         const rp = P.renderPos || P.pos;
@@ -492,14 +503,15 @@ async () => {
       await place(-30, TEST.y, TEST.z, FACE_PLUS_X);
       await wait(300);
       down('KeyW');
-      let t0 = performance.now();
-      while (spd() < needSpeed && performance.now() - t0 < 1500) await frame();
+      let t0 = simMs();
+      const w0r = performance.now();
+      while (spd() < needSpeed && simMs() - t0 < 1500 && wallOk(w0r, 1500)) await frame();
       const speedAtMove = spd();
       cam.__test.setYaw(FACE_PLUS_X + 0.5);
       await fire();
       const seen = [];
-      t0 = performance.now();
-      while (states.indexOf(P.state) < 0 && performance.now() - t0 < 600) {
+      t0 = simMs();
+      while (states.indexOf(P.state) < 0 && simMs() - t0 < 600 && wallOk(w0r, 2100)) {
         await frame(); syncP();
         if (seen[seen.length - 1] !== P.state) seen.push(P.state);
       }
@@ -507,12 +519,12 @@ async () => {
       let ok = false, maxDelta = null, dur = 0;
       if (states.indexOf(P.state) >= 0) {
         const y0 = cam.yaw; maxDelta = 0;
-        const tj = performance.now();
+        const tj = simMs();
         let lastIn = tj;
-        while (performance.now() - lastIn < 150 && performance.now() - tj < 2500) {
+        while (simMs() - lastIn < 150 && simMs() - tj < 2500 && wallOk(w0r, 4600)) {
           await frame(); syncP();
           if (states.indexOf(P.state) >= 0) {
-            lastIn = performance.now();
+            lastIn = simMs();
             maxDelta = Math.max(maxDelta, Math.abs(dAng(y0, cam.yaw)));
             if (seen[seen.length - 1] !== P.state) seen.push(P.state);
           }
@@ -573,12 +585,12 @@ async () => {
       let worst = 0, run = 0, occFrames = 0, frames = 0;
       let minD = 1e9, maxFade = 0;
       const x0 = P.pos.x;
-      let last = performance.now();
-      const t0 = last;
+      let last = simMs();
+      const t0 = last, w0o = performance.now();
       down('KeyW');
-      while (P.pos.x < -6 && performance.now() - t0 < 9000) {
+      while (P.pos.x < -6 && simMs() - t0 < 9000 && wallOk(w0o, 9000)) {
         await frame(); syncP();
-        const now = performance.now();
+        const now = simMs();
         const dt = Math.min(0.05, (now - last) / 1000); last = now;
         frames++;
         const rp = P.renderPos || P.pos;
@@ -617,12 +629,12 @@ async () => {
       const yawBefore = cam.yaw;
       const moveBefore = cam.yawForMovement;
       down('KeyZ'); await frame(); up('KeyZ');
-      const t0 = performance.now();
+      const t0 = simMs(), w0c = performance.now();
       const moveAfterFirst = cam.yawForMovement;
       let converged = -1;
-      while (performance.now() - t0 < 1500) {
+      while (simMs() - t0 < 1500 && wallOk(w0c, 1500)) {
         await frame();
-        if (Math.abs(dAng(cam.yaw, P.facing)) < 0.02) { converged = (performance.now() - t0) / 1000; break; }
+        if (Math.abs(dAng(cam.yaw, P.facing)) < 0.02) { converged = (simMs() - t0) / 1000; break; }
       }
       const limit = C.recenterTime + 0.1;
       const holdOk = Math.abs(dAng(moveAfterFirst, moveBefore)) < 0.02;   // movement yaw held on the first frame
@@ -687,8 +699,8 @@ async () => {
         try {
           await wait(900);                                    // the mirror picks the post up; the camera settles
           mirrored = !!(cam.__test.cwHas && cam.__test.cwHas(post));
-          const t0 = performance.now();
-          while ((performance.now() - t0 < 1200 || frames < 30) && performance.now() - t0 < 20000) {
+          const t0 = simMs(), w0p = performance.now();
+          while ((simMs() - t0 < 1200 || frames < 30) && wallOk(w0p, 1200)) {
             await frame();
             const s = cs();
             const c = segClear(s, post);
@@ -732,9 +744,9 @@ async () => {
         // relative W, so the measurement is taken standing, not curving away.
         const walkInto = async (x0, xc, id) => {
           await place(x0, Y0, LZ, FACE_PLUS_X);
-          const t0 = performance.now();
+          const t0 = simMs(), w0v = performance.now();
           down('KeyW');
-          while (P.pos.x < xc && cs().vol !== id && performance.now() - t0 < 8000) await frame();
+          while (P.pos.x < xc && cs().vol !== id && simMs() - t0 < 4000 && wallOk(w0v, 4000)) await frame();
           up('KeyW');
           await wait(1800);
           syncP();
