@@ -1,6 +1,6 @@
 # Stage 1 - lane: creatures (signature enemies + realm bosses)
 
-Status: STARTED 2026-09-30. Owned files: runtime/entities/** (critters.js + new files),
+Status: COMPLETE 2026-10-01 (see STATUS at the end). Started 2026-09-30. Owned files: runtime/entities/** (critters.js + new files),
 plus harness-only files under _harness/ (the test arena data + its driver).
 
 ## Design decisions (so a usage limit cannot erase them)
@@ -8,7 +8,7 @@ plus harness-only files under _harness/ (the test arena data + its driver).
   NEW files (runtime/entities/creatures.js, runtime/entities/bosses.js) built by factory functions that
   receive the Critter base + helpers from critters.js (no ESM import cycle: the new files never import
   critters.js). critters.js only gains an exported kit object and registry lines at the bottom.
-- Reward drop = `_awardCoins(n, pos)` -> course.dropCoins (same path the bumbler uses).
+- Reward drop = `events.emit('coins', n, pos)` -> course.js -> ONE course.dropCoins (as built; see STATUS).
 - Boss defeat fires `_trigger('boss')` -> collectibles spawns the `boss` crest (collectibles.js:1892 matches
   'warden-down' OR 'boss'). Bosses do NOT emit 'down' (that would toast "WARDEN DEFEATED" in game.js).
 - The Warden stays registered as `warden` = the mini-boss.
@@ -16,7 +16,8 @@ plus harness-only files under _harness/ (the test arena data + its driver).
   (in-page only, nothing on disk changes), so every creature + boss is fought in the real game loop.
 
 ## Baseline
-- loopcheck --headless verdant-1,ember-1,azure-3 BEFORE any edit: running (scratchpad loop_base.json).
+- loopcheck --headless verdant-1,ember-1,azure-3 BEFORE any edit: that first run never finished (its log is empty).
+  Superseded by the A/B in REGRESSION below (lane base vs lane head, same everything else).
 
 ## Log
 - read CONTRACT, HARNESS_NOTES, PLAN, sm64_bar (sections 5, 7), critters.js in full, course.js critter
@@ -168,3 +169,134 @@ plus harness-only files under _harness/ (the test arena data + its driver).
   leap: the bot's "settled" gate compared the hero's velocity with the gear's linVel, but player.vel is relative to
   the deck (collide.js carryOn moves him by linVel in position), and a phase-3 gear near its peak moves ~1.9 m/s, so
   the gate never opened. Fixed to the hero's own speed (< 1.5 m/s); rerun queued.
+- GYRARCH run 5 (08:48-09:28, frames r0848_*, 131 ms/frame), with the deck-relative speed gate: again 2 leaps, 2 crown
+  pounds (hp 3->2 f1597 — the same frame as run 4: the fight is deterministic — 2->1 f6469), then ~196 s of phase 3
+  on a gear with NO opening. Not the bot: the GAME. Modelled (scratch gyr_timing2.py, the boss state machine + the
+  gear clock, the bot's gate): phase 3 alternates a 7.09 s sweep cycle and a 5.0 s plain one = 12.09 s, two 6.0 s
+  gear periods, so a rider's gear peak and the vent RESONATE — over 80 start phases x 3 gears a one-gear rider
+  could get 0 windows in 240 s (phases 1-2: first window <= 18.7 s, gaps <= 21.3 s). FIXED in bosses.js:
+  GY_TC[2] 6.0 -> 5.0 s (worst first window 17.7 s, gaps <= 20 s, >= 22 windows per 240 s). Phases 1-2 untouched.
+  modulecheck 71/0, `node _harness/_cr_smoke.mjs` SMOKE OK 12/12 after the change. Committed b48e2ef4.
+- GYRARCH DEFEATED (run 6, 09:50-09:59, frames r0950_01..17, 34 ms/frame): intro toast + line; phase 1 ride ->
+  run-up leap in the vent (6.96 m/s from 3.26 m) -> crown POUND 0.65 m off the core -> hp 3->2 (f1597), hurt1 +
+  phase2 lines; phase 2 leap (6.51 m/s from 3.31 m) -> pound -> 2->1 (f6457), hurt2 + phase3 lines, floor sweeps
+  (hopped / ridden over); phase 3: one leap landed on the crown 1.17 m off the core (no pound), the next (5.41 m/s
+  from 3.09 m, pound 0.60 m off) -> 1->0 (f12760) -> defeat line -> defeat 4.02 s (it sinks, the gears settle to
+  the floor) -> bossDown -> trigger 'boss' -> crest present -> walked to it -> crest counter +1, game 'clear'.
+  Said intro/hurt1/phase2/hurt2/phase3/defeat. 5 leaps, 0 leap fails, 3 pounded, 3 hit; fight 209.5 s game time.
+
+## REGRESSION — the five original critters (gnasher, bumbler, skitter, warden, fen)
+A/B on frozen snapshots that differ ONLY in this lane's files: `games/_bisect/s1crfin_new` = HEAD ab3368db's
+runtime (git archive), `games/_bisect/s1crfin_base` = the same with runtime/entities/ from 2a51c2c2 (= c55df6df~1,
+before the lane's first entities commit: critters.js reverted, creatures.js + bosses.js absent). Served by a private
+serve_nocache.py on :8817, `?quality=low&autoscale=0`, headless, one browser at a time. (The GY_TC fix above came
+later and touches only Gyrarch, which none of these courses place.)
+1. BIT-EXACT TRACE (`_harness/_cr_trace.py`, scratch): per course, course.reset() + clock 0, the hero on the spawn
+   and each checkpoint, 900 hand-stepped frames of course.update(1/60) + player.update(1/60), every original
+   critter's pos / yaw / linVel / clock / state / hp / collider boxes + the hero's pos folded into an FNV-1a hash
+   per frame. keep (fen x2), verdant-1 (gnasher 1, bumbler 3, skitter 2, warden 1), ember-1 (bumbler 3, skitter 2,
+   warden 1), azure-3 (gnasher 1, bumbler 2, skitter 2, warden 1): 24 stations, 24/24 hashes IDENTICAL base vs new
+   (and every 60/300/600/900-frame mark), 0 deaths, 0 errors, 0 console errors. The hashes move every mark (the
+   bumblers walk, the skitters fly): the trace is live, not a constant.
+2. LOOPCHECK (`_harness/_cr_loopwrap.py` = loopcheck.py unchanged with widened setup budgets; keep + the three
+   courses + gates): base 297/303, new 300/302. 296 rows have the same pass/warn; the 8 that differ are all
+   WALL-CLOCK rows under the loaded box (77-94 % CPU): "respawn completes (<= 950 ms ceiling)" (base 2024 / 1799 /
+   1179 / 1211 ms fail where new passes; ember-1 cp1 the other way, 2570 ms) and "the game clock advanced 1.5 s"
+   (engine.elapsed stalled 20 s — present in whichever run stalled: base keep cp4 + ember-1 crest-boss, new ember-1
+   cp1). The 36 detail differences after stripping wall-clock numbers are live-loop timing: the sweep's end clock
+   (21.6 vs 21.7), camera lens coordinates +-0.01 m, a station on a mover 0.13 m along its path, coinsBest 4 vs 3
+   (coins the live loop collected). Every sweep (20 s per checkpoint, 90 s per crest station), every determinism
+   row ("hazards bit-identical at t=5.0 s") and every spawn / collect / save row passes in BOTH, with 0 warnings
+   (no critter crush) and 0 page errors. Verdict: no behaviour difference; the five original critters are unchanged.
+
+## STATUS (final, 2026-10-01) — what stage 2 builds on
+
+Files: `runtime/entities/creatures.js` (Creature base + the 8 enemies), `runtime/entities/bosses.js` (Boss base +
+the 4 realm bosses), `runtime/entities/critters.js` (+49 / -1 lines: the header comment, two imports, and a block at the bottom —
+ROSTER_KIT, the registry spread, exports CRITTER_ROLES / CREATURE_INFO / BOSS_INFO / ROSTER_CLASSES; no class body changed).
+Arena harness (dev only): `_harness/cr_arena.js` (one arena per realm), `cr_arena.py` (driver; `--port` for a private
+serve_nocache.py), `cr_scenarios.js` (one closed-loop proof per kind), `cr_bot.js` (real-key bot).
+
+### Placing them (course def `critters: [...]`, or a mission's `add.critters`)
+Every roster kind reads: `kind`, `p:[x,y,z]` (or `path[0]`), `yaw` (CONTRACT yaw, 0 faces -Z), optional `name`,
+`notice` (m), `coins`, `respawn` (s; 0 = stays down until the course resets), `color` (body tint), `range` (leash m,
+default 9: burrower / slagcrab / emberimp). `CRITTER_ROLES[kind]` = `{realm, name, role:'enemy'|'boss'|'miniboss'|'npc'}`.
+
+| kind | realm | fields it reads | how Nim beats it | drop |
+|---|---|---|---|---|
+| burrower | verdant | `p`, `range` (tunnel leash) | sidestep the trembling ring (the pop tosses you), STOMP it while it is dazed; a pound near a running mound flushes it out; punch/kick | 3 |
+| podspitter | verdant | `p`, `yaw` | walk out of the marked ring; STOMP the pod (single-jump height) or pound its root; punch | 3 |
+| slagcrab | ember | `path` (+`loop`, `speed` 1.2) or `p`, `range` | a jump at it shells it up (clonk); bait the snap, then stomp it recovering, or POUND beside it -> flipped -> stomp/pound; punch | 3 |
+| emberimp | ember | `p`, `range` | its touch burns (shove); STOMP or POUND it as it lands a hop; punch | 2 |
+| skater | rime | `path` (+`loop`, `speed` 1.1) | sidestep the belly slide; STOMP it while it sits dizzy; punch | 3 |
+| snowcub | rime | `p`, `yaw` | sidestep the rolling ball; STOMP it any time or POUND beside it; punch | 3 |
+| sentry | azure | `path` (+`loop`, `speed` 1.4): its rail | step out of the aim beam before the bolt; STOMP the dome or POUND beside it; punch | 3 |
+| puffer | azure | `p` or `path` (+`loop`, `speed` 0.9), `hover` (m, 1.2), `power` (bounce apex, 5.5) | puffed it is a BOUNCE PLATFORM (higher than a triple jump); POUND it while puffed (from the top of a bounce) = POP; deflated, stomp it; punch when not puffed; floats back after 10 s | 3 |
+
+Bosses read: `kind`, `p`, `yaw`, `arena:{c:[x,z], r}` (the ring: it wakes when Nim enters, sleeps 3 s after he
+leaves r+4 with hp kept), `hp` (3), `title`, `lines:{intro,hurt1,phase2,hurt2,phase3,defeat}` (overrides),
+`trigger` (default `'boss'`), `color`. The course must carry a crest `{id, type:'boss', spawnAt:[x,y,z]}`:
+collectibles.trigger('boss') spawns it when the defeat animation ends.
+
+| kind | realm | extra fields | how Nim beats it (3 hits) |
+|---|---|---|---|
+| bramblehide | verdant | arena r 11 | out of the slam ring, then POUND the glowing BUD while the tail is stuck; phase 2 adds a thorn volley (5 rings), phase 3 slams twice |
+| slagmaw | ember | arena r 11 | a slag bomb lands hot, then cools DARK: POUND beside it (it flies back into the grate) or PICK IT UP (action key) and THROW it at Slagmaw; phase 2 adds a fire ring (jump it), phase 3 marches |
+| hoarhorn | rime | `floe:{half, depth, y}` (`false` = no floe), arena r 8 | sidestep its belly charge near the lip; while it TEETERS, stomp / pound beside / punch it into the sea; phase 2 frost breath, phase 3 double charge |
+| gyrarch | azure | `hover` (6.2), arena r 11 (its 3 gears orbit inside) | ride a gear up, take a RUN-UP across it and leap onto the crown while it VENTS, POUND the core; a closed crown zaps; phase 2 fans 3 bolts, phase 3 adds a floor sweep |
+
+### Interfaces stage 2 needs
+- **Boss flag**: every boss has `isBoss === true`, `hp`, `hpMax`, `phase`, `engaged`, `hud {type,name,hp,hpMax,phase}`,
+  `displayName`, `title`, `said[]`, `arenaC`, `arenaR`. `game.js _findWarden` matches kind 'warden' ONLY (not this
+  lane's file): add `|| c.isBoss` there and the HUD hp bar plus the existing mood bridge (`audio.setMood('boss')` ->
+  the recorded boss track, released 4 s after the mood drops) light up for every realm boss.
+- **Boss events** (`boss.events.on(name, fn)`): `'intro'(boss)`; `'say'(key, line, boss)` (also toasted through
+  `ctx.say` or `game.hud.toast`); `'hit'(hp, boss, how)`; `'state'(s, boss)`; `'defeated'(boss, 'boss')` at the START
+  of the defeat animation; `'bossDown'(boss)` when it ends, the same frame as `'trigger'('boss', boss)` (course
+  trigger -> the boss crest). Per boss: bramblehide `'stuck'`, slagmaw `'bombKicked'` / `'bombHeld'` / `'bombThrown'`,
+  hoarhorn `'teeter'` / `'pushed'`, gyrarch `'vent'`. Bosses never emit `'down'` (game.js toasts WARDEN DEFEATED on it).
+- **Music**: no boss calls `setMusicMood` itself. Wire it from the events: `'intro'` -> `setMusicMood('boss')`,
+  `'bossDown'` -> `setMusicMood('course')` (then the crest's `'fanfare'`); or rely on the `_findWarden` bridge above.
+- **Enemy events**: `'notice'(c)`, `'state'(s, c)`, `'defeated'(c, how)` (how = stomp | pound | pop | punch | kick |
+  slidekick | dive | throw), `'coins'(n, pos)` (course.js turns it into ONE dropCoins), `'bump'(c)`, `'lost'(c)`,
+  plus `'clonk'` (slagcrab), `'spit'` (podspitter), `'fire'` (sentry), `'ballHit'` (snowcub), `'bounced'` (puffer).
+- **Strikes** (the hero lane's `controller.strikeAt`): every roster kind and boss implements
+  `onAttack(player, pos, kind, dir)` (preferred by strikeAt) -> `onStrike(player, verb, pos, dir)`; verbs normalised
+  to punch / kick / slidekick / dive / throw. `hitRadius` (strikeAt's reach pre-filter; default 0.6 when absent, which
+  the 8 enemies use): bramblehide 6.6 (the bud lies ~5.6 m behind the hips), slagmaw 2*(arenaR+1) (its bombs lie
+  anywhere in the ring; onStrike checks each), hoarhorn 1.9, gyrarch 1.6.
+- **Stomp / pound**: `course._detectStand -> onStand(player)`, `course.onPoundLand -> onPound(player, pos)`, and the
+  controller's own `_notifyPound(groundCollider)` -> `onPound(player, collider)` for the critter under a pound (the
+  puffer pop and the Gyrarch crown pound arrive this way).
+- **Carry**: Slagmaw's dark bombs are carry-contract objects, registered through a dynamic import of
+  `player/carry.js` (a missing carry.js never breaks the boss).
+- **World probe**: the roster raycasts the course broadphase (`Creature._cast`, its own colliders parked for the
+  call); the five original critters keep their ctx untouched.
+
+### Proven in the arena (real keys, hand-stepped game.update(1/60), frames read) — on the final code
+| kind | run / frames | the proof |
+|---|---|---|
+| burrower | verdant 03:37, r0337_01-05 | notice -> tunnel 7.97 m -> tele under Nim -> pop TOSSED him -> dazed -> 2nd tele sidestepped -> STOMP -> +3 |
+| podspitter | verdant 03:37, r0337_06-12 | notice -> tele ring -> 2 seeds sidestepped -> STOMP; strike: PUNCH -> +3 each |
+| slagcrab | ember 03:42, r0342_01-05, 10-11 | clonk off the shell -> snap baited -> POUND -> flipped -> POUND -> +3; strike: PUNCH -> +3 |
+| emberimp | ember 03:42, r0342_06-09 | cackle -> 4 flare/hop cycles toward Nim -> POUND as it landed -> +2 |
+| skater | rime 03:44, r0344_01-05 | tele -> slide sidestepped -> spin -> dizzy -> STOMP -> +3 |
+| snowcub | rime 03:44, r0344_06-13 | windup -> the ball ROLLS -> sidestepped -> sulk -> POUND -> +3; strike: ballHit -> PUNCH -> +3 |
+| sentry | azure 03:45, r0345_01-04, 10-11 | track -> aim beam -> bolt sidestepped -> POUND -> +3; strike: PUNCH -> +3 |
+| puffer | azure 07:15, r0715_01-05 | puffed platform (top 1.44 m) -> BOUNCE to 6.94 m -> POUND at the apex -> POP -> +3 -> back in 9.57 s |
+| bramblehide | verdant 21:36, 11-27 | 3 x pound the stuck bud -> defeat -> crest taken |
+| slagmaw | ember 07:51, r0751_01-15 | 3 x pound beside a dark bomb (kicked into the grate) -> defeat -> crest taken (carry/throw route: ember run 1) |
+| hoarhorn | rime 01:20, r0120_01-18 | 3 x teeter -> pound/push -> dunk -> defeat -> crest taken |
+| gyrarch | azure 09:50, r0950_01-17 | 3 x ride a gear, run-up leap in the vent, crown POUND -> defeat -> crest taken |
+(Bramblehide and Hoarhorn were fought before the broadphase fix 816f7616; they read the floor through `_groundY`
+only, and the arena floor is flat at the fallback height, so the fix cannot change those fights. Slagmaw was refought
+after it and fought the same: 3 hits, 25.8 s.)
+
+### Residuals (outside this lane's files, or information)
+- game.js `_findWarden` sees kind 'warden' only: realm bosses get no HUD hp bar and no automatic boss music until
+  `|| c.isBoss` is added there or stage 2 wires `setMusicMood` from 'intro' / 'bossDown' (see Interfaces).
+- No shipped course places a stage-1 creature or realm boss yet: that is stage 2 (placement fields above).
+- Performance is information: the arena measured 34-502 ms per hand-stepped frame while other workflows held the box
+  at 77-94 % CPU (34-43 chrome processes); the course sim alone (trace) runs 900 frames x 6 stations in 0.5-8.6 s.
+- The puffer's pop needs a hero who lands on the ball slowly: the air floor (AIR_KEEP_FRAC 0.45, movement feel, not
+  touched) keeps ~half the launch speed, so a fast landing bounces him off sideways (tries 1-3 of the 07:15 run).
