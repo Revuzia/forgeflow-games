@@ -51,7 +51,8 @@
  * crossfaded 1.2 s, through the same music bus (volume slider, duck, the
  * underwater filter). A track that cannot be fetched or decoded falls back to
  * its procedural bed. `setMusicMood('course'|'boss'|'fanfare'|'clear')` is the
- * switch for bosses and crests; `?music=synth` forces the procedural beds.
+ * switch for bosses and crests; `?music=synth` forces the procedural beds,
+ * `?music=m4a` forces the AAC twins (the WebKit path) for a dev check.
  * ==========================================================================*/
 
 import { MUSIC_CUES, MUSIC_RATE } from '../../assets/music/manifest.js';
@@ -267,14 +268,17 @@ export class Audio {
     this._bossReleaseAt = 0;
 
     if (IS_BROWSER) {
+      let forceM4a = false;
       try {
         const q = window.location && window.location.search;
         if (q && /[?&]music=synth\b/.test(q)) this._recOn = false;
+        if (q && /[?&]music=m4a\b/.test(q)) forceM4a = true;     // dev: exercise the AAC twins (the WebKit path)
       } catch (e) {}
       try {
         const a = document.createElement('audio');
         this._mOgg = typeof a.canPlayType !== 'function' || a.canPlayType('audio/ogg; codecs="vorbis"') !== '';
       } catch (e) {}
+      if (forceM4a) this._mOgg = false;
 
       this._onMuteChange = (e) => {
         this._pageMuted = !!(e && e.detail && e.detail.muted);
