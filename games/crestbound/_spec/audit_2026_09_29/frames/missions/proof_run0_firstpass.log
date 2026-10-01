@@ -1,0 +1,65 @@
+goto http://127.0.0.1:8913/games/crestbound/index.html?dev=1&quality=low&autoscale=0
+title after 84 s True
+NEW GAME button at [264.390625, 382.671875]
+in the Keep: True {'state': 'keep', 'course': 'keep', 'loading': False}
+[run1] placed at the Bailey gate stand-out spot {'yaw': 1.571, 'exit': [-18.1, 0.05, -6], 'locked': False}
+[run1] hand-stepped walk (real KeyW held): {"frames": 11, "state": "card", "pos": [-18.65, -0.0, -6], "near": 0, "dwell": 0}
+[run1] card raised by the walk-in: True
+  card on open: MISSION 1 OF 7  ·  A CLIMB | CREST ON THE RAMPARTS | ['CREST ON THE RAMPARTS*', 'EIGHT SIGILS OF THE MEADOW', 'A HUNDRED COINS', 'WHAT THE GNASHER GUARDS', 'THE WARDEN OF THE RIDGE', 'MEADOW DASH', 'THE LONG WAY ROUND']
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\01_card_default.png
+  after 4x ArrowRight: MISSION 5 OF 7  ·  A WARDEN | THE WARDEN OF THE RIDGE | sel [5]
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\02_card_mission5.png
+[run1] course loaded: True {'state': 'cinematic', 'course': 'verdant-1', 'loading': False}
+  RUN 1 mission: {"id": "boss", "index": 4, "name": "THE WARDEN OF THE RIDGE", "present": ["sigils", "coins", "secret", "boss", "wing"], "absent": ["open", "race"], "routes": {"north-door": true}, "at": [-2, 18, -54], "counts": {"added": 3, "removed": 0, "moved": 1, "set": 1}}
+  critters: [{"kind": "gnasher", "tag": null, "pos": [-8, 7.41, -2]}, {"kind": "bumbler", "tag": null, "pos": [-7.82, 2.55, 35.96]}, {"kind": "bumbler", "tag": "yard-bumbler", "pos": [-6.8, 16.79, -49]}, {"kind": "bumbler", "tag": null, "pos": [20.16, 7.72, 10.96]}, {"kind": "skitter", "tag": null, "pos": [-30.2, 5.43, -2.41]}, {"kind": "skitter", "tag": null, "pos": [30.51, 17.56, -2.05]}, {"kind": "warden", "tag": "warden", "pos": [-2, 16.4, -54]}]
+  crests built: [{"id": "sigils", "present": false, "home": [0, 10.45, -24], "race": false}, {"id": "coins", "present": false, "home": [-5, 3.45, 41], "race": false}, {"id": "secret", "present": false, "home": [-12, 7.95, -6], "race": false}, {"id": "boss", "present": false, "home": [-2, 18, -54], "race": false}, {"id": "wing", "present": true, "home": [4.2, 31.8, -22], "race": false}] | def.crests 7
+  mill period 16 | north door ray hit None | runstatsOff True none none
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\03_boss_arrival.png
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\04_boss_v1_courtyard.png
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\04_boss_v2_ring.png
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\04_boss_v3_tower.png
+  on the race start pad in mission 5: raceMs -1
+[run2] placed at the Bailey gate stand-out spot {'yaw': 1.571, 'exit': [-18.1, 0.05, -6], 'locked': False}
+[run2] hand-stepped walk (real KeyW held): {"frames": 11, "state": "card", "pos": [-18.65, -0.0, -6], "near": 0, "dwell": 0}
+[run2] card raised by the walk-in: True
+  card run2: MISSION 1 OF 7  ·  A CLIMB | CREST ON THE RAMPARTS
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\05_card_mission1.png
+[run2] course loaded: True {'state': 'playing', 'course': 'verdant-1', 'loading': False}
+  RUN 2 mission: {"id": "open", "index": 0, "name": "CREST ON THE RAMPARTS", "present": ["open", "sigils", "coins", "secret", "wing"], "absent": ["boss", "race"], "routes": {"north-door": false}, "at": null, "counts": {"added": 7, "removed": 1, "moved": 0, "set": 0}}
+  critters: [{"kind": "gnasher", "tag": null, "pos": [-8, 7.42, -2]}, {"kind": "bumbler", "tag": null, "pos": [-7.62, 2.54, 35.92]}, {"kind": "bumbler", "tag": "yard-bumbler", "pos": [-4.56, 9.39, -19]}, {"kind": "bumbler", "tag": null, "pos": [20.34, 7.77, 10.92]}, {"kind": "skitter", "tag": null, "pos": [-30.44, 5.89, -2.88]}, {"kind": "skitter", "tag": null, "pos": [31.11, 18.18, -2.12]}, {"kind": "bumbler", "tag": "garrison", "pos": [-4.66, 9.39, -31]}, {"kind": "bumbler", "tag": "garrison", "pos": [6.71, 9.39, -26.5]}]
+  crests built: [{"id": "open", "present": true, "home": [9.2, 19.3, -32.8], "race": false}, {"id": "sigils", "present": false, "home": [0, 10.45, -24], "race": false}, {"id": "coins", "present": false, "home": [-5, 3.45, 41], "race": false}, {"id": "secret", "present": false, "home": [-12, 7.95, -6], "race": false}, {"id": "wing", "present": true, "home": [4.2, 31.8, -22], "race": false}]
+  mill period 11 | north door ray hit 3.83 | runstatsOff True none none
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\06_open_v1_courtyard.png
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\06_open_v2_ring.png
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\06_open_v3_tower.png
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\07_climb_start.png
+  climb: 142 frames, 3 jumps, state clear
+     {"i": 14, "ev": "jump", "z": -25.24, "y": 14.48, "toward": 15.7}
+     {"i": 46, "ev": "jump", "z": -26.92, "y": 15.7, "toward": 17}
+     {"i": 79, "ev": "jump", "z": -28.68, "y": 17, "toward": 18.15}
+     {"i": 142, "ev": "CREST", "state": "clear", "p": [10, 18.15, -31.69]}
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\08_crest_taken.png
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\09_celebration.png
+  clear panel visible buttons: ['RETURN TO KEEP']
+  frame FAILED 10_clear_panel Page.screenshot: Timeout 60000ms exceeded.
+Call log:
+  - taking page screenshot
+  - waiting for fonts to load...
+  - fon
+  Enter on the clear panel -> the Keep: True
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\11_back_in_keep.png
+  SAVE verdant-1: {"id": "verdant-1", "crests": ["open"], "coinsBest": 0, "cleared": true, "deaths": 0, "bestMs": {"open": 4183}, "clears": 1, "playMs": 0, "lastPlayed": 1790822027414, "firstClearDate": "2026-10-01T02:33:47.411Z", "missions": {"boss": {"runs": 1, "got": []}, "open": {"runs": 1, "got": ["open"]}}, "lastMission": "open"}
+  Save.crestTotal(): 1
+[run3] placed at the Bailey gate stand-out spot {'yaw': 1.571, 'exit': [-18.1, 0.05, -6], 'locked': False}
+[run3] hand-stepped walk (real KeyW held): {"frames": 11, "state": "card", "pos": [-18.65, -0.0, -6], "near": 0, "dwell": 0}
+[run3] card raised by the walk-in: True
+  card run3 (after the crest): MISSION 1 OF 7  ·  A CLIMB | CREST ON THE RAMPARTS | got []
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\12_card_after_crest.png
+  Digit6 -> MISSION 6 OF 7  ·  A RACE | MEADOW DASH
+[run3] course loaded: True {'state': 'playing', 'course': 'verdant-1', 'loading': False}
+  RUN 3 mission: race | race crest built: ['race'] | runstatsOff True
+  on the start pad in mission 6: raceMs -1 | runstatsOff True | timers none | deaths none
+  frame ..\..\..\..\AppData\Local\Temp\ms\proof1\13_race_running.png
+page errors: 0
+wrote C:\Users\TestRun\AppData\Local\Temp/ms/proof1\proof.json
+exit 0

@@ -81,3 +81,22 @@ edited only to author two missions - see below).
   overview; walked (real KeyW, 150 frames) across the race start spot: raceMs -1, timers/deaths display none.
   Then the Playwright driver died ("Connection closed while reading from the driver") — the box ran out of
   commit (bash fork 0xC000012D; 88 chrome procs). Driver got --skip-run1 / --name and dumps json per run.
+- PROOF v2 RUN 2+3 DONE (frames/missions/05..13, proof_run2.json; 0 page errors):
+  * mission 1 frames: 06_open_v1_courtyard = north door BARRED (timber leaf, iron straps) + three bumblers in
+    the yard (two red-hat garrison + the yard bumbler); 06_open_v2_ring = the ring EMPTY (no Warden, no
+    squire, no braziers) and the barred door visible on the right. Compare 04_boss_v1 / 04_boss_v2.
+  * crest by 3 real Space jumps (142 frames) -> Keep. SAVE: crests ['open'], bestMs open 6629,
+    missions {open:{runs 1, got ['open']}}, lastMission 'open'; Save.crestTotal() 1.
+  * reopened card (12_card_after_crest): tile 1 GOLD with 0:06.629, cursor on MISSION 2 (first unclaimed),
+    button RE-ENTER — the coursecard save-module fix, observed.
+  * held D (1 keydown + 2 repeat keydowns): cursor 2 -> 3 (ONE step).
+  * Digit6 -> mission 6: only the race crest of the race kind built; walking onto the pad (real KeyW):
+    race started at frame 14, raceMs 1517, runstatsOff false, timers + deaths display flex (13_race_running:
+    RACE clock top centre, run timer + skull top right). Mission 5 walk over the same spot: raceMs -1,
+    display none.
+  * 10_clear_panel caught the celebration orbit (state clear, lens inside the tower's cone roof) before the
+    panel rose — the panel's single RETURN TO KEEP was recorded in the first pass (proof_run0_firstpass.log).
+    CAMERA NOTE (not this lane): at the rampart crest the clear orbit puts the lens INSIDE the cone roof
+    (08_crest_taken, 10_clear_panel).
+  * DISK: C: hit 100 % (216 MB free) at 22:04 — "[Errno 28] No space left on device" on one screenshot
+    (retry succeeded). Deleted my own scratch frames (16 MB).
