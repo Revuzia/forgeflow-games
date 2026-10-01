@@ -94,18 +94,31 @@ def boot(p):
     console = []
     pg.on("console", lambda m: console.append(m.type + ": " + m.text[:300]) if m.type in ("error", "warning") else None)
     pg.on("pageerror", lambda e: console.append("pageerror: " + str(e)[:400]))
-    t0 = time.time()
-    pg.goto(URL, wait_until="load", timeout=900000)
-    # the box can be at 100 % CPU (other lanes): boot measured at 5+ minutes
-    for _ in range(2400):
+    # the box can be at 100 % CPU (other lanes): boot measured 39 s .. 5+ minutes.
+    # A boot that never defines the global (another lane's file caught mid-edit)
+    # is reloaded, up to three tries, and its console is printed.
+    for attempt in range(3):
+        t0 = time.time()
+        c0 = len(console)
         try:
-            if pg.evaluate("!!(globalThis.CRESTBOUND && CRESTBOUND.game && CRESTBOUND.game.__dev)"):
-                break
-        except Exception:
-            pass
-        pg.wait_for_timeout(500)
-    print("page up in %.0f s" % (time.time() - t0), flush=True)
-    return br, pg, console
+            pg.goto(URL, wait_until="load", timeout=900000)
+        except Exception as e:
+            print("goto failed: %s" % str(e)[:200], flush=True)
+        up = False
+        for _ in range(1200):
+            try:
+                if pg.evaluate("!!(globalThis.CRESTBOUND && CRESTBOUND.game && CRESTBOUND.game.__dev)"):
+                    up = True
+                    break
+            except Exception:
+                pass
+            pg.wait_for_timeout(500)
+        print("page %s in %.0f s (try %d)" % ("up" if up else "NOT up", time.time() - t0, attempt + 1), flush=True)
+        if up:
+            return br, pg, console
+        for line in console[c0:c0 + 20]:
+            print("   console: " + line, flush=True)
+    raise RuntimeError("the page never booted")
 
 
 def run_realm(pg, console, realm, only, args):

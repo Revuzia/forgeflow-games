@@ -59,10 +59,10 @@ export function makeBot() {
       for (const c of cs) {
         if (c.__crWatched) continue;
         c.__crWatched = true;
-        for (const e of ['state', 'notice', 'defeated', 'coins', 'hit', 'say', 'bossDown', 'intro', 'stuck', 'teeter', 'vent', 'bombKicked', 'pushed', 'bump', 'clonk', 'spit', 'fire', 'ballHit', 'trigger', 'lost', 'bounced', 'stagger']) {
+        for (const e of ['state', 'notice', 'defeated', 'coins', 'hit', 'say', 'bossDown', 'intro', 'stuck', 'teeter', 'vent', 'bombKicked', 'pushed', 'bump', 'clonk', 'spit', 'fire', 'ballHit', 'trigger', 'lost', 'bounced', 'stagger', 'bombHeld', 'bombThrown']) {
           c.events.on(e, (...a) => {
             const arg = a.length && (typeof a[0] === 'string' || typeof a[0] === 'number') ? a[0] : (e === 'say' ? a[1] : null);
-            log.push({ f: frame, k: c.kind, e, a: arg, a2: e === 'say' ? a[1] : (e === 'coins' ? a[0] : undefined) });
+            log.push({ f: frame, k: c.kind, e, a: arg, a2: e === 'say' ? a[1] : (e === 'coins' ? a[0] : (e === 'hit' ? a[2] : undefined)) });
           });
         }
       }
@@ -263,6 +263,23 @@ export function makeBot() {
       const s = slow === undefined ? 1.2 : slow;
       const want = d < s ? 0.6 + d * 2.2 : 99;
       key('KeyW', d > 0.12 && hs < want);
+      return d;
+    },
+    /**
+     * Velocity servo toward (x, z): want speed min(vmax, k*d) at the point, and
+     * push the stick (camera yaw + W) along (wanted - actual) velocity. On ICE
+     * (friction 1.6 m/s^2) this is what brakes: releasing W there glides for
+     * metres. On normal ground it simply arrives without overshoot.
+     */
+    servo(x, z, vmax, k) {
+      const p = P().pos, v = P().vel;
+      const dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz);
+      const sp = Math.min(vmax || 4.5, (k || 1.6) * d);
+      const vx = d > 1e-3 ? dx / d * sp : 0, vz = d > 1e-3 ? dz / d * sp : 0;
+      const ex = vx - v.x, ez = vz - v.z, e = Math.hypot(ex, ez);
+      if (e < 0.35) { key('KeyW', false); return d; }
+      aim(p.x + ex * 5, p.z + ez * 5);
+      key('KeyW', true);
       return d;
     },
     hdist,

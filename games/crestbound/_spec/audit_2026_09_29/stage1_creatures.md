@@ -65,3 +65,28 @@ plus harness-only files under _harness/ (the test arena data + its driver).
     state 'clear'. Said: intro, hurt1, phase2, hurt2, phase3, defeat. Hero never bumped.
 - Cost: 0.31-0.77 s wall per game frame at 82-100 % CPU (97 chrome processes on the box).
 - Fixed after reading frame 01: lurking burrower showed only fur tufts (face under the mound) -> BR_LURK -0.28.
+- EMBER run 1 (22:05-22:55, _harness/cr_arena_ember.json, _shots/cr_arena/ember/01-22):
+  * slagcrab: noticed at 7.92 m -> stalk, tele (claw up, seams flare: frame 03), snap, recover -> STOMP -> coins +3.
+    The clonk/flip beats did not happen (the hop started inside its 2.7 m snap reach) -> scenario now hops from 3.3 m.
+  * emberimp: noticed at 9.92 m, cackle, 13 crouch(flare)/hop cycles, NOT defeated: its hops were blocked by the
+    BAY B sign post in the lane (same cause as the burrower's short tunnel) -> signs moved; pound loop now frame-driven.
+  * strike:slagcrab: the hero lane's PUNCH (real KeyF, controller.strikeAt -> Creature.onAttack) defeated it
+    (defeatHow 'punch'), coins +3.
+  * slagmaw: intro toast "SLAGMAW · THE CRUCIBLE GLUTTON / FRESH ORE! ..."; bomb LIFTED with KeyF (carry contract,
+    f2757); hp 3->2 at f2974 (no pound-kick before it: the held/released bomb), phase2 line + fire ring, pound-kick
+    bombKicked f3538 -> hp 2->1, phase3 line + march; then 150 s without the last hit: the bot drifted out of the ring
+    (boss slept 'dormant') and dark bombs sat under the next volley's rings. Policy fixed (kick from 1.6 m, allowed
+    unless a bomb lands on him first; hold point clamped inside the ring; walk back in when it sleeps; throw press
+    retried after the 0.26 s lift). Rerun pending.
+- RIME run 2 (23:3x, _harness/cr_arena_rime.json, _shots/cr_arena/rime/):
+  * skater: noticed -> tele (scrabble) -> slide (sidestepped) -> spin -> dizzy (stars) -> STOMP; coins +3.
+  * snowcub: clap -> windup -> shove (ball rolls, sidestepped: no ballHit) -> watch -> sulk -> scoop -> windup ->
+    POUND beside -> defeat; coins +3.   * strike:snowcub: PUNCH (KeyF) -> defeat 'punch', coins +3.
+  * hoarhorn: reached the floe by a jump, intro toast "HOARHORN · LORD OF THE FLOE / OFF MY FLOE, SPRAT...", charge ->
+    TEETER at the lip twice, but 0 hits: the bot slid off the ICE (friction 1.6) and spent 9991 of 10430 frames in
+    the sea, then swam under the north shore and died below killY. Fixes: arena sea surface raised to -0.5 (0.5 m
+    freeboard, shore slab reaches below it), velocity-SERVO steering (bot.servo brakes on ice), stand spots 3 m in
+    from the lip, sea recovery (swim to the lip, surface-jump out). Rerun pending.
+- AZURE run 2: sentry: track -> tele (red aim beam, frame 02) -> fire (sidestepped) -> cool -> POUND -> coins +3.
+  puffer: within 5 m inflate -> puffed (a bounce platform, frame 06) -> warn -> deflate -> drift -> defeat -> gone ->
+  RESPAWN after its 10 s -> drift -> inflate; coins +3.  strike:sentry: PUNCH -> defeat 'punch', coins +3.

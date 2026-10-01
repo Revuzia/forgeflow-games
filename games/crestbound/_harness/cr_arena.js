@@ -104,7 +104,9 @@ export function arenaDef(realm) {
     music: realm,
   };
   if (realm === 'rime') {
-    def.waters = [{ kind: 'water', kind2: 'lake', p: [0, -3.6, -30], s: [90, 4.8, 31] }];
+    // sea surface 0.5 m under the floe and the shore (top -0.5): a dunked hero can surface-jump back out,
+    // and the shore's 1 m slab reaches below it, so nobody swims under the north ground
+    def.waters = [{ kind: 'water', kind2: 'lake', p: [0, -2.9, -30], s: [90, 4.8, 31] }];
   }
   return def;
 }

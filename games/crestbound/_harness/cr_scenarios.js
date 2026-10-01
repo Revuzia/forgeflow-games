@@ -18,6 +18,7 @@ export function makeScenarios(bot) {
   const P = () => G.player;
   const frames = (globalThis.__crFrames = globalThis.__crFrames || []);
   const r2 = (v) => Math.round(v * 100) / 100;
+  const clampN = (v, a, b) => (v < a ? a : (v > b ? b : v));
   const crit = (k) => (G.course && G.course.critters || []).find((c) => c.kind === k) || null;
 
   /* ---------------------------------------------------------------- frames */
@@ -40,7 +41,9 @@ export function makeScenarios(bot) {
     const l = Math.hypot(dx, dz);
     if (l < 0.6) { dx = Math.sin(G.cam ? G.cam.yaw : 0); dz = Math.cos(G.cam ? G.cam.yaw : 0); } else { dx /= l; dz /= l; }
     const back = 3.4 + Math.min(l, 14) * 0.3;
-    cam.position.set(p.x + dx * back, Math.max(p.y, ty) + 2.0 + Math.min(l, 14) * 0.12, p.z + dz * back);
+    // a little to the side, so a creature right behind Nim is not hidden by him
+    const side = 1.2 + Math.min(l, 8) * 0.15;
+    cam.position.set(p.x + dx * back - dz * side, Math.max(p.y, ty) + 2.0 + Math.min(l, 14) * 0.12, p.z + dz * back + dx * side);
     cam.lookAt((p.x + tx) * 0.5, (p.y + ty) * 0.5 + 0.7, (p.z + tz) * 0.5);
     cam.updateMatrixWorld(true);
     E.render(1 / 60); E.render(1 / 60);
@@ -578,7 +581,7 @@ export function makeScenarios(bot) {
     const r = end(o);
     const c = o.c;
     r.hp = c.hp; r.hpMax = c.hpMax; r.phase = c.phase; r.hits = c.hits; r.said = c.said.slice();
-    r.events.hits = bot.log.filter((e) => e.k === c.kind && e.f >= o.f0 && e.e === 'hit').map((e) => 'hp' + e.a + '@' + e.f);
+    r.events.hits = bot.log.filter((e) => e.k === c.kind && e.f >= o.f0 && e.e === 'hit').map((e) => 'hp' + e.a + ':' + e.a2 + '@' + e.f);
     r.events.say = bot.log.filter((e) => e.k === c.kind && e.f >= o.f0 && e.e === 'say').map((e) => e.a);
     return r;
   }
@@ -656,7 +659,7 @@ export function makeScenarios(bot) {
     const ac = c.arenaC, ar = c.arenaR - 1.0;
     bossIntro(o, [ac.x, ac.z + 6.5]);
     const pounder = makePounder(), jumper = makeJumper();
-    const carry = { phase: 0, bomb: -1, t: 0, tries: 0 };
+    const carry = { phase: 0, bomb: -1, t: 0, tries: 0, presses: 0 };
     let kicks = 0, target = -1;
     const n = bot.drive(() => {
       if (c.defeated || c.state === 'defeat') return true;
@@ -721,34 +724,44 @@ export function makeScenarios(bot) {
           if (carry.t > 40) { carry.phase = 0; bot.releaseAll(); rec.steps.pickupFailed = (rec.steps.pickupFailed || 0) + 1; }
           return false;
         }
-        if (carry.phase === 4) {                      // turn to the grate
+        if (carry.phase === 4) {                      // lift done, then turn to the grate
+          if (P().state === 'pickup') { carry.t = 0; return false; }
           bot.aim(c.pos.x, c.pos.z);
           bot.key('KeyW', carry.t < 10);
-          if (carry.t >= 16) { bot.key('KeyW', false); bot.key('KeyF', true); carry.phase = 5; carry.t = 0; }
+          if (carry.t >= 16) { bot.key('KeyW', false); bot.key('KeyF', true); carry.phase = 5; carry.t = 0; carry.presses = 1; }
           return false;
         }
-        if (carry.phase === 5) {                      // the throw
+        if (carry.phase === 5) {                      // the throw (press again if the first was eaten)
           if (carry.t === 2) bot.key('KeyF', false);
-          if (c.bs[i] === 7) { rec.steps.thrownF = bot.frame; capOnce(o, 'bombThrown'); }
-          if (carry.t > 90 || c.bs[i] === 0 || c.state === 'hurt') { carry.phase = 0; bot.releaseAll(); rec.steps.throwResult = { state: c.state, hits: c.hits }; }
+          if (c.bs[i] === 6 && carry.t > 0 && carry.t % 20 === 0 && carry.presses < 4) { bot.aim(c.pos.x, c.pos.z); bot.key('KeyF', true); carry.presses++; }
+          if (c.bs[i] === 6 && carry.t % 20 === 2) bot.key('KeyF', false);
+          if (c.bs[i] === 7 && !rec.steps.thrownF) { rec.steps.thrownF = bot.frame; capOnce(o, 'bombThrown'); }
+          if (carry.t > 150 || c.bs[i] === 0 || c.state === 'hurt') { carry.phase = 0; bot.releaseAll(); rec.steps.throwResult = { state: c.state, hits: c.hits, bomb: c.bs[i], presses: carry.presses }; }
           return false;
         }
       }
-      if (target >= 0 && !(st === 'lobTele' || st === 'lob') ) {
+      // incoming bombs that will land on Nim before a pound could finish
+      let incoming = st === 'lob' && c.stateT > 0.15;
+      for (let i = 0; i < 4 && !incoming; i++) if (c.bs[i] === 1 && c.bt[i] > 0.35) {
+        const m = c.bombMark[i] * 3;
+        if (Math.hypot(p.x - c.btx[m], p.z - c.btx[m + 2]) < 1.9) incoming = true;
+      }
+      if (target >= 0 && !incoming) {
         capOnce(o, 'darkBomb_p' + ph);
         const k = target * 3, bx = c.bp[k], bz = c.bp[k + 2];
-        if (bd > 1.0) {
-          // approach the bomb from the side away from the boss
-          let ax = bx - c.pos.x, az = bz - c.pos.z;
-          const al = Math.hypot(ax, az) || 1;
-          bot.steer(bx + ax / al * 0.9, bz + az / al * 0.9, 0.4);
-        } else { bot.key('KeyW', false); kicks++; pounder.start(); }
+        // the pound's shock reaches TUNE.pound.shockRadius + 0.3 = 2.5 m: 1.6 m is plenty
+        if (bd > 1.6) bot.steer(bx, bz, 0.6);
+        else { bot.key('KeyW', false); kicks++; pounder.start(); }
         return false;
       }
       if (threatened) { if (!escape(circles, ac, ar)) bot.releaseAll(); return false; }
-      // hold a spot ~6 m off its furnace
-      const dB = Math.hypot(p.x - c.pos.x, p.z - c.pos.z);
-      if (dB < 5.0) bot.steer(c.pos.x + (p.x - c.pos.x) / dB * 6.5, c.pos.z + (p.z - c.pos.z) / dB * 6.5, 0.5);
+      if (st === 'dormant') { bot.steer(ac.x, ac.z, 0.5); return false; }   // it slept: walk back in
+      // hold a spot ~6 m off its furnace, inside the ring
+      const dB = Math.hypot(p.x - c.pos.x, p.z - c.pos.z) || 1;
+      let hx = c.pos.x + (p.x - c.pos.x) / dB * 6.5, hz = c.pos.z + (p.z - c.pos.z) / dB * 6.5;
+      const hd = Math.hypot(hx - ac.x, hz - ac.z), lim = c.arenaR - 2.5;
+      if (hd > lim) { hx = ac.x + (hx - ac.x) / hd * lim; hz = ac.z + (hz - ac.z) / hd * lim; }
+      if (dB < 5.0 || Math.hypot(p.x - ac.x, p.z - ac.z) > c.arenaR - 1.5) bot.steer(hx, hz, 0.5);
       else bot.releaseAll();
       return false;
     }, 60 * 170);
@@ -775,19 +788,18 @@ export function makeScenarios(bot) {
     }, 300);
     bot.releaseAll();
     rec.onFloe = bot.hero();
-    // the intro (it wakes when Nim is on its ice)
+    // brake on the ice and walk in until it wakes
     rec.introF = bot.frame;
-    bot.drive(() => { if (c.state === 'intro') return true; bot.steer(ac.x, ac.z + 4.0, 0.5); return false; }, 400);
-    bot.key('KeyW', false);
-    bot.drive((i) => { if (i === 50) rec.frames.push(capOn(c, 'hoarhorn_intro')); return c.state !== 'intro'; }, 600);
+    bot.drive(() => { if (c.state === 'intro') return true; bot.servo(ac.x, ac.z + 4.0, 3.0); return false; }, 400);
+    bot.drive((i) => { bot.servo(ac.x, ac.z + 4.5, 3.0); if (i === 50) rec.frames.push(capOn(c, 'hoarhorn_intro')); return c.state !== 'intro'; }, 600);
     rec.introLine = c.lines.intro;
     rec.introToasts = toasts();
     const pounder = makePounder();
-    let stand = null, dodged = false, pounds = 0, fell = 0;
-    const edge = half - 1.7;
+    let stand = null, dodged = false, pounds = 0, fell = 0, climbs = 0;
+    const inner = half - 3.0;
     const pickStand = () => {
-      // the edge midpoint farthest from the beast
-      const cands = [[ac.x + edge, ac.z], [ac.x - edge, ac.z], [ac.x, ac.z + edge], [ac.x, ac.z - edge]];
+      // the edge-side spot farthest from the beast, 3 m in from the lip
+      const cands = [[ac.x + inner, ac.z], [ac.x - inner, ac.z], [ac.x, ac.z + inner], [ac.x, ac.z - inner]];
       let b = cands[0], bd = -1;
       for (const q of cands) { const d = Math.hypot(q[0] - c.pos.x, q[1] - c.pos.z); if (d > bd) { bd = d; b = q; } }
       return b;
@@ -795,8 +807,20 @@ export function makeScenarios(bot) {
     const n = bot.drive(() => {
       if (c.defeated || c.state === 'defeat') return true;
       const st = c.state, ph = c.phase;
-      const p = P().pos;
-      if (p.y < ac.y - 0.6) fell++;
+      const pl = P(), p = pl.pos;
+      // in the sea: swim to the nearest lip and surface-jump out
+      if (pl.inWater || p.y < ac.y - 0.45) {
+        fell++;
+        const lim = half - 0.3;
+        const ex = clampN(p.x - ac.x, -lim, lim), ez = clampN(p.z - ac.z, -lim, lim);
+        const ix = clampN(p.x - ac.x, -(half - 1.6), half - 1.6), iz = clampN(p.z - ac.z, -(half - 1.6), half - 1.6);
+        const dEdge = Math.hypot(p.x - (ac.x + ex), p.z - (ac.z + ez));
+        bot.aim(ac.x + ix, ac.z + iz);
+        bot.key('KeyW', true);
+        if (dEdge < 1.3 && !bot.held('Space')) { bot.key('Space', true); climbs++; }
+        else if (bot.held('Space')) bot.key('Space', false);
+        return false;
+      }
       if (pounder.busy) { pounder.step(); return false; }
       if (st === 'chargeTele') { capOnce(o, 'chargeTele_p' + ph); dodged = false; }
       if (st === 'charge') {
@@ -809,18 +833,18 @@ export function makeScenarios(bot) {
           stand = e1 > e2 ? [s1x, s1z] : [s2x, s2z];
           dodged = true;
         }
-        bot.steer(stand[0], stand[1], 0.2);
+        bot.servo(stand[0], stand[1], 6.0, 3.0);
         return false;
       }
       if (st === 'teeter') {
         capOnce(o, 'teeter_p' + ph);
         const d = Math.hypot(p.x - c.pos.x, p.z - c.pos.z);
-        if (d > 2.6) { bot.steer(c.pos.x + (p.x - c.pos.x) / d * 2.0, c.pos.z + (p.z - c.pos.z) / d * 2.0, 0); return false; }
+        if (d > 2.7) { bot.servo(c.pos.x + (p.x - c.pos.x) / d * 2.2, c.pos.z + (p.z - c.pos.z) / d * 2.2, 5.0, 3.0); return false; }
         pounds++;
         pounder.start();
         return false;
       }
-      if (st === 'fall') { capOnce(o, 'dunk_hp' + c.hp); bot.releaseAll(); return false; }
+      if (st === 'fall') { capOnce(o, 'dunk_hp' + c.hp); bot.servo(p.x, p.z, 0.1); return false; }
       if (st === 'breathTele' || st === 'breath') {
         if (st === 'breathTele' && c.stateT > 0.5) capOnce(o, 'frostBreath_p' + ph);
         // out of the cone: sidestep across its facing
@@ -828,28 +852,30 @@ export function makeScenarios(bot) {
         const rx = p.x - c.pos.x, rz = p.z - c.pos.z, rl = Math.hypot(rx, rz) || 1;
         const dot = (rx * fx + rz * fz) / rl;
         if (dot > 0.6 && rl < 7.5) {
-          const sx = p.x - fz * 3, sz = p.z + fx * 3, tx = p.x + fz * 3, tz = p.z - fx * 3;
-          const ok1 = c._edgeDist(sx, sz) > 0.8;
-          bot.steer(ok1 ? sx : tx, ok1 ? sz : tz, 0);
-        } else bot.releaseAll();
+          if (!stand || (st === 'breathTele' && c.stateT < 0.05)) {
+            const sx = p.x - fz * 3, sz = p.z + fx * 3, tx = p.x + fz * 3, tz = p.z - fx * 3;
+            stand = c._edgeDist(sx, sz) > c._edgeDist(tx, tz) ? [sx, sz] : [tx, tz];
+          }
+          bot.servo(stand[0], stand[1], 5.0, 2.5);
+        } else bot.servo(p.x, p.z, 0.1);
         return false;
       }
-      if (st === 'return' || st === 'enrage' || st === 'hurt') {
-        // it lands back in the middle: be out at the rim
+      if (st === 'return' || st === 'enrage' || st === 'hurt' || st === 'dormant') {
+        // it lands back in the middle: be out by the rim (and, asleep, walk back in)
         stand = pickStand();
-        bot.steer(stand[0], stand[1], 0.6);
+        bot.servo(stand[0], stand[1], 3.5);
         return false;
       }
-      // shuffle / recover / stagger: take the far edge so its charge ends at the lip
-      if (st === 'shuffle' || st === 'recover' || st === 'stagger' || st === 'idle') {
-        if (!stand || Math.hypot(stand[0] - c.pos.x, stand[1] - c.pos.z) < 4.5) stand = pickStand();
-        bot.steer(stand[0], stand[1], 0.6);
-      }
+      // shuffle / recover / stagger: take the far side so its charge ends at the lip
+      if (!stand || Math.hypot(stand[0] - c.pos.x, stand[1] - c.pos.z) < 4.0) stand = pickStand();
+      bot.servo(stand[0], stand[1], 3.5);
       return false;
     }, 60 * 170);
     rec.fightS = r2(n / 60);
     rec.teeterPounds = pounds;
     rec.heroInSeaFrames = fell;
+    rec.climbOutJumps = climbs;
+    rec.pushes = bot.log.filter((e) => e.k === 'hoarhorn' && e.e === 'pushed').map((e) => e.a + '@' + e.f);
     if (c.state === 'defeat') bossAftermath(o, [0, 1, -9]);
     return bossRecord(o);
   }
