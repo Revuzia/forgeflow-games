@@ -114,6 +114,12 @@ def _is_dev_only(relative):
         return True
     if any(p == "__pycache__" for p in parts):
         return True
+    # Node selftests (foo.selftest.cjs / .js / .mjs) sit beside the sim modules they test,
+    # inside runtime/, so the directory rule above never caught them and every one shipped
+    # to the public CDN (14 files across 6 games on 2026-10-01). No game imports one at
+    # runtime (checked: no import/require/fetch of a *.selftest.* path in any shipped tree).
+    if ".selftest." in relative.name.lower():
+        return True
     return relative.name in DEV_ONLY_NAMES
 
 
@@ -267,8 +273,14 @@ def _is_critical(relative, hashed):
     if relative.name in CRITICAL_FILES:
         return True
     parts = relative.parts
-    return (not hashed and len(parts) > 1 and parts[0] in CRITICAL_UNHASHED_JS_DIRS
-            and relative.suffix.lower() in _CRITICAL_JS_SUFFIXES)
+    if hashed or relative.suffix.lower() not in _CRITICAL_JS_SUFFIXES:
+        return False
+    if len(parts) > 1 and parts[0] in CRITICAL_UNHASHED_JS_DIRS:
+        return True
+    # A VENDORED library (assets/vendor/three/...) is as load-bearing as runtime/: last-circle
+    # serves three r172 from there so a jsdelivr outage cannot stop it, which means a failed
+    # three.module.js upload would put up an index.html whose importmap points at nothing.
+    return len(parts) > 2 and parts[0] == "assets" and parts[1] == "vendor"
 
 
 def plan_uploads(game_dir, slug, force=False, manifest=None):
