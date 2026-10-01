@@ -10,13 +10,19 @@ Usage:
   python pipeline/deploy_game.py --game-dir games/001-tropical-fury --slug tropical-fury
 
 Flow:
-  1. Upload all files in game-dir to R2 bucket forgeflow-games/{slug}/
-  2. Insert or update game metadata in Supabase games table
-  3. Set status to 'published'
+  1. Upload new/changed files in game-dir to R2 bucket forgeflow-games/{slug}/ — every
+     other file first, then the root index.html, then the root game_meta.json LAST. A
+     critical failure (for an unhashed game: any runtime/**/*.js) aborts before
+     index.html and exits non-zero. `--dry-run` prints this order without uploading.
+  2. Purge the CDN cache for the uploaded keys
+  3. Insert or update game metadata in Supabase games table (stamps build_version +
+     updated_at; never changes an existing game's publish status unless --status)
+  4. Refresh the portal prerender
 """
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -181,11 +187,185 @@ def load_supabase_creds():
 # NOT touch Supabase (else the portal points at a half-uploaded/broken game).
 CRITICAL_FILES = {"index.html", "game_meta.json"}
 
+# UPLOAD ORDER — fixed 2026-09-30 (Last Circle improve plan, lane L11). The old single
+# rglob loop reached the ROOT index.html early (it sorts before runtime/), so for the
+# whole upload a live player could load the NEW index.html (new ?v= tags) against OLD
+# module bytes, or a missing module if a later upload failed: the "mixed-module window".
+# The entry page is now the commit point: every other file goes up first, then the root
+# index.html, then the root game_meta.json LAST. Root-level only; a nested index.html is
+# an ordinary file (still critical by name, as before).
+DEFERRED_ROOT_FILES = ("index.html", "game_meta.json")   # uploaded last, in this order
+
+# Games WITHOUT a hashed build import stable filenames (runtime/3d/foo.js?v=N) and the
+# CDN worker ignores query strings, so a failed runtime/**/*.js upload means the new
+# index.html would run against a stale or missing module. Those failures are critical:
+# the deploy aborts BEFORE index.html (the live game keeps its previous, consistent
+# entry page) and exits non-zero. A hashed build (Vite: assets/index-<8-char hash>.js)
+# has no runtime/ tree, so the rule does not apply to it.
+CRITICAL_UNHASHED_JS_DIRS = ("runtime",)
+_CRITICAL_JS_SUFFIXES = (".js", ".mjs")
+# Rollup/Vite `[name]-[hash]` — 8 base64url chars, which may themselves contain '-'
+# (ironwake ships assets/index-EbddUdy-.js).
+_HASHED_JS_NAME = re.compile(r"-([A-Za-z0-9_-]{8})\.m?js$")
+
+# The manifest of what is already on R2 (incremental mode, see upload_to_r2). A module
+# constant so tests point it at a scratch dir — a fake uploader must NEVER write the live
+# manifest, or the next real deploy would skip files that were never uploaded.
+R2_MANIFEST_DIR = Path('C:\\Users\\TestRun\\Claude Claw\\state')
+R2_PUT_TIMEOUT_S = 150
+
+
+def _manifest_path(slug):
+    return Path(R2_MANIFEST_DIR) / f"r2_manifest_{slug}.json"
+
+
+def _load_manifest(slug):
+    p = _manifest_path(slug)
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    except Exception:
+        return {}
+
+
+def _md5_file(fp):
+    import hashlib
+    h = hashlib.md5()
+    with open(fp, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _entry_script_refs(game_dir):
+    """Local <script src> and <link rel=modulepreload href> refs of the ROOT index.html
+    (absolute http(s):, protocol-relative // and data: refs are dropped)."""
+    try:
+        html = (Path(game_dir) / "index.html").read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return []
+    refs = re.findall(r"""<script\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']""", html, re.I)
+    refs += re.findall(r"""<link\b(?=[^>]*\brel\s*=\s*["']modulepreload["'])[^>]*?\bhref\s*=\s*["']([^"']+)["']""",
+                       html, re.I)
+    return [r for r in refs if not re.match(r"^(?:[a-z][a-z0-9+.-]*:|//)", r, re.I)]
+
+
+def detect_hashed_build(game_dir):
+    """(hashed, evidence_ref). Hashed = the root index.html loads at least one local script
+    whose filename carries a content hash (name-XXXXXXXX.js). An all-lowercase 8-letter
+    tail ('my-renderer.js') is a word, not a hash. A missing or unreadable index.html
+    counts as UNHASHED, which is the stricter mode."""
+    for ref in _entry_script_refs(game_dir):
+        name = ref.split("#", 1)[0].split("?", 1)[0].rsplit("/", 1)[-1]
+        m = _HASHED_JS_NAME.search(name)
+        if m and not m.group(1).islower():
+            return True, ref
+    return False, ""
+
+
+def _is_critical(relative, hashed):
+    """A failed upload of this file must stop the deploy before the entry page goes up."""
+    if relative.name in CRITICAL_FILES:
+        return True
+    parts = relative.parts
+    return (not hashed and len(parts) > 1 and parts[0] in CRITICAL_UNHASHED_JS_DIRS
+            and relative.suffix.lower() in _CRITICAL_JS_SUFFIXES)
+
+
+def plan_uploads(game_dir, slug, force=False, manifest=None):
+    """Decide WHAT uploads and in WHICH ORDER. No network, no writes. The real upload and
+    --dry-run both use it, so a dry-run prints exactly the order a deploy would follow.
+
+    Returns {"items": [{"path", "relative", "key", "md5", "critical", "phase"}, ...],
+    "skipped_dev", "unchanged", "hashed", "hashed_evidence"}. phase is "body" (every
+    other file, rglob order as before), then "entry" (root index.html), then "meta"
+    (root game_meta.json, always LAST)."""
+    game_dir = Path(game_dir)
+    manifest = {} if manifest is None else manifest
+    hashed, evidence = detect_hashed_build(game_dir)
+    ALWAYS = {"index.html", "game_meta.json", "content.json"}   # code/metadata: always re-push
+    body, deferred = [], {}
+    skipped_dev = unchanged = 0
+    for file_path in game_dir.rglob("*"):
+        if file_path.is_dir():
+            continue
+        relative = file_path.relative_to(game_dir)
+        # Dev-only trees never belong on a public CDN. `tools/` holds build
+        # scripts, generator state and screenshot dumps — colosseum's alone is
+        # ~40 MB of PNGs, which would more than double its transfer and ship
+        # our asset-generation scripts to anyone who guesses the URL.
+        if _is_dev_only(relative):
+            skipped_dev += 1
+            continue
+        r2_key = f"{slug}/{relative.as_posix()}"
+        # By DEFAULT push only the code/metadata files (they change every deploy) plus
+        # new/changed assets per the manifest; static assets rarely change and a full
+        # re-upload of a big folder times out. Use --force to re-push everything (first-ever
+        # deploy of a game, or when you actually changed assets). We do NOT probe the CDN
+        # per-file: the worker returns inconsistent 404/5xx under rapid GETs (and does not
+        # answer HEAD), which made the old skip-check re-upload everything anyway.
+        _h = None
+        if relative.name not in ALWAYS and not force:
+            _h = _md5_file(file_path)
+            if manifest.get(r2_key) == _h:
+                unchanged += 1
+                continue                      # unchanged + already uploaded -> skip
+            # new or changed asset -> upload (manifest updated on success)
+        item = {"path": file_path, "relative": relative, "key": r2_key, "md5": _h,
+                "critical": _is_critical(relative, hashed), "phase": "body"}
+        if len(relative.parts) == 1 and relative.name in DEFERRED_ROOT_FILES:
+            item["phase"] = "entry" if relative.name == "index.html" else "meta"
+            deferred[relative.name] = item
+        else:
+            body.append(item)
+    items = body + [deferred[n] for n in DEFERRED_ROOT_FILES if n in deferred]
+    return {"items": items, "skipped_dev": skipped_dev, "unchanged": unchanged,
+            "hashed": hashed, "hashed_evidence": evidence}
+
+
+def print_upload_plan(game_dir, slug, force=False):
+    """--dry-run: print the upload order a real deploy would use. Reads the manifest,
+    writes nothing, calls nothing remote."""
+    plan = plan_uploads(game_dir, slug, force=force, manifest=_load_manifest(slug))
+    if plan["hashed"]:
+        mode = (f"hashed build (entry {plan['hashed_evidence']}): the runtime/**/*.js "
+                f"critical rule does not apply")
+    else:
+        mode = ("unhashed build: a failed runtime/**/*.js upload is CRITICAL and aborts "
+                "the deploy before index.html")
+    _safe_print(f"[dry-run] Upload order for {slug} ({mode}):")
+    items = plan["items"]
+    for i, it in enumerate(items, 1):
+        tag = "  [critical]" if it["critical"] else ""
+        _safe_print(f"  [plan] {i:03d} {it['phase']:<5} {it['key']}{tag}")
+    tail = [it["relative"].as_posix() for it in items if it["phase"] != "body"]
+    _safe_print(f"[dry-run] {len(items)} file(s) would upload; last: {' then '.join(tail) or '(no root index.html)'}; "
+                f"{plan['unchanged']} unchanged vs manifest skipped; {plan['skipped_dev']} dev-only withheld; "
+                f"{sum(1 for it in items if it['critical'])} critical")
+    return plan
+
+
+def _r2_put(r2_key, file_path):
+    """Upload ONE file to R2 via wrangler. Returns (ok, err). Every upload goes through
+    this single seam, so tests monkeypatch it and never touch R2."""
+    # 2026-05-05 — wrangler 4.x needs --remote or it writes to a LOCAL sandbox and the worker serves stale content.
+    cmd = f'npx wrangler r2 object put "{R2_BUCKET}/{r2_key}" --file="{file_path}" --remote'
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=R2_PUT_TIMEOUT_S
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"timeout after {R2_PUT_TIMEOUT_S}s"
+    if result.returncode == 0:
+        return True, ""
+    return False, (result.stderr or "").strip()
+
 
 def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
     """Upload files in game_dir to R2 under {slug}/.
 
-    Returns {"uploaded": int, "failed": [{"key", "err"}], "critical_failed": [key, ...]}.
+    Returns {"uploaded": int, "failed": [{"key", "err", "critical"}], "critical_failed": [key, ...],
+    "uploaded_keys", "skipped_dev", "withheld": [keys NOT uploaded by the critical gate], "hashed"}.
 
     2026-06-22 ROBUSTNESS FIX (forgeflowgames.com was stale all session): a single
     `npx wrangler r2 object put` can exceed 30s (npx cold-start + a multi-MB GLB), and
@@ -199,95 +379,86 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
     non-cp1252 glyph (e.g. ▲), and printing it on a Windows cp1252 console raised
     UnicodeEncodeError — which used to ABORT the whole deploy mid-loop (~5 of ~890 files up).
     The module-level utf-8 reconfigure + _safe_print now make that print un-crashable, and
-    failures are collected and summarised at the end instead of aborting on the first one."""
+    failures are collected and summarised at the end instead of aborting on the first one.
+
+    2026-09-30 ORDER + CRITICAL GATE (Last Circle improve plan, lane L11): uploads follow
+    plan_uploads() — every other file first, then the root index.html, then the root
+    game_meta.json LAST. If any CRITICAL file failed before the entry page (for an unhashed
+    game that includes every runtime/**/*.js), index.html and game_meta.json are WITHHELD:
+    the live game keeps its previous, consistent entry page, and the caller exits non-zero.
+    A failed index.html also withholds game_meta.json. Non-critical failures (an asset)
+    still never block, exactly as before."""
     count = 0
-    skipped_dev = 0            # dev-only files never offered to the CDN (see _is_dev_only)
-    failures = []              # [{"key": r2_key, "err": "..."}]
+    failures = []              # [{"key": r2_key, "err": "...", "critical": bool}]
     uploaded_keys = []         # r2 keys actually pushed this run — for a targeted cache purge
-    ALWAYS = {"index.html", "game_meta.json", "content.json"}   # code/metadata: always re-push
+    withheld = []              # entry/meta keys deliberately NOT uploaded (critical gate)
     # 2026-07-02 INCREMENTAL MODE: a local manifest (state/r2_manifest_{slug}.json) records what we
     # have successfully uploaded (md5 per key). New/changed assets upload WITHOUT --force (the CDN
     # worker returns 200 "not found" bodies for missing keys, so remote probing is unreliable, and
     # --force re-uploads everything via one npx cold-start per file = 1-2h). --seed-manifest records
     # the current local tree as already-uploaded (baseline after a verified-synced state).
-    import hashlib as _hl2, json as _json2
-    _man_path = Path('C:\\Users\\TestRun\\Claude Claw\\state') / f"r2_manifest_{slug}.json"
-    try:
-        _manifest = _json2.loads(_man_path.read_text(encoding="utf-8")) if _man_path.exists() else {}
-    except Exception:
-        _manifest = {}
-    def _md5(fp):
-        h = _hl2.md5()
-        with open(fp, "rb") as f:
-            for chunk in iter(lambda: f.read(1 << 20), b""):
-                h.update(chunk)
-        return h.hexdigest()
+    _man_path = _manifest_path(slug)
+    _manifest = _load_manifest(slug)
+
     def _save_manifest():
         try:
-            _man_path.write_text(_json2.dumps(_manifest, indent=0), encoding="utf-8")
+            _man_path.write_text(json.dumps(_manifest, indent=0), encoding="utf-8")
         except Exception as e:
             print(f"  [r2] manifest save failed (non-fatal): {e}")
-    for file_path in game_dir.rglob("*"):
-        if file_path.is_dir():
-            continue
-        relative = file_path.relative_to(game_dir)
-        # Dev-only trees never belong on a public CDN. `tools/` holds build
-        # scripts, generator state and screenshot dumps — colosseum's alone is
-        # ~40 MB of PNGs, which would more than double its transfer and ship
-        # our asset-generation scripts to anyone who guesses the URL.
-        if _is_dev_only(relative):
-            skipped_dev += 1
-            continue
-        r2_key = f"{slug}/{relative.as_posix()}"
-        # skip immutable assets already on the CDN unless forced. NOTE: the CDN worker
-        # does NOT answer HEAD (returns non-200) -> use a GET and read only the status
-        # line (the body never streams since we don't .read()), which is what actually works.
-        # By DEFAULT push only the code/metadata files (they change every deploy); static assets
-        # rarely change and a full re-upload of a big folder times out. Use --force to re-push
-        # everything (first-ever deploy of a game, or when you actually changed assets). We do NOT
-        # probe the CDN per-file: the worker returns inconsistent 404/5xx under rapid GETs, which
-        # made the old skip-check re-upload everything anyway.
-        _h = None
-        if relative.name not in ALWAYS and not force:
-            _h = _md5(file_path)
-            if _manifest.get(r2_key) == _h:
-                continue                      # unchanged + already uploaded -> skip
-            # new or changed asset -> fall through and upload (manifest updated on success)
-        # 2026-05-05 — wrangler 4.x needs --remote or it writes to a LOCAL sandbox and the worker serves stale content.
-        cmd = f'npx wrangler r2 object put "{R2_BUCKET}/{r2_key}" --file="{file_path}" --remote'
-        try:
-            result = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=150
-            )
-        except subprocess.TimeoutExpired:
-            print(f"  [r2] TIMEOUT (skipped, not fatal): {r2_key}")
-            failures.append({"key": r2_key, "err": "timeout after 150s"})
-            continue
-        if result.returncode == 0:
+
+    plan = plan_uploads(game_dir, slug, force=force, manifest=_manifest)
+    skipped_dev = plan["skipped_dev"]   # dev-only files never offered to the CDN (see _is_dev_only)
+
+    def _put(item):
+        nonlocal count
+        ok, err = _r2_put(item["key"], item["path"])
+        err = err or ""
+        if ok:
             count += 1
-            uploaded_keys.append(r2_key)
-            _manifest[r2_key] = _h if _h is not None else _md5(file_path)
-            print(f"  [r2] Uploaded: {r2_key}")
+            uploaded_keys.append(item["key"])
+            _manifest[item["key"]] = item["md5"] if item["md5"] is not None else _md5_file(item["path"])
+            print(f"  [r2] Uploaded: {item['key']}")
+            return True
+        crit = " (CRITICAL)" if item["critical"] else ""
+        if err.startswith("timeout after"):
+            _safe_print(f"  [r2] TIMEOUT{crit}: {item['key']} -- {err}")
         else:
-            err = (result.stderr or "").strip()
-            _safe_print(f"  [r2] FAILED: {r2_key} -- {err[:100]}")
-            failures.append({"key": r2_key, "err": err})
+            _safe_print(f"  [r2] FAILED{crit}: {item['key']} -- {err[:100]}")
+        failures.append({"key": item["key"], "err": err, "critical": bool(item["critical"])})
+        return False
+
+    blocked_by = []            # critical keys that failed before the entry page
+    for item in plan["items"]:
+        if item["phase"] == "body":
+            _put(item)
+            continue
+        # entry (root index.html), then meta (root game_meta.json): the commit point.
+        if not blocked_by:
+            blocked_by = [f["key"] for f in failures if f["critical"]]
+        if blocked_by:
+            withheld.append(item["key"])
+            continue
+        if not _put(item) and item["phase"] == "entry":
+            blocked_by = [item["key"]]
 
     _save_manifest()
     # Say what was withheld. A silent skip reads as "everything shipped".
     if skipped_dev:
         _safe_print(f"  [r2] {skipped_dev} dev-only file(s) withheld from the CDN "
                     f"({'/'.join(sorted(DEV_ONLY_DIRS))})")
-    # A single failed file is never fatal here — collect + summarise, and let the caller
+    if withheld:
+        _safe_print(f"  [r2] ABORTED before the entry page: critical upload failed ({', '.join(blocked_by)}).")
+        _safe_print(f"       Withheld, NOT uploaded: {', '.join(withheld)} — the live game keeps its previous entry page.")
+    # A non-critical failed file is never fatal here — collect + summarise, and let the caller
     # decide (0 uploaded, or a CRITICAL file failed -> skip Supabase and exit non-zero).
-    critical_failed = [f["key"] for f in failures if Path(f["key"]).name in CRITICAL_FILES]
+    critical_failed = [f["key"] for f in failures if f["critical"]]
     if failures:
         _safe_print(f"  [r2] {len(failures)} file(s) failed to upload:")
         for f in failures:
-            _safe_print(f"        - {f['key']}: {(f['err'] or '')[:120]}")
+            _safe_print(f"        - {f['key']}{' [critical]' if f['critical'] else ''}: {(f['err'] or '')[:120]}")
     return {"uploaded": count, "failed": failures, "critical_failed": critical_failed,
-            "uploaded_keys": uploaded_keys, "skipped_dev": skipped_dev}
+            "uploaded_keys": uploaded_keys, "skipped_dev": skipped_dev, "withheld": withheld,
+            "hashed": plan["hashed"]}
 
 
 def _cf_purge_token():
@@ -578,7 +749,9 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, r
     print(f"Deploying game: {slug}\n  Source: {game_dir}\n  Files: {total}")
     if dry_run:
         print("[dry-run] Would upload to R2 and upsert Supabase")
-        return {"ok": True, "uploaded": 0, "total": total, "url": f"{CDN_BASE}/{slug}/index.html", "dry": True}
+        plan = print_upload_plan(game_dir, slug, force=force)
+        return {"ok": True, "uploaded": 0, "total": total, "url": f"{CDN_BASE}/{slug}/index.html", "dry": True,
+                "plan": [it["key"] for it in plan["items"]]}
 
     # Cover: keep an existing thumbnail.png; otherwise try to generate one (xAI).
     thumb_path = game_dir / "thumbnail.png"
@@ -606,18 +779,25 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, r
     uploaded = up["uploaded"]
     critical_failed = up["critical_failed"]
     print(f"  [r2] {uploaded}/{total} files uploaded to {R2_BUCKET}/{slug}/")
+    withheld = up.get("withheld", [])
     if uploaded == 0:
         print("  [r2] ERROR: 0 files uploaded — R2 auth/network failed. Skipping Supabase so the")
         print("       portal isn't left pointing at missing files. Fix the R2 token, then re-run.")
-        return {"ok": False, "uploaded": 0, "total": total, "url": None, "reason": "r2 upload failed"}
+        return {"ok": False, "uploaded": 0, "total": total, "url": None, "reason": "r2 upload failed",
+                "withheld": withheld}
     if critical_failed:
-        # index.html / game_meta.json didn't make it — the game would be broken. Don't upsert
-        # Supabase; surface a non-zero result so the caller (and Task Scheduler) sees the failure.
+        # A critical file didn't make it (index.html / game_meta.json, or — for an unhashed
+        # game — a runtime/**/*.js module, in which case index.html was never uploaded). The
+        # game would be broken. Don't upsert Supabase or purge; surface a non-zero result so
+        # the caller (and Task Scheduler) sees the failure.
         joined = ", ".join(critical_failed)
         print(f"  [r2] ERROR: critical file(s) failed to upload: {joined}. Skipping Supabase so the")
-        print("       portal isn't left pointing at a broken game. Re-run (add --force) to retry.")
+        print("       portal isn't left pointing at a broken game. Re-run to retry (failed files are")
+        print("       not in the manifest, so a plain re-run re-uploads them; --force re-pushes all).")
+        if withheld:
+            print(f"       Entry page withheld (live copy unchanged): {', '.join(withheld)}")
         return {"ok": False, "uploaded": uploaded, "total": total, "url": None,
-                "reason": f"critical file upload failed: {joined}"}
+                "reason": f"critical file upload failed: {joined}", "withheld": withheld}
 
     # Purge the CDN cache for the files just uploaded so the deploy is visible immediately
     # (unbundled, stable-named modules otherwise serve stale ~4h — see purge_cf_cache).
@@ -657,7 +837,7 @@ def main():
     if getattr(args, "seed_manifest", False):
         import hashlib as _shl, json as _sjson
         gd = Path(args.game_dir).resolve()
-        man_path = Path('C:\\Users\\TestRun\\Claude Claw\\state') / f"r2_manifest_{args.slug}.json"
+        man_path = _manifest_path(args.slug)
         man = {}
         for fp in gd.rglob("*"):
             if fp.is_dir():
