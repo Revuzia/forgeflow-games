@@ -156,3 +156,17 @@ edited only to author two missions - see below).
   + 14 sealed walk-ins whose hero never reached the trigger inside gatecheck's 3.4 s WALL budget (event log:
   W held 3.4-3.5 s, state never left 'keep', hero moved < 0.1 m at verdant-2) + 5 floor drops (900 ms wall).
   The same rows hand-stepped: _ms_gateprobe.py 42/42.
+- After the close fix, real keys (quickcard_after_closefix.log): walk-in raised the card in 11 frames; real
+  Escape -> 'keep' with `.on` already off while `.cc-leaving` still lingered 1.5 s (the late onfinish, now
+  harmless); second walk-in -> 4x ArrowRight -> MISSION 5 -> real Enter -> verdant-1 in mission 'boss';
+  0 page errors. modulecheck 71 / 0 failing.
+
+## STATUS (2026-09-30 23:56) — lane complete, exit gates NOT green on this box
+Built + proven: mission schema (course.js resolveMission/missionList/validate sweep/crestsLive), mission select
+card (names as hints, claimed marked, cursor rules, real-key + pad input, held-input guard, `.on` truthful),
+per-mission save (missions{runs,got}, lastMission, startMission, collectCrest(...,mission)), mission run flow
+(game.js: loadCourse {mission}, ?mission= dev boot, toast, RETURN-TO-KEEP-only clear except the coins crest),
+race-only run timer + skull, race crest only in its own mission; verdant-1 missions 'open' + 'boss'.
+Gates: modulecheck clean. loopcheck best run 130/132 and gatecheck --no-enter red ONLY on wall-clock rows
+(respawn wall stamps, 900 ms drop waits, 3.4 s walk budgets) on a box at 91-100 % CPU; the same gatecheck
+rows hand-stepped 42/42. Re-run both on a quiet box before stage 2.
