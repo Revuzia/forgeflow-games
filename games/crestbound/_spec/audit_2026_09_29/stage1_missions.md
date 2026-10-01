@@ -120,3 +120,12 @@ edited only to author two missions - see below).
   OUT-OF-SCOPE OBSERVATION: at rime-2, azure-1, azure-2 and azure-3 (0, -0.6) the walk-in needs exactly
   329 hand-stepped frames (5.5 s game time) with the hero in 'bonk' against the wall before the card rises
   (ember-3/4: 9-23 frames; azure-3 +0.6: 18). gatecheck's walk budget is 3.4 s. Owner: gates / controller.
+- loopcheck verdant-1 rerun (22:55): 76/83 — worse, and still only timing rows: three "engine.elapsed
+  stalled for 20000 ms" (the renderer got no frame in 20 s of wall) + respawn wall stamps 1115-1298 ms.
+  game.js stamps lastRespawnMs with performance.now (line ~2123), so it is a wall measure. Log loopcheck_run2.log.
+- DIRECT MISSION BOOT (_ms_direct.py, ?dev=1&course=verdant-1&mission=open): the run's record is mission
+  'open' (north-door closed; boss + race absent) -> 3 real jumps -> crest -> celebration hand-stepped until
+  the panel rose -> 14_direct_open_clear_panel.png: COURSE CLEAR, CREST ON THE RAMPARTS, ONE button
+  'RETURN TO KEEP' (focused), the run timer + skull hidden in the HUD -> real Enter -> Keep. Save:
+  missions {open:{runs 1, got ['open']}}. (The under-roof crest lens frame was inside the cone roof:
+  the rampart crest sits inside the tower's roof volume — deleted, not evidence.)
