@@ -27,7 +27,11 @@ export function makeBot() {
   }
   function releaseAll() { for (const c of Array.from(held)) T.release(c); held.clear(); }
   const P = () => G.player;
-  function tick() { G.update(DT); frame++; }
+  let lastGS = G.state;
+  function tick() {
+    G.update(DT); frame++;
+    if (G.state !== lastGS) { log.push({ f: frame, k: 'game', e: 'state', a: G.state, a2: lastGS }); lastGS = G.state; }
+  }
   function aim(x, z) {
     const p = P().pos;
     const yaw = Math.atan2(-(x - p.x), -(z - p.z));

@@ -90,3 +90,14 @@ plus harness-only files under _harness/ (the test arena data + its driver).
 - AZURE run 2: sentry: track -> tele (red aim beam, frame 02) -> fire (sidestepped) -> cool -> POUND -> coins +3.
   puffer: within 5 m inflate -> puffed (a bounce platform, frame 06) -> warn -> deflate -> drift -> defeat -> gone ->
   RESPAWN after its 10 s -> drift -> inflate; coins +3.  strike:sentry: PUNCH -> defeat 'punch', coins +3.
+- AZURE run 2 gyrarch (23:45-01:00, 5517 s wall at 258 ms/frame): intro toast "GYRARCH · THE CLOCKWORK SUN / TICK.
+  TOCK. ..."; 11 aim/fire/vent/close cycles, the bot boarded gears 8 times and rode 58 s, 0 hits. Two causes:
+  (1) HARNESS: its leap re-pressed an already-held Space (no new press, no jump: 800 'leaps'); fixed (fresh press,
+  rise clear of the body, ride the gear's inner edge). (2) GAME BUG, fixed in bosses.js: the body shove sphere
+  (r 1.26 + capsule 0.38 at the core) reached 0.2 m ABOVE the crown deck, so any hero landing on the crown was shoved
+  off before the pound could land - the core was unreachable. The shove now only applies below the deck.
+- puffer bounce was never proven: the puffed collider top was 1.70 m, 0.21 m under a single jump apex (1.91 m);
+  real-key hops never got on. FIXED in creatures.js: the puffed ball SAGS (PF_SQUASH 0.8) -> collider top ~1.44 m.
+- HARNESS: a __dev.goto straight from the TITLE left the title menu open; a later key press reached it and sent the
+  game to 'loading' mid-proof (rerun 1 puffer froze in 'puffed'; run 2 gyrarch ended in gs 'loading'). cr_arena.py
+  now leaves the title with its own button first; the bot logs every game-state change into each record.

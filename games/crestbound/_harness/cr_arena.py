@@ -88,6 +88,44 @@ def save_frames(pg, outdir, start, tag=""):
     return start + len(fr), names
 
 
+TITLE_CLICK_JS = r"""() => {
+  const words = ['NEW GAME', 'NEW RUN', 'CONTINUE', 'PLAY', 'START', 'BEGIN', 'ENTER'];
+  const btns = Array.from(document.querySelectorAll('button.cb-btn, button, [role=button], .btn'));
+  for (const want of words) for (const b of btns) {
+    const r = b.getBoundingClientRect();
+    if (b.disabled || r.width < 4 || r.height < 4) continue;
+    if ((b.textContent || '').toUpperCase().indexOf(want) < 0) continue;
+    if (typeof b.__activate === 'function') b.__activate(); else b.click();
+    return want;
+  }
+  return null;
+}"""
+
+
+def leave_title(pg):
+    """Leave the title the way a player does (its menu button) BEFORE entering the
+    arena. Measured 2026-10-01: a __dev.goto straight from the title left the title
+    menu open over the arena, and a later real key press reached it -- the game
+    went to 'loading' mid-proof and every creature froze."""
+    t0 = time.time()
+    st = None
+    for _ in range(1200):
+        st = pg.evaluate("() => CRESTBOUND.game.state")
+        if st in ("title", "keep", "playing"):
+            break
+        pg.wait_for_timeout(500)
+    clicked = None
+    for _ in range(600):
+        st = pg.evaluate("() => CRESTBOUND.game.state")
+        if st in ("keep", "playing"):
+            break
+        if st == "title":
+            clicked = pg.evaluate(TITLE_CLICK_JS) or clicked
+        pg.wait_for_timeout(700)
+    print("left the title (%s) -> state %s in %.0f s" % (clicked, st, time.time() - t0), flush=True)
+    return st
+
+
 def boot(p):
     br = p.chromium.launch(channel="chrome", headless=True, args=FLAGS)
     pg = br.new_page(viewport={"width": 1280, "height": 720})
@@ -115,6 +153,7 @@ def boot(p):
             pg.wait_for_timeout(500)
         print("page %s in %.0f s (try %d)" % ("up" if up else "NOT up", time.time() - t0, attempt + 1), flush=True)
         if up:
+            leave_title(pg)
             return br, pg, console
         for line in console[c0:c0 + 20]:
             print("   console: " + line, flush=True)

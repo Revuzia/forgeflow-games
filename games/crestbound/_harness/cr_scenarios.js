@@ -168,6 +168,7 @@ export function makeScenarios(bot) {
     rec.hero = bot.hero();
     rec.gameFrames = bot.frame - o.f0;
     rec.coinsGained = bot.coins() - rec.coins0;   // the drop, counted by the hero's own coin counter
+    rec.gameStates = bot.log.filter((e) => e.k === 'game' && e.f >= o.f0).map((e) => e.a2 + '>' + e.a + '@' + e.f);
     rec.msPerFrame = r2((performance.now() - o.t0) / Math.max(1, rec.gameFrames));
     return rec;
   }
@@ -855,7 +856,9 @@ export function makeScenarios(bot) {
       if (st === 'teeter') {
         capOnce(o, 'teeter_p' + ph);
         const d = Math.hypot(p.x - c.pos.x, p.z - c.pos.z);
-        if (d > 2.7) { bot.servo(c.pos.x + (p.x - c.pos.x) / d * 2.2, c.pos.z + (p.z - c.pos.z) / d * 2.2, 5.0, 3.0); return false; }
+        const hs = Math.hypot(pl.vel.x, pl.vel.z);
+        // on ICE a jump keeps the slide: brake to a stand first, then pound
+        if (d > 2.7 || hs > 1.6) { bot.servo(c.pos.x + (p.x - c.pos.x) / d * 2.2, c.pos.z + (p.z - c.pos.z) / d * 2.2, 5.0, 3.0); return false; }
         pounds++;
         pounder.start();
         return false;
