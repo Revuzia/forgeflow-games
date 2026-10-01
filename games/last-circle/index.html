@@ -1,76 +1,467 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Last Circle — ForgeFlow Games</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;overflow:hidden;background:#08131f}#game-container{width:100%;height:100%;position:relative}canvas{display:block}
-#lc-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center;background:radial-gradient(ellipse at 50% 40%,#12263f 0%,#08131f 70%);color:#eaf2ff;font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;height:100dvh;overflow:hidden;background:#08131f}#game-container{width:100%;height:100%;position:relative}canvas{display:block}
+#lc-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;padding:max(24px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left));text-align:center;background:radial-gradient(ellipse at 50% 40%,#12263f 0%,#08131f 70%);color:#eaf2ff;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;overflow:auto}
 #lc-splash .wm{font-size:clamp(30px,6vw,58px);font-weight:900;letter-spacing:10px;color:#bcdcff;text-shadow:0 0 28px rgba(80,160,255,.45)}
 #lc-splash .track{width:min(320px,70vw);height:4px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
-#lc-splash .bar{height:100%;width:8%;border-radius:2px;background:linear-gradient(90deg,#2f7fd6,#6ec4ff);animation:lcBootBar 9s cubic-bezier(.2,.7,.3,1) forwards}
-#lc-splash .tip{font-size:14px;letter-spacing:1.5px;opacity:.72;max-width:520px;line-height:1.6}
-@keyframes lcBootBar{0%{width:8%}35%{width:52%}75%{width:78%}100%{width:92%}}</style>
-<!-- three.module.js is the first blocking dependency of the whole module graph, and
-     its fetch used to start only after ffg_boot3d.js had been downloaded and parsed.
-     This starts it during HTML parse instead. Same host, same URL, same CORS mode as
-     the importmap resolution below — no new request, just an earlier one. The addons
-     (ffg_kernel_3d.js:12-18, maps.js:14) are deliberately NOT listed: they are pulled
-     transitively and a hand-written list here would go stale the next time the kernel
-     imports one more. -->
-<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js" crossorigin>
+#lc-splash .bar{height:100%;width:100%;border-radius:2px;background:linear-gradient(90deg,#2f7fd6,#6ec4ff);transform-origin:0 50%;transform:scaleX(.08);animation:lcBootBar 9s cubic-bezier(.2,.7,.3,1) forwards}
+#lc-splash .status{font-size:13px;letter-spacing:1px;opacity:.85;min-height:1.4em;font-variant-numeric:tabular-nums}
+#lc-splash .tip{font-size:14px;letter-spacing:1.5px;opacity:.72;max-width:520px;line-height:1.6;white-space:pre-line}
+#lc-splash.lc-failed .bar{animation:none;transform:none;background:#c8503c}
+#lc-splash.lc-failed .status{display:none}
+#lc-splash.lc-failed .tip{opacity:.95;letter-spacing:.4px}
+@media (hover:none) and (pointer:coarse){#lc-splash .kb{display:none}}
+.lc-card-title{margin:0;font:800 20px/1.3 'Segoe UI',system-ui,-apple-system,sans-serif;letter-spacing:1px;color:#ff8f7d}
+.lc-card-diag{white-space:pre-wrap;text-align:left;max-width:min(640px,88vw);max-height:30vh;overflow:auto;font:12px/1.45 Consolas,'Courier New',monospace;background:rgba(0,0,0,.35);color:#b9cbe0;padding:10px 12px;border-radius:8px}
+.lc-card-actions{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.lc-card-actions button{padding:11px 24px;border:0;border-radius:8px;background:#2f9e6e;color:#04140d;font:800 14px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:1px;cursor:pointer}
+.lc-card-actions button+button{background:rgba(255,255,255,.14);color:#eaf2ff}
+#lc-fail{position:fixed;inset:0;z-index:2147483600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;padding:max(24px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left));text-align:center;background:rgba(6,13,22,.92);color:#eaf2ff;font:14px/1.6 'Segoe UI',system-ui,-apple-system,sans-serif;overflow:auto}
+#lc-fail .tip{max-width:560px;white-space:pre-line}
+@keyframes lcBootBar{0%{transform:scaleX(.08)}35%{transform:scaleX(.52)}75%{transform:scaleX(.78)}100%{transform:scaleX(.92)}}</style>
+<!-- three r172 is VENDORED (assets/vendor/three/, byte-identical to three@0.172.0 on npm):
+     cdn.jsdelivr.net used to be a single point of failure — a network that blocks it
+     (schools, offices) could never start the game. The head guard below adds the two
+     modulepreloads for build/three.module.js + build/three.core.js (read from this
+     importmap, so the URL lives in one place) once WebGL 2 is known to exist, so the
+     biggest file starts downloading during HTML parse. If a runtime module ever imports
+     a NEW three/addons/* file, copy it from node_modules/three into the vendor tree. -->
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/" } }
+{ "imports": { "three": "./assets/vendor/three/build/three.module.js", "three/addons/": "./assets/vendor/three/examples/jsm/" } }
+</script>
+<script>
+  // ── Boot guard ── window.__LC_BOOT__ = { handoff(), fail(title, detail, actions?, opts?), info(msg?) }.
+  // A classic script in <head>, so every listener exists before any module or preload can fail. It owns the
+  // #lc-splash card until ffg_boot3d.js calls handoff() (the menu is up), and fail() keeps working after that.
+  //  * A TERMINAL CARD IS NEVER OVERWRITTEN. The old 120 ms poll rewrote every failure into "Still loading..."
+  //    at 30 s; nothing here writes into a card except its own owner (fail()'s handle.update, a load card
+  //    adding the HTTP status). A later fail() adds its detail to the card on screen instead of replacing it.
+  //  * LOAD FAILURE -> "Last Circle could not load", at once. A <script>/<link> load error does not bubble, so a
+  //    CAPTURE-phase window 'error' listener hears it (own-origin script / modulepreload only). The card names
+  //    the file, one GET of it reports the HTTP status, and the page reloads ONCE by itself (cache-busting
+  //    ?lcretry=a<t>, stripped again on the next load; sessionStorage 'lastcircle.bootRetry' blocks a second
+  //    automatic retry until a boot reaches handoff). A deploy in progress or a network blip is the likeliest
+  //    cause. A module deep in the graph is no element, so two more feeds name it on the SAME card: resource
+  //    timing (one of our .js files answered 4xx/5xx) and ffg_boot3d.js, which walks the module graph after an
+  //    import() fails and reports what it finds through __LC_BOOT__.loadFailed(url, why) (also content.json).
+  //  * EVALUATION ERROR before handoff (window 'error' / 'unhandledrejection') -> "Last Circle could not start";
+  //    withdrawn again if the game still reaches handoff.
+  //  * STATUS LINE: "Loading... <bytes> · <visible s>" from resource timing, plus "slow connection, still
+  //    loading" after 15 s VISIBLE. It never says "reload": that word appears only on a failure card.
+  //  * WATCHDOG -> "Last Circle did not start" only when the page has been VISIBLE >= 60 s (hidden time does not
+  //    count) AND nothing finished downloading for 20 s AND a HEAD probe of a pending entry file got no answer
+  //    within 10 s (a server that answers = a slow download, not a dead one), or at the 240 s visible cap.
+  //    A 'stalled' card is withdrawn by itself if bytes start arriving again.
+  //  * WebGL 2 is checked here once (three r172 is WebGL-2-only); without it the guard puts up the WebGL card
+  //    as soon as the splash exists, the three preloads are never added, and ffg_boot3d.js never imports the engine.
+  //  * fail() actions: omitted/null -> one RELOAD button; [] -> no button; otherwise an array of
+  //    { label, onClick } (a { label: 'RELOAD' } without onClick reloads). A non-reload action closes the card,
+  //    then runs. opts: { retry: true } asks for the single automatic retry (before handoff only),
+  //    { waitForUpdate: true } holds that retry until handle.update(title, detail) names the cause (max 6 s).
+  //    Returns a handle { update(title, detail), close() }. Before handoff the card is drawn inside #lc-splash,
+  //    after it as a full-screen #lc-fail overlay above the HUD (pointer lock is released so it can be clicked).
+  //  * info(msg): a string sets the status line's label (before handoff, unless a card is up); it always
+  //    returns the guard's state (card, title, text, bytes, visibleMs, failed files, loaded/pending, webgl2...).
+  //  * TEST ONLY: ?bootguard=<scale> (0.02 .. 1) scales the 60 / 20 / 15 / 240 s thresholds and the probe
+  //    timeout (floor 3 s), so a gate can drive the slow and stalled paths quickly.
+  (function () {
+    var W = window, D = document, L = location, P = W.performance;
+    var now = function () { return P && P.now ? P.now() : Date.now(); };
+    var q = null; try { q = new URLSearchParams(L.search); } catch (e) { /* defaults */ }
+    var sc = q ? parseFloat(q.get('bootguard') || '') : NaN, scale = sc > 0 && sc < 1 ? Math.max(0.02, sc) : 1;
+    var VISIBLE = 60000 * scale, QUIET = 20000 * scale, SLOW = 15000 * scale, CAP = 240000 * scale, PROBE = Math.max(3000, 10000 * scale);
+    var RK = 'lastcircle.bootRetry', store = null;
+    try { store = W.sessionStorage; store.getItem(RK); } catch (e) { store = null; }
+    function unretry(u) { return u.replace(/([?&])lcretry=[^&#]*(&?)/, function (m, a, b) { return b ? a : ''; }).replace(/\?(#|$)/, '$1'); }
+    var rq = q ? q.get('lcretry') || '' : '', autoRetried = rq.charAt(0) === 'a';
+    if (rq) try { history.replaceState(history.state, '', unretry(L.href)); } catch (e) { /* keep the marker */ }
+    var origin = L.protocol + '//' + L.host + '/', dir = L.href.replace(/[?#].*$/, '').replace(/[^\/]*$/, '');
+    function short(u) {
+      u = String(u || '').replace(/[?#].*$/, '');
+      if (u.indexOf(dir) === 0) return u.slice(dir.length);
+      return u.indexOf(origin) === 0 ? u.slice(origin.length - 1) : u.replace(/^[a-z]+:\/\//i, '');
+    }
+    function size(b) { return b < 104858 ? Math.round(b / 1024) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; }
+    function secs(ms) { return Math.round(ms / 1000) + ' s'; }
+    var over = false, card = null, later = null, label = 'Loading', pend = [], wrote = false;
+
+    // visible time: a hidden tab never runs toward a failure
+    var visMs = 0, visFrom = D.visibilityState === 'visible' ? now() : -1;
+    function visible() { return visMs + (visFrom >= 0 ? now() - visFrom : 0); }
+    function onVis() {
+      if (D.visibilityState === 'visible') { if (visFrom < 0) visFrom = now(); }
+      else if (visFrom >= 0) { visMs += now() - visFrom; visFrom = -1; }
+    }
+
+    // progress from resource timing (every download counts - the GLBs and content.json are fetches - except
+    // the guard's and ffg_boot3d.js's own diagnostic requests, which carry an lcprobe marker)
+    var got = {}, bytes = 0, last = now(), obs = null, polled = 0;
+    function take(list) {
+      for (var i = 0; i < list.length; i++) {
+        var e = list[i];
+        if (String(e.name).indexOf('lcprobe=') >= 0) continue;
+        bytes += e.transferSize || e.encodedBodySize || 0;
+        last = now();
+        if (!(e.responseStatus >= 400)) got[e.name] = 1;
+        // one of OUR .js files answered 4xx/5xx: every module is part of the boot graph (none is optional), and
+        // the import() that will fail names only its top-level file, seconds later - name the real one now
+        else if (!over && String(e.name).indexOf(origin) === 0 && /\.m?js(\?|$)/.test(e.name)
+                 && e.initiatorType !== 'fetch' && e.initiatorType !== 'xmlhttprequest') loadFail(e.name, 'HTTP ' + e.responseStatus, false);
+      }
+    }
+    try { obs = new PerformanceObserver(function (l) { take(l.getEntries()); }); obs.observe({ type: 'resource', buffered: true }); } catch (e) { obs = null; }
+    function poll() { if (obs || !P || !P.getEntriesByType) return; var a = P.getEntriesByType('resource'); take(a.slice(polled)); polled = a.length; }
+    function split() {
+      var r = { loaded: [], pending: [], urls: [] };
+      var els = D.querySelectorAll('script[src],link[rel="modulepreload"][href]');
+      for (var i = 0; i < els.length; i++) {
+        var u = els[i].src || els[i].href;
+        if (got[u]) r.loaded.push(short(u)); else { r.pending.push(short(u)); r.urls.push(u); }
+      }
+      return r;
+    }
+    function mark(u) { return u + (u.indexOf('?') >= 0 ? '&' : '?') + 'lcprobe=' + Math.round(now()); }
+    function check(url, method, cb) {   // one request for the status line of a card; the body is never read
+      var ctl = W.AbortController ? new AbortController() : null, fin = false, rec = { ctl: ctl, to: 0 };
+      function end(code, text) {
+        if (fin) return; fin = true; clearTimeout(rec.to);
+        try { if (ctl) ctl.abort(); } catch (e) { /* done */ }
+        if (!over) cb(code, text);
+      }
+      rec.to = setTimeout(function () { end(0, 'no answer in ' + secs(PROBE)); }, PROBE);
+      pend.push(rec);
+      try {
+        fetch(mark(url), { method: method, cache: 'no-store', credentials: 'same-origin', signal: ctl ? ctl.signal : undefined }).then(function (r) {
+          var ct = (r.headers.get('content-type') || '').split(';')[0];
+          end(r.status, 'HTTP ' + r.status + (ct ? ' ' + ct : ''));
+        }, function () { end(0, 'network error'); });
+      } catch (e) { end(0, 'network error'); }
+    }
+    function diag(what) {
+      return 'bootguard: ' + what + ' | t ' + secs(now()) + ', visible ' + secs(visible()) + ', ' + size(bytes) + ' received'
+        + (autoRetried ? ' | after 1 automatic retry' : '') + (scale !== 1 ? ' | scale ' + scale : '');
+    }
+
+    // WebGL 2, asked once, the way the renderer will ask; the throwaway context is released at once
+    var webgl2 = false, webgl2Ms = 0;
+    (function () {
+      var t = now();
+      try {
+        var c = D.createElement('canvas'), gl = c.getContext('webgl2');
+        if (gl) { webgl2 = true; var x = gl.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); }
+      } catch (e) { webgl2 = false; }
+      webgl2Ms = Math.round(now() - t);
+    })();
+
+    // ── the card ──
+    // kinds, strongest first: 'fail' (fail(): terminal, only its owner or its buttons remove it), 'load' (a
+    // file did not download), 'error' (a stray error before handoff), 'stall' (the watchdog).
+    var RANK = { fail: 4, load: 3, error: 2, stall: 1 };
+    function el(tag, cls, text) { var e = D.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+    function reload(auto) {
+      if (auto) try { if (store) store.setItem(RK, '1'); } catch (e) { /* the URL marker still stops a loop */ }
+      var u = unretry(L.href), h = '', i = u.indexOf('#');
+      if (i >= 0) { h = u.slice(i); u = u.slice(0, i); }
+      L.replace(u + (u.indexOf('?') >= 0 ? '&' : '?') + 'lcretry=' + (auto ? 'a' : 'm') + Date.now() + h);
+    }
+    function norm(actions) {
+      if (actions == null) return [{ label: 'RELOAD', reload: true }];
+      var out = [];
+      for (var i = 0; i < actions.length && out.length < 4; i++) {
+        var a = actions[i];
+        if (!a) continue;
+        if (typeof a === 'string') a = { label: a };
+        var lbl = String(a.label || a.text || 'OK'), fn = a.onClick || a.run || a.fn || a.action || null;
+        out.push({ label: lbl, fn: typeof fn === 'function' ? fn : null, reload: typeof fn !== 'function' && /^reload$/i.test(lbl) });
+      }
+      return out;
+    }
+    function draw() {   // (re)paint `card` into the splash, or into the #lc-fail overlay once the splash is gone
+      var c = card;
+      if (!c) return;
+      var s = D.getElementById('lc-splash');
+      if (!s && !D.body) { later = true; return; }
+      later = null;
+      if (!c.host) {
+        if (s && !over) {
+          c.host = s; c.inSplash = true;
+          c.tip = D.getElementById('lc-splash-tip');
+          if (c.tip && c.tipWas == null) c.tipWas = c.tip.innerHTML;
+          s.classList.add('lc-failed');
+        } else {
+          try { if (D.pointerLockElement && D.exitPointerLock) D.exitPointerLock(); } catch (e) { /* ignore */ }
+          var ov = el('div'); ov.id = 'lc-fail'; ov.setAttribute('role', 'alertdialog');
+          var fs = D.fullscreenElement;
+          (fs && fs !== D.documentElement && fs !== D.body ? fs : D.body).appendChild(ov);
+          c.host = ov; c.inSplash = false;
+        }
+      }
+      if (!c.title) { c.title = el('h2', 'lc-card-title'); c.title.setAttribute('role', 'alert'); c.host.insertBefore(c.title, c.inSplash ? c.tip || null : null); }
+      if (!c.inSplash && !c.tip) { c.tip = el('div', 'tip'); c.host.appendChild(c.tip); }
+      if (!c.pre) { c.pre = el('pre', 'lc-card-diag'); c.host.appendChild(c.pre); }
+      if (!c.bar) { c.bar = el('div', 'lc-card-actions'); c.host.appendChild(c.bar); }
+      c.title.textContent = c.titleText;
+      if (c.tip) c.tip.textContent = c.msgText;
+      c.pre.textContent = c.diagLines.concat(c.also.length ? ['', 'Also:'].concat(c.also) : []).join('\n');
+      c.pre.style.display = c.pre.textContent ? '' : 'none';
+      while (c.bar.firstChild) c.bar.removeChild(c.bar.firstChild);
+      for (var i = 0; i < c.actions.length; i++) (function (a) {
+        var b = el('button', '', a.label); b.type = 'button';
+        b.onclick = function () {
+          if (a.reload) { reload(false); return; }
+          close(c);
+          if (a.fn) try { a.fn(); } catch (e) { try { console.error('[LC_BOOT] action failed:', e); } catch (x) { /* ignore */ } }
+        };
+        c.bar.appendChild(b);
+      })(c.actions[i]);
+      c.bar.style.display = c.actions.length ? '' : 'none';
+    }
+    function close(c) {
+      if (!c) return;
+      var nodes = [c.title, c.pre, c.bar];
+      for (var i = 0; i < nodes.length; i++) if (nodes[i] && nodes[i].parentNode) nodes[i].parentNode.removeChild(nodes[i]);
+      if (c.inSplash) {
+        if (c.tip && c.tipWas != null) c.tip.innerHTML = c.tipWas;
+        if (c.host) c.host.classList.remove('lc-failed');
+      } else if (c.host && c.host.parentNode) c.host.parentNode.removeChild(c.host);
+      if (card === c) card = null;
+      c.closed = true;
+    }
+    // show a card of `kind`; a weaker kind never replaces a stronger one, and a second 'fail' adds its text
+    // to the card on screen. Returns the card now showing this text (or null).
+    function show(kind, title, msg, diagLines, actions) {
+      if (card && !card.closed) {
+        if (card.kind === kind && kind !== 'fail') {          // the same owner refreshing its own card
+          card.titleText = title; card.msgText = msg; card.diagLines = diagLines; card.actions = norm(actions);
+          draw(); return card;
+        }
+        if (RANK[card.kind] >= RANK[kind]) {                  // never overwrite: add it underneath instead
+          if (String(title) === card.titleText) return null;   // the same failure reported twice (e.g. WebGL: guard + ffg_boot3d.js)
+          if (kind === 'fail' || kind === 'load') {
+            var line = title + ': ' + String(msg).replace(/\s*\n\s*/g, ' / ');
+            if (card.also.indexOf(line) < 0 && card.also.length < 4) { card.also.push(line); draw(); }
+          }
+          return null;
+        }
+        close(card);                                          // a stall / stray-error card gives way
+      }
+      card = { kind: kind, titleText: String(title), msgText: String(msg == null ? '' : msg), diagLines: diagLines || [],
+               actions: norm(actions), also: [], at: now() };
+      draw();
+      return card;
+    }
+
+    // 1. load failures (capture phase)
+    var failed = [], codes = {}, hosts = [], loadNote = '', willRetry = false, retryAt = 0, retryNamed = true, retryMax = 0, reloading = false;
+    function canRetry() { if (autoRetried) return false; try { return !store || store.getItem(RK) !== '1'; } catch (e) { return false; } }
+    function armRetry(waitForName) {
+      if (over || willRetry || !canRetry()) return false;
+      willRetry = true; retryAt = now() + 1500; retryNamed = !waitForName; retryMax = now() + 6000;
+      return true;
+    }
+    function retryLine() { return willRetry ? '\nRetrying once automatically…' : ''; }
+    function onLoadErr(ev) {
+      var t = ev && ev.target;
+      if (over || !t || t === W || !t.tagName) return;
+      var rel = String(t.getAttribute('rel') || '').toLowerCase();
+      var kind = t.tagName === 'SCRIPT' ? 'script' : t.tagName === 'LINK' && rel === 'modulepreload' ? rel : '';
+      var url = String(t.src || t.href || '');
+      if (!kind || url.indexOf(origin) !== 0) return;   // only the game's own files
+      var f = short(url);
+      if (failed.indexOf(f) >= 0) return;
+      loadFail(url, '', true);
+      check(url, 'GET', function (code, text) { if (!codes[f]) codes[f] = text; retryNamed = true; drawLoad(); });
+    }
+    // One card lists every boot file that did not download: element errors (above), 4xx/5xx in resource timing
+    // (take), and what ffg_boot3d.js finds (loadFailed: a module deep in the graph, content.json). url null =
+    // "a file failed, which one is not known yet" (why empty) or a general note (why = the note).
+    function loadFail(url, why, waitForName) {
+      if (over) return;
+      if (url) {
+        var f = short(url);
+        if (failed.indexOf(f) < 0) failed.push(f);
+        if (why) codes[f] = why;
+        if (String(url).indexOf(origin) !== 0) { var h = String(url).replace(/^[a-z]+:\/\/([^\/]+).*$/i, '$1'); if (hosts.indexOf(h) < 0) hosts.push(h); }
+      } else if (why) loadNote = why;
+      armRetry(waitForName);
+      if (why) retryNamed = true;
+      drawLoad();
+    }
+    function drawLoad() {
+      var lines = ['A game file did not download:'];
+      for (var i = 0; i < failed.length; i++) lines.push('  ' + failed[i] + '  (' + (codes[failed[i]] || 'checking…') + ')');
+      if (!failed.length) lines.push('  ' + (loadNote || 'finding out which one…'));
+      if (hosts.length) lines.push('This network may be blocking ' + hosts.join(', ') + '.');
+      lines.push('Check your connection, then press RELOAD. If Last Circle was just updated, wait a minute and try again.' + retryLine());
+      show('load', 'Last Circle could not load', lines.join('\n'), [diag('load-error')]);
+    }
+
+    // 2. evaluation errors before handoff (bubble phase)
+    function stray(detail) {
+      if (over) return;
+      show('error', 'Last Circle could not start', 'Something went wrong while the game was starting. Press RELOAD to try again.',
+           [String(detail || 'unknown error').slice(0, 900), '', diag('error')]);
+    }
+    function onErr(e) { if (!(e && e.target && e.target !== W && e.target.tagName)) stray((e && e.error && e.error.stack) || (e && e.message) || e); }
+    function onRej(e) { var r = e && e.reason; stray((r && (r.stack || r.message)) || r); }
+
+    // 3. the watchdog
+    var probing = false;
+    function stall(why, detail) {
+      var s = split();
+      var c = show('stall', 'Last Circle did not start',
+        (why === 'cap' ? 'Still not started after ' + secs(visible()) + ' of loading (' + size(bytes) + ' received).'
+          : 'The game files stopped arriving (' + size(bytes) + ' received, nothing new for ' + secs(now() - last) + ').')
+          + '\nCheck your connection, then press RELOAD.',
+        ['Loaded:  ' + (s.loaded.join(', ') || '-'),
+         'Pending: ' + (s.pending.join(', ') || '- (every entry file arrived; the game code is still starting)') + (detail ? '\n         probe ' + detail : ''),
+         '', diag('watchdog ' + why)]);
+      if (c) c.why = why;
+    }
+    function probe() {
+      var s = split();
+      if (!s.urls.length) { last = now(); return; }   // every entry file arrived: still importing / evaluating (the cap still applies)
+      probing = true;
+      check(s.urls[0], 'HEAD', function (code, text) {
+        probing = false;
+        if (card) return;
+        if ((code >= 200 && code < 400) || code === 405 || code === 501) { last = now(); return; }   // it answers: slow, not dead
+        stall('stalled', s.pending[0] + ': ' + text);
+      });
+    }
+    function status() {
+      var st = D.getElementById('lc-splash-status');
+      if (!st) return;
+      var vis = visible();
+      var s = label + '…' + (now() >= 2000 && bytes > 0 ? ' ' + size(bytes) + ' · ' + secs(vis) : '') + (vis >= SLOW ? ' — slow connection, still loading' : '');
+      if (st.textContent !== s) { st.textContent = s; wrote = true; }
+    }
+    function tick() {
+      if (over) return;
+      if (later) draw();   // a card raised before <body> existed: timers run while the parser waits on game_controls.js
+      poll();
+      var t = now();
+      if (willRetry && !reloading && t >= retryAt && (retryNamed || t >= retryMax)) { reloading = true; reload(true); return; }
+      if (card && card.kind === 'stall' && card.why === 'stalled' && last > card.at) close(card);   // it was slow after all
+      if (W.__LC__ || (D.readyState !== 'loading' && !D.getElementById('lc-splash'))) {   // backstop: the menu is up / the splash was taken down
+        api.handoff();
+        return;
+      }
+      if (card) return;
+      status();
+      var vis = visible();
+      if (vis >= CAP) stall('cap');
+      else if (vis >= VISIBLE && t - last >= QUIET && !probing) probe();
+    }
+    function onReady() { if (D.readyState !== 'loading') { if (later) draw(); status(); } }
+
+    W.addEventListener('error', onLoadErr, true);
+    W.addEventListener('error', onErr);
+    W.addEventListener('unhandledrejection', onRej);
+    D.addEventListener('visibilitychange', onVis);
+    D.addEventListener('readystatechange', onReady);
+    var iv = setInterval(tick, 250);
+
+    var api = W.__LC_BOOT__ = {
+      handoff: function () {
+        if (over) return;
+        over = true;
+        clearInterval(iv);
+        for (var i = 0; i < pend.length; i++) { clearTimeout(pend[i].to); try { if (pend[i].ctl) pend[i].ctl.abort(); } catch (e) { /* done */ } }
+        pend = [];
+        W.removeEventListener('error', onLoadErr, true);
+        W.removeEventListener('error', onErr);
+        W.removeEventListener('unhandledrejection', onRej);
+        D.removeEventListener('visibilitychange', onVis);
+        D.removeEventListener('readystatechange', onReady);
+        if (obs) try { obs.disconnect(); } catch (e) { /* done */ }
+        willRetry = false;                                    // the game started: a pending automatic retry is moot
+        try { if (store) store.removeItem(RK); } catch (e) { /* done */ }
+        if (card && card.kind === 'fail') return;             // a terminal card stays, splash and all
+        if (card) close(card);                                // a load / stray-error / stall card: it was not fatal
+        var s = D.getElementById('lc-splash');
+        if (!s) return;
+        s.style.pointerEvents = 'none';
+        var gone = false, go = function () {
+          if (gone) return; gone = true;
+          s.style.transition = 'opacity .45s ease'; s.style.opacity = '0';
+          setTimeout(function () { if (s.parentNode && !(card && card.host === s)) s.parentNode.removeChild(s); }, 500);
+        };
+        // the first frame of the menu is drawn under the splash before it fades (rAF does not run in a hidden tab)
+        try { requestAnimationFrame(function () { requestAnimationFrame(go); }); } catch (e) { /* timer below */ }
+        setTimeout(go, 300);
+      },
+      fail: function (title, detail, actions, opts) {
+        opts = opts || {};
+        var msg = detail == null ? '' : (detail.join ? detail.join('\n') : String(detail));
+        if (opts.retry && !over) armRetry(!!opts.waitForUpdate);
+        var c = show('fail', String(title || 'Last Circle stopped'), msg + retryLine(), [diag(over ? 'fail after handoff' : 'fail')], actions);
+        var h = {
+          update: function (t2, d2) {
+            if (!c || c.closed || card !== c) return;
+            if (t2) c.titleText = String(t2);
+            if (d2 != null) c.msgText = (d2.join ? d2.join('\n') : String(d2)) + retryLine();
+            c.diagLines = [diag(over ? 'fail after handoff' : 'fail')];
+            retryNamed = true;
+            draw();
+          },
+          close: function () { if (c && card === c) close(c); }
+        };
+        if (!c) retryNamed = true;                            // added under another card: nothing to wait for
+        return h;
+      },
+      // not part of the C2 contract: ffg_boot3d.js feature-detects it to add a file to the load card
+      loadFailed: function (url, why) { loadFail(url || null, why || '', !why); return api.info(); },
+      retryKey: RK,   // the sessionStorage key of the single automatic retry (for test harnesses)
+      info: function (msg) {
+        if (typeof msg === 'string' && msg && !over && !card) { label = msg.replace(/[.…\s]+$/, ''); status(); }
+        var s = split();
+        return { scale: scale, visibleMs: Math.round(visible()), bytes: bytes, card: card ? card.kind : '',
+                 title: card ? card.titleText : '', text: card ? card.msgText : '', failed: failed.slice(),
+                 loaded: s.loaded, pending: s.pending, autoRetried: autoRetried, retrying: reloading,
+                 handedOff: over, webgl2: webgl2, webgl2Ms: webgl2Ms, label: label, wrote: wrote };
+      }
+    };
+
+    // No WebGL 2: the card goes up from here, as soon as the splash is parsed, instead of after game_controls.js and
+    // ffg_boot3d.js have downloaded (seconds on a slow link). ffg_boot3d.js raises the same card (same title: the
+    // guard keeps one) and also covers a page without this guard. Keep the words in step with its webglCard().
+    if (!webgl2) api.fail('WebGL 2 is required',
+      'Last Circle draws its 3D world with WebGL 2, and this browser did not provide it.\n' +
+      'Turn on hardware acceleration in your browser settings (it may need a browser restart), ' +
+      'update the browser or graphics driver, then press RELOAD.');
+
+    // three r172 first: its two files are the biggest blocking downloads of the module graph. Same URL as the
+    // importmap's resolution (read from it), so the module map reuses this fetch. Skipped without WebGL 2:
+    // ffg_boot3d.js shows that card and never imports the engine.
+    if (webgl2) try {
+      var im = JSON.parse(D.querySelector('script[type="importmap"]').textContent).imports || {};
+      if (im.three) {
+        var pre = [im.three, im.three.replace(/three\.module\.js$/, 'three.core.js')];
+        for (var k = 0; k < pre.length; k++) {
+          if (k && pre[k] === pre[0]) continue;
+          var ln = D.createElement('link'); ln.rel = 'modulepreload'; ln.href = pre[k]; D.head.appendChild(ln);
+        }
+      }
+    } catch (e) { /* the importmap still resolves three; it just starts later */ }
+  })();
 </script>
 </head><body>
-<!-- First-paint splash. Before this existed the pre-menu window was a flat #08131f
-     rectangle: ffg_boot3d.js awaits ffg_kernel_3d.js and ffg_royale3d.js, which pull
-     three.module.js plus eight addon modules off cdn.jsdelivr.net (ffg_kernel_3d.js:12-18,
-     maps.js:14), then ten royale/* modules (ffg_royale3d.js:27-37), sim/royale.js and
-     content.json — and NOTHING paints until hudMod.showMenu() runs at ffg_royale3d.js:384.
-     No wordmark, no bar, no error path: on a cold load it reads as a broken page.
-     The bar is a TIME-BASED estimate, not byte progress — the module graph gives us no
-     progress events to hang a real one on. The determinate bar is the match loading
-     screen; do not "fix" this one to be accurate, it can't be.
-     System font stack ONLY: hud.js:56 requests Orbitron/Rajdhani from fonts.googleapis.com
-     inside ensureAAAStyles(), which does not run until the menu is already up. -->
-<div id="lc-splash"><div class="wm">LAST CIRCLE</div><div class="track"><div class="bar"></div></div><div class="tip" id="lc-splash-tip">Loading — 50 drop in, one walks out. SHIFT toggles sprint · SPACE toggles your parachute, cut it to dive faster.</div></div>
-<script>
-// The splash has to take itself down: nothing under runtime/ knows it exists (that
-// tree is the SHARED FFG runtime, this file is the only per-game page). Poll for
-// window.__LC__ — ffg_royale3d.js:384 calls showMenu() and assigns __LC__ 23 lines
-// later with no await between, so it is the tightest "menu is actually painted"
-// signal reachable from here. Watching for the canvas instead would fire at kernel
-// mount (ffg_kernel_3d.js:123), seconds early, onto an empty frame.
-(function () {
-  var el = document.getElementById("lc-splash");
-  if (!el) return;
-  var tip = document.getElementById("lc-splash-tip"), t0 = Date.now();
-  var iv = setInterval(function () {
-    if (window.__LC__) {
-      clearInterval(iv);
-      el.style.pointerEvents = "none";
-      el.style.transition = "opacity .45s ease";
-      el.style.opacity = "0";
-      setTimeout(function () { el.remove(); }, 500);
-      return;
-    }
-    // A failed boot was indistinguishable from a slow one: ffg_boot3d.js logs
-    // "[FFG3D] boot failed" to the console and the screen never changes. Rewrite the
-    // tip instead of parking the bar at 92% forever. The poll deliberately KEEPS
-    // running — a genuinely slow CDN still clears the splash when it finally lands.
-    if (tip && Date.now() - t0 > 30000) {
-      tip.textContent = "Still loading. If this doesn't clear, reload — the 3D runtime is fetched from a CDN and that request may have been blocked.";
-      tip = null;
-    }
-  }, 120);
-})();
-</script>
+<!-- First-paint splash, owned by the boot guard above until ffg_boot3d.js hands off (menu painted).
+     The bar is a TIME-BASED estimate (transform only, no layout); the honest number is the status line,
+     which the guard fills from resource timing: bytes received and visible seconds. Failure cards are drawn
+     inside this element (title, message in #lc-splash-tip, diagnostic block, buttons).
+     System font stack ONLY: hud.js requests Orbitron/Rajdhani from fonts.googleapis.com inside
+     ensureAAAStyles(), which does not run until the menu is already up. -->
+<div id="lc-splash"><div class="wm">LAST CIRCLE</div><div class="track"><div class="bar"></div></div><div class="status" id="lc-splash-status">Loading…</div><div class="tip" id="lc-splash-tip">50 drop in, one walks out.<span class="kb"> SHIFT toggles sprint · SPACE toggles your parachute, cut it to dive faster.</span></div></div>
 <div id="game-container"></div>
 <script>window.GAME_CONFIG={hide_bug_button:true,mute_hotkey:false};</script>
-<!-- One bump per fix batch busts the WHOLE runtime: ffg_boot3d.js:10 reads
-     new URL(import.meta.url).search and appends it to ffg_kernel_3d.js and
-     ffg_royale3d.js, which appends it again to every royale/* import
-     (ffg_royale3d.js:20-37) and to sim/royale.js. Editing a runtime module without
-     moving this number ships the new index.html against CDN-cached stale JS. -->
-<script src="game_controls.js?v=177"></script>
-<script type="module" src="runtime/3d/ffg_boot3d.js?v=177"></script>
+<!-- One bump per fix batch busts the WHOLE runtime: ffg_boot3d.js reads new URL(import.meta.url).search
+     and appends it to ffg_kernel_3d.js and ffg_royale3d.js, which appends it again to every royale/*
+     import and to sim/royale.js. Editing a runtime module without moving this number ships the new
+     index.html against CDN-cached stale JS. (The vendored three files never change, so they carry no tag.) -->
+<script src="game_controls.js?v=1789530264"></script>
+<script type="module" src="runtime/3d/ffg_boot3d.js?v=1789530264"></script>
 </body></html>

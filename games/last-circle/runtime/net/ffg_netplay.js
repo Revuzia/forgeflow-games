@@ -38,7 +38,10 @@ export class NetPlay {
   // Lazy-load supabase-js + create the client. Safe to call once.
   async connect() {
     if (this.sb) return this.sb;
-    const mod = await import("https://esm.sh/@supabase/supabase-js@2");
+    // PINNED to an exact version: "@2" floated to whatever esm.sh resolved that day, so a
+    // supabase-js release could change online play with no deploy of ours. 2.117.2 is what
+    // esm.sh resolved "@2" to on 2026-09-30 (the version the live game was already running).
+    const mod = await import("https://esm.sh/@supabase/supabase-js@2.117.2");
     const createClient = mod.createClient || (mod.default && mod.default.createClient);
     // eventsPerSecond is the rate this client DECLARES to the Realtime server (it
     // rides in the socket URL; the server rate-limits the connection to it). It

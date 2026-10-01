@@ -221,7 +221,7 @@ function openLobby(W, sel) {
     setTimeout(() => { inviteB.textContent = "COPY INVITE LINK"; }, 1600);
   };
   const closeB = mk("CANCEL", false);
-  closeB.onclick = () => { if (S) { try { S.rtc && S.rtc.close(); } catch (e) {} S.net.leave(); S = null; W.net = null; } root.remove(); };
+  closeB.onclick = () => { attempt++; if (S) { try { S.rtc && S.rtc.close(); } catch (e) {} S.net.leave(); S = null; W.net = null; } root.remove(); };
 
   // Who is actually in the room. S.peers has held every peer's chosen name since
   // the "hello" handler shipped, but it was read in exactly ONE place — building
@@ -255,10 +255,51 @@ function openLobby(W, sel) {
   Object.assign(startB.style, { padding: "12px 34px", borderRadius: "10px", border: "none", cursor: "pointer", fontWeight: "900", fontSize: "16px", background: "#4ade80", color: "#08131f", display: "none", marginTop: "6px" });
   box.appendChild(startB);
 
+  // One attempt at a time. A newer attempt (or CANCEL) makes an older one stale: when
+  // its await finally settles it only cleans up after itself.
+  let attempt = 0;
+  const within = (p, ms, what) => new Promise((res, rej) => {
+    const to = setTimeout(() => rej(new Error(what)), ms);
+    p.then((v) => { clearTimeout(to); res(v); }, (e) => { clearTimeout(to); rej(e); });
+  });
+  const connectWithin = (net, ms) => within(net.connect(), ms, "no answer from the online service in " + Math.round(ms / 1000) + " s");
+  // The failure line + the buttons back. Plain text only (textContent): the error
+  // message is shown in the console, not injected into the page.
+  function offline(e) {
+    status.textContent = "";
+    const b = document.createElement("b");
+    b.style.color = "#ff9b8a";
+    b.textContent = "Couldn't reach the online service.";
+    status.appendChild(b);
+    status.appendChild(document.createElement("br"));
+    status.appendChild(document.createTextNode("Check your connection and try again, or play solo from the menu."));
+    status.setAttribute("data-net-error", String((e && e.message) || e || "error").slice(0, 200));
+    createB.disabled = joinB.disabled = false;
+    startB.style.display = "none";
+    inviteB.style.display = "none";
+    rosterEl.innerHTML = "";
+  }
   async function enter(code, asHost) {
+    const my = ++attempt;
     createB.disabled = joinB.disabled = true;
     status.textContent = "Connecting…";
     const net = new NetPlay(SUPABASE_URL, SUPABASE_ANON_KEY, "last-circle");
+    // joinRoom resolves (it does not reject) on CHANNEL_ERROR / TIMED_OUT and reports
+    // them through "error" — without this the lobby printed a room code for a room
+    // nobody could ever reach.
+    let chanErr = null;
+    net.on("error", (e) => { chanErr = (e && e.status) || "error"; });
+    try {
+      await connectWithin(net, 20000);
+    } catch (e) {
+      // esm.sh unreachable, supabase-js failed to load, or no answer: say so and give the
+      // buttons back. Before this, enter() had no catch — "Connecting…" forever with
+      // CREATE ROOM and JOIN both disabled.
+      console.warn("[net] online service unreachable:", e);
+      if (my === attempt && root.isConnected) offline(e);
+      return;
+    }
+    if (my !== attempt || !root.isConnected) return;   // cancelled / superseded while loading
     // distinct default names online — two "You"s in one lobby is confusing
     const myName = (W.settings.playerName && W.settings.playerName !== "You")
       ? W.settings.playerName
@@ -275,12 +316,24 @@ function openLobby(W, sel) {
     W.net = S;
     net.on("msg", (m) => onMsg(W, m));
     net.on("peer", ({ count }) => {
+      if (S !== sess) return;
       status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — ${Math.max(1, count)} player(s) connected` +
         (net.isHost() ? "" : "<br>Waiting for the host to start…");
       if (net.isHost()) startB.style.display = count >= 1 ? "inline-block" : "none";
       paintRoster();
     });
-    await net.joinRoom(code, asHost);
+    const sess = S;
+    try {
+      await within(net.joinRoom(code, asHost), 20000, "the room did not answer in 20 s");
+      if (chanErr) throw new Error("realtime channel " + chanErr);
+    } catch (e) {
+      console.warn("[net] could not join the room:", e);
+      if (S === sess) { try { S.rtc && S.rtc.close(); } catch (x) {} try { net.leave(); } catch (x) {} S = null; W.net = null; }
+      else { try { net.leave(); } catch (x) {} }
+      if (my === attempt && root.isConnected) offline(e);
+      return;
+    }
+    if (S !== sess || my !== attempt) { try { net.leave(); } catch (x) {} return; }   // cancelled while joining
     send("hello", { name: S.myName });
     status.innerHTML = `Room <b style="letter-spacing:3px">${net.room}</b> — share this code.` + (asHost ? "" : "<br>Waiting for the host to start…");
     inviteB.style.display = "inline-block";
