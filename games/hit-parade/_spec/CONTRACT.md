@@ -3124,3 +3124,82 @@ Verifier defects D2, D6, D10, D13, D5 (renderer side; the stage lights are §35.
    automated Chromes, CPU 47-100 %, the Intel iGPU busy with other sessions + DWM + the DisplayLink host: its frames took 0.2-15 s, no
    usable sample). rAF frame times, super window (Lv3 PRIME TIME, johnny vs bruno on a 38.2 deg line), on the dGPU (`--chrome-arg=--force_high_performance_gpu`), vsync on (the display paces 20 ms), every run labelled CONTAMINATED by perfcheck (3-4 other automated Chromes, machine CPU 47-98 %; the IDLE windows of the same runs spiked too: idle p99 up to 300 ms, max 900 ms). Windows that were not starved pace at the display: butcher_block p50 20.0 / p99 20.9 / max 21.5 ms (both windows; idle 20.8), rooftop window 1 20.0 / 20.8 / 21.0, control_room 20.0 / 20.8 / 21.2 (`perfcheck_fixview_g9_cr_new_r1` window 1), rust_theater best window 20.1 / 60.5 / 80.2. Starved / spiky windows: rooftop window 0 p99 100.2 (frames of 100-220 ms at cinematic frames 45-54 whose own CPU is <= 5.4 ms and GPU <= 5.1 ms, idle window clean), control_room p99 80-360, rust_theater 139.7-379.9, wheel_of_pain 0 and 78 frames in 8 s (p50 40). GPU timer p99: butcher 5.0, rooftop 5.3, control_room 11.4 / 11.5 / 21.2 / 32.0 (four runs, 32.0 in the starved one; baseline 14.0 / 18.1), rust 20.4 / 22.8, wheel 23.6 / 40.4 ms (contention inflates the timer itself: idle frames read up to 45.9). control_room A/B vs the BASELINE (314ec728's runtime, same flags, interleaved): baseline clean windows p99 20.8 too; per-frame JS p90 7.5-8.4 -> 6.0-7.9, p99 9.7-12.3 -> 8.3-11.1 ms; the A/B spike frames carried CPU <= 6 ms and GPU <= 12 ms, the longest LoAF (706 ms) held 5 ms of the page's script. G9 itself (VIEW3D's p99 80 ms on the Intel iGPU) could NOT be re-measured: OPEN until a quiet machine re-runs `perfcheck.py --headless --stages control_room,rust_theater,butcher_block,wheel_of_pain,rooftop --circle 60 --ab 2` without the dGPU flag.
 8. **Gates (2026-10-01):** `npm run typecheck` rc 0, 0 errors (09:45, `fixview_typecheck_final.log`). `npm run probe` on the shared tree: 21/23 PASS, rc 1 (09:48 `fixview_probe_final.log`, re-checked 09:51 `fixview_probe_final_recheck.log`): FAIL probe_3d 110/111 - "D4: a grab caught at range releases where a touching one does (johnny throw_f 1.41 / 1.41 m, bruno walk_in_m 0.00 / 2.13 m)"; FAIL probe_audio 16/17 - router "unhandled #47". Neither comes from this lane: no probe imports runtime/src/view (grep of _harness/*.ts + fixtures), the same suite passed 23/23 at 09:11 (`fixview_probe.log`), and in between data/fighters/bruno.json + kits/bruno.py (09:42, a grab-range change in flight) and core/sim inputs.ts / motion.ts (09:26-09:29) changed; #47 is EV3D.BACK_HIT, which the router handles but probe_audio's event-name table (EV + EVX only) does not name - the scripted bout now produces a back hit. `lookshots.py --game --only fixview` RESULT OK (0 fails, 0 console / page errors); `--fixview top` re-run OK after the measureTop() move.
+### §35.25 CHANGED(wf6_fixer_core): wall-splat drop, carousel grab path, CPU throw trust + ring walks (2026-10-01; additive, data + sim + AI)
+Evidence: `_harness/_reports/progress_wf6_fixer_core.md` (every number below is quoted there with its log). Files carry `CHANGED(wf6_fixer_core)`.
+1. **Wall splat (WF6 D1).** `splat.ts wallSplat`: the victim faces the wall's INWARD normal (back flat on it; F.facing follows) and
+   its push circle is re-seated on the wall for that yaw. `fighter.ts` WALL_SPLAT -> knockdown with `KDF.DOWN` (kd_fall_f ->
+   wake_f, the way the authored wall_splat clip ends) + `splatDrop`: a non-transferring pushback along its forward over
+   system.json `wallSplat.dropF` (5) frames by `down[1]` - the room behind it. data/bodies.json gains an optional posture
+   `down: [front, back]` (generator `_harness/tool_bodies.ts`: the widest per-frame extent over kd_fall_f / kd_ground_f / wake_f;
+   johnny 0.826, THE FREAK 1.07 m back) -> `CFighter.downF / downB` (0 when not measured = no slide). Measured (real keys, all 5
+   arenas): 65 f after the splat 70-72 % of the victim's skinned vertices were beyond the wall -> 0 %.
+2. **Grab path turn (WF6 V2).** `GrabDef.path` keys may carry a 4th number `turnDeg` (the THROWER's yaw turn since the connect,
+   linear from 0, multi-turn; must end on whole turns, <= 15 deg / frame - validate.py). The sim (throwpose.ts holdPos stride 4,
+   `grabTurn`; fighter.ts throwCarry) turns the thrower by it, swings the victim round the connect root on the turned forward
+   and keeps it facing the thrower; F.facing of both is left as at the connect. kitlib cinematic gapD rows carry it into
+   grab.path. bruno FINAL DELIVERY: bear hug -> a two-turn carousel (12 deg / frame, victim 0.75 m out, 0.42-0.45 m up) -> the
+   throw-in holds the victim face up across his raised hands (kd_ground_b at 1.75 m) -> the hurl (unchanged: 3.0 m, 4500).
+   Nearest bruno hand -> victim chest / hips (rendered): carousel median 0.85 -> 0.32 m, overhead 0.79 -> 0.26 m.
+3. **CPU (WF6 V3 / V6, core/ai).** habits.ts `techRate` (my plain throws that caught it: teched / landed) -> brain.ts
+   `throwTrust()` (x 0.12..1 once more than ~60 % are teched) on the close plan's throw weight; plans.ts ringPlan (5): the
+   neutral circle-walk is held 40-120 f (was 18-54 f) and a regular contestant's style weight is never under 0.9 x the level
+   lever (bosses keep theirs); brain.ts stepTick acts on a non-guard reaction decided while circling (unique / parry / IMPACT /
+   throw); uniques.ts gazza's DIVE approach also under a high-poke habit. probe_balance --full 13/13 (CPU L6 vs THE FREAK
+   NORMAL 48 %, RICKY 34 %).
+4. **Harness notes (not changed here, measured):** playtest.py SeasonBot's range constants are absolute root distances (walk in
+   while d > 1.05 m): johnny 0.317 + THE FREAK 0.747 m push fronts = 1.064 m, so vs THE FREAK it never reaches its neutral
+   offense - the WF6 "FREAK is a wall for the SeasonBot" result (0 / 25) is that bot artefact (re-based on the push fronts:
+   12 / 12 in the headless model `_harness/scratch/wf6fx_seasonbot.ts`).
+### §35.26 CHANGED(wf6 fixer): wall cutaway, camera frame guard, PRIME TIME fit + payoff, spotlight, touch EDIT LAYOUT / fitted pad, baked portraits, ending payoff (2026-10-01; view / UI / net-client / harness only - no §16 / §17 / §18 / §19 signature broken, the sim untouched)
+Evidence: `_harness/_reports/progress_wf6_fixer.md` (every number below is quoted there), scratch scripts `_harness/scratch/wf6fix_*.py`
+(real keys / CDP touch; dev hooks only for stations), shots `_shots/wf6fix/`. Files carry `CHANGED(wf6 fixer)` notes. Verifier defects
+D2 D3 D4 D5 D8 D9 V4 V7 VO-D2 VO-D3 VO-D4 VO-D6 VO-D7 VO-D8.
+1. **Ring-wall cutaway (D2, D3; new `view/cutaway.ts`).** BoutView patches every stage material once (onBeforeCompile chained, cache key
+   `|hp-cut1`; ONE page-wide uniform set, patched materials tracked by identity - the stage GLB's materials are cached and shared by
+   every bout on that stage). A fragment is discarded when it lies outside the ring's inner face (planar measure > r - 0.12 m; poly =
+   the apothem measure), above y 0.03 and below max(2.6, wallH + 1.6), nearer the lens than a fighter's mid plane (+ 0.1 m) and inside
+   that fighter's screen box (rounded rect, 0.07 feather, 4x4 ordered dither; two boxes that nearly touch merge). On only while the
+   lens is outside the ring's inner face. Read-back `info().cutaway {on, boxes, depth, patched, enabled}`; A/B `view.cut.enabled`.
+2. **Camera (V7, D2; `view/camera.ts`).** With `cutaway` set (BoutView) the wall step no longer climbs to 2.95 m and pulls in: the rig
+   rises <= `cutRaise` 0.6 m and keeps its distance, a cinematic keeps its authored height; `last.wallBlocked` (raw), `last.cut` (the
+   cutaway shows it), `last.occluded` stays 0 then. The soft pull FADES OUT (over `softFade` 1.4 m) when the lens cannot get inside within
+   softPullMax. Rig FRAME GUARD: after occlusion the vertical FOV opens (instant; closes at 0.05 / frame; <= +24 deg) until each fighter's
+   top is under the HUD band, its feet (feetDepth toward the lens) above the bottom margin and its body inside 4 % side margins
+   (`last.guardFov`). A/B `cam.guardOn`, `cam.softFadeOn`, `cam.cutaway`.
+3. **PRIME TIME (D3, D5; `view/bout.ts`).** `fitCineFrame`: after compilePlan, v2 strike cinematics sample both roots (every 3rd frame;
+   need ring gap >= push front + 0.08 m, hard) and the shots' lens points (>= 0.25 m inside, soft, capped 1.2 m) and slide the frozen
+   LineFrame inward (<= 3 m); the outro starts from the unshifted, ring-clamped roots (the shift hides in the hard cuts). `place()`
+   clamps each root by its own push front (was a flat 0.3 m). `info().cineFrame.shift`. frameGuard: from 4 frames before to 10 after
+   each `hits` frame the VICTIM's chest + head stay in frame (top / bottom with a 25 % inset / sides; new axes 2 / 3 / 4 in gPts);
+   `guardLast.payoff`. A/B `view.fitCine`, `view.guardPayoff`.
+4. **Spotlight (V4; `view/fx.ts`).** The shaft cone draws its far half only (BackSide) with an alpha-preserving additive blend (src One /
+   dst One, alpha Zero / One; the floor pool weighs by src alpha): no haze over the lit body, its bloom-mask alpha 0 kept. A/B
+   `fx.legacySpot`.
+5. **Touch (VO-D2, VO-D3, VO-D6).** EDIT LAYOUT is reachable: SETTINGS -> TOUCH CONTROLS `#hpm-touch-edit` and the pause card
+   `#hpm-p-editlayout` (touch mode, offline) -> `Menus.setTouchEditor(run, labels)` (main.ts: `Game.editTouchLayout()` + the overlay
+   for the localized editor bar) - the menus hide (`.hpm-touch-editing`), the overlay edits over the paused bout (Game.touchEditing
+   keeps it up), DONE saves through the existing onLayout handler and returns to the same screen. `touch/controls.ts` fits BUTTON SIZE:
+   the largest disc size q <= setting (>= min(1, setting)) with a spread p in [q / 1.12, q] at which every unmoved button clears the
+   measured top-HUD bottom (`.hp-bars, .hp-side, .hp-show` + 6 px), PAUSE (+ 6) and its neighbours (+ 4); stick / pause follow;
+   readback `fitScale` (q) / `fitSpread` (p). The touch pause legend lists STICK first and SUPER last (`leg.touch.super` via tOr -
+   strings.json may add the key).
+6. **Online client (VO-D4, VO-D7).** `net/netplay.ts` loadClient = ONE memoised realtime client per page under its own auth storageKey
+   `hit-parade-netplay` (persistSession / autoRefreshToken / detectSessionInUrl off); ratings.ts keeps the default key (the portal
+   session) - no more "Multiple GoTrueClient instances". The lobby STATUS chips size to their labels (menus.css).
+7. **Portraits (D8).** `runtime/public/portraits/<id>.webp` (1024 px) + `index.json` baked by `_harness/bake_portraits.py` with the game's
+   own Showcase.portrait (dev-only `window.__HP_PORTRAIT__`); `PortraitQueue.useBaked(BASE_URL)` hands them to the UI at boot, the
+   runtime queue waits for the index and renders only fighters whose baked size < portraitSize(). Re-bake after a fighter GLB change;
+   `bake_portraits.py --check` fails on a missing / stale portrait. (A frozen vite only serves public files present at its start.)
+8. **Ending (D9).** SEASON FINALE + epilogue cards show the champion in 3D (the Showcase drives the ending's art area: showcaseRect /
+   showcaseHole now serve 'ending' too; framed as the show's monitor) with spotlight beams and a confetti fall (static under REDUCE
+   FLASHING / reduced motion); the 2D portrait stays the fallback without a Showcase (lab).
+9. **Cover (D4).** `runtime/public/thumbnail.png` regenerated (one generate_cover.py call; art direction in `_harness/cover_prompt.json`:
+   both fighters on-model, a BLANK marquee - the template forbids text; a corner pseudo-signature inpainted).
+10. **Harness (VO-D4, VO-D8).** layoutcheck.py: new `textclip` problem (leaf text wider than its own box by > 2 px; ellipsis labels
+   skipped). online2.py: `--ports A,B`, the picker moves rows (ArrowDown once a row cycles), the Bot holds STEP 45-120 sim frames as
+   circle-walks + a gated "circle-walk over rollback" check. mobile.py --game: `game_menus_by_tap` walks the real menus by taps THROUGH
+   character select (it fails while a touch player cannot confirm PICK A COLOR - verifier VO-D1).
+11. **Seen, not changed (net):** online result agreement fails when MATCH_END lands on a checksum boundary (frame % 15 == 0):
+   online_flow.ts sends once confirmedFrame() >= the end frame, but rollback.ts confirmedFrame() = min(rc + 1, frame) while checksumAt(f)
+   exists only once state[f] is confirmed -> cs null -> "agreed false" (UNRATED, result-mismatch) in ~1 of 15 matches (online2 run:
+   "B cs@3255=None (MATCH_END frame 3255)"). Suggested: send when checksumAt(csFrame) !== null (fallback 15 frames later).

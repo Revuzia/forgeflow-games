@@ -273,8 +273,14 @@ def build():
               "cannot be scaled by a combo starter.")
     # P2 Lv3: a grab super (CONTRACT 26.1 grab supers): the sim locks 175 f and carries the victim along grab.victim;
     # the cinematic block drives VIEW from the lock frame (and a real cinematic if SIM starts one on the connect).
+    # CHANGED(wf6_fixer_core) V2 (WF6 verifier: only the hug held the victim - in the two lariat half-spins (each a ~190 deg
+    # hip turn with a ~180 deg snap between them, measured in the GLB) bruno's hands stayed 0.1-0.34 m from his own axis
+    # while the victim stood upright 0.6-0.7 m out on the connect line, and in the throw-in he held his own head while the
+    # victim floated upright above him): now a CAROUSEL - bruno keeps the bear hug and the SIM turns him two whole turns
+    # (grab.path turnDeg, 12 deg / frame) with the victim swung round in his arms, then the throw-in holds the victim lying
+    # face up across his raised hands (kd_ground_b at 1.75 m) before the hurl.
     fd_victim = [[0, "hit_body", 0.0, 0.3], [24, "hit_body", 0.2, 0.6], [40, "hit_air", 0.2, 0.9],
-                 [100, "hit_air", 0.9, 1.3], [128, "thrown_f", 0.3, 0.74], [140, "thrown_f", 0.74, 1.3333]]
+                 [100, "kd_ground_b", 0.0, 0.3667], [128, "thrown_f", 0.3, 0.74], [140, "thrown_f", 0.74, 1.3333]]
     K.add("final_delivery", LV3, kind="super3", input="214214", name="Final Delivery", strength="H",
           clip="delivery_reach", startup=3, active=3, recovery=58, guard="U", blockstun=0,
           invuln={"strike": [1, 3]}, cost={"showtime": LV3_COST}, gain=0, nerve=0, role=["grab"],
@@ -285,9 +291,8 @@ def build():
           cinematic=lambda: cinematic(
               175, "bruno_final_delivery",
               hits=[[24, 500], [70, 1000], [140, 3000]],
-              anim=[K.seg(0, "bear_hug", 40, fromS=0.1), K.seg(40, "lariat_spin", 70, fromS=0.1, rate=1.6),
-                    K.seg(70, "lariat_spin", 100, fromS=0.1, rate=1.6), K.seg(100, "throw_in", 150, hit=128),
-                    K.seg(150, "win_flex", 175, fromS=0.8)],
+              anim=[K.seg(0, "bear_hug", 40, fromS=0.0, rate=0.6), K.seg(40, "bear_hug", 100, fromS=0.4, rate=0.08),
+                    K.seg(100, "throw_in", 150, hit=128), K.seg(150, "win_flex", 175, fromS=0.8)],
               victim=fd_victim,
               camera=[cam(0, 40, "low", "both", 38, 2.8, 0.5, 20, lookH=1.3),
                       cam(40, 100, "orbit", "both", 40, 3.4, 1.4, [-50, 70], ease="linear"),
@@ -301,8 +306,12 @@ def build():
               crowd=[(24, "ooh"), (70, "roar", "up"), (100, "gasp"), (140, "roar", "spike"), (150, "cheer", "peak"),
                      (165, "chant")],
               pathA=[[40, 0.1, 0], [100, 0.1, 0], [128, 0.3, 0], [160, 0, 0]],
-              gapD=[[10, 0.6, 0], [40, 0.6, 0.3], [70, 0.7, 0.6], [100, 0.4, 1.4], [128, 0.8, 1.6], [134, 2.0, 1.0],
-                    [140, 3.0, 0]],
+              # [lock f, gap m, lift m, turn deg]: hugged (the push-front floor while grounded), lifted into the carousel
+              # (0.75 m out, 0.42-0.45 m up: feet off the floor, bruno's hands round its hips), two whole turns at 12 deg / frame, hoisted
+              # over his head (0.05-0.15 m out, 1.75 m up = his raised hands, measured 1.8-2.0 m), thrown forward from 124
+              gapD=[[10, 0.6, 0, 0], [40, 0.75, 0.42, 0], [100, 0.75, 0.45, -720], [106, 0.05, 1.75, -720],
+                    [120, 0.15, 1.75, -720], [124, 0.5, 1.7, -720], [128, 0.8, 1.55, -720], [134, 2.0, 1.0, -720],
+                    [140, 3.0, 0, -720]],
               slate='PRIME TIME - BRUNO "THE FRIDGE": FINAL DELIVERY', endPose="back", endAdv=19, endGapM=3.0),
           desc="PRIME TIME command grab: hugged, spun like a carousel, lifted overhead and hurled across the set.",
           why="Grab Lv3: 3f unblockable grab (post-freeze) instead of the 10f strike template; 4500 total; reach 1.08 m "
@@ -320,8 +329,9 @@ def build():
                             "fridge_door_h", "fridge_door_ex"]}
     K.cine_doc = [
         "f0 BEAR HUG (low, both): Bruno scoops them up and squeezes - 500 at f24.",
-        "f40 CAROUSEL (orbit -50 -> +70 deg): two lariat spins with the victim lifted and flailing - 1000 at f70.",
-        "f100 OVERHEAD (low, looking up, spotlight): the throw-in lift, the victim held 1.4 m up over his head.",
+        "f40 CAROUSEL (orbit -50 -> +70 deg): two whole turns with the victim locked in the bear hug, feet off the floor, "
+        "swung round with him - 1000 at f70.",
+        "f100 OVERHEAD (low, looking up, spotlight): the throw-in lift, the victim held face up across his raised hands.",
         "f128 HURL (wide): released across the set - 3000 when they land at f140 (flash, freeze-frame, dust).",
         "f150 MOST-MUSCULAR (close on Bruno): the crab flex over a body lying face up 3.0 m away (KD +19).",
     ]

@@ -1186,11 +1186,25 @@ function throwAt(yawOff: number): number {
     const i145 = at(fd, 145);
     const latMax = Math.max(...fd.lat);
     const yMax = Math.max(...fd.y);
-    // f20: lift 0.10 (< 0.15) -> the full §26.5 floor (the push fronts); f30: lift 0.20 -> 2/3 of it over the authored 0.6 m
-    const ok30 = i20 >= 0 && i30 >= 0 && Math.abs(fd.along[i20] - fronts) <= 0.01 && Math.abs(fd.y[i20] - 0.1) <= 0.01 &&
-      Math.abs(fd.along[i30] - (0.6 + ((fronts - 0.6) * 2) / 3)) <= 0.01 && Math.abs(fd.y[i30] - 0.2) <= 0.01;
-    const ok100 = i100 >= 0 && Math.abs(fd.along[i100] - 0.4) <= 0.01 && Math.abs(fd.y[i100] - 1.4) <= 0.01;
-    const ok128 = i128 >= 0 && Math.abs(fd.along[i128] - 0.8) <= 0.01 && Math.abs(fd.y[i128] - 1.6) <= 0.01;
+    // CHANGED(wf6_fixer_core) V2: the expectations come from the data's grab.path (the carousel retune moved the keys and added
+    // turnDeg; the along / lat read-back is taken along the thrower's CURRENT yaw, which turns with the path): piecewise linear
+    // from the implicit connect key, the §26.5 floor (push fronts) at full weight for lift <= 0.15 m, ramped out by 0.30 m
+    const fdPath = (R4.fighters.bruno.moves.final_delivery.grab?.path ?? []) as number[][];
+    const want = (lf: number): [number, number] => {
+      let f0 = 0, g0 = 1.6, l0 = 0;
+      let gp = fdPath.length ? fdPath[fdPath.length - 1][1] : 0, lt = fdPath.length ? fdPath[fdPath.length - 1][2] : 0;
+      for (const k of fdPath) {
+        if (lf <= k[0]) { const u = (lf - f0) / Math.max(1, k[0] - f0); gp = g0 + (k[1] - g0) * u; lt = l0 + (k[2] - l0) * u; break; }
+        f0 = k[0]; g0 = k[1]; l0 = k[2];
+      }
+      if (gp < fronts && lt < 0.3) gp += (fronts - gp) * Math.min(0.15, 0.3 - lt) / 0.15;
+      return [gp, lt];
+    };
+    const near = (i: number, lf: number): boolean => i >= 0 && Math.abs(fd.along[i] - want(lf)[0]) <= 0.01 && Math.abs(fd.y[i] - want(lf)[1]) <= 0.01;
+    // f20: lift 0.10 (< 0.15) -> the full §26.5 floor (the push fronts); f30: lift 0.28 -> the floor ramping out
+    const ok30 = i20 >= 0 && Math.abs(fd.along[i20] - fronts) <= 0.01 && near(i20, 20) && near(i30, 30);
+    const ok100 = near(i100, 100);
+    const ok128 = near(i128, 128);
     const okEnd = i145 >= 0 && Math.abs(fd.along[i145] - 3.0) <= 0.01 && fd.y[i145] === 0 && Math.abs(fd.end - 3.0) <= 0.01 && fd.endState === 'knockdown';
     t.ok(fd.thrown && ok30 && ok100 && ok128 && okEnd && latMax <= 0.005 && fd.dmg === R4.fighters.bruno.moves.final_delivery.damage,
       `D4: FINAL DELIVERY holds its victim along grab.path: lock f20 hug ${i20 >= 0 ? fd.along[i20].toFixed(3) : '-'} m (= push fronts ${fronts.toFixed(3)}: the §26.5 floor while grounded) y ${i20 >= 0 ? fd.y[i20].toFixed(2) : '-'}, f30 ${i30 >= 0 ? fd.along[i30].toFixed(3) : '-'} m y ${i30 >= 0 ? fd.y[i30].toFixed(2) : '-'} (floor ramping out), f100 overhead ${i100 >= 0 ? fd.along[i100].toFixed(2) : '-'} m y ${i100 >= 0 ? fd.y[i100].toFixed(2) : '-'}, f128 ${i128 >= 0 ? fd.along[i128].toFixed(2) : '-'} m y ${i128 >= 0 ? fd.y[i128].toFixed(2) : '-'}, f145 ${i145 >= 0 ? fd.along[i145].toFixed(2) : '-'} m y ${i145 >= 0 ? fd.y[i145] : '-'}; released at ${fd.end.toFixed(2)} m (${fd.endState}); max lift ${yMax.toFixed(2)} m, off the forward line <= ${latMax.toFixed(3)} m, damage ${fd.dmg}`);

@@ -315,6 +315,8 @@ export class Brain {
   /** last 3 close-range mixups the opponent landed or had blocked: 1 low, 2 overhead, 3 throw */
   mixHist: number[] = [];
   private lastMySt = -1;
+  /** CHANGED(wf6_fixer_core) V3: my plain throw in flight (0 none, 1 started, 2 it caught the opponent) - throwBook */
+  private myThrow = 0;
   private throwKey = -1;
   private techGo = false;
   private techDone = false;
@@ -639,6 +641,19 @@ export class Brain {
     if (this.tools) a += this.tools.aggressionBonus(this);
     return Math.max(0, Math.min(0.95, a));
   }
+  /**
+   * CHANGED(wf6_fixer_core) V3: 0.12..1 multiplier on the close plan's plain-throw weight from what my throws met on screen
+   * (habits.techRate, weighted by the level's habit use): a player who techs every throw stops being fed throws - measured
+   * before: THE FREAK (style throw 0.30) started 20-39 throws a bout into the real-key SeasonBot, which teched nearly all of
+   * them, and the rounds ran to the timer (WF6 V3). It only bites once most of my throws are teched (techRate > 0.6): an
+   * opponent teching about half of them (CPU L5-L8 tech 0.4-0.55, the 'optimal' persona 0.5) is still thrown as authored -
+   * throws that land half the time are a fair mixup (measured: a 0.7 knee took lotus-optimal vs THE FREAK 46 -> 25 %).
+   */
+  throwTrust(): number {
+    const P = this.profile;
+    const k = Math.max(0.12, Math.min(1, (1 - this.habits.techRate) / 0.4));
+    return 1 - Math.min(1, Math.max(0, P.habit) * 1.3) * (1 - k);
+  }
   bars(v: number, bar: number): number {
     return Math.floor(v / bar);
   }
@@ -891,6 +906,7 @@ export class Brain {
     }
     if (s.cin) return this.out(null);
     this.track();
+    this.throwBook();
     this.evadeBook();
     this.habits.tick(s.frame);
     const bars = this.showBars();
@@ -1001,6 +1017,7 @@ export class Brain {
     this.kdKey = -1;
     this.airKey = -1;
     this.lastMySt = -1;
+    this.myThrow = 0; // CHANGED(wf6_fixer_core)
     this.circle = null; // CHANGED(AI3D)
     this.opStepKey = -1;
     this.stepWatch = -1;
@@ -1119,6 +1136,26 @@ export class Brain {
       this.circle = null; // CHANGED(AI3D)
     }
     void prev;
+  }
+
+  /**
+   * CHANGED(wf6_fixer_core) V3: the outcome of my own plain (techable) throw, from what is on screen: it started (my ATTACK on a
+   * K.throw move), it caught the opponent (the opponent THROWN), then either both of us went to TECH (teched) or my throw
+   * ended any other way (landed). A whiff (never caught) is no sample; command grabs are untechable and never sampled.
+   */
+  private throwBook(): void {
+    const s = this.seen;
+    const me = s.me;
+    if (me.st === ST.ATTACK && me.cm !== null && me.cm.kind === K.throw && this.myThrow === 0) this.myThrow = 1;
+    if (this.myThrow === 0) return;
+    if (s.op.st === ST.THROWN) this.myThrow = 2;
+    if (me.st === ST.TECH) {
+      if (this.myThrow === 2) this.habits.throwOutcome(s.frame, true);
+      this.myThrow = 0;
+    } else if (me.st !== ST.ATTACK && me.st !== ST.GRAB) {
+      if (this.myThrow === 2) this.habits.throwOutcome(s.frame, false);
+      this.myThrow = 0;
+    } else if (me.st === ST.ATTACK && (me.cm === null || me.cm.kind !== K.throw)) this.myThrow = 0;
   }
 
   private pushMix(k: number): void {
@@ -2143,6 +2180,19 @@ export class Brain {
     }
     if (me.st === ST.STEP_END) return null;
     const canPress = me.st === ST.SIDEWALK || me.stF + 2 >= this.m.sys.stepBufferF;
+    // CHANGED(wf6_fixer_core) V6: a reaction decided while circling that is not a guard (a unique evade / counter, parry,
+    // IMPACT, throw - decideStrike's latched roll, the same as from the free state) is acted on: the circle-walk ends and the
+    // free-state reaction driver plays it (moves come out of a sidewalk / a sidestep from its buffer frame). Before, only a
+    // guard was taken from a circle-walk and every other answer was dropped - once the neutral circle-walk got 2-3x longer
+    // (V6) gazza's SIMULATION dive vanished from 8 G3 bouts (1 -> 0 uses: probe_personas U1)
+    const t0 = this.strike;
+    if (canPress && t0 && t0.decided && !t0.acted && this.live(t0) && (t0.resp === RESP.TOOL || t0.resp === RESP.PARRY || t0.resp === RESP.IMPACT || t0.resp === RESP.THROW)) {
+      const r = this.reactTick();
+      if (r) {
+        this.circle = null;
+        return r;
+      }
+    }
     if (canPress) {
       if (this.punishTick()) {
         this.stats.sidePunishes++;

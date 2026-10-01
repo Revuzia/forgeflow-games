@@ -36,6 +36,16 @@
 // ease: a target jump 0 -> 20 deg started at 1.2 deg / frame in one frame - measured 0.7 -> 2.5 deg / frame).
 // CHANGED(fix_view) D13: `bottomMargin` 0.04 -> 0.07 of the frame (the feet stay above the HUD's RATINGS bars); the tops
 // BoutView feeds are each body's measured neutral top (view/bodytop.ts), so THE FREAK's raised claw stays under the HUD band.
+// CHANGED(wf6 fixer) D2 / V7 / D3 (CONTRACT §35.26): (1) with the ring-wall CUTAWAY installed (`cutaway`, view/cutaway.ts:
+// the set geometry between the lens and the fighters is cut out of the frame) the wall step no longer climbs to the band
+// top and pulls in (both fighters pinned on the wall with camN facing out ended in a 2.34 m, 62-degree top-down frame of
+// P1's back with the victim behind the coping): the rig rises at most `cutRaise` and keeps its distance, a cinematic keeps
+// its authored height (a 'low' shot outside the ring sat at 3.4 m); `last.cut` = the cutaway shows what the wall hides;
+// (2) the soft pull FADES OUT when the lens cannot get inside the ring within softPullMax (a capped 0.9 m dolly that left
+// the lens outside anyway sat the rig at 3.5 m with P1's feet under the frame); (3) a rig FRAME GUARD: after occlusion,
+// the vertical FOV opens (instantly; it closes slowly) until both fighters' tops sit under the HUD band, their feet above
+// the bottom margin (feet `feetDepth` toward the lens) and their sides inside the frame - a swing, a pull or a jump the
+// eased distance has not caught up with no longer puts a body part out of frame.
 
 import * as THREE from 'three';
 import { ringEntry, ringGap, wrapPi, type RingGeom } from './ring3d.ts';
@@ -67,6 +77,12 @@ export const CAM = {
   swingOmega: 4.5, swingAccMax: 12, swingHyst: 0.12,
   /** CHANGED(fix_view) D10: soft pull - the lens stays `softIn` m inside the ring's inner face by dollying in up to softPullMax m */
   softIn: 0.15, softPullMax: 0.9,
+  /** CHANGED(wf6 fixer) V7: a needed pull beyond softPullMax fades the pull out over this many metres (the lens stays out) */
+  softFade: 1.4,
+  /** CHANGED(wf6 fixer) D2: with the cutaway, the most the rig rises for the ring wall (m) */
+  cutRaise: 0.6,
+  /** CHANGED(wf6 fixer) V7: frame guard - side margin (fraction of the half width), the guard's closing ease per 60 Hz frame */
+  guardSide: 0.04, guardClose: 0.05, guardMax: 24,
   /** CHANGED(VIEW3D) occlusion: the top of the clear camera band (§35.11.5: y 1.30-3.00 m holds no set geometry) */
   maxY: 2.95,
   /** outside the ring the camera stays at or above the band floor */
@@ -173,6 +189,13 @@ export class FightCamera {
   bottomMargin = CAM.bottomMargin;
   /** CHANGED(fix_view) D13: how far toward the lens (m) the feet may reach from the fight plane (BoutView: the bodies' size) */
   feetDepth = CAM.feetDepth;
+  /** CHANGED(wf6 fixer) D2: BoutView installed the ring-wall cutaway (the wall step neither climbs nor pulls in) */
+  cutaway = false;
+  /** CHANGED(wf6 fixer) V7: harness A/B switches - the rig frame guard, the soft-pull fade (true = on) */
+  guardOn = true;
+  softFadeOn = true;
+  /** CHANGED(wf6 fixer) V7: the frame guard's extra vertical FOV (deg, eased closed) */
+  private guardFov = 0;
   private brawlOff: number = CAM.brawl.behindDeg;
   private shakeT = 0;
   private init = false;
@@ -201,6 +224,8 @@ export class FightCamera {
     yawDeg: 0, yawTDeg: 0, midZ: 0, pos: [0, 0, 0] as number[], look: [0, 0, 0] as number[], raise: 0, pull: 0, clearPull: 0, occluded: 0, camR: 0, swingDeg: 0, brawlOffDeg: 0,
     // CHANGED(fix_view) D10: the soft pull (m), the swing target (deg) and angular speed (deg / 60 Hz frame)
     softPull: 0, swingTDeg: 0, swingVDeg: 0,
+    // CHANGED(wf6 fixer) D2 / V7: the wall blocks a feet sight line (raw), the cutaway shows it, the frame guard's FOV (deg)
+    wallBlocked: 0, cut: 0, guardFov: 0,
   };
 
   constructor(aspect = 16 / 9) {
@@ -219,7 +244,7 @@ export class FightCamera {
 
   reset(): void {
     this.init = false; this.trauma = 0; this.parryAt = -1; this.superAt = -1; this.koAt = -1; this.cine = null;
-    this.swingV = 0; this.swingOn = false;
+    this.swingV = 0; this.swingOn = false; this.guardFov = 0;
   }
 
   /**
@@ -237,7 +262,12 @@ export class FightCamera {
       if (ringGap(g, look.x + (px - look.x) * m, look.z + (pz - look.z) * m) >= CAM.softIn) lo = m; else hi = m;
     }
     const d0 = Math.hypot(px - look.x, py - look.y, pz - look.z);
-    return Math.min(CAM.softPullMax, (1 - lo) * d0);
+    const raw = (1 - lo) * d0;
+    if (raw <= CAM.softPullMax) return raw;
+    if (!this.softFadeOn) return CAM.softPullMax;
+    // CHANGED(wf6 fixer) V7: the lens cannot get inside within the cap - fade the pull out (continuous in the need) instead
+    // of a capped dolly that leaves it outside AND under the distance floor
+    return CAM.softPullMax * (1 - smooth01((raw - CAM.softPullMax) / CAM.softFade));
   }
 
   /** CHANGED(fix_view) D10: apply the soft pull to `pos` (along the view line); returns the FOV that keeps the framing */
@@ -327,10 +357,10 @@ export class FightCamera {
    * CHANGED(VIEW3D) occlusion: keep `pos` inside the stage's clear radius and its sight lines to `targets` over the ring
    * wall (raise, else pull in along the view line). Returns the vFOV that keeps the framing at `look`.
    */
-  private constrain(pos: THREE.Vector3, look: THREE.Vector3, fov: number, targets: ReadonlyArray<[number, number, number]>, maxY: number): number {
+  private constrain(pos: THREE.Vector3, look: THREE.Vector3, fov: number, targets: ReadonlyArray<[number, number, number]>, maxY: number, cine = false): number {
     const g = this.ring;
     const L = this.last;
-    L.raise = 0; L.pull = 0; L.clearPull = 0; L.occluded = 0;
+    L.raise = 0; L.pull = 0; L.clearPull = 0; L.occluded = 0; L.wallBlocked = 0; L.cut = 0;
     if (!g) return fov;
     let out = fov;
     const rad = (x: number, z: number) => Math.hypot(x - g.cx, z - g.cz);
@@ -349,7 +379,22 @@ export class FightCamera {
       }
     }
     // (2) the ring wall: outside the inner face (+0.3 m) the camera stays in the clear band and sees the feet over the wall
-    if (ringGap(g, pos.x, pos.z) < 0.3) {
+    if (ringGap(g, pos.x, pos.z) < 0.3 && this.cutaway) {
+      // CHANGED(wf6 fixer) D2 / D3: the cutaway removes the wall between the lens and the fighters, so the lens keeps its
+      // distance: the rig rises a little (<= cutRaise, a ringside look; often enough to clear the wall outright), a
+      // cinematic keeps the director's height. Still under the band floor outside the ring.
+      const need = (): number => this.wallNeed(pos.x, pos.z, targets);
+      let h = need();
+      if (h > pos.y + 0.01) {
+        L.wallBlocked = 1;
+        const top = cine ? pos.y : Math.min(maxY, pos.y + CAM.cutRaise);
+        const y = Math.max(pos.y, Math.min(h, top));
+        if (y > pos.y) { L.raise = Math.round((y - pos.y) * 1000) / 1000; pos.y = y; }
+        h = need();
+        if (h > pos.y + 0.01) L.cut = 1;
+      }
+      if (!cine && pos.y < CAM.bandLow) pos.y = CAM.bandLow;
+    } else if (ringGap(g, pos.x, pos.z) < 0.3) {
       const need = (): number => Math.max(CAM.bandLow, this.wallNeed(pos.x, pos.z, targets));
       let h = need();
       if (h > pos.y) {
@@ -377,6 +422,49 @@ export class FightCamera {
       }
     }
     return out;
+  }
+
+  /**
+   * CHANGED(wf6 fixer) V7: the smallest vertical FOV (deg) at the current lens (this.pos -> this.look, no roll) that keeps
+   * each fighter's top under the HUD band (`safeTop` + pad), its feet - `feetDepth` toward the lens - above the bottom
+   * margin, and its body (+-bodyHalf) inside the side margins. `fov` when everything already fits.
+   */
+  private guardNeed(f: [CamFighter, CamFighter], aspect: number, fov: number): number {
+    const p = this.pos, l = this.look;
+    let fx = l.x - p.x, fy = l.y - p.y, fz = l.z - p.z;
+    const fl = Math.hypot(fx, fy, fz);
+    if (fl < 1e-4) return fov;
+    fx /= fl; fy /= fl; fz /= fl;
+    // right = fwd x up, up' = right x fwd
+    let rx = -fz, rz = fx;
+    const rl = Math.hypot(rx, rz);
+    if (rl < 1e-4) return fov;
+    rx /= rl; rz /= rl;
+    const ux = -rz * fy, uy = rz * fx - rx * fz, uz = rx * fy;
+    const safeTop = this.safeTop > 0 ? Math.min(0.4, this.safeTop + CAM.safePad) : CAM.topMargin;
+    const topLim = Math.max(0.2, 1 - 2 * safeTop), botLim = Math.max(0.2, 1 - 2 * this.bottomMargin), sideLim = Math.max(0.2, 1 - 2 * CAM.guardSide);
+    let t = Math.tan(fov * DEG / 2);
+    const tv0 = t;
+    const test = (x: number, y: number, z: number, kind: 0 | 1 | 2): void => {
+      const dx = x - p.x, dy = y - p.y, dz = z - p.z;
+      const depth = dx * fx + dy * fy + dz * fz;
+      if (depth < 0.4) return;
+      if (kind === 2) { const sx = Math.abs(dx * rx + dz * rz) / depth; t = Math.max(t, sx / (aspect * sideLim)); return; }
+      const vy = (dx * ux + dy * uy + dz * uz) / depth;
+      if (kind === 0 && vy > 0) t = Math.max(t, vy / topLim);
+      if (kind === 1 && vy < 0) t = Math.max(t, -vy / botLim);
+    };
+    for (const q of f) {
+      const qz = q.z ?? 0;
+      let tx = p.x - q.x, tz = p.z - qz;
+      const tl = Math.hypot(tx, tz) || 1;
+      tx /= tl; tz /= tl;
+      test(q.x, q.head, qz, 0);
+      test(q.x + tx * this.feetDepth, q.y, qz + tz * this.feetDepth, 1);
+      test(q.x + rx * CAM.bodyHalf, q.y + 1.0, qz + rz * CAM.bodyHalf, 2);
+      test(q.x - rx * CAM.bodyHalf, q.y + 1.0, qz - rz * CAM.bodyHalf, 2);
+    }
+    return t > tv0 + 1e-6 ? 2 * Math.atan(t) / DEG : fov;
   }
 
   /**
@@ -574,9 +662,17 @@ export class FightCamera {
       ft.push([x0, 0.05, z0], [x1, 0.05, z1]);
       if (brawl) for (const [gx, gz] of this.extra) if (Math.hypot(gx - x0, gz - z0) < CAM.brawl.reach) ft.push([gx, 0.05, gz]);
       if (this.cine) ft.push([this.look.x, Math.max(0.05, this.look.y - 0.8), this.look.z]);
-      fovNow = this.constrain(this.pos, this.look, fovNow, ft, this.cine ? 3.4 : CAM.maxY);
+      fovNow = this.constrain(this.pos, this.look, fovNow, ft, this.cine ? 3.4 : CAM.maxY, !!this.cine);
       if (this.pos.y < 0.12) this.pos.y = 0.12;
-    } else { const L = this.last; L.raise = 0; L.pull = 0; L.clearPull = 0; L.occluded = 0; }
+    } else { const L = this.last; L.raise = 0; L.pull = 0; L.clearPull = 0; L.occluded = 0; L.wallBlocked = 0; L.cut = 0; }
+    // CHANGED(wf6 fixer) V7: the rig frame guard (versus rig only; overrides frame by design: the super punch-in, KO, parry)
+    if (mode === 'rig' && !brawl && this.guardOn) {
+      const need = this.guardNeed(f, aspect, fovNow);
+      const want = Math.min(CAM.guardMax, Math.max(0, need - fovNow));
+      this.guardFov = snap || want >= this.guardFov ? want : this.guardFov + (want - this.guardFov) * ease(CAM.guardClose, dt);
+      fovNow = Math.min(CAM.fovMax, fovNow + this.guardFov);
+    } else this.guardFov = 0;
+    this.last.guardFov = Math.round(this.guardFov * 100) / 100;
     fov = fovNow;
     if (cam.fov !== fovNow || cam.aspect !== aspect) { cam.fov = fovNow; cam.aspect = aspect; cam.updateProjectionMatrix(); }
     cam.position.copy(this.pos);

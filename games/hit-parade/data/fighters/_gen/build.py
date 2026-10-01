@@ -445,9 +445,11 @@ def fighter_md(K):
             A("- crowd: %s" % ", ".join("f%d %s%s" % (e["f"], e["react"], ("/" + e["ratings"]) if "ratings" in e
                                                         else "") for e in c["crowd"]))
         if c.get("pathA"):
-            A("- attacker path (f, dx, lift m): %s; defender gap (f, gap, lift m): %s" % (
+            # CHANGED(wf6_fixer_core) V2: a gapD key may carry the thrower's turn (deg) as a 4th number
+            A("- attacker path (f, dx, lift m): %s; defender gap (f, gap, lift m[, turn deg]): %s" % (
                 " ".join("[%d %.2f %.2f]" % tuple(e) for e in c["pathA"]),
-                " ".join("[%d %.2f %.2f]" % tuple(e) for e in c["gapD"])))
+                " ".join(("[%d %.2f %.2f]" % tuple(e[:3])) if len(e) < 4 or not e[3] else ("[%d %.2f %.2f %+.0f]" % tuple(e[:4]))
+                         for e in c["gapD"])))
         A("")
     # CHANGED(FIGHTERS) P2: season text (CONTRACT 26.3)
     if J.get("introLine"):

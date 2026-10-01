@@ -356,8 +356,13 @@ export class UniqueTools {
     }
 
     // evade approach (gazza's dive vs a projectile-happy opponent at mid range)
+    // CHANGED(wf6_fixer_core): or under a HIGH-poke habit (a third or more of its close strikes high - habits.highRate, the same
+    // read the WEAVE uses): the dive is low-profile (0.6 m hurtbox) as well as projectile-invulnerable. Measured: in G3 U1's
+    // 8 natural gazza bouts (opponents mostly without projectiles) the dive came out 1x on the base tree and 0x once the
+    // neutral circle-walks got longer (WF6 V6) - gazza's unique was invisible vs most of the cast
     const ev = toolsOf(b, 'evade').filter((k) => b.kit.moves[k].projInv0 > 0 && b.kit.moves[k].cm.curve[b.kit.moves[k].cm.total] > 60000);
-    if (ev.length > 0 && aggro && d > 180000 && d < 360000 && b.habits.counts[5] > 1 && b.rnd() < 0.15) return this.start(b, ev[0]);
+    const lowUnder = ev.length > 0 && b.kit.moves[ev[0]].evadeTop > 0 && b.habits.highRate > 0.33;
+    if (ev.length > 0 && aggro && d > 180000 && d < 360000 && (b.habits.counts[5] > 1 || lowUnder) && b.rnd() < 0.15) return this.start(b, ev[0]);
     return null;
   }
 

@@ -25,7 +25,8 @@ interface Pending {
   at: number; // frame the observation becomes known
   // 0 action (k = HK), 1 in-range sample (v = 0/1), 2 wake sample, 3 after-block sample, 4 strike height,
   // CHANGED(AI3D): 5 neutral action near me (v = 1 a step / circle-walk, 0 an attack / dash / jump),
-  // 6 its ground strike's 3D class (k = 0 straight, 1 linear, 2 homing)
+  // 6 its ground strike's 3D class (k = 0 straight, 1 linear, 2 homing),
+  // CHANGED(wf6_fixer_core): 7 the outcome of MY plain throw that caught it (v = 1 teched, 0 landed)
   kind: number;
   k: number;
   v: number;
@@ -57,6 +58,12 @@ export class Habits {
   /** CHANGED(AI3D): EMA share of its ground strikes near me that were LINEAR (a read sidestep beats them) / HOMING */
   linearRate = 0.2;
   homingRate = 0.25;
+  /**
+   * CHANGED(wf6_fixer_core) V3: EMA of "MY plain throw caught it and it TECHED" (1) vs "my throw landed" (0) - the outcome of
+   * my own techable throws on screen (whiffs and untechable command grabs are not samples). "He techs every throw" -> stop
+   * feeding it throws (plans.ts close plan, brain.throwTrust). 0.3 = the prior.
+   */
+  techRate = 0.3;
   private q: Pending[] = [];
   private win: number;
   private sampleOpen = -1; // frame the current in-range sample started (-1 none)
@@ -141,6 +148,11 @@ export class Habits {
     this.q.push({ at: f + this.delay, kind: 6, k, v: 1 });
   }
 
+  /** CHANGED(wf6_fixer_core) V3: one of MY plain throws caught it: `teched` = it broke the throw (else the throw landed) */
+  throwOutcome(f: number, teched: boolean): void {
+    this.q.push({ at: f + this.delay, kind: 7, k: 0, v: teched ? 1 : 0 });
+  }
+
   /** commits every observation whose delay has passed (call once per frame, before reading) */
   tick(f: number): void {
     let n = 0;
@@ -156,6 +168,7 @@ export class Habits {
       else if (p.kind === 3) this.pressureRate += (p.v - this.pressureRate) * 0.25;
       else if (p.kind === 4) this.highRate += (p.v - this.highRate) * 0.15;
       else if (p.kind === 5) this.stepRate += (p.v - this.stepRate) * 0.2; // CHANGED(AI3D)
+      else if (p.kind === 7) this.techRate += (p.v - this.techRate) * 0.25; // CHANGED(wf6_fixer_core) V3
       else {
         this.linearRate += ((p.k === 1 ? 1 : 0) - this.linearRate) * 0.15;
         this.homingRate += ((p.k === 2 ? 1 : 0) - this.homingRate) * 0.15;

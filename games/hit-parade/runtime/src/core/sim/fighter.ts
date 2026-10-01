@@ -25,7 +25,7 @@ import {
 import type { Match } from './state.ts';
 import { ballLaunch, spawnProjectile } from './projectiles.ts';
 import { clampToRing, pushCircle } from './boxes.ts';
-import { KDF, endsFaceDown, holdPos, victimPose } from './throwpose.ts';
+import { KDF, endsFaceDown, grabTurn, holdPos, lockGrab, victimPose } from './throwpose.ts';
 import { Q, YAW_HALF, alongYaw, cosQ, divRound, dirToYaw, isqrt, mulQ, sinQ, turnToward } from './fx3d.ts';
 
 const AY = new Int32Array(2);
@@ -899,6 +899,28 @@ function juggleTick(m: Match, i: number): void {
   emit(m, EV.KNOCKDOWN, i, s[b + F.kd], 0, 0);
 }
 
+/**
+ * CHANGED(wf6_fixer_core) D1: the face-down drop off the ring wall after a WALL_SPLAT. The splat left the victim's push circle
+ * touching the wall with its back to it (splat.ts); the drop (kd_fall_f -> wake_f) reaches up to the body's measured
+ * `down[1]` (data/bodies.json: johnny 0.83 m, THE FREAK 1.07 m) behind the root, so the body slides away from the wall along
+ * its forward by what is missing, over wallSplat.dropF frames (a pushback that never transfers to the attacker). Measured
+ * before (WF6 D1, rust_theater, johnny): 72 % of the lying body's vertices beyond the brick face, up to 1.07 m.
+ */
+function splatDrop(m: Match, i: number): void {
+  const s = m.s;
+  const b = fb(i);
+  const cf = m.cf[i];
+  if (cf.downB <= 0) return;
+  const yaw = s[b + F.yaw];
+  const room = ringRay(m.ring, s[b + F.x], s[b + F.z], -sinQ(yaw), -cosQ(yaw));
+  const need = cf.downB - room;
+  if (need <= 0) return;
+  s[b + F.pushLeft] = need;
+  s[b + F.pushYaw] = yaw;
+  s[b + F.pushF] = Math.max(1, m.sys.raw.wallSplat.dropF ?? 5);
+  s[b + F.flags] &= ~FL.PUSHX;
+}
+
 /** Enters a grounded knockdown for `total` frames (fall + lying + wakeup). */
 export function enterKnockdown(m: Match, i: number, total: number, kind: number): void {
   const s = m.s;
@@ -959,11 +981,22 @@ function throwCarry(m: Match, i: number): void {
   const b = fb(i);
   if (!victimPose(m, i, VP)) return;
   const tot = Math.max(1, s[b + F.tot]);
-  holdPos(m, i, Math.max(0, Math.min(tot, tot - s[b + F.stun])), VP[3], HP);
+  const lf = Math.max(0, Math.min(tot, tot - s[b + F.stun]));
+  holdPos(m, i, lf, VP[3], HP);
   s[b + F.x] = HP[0];
   s[b + F.z] = HP[1];
   s[b + F.y] = HP[2];
   clampToRing(m, i);
+  // CHANGED(wf6_fixer_core) V2: a grab path with turn keys (bruno FINAL DELIVERY's carousel) turns the THROWER by it and keeps
+  // the swung victim facing him; the input-mapping signs (F.facing) are left as they were at the connect (both are locked, and
+  // the view keeps each body's mirror instead of flipping it twice per turn); a whole number of turns ends where it began
+  const g = lockGrab(m, i);
+  if (g && g.turns) {
+    const tr = grabTurn(m, i, lf);
+    const yaw0 = s[b + F.thrYaw];
+    s[fb(1 - i) + F.yaw] = (yaw0 + tr) & 65535;
+    s[b + F.yaw] = (yaw0 + YAW_HALF + tr) & 65535;
+  }
 }
 
 /**
@@ -1130,7 +1163,14 @@ export function fighterUpdate(m: Match, i: number): void {
       }
       break;
     case ST.WALL_SPLAT:
-      if (--s[b + F.stun] <= 0) enterKnockdown(m, i, m.sys.raw.wallSplat.fallTotal, 1);
+      if (--s[b + F.stun] <= 0) {
+        enterKnockdown(m, i, m.sys.raw.wallSplat.fallTotal, 1);
+        // CHANGED(wf6_fixer_core) D1: it peels off the wall and drops FACE-DOWN into the ring (kd_fall_f -> kd_ground_f ->
+        // wake_f, the way the authored wall_splat clip ends); the generic backward fall laid the body through the wall it
+        // is pinned against (WF6 D1: 7 of 7 splats, 70 % of the victim's vertices beyond the wall 65 frames after)
+        s[b + F.kdFace] = KDF.DOWN;
+        splatDrop(m, i);
+      }
       break;
     case ST.RUSH:
       rushTick(m, i);

@@ -143,7 +143,11 @@ export function ringPlan(b: Brain, aggro: boolean, opThreat: number): Decision |
   // 15 f sidestep, then the 1.8 m/s sidewalk); the reaction clock keeps running (back = the sim's circle -> block cancel)
   const lo = Math.max(kit.cf.pushFS + op.cf.pushFS + 30000, opThreat - 30000);
   const hi = Math.max(opThreat + 160000, st.backOff >= 0.3 ? kit.rangeHi : 0);
-  if (P.walk > 0 && (opFree || opIn) && !opSwinging && d >= lo && d <= hi && b.rnd() < P.walk * st.ringWalk) {
+  // CHANGED(wf6_fixer_core) V6: a regular contestant's style never takes it below 0.9 x the level lever (grappler 0.5 / bigbody
+  // 0.6 / rushdown 0.6 left bruno at 0.2 circle-walks per L4 bout and a third of the CPU sides at none in a whole bout); the
+  // bosses (b.tools) keep their authored style weight - THE FREAK's armored brute plan (boss_armor 0.4) is part of its tuning
+  const walkW = b.tools ? st.ringWalk : Math.max(0.9, st.ringWalk);
+  if (P.walk > 0 && (opFree || opIn) && !opSwinging && d >= lo && d <= hi && b.rnd() < P.walk * walkW) {
     let sd = b.walkSense;
     if (s.backU < s.opBackU - 60000) {
       const pl = planCircle(b.m, s, 'escape', Math.min(s.backU + 120000, 260000), 60);
@@ -154,7 +158,11 @@ export function ringPlan(b: Brain, aggro: boolean, opThreat: number): Decision |
     } else if (b.rnd() < 0.3) sd = -sd;
     b.walkSense = sd;
     b.stats.circlesWalk++;
-    return { t: 'circle', bit: stepBitFor(s, sd), frames: 18 + Math.floor(b.rnd() * 37), atk: -1 };
+    // CHANGED(wf6_fixer_core) V6: a real walk round the ring - held 40-120 f (25-105 f of 1.8 m/s sidewalk after the 15 f
+    // step = 0.8-3.2 m of arc, ~20-75 deg round an opponent 2.4 m away); was 18-54 f = 3-39 f of sidewalk (WF6 V6: mean 23 f,
+    // "token gestures"). Reactions still cancel it into a guard (stepTick -> reactGuard), and it ends early when it reaches
+    // the opponent's side of a wall (planCircle senses above)
+    return { t: 'circle', bit: stepBitFor(s, sd), frames: 40 + Math.floor(b.rnd() * 81), atk: -1 };
   }
   return null;
 }
@@ -344,8 +352,9 @@ export function neutralPlan(b: Brain): Decision {
       }
       const mix = usableIn(b, (kit.roles.low ?? []).concat(kit.roles.overhead ?? []), true).filter((k) => kit.moves[k].normal || kit.moves[k].special);
       const armor = usableIn(b, kit.lists.armor, true);
+      // CHANGED(wf6_fixer_core) V3: the plain-throw weight follows what my throws met (b.throwTrust: x 0.12..1 once teched)
       const dec = choose(b, [
-        [st.throw, () => (kit.throwF >= 0 && b.inReach(kit.throwF) ? { t: 'move', idx: b.rnd() < 0.8 || cornerBehind ? kit.throwF : kit.throwB >= 0 ? kit.throwB : kit.throwF } : null)],
+        [st.throw * b.throwTrust(), () => (kit.throwF >= 0 && b.inReach(kit.throwF) ? { t: 'move', idx: b.rnd() < 0.8 || cornerBehind ? kit.throwF : kit.throwB >= 0 ? kit.throwB : kit.throwF } : null)],
         [st.grab, () => { const g = pick(b, grabs); return g !== undefined ? { t: 'move', idx: g } : null; }],
         [st.poke + 0.1, () => {
           const steps = b.kit.lists.combo.filter((k) => kit.moves[k].recipe !== null);

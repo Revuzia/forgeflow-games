@@ -62,13 +62,29 @@ export class SendBudget {
 
 function nowMs(): number { return typeof performance !== 'undefined' ? performance.now() : Date.now(); }
 
-async function loadClient(): Promise<RealtimeClient> {
-  const url = SUPABASE_JS;
-  const mod = (await import(/* @vite-ignore */ url)) as { createClient?: CreateClient; default?: { createClient?: CreateClient } };
-  const createClient = mod.createClient ?? mod.default?.createClient;
-  if (!createClient) throw new Error('supabase-js: createClient missing');
-  // NOTE: no realtime.params.eventsPerSecond - it is a no-op on the wire (NETCODE 0.3).
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } }) as unknown as RealtimeClient;
+/**
+ * CHANGED(wf6 fixer) VO-D7: ONE realtime client per page (memoised; every NetPlay - rematches, new lobbies - shares it and
+ * removes only its own channels) under its OWN auth storage key. supabase-js numbers GoTrueClient instances per storage
+ * key and warns "Multiple GoTrueClient instances detected in the same browser context" from the second one: this anon
+ * client and net/ratings.ts' portal-session client both used the default `sb-<project>-auth-token` key (2 per page, +1 per
+ * new NetPlay). The netplay client never signs in (persistSession / autoRefreshToken / detectSessionInUrl off), so its key
+ * holds nothing; the ratings client keeps the default key = the portal's session.
+ */
+let sharedClient: Promise<RealtimeClient> | null = null;
+function loadClient(): Promise<RealtimeClient> {
+  if (sharedClient) return sharedClient;
+  sharedClient = (async () => {
+    const url = SUPABASE_JS;
+    const mod = (await import(/* @vite-ignore */ url)) as { createClient?: CreateClient; default?: { createClient?: CreateClient } };
+    const createClient = mod.createClient ?? mod.default?.createClient;
+    if (!createClient) throw new Error('supabase-js: createClient missing');
+    // NOTE: no realtime.params.eventsPerSecond - it is a no-op on the wire (NETCODE 0.3).
+    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'hit-parade-netplay' },
+    }) as unknown as RealtimeClient;
+  })();
+  sharedClient.catch(() => { sharedClient = null; });      // a failed load (offline) may be retried by the next lobby
+  return sharedClient;
 }
 type CreateClient = (url: string, key: string, opts?: Record<string, unknown>) => unknown;
 

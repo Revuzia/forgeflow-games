@@ -42,8 +42,9 @@ import { BrawlView, type Popup } from './brawl.ts';
 import { setOutlineViewport } from './toon.ts';
 import { warmupComposer } from './warmup.ts';
 import { EV, EV_SOURCE } from './ev.ts';
-import { LineFrame, ringClamp, ringFrom, ringRay, ringSolidTop, ringWallAt, type RingGeom } from './ring3d.ts';
+import { LineFrame, ringClamp, ringFrom, ringGap, ringRay, ringSolidTop, ringWallAt, type RingGeom } from './ring3d.ts';
 import { stepFactsFor } from './stepanim.ts';
+import { Cutaway, type CutBody } from './cutaway.ts';
 import { makeLightProbe } from './lightlevel.ts';
 import {
   DEFAULT_VIEW_SETTINGS, flagOn, type ViewEvent, type ViewFighterSnap, type ViewGameData, type ViewMatchCfg,
@@ -118,9 +119,11 @@ export class BoutView {
   private readonly gU = new THREE.Vector3();
   private readonly gR = new THREE.Vector3();
   private readonly gD = new THREE.Vector3();
-  private readonly gPts: Array<[number, number, number, number]> = [];   // [x, y, z, axis 0 = top, 1 = side]
+  private readonly gPts: Array<[number, number, number, number]> = [];   // [x, y, z, axis 0 = top, 1 = side, 2 = bottom, 3 / 4 = top / bottom inset (wf6 fixer D5)]
   /** the last frame's framing-guard correction (lab read-back): dolly m, fov widened by deg, crouch follow m */
-  guardLast = { dolly: 0, fov: 0, crouch: 0 };
+  guardLast = { dolly: 0, fov: 0, crouch: 0, payoff: 0 };
+  /** CHANGED(wf6 fixer) D5 harness A/B: false = the pre-fix guard (no payoff points) */
+  guardPayoff = true;
   private readonly camF: [CamFighter, CamFighter] = [{ x: 0, y: 0, z: 0, head: 1.8 }, { x: 0, y: 0, z: 0, head: 1.8 }];
   /** CHANGED(VIEW3D): the ring (stage facts + the sim's ring once a snapshot carries it) */
   ring: RingGeom;
@@ -129,6 +132,12 @@ export class BoutView {
   readonly cineF = new LineFrame();
   private cineFacing = 1;
   private cineFlip = false;
+  /** CHANGED(wf6 fixer) D3: how far (m, world x / z) the frozen line frame was slid inward so the cinematic fits the ring */
+  readonly cineShift: [number, number] = [0, 0];
+  /** CHANGED(wf6 fixer) D3: harness A/B - false = the pre-fix frame (no fit, 0.3 m root clamp) */
+  fitCine = true;
+  private readonly fitPs: PrimeSample = newSample();
+  private readonly fitScratch = { prev: newLocalPose(), blendFrom: newLocalPose() };
   private readonly cl2: [number, number] = [0, 0];
   private readonly wl4: [number, number, number, number] = [0, 0, 0, 0];
   private readonly goonPts: Array<[number, number]> = [];
@@ -161,6 +170,10 @@ export class BoutView {
   lightProbe: ((x: number, y: number, z: number) => number) | null = null;
   /** CHANGED(fix_view) D13: frame by the measured neutral top (head + a raised limb); false = the old head-only top (A/B) */
   realTops = true;
+  /** CHANGED(wf6 fixer) D2 / D3: the ring-wall cutaway (view/cutaway.ts) - set geometry between the lens and the fighters */
+  readonly cut = new Cutaway();
+  private readonly cutBodies: [CutBody, CutBody] = [{ x: 0, z: 0, y0: 0, top: 1.8, r: 0.4 }, { x: 0, z: 0, y0: 0, top: 1.8, r: 0.4 }];
+  private readonly bodyR: [number, number] = [0.4, 0.4];
 
   /** CHANGED(fix_view) D5 harness A/B: the pre-fix look (old bloom, no body light cap) */
   legacyLook(on: boolean): void {
@@ -187,6 +200,11 @@ export class BoutView {
     if (this.ring.dust) { try { this.dustCol = new THREE.Color(this.ring.dust); } catch { this.dustCol = null; } }
     this.scene.name = 'bout';
     stage.applyTo(this.scene, r.three);
+    // CHANGED(wf6 fixer) D2 / D3: patch the set's materials before the warm-up links their programs
+    this.cut.install(stage.group);
+    this.cut.setRing(this.ring);
+    this.cam.cutaway = this.cut.patched > 0;
+    for (let i = 0; i < 2; i++) this.bodyR[i] = Math.max(0.35, pushFront(data.fighters[cfg.p[i]?.fighter ?? '']));
     for (const f of fighters) this.scene.add(f.root);
     // CHANGED(fix_view) D6 / D5: sidestep facts per fighter (system step + its own step.distM + its clips' rootLat) and the
     // light cap from the stage's light pool
@@ -552,10 +570,14 @@ export class BoutView {
    *      drop of the head below its standing height), so a bent-over flex is not framed on the crowd above it;
    *   2. the target's head top (airborne: also hands and feet) stays under the letterbox, and on `both` shots both bodies
    *      stay inside the frame sideways: dolly out along the view (<= 2.5 m), then widen the FOV (<= 60 deg).
+   *   3. CHANGED(wf6 fixer) D5: THE PAYOFF IS SEEN - from 4 frames before to 10 after each `hits` frame the VICTIM's chest
+   *      and head are kept inside the frame (top, BOTTOM and sides) whatever the shot's target: rerun's SERIES FINALE 'low'
+   *      shot targets the attacker, and at its last blow the victim lay below the frame (only a burst and a fist at the
+   *      edge; the guard had dolly 0 - it only ever checked points ABOVE the frame centre).
    */
   private frameGuard(c: CinePose, ps: PrimeSample, att: 0 | 1): void {
     const G = this.guardLast;
-    G.dolly = 0; G.fov = 0; G.crouch = 0;
+    G.dolly = 0; G.fov = 0; G.crouch = 0; G.payoff = 0;
     if (ps.shot === 'top') return;
     const A = this.fighters[att], V = this.fighters[1 - att];
     const tgt = ps.camTarget;
@@ -589,6 +611,17 @@ export class BoutView {
       const cx = ch.x, cy = ch.y, cz = ch.z;
       pts.push([cx - rgt.x * 0.35, cy, cz - rgt.z * 0.35, 1], [cx + rgt.x * 0.35, cy, cz + rgt.z * 0.35, 1]);
     }
+    // CHANGED(wf6 fixer) D5: around each blow the victim is in the picture (axis 2 = keep ABOVE the frame bottom)
+    const pl = this.plan;
+    if (this.guardPayoff && pl && pl.hits.some((h) => ps.f >= h[0] - 4 && ps.f <= h[0] + 10)) {
+      const ch = V.chest(this.gD);
+      const cx = ch.x, cy = ch.y, cz = ch.z;
+      // axis 3 / 4 = top / bottom with a 25 % inner margin: the blow's burst sits ON the chest, so a chest just inside
+      // the edge still read as "a burst and a fist" (measured: dolly 0.30 m with the plain frame edge)
+      pts.push([cx, cy + 0.15, cz, 3], [cx, cy - 0.15, cz, 4], [cx - rgt.x * 0.3, cy, cz - rgt.z * 0.3, 1], [cx + rgt.x * 0.3, cy, cz + rgt.z * 0.3, 1]);
+      if (V.bonePos('Head', this.gD)) { const hx = this.gD.x, hy = this.gD.y, hz = this.gD.z; pts.push([hx, hy + 0.1, hz, 3], [hx, hy - 0.1, hz, 4]); }
+      G.payoff = 1;
+    }
     const tv = Math.tan((c.fov * Math.PI / 180) / 2);
     const allowY = tv * Math.max(0.3, 1 - 2 * ps.letterbox) * 0.94, allowX = tv * aspect * 0.93;
     const need = (): [number, number] => {           // [dolly needed, worst ratio]
@@ -597,9 +630,9 @@ export class BoutView {
         const d = this.gD.set(x - c.pos.x, y - c.pos.y, z - c.pos.z);
         const depth = d.dot(v);
         if (depth < 0.2) continue;
-        const off = ax === 0 ? d.dot(u) : Math.abs(d.dot(rgt));
+        const off = ax === 0 || ax === 3 ? d.dot(u) : ax === 2 || ax === 4 ? -d.dot(u) : Math.abs(d.dot(rgt));
         if (off <= 0) continue;
-        const al = ax === 0 ? allowY : allowX;
+        const al = ax === 1 ? allowX : ax >= 3 ? allowY * 0.75 : allowY;
         s = Math.max(s, off / al - depth); q = Math.max(q, off / depth / al);
       }
       return [s, q];
@@ -647,6 +680,58 @@ export class BoutView {
     this.cineFacing = facing;
   }
 
+  /**
+   * CHANGED(wf6 fixer) D3 (CONTRACT §35.26): slide the frozen line frame inward until the WHOLE cinematic fits the ring.
+   * setCineFrame only looked at the room on the camera side, so a PRIME TIME started 0.6 m from the wall (THE FREAK's
+   * SPECIMEN 13: the victim hurled 3.5 m ahead, the attacker stepping 0.35 m) played with both bodies inside the butcher
+   * counter (roots clamped 0.3 m off the wall, a 0.75 m body front) and its shots outside the ring. Samples every 3rd
+   * frame of the plan (pure): both roots (attacker AX, victim AX + G along the forward) need the ring's inner face
+   * >= body radius + 0.08 m away (hard); the shots' lens points want to be >= 0.25 m inside (soft: their shift is capped at
+   * 1.2 m and the bodies win). Iterative projection along the wall's inward normal, total <= 3 m. The shift is hidden by
+   * the hard cuts at both ends (into the first shot; back to the rig, where the outro starts from the unshifted roots).
+   * v2 strike cinematics only: a grab super's bodies are the sim's (already inside), v1 data tunes its own wall splat.
+   */
+  private fitCineFrame(p: PrimePlan, att: 0 | 1): void {
+    const sh = this.cineShift;
+    sh[0] = 0; sh[1] = 0;
+    if (!this.fitCine || p.simVictim || !p.v2) return;
+    const F = this.cineF, g = this.ring, facing = this.cineFacing;
+    const rA = this.bodyR[att] + 0.08, rV = this.bodyR[1 - att] + 0.08;
+    const body: Array<[number, number, number]> = [];
+    const lens: Array<[number, number, number]> = [];
+    const t = this.tmp;
+    const short = this.settings.cinematicCamera === 'short';
+    for (let f = 0; f < p.frames; f += 3) {
+      F.toWorld(facing * p.AX[f], 0, 0, t); body.push([t.x, t.z, rA]);
+      F.toWorld(facing * (p.AX[f] + p.G[f]), 0, 0, t); body.push([t.x, t.z, rV]);
+      if (short) continue;
+      const ps = samplePlan(p, f, false, null, 0, facing, null, this.fitPs, this.fitScratch);
+      const L = ps.cam;
+      if (ps.camLocal) F.toWorld(facing * L.pos.x, L.pos.y, L.pos.z, t); else F.toWorld(L.pos.x, L.pos.y, L.pos.z, t);
+      lens.push([t.x, t.z, 0.25]);
+    }
+    const w4 = this.wl4;
+    let sx = 0, sz = 0;
+    const solve = (pts: ReadonlyArray<[number, number, number]>, cap: number): void => {
+      for (let it = 0; it < 8; it++) {
+        let worst = 0, wx = 0, wz = 0;
+        for (const [x, z, need] of pts) {
+          const d = need - ringGap(g, x + sx, z + sz);
+          if (d > worst) { ringWallAt(g, x + sx, z + sz, w4); worst = d; wx = w4[2]; wz = w4[3]; }
+        }
+        if (worst < 0.005) break;
+        sx += wx * worst; sz += wz * worst;
+        const l = Math.hypot(sx, sz);
+        if (l > cap) { sx *= cap / l; sz *= cap / l; break; }
+      }
+    };
+    solve(lens, 1.2);
+    solve(body, 3.0);
+    if (Math.hypot(sx, sz) < 0.01) return;
+    sh[0] = Math.round(sx * 1000) / 1000; sh[1] = Math.round(sz * 1000) / 1000;
+    F.fromR(F.ox + sx, F.oz + sz, F.rx, F.rz);
+  }
+
   /** CHANGED(fix_view) G9 read-back: the last cinematic start's cost split (ms) */
   primeCost = { plan: 0, crowd: 0, slate: 0, total: 0 };
 
@@ -681,6 +766,7 @@ export class BoutView {
       frontV: pushFront(this.data.fighters[this.cfg.p[1 - who]?.fighter ?? '']) + (V.propInfo().some((q) => /shield/.test(q.id)) ? 0.2 : 0),
       wallDist,
     });
+    this.fitCineFrame(this.plan, who);
     const pt1 = performance.now();
     this.planKey = `${who}:${moveIdx}:${simVictim ? 'grab' : 'cin'}`;
     this.planAtt = who;
@@ -907,6 +993,7 @@ export class BoutView {
     if (m.ring && !this.ringFromSim) {
       this.ring = ringFrom(m.ring, stageDef(this.data, this.cfg.stage));
       this.cam.ring = this.ring;
+      this.cut.setRing(this.ring);
       this.ringFromSim = true;
     }
     this.cam.camN = m.camN && m.camN.length >= 2 ? [Number(m.camN[0]), Number(m.camN[1])] : null;
@@ -945,7 +1032,12 @@ export class BoutView {
         const src = i === a ? this.ps.att : this.plan.simVictim ? [] : this.ps.vic;
         this.outro.lists[i] = src.map((e) => ({ ...e }));
         const rp = this.fighters[i].root.position;
-        this.outro.pos[i] = [rp.x, rp.y, rp.z];
+        // CHANGED(wf6 fixer) D3: the frame's fit shift leaves with the cut back to the rig (the outro blends what is left)
+        const sh = this.cineShift;
+        if (sh[0] !== 0 || sh[1] !== 0) {
+          ringClamp(this.ring, rp.x - sh[0], rp.z - sh[1], this.bodyR[i] + 0.05, this.cl2);
+          this.outro.pos[i] = [this.cl2[0], rp.y, this.cl2[1]];
+        } else this.outro.pos[i] = [rp.x, rp.y, rp.z];
       }
     }
     this.lastCineActive = !!ps;
@@ -964,13 +1056,14 @@ export class BoutView {
       const oa = att === 0 ? ovA : ovB, ob = att === 0 ? ovB : ovA;
       this.fighters[0].zTarget = 0; this.fighters[1].zTarget = 0;
       // line space -> world, kept inside the ring (the 1D view clamped x to +-7.55)
-      const place = (o: typeof oa, lx: number, lz: number) => {
+      // CHANGED(wf6 fixer) D3: each body keeps its own radius off the wall (a flat 0.3 m put THE FREAK's 0.75 m front in it)
+      const place = (o: typeof oa, lx: number, lz: number, who: number) => {
         const w = F.toWorld(lx, 0, lz, this.tmp3);
-        ringClamp(this.ring, w.x, w.z, 0.3, this.cl2);
+        ringClamp(this.ring, w.x, w.z, this.fitCine ? Math.max(0.3, this.bodyR[who] + 0.05) : 0.3, this.cl2);
         o.x = this.cl2[0]; o.z = this.cl2[1];
       };
       oa.list = ps.att; oa.facing = facing; oa.visible = ps.attVisible; oa.inCinematic = true;
-      if (!this.plan.simVictim) { place(oa, facing * ps.attDx, 0); oa.y = Math.max(-2.2, ps.attY); oa.yaw = F.yawAlong(facing); }
+      if (!this.plan.simVictim) { place(oa, facing * ps.attDx, 0, att); oa.y = Math.max(-2.2, ps.attY); oa.yaw = F.yawAlong(facing); }
       this.fighters[att].update(sa, dt, this.realTime, oa);
       if (!this.plan.simVictim) {
         let vx = facing * (ps.attDx + ps.vicGap), vz = 0, vy = ps.vicY;
@@ -985,7 +1078,7 @@ export class BoutView {
           vx += (cxv - vx) * ps.carryBlend; vz += (czv - vz) * ps.carryBlend; vy += (cyv - vy) * ps.carryBlend;
           if (ps.carry) yaw = Math.atan2(-this.tmp2.x, -this.tmp2.z);
         }
-        place(ob, vx, vz);
+        place(ob, vx, vz, vic);
         ob.list = ps.vic; ob.y = vy; ob.yaw = yaw; ob.facing = -facing; ob.visible = ps.vicVisible; ob.inCinematic = true;
       }
       this.fighters[vic].update(snaps[vic], dt, this.realTime, this.plan.simVictim ? null : ob);
@@ -1055,7 +1148,7 @@ export class BoutView {
       c.roll = L.roll * facing;
       c.fov = L.fov;
       if (!ps.camLocal) this.frameGuard(c, ps, att);
-      else this.guardLast.dolly = this.guardLast.fov = this.guardLast.crouch = 0;
+      else this.guardLast.dolly = this.guardLast.fov = this.guardLast.crouch = this.guardLast.payoff = 0;
       c.pos.y = Math.max(0.12, c.pos.y);
       this.cam.setCinematic(c);
       if (ps.freeze) this.cam.trauma = 0;
@@ -1104,6 +1197,12 @@ export class BoutView {
       if (typeof yw === 'number') this.cam.fwd0 = [Math.sin(yw), Math.cos(yw)];
     }
     this.cam.update(dt, this.camF, this.r.css.x / Math.max(1, this.r.css.y), m.frame, ts);
+    // CHANGED(wf6 fixer) D2 / D3: the cutaway follows the presented bodies (cinematic placements included)
+    for (let i = 0; i < 2; i++) {
+      const fv = this.fighters[i], cb = this.cutBodies[i], rp = fv.root.position;
+      cb.x = rp.x; cb.z = rp.z; cb.y0 = rp.y; cb.top = fv.camTop(true); cb.r = this.bodyR[i]; cb.visible = fv.root.visible;
+    }
+    this.cut.update(this.cam.camera, this.ring, this.cutBodies, this.r.css.x / Math.max(1, this.r.css.y));
     // CHANGED(fixer) D4 read-back: where each fighter's top lands on screen (fraction of the frame height from the top)
     for (let i = 0; i < 2; i++) {
       this.tmp.set(this.camF[i].x, this.camF[i].head, this.camF[i].z ?? 0).project(this.cam.camera);
@@ -1196,8 +1295,10 @@ export class BoutView {
       ring: { shape: this.ring.shape, r: this.ring.r, sides: this.ring.sides, rotDeg: Math.round(this.ring.rot * 1800 / Math.PI) / 10, wallH: this.ring.wallH,
         surface: this.ring.surface, solidTop: ringSolidTop(this.ring), clearR: this.ring.clearR, fromSim: this.ringFromSim },
       cineFrame: p ? { ox: +this.cineF.ox.toFixed(3), oz: +this.cineF.oz.toFixed(3), rDeg: Math.round(Math.atan2(this.cineF.rx, this.cineF.rz) * 1800 / Math.PI) / 10,
-        facing: this.cineFacing, flip: this.cineFlip } : null,
+        facing: this.cineFacing, flip: this.cineFlip, shift: [...this.cineShift] } : null,
       splat: this.lastSplat,
+      // CHANGED(wf6 fixer) D2 / D3 read-back: the cutaway (on, per-fighter NDC boxes, front depths, patched materials)
+      cutaway: { on: this.cut.last.on, boxes: this.cut.last.boxes.map((b) => [...b]), depth: [...this.cut.last.depth], patched: this.cut.patched, enabled: this.cut.enabled },
       // CHANGED(fix_view) D13 read-back: each fighter's framed top / feet as screen fractions from the top, the HUD band
       framing: { tops: [...this.lastTops], feet: [...this.lastFeet], safeTop: this.cam.safeTop, topM: this.fighters.map((x) => x.neutralTopM),
         // the posed top this frame (independent of what the camera framed by) and the lowest foot bone, as screen fractions

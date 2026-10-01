@@ -111,7 +111,8 @@ def cinematic(frames, cue, hits, anim, victim, camera, fx, crowd, pathA, gapD, s
             "crowd": [{"f": int(f), "react": r} if g is None else {"f": int(f), "react": r, "ratings": g}
                       for f, r, g in [(e + (None,))[:3] for e in crowd]],
             "pathA": [[int(f), round(x, 3), round(y, 3)] for f, x, y in pathA],
-            "gapD": [[int(f), round(x, 3), round(y, 3)] for f, x, y in gapD],
+            # CHANGED(wf6_fixer_core) V2: a gapD key may carry a 4th number = the thrower's turn (deg) since the connect
+            "gapD": [[int(k[0]), round(k[1], 3), round(k[2], 3)] + ([round(k[3], 1)] if len(k) > 3 else []) for k in gapD],
             "slate": slate, "endPose": endPose, "endAdv": int(endAdv), "endGapM": endGapM}
 
 # --------------------------------------------------------------------------------------------------
@@ -705,7 +706,8 @@ class Kit:
         cin = o.get("cinematic")
         if o.get("grab") and isinstance(cin, dict) and cin.get("gapD"):
             o["grab"] = dict(o["grab"])
-            o["grab"]["path"] = [[int(k[0]), float(k[1]), float(k[2]) if len(k) > 2 else 0.0] for k in cin["gapD"]]
+            o["grab"]["path"] = [[int(k[0]), float(k[1]), float(k[2]) if len(k) > 2 else 0.0] + ([float(k[3])] if len(k) > 3 else [])
+                                 for k in cin["gapD"]]   # CHANGED(wf6_fixer_core) V2: + turnDeg
         emit3d(m, o)   # CHANGED(FIGHTERS3D): track / homing / linear / lateralM / projectile aimed (CONTRACT 35.12)
         anim = {"clip": m["clip"]}
         if m.get("warp") == "auto":

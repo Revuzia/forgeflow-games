@@ -77,9 +77,12 @@ export interface CGrab {
   vClip: Int32Array;
   vT0: Int32Array;
   vT1: Int32Array;
-  /** CHANGED(fix_core) D4 (CONTRACT §35.20): grab.path keys [lockFrame, gapU, liftU] x n (sorted, frames >= 1), null = none:
-   *  the victim's root = the thrower's root at the connect + forward x gap, lifted (throwpose.ts holdPoint) */
+  /** CHANGED(fix_core) D4 (CONTRACT §35.20): grab.path keys [lockFrame, gapU, liftU, turnYaw] x n (sorted, frames >= 1), null =
+   *  none: the victim's root = the thrower's root at the connect + forward x gap, lifted (throwpose.ts holdPos).
+   *  CHANGED(wf6_fixer_core) V2: stride 4 - turnYaw = the thrower's yaw turn since the connect (yaw units, multi-turn, 0 when the
+   *  data gives none); `turns` = any key turns (throwCarry then turns the thrower + its victim with it) */
   path: Int32Array | null;
+  turns: boolean;
   /** CHANGED(fix_core) D4: push-front gap (U) the victim is pulled to at the connect (grab.holdGapM, else system) */
   holdGap: number;
 }
@@ -359,6 +362,11 @@ export interface CFighter {
   mw: { qc: number; dp: number; hc: number; spd: number; double: number; chargeFrames: number; chargeKeep: number; tap22: number };
   /** measured hurtbox extents (U) front / back per posture (data/bodies.json, §28.5c); centred when not measured */
   hurtFS: number; hurtBS: number; hurtFC: number; hurtBC: number; hurtFA: number; hurtBA: number;
+  /**
+   * CHANGED(wf6_fixer_core) D1: the face-down fall's measured extents (U) front / back (data/bodies.json `down`); 0 / 0 when
+   * not measured (fixture kits) = no room kept after a wall splat (fighter.ts splatDrop)
+   */
+  downF: number; downB: number;
   animIntro: number;
   animWin: number;
   animTaunt: number;
@@ -748,11 +756,15 @@ function compileMove(id: string, mv: Move, idx: number, snapId: number, animId: 
     if (Array.isArray(gd.path) && gd.path.length > 0) {
       const keys = gd.path
         .filter((k) => Array.isArray(k) && k.length >= 2 && Number.isFinite(k[0]) && k[0] >= 1 && Number.isFinite(k[1]))
-        .map((k) => [Math.trunc(k[0]), mToU(Math.max(0, k[1])), mToU(Math.max(0, Number.isFinite(k[2]) ? k[2] : 0))])
+        .map((k) => [Math.trunc(k[0]), mToU(Math.max(0, k[1])), mToU(Math.max(0, Number.isFinite(k[2]) ? k[2] : 0)),
+          // CHANGED(wf6_fixer_core) V2: the thrower's turn (degrees -> yaw units, at compile time only)
+          Number.isFinite(k[3]) ? Math.round(((k[3] as number) * 65536) / 360) : 0])
         .sort((p, q) => p[0] - q[0]);
       if (keys.length > 0) path = Int32Array.from(keys.flat());
     }
+    const turns = path !== null && path.some((v, j) => j % 4 === 3 && v !== 0);
     grab = {
+      turns,
       frames: gd.frames,
       adv: gd.adv,
       hitF: gd.hitF,
@@ -1131,17 +1143,19 @@ function dashCurve(distU: number, frames: number, movePct: number): Int32Array {
 }
 
 /** CHANGED(SIM) P2 (CONTRACT section 28.5c): hurtbox front / back extents (U) per posture; centred when not measured. */
-function hurtExtents(def: FighterDef, data: GameData): Pick<CFighter, 'hurtFS' | 'hurtBS' | 'hurtFC' | 'hurtBC' | 'hurtFA' | 'hurtBA'> {
+function hurtExtents(def: FighterDef, data: GameData): Pick<CFighter, 'hurtFS' | 'hurtBS' | 'hurtFC' | 'hurtBC' | 'hurtFA' | 'hurtBA' | 'downF' | 'downB'> {
   const b = data.bodies ? data.bodies[def.id] : undefined;
   if (!b) {
     const hs = mToU(def.hurt.stand[0]) >> 1;
     const hc = mToU(def.hurt.crouch[0]) >> 1;
     const ha = mToU(def.hurt.air[0]) >> 1;
-    return { hurtFS: hs, hurtBS: hs, hurtFC: hc, hurtBC: hc, hurtFA: ha, hurtBA: ha };
+    return { hurtFS: hs, hurtBS: hs, hurtFC: hc, hurtBC: hc, hurtFA: ha, hurtBA: ha, downF: 0, downB: 0 };
   }
   return {
     hurtFS: mToU(b.stand[0]), hurtBS: mToU(b.stand[1]), hurtFC: mToU(b.crouch[0]), hurtBC: mToU(b.crouch[1]),
     hurtFA: mToU(b.air[0]), hurtBA: mToU(b.air[1]),
+    // CHANGED(wf6_fixer_core) D1
+    downF: b.down ? mToU(b.down[0]) : 0, downB: b.down ? mToU(b.down[1]) : 0,
   };
 }
 

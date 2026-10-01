@@ -717,7 +717,9 @@ html.hp-noflash .hpm-res-rematch { animation: none; }
 /* online lobby panel */
 .hpm-on-steps { display: flex; gap: 3px; flex-wrap: wrap; }
 .hpm-on-steps[hidden] { display: none; }
-.hpm-on-steps i { flex: 1 1 0; min-width: 3.4em; padding: .25em .3em; text-align: center; font: 400 max(12px, calc(var(--u) * .8)) / 1.1 var(--f-display); font-style: normal; color: rgba(255, 245, 220, .45); background: var(--hp-ink); border: 1px solid rgba(255, 245, 220, .25); transform: skewX(-12deg); }
+/* CHANGED(wf6 fixer) VO-D4: chips grow from their own label width (equal 1 1 0 shares clipped CONNECT / SEARCH to
+   CONNEC / SEARC at 960 x 540 and on the phone); a row that cannot hold all six wraps */
+.hpm-on-steps i { flex: 1 1 auto; min-width: max-content; white-space: nowrap; padding: .25em .3em; text-align: center; font: 400 max(12px, calc(var(--u) * .8)) / 1.1 var(--f-display); font-style: normal; color: rgba(255, 245, 220, .45); background: var(--hp-ink); border: 1px solid rgba(255, 245, 220, .25); transform: skewX(-12deg); }
 .hpm-on-steps i.done { color: var(--hp-ink); background: rgba(255, 210, 26, .75); border-color: var(--hp-ink); }
 .hpm-on-steps i.on { color: #fff; background: var(--hp-red); border-color: var(--hp-yellow); }
 .hpm-on-room { display: grid; justify-items: start; gap: .15em; padding: calc(var(--u) * .5) calc(var(--u) * .8); background: var(--hp-yellow); color: var(--hp-ink); border: var(--line) solid var(--hp-ink); }
@@ -800,6 +802,9 @@ html.hp-noflash .hpm-res-rematch { animation: none; }
 .hpm-how-row .tbtn, .hpm-leg .tbtn.t-stepin, .hpm-leg .tbtn.t-stepout { display: inline-grid; place-items: center; min-width: 2.6em; height: 2.2em; padding: 0 .4em; border-radius: 99px; background: rgba(11, 11, 16, .8); border: max(1.5px, calc(var(--u) * .16)) solid var(--hp-paper); font: 400 max(12px, calc(var(--u) * .9)) / 1 var(--f-display); }
 .hpm-how-row .tbtn.t-stepin, .hpm-how-row .tbtn.t-stepout, .hpm-leg .tbtn.t-stepin, .hpm-leg .tbtn.t-stepout { background: #c9a6ff; color: var(--hp-ink); border-color: var(--hp-ink); }
 .hpm-leg .keys .tbtn + .tbtn { margin-left: .3em; }
+/* CHANGED(wf6 fixer) VO-D6: the touch legend's STICK and SUPER tokens (SUPER = the bout's gold disc) */
+.hpm-leg .tbtn.t-super { background: #ffd21a; color: var(--hp-ink); border-color: var(--hp-ink); }
+.hpm-leg .tbtn.t-stick { border-style: dashed; }
 .hpm-how-row .tx { display: grid; gap: .1em; min-width: 0; }
 .hpm-how-row .tx b { font: 400 max(14px, calc(var(--u) * 1.15)) / 1.1 var(--f-display); }
 .hpm-how-row .tx .d { font: 400 max(12px, calc(var(--u) * 1)) / 1.25 var(--f-body); opacity: .85; }
@@ -836,3 +841,50 @@ html.hp-noflash .hpm-res-rematch { animation: none; }
   .hpm-ml-row.sub.d2 .nm::before { left: 15px; }
   .hpm-ml-row.sub.d3 .nm::before { left: 27px; }
 }
+
+/* CHANGED(wf6 fixer) VO-D2: the menus step aside while the touch overlay (z 30, under the menus' 40) is in EDIT LAYOUT */
+.hpm.hpm-touch-editing { visibility: hidden !important; pointer-events: none !important; }
+
+/* CHANGED(wf6 fixer) D9: the SEASON FINALE / epilogue payoff - the champion in 3D in the art area (the Showcase draws into
+   the #game canvas under this DOM: the card's backdrop + tint move onto masked layers with a hole at --sc-*), spotlight
+   beams and a confetti fall over it; the 2D portrait stays as the fallback when no Showcase runs (lab). */
+.hpm-s-ending.hpm-3d, .hpm-s-ending.hpm-3d .hpm-slatecard { background: transparent; }
+.hpm-s-ending.hpm-3d .hpm-slatecard::before {
+  content: ''; position: absolute; inset: 0; z-index: 0;
+  background: radial-gradient(90% 90% at 70% 40%, #4a0c20, var(--hp-ink) 75%);
+}
+.hpm-s-ending.hpm-3d .hpm-slatecard::before, .hpm-s-ending.hpm-3d .hpm-sc-tint {
+  -webkit-mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  -webkit-mask-size: 100% 100%, var(--sc-w, 0px) var(--sc-h, 0px);
+  mask-size: 100% 100%, var(--sc-w, 0px) var(--sc-h, 0px);
+  -webkit-mask-position: 0 0, var(--sc-x, 0px) var(--sc-y, 0px);
+  mask-position: 0 0, var(--sc-x, 0px) var(--sc-y, 0px);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.hpm-ending .hpm-sc-tint { z-index: 0; }
+.hpm-ending .hpm-sc-art { z-index: 2; }
+.hpm-ending .hpm-sc-lt, .hpm-ending .hpm-sc-bug, .hpm-ending .hpm-sc-page, .hpm-ending .hpm-sc-any { z-index: 3; }
+.hpm-sc-3d .hpm-sc-pic { display: none; }
+/* the 3D window reads as the show's own monitor (its edge is the mask hole) */
+.hpm-sc-3d { outline: var(--line) solid var(--hp-yellow); box-shadow: 0 0 0 calc(var(--line) * 2.2) var(--hp-ink), var(--shadow); }
+.hpm-sc-floor { position: absolute; left: 6%; right: 6%; bottom: -6%; height: 22%; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 226, 150, .55), rgba(255, 210, 26, .18) 60%, transparent); pointer-events: none; }
+.hpm-sc-3d .hpm-sc-floor { display: none; }
+.hpm-end-beams { position: absolute; right: 0; top: 0; width: 62%; height: 100%; z-index: 1; pointer-events: none; mix-blend-mode: screen;
+  background:
+    conic-gradient(from 168deg at 38% -8%, transparent 0deg, rgba(255, 236, 190, .30) 7deg, rgba(255, 236, 190, .10) 13deg, transparent 18deg),
+    conic-gradient(from 178deg at 74% -8%, transparent 0deg, rgba(255, 210, 26, .26) 6deg, rgba(255, 210, 26, .08) 12deg, transparent 17deg);
+  animation: hpm-beams 5s ease-in-out infinite alternate; }
+@keyframes hpm-beams { from { opacity: .75; } to { opacity: 1; } }
+.hpm-confetti { position: absolute; inset: 0; z-index: 4; overflow: hidden; pointer-events: none; }
+.hpm-confetti i { position: absolute; top: -6%; width: max(6px, calc(var(--u) * .55)); height: max(10px, calc(var(--u) * .95)); border-radius: 1px; opacity: .92;
+  animation: hpm-conf 4s linear infinite; }
+@keyframes hpm-conf {
+  from { transform: translate3d(0, -8vh, 0) rotate(0deg); }
+  to { transform: translate3d(var(--sw, 0px), 112vh, 0) rotate(var(--rot, 360deg)); }
+}
+.hpm-confetti.still i { animation: none; top: var(--top, 40%); transform: rotate(var(--rot, 30deg)); }
+@media (prefers-reduced-motion: reduce) { .hpm-confetti i { animation: none; top: var(--top, 40%); transform: rotate(var(--rot, 30deg)); } .hpm-end-beams { animation: none; } }

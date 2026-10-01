@@ -468,7 +468,8 @@ def check_cinematic_v2(fid, mid, o, c, plan):
             fail(fid, "%s %s: empty" % (where, key))
             continue
         last = 0
-        for f, x, y in rows:
+        for row in rows:
+            f, x, y = row[0], row[1], row[2]   # CHANGED(wf6_fixer_core) V2: gapD rows may carry a 4th number (turnDeg)
             if not (last < f < n) or y < 0:
                 fail(fid, "%s %s: key f%d (x %.2f, lift %.2f) not increasing inside 1..%d or lift < 0" % (
                     where, key, f, x, y, n - 1))
@@ -514,7 +515,8 @@ def check_grab_victim(fid, mid, o, g):
     # victim: the view draws it at the sim's position); keys ascending inside the lock, gaps / lifts >= 0, ending on the floor
     cin = o.get("cinematic")
     p = g.get("path")
-    if cin and cin.get("gapD") and p != [[int(k[0]), float(k[1]), float(k[2]) if len(k) > 2 else 0.0] for k in cin["gapD"]]:
+    if cin and cin.get("gapD") and p != [[int(k[0]), float(k[1]), float(k[2]) if len(k) > 2 else 0.0] + ([float(k[3])] if len(k) > 3 else [])
+                                         for k in cin["gapD"]]:
         fail(fid, "%s grab.path: must equal cinematic.gapD (the sim carries a grab super's victim)" % mid)
     if p is not None:
         fr = [k[0] for k in p]
@@ -524,6 +526,19 @@ def check_grab_victim(fid, mid, o, g):
             fail(fid, "%s grab.path: the last key must be on the floor (lift 0), has %s" % (mid, p[-1]))
         elif cin and abs(p[-1][1] - cin.get("endGapM", p[-1][1])) > 1e-6:
             fail(fid, "%s grab.path: the last gap %.2f != cinematic.endGapM %.2f" % (mid, p[-1][1], cin.get("endGapM")))
+        # CHANGED(wf6_fixer_core) V2: turn keys (4th number, deg): the thrower ends facing the way it grabbed (whole turns),
+        # and no more than 15 deg per lock frame between keys (the view shows <= 12-15 deg / frame turns as they come)
+        turns = [k[3] if len(k) > 3 else 0.0 for k in p]
+        if any(len(k) not in (3, 4) for k in p):
+            fail(fid, "%s grab.path: keys are [frame, gapM, liftM] or [frame, gapM, liftM, turnDeg]" % mid)
+        elif abs(turns[-1] - 360.0 * round(turns[-1] / 360.0)) > 1e-6:
+            fail(fid, "%s grab.path: the last turn %.1f deg is not a whole number of turns" % (mid, turns[-1]))
+        else:
+            pf, pt = 0, 0.0
+            for k, tr in zip(p, turns):
+                if k[0] > pf and abs(tr - pt) / (k[0] - pf) > 15.0 + 1e-6:
+                    fail(fid, "%s grab.path: turn %.1f -> %.1f deg over lock %d..%d is > 15 deg / frame" % (mid, pt, tr, pf, k[0]))
+                pf, pt = k[0], tr
     return travel
 
 

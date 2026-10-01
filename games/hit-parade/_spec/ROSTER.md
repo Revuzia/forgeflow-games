@@ -262,7 +262,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - camera: f0-34 close on both (fov 32, dist 3.0, h 1.45, yaw 18, lookH 1.3); f34-56 close on defender (fov [30, 26], dist [2.5, 2.5], h 1.6, yaw 38, lookH 1.45); f56-92 low on both (fov 40, dist 2.8, h 0.45, yaw -22, lookH 1.1); f92-114 low on defender (fov 42, dist 3.0, h 0.3, yaw 28, lookH 1.7); f114-140 top on defender (fov 40, dist 1.4, h 5.5, yaw 12, lookH 0.6); f140-158 close on attacker (fov 32, dist [2.5, 2.5], h 1.5, yaw [35, 15], lookH 1.45); f158-170 wide on both (fov 38, dist 6.0, h 1.8, yaw 0, lookH 1.1)
 - fx: f0 slate, f7 impact_s, f24 impact_s, f42 impact_m, f42 shake_s, f62 impact_s, f70 impact_s, f78 impact_m, f99 impact_l, f99 speed_lines, f99 shake_m, f128 impact_l, f128 flash, f128 shake_l, f128 dust, f128 freeze_frame, f140 spot@attacker, f158 spot_off, f158 confetti
 - crowd: f7 ooh, f42 gasp, f78 cheer/up, f99 roar/up, f128 roar/spike, f144 cheer/peak, f160 chant
-- attacker path (f, dx, lift m): [7 0.10 0.00] [24 0.20 0.00] [42 0.30 0.00] [92 0.35 0.00] [118 0.55 0.90] [128 0.80 0.30] [134 0.85 0.00] [150 0.80 0.00] [168 0.00 0.00]; defender gap (f, gap, lift m): [7 1.00 0.00] [42 1.10 0.00] [62 1.00 0.00] [99 1.00 0.15] [114 1.25 1.10] [124 1.15 1.25] [131 1.35 0.00] [168 2.20 0.00]
+- attacker path (f, dx, lift m): [7 0.10 0.00] [24 0.20 0.00] [42 0.30 0.00] [92 0.35 0.00] [118 0.55 0.90] [128 0.80 0.30] [134 0.85 0.00] [150 0.80 0.00] [168 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [7 1.00 0.00] [42 1.10 0.00] [62 1.00 0.00] [99 1.00 0.15] [114 1.25 1.10] [124 1.15 1.25] [131 1.35 0.00] [168 2.20 0.00]
 
 **Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
 
@@ -436,7 +436,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - camera: f0-28 low on both (fov 38, dist 2.6, h 0.5, yaw 18, lookH 1.2); f28-52 close on defender (fov 30, dist 2.5, h 1.55, yaw 40, lookH 1.45); f52-78 close on both (fov [34, 30], dist [3.0, 3.0], h 1.6, yaw -30, lookH 1.3); f78-102 low on defender (fov 42, dist 3.0, h 0.3, yaw 25, lookH 1.8); f102-126 orbit on both (fov 40, dist 3.4, h 2.0, yaw [30, -40], lookH 1.8); f126-146 top on defender (fov 40, dist 1.3, h 5.2, yaw 8, lookH 0.5); f146-160 wide on both (fov 38, dist 5.5, h 1.7, yaw 0, lookH 1.1)
 - fx: f0 slate, f10 impact_m, f35 impact_s, f60 impact_m, f60 smear@attacker, f85 impact_m, f85 shake_s, f102 speed_lines, f110 impact_m, f135 impact_l, f135 flash, f135 shake_l, f135 dust, f135 freeze_frame, f146 spot@attacker, f158 spot_off
 - crowd: f10 ooh, f35 ooh, f60 gasp, f85 cheer/up, f110 roar/up, f135 roar/spike, f146 chant/peak
-- attacker path (f, dx, lift m): [10 0.10 0.00] [35 0.25 0.00] [60 0.40 0.00] [85 0.50 0.35] [95 0.55 0.00] [110 0.70 0.90] [120 0.80 0.90] [135 0.90 0.20] [140 0.90 0.00] [158 0.00 0.00]; defender gap (f, gap, lift m): [10 0.80 0.00] [35 0.90 0.00] [60 1.00 0.00] [85 0.90 0.30] [100 1.00 1.00] [110 0.90 1.20] [128 0.90 1.00] [136 1.10 0.00] [158 2.00 0.00]
+- attacker path (f, dx, lift m): [10 0.10 0.00] [35 0.25 0.00] [60 0.40 0.00] [85 0.50 0.35] [95 0.55 0.00] [110 0.70 0.90] [120 0.80 0.90] [135 0.90 0.20] [140 0.90 0.00] [158 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [10 0.80 0.00] [35 0.90 0.00] [60 1.00 0.00] [85 0.90 0.30] [100 1.00 1.00] [110 0.90 1.20] [128 0.90 1.00] [136 1.10 0.00] [158 2.00 0.00]
 
 **Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
 
@@ -553,7 +553,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `brace_h` | Brace | 22H | 3 | 16 | 12 | 30 | - | - | 0 | HL | 0 | whiff special | armor 1x 3-18 | tracks to f1 | custom | armorStep unique (CONTRACT 5.3): FIGHTING_DESIGN 8c 'armored step (1 hit armor, 18f)'. |
 | `brace_ex` | Brace (EX) | 22S | 1 | 20 | 8 | 28 | - | - | 0 | HL | 0 | whiff special | armor 2x 1-20 | tracks to f1 | custom | EX: 2-hit armor from frame 1. |
 | `cold_storage` | Cold Storage | 236236 | 12 | 6 | 50 | 67 | KD +20 | - | 2400 | U | 0 | - | strike 1-6 | HOMING 20/f to f17 | custom | grab: range 0.9 m, lock 90 f, dmg at f28, same side; victim f0 hit_body 0.00-0.30 s, f11 thrown_f 0.25-0.70 s, f28 thrown_f 0.70-1.33 s. Grappler Lv1 is a running command grab (FIGHTING_DESIGN 8c): unblockable, so it gives up the Lv1 template's 8f startup (12f run, visible) and invulnerability after f6; 2400 because grabs cannot be scaled by a combo starter. |
-| `final_delivery` | Final Delivery | 214214 | 3 | 3 | 58 | 63 | KD +19 | - | 4500 | U | 0 | - | strike 1-3 | HOMING 20/f to f5 | custom | grab: range 1.08 m, lock 175 f, dmg at f140, same side; victim f0 hit_body 0.00-0.30 s, f24 hit_body 0.20-0.60 s, f40 hit_air 0.20-0.90 s, f100 hit_air 0.90-1.30 s, f128 thrown_f 0.30-0.74 s, f140 thrown_f 0.74-1.33 s. Grab Lv3: 3f unblockable grab (post-freeze) instead of the 10f strike template; 4500 total; reach 1.08 m = the EX WALK IN (CHANGED fix_bruno: was 1.30 m). |
+| `final_delivery` | Final Delivery | 214214 | 3 | 3 | 58 | 63 | KD +19 | - | 4500 | U | 0 | - | strike 1-3 | HOMING 20/f to f5 | custom | grab: range 1.08 m, lock 175 f, dmg at f140, same side; victim f0 hit_body 0.00-0.30 s, f24 hit_body 0.20-0.60 s, f40 hit_air 0.20-0.90 s, f100 kd_ground_b 0.00-0.37 s, f128 thrown_f 0.30-0.74 s, f140 thrown_f 0.74-1.33 s. Grab Lv3: 3f unblockable grab (post-freeze) instead of the 10f strike template; 4500 total; reach 1.08 m = the EX WALK IN (CHANGED fix_bruno: was 1.30 m). |
 
 **Move notes.**
 
@@ -592,17 +592,17 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **Lv3 PRIME TIME cinematic `final_delivery` (Final Delivery)** - 175 frames (<= 180), cue `bruno_final_delivery`, damage 500+1000+3000 = 4500, ends KD +19 at 3.0 m.
 
 - f0 BEAR HUG (low, both): Bruno scoops them up and squeezes - 500 at f24.
-- f40 CAROUSEL (orbit -50 -> +70 deg): two lariat spins with the victim lifted and flailing - 1000 at f70.
-- f100 OVERHEAD (low, looking up, spotlight): the throw-in lift, the victim held 1.4 m up over his head.
+- f40 CAROUSEL (orbit -50 -> +70 deg): two whole turns with the victim locked in the bear hug, feet off the floor, swung round with him - 1000 at f70.
+- f100 OVERHEAD (low, looking up, spotlight): the throw-in lift, the victim held face up across his raised hands.
 - f128 HURL (wide): released across the set - 3000 when they land at f140 (flash, freeze-frame, dust).
 - f150 MOST-MUSCULAR (close on Bruno): the crab flex over a body lying face up 3.0 m away (KD +19).
 - slate: "PRIME TIME - BRUNO "THE FRIDGE": FINAL DELIVERY"; defender ends lying back
-- attacker clips: f0 `bear_hug` 0.10-0.77 s, f40 `lariat_spin` 0.10-0.90 s, f70 `lariat_spin` 0.10-0.90 s, f100 `throw_in` 0.20-1.03 s, f150 `win_flex` 0.80-1.22 s
-- victim clips: f0 `hit_body` 0.00-0.30 s, f24 `hit_body` 0.20-0.60 s, f40 `hit_air` 0.20-0.90 s, f100 `hit_air` 0.90-1.30 s, f128 `thrown_f` 0.30-0.74 s, f140 `thrown_f` 0.74-1.33 s
+- attacker clips: f0 `bear_hug` 0.00-0.40 s, f40 `bear_hug` 0.40-0.48 s, f100 `throw_in` 0.20-1.03 s, f150 `win_flex` 0.80-1.22 s
+- victim clips: f0 `hit_body` 0.00-0.30 s, f24 `hit_body` 0.20-0.60 s, f40 `hit_air` 0.20-0.90 s, f100 `kd_ground_b` 0.00-0.37 s, f128 `thrown_f` 0.30-0.74 s, f140 `thrown_f` 0.74-1.33 s
 - camera: f0-40 low on both (fov 38, dist 2.8, h 0.5, yaw 20, lookH 1.3); f40-100 orbit on both (fov 40, dist 3.4, h 1.4, yaw [-50, 70]); f100-128 low on attacker (fov 44, dist 3.2, h 0.3, yaw 25, lookH 2.0); f128-150 wide on both (fov 40, dist [4.5, 5.6], h 1.6, yaw 10, lookH 1.1); f150-175 close on attacker (fov 32, dist 2.5, h 1.6, yaw 30, lookH 1.45)
 - fx: f0 slate, f24 impact_m, f24 shake_s, f40 speed_lines, f70 impact_m, f70 shake_m, f100 spot@attacker, f128 spot_off, f128 smear@attacker, f140 impact_l, f140 flash, f140 shake_l, f140 dust, f140 freeze_frame, f150 lights_flicker
 - crowd: f24 ooh, f70 roar/up, f100 gasp, f140 roar/spike, f150 cheer/peak, f165 chant
-- attacker path (f, dx, lift m): [40 0.10 0.00] [100 0.10 0.00] [128 0.30 0.00] [160 0.00 0.00]; defender gap (f, gap, lift m): [10 0.60 0.00] [40 0.60 0.30] [70 0.70 0.60] [100 0.40 1.40] [128 0.80 1.60] [134 2.00 1.00] [140 3.00 0.00]
+- attacker path (f, dx, lift m): [40 0.10 0.00] [100 0.10 0.00] [128 0.30 0.00] [160 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [10 0.60 0.00] [40 0.75 0.42] [100 0.75 0.45 -720] [106 0.05 1.75 -720] [120 0.15 1.75 -720] [124 0.50 1.70 -720] [128 0.80 1.55 -720] [134 2.00 1.00 -720] [140 3.00 0.00 -720]
 
 **Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
 
@@ -636,7 +636,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `throw_in` | final_delivery (cine) | Mixamo `Soccer_Game_Pack/throw in` f30-84 contact f50 | Mixamo throw in: victim held overhead f42-47, release f50 (hurled behind) |
 | `freezer_slam` | walk_in_l (grab), walk_in_m (grab), walk_in_h (grab), walk_in_ex (grab) | Mixamo `Pro_Magic_Pack/Standing 2H Magic Area Attack 01` f10-90 contact f40 | Mixamo 2H Magic Area Attack 01: both fists driven down to the floor at f40 (dense render) = the piledriver slam holding the victim (Great_Sword two-handed clips stay with Ricky) |
 | `fridge_shove` | fridge_door_l, fridge_door_m, fridge_door_h, fridge_door_ex | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Run Forward` f1-23, loop] + upper[Mixamo `Pro_Magic_Pack/Standing 2H Magic Attack 02` f28-62 contact f43] | LAYERED: running legs + Mixamo 2H Magic Attack 02 double-palm shove (front pass f43, 0.92 m) |
-| `lariat_spin` | throw_b (grab), lariat_l, lariat_m, lariat_h, lariat_ex, final_delivery (cine) | Mixamo `Pro_Melee_Axe_Pack/standing melee attack 360 high` f20-60 contact f32 | Mixamo axe 360 high: spinning clothesline, arms flung wide (front pass f32) |
+| `lariat_spin` | throw_b (grab), lariat_l, lariat_m, lariat_h, lariat_ex | Mixamo `Pro_Melee_Axe_Pack/standing melee attack 360 high` f20-60 contact f32 | Mixamo axe 360 high: spinning clothesline, arms flung wide (front pass f32) |
 | `brace_step` | brace_l, brace_m, brace_h, brace_ex | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Walk Forward` f1-35, sync] + upper[Mixamo `Pro_Melee_Axe_Pack/standing block idle` f1-36] | LAYERED: walk-forward legs + axe block idle arms (hands at face) = armored step |
 | `storage_run` | cold_storage | LAYER lower[Mixamo `Pro_Magic_Pack/Standing Run Forward` f1-23, loop] + upper[Mixamo `Soccer_Game_Pack/goalkeeper catch (2)` f1-30 contact f9] | LAYERED: running legs + goalkeeper grab arms (running grab) |
 | `storage_slam` | cold_storage (grab) | Mixamo `Soccer_Game_Pack/goalkeeper body block (3)` f1-103 contact f33 | Mixamo goalkeeper body block (3): long sprawl onto the floor and back up = full body splash on the grabbed victim (the axe leap slam is Boneyard's) |
@@ -768,7 +768,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - camera: f0-24 close on attacker (fov 32, dist 2.5, h 1.55, yaw 30, lookH 1.45); f24-50 over_shoulder on defender (fov 36, dist 2.9, h 1.8, yaw -70, lookH 1.4); f50-80 low on defender (fov 42, dist 3.2, h 0.4, yaw 20, lookH 1.9); f80-104 wide on both (fov 40, dist 5.0, h 1.8, yaw 0, lookH 1.5); f104-132 top on defender (fov 42, dist 1.5, h 5.5, yaw 10, lookH 0.6); f132-150 close on attacker (fov 32, dist [2.6, 2.5], h 1.5, yaw -20, lookH 1.45)
 - fx: f0 slate, f0 dim, f0 spot@attacker, f24 spot_off, f34 cards, f34 impact_m, f64 fire, f64 doves, f64 impact_m, f64 shake_s, f80 smoke@attacker, f96 smoke@attacker, f118 impact_l, f118 flash, f118 shake_l, f118 dust, f118 freeze_frame, f120 undim, f132 doves@attacker
 - crowd: f0 hush, f34 ooh, f64 gasp/up, f90 hush, f118 roar/spike, f132 applause/peak
-- attacker path (f, dx, lift m): [96 0.00 0.00] [97 0.60 0.00] [132 0.60 0.00] [148 0.00 0.00]; defender gap (f, gap, lift m): [34 1.00 0.00] [64 1.00 0.30] [80 1.30 1.50] [96 1.30 2.00] [97 0.70 2.00] [112 0.70 1.60] [120 0.80 0.00] [148 1.50 0.00]
+- attacker path (f, dx, lift m): [96 0.00 0.00] [97 0.60 0.00] [132 0.60 0.00] [148 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [34 1.00 0.00] [64 1.00 0.30] [80 1.30 1.50] [96 1.30 2.00] [97 0.70 2.00] [112 0.70 1.60] [120 0.80 0.00] [148 1.50 0.00]
 
 **Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
 
@@ -932,7 +932,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - camera: f0-20 close on both (fov 32, dist 3.0, h 1.5, yaw 15, lookH 1.3); f20-45 close on defender (fov [32, 28], dist [2.5, 2.5], h 1.6, yaw 35, lookH 1.45); f45-70 low on both (fov 40, dist 2.8, h 0.5, yaw -20, lookH 1.2); f70-110 over_shoulder on defender (fov 36, dist 2.9, h 1.8, yaw -65, lookH 1.4); f110-140 low on defender (fov 40, dist [2.6, 2.2], h 0.6, yaw 30, lookH 1.3); f140-165 wide on both (fov 38, dist 5.5, h 1.7, yaw 5, lookH 1.1)
 - fx: f0 slate, f0 sparks, f28 impact_m, f53 impact_m, f53 shake_s, f78 impact_s, f90 impact_s, f101 impact_m, f110 lights_flicker, f118 electric, f118 flash, f118 shake_m, f118 freeze_frame, f132 dust, f140 spot@attacker, f160 spot_off
 - crowd: f0 boo, f28 ooh, f53 ooh, f101 cheer/up, f118 roar/spike, f132 laugh, f145 cheer/peak
-- attacker path (f, dx, lift m): [28 0.15 0.00] [53 0.30 0.00] [78 0.40 0.00] [101 0.55 0.00] [118 0.50 0.00] [150 0.20 0.00] [163 0.00 0.00]; defender gap (f, gap, lift m): [28 1.10 0.00] [53 1.00 0.00] [78 0.95 0.00] [101 1.00 0.00] [118 1.20 0.20] [128 1.40 0.35] [138 1.60 0.00] [163 2.00 0.00]
+- attacker path (f, dx, lift m): [28 0.15 0.00] [53 0.30 0.00] [78 0.40 0.00] [101 0.55 0.00] [118 0.50 0.00] [150 0.20 0.00] [163 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [28 1.10 0.00] [53 1.00 0.00] [78 0.95 0.00] [101 1.00 0.00] [118 1.20 0.20] [128 1.40 0.35] [138 1.60 0.00] [163 2.00 0.00]
 
 **Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
 
@@ -1103,7 +1103,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - camera: f0-22 close on both (fov 32, dist 3.0, h 1.45, yaw 15, lookH 1.3); f22-40 close on attacker (fov 30, dist 2.5, h 1.5, yaw 40, lookH 1.45); f40-64 close on defender (fov [32, 28], dist [2.5, 2.5], h 1.55, yaw 35, lookH 1.45); f64-90 over_shoulder on defender (fov 36, dist 2.9, h 1.8, yaw -65, lookH 1.4); f90-115 low on both (fov 42, dist 3.0, h 0.3, yaw 25, lookH 1.7); f115-140 low on defender (fov 40, dist 3.4, h 0.7, yaw -15, lookH 1.6); f140-160 wide on both (fov 38, dist 5.6, h 1.7, yaw 0, lookH 1.1)
 - fx: f0 slate, f8 impact_s, f22 spot@attacker, f40 spot_off, f48 impact_m, f48 smear@attacker, f72 impact_m, f72 shake_s, f98 impact_l, f98 speed_lines, f124 fire, f124 impact_l, f124 flash, f124 shake_l, f124 freeze_frame, f134 dust, f140 lights_flicker
 - crowd: f8 ooh, f22 laugh, f48 ooh, f72 gasp, f98 cheer/up, f124 roar/spike, f144 applause/peak
-- attacker path (f, dx, lift m): [8 0.20 0.00] [48 0.30 0.00] [72 0.45 0.00] [98 0.55 0.60] [108 0.60 0.90] [115 0.60 0.20] [118 0.60 0.00] [150 0.20 0.00] [158 0.00 0.00]; defender gap (f, gap, lift m): [8 1.00 0.00] [48 1.05 0.00] [72 1.00 0.00] [98 0.90 0.50] [110 1.00 1.30] [120 1.00 1.00] [124 1.20 0.90] [134 2.60 0.00] [158 2.40 0.00]
+- attacker path (f, dx, lift m): [8 0.20 0.00] [48 0.30 0.00] [72 0.45 0.00] [98 0.55 0.60] [108 0.60 0.90] [115 0.60 0.20] [118 0.60 0.00] [150 0.20 0.00] [158 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [8 1.00 0.00] [48 1.05 0.00] [72 1.00 0.00] [98 0.90 0.50] [110 1.00 1.30] [120 1.00 1.00] [124 1.20 0.90] [134 2.60 0.00] [158 2.40 0.00]
 
 **Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
 
@@ -1271,7 +1271,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - camera: f0-25 close on both (fov 32, dist 3.0, h 1.5, yaw 15, lookH 1.3); f25-60 close on defender (fov [32, 28], dist [2.5, 2.5], h 1.6, yaw 38, lookH 1.45); f60-100 over_shoulder on defender (fov 36, dist 2.9, h 1.8, yaw -65, lookH 1.4); f100-128 low on attacker (fov 44, dist 3.2, h 0.35, yaw 20, lookH 1.9); f128-145 top on defender (fov 40, dist 1.4, h 5.4, yaw 10, lookH 0.5); f145-170 close on attacker (fov 32, dist 2.6, h 1.55, yaw 30, lookH 1.45)
 - fx: f0 slate, f8 impact_m, f8 sparks, f32 impact_m, f50 impact_m, f50 shake_s, f70 impact_s, f94 impact_m, f110 speed_lines, f128 impact_l, f128 splat, f128 flash, f128 shake_l, f128 dust, f128 freeze_frame, f145 spot@attacker, f166 spot_off
 - crowd: f8 gasp, f50 ooh, f94 boo, f128 roar/spike, f148 chant/peak
-- attacker path (f, dx, lift m): [8 0.10 0.00] [32 0.20 0.00] [50 0.30 0.00] [94 0.35 0.00] [110 0.20 0.30] [120 0.50 1.20] [128 0.90 0.10] [132 0.90 0.00] [150 0.80 0.00] [168 0.00 0.00]; defender gap (f, gap, lift m): [8 1.10 0.00] [32 1.00 0.00] [50 1.05 0.00] [70 1.00 0.00] [94 1.00 0.00] [110 1.20 0.00] [128 0.70 0.00] [132 0.90 0.00] [168 1.80 0.00]
+- attacker path (f, dx, lift m): [8 0.10 0.00] [32 0.20 0.00] [50 0.30 0.00] [94 0.35 0.00] [110 0.20 0.30] [120 0.50 1.20] [128 0.90 0.10] [132 0.90 0.00] [150 0.80 0.00] [168 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [8 1.10 0.00] [32 1.00 0.00] [50 1.05 0.00] [70 1.00 0.00] [94 1.00 0.00] [110 1.20 0.00] [128 0.70 0.00] [132 0.90 0.00] [168 1.80 0.00]
 
 **Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
 
@@ -1443,7 +1443,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - camera: f0-22 close on both (fov 32, dist 3.0, h 1.4, yaw 15, lookH 1.3); f22-48 low on both (fov 40, dist 2.6, h 0.45, yaw -20, lookH 1.1); f48-72 top on both (fov 42, dist 1.6, h 5.0, yaw 10, lookH 0.4); f72-100 low on defender (fov 42, dist 3.0, h 0.3, yaw 25, lookH 1.9); f100-128 orbit on both (fov 40, dist 3.6, h 2.0, yaw [-30, 50], lookH 1.9); f128-150 close on both (fov [36, 32], dist 3.4, h 1.3, yaw 30, lookH 1.6); f150-165 wide on both (fov 38, dist 5.6, h 1.7, yaw 0, lookH 1.1)
 - fx: f0 slate, f8 impact_s, f30 impact_s, f36 impact_s, f36 smear@attacker, f55 impact_m, f55 dust, f80 impact_m, f80 speed_lines, f108 impact_m, f108 shake_s, f134 impact_l, f134 flash, f134 shake_m, f134 freeze_frame, f150 spot@attacker, f150 confetti
 - crowd: f8 ooh, f30 cheer, f55 ooh/up, f80 cheer/up, f108 roar/up, f134 roar/spike, f150 chant/peak
-- attacker path (f, dx, lift m): [8 0.20 0.00] [30 0.35 0.00] [55 0.45 0.00] [80 0.60 0.50] [92 0.70 0.00] [108 0.80 0.80] [118 0.90 0.00] [134 0.95 0.20] [148 0.90 0.00] [163 0.00 0.00]; defender gap (f, gap, lift m): [8 1.00 0.00] [30 1.00 0.00] [55 1.00 0.30] [80 1.00 0.90] [100 1.00 1.20] [108 1.00 1.40] [128 1.00 1.00] [134 1.00 0.90] [142 1.20 0.00] [163 2.20 0.00]
+- attacker path (f, dx, lift m): [8 0.20 0.00] [30 0.35 0.00] [55 0.45 0.00] [80 0.60 0.50] [92 0.70 0.00] [108 0.80 0.80] [118 0.90 0.00] [134 0.95 0.20] [148 0.90 0.00] [163 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [8 1.00 0.00] [30 1.00 0.00] [55 1.00 0.30] [80 1.00 0.90] [100 1.00 1.20] [108 1.00 1.40] [128 1.00 1.00] [134 1.00 0.90] [142 1.20 0.00] [163 2.20 0.00]
 
 **Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
 
@@ -1610,7 +1610,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - camera: f0-30 close on both (fov 32, dist 3.0, h 1.3, yaw 15, lookH 1.3); f30-60 low on both (fov 38, dist 2.8, h 0.4, yaw -20, lookH 1.1); f60-90 close on defender (fov [32, 28], dist [2.5, 2.5], h 1.6, yaw 35, lookH 1.45); f90-112 wide on both (fov 38, dist 4.8, h 1.6, yaw 0, lookH 1.1); f112-140 low on attacker (fov 44, dist 3.2, h 0.3, yaw 25, lookH 1.5); f140-165 wide on both (fov 38, dist 6.0, h 1.8, yaw 0, lookH 1.1)
 - fx: f0 slate, f10 impact_m, f30 ball_trail@attacker, f40 impact_m, f40 ball_trail, f70 impact_m, f70 shake_s, f112 speed_lines, f128 impact_l, f128 ball_trail, f128 flash, f128 shake_l, f128 freeze_frame, f140 dust, f148 confetti
 - crowd: f10 ooh, f40 ooh, f70 cheer, f90 chant/up, f128 roar/spike, f148 cheer/peak
-- attacker path (f, dx, lift m): [10 0.10 0.00] [40 0.20 0.00] [70 0.35 0.00] [112 0.30 0.00] [148 0.30 0.00] [163 0.00 0.00]; defender gap (f, gap, lift m): [10 1.00 0.00] [40 1.20 0.00] [70 1.10 0.00] [90 1.20 0.00] [128 1.10 0.40] [136 2.40 0.30] [142 3.00 0.00] [163 3.00 0.00]
+- attacker path (f, dx, lift m): [10 0.10 0.00] [40 0.20 0.00] [70 0.35 0.00] [112 0.30 0.00] [148 0.30 0.00] [163 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [10 1.00 0.00] [40 1.20 0.00] [70 1.10 0.00] [90 1.20 0.00] [128 1.10 0.40] [136 2.40 0.30] [142 3.00 0.00] [163 3.00 0.00]
 
 **Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
 
@@ -1778,7 +1778,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - camera: f0-25 close on both (fov 32, dist 3.0, h 1.5, yaw 15, lookH 1.3); f25-80 close on both (fov [30, 26], dist [3.0, 3.0], h 1.55, yaw -35, lookH 1.3); f80-120 top on both (fov 42, dist 1.6, h 5.0, yaw 10, lookH 0.4); f120-140 low on attacker (fov 42, dist 2.8, h 0.3, yaw 30, lookH 1.2); f140-170 wide on both (fov 38, dist 5.4, h 1.6, yaw 0, lookH 0.9)
 - fx: f0 slate, f0 lights_flicker, f32 impact_m, f32 splat, f60 impact_m, f60 shake_s, f80 dim, f80 smoke, f100 impact_m, f100 dust, f128 impact_l, f128 flash, f128 shake_m, f128 freeze_frame, f140 undim, f140 spot@attacker, f165 spot_off
 - crowd: f0 gasp, f32 gasp, f60 laugh, f80 hush, f100 boo, f128 roar/spike, f140 laugh/peak
-- attacker path (f, dx, lift m): [25 0.10 0.00] [80 0.15 0.00] [100 0.50 0.00] [128 0.60 0.00] [140 0.60 0.00] [168 0.00 0.00]; defender gap (f, gap, lift m): [25 0.80 0.00] [80 0.80 0.00] [100 0.90 0.00] [128 1.00 0.00] [168 1.60 0.00]
+- attacker path (f, dx, lift m): [25 0.10 0.00] [80 0.15 0.00] [100 0.50 0.00] [128 0.60 0.00] [140 0.60 0.00] [168 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [25 0.80 0.00] [80 0.80 0.00] [100 0.90 0.00] [128 1.00 0.00] [168 1.60 0.00]
 
 **Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
 
@@ -1943,7 +1943,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - camera: f0-25 close on both (fov 34, dist 3.4, h 1.6, yaw 25, lookH 1.1); f25-55 low on both (fov 40, dist 3.6, h 0.5, yaw 25, lookH 1.4); f55-115 top on defender (fov 42, dist 1.6, h 6.0, yaw 10, lookH 0.4); f115-140 close on attacker (fov 34, dist [2.9, 2.5], h 1.6, yaw 35, lookH 1.05); f140-175 wide on both (fov 40, dist [5.0, 6.2], h 1.8, yaw 5, lookH 1.1)
 - fx: f0 slate, f25 impact_m, f40 impact_m, f40 shake_s, f70 impact_l, f70 dust, f70 shake_m, f100 impact_l, f100 dust, f100 shake_m, f115 lights_flicker, f115 shock_ring@attacker, f115 shake_m, f150 impact_l, f150 flash, f150 shake_l, f150 freeze_frame, f164 dust
 - crowd: f0 gasp, f40 gasp, f70 ooh, f100 ooh/up, f115 hush, f150 roar/spike, f164 gasp/peak
-- attacker path (f, dx, lift m): [25 0.10 0.00] [55 0.20 0.00] [70 0.30 0.30] [78 0.35 0.00] [100 0.35 0.00] [140 0.20 0.00] [150 0.25 0.00] [173 0.00 0.00]; defender gap (f, gap, lift m): [25 0.90 0.00] [40 0.80 0.40] [55 0.90 0.20] [70 1.20 0.00] [115 1.20 0.00] [150 1.00 0.00] [158 2.60 0.60] [164 3.50 0.00] [173 3.50 0.00]
+- attacker path (f, dx, lift m): [25 0.10 0.00] [55 0.20 0.00] [70 0.30 0.30] [78 0.35 0.00] [100 0.35 0.00] [140 0.20 0.00] [150 0.25 0.00] [173 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [25 0.90 0.00] [40 0.80 0.40] [55 0.90 0.20] [70 1.20 0.00] [115 1.20 0.00] [150 1.00 0.00] [158 2.60 0.60] [164 3.50 0.00] [173 3.50 0.00]
 
 **Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
 
@@ -2117,7 +2117,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - camera: f0-18 close on attacker (fov 30, dist 2.5, h 1.6, yaw 35, lookH 1.45); f18-42 close on defender (fov 32, dist 2.5, h 1.55, yaw 35, lookH 1.45); f42-92 over_shoulder on defender (fov 36, dist 2.9, h 1.8, yaw -65, lookH 1.4); f92-122 low on attacker (fov 40, dist 2.6, h 0.5, yaw 20, lookH 1.6); f122-150 top on defender (fov 40, dist 1.5, h 5.4, yaw 10, lookH 0.5); f150-170 wide on both (fov 38, dist 5.6, h 1.8, yaw 0, lookH 1.1)
 - fx: f0 slate, f0 spot@attacker, f18 spot_off, f26 impact_m, f52 impact_m, f52 sparks, f82 impact_m, f82 shake_s, f92 dim, f92 spot@attacker, f122 spot_off, f140 impact_l, f140 flash, f140 shake_l, f140 dust, f140 freeze_frame, f142 undim, f150 confetti
 - crowd: f0 applause, f26 ooh, f52 ooh, f82 cheer/up, f92 hush, f140 roar/spike, f150 applause/peak
-- attacker path (f, dx, lift m): [26 0.10 0.00] [52 0.25 0.00] [82 0.40 0.00] [120 0.35 0.00] [140 0.45 0.00] [168 0.00 0.00]; defender gap (f, gap, lift m): [26 1.10 0.00] [52 1.20 0.00] [82 1.15 0.00] [100 1.20 0.00] [140 1.30 0.00] [146 1.60 0.00] [168 2.20 0.00]
+- attacker path (f, dx, lift m): [26 0.10 0.00] [52 0.25 0.00] [82 0.40 0.00] [120 0.35 0.00] [140 0.45 0.00] [168 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [26 1.10 0.00] [52 1.20 0.00] [82 1.15 0.00] [100 1.20 0.00] [140 1.30 0.00] [146 1.60 0.00] [168 2.20 0.00]
 
 **Lv3 PRIME TIME cinematic `season_finale` (Season Finale)** - 180 frames (<= 180), cue `ricky_season_finale`, damage 800+1000+1000+2500 = 5300, ends KD +19 at 1.8 m.
 
@@ -2129,7 +2129,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - camera: f0-25 wide on both (fov 40, dist 5.2, h 1.8, yaw 0, lookH 1.4); f25-45 low on defender (fov 42, dist 3.0, h 0.35, yaw 25, lookH 1.7); f45-80 close on both (fov [32, 28], dist [3.0, 3.0], h 1.6, yaw -30, lookH 1.3); f80-120 orbit on both (fov 40, dist 3.8, h 1.6, yaw [-40, 60]); f120-140 close on attacker (fov 30, dist 2.5, h 1.6, yaw 35, lookH 1.45); f140-165 low on defender (fov 42, dist 2.8, h 0.4, yaw -20, lookH 1.2); f165-180 wide on both (fov 40, dist 6.0, h 2.0, yaw 0, lookH 1.1)
 - fx: f0 slate, f0 pyro, f25 impact_m, f25 fire, f25 shake_m, f60 impact_m, f60 sparks, f95 impact_m, f95 sparks, f95 lights_flicker, f120 spot@attacker, f140 spot_off, f140 lights_flicker, f150 impact_l, f150 flash, f150 shake_l, f150 dust, f150 freeze_frame, f165 confetti, f165 pyro
 - crowd: f0 roar/up, f25 gasp, f60 ooh, f95 gasp/up, f120 hush, f150 roar/spike, f165 applause/peak
-- attacker path (f, dx, lift m): [25 0.00 0.00] [60 0.20 0.00] [95 0.35 0.00] [140 0.30 0.00] [150 0.50 0.00] [178 0.00 0.00]; defender gap (f, gap, lift m): [25 1.30 0.50] [40 1.30 0.00] [60 1.20 0.00] [95 1.40 0.50] [110 2.20 0.80] [120 2.00 0.00] [140 1.30 0.00] [150 1.10 0.00] [156 1.30 0.00] [178 1.80 0.00]
+- attacker path (f, dx, lift m): [25 0.00 0.00] [60 0.20 0.00] [95 0.35 0.00] [140 0.30 0.00] [150 0.50 0.00] [178 0.00 0.00]; defender gap (f, gap, lift m[, turn deg]): [25 1.30 0.50] [40 1.30 0.00] [60 1.20 0.00] [95 1.40 0.50] [110 2.20 0.80] [120 2.00 0.00] [140 1.30 0.00] [150 1.10 0.00] [156 1.30 0.00] [178 1.80 0.00]
 
 **Season text** (`introLine`, `winQuotes`, `banter`, `ending`; UI renders them).
 

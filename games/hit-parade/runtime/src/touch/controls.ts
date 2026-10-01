@@ -23,6 +23,14 @@
 // last tick (OR-ed in here, cleared by input.ts at each tick), so a tap shorter than one tick still reaches the sim.
 // EDIT LAYOUT (editLayout(true)): drag a button to move it, tap one to select it and BIGGER / SMALLER it, RESET, DONE ->
 // onLayout handlers get the TouchLayout ({id: {dx, dy, s}}) for the settings store; setOptions({layout}) applies one.
+// CHANGED(wf6 fixer) VO-D3 (CONTRACT §35.26): BUTTON SIZE is FITTED to the screen. The pad scaled about the bottom corners
+// with no check against the top HUD or the PAUSE disc: at the slider's own maximum (130 %) on the 667 x 375 phone THROW sat
+// on PAUSE (a throw could pause the game) and IMPACT under P2's NERVE / RATINGS (844 x 390 too). layout() now takes the
+// largest button size <= the setting (never below min(1, setting): the shipped 100 % layout is verified clean) at which
+// every button the player has not moved stays under the HUD's measured bottom (HUD_SELECTOR, + 6 px, never above the
+// band), clear of PAUSE and 4 px clear of its neighbours. The spread (button offsets, the stick) may stay up to 12 %
+// smaller than the button size - the 100 % layout leaves >= 16 % between neighbours - so a short phone still gets bigger
+// discs (readback `fitScale` = disc size, `fitSpread` = offsets).
 
 import './touch.css';
 
@@ -62,6 +70,8 @@ const CLUSTER: ReadonlyArray<{ id: Exclude<TouchButtonId, 'pause'>; dx: number; 
   { id: 'stepout', dx: 130, dy: 196, d: 56, bits: BIT.STEP_OUT, label: 'OUT', left: true },
 ];
 const PAUSE_D = 44;
+/** CHANGED(wf6 fixer) VO-D3: the top HUD blocks the pad must stay under (their measured bottom edge) */
+const HUD_SELECTOR = '.hp-bars, .hp-side, .hp-show';
 const PAUSE_TOP = 96;            // pause centre, px below the top safe edge (under the HUD timer + pips; >= 20 % of the height)
 const STICK_HOME_PAD = 34;
 
@@ -111,6 +121,9 @@ export class TouchControls {
   private W = 0; private H = 0;
   private safe = { l: 0, t: 0, r: 0, b: 0 };
   private band = 64;
+  /** CHANGED(wf6 fixer) VO-D3: the disc size / offset spread the pad was laid out at (<= opts.scale; see layout) */
+  private fitScale = 1;
+  private fitSpread = 1;
   private assistUntil = 0;
   private assistTimer = 0;
   /** the stick's direction bits and the buttons' bits, composed into state.held */
@@ -230,7 +243,11 @@ export class TouchControls {
     this.visible = on;
     if (!on) { this.releaseAll(); if (this.editing) this.editLayout(false); }
     this.root.hidden = !on;
-    if (on) this.layout();
+    if (on) {
+      this.layout();
+      // CHANGED(wf6 fixer) VO-D3: the HUD may lay out in the same frame the overlay appears - fit again once it has
+      try { requestAnimationFrame(() => { if (this.visible && !this.disposed) this.layout(); }); } catch { /* no rAF */ }
+    }
   }
 
   setOptions(o: Partial<TouchOptions>): void { this.opts = TouchControls.clean(o, this.opts); this.applyOptions(); }
@@ -324,7 +341,7 @@ export class TouchControls {
     return {
       visible: this.visible, editing: this.editing, dir: this.dir, held: this.state.held, latched: this.state.latched,
       active: this.state.active, stick: { active: this.stickId !== null }, assist: performance.now() < this.assistUntil,
-      leftHanded: this.opts.leftHanded, scale: this.opts.scale, opacity: this.opts.opacity, layout: this.opts.layout,
+      leftHanded: this.opts.leftHanded, scale: this.opts.scale, fitScale: Math.round(this.fitScale * 1000) / 1000, fitSpread: Math.round(this.fitSpread * 1000) / 1000, opacity: this.opts.opacity, layout: this.opts.layout,
       buttons, stats: { presses: { ...this.stats.presses }, dirWords: this.stats.dirWords, reads: this.stats.reads },
       labels: this.visible ? this.labelFit() : [],
     };
@@ -347,12 +364,62 @@ export class TouchControls {
     this.band = this.safe.t + clamp(this.H * 0.18, 56, 120);
   }
 
+  /** CHANGED(wf6 fixer) VO-D3: the lowest bottom edge (px from the overlay's top) of the visible top-HUD blocks, 0 = none */
+  private hudBottom(): number {
+    let b = 0;
+    try {
+      const top = this.root.getBoundingClientRect().top;
+      for (const e of Array.from(document.querySelectorAll<HTMLElement>(HUD_SELECTOR))) {
+        const r = e.getBoundingClientRect();
+        if (r.width < 1 || r.height < 1 || r.top - top > this.H * 0.45) continue;   // hidden, or not a TOP block
+        b = Math.max(b, r.bottom - top);
+      }
+    } catch { /* no DOM */ }
+    return b;
+  }
+
+  /**
+   * CHANGED(wf6 fixer) VO-D3: [disc size q, spread p] for a setting `s`: the largest q <= s (>= min(1, s)) with a spread
+   * p in [q / 1.12, q] at which every unmoved button clears the top HUD, PAUSE and its neighbours
+   */
+  private fitPad(s: number, L: TouchLayout): [number, number] {
+    const { W, H, safe } = this;
+    const lh = this.opts.leftHanded;
+    const topLimit = Math.max(this.band, this.hudBottom() + 6);
+    const lo = Math.min(1, s);
+    const px = W / 2, py = safe.t + Math.max(PAUSE_TOP, H * 0.2);
+    const pts: Array<[number, number, number]> = [];
+    const ok = (q: number, p: number): boolean => {
+      const pr = Math.max(TOUCH.minTarget, PAUSE_D * q) / 2;
+      pts.length = 0;
+      for (const c of CLUSTER) {
+        const o = L[c.id];
+        if (o && (o.dx || o.dy)) continue;                      // a button the player placed is the player's call
+        const r = Math.max(TOUCH.minTarget, c.d * q * (o?.s ?? 1)) / 2;
+        const fromLeft = !!c.left !== lh;
+        const cx = fromLeft ? safe.l + c.dx * p : W - safe.r - c.dx * p;
+        const cy = H - safe.b - c.dy * p;
+        if (cy - r < topLimit) return false;
+        if (Math.hypot(cx - px, cy - py) < r + pr + 6) return false;
+        for (const [x, y, rr] of pts) if (Math.hypot(cx - x, cy - y) < r + rr + 4) return false;
+        pts.push([cx, cy, r]);
+      }
+      return true;
+    };
+    for (let q = s; ; q = Math.max(lo, q - 0.02)) {
+      for (let p = q; p >= q / 1.12 - 1e-6; p -= 0.02) if (ok(q, p)) return [q, p];
+      if (q <= lo + 1e-6) return [lo, lo];
+    }
+  }
+
   private layout(): void {
     this.measure();
-    const s = this.opts.scale;
     const lh = this.opts.leftHanded;
     const { W, H, safe } = this;
     const L = this.editing ? this.editLayoutDraft : (this.opts.layout ?? {});
+    const [s, sp] = this.fitPad(this.opts.scale, L);
+    this.fitScale = s;
+    this.fitSpread = sp;
     const place = (b: Btn, cx: number, cy: number, d: number): void => {
       const r = d / 2;
       cx = clamp(cx, safe.l + r, W - safe.r - r);
@@ -370,17 +437,17 @@ export class TouchControls {
       const dx = (lh ? -1 : 1) * (o?.dx ?? 0);
       // CHANGED(UI3D): the STEP pair hangs off the stick's edge (left; right when left-handed), the rest off the other
       const fromLeft = !!c.left !== lh;
-      const cx = (fromLeft ? safe.l + c.dx * s : W - safe.r - c.dx * s) + dx;
-      const cy = H - safe.b - c.dy * s + (o?.dy ?? 0);
+      const cx = (fromLeft ? safe.l + c.dx * sp : W - safe.r - c.dx * sp) + dx;
+      const cy = H - safe.b - c.dy * sp + (o?.dy ?? 0);
       place(b, cx, cy, d);
     }
     const pb = this.btns.get('pause');
     if (pb) place(pb, W / 2, safe.t + Math.max(PAUSE_TOP, H * 0.2), Math.max(TOUCH.minTarget, PAUSE_D * s));
-    this.baseR = (TOUCH.stickBase * s) / 2;
-    const knob = TOUCH.stickKnob * s;
+    this.baseR = (TOUCH.stickBase * sp) / 2;
+    const knob = TOUCH.stickKnob * sp;
     this.knobEl.style.width = `${knob}px`;
     this.knobEl.style.height = `${knob}px`;
-    const off = STICK_HOME_PAD * s + this.baseR;
+    const off = STICK_HOME_PAD * sp + this.baseR;
     this.homeX = lh ? W - safe.r - off : safe.l + off;
     this.homeY = H - safe.b - off;
     if (this.stickId === null) this.placeStick(this.homeX, this.homeY, 0, 0);
@@ -395,7 +462,7 @@ export class TouchControls {
     for (const b of this.btns.values()) {
       const lab = b.el.firstElementChild as HTMLElement | null;
       if (!lab || !lab.textContent || b.hidden) continue;
-      const d = b.d * this.opts.scale * (this.layoutScale(b.id));
+      const d = b.d * this.fitScale * (this.layoutScale(b.id));
       const base = lab.classList.contains('long') ? Math.max(12, d * 0.3) : Math.max(11, d * 0.26);
       lab.style.fontSize = `${base.toFixed(1)}px`;
       const r = lab.getBoundingClientRect();

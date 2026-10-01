@@ -188,6 +188,17 @@ LAYOUT_JS = r"""
     const fs = parseFloat(getComputedStyle(p).fontSize);
     if (fs < 12 - 0.25) small.push(name(p) + ' ' + fs + 'px');
     if (p.classList.contains('lbl') && fs < 14 - 0.25) small.push(name(p) + ' ' + fs + 'px (label < 14)');
+    // CHANGED(wf6 fixer) VO-D4: text wider than its own box (a chip whose label spills / is cut: the online ribbon showed
+    // SEARC / CONNEC at 960 x 540 and on the phone; the overlap / clip checks only look at controls). Leaf boxes only.
+    // (a label truncated ON PURPOSE - text-overflow: ellipsis, the select grid's long names - shows its cut and is skipped)
+    // (2 px tolerance: scrollWidth counts the last glyph's trailing letter-spacing and rounds up - a 12 px BEST COMBO
+    // header measured 48 in a 46.4 px column with nothing visibly cut)
+    const pcs2 = getComputedStyle(p);
+    if (!p.firstElementChild && p.clientWidth > 0 && pcs2.display !== 'inline' && pcs2.textOverflow !== 'ellipsis' && p.scrollWidth > p.clientWidth + 2) {
+      let scroller = false;
+      for (let a = p.parentElement; a && a !== D.body; a = a.parentElement) { const as = getComputedStyle(a); if (/(auto|scroll)/.test(as.overflowX) && a.scrollWidth > a.clientWidth + 1) { scroller = true; break; } }
+      if (!scroller) P('textclip', name(p) + ' text ' + p.scrollWidth + ' px in a ' + p.clientWidth + ' px box', rnd(R(p.getBoundingClientRect())));
+    }
   }
   const fontInfo = [];
   for (const s of small) { if (touch) P('font', s); else fontInfo.push(s); }

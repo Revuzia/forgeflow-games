@@ -4,6 +4,9 @@
 //   stand  = [max(median idle full_front, median walk_f full_front), max(median idle full_back, median walk_b full_back)]
 //   crouch = median crouch_idle full_front / full_back
 //   air    = median over jump_up + jump_f + jump_b frames
+//   down   = CHANGED(wf6_fixer_core) D1: the WIDEST per-frame extent over kd_fall_f + kd_ground_f + wake_f (the face-down
+//            drop off the ring wall after a WALL_SPLAT and its get-up): the sim keeps that much room from the wall behind the
+//            body (fighter.ts splatDrop) - a max, not a median: one frame through the wall is visible
 // each side never smaller than the fighter's measured push box (fighters/<id>.json `push`), rounded to 1 mm.
 // "full" = 98th percentile over ALL skinned vertices (arms / guard hands included - what can be hit), fighter-local, root
 // at the origin, x forward. Heights are not touched (fighters/<id>.json `hurt`, FIGHTERS-measured).
@@ -30,7 +33,7 @@ const r3 = (v: number): number => Math.round(v * 1000) / 1000;
 export function buildBodies(root: string = ROOT): { json: string; rows: string[]; missing: string[] } {
   const mdir = root + 'tools/measure/';
   const fdir = root + 'data/fighters/';
-  const out: Record<string, { stand: [number, number]; crouch: [number, number]; air: [number, number] }> = {};
+  const out: Record<string, { stand: [number, number]; crouch: [number, number]; air: [number, number]; down?: [number, number] }> = {};
   const rows: string[] = [];
   const missing: string[] = [];
   const ids = readdirSync(fdir).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, '')).sort();
@@ -58,18 +61,28 @@ export function buildBodies(root: string = ROOT): { json: string; rows: string[]
     const airF = mx(cat(air, 'full_front'), pu.front * 0.9);
     const airB = mx(cat(air, 'full_back'), pu.back * 0.9);
     out[id] = { stand: [r3(standF), r3(standB)], crouch: [r3(crouchF), r3(crouchB)], air: [r3(airF), r3(airB)] };
-    rows.push(`${id.padEnd(9)} stand ${out[id].stand.join('/')}  crouch ${out[id].crouch.join('/')}  air ${out[id].air.join('/')}`);
+    // CHANGED(wf6_fixer_core) D1: the face-down drop (max over the clips' frames)
+    const down = ['kd_fall_f', 'kd_ground_f', 'wake_f'];
+    const widest = (k: 'full_front' | 'full_back'): number => {
+      let w = Number.NaN;
+      for (const c of down) if (b.clips[c]) for (const v of b.clips[c][k]) if (!(v <= w)) w = v;
+      return w;
+    };
+    const downF = widest('full_front');
+    const downB = widest('full_back');
+    if (Number.isFinite(downF) && Number.isFinite(downB)) out[id].down = [r3(downF), r3(downB)];
+    rows.push(`${id.padEnd(9)} stand ${out[id].stand.join('/')}  crouch ${out[id].crouch.join('/')}  air ${out[id].air.join('/')}${out[id].down ? `  down ${out[id].down!.join('/')}` : ''}`);
   }
   const doc = {
     _generated_by: 'node _harness/tool_bodies.ts (lane SIM, CONTRACT 28.5c) from tools/measure/<id>.body_all.json - do not hand-edit',
-    _fields: 'fighters.<id>.<posture> = [front, back] metres from the root along the facing (98th-percentile full skinned mesh; median over the posture clips; never smaller than the push box)',
+    _fields: 'fighters.<id>.<posture> = [front, back] metres from the root along the facing (98th-percentile full skinned mesh; median over the posture clips; never smaller than the push box); down = the widest frame of the face-down drop (kd_fall_f / kd_ground_f / wake_f)',
     fighters: out,
   };
   const lines = ['{', `  "_generated_by": ${JSON.stringify(doc._generated_by)},`, `  "_fields": ${JSON.stringify(doc._fields)},`, '  "fighters": {'];
   const keys = Object.keys(out);
   keys.forEach((k, i) => {
     const v = out[k];
-    lines.push(`    ${JSON.stringify(k)}: { "stand": [${v.stand.join(', ')}], "crouch": [${v.crouch.join(', ')}], "air": [${v.air.join(', ')}] }${i < keys.length - 1 ? ',' : ''}`);
+    lines.push(`    ${JSON.stringify(k)}: { "stand": [${v.stand.join(', ')}], "crouch": [${v.crouch.join(', ')}], "air": [${v.air.join(', ')}]${v.down ? `, "down": [${v.down.join(', ')}]` : ''} }${i < keys.length - 1 ? ',' : ''}`);
   });
   lines.push('  }', '}', '');
   return { json: lines.join('\n'), rows, missing };

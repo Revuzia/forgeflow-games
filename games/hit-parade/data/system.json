@@ -154,7 +154,7 @@
       "super": { "js": 1, "ji": 0, "jl": 99 }
     }
   },
-  "wallSplat": { "frames": 36, "rangeM": 0.9, "fallTotal": 44 },
+  "wallSplat": { "frames": 36, "rangeM": 0.9, "fallTotal": 44, "dropF": 5, "_dropNote": "CHANGED(wf6_fixer_core) D1: after the splat the victim drops FACE-DOWN into the ring and slides clear of the wall over dropF frames - as far as its measured face-down drop reaches behind it (data/bodies.json down[1])" },
   "groundBounce": { "vyMps": 5.4 },
   "crumple": { "frames": 70 },
   "pushback": { "frames": 8, "L": 0.27, "M": 0.36, "H": 0.45, "special": 0.5, "super": 0.7, "projectile": 0.45 },

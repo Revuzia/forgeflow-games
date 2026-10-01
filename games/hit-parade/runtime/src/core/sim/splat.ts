@@ -7,7 +7,7 @@
 
 import { CF, F, FL, ST } from './layout.ts';
 import { CUE, EV } from './events.ts';
-import { clearMove, emit, fb, setSt } from './state.ts';
+import { clearMove, emit, fb, setSt, updateFacing } from './state.ts';
 import type { Match } from './state.ts';
 import { pushCircle } from './boxes.ts';
 import { ringClamp, ringRay, ringWall } from './ring.ts';
@@ -45,6 +45,21 @@ export function wallSplat(m: Match, a: number, d: number, dirYaw: number): void 
   s[bd + F.pushLeft] = 0;
   s[bd + F.cFlags] |= CF.SPLAT;
   s[bd + F.jc] = 0;
+  ringWall(m.ring, RC[0], RC[1], WL);
+  // CHANGED(wf6_fixer_core) D1: the splat pins the victim with its BACK flat on the wall (the authored wall_splat clip:
+  // back slams into the wall behind, sticks, peels off and drops face-down) - so it faces along the wall's inward normal
+  // (was: whatever yaw it was hit at, up to ~70 deg off, which put a shoulder / the lying body through the wall), the
+  // input-mapping sign follows, and its push circle is re-seated touching the wall along the normal for the new yaw.
+  // fighter.ts then drops it face-down INTO the ring (KDF.DOWN) instead of the generic backward fall through the wall.
+  s[bd + F.yaw] = WL[1];
+  updateFacing(s, bd);
+  pushCircle(m, d, PC);
+  const ox = -sinQ(WL[1]);
+  const oz = -cosQ(WL[1]);
+  const t2 = Math.max(0, ringRay(m.ring, PC[0], PC[1], ox, oz) - PC[2]);
+  ringClamp(m.ring, PC[0] + divRound(ox * t2, Q), PC[1] + divRound(oz * t2, Q), PC[2], RC);
+  s[bd + F.x] += RC[0] - PC[0];
+  s[bd + F.z] += RC[1] - PC[1];
   ringWall(m.ring, RC[0], RC[1], WL);
   const deg = Math.trunc((WL[1] * 360) / 65536) % 360;
   emit(m, EV.WALL_SPLAT, d, WL[0] + 256 * deg, Math.trunc(WL[2] / 1000), Math.trunc(WL[3] / 1000));

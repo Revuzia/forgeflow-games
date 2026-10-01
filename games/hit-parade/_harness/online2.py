@@ -319,10 +319,16 @@ def g_step_check(checks, label, rep, bots):
     in a SIDESTEP / SIDEWALK (its STEP bits reached this peer only over the rollback session); the agreement gates (same
     winner, identical checksums, 0 desyncs) then prove both sims agreed with them"""
     rep["steps"] = {"taps": [b.step_taps for b in bots], "localStepSamples": [b.local_step_samples for b in bots],
-                    "remoteStepSamples": [b.remote_step_samples for b in bots]}
+                    "remoteStepSamples": [b.remote_step_samples for b in bots],
+                    # CHANGED(wf6 fixer) VO-D8: held circle-walks and the SIDEWALK frames each peer saw
+                    "circles": [getattr(b, "circles", 0) for b in bots], "localWalkSamples": [getattr(b, "local_walk_samples", 0) for b in bots],
+                    "remoteWalkSamples": [getattr(b, "remote_walk_samples", 0) for b in bots]}
     checks.append((label + ": STEP over rollback (each peer saw the remote fighter sidestep / circle)",
                    all(x > 0 for x in rep["steps"]["taps"]) and all(x > 0 for x in rep["steps"]["remoteStepSamples"]), json.dumps(rep["steps"])))
-GAME_PORTS = (5325, 5330)
+    checks.append((label + ": circle-walk over rollback (a held STEP: some peer saw the remote fighter SIDEWALK)",
+                   sum(rep["steps"]["circles"]) > 0 and sum(rep["steps"]["remoteWalkSamples"]) > 0,
+                   "circles %s, remote sidewalk samples %s" % (rep["steps"]["circles"], rep["steps"]["remoteWalkSamples"])))
+GAME_PORTS = (5325, 5330)   # CHANGED(wf6 fixer) VO-D8: --ports A,B overrides (a verifier's / fixer's own dev servers)
 
 READ_TICK = """() => { try { const h = window.__HP__; if (!h) return null; const st = h.state(); const n = h.net();
   return { phase: st.phase, screen: st.screen, f: h.fighters(), m: h.match ? h.match() : null,
@@ -516,14 +522,23 @@ def g_guard_direct(A, B, checks, label, opts):
 
 
 def g_pick(s, fighter):
-    """move P1's cursor to `fighter` by real ArrowRight presses (each press waits until the cursor moved: a starved page
-    handles keys late) then Enter x3"""
+    """move P1's cursor to `fighter` by real arrow presses (each press waits until the cursor moved: a starved page handles
+    keys late) then Enter x3. CHANGED(wf6 fixer) VO-D8: ArrowRight wraps INSIDE a grid row, so a fighter on row 1 (lotus,
+    boneyard, spin, gazza, rerun) was never reached and another fighter was picked silently: once a row has cycled without
+    the target, ArrowDown moves to the next row (the caller compares the returned cursor with the wanted fighter)."""
     time.sleep(0.6)
     cur_of = lambda: (((s.menus().get("cs") or {}).get("p") or [{}])[0]).get("cursor")
-    for _ in range(24):
+    seen = set()
+    for _ in range(48):
         cur = cur_of()
         if cur == fighter:
             break
+        if cur in seen:                    # this row cycled: next row
+            seen = set()
+            s.key("ArrowDown", gap=0.05)
+            s.wait(lambda: cur_of() != cur, 2.0, 0.05)
+            continue
+        seen.add(cur)
         s.key("ArrowRight", gap=0.05)
         s.wait(lambda: cur_of() != cur, 2.0, 0.05)
     cur = cur_of()
@@ -556,6 +571,13 @@ class Bot:
         self.step_taps = 0
         self.remote_step_samples = 0
         self.local_step_samples = 0
+        # CHANGED(wf6 fixer) VO-D8: circle-walks = STEP HELD for a number of SIM frames (poll counts were 4-10 frames on a
+        # starved machine, under the 15 f sidestep: the bot never circle-walked)
+        self.circle_until = -1
+        self.circle_key = None
+        self.circles = 0
+        self.local_walk_samples = 0
+        self.remote_walk_samples = 0
 
     def step(self, s, info):
         f, loc = info.get("f"), info.get("local")
@@ -575,6 +597,10 @@ class Bot:
             self.remote_step_samples += 1
         if g_step_kind(me) in ("sidestep", "sidewalk"):
             self.local_step_samples += 1
+        if g_step_kind(me) == "sidewalk":
+            self.local_walk_samples += 1
+        if g_step_kind(op) == "sidewalk":
+            self.remote_walk_samples += 1
         if self.release_next:                                   # attack keys up (a held button never re-triggers)
             self.release_next = False
             s.hold({k for k in s.held if k in (GK["right"], GK["left"], GK["down"])})
@@ -584,6 +610,21 @@ class Bot:
             s.hold({back})
             return
         reach = 1.15 if self.style == "rush" else 1.5
+        # CHANGED(wf6 fixer) VO-D8: a running circle-walk holds STEP until its sim frame; a new one now and then from neutral
+        fr = m.get("frame") if isinstance(m.get("frame"), (int, float)) else None
+        if self.circle_until >= 0:
+            if fr is not None and fr < self.circle_until:
+                s.hold({self.circle_key})
+                return
+            self.circle_until = -1
+            s.hold(set())
+            return
+        if fr is not None and 1.0 < gap < 2.8 and self.r.random() < 0.03 and (me.get("stateName") or "") in ("idle", "walk_f", "walk_b"):
+            self.circle_key = GK["stepin"] if self.circles % 2 == 0 else GK["stepout"]
+            self.circle_until = fr + self.r.randint(45, 120)
+            self.circles += 1
+            s.hold({self.circle_key})
+            return
         # CHANGED(integrator) 3D: now and then a sidestep tap (STEP IN / OUT alternate) from neutral range
         if 0.9 < gap < 2.6 and self.r.random() < 0.08 and (me.get("stateName") or "") in ("idle", "walk_f", "walk_b"):
             s.hold({GK["stepin"] if self.step_taps % 2 == 0 else GK["stepout"]})
@@ -1008,6 +1049,10 @@ def run_game(opts):
     servers = []
     out = {"mode": "game", "started": time.strftime("%Y-%m-%dT%H:%M:%S"), "relay": opts.relay, "quality": opts.quality, "query": q, "scenarios": {}, "checks": []}
     all_checks = []
+    global GAME_PORTS
+    if getattr(opts, "ports", ""):
+        GAME_PORTS = tuple(int(x) for x in opts.ports.split(",")[:2])
+    out["ports"] = list(GAME_PORTS)
     try:
         for port in GAME_PORTS:
             servers.append(C.ensure_server("http://localhost:%d/" % port, wait_s=300))
@@ -1089,6 +1134,7 @@ def main():
     ap.add_argument("--relay-secs", dest="relay_secs", type=float, default=20, help="game relay scenario: seconds of play on the relay")
     ap.add_argument("--quality", default="low", help="game: ?quality= for both pages (low|med|high; '' = the saved setting)")
     ap.add_argument("--bout-timeout", dest="bout_timeout", type=float, default=420, help="game: seconds a full bout may take")
+    ap.add_argument("--ports", default="", help="game: the two dev-server ports A,B (default 5325,5330)")
     ap.add_argument("--fa", default="johnny", help="game quick: A's fighter")
     ap.add_argument("--fb", default="bruno", help="game quick: B's fighter")
     ap.add_argument("--fa2", default="patch", help="game code: A's fighter")

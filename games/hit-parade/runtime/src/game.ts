@@ -459,9 +459,35 @@ export class Game {
   private touchFrame(b: Bout, f: readonly [FighterSnap, FighterSnap]): void {
     const t = this.d.touch;
     if (!t) return;
+    if (this.touchEditing) return;                        // CHANGED(wf6 fixer) VO-D2: EDIT LAYOUT keeps it up while paused
     const on = this.d.input.mode === 'touch' && this.d.flow.phase === 'bout' && !b.finished;
     t.setVisible(on);
     if (on) { const me = f[b.local]; t.setMeters({ showtime: me.showtime, nerve: me.nerve, stageFright: !!me.stageFright }); }
+  }
+
+  /** CHANGED(wf6 fixer) VO-D2: true while the touch overlay is in EDIT LAYOUT (opened from the pause card or SETTINGS) */
+  private touchEditing = false;
+
+  /**
+   * CHANGED(wf6 fixer) VO-D2: EDIT LAYOUT on the live touch overlay (the menus hide themselves around it): drag / resize every
+   * button incl. STEP IN / OUT; resolves on DONE, after main.ts' onLayout handler has stored the layout. Over a paused bout
+   * the overlay stays up while editing; outside a bout it is shown for the edit only.
+   */
+  async editTouchLayout(): Promise<void> {
+    const t = this.d.touch;
+    if (!t || this.touchEditing) return;
+    this.touchEditing = true;
+    try {
+      t.setVisible(true);
+      await new Promise<void>((resolve) => {
+        const off = t.onLayout(() => { off(); resolve(); });
+        t.editLayout(true);
+      });
+    } finally {
+      this.touchEditing = false;
+      const b = this.bout;
+      t.setVisible(!!b && this.d.input.mode === 'touch' && this.d.flow.phase === 'bout' && !b.finished);
+    }
   }
 
   /** NEW events since the last rendered frame (§18.1 eventsSince + dedupe; rollback re-emits) */

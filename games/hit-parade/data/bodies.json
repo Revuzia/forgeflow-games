@@ -1,18 +1,18 @@
 {
   "_generated_by": "node _harness/tool_bodies.ts (lane SIM, CONTRACT 28.5c) from tools/measure/<id>.body_all.json - do not hand-edit",
-  "_fields": "fighters.<id>.<posture> = [front, back] metres from the root along the facing (98th-percentile full skinned mesh; median over the posture clips; never smaller than the push box)",
+  "_fields": "fighters.<id>.<posture> = [front, back] metres from the root along the facing (98th-percentile full skinned mesh; median over the posture clips; never smaller than the push box); down = the widest frame of the face-down drop (kd_fall_f / kd_ground_f / wake_f)",
   "fighters": {
-    "boneyard": { "stand": [0.55, 0.302], "crouch": [0.634, 0.223], "air": [0.643, 0.245] },
-    "bruno": { "stand": [0.596, 0.155], "crouch": [0.506, 0.116], "air": [0.681, 0.287] },
-    "freak": { "stand": [0.761, 0.173], "crouch": [0.826, 0.108], "air": [1.009, 0.359] },
-    "gazza": { "stand": [0.354, 0.121], "crouch": [0.469, 0.105], "air": [0.585, 0.3] },
-    "johnny": { "stand": [0.361, 0.118], "crouch": [0.482, 0.114], "air": [0.586, 0.279] },
-    "krane": { "stand": [0.546, 0.42], "crouch": [0.64, 0.236], "air": [0.653, 0.276] },
-    "lotus": { "stand": [0.339, 0.178], "crouch": [0.423, 0.207], "air": [0.531, 0.286] },
-    "patch": { "stand": [0.308, 0.134], "crouch": [0.401, 0.117], "air": [0.497, 0.245] },
-    "rerun": { "stand": [0.802, 0.138], "crouch": [0.499, 0.097], "air": [0.644, 0.274] },
-    "ricky": { "stand": [0.444, 0.168], "crouch": [0.539, 0.108], "air": [0.56, 0.297] },
-    "spin": { "stand": [0.519, 0.261], "crouch": [0.463, 0.104], "air": [0.582, 0.285] },
-    "zambini": { "stand": [0.428, 0.216], "crouch": [0.504, 0.244], "air": [0.689, 0.349] }
+    "boneyard": { "stand": [0.55, 0.302], "crouch": [0.634, 0.223], "air": [0.643, 0.245], "down": [0.78, 0.737] },
+    "bruno": { "stand": [0.596, 0.155], "crouch": [0.506, 0.116], "air": [0.681, 0.287], "down": [0.889, 0.917] },
+    "freak": { "stand": [0.761, 0.173], "crouch": [0.826, 0.108], "air": [1.009, 0.359], "down": [1.136, 1.07] },
+    "gazza": { "stand": [0.354, 0.121], "crouch": [0.469, 0.105], "air": [0.585, 0.3], "down": [0.895, 0.865] },
+    "johnny": { "stand": [0.361, 0.118], "crouch": [0.482, 0.114], "air": [0.586, 0.279], "down": [0.883, 0.826] },
+    "krane": { "stand": [0.546, 0.42], "crouch": [0.64, 0.236], "air": [0.653, 0.276], "down": [0.889, 0.867] },
+    "lotus": { "stand": [0.339, 0.178], "crouch": [0.423, 0.207], "air": [0.531, 0.286], "down": [0.864, 0.834] },
+    "patch": { "stand": [0.308, 0.134], "crouch": [0.401, 0.117], "air": [0.497, 0.245], "down": [0.802, 0.763] },
+    "rerun": { "stand": [0.802, 0.138], "crouch": [0.499, 0.097], "air": [0.644, 0.274], "down": [0.966, 0.94] },
+    "ricky": { "stand": [0.444, 0.168], "crouch": [0.539, 0.108], "air": [0.56, 0.297], "down": [0.893, 0.839] },
+    "spin": { "stand": [0.519, 0.261], "crouch": [0.463, 0.104], "air": [0.582, 0.285], "down": [0.819, 0.81] },
+    "zambini": { "stand": [0.428, 0.216], "crouch": [0.504, 0.244], "air": [0.689, 0.349], "down": [1.003, 0.993] }
   }
 }

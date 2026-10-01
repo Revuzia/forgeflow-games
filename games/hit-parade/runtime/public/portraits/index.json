@@ -1,0 +1,95 @@
+{
+ "size": 1024,
+ "ext": "webp",
+ "ids": [
+  "boneyard",
+  "bruno",
+  "freak",
+  "gazza",
+  "johnny",
+  "krane",
+  "lotus",
+  "patch",
+  "rerun",
+  "ricky",
+  "spin",
+  "zambini"
+ ],
+ "built": "2026-10-01T15:59:27",
+ "src": {
+  "boneyard": {
+   "glb": "art/gltf/fighters/boneyard.glb",
+   "bytes": 1815344,
+   "mtime": 1790811672.861
+  },
+  "bruno": {
+   "glb": "art/gltf/fighters/bruno.glb",
+   "bytes": 1623360,
+   "mtime": 1790811672.879
+  },
+  "freak": {
+   "glb": "art/gltf/fighters/freak.glb",
+   "bytes": 1184408,
+   "mtime": 1790811672.9
+  },
+  "gazza": {
+   "glb": "art/gltf/fighters/gazza.glb",
+   "bytes": 1883412,
+   "mtime": 1790811672.921
+  },
+  "johnny": {
+   "glb": "art/gltf/fighters/johnny.glb",
+   "bytes": 1769216,
+   "mtime": 1790811672.938
+  },
+  "krane": {
+   "glb": "art/gltf/fighters/krane.glb",
+   "bytes": 1507084,
+   "mtime": 1790811672.957
+  },
+  "lotus": {
+   "glb": "art/gltf/fighters/lotus.glb",
+   "bytes": 1700116,
+   "mtime": 1790811672.975
+  },
+  "patch": {
+   "glb": "art/gltf/fighters/patch.glb",
+   "bytes": 1504000,
+   "mtime": 1790811672.99
+  },
+  "rerun": {
+   "glb": "art/gltf/fighters/rerun.glb",
+   "bytes": 1215780,
+   "mtime": 1790811673.006
+  },
+  "ricky": {
+   "glb": "art/gltf/fighters/ricky.glb",
+   "bytes": 2139764,
+   "mtime": 1790811673.088
+  },
+  "spin": {
+   "glb": "art/gltf/fighters/spin.glb",
+   "bytes": 1908304,
+   "mtime": 1790811673.103
+  },
+  "zambini": {
+   "glb": "art/gltf/fighters/zambini.glb",
+   "bytes": 1376364,
+   "mtime": 1790811673.129
+  }
+ },
+ "bytes": {
+  "boneyard": 88080,
+  "bruno": 96410,
+  "freak": 175110,
+  "gazza": 83514,
+  "johnny": 123034,
+  "krane": 80646,
+  "lotus": 90418,
+  "patch": 85584,
+  "rerun": 63232,
+  "ricky": 103178,
+  "spin": 49810,
+  "zambini": 63586
+ }
+}

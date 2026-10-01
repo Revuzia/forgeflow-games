@@ -168,6 +168,13 @@ export class Menus {
   private readonly pauseLegend: HTMLElement;
   private readonly pauseTrainingBtn: HTMLButtonElement;
   private readonly pauseForfeitBtn: HTMLButtonElement;
+  /** CHANGED(wf6 fixer) VO-D2: EDIT LAYOUT on the pause card (touch mode, offline) */
+  private readonly pauseEditBtn: HTMLButtonElement;
+  private readonly touchEditBtn: HTMLButtonElement;
+  /** CHANGED(wf6 fixer) VO-D2: runs the touch overlay's EDIT LAYOUT (main.ts -> Game.editTouchLayout); null = unavailable */
+  private touchEditor: (() => Promise<void>) | null = null;
+  private editingLayout = false;
+  private lastPauseOnline = false;
   private readonly pauseNote: HTMLElement;
   private trNoteEl: HTMLElement | null = null;
   private readonly keysBox: HTMLElement;
@@ -198,6 +205,8 @@ export class Menus {
   private anyArmedAt = 0;
   private vsTimer = 0;
   private endingStep = '';
+  /** CHANGED(wf6 fixer) D9: the champion the ending shows in 3D (the Showcase in the art area), null = none */
+  private endingShow: string | null = null;
   private nameLetters = [0, 0, 0];
   private nameSlot = 0;
   private nameSlots: HTMLElement[] = [];
@@ -376,6 +385,9 @@ export class Menus {
     pItem('hpm-p-movelist', t('pause.movelist'), () => { this.sound('select'); this.finishPause('movelist'); });
     this.pauseTrainingBtn = pItem('hpm-p-training', t('pause.training'), () => { this.sound('select'); this.push('training'); });
     pItem('hpm-p-settings', t('pause.settings'), () => { this.sound('select'); this.finishPause('settings'); });
+    // CHANGED(wf6 fixer) VO-D2: move / resize the touch buttons (incl. STEP IN / OUT) over the paused bout
+    this.pauseEditBtn = pItem('hpm-p-editlayout', t('set.touch.edit'), () => { this.sound('select'); void this.editTouch(); });
+    this.pauseEditBtn.hidden = true;
     const pfs = this.fsButton('hpm-p-fullscreen', true);
     pfs.dataset.group = 'pause';
     pl.append(pfs);
@@ -399,10 +411,16 @@ export class Menus {
       this.toggle('touch-left', t('set.touch.left'), () => !!this.s().touchLeftHanded, (v) => this.put({ touchLeftHanded: v })),
       this.toggle('haptics', t('set.touch.haptics'), () => this.s().haptics !== false, (v) => this.put({ haptics: v })),
     );
+    // CHANGED(wf6 fixer) VO-D2: the EDIT LAYOUT the hint promised (string set.touch.edit existed, nothing opened the editor)
+    const te = btn('hpm-small', t('set.touch.edit'));
+    te.id = 'hpm-touch-edit';
+    te.addEventListener('click', () => { this.sound('select'); void this.editTouch(); });
+    te.hidden = true;
+    this.touchEditBtn = te;
     const tr = btn('hpm-small', t('set.touch.reset'));
     tr.id = 'hpm-touch-reset';
     tr.addEventListener('click', () => { this.sound('select'); this.put({ touchLayout: null }); });
-    this.touchCard.append(tr, el('p', 'hpm-note', t('set.touch.hint')));
+    this.touchCard.append(te, tr, el('p', 'hpm-note', t('set.touch.hint')));
     // controls
     const ctl = div('hpm-card hpm-keys', sc);
     const kh = div('hpm-keys-head', ctl);
@@ -720,6 +738,8 @@ export class Menus {
   showPause(o: { training?: boolean; online?: boolean; fighter?: string; scheme?: Scheme } = {}): Promise<PauseChoice> {
     this.stack = ['pause'];
     this.pauseTrainingBtn.hidden = !o.training;
+    this.lastPauseOnline = !!o.online;
+    this.pauseEditBtn.hidden = !this.touch || !!o.online || !this.touchEditor;
     const fl = this.pauseForfeitBtn.querySelector('.lbl');
     if (fl) fl.textContent = o.training ? tOr('pause.exitTraining', t('pause.forfeit')) : t('pause.forfeit');
     setText(this.pauseNote, o.online ? t('pause.online') : '');
@@ -769,13 +789,21 @@ export class Menus {
     const len = p.length ?? this.ladderLen ?? 'season';
     if (this.board(len).length) cards.push({ kind: 'board' });
     if (p.unlocked.length) cards.push({ kind: 'unlock' });
+    // CHANGED(wf6 fixer) D9: the champion stands in the art area in 3D (win clip) on the SEASON FINALE / epilogue cards
+    const sc3d = !!this.deps.showcase && this.driveShowcase;
     for (let k = 0; k < cards.length; k++) {
       this.stack = ['ending'];
+      const kind = cards[k].kind;
+      const want = sc3d && (kind === 'finale' || kind === 'text') ? p.fighter : null;
+      if (want && this.endingShow !== want) this.showcaseShow(want, 0, 'win');
+      this.endingShow = want;
       this.buildEnding(p, cards[k], pages, k, cards.length);
       this.endingStep = `${cards[k].kind}${cards[k].page !== undefined ? cards[k].page : ''}`;
       await this.anyKeyScreen('ending', 0);
     }
     this.endingStep = '';
+    this.endingShow = null;
+    this.showcaseRegion(false);
   }
 
   /** CHANGED(fix_ui_stage) (verifier modes D3): `length` picks the board the run ranks on (default: the run on screen) */
@@ -783,6 +811,32 @@ export class Menus {
     this.stack = ['nameentry'];
     this.buildNameEntry({ ...p, length: p.length ?? this.ladderLen ?? 'season' });
     return new Promise((resolve) => { this.resolveName = resolve; this.render('nameentry'); });
+  }
+
+  /**
+   * CHANGED(wf6 fixer) VO-D2: the touch overlay's EDIT LAYOUT. `run` shows the overlay in edit mode and resolves on DONE
+   * (main.ts: Game.editTouchLayout); `labels` gets the localised editor bar (strings touch.edit / smaller / bigger / reset /
+   * done - main.ts never passed them, the bar was hard-coded English).
+   */
+  setTouchEditor(run: (() => Promise<void>) | null, labels?: { setEditLabels(l: { hint: string; smaller: string; bigger: string; reset: string; done: string }): void }): void {
+    this.touchEditor = run;
+    labels?.setEditLabels({ hint: t('touch.edit'), smaller: t('touch.smaller'), bigger: t('touch.bigger'), reset: t('touch.reset'), done: t('touch.done') });
+    this.refresh();
+  }
+
+  /** CHANGED(wf6 fixer) VO-D2: hide the menus, run the editor, come back to the same screen (pause card / SETTINGS) */
+  private async editTouch(): Promise<void> {
+    const run = this.touchEditor;
+    if (!run || this.editingLayout) return;
+    this.editingLayout = true;
+    this.root.classList.add('hpm-touch-editing');
+    try { await run(); } catch (e) { console.error('[hit-parade ui] edit layout', e); } finally {
+      this.root.classList.remove('hpm-touch-editing');
+      this.editingLayout = false;
+      this.refresh();
+      const f = this.screen === 'pause' ? this.root.querySelector<HTMLElement>('#hpm-p-editlayout') : this.screen === 'settings' ? this.touchEditBtn : null;
+      if (f && !f.hidden) this.focus(f, false);
+    }
   }
 
   /** the fighter / scheme the pause card's MOVE LIST shows (game.ts sets it when a bout starts) */
@@ -934,7 +988,18 @@ export class Menus {
   setPortraits(map: Readonly<Record<string, string>>): void { setPortraits(map); }
 
   /** the Showcase region in CSS px while the character select shows it, else null */
-  showcaseRect(): Rect | null { return this.screen === 'charselect' && !this.root.hidden ? this.cs.showcaseRect() : null; }
+  showcaseRect(): Rect | null {
+    if (this.root.hidden) return null;
+    if (this.screen === 'charselect') return this.cs.showcaseRect();
+    // CHANGED(wf6 fixer) D9: the ending's art area while the champion stands there in 3D
+    if (this.screen === 'ending' && this.endingShow) {
+      const a = this.endBox.querySelector<HTMLElement>('.hpm-sc-3d');
+      if (!a) return null;
+      const r = a.getBoundingClientRect();
+      return r.width > 4 && r.height > 4 ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+    }
+    return null;
+  }
 
   confirm(title: string, body: string, yes: string, no: string): Promise<boolean> {
     this.confirmTitle.textContent = title;
@@ -1269,7 +1334,27 @@ export class Menus {
     bug.classList.add('hpm-sc-bug');
     box.append(bug);
     const name = fighterName(this.data, p.fighter);
-    const art = div('hpm-sc-art', box);
+    // CHANGED(wf6 fixer) D9: the finale is a payoff, not a text card - spotlight beams over the champion, a confetti fall
+    // (finale + epilogue; static under REDUCE FLASHING / reduced motion) and the champion in 3D (the Showcase, win clip) in
+    // the art area, the 2D portrait kept as the fallback when no Showcase drives the menus (lab)
+    const stagey = card.kind === 'finale' || card.kind === 'text';
+    if (stagey) {
+      const beams = div('hpm-end-beams', box);
+      beams.setAttribute('aria-hidden', 'true');
+      const cf = div('hpm-confetti', box);
+      cf.setAttribute('aria-hidden', 'true');
+      if (flashesReduced()) cf.classList.add('still');
+      const cols = ['#ffd21a', '#e8122d', '#00c2ff', '#7dff6b', '#ff7ad9', '#fff4e0'];
+      const n = card.kind === 'finale' ? 46 : 18;
+      for (let i = 0; i < n; i++) {
+        const c = el('i', '');
+        const r = (k2: number): number => ((Math.sin((i + 1) * 12.9898 + k2 * 78.233) * 43758.5453) % 1 + 1) % 1;
+        c.style.cssText = `left:${(r(1) * 100).toFixed(1)}%;background:${cols[i % cols.length]};animation-delay:${(-r(2) * 4).toFixed(2)}s;animation-duration:${(3 + r(3) * 2.5).toFixed(2)}s;--sw:${((r(4) - 0.5) * 120).toFixed(0)}px;--rot:${(r(5) * 720).toFixed(0)}deg;--top:${(r(6) * 90).toFixed(1)}%`;
+        cf.append(c);
+      }
+    }
+    const art = div(`hpm-sc-art${stagey && this.endingShow ? ' hpm-sc-3d' : ''}`, box);
+    if (stagey) div('hpm-sc-floor', art).setAttribute('aria-hidden', 'true');
     const lt = div('hpm-sc-lt', box);
     switch (card.kind) {
       case 'finale': {
@@ -1533,7 +1618,7 @@ export class Menus {
     this.root.dataset.screen = s;
     this.refresh();
     this.renderHints();
-    this.showcaseRegion(s === 'charselect');
+    this.showcaseRegion(s === 'charselect' || (s === 'ending' && !!this.endingShow));
     if (s === 'title' || s === 'main') this.music('menu');
     const scr = this.screens.get(s) as HTMLElement;
     let target: HTMLElement | null = null;
@@ -1702,6 +1787,8 @@ export class Menus {
     this.renderLegend();
     if (this.screen === 'howto') this.renderHowto();
     this.touchCard.hidden = !this.touch && !TOUCH_PARAM;
+    this.touchEditBtn.hidden = !this.touchEditor;
+    this.pauseEditBtn.hidden = !this.touch || this.lastPauseOnline || !this.touchEditor;
   }
 
   // ─────────────────────────── key remap ───────────────────────────
@@ -1843,7 +1930,10 @@ export class Menus {
     box.replaceChildren();
     box.classList.toggle('touch', this.touch);
     if (this.touch) {
-      // CHANGED(UI3D): the STEP pair first (one row: IN + OUT), then the buttons
+      // CHANGED(wf6 fixer) VO-D6: the STICK first (move / jump / crouch; hold away = block), as on the keyboard legend
+      const mv = div('hpm-leg', box);
+      mv.append(el('span', 'tbtn t-stick', t('how.stick')), el('span', 'lbl', t('hint.move')));
+      // CHANGED(UI3D): the STEP pair (one row: IN + OUT), then the buttons
       const sr = div('hpm-leg', box);
       const sk = el('span', 'keys');
       sk.append(el('span', 'tbtn t-stepin', t('touch.stepin')), el('span', 'tbtn t-stepout', t('touch.stepout')));
@@ -1852,6 +1942,9 @@ export class Menus {
         const r = div('hpm-leg', box);
         r.append(el('span', `tbtn t-${k.split('.')[1]}`, t(k)), el('span', 'lbl', t(label)));
       }
+      // CHANGED(wf6 fixer) VO-D6: the SUPER disc (it only appears at 1 SHOWTIME bar, so a new touch player never learned it)
+      const su = div('hpm-leg', box);
+      su.append(el('span', 'tbtn t-super', t('touch.super')), el('span', 'lbl', tOr('leg.touch.super', 'SUPER (AT 1+ SHOWTIME BAR)')));
       return;
     }
     const c = this.controls(0);
@@ -2254,6 +2347,7 @@ export class Menus {
     if (!on) {
       if (this.lastShowcase) { sc.setRect?.(null); sc.hide?.(); this.lastShowcase = null; }
       this.screens.get('charselect')?.classList.remove('hpm-3d');
+      this.screens.get('ending')?.classList.remove('hpm-3d');            // CHANGED(wf6 fixer) D9
     }
   }
 
@@ -2263,7 +2357,7 @@ export class Menus {
    * the Showcase it moves its backdrop to ::before with a CSS mask hole at the showcase rect (menus.css .hpm-3d).
    */
   private showcaseHole(r: Rect): void {
-    const scr = this.screens.get('charselect');
+    const scr = this.screens.get(this.screen === 'ending' ? 'ending' : 'charselect');   // CHANGED(wf6 fixer) D9
     if (!scr) return;
     const b = scr.getBoundingClientRect();
     const st = scr.style;

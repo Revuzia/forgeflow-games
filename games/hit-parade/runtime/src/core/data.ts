@@ -909,7 +909,8 @@ function parseBodyExt(v: unknown): BodyExt | null {
   if (!isObj(v)) return null;
   const ok = (p: unknown): p is Vec2 => isVec2(p) && p[0] >= 0 && p[1] >= 0;
   if (!ok(v.stand) || !ok(v.crouch) || !ok(v.air)) return null;
-  return { stand: v.stand, crouch: v.crouch, air: v.air };
+  // CHANGED(wf6_fixer_core) D1: the optional face-down fall extents
+  return ok(v.down) ? { stand: v.stand, crouch: v.crouch, air: v.air, down: v.down } : { stand: v.stand, crouch: v.crouch, air: v.air };
 }
 
 /** Anim id of the grab (connect) clip of move `moveKey` (§19.10), or -1. */

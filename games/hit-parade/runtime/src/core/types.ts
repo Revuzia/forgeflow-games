@@ -125,6 +125,11 @@ export interface BodyExt {
   stand: Vec2;
   crouch: Vec2;
   air: Vec2;
+  /**
+   * CHANGED(wf6_fixer_core) D1: optional - the FACE-DOWN fall [front, back] (m, the widest per-frame 98th-percentile extent
+   * over kd_fall_f / kd_ground_f / wake_f); the sim keeps a body that drops face-down off the ring wall clear of it
+   */
+  down?: Vec2;
 }
 
 /** §20.2 one hit of a multi-hit move. */
@@ -151,8 +156,12 @@ export interface GrabDef {
   /** CHANGED(fix_core) D4 (CONTRACT §35.20): the victim's ROOT path over the lock, [lockFrame, gapM, liftM] keys = root to
    *  root distance along the thrower's forward (at the connect) + height; implicit first key = the actual distance at the
    *  connect (lift 0), linear between keys, held after the last; while lift < 0.30 m the gap never goes under the two push
-   *  fronts (CONTRACT §26.5). Replaces the clip-root carry. Generated for grab supers from their cinematic gapD. */
-  path?: [number, number, number][];
+   *  fronts (CONTRACT §26.5). Replaces the clip-root carry. Generated for grab supers from their cinematic gapD.
+   *  CHANGED(wf6_fixer_core) V2: an optional 4th number per key = turnDeg, the THROWER's yaw turn since the connect (degrees,
+   *  yaw convention, may exceed 360: 720 = two whole turns), linear between keys from an implicit 0: the thrower turns with
+   *  it (a carousel), the victim's root swings round the connect root with it (gap along the turned forward) and it keeps
+   *  facing the thrower. Must end on a whole number of turns (validate.py). */
+  path?: Array<[number, number, number] | [number, number, number, number]>;
   /** CHANGED(fix_core) D4: push-front gap (m) the victim is pulled to at the connect (default system.json throw.holdGapM) */
   holdGapM?: number;
 }
@@ -309,7 +318,8 @@ export interface System {
     gravityMps2: number; airReset: Vec2; pop: Vec2;
     defaults: Record<'normal' | 'special' | 'super', { js: number; ji: number; jl: number }>;
   };
-  wallSplat: { frames: number; rangeM: number; fallTotal: number };
+  /** CHANGED(wf6_fixer_core) D1: dropF = frames the face-down drop off the wall slides the body clear of it (default 5) */
+  wallSplat: { frames: number; rangeM: number; fallTotal: number; dropF?: number };
   groundBounce: { vyMps: number };
   crumple: { frames: number };
   pushback: StrengthTable & { frames: number; special: number; super: number; projectile: number };

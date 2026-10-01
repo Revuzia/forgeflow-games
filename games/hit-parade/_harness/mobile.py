@@ -328,6 +328,58 @@ def lab_menus_by_tap(page, cdp, dev: str, results: list) -> None:
     R.ok("tap_back", scr() == "main", f"screen={scr()}")
 
 
+def game_menus_by_tap(page, cdp, dev: str, results: list, base: str) -> None:
+    """CHANGED(wf6 fixer) VO-D8: the REAL game's menus by CDP taps only, THROUGH character select (the lab tap walk stopped at
+    VERSUS -> BACK, so a touch player stuck at PICK A COLOR - verifier VO-D1 - went unnoticed): plain URL in touch mode,
+    title -> main -> VERSUS -> GO -> tap P1's slot, then up to 6 more taps on whatever confirms (the same slot again, a
+    colour swatch, a READY / CONFIRM / LOCK control) must take P1 past the colour / controls steps or leave the screen."""
+    R = Run(page, dev, results)
+    T = Touch(cdp)
+    page.goto(base.rstrip("/") + "/?touch=1&quality=low", wait_until="load")
+    scr = lambda: (page.evaluate(READ_MENUS) or {}).get("screen")  # noqa: E731
+    cs = lambda: (((page.evaluate(READ_MENUS) or {}).get("cs") or {}).get("p") or [{}])[0]  # noqa: E731
+    t0 = time.time()
+    while time.time() - t0 < 120 and scr() != "title":
+        time.sleep(0.25)
+
+    def tap_sel(sel: str) -> bool:
+        c = page.evaluate("(s) => { const e = document.querySelector(s); if (!e || !e.offsetParent) return null; const r = e.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; }", sel)
+        if not c:
+            return False
+        T.tap(c["x"], c["y"])
+        time.sleep(0.45)
+        return True
+
+    T.tap(DEVICES[dev]["w"] * 0.5, DEVICES[dev]["h"] * 0.62)
+    time.sleep(0.6)
+    tap_sel("#hpm-main-versus")
+    tap_sel("#hpm-versus-go")
+    t1 = time.time()
+    while time.time() - t1 < 10 and scr() != "charselect":
+        time.sleep(0.2)
+    R.ok("game_tap_to_charselect", scr() == "charselect", f"screen={scr()}")
+    tap_sel("#hpm-slot-johnny")
+    trail = [("slot", cs().get("step"))]
+    confirm_js = """() => { const root = document.querySelector('#hp-menus .hpm-s-charselect'); if (!root) return [];
+      const out = []; const add = (e, why) => { if (!e || !e.offsetParent) return; const r = e.getBoundingClientRect(); if (r.width < 4) return; out.push({x: r.left + r.width / 2, y: r.top + r.height / 2, why}); };
+      add(root.querySelector('#hpm-slot-johnny'), 'slot');
+      root.querySelectorAll('.sw, [data-color], .hpm-cs-colors > *').forEach((e) => add(e, 'swatch'));
+      root.querySelectorAll('button, [role=button]').forEach((e) => { if (/READY|CONFIRM|LOCK|OK|FIGHT|SELECT|CHOOSE|GO/i.test(e.textContent || '')) add(e, 'confirm:' + (e.textContent || '').trim().slice(0, 16)); });
+      return out; }"""
+    done = lambda: scr() != "charselect" or (cs().get("step") or "") not in ("fighter", "color", "controls", "")  # noqa: E731
+    for k in range(6):
+        if done():
+            break
+        cands = page.evaluate(confirm_js) or []
+        if not cands:
+            break
+        c = cands[k % len(cands)]
+        T.tap(c["x"], c["y"])
+        time.sleep(0.5)
+        trail.append((c["why"], cs().get("step"), scr()))
+    R.ok("game_charselect_by_taps", done(), f"P1 step trail {trail}; screen {scr()}", snap=True)
+
+
 def game_device(page, cdp, dev: str, results: list, base: str) -> None:
     """CHANGED(integrator): the --game path (the shell now wires TouchControls, CONTRACT §24.3): a real deep-linked bout
     in touch mode, driven by CDP touches only."""
@@ -474,6 +526,8 @@ def run(args) -> int:
                     except Exception as e:
                         errors.append(f"{dev} safe-area override unsupported: {e}")
                 if args.game:
+                    # CHANGED(wf6 fixer) VO-D8: the menus by taps through character select first, then the bout checks
+                    game_menus_by_tap(page, cdp, dev, results, args.base or f"http://localhost:{LAB_PORT}/")
                     game_device(page, cdp, dev, results, args.base or f"http://localhost:{LAB_PORT}/")
                     ctx.close()
                     continue

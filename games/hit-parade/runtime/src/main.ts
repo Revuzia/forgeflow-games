@@ -235,6 +235,9 @@ async function boot(): Promise<void> {
     const menus = new Menus(uiRoot, data, { showcase: showcaseDep, settings, save, audio: au, input });
     portraits = new PortraitQueue(showcase, (map) => menus.setPortraits(map));
     portraits.allowed = () => flow.phase !== 'bout' && flow.phase !== 'loading' && flow.phase !== 'ready';
+    void portraits.useBaked(import.meta.env.BASE_URL);
+    // CHANGED(wf6 fixer) D8: dev-only bake hook for _harness/bake_portraits.py (the same render the queue uses; tree-shaken)
+    if (import.meta.env.DEV) (window as unknown as { __HP_PORTRAIT__?: unknown }).__HP_PORTRAIT__ = (id: string, size: number) => showcase.portrait(id, 0, size);
     // CHANGED(integrator): the touch overlay (lane UI) writes input.touch (CONTRACT §18.5); game.ts shows it in bouts
     const s0 = settings.get();
     const touch = new TouchControls(uiRoot, input.touch, { scale: s0.touchScale, opacity: s0.touchOpacity, leftHanded: s0.touchLeftHanded,
@@ -245,6 +248,8 @@ async function boot(): Promise<void> {
     menusUi = menus;
     touch.onPause(() => { g.pause('touch', 0); });
     touch.onLayout((l) => { settings.set({ touchLayout: Object.keys(l).length ? l : null }); });
+    // CHANGED(wf6 fixer) VO-D2: the pause card / SETTINGS open EDIT LAYOUT (nothing did: only the lab called editLayout(true))
+    menus.setTouchEditor(() => g.editTouchLayout(), touch);
 
     // the fps chip (SETTINGS show FPS); inline styles: it never depends on a stylesheet
     const fpsEl = document.createElement('div');
@@ -298,6 +303,8 @@ async function boot(): Promise<void> {
       g.toMenus('title');
     }
     // the whole roster's portraits, in the background (waits while a bout loads / steps)
+    // CHANGED(wf6 fixer) D8: the baked set first (no initials badges on the select screen); the queue then only renders the
+    // fighters the baked set does not cover at this screen's size
     window.setTimeout(() => { portraits?.all(Object.keys(data.fighters)); }, 1500);
   } catch (e) {
     if (contextLost) return;          // a load that failed on the lost context keeps the reset card

@@ -203,25 +203,30 @@ export function holdPos(m: Match, d: number, lf: number, disp: number, out: Int3
   const along = divRound((vx - ax) * fx + (vz - az) * fz, Q); // the victim's distance along the forward at the connect
   const lat = divRound((vz - az) * fx - (vx - ax) * fz, Q); // its sideways offset along (-fz, fx) = dir(yaw - 90 deg)
   if (g && g.path) {
+    // CHANGED(wf6_fixer_core) V2: stride 4 (+ the thrower's turn): the gap runs along the TURNED forward
     const p = g.path;
-    const n = p.length / 3;
+    const n = p.length / 4;
     let f0 = 0;
     let g0 = along;
     let l0 = 0;
-    let gap = p[(n - 1) * 3 + 1];
-    let lift = p[(n - 1) * 3 + 2];
+    let r0 = 0;
+    let gap = p[(n - 1) * 4 + 1];
+    let lift = p[(n - 1) * 4 + 2];
+    let turn = p[(n - 1) * 4 + 3];
     for (let k = 0; k < n; k++) {
-      const f1 = p[k * 3];
+      const f1 = p[k * 4];
       if (lf <= f1) {
         const t = lf - f0;
         const span = Math.max(1, f1 - f0);
-        gap = g0 + Math.trunc(((p[k * 3 + 1] - g0) * t) / span);
-        lift = l0 + Math.trunc(((p[k * 3 + 2] - l0) * t) / span);
+        gap = g0 + Math.trunc(((p[k * 4 + 1] - g0) * t) / span);
+        lift = l0 + Math.trunc(((p[k * 4 + 2] - l0) * t) / span);
+        turn = r0 + Math.trunc(((p[k * 4 + 3] - r0) * t) / span);
         break;
       }
       f0 = f1;
-      g0 = p[k * 3 + 1];
-      l0 = p[k * 3 + 2];
+      g0 = p[k * 4 + 1];
+      l0 = p[k * 4 + 2];
+      r0 = p[k * 4 + 3];
     }
     const fronts = m.cf[1 - d].pushFS + m.cf[d].pushFS;
     if (gap < fronts && lift < FLOOR_LIFT) {
@@ -230,7 +235,7 @@ export function holdPos(m: Match, d: number, lf: number, disp: number, out: Int3
     }
     const first = Math.max(1, p[0]);
     const latNow = lf >= first ? 0 : Math.trunc((lat * (first - lf)) / first);
-    alongYaw(gap, yaw, HY);
+    alongYaw(gap, (yaw + turn) & 65535, HY);
     alongYaw(latNow, (yaw + 49152) & 65535, HZ); // yaw - 90 deg: the side `lat` was measured along
     out[0] = ax + HY[0] + HZ[0];
     out[1] = az + HY[1] + HZ[1];
@@ -251,6 +256,26 @@ export function holdPos(m: Match, d: number, lf: number, disp: number, out: Int3
   out[0] = px + HZ[0];
   out[1] = pz + HZ[1];
   out[2] = 0;
+}
+
+/**
+ * CHANGED(wf6_fixer_core) V2: the thrower's yaw turn (yaw units, multi-turn, signed) at lock frame `lf` of lock victim d's
+ * grab.path (0 without turn keys): piecewise linear from 0 at the connect, held after the last key.
+ */
+export function grabTurn(m: Match, d: number, lf: number): number {
+  const g = lockGrab(m, d);
+  if (!g || !g.path || !g.turns) return 0;
+  const p = g.path;
+  const n = p.length / 4;
+  let f0 = 0;
+  let r0 = 0;
+  for (let k = 0; k < n; k++) {
+    const f1 = p[k * 4];
+    if (lf <= f1) return r0 + Math.trunc(((p[k * 4 + 3] - r0) * (lf - f0)) / Math.max(1, f1 - f0));
+    f0 = f1;
+    r0 = p[k * 4 + 3];
+  }
+  return p[(n - 1) * 4 + 3];
 }
 
 const VQ = new Int32Array(6);

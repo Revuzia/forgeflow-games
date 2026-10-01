@@ -491,6 +491,21 @@ void main() {
 }
 `;
 
+/**
+ * CHANGED(wf6 fixer) V4: additive light that leaves the destination ALPHA alone (THREE.AdditiveBlending writes src alpha
+ * into it: over a toon body that turned its bloom-mask alpha 0 into 1). `srcAlpha` = weigh the colour by the fragment's
+ * alpha (MeshBasicMaterial opacity / map alpha) instead of a premultiplied colour (the shaft's shader).
+ */
+function keepAlphaAdd(m: THREE.Material, srcAlpha = false): void {
+  m.blending = THREE.CustomBlending;
+  m.blendEquation = THREE.AddEquation;
+  m.blendSrc = srcAlpha ? THREE.SrcAlphaFactor : THREE.OneFactor;
+  m.blendDst = THREE.OneFactor;
+  m.blendEquationAlpha = THREE.AddEquation;
+  m.blendSrcAlpha = THREE.ZeroFactor;
+  m.blendDstAlpha = THREE.OneFactor;
+}
+
 // ───────────────────────────────────────── the system ─────────────────────────────────────────
 
 /** colours per strength / kind (linear values; the post chain tone-maps) */
@@ -553,6 +568,17 @@ export class FxSystem {
   private spotNow = 0;
   /** spotlight target (0 = off): world x of the lit fighter + strength 0..1 (BoutView sets it each frame) */
   spotTarget = 0;
+  /** CHANGED(wf6 fixer) V4 harness A/B: true = the pre-fix spotlight (DoubleSide additive cone over the body) */
+  get legacySpot(): boolean { return this.spotLegacy; }
+  set legacySpot(on: boolean) {
+    if (on === this.spotLegacy) return;
+    this.spotLegacy = on;
+    const sm = this.spot.material as THREE.ShaderMaterial, pm = this.spotPool.material as THREE.MeshBasicMaterial;
+    if (on) { sm.side = THREE.DoubleSide; sm.blending = THREE.AdditiveBlending; pm.blending = THREE.AdditiveBlending; }
+    else { sm.side = THREE.BackSide; keepAlphaAdd(sm); keepAlphaAdd(pm, true); }
+    sm.needsUpdate = true; pm.needsUpdate = true;
+  }
+  private spotLegacy = false;
   spotX = 0;
   /** CHANGED(VIEW3D): world z of the spotlight */
   spotZ = 0;
@@ -591,10 +617,15 @@ export class FxSystem {
     // spotlight shaft: an open cone from a rig 6.5 m up to a 1.1 m pool on the floor (uv.y = 1 at the top)
     const cone = new THREE.CylinderGeometry(0.12, 1.1, 6.5, 40, 1, true);
     cone.translate(0, 3.25, 0);
+    // CHANGED(wf6 fixer) V4: the shaft draws its FAR half only (BackSide: the lit body hides it instead of a haze being
+    // added over the body) and adds light without writing alpha (alpha-preserving custom blend): the toon bodies keep
+    // the alpha 0 that keeps them out of the bloom (§35.23 item 5). The DoubleSide additive cone washed Bruno near-white
+    // inside FINAL DELIVERY's beam (and its alpha 1 let the bloom haze back onto him).
     const sm = new THREE.ShaderMaterial({
       name: 'fx-spot', uniforms: { uColor: { value: COL.spot.clone() }, uAlpha: { value: 0 } }, vertexShader: SPOT_VERT, fragmentShader: SPOT_FRAG,
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+      transparent: true, depthWrite: false, side: THREE.BackSide, fog: false,
     });
+    keepAlphaAdd(sm);
     this.spot = new THREE.Mesh(cone, sm);
     this.spot.name = 'fx-spot';
     this.spot.frustumCulled = false;
@@ -603,7 +634,8 @@ export class FxSystem {
     const poolTex = this.atlas.clone();
     poolTex.repeat.set(1 / ATLAS_COLS, 1 / ATLAS_ROWS);
     poolTex.offset.set((C.GLOW_SOFT % ATLAS_COLS) / ATLAS_COLS, (ATLAS_ROWS - 1 - Math.floor(C.GLOW_SOFT / ATLAS_COLS)) / ATLAS_ROWS);
-    const pm = new THREE.MeshBasicMaterial({ map: poolTex, color: COL.spot, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    const pm = new THREE.MeshBasicMaterial({ map: poolTex, color: COL.spot, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    keepAlphaAdd(pm, true);
     pm.name = 'fx-spot-pool';
     this.spotPool = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 3.0), pm);
     this.spotPool.rotation.x = -Math.PI / 2;
@@ -1085,7 +1117,7 @@ export class FxSystem {
     this.spot.visible = on; this.spotPool.visible = on;
     if (on) {
       this.spot.position.set(this.spotX, 0, this.spotZ);
-      (this.spot.material as THREE.ShaderMaterial).uniforms.uAlpha.value = 0.55 * this.spotNow;
+      (this.spot.material as THREE.ShaderMaterial).uniforms.uAlpha.value = (this.spotLegacy ? 0.55 : 0.8) * this.spotNow;   // CHANGED(wf6 fixer) V4: one layer now (was front + back)
       this.spotPool.position.set(this.spotX, 0.012, this.spotZ);
       (this.spotPool.material as THREE.MeshBasicMaterial).opacity = 0.7 * this.spotNow;
     }
