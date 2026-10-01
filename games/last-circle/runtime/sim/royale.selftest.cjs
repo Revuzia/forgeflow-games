@@ -210,7 +210,8 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     if (it.kind === "weapon") { weapons++; rarCount[it.rarity]++; }
     if (it.kind === "mats") mats++;
   }
-  ok(weapons > N * 0.35 && weapons < N * 0.55, "loot: ~45% of floor spawns are guns (" + weapons + "/" + N + ")");
+  // 2026-09 loot economy: guns are 55% of floor rolls (was 45%) — see royale.js
+  ok(weapons > N * 0.50 && weapons < N * 0.60, "loot: ~55% of floor spawns are guns (" + weapons + "/" + N + ")");
   ok(mats === 0, "loot: no building materials in loot tables");
   ok(rarCount[0] > rarCount[4], "loot: commons more frequent than legendaries (" + rarCount.join(",") + ")");
 
@@ -225,6 +226,149 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   const s2 = JSON.stringify(R.rollChest(R.mulberry32(555)));
   ok(s1 === s2, "loot: seeded rolls deterministic");
 }
+// ── Floor loot economy (audit 2026-09: 74.8% of bot lives ended on the pistol) ──
+// A floor gun always lies with its own ammo (1-2 boxes, as rollChest already did);
+// the companion rides as ONE item and is stripped off the gun by rollFloorSpawn.
+{
+  const rng = R.mulberry32(4242);
+  let guns = 0, withComp = 0, compOk = true, boxesSeen = new Set(), pistols = 0;
+  for (let i = 0; i < 4000; i++) {
+    const it = R.rollFloorItem(rng);
+    if (it.kind !== "weapon") { if (it.companions) compOk = false; continue; }
+    guns++;
+    if (it.id === "pistol") pistols++;
+    const want = R.WEAPONS[it.id].ammo;
+    if (!it.companions || it.companions.length !== 1) { compOk = false; continue; }
+    withComp++;
+    const c = it.companions[0];
+    const box = R.AMMO[want].box;
+    if (c.kind !== "ammo" || c.id !== want || !(c.count === box || c.count === box * 2)) compOk = false;
+    boxesSeen.add(c.count / box);
+  }
+  ok(guns > 0 && withComp === guns, "floor loot: every floor gun has an ammo companion (" + withComp + "/" + guns + ")");
+  ok(compOk, "floor loot: the companion is the gun's OWN ammo type, 1 or 2 boxes");
+  ok(boxesSeen.has(1) && boxesSeen.has(2), "floor loot: both 1-box and 2-box companions occur");
+  ok(pistols / guns < 0.12, "floor loot: floor pistols are rare (everyone spawns with one) (" + (100 * pistols / guns).toFixed(1) + "%)");
+
+  // rollFloorSpawn: flat list, companion stripped off the gun, same rng draws
+  const a = R.rollFloorSpawn(R.mulberry32(99)), b = R.rollFloorSpawn(R.mulberry32(99));
+  ok(JSON.stringify(a) === JSON.stringify(b), "floor loot: rollFloorSpawn is seeded/deterministic");
+  let flatOk = true, sawPair = false;
+  const r2 = R.mulberry32(7);
+  for (let i = 0; i < 500; i++) {
+    const sp = R.rollFloorSpawn(r2);
+    if (sp[0].companions) flatOk = false;
+    if (sp[0].kind === "weapon") { if (sp.length !== 2 || sp[1].kind !== "ammo") flatOk = false; else sawPair = true; }
+    else if (sp.length !== 1) flatOk = false;
+  }
+  ok(flatOk && sawPair, "floor loot: rollFloorSpawn = [gun, its ammo] or [item], never a companion left on the gun");
+
+  // a floor point is a pile: expected rolls per point ~1.1 standard, more in quick
+  const r3 = R.mulberry32(11);
+  let n1 = 0, nq = 0;
+  for (let i = 0; i < 4000; i++) { n1 += R.floorRollCount(r3, R.MODE.standard.lootMult); nq += R.floorRollCount(r3, R.MODE.quick.lootMult); }
+  ok(n1 / 4000 > 1.0 && n1 / 4000 < 1.2, "floor loot: ~1.1 rolls per standard floor point (" + (n1 / 4000).toFixed(2) + ")");
+  ok(nq > n1, "floor loot: quick mode (lootMult 1.8) is richer than standard");
+  // guns per floor point, standard: the census target is >= 3 guns per player
+  ok((n1 / 4000) * 0.55 > 0.55, "floor loot: > 0.55 guns per floor point (" + ((n1 / 4000) * 0.55).toFixed(2) + ")");
+}
+
+// ── Range-aware weapon value (bots' weapon choice) ───────────────────────────
+// Time-to-kill from the weapon tables. The old raw-DPS choice (pistol 133 vs sniper
+// 61) swapped every sniper back to the pistol; these pin the ranges the tables give.
+{
+  const V = (id, d, o) => R.gunValueAt(id, 0, d, o);
+  ok(V("sniper", 60) > V("pistol", 60), "value: sniper beats the pistol at 60 m (" + V("sniper", 60).toFixed(1) + " vs " + V("pistol", 60).toFixed(1) + ")");
+  ok(V("sniper", 120) > V("pistol", 120), "value: sniper beats the pistol at 120 m");
+  ok(V("pistol", 10) > V("sniper", 10), "value: pistol beats the sniper at 10 m (full-EHP target)");
+  ok(V("shotgun", 5) > V("pistol", 5) && V("shotgun", 5) > V("ar", 5), "value: shotgun is the point-blank gun");
+  ok(V("ar", 50) > V("smg", 50) && V("ar", 50) > V("pistol", 50), "value: AR owns mid range");
+  ok(V("glauncher", 60) === 0, "value: launcher is worthless past its ~40 m reach");
+  ok(V("glauncher", 30) > V("pistol", 30), "value: launcher beats the pistol at 30 m (mid range)");
+  ok(V("glauncher", 3) < V("glauncher", 15), "value: launcher is penalised point blank (self splash)");
+  ok(V("sniper", 20, { ehp: 30 }) > V("pistol", 20, { ehp: 30 }), "value: a one-shot on a 30 EHP target at 20 m favours the sniper");
+  ok(V("ar", 30, { mag: 0, reserve: 0 }) === 0, "value: a dry gun is worth nothing");
+  ok(V("ar", 30, { mag: 0, reserve: 60 }) < V("ar", 30), "value: an empty mag costs its reload");
+  // ammo that runs out before the kill still counts for the share of it it delivers
+  // (it used to be a flat 0.01 cliff that handed every long fight to the pistol)
+  const lim = R.gunValueAt("ar", 0, 60, { mag: 30, reserve: 0, aimDeg: 3 }), full = R.gunValueAt("ar", 0, 60, { aimDeg: 3 });
+  ok(lim > 0.5 && lim < full, "value: a short magazine is worth its share of the kill, not nothing (" + lim.toFixed(2) + " < " + full.toFixed(2) + ")");
+  ok(R.gunValueAt("ar", 0, 40, { mag: 30, reserve: 20, aimDeg: 3 }) > R.gunValueAt("pistol", 0, 40, { mag: 16, reserve: 200, aimDeg: 3 }),
+     "value: 50 rifle rounds beat a pistol with 216 at 40 m for a 3 deg hand");
+  let monoAmmo = true;
+  for (const id of R.WEAPON_IDS) for (const d of [10, 40, 90]) {
+    let prev = -1;
+    for (const rsv of [0, 5, 20, 60, 200, 2000]) { const v = R.gunValueAt(id, 0, d, { mag: 1, reserve: rsv, aimDeg: 2.5 }); if (v < prev - 1e-9) monoAmmo = false; prev = v; }
+  }
+  ok(monoAmmo, "value: more ammo never makes a gun worth less");
+  ok(R.gunValueAt("sniper", 4, 60) > V("sniper", 60), "value: rarity helps");
+  let finite = true;
+  for (const id of R.WEAPON_IDS) for (const d of [0, 1, 7, 33, 90, 250, 900]) { const v = V(id, d); if (!(v >= 0 && isFinite(v))) finite = false; }
+  ok(finite, "value: always finite and >= 0");
+  // aimDeg = the shooter's own aim error (bots pass their tier's). A shakier hand
+  // never makes a gun BETTER, and once the wobble swamps the cones the fire rate
+  // decides: the SMG at least matches the pistol from 10 to 40 m for a ~3 deg hand
+  // (a tier-2 bot: aimErrDeg 4.5 x 0.7 RMS).
+  let mono = true;
+  for (const id of R.WEAPON_IDS) for (const d of [5, 15, 30, 60]) {
+    if (R.gunValueAt(id, 0, d, { aimDeg: 3 }) > R.gunValueAt(id, 0, d, { aimDeg: 1 }) + 1e-9) mono = false;
+  }
+  ok(mono, "value: more aim error never raises a gun's value");
+  let smgOk = true;
+  for (const aim of [3, 4]) for (const d of [10, 15, 20, 25, 30, 40]) {
+    if (R.gunValueAt("smg", 0, d, { aimDeg: aim }) < R.gunValueAt("pistol", 0, d, { aimDeg: aim })) smgOk = false;
+  }
+  ok(smgOk, "value: for a 3-4 deg hand the SMG >= the pistol from 10 to 40 m");
+  ok(R.gunValueAt("ar", 0, 30) === R.gunValueAt("ar", 0, 30, { aimDeg: 1.0 }), "value: aimDeg omitted = the 1 deg default");
+}
+
+// ── moveBasis out-param (per-frame callers pass a scratch object) ────────────
+{
+  let parity = true, same = true;
+  const out = { fx: 9, fz: 9, rx: 9, rz: 9 };
+  for (let i = 0; i < 64; i++) {
+    const yaw = -7 + i * 0.23;
+    const a = R.moveBasis(yaw), b = R.moveBasis(yaw, out);
+    if (b !== out) same = false;
+    if (a.fx !== b.fx || a.fz !== b.fz || a.rx !== b.rx || a.rz !== b.rz) parity = false;
+  }
+  ok(parity, "move basis: out-param result is bit-identical to the returned object");
+  ok(same, "move basis: out-param returns the SAME object (no allocation)");
+}
+
+// ── segmentBox rewrite parity (scalars instead of 5 arrays per call) ─────────
+{
+  function refSegmentBox(ax, ay, az, bx, by, bz, box) {   // the pre-2026-09 implementation, verbatim
+    var o = [ax, ay, az], d = [bx - ax, by - ay, bz - az];
+    var lo = [box.minX, box.minY, box.minZ], hi = [box.maxX, box.maxY, box.maxZ];
+    var tmin = 0, tmax = 1, axis = -1;
+    for (var i = 0; i < 3; i++) {
+      if (Math.abs(d[i]) < 1e-9) { if (o[i] < lo[i] || o[i] > hi[i]) return null; continue; }
+      var inv = 1 / d[i];
+      var t1 = (lo[i] - o[i]) * inv, t2 = (hi[i] - o[i]) * inv;
+      if (t1 > t2) { var sw = t1; t1 = t2; t2 = sw; }
+      if (t1 > tmin) { tmin = t1; axis = i; }
+      if (t2 < tmax) tmax = t2;
+      if (tmin > tmax) return null;
+    }
+    var n = [0, 0, 0];
+    if (axis >= 0) n[axis] = d[axis] > 0 ? -1 : 1;
+    return { t: tmin, tExit: tmax, nx: n[0], ny: n[1], nz: n[2] };
+  }
+  const rng = R.mulberry32(2026);
+  const box = { minX: -1, maxX: 1.5, minY: 0, maxY: 3, minZ: -0.2, maxZ: 0.2 };
+  let same = 0, hits = 0, N = 20000;
+  for (let i = 0; i < N; i++) {
+    const q = () => (rng() - 0.5) * 8;
+    const ax = q(), ay = q() + 1.5, az = q(), flat = rng() < 0.2;
+    const bx = flat ? ax : q(), by = rng() < 0.2 ? ay : q() + 1.5, bz = q();
+    const A = refSegmentBox(ax, ay, az, bx, by, bz, box), B = R.segmentBox(ax, ay, az, bx, by, bz, box);
+    if (JSON.stringify(A) === JSON.stringify(B)) same++;
+    if (B) hits++;
+  }
+  ok(same === N && hits > N * 0.1, "sweep: scalar segmentBox is identical to the old array version (" + same + "/" + N + ", " + hits + " hits)");
+}
+
 // ── Match bookkeeping ────────────────────────────────────────────────────────
 {
   const m = new R.Match({ players: 4 });

@@ -18,7 +18,9 @@ const chests = new Map();     // id -> {id, pos, group, opened}
 // up to 49 bots looting at once early in a match.
 const LOOT_CELL = 24;
 const lootGrid = new Map();
-const lkey = (cx, cz) => cx + "," + cz;
+// numeric key: the string form allocated a key per cell per query, and bots query
+// every frame (walkover) — a 16k x 16k cell range is far beyond any map
+const lkey = (cx, cz) => (cx + 8192) * 16384 + (cz + 8192);
 function gridAdd(kind, id, pos) {
   const k = lkey(Math.floor(pos.x / LOOT_CELL), Math.floor(pos.z / LOOT_CELL));
   let l = lootGrid.get(k);
@@ -62,7 +64,7 @@ export function init(W) {
   // network mirrors + join-sync
   W.netTakeItem = (id) => {
     const it = items.get(id);
-    if (it) { it.taken = true; if (it.group.parent) it.group.parent.remove(it.group); items.delete(id); takenIds.push(id); }
+    if (it) { it.taken = true; releaseItem(it); items.delete(id); takenIds.push(id); }
   };
   W.netOpenChest = (id) => openChest(W, null, id);
   W.netSpawnItem = (d) => spawnItem(W, d.data, d.x, d.y, d.z, d.id);
@@ -92,6 +94,7 @@ export function init(W) {
   };
   W.lootSyncState = () => ({ taken: takenIds.slice(), opened: [...chests.values()].filter((c) => c.opened).map((c) => c.id) });
   W.debugChests = () => [...chests.values()]; // test hook (preview verification)
+  W.debugItems = debugItems;                   // test hook (loot census)
 }
 const takenIds = [];
 
@@ -113,6 +116,10 @@ export function resetSync() { takenIds.length = 0; }
 export function disposeLootResources(W) {
   const g = W._groups && W._groups.loot;
   if (!g) return { geometries: 0, materials: 0, textures: 0 };
+  // Idempotent per match: disposeMatch and the orchestrator's direct call can
+  // both run in one teardown; populate() re-arms the flag.
+  if (g.userData.disposed) return { geometries: 0, materials: 0, textures: 0 };
+  g.userData.disposed = true;
   const keepG = new Set(), keepM = new Set(), keepT = new Set();
   const keep = (o) => {
     if (!o) return;
@@ -134,6 +141,11 @@ export function disposeLootResources(W) {
   for (const k in kindGeos) keep(kindGeos[k]);
   for (const k in kindMats) keep(kindMats[k]);
   for (const k in itemProtoCache) keep(itemProtoCache[k]);
+  // Weapon protos are shared across matches too (weapons.js builds them once per
+  // page and every floor gun is a clone). Without this, teardown disposed the
+  // shared weapon materials and textures, so every later match re-uploaded them
+  // and recompiled their programs on the first frame a gun was on screen.
+  if (W._weaponProtos) for (const k in W._weaponProtos) keep(W._weaponProtos[k]);
 
   const seenG = new Set(), seenM = new Set(), seenT = new Set();
   let geometries = 0, materials = 0, textures = 0;
@@ -155,28 +167,75 @@ export function disposeLootResources(W) {
   return { geometries, materials, textures };
 }
 
+// A floor loot point is a small PILE now (sim/royale.js floorRollCount +
+// rollFloorSpawn): a gun lies with its own ammo beside it, sometimes with a second
+// roll. Offsets stay inside ~1.2 m so a pile reads as one spot and never pokes
+// through the walls of the 4.5 m huts most points sit in.
+const PILE = [[0, 0], [0.85, 0.45], [-0.8, 0.55], [0.15, -0.9], [1.05, -0.55], [-0.95, -0.5]];
+// Guaranteed per 50 players: light ammo feeds BOTH the starter pistol and the SMG,
+// and isla_viva used to spawn one light box for the whole lobby (audit M2).
+const LIGHT_MIN_PER_50 = 8;
+
 export function populate(W) {
   items.clear(); chests.clear(); lootGrid.clear();
   takenIds.length = 0;
   nextId = 1;
+  swapN = 0;                      // swap-drop ids restart, so a replayed seed names drops identically
   supplyState = { dropped: 0, next: null };
+  chestChannel.id = null; chestChannel.t = 0;
+  // Per-system stream for swap-drop scatter (was Math.random, which broke replay).
+  W._scatterRng = K.mulberry32((((W.seed >>> 0) ^ 0x5ca77e) >>> 0));
   const rng = K.mulberry32(W.seed ^ 0x100f);
   const modeK = K.MODE[W.mode] || K.MODE.standard;
   const g = W.group("loot");
   g.clear();
+  g.userData.disposed = false;
 
   let fi = 0;
+  const floorPts = [];
+  let light = 0;
   for (const lp of W.map.lootPoints) {
     fi++;
     if (lp.kind === "chest") {
       spawnChest(W, lp.x, lp.y, lp.z);
-    } else {
-      if (rng() < 0.55 * Math.min(1.6, modeK.lootMult)) spawnItem(W, K.rollFloorItem(rng), lp.x, lp.y, lp.z, "f:" + fi);
-      if (modeK.lootMult > 1.2 && rng() < 0.4) {
-        spawnItem(W, K.rollFloorItem(rng), lp.x + 1.2, lp.y, lp.z + 0.8, "f2:" + fi);
+      continue;
+    }
+    floorPts.push(lp);
+    // (feature-detected so a stale cached sim/royale.js can never take the loot out)
+    const rolls = K.floorRollCount ? K.floorRollCount(rng, modeK.lootMult) : (rng() < 0.55 * Math.min(1.6, modeK.lootMult) ? 1 : 0);
+    let k = 0;
+    for (let r = 0; r < rolls; r++) {
+      const spawn = K.rollFloorSpawn ? K.rollFloorSpawn(rng) : [K.rollFloorItem(rng)];
+      for (const data of spawn) {
+        const o = PILE[k % PILE.length];
+        spawnItem(W, data, lp.x + o[0], lp.y, lp.z + o[1], k ? "f" + k + ":" + fi : "f:" + fi);
+        if (data.kind === "ammo" && data.id === "light") light++;
+        k++;
       }
     }
   }
+  // Light-ammo floor guarantee (deterministic: same rng, fixed order).
+  const need = Math.ceil(LIGHT_MIN_PER_50 * (modeK.players || 50) / 50) - light;
+  for (let i = 0; i < need && floorPts.length; i++) {
+    const lp = floorPts[Math.floor(rng() * floorPts.length)];
+    spawnItem(W, { kind: "ammo", id: "light", count: K.AMMO.light.box }, lp.x - 0.6, lp.y, lp.z + 1.0, "fl:" + i);
+  }
+}
+
+/** Test hook (read-only by convention): every live ground item, for the loot
+ *  census in the lane probes. Same idea as W.debugChests. */
+export function debugItems() { return [...items.values()].filter((it) => !it.taken); }
+
+/** C8 teardown contract: free what THIS match's loot allocated and drop the
+ *  module's references to it. Idempotent — the orchestrator may also call
+ *  disposeLootResources in the same teardown. */
+export function disposeMatch(W) {
+  const r = disposeLootResources(W);
+  items.clear(); chests.clear(); lootGrid.clear();
+  takenIds.length = 0;
+  supplyState = null;
+  chestChannel.id = null; chestChannel.t = 0;
+  return r;
 }
 
 // ── visuals ──────────────────────────────────────────────────────────────────
@@ -324,7 +383,7 @@ function spawnChest(W, x, y, z) {
 
 // ── supply drops ─────────────────────────────────────────────────────────────
 function maybeSupplyDrop(W, dt) {
-  if (W.mode === "practice" || !W.stormCtl) return;
+  if (W.mode === "practice" || !W.stormCtl || !supplyState) return;   // null between disposeMatch and populate
   const st = W.stormCtl.storm.stateAt(W.t);
   // one drop early (~phase 2), one late (~phase 5+). The old `dropped < phase-1`
   // gate front-loaded BOTH into phases 2-3, leaving the tense endgame with none.
@@ -354,6 +413,8 @@ function maybeSupplyDrop(W, dt) {
     if (f.crate.position.y <= gy) {
       f.crate.position.y = gy;
       f.crate.remove(f.balloon);
+      // detached = unreachable by the match teardown: free it now
+      f.balloon.geometry.dispose(); f.balloon.material.dispose();
       // becomes a "supply chest": burst immediately into legendary loot items
       const rng = K.mulberry32((W.seed ^ 0xdead) + supplyState.dropped);
       const drops = K.rollSupplyDrop(rng);
@@ -426,6 +487,14 @@ function openChest(W, a, id) {
   return true;
 }
 
+/** Detach a taken item. Its only per-item GPU object is a death drop's glow
+ *  SpriteMaterial (everything else is shared proto state), and once detached the
+ *  match teardown can no longer reach it — so it is freed here. */
+function releaseItem(it) {
+  if (it.group.parent) it.group.parent.remove(it.group);
+  if (it.glow) { it.glow.material.dispose(); it.glow = null; }
+}
+
 function pickup(W, a, id, opts) {
   const it = items.get(id);
   if (!it || it.taken) return false;
@@ -434,7 +503,7 @@ function pickup(W, a, id, opts) {
   delete it.data.swap;
   if (!ok) return false;
   it.taken = true;
-  if (it.group.parent) it.group.parent.remove(it.group);
+  releaseItem(it);
   items.delete(id);
   takenIds.push(id);
   W.events.emit("pickedUp", a, it.data, id);
@@ -533,7 +602,15 @@ function give(W, a, data) {
       inv.slots[empty] = slot;
       // auto-upgrade: if still on the starter common pistol, switch to the pickup
       const cur = inv.slots[inv.active];
-      if (cur && cur.id === "pistol" && cur.rarity === 0 && data.id !== "pistol") W.equipSlot(a, empty);
+      // (bots too, mid-fight included: a real gun in hand beats the starter at
+      // almost every range, and the brain's range-aware ensureGunOut swaps back
+      // only when the pistol is clearly better at THIS range after paying the
+      // swap delay — e.g. a shotgun picked up with the enemy at 30 m. The swap is
+      // stamped so that check waits its 1.2 s gate instead of dithering.)
+      if (cur && cur.id === "pistol" && cur.rarity === 0 && data.id !== "pistol") {
+        W.equipSlot(a, empty);
+        if (a.isBot && a.brain && a.brain.bb) a.brain.bb.swapT = W.t;
+      }
       return true;
     }
     // bot trade-up at the cap: drop its worst gun, take the better one
@@ -609,7 +686,13 @@ function dropItem(W, a, data, fwd) {
   const id = "sw:" + a.id + ":" + (swapN++);
   let x, z;
   if (fwd) { x = a.pos.x - Math.sin(a.yaw) * 2.0; z = a.pos.z - Math.cos(a.yaw) * 2.0; }
-  else { x = a.pos.x + (Math.random() - 0.5) * 1.4; z = a.pos.z + (Math.random() - 0.5) * 1.4; }
+  else {
+    // seeded per match (populate), never Math.random: a bot's trade-up drop is sim
+    // state other bots walk over, so it has to replay with the seed
+    if (!W._scatterRng) W._scatterRng = K.mulberry32((((W.seed >>> 0) ^ 0x5ca77e) >>> 0));
+    const r = W._scatterRng;
+    x = a.pos.x + (r() - 0.5) * 1.4; z = a.pos.z + (r() - 0.5) * 1.4;
+  }
   const y = a.pos.y + 0.2;
   spawnItem(W, data, x, y, z, id);
   if (W.net && !a.netRemote) W.events.emit("netDropItem", { data, x, y, z, id });
@@ -632,7 +715,7 @@ function deathDrop(W, victim) {
     // gun a kill just dropped was harder to spot than loot nobody had touched.
     // Scaled to 1.3 (chests use 3.2): a marker, not a beacon.
     const it = items.get(iid);
-    if (it) { const g2 = chestGlow(); g2.scale.set(1.3, 1.3, 1); g2.position.y = 0.55; it.group.add(g2); }
+    if (it) { const g2 = chestGlow(); g2.scale.set(1.3, 1.3, 1); g2.position.y = 0.55; it.group.add(g2); it.glow = g2; }
   };
   // EVERY carried weapon (including the equipped one) + consumables + ammo
   for (let i = 0; i < inv.slots.length; i++) {
@@ -661,7 +744,9 @@ export function update(W, dt) {
   // Distance is 3D on purpose: the old horizontal test called everything under
   // the 240-270 m glider flight path "near".
   const cull = W.lootCull || 150, cull2 = cull * cull;
-  for (const [, it] of items) {
+  // values(), not entries: `for (const [, it] of map)` builds a [key, value]
+  // array per entry — ~400 a frame here (framecheck heap sampling, 2026-09-30)
+  for (const it of items.values()) {
     if (it.taken) continue;
     const dx = it.pos.x - cp.x, dy = it.pos.y - cp.y, dz = it.pos.z - cp.z;
     const d2 = dx * dx + dy * dy + dz * dz;
@@ -674,7 +759,7 @@ export function update(W, dt) {
   maybeSupplyDrop(W, dt);
 
   // chest glow pulse (only near camera)
-  for (const [, c] of chests) {
+  for (const c of chests.values()) {
     const cdx = c.pos.x - cp.x, cdy = c.pos.y - cp.y, cdz = c.pos.z - cp.z;
     const d2 = cdx * cdx + cdy * cdy + cdz * cdz;
     // Cull the chest MODEL and its rarity ring only. The glow sprite and the
@@ -739,6 +824,41 @@ export function update(W, dt) {
       if (target && target.type === "item") pickup(W, a, target.id, { swap: true });
     }
     W.interactHint = target ? Object.assign({}, target, { progress: target.type === "chest" ? chestChannel.t / CHEST_OPEN_S : 0 }) : null;
+  }
+
+  // BOT WALKOVER (audit M6/gap 9). Bots only ever picked things up inside actLoot,
+  // so a bot fighting, fleeing or rotating walked straight over a better gun. The
+  // human's walkover rule now applies to every bot in every state, through the
+  // same wouldAccept() predicate give() enforces (gun cap, bot trade-up, reserve
+  // and stack caps) and the same [Q]-drop grace. Allocation-free grid walk.
+  for (let i = 0; i < W.actors.length; i++) {
+    const b = W.actors[i];
+    if (!b.isBot || !b.alive || b.gliding || b.netRemote || !b.inventory) continue;
+    botWalkover(W, b);
+  }
+}
+
+const WALK_R = 1.5, WALK_DY = 2.2;
+function botWalkover(W, a) {
+  const px = a.pos.x, pz = a.pos.z;
+  const x0 = Math.floor((px - WALK_R) / LOOT_CELL), x1 = Math.floor((px + WALK_R) / LOOT_CELL);
+  const z0 = Math.floor((pz - WALK_R) / LOOT_CELL), z1 = Math.floor((pz + WALK_R) / LOOT_CELL);
+  for (let cx = x0; cx <= x1; cx++) {
+    for (let cz = z0; cz <= z1; cz++) {
+      const l = lootGrid.get(lkey(cx, cz));
+      if (!l) continue;
+      for (let j = 0; j < l.length; j++) {
+        const e = l[j];
+        if (e.kind !== "item") continue;
+        const it = items.get(e.id);
+        if (!it || it.taken) continue;
+        const dx = it.pos.x - px, dz = it.pos.z - pz;
+        if (dx * dx + dz * dz >= WALK_R * WALK_R || Math.abs(it.pos.y - a.pos.y) > WALK_DY) continue;
+        if (it.noWalkoverBy === a.id && W.t < it.noWalkoverUntil) continue;
+        if (!wouldAccept(W, a, it.data)) continue;
+        pickup(W, a, it.id);
+      }
+    }
   }
 }
 const CHEST_OPEN_S = 2.0;

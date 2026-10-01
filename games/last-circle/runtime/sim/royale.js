@@ -189,8 +189,12 @@
     return spread;
   }
 
-  function moveBasis(yaw) {
+  /** `out` is optional: pass a reusable {fx,fz,rx,rz} object on per-frame paths
+   *  (player movement, every bot's fire-on-the-move) and nothing is allocated.
+   *  Without it a fresh object comes back, exactly as before. */
+  function moveBasis(yaw, out) {
     var s = Math.sin(yaw), c = Math.cos(yaw);
+    if (out) { out.fx = -s; out.fz = -c; out.rx = c; out.rz = -s; return out; }
     return { fx: -s, fz: -c, rx: c, rz: -s };
   }
 
@@ -204,27 +208,31 @@
   /** Segment (a→b) vs AABB, slab method. null on miss, else {t, tExit, nx,ny,nz}
    *  where t is the ENTRY fraction along a→b and n* the entry face normal
    *  (0,0,0 when the segment starts already inside). */
+  // Slab state for segmentBox. The old form built five little arrays per call
+  // (o, d, lo, hi, n) — and bullets, bot sight lines and cover scans call it for
+  // every collider they touch, a measured 14 KB of garbage per frame on its own.
+  // Scalars in module scope instead; the result object is only built on a HIT.
+  var _sbMin = 0, _sbMax = 1, _sbAxis = -1;
+  function _slab(o, d, lo, hi, axis) {
+    if (d > -1e-9 && d < 1e-9) return !(o < lo || o > hi);   // parallel: inside the slab or a miss
+    var inv = 1 / d;
+    var t1 = (lo - o) * inv, t2 = (hi - o) * inv;
+    if (t1 > t2) { var sw = t1; t1 = t2; t2 = sw; }
+    if (t1 > _sbMin) { _sbMin = t1; _sbAxis = axis; }
+    if (t2 < _sbMax) _sbMax = t2;
+    return _sbMin <= _sbMax;
+  }
   function segmentBox(ax, ay, az, bx, by, bz, box) {
-    var o = [ax, ay, az];
-    var d = [bx - ax, by - ay, bz - az];
-    var lo = [box.minX, box.minY, box.minZ];
-    var hi = [box.maxX, box.maxY, box.maxZ];
-    var tmin = 0, tmax = 1, axis = -1;
-    for (var i = 0; i < 3; i++) {
-      if (Math.abs(d[i]) < 1e-9) {
-        if (o[i] < lo[i] || o[i] > hi[i]) return null;   // parallel to the slab and outside it
-        continue;
-      }
-      var inv = 1 / d[i];
-      var t1 = (lo[i] - o[i]) * inv, t2 = (hi[i] - o[i]) * inv;
-      if (t1 > t2) { var sw = t1; t1 = t2; t2 = sw; }
-      if (t1 > tmin) { tmin = t1; axis = i; }
-      if (t2 < tmax) tmax = t2;
-      if (tmin > tmax) return null;
-    }
-    var n = [0, 0, 0];
-    if (axis >= 0) n[axis] = d[axis] > 0 ? -1 : 1;
-    return { t: tmin, tExit: tmax, nx: n[0], ny: n[1], nz: n[2] };
+    var dx = bx - ax, dy = by - ay, dz = bz - az;
+    _sbMin = 0; _sbMax = 1; _sbAxis = -1;
+    if (!_slab(ax, dx, box.minX, box.maxX, 0)) return null;
+    if (!_slab(ay, dy, box.minY, box.maxY, 1)) return null;
+    if (!_slab(az, dz, box.minZ, box.maxZ, 2)) return null;
+    var nx = 0, ny = 0, nz = 0;
+    if (_sbAxis === 0) nx = dx > 0 ? -1 : 1;
+    else if (_sbAxis === 1) ny = dy > 0 ? -1 : 1;
+    else if (_sbAxis === 2) nz = dz > 0 ? -1 : 1;
+    return { t: _sbMin, tExit: _sbMax, nx: nx, ny: ny, nz: nz };
   }
 
   /** Top surface of a ramp collider at (x,z) — same formula the movement
@@ -586,19 +594,136 @@
 
   function rollRarity(rng, table) { return weightedIndex(rng, LOOT_WEIGHTS[table] || LOOT_WEIGHTS.floor); }
 
-  /** One floor-spawn item. kind: weapon|ammo|consumable */
+  // ── FLOOR LOOT ECONOMY (audit 2026-09, bots-match M2/M5/M6) ────────────────
+  // Measured over 11 storm-on matches: 74.8% of bot lives ended holding the starter
+  // pistol and 60.2% of gun kills were pistol kills — and at 72% of those pistol
+  // kills there was NO better gun or chest within 40 m of the killer. It was
+  // scarcity, not bad choices: 1.42-2.32 guns per player on the map, and isla_viva
+  // spawned ONE light-ammo box for 50 players. So a floor gun now always lies with
+  // 1-2 boxes of its own ammo beside it (as rollChest already did), guns are a
+  // larger share of floor spawns, and the floor pistol is rarer: everyone already
+  // spawns holding one, so a floor pistol is the least useful gun in the game.
+  var FLOOR_GUN_SHARE = 0.55;
+  var FLOOR_AMMO_SHARE = 0.20;           // standalone ammo; guns bring their own
+  var FLOOR_GUN_WEIGHTS = [8, 24, 26, 20, 12, 10];   // pistol smg ar shotgun sniper glauncher
+
+  /** One floor-spawn item. kind: weapon|ammo|consumable.
+   *  A weapon carries `companions`: its own ammo, 1-2 boxes' worth, as ONE item
+   *  (one pickup, one mesh — a box per box would double the loot draw calls). */
   function rollFloorItem(rng) {
     var r = rng();
-    if (r < 0.45) {
-      var wid = WEAPON_IDS[weightedIndex(rng, [16, 22, 24, 20, 10, 8])];
-      return { kind: "weapon", id: wid, rarity: rollRarity(rng, "floor") };
+    if (r < FLOOR_GUN_SHARE) {
+      var wid = WEAPON_IDS[weightedIndex(rng, FLOOR_GUN_WEIGHTS)];
+      var gun = { kind: "weapon", id: wid, rarity: rollRarity(rng, "floor") };
+      var am = WEAPONS[wid].ammo;
+      if (am && AMMO[am]) {
+        var boxes = rng() < 0.5 ? 1 : 2;
+        gun.companions = [{ kind: "ammo", id: am, count: AMMO[am].box * boxes }];
+      }
+      return gun;
     }
-    if (r < 0.7) {
+    if (r < FLOOR_GUN_SHARE + FLOOR_AMMO_SHARE) {
       var aid = ["light", "medium", "shells", "heavy", "grenades"][weightedIndex(rng, [30, 28, 22, 12, 8])];
       return { kind: "ammo", id: aid, count: AMMO[aid].box };
     }
     var cid = ["bandage", "mini_shield", "medkit", "big_shield"][weightedIndex(rng, [32, 34, 18, 16])];
     return { kind: "consumable", id: cid, count: cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : 1 };
+  }
+
+  /** Flat list for one floor roll: [item, ...its companions], companions stripped
+   *  off the item so they never ride along into an inventory slot. */
+  function rollFloorSpawn(rng) {
+    var it = rollFloorItem(rng);
+    var out = [it];
+    if (it.companions) {
+      for (var i = 0; i < it.companions.length; i++) out.push(it.companions[i]);
+      delete it.companions;
+    }
+    return out;
+  }
+
+  /** How many floor rolls a loot point gets. First roll almost always, a second
+   *  one sometimes — a pile, not a single item. `lootMult` is MODE[mode].lootMult. */
+  var FLOOR_ROLL_P = [0.85, 0.25];
+  function floorRollCount(rng, lootMult) {
+    var m = lootMult || 1;
+    var n = 0;
+    if (rng() < Math.min(0.97, FLOOR_ROLL_P[0] * Math.sqrt(m))) n++;
+    if (rng() < Math.min(0.9, FLOOR_ROLL_P[1] * m)) n++;
+    return n;
+  }
+
+  // ── RANGE-AWARE WEAPON VALUE ──────────────────────────────────────────────
+  // Bots chose weapons by raw sustained DPS: pistol 133, sniper 61, launcher 87,
+  // so a sniper of ANY rarity never cleared 1.15 x pistol and ensureGunOut swapped
+  // every sniper and most launchers straight back to the starter pistol (34.4% of
+  // sniper/launcher carriers held the pistol; 4 sniper kills in 539). What a gun is
+  // worth depends on HOW FAR the target is and HOW HURT it is, so this is a
+  // TIME-TO-KILL estimate against a man-sized target, built only from the game's own
+  // tables: damage + falloff (hitDamage), spread (effectiveSpread — which already
+  // hands a slow-cycling sniper its first-shot bonus on every shot), mag, fire rate,
+  // reload, projectile speed. A fixed ~1 deg of hand wobble sits on top of the
+  // weapon's spread, and a slow shell gives the target time to move (2 m/s of
+  // unpredictable motion over the flight). No class bonus is invented: the sniper
+  // overtakes the pistol at ~40 m because 105 at full damage with first-shot
+  // accuracy beats 8 damage a round past the pistol's 38 m falloff — the table.
+  // Returns a rate (target EHP / seconds-to-kill); higher is better; 0 = useless.
+  var VALUE_AIM_DEG = 1.0;              // typical hand wobble on top of weapon spread
+  var VALUE_DODGE_MS = 2.0;             // target motion a slow round has to absorb
+  var TARGET_HALF_W = 0.45, TARGET_HALF_H = 0.9;
+  var LAUNCHER_MAX_M = 40;              // 26 m/s shell, 2 s fuse, ~0.7 rad max lob
+  /** opts: {ehp (target shield+hp, default 150), speed (shooter m/s),
+   *  mag (rounds loaded; omit = full), reserve (rounds in reserve; omit = plenty),
+   *  aimDeg (the shooter's RMS aim error in degrees; omit = VALUE_AIM_DEG)} */
+  function gunValueAt(id, rarity, distM, opts) {
+    var d = WEAPONS[id];
+    if (!d) return 0;
+    opts = opts || {};
+    var dist = Math.max(0.5, distM || 0);
+    if (d.arc && dist > LAUNCHER_MAX_M) return 0;             // shell cannot reach
+    var ehp = Math.max(1, opts.ehp != null ? opts.ehp : 150);
+    var interval = 60 / d.rpm;
+    var loaded = opts.mag != null ? opts.mag : d.mag;
+    var reserve = opts.reserve != null ? opts.reserve : Infinity;
+    if (loaded + reserve <= 0) return 0;                        // dry: worth nothing
+    var spread = effectiveSpread(id, rarity || 0, {
+      ads: dist > 25, speed: opts.speed || 0, airborne: false, crouching: false, sinceLastShotS: interval,
+    });
+    var aim = opts.aimDeg != null ? opts.aimDeg : VALUE_AIM_DEG;   // the shooter's own aim error, when known
+    var ang = Math.sqrt(spread * spread + aim * aim) * Math.PI / 180;
+    var flight = d.speed ? dist / d.speed : 0;
+    var reach = Math.sqrt(Math.pow(dist * Math.tan(ang), 2) + Math.pow(flight * VALUE_DODGE_MS, 2));
+    var splash = d.splashR ? d.splashR * 0.5 : 0;
+    var fx = Math.min(1, (TARGET_HALF_W + splash) / Math.max(1e-6, reach));
+    var fy = Math.min(1, (TARGET_HALF_H + splash) / Math.max(1e-6, reach));
+    var pHit = fx * fy;                                         // one round lands
+    var pellets = d.pellets || 1;
+    var dmg = hitDamage(id, rarity || 0, dist, false);          // per round that lands
+    // expected trigger pulls to kill: enough landed damage, and at least one landed pull
+    var perPull = dmg * pellets * pHit;
+    var pPull = 1 - Math.pow(1 - pHit, pellets);                // any pellet lands
+    var pulls = Math.max(1 / Math.max(1e-6, pPull), ehp / Math.max(1e-6, perPull));
+    var t = 0;
+    if (loaded <= 0) { t += d.reloadS; loaded = Math.min(d.mag, reserve); reserve -= loaded; }
+    // AMMO LIMIT: when the rounds on hand run out before the kill, the gun delivers
+    // only that share of it, at its own rate. This used to return a flat 0.01
+    // ("cannot finish this fight"), a cliff: a bot with 60 rifle rounds and a 3 deg
+    // wobble at 40 m valued its AR at nothing and fought with the pistol, whose
+    // light ammo is the commonest box (measured 2026-09-30: 6-8 of ~25 pistol kills
+    // per match were by bots carrying a loaded AR).
+    // The RATE is the full kill's (reloads included), so more ammo can never make a
+    // gun worth less; only the deliverable share shrinks.
+    var have = loaded + reserve;
+    var frac = pulls > have ? have / pulls : 1;
+    t += (pulls - 1) * interval + flight;
+    // Rounds beyond the loaded magazine cost reloads. The fire-rate timer keeps
+    // running during a reload (weapons.js stepWeapon), so each reload adds only
+    // what it outlasts the shot interval by — a 1-round sniper cycles at its 3.0 s
+    // reload, not at 1.71 s + 3.0 s.
+    if (pulls > loaded) t += Math.max(0, d.reloadS - interval) * (pulls - loaded) / Math.max(1, d.mag);   // expected, not ceil: smooth in range
+    var v = ehp * frac / (t + 0.3);                             // 0.3 s: first-shot latency
+    if (d.splashR && dist < d.splashR + 1.5) v *= 0.25;         // it would hit you too
+    return v;
   }
 
   /** Chest burst: weapon + ammo for it + one extra. */
@@ -707,6 +832,8 @@
     Storm: Storm, Match: Match,
     hitDamage: hitDamage, applyDamage: applyDamage, splashScale: splashScale,
     weightedIndex: weightedIndex, rollRarity: rollRarity, rollFloorItem: rollFloorItem, rollChest: rollChest, rollSupplyDrop: rollSupplyDrop,
+    rollFloorSpawn: rollFloorSpawn, floorRollCount: floorRollCount, FLOOR_GUN_WEIGHTS: FLOOR_GUN_WEIGHTS,
+    gunValueAt: gunValueAt,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.FFG = root.FFG || {};

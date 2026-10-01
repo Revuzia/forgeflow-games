@@ -315,9 +315,16 @@ function colorAt(mapId, h, x, z, seed) {
  *  texture cache (_texCache, built once per page session on purpose) — those are
  *  excluded by identity, because disposing them would leave the next match
  *  rendering with dead GPU handles. */
+/** C8 teardown contract: the map's per-match GPU objects (idempotent; see below). */
+export function disposeMatch(W) { return disposeMapResources(W); }
+
 export function disposeMapResources(W) {
   const g = W._groups && W._groups.map;
   if (!g) return { geometries: 0, materials: 0, textures: 0 };
+  // Idempotent per build (disposeMatch and the orchestrator's direct call may both
+  // run in one teardown); buildMap re-arms it.
+  if (g.userData.disposed) return { geometries: 0, materials: 0, textures: 0 };
+  g.userData.disposed = true;
   const shared = new Set();
   for (const k in _texCache) {
     const v = _texCache[k];
@@ -353,6 +360,7 @@ export async function buildMap(W, mapId) {
   const g = W.group("map");
   let mapWater = null;   // exposed on the returned map so the camera can test submersion
   g.clear();
+  g.userData.disposed = false;
   // The match build blocks the main thread for ~1,934 ms warm (all GLBs cached) with
   // exactly one await in front of it, so the loading screen's shimmer bar and its
   // 300 ms progress interval are frozen for the whole build — the tab looks hung,
@@ -1812,12 +1820,17 @@ export async function buildMap(W, mapId) {
     }
   }
 
-  // scattered wilderness loot (all maps)
+  // scattered wilderness loot (all maps). 130 LAND spots, not 130 attempts: the
+  // old loop spent its attempts on ocean too, so isla_viva (an island in a square
+  // of sea) got ~50 spots against ~120 on the inland maps, and ended with 1.4 guns
+  // per player (audit M2). This is the LAST rng consumer in buildMap (nothing after
+  // it draws), so taking more draws here moves no building, prop or portal.
   const wildN = 130;
-  for (let i = 0; i < wildN; i++) {
+  for (let i = 0, tries = 0; i < wildN && tries < wildN * 6; tries++) {
     const x = (rng() * 2 - 1) * (HALF - 60), z = (rng() * 2 - 1) * (HALF - 60);
     const y = heightAt0(x, z);
     if (y < waterY + 0.5) continue;
+    i++;
     loot(x, y + 0.5, z, null);
     if (rng() < 0.12) chest(x, y + 0.6, z, null);
   }
@@ -2126,9 +2139,19 @@ export async function buildMap(W, mapId) {
   }
 
   // ── static collider spatial hash ──────────────────────────────────────────
+  // queryColliders is the hottest function in the game: 423 calls a frame were
+  // measured (movement support + wall tests for 50 actors, bullets, bot sight and
+  // cover), and each one allocated an output array, a Set and 1-4 string keys.
+  // Now: numeric cell keys, a per-query STAMP on each collider instead of a Set,
+  // and a reused output array.
+  //   CONTRACT: the returned array is shared scratch, valid until the NEXT call.
+  //   A caller that must hold the list across another query (or recurse, as
+  //   weapons.js explode does) passes its own `out` array as the 4th argument.
+  // Result order is unchanged (cells x-major, then insertion order), so every
+  // nearest-hit tie resolves exactly as before.
   const CELL = 16;
   const chash = new Map();
-  function cKey(cx, cz) { return cx + "," + cz; }
+  const cKey = (cx, cz) => (cx + 8192) * 16384 + (cz + 8192);
   colliders.forEach((c, idx) => {
     const x0 = Math.floor(c.minX / CELL), x1 = Math.floor(c.maxX / CELL);
     const z0 = Math.floor(c.minZ / CELL), z1 = Math.floor(c.maxZ / CELL);
@@ -2138,19 +2161,27 @@ export async function buildMap(W, mapId) {
       chash.get(k).push(c);
     }
   });
-  function queryColliders(x, z, r) {
-    const out = [];
+  let qStamp = 0;
+  const qOut = [];
+  function queryColliders(x, z, r, out) {
+    const o = out || qOut;
+    o.length = 0;
+    const stamp = ++qStamp;
     const x0 = Math.floor((x - r) / CELL), x1 = Math.floor((x + r) / CELL);
     const z0 = Math.floor((z - r) / CELL), z1 = Math.floor((z + r) / CELL);
-    const seen = new Set();
     for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
       const l = chash.get(cKey(cx, cz));
-      if (l) for (const c of l) { if (!c.dead && !seen.has(c)) { seen.add(c); out.push(c); } }
+      if (!l) continue;
+      for (let i = 0; i < l.length; i++) {
+        const c = l[i];
+        if (!c.dead && c._qs !== stamp) { c._qs = stamp; o.push(c); }
+      }
     }
-    return out;
+    return o;
   }
 
   // ── LOS (coarse march vs terrain + static boxes) ──────────────────────────
+  const losCols = [];
   function losBlocked(ax, ay, az, bx, by, bz) {
     const dx = bx - ax, dy = by - ay, dz = bz - az;
     const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -2170,8 +2201,9 @@ export async function buildMap(W, mapId) {
       const t0 = i / spans, t1 = (i + 1) / spans;
       const x0 = ax + dx * t0, y0 = ay + dy * t0, z0 = az + dz * t0;
       const x1 = ax + dx * t1, y1 = ay + dy * t1, z1 = az + dz * t1;
-      const r = Math.hypot(x1 - x0, z1 - z0) / 2 + 0.6;
-      const cols = queryColliders((x0 + x1) / 2, (z0 + z1) / 2, r);
+      const hx = x1 - x0, hz = z1 - z0;                   // (Math.hypot allocates: rest-args builtin)
+      const r = Math.sqrt(hx * hx + hz * hz) / 2 + 0.6;
+      const cols = queryColliders((x0 + x1) / 2, (z0 + z1) / 2, r, losCols);
       if (cols.length && S.segmentColliders(x0, y0, z0, x1, y1, z1, cols)) return true;
     }
     const steps = Math.min(60, Math.max(6, Math.floor(len / 3)));

@@ -36,7 +36,7 @@ export function init(W) {
 }
 
 function protos(W) {
-  if (!protosPromise) protosPromise = buildProtos(W);
+  if (!protosPromise) protosPromise = buildProtos(W).then((p) => { W._weaponProtos = p; return p; });
   return protosPromise;
 }
 
@@ -256,8 +256,12 @@ async function refreshWeaponMesh(W, a) {
 
 // ── aim helpers ──────────────────────────────────────────────────────────────
 const _dir = new THREE.Vector3();
-export function eyePos(a) {
-  return { x: a.pos.x, y: a.pos.y + (a.swimming ? 0.7 : K.actorEyeY(a)), z: a.pos.z };
+/** `out` optional: per-frame callers (bot aim, perception) pass a scratch object
+ *  and nothing is allocated; without it a fresh object comes back as before. */
+export function eyePos(a, out) {
+  const y = a.pos.y + (a.swimming ? 0.7 : K.actorEyeY(a));
+  if (out) { out.x = a.pos.x; out.y = y; out.z = a.pos.z; return out; }
+  return { x: a.pos.x, y, z: a.pos.z };
 }
 export function aimDir(a, out) {
   const sy = Math.sin(a.yaw), cy = Math.cos(a.yaw);
@@ -273,6 +277,8 @@ export function aimDir(a, out) {
  *  next one — and their meshes stayed parented to a cleared group. */
 export function reset(W) {
   W._dmgRng = null;               // fresh damage-roll stream per match
+  W._spreadRng = null;            // fresh spread stream per match (fire())
+  W._recoilRng = null;            // fresh human recoil-yaw stream per match
   for (const p of projectiles) {
     if (p.m && p.m.parent) p.m.parent.remove(p.m);
     p.dead = true;
@@ -282,6 +288,23 @@ export function reset(W) {
   // sway/breath state lives on W and outlived the match (sweep finding): a
   // player who quit while WINDED started the next match still winded
   W._swayP = 0; W._swayY = 0; W._breathT = null; W._winded = false;
+}
+
+/** C8 teardown contract. Held guns are proto CLONES (weapons.js refreshWeaponMesh):
+ *  they share the protos' geometry and materials, which live for the page on
+ *  purpose, so there is nothing of theirs to free — only references to drop so the
+ *  dead roster is collectable. Live rounds go back to the pool (reset). Shell
+ *  meshes share one geometry/material. Safe to call twice. */
+export function disposeMatch(W) {
+  reset(W);
+  let detached = 0;
+  for (const a of (W.actors || [])) {
+    if (a.weaponMesh) {
+      if (a.weaponMesh.parent) a.weaponMesh.parent.remove(a.weaponMesh);
+      a.weaponMesh = null; detached++;
+    }
+  }
+  return { detached };
 }
 
 export function update(W, dt) {
@@ -419,7 +442,13 @@ function stepWeapon(W, a, dt) {
   // weapon, thats impossible"). The old `|| inp.fire` hold-to-fire fallback
   // made a held button cycle the pistol at its full 400 rpm; the 420ms edge
   // buffer alone already fixes the swallowed-click problem it was added for.
-  const wantFire = (a.isBot || isAuto) ? inp.fire : !!edgeLive;
+  // TOUCH (contract C6): a phone has no click edge to buffer — the FIRE button is
+  // HELD. While it is held, a semi-auto re-arms at its own fire interval (the cd
+  // gate below is that interval), so holding FIRE with a pistol fires at the
+  // pistol's rate instead of once per tap. Mouse play is unchanged: W.touch is
+  // absent or inactive there. Feature-detected; touch.js (L10) owns W.touch.
+  const touchHeld = !a.isBot && a === W.player && !!(W.touch && W.touch.active && W.touch.fire);
+  const wantFire = (a.isBot || isAuto) ? inp.fire : (!!edgeLive || touchHeld);
   if (wantFire && wpn.cd <= 0 && !a.gliding && !a.healing && !a.swimming && a.mantleT == null) {
     if (def.mag > 0 && wpn.magAmmo <= 0) {
       // auto reload attempt
@@ -432,13 +461,19 @@ function stepWeapon(W, a, dt) {
     fire(W, a, def);
     wpn.magAmmo--;
     if (wpn.slotRef) wpn.slotRef.mag = wpn.magAmmo;
-    wpn.cd = 60 / def.rpm;
+    // CADENCE CARRY. `wpn.cd = 60 / def.rpm` threw away how far past zero the
+    // timer had run, so a gun could only fire on frame boundaries: the SMG (720
+    // designed, 83.3 ms) fired every 5th frame at 60 Hz = 600 rpm, 606 at 30 Hz,
+    // 708 at 165 Hz (measured in-page). Carrying the overshoot makes the cadence
+    // exact at any frame rate. The floor (>= -dt) stops an idle gun banking a
+    // burst of instant shots: an idle timer runs far below zero.
+    wpn.cd = Math.max(wpn.cd, -dt) + 60 / def.rpm;
     if (!a.isBot && !isAuto) W._fireEdge = 0;      // one shot per click for semi weapons
   }
 }
 
 // ── firing ───────────────────────────────────────────────────────────────────
-const _d = new THREE.Vector3(), _right = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+const _d = new THREE.Vector3(), _right = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _pdir = new THREE.Vector3();
 const _camDir = new THREE.Vector3(), _camPt = new THREE.Vector3();
 
 /** What is the crosshair actually ON? March the camera-forward ray against
@@ -498,17 +533,22 @@ function fire(W, a, def) {
     // the ADS accuracy bonus is EARNED at adsTimeS, not on the frame RMB lands —
     // player.js accrues a._adsT while ads is held (bots included)
     ads: !!a.input.ads && (a._adsT || 0) >= (def.adsTimeS || 0),
-    speed: Math.hypot(a.vel.x, a.vel.z),
+    speed: Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z),
     airborne: !a.onGround,
     crouching: !!a.crouching,
     sinceLastShotS: W.t - a.lastShotT,
   });
 
+  // Per-system seeded stream (never Math.random, never a shared global one): the
+  // pellet cone of every bot shot is sim state, and Math.random here was one of
+  // the four sources that stopped a seed replaying a match (audit M4).
+  if (!W._spreadRng) W._spreadRng = K.mulberry32((((W.seed >>> 0) ^ 0x5b7ead) >>> 0));
+  const srng = W._spreadRng;
+  const sr = (spread * Math.PI / 180);
+  _right.crossVectors(_d, _up).normalize();
   for (let p = 0; p < pellets; p++) {
-    const sr = (spread * Math.PI / 180);
-    const ox = (Math.random() - 0.5) * 2 * sr, oy = (Math.random() - 0.5) * 2 * sr;
-    _right.crossVectors(_d, _up).normalize();
-    const dir = _d.clone().addScaledVector(_right, ox).addScaledVector(_up, oy).normalize();
+    const ox = (srng() - 0.5) * 2 * sr, oy = (srng() - 0.5) * 2 * sr;
+    const dir = _pdir.copy(_d).addScaledVector(_right, ox).addScaledVector(_up, oy).normalize();
     spawnProjectile(W, {
       x: eye.x + dir.x * 0.6, y: eye.y + dir.y * 0.6 - 0.05, z: eye.z + dir.z * 0.6,
       vx: dir.x * def.speed, vy: dir.y * def.speed + (def.arc ? 3 : 0), vz: dir.z * def.speed,
@@ -546,7 +586,8 @@ function fire(W, a, def) {
   // shots: "my pistol doesn't work").
   if (!a.isBot) {
     const kick = { pistol: 0.008, smg: 0.006, ar: 0.011, shotgun: 0.03, sniper: 0.05, glauncher: 0.035 }[a.weapon.id] || 0.01;
-    const yawKick = (Math.random() - 0.5) * kick * 0.6;
+    if (!W._recoilRng) W._recoilRng = K.mulberry32((((W.seed >>> 0) ^ 0x7ec011) >>> 0));
+    const yawKick = (W._recoilRng() - 0.5) * kick * 0.6;
     a.input.pitch = K.clamp(a.input.pitch + kick, -1.35, 1.35);
     a.input.yaw += yawKick;
     a.recoilPitch = (a.recoilPitch || 0) + kick;
@@ -576,7 +617,8 @@ function segPointDist(ax, ay, az, bx, by, bz, cx, cy, cz, out) {
   let t = l2 > 0 ? ((cx - ax) * dx + (cy - ay) * dy + (cz - az) * dz) / l2 : 0;
   t = t < 0 ? 0 : t > 1 ? 1 : t;
   out.x = ax + dx * t; out.y = ay + dy * t; out.z = az + dz * t;
-  return Math.hypot(out.x - cx, out.y - cy, out.z - cz);
+  const ex = out.x - cx, ey = out.y - cy, ez = out.z - cz;
+  return Math.sqrt(ex * ex + ey * ey + ez * ez);
 }
 
 /** One [0,1) sample per damaging hit, for the weapon damage RANGE in
@@ -600,8 +642,14 @@ function spawnProjectile(W, o) {
     // grenade-launcher shell: visible arcing round with a hot tracer tint
     // 0.15 m + hot emissive: the 0.11/0.4 shell was invisible in flight
     // (owner playtest: "grenade launcher shoots no grenade, at least i cant
-    // see it") — the bloom pass needs the emissive over its 0.72 threshold
-    p.m = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), new THREE.MeshStandardMaterial({ color: 0x3d5a3a, emissive: 0xff6622, emissiveIntensity: 1.2 }));
+    // see it") — the bloom pass needs the emissive over its 0.72 threshold.
+    // ONE geometry + material shared by every shell (was a fresh pair per pooled
+    // round, each resident for the life of the page).
+    if (!_shellGeo) {
+      _shellGeo = new THREE.SphereGeometry(0.15, 6, 6);
+      _shellMat = new THREE.MeshStandardMaterial({ color: 0x3d5a3a, emissive: 0xff6622, emissiveIntensity: 1.2 });
+    }
+    p.m = new THREE.Mesh(_shellGeo, _shellMat);
   }
   // Only SHOW the mesh when THIS spawn is a mesh projectile. kill() removes p.m
   // from the scene but keeps it on the pooled object for the next grenade to
@@ -616,6 +664,12 @@ function spawnProjectile(W, o) {
   W.events.emit("tracer", p);
 }
 
+let _shellGeo = null, _shellMat = null;
+// Colliders along ONE projectile's whole frame of travel. testSegment used to run a
+// fresh queryColliders per 2.5 m sub-step (up to 8 a frame per round, each building
+// an array, a Set and string keys) — the top allocation site of the whole frame,
+// 180.7 KB/frame measured. One query per round per frame, into this reused array.
+const _projCols = [];
 function stepProjectiles(W, dt) {
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const p = projectiles[i];
@@ -626,15 +680,20 @@ function stepProjectiles(W, dt) {
       continue;
     }
     // sub-steps so fast bullets don't tunnel
-    const speed = Math.hypot(p.vx, p.vy, p.vz);
+    const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz);
     const steps = Math.max(1, Math.min(8, Math.ceil((speed * dt) / 2.5)));
     const sx = p.x, sy = p.y, sz = p.z;
+    // the frame's XZ travel (gravity only bends Y; a launcher bounce stays well
+    // inside the 0.6 m margin at 26 m/s x 0.45)
+    // (use the RETURN value: a maps.js without the out-param returns its own array)
+    const hx = p.vx * dt / 2, hz = p.vz * dt / 2;
+    const cols = W.map.queryColliders(sx + hx, sz + hz, Math.sqrt(hx * hx + hz * hz) + 0.6, _projCols);
     let hit = false;
     for (let s = 0; s < steps && !hit; s++) {
       const h = dt / steps;
       p.vy += (p.gravity || 0) * h;
       const nx = p.x + p.vx * h, ny = p.y + p.vy * h, nz = p.z + p.vz * h;
-      hit = testSegment(W, p, p.x, p.y, p.z, nx, ny, nz);
+      hit = testSegment(W, p, p.x, p.y, p.z, nx, ny, nz, cols);
       if (!hit) { p.x = nx; p.y = ny; p.z = nz; }
     }
     // Whiz-by: a round passing close is the ONLY cue that you are under fire —
@@ -660,7 +719,7 @@ function kill(W, i, p) {
   POOL.push(p);
 }
 
-function testSegment(W, p, ax, ay, az, bx, by, bz) {
+function testSegment(W, p, ax, ay, az, bx, by, bz, cols) {
   // ── NEAREST-HIT ARBITRATION ────────────────────────────────────────────────
   // This used to `return` on the FIRST actor whose capsule the segment touched,
   // before the static world was tested at all. Two consequences, both bad:
@@ -674,26 +733,37 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
   //      whoever happened to sit earlier in the array.
   // Solve the world hit FIRST, keep the nearest actor candidate rather than the
   // first, then let whichever is nearer along the segment win.
-  const _midX = (ax + bx) / 2, _midZ = (az + bz) / 2;
-  const _halfLen = Math.hypot(bx - ax, bz - az) / 2;
-  const _cols = W.map.queryColliders(_midX, _midZ, _halfLen + 0.6);
-  const sh = K.segmentColliders(ax, ay, az, bx, by, bz, _cols);
+  if (!cols) {
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, hx = (bx - ax) / 2, hz = (bz - az) / 2;
+    cols = W.map.queryColliders(mx, mz, Math.sqrt(hx * hx + hz * hz) + 0.6);
+  }
+  const sh = K.segmentColliders(ax, ay, az, bx, by, bz, cols);
   const worldT = sh ? sh.t : Infinity;
 
-  // 1) actors (capsule vs segment, coarse: sample closest point) — nearest wins
+  // 1) actors (capsule vs segment, coarse: sample closest point) — nearest wins.
+  // Broad phase first: an actor whose axis is outside the sub-segment's XZ box
+  // (grown by the capsule reach) cannot be hit, so it costs four compares, not a
+  // projection and a Math.hypot (60 KB/frame of hypot garbage measured).
+  const REACH = K.PLAYERK.radius + 0.12;
+  const bx0 = (ax < bx ? ax : bx) - REACH, bx1 = (ax < bx ? bx : ax) + REACH;
+  const bz0 = (az < bz ? az : bz) - REACH, bz1 = (az < bz ? bz : az) + REACH;
   let hitT = Infinity, hitActor = null, hitPx = 0, hitPy = 0, hitPz = 0, hitDh = 0;
-  for (const t of W.actors) {
+  const acts = W.actors;
+  for (let ai = 0; ai < acts.length; ai++) {
+    const t = acts[ai];
     if (!t.alive || t.id === p.ownerId) continue;
+    const cx = t.pos.x, cz = t.pos.z;
+    if (cx < bx0 || cx > bx1 || cz < bz0 || cz > bz1) continue;
     const feetY = t.pos.y, headY = t.pos.y + (t.swimming ? 0.9 : K.actorHeight(t));
     // closest point of segment to vertical axis of capsule
-    const cx = t.pos.x, cz = t.pos.z;
     const dx = bx - ax, dz = bz - az;
     const len2 = dx * dx + dz * dz;
     let u = len2 > 0 ? (((cx - ax) * dx) + ((cz - az) * dz)) / len2 : 0;
-    u = K.clamp(u, 0, 1);
+    u = u < 0 ? 0 : u > 1 ? 1 : u;
     const px = ax + dx * u, pz = az + dz * u, py = ay + (by - ay) * u;
-    const dh = Math.hypot(px - cx, pz - cz);
-    if (dh < K.PLAYERK.radius + 0.12 && py > feetY - 0.05 && py < headY + 0.12) {
+    const ex2 = px - cx, ez2 = pz - cz;
+    const dh = Math.sqrt(ex2 * ex2 + ez2 * ez2);
+    if (dh < REACH && py > feetY - 0.05 && py < headY + 0.12) {
       if (u < hitT) { hitT = u; hitActor = t; hitPx = px; hitPy = py; hitPz = pz; hitDh = dh; }
     }
   }
@@ -703,7 +773,8 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
       const t = hitActor, px = hitPx, py = hitPy, pz = hitPz, dh = hitDh;
       const feetY = t.pos.y, headY = t.pos.y + (t.swimming ? 0.9 : K.actorHeight(t));
       if (p.splash) { explode(W, px, py, pz, p.weaponId, p.rarity, p.ownerId); p.dead = true; return true; }
-      const distFromOrigin = Math.hypot(px - p.origin.x, py - p.origin.y, pz - p.origin.z);
+      const ox = px - p.origin.x, oy = py - p.origin.y, oz = pz - p.origin.z;
+      const distFromOrigin = Math.sqrt(ox * ox + oy * oy + oz * oz);
       // The 2.5x head zone used to be the ENTIRE body cylinder above 0.8 height:
       // dh was never re-tested, so a 1.14 m wide disc (radius 0.45 + 0.12 slop)
       // paid headshot damage on a rig whose shoulders are ~0.5 m across — a
@@ -836,7 +907,9 @@ function explode(W, x, y, z, weaponId, rarity, ownerId, depth) {
   }
   // environment: level nearby trees, detonate nearby barrels (chain reaction, depth-capped)
   if (W.map.destroyProp && W.map.queryColliders) {
-    const near = W.map.queryColliders(x, z, R + 1.5);
+    // own array: explode() recurses through barrel chains while iterating this
+    // list, and queryColliders' default return is one shared scratch array
+    const near = W.map.queryColliders(x, z, R + 1.5, []);
     for (const c of near) {
       if (c.dead || !c.prop || !c.hp) continue;
       const cx = (c.minX + c.maxX) / 2, cy = (c.minY + c.maxY) / 2, cz = (c.minZ + c.maxZ) / 2;
