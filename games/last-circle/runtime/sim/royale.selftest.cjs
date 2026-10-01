@@ -563,5 +563,32 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(R.MOVE.sprint <= 9.0, "sprint: speed reined in from the 9.6 that outran the camera");
 }
 
+// -- L6F (2026-10-01): tracking miss in the value model + storm state memo ----
+// trackM is the LINEAR miss a turn-lagging shooter has against a strafing target
+// (bots.js: lateral speed / steer rate). It must default to 0 (every older caller
+// unchanged), can only lower a value, and shrinks the pistol's tight-cone edge
+// over the SMG (bots.js still overrides the model for the pistol: measured bot
+// damage per engaged second puts every primary above it - see chooseGun).
+{
+  const o = (extra) => Object.assign({ aimDeg: 0.85, speed: 6, ehp: 150 }, extra || {});
+  ok(R.gunValueAt("ar", 0, 30, o()) === R.gunValueAt("ar", 0, 30, o({ trackM: 0 })), "value: trackM omitted = 0 (callers without it unchanged)");
+  let monoT = true;
+  for (const id of R.WEAPON_IDS) for (const d of [5, 20, 45, 90]) {
+    let prev = Infinity;
+    for (const tm of [0, 0.3, 0.85, 1.5]) { const v = R.gunValueAt(id, 0, d, o({ trackM: tm })); if (v > prev + 1e-9) monoT = false; prev = v; }
+  }
+  ok(monoT, "value: a larger tracking miss never raises a gun's value");
+  const ratio = (tm) => R.gunValueAt("smg", 0, 35, o({ trackM: tm })) / R.gunValueAt("pistol", 0, 35, o({ trackM: tm }));
+  ok(ratio(0.85) > ratio(0), "value: a tracking miss narrows the pistol's cone advantage over the SMG");
+  // stateAt memo: same t -> same object and same numbers; new t -> a fresh object
+  const sm = new R.Storm({ seed: 5, mode: "standard", half: 784 });
+  const a1 = sm.stateAt(150), a2 = sm.stateAt(150);
+  const raw = sm._stateAt(150);
+  ok(a1 === a2, "storm: a repeated t is answered from the memo (no new objects)");
+  ok(a1.radius === raw.radius && a1.center.x === raw.center.x && a1.phase === raw.phase && a1.dps === raw.dps, "storm: the memo holds the exact state");
+  const b1 = sm.stateAt(151);
+  ok(b1 !== a1 && a1.radius === raw.radius, "storm: a new t builds a new object and never changes one handed out before");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

@@ -66,7 +66,12 @@ export function init(W) {
     for (const b of brains) {
       if (!b.actor.alive || b.actor === shooter) continue;
       const d = hyp(b.actor.pos.x - p.x, b.actor.pos.z - p.z);
-      if (d < 250) b.bb.heard = { x: p.x, z: p.z, t: b.W.t, d, shooterId: shooter.id };
+      if (d < 250) {
+        // one record per brain, rewritten in place (every shot used to allocate one per
+        // listening brain); nothing keeps a reference to it (PUSH copies x/z out)
+        const h = b.bb.heard || (b.bb.heard = { x: 0, z: 0, t: 0, d: 0, shooterId: null });
+        h.x = p.x; h.z = p.z; h.t = b.W.t; h.d = d; h.shooterId = shooter.id;
+      }
     }
   });
   // supply drops: no brain had ANY concept of the two per-match crates, so the
@@ -186,6 +191,22 @@ export function attachBrain(W, actor, nBots) {
       moveTo: null, strafeDir: 1, strafeT: 0,
       campSpot: null, dropTarget: null, chestT: 0, chestId: null,
       stuckT: 0, lastPos: new THREE.Vector3(), burstLeft: 0, burstPause: 0,
+      // EVERY field the brain ever writes, present from birth, so all 49
+      // blackboards share one hidden class. They used to grow these on first use,
+      // each bot in its own order: dozens of shapes at every bb.* read, i.e.
+      // megamorphic loads, and a megamorphic load of a number field hands back a
+      // fresh heap box - garbage on every read in actEngage/moveToward/think. Each
+      // start value behaves exactly like the old `undefined` at every reader:
+      // numbers only meet `|| 0` / `|| -99` defaults or `>` tests against W.t >= 0;
+      // the rest only meet truthiness or `== null`. fightTarget, threatFor and
+      // coverState keep `undefined` itself (compared with !== / ===).
+      lootType: null, supply: null, path: null, pathGoal: null, nextPathT: 0, badLoot: null,
+      progGoal: null, progBest: null, progT: 0, wallSide: 0, detourDir: 0, nextJumpT: 0,
+      anchor: null, anchorT: 0, breaks: 0,
+      fightTarget: undefined, fightT: 0, aimHigh: false, errPhase: 0, closeInUntil: 0,
+      avoidId: null, avoidUntil: 0, swapT: -99, healBlockedUntil: 0,
+      threatFor: undefined, threatT: -99, threatAt: null,
+      coverState: undefined, coverPt: null, coverGiveUp: 0, coverUntil: 0, coverFailUntil: 0, coverReflexUntil: 0,
     },
   };
   actor.brain = brain;
@@ -517,7 +538,8 @@ function think(W, b) {
 }
 
 const GRAB_R = 8, GRAB_CLOSE_M = 8;
-/** Nearest ground gun that is a real upgrade over the starter pistol and that the
+/** Nearest ground gun that is a real upgrade over the starter pistol (a primary:
+ *  isUpgraded's definition, so a pistol of any rarity is not one) and that the
  *  inventory would take (same predicate give() enforces). */
 function nearestGun(W, a, bb, r) {
   if (!W.nearbyLoot) return null;
@@ -526,7 +548,7 @@ function nearestGun(W, a, bb, r) {
   let best = null, bd = 1e9;
   for (let i = 0; i < near.length; i++) {
     const n = near[i];
-    if (n.type !== "item" || n.data.kind !== "weapon") continue;
+    if (n.type !== "item" || n.data.kind !== "weapon" || n.data.id === "pistol") continue;
     if (K.gunScore(n.data.id, n.data.rarity || 0) <= base * 1.001) continue;
     if (bb.badLoot && bb.badLoot[n.id] > W.t) continue;
     if (W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data)) continue;
@@ -573,10 +595,18 @@ function perceive(W, b) {
   if (best) {
     if (bb.target !== best.id) { bb.target = best.id; bb.acquireT = W.t; }
     bb.targetSeenT = W.t;
-    bb.targetPos = { x: best.pos.x, y: best.pos.y, z: best.pos.z };
+    setTargetPos(bb, best.pos);
   } else if (bb.target && W.t - bb.targetSeenT > 8) {
     bb.target = null;   // memory decay → search last known then give up
   }
+}
+
+/** The last-seen target position, rewritten in place: perceive (every think) and
+ *  underFire (every frame of a burst) used to allocate a fresh {x,y,z} each time.
+ *  Every reader copies the numbers out (moveToward, ensureGunOut, coverStep). */
+function setTargetPos(bb, p) {
+  const t = bb.targetPos || (bb.targetPos = { x: 0, y: 0, z: 0 });
+  t.x = p.x; t.y = p.y; t.z = p.z;
 }
 
 function onEnter(W, b, state) {
@@ -662,13 +692,40 @@ function onEnter(W, b, state) {
   }
 }
 
-/** Carries a gun that beats the common starter pistol as a general-purpose gun. */
+/** Carries a PRIMARY it can fight with: a non-pistol gun that beats the common
+ *  starter pistol as a general-purpose gun, with at least half a magazine on hand.
+ *  Two holes measured 2026-10-01 (6 storm-on matches, wdiag): an uncommon pistol
+ *  (gunScore 153 > 133) counted as "upgraded", so a bot that found one dropped
+ *  LOOT from 64 to 35/20 and fought the match with a sidearm; and an EMPTY rifle
+ *  counted too, so a bot with a dry AR and a loaded pistol never went looking for
+ *  rifle ammo (15% of the "better gun carried, pistol held" samples were a dry
+ *  better gun). A pistol is a sidearm at any rarity; a gun with nothing in it is
+ *  not an upgrade. */
 function isUpgraded(a) {
   const base = K.gunScore("pistol", 0);
   const sl = a.inventory.slots;
   for (let i = 0; i < sl.length; i++) {
     const s2 = sl[i];
-    if (s2 && s2.kind === "weapon" && K.gunScore(s2.id, s2.rarity || 0) > base * 1.001) return true;
+    if (s2 && s2.kind === "weapon" && s2.id !== "pistol" && K.gunScore(s2.id, s2.rarity || 0) > base * 1.001 &&
+        !lowOnAmmo(a, s2, 0.5)) return true;
+  }
+  return false;
+}
+/** Fewer rounds on hand (mag + matching reserve) than `frac` of a magazine. */
+function lowOnAmmo(a, s, frac) {
+  const def = K.WEAPONS[s.id];
+  return !def || slotAmmo(a, s) < Math.max(1, def.mag * frac);
+}
+/** Does this ammo type feed a carried primary that is short of a full magazine?
+ *  Ammo for it is a NEED, not filler: without it the primary stays in the bag and
+ *  the bot fights with the pistol (measured: rifles carried with 0-4 rounds). */
+function feedsStarvingPrimary(a, ammoId) {
+  const sl = a.inventory.slots;
+  for (let i = 0; i < sl.length; i++) {
+    const s2 = sl[i];
+    if (!s2 || s2.kind !== "weapon" || s2.id === "pistol") continue;
+    const def = K.WEAPONS[s2.id];
+    if (def && def.ammo === ammoId && lowOnAmmo(a, s2, 1)) return true;
   }
   return false;
 }
@@ -692,7 +749,7 @@ function pickLoot(W, a, near) {
       if (!dry && carriesAtLeast(a, n.data.id, n.data.rarity || 0)) score = 12;
     }
     else if (n.data.kind === "consumable") score = n.data.id.includes("shield") ? 45 : 34;
-    else if (n.data.kind === "ammo") score = dry ? 80 : 38;
+    else if (n.data.kind === "ammo") score = dry ? 80 : (feedsStarvingPrimary(a, n.data.id) ? 70 : 38);
     score -= n.d * 0.4;
     if (score > bs && !lowCeiling(W, n.pos.x, n.pos.y, n.pos.z) && !offShore(W, a, n.pos)) { bs = score; best = n; }   // (only a would-be winner pays for the probes)
   }
@@ -737,7 +794,11 @@ function carriesLongGun(a) {
   const sl = a.inventory.slots;
   for (let i = 0; i < sl.length; i++) {
     const s2 = sl[i];
-    if (s2 && s2.kind === "weapon" && (s2.id === "sniper" || s2.id === "ar") && slotAmmo(a, s2) > 0) return true;
+    // half a magazine, like isUpgraded: a rifle with 4 rounds left is not what
+    // makes a 100 m fight worth starting (measured: bots with "ar:1:4"-style
+    // loadouts opened 70-140 m fights, drew the pistol when the rifle ran dry and
+    // stayed in them instead of looting rifle ammo)
+    if (s2 && s2.kind === "weapon" && (s2.id === "sniper" || s2.id === "ar") && !lowOnAmmo(a, s2, 0.5)) return true;
   }
   return false;
 }
@@ -901,7 +962,8 @@ function underFire(W, b, dt) {
   if (bb.threatFor !== a.lastAttacker || (W.t - (bb.threatT || -99)) > 2.5) {
     bb.threatFor = a.lastAttacker;
     bb.threatT = W.t;
-    bb.threatAt = { x: att.pos.x, z: att.pos.z };
+    if (!bb.threatAt) bb.threatAt = { x: 0, z: 0 };
+    bb.threatAt.x = att.pos.x; bb.threatAt.z = att.pos.z;
   }
   const tp = bb.threatAt;
   steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 4 + (a.tier || 3) * 1.6);
@@ -918,7 +980,7 @@ function underFire(W, b, dt) {
   if (bb.avoidId === att.id) { bb.avoidId = null; bb.avoidUntil = 0; }
   if (bb.target !== att.id) { bb.target = att.id; bb.acquireT = W.t; bb.fightT = 0; }
   bb.targetSeenT = W.t;
-  bb.targetPos = { x: att.pos.x, y: att.pos.y, z: att.pos.z };
+  setTargetPos(bb, att.pos);
   if (b.state !== "ENGAGE") { b.state = "ENGAGE"; b.nextThink = 0; }
   return true;
 }
@@ -938,7 +1000,8 @@ function steerYaw(a, want, dt, speed) {
  *  walkable by design and never block. */
 function obstacleAt(W, x, z, y) {
   const cols = W.map.queryColliders(x, z, 0.6);
-  for (const c of cols) {
+  for (let i = 0; i < cols.length; i++) {
+    const c = cols[i];
     if (c.kind === "ramp") continue;
     if (x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
     if (c.minY < y + 2.0 && c.maxY > y + 0.55) return true;
@@ -1112,7 +1175,17 @@ function navSupport(W, ci) {
     if (c.dead) continue;
     if (x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
     let top;
-    if (c.kind === "ramp") { top = K.rampTopAt(c, x, z); if (top > yTop + NAV_RAMP_EXTRA) continue; }
+    if (c.kind === "ramp") {
+      // sim rampTopAt, inlined: the search calls this per 0.5 m step per ramp, and a
+      // call with number arguments boxes them (the hottest garbage site in a search)
+      let f;
+      if (c.dir === 0) f = (x - c.minX) / Math.max(0.01, c.maxX - c.minX);
+      else if (c.dir === 1) f = (c.maxX - x) / Math.max(0.01, c.maxX - c.minX);
+      else if (c.dir === 2) f = (z - c.minZ) / Math.max(0.01, c.maxZ - c.minZ);
+      else f = (c.maxZ - z) / Math.max(0.01, c.maxZ - c.minZ);
+      top = c.minY + (c.maxY - c.minY) * (f < 0 ? 0 : f > 1 ? 1 : f);
+      if (top > yTop + NAV_RAMP_EXTRA) continue;
+    }
     else { top = c.maxY; if (top > yTop) continue; }
     if (top > s) { s = top; onCol = true; }
   }
@@ -1355,7 +1428,8 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
      So watch the GOAL, not the legs: if the distance has not improved by half a
      metre in 3 s, declare hard-stuck and let the pathfinder take over. */
   if (!bb.progGoal || hyp(tx - bb.progGoal.x, tz - bb.progGoal.z) > 4) {
-    bb.progGoal = { x: tx, z: tz }; bb.progBest = null; bb.progT = 0;
+    if (!bb.progGoal) bb.progGoal = { x: 0, z: 0 };
+    bb.progGoal.x = tx; bb.progGoal.z = tz; bb.progBest = null; bb.progT = 0;
   }
   const goalD = hyp(tx - a.pos.x, tz - a.pos.z);
   if (bb.progBest == null || goalD < bb.progBest - 0.5) { bb.progBest = goalD; bb.progT = 0; }
@@ -1393,7 +1467,15 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // have got the bot round the wall — audit S4).
   const legD = hyp(gx - a.pos.x, gz - a.pos.z);
   let holdStill = false;
-  if (wallAhead(W, a, want, bb.path ? Math.min(3.2, Math.max(0.8, legD)) : 3.2)) {
+  // The probe sits 3.2 m out, so a THIN wall right in front (a 0.35 m hut wall)
+  // falls between the bot and the probe point and is never seen: measured
+  // 2026-10-01, deepwood seed 13, a bot inside a hut pushed into the wall beside the
+  // door for ~80 s (8 stuck episodes) while every probe landed outside. Once the
+  // bot is visibly not moving (stuckT, frozen legs), probe at arm's length too.
+  // (Only then: an extra collider query per moving bot per frame would cost more
+  // than the whole queryColliders budget saved by L6.)
+  if (wallAhead(W, a, want, bb.path ? Math.min(3.2, Math.max(0.8, legD)) : 3.2) ||
+      (bb.stuckT > 0.3 && wallAhead(W, a, want, 0.9))) {
     if (bb.path) { bb.path = null; bb.pathGoal = null; }
     requestPath(W, b, tx, tz, ty);
     if (!bb.wallSide) bb.wallSide = !wallAhead(W, a, want + 0.9, 3.2) ? 1 : (!wallAhead(W, a, want - 0.9, 3.2) ? -1 : 1);
@@ -1569,14 +1651,41 @@ function slotScore(a, s) {
 const IDLE_RANGES = [5, 15, 40, 80];
 /** What this slot is worth right now (sim gunValueAt: time-to-kill from the
  *  weapon tables). dist == null = no live fight. */
-// The value is computed for THIS bot's hands: its tier's aim error (actEngage
-// wobbles the aim sinusoidally at amplitude aimErrDeg, RMS ~0.7 of it). With the
-// fixed 1 deg default the pistol's tight cone made it the "right" gun at 20-60 m
-// against the SMG, which is true for a steady hand and false for a tier-1-3 bot
-// whose 2-5 deg wobble swamps any cone difference; then the SMG's fire rate wins.
-// (Measured 2026-09-30: pistol share of gun kills 38%, most of it at 20-30 m.)
+// The value is computed for THIS bot's hands, with the error model actEngage
+// actually applies (measured, not assumed). Until 2026-10-01 it used only the
+// tier's wobble amplitude x 0.7 (the RMS of the sine), so a tier-4/5 bot "aimed"
+// to 0.6-1.3 deg and the pistol's tight cone won at 20-50 m. The game disagreed:
+// bot damage landed per trigger pull, 6 storm-on matches (wdiag_v1b), tiers 4-5,
+// at 20-30 / 30-40 / 40-50 m: SMG 39 / 25 / 18 vs pistol 26 / 17 / 13 (x rpm/60),
+// and the AR beat the pistol in every band from 10 m out. What the old model left
+// out, both straight from actEngage:
+//  - the target-motion multiplier on the aim error (motionMul below: a target
+//    strafing at walk speed widens the wobble 1.34x, airborne +0.35);
+//  - the turn lag: steerYaw chases the aim point at rate 10/s, so the muzzle trails
+//    a target moving across the sightline by (relative lateral speed x 0.1 s) - a
+//    LINEAR miss that does not shrink with range (gunValueAt trackM). Two strafing
+//    fighters: ~0.85 m, wider than the 0.45 m half-width of a body.
+// With both in, the model ranks the guns the way the matches do (fit 2026-10-01:
+// a free fit of aim + linear miss to the same data lands on 0.5-1.5 deg + 1.0 m).
 const AIM_RMS = 0.7;
-function slotValue(a, s, dist, ehp, speed) {
+const BOT_TURN_RATE = 10;                         // actEngage: steerYaw(a, wantYaw, dt, 10)
+/** actEngage's target-motion multiplier on the aim error (one definition for both). */
+function aimMotionMul(tgtSpeed, airborne) { return 1 + Math.min(1.2, tgtSpeed / 9.6) * 0.55 + (airborne ? 0.35 : 0); }
+/** The distance actEngage will pull this weapon's trigger at (its inRange test).
+ *  ONE definition for the fire discipline and the weapon choice: they used to
+ *  disagree. slotValue scored every gun at every range, and the sim's value model
+ *  ranks the pistol's tight cone above the SMG and the shotgun at 50-100 m, so the
+ *  bot drew a pistol it would not even fire past 49 m, closed in with it and
+ *  fought the close range with it (measured 2026-10-01, wdiag: 3,885 of 10,792
+ *  "better gun carried, pistol held" samples were fights at >= 50 m, and 90 of
+ *  156 bot lives that ended on the pistol carried a loaded better gun). */
+function fireRangeM(def) { return def.falloff ? def.falloff[1] * 1.3 : 30; }
+// gunValueAt opts, reused (slotValue runs per slot per think for 49 brains)
+const _gvOpts = { ehp: 150, speed: 0, mag: 0, reserve: 0, aimDeg: undefined, trackM: 0 };
+/** tgtSpeed / tgtAir: the live target's ground speed and airborne flag (live fight
+ *  only). No fight: the next one is assumed to be against someone strafing at walk
+ *  speed while this bot strafes too (actEngage strafes at mx = +-1 inside 50 m). */
+function slotValue(a, s, dist, ehp, speed, tgtSpeed, tgtAir) {
   const def = K.WEAPONS[s.id];
   if (!def) return -1;
   if (!K.gunValueAt) return slotScore(a, s);
@@ -1584,25 +1693,142 @@ function slotValue(a, s, dist, ehp, speed) {
   const mag = s.mag != null ? s.mag : 0;
   if (mag + reserve <= 0) return 0;
   const tk = a.brain && a.brain.tierK;
-  const aimDeg = tk ? tk.aimErrDeg * AIM_RMS : undefined;
+  const o = _gvOpts;
+  const walk = K.MOVE ? K.MOVE.walk : 6;
+  const idle = dist == null;
+  const ts = idle ? walk : (tgtSpeed || 0), ss = idle ? walk : speed;
+  o.mag = mag; o.reserve = reserve;
+  o.aimDeg = tk ? tk.aimErrDeg * AIM_RMS * aimMotionMul(ts, !idle && tgtAir) : undefined;
+  o.trackM = Math.sqrt(ts * ts + ss * ss) / BOT_TURN_RATE;
+  o.speed = ss;
+  const reach = fireRangeM(def);
   let v;
-  if (dist == null) {
+  if (idle) {
+    o.ehp = 150;
     v = 0;
-    for (let i = 0; i < IDLE_RANGES.length; i++) v += K.gunValueAt(s.id, s.rarity || 0, IDLE_RANGES[i], { mag, reserve, aimDeg });
+    for (let i = 0; i < IDLE_RANGES.length; i++) {
+      const r = IDLE_RANGES[i];
+      if (r <= reach) v += K.gunValueAt(s.id, s.rarity || 0, r, o);   // no shots past its fire range
+    }
     v /= IDLE_RANGES.length;
   } else {
-    v = K.gunValueAt(s.id, s.rarity || 0, dist, { ehp, speed, mag, reserve, aimDeg });
+    if (dist > reach) return 0;                    // the bot will not fire it from here
+    o.ehp = ehp;
+    v = K.gunValueAt(s.id, s.rarity || 0, dist, o);
     // A bot only pulls a sniper trigger while standing still (actEngage), so a
     // sniper is only worth drawing when the bot is not running.
     if (def.cls === "sniper" && speed > 3) v *= 0.5;
   }
   return v;
 }
-/** RANGE-AWARE WEAPON CHOICE (audit S2). Scored by sim gunValueAt at the live
+// PRIMARY FIRST. Measured 2026-10-01 (wdiag_v2, 6 storm-on matches): damage a bot
+// deals per second ENGAGED holding a gun at a seen target, tiers 4-5, at 10-20 /
+// 20-30 / 30-40 / 40-50 m: pistol 10.0 / 7.5 / 6.0 / 3.8, SMG 25.2 / 15.2 / 11.6 /
+// 8.0, AR 22.5 / 23.7 / 17.6 / 13.6; tiers 1-3: pistol 7.6 / 5.8 / 3.5 / 1.0 vs SMG
+// 33.1 / 6.9 / 4.2 / 1.9 and AR 10.0 / 9.6 / 6.2 / 8.8; shotgun 21.7-27.7 inside
+// 20 m; sniper and launcher out-damage the pistol inside their own reach as well.
+// In bot hands EVERY primary beats the sidearm wherever both can fire - the pistol
+// tight cone is swamped by turn lag, target motion and its 3-round burst cadence
+// (actEngage). The value model still ranks the pistol over the SMG at 25-45 m for
+// a steady hand (it has no burst cadence and no head-hit term), and that one
+// ranking was 40-62% of the "better gun carried, pistol held" samples. So the
+// pistol is what a player uses it as: the gun drawn when no primary can do the
+// job - none with a round left (a player empties the rifle, THEN draws the
+// pistol), or none that fires at this range while the pistol does (shotgun past
+// 26 m). Among primaries, and whenever the pistol IS a candidate, the value model
+// decides as before.
+/** RANGE-AWARE WEAPON CHOICE (audit S2): scored by sim gunValueAt at the live
  *  target's distance and EHP, so a sniper is drawn for the man at 120 m, the
  *  shotgun for the man in the doorway, and a sniper one-shot is taken on a target
- *  on 20 EHP. The old raw-DPS score (pistol 133 > sniper 61 x 1.15) swapped every
- *  sniper and most launchers straight back to the starter pistol. */
+ *  on 20 EHP. Pure decision (no side effects): fills and returns the scratch _gc. */
+const _gc = { bestIdx: -1, curScore: -1, bestScore: -1, eff: 0, clock: false, primaryOnly: false, dist: -1, ehp: 150, swap: false, why: "" };
+const _gcScores = [];
+function chooseGun(W, a) {
+  const g = _gc;
+  g.bestIdx = -1; g.curScore = -1; g.bestScore = -1; g.eff = 0; g.clock = false; g.primaryOnly = false; g.swap = false; g.why = "";
+  _gcScores.length = 0;
+  const cur = a.weapon;
+  const holdingConsumable = !cur || cur.id.startsWith("consumable");
+  const curSlot = a.inventory.slots[a.inventory.active];
+  const curDry = !holdingConsumable && curSlot && curSlot.kind === "weapon" && slotAmmo(a, curSlot) <= 0;
+  const bb = a.brain && a.brain.bb;
+  let dist = null, ehp = 150, tgtSpeed = 0, tgtAir = false;
+  if (bb && bb.target && bb.targetPos && W.t - bb.targetSeenT < 3) {
+    const dx = bb.targetPos.x - a.pos.x, dz = bb.targetPos.z - a.pos.z;
+    dist = Math.sqrt(dx * dx + dz * dz);
+    const t = W.actorById.get(bb.target);
+    if (t && t.alive) {
+      ehp = (t.hp || 0) + (t.shield || 0);
+      if (t.vel) tgtSpeed = Math.sqrt(t.vel.x * t.vel.x + t.vel.z * t.vel.z);
+      tgtAir = t.onGround === false;
+    }
+  }
+  g.dist = dist == null ? -1 : dist; g.ehp = ehp;
+  const speed = a.vel ? Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z) : 0;
+  const sl = a.inventory.slots;
+  // which guns can fire at this range at all, and is a loaded primary among them?
+  let anyReach = false, primaryReach = false, primaryLoaded = false;
+  for (let i = 0; i < sl.length; i++) {
+    const s = sl[i];
+    if (!s || s.kind !== "weapon" || slotAmmo(a, s) <= 0) continue;
+    const def = K.WEAPONS[s.id];
+    if (!def) continue;
+    const reach = dist == null || dist <= fireRangeM(def);
+    if (reach) anyReach = true;
+    if (s.id !== "pistol") { primaryLoaded = true; if (reach) primaryReach = true; }
+  }
+  // the pistol sits out when a loaded primary can fire here, or when nothing can
+  // fire from here at all (the fight is still to be closed: carry the primary in)
+  const primaryOnly = primaryReach || (primaryLoaded && !anyReach);
+  g.primaryOnly = primaryOnly;
+  let bestIdx = -1, bs = -1, curScore = -1, fightBest = 0;
+  for (let i = 0; i < sl.length; i++) {
+    const s = sl[i];
+    if (!s || s.kind !== "weapon") continue;
+    let score = slotValue(a, s, dist, ehp, speed, tgtSpeed, tgtAir);
+    if (score > fightBest) fightBest = score;
+    // Tie-break on the NEXT fight (measured 2026-09-30: 66-80% of the samples where
+    // a bot held the pistol while carrying a better gun were fights at 30-200 m,
+    // where no carried gun can finish a 150 EHP target on the ammo it has — every
+    // value was ~0, the tie kept the pistol, and the bot met the next close fight
+    // with it). Where the live fight's value is real (tens) this term is noise.
+    // Every gun with rounds gets it, including the ones out of fire range (value
+    // exactly 0 now): with nothing in the bag able to fire at this range, the bot
+    // holds what the fight will need once it has closed the distance.
+    if (dist != null && slotAmmo(a, s) > 0) score += IDLE_TIE * slotValue(a, s, null, ehp, speed, 0, false);
+    if (primaryOnly && s.id === "pistol") score = 0;   // not a candidate (see above)
+    _gcScores.push(i, score);
+    if (i === a.inventory.active) curScore = score;
+    if (score > bs) { bs = score; bestIdx = i; }
+  }
+  g.bestIdx = bestIdx; g.curScore = curScore; g.bestScore = bs;
+  if (bestIdx < 0) { g.why = "noGun"; return g; }
+  // Only act when there is a REASON to: holding a consumable, holding a dry gun,
+  // or a meaningfully better gun is available. And never re-equip the slot we
+  // already hold — equipSlot rebuilds the weapon object, so calling it every
+  // think would cancel reloads and re-clone the mesh forever.
+  if (bestIdx === a.inventory.active) { g.why = "holding"; return g; }
+  if (holdingConsumable || curDry) { g.swap = true; g.why = "dryOrConsumable"; return g; }
+  if (bb && W.t - (bb.swapT || -99) <= SWAP_GATE_S) { g.why = "gate"; return g; }   // one range-driven swap per 1.2 s
+  // In a fight, charge the swap its real price in the value's own units: the value
+  // is target EHP / time-to-kill, and equipSlot holds a fresh gun for 0.4 s
+  // (weapons.js equipSlot startCd), so the swapped-in gun is worth
+  // ehp / (ehp / v + 0.4). Then demand SWAP_MARGIN over what is in hand, because the
+  // value model's aim and dodge constants are estimates, not measurements.
+  // With NO clock running there is no price and nothing noisy to dither on (no
+  // target: the idle values move only when ammo does; a target beyond every
+  // carried gun's fire range: the fight values are all exactly 0), so the margin
+  // is only hysteresis there. At 1.15 it was the reason a bot that had answered a
+  // mid-range fight with the pistol kept it out for the rest of the match: an SMG
+  // is worth 1.11x the pistol at the idle ranges for a steady hand, under the bar.
+  let eff = bs;
+  const clock = dist != null && fightBest > 0;
+  if (clock) eff = ehp / (ehp / Math.max(1e-6, bs) + SWAP_READY_S);
+  g.eff = eff; g.clock = clock;
+  g.swap = eff > curScore * (clock ? SWAP_MARGIN : SWAP_MARGIN_IDLE);
+  g.why = g.swap ? "better" : "margin";
+  return g;
+}
 function ensureGunOut(W, a) {
   // Old guard: `if (a.weapon && !a.weapon.id.startsWith("consumable")) return;`
   // Every actor is created holding a pistol, so this returned immediately for
@@ -1610,57 +1836,23 @@ function ensureGunOut(W, a) {
   // onto the first gun it ever touched, never upgraded, and — once mag AND
   // reserve hit zero — stood in the open aiming correctly and pulling a dead
   // trigger while a loaded pistol sat in slot 0.
-  const cur = a.weapon;
-  const holdingConsumable = !cur || cur.id.startsWith("consumable");
-  const curSlot = a.inventory.slots[a.inventory.active];
-  const curDry = !holdingConsumable && curSlot && curSlot.kind === "weapon" && slotAmmo(a, curSlot) <= 0;
+  const g = chooseGun(W, a);
+  if (!g.swap) return;
+  W.equipSlot(a, g.bestIdx);
   const bb = a.brain && a.brain.bb;
-  let dist = null, ehp = 150;
-  if (bb && bb.target && bb.targetPos && W.t - bb.targetSeenT < 3) {
-    const dx = bb.targetPos.x - a.pos.x, dz = bb.targetPos.z - a.pos.z;
-    dist = Math.sqrt(dx * dx + dz * dz);
-    const t = W.actorById.get(bb.target);
-    if (t && t.alive) ehp = (t.hp || 0) + (t.shield || 0);
-  }
-  const speed = a.vel ? Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z) : 0;
-  let bestIdx = -1, bs = -1, curScore = -1;
-  for (let i = 0; i < a.inventory.slots.length; i++) {
-    const s = a.inventory.slots[i];
-    if (!s || s.kind !== "weapon") continue;
-    let score = slotValue(a, s, dist, ehp, speed);
-    // Tie-break on the NEXT fight (measured 2026-09-30: 66-80% of the samples where
-    // a bot held the pistol while carrying a better gun were fights at 30-200 m,
-    // where no carried gun can finish a 150 EHP target on the ammo it has — every
-    // value was ~0, the tie kept the pistol, and the bot met the next close fight
-    // with it). Where the live fight's value is real (tens) this term is noise.
-    if (dist != null && score > 0) score += IDLE_TIE * slotValue(a, s, null, ehp, speed);
-    if (i === a.inventory.active) curScore = score;
-    if (score > bs) { bs = score; bestIdx = i; }
-  }
-  if (bestIdx < 0) return;
-  // Only act when there is a REASON to: holding a consumable, holding a dry gun,
-  // or a meaningfully better gun is available. And never re-equip the slot we
-  // already hold — equipSlot rebuilds the weapon object, so calling it every
-  // think would cancel reloads and re-clone the mesh forever.
-  if (bestIdx === a.inventory.active) return;
-  if (holdingConsumable || curDry) { W.equipSlot(a, bestIdx); if (bb) bb.swapT = W.t; return; }
-  if (bb && W.t - (bb.swapT || -99) <= SWAP_GATE_S) return;   // one range-driven swap per 1.2 s
-  // In a fight, charge the swap its real price in the value's own units: the value
-  // is target EHP / time-to-kill, and equipSlot holds a fresh gun for 0.4 s
-  // (weapons.js equipSlot startCd), so the swapped-in gun is worth
-  // ehp / (ehp / v + 0.4). Then demand SWAP_MARGIN over what is in hand, because the
-  // value model's aim and dodge constants are estimates, not measurements.
-  // Out of a fight there is no clock running: only the margin applies.
-  let eff = bs;
-  if (dist != null) eff = ehp / (ehp / Math.max(1e-6, bs) + SWAP_READY_S);
-  if (eff > curScore * SWAP_MARGIN) {
-    W.equipSlot(a, bestIdx);
-    if (bb) bb.swapT = W.t;
-  }
+  if (bb) bb.swapT = W.t;
+}
+/** Test hook (read-only): what ensureGunOut would decide for this bot right now. */
+export function debugGunChoice(W, a) {
+  const g = chooseGun(W, a);
+  const scores = [];
+  for (let i = 0; i < _gcScores.length; i += 2) scores.push({ slot: _gcScores[i], score: +_gcScores[i + 1].toFixed(3) });
+  return Object.assign({}, g, { scores });
 }
 const IDLE_TIE = 0.02;
 const SWAP_READY_S = 0.4;       // weapons.js equipSlot: startCd >= 0.4
 const SWAP_MARGIN = 1.15;
+const SWAP_MARGIN_IDLE = 1.03;
 const SWAP_GATE_S = 1.2;
 
 function actHeal(W, b, dt) {
@@ -1871,7 +2063,7 @@ function actEngage(W, b, dt) {
   const tp = seen ? t.pos : bb.targetPos;
   if (!tp) { bb.target = null; return; }
   const dx = tp.x - a.pos.x, dz = tp.z - a.pos.z;
-  const dist = hyp(dx, dz);
+  const dist = Math.sqrt(dx * dx + dz * dz);   // (inline: actEngage is past the inliner's budget, and every call boxes its numbers)
 
   const wid = a.weapon ? a.weapon.id : "pistol";
   const def = K.WEAPONS[wid] || K.WEAPONS.pistol;
@@ -1923,7 +2115,8 @@ function actEngage(W, b, dt) {
   const px = tp.x + (seen && t.vel ? t.vel.x * lead : 0);
   const pz = tp.z + (seen && t.vel ? t.vel.z * lead : 0);
   let wantYaw = Math.atan2(-(px - eye.x), -(pz - eye.z));
-  let wantPitch = Math.atan2(aimY - eye.y, hyp(px - eye.x, pz - eye.z));
+  const ehx = px - eye.x, ehz = pz - eye.z, dHorizE = Math.sqrt(ehx * ehx + ehz * ehz);
+  let wantPitch = Math.atan2(aimY - eye.y, dHorizE);
   // ARCING WEAPONS need a ballistic solution, not a straight line. The grenade
   // launcher flies at speed 26 under gravity -18 (sim/royale.js, weapons.js), so
   // a flat aim drops every bot-fired shell well short — bots holding one were
@@ -1931,7 +2124,7 @@ function actEngage(W, b, dt) {
   {
     const wdef = K.WEAPONS[a.weapon && a.weapon.id];
     if (wdef && wdef.arc) {
-      const dHoriz = hyp(px - eye.x, pz - eye.z);
+      const dHoriz = dHorizE;
       if (dHoriz > 0.5) wantPitch = arcPitch(wdef, dHoriz, aimY - eye.y);
     }
   }
@@ -1939,8 +2132,8 @@ function actEngage(W, b, dt) {
   // error: base tier error × acquire overshoot (3× decaying 0.6s) × target-motion penalty
   const sinceAcq = W.t - bb.acquireT;
   const acquireMul = sinceAcq < 0.6 ? 3 - (sinceAcq / 0.6) * 2 : 1;
-  const tgtSpeed = seen && t.vel ? hyp(t.vel.x, t.vel.z) : 0;
-  const motionMul = 1 + Math.min(1.2, tgtSpeed / 9.6) * 0.55 + (t.onGround === false ? 0.35 : 0);
+  const tgtSpeed = seen && t.vel ? Math.sqrt(t.vel.x * t.vel.x + t.vel.z * t.vel.z) : 0;
+  const motionMul = 1 + Math.min(1.2, tgtSpeed / 9.6) * 0.55 + (t.onGround === false ? 0.35 : 0);   // = aimMotionMul (inlined)
   const errDeg = b.tierK.aimErrDeg * acquireMul * motionMul * (duel ? 0.55 : 1);
   const err = (errDeg * Math.PI) / 180;
   // wander the error smoothly (not white noise): per-brain sine wobble
@@ -1949,11 +2142,11 @@ function actEngage(W, b, dt) {
   wantPitch += Math.cos(bb.errPhase * 0.83) * err * 0.6;
 
   steerYaw(a, wantYaw, dt, 10);
-  inp.pitch = K.clamp(inp.pitch + (wantPitch - inp.pitch) * Math.min(1, dt * 9), -1.3, 1.3);
+  inp.pitch = Math.max(-1.3, Math.min(1.3, inp.pitch + (wantPitch - inp.pitch) * Math.min(1, dt * 9)));
 
   // fire discipline: reaction delay, LOS, range, bursts
   const reacted = sinceAcq > b.tierK.reactionMs / 1000;
-  const inRange = dist < (def.falloff ? def.falloff[1] * 1.3 : 30);
+  const inRange = dist < fireRangeM(def);          // the same reach ensureGunOut values a gun at
   const canSee = seen;
   inp.ads = dist > 25;
   // Take the crouched stance only when already holding a range position, not
@@ -1975,12 +2168,17 @@ function actEngage(W, b, dt) {
       }
       bb.burstPause -= dt;
     } else if (def.cls === "sniper") {
-      // only when still-ish
+      // PLANT, then fire once still. This used to stop the bot only when it was
+      // ALREADY below 1.5 m/s - but the strafe a few lines up has just set
+      // inp.mx = +-1 (walk speed), so a sniper bot in a fight was never still and
+      // almost never pulled the trigger: 99 sniper trigger pulls at a target in 6 whole
+      // matches against 7,794 landed samples of bots carrying a loaded sniper
+      // (wdiag_base2), and 0-1 damage/s engaged past 50 m. Standing still is the
+      // sniper's price (the value model already halves a running bot's sniper).
       // NOTE: coverStep owns inp.mx/mz when it is active — only fire+crouch here.
-      if (hyp(a.vel.x, a.vel.z) < 1.5) {
-        inp.fire = true; inp.crouch = true;
-        if (bb.coverState === "NONE" || !bb.coverState) { inp.mx = 0; inp.mz = 0; }
-      }
+      if (bb.coverState === "NONE" || !bb.coverState) { inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.jump = false; }
+      inp.crouch = true;
+      if (a.vel.x * a.vel.x + a.vel.z * a.vel.z < 2.25) inp.fire = true;   // < 1.5 m/s
     } else {
       inp.fire = true;
     }

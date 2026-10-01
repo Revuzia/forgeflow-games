@@ -308,7 +308,9 @@ export function disposeMatch(W) {
 }
 
 export function update(W, dt) {
-  for (const a of W.actors) {
+  const acts = W.actors;
+  for (let ai = 0; ai < acts.length; ai++) {
+    const a = acts[ai];
     if (!a.alive || a.netRemote) continue;
     stepWeapon(W, a, dt);
     // recoil recovery: re-center what the kicks added (~0.3s), leaving the
@@ -518,8 +520,13 @@ function crosshairPoint(W, shooter, out) {
   return out.copy(o).addScaledVector(_camDir, bestT);
 }
 
+// Per-shot tables, hoisted: fire() built three object literals per trigger pull.
+const VM_KICK = { pistol: 0.7, smg: 0.5, ar: 0.75, shotgun: 1.6, sniper: 1.9, launcher: 1.2 };
+const HUMAN_KICK = { pistol: 0.008, smg: 0.006, ar: 0.011, shotgun: 0.03, sniper: 0.05, glauncher: 0.035 };
+const BARREL_LEN = { pistol: 0.5, smg: 0.7, ar: 0.95, shotgun: 0.85, sniper: 1.15, glauncher: 0.8 };
+const _eyeFire = { x: 0, y: 0, z: 0 };
 function fire(W, a, def) {
-  const eye = eyePos(a);
+  const eye = eyePos(a, _eyeFire);
   aimDir(a, _d);
   // HUMAN aim = wherever the crosshair visually points
   if (a === W.player) {
@@ -549,19 +556,20 @@ function fire(W, a, def) {
   for (let p = 0; p < pellets; p++) {
     const ox = (srng() - 0.5) * 2 * sr, oy = (srng() - 0.5) * 2 * sr;
     const dir = _pdir.copy(_d).addScaledVector(_right, ox).addScaledVector(_up, oy).normalize();
-    spawnProjectile(W, {
-      x: eye.x + dir.x * 0.6, y: eye.y + dir.y * 0.6 - 0.05, z: eye.z + dir.z * 0.6,
-      vx: dir.x * def.speed, vy: dir.y * def.speed + (def.arc ? 3 : 0), vz: dir.z * def.speed,
-      weaponId: a.weapon.id,
-      rarity: a.weapon.rarity, ownerId: a.id,
-      // only the launcher arcs. The old `def.gravity ? -9.8 : 0` fallback was
-      // dead code — none of the six WEAPONS entries in sim/royale.js has a
-      // gravity key, so it always resolved to 0 and bullets were always flat.
-      gravity: def.arc ? -18 : 0,
-      tLeft: def.arc ? def.fuseS : 3.5,
-      splash: def.splashR || 0, bounce: !!def.arc, mesh: !!def.arc,
-      origin: { x: eye.x, y: eye.y, z: eye.z },
-    });
+    // (fields written straight onto a pooled round: this used to build a spawn
+    // object plus an origin object per PELLET and Object.assign them in)
+    const p = takeRound();
+    p.x = eye.x + dir.x * 0.6; p.y = eye.y + dir.y * 0.6 - 0.05; p.z = eye.z + dir.z * 0.6;
+    p.vx = dir.x * def.speed; p.vy = dir.y * def.speed + (def.arc ? 3 : 0); p.vz = dir.z * def.speed;
+    p.weaponId = a.weapon.id; p.rarity = a.weapon.rarity; p.ownerId = a.id;
+    // only the launcher arcs. The old `def.gravity ? -9.8 : 0` fallback was
+    // dead code — none of the six WEAPONS entries in sim/royale.js has a
+    // gravity key, so it always resolved to 0 and bullets were always flat.
+    p.gravity = def.arc ? -18 : 0;
+    p.tLeft = def.arc ? def.fuseS : 3.5;
+    p.splash = def.splashR || 0; p.bounce = !!def.arc; p.mesh = !!def.arc;
+    p.origin.x = eye.x; p.origin.y = eye.y; p.origin.z = eye.z;
+    launchRound(W, p);
   }
   // VISIBLE ROUND for every LOCAL shot (owner playtest: "firing sniper i see
   // no tracer"). The tracer dash listener existed with per-weapon colors and a
@@ -579,13 +587,13 @@ function fire(W, a, def) {
   // identically. Per-class multiplier onto the SAME 0.05 m axis and 6/s decay:
   // pistol 3.5 cm, smg 2.5, ar 3.75, shotgun 8, sniper 9.5, launcher 6 — and a
   // sniper's recovery stretches to ~0.32 s, which reads as the bolt cycling.
-  a.vmKick = ({ pistol: 0.7, smg: 0.5, ar: 0.75, shotgun: 1.6, sniper: 1.9, launcher: 1.2 })[def.cls] || 1;
+  a.vmKick = VM_KICK[def.cls] || 1;
   // recoil kick (human only — bots model error separately). The kick is
   // tracked in recover-accumulators and re-centers over ~0.3s — permanent
   // kick made the crosshair CLIMB forever (aim drifted ~2m high after a few
   // shots: "my pistol doesn't work").
   if (!a.isBot) {
-    const kick = { pistol: 0.008, smg: 0.006, ar: 0.011, shotgun: 0.03, sniper: 0.05, glauncher: 0.035 }[a.weapon.id] || 0.01;
+    const kick = HUMAN_KICK[a.weapon.id] || 0.01;
     if (!W._recoilRng) W._recoilRng = K.mulberry32((((W.seed >>> 0) ^ 0x7ec011) >>> 0));
     const yawKick = (W._recoilRng() - 0.5) * kick * 0.6;
     a.input.pitch = K.clamp(a.input.pitch + kick, -1.35, 1.35);
@@ -598,13 +606,13 @@ function fire(W, a, def) {
   // muzzle world position from the held weapon (right-hand bone) so the flash
   // erupts at the BARREL, not the eye/body-centre (the third-person "fire from
   // the face" issue). Physics/aim stay eye-based; only the FX origin moves.
-  let muzzle = eye;
+  let muzzle = null;
   if (a.hand) {
     a.hand.updateWorldMatrix(true, false);
     const m = a.hand.matrixWorld.elements;
-    const bl = { pistol: 0.5, smg: 0.7, ar: 0.95, shotgun: 0.85, sniper: 1.15, glauncher: 0.8 }[a.weapon.id] || 0.8;
+    const bl = BARREL_LEN[a.weapon.id] || 0.8;
     muzzle = { x: m[12] + _d.x * bl, y: m[13] + _d.y * bl, z: m[14] + _d.z * bl };
-  }
+  } else muzzle = { x: eye.x, y: eye.y, z: eye.z };   // eye is scratch now: listeners get their own copy
   W.events.emit("shotFired", a, a.weapon.id, muzzle, _d.clone());
 }
 
@@ -630,13 +638,18 @@ function dmgRoll(W) {
   return W._dmgRng();
 }
 
-function spawnProjectile(W, o) {
-  const p = POOL.pop() || {};
-  Object.assign(p, o);
+/** A pooled round with ONE fixed shape (every field present from birth), so the
+ *  projectile loop stays monomorphic and nothing is allocated per pellet. */
+function takeRound() {
+  return POOL.pop() || { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, weaponId: "", rarity: 0, ownerId: null,
+    gravity: 0, tLeft: 0, splash: 0, bounce: false, mesh: false, origin: { x: 0, y: 0, z: 0 },
+    dead: false, whizzed: false, m: null };
+}
+function launchRound(W, p) {
+  const o = p;
   p.dead = false;
-  // POOL entries are recycled through the Object.assign above, which does NOT
-  // clear fields the new spawn object omits — a stale `true` here would mute
-  // the whiz-by on every reused round.
+  // pooled rounds keep their old fields: a stale `true` here would mute the
+  // whiz-by on every reused round.
   p.whizzed = false;
   if (o.mesh && !p.m) {
     // grenade-launcher shell: visible arcing round with a hot tracer tint
@@ -705,17 +718,42 @@ function stepProjectiles(W, dt) {
     // you did not fire.
     if (!p.dead && !p.whizzed && W.player && W.player.alive && p.ownerId !== W.player.id) {
       const c = W.camera.position;
-      const miss = segPointDist(sx, sy, sz, p.x, p.y, p.z, c.x, c.y, c.z, _whizPt);
-      if (miss < 3.5) { p.whizzed = true; W.events.emit("whizBy", { x: _whizPt.x, y: _whizPt.y, z: _whizPt.z }, miss); }
+      // broad phase first (inline, no call): the whole frame's segment lies within
+      // its own length of its start, so a camera further than that + 3.5 m from the
+      // start cannot be whizzed (segPointDist boxed 9 numbers per round per frame)
+      const ex = c.x - sx, ey = c.y - sy, ez = c.z - sz;
+      const fx = p.x - sx, fy = p.y - sy, fz = p.z - sz;
+      const reach = Math.sqrt(fx * fx + fy * fy + fz * fz) + 3.5;
+      if (ex * ex + ey * ey + ez * ez < reach * reach) {
+        const miss = segPointDist(sx, sy, sz, p.x, p.y, p.z, c.x, c.y, c.z, _whizPt);
+        if (miss < 3.5) { p.whizzed = true; W.events.emit("whizBy", { x: _whizPt.x, y: _whizPt.y, z: _whizPt.z }, miss); }
+      }
     }
     if (p.m && !p.dead) p.m.position.set(p.x, p.y, p.z);
+    // A round that has left the world can never hit anything: everything that can
+    // be hit (actors, colliders, terrain) sits inside the map square, and nothing
+    // bends a round sideways (only the launcher has gravity, and that only pulls
+    // DOWN). A miss used to fly its full 3.5 s - 3.5 km at 999 m/s - testing
+    // segments every frame far past the coast and over the sky, the bulk of the
+    // projectile loop's work. Retire it once it is outside the square and moving
+    // further out, or above everything (1 km; gliders top out near 460 m) and still
+    // climbing without gravity. Nothing a round can do in play changes.
+    if (!hit && !p.dead) {
+      const lim = (W.map.size || 1600) * 0.5 + 20;
+      if ((p.x > lim && p.vx >= 0) || (p.x < -lim && p.vx <= 0) || (p.z > lim && p.vz >= 0) || (p.z < -lim && p.vz <= 0) ||
+          (p.y > 1000 && p.vy >= 0 && !p.gravity)) p.dead = true;
+    }
     if (hit || p.dead) kill(W, i, p);
   }
 }
 
 function kill(W, i, p) {
   if (p.m) { W.group("projectiles").remove(p.m); }
-  projectiles.splice(i, 1);
+  // in-place removal, ORDER KEPT (the order decides which of two rounds hitting in
+  // one frame lands first): splice(i, 1) allocated its removed-elements array per kill
+  const n = projectiles.length - 1;
+  for (let j = i; j < n; j++) projectiles[j] = projectiles[j + 1];
+  projectiles.length = n;
   POOL.push(p);
 }
 

@@ -517,6 +517,23 @@ const GUN_CAP = 3;
 /** Would give() accept this item right now? Bots ask before walking to it —
  *  pickLoot used to re-select the exact item give() had just refused, so a
  *  fully-kitted bot twitched in place beside a gun it could not take. */
+/** A bot does not take a gun it cannot load: an empty magazine (a death drop fired
+ *  dry) and not one round of its ammo on hand. It used to walk over it into a free
+ *  slot and carry it, so it fought with the pistol beside a rifle it could not fire
+ *  (measured 2026-10-01: 15% of the "better gun carried, pistol held" samples were
+ *  a dry better gun) - and dropped the empty rifle next to the pistol when it died.
+ *  The human keeps the old rule: walk over anything, E to take anything. */
+function botCannotLoad(a, data) {
+  if (!a.isBot || data.kind !== "weapon" || data.mag == null || data.mag > 0) return false;
+  const def = K.WEAPONS[data.id];
+  return !(def && def.ammo && (a.inventory.ammo[def.ammo] || 0) > 0);
+}
+/** Slot index of the carried pistol, or -1. */
+function pistolIdx(a) {
+  const sl = a.inventory.slots;
+  for (let i = 0; i < sl.length; i++) { const s2 = sl[i]; if (s2 && s2.kind === "weapon" && s2.id === "pistol") return i; }
+  return -1;
+}
 /** Index of the least valuable gun carried, or -1. */
 function worstGunIdx(a) {
   // RARITY FIRST, then score: picking purely by sustained DPS nominates a
@@ -557,6 +574,11 @@ function wouldAccept(W, a, data) {
   }
   if (data.kind === "weapon") {
     if (data.swap) return true;
+    if (botCannotLoad(a, data)) return false;
+    if (a.isBot && data.id === "pistol") {           // a bot carries ONE sidearm (see give)
+      const pi = pistolIdx(a);
+      if (pi >= 0) return (data.rarity || 0) > (inv.slots[pi].rarity || 0);
+    }
     const empty = inv.slots.findIndex((s) => !s);
     const guns = inv.slots.filter((s) => s && s.kind === "weapon").length;
     if (empty >= 0 && guns < GUN_CAP) return true;
@@ -594,6 +616,23 @@ function give(W, a, data) {
     // magazine on the item and honour it coming back in.
     const slot = { kind: "weapon", id: data.id, rarity: data.rarity || 0,
                    mag: data.mag != null ? data.mag : K.WEAPONS[data.id].mag };
+    // ONE SIDEARM PER BOT. Bots walked over every floor pistol into a free slot and
+    // carried two (measured 2026-10-01: "pistol:0 + pistol:0 + ar", "pistol:0 +
+    // pistol:1"), a gun slot the 3-gun cap then denied to a primary. A player keeps
+    // the better pistol and leaves the other: a higher-rarity pistol REPLACES the
+    // carried one (dropped where it stands), anything else is refused (wouldAccept).
+    if (!data.swap && botCannotLoad(a, data)) return false;
+    if (a.isBot && !data.swap && data.id === "pistol") {
+      const pi = pistolIdx(a);
+      if (pi >= 0) {
+        const old = inv.slots[pi];
+        if ((data.rarity || 0) <= (old.rarity || 0)) return false;
+        dropItem(W, a, { kind: "weapon", id: old.id, rarity: old.rarity, mag: old.mag });
+        inv.slots[pi] = slot;
+        if (inv.active === pi) W.equipSlot(a, pi);
+        return true;
+      }
+    }
     // The 3-gun cap used to live ONLY in the human's walkover branch, so bots
     // filled all five slots with guns and could then never pick up a shield or
     // a heal for the rest of the match. An explicit E-swap still works below:

@@ -205,6 +205,21 @@ function clutterTex() {
   _texCache.clutter = t; return t;
 }
 
+/** EVERY static collider is built here, with every field it will ever carry present
+ *  from birth and in one order, so all of them share ONE hidden class. They were
+ *  four object-literal shapes (box, ramp, island box, prop box) that then grew
+ *  `_qs` (queryColliders' stamp) and `dead` at run time: 6-8 shapes at every site
+ *  that reads c.minX..c.maxZ. Past 4 shapes V8 goes megamorphic, and a megamorphic
+ *  load of a number field returns a freshly boxed copy - a heap allocation per
+ *  field read, at the hottest reads in the game (bot path search, wall probes,
+ *  bullets, sight lines, player support). Same values as before: a box has dir -1
+ *  (only ramps read it), a non-prop has prop null / idx -1 / hp 0 (every reader
+ *  tests `c.prop == null`, `!c.prop`, `c.hp > 0`), dead false, _qs 0 (stamps
+ *  start at 1). */
+function mkCollider(kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp) {
+  return { kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp, dead: false, _qs: 0 };
+}
+
 // ── height functions per map ────────────────────────────────────────────────
 function mkHeightFn(mapId, seed) {
   if (mapId === "isla_viva") {
@@ -704,7 +719,7 @@ export async function buildMap(W, mapId) {
   const ROAD_TILE = 6.0;      // asphalt tiles slower — it is a broad flat surface
 
   // ── structures: batched boxes + colliders ─────────────────────────────────
-  const colliders = [];             // {kind:'box'|'ramp', minX..maxZ, dir?, top}
+  const colliders = [];             // mkCollider(): {kind:'box'|'ramp', minX..maxZ, dir, prop, idx, hp, dead, _qs}
   const batches = {};               // colorHex -> geometry list
   function addBox(cx, cy, cz, w, h, d, color, opts) {
     opts = opts || {};
@@ -720,7 +735,7 @@ export async function buildMap(W, mapId) {
       // AABB of the (possibly rotated) box — conservative
       const hw = opts.rotY ? (Math.abs(Math.cos(opts.rotY)) * w + Math.abs(Math.sin(opts.rotY)) * d) / 2 : w / 2;
       const hd = opts.rotY ? (Math.abs(Math.sin(opts.rotY)) * w + Math.abs(Math.cos(opts.rotY)) * d) / 2 : d / 2;
-      colliders.push({ kind: "box", minX: cx - hw, maxX: cx + hw, minY: cy - h / 2, maxY: cy + h / 2, minZ: cz - hd, maxZ: cz + hd });
+      colliders.push(mkCollider("box", cx - hw, cx + hw, cy - h / 2, cy + h / 2, cz - hd, cz + hd, -1, null, -1, 0));
     }
   }
   // addBox rotates a box about its OWN centre (rotateY then translate on an
@@ -753,7 +768,7 @@ export async function buildMap(W, mapId) {
     // collider footprint: run axis is X for dir 0/1, Z for dir 2/3
     const hx = (dir === 0 || dir === 1) ? d / 2 : w / 2;
     const hz = (dir === 0 || dir === 1) ? w / 2 : d / 2;
-    colliders.push({ kind: "ramp", minX: cx - hx, maxX: cx + hx, minY: cy, maxY: cy + h, minZ: cz - hz, maxZ: cz + hz, dir });
+    colliders.push(mkCollider("ramp", cx - hx, cx + hx, cy, cy + h, cz - hz, cz + hz, dir, null, -1, 0));
   }
 
   // A square floor slab MINUS a rectangular stairwell hole (world coords), built
@@ -1795,7 +1810,7 @@ export async function buildMap(W, mapId) {
       // walkable top collider — 0.92·rad matches the visible disc's octagon flat-to-flat
       // (was 0.86·rad, leaving the outer ~14% of grass unsupported → rim fall-through on
       // a hero feature that carries premium loot).
-      colliders.push({ kind: "box", minX: ix - rad * 0.92, maxX: ix + rad * 0.92, minY: topY - 2.2, maxY: topY, minZ: iz - rad * 0.92, maxZ: iz + rad * 0.92 });
+      colliders.push(mkCollider("box", ix - rad * 0.92, ix + rad * 0.92, topY - 2.2, topY, iz - rad * 0.92, iz + rad * 0.92, -1, null, -1, 0));
       // premium loot: every island gets a chest + a couple of floor items
       chest(ix + (rng() - 0.5) * rad * 0.6, topY + 0.4, iz + (rng() - 0.5) * rad * 0.6, "sky_island");
       loot(ix + (rng() - 0.5) * rad, topY + 0.3, iz + (rng() - 0.5) * rad, "sky_island");
@@ -1986,7 +2001,7 @@ export async function buildMap(W, mapId) {
       for (let i = 0; i < list.length; i++) {
         const it = list[i];
         const topY = it.y + (kind === "car" ? 1.6 : kind === "container" ? 2.8 : kind === "barrel" ? 1.6 : 6);
-        colliders.push({ kind: "box", minX: it.x - rad, maxX: it.x + rad, minY: it.y, maxY: topY, minZ: it.z - rad, maxZ: it.z + rad, prop: kind, idx: i, hp: propHP[kind] || 0 });
+        colliders.push(mkCollider("box", it.x - rad, it.x + rad, it.y, topY, it.z - rad, it.z + rad, -1, kind, i, propHP[kind] || 0));
       }
     }
   }

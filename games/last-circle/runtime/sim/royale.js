@@ -491,7 +491,19 @@
     this.totalS = t;
   }
 
+  /** The state is a pure function of t, and every frame asks for the SAME t many
+   *  times (storm.js, the HUD, every thinking brain, loot): three fresh objects per
+   *  call was ~1 KB of garbage a frame. The last answer is kept and handed back
+   *  for a repeat t. Callers only read it (no writes into a returned state
+   *  anywhere in runtime/, grep 2026-10-01); a NEW t always builds a new object, so
+   *  a state an event listener kept is never changed under it. */
   Storm.prototype.stateAt = function (t) {
+    if (this._memo !== undefined && this._memoT === t) return this._memo;
+    var s = this._stateAt(t);
+    this._memoT = t; this._memo = s;
+    return s;
+  };
+  Storm.prototype._stateAt = function (t) {
     if (!this.phases.length) {
       return { center: { x: 0, z: 0 }, radius: this.circles[0].r, dps: 0, phase: 0, phaseState: "idle", tToNext: Infinity, closing: false, done: false };
     }
@@ -674,7 +686,10 @@
   var LAUNCHER_MAX_M = 40;              // 26 m/s shell, 2 s fuse, ~0.7 rad max lob
   /** opts: {ehp (target shield+hp, default 150), speed (shooter m/s),
    *  mag (rounds loaded; omit = full), reserve (rounds in reserve; omit = plenty),
-   *  aimDeg (the shooter's RMS aim error in degrees; omit = VALUE_AIM_DEG)} */
+   *  aimDeg (the shooter's RMS aim error in degrees; omit = VALUE_AIM_DEG),
+   *  trackM (a LINEAR miss at the target in metres that does not shrink with range:
+   *  a turret that lags a strafing target by a fixed time misses it by
+   *  lateral speed x lag wherever it stands; omit = 0)} */
   function gunValueAt(id, rarity, distM, opts) {
     var d = WEAPONS[id];
     if (!d) return 0;
@@ -692,7 +707,8 @@
     var aim = opts.aimDeg != null ? opts.aimDeg : VALUE_AIM_DEG;   // the shooter's own aim error, when known
     var ang = Math.sqrt(spread * spread + aim * aim) * Math.PI / 180;
     var flight = d.speed ? dist / d.speed : 0;
-    var reach = Math.sqrt(Math.pow(dist * Math.tan(ang), 2) + Math.pow(flight * VALUE_DODGE_MS, 2));
+    var track = opts.trackM || 0;
+    var reach = Math.sqrt(Math.pow(dist * Math.tan(ang), 2) + Math.pow(flight * VALUE_DODGE_MS, 2) + track * track);
     var splash = d.splashR ? d.splashR * 0.5 : 0;
     var fx = Math.min(1, (TARGET_HALF_W + splash) / Math.max(1e-6, reach));
     var fy = Math.min(1, (TARGET_HALF_H + splash) / Math.max(1e-6, reach));
