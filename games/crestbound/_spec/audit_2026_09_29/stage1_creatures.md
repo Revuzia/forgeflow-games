@@ -156,3 +156,15 @@ plus harness-only files under _harness/ (the test arena data + its driver).
   'fire' took off on frame 1-4 at 6 m/s SIDEWAYS (still sidestepping the bolt) and never came within 3.2 m.
   Policy fixed (harness only): start a leap only from a settled stand, jump on the speed TOWARD the crown (>= 5 m/s)
   from <= 3.35 m, abort a run-up that cannot get there. Rerun queued after the slagmaw rerun.
+- SLAGMAW DEFEATED ON THE CURRENT CODE (07:51-08:11, frames r0751_01..15, 357 ms/frame): intro toast + line ->
+  lobTele rings -> lob -> a bomb cools DARK -> POUND beside it -> bombKicked into the grate: hp 3->2 (f565), phase2
+  line + fire ring (hopped) -> kick -> 2->1 (f1193), phase3 line + march -> kick -> 1->0 (f1714) -> defeat line ->
+  defeat 3.42 s -> bossDown -> trigger 'boss' -> crest present -> walked to it -> crest counter +1, game 'clear'.
+  Said intro/hurt1/phase2/hurt2/phase3/defeat; fight 25.8 s; 0 bumps. (The carry route — lift a dark bomb with the
+  action key and throw it into the grate — was proven in ember run 1, hp 3->2 at f2974.)
+- GYRARCH run 4 (08:12-08:42, frames r0812_01..13, 95 ms/frame): the run-up leap works — 2 leaps, 2 crown pounds
+  (take-off 6.96 / 5.47 m/s toward the crown from 3.25 m, pound 0.65 / 0.61 m off the core, 0.55 / 0.46 m over the
+  deck): hp 3->2 at f1597 (27 s into the fight), 2->1 at f4085 (68 s). Then 236 s of phase 3 on the gears with NO
+  leap: the bot's "settled" gate compared the hero's velocity with the gear's linVel, but player.vel is relative to
+  the deck (collide.js carryOn moves him by linVel in position), and a phase-3 gear near its peak moves ~1.9 m/s, so
+  the gate never opened. Fixed to the hero's own speed (< 1.5 m/s); rerun queued.

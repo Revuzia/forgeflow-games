@@ -1052,7 +1052,10 @@ export function makeScenarios(bot) {
         }
         // leap in the vent (or the instant before it: the leap lands ~0.5 s later)
         const opening = (st === 'vent' && ventLeft() > 0.8) || (st === 'fire' && c.stateT > 0.1);
-        const settled = Math.hypot(pl.vel.x - c.platRefs[gear].linVel.x, pl.vel.z - c.platRefs[gear].linVel.z) < 1.5;
+        // the hero's OWN motion: player.vel is relative to the deck (collide.js carryOn moves
+        // him by the gear's linVel in position). Measured run 08:12: comparing it with the
+        // gear's linVel blocked every phase-3 leap (the gear moves ~1.9 m/s near its peak).
+        const settled = Math.hypot(pl.vel.x, pl.vel.z) < 1.5;
         if (opening && settled && gearTop(gear) > deckTop() - 1.5 && dB < 4.4 && Math.hypot(p.x - sx, p.z - sz) < 0.7) {
           leaps++; mode = 'run'; runT = 0;
           L = { f: bot.frame, ph, st, stT: r2(c.stateT), ventLeft: st === 'vent' ? r2(ventLeft()) : null, u: r2(gearU(gear)),
