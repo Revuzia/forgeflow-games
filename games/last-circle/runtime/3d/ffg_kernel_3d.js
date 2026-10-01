@@ -25,6 +25,41 @@ const _lcDraco = new DRACOLoader();
 _lcDraco.setDecoderPath("assets/vendor/three/examples/jsm/libs/draco/");
 _lcDraco.setDecoderConfig({ type: "js" });
 
+// This module's own ?v= build tag: sibling runtime modules are imported WITH it,
+// or a deploy would serve the new kernel against a CDN-cached stale sibling.
+const _V = (() => { try { return new URL(import.meta.url).search; } catch (e) { return ""; } })();
+
+/** Frame budgets (contract C3; BLOCKTOOTH config.ts BUDGET). dprMax is ENFORCED
+ * by setDpr; drawCallsMax / p99Ms are reported by the profiler as information. */
+export const BUDGET = Object.freeze({ drawCallsMax: 450, p99Ms: 22, dprMax: 1.5 });
+
+/** Per-asset load timeout (ms). A GLB whose request never settles used to wedge
+ * the match-start await forever (boot-robustness: 4/4 runs with every GLB aborted
+ * left exactly one loadAsync promise unsettled — "BUILDING TERRAIN..." for good). */
+export const LOAD_TIMEOUT_MS = 30000;
+
+// Frame profiler: `?prof=1` only. Without the flag the module is never fetched
+// and the render loop makes no profiler call at all (kernel.prof = NOOP_PROF).
+const _PROF_ON = (() => { try { return new URLSearchParams(location.search).get("prof") === "1"; } catch (e) { return false; } })();
+let _profMod = null;
+if (_PROF_ON) {
+  try { _profMod = await import("./ffg_frameprof.js" + _V); }
+  catch (e) { console.warn("[FFG3D] ?prof=1 but ffg_frameprof.js failed to load:", e); }
+}
+const NOOP_PROF = (_profMod && _profMod.NOOP_PROF) || Object.freeze({
+  enabled: false, gpuSupported: false,
+  begin() {}, end() {}, mark() {}, skip() {}, gpuBegin() {}, gpuEnd() {},
+  annotate() {}, resync() {}, reset() {}, frameBegin() {}, frameEnd() {},
+  dump() { return { enabled: false, frames: 0 }; },
+});
+
+function _withTimeout(promise, ms, url) {
+  if (!(ms > 0)) return promise;
+  let to = 0;
+  const timer = new Promise((_, rej) => { to = setTimeout(() => rej(new Error("timed out loading " + url)), ms); });
+  return Promise.race([promise, timer]).finally(() => clearTimeout(to));
+}
+
 export const genres3d = {};
 export function register3d(name, builder) { genres3d[name] = builder; }
 
@@ -41,6 +76,26 @@ export class Kernel3D {
     this.camera.position.set(0, 26, 30);
     this.camera.lookAt(0, 0, 0);
 
+    // PORTRAIT CAMERA FIT — a PerspectiveCamera's `fov` is the VERTICAL field of
+    // view, so the textbook resize (`camera.aspect = w/h`) holds the vertical
+    // view fixed and lets the HORIZONTAL view collapse as the viewport narrows.
+    // Every 3D game here is framed in a landscape desktop window, so on a phone
+    // held in portrait (~9:19.5) the scene is cropped left and right: checkers
+    // showed about a THIRD of its 8x8 board — you could not see the game you
+    // were playing. Fix: treat the authored fov as correct at a DESIGN aspect
+    // and, when the viewport is narrower than that, widen the vertical fov by
+    // exactly the amount that keeps the HORIZONTAL fov equal to the design one.
+    // At or above the design aspect nothing is touched, so desktop framing is
+    // bit-for-bit what it always was. See applyCameraFit() / setCameraFit().
+    this._camFit = {
+      enabled: view.cameraFit !== false,                                 // content.view.cameraFit:false -> classic fixed-vertical-fov behaviour
+      designAspect: view.designAspect > 0 ? view.designAspect : 16 / 9,  // 16:9 — the window games are authored + QA'd in
+      maxVFov: view.maxVFov > 0 ? view.maxVFov : 85,                     // past ~85 deg vertical the perspective smears and the near plane starts eating geometry
+      authoredFov: this.camera.fov,  // source of truth; NEVER overwritten by a computed value or repeated resizes would ratchet the view open
+      appliedFov: this.camera.fov,   // what we last wrote to camera.fov — how we notice a genre re-authoring the framing
+      active: false,                 // true while a widened fov is in force
+    };
+
     // preserveDrawingBuffer:true lets toDataURL()/the vision fidelity gate
     // capture the rendered frame (default false returns a blank canvas for
     // WebGL). Negligible perf cost at our scale; unlocks automated visual QA.
@@ -52,20 +107,39 @@ export class Kernel3D {
     // quad — a quad has no interior edges, so the 4x buffer was allocated and
     // resolved every frame for zero pixels of coverage. Output is identical.
     this.renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
+    // HONEST COUNTERS: with the default autoReset, every render() call zeroes
+    // renderer.info, so after a composer frame `info.render.calls` showed only
+    // the LAST pass (OutputPass's one quad) — the shadow and bloom passes were
+    // invisible. The frame body resets once per frame instead (see _frame).
+    this.renderer.info.autoReset = false;
+
+    // DPR BUDGET CAP. effectiveDpr = max(0.5, min(devicePixelRatio, tier, BUDGET.dprMax)).
+    // The frame is vertex/skinning-bound, so DPR 2.0 at the high tier bought 1.78x
+    // the pixels for nothing measurable. The cap is enforced AT THE RENDERER:
+    // renderer.setPixelRatio is routed through setDpr, so a caller that still sets
+    // the ratio directly (applyGraphics, the shell's QUALITY buttons) is capped too
+    // and the composer's render targets follow the ratio (EffectComposer only
+    // reads the renderer's ratio once, at construction).
+    this.dpr = 0;
+    this._tierDpr = 1.5;
+    this._devDpr = 0;
+    this._rawSetPixelRatio = this.renderer.setPixelRatio;
+    this.renderer.setPixelRatio = (v) => { this.setDpr(v); };
     // QUALITY preset (shell settings → ffg_settings.quality): low = 1.0 DPR +
-    // no shadows, med = 1.5 + shadows (the old fixed cap), high = 2.0 + shadows.
+    // no shadows, med = 1.5 + shadows, high = 2.0 requested (capped to 1.5) + shadows.
     const QDPR = { low: 1.0, med: 1.5, high: 2.0 };
     let _q = "med";
     try { _q = (JSON.parse(localStorage.getItem("ffg_settings") || "{}").quality) || "med"; } catch (e) {}
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, QDPR[_q] || 1.5));
+    this.setDpr(QDPR[_q] || 1.5);
     this.renderer.shadowMap.enabled = _q !== "low";
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     // live-apply hook for the shell's QUALITY buttons
     {
       const kr = this.renderer;
+      const k = this;
       window.FFG = window.FFG || {};
       window.FFG.applyQuality = function (q) {
-        kr.setPixelRatio(Math.min(window.devicePixelRatio || 1, QDPR[q] || 1.5));
+        k.setDpr(QDPR[q] || 1.5);
         kr.shadowMap.enabled = q !== "low";
         kr.shadowMap.needsUpdate = true;
       };
@@ -112,6 +186,32 @@ export class Kernel3D {
     this._updaters = [];
     this._tweens = [];
     this._running = false;
+    this._raf = 0;
+    this.frameNo = 0;                 // frames run (rAF or stepFrame)
+    this._lastFrameT = 0;             // rAF timestamp of the previous frame (profiler rAF gap)
+    this._mixerPhase = 0;             // hands each rate-limited mixer its own stagger slot
+    this.loadTimeoutMs = LOAD_TIMEOUT_MS;
+    this.budget = BUDGET;
+    // C1: the container's CSS size, cached by a ResizeObserver (see mount). The
+    // frame never reads clientWidth / clientHeight, which forced a style + layout
+    // flush whenever the HUD had dirtied the DOM earlier in the frame.
+    this.viewW = 0;
+    this.viewH = 0;
+    this._viewDirty = false;
+    this._sizeW = -1;                 // what setSize last applied
+    this._sizeH = -1;
+    // C2: frame / context-loss errors (see onError)
+    this._errorHandlers = [];
+    this.lastError = null;
+    this.contextLost = false;
+    this.onContextRestored = null;    // default on restore: location.reload()
+    // C3: frame profiler, `?prof=1` only
+    this.prof = NOOP_PROF;
+    this._profOn = false;
+    if (_profMod && _profMod.FrameProf) {
+      try { this.prof = new _profMod.FrameProf(this.renderer, { budget: BUDGET }); this._profOn = true; }
+      catch (e) { console.warn("[FFG3D] frame profiler unavailable:", e); }
+    }
     // physics (cannon-es) — created lazily via initPhysics()
     this.world = null;
     this.CANNON = null;
@@ -152,18 +252,155 @@ export class Kernel3D {
     });
     this.parent.style.position = this.parent.style.position || "relative";
     this.parent.appendChild(this.hudEl);
+    this._measure();
     this._resize();
-    window.addEventListener("resize", () => this._resize());
+    // C1: the container's CSS box, cached by a ResizeObserver (port of
+    // blocktooth renderer.ts:105-124). The observer fires after layout, before
+    // paint, on ANY size change (window resize, fullscreen, a CSS change) and
+    // only caches: the next frame applies it right before it draws, so setSize
+    // never clears a drawing buffer that is about to be presented (no blank frame).
+    if (typeof ResizeObserver !== "undefined") {
+      this._ro = new ResizeObserver((entries) => {
+        for (const e of entries) {
+          const box = e.contentBoxSize && e.contentBoxSize[0];
+          // clientWidth/clientHeight round the content box; keep that rounding so sizes match the old read
+          const w = Math.round(box ? box.inlineSize : e.contentRect.width);
+          const h = Math.round(box ? box.blockSize : e.contentRect.height);
+          if (w > 0 && h > 0 && (w !== this.viewW || h !== this.viewH)) { this.viewW = w; this.viewH = h; this._viewDirty = true; }
+        }
+      });
+      this._ro.observe(this.parent);
+    }
+    // Event-time reads stay (a forced layout per EVENT is fine; per frame is not).
+    window.addEventListener("resize", () => { this._measure(); this._resize(); });
+    // An orientation flip (and mobile browser chrome sliding in/out) does not
+    // reliably fire a window resize, and when it does the container's box has
+    // not settled yet — so the canvas keeps the pre-rotation size and the fit
+    // above is computed from a stale aspect. visualViewport reports the real
+    // visible area, and the two delayed re-reads catch the box after the
+    // rotation animation lands (the 120/420ms pattern crestbound's boot uses).
+    // _resize() is idempotent, so the extra calls cost one setSize and nothing.
+    const reread = () => { this._measure(); this._resize(); };
+    const nudge = () => { setTimeout(reread, 120); setTimeout(reread, 420); };
+    window.addEventListener("orientationchange", nudge, false);
+    if (window.visualViewport && window.visualViewport.addEventListener) window.visualViewport.addEventListener("resize", nudge);
+    // Context loss (phones, backgrounded tabs, driver resets). three's own
+    // listener already preventDefault()s so a restore is possible; we stop the
+    // loop — rendering into a lost context is a grey dead canvas under a live
+    // HUD — tell the player, and reload on restore (every GPU resource is gone,
+    // and the match state is bound to them).
+    const cv = this.renderer.domElement;
+    cv.addEventListener("webglcontextlost", (e) => {
+      try { e.preventDefault(); } catch (err) {}
+      this.stop();
+      this.contextLost = true;
+      this.onError(new Error("WebGL context lost"), { kind: "contextlost" });
+    }, false);
+    cv.addEventListener("webglcontextrestored", () => {
+      this.contextLost = false;
+      if (typeof this.onContextRestored === "function") this.onContextRestored();
+      else location.reload();
+    }, false);
     return this;
   }
 
+  /** Read the container's CSS box now (event-time only — never per frame). */
+  _measure() {
+    const w = this.parent ? this.parent.clientWidth : 0;
+    const h = this.parent ? this.parent.clientHeight : 0;
+    this.viewW = w > 0 ? w : (window.innerWidth || 1280);
+    this.viewH = h > 0 ? h : (window.innerHeight || 720);
+    this._viewDirty = false;
+  }
+
   _resize() {
-    const w = this.parent.clientWidth || window.innerWidth;
-    const h = this.parent.clientHeight || window.innerHeight;
-    this.renderer.setSize(w, h, true);   // canvas CSS must match window (HiDPI overflow fix)
-    this.camera.aspect = w / Math.max(1, h);
+    this._viewDirty = false;
+    const w = Math.max(1, this.viewW || window.innerWidth || 1);
+    const h = Math.max(1, this.viewH || window.innerHeight || 1);
+    if (w !== this._sizeW || h !== this._sizeH) {
+      this.renderer.setSize(w, h, true);   // canvas CSS must match window (HiDPI overflow fix)
+      if (this.composer) this.composer.setSize(w, h);
+      this._sizeW = w; this._sizeH = h;
+    }
+    this.camera.aspect = w / h;
+    this.applyCameraFit();               // vertical fov follows the aspect on narrow viewports; strict no-op at/above designAspect
     this.camera.updateProjectionMatrix();
-    if (this.composer) this.composer.setSize(w, h);
+  }
+
+  /** Tier DPR -> effective DPR = max(0.5, min(devicePixelRatio, tierDpr, BUDGET.dprMax)).
+   * Applied to the renderer AND the composer's render targets. Returns the
+   * effective ratio. renderer.setPixelRatio(v) is routed here too (see the
+   * constructor), so `v` is always treated as the REQUESTED ratio. */
+  setDpr(tierDpr) {
+    const req = Number.isFinite(+tierDpr) && +tierDpr > 0 ? +tierDpr : 1;
+    const dev = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
+    this._tierDpr = req;
+    this._devDpr = dev;
+    const eff = Math.max(0.5, Math.min(dev, req, BUDGET.dprMax));
+    if (eff !== this.dpr) {
+      this._rawSetPixelRatio.call(this.renderer, eff);
+      if (this.composer && this.composer.setPixelRatio) this.composer.setPixelRatio(eff);
+      this.dpr = eff;
+    }
+    return eff;
+  }
+
+  /** Re-derive the camera's VERTICAL fov for the CURRENT aspect from the
+   * AUTHORED fov. Runs on every resize, once after the genre builder returns,
+   * and on start(). Idempotent — safe to call at any time. Returns the fit state
+   * ({enabled, designAspect, maxVFov, authoredFov, appliedFov, active}).
+   *
+   * Why the authored fov is tracked instead of just read off the camera: genres
+   * author their framing AFTER mount() (`kernel.camera.fov = 40` is the
+   * board-game idiom), and a widened fov must never become the input to the next
+   * widening. So we remember what WE last wrote — if camera.fov differs from
+   * that, a genre re-authored it and that value becomes the new source of truth.
+   */
+  applyCameraFit() {
+    const cam = this.camera, f = this._camFit;
+    if (!f || !cam || !cam.isPerspectiveCamera) return null;
+    // A genre re-authored the framing — adopt it, don't stomp it. EXACT compare:
+    // appliedFov is the exact double we wrote, and this now runs every frame
+    // (start()'s loop, after the updaters). A tolerance let a per-frame lerp that
+    // had settled to within 1e-6 of the last value be overwritten by that stale
+    // value — visually nothing, but no longer bit-identical at 16:9.
+    if (cam.fov !== f.appliedFov) f.authoredFov = cam.fov;
+    const aspect = cam.aspect > 0 ? cam.aspect : 1;
+    let vfov = f.authoredFov;
+    if (f.enabled && aspect < f.designAspect) {
+      // Hold the horizontal fov the game was authored with:
+      //   hFov = 2*atan(tan(authoredFov/2) * designAspect)   <- what a 16:9 desktop shows
+      //   vFov = 2*atan(tan(hFov/2) / aspect)                <- what THIS viewport needs to show that same width
+      const halfH = Math.atan(Math.tan((f.authoredFov * Math.PI) / 360) * f.designAspect);
+      vfov = (2 * Math.atan(Math.tan(halfH) / aspect) * 180) / Math.PI;
+      // A portrait phone asks for ~109 deg at the board-game fov of 40. Clamped
+      // to maxVFov it still opens the horizontal angle ~2.4x — the difference
+      // between a third of the board and all of it. Unclamped, the perspective
+      // smears and geometry starts clipping through the near plane.
+      vfov = Math.min(vfov, f.maxVFov);
+      if (vfov < f.authoredFov) vfov = f.authoredFov;   // never NARROWER than authored
+    }
+    f.active = Math.abs(vfov - f.authoredFov) > 1e-6;
+    f.appliedFov = vfov;
+    if (cam.fov !== vfov) { cam.fov = vfov; cam.updateProjectionMatrix(); }
+    return f;
+  }
+
+  /** Tune or disable the portrait fit — every key optional, applied at once:
+   *    designAspect : aspect the authored fov is correct at   (default 16/9)
+   *    maxVFov      : vertical fov ceiling, degrees           (default 85)
+   *    enabled      : false = classic fixed-vertical-fov, authored fov restored
+   * Content-level equivalent, for games that never touch the kernel directly:
+   * content.view.cameraFit / .designAspect / .maxVFov. Call with no arguments to
+   * read the current state back. */
+  setCameraFit(opts) {
+    opts = opts || {};
+    const f = this._camFit;
+    if (!f) return null;
+    if (opts.designAspect > 0) f.designAspect = opts.designAspect;
+    if (opts.maxVFov > 0) f.maxVFov = opts.maxVFov;
+    if (opts.enabled != null) f.enabled = !!opts.enabled;
+    return this.applyCameraFit();   // disabling puts the authored fov back — it never freezes a widened one
   }
 
   // Optional post-processing: HDR bloom over the emissive elements (glowing
@@ -171,9 +408,9 @@ export class Kernel3D {
   // opt in via enableBloom(); the render loop then draws through the composer.
   enableBloom(opts) {
     opts = opts || {};
-    const w = this.parent.clientWidth || window.innerWidth;
-    const h = this.parent.clientHeight || window.innerHeight;
-    const composer = new EffectComposer(this.renderer);
+    const w = this.viewW || window.innerWidth;
+    const h = this.viewH || window.innerHeight;
+    const composer = new EffectComposer(this.renderer);   // takes the renderer's (capped) DPR; setDpr keeps it in step afterwards
     composer.addPass(new RenderPass(this.scene, this.camera));
     const bloom = new UnrealBloomPass(new THREE.Vector2(w, h),
       opts.strength != null ? opts.strength : 0.6,
@@ -283,8 +520,14 @@ export class Kernel3D {
     // do the same pre-await check one level up (loot.js:39 W.itemProto), which
     // is why the loot group alone carried 134 of them. Park the PROMISE, not
     // just the result, so concurrent callers share one parse and one upload.
+    // TIMEOUT: a request that never settles rejects after loadTimeoutMs with
+    // "timed out loading <url>", so a match start can fail loudly instead of
+    // hanging on its loading screen. The inflight slot clears either way, so a
+    // later call starts a fresh loadAsync. (three's FileLoader joins a fetch of
+    // the same URL that is STILL pending, so a request that is truly hung is not
+    // re-sent: the retry times out again, loudly, instead of hanging.)
     if (!this._gltfInflight[url]) {
-      this._gltfInflight[url] = this.loader.loadAsync(url).then((gltf) => {
+      this._gltfInflight[url] = _withTimeout(this.loader.loadAsync(url), this.loadTimeoutMs, url).then((gltf) => {
         const root = gltf.scene;
         const _lts = [];
         root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } else if (o.isLight) _lts.push(o); });
@@ -308,7 +551,7 @@ export class Kernel3D {
       // every concurrent spawn on a cold url ran its own loadAsync before the
       // first one could fill the cache. All callers await one shared promise.
       if (!this._charInflight[url]) {
-        this._charInflight[url] = this.loader.loadAsync(url).then((g) => {
+        this._charInflight[url] = _withTimeout(this.loader.loadAsync(url), this.loadTimeoutMs, url).then((g) => {   // same timeout as loadGLTF
           const _lts = [];
           g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } else if (o.isLight) _lts.push(o); });
           _lts.forEach((l) => l.parent && l.parent.remove(l)); // PERF: drop model-embedded lights
@@ -383,33 +626,213 @@ export class Kernel3D {
   }
 
   start() {
-    if (this._running) return;
+    if (this._running || this.contextLost) return;
     this._running = true;
-    const loop = () => {
+    this.applyCameraFit();   // genres author their fov after mount() — fit the FINAL value before the first frame
+    this.clock.getDelta();   // a restart (after stop / an error card) must not hand the first frame the whole pause
+    const loop = (now) => {
       if (!this._running) return;
-      const dt = Math.min(0.05, this.clock.getDelta());
-      this._stepTweens(dt);
-      if (this.world) {
-        this.world.step(1 / 60, dt, 3);
-        for (let i = this._phys.length - 1; i >= 0; i--) {
-          const r = this._phys[i];
-          if (r.mesh) { r.mesh.position.copy(r.body.position); r.mesh.quaternion.copy(r.body.quaternion); }
-          if (r.die != null && this.clock.elapsedTime > r.die) {
-            this.world.removeBody(r.body);
-            if (r.mesh && r.removeMesh) this.scene.remove(r.mesh);
-            this._phys.splice(i, 1);
-          }
-        }
-      }
-      for (let i = 0; i < this._mixers.length; i++) this._mixers[i].update(dt);
-      for (const u of this._updaters) u(dt, this.clock.elapsedTime);
-      if (this.composer) this.composer.render(dt); else this.renderer.render(this.scene, this.camera);
+      // Schedule the NEXT frame FIRST. The old loop requested it on its last
+      // line, so one throw anywhere in the frame (any updater, any render) froze
+      // the game for good, silently, with `running` still true (boot-robustness
+      // G4: frame counter 195 -> 195 -> 195 over 5 s). Now a throw cancels this
+      // request, stops the loop and reaches onError (C2) — a card, never a freeze.
       this._raf = requestAnimationFrame(loop);
+      const t = typeof now === "number" ? now : performance.now();
+      const raw = this._lastFrameT ? t - this._lastFrameT : 0;
+      this._lastFrameT = t;
+      try {
+        this._frame(Math.min(0.05, this.clock.getDelta()), true, raw);
+      } catch (e) {
+        cancelAnimationFrame(this._raf);
+        this._raf = 0;
+        this._running = false;
+        this.onError(e, { kind: "frame" });
+      }
     };
-    loop();
+    loop(performance.now());
   }
 
-  stop() { this._running = false; if (this._raf) cancelAnimationFrame(this._raf); }
+  stop() { this._running = false; if (this._raf) cancelAnimationFrame(this._raf); this._raf = 0; this._lastFrameT = 0; }
+
+  /** Run ONE frame synchronously (tests / harness: the hidden or headless tab
+   * throttles rAF, so gates step frames instead of waiting on it). Same body as
+   * the rAF loop — tweens -> physics -> mixers -> updaters -> camera fit ->
+   * render — but a throw propagates to the caller instead of the error card.
+   * `render` false skips only the draw. Returns the frame number. */
+  stepFrame(dt, render) {
+    const d = dt > 0 ? dt : 1 / 60;
+    this.clock.getDelta();   // keep the live loop's next dt small after a burst of stepped frames
+    this._frame(d, render !== false, d * 1000);
+    return this.frameNo;
+  }
+
+  /** The frame body. Section order is the contract the royale pipeline and the
+   * probes rely on: tweens -> physics -> mixers -> updaters -> camera fit -> render. */
+  _frame(dt, render, raw) {
+    const P = this._profOn ? this.prof : null;
+    if (P) P.frameBegin();
+    this.frameNo++;
+    // ONE counter reset per frame (autoReset is off): everything drawn in this
+    // frame — shadow pass, RenderPass, bloom mips, OutputPass, and any updater's
+    // own render — lands in renderer.info.render.{calls,triangles}.
+    this.renderer.info.reset();
+    // C1: apply a size the ResizeObserver cached, right before this frame draws.
+    if (this._viewDirty) this._resize();
+    // A DPR change (window dragged to another monitor, browser zoom) re-derives
+    // the effective ratio. Reading devicePixelRatio forces no layout.
+    if (window.devicePixelRatio !== this._devDpr) this.setDpr(this._tierDpr);
+
+    if (P) P.begin("tweens");
+    this._stepTweens(dt);
+    if (P) P.end("tweens");
+    if (this.world) {
+      if (P) P.begin("physics");
+      this.world.step(1 / 60, dt, 3);
+      for (let i = this._phys.length - 1; i >= 0; i--) {
+        const r = this._phys[i];
+        if (r.mesh) { r.mesh.position.copy(r.body.position); r.mesh.quaternion.copy(r.body.quaternion); }
+        if (r.die != null && this.clock.elapsedTime > r.die) {
+          this.world.removeBody(r.body);
+          if (r.mesh && r.removeMesh) this.scene.remove(r.mesh);
+          this._phys.splice(i, 1);
+        }
+      }
+      if (P) P.end("physics");
+    }
+
+    // C4 MIXER POLICY (flags set by the genre, e.g. player.js per actor):
+    //   m._ffgSkip === true -> not evaluated at all this frame. timeScale 0 is
+    //     NOT a skip: three r172 still runs every action's _update and every
+    //     binding's apply at timeScale 0 (the old far-bot "LOD" paid full price).
+    //   m._ffgRate 2 | 4    -> evaluated every 2nd / 4th frame with the dt it
+    //     accumulated, on a per-mixer stagger slot so the reduced-rate crowd
+    //     spreads across frames instead of spiking together.
+    // A skipped mixer drops its accumulator: when it resumes it continues from
+    // its own clock rather than jumping by the whole skipped span.
+    if (P) P.begin("mixers");
+    const mixers = this._mixers;
+    for (let i = 0; i < mixers.length; i++) {
+      const m = mixers[i];
+      if (m._ffgSkip === true) { m._ffgAcc = 0; continue; }
+      const rate = m._ffgRate === 2 || m._ffgRate === 4 ? m._ffgRate : 1;
+      if (rate === 1) {
+        const acc = m._ffgAcc || 0;
+        m._ffgAcc = 0;
+        m.update(dt + acc);
+        continue;
+      }
+      if (m._ffgSlot === undefined) m._ffgSlot = this._mixerPhase++;
+      const acc = (m._ffgAcc || 0) + dt;
+      if ((this.frameNo + m._ffgSlot) % rate !== 0) { m._ffgAcc = acc; continue; }
+      m._ffgAcc = 0;
+      m.update(acc);
+    }
+    if (P) P.end("mixers");
+
+    if (P) P.begin("updaters");
+    const el = this.clock.elapsedTime;
+    for (const u of this._updaters) u(dt, el);
+    if (P) P.end("updaters");
+
+    // PORTRAIT CAMERA FIT, every frame, AFTER the updaters: the royale menu
+    // (hud.js updateMenuWorld) and the match camera (player.js updateCamera)
+    // both write camera.fov every frame, so a fit applied only on resize survived
+    // at most one frame. applyCameraFit adopts the value the game just wrote as
+    // the authored fov and widens it on narrow viewports; at or above 16:9 it
+    // writes nothing (the game's own value is drawn, bit for bit).
+    this.applyCameraFit();
+
+    if (render) {
+      if (P) { P.begin("render"); P.gpuBegin(); }
+      if (this.composer) this.composer.render(dt); else this.renderer.render(this.scene, this.camera);
+      if (P) { P.gpuEnd(); P.end("render"); }
+    }
+    if (P) P.frameEnd(raw || 0, this.renderer.info);
+  }
+
+  /** C2 — frame / context-loss errors.
+   *   kernel.onError(fn)        register a handler fn(err, info) (info.kind: "frame" |
+   *                             "contextlost" | ...); returns an unsubscribe function.
+   *                             Registered handlers REPLACE the default card; if every
+   *                             handler throws, the default card still shows.
+   *   kernel.onError(err, info) dispatch (what the loop's catch calls).
+   * The default: console.error + window.__LC_BOOT__.fail(title, detail, actions)
+   * when the boot guard is present, else (or if that painted nothing) a minimal
+   * inline card with RELOAD. Pointer lock is released first either way — a card
+   * the cursor cannot reach is not a card. */
+  onError(arg, info) {
+    if (typeof arg === "function") {
+      const fn = arg;
+      this._errorHandlers.push(fn);
+      return () => { const i = this._errorHandlers.indexOf(fn); if (i >= 0) this._errorHandlers.splice(i, 1); };
+    }
+    const err = arg instanceof Error ? arg : new Error(String(arg));
+    const inf = Object.assign({ kind: "error" }, info || {}, { kernel: this });
+    this.lastError = { message: err.message, stack: err.stack || "", kind: inf.kind, t: Math.round(performance.now()) };
+    console.error("[FFG3D] " + inf.kind + " error:", err);
+    try { if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock(); } catch (e) {}
+    let handled = false;
+    for (const h of this._errorHandlers.slice()) {
+      try { h(err, inf); handled = true; } catch (e) { console.error("[FFG3D] onError handler threw:", e); }
+    }
+    if (!handled) this._defaultErrorCard(err, inf);
+    return handled;
+  }
+
+  _defaultErrorCard(err, info) {
+    const lost = info.kind === "contextlost";
+    const title = lost ? "Graphics were interrupted" : "Something went wrong";
+    const detail = lost
+      ? "The browser reset the graphics (this happens on phones and in background tabs). The game reloads when they come back, or press RELOAD."
+      : "The game stopped on an error: " + (err && err.message ? err.message : String(err)) + ". Press RELOAD to start again.";
+    const reload = () => { try { location.reload(); } catch (e) {} };
+    const B = window.__LC_BOOT__;
+    if (B && typeof B.fail === "function") {
+      try { B.fail(title, detail, [{ label: "RELOAD", onClick: reload }]); } catch (e) { console.error("[FFG3D] __LC_BOOT__.fail threw:", e); }
+    }
+    // Paint our own card unless the boot guard visibly put this title on screen
+    // (a guard may treat fail() after its handoff as a no-op, or paint async).
+    const check = () => {
+      if (document.getElementById("ffg-kernel-error")) return;
+      let shown = false;
+      try { shown = (document.body.innerText || "").indexOf(title) >= 0; } catch (e) {}
+      if (!shown) this._paintErrorCard(title, detail, reload);
+    };
+    setTimeout(check, 60);
+  }
+
+  _paintErrorCard(title, detail, reload) {
+    const host = document.body;
+    const card = document.createElement("div");
+    card.id = "ffg-kernel-error";
+    card.setAttribute("role", "alertdialog");
+    card.style.cssText = "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;background:rgba(8,19,31,0.92);font:14px/1.6 system-ui,sans-serif;color:#cfe3f5;z-index:2147483600;pointer-events:auto";
+    const box = document.createElement("div");
+    box.style.cssText = "max-width:380px";
+    const h = document.createElement("div");
+    h.style.cssText = "font:700 18px/1.3 system-ui,sans-serif;color:#e8f4ff;margin-bottom:10px";
+    h.textContent = title;
+    const p = document.createElement("div");
+    p.style.cssText = "margin-bottom:18px;word-break:break-word";
+    p.textContent = detail;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = "RELOAD";
+    b.style.cssText = "padding:11px 22px;border:0;border-radius:8px;background:#2f9e6e;color:#04140d;font:700 14px system-ui,sans-serif;cursor:pointer";
+    b.addEventListener("click", reload);
+    box.appendChild(h); box.appendChild(p); box.appendChild(b);
+    card.appendChild(box);
+    host.appendChild(card);
+    return card;
+  }
+
+  /** C7 convenience: `await kernel.warmup({extras})` == ffg_warmup.warmup(kernel, {extras}).
+   * The module is loaded on first use, with this kernel's ?v= tag. */
+  async warmup(opts) {
+    const mod = await import("./ffg_warmup.js" + _V);
+    return mod.warmup(this, opts);
+  }
 }
 
 function _get(obj, path) { return path.split(".").reduce((o, k) => o[k], obj); }
@@ -420,9 +843,16 @@ function _set(obj, path, v) {
 
 export async function boot3d(content) {
   const builder = genres3d[content.genre];
-  if (!builder) { console.error("[FFG3D] no 3D runtime for genre:", content.genre, "have:", Object.keys(genres3d)); return null; }
+  // THROW, never `return null`: the boot module awaited a null, took it as
+  // success, removed the splash and left a blank page (boot-robustness G11).
+  // A throw reaches its catch and paints the failure.
+  if (!builder) throw new Error("[FFG3D] no 3D runtime for genre: " + content.genre + " (have: " + Object.keys(genres3d).join(", ") + ")");
   const kernel = new Kernel3D(content).mount(content.parent || "game-container");
   const controller = await builder(kernel, content);
+  // The builder is where a genre authors its framing, which lands AFTER
+  // mount()'s resize — refit to the real viewport now, so a portrait phone is
+  // correct on the FIRST frame instead of only after some later resize event.
+  kernel.applyCameraFit();
   kernel.start();
   window.__FFG3D__ = { kernel, controller, content };
   return controller;
@@ -433,5 +863,5 @@ if (typeof window !== "undefined") {
   window.FFG = window.FFG || {};
   window.FFG.genres3d = genres3d;
   window.FFG.boot3d = boot3d;
-  window.FFG.VERSION3D = "2.0.0";
+  window.FFG.VERSION3D = "2.2.0";   // 2.2: rAF-first loop + onError, ResizeObserver view size, per-frame camera fit, honest counters, ?prof=1, mixer policy, DPR cap, load timeouts, warmup
 }
