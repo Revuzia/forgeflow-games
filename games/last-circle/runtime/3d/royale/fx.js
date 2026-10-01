@@ -17,7 +17,35 @@ const noRot = new THREE.Quaternion();
 // tracer stretch axis — hoisted because the update loop used to build a fresh
 // Vector3(0,0,1) for EVERY live tracer EVERY frame, straight into the GC
 const _Z = new THREE.Vector3(0, 0, 1);
+// Scratch colour for spawn(). This used to be `new THREE.Color(...)` on EVERY
+// particle — 49 bots fire through the same global shotFired event, so a busy
+// firefight fed the GC a Color per muzzle cube (feel-juice-ui G15).
+const _col = new THREE.Color();
+const _tdir = new THREE.Vector3();
 let dmgLayer = null;
+
+// ── view size (contract C1) ──────────────────────────────────────────────────
+// kernel.viewW/viewH are the ResizeObserver-cached CSS size (L3). Until that
+// lands, keep our own RO cache: reading canvas.clientWidth every frame forced a
+// layout whenever anything in the DOM had changed since the last frame
+// (fx.js:564 was one of the two per-frame layout reads the frame lane measured).
+let _vw = 0, _vh = 0, _vro = null;
+function viewSize(W) {
+  const k = W.kernel;
+  if (k && k.viewW > 0 && k.viewH > 0) { _vw = k.viewW; _vh = k.viewH; return; }
+  if (!_vro) {
+    const el = k.renderer.domElement;
+    _vw = el.clientWidth || window.innerWidth; _vh = el.clientHeight || window.innerHeight;   // once, at first use
+    if (typeof ResizeObserver !== "undefined") {
+      _vro = new ResizeObserver((ents) => {
+        const r = ents[ents.length - 1].contentRect;
+        if (r.width > 0 && r.height > 0) { _vw = r.width; _vh = r.height; }
+      });
+      _vro.observe(el);
+    } else _vro = true;
+  }
+  if (_vro === true) { const el = k.renderer.domElement; _vw = el.clientWidth; _vh = el.clientHeight; }
+}
 
 export function init(W) {
   const geo = new THREE.BoxGeometry(1, 1, 1);
@@ -28,23 +56,28 @@ export function init(W) {
   inst.count = N;
   inst.frustumCulled = false;
   for (let i = 0; i < N; i++) {
-    parts.push({ alive: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 0, life0: 1, size: 0.1, gravity: 0, drag: 0, dir: null });
+    // dirV is the slot's OWN stretch axis: tracers used to hand in a fresh
+    // Vector3 per round (fx.js:247); now the handler copies into this one.
+    parts.push({ alive: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 0, life0: 1, size: 0.1, gravity: 0, drag: 0, dir: null, dirV: new THREE.Vector3(), stretch: 0, idx: i });
     dummy.position.set(0, -9999, 0); dummy.scale.setScalar(0.0001); dummy.updateMatrix();
     inst.setMatrixAt(i, dummy.matrix);
   }
   W.group("fx").add(inst);
   W.camShake = 0;
 
-  // DOM damage-number layer
+  // DOM damage-number layer + its fixed node pool (built once, never grown)
   dmgLayer = document.createElement("div");
   Object.assign(dmgLayer.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden", zIndex: 30 });
   W.kernel.parent.appendChild(dmgLayer);
+  buildDmgPool();
 
   wireEvents(W);
 }
 
 let cursor = 0;
-function spawn(o) {
+/** Positional spawn — no option object, no allocation. `dir` (optional) is
+ *  COPIED into the slot's own vector. */
+function spawnRaw(x, y, z, vx, vy, vz, color, size, life, gravity, drag, dir, stretch) {
   // The slot index IS the pre-bump cursor. This used to be `parts.indexOf(p)`,
   // a 1024-entry linear scan to recover an index we were already holding — a
   // 26-particle explosion paid 26 of them. Capture BEFORE the bump: reading
@@ -53,33 +86,35 @@ function spawn(o) {
   const p = parts[cursor];
   cursor = (cursor + 1) % N;
   p.alive = true;
-  p.pos.set(o.x, o.y, o.z);
-  p.vel.set(o.vx || 0, o.vy || 0, o.vz || 0);
-  p.life = p.life0 = o.life || 0.6;
-  p.size = o.size || 0.12;
-  p.gravity = o.gravity != null ? o.gravity : -9;
-  p.drag = o.drag != null ? o.drag : 0.5;
-  p.dir = o.dir || null;      // stretch along dir (tracers)
-  p.stretch = o.stretch || 0;
+  p.pos.set(x, y, z);
+  p.vel.set(vx, vy, vz);
+  p.life = p.life0 = life || 0.6;
+  p.size = size || 0.12;
+  p.gravity = gravity != null ? gravity : -9;
+  p.drag = drag != null ? drag : 0.5;
+  if (dir) { p.dirV.copy(dir); p.dir = p.dirV; } else p.dir = null;   // stretch along dir (tracers)
+  p.stretch = stretch || 0;
   p.idx = i;
-  const c = new THREE.Color(o.color != null ? o.color : 0xffcc66);
-  inst.instanceColor.setXYZ(i, c.r, c.g, c.b);
+  _col.set(color != null ? color : 0xffcc66);
+  inst.instanceColor.setXYZ(i, _col.r, _col.g, _col.b);
   inst.instanceColor.needsUpdate = true;
+}
+function spawn(o) {
+  spawnRaw(o.x, o.y, o.z, o.vx || 0, o.vy || 0, o.vz || 0, o.color, o.size, o.life, o.gravity, o.drag, o.dir || null, o.stretch);
 }
 
 function burst(o) {
   const n = o.n || 8;
+  const multi = Array.isArray(o.color);
   for (let i = 0; i < n; i++) {
     const a = Math.random() * Math.PI * 2, e = (Math.random() - 0.3) * Math.PI;
     const s = (o.speed || 5) * (0.4 + Math.random() * 0.8);
-    spawn({
-      x: o.x, y: o.y, z: o.z,
-      vx: Math.cos(a) * Math.cos(e) * s, vy: Math.sin(e) * s + (o.up || 2), vz: Math.sin(a) * Math.cos(e) * s,
-      color: Array.isArray(o.color) ? o.color[i % o.color.length] : o.color,
-      size: (o.size || 0.12) * (0.6 + Math.random() * 0.9),
-      life: (o.life || 0.7) * (0.6 + Math.random() * 0.8),
-      gravity: o.gravity, drag: o.drag,
-    });
+    spawnRaw(o.x, o.y, o.z,
+      Math.cos(a) * Math.cos(e) * s, Math.sin(e) * s + (o.up || 2), Math.sin(a) * Math.cos(e) * s,
+      multi ? o.color[i % o.color.length] : o.color,
+      (o.size || 0.12) * (0.6 + Math.random() * 0.9),
+      (o.life || 0.7) * (0.6 + Math.random() * 0.8),
+      o.gravity, o.drag, null, 0);
   }
 }
 
@@ -239,13 +274,11 @@ function wireEvents(W) {
     // frame — the eye never sees them. The damage ray is already resolved;
     // the bolt flies at a readable pace instead.
     const vs = Math.min(speed, 200);
-    spawn({
-      x: pr.x + dx * 1.4, y: pr.y + dy * 1.4, z: pr.z + dz * 1.4,
-      vx: dx * vs, vy: dy * vs, vz: dz * vs,
-      color: TRACER_COLOR[pr.weaponId] || 0xffd24a,
-      size: 0.13, life: 0.22, gravity: 0, drag: 0,
-      dir: new THREE.Vector3(dx, dy, dz), stretch: len,
-    });
+    _tdir.set(dx, dy, dz);    // copied into the slot's own dirV by spawnRaw
+    spawnRaw(pr.x + dx * 1.4, pr.y + dy * 1.4, pr.z + dz * 1.4,
+      dx * vs, dy * vs, dz * vs,
+      TRACER_COLOR[pr.weaponId] || 0xffd24a,
+      0.13, 0.22, 0, 0, _tdir, len);
   });
 
   // weapons.js emits exactly four surfaces: flesh, wood, stone, dirt. The old
@@ -307,21 +340,26 @@ function wireEvents(W) {
   W.events.on("actorHurt", (victim, info) => {
     burst({ x: victim.pos.x, y: victim.pos.y + 1.2, z: victim.pos.z, n: 4, color: info.toShield > 0 ? 0x4aa8ff : 0xc23b3b, speed: 2.4, size: 0.08, life: 0.35 });
     flashActor(victim, info.toShield > 0);
+    // SHIELD BREAK — the one hit that changes the fight had no visual beat at
+    // all: `info.broke` was read only by audio.js (feel-juice-ui G8), and the
+    // breaking hit drew the same blue chip as any other. A burst of shield-blue
+    // shards off the chest, from the same particle pool (no new draw call).
+    // Distance-gated like the other world bursts; your own and your attacker's
+    // breaks always show.
+    if (info.broke) {
+      const mine = W.player && (info.attackerId === W.player.id || victim === W.player);
+      if (mine || nearCam(victim.pos.x, victim.pos.z, 80)) {
+        burst({ x: victim.pos.x, y: victim.pos.y + 1.25, z: victim.pos.z, n: 18, color: SHARD_COLORS, speed: 6.5, up: 2.2, size: 0.13, life: 0.6, gravity: -7, drag: 1.4 });
+        shieldBreaks++;
+        lastBreak = { id: victim.id, t: W.t };
+      }
+    }
     if (info.attackerId === (W.player && W.player.id)) {
       if (info.isHead) W.hitstopT = Math.max(W.hitstopT || 0, 0.03);
-      // Coalesce: one shotgun blast fires this nine times in a single frame at
-      // identical world coords, so it printed nine overlapping "10"s instead of
-      // one readable "90". Summed and flushed once per frame in update().
-      const b = hurtBuf.get(victim);
-      if (b) {
-        b.dmg += info.dmg;
-        b.isHead = b.isHead || !!info.isHead;
-        b.toShield = b.toShield || info.toShield || 0;
-      } else {
-        hurtBuf.set(victim, { dmg: info.dmg, isHead: !!info.isHead, toShield: info.toShield || 0 });
-      }
-      // fastForward skips fx update entirely — never let the buffer run away
-      if (hurtBuf.size > 64) hurtBuf.clear();
+      // ONE accumulating number per victim (feel-juice-ui G1). A shotgun
+      // blast (nine events in one frame) and an SMG burst (one per 83 ms) both
+      // fold into the same pooled node, which re-pops as its value grows.
+      dmgHit(W, victim, info);
     }
     if (victim === W.player) W.camShake = Math.max(W.camShake, 0.12);
   });
@@ -331,7 +369,10 @@ function wireEvents(W) {
   W.events.on("actorDied", (victim, killerId) => {
     burst({ x: victim.pos.x, y: victim.pos.y + 1, z: victim.pos.z, n: 12, color: [0xffffff, 0x9fd7ff], speed: 5, up: 4, size: 0.14, life: 0.8 });
     // your own kill gets the longest beat — 50 ms at 0.12x is ~6 ms of world time
-    if (W.player && killerId === W.player.id && victim !== W.player) W.hitstopT = Math.max(W.hitstopT || 0, 0.05);
+    if (W.player && killerId === W.player.id && victim !== W.player) {
+      W.hitstopT = Math.max(W.hitstopT || 0, 0.05);
+      dmgKill(victim);      // the killing number turns red and pops bigger
+    }
   });
 
   // propBreak had NO fx listener — this file wires nine events and it was not
@@ -383,24 +424,107 @@ function wireEvents(W) {
   });
 }
 
-/** floating damage number (world → screen projection each frame until dead) */
-const dmgNums = [];
-// victim -> accumulated damage for THIS frame (see the actorHurt handler)
-const hurtBuf = new Map();
-function dmgNumber(W, x, y, z, text, color, scale) {
-  const el = document.createElement("div");
-  el.textContent = text;
-  Object.assign(el.style, {
-    position: "absolute", left: "0", top: "0", color, fontWeight: "900",
-    fontFamily: "system-ui, sans-serif", fontSize: Math.round(26 * (scale || 1)) + "px",
-    textShadow: "0 2px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.5)", willChange: "transform, opacity",
-    WebkitTextStroke: "1px rgba(0,0,0,0.55)",
-  });
-  dmgLayer.appendChild(el);
-  // per-number rise speed: with a shared constant 0.9 every number climbed the
-  // same 0.945 m at the same rate, so a 720 RPM SMG's ~12 concurrent numbers
-  // stayed welded in one column no matter how far apart they spawned
-  dmgNums.push({ el, pos: new THREE.Vector3(x, y, z), t: 0, life: 1.05, riseV: 0.7 + Math.random() * 0.5 });
+// ── damage numbers: ONE accumulating number per victim, from a fixed pool ────
+// Before: one new DOM node per hit (fx.js:391), no pool, no cap, always 26 px,
+// spawned at the name-tag height — a 1 s SMG burst stacked "18 20 22 21 22 19"
+// in an unreadable column over the victim's name (feel-juice-ui G1; 30 nodes
+// created for 30 hits). Now: while a victim keeps taking YOUR damage inside
+// DMG_WINDOW, the same node re-pops and its value grows (18 -> 38 -> 60 ...);
+// after the window it floats up and fades, and the slot returns to the pool.
+// Size is a damage TIER (transform scale, so no layout per frame); colour
+// precedence kill red > head yellow > shield blue > body white; the hit that
+// breaks a shield carries a BREAK tag. Placed BESIDE the name tag (screen-right
+// of the head at ~1.6 m), never on it — the tag sprite spans y 2.0-2.5 m.
+const DMG_POOL = 12, DMG_WINDOW = 0.8, DMG_FLOAT = 0.5, DMG_POP = 0.12, DMG_Y = 1.6;
+const dmgPool = [];           // fixed: built once in init()
+let dmgCreated = 0, dmgSpawned = 0, dmgPops = 0;
+const SHARD_COLORS = [0x4aa8ff, 0x9fd7ff, 0xe8f6ff, 0x2f7fd6];
+let shieldBreaks = 0, lastBreak = null;
+const DMG_COL = { kill: "#ff4d4d", head: "#ffd54a", shield: "#6db9ff", body: "#ffffff" };
+function buildDmgPool() {
+  if (dmgPool.length) {           // a re-init (never expected) re-parents, never rebuilds
+    for (const d of dmgPool) if (d.el.parentNode !== dmgLayer) dmgLayer.appendChild(d.el);
+    return;
+  }
+  for (let i = 0; i < DMG_POOL; i++) {
+    const el = document.createElement("div");
+    const num = document.createElement("span");
+    const tag = document.createElement("span");
+    dmgCreated += 3;
+    el.dataset.lc = "dmgnum";
+    Object.assign(el.style, {
+      position: "absolute", left: "0", top: "0", display: "none", opacity: "0",
+      fontWeight: "900", fontFamily: "system-ui, sans-serif", fontSize: "26px", lineHeight: "1",
+      whiteSpace: "nowrap", transformOrigin: "0 50%", willChange: "transform, opacity",
+      textShadow: "0 2px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.5)",
+      WebkitTextStroke: "1px rgba(0,0,0,0.55)",
+    });
+    Object.assign(tag.style, {
+      display: "none", marginLeft: "5px", fontSize: "12px", letterSpacing: "1.5px", verticalAlign: "middle",
+      color: "#9fd7ff", WebkitTextStroke: "0", textShadow: "0 1px 4px rgba(0,0,0,0.95)",
+    });
+    tag.textContent = "BREAK";
+    el.appendChild(num); el.appendChild(tag);
+    dmgLayer.appendChild(el);
+    dmgPool.push({
+      el, num, tag, live: false, victim: null, vid: null, pos: new THREE.Vector3(),
+      value: 0, kill: false, head: false, shield: false, broke: false,
+      age: 0, popT: 9, shown: "", shownVal: -1, col: "", tagOn: false, op: "", tf: "", disp: false,
+    });
+  }
+}
+function dmgFind(victim) {
+  for (const d of dmgPool) if (d.live && d.victim === victim) return d;
+  return null;
+}
+function dmgAlloc() {
+  let best = null;
+  for (const d of dmgPool) {
+    if (!d.live) return d;
+    if (!best || d.age > best.age) best = d;   // pool full: steal the oldest
+  }
+  return best;
+}
+function dmgHit(W, victim, info) {
+  if (!dmgPool.length) return;
+  let d = dmgFind(victim);
+  if (d && d.age > DMG_WINDOW) {
+    // already floating off: RESTART the count on the same node — still one
+    // live number for this victim, never a second one stacked on it
+    d.value = 0; d.kill = d.head = d.shield = d.broke = false;
+  }
+  if (!d) {
+    d = dmgAlloc();
+    d.live = true; d.victim = victim; d.vid = victim.id;
+    d.value = 0; d.kill = d.head = d.shield = d.broke = false;
+    dmgSpawned++;
+  } else dmgPops++;
+  d.value += info.dmg || 0;
+  if (info.isHead) d.head = true;
+  // the colour tracks the LATEST hit's layer: a burst that chews through the
+  // shield and into health turns from blue to white as it crosses over
+  d.shield = (info.toShield || 0) > 0 && (info.toShield || 0) >= (info.dmg || 0) * 0.5;
+  if (info.broke) d.broke = true;
+  d.age = 0; d.popT = 0;
+  d.pos.set(victim.pos.x, victim.pos.y, victim.pos.z);
+}
+function dmgKill(victim) {
+  const d = dmgFind(victim);
+  if (!d) return;
+  d.kill = true;
+  d.age = 0; d.popT = 0;
+}
+function dmgPark(d) {
+  d.live = false; d.victim = null; d.vid = null;
+  if (d.disp) { d.el.style.display = "none"; d.disp = false; }
+  d.op = ""; d.tf = "";
+}
+/** Damage-number tier: size by the ACCUMULATED value (a 105 sniper body shot
+ *  used to be the same 26 px as an 18 pistol chip). */
+function dmgScale(d) {
+  const v = d.value;
+  const s = v < 20 ? 0.85 : v < 45 ? 1 : v < 90 ? 1.2 : 1.4;
+  return d.kill ? Math.max(1.3, s + 0.15) : s;
 }
 
 // ── frame update ─────────────────────────────────────────────────────────────
@@ -452,31 +576,132 @@ export function fireworks(W, x, y, z) {
   burst({ x, y, z, n: 30, color: FW_COLORS[(fwCursor++) % FW_COLORS.length], speed: 9, up: 1.5, size: 0.16, life: 1.6, gravity: -4, drag: 0.6 });
 }
 
-/** Remove any damage numbers still floating when a match ends — they are DOM
- *  nodes, so they otherwise hang over the menu until their life expires. */
+/** Park every damage number still floating when a match ends — the pool nodes
+ *  stay (they are reused next match), only their state and victim refs go. */
 export function reset() {
-  for (const d of dmgNums) { if (d.el) d.el.remove(); }
-  dmgNums.length = 0;
-  hurtBuf.clear();
+  for (const d of dmgPool) dmgPark(d);
   // actors are rebuilt every match, so a live entry would pin a discarded roster
   flashing.length = 0;
   for (const b of blasts) { b.t = 99; b.sp.visible = false; b.ring.visible = false; }
   shakePrev = 0;
+  lastBreak = null;
+}
+
+/** Contract C8: per-match teardown. Everything fx owns is SESSION-scoped and
+ *  pooled (particle InstancedMesh, 64 decals, 4 blast sprites, their two
+ *  CanvasTextures, the 12 damage-number nodes) — none of it is re-created per
+ *  match, so there is nothing to free; what must not survive a match is state
+ *  that references the old roster (victims, flashing actors' material lists)
+ *  and live particles/decals drawn in the old map. */
+export function disposeMatch(W) {
+  reset();
+  for (let i = 0; i < N && parts.length; i++) {
+    const p = parts[i];
+    if (!p.alive) continue;
+    p.alive = false;
+    dummy.position.set(0, -9999, 0); dummy.scale.setScalar(0.0001); dummy.updateMatrix();
+    inst.setMatrixAt(i, dummy.matrix);
+  }
+  if (inst) { inst.count = 0; inst.instanceMatrix.needsUpdate = true; }
+  if (decalMesh) {
+    _dM.makeScale(0, 0, 0);
+    for (let i = 0; i < DECAL_N; i++) decalMesh.setMatrixAt(i, _dM);
+    decalMesh.instanceMatrix.needsUpdate = true;
+    decalCursor = 0;
+  }
+  if (W) W.camShake = 0;
+}
+
+/** Contract C7: the objects whose programs must exist before the first drop
+ *  frame. L3's warmup forces them visible / un-culled / count >= 1 for one real
+ *  composer.render() and restores them exactly, so this only has to make sure
+ *  every pool EXISTS and is in the scene graph (an object outside the graph is
+ *  invisible to compile no matter its flags — the old prewarm's first bug). */
+export function warmObjects(W) {
+  ensureBlasts(W);
+  ensureDecals(W);
+  const g = W.group("fx");
+  if (inst && !inst.parent) g.add(inst);
+  for (const b of blasts) if (!b.sp.parent) g.add(b.sp, b.ring);
+  const out = [];
+  if (inst) out.push(inst);
+  if (decalMesh) out.push(decalMesh);
+  for (const b of blasts) out.push(b.sp, b.ring);
+  return out;
+}
+
+/** Contract C9 read-back (merged into __LC__.feel() by L4). Cheap: no DOM reads. */
+export function readback(W) {
+  const nums = [];
+  const per = {};
+  let live = 0, maxPer = 0;
+  for (const d of dmgPool) {
+    if (!d.live) continue;
+    live++;
+    per[d.vid] = (per[d.vid] || 0) + 1;
+    if (per[d.vid] > maxPer) maxPer = per[d.vid];
+    nums.push({
+      victim: d.vid, text: d.shown, value: Math.round(d.value), kill: d.kill, head: d.head, shield: d.shield, broke: d.broke,
+      color: d.col, scale: +dmgScale(d).toFixed(2), ageMs: Math.round(d.age * 1000), floating: d.age > DMG_WINDOW,
+      opacity: d.op === "" ? 0 : +d.op,
+    });
+  }
+  let pLive = 0;
+  for (let i = 0; i < parts.length; i++) if (parts[i].alive) pLive++;
+  return {
+    dmg: { live, maxPerVictim: maxPer, perVictim: per, numbers: nums, pool: dmgPool.length,
+           nodesCreated: dmgCreated, spawned: dmgSpawned, pops: dmgPops, windowMs: DMG_WINDOW * 1000 },
+    shieldBreaks, lastShieldBreak: lastBreak,
+    particles: { live: pLive, cap: N },
+    camShake: W ? +(W.camShake || 0).toFixed(3) : 0,
+  };
+}
+
+function updateDmg(W, dt) {
+  let any = false;
+  for (let i = 0; i < dmgPool.length; i++) if (dmgPool[i].live) { any = true; break; }
+  if (!any) return;
+  viewSize(W);
+  const cam = W.camera;
+  cam.updateMatrixWorld();   // also refreshes matrixWorldInverse for project()
+  const focal = _vh / (2 * Math.tan((cam.fov * Math.PI / 180) / 2));
+  for (let i = 0; i < dmgPool.length; i++) {
+    const d = dmgPool[i];
+    if (!d.live) continue;
+    d.age += dt; d.popT += dt;
+    const fl = d.age > DMG_WINDOW ? (d.age - DMG_WINDOW) / DMG_FLOAT : 0;
+    if (fl >= 1) { dmgPark(d); continue; }
+    // follow the victim while the count is live; the anchor freezes once it floats
+    const v = d.victim;
+    if (v && fl === 0 && v.pos) d.pos.set(v.pos.x, v.pos.y, v.pos.z);
+    proj.set(d.pos.x, d.pos.y + DMG_Y + fl * 0.55, d.pos.z);
+    const dist = Math.max(1, cam.position.distanceTo(proj));
+    proj.project(cam);
+    if (proj.z > 1) {                         // behind the camera
+      if (d.op !== "0") { d.el.style.opacity = "0"; d.op = "0"; }
+      continue;
+    }
+    // beside the tag: ~0.62 m to the screen-right of the head, in px, clamped so
+    // a far victim's number still clears the body and a near one stays close
+    const off = Math.max(18, Math.min(80, 0.62 * focal / dist));
+    const sx = (proj.x * 0.5 + 0.5) * _vw + off, sy = (-proj.y * 0.5 + 0.5) * _vh;
+    const pk = d.popT < DMG_POP ? 1 - d.popT / DMG_POP : 0;
+    const s = dmgScale(d) * (1 + (d.kill ? 0.5 : 0.35) * pk);
+    const rv = Math.round(d.value);
+    if (rv !== d.shownVal) { d.shownVal = rv; d.shown = String(rv); d.num.textContent = d.shown; }
+    const col = d.kill ? DMG_COL.kill : d.head ? DMG_COL.head : d.shield ? DMG_COL.shield : DMG_COL.body;
+    if (col !== d.col) { d.el.style.color = col; d.col = col; }
+    const tagOn = d.broke && !d.kill;         // the kill supersedes the BREAK tag
+    if (tagOn !== d.tagOn) { d.tag.style.display = tagOn ? "inline" : "none"; d.tagOn = tagOn; }
+    if (!d.disp) { d.el.style.display = "block"; d.disp = true; }
+    const tf = "translate(" + sx.toFixed(0) + "px," + sy.toFixed(0) + "px) translateY(-50%) scale(" + s.toFixed(2) + ")";
+    if (tf !== d.tf) { d.el.style.transform = tf; d.tf = tf; }
+    const op = fl > 0 ? (1 - fl).toFixed(2) : "1";
+    if (op !== d.op) { d.el.style.opacity = op; d.op = op; }
+  }
 }
 
 export function update(W, dt) {
-  // flush this frame's coalesced damage numbers (colour precedence: head > shield > body)
-  if (hurtBuf.size) {
-    for (const [victim, b] of hurtBuf) {
-      // Jitter the spawn point. The coalescing above merges one shotgun blast
-      // but the Map is cleared every frame, so sustained fire still stacks a
-      // number per frame at the SAME world point — 12/s from an SMG piled into
-      // one illegible column. +/-0.35 m of spread is enough to read them apart.
-      dmgNumber(W, victim.pos.x + (Math.random() - 0.5) * 0.7, victim.pos.y + 2.1 + Math.random() * 0.35, victim.pos.z + (Math.random() - 0.5) * 0.7,
-        String(Math.round(b.dmg)), b.isHead ? "#ffd54a" : b.toShield > 0 ? "#6db9ff" : "#ffffff", 1);
-    }
-    hurtBuf.clear();
-  }
   // startMatch clears every scene group — re-adopt the particle mesh or NO
   // particle (muzzle flash / tracer / impact / explosion) ever renders
   // in a match (root cause of "when shooting i dont see bullets")
@@ -559,20 +784,9 @@ export function update(W, dt) {
     if (k <= 0) flashing.splice(i, 1);
   }
 
-  // damage numbers
-  const cam = W.camera, rect = W.kernel.renderer.domElement;
-  const w2 = rect.clientWidth, h2 = rect.clientHeight;
-  for (let i = dmgNums.length - 1; i >= 0; i--) {
-    const d = dmgNums[i];
-    d.t += dt;
-    if (d.t > d.life) { d.el.remove(); dmgNums.splice(i, 1); continue; }
-    proj.copy(d.pos); proj.y += d.t * d.riseV;
-    proj.project(cam);
-    if (proj.z > 1) { d.el.style.opacity = "0"; continue; }
-    const sx = (proj.x * 0.5 + 0.5) * w2, sy = (-proj.y * 0.5 + 0.5) * h2;
-    d.el.style.transform = `translate(${sx.toFixed(0)}px, ${sy.toFixed(0)}px)`;
-    d.el.style.opacity = String(1 - (d.t / d.life) * 0.9);
-  }
+  // damage numbers (pooled, one per victim) — only style writes, never a
+  // layout read: the view size comes from the C1 cache
+  updateDmg(W, dt);
 
   // Camera shake is CONSUMED by player.js's updateCamera and decayed here, and the frame
   // order in ffg_royale3d.js is player(camera) → weapons(emits shotFired,

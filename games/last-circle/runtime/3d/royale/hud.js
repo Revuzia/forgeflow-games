@@ -25,6 +25,54 @@ let feedTimer = [];
 // HiDPI screen. Capped at 2 — past that it is fill-rate for nothing.
 const HUD_DPR = Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2);
 
+// ── view size (contract C1) ──────────────────────────────────────────────────
+// kernel.viewW/viewH (L3) are the ResizeObserver-cached CSS size. Until that
+// lands, hud keeps its own RO cache. stepIndicators read the canvas's
+// clientWidth/clientHeight EVERY frame (hud.js:2367) — a forced layout any time
+// the HUD had written text since the last frame.
+let _vw = 0, _vh = 0, _vro = null;
+function viewSize(W) {
+  const k = W.kernel;
+  if (k && k.viewW > 0 && k.viewH > 0) { _vw = k.viewW; _vh = k.viewH; return; }
+  if (!_vro) {
+    const el = k.renderer.domElement;
+    _vw = el.clientWidth || window.innerWidth; _vh = el.clientHeight || window.innerHeight;   // once
+    if (typeof ResizeObserver !== "undefined") {
+      _vro = new ResizeObserver((ents) => {
+        const r = ents[ents.length - 1].contentRect;
+        if (r.width > 0 && r.height > 0) { _vw = r.width; _vh = r.height; }
+      });
+      _vro.observe(el);
+    } else _vro = true;
+  }
+  if (_vro === true) { const el = k.renderer.domElement; _vw = el.clientWidth; _vh = el.clientHeight; }
+}
+
+// ── announcement band geometry ───────────────────────────────────────────────
+// The owner-approved top stack does not move: compass (top 4), storm row
+// (top 56), then the LVL chip + quest card stack at META_TOP. The big banner
+// (DEPLOY / ELIMINATED / LAST ONE STANDING / LEVEL) used to be pinned at top 14%
+// — 101 px at 720p, exactly the LVL chip row — so it painted over the chip and
+// the quest card in every match (feel-juice-ui G4). It now starts BAND_GAP below
+// the stack's measured bottom; storm and pickup lines sit under the band; the
+// death card and the indicator ring keep clear of it.
+const META_TOP = 94;         // px — the LVL chip + quest card stack
+const META_RESERVE = 74;     // chip ~22 + gap 6 + card ~46: held before the card first shows
+const BAND_GAP = 12;
+const BAND_H = 70;           // banner title (34 px Orbitron) + subtitle
+const IND_HALF = 24;         // half-height of the biggest ring cue (34 px damage glyph)
+function bandTop() { return Math.max(R._metaBottom || 0, META_TOP + META_RESERVE) + BAND_GAP; }
+function placeBand() {
+  if (!R.annWrap) return;
+  const t = Math.round(bandTop());
+  if (R._bandTop === t) return;
+  R._bandTop = t;
+  R.annWrap.style.top = t + "px";
+  if (R.stormMsg) R.stormMsg.style.top = (t + BAND_H + 6) + "px";
+  if (R.pickupMsg) R.pickupMsg.style.top = (t + BAND_H + 40) + "px";
+  if (R.deathBox) R.deathBox.style.top = (t + BAND_H + 16) + "px";
+}
+
 const css = (el, o) => { Object.assign(el.style, o); return el; };
 function h(tag, styles, text, parent) {
   const el = document.createElement(tag);
@@ -621,21 +669,32 @@ export function showMenu(W, startMatch) {
   }, "LAST CIRCLE", topBar);   // no studio/site branding inside the game itself
   h("div", { fontSize: "12px", opacity: "0.55", letterSpacing: "2px", fontWeight: "600" }, "SEASON 1  ·  FREE TO PLAY", topBar);
 
-  // center stack
+  // center stack. A centred column TALLER than the viewport overflows at BOTH
+  // ends, and the top end cannot be scrolled to: at 1280x720 the wordmark's top
+  // sat at -57 px and at 1366x768 at -33 px (feel-juice-ui G6, measured). Now
+  // the column starts at the top and scrolls when it has to; the auto margins on
+  // its first and last children still centre it whenever it fits. Short
+  // viewports also get a compact layout (tighter gaps, smaller preview stage,
+  // no tagline) so the common laptop sizes need little or no scroll.
+  const compact = (window.innerHeight || 900) < 860;
   const wrap = h("div", {
     position: "absolute", inset: "0", display: "flex", flexDirection: "column",
-    alignItems: "center", justifyContent: "center", gap: "20px", padding: "64px 24px 40px",
+    alignItems: "center", justifyContent: "flex-start", gap: compact ? "12px" : "20px",
+    padding: compact ? "58px 24px 16px" : "64px 24px 40px", boxSizing: "border-box",
+    overflowY: "auto", overflowX: "hidden",
   }, null, L);
+  wrap.dataset.lc = "menuwrap";
 
   // title block
-  const titleBlock = h("div", { textAlign: "center", animation: "lcTitleIn .9s cubic-bezier(.2,.8,.2,1) both" }, null, wrap);
-  h("div", {
-    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "clamp(42px, 7vw, 72px)", fontWeight: "900",
+  const titleBlock = h("div", { textAlign: "center", marginTop: "auto", animation: "lcTitleIn .9s cubic-bezier(.2,.8,.2,1) both" }, null, wrap);
+  const wordmark = h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "min(72px, 7vw, 9vh)", fontWeight: "900", lineHeight: "1.15",
     letterSpacing: "10px",
     background: "linear-gradient(180deg, #ffffff 10%, #a8d4ff 55%, #4a9fff 100%)",
     WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
     filter: "drop-shadow(0 0 32px rgba(80,160,255,0.55)) drop-shadow(0 6px 4px rgba(0,0,0,0.55))",
   }, "LAST CIRCLE", titleBlock);
+  wordmark.dataset.lc = "wordmark";
   // Level / XP / career on the MENU. All of it existed already but was only ever
   // visible on the one post-match screen, so between sessions the game showed
   // the player no evidence they had ever played it.
@@ -700,7 +759,7 @@ export function showMenu(W, startMatch) {
     }
     if (!W.daily.firstWin) h("div", { fontSize: "11px", opacity: "0.75", color: "#9fd7ff", textAlign: "left", letterSpacing: "0.2px" }, "First win today  ·  +750 XP", dp);
   }
-  h("div", {
+  if (!compact) h("div", {
     fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "600",
     letterSpacing: "6px", color: "#b8d8ff", opacity: "0.85", marginTop: "6px",
     textShadow: "0 2px 12px rgba(0,0,0,0.8)",
@@ -848,8 +907,9 @@ export function showMenu(W, startMatch) {
     fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "11px", letterSpacing: "3px",
     opacity: "0.7", fontWeight: "800", color: "#9fd0ff",
   }, "OPERATIVE", bay);
+  const STG = compact ? 220 : 280;
   const stage = h("div", {
-    position: "relative", width: "280px", height: "280px", borderRadius: "14px",
+    position: "relative", width: STG + "px", height: STG + "px", borderRadius: "14px",
     overflow: "hidden",
     background: "radial-gradient(ellipse at 50% 78%, rgba(87,176,255,0.28) 0%, rgba(8,18,36,0.5) 45%, rgba(4,10,20,0.85) 100%)",
     border: "1px solid rgba(120,190,255,0.25)",
@@ -866,8 +926,14 @@ export function showMenu(W, startMatch) {
       c.style[a] = "2px solid rgba(120,200,255,0.7)";
       c.style[b] = "2px solid rgba(120,200,255,0.7)";
     });
-  const pvCv = h("canvas", { width: "280px", height: "280px", display: "block" }, null, stage);
+  // Hidden until the operative's first menu clip is playing: the three menu
+  // clips are awaited GLB fetches, and until they land the stage showed a
+  // T-posed or empty rig (feel-juice-ui G6: T-pose at ~2.5 s, empty at 1366x768).
+  const pvCv = h("canvas", { width: STG + "px", height: STG + "px", display: "block", opacity: "0", transition: "opacity .3s ease" }, null, stage);
   pvCv.width = 560; pvCv.height = 560;
+  pvCv.dataset.lc = "preview";
+  const pvShow = (on) => { pvCv.style.opacity = on ? "1" : "0"; pvCv.dataset.shown = on ? "1" : "0"; };
+  pvShow(false);
   const nameEl = h("div", {
     fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "18px", fontWeight: "800",
     letterSpacing: "2px", color: "#eef6ff", textShadow: "0 0 16px rgba(100,180,255,0.4)",
@@ -969,6 +1035,7 @@ export function showMenu(W, startMatch) {
 
   async function setSkin(i) {
     skinIdx = (i + MENU_SKINS.length) % MENU_SKINS.length;
+    pvShow(false);
     const meta = MENU_SKINS[skinIdx];
     // Locked skins stay browsable — seeing what level 10 buys you is the point
     // of a locker — but they are not equipped and not persisted.
@@ -989,6 +1056,7 @@ export function showMenu(W, startMatch) {
       const rig = await W.kernel.loadCharacter(W.assetBase + "assets/chars/meshy/" + meta.key + ".glb");
       if (pvRig) { pvScene.remove(pvRig.scene); W.kernel.disposeMixer(pvRig.mixer); }
       pvRig = rig;
+      pvShow(false);          // a slower earlier setSkin may have revealed the old rig meanwhile
       rig.scene.position.set(0, 0, 0);
       pvScene.add(rig.scene);
       // Drive the rig IMMEDIATELY. kernel.loadCharacter() never auto-plays a
@@ -1015,17 +1083,22 @@ export function showMenu(W, startMatch) {
       if (pvRig !== rig) return;
       pvIdleRelax = !menuClips.rifle_idle && !menuClips.cheer && !menuClips.dance;
       if (menuClips.rifle_idle) rig.play("rifle_idle_menu");
+      // first clip resolved (or none exist and the relax pose takes over): the
+      // rig is driven now, so it may be seen. With only cheer/dance the reveal
+      // waits for that clip's timer below.
+      if (menuClips.rifle_idle || pvIdleRelax) pvShow(true);
       const tCheer = menuClips.rifle_idle ? 2400 : 0;
       if (menuClips.cheer) {
         setTimeout(() => {
           if (pvRig !== rig) return;
           rig.play("cheer_menu", { once: true });
+          pvShow(true);
           if (menuClips.dance) setTimeout(() => { if (pvRig === rig) rig.play("dance_menu"); }, Math.max(400, menuClips.cheer.duration * 1000 - 250));
         }, tCheer);
       } else if (menuClips.dance) {
-        setTimeout(() => { if (pvRig === rig) rig.play("dance_menu"); }, tCheer);
+        setTimeout(() => { if (pvRig === rig) { rig.play("dance_menu"); pvShow(true); } }, tCheer);
       }
-    } catch (e) { /* still baking */ }
+    } catch (e) { pvShow(true); /* still baking — show whatever the stage has rather than an empty box forever */ }
   }
   prev.onclick = () => { W.events.emit("uiClick"); setSkin(skinIdx - 1); };
   next.onclick = () => { W.events.emit("uiClick"); setSkin(skinIdx + 1); };
@@ -1061,6 +1134,7 @@ export function showMenu(W, startMatch) {
     letterSpacing: "0.5px", color: "#c0d4ec",
     textShadow: "0 2px 8px rgba(0,0,0,0.9)",
     animation: "lcPanelIn .6s .4s both",
+    marginBottom: "auto",       // pairs with the title block's marginTop: auto
   },
   mk("KeyW") + mk("KeyA") + mk("KeyS") + mk("KeyD") + " MOVE  ·  MOUSE AIM/FIRE  ·  RMB ADS  ·  " +
   mk("Space") + " JUMP / CHUTE  ·  " + mk("ShiftLeft") + " SPRINT (" + (W.settings && W.settings.sprintToggle ? "TOGGLE" : "HOLD") + ")  ·  " +
@@ -1098,12 +1172,17 @@ export function showLoading(W, text) {
     width: "300px", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px",
     margin: "22px auto 0", overflow: "hidden", border: "1px solid rgba(120,180,255,0.2)",
   }, null, box);
+  // Fill animates with transform: scaleX, not width — a width transition is a
+  // layout per frame under the loading screen, the one screen that is already
+  // fighting the asset decode for the main thread.
   const fill = h("div", {
-    width: "30%", height: "100%",
+    width: "100%", height: "100%", transformOrigin: "0 50%", transform: "scaleX(0.3)",
     background: "linear-gradient(90deg,#2f7fd6,#6ec4ff,#2f7fd6)", backgroundSize: "200% 100%",
-    borderRadius: "2px", transition: "width .4s", animation: "lcShimmer 1.6s linear infinite",
-    boxShadow: "0 0 12px rgba(87,176,255,0.6)",
+    borderRadius: "2px", transition: "transform .4s", animation: "lcShimmer 1.6s linear infinite",
+    boxShadow: "0 0 12px rgba(87,176,255,0.6)", willChange: "transform",
   }, null, bar);
+  fill.dataset.lc = "loadfill";
+  const setFill = (pct) => { fill.style.transform = "scaleX(" + (pct / 100).toFixed(3) + ")"; };
   // The bar was pure animation — seeded at 30% and adding 8% every 300 ms up to a
   // 92% ceiling, tied to nothing — so it always parked at 92% while the real GLB
   // requests were still in flight, which reads as a hang. W.loadProgress is the
@@ -1116,12 +1195,12 @@ export function showLoading(W, text) {
     letterSpacing: "1.5px", marginTop: "10px", color: "#9fd0ff",
   }, "BUILDING TERRAIN…", box);
   let p = 12;
-  fill.style.width = "12%";
-  R._loadIv = setInterval(() => { p = Math.min(92, p + 8); fill.style.width = p + "%"; }, 300);
+  setFill(12);
+  R._loadIv = setInterval(() => { p = Math.min(92, p + 8); setFill(p); }, 300);
   W.loadProgress = (loaded, total) => {
     if (!total) return;
     if (R._loadIv) { clearInterval(R._loadIv); R._loadIv = null; }
-    fill.style.width = (12 + Math.round(86 * Math.min(1, loaded / total))) + "%";
+    setFill(12 + Math.round(86 * Math.min(1, loaded / total)));
     sub.textContent = "LOADING OPERATIVES  " + Math.min(loaded, total) + "/" + total;
   };
 }
@@ -1756,10 +1835,16 @@ export function showHUD(W) {
   R.reloadBar = h("div", { position: "absolute", left: "50%", top: "55%", transform: "translateX(-50%)", width: "180px", height: "8px", background: "rgba(0,0,0,0.55)", borderRadius: "4px", display: "none", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, L);
   R.reloadFill = h("div", { width: "0%", height: "100%", background: "#ffd166" }, null, R.reloadBar);
 
-  // slots bottom right
-  const br = h("div", { position: "absolute", right: "18px", bottom: "16px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }, null, L);
+  // slots bottom right. bottom 54, not 16: the portal's fullscreen/mute/pause
+  // bar (game_controls.js:306, position:fixed bottom 8 right 8, z 2147483600)
+  // paints over y 8..42 at the right edge, and at bottom 16 the ammo count sat
+  // UNDER it in every match (feel-juice-ui G5). game_controls.js:955 states the
+  // rule for its own buttons: "bottom:54px ... Never overlap it."
+  const br = h("div", { position: "absolute", right: "18px", bottom: "54px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }, null, L);
   R.slotsRow = h("div", { display: "flex", gap: "6px" }, null, br);
   R.ammoText = h("div", { fontSize: "22px", fontWeight: "900", textShadow: "0 2px 4px #000" }, "", br);
+  R.ammoText.dataset.lc = "ammo";
+  R.slotsRow.dataset.lc = "slots";
 
   // (The old canvas compass ribbon that used to live here is GONE — owner:
   // "there are 2 compasses, one above the other". The DOM heading strip built
@@ -1783,8 +1868,10 @@ export function showHUD(W) {
   W.daily = loadDaily();
   W._challenges = pickChallenges(W).concat(dailyChallenges(W));
   W._chalIdx = 0; W._xpDirty = true; W._chalXp = 0; W._elimXp = 0;
-  const meta = h("div", { position: "absolute", top: "94px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", width: "352px" }, null, L);
+  const meta = h("div", { position: "absolute", top: META_TOP + "px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", width: "352px" }, null, L);
   const xpRow = h("div", { display: "flex", alignItems: "center", gap: "8px", width: "100%", background: "rgba(0,0,0,0.42)", padding: "4px 10px", borderRadius: "8px" }, null, meta);
+  xpRow.dataset.lc = "lvl";
+  R.meta = meta;
   // 13px to match R.chalLabel below (owner: "make the lvl 5 the same size as
   // the quests like 'deal 1000 damage'")
   R.xpLevel = h("div", { fontSize: "13px", fontWeight: "900", color: "#ffd873", minWidth: "48px", textShadow: "0 1px 2px #000" }, "LVL 1", xpRow);
@@ -1799,6 +1886,21 @@ export function showHUD(W) {
   R.chalFill = h("div", { width: "0%", height: "100%", background: "#4ade80", transition: "width .2s" }, null, chalBarWrap);
   R.chalProg = h("div", { fontSize: "11px", fontWeight: "800", opacity: "0.8", minWidth: "44px", textAlign: "right" }, "", R.chalCard);
   R.chalXp = h("div", { fontSize: "11px", fontWeight: "900", color: "#ffd873" }, "", R.chalCard);
+  R.chalCard.dataset.lc = "quest";
+  // The announcement band hangs off the quest card's MEASURED bottom (see
+  // placeBand). A ResizeObserver reports the stack's height whenever the card
+  // appears, grows or wraps — no layout read on any frame. The band keeps the
+  // tallest bottom seen, so it never jumps up into a card that re-appears.
+  R._metaBottom = 0;
+  if (R._metaRO) { R._metaRO.disconnect(); R._metaRO = null; }
+  if (typeof ResizeObserver !== "undefined") {
+    R._metaRO = new ResizeObserver((ents) => {
+      const hgt = ents[ents.length - 1].contentRect.height;
+      const b = META_TOP + hgt;
+      if (b > R._metaBottom) { R._metaBottom = b; placeBand(); }
+    });
+    R._metaRO.observe(meta);
+  }
 
   // minimap top left
   const mmWrap = h("div", { position: "absolute", top: "12px", left: "14px", width: "180px", height: "180px", borderRadius: "12px", overflow: "hidden", border: "2px solid rgba(120,180,255,0.35)", boxShadow: "0 4px 18px rgba(0,0,0,0.5)" }, null, L);
@@ -1809,9 +1911,12 @@ export function showHUD(W) {
   R.feed = h("div", { position: "absolute", right: "16px", top: "70px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end", fontSize: "12px" }, null, L);
 
   // crosshair — PER-WEAPON reticles (painted by paintCrosshair)
-  R.cross = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "56px", height: "56px", transition: "transform .12s" }, null, L);
+  // No transition and no scale on this box any more: bloom moves the ARMS (see
+  // paintCrosshair / setReticleGap), so the stroke never shrinks below 2 px.
+  R.cross = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "56px", height: "56px" }, null, L);
+  R.cross.dataset.lc = "reticle";
   R._crossFor = null;
-  R.hitmark = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%) rotate(45deg)", fontSize: "26px", color: "#fff", opacity: "0", transition: "opacity .18s" }, "✕", L);
+  buildHitMarker(L);
 
   // ── COMPASS HEADING STRIP (Final Drop parity — owner screenshots) ─────────
   // Top-centre sliding ruler: degree number above, tick strip with cardinals
@@ -1904,9 +2009,13 @@ export function showHUD(W) {
 
   // directional indicators (footsteps / gunfire / damage) on a screen-edge ring
   R.indicators = h("div", { position: "absolute", inset: "0", pointerEvents: "none" }, null, L);
+  R.indicators.dataset.lc = "indicators";
+  buildIndicatorPool();
 
-  // parachute button indicator during the drop (Final Drop style)
-  R.chuteBtn = h("div", { position: "absolute", right: "40px", bottom: "120px", width: "84px", height: "84px", borderRadius: "50%", background: "rgba(10,19,31,0.75)", border: "2px solid rgba(140,190,255,0.6)", display: "none", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", boxShadow: "0 4px 18px rgba(0,0,0,0.5)" }, null, L);
+  // parachute button indicator during the drop (Final Drop style). bottom 150
+  // (was 120): the slot/ammo column moved up to bottom 54 to clear the portal
+  // control bar, and its top edge now reaches ~138.
+  R.chuteBtn = h("div", { position: "absolute", right: "40px", bottom: "150px", width: "84px", height: "84px", borderRadius: "50%", background: "rgba(10,19,31,0.75)", border: "2px solid rgba(140,190,255,0.6)", display: "none", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", boxShadow: "0 4px 18px rgba(0,0,0,0.5)" }, null, L);
   R.chuteGlyph = h("div", { fontSize: "26px", lineHeight: "1.1" }, "🪂", R.chuteBtn);
   R.chuteLabel = h("div", { fontSize: "10px", fontWeight: "900", letterSpacing: "0.5px", marginTop: "2px" }, "[SPACE]", R.chuteBtn);
   // First-drops-only centre hint for the CUT (see the gliding branch in update).
@@ -1917,17 +2026,23 @@ export function showHUD(W) {
     whiteSpace: "nowrap",
   }, "PRESS " + (physFor(W, "Space") ? keyLabel(physFor(W, "Space")) : "SPACE") + " TO CUT THE CHUTE AND DIVE", L);
 
-  // storm messages center
-  R.stormMsg = h("div", { position: "absolute", left: "50%", top: "22%", transform: "translateX(-50%)", fontSize: "22px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 2px 8px #000", opacity: "0", transition: "opacity .4s", color: "#d9b3ff" }, "", L);
+  // storm messages center — tops are set by placeBand() (under the banner band)
+  R.stormMsg = h("div", { position: "absolute", left: "50%", top: "256px", transform: "translateX(-50%)", fontSize: "22px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 2px 8px #000", opacity: "0", transition: "opacity .4s", color: "#d9b3ff", whiteSpace: "nowrap" }, "", L);
   // Pickups used to share stormMsg with storm warnings and supply alerts, so
   // grabbing loot as the storm warned clobbered whichever fired second. Loot is
   // frequent+low-priority; the storm line is rare+important — separate them.
-  R.pickupMsg = h("div", { position: "absolute", left: "50%", top: "27.5%", transform: "translateX(-50%)", fontSize: "15px", fontWeight: "800", letterSpacing: "1px", textShadow: "0 2px 6px #000", opacity: "0", transition: "opacity .3s", color: "#bfe9d2", whiteSpace: "nowrap" }, "", L);
-  // BIG match announcements (deploy, alive-count milestones, eliminations, level-up)
-  R.annWrap = h("div", { position: "absolute", left: "50%", top: "14%", transform: "translateX(-50%)", textAlign: "center", opacity: "0", transition: "opacity .35s, transform .35s", pointerEvents: "none" }, null, L);
-  R.annTitle = h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "34px", fontWeight: "900", letterSpacing: "4px", textShadow: "0 3px 14px #000, 0 0 26px rgba(90,170,255,0.5)" }, "", R.annWrap);
+  R.pickupMsg = h("div", { position: "absolute", left: "50%", top: "290px", transform: "translateX(-50%)", fontSize: "15px", fontWeight: "800", letterSpacing: "1px", textShadow: "0 2px 6px #000", opacity: "0", transition: "opacity .3s", color: "#bfe9d2", whiteSpace: "nowrap" }, "", L);
+  // BIG match announcements (deploy, alive-count milestones, eliminations, level-up).
+  // Band top = the quest card's measured bottom + 12 px (placeBand). nowrap:
+  // `left:50%` leaves a shrink-to-fit box only HALF the viewport wide, so a long
+  // "ELIMINATED <name>" wrapped onto two lines and grew down into the storm line.
+  R.annWrap = h("div", { position: "absolute", left: "50%", top: (META_TOP + META_RESERVE + BAND_GAP) + "px", transform: "translateX(-50%)", textAlign: "center", whiteSpace: "nowrap", opacity: "0", transition: "opacity .35s, transform .35s", pointerEvents: "none" }, null, L);
+  R.annWrap.dataset.lc = "ann";
+  R.annTitle = h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "clamp(20px, 2.9vw, 34px)", fontWeight: "900", letterSpacing: "4px", textShadow: "0 3px 14px #000, 0 0 26px rgba(90,170,255,0.5)" }, "", R.annWrap);
   R.annSub = h("div", { fontSize: "14px", fontWeight: "700", letterSpacing: "2px", opacity: "0.85", marginTop: "4px", textShadow: "0 2px 6px #000" }, "", R.annWrap);
   R._annUntil = 0; R._aliveMark = 0; R._annPrio = 0; R._annQ = [];
+  R._bandTop = null; R.deathBox = null;
+  placeBand();
   // stepMarks stores absolute W.t; W.t resets to 0 each match, so a stale match-1
   // time (larger than any match-2 time) made `W.t - last < 1.4` permanently true
   // and the footstep chevrons vanished for the first ~2 min of every later match.
@@ -1944,6 +2059,7 @@ export function showHUD(W) {
   R.lowHpTint = h("div", { position: "absolute", inset: "0", background: "radial-gradient(ellipse at center, rgba(180,20,20,0) 45%, rgba(180,20,20,0.5) 100%)", opacity: "0", transition: "opacity .45s", pointerEvents: "none" }, null, L);
 
   R._hudCache = {};
+  _slotC.who = null;        // new roster / new HUD: repaint the slot row once
   // perf readout (opt-in): FPS always, plus link freshness when online. This is
   // deliberately NOT labelled "ping" — net.js records lastSeen timestamps, not
   // round-trip time, so calling it ping would be a lie.
@@ -1991,6 +2107,124 @@ function bar(parent, color) {
 
 function hideHUD() {
   ["hud", "death", "post", "bigmap"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
+  R.deathBox = null;
+}
+
+// ═══ hit marker ══════════════════════════════════════════════════════════════
+// (feel-juice-ui G2) The old marker was a "✕" rotated 45° — an upright "+", the
+// same shape as the pistol/SMG reticle — and the kill confirm never painted:
+// weapons.js emits actorDied (kill style) and THEN hitMarker for the same round
+// (weapons.js:724/:728), and the hitMarker handler reset it to a 26 px white
+// "+" hidden 113 ms later (measured). Now: four diagonal ticks + a ring, a
+// 1.38 -> 1 pop on every hit, colour tiers (shield blue / body white / head
+// yellow / kill red + ring), and a KILL LATCH that no hitMarker can downgrade
+// for 0.5 s. Driven from update() by the frame dt (no setTimeout), so a stepped
+// test harness and a throttled tab see the same timeline as a player.
+const MK_TIERS = {
+  body:   { col: "#ffffff", hold: 0.10, fade: 0.12, base: 1.00, rank: 1 },
+  shield: { col: "#57b0ff", hold: 0.10, fade: 0.12, base: 1.00, rank: 2 },
+  head:   { col: "#ffd54a", hold: 0.17, fade: 0.14, base: 1.18, rank: 3 },
+  kill:   { col: "#ff4d4d", hold: 0.35, fade: 0.20, base: 1.28, rank: 4 },
+};
+const KILL_LATCH = 0.5, MK_POP = 0.09, MK_POP_AMT = 0.38, MK_BREAK = 0.36;
+const MK = { style: null, t: 99, clk: 0, latch: 0, breakT: 99, op: -1, sc: 1, tf: "", col: "", ring: false,
+             bop: -1, btf: "", killHeld: 0, kills: 0, hits: 0, blocked: 0, breaks: 0, hurt: null, log: [] };
+function mkLog(ev, style) {
+  MK.log.push({ clkMs: Math.round(MK.clk * 1000), wall: Math.round(performance.now()), ev, style: style || MK.style });
+  if (MK.log.length > 32) MK.log.shift();
+}
+function buildHitMarker(L) {
+  // zero-size box pinned at screen centre: children are laid out around the
+  // point, and the pop scales about it
+  R.hitmark = h("div", { position: "absolute", left: "50%", top: "50%", width: "0", height: "0", opacity: "0", pointerEvents: "none", willChange: "transform, opacity" }, null, L);
+  R.hitmark.dataset.lc = "hitmark";
+  R.hitTicks = [];
+  for (const deg of [45, 135, 225, 315]) {
+    R.hitTicks.push(h("i", {
+      position: "absolute", display: "block", left: "-1.5px", top: "-6px", width: "3px", height: "12px",
+      borderRadius: "1.5px", background: "#ffffff", boxShadow: "0 0 2px rgba(0,0,0,0.95)",
+      transform: "rotate(" + deg + "deg) translateY(-14px)",
+    }, null, R.hitmark));
+  }
+  R.hitRing = h("div", {
+    position: "absolute", left: "-24px", top: "-24px", width: "48px", height: "48px", boxSizing: "border-box",
+    borderRadius: "50%", border: "2px solid #ff4d4d", boxShadow: "0 0 3px rgba(0,0,0,0.85), inset 0 0 3px rgba(0,0,0,0.85)", opacity: "0",
+  }, null, R.hitmark);
+  // shield-break ring: its own element so it can expand while ticks pop
+  R.hitBreak = h("div", {
+    position: "absolute", left: "50%", top: "50%", width: "40px", height: "40px", marginLeft: "-20px", marginTop: "-20px",
+    boxSizing: "border-box", borderRadius: "50%", border: "2px solid #57b0ff", boxShadow: "0 0 8px rgba(87,176,255,0.85)",
+    opacity: "0", pointerEvents: "none", willChange: "transform, opacity",
+  }, null, L);
+  R.hitBreak.dataset.lc = "hitbreak";
+  Object.assign(MK, { style: null, t: 99, latch: 0, breakT: 99, op: -1, sc: 1, tf: "", col: "#ffffff", ring: false, bop: -1, btf: "", killHeld: 0, hurt: null });
+}
+function mkShow(style) {
+  const T = MK_TIERS[style];
+  MK.style = style; MK.t = 0;
+  if (style === "kill") { MK.killHeld = 0; MK.kills++; } else MK.hits++;
+  if (MK.col !== T.col) { for (const t of R.hitTicks) t.style.background = T.col; MK.col = T.col; }
+  const ring = style === "kill";
+  if (ring !== MK.ring) { R.hitRing.style.opacity = ring ? "1" : "0"; MK.ring = ring; }
+  mkLog("show", style);
+  mkPaint();                       // visible in the frame the hit lands, not one later
+}
+function mkPaint() {
+  let op = 0, sc = 1;
+  if (MK.style) {
+    const T = MK_TIERS[MK.style];
+    op = MK.t < T.hold ? 1 : Math.max(0, 1 - (MK.t - T.hold) / T.fade);
+    sc = T.base * (1 + MK_POP_AMT * Math.max(0, 1 - MK.t / MK_POP));
+  }
+  const opq = Math.round(op * 100) / 100;
+  if (opq !== MK.op) { R.hitmark.style.opacity = String(opq); MK.op = opq; }
+  const tf = "scale(" + sc.toFixed(3) + ")";
+  if (tf !== MK.tf) { R.hitmark.style.transform = tf; MK.tf = tf; }
+  MK.sc = sc;
+  // shield-break ring: 0.7 -> 1.8 scale, fading, once per breaking hit
+  let bop = 0, btf = MK.btf;
+  if (MK.breakT < MK_BREAK) {
+    const k = MK.breakT / MK_BREAK;
+    bop = Math.round((1 - k) * 100) / 100;
+    btf = "scale(" + (0.7 + 1.1 * k).toFixed(3) + ")";
+  }
+  if (bop !== MK.bop) { R.hitBreak.style.opacity = String(bop); MK.bop = bop; }
+  if (btf !== MK.btf) { R.hitBreak.style.transform = btf; MK.btf = btf; }
+}
+function mkUpdate(dt) {
+  if (!R.hitmark) return;
+  MK.clk += dt;
+  if (MK.latch > 0) MK.latch = Math.max(0, MK.latch - dt);
+  if (MK.breakT < MK_BREAK) MK.breakT += dt;
+  if (MK.style) {
+    MK.t += dt;
+    const T = MK_TIERS[MK.style];
+    if (MK.style === "kill" && MK.t <= T.hold) MK.killHeld = MK.t;
+    if (MK.t >= T.hold + T.fade) { mkLog("hide"); MK.style = null; }
+  }
+  mkPaint();
+}
+
+// ── reticle arms ─────────────────────────────────────────────────────────────
+// (feel-juice-ui G3) Bloom used to SCALE the whole reticle — stroke included —
+// so the pistol's 2 px arms rendered ~0.9 px thick and ~3.7 px long at rest
+// (scale 0.457, measured): practically invisible. Now the arms keep a fixed
+// 2 px stroke and length and only their DISTANCE from the pinned centre follows
+// the real spread. Only transforms are written, and only when the rounded gap
+// changes.
+function setReticleGap(bloom) {
+  const r = R._ret;
+  if (!r || !r.arms.length) return;
+  const gap = Math.max(r.min, Math.round(r.gap0 * bloom));   // px, centre -> inner end of an arm
+  if (gap === r.gapPx) return;
+  r.gapPx = gap;
+  if (r.kind === "cross") {
+    const off = gap + r.len / 2;
+    for (const a of r.arms) a.el.style.transform = "translate(" + (a.dx * off) + "px," + (a.dy * off) + "px)";
+  } else {                                                    // shotgun arcs
+    const ex = Math.max(0, gap - r.len);
+    for (const a of r.arms) a.el.style.transform = "rotate(" + a.deg + "deg) translateY(" + (-ex) + "px)";
+  }
 }
 
 // ═══ per-frame update ════════════════════════════════════════════════════════
@@ -2076,11 +2310,10 @@ export function update(W, dt) {
   if (p.swimming) ammoT = "SWIMMING";
   if (C.ammo !== ammoT) { R.ammoText.textContent = ammoT; C.ammo = ammoT; }
 
-  if (p.inventory) {   // spectated remote actors can have a partial inventory
-    const ammoSig = Object.values(p.inventory.ammo).join(",");
-    const slotSig = p.inventory.slots.map((s, i) => (s ? s.id + (s.count || "") + (s.rarity || 0) : "-") + (i === p.inventory.active ? "*" : "")).join("|") + "#" + ammoSig;
-    if (C.slots !== slotSig) { paintSlots(W, p); C.slots = slotSig; }
-  }
+  // spectated remote actors can have a partial inventory. slotsDirty compares
+  // in place — this used to build two joined signature strings (plus a map()
+  // array and an Object.values array) EVERY frame just to learn nothing changed.
+  if (p.inventory && p.inventory.slots && slotsDirty(p)) paintSlots(W, p);
 
   // storm timer + alive
   srT += dt;
@@ -2257,7 +2490,8 @@ export function update(W, dt) {
       if (!R._lv) R._lv = new p.pos.constructor();
       const near = W.nearbyLoot(p.pos, 9);
       const cam = W.kernel.camera;
-      const sw = window.innerWidth, sh = window.innerHeight;
+      viewSize(W);
+      const sw = _vw, sh = _vh;
       for (const n of near) {
         if (li >= R.lootLbls.length) break;
         R._lv.set(n.pos.x, n.pos.y + (n.type === "chest" ? 1.0 : 0.55), n.pos.z).project(cam);
@@ -2303,47 +2537,93 @@ export function update(W, dt) {
   if (R._crossAtCursor) {
     R._crossAtCursor = false;
     R.cross.style.left = "50%"; R.cross.style.top = "50%";
-    R.cross.style.transform = `translate(-50%,-50%) scale(${C.bloom || 1})`;
+    R.cross.style.transform = "translate(-50%,-50%)";
   }
-  // Reticle size from the ACTUAL spread the next shot will use, not a guess.
-  const spreadNow = (p.weapon && K.WEAPONS[p.weapon.id])
-    ? K.effectiveSpread(p.weapon.id, p.weapon.rarity, {
-        ads: !!p.input.ads && (p._adsT || 0) >= ((K.WEAPONS[p.weapon.id].adsTimeS) || 0),   // reticle must not promise accuracy fire() won't give
-        speed: Math.hypot(p.vel.x, p.vel.z),
-        airborne: !p.onGround,
-        crouching: !!p.crouching,
-        sinceLastShotS: W.t - (p.lastShotT == null ? -9 : p.lastShotT),   // 0 is a REAL time, not 'missing'
-      })
-    : 1;
+  // Reticle spread from the ACTUAL spread the next shot will use, not a guess.
+  // One scratch query object (this built a fresh literal every frame).
+  let spreadNow = 1;
+  if (p.weapon && K.WEAPONS[p.weapon.id]) {
+    _sq.ads = !!p.input.ads && (p._adsT || 0) >= ((K.WEAPONS[p.weapon.id].adsTimeS) || 0);   // reticle must not promise accuracy fire() won't give
+    _sq.speed = Math.hypot(p.vel.x, p.vel.z);
+    _sq.airborne = !p.onGround;
+    _sq.crouching = !!p.crouching;
+    _sq.sinceLastShotS = W.t - (p.lastShotT == null ? -9 : p.lastShotT);   // 0 is a REAL time, not 'missing'
+    spreadNow = K.effectiveSpread(p.weapon.id, p.weapon.rarity, _sq);
+  }
   const bloom = Math.max(0.4, Math.min(3.2, 0.35 + spreadNow * 0.55));
   if (C.bloom !== bloom) {
-    C.bloom = bloom;
-    if (!R._crossAtCursor) R.cross.style.transform = `translate(-50%,-50%) scale(${bloom})`;
+    C.bloom = bloom; R._bloom = bloom;
+    setReticleGap(bloom);          // arms move; the stroke never scales
   }
+  mkUpdate(dt);
+}
+const _sq = { ads: false, speed: 0, airborne: false, crouching: false, sinceLastShotS: 0 };
+// Dirty check for the slot row, allocation-free: the last painted id / count /
+// rarity per slot, the active index, and every ammo pool, compared in place.
+const _slotC = { who: null, active: -2, n: -1, ids: [], counts: [], rars: [], ammo: {}, ammoN: -1 };
+function slotsDirty(p) {
+  const inv = p.inventory, c = _slotC, sl = inv.slots;
+  let dirty = c.who !== p || c.active !== inv.active || c.n !== sl.length;
+  for (let i = 0; i < sl.length; i++) {
+    const s = sl[i];
+    const id = s ? s.id : null, cnt = s ? (s.count || 0) : 0, rr = s ? (s.rarity || 0) : 0;
+    if (c.ids[i] !== id || c.counts[i] !== cnt || c.rars[i] !== rr) { dirty = true; c.ids[i] = id; c.counts[i] = cnt; c.rars[i] = rr; }
+  }
+  let an = 0;
+  const am = inv.ammo || {};
+  for (const k in am) { an++; if (c.ammo[k] !== am[k]) { dirty = true; c.ammo[k] = am[k]; } }
+  if (an !== c.ammoN) { dirty = true; c.ammoN = an; }
+  c.who = p; c.active = inv.active; c.n = sl.length;
+  return dirty;
 }
 
 // ═══ directional indicators ══════════════════════════════════════════════════
 // Screen-edge cues (industry standard): white footsteps for nearby movement,
 // white/gold chevrons for gunfire direction (≤250m), red arcs for damage taken.
-const inds = [];      // {el, ang, t, life}
+// A FIXED pool of IND_POOL nodes per HUD (built by showHUD): every footstep /
+// gunshot / hit cue used to createElement a fresh div and remove() it 0.9-1.6 s
+// later, so a firefight churned DOM nodes in exactly the frames that matter.
+// The pool size is the old live cap (14); when all are live the oldest is reused.
+const IND_POOL = 14;
+const inds = [];      // live cues: {el, ang, t, life, kind}
+const indFree = [];   // parked pool entries of the CURRENT HUD
 const stepMarks = new Map(); // actorId -> last footstep indicator time
+function buildIndicatorPool() {
+  inds.length = 0; indFree.length = 0;
+  for (let i = 0; i < IND_POOL; i++) {
+    const el = h("div", { position: "absolute", left: "50%", top: "50%", display: "none", opacity: "0", willChange: "transform, opacity", fontSize: "20px", fontWeight: "900", textShadow: "0 1px 4px #000" }, null, R.indicators);
+    indFree.push({ el, ang: 0, t: 0, life: 1, kind: "" });
+  }
+}
+function parkIndicator(d) {
+  d.el.style.display = "none"; d.el.style.opacity = "0";
+  indFree.push(d);
+}
 function addIndicator(W, worldX, worldZ, kind) {
   if (!R.indicators || !W.player || (W.settings && W.settings.soundVis === false)) return;
   const p = W.player;
   const ang = Math.atan2(worldX - p.pos.x, worldZ - p.pos.z);   // world bearing
-  const el = h("div", { position: "absolute", left: "50%", top: "50%", willChange: "transform, opacity", fontSize: kind === "damage" ? "34px" : "20px", fontWeight: "900", textShadow: "0 1px 4px #000" }, null, R.indicators);
-  if (kind === "footstep") { el.textContent = "👣"; el.style.filter = "grayscale(1) brightness(2)"; el.style.fontSize = "17px"; }
-  else if (kind === "shot") { el.textContent = "︿"; el.style.color = "#ffe9a0"; }
-  else { el.textContent = "❮❯"; el.style.color = "#ff5544"; el.style.letterSpacing = "-4px"; }
-  inds.push({ el, ang, t: 0, life: kind === "damage" ? 1.6 : kind === "shot" ? 1.2 : 0.9 });
-  if (inds.length > 14) { const d = inds.shift(); d.el.remove(); }
+  const d = indFree.pop() || inds.shift();     // pool exhausted: reuse the oldest live cue
+  if (!d) return;
+  const el = d.el;
+  if (d.kind !== kind) {
+    const st = el.style;
+    if (kind === "footstep") { el.textContent = "👣"; st.filter = "grayscale(1) brightness(2)"; st.fontSize = "17px"; st.color = ""; st.letterSpacing = ""; }
+    else if (kind === "shot") { el.textContent = "︿"; st.filter = ""; st.fontSize = "20px"; st.color = "#ffe9a0"; st.letterSpacing = ""; }
+    else { el.textContent = "❮❯"; st.filter = ""; st.fontSize = "34px"; st.color = "#ff5544"; st.letterSpacing = "-4px"; }
+    d.kind = kind;
+  }
+  d.ang = ang; d.t = 0; d.life = kind === "damage" ? 1.6 : kind === "shot" ? 1.2 : 0.9;
+  el.style.opacity = "0";        // stepIndicators places it and fades it in this frame
+  el.style.display = "block";
+  inds.push(d);
 }
 function stepIndicators(W, dt) {
   if (!R.indicators) return;
   // Turning the ring off mid-match has to clear what is already on screen —
   // otherwise whatever was showing freezes there until it ages out.
   if (W.settings && W.settings.soundVis === false) {
-    while (inds.length) inds.pop().el.remove();
+    while (inds.length) parkIndicator(inds.pop());
     return;
   }
   const p = W.player;
@@ -2363,13 +2643,23 @@ function stepIndicators(W, dt) {
       addIndicator(W, a.pos.x, a.pos.z, "footstep");
     }
   }
-  // position + fade all live indicators around a screen-centered ring
-  const wpx = W.kernel.renderer.domElement.clientWidth, hpx = W.kernel.renderer.domElement.clientHeight;
-  const RAD = Math.min(wpx, hpx) * 0.36;
+  // position + fade all live indicators around a screen-centred ring. The view
+  // size is the C1 cache (this read clientWidth/Height every frame). A ring of
+  // min(w,h)*0.36 put the straight-ahead cue at y 101 on a 720p screen, right on
+  // the LVL chip (feel-juice-ui G4), and keeping it only under the band's TOP
+  // still left it inside the DEPLOY / ELIMINATED title (y ~204 at 720p). The
+  // radius is now derived from the band: the top cue (a 34 px glyph, ~24 px
+  // half-height) sits wholly below the band's bottom. A circle, not an ellipse,
+  // so a cue's screen angle stays its true bearing.
+  if (!inds.length) return;
+  viewSize(W);
+  const bandBottom = (R._bandTop || (META_TOP + META_RESERVE + BAND_GAP)) + BAND_H;
+  const RAD = Math.max(64, Math.min(Math.min(_vw, _vh) * 0.36, _vh / 2 - bandBottom - IND_HALF));
+  R._ringR = RAD;
   for (let i = inds.length - 1; i >= 0; i--) {
     const d = inds[i];
     d.t += dt;
-    if (d.t > d.life) { d.el.remove(); inds.splice(i, 1); continue; }
+    if (d.t > d.life) { inds.splice(i, 1); parkIndicator(d); continue; }
     // screen angle relative to the camera facing (0 = up/forward)
     const rel = d.ang - p.yaw + Math.PI;
     const sx = Math.sin(rel) * RAD, sy = -Math.cos(rel) * RAD;
@@ -2444,19 +2734,38 @@ function paintCrosshair(W, weaponId) {
   const mk = (styles) => h("div", Object.assign({ position: "absolute", background: CC, boxShadow: "0 0 2px rgba(0,0,0,0.9)" }, styles), null, R.cross);
   const dot = (r) => mk({ left: (CENTER - r) + "px", top: (CENTER - r) + "px", width: r * 2 + "px", height: r * 2 + "px", borderRadius: "50%" });
   const line = (x, y, w, hh) => mk({ left: (CENTER + x) + "px", top: (CENTER + y) + "px", width: w + "px", height: hh + "px", borderRadius: "1px" });
-  const cross4 = (gap, len, th) => {
-    line(-th / 2, -gap - len, th, len);   // up
-    line(-th / 2, gap, th, len);          // down
-    line(-gap - len, -th / 2, len, th);   // left
-    line(gap, -th / 2, len, th);          // right
+  // Arms are built CENTRED on the reticle and pushed outward by transform
+  // (setReticleGap). g0 = the gap at bloom 1; the stroke (th) and the length
+  // never change with spread.
+  R._ret = { kind: null, arms: [], gap0: 0, len: 0, th: 0, min: 3, gapPx: -1 };
+  const cross4 = (g0, len, th) => {
+    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+      const vert = dx === 0, w = vert ? th : len, hh = vert ? len : th;
+      const el = mk({ left: (CENTER - w / 2) + "px", top: (CENTER - hh / 2) + "px", width: w + "px", height: hh + "px", borderRadius: "1px" });
+      el.dataset.lc = "arm";
+      R._ret.arms.push({ el, dx, dy });
+    }
+    Object.assign(R._ret, { kind: "cross", gap0: g0, len, th, min: 3 });
   };
   const def = K.WEAPONS[weaponId];
   const cls = def ? def.cls : null;
-  if (cls === "pistol" || cls === "smg") { cross4(5, 8, 2); dot(1.5); }
-  else if (cls === "ar") { cross4(8, 11, 2); dot(1.5); }
+  if (cls === "pistol" || cls === "smg") { cross4(6, 7, 2); dot(1.5); }
+  else if (cls === "ar") { cross4(9, 8, 2); dot(1.5); }
   else if (cls === "shotgun") {
-    // ring ≈ the real pellet cone at mid-range
-    h("div", { position: "absolute", left: (CENTER - 16) + "px", top: (CENTER - 16) + "px", width: "32px", height: "32px", borderRadius: "50%", border: "2px solid " + CC, boxShadow: "0 0 2px rgba(0,0,0,0.9), inset 0 0 2px rgba(0,0,0,0.9)" }, null, R.cross);
+    // ring ≈ the real pellet cone at mid-range — now four 2 px quarter-arcs of
+    // radius 12 that spread apart with the cone instead of one ring whose stroke
+    // scaled with it
+    const AR = 12;
+    for (const deg of [0, 90, 180, 270]) {
+      const el = h("div", {
+        position: "absolute", left: (CENTER - AR) + "px", top: (CENTER - AR) + "px", width: AR * 2 + "px", height: AR * 2 + "px",
+        boxSizing: "border-box", borderRadius: "50%", border: "2px solid transparent", borderTopColor: CC,
+        filter: "drop-shadow(0 0 1px rgba(0,0,0,0.95))", transform: "rotate(" + deg + "deg)",
+      }, null, R.cross);
+      el.dataset.lc = "arm";
+      R._ret.arms.push({ el, deg });
+    }
+    Object.assign(R._ret, { kind: "arc", gap0: 16, len: AR, th: 2, min: AR });
     dot(1.5);
   }
   else if (cls === "sniper") { dot(2); line(-1, 10, 2, 8); }  // fine dot + drop hint (scope overlay on ADS)
@@ -2467,6 +2776,7 @@ function paintCrosshair(W, weaponId) {
   }
   else { dot(2); } // consumable / fallback
   R._crossFor = weaponId;
+  setReticleGap(R._bloom || 1);
 }
 
 function paintSlots(W, p) {
@@ -2654,22 +2964,28 @@ function drawMinimap(W, ctx, size, big) {
 // ═══ events, pause, death, stats, settings ══════════════════════════════════
 function wireEvents(W) {
   W.events.on("hitMarker", (owner, target, dmg, isHead) => {
-    if (owner !== W.player || !R.hitmark) return;
+    if (owner !== W.player || !R.hitmark || !R.hitTicks) return;
+    // KILL LATCH: weapons.js emits actorDied for the killing round BEFORE this
+    // event (weapons.js:724 hurtActor -> actorDied, :728 hitMarker), and a
+    // shotgun's later pellets / an SMG's next rounds follow. None of them may
+    // downgrade the kill confirm inside KILL_LATCH.
+    if (MK.latch > 0) { MK.blocked++; mkLog("blocked", isHead ? "head" : "body"); return; }
+    let style = isHead ? "head" : "body";
+    if (!isHead) {
+      // shield vs body from the actorHurt that fired for THIS round (same call
+      // chain, just before). A remote target has no local actorHurt: read its
+      // replicated shield instead.
+      const hu = MK.hurt;
+      if (hu && hu.victim === target) style = hu.toShield > 0 && hu.toShield >= hu.dmg * 0.5 ? "shield" : "body";
+      else if (target && target.shield > 0) style = "shield";
+    }
+    MK.hurt = null;
     // A shotgun blast fires this once per pellet in one frame; a body pellet
     // landing after a head pellet used to overwrite the marker back to plain
-    // white, so headshots inside a blast were invisible.
-    const nowMs = performance.now();
-    if (!isHead && nowMs < (R._hitHeadUntil || 0)) return;
-    if (isHead) R._hitHeadUntil = nowMs + 170;
-    // headshots get a bigger yellow marker (audio.js adds a higher-pitched ping)
-    R.hitmark.style.color = isHead ? "#ffd54a" : "#ffffff";
-    R.hitmark.style.fontSize = isHead ? "34px" : "26px";
-    R.hitmark.style.opacity = "1";
-    // Cancellable: the kill-confirm marker in the actorDied handler below has to
-    // be able to kill the hide-timer armed by the hit that actually landed the
-    // kill, or it is wiped 120 ms into its own window.
-    clearTimeout(R._hitT);
-    R._hitT = setTimeout(() => { if (R.hitmark) R.hitmark.style.opacity = "0"; }, isHead ? 170 : 120);
+    // white, so headshots inside a blast were invisible. Never downgrade a
+    // marker that is still inside its hold.
+    if (MK.style && MK.t < MK_TIERS[MK.style].hold && MK_TIERS[MK.style].rank > MK_TIERS[style].rank) return;
+    mkShow(style);
   });
   // gunfire direction (industry-standard ~250m audible range)
   W.events.on("shotFired", (shooter, weaponId, eye) => {
@@ -2689,22 +3005,25 @@ function wireEvents(W) {
       // passes res.dealt), so it is the right number to read.
       R.hurtTint.style.opacity = String(Math.max(0.3, Math.min(1, (info.dmg || 0) / 60)));
     }
+    // YOUR hit: remember which layer it landed on for the hitMarker that
+    // follows in the same call chain, and give the breaking hit its ring
+    if (W.player && info.attackerId === W.player.id && victim !== W.player && R.hitmark) {
+      MK.hurt = { victim, toShield: info.toShield || 0, dmg: info.dmg || 0 };
+      if (info.broke) { MK.breakT = 0; MK.breaks++; mkLog("break", "shield"); mkPaint(); }
+    }
     if (victim !== W.player || !info.attackerId) return;
     const att = W.actorById.get(info.attackerId);
     if (att) addIndicator(W, att.pos.x, att.pos.z, "damage");
   });
   W.events.on("actorDied", (victim, killerId, weaponId) => {
     // The killing blow looked identical to chipping someone for 13 — the same
-    // white marker. The kill was confirmed only in audio (audio.js, a 700->1050
-    // Hz two-tone). BOTH latches have to be cleared or the hide-timer armed by
-    // the hit that actually killed them wipes this 120 ms in.
-    if (R.hitmark && W.player && killerId === W.player.id && victim !== W.player) {
-      clearTimeout(R._hitT);
-      R._hitHeadUntil = 0;
-      R.hitmark.style.color = "#ff4d4d";
-      R.hitmark.style.fontSize = "40px";
-      R.hitmark.style.opacity = "1";
-      R._hitT = setTimeout(() => { if (R.hitmark) R.hitmark.style.opacity = "0"; }, 280);
+    // white marker. Kill style = red ticks + ring, held, and LATCHED so the
+    // hitMarker that weapons.js emits right after this for the same round
+    // cannot overwrite it (the bug that kept it from ever painting).
+    if (R.hitmark && R.hitTicks && W.player && killerId === W.player.id && victim !== W.player) {
+      MK.latch = KILL_LATCH;
+      MK.hurt = null;
+      mkShow("kill");
     }
     if (!R.feed) return;
     const killer = killerId ? W.actorById.get(killerId) : null;
@@ -2834,6 +3153,7 @@ function announce(text, sub, color, ms, prio) {
 }
 function showAnnouncement(text, sub, color, ms, p, now) {
   const dur = ms || 2200;
+  placeBand();
   R.annTitle.textContent = text;
   R.annTitle.style.color = color || "#eaf2ff";
   R.annSub.textContent = sub || "";
@@ -2845,7 +3165,9 @@ function showAnnouncement(text, sub, color, ms, p, now) {
   R._annT = setTimeout(() => {
     if (!R.annWrap) return;
     R.annWrap.style.opacity = "0";
-    R.annWrap.style.transform = "translateX(-50%) translateY(-12px)";
+    // a SHORT upward drift: the band sits 12 px under the quest card, and a
+    // -12 px exit slid the fading title right back onto it
+    R.annWrap.style.transform = "translateX(-50%) translateY(-6px)";
     R._annPrio = 0; R._annUntil = 0;
     const q = R._annQ && R._annQ.shift();
     if (q) setTimeout(() => announce(q.text, q.sub, q.color, q.ms, q.prio), 200);
@@ -2931,11 +3253,17 @@ function showDeath(W, killerId, weaponId) {
   releaseCursor(W);          // its MATCH STATS button is otherwise unclickable
   const killer = killerId ? W.actorById.get(killerId) : null;
   const L = layer("death", { pointerEvents: "auto" });
-  // The big match announcement (R.annWrap) is pinned at top:14% too, and dying
-  // FIRES one ("<killer> eliminated you"), so for the ~2.6s the announcement
-  // holds, ELIMINATED and the announcement painted straight through each other
-  // — at the single most-screenshotted moment of the match. Sit below it.
-  const box = h("div", { position: "absolute", top: "26%", left: "50%", transform: "translateX(-50%)", textAlign: "center" }, null, L);
+  // The big match announcement (R.annWrap) can fire while this is up, so the
+  // card sits BELOW the announcement band (placeBand keeps it there). It is a
+  // PANEL now: it used to be bare text on the world, and the victim-side name
+  // tags painted straight through the subtitle (feel-juice-ui G7).
+  const bt = (R._bandTop != null ? R._bandTop : META_TOP + META_RESERVE + BAND_GAP);
+  const box = h("div", Object.assign({
+    position: "absolute", top: (bt + BAND_H + 16) + "px", left: "50%", transform: "translateX(-50%)", textAlign: "center",
+    padding: "18px 30px 16px", minWidth: "340px", maxWidth: "calc(100vw - 32px)", boxSizing: "border-box",
+  }, PANEL), null, L);
+  box.dataset.lc = "death";
+  R.deathBox = box;
   h("div", { fontSize: "38px", fontWeight: "900", color: "#ff7a7a", textShadow: "0 3px 12px #000", letterSpacing: "3px" }, "ELIMINATED", box);
   const place = W.match.placementOf(W.player.id);
   h("div", { fontSize: "17px", marginTop: "8px", textShadow: "0 2px 6px #000" },
@@ -2971,14 +3299,12 @@ function showDeath(W, killerId, weaponId) {
   }
 
   const row = h("div", { display: "flex", gap: "12px", justifyContent: "center", marginTop: "16px" }, null, box);
-  if (killer && killer.alive) h("div", { fontSize: "13px", opacity: "0.8", alignSelf: "center" }, "Spectating " + killer.name, row);
   const btn = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff" }), "MATCH STATS", row);
   btn.onclick = () => W.endMatch(false);
-  // spectate cycling existed since the A/D handler shipped but was taught
-  // NOWHERE (sweep finding) — the one screen every spectator passes through
-  // is the place to say it
-  h("div", { fontSize: "12px", opacity: "0.55", marginTop: "8px", letterSpacing: "0.5px" },
-    "A / D — watch someone else", box);
+  // "Spectating <name>" and "A / D — watch someone else" used to be printed
+  // here AND in the spectate bar at the bottom ("SPECTATING X · N ALIVE · [A] /
+  // [D] TO SWITCH") at the same time. The bar is the one that stays true when
+  // you switch targets, so the card no longer repeats it.
 }
 
 /** The winning kill's banner + feed used to be destroyed in the frame they were
@@ -2986,9 +3312,53 @@ function showDeath(W, killerId, weaponId) {
  *  "over" is already whitelisted in the frame gate and already blocks damage, so
  *  the world can safely hold for a beat first. */
 export function announceVictory(W, victory) {
-  announce(victory ? "VICTORY ROYALE" : "ELIMINATED",
-    victory ? "LAST ONE STANDING" : "BETTER LUCK NEXT DROP",
+  // "VICTORY ROYALE" is Epic Games' Fortnite phrase; the win title is our own
+  // line, promoted from what used to be its subtitle.
+  const total = (W && W.match && W.match.totalPlayers) || 50;
+  announce(victory ? "LAST ONE STANDING" : "ELIMINATED",
+    victory ? "#1 OF " + total + " · THE CIRCLE IS YOURS" : "BETTER LUCK NEXT DROP",
     victory ? "#ffd54a" : "#ff8f6a", 2600, ANN_PRIO.victory);
+}
+
+/** Contract C9 read-back (merged into __LC__.feel() by L4). State only — it
+ *  never reads layout, so a gate can call it every stepped frame. */
+export function readback(W) {
+  const r = R._ret;
+  return {
+    hud: !!R.hud,
+    marker: {
+      style: MK.style, opacity: MK.op < 0 ? 0 : MK.op, scale: +MK.sc.toFixed(3),
+      ageMs: MK.style ? Math.round(MK.t * 1000) : null, color: MK.col, ring: MK.ring,
+      killLatchMs: Math.round(MK.latch * 1000), killHeldMs: Math.round(MK.killHeld * 1000),
+      breakRing: MK.bop > 0 ? MK.bop : 0,
+      hits: MK.hits, kills: MK.kills, blocked: MK.blocked, breaks: MK.breaks,
+      clockMs: Math.round(MK.clk * 1000), log: MK.log.slice(),
+    },
+    reticle: r ? { weapon: R._crossFor, kind: r.kind, arms: r.arms.length, gapPx: r.gapPx, armLenPx: r.len, armThickPx: r.th, bloom: +(R._bloom || 1).toFixed(3) } : null,
+    band: { top: R._bandTop, metaBottom: R._metaBottom, height: BAND_H },
+    ring: { radius: R._ringR != null ? Math.round(R._ringR) : null, live: inds.length },
+    announcement: R.annWrap ? {
+      title: R.annTitle.textContent, sub: R.annSub.textContent,
+      showing: performance.now() < (R._annUntil || 0), prio: R._annPrio || 0, queued: (R._annQ || []).length,
+    } : null,
+    view: { w: _vw, h: _vh, c1: !!(W && W.kernel && W.kernel.viewW > 0) },
+  };
+}
+
+/** Contract C8: per-match teardown. The HUD layer itself is rebuilt by
+ *  showHUD; this drops what would otherwise leak from one match into the next
+ *  (live indicators, queued banners and their timers, the marker latch, the
+ *  quest-card observer, cached roster refs). */
+export function disposeMatch(W) {
+  while (inds.length) parkIndicator(inds.pop());
+  stepMarks.clear();
+  clearTimeout(R._annT); R._annQ = []; R._annUntil = 0; R._annPrio = 0;
+  clearTimeout(R._stormMsgT); clearTimeout(R._pickupMsgT);
+  if (R._bigIv) { clearInterval(R._bigIv); R._bigIv = null; }
+  if (R._metaRO) { R._metaRO.disconnect(); R._metaRO = null; }
+  MK.style = null; MK.latch = 0; MK.hurt = null; MK.breakT = 99;
+  _slotC.who = null;
+  R.deathBox = null;
 }
 
 export function showPostMatch(W, res) {
@@ -3007,9 +3377,9 @@ export function showPostMatch(W, res) {
   box.className = "lc-glass-scan";
   if (res.victory) {
     h("div", {
-      fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "42px", fontWeight: "900", color: "#ffd54a",
-      textShadow: "0 0 36px rgba(255,213,74,0.55)", letterSpacing: "4px",
-    }, "VICTORY ROYALE", box);
+      fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "38px", fontWeight: "900", color: "#ffd54a",
+      textShadow: "0 0 36px rgba(255,213,74,0.55)", letterSpacing: "4px", whiteSpace: "nowrap",
+    }, "LAST ONE STANDING", box);   // not "VICTORY ROYALE" — Epic Games' phrase
     confetti(L);
     if (W.hooks && W.hooks.celebrate) W.hooks.celebrate();
   } else {
@@ -3169,7 +3539,16 @@ export function showHowToPlay(W) {
   releaseCursor(W);
   ensureAAAStyles();
   const L = layer("howto", { pointerEvents: "auto", background: "rgba(4,8,16,0.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 70 });
-  const box = h("div", Object.assign({ padding: "26px 34px", width: "520px", display: "flex", flexDirection: "column", gap: "10px" }, PANEL), null, L);
+  // It never scrolled and had no way out but its button: on a short viewport
+  // the card ran off the bottom and GOT IT went with it. Now it fits the
+  // dynamic viewport and scrolls inside itself; ESC or a click/tap outside
+  // closes it too.
+  const box = h("div", Object.assign({
+    padding: "26px 34px", width: "min(520px, calc(100vw - 24px))", boxSizing: "border-box",
+    maxHeight: "calc(100dvh - 24px)", overflowY: "auto", overscrollBehavior: "contain",
+    display: "flex", flexDirection: "column", gap: "10px",
+  }, PANEL), null, L);
+  box.dataset.lc = "howto";
   h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "20px", fontWeight: "900", letterSpacing: "3px" }, "HOW TO PLAY", box);
   h("div", { fontSize: "13px", opacity: "0.8", lineHeight: "1.5", fontFamily: "Rajdhani, " + FONT },
     "50 drop in, one walks out. Pick a landing zone, loot a weapon, stay inside the circle.", box);
@@ -3205,10 +3584,21 @@ export function showHowToPlay(W) {
     fontFamily: "Orbitron, " + FONT_DISPLAY, background: "linear-gradient(180deg,#6ec4ff,#2f7fd6)",
     color: "#fff", fontSize: "15px", padding: "12px 34px", letterSpacing: "2px", marginTop: "10px", alignSelf: "center",
   }), "GOT IT", box);
-  go.onclick = () => {
+  const close = () => {
     try { localStorage.setItem("lc_seen_intro", "1"); } catch (e) {}
-    L.remove(); R.howto = null;
+    window.removeEventListener("keydown", onKey, true);
+    if (R.howto === L) R.howto = null;
+    L.remove();
   };
+  // capture phase + stopPropagation: the Esc that closes the card must not also
+  // reach player.js and open the pause menu underneath it
+  const onKey = (e) => {
+    if (!L.isConnected) { window.removeEventListener("keydown", onKey, true); return; }
+    if (e.key === "Escape" || e.code === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+  };
+  window.addEventListener("keydown", onKey, true);
+  L.addEventListener("click", (e) => { if (e.target === L) close(); });   // tap / click outside the card
+  go.onclick = close;
 }
 
 /** Lifetime record. Every headline number below was already persisted and merely
@@ -3322,10 +3712,12 @@ function showSettings(W) {
 
   // FOV: hardcoded at 57 (70 sprinting) with no control, in a genre where an FOV
   // slider is table stakes AND a motion-sickness accommodation.
+  // The label read "20%" for the 57° default (the shared slider printed the
+  // 0..1 position): it is an angle, so it says one.
   slider(box, "Field of view", (( W.settings.fov || 57) - 50) / 35, (v) => {
     W.settings.fov = Math.round(50 + v * 35);   // 50–85
     save(W);
-  });
+  }, { fmt: (v) => Math.round(50 + v * 35) + "°" });
   // Sprint and ADS were hold-only. Toggle is an accessibility need, not a taste.
   // live binding in the label, not a hardcoded SHIFT — Sprint is rebindable
   // four rows down and the label lied after a rebind (sweep finding)
@@ -3499,8 +3891,10 @@ function slider(box, label, val, onChange, opts) {
   h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, label, row);
   const inp = h("input", { flex: "1" }, null, row);
   inp.type = "range"; inp.min = (opts && opts.min != null) ? opts.min : 0; inp.max = 1; inp.step = 0.01; inp.value = val;
-  const num = h("div", { fontSize: "12px", width: "40px", textAlign: "right" }, Math.round(val * 100) + "%", row);
-  inp.oninput = () => { onChange(parseFloat(inp.value)); num.textContent = Math.round(inp.value * 100) + "%"; };
+  const fmt = (opts && opts.fmt) || ((v) => Math.round(v * 100) + "%");
+  const num = h("div", { fontSize: "12px", width: "40px", textAlign: "right" }, fmt(val), row);
+  num.dataset.lc = "slider-" + label.toLowerCase().replace(/[^a-z]+/g, "-");
+  inp.oninput = () => { const v = parseFloat(inp.value); onChange(v); num.textContent = fmt(v); };
 }
 function applyAudio(W) {
   save(W);
