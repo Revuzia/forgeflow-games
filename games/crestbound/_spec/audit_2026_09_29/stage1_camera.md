@@ -66,3 +66,23 @@ assets/vendor/rapier/ (new). Never game.js / course.js / index.html.
   orbit err 0.000, exit vol null 6.80 m. onscreen 1005 frames 0 off. rapier rig 7/7, 5.150 = 5.150, 1566 sweeps, 0 fallbacks.
 - camworld.js: a heightfield added after the build now triggers one rebuild (`_hfSeen`); unusable ones count
   as skipped so terrain stays on the rays (Node: rebuilt in 1 frame, new hf sweep 9.6500 exact, no loop).
+
+## Final evidence (resume run, 2026-09-30/10-01)
+- FULL camcheck --headless (:8797, quality low, autoscale 0): 23/23 station rows PASS with `cwLive true` on
+  every course; MEASURE rows 11/12 in that run (volumes failed: a teleport out of a 'fixed' volume kept steering
+  the yaw while easing out) -> fixed in `_snapToPlayer` (a snap is a cut for volumes too) -> rows re-run 12/12 PASS.
+- Audit stations, before (fan only, `setSweep(false)`) -> after (sweep):
+  * verdant-2/@kickshaft (10 real kicks): min dist 1.115 m (86 frames) -> 1.957 m (302 frames), fade 0.057 -> 0.
+  * verdant-1/@fortramp (posed at bailey/031's point and yaw, 4 headings): 3.90 -> 3.88 m min, 0 off screen both;
+    frame read: the lens slides along the east wall under the ramp, hero solid, grass + coins + ramp in frame.
+  * verdant-1/@ramprun (real keys): 3.59 -> 3.57 m. @rampwall (run at the camera into the corner): 0.12 m with
+    fade 1.0 (first-person commit) -> 0.795 m, fade 0.45, 0.20 s under the 1.25 m ghost line (budget 0.30).
+  * verdant-3/@granary: 5.11 -> 2.40 m min (the sphere is more conservative), 0 off screen, lens outside;
+    @granaryrun (forbid box = granary interior): 0 forbid frames both.
+- bootcheck --headless keep CLEAN, verdant-1 CLEAN (after the last camera.js change).
+- Boot A/B (camcheck --boot-ab 2): nav -> first live frame 41.5 / 42.0 s without Rapier, 40.8 / 39.1 s with it
+  (box at ~90 % CPU: noise); the Rapier import starts 4.5 s / 2.7 s AFTER the first live frame, import+init
+  80 / 75 ms, zero long tasks (>50 ms) inside the load window, the frame spanning it 161 / 119 ms (= the
+  run's median frame).
+- RESIDUAL: verdant-2/@midwalk passes but one heading still commits to first person (camDist min 0.12, fade 1
+  inside the near-plane commit, 0 off screen) -- not A/B'd, not one of the three audit stations.
