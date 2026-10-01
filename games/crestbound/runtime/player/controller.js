@@ -976,6 +976,12 @@ export class Player {
         self.prevPos.copy(self.pos);
         self.renderPos.copy(self.pos);
         self._acc = 0;
+        /* a teleported hero lets go of any ledge (launch.js teleports into a
+           cannon mouth with this hook; a kept grip would pull him back) */
+        if (self.state === 'ledgeHang' || self.state === 'ledgeClimb') {
+          self.ledgeDir = 0;
+          self._setState('fall');
+        }
       },
       setVel(v) { readVec(v, self.vel, 0, 0, 0); self.speed = hyp2(self.vel.x, self.vel.z); },
       setFacing(yaw) { if (isFinite(yaw)) self.facing = wrapAngle(yaw); },
@@ -2329,6 +2335,7 @@ export class Player {
    * the blow through the critter registry's EXISTING entry points:
    *   c.onAttack(player, pos, kind, dir) -> truthy   if a creature defines it (the
    *                                                  creatures lane's own hook);
+   *   else c.onStrike(player, kind, pos, dir)        (the carry contract's name);
    *   else c.onDive(player)          for body blows ('dive', 'slideKick');
    *        c.onPound(player, pos)    for everything but the dive — at the fist /
    *                                  boot / crate, never for the gnasher (its
@@ -2376,6 +2383,12 @@ export class Player {
     if (typeof c.onAttack === 'function') {
       let r = false;
       try { r = c.onAttack(this, _hitPos, kind, _hitDir); } catch (err) { r = false; }
+      return !!r;
+    }
+    /* the carry contract's strike hook, if a creature speaks that one instead */
+    if (typeof c.onStrike === 'function') {
+      let r = false;
+      try { r = c.onStrike(this, kind, _hitPos, _hitDir); } catch (err) { r = false; }
       return !!r;
     }
     _snapC.state = c.state; _snapC.hp = c.hp; _snapC.alive = c.alive;
@@ -2724,6 +2737,9 @@ export class Player {
         this._startLedgeClimb(LEDGE_QUICK_T, false);
       } else if ((this._crouchPressLatch && !this._crouchUsed) || (wm > 0.3 && wIn < -0.5)) {
         this._crouchUsed = true;
+        /* the crouch that lets go is spent: it must not ALSO start a ground pound
+           on the next substep (measured: drop -> poundHang -> poundFall) */
+        if (this._crouchPressLatch) this._poundPressLatch = false;
         this._ledgeDrop();
       } else {
         this._ledgeInT = (wm > 0.3 && wIn > 0.55) ? this._ledgeInT + dt : 0;
@@ -3622,7 +3638,8 @@ export class Player {
           this.coyoteT = TUNE.coyote;
           this._fellFromJump = false;               // walked off → a real FALL
           if (this.state !== 'dive' && this.state !== 'fly' && !this.inWater &&
-            this.state !== 'climb' && this.state !== 'cannon') this._setState('fall');
+            this.state !== 'climb' && this.state !== 'cannon' &&
+            this.state !== 'slideKick') this._setState('fall');   // the slide kick's hop is its own arc, like the dive
         }
         /* Keep 70 % of the deck velocity for 0.25 s — how a mover launches you. */
         if (_carryPrev.x !== 0 || _carryPrev.z !== 0) {
