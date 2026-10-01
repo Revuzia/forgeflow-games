@@ -100,3 +100,23 @@ edited only to author two missions - see below).
     (08_crest_taken, 10_clear_panel).
   * DISK: C: hit 100 % (216 MB free) at 22:04 — "[Errno 28] No space left on device" on one screenshot
     (retry succeeded). Deleted my own scratch frames (16 MB).
+- GATES, first pass (22:10-22:40, CPU 99 %, 73-88 chrome procs, private server :8913):
+  * modulecheck 71 / 0 failing.
+  * loopcheck --headless keep + verdant-1: keep 46/46; verdant-1 77/80 — the 3 failures are respawn TIMING
+    only (cp1 2985 ms, cp4 1483 ms vs 950 ceiling; median 776 vs 700); every functional row passes,
+    including "a crest collects", "written to the save", "clear card resolves". G.lastRespawnMs is a WALL
+    stamp (the death timeline is wall-driven) and keep's samples in the same run were 433/492/428/12.
+    The mission layer adds no per-frame work. Log: frames/missions/loopcheck_run1.log.
+  * gatecheck --headless --no-enter: 319 passed, 8 failed — 5x "floor to stand on" (dropped +0.6 m,
+    "ended" +0.37..0.54 m after a 900 ms WALL wait = ~1-2 frames ran), 2x walk-in never reached the
+    volume (hero still at its start spot after the 3.4 s WALL budget), 1x azure-3 cancel -> 'paused'.
+    None of the 8 involve the mission UI (the card never opened in 7 of them). Re-driving the same rows
+    hand-stepped with real W / Escape: _harness/_ms_gateprobe.py. Log: gatecheck_noenter_run1.log.
+- _ms_gateprobe.py (shipping build, gatecheck's own DROP/LANDED/AIM/place/SET_CRESTS, hand-stepped,
+  REAL held W + REAL Escape) on the 6 gates gatecheck failed: 42 rows, 0 failed, 0 page errors
+  (log frames/missions/gateprobe_handstepped.log). Floors: grounded after 90 frames at every stand-out spot.
+  Walk-ins: all raise the card; real Escape returns control to 'keep' every time. => the 8 gatecheck rows
+  were the wall-clock waits under load, not the build.
+  OUT-OF-SCOPE OBSERVATION: at rime-2, azure-1, azure-2 and azure-3 (0, -0.6) the walk-in needs exactly
+  329 hand-stepped frames (5.5 s game time) with the hero in 'bonk' against the wall before the card rises
+  (ember-3/4: 9-23 frames; azure-3 +0.6: 18). gatecheck's walk budget is 3.4 s. Owner: gates / controller.

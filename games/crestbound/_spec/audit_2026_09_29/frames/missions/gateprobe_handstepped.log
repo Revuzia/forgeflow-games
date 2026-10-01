@@ -1,0 +1,46 @@
+title -> NEW GAME
+state keep
+  ok    ember-3: floor in front (dropped 0.6 m at [4.5, -7.95, -9.1], 90 hand-stepped frames)   {"state": "keep", "grounded": true, "pstate": "idle", "pos": [4.5, -8, -9.1]}
+  ok    ember-4: floor in front (dropped 0.6 m at [12, -7.95, -9.1], 90 hand-stepped frames)   {"state": "keep", "grounded": true, "pstate": "idle", "pos": [12, -8, -9.1]}
+  ok    rime-2: floor in front (dropped 0.6 m at [-10.1, 6.35, -28], 90 hand-stepped frames)   {"state": "keep", "grounded": true, "pstate": "idle", "pos": [-10.1, 6.3, -28]}
+  ok    azure-1: floor in front (dropped 0.6 m at [24.1, 0.05, 30], 90 hand-stepped frames)   {"state": "keep", "grounded": true, "pstate": "idle", "pos": [24.1, 0, 30]}
+  ok    azure-2: floor in front (dropped 0.6 m at [-22.1, 0.05, 22], 90 hand-stepped frames)   {"state": "keep", "grounded": true, "pstate": "idle", "pos": [-22.1, 0, 22]}
+  ok    azure-3: floor in front (dropped 0.6 m at [-17, 12.65, 36.5], 90 hand-stepped frames)   {"state": "keep", "grounded": true, "pstate": "idle", "pos": [-17, 12.6, 36.5]}
+  ok    ember-3: walk-in (offset +0.0 m) raises the card [real W, hand-stepped]   {"frames": 9, "state": "card", "pstate": "run", "pos": [4.5, -8, -9.71]}
+  ok    ember-3: real Escape on the card (offset +0.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [4.5, -8, -10.07]}
+  ok    ember-3: walk-in (offset -1.0 m) raises the card [real W, hand-stepped]   {"frames": 9, "state": "card", "pstate": "run", "pos": [3.7, -8, -9.68]}
+  ok    ember-3: real Escape on the card (offset -1.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [3.81, -8, -10.01]}
+  ok    ember-3: walk-in (offset +1.0 m) raises the card [real W, hand-stepped]   {"frames": 10, "state": "card", "pstate": "run", "pos": [5.26, -8, -9.8]}
+  ok    ember-3: real Escape on the card (offset +1.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [5.12, -8, -10.21]}
+  ok    ember-4: walk-in (offset +0.0 m) raises the card [real W, hand-stepped]   {"frames": 10, "state": "card", "pstate": "run", "pos": [12, -8, -9.84]}
+  ok    ember-4: real Escape on the card (offset +0.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [12, -8, -10.27]}
+  ok    ember-4: walk-in (offset -1.0 m) raises the card [real W, hand-stepped]   {"frames": 17, "state": "card", "pstate": "run", "pos": [11.57, -8, -10.59]}
+  ok    ember-4: real Escape on the card (offset -1.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [11.64, -8, -10.56]}
+  ok    ember-4: walk-in (offset +1.0 m) raises the card [real W, hand-stepped]   {"frames": 23, "state": "card", "pstate": "bonk", "pos": [12.19, -8, -10.62]}
+  ok    ember-4: real Escape on the card (offset +1.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [12.18, -8, -10.62]}
+  ok    rime-2: walk-in (offset +0.0 m) raises the card [real W, hand-stepped]   {"frames": 329, "state": "card", "pstate": "bonk", "pos": [-11.62, 6.3, -28]}
+  ok    rime-2: real Escape on the card (offset +0.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [-11.62, 6.3, -28]}
+  ok    rime-2: walk-in (offset -1.0 m) raises the card [real W, hand-stepped]   {"frames": 329, "state": "card", "pstate": "bonk", "pos": [-11.62, 6.3, -27.65]}
+  ok    rime-2: real Escape on the card (offset -1.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [-11.62, 6.3, -27.65]}
+  ok    rime-2: walk-in (offset +1.0 m) raises the card [real W, hand-stepped]   {"frames": 329, "state": "card", "pstate": "bonk", "pos": [-11.62, 6.3, -28.35]}
+  ok    rime-2: real Escape on the card (offset +1.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [-11.62, 6.3, -28.35]}
+  ok    azure-1: walk-in (offset +0.0 m) raises the card [real W, hand-stepped]   {"frames": 329, "state": "card", "pstate": "bonk", "pos": [25.62, 0, 30]}
+  ok    azure-1: real Escape on the card (offset +0.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [25.62, 0, 30]}
+  ok    azure-1: walk-in (offset -1.0 m) raises the card [real W, hand-stepped]   {"frames": 329, "state": "card", "pstate": "bonk", "pos": [25.62, 0, 29.65]}
+  ok    azure-1: real Escape on the card (offset -1.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [25.62, 0, 29.65]}
+  ok    azure-1: walk-in (offset +1.0 m) raises the card [real W, hand-stepped]   {"frames": 329, "state": "card", "pstate": "bonk", "pos": [25.62, 0, 30.35]}
+  ok    azure-1: real Escape on the card (offset +1.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [25.62, 0, 30.35]}
+  ok    azure-2: walk-in (offset +0.0 m) raises the card [real W, hand-stepped]   {"frames": 329, "state": "card", "pstate": "bonk", "pos": [-23.62, 0, 22]}
+  ok    azure-2: real Escape on the card (offset +0.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [-23.62, 0, 22]}
+  ok    azure-2: walk-in (offset -1.0 m) raises the card [real W, hand-stepped]   {"frames": 329, "state": "card", "pstate": "bonk", "pos": [-23.62, 0, 22.35]}
+  ok    azure-2: real Escape on the card (offset -1.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [-23.62, 0, 22.35]}
+  ok    azure-2: walk-in (offset +1.0 m) raises the card [real W, hand-stepped]   {"frames": 329, "state": "card", "pstate": "bonk", "pos": [-23.62, 0, 21.65]}
+  ok    azure-2: real Escape on the card (offset +1.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [-23.62, 0, 21.65]}
+  ok    azure-3: walk-in (offset +0.0 m) raises the card [real W, hand-stepped]   {"frames": 329, "state": "card", "pstate": "bonk", "pos": [-17, 12.6, 38.02]}
+  ok    azure-3: real Escape on the card (offset +0.0 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [-17, 12.6, 38.02]}
+  ok    azure-3: walk-in (offset -0.6 m) raises the card [real W, hand-stepped]   {"frames": 329, "state": "card", "pstate": "bonk", "pos": [-16.79, 12.6, 38.02]}
+  ok    azure-3: real Escape on the card (offset -0.6 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [-16.79, 12.6, 38.02]}
+  ok    azure-3: walk-in (offset +0.6 m) raises the card [real W, hand-stepped]   {"frames": 18, "state": "card", "pstate": "bonk", "pos": [-17.22, 12.6, 38.02]}
+  ok    azure-3: real Escape on the card (offset +0.6 m) returns control   card shown True -> {"state": "keep", "grounded": true, "pstate": "idle", "pos": [-17.2, 12.6, 38.02]}
+PROBE: 42 rows, 0 failed, page errors 0
+exit 0
