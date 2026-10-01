@@ -549,6 +549,7 @@ const FW_COLORS = [[0xffd54a, 0xfff2b0], [0x7ad0ff, 0xbfe8f5], [0x4ade80, 0xbdf5
 export function prewarm(W) {
   ensureBlasts(W);
   ensureDecals(W);
+  uploadTextures(W);
   const toggled = [];
   for (const b of blasts) {
     // ensureBlasts CREATES the pool but the sprites only join the scene on
@@ -612,6 +613,24 @@ export function disposeMatch(W) {
   if (W) W.camShake = 0;
 }
 
+/** The blast flash (fx.js:190) and decal (:164) CanvasTextures are SESSION
+ *  objects, made once — but a texture reaches the GPU only on its first draw,
+ *  so the blast sprite's went up mid-firefight on the first explosion of the
+ *  session. renderer.compile() builds programs and uploads nothing, so under
+ *  the old prewarm the leak census saw it appear at the match-2 lobby
+ *  (m1/m2/m3 = 0/1/1, "growth" +1: VERIFY item 18) — a one-time upload,
+ *  not a per-match leak. Uploading both here makes them resident from the
+ *  first lobby (flat census) and takes the upload out of the first blast. */
+function uploadTextures(W) {
+  const r = W && W.kernel && W.kernel.renderer;
+  if (!r || typeof r.initTexture !== "function") return;
+  try {
+    if (flashTex) r.initTexture(flashTex);
+    const dm = decalMesh && decalMesh.material && decalMesh.material.map;
+    if (dm) r.initTexture(dm);
+  } catch (e) { /* an optimization — never block a match on it */ }
+}
+
 /** Contract C7: the objects whose programs must exist before the first drop
  *  frame. L3's warmup forces them visible / un-culled / count >= 1 for one real
  *  composer.render() and restores them exactly, so this only has to make sure
@@ -620,6 +639,7 @@ export function disposeMatch(W) {
 export function warmObjects(W) {
   ensureBlasts(W);
   ensureDecals(W);
+  uploadTextures(W);
   const g = W.group("fx");
   if (inst && !inst.parent) g.add(inst);
   for (const b of blasts) if (!b.sp.parent) g.add(b.sp, b.ring);

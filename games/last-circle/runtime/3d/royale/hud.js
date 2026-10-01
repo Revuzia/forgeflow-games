@@ -61,16 +61,30 @@ const META_RESERVE = 74;     // chip ~22 + gap 6 + card ~46: held before the car
 const BAND_GAP = 12;
 const BAND_H = 70;           // banner title (34 px Orbitron) + subtitle
 const IND_HALF = 24;         // half-height of the biggest ring cue (34 px damage glyph)
-function bandTop() { return Math.max(R._metaBottom || 0, META_TOP + META_RESERVE) + BAND_GAP; }
-function placeBand() {
+// A phone on its side (touch, <= 520 px tall: TOUCH_CSS's short rules) runs a
+// compact top stack — meta at 86 with the quest card off, an 18 px banner
+// title — so the band starts right under the LVL row and ends above the
+// reticle (375 px tall: band 116..155, reticle from ~160).
+const PH_META_TOP = 86, PH_META_RESERVE = 24, PH_BAND_GAP = 8, PH_BAND_H = 41;
+function phoneShort() {
+  if (!touchOn) return false;
+  if (_tW && _tW.kernel) viewSize(_tW);        // C1 cache (no layout read)
+  return _vh > 0 && _vh <= 520;
+}
+function bandH() { return phoneShort() ? PH_BAND_H : BAND_H; }
+function bandTop() {
+  if (phoneShort()) return Math.max(PH_META_TOP + Math.min(R._metaH || 0, PH_META_RESERVE), PH_META_TOP + PH_META_RESERVE) + PH_BAND_GAP;
+  return Math.max(META_TOP + (R._metaH || 0), META_TOP + META_RESERVE) + BAND_GAP;
+}
+function placeBand(force) {
   if (!R.annWrap) return;
-  const t = Math.round(bandTop());
-  if (R._bandTop === t) return;
+  const t = Math.round(bandTop()), bh = bandH();
+  if (R._bandTop === t && !force) return;
   R._bandTop = t;
   R.annWrap.style.top = t + "px";
-  if (R.stormMsg) R.stormMsg.style.top = (t + BAND_H + 6) + "px";
-  if (R.pickupMsg) R.pickupMsg.style.top = (t + BAND_H + 40) + "px";
-  if (R.deathBox) R.deathBox.style.top = (t + BAND_H + 16) + "px";
+  if (R.stormMsg) R.stormMsg.style.top = (t + bh + 6) + "px";
+  if (R.pickupMsg) R.pickupMsg.style.top = (t + bh + 40) + "px";
+  if (R.deathBox) R.deathBox.style.top = (t + bh + 16) + "px";
 }
 
 const css = (el, o) => { Object.assign(el.style, o); return el; };
@@ -83,6 +97,12 @@ function h(tag, styles, text, parent) {
 }
 const FONT = "'Segoe UI', system-ui, -apple-system, sans-serif";
 const FONT_DISPLAY = "'Segoe UI', system-ui, sans-serif";
+// Font floor for touch (PLAN L7 phone gate: no text under 12 px on a phone).
+// Small labels are written as max(Npx, var(--lc-minfs)): on a desktop the
+// variable is unset, so every label keeps its designed size; touch mode sets
+// --lc-minfs: 12px on <html> (see TOUCH_CSS), and the same inline style lifts
+// to 12 px with no re-render and no layout pass.
+const FS = (n) => "max(" + n + "px, var(--lc-minfs, 0px))";
 // AAA glass panels — translucent so the live Three.js world reads through
 const PANEL = {
   background: "linear-gradient(165deg, rgba(12,24,44,0.72) 0%, rgba(8,16,30,0.82) 100%)",
@@ -138,9 +158,11 @@ export function init(W) {
   K = W.SIM;
   W.randomMap = randomMap;   // net.js uses this for online match starts
   const root = h("div", { position: "absolute", inset: "0", pointerEvents: "none", fontFamily: FONT, zIndex: 40, color: "#eaf2ff", userSelect: "none" });
+  root.dataset.lc = "hudroot";
   W.kernel.parent.appendChild(root);
   R = { root };
   wireEvents(W);
+  initTouch(W);
 }
 
 function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
@@ -164,6 +186,311 @@ function layer(name, styles) {
   if (R[name]) { clear(R[name]); R[name].remove(); }
   R[name] = h("div", Object.assign({ position: "absolute", inset: "0", pointerEvents: "none" }, styles || {}), null, R.root);
   return R[name];
+}
+
+// ═══ TOUCH MODE (contract C6: hud.setTouchMode(W, on)) ═══════════════════════
+// Touch mode is a property of the DEVICE IN USE, not of the match phase: it
+// flips on with the first real touch (or at boot on a coarse-only pointer —
+// the same test the KEYBOARD + MOUSE card uses) and off with a real mouse
+// press, last input wins. touch.js (lane L10) may also call setTouchMode
+// directly; both paths land on the same state. What it changes:
+//   * <html class="lc-touch">: TOUCH_CSS lifts every small label to 12 px
+//     (--lc-minfs, see FS), every button/input to >= 44 px, swaps the
+//     .kbd-hint lines for their .lc-touch-only twins and lays the HUD out
+//     around the thumb zones (stick bottom-left, buttons bottom-right).
+//   * prompts name the touch control: "HOLD USE · Open chest", "TAP USE · …",
+//     "TAP JUMP TO CUT THE CHUTE"; "CLICK TO LOOK AROUND" never shows.
+//   * the HUD slots and the minimap are tappable (see hudTap*): a tap on a
+//     slot calls W.equipSlot, a tap on the minimap opens the big map.
+//   * the rotate overlay covers a portrait screen and pauses a live solo match.
+let touchOn = false;
+let _tW = null;                  // the W the touch listeners act on (one game per page)
+let _touchInit = false;
+// A slot / the minimap has no hold action, so a slow press is still a tap:
+// the window is generous, and it is measured on the events' own timestamps
+// (input time), not handler time — a long frame between the finger landing and
+// lifting must not turn a tap into a no-op (seen once under a loaded test box).
+const TAP_SLOP = 18, TAP_MS = 1200;
+const _tap = { id: null, kind: null, idx: -1, x: 0, y: 0, t: 0, swallowEnd: false, n: 0, last: null };
+function coarseOnly() {
+  try {
+    return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches && !window.matchMedia("(pointer: fine)").matches);
+  } catch (e) { return false; }
+}
+/** C6. `on` = the player is using touch. Idempotent; safe before showHUD. */
+export function setTouchMode(W, on) {
+  on = !!on;
+  if (W) _tW = W;
+  ensureTouchStyles();
+  touchOn = on;
+  try { document.documentElement.classList.toggle("lc-touch", on); } catch (e) {}
+  if (R.root) R.root.dataset.touch = on ? "1" : "0";
+  if (R.lookHint && on && R.lookHint.style.display !== "none") R.lookHint.style.display = "none";
+  if (R._hudCache) { R._hudCache.ia = null; R._hudCache.chuteLbl = null; }
+  syncTouchPrefs(W || _tW);
+  placeBand(true);
+  updateRotate();
+}
+export function isTouchMode() { return touchOn; }
+/** touch.js reads W.settings.touchScale / touchLeftHanded (lane L10); the HUD
+ *  mirrors them as html classes + --lct-s so TOUCH_CSS keeps the HUD out of
+ *  the same thumb zones at any button size and on either hand. */
+function syncTouchPrefs(W) {
+  const st = (W && W.settings) || {};
+  let sc = +st.touchScale;
+  if (!(sc > 0)) sc = 1;
+  sc = Math.max(0.8, Math.min(1.3, sc));
+  try {
+    const de = document.documentElement;
+    de.style.setProperty("--lct-s", String(sc));
+    de.classList.toggle("lc-ts-s", sc <= 0.9);
+    de.classList.toggle("lc-ts-m", sc > 0.9 && sc <= 1.1);
+    de.classList.toggle("lc-ts-l", sc > 1.1);
+    de.classList.toggle("lc-lh", st.touchLeftHanded === true);
+  } catch (e) {}
+}
+
+function initTouch(W) {
+  _tW = W;
+  ensureTouchStyles();
+  // ?touch=1 / ?touch=0 pin the mode (the same flag touch.js honours): a
+  // desktop test of the touch HUD, where the mouse plays the finger
+  let forced = null;
+  try { const m = /[?&]touch=([01])(?:&|$)/.exec(location.search || ""); if (m) forced = m[1] === "1"; } catch (e) {}
+  if (forced !== null) setTouchMode(W, forced);
+  else if (coarseOnly()) setTouchMode(W, true);
+  if (_touchInit) return;
+  _touchInit = true;
+  // CAPTURE phase on window: these run before ANY element listener, whatever
+  // the z-order of the touch layer, so a tap that starts on a HUD slot or the
+  // minimap is the HUD's and never also starts a look drag or a FIRE press.
+  window.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch" || e.pointerType === "pen" || (forced === true && e.pointerType === "mouse")) {
+      if (!touchOn && forced !== false) setTouchMode(_tW, true);
+      hudTapDown(e);
+    } else if (e.pointerType === "mouse" && touchOn && e.isTrusted && forced === null) {
+      setTouchMode(_tW, false);          // a real mouse took over (touch laptop)
+    }
+  }, true);
+  window.addEventListener("pointermove", (e) => { if (_tap.id !== null && e.pointerId === _tap.id) e.stopPropagation(); }, true);
+  window.addEventListener("pointerup", hudTapUp, true);
+  window.addEventListener("pointercancel", (e) => { if (_tap.id !== null && e.pointerId === _tap.id) { _tap.id = null; e.stopPropagation(); } }, true);
+  // a HUD tap acts on pointerup; cancelling its touchend stops the browser's
+  // synthesized click from landing on whatever that tap just opened (the big
+  // map's own "tap anywhere to close" would otherwise shut it in the same tap)
+  window.addEventListener("touchend", (e) => {
+    if (_tap.swallowEnd) { _tap.swallowEnd = false; if (e.cancelable) e.preventDefault(); }
+  }, { capture: true, passive: false });
+  const ro = () => updateRotate();
+  window.addEventListener("resize", ro);
+  window.addEventListener("orientationchange", ro);
+  try { if (window.visualViewport) window.visualViewport.addEventListener("resize", ro); } catch (e) {}
+}
+
+function rectHas(el, x, y) {
+  if (!el || !el.isConnected) return false;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+/** Which HUD target a touch at (x, y) starts on. Read on a TAP only (never per
+ *  frame), so its rect reads cost nothing in the frame budget. */
+function hudTapTarget(x, y) {
+  const W = _tW;
+  if (!W || !R.hud) return null;
+  if (R.bigmap) return { kind: "bigmap", idx: -1 };      // the map is up: any tap closes it
+  if (W.phase !== "match" && W.phase !== "drop") return null;
+  if (R.pause || R.settings || R.post || R.howto || R.career || (R.rotate && R.rotate.style.display !== "none")) return null;
+  if (R.mmWrap && rectHas(R.mmWrap, x, y)) return { kind: "map", idx: -1 };
+  const me = W.player;
+  if (me && me.alive && R.slotsRow && rectHas(R.slotsRow, x, y)) {
+    const cells = R.slotsRow.children;
+    for (let i = 0; i < cells.length; i++) if (rectHas(cells[i], x, y)) return { kind: "slot", idx: i };
+  }
+  return null;
+}
+function hudTapDown(e) {
+  if (!touchOn || _tap.id !== null) return;
+  const t = hudTapTarget(e.clientX, e.clientY);
+  if (!t) return;
+  _tap.id = e.pointerId; _tap.kind = t.kind; _tap.idx = t.idx;
+  _tap.x = e.clientX; _tap.y = e.clientY; _tap.t = e.timeStamp || performance.now();
+  e.stopPropagation();
+  if (e.cancelable) e.preventDefault();
+}
+function hudTapUp(e) {
+  if (_tap.id === null || e.pointerId !== _tap.id) return;
+  _tap.id = null;
+  e.stopPropagation();
+  _tap.swallowEnd = true;
+  const moved = Math.hypot(e.clientX - _tap.x, e.clientY - _tap.y), held = (e.timeStamp || performance.now()) - _tap.t;
+  _tap.n++;
+  _tap.last = { kind: _tap.kind, idx: _tap.idx, moved: Math.round(moved), heldMs: Math.round(held), acted: false };
+  if (moved > TAP_SLOP || held > TAP_MS) return;
+  const W = _tW;
+  if (!W) return;
+  _tap.last.acted = true;
+  if (_tap.kind === "map" || _tap.kind === "bigmap") {
+    if (_tap.kind === "bigmap" ? !!R.bigmap : !R.bigmap) { toggleBigMap(W); W.events && W.events.emit("uiClick"); }
+  } else if (_tap.kind === "slot") {
+    const me = W.player, i = _tap.idx;
+    if (!me || !me.alive || !me.inventory || !me.inventory.slots[i] || me.inventory.active === i) return;
+    // C6: the slot calls W.equipSlot (weapons.js) — the same equip the 1-5
+    // keys reach through input.slot, applied now so the row repaints this frame
+    if (W.equipSlot) W.equipSlot(me, i);
+    else if (me.input) me.input.slot = i;
+  }
+}
+
+// rotate overlay: touch + portrait. Same rule as DYEFIELD's CONTRACT_MOBILE M4:
+// shown while the page is in touch mode and taller than wide; a live solo
+// match pauses under it, and turning back never auto-resumes (the pause card is
+// waiting). Online matches cannot pause — the overlay still covers.
+let _rotOn = false;
+function ensureRotate() {
+  if (R.rotate && R.rotate.isConnected) return R.rotate;
+  const el = h("div", {
+    position: "fixed", inset: "0", zIndex: "2147483000", display: "none",
+    alignItems: "center", justifyContent: "center", padding: "24px", boxSizing: "border-box",
+    background: "radial-gradient(ellipse at 50% 40%, rgba(16,32,58,0.97) 0%, rgba(3,8,16,0.985) 100%)",
+    color: "#eaf2ff", fontFamily: FONT, textAlign: "center", pointerEvents: "auto", touchAction: "none",
+  }, null, document.body);
+  el.id = "lc-rotate";
+  el.dataset.lc = "rotate";
+  el.setAttribute("role", "alert");
+  const card = h("div", { display: "flex", flexDirection: "column", alignItems: "center", gap: "14px", maxWidth: "320px" }, null, el);
+  const ic = h("div", { width: "96px", height: "96px" }, null, card);
+  ic.innerHTML = '<svg viewBox="0 0 120 120" width="96" height="96" aria-hidden="true"><g class="lc-rot-ph">'
+    + '<rect x="38" y="14" width="44" height="80" rx="9" fill="#0b1830" stroke="#8ec8ff" stroke-width="5"/>'
+    + '<rect x="45" y="24" width="30" height="56" rx="3" fill="#2f7fd6"/><circle cx="60" cy="87" r="3" fill="#8ec8ff"/></g>'
+    + '<path d="M22 86a42 42 0 0 0 30 22" fill="none" stroke="#eaf2ff" stroke-width="5" stroke-linecap="round"/>'
+    + '<path d="M44 100l10 8-12 5" fill="none" stroke="#eaf2ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "18px", fontWeight: "900", letterSpacing: "2px" }, "TURN YOUR PHONE SIDEWAYS", card);
+  h("div", { fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "600", opacity: "0.8", lineHeight: "1.45" },
+    "Last Circle plays in landscape. A match in progress is paused until you turn back.", card);
+  R.rotate = el;
+  return el;
+}
+function updateRotate() {
+  if (typeof document === "undefined" || !document.body) return;
+  const on = touchOn && window.innerHeight > window.innerWidth;
+  if (on === _rotOn && (!on || (R.rotate && R.rotate.isConnected))) return;
+  _rotOn = on;
+  const el = ensureRotate();
+  el.style.display = on ? "flex" : "none";
+  if (!on) return;
+  const W = _tW;
+  if (W && !W.net && !W.paused && (W.phase === "match" || W.phase === "drop") && W.player && W.player.alive) {
+    if (R.bigmap) toggleBigMap(W);
+    requestPause(W, true);
+  }
+}
+
+// Phone / touch layout. Inline styles carry the desktop design, so these rules
+// use !important to win — and they only ever match under html.lc-touch, so a
+// desktop never sees one of them. Short-landscape rules (a phone on its side,
+// <= 520 px tall) compact the menu and the HUD's top stack; the HUD's bottom
+// widgets move out of the two thumb zones (touch.js, lane L10: the stick
+// bottom-left, the button cluster bottom-right) into the bottom centre.
+const TOUCH_CSS = `
+html.lc-touch { --lc-minfs: 12px; }
+html:not(.lc-touch) .lc-touch-only { display: none !important; }
+html.lc-touch .kbd-hint { display: none !important; }
+html.lc-touch [data-lc=hudroot] button { min-height: 44px; min-width: 44px; touch-action: manipulation; }
+html.lc-touch [data-lc=hudroot] input { min-height: 44px; }
+html.lc-touch [data-lc=hudroot] [role=button] { min-height: 44px; touch-action: manipulation; }
+html.lc-touch [data-lc=swatchrow] { flex-wrap: wrap; justify-content: center; max-width: 290px; gap: 6px !important; }
+html.lc-touch [data-lc=swatch] { width: 44px !important; height: 44px !important; }
+html.lc-touch [data-lc=strip] { flex-wrap: wrap; justify-content: center; row-gap: 4px; max-width: calc(100vw - 32px); box-sizing: border-box; }
+html.lc-touch [data-lc=chutebtn] { display: none !important; }
+html.lc-touch [data-lc=lookhint] { display: none !important; }
+/* MENU on a phone on its side: the PLAY cards come first (title, then the
+   cards + operative side by side), the level strip and the dailies follow,
+   and the column scrolls inside itself (menuwrap overflow-y: auto) */
+@media (max-height: 520px) {
+  html.lc-touch [data-lc=menuwrap] { padding: 50px 12px 12px !important; gap: 10px !important; }
+  html.lc-touch [data-lc=titleblock] { display: contents; }
+  html.lc-touch [data-lc=wordmark] { font-size: 26px !important; letter-spacing: 6px !important; order: 0; }
+  html.lc-touch [data-lc=cols] { order: 1; gap: 12px !important; flex-wrap: nowrap !important; }
+  html.lc-touch [data-lc=strip] { order: 2; margin-top: 0 !important; }
+  html.lc-touch [data-lc=daily] { order: 3; margin-top: 0 !important; }
+  html.lc-touch [data-lc=touchhint], html.lc-touch [data-lc=kbdhint] { order: 4; }
+  html.lc-touch [data-lc=leftcol] { min-width: 0 !important; width: 296px; gap: 8px !important; }
+  html.lc-touch [data-lc=leftcol] .lc-mode-card { min-width: 0 !important; padding: 9px 12px 9px 10px !important; }
+  html.lc-touch [data-lc=leftcol] .lc-mode-card div { letter-spacing: 1px !important; }
+  html.lc-touch [data-lc=chiptail] { display: none; }
+  html.lc-touch [data-lc=bay] { width: 236px !important; padding: 10px 12px !important; gap: 6px !important; }
+  html.lc-touch [data-lc=stage] { width: 132px !important; height: 132px !important; }
+  html.lc-touch [data-lc=stage] canvas { width: 100% !important; height: 100% !important; }
+  html.lc-touch [data-lc=lobbygrid] { display: none !important; }
+}
+/* MATCH HUD around touch.js's thumb zones (lane L10's published geometry, CSS
+   px x --lct-s, from the safe-area edges): STICK home 34..154 bottom-left;
+   cluster bottom-right - RELOAD from W-278, FIRE from W-194 / H-160, USE to
+   H-252; PAUSE top-right 10..54. The slot row (5 x 44 + 4 x 4 = 236 px) goes
+   in the bottom-centre gap: mode A (wide) on the bottom edge between the stick
+   and RELOAD, mode B (narrow, e.g. 667 px) above RELOAD's top between the stick
+   and FIRE. Ammo / reload bar / weapon pop stack on the row. HP + shield move
+   under the minimap. Thresholds: A needs W >= 432 s + 248 (s = button scale;
+   the bucket's largest s is used: S 0.9 -> 637, M 1.1 -> 723, L 1.3 -> 810). */
+html.lc-touch {
+  --lct-s: 1;
+  --lc-sl: env(safe-area-inset-left, 0px); --lc-sr: env(safe-area-inset-right, 0px); --lc-sb: env(safe-area-inset-bottom, 0px);
+  --lc-rx: calc(50% + (var(--lc-sl) - var(--lc-sr)) / 2 - var(--lct-s) * 20px - 118px);
+  --lc-rb: calc(var(--lc-sb) + var(--lct-s) * 98px + 6px);
+  --lc-ab: calc(var(--lc-rb) - 28px);
+  --lc-bb: calc(var(--lc-rb) - 40px);
+  --lc-pb: calc(var(--lc-rb) + 52px);
+}
+html.lc-touch.lc-lh { --lc-rx: calc(50% + (var(--lc-sl) - var(--lc-sr)) / 2 + var(--lct-s) * 20px - 118px); }
+@media (min-width: 637px) { html.lc-touch.lc-ts-s { --lc-rx: calc(50% + (var(--lc-sl) - var(--lc-sr)) / 2 - var(--lct-s) * 62px - 118px); --lc-rb: calc(var(--lc-sb) + 12px); --lc-ab: calc(var(--lc-rb) + 50px); --lc-bb: calc(var(--lc-rb) + 78px); --lc-pb: calc(var(--lc-rb) + 92px); }
+  html.lc-touch.lc-ts-s.lc-lh { --lc-rx: calc(50% + (var(--lc-sl) - var(--lc-sr)) / 2 + var(--lct-s) * 62px - 118px); } }
+@media (min-width: 723px) { html.lc-touch.lc-ts-m { --lc-rx: calc(50% + (var(--lc-sl) - var(--lc-sr)) / 2 - var(--lct-s) * 62px - 118px); --lc-rb: calc(var(--lc-sb) + 12px); --lc-ab: calc(var(--lc-rb) + 50px); --lc-bb: calc(var(--lc-rb) + 78px); --lc-pb: calc(var(--lc-rb) + 92px); }
+  html.lc-touch.lc-ts-m.lc-lh { --lc-rx: calc(50% + (var(--lc-sl) - var(--lc-sr)) / 2 + var(--lct-s) * 62px - 118px); } }
+@media (min-width: 810px) { html.lc-touch.lc-ts-l { --lc-rx: calc(50% + (var(--lc-sl) - var(--lc-sr)) / 2 - var(--lct-s) * 62px - 118px); --lc-rb: calc(var(--lc-sb) + 12px); --lc-ab: calc(var(--lc-rb) + 50px); --lc-bb: calc(var(--lc-rb) + 78px); --lc-pb: calc(var(--lc-rb) + 92px); }
+  html.lc-touch.lc-ts-l.lc-lh { --lc-rx: calc(50% + (var(--lc-sl) - var(--lc-sr)) / 2 + var(--lct-s) * 62px - 118px); } }
+html.lc-touch [data-lc=slotcol] { display: contents !important; }
+html.lc-touch [data-lc=slots] { position: absolute; left: var(--lc-rx); bottom: var(--lc-rb); gap: 4px !important; }
+html.lc-touch [data-lc=slots] > div { width: 44px !important; height: 44px !important; }
+html.lc-touch [data-lc=slots] img { width: 40px !important; height: 30px !important; }
+html.lc-touch [data-lc=ammo] { position: absolute; left: var(--lc-rx); bottom: var(--lc-ab); font-size: 18px !important; line-height: 22px; white-space: nowrap; }
+html.lc-touch [data-lc=reloadbar], html.lc-touch [data-lc=healbar] { left: var(--lc-rx) !important; top: auto !important; bottom: var(--lc-bb) !important; transform: none !important; width: 180px !important; }
+html.lc-touch [data-lc=wpnpop] { left: calc(var(--lc-rx) + 118px) !important; bottom: var(--lc-pb) !important; font-size: 14px !important; }
+html.lc-touch [data-lc=minimap] { top: calc(env(safe-area-inset-top, 0px) + 12px) !important; left: calc(var(--lc-sl) + 14px) !important; }
+html.lc-touch [data-lc=bars] { left: calc(var(--lc-sl) + 14px) !important; bottom: auto !important; top: calc(env(safe-area-inset-top, 0px) + 200px) !important; width: 240px !important; }
+html.lc-touch [data-lc=chat] { left: calc(var(--lc-sl) + 14px) !important; bottom: auto !important; top: calc(env(safe-area-inset-top, 0px) + 250px) !important; max-width: 300px !important; }
+html.lc-touch [data-lc=feed] { top: 62px !important; right: calc(var(--lc-sr) + 10px) !important; }
+html.lc-touch [data-lc=perf] { top: 16px !important; right: calc(var(--lc-sr) + 64px) !important; }
+/* a phone on its side (<= 520 px tall): a compact top stack, the quest card
+   off (dailies still pay out and flash), the left column under the minimap
+   carries the prompts so the centre stays on the reticle */
+@media (max-height: 520px) {
+  html.lc-touch { --lc-ann-fs: 18px; --lc-ann-sub: 12px; }
+  html.lc-touch [data-lc=minimap] { width: 104px !important; height: 104px !important; top: calc(env(safe-area-inset-top, 0px) + 8px) !important; left: calc(var(--lc-sl) + 8px) !important; border-radius: 10px !important; }
+  html.lc-touch [data-lc=bars] { top: calc(env(safe-area-inset-top, 0px) + 118px) !important; left: calc(var(--lc-sl) + 8px) !important; width: 200px !important; }
+  html.lc-touch [data-lc=chat] { top: calc(env(safe-area-inset-top, 0px) + 220px) !important; left: calc(var(--lc-sl) + 8px) !important; max-width: 240px !important; }
+  html.lc-touch [data-lc=stormrow] { top: 54px !important; padding: 4px 14px !important; gap: 12px !important; }
+  html.lc-touch [data-lc=stormrow] > div { font-size: 15px !important; }
+  html.lc-touch [data-lc=meta] { top: 86px !important; width: 300px !important; }
+  html.lc-touch [data-lc=quest] { display: none !important; }
+  html.lc-touch [data-lc=feed] > :nth-last-child(n+3) { display: none !important; }
+  html.lc-touch [data-lc=interact], html.lc-touch [data-lc=chutehint] { left: calc(var(--lc-sl) + 8px) !important; top: calc(env(safe-area-inset-top, 0px) + 166px) !important; transform: none !important; font-size: 13px !important; max-width: calc(45vw - 16px); overflow: hidden; text-overflow: ellipsis; }
+  html.lc-touch [data-lc=pickupmsg] { left: calc(var(--lc-sl) + 8px) !important; top: calc(env(safe-area-inset-top, 0px) + 196px) !important; transform: none !important; font-size: 13px !important; }
+  html.lc-touch [data-lc=stormmsg] { font-size: 15px !important; }
+  html.lc-touch [data-lc=death] { top: 52px !important; max-height: calc(100% - 60px); overflow-y: auto; padding: 12px 22px 12px !important; min-width: 0 !important; }
+  html.lc-touch [data-lc=deathtitle] { font-size: 28px !important; }
+  html.lc-touch [data-lc=post] { padding: 14px 28px !important; gap: 6px !important; min-width: 0 !important; max-height: calc(100% - 16px); overflow-y: auto !important; }
+  html.lc-touch [data-lc=posttitle] { font-size: 26px !important; }
+}
+@keyframes lcRotPh { 0%, 30% { transform: rotate(0deg) } 60%, 100% { transform: rotate(-90deg) } }
+#lc-rotate .lc-rot-ph { transform-origin: 60px 54px; animation: lcRotPh 2.2s ease-in-out infinite alternate; }
+@media (prefers-reduced-motion: reduce) { #lc-rotate .lc-rot-ph { animation: none; transform: rotate(-90deg); } }
+`;
+function ensureTouchStyles() {
+  if (typeof document === "undefined" || document.getElementById("lc-touch-css")) return;
+  const st = document.createElement("style");
+  st.id = "lc-touch-css";
+  st.textContent = TOUCH_CSS;
+  document.head.appendChild(st);
 }
 
 // ═══ MENU ════════════════════════════════════════════════════════════════════
@@ -628,6 +955,15 @@ export function showMenu(W, startMatch) {
   document.exitPointerLock && document.exitPointerLock();
   W.kernel.renderer.domElement.style.cursor = "";
   hideHUD();
+  // Every way back to the menu lands here — MAIN MENU, QUIT, and the
+  // orchestrator's failed-match recovery (lane L4: "Couldn't load the match").
+  // That last one can arrive with the loading screen (and its creep interval),
+  // a pause card, settings or a running lobby countdown still up; the menu
+  // must own the screen, and a stale lobby timer must never start a drop.
+  hideLoading(W);
+  if (R._lobbyCancel) { R._lobbyCancel(); R._lobbyCancel = null; }
+  if (R.settings) { W.captureKey = null; R.settings.remove(); R.settings = null; }
+  ["pause", "lobby", "dropsel"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
   ensureAAAStyles();
   // Dispose BEFORE clearing. Both disposeMapResources and disposeLootResources
   // derive their work list by traversing these very groups, and Object3D.clear()
@@ -687,6 +1023,7 @@ export function showMenu(W, startMatch) {
 
   // title block
   const titleBlock = h("div", { textAlign: "center", marginTop: "auto", animation: "lcTitleIn .9s cubic-bezier(.2,.8,.2,1) both" }, null, wrap);
+  titleBlock.dataset.lc = "titleblock";
   const wordmark = h("div", {
     fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "min(72px, 7vw, 9vh)", fontWeight: "900", lineHeight: "1.15",
     letterSpacing: "10px",
@@ -707,31 +1044,32 @@ export function showMenu(W, startMatch) {
       padding: "6px 14px", borderRadius: "10px", background: "rgba(4,12,24,0.5)",
       border: "1px solid rgba(120,180,255,0.18)", fontFamily: "Rajdhani, " + FONT,
     }, null, titleBlock);
+    strip.dataset.lc = "strip";
     h("div", { fontSize: "13px", fontWeight: "900", color: "#ffd873", letterSpacing: "1px" }, "LVL " + pr.level, strip);
     // The rank is what a level MEANS once the skin track has run out at 10.
     // Deliberately not in the kill feed — that line is already name + weapon at
     // 12px and a title makes it unreadable.
-    h("div", { fontSize: "11px", fontWeight: "800", color: "#9fd7ff", letterSpacing: "1.5px", opacity: "0.9" }, rankLabel(pr.level), strip);
+    h("div", { fontSize: FS(11), fontWeight: "800", color: "#9fd7ff", letterSpacing: "1.5px", opacity: "0.9" }, rankLabel(pr.level), strip);
     const barW = h("div", { width: "120px", height: "8px", background: "rgba(0,0,0,0.55)", borderRadius: "4px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, strip);
     h("div", { width: Math.min(100, (pr.xp / need) * 100) + "%", height: "100%", background: "linear-gradient(90deg,#4aa8ff,#7ad0ff)" }, null, barW);
-    h("div", { fontSize: "11px", opacity: "0.75", letterSpacing: "1px" }, pr.xp + " / " + need + " XP", strip);
+    h("div", { fontSize: FS(11), opacity: "0.75", letterSpacing: "1px" }, pr.xp + " / " + need + " XP", strip);
     if (c.matches) {
       // damage and timeAliveS were accumulated every match and read by NOTHING —
       // two of the seven career fields were write-only. Show them.
       h("div", {
-        fontSize: "11.5px", opacity: "0.8", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px",
+        fontSize: FS(11.5), opacity: "0.8", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px",
       }, c.matches + " matches · " + c.wins + " wins · " + c.kills + " kills" + (c.bestPlacement ? " · best #" + c.bestPlacement : "")
          + (c.damage ? " · " + Math.round(c.damage / 1000) + "k dmg" : "") + (c.timeAliveS ? " · " + (c.timeAliveS / 3600).toFixed(1) + "h" : ""), strip);
     }
     // Coming back tomorrow rather than in a month is worth naming.
     if (pr.dayStreak > 1) {
-      h("div", { fontSize: "11.5px", color: "#ffb36a", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px" },
+      h("div", { fontSize: FS(11.5), color: "#ffb36a", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px" },
         "🔥 " + pr.dayStreak + "-DAY STREAK", strip);
     }
     // Reads the whole reward table, not just MENU_SKINS: the skins are exhausted
     // at level 10, so a skins-only lookup named no target for anyone past it.
     const nextRw = rewardTable().filter((e) => e.lvl > pr.level).sort((a, b) => a.lvl - b.lvl)[0];
-    h("div", { fontSize: "11.5px", color: "#9fd7ff", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px" },
+    h("div", { fontSize: FS(11.5), color: "#9fd7ff", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px" },
       nextRw ? "NEXT: " + nextRw.kind + " " + nextRw.name + " @ LVL " + nextRw.lvl : "MAX RANK · NEXT: " + careerGoal(c), strip);
   }
   // DAILIES — the only thing on any screen that is different because it is a new
@@ -748,8 +1086,9 @@ export function showMenu(W, startMatch) {
       // Reset it here; the header below re-asserts its own deliberate spacing.
       letterSpacing: "normal",
     }, null, titleBlock);
+    dp.dataset.lc = "daily";
     const mins = Math.max(0, Math.round(msToMidnight() / 60000));
-    h("div", { fontSize: "10.5px", fontWeight: "900", letterSpacing: "2.5px", color: "#ffb36a" },
+    h("div", { fontSize: FS(10.5), fontWeight: "900", letterSpacing: "2.5px", color: "#ffb36a" },
       "DAILY CHALLENGES  ·  RESETS IN " + Math.floor(mins / 60) + "h " + (mins % 60) + "m", dp);
     for (const c of dailyChallenges(W)) {
       const row = h("div", { display: "flex", gap: "10px", alignItems: "center", fontSize: "12.5px", letterSpacing: "0.2px" }, null, dp);
@@ -757,7 +1096,7 @@ export function showMenu(W, startMatch) {
       h("div", { flex: "1", textAlign: "left", opacity: c.done ? "0.55" : "0.95", textDecoration: c.done ? "line-through" : "none" }, c.label, row);
       h("div", { fontWeight: "900", color: c.done ? "#8fa4bb" : "#ffd873", whiteSpace: "nowrap", marginLeft: "auto" }, "+" + c.xp + " XP", row);
     }
-    if (!W.daily.firstWin) h("div", { fontSize: "11px", opacity: "0.75", color: "#9fd7ff", textAlign: "left", letterSpacing: "0.2px" }, "First win today  ·  +750 XP", dp);
+    if (!W.daily.firstWin) h("div", { fontSize: FS(11), opacity: "0.75", color: "#9fd7ff", textAlign: "left", letterSpacing: "0.2px" }, "First win today  ·  +750 XP", dp);
   }
   if (!compact) h("div", {
     fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "600",
@@ -769,7 +1108,9 @@ export function showMenu(W, startMatch) {
     display: "flex", gap: "28px", alignItems: "stretch", flexWrap: "wrap",
     justifyContent: "center", animation: "lcPanelIn .7s .15s cubic-bezier(.2,.8,.2,1) both",
   }, null, wrap);
+  cols.dataset.lc = "cols";
   const leftCol = h("div", { display: "flex", flexDirection: "column", gap: "10px", justifyContent: "center", minWidth: "300px" }, null, cols);
+  leftCol.dataset.lc = "leftcol";
 
   // A first-time visitor clicks the TOP card, and the top card was the 50-player
   // standard drop: lobby, then a 12 s landing-zone map, then a ~26 s parachute
@@ -802,10 +1143,13 @@ export function showMenu(W, startMatch) {
     h("div", { fontFamily: "Rajdhani, " + FONT, fontSize: "14px", fontWeight: "500", opacity: "0.72", marginTop: "2px", color: "#b8d0ea" }, m.sub, txt);
     if (rookie && m.id === "quick") {
       h("div", {
-        fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "10px", fontWeight: "900",
+        fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: FS(10), fontWeight: "900",
         letterSpacing: "1.6px", color: "#0a1a2c", background: "linear-gradient(180deg,#8fe0ff,#3fa9e8)",
         borderRadius: "5px", padding: "3px 7px", marginTop: "5px", display: "inline-block",
-      }, "START HERE · FIGHTING IN 10 SECONDS", txt);
+      }, "START HERE", txt).dataset.lc = "rookiechip";
+      // the tail drops on a phone on its side, where the full line wrapped to
+      // three lines inside the card
+      h("span", null, " · FIGHTING IN 10 SECONDS", txt.lastChild).dataset.lc = "chiptail";
     }
     // the card IS the play button — one click launches this mode (no separate DROP IN)
     h("div", {
@@ -903,8 +1247,9 @@ export function showMenu(W, startMatch) {
     alignItems: "center", gap: "8px", position: "relative", overflow: "hidden",
   }, PANEL), null, cols);
   bay.className = "lc-glass-scan";
+  bay.dataset.lc = "bay";
   h("div", {
-    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "11px", letterSpacing: "3px",
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: FS(11), letterSpacing: "3px",
     opacity: "0.7", fontWeight: "800", color: "#9fd0ff",
   }, "OPERATIVE", bay);
   const STG = compact ? 220 : 280;
@@ -915,6 +1260,7 @@ export function showMenu(W, startMatch) {
     border: "1px solid rgba(120,190,255,0.25)",
     boxShadow: "inset 0 0 40px rgba(40,120,255,0.12), 0 0 24px rgba(40,100,200,0.15)",
   }, null, bay);
+  stage.dataset.lc = "stage";
   // chrome corners
   [["0","0","borderTop","borderLeft"], ["0","auto","borderTop","borderRight"], ["auto","0","borderBottom","borderLeft"], ["auto","auto","borderBottom","borderRight"]]
     .forEach(([t, r, a, b], i) => {
@@ -960,15 +1306,17 @@ export function showMenu(W, startMatch) {
   // and browsable for the same reason locked skins do: seeing what level 22 buys
   // you is the point of a locker.
   h("div", {
-    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "10px", letterSpacing: "2.5px",
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: FS(10), letterSpacing: "2.5px",
     opacity: "0.6", fontWeight: "800", color: "#9fd0ff", marginTop: "6px",
   }, "RETICLE", bay);
   const swRow = h("div", { display: "flex", gap: "7px", alignItems: "center" }, null, bay);
+  swRow.dataset.lc = "swatchrow";
   const swEls = CROSS_COLORS.map((cc, i) => {
     const b = h("button", {
       width: "26px", height: "26px", borderRadius: "7px", cursor: "pointer", padding: "0",
       background: cc.css, border: "1px solid rgba(255,255,255,0.25)",
     }, null, swRow);
+    b.dataset.lc = "swatch";
     b.title = cc.name + ((cc.unlockLevel || 1) > 1 ? " · LVL " + cc.unlockLevel : "");
     b.onclick = () => {
       if ((cc.unlockLevel || 1) > ((W.progress && W.progress.level) || 1)) return;
@@ -1128,14 +1476,22 @@ export function showMenu(W, startMatch) {
   // hardcoded, so after a rebind (and after switching sprint to HOLD in
   // Settings) the menu confidently taught keys that no longer did anything.
   const mk = (canonical) => { const ph = physFor(W, canonical); return ph ? keyLabel(ph) : "—"; };
-  h("div", {
+  // Two twins, one shown: .kbd-hint (keyboard + mouse) and .lc-touch-only (the
+  // touch layer). TOUCH_CSS swaps them on html.lc-touch, so a phone never reads
+  // "WASD MOVE · MOUSE AIM" and a desktop never reads "LEFT THUMB".
+  const hintStyle = {
     fontFamily: "Rajdhani, " + FONT, fontSize: "13px", fontWeight: "600",
     opacity: "0.6", maxWidth: "820px", textAlign: "center", lineHeight: "1.7",
     letterSpacing: "0.5px", color: "#c0d4ec",
     textShadow: "0 2px 8px rgba(0,0,0,0.9)",
     animation: "lcPanelIn .6s .4s both",
     marginBottom: "auto",       // pairs with the title block's marginTop: auto
-  },
+  };
+  const touchHint = h("div", Object.assign({}, hintStyle, { opacity: "0.75" }),
+    "LEFT THUMB MOVE  ·  RIGHT THUMB LOOK  ·  HOLD FIRE  ·  ADS AIMS  ·  JUMP / CHUTE  ·  TAP USE TO LOOT, HOLD FOR CHESTS  ·  TAP A SLOT TO SWITCH  ·  TAP THE MINIMAP FOR THE MAP", null);
+  touchHint.className = "lc-touch-only";
+  touchHint.dataset.lc = "touchhint";
+  const kbdHint = h("div", hintStyle,
   mk("KeyW") + mk("KeyA") + mk("KeyS") + mk("KeyD") + " MOVE  ·  MOUSE AIM/FIRE  ·  RMB ADS  ·  " +
   mk("Space") + " JUMP / CHUTE  ·  " + mk("ShiftLeft") + " SPRINT (" + (W.settings && W.settings.sprintToggle ? "TOGGLE" : "HOLD") + ")  ·  " +
   mk("KeyR") + " RELOAD  ·  " + mk("KeyE") + " LOOT  ·  " + mk("Digit1") + "–" + mk("Digit5") + " WEAPONS  ·  " + mk("KeyM") + " MAP" +
@@ -1143,6 +1499,11 @@ export function showMenu(W, startMatch) {
   // discover is a feature that doesn't exist
   "  ·  JUMP AT A LEDGE = CLIMB  ·  " + mk("ShiftLeft") + " WHILE SCOPED = HOLD BREATH",
   wrap);
+  kbdHint.className = "kbd-hint";
+  kbdHint.dataset.lc = "kbdhint";
+  // both twins carry the bottom auto-margin that centres the column: the hidden
+  // one is display:none, so only the shown one takes part
+  wrap.insertBefore(touchHint, kbdHint);
 
   import("./audio.js" + (new URL(import.meta.url).search || "")).then((m) => m.startMenuMusic(W));
 }
@@ -1196,6 +1557,7 @@ export function showLoading(W, text) {
   }, "BUILDING TERRAIN…", box);
   let p = 12;
   setFill(12);
+  if (R._loadIv) clearInterval(R._loadIv);      // a second showLoading must not orphan the first creep
   R._loadIv = setInterval(() => { p = Math.min(92, p + 8); setFill(p); }, 300);
   W.loadProgress = (loaded, total) => {
     if (!total) return;
@@ -1203,6 +1565,15 @@ export function showLoading(W, text) {
     setFill(12 + Math.round(86 * Math.min(1, loaded / total)));
     sub.textContent = "LOADING OPERATIVES  " + Math.min(loaded, total) + "/" + total;
   };
+}
+
+/** Take the loading screen down without showing anything else (lane L4's
+ *  failed-match path; feature-detected there): the layer, its creep interval
+ *  and the W.loadProgress hook that writes into it. Idempotent. */
+export function hideLoading(W) {
+  if (R._loadIv) { clearInterval(R._loadIv); R._loadIv = null; }
+  if (W) W.loadProgress = null;
+  if (R.loading) { R.loading.remove(); R.loading = null; }
 }
 
 // ═══ LOBBY ═══════════════════════════════════════════════════════════════════
@@ -1240,9 +1611,10 @@ export function showLobby(W, onDone) {
     background: "rgba(6,14,28,0.55)", border: "1px solid rgba(120,180,255,0.15)",
     boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
   }, null, wrap);
+  grid.dataset.lc = "lobbygrid";
   const cells = W.actors.map((a) => {
     const c = h("div", {
-      padding: "6px 8px", fontSize: "11px", borderRadius: "6px",
+      padding: "6px 8px", fontSize: FS(11), borderRadius: "6px",
       background: "rgba(255,255,255,0.04)", color: "transparent",
       overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis",
       border: "1px solid rgba(255,255,255,0.05)", fontFamily: "Rajdhani, " + FONT, fontWeight: "600",
@@ -1302,12 +1674,22 @@ export function showLobby(W, onDone) {
   function finishLobby() {
     if (ended) return;
     ended = true;
+    R._lobbyCancel = null;
     clearInterval(fillIv);
     if (cdIv) clearInterval(cdIv);
     window.removeEventListener("keydown", onKey);
     L.remove(); R.lobby = null;
     onDone();
   }
+  // showMenu's way out (a failed / abandoned match): stop the fill and the
+  // countdown WITHOUT handing off to the drop
+  R._lobbyCancel = () => {
+    if (ended) return;
+    ended = true;
+    clearInterval(fillIv);
+    if (cdIv) clearInterval(cdIv);
+    window.removeEventListener("keydown", onKey);
+  };
   // e.repeat is rejected so a held ENTER cannot double-fire the hand-off. (It
   // originally guarded the drop-select screen's own ENTER listener; that screen
   // is no longer shown — the lobby now hands straight to the drop.)
@@ -1318,10 +1700,12 @@ export function showLobby(W, onDone) {
     L.style.cursor = "pointer";
     L.onclick = finishLobby;
     window.addEventListener("keydown", onKey);
-    h("div", {
+    const skipSt = {
       fontFamily: "Rajdhani, " + FONT, fontSize: "12px", fontWeight: "700",
       letterSpacing: "2.5px", opacity: "0.6", color: "#9fd0ff",
-    }, "CLICK OR PRESS ENTER TO DROP IN NOW", wrap);
+    };
+    h("div", skipSt, "CLICK OR PRESS ENTER TO DROP IN NOW", wrap).className = "kbd-hint";
+    h("div", skipSt, "TAP ANYWHERE TO DROP IN NOW", wrap).className = "lc-touch-only";
   }
 }
 
@@ -1459,7 +1843,7 @@ export function showDropSelect(W, onDone) {
     boxShadow: "0 8px 26px rgba(60,170,235,0.35)",
   }, "DROP  [ENTER]", row);
   const legend = h("div", {
-    display: "flex", gap: "15px", alignItems: "center", fontSize: "11px",
+    display: "flex", gap: "15px", alignItems: "center", fontSize: FS(11),
     letterSpacing: "1px", opacity: "0.85", fontFamily: "Rajdhani, " + FONT, fontWeight: "600",
   }, null, wrap);
   [["QUIET", 0], ["LIGHT", 1], ["CONTESTED", 2], ["HOT", 5]].forEach((e) => {
@@ -1471,7 +1855,7 @@ export function showDropSelect(W, onDone) {
     h("span", null, e[0], it);
   });
   h("div", {
-    fontSize: "11px", opacity: "0.55", letterSpacing: "1px", fontFamily: "Rajdhani, " + FONT,
+    fontSize: FS(11), opacity: "0.55", letterSpacing: "1px", fontFamily: "Rajdhani, " + FONT,
   }, "THE NUMBER IN EACH ZONE IS HOW MANY OPERATIVES DECLARED IT. YOU STEER FREELY ON THE WAY DOWN.", wrap);
 
   let done = false;
@@ -1802,16 +2186,17 @@ export function showHUD(W) {
   // right of the scope centre, cyan draining as you hold, red while WINDED.
   // Lives inside R.scope so it exists exactly when the mechanic does.
   const bWrap = h("div", { position: "absolute", left: "calc(50% + 120px)", top: "50%", width: "7px", height: "90px", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: "4px", overflow: "hidden" }, null, R.scope);
-  h("div", { position: "absolute", left: "calc(50% + 132px)", top: "calc(50% - 58px)", fontSize: "11px", fontFamily: "Rajdhani, " + FONT, fontWeight: "700", letterSpacing: "1px", color: "rgba(255,255,255,0.65)", textShadow: "0 1px 3px #000" }, "BREATH", R.scope);
+  h("div", { position: "absolute", left: "calc(50% + 132px)", top: "calc(50% - 58px)", fontSize: FS(11), fontFamily: "Rajdhani, " + FONT, fontWeight: "700", letterSpacing: "1px", color: "rgba(255,255,255,0.65)", textShadow: "0 1px 3px #000" }, "BREATH", R.scope);
   R.breathFill = h("div", { position: "absolute", left: "0", bottom: "0", width: "100%", height: "100%", background: "#7fd8ff", transition: "height .1s linear" }, null, bWrap);
   const bottomLeft = h("div", { position: "absolute", left: "18px", bottom: "16px", width: "300px" }, null, L);
+  bottomLeft.dataset.lc = "bars";
   // hp/shield — Final Drop style: icon + bar with % inside
   const mkBar = (icon, color) => {
     const row = h("div", { display: "flex", alignItems: "center", gap: "6px", marginTop: "5px" }, null, bottomLeft);
     h("div", { fontSize: "15px", width: "20px", textAlign: "center", filter: "drop-shadow(0 1px 2px #000)" }, icon, row);
     const wrap = h("div", { flex: "1", height: "16px", background: "rgba(0,0,0,0.55)", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)", position: "relative" }, null, row);
     const fill = h("div", { width: "0%", height: "100%", background: color, transition: "width .15s" }, null, wrap);
-    const pct = h("div", { position: "absolute", inset: "0", textAlign: "center", fontSize: "11px", fontWeight: "900", lineHeight: "16px", textShadow: "0 1px 2px #000" }, "", wrap);
+    const pct = h("div", { position: "absolute", inset: "0", textAlign: "center", fontSize: FS(11), fontWeight: "900", lineHeight: "16px", textShadow: "0 1px 2px #000" }, "", wrap);
     return { fill, pct };
   };
   const sb = mkBar("🛡", "#57b0ff");
@@ -1821,6 +2206,7 @@ export function showHUD(W) {
   R.hpText = h("div", { fontSize: "0px", display: "none" }, "", bottomLeft);
   // heal channel
   R.healBar = h("div", { position: "absolute", left: "50%", top: "58%", transform: "translateX(-50%)", width: "220px", height: "10px", background: "rgba(0,0,0,0.5)", borderRadius: "5px", display: "none", overflow: "hidden" }, null, L);
+  R.healBar.dataset.lc = "healbar";
   R.healFill = h("div", { width: "0%", height: "100%", background: "#4ade80" }, null, R.healBar);
   // Reload had NO progress UI at all — just the word "RELOADING…" — while both
   // healing and chest-opening show a bar. A 4-second shotgun reload with no
@@ -1833,6 +2219,7 @@ export function showHUD(W) {
   // the top half of this bar on any viewport under ~1160px — i.e. a maximised
   // 1080p browser — exactly while you stand over loot and reload.
   R.reloadBar = h("div", { position: "absolute", left: "50%", top: "55%", transform: "translateX(-50%)", width: "180px", height: "8px", background: "rgba(0,0,0,0.55)", borderRadius: "4px", display: "none", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, L);
+  R.reloadBar.dataset.lc = "reloadbar";
   R.reloadFill = h("div", { width: "0%", height: "100%", background: "#ffd166" }, null, R.reloadBar);
 
   // slots bottom right. bottom 54, not 16: the portal's fullscreen/mute/pause
@@ -1841,6 +2228,7 @@ export function showHUD(W) {
   // UNDER it in every match (feel-juice-ui G5). game_controls.js:955 states the
   // rule for its own buttons: "bottom:54px ... Never overlap it."
   const br = h("div", { position: "absolute", right: "18px", bottom: "54px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }, null, L);
+  br.dataset.lc = "slotcol";
   R.slotsRow = h("div", { display: "flex", gap: "6px" }, null, br);
   R.ammoText = h("div", { fontSize: "22px", fontWeight: "900", textShadow: "0 2px 4px #000" }, "", br);
   R.ammoText.dataset.lc = "ammo";
@@ -1854,7 +2242,8 @@ export function showHUD(W) {
   // top center: storm timer + alive
   // top 56, not 28: the compass strip above measures 48 px tall, so at 28 it
   // buried the storm clock, alive count and kill count under the ruler.
-  const tc = h("div", { position: "absolute", top: "56px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "18px", alignItems: "center", background: "rgba(0,0,0,0.4)", padding: "6px 18px", borderRadius: "10px" }, null, L);
+  const tc = h("div", { position: "absolute", top: "56px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "18px", alignItems: "center", background: "rgba(0,0,0,0.4)", padding: "6px 18px", borderRadius: "10px", whiteSpace: "nowrap" }, null, L);
+  tc.dataset.lc = "stormrow";
   R.stormIcon = h("div", { fontSize: "15px" }, "⛈", tc);
   R.stormTimer = h("div", { fontSize: "17px", fontWeight: "800", minWidth: "72px" }, "", tc);
   h("div", { width: "1px", height: "18px", background: "rgba(255,255,255,0.25)" }, null, tc);
@@ -1871,44 +2260,47 @@ export function showHUD(W) {
   const meta = h("div", { position: "absolute", top: META_TOP + "px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", width: "352px" }, null, L);
   const xpRow = h("div", { display: "flex", alignItems: "center", gap: "8px", width: "100%", background: "rgba(0,0,0,0.42)", padding: "4px 10px", borderRadius: "8px" }, null, meta);
   xpRow.dataset.lc = "lvl";
+  meta.dataset.lc = "meta";
   R.meta = meta;
   // 13px to match R.chalLabel below (owner: "make the lvl 5 the same size as
   // the quests like 'deal 1000 damage'")
   R.xpLevel = h("div", { fontSize: "13px", fontWeight: "900", color: "#ffd873", minWidth: "48px", textShadow: "0 1px 2px #000" }, "LVL 1", xpRow);
   const xpBarWrap = h("div", { flex: "1", height: "10px", background: "rgba(0,0,0,0.55)", borderRadius: "5px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, xpRow);
   R.xpFill = h("div", { width: "0%", height: "100%", background: "linear-gradient(90deg,#4aa8ff,#7ad0ff)", transition: "width .3s" }, null, xpBarWrap);
-  R.xpText = h("div", { fontSize: "10px", fontWeight: "700", opacity: "0.85", minWidth: "74px", textAlign: "right" }, "", xpRow);
+  R.xpText = h("div", { fontSize: FS(10), fontWeight: "700", opacity: "0.85", minWidth: "74px", textAlign: "right" }, "", xpRow);
   R.chalCard = h("div", Object.assign({ display: "none", alignItems: "center", gap: "10px", width: "100%", padding: "7px 12px" }, PANEL), null, meta);
   R.chalIcon = h("div", { fontSize: "16px" }, "🎯", R.chalCard);
   const chalMid = h("div", { flex: "1" }, null, R.chalCard);
   R.chalLabel = h("div", { fontSize: "13px", fontWeight: "800" }, "", chalMid);
   const chalBarWrap = h("div", { height: "6px", background: "rgba(0,0,0,0.5)", borderRadius: "3px", overflow: "hidden", marginTop: "4px" }, null, chalMid);
   R.chalFill = h("div", { width: "0%", height: "100%", background: "#4ade80", transition: "width .2s" }, null, chalBarWrap);
-  R.chalProg = h("div", { fontSize: "11px", fontWeight: "800", opacity: "0.8", minWidth: "44px", textAlign: "right" }, "", R.chalCard);
-  R.chalXp = h("div", { fontSize: "11px", fontWeight: "900", color: "#ffd873" }, "", R.chalCard);
+  R.chalProg = h("div", { fontSize: FS(11), fontWeight: "800", opacity: "0.8", minWidth: "44px", textAlign: "right" }, "", R.chalCard);
+  R.chalXp = h("div", { fontSize: FS(11), fontWeight: "900", color: "#ffd873" }, "", R.chalCard);
   R.chalCard.dataset.lc = "quest";
   // The announcement band hangs off the quest card's MEASURED bottom (see
   // placeBand). A ResizeObserver reports the stack's height whenever the card
   // appears, grows or wraps — no layout read on any frame. The band keeps the
   // tallest bottom seen, so it never jumps up into a card that re-appears.
-  R._metaBottom = 0;
+  R._metaBottom = 0; R._metaH = 0;
   if (R._metaRO) { R._metaRO.disconnect(); R._metaRO = null; }
   if (typeof ResizeObserver !== "undefined") {
     R._metaRO = new ResizeObserver((ents) => {
       const hgt = ents[ents.length - 1].contentRect.height;
-      const b = META_TOP + hgt;
-      if (b > R._metaBottom) { R._metaBottom = b; placeBand(); }
+      if (hgt > (R._metaH || 0)) { R._metaH = hgt; R._metaBottom = META_TOP + hgt; placeBand(); }
     });
     R._metaRO.observe(meta);
   }
 
   // minimap top left
   const mmWrap = h("div", { position: "absolute", top: "12px", left: "14px", width: "180px", height: "180px", borderRadius: "12px", overflow: "hidden", border: "2px solid rgba(120,180,255,0.35)", boxShadow: "0 4px 18px rgba(0,0,0,0.5)" }, null, L);
-  R.mmCanvas = h("canvas", { width: "180px", height: "180px" }, null, mmWrap);
+  mmWrap.dataset.lc = "minimap";
+  R.mmWrap = mmWrap;              // touch: a tap here opens the big map (hudTapTarget)
+  R.mmCanvas = h("canvas", { width: "100%", height: "100%", display: "block" }, null, mmWrap);
   R.mmCanvas.width = Math.round(180 * HUD_DPR); R.mmCanvas.height = Math.round(180 * HUD_DPR);
 
   // kill feed right
   R.feed = h("div", { position: "absolute", right: "16px", top: "70px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end", fontSize: "12px" }, null, L);
+  R.feed.dataset.lc = "feed";
 
   // crosshair — PER-WEAPON reticles (painted by paintCrosshair)
   // No transition and no scale on this box any more: bloom moves the ARMS (see
@@ -1930,19 +2322,33 @@ export function showHUD(W) {
   const compBand = h("div", { position: "relative", width: "300px", height: "26px", overflow: "hidden", marginTop: "1px", WebkitMask: "linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent)", mask: "linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent)" }, null, compWrap);
   R.compassRuler = h("div", { position: "absolute", left: "0", top: "0", height: "26px", width: (720 * COMP_PPD) + "px", willChange: "transform" }, null, compBand);
   const CARD = { 0: "N", 45: "NE", 90: "E", 135: "SE", 180: "S", 225: "SW", 270: "W", 315: "NW" };
+  // The 720-degree ruler is 1584 px of DOM boxes; overflow:hidden clips them to
+  // the 300 px strip visually, but every off-strip label is still a real box
+  // spread across the top of the screen (on a phone, under touch.js's PAUSE
+  // button). The ticks live in 24 chunks of 30 degrees and only the chunks the
+  // strip can show are displayed (update() flips them when the heading
+  // crosses a chunk edge — at most two style writes, never per frame).
+  R.compassChunks = [];
+  for (let c = 0; c < 24; c++) {
+    R.compassChunks.push(h("div", { position: "absolute", left: (c * 30 * COMP_PPD) + "px", top: "0", width: (30 * COMP_PPD) + "px", height: "26px", display: "none" }, null, R.compassRuler));
+  }
+  R._cc0 = -1; R._cc1 = -1;
   for (let d = 0; d < 720; d += 15) {
     const deg = d % 360, card = CARD[deg];
-    const x = d * COMP_PPD;
-    h("div", { position: "absolute", left: x + "px", top: card ? "14px" : "17px", width: "2px", height: card ? "9px" : "6px", background: card ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.45)", boxShadow: "0 1px 3px rgba(0,0,0,0.8)" }, null, R.compassRuler);
-    if (card) h("div", { position: "absolute", left: (x - 14) + "px", top: "-1px", width: "30px", textAlign: "center", fontFamily: "Rajdhani, " + FONT, fontSize: "13px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 1px 4px rgba(0,0,0,0.9)" }, card, R.compassRuler);
-    else if (deg % 45 !== 0 && deg % 30 === 0) h("div", { position: "absolute", left: (x - 14) + "px", top: "1px", width: "30px", textAlign: "center", fontFamily: "Rajdhani, " + FONT, fontSize: "11px", fontWeight: "700", opacity: "0.55", textShadow: "0 1px 3px rgba(0,0,0,0.9)" }, String(deg), R.compassRuler);
+    const chunk = R.compassChunks[Math.floor(d / 30)];
+    const x = (d % 30) * COMP_PPD;
+    h("div", { position: "absolute", left: x + "px", top: card ? "14px" : "17px", width: "2px", height: card ? "9px" : "6px", background: card ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.45)", boxShadow: "0 1px 3px rgba(0,0,0,0.8)" }, null, chunk);
+    if (card) h("div", { position: "absolute", left: (x - 14) + "px", top: "-1px", width: "30px", textAlign: "center", fontFamily: "Rajdhani, " + FONT, fontSize: "13px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 1px 4px rgba(0,0,0,0.9)" }, card, chunk);
+    else if (deg % 45 !== 0 && deg % 30 === 0) h("div", { position: "absolute", left: (x - 14) + "px", top: "1px", width: "30px", textAlign: "center", fontFamily: "Rajdhani, " + FONT, fontSize: FS(11), fontWeight: "700", opacity: "0.55", textShadow: "0 1px 3px rgba(0,0,0,0.9)" }, String(deg), chunk);
   }
   h("div", { position: "absolute", left: "50%", top: "12px", transform: "translateX(-50%)", width: "2px", height: "12px", background: "#ffd254", boxShadow: "0 0 4px rgba(0,0,0,0.9)" }, null, compBand);
   R.compassWrap = compWrap;
+  compWrap.dataset.lc = "compass";
 
   // weapon-switch popup: rarity-coloured name above the hotbar for a beat
   // (Final Drop parity — their hotbar select shows rarity/name)
-  R.wpnPop = h("div", { position: "absolute", left: "50%", bottom: "118px", transform: "translateX(-50%)", fontFamily: "Rajdhani, " + FONT, fontSize: "16px", fontWeight: "900", letterSpacing: "1.5px", textShadow: "0 2px 8px rgba(0,0,0,0.95)", opacity: "0", transition: "opacity .18s", pointerEvents: "none" }, "", L);
+  R.wpnPop = h("div", { position: "absolute", left: "50%", bottom: "118px", transform: "translateX(-50%)", fontFamily: "Rajdhani, " + FONT, fontSize: "16px", fontWeight: "900", letterSpacing: "1.5px", textShadow: "0 2px 8px rgba(0,0,0,0.95)", opacity: "0", transition: "opacity .18s", pointerEvents: "none", whiteSpace: "nowrap" }, "", L);
+  R.wpnPop.dataset.lc = "wpnpop";
 
   // ── MP TEXT CHAT (ENTER — Final Drop parity, owner screenshots) ──────────
   // Log bottom-left above the bars; input opens on ENTER (online only).
@@ -1950,6 +2356,7 @@ export function showHUD(W) {
   // messages. textContent everywhere: peer names and message bodies are
   // remote strings and must never touch innerHTML.
   R.chatLog = h("div", { position: "absolute", left: "18px", bottom: "128px", display: "flex", flexDirection: "column", gap: "3px", maxWidth: "360px", fontFamily: "Rajdhani, " + FONT, fontSize: "13.5px", pointerEvents: "none" }, null, L);
+  R.chatLog.dataset.lc = "chat";
   const chatRow = h("div", { position: "absolute", left: "18px", bottom: "104px", display: "none", pointerEvents: "auto" }, null, L);
   R.chatInput = document.createElement("input");
   Object.assign(R.chatInput.style, { width: "300px", padding: "7px 10px", borderRadius: "8px", border: "1px solid rgba(140,190,255,0.5)", background: "rgba(6,12,20,0.85)", color: "#e6eefc", fontFamily: "Rajdhani, " + FONT, fontSize: "14px", outline: "none" });
@@ -2004,7 +2411,9 @@ export function showHUD(W) {
     background: "rgba(0,0,0,0.62)", padding: "8px 18px", borderRadius: "10px",
     font: "700 14px system-ui", letterSpacing: "0.08em", color: "#dbeaff",
     border: "1px solid rgba(140,190,255,0.35)", display: "none", pointerEvents: "none" }, "CLICK TO LOOK AROUND", L);
-  R.interact = h("div", { position: "absolute", left: "50%", top: "60%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", padding: "6px 14px", borderRadius: "8px", fontSize: "14px", display: "none" }, "", L);
+  R.lookHint.dataset.lc = "lookhint";
+  R.interact = h("div", { position: "absolute", left: "50%", top: "60%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", padding: "6px 14px", borderRadius: "8px", fontSize: "14px", display: "none", whiteSpace: "nowrap" }, "", L);
+  R.interact.dataset.lc = "interact";
   R.chestRing = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "58px", height: "58px", borderRadius: "50%", display: "none", background: "conic-gradient(#ffd254 0deg, rgba(255,255,255,0.15) 0deg)", WebkitMask: "radial-gradient(circle, transparent 22px, #000 23px)", mask: "radial-gradient(circle, transparent 22px, #000 23px)" }, null, L);
 
   // directional indicators (footsteps / gunfire / damage) on a screen-edge ring
@@ -2016,30 +2425,36 @@ export function showHUD(W) {
   // (was 120): the slot/ammo column moved up to bottom 54 to clear the portal
   // control bar, and its top edge now reaches ~138.
   R.chuteBtn = h("div", { position: "absolute", right: "40px", bottom: "150px", width: "84px", height: "84px", borderRadius: "50%", background: "rgba(10,19,31,0.75)", border: "2px solid rgba(140,190,255,0.6)", display: "none", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", boxShadow: "0 4px 18px rgba(0,0,0,0.5)" }, null, L);
+  R.chuteBtn.dataset.lc = "chutebtn";
   R.chuteGlyph = h("div", { fontSize: "26px", lineHeight: "1.1" }, "🪂", R.chuteBtn);
-  R.chuteLabel = h("div", { fontSize: "10px", fontWeight: "900", letterSpacing: "0.5px", marginTop: "2px" }, "[SPACE]", R.chuteBtn);
+  R.chuteLabel = h("div", { fontSize: FS(10), fontWeight: "900", letterSpacing: "0.5px", marginTop: "2px" }, "[SPACE]", R.chuteBtn);
   // First-drops-only centre hint for the CUT (see the gliding branch in update).
   R.chuteHint = h("div", {
     position: "absolute", left: "50%", top: "58%", transform: "translateX(-50%)",
     fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "700", letterSpacing: "2px",
     color: "#cfe4ff", textShadow: "0 2px 10px rgba(0,0,0,0.9)", display: "none", pointerEvents: "none",
     whiteSpace: "nowrap",
-  }, "PRESS " + (physFor(W, "Space") ? keyLabel(physFor(W, "Space")) : "SPACE") + " TO CUT THE CHUTE AND DIVE", L);
+  }, null, L);
+  R.chuteHint.dataset.lc = "chutehint";
+  h("span", null, "PRESS " + (physFor(W, "Space") ? keyLabel(physFor(W, "Space")) : "SPACE") + " TO CUT THE CHUTE AND DIVE", R.chuteHint).className = "kbd-hint";
+  h("span", null, "TAP JUMP TO CUT THE CHUTE AND DIVE", R.chuteHint).className = "lc-touch-only";
 
   // storm messages center — tops are set by placeBand() (under the banner band)
   R.stormMsg = h("div", { position: "absolute", left: "50%", top: "256px", transform: "translateX(-50%)", fontSize: "22px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 2px 8px #000", opacity: "0", transition: "opacity .4s", color: "#d9b3ff", whiteSpace: "nowrap" }, "", L);
+  R.stormMsg.dataset.lc = "stormmsg";
   // Pickups used to share stormMsg with storm warnings and supply alerts, so
   // grabbing loot as the storm warned clobbered whichever fired second. Loot is
   // frequent+low-priority; the storm line is rare+important — separate them.
   R.pickupMsg = h("div", { position: "absolute", left: "50%", top: "290px", transform: "translateX(-50%)", fontSize: "15px", fontWeight: "800", letterSpacing: "1px", textShadow: "0 2px 6px #000", opacity: "0", transition: "opacity .3s", color: "#bfe9d2", whiteSpace: "nowrap" }, "", L);
+  R.pickupMsg.dataset.lc = "pickupmsg";
   // BIG match announcements (deploy, alive-count milestones, eliminations, level-up).
   // Band top = the quest card's measured bottom + 12 px (placeBand). nowrap:
   // `left:50%` leaves a shrink-to-fit box only HALF the viewport wide, so a long
   // "ELIMINATED <name>" wrapped onto two lines and grew down into the storm line.
   R.annWrap = h("div", { position: "absolute", left: "50%", top: (META_TOP + META_RESERVE + BAND_GAP) + "px", transform: "translateX(-50%)", textAlign: "center", whiteSpace: "nowrap", opacity: "0", transition: "opacity .35s, transform .35s", pointerEvents: "none" }, null, L);
   R.annWrap.dataset.lc = "ann";
-  R.annTitle = h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "clamp(20px, 2.9vw, 34px)", fontWeight: "900", letterSpacing: "4px", textShadow: "0 3px 14px #000, 0 0 26px rgba(90,170,255,0.5)" }, "", R.annWrap);
-  R.annSub = h("div", { fontSize: "14px", fontWeight: "700", letterSpacing: "2px", opacity: "0.85", marginTop: "4px", textShadow: "0 2px 6px #000" }, "", R.annWrap);
+  R.annTitle = h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "var(--lc-ann-fs, clamp(20px, 2.9vw, 34px))", fontWeight: "900", letterSpacing: "4px", textShadow: "0 3px 14px #000, 0 0 26px rgba(90,170,255,0.5)" }, "", R.annWrap);
+  R.annSub = h("div", { fontSize: "var(--lc-ann-sub, 14px)", fontWeight: "700", letterSpacing: "2px", opacity: "0.85", marginTop: "4px", textShadow: "0 2px 6px #000" }, "", R.annWrap);
   R._annUntil = 0; R._aliveMark = 0; R._annPrio = 0; R._annQ = [];
   R._bandTop = null; R.deathBox = null;
   placeBand();
@@ -2073,6 +2488,7 @@ export function showHUD(W) {
     letterSpacing: "0.5px", pointerEvents: "none",
     display: W.settings && W.settings.showPerf ? "block" : "none",
   }, "— FPS", L);
+  R.perf.dataset.lc = "perf";
   R._fpsAcc = 0; R._fpsFrames = 0; R._fpsShown = 0;
   // who you are watching once you are out, and how to change it
   R.specBar = h("div", {
@@ -2097,6 +2513,7 @@ export function showHUD(W) {
   const tot = W.match ? W.match.totalPlayers : 50;
   if (W.mode === "practice") setTimeout(() => announce("PRACTICE", "FIVE DUMMIES DUE SOUTH · 12–80M", "#9fd7ff", 2600, ANN_PRIO.deploy), 250);
   else setTimeout(() => announce("DEPLOY", tot + " PLAYERS · LAST ONE STANDING WINS", "#9fd7ff", 2600, ANN_PRIO.deploy), 250);
+  syncTouchPrefs(W);
 }
 
 function bar(parent, color) {
@@ -2259,6 +2676,15 @@ export function update(W, dt) {
     const hdg = ((-p.yaw * 180 / Math.PI) % 360 + 360) % 360;
     const dd = hdg < 90 ? hdg + 360 : hdg;
     R.compassRuler.style.transform = "translateX(" + (150 - dd * 2.2).toFixed(1) + "px)";
+    // the strip shows dd +- 68 degrees: keep exactly the chunks that reach it
+    const c0 = Math.max(0, Math.floor((dd - 70) / 30)), c1 = Math.min(23, Math.floor((dd + 70) / 30));
+    if (c0 !== R._cc0 || c1 !== R._cc1) {
+      for (let c = 0; c < 24; c++) {
+        const on = c >= c0 && c <= c1, was = c >= R._cc0 && c <= R._cc1;
+        if (on !== was) R.compassChunks[c].style.display = on ? "block" : "none";
+      }
+      R._cc0 = c0; R._cc1 = c1;
+    }
     const n = Math.round(hdg) % 360;
     if (R._compN !== n) { R._compN = n; R.compassNum.textContent = String(n); }
   }
@@ -2328,6 +2754,7 @@ export function update(W, dt) {
       R.stormTimer.textContent = txt;
       R.stormIcon.style.color = st.closing ? "#d9b3ff" : "#9fb6cc";
     }
+    expireFeed(performance.now());
     R.aliveText.textContent = "👥 " + (W.match ? W.match.aliveCount() : "—");
     R.killsText.textContent = "☠ " + (W.match ? (W.match.kills[p.id] || 0) : 0);
     if (R.specBar) {
@@ -2335,7 +2762,9 @@ export function update(W, dt) {
       if (me && !me.alive && W._camFocus && W._camFocus !== me) {
         const n = W.match ? W.match.aliveCount() : 0;
         R.specBar.style.display = "block";
-        R.specBar.textContent = "SPECTATING  " + W._camFocus.name.toUpperCase() + "   ·   " + n + " ALIVE   ·   [A] / [D] TO SWITCH";
+        // no touch control switches the spectated player, so a touch player is
+        // not told to press keys they do not have
+        R.specBar.textContent = "SPECTATING  " + W._camFocus.name.toUpperCase() + "   ·   " + n + " ALIVE" + (touchOn ? "" : "   ·   [A] / [D] TO SWITCH");
       } else R.specBar.style.display = "none";
     }
     if (R.rangePanel) {
@@ -2426,13 +2855,16 @@ export function update(W, dt) {
   if (mmT > 0.1) { mmT = 0; drawMinimap(W, R.mmCanvas.getContext("2d"), 180, false); }
 
   // interact hint + chest channel ring
+  // Touch names the on-screen control (USE, from touch.js) instead of a key the
+  // player does not have. Written only when the text changes.
   const hint = W.interactHint;
   if (hint) {
-    R.interact.style.display = "block";
-    R.interact.textContent = hint.type === "chest"
-      ? (hint.progress > 0 ? "Opening…" : "[HOLD E] Open chest")
+    if (C.iaOn !== true) { R.interact.style.display = "block"; C.iaOn = true; }
+    let ia = hint.type === "chest"
+      ? (hint.progress > 0 ? "Opening…" : (touchOn ? "HOLD USE  ·  Open chest" : "[HOLD " + keyOf(W, "KeyE") + "] Open chest"))
       : interactLabel(W, hint.data);
-  } else R.interact.style.display = "none";
+    if (C.ia !== ia) { R.interact.textContent = ia; C.ia = ia; }
+  } else if (C.iaOn !== false) { R.interact.style.display = "none"; C.iaOn = false; }
   if (hint && hint.type === "chest" && hint.progress > 0) {
     R.chestRing.style.display = "block";
     const deg = Math.min(360, Math.round(hint.progress * 360));
@@ -2443,7 +2875,8 @@ export function update(W, dt) {
   if (p.gliding) {
     R.chuteBtn.style.display = "flex";
     const open = !!p.chute;
-    R.chuteLabel.textContent = (open ? "CUT" : "OPEN") + " [SPACE]";
+    const cl = (open ? "CUT" : "OPEN") + " [" + keyOf(W, "Space") + "]";
+    if (C.chuteLbl !== cl) { R.chuteLabel.textContent = cl; C.chuteLbl = cl; }
     R.chuteBtn.style.borderColor = open ? "rgba(255,190,90,0.8)" : "rgba(140,190,255,0.8)";
     // Teach the cut where the player is actually looking. The CUT [SPACE] button
     // above is correct but it lives at right:40px bottom:120px — the corner — on
@@ -2527,7 +2960,9 @@ export function update(W, dt) {
   const wantCursor = meAlive && !W.paused && locked ? "none" : "";
   if (dom.style.cursor !== wantCursor) dom.style.cursor = wantCursor;
   if (R.lookHint) {
-    const wantHint = !locked && meAlive && !W.paused && W.phase !== "menu";
+    // never in touch mode: a phone has no pointer lock and looks with the
+    // right thumb (touch.js), so "CLICK TO LOOK" would be a lie there
+    const wantHint = !touchOn && !locked && meAlive && !W.paused && W.phase !== "menu";
     const d2 = wantHint ? "block" : "none";
     if (R.lookHint.style.display !== d2) R.lookHint.style.display = d2;
   }
@@ -2653,7 +3088,7 @@ function stepIndicators(W, dt) {
   // so a cue's screen angle stays its true bearing.
   if (!inds.length) return;
   viewSize(W);
-  const bandBottom = (R._bandTop || (META_TOP + META_RESERVE + BAND_GAP)) + BAND_H;
+  const bandBottom = (R._bandTop || (META_TOP + META_RESERVE + BAND_GAP)) + bandH();
   const RAD = Math.max(64, Math.min(Math.min(_vw, _vh) * 0.36, _vh / 2 - bandBottom - IND_HALF));
   R._ringR = RAD;
   for (let i = inds.length - 1; i >= 0; i--) {
@@ -2787,7 +3222,7 @@ function paintSlots(W, p) {
       width: "56px", height: "46px", borderRadius: "8px", position: "relative",
       background: active ? "rgba(87,176,255,0.25)" : "rgba(0,0,0,0.45)",
       border: active ? "2px solid #57b0ff" : "1px solid rgba(255,255,255,0.18)",
-      display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: "800",
+      display: "flex", alignItems: "center", justifyContent: "center", fontSize: FS(11), fontWeight: "800",
       overflow: "hidden",
     }, null, R.slotsRow);
     if (s) {
@@ -2797,7 +3232,7 @@ function paintSlots(W, p) {
       // survives any colour-vision deficiency (and reads faster for everyone).
       if (s.kind === "weapon") {
         h("div", {
-          position: "absolute", left: "3px", top: "2px", fontSize: "9px", fontWeight: "900",
+          position: "absolute", left: "3px", top: "2px", fontSize: FS(9), fontWeight: "900",
           color: rc, textShadow: "0 1px 2px #000", letterSpacing: "0.5px",
         }, ["I", "II", "III", "IV", "V"][s.rarity || 0], cell);
       }
@@ -2809,7 +3244,7 @@ function paintSlots(W, p) {
         });
         // reserve ammo on the slot (Final Drop style)
         const def = K.WEAPONS[s.id];
-        if (def && def.ammo) h("div", { position: "absolute", right: "3px", bottom: "5px", fontSize: "10px", fontWeight: "900", textShadow: "0 1px 2px #000" }, String(p.inventory.ammo[def.ammo] || 0), cell);
+        if (def && def.ammo) h("div", { position: "absolute", right: "3px", bottom: "5px", fontSize: FS(10), fontWeight: "900", textShadow: "0 1px 2px #000" }, String(p.inventory.ammo[def.ammo] || 0), cell);
       } else {
         const img = h("img", { width: "40px", height: "36px", objectFit: "contain", display: "none" }, null, cell);
         const glyph = h("div", { fontSize: "22px", lineHeight: "1" }, CONSUMABLE_ICONS[s.id] || "▣", cell);
@@ -2817,9 +3252,9 @@ function paintSlots(W, p) {
           if (url && img.isConnected) { img.src = url; img.style.display = "block"; glyph.remove(); }
         });
       }
-      if (s.count) h("div", { position: "absolute", right: "3px", top: "1px", fontSize: "10px", opacity: "0.95", textShadow: "0 1px 2px #000" }, String(s.count), cell);
+      if (s.count) h("div", { position: "absolute", right: "3px", top: "1px", fontSize: FS(10), opacity: "0.95", textShadow: "0 1px 2px #000" }, String(s.count), cell);
     }
-    h("div", { position: "absolute", left: "3px", top: "1px", fontSize: "9px", opacity: "0.6" }, String(i + 1), cell);
+    h("div", { position: "absolute", left: "3px", top: "1px", fontSize: FS(9), opacity: "0.6" }, String(i + 1), cell);
   });
 }
 function shortName(s) {
@@ -2842,7 +3277,8 @@ const HUD_GUN_CAP = 3;
  *  on the ground for a common pistol you meant to walk past. */
 function interactLabel(W, data) {
   const me = W.player, inv = me && me.inventory;
-  if (!data || !inv || !W.wouldAcceptItem || W.wouldAcceptItem(me, data)) return "[E] " + labelFor(data);
+  const E = touchOn ? "TAP USE  ·  " : "[" + keyOf(W, "KeyE") + "] ";
+  if (!data || !inv || !W.wouldAcceptItem || W.wouldAcceptItem(me, data)) return E + labelFor(data);
   const what = labelFor(data).replace("Pick up ", "");
   // Three cases where the swap itself is refused by give() and E does nothing:
   // ammo has no swap branch at all, a same-kind consumable stack already at max
@@ -2854,7 +3290,7 @@ function interactLabel(W, data) {
     || (data.kind === "consumable" && inv.slots.some((s) => s && s.kind === "consumable" && s.id === data.id))
     || (data.kind === "weapon" && (!out || out.kind !== "weapon") && guns >= HUD_GUN_CAP);
   if (blocked) return "FULL — no room for " + what;
-  return "[E] Swap for " + what + (out ? " — drops " + shortName(out) : "");
+  return E + "Swap for " + what + (out ? " — drops " + shortName(out) : "");
 }
 function fmtT(s) {
   s = Math.max(0, Math.ceil(s));
@@ -3027,11 +3463,8 @@ function wireEvents(W) {
     }
     if (!R.feed) return;
     const killer = killerId ? W.actorById.get(killerId) : null;
-    const el = h("div", { background: "rgba(0,0,0,0.5)", padding: "3px 10px", borderRadius: "6px" },
-      (killer ? killer.name + " ⚔ " : "⛈ ") + victim.name + (weaponId ? "  ·  " + K.weaponName(weaponId) : ""), R.feed);
-    if (victim === W.player || killer === W.player) el.style.color = "#ffd54a";
-    setTimeout(() => el.remove(), 6000);
-    while (R.feed.children.length > 6) R.feed.firstChild.remove();
+    feedRow((killer ? killer.name + " ⚔ " : "⛈ ") + victim.name + (weaponId ? "  ·  " + K.weaponName(weaponId) : ""),
+      victim === W.player || killer === W.player);
     // YOUR elimination gets a banner + streak escalation (kills used to land silently)
     if (killer === W.player && victim !== W.player) {
       // Bank the elimination's XP NOW. The kills/damage/placement/victory/time
@@ -3112,6 +3545,34 @@ function wireEvents(W) {
   });
 }
 
+// KILL FEED: six pooled rows per HUD (feel G11 / VERIFY 18). Every death used
+// to createElement a row and setTimeout-remove it 6 s later — DOM churn in
+// exactly the frames a firefight is busiest. The oldest row is recycled and
+// moved to the bottom; rows past their 6 s expire in update()'s 4 Hz block
+// (display:none, kept for reuse). Hidden rows are always the oldest, so they
+// sit first and the phone rule "last two rows only" still counts right.
+const FEED_N = 6, FEED_MS = 6000;
+function feedRow(text, mine) {
+  if (!R.feed) return;
+  const kids = R.feed.children;
+  const el = kids.length < FEED_N
+    ? h("div", { background: "rgba(0,0,0,0.5)", padding: "3px 10px", borderRadius: "6px" }, null, R.feed)
+    : kids[0];
+  el.textContent = text;
+  el.style.color = mine ? "#ffd54a" : "";
+  if (el.style.display === "none") el.style.display = "";
+  el._exp = performance.now() + FEED_MS;
+  if (el !== R.feed.lastChild) R.feed.appendChild(el);
+}
+function expireFeed(now) {
+  if (!R.feed) return;
+  const kids = R.feed.children;
+  for (let i = 0; i < kids.length; i++) {
+    const el = kids[i];
+    if (el._exp && now > el._exp) { el._exp = 0; el.style.display = "none"; }
+  }
+}
+
 function flashMsg(text) {
   if (!R.stormMsg) return;
   R.stormMsg.textContent = text;
@@ -3177,7 +3638,7 @@ function showAnnouncement(text, sub, color, ms, p, now) {
 function toggleBigMap(W) {
   if (R.bigmap) { R.bigmap.remove(); R.bigmap = null; return; }
   const L = layer("bigmap", { pointerEvents: "auto", background: "rgba(4,8,16,0.9)", display: "flex", alignItems: "center", justifyContent: "center" });
-  const size = Math.min(window.innerHeight - 100, 640);
+  const size = Math.min(window.innerHeight - (touchOn ? 116 : 100), 640);
   const cv = h("canvas", { borderRadius: "14px", border: "2px solid rgba(120,180,255,0.35)", width: size + "px", height: size + "px" }, null, L);
   cv.width = cv.height = Math.round(size * HUD_DPR);
   drawMinimap(W, cv.getContext("2d"), size, true);
@@ -3202,8 +3663,13 @@ function toggleBigMap(W) {
     head.textContent = bits.join("   ·   ");
   };
   paintHead();
-  h("div", { position: "absolute", bottom: "26px", fontSize: "13px", opacity: "0.7" }, "M / ESC to close", L);
-  L.onclick = () => toggleBigMap(W);
+  h("div", { position: "absolute", bottom: "26px", fontSize: "13px", opacity: "0.7" }, "M / ESC to close", L).className = "kbd-hint";
+  h("div", { position: "absolute", bottom: "26px", fontSize: "13px", opacity: "0.8" }, "TAP ANYWHERE TO CLOSE", L).className = "lc-touch-only";
+  // A touch tap that opened the map is followed by the browser's synthesized
+  // click on whatever is under the finger — now this layer. hudTapUp cancels
+  // that click at its touchend; this guard is the backstop.
+  const openedAt = performance.now();
+  L.onclick = () => { if (performance.now() - openedAt > 250) toggleBigMap(W); };
   R._bigIv = setInterval(() => {
     if (R.bigmap) { drawMinimap(W, cv.getContext("2d"), size, true); paintHead(); }
     else clearInterval(R._bigIv);
@@ -3244,7 +3710,7 @@ function togglePause(W) {
   st.onclick = () => showSettings(W);
   const quit = h("button", Object.assign({}, BTN, { background: "rgba(255,80,80,0.2)", color: "#ff9f9f" }), "QUIT TO MENU", box);
   quit.onclick = () => { R.pause.remove(); R.pause = null; if (!online) W.paused = false; W.endMatch(false); };
-  h("div", { fontSize: "11px", opacity: "0.6" },
+  h("div", { fontSize: FS(11), opacity: "0.6" },
     online ? "ONLINE — the match keeps running while this is open. Stay sharp."
            : "Note: the match keeps running in a real BR — here it pauses (single-player).", box);
 }
@@ -3259,12 +3725,12 @@ function showDeath(W, killerId, weaponId) {
   // tags painted straight through the subtitle (feel-juice-ui G7).
   const bt = (R._bandTop != null ? R._bandTop : META_TOP + META_RESERVE + BAND_GAP);
   const box = h("div", Object.assign({
-    position: "absolute", top: (bt + BAND_H + 16) + "px", left: "50%", transform: "translateX(-50%)", textAlign: "center",
+    position: "absolute", top: (bt + bandH() + 16) + "px", left: "50%", transform: "translateX(-50%)", textAlign: "center",
     padding: "18px 30px 16px", minWidth: "340px", maxWidth: "calc(100vw - 32px)", boxSizing: "border-box",
   }, PANEL), null, L);
   box.dataset.lc = "death";
   R.deathBox = box;
-  h("div", { fontSize: "38px", fontWeight: "900", color: "#ff7a7a", textShadow: "0 3px 12px #000", letterSpacing: "3px" }, "ELIMINATED", box);
+  h("div", { fontSize: "38px", fontWeight: "900", color: "#ff7a7a", textShadow: "0 3px 12px #000", letterSpacing: "3px" }, "ELIMINATED", box).dataset.lc = "deathtitle";
   const place = W.match.placementOf(W.player.id);
   h("div", { fontSize: "17px", marginTop: "8px", textShadow: "0 2px 6px #000" },
     "#" + place + " of " + W.match.totalPlayers + (killer ? "  ·  by " + killer.name + " (" + K.weaponName(weaponId) + ")" : "  ·  the storm got you"), box);
@@ -3335,7 +3801,8 @@ export function readback(W) {
       clockMs: Math.round(MK.clk * 1000), log: MK.log.slice(),
     },
     reticle: r ? { weapon: R._crossFor, kind: r.kind, arms: r.arms.length, gapPx: r.gapPx, armLenPx: r.len, armThickPx: r.th, bloom: +(R._bloom || 1).toFixed(3) } : null,
-    band: { top: R._bandTop, metaBottom: R._metaBottom, height: BAND_H },
+    band: { top: R._bandTop, metaBottom: R._metaBottom, height: bandH() },
+    touch: { on: touchOn, phone: phoneShort(), rotate: _rotOn, taps: _tap.n, lastTap: _tap.last },
     ring: { radius: R._ringR != null ? Math.round(R._ringR) : null, live: inds.length },
     announcement: R.annWrap ? {
       title: R.annTitle.textContent, sub: R.annSub.textContent,
@@ -3375,17 +3842,18 @@ export function showPostMatch(W, res) {
     gap: "10px", minWidth: "440px", position: "relative", overflow: "hidden",
   }, PANEL), null, L);
   box.className = "lc-glass-scan";
+  box.dataset.lc = "post";
   if (res.victory) {
     h("div", {
       fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "38px", fontWeight: "900", color: "#ffd54a",
       textShadow: "0 0 36px rgba(255,213,74,0.55)", letterSpacing: "4px", whiteSpace: "nowrap",
-    }, "LAST ONE STANDING", box);   // not "VICTORY ROYALE" — Epic Games' phrase
+    }, "LAST ONE STANDING", box).dataset.lc = "posttitle";   // not "VICTORY ROYALE" — Epic Games' phrase
     confetti(L);
     if (W.hooks && W.hooks.celebrate) W.hooks.celebrate();
   } else {
     h("div", {
       fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "34px", fontWeight: "900", letterSpacing: "4px",
-    }, "MATCH OVER", box);
+    }, "MATCH OVER", box).dataset.lc = "posttitle";
   }
   h("div", {
     fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "22px", fontWeight: "800",
@@ -3540,26 +4008,56 @@ export function showHowToPlay(W) {
   ensureAAAStyles();
   const L = layer("howto", { pointerEvents: "auto", background: "rgba(4,8,16,0.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 70 });
   // It never scrolled and had no way out but its button: on a short viewport
-  // the card ran off the bottom and GOT IT went with it. Now it fits the
-  // dynamic viewport and scrolls inside itself; ESC or a click/tap outside
-  // closes it too.
+  // the card ran off the bottom and GOT IT went with it. It fits the dynamic
+  // viewport, and only the BODY scrolls: GOT IT sits in a footer outside the
+  // scroller, so it is on-screen on every landscape phone (a scrolling card
+  // with the button as its last child still put it at y 518-563 on a 375-412
+  // px tall phone — VERIFY 17). ESC or a click/tap outside closes it too.
   const box = h("div", Object.assign({
-    padding: "26px 34px", width: "min(520px, calc(100vw - 24px))", boxSizing: "border-box",
-    maxHeight: "calc(100dvh - 24px)", overflowY: "auto", overscrollBehavior: "contain",
+    padding: "24px 32px 16px", width: "min(520px, calc(100vw - 24px))", boxSizing: "border-box",
+    maxHeight: "calc(100dvh - 24px)", overflow: "hidden",
     display: "flex", flexDirection: "column", gap: "10px",
   }, PANEL), null, L);
   box.dataset.lc = "howto";
-  h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "20px", fontWeight: "900", letterSpacing: "3px" }, "HOW TO PLAY", box);
+  h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "20px", fontWeight: "900", letterSpacing: "3px", flexShrink: "0" }, "HOW TO PLAY", box);
+  const body = h("div", {
+    flex: "1 1 auto", minHeight: "0", overflowY: "auto", overscrollBehavior: "contain",
+    display: "flex", flexDirection: "column", gap: "10px", paddingRight: "4px",
+  }, null, box);
+  body.dataset.lc = "howtobody";
   h("div", { fontSize: "13px", opacity: "0.8", lineHeight: "1.5", fontFamily: "Rajdhani, " + FONT },
-    "50 drop in, one walks out. Pick a landing zone, loot a weapon, stay inside the circle.", box);
-  const grid = h("div", { display: "grid", gridTemplateColumns: "auto 1fr", gap: "5px 16px", marginTop: "6px", fontFamily: "Rajdhani, " + FONT, fontSize: "13px" }, null, box);
-  const kb = (k, what) => {
-    h("div", { fontWeight: "900", color: "#9fd7ff", letterSpacing: "1px", whiteSpace: "nowrap" }, k, grid);
-    h("div", { opacity: "0.85" }, what, grid);
+    "50 drop in, one walks out. Pick a landing zone, loot a weapon, stay inside the circle.", body);
+  const mkGrid = (cls) => {
+    const g = h("div", { display: "grid", gridTemplateColumns: "auto 1fr", gap: "5px 16px", marginTop: "6px", fontFamily: "Rajdhani, " + FONT, fontSize: "13px" }, null, body);
+    g.className = cls;
+    return (k, what) => {
+      h("div", { fontWeight: "900", color: "#9fd7ff", letterSpacing: "1px", whiteSpace: "nowrap" }, k, g);
+      h("div", { opacity: "0.85" }, what, g);
+    };
   };
-  // Read the LIVE bindings. This card closes with "Every key here can be rebound
-  // in Settings" while printing hardcoded defaults, so the moment anyone took it
-  // up on that, the only onboarding screen in the game taught the wrong keys.
+  // TOUCH section (touch.js, lane L10, contract C6): shown instead of the keys
+  // on html.lc-touch. The verbs are the same game; only the hands change.
+  const th = h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "12px", fontWeight: "800", letterSpacing: "2px", color: "#8ec8ff", marginTop: "4px" }, "TOUCH CONTROLS", body);
+  th.className = "lc-touch-only";
+  const tc = mkGrid("lc-touch-only");
+  tc("LEFT THUMB", "Move — the stick appears where your thumb lands; push it all the way forward to sprint");
+  tc("RIGHT THUMB", "Look — drag anywhere on the right side of the screen");
+  tc("FIRE", "Hold to fire · drag from the button to keep aiming while you shoot");
+  tc("ADS", "Aim down sights — tap on, tap again to lower");
+  tc("JUMP", "Jump · in the air, CUT the chute to dive — tap again to re-open · jump at a ledge to climb");
+  tc("USE", "Tap to pick up loot · hold at a chest to open it");
+  tc("RELOAD", "Reload");
+  tc("SLOTS", "Tap a weapon or item slot to equip it");
+  tc("MINIMAP", "Tap it for the full map · tap the map to close it");
+  tc("PAUSE", "Pause and settings");
+  const tn = h("div", { fontSize: "12px", opacity: "0.7", marginTop: "6px", lineHeight: "1.5", fontFamily: "Rajdhani, " + FONT },
+    "Play with the phone on its side. Aim assist steadies your aim while you fire (Settings turns it off). The reticle grows when your shots will scatter and tightens when they will not — standing still helps.", body);
+  tn.className = "lc-touch-only";
+  // KEYBOARD section. Read the LIVE bindings. This card closes with "Every key
+  // here can be rebound in Settings" while printing hardcoded defaults, so the
+  // moment anyone took it up on that, the only onboarding screen in the game
+  // taught the wrong keys.
+  const kb = mkGrid("kbd-hint");
   const kx = (canonical) => { const ph = physFor(W, canonical); return ph ? keyLabel(ph) : "—"; };
   kb(kx("KeyW") + " " + kx("KeyA") + " " + kx("KeyS") + " " + kx("KeyD"), "Move");
   kb(kx("ShiftLeft"), (W.settings && W.settings.sprintToggle) ? "Sprint — a CLICK toggles it on and off" : "Sprint — hold");
@@ -3579,10 +4077,11 @@ export function showHowToPlay(W) {
   kb(kx("ShiftLeft") + " scoped", "Hold breath — steadies the sniper sway; watch your lungs, running dry leaves you shaky");
   kb("ESC", "Pause and settings");
   h("div", { fontSize: "12px", opacity: "0.7", marginTop: "6px", lineHeight: "1.5", fontFamily: "Rajdhani, " + FONT },
-    "The reticle grows when your shots will scatter and tightens when they will not — standing still and crouching both help. Every key here can be rebound in Settings.", box);
+    "The reticle grows when your shots will scatter and tightens when they will not — standing still and crouching both help. Every key here can be rebound in Settings.", body).className = "kbd-hint";
   const go = h("button", Object.assign({}, BTN, {
     fontFamily: "Orbitron, " + FONT_DISPLAY, background: "linear-gradient(180deg,#6ec4ff,#2f7fd6)",
-    color: "#fff", fontSize: "15px", padding: "12px 34px", letterSpacing: "2px", marginTop: "10px", alignSelf: "center",
+    color: "#fff", fontSize: "15px", padding: "12px 34px", letterSpacing: "2px", marginTop: "2px", alignSelf: "center",
+    flexShrink: "0", minHeight: "44px",
   }), "GOT IT", box);
   const close = () => {
     try { localStorage.setItem("lc_seen_intro", "1"); } catch (e) {}
@@ -3611,7 +4110,7 @@ export function showCareer(W) {
   if (!W.progress) W.progress = loadProgress();
   const p = W.progress, c = p.career || newCareer(null);
   const L = layer("career", { pointerEvents: "auto", background: "rgba(4,8,16,0.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 70 });
-  const box = h("div", Object.assign({ padding: "26px 34px", width: "520px", maxHeight: "82vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px" }, PANEL), null, L);
+  const box = h("div", Object.assign({ padding: "26px 34px", width: "520px", maxWidth: "calc(100vw - 92px)", maxHeight: "82vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px" }, PANEL), null, L);
   h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "20px", fontWeight: "900", letterSpacing: "3px" }, "CAREER", box);
   h("div", { fontSize: "13px", opacity: "0.8", fontFamily: "Rajdhani, " + FONT, letterSpacing: "1px" },
     "LVL " + p.level + "  ·  " + rankLabel(p.level) + (p.dayStreak > 1 ? "  ·  🔥 " + p.dayStreak + "-DAY STREAK" : ""), box);
@@ -3662,7 +4161,8 @@ function showSettings(W) {
   const prevScroll = (R.settings && R.settings.firstChild) ? R.settings.firstChild.scrollTop : 0;
   if (R.settings) { R.settings.remove(); R.settings = null; }
   const L = layer("settings", { pointerEvents: "auto", background: "rgba(4,8,16,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60 });
-  const box = h("div", Object.assign({ padding: "28px 36px", width: "560px", maxHeight: "82vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px" }, PANEL), null, L);
+  const box = h("div", Object.assign({ padding: "28px 36px", width: "560px", maxWidth: "calc(100vw - 96px)", maxHeight: "82vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px" }, PANEL), null, L);
+  box.dataset.lc = "settings";
   h("div", { fontSize: "22px", fontWeight: "900", letterSpacing: "2px" }, "SETTINGS", box);
 
   // Every kill-feed line, the lobby cell and the name tags read actor.name, and
@@ -3691,7 +4191,7 @@ function showSettings(W) {
   };
   nInp.onchange = commitName;
   nInp.onblur = commitName;
-  h("div", { fontSize: "11px", opacity: "0.6", marginTop: "-4px", fontFamily: "Rajdhani, " + FONT },
+  h("div", { fontSize: FS(11), opacity: "0.6", marginTop: "-4px", fontFamily: "Rajdhani, " + FONT },
     // the name is baked into the actor at match start (ffg_royale3d.js: `name:
     // W.settings.playerName || "You"`), so a mid-match change must not look inert
     "Applies from the next match.", box);
@@ -3699,8 +4199,48 @@ function showSettings(W) {
   slider(box, "Master volume", W.settings.masterVol, (v) => { W.settings.masterVol = v; applyAudio(W); });
   slider(box, "Music volume", W.settings.musicVol, (v) => { W.settings.musicVol = v; applyAudio(W); });
   slider(box, "SFX volume", W.settings.sfxVol, (v) => { W.settings.sfxVol = v; applyAudio(W); });
-  slider(box, "Mouse sensitivity", W.settings.sensitivity / 2, (v) => { W.settings.sensitivity = v * 2; save(W); }, { min: 0.075 });   // never draggable to 0 — that killed mouse-look, and it persisted
-  slider(box, "ADS sensitivity", W.settings.adsSensitivity / 2, (v) => { W.settings.adsSensitivity = v * 2; save(W); }, { min: 0.075 });
+  // mouse / keyboard rows are .kbd-hint: hidden while the player is on touch,
+  // where the TOUCH CONTROLS rows below take their place
+  slider(box, "Mouse sensitivity", W.settings.sensitivity / 2, (v) => { W.settings.sensitivity = v * 2; save(W); }, { min: 0.075 }).className = "kbd-hint";   // never draggable to 0 — that killed mouse-look, and it persisted
+  slider(box, "ADS sensitivity", W.settings.adsSensitivity / 2, (v) => { W.settings.adsSensitivity = v * 2; save(W); }, { min: 0.075 }).className = "kbd-hint";
+
+  // TOUCH CONTROLS — the settings touch.js (lane L10) reads, feature-detected
+  // there: touchScale, touchLeftHanded, touchSens, touchOpacity, aimAssist,
+  // haptics. Shown only in touch mode. A change re-lays the controls out (a
+  // resize event, which touch.js listens for) and the HUD (syncTouchPrefs).
+  const touchChanged = () => {
+    save(W); syncTouchPrefs(W);
+    clearTimeout(R._touchRelayT);   // a slider drag fires per pixel: one relayout when it settles
+    R._touchRelayT = setTimeout(() => { try { window.dispatchEvent(new Event("resize")); } catch (e) {} }, 150);
+    if (W.events) W.events.emit("touchSettings");
+  };
+  h("div", { fontSize: "15px", fontWeight: "800", marginTop: "4px" }, "TOUCH CONTROLS", box).className = "lc-touch-only";
+  const tRow = (label, opts, cur, set) => {
+    const row2 = h("div", { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }, null, box);
+    row2.className = "lc-touch-only";
+    h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, label, row2);
+    opts.forEach((o) => {
+      const on = cur === o[1];
+      const b = h("button", Object.assign({}, BTN, {
+        padding: "7px 16px", fontSize: "13px",
+        background: on ? "#57b0ff" : "rgba(255,255,255,0.1)", color: on ? "#fff" : "#cfe4ff",
+      }), o[0], row2);
+      b.onclick = () => { set(o[1]); touchChanged(); showSettings(W); };
+    });
+  };
+  const tsNow = +W.settings.touchScale > 0 ? +W.settings.touchScale : 1;
+  tRow("Button size", [["S", 0.85], ["M", 1], ["L", 1.2]], tsNow <= 0.9 ? 0.85 : tsNow > 1.1 ? 1.2 : 1, (v) => { W.settings.touchScale = v; });
+  tRow("Left-handed", [["OFF", false], ["ON", true]], W.settings.touchLeftHanded === true, (v) => { W.settings.touchLeftHanded = v; });
+  tRow("Aim assist", [["OFF", false], ["ON", true]], W.settings.aimAssist !== false, (v) => { W.settings.aimAssist = v; });
+  tRow("Vibration", [["OFF", false], ["ON", true]], W.settings.haptics !== false, (v) => { W.settings.haptics = v; });
+  const tsens = +W.settings.touchSens > 0 ? +W.settings.touchSens : 1;
+  slider(box, "Look sensitivity", (Math.max(0.3, Math.min(3, tsens)) - 0.3) / 2.7,
+    (v) => { W.settings.touchSens = Math.round((0.3 + v * 2.7) * 100) / 100; touchChanged(); },
+    { min: 0, fmt: (v) => (0.3 + v * 2.7).toFixed(1) + "x" }).className = "lc-touch-only";
+  const topa = +W.settings.touchOpacity > 0 ? +W.settings.touchOpacity : 0.75;
+  slider(box, "Button opacity", (Math.max(0.35, Math.min(1, topa)) - 0.35) / 0.65,
+    (v) => { W.settings.touchOpacity = Math.round((0.35 + v * 0.65) * 100) / 100; touchChanged(); },
+    { min: 0, fmt: (v) => Math.round((0.35 + v * 0.65) * 100) + "%" }).className = "lc-touch-only";
 
   // graphics
   const gRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
@@ -3723,6 +4263,7 @@ function showSettings(W) {
   // four rows down and the label lied after a rebind (sweep finding)
   [["Sprint (" + ((() => { const ph = physFor(W, "ShiftLeft"); return ph ? keyLabel(ph) : "SHIFT"; })()) + ")", "sprintToggle"], ["Aim down sights", "adsToggle"]].forEach((e) => {
     const row2 = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+    row2.className = "kbd-hint";       // keyboard / mouse behaviour; touch ADS is always a toggle
     h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, e[0], row2);
     [["HOLD", false], ["TOGGLE", true]].forEach((o) => {
       const on = !!W.settings[e[1]] === o[1];
@@ -3781,8 +4322,9 @@ function showSettings(W) {
   });
 
   // keybinds
-  h("div", { fontSize: "15px", fontWeight: "800", marginTop: "8px" }, "KEYBINDS (click to rebind)", box);
+  h("div", { fontSize: "15px", fontWeight: "800", marginTop: "8px" }, "KEYBINDS (click to rebind)", box).className = "kbd-hint";
   const kGrid = h("div", { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px" }, null, box);
+  kGrid.className = "kbd-hint";
   for (const [label, canonical] of ACTIONS) {
     const row = h("div", { display: "flex", justifyContent: "space-between", alignItems: "center" }, null, kGrid);
     h("div", { fontSize: "13px", opacity: "0.8" }, label, row);
@@ -3824,6 +4366,7 @@ function showSettings(W) {
   }
 
   const resetRow = h("div", { display: "flex", justifyContent: "flex-end", marginTop: "4px" }, null, box);
+  resetRow.className = "kbd-hint";
   const resetB = h("button", Object.assign({}, BTN, { padding: "5px 14px", fontSize: "12px" }), "RESET TO DEFAULTS", resetRow);
   resetB.onclick = () => { W.settings.remap = {}; save(W); showSettings(W); };
 
@@ -3837,11 +4380,11 @@ function showSettings(W) {
   const xRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
   const xInp = h("input", {
     flex: "1", padding: "6px 9px", borderRadius: "8px", background: "rgba(0,0,0,0.4)",
-    border: "1px solid rgba(255,255,255,0.2)", color: "#cfe4ff", fontSize: "11px",
+    border: "1px solid rgba(255,255,255,0.2)", color: "#cfe4ff", fontSize: FS(11),
     fontFamily: "ui-monospace, Consolas, monospace",
   }, null, xRow);
   xInp.type = "text"; xInp.placeholder = "EXPORT to generate · paste a code and IMPORT to restore";
-  const xMsg = h("div", { fontSize: "11.5px", opacity: "0.75", fontFamily: "Rajdhani, " + FONT, minHeight: "15px" }, "", box);
+  const xMsg = h("div", { fontSize: FS(11.5), opacity: "0.75", fontFamily: "Rajdhani, " + FONT, minHeight: "15px" }, "", box);
   const expB = h("button", Object.assign({}, BTN, { padding: "5px 14px", fontSize: "12px" }), "EXPORT", xRow);
   expB.onclick = () => {
     try {
@@ -3886,6 +4429,8 @@ function closeSettings(W) {
   save(W);
 }
 function keyLabel(code) { return code.replace("Key", "").replace("Digit", "").replace("Left", " L").replace("Control", "CTRL"); }
+/** The live key for a canonical action, as a short label ("E", "SPACE"). */
+function keyOf(W, canonical) { const ph = physFor(W, canonical); return ph ? keyLabel(ph).toUpperCase() : "—"; }
 function slider(box, label, val, onChange, opts) {
   const row = h("div", { display: "flex", gap: "10px", alignItems: "center" }, null, box);
   h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, label, row);
@@ -3895,6 +4440,7 @@ function slider(box, label, val, onChange, opts) {
   const num = h("div", { fontSize: "12px", width: "40px", textAlign: "right" }, fmt(val), row);
   num.dataset.lc = "slider-" + label.toLowerCase().replace(/[^a-z]+/g, "-");
   inp.oninput = () => { const v = parseFloat(inp.value); onChange(v); num.textContent = fmt(v); };
+  return row;
 }
 function applyAudio(W) {
   save(W);
