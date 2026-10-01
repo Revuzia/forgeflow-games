@@ -9,10 +9,24 @@
  *
  * Walking into a painting in THE KEEP (or through an unlocked door) raises this
  * card: a gilded frame around a painted view of the realm, the course name and
- * subtitle burnt into the canvas, difficulty pips, the SEVEN crest slots (filled
- * gold when claimed — and only then does the crest's NAME appear; an unclaimed
- * slot shows what KIND of crest it is, never where it is), the coin best, the
- * best time, and ENTER / BACK.
+ * subtitle burnt into the canvas, difficulty pips, the MISSION SELECT, the coin
+ * best, the best time, and ENTER / BACK.
+ *
+ * MISSION SELECT (stage 1, 2026-09-30 — the reference game's star select). The
+ * seven crest slots are the seven MISSIONS. Every slot shows its mission NAME —
+ * `crest.mission.name`, else the crest's own name — because in the reference
+ * the star list doubles as the list of hints; a claimed crest fills gold. One
+ * slot is SELECTED (the first unclaimed one when the card opens, as the
+ * reference puts its cursor on the next star) and the banner under the row
+ * spells it out. ENTER loads the course IN THAT MISSION'S STATE: the card
+ * exposes the choice as `card.mission` (a crest id) and `card.missionIndex`,
+ * and game.js hands it to `loadCourse(id, {mission})` -> course.js
+ * resolveMission. `show()` still resolves 'enter' | 'cancel' (contract §27).
+ *
+ *   LEFT / RIGHT (A / D, the stick, the d-pad) and 1-7 pick a mission;
+ *   UP / DOWN / TAB move between ENTER and BACK; ENTER / SPACE / A confirm the
+ *   focused button; ESC / BACKSPACE / B go back. A click selects a slot and a
+ *   click on the selected slot enters it.
  *
  * ART DIRECTION
  * -------------
@@ -50,16 +64,58 @@ const CRESTS = UI_TOKENS.counts.crests;
 const PAINT_W = 1280;
 const PAINT_H = 380;
 
-/** What an UNCLAIMED slot admits to — the kind, never the name or the place. */
-const TYPE_HINT = {
-  open: 'SOMEWHERE',
+/** The kind chip beside a mission's name in the banner. */
+const TYPE_TAG = {
+  open: 'A CLIMB',
   sigils: 'EIGHT SIGILS',
   coins: 'ONE HUNDRED COINS',
   secret: 'A SECRET',
-  boss: 'THE WARDEN',
+  boss: 'A WARDEN',
   race: 'A RACE',
   power: 'A POWER',
 };
+
+/* Mission-select styling. The card's base sheet lives in ui/style.js; the
+   mission layer is this module's, so its rules ride with it (injected once). */
+const MISSION_CSS_ID = 'cb-card-missions-css';
+const MISSION_CSS = `
+.cc-crests .cc-mtile{ position:relative; cursor:pointer; user-select:none; transition:transform .16s var(--e-out,ease),
+  border-color .16s, background .16s, box-shadow .16s; }
+.cc-crests .cc-mtile:hover{ border-color:rgba(243,233,210,.26); }
+.cc-crests .cc-mtile .nm{ font-size:${UI_TOKENS.type['2xs'] + 1}px; color:var(--ink-dim); letter-spacing:.06em; }
+.cc-crests .cc-mtile .cc-mnum{ position:absolute; left:6px; top:4px; font-family:var(--f-num); font-weight:700;
+  font-size:${UI_TOKENS.type.xs}px; color:var(--ink-mute); letter-spacing:.04em; }
+.cc-crests .cc-mtile.is-got .cc-mnum{ color:var(--gold); }
+.cc-crests .cc-mtile.is-sel{ transform:translateY(-3px); background:rgba(243,233,210,.10);
+  border-color:var(--accent,#e9c36b); box-shadow:0 0 0 1px var(--accent,#e9c36b), 0 8px 22px -10px var(--accent-glow,rgba(233,195,107,.5)); }
+.cc-crests .cc-mtile.is-sel .nm{ color:#fff; }
+.cc-crests .cc-mtile.is-sel .cc-mnum{ color:var(--accent,#e9c36b); }
+.cc-mission{ margin-top:10px; padding:9px 14px 10px; border-radius:var(--r-md); text-align:center;
+  background:linear-gradient(180deg,rgba(243,233,210,.07),rgba(243,233,210,.02)); border:1px solid var(--hair); }
+.cc-mission .k{ font-family:var(--f-display); font-size:${UI_TOKENS.type['2xs']}px; font-weight:700; letter-spacing:.3em;
+  text-transform:uppercase; color:var(--accent,#e9c36b); }
+.cc-mission .nm{ margin-top:3px; font-family:var(--f-display); font-weight:700; text-transform:uppercase;
+  font-size:${UI_TOKENS.type.lg}px; letter-spacing:.07em; line-height:1.1; color:#fff; }
+.cc-mission .sub{ margin-top:3px; font-family:var(--f-body); font-size:${UI_TOKENS.type.xs}px; color:var(--ink-dim); letter-spacing:.02em; }
+.cc-mission .sub b{ color:var(--gold); font-weight:700; font-family:var(--f-num); letter-spacing:.04em; }
+.cb-card .cc-hint .cc-arrows{ font-family:var(--f-num); font-weight:700; opacity:.85; }
+`;
+
+function injectMissionCss() {
+  if (typeof document === 'undefined' || !document || typeof document.getElementById !== 'function') return;
+  if (document.getElementById(MISSION_CSS_ID)) return;
+  const st = document.createElement('style');
+  st.id = MISSION_CSS_ID;
+  st.textContent = MISSION_CSS;
+  (document.head || document.body).appendChild(st);
+}
+
+/** A crest's mission name: the authored `mission.name`, else the crest's name. */
+function missionName(cd) {
+  if (!cd) return '';
+  const m = cd.mission && typeof cd.mission === 'object' ? cd.mission : null;
+  return String((m && m.name) || cd.name || prettyId(cd.id) || '').toUpperCase();
+}
 
 /** Realm palettes for the painting. [skyTop, skyBottom, sun, ridgeFar, ridgeMid, ridgeNear, mote] */
 const REALM_PAINT = {
@@ -107,6 +163,14 @@ export class CourseCard {
     /** courseId -> painted canvas, so re-entering the Keep never repaints. */
     this._paintCache = new Map();
     this._def = null;
+    /** MISSION SELECT: the slot the cursor is on, and the choice ENTER hands game.js. */
+    this._sel = 0;
+    this._missionIds = [];
+    this._missionGot = [];
+    this._missionBest = [];
+    /** crest id of the mission ENTER chose (read by game.js after 'enter'); null until then. */
+    this.mission = null;
+    this.missionIndex = -1;
 
     this._build();
     UIRegistry.card = this;
@@ -117,6 +181,7 @@ export class CourseCard {
    * ====================================================================*/
 
   _build() {
+    injectMissionCss();
     this.el = el('div', 'cb-card cb-ui');
 
     const frame = el('div', 'cc-frame');
@@ -152,15 +217,35 @@ export class CourseCard {
     const crests = el('div', 'cc-crests');
     this._slots = [];
     for (let i = 0; i < CRESTS; i++) {
-      const slot = el('div', 'cc-slot');
+      /* A MISSION TILE. Not `data-nav`: the FocusList walks ENTER / BACK, and the
+         mission cursor is its own axis (left/right), exactly as in the reference. */
+      const slot = el('div', 'cc-slot cc-mtile');
+      slot.setAttribute('role', 'option');
+      const num = el('div', 'cc-mnum');
+      num.textContent = String(i + 1);
       const pip = makeCrestPip(false);
       const nm = el('div', 'nm');
       const best = el('div', 'best');
-      slot.appendChild(pip); slot.appendChild(nm); slot.appendChild(best);
+      slot.appendChild(num); slot.appendChild(pip); slot.appendChild(nm); slot.appendChild(best);
+      const idx = i;
+      slot.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!this._open) return;
+        if (this._sel === idx) this._choose('enter');   // a second click on the chosen slot enters
+        else this._select(idx, true);
+      });
       crests.appendChild(slot);
       this._slots.push({ slot, pip, nm, best });
     }
     this.nCrests = crests;
+
+    /* The chosen mission, spelled out: number, kind, NAME, and its state. */
+    const mission = el('div', 'cc-mission');
+    this.nMissionK = el('div', 'k');
+    this.nMissionName = el('div', 'nm');
+    this.nMissionSub = el('div', 'sub');
+    mission.appendChild(this.nMissionK); mission.appendChild(this.nMissionName); mission.appendChild(this.nMissionSub);
+    this.nMission = mission;
 
     const stats = el('div', 'cc-stats');
     const mkStat = (k, gold) => {
@@ -184,6 +269,7 @@ export class CourseCard {
 
     this.nHint = el('div', 'cc-hint');
     this.nHint.innerHTML =
+      '<b class="cb-kbd cc-arrows">&larr; &rarr;</b> MISSION<i>·</i>' +
       '<b class="cb-kbd">ENTER</b><b class="cb-pad a">A</b> ENTER<i>·</i>' +
       '<b class="cb-kbd">ESC</b><b class="cb-pad b">B</b> BACK';
 
@@ -191,7 +277,7 @@ export class CourseCard {
     this.nLock.style.color = 'var(--gold)';
     this.nLock.style.display = 'none';
 
-    body.appendChild(crests); body.appendChild(stats);
+    body.appendChild(crests); body.appendChild(mission); body.appendChild(stats);
     body.appendChild(btns); body.appendChild(this.nLock); body.appendChild(this.nHint);
 
     plate.appendChild(paint); plate.appendChild(body);
@@ -218,8 +304,10 @@ export class CourseCard {
    * @param {object} [save] the Save.course(id) record
    *   {crests:[crestId], coinsBest, cleared, deaths, bestMs:{crestId:ms}}.
    *   Omitted -> read from Save.
-   * @param {{locked?:boolean, needCrests?:number, haveCrests?:number}} [opts]
+   * @param {{locked?:boolean, needCrests?:number, haveCrests?:number, mission?:string}} [opts]
    *   a sealed gate: ENTER is disabled and the requirement is spelled out.
+   *   `mission` pre-selects that crest's mission (else the first unclaimed one).
+   *   On 'enter', `this.mission` / `this.missionIndex` hold the chosen mission.
    * @returns {Promise<'enter'|'cancel'>}
    */
   show(courseDef, save, opts) {
@@ -275,9 +363,13 @@ export class CourseCard {
     const got = new Set(rec && Array.isArray(rec.crests) ? rec.crests.map(String) : []);
     const bestMs = (rec && rec.bestMs) || {};
 
-    /* --- the seven slots ------------------------------------------------ */
+    /* --- the seven MISSIONS ---------------------------------------------- */
     const defs = Array.isArray(def.crests) ? def.crests : null;
+    this._crestDefs = defs;
     let bestOverall = null;
+    this._missionIds.length = 0;
+    this._missionGot.length = 0;
+    this._missionBest.length = 0;
     for (let i = 0; i < CRESTS; i++) {
       const s = this._slots[i];
       const cd = defs ? defs[i] : null;
@@ -285,19 +377,35 @@ export class CourseCard {
       const has = cid ? got.has(cid) : false;
       s.pip.set(has, false);
       s.slot.classList.toggle('is-got', has);
-      if (has) {
-        s.nm.textContent = String((cd && cd.name) || prettyId(cid)).toUpperCase();
-      } else if (cd) {
-        const hint = TYPE_HINT[cd.type] || 'SOMEWHERE';
-        s.nm.textContent = hint;
-      } else {
-        s.nm.textContent = '· · ·';
-      }
+      /* The mission name IS the hint (the reference's star list), claimed or not. */
+      s.nm.textContent = cd ? missionName(cd) : '· · ·';
       const ms = cid != null && bestMs && isFinite(bestMs[cid]) ? bestMs[cid] : null;
       s.best.textContent = ms != null ? fmtMs(ms) : '';
       if (ms != null && (bestOverall == null || ms < bestOverall)) bestOverall = ms;
-      s.slot.style.display = (defs && i >= defs.length && defs.length > 0) ? 'none' : '';
+      const hidden = !cd || (defs && i >= defs.length && defs.length > 0);
+      s.slot.style.display = hidden ? 'none' : '';
+      this._missionIds.push(hidden ? null : cid);
+      this._missionGot.push(has);
+      this._missionBest.push(ms);
     }
+
+    /* The cursor starts on the first unclaimed mission (the reference's rule);
+       with everything claimed, on the last mission played; an explicit
+       `opts.mission` wins over both. */
+    let sel = -1;
+    if (o.mission != null) sel = this._missionIds.indexOf(String(o.mission));
+    if (sel < 0) {
+      for (let i = 0; i < this._missionIds.length; i++) if (this._missionIds[i] && !this._missionGot[i]) { sel = i; break; }
+    }
+    if (sel < 0 && id) {
+      let last = null;
+      try { last = typeof Save.lastMission === 'function' ? Save.lastMission(id) : null; } catch (e) { last = null; }
+      if (last) sel = this._missionIds.indexOf(String(last));
+    }
+    if (sel < 0) sel = Math.max(0, this._missionIds.findIndex((x) => !!x));
+    this.mission = null;
+    this.missionIndex = -1;
+    this._select(sel, false);
 
     /* --- stats ---------------------------------------------------------- */
     const coinsTotal = this._coinsThreshold(def);
@@ -340,7 +448,7 @@ export class CourseCard {
       { opacity: 0, transform: 'translateY(30px) scale(.94) rotateX(9deg)' },
       { opacity: 1, transform: 'translateY(0) scale(1) rotateX(0)' },
     ], { duration: 520, easing: UI_TOKENS.ease.spring });
-    const stagger = [this.nPaint, this.nCrests, this.nStats, this.nBtns, this.nHint];
+    const stagger = [this.nPaint, this.nCrests, this.nMission, this.nStats, this.nBtns, this.nHint];
     for (let i = 0; i < stagger.length; i++) {
       animateOnce(stagger[i], [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }],
         { duration: 340, delay: 110 + i * 60, easing: UI_TOKENS.ease.out });
@@ -380,8 +488,83 @@ export class CourseCard {
   _choose(which) {
     if (which === 'enter' && this.btnEnter.disabled) { uiSfx(this.game, 'ui_back'); return; }
     uiSfx(this.game, which === 'enter' ? 'ui_ok' : 'ui_back');
-    if (which === 'enter') uiRumble(this.game, 0.4, 0.6, 120);
+    if (which === 'enter') {
+      uiRumble(this.game, 0.4, 0.6, 120);
+      /* The choice travels with the promise: game.js reads it on 'enter'. */
+      const mid = this._missionIds[this._sel] || null;
+      this.mission = mid;
+      this.missionIndex = mid ? this._sel : -1;
+    }
     this.close(which);
+  }
+
+  /* ======================================================================
+   * MISSION SELECT
+   * ====================================================================*/
+
+  /** Put the mission cursor on slot `i` (wraps over the visible slots). */
+  _select(i, audible) {
+    const n = this._missionIds.length;
+    if (!n) return;
+    let k = ((i % n) + n) % n;
+    /* skip hidden slots (a course authored with fewer than seven crests) */
+    for (let guard = 0; guard < n && !this._missionIds[k]; guard++) k = (k + 1) % n;
+    const changed = k !== this._sel;
+    this._sel = k;
+    for (let j = 0; j < this._slots.length; j++) {
+      const on = j === k;
+      this._slots[j].slot.classList.toggle('is-sel', on);
+      this._slots[j].slot.setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+    this._paintMission();
+    if (audible && changed) uiSfx(this.game, 'ui_move');
+  }
+
+  /** Step the cursor by `d` visible slots. */
+  _step(d) {
+    const n = this._missionIds.length;
+    if (!n) return;
+    let k = this._sel;
+    for (let guard = 0; guard < n; guard++) {
+      k = ((k + d) % n + n) % n;
+      if (this._missionIds[k]) break;
+    }
+    this._select(k, true);
+  }
+
+  /** The banner under the row: MISSION n OF N · KIND, the NAME, and its state. */
+  _paintMission() {
+    const k = this._sel;
+    const defs = this._crestDefs || null;
+    const cd = defs ? defs[k] : null;
+    const shown = this._missionIds.filter((x) => !!x).length;
+    if (!cd) {
+      this.nMissionK.textContent = '';
+      this.nMissionName.textContent = '';
+      this.nMissionSub.textContent = '';
+      return;
+    }
+    const tag = TYPE_TAG[cd.type || 'open'] || 'A CREST';
+    this.nMissionK.textContent = 'MISSION ' + (k + 1) + ' OF ' + shown + '  ·  ' + tag;
+    this.nMissionName.textContent = missionName(cd);
+    const m = cd.mission && typeof cd.mission === 'object' ? cd.mission : null;
+    const got = !!this._missionGot[k];
+    const best = this._missionBest[k];
+    this.nMissionSub.textContent = '';
+    if (got) {
+      this.nMissionSub.appendChild(document.createTextNode('CLAIMED'));
+      if (best != null) {
+        this.nMissionSub.appendChild(document.createTextNode('  ·  BEST '));
+        const b = el('b'); b.textContent = fmtMs(best);
+        this.nMissionSub.appendChild(b);
+      }
+    } else if (m && typeof m.hint === 'string' && m.hint) {
+      this.nMissionSub.textContent = m.hint;
+    } else if ((cd.type || 'open') === 'race' && isFinite(cd.limitMs)) {
+      this.nMissionSub.textContent = 'BEAT ' + fmtMs(cd.limitMs);
+    } else {
+      this.nMissionSub.textContent = 'NOT YET CLAIMED';
+    }
   }
 
   /* ======================================================================
@@ -401,6 +584,23 @@ export class CourseCard {
       if (!this.nav.activate()) this._choose('enter');
       return;
     }
+    /* MISSION CURSOR: left/right (and A/D, the WASD a player's hand is already on)
+       walk the missions; a digit jumps to one. */
+    const code = e.code || '';
+    if (e.key === 'ArrowRight' || e.key === 'Right' || code === 'KeyD') { e.preventDefault(); e.stopPropagation(); this._step(1); return; }
+    if (e.key === 'ArrowLeft' || e.key === 'Left' || code === 'KeyA') { e.preventDefault(); e.stopPropagation(); this._step(-1); return; }
+    if (/^Digit[1-9]$/.test(code) || /^Numpad[1-9]$/.test(code)) {
+      const i = (code.charCodeAt(code.length - 1) - 49) | 0;
+      if (i >= 0 && i < this._missionIds.length && this._missionIds[i]) { e.preventDefault(); e.stopPropagation(); this._select(i, true); }
+      return;
+    }
+    /* ENTER / BACK: up/down/tab (the buttons' own FocusList). */
+    if (e.key === 'ArrowDown' || e.key === 'Down' || code === 'KeyS' || (e.key === 'Tab' && !e.shiftKey)) {
+      e.preventDefault(); e.stopPropagation(); this.nav.move(1); return;
+    }
+    if (e.key === 'ArrowUp' || e.key === 'Up' || code === 'KeyW' || (e.key === 'Tab' && e.shiftKey)) {
+      e.preventDefault(); e.stopPropagation(); this.nav.move(-1); return;
+    }
     if (this.nav.handleKey(e)) { e.preventDefault(); e.stopPropagation(); }
   }
 
@@ -408,6 +608,10 @@ export class CourseCard {
     if (!this._open) return;
     if (name === 'back') { this._choose('cancel'); return; }
     if (name === 'confirm') { this.nav.activate(); return; }
+    if (name === 'left') { this._step(-1); return; }
+    if (name === 'right') { this._step(1); return; }
+    if (name === 'up') { this.nav.move(-1); return; }
+    if (name === 'down') { this.nav.move(1); return; }
     this.nav.handleNav(name);
   }
 

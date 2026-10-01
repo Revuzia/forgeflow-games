@@ -430,6 +430,32 @@ export default {
   ambience: { wind: 0.30, birds: 0.55, water: 0.35 },
 
   /* ------------------------------------------------------------------------
+   * ROUTES (the mission layer, world/course.js resolveMission). A named way
+   * through the course that a mission may open or close. `whenClosed` is built
+   * only while the route is shut, so the plain course — and reachcheck, which
+   * reads `objects` — never sees it.
+   *
+   * THE NORTH DOOR: the fort's 3.0 x 4.0 m back door (building doors, side
+   * north, x 0, wall z -35..-33, floor 9.08) — the fort's way out to the ridge
+   * and the Warden's ring. Barred, it is a timber leaf in the middle of the
+   * wall with three iron straps and a drop-bar across the courtyard face. None
+   * of the three routes onto the rampart walk, the crest tower, the courtyard
+   * sigil or the rampart coins goes through it.
+   * --------------------------------------------------------------------- */
+  routes: {
+    'north-door': {
+      open: true,
+      whenClosed: [
+        { kind: 'platform', p: [0, 11.12, -34.0], s: [3.1, 4.1, 0.35], mat: 'wood', tint: 0x6a4a26 },
+        { kind: 'platform', p: [0, 9.80, -33.78], s: [3.1, 0.18, 0.08], mat: 'metal', tint: 0x3a3d42 },
+        { kind: 'platform', p: [0, 11.12, -33.78], s: [3.1, 0.18, 0.08], mat: 'metal', tint: 0x3a3d42 },
+        { kind: 'platform', p: [0, 12.44, -33.78], s: [3.1, 0.18, 0.08], mat: 'metal', tint: 0x3a3d42 },
+        { kind: 'platform', p: [0, 11.50, -33.60], s: [3.8, 0.34, 0.28], mat: 'wood', tint: 0x4a3420 },
+      ],
+    },
+  },
+
+  /* ------------------------------------------------------------------------
    * TERRAIN + WATER
    * --------------------------------------------------------------------- */
 
@@ -505,6 +531,21 @@ export default {
       id: 'open', type: 'open', name: 'CREST ON THE RAMPARTS',
       hint: 'The high tower. Stairs, crates or the shaft — pick one.',
       p: [TOWER_E[0], CAP_TOP + 1.15, TOWER_E[1]],
+      /* MISSION 1 (stage 1 missions lane). The Warden is away, so its ring on the
+         ridge stands empty; the garrison has barred the north door behind it and
+         doubled the watch in the courtyard — three bumblers where there is one.
+         The crest is where it always is, on the east tower. */
+      mission: {
+        name: 'CREST ON THE RAMPARTS',
+        remove: ['warden'],
+        close: ['north-door'],
+        add: {
+          critters: [
+            { kind: 'bumbler', tag: 'garrison', path: [on(-5, -31), on(5, -31), on(-5, -31)], speed: 1.3 },
+            { kind: 'bumbler', tag: 'garrison', path: [on(2, -21.5), on(7, -21.5), on(7, -26.5), on(2, -26.5), on(2, -21.5)], speed: 1.1, offset: 0.5 },
+          ],
+        },
+      },
     },
     {
       id: 'sigils', type: 'sigils', name: 'EIGHT SIGILS OF THE MEADOW',
@@ -526,6 +567,26 @@ export default {
       id: 'boss', type: 'boss', name: 'THE WARDEN OF THE RIDGE',
       hint: 'Jump the shockwave, dodge the charge, pound its back.',
       spawnAt: [-2, 16.4 + 1.6, -54],            // the ring centre, flat 16.40
+      /* MISSION 5 (stage 1 missions lane). The Warden holds its ring, and it has
+         called the courtyard bumbler up as its squire: the 10 x 10 m patrol
+         square moves, whole, from the courtyard onto the flat of the ring
+         (x -7..3, z -49..-59, all inside the 16.40 flat and the r 8 fence). Two
+         braziers flank the ring's west entrance (the fence gap, PI +- 0.35). The crest tower is bare — the
+         rampart crest is a different mission — and the wind has dropped: the
+         mill turns once in 16 s instead of 11. `at` names the ring centre. */
+      mission: {
+        name: 'THE WARDEN OF THE RIDGE',
+        at: [-2, 18.0, -54],
+        move: { 'yard-bumbler': { to: [-7, 16.4, -49] } },
+        set: { mill: { period: 16.0 } },
+        add: {
+          objects: [
+            { kind: 'deco', kindOf: 'brazier', p: on(-10.6, -51.2, 0.8), s: [0.7, 1.6, 0.7], mat: 'metal', tint: EMBER },
+            { kind: 'deco', kindOf: 'brazier', p: on(-10.6, -56.8, 0.8), s: [0.7, 1.6, 0.7], mat: 'metal', tint: EMBER },
+            { kind: 'light', p: on(-10.8, -54.0, 2.4), color: EMBER, intensity: 7, distance: 14 },
+          ],
+        },
+      },
     },
     {
       id: 'race', type: 'race', name: 'MEADOW DASH',
@@ -977,7 +1038,7 @@ export default {
     // `dir: -1` so the arms turn the way this beat is written: an arm boarded at
     // the bottom of the sweep reaches 3 o'clock in a QUARTER turn (2.75 s), not
     // three quarters the long way over the top.
-    { kind: 'mill', p: MILL_HUB, arms: 4, len: MILL_LEN, period: 11.0, yaw: 0, dir: -1, deck: { w: 2.2, d: 1.6, t: 0.5 }, mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    { kind: 'mill', tag: 'mill', p: MILL_HUB, arms: 4, len: MILL_LEN, period: 11.0, yaw: 0, dir: -1, deck: { w: 2.2, d: 1.6, t: 0.5 }, mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
     { kind: 'text', p: [38, r2(gy(38, -1.6) + 1.4), -1.6], rot: [0, 0, 0], text: 'RIDE AN ARM  ·  STEP OFF AT THE TOP OF THE SWING', size: 0.24, color: 0x6b5a3a },
 
     // THE FLOATING ISLAND. Top 25.20, near edge x = 49.50 — the arm sweep
@@ -1156,7 +1217,7 @@ export default {
     // BUMBLERS. Side contact = knockback, not death (contract §23). Three, on
     // ground that is flat enough that their waddle reads at 40 m.
     { kind: 'bumbler', path: [on(-8, 36), on(6, 33), on(2, 39), on(-8, 36)], speed: 1.5 },
-    { kind: 'bumbler', path: [on(-5, -19), on(5, -19), on(5, -29), on(-5, -29), on(-5, -19)], speed: 1.7 },
+    { kind: 'bumbler', tag: 'yard-bumbler', path: [on(-5, -19), on(5, -19), on(5, -29), on(-5, -29), on(-5, -19)], speed: 1.7 },
     { kind: 'bumbler', path: [on(20, 11), on(28, 9), on(31, 4), on(28, 9), on(20, 11)], speed: 1.4 },
     // SKITTERS. Flyers on sine paths — one over the pond (it swoops at anyone
     // on a lily pad), one circling the mill hill.
@@ -1174,6 +1235,6 @@ export default {
      * crest-boss station was posted over it — "DIED at +5.92 s (void) at
      * -1.42,-30.28,-88.45". At 6.00 the whole ring, the charge (which halts at
      * r - WD_CHARGE_STOP) and anyone it bulldozes stay on flat grass. */
-    { kind: 'warden', p: [-2, 16.40, -54], arena: { c: [-2, -54], r: 6.0 }, hp: 3, tint: 0x6d7a86 },
+    { kind: 'warden', tag: 'warden', p: [-2, 16.40, -54], arena: { c: [-2, -54], r: 6.0 }, hp: 3, tint: 0x6d7a86 },
   ],
 };

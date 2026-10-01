@@ -63,6 +63,19 @@
  *   420   .. 620   iris opens, desaturate releases; state returns to live at 620
  * Designed 620 total; the swap lands ~420-460 ms measured, well inside 700.
  * Never a course rebuild on respawn.
+ *
+ * MISSION FLOW (stage 1, 2026-09-30 — the reference game's star select):
+ *   painting -> course card (the player picks a MISSION = a crest id)
+ *   -> loadCourse(id, {mission}) -> Course.load resolves the course IN THAT
+ *   MISSION'S STATE (world/course.js resolveMission: who is there, what is open,
+ *   where the crest is) -> Save.startMission -> play -> a crest -> celebration
+ *   -> the clear panel offers RETURN TO KEEP only (the run ends, the reference
+ *   way; the hundred-coin crest may STAY, as in the reference) -> the Keep, in
+ *   front of that painting. `this.mission` is the run's record (null for a run
+ *   with no mission: __dev.goto, the harnesses — the plain course, as before).
+ *   The run timer and the death counter are only on screen while a race is live
+ *   (audit sm64_bar §10), and a race crest only exists in its own mission, so a
+ *   race clock never starts uninvited.
  * ==========================================================================*/
 
 import * as THREE from 'three';
@@ -189,6 +202,15 @@ const _orbRay = new THREE.Raycaster();
  * ------------------------------------------------------------------------ */
 function isNum(v) { return typeof v === 'number' && Number.isFinite(v); }
 
+/** `?mission=<crestId>` on the page URL (dev boot-into-course only), else undefined. */
+function urlMission() {
+  try {
+    if (typeof location === 'undefined' || !location) return undefined;
+    const v = new URLSearchParams(location.search || '').get('mission');
+    return v && /^[A-Za-z0-9_-]{1,32}$/.test(v) ? v : undefined;
+  } catch (e) { return undefined; }
+}
+
 /** Accepts [x,y,z] | {x,y,z} | Vector3 | {p:...} | {pos:...} | {position:...} | {center:...}. */
 function toVec3(src, out) {
   out.set(0, 0, 0);
@@ -309,7 +331,10 @@ export class Game {
     this.__dev = undefined;           // defined only with ?dev=1 (hard rule 9)
 
     /* ---- owned by Game ---- */
-    this.def = null;                  // current course def
+    this.def = null;                  // current course def (the MISSION-RESOLVED one)
+    this.mission = null;              // the run's mission record (course.js resolveMission), or null
+    this.missionId = null;            // its crest id, or null for a plain run
+    this._runStatsOn = null;          // timer + death counter visible (only while a race is live)
     this.theme = null;
     this.themeId = 'keep';
     this.cpIndex = 0;
@@ -574,7 +599,9 @@ export class Game {
       const id = this._pendingCourse;
       this._pendingCourse = null;
       this.startAudio();
-      await this.loadCourse(id, { silent: true, holdVeil: true, skipIntro: true });
+      /* ?dev=1&course=<id>&mission=<crestId>: boot straight into one MISSION's state
+         (stage 2 authors check each mission this way); no &mission = the plain course. */
+      await this.loadCourse(id, { silent: true, holdVeil: true, skipIntro: true, mission: urlMission() });
       if (this.dev) this._installDev();
       this.engine.start((dt) => this.update(dt));
       this._veilIn(600);
@@ -855,7 +882,9 @@ export class Game {
   /**
    * @param {string} courseId
    * @param {{silent?:boolean, toTitle?:boolean, holdVeil?:boolean, fromGate?:object,
-   *          fromCourse?:string, cpIndex?:number, skipIntro?:boolean}} [opts]
+   *          fromCourse?:string, cpIndex?:number, skipIntro?:boolean, mission?:string}} [opts]
+   *   `mission`: a crest id — the course is built in that mission's state (null / absent:
+   *   the plain course, every crest present, as before missions existed).
    */
   async loadCourse(courseId, opts) {
     const o = opts || {};
@@ -902,16 +931,22 @@ export class Game {
       this._progress(0.55, 'materialising');
 
       /* ---- 5. build ---- */
+      const missionId = id !== KEEP_ID && typeof o.mission === 'string' && o.mission ? o.mission : null;
       const ctx = {
         mats: this.mats, fx: this.fx, audio: this.audio, save: this.save, game: this, engine: this.engine,
         quality: this.quality, impacts: this.impacts, decals: this.decals, settings: this.settings,
+        mission: missionId,
       };
       let course = null;
       if (typeof Course.load === 'function') course = await Course.load(def, this.engine, ctx);
       if (epoch !== this._epoch) { safe(() => course && course.dispose(), 'course.dispose'); return this; }
       if (!course) course = new Course(def, this.engine, ctx);
       this.course = course;
-      this.def = def;
+      /* The MISSION-RESOLVED def (the plain def when there is no mission): the HUD,
+         the clear panel and every per-course read below see this run's course. */
+      this.def = course.def || def;
+      this.mission = course.mission || null;
+      this.missionId = this.mission ? this.mission.id : null;
       this.courseId = def.id || id;
       const realm = realmOf(this.courseId);
       this.realmId = realm ? realm.id : null;
@@ -926,7 +961,8 @@ export class Game {
       this.courseDeaths = 0;
       this._prevPlayerDead = false;
       this._indexCheckpointVolumes(course);
-      this._indexCrests(def);
+      this._indexCrests(this.def);
+      if (this.missionId) safe(() => this.save.startMission(this.courseId, this.missionId), 'save.startMission');
       this._findWarden(course);
       this._resolveGates(def, course);
       this._resolveFen(def, course);
@@ -1396,7 +1432,9 @@ export class Game {
         if (this.fx && typeof this.fx.burst === 'function') safe(() => this.fx.burst('paintingRipple', g.pos), 'fx.burst');
         safe(() => this.audio && this.audio.sfx('painting_enter'), 'audio.sfx');
         safe(() => this.save.clearCheckpoint(g.course), 'save.clearCheckpoint');
-        this.loadCourse(g.course, { fromGate: g }).catch(() => {});
+        /* The card's MISSION rides into the load: the course is built in its state. */
+        const mission = this.card && typeof this.card.mission === 'string' && this.card.mission ? this.card.mission : null;
+        this.loadCourse(g.course, { fromGate: g, mission }).catch(() => {});
       } else {
         this._gateSuppressed = gateIdx;
         this.state = 'keep';
@@ -1697,8 +1735,11 @@ export class Game {
   _toastCourse(def) {
     if (!def || def.id === KEEP_ID) return;
     const realm = realmOf(def.id);
-    safe(() => this.hud && this.hud.toast(def.name || String(def.id).toUpperCase(),
-      (realm ? realm.name + '  ·  ' : '') + (def.subtitle || ''), 'course'), 'hud.toast');
+    /* A mission run says WHICH mission, the way the reference titles the run. */
+    const m = this.mission;
+    const sub = m ? 'MISSION ' + (m.index + 1) + '  ·  ' + m.name
+      : (realm ? realm.name + '  ·  ' : '') + (def.subtitle || '');
+    safe(() => this.hud && this.hud.toast(def.name || String(def.id).toUpperCase(), sub, 'course'), 'hud.toast');
   }
 
   /* ======================================================================
@@ -2196,7 +2237,7 @@ export class Game {
     const already = Array.isArray(rec.crests) && rec.crests.indexOf(crestId) !== -1;
     const isBest = prevBest === null || ms < prevBest;
 
-    safe(() => this.save.collectCrest(courseId, crestId), 'save.collectCrest');
+    safe(() => this.save.collectCrest(courseId, crestId, this.missionId), 'save.collectCrest');
     if (isBest) safe(() => this.save.setBestMs(courseId, crestId, ms), 'save.setBestMs');
     if (this._collectibles && this._collectibles.counts && isNum(this._collectibles.counts.coins)) {
       const coins = this._collectibles.counts.coins;
@@ -2247,6 +2288,14 @@ export class Game {
       deaths: this.courseDeaths, totalDeaths: this.deaths, sessionMs: Math.round(this.sessionMs),
       firstClear: !wasCleared,
       newlyUnlocked: this._newlyUnlockedAt(total),
+      /* A MISSION RUN ENDS ON ITS CREST, the reference way: celebrate, then back to
+         the Keep in front of the painting (the card is one step away). Only the
+         hundred-coin crest may stay, as the reference's does. A run with no
+         mission (dev / harness) keeps STAY. */
+      canStay: !this.missionId || (def.type || 'open') === 'coins',
+      missionId: this.missionId,
+      kicker: !wasCleared ? undefined
+        : (this.missionId ? (crestId === this.missionId ? 'MISSION COMPLETE' : 'CREST CLAIMED') : undefined),
       onStay: () => this._resolveClear('stay'),
       onReturn: () => this._resolveClear('keep'),
     };
@@ -3017,6 +3066,7 @@ export class Game {
     if (this.power) { this._snapPower.id = this.power.id; this._snapPower.t = this.power.t; s.power = this._snapPower; s.power01 = this.power.max > 0 ? clamp(this.power.t / this.power.max, 0, 1) : 0; }
     else { s.power = null; s.power01 = 0; }
     s.raceMs = col && isNum(col.raceMs) && col.raceMs >= 0 ? col.raceMs : null;
+    this._setRunStats(!isKeep && s.raceMs !== null);
     const w = this._warden;
     if (w && isNum(w.hp) && (w.engaged || w.hp < (isNum(w.hpMax) ? w.hpMax : 3))) { this._snapWarden.hp = w.hp; this._snapWarden.hpMax = isNum(w.hpMax) ? w.hpMax : 3; s.warden = this._snapWarden; }
     else s.warden = null;
@@ -3034,6 +3084,26 @@ export class Game {
       s.crestGrandTotal = CREST_TOTAL;
     }
     return s;
+  }
+
+  /**
+   * The run timer and the death counter belong to RACES (audit sm64_bar §10: "a
+   * running timer and a death skull are always on screen outside races"). The
+   * HUD draws them; Game decides when they exist, with one class on <html> and a
+   * rule injected once. Toggled on CHANGE only — this runs every frame.
+   */
+  _setRunStats(on) {
+    const v = !!on;
+    if (v === this._runStatsOn) return;
+    this._runStatsOn = v;
+    if (typeof document === 'undefined' || !document || !document.documentElement) return;
+    if (!document.getElementById(RUNSTATS_CSS_ID)) {
+      const st = document.createElement('style');
+      st.id = RUNSTATS_CSS_ID;
+      st.textContent = RUNSTATS_CSS;
+      (document.head || document.body).appendChild(st);
+    }
+    document.documentElement.classList.toggle('cb-runstats-off', !v);
   }
 
   /* ======================================================================
@@ -3165,7 +3235,12 @@ export class Game {
     const g = this;
     this.__dev = {
       /* contract §28 */
-      goto(courseId, cpIndex) { return g.loadCourse(String(courseId), { skipIntro: true, cpIndex: isNum(cpIndex) ? cpIndex : undefined }); },
+      goto(courseId, cpIndex, mission) {
+        return g.loadCourse(String(courseId), { skipIntro: true, cpIndex: isNum(cpIndex) ? cpIndex : undefined,
+          mission: typeof mission === 'string' && mission ? mission : undefined });
+      },
+      /** The current run's mission record (course.js resolveMission), or null. */
+      mission() { return g.mission; },
       tp(x, y, z) {
         if (!g.player) return null;
         _v1.set(+x || 0, +y || 0, +z || 0);
@@ -3346,6 +3421,10 @@ export class Game {
 /* ==========================================================================
  * Overlay styling — Game-owned chrome only. The HUD ships its own art.
  * ========================================================================*/
+/* Race-only run stats (see Game._setRunStats). */
+const RUNSTATS_CSS_ID = 'cb-runstats-style';
+const RUNSTATS_CSS = 'html.cb-runstats-off .ch-timers, html.cb-runstats-off .ch-deaths { display: none !important; }';
+
 const GAME_CSS = `
 :root{
   --cb-accent:#ffd166; --cb-accent-dim:#7a6431; --cb-kill:#ff5a3c; --cb-bg:#0b0a16; --cb-hud-scale:1;

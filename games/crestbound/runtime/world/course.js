@@ -975,6 +975,351 @@ void main(){
 }`;
 
 /* ===========================================================================
+ * THE MISSION LAYER  (stage 1, missions lane, 2026-09-30)
+ * ---------------------------------------------------------------------------
+ * The reference game's star select CHANGES THE LEVEL: pick the summit star and
+ * the boss is on the summit; pick the footrace and the racer is at the start;
+ * pick another and neither is there. This is that, as data, resolved BEFORE the
+ * compiler sees the def — so nothing below (chunking, terrain, builders,
+ * collision, critter behaviour) knows missions exist. A mission run is simply a
+ * different, fully ordinary course def.
+ *
+ * A mission is chosen by CREST ID (the course card picks one). Any crest may
+ * declare one:
+ *
+ *   crests: [{ id:'boss', type:'boss', name:'THE WARDEN OF THE RIDGE', spawnAt:[…],
+ *     mission: {
+ *       name:   'THE WARDEN OF THE RIDGE',   // the hint the card shows (default: crest name)
+ *       hint:   'optional second line',
+ *       at:     [x,y,z],                     // where THIS crest appears (p for open/power,
+ *                                            //   spawnAt for every spawned type)
+ *       add:    { objects:[ObjectDef…], critters:[CritterDef…], coins:[CoinDef…] },
+ *       remove: ['tag', …],                  // objects / critters / coins / waters by `tag`
+ *       move:   { tag: { to:[x,y,z] } | { by:[dx,dy,dz] } },   // translates every point
+ *                                            //   field (p a b post start finish spawnAt
+ *                                            //   motion.to path[] pts[] arena.c)
+ *       set:    { tag: { …fields } },        // patch a def — a hazard's cycle, a mill's
+ *                                            //   period, a water's height (`hazards` = alias)
+ *       open:   ['route', …], close: ['route', …],
+ *       always: false,                       // true: this crest also exists in OTHER missions
+ *     } }]
+ *
+ * Routes are named at course level and are open unless the course says not:
+ *
+ *   routes: { 'north-door': { open:true, whenOpen:[ObjectDef…], whenClosed:[ObjectDef…] } }
+ *
+ * and any object or critter may join a route with `route:'name'` (it exists only
+ * while the route is OPEN — a bridge, a plank) or `blocks:'name'` (only while it
+ * is CLOSED — a portcullis, a rockfall). `missions:['id',…]` on an object or
+ * critter means "only in these missions"; `notMissions:[…]` the reverse.
+ *
+ * WHICH CRESTS EXIST in a run of mission M:
+ *   - M itself, always (at `mission.at` when it gives one);
+ *   - a RACE crest only when it IS M — a race timer never runs uninvited
+ *     (audit sm64_bar §10: the red RACE clock ran through a whole boss fight);
+ *   - when M declares a mission, crests that declare their OWN mission exist only
+ *     with `always:true` (the boss is not on the summit during the footrace);
+ *   - every other crest (8 sigils, 100 coins, …) exists in every mission, as in
+ *     the reference.
+ *
+ * NO MISSION (missionId null — __dev.goto, the harnesses) is the course exactly
+ * as it was before this layer existed: every crest, every race pad, every
+ * critter, and the route defaults. A course that declares no missions, no
+ * routes and no mission-gated objects resolves to the SAME def object, so all
+ * thirteen courses load byte-for-byte as they did.
+ *
+ * reachcheck.mjs reads `def.objects` directly and knows none of this: content
+ * that exists only in some missions belongs under `mission.add` or a route's
+ * `whenOpen` / `whenClosed`, never loose in `def.objects` with a gate on it.
+ * ======================================================================== */
+
+/** Point fields a mission `move` translates (each a finite [x, y, z]). */
+const MISSION_POINT_FIELDS = ['p', 'a', 'b', 'post', 'start', 'finish', 'spawnAt'];
+/** List fields a mission `move` translates (each an array of [x, y, z]). */
+const MISSION_LIST_FIELDS = ['path', 'pts'];
+
+function missionOf(crest) {
+  return crest && crest.mission && typeof crest.mission === 'object' && !Array.isArray(crest.mission) ? crest.mission : null;
+}
+
+function tagSet(list) {
+  const s = new Set();
+  if (Array.isArray(list)) for (let i = 0; i < list.length; i++) if (typeof list[i] === 'string' && list[i]) s.add(list[i]);
+  return s;
+}
+
+/** The tags an object carries: `tag:'x'` or `tag:['x','y']`. */
+function tagsOfDef(o) {
+  const t = o && o.tag;
+  if (typeof t === 'string' && t) return [t];
+  if (Array.isArray(t)) return t.filter((x) => typeof x === 'string' && x);
+  return null;
+}
+
+function addPoint(a, dx, dy, dz) {
+  return fin3(a) ? [a[0] + dx, a[1] + dy, a[2] + dz].concat(a.slice(3)) : a;
+}
+
+/** Anchor a `move:{to}` is measured from: the def's own position. */
+function anchorOfDef(o) {
+  if (!o) return null;
+  if (fin3(o.p)) return o.p;
+  if (fin3(o.a)) return o.a;
+  if (fin3(o.post)) return o.post;
+  if (fin3(o.start)) return o.start;
+  if (Array.isArray(o.path) && fin3(o.path[0])) return o.path[0];
+  if (Array.isArray(o.pts) && fin3(o.pts[0])) return o.pts[0];
+  if (fin3(o.spawnAt)) return o.spawnAt;
+  return null;
+}
+
+/** A copy of `o` with every point field translated by (dx, dy, dz). */
+function translateDef(o, dx, dy, dz) {
+  const out = Object.assign({}, o);
+  for (let i = 0; i < MISSION_POINT_FIELDS.length; i++) {
+    const k = MISSION_POINT_FIELDS[i];
+    if (fin3(o[k])) out[k] = addPoint(o[k], dx, dy, dz);
+  }
+  for (let i = 0; i < MISSION_LIST_FIELDS.length; i++) {
+    const k = MISSION_LIST_FIELDS[i];
+    if (Array.isArray(o[k])) out[k] = o[k].map((p) => addPoint(p, dx, dy, dz));
+  }
+  if (o.motion && typeof o.motion === 'object' && fin3(o.motion.to)) {
+    out.motion = Object.assign({}, o.motion, { to: addPoint(o.motion.to, dx, dy, dz) });
+  }
+  if (o.arena && typeof o.arena === 'object' && Array.isArray(o.arena.c)) {
+    const c = o.arena.c;
+    out.arena = Object.assign({}, o.arena, {
+      c: c.length === 2 ? [c[0] + dx, c[1] + dz] : addPoint(c, dx, dy, dz),
+    });
+  }
+  return out;
+}
+
+/** Does this def use any part of the mission layer? (cheap, build-time only) */
+function defUsesMissions(def) {
+  if (!def) return false;
+  if (def.routes && typeof def.routes === 'object') return true;
+  const crests = Array.isArray(def.crests) ? def.crests : [];
+  for (let i = 0; i < crests.length; i++) if (missionOf(crests[i])) return true;
+  const lists = [def.objects, def.critters, def.coins, def.waters];
+  for (let l = 0; l < lists.length; l++) {
+    const list = lists[l];
+    if (!Array.isArray(list)) continue;
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i];
+      if (o && (o.missions !== undefined || o.notMissions !== undefined || o.route !== undefined || o.blocks !== undefined)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolve a course def for one mission. PURE: `def` is never mutated, and every
+ * entry the mission changes is a fresh object, so the module-cached course data
+ * serves the next mission untouched.
+ *
+ * @param {object} def        a course def (CONTRACT §25)
+ * @param {string|null} missionId  a crest id, or null for the plain course
+ * @returns {{def:object, mission:object|null, report:{unmatched:string[]}}}
+ *   `mission` = {id, index, name, hint, type, declared, present:[crestIds],
+ *   absent:[crestIds], routes:{name:open}, at, counts:{added, removed, moved, set}}
+ */
+export function resolveMission(def, missionId) {
+  const report = { unmatched: [] };
+  if (!def || typeof def !== 'object') return { def, mission: null, report };
+  /* An already-resolved def resolves to itself (Course.load resolves, then the
+     constructor sees the same def again). */
+  if (def.missionRun !== undefined) return { def, mission: def.missionRun || null, report };
+
+  const crests = Array.isArray(def.crests) ? def.crests : [];
+  let sel = null;
+  let selIndex = -1;
+  if (missionId !== undefined && missionId !== null && missionId !== '') {
+    for (let i = 0; i < crests.length; i++) {
+      if (crests[i] && crests[i].id === missionId) { sel = crests[i]; selIndex = i; break; }
+    }
+    if (!sel && typeof console !== 'undefined') {
+      console.warn('[Course ' + (def.id || '?') + '] mission "' + missionId + '" names no crest — loading the plain course');
+    }
+  }
+  if (!sel && !defUsesMissions(def)) return { def, mission: null, report };
+
+  const m = sel ? missionOf(sel) : null;
+  const selId = sel ? sel.id : null;
+
+  /* ---- routes: course defaults, then the mission's open / close ---- */
+  const routes = new Map();
+  const rdefs = def.routes && typeof def.routes === 'object' ? def.routes : {};
+  for (const name of Object.keys(rdefs)) {
+    const r = rdefs[name];
+    routes.set(name, !(r && r.open === false));
+  }
+  if (m) {
+    const op = Array.isArray(m.open) ? m.open : [];
+    const cl = Array.isArray(m.close) ? m.close : [];
+    for (let i = 0; i < op.length; i++) { if (!routes.has(op[i])) report.unmatched.push('open:' + op[i]); routes.set(op[i], true); }
+    for (let i = 0; i < cl.length; i++) { if (!routes.has(cl[i])) report.unmatched.push('close:' + cl[i]); routes.set(cl[i], false); }
+  }
+
+  /* ---- the tag edits ---- */
+  const removeTags = tagSet(m && m.remove);
+  const moves = (m && m.move && typeof m.move === 'object') ? m.move : null;
+  const sets = {};
+  if (m && m.set && typeof m.set === 'object') Object.assign(sets, m.set);
+  if (m && m.hazards && typeof m.hazards === 'object') Object.assign(sets, m.hazards);
+  const usedTags = new Set();
+  const counts = { added: 0, removed: 0, moved: 0, set: 0 };
+
+  const passes = (o) => {
+    if (!o || typeof o !== 'object') return true;
+    if (Array.isArray(o.missions) && (selId === null || o.missions.indexOf(selId) < 0)) return false;
+    if (Array.isArray(o.notMissions) && selId !== null && o.notMissions.indexOf(selId) >= 0) return false;
+    if (typeof o.route === 'string' && routes.get(o.route) === false) return false;
+    if (typeof o.blocks === 'string' && routes.get(o.blocks) !== false) return false;
+    return true;
+  };
+
+  const edit = (list) => {
+    if (!Array.isArray(list)) return list;
+    const out = [];
+    let changed = false;
+    for (let i = 0; i < list.length; i++) {
+      let o = list[i];
+      if (!passes(o)) { changed = true; counts.removed++; continue; }
+      const tags = tagsOfDef(o);
+      if (tags) {
+        let drop = false;
+        for (let t = 0; t < tags.length; t++) if (removeTags.has(tags[t])) { usedTags.add('remove:' + tags[t]); drop = true; }
+        if (drop) { changed = true; counts.removed++; continue; }
+        for (let t = 0; t < tags.length; t++) {
+          const tg = tags[t];
+          const mv = moves && moves[tg];
+          if (mv && typeof mv === 'object') {
+            let dx = 0, dy = 0, dz = 0;
+            if (fin3(mv.by)) { dx = mv.by[0]; dy = mv.by[1]; dz = mv.by[2]; }
+            else if (fin3(mv.to)) {
+              const a = anchorOfDef(o);
+              if (a) { dx = mv.to[0] - a[0]; dy = mv.to[1] - a[1]; dz = mv.to[2] - a[2]; }
+            }
+            o = translateDef(o, dx, dy, dz);
+            usedTags.add('move:' + tg);
+            counts.moved++; changed = true;
+          }
+          const patch = sets[tg];
+          if (patch && typeof patch === 'object') {
+            o = Object.assign({}, o, patch);
+            usedTags.add('set:' + tg);
+            counts.set++; changed = true;
+          }
+        }
+      }
+      out.push(o);
+    }
+    return changed ? out : list;
+  };
+
+  const add = (m && m.add) ? (Array.isArray(m.add) ? { objects: m.add } : m.add) : null;
+  const append = (list, extra) => {
+    if (!Array.isArray(extra) || !extra.length) return list;
+    const kept = extra.filter(passes);
+    counts.added += kept.length;
+    return (Array.isArray(list) ? list : []).concat(kept);
+  };
+
+  let objects = edit(def.objects);
+  for (const name of Object.keys(rdefs)) {
+    const r = rdefs[name];
+    if (!r || typeof r !== 'object') continue;
+    const open = routes.get(name) !== false;
+    const extra = open ? r.whenOpen : r.whenClosed;
+    if (Array.isArray(extra) && extra.length) {
+      const kept = extra.filter(passes);
+      objects = (Array.isArray(objects) ? objects : []).concat(kept);
+      counts.added += kept.length;
+    }
+  }
+  objects = append(objects, add && add.objects);
+  const critters = append(edit(def.critters), add && add.critters);
+  const coins = append(edit(def.coins), add && add.coins);
+  const waters = edit(def.waters);
+
+  if (m) {
+    for (const tg of removeTags) if (!usedTags.has('remove:' + tg)) report.unmatched.push('remove:' + tg);
+    if (moves) for (const tg of Object.keys(moves)) if (!usedTags.has('move:' + tg)) report.unmatched.push('move:' + tg);
+    for (const tg of Object.keys(sets)) if (!usedTags.has('set:' + tg)) report.unmatched.push('set:' + tg);
+  }
+
+  /* ---- which crests exist, and where the chosen one appears ---- */
+  const present = [];
+  const absent = [];
+  const crestsOut = crests.map((c) => {
+    if (!c) return c;
+    let live;
+    if (!sel) live = true;                                   // no mission: the plain course
+    else if (c === sel) live = true;
+    else if ((c.type || 'open') === 'race') live = false;    // a race only in its own mission
+    else if (m && missionOf(c)) live = missionOf(c).always === true;
+    else live = true;
+    (live ? present : absent).push(c.id);
+    if (c === sel && m && fin3(m.at)) {
+      const t = c.type || 'open';
+      return Object.assign({}, c, (t === 'open' || t === 'power') ? { p: m.at.slice() } : { spawnAt: m.at.slice() });
+    }
+    return c;
+  });
+
+  const routesOut = {};
+  routes.forEach((v, k) => { routesOut[k] = v; });
+  const info = sel ? {
+    id: selId,
+    index: selIndex,
+    name: String((m && m.name) || sel.name || selId),
+    hint: m && typeof m.hint === 'string' ? m.hint : '',
+    type: sel.type || 'open',
+    declared: !!m,
+    present,
+    absent,
+    routes: routesOut,
+    at: m && fin3(m.at) ? m.at.slice() : null,
+    counts,
+    unmatched: report.unmatched.slice(),
+  } : null;
+
+  const out = Object.assign({}, def, {
+    objects: objects || [],
+    crests: crestsOut,
+    missionRun: info,
+    baseDef: def,
+  });
+  if (critters !== undefined) out.critters = critters;
+  if (coins !== undefined) out.coins = coins;
+  if (waters !== undefined) out.waters = waters;
+  /* The HUD, the save and the harnesses read ALL SEVEN crests off `def.crests`;
+     only the collectible layer is told which of them exist in this run. */
+  if (sel) out.crestsLive = present;
+  return { def: out, mission: info, report };
+}
+
+/** The card's list: one entry per crest, in authored order. */
+export function missionList(def) {
+  const crests = def && Array.isArray(def.crests) ? def.crests : [];
+  const out = [];
+  for (let i = 0; i < crests.length; i++) {
+    const c = crests[i];
+    if (!c || !c.id) continue;
+    const m = missionOf(c);
+    out.push({
+      id: c.id, index: i, type: c.type || 'open',
+      name: String((m && m.name) || c.name || c.id),
+      hint: m && typeof m.hint === 'string' ? m.hint : '',
+      declared: !!m,
+    });
+  }
+  return out;
+}
+
+/* ===========================================================================
  * COURSE
  * ======================================================================== */
 
@@ -985,9 +1330,15 @@ export class Course {
    * @param {object} ctx    {mats, fx, audio, save, game, quality, settings, impacts, decals}
    */
   constructor(def, engine, ctx) {
-    this.def = def || {};
     this.engine = engine || null;
     this.ctx = ctx || {};
+    /* MISSION LAYER: `ctx.mission` (a crest id, or null) picks which version of the
+       course is built. `def` is the resolved def from here on; `baseDef` is the
+       authored one and `mission` the run's record (null = the plain course). */
+    const res = resolveMission(def || {}, this.ctx.mission);
+    this.def = res.def || {};
+    this.baseDef = (this.def && this.def.baseDef) || def || {};
+    this.mission = res.mission || null;
 
     this.mats = this.ctx.mats || MatsMod.Mats || null;
     this.fx = this.ctx.fx || null;
@@ -1138,11 +1489,16 @@ export class Course {
    * @returns {Promise<Course>}
    */
   static async load(def, engine, ctx) {
-    Course.validate(def);
-    const course = new Course(def, engine, ctx);
+    const res = resolveMission(def, ctx && ctx.mission);
+    Course.validate(res.def);
+    const course = new Course(res.def, engine, ctx);
     await course._build();
     return course;
   }
+
+  /** The mission layer, as statics for tooling (see THE MISSION LAYER above). */
+  static resolveMission(def, missionId) { return resolveMission(def, missionId); }
+  static missionList(def) { return missionList(def); }
 
   /**
    * Authoring validator.  Throws with the offending index AND kind so a data
@@ -1251,6 +1607,77 @@ export class Course {
     }
     if (!isHub && crests.length !== 7) {
       warnings.push(crests.length + ' crest(s) — a full course carries exactly 7 (contract §22)');
+    }
+
+    /* ---- missions + routes (THE MISSION LAYER) ---- */
+    if (def.routes !== undefined) {
+      if (!def.routes || typeof def.routes !== 'object' || Array.isArray(def.routes)) {
+        fail('"routes" must be an object map { name: {open?, whenOpen?:[…], whenClosed?:[…]} }');
+      }
+      for (const name of Object.keys(def.routes)) {
+        const r = def.routes[name];
+        if (!r || typeof r !== 'object') fail('routes.' + name + ' must be an object');
+        if (r.open !== undefined && typeof r.open !== 'boolean') fail('routes.' + name + '.open must be true or false');
+        for (const k of ['whenOpen', 'whenClosed']) {
+          if (r[k] !== undefined && !Array.isArray(r[k])) fail('routes.' + name + '.' + k + ' must be an array of ObjectDefs');
+        }
+      }
+    }
+    for (let i = 0; i < crests.length; i++) {
+      const c = crests[i];
+      if (c.mission === undefined) continue;
+      const m = c.mission;
+      const where = 'crests[' + i + '] (id "' + c.id + '") mission';
+      if (!m || typeof m !== 'object' || Array.isArray(m)) fail(where + ' must be an object');
+      if (m.name !== undefined && (typeof m.name !== 'string' || !m.name || m.name.length > 48)) {
+        fail(where + '.name must be a non-empty string of at most 48 characters (it is the card\'s hint)');
+      }
+      if (m.hint !== undefined && typeof m.hint !== 'string') fail(where + '.hint must be a string');
+      if (m.at !== undefined && !fin3(m.at)) fail(where + '.at must be a finite [x,y,z]');
+      for (const k of ['remove', 'open', 'close']) {
+        if (m[k] !== undefined && (!Array.isArray(m[k]) || m[k].some((t) => typeof t !== 'string' || !t))) {
+          fail(where + '.' + k + ' must be an array of non-empty strings');
+        }
+      }
+      for (const k of ['move', 'set', 'hazards']) {
+        if (m[k] !== undefined && (!m[k] || typeof m[k] !== 'object' || Array.isArray(m[k]))) {
+          fail(where + '.' + k + ' must be an object keyed by tag');
+        }
+      }
+      if (m.move) {
+        for (const tg of Object.keys(m.move)) {
+          const mv = m.move[tg];
+          if (!mv || (!fin3(mv.to) && !fin3(mv.by))) fail(where + '.move.' + tg + ' needs a finite "to" or "by" [x,y,z]');
+        }
+      }
+      if (m.add !== undefined) {
+        const a = m.add;
+        if (!a || typeof a !== 'object') fail(where + '.add must be {objects?, critters?, coins?} (or an array of objects)');
+        if (!Array.isArray(a)) {
+          for (const k of ['objects', 'critters', 'coins']) {
+            if (a[k] !== undefined && !Array.isArray(a[k])) fail(where + '.add.' + k + ' must be an array');
+          }
+        }
+      }
+    }
+    /* Every declared mission is RESOLVED and validated as the course it builds,
+       so a bad object in a mission's `add` fails here, at authoring time, and not
+       the day a player picks that crest. A tag edit that matches nothing is a
+       typo that would silently do nothing — a warning. A resolved def carries
+       `missionRun` and is not swept again. */
+    if (def.missionRun === undefined) {
+      for (let i = 0; i < crests.length; i++) {
+        const c = crests[i];
+        if (!missionOf(c)) continue;
+        let res = null;
+        try { res = resolveMission(def, c.id); } catch (e) { fail('mission "' + c.id + '" failed to resolve: ' + ((e && e.message) || e)); }
+        if (res.report.unmatched.length) {
+          warnings.push('mission "' + c.id + '": ' + res.report.unmatched.join(', ') + ' matched nothing (tag / route typo?)');
+        }
+        try { Course.validate(res.def); } catch (e) {
+          fail('mission "' + c.id + '" builds an invalid course: ' + String((e && e.message) || e).replace(/^\[Course\.validate [^\]]*\]\s*/, ''));
+        }
+      }
     }
 
     /* ---- sigils / coins ---- */
@@ -3681,6 +4108,13 @@ export class Course {
       const coins = this._coinKeepOut(this.def.coins);
       if (coins !== this.def.coins) colDef = Object.assign({}, this.def, { coins });
     } catch (e) { this._once('coinKeepOut', e); colDef = this.def; }
+    /* MISSION LAYER: in a mission run only the crests that exist in it are built
+       (`crestsLive`, see resolveMission) — no pad, no pedestal glow, no race clock
+       for a crest the player did not choose. `def.crests` itself keeps all seven. */
+    const live = Array.isArray(this.def.crestsLive) ? this.def.crestsLive : null;
+    if (live && Array.isArray(colDef.crests)) {
+      colDef = Object.assign({}, colDef, { crests: colDef.crests.filter((c) => c && live.indexOf(c.id) !== -1) });
+    }
     try {
       col = new Ctor(colDef, {
         group: this.group, scene: this.engine ? this.engine.scene : null,

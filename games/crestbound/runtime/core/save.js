@@ -10,7 +10,9 @@
  *     courses: {
  *       [courseId]: { id, crests:[crestId…], coinsBest, cleared, deaths,
  *                     bestMs:{[crestId]:ms}, clears, playMs, lastPlayed,
- *                     firstClearDate }
+ *                     firstClearDate,
+ *                     missions:{[missionId]:{runs, got:[crestId…]}},   // stage 1
+ *                     lastMission }                                    // stage 1
  *     },
  *     flags: { [key]: bool|number|string }      // misc: seenIntro, keepDoorOpen…
  *   }
@@ -24,6 +26,14 @@
  * Progression rule: Keep gates unlock on the TOTAL crest count (a gate's
  * `requires.crests`), never on per-course clears — collecting anything anywhere
  * always moves the player forward. `unlockAll` is the dev/accessibility escape.
+ *
+ * MISSIONS (stage 1, 2026-09-30). The course card picks a MISSION — a crest id —
+ * and the course is built in that mission's state. `crests` stays the one list
+ * the tally and the Keep gates count (a crest is a crest whichever run took it);
+ * `missions[m]` records, per mission, how many runs the player started and which
+ * crests each of those runs collected, and `lastMission` is where the card puts
+ * its cursor when every crest is already taken. Additive to v1: an older save has
+ * neither field and reads as "no runs yet"; an older build drops them unread.
  *
  * Every localStorage touch is wrapped: in private mode / a sandboxed iframe the
  * whole API keeps working against an in-memory store for the session, and
@@ -84,8 +94,12 @@ function freshCourse(courseId) {
     playMs: 0,
     lastPlayed: 0,           // epoch ms
     firstClearDate: null,    // ISO string
+    missions: Object.create(null),   // missionId -> {runs, got:[crestId]}
+    lastMission: null,       // the crest id the last run was started for
   };
 }
+
+function freshMission() { return { runs: 0, got: [] }; }
 
 function freshData() {
   const now = Date.now();
@@ -217,6 +231,26 @@ function takeBestMs(raw, repairs, where) {
   return out;
 }
 
+/** missionId -> {runs, got:[crestId]} */
+function takeMissions(raw, repairs, where) {
+  const out = Object.create(null);
+  if (!has(raw, 'missions')) return out;
+  const v = raw.missions;
+  if (!isObj(v)) { note(repairs, where + '.missions'); return out; }
+  let n = 0;
+  for (const k in v) {
+    if (!has(v, k)) continue;
+    const r = v[k];
+    if (!idOk(k, MAX_CREST_ID_LEN) || !isObj(r)) { note(repairs, where + '.missions.' + String(k).slice(0, 12)); continue; }
+    const m = freshMission();
+    m.runs = takeInt(r, 'runs', 0, repairs, where + '.missions.' + k);
+    m.got = takeCrests({ crests: has(r, 'got') ? r.got : [] }, repairs, where + '.missions.' + k);
+    out[k] = m;
+    if (++n >= MAX_CRESTS_PER_COURSE) break;
+  }
+  return out;
+}
+
 function flagValueOk(v) {
   if (typeof v === 'boolean') return true;
   if (typeof v === 'number') return Number.isFinite(v);
@@ -290,6 +324,12 @@ function migrate(raw) {
         else note(repairs, where + '.firstClearDate');
       }
       if (rec.cleared && !rec.firstClearDate) rec.firstClearDate = new Date(rec.lastPlayed || Date.now()).toISOString();
+      rec.missions = takeMissions(s, repairs, where);
+      if (has(s, 'lastMission')) {
+        const lm = s.lastMission;
+        if (lm === null || idOk(lm, MAX_CREST_ID_LEN)) rec.lastMission = lm;
+        else note(repairs, where + '.lastMission');
+      }
       out.courses[id] = rec;
       if (++n >= MAX_COURSES) break;
     }
@@ -341,7 +381,7 @@ function ensureCourse(courseId) {
 /** True when a record holds anything a player actually did. */
 function courseTouched(r) {
   return !!r && (r.crests.length > 0 || r.deaths > 0 || r.coinsBest > 0 || r.clears > 0 ||
-                 r.playMs > 0 || r.cleared === true || r.lastPlayed > 0);
+                 r.playMs > 0 || r.cleared === true || r.lastPlayed > 0 || r.lastMission !== null);
 }
 
 function emit(type, payload) {
@@ -556,10 +596,13 @@ export const Save = {
     const r = this.course(courseId);
     const best = {};
     for (const k in r.bestMs) best[k] = r.bestMs[k];
+    const missions = {};
+    for (const k in r.missions) missions[k] = { runs: r.missions[k].runs, got: r.missions[k].got.slice() };
     return {
       id: r.id, crests: r.crests.slice(), coinsBest: r.coinsBest, cleared: r.cleared,
       deaths: r.deaths, bestMs: best, clears: r.clears, playMs: r.playMs,
       lastPlayed: r.lastPlayed, firstClearDate: r.firstClearDate,
+      missions, lastMission: r.lastMission,
     };
   },
 
@@ -581,12 +624,27 @@ export const Save = {
    * Bank a crest. Returns true when it was NEW (the first crest of a course
    * also marks it cleared — contract §22). Flushes synchronously: a crest is
    * the one thing a player must never lose to a closed tab.
+   *
+   * `missionId` (optional, stage 1): the mission the run was started for. The
+   * crest is also filed under `missions[missionId].got` — even a crest already
+   * banked by an earlier run, because "this mission's run took it" is a fact
+   * about the run, not about the tally (which never counts it twice).
    * @returns {boolean}
    */
-  collectCrest(courseId, crestId) {
+  collectCrest(courseId, crestId, missionId) {
     const rec = ensureCourse(courseId);
     const id = String(crestId);
     if (!idOk(id, MAX_CREST_ID_LEN)) return false;
+    if (missionId !== undefined && missionId !== null && idOk(String(missionId), MAX_CREST_ID_LEN)) {
+      const mid = String(missionId);
+      let m = rec.missions[mid];
+      if (!m && Object.keys(rec.missions).length < MAX_CRESTS_PER_COURSE) { m = freshMission(); rec.missions[mid] = m; }
+      if (m && m.got.indexOf(id) === -1 && m.got.length < MAX_CRESTS_PER_COURSE) {
+        m.got.push(id);
+        markDirty('missionCrest', { courseId: rec.id, missionId: mid, crestId: id });
+        if (rec.crests.indexOf(id) !== -1) this.flush();
+      }
+    }
     if (rec.crests.indexOf(id) !== -1) return false;
     if (rec.crests.length >= MAX_CRESTS_PER_COURSE) return false;
     rec.crests.push(id);
@@ -603,6 +661,40 @@ export const Save = {
     if (firstClear) emit('clear', { courseId: rec.id, crestId: id });
     emit('unlock', { total });
     return true;
+  },
+
+  /* ------------------------------------------------------------ missions */
+  /**
+   * A run of `missionId` (a crest id) has started in this course: counted, and
+   * remembered as the course's last mission. Returns the run count.
+   */
+  startMission(courseId, missionId) {
+    const mid = String(missionId);
+    if (!idOk(mid, MAX_CREST_ID_LEN)) return 0;
+    const rec = ensureCourse(courseId);
+    let m = rec.missions[mid];
+    if (!m) {
+      if (Object.keys(rec.missions).length >= MAX_CRESTS_PER_COURSE) return 0;
+      m = freshMission();
+      rec.missions[mid] = m;
+    }
+    m.runs++;
+    rec.lastMission = mid;
+    rec.lastPlayed = Date.now();
+    markDirty('mission', { courseId: rec.id, missionId: mid, runs: m.runs });
+    return m.runs;
+  },
+
+  /** {runs, got:[crestId]} for one mission of a course, or null (never minted by a read). */
+  mission(courseId, missionId) {
+    const rec = this.course(courseId);
+    const mid = String(missionId);
+    return has(rec.missions, mid) ? rec.missions[mid] : null;
+  },
+
+  /** The crest id the last run of this course was started for, or null. */
+  lastMission(courseId) {
+    return this.course(courseId).lastMission || null;
   },
 
   /** Raise (never lower) the coins-in-one-visit record. Returns the record value. */
