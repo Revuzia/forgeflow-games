@@ -37,12 +37,22 @@
  *     holds the PREVIOUS yaw for 0.15 s after a recenter so a mid-air stick
  *     input never flips direction under the player.
  *
- *  3. NEVER CLIP — AND NEVER DELETE THE HERO. Seven whisker rays (five spread
- *     ±0.50 m along camera-right, plus a vertical pair at chest height and above
- *     the focus) are cast from the focus toward the desired camera position
- *     through `world.broadphase.raycast`. Three rays at focus height missed any
- *     occluder whose top sat between the chest and the focus, and any pillar
- *     narrower than the whisker gap; the fan and the vertical pair close both.
+ *  3. NEVER CLIP — AND NEVER DELETE THE HERO. The lens is a SPHERE
+ *     (`TUNE.cam.collideRadius`) SWEPT from the focus toward the desired camera
+ *     position with Rapier `castShape` (a ball), against a camera-only Rapier
+ *     world that mirrors the course's STATIC collision — every solid 'world'
+ *     box and every terrain heightfield (runtime/world/camworld.js; DYEFIELD's
+ *     camera does the same, dyefield/runtime/src/core/physics.ts `sphereCast`).
+ *     A swept sphere has no gaps: it sees the corner a ray fan slips past and
+ *     the thin slab between two whiskers, and its answer IS the lens-centre
+ *     distance, so nothing has to guess a surface's angle to the ray. What moves
+ *     — movers, rotors, crushers, critters, drawn hazard bodies — stays on the
+ *     original whisker rays (five spread ±0.50 m along camera-right plus a probe
+ *     one collide-radius above the focus), which now see ONLY that set. Until
+ *     Rapier has loaded (it is fetched after gameplay has rendered, never on the
+ *     boot path) and whenever it is unavailable, the whisker fan answers for
+ *     everything exactly as it always did. A chest-height FRAMING probe (a ray,
+ *     0.70 m under the focus) is kept either way: it is not about clipping.
  *     A hit pulls the camera in to `t − collideRadius`, rate-limited so no
  *     single frame can swallow metres of distance; clearing eases back out over
  *     0.6 s so the camera never pumps. An eighth ray protects the shoulder
@@ -85,6 +95,35 @@
  *     a respawn snaps the focus to the hero and the yaw behind them, because a
  *     respawn must be crisp.
  *
+ *  6. CAMERA VOLUMES — authored framing by area, the way a 1996 platformer's
+ *     camera switches behaviour by place. A course def may carry
+ *       camVolumes: [ { mode, p:[x,y,z], s:[sx,sy,sz] | r + h, ...params } ]
+ *     (a box centred on `p`, or an upright cylinder whose BASE centre is `p`),
+ *     entered by the hero's FEET, highest `priority` wins, eased in and out
+ *     over `blend` s (default 0.45). Modes:
+ *       'orbit'  tower orbit: the yaw keeps the lens on the line from the axis
+ *                `center:[x,z]` (default p.xz) through the hero — `facing:'in'`
+ *                (default) looks at the tower from outside, 'out' looks out from
+ *                a hollow tower's axis. Optional dist / pitch.
+ *       'fixed'  fixed framing: `yaw` (and optional pitch / dist) is held — the
+ *                lens still follows the hero, the angle does not drift; or `eye:
+ *                [x,y,z]` pins the lens itself and aims it at the hero (a
+ *                blocked eye → the follow pose).
+ *       'tight'  tighter follow for shafts: `dist` (default 3.4 m), a faster
+ *                focus (`lag` × lagPos, default 2.2), optional pitch, no auto-yaw.
+ *     Manual orbit always wins for MANUAL_IDLE_S; a committed move (FREEZE_
+ *     STATES) never has its yaw turned under it. `setVolumes(list)` overrides
+ *     the course's list (harness / dev); the collision solver runs unchanged
+ *     inside every volume.
+ *
+ *  7. THE HERO IS NEVER OFF SCREEN. After the pose is solved, the chest is
+ *     projected through the lens; if it falls outside the central
+ *     HERO_SAFE_NDC box (or behind the lens) the look direction is turned
+ *     toward him — the smallest turn that brings him back inside (bisected),
+ *     position untouched, so it has no path back into the collision solver.
+ *     Skipped only where there is no third-person hero to frame: peek,
+ *     cinematics, and the near-plane first-person commit (lens inside him).
+ *
  * Coordinate conventions (CONTRACT): yaw 0 faces −Z, +yaw is counter-clockwise
  * from above; `headingFromYaw` is the ONE conversion. `pitch` is the camera's
  * ELEVATION above the focus (positive = camera above, looking down) — so a
@@ -104,6 +143,7 @@ import {
 } from '../core/util.js';
 import { Settings as SettingsSingleton } from '../core/settings.js';
 import { Collider, rayBoxT } from '../world/collider.js';
+import { CamWorld, G_BOX, G_TERRAIN } from '../world/camworld.js';
 
 /* ───────────────────────────── constants ───────────────────────────── */
 
@@ -600,6 +640,38 @@ const LOOK_AIM_D0          = 1.0;    // m - aim fully at the hero's chest at/bel
 const LOOK_AIM_D1          = 4.5;    // m - aim at the focus at/above this
 const LOOK_AIM_H           = 0.82;   // m above the hero's feet = chest (TUNE.height x 0.55)
 
+// ── THE SWEPT SPHERE (see docstring rule 3 and runtime/world/camworld.js) ─────
+// Rapier is fetched only after this much gameplay has been rendered, so its
+// 2.9 MB module parse and wasm compile never land on the boot path or on the
+// first frames of play. `?camrapier=0` on the page URL keeps it off entirely
+// (the rays answer everything) — the A/B switch for the harnesses.
+const CW_DEFER_S           = 0.35;
+// A sweep whose START already overlaps a surface (the focus is a few cm from a
+// wall or under a low soffit) and does not leave it along the heading is
+// answered by Rapier as a hit at 0. That is right when the heading runs INTO
+// the surface and wrong when it runs along or away from it, so the sweep is
+// re-asked with the ball that FITS at the focus (its clearance minus this
+// skin). Under SWEEP_R_MIN there is no honest ball left; the heading is then
+// answered by the rays, exactly as before Rapier.
+const SWEEP_SKIN_M         = 0.02;
+const SWEEP_R_MIN          = 0.06;   // > 1 engine near plane (0.05): the frame cannot be cut open
+const SWEEP_BACKOFF_M      = 0.01;   // the posed lens stops this short of the contact
+
+// ── CAMERA VOLUMES (docstring rule 6) ─────────────────────────────────────────
+const VOL_BLEND_S          = 0.45;   // default ease in/out
+const VOL_EXIT_PAD_M       = 0.35;   // hysteresis: a volume is left this far outside its shape
+const VOL_YAW_RATE         = 2.6;    // rad/s at full weight (orbit / fixed-yaw drivers)
+const VOL_YAW_SOFT         = 0.35;   // rad: the rate softens inside this so it settles, not hunts
+const VOL_PITCH_RATE       = 0.9;    // rad/s toward an authored pitch
+const VOL_TIGHT_DIST       = 3.4;    // m — 'tight' default distance
+const VOL_TIGHT_LAG        = 2.2;    // × lagPos — 'tight' default focus speed-up
+const VOL_EYE_CLEAR_M      = 0.5;    // a fixed eye whose line to the chest is blocked this short is not used
+
+// ── THE HERO IS NEVER OFF SCREEN (docstring rule 7) ───────────────────────────
+const HERO_SAFE_NDC        = 0.86;   // |ndc| the chest must stay inside
+const HERO_GUARD_NEAR_M    = 0.35;   // closer than this the lens is at/inside the hero (FP commit)
+const HERO_GUARD_ITERS     = 7;      // bisection steps for the smallest turn
+
 // fov
 const FOV_LAMBDA           = 12;
 const FOV_PEEK_LAMBDA      = 16;
@@ -677,6 +749,73 @@ const _spring    = { x: 0, v: 0 };
 const _rayBox    = new THREE.Box3();               // the camera's own ray march (see _ray)
 const _rayCands  = [];
 const _hfHit     = { t: 0, normal: new THREE.Vector3(), collider: null, heightfield: null };
+const _hfN       = new THREE.Vector3();               // heightfield normal (touching-start gap)
+const _gTmp      = new THREE.Vector3();               // hero-on-screen guard
+const _volP      = new THREE.Vector3();               // camera volumes: hero feet
+
+/** `_ray` filters: every body (the pre-Rapier behaviour), only what the Rapier
+ *  mirror does NOT hold (movers, rotors, occluders…), or only the heightfields. */
+const RAY_ALL = 0, RAY_DYNAMIC = 1, RAY_TERRAIN = 2;
+
+/** Read `?camrapier=0` once (browser only). */
+function camRapierAllowed() {
+  try {
+    const s = (typeof location !== 'undefined' && location && location.search) || '';
+    return !/[?&]camrapier=0\b/.test(s);
+  } catch (e) { return true; }
+}
+
+/**
+ * Normalise one authored camera volume (course def `camVolumes`, or
+ * `setVolumes`). Allocation happens here, once per course — never per frame.
+ * Returns null for an unusable entry.
+ */
+function normaliseVolume(v, i) {
+  if (!v || typeof v !== 'object') return null;
+  const mode = v.mode === 'orbit' || v.mode === 'fixed' || v.mode === 'tight' ? v.mode : null;
+  if (!mode) return null;
+  const p = [0, 0, 0];
+  if (!readVec3(v.p || v.pos || v.center3, p, 0)) return null;
+  const o = {
+    id: v.id !== undefined ? String(v.id) : mode + '#' + i, mode,
+    shape: 'box', px: p[0], py: p[1], pz: p[2], hx: 0, hy: 0, hz: 0, r: 0, h: 0,
+    priority: isFinite(+v.priority) ? +v.priority : 0,
+    blend: +v.blend > 0 ? +v.blend : VOL_BLEND_S,
+    dist: +v.dist > 0 ? +v.dist : (mode === 'tight' ? VOL_TIGHT_DIST : 0),
+    pitch: isFinite(+v.pitch) ? +v.pitch : NaN,
+    lag: +v.lag > 0 ? +v.lag : (mode === 'tight' ? VOL_TIGHT_LAG : 1),
+    yaw: isFinite(+v.yaw) ? +v.yaw : NaN,
+    cx: p[0], cz: p[2], facingOut: v.facing === 'out',
+    eye: null,
+  };
+  if (+v.r > 0) {
+    o.shape = 'cyl'; o.r = +v.r; o.h = +v.h > 0 ? +v.h : 1e4;
+  } else {
+    const s = [0, 0, 0];
+    if (!readVec3(v.s || v.size, s, 0)) return null;
+    o.hx = Math.abs(s[0]) * 0.5; o.hy = Math.abs(s[1]) * 0.5; o.hz = Math.abs(s[2]) * 0.5;
+    if (!(o.hx > 0 && o.hy > 0 && o.hz > 0)) return null;
+  }
+  if (Array.isArray(v.center) && v.center.length >= 2) {
+    o.cx = +v.center[0] || 0; o.cz = +(v.center.length >= 3 ? v.center[2] : v.center[1]) || 0;
+  }
+  if (mode === 'fixed' && v.eye) {
+    const e = [0, 0, 0];
+    if (readVec3(v.eye, e, 0)) o.eye = new THREE.Vector3(e[0], e[1], e[2]);
+  }
+  if (mode === 'fixed' && !o.eye && !(o.yaw === o.yaw)) return null;   // fixed needs an angle or an eye
+  return o;
+}
+
+/** Is the point inside volume `v`, grown by `pad` metres? */
+function volumeContains(v, x, y, z, pad) {
+  if (v.shape === 'cyl') {
+    if (y < v.py - pad || y > v.py + v.h + pad) return false;
+    const dx = x - v.px, dz = z - v.pz, r = v.r + pad;
+    return dx * dx + dz * dz <= r * r;
+  }
+  return Math.abs(x - v.px) <= v.hx + pad && Math.abs(y - v.py) <= v.hy + pad && Math.abs(z - v.pz) <= v.hz + pad;
+}
 
 /**
  * Exact free response of a critically damped 2nd-order system.
@@ -1282,10 +1421,36 @@ export class FollowCamera {
     const self = this;
     /** camera occluders (see CamOccluders): the drawn envelopes the fan must also respect */
     this._occ = new CamOccluders();
+    /** camera-only Rapier world: the swept sphere's static set (runtime/world/camworld.js) */
+    this._cw = new CamWorld();
+    this._cwAllowed = camRapierAllowed();
+    this._rayMode = RAY_ALL;                    // `_ray` filter (see RAY_*)
+    this._sweepN = 0;                           // lens sweeps answered by Rapier (harness)
+    this._sweepFallbackN = 0;                   // …and headings handed back to the rays
+    // camera volumes (docstring rule 6)
+    this._volSrc = undefined;                   // the course def list the records were built from
+    this._volList = [];                         // normalised records
+    this._volOverride = null;                   // setVolumes() list, until the course changes
+    this._volCourse = null;
+    this._vol = null;                           // the volume being eased in / held / eased out
+    this._volW = 0;                             // its weight 0..1
+    this._volK = 0;                             // …smoothstepped: what every consumer reads
+    this._volEyeOk = false;                     // a 'fixed' eye has a clear line to the hero
+    // the hero-on-screen guard (docstring rule 7)
+    this._guardN = 0;                           // frames the guard had to turn the lens (harness)
+    this._guardK = 0;                           // the last turn it took (0 = none, 1 = look straight at him)
 
     this.__test = {
+      /** the Rapier mirror's state (harness) */
+      camworld() {
+        return Object.assign({ live: self._cwLive(self._broadphase()), allowed: self._cwAllowed,
+                               sweeps: self._sweepN, fallbacks: self._sweepFallbackN }, self._cw.info());
+      },
       state() {
         return {
+          cwLive: self._cwLive(self._broadphase()),
+          vol: self._vol ? self._vol.id : null, volMode: self._vol ? self._vol.mode : null, volW: self._volW,
+          guardN: self._guardN, guardK: self._guardK,
           occluders: self._occ.items.length, occNear: self._occ.nearCount, occPublished: self._occ.published,
           // `yaw`/`pitch` are the POSED lens angles (orbit value + the solver's
           // collision-avoidance slide / context-derived pitch), because that is
@@ -1339,6 +1504,16 @@ export class FollowCamera {
 
   /** Swap the collision world (course load). Additive to the contract. */
   setWorld(world) { this.world = world || null; }
+
+  /**
+   * Camera volumes authored at runtime (harness / dev tools), in the course-def
+   * schema (docstring rule 6). They replace the course's own `camVolumes` until
+   * the course changes; `null` hands control back to the course's list.
+   */
+  setVolumes(list) {
+    this._volOverride = Array.isArray(list) ? list : null;
+    this._volSrc = undefined;                   // rebuild the records on the next update
+  }
 
   /** Post chain for underwater tint. Resolved lazily from player.fx if not set. */
   setPost(post) { this._post = (post && typeof post.setUnderwater === 'function') ? post : null; }
@@ -1621,9 +1796,11 @@ export class FollowCamera {
     if (input && input.recenterPressed && !suspended && !this._peekOn) this.recenter();
     if (this._rcHoldT > 0) this._rcHoldT = Math.max(0, this._rcHoldT - d);
 
-    // 6 ── yaw drivers: recenter > death orbit > auto-yaw --------------------
+    // 6 ── yaw drivers: recenter > death orbit > authored volume > auto-yaw ---
+    this._updateVolumes(d);
     if (this._rcActive) this._updateRecenter(d);
     else if (this._deathOn) this.yaw = wrapAngle(this.yaw + DEATH_ORBIT_RATE * d);
+    else if (this._vol && this._volK > 0) this._updateVolumeYaw(d);
     else this._updateAutoYaw(d);
 
     // 7 ── pitch return ------------------------------------------------------
@@ -1843,11 +2020,181 @@ export class FollowCamera {
     if (this._peekOn || this._cine || this._deathOn) return;
     this._pitchIdleT += dt;
     if (this.mode !== 'follow') return;
-    if (this._pitchIdleT < PITCH_IDLE_S) return;
-    const d = TUNE.cam.defaultPitch - this.pitch;
-    if (Math.abs(d) < 1e-4) { this.pitch = TUNE.cam.defaultPitch; return; }
-    const step = PITCH_RETURN_RATE * dt;
+    // an authored volume pitch (docstring rule 6) is where the pitch returns to
+    // inside that volume — sooner and faster than the ordinary return
+    const v = this._vol, vk = this._volK;
+    const volPitch = !!(v && vk > 0 && v.pitch === v.pitch);
+    if (this._pitchIdleT < (volPitch ? MANUAL_IDLE_S : PITCH_IDLE_S)) return;
+    const C = TUNE.cam;
+    const target = volPitch
+      ? C.defaultPitch + (clamp(v.pitch, C.pitchMin, C.pitchMax) - C.defaultPitch) * vk
+      : C.defaultPitch;
+    const d = target - this.pitch;
+    if (Math.abs(d) < 1e-4) { this.pitch = target; return; }
+    const step = (volPitch ? VOL_PITCH_RATE : PITCH_RETURN_RATE) * dt;
     this.pitch += d > step ? step : (d < -step ? -step : d);
+  }
+
+  /* ─────────────────────────── camera volumes ─────────────────────────── */
+
+  /**
+   * Which authored volume (docstring rule 6) holds the hero, and how far it is
+   * eased in. Records are rebuilt only when the course or its list changes; the
+   * per-frame cost is one containment test per volume.
+   */
+  _updateVolumes(dt) {
+    const w = this.world;
+    const course = w ? ((w.hazards && w.group && w.broadphase) ? w : (w.course || null)) : null;
+    if (course !== this._volCourse) {
+      this._volCourse = course;
+      this._volOverride = null;
+      this._volSrc = undefined;
+    }
+    const def = course && course.def;
+    const src = this._volOverride ||
+      (def && (def.camVolumes || (def.camera && def.camera.volumes))) ||
+      (course && course.camVolumes) || null;
+    if (src !== this._volSrc) {
+      this._volSrc = src;
+      this._volList.length = 0;
+      if (Array.isArray(src)) {
+        for (let i = 0; i < src.length; i++) {
+          const v = normaliseVolume(src[i], i);
+          if (v) this._volList.push(v);
+        }
+      }
+      this._vol = null; this._volW = 0;
+    }
+    // which one wants the camera: the highest priority holding the hero's feet
+    // (the one we are in keeps a VOL_EXIT_PAD_M margin, so a boundary never flickers)
+    let want = null;
+    const hs = this._heroSrc();
+    const list = this._volList;
+    if (hs && list.length && this.mode === 'follow' && !this._peekOn && !this._cine && !this._deathOn) {
+      let best = -Infinity;
+      for (let i = 0; i < list.length; i++) {
+        const v = list[i];
+        const cur = v === this._vol;
+        if (!volumeContains(v, hs.x, hs.y, hs.z, cur ? VOL_EXIT_PAD_M : 0)) continue;
+        if (v.priority < best || (v.priority === best && !cur)) continue;
+        if (v.eye && !this._eyeClear(v, hs)) continue;
+        best = v.priority; want = v;
+      }
+    }
+    // ease: a volume eases fully out before another eases in
+    if (dt <= 0) {
+      this._vol = want; this._volW = want ? 1 : 0;
+    } else if (want === this._vol) {
+      if (want) this._volW = Math.min(1, this._volW + dt / want.blend);
+    } else if (this._vol && this._volW > 0) {
+      this._volW = Math.max(0, this._volW - dt / this._vol.blend);
+      if (this._volW === 0) this._vol = null;
+    } else {
+      this._vol = want;
+      this._volW = want ? Math.min(1, dt / want.blend) : 0;
+    }
+    this._volK = this._vol ? smoothstep(0, 1, this._volW) : 0;
+  }
+
+  /** A 'fixed' eye is used only while its line to the hero's chest is open. */
+  _eyeClear(v, hs) {
+    const bp = this._broadphase();
+    if (!bp) return true;
+    _gTmp.set(hs.x, hs.y + LOOK_AIM_H, hs.z);
+    _tmp2.copy(v.eye).sub(_gTmp);
+    const len = _tmp2.length();
+    if (!(len > VOL_EYE_CLEAR_M)) return true;
+    _tmp2.multiplyScalar(1 / len);
+    const t = this._castOccluder(bp, _gTmp, _tmp2, len);
+    return t < 0 || t >= len - VOL_EYE_CLEAR_M;
+  }
+
+  /**
+   * The volume's yaw driver, in place of auto-yaw while a volume holds the
+   * camera: 'orbit' keeps the lens on the axis→hero line, 'fixed' holds its
+   * yaw, 'tight' holds whatever yaw the player has (no auto-yaw in a shaft).
+   * The player's own orbit wins for MANUAL_IDLE_S, and a committed move is
+   * never turned under (FREEZE_STATES) — the same two rules auto-yaw keeps.
+   */
+  _updateVolumeYaw(dt) {
+    const v = this._vol, k = this._volK;
+    this._autoRate = 0;
+    if (!v || !(k > 0) || !(dt > 0)) return;
+    if (this._time - this._lastManualT < MANUAL_IDLE_S) return;
+    if (this._autoFrozen()) return;
+    let target;
+    if (v.mode === 'orbit') {
+      const s = this._heroSrc();
+      if (!s) return;
+      let dx = v.cx - s.x, dz = v.cz - s.z;        // forward toward the axis → lens outside
+      if (v.facingOut) { dx = -dx; dz = -dz; }
+      if (dx * dx + dz * dz < 0.04) return;        // on the axis: no defined heading
+      target = yawFromHeading(dx, dz);
+    } else if (v.mode === 'fixed' && v.yaw === v.yaw) {
+      target = v.yaw;
+    } else {
+      return;
+    }
+    const delta = shortestAngle(this.yaw, target);
+    const soft = smoothstep(0, VOL_YAW_SOFT, Math.abs(delta));
+    this.yaw = moveTowardAngle(this.yaw, target, VOL_YAW_RATE * k * (0.2 + 0.8 * soft) * dt);
+  }
+
+  /* ─────────────────────── the hero is never off screen ─────────────────────── */
+
+  /** Is the unit direction (vx,vy,vz) inside the safe NDC box of a lens looking along unit (dx,dy,dz)? */
+  _heroInSafe(dx, dy, dz, vx, vy, vz, tanH, tanV) {
+    const hl = Math.sqrt(dx * dx + dz * dz);
+    if (hl < 1e-4) return true;                    // straight up/down: lookAt has no roll to judge
+    const rx = -dz / hl, rz = dx / hl;             // camera right = normalize(d × up)
+    const ux = -(dy * rz), uy = -(dz * rx - dx * rz), uz = dy * rx;   // camera up = (−d) × right
+    const cz = vx * dx + vy * dy + vz * dz;
+    if (cz <= 1e-3) return false;                  // behind the lens
+    const cx = vx * rx + vz * rz;
+    const cy = vx * ux + vy * uy + vz * uz;
+    return Math.abs(cx / (cz * tanH)) <= HERO_SAFE_NDC && Math.abs(cy / (cz * tanV)) <= HERO_SAFE_NDC;
+  }
+
+  /**
+   * THE HARD RULE (docstring rule 7): the hero's chest may not leave the frame.
+   * Called by `_compose` with the lens position and look point already decided;
+   * if the chest is outside HERO_SAFE_NDC, the look direction is turned toward
+   * him by the SMALLEST blend (bisected) that brings him back inside. Only the
+   * aim moves, so the collision solver never sees it. Allocation-free.
+   */
+  _guardHeroOnScreen() {
+    const cam = this.camera;
+    const s = this._heroSrc();
+    this._guardK = 0;
+    if (!cam || !cam.isPerspectiveCamera || !s) return;
+    const px = this._pos.x, py = this._pos.y, pz = this._pos.z;
+    let vx = s.x - px, vy = s.y + LOOK_AIM_H - py, vz = s.z - pz;
+    const vl = Math.sqrt(vx * vx + vy * vy + vz * vz);
+    if (vl < HERO_GUARD_NEAR_M) return;            // the lens is at / inside the hero: the FP commit
+    vx /= vl; vy /= vl; vz /= vl;
+    let fx = this._lookPt.x - px, fy = this._lookPt.y - py, fz = this._lookPt.z - pz;
+    const fl = Math.sqrt(fx * fx + fy * fy + fz * fz);
+    if (!(fl > 1e-6)) return;
+    fx /= fl; fy /= fl; fz /= fl;
+    const fov = cam.fov > 1 ? cam.fov : this.fov;
+    const tanV = Math.tan(fov * 0.5 * DEG);
+    const tanH = tanV * (cam.aspect > 0 ? cam.aspect : 16 / 9);
+    if (this._heroInSafe(fx, fy, fz, vx, vy, vz, tanH, tanV)) return;
+    let lo = 0, hi = 1;
+    for (let i = 0; i < HERO_GUARD_ITERS; i++) {
+      const mid = (lo + hi) * 0.5;
+      let dx = fx + (vx - fx) * mid, dy = fy + (vy - fy) * mid, dz = fz + (vz - fz) * mid;
+      const dl = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (!(dl > 1e-6)) { lo = mid; continue; }
+      dx /= dl; dy /= dl; dz /= dl;
+      if (this._heroInSafe(dx, dy, dz, vx, vy, vz, tanH, tanV)) hi = mid; else lo = mid;
+    }
+    let dx = fx + (vx - fx) * hi, dy = fy + (vy - fy) * hi, dz = fz + (vz - fz) * hi;
+    const dl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    dx /= dl; dy /= dl; dz /= dl;
+    this._lookPt.set(px + dx * fl, py + dy * fl, pz + dz * fl);
+    this._guardK = hi;
+    this._guardN++;
   }
 
   /**
@@ -2007,7 +2354,9 @@ export class FollowCamera {
 
     const grounded = !!(p && (p.grounded || p.onGround));
     const inWater  = !!(p && (p.inWater || p.submerged));
-    const lam = TUNE.cam.lagPos;
+    // a 'tight' volume (docstring rule 6) follows faster: lag × its `lag`
+    const vol = this._vol, vk = this._volK;
+    const lam = TUNE.cam.lagPos * ((vol && vk > 0 && vol.lag !== 1) ? 1 + (vol.lag - 1) * vk : 1);
 
     // horizontal: hero leads by v/lambda
     this._focus.x = damp(this._focus.x, _focusT.x, lam, dt);
@@ -2114,8 +2463,25 @@ export class FollowCamera {
     // 'lens in a wall' (see COLLIDE_IN_MAX_RATE).
     let lensLimit = want;
 
+    // ── THE SWEPT SPHERE (docstring rule 3): once the Rapier mirror of this
+    // course is live, the lens sphere itself is swept from the focus along the
+    // heading against every STATIC surface, and the whisker fan below is left
+    // with only what moves (`RAY_DYNAMIC`). A NaN answer is a heading the sphere
+    // cannot judge honestly (see `_sweepLens`): the fan then answers for
+    // everything, as it did before Rapier.
+    if (this._cwLive(bp)) {
+      const tS = this._sweepLens(bp, this._focus, _cDir, want);
+      if (tS === tS) {
+        this._sweepN++;
+        if (tS < limit) { limit = tS; ceil = this._probeCeil; }
+        if (tS < lensLimit) lensLimit = tS;
+        this._rayMode = RAY_DYNAMIC;
+      } else this._sweepFallbackN++;
+    }
+
     // ── LENS PROBES: the path the lens sphere actually sweeps. A hit here is
     // real clipping, so it has NO floor but the near plane (CONTRACT §12).
+    // (With the sweep live these see only the bodies the mirror does not hold.)
     for (let i = -WHISKER_N; i <= WHISKER_N; i++) {
       _cOrigin.copy(this._focus).addScaledVector(_cRight, i * WHISKER_M);
       t = this._castOccluder(bp, _cOrigin, _cDir, maxD);
@@ -2135,6 +2501,7 @@ export class FollowCamera {
       if (tu < limit) { limit = tu; ceil = this._probeCeil; }
       if (tu < lensLimit) lensLimit = tu;
     }
+    this._rayMode = RAY_ALL;                  // every probe below sees the whole world
 
     // ── FRAMING PROBE: chest height, 0.70 m BELOW the lens path — twice the
     // collide radius, so it is not the lens sphere and a hit on it is not a
@@ -2400,9 +2767,13 @@ export class FollowCamera {
     // is culled to the fan's reach BEFORE any probe below asks the world (also on a
     // dt = 0 snap, so a respawn or test placement never solves against a stale set).
     this._syncOccluders();
+    this._syncCamWorld();
+    // an authored volume may ask for its own distance (docstring rule 6)
+    const vol = this._vol, vk = this._volK;
+    const followDist = (vol && vk > 0 && vol.dist > 0) ? C.dist + (vol.dist - C.dist) * vk : C.dist;
     const baseWant = this._deathOn
       ? C.dist + DEATH_PULL_M + Math.min(this._deathSep, DEATH_FOLLOW_MAX_M) * DEATH_SEP_PULL_K
-      : C.dist;
+      : followDist;
     this._distBase = dt > 0 ? damp(this._distBase, baseWant, DIST_LAMBDA, dt) : baseWant;
 
     if (this._peekOn || this._cine) {
@@ -3006,6 +3377,14 @@ export class FollowCamera {
   _ray(bp, origin, dir, maxD, out, all) {
     out.t = maxD; out.collider = null; out.heightfield = null;
     if (!(maxD > 0)) return false;
+    // `_rayMode` narrows what this ray may hit (see RAY_*): the whole world (the
+    // pre-Rapier behaviour, and every probe that is not the lens fan), only the
+    // bodies the Rapier mirror does NOT hold (the fan beside a live sweep), or
+    // only the heightfields (the sweep's under-the-ground helper).
+    const mode = this._rayMode;
+    const cw = this._cw;
+    const skipBoxes = mode === RAY_TERRAIN;
+    const skipTerrain = mode === RAY_DYNAMIC && cw.terrainMirrored;
     // ── boxes: the broadphase's own cell query, walked HERE so the camera can
     // leave out what is not a wall to it (see camTransparent). `all` = true is
     // the embedded-lens guard asking, and to that every body counts.
@@ -3014,12 +3393,15 @@ export class FollowCamera {
     _rayBox.min.set(Math.min(ox, ex) - 1e-3, Math.min(oy, ey) - 1e-3, Math.min(oz, ez) - 1e-3);
     _rayBox.max.set(Math.max(ox, ex) + 1e-3, Math.max(oy, ey) + 1e-3, Math.max(oz, ez) + 1e-3);
     let best = maxD, hit = false;
-    if (typeof bp.query === 'function') {
+    if (skipBoxes) {
+      /* heightfields only */
+    } else if (typeof bp.query === 'function') {
       const cands = bp.query(_rayBox, _rayCands);
       for (let i = 0; i < cands.length; i++) {
         const c = cands[i];
         if (c.solid === false) continue;
         if (!all && camTransparent(c)) continue;
+        if (mode === RAY_DYNAMIC && cw.isMirrored(c)) continue;   // the sweep answered it
         const t = rayBoxT(c, origin, dir, best, _occN);
         if (t >= 0 && t < best) {
           best = t; hit = true;
@@ -3033,7 +3415,7 @@ export class FollowCamera {
       best = hit ? out.t : maxD;
     }
     // ── heightfields
-    const hfs = bp.heightfields;
+    const hfs = skipTerrain ? null : bp.heightfields;
     if (hfs) for (let i = 0; i < hfs.length; i++) {
       const hf = hfs[i];
       if (!hf.active || typeof hf.raycast !== 'function') continue;
@@ -3046,7 +3428,7 @@ export class FollowCamera {
     }
     // ── the camera-occluder set (drawn bodies; see CamOccluders)
     const occ = this._occ;
-    const n = occ.nearCount;
+    const n = skipBoxes ? 0 : occ.nearCount;
     if (n > 0) {
       const items = occ.items, near = occ.near;
       for (let k = 0; k < n; k++) {
@@ -3077,6 +3459,120 @@ export class FollowCamera {
     const reach = C.dist + DEATH_PULL_M + C.collideRadius + Math.abs(C.shoulder) +
                   WHISKER_N * WHISKER_M + WHISKER_DOWN_M + OCC_NEAR_PAD_M;
     occ.cull(this._focus.x, this._focus.y, this._focus.z, reach);
+  }
+
+  /* ───────────────────────── the swept sphere (Rapier) ───────────────────────── */
+
+  /** Keep the Rapier mirror on the live course. Starts the load once gameplay has rendered. */
+  _syncCamWorld() {
+    if (!this._cwAllowed || this._time < CW_DEFER_S) return;
+    const bp = this._broadphase();
+    if (bp) this._cw.sync(bp);
+  }
+
+  /** Is the Rapier mirror complete for THIS broadphase (i.e. may the sweep answer)? */
+  _cwLive(bp) {
+    const cw = this._cw;
+    return this._cwAllowed && cw.ready && !cw.failed && !!bp && cw.bp === bp;
+  }
+
+  /** Is (x,y,z) under the surface of any active heightfield? */
+  _underTerrain(bp, x, y, z) {
+    const hfs = bp.heightfields;
+    if (!hfs) return false;
+    for (let i = 0; i < hfs.length; i++) {
+      const hf = hfs[i];
+      if (!hf.active || typeof hf.heightAt !== 'function') continue;
+      const h = hf.heightAt(x, z);
+      if (h === h && y < h) return true;
+    }
+    return false;
+  }
+
+  /**
+   * THE LENS SWEEP: how far the lens CENTRE can travel from `origin` along the
+   * unit `dir` (at most `maxD`) before the lens sphere (collideRadius) touches
+   * the course's STATIC geometry — Rapier `castShape` with a ball against the
+   * camera's mirror (runtime/world/camworld.js). Sets `_probeCeil` like the
+   * rays do. Returns NaN when this heading cannot be answered honestly by a
+   * sphere (the focus is pressed within SWEEP_R_MIN of a surface it runs along):
+   * the caller then asks the rays, exactly as before Rapier.
+   *
+   * The two start conditions the whisker fan already had rules for keep them:
+   *   EMBEDDED — geometry that CONTAINS the focus cannot occlude it (EMBED_*):
+   *     the sweep steps past the containing box's exit face and asks again with
+   *     that box excluded; a focus under the ground leaves the terrain out of
+   *     the sweep and lets the heightfield rays (which step through the ground
+   *     the same way) answer for it.
+   *   TOUCHING — a centre in open air but within the radius of a surface is a
+   *     hit at 0 in Rapier whatever the heading. Into the surface that is the
+   *     honest answer (camcheck's wall row); along or away from it, the ball
+   *     that FITS (the clearance it has, minus SWEEP_SKIN_M) is swept instead,
+   *     and the lens-sphere walk in `_clearance` then judges the heading exactly
+   *     as it always did.
+   */
+  _sweepLens(bp, origin, dir, maxD) {
+    const cw = this._cw;
+    let r = TUNE.cam.collideRadius;
+    let mask = G_BOX | G_TERRAIN;
+    let hfLimit = Infinity, hfCeil = false;
+    let px = origin.x, py = origin.y, pz = origin.z;
+    if (this._underTerrain(bp, px, py, pz)) {
+      mask = G_BOX;
+      const saved = this._rayMode;
+      this._rayMode = RAY_TERRAIN;
+      const tH = this._castOccluder(bp, origin, dir, maxD + TUNE.cam.collideRadius);
+      this._rayMode = saved;
+      if (tH >= 0) { hfLimit = tH - TUNE.cam.collideRadius; hfCeil = this._probeCeil; }
+    }
+    let travelled = 0, excl, out = maxD, ceil = false;
+    for (let i = 0; i <= EMBED_SKIP_MAX; i++) {
+      const rem = maxD - travelled;
+      if (!(rem > 0)) break;
+      const t = cw.sweep(px, py, pz, dir.x, dir.y, dir.z, r, rem, mask, excl);
+      if (t < 0) break;                                           // clear to maxD
+      if (t > EMBED_EPS_M) {
+        out = Math.max(0, travelled + t - SWEEP_BACKOFF_M);
+        ceil = cw.hit.ny < -0.5;
+        break;
+      }
+      // t ≈ 0: the sphere starts overlapping something it does not leave
+      const box = cw.hit.box, hf = cw.hit.hf;
+      _pOrigin.set(px, py, pz);
+      if (box && box.containsPoint(_pOrigin)) {                  // EMBEDDED in a box
+        const step = boxExitT(box, px, py, pz, dir.x, dir.y, dir.z) + EMBED_STEP_PAD;
+        travelled += step;
+        px += dir.x * step; py += dir.y * step; pz += dir.z * step;
+        excl = cw.hit.handle;
+        continue;
+      }
+      let gap = -1;
+      if (box) gap = box.distanceToPoint(_pOrigin);
+      else if (hf) {
+        const h = hf.heightAt(px, pz);
+        if (h === h && py < h) {                                  // EMBEDDED in the ground
+          travelled += EMBED_HF_STEP;
+          px += dir.x * EMBED_HF_STEP; py += dir.y * EMBED_HF_STEP; pz += dir.z * EMBED_HF_STEP;
+          continue;
+        }
+        if (h === h) { hf.normalAt(px, pz, _hfN); gap = (py - h) * (_hfN.y > 0.05 ? _hfN.y : 0.05); }
+      }
+      const r2 = gap - SWEEP_SKIN_M;                              // TOUCHING: the ball that fits
+      if (!(r2 >= SWEEP_R_MIN)) {
+        // no honest ball left: INTO the surface is a real contact at zero range
+        // (the rays said the same — camcheck's wall row); along it, the rays answer
+        if (dir.x * cw.hit.nx + dir.y * cw.hit.ny + dir.z * cw.hit.nz <= -0.2) {
+          out = travelled; ceil = cw.hit.ny < -0.5;
+          break;
+        }
+        return NaN;
+      }
+      if (r2 >= r - 1e-4) return NaN;                             // the estimate says it fits already: the rays decide
+      r = r2;
+    }
+    if (hfLimit < out) { out = Math.max(0, hfLimit); ceil = hfCeil; }
+    this._probeCeil = ceil;
+    return out;
   }
 
   /**
@@ -3201,6 +3697,19 @@ export class FollowCamera {
       } else {
         this._lookPt.copy(this._focus);
       }
+      // A FIXED EYE (docstring rule 6): the lens itself is authored, eased in
+      // by the volume weight, and aimed at the chest. `_updateVolumes` only
+      // admits it while the eye's line to the hero is open.
+      const vol = this._vol, vk = this._volK;
+      if (vol && vol.eye && vk > 0 && !this._deathOn) {
+        this._pos.lerp(vol.eye, vk);
+        const hs = this._heroSrc();
+        if (hs) {
+          this._lookPt.x += (hs.x - this._lookPt.x) * vk;
+          this._lookPt.y += (hs.y + LOOK_AIM_H - this._lookPt.y) * vk;
+          this._lookPt.z += (hs.z - this._lookPt.z) * vk;
+        }
+      }
     }
 
     // ── PUSH THE LENS OUT OF A CAMERA-TRANSPARENT BODY (see SOFT_PUSH_STEPS).
@@ -3211,6 +3720,9 @@ export class FollowCamera {
     // shake translation in camera-right / up
     this._pos.addScaledVector(_right, this._shakeX);
     this._pos.y += this._shakeY;
+
+    // ── THE HERO IS NEVER OFF SCREEN (docstring rule 7): the last word on the aim.
+    if (!this._peekOn) this._guardHeroOnScreen();
 
     if (!cam) return;
     cam.position.copy(this._pos);
@@ -3274,10 +3786,15 @@ export class FollowCamera {
     let fade = 0;
     if (this._peekOn) fade = 1;
     else if (!this._cine) {
-      fade = HERO_FADE_MAX * (1 - smoothstep(FADE_FULL_DIST, FADE_START_DIST, this.dist));
+      // the distance the lens really is from the focus: `dist`, unless a fixed
+      // eye (docstring rule 6) has moved the lens away from the solved pose
+      let dF = this.dist;
+      const vol = this._vol;
+      if (vol && vol.eye && this._volK > 0) dF = lerp(this.dist, this._pos.distanceTo(this._focus), this._volK);
+      fade = HERO_FADE_MAX * (1 - smoothstep(FADE_FULL_DIST, FADE_START_DIST, dF));
       // …and inside the model itself, commit to first person (see FADE_FP_DIST).
-      if (this.dist < FADE_FULL_DIST) {
-        fade = lerp(HERO_FADE_MAX, 1, 1 - smoothstep(FADE_FP_DIST, FADE_FULL_DIST, this.dist));
+      if (dF < FADE_FULL_DIST) {
+        fade = lerp(HERO_FADE_MAX, 1, 1 - smoothstep(FADE_FP_DIST, FADE_FULL_DIST, dF));
       }
     }
     this._heroFade = fade;
@@ -3380,6 +3897,7 @@ export class FollowCamera {
     if (this.player && this.player.heroFade !== undefined) this.player.heroFade = 0;
     this._cine = null;
     this._post = null;
+    if (this._cw) this._cw.dispose();
   }
 }
 
