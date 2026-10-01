@@ -738,6 +738,7 @@ async () => {
         {id: 'cc-orbit', mode: 'orbit', p: [50, Y0, LZ], r: 4, h: 6, center: AX},
       ]);
       const R = {};
+      const walkLog = {};
       try {
         // W until the hero is IN (the volume reports itself) or past its centre,
         // then let go: a volume that turns the camera also turns a camera-
@@ -748,7 +749,13 @@ async () => {
           down('KeyW');
           while (P.pos.x < xc && cs().vol !== id && simMs() - t0 < 4000 && wallOk(w0v, 4000)) await frame();
           up('KeyW');
-          await wait(1800);
+          walkLog[id] = {release: [+P.pos.x.toFixed(2), +P.pos.z.toFixed(2)], trace: []};
+          const t1 = simMs(), w1 = performance.now();
+          let k = 0;
+          while (simMs() - t1 < 1800 && wallOk(w1, 1800)) {
+            await frame(); syncP();
+            if ((k++ % 6) === 0) walkLog[id].trace.push([+P.pos.x.toFixed(2), +P.pos.z.toFixed(2), P.state, +cam.yaw.toFixed(2), cs().vol]);
+          }
           syncP();
           return cs();
         };
@@ -776,6 +783,7 @@ async () => {
         s = cs();
         R.exit = {vol: s.vol, dist: +s.dist.toFixed(2)};
         const exitOk = s.vol === null && s.dist >= C.dist - 0.5;
+        if (!(tightOk && fixedOk && manualOk && orbitOk && exitOk)) R.walkLog = walkLog;
         pass('volumes', tightOk && fixedOk && manualOk && orbitOk && exitOk, R);
       } finally {
         cam.setVolumes(null);

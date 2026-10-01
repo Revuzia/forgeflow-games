@@ -1920,6 +1920,14 @@ export class FollowCamera {
     this._distBase = TUNE.cam.dist;
     this._distColl = TUNE.cam.dist;
     this.dist = TUNE.cam.dist;
+    // A SNAP IS A CUT FOR THE CAMERA VOLUMES TOO (docstring rule 6): the volume
+    // that holds the hero NOW applies at full weight at once, and one he was
+    // teleported out of stops steering at once. Measured before this line
+    // (camcheck `volumes`, 2026-09-30): a placement out of a 'fixed' volume
+    // left it easing out for 0.45 s, still turning the yaw, and the walk that
+    // followed set off 0.53 rad off the placed heading and missed the next volume.
+    this._vol = null; this._volW = 0; this._volK = 0;
+    this._updateVolumes(0);
   }
 
   _consumeLook(dt, suspended) {
