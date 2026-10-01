@@ -57,6 +57,9 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 class ThreadingServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True  # avoid "address already in use" on quick restart
     daemon_threads = True
+    # The default listen backlog is 5: with several harness browsers booting a game at once
+    # (dozens of module requests each) the OS refused connections and pages stuck at "initialising".
+    request_queue_size = 256
 
 
 if __name__ == "__main__":

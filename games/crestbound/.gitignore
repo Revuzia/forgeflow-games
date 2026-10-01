@@ -15,3 +15,7 @@ _harness/_*.sh
 _harness/_*
 assets/models/*/_turntable/
 assets/models/*/_work/
+# audit proof frames - evidence on disk, never source (logs/json beside them stay tracked)
+_spec/audit_*/frames/**/*.png
+_spec/audit_*/frames/**/*.jpg
+_spec/audit_*/frames/**/*.webp
