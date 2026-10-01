@@ -1878,7 +1878,15 @@ export function defineBosses(K) {
    *  sweep ring (jump it, or be up on a gear) and shortens the vent.
    * ====================================================================== */
 
-  const GY_PLATS = 3, GY_PLAT_HALF = 1.1, GY_RIN = 2.95, GY_TC = [8.0, 7.0, 6.0], GY_OMEGA = [0.22, 0.3, 0.38];
+  /* GY_TC[2] was 6.0 s. MEASURED (arena runs 2026-10-01 08:12 and 08:48: two crown
+     pounds each by 68 s / 108 s, then ~200 s of phase 3 riding a gear with NO opening)
+     and modelled (the bot's gate: vent with > 0.8 s left or late 'fire', gear top within
+     1.5 m of the deck): phase 3 alternates a 7.09 s sweep cycle and a 5.0 s plain one,
+     12.09 s — two 6.0 s gear periods. Gear and vent RESONATE: a rider on one gear could
+     wait the whole fight for his gear's peak to meet a vent (0 windows in 240 s for some
+     start phases). At 5.0 s the worst wait is 17.7 s and a window recurs at least every
+     20 s (phases 1-2: 14.7-18.7 s first, <= 21.3 s gaps). Faster, too: "EVERY COG, TURN". */
+  const GY_PLATS = 3, GY_PLAT_HALF = 1.1, GY_RIN = 2.95, GY_TC = [8.0, 7.0, 5.0], GY_OMEGA = [0.22, 0.3, 0.38];
   const GY_TELE = [0.9, 0.8, 0.7], GY_VENT = [3.8, 3.2, 2.7], GY_BOLT_V = 11, GY_DECK = 1.05, GY_R = 1.2;
 
   class Gyrarch extends Boss {
