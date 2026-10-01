@@ -54,7 +54,7 @@ const DR = await import('../src/upgrades/draft.ts');
 const EN = await import('../src/upgrades/engine.ts');
 const { UPGRADES, UPGRADE_BY_ID } = await import('../src/data/upgrades.ts');
 const { EVOLUTIONS, EVO_NUDGE, EVO_READY_STACKS, EVO_LATE_LEVEL, EVO_LATE_NUDGE, EVO_ROWS_OF_PART, evoReadyStacks } = await import('../src/data/evolutions.ts');
-const { DRAFT_V2, RANK_LEVELS, SIM_HZ } = await import('../src/core/config.ts');
+const { DRAFT_V2, GATE2_V3, RANK_LEVELS, SIM_HZ } = await import('../src/core/config.ts');
 const { TITAN_IDS, BIOME_IDS, EMPTY_RUN_META } = await import('../src/core/types.ts');
 const { STAT_KEYS } = await import('../src/upgrades/stats.ts');
 
@@ -727,7 +727,7 @@ section('11. REAL SIM: evolution offered by LV 35 (GATE 2 draft bot)');
     for (let si = 0; si < SEEDS.length; si++) {
       const seed = SEEDS[si], biome = BIOME_IDS[si % BIOME_IDS.length];
       const w = WM.createWorld({ titan: tid, biome, seed, meta: { ...EMPTY_RUN_META, unlocked: metaFull ? LOCKED_IDS.slice() : [] } });
-      const maxTicks = 13 * 60 * SIM_HZ;
+      const maxTicks = GATE2_V3.probeMinutes * 60 * SIM_HZ;   // the 20-minute run reaches LV 35 at ~18 min (was 13 · 60)
       let first = -1, drafts = 0, late = '';
       for (let i = 0; i < maxTicks && !w.run.result && w.titan.level <= 35 && first < 0; i++) {
         let guard = 0;

@@ -32,7 +32,7 @@
 import type { BiomeId, Shape, Tier, TitanId, TitanInput, World } from '../src/core/types.ts';
 import { EMPTY_RUN_META } from '../src/core/types.ts';
 import { createWorld, stepWorld } from '../src/core/world.ts';
-import { BOSS_HP_SCALE, RANKS } from '../src/core/config.ts';
+import { BOSS_HP_SCALE, GATE2_V3, RANKS } from '../src/core/config.ts';
 import { BIOMES } from '../src/data/biomes.ts';
 import { BOSSES, BOSS_DEFAULT_SUBTITLE } from '../src/data/bosses.ts';
 import { gainGrowth } from '../src/titans/titansim.ts';
@@ -432,7 +432,8 @@ console.log('\n══ E. gate-bot fights (full GRID-EAST runs, bot.ts, non-god, 
     for (const titan of ['molo', 'voltkite', 'hearthback', 'briarwick'] as TitanId[]) {
       const w = createWorld({ titan, biome: 'grideast' as BiomeId, seed, meta: { ...EMPTY_RUN_META, unlocked: [] } });
       let bossT = NaN, jams = 0, ults = 0, tows = 0;
-      for (let i = 0; i < 780 * 30 && !w.run.result; i++) {
+      // run cap: GATE2_V3.probeMinutes (25 min for the 20-minute run, PACING_20 §3.10; was the literal 780 s = 13 min)
+      for (let i = 0; i < GATE2_V3.probeMinutes * 60 * 30 && !w.run.result; i++) {
         drafts(w);
         stepWorld(w, botInput(w));
         for (const ev of w.events) {

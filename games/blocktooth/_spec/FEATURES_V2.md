@@ -54,7 +54,11 @@ Build plan, file ownership, order and gates: **§15**. Owner decisions still ope
    through `RunOptions.meta` → `w.meta` at `createWorld`. A goal completed mid-run takes effect next
    run. Same seed + same `RunMeta` + same inputs → same state hash.
 6. **GATE 2 still holds.** Rank bands II 60–150 s, III 150–300 s, IV 280–450 s, V 400–560 s, boss
-   spawn ≤ 560 s, ≥ 8/12 clears in 8–12 min with some deaths, early draft gap median 8–30 s. It must
+   spawn ≤ 560 s, ≥ 8/12 clears in 8–12 min with some deaths, early draft gap median 8–30 s.
+   *Superseded twice:* by the gate bands of GATEKEEPERS §5.3, then by the **20-minute run** (owner decision 11,
+   2026-10-01; GATEKEEPERS §5.1b / §5.3): gatekeeper spawns 115–290 / 330–620 / 545–915 s, city boss
+   995–1 265 s, ≥ 8/12 clears in **17–24 min (1 020–1 440 s)** with some deaths (deaths ≥ 1 per meta
+   unchanged), early draft gap median ~16–40 s over the first 360 s (every gap 13–48 s). It must
    pass with a **fresh** profile (`--meta fresh`, the default) and a **full** profile (`--meta full`:
    everything unlocked, no perk). Every sim lane re-runs it before reporting (§15.4). Because each lane
    tunes in isolation, the orchestrator also runs the **combined** GATE 2 (fresh and full) after every
@@ -627,7 +631,7 @@ roar. At Size I the first charge-up of a profile's first run gets a one-time hin
 ### 4.6 Objective tracker (top-right)
 Up to 6 rows of 2.2u: one per live objective (glyph · name · distance `2.4 BLK` · a life bar), one per
 active power-up timer (`RED LIGHT 4.1s`), and one row for the most-advanced **run-scope goal**
-(`GOAL · CROWD CONTROL 412 / 1000`, only while ≥ 25 % complete). Rows enter and exit with 0.2 s slides.
+(`GOAL · CROWD CONTROL 612 / 2000`, only while ≥ 25 % complete). Rows enter and exit with 0.2 s slides.
 Row DOM nodes are pooled (6 created at mount); text changes at most at 4 Hz per row.
 
 ### 4.7 Frame-time budget (HUD + DOM)
@@ -858,7 +862,7 @@ turretCap ≤ 16, vineLength ≤ 4, shellCapacity ≤ 6.
 5. **Reroll while a card is held** (`rerollOffer`): the held card keeps its slot and only the other
    slots are re-rolled (excluding the held id). `rerollOffer` increments `tally.rerolls` (L2; the app
    never touches the tally).
-6. Sources of chest drafts per run: RAMROD elites (1–3), RECORDS ANNEX (4), EXTENDED COVERAGE rematch
+6. Sources of chest drafts per run: RAMROD elites (1–3; one per run since the 20-minute run), RECORDS ANNEX (4), EXTENDED COVERAGE rematch
    chests. A ready evolution therefore reaches the player within about 1–2 minutes.
 
 ### 7.5 Banish and lock (sim: `upgrades/draft.ts`; UI: `ui/draft.ts`)
@@ -1092,10 +1096,30 @@ goals carry `titan`.
 | g_ws_hairline | HAIRLINE FRACTURES | stagger IRON GULLY 3 times in one fight, rematches excluded (staggersBestFight, boss irongully → `tally.staggersBestFightBy.irongully` · 3 · run) | perk SAFETY INSPECTION |
 | g_lw_shipping_delays | SHIPPING DELAYS | LOCKWATER: sink 60 boats in one run (boats · 60 · run) | card Street Festival |
 | g_lw_port_closed | PORT CLOSED | defeat CAISSON-4 (bossKillsLife, boss caisson4 · 1 · life) | card Landmark Status |
-| g_lw_early_closing | EARLY CLOSING | clear LOCKWATER in under 9:00 (fastClearS · 540 · run, lowerIsBetter) | card Detour Signage |
+| g_lw_early_closing | EARLY CLOSING | clear LOCKWATER in under **20:00** (fastClearS · **1200** · run, lowerIsBetter); was 9:00 (540), then 10:00 (600) with the gates (GATEKEEPERS §6.5), then 20:00 for the 20-minute run (owner decision 11) | card Detour Signage |
 
 Goal descriptions (`desc`) are the condition text above, set in `data/goals.ts`. Metrics with a boss or
 biome filter only count runs or fights that match it.
+
+**Current targets (2026-10-01).** The tables above are the rev-2 design. The run-scope thresholds were
+retuned twice since, and `data/goals.ts` is the source of truth: the F4 retune (anchored near the gate bot's
+best run) and the **20-minute run** (owner decision 11, GATEKEEPERS §6.5 / §9). A 20-minute run sees about
+twice the per-minute supply (foes, UPROAR charges, power-ups, objectives, OVERLOAD SITES), measured on the
+20-minute prototype (gate bot, seed 1337, `probe_meta` G with 25-minute runs):
+
+| goal | F4 target (10-minute run) | **20-minute target** | measured supply / result (20-minute prototype) |
+|---|---|---|---|
+| CROWD CONTROL (kills) | 1 000 | **2 000** | kills median 3 068, quickest clear 2 417 on the prototype; on the final tree (Size IV ramp, one RAMROD) the quickest gate-bot clear fielded 2 189 foes (probe_meta G(a) failed 2 200), so 2 000 (Gate, 2026-10-01) |
+| LIVE COVERAGE (ults) | 10 | **18** | ults median 30; ≥ 27 UPROAR charges per cleared run |
+| SIGNAL BOOST (power-ups) | 4 | **9** | collected median 19; ≥ 14 dropped per cleared run |
+| RUNNING ERRANDS (objectives) | 14 | **25** | completed median 20, max 27; ≥ 30 placed per cleared run |
+| RATE HIKE (GRID-EAST OVERLOAD SITES) | 8 | **16** | destroyed median 16; ≥ 17 placed |
+| CURB APPEAL (GRID-EAST props) | 6 500 | **7 300** | the city holds 7 661; best run 7 577 |
+| SHIPPING DELAYS (LOCKWATER boats) | 520 | **540** | the city holds 551 (seed 1337); sunk median 507, best 551 |
+| URBAN RENEWAL (blocks) | 130 | **130 (unchanged)** | city-capped: WHITE STACKS holds only 135 blocks (seed 1337) |
+| EARLY CLOSING (LOCKWATER clear) | 10:00 | **20:00** | gate-bot LOCKWATER clears 1 117–1 277 s, 8 of 11 under 1 200 |
+| TIPPED OFF / HANG UP / OVER THE LIMIT | 20 / 40 / 135 s | unchanged | fights are not stretched |
+| the other run-scope goals | — | unchanged | best-instance or structural, not run length |
 
 **Reachability (rev 2).** Rev 1's COLD STORAGE asked for 8 tier-4 collapses; over 40 WHITE STACKS seeds
 the city generates 3–15 tier-4 buildings (median 10) and 10 of 40 seeds have fewer than 8, so it is now
@@ -1568,7 +1592,8 @@ acceptance action in §15.4 is a real key, button or walk.
 | Perks | small start bonuses | one per run | the perk's own number |
 | PARKADE-6 | GRID-EAST boss difficulty | probe_boss3 bands | `BOSSES.parkade6.hp`, `GAP`, `HIT_CAP` |
 Early draft cadence (8–30 s median) is affected only by UPROAR kills and OVERLOAD XP before 180 s. It
-is checked by GATE 2 as today. **The combined effect is measured, not argued**: every sim lane tunes
+is checked by GATE 2 as today. (20-minute run, GATEKEEPERS §5.3: median gap ~16–40 s over the first 360 s,
+every gap 13–48 s.) **The combined effect is measured, not argued**: every sim lane tunes
 against GATE 2 alone, so the orchestrator runs the combined GATE 2 (fresh and full) after C1 and again
 after C2 (§15.1), with the §0.6 reporting lines (XP share through the UPROAR bank and through OVERLOAD
 payouts; DEMOLITION kills; deaths ≥ 1). A combined failure is fixed with the first knobs above, in

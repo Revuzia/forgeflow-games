@@ -1,6 +1,6 @@
 // BLOCKTOOTH — economy breakdown probe (sim-integrator tool, harness code — not sim code).
 //
-//   node _harness/probe_econ.ts --titan molo --biome grideast [--seed 1337] [--minutes 10]
+//   node _harness/probe_econ.ts --titan molo --biome grideast [--seed 1337] [--minutes 20]
 //
 // Runs the same deterministic bot + draft path as probe_sim.ts and accounts, PER SIZE RANK:
 // time in rank, nominal XP/mass DROPPED by source (props t0/t1, floors by tier, collapse
@@ -110,7 +110,7 @@ if (isMain) {
   const titans = get('--titan', 'molo').split(',') as TitanId[];
   const biomes = get('--biome', 'grideast').split(',') as BiomeId[];
   const seed = Number(get('--seed', '1337'));
-  const minutes = Number(get('--minutes', '10'));
+  const minutes = Number(get('--minutes', '20'));   // the 20-minute run (PACING_20 §6 HARN; was 10)
   if (argv.includes('--matrix')) {
     // one compact line per titan × biome: per-rank duration · damage taken (as % of the rank's
     // maxHp) · min HP, then the boss fight (spawn t, fight length, attacks, paint hits, min HP)

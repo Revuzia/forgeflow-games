@@ -1,6 +1,6 @@
 // BLOCKTOOTH — headless sim probe (CONTRACT §15 gate 2).
 //
-//   node _harness/probe_sim.ts                          # all 4 titans × 3 biomes, 13 sim-minutes each
+//   node _harness/probe_sim.ts                          # all 4 titans × 3 biomes, GATE2_V3.probeMinutes (25) sim-minutes each
 //   node _harness/probe_sim.ts --titan molo --biome grideast --seed 7
 //   node _harness/probe_sim.ts --titan molo,voltkite --minutes 6 --quiet
 //   node _harness/probe_sim.ts --det all                # determinism re-run for every config
@@ -14,13 +14,14 @@
 // avg/p99), a determinism check (same seed run twice ⇒ identical state hashes at every
 // sim-minute checkpoint and at the end) and asserts the gate-2 bands:
 //   * no NaN / no throw
-//   * GATEKEEPERS §5.3 (GATE2_V3, lane K1a): gatekeeper 1/2/3 spawns 60–150 / 170–320 / 270–450 s; Size II/III/IV
-//     (= gate 1/2/3's kill) 80–210 / 210–380 / 300–500 s; the city boss spawns 440–560 s; Size V ONLY on the
+//   * GATEKEEPERS §5.3 (GATE2_V3, lane K1a; re-banded for the 20-minute run, owner decision 11 / PACING_20 §3.10):
+//     gatekeeper 1/2/3 spawns 115–290 / 330–620 / 545–915 s; Size II/III/IV (= gate 1/2/3's kill) 135–350 /
+//     370–680 / 575–965 s; the city boss spawns 995–1265 s (floor = mainEarliestS, 1e-6 s float slack); Size V ONLY on the
 //     city boss's kill tick; each gate fight (spawn → kill) 15–90 s, per-gatekeeper matrix median 25–55 s;
 //     the city fight's matrix median 60–150 s; levels gained in the city fight ≤ 6 per run, matrix median
 //     ≤ 4; a time cap firing (gateLocked capped) is a violation
-//   * drafts every ~10–25 s early (median gap of the drafts in the first 180 s, or until Size III)
-//   * full matrix only: a competent bot clears ≥ 8 of 12 runs in 8–12 min, and dies in some
+//   * drafts every ~16–40 s early (hard 13–48 s; median gap of the drafts in the first 360 s, or until Size III)
+//   * full matrix only: a competent bot clears ≥ 8 of 12 runs in 17–24 min (GATE2_V3.clearWindowS), and dies in some
 //     (v2 §0.6: "deaths ≥ 1 across the 12-run matrix" is stated explicitly — heals / shields / screen
 //     clears must not turn the gate into a walkover)
 //   * v2 §0.6 reporting lines per run: the share of all XP granted through the UPROAR bank
@@ -75,13 +76,20 @@ async function loadSim(): Promise<string | null> {
 const GATE_SPAWN_BANDS = GATE2_V3.spawnBand;
 const BREACH_BANDS = GATE2_V3.breachBand;
 const MAIN_SPAWN_BAND = GATE2_V3.mainSpawn;
-const CLEAR_WINDOW_S: readonly [number, number] = [480, 720];
+// The 20-minute run (owner decision 2026-09-30 "go with 20 minutes"; GATEKEEPERS §5.3, PACING_20 §3.10): the clear
+// window, the early draft cadence and the default run length are pacing bands, read from config (GATE2_V3) so every
+// probe shares one source. Was: clears 480–720 s, cadence ~10–25 s (hard 8–30) over the first 180 s, 13 sim-minutes.
+const CLEAR_WINDOW_S: readonly [number, number] = GATE2_V3.clearWindowS;
 const CLEARS_REQUIRED = 8;          // of 12
-const DRAFT_EARLY_S = 180;
-/** The contract says "~10–25 s": the median must sit in the band ±20 % (hard) — [8, 30] s;
- *  outside [10, 25] but inside the tolerance prints a note. */
-const DRAFT_GAP_BAND: readonly [number, number] = [10, 25];
-const DRAFT_GAP_HARD: readonly [number, number] = [8, 30];
+const DRAFT_EARLY_S: number = GATE2_V3.draftEarlyS;
+/** The contract's early draft cadence band: the median must sit inside the hard band; outside the soft band but
+ *  inside the hard one prints a note. */
+const DRAFT_GAP_BAND: readonly [number, number] = GATE2_V3.draftGapS;
+const DRAFT_GAP_HARD: readonly [number, number] = GATE2_V3.draftGapHardS;
+/** The accumulated w.t (w.t += dt) reads 994.99999999975 at the 995 s tick: a floor test tolerates that drift
+ *  (measured, PACING_20 §5 item 5) — a harness float slack, not a widening. */
+const FLOOR_SLACK_S = 1e-6;
+const PROBE_MINUTES: number = GATE2_V3.probeMinutes;
 const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
 
 // ─────────────────────────────── args ───────────────────────────────
@@ -92,7 +100,7 @@ interface Args {
 }
 
 function parseArgs(argv: string[]): Args {
-  const a: Args = { titans: [...TITAN_IDS], biomes: [...BIOME_IDS], seed: 1337, minutes: 13, quiet: false, det: 2, json: null, meta: 'fresh' };
+  const a: Args = { titans: [...TITAN_IDS], biomes: [...BIOME_IDS], seed: 1337, minutes: PROBE_MINUTES, quiet: false, det: 2, json: null, meta: 'fresh' };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     const v = (): string => {
@@ -124,7 +132,7 @@ function parseArgs(argv: string[]): Args {
     } else { console.error(`unknown arg ${k}`); process.exit(2); }
   }
   if (!Number.isFinite(a.seed)) a.seed = 1337;
-  if (!Number.isFinite(a.minutes)) a.minutes = 13;
+  if (!Number.isFinite(a.minutes)) a.minutes = PROBE_MINUTES;
   return a;
 }
 
@@ -408,7 +416,7 @@ function runViolations(r: RunResult): string[] {
   for (let k = 1; k <= 4; k++) if (r.gateCapped[k]) v.push(`${id}: the slot ${k} time cap fired (gateLocked capped @${r.gateLockT[k].toFixed(0)} s) — the XP economy did not deliver the level (§2.7)`);
   const [mlo, mhi] = MAIN_SPAWN_BAND;
   if (Number.isNaN(r.bossT)) { if (endT > mhi) v.push(`${id}: the city boss never spawned by ${mhi} s${died}`); }
-  else if (r.bossT < mlo || r.bossT > mhi) v.push(`${id}: the city boss spawned at ${r.bossT.toFixed(0)} s, outside ${mlo}–${mhi} s`);
+  else if (r.bossT < mlo - FLOOR_SLACK_S || r.bossT > mhi) v.push(`${id}: the city boss spawned at ${r.bossT.toFixed(0)} s, outside ${mlo}–${mhi} s`);
   if (!Number.isNaN(r.rankT[4]) && !(r.rankVOnKillTick === true && Math.abs(r.rankT[4] - r.mainKillT) < 1e-6)) v.push(`${id}: Size V at ${r.rankT[4].toFixed(0)} s is not on the city boss's kill tick (kill ${Number.isNaN(r.mainKillT) ? '—' : r.mainKillT.toFixed(2)})`);
   if (!Number.isNaN(r.levelAtMainSpawn) && !Number.isNaN(r.levelAtMainKill) && r.levelAtMainKill - r.levelAtMainSpawn > GATE2_V3.mainFightLevels.max) v.push(`${id}: ${r.levelAtMainKill - r.levelAtMainSpawn} levels gained in the city fight (> ${GATE2_V3.mainFightLevels.max})`);
   const g = earlyDraftGap(r);
@@ -501,7 +509,7 @@ async function main(): Promise<number> {
   for (const r of results) {
     const g = earlyDraftGap(r);
     const ev = r.events;
-    const soft = !Number.isNaN(g.median) && (g.median < DRAFT_GAP_BAND[0] || g.median > DRAFT_GAP_BAND[1]) ? ' [outside 10–25, within tolerance]' : '';
+    const soft = !Number.isNaN(g.median) && (g.median < DRAFT_GAP_BAND[0] || g.median > DRAFT_GAP_BAND[1]) ? ` [outside ${DRAFT_GAP_BAND[0]}–${DRAFT_GAP_BAND[1]}, within tolerance]` : '';
     console.log(`  ${pad(`${r.titan}/${r.biome}`, 24)} early draft gap median ${Number.isNaN(g.median) ? '—' : g.median.toFixed(1) + ' s'} (${g.n} in ${g.window.toFixed(0)} s)${soft}` +
       `  hooks ${ev.ability ?? 0}  dashes ${ev.dash ?? 0}  hurt ${ev.titanHurt ?? 0}  collapses ${ev.buildingCollapse ?? 0}` +
       `  paint dodged ${r.paintFired - r.paintHit}/${r.paintFired}` +
@@ -574,7 +582,7 @@ async function main(): Promise<number> {
     const mlm = median(ml);
     if (ml.length && mlm > GATE2_V3.mainFightLevels.median) violations.push(`city fight: matrix median ${mlm} levels gained (> ${GATE2_V3.mainFightLevels.median})`);
   } else {
-    console.log('aggregate gates (≥ 8/12 clears in 8–12 min, some deaths) skipped: not the full 4×3 matrix');
+    console.log(`aggregate gates (≥ ${CLEARS_REQUIRED}/12 clears in ${CLEAR_WINDOW_S[0] / 60}–${CLEAR_WINDOW_S[1] / 60} min, some deaths) skipped: not the full 4×3 matrix`);
   }
   {
     const md = (xs: number[]) => { const f = xs.filter((x) => !Number.isNaN(x)); return f.length ? `${median(f).toFixed(1)} (${f.length})` : '—'; };

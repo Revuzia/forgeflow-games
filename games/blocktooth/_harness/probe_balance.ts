@@ -17,7 +17,8 @@
 // boss part and circles it, dashes ONLY to escape paint, presses the hook on cooldown whenever a foe is within 4 H or
 // a boss is up. Its reach for BRIARWICK is the bot's (kitReach) when bot.ts exports botReach; otherwise pa.ts's
 // 2.6 H formula (so the probe also runs unchanged on an older tree — that is how it was checked against pa.ts).
-// The run loop (draft auto-pick, per-tick bookkeeping, 720 s + 20 s cap) is pa.ts's, minus its damage-attribution
+// The run loop (draft auto-pick, per-tick bookkeeping, GATE2_V3.probeMinutes + 20 s cap — 25 min + 20 s for the
+// 20-minute run, PACING_20 §3.10; pa.ts's was 720 s + 20 s, kept on an older tree without the field) is pa.ts's, minus its damage-attribution
 // hooks (__PA / paTag), which shipped code does not carry.
 //
 // Bands (TITAN_PASS §4.3; MOLO is the reference every relative band is measured against, per set):
@@ -68,7 +69,9 @@ const SET_DEFS: Record<string, { policy: 'human' | 'bot'; seeds: number[] }> = {
 };
 const SETS = (arg('sets', 'P-human,P-bot,Q-human') as string).split(',').filter((s) => s in SET_DEFS);
 const SEED_OVERRIDE = arg('seeds');
-const MAX_T = 720 * 30 + 600;          // pa.ts: 12 sim-minutes + 20 s
+/** run cap in ticks: GATE2_V3.probeMinutes sim-minutes + 20 s (set after the config loads; pa.ts's 12 min + 20 s on an
+ *  older tree that has no probeMinutes) */
+let MAX_T = 720 * 30 + 600;
 const POD_FAR_H = 12;                  // B9: pod-time beyond 12 H (the POP-UP PARK reach)
 const GATES = ['stencil1', 'cordon2', 'switchboard5'];
 const MAINS = ['caisson4', 'irongully', 'parkade6'];
@@ -471,6 +474,7 @@ async function main(): Promise<number> {
     bm = await import('./bot.ts');
     tm = await import('../src/core/types.ts');
     cm = await import('../src/core/config.ts');
+    { const pm = (cm.GATE2_V3 as { probeMinutes?: number }).probeMinutes; if (typeof pm === 'number' && pm > 0) MAX_T = Math.round(pm * 60 * 30) + 600; }
     mm = await import('../src/core/math.ts');
     dt = await import('../src/data/titans.ts');
     tg = await import('../src/combat/targeting.ts');

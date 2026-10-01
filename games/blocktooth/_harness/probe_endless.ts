@@ -135,11 +135,12 @@ function hashWorld(w: World): string {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
-/** play with the gate bot until the city boss is fielded and its intro is over (≤ 600 s; each gatekeeper on the
+/** play with the gate bot until the city boss is fielded and its intro is over (≤ GATES.capS[4] + 60 s — the city
+ *  cap plus a minute, 1310 s on the 20-minute run, was 600 s = 540 + 60; each gatekeeper on the
  *  way is dev-killed after its intro), then dev-kill it (the cheat's path) and step through the Size V finale:
  *  the run files `runEnd clear`. Returns false when no clear happened. */
 function playToClear(w: World): boolean {
-  const cap = 600 * SIM_HZ;
+  const cap = (GATES.capS[4] + 60) * SIM_HZ;
   for (let i = 0; i < cap && !w.run.result; i++) {
     botStep(w);
     const bb = w.boss;

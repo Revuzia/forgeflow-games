@@ -11,8 +11,9 @@
 // fight), HANG UP (SWITCHBOARD-5 killed ≤ 40 s after its spawn), WITHOUT A DENT (a home gate kill with no
 // damage taken during that fight), OVER THE LIMIT (the three home gate fights sum < 135 s) and REISSUED (a
 // gatekeeper rematch won in EXTENDED COVERAGE, lifetime: Profile.life.gateRematches). The three timed goals
-// are lower-is-better like EARLY CLOSING. EARLY CLOSING moves 9:00 → 10:00 (600 s): gates hold the Size, and
-// in the GATEKEEPERS §5.1 re-run emulation 1 of 16 LOCKWATER clears was under 540 s, 8 under 600 s.
+// are lower-is-better like EARLY CLOSING. EARLY CLOSING moved 9:00 → 10:00 (600 s): gates hold the Size, and
+// in the GATEKEEPERS §5.1 re-run emulation 1 of 16 LOCKWATER clears was under 540 s, 8 under 600 s (then
+// 10:00 → 20:00 for the 20-minute run, below).
 //
 // F4 retune (critic LOW: a first run met ~1/3 of all goals): the run-scope thresholds that the gate bot
 // overshot on its FIRST run (CROWD CONTROL 1.4×, LIVE COVERAGE 1.4×, URBAN RENEWAL 3.4×, CURBSIDE 10×,
@@ -21,7 +22,21 @@
 // they are SUPPLY-capped — probe_meta G(a) requires every run-scope target ≤ the foes fielded / UPROAR
 // charges / power-ups dropped in the quickest gate-bot run (min 1 179 / 13 / 8 on the 11:18 baseline),
 // so they cannot be raised. A clean first CLEAR still files the 7–8 milestone goals (finish, SIZE III,
-// SIZE V, a clear, the titan's clear, the city boss, ONE TAKE, an evolution) — structural, not a threshold. A goal with `titan` / `biome` only counts runs that match; a
+// SIZE V, a clear, the titan's clear, the city boss, ONE TAKE, an evolution) — structural, not a threshold.
+//
+// p20 retune (owner decision 11, 2026-09-30 "go with 20 minutes"; GATEKEEPERS §6.5 / §9): a run is ~20 min, so every
+// run-scope supply that comes per minute (foes, UPROAR charges, power-ups, objectives, OVERLOAD SITES) about doubles.
+// Measured on the 20-minute prototype (gate bot, seed 1337; _harness/scratch/p20/PACING_20.md §3.9 + lane UX's
+// probe_meta G run): CROWD CONTROL 1 000 → 2 000 (kills: median 3 068, quickest clear 2 417 on the prototype; with the
+// Size IV ramp + one RAMROD per run the quickest gate-bot clear fielded 2 189 foes, so the Gate re-cut 2 200 → 2 000 at
+// the same ~0.9 headroom as the other supply goals), LIVE COVERAGE 10 → 18
+// (ults: median 30, quickest 27), SIGNAL BOOST 4 → 9 (power-ups collected: median 19), RUNNING ERRANDS 14 → 25
+// (objectives: median 20, max 27; ≥ 30 placed in every cleared run), RATE HIKE 8 → 16 (GRID-EAST OVERLOAD SITES:
+// median 16, ≥ 17 placed), CURB APPEAL 6 500 → 7 300 (GRID-EAST holds 7 661 props), SHIPPING DELAYS 520 → 540
+// (LOCKWATER holds 551 boats on seed 1337; the bot sank 507 median, 551 max), EARLY CLOSING 10:00 → 20:00 (LOCKWATER
+// clears 1 117–1 277 s, 8 of 11 under 1 200). URBAN RENEWAL stays 130: blocks are city-capped, and WHITE STACKS
+// holds only 135 blocks on seed 1337 (129 on seed 7), so probe_meta G(a) forbids more. The timed gate goals do not
+// move (fights are not stretched). A goal with `titan` / `biome` only counts runs that match; a
 // `boss` filter narrows boss metrics (bossKillsLife, staggersBestFight). How each metric is measured is
 // in meta/goals.ts (metricValue).
 
@@ -41,12 +56,12 @@ export const GOALS: GoalDef[] = [
     metric: 'clears', target: 1, scope: 'life', unlocks: [card('u_ribbon_cutting')] },
   { id: 'g_full_programming', name: 'FULL PROGRAMMING', desc: 'Clear all three cities, any titans', group: 'general',
     metric: 'biomesCleared', target: 3, scope: 'life', unlocks: [card('evo_citywide_blackout')] },
-  { id: 'g_crowd_control', name: 'CROWD CONTROL', desc: '1 000 kills in one run', group: 'general',
-    metric: 'kills', target: 1000, scope: 'run', unlocks: [card('u_rolling_closure')] },
+  { id: 'g_crowd_control', name: 'CROWD CONTROL', desc: '2 000 kills in one run', group: 'general',
+    metric: 'kills', target: 2000, scope: 'run', unlocks: [card('u_rolling_closure')] },
   { id: 'g_one_take', name: 'ONE TAKE', desc: 'Clear a city without dropping below 25 % HP', group: 'general',
     metric: 'cleanClear', target: 1, scope: 'run', unlocks: [{ kind: 'perk', id: 'perk_stay_of_demolition' }] },
-  { id: 'g_live_coverage', name: 'LIVE COVERAGE', desc: 'Fire UPROAR 10 times in one run', group: 'general',
-    metric: 'ults', target: 10, scope: 'run', unlocks: [card('u_psa')] },
+  { id: 'g_live_coverage', name: 'LIVE COVERAGE', desc: 'Fire UPROAR 18 times in one run', group: 'general',
+    metric: 'ults', target: 18, scope: 'run', unlocks: [card('u_psa')] },
   { id: 'g_paperwork', name: 'PAPERWORK', desc: 'Banish 5 cards', group: 'general',
     metric: 'banishesLife', target: 5, scope: 'life', unlocks: [{ kind: 'perk', id: 'perk_red_tape' }] },
   { id: 'g_urban_renewal', name: 'URBAN RENEWAL', desc: 'Level 130 blocks in one run', group: 'general',
@@ -61,10 +76,11 @@ export const GOALS: GoalDef[] = [
   // "× 0.5 while a boss is alive" drop rule (GATEKEEPERS §6.2) leaves the seed-1337 gate matrix dropping only
   // 4–10 power-ups per run (5 of 12 runs under 8; briarwick/grideast 4), so 8 failed probe_meta G(a).
   // Revert to 8 if the power-up supply during gate fights is raised instead.
-  { id: 'g_signal_boost', name: 'SIGNAL BOOST', desc: 'Collect 4 power-ups in one run', group: 'general',
-    metric: 'powerups', target: 4, scope: 'run', unlocks: [card('u_night_market')] },
-  { id: 'g_running_errands', name: 'RUNNING ERRANDS', desc: 'Complete 14 objectives in one run', group: 'general',
-    metric: 'objectives', target: 14, scope: 'run', unlocks: [{ kind: 'perk', id: 'perk_warm_mic' }] },
+  // p20 (the 20-minute run): 4 → 9; every cleared gate-bot run now drops ≥ 14 power-ups (seed 1337, 25-min probe_meta G).
+  { id: 'g_signal_boost', name: 'SIGNAL BOOST', desc: 'Collect 9 power-ups in one run', group: 'general',
+    metric: 'powerups', target: 9, scope: 'run', unlocks: [card('u_night_market')] },
+  { id: 'g_running_errands', name: 'RUNNING ERRANDS', desc: 'Complete 25 objectives in one run', group: 'general',
+    metric: 'objectives', target: 25, scope: 'run', unlocks: [{ kind: 'perk', id: 'perk_warm_mic' }] },
 
   // ── GATEKEEPERS §6.5 (lane K2c): six gatekeeper goals, group general ──
   { id: 'g_gate_tipped_off', name: 'TIPPED OFF', desc: 'Tip STENCIL-1 over within 20 s of its arrival', group: 'general',
@@ -128,25 +144,25 @@ export const GOALS: GoalDef[] = [
     unlocks: [{ kind: 'palette', titan: 'briarwick', index: 2 }, card('bw_u_arbor_day')] },
 
   // ─────────────────────────────── city (9) ───────────────────────────────
-  { id: 'g_ge_curb_appeal', name: 'CURB APPEAL', desc: 'GRID-EAST: flatten 6 500 street props in one run', group: 'city', biome: 'grideast',
-    metric: 'props', target: 6500, scope: 'run', unlocks: [card('u_parking_validation')] },
+  { id: 'g_ge_curb_appeal', name: 'CURB APPEAL', desc: 'GRID-EAST: flatten 7 300 street props in one run', group: 'city', biome: 'grideast',
+    metric: 'props', target: 7300, scope: 'run', unlocks: [card('u_parking_validation')] },
   { id: 'g_ge_parking_violation', name: 'PARKING VIOLATION', desc: 'Defeat PARKADE-6', group: 'city', biome: 'grideast', boss: 'parkade6',
     metric: 'bossKillsLife', target: 1, scope: 'life', unlocks: [card('u_after_hours_permit')] },
-  { id: 'g_ge_rate_hike', name: 'RATE HIKE', desc: 'GRID-EAST: destroy 8 OVERLOAD SITES in one run', group: 'city', biome: 'grideast',
-    metric: 'overloadSites', target: 8, scope: 'run', unlocks: [card('u_citizen_hotline')] },
+  { id: 'g_ge_rate_hike', name: 'RATE HIKE', desc: 'GRID-EAST: destroy 16 OVERLOAD SITES in one run', group: 'city', biome: 'grideast',
+    metric: 'overloadSites', target: 16, scope: 'run', unlocks: [card('u_citizen_hotline')] },
   { id: 'g_ws_cold_storage', name: 'COLD STORAGE', desc: "WHITE STACKS: topple 90 % of the district's tier-4 structures in one run", group: 'city', biome: 'whitestacks',
     metric: 'tier4CollapseFrac', target: 0.9, scope: 'run', unlocks: [card('u_rent_control')] },
   { id: 'g_ws_thaw', name: 'THAW', desc: 'Defeat IRON GULLY', group: 'city', biome: 'whitestacks', boss: 'irongully',
     metric: 'bossKillsLife', target: 1, scope: 'life', unlocks: [card('u_eviction_notice')] },
   { id: 'g_ws_hairline', name: 'HAIRLINE FRACTURES', desc: 'Stagger IRON GULLY 3 times in one fight (rematches do not count)', group: 'city', biome: 'whitestacks', boss: 'irongully',
     metric: 'staggersBestFight', target: 3, scope: 'run', unlocks: [{ kind: 'perk', id: 'perk_safety_inspection' }] },
-  { id: 'g_lw_shipping_delays', name: 'SHIPPING DELAYS', desc: 'LOCKWATER: sink 520 boats in one run', group: 'city', biome: 'lockwater',
-    metric: 'boats', target: 520, scope: 'run', unlocks: [card('u_street_festival')] },
+  { id: 'g_lw_shipping_delays', name: 'SHIPPING DELAYS', desc: 'LOCKWATER: sink 540 boats in one run', group: 'city', biome: 'lockwater',
+    metric: 'boats', target: 540, scope: 'run', unlocks: [card('u_street_festival')] },
   { id: 'g_lw_port_closed', name: 'PORT CLOSED', desc: 'Defeat CAISSON-4', group: 'city', biome: 'lockwater', boss: 'caisson4',
     metric: 'bossKillsLife', target: 1, scope: 'life', unlocks: [card('u_landmark_status')] },
-  // GATEKEEPERS §6.5: 9:00 → 10:00 (the gates hold the Size; see the header)
-  { id: 'g_lw_early_closing', name: 'EARLY CLOSING', desc: 'Clear LOCKWATER in under 10:00', group: 'city', biome: 'lockwater',
-    metric: 'fastClearS', target: 600, scope: 'run', lowerIsBetter: true, unlocks: [card('u_detour_signage')] },
+  // GATEKEEPERS §6.5: 9:00 → 10:00 (the gates hold the Size); owner decision 11 (the 20-minute run): 10:00 → 20:00
+  { id: 'g_lw_early_closing', name: 'EARLY CLOSING', desc: 'Clear LOCKWATER in under 20:00', group: 'city', biome: 'lockwater',
+    metric: 'fastClearS', target: 1200, scope: 'run', lowerIsBetter: true, unlocks: [card('u_detour_signage')] },
 ];
 
 /** goal id → goal (built once). */

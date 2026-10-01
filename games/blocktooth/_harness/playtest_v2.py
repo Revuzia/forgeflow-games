@@ -438,7 +438,7 @@ class V2Playtest:
         """Cheat XP for exactly one level-up; wait for the draft screen. Returns (ok, state)."""
         self.to_play()
         s = self.st()
-        need = xp_to_next(int(s.get("level") or 1)) - float(s.get("xp") or 0) + 0.5
+        need = xp_to_next(int(s.get("level") or 1), self.sess) - float(s.get("xp") or 0) + 0.5
         self.cheat("xp", max(1.0, need))
         ok, s = self.wait(lambda s: s.get("screen") == "draft", 6.0)
         self.log("  %s: draft open=%s offer=%s" % (tag, ok, ((s or {}).get("drafts") or {}).get("offer")))

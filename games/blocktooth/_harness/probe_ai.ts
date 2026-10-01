@@ -2,8 +2,9 @@
 //
 // Real sim end-to-end (createWorld → stepWorld), passive titan (cheats.god, no input):
 //   A. Director run per biome (GRID-EAST / WHITE STACKS, seed 11): the titan is cheated up the
-//      size ranks on the pacing schedule (II 90 s, III 210 s, IV 360 s, V 480 s), 9 simulated
-//      minutes. Prints spawns per minute by kind, peak alive, alerts (time + key), elite/boss spawn
+//      size ranks on the pacing schedule (config RANK_SCHEDULE_S - the 20-minute run: II 190 s, III 480 s,
+//      IV 780 s, V 1080 s; was 90/210/360/480) for RANK_SCHEDULE_S[4] + 60 simulated seconds (1140; was 540 = 9 min).
+//      Prints spawns per minute by kind, peak alive, alerts (time + key), elite/boss spawn
 //      times; asserts rank gating, the elite/boss schedule, caps, no NaN, nothing out of bounds,
 //      ground units never standing inside a standing building.
 //   B. Boss fight per boss (continues run A): 45 s per phase, hp forced to 60 % / 30 % to reach
@@ -19,7 +20,7 @@
 import type { BiomeId, BossState, Enemy, EnemyKind, SimEvent, Telegraph, World } from '../src/core/types.ts';
 import { ENEMY_KINDS } from '../src/core/types.ts';
 import { NO_INPUT, createWorld, stepWorld } from '../src/core/world.ts';
-import { CITY, ENEMY_HP_PER_MIN, RANK_LEVELS, RANK_V_GROWTH_LEVELS } from '../src/core/config.ts';
+import { BOSS_AT_S, CITY, ELITE_AT_S, ENEMY_HP_PER_MIN, RANK_LEVELS, RANK_SCHEDULE_S, RANK_V_GROWTH_LEVELS } from '../src/core/config.ts';
 import { growToRank } from '../src/titans/titansim.ts';
 import { ENEMIES } from '../src/data/enemies.ts';
 import { BOSSES } from '../src/data/bosses.ts';
@@ -33,7 +34,13 @@ function check(ok: boolean, msg: string): void { if (!ok) { fails.push(msg); con
 const fmt = (n: number, d = 0) => (Number.isFinite(n) ? n.toFixed(d) : String(n));
 const pad = (s: string | number, n: number) => String(s).padStart(n);
 
-const RANK_AT = [0, 90, 210, 360, 480];
+/** the pacing schedule the titan is cheated along: config RANK_SCHEDULE_S (the rubber band's due times; was the literal
+ *  0/90/210/360/480 = the 10-minute schedule) */
+const RANK_AT: readonly number[] = RANK_SCHEDULE_S;
+/** run A's length: Size V's due time + 60 s (1140 s on the 20-minute run; was the literal 540 = 480 + 60). The boss
+ *  comes at min(BOSS_AT_S, Size V + 20 s), so part B starts ~40 s into the boss's life, as it did on the 10-minute run
+ *  (BOSS_AT_S itself is now 1250, which would leave the boss alive 150 s, past STRUCTURAL FATIGUE's 90 s, before B). */
+const END_S = RANK_SCHEDULE_S[4] + 60;
 const HZ = 30;
 
 function forceRank(w: World, r: number): void {
@@ -138,12 +145,12 @@ function tick(w: World, L: RunLog): void {
 // ─────────────────────────────── A + B: director + boss per biome ───────────────────────────────
 function runBiome(biome: BiomeId, seed: number): void {
   const expectBoss = biome === 'whitestacks' ? 'irongully' : biome === 'grideast' ? 'parkade6' : 'caisson4';
-  console.log(`\n══ ${biome.toUpperCase()} (seed ${seed}) — passive god titan, 9 min director run ══`);
+  console.log(`\n══ ${biome.toUpperCase()} (seed ${seed}) — passive god titan, ${END_S} s director run ══`);
   const w = createWorld({ titan: 'molo', biome, seed });
   w.cheats.god = true;
   const L = newLog();
   const kindsSeenBeforeRank: string[] = [];
-  const END = 540;
+  const END = END_S;
   // rank transitions as the DIRECTOR sees them: it reads titan.rank on the tick after a rank-up
   // (forced here before a tick, or natural from pickups late in a tick) → record t + dt
   let lastRank = 0;
@@ -180,7 +187,9 @@ function runBiome(biome: BiomeId, seed: number): void {
   check(L.insideB <= Math.max(2, L.insideSamples * 0.002), `${biome}: ground enemies inside standing buildings ${L.insideB}/${L.insideSamples}`);
   check(kindsSeenBeforeRank.length === 0, `${biome}: rank gating broken: ${kindsSeenBeforeRank.slice(0, 5).join(', ')}`);
   check(L.peakAlive <= CITY.maxEnemies, `${biome}: peak alive ${L.peakAlive} > CITY.maxEnemies`);
-  check(L.waves >= 55 && L.waves <= 95, `${biome}: ${L.waves} waves in 9 min (expect ~60–90 at 6–9 s)`);
+  // the wave cadence is absolute (6-9 s, PACING_20 3.1): END/9 .. END/6 waves, +-5 (= the old 55-95 over 540 s)
+  const wavesLo = Math.floor(END / 9) - 5, wavesHi = Math.ceil(END / 6) + 5;
+  check(L.waves >= wavesLo && L.waves <= wavesHi, `${biome}: ${L.waves} waves in ${END} s (band ${wavesLo}–${wavesHi}; expect ~${Math.floor(END / 9)}–${Math.ceil(END / 6)} at 6–9 s)`);
   for (const k of ['android', 'squad', 'drone', 'buggy', 'apc', 'tank', 'walker'] as EnemyKind[]) check(!!L.firstSpawn[k], `${biome}: ${k} never spawned`);
   for (const key of ['contractors', 'squads', 'drones', 'vehicles', 'armor', 'artillery', 'elite', 'boss']) {
     const n = L.alerts.filter((a) => a.key === key).length;
@@ -188,8 +197,8 @@ function runBiome(biome: BiomeId, seed: number): void {
   }
   // schedule (§9): elite at min(ELITE_AT_S, t(rank IV) + 30), boss at min(BOSS_AT_S, t(rank V) + 20).
   // The passive titan also grows from its own kills, so the rank times are read from rankUp events.
-  const expElite = Math.min(390, (Number.isFinite(L.rankT[3]) ? L.rankT[3] : Infinity) + 30);
-  const expBoss = Math.min(540, (Number.isFinite(L.rankT[4]) ? L.rankT[4] : Infinity) + 20);
+  const expElite = Math.min(ELITE_AT_S, (Number.isFinite(L.rankT[3]) ? L.rankT[3] : Infinity) + 30);
+  const expBoss = Math.min(BOSS_AT_S, (Number.isFinite(L.rankT[4]) ? L.rankT[4] : Infinity) + 20);
   console.log(`rank-up times: ${L.rankT.map((t, i) => (i ? 'R' + (i + 1) + ' ' + fmt(t, 1) + 's' : '')).filter(Boolean).join(' · ')} → expect elite ${fmt(expElite, 1)} s, boss ${fmt(expBoss, 1)} s`);
   check(L.eliteT.length >= 1 && Math.abs(L.eliteT[0] - expElite) < 0.05, `${biome}: first elite at ${fmt(L.eliteT[0], 2)} s (expect ${fmt(expElite, 2)})`);
   check(Math.abs(L.bossT - expBoss) < 0.05, `${biome}: boss at ${fmt(L.bossT, 2)} s (expect ${fmt(expBoss, 2)})`);
@@ -199,8 +208,9 @@ function runBiome(biome: BiomeId, seed: number): void {
   const sq = L.spawnsByMin.reduce((a, r) => a + r.squad, 0);
   check(sq % 5 === 0 || sq > 0, `${biome}: squads spawned ${sq}`);
   // boss-time trickle: spawns in the last minute must fall well below the minute before the boss
-  const pre = L.spawnsByMin[7] ? ENEMY_KINDS.reduce((a, k) => a + L.spawnsByMin[7][k], 0) : 0;
-  console.log(`spawns minute 7 (pre-boss): ${pre}`);
+  const preMin = Math.max(0, Math.floor((Number.isFinite(L.bossT) ? L.bossT : END) / 60) - 1);   // the minute before the boss (was the literal 7)
+  const pre = L.spawnsByMin[preMin] ? ENEMY_KINDS.reduce((a, k) => a + L.spawnsByMin[preMin][k], 0) : 0;
+  console.log(`spawns minute ${preMin} (pre-boss): ${pre}`);
 
   bossFight(w, L);
 }

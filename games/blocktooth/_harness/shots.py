@@ -517,7 +517,7 @@ class Battery:
         # MUTATION REPORT
         s = sess.state() or {}
         if s.get("screen") != "draft":
-            need = xp_to_next(s.get("level") or 1) * 2 + 10
+            need = xp_to_next(s.get("level") or 1, sess) * 2 + 10
             okc, v = sess.cheat("xp", need)
             if not okc:
                 self.log("    cheat.xp failed: %s" % v)

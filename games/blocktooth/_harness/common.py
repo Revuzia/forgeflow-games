@@ -791,9 +791,32 @@ def menus_to_slate(sess, titan, biome, log=print, snap=None, timeout_s=90):
     return True, detail
 
 
-def xp_to_next(level):
-    """Mirror of config.ts xpToNext(level) = round(8 + 6·level^1.35)."""
-    return int(round(8 + 6 * math.pow(max(1, int(level or 1)), 1.35)))
+# config.ts XP_STRETCH / RANK_LEVELS[1] (the 20-minute run, owner decision 2026-09-30, PACING_20 §3.2)
+_XP_STRETCH = {"early": 1.3, "earlyK": 1.8, "sizeII": 1.85, "late": 0.03, "lateFrom": 15}
+_RANK_LEVEL_II = 7
+
+
+def _xp_stretch(level):
+    L = max(1, int(level or 1))
+    if L < _RANK_LEVEL_II:
+        return 1 + _XP_STRETCH["early"] * (1 - math.exp(-(L - 1) / _XP_STRETCH["earlyK"]))
+    return _XP_STRETCH["sizeII"] + _XP_STRETCH["late"] * max(0, L - _XP_STRETCH["lateFrom"])
+
+
+def xp_to_next(level, sess=None):
+    """XP needed from `level` to the next. With a Session: the live sim's titan.xpToNext when the titan is at that
+    level (config.ts xpToNext is the single source). Otherwise the mirror of config.ts
+    xpToNext(L) = round((8 + 6·L^1.35) · xpStretch(L)) — the 20-minute curve (was round(8 + 6·L^1.35))."""
+    L = max(1, int(level or 1))
+    if sess is not None:
+        try:
+            v = sess.safe_js("(L) => { const T = window.__BT__ && window.__BT__.world && window.__BT__.world.titan; "
+                             "return T && T.level === L ? T.xpToNext : null; }", L)
+            if isinstance(v, (int, float)) and v > 0:
+                return float(v)
+        except Exception:
+            pass
+    return int(round((8 + 6 * math.pow(L, 1.35)) * _xp_stretch(L)))
 
 
 def set_rank(sess, idx, log=print, settle_s=0.0):

@@ -21,7 +21,7 @@
 
 import type { DamageKind, DamageOpts, Enemy, RankIndex, TitanDef, TitanState, Tier, World } from '../core/types.ts';
 import {
-  AHEAD_FROM_RANK, AHEAD_GRACE_S, AHEAD_MIN, AHEAD_PER_MIN, CATCHUP_MAX, CATCHUP_PER_MIN, CRUSH_RATIO, GROW_TWEEN_S, LEVEL_GROW_S,
+  AHEAD_FROM_RANK, AHEAD_GRACE_S, AHEAD_MIN, AHEAD_PER_MIN, CITY_PACE, CATCHUP_MAX, CATCHUP_PER_MIN, CRUSH_RATIO, GROW_TWEEN_S, LEVEL_GROW_S,
   RANKS, RANK_LEVELS, RANK_SCHEDULE_S, SMASH_MIN_SPEED_FRAC, SMASH_SLOW, TIERS, TITAN, TITAN_RADIUS_PER_H, cumXpAt, sizeMassMirror,
   titanHeightAt, titanSpeed, xpToNext,
 } from '../core/config.ts';
@@ -515,7 +515,7 @@ export function paceMul(w: World): number {
   const T = w.titan;
   // GATEKEEPERS §2.2 / §4.2: the climax is governed (the city boss due or alive at Size IV); no catch-up
   // while any fight is alive
-  if (T.rank === 3 && (w.gates.pending === 4 || w.gates.active === 4)) return AHEAD_MIN;
+  if (T.rank === 3 && (w.gates.pending === 4 || w.gates.active === 4)) return CITY_PACE;
   if (fightAlive(w)) return 1;
   const next = T.rank + 1;
   if (next >= RANK_SCHEDULE_S.length) return 1;

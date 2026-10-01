@@ -10,7 +10,8 @@
 // meta, the gate bot (bot.ts + bot_gate.ts), no god, every draft bot-picked — exactly how GATE 2 plays.
 //   1  Summon: gatekeeper s locks on the tick LV RANK_LEVELS[s] is reached (or on the kill tick of a chained lock)
 //      and spawns at dueT = max(lockT + summonDelayS, lastBreachT + chainGapS[, mainEarliestS]) ± 1 tick; spawn
-//      bands per §5.3 (GATE2_V3.spawnBand / mainSpawn).
+//      bands per §5.3 (GATE2_V3.spawnBand / mainSpawn; the city floor with a 1e-6 s float slack — the accumulated
+//      w.t reads 994.99999999975 at the 995 s tick, PACING_20 §5 item 5). Runs last GATE2_V3.probeMinutes.
 //   2  Never breach without the kill: every tick titan.rank ≤ gates.unlocked; every rankUp r ≥ 1 is on a tick with
 //      gateDefeated slot r (r ≤ 3) or the city boss's bossDefeated (r = 4).
 //   3  The breach is on the kill tick; the height lands at titanHeightAt(rank, level) GROW_TWEEN_S + 1 tick later.
@@ -44,7 +45,8 @@
 //      the probe): a kill (or a titan death, reported) within 90 s; pressure never rises within band max + 0.5 H;
 //      never reaches 3.
 //   8  Time caps (a starved run: every pickup deleted each tick, god): locks at max(capS[s], lastBreach + chainGap)
-//      with capped; each capped kill tops the level up to RANK_LEVELS[s] and pendingDrafts rises by exactly that.
+//      with capped; each capped kill tops the level up to RANK_LEVELS[s] and pendingDrafts rises by exactly that;
+//      the city boss locks by GATES.capS[4] + 220 s (was the literal 760 s = the old 540 s cap + 220).
 //   11 Interactions: UPROAR 6 % + 0.30 meter exactly; DEMOLITION 2 %; RED LIGHT freezes the adds, not the rig; the
 //      tumbling dps cap (50 % burst → 6 %; two bursts across a window boundary → 12 %); an open weak point takes
 //      a whole AoE hit; findTarget prefers an open weak point in reach over 5 nearer enemies, else the nearest enemy.
@@ -194,10 +196,11 @@ function atGate(titan: TitanId, biome: BiomeId, seed: number, s: 1 | 2 | 3 | 4, 
 }
 /** take the last level of atGate → gateLocked; then step (NO input) until the gatekeeper / city boss is fielded */
 function lockAndSpawn(w: World, s: number): BossState | null {
-  if (s === 4) w.gates.mainEarliestT = Math.min(w.gates.mainEarliestT, w.t);   // a probe fixture: no 7:20 wait
+  if (s === 4) w.gates.mainEarliestT = Math.min(w.gates.mainEarliestT, w.t);   // a probe fixture: no mainEarliestS wait
   M.titansim.gainGrowth(w, 1); drafts(w);
   // fx2: a titan whose drafts overshot LV 35 during atGate's warm-up locked slot 4 BEFORE the override above, so its
-  // due time still carries the 7:20 wait (briarwick/grideast seed 1: dueT 440 → "could not field it") — same fixture intent
+  // due time still carries the mainEarliestS wait (briarwick/grideast seed 1: dueT 440 on the 10-minute run → "could not
+  // field it") — same fixture intent
   if (s === 4 && w.gates.pending === 4 && w.gates.dueT > w.t) w.gates.dueT = w.t;
   // the noSpawns cheat also holds a pending gate (stepGates, like the director's boss block): lift it until the fight is fielded
   const ns = w.cheats.noSpawns;
@@ -255,7 +258,7 @@ function matrixRun(titan: TitanId, biome: BiomeId, seed: number): MatrixRun {
   // RAMROD bookkeeping (case 14): state at the END of the previous tick (what stepDirector sees)
   let prevEligibleBase = true;   // !fightAlive && !(pending 1..3) && !bossSpawned
   let firstEliteT = NaN, firstEligibleT = NaN;
-  const maxT = 13 * 60;
+  const maxT = GATE2_V3.probeMinutes * 60;   // the 20-minute run (PACING_20 §6 HARN; was 13 · 60)
   let prevMask = 0;
   while (!w.run.result && w.t < maxT) {
     drafts(w);
@@ -304,7 +307,7 @@ function matrixRun(titan: TitanId, biome: BiomeId, seed: number): MatrixRun {
           if (!L) bad('1', 'the city boss spawned without a slot 4 lock');
           else if (w.t < L.due - 1e-9 || w.t > L.due + TICK + 1e-9) bad('1', `city boss spawned @${f2(w.t)} s, due ${f2(L.due)} s`);
           const [lo, hi] = GATE2_V3.mainSpawn;
-          if (w.t < lo || w.t > hi) bad('1', `city boss spawned @${f1(w.t)} s outside ${lo}–${hi} s`);
+          if (w.t < lo - 1e-6 || w.t > hi) bad('1', `city boss spawned @${f1(w.t)} s outside ${lo}–${hi} s`);
           // case 10
           const b = w.boss!;
           if (Math.abs(b.data.H - titanHeightAt(3, 35)) > 1e-6) bad('10', `city boss bossH ${f2(b.data.H)} ≠ titanHeightAt(3, 35) ${f2(titanHeightAt(3, 35))}`);
@@ -1213,6 +1216,8 @@ function runSoaked(): void {
 }
 
 // ─────────────────────────────── 8. time caps ───────────────────────────────
+/** case 8's starved-run horizon: the city cap + 220 s (worst-case chain slack; was 760 = the 10-minute cap 540 + 220) */
+const CAPS_HORIZON_S = GATES.capS[4] + 220;
 function runCaps(): void {
   console.log('\n8. Time caps (starved: every pickup deleted each tick; god; drafts left unpicked)');
   for (const biome of BIOME_IDS) for (const titan of TITAN_IDS) {
@@ -1222,7 +1227,7 @@ function runCaps(): void {
     const locks: string[] = [];
     let bad: string[] = [];
     let lastBreach = -1;
-    while (!w.run.result && w.t < 760 && !(G.lockT >= 0 && G.pending === 4)) {
+    while (!w.run.result && w.t < CAPS_HORIZON_S && !(G.lockT >= 0 && G.pending === 4)) {
       for (const p of w.pickups) p.alive = false;
       const lv0 = T.level, pd0 = w.upgrades.pendingDrafts, top0 = G.topUpLevels, unl0 = G.unlocked;
       M.world.stepWorld(w, M.bot.botInput(w));
@@ -1248,7 +1253,7 @@ function runCaps(): void {
     }
     console.log(`    ${biome}/${titan}: locks ${locks.join(' · ')} · top-up ${G.topUpLevels} LV · level ${T.level} · rank ${T.rank}`);
     const cityLock = G.pending === 4 || G.active === 4 || Number.isFinite(G.spawnT[4]);
-    check(bad.length === 0 && cityLock, `8. ${biome}/${titan}: capped locks at max(capS, lastBreach + 20 s), top-ups exact, drafts owed; the city boss locks (${locks.length} locks)`, bad.slice(0, 4).join(' | ') || (cityLock ? '' : 'no city lock by 760 s'));
+    check(bad.length === 0 && cityLock, `8. ${biome}/${titan}: capped locks at max(capS, lastBreach + 20 s), top-ups exact, drafts owed; the city boss locks (${locks.length} locks)`, bad.slice(0, 4).join(' | ') || (cityLock ? '' : `no city lock by ${CAPS_HORIZON_S} s`));
   }
 }
 

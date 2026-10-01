@@ -28,6 +28,12 @@ finale, §5 pacing and GATE 2, §6 interactions, §7 sim/view split and the exac
 add-soaked auto-attacks; multi-tell volleys with no walkable exit) and seven majors. Every finding and
 its resolution is in the **Review log** at the end.
 
+**Revision 3 (2026-10-01): the 20-minute run** (owner decision 11, §9). A full run now takes about 20
+minutes instead of 10: the XP curve, the rubber band, the time caps, the earliest city boss, RAMROD's
+repeat, the climax XP pace, the GATE 2 bands and the time-based goal targets are re-derived from the new
+targets in §2.7, §2.8, §4.1, §4.2, §5.1b, §5.2, §5.3, §6.5 and §9. The measurements of 2026-09-25 below
+are kept as the history of the 10-minute run.
+
 **What was measured for this revision (2026-09-25, tool output in §10)**, not assumed:
 * the current tree passes GATE 2 (`probe_sim --det 0`, seed 1337: 10/12 clears, 2 deaths, PASS), with
   LV 7 / 16 / 27 / 35 reached at a median of **106 / 233 / 364 / 437 s**;
@@ -130,8 +136,8 @@ the city boss (`spawnBoss(w, BIOMES[biome].boss)`). `gates.active = s`.
 * **The pacing catch-up is suspended while a fight is alive.** `paceMul` returns 1 while
   `fightAlive(w)`: the rubber band exists to rescue slow eaters, not to flood XP into a locked bar
   mid-fight. After the fight the normal band resumes (§5.2). The one exception is rank 3 with the city
-  boss pending or alive: `paceMul` is then `AHEAD_MIN` (0.35) so the climax is not cut into draft
-  screens every ~11 s (§4.2).
+  boss pending or alive: `paceMul` is then `CITY_PACE` (0.86 on the 20-minute curve; `AHEAD_MIN` 0.35 on
+  the 10-minute one) so the climax is not cut into draft screens every ~11 s (§4.2).
 * The status card shows `LV n · SIZE I` with a padlock chip; the GROW bar is full, hazard-striped and
   reads `SIZE LOCKED — BEAT STENCIL-1`.
 
@@ -225,24 +231,27 @@ A normal run end (`runEnd dead`), unchanged. The dead front page names who held 
 happened during a gate fight: the sub-head `HELD AT SIZE II BY CORDON-2` (`TabloidExtra.heldBy`, §6.6).
 
 ### 2.7 Fallback for an under-levelled titan (time caps)
-`stepGates` locks slot `s` at `GATES.capS[s]` = **165 / 320 / 430 s** for the gatekeepers and **540 s**
+`stepGates` locks slot `s` at `GATES.capS[s]` = **305 / 635 / 930 s** for the gatekeepers and **1 250 s**
 (`BOSS_AT_S`) for the city boss, even below the gate level (`gateLocked {capped: true}`), when nothing is
-pending, no fight is alive and `chainGapS` has passed. The city boss's cap also needs `unlocked === 3`;
-if SWITCHBOARD-5 is still alive at 540 s, the city boss comes `chainGapS` after its kill. On a capped
+pending, no fight is alive and `chainGapS` has passed. (Owner decision 11, the 20-minute run, 2026-10-01; the
+10-minute run's caps were 165 / 320 / 430 / 540 s.) The city boss's cap also needs `unlocked === 3`;
+if SWITCHBOARD-5 is still alive at 1 250 s, the city boss comes `chainGapS` after its kill. On a capped
 kill `breachTo` **tops the level up** to `RANK_LEVELS[s]` with exact XP (no multipliers, like
 `gainGrowth`), so the levels are real and their drafts are owed (`gates.topUpLevels` counts them). This
 keeps the invariant "Size r ⇒ LV ≥ RANK_LEVELS[r]" that `titanHeightAt`, `sizeProgress` and the HUD rely
 on.
 
 **What the caps are, and are not.** They are a **liveness** guarantee (a starved run always reaches
-every fight), not a pacing tool. Each cap sits just outside its own spawn band (165 vs 60–150, 320 vs
-170–320, 430 vs 270–450 only through the cap itself), so **a cap firing in the GATE 2 matrix is a GATE 2
+every fight), not a pacing tool. Each gatekeeper cap sits about 15 s above its own spawn-band ceiling
+(305 vs 115–290, 635 vs 330–620, 930 vs 545–915; §5.3), so **a cap firing in the GATE 2 matrix is a GATE 2
 failure by design**: it means the XP economy, not the net, delivered the run. Worst case with every cap
 firing and every fight at its hard maximum (gate fights 90 s spawn→kill, `chainGapS` 20 s,
-`summonDelayS` 1.5 s, the city fight 170 s): G1 locks 165 → dies ≤ 256.5; G2 locks 320 → dies ≤ 411.5;
-G3 locks max(430, 411.5 + 20) = 431.5 → dies ≤ 523; the city boss locks max(540, 523 + 20) = 543 →
-spawns 544.5 → 4 s intro → dies ≤ **718.5 s**, inside 720. `capS[3]` moved from 460 to **430** for this
-(at 460 the same chain ended at 740 s). The measured LV 27 arrivals (≤ 410 s in the re-run emulation, §5.1) stay below 430.
+`summonDelayS` 1.5 s, the city fight 170 s): G1 locks 305 → dies ≤ 396.5; G2 locks 635 → dies ≤ 726.5;
+G3 locks max(930, 726.5 + 20) = 930 → dies ≤ 1 021.5; the city boss locks max(1 250, 1 021.5 + 20) = 1 250 →
+spawns 1 251.5 → 4 s intro → dies ≤ **1 425.5 s**, inside the 1 440 s clear window (§5.3). The measured LV 27
+arrivals (≤ 893 s over 48 bot runs, §5.1b) stay below 930; caps fired 0 of 48.
+*History:* the 10-minute run's chain was 165 → 256.5, 320 → 411.5, 431.5 → 523, 543 → **718.5 s** inside 720
+(`capS[3]` had moved from 460 to 430 for it).
 
 ### 2.8 RAMROD stays a separate elite (decided)
 RAMROD is an `Enemy` (a charging dozer with a lane tell and a chest), not a parts/meter/phase rig, and a
@@ -258,6 +267,27 @@ would spawn on the tick after the kill, or be skipped entirely when LV 35 is alr
 repeats every 75 s (max 3) until the city boss spawns, as today; the city boss's arrival is not delayed
 by a live RAMROD. EXTENDED COVERAGE keeps its RAMROD every 60 s. `probe_gatekeepers` asserts the first
 `eliteSpawn` is on the first tick ≥ `killT[3] + 30` on which no fight is alive (§5.4 case 14).
+
+**The 20-minute run (owner decision 11, 2026-10-01).** The schedule above is unchanged, and **one RAMROD
+per run** stays the rule (director `ELITE_MAX` 3 → **1**). In the 10-minute run the repeat test
+`w.t < D.bossT − 20` read `D.bossT` = `BOSS_AT_S` 540, so the 75 s repeat could never land before 520 s and
+only one RAMROD ever spawned (measured: elites per run 1–1 over 24 runs). With `BOSS_AT_S` 1 250 the old
+3-cap went live (2–3 per run in the prototype), and RAMROD fire became the main pre-city killer in the
+~4.75-minute Size IV (player-like policy, 96 runs, with the Size IV ramp below: cap 3 → 73 clears, cap 2 → 76,
+cap 1 → 81; the 10-minute run 80). So the cap is 1, which is exactly what every 10-minute balance number was
+tuned with. The repeat code stays for a future cap > 1, with two guards that keep RAMRODs out of the climax:
+* the "20 s before the boss" test reads the locked city boss's real `gates.dueT` while slot 4 is pending,
+  not the 1 250 s cap;
+* no **repeat** RAMROD at LV ≥ `RANK_LEVELS[4]` − `ELITE_CITY_LEVELS` (2), i.e. from LV 33.
+The elite tests compare `w.t ≥ due − 1e-9`, the gates' float convention (accumulated `w.t` reads
+829.6666666 against an 829.67 s schedule). Measured (final tree, gate bot, 48 runs): 1 RAMROD per run, the
+first at 719–966 s (median 835 s = 13:55).
+
+**Size IV budget ramp (20-minute run).** Outside a boss fight at Size IV the director budget is ×
+`SIZE_IV_RAMP_FROM` **0.5** at the breach (LV 27) rising linearly by level to × 1 at the city lock (LV 35); the
+city fight is unchanged. Size IV lasts ~4.75 min instead of ~1.5, and without the ramp the player-like policy
+died before the city boss 10× as often (96 runs: pre-city deaths 1 in the 10-minute run, 10 without the ramp,
+3 with it). Size IV now builds to the old crescendo instead of starting at it.
 
 ---
 
@@ -599,21 +629,23 @@ because the trajectory moved — its mechanism (bot CROWD dashes carrying the ti
 
 ### 4.1 Arrival
 The city boss is slot 4. `lockGate(w, 4, …)` happens at LV 35 at Size IV (after SWITCHBOARD-5's kill) or
-at the 540 s cap (§2.7). It spawns through the existing `spawnBoss` (4 s intro from `ENTRY_D`, `alert
+at the 1 250 s cap (§2.7). It spawns through the existing `spawnBoss` (4 s intro from `ENTRY_D`, `alert
 boss`, `bossSpawn`, `director.bossSpawned`, `run.phase 'boss'`, the boss music), now with `b.role =
 'main'`, `b.slot = 4`. The director no longer schedules it: the "Size V + 20 s" rule never fires in
 normal play (Size V now only comes from the kill), and the director's boss block moves into `stepGates`.
 
 **Earliest arrival (new, closes the fast tail by design).** The slot-4 `dueT` is
-`max(lockT + summonDelayS, lastBreachT + chainGapS, GATES.mainEarliestS)` with **`mainEarliestS` = 440 s**
-(= `RANK_SCHEDULE_S[4]` − `AHEAD_GRACE_S[4]`, the pace governor's own target for LV 35). A titan that
+`max(lockT + summonDelayS, lastBreachT + chainGapS, GATES.mainEarliestS)` with **`mainEarliestS` = 995 s
+(16:35)** (= `RANK_SCHEDULE_S[4]` − `AHEAD_GRACE_S[4]` = 1 080 − 85, the pace governor's own target for
+LV 35; owner decision 11, 2026-10-01; it was 440 s = 480 − 40 in the 10-minute run). A titan that
 reaches LV 35 earlier waits at Size IV with the GROW bar reading `SIZE LOCKED — <BOSS> EN ROUTE · 0:nn`
 (a whole-second countdown, event-driven text: one write per second), the city keeps coming (the
 director's normal Size IV budget, RAMROD per §2.8), and the XP rate is governed (§4.2). *Why a spawn
 floor and not a fight floor:* the clear time is spawn + 4 s intro + fight, and the fight's short tail
 comes from strong builds (54 s measured), which a spawn floor bounds without making the median fight
-longer; with it the earliest possible clear is 440 + 4 + that tail, and the re-run emulation (§5.1,
-48 runs) has **0 clears under 480 s** (earliest 502 s).
+longer; with it the earliest possible clear is 995 + 4 + that tail. Measured on the 20-minute run (§5.1b,
+48 bot runs): **0 clears before 1 020 s** (earliest 1 076 s); the 10-minute run's re-run emulation (§5.1,
+48 runs) had 0 clears under 480 s (earliest 502 s) with the 440 s floor.
 
 ### 4.2 Re-scale for a Size IV titan
 * **HP: keep `BOSS_HP_SCALE[3]` = 0.8** (CAISSON-4 152 000, IRON GULLY 172 000, PARKADE-6 144 000).
@@ -629,7 +661,9 @@ longer; with it the earliest possible clear is 440 + 4 + that tail, and the re-r
   the measured rate is 65 XP/s against `xpToNext(35)` = 737: a level (and a draft screen that freezes the
   fight) every ~11 s; the floor-only re-run (no XP rule) measured 2–18 levels per city fight. **Rule:** `paceMul` returns
   `AHEAD_MIN` (0.35) while `gates.pending === 4 || (gates.active === 4)` (i.e. `sizeLocked(w) && T.rank
-  === 3`), before any other branch. Measured with the rule (§5.1): **1–4 levels per city fight** (a draft
+  === 3`), before any other branch. **20-minute run (owner decision 11):** it returns **`CITY_PACE` = 0.86**
+  instead. `xpToNext(35)` is now × 2.45 (`xpStretch`, §5.2), so 0.35 × 2.45 ≈ 0.86 keeps the same levels per
+  second of climax (measured: levels in the city fight median 0–1, max ≤ 6, inside the §5.3 band). Measured with the rule (§5.1): **1–4 levels per city fight** (a draft
   every ~30–40 s) and 0–8 levels during the gate fights; `probe_sim` reports both per run and GATE2_V3
   bands them (§5.3). Drafts are not banked: a draft mid-fight is a v2 feature (the fight pauses, as at
   Size V today); the governed rate keeps them rare.
@@ -794,42 +828,111 @@ inside the G3 spawn band (270–450), and Size IV (367–475) inside 300–500. 
 (first 180 s) gets one long gap during the STENCIL-1 fight (0–1 levels in it). None of the variants
 models the gate bot's real fight lengths; the §5.3 bands are the acceptance test.
 
+### 5.1b The 20-minute run (owner decision 11, 2026-10-01; lane PACING, `_harness/scratch/p20/PACING_20.md`)
+The owner: *"overall, i think leveling up happens too fast - shouldnt it require more XP over time? Im not
+saying it should be brutal but i burn through a game in about 10 min and im level 35."* After the genre
+references (Vampire Survivors / Halls of Torment 30 min, 20 Minutes Till Dawn 20 min, Brotato 15–20 min) he
+chose **"go with 20 minutes"**. Targets: LV 35 + the city boss at ~17–18 min, then the fight and the 10 s
+finale; early levels stay quick (STENCIL-1 at LV 7 around 3–4 min); later levels need clearly more XP; enemy
+pressure, elites, objectives and power-ups stretch with the timeline.
+
+**Before (HEAD 2fd7e203, gate bot, seed 1337, fresh + full, 24 runs; medians):** LV 7 104 s · LV 16 241 ·
+LV 27 381 · LV 35 470 · city boss 472 · clear 585 (9:45). Levels got *faster* inside every Size (LV 30–34
+took 7–11 s each). Player-like policy (P-human, 96 runs): city boss 509 s, clear 631 s (10:31).
+
+**The change** (config.ts / director.ts / titansim.ts):
+* `xpToNext(L)` = `round((8 + 6·L^1.35) · xpStretch(L))`: Size I ramps × 1 (LV 1, so LV 2 still comes at
+  ~14 s) to × 2.22 (LV 6); from Size II × 1.85 flat to LV 15, then + 0.03 per level (× 2.45 at LV 35;
+  the prototype below used + 0.04 / × 2.65, see "Final"). Cumulative XP to LV 35: 10 763 → 23 091 (× 2.15).
+* `PACE_STRETCH` 2.1: every curve keyed to world time reads `w.t / 2.1` (director budget ramp, now capped at
+  21:00; `ENEMY_HP_PER_MIN` 0.18 → 0.086), so pressure *per Size* stays what GATE 2 tuned.
+* Not stretched (absolute cadences, so a longer run sees more of them): the 6–9 s waves, `SQUAD_AFTER_S`,
+  objectives, power-ups, UPROAR trickle, gate and city fight lengths, KEEP GOING's escalation.
+* The rubber band, caps, earliest city boss, RAMROD and the climax pace: §5.2, §2.7, §4.1, §2.8, §4.2.
+
+**After (prototype with the final values, gate bot, seed 1337, fresh + full, 24 runs; ranges and medians):**
+LV 7 145–241 (197 s = 3:17) · LV 16 392–536 (467 = 7:47) · LV 27 669–893 (777 = 12:57) · LV 35 982–1183
+(1 063) · city boss 995–1185 (1 064 = 17:44) · clear 1094–1344 (1 161 = 19:21) · 23/24 clears · caps fired 0.
+Seeds 7 and 99: clear median 1 171 s. P-human (96 runs): LV 7 190 · LV 16 477 · LV 27 848 · city boss 1 118
+(18:38) · clear 1 229 (20:29). In the 20-minute curve Size II–IV levels take 21–40 s and rise toward each
+breach; the level after a breach takes about half as long as the one before (the breach is still a power
+spike). Every minute 0–17 has an OVERLOAD SITE placed and a power-up dropped and collected (bot medians);
+per run 15 OVERLOAD SITES (was 7), 19 power-ups (was 8), 20 objectives completed (was 9).
+
+**LV 7 lands at ~3:15, not 3:30 (a stated deviation).** Keeping the early levels at the old pace (LV 2 at ~14 s; LV 3 now comes at ~31 s against ~23 s) *and* LV 7 at 3:30
+needs ~60 s per level at LV 5–7, where Size I income is flat at 2–3 XP/s (one draft per minute). The owner
+can have the full 3:30 (Size I `XP_STRETCH.early` 1.6) at that cost.
+
+**Open at the time of writing (stated plainly):** the GATE 2 `--meta full` walkover guard (deaths ≥ 1: the
+bot died in 0 of 12 full-meta runs) and the player-like B11 band (P-human 84 → 76/96, Q-human 80 → 77/96;
+the extra deaths are in the city fight). Both are non-pacing assertions and are **not** loosened.
+
+**Final (Gate, 2026-10-01; what shipped).** Two difficulty changes landed after the prototype (§2.8: one
+RAMROD per run, the Size IV budget ramp). The ramp lowers Size IV kill income, which put LV 35 / the city boss
+at 18:15 with `XP_STRETCH.late` 0.04, so the Gate re-tuned the one XP-curve knob: **`late` 0.04 → 0.03**
+(late 0.025 measured 17:28, 0.03 17:43) and `CITY_PACE` 0.93 → **0.86** by the same derivation. Measured on
+the final tree, with the owner-feedback-3 VOLT-KITE / BRIARWICK kits (gate bot, seeds 1337 + 7, fresh + full,
+4 titans × 3 cities, 48 runs; medians): **LV 7 191 s (3:11) · LV 16 473 (7:53) · LV 27 768 (12:48) · LV 35
+1 052 (17:32) · city boss spawn 1 054 (17:34) · kill / clear 1 180 (19:40)**; 46/48 clears, caps fired 0, one
+RAMROD per run, no quiet minute (kills ≥ 60 per minute from minute 5). The per titan × city table is in the
+Gate commit message. Still open: the player-like policy dies more often than in
+the 10-minute run (seeds 1–24, 288 runs: 253 clears then, 233–239 now; the extra deaths are in the city fights,
+mostly IRON GULLY and PARKADE-6), and the static city is mostly eaten by the city boss's arrival (§9 decision 11).
+
 ### 5.2 The rubber band with gates (decided)
-* `RANK_SCHEDULE_S` keeps its values and gets a new meaning: **when the gate LEVEL for Size r is due**
-  (LV 7 at 90 s, LV 16 at 210, LV 27 at 360, LV 35 at 480). The catch-up still re-times a slow run
-  toward them.
+* `RANK_SCHEDULE_S` means **when the gate LEVEL for Size r is due**: LV 7 at 190 s, LV 16 at 480, LV 27 at
+  780, LV 35 at 1 080 (owner decision 11, the 20-minute run; the 10-minute run had 90 / 210 / 360 / 480).
+  The catch-up still re-times a slow run toward them, at `CATCHUP_PER_MIN` **0.95** (was 2.0: the same
+  catch-up per stretched minute; `CATCHUP_MAX` 3 unchanged).
 * **The catch-up is suspended while a fight is alive** (`paceMul` returns 1 while `fightAlive(w)` and
   slot 4 is not the one pending or alive). Levels keep coming at the base rate.
-* **At rank 3 with the city boss pending or alive, `paceMul` returns `AHEAD_MIN` (0.35)** (§4.2), checked
-  first. It governs both the wait for `mainEarliestS` and the city fight.
-* The pace governor (`AHEAD_*`, next rank ≥ 4) keeps projecting LV 35, now the city boss's arrival,
-  against `RANK_SCHEDULE_S[4]` − 40 s = 440 s, the same number as `mainEarliestS`.
+* **At rank 3 with the city boss pending or alive, `paceMul` returns `CITY_PACE` (0.86)** (§4.2; it was
+  `AHEAD_MIN` 0.35 on the 10-minute curve), checked first. It governs both the wait for `mainEarliestS` and
+  the city fight.
+* The pace governor (`AHEAD_*`) now watches **every** Size (`AHEAD_FROM_RANK` 4 → **1**: in the longer run
+  fast eaters broke the II–IV floors without it, LV 16 at 343 s and LV 27 at 573 s in a measured variant)
+  with `AHEAD_GRACE_S` **0 / 40 / 75 / 95 / 85** (the 10-minute graces × ~2.1). Its floors are LV 7 at 150 s,
+  LV 16 at 405, LV 27 at 685 and LV 35 at 1 080 − 85 = **995 s**, the same number as `mainEarliestS`.
+  `AHEAD_PER_MIN` 1.2 and `AHEAD_MIN` 0.35 are unchanged.
 * Tuning order if a band breaks: (1) `GATE_HP_MUL` and `GATES.fatigue` for the gate fight bands; (2)
-  `BOSS_HP_SCALE[3]` for the city fight band; (3) `GATES.mainEarliestS` for clears before 480 s (up, never
-  down); (4) `RANK_SCHEDULE_S` for the breach bands; (5) `GATES.capS` never (it is a liveness net).
+  `BOSS_HP_SCALE[3]` for the city fight band; (3) `GATES.mainEarliestS` for clears before the clear
+  window's floor (1 020 s; up, never down); (4) `RANK_SCHEDULE_S` for the breach bands; (5) `GATES.capS` never (it is a liveness net).
   **The bands are never widened to pass.**
 
-### 5.3 New GATE 2 bands (`probe_sim.ts`, lane K1a). World seconds, every run of the 12-run matrix
+### 5.3 GATE 2 bands (`probe_sim.ts`, lane K1a). World seconds, every run of the 12-run matrix
 
-| Check | Old | New | Evidence (re-run emulation, 48 runs) |
+**Re-banded for the 20-minute run (owner decision 11, 2026-10-01).** This is a spec change, not a widening:
+every changed band is derived from the new targets, and only *pacing* bands move. The rule: the spawn bands
+keep the 10-minute bands' floor/ceiling ratios to their median (G1 0.58 / 1.44, G2 0.70 / 1.32, G3 0.70 /
+1.17, city 0.93 / 1.19), applied to the 20-minute medians (199 / 468 / 779 / 1 064 s); each breach band is
+its spawn band plus the old offsets (+20 / +60, +40 / +60, +30 / +50). Fights are not stretched, so their
+bands do not move. The shared harness numbers live in `GATE2_V3` (`clearWindowS`, `draftEarlyS`,
+`draftGapS`, `draftGapHardS`, `probeMinutes` 25), so every probe reads one source. Evidence column: the
+prototype with the final values, gate bot, 48 runs (seed 1337 × fresh + full, seeds 7 and 99 fresh) and the
+GATE 2 matrix (`probe_sim --det 2`, fresh and full), PACING_20 §3.10 / §4.2.
+
+| Check | 10-minute band (2026-09-25) | **20-minute band (2026-10-01)** | Evidence (prototype) |
 |---|---|---|---|
-| gatekeeper 1 spawns (LV 7 + 1.5 s) | Size II 60–150 | **60–150** | LV 7 at 84–143 |
-| Size II reached (G1's kill) | — | **80–210** | 119–180 with 35–55 s holds |
-| gatekeeper 2 spawns (LV 16) | Size III 150–300 | **170–320** | LV 16 at 223–268 |
-| Size III (G2's kill) | — | **210–380** | 263–326 |
-| gatekeeper 3 spawns (LV 27) | Size IV 280–450 | **270–450** | LV 27 at 322–410 |
-| Size IV (G3's kill) | — | **300–500** | 367–475 |
-| city boss spawns (LV 35 and ≥ `mainEarliestS`, or the 540 s cap) | boss ≤ 560 | **440–560** | 440–513 |
-| Size V | 400–560 | **only on the city boss's kill tick**, never before | invariant |
-| each gate fight, spawn → kill | — | **15–90 s**, the per-gatekeeper median over the matrix **25–55 s**, and each titan's median per gatekeeper 18–75 s (probe_gatekeepers) | targets (§3.0) |
-| city boss fight at Size IV | 70–170 (probe_boss3) | median **60–150 s** | 62–162, medians 126–135 |
-| levels gained during the city fight (spawn → kill) | — | **max 6 per run, median ≤ 4** (a draft cadence band for the climax) | 1–4 |
-| levels gained during each gate fight | — | reported, not banded | 0–8 |
-| clears | ≥ 8/12 in 8–12 min, deaths ≥ 1 | **unchanged**, clear time = the kill (`run.endT`) | 10–12 of 12; deaths 0–2 (see risk 1) |
-| clears before 480 s | a violation | **unchanged (hard fail)** | 0 of 48 |
-| a time cap firing (`gateLocked {capped: true}`) | — | **a violation** (§2.7) | 0 of 48 |
-| early draft cadence (median gap, first 180 s) | 8–30 s hard | **unchanged** | risk: the Size I fight gives 0–1 levels, so one long gap appears in the window; if the median breaks, the first knob is `GATE_HP_MUL.stencil1` |
-| v2 §0.6 report lines (UPROAR / OVERLOAD XP share, DEMOLITION kills) | — | unchanged, plus per run: gate spawn / breach / fight times, held time `gates.fightS`, **levels and drafts gained in each gate fight and in the city fight, the wait for `mainEarliestS`**, top-up levels, pressure peaks, RAMMING THROUGH count | |
+| gatekeeper 1 spawns (LV 7 + 1.5 s) | 60–150 | **115–290** | 144–262 |
+| Size II reached (G1's kill) | 80–210 | **135–350** | 178–303 |
+| gatekeeper 2 spawns (LV 16) | 170–320 | **330–620** | 393–538 |
+| Size III (G2's kill) | 210–380 | **370–680** | 423–586 |
+| gatekeeper 3 spawns (LV 27) | 270–450 | **545–915** | 662–895 |
+| Size IV (G3's kill) | 300–500 | **575–965** | 697–955 (10 s under the ceiling) |
+| city boss spawns (LV 35 and ≥ `mainEarliestS`, or the `BOSS_AT_S` cap) | 440–560 | **995–1 265**; the floor is `mainEarliestS` with a 1e-6 s float slack (accumulated `w.t` reads 994.99999999975 on the 995 s tick) | 995–1 185 |
+| Size V | only on the city boss's kill tick, never before | **unchanged** | invariant |
+| each gate fight, spawn → kill | **15–90 s**, the per-gatekeeper median over the matrix **25–55 s**, and each titan's median per gatekeeper 18–75 s (probe_gatekeepers) | **unchanged** | medians G1 32–33 · G2 36–37 · G3 29–42 s |
+| city boss fight at Size IV | median **60–150 s** | **unchanged** | medians 88 (full) – 124 (fresh) s |
+| levels gained during the city fight (spawn → kill) | **max 6 per run, median ≤ 4** | **unchanged** | median 0–1 |
+| levels gained during each gate fight | reported, not banded | unchanged | — |
+| clears (clear time = the kill, `run.endT`) | ≥ 8/12 in 8–12 min (480–720 s) | **≥ 8/12 in 17–24 min (1 020–1 440 s)** | fresh 11/12, full 12/12, all inside |
+| clears before the window's floor | < 480 s a violation | **< 1 020 s a violation (hard fail)** | 0 of 48 (earliest 1 076 s) |
+| deaths ≥ 1 per meta (the walkover guard) | v2 §0.6 | **unchanged — not a pacing band** | fresh 1, full 0 (open: §5.1b) |
+| a time cap firing (`gateLocked {capped: true}`) | a violation (§2.7) | **unchanged** | 0 of 48 |
+| early draft cadence | median gap over the first 180 s ~10–25 s, every gap 8–30 s | **median gap over the first 360 s (or until Size III) ~16–40 s, every gap 13–48 s** | medians 20.5–31.0 s |
+| probe_map K: OVERLOAD SITES / power-ups per run (median per city) | 5–12 / 4–12 | **10–25 / 8–25** (× 2.1: the cadence is per minute) | 14–17 / 18–23 |
+| headless probe run length | 13 min (probe_balance 12 min + 20 s) | **25 min** (`GATE2_V3.probeMinutes`; probe_balance 25 min + 20 s) | — |
+| v2 §0.6 report lines (UPROAR / OVERLOAD XP share, DEMOLITION kills) | reported | unchanged, plus per run: gate spawn / breach / fight times, held time `gates.fightS`, **levels and drafts gained in each gate fight and in the city fight, the wait for `mainEarliestS`**, top-up levels, pressure peaks, RAMMING THROUGH count | OVERLOAD SITE share 6.5–7.4 % (was 2.4–2.5 %) |
 
 Must pass with `--meta fresh` and `--meta full`, as in v2.
 
@@ -878,9 +981,11 @@ Runs 4 titans × 3 cities × seeds 1337 / 7 / 99 with the gate bot unless a line
    a kill (or a titan death, which is a legal outcome and is reported) within `GATE2_V3.gateFightS[1]`
    (90 s), and that **pressure never rises on any tick where the titan is within band max + 0.5 H**,
    and never reaches 3 in any of these runs.
-8. **Time caps.** A starved run (the probe deletes every pickup each tick): the gatekeepers lock at 165 /
-   320 / 430 s with `capped`; each capped breach tops the level up to `RANK_LEVELS[s]`, and `pendingDrafts`
-   rises by exactly the levels granted; the city boss locks at 540 s.
+8. **Time caps.** A starved run (the probe deletes every pickup each tick): the gatekeepers lock at
+   `GATES.capS` (305 / 635 / 930 s; 165 / 320 / 430 s in the 10-minute run) with `capped`; each capped
+   breach tops the level up to `RANK_LEVELS[s]`, and `pendingDrafts` rises by exactly the levels granted;
+   the city boss locks at `GATES.capS[4]` (1 250 s; was 540 s). The starved run's horizon is
+   `GATES.capS[4] + 220` s, not a literal.
 9. **Finale.** On the city boss's kill: `rankUp 4` and `finale on` on the same tick; the titan takes 0
    damage during the finale; no enemy fires; `runEnd clear` comes exactly `finaleS` later (or on the
    `endFinale` skip tick) with `run.endT === gates.mainKillT` and `titan.rank === 4`.
@@ -992,7 +1097,17 @@ untouched); `gateDefeated` updates the rest. `life.gateRematches` is a new profi
 (`sanitizeProfile` coerces it). Existing goals checked: SKYLINE ADJUSTED (reach Size V) now means
 reaching the finale; ZONING CHANGE needs CORDON-2's kill; **EARLY CLOSING** (clear LOCKWATER under 9:00)
 gets harder: in the re-run emulation (§5.1) 1 of the 16 LOCKWATER clears was under 540 s and 8 were
-under 600 s, so the target moves to **10:00 (600 s)**.
+under 600 s, so the target moved to **10:00 (600 s)**.
+
+**The 20-minute run (owner decision 11, 2026-10-01): EARLY CLOSING moves to 20:00 (1 200 s)**, desc
+`Clear LOCKWATER in under 20:00`. Measured on the prototype: gate-bot LOCKWATER clears 1 117–1 277 s (8 of 11
+under 1 200), P-human 10 of 28 under 1 200. The timed gate goals (TIPPED OFF 20 s, HANG UP 40 s, OVER THE
+LIMIT 135 s) do not move: fights are not stretched (gate-bot `gateTotalFightS` median 101 → 109 s). The
+run-scope goals whose supply is per minute (kills, UPROAR charges, power-ups, objectives, OVERLOAD SITES)
+roughly double in a 20-minute run, so their targets move with it (`data/goals.ts`, FEATURES_V2 §8.2 "Current
+targets"); goals capped by what a city physically holds are capped by that supply, per `probe_meta` G(a): URBAN
+RENEWAL stays 130 (WHITE STACKS holds 135 blocks on seed 1337) and SHIPPING DELAYS moves only to 540
+(LOCKWATER holds 551 boats). Old profiles keep their 10-minute bests: a met goal stays met.
 
 New unlock cards (`data/upgrades_gate.ts`, new file, appended to `UPGRADES` by one line in
 `data/upgrades.ts`; all `locked: true`; descriptions from `describe()`):
@@ -1210,9 +1325,9 @@ export const GATES = {
   entryRingMul: 1.15,
   /** time caps (world.t): slot s is locked at this time even below its level (index = slot; 4 = the city boss,
    *  which also needs unlocked === 3; it reuses BOSS_AT_S) */
-  capS: [0, 165, 320, 430, 540] as readonly number[],
+  capS: [0, 305, 635, 930, 1250] as readonly number[],   // owner decision 11 (20-minute run); was 165/320/430/540
   /** the city boss (slot 4) never spawns before this world.t (= RANK_SCHEDULE_S[4] − AHEAD_GRACE_S[4]); §4.1 */
-  mainEarliestS: 440,
+  mainEarliestS: 995,   // 1080 − 85 (owner decision 11); was 440 = 480 − 40
   /** minimum seconds between a breach and the next fight's arrival */
   chainGapS: 20,
   /** × director budget while a HOME gatekeeper is alive (keyed by id, never by slot); rematches and the
@@ -1251,10 +1366,14 @@ export const GATE_HP_MUL: Readonly<Record<GateId, number>> = { stencil1: 1, cord
 /** GATE 2 v3 (probe_sim + probe_gatekeepers). World seconds. */
 export const GATE2_V3 = {
   /** gatekeeper spawn (index = slot) and breach (Size r reached = gate r's kill) bands */
-  spawnBand: [[0, 0], [60, 150], [170, 320], [270, 450]] as readonly (readonly [number, number])[],
-  breachBand: [[0, 0], [80, 210], [210, 380], [300, 500]] as readonly (readonly [number, number])[],
+  spawnBand: [[0, 0], [115, 290], [330, 620], [545, 915]] as readonly (readonly [number, number])[],   // §5.3 (20-minute run)
+  breachBand: [[0, 0], [135, 350], [370, 680], [575, 965]] as readonly (readonly [number, number])[],
   /** the city boss spawns inside this band (LV 35 and ≥ GATES.mainEarliestS, or the cap) */
-  mainSpawn: [440, 560] as readonly [number, number],
+  mainSpawn: [995, 1265] as readonly [number, number],
+  /** §5.3 (owner decision 11): shared harness bands — the clear window, the early draft cadence, the probe length */
+  clearWindowS: [1020, 1440] as readonly [number, number],
+  draftEarlyS: 360, draftGapS: [16, 40] as readonly [number, number], draftGapHardS: [13, 48] as readonly [number, number],
+  probeMinutes: 25,
   /** levels gained from the city boss's spawn to its kill: every run ≤ max, matrix median ≤ median */
   mainFightLevels: { max: 6, median: 4 },
   /** each gate fight spawn→kill; the per-gate median must sit in the median band */
@@ -1479,19 +1598,33 @@ shots + critic; README updated.
    Alternative: keep growing inside the Size (the lock would read weaker).
 2. **The rubber band's catch-up is off during fights.** Alternative: leave it on (runs about 20–40 s
    faster, more XP mid-fight).
-3. **Time caps** 165 / 320 / 430 / 540 s, with a level top-up on a capped kill. Alternative: no caps (a
-   weak run could pass 12 min).
+3. **Time caps** 305 / 635 / 930 / 1 250 s (the 10-minute run had 165 / 320 / 430 / 540 s), with a level
+   top-up on a capped kill. Alternative: no caps (a weak run could pass 24 min).
 4. **RAMROD stays a separate elite**, now only between SWITCHBOARD-5 and the city boss.
 5. **Per-second damage cap on gatekeepers** (6 % of max HP per s), so strong builds still get a fight.
 6. **Finale** 10 s, skippable after 3 s, with `THE CITY GOT SMALLER.` as a live banner before the paper.
 7. **EXTENDED COVERAGE** alternates gatekeeper and city-boss rematches at Size V every 75 s.
 8. **Names**: STENCIL-1, CORDON-2, SWITCHBOARD-5 and the HEIGHT LIMIT framing.
-9. **The city boss never arrives before 7:20 (440 s)**, even if LV 35 comes earlier (the bar counts down
-   to it; the city keeps coming). Alternative: a floor on the city fight's length instead (a damage cap
+9. **The city boss never arrives before 16:35 (995 s)** (the 10-minute run: 7:20, 440 s), even if LV 35
+   comes earlier (the bar counts down to it; the city keeps coming). Alternative: a floor on the city fight's length instead (a damage cap
    on the city boss), which makes the climax feel artificially armoured.
-10. **XP is governed (× 0.35) while the city boss is due or alive**, so the climax gets 1–4 draft screens,
-   not 2–18. Alternative: bank those drafts until the kill (the finale holds drafts, so they would
-   only matter in KEEP GOING).
+10. **XP is governed while the city boss is due or alive**, so the climax gets 1–4 draft screens, not
+   2–18: × `CITY_PACE` 0.86 on the 20-minute curve (it was × 0.35 on the 10-minute curve; 0.35 × the
+   curve's × 2.45 at LV 35 ≈ 0.86, the same levels per second). Alternative: bank those drafts until the
+   kill (the finale holds drafts, so they would only matter in KEEP GOING).
+11. **The 20-minute run** (owner, 2026-09-30: *"go with 20 minutes"*; §5.1b). The city boss arrives at
+   about 17:35 and the clear comes at about 19:40 for the gate bot, about 21:00 for the player-like policy. LV 7
+   (STENCIL-1) comes at about 3:15, LV 16 at about 7:50, LV 27 at about 13:00. Early levels stay at the old
+   pace (LV 2 at ~14 s); from Size II every level costs × 1.85–2.45 of the old XP (`xpStretch`), rising
+   with the level. Time-keyed pressure (director budget, enemy HP per minute) is stretched by
+   `PACE_STRETCH` 2.1, so pressure per Size is unchanged; objectives, power-ups and UPROAR keep their
+   per-minute cadence, so a run sees about twice as many. RAMROD stays one per run (`ELITE_MAX` 1, §2.8) and
+   Size IV pressure ramps from × 0.5 at the breach to × 1 at the city lock (`SIZE_IV_RAMP_FROM`, §2.8). Bands, caps, the earliest city boss and the goal targets are
+   re-derived from these targets (§2.7, §4.1, §5.3, §6.5); no non-pacing assertion was loosened.
+   Owner options, not built: (a) a mid-Size II/III elite beat to fill the ~4-minute stretches with no gate
+   or elite (it changes decision 4); (b) freeze `xpStretch` past LV 35 so KEEP GOING levels come at the old
+   rate (now about 1/2.5 of it); (c) LV 7 at a full 3:30, at the cost of about one draft per minute in
+   minutes 1–3.
 
 ---
 

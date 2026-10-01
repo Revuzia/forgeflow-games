@@ -103,9 +103,14 @@ const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
 /** a goal's target, read from the data (F4: the fixtures follow the §8.2 retune instead of hard-coding it) */
 const TG = (id: string): number => M.GOALS.find((g) => g.id === id)!.target;
 /** Size reached (s): GATEKEEPERS §5.3 (GATE2_V3) — Size II/III/IV = gatekeeper 1/2/3's kill (breachBand); Size V only on
- *  the city boss's kill tick, which is the clear, so its band is GATE 2's clear window (8–12 min, probe_sim CLEAR_WINDOW_S).
+ *  the city boss's kill tick, which is the clear, so its band is GATE 2's clear window (GATE2_V3.clearWindowS: 17–24 min
+ *  for the 20-minute run, PACING_20 §3.10 / GATEKEEPERS §5.3; was 8–12 min = [480, 720]).
  *  (The v2 bands 60–150 / 150–300 / 280–450 / 400–560 were the ungated schedule.) */
-const RANK_BANDS: readonly (readonly [number, number])[] = [[0, 0], ...GATE2_V3.breachBand.slice(1), [480, 720]];
+const RANK_BANDS: readonly (readonly [number, number])[] = [[0, 0], ...GATE2_V3.breachBand.slice(1), GATE2_V3.clearWindowS];
+/** a full gate-bot run's length (G reachability, H perk bands): GATE2_V3.probeMinutes (25; was 13) */
+const GATE_RUN_MINUTES: number = GATE2_V3.probeMinutes;
+/** m:ss of a time in seconds (fixture labels) */
+const mmss = (t: number): string => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
 const BOSS_BY_S = GATE2_V3.mainSpawn[1];
 const NO_INPUT: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
 
@@ -180,7 +185,8 @@ function checkCatalogue(): void {
       `${id}: general · ${metric} · ${target} · ${scope}${lower ? ' · lowerIsBetter' : ''} → ${unlock} (got ${g ? `${g.group} · ${g.metric} · ${g.target} · ${g.scope}${g.lowerIsBetter ? ' · lowerIsBetter' : ''} → ${uk}` : 'missing'})`);
   }
   const ec = G.find((x) => x.id === 'g_lw_early_closing');
-  ok(!!ec && ec.target === 600 && ec.lowerIsBetter === true && /10:00/.test(ec.desc), `EARLY CLOSING: under 10:00 = 600 s (GATEKEEPERS §6.5; got ${ec?.target} '${ec?.desc}')`);
+  // the 20-minute run (owner decision 11, PACING_20 §3.9): EARLY CLOSING moves 10:00 (600 s) → 20:00 (1200 s)
+  ok(!!ec && ec.target === 1200 && ec.lowerIsBetter === true && /20:00/.test(ec.desc), `EARLY CLOSING: under 20:00 = 1200 s (GATEKEEPERS §6.5; got ${ec?.target} '${ec?.desc}')`);
   // the five gatekeeper cards (§6.5 table), appended to UPGRADES, locked, desc generated
   for (const [id, name, rarity, stacks, tags, fx] of GATE_CARDS) {
     const d = M.UPGRADE_BY_ID[id];
@@ -432,25 +438,27 @@ function checkLedger(): void {
   wd.run.result = 'dead'; wd.run.endT = 200;
   const d = G.applyRunToProfile(M.profile.emptyProfile(), wd, 'dead');
   ok(d.profile.life.runs === 1 && d.profile.life.clears === 0 && d.newly.includes('g_first_broadcast') && !d.newly.includes('g_one_take'), 'a death: run counted, no clear, ONE TAKE not met');
-  // cleanClear / fastClearS
+  // cleanClear / fastClearS — the clear times sit at the same offsets from the EARLY CLOSING target as the 10:00 fixtures
+  // did (target − 70 / + 20 / − 20 s; was 530 / 620 / 580 s), re-keyed to the 20-minute target (PACING_20 §3.9)
+  const ecT = TG('g_lw_early_closing');
   const wc = mkWorld('briarwick', 'lockwater');
   M.world.stepN(wc, 10);
-  wc.tally.hpLowFrac = 0.3; wc.run.result = 'clear'; wc.run.endT = 530;
+  wc.tally.hpLowFrac = 0.3; wc.run.result = 'clear'; wc.run.endT = ecT - 70;
   const e = G.applyRunToProfile(M.profile.emptyProfile(), wc, 'clear');
-  ok(e.newly.includes('g_one_take') && e.newly.includes('g_lw_early_closing'), 'ONE TAKE (low 30 %) + EARLY CLOSING (8:50 < 10:00) met');
-  ok(e.profile.best.g_lw_early_closing === 530, 'EARLY CLOSING best = 530 s');
+  ok(e.newly.includes('g_one_take') && e.newly.includes('g_lw_early_closing'), `ONE TAKE (low 30 %) + EARLY CLOSING (${mmss(ecT - 70)} < ${mmss(ecT)}) met`);
+  ok(e.profile.best.g_lw_early_closing === ecT - 70, `EARLY CLOSING best = ${ecT - 70} s`);
   const wc2 = mkWorld('briarwick', 'lockwater');
   M.world.stepN(wc2, 10);
-  wc2.tally.hpLowFrac = 0.2; wc2.run.result = 'clear'; wc2.run.endT = 620;
+  wc2.tally.hpLowFrac = 0.2; wc2.run.result = 'clear'; wc2.run.endT = ecT + 20;
   const e2 = G.applyRunToProfile(M.profile.emptyProfile(), wc2, 'clear');
-  ok(!e2.newly.includes('g_one_take') && !e2.newly.includes('g_lw_early_closing'), 'ONE TAKE (low 20 %) + EARLY CLOSING (10:20) not met');
+  ok(!e2.newly.includes('g_one_take') && !e2.newly.includes('g_lw_early_closing'), `ONE TAKE (low 20 %) + EARLY CLOSING (${mmss(ecT + 20)}) not met`);
   const wc3 = mkWorld('briarwick', 'lockwater');
   M.world.stepN(wc3, 10);
-  wc3.tally.hpLowFrac = 0.2; wc3.run.result = 'clear'; wc3.run.endT = 580;
+  wc3.tally.hpLowFrac = 0.2; wc3.run.result = 'clear'; wc3.run.endT = ecT - 20;
   const e4 = G.applyRunToProfile(M.profile.emptyProfile(), wc3, 'clear');
-  ok(e4.newly.includes('g_lw_early_closing'), 'EARLY CLOSING at 9:40 is met under the GATEKEEPERS 10:00 target (was not under 9:00)');
+  ok(e4.newly.includes('g_lw_early_closing'), `EARLY CLOSING at ${mmss(ecT - 20)} is met under the ${mmss(ecT)} target`);
   const e3 = G.applyRunToProfile(e.profile, wc2, 'clear');
-  ok(e3.profile.best.g_lw_early_closing === 530, 'lower-is-better best keeps the lower time');
+  ok(e3.profile.best.g_lw_early_closing === ecT - 70, 'lower-is-better best keeps the lower time');
   // evalGoals (live)
   const pl = M.profile.emptyProfile();
   const wl = mkWorld('molo', 'grideast');
@@ -883,7 +891,7 @@ interface GateRun {
   tally: RunTally; supply: Record<string, number>; met: string[]; hash: string; error: string | null;
 }
 
-function gateRun(titan: TitanId, biome: BiomeId, perk: PerkId | null, minutes = 13): GateRun {
+function gateRun(titan: TitanId, biome: BiomeId, perk: PerkId | null, minutes = GATE_RUN_MINUTES): GateRun {
   const out: GateRun = { titan, biome, perk, rankT: [0, NaN, NaN, NaN, NaN], bossT: NaN, result: 'timeout', endT: NaN, tally: null as unknown as RunTally, supply: {}, met: [], hash: '', error: null };
   let w: World;
   try { w = mkWorld(titan, biome, { unlocked: [], perk, palette: 0, reviveUsed: false }); } catch (e) { out.error = String((e as Error)?.stack ?? e); return out; }

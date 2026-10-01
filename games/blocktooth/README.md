@@ -15,6 +15,15 @@ monster: the titan is the only monster in town. Its kill is the **VICTORY FINALE
 Level-ups open 3-card **MUTATION REPORT** drafts. The run ends on the front page of *THE WARD SEVEN
 WITNESS*: **THE CITY GOT SMALLER.** A clear can be pushed on into **EXTENDED COVERAGE** (endless).
 
+**A run takes about 20 minutes** (owner decision, 2026-09-30: "go with 20 minutes"). Measured with the gate
+bot (medians): STENCIL-1 at LV 7 comes at about 3:15, CORDON-2 at LV 16 at about 7:55, SWITCHBOARD-5 at
+LV 27 at about 12:50, and LV 35 and the city boss at about 17:35. The kill comes at about 19:40, then the
+10 s finale; a player-like bot clears at about 21:00. Early levels come as fast as before (LV 2 at about
+14 s). From Size II each level costs 1.85–2.45 × the XP of the 10-minute run, rising with the level.
+Enemy pressure per Size is unchanged and ramps over the longer run. OVERLOAD SITES, power-ups and RELIEF
+DEPOTS keep their per-minute cadence, so a run sees about twice as many. Size IV gets one RAMROD, and its pressure
+builds from half to full toward the city boss (`_spec/GATEKEEPERS.md` §5.1b, §9 decision 11).
+
 The look is a Saturday-morning monster comic built as a clean 3D diorama: faceted low-poly shapes,
 toon ramps, thick ink outlines, painted palettes and long soft shadows. Everything is procedural:
 geometry, animation, music and sound effects. No gore: stepped-on things puff into dust, bolts
@@ -102,7 +111,7 @@ itself. Each breach needs a kill:
   The pacing catch-up is off while a fight is alive.
 * **Arrival.** 1.5 s after the lock the gatekeeper spawns off-screen ahead of the titan (an edge arrow
   points at it). It then drives in over a 3 s invulnerable intro, with the nameplate in its
-  `GATEKEEPER` variant. The city boss keeps its own 4 s intro and never arrives before 7:20 (440 s);
+  `GATEKEEPER` variant. The city boss keeps its own 4 s intro and never arrives before 16:35 (995 s);
   a titan at LV 35 earlier than that waits at Size IV with a countdown on the GROW bar.
 * **The fights.** Each gatekeeper has a meter, a stagger and a weak point that opens after its own
   attack: STENCIL-1 (STRIPE RUN, PAINT BUCKETS, DOUBLE LINE, U-TURN; hit the open paint **DRUM** during
@@ -116,8 +125,9 @@ itself. Each breach needs a kill:
   2.2 × the spawn ring away for 4 s is cut off (it re-enters ahead: `CUTTING YOU OFF`). Time spent not
   engaged raises **containment pressure** (0–3: more spawns, shorter attack gaps, more damage), and
   fatigue runs on `max(engaged time, 0.5 × fight time)`, so every fight is bounded.
-* **Time caps.** A starved run still reaches every fight: the gates lock at 165 / 320 / 430 s and the
-  city boss at 540 s even below the level, and a capped kill tops the level up (the drafts are owed).
+* **Time caps.** A starved run still reaches every fight: the gates lock at 305 / 635 / 930 s and the
+  city boss at 1 250 s even below the level, and a capped kill tops the level up (the drafts are owed).
+  Even with every cap firing and every fight at its longest, the city boss dies by 1 425.5 s (23:45).
 * **The kill** breaches on the same tick (`LIMIT LIFTED` stamp, then the MASS BREACH banner), drops a
   chest and adds +40 UPROAR. A titan that dies in a gate fight gets the sub-head
   `HELD AT SIZE II BY CORDON-2` on its front page.
@@ -536,7 +546,8 @@ The gatekeepers (GATEKEEPERS §8.3 / §8.4) add:
 
 ```bash
 node _harness/probe_sim.ts --det 2 --meta fresh|full   # GATE 2 on the GATE2_V3 bands (gate spawn / breach bands,
-                                                       #   city-boss spawn 440–560 s, levels per city fight)
+                                                       #   city-boss spawn 995–1 265 s, clears in 17–24 min,
+                                                       #   levels per city fight; GATEKEEPERS §5.3)
 node _harness/probe_gatekeepers.ts            # 246 checks, cases 1–16 of §5.4 (summon, no breach without the kill,
                                               #   beatable, weak points, fair tells, volley geometry, avoider, soaked
                                               #   fighter, time caps, finale, city boss at Size IV, rematches,

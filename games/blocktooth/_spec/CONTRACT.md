@@ -134,6 +134,10 @@ table mirrors it.
   band `paceMul`: catch-up × `min(CATCHUP_MAX, 1 + CATCHUP_PER_MIN × minutesBehind)` once `w.t` passes
   `RANK_SCHEDULE_S[rank+1]`; for the Size V breach only, a pace governor × `max(AHEAD_MIN, 1 −
   AHEAD_PER_MIN × minutesEarly)` when the projected breach is more than `AHEAD_GRACE_S` early.
+  *(The 20-minute run, owner decision 11, 2026-10-01: GATEKEEPERS §5.2 re-keys this — `RANK_SCHEDULE_S`
+  0 / 190 / 480 / 780 / 1 080 s are the gate-level due times, `CATCHUP_PER_MIN` 0.95, the governor watches
+  every Size (`AHEAD_FROM_RANK` 1, graces 0 / 40 / 75 / 95 / 85 s), and `xpToNext(L)` =
+  `round((8 + 6·L^1.35) · xpStretch(L))`, × 1 at LV 1 rising to × 2.45 at LV 35.)*
   `xpToNext(level)`; each level-up increments `upgrades.pendingDrafts`, emits `levelUp` and steps the
   body up; crossing `RANK_LEVELS[r]` emits `rankUp` and recomputes stats (`recomputeStats`) — maxHp
   scales by hp×, current hp keeps its ratio then +15 % heal. The upgrade action `'mass'` ("grow") is
@@ -567,11 +571,15 @@ upgrade seed damage. Size-I multipliers apply only while `titan.rank === 0`.)
 | walker | STILT MORTAR | 700 | 3 | 3 | 12 | 30 | 90 | 6 | 60 | 60 | 55 | IV | 3 lobbed shells, circle tells r 6, 1.8 s |
 | elite | RAMROD | 2400 | 6 (charge 30) | 5 | 6 | 45 | 80 | 7 | 250 | 200 | — | III | lane-tell charge (len 80, w 8, 1.6 s); never crushable; drops a CHEST |
 
-* HP × (1 + 0.18·minutes) at spawn; hostile dmg × `RANKS[titan.rank].hpMul`.
+* HP × (1 + `ENEMY_HP_PER_MIN`·minutes) at spawn, `ENEMY_HP_PER_MIN` = 0.086 (was 0.18; ÷ `PACE_STRETCH` 2.1
+  for the 20-minute run, GATEKEEPERS §5.1b); hostile dmg × `RANKS[titan.rank].hpMul`.
 * Spawn ring radius = `spawnRing(w)` = max(14, 0.55 × camera vertical extent at the current D)
   so spawns happen just off-screen; vehicles snap to the nearest road lane; drones anywhere.
   Enemies farther than 2.4× the ring are recycled back onto the ring.
-* **Director**: spawn budget accrues `1.2 + 0.9·min(t,600)/60 + 0.6·rank` per second; a wave every
+* **Director**: spawn budget accrues `1.2 + 0.9·min(t / PACE_STRETCH, 600)/60 + 0.6·rank` per second
+  (`PACE_STRETCH` 2.1 since the 20-minute run; it was `min(t, 600)`); at Size IV outside a boss fight × `SIZE_IV_RAMP_FROM`
+  0.5 at the breach rising linearly by level to × 1 at LV 35 (the city fight unchanged); one RAMROD per run
+  (`ELITE_MAX` 1); a wave every
   6–9 s (rng.spawn) spends it on kinds allowed at the current rank with biome bias; caps per kind
   and `CITY.maxEnemies`. First appearance of a category raises an alert (`contractors`, `squads`,
   `drones`, `vehicles`, `armor`, `artillery`). Elite at `min(ELITE_AT_S, t(rank IV)+30)` →
@@ -730,9 +738,12 @@ machine's.
 
 1. `npx tsc --noEmit -p tsconfig.json` → 0 errors.
 2. `node _harness/probe_sim.ts` — headless bot, all 4 titans × 3 biomes: no NaN/throw; deterministic
-   (same seed ⇒ identical state hash); pacing bands: rank II 60–150 s, III 150–300 s, IV 280–450 s,
-   V 400–560 s; boss spawns ≤ 560 s; a competent bot clears ≥ 8 of 12 runs in 8–12 min and dies in
-   some (it is not a walkover); drafts every ~10–25 s early.
+   (same seed ⇒ identical state hash); pacing bands (now GATEKEEPERS §5.3, re-banded for the 20-minute
+   run, owner decision 11): gatekeeper spawns 115–290 / 330–620 / 545–915 s, Sizes II–IV (each gate's kill)
+   135–350 / 370–680 / 575–965 s, city boss spawns 995–1 265 s, Size V only on its kill; a competent bot
+   clears ≥ 8 of 12 runs in 17–24 min (1 020–1 440 s) and dies in some (it is not a walkover); drafts
+   every ~16–40 s over the first 360 s. (The 10-minute run's bands were II 60–150 s, III 150–300 s,
+   IV 280–450 s, V 400–560 s, boss ≤ 560 s, clears in 8–12 min, drafts every ~10–25 s early.)
 3. `python _harness/bootcheck.py` (headed Chrome, `?autostart=1`): 0 console/page errors, 0 shader
    errors, reaches `play`, frames rendering, screenshot shows the baby titan ON a zebra crossing.
 4. `python _harness/playtest.py --titan X --biome Y` with REAL keyboard input from the title

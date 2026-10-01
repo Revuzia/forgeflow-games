@@ -7,7 +7,8 @@
 // Asserts (exit 1 on any failure, 2 if the sim cannot load):
 //   A. the R table printed from the merged config (first/last level of each Size) and R = max(3 H, 0.95 × spawnRing)
 //   B. ≥ 90 % of the non-elite foes inside 0.9 R killed by one UPROAR at Size I and Size V, all 4 titans
-//      (damage stat 1, foes spawned at the band's latest time: HP × (1 + 0.18·min) × rank mul)
+//      (damage stat 1, foes spawned at the band's latest time: HP × (1 + ENEMY_HP_PER_MIN·min) × rank mul; the clock is
+//      150 / 540 s × PACE_STRETCH = 315 / 1134 s on the 20-minute run, the same foe HP as the 10-minute probe)
 //   C. roar invulnerability: 0 damage of any kind (a hostile dot hazard + an ACTIVE enemy telegraph on the titan
 //      + direct discrete and dot hurtTitan calls) for the whole roar, damage resumes after it; the 30 % move from
 //      the fire tick (standing start, move held); a WINCH / TOW leash snaps on the fire tick
@@ -37,7 +38,9 @@
 
 import type { BiomeId, MainBossId, EnemyKind, RankIndex, SimEvent, TitanId, TitanInput, World } from '../src/core/types.ts';
 import { BIOME_IDS, TITAN_IDS } from '../src/core/types.ts';
-import { RANK_LEVELS, RANK_V_GROWTH_LEVELS, TITAN_RADIUS_PER_H, ULT, ULT_GAP_BAND_S, titanHeightAt, xpToNext } from '../src/core/config.ts';
+import { GATE2_V3, PACE_STRETCH, RANK_LEVELS, RANK_V_GROWTH_LEVELS, TITAN_RADIUS_PER_H, ULT, ULT_GAP_BAND_S, titanHeightAt, xpToNext } from '../src/core/config.ts';
+/** H/I full-run length: GATE2_V3.probeMinutes (25 min for the 20-minute run, PACING_20 §3.10; was 13 · 60 s) */
+const FULL_RUN_S: number = GATE2_V3.probeMinutes * 60;
 
 type WorldMod = typeof import('../src/core/world.ts');
 let M: {
@@ -217,12 +220,14 @@ function killTest(titan: TitanId, rank: RankIndex, n: number, tMin: number): { f
 function partB(): void {
   console.log('\n── B/F/G. one UPROAR vs a field of foes inside 0.9 R (damage stat 1) ──');
   for (const titan of TITAN_IDS) {
-    for (const [rank, tMin, n] of [[0, 150, 60], [4, 540, 250]] as [RankIndex, number, number][]) {
+    // foe-HP clock re-keyed by PACE_STRETCH (PACING_20 §6 HARN): ENEMY_HP_PER_MIN is 0.18 / PACE_STRETCH, so the foes keep
+    // the HP they had at 150 s (Size I) / 540 s (Size V) on the 10-minute run
+    for (const [rank, tMin, n] of [[0, 150 * PACE_STRETCH, 60], [4, 540 * PACE_STRETCH, 250]] as [RankIndex, number, number][]) {
       const k = killTest(titan, rank, n, tMin);
       const ok = check(k.frac >= 0.9 && k.inside >= 20, `B: ${titan} Size ${ROMAN[rank]}: killed ${k.killed}/${k.inside} (${(100 * k.frac).toFixed(1)} %) of the non-elite foes inside 0.9 R (need ≥ 90 %, ≥ 20 foes)`);
       const okXp = check(k.xp <= k.cap + 1e-6, `F: ${titan} Size ${ROMAN[rank]}: banked ${k.xp.toFixed(2)} XP > cap ${k.cap.toFixed(2)}`);
       const okSp = check(k.maxScrap <= ULT.bankPickupsPerTick, `G: ${titan} Size ${ROMAN[rank]}: ${k.maxScrap} scrap pickups spawned in one tick (cap ${ULT.bankPickupsPerTick})`);
-      console.log(`  ${titan.padEnd(10)} Size ${ROMAN[rank].padEnd(2)} t=${tMin}s: killed ${String(k.killed).padStart(3)}/${String(k.inside).padStart(3)} = ${(100 * k.frac).toFixed(1).padStart(5)} %  ${ok ? 'ok' : 'FAIL'} · XP banked ${k.xp.toFixed(1)} ≤ cap ${k.cap.toFixed(1)} ${okXp ? 'ok' : 'FAIL'} · max scrap/tick ${k.maxScrap} ${okSp ? 'ok' : 'FAIL'}`);
+      console.log(`  ${titan.padEnd(10)} Size ${ROMAN[rank].padEnd(2)} t=${tMin.toFixed(0)}s: killed ${String(k.killed).padStart(3)}/${String(k.inside).padStart(3)} = ${(100 * k.frac).toFixed(1).padStart(5)} %  ${ok ? 'ok' : 'FAIL'} · XP banked ${k.xp.toFixed(1)} ≤ cap ${k.cap.toFixed(1)} ${okXp ? 'ok' : 'FAIL'} · max scrap/tick ${k.maxScrap} ${okSp ? 'ok' : 'FAIL'}`);
     }
   }
 }
@@ -450,7 +455,7 @@ function partH(seed: number): void {
   const runs: Run[] = [];
   const t0 = Date.now();
   for (const titan of TITAN_IDS) for (const biome of BIOME_IDS) {
-    const r = fullRun(titan, biome, seed, 13 * 60);
+    const r = fullRun(titan, biome, seed, FULL_RUN_S);
     runs.push(r);
     const gaps: string[] = [];
     for (let i = 1; i < r.edges.length; i++) gaps.push((r.edges[i].t - r.edges[i - 1].t).toFixed(0));
@@ -502,7 +507,7 @@ function partH(seed: number): void {
   console.log('\n── I. determinism ──');
   for (const [titan, biome] of [['molo', 'grideast'], ['voltkite', 'lockwater']] as [TitanId, BiomeId][]) {
     const a = runs.find((r) => r.titan === titan && r.biome === biome)!;
-    const b = fullRun(titan, biome, seed, 13 * 60);
+    const b = fullRun(titan, biome, seed, FULL_RUN_S);
     const same = a.digests.length === b.digests.length && a.digests.every((d, i) => d === b.digests[i]);
     check(same, `I: ${titan}/${biome}: digests differ between two identical runs`);
     console.log(`  ${titan}/${biome}: ${a.digests.length} checkpoints ${same ? 'identical' : 'DIFFER'}`);

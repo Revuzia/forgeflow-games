@@ -91,7 +91,8 @@ function ensureLockCss(): void {
   document.head.appendChild(st);
 }
 /** a lock label longer than these drops to the .long / .xlong size (the ~16u GROW row at 1280 × 720:
- *  `SIZE LOCKED — SWITCHBOARD-5 EN ROUTE` 36 chars, `SIZE LOCKED — IRON GULLY EN ROUTE · 7:20` 40) */
+ *  `SIZE LOCKED — SWITCHBOARD-5 EN ROUTE` 36 chars, `SIZE LOCKED — IRON GULLY EN ROUTE · 16:35` 41: the
+ *  longest countdown is GATES.mainEarliestS, 995 s in the 20-minute run; any two-digit-minute label is .xlong) */
 const LOCK_LONG_CHARS = 32;
 const LOCK_XLONG_CHARS = 37;
 

@@ -23,8 +23,9 @@
 //   I. DEMOLITION NOTICE: non-elites in 1.0 × spawnRing die, elites −25 %, hostile non-boss shots in the ring
 //      deleted, boss −2 % and meter +0.1 exactly, banked pickups ≤ ULT.bankPickupsPerTick per tick, XP conserved
 //   J. CLEANUP / RUSH HOUR / BACK PAY effects; spawn gap + cap rules
-//   K. full runs (gate bot + bot_map, 5 seeds × 3 biomes): per-biome medians OVERLOAD done 5–12, ANNEX placed
-//      = breaches reached (owed before the run ended), power-ups 4–12, random-drop gap ≥ minGapS, ≤ maxAlive
+//   K. full runs (gate bot + bot_map, 5 seeds × 3 biomes, GATE2_V3.probeMinutes): per-biome medians OVERLOAD done 10–25,
+//      ANNEX placed = breaches reached (owed before the run ended), power-ups 8–25 (the 20-minute run, PACING_20 §3.10:
+//      the old 5–12 / 4–12 × 2.1 — the objective / power-up cadence is absolute, the run is 2.1× longer), random-drop gap ≥ minGapS, ≤ maxAlive
 //      alive; no bound objective ever outlives its target; every building/prop completion matches a credited
 //      event that tick; OVERLOAD XP collected the next tick
 //   L. determinism: the same seed twice ⇒ identical map + titan digests every 30 s
@@ -32,7 +33,12 @@
 
 import type { BiomeId, Building, EnemyKind, Objective, PowerUpKind, Prop, SimEvent, TitanId, TitanInput, World } from '../src/core/types.ts';
 import { BIOME_IDS, TITAN_IDS } from '../src/core/types.ts';
-import { OBJECTIVES, POWERUPS, RANKS, RANK_LEVELS, ULT, xpToNext } from '../src/core/config.ts';
+import { GATE2_V3, OBJECTIVES, POWERUPS, RANKS, RANK_LEVELS, ULT, xpToNext } from '../src/core/config.ts';
+/** K: per-biome median bands per run (PACING_20 §3.10; was OVERLOAD 5–12, power-ups 4–12 on the 10-minute run) */
+const K_OVERLOAD_BAND: readonly [number, number] = [10, 25];
+const K_POWERUP_BAND: readonly [number, number] = [8, 25];
+/** K: a full run's cap (s): GATE2_V3.probeMinutes (was the literal 900 s) */
+const K_RUN_S: number = GATE2_V3.probeMinutes * 60;
 
 type Mods = {
   world: typeof import('../src/core/world.ts');
@@ -527,7 +533,7 @@ function fullRun(titan: TitanId, biome: BiomeId, seed: number): RunRec {
   const pendingXp: { tick: number; xp: number }[] = [];
   const bad = (s: string) => { if (r.bad.length < 8) r.bad.push(s); };
   const cfgB = S.dobj.OBJECTIVE_BIOME[biome];
-  while (!w.run.result && w.t < 900) {
+  while (!w.run.result && w.t < K_RUN_S) {
     while (S.draft.hasPendingDraft(w)) {
       const off = w.upgrades.offer && w.upgrades.offer.length ? w.upgrades.offer : S.draft.rollOffer(w, w.upgrades.chestDrafts > 0);
       S.draft.pickUpgrade(w, S.bot.botPickUpgrade(w, off));
@@ -647,8 +653,8 @@ function testFullRuns(): void {
     const mr = median(rs.map((r) => r.reliefDone)), ma = median(rs.map((r) => r.annexSpawn));
     console.log(`  ${biome}: medians OVERLOAD done ${mo} (placed ${median(rs.map((r) => r.overloadSpawn))}) · RELIEF done ${mr} (placed ${median(rs.map((r) => r.reliefSpawn))}) · ANNEX placed ${ma} (done ${median(rs.map((r) => r.annexDone))}) · power-ups ${mp} (collected ${median(rs.map((r) => r.collected))})`);
     check(rs.every((r) => r.firstS1Overload), `${biome}: an OVERLOAD SITE placed in Size I on all ${rs.length} seeds`);
-    check(mo >= 5 && mo <= 12, `${biome}: OVERLOAD SITE median 5–12 per run`, `${mo}`);
-    check(mp >= 4 && mp <= 12, `${biome}: power-up median 4–12 per run`, `${mp}`);
+    check(mo >= K_OVERLOAD_BAND[0] && mo <= K_OVERLOAD_BAND[1], `${biome}: OVERLOAD SITE median ${K_OVERLOAD_BAND[0]}–${K_OVERLOAD_BAND[1]} per run`, `${mo}`);
+    check(mp >= K_POWERUP_BAND[0] && mp <= K_POWERUP_BAND[1], `${biome}: power-up median ${K_POWERUP_BAND[0]}–${K_POWERUP_BAND[1]} per run`, `${mp}`);
     check(rs.every((r) => r.annexSpawn >= r.annexOwed && r.annexSpawn <= Math.max(0, r.breaches)), `${biome}: ANNEX placed = breaches reached (every one owed before the run ended)`,
       rs.map((r) => `${r.annexSpawn}/${r.annexOwed}/${r.breaches}`).join(' '));
     check(rs.every((r) => r.bad.length === 0), `${biome}: placement bands/tiers, credited completions, next-tick XP, gap, cap, no stuck objective`);

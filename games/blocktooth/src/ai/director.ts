@@ -1,8 +1,11 @@
 // BLOCKTOOTH — the HALVARD CIVIL DEFENSE dispatch desk (ai lane, CONTRACT §5.3, §9).
 // THREE-free, DOM-free, deterministic: every roll comes from world.rng.spawn.
 //
-//   * Spawn budget accrues 1.2 + 0.9·min(t,600)/60 + 0.6·rank points per second (× 0.3 once the
-//     boss is on the field). A wave fires every 6–9 s and spends the budget on the kinds the
+//   * Spawn budget accrues 1.2 + 0.9·min(t/PACE_STRETCH,600)/60 + 0.6·rank points per second (× 0.3 once the
+//     boss is on the field). p20 (owner 2026-09-30 "go with 20 minutes"): world time is read / PACE_STRETCH 2.1,
+//     so pressure per Size rank stays what GATE 2 tuned and the ramp spans the ~20-minute run (cap at 21:00).
+//     At Size IV outside a boss fight it is × SIZE_IV_RAMP_FROM at the breach rising to × 1 at the city lock.
+//     A wave fires every 6–9 s and spends the budget on the kinds the
 //     titan's rank allows (ENEMIES[k].minRank; PICKET SQUADs only after 45 s), weighted by a
 //     per-rank mix × the biome's enemyBias, respecting per-kind caps and CITY.maxEnemies.
 //   * Groups: CROSSING WARDENs arrive in pairs/trios along a street, PICKET SQUADs as five in a
@@ -11,7 +14,10 @@
 //     a BULWARK or a cheat spawn count too).
 //   * Elite: RAMROD at min(ELITE_AT_S, t(rank IV) + 30) → `alert elite` + `eliteSpawn`, run.phase
 //     'elite'. While the phase lasts and none is alive, another follows every ELITE_REPEAT_S
-//     (max ELITE_MAX) so the chest economy survives a fast kill.
+//     (max ELITE_MAX) so the chest economy survives a fast kill. p20: ELITE_MAX is 1 — one RAMROD per run, as the
+//     10-minute run always had (its 520 s cutoff kept the repeat dormant). For a future cap > 1 the repeat keeps two
+//     guards: none within 20 s of the locked city boss's gates.dueT and none at LV >= RANK_LEVELS[4] -
+//     ELITE_CITY_LEVELS, so the last RAMROD is down before the climax.
 //   * Boss: director.bossT = min(BOSS_AT_S, t(rank V) + 20) is still kept here, but the spawn itself
 //     moved to meta/gates.ts stepGates (GATEKEEPERS §4.1 / §7.3; the K0 stub runs the old block verbatim).
 //   * cheats.noSpawns: nothing is fielded (waves, trickle, elite, scheduled boss) and the
@@ -24,7 +30,7 @@
 
 import type { DirectorState, EnemyKind, World } from '../core/types.ts';
 import {
-  BOSS_AT_S, BOSS_FRAME, CAMERA, CITY, DIRECTOR_BUDGET_RANK_MUL, ELITE_AT_S, GROW_TWEEN_S, bossFrameFitAt, bossFrameFloorAt,
+  BOSS_AT_S, BOSS_FRAME, PACE_STRETCH, RANK_LEVELS, SIZE_IV_RAMP_FROM, CAMERA, CITY, DIRECTOR_BUDGET_RANK_MUL, ELITE_AT_S, GROW_TWEEN_S, bossFrameFitAt, bossFrameFloorAt,
   bossFrameNeed, cameraDistance, frameDistance, stepFrameHold, titanHeightAt,
 } from '../core/config.ts';
 import type { FrameHold } from '../core/config.ts';
@@ -47,7 +53,13 @@ const MAX_PER_WAVE = 48;                          // bodies per wave (keeps the 
 const ELITE_AFTER_RANK_IV_S = 30;
 const BOSS_AFTER_RANK_V_S = 20;
 const ELITE_REPEAT_S = 75;
-const ELITE_MAX = 3;
+/** p20: 1 (was 3). The repeat never fired in the 10-minute run (its 520 s cutoff), so every RAMROD count GATE 2 and
+ *  the player-like sets tuned was 1. With BOSS_AT_S 1250 the 3-cap went live (2–3 per run) and RAMROD fire became the
+ *  main pre-city killer in the 4.75-min Size IV (Q-human, 96 runs, with SIZE_IV_RAMP_FROM 0.5: cap 3 → 73 clears,
+ *  6 pre-city deaths; cap 2 → 76, 4; cap 1 → 81, 2; HEAD 80, 3). The repeat code and its p20 guards stay for a
+ *  future cap > 1. */
+const ELITE_MAX = 1;
+const ELITE_CITY_LEVELS = 2;
 const SQUAD_SIZE = 5;
 
 /** Relative pick weight per kind by titan rank (I..V). Heavy kinds take over as the titan grows;
@@ -150,10 +162,18 @@ function weightOf(w: World, k: EnemyKind): number {
   return (bossRules(w) ? BOSS_MIX[k] : MIX[k][w.titan.rank]) * b;
 }
 
+/** p20: × budget at Size IV outside a boss fight — SIZE_IV_RAMP_FROM at the breach level rising to × 1 at the city lock */
+function sizeIvRamp(w: World): number {
+  const T = w.titan;
+  if (T.rank !== 3 || SIZE_IV_RAMP_FROM >= 1) return 1;
+  const u = clamp((T.level - RANK_LEVELS[3]) / (RANK_LEVELS[4] - RANK_LEVELS[3]), 0, 1);
+  return SIZE_IV_RAMP_FROM + (1 - SIZE_IV_RAMP_FROM) * u;
+}
+
 /** Budget points per second at the current time/rank (§9). */
 export function budgetRate(w: World): number {
-  const r = (1.2 + (0.9 * Math.min(w.t, 600)) / 60 + 0.6 * w.titan.rank) * (DIRECTOR_BUDGET_RANK_MUL[w.titan.rank] ?? 1);
-  const out = bossRules(w) ? r * BOSS_SPAWN_MUL : r;
+  const r = (1.2 + (0.9 * Math.min(w.t / PACE_STRETCH, 600)) / 60 + 0.6 * w.titan.rank) * (DIRECTOR_BUDGET_RANK_MUL[w.titan.rank] ?? 1);
+  const out = bossRules(w) ? r * BOSS_SPAWN_MUL : r * sizeIvRamp(w);
   return out * endlessBudgetMul(w)    // v2: EXTENDED COVERAGE escalation (1 outside endless)
     * gateSpawnMul(w);                // GATEKEEPERS §6.3: GATES.spawnMul × pressure while a home gatekeeper is alive (1 otherwise)
 }
@@ -380,12 +400,20 @@ export function stepDirector(w: World): void {
   // flush (w.gates.active / breachDue still set), and the rank IV rule only for the dev bypass (Size IV without it)
   const eliteOpen = Number.isFinite(w.gates.killT[3]) || (T.rank >= 3 && w.gates.active === 0 && w.gates.breachDue === 0);
   if (!D.bossSpawned && !gatePending && !fightAlive(w) && eliteOpen && w.gates.active === 0 && w.gates.breachDue === 0) {
-    if (D.elitesSpawned === 0 && w.t >= D.eliteT) spawnElite(w);
+    // p20: the gates.ts float convention (accumulated w.t reads 829.6666666666 against a 829.67 schedule; the
+    // 20-minute run exposed the one-tick-late RAMROD, probe_gatekeepers case 14)
+    if (D.elitesSpawned === 0 && w.t >= D.eliteT - 1e-9) spawnElite(w);
     else if (D.elitesSpawned > 0 && D.elitesSpawned < ELITE_MAX) {
       let eliteAlive = false;
       for (let i = 0; i < w.enemies.length; i++) { const e = w.enemies[i]; if (e.alive && e.kind === 'elite') { eliteAlive = true; break; } }
       const last = D.data.lastEliteT ?? D.eliteT;
-      if (!eliteAlive && w.t >= last + ELITE_REPEAT_S && w.t < D.bossT - 20) spawnElite(w);
+      // p20: the "20 s before the boss" guard reads the city boss's real due time once it is locked (D.bossT is
+      // only the 1250 s cap now), so no RAMROD is fielded right before the city boss arrives
+      const cityDue = w.gates.pending === 4 ? w.gates.dueT : Infinity;
+      // p20: no REPEAT RAMROD within ELITE_CITY_LEVELS levels of the city lock (≈ 70 s of Size IV levels), so the
+      // last one is down before the city boss arrives (the 10-minute run got that from the 520 s cutoff)
+      const nearCity = T.level >= RANK_LEVELS[4] - ELITE_CITY_LEVELS;
+      if (!eliteAlive && !nearCity && w.t >= last + ELITE_REPEAT_S - 1e-9 && w.t < Math.min(D.bossT, cityDue) - 20) spawnElite(w);
     }
   }
 

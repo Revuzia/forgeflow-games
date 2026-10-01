@@ -10,9 +10,24 @@
 // (titanHeightAt, LEVEL_GROW_S tween); RANK_LEVELS[r] is the MASS BREACH (GROW_TWEEN_S). Mass is retired:
 // loot still carries it for the pickup meshes, titan.mass is a legacy mirror of SIZE progress (sizeMassMirror); the HUD / debug read sizeProgress().
 //
+// p20 — THE 20-MINUTE RUN (owner 2026-09-30 "go with 20 minutes"; _harness/scratch/p20/PACING_20.md, GATEKEEPERS §9
+// decision 11). The numbers in this table below this block are the 10-minute run's measurements, kept for history;
+// where a constant changed, the new value is in this block and in the constant itself:
+//   xpToNext × xpStretch(L) [XP_STRETCH]: Size I ×1 → ×2.22, Size II ×1.85 flat to LV 15, then +0.03/LV (×2.45 at LV 35)
+//   cumulative XP to reach LV 7/16/27/35 [cumXpAt]: 509 / 3 218 / 11 684 / 23 091
+//   schedule [RANK_SCHEDULE_S] 0/190/480/780/1080 · catch-up 0.95/min [CATCHUP_PER_MIN] · governor from Size II
+//     [AHEAD_FROM_RANK 1, AHEAD_GRACE_S 0/40/75/95/85] · city climax × CITY_PACE 0.86 (was AHEAD_MIN 0.35)
+//   time-keyed pressure reads t / PACE_STRETCH 2.1: director budget min(t/2.1, 600) · ENEMY_HP_PER_MIN 0.086 (was 0.18)
+//   caps [GATES.capS] 305/635/930/1250 s · city boss never before [GATES.mainEarliestS] 995 s (16:35) · ELITE_AT_S 820 ·
+//     BOSS_AT_S 1250 · one RAMROD per run (director ELITE_MAX 1) · Size IV budget ramp [SIZE_IV_RAMP_FROM 0.5]
+//   GATE 2 bands [GATE2_V3]: spawn 115-290 / 330-620 / 545-915 s; breach 135-350 / 370-680 / 575-965 s; city boss
+//     spawn 995-1265 s; clears 1020-1440 s (17-24 min) [clearWindowS]; early draft gap 16-40 s (hard 13-48) to 360 s
+//   measured (final tree incl. owner feedback 3 kits, gate bot, seeds 1337+7, fresh+full, 4 titans × 3 cities, 48 runs;
+//     medians): LV 7 191 s · LV 16 473 · LV 27 768 · LV 35 1052 · city spawn 1054 (17:34) · clear 1180 (19:40); 46/48 clears
+//
 // ECONOMY (per Size rank)                      I        II        III        IV         V
 //   reached at LV [RANK_LEVELS]                 1        7         16         27         35
-//   cumulative XP to reach it [cumXpAt]          0        254       1 719      5 851      10 763
+//   cumulative XP to reach it [cumXpAt]          0        254       1 719      5 851      10 763   (p20: 509 / 3 218 / 11 684 / 23 091)
 //   body H on entry → last level before breach 1.2→2.66 5→9.89    14→24.2    32→47.3    60→63.5→67.2
 //   per-level step [BREACH_JUMP]                +17 %    +8.9 %    +5.6 %     +5.7 %     +5.8 % (2 levels)
 //   schedule [RANK_SCHEDULE_S] / gate band      0        90/60–150 210/150–300 360/280–450 480/400–560
@@ -205,10 +220,24 @@ export function titanSpeed(height: number): number {
   return 3.2 + 1.9 * Math.pow(height, 0.8);
 }
 
-/** XP curve: xpToNext(level) — level starts at 1. Target ≈ LV 28–34 by the boss (~8.5 min). */
+/** XP curve: xpToNext(level) — level starts at 1. p20: × xpStretch(level) → LV 7 ≈ 3:15, LV 16 ≈ 7:50, LV 27 ≈ 13:00,
+ *  LV 35 + the city boss ≈ 17:45 (gate bot; _harness/scratch/p20/PACING_20.md §3.2). */
 export function xpToNext(level: number): number {
-  return Math.round(8 + 6 * Math.pow(level, 1.35));
+  return Math.round((8 + 6 * Math.pow(level, 1.35)) * xpStretch(level));
 }
+/** p20 (owner 2026-09-30 "go with 20 minutes"): × the 10-minute curve by level. Size I ramps from × 1 (LV 1) toward
+ *  × (1 + early); from Size II on: × sizeII flat, + late per level past lateFrom (later levels need clearly more XP).
+ *  Gate tuning (2026-10-01): late 0.04 → 0.03. The Size IV budget ramp (SIZE_IV_RAMP_FROM) lowers Size IV kill income,
+ *  so 0.04 put LV 35 / the city boss at 18:15 (gate bot, 48 runs); 0.03 measured 17:43 / 17:45 (late 0.025: 17:28), and
+ *  17:32 / 17:34 with the owner-feedback-3 VOLT-KITE / BRIARWICK kits. */
+export const XP_STRETCH = { early: 1.3, earlyK: 1.8, sizeII: 1.85, late: 0.03, lateFrom: 15 };
+export function xpStretch(level: number): number {
+  const L = Math.max(1, level);
+  if (L < RANK_LEVELS[1]) return 1 + XP_STRETCH.early * (1 - Math.exp(-(L - 1) / XP_STRETCH.earlyK));
+  return XP_STRETCH.sizeII + XP_STRETCH.late * Math.max(0, L - XP_STRETCH.lateFrom);
+}
+/** p20: every time-keyed curve reads world time / PACE_STRETCH (the 10-minute tables stretched to ~20 min). */
+export const PACE_STRETCH = 2.1;
 
 /** Total XP banked from LV 1 to the START of `level` (Σ xpToNext over the levels below it). */
 const CUM_XP: number[] = [0, 0];
@@ -243,8 +272,8 @@ export function sizeMassMirror(rank: RankIndex, level: number, xp: number): numb
 /** Pacing schedule (s since run start) the rubber band targets: when each Size rank is due. Growth
  *  XP gets a catch-up multiplier while the run is behind the NEXT rank's time:
  *  mul = 1 + CATCHUP_PER_MIN × minutesBehind (cap CATCHUP_MAX). */
-export const RANK_SCHEDULE_S: readonly number[] = [0, 90, 210, 360, 480];
-export const CATCHUP_PER_MIN = 2.0;
+export const RANK_SCHEDULE_S: readonly number[] = [0, 190, 480, 780, 1080];
+export const CATCHUP_PER_MIN = 0.95;
 export const CATCHUP_MAX = 3;
 /** The other half of the rubber band (next rank ≥ AHEAD_FROM_RANK, i.e. the Size V breach): a pace
  *  governor projects the next breach from the average XP rate since entering the current rank; a
@@ -254,10 +283,14 @@ export const CATCHUP_MAX = 3;
  *  RANK_LEVELS tuned the ungoverned Size II–IV times sit inside their bands, and AHEAD_FROM_RANK = 1
  *  (graces below, each inside its gate band's floor II 60 · III 150 · IV 280 s) changed nothing in the
  *  36-run sweep. It is the lever if a faster eater ever breaks the II–IV floors. */
-export const AHEAD_FROM_RANK = 4;
-export const AHEAD_GRACE_S: readonly number[] = [0, 20, 35, 45, 40];
+export const AHEAD_FROM_RANK = 1;
+export const AHEAD_GRACE_S: readonly number[] = [0, 40, 75, 95, 85];
 export const AHEAD_PER_MIN = 1.2;
 export const AHEAD_MIN = 0.35;
+/** p20: × growth XP while the city boss is due or alive at Size IV (GATEKEEPERS §4.2 / owner decision 10). It was
+ *  AHEAD_MIN 0.35 on the 10-minute curve; × xpStretch(35) (2.45, so 0.35 × 2.45 ≈ 0.86) keeps the same levels per second of climax on the
+ *  20-minute curve (1-2 draft screens in the city fight, not 0). */
+export const CITY_PACE = 0.86;
 
 // ─────────────────────────────── destruction tiers ───────────────────────────────
 export interface TierDef {
@@ -845,7 +878,7 @@ export const TITAN = {
 } as const;
 
 /** Enemy stats scale with elapsed minutes: hp × (1 + ENEMY_HP_PER_MIN · min), dmg × rankHpMul. */
-export const ENEMY_HP_PER_MIN = 0.18;
+export const ENEMY_HP_PER_MIN = 0.086;
 /** × enemy HP at spawn by the titan's rank (on top of the per-minute ramp). The titan's damage
  *  grows ×45 from Size I to V while the minute ramp only gives ×2.5, so without this every heavy
  *  died before its first shot at Size IV–V (measured: 0–4 hostile paints per 100 s). */
@@ -876,6 +909,12 @@ export const KILL_MASS_RANK_MUL: readonly number[] = [1, 1, 3, 25, 30];
 export const ENEMY_AIM_LEAD: readonly number[] = [0, 0, 0.35, 0.6, 0.65];
 /** Director spawn budget × this by titan rank (the §9 rate is tuned for Size I–II bodies). */
 export const DIRECTOR_BUDGET_RANK_MUL: readonly number[] = [1, 1, 1.3, 2.0, 2.6];
+/** p20 (owner 2026-09-30 "go with 20 minutes"): × director budget at Size IV outside a boss fight, from this at the
+ *  breach (LV RANK_LEVELS[3]) rising linearly by level to × 1 at the city lock (LV RANK_LEVELS[4]); the city fight is
+ *  unchanged. Size IV lasts ~4.75 min in the 20-minute run against ~1.5 min in the 10-minute one, and without the ramp
+ *  the player-like policy died before the city boss 10× as often (P-human, 96 runs: pre-city deaths HEAD 1 · no ramp
+ *  10 · ramp 0.5 3; city-fight deaths 10 · 10 · 11; mortar fire). Size IV now builds to today's crescendo. */
+export const SIZE_IV_RAMP_FROM = 0.5;
 /** Boss HP × this per rank reached when it spawns (it expects Size V, copes with IV). */
 export const BOSS_HP_SCALE: readonly number[] = [0.2, 0.3, 0.45, 0.8, 1.15];
 /** STRUCTURAL FATIGUE: a containment rig that has been fighting for longer than `startS` (after its
@@ -908,8 +947,8 @@ export const BOSS_DASH_READ = { escapeCdS: 0.6, followS: 1.0 } as const;
 /** × boss attack damage by boss phase (index = phase 1..3): the rig gets meaner as it breaks down. */
 export const BOSS_PHASE_DMG_MUL: readonly number[] = [1, 0.9, 1.05, 1.35];
 /** Elite arrives at min(time, rank IV + 30 s); boss at min(time, rank V + 20 s). */
-export const ELITE_AT_S = 390;
-export const BOSS_AT_S = 540;
+export const ELITE_AT_S = 820;
+export const BOSS_AT_S = 1250;
 
 // ═══════════════════════════════ GATEKEEPERS (§7.2 — merged by lane K0) ═══════════════════════════════
 /** GATEKEEPERS.md §1, §4, §5. Starting points; probe_gatekeepers + GATE 2 tune them. */
@@ -922,9 +961,9 @@ export const GATES = {
   entryRingMul: 1.15,
   /** time caps (world.t): slot s is locked at this time even below its level (index = slot; 4 = the city boss,
    *  which also needs unlocked === 3; it reuses BOSS_AT_S) */
-  capS: [0, 165, 320, 430, 540] as readonly number[],
+  capS: [0, 305, 635, 930, 1250] as readonly number[],
   /** the city boss (slot 4) never spawns before this world.t (= RANK_SCHEDULE_S[4] − AHEAD_GRACE_S[4]); §4.1 */
-  mainEarliestS: 440,
+  mainEarliestS: 995,
   /** minimum seconds between a breach and the next fight's arrival */
   chainGapS: 20,
   /** × director budget while a HOME gatekeeper is alive (keyed by id, never by slot); rematches and the
@@ -968,10 +1007,10 @@ export const GATE_HP_MUL: Readonly<Record<GateId, number>> = { stencil1: 1, cord
 /** GATE 2 v3 (probe_sim + probe_gatekeepers). World seconds. Lane K1a switches probe_sim to these. */
 export const GATE2_V3 = {
   /** gatekeeper spawn (index = slot) and breach (Size r reached = gate r's kill) bands */
-  spawnBand: [[0, 0], [60, 150], [170, 320], [270, 450]] as readonly (readonly [number, number])[],
-  breachBand: [[0, 0], [80, 210], [210, 380], [300, 500]] as readonly (readonly [number, number])[],
+  spawnBand: [[0, 0], [115, 290], [330, 620], [545, 915]] as readonly (readonly [number, number])[],
+  breachBand: [[0, 0], [135, 350], [370, 680], [575, 965]] as readonly (readonly [number, number])[],
   /** the city boss spawns inside this band (LV 35 and ≥ GATES.mainEarliestS, or the cap) */
-  mainSpawn: [440, 560] as readonly [number, number],
+  mainSpawn: [995, 1265] as readonly [number, number],
   /** levels gained from the city boss's spawn to its kill: every run ≤ max, matrix median ≤ median */
   mainFightLevels: { max: 6, median: 4 },
   /** each gate fight spawn→kill; the per-gate median must sit in the median band */
@@ -979,6 +1018,15 @@ export const GATE2_V3 = {
   gateFightMedianS: [25, 55] as readonly [number, number],
   /** the city boss fight at Size IV (median band; per-fight hard cap is the run-time window) */
   mainFightMedianS: [60, 150] as readonly [number, number],
+  /** p20 (owner 2026-09-30 "go with 20 minutes"; GATEKEEPERS §5.3): shared harness bands, so every probe reads one
+   *  source. A clear inside clearWindowS (17–24 min) counts; one below its floor is "too fast". */
+  clearWindowS: [1020, 1440] as readonly [number, number],
+  /** early draft cadence: drafts before draftEarlyS (or Size III) — median gap in draftGapS, every gap in draftGapHardS */
+  draftEarlyS: 360,
+  draftGapS: [16, 40] as readonly [number, number],
+  draftGapHardS: [13, 48] as readonly [number, number],
+  /** default run length (minutes) of the headless probes (probe_sim / probe_gatekeepers / probe_balance / probe_meta …) */
+  probeMinutes: 25,
 } as const;
 /** EXTENDED COVERAGE (REPLACES ENDLESS.bossEveryS once lane K1a lands): after KEEP GOING and after every
  *  rematch dies, the next rematch comes rematchGapS later, alternating gatekeeper (G1 → G2 → G3 …) and city
