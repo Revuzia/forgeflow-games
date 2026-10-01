@@ -325,6 +325,18 @@ export function defineCreatures(K) {
   class Creature extends Critter {
     constructor(def, ctx, kind, info) {
       super(def, ctx, kind);
+      /* THE ROSTER SEES THE WORLD. A critter ctx's `world` is the course's bundle
+         { broadphase, killVolumes, volumes, course } — it has NO raycast, so the
+         base `_groundY` always returned its fallback and every `world.raycast` was
+         skipped. Measured in the arena (cr_arena.py, 2026-10-01): the burrower
+         never left its mound, the ember imp hopped in place and the snowball
+         burst the frame it was shoved. The roster casts against the course
+         BROADPHASE instead, skipping its own colliders. (The five original
+         critters keep the bundle untouched: their behaviour is bit-identical.) */
+      const host = this.world;
+      const self = this;
+      this.world = Object.create(host || null);
+      this.world.raycast = function raycast(o, d, max, out) { return self._cast(o, d, max, out); };
       this.info = info || CREATURE_INFO[kind] || { notice: 8, coins: 3, respawn: 0, emoteY: 1.4, defeatT: 1.0, name: kind.toUpperCase() };
       const d = this.def;
       this.displayName = String(d.name || this.info.name || kind.toUpperCase());
@@ -335,7 +347,7 @@ export function defineCreatures(K) {
          so the body yaw is the authored one turned half a circle. */
       this.homeYaw = d.yaw !== undefined ? fin(d.yaw, 0) + Math.PI : 0;
       this.yaw = this.homeYaw;
-      this.groundY = this._groundY(this.home.x, this.home.y + 0.5, this.home.z, this.home.y);
+      this.groundY = this._groundY(this.home.x, this.home.y - 1.4, this.home.z, this.home.y);   // probe from 0.6 m over the feet
       this.home.y = this.groundY;
       this.pos.copy(this.home);
       this.state = 'idle';
@@ -361,6 +373,40 @@ export function defineCreatures(K) {
       /* last frame's player snapshot, for the stomp test */
       this._pValid = false; this._pY = 0; this._pVy = 0;
       this.stompCount = 0;
+    }
+
+    /* ---- the world probe ---------------------------------------------------- */
+
+    /** The course broadphase (the one thing in a critter ctx that can raycast). */
+    _rayHost() {
+      const c = this.ctx;
+      const bp = c && (c.broadphase || (c.world && c.world.broadphase));
+      return bp && typeof bp.raycast === 'function' ? bp : null;
+    }
+
+    /**
+     * Raycast the course, IGNORING this creature's own colliders (they are parked
+     * inactive for the one call and restored; allocation-free). Same contract as
+     * the broadphase: fills out.t / out.collider / out.normal, returns hit.
+     */
+    _cast(origin, dir, max, out) {
+      const bp = this._rayHost();
+      if (!bp) return false;
+      const cs = this.colliders;
+      const n = Math.min(cs.length, 30);
+      let mask = 0;
+      for (let i = 0; i < n; i++) if (cs[i].active) { mask |= (1 << i); cs[i].active = false; }
+      let hit = false;
+      try { hit = bp.raycast(origin, dir, max, out); } catch (e) { hit = false; }
+      for (let i = 0; i < n; i++) if (mask & (1 << i)) cs[i].active = true;
+      return hit;
+    }
+
+    /** Ground under (x, z) from a ray down from y + 2. Without a broadphase (a
+        Node smoke test, a ctx with no course) the ground is taken as flat. */
+    _groundY(x, y, z, fallback) {
+      if (!this._rayHost()) return Number.isFinite(fallback) ? fallback : this.pos.y;
+      return super._groundY(x, y, z, fallback);
     }
 
     /* ---- construction helpers ------------------------------------------ */
@@ -484,7 +530,7 @@ export function defineCreatures(K) {
     /** Is a straight path from here toward (dx, dz) walkable for `ahead` metres? */
     _clearAhead(dx, dz, ahead, maxDrop) {
       const w = this.world;
-      if (!w || typeof w.raycast !== 'function') return true;
+      if (!w || typeof w.raycast !== 'function' || !this._rayHost()) return true;
       const l = Math.hypot(dx, dz);
       if (l < 1e-6) return true;
       _a.set(this.pos.x, this.pos.y + 0.45, this.pos.z);

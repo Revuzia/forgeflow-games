@@ -114,3 +114,12 @@ plus harness-only files under _harness/ (the test arena data + its driver).
     Said intro, hurt1, phase2, hurt2, phase3, defeat. Hero in the sea 250 frames, climbed out by surface-jumps.
     (On the walk to the crest the bot fell in the floe/shore channel once: game 'dead' -> respawn at cp-ring, which
     is beside the crest.)
+- GAME BUG FOUND BY THE ARENA, FIXED (creatures.js): a critter ctx's `world` is the course bundle
+  {broadphase, killVolumes, volumes, course} with NO raycast, so Critter._groundY always returned its fallback and
+  every `world.raycast` in the roster was skipped. Effects measured in the arena: the burrower never left its mound
+  (its first telegraph was at HOME, 9 m from Nim), the ember imp hopped in place at home for 2680 frames, the
+  snowball burst the frame it was shoved (the cub's "sulk" was a miss by construction), the sentry's line of sight
+  was always clear. The roster now casts against the course BROADPHASE (Creature._cast, parking its own colliders
+  for the call); the five original critters keep the bundle, untouched. Node sim of the imp now hops 10 -> 19 m.
+  Every enemy proof is being re-run on the fixed code; the three defeated bosses (bramblehide, slagmaw, hoarhorn)
+  only probe the floor with a fallback equal to the flat arena floor, so their proofs are unaffected.
