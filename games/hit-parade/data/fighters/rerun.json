@@ -37,6 +37,9 @@
     "crouchFront": 0.427,
     "crouchBack": 0.034
   },
+  "step": {
+    "distM": 1.715
+  },
   "colors": [
     {"name": "Death Row", "tint": null},
     {"name": "Solitary", "tint": "#37474f"},

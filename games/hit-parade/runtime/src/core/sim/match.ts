@@ -460,6 +460,7 @@ export function readFighter(m: Match, i: number): FighterSnap {
       frame: stepKind === 'none' ? 0 : s[b + F.stF] + 1,
       side: stepKind === 'sidestep' || stepKind === 'sidewalk' ? (s[b + F.stepDir] > 0 ? -1 : 1) : 0,
       dir: stepKind === 'none' ? '' : s[b + F.stepIn] !== 0 ? 'in' : 'out',
+      dist: cf.stepDist / M, // CHANGED(fix_core) D1: the fighter's own sidestep arc length (m)
     },
   };
 }

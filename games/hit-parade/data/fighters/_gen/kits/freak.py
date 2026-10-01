@@ -19,7 +19,9 @@ def build():
         cpu={"style": "boss_armor", "rangeM": [1.0, 2.4], "pokes": ["5M", "2M"], "antiAir": ["2H"],
              "punish": ["5H", "claw_rush_h"], "combo": ["2L", "5M", "claw_rush_m"], "approach": ["crusher_leap_m"],
              "grab": ["specimen_grab_m"], "armor": ["5H", "6H", "claw_rush_m", "crusher_leap_m"], "meter": "meltdown",
-             "antiStep": ["5M", "specimen_grab_m"]},
+             # CHANGED(fix_balance) (CONTRACT 35.21): the anti-step answer is the homing 5M / EX ROAR, not the command grab -
+             # the CPU took the fastest anti-step move that reaches = the 5 f SPECIMEN GRAB on every visible step
+             "antiStep": ["5M", "roar_ex"]},
         doc=dict(
             difficulty=2, packs="Creature (mutant punch, swiping, jump attacks, roar, flex, run/walk)",
             look="Mutant: hulking cracked-rock skin, bony mask with cyan crystals, crystal claw growths on both "
@@ -30,7 +32,7 @@ def build():
                 "on camera.",
             plan="Boss tools, not cheats (FIGHTING_DESIGN 10): 2.40 m reach and 11,500 HP, 2 hits of armor on "
                  "5H, 6H and every special, CRUSHER LEAP crosses the screen as an overhead, ROAR blows people and "
-                 "projectiles away, SPECIMEN GRAB has the longest command-grab reach in the game.",
+                 "projectiles away, SPECIMEN GRAB reaches as far as Bruno's WALK IN but is slower and lighter.",
             weakness="The biggest hurtbox in the game and the slowest dash; armor loses to throws, multi-hits "
                      "and supers; ROAR and CRUSHER LEAP are very punishable; honest frame data (no normal "
                      "below -4 except the anti-air).",
@@ -42,7 +44,7 @@ def build():
                          "It does not need to step itself: 2.40 m reach and armor.",
                 homing="5M WILD SWING (10f looping claw, homing, -4) is the anti-step tool. ROAR hits all around it (its "
                        "box is centred on the body: a square 2.0-3.0 m wide), so circling it does not help once it "
-                       "roars. SPECIMEN GRAB homes with the longest command-grab reach in the game; MELTDOWN and "
+                       "roars. SPECIMEN GRAB homes (~2.0 m from centre); MELTDOWN and "
                        "SPECIMEN 13 home.",
                 wall="CLAW RUSH H / EX wall-splat; ROAR's 4 m/s launch becomes a wall splat when the opponent's back is "
                      "to the ring boundary."),
@@ -110,16 +112,19 @@ def build():
     K.add("2M", "2M", name="Floor Slam", clip="floor_slam", startup=11, damage=700, cancel=["special", "super"],
           role=["poke", "low"], desc="Slams both claws on the floor (low).", why="11f, 700 (+4/-2).")
     K.add("5H", "H", name="Crystal Swipe", clip="crystal_swipe", startup=15, recovery=21, damage=1100,
-          armor={"hits": 2, "f": [5, 14]}, cancel=["special", "super"], sfx=[[9, "whoosh_heavy"]],
+          armor={"hits": 2, "f": [9, 14]}, cancel=["special", "super"], sfx=[[9, "whoosh_heavy"]],
           desc="Overhead claw haymaker with 2 hits of armor.",
-          why="Boss armored heavy (FIGHTING_DESIGN 8c ENFORCER: 2-hit armor on heavies): 15/3/21, 1100, +1/-4.")
+          why="Boss armored heavy (FIGHTING_DESIGN 8c ENFORCER: 2-hit armor on heavies): 15/3/21, 1100, +1/-4. "
+              "CHANGED(fix_balance): the armor covers the last 6 startup frames (9-14, was 5-14) - an early poke still "
+              "interrupts the wind-up (armored normals absorbing every poke made THE FREAK a wall, CONTRACT 35.21).")
     K.add("2H", "AA", name="Jumping Claw", clip="jump_claw", startup=11, recovery=22,
           moveY=[[0, 0], [6, 0.2], [11, 0.4], [24, 0.0]], juggle={"js": 1, "ji": 1, "jl": 0},
           cancel=["special", "super"], desc="Hops up with both claws: anti-air.",
           why="Monster anti-air: 11/4/22 (+1/-7) on a small hop.")
     K.add("6H", "OH", input="6H", kind="command", name="Hammer Down", clip="hammer_down", startup=24, damage=1000,
-          armor={"hits": 2, "f": [5, 23]}, sfx=[[14, "whoosh_heavy"]], desc="Leaping two-claw slam: armored overhead.",
-          why="Boss overhead: 24f (reactable) with 2-hit armor 5-23 and 1000 damage.")
+          armor={"hits": 2, "f": [18, 23]}, sfx=[[14, "whoosh_heavy"]], desc="Leaping two-claw slam: armored overhead.",
+          why="Boss overhead: 24f (reactable) with 2-hit armor 18-23 (CHANGED fix_balance: was 5-23, the last 6 startup "
+              "frames like 5H) and 1000 damage.")
     K.add("j.L", "jL", input="j.L", name="Air Claw", clip="air_claw", startup=6, desc="Air claw.",
           why="Startup 6 (monster).")
     K.add("j.M", "jM", input="j.M", name="Air Swipe", clip="air_swipe", desc="Air swipe.")
@@ -193,7 +198,11 @@ def build():
                       why3d="12f radial shockwave (1.5 m deep = half the 3.0 m box): the EX is its fast anti-step answer",
                       why="EX: 12f, super armor."))
     sg = {}
-    for s, (rng, dmg) in {"l": (1.30, 2600), "m": (1.20, 3000), "h": (1.10, 3400)}.items():
+    # CHANGED(fix_balance) (CONTRACT 35.21, measured in _harness/_reports/progress_fix_balance.md): the WALK IN template
+    # (5 f, 1.10-1.30 m push-front gap, 2600-3400) on a 0.75 m push front reached from ~2.3 m centre distance and was 52-55 %
+    # of THE FREAK's damage vs CPU L6 / optimal contestants (the mini-boss wall): gap 1.00 / 0.92 / 0.85 m (~2.0 m centre
+    # reach = Bruno's WALK IN on a normal body), damage 2200 / 2550 / 2900 (the 5 f startup stays the template's)
+    for s, (rng, dmg) in {"l": (1.00, 2200), "m": (0.92, 2550), "h": (0.85, 2900)}.items():
         # P2 paired grab: grab_slam (3.7 s over 80 f) rakes them (lock 10), leaps 2 m up (lock 18-30) and crashes down
         # at clip 1.67 s = lock 36 (was hitF 51, when it is already rising). The victim cannot be carried up (the sim
         # carry is horizontal), so it is raked, left dazed under the leap and flattened by the landing (kd_fall_b from
@@ -205,16 +214,18 @@ def build():
     K.special("specimen_grab", "cmdgrab", motion="360", kind="cmdgrab",
               common=dict(name="Specimen Grab", clip="throw_reach", recovery=50, role=["grab", "antistep"],
                           sfx=[[1, "grab_cloth"]], why3d="command grab reach arc: homes through its active frames",
-                          desc="360 command grab with the longest reach in the game.",
-                          why="Boss command grab: reach +0.08..+0.18 m over the template (its 2.40 m arms), "
-                              "damage +100 per strength, whiff recovery 50."),
+                          desc="360 command grab with a long reach.",
+                          why="Boss command grab (CHANGED fix_balance): push-front gap 1.00 / 0.92 / 0.85 m (its 0.75 m "
+                              "push front makes that ~2.0 m from centre, Bruno's WALK IN reach), damage 2200 / 2550 / "
+                              "2900 (template 2500 / 2900 / 3300), whiff recovery 50."),
               per=sg,
-              ex=dict(name="Specimen Grab (EX)", damage=3700, invuln={"strike": [1, 5]},
-                      grab={"rangeM": 1.40, "frames": 84, "adv": 28, "hitF": 38, "swap": False, "air": False,
+              ex=dict(name="Specimen Grab (EX)", damage=3150, invuln={"strike": [1, 5]},
+                      grab={"rangeM": 1.08, "frames": 84, "adv": 28, "hitF": 38, "swap": False, "air": False,
                             "techable": False, "clip": "grab_slam",
                             "victim": [[0, "hit_body", 0.0, 0.3], [11, "hit_high_l", 0.0, 0.3], [19, "dizzy", 0.3, 1.0],
                                        [38, "kd_fall_b", 1.25, 1.8667]]},
-                      desc="Strike-invulnerable 1-5, 1.40 m.", why="EX: strike invulnerable 1-5."))
+                      desc="Strike-invulnerable 1-5, 1.08 m.",
+                      why="EX: strike invulnerable 1-5, gap 1.08 m, 3150 (CHANGED fix_balance: was 1.40 m / 3700)."))
 
     K.add("meltdown", LV1, kind="super1", input="236236", name="Meltdown", strength="H", clip="meltdown_clip",
           startup=10, active=27, recovery=50, damage=2200, hitstun=76,

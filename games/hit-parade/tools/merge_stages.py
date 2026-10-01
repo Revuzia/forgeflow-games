@@ -5,6 +5,8 @@
   python tools/merge_stages.py --nodes              # also print each animated node's pivot / local +Y / bbox centre
   python tools/merge_stages.py --install a,b        # CHANGED(STAGES3D-A): swap staged builds in, then merge
   python tools/merge_stages.py --install all        #   (every stage staged in _harness/scratch/stages3d_out/)
+                                                    # CHANGED(fix_ui_stage): + stages_cache/out3d/ (stagekit_b builds);
+                                                    # a stage staged without a GLB = fragment-only install
 
 Fragments are written by the stage builds (art/stages/<id>.py -> art/stages/<id>.stage.json, lanes STAGES-A/-B); each
 is one CONTRACT 21 StageDef (same fields as the rust_theater entry). Rules:
@@ -42,6 +44,8 @@ OUT = os.path.join(ROOT, "data", "stages.json")
 FRAG_DIR = os.path.join(ROOT, "art", "stages")
 GLB_DIR = os.path.join(ROOT, "art", "gltf", "stages")
 STAGE_OUT = os.path.join(ROOT, "_harness", "scratch", "stages3d_out")
+# CHANGED(fix_ui_stage): art/stages/stagekit_b.py (rooftop / control_room) stages in stages_cache/out3d - --install reads both
+STAGE_DIRS = [STAGE_OUT, os.path.join(ROOT, "_harness", "scratch", "stages_cache", "out3d")]
 STAGE_ORDER = ["rust_theater", "butcher_block", "wheel_of_pain", "rooftop", "control_room"]
 REQUIRED_BUILT = ["id", "name", "status", "glb", "home", "look", "floor", "walls", "spawn", "camera", "exposure",
                   "toneMapping", "fog", "environment", "lights", "crowd", "music", "dressing"]
@@ -277,34 +281,71 @@ def validate(s, budget, errs, warns, glb_dir=GLB_DIR):
     s["build"] = st
 
 
+def _replace(src, dst, tries=20):
+    """CHANGED(fix_ui_stage): atomic rename, retried while a dev server still holds the old file open (Windows sharing)"""
+    import time
+    for k in range(tries):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError as ex:
+            print("  busy (%s), retry %d" % (ex, k + 1))
+            time.sleep(0.5)
+    raise SystemExit("could not replace %s" % dst)
+
+
+def staged_fragment(sid):
+    """CHANGED(fix_ui_stage): the newest staged fragment of `sid` across STAGE_DIRS (STAGES3D-A builds stage in
+    stages3d_out/, the stagekit_b builds - rooftop / control_room - in stages_cache/out3d/) -> (path, dir) or (None, None)"""
+    best = (None, None, -1.0)
+    for d in STAGE_DIRS:
+        fp = os.path.join(d, sid + ".stage.json")
+        if os.path.exists(fp) and os.path.getmtime(fp) > best[2]:
+            best = (fp, d, os.path.getmtime(fp))
+    return best[0], best[1]
+
+
 def install(ids_arg, budget, check):
-    """validate staged builds, then move GLB + env + fragment into place (one stage at a time)"""
-    staged = sorted(os.path.basename(p)[:-len(".stage.json")] for p in glob.glob(os.path.join(STAGE_OUT, "*.stage.json")))
+    """validate staged builds, then move GLB + env + fragment into place (one stage at a time).
+    CHANGED(fix_ui_stage): both staging dirs are searched; a stage staged WITHOUT a GLB (a `--fragment-only` re-emit of the
+    StageDef: lights / fog / copy) is a fragment-only install - validated against the shipped GLB + env, only the
+    fragment moves."""
+    staged = sorted({os.path.basename(p)[:-len(".stage.json")] for d in STAGE_DIRS
+                     for p in glob.glob(os.path.join(d, "*.stage.json"))})
     want = staged if ids_arg in (True, "all") else [i for i in str(ids_arg).split(",") if i]
     moved, errs_all = [], []
     for sid in want:
-        fp = os.path.join(STAGE_OUT, sid + ".stage.json")
-        if not os.path.exists(fp):
-            errs_all.append("%s: nothing staged (%s missing)" % (sid, os.path.relpath(fp, ROOT)))
+        fp, sdir = staged_fragment(sid)
+        if not fp:
+            errs_all.append("%s: nothing staged (%s.stage.json in none of %s)" % (
+                sid, sid, ", ".join(os.path.relpath(d, ROOT) for d in STAGE_DIRS)))
             continue
         s = json.load(open(fp, encoding="utf-8"))
+        glb_name = s.get("glb", sid + ".glb")
+        frag_only = not os.path.exists(os.path.join(sdir, glb_name))
         errs, warns = [], []
-        validate(s, budget, errs, warns, glb_dir=STAGE_OUT)
+        validate(s, budget, errs, warns, glb_dir=GLB_DIR if frag_only else sdir)
         for w in warns:
             print("WARN  [staged]", w)
         if errs:
             errs_all += ["[staged] " + e for e in errs]
             continue
-        files = [(os.path.join(STAGE_OUT, s.get("glb", sid + ".glb")), os.path.join(GLB_DIR, s.get("glb", sid + ".glb")))]
-        env = s.get("environment", {}).get("hdr")
-        if env:
-            files.append((os.path.join(STAGE_OUT, env), os.path.join(GLB_DIR, env)))
+        files = []
+        if not frag_only:
+            files.append((os.path.join(sdir, glb_name), os.path.join(GLB_DIR, glb_name)))
+            env = s.get("environment", {}).get("hdr")
+            if env and os.path.exists(os.path.join(sdir, env)):
+                files.append((os.path.join(sdir, env), os.path.join(GLB_DIR, env)))
+            elif env:
+                print("NOTE  %s: no staged %s - the shipped env HDR stays" % (sid, env))
+        else:
+            print("NOTE  %s: fragment-only install (no staged GLB): validated against the shipped %s" % (sid, glb_name))
         files.append((fp, os.path.join(FRAG_DIR, sid + ".stage.json")))
         if check:
             print("install check OK: %s (%s)" % (sid, ", ".join(os.path.relpath(b, ROOT) for _, b in files)))
             continue
         for a, b in files:
-            os.replace(a, b)
+            _replace(a, b)
         moved.append(sid)
         print("installed %s: %s" % (sid, ", ".join(os.path.relpath(b, ROOT) for _, b in files)))
     return moved, errs_all

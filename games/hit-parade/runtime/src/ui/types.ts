@@ -70,6 +70,14 @@ export interface UiMoveDef {
   homing?: boolean; linear?: boolean;
   track?: { until?: number; rate?: number };
   projectile?: { aimed?: boolean };
+  /** CHANGED(fix_ui_stage) (CONTRACT 19.1 / 20.2 / 28.2): the follow-up plumbing the move list reads - `cancel` entries
+   *  `chain:<id>`, `tc` = reachable only through a parent's chain, `trigger` = the input that fires a rekka part inside the
+   *  parent's window, `stance` 'enter' | 'follow' | 'exit', `counter.follow` = the counter's automatic follow-up */
+  cancel?: ReadonlyArray<string>;
+  tc?: boolean;
+  trigger?: { classic?: { motion?: string; btn?: string }; simple?: string };
+  stance?: string;
+  counter?: { follow?: string };
 }
 
 /** CONTRACT 5.2 fighter file, the fields the UI reads. `difficulty` (1..3) is optional (CHANGED(UI) request). */
@@ -79,7 +87,9 @@ export interface UiFighterDef {
   moves?: Readonly<Record<string, UiMoveDef>>;
   simple?: Readonly<Record<string, unknown>>;
   classic?: ReadonlyArray<{ motion: string; btn: string; move: string }>;
-  unique?: { kind: string; trait?: string; thresholdPct?: number };
+  unique?: { kind: string; trait?: string; thresholdPct?: number;
+    /** CHANGED(fix_ui_stage): a stance's follow-ups by button / its exits by direction (CONTRACT 28.2 `stance`) */
+    followups?: Readonly<Record<string, string>>; exit?: Readonly<Record<string, string>> };
   rival?: string; stage?: string;
   /** CHANGED(UI) P2 - CONTRACT 26.3 season text (lane FIGHTERS): VS-card line, results quotes, pre-fight lines per
    *  opponent id (or 'default'), the SEASON ending text */
@@ -159,6 +169,8 @@ export interface UiSave {
   seasonClears?: Readonly<Record<string, number>>;
   bestScores?: Readonly<Record<string, number>>;
   board?: ReadonlyArray<{ name: string; score: number; fighter: string }>;
+  /** CHANGED(fix_ui_stage) (verifier modes D3): SaveStore's per-length boards (`board` above = the SEASON one) */
+  scores?: { readonly season?: ReadonlyArray<{ name: string; score: number; fighter: string }>; readonly pilot?: ReadonlyArray<{ name: string; score: number; fighter: string }> };
   onlineName?: string;
 }
 export interface UiSaveStore { get(): UiSave; set?(patch: Partial<UiSave>): void }

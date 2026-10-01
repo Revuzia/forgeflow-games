@@ -25,7 +25,7 @@ import {
 import type { Match } from './state.ts';
 import { ballLaunch, spawnProjectile } from './projectiles.ts';
 import { clampToRing, pushCircle } from './boxes.ts';
-import { KDF, endsFaceDown, victimPose } from './throwpose.ts';
+import { KDF, endsFaceDown, holdPos, victimPose } from './throwpose.ts';
 import { Q, YAW_HALF, alongYaw, cosQ, divRound, dirToYaw, isqrt, mulQ, sinQ, turnToward } from './fx3d.ts';
 
 const AY = new Int32Array(2);
@@ -211,7 +211,9 @@ export function startSidestep(m: Match, i: number, isIn: boolean): void {
   s[b + F.stepIn] = isIn ? 1 : 0;
   setSt(m, i, ST.SIDESTEP);
   autoFace(m, i);
-  arcMove(m, i, m.sys.stepCurve[1] - m.sys.stepCurve[0]);
+  // CHANGED(fix_core) D1 (CONTRACT §35.20): the fighter's own arc (step.distM from its measured body), same 15 f curve
+  const cv = m.cf[i].stepCurve;
+  arcMove(m, i, cv[1] - cv[0]);
   autoFace(m, i);
 }
 
@@ -264,7 +266,8 @@ function sidestepTick(m: Match, i: number): void {
   }
   if (k >= sys.stepAttackF && tryAct(m, i, CTX.STEP)) return;
   autoFace(m, i);
-  arcMove(m, i, sys.stepCurve[k] - sys.stepCurve[k - 1]);
+  const cv = m.cf[i].stepCurve; // CHANGED(fix_core) D1: per-fighter arc length
+  arcMove(m, i, cv[k] - cv[k - 1]);
   autoFace(m, i);
 }
 
@@ -723,6 +726,11 @@ function teleport(m: Match, i: number, mv: CMove): void {
   s[b + F.x] = nx;
   s[b + F.z] = nz;
   clampToRing(m, i);
+  // CHANGED(fix_core) D8 (CONTRACT §35.20): arrive FACING the opponent (its start-of-frame point, like every auto-face): a
+  // behind teleport used to keep the old yaw - his back to the opponent for the rest of the move (vanish_l 23 frames) and
+  // then a 180-degree snap in the free state. The input-mapping sign follows the yaw (it is set where the yaw is set). The
+  // opponent is untouched here: it re-faces him by its own auto-face (next frame, from his new start-of-frame position).
+  autoFace(m, i);
   s[b + F.pushF] = 0;
   s[b + F.pushLeft] = 0;
   if (m.cf[i].uk === UK.TELEPORT) s[b + F.uniq]++;
@@ -936,20 +944,25 @@ function kdTick(m: Match, i: number): void {
 }
 
 const VP = new Int32Array(6);
+const HP = new Int32Array(3);
 
 /**
  * CHANGED(fixer) D3: the throw carry - the victim follows its lock segments' clip root travel (throwpose.ts) from the
  * anchor at the connect frame. CHANGED(SIM3D) (CONTRACT §35.4): along the THROWER's yaw at the connect (victim forward =
  * -dir(thrower yaw)), clamped to the ring. Runs every lock frame.
+ * CHANGED(fix_core) D4 (CONTRACT §35.20): throwpose.ts holdPos - the anchor slides onto the HOLD point (push fronts touching,
+ * on the thrower's forward line) over throw.pullF frames, or the victim follows the grab's root path (grab supers: hugged,
+ * spun, lifted - F.y carries the lift) instead of standing where the grab caught it.
  */
 function throwCarry(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   if (!victimPose(m, i, VP)) return;
-  const yaw = (s[b + F.thrYaw] + YAW_HALF) & 65535;
-  alongYaw(VP[3], yaw, AY);
-  s[b + F.x] = s[b + F.thrX] + AY[0];
-  s[b + F.z] = s[b + F.thrZ] + AY[1];
+  const tot = Math.max(1, s[b + F.tot]);
+  holdPos(m, i, Math.max(0, Math.min(tot, tot - s[b + F.stun])), VP[3], HP);
+  s[b + F.x] = HP[0];
+  s[b + F.z] = HP[1];
+  s[b + F.y] = HP[2];
   clampToRing(m, i);
 }
 

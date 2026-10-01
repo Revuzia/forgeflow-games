@@ -37,6 +37,9 @@
     "crouchFront": 0.477,
     "crouchBack": 0.081
   },
+  "step": {
+    "distM": 0.85
+  },
   "colors": [
     {"name": "Headliner", "tint": null},
     {"name": "Encore", "tint": "#2a6bd6"},

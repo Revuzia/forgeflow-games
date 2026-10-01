@@ -318,7 +318,7 @@ const pct = (a: number, n: number): string => `${a}/${n} (${n ? Math.round((100 
     const cells: string[] = [];
     for (const [S, [att, idx]] of moves) {
       // CHANGED(AI3D): the 3D levers off - H4 is the BLOCK clock (H6 is the step clock)
-      const prof = { ...levelProfile(8), name: `react${R}`, level: -1, reactF: R, block: 1, guard: 0, aggression: 0, punish: 0, antiAir: 0, parry: 0, parryShare: 0, tech: 0, drop: 0, nerve: 0, backRise: 0, wakeReversal: 0, step: 0, stepGuess: 0, circle: 0, antiStep: 0 };
+      const prof = { ...levelProfile(8), name: `react${R}`, level: -1, reactF: R, block: 1, guard: 0, aggression: 0, punish: 0, antiAir: 0, parry: 0, parryShare: 0, tech: 0, drop: 0, nerve: 0, backRise: 0, wakeReversal: 0, step: 0, stepGuess: 0, circle: 0, antiStep: 0, walk: 0 };
       const cpu = createBrainCpu(prof, def, 1234, none);
       const m = createMatch({ mode: 'training', stage: 'rust_theater', seed: 3, p: [{ fighter: att, color: 0, scheme: 1, cpu: -1 }, { fighter: def, color: att === def ? 1 : 0, scheme: 1, cpu: 0 }] }, data);
       const kitA = buildKit(data, m.cf[0], 1);
@@ -379,7 +379,7 @@ const pct = (a: number, n: number): string => `${a}/${n} (${n ? Math.round((100 
   const evadedAt: Record<number, string[]> = { 18: [], 24: [] };
   for (const R of [18, 24]) {
     for (const att of atts) {
-      const prof: Profile = { ...levelProfile(8), name: `step${R}`, level: -1, reactF: R, block: 1, step: 1, guard: 0, aggression: 0, punish: 0, antiAir: 0, parry: 0, parryShare: 0, tech: 0, drop: 0, nerve: 0, backRise: 0, wakeReversal: 0, stepGuess: 0, circle: 0, antiStep: 0, antiZone: 0 };
+      const prof: Profile = { ...levelProfile(8), name: `step${R}`, level: -1, reactF: R, block: 1, step: 1, guard: 0, aggression: 0, punish: 0, antiAir: 0, parry: 0, parryShare: 0, tech: 0, drop: 0, nerve: 0, backRise: 0, wakeReversal: 0, stepGuess: 0, circle: 0, antiStep: 0, walk: 0, antiZone: 0 };
       const cpu = createBrainCpu(prof, DEF, 4321 + R, none);
       const m = createMatch({ mode: 'training', stage: 'rust_theater', seed: 3, p: [{ fighter: att, color: 0, scheme: 1, cpu: -1 }, { fighter: DEF, color: att === DEF ? 1 : 0, scheme: 1, cpu: 0 }] }, data);
       const kitA = buildKit(data, m.cf[0], 1);
@@ -477,7 +477,8 @@ const pct = (a: number, n: number): string => `${a}/${n} (${n ? Math.round((100 
     };
     const att = createBrainCpu(blindP(), ATT, seed * 7 + 1, plan);
     // CHANGED(AI3D): the 3D levers off - H5 measures the guard guesses (a circle-walk / read step is no guard)
-    const prof = { ...levelProfile(3), aggression: 0, punish: 0, habit: habitW, step: 0, stepGuess: 0, circle: 0, antiStep: 0 };
+    // CHANGED(fix_balance): + the neutral circle-walk lever (CONTRACT §35.21)
+    const prof = { ...levelProfile(3), aggression: 0, punish: 0, habit: habitW, step: 0, stepGuess: 0, circle: 0, antiStep: 0, walk: 0 };
     const def = createBrainCpu(prof, DEF, seed * 11 + 3, null);
     const b0 = fighterBase(0);
     let lastInst = -1;
@@ -516,7 +517,10 @@ const pct = (a: number, n: number): string => `${a}/${n} (${n ? Math.round((100 
     }
     return { logs, techs: def.brain.stats.techTries, escapes: def.brain.stats.throwEscapes };
   };
-  const H5S = GATE ? [1, 2, 3, 4, 5, 6] : [1, 2, 3];
+  // CHANGED(fix_balance): the G3 seed set in the smoke too (was [1, 2, 3] there) - H5 always gates, and on 3 seeds H5b decided
+  // on 7 guarded overheads (4/7 = 0.57 vs the 0.6 bar = one sample): any change in the defender's random stream flipped it
+  // (§35.21's 0.3 WEAVE read threshold draws one more roll per decision); same threshold, twice the sample
+  const H5S = [1, 2, 3, 4, 5, 6];
   const share = (ls: AttackLog[], pred: (l: AttackLog) => boolean, of: (l: AttackLog) => boolean): [number, number] => {
     const base = ls.filter(of);
     return [base.filter(pred).length, base.length];
@@ -735,7 +739,7 @@ const foeF = (s: number): string => pairFor(s)[1];
 // Probe-local spammers (blind brains, like the masher): HOMING spam = a homing ground strike that reaches, every
 // decision; LINEAR spam = a linear ground strike / straight projectile that reaches. Fighters for the linear spammer: kits
 // with >= 4 linear ground strikes (a kit without linear moves cannot spam them).
-const spamProfile = (name: string): Profile => ({ ...levelProfile(0), name, level: -1, reactF: 100000, block: 0, guard: 0, punish: 0, antiAir: 0, aggression: 1, thinkF: 6, drop: 0, habit: 0, parry: 0, meter: 0, route: 1, tech: 0, delayF: 0, respect: 0, backRise: 0, wakeReversal: 0, step: 0, stepGuess: 0, circle: 0, antiStep: 0 });
+const spamProfile = (name: string): Profile => ({ ...levelProfile(0), name, level: -1, reactF: 100000, block: 0, guard: 0, punish: 0, antiAir: 0, aggression: 1, thinkF: 6, drop: 0, habit: 0, parry: 0, meter: 0, route: 1, tech: 0, delayF: 0, respect: 0, backRise: 0, wakeReversal: 0, step: 0, stepGuess: 0, circle: 0, antiStep: 0, walk: 0 });
 const spammer = (kind: 'homing' | 'linear') => (f: string, seed: number): Cpu => createBrainCpu(spamProfile(kind), f, seed, (b: Brain): Decision => {
   const xs = b.kit.moves.filter((mi) => (kind === 'homing' ? mi.homing && !mi.proj : mi.linear && !(mi.proj && mi.cm.proj && mi.cm.proj.aimed)) && mi.recipe && mi.recipe.ctx === '' && !mi.recipe.air && !mi.inert && mi.super === 0 && !mi.grab && b.canUse(mi.idx) && (mi.proj || b.inReach(mi.idx)));
   if (xs.length > 0) return { t: 'move', idx: xs[Math.floor(b.rnd() * xs.length)].idx };

@@ -34,7 +34,7 @@ export interface Recipe {
    * CHANGED(AI) P2: where the recipe works. '' = from neutral (measured in the sandbox); 'chain' = only inside the
    * parent move's cancel window (rekka / weave trigger, target combo; the route executor knows); 'stance' = only in
    * STANCE (Lotus follow-ups: the button alone). CHANGED(AI3D): 'step' = a step-attack ("SS.<btn>", §35.12.5): its
-   * button while in SIDESTEP (from step frame 9) / SIDEWALK - the brain steps first (brain.stepAttackLag).
+   * button while in SIDESTEP (from the sim's step buffer frame, 2 since fix_core §35.20) / SIDEWALK - the brain steps first.
    */
   ctx: '' | 'chain' | 'stance' | 'step';
 }
@@ -374,7 +374,7 @@ export function buildKit(data: GameData, cf: CFighter, scheme: Scheme, phase = 1
       const tsteps = triggerSteps(cm, scheme);
       if (tsteps) recipe = { steps: tsteps, lag: tsteps.length, air: cm.inAir, charge: 0, simple: scheme === 0, label: `trigger ${cm.id}`, ctx: 'chain' };
     }
-    // CHANGED(AI3D): a step-attack = its button while stepping (the sim routes it from SIDESTEP frame 9 / SIDEWALK)
+    // CHANGED(AI3D): a step-attack = its button while stepping (the sim routes it from the SIDESTEP buffer frame / SIDEWALK)
     if (!recipe && cm.stepAtk && cm.inBtn >= 0 && cm.inBtn <= 2) {
       recipe = { steps: [{ d: 5, b: BTN[cm.inBtn] }], lag: 1, air: false, charge: 0, simple: false, label: `SS.${BTN_NAME[cm.inBtn]}`, ctx: 'step' };
     }

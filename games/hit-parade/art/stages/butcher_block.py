@@ -103,8 +103,12 @@ S = {
          "position": [round(v, 3) for v in polar(9.0, 200.0, 14.0)], "target": [0.0, 1.0, 0.0], "castShadow": True,
          "shadow": {"mapSize": 1024, "bias": -0.0004, "normalBias": 0.03,
                     "camera": {"left": -9.0, "right": 9.0, "top": 9.0, "bottom": -9.0, "near": 1.0, "far": 40.0}}},
-        {"id": "rim", "type": "directional", "color": "#a6d2ff", "intensity": 1.5,
-         "position": [round(v, 3) for v in polar(10.0, 20.0, 7.0)], "target": [0.0, 1.2, 0.0], "castShadow": False},
+        # CHANGED(fix_ui_stage) (verifier: butcher_block ring-wall cap glare across the fighters): the rim came in at 30 deg
+        # elevation and its grazing specular off the stainless cap sheeted over the frame whenever the orbit camera stood
+        # outside the wall on the far side (measured: 12 % of the fighters' band over the bloom threshold, peak 5.7);
+        # raised to ~51 deg it reflects below the frame (with the satin cap: 0 %, peak 0.9)
+        {"id": "rim", "type": "directional", "color": "#a6d2ff", "intensity": 1.3,
+         "position": [round(v, 3) for v in polar(7.0, 20.0, 9.5)], "target": [0.0, 1.2, 0.0], "castShadow": False},
         {"id": "fill", "type": "hemisphere", "sky": "#d6e4ff", "ground": "#5b4640", "intensity": 0.85},
         spot("spot_60", 60.0, "#fff4ea", 110.0),
         spot("spot_300", 300.0, "#fff4ea", 110.0),
@@ -177,6 +181,18 @@ M_TILE = L.mat_pbr("bb_tile", gt("bb_tile_a"), gt("bb_tile_n", True), gt("bb_til
 M_BAND = L.mat_pbr("bb_tile_band", gt("bb_tile_band_a"), gt("bb_tile_n", True), gt("bb_tile_r", True))
 M_STEEL = L.mat_pbr("bb_steel", gt("bb_steel_a"), gt("bb_steel_n", True), gt("bb_steel_r", True), metallic=1.0)
 M_STEELD = L.mat_pbr("bb_steel_dark", gt("bb_steeld_a"), gt("bb_steeld_n", True), gt("bb_steeld_r", True), metallic=1.0)
+# CHANGED(fix_ui_stage): the ring cap + corner posts are SATIN stainless (roughness map x1.85: mean 0.31 -> 0.58) - right in
+# front of the orbit camera when it stands outside the wall, the polished cap mirrored the rim / key light across the frame
+def fn_satin_r(p):
+    import numpy as np
+    out = p.copy()
+    out[..., :3] = np.clip(p[..., :3] * 1.85, 0.0, 0.95)
+    return out
+
+
+M_STEELCAP = L.mat_pbr("bb_steel_cap", gt("bb_steel_a"), gt("bb_steel_n", True),
+                       L.prep(os.path.join(L.TEXA, "bb_steel_r.png"), "bb_steelcap_r", 512, True, fn=fn_satin_r),
+                       metallic=1.0)
 M_RED = L.mat_pbr("bb_red_lacquer", gt("bb_red_a"), gt("bb_red_n", True), gt("bb_red_r", True))
 M_BLACK = L.mat_pbr("bb_black", gt("bb_black_a"), gt("bb_black_n", True), gt("bb_black_r", True), metallic=0.2)
 M_WALLP = L.mat_pbr("bb_wallpaint", gt("bb_wallpaint_a"), gt("bb_wallpaint_n", True), gt("bb_wallpaint_r", True))
@@ -248,7 +264,7 @@ annulus("ring_kick", RA, RA + WT, 0.0, 0.25, M_STEELD, parts=("in", "out"), tile
 annulus("ring_tile_lo", RA, RA + WT, 0.25, 0.62, M_TILE, parts=("in", "out"), tile=1.2, **oct_kw())
 annulus("ring_band", RA, RA + WT, 0.62, 0.8, M_BAND, parts=("in", "out"), tile=1.2, **oct_kw())
 annulus("ring_tile_hi", RA, RA + WT, 0.8, 0.94, M_TILE, parts=("in", "out"), tile=1.2, **oct_kw())
-annulus("ring_cap", RA - 0.03, RA + WT + 0.03, 0.94, WH, M_STEEL, tile=1.2, **oct_kw())
+annulus("ring_cap", RA - 0.03, RA + WT + 0.03, 0.94, WH, M_STEELCAP, tile=1.2, **oct_kw())
 CR = 1.0 / math.cos(math.radians(22.5))
 rail_in = [polar((RA - 0.07) * CR, -22.5 + 45.0 * k, 0.55) for k in range(9)]
 tube("ring_rail", rail_in, 0.028, M_STEEL, sides=10, caps=False)
@@ -260,7 +276,7 @@ for k in range(8):
         cyl("ring_rail_so_%d_%.1f" % (k, off), (c[0] + t[0], 0.55, c[2] + t[2]), polar(1.0, a, 0.0), 0.016, 0.07, M_STEEL,
             sides=8)
     ca = 22.5 + 45.0 * k                     # stainless corner posts (1.2 m, below the camera band)
-    obox("ring_post_%d" % k, polar(RA * CR + 0.15, ca, 0.56), (0.36, 1.12, 0.36), ca, M_STEEL, tile=0.6, bevel=0.03)
+    obox("ring_post_%d" % k, polar(RA * CR + 0.15, ca, 0.56), (0.36, 1.12, 0.36), ca, M_STEELCAP, tile=0.6, bevel=0.03)
     obox("ring_post_cap_%d" % k, polar(RA * CR + 0.15, ca, 1.135), (0.4, 0.03, 0.4), ca, M_STEELD, tile=0.4,
          bevel=0.01)
 

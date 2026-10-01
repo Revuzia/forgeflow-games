@@ -74,8 +74,8 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   window. Verified in the real sim (scratch throwcheck: all 31 grabs x 3 victim bodies).
 - **Season text (CONTRACT 26.3, P2):** `introLine`, `winQuotes` (3), `banter` (rival / freak / ricky / default; Ricky
   vs every contestant; the Freak's lines are stage directions), `ending` (3-5 sentences), listed per fighter below.
-- **3D ring (CONTRACT 35.4 / 35.12, lane FIGHTERS3D):** the fight is a 360-degree ring; fighters sidestep (15 f, 0.85 m
-  arc) and circle-walk. Every move carries `track {until, rate}` (the last frame the attacker turns toward the opponent,
+- **3D ring (CONTRACT 35.4 / 35.12, lane FIGHTERS3D):** the fight is a 360-degree ring; fighters sidestep (15 f; the arc
+  is per fighter, CONTRACT 35.20: 0.85 m for the small bodies, up to 1.7 m for the long / wide ones) and circle-walk. Every move carries `track {until, rate}` (the last frame the attacker turns toward the opponent,
   degrees per frame); class defaults: normals, command normals, specials and supers track to startup - 6 (throws to
   startup - 4; CHANGED(STEPTUNE) 35.15: normals were startup - 4), at 180 deg / f (snap). **HOMING** moves track through their last active frame at 20 deg / f and are 0.60 m deep across the
   attack line: they catch a stepper (wide hooks and roundhouses, low roundhouses, sweeps, spins / flairs / lariats,
@@ -87,13 +87,15 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   started 4-8 frames before the first active frame - evades a default normal (52 of 53, median window 4 frames; the
   4-frame johnny 5L is the exception) and a LINEAR move (median window 20 frames); a step started less than 3 frames
   before a default normal's active frames is hit; HOMING moves (and aimed projectiles at 1.2 m) are never evaded. The
-  defender's body matters as much: the big bodies (boneyard, bruno, freak, krane, rerun, spin) never step a straight
-  normal with the 0.85 m step, only linear moves (CONTRACT 35.15 item 7).
+  defender's body matters as much: with one 0.85 m step the big bodies (boneyard, bruno, freak, krane, rerun, spin) never
+  stepped a straight normal (CONTRACT 35.15 item 7), so each fighter now carries its own `step.distM` sized from the
+  measured body (kitlib.step_dist_m, CHANGED(fix_core) 35.20): at 1.2 m every body evades a straight 5M / 5H on a read
+  (big bodies 2-3 start frames, the small ones keep their 3-6), and homing moves stay unsteppable.
   `lateralM` = each box's half-depth across the attack line (L 0.15,
   M 0.18 by button for normals; specials / EX / supers 0.22; sweeps 0.45, homing 0.60 unless noted). Projectiles: **AIMED** = launched at the opponent on
   the spawn frame (the step has to come after the release); straight = along the thrower's yaw (steppable on
   anticipation). Roles: `antistep` = the fighter's fast step-catcher (every fighter has one), `stepatk` = a step-attack
-  (`SS.<button>`: the button pressed during a sidestep from its frame 9, out on frame 11, or while circle-walking; PATCH and
+  (`SS.<button>`: the button pressed during a sidestep from its frame 2, out on frame 11, or while circle-walking; PATCH and
   SPIN). The 3D column of each frame table shows the class, the tracking end frame and the depth; per-fighter "3D ring
   play" covers the stepping game, the homing tools and the wall game (ring boundary = wall; `onHit.wallSplat` enders).
 
@@ -155,6 +157,7 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
 - *Homing tools:* 5H HAYMAKER (12f, -3 on block, 0.60 m deep) is the safe homing mid at poke range; 3H LOW BLOW (10f homing sweep) is the anti-step low; the WEAVE counter hook, SOLD OUT and MAIN EVENT home.
 - *Wall game:* HEADLINE HOOK H / EX wall-splat: the running hook carries any light / medium confirm to the ring boundary, then 6H overhead vs 3H low and IMPACT at the wall.
 - *From the data:* homing `5H`, `3H`, `weave_counter`, `sold_out`, `main_event` | linear (steppable) `brickbat_l`, `brickbat_m`, `brickbat_h`, `hook_l`, `hook_m`, `hook_h` | aimed projectiles `brickbat_ex` | straight projectiles `brickbat_l`, `brickbat_m`, `brickbat_h` | anti-step `3H` | step-attacks - | wall splat `hook_h`, `hook_ex`.
+- *Sidestep:* 0.850 m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the small bodies) - CONTRACT 35.20.
 
 **Stats.** HP 10000 | walk 2.12 / 1.44 m/s | dash 1.06 m (18f) / 0.68 m (23f) | jump 4+38+3, apex 1.59 m, forward 1.43 m | throw range 0.60 m | hurtbox stand [0.54, 1.71], crouch [0.62, 1.27], air [0.51, 1.12] m | pushbox [0.41, 1.54] m | build `average`.
 
@@ -322,6 +325,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - *Homing tools:* 2M SHIN KICK (8f homing low roundhouse, 0.40 m deep) is the anti-step poke and cancels into the rekka; 5H HEAD KICK homes (12f, -3). CUE 2 homes, so stepping the gap after a blocked CUE 1 gets caught; CUE 3 low homes, CUE 3 overhead does not (a step beats the overhead ender). 2H leg kick is a homing sweep; HIGHLIGHT REEL and ON AIR home.
 - *Wall game:* 4H BACK KICK and BLINDSIDE KICK wall-splat; at the ring edge the CUE 3 overhead / low guess is her damage and a stepper runs into the boundary.
 - *From the data:* homing `2M`, `5H`, `2H`, `SS.H`, `cue2`, `cue3_lo`, `highlight_reel`, `on_air` | linear (steppable) `6M`, `4H`, `cue_l`, `cue_m`, `cue_h`, `stage_dive_l`, `stage_dive_m`, `stage_dive_h`, `stage_dive_ex`, `slide_l`, `slide_m`, `slide_h`, `slide_ex` | aimed projectiles - | straight projectiles - | anti-step `2M` | step-attacks `SS.H` | wall splat `4H`, `SS.H`.
+- *Sidestep:* 0.850 m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the small bodies) - CONTRACT 35.20.
 
 **Stats.** HP 9500 | walk 2.28 / 1.49 m/s | dash 1.43 m (17f) / 0.84 m (22f) | jump 4+36+3, apex 1.50 m, forward 1.55 m | throw range 0.60 m | hurtbox stand [0.46, 1.67], crouch [0.53, 1.22], air [0.44, 1.07] m | pushbox [0.36, 1.5] m | build `slim`.
 
@@ -484,7 +488,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Look.** Brute (BattleAxe_GEO hidden - Bruno is unarmed): shirtless, handlebar moustache, earring, baggy brown trousers, tall boots.
 
-**Game plan.** Walk in, BRACE through pokes, then guess: WALK-IN FREEZER (360 grab, 2500-3300) versus a 2L tick. LARIAT beats jumps and fireballs; FRIDGE DOOR walls opponents in the corner.
+**Game plan.** Walk in, BRACE through pokes, then guess: WALK-IN FREEZER (360 grab, 2200-2900) versus a 2L tick. LARIAT beats jumps and fireballs; FRIDGE DOOR walls opponents in the corner.
 
 **Weakness (the counter-play).** Slowest walk (1.64 m/s) and shortest dash; zoners keep him out; every armored move loses to throws and multi-hits; grab whiff = 54 frames of recovery.
 
@@ -496,6 +500,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - *Homing tools:* WALK-IN FREEZER (5f, every strength), COLD STORAGE and FINAL DELIVERY home through their active frames, so a sidestep on his walk-in is grabbed like a block. DOUBLE-DOOR LARIAT (8f homing spin, 0.60 m deep) is the anti-step strike and 5H HAYMAKER (13f, -4) the safe homing swing.
 - *Wall game:* 6H BIG BOOT and FRIDGE DOOR wall-splat; at the ring edge a stepping opponent has one side left, which makes the 360 guess worse for them.
 - *From the data:* homing `5H`, `walk_in_l`, `walk_in_m`, `walk_in_h`, `walk_in_ex`, `lariat_l`, `lariat_m`, `lariat_h`, `lariat_ex`, `cold_storage`, `final_delivery` | linear (steppable) `fridge_door_l`, `fridge_door_m`, `fridge_door_h` | aimed projectiles - | straight projectiles - | anti-step `walk_in_l`, `walk_in_m`, `walk_in_h`, `walk_in_ex`, `lariat_l`, `lariat_m`, `lariat_h`, `lariat_ex` | step-attacks - | wall splat `6H`, `fridge_door_l`, `fridge_door_m`, `fridge_door_h`, `fridge_door_ex`.
+- *Sidestep:* 1.219 m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the small bodies) - CONTRACT 35.20.
 
 **Stats.** HP 11000 | walk 1.64 / 1.13 m/s | dash 0.76 m (21f) / 0.54 m (25f) | jump 4+42+4, apex 1.45 m, forward 1.30 m | throw range 0.77 m | hurtbox stand [0.68, 1.75], crouch [0.78, 1.39], air [0.65, 1.24] m | pushbox [0.67, 1.57] m | build `heavy`.
 
@@ -531,10 +536,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `j.2H` | Fridge Drop | j.2H | 12 | 10 | 6 | 27 | air 20 | air 16 | 900 | H | 13 | - | - | tracks to f6, lat 0.22 | jH | (startup 10->12; active 6->10; recovery 3->6; hitstun 19->20; blockstun 15->16; damage 800->900) Air command normal: 12/10/6 landing, 900, a big active window (body press) paid with 6 landing frames. |
 | `throw_f` | Bear Hug | LM | 5 | 3 | 23 | 30 | KD +21 | - | 1300 | U | 0 | - | - | tracks to f1 | THROW_F | grab: range 0.77 m, lock 50 f, dmg at f36, same side; victim f0 hit_body 0.00-0.25 s, f12 hit_body 0.25-0.70 s, f36 kd_fall_b 1.04-1.50 s. (damage 1200->1300) Grappler throws deal 1300 (+100 over 1200). |
 | `throw_b` | Carousel | 4LM | 5 | 3 | 23 | 30 | KD +16 | - | 1300 | U | 0 | - | - | tracks to f1 | THROW_B | grab: range 0.77 m, lock 52 f, dmg at f26, swap sides; victim f0 hit_high_s 0.00-0.20 s, f10 thrown_b 0.00-0.40 s, f26 thrown_b 0.40-1.20 s. (damage 1200->1300) Grappler throws deal 1300. |
-| `walk_in_l` | Walk-In Freezer | 360L | 5 | 3 | 54 | 61 | KD +28 | - | 2500 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_l | grab: range 1.22 m, lock 70 f, dmg at f26, same side; victim f0 hit_body 0.00-0.30 s, f9 thrown_f 0.15-0.70 s, f26 thrown_f 0.70-1.33 s.  3D: command grab reach arc: homes through its active frames (a stepper is grabbed) |
-| `walk_in_m` | Walk-In Freezer | 360M | 5 | 3 | 54 | 61 | KD +28 | - | 2900 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_m | grab: range 1.1 m, lock 70 f, dmg at f26, same side; victim f0 hit_body 0.00-0.30 s, f9 thrown_f 0.15-0.70 s, f26 thrown_f 0.70-1.33 s.  3D: command grab reach arc: homes through its active frames (a stepper is grabbed) |
-| `walk_in_h` | Walk-In Freezer | 360H | 5 | 3 | 54 | 61 | KD +28 | - | 3300 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_h | grab: range 0.92 m, lock 70 f, dmg at f26, same side; victim f0 hit_body 0.00-0.30 s, f9 thrown_f 0.15-0.70 s, f26 thrown_f 0.70-1.33 s.  3D: command grab reach arc: homes through its active frames (a stepper is grabbed) |
-| `walk_in_ex` | Walk-In Freezer (EX) | 360S | 5 | 3 | 54 | 61 | KD +28 | - | 3500 | U | 0 | - | strike 1-5 | HOMING 20/f to f7 | cmdgrab_h | grab: range 1.3 m, lock 76 f, dmg at f28, same side; victim f0 hit_body 0.00-0.30 s, f10 thrown_f 0.15-0.70 s, f28 thrown_f 0.70-1.33 s. (damage 3300->3500) EX grab: strike invulnerable on startup (the SF6 rule: only OD/supers get true invulnerability), 3500, reach 1.30 m. 3D: command grab reach arc: homes through its active frames (a stepper is grabbed) |
+| `walk_in_l` | Walk-In Freezer | 360L | 5 | 3 | 54 | 61 | KD +28 | - | 2200 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_l | grab: range 1.0 m, lock 70 f, dmg at f26, same side; victim f0 hit_body 0.00-0.30 s, f9 thrown_f 0.15-0.70 s, f26 thrown_f 0.70-1.33 s. (damage 2500->2200) Command grab, 5/3/54, untechable, KD +28. CHANGED(fix_bruno): push-front gap 1.00 / 0.92 / 0.85 m and 2200 / 2550 / 2900 = THE FREAK's SPECIMEN GRAB table (template 1.22 / 1.10 / 0.92 m reached ~2.1 m root to root, past every 5H of the cast). 3D: command grab reach arc: homes through its active frames (a stepper is grabbed) |
+| `walk_in_m` | Walk-In Freezer | 360M | 5 | 3 | 54 | 61 | KD +28 | - | 2550 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_m | grab: range 0.92 m, lock 70 f, dmg at f26, same side; victim f0 hit_body 0.00-0.30 s, f9 thrown_f 0.15-0.70 s, f26 thrown_f 0.70-1.33 s. (damage 2900->2550) Command grab, 5/3/54, untechable, KD +28. CHANGED(fix_bruno): push-front gap 1.00 / 0.92 / 0.85 m and 2200 / 2550 / 2900 = THE FREAK's SPECIMEN GRAB table (template 1.22 / 1.10 / 0.92 m reached ~2.1 m root to root, past every 5H of the cast). 3D: command grab reach arc: homes through its active frames (a stepper is grabbed) |
+| `walk_in_h` | Walk-In Freezer | 360H | 5 | 3 | 54 | 61 | KD +28 | - | 2900 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_h | grab: range 0.85 m, lock 70 f, dmg at f26, same side; victim f0 hit_body 0.00-0.30 s, f9 thrown_f 0.15-0.70 s, f26 thrown_f 0.70-1.33 s. (damage 3300->2900) Command grab, 5/3/54, untechable, KD +28. CHANGED(fix_bruno): push-front gap 1.00 / 0.92 / 0.85 m and 2200 / 2550 / 2900 = THE FREAK's SPECIMEN GRAB table (template 1.22 / 1.10 / 0.92 m reached ~2.1 m root to root, past every 5H of the cast). 3D: command grab reach arc: homes through its active frames (a stepper is grabbed) |
+| `walk_in_ex` | Walk-In Freezer (EX) | 360S | 5 | 3 | 54 | 61 | KD +28 | - | 3150 | U | 0 | - | strike 1-5 | HOMING 20/f to f7 | cmdgrab_h | grab: range 1.08 m, lock 76 f, dmg at f28, same side; victim f0 hit_body 0.00-0.30 s, f10 thrown_f 0.15-0.70 s, f28 thrown_f 0.70-1.33 s. (damage 3300->3150) EX grab: strike invulnerable on startup (the SF6 rule: only OD/supers get true invulnerability), 3150, reach 1.08 m (CHANGED fix_bruno: was 3500 / 1.30 m). 3D: command grab reach arc: homes through its active frames (a stepper is grabbed) |
 | `fridge_door_l` | Fridge Door | 236L | 16 | 4 | 24 | 43 | KD +30 | -8 | 1000 | HL | 15 | super | armor 1x 3-15 | LINEAR, lat 0.22 | custom | Armored rush (FIGHTING_DESIGN 8c 'BODY BLOCK armour'): rush class slowed to 16/18/20 for 1 hit of armor, -8/-10/-12 on block, KD +30. 3D: running shove: linear |
 | `fridge_door_m` | Fridge Door | 236M | 18 | 4 | 26 | 47 | KD +30 | -10 | 1100 | HL | 15 | super | armor 1x 3-17 | LINEAR, lat 0.22 | custom | Armored rush (FIGHTING_DESIGN 8c 'BODY BLOCK armour'): rush class slowed to 16/18/20 for 1 hit of armor, -8/-10/-12 on block, KD +30. 3D: running shove: linear |
 | `fridge_door_h` | Fridge Door | 236H | 20 | 4 | 28 | 51 | KD +30 | -12 | 1200 | HL | 15 | super | armor 1x 3-19 | LINEAR, lat 0.22 | custom | Armored rush (FIGHTING_DESIGN 8c 'BODY BLOCK armour'): rush class slowed to 16/18/20 for 1 hit of armor, -8/-10/-12 on block, KD +30. 3D: running shove: linear |
@@ -548,7 +553,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `brace_h` | Brace | 22H | 3 | 16 | 12 | 30 | - | - | 0 | HL | 0 | whiff special | armor 1x 3-18 | tracks to f1 | custom | armorStep unique (CONTRACT 5.3): FIGHTING_DESIGN 8c 'armored step (1 hit armor, 18f)'. |
 | `brace_ex` | Brace (EX) | 22S | 1 | 20 | 8 | 28 | - | - | 0 | HL | 0 | whiff special | armor 2x 1-20 | tracks to f1 | custom | EX: 2-hit armor from frame 1. |
 | `cold_storage` | Cold Storage | 236236 | 12 | 6 | 50 | 67 | KD +20 | - | 2400 | U | 0 | - | strike 1-6 | HOMING 20/f to f17 | custom | grab: range 0.9 m, lock 90 f, dmg at f28, same side; victim f0 hit_body 0.00-0.30 s, f11 thrown_f 0.25-0.70 s, f28 thrown_f 0.70-1.33 s. Grappler Lv1 is a running command grab (FIGHTING_DESIGN 8c): unblockable, so it gives up the Lv1 template's 8f startup (12f run, visible) and invulnerability after f6; 2400 because grabs cannot be scaled by a combo starter. |
-| `final_delivery` | Final Delivery | 214214 | 3 | 3 | 58 | 63 | KD +19 | - | 4500 | U | 0 | - | strike 1-3 | HOMING 20/f to f5 | custom | grab: range 1.3 m, lock 175 f, dmg at f140, same side; victim f0 hit_body 0.00-0.30 s, f24 hit_body 0.20-0.60 s, f40 hit_air 0.20-0.90 s, f100 hit_air 0.90-1.30 s, f128 thrown_f 0.30-0.74 s, f140 thrown_f 0.74-1.33 s. Grab Lv3: 3f unblockable grab (post-freeze) instead of the 10f strike template; 4500 total. |
+| `final_delivery` | Final Delivery | 214214 | 3 | 3 | 58 | 63 | KD +19 | - | 4500 | U | 0 | - | strike 1-3 | HOMING 20/f to f5 | custom | grab: range 1.08 m, lock 175 f, dmg at f140, same side; victim f0 hit_body 0.00-0.30 s, f24 hit_body 0.20-0.60 s, f40 hit_air 0.20-0.90 s, f100 hit_air 0.90-1.30 s, f128 thrown_f 0.30-0.74 s, f140 thrown_f 0.74-1.33 s. Grab Lv3: 3f unblockable grab (post-freeze) instead of the 10f strike template; 4500 total; reach 1.08 m = the EX WALK IN (CHANGED fix_bruno: was 1.30 m). |
 
 **Move notes.**
 
@@ -640,7 +645,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `win_flex` | final_delivery (cine), win | Mixamo `Creature_Pack/mutant flexing muscles` f45-105 | P2: Mixamo mutant flexing muscles f45-105: arms thrown up, then the crab most-muscular (f74-89) - a strongman win. Was CMU 79_94 480-721: turned 30 deg away with one arm out = read as a bow (lane ASSETS QC) |
 | `win_nod` | win | Mixamo `Gestures_Pack_Basic/hard head nod` f1-50 | Mixamo hard head nod |
 
-**CPU.** `{"style": "grappler", "rangeM": [0.6, 1.4], "approach": ["brace_m", "fridge_door_l"], "pokes": ["2M", "5M"], "antiAir": ["lariat_l", "2H"], "punish": ["walk_in_h", "5H"], "combo": ["2L", "5M", "fridge_door_m"], "grab": ["walk_in_l", "walk_in_h"], "meter": "cold_storage", "antiStep": ["lariat_l", "walk_in_l", "5H"]}`. **Intro** `intro_battlecry`, **win** `win_flex`, `win_nod`, **taunt** `taunt_flex`.
+**CPU.** `{"style": "grappler", "rangeM": [0.6, 1.4], "approach": ["brace_m", "fridge_door_l"], "pokes": ["2M", "5M"], "antiAir": ["lariat_l", "2H"], "punish": ["walk_in_h", "5H"], "combo": ["2L", "5M", "fridge_door_m"], "grab": ["walk_in_l", "walk_in_h"], "meter": "cold_storage", "antiStep": ["lariat_l", "5H"]}`. **Intro** `intro_battlecry`, **win** `win_flex`, `win_nod`, **taunt** `taunt_flex`.
 
 ## THE GREAT ZAMBINI - The Act (`zambini`)
 
@@ -662,6 +667,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - *Homing tools:* He has no homing normal - up close a stepper beats 5M / 5H. FLOURISH (8-11f) is a radial burst 0.60-0.80 m deep that homes: the anti-step answer once a stepper is close. At range the AIMED CARD FAN is his reliable tracking tool; GRAND ILLUSION's card-saw is aimed and 0.45 m deep; THE PRESTIGE homes.
 - *Wall game:* 5H DOUBLE PALM wall-splats at the ring edge (0.60 m pushback); otherwise the wall is his problem - VANISHING ACT H drops him back to his own side of the ring.
 - *From the data:* homing `flourish_l`, `flourish_m`, `flourish_h`, `flourish_ex`, `the_prestige` | linear (steppable) - | aimed projectiles `card_fan_l`, `card_fan_m`, `card_fan_h`, `card_fan_ex`, `flash_paper_l`, `flash_paper_m`, `flash_paper_h`, `flash_paper_ex`, `grand_illusion` | straight projectiles - | anti-step `flourish_l`, `flourish_m`, `flourish_h`, `flourish_ex` | step-attacks - | wall splat `5H`.
+- *Sidestep:* 0.967 m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the small bodies) - CONTRACT 35.20.
 
 **Stats.** HP 9500 | walk 1.26 / 1.13 m/s | dash 1.10 m (19f) / 0.75 m (24f) | jump 4+42+3, apex 1.70 m, forward 1.30 m | throw range 0.60 m | hurtbox stand [0.56, 1.74], crouch [0.64, 1.33], air [0.53, 1.15] m | pushbox [0.42, 1.57] m | build `average`.
 
@@ -822,6 +828,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - *Homing tools:* 5H BATON SWING (12f, -3, horizontal) is the homing anti-step strike; UNDER ARREST (6f command grab) homes through its active frames, the answer to a stepper at point blank; BACKUP'S HERE and RIOT ACT home.
 - *Wall game:* 4H SHIELD BASH wall-splats (0.60 m hit pushback) - at the ring edge it becomes a combo starter instead of a reset; his standing-block NERVE passive makes the wall less scary for him.
 - *From the data:* homing `5H`, `cuff_l`, `cuff_m`, `cuff_h`, `cuff_ex`, `backup`, `riot_act` | linear (steppable) `taser_l`, `taser_m`, `taser_h`, `baton_flip_l`, `baton_flip_m`, `baton_flip_h`, `shield_rush_l`, `shield_rush_m`, `shield_rush_h` | aimed projectiles `taser_ex` | straight projectiles `taser_l`, `taser_m`, `taser_h` | anti-step `5H`, `cuff_l`, `cuff_m`, `cuff_h`, `cuff_ex` | step-attacks - | wall splat `4H`.
+- *Sidestep:* 1.244 m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the small bodies) - CONTRACT 35.20.
 
 **Stats.** HP 10000 | walk 1.94 / 1.44 m/s | dash 1.18 m (19f) / 0.56 m (24f) | jump 4+39+3, apex 1.55 m, forward 1.40 m | throw range 0.60 m | hurtbox stand [0.55, 1.67], crouch [0.63, 1.16], air [0.52, 1.13] m | pushbox [0.57, 1.5] m | build `average`.
 
@@ -994,6 +1001,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - *Homing tools:* 2M SHIN KICK (8f homing low roundhouse, 0.40 m deep) is the anti-step poke; 5H DRUNKEN ROUNDHOUSE (13f, -3) the safe homing kick; BOTTOMS UP and HAPPY HOUR home.
 - *Wall game:* 6M WOBBLE PALM wall-splats at the ring edge; SWAY L leans back and needs room, so with her back to the boundary she enters SWAY M / H or goes straight to a follow-up.
 - *From the data:* homing `2M`, `5H`, `sway_low`, `sway_hop`, `bottoms_up`, `happy_hour` | linear (steppable) `6M` | aimed projectiles `dragon_breath_l`, `dragon_breath_m`, `dragon_breath_h`, `dragon_breath_ex` | straight projectiles - | anti-step `2M` | step-attacks - | wall splat `6M`.
+- *Sidestep:* 0.850 m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the small bodies) - CONTRACT 35.20.
 
 **Stats.** HP 9500 | walk 2.12 / 1.44 m/s | dash 1.30 m (18f) / 0.80 m (23f) | jump 4+37+3, apex 1.60 m, forward 1.45 m | throw range 0.60 m | hurtbox stand [0.46, 1.62], crouch [0.53, 1.16], air [0.44, 1.05] m | pushbox [0.38, 1.46] m | build `slim`.
 
@@ -1163,6 +1171,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - *Homing tools:* MEAT HOOK's two armored cleaver swings home through all 11 active frames (0.60 m deep): stepping his slow startup gets hooked, and it wall-splats. 2M LOW CLEAVER (10f homing low, 0.40 m, -2) is the anti-step poke; HAM SLAM's spin homes and launches; CHEF'S SPECIAL and SUNDAY ROAST home.
 - *Wall game:* MEAT HOOK and CHEF'S SPECIAL wall-splat: he walks them to the ring boundary behind armor and hooks them into it; at the wall the 6H TENDERIZER overhead vs HAM SLAM low guess is his damage.
 - *From the data:* homing `2M`, `meat_hook_l`, `meat_hook_m`, `meat_hook_h`, `meat_hook_ex`, `ham_slam_l`, `ham_slam_m`, `ham_slam_h`, `ham_slam_ex`, `chefs_special`, `sunday_roast` | linear (steppable) `cleaver_drop_l`, `cleaver_drop_m`, `cleaver_drop_h`, `cleaver_drop_ex` | aimed projectiles - | straight projectiles - | anti-step `2M` | step-attacks - | wall splat `meat_hook_l`, `meat_hook_m`, `meat_hook_h`, `meat_hook_ex`, `chefs_special`.
+- *Sidestep:* 1.202 m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the small bodies) - CONTRACT 35.20.
 
 **Stats.** HP 10500 | walk 1.80 / 1.20 m/s | dash 0.95 m (20f) / 0.60 m (25f) | jump 4+40+4, apex 1.50 m, forward 1.35 m | throw range 0.68 m | hurtbox stand [0.65, 1.75], crouch [0.74, 1.44], air [0.61, 1.18] m | pushbox [0.56, 1.57] m | build `heavy`.
 
@@ -1329,6 +1338,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - *Homing tools:* 2M FOOTWORK SWEEP (9f homing low, 0.40 m deep, -2) is the anti-step poke; 5H SWIPES (12f, -3) the safe homing mid; WINDMILL spins through a stepper 0.60 m deep; CYPHER and BATTLE OF THE YEAR home.
 - *Wall game:* WINDMILL H / EX wall-splat on the last leg pass, so a windmill confirm near the ring edge ends in a splat; in the open his damage is the windmill knockdown and the floaty jump mixups.
 - *From the data:* homing `2M`, `5H`, `2H`, `6M`, `SS.H`, `windmill_l`, `windmill_m`, `windmill_h`, `windmill_ex`, `handspin_l`, `handspin_m`, `handspin_h`, `handspin_ex`, `cypher`, `battle_of_the_year` | linear (steppable) `six_step_l`, `six_step_m`, `six_step_h`, `six_step_ex`, `drop_in_l`, `drop_in_m`, `drop_in_h`, `drop_in_ex` | aimed projectiles - | straight projectiles - | anti-step `2M` | step-attacks `SS.H` | wall splat `windmill_h`, `windmill_ex`.
+- *Sidestep:* 1.131 m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the small bodies) - CONTRACT 35.20.
 
 **Stats.** HP 9500 | walk 2.20 / 1.50 m/s | dash 1.20 m (17f) / 0.90 m (21f) | jump 4+40+3, apex 1.75 m, forward 1.60 m | throw range 0.60 m | hurtbox stand [0.48, 1.62], crouch [0.55, 1.27], air [0.45, 1.09] m | pushbox [0.42, 1.46] m | build `slim`.
 
@@ -1498,6 +1508,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - *Homing tools:* 2M GRASS CUTTER (10f homing low swing kick, 0.40 m deep, -2) is the anti-step tool; KEEPY-UPPY parks a ball above him that hits whoever circles in; TOP BINS is aimed; HAT TRICK homes.
 - *Wall game:* 5H VOLLEY wall-splats at the ring edge; near the boundary a shot rebounds sooner, so the ball comes back fast for the next set-play.
 - *From the data:* homing `2M`, `hat_trick` | linear (steppable) `2H`, `power_shot_m`, `dive_l`, `dive_m`, `dive_h`, `dive_ex` | aimed projectiles `power_shot_l`, `power_shot_h`, `power_shot_ex`, `top_bins` | straight projectiles `power_shot_m`, `keepy_l`, `keepy_m`, `keepy_h`, `keepy_ex` | anti-step `2M` | step-attacks - | wall splat `5H`.
+- *Sidestep:* 0.850 m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the small bodies) - CONTRACT 35.20.
 
 **Stats.** HP 10000 | walk 2.00 / 1.40 m/s | dash 1.00 m (18f) / 0.75 m (23f) | jump 4+38+3, apex 1.62 m, forward 1.45 m | throw range 0.60 m | hurtbox stand [0.54, 1.79], crouch [0.62, 1.28], air [0.51, 1.12] m | pushbox [0.39, 1.61] m | build `average`.
 
@@ -1661,6 +1672,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - *Homing tools:* 5M LURCH CLAW (9f wild claw, homing, -4) is the anti-step poke; LAST MEAL (5f command grab) homes through its active frames; GRAVE RISE, DEAD AIR BITE and SERIES FINALE home.
 - *Wall game:* 5H LONG REACH wall-splats at the ring edge; a cornered opponent who panics into a step-attack walks into PLAY DEAD.
 - *From the data:* homing `5M`, `grave_rise`, `grave_rise_big`, `last_meal_l`, `last_meal_m`, `last_meal_h`, `last_meal_ex`, `dead_air`, `dead_air_bite`, `series_finale` | linear (steppable) `5H`, `grave_crawl_l`, `grave_crawl_m`, `grave_crawl_h`, `grave_crawl_ex` | aimed projectiles - | straight projectiles - | anti-step `5M`, `last_meal_l`, `last_meal_m`, `last_meal_h`, `last_meal_ex` | step-attacks - | wall splat `5H`.
+- *Sidestep:* 1.715 m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the small bodies) - CONTRACT 35.20.
 
 **Stats.** HP 10000 | walk 1.80 / 1.30 m/s | dash 1.00 m (19f) / 0.80 m (24f) | jump 4+40+3, apex 1.55 m, forward 1.35 m | throw range 0.60 m | hurtbox stand [0.54, 1.66], crouch [0.62, 1.22], air [0.51, 1.12] m | pushbox [0.54, 1.49] m | build `average`.
 
@@ -1819,7 +1831,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 
 **Look.** Mutant: hulking cracked-rock skin, bony mask with cyan crystals, crystal claw growths on both hands, torn blue jeans, bare feet, stitched chest scar; the branded chest number is repainted to the show's own specimen number (research ROSTER content flag).
 
-**Game plan.** Boss tools, not cheats (FIGHTING_DESIGN 10): 2.40 m reach and 11,500 HP, 2 hits of armor on 5H, 6H and every special, CRUSHER LEAP crosses the screen as an overhead, ROAR blows people and projectiles away, SPECIMEN GRAB has the longest command-grab reach in the game.
+**Game plan.** Boss tools, not cheats (FIGHTING_DESIGN 10): 2.40 m reach and 11,500 HP, 2 hits of armor on 5H, 6H and every special, CRUSHER LEAP crosses the screen as an overhead, ROAR blows people and projectiles away, SPECIMEN GRAB reaches as far as Bruno's WALK IN but is slower and lighter.
 
 **Weakness (the counter-play).** The biggest hurtbox in the game and the slowest dash; armor loses to throws, multi-hits and supers; ROAR and CRUSHER LEAP are very punishable; honest frame data (no normal below -4 except the anti-air).
 
@@ -1828,9 +1840,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **3D ring play.**
 
 - *Stepping game:* CRUSHER LEAP (28-36f) and CLAW RUSH L/M/H are LINEAR: its big armored approaches are exactly what a sidestep is for - step, then punish the landing or the -4..-12. The EX CLAW RUSH re-aims. It does not need to step itself: 2.40 m reach and armor.
-- *Homing tools:* 5M WILD SWING (10f looping claw, homing, -4) is the anti-step tool. ROAR hits all around it (its box is centred on the body: a square 2.0-3.0 m wide), so circling it does not help once it roars. SPECIMEN GRAB homes with the longest command-grab reach in the game; MELTDOWN and SPECIMEN 13 home.
+- *Homing tools:* 5M WILD SWING (10f looping claw, homing, -4) is the anti-step tool. ROAR hits all around it (its box is centred on the body: a square 2.0-3.0 m wide), so circling it does not help once it roars. SPECIMEN GRAB homes (~2.0 m from centre); MELTDOWN and SPECIMEN 13 home.
 - *Wall game:* CLAW RUSH H / EX wall-splat; ROAR's 4 m/s launch becomes a wall splat when the opponent's back is to the ring boundary.
 - *From the data:* homing `5M`, `roar_l`, `roar_m`, `roar_h`, `roar_ex`, `specimen_grab_l`, `specimen_grab_m`, `specimen_grab_h`, `specimen_grab_ex`, `meltdown`, `specimen_13` | linear (steppable) `crusher_leap_l`, `crusher_leap_m`, `crusher_leap_h`, `crusher_leap_ex`, `claw_rush_l`, `claw_rush_m`, `claw_rush_h` | aimed projectiles - | straight projectiles - | anti-step `5M`, `roar_ex`, `specimen_grab_l`, `specimen_grab_m`, `specimen_grab_h`, `specimen_grab_ex` | step-attacks - | wall splat `claw_rush_h`, `claw_rush_ex`.
+- *Sidestep:* 1.606 m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the small bodies) - CONTRACT 35.20.
 
 **Stats.** HP 11500 | walk 1.80 / 1.20 m/s | dash 0.90 m (22f) / 0.60 m (26f) | jump 5+42+5, apex 1.55 m, forward 1.40 m | throw range 0.70 m | hurtbox stand [0.86, 2.01], crouch [0.99, 2.01], air [0.82, 1.49] m | pushbox [0.85, 1.81] m | build `monster`.
 
@@ -1857,9 +1870,9 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `2L` | Low Claw | 2L | 6 | 3 | 9 | 17 | +3 | -2 | 250 | L | 9 | chain:2L special super | - | tracks to f1, lat 0.15 | 2L | (startup 5->6) Startup 6 (monster). |
 | `5M` | Wild Swing | 5M | 10 | 3 | 17 | 29 | +2 | -4 | 700 | HL | 11 | special super | - | HOMING 20/f to f12, lat 0.60 | M | (startup 8->10; recovery 16->17; damage 600->700) Monster medium: 10/3/17, 700 (+2/-4). 3D: looping claw chop across the body: homing anti-step tool |
 | `2M` | Floor Slam | 2M | 11 | 3 | 15 | 28 | +4 | -2 | 700 | L | 11 | special super | - | tracks to f5, lat 0.18 | 2M | (startup 8->11; damage 600->700) 11f, 700 (+4/-2). |
-| `5H` | Crystal Swipe | 5H | 15 | 3 | 21 | 38 | +1 | -4 | 1100 | HL | 13 | special super | armor 2x 5-14 | tracks to f9, lat 0.22 | H | (startup 12->15; recovery 20->21; damage 800->1100) Boss armored heavy (FIGHTING_DESIGN 8c ENFORCER: 2-hit armor on heavies): 15/3/21, 1100, +1/-4. |
+| `5H` | Crystal Swipe | 5H | 15 | 3 | 21 | 38 | +1 | -4 | 1100 | HL | 13 | special super | armor 2x 9-14 | tracks to f9, lat 0.22 | H | (startup 12->15; recovery 20->21; damage 800->1100) Boss armored heavy (FIGHTING_DESIGN 8c ENFORCER: 2-hit armor on heavies): 15/3/21, 1100, +1/-4. CHANGED(fix_balance): the armor covers the last 6 startup frames (9-14, was 5-14) - an early poke still interrupts the wind-up (armored normals absorbing every poke made THE FREAK a wall, CONTRACT 35.21). |
 | `2H` | Jumping Claw | 2H | 11 | 4 | 22 | 36 | +1 | -7 | 800 | HL | 13 | special super | - | tracks to f5, lat 0.22 | AA | (startup 9->11; recovery 21->22) Monster anti-air: 11/4/22 (+1/-7) on a small hop. |
-| `6H` | Hammer Down | 6H | 24 | 3 | 17 | 43 | +2 | -4 | 1000 | H | 11 | - | armor 2x 5-23 | tracks to f18, lat 0.18 | OH | (startup 18->24; damage 600->1000) Boss overhead: 24f (reactable) with 2-hit armor 5-23 and 1000 damage. |
+| `6H` | Hammer Down | 6H | 24 | 3 | 17 | 43 | +2 | -4 | 1000 | H | 11 | - | armor 2x 18-23 | tracks to f18, lat 0.18 | OH | (startup 18->24; damage 600->1000) Boss overhead: 24f (reactable) with 2-hit armor 18-23 (CHANGED fix_balance: was 5-23, the last 6 startup frames like 5H) and 1000 damage. |
 | `j.L` | Air Claw | j.L | 6 | 7 | 3 | 15 | air 13 | air 9 | 300 | H | 9 | - | - | tracks to f1, lat 0.15 | jL | (startup 5->6) Startup 6 (monster). |
 | `j.M` | Air Swipe | j.M | 7 | 6 | 3 | 15 | air 17 | air 13 | 600 | H | 11 | - | - | tracks to f1, lat 0.18 | jM |  |
 | `j.H` | Falling Slam | j.H | 10 | 6 | 3 | 18 | air 19 | air 15 | 900 | H | 13 | - | - | tracks to f4, lat 0.22 | jH | (damage 800->900) Boss jump-in 900. |
@@ -1877,10 +1890,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `roar_m` | Roar | 22M | 20 | 6 | 24 | 49 | KD launch | -10 | 600 | HL | 13 | - | proj 1-25, armor 2x 1-19 | HOMING 20/f to f25, lat 1.20 | custom | Boss 'get off me' tool: 20f startup, 2-hit armor, projectile invulnerable 1-25, a 2.0/2.4/2.8 m box around it, -10 on block. 3D: shockwave all around it: the box is centred on the body, so its depth = half its width (a square around the Freak); homing |
 | `roar_h` | Roar | 22H | 20 | 6 | 24 | 49 | KD launch | -10 | 700 | HL | 13 | - | proj 1-25, armor 2x 1-19 | HOMING 20/f to f25, lat 1.40 | custom | Boss 'get off me' tool: 20f startup, 2-hit armor, projectile invulnerable 1-25, a 2.0/2.4/2.8 m box around it, -10 on block. 3D: shockwave all around it: the box is centred on the body, so its depth = half its width (a square around the Freak); homing |
 | `roar_ex` | Roar (EX) | 22S | 12 | 6 | 24 | 41 | KD launch | -10 | 900 | HL | 13 | - | proj 1-25, armor 99x 1-17 | HOMING 20/f to f17, lat 1.50 | custom | EX: 12f, super armor. 3D: 12f radial shockwave (1.5 m deep = half the 3.0 m box): the EX is its fast anti-step answer |
-| `specimen_grab_l` | Specimen Grab | 360L | 5 | 3 | 50 | 57 | KD +28 | - | 2600 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_l | grab: range 1.3 m, lock 80 f, dmg at f36, same side; victim f0 hit_body 0.00-0.30 s, f10 hit_high_l 0.00-0.30 s, f18 dizzy 0.30-1.00 s, f36 kd_fall_b 1.25-1.87 s. (recovery 54->50; damage 2500->2600) Boss command grab: reach +0.08..+0.18 m over the template (its 2.40 m arms), damage +100 per strength, whiff recovery 50. 3D: command grab reach arc: homes through its active frames |
-| `specimen_grab_m` | Specimen Grab | 360M | 5 | 3 | 50 | 57 | KD +28 | - | 3000 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_m | grab: range 1.2 m, lock 80 f, dmg at f36, same side; victim f0 hit_body 0.00-0.30 s, f10 hit_high_l 0.00-0.30 s, f18 dizzy 0.30-1.00 s, f36 kd_fall_b 1.25-1.87 s. (recovery 54->50; damage 2900->3000) Boss command grab: reach +0.08..+0.18 m over the template (its 2.40 m arms), damage +100 per strength, whiff recovery 50. 3D: command grab reach arc: homes through its active frames |
-| `specimen_grab_h` | Specimen Grab | 360H | 5 | 3 | 50 | 57 | KD +28 | - | 3400 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_h | grab: range 1.1 m, lock 80 f, dmg at f36, same side; victim f0 hit_body 0.00-0.30 s, f10 hit_high_l 0.00-0.30 s, f18 dizzy 0.30-1.00 s, f36 kd_fall_b 1.25-1.87 s. (recovery 54->50; damage 3300->3400) Boss command grab: reach +0.08..+0.18 m over the template (its 2.40 m arms), damage +100 per strength, whiff recovery 50. 3D: command grab reach arc: homes through its active frames |
-| `specimen_grab_ex` | Specimen Grab (EX) | 360S | 5 | 3 | 50 | 57 | KD +28 | - | 3700 | U | 0 | - | strike 1-5 | HOMING 20/f to f7 | cmdgrab_h | grab: range 1.4 m, lock 84 f, dmg at f38, same side; victim f0 hit_body 0.00-0.30 s, f11 hit_high_l 0.00-0.30 s, f19 dizzy 0.30-1.00 s, f38 kd_fall_b 1.25-1.87 s. (recovery 54->50; damage 3300->3700) EX: strike invulnerable 1-5. 3D: command grab reach arc: homes through its active frames |
+| `specimen_grab_l` | Specimen Grab | 360L | 5 | 3 | 50 | 57 | KD +28 | - | 2200 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_l | grab: range 1.0 m, lock 80 f, dmg at f36, same side; victim f0 hit_body 0.00-0.30 s, f10 hit_high_l 0.00-0.30 s, f18 dizzy 0.30-1.00 s, f36 kd_fall_b 1.25-1.87 s. (recovery 54->50; damage 2500->2200) Boss command grab (CHANGED fix_balance): push-front gap 1.00 / 0.92 / 0.85 m (its 0.75 m push front makes that ~2.0 m from centre, Bruno's WALK IN reach), damage 2200 / 2550 / 2900 (template 2500 / 2900 / 3300), whiff recovery 50. 3D: command grab reach arc: homes through its active frames |
+| `specimen_grab_m` | Specimen Grab | 360M | 5 | 3 | 50 | 57 | KD +28 | - | 2550 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_m | grab: range 0.92 m, lock 80 f, dmg at f36, same side; victim f0 hit_body 0.00-0.30 s, f10 hit_high_l 0.00-0.30 s, f18 dizzy 0.30-1.00 s, f36 kd_fall_b 1.25-1.87 s. (recovery 54->50; damage 2900->2550) Boss command grab (CHANGED fix_balance): push-front gap 1.00 / 0.92 / 0.85 m (its 0.75 m push front makes that ~2.0 m from centre, Bruno's WALK IN reach), damage 2200 / 2550 / 2900 (template 2500 / 2900 / 3300), whiff recovery 50. 3D: command grab reach arc: homes through its active frames |
+| `specimen_grab_h` | Specimen Grab | 360H | 5 | 3 | 50 | 57 | KD +28 | - | 2900 | U | 0 | - | - | HOMING 20/f to f7 | cmdgrab_h | grab: range 0.85 m, lock 80 f, dmg at f36, same side; victim f0 hit_body 0.00-0.30 s, f10 hit_high_l 0.00-0.30 s, f18 dizzy 0.30-1.00 s, f36 kd_fall_b 1.25-1.87 s. (recovery 54->50; damage 3300->2900) Boss command grab (CHANGED fix_balance): push-front gap 1.00 / 0.92 / 0.85 m (its 0.75 m push front makes that ~2.0 m from centre, Bruno's WALK IN reach), damage 2200 / 2550 / 2900 (template 2500 / 2900 / 3300), whiff recovery 50. 3D: command grab reach arc: homes through its active frames |
+| `specimen_grab_ex` | Specimen Grab (EX) | 360S | 5 | 3 | 50 | 57 | KD +28 | - | 3150 | U | 0 | - | strike 1-5 | HOMING 20/f to f7 | cmdgrab_h | grab: range 1.08 m, lock 84 f, dmg at f38, same side; victim f0 hit_body 0.00-0.30 s, f11 hit_high_l 0.00-0.30 s, f19 dizzy 0.30-1.00 s, f38 kd_fall_b 1.25-1.87 s. (recovery 54->50; damage 3300->3150) EX: strike invulnerable 1-5, gap 1.08 m, 3150 (CHANGED fix_balance: was 1.40 m / 3700). 3D: command grab reach arc: homes through its active frames |
 | `meltdown` | Meltdown | 236236 | 10 | 27 | 50 | 86 | KD +23 | -28 | 2200 | HL | 20 | - | throw 1-10, armor 99x 1-34 | HOMING 20/f to f36, lat 0.60 | custom | hits: f10 600, f22 600, f34 1000. Boss Lv1: super armor 1-34 (not invulnerable - throws beat it), 2200 (boss damage), hits 12 frames apart (three separate swings in the clip), -28 on block. |
 | `specimen_13` | Specimen 13 | 214214 | 10 | 4 | 58 | 71 | cine, KD +19 | -42 | 5000 | HL | 0 | - | strike 1-13, throw 1-13, air 1-13, proj 1-13 | HOMING 20/f to f13, lat 0.60 | custom | Boss Lv3: 5000 (+500 over the 4500 template; inside the SF6 range 2600-5300), otherwise 10/4/58. |
 
@@ -1910,10 +1923,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `roar_m` Roar: Shockwave roar all around it: blows opponents away, projectile-invulnerable. (hand-set hit volume f20-25 x 0.30 y 1.00 w 2.40 h 2.00)
 - `roar_h` Roar: Shockwave roar all around it: blows opponents away, projectile-invulnerable. (hand-set hit volume f20-25 x 0.30 y 1.00 w 2.80 h 2.00)
 - `roar_ex` Roar (EX): Fast super-armored roar. (hand-set hit volume f12-17 x 0.30 y 1.00 w 3.00 h 2.20)
-- `specimen_grab_l` Specimen Grab: 360 command grab with the longest reach in the game.
-- `specimen_grab_m` Specimen Grab: 360 command grab with the longest reach in the game.
-- `specimen_grab_h` Specimen Grab: 360 command grab with the longest reach in the game.
-- `specimen_grab_ex` Specimen Grab (EX): Strike-invulnerable 1-5, 1.40 m.
+- `specimen_grab_l` Specimen Grab: 360 command grab with a long reach.
+- `specimen_grab_m` Specimen Grab: 360 command grab with a long reach.
+- `specimen_grab_h` Specimen Grab: 360 command grab with a long reach.
+- `specimen_grab_ex` Specimen Grab (EX): Strike-invulnerable 1-5, 1.08 m.
 - `meltdown` Meltdown: Super-armored three-swipe rampage.
 - `specimen_13` Specimen 13: PRIME TIME: grabbed, crushed, hammered into the floor twice, roared at and hurled across the set.
 
@@ -1968,7 +1981,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 | `win_idle` | win | Mixamo `Creature_Pack/mutant idle (2)` f1-158 | mutant idle (2) |
 | `taunt_flex` | taunt | Mixamo `Creature_Pack/mutant flexing muscles` f1-133 | boss flex |
 
-**CPU.** `{"style": "boss_armor", "rangeM": [1.0, 2.4], "pokes": ["5M", "2M"], "antiAir": ["2H"], "punish": ["5H", "claw_rush_h"], "combo": ["2L", "5M", "claw_rush_m"], "approach": ["crusher_leap_m"], "grab": ["specimen_grab_m"], "armor": ["5H", "6H", "claw_rush_m", "crusher_leap_m"], "meter": "meltdown", "antiStep": ["5M", "specimen_grab_m"]}`. **Intro** `intro_roar`, **win** `win_roar`, `win_idle`, **taunt** `taunt_flex`.
+**CPU.** `{"style": "boss_armor", "rangeM": [1.0, 2.4], "pokes": ["5M", "2M"], "antiAir": ["2H"], "punish": ["5H", "claw_rush_h"], "combo": ["2L", "5M", "claw_rush_m"], "approach": ["crusher_leap_m"], "grab": ["specimen_grab_m"], "armor": ["5H", "6H", "claw_rush_m", "crusher_leap_m"], "meter": "meltdown", "antiStep": ["5M", "roar_ex"]}`. **Intro** `intro_roar`, **win** `win_roar`, `win_idle`, **taunt** `taunt_flex`.
 
 ## RICKY MARQUEE - The Host (`ricky`)
 
@@ -1990,6 +2003,7 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - *Homing tools:* 5H SHOWSTOPPER (12f horizontal cane swing, homing, -3) and 2M LOW CANE (9f homing low, 0.40 m deep) are the anti-step tools; 3H THE HOOK is a homing sweep that drags them in; STANDING OVATION, PRIME TIME and SEASON FINALE home.
 - *Wall game:* 5H SHOWSTOPPER wall-splats at the ring edge; THE HOOK pulls opponents toward him - off the wall - when he wants the centre of the set.
 - *From the data:* homing `2M`, `5H`, `3H`, `commercial_hit`, `standing_ovation`, `prime_time`, `season_finale` | linear (steppable) `spotlight_l`, `spotlight_m`, `spotlight_h`, `the_hook_l`, `the_hook_m`, `the_hook_h` | aimed projectiles `spotlight_ex`, `pyro_l`, `pyro_m`, `pyro_h`, `pyro_ex` | straight projectiles `spotlight_l`, `spotlight_m`, `spotlight_h` | anti-step `2M`, `5H` | step-attacks - | wall splat `5H`.
+- *Sidestep:* 0.967 m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the small bodies) - CONTRACT 35.20.
 
 **Stats.** HP 13000 | walk 2.12 / 1.44 m/s | dash 1.20 m (18f) / 0.80 m (23f) | jump 4+38+3, apex 1.59 m, forward 1.43 m | throw range 0.60 m | hurtbox stand [0.57, 1.79], crouch [0.66, 1.26], air [0.54, 1.18] m | pushbox [0.44, 1.61] m | build `average`.
 

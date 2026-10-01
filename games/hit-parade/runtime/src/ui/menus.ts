@@ -202,6 +202,9 @@ export class Menus {
   private nameSlot = 0;
   private nameSlots: HTMLElement[] = [];
   private nameMine: HTMLElement | null = null;
+  /** CHANGED(fix_ui_stage) (verifier modes D3): the ladder length of the run on screen (the last showLadder / startSeason),
+   *  so name entry + the ending read the PILOT or the SEASON board - SaveStore keeps one board per length */
+  private ladderLen: 'season' | 'pilot' | null = null;
   // loop / pads
   private raf = 0;
   private lastPoll = 0;
@@ -736,6 +739,7 @@ export class Menus {
 
   showLadder(v: LadderView): Promise<'go' | 'quit'> {
     this.stack = ['ladder'];
+    this.ladderLen = v.length;
     this.buildLadder(v);
     return new Promise((resolve) => {
       this.resolveLadder = resolve;
@@ -761,7 +765,9 @@ export class Menus {
     const cards: Array<{ kind: 'finale' | 'text' | 'ratings' | 'board' | 'unlock'; page?: number }> = [{ kind: 'finale' }];
     pages.forEach((_, i) => cards.push({ kind: 'text', page: i }));
     cards.push({ kind: 'ratings' });
-    if ((this.deps.save.get().board ?? []).length) cards.push({ kind: 'board' });
+    // CHANGED(fix_ui_stage) (verifier modes D3): THE BOARD of this run's length (a PILOT clear is saved to the PILOT board)
+    const len = p.length ?? this.ladderLen ?? 'season';
+    if (this.board(len).length) cards.push({ kind: 'board' });
     if (p.unlocked.length) cards.push({ kind: 'unlock' });
     for (let k = 0; k < cards.length; k++) {
       this.stack = ['ending'];
@@ -772,14 +778,26 @@ export class Menus {
     this.endingStep = '';
   }
 
-  showNameEntry(p: { score: number; fighter: string }): Promise<string> {
+  /** CHANGED(fix_ui_stage) (verifier modes D3): `length` picks the board the run ranks on (default: the run on screen) */
+  showNameEntry(p: { score: number; fighter: string; length?: 'season' | 'pilot' }): Promise<string> {
     this.stack = ['nameentry'];
-    this.buildNameEntry(p);
+    this.buildNameEntry({ ...p, length: p.length ?? this.ladderLen ?? 'season' });
     return new Promise((resolve) => { this.resolveName = resolve; this.render('nameentry'); });
   }
 
   /** the fighter / scheme the pause card's MOVE LIST shows (game.ts sets it when a bout starts) */
   setMoveList(fighterId: string, scheme: Scheme = 0): void { this.mlFighter = fighterId; this.mlScheme = scheme; }
+
+  /**
+   * CHANGED(fix_ui_stage) (verifier modes D3): the local ratings board of one ladder length. SaveStore.get() carries both
+   * (`scores.season` / `scores.pilot`, CONTRACT 8 save) and its flat `board` is the SEASON one; a save view without
+   * `scores` (lab stubs) has only that SEASON board, so a PILOT run there has none.
+   */
+  private board(length: 'season' | 'pilot'): Array<{ name: string; score: number; fighter: string }> {
+    const sv = this.deps.save.get();
+    const rows = sv.scores?.[length] ?? (length === 'season' ? sv.board : undefined) ?? [];
+    return rows.map((r) => ({ name: r.name, score: r.score, fighter: r.fighter }));
+  }
 
   private mlDefault(): string {
     return this.mlFighter || this.flow.picks?.p1.fighter || Object.keys(this.data.fighters)[0] || 'johnny';
@@ -994,6 +1012,7 @@ export class Menus {
     const P = (pk: CsPick, cpu: number) => ({ fighter: pk.fighter, color: pk.color, scheme: pk.scheme, cpu });
     switch (this.flow.kind) {
       case 'season':
+        this.ladderLen = this.flow.length;
         this.emit({ kind: 'startSeason', fighter: r.p1.fighter, color: r.p1.color, scheme: r.p1.scheme, length: this.flow.length, difficulty: this.flow.difficulty });
         break;
       case 'online':
@@ -1240,7 +1259,7 @@ export class Menus {
     div('hpm-sc-any', box, this.touch ? t('misc.tapAny') : t('card.continue'));
   }
 
-  private buildEnding(p: { fighter: string; score: number; unlocked: string[]; continues?: number }, card: { kind: string; page?: number },
+  private buildEnding(p: { fighter: string; score: number; unlocked: string[]; length?: 'season' | 'pilot'; continues?: number }, card: { kind: string; page?: number },
     pages: string[], k: number, n: number): void {
     const box = this.endBox;
     box.replaceChildren();
@@ -1283,8 +1302,11 @@ export class Menus {
       case 'board': {
         art.classList.add('board');
         const brd = div('hpm-card hpm-board big', art);
-        brd.append(el('h3', 'hpm-cap', t('name.board')));
-        const rows = [...(this.deps.save.get().board ?? [])].sort((a, b) => b.score - a.score).slice(0, 5);
+        // CHANGED(fix_ui_stage) (verifier modes D3): the board of this run's length, labelled (PILOT / FULL SEASON)
+        const len = p.length ?? this.ladderLen ?? 'season';
+        brd.append(el('h3', 'hpm-cap', t('name.board')), el('span', 'hpm-board-len', t(`name.boardLen.${len}`)));
+        brd.dataset.len = len;
+        const rows = this.board(len).sort((a, b) => b.score - a.score).slice(0, 5);
         let mine = false;
         rows.forEach((r, i) => {
           const me = !mine && r.fighter === p.fighter && r.score === Math.floor(p.score);
@@ -1317,7 +1339,7 @@ export class Menus {
     requestAnimationFrame(step);
   }
 
-  private buildNameEntry(p: { score: number; fighter: string }): void {
+  private buildNameEntry(p: { score: number; fighter: string; length: 'season' | 'pilot' }): void {
     const box = this.nameBox;
     box.replaceChildren();
     this.nameLetters = [0, 0, 0];
@@ -1343,8 +1365,10 @@ export class Menus {
     card.append(done);
     // CHANGED(UI) P2: the local board with THIS run slotted in where its score ranks (the name fills in as it is typed)
     const board = div('hpm-card hpm-board', box);
-    board.append(el('h3', 'hpm-cap', t('name.board')));
-    const all = [...(this.deps.save.get().board ?? [])].map((r) => ({ ...r, me: false }));
+    // CHANGED(fix_ui_stage) (verifier modes D3): rank against the board of this run's length (PILOT / FULL SEASON)
+    board.append(el('h3', 'hpm-cap', t('name.board')), el('span', 'hpm-board-len', t(`name.boardLen.${p.length}`)));
+    board.dataset.len = p.length;
+    const all = this.board(p.length).map((r) => ({ ...r, me: false }));
     const mine = { name: '', score: Math.floor(p.score), fighter: p.fighter, me: true };
     all.push(mine);
     all.sort((a, b) => b.score - a.score || (a.me ? 1 : 0) - (b.me ? 1 : 0));

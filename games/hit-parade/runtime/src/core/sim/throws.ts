@@ -9,6 +9,9 @@
 // CHANGED(SIM3D) (CONTRACT §35.4): a grab connects when the defender is within range (push circle to push circle, the
 // old push-box front to front on the line) AND inside the thrower's front arc +- throw.frontArcDeg (70); the victim's
 // carry runs along the thrower's yaw (fighter.ts throwCarry), a back throw lands it behind along -forward.
+// CHANGED(fix_core) D4 (CONTRACT §35.20): on the connect the victim is pulled onto the thrower's forward line, push fronts
+// touching (throw.pullF frames; throwpose.ts holdPos), or follows grab.path (grab supers) - it was held where it was caught,
+// up to 1.4 m out of reach of the grab clip (bruno FINAL DELIVERY hugged, spun and lifted air).
 
 import { ACT, F, FL, ST } from './layout.ts';
 import { EV, SC } from './events.ts';
@@ -18,7 +21,7 @@ import { addShowtime, clearMove, drainNerve, emit, fb, isAirborne, setSt } from 
 import type { Match } from './state.ts';
 import { applyDamage, comboStep } from './hits.ts';
 import { pushCircle } from './boxes.ts';
-import { throwEarlyRelease, throwWakeNeed } from './throwpose.ts';
+import { holdDist, throwEarlyRelease, throwWakeNeed } from './throwpose.ts';
 import { Q, YAW_HALF, cosQ, divRound, dirToYaw, isqrt, sinQ } from './fx3d.ts';
 
 function inRange(inv: Int32Array, o: number, f: number): boolean {
@@ -177,6 +180,10 @@ function connect(m: Match, a: number, mv: CMove): void {
   // victim's own root sits on the thrower's forward line from here on (the carry anchor is its position at the connect)
   s[bd + F.thrYaw] = s[ba + F.yaw];
   s[bd + F.yaw] = (s[ba + F.yaw] + YAW_HALF) & 65535;
+  // CHANGED(fix_core) D4 (CONTRACT §35.20): the thrower's root at the connect = the origin of the hold point / grab.path
+  // (throwpose.ts holdPos: the victim is pulled into contact or follows the path instead of staying where it was caught)
+  s[bd + F.thrAX] = s[ba + F.x];
+  s[bd + F.thrAZ] = s[ba + F.z];
   s[bd + F.kdFace] = 0;
   s[bd + F.thrDisp] = 0;
   s[bd + F.thrMv] = s[ba + F.mv];
@@ -184,7 +191,8 @@ function connect(m: Match, a: number, mv: CMove): void {
   if (mv.throwBack) {
     const ddx = s[bd + F.x] - s[ba + F.x];
     const ddz = s[bd + F.z] - s[ba + F.z];
-    const d0 = isqrt(ddx * ddx + ddz * ddz);
+    // CHANGED(fix_core) D4: with the pull, the side-swap carry starts from the HOLD point (holdDist ahead of the thrower)
+    const d0 = m.sys.throwPullF > 0 && !(g && g.path) ? holdDist(m, d) : isqrt(ddx * ddx + ddz * ddz);
     // clear of both FRONTS: once the victim is up it turns to face the thrower (no push-apart pop at that turn)
     const after = Math.max(m.sys.backThrowOff, m.cf[a].pushFS + m.cf[d].pushFS + 2000);
     s[bd + F.thrDisp] = d0 + after;

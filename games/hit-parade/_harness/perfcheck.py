@@ -81,6 +81,37 @@ def machine_load():
         return {"error": str(e)[:200]}
 
 
+def attrib(pf, n=8):
+    """CHANGED(fix_view) G9: the FrameProf dump boiled down for attribution - the worst frames by rAF gap (their CPU
+    sections wrap / sim / view / render, GPU timer ms, renderer deltas: programs linked, textures / geometries created,
+    JS heap delta KB, note = cinematic frame + 'wrap'), the longest Long-Animation-Frame entries with their scripts, and
+    how many frames in the window changed the program / texture / geometry counts at all"""
+    if not pf:
+        return None
+    worst = []
+    for f in (pf.get("worst") or [])[:n]:
+        worst.append({k: f.get(k) for k in ("raw", "cpu", "gpu", "sec", "dProg", "dTex", "dGeo", "dHeap", "note", "screen")})
+    loaf = sorted(pf.get("loaf") or [], key=lambda e: -e.get("dur", 0))[:6]
+    series = pf.get("series") or []
+    return {"gpuP": pf.get("gpuP"), "cpuP": pf.get("cpuP"), "rawP": pf.get("rawP"), "mean": pf.get("mean"), "max": pf.get("max"),
+            "worst": worst, "loaf": loaf, "frames": pf.get("frames"),
+            "framesWithDeltas": sum(1 for w in (pf.get("worst") or []) if (w.get("dProg") or w.get("dTex") or w.get("dGeo"))),
+            "seriesN": len(series)}
+
+
+def attrib_line(a):
+    if not a:
+        return "-"
+    parts = []
+    for w in a["worst"][:5]:
+        sec = w.get("sec") or {}
+        parts.append("%.0fms(cpu %.1f gpu %s %s%s%s)" % (w.get("raw") or 0, w.get("cpu") or 0, w.get("gpu"),
+                     " ".join("%s %.1f" % (k, v) for k, v in sec.items() if v >= 0.5),
+                     (" dProg %d dTex %d dGeo %d" % (w.get("dProg") or 0, w.get("dTex") or 0, w.get("dGeo") or 0)) if (w.get("dProg") or w.get("dTex") or w.get("dGeo")) else "",
+                     (" heap %+dKB" % w["dHeap"]) if abs(w.get("dHeap") or 0) > 512 else "") + " [" + (w.get("note") or "") + "]")
+    return "; ".join(parts)
+
+
 def main():
     ap = argparse.ArgumentParser(description="HIT PARADE perf check (G9) through the VIEW lab")
     ap.add_argument("--base", default="http://localhost:%d/" % PORT)
@@ -104,9 +135,11 @@ def main():
     ap.add_argument("--circle", type=int, default=0, help="CHANGED(VIEW3D) --lab sim: frames of STEP_IN before the walk-in (diagonal line)")
     ap.add_argument("--stages", default="", help="--lab sim: comma list of stage ids measured one after another in the same page "
                     "(the super cinematic on each set; per-stage p50 / p99 table; the gate applies to the worst p99)")
+    ap.add_argument("--chrome-arg", action="append", default=[], help="CHANGED(fix_view) extra Chrome flag (repeatable), e.g. "
+                    "--chrome-arg=--force_high_performance_gpu (the dGPU when other sessions saturate the iGPU; say so in the report)")
     args = ap.parse_args()
     name = "perfcheck_%s" % (args.label or (args.scene + ("_headless" if args.headless else "_headed")))
-    extra = FLAGS + (["--disable-gpu-vsync", "--disable-frame-rate-limit"] if args.uncapped else [])
+    extra = FLAGS + (["--disable-gpu-vsync", "--disable-frame-rate-limit"] if args.uncapped else []) + list(args.chrome_arg)
 
     t0 = time.time()
     found, err = automated_chromes()
@@ -165,19 +198,29 @@ def main():
                     raise RuntimeError("no PRIME TIME cinematic started on %s: %s" % (sid, json.dumps(sc)))
                 a0, a1 = max(0, sc.get("pressAt", c0) - 4), (sc.get("endAt", c0 + 180) or c0 + 180)
                 wins = []
+                atts = []
                 for k in range(max(1, args.ab)):
                     ra = pg.evaluate("([n, a, b]) => window.__LAB__.perf(n, a, b)", [args.seconds, a0, a1])
                     rb = pg.evaluate("([n, a, b]) => window.__LAB__.perf(n, a, b)", [args.seconds, 30, max(31, a0 - 10)]) if args.ab > 0 else None
+                    # CHANGED(fix_view) G9: keep each window's attribution (the full dumps are too big for the report)
+                    atts.append({"A": attrib(ra.pop("prof", None)), "B": attrib(rb.pop("prof", None)) if rb else None,
+                                 "Awraps": ra.get("wraps"), "Bwraps": rb.get("wraps") if rb else None})
+                    print("   %s window %d: A p50 %.1f p99 %.1f max %.1f (%d fr, %s wraps left out)%s" % (sid, k, ra["p50"], ra["p99"], ra["max"], ra["frames"], ra.get("wraps"),
+                          (" | B idle p50 %.1f p99 %.1f max %.1f" % (rb["p50"], rb["p99"], rb["max"])) if rb else ""), flush=True)
+                    print("      A worst: %s" % attrib_line(atts[-1]["A"]), flush=True)
+                    if rb:
+                        print("      B worst: %s" % attrib_line(atts[-1]["B"]), flush=True)
                     wins.append((ra, rb))
                 med = lambda xs: sorted(xs)[len(xs) // 2]
                 r_ = dict(wins[-1][0])
-                pf = r_.pop("prof", None) or {}
+                pf = (atts[-1]["A"] or {})
                 for key in ("p50", "p90", "p99", "max", "avgFps"):
                     r_[key] = med([w[0][key] for w in wins])
                 r_["window"] = [a0, a1]
                 r_["lineDegAtCine"] = sc.get("lineDegAtCine")
                 r_["stageFallback"] = su.get("stageFallback")
-                r_["prof"] = {k: pf.get(k) for k in ("gpuSupported", "gpuP", "cpuP", "mean")}
+                r_["prof"] = {k: pf.get(k) for k in ("gpuP", "cpuP", "mean")}
+                r_["attribution"] = atts
                 if args.ab > 0:
                     r_["ab"] = [{"A": {k: w[0][k] for k in ("p50", "p99", "frames")}, "B": {k: w[1][k] for k in ("p50", "p99", "frames")}} for w in wins]
                     r_["idleP50"] = med([w[1]["p50"] for w in wins]); r_["idleP99"] = med([w[1]["p99"] for w in wins])

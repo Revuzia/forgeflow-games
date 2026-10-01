@@ -26,8 +26,11 @@ export interface ViewFighterSnap {
   /** CHANGED(VIEW3D) (SIM3D §35.13 item 11): world z (m), body yaw (radians = three.js rotation.y), step state */
   z?: number;
   yaw?: number;
-  step?: { kind?: string; frame?: number; side?: number; dir?: string };
+  /** CHANGED(fix_view): + `dist` (m) = this fighter's sidestep arc (fix_core §35.20 item 1, additive) */
+  step?: { kind?: string; frame?: number; side?: number; dir?: string; dist?: number };
   absent?: boolean;
+  /** CHANGED(fix_view) D2: the sim state name (FighterSnap.stateName) - which states can have active frames */
+  stateName?: string;
 }
 
 /** CHANGED(VIEW3D) (SIM3D §35.13 item 11): MatchSnap.ring */

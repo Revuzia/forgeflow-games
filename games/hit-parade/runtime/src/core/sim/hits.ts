@@ -8,20 +8,23 @@
 // hurt cylinders; projectiles test their travel-frame box; the hit direction of a record is a YAW (the attacker's
 // forward, or the projectile's travel): pushback, launches and wall splats run along it. Blocking reads "back" from the
 // camera basis (the screen direction away from the attacker).
+// CHANGED(fix_core) D7 (CONTRACT §35.20): BACK HIT - a hit on a grounded defender from more than backHit.arcDeg off its
+// facing (attacker root / projectile travel, pre-hit state) deals +20 %, +4 hitstun, turns the victim to face the attacker
+// on the hit frame and emits EV3D.BACK_HIT after the HIT.
 
 import { CF, F, FL, MVF, P, PROJ_CAP, ST, W, projBase } from './layout.ts';
-import { EV, CUE, SC, EVX } from './events.ts';
+import { EV, CUE, SC, EVX, EV3D } from './events.ts';
 import { GD, UK } from './compile.ts';
 import type { CMove } from './compile.ts';
 import { boxCyl, hurtCyls, moveBoxHits, wallRoom } from './boxes.ts';
 import { IN } from './inputs.ts';
 import {
-  addShowtime, clearMove, drainNerve, emit, fb, gainNerve, isAirborne, setSt, setVelAlong,
+  addShowtime, clearMove, drainNerve, emit, fb, gainNerve, isAirborne, setSt, setVelAlong, updateFacing,
 } from './state.ts';
 import type { Match } from './state.ts';
 import { enterKnockdown, setOpp, startMove } from './fighter.ts';
 import { killProjectile } from './projectiles.ts';
-import { YAW_HALF, cosQ, sinQ } from './fx3d.ts';
+import { YAW_HALF, cosQ, dirToYaw, isqrt, sinQ } from './fx3d.ts';
 import { wallSplat } from './splat.ts';
 
 export const OUT = { NONE: 0, HIT: 1, BLOCK: 2, PARRY: 3, PPARRY: 4, ARMOR: 5, CLASH: 6, CATCH: 7 } as const;
@@ -39,6 +42,7 @@ const rFlags = new Int32Array(R_CAP);
 const rDir = new Int32Array(R_CAP); // CHANGED(SIM3D): hit direction yaw (attacker forward / projectile travel)
 const rOut = new Int32Array(R_CAP);
 const rCounter = new Int32Array(R_CAP);
+const rBack = new Int32Array(R_CAP); // CHANGED(fix_core) D7: 1 = a BACK HIT (pre-hit state)
 const rAttX = new Int32Array(R_CAP);
 const rAttZ = new Int32Array(R_CAP);
 let rN = 0;
@@ -96,6 +100,7 @@ function push(att: number, vic: number, move: number, hid: number, cy: number, p
   rAttZ[rN] = attZ;
   rOut[rN] = OUT.NONE;
   rCounter[rN] = 0;
+  rBack[rN] = 0;
   rN++;
 }
 
@@ -178,6 +183,30 @@ export function canBlock(m: Match, d: number, mv: CMove, fromX: number, fromZ = 
   }
   if (!back) return false;
   return (mv.guard & (crouchG ? GD.CROUCH : GD.STAND)) !== 0;
+}
+
+/**
+ * CHANGED(fix_core) D7 (CONTRACT §35.20): is record r a BACK HIT (pre-hit state)? A GROUNDED defender (not airborne / juggled:
+ * juggles keep their own scaling) hit from more than system.json backHit.arcDeg (120) off its facing: a strike from its
+ * attacker's root position, a projectile from the reverse of its travel (it flew into the defender's back). Integer math:
+ * dot(forward Q14, from) < cos(arc) Q14 x |from| (|from| <= ~2^21 U, products < 2^36).
+ */
+function isBackHit(m: Match, r: number): boolean {
+  const s = m.s;
+  const bd = fb(rVic[r]);
+  if (isAirborne(s, bd) || s[bd + F.st] === ST.JUGGLE) return false;
+  let vx: number;
+  let vz: number;
+  if (rProj[r] >= 0) {
+    vx = -sinQ(rDir[r]);
+    vz = -cosQ(rDir[r]);
+  } else {
+    vx = rAttX[r] - s[bd + F.x];
+    vz = rAttZ[r] - s[bd + F.z];
+  }
+  if (vx === 0 && vz === 0) return false;
+  const yaw = s[bd + F.yaw];
+  return vx * sinQ(yaw) + vz * cosQ(yaw) < m.sys.backHitCos * isqrt(vx * vx + vz * vz);
 }
 
 /** 0 normal, 1 counter hit, 2 punish counter (pre-hit state of `d`). */
@@ -423,6 +452,7 @@ function applyHit(m: Match, r: number): void {
     startCinematic(m, a, d, mv);
     return;
   }
+  const back = rBack[r] !== 0; // CHANGED(fix_core) D7
   const dst = s[bd + F.st];
   const wasAir = isAirborne(s, bd) || dst === ST.JUGGLE;
   const wasJumping = wasAir && dst !== ST.JUGGLE;
@@ -434,7 +464,9 @@ function applyHit(m: Match, r: number): void {
   // stun / onHit / pushback of the move apply to the final hit
   const nonFinal = !proj && hid < mv.nHid - 1;
   const base = proj ? mv.damage : mv.hidDmg[hid];
-  const dmg = installDamage(m, a, scaledDamage(m, d, mv, base, pct, counter, (rFlags[r] & MVF.SIMPLE) !== 0, false));
+  let dmg = installDamage(m, a, scaledDamage(m, d, mv, base, pct, counter, (rFlags[r] & MVF.SIMPLE) !== 0, false));
+  // CHANGED(fix_core) D7 (CONTRACT §35.20): a BACK HIT deals backHit.damagePct % (120)
+  if (back) dmg = Math.max(base > 0 ? 1 : 0, Math.trunc((dmg * m.sys.backHitDmgPct) / 100));
   applyDamage(m, d, dmg, mv.isShove); // SHOVE damage is grey HP only (FIGHTING_DESIGN 2f)
   s[bd + F.cCount]++;
   s[bd + F.counterFlag] = counter;
@@ -448,7 +480,9 @@ function applyHit(m: Match, r: number): void {
   if (!proj && mv.hidHs[hid] >= 0) hs = mv.hidHs[hid];
   else if (mv.isSuper && hid === mv.nHid - 1) hs = Math.max(hs, sys.hitstop.superLast);
   if (counter === 2 && mv.str === 2 && mv.isNormalCat) hs += sys.hitstop.pcHeavyBonus;
-  const bonus = (counter === 1 ? sys.counter.chFrames : counter === 2 ? sys.counter.pcFrames : 0) + ((rFlags[r] & MVF.RUSH) !== 0 ? sys.rush.advBonus : 0);
+  // CHANGED(fix_core) D7: a BACK HIT adds backHit.hitstunF (4) hitstun frames, like the counter-hit bonus
+  const bonus = (counter === 1 ? sys.counter.chFrames : counter === 2 ? sys.counter.pcFrames : 0) + ((rFlags[r] & MVF.RUSH) !== 0 ? sys.rush.advBonus : 0) +
+    (back ? m.sys.backHitStun : 0);
   // victim reaction
   // CHANGED(SIM3D): STAGE FRIGHT stun / IMPACT splat "against the wall" = within ring.againstWallM (CONTRACT §35.2)
   const frightCorner = mv.isImpact && s[bd + F.fright] !== 0 && nearWall(m, d, dir, m.sys.againstWall);
@@ -512,11 +546,21 @@ function applyHit(m: Match, r: number): void {
     if (!proj) s[bd + F.flags] |= FL.PUSHX;
     else s[bd + F.flags] &= ~FL.PUSHX;
   }
+  if (back) {
+    // CHANGED(fix_core) D7: the back-hit victim turns to face the attacker on the hit frame (a projectile: where it came
+    // from), so its reaction plays as a front reaction pushed straight back along the hit direction
+    const fx = rAttX[r] - s[bd + F.x];
+    const fz = rAttZ[r] - s[bd + F.z];
+    if (proj) s[bd + F.yaw] = (dir + YAW_HALF) & 65535;
+    else if (fx !== 0 || fz !== 0) s[bd + F.yaw] = dirToYaw(fx, fz);
+    updateFacing(s, bd);
+  }
   setHitstop(m, a, d, r, hs);
   attackerContact(m, a, r, 1);
   projHit(m, r);
   const sc = proj ? SC.PROJECTILE : mv.sc;
   emit(m, EV.HIT, a, d, sc, cm(rCy[r]));
+  if (back) emit(m, EV3D.BACK_HIT, a, d, sc, cm(rCy[r])); // CHANGED(fix_core) D7 (HUD / audio callout)
   if (proj) emit(m, EV.PROJ_HIT, a, d, sc, cm(rCy[r]));
   if (counter === 1) emit(m, EV.COUNTER, a, d, sc, cm(rCy[r]));
   else if (counter === 2) emit(m, EV.PUNISH, a, d, sc, cm(rCy[r]));
@@ -720,6 +764,7 @@ export function resolveHits(m: Match): void {
   for (let r = 0; r < rN; r++) {
     rOut[r] = outcomeOf(m, r);
     rCounter[r] = rOut[r] === OUT.HIT ? counterKind(m, rVic[r], m.cf[rAtt[r]].moves[rMove[r]]) : 0;
+    rBack[r] = rOut[r] === OUT.HIT && isBackHit(m, r) ? 1 : 0; // CHANGED(fix_core) D7
   }
   for (let r = 0; r < rN; r++) {
     // a victim knocked into a cinematic / KO by an earlier record this frame takes nothing more

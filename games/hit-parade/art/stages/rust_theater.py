@@ -273,7 +273,9 @@ M_DECO = M("rt_deco", T_DECO_A, T_DECO_N, T_DECO_R, metallic=0.25)
 M_VELV = M("rt_velvet", T_VELV_A, T_VELV_N, roughness=0.95, double=True)
 M_FAB = M("rt_fabric", T_FAB_A, roughness=0.9, double=True)
 M_IRON = M("rt_iron", color=(0.030, 0.032, 0.038, 1), roughness=0.5, metallic=0.85)
-M_BRASS = M("rt_brass", color=(0.62, 0.42, 0.14, 1), roughness=0.35, metallic=1.0)
+# CHANGED(fix_ui_stage) (verifier modes D6): burnished brass 0.35 -> 0.55 roughness - the polished faces mirrored the
+# church HDRI's windows (the proscenium pilaster bases flared at luminance 8.8 right behind P1's head at orbit 45 deg)
+M_BRASS = M("rt_brass", color=(0.62, 0.42, 0.14, 1), roughness=0.55, metallic=1.0)
 M_FLAME = M("rt_flame", color=(1.0, 0.4, 0.05, 1), roughness=1.0, emission=(1.0, 0.34, 0.03, 1), estrength=3.0, double=True)
 M_BULB = M("rt_bulb", color=(1.0, 0.85, 0.55, 1), roughness=0.3, emission=(1.0, 0.78, 0.45, 1), estrength=1.6)
 M_LENS = M("rt_lens", color=(1.0, 0.8, 0.55, 1), roughness=0.2, emission=(1.0, 0.72, 0.42, 1), estrength=0.9)
@@ -398,12 +400,19 @@ for a in (90.0, 270.0):
     place(g, polar(RR - 0.005, a, 0.0), (a + 180.0) % 360.0)
     if a == 270.0:
         HERO["pit wall + gate"] += g
-# footlights round the coping (iron hoods <= 1.28 m, lamps facing into the pit)
+# footlights round the pit. CHANGED(fix_ui_stage) (verifier D11): they were 48 iron hoods LYING ON the coping (0.26 m
+# cylinders, top 1.285 m) - with the orbit camera behind the near pit wall they filled the lower frame as big black
+# cylinders and covered the far fighter's boots. Now each lamp is RECESSED under the coping lip: a small iron housing on
+# the brick face inside the lip's 5 cm overhang (y 1.0-1.05, never above the 1.05 m lip underside, never proud of the lip
+# edge) with a glowing slot facing into the pit. Seen from across the pit the far wall shows the footlight ring under the
+# coping; from behind the near wall the lamps face away and sit below the coping, so the wall alone decides what the camera
+# sees. None over the two fighter gates (their frames reach the lip). Slots chase with the marquee bulbs.
 for k in range(48):
     a = 7.5 * k + 3.75
-    c = polar(RR + 0.12, a, WH + 0.03)            # hood top 1.285 m: below the 1.30 m camera band
-    cyl("foot_hood_%d" % k, c, tangent(a), 0.055, 0.26, M_IRON, sides=10)
-    BULBS.append(sphere("foot_bulb_%d" % k, polar(RR + 0.05, a, WH + 0.035), 0.033, M_BULB, seg=8, rings=5))
+    if min(abs(a - 90.0), abs(a - 270.0)) < 9.0:
+        continue
+    obox("foot_box_%d" % k, polar(RR - 0.022, a, 1.022), (0.13, 0.05, 0.044), a, M_IRON, tile=0.3, bevel=0.004)
+    BULBS.append(obox("foot_lamp_%d" % k, polar(RR - 0.046, a, 1.016), (0.1, 0.018, 0.004), a, M_BULB, tile=0.3))
 
 # =============================================================== BUILD: the old stage (180 deg)
 log("stage + proscenium")

@@ -10,9 +10,10 @@
 // (newest press wins); fighter.ts executes the buffer when the fighter may act.
 
 import { ACT, BUF, F, FL, HIST, P, PROJ_CAP, ST, W, projBase } from './layout.ts';
-import { H_FROZEN, dashDone, motionDone } from './motion.ts';
-import { K, MO, STK, UK } from './compile.ts';
-import type { CFighter, CMove, CRoute } from './compile.ts';
+import { H_FROZEN, dashDone, motionDone, motionSpan } from './motion.ts';
+import type { MotionWindows } from './motion.ts';
+import { K, MO, MOTION_PRIO, STK, UK } from './compile.ts';
+import type { CFighter, CMove, CRoute, CSpecial, CTrigger } from './compile.ts';
 import { ballReady } from './projectiles.ts';
 import { canAfford, fb, isAirborne } from './state.ts';
 import type { Match } from './state.ts';
@@ -156,17 +157,91 @@ function setBuf(m: Match, i: number, act: number, mv: number, flags: number, win
   s[b + F.bufWin] = win;
 }
 
-/** Chain target matching a pressed normal (dir class + button + air). */
+/**
+ * Chain target matching a pressed normal (dir class + button + air). CHANGED(fix_input) (CONTRACT §35.24): an EXACT direction
+ * match wins over a 5X / 2X class match (a 5X part no longer shadows a 6X / 4X sibling, a 2X part a 3X / 1X one); with no
+ * overlapping siblings (every kit today) the result is unchanged.
+ */
 function chainTarget(cf: CFighter, cur: CMove | null, dir: number, btn: number, air: boolean): number {
   if (!cur) return -1;
+  let cls = -1;
   for (let k = 0; k < cur.chains.length; k++) {
     const t = cf.moves[cur.chains[k]];
     if (t.inBtn !== btn || t.inAir !== air) continue;
     const td = t.inDir;
-    const ok = td === dir || (td === 5 && (dir === 4 || dir === 5 || dir === 6)) || (td === 2 && (dir === 1 || dir === 2 || dir === 3));
-    if (ok) return t.idx;
+    if (td === dir) return t.idx;
+    if (cls < 0 && ((td === 5 && (dir === 4 || dir === 5 || dir === 6)) || (td === 2 && (dir === 1 || dir === 2 || dir === 3)))) cls = t.idx;
   }
-  return -1;
+  return cls;
+}
+
+// ------------------------------------------------------------------ CHANGED(fix_input): rekka / follow-up trigger ranking
+/**
+ * How specifically a press matches a chain trigger (CONTRACT §20.2 `trigger`, §35.24 a). The parser buffers the sibling with
+ * the highest tier; ties keep the authored `cancel` order, except motion vs motion (motionWins).
+ *   T_EXACT  SIMPLE S form, the exact direction ("2S" on 2)
+ *   T_CLASS  SIMPLE S form, the same SIMPLE class - the 5S / 6S / 2S / 4S routing: 1 / 3 -> 2S, 9 -> 6S, 7 -> 4S, 8 -> 5S
+ *   T_MOTION the classic form: its motion + one of its buttons (CLASSIC; in SIMPLE too, §1)
+ *   T_ANY    SIMPLE "5S" on any other direction - the neutral fallback, only when no more specific sibling matches
+ *   T_BTN    a button-only trigger (SIMPLE "LMH", a classic form without a motion)
+ * Before: the FIRST sibling whose trigger matched won, and "5S" matched S with any direction, so Patch CUE 2 -> 2S was
+ * CUE 3 OVERHEAD (sibling order cue3_oh "5S", cue3_lo "2S"), never CUE 3 LOW.
+ */
+const T_BTN = 1;
+const T_ANY = 2;
+const T_MOTION = 3;
+const T_CLASS = 4;
+const T_EXACT = 5;
+
+/** The SIMPLE direction class of a numpad direction (the one-button routing: 6 / 9, 4 / 7, 1 / 2 / 3, 5 / 8). */
+function simpleClass(dir: number): number {
+  return dir === 6 || dir === 9 ? 6 : dir === 4 || dir === 7 ? 4 : dir === 1 || dir === 2 || dir === 3 ? 2 : 5;
+}
+
+/** Input bits of a trigger button mask (bit0 L, bit1 M, bit2 H, bit3 S). */
+function trigBits(mask: number): number {
+  return (mask & 1 ? IN.L : 0) | (mask & 2 ? IN.M : 0) | (mask & 4 ? IN.H : 0) | (mask & 8 ? IN.S : 0);
+}
+
+// scratch for the motion tier (fully rewritten on every parse; never carries state between frames)
+const spanNew = new Int32Array(2);
+const spanBest = new Int32Array(2);
+
+/**
+ * Tier of trigger `tr` for this frame's press (0 = no match). A T_MOTION result leaves the motion's span (motion.ts
+ * motionSpan: end / start ages) in spanNew.
+ */
+function triggerTier(s: Int32Array, b: number, tr: CTrigger, scheme: number, pressed: number, dir: number, mw: MotionWindows): number {
+  let tier = 0;
+  if (scheme === 0) {
+    if (tr.simpleDir >= 0) {
+      if ((pressed & IN.S) !== 0) tier = tr.simpleDir === dir ? T_EXACT : tr.simpleDir === simpleClass(dir) ? T_CLASS : tr.simpleDir === 5 ? T_ANY : 0;
+    } else if ((pressed & trigBits(tr.simpleBtn & 7)) !== 0) tier = T_BTN;
+  }
+  if (tier >= T_MOTION) return tier;
+  if ((pressed & trigBits(tr.btnMask)) !== 0) {
+    if (tr.motion === 0) return tier > T_BTN ? tier : T_BTN;
+    if (motionSpan(s, b, tr.motion, mw, spanNew)) return T_MOTION;
+  }
+  return tier;
+}
+
+/**
+ * Motion tier tie-break: does the new trigger's motion (span in spanNew, priority prioN) beat the best so far (spanBest,
+ * prioB)? A motion that ENDED BEFORE the other one STARTED is a leftover (the 236 that fired CUE 2 is still inside the
+ * window when 214 is typed for CUE 3 LOW, and hitstop frames never age it): the fresh one wins. Overlapping motions (6236 =
+ * 623 and 236) fall back to the special routing's MOTION_PRIO (the longer motion first, so 6236 stays the DP), then to the
+ * authored order.
+ */
+function motionWins(prioN: number, prioB: number): boolean {
+  if (spanBest[0] > spanNew[1]) return true; // the best's motion ended before the new one started
+  if (spanNew[0] > spanBest[1]) return false; // the new motion is the leftover
+  return prioN < prioB;
+}
+
+/** CHANGED(fix_input): does special row `sp` route to move `idx` (any button / EX)? */
+function rowHas(sp: CSpecial, idx: number): boolean {
+  return sp.idx[0] === idx || sp.idx[1] === idx || sp.idx[2] === idx || sp.idx[3] === idx;
 }
 
 /**
@@ -178,8 +253,9 @@ export function parseAction(m: Match, i: number): void {
   const b = fb(i);
   const st = s[b + F.st];
   if (st === ST.INTRO || st === ST.KO || st === ST.WIN || st === ST.LOSE || st === ST.ABSENT) return;
-  // CHANGED(SIM3D) (CONTRACT §35.2): a sidestep buffers presses only from step frame step.bufferF (9) on (the parse runs
-  // before this frame's update: the step frame being played now is stF + 2)
+  // CHANGED(SIM3D) (CONTRACT §35.2): a sidestep buffers presses only from step frame step.bufferF on (the parse runs
+  // before this frame's update: the step frame being played now is stF + 2). CHANGED(fix_core) D9 (CONTRACT §35.20):
+  // bufferF 9 -> 2, i.e. every press made during the step buffers (it was silently dropped on step frames 2-8)
   if (st === ST.SIDESTEP && s[b + F.stF] + 2 < m.sys.stepBufferF) return;
   const cf = m.cf[i];
   const R = routeOf(m, i); // CHANGED(SIM) P2: phase-2 routing for a `phases` fighter
@@ -194,30 +270,61 @@ export function parseAction(m: Match, i: number): void {
   const down = dir === 1 || dir === 2 || dir === 3;
   const kdCtx = st === ST.KNOCKDOWN || st === ST.THROWN;
   const baseWin = scheme === 0 ? sys.buffer.simple : sys.buffer.classic;
-  const win = kdCtx ? Math.max(baseWin, sys.buffer.wakeup) : st === ST.HITSTUN || st === ST.BLOCKSTUN ? Math.max(baseWin, sys.buffer.afterStun) : baseWin;
+  let win = kdCtx ? Math.max(baseWin, sys.buffer.wakeup) : st === ST.HITSTUN || st === ST.BLOCKSTUN ? Math.max(baseWin, sys.buffer.afterStun) : baseWin;
+  // CHANGED(fix_core) D9 (CONTRACT §35.20): a press made on sidestep frame k (2 .. stepAttackF - 1) is HELD until the step's
+  // action frame stepAttackF (11), where it comes out (step-attacks / follow-ups), and keeps the normal window after it; a
+  // later press overwrites it (setBuf: the newest press wins). The STEP tap and the dash keep their own short windows.
+  if (st === ST.SIDESTEP) win = Math.max(win, m.sys.stepAttackF - (s[b + F.stF] + 2) + baseWin);
   const chord = sys.buffer.chordFrames - 1;
   const w = cf.mw; // CHANGED(SIM) P2: per-fighter charge numbers (unique.chargeF / keepF)
   const curMv = s[b + F.mv] >= 0 ? cf.moves[s[b + F.mv]] : null;
 
+  // ---------------------------------------------------------------- SIMPLE S+H over follow-ups (CHANGED(fix_input))
+  // CONTRACT §35.24 item 2b (orchestrator decision): in SIMPLE the S+H super chord completed on THIS frame (S with H pressed
+  // this frame or one frame before, or H with S pressed one frame before - the chord window of the S+H routing below) is the
+  // SUPER, not a follow-up press, while the running move has follow-ups and its cancel list allows a super and the super is
+  // usable. Before: the follow-up triggers read first, so S+H in Patch's CUE 1 / CUE 2 gave CUE 2 / CUE 3 and the authored
+  // "super" cancels could never be used in SIMPLE. A move without a super cancel, or an unaffordable super, keeps the S press
+  // as the follow-up (unchanged); CLASSIC is unchanged (a fast 236, 236 rekka already contains 236236).
+  if (scheme === 0 && curMv !== null && curMv.cSuper && curMv.chains.length > 0) {
+    const chordS = (pressed & IN.S) !== 0 && (raw & IN.H) !== 0 && s[b + F.ageH] <= chord;
+    const chordH = (pressed & IN.H) !== 0 && (raw & IN.S) !== 0 && s[b + F.ageS] <= chord;
+    if (chordS || chordH) {
+      const sup = down ? R.sup3 : R.sup1;
+      if (sup >= 0 && usable(m, i, cf.moves[sup], air)) {
+        setBuf(m, i, ACT.MOVE, sup, BUF.SIMPLE, win);
+        return;
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- rekka triggers (CONTRACT 20.2)
+  // CHANGED(fix_input) (CONTRACT §35.24 a): every sibling trigger is ranked (triggerTier) and the MOST SPECIFIC affordable one
+  // is buffered - an exact SIMPLE direction beats its class, a motion beats the neutral "5S" fallback, a fresh motion beats a
+  // leftover one (motionWins) - instead of the first sibling that matched.
   if (curMv && curMv.chains.length > 0 && (pressed & (IN.L | IN.M | IN.H | IN.S)) !== 0) {
+    let best = -1;
+    let bestTier = 0;
+    let bestPrio = 0;
     for (let k = 0; k < curMv.chains.length; k++) {
       const tm = cf.moves[curMv.chains[k]];
       const tr = tm.trigger;
       if (!tr) continue;
-      let ok = false;
-      if (scheme === 0 && (tr.simpleDir >= 0 || tr.simpleBtn !== 0)) {
-        if (tr.simpleDir >= 0) ok = (pressed & IN.S) !== 0 && (tr.simpleDir === 5 || tr.simpleDir === dir || (tr.simpleDir === 2 && down));
-        else ok = (pressed & ((tr.simpleBtn & 1 ? IN.L : 0) | (tr.simpleBtn & 2 ? IN.M : 0) | (tr.simpleBtn & 4 ? IN.H : 0))) !== 0;
+      const tier = triggerTier(s, b, tr, scheme, pressed, dir, sys.motion);
+      if (tier === 0 || tier < bestTier || !canAfford(m, i, tm)) continue;
+      const prio = tier === T_MOTION ? MOTION_PRIO[tr.motion] ?? 9 : 0;
+      if (best >= 0 && tier === bestTier && (tier !== T_MOTION || !motionWins(prio, bestPrio))) continue;
+      best = tm.idx;
+      bestTier = tier;
+      bestPrio = prio;
+      if (tier === T_MOTION) {
+        spanBest[0] = spanNew[0];
+        spanBest[1] = spanNew[1];
       }
-      if (!ok) {
-        const bits = (tr.btnMask & 1 ? IN.L : 0) | (tr.btnMask & 2 ? IN.M : 0) | (tr.btnMask & 4 ? IN.H : 0) | (tr.btnMask & 8 ? IN.S : 0);
-        ok = (pressed & bits) !== 0 && (tr.motion === 0 || motionDone(s, b, tr.motion, sys.motion));
-      }
-      if (ok && canAfford(m, i, tm)) {
-        setBuf(m, i, ACT.MOVE, tm.idx, BUF.CHAIN, win);
-        return;
-      }
+    }
+    if (best >= 0) {
+      setBuf(m, i, ACT.MOVE, best, BUF.CHAIN, win);
+      return;
     }
   }
 
@@ -262,8 +369,18 @@ export function parseAction(m: Match, i: number): void {
   const trig = (pressed | released) & (IN.L | IN.M | IN.H | IN.S);
   const trigS = scheme === 1 ? trig & IN.S : 0;
   const trigLMH = trig & (IN.L | IN.M | IN.H);
-  if (trigS !== 0 || trigLMH !== 0) {
-    const neg = ((pressed & (IN.L | IN.M | IN.H | IN.S)) & trig) === 0 ? BUF.NEG : 0;
+  const neg = ((pressed & (IN.L | IN.M | IN.H | IN.S)) & trig) === 0 ? BUF.NEG : 0;
+  // CHANGED(fix_input) (CONTRACT §35.24 b): a negative-edge (release-only) read
+  //  - never overwrites a live follow-up the player PRESSED (a rekka / target-combo chain, a stance follow-up). Before: the
+  //    release of the chain's button re-read the still-fresh motion (hitstop never ages it) as the PARENT special and
+  //    replaced the buffered chain - Patch 236M typed in CUE 1's hitstop gave no CUE 2 (after the hitstop it did);
+  //  - never re-reads the special row of the move already running (runRow). Before: a special with a "special" cancel
+  //    restarted itself on the button's release - bruno BRACE / gazza DIVE / boneyard BUTCHER'S BLOCK / zambini EX VANISH
+  //    (2 more NERVE bars) - and a release in CUE 1 buffered CUE 1 again.
+  // A release still fires a special from neutral / a cancel window exactly as before (the §4.3.9 negative edge).
+  const keepFollow = neg !== 0 && s[b + F.bufA] === ACT.MOVE && s[b + F.bufAge] <= s[b + F.bufWin] && (s[b + F.bufF] & (BUF.CHAIN | BUF.STANCE)) !== 0;
+  const runRow = neg !== 0 ? s[b + F.mv] : -1;
+  if ((trigS !== 0 || trigLMH !== 0) && !keepFollow) {
     let lastMotion = -1;
     let lastOk = false;
     // EX first (CLASSIC: motion + S)
@@ -272,6 +389,7 @@ export function parseAction(m: Match, i: number): void {
         const sp = R.specials[k];
         const idx = sp.idx[3];
         if (idx < 0 || sp.motion === MO.DQCF || sp.motion === MO.DQCB) continue;
+        if (runRow >= 0 && rowHas(sp, runRow)) continue;
         if (sp.motion !== lastMotion) {
           lastMotion = sp.motion;
           lastOk = motionDone(s, b, sp.motion, w);
@@ -286,6 +404,7 @@ export function parseAction(m: Match, i: number): void {
       lastMotion = -1;
       for (let k = 0; k < R.specials.length; k++) {
         const sp = R.specials[k];
+        if (runRow >= 0 && rowHas(sp, runRow)) continue;
         if (sp.motion !== lastMotion) {
           lastMotion = sp.motion;
           lastOk = motionDone(s, b, sp.motion, w);

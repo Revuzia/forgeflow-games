@@ -777,9 +777,9 @@
         "splatWallDust": "#7d8fb0"
       },
       "build": {
-        "bytes": 2912616,
+        "bytes": 2908356,
         "draws": 20,
-        "triangles": 135832,
+        "triangles": 136312,
         "materials": 20,
         "textures": 27,
         "crowdNodes": 782,
@@ -1222,11 +1222,11 @@
           "id": "rim",
           "type": "directional",
           "color": "#a6d2ff",
-          "intensity": 1.5,
+          "intensity": 1.3,
           "position": [
-            3.42,
-            7.0,
-            9.397
+            2.394,
+            9.5,
+            6.578
           ],
           "target": [
             0.0,
@@ -1541,11 +1541,11 @@
         "splatWallDust": "#e6e1d6"
       },
       "build": {
-        "bytes": 2903408,
-        "draws": 28,
+        "bytes": 2911836,
+        "draws": 29,
         "triangles": 127334,
-        "materials": 26,
-        "textures": 44,
+        "materials": 27,
+        "textures": 45,
         "crowdNodes": 439,
         "extensions": [
           "EXT_meshopt_compression",
@@ -1997,11 +1997,11 @@
           "id": "rim",
           "type": "directional",
           "color": "#62dcff",
-          "intensity": 1.5,
+          "intensity": 1.3,
           "position": [
-            3.42,
-            7.0,
-            9.397
+            2.394,
+            9.5,
+            6.578
           ],
           "target": [
             0.0,
@@ -2045,9 +2045,9 @@
           "distance": 24.0,
           "decay": 2,
           "position": [
-            6.894,
-            7.0,
-            6.894
+            5.515,
+            9.0,
+            5.515
           ],
           "target": [
             0.0,
@@ -2065,9 +2065,9 @@
           "distance": 24.0,
           "decay": 2,
           "position": [
-            6.894,
-            7.0,
-            -6.894
+            5.515,
+            9.0,
+            -5.515
           ],
           "target": [
             0.0,
@@ -2085,9 +2085,9 @@
           "distance": 24.0,
           "decay": 2,
           "position": [
-            -6.894,
-            7.0,
-            -6.894
+            -5.515,
+            9.0,
+            -5.515
           ],
           "target": [
             0.0,
@@ -2105,9 +2105,9 @@
           "distance": 24.0,
           "decay": 2,
           "position": [
-            -6.894,
-            7.0,
-            6.894
+            -5.515,
+            9.0,
+            5.515
           ],
           "target": [
             0.0,
@@ -2329,7 +2329,7 @@
         "splatWallDust": "#ff7ad9"
       },
       "build": {
-        "bytes": 2114972,
+        "bytes": 2119824,
         "draws": 23,
         "triangles": 82642,
         "materials": 18,
@@ -2768,9 +2768,9 @@
           "color": "#ff66b8",
           "intensity": 1.05,
           "position": [
-            4.0,
-            6.0,
-            -13.0
+            3.0,
+            10.5,
+            -9.5
           ],
           "target": [
             0.0,
@@ -2811,9 +2811,9 @@
           "distance": 26.0,
           "decay": 2,
           "position": [
-            7.6,
-            5.0,
-            -7.6
+            6.4,
+            7.4,
+            -6.4
           ],
           "target": [
             0.0,
@@ -2831,9 +2831,9 @@
           "distance": 26.0,
           "decay": 2,
           "position": [
-            -7.6,
-            5.0,
-            7.6
+            -6.4,
+            7.4,
+            6.4
           ],
           "target": [
             0.0,
@@ -2851,8 +2851,8 @@
           "distance": 7.0,
           "decay": 2,
           "position": [
-            -10.15,
-            2.8,
+            -9.1,
+            2.45,
             -1.05
           ],
           "flicker": {
@@ -3544,9 +3544,9 @@
           "color": "#6fd6ff",
           "intensity": 1.0,
           "position": [
-            3.0,
-            5.0,
-            -12.0
+            2.2,
+            9.5,
+            -8.8
           ],
           "target": [
             0.0,
@@ -3566,13 +3566,13 @@
           "id": "crt_wall",
           "type": "point",
           "color": "#86d2ff",
-          "intensity": 40.0,
+          "intensity": 32.0,
           "distance": 14.0,
           "decay": 2,
           "position": [
             0.0,
-            3.4,
-            -14.8
+            3.6,
+            -12.6
           ],
           "flicker": {
             "amp": 0.05,
@@ -3583,12 +3583,12 @@
           "id": "furnace",
           "type": "point",
           "color": "#ff6a20",
-          "intensity": 34.0,
+          "intensity": 14.0,
           "distance": 12.0,
           "decay": 2,
           "position": [
-            11.1,
-            1.3,
+            9.4,
+            0.8,
             0.0
           ],
           "flicker": {
@@ -3600,7 +3600,7 @@
           "id": "ring_spot",
           "type": "spot",
           "color": "#fff0d8",
-          "intensity": 320.0,
+          "intensity": 70.0,
           "distance": 14.0,
           "decay": 2,
           "position": [
@@ -3620,12 +3620,12 @@
           "id": "beacon",
           "type": "point",
           "color": "#ffa020",
-          "intensity": 8.0,
+          "intensity": 5.0,
           "distance": 8.0,
           "decay": 2,
           "position": [
-            -10.95,
-            3.2,
+            -9.9,
+            2.9,
             3.75
           ],
           "flicker": {
@@ -3634,7 +3634,7 @@
           }
         }
       ],
-      "lightsNote": "FIXED pool: created once at stage load, never added/removed (shader programs stay warm). No lights are embedded in the GLB. Flicker = view-only intensity modulation (beacon = the rotating amber sweep, furnace = fire). 3D ring: key from high above + the overhead ring spot light the ring from every orbit angle; CRT wall glow north, furnace east, beacon west, cyan rim from the CRT side.",
+      "lightsNote": "FIXED pool: created once at stage load, never added/removed (shader programs stay warm). No lights are embedded in the GLB. Flicker = view-only intensity modulation (beacon = the rotating amber sweep, furnace = fire). 3D ring: key from high above + the overhead ring spot light the ring from every orbit angle; CRT wall glow north, furnace east, beacon west, cyan rim from the CRT side. CHANGED(fix_ui_stage): practical point lights stand 1-2 m off their fixtures (furnace 2.1 m in front of the door, beacon 1.35 m out from the west dome, CRT glow 3.8 m in front of the wall) and the ring spot is 70 cd (was 320: the fighters washed out); the firebox door sits low (glow 0.47-0.93 m, below the 1.35 m orbit eye).",
       "crowd": {
         "atlas": "crowd_atlas.webp",
         "meta": "crowd_atlas.json",
@@ -3867,10 +3867,10 @@
         ]
       },
       "build": {
-        "bytes": 2716580,
-        "draws": 30,
+        "bytes": 2718040,
+        "draws": 31,
         "triangles": 102366,
-        "materials": 27,
+        "materials": 28,
         "textures": 36,
         "crowdNodes": 161,
         "extensions": [

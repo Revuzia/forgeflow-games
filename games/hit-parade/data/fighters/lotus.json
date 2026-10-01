@@ -37,6 +37,9 @@
     "crouchFront": 0.378,
     "crouchBack": 0.089
   },
+  "step": {
+    "distM": 0.85
+  },
   "colors": [
     {"name": "Lotus Red", "tint": null},
     {"name": "Jade", "tint": "#2e8b57"},

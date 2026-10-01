@@ -5,7 +5,8 @@
 //               HP, a red damage trail that lags 0.45 s), NERVE (6 bars) with the STAGE FRIGHT state, and SHOWTIME
 //               (the RATINGS meter, 3 bars) in the bottom corner; the centre has the timer and the round pips
 //   combo       the attacker's side: hit count + style word SOLID / SPICY / BRUTAL / PRIME TIME / SYNDICATED + damage
-//   callouts    COUNTER, PUNISH COUNTER, THROW ESCAPE, PERFECT PARRY, STAGE FRIGHT, WALL SPLAT, FIRST BLOOD
+//   callouts    COUNTER, PUNISH COUNTER, THROW ESCAPE, PERFECT PARRY, STAGE FRIGHT, WALL SPLAT, FIRST BLOOD, BACK HIT
+//               (CHANGED(fix_ui_stage): EV3D.BACK_HIT, CONTRACT 35.20 item 3 - the attacker's side, like COUNTER)
 //   broadcast   ROUND / FIGHT / K.O. / TIME OVER / PERFECT / WINS sweeps, the stage manager's straps, host captions
 //
 // frame() is cheap: DOM writes happen only when a value changes. Events are deduped by (frame, type, a, b) because a
@@ -20,7 +21,7 @@
 // Touch mode (html.hp-touch) re-flows the blocks out of the stick zone and the button arc (styles.css).
 
 import type { MatchCfg, MatchStats, RoundLog, SimEvent, UiFighterSnap, UiGameData, UiMatchSnap } from './types.ts';
-import { EV } from './ev.ts';
+import { EV, EV_BACK_HIT } from './ev.ts';
 import { Broadcast, buildBug, setBugLine, type CaptionEvent } from './broadcast.ts';
 import { clamp, div, el, exposeDev, pulse, setText, touchModeOn, watchTouchMode } from './dom.ts';
 import { fighterName, fillPortrait, colorsOf, fighter, onPortraits, setPortraits } from './data.ts';
@@ -68,7 +69,7 @@ export function bannerPace(system: unknown): BannerPace {
   };
 }
 
-type CallKind = 'counter' | 'punish' | 'throwEscape' | 'perfectParry' | 'stageFright' | 'wallSplat' | 'firstBlood' | 'phase2';
+type CallKind = 'counter' | 'punish' | 'throwEscape' | 'perfectParry' | 'stageFright' | 'wallSplat' | 'firstBlood' | 'phase2' | 'backHit';
 
 interface Side {
   root: HTMLElement;
@@ -671,6 +672,7 @@ export class Hud {
       }
       case EV.COUNTER: if (e.a === 0) this.call(0, 'counter'); break;
       case EV.PUNISH: if (e.a === 0) this.call(0, 'punish'); break;
+      case EV_BACK_HIT: if (e.a === 0) this.call(0, 'backHit'); break;
       case EV.PERFECT_PARRY: if (e.b === 0) this.call(0, 'perfectParry'); break;
       case EV.SCORE:
         this.scoreEv = typeof e.c === 'number' && e.c >= 0 ? e.c : this.scoreEv + (e.b | 0);
@@ -733,6 +735,8 @@ export class Hud {
         break;
       case EV.COUNTER: this.stats[P(e.a)].counters++; this.call(P(e.a), 'counter'); B.caption('counter', both(P(e.a))); break;
       case EV.PUNISH: this.stats[P(e.a)].punishes++; this.call(P(e.a), 'punish'); B.caption('punish', both(P(e.a))); break;
+      // CHANGED(fix_ui_stage) (CONTRACT 35.20 item 3): BACK HIT - EV3D.BACK_HIT follows the HIT (a attacker, b victim)
+      case EV_BACK_HIT: this.call(P(e.a), 'backHit'); B.caption('back_hit', both(P(e.a))); break;
       case EV.PERFECT_PARRY: this.stats[P(e.b)].perfectParries++; this.call(P(e.b), 'perfectParry'); B.caption('perfect_parry', both(P(e.b))); break;
       case EV.THROW: this.stats[P(e.a)].throws++; break;
       case EV.THROW_TECH: this.call(P(e.b), 'throwEscape'); B.caption('throw_escape', both(P(e.b))); break;

@@ -290,7 +290,10 @@ export class UniqueTools {
         const cr = Math.max(...mi.cm.chains.map((c) => kit.moves[c].reach));
         return d <= cr + (mi.cm.curve[mi.cm.total] >> 1) + b.opHurtHalf();
       });
-      if (ev.length > 0 && h.highRate > 0.45 && b.rnd() < this.r.evadeHigh * b.profile.habit * h.attackRate * h.highRate * 3) {
+      // CHANGED(fix_balance): from a third of its close strikes high (was 0.45): in the 3D ring its close strikes mix in more
+      // lows / mids and steps, and measured highRate stayed 0.00-0.49 in G3 U1's johnny bouts - WEAVE never came out there
+      // (G3 U1 "MISSING johnny [weave, weave_counter]" on the base tree); the chance still scales with highRate
+      if (ev.length > 0 && h.highRate > 0.3 && b.rnd() < this.r.evadeHigh * b.profile.habit * h.attackRate * h.highRate * 3) {
         b.stats.evadeReads++;
         return this.start(b, ev[0]);
       }

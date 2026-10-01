@@ -43,6 +43,8 @@ import { setOutlineViewport } from './toon.ts';
 import { warmupComposer } from './warmup.ts';
 import { EV, EV_SOURCE } from './ev.ts';
 import { LineFrame, ringClamp, ringFrom, ringRay, ringSolidTop, ringWallAt, type RingGeom } from './ring3d.ts';
+import { stepFactsFor } from './stepanim.ts';
+import { makeLightProbe } from './lightlevel.ts';
 import {
   DEFAULT_VIEW_SETTINGS, flagOn, type ViewEvent, type ViewFighterSnap, type ViewGameData, type ViewMatchCfg,
   type ViewMatchSnap, type ViewSettings,
@@ -153,6 +155,18 @@ export class BoutView {
   private readonly propLib: PropLibrary | null;
   /** CHANGED(fixer) D4: screen-y fraction (from the top) of each fighter's top, last frame */
   readonly lastTops: [number, number] = [0, 0];
+  /** CHANGED(fix_view) D13: screen-y fraction (from the top) of each fighter's feet (root), last frame */
+  readonly lastFeet: [number, number] = [0, 0];
+  /** CHANGED(fix_view) D5: the toon light scale at a world point (stage light pool) */
+  lightProbe: ((x: number, y: number, z: number) => number) | null = null;
+  /** CHANGED(fix_view) D13: frame by the measured neutral top (head + a raised limb); false = the old head-only top (A/B) */
+  realTops = true;
+
+  /** CHANGED(fix_view) D5 harness A/B: the pre-fix look (old bloom, no body light cap) */
+  legacyLook(on: boolean): void {
+    this.post.legacyBloom = on;
+    for (const f of this.fighters) f.lightProbe = on ? null : this.lightProbe;
+  }
   warmMs = 0;
   warmSplit: Record<string, number> = {};
   loadSplit: Record<string, number> = {};
@@ -174,6 +188,15 @@ export class BoutView {
     this.scene.name = 'bout';
     stage.applyTo(this.scene, r.three);
     for (const f of fighters) this.scene.add(f.root);
+    // CHANGED(fix_view) D6 / D5: sidestep facts per fighter (system step + its own step.distM + its clips' rootLat) and the
+    // light cap from the stage's light pool
+    {
+      const probe = makeLightProbe(stage.lights, stage.def.exposure ?? 1).probe;
+      fighters.forEach((f, i) => { f.stepFacts = stepFactsFor(cfg.p[i]?.fighter ?? f.id, data.fighters[cfg.p[i]?.fighter ?? f.id], data.system); f.lightProbe = probe; });
+      this.lightProbe = probe;
+      // D13: a bigger body's feet reach further toward the lens
+      this.cam.feetDepth = CAM.feetDepth * Math.max(1, ...fighters.map((f) => f.heightM / 1.8));
+    }
     if (crowd) this.scene.add(crowd.mesh);
     this.post = new Post(r, this.scene, this.cam.camera);
     this.fx = new FxSystem(this.scene, this.post, this.cam);
@@ -203,6 +226,7 @@ export class BoutView {
     const mk = (i: number, asset: FighterAsset) => new FighterView(a, asset, animTableFor(data, ids[i]), data.fighters[ids[i]],
       cfg.p[i]?.color ?? 0, opts.outline !== false);
     const fighters: [FighterView, FighterView] = [mk(0, fa), mk(1, fb)];
+    for (const f of fighters) f.measureTop();                  // CHANGED(fix_view) D13: the camera's real tops
     let crowd: CrowdView | null = null;
     if (opts.crowd !== false && stage.crowd.length) {
       let atlas: CrowdAtlas | null = null;
@@ -257,6 +281,7 @@ export class BoutView {
     this.post.setLetterbox(0.001);
     const bloomWas = this.post.bloom.enabled;
     this.post.bloom.enabled = this.settings.bloom && this.r.bloomAllowed();
+    this.crowdPts();                                           // CHANGED(fix_view) G9: cached here, not at the first super
     const t1 = performance.now();
     await warmupComposer(this.r.three, this.scene, this.cam.camera);
     const t2 = performance.now();
@@ -266,9 +291,35 @@ export class BoutView {
     this.primeProps.hideAll();
     this.post.setSlate(null, 0, 0, 0, 0, 0);
     this.post.setLetterbox(0);
-    this.warmMs = t3 - t0;
     this.warmSplit = { prep: Math.round(t1 - t0), warmup: Math.round(t2 - t1), firstComposer: Math.round(t3 - t2),
       programs: this.r.three.info.programs?.length ?? 0 };
+    this.warmPrime();
+    this.warmMs = performance.now() - t0;
+  }
+
+  /**
+   * CHANGED(fix_view) G9: the first PRIME TIME of a page spent ~12 ms more on its start frame than later ones (measured
+   * with the lab's frameCost probe: cold cf0 'prime' 12.2 ms vs ~0.6 ms warm) - first-run JIT of the cinematic code plus the
+   * plan compile. Run the same compile and a few samples for both fighters' cinematic moves here, behind the loading card,
+   * then drop the plan (no beats fire, nothing is shown).
+   */
+  private warmPrime(): void {
+    const t0 = performance.now();
+    const idle = (x: number, facing: number): ViewFighterSnap => ({ x, y: 0, z: 0, yaw: facing * Math.PI / 2, facing, animId: 0, animFrame: 0, prevAnimId: 0, prevAnimFrame: 0, blendT: 1 });
+    const snaps: [ViewFighterSnap, ViewFighterSnap] = [idle(-1.2, 1), idle(1.2, -1)];
+    for (const who of [0, 1] as const) {
+      const def = this.data.fighters[this.cfg.p[who]?.fighter ?? ''];
+      const keys = moveKeys(def);
+      const k = keys.findIndex((q) => !!def?.moves[q]?.cinematic);
+      if (k < 0) continue;
+      try {
+        this.primeBegin(snaps, who, k, 0, !!(def!.moves[keys[k]] as { grab?: unknown }).grab, [0, 1]);
+        const pl = this.plan!;
+        for (let cf = 0; cf < pl.frames; cf += 15) samplePlan(pl, cf, false, this.crowdFocus, 0, this.cineFacing, null, this.ps, this.psScratch);
+      } catch (e) { console.warn('[view] PRIME TIME warm-up', e); }
+    }
+    this.plan = null; this.outro = null; this.planKey = ''; this.lastCineFrame = -1; this.firedUpTo = -1;
+    this.warmSplit.prime = Math.round(performance.now() - t0);
   }
 
   /**
@@ -336,9 +387,15 @@ export class BoutView {
     const F = this.fighters;
     const p = (i: number): ViewFighterSnap => f[i === 1 ? 1 : 0];
     const inCine = !!this.plan && !!m.cinematic && flagOn(m.cinematic.active);
+    // CHANGED(fix_view) D7: the sim emits each goon's HIT / THROW / GOON_DOWN right before the SCORE it earns (brawl.ts
+    // award); the last goon referenced (and every goon hit this frame, for a CROWD bonus) anchors the next SCORE popup
+    let goonRef = -1;
+    const swing: number[] = [];
     for (const e of ev) {
       const t = e.type;
       this.camBasis();
+      if ((t === EV.HIT || t === EV.THROW || t === EV.PROJ_HIT) && e.b >= 8) { goonRef = e.b - 8; if (swing.indexOf(goonRef) < 0) swing.push(goonRef); }
+      else if (t === EV.GOON_DOWN && e.a >= 8) goonRef = e.a - 8;
       if (t === EV.SUPER_HIT && inCine) {
         // PRIME TIME blows land on the victim's presentation body (the sim holds its x; the view carries it); the cinematic
         // line frame is the FX basis here, so the spray runs along the fight line in line space
@@ -431,8 +488,21 @@ export class BoutView {
         this.crowd?.popNow(0.4);
       } else if (t === EV.SCORE) {
         // §28.4: d = reason (1 hit, 2 KO, 3 combo, 4 crowd hit, 5/6 parry, 7/8 heckle parry, 9 heckle hit)
-        const at = e.d === 2 || e.d === 4 ? null : F[0].chest(this.tmp3);
-        if (this.brawl) this.brawl.score(e.b, e.a, at, e.d, e.c);
+        // CHANGED(fix_view) D7: each popup at its OWN event: a hit / KO over the goon it names, a crowd bonus over the
+        // goons that swing hit, a combo / parry / heckle score over the player (was: every KO / crowd popup at the
+        // last downed goon, every hit popup on the player's chest - they stacked at one anchor)
+        let at: THREE.Vector3 | null = null;
+        if (this.brawl && this.brawl.legacyPopups) this.brawl.score(e.b, e.a, e.d === 2 || e.d === 4 ? null : F[0].chest(this.tmp3), e.d, e.c);
+        else if (this.brawl) {
+          if ((e.d === 1 || e.d === 2) && goonRef >= 0 && this.brawl.goonChest(goonRef, this.tmp3)) at = this.tmp3;
+          else if (e.d === 4 && swing.length) {
+            let n = 0; this.tmp3.set(0, 0, 0);
+            for (const k of swing) if (this.brawl.goonChest(k, this.tmp2)) { this.tmp3.add(this.tmp2); n++; }
+            if (n) at = this.tmp3.multiplyScalar(1 / n);
+          }
+          if (!at) { F[0].chest(this.tmp3); this.tmp3.y = Math.max(this.tmp3.y, F[0].root.position.y + F[0].heightM * 0.85); at = this.tmp3; }
+          this.brawl.score(e.b, e.a, at, e.d, e.c);
+        }
       }
       if (t === EV.PROJ_HIT || t === EV.PROJ_CLASH) this.proj.onEvent(e);
     }
@@ -577,8 +647,12 @@ export class BoutView {
     this.cineFacing = facing;
   }
 
+  /** CHANGED(fix_view) G9 read-back: the last cinematic start's cost split (ms) */
+  primeCost = { plan: 0, crowd: 0, slate: 0, total: 0 };
+
   /** compile (or reuse) the plan for the running cinematic */
   private primeBegin(snaps: [ViewFighterSnap, ViewFighterSnap], who: 0 | 1, moveIdx: number, simFrames: number, simVictim: boolean, camN?: ReadonlyArray<number>): void {
+    const pt0 = performance.now();
     const id = this.cfg.p[who]?.fighter ?? '';
     const def = this.data.fighters[id];
     const mk = def ? moveKeys(def)[moveIdx] ?? '' : '';
@@ -607,6 +681,7 @@ export class BoutView {
       frontV: pushFront(this.data.fighters[this.cfg.p[1 - who]?.fighter ?? '']) + (V.propInfo().some((q) => /shield/.test(q.id)) ? 0.2 : 0),
       wallDist,
     });
+    const pt1 = performance.now();
     this.planKey = `${who}:${moveIdx}:${simVictim ? 'grab' : 'cin'}`;
     this.planAtt = who;
     this.firedUpTo = -1;
@@ -615,14 +690,19 @@ export class BoutView {
     // the stage-magic props live in line space: their group carries the frame
     F.applyTo(this.primeProps.group);
     // the crowd the crowd_pop shot turns to: the stands behind the action (line space: beyond the fight line from the camera)
+    // CHANGED(fix_view) G9: the crowd slots' world positions are cached once per match (the stage never moves): calling
+    // getWorldPosition on each slot re-walked its parent chain (updateWorldMatrix) - with control_room's slots that was
+    // most of a 26 ms PRIME TIME start frame
+    const cp = this.crowdPts();
     let n = 0, cx = 0, cy = 0, cz = 0;
-    for (const o of this.stage.crowd) {
-      o.getWorldPosition(this.tmp);
+    for (let k = 0; k < cp.length; k += 3) {
+      this.tmp.set(cp[k], cp[k + 1], cp[k + 2]);
       F.toLocal(this.tmp, this.tmp);
       if (this.tmp.z > -2.5 || Math.abs(this.tmp.x) > 6.5) continue;
       cx += this.tmp.x; cy += this.tmp.y; cz += this.tmp.z; n++;
     }
     this.crowdFocus = n ? [(cx / n) * facing, cy / n + 1.2, cz / n] : null;
+    const pt2 = performance.now();
     // the name slate
     const tag = this.data.strings?.['hud.combo.prime'] ?? 'PRIME TIME';
     const [line, who2] = slateParts(this.plan.slate, tag, this.plan.moveName, this.plan.fighterName);
@@ -632,6 +712,24 @@ export class BoutView {
       this.slateTex.needsUpdate = true;
       this.slateKey = key;
     }
+    const pt3 = performance.now();
+    const r2 = (v: number) => Math.round(v * 100) / 100;
+    this.primeCost = { plan: r2(pt1 - pt0), crowd: r2(pt2 - pt1), slate: r2(pt3 - pt2), total: r2(pt3 - pt0) };
+  }
+
+  /** CHANGED(fix_view) G9: the stage's crowd slot world positions, packed xyz, computed once */
+  private crowdCache: Float32Array | null = null;
+  private crowdPts(): Float32Array {
+    if (this.crowdCache) return this.crowdCache;
+    const c = this.stage.crowd;
+    const out = new Float32Array(c.length * 3);
+    this.stage.group.updateMatrixWorld(true);
+    for (let k = 0; k < c.length; k++) {
+      const e = c[k].matrixWorld.elements;
+      out[k * 3] = e[12]; out[k * 3 + 1] = e[13]; out[k * 3 + 2] = e[14];
+    }
+    this.crowdCache = out;
+    return out;
   }
 
   private anchor(fv: FighterView, name: string, out: THREE.Vector3): boolean {
@@ -801,7 +899,10 @@ export class BoutView {
     if (m.round !== undefined && m.round !== this.lastRound) {
       if (this.lastRound !== -1) { this.cam.clearKo(); this.cam.setCinematic(null); this.plan = null; this.outro = null; }
       this.lastRound = m.round;
+      for (const fv of this.fighters) fv.turn.reset();          // CHANGED(fix_view) D2: a new round re-spawns: no turn
     }
+    // CHANGED(fix_view) D2: the presented yaw advances per SIM frame
+    for (const fv of this.fighters) fv.simFrame = Number.isFinite(m.frame) ? m.frame : -1;
     // CHANGED(VIEW3D): the sim's ring (constant per match) + its camera normal for this frame
     if (m.ring && !this.ringFromSim) {
       this.ring = ringFrom(m.ring, stageDef(this.data, this.cfg.stage));
@@ -809,6 +910,8 @@ export class BoutView {
       this.ringFromSim = true;
     }
     this.cam.camN = m.camN && m.camN.length >= 2 ? [Number(m.camN[0]), Number(m.camN[1])] : null;
+    const fs = this.fsplit, now = (): number => performance.now();
+    let ft = now();
     // 1. PRIME TIME sample (pure function of the cinematic frame / the grab super's lock frame)
     const cin = m.cinematic;
     const simCine = !!cin && flagOn(cin.active);
@@ -849,6 +952,7 @@ export class BoutView {
     this.camBasis();
     // the fighters' presentation depth offset runs toward the camera
     { const b = this.cam.basis(); for (const fv of this.fighters) fv.towardCam.set(b.nx, 0, b.nz); }
+    fs.prime = now() - ft; ft = now();
     // 2. fighters (cinematic overrides / outro blend / plain snapshot)
     const hideP2 = this.cfg.mode === 'brawl' || this.cfg.mode === 'heckler';
     const ovA = this.ov[0], ovB = this.ov[1];
@@ -908,8 +1012,10 @@ export class BoutView {
         fv.update(snaps[i], dt, this.realTime, ov);
       }
     }
+    fs.fighters = now() - ft; ft = now();
     // 3. events (after posing: FX sit on the current bones)
     if (ev.length) this.events(m, snaps, ev);
+    fs.events = now() - ft; ft = now();
     // 4. PRIME TIME beats, continuous FX, props (line space)
     this.cineTs = ps ? ps.ts : 1;
     if (ps && this.plan) {
@@ -931,6 +1037,7 @@ export class BoutView {
         for (let k = 0; k < 3; k++) this.fx.trail(bp, this.tmp.set(-facing * this.fx.rr(1, 2.5), this.fx.rr(0.2, 1), this.fx.rr(-0.3, 0.3)), this.fx.rr(0.16, 0.28), k ? 0xff6a10 : 0xffdc70, 16, 0.3, true, 2.4, -1.5, 2.2, 0.85);
       }
     } else this.primeProps.hideAll();
+    fs.beats = now() - ft; ft = now();
     // 5. camera
     if (ps && this.plan) {
       const facing = this.cineFacing;
@@ -980,7 +1087,10 @@ export class BoutView {
       const c = this.camF[i];
       // CHANGED(fixer) D4: an airborne fighter's top includes raised hands (grounded: the head only, so an uppercut's fist
       // does not bob the camera)
-      c.x = snaps[i].x; c.y = snaps[i].y; c.z = snaps[i].z ?? 0; c.head = snaps[i].y > 0.02 ? this.fighters[i].topY() : this.fighters[i].headY();
+      // CHANGED(fix_view) D13: never below the body's measured neutral top (head + a raised limb: THE FREAK's claw)
+      const air = snaps[i].y > 0.02;
+      c.x = snaps[i].x; c.y = snaps[i].y; c.z = snaps[i].z ?? 0;
+      c.head = this.realTops ? this.fighters[i].camTop(air) : air ? this.fighters[i].topY() : this.fighters[i].headY();
     }
     this.cam.extra.length = 0;
     this.cam.fwd0 = null;
@@ -998,6 +1108,8 @@ export class BoutView {
     for (let i = 0; i < 2; i++) {
       this.tmp.set(this.camF[i].x, this.camF[i].head, this.camF[i].z ?? 0).project(this.cam.camera);
       this.lastTops[i] = Math.round(((1 - this.tmp.y) / 2) * 1000) / 1000;
+      this.tmp.set(this.camF[i].x, this.camF[i].y, this.camF[i].z ?? 0).project(this.cam.camera);
+      this.lastFeet[i] = Math.round(((1 - this.tmp.y) / 2) * 1000) / 1000;
     }
     // the dim plane goes just behind the farther fighter along the camera's view (fighters stay lit in any shot)
     const cc = this.cam.camera;
@@ -1013,17 +1125,25 @@ export class BoutView {
     this.stage.followShadow(this.cam.midX, this.cam.midZ);
     this.camBasis();
     const hp0 = snaps[0].hpMax ? (snaps[0].hp ?? 0) / snaps[0].hpMax : 1, hp1 = snaps[1].hpMax ? (snaps[1].hp ?? 0) / snaps[1].hpMax : 1;
+    fs.camera = now() - ft; ft = now();
     this.stage.update(dt * pts, { hp: [hp0, hp1], names: [this.nameOf(0), this.nameOf(1)], timer: m.timer, time: this.realTime },
       (at, size, col) => this.fx.trail(at, this.tmp3.set(this.fx.rr(-0.2, 0.2), this.fx.rr(0.8, 1.4), this.fx.rr(-0.1, 0.1)), size * this.fx.rr(0.5, 0.8), col, 17, 1.4, false, 2.6, -0.4, 0.8, 0.35));
+    fs.stage = now() - ft; ft = now();
     if (this.crowd) {
       const st = ((snaps[0].showtime ?? 0) + (snaps[1].showtime ?? 0)) / 60000;
       this.crowd.intensityTarget = Math.min(1, 0.2 + 0.8 * st + (ps ? 0.35 + 0.5 * ps.crowdBoost : 0));
       this.crowd.update(dt * pts);
     }
+    fs.crowd = now() - ft; ft = now();
     this.proj.frame(m.proj, dt * pts, m.frame);
-    if (this.brawl) { this.brawl.frame(m.brawl?.goons, dt, this.realTime, snaps[0].x); this.brawl.updatePopups(dt, this.cam.camera); }
+    if (this.brawl) { this.brawl.frame(m.brawl?.goons, dt, this.realTime, snaps[0].x); this.brawl.updatePopups(dt, this.cam.camera, this.cam.safeTop); }
+    fs.proj = now() - ft; ft = now();
     this.fx.update(dt, pts);
+    fs.fx = now() - ft;
   }
+
+  /** CHANGED(fix_view) G9 read-back: the last frame()'s CPU split by section (ms; the lab's frameCost probe reads it) */
+  readonly fsplit = { prime: 0, fighters: 0, events: 0, beats: 0, camera: 0, stage: 0, crowd: 0, proj: 0, fx: 0 };
 
   private nameOf(i: number): string { const id = this.cfg.p[i]?.fighter ?? ''; return this.data.fighters[id]?.name ?? id.toUpperCase(); }
 
@@ -1048,14 +1168,14 @@ export class BoutView {
     this.primeProps.hideAll();
     this.post.setLetterbox(0); this.post.setSlate(null, 0, 0, 0, 0, 0);
     this.pendingHits.clear();
-    for (const f of this.fighters) { f.victim = false; f.flash(0, 0xffffff, 0.001); }
+    for (const f of this.fighters) { f.victim = false; f.flash(0, 0xffffff, 0.001); f.turn.reset(); }
   }
 
   /** CHANGED(fixer) D4: small per-frame camera read-back (test surface `state().cam`) */
   camReadback(): Record<string, unknown> {
     const L = this.cam.last;
     return { mode: L.mode, dist: Math.round(L.dist * 1000) / 1000, lookY: Math.round(L.lookY * 1000) / 1000, safeTop: this.cam.safeTop, yawDeg: L.yawDeg,
-      tops: [...this.lastTops], topY: [Math.round(this.camF[0].head * 1000) / 1000, Math.round(this.camF[1].head * 1000) / 1000] };
+      tops: [...this.lastTops], topY: [Math.round(this.camF[0].head * 1000) / 1000, Math.round(this.camF[1].head * 1000) / 1000], feet: [...this.lastFeet] };
   }
 
   /** read-back for the test surface / lab */
@@ -1078,6 +1198,13 @@ export class BoutView {
       cineFrame: p ? { ox: +this.cineF.ox.toFixed(3), oz: +this.cineF.oz.toFixed(3), rDeg: Math.round(Math.atan2(this.cineF.rx, this.cineF.rz) * 1800 / Math.PI) / 10,
         facing: this.cineFacing, flip: this.cineFlip } : null,
       splat: this.lastSplat,
+      // CHANGED(fix_view) D13 read-back: each fighter's framed top / feet as screen fractions from the top, the HUD band
+      framing: { tops: [...this.lastTops], feet: [...this.lastFeet], safeTop: this.cam.safeTop, topM: this.fighters.map((x) => x.neutralTopM),
+        // the posed top this frame (independent of what the camera framed by) and the lowest foot bone, as screen fractions
+        live: this.fighters.map((x) => { const p = x.root.position; this.tmp.set(p.x, x.liveTop(), p.z).project(this.cam.camera); return Math.round(((1 - this.tmp.y) / 2) * 1000) / 1000; }),
+        liveFeet: this.fighters.map((x) => { let lo = 0; for (const n of ['LeftToeBase', 'RightToeBase', 'LeftFoot', 'RightFoot']) if (x.bonePos(n, this.tmp2)) { this.tmp2.project(this.cam.camera); lo = Math.max(lo, (1 - this.tmp2.y) / 2); } return Math.round(lo * 1000) / 1000; }) },
+      feet: this.fighters.map((x) => x.feetInfo()),
+      primeCost: { ...this.primeCost },
       missingClips: this.fighters.map((x) => [...x.pose.missing]), render: this.r.info(),
     };
   }

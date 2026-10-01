@@ -17,7 +17,7 @@
 import { ST } from '../sim/layout.ts';
 import type { Brain, Decision } from './brain.ts';
 import { B } from './pad.ts';
-import { planCircle, stepOrder } from './ring3d.ts';
+import { planCircle, stepBitFor, stepOrder } from './ring3d.ts';
 
 const M = 100000;
 
@@ -70,6 +70,13 @@ function opFreeNow(st: number): boolean {
 /**
  * CHANGED(AI3D) (§35.9): the ring options of a neutral decision, or null. All honest: geometry I can see (ring3d.ts),
  * habits committed after my reaction delay (habits.ts), the opponent's visible state.
+ * CHANGED(fix_balance) (CONTRACT §35.21): the CPU fights in 3D by PLAN, not only at the wall (measured before: L4 3.0 sidestep
+ * taps + 0.8 circle-walks per bout, 8 of 12 fighters circled < 0.5 times): (1) the wall escape starts at 1.6 m behind me (was
+ * 1.3), (3) the read sidestep works at every range inside its threat (point blank too: grapplers live there), (3b) a read step
+ * as it WALKS / DASHES into its range (its straight button or approach whiffs past me -> the side punish), (5) a neutral
+ * circle-walk at footsies spacing to reposition (zoners / footsies kits most, style `ringWalk`): toward the room behind me /
+ * its wall, else on round the ring. The level levers (cpu.json `stepGuess`, `circle`, `walk`) set how often; the style's
+ * `ringStep` / `ringWalk` scale them per kit.
  */
 export function ringPlan(b: Brain, aggro: boolean, opThreat: number): Decision | null {
   const s = b.seen;
@@ -78,14 +85,15 @@ export function ringPlan(b: Brain, aggro: boolean, opThreat: number): Decision |
   const kit = b.kit;
   const d = s.dist;
   const h = b.habits;
+  const st = b.style;
   const opFree = opFreeNow(op.st);
   if (op.st === ST.KNOCKDOWN || op.air || s.me.air) return null;
   // (1) my back on the ring wall (along the fight line): circle-walk until there is room behind me again - not into a
   // running attack, and inside its range less often the more it attacks there (its habit: a circle-walk is no guard)
   const opSwinging = op.st === ST.ATTACK && op.cm !== null && op.mvF <= op.cm.lastActive;
   const inRange = d <= opThreat + 20000;
-  if (P.circle > 0 && s.backU < 130000 && !opSwinging && b.rnd() < P.circle * (inRange ? 1 - h.attackRate : 1)) {
-    const pl = planCircle(b.m, s, 'escape', 180000, 80);
+  if (P.circle > 0 && s.backU < 160000 && !opSwinging && b.rnd() < P.circle * (inRange ? 1 - h.attackRate : 1)) {
+    const pl = planCircle(b.m, s, 'escape', 200000, 80);
     if (pl) {
       b.stats.circlesEscape++;
       return { t: 'circle', bit: pl.bit, frames: pl.frames <= b.m.sys.stepFrames ? 1 : pl.frames, atk: -1 };
@@ -100,14 +108,26 @@ export function ringPlan(b: Brain, aggro: boolean, opThreat: number): Decision |
     }
   }
   // (3) a READ sidestep inside its range vs its linear habit (a step a few frames before a linear move's active frames
-  // evades it, STEPTUNE §35.15; vs a homing-happy opponent less often); patch / spin ride their step-attack on it
-  if (P.stepGuess > 0 && opFree && d <= opThreat + 40000 && d > kit.cf.pushFS + op.cf.pushFS + 15000) {
-    const p = P.stepGuess * (0.4 + 3 * P.habit * h.linearRate) * (1 - h.homingRate);
-    if (b.rnd() < p) {
+  // evades it, STEPTUNE §35.15; vs a homing-happy opponent less often); patch / spin ride their step-attack on it.
+  // CHANGED(fix_balance): from point blank out (the old floor of push fronts + 0.15 m kept grapplers / rushdown, who live
+  // up close, from ever stepping: bruno 0.7 taps per L4 bout) and x the style's ringStep
+  const readP = P.stepGuess * st.ringStep * (0.4 + 3 * P.habit * h.linearRate) * (1 - h.homingRate);
+  if (P.stepGuess > 0 && opFree && d <= opThreat + 40000 && d > kit.cf.pushFS + op.cf.pushFS + 2000) {
+    if (b.rnd() < readP) {
       b.stats.stepGuesses++;
       const [bit] = stepOrder(b.m, s);
       return { t: 'circle', bit, frames: 1, atk: aggro && kit.stepAttack >= 0 ? kit.stepAttack : -1 };
     }
+  }
+  // (3b) CHANGED(fix_balance): it WALKS / DASHES in (visible) and is about to enter its range - a read step as it arrives:
+  // its first straight button / approach goes past me and the whiff is punished from the side (brain.punishTick runs in the
+  // step); vs a homing-happy opponent less often (the same habit factors)
+  const opIn = op.st === ST.WALK_F || op.st === ST.DASH_F;
+  if (P.stepGuess > 0 && opIn && d > opThreat - 20000 && d <= opThreat + 90000 && b.rnd() < readP * 1.2) {
+    b.stats.stepGuesses++;
+    b.stats.approachSteps++;
+    const [bit] = stepOrder(b.m, s);
+    return { t: 'circle', bit, frames: 1, atk: kit.stepAttack >= 0 ? kit.stepAttack : -1 };
   }
   // (4) circle the opponent onto ITS wall from mid range (its back then takes the pushback / the wall splat)
   if (P.circle > 0 && aggro && s.opBackU > 220000 && s.backU > 150000 && d > 130000 && d < 320000 && b.rnd() < P.circle * 0.3) {
@@ -116,6 +136,25 @@ export function ringPlan(b: Brain, aggro: boolean, opThreat: number): Decision |
       b.stats.circlesCorner++;
       return { t: 'circle', bit: pl.bit, frames: pl.frames <= b.m.sys.stepFrames ? 1 : pl.frames, atk: -1 };
     }
+  }
+  // (5) CHANGED(fix_balance): a neutral circle-walk at footsies spacing (at / just outside its threat range, not into a running
+  // attack): reposition around it - away from the wall behind me when the room behind me is the smaller, else drive it toward
+  // its wall when that is near, else on round the ring (the last sense, sometimes reversed). 18-54 frames (a held STEP: the
+  // 15 f sidestep, then the 1.8 m/s sidewalk); the reaction clock keeps running (back = the sim's circle -> block cancel)
+  const lo = Math.max(kit.cf.pushFS + op.cf.pushFS + 30000, opThreat - 30000);
+  const hi = Math.max(opThreat + 160000, st.backOff >= 0.3 ? kit.rangeHi : 0);
+  if (P.walk > 0 && (opFree || opIn) && !opSwinging && d >= lo && d <= hi && b.rnd() < P.walk * st.ringWalk) {
+    let sd = b.walkSense;
+    if (s.backU < s.opBackU - 60000) {
+      const pl = planCircle(b.m, s, 'escape', Math.min(s.backU + 120000, 260000), 60);
+      if (pl) sd = pl.sd;
+    } else if (s.opBackU < 200000 && aggro) {
+      const pl = planCircle(b.m, s, 'corner', Math.max(60000, s.opBackU - 80000), 60);
+      if (pl) sd = pl.sd;
+    } else if (b.rnd() < 0.3) sd = -sd;
+    b.walkSense = sd;
+    b.stats.circlesWalk++;
+    return { t: 'circle', bit: stepBitFor(s, sd), frames: 18 + Math.floor(b.rnd() * 37), atk: -1 };
   }
   return null;
 }
@@ -258,6 +297,40 @@ export function neutralPlan(b: Brain): Decision {
     if (P.nerve >= 3 && aggro && b.rnd() < 0.02) return { t: 'move', idx: kit.impact };
   }
 
+  // CHANGED(fix_balance) (CONTRACT §35.21): the opponent's COMMAND-grab zone (frame data, brain.opGrabU - THE FREAK / Bruno /
+  // Rerun / Krane reach 1.9-2.3 m, beyond the close range my own throw sets) once it has shown grabs (its throw habit counts
+  // them): walking in or guarding there loses to a 5 f unblockable grab no level can react to, so a player who has been
+  // grabbed backs out of it or presses a button that is out first (measured before: CPU L6 contestants lost 52-55 % of their
+  // HP vs THE FREAK to SPECIMEN GRAB; bruno / rerun / krane won their boss bouts with their own command grabs)
+  const grabZone = Math.max(closeU, b.opGrabU) + 10000;
+  // (x 2 over a plain throw's escape: an untechable command grab deals ~2x a throw - a grabbed player respects its zone more)
+  const pGrab = b.opGrabU > 0 ? Math.min(0.8, 2 * P.habit * b.habits.confidence() * b.habits.pThrow()) : 0;
+  const opCanGrab = op.st === ST.IDLE || op.st === ST.CROUCH || op.st === ST.WALK_F || op.st === ST.WALK_B || op.st === ST.DASH_F;
+  const grabEscape = (): Decision | null => {
+    b.stats.throwEscapes++;
+    if (P.level >= 3 || P.level < 0) {
+      const jab = kit.lights.find((k) => b.canUse(k) && b.inReach(k) && b.timeToActive(k) <= b.opGrabF + 1);
+      if (jab !== undefined && b.rnd() < 0.5) return { t: 'move', idx: jab };
+    }
+    if (cornerBehind) return null;
+    const out = grabZone + 15000 - d;
+    if (s.backU > 150000 && out > 40000 && b.rnd() < 0.35) return { t: 'steps', steps: [{ d: 4, b: 0 }, { d: 5, b: 0 }, { d: 4, b: 0 }] };
+    return { t: 'hold', d: 4, frames: Math.max(8, Math.min(40, Math.ceil(out / Math.max(1, kit.cf.walkB)))) };
+  };
+  // (it walking in toward that zone counts too: L3+ first try a poke that meets the walk-in before its grab, brain.antiGrabPoke)
+  const grabWatch = grabZone + (op.st === ST.WALK_F || op.st === ST.DASH_F ? 40000 : 0);
+  if (pGrab > 0 && b.opGrabU > closeU && d > closeU && d <= grabWatch && opCanGrab && b.rnd() < pGrab) {
+    if (P.level >= 3 || P.level < 0) {
+      const ap = b.antiGrabPoke();
+      if (ap >= 0) {
+        b.stats.antiGrabPokes++;
+        return { t: 'move', idx: ap };
+      }
+    }
+    const e = grabEscape();
+    if (e) return e;
+  }
+
   // a keep-away style already inside its range does not walk in: it waits for the next zoning window
   if (aggro && !(keepAway && d >= kit.rangeLo)) {
     if (d <= closeU) {
@@ -318,16 +391,23 @@ export function neutralPlan(b: Brain): Decision {
 
   // CHANGED(AI) P2: a throw-happy opponent up close (its observed throw share): step out of throw range, or (L3+)
   // press a fast button - a strike beats a throw on the same frame - instead of holding a guard it would throw
-  if (d <= closeU + 10000 && op.st !== ST.KNOCKDOWN) {
+  // CHANGED(fix_balance): inside its COMMAND-grab zone too (grabZone; was my own throw range only), the walk out long enough
+  // to leave it
+  if (d <= grabZone && op.st !== ST.KNOCKDOWN) {
     const h = b.habits;
     const pT = P.habit * h.confidence() * h.pThrow();
     if (pT > 0 && b.rnd() < pT) {
-      b.stats.throwEscapes++;
-      if (P.level >= 3 || P.level < 0) {
-        const jab = kit.lights.find((k) => b.canUse(k) && b.inReach(k));
-        if (jab !== undefined && b.rnd() < 0.5) return { t: 'move', idx: jab };
+      if (d > closeU + 10000) {
+        const e = grabEscape();
+        if (e) return e;
+      } else {
+        b.stats.throwEscapes++;
+        if (P.level >= 3 || P.level < 0) {
+          const jab = kit.lights.find((k) => b.canUse(k) && b.inReach(k));
+          if (jab !== undefined && b.rnd() < 0.5) return { t: 'move', idx: jab };
+        }
+        if (!cornerBehind) return { t: 'hold', d: 4, frames: Math.max(8, think >> 1) };
       }
-      if (!cornerBehind) return { t: 'hold', d: 4, frames: Math.max(8, think >> 1) };
     }
   }
 

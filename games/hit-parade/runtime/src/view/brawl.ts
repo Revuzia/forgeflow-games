@@ -14,6 +14,11 @@
 //   * CHANGED(VIEW3D) (§35.8 / §35.13 item 10): goons come from every bearing - each is placed at its snapshot (x, y, z)
 //     with its yaw (mirrored by facing like a fighter). The old depth stagger (the 1D sim kept every goon on the line)
 //     only applies to a snapshot without z (the 1D labs).
+//   * CHANGED(fix_view) D7 (CONTRACT §35.23 fix_view): popups are anchored at their own event (BoutView: the goon a hit / KO
+//     names, the goons a crowd bonus hit, the player for combo / parry / heckle scores) and LAID OUT on screen every frame:
+//     a popup overlapping an older one moves below it (above when there is no room below), and every popup stays inside
+//     the HUD-safe area (under the top HUD band - the timer / score panel - above the bottom 10 %, 6 % in from the sides).
+//     The sprite is placed back in the world at its anchor's depth, so it still sits in the scene.
 
 import * as THREE from 'three';
 import type { Assets, FighterAsset } from './assets.ts';
@@ -27,6 +32,10 @@ const GOON_GLBS = import.meta.glob('../../../art/gltf/**/goon_*.glb', { eager: t
 const DEG = Math.PI / 180;
 const TINTS = [0, 0.35, -0.3, 0.7, -0.6, 1.1, -1.0, 1.6];
 const POOL_PER_KIND = 4;
+/** CHANGED(fix_view) D7: popup safe area (frame fractions): gap under the HUD band, bottom band (RATINGS bars), sides */
+const POP_PAD = 0.02;
+const POP_BOTTOM = 0.1;
+const POP_SIDE = 0.06;
 
 /** a score popup for the UI: points (negative = a heckle hit), reason = SCORE `d` (§28.4), screen x / y (0..1, y down) */
 export interface Popup { id: number; points: number; player: number; reason: number; total: number; x: number; y: number; wx: number; wy: number; wz: number; age: number }
@@ -239,8 +248,73 @@ export class BrawlView {
     this.stats.popups++;
   }
 
-  /** age popups and project them to screen fractions (0..1, y from the top); the in-canvas sprites follow */
-  updatePopups(dt: number, cam: THREE.Camera): void {
+  /**
+   * Age popups, lay them out and project them to screen fractions (0..1, y from the top); the in-canvas sprites follow.
+   * CHANGED(fix_view) D7: `safeTop` = the HUD band's bottom (fraction of the frame from the top; BoutView passes the
+   * camera's). Layout per frame: each popup's wanted spot = its anchor risen by its age, projected; newer popups that
+   * overlap an older one move below it (above when below runs out of room); then all are clamped into the safe area.
+   */
+  updatePopups(dt: number, cam: THREE.Camera, safeTop = 0): void {
+    if (this.legacyPopups) { this.updatePopupsLegacy(dt, cam); return; }
+    for (const p of this.popupsL) p.age += dt;
+    this.popupsL = this.popupsL.filter((p) => p.age < 1.4);
+    const pc = cam as THREE.PerspectiveCamera;
+    const tanH = Math.tan(((pc.fov ?? 45) * Math.PI / 180) / 2);
+    const aspect = pc.aspect ?? 16 / 9;
+    const top = Math.min(0.5, Math.max(0, safeTop)) + POP_PAD;
+    const placed: Array<{ x: number; y: number; hw: number; hh: number }> = [];
+    const L = this.layout;
+    L.length = 0;
+    for (const p of this.popupsL) {
+      // wanted: the anchor risen by age, projected (NDC z kept to put the sprite back at that depth)
+      this.tmp.set(p.wx, p.wy + 0.25 + p.age * 0.6, p.wz).project(cam);
+      const depth = Math.max(0.5, this.tmp2.set(p.wx, p.wy, p.wz).applyMatrix4(pc.matrixWorldInverse).z * -1);
+      const hh = 0.475 / (2 * depth * tanH) / 2 * 1.08;            // half the sprite's height, frame fraction (+8 %)
+      const hw = 0.95 / (2 * depth * tanH * aspect) / 2 * 0.9;      // half its width (the digits are narrower than the card)
+      const yMin = top + hh, yMax = 1 - POP_BOTTOM - hh;
+      // the wanted spot clamped into the safe area FIRST (a popup risen to the HUD band stops under it) ...
+      let x = Math.max(POP_SIDE + hw, Math.min(1 - POP_SIDE - hw, this.tmp.x * 0.5 + 0.5));
+      let y = Math.max(yMin, Math.min(yMax, 0.5 - this.tmp.y * 0.5));
+      // ... then spread: below any older popup it overlaps (older ones have risen higher), above when below is full
+      for (let pass = 0; pass < 4; pass++) {
+        let moved = false;
+        for (const q of placed) {
+          if (Math.abs(x - q.x) >= hw + q.hw || Math.abs(y - q.y) >= hh + q.hh) continue;
+          const below = q.y + q.hh + hh + 0.004;
+          y = below <= yMax ? below : Math.min(y, q.y - q.hh - hh - 0.004);
+          moved = true;
+        }
+        if (!moved) break;
+      }
+      y = Math.max(yMin, Math.min(yMax, y));
+      placed.push({ x, y, hw, hh });
+      L.push({ id: p.id, x, y, z: this.tmp.z });
+      p.x = Math.round(x * 1000) / 1000;
+      p.y = Math.round(y * 1000) / 1000;
+    }
+    // sprites: one per live popup (painted once), a pop-in scale, a fade over the last 0.4 s
+    for (const ps of this.pops) if (!this.drawPopups || !this.popupsL.some((p) => p.id === ps.id)) { ps.sprite.visible = false; ps.id = -1; }
+    if (!this.drawPopups) return;
+    this.stats.drawn = 0;
+    for (let k = 0; k < this.popupsL.length; k++) {
+      const p = this.popupsL[k], lp = L[k];
+      let ps = this.pops.find((x) => x.id === p.id);
+      if (!ps) { ps = this.pops.find((x) => x.id < 0); if (!ps) continue; ps.id = p.id; ps.paint(p.points); }
+      const pop = p.age < 0.12 ? 0.6 + 0.4 * (p.age / 0.12) * 1.25 : 1;
+      ps.sprite.visible = true;
+      // the laid-out screen spot back into the world at the anchor's depth
+      ps.sprite.position.set(lp.x * 2 - 1, 1 - lp.y * 2, lp.z).unproject(cam);
+      ps.sprite.scale.set(0.95 * pop, 0.475 * pop, 1);
+      (ps.sprite.material as THREE.SpriteMaterial).opacity = Math.max(0, Math.min(1, (1.4 - p.age) / 0.4));
+      this.stats.drawn++;
+    }
+  }
+  private readonly layout: Array<{ id: number; x: number; y: number; z: number }> = [];
+  /** CHANGED(fix_view) D7 harness A/B: true = the pre-fix popups (BoutView's old anchors + this old placement) */
+  legacyPopups = false;
+
+  /** the pre-fix placement (kept for the A/B only): anchor risen by age, alternate rows 0.18 m apart, no layout / clamp */
+  private updatePopupsLegacy(dt: number, cam: THREE.Camera): void {
     for (const p of this.popupsL) {
       p.age += dt;
       this.tmp.set(p.wx, p.wy + p.age * 0.6, p.wz).project(cam);
@@ -248,7 +322,6 @@ export class BrawlView {
       p.y = Math.round((0.5 - this.tmp.y * 0.5) * 1000) / 1000;
     }
     this.popupsL = this.popupsL.filter((p) => p.age < 1.4);
-    // sprites: one per live popup (painted once), a pop-in scale, a rise, a fade over the last 0.4 s
     for (const ps of this.pops) if (!this.drawPopups || !this.popupsL.some((p) => p.id === ps.id)) { ps.sprite.visible = false; ps.id = -1; }
     if (!this.drawPopups) return;
     this.stats.drawn = 0;

@@ -148,6 +148,13 @@ export interface GrabDef {
    *  until the next one starts, or the lock ends; fromS / toS = the clip range it plays - toS omitted = 1 clip-second per
    *  60 frames from fromS). Omitted = thrown_f / thrown_b (swap) with its slam mark on hitF, ending at release. */
   victim?: [number, string, number?, number?][];
+  /** CHANGED(fix_core) D4 (CONTRACT §35.20): the victim's ROOT path over the lock, [lockFrame, gapM, liftM] keys = root to
+   *  root distance along the thrower's forward (at the connect) + height; implicit first key = the actual distance at the
+   *  connect (lift 0), linear between keys, held after the last; while lift < 0.30 m the gap never goes under the two push
+   *  fronts (CONTRACT §26.5). Replaces the clip-root carry. Generated for grab supers from their cinematic gapD. */
+  path?: [number, number, number][];
+  /** CHANGED(fix_core) D4: push-front gap (m) the victim is pulled to at the connect (default system.json throw.holdGapM) */
+  holdGapM?: number;
 }
 
 export interface ClassicEntry {
@@ -190,6 +197,9 @@ export interface FighterDef {
   push?: { front: number; back: number; crouchFront?: number; crouchBack?: number };
   /** CHANGED(SIM) P2 (CONTRACT §28.5c): measured hurtbox extents (wins over data/bodies.json) */
   hurtBody?: BodyExt;
+  /** CHANGED(fix_core) D1 (CONTRACT §35.20): this fighter's sidestep arc length in metres (0.5..2.5; the kit generator
+   *  sizes it from the measured body in data/bodies.json); absent = system.json step.distM (0.85) */
+  step?: { distM?: number };
   colors?: { name: string; tint: string | null }[];
   moves: Record<string, Move>;
   simple: SimpleMap;
@@ -289,6 +299,10 @@ export interface System {
     postStunInvuln: number; wakeupInvuln: number; backThrowOffsetM: number;
     /** CHANGED(SIM3D) (CONTRACT §35.4): the defender must be inside the thrower's front arc +- this (deg), default 70 */
     frontArcDeg?: number;
+    /** CHANGED(fix_core) D4 (CONTRACT §35.20): at the connect the victim slides onto the thrower's forward line at the HOLD
+     *  distance (push fronts touching + holdGapM) over pullF frames (defaults 6 f / 0.0 m) */
+    pullF?: number;
+    holdGapM?: number;
   };
   kd: { fallFrames: number; wakeupFrames: number; softLandTotal: number; hardLandTotal: number; airResetLand: number; backRiseM: number; minTotal: number };
   juggle: {
@@ -318,6 +332,9 @@ export interface System {
   ring?: { defaultRadiusM?: number; againstWallM?: number; camMinSepM?: number; spawnAxisDeg?: number; sectors?: number };
   step?: { frames?: number; distM?: number; movePct?: number; bufferF?: number; attackF?: number; blockF?: number; walkMps?: number; settleF?: number };
   track?: { normalUntilOffset?: number; specialUntilOffset?: number };
+  /** CHANGED(fix_core) D7 (CONTRACT §35.20): BACK HIT - a hit from more than arcDeg off a grounded defender's facing deals
+   *  damagePct % and +hitstunF hitstun frames (defaults 120 / 120 / 4) */
+  backHit?: { arcDeg?: number; damagePct?: number; hitstunF?: number };
   lateral?: { L: number; M: number; H: number; sweep: number; homing: number };
   /** CHANGED(SIM) P2 (CONTRACT §28): unique defaults, bonus rounds */
   uniques?: UniquesSys;
@@ -451,8 +468,10 @@ export interface FighterSnap {
   absent?: boolean;
   actionable?: boolean;
   /** CHANGED(SIM3D) (CONTRACT §35.2): step state - kind, step frame (1..), the side of the fighter's OWN body it moves
-   *  toward (-1 left, +1 right, 0 none) and which button ('in' = STEP_IN away from the camera, 'out' = toward it) */
-  step?: { kind: 'none' | 'sidestep' | 'sidewalk' | 'settle'; frame: number; side: number; dir: 'in' | 'out' | '' };
+   *  toward (-1 left, +1 right, 0 none) and which button ('in' = STEP_IN away from the camera, 'out' = toward it).
+   *  CHANGED(fix_core) D1 (CONTRACT §35.20): `dist` = this fighter's sidestep arc length in metres (its step.distM, e.g.
+   *  0.85 johnny / 1.219 bruno / 1.715 rerun) so the view can scale the sidestep clip's lateral travel to it */
+  step?: { kind: 'none' | 'sidestep' | 'sidewalk' | 'settle'; frame: number; side: number; dir: 'in' | 'out' | ''; dist?: number };
 }
 
 /** CHANGED(SIM) P2 (CONTRACT §28.4): one goon of BRAWL BREAK. */

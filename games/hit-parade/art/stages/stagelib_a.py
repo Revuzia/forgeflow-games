@@ -1402,6 +1402,10 @@ def write_fragment(S, build=None):
         frag["build"] = build
     else:
         old = os.path.join(out_frag_dir(), S["id"] + ".stage.json")
+        # CHANGED(fix_ui_stage): `--fragment-only` into an empty staging dir carries the SHIPPED fragment's measured build
+        # (GLB stats + the camera-band clearance probe) - the GLB is unchanged, merge_stages --install validates against it
+        if not os.path.exists(old):
+            old = os.path.join(HERE, S["id"] + ".stage.json")
         if os.path.exists(old):
             prev = json.load(open(old, encoding="utf-8"))
             if "build" in prev:

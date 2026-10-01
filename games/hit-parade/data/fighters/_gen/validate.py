@@ -26,6 +26,7 @@ Usage: python data/fighters/_gen/validate.py
 """
 import importlib.util
 import json
+import math
 import os
 import re
 import sys
@@ -509,6 +510,20 @@ def check_grab_victim(fid, mid, o, g):
             where, travel))
     if not g.get("swap") and travel > 0.1:
         fail(fid, "%s: forward-throw victim travels %.2f m TOWARD the thrower" % (where, travel))
+    # CHANGED(fix_core) D4 (CONTRACT 35.20): a grab super carries grab.path = its cinematic gapD (the sim carries that
+    # victim: the view draws it at the sim's position); keys ascending inside the lock, gaps / lifts >= 0, ending on the floor
+    cin = o.get("cinematic")
+    p = g.get("path")
+    if cin and cin.get("gapD") and p != [[int(k[0]), float(k[1]), float(k[2]) if len(k) > 2 else 0.0] for k in cin["gapD"]]:
+        fail(fid, "%s grab.path: must equal cinematic.gapD (the sim carries a grab super's victim)" % mid)
+    if p is not None:
+        fr = [k[0] for k in p]
+        if not p or fr != sorted(fr) or fr[0] < 1 or fr[-1] > g["frames"] or any(k[1] < 0 or k[2] < 0 for k in p):
+            fail(fid, "%s grab.path %s: keys [frame 1..frames ascending, gapM >= 0, liftM >= 0]" % (mid, p))
+        elif p[-1][2] != 0:
+            fail(fid, "%s grab.path: the last key must be on the floor (lift 0), has %s" % (mid, p[-1]))
+        elif cin and abs(p[-1][1] - cin.get("endGapM", p[-1][1])) > 1e-6:
+            fail(fid, "%s grab.path: the last gap %.2f != cinematic.endGapM %.2f" % (mid, p[-1][1], cin.get("endGapM")))
     return travel
 
 
@@ -518,6 +533,35 @@ HOMING_RATE, TRACK_FULL = 20, 180
 LAT_RANGE, PROJ_LAT_RANGE = (0.10, 1.50), (0.10, 0.80)
 STEP_ATTACK_REQUIRED = ("patch", "spin")
 ROSTER_MD = os.path.join(GAME, "_spec", "ROSTER.md")
+
+
+# CHANGED(fix_core) D1 (CONTRACT 35.20): the per-fighter sidestep length, re-derived here from data/bodies.json (the rule
+# kitlib.step_dist_m states: arc needed A = 1.2 asin((0.22 + r) / (1.2 - off)), distM = clamp(1.555 A, 0.85, 2.0); r / off
+# of the measured stand hurt cylinder). The windows it buys are measured and gated by _harness/probe_3d.ts (section 3b).
+STEP_RULE = {"default": 0.85, "gap": 1.2, "lat": 0.22, "k": 1.555, "max": 2.0}
+BODIES = os.path.join(GAME, "data", "bodies.json")
+
+
+def check_step(fid, d):
+    st = d.get("step")
+    if not (isinstance(st, dict) and isinstance(st.get("distM"), (int, float))):
+        fail(fid, "step.distM missing (CONTRACT 35.20: every fighter carries its sidestep length)")
+        return
+    dist = float(st["distM"])
+    if not (STEP_RULE["default"] <= dist <= STEP_RULE["max"]):
+        fail(fid, "step.distM %.3f outside %.2f..%.2f m" % (dist, STEP_RULE["default"], STEP_RULE["max"]))
+    bodies = json.load(open(BODIES, encoding="utf-8")).get("fighters", {}) if os.path.exists(BODIES) else {}
+    b = bodies.get(fid)
+    if not b:
+        want = STEP_RULE["default"]
+    else:
+        fr, bk = float(b["stand"][0]), float(b["stand"][1])
+        r, off = (fr + bk) / 2.0, (fr - bk) / 2.0
+        arc = STEP_RULE["gap"] * math.asin(min(1.0, (STEP_RULE["lat"] + r) / (STEP_RULE["gap"] - off)))
+        want = round(min(STEP_RULE["max"], max(STEP_RULE["default"], STEP_RULE["k"] * arc)), 3)
+    if abs(dist - want) > 0.0005:
+        fail(fid, "step.distM %.3f != %.3f from the measured body (data/bodies.json)" % (dist, want))
+    say("  step.distM %.3f (rule %.3f)" % (dist, want))
 
 
 def is_strike3d(o):
@@ -936,6 +980,7 @@ def validate_fighter(fid, mix):
     check_hit_volume(fid, d, plan)
     check_text(fid, d)
     check_3d(fid, d)   # CHANGED(FIGHTERS3D)
+    check_step(fid, d)   # CHANGED(fix_core) D1
 
 
 def main():

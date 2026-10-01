@@ -37,6 +37,9 @@
     "crouchFront": 0.455,
     "crouchBack": 0.025
   },
+  "step": {
+    "distM": 0.85
+  },
   "colors": [
     {"name": "Sunday League", "tint": null},
     {"name": "Home Kit", "tint": "#c62828"},

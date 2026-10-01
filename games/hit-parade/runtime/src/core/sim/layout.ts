@@ -11,7 +11,8 @@
 import { hash32 } from '../rng.ts';
 
 /** Bump when a field's MEANING changes without the sizes changing. */
-export const LAYOUT_REV = 4; // CHANGED(fixer): 2 = throw carry / knockdown presentation fields, asymmetric push boxes
+export const LAYOUT_REV = 5; // CHANGED(fixer): 2 = throw carry / knockdown presentation fields, asymmetric push boxes
+// CHANGED(fix_core): 5 = grab hold (F.thrAX / thrAZ: the victim is pulled to the hold point / follows grab.path; §35.20)
 // CHANGED(SIM) P2: 3 = uniques (stance state, install timer, ball / heckle projectile fields), BRAWL header + goon blocks v2
 // CHANGED(SIM3D): 4 = the 3D ring (CONTRACT §35): z / vz / yaw per fighter, projectile and goon, step state, camera basis
 // camN, ring cache, push direction, throw carry direction; F.facing = the SCREEN-side sign from the camN basis
@@ -196,6 +197,9 @@ export const F = {
   pushYaw: fb.f(), // direction of the pending pushback F.pushLeft (U, >= 0 along this yaw)
   thrZ: fb.f(), // victim: z anchor of the throw carry (thrX above = x anchor)
   thrYaw: fb.f(), // victim: the thrower's yaw at the connect (the carry runs along -dir(thrYaw))
+  // CHANGED(fix_core) D4 (CONTRACT §35.20): the grab hold
+  thrAX: fb.f(), // victim: the THROWER's root x at the connect (the hold point / grab.path origin)
+  thrAZ: fb.f(), // victim: the thrower's root z at the connect
 };
 export const FIGHTER_INTS = fb.size();
 

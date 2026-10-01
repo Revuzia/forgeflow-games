@@ -130,6 +130,114 @@ export function motionDone(s: Int32Array, b: number, code: number, w: MotionWind
 }
 
 /**
+ * Latest-ending match of `pat` in dirs[0..n) (reverse greedy: the newest occurrence of the last direction, then the newest
+ * fitting occurrence of each earlier one). Writes the END / START ages into out[0] / out[1]; false when `pat` is absent.
+ */
+function lastMatch(n: number, pat: readonly number[], out: Int32Array): boolean {
+  let j = pat.length - 1;
+  let end = -1;
+  for (let i = n - 1; i >= 0; i--) {
+    if (dirs[i] !== pat[j]) continue;
+    if (end < 0) end = i;
+    if (j === 0) {
+      out[0] = n - 1 - end;
+      out[1] = n - 1 - i;
+      return true;
+    }
+    j--;
+  }
+  return false;
+}
+const spanAlt = new Int32Array(2); // scratch (fully rewritten on every call)
+
+/** The fresher of two pattern alternatives (smaller end age; tie: the later start) into out. */
+function lastMatch2(n: number, p1: readonly number[], p2: readonly number[], out: Int32Array): boolean {
+  const a = lastMatch(n, p1, out);
+  if (!lastMatch(n, p2, spanAlt)) return a;
+  if (!a || spanAlt[0] < out[0] || (spanAlt[0] === out[0] && spanAlt[1] < out[1])) {
+    out[0] = spanAlt[0];
+    out[1] = spanAlt[1];
+  }
+  return true;
+}
+
+/**
+ * CHANGED(fix_input) (CONTRACT §35.24): when motion `code` is done, writes the ages of its latest-ending match into
+ * out[0] = END (the newest entry that completes it) and out[1] = START (that match's first entry) and returns true; false
+ * when the motion is not done. Age = history entries back from the newest (0 = this frame; frozen entries count as entries,
+ * so two motions read off the same ring compare directly). The rekka parser (inputs.ts) uses it to tell a fresh sibling
+ * motion from a leftover one still inside the window (the 214 typed for CUE 3 LOW vs the 236 that fired CUE 2).
+ * Charge motions complete on this frame (0, 0); a 360 ends on its newest cardinal and starts where its third distinct
+ * cardinal is reached going back.
+ */
+export function motionSpan(s: Int32Array, b: number, code: number, w: MotionWindows, out: Int32Array): boolean {
+  if (!motionDone(s, b, code, w)) return false;
+  switch (code) {
+    case MO.QCF:
+      return lastMatch(collect(s, b, w.qc), P236, out);
+    case MO.QCB:
+      return lastMatch(collect(s, b, w.qc), P214, out);
+    case MO.DP:
+      return lastMatch2(collect(s, b, w.dp), P623, P323, out);
+    case MO.RDP:
+      return lastMatch(collect(s, b, w.dp), P421, out);
+    case MO.HCF:
+      return lastMatch(collect(s, b, w.hc), P_HCF, out);
+    case MO.HCB:
+      return lastMatch(collect(s, b, w.hc), P_HCB, out);
+    case MO.DQCF:
+      return lastMatch2(collect(s, b, w.double), P236236, P2626, out);
+    case MO.DQCB:
+      return lastMatch2(collect(s, b, w.double), P214214, P2424, out);
+    case MO.SPD: {
+      const n = collect(s, b, w.spd);
+      let seen = 0;
+      let cnt = 0;
+      let end = -1;
+      for (let i = n - 1; i >= 0; i--) {
+        const d = dirs[i];
+        const bit = d === 4 ? 1 : d === 2 ? 2 : d === 6 ? 4 : d === 8 ? 8 : 0;
+        if (bit === 0) continue;
+        if (end < 0) end = i;
+        if ((seen & bit) !== 0) continue;
+        seen |= bit;
+        if (++cnt >= 3) {
+          out[0] = n - 1 - end;
+          out[1] = n - 1 - i;
+          return true;
+        }
+      }
+      return false;
+    }
+    case MO.DD: {
+      // the forward 2, non-down, 2 machine run backward from the newest entry
+      const n = collect(s, b, w.tap22);
+      let st = 0;
+      let end = -1;
+      for (let i = n - 1; i >= 0; i--) {
+        const d = dirs[i];
+        const down = d === 1 || d === 2 || d === 3;
+        if (st === 0 && d === 2) {
+          end = i;
+          st = 1;
+        } else if (st === 1 && !down) st = 2;
+        else if (st === 2 && d === 2) {
+          out[0] = n - 1 - end;
+          out[1] = n - 1 - i;
+          return true;
+        }
+      }
+      return false;
+    }
+    default:
+      // charge [4]6 / [2]8: completed by this frame's direction
+      out[0] = 0;
+      out[1] = 0;
+      return true;
+  }
+}
+
+/**
  * 66 / 44 detection on the frame the direction is newly entered: tap run of `want` (<= tapMax
  * frames), neutral gap (<= gapMax frames, direction 5 only), current frame = `want` again.
  */

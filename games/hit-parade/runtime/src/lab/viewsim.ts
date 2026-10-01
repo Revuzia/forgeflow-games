@@ -19,7 +19,7 @@ import { Showcase } from '../view/showcase.ts';
 import { animTableFor } from '../view/animtable.ts';
 import { FrameProf } from '../view/frameprof.ts';
 import { loadGameData } from '../core/data.ts';
-import { createMatch, step, readMatch, readFighter, devSet } from '../core/sim/match.ts';
+import { createMatch, step, readMatch, readFighter, devSet, save, load } from '../core/sim/match.ts';
 import { eventsSince, EV } from '../core/sim/events.ts';
 import type { GameData, SimEvent } from '../core/types.ts';
 import type { MatchCfg, Match } from '../core/sim/state.ts';
@@ -315,27 +315,53 @@ export async function simMain(fail: (e: unknown) => void): Promise<void> {
   lab.run = (frames) => lab.goto(cur + frames);
 
   // real-time replay of a window (G9): script frames [from, to) looped, one sim step + one view frame per rAF
+  // CHANGED(fix_view) G9: the loop used to re-simulate all `from` frames inside ONE rAF at every wrap (a few hundred sim
+  // steps: a 20-100 ms frame per wrap that no real bout has - it fed the window's p99). Now the state at `from` is saved
+  // once and the wrap restores it into a fresh Match (empty event ring) - a sub-millisecond reset - and the frame after a
+  // wrap is still left out of the statistics (`wraps` says how many). Marks: sim / view / render (FrameProf ?prof=1),
+  // each frame annotated with its cinematic frame (cf<n>, -1 outside) for attribution.
   lab.perf = async (seconds, from, to) => {
     if (!bout || !cfg) throw new Error('setup first');
     lab.goto(from);
+    const slot = new Int32Array(m!.s.length);
+    save(m!, slot);
+    const restore = (): void => {
+      m = fresh();
+      load(m, slot);
+      cur = from;
+      lastFrame = m.frame();
+      bout!.resetPresentation();
+    };
     const d: number[] = [];
     let last = performance.now();
     const t0 = last;
+    let wraps = 0, skipNext = false;
     prof?.reset();
     await new Promise<void>((res) => {
       const loop = (now: number) => {
         const raw = now - last; last = now;
         prof?.begin();
-        if (cur >= to) { m = fresh(); bout!.resetPresentation(); for (let i = 0; i < from; i++) tick(m, i, false); }
-        tick(m!, cur, true, Math.min(0.1, raw / 1000));
-        prof?.mark('frame');
+        let wrapped = false;
+        if (cur >= to) { restore(); wrapped = true; wraps++; prof?.annotate('wrap'); }
+        prof?.mark('wrap');
+        const i = cur;
+        for (const q of script.dev) if (q.f === i) devSet(m!, q.p, q.k, q.v);
+        step(m!, script.words[i] ?? 0, 0);
+        cur = i + 1;
+        prof?.mark('sim');
+        const ev = newEvents(m!);
+        const ms = readMatch(m!);
+        bout!.frame(ms, [readFighter(m!, 0), readFighter(m!, 1)], ev, Math.min(0.1, raw / 1000));
+        prof?.annotate('cf' + (ms.cinematic?.active ? ms.cinematic.frame : -1));
+        prof?.mark('view');
         prof?.gpuBegin();
         bout!.render();
         prof?.gpuEnd();
         prof?.mark('render');
-        prof?.end(raw, 1, 0, r.three.info, 'perf');
+        prof?.end(raw, 1, 0, r.three.info, skipNext ? 'perf-skip' : 'perf');
         r.frameTime(raw, true);
-        d.push(raw);
+        if (!skipNext) d.push(raw);
+        skipNext = wrapped;
         if (now - t0 < seconds * 1000 + 1500) requestAnimationFrame(loop); else res();
       };
       requestAnimationFrame(loop);
@@ -344,9 +370,71 @@ export async function simMain(fail: (e: unknown) => void): Promise<void> {
     const s = d.slice(warm).sort((a, b) => a - b);
     const pct = (p: number) => (s.length ? s[Math.min(s.length - 1, Math.max(0, Math.ceil(p * s.length) - 1))] : 0);
     const inf = r.info();
-    return { frames: s.length, p50: pct(0.5), p90: pct(0.9), p99: pct(0.99), max: s[s.length - 1] ?? 0,
+    return { frames: s.length, wraps, p50: pct(0.5), p90: pct(0.9), p99: pct(0.99), max: s[s.length - 1] ?? 0,
       avgFps: s.length ? 1000 * s.length / s.reduce((a, b) => a + b, 0) : 0, calls: inf.calls, triangles: inf.triangles, programs: inf.programs,
       gpu: inf.gpu, buffer: (inf as { buffer?: unknown }).buffer, scale: inf.scale, prof: prof ? prof.dump() : null };
+  };
+
+  /**
+   * CHANGED(fix_view) G9: per-frame COST of script frames [from, to), measured without the rAF clock (a starved machine
+   * still gives comparable numbers): for each pass the state at `from` is restored, then every frame times the sim step,
+   * BoutView.frame (view) and render + gl.finish (the GPU work and any upload / link it forces, synchronously). Pass 0 is
+   * the first time this page plays the window (cold: first PRIME TIME), later passes are warm. Returns per pass the totals
+   * and the costliest frames with their renderer deltas (programs / textures / geometries).
+   */
+  (lab as unknown as { frameCost: (from: number, to: number, passes?: number) => unknown }).frameCost = (from, to, passes = 2) => {
+    if (!bout || !cfg) throw new Error('setup first');
+    lab.goto(from);
+    const slot = new Int32Array(m!.s.length);
+    save(m!, slot);
+    const gl = r.three.getContext();
+    const out: unknown[] = [];
+    for (let pass = 0; pass < passes; pass++) {
+      m = fresh(); load(m, slot); cur = from; lastFrame = m.frame(); bout.resetPresentation();
+      const rows: Array<{ i: number; cf: number; sim: number; view: number; render: number; dProg: number; dTex: number; dGeo: number; split: Record<string, number> }> = [];
+      for (let i = from; i < to && i < script.words.length; i++) {
+        const info0 = r.three.info;
+        const p0 = info0.programs ? info0.programs.length : 0, x0 = info0.memory.textures, g0 = info0.memory.geometries;
+        const t0 = performance.now();
+        for (const q of script.dev) if (q.f === i) devSet(m!, q.p, q.k, q.v);
+        step(m!, script.words[i] ?? 0, 0);
+        cur = i + 1;
+        const t1 = performance.now();
+        const ms = readMatch(m!);
+        bout.frame(ms, [readFighter(m!, 0), readFighter(m!, 1)], newEvents(m!), 1 / 60);
+        const t2 = performance.now();
+        bout.render();
+        gl.finish();
+        const t3 = performance.now();
+        const info1 = r.three.info;
+        const split: Record<string, number> = {};
+        for (const [k, v] of Object.entries(bout.fsplit)) if (v >= 0.3) split[k] = +v.toFixed(2);
+        rows.push({ i, cf: ms.cinematic?.active ? ms.cinematic.frame : -1, sim: +(t1 - t0).toFixed(2), view: +(t2 - t1).toFixed(2), render: +(t3 - t2).toFixed(2),
+          dProg: (info1.programs ? info1.programs.length : 0) - p0, dTex: info1.memory.textures - x0, dGeo: info1.memory.geometries - g0, split });
+      }
+      const tot = (k: 'sim' | 'view' | 'render') => +rows.reduce((a, q) => a + q[k], 0).toFixed(1);
+      const worst = rows.slice().sort((a, b) => (b.view + b.render) - (a.view + a.render)).slice(0, 8);
+      out.push({ pass, frames: rows.length, sim: tot('sim'), view: tot('view'), render: tot('render'), worst,
+        deltas: rows.filter((q) => q.dProg || q.dTex || q.dGeo) });
+    }
+    return out;
+  };
+
+  /** CHANGED(fix_view) G9: what one window wrap costs - the old in-frame re-simulation of `from` sim frames vs the restore */
+  (lab as unknown as { wrapCost: (from: number) => unknown }).wrapCost = (from) => {
+    if (!bout || !cfg) throw new Error('setup first');
+    lab.goto(from);
+    const slot = new Int32Array(m!.s.length);
+    save(m!, slot);
+    let t0 = performance.now();
+    const mm = createMatch(cfg, data);
+    for (let i = 0; i < from; i++) { for (const q of script.dev) if (q.f === i) devSet(mm, q.p, q.k, q.v); step(mm, script.words[i] ?? 0, 0); }
+    const resim = performance.now() - t0;
+    t0 = performance.now();
+    const m2 = createMatch(cfg, data);
+    load(m2, slot);
+    const restore = performance.now() - t0;
+    return { from, resimMs: +resim.toFixed(2), restoreMs: +restore.toFixed(2), sameState: m2.s.every((v, k) => v === mm.s[k]) };
   };
 
   // the roster standing in a row on the set (G5 lineup): extra FighterViews in the bout scene, a fixed wide camera

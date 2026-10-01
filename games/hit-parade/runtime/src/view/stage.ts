@@ -213,7 +213,41 @@ export interface LightSpec {
 interface Flicker { light: THREE.Light; base: number; amp: number; hz: number; phase: number }
 interface DressNode { o: THREE.Object3D; spec: DressingSpec; phase: number; base?: THREE.Euler; mats?: Array<{ m: THREE.MeshStandardMaterial | THREE.MeshBasicMaterial; base: number; col?: THREE.Color }> }
 
-/** one live monitor feed texture (shared by every `screen` node of a stage) */
+/**
+ * one live monitor feed texture (shared by every `screen` node of a stage)
+ * CHANGED(fix_view) G9: the static noise and the scanlines are pre-rendered once (6 noise frames cycled + one scanline
+ * overlay, blitted with drawImage); the old redraw issued 900 fillRects with a freshly formatted colour string per noise
+ * dot plus 53 scanline rects per panel - ~3 ms of CPU (and garbage) every 6th frame on control_room, the only stage with
+ * a feed. Feeds start at staggered phases so two feeds never redraw (and re-upload) in the same frame.
+ */
+const NOISE_FRAMES = 6;
+let noiseCache: HTMLCanvasElement[] | null = null;
+let scanCache: HTMLCanvasElement | null = null;
+let feedCount = 0;
+function noiseFrames(): HTMLCanvasElement[] {
+  if (noiseCache) return noiseCache;
+  noiseCache = [];
+  for (let n = 0; n < NOISE_FRAMES; n++) {
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 160;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#06080c'; g.fillRect(0, 0, 256, 160);
+    for (let k = 0; k < 900; k++) { const v = (Math.sin(k * 12.9898 + n * 78.233) * 43758.5453) % 1; g.fillStyle = `rgba(220,230,255,${Math.abs(v) * 0.6})`; g.fillRect((k * 37 + n * 13) % 256, (k * 11 + n * 7) % 160, 2, 2); }
+    noiseCache.push(c);
+  }
+  return noiseCache;
+}
+function scanlines(): HTMLCanvasElement {
+  if (scanCache) return scanCache;
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 160;
+  const g = c.getContext('2d')!;
+  g.fillStyle = 'rgba(0,0,0,0.28)';
+  for (let y = 0; y < 160; y += 3) g.fillRect(0, y, 256, 1);
+  scanCache = c;
+  return c;
+}
+
 class ScreenFeed {
   readonly canvas = document.createElement('canvas');
   readonly tex: THREE.CanvasTexture;
@@ -231,6 +265,8 @@ class ScreenFeed {
     this.tex = new THREE.CanvasTexture(this.canvas);
     this.tex.colorSpace = THREE.SRGBColorSpace;
     this.draw({});
+    // CHANGED(fix_view) G9: staggered phase (the first redraw lands at a different frame for every feed)
+    this.acc = 0.1 - ((feedCount++ * 0.037) % 0.1);
   }
   update(dt: number, ctx: StageFrameCtx): void {
     this.acc += dt;
@@ -261,7 +297,7 @@ class ScreenFeed {
       g.fillStyle = '#fff'; g.fillText(nm[1].slice(0, 14), W / 2, 126);
       g.fillStyle = 'rgba(255,255,255,0.8)'; g.font = 'bold 16px Impact, sans-serif'; g.fillText('VS', W / 2, 86);
     } else if (content === 'static') {
-      for (let k = 0; k < 900; k++) { const v = (Math.sin(k * 12.9898 + (this.n + idx * 7) * 78.233) * 43758.5453) % 1; g.fillStyle = `rgba(220,230,255,${Math.abs(v) * 0.6})`; g.fillRect((k * 37 + this.n * 13) % W, (k * 11 + this.n * 7) % H, 2, 2); }
+      g.drawImage(noiseFrames()[(this.n + idx * 7) % NOISE_FRAMES], 0, 0);   // CHANGED(fix_view) G9: cached noise frames
     } else if (content === 'bars') {
       const cols = ['#c0c0c0', '#c0c000', '#00c0c0', '#00c000', '#c000c0', '#c00000', '#0000c0'];
       cols.forEach((c, k) => { g.fillStyle = c; g.fillRect((k * W) / 7, 0, W / 7 + 1, H * 0.72); });
@@ -282,8 +318,7 @@ class ScreenFeed {
       if (this.n % 10 < 6) { g.fillStyle = '#e8122d'; g.beginPath(); g.arc(22, H - 20, 7, 0, 7); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'left'; g.fillText('LIVE', 34, H - 14); }
       g.fillStyle = 'rgba(120,200,255,0.18)'; g.fillRect(0, (this.n * 9) % H, W, 14);
     }
-    g.fillStyle = 'rgba(0,0,0,0.28)';
-    for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);              // scanlines
+    g.drawImage(scanlines(), 0, 0);                                      // scanlines (CHANGED(fix_view) G9: one cached overlay)
   }
   dispose(): void { this.tex.dispose(); }
 }

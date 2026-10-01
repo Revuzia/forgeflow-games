@@ -2104,8 +2104,9 @@ throws, parry, IMPACT, supers, uniques, bonus rounds, rollback, SIMPLE/CLASSIC).
 - **Walk** forward/back = along the line to the opponent (existing speeds). Dashes and jumps along that line.
 - **STEP controls:** input bit 13 `STEP_IN` (circle AWAY from the camera) and bit 14 `STEP_OUT` (circle TOWARD
   the camera); both pressed = neutral (SOCD). **Tap** = SIDESTEP: 15 frames total, 0.85 m along the circle around
-  the opponent (distance to the opponent preserved: an arc, not a straight line); attacks may be buffered from
-  frame 9 and come out from frame 11 (step-attacks); block from frame 12. **Hold** past the sidestep = SIDEWALK:
+  the opponent (distance to the opponent preserved: an arc, not a straight line) [CHANGED(fix_core) §35.20: the arc length is per
+  fighter, 0.85-1.72 m]; attacks may be buffered from frame 9 [CHANGED(fix_core) §35.20: from frame 2, held to 11] and come
+  out from frame 11 (step-attacks); block from frame 12. **Hold** past the sidestep = SIDEWALK:
   circling at 1.8 m/s tangential around the opponent (the "walk around the ring"); ends on release with a 4-frame
   settle; holding BACK cancels circling into block. No invulnerability: evasion is geometric (moving off the line).
 - Default bindings: keyboard Q = STEP_IN, E = STEP_OUT (P2: numpad 7 / 9); gamepad right stick up = STEP_IN,
@@ -2278,7 +2279,7 @@ move are in `_spec/ROSTER.md` (3D column + "3D ring play").
    fans / flames / sawblades). A hover / resting projectile (Gazza keepy-uppy) is `aimed: false`, speed 0. Gazza's shot
    rebounds reflect the direction vector off the ring (§35.4, SIM).
 5. **Step-attacks:** kind `command`, `input: "SS.<btn>"` (btn L | M | H), role `stepatk`. Routed when that button is pressed
-   while the fighter is in SIDESTEP (buffered from step frame 9, starting on frame 11, §35.2) or SIDEWALK; there it wins
+   while the fighter is in SIDESTEP (buffered from step frame 9 [CHANGED(fix_core) §35.20: 2], starting on frame 11, §35.2) or SIDEWALK; there it wins
    over the button's plain 5X / 2X / 6X routing, anywhere else it is unreachable. Same in SIMPLE and CLASSIC. The move
    starts facing the opponent (frame-1 re-face at its `track.rate`). Today's sim parses `SS.H` as button -1 (never routed),
    so the data is harmless until SIM3D routes it. patch `SS.H` BLINDSIDE KICK (mid, homing, KD + wall splat), spin `SS.H`
@@ -2343,7 +2344,8 @@ while they convert.
    `step`): a tap buffers `ACT.STEP` (dash window) or a held STEP starts SIDESTEP from the free state (not while back is
    held: back = block wins; forward + STEP = the step): 15 frames along the circle around the opponent point, distance
    kept (tangent step renormalised to the start radius every frame), 0.85 m arc on an ease-out curve over 80 % of the
-   frames [CHANGED(STEPTUNE) §35.15: over all 15 frames, 64 % in the first 6]; presses buffer from step frame 9 (earlier presses are ignored), actions (`tryAct` CTX.STEP = the free rules
+   frames [CHANGED(STEPTUNE) §35.15: over all 15 frames, 64 % in the first 6] [CHANGED(fix_core) §35.20: the arc is the fighter's own
+   step.distM]; presses buffer from step frame 9 (earlier presses are ignored) [CHANGED(fix_core) §35.20: from frame 2, held to 11], actions (`tryAct` CTX.STEP = the free rules
    minus a new STEP) from frame 11, `canBlock` accepts a SIDESTEP from frame 12; at frame 16 a still-held STEP -> SIDEWALK
    (1.8 m/s tangential, attacks come out of it, back / down / up leave to the free state at once = back cancels into
    block, forward keeps circling), release -> STEP_END 4 frames -> free. STEP_IN circles toward -camN, STEP_OUT toward
@@ -2671,8 +2673,10 @@ Evidence: `_harness/_reports/progress_3d_AI3D.md`. Every file carries `CHANGED(A
    the sim's circle -> block cancel).
 5. **data/cpu.json:** level levers `step / stepGuess / circle / antiStep` (L0 0 / 0 / 0 / 0, L1 0 / 0 / 0.05 / 0.05, L2 0.1 / 0.02 /
    0.1 / 0.1, L3 0.2 / 0.05 / 0.2 / 0.2, L4 0.3 / 0.08 / 0.3 / 0.3, L5 0.4 / 0.1 / 0.35 / 0.4, L6 0.5 / 0.12 / 0.4 / 0.5, L7 0.6 / 0.15 /
-   0.45 / 0.6, L8 0.7 / 0.18 / 0.5 / 0.7; absent = 0 = no roll, no sandbox run), personas novice / optimal gain them, new personas
-   `stepper` / `circler` (`personas.ts`, harness only), `_src.ring3d`. data/ladder.json unchanged.
+   0.45 / 0.6, L8 0.7 / 0.18 / 0.5 / 0.7; absent = 0 = no roll, no sandbox run) [CHANGED(fix_balance) §35.21: re-scaled + the `walk`
+   lever + style ringWalk / ringStep], personas novice / optimal gain them, new personas
+   `stepper` / `circler` (`personas.ts`, harness only), `_src.ring3d`. data/ladder.json unchanged [CHANGED(fix_balance) §35.21: THE
+   FREAK L5, NORMAL slot 1 L1].
 6. **Plans that had to follow the ring:** Ricky's phase-2 PYRO comes from his `cpu.rangeM` low end (1.4 m) as well as beyond 1.9 m
    (boss.ts: in the 5.5 m ring the fight stays at 1.4-2 m - measured phase-2 moves in 2/4 boss bouts before); a command-grab SUPER
    (Bruno COLD STORAGE) joins the up-close grab option when the meter policy spends it; Gazza's ball readiness adds the sim's
@@ -2768,3 +2772,355 @@ Evidence: `_harness/_reports/progress_3d_integrator.md` (every number below is q
    cases; G8 mobile --game 50/50, mobile lab 180/180, layoutcheck 7 x 44 steps 0 problems; G11 item 10; online2 --game quick: STEP
    over rollback ok (remote step samples 294 / 251, 0 desyncs) but the bout did not finish (both loops ~5 % of real time);
    `npm run build` 58,152,817 B / 86 files (31 GLBs 40,972,332 B).
+
+### §35.20 CHANGED(fix_core): per-fighter sidestep, the frame-2 step buffer, BACK HIT, teleport facing, the grab hold (2026-10-01; additive except where marked)
+Evidence: `_harness/_reports/progress_fix_core.md` (every number below is quoted there with its scratch script / log), gates
+`probe_3d` (3b by-defender + section 10), `probe_uniques` (teleport), synctest / determinism / perf. Files carry
+`CHANGED(fix_core)` notes. Verifier defects D1, D9, D7, D8, D4.
+1. **Per-fighter SIDESTEP length (D1; data + sim interface).** `fighters/<id>.json` gains `step: { distM }` (metres, sim clamps
+   0.5..2.5). Generated by `data/fighters/_gen/kitlib.py step_dist_m` from the measured body (data/bodies.json stand
+   [front, back]); validate.py `check_step` re-derives it. Why: the step circles round the ATTACKER, so the defender's hurt
+   cylinder (r = (front + back) / 2, centred off = (front - back) / 2 ahead of the root) must swing (lat + r) sideways on a
+   lever arm of (gap - off): arc needed A = 1.2 asin((0.22 + r) / (1.2 - off)), `distM = clamp(1.555 A, 0.85, 2.0)` (mm).
+   The radius alone cannot rank the bodies (krane r 0.48 needs ~1.24 m, rerun r 0.47 needs ~1.71 m: its front sits 0.33 m
+   toward the pivot); K 1.555 is calibrated in the real sim so every non-small body sits in its "2-frame" band. As generated:
+   patch / johnny / gazza / lotus **0.850** (the default), ricky / zambini 0.967, spin 1.131, boneyard 1.202, bruno 1.219,
+   krane 1.244, freak 1.606, rerun 1.715. SIM: `CFighter.stepDist / stepCurve` (compile.ts `stepCurveOf(sys, distU)` = the
+   §35.15 curve scaled: still 15 frames, 64 % of the arc in the first 6), fighter.ts steps each fighter by its own curve; a
+   fighter without `step` (fixture kits) uses system.json `step.distM` 0.85 (goons never step); `CSys.stepCurve` stays the
+   DEFAULT curve; FighterSnap `step.dist` (m, additive). Measured at 1.2 m (probe_3d 3b by-defender rows, STEP_IN, longest
+   run of evading start frames vs krane 5M s8 / zambini 5H s12 - every straight 5M / 5H of the roster gives the same window
+   for a given defender): **before** boneyard / bruno / freak / krane / rerun / spin never / never, ricky / zambini 1 / never;
+   **after** boneyard 3 / 2, bruno 3 / 2, freak 3 / 3, krane 3 / 2, rerun 3 / 2, spin 3 / 2, ricky 4 / 2, zambini 3 / 2; the
+   small bodies unchanged (patch 6 / 4, johnny / gazza / lotus 4 / 3); homing never evaded (krane 5H vs all 12; 134 reachable
+   homing ground strikes vs the two longest steps, rerun / freak); STEP_OUT = STEP_IN. The jab-speed 5L (s5) stays
+   unsteppable for the big bodies (§35.15: 4-6 frame moves). Requests: **AI** - `core/ai/ring3d.ts traceCircle` reads
+   `m.sys.stepCurve` (the 0.85 m default): read `m.cf[i].stepCurve` (the StepOracle sandbox already plays the real
+   per-fighter step) [done: CHANGED(fix_balance) §35.21 item 4]. **VIEW** - scale the sidestep clip's lateral travel to the fighter's `step.distM` / snapshot
+   `step.dist` (view/stepanim.ts already reads `step.distM`).
+2. **Step buffer from frame 2 (D9; one data number + one parse rule; supersedes "attacks may be buffered from frame 9" in
+   §35.2, "buffered from step frame 9" in §35.12 item 5 and "presses buffer from step frame 9 (earlier presses are ignored)"
+   in §35.13 item 4).** system.json `step.bufferF` 9 -> 2 (compile default 2): a press on ANY sidestep frame (2 .. 10) is HELD
+   - inputs.ts gives its buffer the frames to `step.attackF` (11) plus the normal window - and comes out on step frame 11; a
+   later press overwrites it (the newest press wins, as everywhere); from frame 11 on a press acts at once (unchanged).
+   Step-attacks (`SS.<btn>`) route the same way from frame 2. The STEP tap and the dash keep their own short windows.
+   AI `brain.ts` mirrors `m.sys.stepBufferF` (its comment "presses before frame 9 are ignored" is stale; the code follows
+   the number).
+3. **BACK HIT (D7; system.json block + one event).** system.json `backHit: { arcDeg 120, damagePct 120, hitstunF 4 }`. A
+   strike whose attacker root - or a projectile whose travel - comes from more than `arcDeg` off a GROUNDED defender's facing
+   (pre-hit state, like counter hits; juggled / airborne defenders excluded so juggles keep their scaling) is a back hit:
+   damage x `damagePct` / 100, + `hitstunF` on a hitstun reaction (the counter-hit bonus slot), the victim turns to face the
+   attacker on the hit frame (a projectile: toward where it came from; F.facing follows), and event **`EV3D.BACK_HIT` = 47**
+   follows the HIT with HIT's payload (a attacker, b victim, c strength class, d height cm). `EV3D` is a NEW opt-in group in
+   core/sim/events.ts (also in EV_NAMES) - not in `EV` / `EVX`, because audio/router.ts types its tables over those keys and
+   probe_audio checks the coverage. Requests: **UI** - a BACK HIT callout (HUD), **AUDIO** - an optional sting; both import
+   `EV3D` from core/sim/events.ts.
+4. **Teleport facing (D8).** fighter.ts `teleport()` ends with auto-face: the teleporter arrives facing the opponent's
+   start-of-frame point (yaw + input sign). Zambini vanish_l / vanish_ex no longer keep their back to the opponent for 23 /
+   16 frames and snap 180 degrees in the free state; the opponent is untouched (it re-faces by its own auto-face on the next
+   frame, as for any cross-over).
+5. **The grab hold (D4; data + sim, LAYOUT_REV 5).** Every grab used to hold its victim where it was caught (the connect
+   anchored the victim's own position; the GRAB thrower never moves): measured at the farthest connecting start, throws 0.56-
+   0.73 m, command grabs 0.82-1.39 m, cold_storage 0.87 m and bruno FINAL DELIVERY 1.27 m of push-front gap, lift always 0 -
+   the grab clips hugged / slammed / lifted air. Now:
+   a. `grab.path: [[lockFrame, gapM, liftM], ...]` (GrabDef, optional) = the victim's ROOT over the lock: the thrower's root at
+      the connect + its forward x gap, lifted; implicit first key = the actual distance at the connect (lift 0), linear,
+      held after the last key; while lift < 0.30 m the gap is floored at the two push fronts (ramped 0.30 -> 0.15 m,
+      §26.5); the sideways offset at the connect fades by the first key; the victim clips' own root travel is not added.
+      The kit generator emits it for every grab super from its cinematic `gapD` (validate.py: equal, ascending, ends on the
+      floor at `endGapM`). bruno FINAL DELIVERY from 1.6 m: hugged at 0.875 m (= bruno 0.558 + johnny 0.317 push fronts)
+      while grounded, spun at 0.61-0.69 m as the lift rises, overhead 1.40-1.60 m at 0.40-0.80 m (lock 100-128), hurled to
+      3.00 m landing on the damage frame (140), released there lying (knockdown), 4500 damage.
+   b. every other grab (throws, command grabs, grab super cold_storage, grab-less system throws): on the connect the victim
+      slides onto the thrower's forward line at the HOLD distance (push fronts touching + `grab.holdGapM`, default
+      system.json `throw.holdGapM` 0) over `throw.pullF` (6) frames, then its clips' carry as before (a side swap scales to
+      hold + `after`, so it still lands `after` behind). The carry anchor is on the hold point by lock frame 6 for all 41
+      such grabs. **Gameplay side effect:** a grab caught at max range now releases where a touching one does (johnny throw_f
+      1.41 m from 1.2 m, was 1.98 m; bruno walk_in_m 2.13 m, was 3.21 m; cold_storage 2.03 m, was 2.91 m; side swaps
+      unchanged); `throw.pullF: 0` restores the old placement.
+   State: fighter `thrAX / thrAZ` (the thrower's root at the connect), STATE_INTS 614 -> 618, LAYOUT_REV 4 -> 5 (STATE_VERSION
+   changes; both online peers run the same build). `F.y` of a THROWN victim now carries the path lift - the view's
+   grab-super path already draws that victim at the sim's x / y / z (bout.ts grabLock / prime.ts simVictim): nothing to change.
+   The 12 strike Lv3 cinematics are unaffected (the view places their victims at attacker + gapD).
+6. **Gates (2026-10-01, logs `_harness/_reports/fixcore_*.log`):** `probe_3d` 96 -> 110 checks: 3b by-defender = every body
+   evades a straight 5M AND 5H at 1.2 m from >= 2 consecutive start frames; small bodies (r <= 0.27) >= big ones (r >= 0.37)
+   per move and larger in 5M + 5H; the small keep 0.85 m, the big step longer; STEP_OUT = STEP_IN for the long steps; homing
+   never vs rerun / freak (134 strikes); step-attacks pressed on step frame 2 / 5 / 9 -> SS.H on frame 11; section 10 = D9
+   (frames 2..10 -> 11, newest wins), D7 (119 deg normal; 121 / 180 / -150 deg x1.2 + 4 f + turned + one BACK_HIT; a
+   straight projectile into the back; juggles excluded), D4 (FINAL DELIVERY path keys; the other 41 grabs' anchor on the
+   hold point by lock frame 6; range-independent release, side swap behind). `probe_uniques` 168/168 (the two teleport checks
+   rewritten: they asserted the D8 defect). build.py BUILD OK, validate.py PASS (`check_step`, `grab.path`), `probe_data
+   --strict` 10/10, `npm run typecheck` 0 errors, `npm run probe` 22/22 (synctest 1742016 + STEP 593808 checks, 0
+   mismatches; determinism STEP streams 180 runs 0 mismatches; perf step p99 55-86 us, budget 250; A/B vs the committed sim
+   under the same machine load: within noise).
+### §35.21 CHANGED(fix_balance): THE FREAK / RICKY balance + the CPU fights in the 3D ring (2026-10-01; §11 / §16 / §23 signatures unchanged)
+Evidence: `_harness/_reports/progress_fix_balance.md` (every number below is quoted there with its log), the new gate
+`_harness/probe_balance.ts` (real sim + data + CPU; SEASON staging = mode arcade on the opponent's home stage, game.ts CPU
+seeds; `--full` = the tables, no args = the run_probes smoke), logs `_harness/_reports/fixbal_*`. Files carry
+`CHANGED(fix_balance)` notes. Strong player = CPU L6 contestants (the bosses' own level); the harness 'optimal' persona is
+measured alongside but cannot be the curve's gauge: G3 A4 (§11) needs it to beat RICKY > 50 %.
+1. **Why THE FREAK was a wall (measured, one lever at a time on a GameData clone, CPU L6 x 10 contestants x 12 seeds vs FREAK
+   L6, base 13 %; scratch `_harness/scratch/fixbal_levers.ts`):** armor off +4, armor 1 hit 0, HP 10000 +5, damage x0.85 +5,
+   reach x0.9 -5 (noise), boss tools (armor reactions) off +1, aggression bonus off +4, no CRUSHER LEAP 0, no ROAR +3, plain
+   bigbody style +4; **the CPU never throwing SPECIMEN GRAB +21** (grab + armor off +42). Damage tally (`fixbal_dmg.ts`):
+   SPECIMEN GRAB = **52-55 % of all FREAK damage** vs CPU L6 and optimal contestants (~6 grabs per bout; SIMPLE 4S = one
+   button). It was the WALK IN template (5 f, untechable, homing, 1.10-1.30 m push-front gap) on a 0.75 m push front = ~2.3 m
+   centre reach, beyond most pokes, thrown by the close plan (style grab 0.30) AND as the anti-step answer (the fastest
+   antiStep move that reaches). The mirror image: the contestants that beat the bosses won with THEIR command grabs (rerun:
+   LAST MEAL 65 % of its damage) - no CPU respected a command-grab range. RICKY's big lever is his counter (tools off +26).
+2. **The retune.** kits/freak.py (build.py BUILD OK, validate.py PASS): SPECIMEN GRAB gap 1.00 / 0.92 / 0.85 m (was 1.30 /
+   1.20 / 1.10), damage 2200 / 2550 / 2900 (was 2600 / 3000 / 3400), EX 1.08 m / 3150 (was 1.40 / 3700) - ~2.0 m centre reach
+   = Bruno's WALK IN on a normal body; 5H armor frames 9-14 (was 5-14), 6H 18-23 (was 5-23): still 2 hits on the heavies, but an
+   early poke interrupts the wind-up; cpu antiStep ["5M", "roar_ex"] (was ["5M", "specimen_grab_m"]). data/cpu.json: style
+   boss_armor grab 0.30 -> 0.05, armor 0.40 -> 0.25; boss.freak aggressionBonus 0.10 -> 0.05. data/ladder.json (season +
+   pilot): THE FREAK L6 -> **L5** (its difficulty now comes from its tools - the §11 boss rule), NORMAL slot 1 L2 -> **L1** (the
+   novice persona beat the L2 opener 42-46 %, L1 69-74 % = G3 A3's opponent). Normal = L1 L3 L3 L4 L5 L5 / FREAK L5 / RICKY L6
+   (EASY -2, HARD +2 as before). RICKY unchanged: HP 14000, damage x1.1, throw 0.45 / counter 0.55 style weights, no linear
+   zoning and ladder L7 were all measured and none moves the optimal persona (63-76 %); vs CPU L6 he is already the hardest bout.
+   Not changed (outside this lane): THE FREAK HP (validate.py pins 11500 = §5.4), grab startup (7 f shifted the ASSETS clip plan
+   `throw_reach` range vs the baked GLB; worth +2 only).
+3. **Every CPU respects command grabs (core/ai, honest - frame data + visible habits):** `brain.opGrabU / opGrabF` = the
+   opponent's command-grab centre reach (its push front + mine + the grab's gap) and startup; a command grab counts as close
+   offense from as far as it reaches (habits); once it has shown grabs (throw habit, x2 for an untechable grab) the CPU does not
+   walk / guard inside that zone: it backs out (walk long enough / backdash) or (L3+) presses a button that is out first, and
+   vs a walk-in swings `brain.antiGrabPoke` (normals or not-badly-unsafe specials that meet the walk-in before the grab).
+4. **The ring by plan (core/ai/plans.ts ringPlan, ring3d.ts, cpu.json):** read sidesteps at every range inside its threat (was
+   push fronts + 0.15 m: grapplers never stepped), a read step as it walks / dashes into range, a NEW neutral circle-walk at
+   footsies spacing (level lever `walk`; toward the room behind me / its wall, else on round; 18-54 f), the wall escape from
+   1.6 m (was 1.3); style multipliers `ringWalk` / `ringStep` (cpu.json styles: zoner 1.2 / 0.8, grappler 0.5 / 1.7, boss_armor
+   0.4 / 1.0, ...); levels step / stepGuess / circle / antiStep / walk L1 0 / 0.015 / 0.05 / 0.05 / 0.012, L2 0.1 / 0.04 / 0.12 /
+   0.1 / 0.03, L3 0.2 / 0.1 / 0.3 / 0.2 / 0.07, L4 0.3 / 0.18 / 0.45 / 0.3 / 0.1, L5 0.4 / 0.25 / 0.55 / 0.4 / 0.14, L6 0.5 / 0.31 /
+   0.6 / 0.5 / 0.18, L7 0.6 / 0.35 / 0.65 / 0.6 / 0.2, L8 0.7 / 0.39 / 0.7 / 0.7 / 0.22; personas novice / optimal gain `walk`.
+   The honesty rules hold (reaction steps only through the §35.18 sandbox oracle on the level's clock; reads are guesses from
+   committed habits; no input reading). `traceCircle` reads the fighter's own step curve (cf.stepCurve, §35.20 request). WEAVE
+   neutral read from highRate 0.3 (was 0.45; G3 U1 had "MISSING johnny [weave, weave_counter]" on the base tree).
+5. **Win-rate table, CPU L6 player, 24 seeds per cell (player win %; FREAK EASY L3 / NORMAL L5 / HARD L7, RICKY L4 / L6 / L8):**
+
+   | contestant | FREAK E | RICKY E | FREAK N | RICKY N | FREAK H | RICKY H |
+   |---|---|---|---|---|---|---|
+   | johnny | 100 | 54 | 21 | 25 | 4 | 21 |
+   | patch | 96 | 88 | 42 | 63 | 21 | 46 |
+   | bruno | 100 | 100 | 96 | 92 | 100 | 92 |
+   | zambini | 96 | 0 | 21 | 0 | 8 | 0 |
+   | krane | 96 | 67 | 100 | 33 | 75 | 38 |
+   | lotus | 71 | 38 | 21 | 25 | 8 | 17 |
+   | boneyard | 67 | 21 | 4 | 8 | 13 | 4 |
+   | spin | 88 | 21 | 54 | 0 | 8 | 0 |
+   | gazza | 83 | 33 | 29 | 4 | 8 | 8 |
+   | rerun | 96 | 63 | 92 | 63 | 71 | 33 |
+   | **ALL** | **89** | **48** | **48** | **31** | **32** | **26** |
+
+   BEFORE (base tree, FREAK L4 / L6 / L8): FREAK 28 / 12 / 9, RICKY 50 / 34 / 28. Regular slots (every other playable fighter
+   x 2 on its home stage) now L1 98 / L3 83 / L4 71 / L5 59 (slots 1-6 mean 76; before L2 96 / L3 90 / L4 83 / L5 59).
+   'optimal' persona: FREAK 97 / 77 / 60, RICKY 82 / 72 / 62 (before 52 / 20 / 13, 81 / 68 / 61); per contestant vs FREAK
+   NORMAL johnny 63, patch 83, bruno 100, zambini 92, krane 96, lotus 46, boneyard 46, spin 63, gazza 79, rerun 100 (min 46);
+   slots L5 74. Novice vs NORMAL slot 1 (L1) 69 %. probe_season S5 (optimal stand-in, 15 full runs): mini boss lost 9 / 24,
+   boss 18 / 33. G3 info: FREAK L6 vs optimal 4 / 20 (was 17 / 20).
+   **Met:** CPU L6 average vs FREAK 48 % (40-65), FREAK 11 points under the hardest slot level and 28 under the slots' mean,
+   FREAK 17 / 41 points easier than RICKY at NORMAL / EASY, every contestant >= 46 % with the optimal persona, novice > 50 %.
+   **Not met (measured, explained):** CPU L6 johnny / zambini / lotus 21 %, boneyard 4 %, gazza 29 % vs FREAK (the same kits are
+   the weakest CPU L6 players vs L5 slots 44-56 % and RICKY 0-25 %: CPU kit-plan strength, not FREAK tools - a stripped FREAK
+   at L5 (no tools / armor / grab) beat lotus only 44 % / boneyard 50 %); HARD: FREAK 32 vs RICKY 26 % (RICKY harder by 6, both
+   saturate: only the grapplers win); the optimal persona finds FREAK (77 %) about as hard as an L5 slot (74 %) and RICKY only
+   5 points harder (structural: its 10 f perfect blocking of RICKY's honest, reactable kit - no lever moved it).
+6. **Ring usage, CPU Ln vs CPU Ln, 12 fighters x 5 arenas (60 bouts per level), per CPU per bout, before -> after:** sidestep
+   taps / circle-walks L1 0.38 / 0.44 -> 1.86 / 1.11, L2 1.28 / 0.61 -> 2.88 / 1.76, **L4 2.96 / 0.77 -> 6.74 / 3.30** (fewest taps
+   bruno 0.7 -> 3.4; every fighter >= 3.4), L6 2.72 / 0.51 -> 8.04 / 3.38, L8 3.98 / 0.62 -> 8.16 / 3.78; camN travel per bout L1-L8
+   109 / 198 / 350 / 297 / 377 -> 313 / 452 / 886 / 936 / 900 deg (widest single-round sweep L4-L8 126-143 -> 234-263 deg). vs an
+   opponent that never steps (the CPU alone): L6 3.58 / 0.63 -> 10.35 / 3.70, camN 202 -> 689 deg; L8 272 -> 743 deg.
+7. **Gates:** `probe_balance.ts` (new; run_probes runs the smoke: FREAK at NORMAL 25-80 %, RICKY not easier by > 10, novice vs
+   slot 1 > 50 %, ring L4 >= 4.5 taps / 1.5 circle-walks; `--full` gates B1a / B1b / B2 / B3 / B4 / R1-R4 above and prints the
+   misses as NOTE lines). G3 `probe_personas --seeds 1..20` 25 / 25, acceptance 7 / 7 (A1 18, A2 20, A3 16, A4 RICKY 5 / 20, A5
+   17 + L6 17, A6 18, A7 44 / 48; U1 "all used"); ring-off profiles in H4 / H5 / H6 / spammers zero `walk` too; H5 uses the G3
+   seeds 1-6 in the smoke too (on 3 seeds H5b decided on 7 guarded overheads - the extra WEAVE roll per decision flipped it
+   4/7 = 0.57 vs the 0.6 bar; same bar, twice the sample: 0.69). `probe_season`
+   30 / 30 (+ a report line: bouts lost / played per slot kind).
+8. **Out-of-scope findings (not changed):** Bruno's WALK IN (FIGHTERS kit: 5 f, untechable, homing, L gap 1.22 m) connects
+   from ~2.2 m centre distance - beyond every normal of most kits - and Bruno walks forward faster than most walk back: as an L5
+   CPU opponent he beats CPU L6 contestants 89 % (johnny 0 / 8 even with the grab-awareness above; the integrator's SeasonBot
+   lost slot 4 = Bruno L4 three times), and every CPU slot level 100 % as a contestant. Command-grab reach is push-front to
+   push-front, so big bodies (THE FREAK 0.75 m) are grabbed from ~2.5 m. Suggested: WALK IN L gap 1.22 -> ~1.0 m (FIGHTERS).
+9. **Real game (2026-10-01, `_reports/fixbal_real.json`, `_harness/scratch/fixbal_real.py`, port 5326 frozen + stepped in the page):**
+   menu-VERSUS deep links, CPU L4 vs CPU L4: rooftop johnny vs krane (seed 411) taps 12 / 8, circle-walks 3 / 4, camN travel 1134
+   deg (sweep 231); butcher_block lotus vs boneyard (seed 412) taps 1 / 3, circle-walks 0 / 0, camN 157 deg - a low-tail bout of a
+   below-average matchup (seeds 401-410: 3.2 / 2.3 and 3.9 / 1.1). Both replay headless IDENTICALLY (fixbal_replay.ts). 0 console
+   / page errors; 3 shots read (`_shots/fixbal_real_b1_first_circle`, `_b1_later` - the camera on another side of the ring -,
+   `_b2_first_sidestep`). Final gates: build.py BUILD OK, validate.py PASS, probe_data --strict 10/10, typecheck rc 0, `npm run
+   probe` 23/23 (synctest 0 mismatches).
+
+### §35.22 CHANGED(fix_ui_stage): stage lights for the orbit camera, rust footlights, BACK HIT callout + sting, HECKLER card, PILOT board, move-list follow-ups, touch harness (2026-10-01; additive)
+Evidence: `_harness/_reports/progress_fix_ui_stage.md`, real-game reports `_harness/_reports/fixus_*.json` (orbit before /
+after, wall stations, season, backhit, crlight), shots `_shots/fixus_*` (all read). Files carry `CHANGED(fix_ui_stage)` notes.
+1. **Stage lights (verifier D5 / modes D6 / butcher_block cap glare; stage scripts -> fragments -> `merge_stages --install`).**
+   Measured in the real game (the linear HDR the bloom pass thresholds at luminance 0.92, fighter masks, 8 orbit angles at the
+   desktop default quality): (a) a practical point light stands >= 1 m off its own fixture - at 0.15-0.44 m it lit the fixture
+   to luminance 25-83 (control_room furnace door + beacon dome, rooftop door lamp) = the flares over the fighters' heads; (b) a
+   rim / spot that reaches metal or glossy surfaces near the camera comes in at >= ~40 deg elevation - at 17-32 deg its mirror
+   image in a metal cap or a glossy floor sat across the fighters' legs from some orbit angles; (c) an overhead ring spot is ~1x
+   the key on the heads (control_room's 320 cd at 6 m was ~7x: both fighters blown out at every angle). Applied: control_room
+   ring_spot 320 -> 70, furnace (11.1, 1.3, 0) 34 -> (9.4, 0.8, 0) 14, beacon (-10.95, 3.2, 3.75) 8 -> (-9.9, 2.9, 3.75) 5,
+   crt_wall (0, 3.4, -14.8) 40 -> (0, 3.6, -12.6) 32, rim (3, 5, -12) -> (2.2, 9.5, -8.8); butcher_block + wheel_of_pain rim
+   polar(10, 20, 7) 1.5 -> polar(7, 20, 9.5) 1.3; wheel tower spots polar(9.75, az, 7) -> polar(7.8, az, 9); rooftop rim (4, 6,
+   -13) -> (3, 10.5, -9.5), floods (+-7.6, 5, -+7.6) -> (+-6.4, 7.4, -+6.4), door_lamp (-10.15, 2.8, -1.05) -> (-9.1, 2.45,
+   -1.05). GLB: control_room firebox door LOW (frame 0.38-1.02 m, glow 0.47-0.93 m - always under the 1.35 m orbit eye, so it
+   can never sit over a standing fighter's head) with its own `cr_fireglow` (2.0), cr_beacon 3.0 -> 1.4, cr_glow 5.0 -> 3.0,
+   CRT glass roughness 0.12 -> 0.4; rust_theater rt_brass roughness 0.35 -> 0.55 (it mirrored the HDRI windows); butcher_block
+   ring cap + corner posts `bb_steel_cap` (roughness map x1.85); wheel_of_pain floor semi-gloss (roughness map x1.5 + 0.06,
+   mean 0.085 -> 0.19). Results: control_room fighters over the threshold 0.034-0.207 -> <= 0.002 (p99 1.67 -> 0.69), furnace /
+   beacon head-zone flares 23-32 -> none; rooftop door-lamp flare 83 -> none, wet-floor pools gone; rust brass glint 8.8 -> none;
+   wall stations: butcher cap glare 11.9 % of the fighters' band -> 0.2 %, wheel bumper 6.5 % -> 1.5 %, wheel floor glints 43-57
+   -> <= 4.2; the other stages' fighters unchanged (p99 <= 0.79). Draws: control_room 30 -> 31, butcher_block 28 -> 29.
+2. **rust_theater footlights (verifier D11):** the 48 iron hoods lying ON the coping (top 1.285 m) are lamps RECESSED under the
+   coping lip (housing inside the 5 cm overhang, y 1.0-1.05 m, a glowing slot facing the pit, none over the two gates): nothing
+   on the wall top stands higher than the coping, the near-wall lamps face away from a camera behind the wall; the ring still
+   reads under the far coping.
+3. **Stage tooling:** `tools/merge_stages.py --install` reads both staging dirs (`_harness/scratch/stages3d_out/` +
+   `_harness/scratch/stages_cache/out3d/`); a stage staged WITHOUT a GLB is a fragment-only install (validated against the shipped
+   GLB + env; light / copy edits without a rebuild); renames retry while a dev server holds a file. `art/stages/stagekit_b.py
+   --fragment-only` (rooftop / control_room) and stagelib_a's existing flag carry the SHIPPED fragment's measured build fields.
+4. **BACK HIT (the §35.20 item 3 requests):** UI `ui/ev.ts EV_BACK_HIT` (the live EV3D table, fallback 47); `ui/hud.ts` callout
+   `call.backHit` "BACK HIT!" on the attacker's side (styled like PUNISH COUNTER, orange; bonus rounds: the player's own only) +
+   host caption pool `back_hit` (data/captions.json, priority 2). AUDIO `audio/router.ts RING_EVENT_SOUNDS` (mapped over
+   `keyof typeof EV3D`: a new EV3D type fails typecheck until routed): BACK_HIT = `hit_pun` (rate x0.94, +20 ms) at the victim's
+   pan + `crowd_ooh`; no new assets; probe_audio's tables stay EV / EVX (nothing becomes unreferenced).
+5. **Copy (modes D4):** `card.heckler.kicker` "HECKLER TOSS" (was "BRAWL BREAK" - the card kicker AND its broadcast bug), title
+   "PARRY THE PEANUT GALLERY"; `season.full.sub` "2 bonus rounds" (the full season has one BRAWL BREAK + one HECKLER TOSS).
+6. **Boards (modes D3):** UiSave gains `scores?: { season?, pilot? }` (SaveStore.get() already returns it; `board` stays the
+   SEASON board). The menus rank, list and show THE BOARD from the board of the run's LENGTH: `showNameEntry(p.length?)`
+   (default: the run on screen - the last showLadder / startSeason length), `showEnding(p.length)`; both label it PILOT BOARD /
+   FULL SEASON BOARD (`name.boardLen.*`). **Request to SHELL:** pass `length: init.length` to `showNameEntry` in game.ts
+   seasonCleared (it works without it today).
+7. **Move list (modes D5):** under each special / EX / super row its follow-ups, indented, each once with its own notation in
+   both control types and its own HOMING / LINEAR tag: rekka parts (`cancel` `chain:<id>` to a `tc` move, the move's `trigger`;
+   recursive: patch CUE KICK > CUE 2 > CUE 3), stance follow-ups / exits (`unique.followups` / `unique.exit` of a stance-enter
+   move), counter follow-ups (`counter.follow`: AUTO). UiMoveDef gains `cancel tc trigger stance counter`, UiFighterDef.unique
+   `followups exit`.
+8. **Harness (verifier D12):** `_harness/mobile.py` Touch.up() lists ONLY the released finger in `touchEnd` (CDP ends the points
+   a touchEnd lists); new checks lab `release_step_keeps_stick` / `release_one_of_3`, --game `game_release_one_finger` (with the
+   old call both lab checks fail: the stick was released instead of STEP).
+9. Seen, out of scope: SIMPLE 2S after CUE 2 still fires CUE 3 OVERHEAD (§34 item 8a, SIM) - the move list shows the authored
+   trigger (2 + S).
+### §35.24 CHANGED(fix_input): rekka / follow-up triggers ranked, a release never re-triggers, SIMPLE S+H beats follow-ups (2026-10-01; parse rules only - no signature, state, layout or data change)
+Evidence: `_harness/_reports/progress_fix_input.md`; gate `probe_motion` (47 -> 169 checks). Files carry `CHANGED(fix_input)` notes:
+`core/sim/inputs.ts` (parse rules), `core/sim/motion.ts` (additive `motionSpan`). Resolves §33 item 8 (a) + (b) and the §35.22 item 9 note.
+1. **Sibling triggers are ranked (a).** In a parent's chain window every triggered part (§20.2 `trigger`) is scored and the MOST
+   SPECIFIC affordable one is buffered (ties: the authored `cancel` order), not the first that matched: SIMPLE S form on the exact
+   direction > on the same SIMPLE class (1 / 3 -> 2S, 9 -> 6S, 7 -> 4S, 8 -> 5S = the one-button routing) > the classic form (motion
+   + one of its buttons; also in SIMPLE, §1) > `"5S"` on any other direction (the neutral fallback, only when no more specific
+   sibling matches) > button-only triggers. Motion vs motion: a motion that ENDED before the other STARTED is a leftover and loses
+   (hitstop never ages a motion: CUE 2's 236 was still satisfied at every 214 typed in CUE 2's hitstop or its last 5 startup frames);
+   overlapping motions (6236 = 623 + 236) go by `MOTION_PRIO`, as the special routing. Patch after CUE 2: 2S / 1S / 3S = CUE 3 LOW
+   (was OVERHEAD), 5S / 8S / 6S / 4S / 7S / 9S = CUE 3 OVERHEAD; CLASSIC 214 = LOW, 236 = OVERHEAD, typed in the hitstop or after it.
+   Target combos (§19.1 `chain:`): an exact direction beats the 5X / 2X class (no kit has overlapping parts today: unchanged).
+2. **A release never re-triggers (b).** A release-only read (§4.3.9 negative edge) (i) never overwrites a LIVE follow-up the player
+   pressed (`BUF.CHAIN` = rekka / target combo, `BUF.STANCE`): the chain button's release re-read the still-fresh motion as the
+   parent special and replaced the chain (236 typed in CUE 1's hitstop, CLASSIC or SIMPLE motion form: no CUE 2; johnny's counter
+   hook pressed on WEAVE frame 1 was lost the same way); (ii) never re-reads the special row of the move already running: a special
+   with a `"special"` cancel restarted itself on the release - bruno BRACE, boneyard BUTCHER'S BLOCK (also from the CPU's 1-frame
+   taps), gazza DIVE, zambini EX VANISH (paying 2 more NERVE bars). Unchanged: a release from neutral or into a cancel window still
+   fires a special; a NEW press still replaces any buffer (newest press wins); the world-freeze hold-to-buffer rule; STEP bits 13 /
+   14 and the §35.20 frame-2 step buffer (probe_3d section 10 passes).
+2b. **SIMPLE S+H beats follow-ups (orchestrator decision, 2026-10-01).** In SIMPLE the S+H super chord completed on this frame (same
+   frame, H first, or S one frame before = the S+H routing's chord window) is the SUPER, not a follow-up press, while the running
+   move has follow-ups AND its cancel list allows a super AND the super is usable: Patch CUE 1 -> S+H = HIGHLIGHT REEL (in or after
+   the hitstop), CUE 2 -> 2S+H = ON AIR (3 bars). S alone (any meter) stays CUE 2 / CUE 3; S+H without the meter, or in a move whose
+   cancel list has no super (johnny WEAVE; fixture rk2n), stays the follow-up press. S first and H one frame later works while the
+   parent is frozen in hitstop (outside it the S frame already starts the follow-up). CLASSIC unchanged: a fast 236, 236 rekka
+   already satisfies 236236, so supers do not outrank the motion triggers there.
+3. **`motion.ts motionSpan(s, b, code, w, out)`** (additive): for a done motion, out[0] / out[1] = the END / START ages (history
+   entries back from the newest, frozen entries counted) of its latest-ending match; false when the motion is not done.
+4. **Checked, no change needed:** every kit's trigger sets (patch cue_* -> cue2, cue2 -> cue3_oh / cue3_lo; johnny weave_* ->
+   weave_counter): each part comes from its own trigger in both schemes (probe_motion, parser level, CLASSIC with every sibling's
+   motion left in the window); lotus' stance follow-ups: 411 timed presses through the enter moves, both schemes, never meet the
+   enter motion's re-read (its 214 is outside the QC window whenever a press can still buffer into the stance); rerun / ricky
+   counter follow-ups have no trigger (automatic).
+5. **Requests / notes.** AI: both workarounds are no longer needed (they still work): brain.ts routeTick waiting out the hitstop
+   for motion triggers, kit.ts `triggerSteps` using the motion form for SIMPLE chain parts. The CPU no longer gets a second BRACE /
+   BUTCHER'S BLOCK / DIVE / EX VANISH from a release (the §35.21 tables were measured with them). Out of scope, measured (not
+   changed): Patch's authored `super` cancels out of CUE 1 / CUE 2 are shadowed by the rekka parse (it runs before the supers):
+   SIMPLE S+H in CUE 1 = CUE 2, 2S+H in CUE 2 = CUE 3 LOW; CLASSIC 236236 in CUE 1 = CUE 2, 236236 / 214214 in CUE 2 = CUE 3; only
+   CUE 1 -> 214214 = ON AIR. SIMPLE: applied as item 2b; CLASSIC stays as described (a fast "236, 236" rekka already satisfies
+   236236).
+6. **Gates (2026-10-01, final tree incl. 2b):** typecheck 0 errors; `npm run probe` 23/23 PASS (probe_motion 169/169; synctest
+   1742016 checks 0 mismatches; determinism 33/33; personas 17/17 smoke; season 30/30; uniques 169/169; axis 20/20 incl. motion on
+   33 / 200 deg; probe_3d 111/111). An intermediate run failed probe_3d D4 (`bruno walk_in_m 0.00 / 2.13 m`) after lane FIX_BRUNO's
+   09:42 WALK IN `grab.rangeM` retune - identically with the pre-fix parser (tree copies) - until probe_3d was updated at 10:03.
+   Before / after (a) + (b) on two tree copies identical except inputs.ts: probe_motion 117/151 FAIL -> 151/151, probe_axis 18/20 ->
+   20/20 (its probe_motion runs), run_probes 19/23 -> 21/23 (the two left fail in both copies only for files outside the copied
+   tree: the music registry, the RTT traces); G3 `probe_personas --seeds 1..20` 25/25 + acceptance 7/7 before and after (A4 RICKY
+   vs optimal 5 -> 6 / 20, A3 novice vs L1 16 -> 17 / 20); probe_determinism fixture final hashes: 2 of 6 random-input streams
+   change (they press and release over motions), 0 mismatches. 2b: the 18 new checks fail 8 / 18 on the parser without 2b (the
+   super cases: `cue_m > cue2`), 18 / 18 with it.
+### §35.23 CHANGED(fix_view): presented turns, step feet, the wall swing, real tops, bloom that spares bodies, popups, super cost (2026-10-01; view only - additive, no §16 / §17 / §18 signature broken, the sim untouched)
+Evidence: `_harness/_reports/progress_fix_view.md` (every number below is quoted there), `lookshots.py --game --only fixview`
+(legacy vs fixed in ONE page through harness switches on the live BoutView: `FighterView.smoothTurns / stepSync`, `BoutView.realTops /
+legacyLook()`, `FightCamera.legacySwing / softPullOn / bottomMargin / feetDepth`, `BrawlView.legacyPopups`; report
+`lookshots_fixview_final.json`), lab `__LAB__.frameCost / wrapCost`, shots `_shots/fixview_*`. Files carry `CHANGED(fix_view)` notes.
+Verifier defects D2, D6, D10, D13, D5 (renderer side; the stage lights are §35.22), modes D7, G9.
+1. **Presented yaw (D2, `view/turn.ts` + fighters.ts).** The sim re-faces with a snap (35-180 deg in one sim frame after a whiffed /
+   stepped move, hitstun, knockdown, a throw, a BACK HIT turn); the view PRESENTS the body yaw through a per-fighter smoother that
+   advances per SIM frame (BoutView sets `FighterView.simFrame = MatchSnap.frame`): a sim change <= 12 deg / frame (auto-face while
+   walking / circling / stepping, a move's own tracking) shows at once; a bigger one turns with acceleration 14 deg / frame^2, capped
+   45 deg / frame, decelerating into the target (20 deg -> 2 frames, 35 -> 3, 115 -> 6, 180 -> 7). Hit reads: the frames to the
+   fighter's own first active frame (`moveName` + `moveFrame` vs the move's startup; system moves by move frame 5) force the turn to
+   land by then, and every active frame shows the sim yaw. Safety: the same sim frame again = no change; a backwards frame, a gap > 8
+   frames, a turn still open after 12 frames, a new round, `resetPresentation()` or a root jump > 0.6 m (teleport) snap to the sim yaw;
+   a cinematic yaw override is shown as given and followed. The mirror (facing -1) flips with the sim facing, except that a flip arriving
+   with >= 60 deg of turn left waits until half the turn is done. Measured (real game, frozen + stepped): krane 5M stepped 35.5 deg pop
+   -> 14.0 / 17.4 / 4.1 deg; johnny hook_m stepped 145.3 -> 6 frames, max 38 deg / frame; a back throw's 180 on BOTH fighters -> 7
+   frames, max 42, the mirror flipping past half way; Zambini's vanish (§35.20 item 4) snaps with the teleport, bruno's 180 re-face
+   turns in 7 frames.
+2. **Sidestep feet (D6, `view/stepanim.ts`, `view/legik.ts`).** Measured: the clip played at (k - 1) / 60 on sim step frame k and the sim
+   blend is 0 on the entry frame (a pure idle pose while the root has moved 13 % of the arc). Now: the clip time on step frame k = where
+   the clip's OWN lateral travel (clips.json `rootLat`, read raw - core/data.ts drops it) reaches the sim's progress 1 - (1 - k / 15)^2;
+   the step clip has full weight from the entry frame; a two-bone leg IK in root-local space scales the ankles' lateral offsets by
+   arc / clip travel (snapshot `step.dist`, else fighters/<id>.json `step.distM`, else system 0.85 - §35.20 item 1) with a reach clamp
+   (feet stay on the floor) and a hip drop <= 22 % of the hip height for long strides, eased out over the last 3 step frames, undone
+   before the next pose. Slide of a foot measured only while the clip's own (unstripped) foot is planted: johnny 0.377 -> 0.044 m,
+   bruno 0.472 -> 0.086, freak 0.380 -> 0.071, krane 0.567 -> 0.070, boneyard 0.479 -> 0.013, rerun 0.584 -> 0.159 (its 1.715 m arc
+   is 2.07 x the clip's stride, beyond the legs' reach: a longer baked stride is the ASSETS lever).
+3. **Wall swing (D10, camera.ts).** Soft pull: a lens just outside the ring wall dollies in along its view line to stay 0.15 m inside
+   (<= 0.9 m, FOV widened to hold the framing; capped, never released abruptly); the swing's cost counts only what the pull cannot fix,
+   the 0.9 m wall-line penalty applies outside the ring only, a hysteresis band holds a running swing; the swing angle is a critically
+   damped spring (omega 4.5 rad/s, acceleration cap 12 rad/s^2) - the old exponential ease started a swing at 1.2 deg / frame in one
+   frame. Twin cameras fed the real snapshots at 60 Hz, P1 circling P2 near the centre, all 5 arenas: legacy swing -17..+24 deg, azimuth
+   acceleration up to 4.25 deg / frame^2, lens 0.28-0.36 m beyond the wall; fixed swing 0, max 0.236 deg / frame^2, lens inside (pull
+   <= 0.38 m, FOV <= 38). At the wall (P1 backed in, circling toward the camera) the swing still engages (rust up to +19.8 deg) with max
+   azimuth acceleration 0.166 vs 3.69 deg / frame^2, occluded 0.
+4. **Real tops, HUD-safe frame (D13, `view/bodytop.ts`, camera.ts, bout.ts).** Each body's neutral silhouette top is measured at load
+   (skinned vertices binned to their dominant bone, 26-direction support points per bone, the highest posed point over idle / walks /
+   crouch / dashes / land / the §35.5 step clips - block poses excluded so a guard does not widen every shot): THE FREAK 2.83 m (tools
+   measure 2.79), bruno 1.99, johnny 1.78. The camera frames max(that top, the live head; airborne: raised hands) and keeps the feet
+   above 7 % of the frame (was 4 %), measured 0.25 m x body scale nearer the lens than the root. FREAK vs bruno sidestep at 2.4 m: the
+   highest posed point sat 14.4 % of the frame behind the HUD band and a foot was off the frame bottom; now under the band with the
+   feet in frame (camera 5.6-6.1 m for that pair; johnny vs bruno 4.41 -> 4.59 m). Read-back `info().framing {tops, feet, live,
+   liveFeet, safeTop, topM}`.
+5. **Bloom / exposure (D5 renderer side, toon.ts, post.ts, `view/lightlevel.ts`; composes with the §35.22 stage-light change).** While
+   `BLOOM_MASK.uMaskOn` is 1 (only inside the bout's composer render) the toon bodies and their outline hulls write alpha 0; the bloom
+   high-pass excludes alpha-0 pixels and caps the luminance of what blooms (soft knee from threshold 1.0, cap 2.4); UnrealBloomPass no
+   longer adds itself - GradePass composites `tBloom` weighted by the pixel's alpha and writes alpha 1 (an alpha-0 frame reached the
+   canvas once in testing: black bodies in every capture). The light a toon body receives is capped by the stage light pool's level at
+   the body (sum x exposure, cap 6.5): with the committed lights only control_room's 320-cd ring spot exceeded it (scale 0.44-0.56 near
+   the centre); with §35.22's lights it is a guard that no stage reaches. Measured with the COMMITTED lights, 5 arenas x 8 orbit angles
+   at the desktop default (high + bloom), blown body pixels max / mean: control_room 27.21 / 7.87 % -> 4.99 / 0.93 %, wheel 3.29 /
+   0.56 -> 1.53 / 0.43, butcher 2.29 / 0.20 -> 1.55 / 0.12, rooftop 1.25 / 0.08 -> 1.14 / 0.07, rust 0.08 / 0.03 -> 0.09 / 0.03; all
+   80 shots read (stage glows kept, no flare over a body). control_room at quality med / low: <= 0.02 % either way (no bloom there).
+   Final evidence run with §35.22's lights (`lookshots_fixview_final`), legacy -> fixed, max / mean: control_room 0.01 / 0 -> 0.01 / 0 % (the stage-light change removes the source; the light cap no longer engages anywhere, lightK min 0.98), butcher 1.65 / 0.10 -> 0.96 / 0.06, wheel 1.52 / 0.41 -> 1.50 / 0.40 (body saturation 0.570 -> 0.640: less bloom haze on the bodies), rust 0.03 / 0.01 -> 0.04 / 0.01, rooftop 0 / 0 -> 0 / 0.
+6. **BRAWL popups (D7 modes, bout.ts, brawl.ts).** The sim emits each goon's HIT / THROW / GOON_DOWN right before the SCORE it earns: a
+   hit / KO popup now sits over that goon, a crowd bonus over the goons that swing hit, combo / parry / heckle scores over the player;
+   every frame the popups are laid out (the wanted spot clamped into the safe area - under the HUD band + 0.02, above the bottom 10 %,
+   6 % in from the sides - then a newer popup overlapping an older one moves below it, above when below is full) and put back in the
+   world at the anchor's depth. Same seeded BRAWL run (score 682): legacy 335 popup samples in the HUD band, 15 overlapping pairs; fixed
+   0 / 0 (final evidence run: 289 / 13 -> 0 / 0).
+7. **Super cost (G9).** Lab `frameCost` (sim / view / render + gl.finish per frame, cold vs warm passes, no rAF clock): no program link,
+   texture or geometry creation anywhere in the super window. control_room's view frame cost ~5x rust's: its CRT feed (the only monitor
+   feed of the 5 sets) redrew 900 noise rects with per-dot colour strings + 53 scanline rects per panel every 6th frame (3.08 ms) ->
+   cached noise frames + one scanline overlay (0.12 ms), feeds start staggered; super-window view CPU 544 -> 149 ms cold, 298 -> 102 ms
+   warm (229 frames). The first PRIME TIME of a page spent 12.2 ms in its start frame (first-run JIT + plan compile) -> `warmPrime()`
+   compiles and samples both fighters' cinematic plans at load (3 ms): cold start frame view 18.8 -> 6.6 ms. Lab perf harness: the
+   window wrap restores a saved state (`save` / `load`; the frame after a wrap left out) - the old in-frame re-simulation measured only
+   0.9-2.2 ms, so it was NOT the source of the reported 80-100 ms spikes; perfcheck.py keeps per-window attribution (worst frames with
+   section / GPU / renderer / heap deltas, LoAF) and takes `--chrome-arg`. Frame times this session are CONTAMINATED (3-6 other
+   automated Chromes, CPU 47-100 %, the Intel iGPU busy with other sessions + DWM + the DisplayLink host: its frames took 0.2-15 s, no
+   usable sample). rAF frame times, super window (Lv3 PRIME TIME, johnny vs bruno on a 38.2 deg line), on the dGPU (`--chrome-arg=--force_high_performance_gpu`), vsync on (the display paces 20 ms), every run labelled CONTAMINATED by perfcheck (3-4 other automated Chromes, machine CPU 47-98 %; the IDLE windows of the same runs spiked too: idle p99 up to 300 ms, max 900 ms). Windows that were not starved pace at the display: butcher_block p50 20.0 / p99 20.9 / max 21.5 ms (both windows; idle 20.8), rooftop window 1 20.0 / 20.8 / 21.0, control_room 20.0 / 20.8 / 21.2 (`perfcheck_fixview_g9_cr_new_r1` window 1), rust_theater best window 20.1 / 60.5 / 80.2. Starved / spiky windows: rooftop window 0 p99 100.2 (frames of 100-220 ms at cinematic frames 45-54 whose own CPU is <= 5.4 ms and GPU <= 5.1 ms, idle window clean), control_room p99 80-360, rust_theater 139.7-379.9, wheel_of_pain 0 and 78 frames in 8 s (p50 40). GPU timer p99: butcher 5.0, rooftop 5.3, control_room 11.4 / 11.5 / 21.2 / 32.0 (four runs, 32.0 in the starved one; baseline 14.0 / 18.1), rust 20.4 / 22.8, wheel 23.6 / 40.4 ms (contention inflates the timer itself: idle frames read up to 45.9). control_room A/B vs the BASELINE (314ec728's runtime, same flags, interleaved): baseline clean windows p99 20.8 too; per-frame JS p90 7.5-8.4 -> 6.0-7.9, p99 9.7-12.3 -> 8.3-11.1 ms; the A/B spike frames carried CPU <= 6 ms and GPU <= 12 ms, the longest LoAF (706 ms) held 5 ms of the page's script. G9 itself (VIEW3D's p99 80 ms on the Intel iGPU) could NOT be re-measured: OPEN until a quiet machine re-runs `perfcheck.py --headless --stages control_room,rust_theater,butcher_block,wheel_of_pain,rooftop --circle 60 --ab 2` without the dGPU flag.
+8. **Gates (2026-10-01):** `npm run typecheck` rc 0, 0 errors (09:45, `fixview_typecheck_final.log`). `npm run probe` on the shared tree: 21/23 PASS, rc 1 (09:48 `fixview_probe_final.log`, re-checked 09:51 `fixview_probe_final_recheck.log`): FAIL probe_3d 110/111 - "D4: a grab caught at range releases where a touching one does (johnny throw_f 1.41 / 1.41 m, bruno walk_in_m 0.00 / 2.13 m)"; FAIL probe_audio 16/17 - router "unhandled #47". Neither comes from this lane: no probe imports runtime/src/view (grep of _harness/*.ts + fixtures), the same suite passed 23/23 at 09:11 (`fixview_probe.log`), and in between data/fighters/bruno.json + kits/bruno.py (09:42, a grab-range change in flight) and core/sim inputs.ts / motion.ts (09:26-09:29) changed; #47 is EV3D.BACK_HIT, which the router handles but probe_audio's event-name table (EV + EVX only) does not name - the scripted bout now produces a back hit. `lookshots.py --game --only fixview` RESULT OK (0 fails, 0 console / page errors); `--fixview top` re-run OK after the measureTop() move.

@@ -111,22 +111,32 @@ STAGE = {
          "position": [-4.0, 12.0, 5.0], "target": [0.0, 0.6, 0.0], "castShadow": True,
          "shadow": {"mapSize": 1024, "bias": -0.0004, "normalBias": 0.03,
                     "camera": {"left": -7.5, "right": 7.5, "top": 7.5, "bottom": -7.5, "near": 1.0, "far": 40.0}}},
+        # CHANGED(fix_ui_stage): rim raised from 17 to ~43 deg elevation - at 17 deg its mirror image in the steel deck sat
+        # at the fighters' feet in the round-start view (a cyan bloom pool round P2's boots); now it reflects below the frame
         {"id": "rim", "type": "directional", "color": "#6fd6ff", "intensity": 1.0,
-         "position": [3.0, 5.0, -12.0], "target": [0.0, 1.2, 0.0], "castShadow": False},
+         "position": [2.2, 9.5, -8.8], "target": [0.0, 1.2, 0.0], "castShadow": False},
         {"id": "fill", "type": "hemisphere", "sky": "#3c4452", "ground": "#2c1b12", "intensity": 0.8},
-        {"id": "crt_wall", "type": "point", "color": "#86d2ff", "intensity": 40.0, "distance": 14.0, "decay": 2,
-         "position": [0.0, 3.4, -14.8], "flicker": {"amp": 0.05, "hz": 17.0}},
-        {"id": "furnace", "type": "point", "color": "#ff6a20", "intensity": 34.0, "distance": 12.0, "decay": 2,
-         "position": [11.1, 1.3, 0.0], "flicker": {"amp": 0.25, "hz": 5.0}},
-        {"id": "ring_spot", "type": "spot", "color": "#fff0d8", "intensity": 320.0, "distance": 14.0, "decay": 2,
+        # CHANGED(fix_ui_stage) (verifier D5 / modes D6, measured in the real game: _harness/_reports/progress_fix_ui_stage.md):
+        # every practical light sits OFF its fixture now - a point light 0.3-0.4 m from a lit surface put 100-200 lux on it
+        # (furnace door / beacon dome / CRT faces peaked at luminance 16-32 = the flares over the fighters' heads); the ring
+        # spot was 320 cd 6 m over the centre (~16 lux on the tops of the heads vs the key's 2.3: both fighters blown out
+        # orange-white at every orbit angle) -> 70.
+        {"id": "crt_wall", "type": "point", "color": "#86d2ff", "intensity": 32.0, "distance": 14.0, "decay": 2,
+         "position": [0.0, 3.6, -12.6], "flicker": {"amp": 0.05, "hz": 17.0}},
+        {"id": "furnace", "type": "point", "color": "#ff6a20", "intensity": 14.0, "distance": 12.0, "decay": 2,
+         "position": [9.4, 0.8, 0.0], "flicker": {"amp": 0.25, "hz": 5.0}},
+        {"id": "ring_spot", "type": "spot", "color": "#fff0d8", "intensity": 70.0, "distance": 14.0, "decay": 2,
          "position": [0.0, 6.05, 0.0], "target": [0.0, 0.0, 0.0], "angleDeg": 34.0, "penumbra": 0.55},
-        {"id": "beacon", "type": "point", "color": "#ffa020", "intensity": 8.0, "distance": 8.0, "decay": 2,
-         "position": [-10.95, 3.2, 3.75], "flicker": {"amp": 0.6, "hz": 1.3}},
+        {"id": "beacon", "type": "point", "color": "#ffa020", "intensity": 5.0, "distance": 8.0, "decay": 2,
+         "position": [-9.9, 2.9, 3.75], "flicker": {"amp": 0.6, "hz": 1.3}},
     ],
     "lightsNote": "FIXED pool: created once at stage load, never added/removed (shader programs stay warm). "
                   "No lights are embedded in the GLB. Flicker = view-only intensity modulation (beacon = the rotating "
                   "amber sweep, furnace = fire). 3D ring: key from high above + the overhead ring spot light the ring from "
-                  "every orbit angle; CRT wall glow north, furnace east, beacon west, cyan rim from the CRT side.",
+                  "every orbit angle; CRT wall glow north, furnace east, beacon west, cyan rim from the CRT side. "
+                  "CHANGED(fix_ui_stage): practical point lights stand 1-2 m off their fixtures (furnace 2.1 m in front of the "
+                  "door, beacon 1.35 m out from the west dome, CRT glow 3.8 m in front of the wall) and the ring spot is 70 cd "
+                  "(was 320: the fighters washed out); the firebox door sits low (glow 0.47-0.93 m, below the 1.35 m orbit eye).",
     "crowd": {
         "atlas": "crowd_atlas.webp", "meta": "crowd_atlas.json", "cols": 12, "rows": 6, "count": 72,
         "cardHeightM": 2.4, "cardWidthM": 1.2, "anchor": [0.5, 0.97917],
@@ -193,10 +203,15 @@ M_SIGN = mat_pbr("cr_sign", "cr_signs", roughness=0.45)
 M_SIGNLIT = mat_pbr("cr_signlit", "cr_signs", roughness=0.35, etex="cr_signs", estrength=2.2)
 M_SIGN2 = mat_pbr("cr_sign2lit", "cr_signs2", roughness=0.4, etex="cr_signs2", estrength=1.6)
 M_LOGO = mat_pbr("cr_floorlogo", "cr_floorlogo", roughness=0.4, alpha="MASK")
-M_SCREEN = mat_pbr("cr_screen", color=(0.0, 0.0, 0.0, 1), roughness=0.12, etex="cr_screens", estrength=1.8)
-M_SCREEN_F = mat_pbr("cr_screen_flicker", color=(0.0, 0.0, 0.0, 1), roughness=0.12, etex="cr_screens", estrength=1.8)
-M_BEACON = mat_pbr("cr_beacon", color=(0.7, 0.35, 0.05, 1), roughness=0.2, etex="cr_signs", estrength=3.0)
-M_GLOW = mat_pbr("cr_glow", color=(1.0, 0.45, 0.1, 1), roughness=0.6, emission=(1.0, 0.36, 0.06, 1), estrength=5.0)
+# CHANGED(fix_ui_stage): screen glass 0.12 -> 0.4 roughness - the CRT glow light mirrored in the glossy faces as hot spots
+# (luminance 11-15) right behind the pair in the round-start view
+M_SCREEN = mat_pbr("cr_screen", color=(0.0, 0.0, 0.0, 1), roughness=0.4, etex="cr_screens", estrength=1.8)
+M_SCREEN_F = mat_pbr("cr_screen_flicker", color=(0.0, 0.0, 0.0, 1), roughness=0.4, etex="cr_screens", estrength=1.8)
+# CHANGED(fix_ui_stage): beacon dome 3.0 -> 1.4 and the trench / post-LED glow 5.0 -> 3.0 (bloom flares at the orbit camera);
+# the firebox door has its own dimmer glow (it read as a white-hot flare at head height)
+M_BEACON = mat_pbr("cr_beacon", color=(0.7, 0.35, 0.05, 1), roughness=0.2, etex="cr_signs", estrength=1.4)
+M_GLOW = mat_pbr("cr_glow", color=(1.0, 0.45, 0.1, 1), roughness=0.6, emission=(1.0, 0.36, 0.06, 1), estrength=3.0)
+M_FIRE = mat_pbr("cr_fireglow", color=(1.0, 0.45, 0.1, 1), roughness=0.7, emission=(1.0, 0.36, 0.06, 1), estrength=2.0)
 M_BULB = mat_pbr("cr_bulb", color=(1.0, 0.86, 0.62, 1), roughness=0.3, emission=(1.0, 0.72, 0.4, 1), estrength=5.0)
 M_RED = mat_pbr("cr_redlamp", color=(1.0, 0.12, 0.06, 1), roughness=0.3, emission=(1.0, 0.08, 0.04, 1), estrength=6.0)
 M_GREEN = mat_pbr("cr_greenled", color=(0.2, 1.0, 0.3, 1), roughness=0.3, emission=(0.2, 1.0, 0.3, 1), estrength=4.0)
@@ -789,14 +804,17 @@ def boiler(cx, cz, r=1.45):
         bolts("boiler_rivets_%.2f" % yy, [(cx + (r + 0.05) * math.cos(a), yy + 0.07, cz + (r + 0.05) * math.sin(a))
                                           for a in np.linspace(0, 2 * math.pi, 37)[:-1]], (0, 1, 0), M_STEEL, r=0.018, h=0.01)
     fz = cz + r + 0.01
-    gbox("boiler_door_frame", cx - 0.62, cx + 0.62, 0.55, 1.55, fz - 0.05, fz + 0.1, M_STEEL, tile=0.6, bevel=0.03)
-    gbox("boiler_door_glow", cx - 0.5, cx + 0.5, 0.68, 1.42, fz + 0.1, fz + 0.11, M_GLOW, tile=0.6)
+    # CHANGED(fix_ui_stage) (verifier D5): the firebox door sits LOW on the plinth (a real firebox is at the base) - glow
+    # 0.47-0.93 m, well under the orbit camera's 1.35 m eye, so from any camera inside the clear radius it lands below the
+    # fighters' heads (it was 0.68-1.42 m = on the horizon line = behind the heads), and it glows with M_FIRE (2.0)
+    gbox("boiler_door_frame", cx - 0.62, cx + 0.62, 0.38, 1.02, fz - 0.05, fz + 0.1, M_STEEL, tile=0.6, bevel=0.03)
+    gbox("boiler_door_glow", cx - 0.5, cx + 0.5, 0.47, 0.93, fz + 0.1, fz + 0.11, M_FIRE, tile=0.6)
     for k in range(8):
         x = cx - 0.44 + k * 0.126
-        gbox("boiler_door_bar_%d" % k, x - 0.022, x + 0.022, 0.66, 1.44, fz + 0.1, fz + 0.16, M_STEEL, tile=0.3, bevel=0.006)
-    for yy in (0.72, 1.38):
+        gbox("boiler_door_bar_%d" % k, x - 0.022, x + 0.022, 0.45, 0.95, fz + 0.1, fz + 0.16, M_STEEL, tile=0.3, bevel=0.006)
+    for yy in (0.5, 0.9):
         cyl("boiler_door_hinge_%.2f" % yy, (cx - 0.66, yy, fz + 0.08), (0, 1, 0), 0.04, 0.16, M_STEEL, sides=10)
-    tube("boiler_door_latch", [(cx + 0.58, 1.05, fz + 0.16), (cx + 0.8, 1.05, fz + 0.2)], 0.022, M_BRASS, sides=6)
+    tube("boiler_door_latch", [(cx + 0.58, 0.7, fz + 0.16), (cx + 0.8, 0.7, fz + 0.2)], 0.022, M_BRASS, sides=6)
     for k, (gx, gy) in enumerate(((cx - 0.55, 2.35), (cx, 2.5), (cx + 0.55, 2.35))):
         tube("boiler_gstem_%d" % k, [(gx, gy, fz - 0.02), (gx, gy, fz + 0.2)], 0.018, M_BRASS, sides=6)
         gauge("boiler_gauge_%d" % k, (gx, gy, fz + 0.24), (0, 0, 1), 0.16, k + 1)

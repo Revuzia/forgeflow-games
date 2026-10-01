@@ -37,6 +37,9 @@
     "crouchFront": 0.478,
     "crouchBack": 0.055
   },
+  "step": {
+    "distM": 0.967
+  },
   "colors": [
     {"name": "Sequins", "tint": null},
     {"name": "Prime Time Gold", "tint": "#ffd54f"},

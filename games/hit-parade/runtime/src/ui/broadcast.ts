@@ -24,7 +24,9 @@ import { fill, t } from './strings.ts';
 export type CaptionEvent =
   | 'round_start' | 'final_round' | 'match_point' | 'first_blood' | 'counter' | 'punish' | 'perfect_parry' | 'throw_escape'
   | 'wall_splat' | 'super' | 'stage_fright' | 'comeback' | 'ko' | 'time_over' | 'perfect_round' | 'round_end' | 'match_end'
-  | 'draw' | 'boss_phase2';
+  | 'draw' | 'boss_phase2'
+  /** CHANGED(fix_ui_stage): EV3D.BACK_HIT (CONTRACT 35.20) */
+  | 'back_hit';
 
 interface CaptionsFile { host?: string; minGapMs?: number; showMs?: number; priority?: Record<string, number>; pools?: Record<string, string[]> }
 const CAP = captionsJson as CaptionsFile;

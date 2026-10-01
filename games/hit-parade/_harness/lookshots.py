@@ -167,7 +167,8 @@ class Page:
     def start(self):
         from playwright.sync_api import sync_playwright
         self._pw = sync_playwright().start()
-        self.browser = self._pw.chromium.launch(channel="chrome", headless=self.args.headless, args=FLAGS)
+        # CHANGED(fix_view): --chrome-arg extra flags (e.g. --force_high_performance_gpu when other sessions saturate the iGPU)
+        self.browser = self._pw.chromium.launch(channel="chrome", headless=self.args.headless, args=FLAGS + list(getattr(self.args, "chrome_arg", None) or []))
         self.ctx = self.browser.new_context(viewport={"width": self.args.width, "height": self.args.height}, device_scale_factor=1)
         self.page = self.ctx.new_page()
         self.page.set_default_timeout(240_000)
@@ -232,6 +233,8 @@ def main():
     ap.add_argument("--g3d", default="", help="CHANGED(VIEW3D) --game --only g3d: comma list of parts (default all): " + ",".join(G3D_PARTS))
     ap.add_argument("--circle", type=int, default=0, help="CHANGED(VIEW3D) --sim prime / proj: frames of STEP_IN after FIGHT before the action "
                     "(the fight line turns off the spawn axis: 60 f ~ 45 deg) - PRIME TIME / projectiles on a diagonal line")
+    ap.add_argument("--fixview", default="", help="CHANGED(fix_view) --game --only fixview: comma list of parts (default all): " + ",".join(FIXVIEW_PARTS))
+    ap.add_argument("--chrome-arg", action="append", default=[], help="CHANGED(fix_view) extra Chrome flag (repeatable), e.g. --chrome-arg=--force_high_performance_gpu")
     args = ap.parse_args()
     if args.game:
         if args.prefix == "view":
@@ -601,8 +604,11 @@ def sim_main(args):
 # game's own frame() (events drained, FX, props, HUD). View read-back: window.__HP_VIEW__ (dev-only handle set by
 # BoutView.create). Shots: __HP__.shot(name) (the game's canvas -> /__shot -> _shots/<name>.png).
 
-GAME_GROUPS = ["gprops", "gbrawl", "gheckler", "gstage", "g3d"]
+GAME_GROUPS = ["gprops", "gbrawl", "gheckler", "gstage", "g3d", "fixview"]
 G3D_PARTS = ["circle", "dodge", "splat", "prime", "arenas", "brawl"]
+# CHANGED(fix_view): the view-fix evidence (CONTRACT §35.23 fix_view) - every part runs the LEGACY presentation and the
+# FIXED one in the same page (harness A/B switches on the live BoutView), REAL game, frozen sim, one presented frame per tick
+FIXVIEW_PARTS = ["yaw", "step", "swing", "top", "bloom", "popups"]
 GAME_PROJ = {  # fighter -> [(label, word, hold frames, phase2)]
     "johnny": [("brick", 128, 2, False)],
     "zambini": [("card_fan", 128, 2, False), ("flame", 4 | 128, 2, False), ("saw_card", 128 | 64, 2, False)],
@@ -729,8 +735,331 @@ window.__LK__ = {
 """
 
 
+# ── CHANGED(fix_view): the fixview group (D2 yaw, D6 step, D10 swing, D13 top, D5 bloom, D7 popups) ──────────────────
+FIXVIEW_JS = r"""
+window.__FV__ = {
+  /** n presented ticks; words for both players (per-tick arrays or numbers); optional per-tick samples */
+  async run(n, w0, w1, sample) {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const a = Array.isArray(w0) ? (w0[i] || 0) : (w0 || 0), b = Array.isArray(w1) ? (w1[i] || 0) : (w1 || 0);
+      if (a) window.__HP__.dev.setInputs(0, a, 1);
+      if (b) window.__HP__.dev.setInputs(1, b, 1);
+      window.__HP__.dev.step(1);
+      await new Promise((r) => requestAnimationFrame(() => r()));
+      if (sample) out.push(window.__FV__.s());
+    }
+    return out;
+  },
+  s() {
+    const m = window.__HP__.match() || {}, f = window.__HP__.fighters() || [];
+    const v = window.__HP_VIEW__ ? window.__HP_VIEW__.info() : {};
+    const vf = v.fighters || [];
+    return { fr: m.simFrame, f: f.map((x, i) => ({ x: x.x, z: x.z, yaw: Math.round((x.yaw || 0) * 1800 / Math.PI) / 10, fac: x.facing, st: x.stateName, mv: x.moveName,
+      mf: x.moveFrame, step: x.step, vyaw: (vf[i] || {}).yawDeg, mir: (vf[i] || {}).mirror, vt: (vf[i] || {}).t, stride: (vf[i] || {}).stride, feet: (v.feet || [])[i] })) };
+  },
+  /** the clip's own feet with the stripped lateral travel put back (= the mocap's world feet, root-local axes) */
+  mocap(i, clip) {
+    const fv = window.__HP_VIEW__.view.fighters[i];
+    const lat = fv.stepFacts.lat[clip];
+    const inv = fv.root.matrixWorld.clone().invert();
+    const dur = fv.pose.dur(clip), rows = [];
+    const latAt = (t) => { const T = lat.t, Q = lat.q; if (t <= T[0]) return 0; for (let j = 1; j < T.length; j++) if (t <= T[j]) return (Q[j - 1] + (Q[j] - Q[j - 1]) * (t - T[j - 1]) / (T[j] - T[j - 1])) * lat.len; return lat.len; };
+    const sx = clip.endsWith('_l') ? 1 : -1;
+    for (let j = 0; j < 57; j++) {
+      const t = dur * j / 56;
+      fv.pose.poseClip(clip, t); fv.root.updateMatrixWorld(true);
+      const row = [t];
+      for (const n of ['LeftFoot', 'LeftToeBase', 'RightFoot', 'RightToeBase']) { const b = fv.bone(n); const p = b.position.clone(); b.getWorldPosition(p); p.applyMatrix4(inv); row.push(p.x + sx * latAt(t), p.y, p.z); }
+      rows.push(row);
+    }
+    return rows;
+  },
+  /** twin FightCameras (legacy / fixed) fed the real snapshots per sim frame at dt 1/60 */
+  twin() {
+    const v = window.__HP_VIEW__.view, C = v.cam.constructor;
+    const mk = (legacy) => { const c = new C(16 / 9); c.ring = v.ring; c.safeTop = v.cam.safeTop; c.legacySwing = legacy; c.softPullOn = !legacy; return c; };
+    window.__TW__ = { a: mk(true), b: mk(false), rows: [] };
+  },
+  feed(n, w) {
+    const T = window.__TW__, v = window.__HP_VIEW__.view;
+    for (let i = 0; i < n; i++) {
+      window.__HP__.dev.setInputs(0, w, 1);
+      window.__HP__.dev.step(1);
+      const m = window.__HP__.match(), f = window.__HP__.fighters();
+      const cf = f.map((x) => ({ x: x.x, y: x.y, z: x.z, head: x.y + 1.85 }));
+      const row = {};
+      for (const k of ['a', 'b']) { const c = T[k]; c.camN = m.camN ? [m.camN[0], m.camN[1]] : null; c.ring = v.ring; c.update(1 / 60, cf, 16 / 9, m.simFrame); const L = c.last;
+        row[k] = [L.yawDeg, L.swingDeg, L.camR, L.softPull || 0, L.raise, L.occluded, L.fov]; }
+      T.rows.push(row);
+    }
+    return T.rows.length;
+  },
+  /** each body's projected box (CSS px) for the pixel stats */
+  boxes() {
+    const v = window.__HP_VIEW__.view, cam = v.cam.camera, W = innerWidth, H = innerHeight;
+    return v.fighters.map((f) => { const p = f.root.position, top = f.liveTop(); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      for (const [dx, dy, dz] of [[-0.45, 0, -0.45], [0.45, 0, 0.45], [-0.45, top - p.y, 0.45], [0.45, top - p.y, -0.45], [0.45, 0, -0.45], [-0.45, top - p.y, -0.45]]) {
+        const q = p.clone().set(p.x + dx, p.y + dy, p.z + dz).project(cam); const sx = (q.x + 1) / 2 * W, sy = (1 - q.y) / 2 * H;
+        x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); }
+      return { box: [x0, y0, x1, y1], lightK: f.last.lightK }; });
+  },
+  /** BRAWL: walk at the nearest live goon, attack inside 1.15 m (L / M / H in turn); popups sampled every tick */
+  async brawl(n, t0) {
+    const rows = [];
+    for (let i = 0; i < n; i++) {
+      const k = t0 + i, m = window.__HP__.match() || {}, f0 = (window.__HP__.fighters() || [])[0] || {};
+      const gs = ((m.brawl || {}).goons || []).filter((q) => !(q.alive === false || q.alive === 0) && !(q.down === true || q.down === 1));
+      let best = null, bd = 1e9;
+      for (const q of gs) { const d = Math.hypot(q.x - f0.x, (q.z || 0) - (f0.z || 0)); if (d < bd) { bd = d; best = q; } }
+      let w = 0;
+      if (best) { if (bd > 1.15) w = (f0.facing || 1) > 0 ? 8 : 4; else if (k % 8 < 2) w = [16, 32, 64][Math.floor(k / 8) % 3]; }
+      if (w) window.__HP__.dev.setInputs(0, w, 1);
+      window.__HP__.dev.step(1);
+      await new Promise((r) => requestAnimationFrame(() => r()));
+      const pops = window.__HP_VIEW__.popups();
+      if (pops.length) rows.push({ k, pops: pops.map((p) => ({ id: p.id, why: p.reason, x: p.x, y: p.y, wx: p.wx, wz: p.wz })) });
+    }
+    return rows;
+  },
+};
+"""
+
+
+def _angd(a, b):
+    return (a - b + 180.0) % 360.0 - 180.0
+
+
+def run_fixview(p, args, rep, fails, start, pre):
+    """CHANGED(fix_view): legacy vs fixed presentation, same page, REAL game. Writes rep['groups']['fixview']."""
+    import math
+    g = rep["groups"]["fixview"] = {}
+    parts = [x for x in (args.fixview.split(",") if args.fixview else FIXVIEW_PARTS) if x]
+    js = p.js
+    p.page.evaluate(FIXVIEW_JS)
+    W_ = dict(LEFT=4, RIGHT=8, L=16, M=32, H=64, S=128, THROW=512, STEP_IN=8192, STEP_OUT=16384)
+
+    def match(p1, p2, stage="rust_theater", seed=8, mode="versus"):
+        start({"mode": mode, "stage": stage, "seed": seed, "p": [{"fighter": p1, "cpu": -1}, {"fighter": p2, "cpu": -1}]})
+        js("() => window.__LK__.ensureStep()")
+
+    def run(n, w0=0, w1=0, sample=True):
+        return js("([n, a, b, s]) => window.__FV__.run(n, a, b, s)", [n, w0, w1, sample])
+
+    def walk(who, gap):
+        for _ in range(240):
+            s_ = js("() => window.__FV__.s()")
+            f = s_["f"]
+            if math.hypot(f[1]["x"] - f[0]["x"], f[1]["z"] - f[0]["z"]) <= gap:
+                return
+            w = W_["RIGHT"] if f[who]["fac"] > 0 else W_["LEFT"]
+            run(1, w if who == 0 else 0, w if who == 1 else 0, False)
+
+    def pshot(name):
+        path = os.path.join(SHOTS, "%s_%s.png" % (pre, name))
+        p.page.screenshot(path=path, timeout=180000)
+        return path
+
+    def setv(expr, on):
+        js("(on) => { const v = window.__HP_VIEW__.view; %s }" % expr, on)
+
+    # D2: presented yaw on the verifier's re-face cases, legacy (no smoothing) vs fixed
+    if "yaw" in parts:
+        row = g["yaw"] = {}
+        cases = [("krane5M_stepped", "johnny", "krane", [1]), ("hook_m_stepped", "johnny", "johnny", [1]), ("back_throw", "johnny", "bruno", [0, 1])]
+        for tag, p1, p2, whos in cases:
+            for mode in ("legacy", "fixed"):
+                match(p1, p2)
+                setv("for (const f of v.fighters) f.smoothTurns = on;", mode == "fixed")
+                if tag == "krane5M_stepped":
+                    walk(1, 1.2); run(10, 0, 0, False); rows = run(50, [W_["STEP_IN"]], [W_["M"]])
+                elif tag == "hook_m_stepped":
+                    walk(0, 1.2); run(10, 0, 0, False)
+                    fac2 = js("() => window.__FV__.s()")["f"][1]["fac"]
+                    rows = run(70, [W_["STEP_IN"]], [0, 0, (W_["RIGHT"] if fac2 > 0 else W_["LEFT"]) | W_["S"]])
+                else:
+                    walk(0, 0.75); run(4, 0, 0, False)
+                    back = W_["LEFT"] if js("() => window.__FV__.s()")["f"][0]["fac"] > 0 else W_["RIGHT"]
+                    rows = run(140, [back | W_["THROW"]] * 2, 0)
+                for who in whos:
+                    sim = max(abs(_angd(b["f"][who]["yaw"], a["f"][who]["yaw"])) for a, b in zip(rows, rows[1:]))
+                    view = max(abs(_angd(b["f"][who]["vyaw"], a["f"][who]["vyaw"])) for a, b in zip(rows, rows[1:]))
+                    bi = max(range(1, len(rows)), key=lambda k: abs(_angd(rows[k]["f"][who]["yaw"], rows[k - 1]["f"][who]["yaw"])))
+                    steps = [round(abs(_angd(rows[k]["f"][who]["vyaw"], rows[k - 1]["f"][who]["vyaw"])), 1) for k in range(bi, min(len(rows), bi + 9))]
+                    conv = next((k - bi for k in range(bi, len(rows)) if abs(_angd(rows[k]["f"][who]["vyaw"], rows[k]["f"][who]["yaw"])) < 0.5), None)
+                    row["%s_%s_P%d" % (tag, mode, who + 1)] = {"simMaxOneFrame": round(sim, 1), "viewMaxOneFrame": round(view, 1), "viewStepsFromPop": steps,
+                                                                 "framesToSimYaw": conv, "trace": [(r["fr"], r["f"][who]["st"], r["f"][who]["mv"], r["f"][who]["yaw"], r["f"][who]["vyaw"], r["f"][who]["mir"]) for r in rows[max(0, bi - 2):bi + 10]]}
+                    log("fixview yaw %-16s %-6s P%d: sim one-frame max %.1f | view one-frame max %.1f | view steps from the pop %s | at the sim yaw after %s frames" % (
+                        tag, mode, who + 1, sim, view, steps, conv))
+                    if mode == "fixed" and (view > 45.5 or conv is None or conv > 8):
+                        fails.append("fixview yaw %s P%d: view one-frame %.1f deg, converged after %s frames" % (tag, who + 1, view, conv))
+
+    # D6: planted-foot slide during a sidestep (frames where the clip's OWN foot is planted), legacy vs fixed
+    if "step" in parts:
+        row = g["step"] = {}
+        for fid in ["johnny", "bruno", "freak", "krane", "boneyard", "rerun"]:
+            match(fid, "johnny", seed=3)
+            run(2, 0, 0, False)
+            mo = js("([i, c]) => window.__FV__.mocap(i, c)", [0, "sidestep_l"])
+            sp = []
+            for j in range(len(mo)):
+                a, b = mo[max(0, j - 1)], mo[min(len(mo) - 1, j + 1)]
+                sp.append([math.hypot(b[1 + 3 * q] - a[1 + 3 * q], b[3 + 3 * q] - a[3 + 3 * q]) / max(1e-6, b[0] - a[0]) / 60 for q in range(4)])
+
+            def planted(t, q):
+                j = min(range(len(mo)), key=lambda k: abs(mo[k][0] - t))
+                return sp[j][q] < 0.004
+            for mode in ("legacy", "fixed"):
+                match(fid, "johnny", seed=3)
+                run(6, 0, 0, False)
+                setv("for (const f of v.fighters) f.stepSync = on;", mode == "fixed")
+                rows = [x for x in run(18, [W_["STEP_IN"]], 0) if (x["f"][0]["step"] or {}).get("kind") == "sidestep"]
+                slide = {}
+                for q, name in enumerate(["L_ankle", "L_toe", "R_ankle", "R_toe"]):
+                    tot = 0.0
+                    for a, b in zip(rows, rows[1:]):
+                        ta = a["f"][0]["vt"] if mode == "fixed" else (a["f"][0]["step"]["frame"] - 1) / 60
+                        tb = b["f"][0]["vt"] if mode == "fixed" else (b["f"][0]["step"]["frame"] - 1) / 60
+                        if planted(ta, q) and planted(tb, q):
+                            fa, fb = a["f"][0]["feet"], b["f"][0]["feet"]
+                            tot += math.hypot(fb[3 * q] - fa[3 * q], fb[3 * q + 2] - fa[3 * q + 2])
+                    slide[name] = round(tot, 3)
+                worst = max(slide.values())
+                row["%s_%s" % (fid, mode)] = {"slide": slide, "worst": worst, "stride": rows[3]["f"][0]["stride"] if len(rows) > 3 else None}
+                log("fixview step %-9s %-6s worst planted-foot slide %.3f m %s stride %s" % (fid, mode, worst, json.dumps(slide), row["%s_%s" % (fid, mode)]["stride"]))
+                if mode == "fixed" and fid != "rerun" and worst > 0.10:
+                    fails.append("fixview step %s: planted-foot slide %.3f m" % (fid, worst))
+
+    # D10: wall swing near the centre - twin cameras (legacy / fixed) fed the real snapshots at 60 Hz, P1 circling P2
+    if "swing" in parts:
+        row = g["swing"] = {}
+        for sid in ["rust_theater", "butcher_block", "wheel_of_pain", "rooftop", "control_room"]:
+            match("johnny", "bruno", stage=sid, seed=3)
+            run(4, 0, 0, False)
+            js("() => window.__FV__.twin()")
+            n = 0
+            while n < 480:
+                n = js("([n, w]) => window.__FV__.feed(n, w)", [40, W_["STEP_IN"]])
+            rows = js("() => window.__TW__.rows")
+            ring_r = js("() => window.__HP_VIEW__.view.ring.r")
+            res = {}
+            for k, mode in (("a", "legacy"), ("b", "fixed")):
+                az = [r[k][0] for r in rows]
+                vel = [_angd(az[i], az[i - 1]) for i in range(1, len(az))]
+                acc = [abs(vel[i] - vel[i - 1]) for i in range(1, len(vel))]
+                sw = [r[k][1] for r in rows]
+                res[mode] = {"swing": [round(min(sw), 2), round(max(sw), 2)], "maxAzAccel": round(max(acc), 3), "beyondWall": round(max(r[k][2] for r in rows) - ring_r, 3),
+                             "softPullMax": round(max(r[k][3] for r in rows), 3), "raiseMax": round(max(r[k][4] for r in rows), 3), "occluded": sum(r[k][5] for r in rows),
+                             "fovMax": round(max(r[k][6] for r in rows), 2)}
+                log("fixview swing %-13s %-6s swing %s deg | max azimuth accel %.3f deg/f^2 | camR - ring %.2f m | soft pull %.2f | raise %.2f | occluded %d | fov max %.1f" % (
+                    sid, mode, res[mode]["swing"], res[mode]["maxAzAccel"], res[mode]["beyondWall"], res[mode]["softPullMax"], res[mode]["raiseMax"], res[mode]["occluded"], res[mode]["fovMax"]))
+            row[sid] = res
+            if res["fixed"]["maxAzAccel"] > 0.5 or res["fixed"]["occluded"]:
+                fails.append("fixview swing %s: azimuth accel %.3f, occluded %d" % (sid, res["fixed"]["maxAzAccel"], res["fixed"]["occluded"]))
+
+    # D13: THE FREAK's raised claw / feet vs the HUD-safe frame during a sidestep at 2.4 m (page shots include the HUD)
+    if "top" in parts:
+        row = g["top"] = {}
+        FR = "() => { const v = window.__HP_VIEW__.info(); return { fr: v.framing, dist: v.camera.dist }; }"
+        for p1, p2 in [("freak", "bruno"), ("johnny", "bruno")]:
+            for mode in ("legacy", "fixed"):
+                match(p1, p2, seed=3)
+                run(4, 0, 0, False)
+                setv("v.realTops = on; v.cam.bottomMargin = on ? 0.07 : 0.04; if (!on) v.cam.feetDepth = 0;", mode == "fixed")
+                js("(n) => window.__LK__.settle(n)", 40)
+                rows, paths = [], []
+                for k in range(16):
+                    if k:
+                        run(1, W_["STEP_IN"] if k == 1 else 0, 0, False)
+                    js("(n) => window.__LK__.settle(n)", 12)
+                    rows.append(js(FR))
+                    if k in (0, 6, 12):
+                        paths.append(pshot("fixview_top_%s_%s_k%02d" % (p1, mode, k)))
+                safe = rows[0]["fr"]["safeTop"]
+                top = min(min(r["fr"]["live"]) for r in rows)
+                feet = max(max(r["fr"]["liveFeet"]) for r in rows)
+                row["%s_%s" % (p1, mode)] = {"hudBand": safe, "highestTop": top, "behindHud": round(max(0, safe - top), 3), "lowestFoot": feet,
+                                             "topM": rows[0]["fr"]["topM"], "dist": [min(r["dist"] for r in rows), max(r["dist"] for r in rows)],
+                                             "strip": strip(paths, os.path.join(SHOTS, "%s_fixview_top_%s_%s_strip.png" % (pre, p1, mode)), cols=3, tile=(640, 360))}
+                log("fixview top %-7s vs %-6s %-6s HUD band %.3f | highest posed top %.3f (behind the HUD by %.3f) | lowest foot %.3f | topM %s | dist %.2f..%.2f" % (
+                    p1, p2, mode, safe, top, max(0, safe - top), feet, json.dumps([round(x, 2) for x in rows[0]["fr"]["topM"]]), min(r["dist"] for r in rows), max(r["dist"] for r in rows)))
+                if mode == "fixed" and (top < safe or feet > 0.985):
+                    fails.append("fixview top %s: top %.3f under band %.3f / feet %.3f" % (p1, top, safe, feet))
+
+    # D5: blown-out body pixels, 5 arenas x 8 orbit angles at the default quality (high + bloom), legacy vs fixed
+    if "bloom" in parts:
+        from PIL import Image
+        row = g["bloom"] = {}
+
+        def stats(path, box):
+            im = Image.open(path).convert("RGB")
+            x0, y0, x1, y1 = [int(round(v)) for v in box]
+            cx0, cx1, cy0, cy1 = max(0, x0 + (x1 - x0) // 5), min(im.size[0], x1 - (x1 - x0) // 5), max(0, y0 + (y1 - y0) // 8), min(im.size[1], y1 - (y1 - y0) // 10)
+            if cx1 <= cx0 or cy1 <= cy0:
+                return None
+            px = list(im.crop((cx0, cy0, cx1, cy1)).getdata())
+            return {"blown": round(sum(1 for c in px if max(c) >= 250) / len(px), 4), "sat": round(sum((max(c) - min(c)) / max(1, max(c)) for c in px) / len(px), 3)}
+        for sid in ["rust_theater", "butcher_block", "wheel_of_pain", "rooftop", "control_room"]:
+            row[sid] = {}
+            for mode in ("legacy", "fixed"):
+                match("johnny", "bruno", stage=sid, seed=3)
+                run(4, 0, 0, False)
+                js("(on) => window.__HP_VIEW__.view.legacyLook(on)", mode == "legacy")
+                paths, st, lk = [], [], []
+                for a_ in range(8):
+                    if a_:
+                        run(60, W_["STEP_IN"], 0, False)
+                    js("(n) => window.__LK__.settle(n)", 30)
+                    bx = js("() => window.__FV__.boxes()")
+                    path = pshot("fixview_bloom_%s_%s_a%d" % (sid, mode, a_))
+                    paths.append(path)
+                    st += [s_ for s_ in (stats(path, b["box"]) for b in bx) if s_]
+                    lk.append([b["lightK"] for b in bx])
+                q = js("() => [window.__HP_VIEW__.view.r.quality, window.__HP_VIEW__.view.post.bloom.enabled]")
+                res = {"quality": q[0], "bloom": q[1], "maxBlown": max(s_["blown"] for s_ in st), "meanBlown": round(sum(s_["blown"] for s_ in st) / len(st), 4),
+                       "meanSat": round(sum(s_["sat"] for s_ in st) / len(st), 3), "lightK": lk,
+                       "strip": strip(paths, os.path.join(SHOTS, "%s_fixview_bloom_%s_%s_strip.png" % (pre, sid, mode)), cols=4, tile=(640, 360))}
+                row[sid][mode] = res
+                log("fixview bloom %-13s %-6s quality %s bloom %s | blown body pixels max %.2f %% mean %.2f %% | saturation %.3f | lightK min %.2f" % (
+                    sid, mode, q[0], q[1], 100 * res["maxBlown"], 100 * res["meanBlown"], res["meanSat"], min(min(x) for x in lk)))
+            if row[sid]["fixed"]["maxBlown"] > 0.08:
+                fails.append("fixview bloom %s: %.1f %% blown body pixels" % (sid, 100 * row[sid]["fixed"]["maxBlown"]))
+
+    # D7: BRAWL BREAK popups - anchors, overlaps, HUD-safe area (same seeded policy for both)
+    if "popups" in parts:
+        row = g["popups"] = {}
+        for mode in ("legacy", "fixed"):
+            match("johnny", "bruno", mode="brawl", seed=5)
+            js("(on) => { window.__HP_VIEW__.view.brawl.legacyPopups = on; }", mode == "legacy")
+            safe = js("() => window.__HP_VIEW__.view.cam.safeTop")
+            rows, paths = [], []
+            k = 0
+            while k < 900:
+                rows += js("([n, t]) => window.__FV__.brawl(n, t)", [60, k])
+                k += 60
+                if rows and rows[-1]["k"] == k - 1 and len(rows[-1]["pops"]) >= 2 and len(paths) < 6:
+                    paths.append(pshot("fixview_popups_%s_k%04d" % (mode, k)))
+            inband = sum(1 for r in rows for q in r["pops"] if q["y"] - 0.045 < safe)
+            pairs = overl = 0
+            for r in rows:
+                ps = r["pops"]
+                for i in range(len(ps)):
+                    for j in range(i + 1, len(ps)):
+                        pairs += 1
+                        if abs(ps[i]["x"] - ps[j]["x"]) < 0.06 and abs(ps[i]["y"] - ps[j]["y"]) < 0.08:
+                            overl += 1
+            n_pop = len({q["id"] for r in rows for q in r["pops"]})
+            score = (js("() => window.__HP__.match().brawl") or {}).get("score")
+            row[mode] = {"popups": n_pop, "samplesInHudBand": inband, "overlappingPairSamples": overl, "pairSamples": pairs, "hudBand": safe, "score": score,
+                         "strip": strip(paths, os.path.join(SHOTS, "%s_fixview_popups_%s_strip.png" % (pre, mode)), cols=3, tile=(640, 360)) if paths else None}
+            log("fixview popups %-6s %d popups (score %s) | samples in the HUD band %d | overlapping pair-samples %d / %d" % (mode, n_pop, score, inband, overl, pairs))
+        if row["fixed"]["samplesInHudBand"] or row["fixed"]["overlappingPairSamples"]:
+            fails.append("fixview popups: %d samples in the HUD band, %d overlapping" % (row["fixed"]["samplesInHudBand"], row["fixed"]["overlappingPairSamples"]))
+
+
 def game_main(args):
-    groups = [g for g in (args.only.split(",") if args.only else GAME_GROUPS) if g]
+    # CHANGED(fix_view): `fixview` (~30 min of A/B runs) only when asked for with --only
+    groups = [g for g in (args.only.split(",") if args.only else [x for x in GAME_GROUPS if x != "fixview"]) if g]
     only_f = [x for x in args.fighters.split(",") if x] if args.fighters else FIGHTERS
     os.makedirs(SHOTS, exist_ok=True)
     os.makedirs(REPORTS, exist_ok=True)
@@ -1217,6 +1546,8 @@ def game_main(args):
 
             for nm in parts:
                 part(nm, {"circle": p_circle, "dodge": p_dodge, "splat": p_splat, "prime": p_prime, "arenas": p_arenas, "brawl": p_brawl}[nm])
+        if "fixview" in groups:
+            run_fixview(p, args, rep, fails, start, pre)
     except Exception as e:
         probs.append("harness error: %s" % str(e).splitlines()[0][:600])
     finally:

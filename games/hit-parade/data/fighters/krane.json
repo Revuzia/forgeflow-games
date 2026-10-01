@@ -37,6 +37,9 @@
     "crouchFront": 0.459,
     "crouchBack": 0.149
   },
+  "step": {
+    "distM": 1.244
+  },
   "colors": [
     {"name": "Riot Blue", "tint": null},
     {"name": "Night Shift", "tint": "#1b2a3a"},

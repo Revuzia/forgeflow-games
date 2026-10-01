@@ -304,6 +304,9 @@ def fighter_md(K):
           ids(lambda o: o.get("projectile") and not o["projectile"].get("aimed")),
           ids(lambda o: "antistep" in o["role"]), ids(lambda o: "stepatk" in o["role"]),
           ids(lambda o: o["onHit"].get("wallSplat"))))
+    # CHANGED(fix_core) D1 (CONTRACT 35.20): the fighter's own sidestep length (kitlib.step_dist_m, from the measured body)
+    A("- *Sidestep:* %.3f m arc in 15 frames (kitlib.step_dist_m from the measured body; the default 0.85 m for the "
+      "small bodies) - CONTRACT 35.20." % J.get("step", {}).get("distM", L.STEP_DEFAULT_M))
     A("")
     h = J["hurt"]
     A("**Stats.** HP %d | walk %.2f / %.2f m/s | dash %.2f m (%df) / %.2f m (%df) | jump %d+%d+%d, apex %.2f m, "
@@ -564,8 +567,8 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   window. Verified in the real sim (scratch throwcheck: all 31 grabs x 3 victim bodies).
 - **Season text (CONTRACT 26.3, P2):** `introLine`, `winQuotes` (3), `banter` (rival / freak / ricky / default; Ricky
   vs every contestant; the Freak's lines are stage directions), `ending` (3-5 sentences), listed per fighter below.
-- **3D ring (CONTRACT 35.4 / 35.12, lane FIGHTERS3D):** the fight is a 360-degree ring; fighters sidestep (15 f, 0.85 m
-  arc) and circle-walk. Every move carries `track {until, rate}` (the last frame the attacker turns toward the opponent,
+- **3D ring (CONTRACT 35.4 / 35.12, lane FIGHTERS3D):** the fight is a 360-degree ring; fighters sidestep (15 f; the arc
+  is per fighter, CONTRACT 35.20: 0.85 m for the small bodies, up to 1.7 m for the long / wide ones) and circle-walk. Every move carries `track {until, rate}` (the last frame the attacker turns toward the opponent,
   degrees per frame); class defaults: normals, command normals, specials and supers track to startup - 6 (throws to
   startup - 4; CHANGED(STEPTUNE) 35.15: normals were startup - 4), at 180 deg / f (snap). **HOMING** moves track through their last active frame at 20 deg / f and are 0.60 m deep across the
   attack line: they catch a stepper (wide hooks and roundhouses, low roundhouses, sweeps, spins / flairs / lariats,
@@ -577,13 +580,15 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   started 4-8 frames before the first active frame - evades a default normal (52 of 53, median window 4 frames; the
   4-frame johnny 5L is the exception) and a LINEAR move (median window 20 frames); a step started less than 3 frames
   before a default normal's active frames is hit; HOMING moves (and aimed projectiles at 1.2 m) are never evaded. The
-  defender's body matters as much: the big bodies (boneyard, bruno, freak, krane, rerun, spin) never step a straight
-  normal with the 0.85 m step, only linear moves (CONTRACT 35.15 item 7).
+  defender's body matters as much: with one 0.85 m step the big bodies (boneyard, bruno, freak, krane, rerun, spin) never
+  stepped a straight normal (CONTRACT 35.15 item 7), so each fighter now carries its own `step.distM` sized from the
+  measured body (kitlib.step_dist_m, CHANGED(fix_core) 35.20): at 1.2 m every body evades a straight 5M / 5H on a read
+  (big bodies 2-3 start frames, the small ones keep their 3-6), and homing moves stay unsteppable.
   `lateralM` = each box's half-depth across the attack line (L 0.15,
   M 0.18 by button for normals; specials / EX / supers 0.22; sweeps 0.45, homing 0.60 unless noted). Projectiles: **AIMED** = launched at the opponent on
   the spawn frame (the step has to come after the release); straight = along the thrower's yaw (steppable on
   anticipation). Roles: `antistep` = the fighter's fast step-catcher (every fighter has one), `stepatk` = a step-attack
-  (`SS.<button>`: the button pressed during a sidestep from its frame 9, out on frame 11, or while circle-walking; PATCH and
+  (`SS.<button>`: the button pressed during a sidestep from its frame 2, out on frame 11, or while circle-walking; PATCH and
   SPIN). The 3D column of each frame table shows the class, the tracking end frame and the depth; per-fighter "3D ring
   play" covers the stepping game, the homing tools and the wall game (ring boundary = wall; `onHit.wallSplat` enders).
 

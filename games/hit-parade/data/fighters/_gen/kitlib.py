@@ -277,6 +277,43 @@ def emit3d(m, o):
         o["projectile"] = p
 
 
+# CHANGED(fix_core) D1 (CONTRACT 35.20): the SIDESTEP length per fighter, sized from the measured body (data/bodies.json
+# stand [front, back]; the sim's hurt cylinder = radius r = (front + back) / 2 centred off = (front - back) / 2 ahead of the
+# root, core/sim/boxes.ts hurtCyls). Why: the step circles round the ATTACKER, so to leave a straight attack's box (frozen
+# after its tracking) the defender's cylinder must swing (lat + r) sideways on a lever arm of (gap - off): a wide body
+# (krane r 0.48) or a long one whose front sits near the pivot (rerun off 0.33) needs a longer arc than johnny (r 0.24,
+# off 0.12) - with the one 0.85 m step bruno / krane / spin / boneyard / rerun / freak never evaded a straight normal.
+#   arc needed  A = GAP * asin((LAT + r) / (GAP - off))          (GAP 1.2 m apart, LAT 0.22 = a straight 5H's half-depth)
+#   step.distM  = clamp(K * A, 0.85, 2.0), rounded to the mm      (K 1.555)
+# K is calibrated in the real sim (probe_3d section 3b, by-defender rows): K * A sits inside each non-small body's
+# "2-frame" band at 1.2 m (straight 5H evaded from 2 consecutive start frames, straight 5M from 3-4), so big bodies step
+# WORSE than the small ones (patch / johnny / gazza / lotus keep the 0.85 m default and their 3-6 frame windows) but never
+# "never"; homing moves stay unsteppable (measured up to 2.0 m). The sim reads it per fighter (CFighter.stepCurve: the same
+# 15-frame front-loaded curve scaled to distM); goons / fixture kits without `step` use system.json step.distM 0.85.
+STEP_DEFAULT_M = 0.85
+STEP_GAP_M = 1.2
+STEP_LAT_M = 0.22
+STEP_K = 1.555
+STEP_MAX_M = 2.0
+BODIES_JSON = os.path.join(GAME, "data", "bodies.json")
+_BODIES = None
+
+
+def step_dist_m(fid):
+    """The fighter's sidestep arc length (m), from data/bodies.json (see the block comment above); 0.85 when unmeasured."""
+    global _BODIES
+    if _BODIES is None:
+        _BODIES = json.load(open(BODIES_JSON, encoding="utf-8")).get("fighters", {}) if os.path.exists(BODIES_JSON) else {}
+    b = _BODIES.get(fid)
+    if not b or "stand" not in b:
+        return STEP_DEFAULT_M
+    front, back = float(b["stand"][0]), float(b["stand"][1])
+    r = (front + back) / 2.0
+    off = (front - back) / 2.0
+    need = STEP_GAP_M * math.asin(min(1.0, (STEP_LAT_M + r) / (STEP_GAP_M - off)))
+    return round(min(STEP_MAX_M, max(STEP_DEFAULT_M, STEP_K * need)), 3)
+
+
 def dim3(o):
     """Short 3D label for the ROSTER frame table: HOMING 20/f->f13 lat 0.60 | LINEAR lat 0.22 | t->f8 lat 0.18 (+ aimed)."""
     t = o["track"]
@@ -662,6 +699,13 @@ class Kit:
             if k in m:
                 o[k] = m[k]
         o["role"] = list(m.get("role", []))
+        # CHANGED(fix_core) D4 (CONTRACT 35.20): a grab super's victim ROOT path for the sim = its cinematic gapD (the sim
+        # runs a grab super as a grab lock and the view draws that victim at the sim's position, so without it the victim
+        # stood where the grab caught it while the attacker hugged / spun / lifted air)
+        cin = o.get("cinematic")
+        if o.get("grab") and isinstance(cin, dict) and cin.get("gapD"):
+            o["grab"] = dict(o["grab"])
+            o["grab"]["path"] = [[int(k[0]), float(k[1]), float(k[2]) if len(k) > 2 else 0.0] for k in cin["gapD"]]
         emit3d(m, o)   # CHANGED(FIGHTERS3D): track / homing / linear / lateralM / projectile aimed (CONTRACT 35.12)
         anim = {"clip": m["clip"]}
         if m.get("warp") == "auto":
@@ -729,6 +773,7 @@ class Kit:
                       "apexM": i["jump"][3], "fwdM": i["jump"][4]},
              "throwRangeM": i["throwRangeM"], "hurt": hurtboxes(i), "pushbox": pushbox(i),
              "push": push_extents(i["id"]),
+             "step": {"distM": step_dist_m(i["id"])},   # CHANGED(fix_core) D1 (CONTRACT 35.20)
              "colors": [{"name": n, "tint": t} for n, t in i["colors"]],
              "moves": {mid: self.emit_move(mid) for mid in self.order},
              "simple": self.simple, "classic": self.classic, "unique": uq,

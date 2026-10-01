@@ -13,8 +13,19 @@
 //     pushed out along a SMOOTHED normal after skinning (onBeforeCompile), by a constant width in SCREEN pixels
 //     (independent of distance and resolution). Cutout meshes pass their map + alphaTest to the hull.
 // All toon materials share one program family (customProgramCacheKey); the per-fighter state lives in uniforms.
+// CHANGED(fix_view) D5 (CONTRACT §35.23 fix_view):
+//   * BLOOM MASK: while `BLOOM_MASK.uMaskOn` is 1 (view/post.ts sets it around the bout's composer render only) the toon
+//     body and its outline hull write alpha 0 into the HDR target; post.ts keeps alpha-0 pixels out of the bloom input AND
+//     adds no bloom over them, so a fighter never glows and no flare (furnace window, spots) washes over a body. Portraits
+//     and the crowd-atlas bake render with the mask off (they need the alpha).
+//   * LIGHT CAP: `setLight(k)` scales the light a body receives (direct + indirect diffuse, before the cel rim); BoutView
+//     feeds k = min(1, cap / the stage light pool's level at the body) so a stage whose centre is lit 2-3x brighter than
+//     the rest (control_room's 320-cd ring spot) does not burn a cel-shaded body to white at any quality.
 
 import * as THREE from 'three';
+
+/** CHANGED(fix_view) D5: the shared bloom-mask switch (one uniform object referenced by every toon + hull material) */
+export const BLOOM_MASK = { uMaskOn: { value: 0 } };
 
 export interface ToonProfile {
   /** texture LOD bias for the albedo (+ = softer; realistic bodies use more) */
@@ -91,6 +102,9 @@ export interface ToonUniforms {
   uFlashColor: { value: THREE.Color };
   uGlow: { value: number };
   uGlowColor: { value: THREE.Color };
+  /** CHANGED(fix_view) D5: light scale (1 = as lit) */
+  uLightK: { value: number };
+  uMaskOn: { value: number };
 }
 
 const FRAG_HEAD = /* glsl */`
@@ -98,6 +112,7 @@ uniform float uDetailBias; uniform float uSat; uniform float uValue; uniform flo
 uniform float uRim; uniform vec3 uRimColor;
 uniform float uFlash; uniform vec3 uFlashColor;
 uniform float uGlow; uniform vec3 uGlowColor;
+uniform float uLightK; uniform float uMaskOn;
 vec3 hpHueRotate( vec3 c, float a ) {
   // rotation about the grey axis (Rodrigues), keeps luminance roughly
   const vec3 k = vec3( 0.57735 );
@@ -138,6 +153,8 @@ const MAP_FRAG = /* glsl */`
 
 const RIM_FRAG = /* glsl */`
 #include <lights_fragment_end>
+  reflectedLight.directDiffuse *= uLightK;
+  reflectedLight.indirectDiffuse *= uLightK;
   vec3 hpView = normalize( vViewPosition );
   float hpNdV = max( dot( normal, hpView ), 0.0 );
   float hpRimMask = smoothstep( 0.60, 0.68, 1.0 - hpNdV );
@@ -150,6 +167,7 @@ const OUT_FRAG = /* glsl */`
   outgoingLight += uGlowColor * uGlow * ( 0.35 + 0.65 * hpRimMask );
   outgoingLight = mix( outgoingLight, uFlashColor, clamp( uFlash, 0.0, 1.0 ) );
 #include <opaque_fragment>
+  gl_FragColor.a *= 1.0 - uMaskOn;
 `;
 
 function patchToon(shader: THREE.WebGLProgramParametersWithUniforms, u: ToonUniforms): void {
@@ -196,10 +214,12 @@ export function makeToonMaterial(src: THREE.Material, prof: ToonProfile, hueShif
     uFlashColor: { value: new THREE.Color(1, 1, 1) },
     uGlow: { value: 0 },
     uGlowColor: { value: new THREE.Color(1.0, 0.35, 0.08) },
+    uLightK: { value: 1 },
+    uMaskOn: BLOOM_MASK.uMaskOn,
   };
   m.userData = { hp: u, cutout: cut };
   m.onBeforeCompile = (shader) => patchToon(shader, u);
-  m.customProgramCacheKey = () => 'hp-toon-1';
+  m.customProgramCacheKey = () => 'hp-toon-2';
   return m;
 }
 
@@ -242,13 +262,17 @@ function makeHullMaterial(color: THREE.Color, cutoutFrom: ToonMaterial | null): 
     fog: true,
   });
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, { uOutlinePx: OUTLINE.uOutlinePx, uViewport: OUTLINE.uViewport, uOutlineOn: OUTLINE.uOutlineOn });
+    Object.assign(shader.uniforms, { uOutlinePx: OUTLINE.uOutlinePx, uViewport: OUTLINE.uViewport, uOutlineOn: OUTLINE.uOutlineOn, uMaskOn: BLOOM_MASK.uMaskOn });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\n' + HULL_VERT_HEAD)
       .replace('#include <beginnormal_vertex>', HULL_BEGIN_NORMAL)
       .replace('#include <project_vertex>', HULL_PROJECT);
+    // CHANGED(fix_view) D5: the outline is part of the body for the bloom mask
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uMaskOn;')
+      .replace('#include <opaque_fragment>', '#include <opaque_fragment>\n  gl_FragColor.a *= 1.0 - uMaskOn;');
   };
-  m.customProgramCacheKey = () => 'hp-outline-1';
+  m.customProgramCacheKey = () => 'hp-outline-2';
   return m;
 }
 
@@ -297,6 +321,8 @@ export interface ToonHandle {
   setFlash(amount: number, color?: THREE.ColorRepresentation): void;
   /** 0..1 emissive glow (IMPACT armour) */
   setGlow(amount: number, color?: THREE.ColorRepresentation): void;
+  /** CHANGED(fix_view) D5: scale of the light the body receives (1 = as lit) */
+  setLight(k: number): void;
   setOutline(on: boolean): void;
   setHue(rad: number): void;
   dispose(): void;
@@ -370,6 +396,10 @@ export function toonify(root: THREE.Object3D, o: ToonOptions): ToonHandle {
     setGlow(a, c) {
       if (c !== undefined) tmp.set(c);
       for (const m of mats) { m.userData.hp.uGlow.value = a; if (c !== undefined) m.userData.hp.uGlowColor.value.copy(tmp); }
+    },
+    setLight(k) {
+      const v = Number.isFinite(k) ? Math.max(0.05, Math.min(1, k)) : 1;
+      for (const m of mats) m.userData.hp.uLightK.value = v;
     },
     setOutline(on) { for (const h of hulls) h.visible = on; },
     setHue(rad) { for (const m of mats) m.userData.hp.uHue.value = rad; },

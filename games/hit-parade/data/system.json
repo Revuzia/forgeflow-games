@@ -15,7 +15,7 @@
     "stageFright": "FIGHTING_DESIGN 2f (regen 50, +4 blockstun, 25% chip, corner IMPACT stun 195 f, combos from 80%)",
     "parry": "FIGHTING_DESIGN 3b (frame 1, 12 active + hold, perfect 3 f, 33 recovery, 60 f freeze, 6 f invuln, projectile 11 f recovery); costs 2f",
     "impact": "FIGHTING_DESIGN 1c/3b (26/2/35, 800, hitstop 25, blockstun 34 = -3, KD +35, 2-hit armor, reach 1.90 m, pushback 1.35 m)",
-    "throw": "FIGHTING_DESIGN 1c/3c (5/3/23, 0.60 m, tech 9 f, 1200, KD +21 fwd / +15 back; post-stun +2 f and wakeup +1 f unthrowable)",
+    "throw": "FIGHTING_DESIGN 1c/3c (5/3/23, 0.60 m, tech 9 f, 1200, KD +21 fwd / +15 back; post-stun +2 f and wakeup +1 f unthrowable). CHANGED(fix_core) (CONTRACT 35.20, verifier D4): pullF / holdGapM = on the connect every grab slides its victim onto the thrower's forward line with the push fronts holdGapM apart (touching) over pullF frames - grabs used to hold the victim wherever it stood (up to 1.4 m out of reach; pullF 0 = the old behaviour); a grab with grab.path (grab supers) follows that root path instead",
     "kd": "[R] fall/wakeup split; hitstun of KD moves = total frames to act (CONTRACT 19.3)",
     "juggle": "FIGHTING_DESIGN 2i (JS/JI/JL; 1 wall splat + 1 ground bounce per combo); gravity = the 4+38+3 / 1.59 m jump arc",
     "pushback": "FIGHTING_DESIGN 2h (light 0.27 m, IMPACT 1.35 m; corner transfer; parry 50/50); M/H/special [R]",
@@ -25,8 +25,9 @@
     "brawl": "CHANGED(SIM) P2 (CONTRACT 28.4): DESIGN_RESEARCH 1c (enemy telegraphs 30-54 f), 4b/4c (Normal: 2 melee tokens, >= 18 f between grants, 30 f telegraph floor), 6b (points, RATINGS 7 bands x1.0-x4.0, idle decay, -2 grades on a hit, combo cash-out 5 x hits^1.5); 45 s (FIGHTING_DESIGN 9b); goon HP / waves [R]",
     "heckler": "CHANGED(SIM) P2 (CONTRACT 28.4): FIGHTING_DESIGN 9b (parry objects from the crowd, perfect parries score double, 40 s); DESIGN_RESEARCH 1c thrower 42 f windup / 10 m/s; arcs + cadence [R]",
     "ring": "CHANGED(SIM3D) (CONTRACT 35.2 / 35.3 / 35.11): default circle ring 5.5 m when a stage has no ring; against the wall = within 0.45 m of the boundary along the attack direction (IMPACT splat, STAGE FRIGHT stun); camN kept while |P2 - P1| < 0.3 m; default spawnAxisDeg 90 (yaw degrees: P1 at -X, the 2.5D layout). stage.wallM / separationCapM: wallM is legacy (AI range estimates), the separation cap stays 6.0 m (3D distance)",
-    "step": "CHANGED(SIM3D) (CONTRACT 35.2): SIDESTEP 15 f / 0.85 m arc, buffer from 9, step-attacks from frame 11, block from 12; SIDEWALK 1.8 m/s tangential, 4 f settle on release. CHANGED(STEPTUNE) (CONTRACT 35.15): movePct 80 -> 100 = quadratic ease-out over all 15 frames, 64 % of the arc in the first 6 frames (designer decision 60-65 %; was 75 % in 6 and still from frame 13)",
+    "step": "CHANGED(SIM3D) (CONTRACT 35.2): SIDESTEP 15 f / 0.85 m arc, buffer from 9, step-attacks from frame 11, block from 12; SIDEWALK 1.8 m/s tangential, 4 f settle on release. CHANGED(STEPTUNE) (CONTRACT 35.15): movePct 80 -> 100 = quadratic ease-out over all 15 frames, 64 % of the arc in the first 6 frames (designer decision 60-65 %; was 75 % in 6 and still from frame 13). CHANGED(fix_core) (CONTRACT 35.20): bufferF 9 -> 2 = a press on ANY sidestep frame (2 on) is held until the step's action frame 11 and comes out there (newest press wins; earlier frames used to drop it, verifier D9); distM = the DEFAULT arc only - each fighter carries its own step.distM (kit generator, from the measured body)",
     "track": "CHANGED(SIM3D) (CONTRACT 35.4): default track.until for moves without a track field (goons, system IMPACT / SHOVE / default throws) = startup - normalUntilOffset (normals, throws, system) / startup - specialUntilOffset (specials, supers), at least 1; rate = full re-face per frame. CHANGED(STEPTUNE) (CONTRACT 35.15): normalUntilOffset 4 -> 6 (designer decision: a read sidestep evades straight normals; throws start on frame 5 so until stays 1)",
+    "backHit": "CHANGED(fix_core) (CONTRACT 35.20, verifier D7): a BACK HIT = a strike whose attacker root (projectile: whose travel) comes from more than arcDeg off a GROUNDED defender's facing: damage x damagePct / 100, +hitstunF frames on a hitstun reaction (like the counter bonus), the defender turns to face the attacker on the hit frame, event EV3D.BACK_HIT",
     "lateral": "CHANGED(SIM3D) (CONTRACT 35.4): hitbox half-depth across the attack line by strength / role (m)"
   },
   "hp": { "default": 10000 },
@@ -44,8 +45,9 @@
   },
   "stage": { "wallM": 5.5, "separationCapM": 6.0 },
   "ring": { "defaultRadiusM": 5.5, "againstWallM": 0.45, "camMinSepM": 0.3, "spawnAxisDeg": 90, "sectors": 16 },
-  "step": { "frames": 15, "distM": 0.85, "movePct": 100, "bufferF": 9, "attackF": 11, "blockF": 12, "walkMps": 1.8, "settleF": 4 },
+  "step": { "frames": 15, "distM": 0.85, "movePct": 100, "bufferF": 2, "attackF": 11, "blockF": 12, "walkMps": 1.8, "settleF": 4 },
   "track": { "normalUntilOffset": 6, "specialUntilOffset": 6 },
+  "backHit": { "arcDeg": 120, "damagePct": 120, "hitstunF": 4 },
   "lateral": { "L": 0.15, "M": 0.18, "H": 0.22, "sweep": 0.45, "homing": 0.6 },
   "movement": {
     "walkFirstFramePct": 25,
@@ -138,7 +140,8 @@
     "damageFrame": 16,
     "postStunInvuln": 2, "wakeupInvuln": 1,
     "backThrowOffsetM": 0.7,
-    "frontArcDeg": 70
+    "frontArcDeg": 70,
+    "pullF": 6, "holdGapM": 0.0
   },
   "kd": { "fallFrames": 16, "wakeupFrames": 18, "softLandTotal": 40, "hardLandTotal": 56, "airResetLand": 6, "backRiseM": 0.8, "minTotal": 30, "throwLieMinF": 6 },
   "juggle": {

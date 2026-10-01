@@ -63,6 +63,19 @@ export const EVX = {
   INSTALL: 46,
 } as const;
 
+/**
+ * CHANGED(fix_core) (CONTRACT §35.20): 3D-ring event types. A third opt-in group on purpose: audio/router.ts types its
+ * tables over `keyof typeof EV` and `keyof typeof EVX` (and probe_audio checks both are covered), so a new type there would
+ * break other lanes' builds; consumers opt in by importing EV3D.
+ * BACK_HIT (D7): emitted right after the HIT of a back hit (the attacker stood in the grounded defender's rear arc,
+ *   > system.json backHit.arcDeg off its facing; for a projectile: it travelled into the defender's back) - same payload as
+ *   HIT: a = attacker, b = victim, c = strength class (§17 rule 6), d = hit height (cm). The hit already carries the
+ *   bonus (damage x backHit.damagePct %, +backHit.hitstunF hitstun) and the victim faces the attacker from that frame.
+ */
+export const EV3D = {
+  BACK_HIT: 47,
+} as const;
+
 /** CHANGED(SIM) P2: SCORE `d` reason codes (CONTRACT §28.4). */
 export const SCORE_WHY = {
   HIT: 1, KO: 2, COMBO: 3, CROWD: 4, PARRY: 5, PERFECT: 6, HECKLE_PARRY: 7, HECKLE_PERFECT: 8, HECKLE_HIT: 9,
@@ -75,6 +88,7 @@ export const BALL_EV = { KICK: 0, REBOUND: 1, REST: 2, PICKUP: 3, KNOCKED: 4, RE
 export const EV_NAMES: Record<number, string> = {};
 for (const k of Object.keys(EV) as (keyof typeof EV)[]) EV_NAMES[EV[k]] = k;
 for (const k of Object.keys(EVX) as (keyof typeof EVX)[]) EV_NAMES[EVX[k]] = k;
+for (const k of Object.keys(EV3D) as (keyof typeof EV3D)[]) EV_NAMES[EV3D[k]] = k; // CHANGED(fix_core)
 
 /** CAMERA_CUE `b` values. */
 export const CUE = { SUPER_FREEZE: 1, PERFECT_PARRY: 2, KO: 3, CINEMATIC: 4, WALL_SPLAT: 5, PHASE: 6 } as const;

@@ -582,6 +582,13 @@ function validateFighter(fid: string, raw: unknown, errs: string[], warns: strin
       errs.push(`${w}.push: {front > 0, back >= 0, crouchFront?, crouchBack?} (metres)`);
     }
   }
+  // CHANGED(fix_core) D1 (CONTRACT §35.20): per-fighter sidestep arc length (optional; the sim clamps to 0.5..2.5 m)
+  if (raw.step !== undefined) {
+    const sp = raw.step as Record<string, unknown>;
+    if (!isObj(sp) || (sp.distM !== undefined && (!isNum(sp.distM) || (sp.distM as number) < 0.5 || (sp.distM as number) > 2.5))) {
+      errs.push(`${w}.step: {distM?: 0.5..2.5} (metres)`);
+    }
+  }
   if (!isObj(raw.moves) || Object.keys(raw.moves).length === 0) {
     errs.push(`${w}.moves: non-empty object required`);
     return null;

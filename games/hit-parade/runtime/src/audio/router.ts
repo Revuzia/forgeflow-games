@@ -9,7 +9,8 @@
 // limit bites (announcer > KO/super > hits > crowd > foley).
 //
 // Every EV type is listed in EVENT_SOUNDS (a mapped type over `keyof typeof EV`, so a new EV type fails typecheck until
-// it is handled here); the SIM P2 extra types (EVX, CONTRACT s28.3) in EXTRA_EVENT_SOUNDS the same way. Round flow
+// it is handled here); the SIM P2 extra types (EVX, CONTRACT s28.3) in EXTRA_EVENT_SOUNDS the same way (CHANGED(fix_ui_stage):
+// the 3D-ring types EV3D, CONTRACT s35.20, in RING_EVENT_SOUNDS - BACK_HIT). Round flow
 // (intro / FIGHT / round end / match end) plays from the events when the sim emits them and from MatchSnap.phase
 // transitions otherwise - guarded per round so it never plays twice.
 //
@@ -17,7 +18,7 @@
 // GameData) makes the routing move-aware: projectiles by `projectile.clip` (wind-up / release / impact), weapon layers by
 // the attacker's move, PRIME TIME beats by `cinematic.cue`; bonus rounds (goons 8 + slot, crowd objects 2) per s28.4.
 
-import { EV, EVX, SC } from '../core/sim/events.ts';
+import { EV, EVX, EV3D, SC } from '../core/sim/events.ts';
 import { mulberry32 } from '../core/rng.ts';
 import type { FighterSnap, MatchSnap, SimEvent } from '../core/types.ts';
 import { MUSIC, SFX, type MusicCueId, type SfxCategory, type SfxId } from './manifest.ts';
@@ -364,6 +365,11 @@ export const EXTRA_EVENT_SOUNDS: { readonly [K in keyof typeof EVX]: EventSoundS
   INSTALL: { ids: ['impact_start'], note: 'an install starts (charge-up)' },
 };
 
+/** CHANGED(fix_ui_stage) (CONTRACT s35.20 item 3): the 3D-ring event types (EV3D) - typecheck forces every key of EV3D */
+export const RING_EVENT_SOUNDS: { readonly [K in keyof typeof EV3D]: EventSoundSpec } = {
+  BACK_HIT: { ids: ['hit_pun', 'crowd_ooh'], note: 'a back hit: the heavy punish crunch layered over the hit (panned at the victim) + a crowd ooh' },
+};
+
 /** sounds driven by state or the API rather than an event */
 export const STATE_SOUNDS: ReadonlyArray<{ readonly ids: readonly SfxId[]; readonly note: string }> = [
   { ids: ['bed_low', 'bed_high', 'bed_stomp'], note: 'crowd beds: intensity = SHOWTIME (both fighters) + recent excitement' },
@@ -404,6 +410,7 @@ export class AudioRouter {
   private readonly rnd: () => number;
   private readonly evNames: Record<number, keyof typeof EV>;
   private readonly evxNames: Record<number, keyof typeof EVX>;
+  private readonly ev3dNames: Record<number, keyof typeof EV3D>;
   private readonly lastVariant: Record<string, number> = {};
   private readonly seen = new Map<string, number>();
   private readonly lastVoice: Record<number, number> = {};
@@ -445,6 +452,9 @@ export class AudioRouter {
     const xn = {} as Record<number, keyof typeof EVX>;
     for (const k of Object.keys(EVX) as (keyof typeof EVX)[]) xn[EVX[k]] = k;
     this.evxNames = xn;
+    const rn = {} as Record<number, keyof typeof EV3D>;
+    for (const k of Object.keys(EV3D) as (keyof typeof EV3D)[]) rn[EV3D[k]] = k;
+    this.ev3dNames = rn;
   }
 
   // ---------------------------------------------------------------------------------------------------- API side
@@ -542,6 +552,8 @@ export class AudioRouter {
     if (!name) {
       const x = this.evxNames[e.type];
       if (x) { this.events[x] = (this.events[x] ?? 0) + 1; this.extra(x, e, sink); return; }
+      const r = this.ev3dNames[e.type];
+      if (r) { this.events[r] = (this.events[r] ?? 0) + 1; this.ring(r, e, sink); return; }
       this.note(`ev:${e.type}`);
       return;
     }
@@ -735,6 +747,18 @@ export class AudioRouter {
         const never: never = name;
         void never;
       }
+    }
+  }
+
+  /** CHANGED(fix_ui_stage): the 3D-ring events (CONTRACT s35.20) - BACK_HIT follows the HIT (a attacker, b victim) */
+  private ring(name: keyof typeof EV3D, e: SimEvent, sink: AudioSink): void {
+    switch (name) {
+      case 'BACK_HIT':
+        this.play(sink, 'hit_pun', 0.85, this.jit(0.03) * 0.94, this.pan(e.b), 7, 'sfx', 0.02);
+        this.crowdShot(sink, 'crowd_ooh', 5, 0.12);
+        this.excite += 0.1;
+        break;
+      default: break;
     }
   }
 

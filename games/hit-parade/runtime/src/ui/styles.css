@@ -237,6 +237,8 @@ html.hp-noflash .hp-show.max .lvl { animation: none; }
 .hp-call[data-k="stageFright"] { background: var(--hp-purple); color: #fff; }
 .hp-call[data-k="wallSplat"] { background: var(--hp-paper); color: var(--hp-red-dk); }
 .hp-call[data-k="firstBlood"] { background: var(--hp-red-dk); color: #fff; }
+/* CHANGED(fix_ui_stage) (CONTRACT 35.20 item 3): BACK HIT - sized like PUNISH COUNTER, its own hot orange */
+.hp-call[data-k="backHit"] { background: #ff7a1a; color: #fff; font-size: max(14px, calc(var(--u) * 1.7)); }
 @keyframes hp-call-in { from { transform: skewX(-14deg) scale(1.8); opacity: 0; } to { transform: skewX(-14deg) scale(1); opacity: 1; } }
 @keyframes hp-call-out { to { transform: skewX(-14deg) translateY(-30%); opacity: 0; } }
 html.hp-noflash .hp-call { animation: hp-call-fade 1.5s linear both; }

@@ -37,6 +37,9 @@
     "crouchFront": 0.733,
     "crouchBack": 0.045
   },
+  "step": {
+    "distM": 1.606
+  },
   "colors": [
     {"name": "Specimen 13", "tint": null},
     {"name": "Cobalt Crystal", "tint": "#1e88e5"},
@@ -191,7 +194,7 @@
       "gain": {"showtime": 1000, "nerveCost": 5000},
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
-      "armor": {"hits": 2, "f": [5, 14]},
+      "armor": {"hits": 2, "f": [9, 14]},
       "role": [],
       "track": {"until": 9, "rate": 180},
       "lateralM": 0.22,
@@ -265,7 +268,7 @@
       "gain": {"showtime": 500, "nerveCost": 4000},
       "cost": {"showtime": 0, "nerve": 0},
       "invuln": {},
-      "armor": {"hits": 2, "f": [5, 23]},
+      "armor": {"hits": 2, "f": [18, 23]},
       "role": ["overhead"],
       "track": {"until": 18, "rate": 180},
       "lateralM": 0.18,
@@ -895,7 +898,7 @@
       "startup": 5,
       "active": 3,
       "recovery": 50,
-      "damage": 2600,
+      "damage": 2200,
       "chipPct": 0,
       "hitstop": 0,
       "hitstun": 0,
@@ -911,7 +914,7 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "grab": {
-        "rangeM": 1.3,
+        "rangeM": 1.0,
         "frames": 80,
         "adv": 28,
         "hitF": 36,
@@ -931,7 +934,7 @@
       "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "360 command grab with the longest reach in the game.",
+      "desc": "360 command grab with a long reach.",
       "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [44, 0.0], [49, 0.037], [58, 0.041]]
     },
     "specimen_grab_m": {
@@ -942,7 +945,7 @@
       "startup": 5,
       "active": 3,
       "recovery": 50,
-      "damage": 3000,
+      "damage": 2550,
       "chipPct": 0,
       "hitstop": 0,
       "hitstun": 0,
@@ -958,7 +961,7 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "grab": {
-        "rangeM": 1.2,
+        "rangeM": 0.92,
         "frames": 80,
         "adv": 28,
         "hitF": 36,
@@ -978,7 +981,7 @@
       "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "360 command grab with the longest reach in the game.",
+      "desc": "360 command grab with a long reach.",
       "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [44, 0.0], [49, 0.037], [58, 0.041]]
     },
     "specimen_grab_h": {
@@ -989,7 +992,7 @@
       "startup": 5,
       "active": 3,
       "recovery": 50,
-      "damage": 3400,
+      "damage": 2900,
       "chipPct": 0,
       "hitstop": 0,
       "hitstun": 0,
@@ -1005,7 +1008,7 @@
       "invuln": {},
       "armor": {"hits": 0, "f": [0, 0]},
       "grab": {
-        "rangeM": 1.1,
+        "rangeM": 0.85,
         "frames": 80,
         "adv": 28,
         "hitF": 36,
@@ -1025,7 +1028,7 @@
       "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "360 command grab with the longest reach in the game.",
+      "desc": "360 command grab with a long reach.",
       "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [44, 0.0], [49, 0.037], [58, 0.041]]
     },
     "specimen_grab_ex": {
@@ -1036,7 +1039,7 @@
       "startup": 5,
       "active": 3,
       "recovery": 50,
-      "damage": 3700,
+      "damage": 3150,
       "chipPct": 25,
       "hitstop": 0,
       "hitstun": 0,
@@ -1052,7 +1055,7 @@
       "invuln": {"strike": [1, 5]},
       "armor": {"hits": 0, "f": [0, 0]},
       "grab": {
-        "rangeM": 1.4,
+        "rangeM": 1.08,
         "frames": 84,
         "adv": 28,
         "hitF": 38,
@@ -1072,7 +1075,7 @@
       "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "Strike-invulnerable 1-5, 1.40 m.",
+      "desc": "Strike-invulnerable 1-5, 1.08 m.",
       "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [44, 0.0], [49, 0.037], [58, 0.041]]
     },
     "meltdown": {
@@ -1333,7 +1336,7 @@
     "grab": ["specimen_grab_m"],
     "armor": ["5H", "6H", "claw_rush_m", "crusher_leap_m"],
     "meter": "meltdown",
-    "antiStep": ["5M", "specimen_grab_m"]
+    "antiStep": ["5M", "roar_ex"]
   },
   "introLine": "(The chains snap. Something in the dark breathes.)",
   "winQuotes": ["(It sniffs the floor where you fell. Then it roars.)", "(It drags its chains back into the dark.)", "(Specimen 13 flexes. The studio lights flicker.)"],

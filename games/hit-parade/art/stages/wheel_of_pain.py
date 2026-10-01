@@ -56,7 +56,10 @@ TOWER_R = 10.05
 
 
 def ring_spot(sid, az, color, inten):
-    p = polar(TOWER_R - 0.3, az, 7.0)
+    # CHANGED(fix_ui_stage): the four tower spots shine from 46 deg elevation (r 7.8, y 9.0; was r 9.75, y 7.0 = 32 deg):
+    # at 32 deg their mirror images in the glossy floor landed at the fighters' knees from some orbit angles (luminance
+    # 8.6); the par cans stay on the towers - the light origin is not visible
+    p = polar(7.8, az, 9.0)
     return {"id": sid, "type": "spot", "color": color, "intensity": inten, "distance": 24.0, "decay": 2,
             "position": [round(v, 3) for v in p], "target": [0.0, 1.0, 0.0], "angleDeg": 27.0, "penumbra": 0.55}
 
@@ -104,8 +107,11 @@ S = {
          "position": [round(v, 3) for v in polar(9.0, 200.0, 14.0)], "target": [0.0, 1.0, 0.0], "castShadow": True,
          "shadow": {"mapSize": 1024, "bias": -0.0004, "normalBias": 0.03,
                     "camera": {"left": -9.0, "right": 9.0, "top": 9.0, "bottom": -9.0, "near": 1.0, "far": 40.0}}},
-        {"id": "rim", "type": "directional", "color": "#62dcff", "intensity": 1.5,
-         "position": [round(v, 3) for v in polar(10.0, 20.0, 7.0)], "target": [0.0, 1.2, 0.0], "castShadow": False},
+        # CHANGED(fix_ui_stage): rim 30 -> 51 deg elevation - its grazing specular sheeted over the alu bumper cap when the
+        # orbit camera stood outside the bumper (7 % of the fighters' band over the bloom threshold) and its mirror image in
+        # the glossy floor peaked at luminance 129 at the fighters' feet (orbit 135 deg)
+        {"id": "rim", "type": "directional", "color": "#62dcff", "intensity": 1.3,
+         "position": [round(v, 3) for v in polar(7.0, 20.0, 9.5)], "target": [0.0, 1.2, 0.0], "castShadow": False},
         {"id": "fill", "type": "hemisphere", "sky": "#9a88ff", "ground": "#2b1233", "intensity": 0.85},
         {"id": "wheel_spot", "type": "spot", "color": "#fff3e0", "intensity": 150.0, "distance": 30.0, "decay": 2,
          "position": [0.0, 9.0, -8.0], "target": [HUB[0], HUB[1], HUB[2]], "angleDeg": 20.0, "penumbra": 0.45},
@@ -151,7 +157,18 @@ L.init_scene("wheel")
 L.run_texgen(SID)
 gt = L.gtex
 log("materials")
-M_FLOOR = L.mat_pbr("wp_floor", gt("wp_floor_a"), gt("wp_floor_n", True), gt("wp_floor_r", True))
+# CHANGED(fix_ui_stage): the stage floor was a near-mirror (roughness map mean 0.085): from a raised orbit camera outside
+# the bumper the tower spots' specular peaks in it reached luminance 43-57 at the fighters' feet (measured, spots off -> 4.9);
+# semi-gloss now (x1.5 + 0.06: mean 0.19) - still glossy, the highlights broad and soft
+def fn_semigloss_r(p):
+    import numpy as np
+    out = p.copy()
+    out[..., :3] = np.clip(p[..., :3] * 1.5 + 0.06, 0.0, 0.9)
+    return out
+
+
+M_FLOOR = L.mat_pbr("wp_floor", gt("wp_floor_a"), gt("wp_floor_n", True),
+                    L.prep(os.path.join(L.TEXA, "wp_floor_r.png"), "wp_floor_semigloss_r", 1024, True, fn=fn_semigloss_r))
 M_ALU = L.mat_pbr("wp_alu", gt("wp_alu_a"), gt("wp_alu_n", True), gt("wp_alu_r", True), metallic=1.0)
 M_GOLD = L.mat_pbr("wp_gold", color=(1.0, 0.70, 0.30, 1), normal=gt("wp_alu_n", True), rough=gt("wp_alu_r", True),
                    metallic=1.0)

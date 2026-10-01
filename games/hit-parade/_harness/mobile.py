@@ -24,6 +24,10 @@ TouchControls over the scripted bout. Per device:
 --game (integration, CHANGED(integrator): implemented): the shell's ?touch=1&mode=versus&p1=johnny&p2=bruno&autostart=1&dev=1
 deep link (P2 idle): the overlay shows, the stick walks P1 (x changes >= 0.3 m), an L tap produces a HIT or WHIFF event,
 PAUSE -> card -> a tap on RESUME, portrait -> rotate overlay pauses the bout.
+CHANGED(fix_ui_stage) (verifier D12): Touch.up() sends `touchEnd` listing ONLY the released finger (CDP ends the points a
+touchEnd lists; the old call listed every OTHER finger and lifted the wrong ones). New checks: lab `release_step_keeps_stick`
+(stick + STEP, lift STEP: LEFT stays, 1 active) and `release_one_of_3` (stick + L + H, lift H: RIGHT|L stay, 2 active);
+--game `game_release_one_finger` (stick right + STEP OUT, lift STEP: the game's touch word keeps RIGHT, drops STEP_OUT).
 Screenshots: _shots/mobile_<device>_<step>.png. Report: _harness/_reports/mobile.json. Exit 0 PASS, 1 FAIL, 2 error.
 Run:  python _harness/mobile.py --headless [--devices se,p844,iphone14,pixel7,ipad]
 """
@@ -76,8 +80,14 @@ class Touch:
             time.sleep(0.016)
 
     def up(self, i: int) -> None:
-        self.pts.pop(i, None)
-        self.cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": [{"x": x, "y": y, "id": j} for j, (x, y) in self.pts.items()]})
+        # CHANGED(fix_ui_stage) (verifier D12): CDP Input.dispatchTouchEvent `touchEnd` ENDS THE POINTS IT LISTS (measured by
+        # the 3D verifier, ver3d_touch2: touchEnd [stick] released the stick and left STEP held; touchEnd [STEP finger]
+        # released STEP and kept the stick). The old call listed every OTHER active finger, so a multi-touch release lifted
+        # the wrong fingers (and an empty list ended them all). List only the released finger.
+        if i not in self.pts:
+            return
+        x, y = self.pts.pop(i)
+        self.cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": [{"x": x, "y": y, "id": i}]})
 
     def tap(self, x: float, y: float, hold: float = 0.05) -> None:
         self.down(99, x, y)
@@ -213,7 +223,13 @@ def lab_device(page, cdp, dev: str, results: list) -> None:
     w = R.word()
     act = R.touch().get("active")
     R.ok("stick_plus_step", (w & (BIT["LEFT"] | BIT["STEP_OUT"])) == (BIT["LEFT"] | BIT["STEP_OUT"]) and act == 2, f"word={names(w)} active={act}", snap=True)
-    T.up(9); T.up(1)
+    # CHANGED(fix_ui_stage) (verifier D12): lifting ONE finger of two releases that finger only (STEP up, the stick stays)
+    T.up(9)
+    time.sleep(0.05)
+    w = R.word()
+    act = R.touch().get("active")
+    R.ok("release_step_keeps_stick", bool(w & BIT["LEFT"]) and not (w & (BIT["STEP_IN"] | BIT["STEP_OUT"])) and act == 1, f"word={names(w)} active={act}")
+    T.up(1)
     time.sleep(0.05)
     R.word()
     # 4 multi-touch: stick right + L + H
@@ -227,7 +243,13 @@ def lab_device(page, cdp, dev: str, results: list) -> None:
     w = R.word()
     act = R.touch().get("active")
     R.ok("multitouch_3", (w & (BIT["RIGHT"] | BIT["L"] | BIT["H"])) == (BIT["RIGHT"] | BIT["L"] | BIT["H"]) and act == 3, f"word={names(w)} active={act}", snap=True)
-    T.up(3); T.up(2); T.up(1)
+    # CHANGED(fix_ui_stage) (verifier D12): release H first - the stick and L stay held
+    T.up(3)
+    time.sleep(0.05)
+    w = R.word()
+    act = R.touch().get("active")
+    R.ok("release_one_of_3", (w & (BIT["RIGHT"] | BIT["L"])) == (BIT["RIGHT"] | BIT["L"]) and not (w & BIT["H"]) and act == 2, f"word={names(w)} active={act}")
+    T.up(2); T.up(1)
     time.sleep(0.05)
     R.word()
     R.ok("multitouch_release", R.word() == 0, f"word={names(R.word())}")
@@ -338,6 +360,26 @@ def game_device(page, cdp, dev: str, results: list, base: str) -> None:
         x1 = fx()
         T.up(1)
         R.ok("game_stick_walks", isinstance(x0, (int, float)) and isinstance(x1, (int, float)) and x1 - x0 >= 0.3, f"P1 x {x0} -> {x1}")
+        # CHANGED(fix_ui_stage) (verifier D12): two fingers (stick right + STEP OUT held), lift ONLY the STEP finger -> the
+        # game's touch word keeps RIGHT and drops STEP_OUT; lift the stick -> neutral (dev.touchWord = what input.ts reads)
+        if R.btn("stepout"):
+            ox, oy = R.centre("stepout")
+            T.down(1, sx, sy)
+            T.move(1, sx + sb["w"] * 0.4, sy)
+            T.down(2, ox, oy)
+            time.sleep(0.15)
+            w_both = R.word()
+            T.up(2)
+            time.sleep(0.15)
+            w_stick = R.word()
+            act = R.touch().get("active")
+            T.up(1)
+            time.sleep(0.15)
+            w_none = R.word()
+            R.ok("game_release_one_finger", (w_both & (BIT["RIGHT"] | BIT["STEP_OUT"])) == (BIT["RIGHT"] | BIT["STEP_OUT"])
+                 and bool(w_stick & BIT["RIGHT"]) and not (w_stick & BIT["STEP_OUT"]) and act == 1 and w_none == 0,
+                 f"both={names(w_both)} after STEP up={names(w_stick)} active={act} after stick up={names(w_none)}")
+            time.sleep(0.4)
     else:
         R.ok("game_stick_walks", False, "no stick rect in __HP__.touch()")
     # L tap -> an attack event by P1

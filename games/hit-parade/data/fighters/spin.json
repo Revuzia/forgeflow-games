@@ -37,6 +37,9 @@
     "crouchFront": 0.443,
     "crouchBack": 0.086
   },
+  "step": {
+    "distM": 1.131
+  },
   "colors": [
     {"name": "Hoodie Black", "tint": null},
     {"name": "Rooftop Red", "tint": "#d32f2f"},

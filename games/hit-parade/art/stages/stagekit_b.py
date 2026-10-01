@@ -74,6 +74,9 @@ SAMPLES = int(arg("--samples", 48))
 SHOTS = arg("--shots", None)
 ORBIT_ONLY = bool(arg("--orbit-only", False))
 NO_ORBIT = bool(arg("--no-orbit", False))
+# CHANGED(fix_ui_stage): `--fragment-only` = re-emit the StageDef (lights / fog / copy edits) into the staging dir without a
+# rebuild; the measured fields come from the shipped fragment (see init)
+FRAGMENT_ONLY = bool(arg("--fragment-only", False))
 
 CACHE = os.path.join(ROOT, "_harness", "scratch", "stages_cache")
 REP = os.path.join(ROOT, "_harness", "_reports", "stages")
@@ -151,6 +154,23 @@ def init(sid, stage_def):
     global SID, S, TEX, SCN, COL_SET, COL_NODES, COL_PROOF, COL_TPL
     SID = sid
     S = stage_def
+    if FRAGMENT_ONLY:
+        # CHANGED(fix_ui_stage): the StageDef edits only (the GLB is unchanged): the measured fields - `build` (GLB stats +
+        # the camera-band clearance probe), camera.clearRadiusM, ring.measuredLowTopM - come from the SHIPPED fragment; the
+        # result is STAGED in OUT3D and installed by `python tools/merge_stages.py --install <id>` (fragment-only install)
+        old = json.load(open(os.path.join(HERE, sid + ".stage.json"), encoding="utf-8"))
+        if "build" in old:
+            S["build"] = old["build"]
+        if (old.get("camera") or {}).get("clearRadiusM") is not None and isinstance(S.get("camera"), dict):
+            S["camera"]["clearRadiusM"] = old["camera"]["clearRadiusM"]
+        if (old.get("ring") or {}).get("measuredLowTopM") is not None and isinstance(S.get("ring"), dict):
+            S["ring"]["measuredLowTopM"] = old["ring"]["measuredLowTopM"]
+        stale = os.path.join(OUT3D, sid + ".glb")
+        if os.path.exists(stale):
+            raise SystemExit("--fragment-only: a staged GLB is waiting in %s - install or remove it first" % stale)
+        write_fragment()
+        log("fragment-only: staged", os.path.join(OUT3D, sid + ".stage.json"))
+        raise SystemExit(0)
     TEX = os.path.join(CACHE, "tex_" + sid)
     if DO_ART or not os.path.isdir(TEX):
         py = system_python()

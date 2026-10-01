@@ -11,6 +11,11 @@
 // STEP ATTACKS section; every row carries a HOMING / LINEAR tag from the fighter data (`moves[id].homing` / `.linear`);
 // HOMING NORMALS lists the fighter's homing normals (its step-catchers - normals are not listed elsewhere); SYSTEM gains
 // SIDESTEP (tap STEP IN / OUT), CIRCLE WALK (hold STEP) and STEP ATTACK; a tip line says what HOMING / LINEAR mean.
+// CHANGED(fix_ui_stage) (verifier modes D5): FOLLOW-UPS are listed under their parent row (indented, a ">" lead) with
+// their own notation in both control types and their own HOMING / LINEAR tag: rekka parts (the parent's `cancel`
+// `chain:<id>` to a `tc` move; notation = the move's `trigger` - CLASSIC motion + button, SIMPLE key; recursive, so patch
+// CUE KICK > CUE 2 > CUE 3), stance follow-ups (`unique.followups` / `unique.exit` of a stance-enter move: > L / M / H / 2)
+// and counter follow-ups (`counter.follow`: AUTO when the counter catches). Each follow-up once, under its first parent.
 
 import type { Scheme, UiFighterDef, UiGameData, UiMoveDef } from './types.ts';
 import { btn, chip, dirSvg, div, el } from './dom.ts';
@@ -18,7 +23,8 @@ import { has, tOr, t } from './strings.ts';
 
 /** CHANGED(UI3D): `step` = a STEP chip ('any' = STEP IN or OUT, 'in' / 'out' = that one) */
 type Part = { d?: number; held?: number; b?: string; plus?: boolean; text?: string; step?: 'any' | 'in' | 'out' };
-interface Row { name: string; parts: Part[]; alt?: Part[]; startup?: number; damage?: number; block?: number; note?: string; id?: string; tags?: Array<'homing' | 'linear'> }
+/** CHANGED(fix_ui_stage): `depth` 1 / 2 = a follow-up row under its parent (rekka part, stance follow-up, counter follow-up) */
+interface Row { name: string; parts: Part[]; alt?: Part[]; startup?: number; damage?: number; block?: number; note?: string; id?: string; tags?: Array<'homing' | 'linear'>; depth?: number }
 
 export function prettyMove(id: string, m?: UiMoveDef | null, fid = ''): string {
   if (m?.name) return m.name.toUpperCase();
@@ -103,9 +109,77 @@ function simpleKeyFor(simple: Record<string, unknown>, fam: string): string | nu
   return null;
 }
 
+/** a button field ('L' / 'M' / 'H' / 'S' / 'LMH' / 'LM' ...) -> parts */
+function btnParts(b: string): Part[] {
+  if (!b) return [];
+  if (b.length > 1 && /^[LMH]+$/.test(b)) return [{ b: 'LMH' }];
+  return [{ b: b === 'SP' ? 'S' : b }];
+}
+
+/** CHANGED(fix_ui_stage): a rekka part's trigger (CONTRACT 20.2) in each control type: [SIMPLE, CLASSIC] parts */
+function triggerParts(m: UiMoveDef): [Part[], Part[]] | null {
+  const tr = m.trigger;
+  if (tr) {
+    const s = tr.simple ?? '';
+    const simple = /^[LMH]+$/.test(s) ? btnParts(s) : s ? simpleParts(s) : [];
+    const c = tr.classic;
+    const classic = c ? [...(c.motion ? [...parseNotation(c.motion), { plus: true } as Part] : []), ...btnParts(c.btn ?? '')] : [];
+    return [simple.length ? simple : classic, classic.length ? classic : simple];
+  }
+  // a target-combo part without a trigger: the last token of "5M>5H" fires it (CONTRACT 19.1)
+  const inp = m.input ?? '';
+  if (inp.includes('>')) { const last = parseNotation(inp.slice(inp.lastIndexOf('>') + 1)); return [last, last]; }
+  return null;
+}
+
+/**
+ * CHANGED(fix_ui_stage) (verifier modes D5): the follow-ups of a listed move, as rows to put right under it - rekka parts
+ * (cancel `chain:<id>` to a `tc` move, recursive), stance follow-ups / exits of a stance-enter move, a counter's
+ * automatic follow-up. `seen` keeps each follow-up to its first parent.
+ */
+function followRows(f: UiFighterDef, scheme: Scheme, parentId: string | undefined, seen: Set<string>, depth = 1): Row[] {
+  const moves = f.moves ?? {};
+  const p = parentId ? moves[parentId] : undefined;
+  if (!p || !parentId || depth > 3) return [];
+  const out: Row[] = [];
+  const parent = prettyMove(parentId, p, f.id);
+  const lead: Part = { text: '>' };
+  const add = (id: string, prim: Part[], alt: Part[] | undefined, note: string): void => {
+    if (seen.has(id) || !moves[id]) return;
+    seen.add(id);
+    const r = moveRow(f, id, [lead, ...prim], note, alt && alt.length ? [lead, ...alt] : undefined);
+    r.depth = depth;
+    out.push(r, ...followRows(f, scheme, id, seen, depth + 1));
+  };
+  // rekka / target-combo parts reachable only through this move's chain
+  const whiff = (p.cancel ?? []).includes('whiff');
+  for (const c of p.cancel ?? []) {
+    if (!c.startsWith('chain:')) continue;
+    const id = c.slice(6);
+    const m = moves[id];
+    if (!m || !m.tc) continue;
+    const tp = triggerParts(m);
+    if (!tp) continue;
+    add(id, scheme === 0 ? tp[0] : tp[1], scheme === 0 ? tp[1] : tp[0], t(whiff ? 'ml.follow.during' : 'ml.follow.chain', { parent }));
+  }
+  // a stance's follow-ups (by button) and exits (by direction) under the move that enters it
+  const u = f.unique;
+  if (p.stance === 'enter' && u?.kind === 'stance') {
+    for (const [b, id] of Object.entries(u.followups ?? {})) add(id, btnParts(b), undefined, t('ml.follow.stance', { parent }));
+    for (const [k, id] of Object.entries(u.exit ?? {})) if (/^[1-9]$/.test(k)) add(id, [{ d: Number(k) }], undefined, t('ml.follow.stance', { parent }));
+  }
+  // a counter's automatic follow-up (it plays when the counter catches a hit)
+  const cf = p.counter?.follow;
+  if (cf) add(cf, [{ text: t('ml.follow.auto') }], undefined, t('ml.follow.counter', { parent }));
+  return out;
+}
+
 export function buildRows(f: UiFighterDef, scheme: Scheme): Array<[string, Row[]]> {
   const secs: Array<[string, Row[]]> = [];
   const moves = f.moves ?? {};
+  // CHANGED(fix_ui_stage): every listed special / EX / super brings its follow-ups right under it (each follow-up once)
+  const seen = new Set<string>();
+  const withFollow = (list: Row[], r: Row): void => { list.push(r, ...followRows(f, scheme, r.id, seen)); };
   const simple = (f.simple ?? {}) as Record<string, unknown>;
   const classic = f.classic ?? [];
   const ids = Object.keys(moves);
@@ -121,11 +195,11 @@ export function buildRows(f: UiFighterDef, scheme: Scheme): Array<[string, Row[]
   const lv1 = [...parseNotation('236236'), { plus: true }, { b: 'LMH' }];
   const lv3 = [...parseNotation('214214'), { plus: true }, { b: 'LMH' }];
   if (scheme === 0) {
-    if (typeof simple['S+H'] === 'string') sup.push(moveRow(f, simple['S+H'] as string, simpleParts('S+H'), t('ml.lv1'), lv1));
-    if (typeof simple['S+H+2'] === 'string') sup.push(moveRow(f, simple['S+H+2'] as string, simpleParts('S+H+2'), t('ml.lv3'), lv3));
+    if (typeof simple['S+H'] === 'string') withFollow(sup, moveRow(f, simple['S+H'] as string, simpleParts('S+H'), t('ml.lv1'), lv1));
+    if (typeof simple['S+H+2'] === 'string') withFollow(sup, moveRow(f, simple['S+H+2'] as string, simpleParts('S+H+2'), t('ml.lv3'), lv3));
   } else {
-    for (const id of ofKind('super1')) sup.push(moveRow(f, id, lv1, t('ml.lv1'), simpleParts('S+H')));
-    for (const id of ofKind('super3')) sup.push(moveRow(f, id, lv3, t('ml.lv3'), simpleParts('S+H+2')));
+    for (const id of ofKind('super1')) withFollow(sup, moveRow(f, id, lv1, t('ml.lv1'), simpleParts('S+H')));
+    for (const id of ofKind('super3')) withFollow(sup, moveRow(f, id, lv3, t('ml.lv3'), simpleParts('S+H+2')));
   }
   if (sup.length) secs.push([t('ml.supers'), sup]);
 
@@ -136,7 +210,7 @@ export function buildRows(f: UiFighterDef, scheme: Scheme): Array<[string, Row[]
     for (const k of ['5S', '6S', '2S', '4S']) {
       if (typeof simple[k] !== 'string') continue;
       const c = classicFor(family(simple[k] as string));
-      spc.push(moveRow(f, simple[k] as string, simpleParts(k), undefined, c ? cParts(c) : undefined));
+      withFollow(spc, moveRow(f, simple[k] as string, simpleParts(k), undefined, c ? cParts(c) : undefined));
     }
     for (const k of ['5S', '6S', '2S', '4S']) {
       if (typeof simple[k] !== 'string') continue;
@@ -144,16 +218,16 @@ export function buildRows(f: UiFighterDef, scheme: Scheme): Array<[string, Row[]
       const explicit = simple[`A${k}`];
       const exId = typeof explicit === 'string' ? explicit : (simple[k] as string).replace(/_(l|m|h)$/i, '_ex');
       const c = classicFor(family(exId));
-      if (moves[exId]) ex.push(moveRow(f, exId, [{ b: 'ASSIST' }, { plus: true }, ...simpleParts(k)], t('ml.nerve', { n: 2 }), c ? [...parseNotation(c.motion), { plus: true }, { b: 'S' }] : undefined));
+      if (moves[exId]) withFollow(ex, moveRow(f, exId, [{ b: 'ASSIST' }, { plus: true }, ...simpleParts(k)], t('ml.nerve', { n: 2 }), c ? [...parseNotation(c.motion), { plus: true }, { b: 'S' }] : undefined));
     }
   } else {
     for (const c of classic) {
       const btnParts: Part[] = c.btn === 'S' ? [{ b: 'S' }] : c.btn.length > 1 ? [{ b: 'LMH' }] : [{ b: c.btn }];
       const sk = simpleKeyFor(simple, family(c.move));
-      if (c.btn !== 'S') spc.push(moveRow(f, c.move, [...parseNotation(c.motion), { plus: true }, ...btnParts], undefined, sk ? simpleParts(sk) : undefined));
+      if (c.btn !== 'S') withFollow(spc, moveRow(f, c.move, [...parseNotation(c.motion), { plus: true }, ...btnParts], undefined, sk ? simpleParts(sk) : undefined));
       // CONTRACT 19.2: motion + S = the `{s}` -> ex id whenever it exists
       const exId = c.move.includes('{s}') ? c.move.replace('{s}', 'ex') : c.btn === 'S' ? c.move : '';
-      if (exId && moves[exId]) ex.push(moveRow(f, exId, [...parseNotation(c.motion), { plus: true }, { b: 'S' }], t('ml.nerve', { n: 2 }), sk ? [{ b: 'ASSIST' }, { plus: true }, ...simpleParts(sk)] : undefined));
+      if (exId && moves[exId]) withFollow(ex, moveRow(f, exId, [...parseNotation(c.motion), { plus: true }, { b: 'S' }], t('ml.nerve', { n: 2 }), sk ? [{ b: 'ASSIST' }, { plus: true }, ...simpleParts(sk)] : undefined));
     }
   }
   if (spc.length) secs.push([t('ml.specials'), spc]);
@@ -286,8 +360,10 @@ export class MoveList {
       sec.append(el('h4', 'hpm-cap', title));
       if (first) { sec.append(colHead()); first = false; }
       for (const r of rows) {
-        const row = div('hpm-ml-row', sec);
+        // CHANGED(fix_ui_stage): a follow-up row sits indented under its parent (`data-follow` = its depth)
+        const row = div(`hpm-ml-row${r.depth ? ` sub d${Math.min(3, r.depth)}` : ''}`, sec);
         if (r.id) row.dataset.move = r.id;
+        if (r.depth) row.dataset.follow = String(r.depth);
         const nm = el('div', 'nm');
         const nb = el('b', '', r.name);
         // CHANGED(UI3D): HOMING / LINEAR tag from the fighter data

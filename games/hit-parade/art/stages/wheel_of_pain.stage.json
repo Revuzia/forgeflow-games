@@ -429,11 +429,11 @@
       "id": "rim",
       "type": "directional",
       "color": "#62dcff",
-      "intensity": 1.5,
+      "intensity": 1.3,
       "position": [
-        3.42,
-        7.0,
-        9.397
+        2.394,
+        9.5,
+        6.578
       ],
       "target": [
         0.0,
@@ -477,9 +477,9 @@
       "distance": 24.0,
       "decay": 2,
       "position": [
-        6.894,
-        7.0,
-        6.894
+        5.515,
+        9.0,
+        5.515
       ],
       "target": [
         0.0,
@@ -497,9 +497,9 @@
       "distance": 24.0,
       "decay": 2,
       "position": [
-        6.894,
-        7.0,
-        -6.894
+        5.515,
+        9.0,
+        -5.515
       ],
       "target": [
         0.0,
@@ -517,9 +517,9 @@
       "distance": 24.0,
       "decay": 2,
       "position": [
-        -6.894,
-        7.0,
-        -6.894
+        -5.515,
+        9.0,
+        -5.515
       ],
       "target": [
         0.0,
@@ -537,9 +537,9 @@
       "distance": 24.0,
       "decay": 2,
       "position": [
-        -6.894,
-        7.0,
-        6.894
+        -5.515,
+        9.0,
+        5.515
       ],
       "target": [
         0.0,
@@ -761,7 +761,7 @@
     "splatWallDust": "#ff7ad9"
   },
   "build": {
-    "bytes": 2114972,
+    "bytes": 2119824,
     "draws": 23,
     "triangles": 82642,
     "materials": 18,

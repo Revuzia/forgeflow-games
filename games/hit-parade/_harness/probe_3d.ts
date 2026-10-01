@@ -9,6 +9,10 @@
 //   from all sides, soft lock, determinism + save/load re-step with random STEP streams, snapshot fields.
 //   CHANGED(STEPTUNE) (CONTRACT §35.15): section 3b = the front-loaded step curve + the measured STEPPABLE TABLE (move
 //   classes x 1.2 / 2.0 m, step-start windows relative to the attack's frame 1) + a roster sweep of all 12 kits.
+//   CHANGED(fix_core) (CONTRACT §35.20): 3b by-DEFENDER rows gate the per-fighter step (D1: every body evades a straight
+//   5M / 5H at 1.2 m from >= 2 start frames, small bodies keep larger windows, homing never even for the longest steps);
+//   section 10 = D9 (a press on any sidestep frame comes out on frame 11, newest wins), D7 BACK HIT, D4 grab hold (FINAL
+//   DELIVERY follows grab.path; every other grab pulls its victim to the hold point). D8 (teleport facing): probe_uniques.
 import { readFileSync, readdirSync } from 'node:fs';
 import { I, ROOT, dirBits, evs, fixtureData, newMatch, place, place3, run, sb, stepInputs, tester } from './fixtures/simkit.ts';
 import { buildGameData, loadGameData, STEP_CLIPS } from '../runtime/src/core/data.ts';
@@ -16,13 +20,14 @@ import type { GameData } from '../runtime/src/core/types.ts';
 import { checksum, load, readFighter, readMatch, save, step } from '../runtime/src/core/sim/match.ts';
 import type { Match } from '../runtime/src/core/sim/match.ts';
 import { ACT, BALL, BR, BRAWL_BASE, F, G, GOON_CAP, P, PROJ_CAP, ST, STATE_INTS, W, goonBase, projBase } from '../runtime/src/core/sim/layout.ts';
-import { BALL_EV, EV, EVX } from '../runtime/src/core/sim/events.ts';
+import { BALL_EV, EV, EVX, EV3D } from '../runtime/src/core/sim/events.ts';
 import {
   Q, SIN_Q, cosQ, dirToYaw, divRound, isqrt, mulQ, rot, sinQ, sinTableHash, yawDelta, degToYaw,
 } from '../runtime/src/core/sim/fx3d.ts';
 import { canBlock } from '../runtime/src/core/sim/hits.ts';
 import { inFrontArc } from '../runtime/src/core/sim/throws.ts';
-import { boxCyl } from '../runtime/src/core/sim/boxes.ts';
+import { holdDist, victimPose } from '../runtime/src/core/sim/throwpose.ts'; // CHANGED(fix_core) D4
+import { boxCyl, pushCircle } from '../runtime/src/core/sim/boxes.ts';
 
 const t = tester('probe_3d');
 const U = 100000;
@@ -302,18 +307,20 @@ const st = (m: Match, i: number): number => m.s[sb(i) + F.st];
     let ok = who.length > 0;
     const notes: string[] = [];
     for (const id of who) {
+      // CHANGED(fix_core) D9 (CONTRACT §35.20): a press on ANY sidestep frame (2 on) is held and comes out on step frame 11
       const tryStep = (pressAt: number): string => {
         const m = newMatch({ data: real, p1: id, p2: 'johnny', stage: 'rust_theater' });
         step(m, I.STEP_IN, 0);
         let name = '';
         for (let k = 2; k <= 13 && !name; k++) {
           step(m, k === pressAt ? I.H : 0, 0);
-          if (st(m, 0) === ST.ATTACK) name = readFighter(m, 0).moveName;
+          if (st(m, 0) === ST.ATTACK) name = `${readFighter(m, 0).moveName}@${k}`;
         }
         return name;
       };
       const at9 = tryStep(9);
       const at5 = tryStep(5);
+      const at2 = tryStep(2);
       const mw = newMatch({ data: real, p1: id, p2: 'johnny', stage: 'rust_theater' });
       run(mw, 30, I.STEP_OUT, 0);
       step(mw, I.STEP_OUT | I.H, 0);
@@ -321,10 +328,10 @@ const st = (m: Match, i: number): number => m.s[sb(i) + F.st];
       const mi = newMatch({ data: real, p1: id, p2: 'johnny', stage: 'rust_theater' });
       step(mi, I.H, 0);
       const idleName = readFighter(mi, 0).moveName;
-      notes.push(`${id}: step f9 H -> ${at9}, f5 H -> ${at5 || 'none'}, sidewalk H -> ${walkName}, idle H -> ${idleName}`);
-      if (!(at9 === 'SS.H' && at5 === '' && walkName === 'SS.H' && idleName === '5H')) ok = false;
+      notes.push(`${id}: step f2 H -> ${at2 || 'none'}, f5 H -> ${at5 || 'none'}, f9 H -> ${at9 || 'none'}, sidewalk H -> ${walkName}, idle H -> ${idleName}`);
+      if (!(at2 === 'SS.H@11' && at5 === 'SS.H@11' && at9 === 'SS.H@11' && walkName === 'SS.H' && idleName === '5H')) ok = false;
     }
-    t.ok(ok, `step-attacks: SS.H out of a sidestep (buffered from step frame 9, not 5) and a sidewalk; idle H stays 5H (${notes.join('; ')})`);
+    t.ok(ok, `step-attacks: SS.H out of a sidestep (pressed on step frame 2 / 5 / 9 -> out on frame 11) and a sidewalk; idle H stays 5H (${notes.join('; ')})`);
   } catch (e) {
     t.ok(false, `step-attack case crashed: ${String((e as Error).message).split(String.fromCharCode(10))[0]}`);
   }
@@ -579,11 +586,17 @@ function stepVs5H(data: GameData): { hit: number; whiff: number } {
     // stepper like the linear L / M / H versions, so a step 2 f before their first active frame still whiffs them)
     const minLate = agg['normal (default track)']?.minLatest ?? 99;
     t.ok(minLate >= 3, `roster: a default-tracking normal is never evaded by a step started < 3 f before its active frames (min ${minLate})`);
-    // --- the DEFENDER's body decides too (report): the hurt cylinder radius = (front + back) / 2 of the measured body
-    // (boxes.ts hurtCyls), so long / lurching bodies are wide across the attack line and need more lateral travel
+    // --- the DEFENDER's body decides too: the hurt cylinder radius = (front + back) / 2 of the measured body (boxes.ts
+    // hurtCyls), so long / lurching bodies are wide across the attack line and need more lateral travel.
+    // CHANGED(fix_core) D1 (CONTRACT §35.20): each fighter steps its OWN arc (fighters/<id>.json step.distM, kitlib
+    // step_dist_m from the measured body) - GATED here: at 1.2 m EVERY body evades a straight 5M (krane, s8) and a straight
+    // 5H (zambini, s12) on a read from >= 2 consecutive start frames (all straight 5M / 5H of the roster give the same
+    // window per defender: scratch d1_sweep2, progress_fix_core.md), small bodies keep larger windows than big ones (the
+    // heavyweights step worse, never "never"), homing is never evaded (the krane 5H vs all 12; every reachable homing ground
+    // strike of the roster vs the two LONGEST steps, rerun / freak).
     const defLines: string[] = [];
     let homingAny = 0;
-    const winVs = (att: string, mid: string, def: string, dM = 1.2): string => {
+    const evadeOffs = (att: string, mid: string, def: string, dM = 1.2, bit: number = I.STEP_IN, lo = -26, hi = 20): number[] | null => {
       const tr = (off: number | null): number => {
         const m = newMatch({ data: R, p1: att, p2: def, stage: 'rust_theater' });
         place(m, -dM / 2, dM / 2);
@@ -591,6 +604,8 @@ function stepVs5H(data: GameData): { hit: number; whiff: number } {
         const idx = m.cf[0].moves.findIndex((x) => x.id === mid);
         const total = m.cf[0].moves[idx].total;
         const b0 = sb(0);
+        m.s[b0 + F.showtime] = 30000;
+        m.s[b0 + F.nerve] = 60000;
         const from = m.frame();
         for (let k = off === null ? 0 : Math.min(0, off); k <= total + 40; k++) {
           if (k === 0) {
@@ -600,29 +615,91 @@ function stepVs5H(data: GameData): { hit: number; whiff: number } {
             m.s[b0 + F.bufWin] = 8;
             m.s[b0 + F.bufF] = 0;
           }
-          step(m, 0, off !== null && k === off ? I.STEP_IN : 0);
+          step(m, 0, off !== null && k === off ? bit : 0);
         }
-        return evs(m, from).filter((e) => e.a === 0 && (e.type === EV.HIT || e.type === EV.BLOCK)).length;
+        return evs(m, from).filter((e) => e.a === 0 && (e.type === EV.HIT || e.type === EV.BLOCK || e.type === EV.PROJ_HIT)).length;
       };
-      if (tr(null) === 0) return 'out of reach';
+      if (tr(null) === 0) return null;
       const ev: number[] = [];
-      for (let o = -26; o <= 20; o++) if (tr(o) === 0) ev.push(o);
-      return ev.length ? `${ev[0]}..${ev[ev.length - 1]} (${ev.length} f)` : 'never';
+      for (let o = lo; o <= hi; o++) if (tr(o) === 0) ev.push(o);
+      return ev;
     };
+    const runOf = (ev: number[] | null): number => {
+      if (!ev) return -1;
+      let best = 0;
+      let cur = 0;
+      for (let q = 0; q < ev.length; q++) {
+        cur = q > 0 && ev[q] === ev[q - 1] + 1 ? cur + 1 : 1;
+        best = Math.max(best, cur);
+      }
+      return best;
+    };
+    const fmtW = (ev: number[] | null): string => (!ev ? 'out of reach' : ev.length ? `${ev[0]}..${ev[ev.length - 1]} (${ev.length} f)` : 'never');
+    const winVs = (att: string, mid: string, def: string, dM = 1.2): string => fmtW(evadeOffs(att, mid, def, dM));
+    interface DefRow { def: string; r: number; dist: number; w5M: number; w5H: number }
+    const rows: DefRow[] = [];
     for (const def of Object.keys(R.fighters).sort()) {
       const cf = newMatch({ data: R, p1: def, p2: def }).cf[0];
       const r = (cf.hurtFS + cf.hurtBS) / 2 / U;
       const hm = winVs('krane', '5H', def);
       if (hm !== 'never') homingAny++;
+      const e5M = evadeOffs('krane', '5M', def);
+      const e5H = evadeOffs('zambini', '5H', def);
+      rows.push({ def, r, dist: cf.stepDist / U, w5M: runOf(e5M), w5H: runOf(e5H) });
       // equal gap: the defender's hurt FRONT 0.84 m from the attacker's root (= johnny at 1.2 m), so big bodies are not
       // simply measured at point-blank range
       const dg = Math.round((0.84 + cf.hurtFS / U) * 100) / 100;
-      defLines.push(`${def} (hurt r ${r.toFixed(2)} m, front ${(cf.hurtFS / U).toFixed(2)} m): 1.2 m: krane 5L ${winVs('krane', '5L', def)}, krane 5M ${winVs('krane', '5M', def)}, zambini 5H ${winVs('zambini', '5H', def)}, johnny hook_m ${winVs('johnny', 'hook_m', def)}, homing krane 5H ${hm} | equal gap (${dg.toFixed(2)} m): 5L ${winVs('krane', '5L', def, dg)}, 5M ${winVs('krane', '5M', def, dg)}, 5H ${winVs('zambini', '5H', def, dg)}`);
+      defLines.push(`${def} (hurt r ${r.toFixed(2)} m, front ${(cf.hurtFS / U).toFixed(2)} m, step ${(cf.stepDist / U).toFixed(3)} m): 1.2 m: krane 5L ${winVs('krane', '5L', def)}, krane 5M ${fmtW(e5M)}, zambini 5H ${fmtW(e5H)}, johnny hook_m ${winVs('johnny', 'hook_m', def)}, homing krane 5H ${hm} | equal gap (${dg.toFixed(2)} m): 5L ${winVs('krane', '5L', def, dg)}, 5M ${winVs('krane', '5M', def, dg)}, 5H ${winVs('zambini', '5H', def, dg)}`);
     }
-    console.log('  by DEFENDER (STEP_IN; the body decides the lateral clearance: hurt cylinder radius + how far its front reaches toward');
-    console.log('  the attacker, i.e. toward the pivot of the circling step):');
+    console.log('  by DEFENDER (STEP_IN; each body steps its own step.distM arc; the body decides the lateral clearance: hurt cylinder');
+    console.log('  radius + how far its front reaches toward the attacker, i.e. toward the pivot of the circling step):');
     for (const l of defLines) console.log(`    ${l}`);
     t.ok(homingAny === 0, `the homing krane 5H is never evaded by any of the 12 defender bodies (${homingAny} evaded)`);
+    const sum = (q: DefRow): string => `${q.def} ${q.w5M}/${q.w5H}`;
+    const low = rows.filter((q) => q.w5M < 2 || q.w5H < 2);
+    t.ok(rows.length === 12 && low.length === 0, `every body evades a straight 5M AND a straight 5H at 1.2 m on a read from >= 2 consecutive start frames (5M/5H frames: ${rows.map(sum).join(', ')})${low.length ? ' - TOO FEW: ' + low.map(sum).join(', ') : ''}`);
+    const small = rows.filter((q) => q.r <= 0.27);
+    const big = rows.filter((q) => q.r >= 0.37);
+    const maxBig = (k: 'w5M' | 'w5H'): number => Math.max(...big.map((q) => q[k]));
+    const minSmall = (k: 'w5M' | 'w5H'): number => Math.min(...small.map((q) => q[k]));
+    const sumOk = small.every((a) => big.every((b) => a.w5M + a.w5H > b.w5M + b.w5H));
+    t.ok(small.length === 4 && big.length === 6 && minSmall('w5M') >= maxBig('w5M') && minSmall('w5H') >= maxBig('w5H') && sumOk,
+      `small bodies keep larger windows than big ones: small (r <= 0.27: ${small.map(sum).join(', ')}) >= big (r >= 0.37: ${big.map(sum).join(', ')}) per move, and every small body's 5M + 5H > every big body's`);
+    t.ok(small.every((q) => Math.abs(q.dist - 0.85) < 1e-9) && big.every((q) => q.dist > 1.0), `the small bodies keep the 0.85 m default step; the big ones step longer (${rows.map((q) => `${q.def} ${q.dist.toFixed(3)}`).join(', ')})`);
+    // every fighter's own curve keeps the §35.15 shape: 15 frames, 60-65 % in the first 6, moving and easing every frame
+    const shapeBad: string[] = [];
+    for (const def of Object.keys(R.fighters).sort()) {
+      const cv = Array.from(newMatch({ data: R, p1: def, p2: def }).cf[0].stepCurve);
+      const Dd = cv[cv.length - 1];
+      let ease = cv.length === 16;
+      for (let f = 1; f < cv.length; f++) {
+        const d = cv[f] - cv[f - 1];
+        if (d <= 0 || (f > 1 && d > cv[f - 1] - cv[f - 2] + 1)) ease = false;
+      }
+      const p6 = (cv[6] / Dd) * 100;
+      if (!ease || p6 < 60 || p6 > 65) shapeBad.push(`${def} ${cv.length - 1} f ${p6.toFixed(1)} %`);
+    }
+    t.ok(shapeBad.length === 0, `every fighter's step keeps 15 frames and the front-loaded ease-out (60-65 % in 6 frames)${shapeBad.length ? ': ' + shapeBad.join(', ') : ''}`);
+    // STEP_OUT = STEP_IN for the long steps too
+    const symBig = [['rerun', 'krane', '5M'], ['freak', 'zambini', '5H'], ['krane', 'zambini', '5H']].every(([d, a, mm]) => fmtW(evadeOffs(a, mm, d, 1.2, I.STEP_OUT)) === fmtW(evadeOffs(a, mm, d)));
+    t.ok(symBig, 'STEP_OUT evades exactly like STEP_IN for the long steps (rerun vs krane 5M, freak / krane vs zambini 5H)');
+    // homing stays unsteppable even for the longest steps: every reachable homing ground strike of the roster
+    let homN = 0;
+    const homEv: string[] = [];
+    for (const def of ['rerun', 'freak']) {
+      for (const id of Object.keys(R.fighters).sort()) {
+        const cfA = newMatch({ data: R, p1: id, p2: def }).cf[0];
+        for (const mvc of cfA.moves) {
+          const o = R.fighters[id].moves[mvc.id];
+          if (!o || !mvc.homing || !mvc.isStrike || mvc.inAir || mvc.stepAtk || mvc.chainOnly || o.kind === 'system') continue;
+          const ev = evadeOffs(id, mvc.id, def, 1.2, I.STEP_IN, -26, mvc.startup + 1);
+          if (!ev) continue;
+          homN++;
+          if (ev.length) homEv.push(`${def} vs ${id} ${mvc.id}: ${fmtW(ev)}`);
+        }
+      }
+    }
+    t.ok(homN >= 80 && homEv.length === 0, `homing is never evaded by the two LONGEST steps (rerun / freak) over ${homN} reachable homing ground strikes at 1.2 m${homEv.length ? ': ' + homEv.join('; ') : ''}`);
     t.note(`steppable table: ${table.join(' || ')} || roster: ${aggLines.join(' || ')} || by defender: ${defLines.join(' || ')}`);
   }
 }
@@ -950,6 +1027,222 @@ function throwAt(yawOff: number): number {
   }
   t.eq(twin, 0, 'random STEP streams (taps, circling, back-cancels, step-attacks): twin runs identical every frame (3 x 4000 f)');
   t.eq(mism, 0, 'save / step / load / re-step every frame reproduces the straight run (3 x 4000 f)');
+}
+
+// ================================================================= 10. CHANGED(fix_core) (CONTRACT §35.20): D9 step buffer,
+// D7 BACK HIT, D4 grab hold (the D1 per-fighter step is gated in section 3b; the D8 teleport facing in probe_uniques)
+{
+  // --- D9: an attack pressed on ANY sidestep frame (2 on) is held and comes out on step frame 11; the newest press wins
+  const stepPress = (presses: [number, number][]): string => {
+    const m = newMatch({ data: D0, stage: 'circ' });
+    step(m, I.STEP_IN, 0); // step frame 1
+    for (let k = 2; k <= 20; k++) {
+      let w = 0;
+      for (const [f, b] of presses) if (f === k) w |= b;
+      step(m, w, 0);
+      if (st(m, 0) === ST.ATTACK) return `${readFighter(m, 0).moveName}@${k}`;
+    }
+    return 'none';
+  };
+  const outs: string[] = [];
+  let allEleven = true;
+  for (let k = 2; k <= 10; k++) {
+    const o = stepPress([[k, I.L]]);
+    outs.push(`f${k} -> ${o}`);
+    if (o !== '5L@11') allEleven = false;
+  }
+  t.ok(allEleven, `D9: L pressed on sidestep frame 2..10 comes out on step frame 11 every time (${outs.join(', ')})`);
+  const late = stepPress([[12, I.L]]);
+  const newest = stepPress([[3, I.L], [7, I.H]]);
+  const newest2 = stepPress([[3, I.H], [10, I.L]]);
+  t.ok(late === '5L@12' && newest === '5H@11' && newest2 === '5L@11', `D9: a press from frame 11 on acts at once (f12 -> ${late}); the newest press wins (L@3 then H@7 -> ${newest}, H@3 then L@10 -> ${newest2})`);
+}
+{
+  // --- D7 BACK HIT: P2 held in hitstun (its yaw kept) turned `turnDeg` off facing P1; P1 lands a 5M / a straight brick
+  const backTrial = (turnDeg: number, proj: boolean, air = false): { dmg: number; stun: number; off: number; back: number; hit: number; facing: number } => {
+    const m = newMatch({ data: D0, stage: 'circ' });
+    place(m, proj ? -2.2 : -0.55, proj ? 2.2 : 0.55);
+    run(m, 2, 0, 0);
+    const b1 = sb(1);
+    m.s[b1 + F.st] = air ? ST.JUGGLE : ST.HITSTUN;
+    m.s[b1 + F.stF] = 0;
+    m.s[b1 + F.stun] = 90;
+    if (air) {
+      m.s[b1 + F.flags] |= 1;
+      m.s[b1 + F.y] = 40000;
+      m.s[b1 + F.vy] = 0;
+      m.s[b1 + F.vx] = 0;
+      m.s[b1 + F.vz] = 0;
+    }
+    const face = dirToYaw(m.s[sb(0) + F.x] - m.s[b1 + F.x], m.s[sb(0) + F.z] - m.s[b1 + F.z]);
+    m.s[b1 + F.yaw] = (face + degToYaw(turnDeg)) & 65535;
+    const hp0 = m.s[b1 + F.hp];
+    const from = m.frame();
+    let stun = -1;
+    let yawAt = 0;
+    let facing = 0;
+    for (let k = 0; k < 70 && stun < 0; k++) {
+      const w = proj ? (k < 3 ? dirBits(m, 0, [2, 3, 6][k]) | (k === 2 ? I.M : 0) : 0) : k === 0 ? I.M : 0;
+      if (air && m.s[b1 + F.y] < 30000) m.s[b1 + F.y] = 40000; // keep it airborne until the hit (test setup)
+      step(m, w, 0);
+      if (m.s[b1 + F.hp] < hp0) {
+        stun = m.s[b1 + F.stun];
+        yawAt = m.s[b1 + F.yaw];
+        facing = m.s[b1 + F.facing];
+      }
+    }
+    const want = dirToYaw(m.s[sb(0) + F.x] - m.s[b1 + F.x], m.s[sb(0) + F.z] - m.s[b1 + F.z]);
+    return {
+      dmg: hp0 - m.s[b1 + F.hp], stun, off: (Math.abs(yawDelta(yawAt, want)) * 360) / 65536,
+      back: count(m, from, EV3D.BACK_HIT, 0), hit: count(m, from, EV.HIT, 0), facing,
+    };
+  };
+  const f0 = backTrial(0, false);
+  const f119 = backTrial(119, false);
+  const b121 = backTrial(121, false);
+  const b180 = backTrial(180, false);
+  const bm150 = backTrial(-150, false);
+  const fmtB = (q: { dmg: number; stun: number; off: number; back: number }): string => `dmg ${q.dmg} stun ${q.stun} yaw off ${q.off.toFixed(1)} deg BACK_HIT ${q.back}`;
+  t.ok(f0.hit === 1 && f0.back === 0 && f119.back === 0 && f119.dmg === f0.dmg && f119.stun === f0.stun,
+    `D7: a hit from the front / 119 deg off the defender's facing is a normal hit (front ${fmtB(f0)}; 119 deg ${fmtB(f119)})`);
+  const want = Math.trunc((f0.dmg * 120) / 100);
+  const backOk = [b121, b180, bm150].every((q) => q.back === 1 && q.dmg === want && q.stun === f0.stun + 4 && q.off <= 0.1);
+  t.ok(backOk, `D7: from > 120 deg off (121 / 180 / -150) = BACK HIT: x1.2 damage (${want}), +4 hitstun (${f0.stun + 4}), the victim turned to face the attacker, EV3D.BACK_HIT once (121: ${fmtB(b121)}; 180: ${fmtB(b180)}; -150: ${fmtB(bm150)})`);
+  const pf = backTrial(0, true);
+  const pb = backTrial(180, true);
+  t.ok(pf.hit === 1 && pf.back === 0 && pb.back === 1 && pb.dmg === Math.trunc((pf.dmg * 120) / 100) && pb.off <= 0.5,
+    `D7: a straight projectile into the defender's back is a BACK HIT too (front ${fmtB(pf)}; back ${fmtB(pb)})`);
+  const air = backTrial(180, false, true);
+  t.ok(air.hit === 1 && air.back === 0, `D7: an airborne (juggled) defender hit from behind is not a back hit (${fmtB(air)})`);
+}
+{
+  // --- D4 grab hold (real data): bruno FINAL DELIVERY carries its victim along grab.path (= the cinematic gapD); every
+  // other grab pulls its victim into contact on the thrower's forward line within throw.pullF frames
+  let real4: GameData | null = null;
+  try {
+    real4 = loadGameData();
+  } catch (e) {
+    t.ok(false, `D4: real data/ not loadable: ${String((e as Error).message).split('\n')[0]}`);
+  }
+  if (real4) {
+    const R4 = real4;
+    const PA = new Int32Array(3);
+    const PV = new Int32Array(3);
+    const VPZ = new Int32Array(6);
+    interface Lock { thrown: boolean; lf: number[]; along: number[]; lat: number[]; y: number[]; gap: number[]; disp: number[]; hold: number; end: number; endState: string; dmg: number }
+    const lockRun = (att: string, mid: string, def: string, dM: number): Lock => {
+      const m = newMatch({ data: R4, p1: att, p2: def, stage: 'rust_theater' });
+      place(m, -dM / 2, dM / 2);
+      run(m, 2, 0, 0);
+      const idx = m.cf[0].moves.findIndex((x) => x.id === mid);
+      const b0 = sb(0);
+      const b1 = sb(1);
+      m.s[b0 + F.showtime] = 30000;
+      m.s[b0 + F.nerve] = 60000;
+      m.s[b0 + F.bufA] = ACT.MOVE;
+      m.s[b0 + F.bufM] = idx;
+      m.s[b0 + F.bufAge] = 0;
+      m.s[b0 + F.bufWin] = 8;
+      m.s[b0 + F.bufF] = 0;
+      const hp0 = m.s[b1 + F.hp];
+      const L: Lock = { thrown: false, lf: [], along: [], lat: [], y: [], gap: [], disp: [], hold: 0, end: 0, endState: '', dmg: 0 };
+      let started = false;
+      for (let k = 0; k < 420; k++) {
+        step(m, 0, 0);
+        if (m.s[b0 + F.st] === ST.ATTACK || m.s[b0 + F.st] === ST.GRAB) started = true;
+        if (m.s[b1 + F.st] === ST.THROWN) {
+          L.thrown = true;
+          const tot = m.s[b1 + F.tot];
+          const yw = (m.s[b0 + F.yaw] * 2 * Math.PI) / 65536;
+          const dx = (m.s[b1 + F.x] - m.s[b0 + F.x]) / U;
+          const dz = (m.s[b1 + F.z] - m.s[b0 + F.z]) / U;
+          pushCircle(m, 0, PA);
+          pushCircle(m, 1, PV);
+          L.lf.push(tot - m.s[b1 + F.stun]);
+          L.along.push(dx * Math.sin(yw) + dz * Math.cos(yw));
+          L.lat.push(Math.abs(dx * Math.cos(yw) - dz * Math.sin(yw)));
+          L.y.push(m.s[b1 + F.y] / U);
+          L.gap.push((Math.hypot(PV[0] - PA[0], PV[1] - PA[1]) - PA[2] - PV[2]) / U);
+          L.disp.push(victimPose(m, 1, VPZ) ? VPZ[3] / U : 0);
+          L.hold = holdDist(m, 1) / U;
+        } else if (L.thrown) {
+          const yw = (m.s[b0 + F.yaw] * 2 * Math.PI) / 65536;
+          L.end = ((m.s[b1 + F.x] - m.s[b0 + F.x]) * Math.sin(yw) + (m.s[b1 + F.z] - m.s[b0 + F.z]) * Math.cos(yw)) / U;
+          L.endState = readFighter(m, 1).stateName;
+          L.dmg = hp0 - m.s[b1 + F.hp];
+          break;
+        } else if (started && (m.s[b0 + F.st] === ST.IDLE || m.s[b0 + F.st] === ST.WALK_F)) break; // whiffed
+      }
+      return L;
+    };
+    const at = (L: Lock, f: number): number => L.lf.indexOf(f);
+    // FINAL DELIVERY from 1.6 m (the verifier's case: johnny stood 0.5-2 m away the whole lock)
+    const fd = lockRun('bruno', 'final_delivery', 'johnny', 1.6);
+    const fronts = (R4.fighters.bruno.push!.front + R4.fighters.johnny.push!.front);
+    const i20 = at(fd, 20);
+    const i30 = at(fd, 30);
+    const i100 = at(fd, 100);
+    const i128 = at(fd, 128);
+    const i145 = at(fd, 145);
+    const latMax = Math.max(...fd.lat);
+    const yMax = Math.max(...fd.y);
+    // f20: lift 0.10 (< 0.15) -> the full §26.5 floor (the push fronts); f30: lift 0.20 -> 2/3 of it over the authored 0.6 m
+    const ok30 = i20 >= 0 && i30 >= 0 && Math.abs(fd.along[i20] - fronts) <= 0.01 && Math.abs(fd.y[i20] - 0.1) <= 0.01 &&
+      Math.abs(fd.along[i30] - (0.6 + ((fronts - 0.6) * 2) / 3)) <= 0.01 && Math.abs(fd.y[i30] - 0.2) <= 0.01;
+    const ok100 = i100 >= 0 && Math.abs(fd.along[i100] - 0.4) <= 0.01 && Math.abs(fd.y[i100] - 1.4) <= 0.01;
+    const ok128 = i128 >= 0 && Math.abs(fd.along[i128] - 0.8) <= 0.01 && Math.abs(fd.y[i128] - 1.6) <= 0.01;
+    const okEnd = i145 >= 0 && Math.abs(fd.along[i145] - 3.0) <= 0.01 && fd.y[i145] === 0 && Math.abs(fd.end - 3.0) <= 0.01 && fd.endState === 'knockdown';
+    t.ok(fd.thrown && ok30 && ok100 && ok128 && okEnd && latMax <= 0.005 && fd.dmg === R4.fighters.bruno.moves.final_delivery.damage,
+      `D4: FINAL DELIVERY holds its victim along grab.path: lock f20 hug ${i20 >= 0 ? fd.along[i20].toFixed(3) : '-'} m (= push fronts ${fronts.toFixed(3)}: the §26.5 floor while grounded) y ${i20 >= 0 ? fd.y[i20].toFixed(2) : '-'}, f30 ${i30 >= 0 ? fd.along[i30].toFixed(3) : '-'} m y ${i30 >= 0 ? fd.y[i30].toFixed(2) : '-'} (floor ramping out), f100 overhead ${i100 >= 0 ? fd.along[i100].toFixed(2) : '-'} m y ${i100 >= 0 ? fd.y[i100].toFixed(2) : '-'}, f128 ${i128 >= 0 ? fd.along[i128].toFixed(2) : '-'} m y ${i128 >= 0 ? fd.y[i128].toFixed(2) : '-'}, f145 ${i145 >= 0 ? fd.along[i145].toFixed(2) : '-'} m y ${i145 >= 0 ? fd.y[i145] : '-'}; released at ${fd.end.toFixed(2)} m (${fd.endState}); max lift ${yMax.toFixed(2)} m, off the forward line <= ${latMax.toFixed(3)} m, damage ${fd.dmg}`);
+    // every other grab of the 12 kits, connected from its farthest start: its carry ANCHOR (root + the victim clips' own carry
+    // taken back out) sits on the thrower's forward line at the hold distance (push fronts touching) from lock frame pullF
+    const pullF = newMatch({ data: R4, p1: 'johnny', p2: 'johnny' }).sys.throwPullF;
+    const bad: string[] = [];
+    let nG = 0;
+    let worst = 0;
+    let maxConn = 0;
+    for (const id of Object.keys(R4.fighters).sort()) {
+      for (const mid of Object.keys(R4.fighters[id].moves)) {
+        const o = R4.fighters[id].moves[mid];
+        if (!o.grab || o.grab.path || mid === 'dead_air_bite') continue; // dead_air_bite = a counter follow-up (started by a catch)
+        let L: Lock | null = null;
+        for (let dM = 4.0; dM >= 0.6 && !L; dM -= 0.05) {
+          const q = lockRun(id, mid, 'johnny', dM);
+          if (q.thrown) L = q;
+        }
+        if (!L) {
+          bad.push(`${id} ${mid}: never connects`);
+          continue;
+        }
+        maxConn = Math.max(maxConn, L.gap[0]);
+        nG++;
+        const i = at(L, pullF);
+        const anchor = i >= 0 ? L.along[i] + L.disp[i] : 99;
+        const err = Math.abs(anchor - L.hold);
+        worst = Math.max(worst, err);
+        if (!(err <= 0.002 && L.lat[i] <= 0.005)) bad.push(`${id} ${mid}: anchor ${anchor.toFixed(3)} m vs hold ${L.hold.toFixed(3)} m, off-line ${i >= 0 ? L.lat[i].toFixed(3) : '-'} m at lock f${pullF} (connect gap ${L.gap[0].toFixed(3)})`);
+      }
+    }
+    t.ok(nG >= 40 && bad.length === 0, `D4: every other grab (${nG} throws / command grabs / grab super cold_storage), connected from its farthest start, pulls the victim onto its forward line at the hold distance (push fronts touching) by lock frame ${pullF} (max anchor error ${worst.toFixed(4)} m; connect gaps were up to ${maxConn.toFixed(2)} m)${bad.length ? ': ' + bad.join('; ') : ''}`);
+    // the landing no longer depends on where the grab caught: johnny throw_f / bruno walk_in_m from far vs touching; a side swap still lands behind
+    // CHANGED(fix_bruno): "far" = just inside the move's CURRENT max range from the data, never a hard-coded distance (walk_in_m
+    // was caught at a fixed 1.95 m, inside its old 1.10 m gap; CONTRACT 35.21 item 8 / fix_bruno set it to 0.92 m = 1.795 m root
+    // to root, so 1.95 m whiffed). On the fight line a grab connects while the push-front gap <= grab.rangeM (a plain throw
+    // without boxes: the thrower's throwRangeM; sim throws.ts grabCandidate), i.e. root to root <= gap + both standing push fronts.
+    const farM = (att: string, mid: string, def: string): number => {
+      const fa = R4.fighters[att];
+      const gap = fa.moves[mid].grab?.rangeM ?? fa.throwRangeM;
+      return gap + fa.push!.front + R4.fighters[def].push!.front - 0.03;
+    };
+    const farTF = farM('johnny', 'throw_f', 'johnny');
+    const farWI = farM('bruno', 'walk_in_m', 'johnny');
+    const farTB = farM('johnny', 'throw_b', 'johnny');
+    const tf = [lockRun('johnny', 'throw_f', 'johnny', farTF).end, lockRun('johnny', 'throw_f', 'johnny', 0.5).end];
+    const wi = [lockRun('bruno', 'walk_in_m', 'johnny', farWI).end, lockRun('bruno', 'walk_in_m', 'johnny', 0.5).end];
+    const tb = lockRun('johnny', 'throw_b', 'johnny', farTB).end;
+    t.ok(Math.abs(tf[0] - tf[1]) <= 0.02 && Math.abs(wi[0] - wi[1]) <= 0.02 && tb < -0.5,
+      `D4: a grab caught at range releases where a touching one does (johnny throw_f from ${farTF.toFixed(2)} / 0.50 m -> ${tf[0].toFixed(2)} / ${tf[1].toFixed(2)} m, bruno walk_in_m from ${farWI.toFixed(2)} / 0.50 m -> ${wi[0].toFixed(2)} / ${wi[1].toFixed(2)} m; "far" = max range from the data - 0.03 m); johnny throw_b from ${farTB.toFixed(2)} m still lands behind (${tb.toFixed(2)} m)`);
+  }
 }
 
 // ================================================================= 9. snapshots + budget

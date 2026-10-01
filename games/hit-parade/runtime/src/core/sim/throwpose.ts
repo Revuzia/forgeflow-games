@@ -23,6 +23,7 @@ import type { Match } from './state.ts';
 import { V_END, V_OPEN, V_SLAM } from './compile.ts';
 import type { CFighter, CGrab } from './compile.ts';
 import { SHARED_CLIPS } from '../data.ts';
+import { Q, YAW_HALF, alongYaw, cosQ, divRound, sinQ } from './fx3d.ts';
 
 /** F.kdFace bits */
 export const KDF = { DOWN: 1, NOFALL: 2, LANDED: 4 } as const;
@@ -154,6 +155,102 @@ function victimPoseAt(m: Match, d: number, lf: number, out: Int32Array): boolean
   out[4] = total;
   out[5] = SCL[n - 1];
   return true;
+}
+
+// ------------------------------------------------------------------ CHANGED(fix_core) D4: the grab hold (CONTRACT §35.20)
+const HY = new Int32Array(2);
+const HZ = new Int32Array(2);
+/** lift (U) under which the victim counts as grounded for the §26.5 no-overlap floor, and the ramp width */
+const FLOOR_LIFT = 30000;
+const FLOOR_RAMP = 15000;
+
+/** The grab block of the lock victim d is in (the thrower's move at the connect), or null (a grab-less system throw). */
+export function lockGrab(m: Match, d: number): CGrab | null {
+  const k = m.s[fb(d) + F.thrMv];
+  const cf = m.cf[1 - d];
+  return k >= 0 && k < cf.moves.length ? cf.moves[k].grab : null;
+}
+
+/** Root-to-root HOLD distance (U) of lock victim d: the two standing push fronts touching + the grab's holdGap. */
+export function holdDist(m: Match, d: number): number {
+  const g = lockGrab(m, d);
+  return m.cf[1 - d].pushFS + m.cf[d].pushFS + (g ? g.holdGap : m.sys.throwHoldGap);
+}
+
+/**
+ * CHANGED(fix_core) D4 (CONTRACT §35.20): lock victim d's root at lock frame lf -> out[0] x, out[1] z, out[2] y (U). The
+ * connect stored F.thrX / thrZ (the victim's position), F.thrAX / thrAZ (the thrower's root) and F.thrYaw (its yaw).
+ *  - grab.path (grab supers): the thrower's root + forward x G(lf), lifted L(lf); G / L piecewise linear through an implicit
+ *    first key [0, d0, 0] (d0 = the victim's distance along the forward at the connect) and the authored keys, held after the
+ *    last; while L < 0.30 m, G is floored at the two push fronts (ramped in over L 0.30 -> 0.15 m, CONTRACT §26.5: the
+ *    authored gaps suit average bodies); the victim's sideways offset at the connect fades out by the first key. The
+ *    victim clips' own root travel is NOT added (the path is the whole root motion).
+ *  - else: the connect position slides onto the HOLD point (thrower root + forward x holdDist) over system throw.pullF
+ *    frames (0 = no pull: the pre-fix behaviour), then + `disp` (the victim clips' root carry) along the victim's forward.
+ * Integer math only (alongYaw = length-exact steps along a yaw; offsets <= ~2^23 U, products < 2^38).
+ */
+export function holdPos(m: Match, d: number, lf: number, disp: number, out: Int32Array): void {
+  const s = m.s;
+  const bd = fb(d);
+  const yaw = s[bd + F.thrYaw];
+  const ax = s[bd + F.thrAX];
+  const az = s[bd + F.thrAZ];
+  const vx = s[bd + F.thrX];
+  const vz = s[bd + F.thrZ];
+  const g = lockGrab(m, d);
+  const fx = sinQ(yaw);
+  const fz = cosQ(yaw);
+  const along = divRound((vx - ax) * fx + (vz - az) * fz, Q); // the victim's distance along the forward at the connect
+  const lat = divRound((vz - az) * fx - (vx - ax) * fz, Q); // its sideways offset along (-fz, fx) = dir(yaw - 90 deg)
+  if (g && g.path) {
+    const p = g.path;
+    const n = p.length / 3;
+    let f0 = 0;
+    let g0 = along;
+    let l0 = 0;
+    let gap = p[(n - 1) * 3 + 1];
+    let lift = p[(n - 1) * 3 + 2];
+    for (let k = 0; k < n; k++) {
+      const f1 = p[k * 3];
+      if (lf <= f1) {
+        const t = lf - f0;
+        const span = Math.max(1, f1 - f0);
+        gap = g0 + Math.trunc(((p[k * 3 + 1] - g0) * t) / span);
+        lift = l0 + Math.trunc(((p[k * 3 + 2] - l0) * t) / span);
+        break;
+      }
+      f0 = f1;
+      g0 = p[k * 3 + 1];
+      l0 = p[k * 3 + 2];
+    }
+    const fronts = m.cf[1 - d].pushFS + m.cf[d].pushFS;
+    if (gap < fronts && lift < FLOOR_LIFT) {
+      const w = Math.min(FLOOR_RAMP, FLOOR_LIFT - lift); // 0 .. FLOOR_RAMP (full weight at lift <= 0.15 m)
+      gap += Math.trunc(((fronts - gap) * w) / FLOOR_RAMP);
+    }
+    const first = Math.max(1, p[0]);
+    const latNow = lf >= first ? 0 : Math.trunc((lat * (first - lf)) / first);
+    alongYaw(gap, yaw, HY);
+    alongYaw(latNow, (yaw + 49152) & 65535, HZ); // yaw - 90 deg: the side `lat` was measured along
+    out[0] = ax + HY[0] + HZ[0];
+    out[1] = az + HY[1] + HZ[1];
+    out[2] = Math.max(0, lift);
+    return;
+  }
+  // the pull onto the hold point, then the clip carry along the victim's forward (= the thrower's forward reversed)
+  const pf = m.sys.throwPullF;
+  let px = vx;
+  let pz = vz;
+  if (pf > 0) {
+    alongYaw(holdDist(m, d), yaw, HY);
+    const k = Math.min(Math.max(0, lf), pf);
+    px = vx + Math.trunc(((ax + HY[0] - vx) * k) / pf);
+    pz = vz + Math.trunc(((az + HY[1] - vz) * k) / pf);
+  }
+  alongYaw(disp, (yaw + YAW_HALF) & 65535, HZ);
+  out[0] = px + HZ[0];
+  out[1] = pz + HZ[1];
+  out[2] = 0;
 }
 
 const VQ = new Int32Array(6);

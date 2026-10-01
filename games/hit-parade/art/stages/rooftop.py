@@ -106,17 +106,21 @@ STAGE = {
          "position": [-5.0, 13.0, 7.0], "target": [0.0, 0.6, 0.0], "castShadow": True,
          "shadow": {"mapSize": 1024, "bias": -0.0004, "normalBias": 0.03,
                     "camera": {"left": -7.5, "right": 7.5, "top": 7.5, "bottom": -7.5, "near": 1.0, "far": 40.0}}},
+        # CHANGED(fix_ui_stage) (verifier modes D6 + floor glare, measured in the real game): rim 19 -> 40 deg and the two
+        # floods 22 -> 39 deg elevation - at the old angles their mirror images in the wet helipad landed between the
+        # fighters' legs at some orbit angles (bloom pools, luminance 3.5); the door lamp light moves 1.2 m out from the
+        # lamp glass (0.15 m away it lit the glass to luminance 80: an orange flare behind P1's head at 270 / 315 deg)
         {"id": "rim", "type": "directional", "color": "#ff66b8", "intensity": 1.05,
-         "position": [4.0, 6.0, -13.0], "target": [0.0, 1.2, 0.0], "castShadow": False},
+         "position": [3.0, 10.5, -9.5], "target": [0.0, 1.2, 0.0], "castShadow": False},
         {"id": "fill", "type": "hemisphere", "sky": "#3a4786", "ground": "#1e1822", "intensity": 0.95},
         {"id": "neon", "type": "point", "color": "#ff3d9a", "intensity": 32.0, "distance": 17.0, "decay": 2,
          "position": [0.0, 4.3, -13.9], "flicker": {"amp": 0.06, "hz": 11.0}},
         {"id": "flood_a", "type": "spot", "color": "#fff0d6", "intensity": 270.0, "distance": 26.0, "decay": 2,
-         "position": [7.6, 5.0, -7.6], "target": [0.0, 0.7, 0.0], "angleDeg": 25.0, "penumbra": 0.55},
+         "position": [6.4, 7.4, -6.4], "target": [0.0, 0.7, 0.0], "angleDeg": 25.0, "penumbra": 0.55},
         {"id": "flood_b", "type": "spot", "color": "#fff0d6", "intensity": 270.0, "distance": 26.0, "decay": 2,
-         "position": [-7.6, 5.0, 7.6], "target": [0.0, 0.7, 0.0], "angleDeg": 25.0, "penumbra": 0.55},
+         "position": [-6.4, 7.4, 6.4], "target": [0.0, 0.7, 0.0], "angleDeg": 25.0, "penumbra": 0.55},
         {"id": "door_lamp", "type": "point", "color": "#ffb46a", "intensity": 6.0, "distance": 7.0, "decay": 2,
-         "position": [-10.15, 2.8, -1.05], "flicker": {"amp": 0.08, "hz": 9.0}},
+         "position": [-9.1, 2.45, -1.05], "flicker": {"amp": 0.08, "hz": 9.0}},
     ],
     "lightsNote": "FIXED pool: created once at stage load, never added/removed (shader programs stay warm). "
                   "No lights are embedded in the GLB. Flicker = view-only intensity modulation. 3D ring: key from high "

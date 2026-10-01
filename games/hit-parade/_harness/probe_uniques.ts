@@ -15,6 +15,7 @@ import { hurtRects } from '../runtime/src/core/sim/boxes.ts';
 import { EV, EVX, BALL_EV } from '../runtime/src/core/sim/events.ts';
 import { BALL, F, P, PH, PROJ_CAP, ST, W, projBase } from '../runtime/src/core/sim/layout.ts';
 import { UK } from '../runtime/src/core/sim/compile.ts';
+import { dirToYaw, yawDelta } from '../runtime/src/core/sim/fx3d.ts'; // CHANGED(fix_core) D8
 import type { FighterDef, GameData, Move } from '../runtime/src/core/types.ts';
 
 const t = tester('probe_uniques');
@@ -586,7 +587,12 @@ for (const [moveId, btn] of [['vanish_l', I.L], ['vanish_m', I.M], ['vanish_h', 
   const e0 = m.frame();
   motion(m, 0, '214', btn);
   t.eq(mvName(m, 0) === moveId ? 1 : 0, 1, `zambini 214 starts ${moveId}`);
-  const k = until(m, () => evs(m, e0).some((e) => e.type === EVX.TELEPORT), tp.f + 2);
+  let oppYawBefore = m.s[sb(1) + F.yaw]; // CHANGED(fix_core) D8: the opponent's yaw at the start of the teleport frame
+  const k = until(m, () => {
+    const hit = evs(m, e0).some((e) => e.type === EVX.TELEPORT);
+    if (!hit) oppYawBefore = m.s[sb(1) + F.yaw];
+    return hit;
+  }, tp.f + 2);
   t.ok(k >= 0 && readFighter(m, 0).moveFrame === tp.f, `${moveId}: TELEPORT on move frame ${tp.f}`, `mvF ${readFighter(m, 0).moveFrame}`);
   // CHANGED(SIM3D): home = the ring boundary behind him seen from the opponent (on the x axis: -ring radius), gap inward;
   // then the ring clamp (his push circle inside) and the separation cap
@@ -597,10 +603,29 @@ for (const [moveId, btn] of [['vanish_l', I.L], ['vanish_m', I.M], ['vanish_h', 
   else want = Math.max(-wall + tp.gapM, -wall + m.cf[0].pushBS / U, 1.0 - data.system.stage.separationCapM);
   t.near(x(m, 0), want, 0.0015, `${moveId} (${tp.to}, gap ${tp.gapM} m) lands at x ${want.toFixed(3)}`);
   if (tp.to === 'behind') {
-    t.eq(m.s[sb(0) + F.facing], 1, 'behind: he still faces his old way during the move (facing re-resolves when free)');
-    until(m, () => isFree(m, 0), 60);
+    // CHANGED(fix_core) D8 (CONTRACT §35.20): he ARRIVES facing the opponent (yaw + the screen-side input sign) instead of
+    // keeping his back to it for the rest of the move and snapping round in the free state (verifier D8)
+    const offDeg = (): number => Math.abs(yawDelta(m.s[sb(0) + F.yaw], dirToYaw(m.s[sb(1) + F.x] - m.s[sb(0) + F.x], m.s[sb(1) + F.z] - m.s[sb(0) + F.z]))) * 360 / 65536;
+    const arrive = offDeg();
+    t.ok(arrive <= 1 && m.s[sb(0) + F.facing] === -1, `behind: he faces the opponent on the teleport frame (yaw off ${arrive.toFixed(2)} deg, facing ${m.s[sb(0) + F.facing]})`);
+    // the idle opponent: no extra snap on the teleport frame (it faced his start-of-frame point), its own auto-face next frame
+    const oppTp = Math.abs(yawDelta(oppYawBefore, m.s[sb(1) + F.yaw])) * 360 / 65536;
+    const oppY1 = m.s[sb(1) + F.yaw];
     step(m, 0, 0);
-    t.eq(m.s[sb(0) + F.facing], -1, 'behind: facing re-resolves toward the opponent on the next free frame');
+    const oppNext = Math.abs(yawDelta(oppY1, m.s[sb(1) + F.yaw])) * 360 / 65536;
+    t.ok(oppTp <= 0.01 && Math.abs(oppNext - 180) <= 1, `behind: the opponent does not turn on the teleport frame (${oppTp.toFixed(2)} deg) and re-faces him by its normal auto-face the frame after (${oppNext.toFixed(1)} deg)`);
+    let worst = 0;
+    let maxTurn = 0;
+    let prev = m.s[sb(0) + F.yaw];
+    until(m, () => {
+      worst = Math.max(worst, offDeg());
+      maxTurn = Math.max(maxTurn, Math.abs(yawDelta(prev, m.s[sb(0) + F.yaw])) * 360 / 65536);
+      prev = m.s[sb(0) + F.yaw];
+      return isFree(m, 0);
+    }, 60);
+    step(m, 0, 0);
+    maxTurn = Math.max(maxTurn, Math.abs(yawDelta(prev, m.s[sb(0) + F.yaw])) * 360 / 65536);
+    t.ok(worst <= 1 && maxTurn <= 1 && m.s[sb(0) + F.facing] === -1, `behind: keeps facing the idle opponent through the move and into the free state - no snap (max off ${worst.toFixed(2)} deg, max turn ${maxTurn.toFixed(2)} deg)`);
   }
 }
 {
@@ -614,7 +639,9 @@ for (const [moveId, btn] of [['vanish_l', I.L], ['vanish_m', I.M], ['vanish_h', 
   until(m, () => readFighter(m, 0).moveFrame >= ex.teleport!.f + 1, 30);
   const fBefore = m.s[sb(0) + F.facing];
   motion(m, 0, '236', I.L);
-  t.ok(mvName(m, 0).startsWith('card_fan') && m.s[sb(0) + F.facing] === -fBefore, `vanish_ex cancels into ${mvName(m, 0)} facing the opponent (facing ${fBefore} -> ${m.s[sb(0) + F.facing]})`);
+  // CHANGED(fix_core) D8: he already faces the opponent from the teleport frame (facing -1 there), so the cancel keeps it
+  const offEx = Math.abs(yawDelta(m.s[sb(0) + F.yaw], dirToYaw(m.s[sb(1) + F.x] - m.s[sb(0) + F.x], m.s[sb(1) + F.z] - m.s[sb(0) + F.z]))) * 360 / 65536;
+  t.ok(mvName(m, 0).startsWith('card_fan') && fBefore === -1 && m.s[sb(0) + F.facing] === -1 && offEx <= 1, `vanish_ex cancels into ${mvName(m, 0)} facing the opponent (facing ${fBefore} -> ${m.s[sb(0) + F.facing]}, yaw off ${offEx.toFixed(2)} deg)`);
 }
 {
   // invulnerable through the vanish, punishable recovery

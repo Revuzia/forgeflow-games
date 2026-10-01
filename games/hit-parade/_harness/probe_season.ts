@@ -294,6 +294,8 @@ function bonusPlayer(): (m: Match, f: number) => number {
 {
   const cleared: string[] = [];
   const bad: string[] = [];
+  // CHANGED(fix_balance) (CONTRACT §35.21): bouts played / lost per slot kind (report: the mini boss is no longer the wall)
+  const kindN: Record<string, [number, number]> = {};
   const runFor = (fighter: string, len: SeasonLength, seed: number): void => {
     const run = new SeasonRun({ fighter, color: 0, scheme: 0, length: len, difficulty: 0, seed }, roster, ladder);
     const seeds = new Set<number>();
@@ -330,6 +332,9 @@ function bonusPlayer(): (m: Match, f: number) => number {
         const r = runMatch(cfg, (m) => player.input(m, 0), (m) => cpu.input(m, 1));
         won = r.winner === 0;
         bouts++;
+        const kn = (kindN[slot.kind] ??= [0, 0]);
+        kn[0]++;
+        if (!won) kn[1]++;
       }
       const out = run.record(won);
       if (out === 'retry') run.continueSlot();
@@ -344,6 +349,7 @@ function bonusPlayer(): (m: Match, f: number) => number {
   for (const id of ['johnny', 'lotus', 'gazza']) runFor(id, 'season', 777 + id.length);
   ok(bad.length === 0, `S5 ${cleared.length} full ladders (PILOT x ${ALL.length} fighters + SEASON x 3) cleared slot by slot as game.ts runs them, continues on losses, a fresh sim seed per slot / continue, each fighter's ending text + ending key present${bad.length ? ' - ' + bad.join('; ') : ''}`);
   say(`full runs: ${cleared.join('; ')}`);
+  say(`full runs, bouts lost / played per slot kind (optimal stand-in): ${Object.entries(kindN).map(([k, [n, l]]) => `${k} ${l}/${n}`).join(', ')}`);
 }
 
 const pass = fails.length === 0;

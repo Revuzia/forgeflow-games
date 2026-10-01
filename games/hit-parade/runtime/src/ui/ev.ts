@@ -15,8 +15,16 @@ export const EV_NAMES = [
 ] as const;
 export type EvName = typeof EV_NAMES[number];
 
-const mods = import.meta.glob('../core/sim/events.ts', { eager: true }) as Record<string, { EV?: Record<string, unknown> }>;
+const mods = import.meta.glob('../core/sim/events.ts', { eager: true }) as Record<string, { EV?: Record<string, unknown>; EV3D?: Record<string, unknown> }>;
 const live = Object.values(mods)[0]?.EV;
+
+/**
+ * CHANGED(fix_ui_stage) (CONTRACT §35.20 item 3): the 3D-ring event group `EV3D` (core/sim/events.ts, opt-in, not in `EV`).
+ * BACK_HIT follows the HIT of a back hit with HIT's payload (a attacker, b victim). Read from the live table; the contract
+ * number 47 when an older sim build has no EV3D yet.
+ */
+const live3d = Object.values(mods)[0]?.EV3D;
+export const EV_BACK_HIT: number = typeof live3d?.BACK_HIT === 'number' ? live3d.BACK_HIT : 47;
 
 function build(): { table: Record<EvName, number>; source: 'sim' | 'fallback'; missing: string[] } {
   const table = {} as Record<EvName, number>;
@@ -39,5 +47,6 @@ export const EV_MISSING: readonly string[] = built.missing;
 /** reverse lookup for debug read-backs */
 export function evName(type: number): string {
   for (const n of EV_NAMES) if (EV[n] === type) return n;
+  if (type === EV_BACK_HIT) return 'BACK_HIT';
   return `EV${type}`;
 }

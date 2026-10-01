@@ -77,6 +77,11 @@ export interface CGrab {
   vClip: Int32Array;
   vT0: Int32Array;
   vT1: Int32Array;
+  /** CHANGED(fix_core) D4 (CONTRACT §35.20): grab.path keys [lockFrame, gapU, liftU] x n (sorted, frames >= 1), null = none:
+   *  the victim's root = the thrower's root at the connect + forward x gap, lifted (throwpose.ts holdPoint) */
+  path: Int32Array | null;
+  /** CHANGED(fix_core) D4: push-front gap (U) the victim is pulled to at the connect (grab.holdGapM, else system) */
+  holdGap: number;
 }
 /** CHANGED(fixer) D3: symbolic victim clip times (resolved against the victim's own clips.json) */
 export const V_SLAM = -1;
@@ -363,6 +368,11 @@ export interface CFighter {
   animStep: [number, number, number, number];
   /** CHANGED(SIM3D): step-attack move index per button (L, M, H; -1 none) - "SS.<btn>" moves */
   stepAtk: number[];
+  /** CHANGED(fix_core) D1 (CONTRACT §35.20): this fighter's sidestep arc length (U) = fighters/<id>.json `step.distM`
+   *  (the kit generator sizes it from the measured body), else system.json step.distM (0.85 m) */
+  stepDist: number;
+  /** CHANGED(fix_core) D1: cumulative sidestep arc travel (U) at step frame f (index 0..stepFrames) for stepDist */
+  stepCurve: Int32Array;
 }
 
 export interface CSys {
@@ -399,14 +409,26 @@ export interface CSys {
   frontArcCos: number; // cos(throw front arc half-angle), Q14
   spawnAxis: number; // default spawnAxisDeg (yaw units)
   stepFrames: number;
-  stepCurve: Int32Array; // cumulative sidestep arc travel (U) at step frame f, index 0..stepFrames
+  /** cumulative sidestep arc travel (U) at step frame f, index 0..stepFrames, of the SYSTEM default step.distM (0.85 m).
+   *  CHANGED(fix_core) D1: the sim steps each fighter by its own CFighter.stepCurve; this one stays for readers that want
+   *  the default (core/ai traceCircle) */
+  stepCurve: Int32Array;
   stepAttackF: number;
   stepBlockF: number;
-  stepBufferF: number; // presses during a sidestep buffer from this step frame on
+  stepBufferF: number; // presses during a sidestep buffer from this step frame on (CHANGED(fix_core) D9: 2, held to stepAttackF)
   sidewalk: number; // U/frame tangential
   stepSettle: number;
   trackNormalOff: number; // default track.until = startup - this (normals / throws / system)
   trackSpecialOff: number; // specials / supers
+  /** CHANGED(fix_core) D7 (CONTRACT §35.20): BACK HIT - cos (Q14) of the rear-arc limit (arcDeg 120 -> -8192): a hit coming
+   *  from a direction whose dot with the defender's forward is below backHitCos x |dir| is a back hit */
+  backHitCos: number;
+  backHitDmgPct: number;
+  backHitStun: number;
+  /** CHANGED(fix_core) D4 (CONTRACT §35.20): grab hold - frames the victim slides to the hold point (0 = no pull) and the
+   *  default push-front gap it is held at (U) for grabs without a grab block (system throws) */
+  throwPullF: number;
+  throwHoldGap: number;
 }
 
 // ------------------------------------------------------------------ helpers
@@ -509,6 +531,13 @@ export function compileSystem(sys: System): CSys {
     sfx: [],
     sfxIndex: {},
     ...compileStep(sys),
+    // CHANGED(fix_core) D7 (CONTRACT §35.20): BACK HIT numbers (system.json backHit; defaults 120 deg / 120 % / +4 f)
+    backHitCos: cosQ(degToYaw(Math.max(90, Math.min(180, sys.backHit?.arcDeg ?? 120)))),
+    backHitDmgPct: Math.max(100, Math.trunc(sys.backHit?.damagePct ?? 120)),
+    backHitStun: Math.max(0, Math.trunc(sys.backHit?.hitstunF ?? 4)),
+    // CHANGED(fix_core) D4 (CONTRACT §35.20): grab hold (system.json throw.pullF / holdGapM; defaults 6 f / 0 m)
+    throwPullF: Math.max(0, Math.trunc(sys.throw.pullF ?? 6)),
+    throwHoldGap: mToU(sys.throw.holdGapM ?? 0),
   };
   for (const k of Object.keys(c) as (keyof CSys)[]) {
     const v = c[k];
@@ -516,6 +545,25 @@ export function compileSystem(sys: System): CSys {
   }
   sysCache.set(sys, c);
   return c;
+}
+
+/**
+ * CHANGED(fix_core) D1 (CONTRACT §35.20): cumulative sidestep arc travel (U) at step frame f (index 0..frames) for an arc of
+ * `distU` - the §35.15 quadratic ease-out over `step.movePct` of the frames (100 = all 15, 64 % in the first 6). The system
+ * default (step.distM 0.85 m) is CSys.stepCurve; a fighter's own `step.distM` (kit generator, from the measured body) builds
+ * CFighter.stepCurve the same way. Floats only here (IEEE products + Math.round: identical on every engine).
+ */
+export function stepCurveOf(sys: System, distU: number): Int32Array {
+  const st = sys.step ?? {};
+  const frames = Math.max(2, Math.trunc(st.frames ?? 15));
+  const movePct = st.movePct ?? 100;
+  const curve = new Int32Array(frames + 1);
+  const fm = Math.max(1, Math.round((frames * movePct) / 100));
+  for (let f = 0; f <= frames; f++) {
+    const t = Math.min(1, f / fm);
+    curve[f] = Math.round(distU * (1 - (1 - t) * (1 - t)));
+  }
+  return curve;
 }
 
 /** CHANGED(SIM3D): the system.json `ring` / `step` / `track` / throw arc numbers (defaults = CONTRACT §35 values). */
@@ -529,14 +577,7 @@ function compileStep(sys: System): Pick<CSys, 'ringR' | 'againstWall' | 'camMinS
   // arc in the first 6 frames, then easing to a stop on frame 15; the designer's 60-65 % target). SIM3D built 80 (75 % in 6,
   // still from frame 13). The travel a defender makes between the attacker's last tracking frame and its first active
   // frame decides what a step evades (steppable table: probe_3d section 3b).
-  const movePct = st.movePct ?? 100;
-  // ease-out over movePct of the frames (like the dash), then still: cumulative travel at step frame f (index 0..frames)
-  const curve = new Int32Array(frames + 1);
-  const fm = Math.max(1, Math.round((frames * movePct) / 100));
-  for (let f = 0; f <= frames; f++) {
-    const t = Math.min(1, f / fm);
-    curve[f] = Math.round(dist * (1 - (1 - t) * (1 - t)));
-  }
+  const curve = stepCurveOf(sys, dist);
   return {
     ringR: mToU(rg.defaultRadiusM ?? 5.5),
     againstWall: mToU(rg.againstWallM ?? 0.45),
@@ -547,7 +588,8 @@ function compileStep(sys: System): Pick<CSys, 'ringR' | 'againstWall' | 'camMinS
     stepCurve: curve,
     stepAttackF: Math.max(1, Math.trunc(st.attackF ?? 11)),
     stepBlockF: Math.max(1, Math.trunc(st.blockF ?? 12)),
-    stepBufferF: Math.max(1, Math.trunc(st.bufferF ?? 9)),
+    // CHANGED(fix_core) D9 (CONTRACT §35.20): presses buffer from step frame 2 (was 9) and are held to stepAttackF
+    stepBufferF: Math.max(1, Math.trunc(st.bufferF ?? 2)),
     sidewalk: mpsToUpf(st.walkMps ?? 1.8),
     stepSettle: Math.max(1, Math.trunc(st.settleF ?? 4)),
     // CHANGED(STEPTUNE) (CONTRACT §35.15): normals / command normals / system moves track to startup - 6 like the
@@ -701,6 +743,15 @@ function compileMove(id: string, mv: Move, idx: number, snapId: number, animId: 
       const hitF = Math.max(1, Math.min(gd.frames - 1, gd.hitF));
       segs.push([0, c, 0, V_SLAM], [hitF, c, V_SLAM, V_END]);
     }
+    // CHANGED(fix_core) D4 (CONTRACT §35.20): the victim root path (grab supers: = their cinematic gapD)
+    let path: Int32Array | null = null;
+    if (Array.isArray(gd.path) && gd.path.length > 0) {
+      const keys = gd.path
+        .filter((k) => Array.isArray(k) && k.length >= 2 && Number.isFinite(k[0]) && k[0] >= 1 && Number.isFinite(k[1]))
+        .map((k) => [Math.trunc(k[0]), mToU(Math.max(0, k[1])), mToU(Math.max(0, Number.isFinite(k[2]) ? k[2] : 0))])
+        .sort((p, q) => p[0] - q[0]);
+      if (keys.length > 0) path = Int32Array.from(keys.flat());
+    }
     grab = {
       frames: gd.frames,
       adv: gd.adv,
@@ -713,6 +764,8 @@ function compileMove(id: string, mv: Move, idx: number, snapId: number, animId: 
       vClip: Int32Array.from(segs.map((q) => q[1])),
       vT0: Int32Array.from(segs.map((q) => q[2])),
       vT1: Int32Array.from(segs.map((q) => q[3])),
+      path,
+      holdGap: mToU(gd.holdGapM !== undefined && Number.isFinite(gd.holdGapM) ? gd.holdGapM : sys.throw.holdGapM ?? 0),
     };
   }
   let pushExt: Int32Array | null = null;
@@ -1092,6 +1145,19 @@ function hurtExtents(def: FighterDef, data: GameData): Pick<CFighter, 'hurtFS' |
   };
 }
 
+/**
+ * CHANGED(fix_core) D1 (CONTRACT §35.20): the fighter's sidestep length. fighters/<id>.json `step: { distM }` (0.5..2.5 m,
+ * generated from the measured body: a wider / longer body needs a longer arc to clear a straight attack, kitlib.py
+ * step_dist_m); absent = the system default (system.json step.distM 0.85 m; goons and the fixture kits).
+ */
+function fighterStep(def: FighterDef, sys: System, cs: CSys): Pick<CFighter, 'stepDist' | 'stepCurve'> {
+  const st = def.step as { distM?: unknown } | undefined;
+  const d = st && typeof st.distM === 'number' && Number.isFinite(st.distM) ? Math.max(0.5, Math.min(2.5, st.distM)) : null;
+  if (d === null) return { stepDist: cs.stepCurve[cs.stepCurve.length - 1], stepCurve: cs.stepCurve };
+  const u = mToU(d);
+  return { stepDist: u, stepCurve: stepCurveOf(sys, u) };
+}
+
 /** CHANGED(SIM) P2: the fighter's unique block with system.json uniques defaults (CONTRACT section 28.2). */
 function compileUnique(def: FighterDef, uk: number, ur: Record<string, unknown>, byName: Record<string, number>, sys: System): CUnique {
   const us = sys.uniques ?? {};
@@ -1375,6 +1441,7 @@ export function compileFighter(data: GameData, id: string): CFighter {
       const mm = moves.find((q) => q.stepAtk && q.inBtn === bt && q.snapId >= 0 && !q.phase2);
       return mm ? mm.idx : -1;
     }),
+    ...fighterStep(def, sys, cs),
   };
   void M;
   void Q;

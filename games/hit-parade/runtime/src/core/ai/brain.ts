@@ -24,8 +24,9 @@
 //     me off it - played in a sandbox from the visible situation (ring3d.ts StepOracle): never vs homing moves, and on
 //     an 18-60 f reaction mostly vs slow linear moves and projectiles at range (STEPTUNE §35.15 table).
 //   * READ steps (plans.ts): a sidestep in the opponent's range as a guess from its LINEAR habit (habits.linearRate).
-//   * the whiff of a stepped move is punished from the side: punishTick also runs from SIDESTEP (from step frame 9,
-//     the sim's buffer) and SIDEWALK; patch / spin step-attacks (SS.H, ctx 'step' recipes) are route candidates there.
+//   * the whiff of a stepped move is punished from the side: punishTick also runs from SIDESTEP (from the sim's step buffer
+//     frame m.sys.stepBufferF: 2 since fix_core §35.20, was 9) and SIDEWALK; patch / spin step-attacks (SS.H, ctx 'step'
+//     recipes) are route candidates there.
 //   * a STEPPING opponent: a visible SIDEWALK is answered on the reaction clock (latched roll < `antiStep`) with a
 //     homing / cpu.antiStep move that reaches; a step HABIT (habits.stepRate) turns pokes into homing moves (plans.ts).
 //   * circle-walks (a held STEP; Decision 'circle'): off my wall, and the opponent onto its wall (plans.ts + ring3d.ts);
@@ -33,7 +34,7 @@
 
 import type { Match } from '../sim/state.ts';
 import type { CMove } from '../sim/compile.ts';
-import { UK } from '../sim/compile.ts';
+import { K, UK } from '../sim/compile.ts';
 import { F, PH, ST, fighterBase } from '../sim/layout.ts';
 import { mulberry32 } from '../rng.ts';
 import { B, Pad, STEP_BITS, awayBits } from './pad.ts';
@@ -104,6 +105,12 @@ export interface Profile {
   circle: number;
   /** chance to answer a visibly circling opponent / a step habit with a homing (cpu.antiStep) move */
   antiStep: number;
+  /**
+   * CHANGED(fix_balance) (CONTRACT §35.21): chance per neutral decision at footsies spacing (just outside / at the edge of
+   * the opponent's threat range) to circle-walk around it to reposition (x the style's ringWalk) - the 3D ring by plan, not
+   * only at the wall
+   */
+  walk: number;
 }
 
 /** how many of the opponent's recent ground strikes the brain remembers (the buttons it actually presses) */
@@ -120,11 +127,17 @@ export interface StyleParams {
   throw: number; poke: number; jump: number; dash: number; walkIn: number; zone: number; approach: number; grab: number;
   armor: number; counter: number; backOff: number; jumpProj: number; mix: number; air: number; setup: number; escape: number;
   charge: boolean;
+  /**
+   * CHANGED(fix_balance) (CONTRACT §35.21): the style's appetite for the 3D ring, multipliers on the level levers -
+   * `ringWalk` x the neutral circle-walk lever (footsies / zoning kits reposition by circling, the FREAK stomps straight in),
+   * `ringStep` x the read-sidestep levers (close-range kits step more, a zoner less). Default 1 = the level as written.
+   */
+  ringWalk: number; ringStep: number;
 }
 
 export const DEFAULT_STYLE: StyleParams = {
   throw: 0.25, poke: 0.45, jump: 0.06, dash: 0.1, walkIn: 0.45, zone: 0.3, approach: 0.1, grab: 0, armor: 0, counter: 0,
-  backOff: 0.15, jumpProj: 0.15, mix: 0.2, air: 0, setup: 0, escape: 0, charge: false,
+  backOff: 0.15, jumpProj: 0.15, mix: 0.2, air: 0, setup: 0, escape: 0, charge: false, ringWalk: 1, ringStep: 1,
 };
 
 /** Responses a reaction can pick (latched per threat). */
@@ -236,6 +249,11 @@ export interface BrainStats {
   /** circle-walks started: off my wall / the opponent onto its wall */
   circlesEscape: number;
   circlesCorner: number;
+  /** CHANGED(fix_balance): neutral repositioning circle-walks (footsies spacing) / read steps vs its walk-in */
+  circlesWalk: number;
+  approachSteps: number;
+  /** CHANGED(fix_balance): pokes swung into a command-grab walk-in (brain.antiGrabPoke) */
+  antiGrabPokes: number;
   /** homing / antiStep answers to a stepping opponent (reaction to its visible circle-walk + habit pokes) */
   antiSteps: number;
   /** step-attacks started (SS.<btn>) */
@@ -253,7 +271,7 @@ function blankStats(): BrainStats {
     uniques: 0, counterReads: 0, stepReads: 0, rekicks: 0, uniqueCancels: 0, stances: 0, stanceFollows: 0, rekkas: 0, habitGuards: 0,
     throwEscapes: 0, superKills: 0, wakeSupers: 0, evadeReads: 0, lv3Cash: 0,
     stepsReact: 0, stepsProj: 0, stepGuesses: 0, stepEvades: 0, linearEvades: 0, circlesEscape: 0, circlesCorner: 0, antiSteps: 0,
-    stepAttacks: 0, sidePunishes: 0, oracleRuns: 0,
+    stepAttacks: 0, sidePunishes: 0, oracleRuns: 0, circlesWalk: 0, approachSteps: 0, antiGrabPokes: 0,
   };
 }
 
@@ -314,6 +332,12 @@ export class Brain {
   opReach = 100000;
   /** opponent's fastest ground strike startup (frames; its frame data, known like any player knows it) */
   opFastest = 99;
+  /**
+   * CHANGED(fix_balance) (CONTRACT §35.21): centre distance (U) inside which the opponent's longest COMMAND grab connects
+   * (its push front + my push front + the grab's gap; frame data, like opReach); 0 = it has none. Its fastest startup.
+   */
+  opGrabU = 0;
+  opGrabF = 99;
   /** longest reach (U) among the opponent's ground normals within 3 f of its fastest startup (its "fast buttons") */
   opFastReach = 80000;
   /** EMA: share of the opponent's free frames inside its fast-button zone that ended in an attack start */
@@ -360,6 +384,8 @@ export class Brain {
   private stepWatch = -1;
   private stepWatchLinear = false;
   private stepWatchTouched = false;
+  /** CHANGED(fix_balance): the sense of my last neutral circle-walk (+1 / -1: the sim's stepDir sense), kept across walks */
+  walkSense = 1;
 
   constructor(profile: Profile, seed: number, style: StyleParams | null = null) {
     this.profile = profile;
@@ -404,6 +430,18 @@ export class Brain {
       fr = Math.max(fr, cmReach(cm));
     }
     this.opFastReach = Math.max(80000, fr);
+    // CHANGED(fix_balance): its command grabs (cmdgrab / EX grab kinds; normal throws are the close range, supers need a bar)
+    let gU = 0;
+    let gF = 99;
+    const mcf = m.cf[i];
+    for (const cm of ocf.moves) {
+      if (!cm.isGrab || cm.snapId < 0 || cm.inAir || cm.isSuper || (cm.kind !== K.cmdgrab && cm.kind !== K.ex)) continue;
+      const u = cm.grabGap >= 0 ? ocf.pushFS + mcf.pushFS + cm.grabGap : cm.grabReach + mcf.pushFS;
+      if (u > gU) gU = u;
+      if (cm.startup < gF) gF = cm.startup;
+    }
+    this.opGrabU = gU;
+    this.opGrabF = gF;
     if (this.profile.step > 0) this.oracle.warm(m); // CHANGED(AI3D): the step oracle's sandbox (never touches m)
     this.bound = true;
   }
@@ -503,6 +541,47 @@ export class Brain {
       if (n === 0) check(this.opFastReach, this.opFastest);
       else for (let j = 0; j < n; j++) check(this.seenReach[j], this.seenStart[j]);
       if (safe && mi.damage > bestDmg) {
+        best = k;
+        bestDmg = mi.damage;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * CHANGED(fix_balance) (CONTRACT §35.21): vs a command-grab walk-in - the most damaging ground normal (or not badly unsafe
+   * plain special) of mine whose box
+   * meets the opponent where its visible walk brings it (it stops to grab once inside its grab range, opGrabU), active at
+   * least 2 frames before its fastest grab could be (frame data: opGrabF) from where it gets into that range. The same
+   * geometry as spacePoke (a strike that is out first beats a grab). -1 if none.
+   */
+  antiGrabPoke(): number {
+    const s = this.seen;
+    const me = s.me;
+    const op = s.op;
+    if (me.air || op.air || this.opGrabU <= 0) return -1;
+    const d = s.dist;
+    const cf = op.cf;
+    const dashV = cf.dashFFrames > 0 ? Math.floor((cf.dashF[cf.dashFFrames] ?? 0) / cf.dashFFrames) : 0;
+    const closingNow = op.st === ST.WALK_F ? cf.walkF : op.st === ST.DASH_F ? dashV : 0;
+    const closing = Math.max(closingNow, cf.walkF);
+    const stopAt = Math.max(0, this.opGrabU - 5000);
+    const tin = d <= this.opGrabU ? 0 : Math.ceil((d - this.opGrabU) / closing);
+    const charged = this.chargeKit && me.chB >= this.m.sys.raw.motion.chargeFrames;
+    let best = -1;
+    let bestDmg = -1;
+    for (const k of this.kit.groundStrikes) {
+      const mi = this.kit.moves[k];
+      // normals, and plain specials that are not badly unsafe (a rush / lunge can meet a grappler whose grab out-ranges
+      // every normal: Bruno's WALK IN L connects from ~2.2 m)
+      if (!(mi.normal || (mi.special && !mi.ex && mi.advBlock >= -14)) || mi.inert || mi.proj || mi.grab || !this.canUse(k)) continue;
+      const rc = this.rcp(k)!;
+      if (rc.ctx !== '' || rc.air) continue;
+      const st0 = rc.steps[0];
+      if (mi.normal && charged && (st0.d === 6 || st0.d === 3 || st0.d === 9)) continue;
+      const t = this.connectsAt(k, closingNow, stopAt);
+      if (t < 0 || t > tin + this.opGrabF - 2) continue;
+      if (mi.damage > bestDmg) {
         best = k;
         bestDmg = mi.damage;
       }
@@ -939,7 +1018,8 @@ export class Brain {
         // CHANGED(AI) P2: the habit it just showed (committed after my reaction delay - pattern knowledge for the NEXT one)
         const cm0 = op.cm;
         if (cm0.proj) this.habits.action(s.frame, HK.PROJ);
-        else if (!op.air && s.dist <= this.opThreatU() + 40000) {
+        // CHANGED(fix_balance): a command grab counts from as far as it reaches (brain.opGrabU) - it is close offense too
+        else if (!op.air && s.dist <= Math.max(this.opThreatU(), cm0.isGrab ? this.opGrabU : 0) + 40000) {
           if (cm0.isGrab) this.habits.action(s.frame, HK.THROW);
           else if (cm0.isStrike && cm0.nBox > 0) {
             this.habits.action(s.frame, cm0.guard === 2 ? HK.LOW : cm0.guard === 1 ? HK.OVERHEAD : HK.MID);
@@ -1864,7 +1944,8 @@ export class Brain {
       // same motion as the PARENT special (negative edge) and overwrites the buffered chain (core/sim/inputs.ts;
       // measured: CLASSIC 236M during CUE 1's hitstop -> no CUE 2; after it -> CUE 2)
       if (r.k > 0 && rc.ctx === 'chain' && rc.steps.length > 1 && me.hitstop > 0) return;
-      // CHANGED(AI3D): a sidestep ignores presses before step frame 9 (core/sim/inputs.ts parseAction)
+      // CHANGED(AI3D): a sidestep ignores presses before its buffer frame (core/sim/inputs.ts parseAction; m.sys.stepBufferF,
+      // 2 since fix_core §35.20 - CHANGED(fix_balance): comment only, the code always followed the number)
       if (me.st === ST.SIDESTEP && me.stF + 2 < this.m.sys.stepBufferF) return;
       const costOk = (mi.cm.costShow === 0 || me.show >= mi.cm.costShow) && (mi.cm.costNerve === 0 || me.nerve > 0);
       if (!costOk) {
@@ -2048,7 +2129,7 @@ export class Brain {
   /**
    * One frame in SIDESTEP / SIDEWALK / STEP_END: reactions (a decided block = back, which leaves a circle-walk into the
    * guard; a sidestep blocks from step frame 12), the whiff punish from the side and a planned step-attack once presses
-   * act (step frame 9+ / SIDEWALK), else keep holding the step plan's bit until it ends.
+   * act (from the step buffer frame m.sys.stepBufferF / SIDEWALK), else keep holding the step plan's bit until it ends.
    */
   private stepTick(): Step | null {
     const s = this.seen;

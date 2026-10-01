@@ -37,6 +37,9 @@
     "crouchFront": 0.459,
     "crouchBack": 0.126
   },
+  "step": {
+    "distM": 1.202
+  },
   "colors": [
     {"name": "Butcher", "tint": null},
     {"name": "Bone White", "tint": "#ece6d6"},

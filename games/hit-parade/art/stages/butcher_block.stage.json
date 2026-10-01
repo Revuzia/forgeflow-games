@@ -418,11 +418,11 @@
       "id": "rim",
       "type": "directional",
       "color": "#a6d2ff",
-      "intensity": 1.5,
+      "intensity": 1.3,
       "position": [
-        3.42,
-        7.0,
-        9.397
+        2.394,
+        9.5,
+        6.578
       ],
       "target": [
         0.0,
@@ -737,11 +737,11 @@
     "splatWallDust": "#e6e1d6"
   },
   "build": {
-    "bytes": 2903408,
-    "draws": 28,
+    "bytes": 2911836,
+    "draws": 29,
     "triangles": 127334,
-    "materials": 26,
-    "textures": 44,
+    "materials": 27,
+    "textures": 45,
     "crowdNodes": 439,
     "lights": 0,
     "extensions": [

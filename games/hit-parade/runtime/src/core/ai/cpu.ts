@@ -109,6 +109,8 @@ export function resolveProfile(row: Obj, table: Obj, name: string, level: number
     stepGuess: n(row, 'stepGuess', 0),
     circle: n(row, 'circle', 0),
     antiStep: n(row, 'antiStep', 0),
+    // CHANGED(fix_balance) (CONTRACT §35.21): the neutral circle-walk lever (default 0 = off)
+    walk: n(row, 'walk', 0),
   };
 }
 

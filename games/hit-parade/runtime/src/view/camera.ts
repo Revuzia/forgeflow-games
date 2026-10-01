@@ -27,6 +27,15 @@
 // BRAWL variant (bonus rounds): behind/above the player - vFOV 45, camera 2.7 m looking down at 0.95 m, the azimuth turned
 // 20 deg toward the player's back (over his shoulder toward the soft-lock goon; 38 / 2 / 56 / -16 deg instead when a goon
 // would stand in the sight line to the player - sticky), distance fit to the player + the goons in reach (4.5 m) projected into the frame.
+// CHANGED(fix_view) D10 (CONTRACT §35.23 fix_view): (1) SOFT PULL - a lens up to `softPullMax` outside the ring's inner
+// face (+ `softIn` margin) dollies in along its view line to stay inside the wall, FOV widened to keep the framing; the
+// pull is a continuous function of the overshoot (capped, never released abruptly), so the pair circling near the centre
+// (the camera passed 0.25-0.36 m beyond the 5.5 m wall: the swing fired) no longer swings or rises; (2) the swing's cost
+// counts only what the soft pull cannot fix, the wall-line penalty applies outside the ring only, and the swing keeps a
+// hysteresis band; (3) the swing angle runs on a critically damped spring with an acceleration cap (was an exponential
+// ease: a target jump 0 -> 20 deg started at 1.2 deg / frame in one frame - measured 0.7 -> 2.5 deg / frame).
+// CHANGED(fix_view) D13: `bottomMargin` 0.04 -> 0.07 of the frame (the feet stay above the HUD's RATINGS bars); the tops
+// BoutView feeds are each body's measured neutral top (view/bodytop.ts), so THE FREAK's raised claw stays under the HUD band.
 
 import * as THREE from 'three';
 import { ringEntry, ringGap, wrapPi, type RingGeom } from './ring3d.ts';
@@ -45,13 +54,19 @@ export const CAM = {
   topMargin: 0.12,
   /** CHANGED(fixer) D4: clearance under the HUD band (fraction of the frame height) */
   safePad: 0.015,
-  /** ... and the lower fighter's feet above the bottom 4 % */
-  bottomMargin: 0.04,
+  /** ... and the lower fighter's feet above the bottom 7 % (CHANGED(fix_view) D13: was 4 %, under the RATINGS bars) */
+  bottomMargin: 0.07,
+  /** CHANGED(fix_view) D13: the feet's reach toward the lens from the fight plane (m) for that margin (1.8 m body) */
+  feetDepth: 0.25,
   aOut: 0.15, aIn: 0.04, aX: 0.2, aY: 0.12,
   /** CHANGED(VIEW3D): azimuth easing per 60 Hz frame (a sidewalk orbits ~43 deg/s: ~5 deg of lag) */
   aYaw: 0.12,
   /** CHANGED(VIEW3D) wall swing: max azimuth offset from camN, easing, the raise a swing must get under */
   swingMaxDeg: 40, aSwing: 0.06, swingOkRaise: 0.35,
+  /** CHANGED(fix_view) D10: swing spring (rad/s), its acceleration cap (rad/s^2), the hysteresis below swingOkRaise */
+  swingOmega: 4.5, swingAccMax: 12, swingHyst: 0.12,
+  /** CHANGED(fix_view) D10: soft pull - the lens stays `softIn` m inside the ring's inner face by dollying in up to softPullMax m */
+  softIn: 0.15, softPullMax: 0.9,
   /** CHANGED(VIEW3D) occlusion: the top of the clear camera band (§35.11.5: y 1.30-3.00 m holds no set geometry) */
   maxY: 2.95,
   /** outside the ring the camera stays at or above the band floor */
@@ -95,12 +110,16 @@ export function lookFloorFor(top: number, d: number, vfovDeg: number, delta: num
   const pitch = Math.atan(delta / d);                      // view axis below horizontal
   return top - delta - d * Math.tan(aMax - pitch);
 }
-/** the highest look-at height that keeps world height `feet` at or above the bottom margin (fraction from the bottom) */
-export function lookCeilFor(feet: number, d: number, vfovDeg: number, delta: number, bottom: number): number {
+/**
+ * the highest look-at height that keeps world height `feet` at or above the bottom margin (fraction from the bottom).
+ * CHANGED(fix_view) D13: `depth` = how much nearer the camera than the fight plane the feet reach (a stance / step puts
+ * a foot ~0.3-0.5 m toward the lens, where it projects lower than the root does)
+ */
+export function lookCeilFor(feet: number, d: number, vfovDeg: number, delta: number, bottom: number, depth = 0): number {
   const t = Math.tan(vfovDeg * DEG / 2);
   const aMin = Math.atan((1 - 2 * bottom) * t);            // max angle below the view axis
   const pitch = Math.atan(delta / d);
-  return feet - delta - d * Math.tan(-aMin - pitch);
+  return feet - delta - Math.max(0.5, d - depth) * Math.tan(-aMin - pitch);
 }
 
 /** CONTRACT §7b / §35.7 distance for a separation (m) at an aspect (w/h) and vFOV (deg) */
@@ -144,6 +163,16 @@ export class FightCamera {
   yaw = 0;
   /** CHANGED(VIEW3D): the wall swing added to `yaw` for the rig (radians, eased) */
   swing = 0;
+  /** CHANGED(fix_view) D10: the swing's angular velocity (rad/s, spring state) */
+  swingV = 0;
+  /** CHANGED(fix_view) D10: the soft pull on/off (harness A/B; default on) and the old exponential swing (A/B: true = old) */
+  softPullOn = true;
+  legacySwing = false;
+  private swingOn = false;
+  /** CHANGED(fix_view) D13: the lower fighter's feet stay above this fraction of the frame (from the bottom) */
+  bottomMargin = CAM.bottomMargin;
+  /** CHANGED(fix_view) D13: how far toward the lens (m) the feet may reach from the fight plane (BoutView: the bodies' size) */
+  feetDepth = CAM.feetDepth;
   private brawlOff: number = CAM.brawl.behindDeg;
   private shakeT = 0;
   private init = false;
@@ -170,6 +199,8 @@ export class FightCamera {
     dist: 0, midX: 0, lookY: 0, fov: 0, sep: 0, mode: 'rig', fill: 0, shake: 0,
     // CHANGED(VIEW3D)
     yawDeg: 0, yawTDeg: 0, midZ: 0, pos: [0, 0, 0] as number[], look: [0, 0, 0] as number[], raise: 0, pull: 0, clearPull: 0, occluded: 0, camR: 0, swingDeg: 0, brawlOffDeg: 0,
+    // CHANGED(fix_view) D10: the soft pull (m), the swing target (deg) and angular speed (deg / 60 Hz frame)
+    softPull: 0, swingTDeg: 0, swingVDeg: 0,
   };
 
   constructor(aspect = 16 / 9) {
@@ -188,6 +219,36 @@ export class FightCamera {
 
   reset(): void {
     this.init = false; this.trauma = 0; this.parryAt = -1; this.superAt = -1; this.koAt = -1; this.cine = null;
+    this.swingV = 0; this.swingOn = false;
+  }
+
+  /**
+   * CHANGED(fix_view) D10: how far (m) `pos` must dolly toward `look` along the view line to sit `softIn` inside the ring's
+   * inner face, capped at softPullMax (0 = already inside). The look point is inside the ring.
+   */
+  private softNeed(px: number, py: number, pz: number, look: THREE.Vector3): number {
+    const g = this.ring;
+    if (!g || !this.softPullOn) return 0;
+    if (ringGap(g, px, pz) >= CAM.softIn) return 0;
+    if (ringGap(g, look.x, look.z) < CAM.softIn + 0.05) return 0;
+    let lo = 0, hi = 1;                                   // u along look -> pos: gap(lo) >= softIn, gap(hi) < softIn
+    for (let k = 0; k < 18; k++) {
+      const m = (lo + hi) / 2;
+      if (ringGap(g, look.x + (px - look.x) * m, look.z + (pz - look.z) * m) >= CAM.softIn) lo = m; else hi = m;
+    }
+    const d0 = Math.hypot(px - look.x, py - look.y, pz - look.z);
+    return Math.min(CAM.softPullMax, (1 - lo) * d0);
+  }
+
+  /** CHANGED(fix_view) D10: apply the soft pull to `pos` (along the view line); returns the FOV that keeps the framing */
+  private softPull(pos: THREE.Vector3, look: THREE.Vector3, fov: number): number {
+    const need = this.softNeed(pos.x, pos.y, pos.z, look);
+    this.last.softPull = Math.round(need * 1000) / 1000;
+    if (need <= 1e-4) return fov;
+    const d0 = pos.distanceTo(look);
+    const u = Math.max(0.3, 1 - need / Math.max(1e-3, d0));
+    pos.set(look.x + (pos.x - look.x) * u, look.y + (pos.y - look.y) * u, look.z + (pos.z - look.z) * u);
+    return widen(fov, d0, d0 * u);
   }
 
   addTrauma(amount: number): void {
@@ -227,20 +288,31 @@ export class FightCamera {
   private swingTarget(camY: number, targets: ReadonlyArray<[number, number, number]>): number {
     const g = this.ring;
     if (!g) return 0;
+    const look = this.tmpB.set(this.midX, this.lookY, this.midZ);
     const cost = (d: number): number => {
       const a = this.yaw + d;
-      const px = this.midX + Math.sin(a) * this.dist, pz = this.midZ + Math.cos(a) * this.dist;
+      let px = this.midX + Math.sin(a) * this.dist, pz = this.midZ + Math.cos(a) * this.dist;
+      // CHANGED(fix_view) D10: what the soft pull fixes costs nothing (a small overshoot never swings)
+      const need = this.legacySwing ? 0 : this.softNeed(px, camY, pz, look);
+      if (need > 0) {
+        const d0 = Math.hypot(px - look.x, camY - look.y, pz - look.z), u = Math.max(0.3, 1 - need / Math.max(1e-3, d0));
+        px = look.x + (px - look.x) * u; pz = look.z + (pz - look.z) * u;
+      }
       const rr = Math.hypot(px - g.cx, pz - g.cz);
       let c = rr > g.clearR - 0.2 ? (rr - (g.clearR - 0.2)) * 2 : 0;
       const h = this.wallNeed(px, pz, targets);
       if (h > camY) c += h - camY;
       // a lens just over the wall top sees the coping lamps / rails huge in the foreground: keep 0.9 m off the wall line
+      // (CHANGED(fix_view) D10: outside the ring only - inside, the wall is behind the lens)
       const gap = ringGap(g, px, pz);
-      if (Math.abs(gap) < 0.9 && Math.max(camY, h) < g.wallH + 0.9) c += 0.5 * (0.9 - Math.abs(gap)) / 0.9;
+      if ((this.legacySwing ? Math.abs(gap) < 0.9 : gap < 0 && gap > -0.9) && Math.max(camY, h) < g.wallH + 0.9) c += 0.5 * (0.9 - Math.abs(gap)) / 0.9;
       return c;
     };
     let best = 0, bc = cost(0);
-    if (bc <= CAM.swingOkRaise) return 0;
+    // CHANGED(fix_view) D10: hysteresis - a running swing holds until the straight shot is clearly fine again
+    const ok = this.legacySwing ? CAM.swingOkRaise : this.swingOn ? CAM.swingOkRaise - CAM.swingHyst : CAM.swingOkRaise;
+    if (bc <= ok) { this.swingOn = false; return 0; }
+    this.swingOn = true;
     const pref = this.swing >= 0 ? 1 : -1;               // sign-sticky: no flip-flop between +d and -d
     for (let m = 10; m <= CAM.swingMaxDeg; m += 10) {
       const cp = cost(pref * m * DEG), cn = cost(-pref * m * DEG);
@@ -380,7 +452,7 @@ export class FightCamera {
     const delta = baseCamY - baseLook;                      // camera height above the look-at point (constant pitch rig)
     const safeTop = this.safeTop > 0 ? Math.min(0.4, this.safeTop + CAM.safePad) : CAM.topMargin;
     const panFloor = (d: number): number => lookFloorFor(top, d, fov, delta, safeTop);
-    const panCeil = (d: number): number => lookCeilFor(feet, d, fov, delta, CAM.bottomMargin);
+    const panCeil = (d: number): number => lookCeilFor(feet, d, fov, delta, this.bottomMargin, this.feetDepth);
     if (!brawl) for (let k = 0; k < 24 && panFloor(dT) > panCeil(dT) && dT < CAM.dMax * 1.25; k++) dT = Math.min(CAM.dMax * 1.25, dT * 1.04);
     const lookYT = brawl ? baseLook : Math.max(baseLook, Math.min(panFloor(dT), panCeil(dT)));
     const snap = !this.init || (this.wasCine && !this.cine);
@@ -403,8 +475,20 @@ export class FightCamera {
       ft.length = 0;
       ft.push([x0, 0.05, z0], [x1, 0.05, z1]);
       const sT = this.swingTarget(baseCamY + (this.lookY - baseLook), ft);
-      this.swing = snap ? sT : this.swing + (sT - this.swing) * ease(CAM.aSwing, dt);
-    } else this.swing = 0;
+      this.last.swingTDeg = Math.round(sT / DEG * 100) / 100;
+      if (snap) { this.swing = sT; this.swingV = 0; }
+      else if (this.legacySwing) this.swing += (sT - this.swing) * ease(CAM.aSwing, dt);
+      else {
+        // CHANGED(fix_view) D10: critically damped spring with an acceleration cap (smooth onset, no overshoot)
+        const n = Math.max(1, Math.ceil(dt * 60 - 1e-6)), h = dt / n, w = CAM.swingOmega;
+        for (let k = 0; k < n; k++) {
+          const acc = Math.max(-CAM.swingAccMax, Math.min(CAM.swingAccMax, w * w * (sT - this.swing) - 2 * w * this.swingV));
+          this.swingV += acc * h;
+          this.swing += this.swingV * h;
+        }
+      }
+      this.last.swingVDeg = Math.round(this.swingV / DEG / 60 * 1000) / 1000;
+    } else { this.swing = 0; this.swingV = 0; }
     // the fighters in the camera's local frame (x along R from the smoothed midpoint, z along N)
     const ya = this.yaw + this.swing;
     const nx = Math.sin(ya), nz = Math.cos(ya), rx = nz, rz = -nx;
@@ -481,6 +565,8 @@ export class FightCamera {
       mode = 'parry';
     }
     if (local) { this.toWorld(this.look); this.toWorld(this.pos); }
+    // CHANGED(fix_view) D10: a lens a little outside the ring wall dollies in to stay inside it (versus rig / overrides)
+    if (local && !brawl) fovNow = this.softPull(this.pos, this.look, fovNow); else this.last.softPull = 0;
     // occlusion (the fighters' feet are the sight-line targets; a `free` lab pose is left alone)
     if (!this.cine || !this.cine.free) {
       const ft = this.feet;

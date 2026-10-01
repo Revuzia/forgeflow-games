@@ -10,6 +10,7 @@
     "first_blood": 2,
     "counter": 1,
     "punish": 2,
+    "back_hit": 2,
     "perfect_parry": 3,
     "throw_escape": 1,
     "wall_splat": 2,
@@ -59,6 +60,12 @@
       "You whiff on my show, you pay on my show!",
       "{attacker} makes {victim} pay full price!",
       "Punish counter! That replay goes on a T-shirt."
+    ],
+    "back_hit": [
+      "BACK HIT! {victim} never saw it coming!",
+      "Around the back! {attacker} works the angles!",
+      "Behind you, {victim}! Too late now.",
+      "{attacker} takes the scenic route to the spine!"
     ],
     "perfect_parry": [
       "PERFECT PARRY! {attacker} just stopped time on live TV!",

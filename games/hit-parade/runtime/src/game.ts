@@ -858,7 +858,7 @@ export class Game {
     const init = run.init;
     let name = d.save.get().onlineName;
     try {
-      const n = await d.menus.showNameEntry({ score, fighter: init.fighter });
+      const n = await d.menus.showNameEntry({ score, fighter: init.fighter, length: init.length });  // CHANGED(orchestrator): §35.22 SHELL request - rank on the run's own board
       if (typeof n === 'string' && n.trim()) name = n;
     } catch (e) { console.warn('[hit-parade] name entry', e); }
     if (my !== this.epoch) return;

@@ -37,6 +37,9 @@
     "crouchFront": 0.424,
     "crouchBack": 0.138
   },
+  "step": {
+    "distM": 0.967
+  },
   "colors": [
     {"name": "Top Hat", "tint": null},
     {"name": "Rabbit White", "tint": "#e8e8e8"},

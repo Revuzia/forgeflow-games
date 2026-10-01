@@ -1,5 +1,5 @@
 """BRUNO "THE FRIDGE" - grappler (Soccer goalkeeper grabs + throw-in, axe-pack unarmed swings, CMU grab)."""
-from kitlib import (Kit, air, cam, cinematic, cmu, crouch, layer, mix, SPECIAL, LV1, LV3, LV1_COST, LV3_COST)
+from kitlib import (Kit, air, cam, cinematic, cmu, crouch, layer, mix, LV1, LV3, LV1_COST, LV3_COST)
 
 
 def build():
@@ -14,7 +14,10 @@ def build():
         cpu={"style": "grappler", "rangeM": [0.6, 1.4], "approach": ["brace_m", "fridge_door_l"],
              "pokes": ["2M", "5M"], "antiAir": ["lariat_l", "2H"], "punish": ["walk_in_h", "5H"],
              "combo": ["2L", "5M", "fridge_door_m"], "grab": ["walk_in_l", "walk_in_h"], "meter": "cold_storage",
-             "antiStep": ["lariat_l", "walk_in_l", "5H"]},
+             # CHANGED(fix_bruno) (CONTRACT 35.21 item 8): the anti-step answer is the homing LARIAT / 5H (the kit's own ring
+             # doc), not the 5 f command grab - the CPU took the fastest anti-step move that reaches, so 28 % of its WALK IN
+             # starts were answers to a visible step (THE FREAK had the same defect, fix_balance)
+             "antiStep": ["lariat_l", "5H"]},
         doc=dict(
             difficulty=3, packs="Soccer goalkeeper (stance, grabs, splash, throw-in), axe-pack unarmed swings, CMU "
                                 "grab/chop/flex",
@@ -22,7 +25,7 @@ def build():
                  "baggy brown trousers, tall boots.",
             bio="Thirty years hauling walk-in freezers up tenement stairs, twenty more as a wrestling-show "
                 "relic. The network pays him in steak. He has never lost a bout that went to the clinch.",
-            plan="Walk in, BRACE through pokes, then guess: WALK-IN FREEZER (360 grab, 2500-3300) versus "
+            plan="Walk in, BRACE through pokes, then guess: WALK-IN FREEZER (360 grab, 2200-2900) versus "
                  "a 2L tick. LARIAT beats jumps and fireballs; FRIDGE DOOR walls opponents in the corner.",
             weakness="Slowest walk (1.64 m/s) and shortest dash; zoners keep him out; every armored move "
                      "loses to throws and multi-hits; grab whiff = 54 frames of recovery.",
@@ -161,29 +164,39 @@ def build():
           desc="Spins them round and flings them behind him.", why="Grappler throws deal 1300.")
 
     # ---------------- specials ----------------
-    grab_l = SPECIAL["cmdgrab"]
+    # CHANGED(fix_bruno) (CONTRACT 35.21 item 8; measured in _harness/_reports/progress_fix_bruno.md): the cmdgrab template
+    # reach 1.22 / 1.10 / 0.92 m (push front to push front, CONTRACT 20.2) on Bruno's 0.558 m push front connected from
+    # ~2.1 m root to root on a normal body, beyond every 5H of the cast (their 5H reaches Bruno's body at 1.86-2.00 m) - the
+    # defect THE FREAK's SPECIMEN GRAB had. Now THE FREAK's retuned table for the same template: gap 1.00 / 0.92 / 0.85 m
+    # (~1.80-1.96 m root to root on the normal bodies: inside their 5H, outside their 5M), damage 2200 / 2550 / 2900 (template
+    # 2500 / 2900 / 3300). H stays above his 0.77 m plain throw (a strictly proportional 0.75 m would reach less than it).
+    walk_tbl = {"l": (1.00, 2200), "m": (0.92, 2550), "h": (0.85, 2900)}
     walk = {}
     for s in ("l", "m", "h"):
         # P2 paired grab: freezer_slam (2.67 s over 70 f) reaches (lock 0), lifts overhead (lock 17) and drives them into
         # the floor at clip 1.00 s = lock 26 (was hitF 52, when he is already standing up again). Victim: folded in the
         # grab, lifted and flipped (thrown_f 0.15 -> 0.70 s), flat on the back from lock ~29.
-        walk[s] = dict(grab={"rangeM": grab_l[s]["rangeM"], "frames": 70, "adv": 28, "hitF": 26, "swap": False,
+        walk[s] = dict(damage=walk_tbl[s][1],
+                       grab={"rangeM": walk_tbl[s][0], "frames": 70, "adv": 28, "hitF": 26, "swap": False,
                              "air": False, "techable": False, "clip": "freezer_slam",
                              "victim": [[0, "hit_body", 0.0, 0.3], [9, "thrown_f", 0.15, 0.7],
                                         [26, "thrown_f", 0.7, 1.3333]]})
     K.special("walk_in", motion="360", fam="cmdgrab", kind="cmdgrab",
               common=dict(name="Walk-In Freezer", clip="throw_reach", role=["grab", "antistep"], sfx=[[1, "grab_cloth"]],
                           why3d="command grab reach arc: homes through its active frames (a stepper is grabbed)",
-                          desc="360 command grab; L reaches furthest, H hits hardest."),
+                          desc="360 command grab; L reaches furthest, H hits hardest.",
+                          why="Command grab, 5/3/54, untechable, KD +28. CHANGED(fix_bruno): push-front gap 1.00 / 0.92 / "
+                              "0.85 m and 2200 / 2550 / 2900 = THE FREAK's SPECIMEN GRAB table (template 1.22 / 1.10 / "
+                              "0.92 m reached ~2.1 m root to root, past every 5H of the cast)."),
               per=walk,
-              ex=dict(name="Walk-In Freezer (EX)", damage=3500, invuln={"strike": [1, 5]},
-                      grab={"rangeM": 1.30, "frames": 76, "adv": 28, "hitF": 28, "swap": False, "air": False,
+              ex=dict(name="Walk-In Freezer (EX)", damage=3150, invuln={"strike": [1, 5]},
+                      grab={"rangeM": 1.08, "frames": 76, "adv": 28, "hitF": 28, "swap": False, "air": False,
                             "techable": False, "clip": "freezer_slam",
                             "victim": [[0, "hit_body", 0.0, 0.3], [10, "thrown_f", 0.15, 0.7],
                                        [28, "thrown_f", 0.7, 1.3333]]},
                       desc="Strike-invulnerable 1-5 reversal grab with the longest reach.",
                       why="EX grab: strike invulnerable on startup (the SF6 rule: only OD/supers get true "
-                          "invulnerability), 3500, reach 1.30 m."))
+                          "invulnerability), 3150, reach 1.08 m (CHANGED fix_bruno: was 3500 / 1.30 m)."))
     K.special("fridge_door", motion="236", fam=None,
               common=dict(name="Fridge Door", clip="fridge_shove", active=4, blockstun=20, hitstop=15,
                           guard="HL", gain=1000, nerve=4000, pb=(0.0, 0.60), kd="soft", wallSplat=True,
@@ -265,7 +278,9 @@ def build():
     K.add("final_delivery", LV3, kind="super3", input="214214", name="Final Delivery", strength="H",
           clip="delivery_reach", startup=3, active=3, recovery=58, guard="U", blockstun=0,
           invuln={"strike": [1, 3]}, cost={"showtime": LV3_COST}, gain=0, nerve=0, role=["grab"],
-          grab={"rangeM": 1.30, "frames": 175, "adv": 19, "hitF": 140, "swap": False, "air": False,
+          # CHANGED(fix_bruno): reach 1.08 m = the EX WALK IN again (was 1.30 m = the old EX): a 3 f unblockable after the
+          # freeze from ~2.18 m root to root was the same past-every-normal reach; the path below starts from the connect
+          grab={"rangeM": 1.08, "frames": 175, "adv": 19, "hitF": 140, "swap": False, "air": False,
                 "techable": False, "clip": "bear_hug", "victim": fd_victim},
           cinematic=lambda: cinematic(
               175, "bruno_final_delivery",
@@ -290,7 +305,8 @@ def build():
                     [140, 3.0, 0]],
               slate='PRIME TIME - BRUNO "THE FRIDGE": FINAL DELIVERY', endPose="back", endAdv=19, endGapM=3.0),
           desc="PRIME TIME command grab: hugged, spun like a carousel, lifted overhead and hurled across the set.",
-          why="Grab Lv3: 3f unblockable grab (post-freeze) instead of the 10f strike template; 4500 total.")
+          why="Grab Lv3: 3f unblockable grab (post-freeze) instead of the 10f strike template; 4500 total; reach 1.08 m "
+              "= the EX WALK IN (CHANGED fix_bruno: was 1.30 m).")
 
     # ---------------- routing ----------------
     K.simple = {"5S": "walk_in_m", "6S": "fridge_door_m", "2S": "lariat_m", "4S": "brace_m", "S+H": "cold_storage",

@@ -768,9 +768,9 @@
     "splatWallDust": "#7d8fb0"
   },
   "build": {
-    "bytes": 2912616,
+    "bytes": 2908356,
     "draws": 20,
-    "triangles": 135832,
+    "triangles": 136312,
     "materials": 20,
     "textures": 27,
     "crowdNodes": 782,

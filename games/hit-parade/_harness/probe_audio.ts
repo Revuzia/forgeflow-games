@@ -36,7 +36,7 @@ import { AMBIENT_BY_STAGE, AudioRouter, CINE_BEATS, EVENT_SOUNDS, EXTRA_EVENT_SO
   STATE_SOUNDS, UI_ALIASES, WALL_SURFACE_LAYER, WEAPON_SOUNDS, boutContext, goonVoiceRate, resolveCue, type AudioSink, type BoutCtx, type LoopCmd, type MusicCmd,
   type PlayCmd } from '../runtime/src/audio/router.ts';
 import { VoicePool } from '../runtime/src/audio/voices.ts';
-import { EV, EVX, SC, eventsSince } from '../runtime/src/core/sim/events.ts';
+import { EV, EVX, EV3D, SC, eventsSince } from '../runtime/src/core/sim/events.ts';  // CHANGED(orchestrator): EV3D (BACK_HIT, s35.20) in the real-bout name map
 import type { FighterSnap, GameData, MatchSnap, SimEvent } from '../runtime/src/core/types.ts';
 import type { AudioBout, AudioMoveData } from '../runtime/src/audio/types.ts';
 
@@ -609,6 +609,7 @@ function runBout(sim: SimMod, data: GameData, inputStream: (s: number, f: number
   const evName: Record<number, string> = {};
   for (const k of Object.keys(EV) as (keyof typeof EV)[]) evName[EV[k]] = k;
   for (const k of Object.keys(EVX) as (keyof typeof EVX)[]) evName[EVX[k]] = k;
+  for (const k of Object.keys(EV3D) as (keyof typeof EV3D)[]) evName[EV3D[k]] = k;
   let last = 0;
   const buf: SimEvent[] = [];
   const phases = new Set<string>();

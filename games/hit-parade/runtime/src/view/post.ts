@@ -9,6 +9,13 @@
 //     a vignette, and procedural manga SPEED LINES / FINISH-ZOOM lines around a screen point (fx.ts drives them).
 //     The background dim of a super freeze is NOT here: fx.ts dims with an in-scene plane behind the fighters so the
 //     fighters stay lit (a post pass cannot tell them from the set without a depth / mask pass).
+//   * CHANGED(fix_view) D5 (CONTRACT §35.23 fix_view) - bloom that never washes a fighter: (1) the toon bodies write alpha 0
+//     into the HDR target while `BLOOM_MASK.uMaskOn` is 1 (set around the composer render only); (2) the bloom's
+//     high-pass keeps alpha-0 pixels out (a lit body never blooms) and CAPS the luminance of what blooms (`BLOOM.cap`: a
+//     floor under a 320-cd spot or a furnace window is not a 5-10x halo) over a soft knee from `BLOOM.threshold`;
+//     (3) UnrealBloomPass no longer adds itself over the frame - GradePass composites its result (`tBloom`) weighted
+//     by the pixel's alpha, so no glow (furnace / beacon flare, a spot's halo) lands ON a body. Measured: control_room at
+//     the desktop default (high + bloom) blew both fighters out orange-white (verifier ver3d_crlight).
 
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -18,11 +25,36 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import type { Renderer } from './renderer.ts';
+import { BLOOM_MASK } from './toon.ts';
+
+/** CHANGED(fix_view) D5: bloom numbers (linear HDR luminance) */
+export const BLOOM = { strength: 0.45, radius: 0.5, threshold: 1.0, knee: 0.35, cap: 2.4 };
+
+/** the bloom high-pass: a soft knee from the threshold, the luminance capped, alpha-0 (masked body) pixels excluded */
+const HIGH_PASS_FRAG = /* glsl */`
+  uniform sampler2D tDiffuse;
+  uniform vec3 defaultColor;
+  uniform float defaultOpacity;
+  uniform float luminosityThreshold;
+  uniform float smoothWidth;
+  uniform float uCap;
+  varying vec2 vUv;
+  void main() {
+    vec4 texel = texture2D( tDiffuse, vUv );
+    float v = luminance( texel.xyz );
+    float k = smoothstep( luminosityThreshold, luminosityThreshold + smoothWidth, v );
+    vec3 c = texel.rgb * min( 1.0, uCap / max( v, 1e-4 ) );
+    gl_FragColor = vec4( c * ( k * clamp( texel.a, 0.0, 1.0 ) ), 1.0 );
+  }
+`;
 
 const GradeShader = {
   name: 'HPGrade',
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
+    // CHANGED(fix_view) D5: the bloom result composited here, weighted by the pixel's alpha (bodies: 0)
+    tBloom: { value: null as THREE.Texture | null },
+    uBloom: { value: 0 },
     uFlashColor: { value: new THREE.Color(1, 1, 1) },
     uFlash: { value: 0 },
     uVignette: { value: 0.28 },
@@ -51,10 +83,12 @@ const GradeShader = {
     uniform float uLines; uniform vec2 uLinesCenter; uniform vec3 uLinesColor; uniform float uLinesInner;
     uniform float uLinesSeed; uniform float uAspect; uniform float uGain;
     uniform float uLetterbox; uniform sampler2D tSlate; uniform vec4 uSlateRect; uniform float uSlateA; uniform float uBorder;
+    uniform sampler2D tBloom; uniform float uBloom;
     varying vec2 vUv;
     float h11( float n ) { return fract( sin( n * 91.3458 ) * 47453.5453 ); }
     void main() {
       vec4 c = texture2D( tDiffuse, vUv );
+      if ( uBloom > 0.0 ) c.rgb += texture2D( tBloom, vUv ).rgb * ( uBloom * clamp( c.a, 0.0, 1.0 ) );
       c.rgb *= uGain;
       vec2 p = ( vUv - 0.5 ) * vec2( uAspect, 1.0 );
       float vig = 1.0 - uVignette * smoothstep( 0.35, 1.05, length( p ) );
@@ -99,7 +133,8 @@ const GradeShader = {
           c.rgb = mix( c.rgb, lin, sl.a * uSlateA );
         }
       }
-      gl_FragColor = c;
+      // CHANGED(fix_view) D5: the body mask (alpha 0) ends here - SMAA / OutputPass / the canvas get an opaque frame
+      gl_FragColor = vec4( c.rgb, 1.0 );
     }
   `,
 };
@@ -116,6 +151,8 @@ export class Post {
   /** false = render straight to the canvas (debug `?post=0`) */
   enabled = true;
   reduceFlashing = false;
+  /** CHANGED(fix_view) D5: harness A/B - true = the pre-fix bloom (threshold 0.92, hard knee, no cap, no body mask) */
+  legacyBloom = false;
 
   constructor(r: Renderer, scene: THREE.Scene, camera: THREE.Camera) {
     this.r = r;
@@ -124,9 +161,21 @@ export class Post {
     rt.texture.name = 'hp-post-rt';
     this.composer = new EffectComposer(three, rt);
     this.renderPass = new RenderPass(scene, camera);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(r.buffer.x, r.buffer.y), 0.45, 0.5, 0.92);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(r.buffer.x, r.buffer.y), BLOOM.strength, BLOOM.radius, BLOOM.threshold);
     this.bloom.enabled = false;
+    // CHANGED(fix_view) D5: the masked / capped high-pass, and no additive blend of its own (GradePass composites tBloom)
+    {
+      const hp = this.bloom.materialHighPassFilter;
+      const hu = this.bloom.highPassUniforms as unknown as Record<string, THREE.IUniform>;
+      hu.uCap = { value: BLOOM.cap };
+      hu.smoothWidth.value = BLOOM.knee;
+      hp.uniforms = hu;
+      hp.fragmentShader = HIGH_PASS_FRAG;
+      hp.needsUpdate = true;
+      this.bloom.blendMaterial.visible = false;
+    }
     this.grade = new ShaderPass(GradeShader);
+    this.grade.uniforms.tBloom.value = (this.bloom as unknown as { renderTargetsHorizontal: THREE.WebGLRenderTarget[] }).renderTargetsHorizontal[0].texture;
     this.smaa = new SMAAPass();
     this.output = new OutputPass();
     this.composer.addPass(this.renderPass);
@@ -194,7 +243,15 @@ export class Post {
       this.r.three.render(this.renderPass.scene, this.renderPass.camera);
       return;
     }
-    this.composer.render(dt);
+    // CHANGED(fix_view) D5: bodies write alpha 0 (the bloom mask) only inside this composer render
+    this.grade.uniforms.uBloom.value = this.bloom.enabled ? 1 : 0;
+    const hu = this.bloom.highPassUniforms as unknown as Record<string, THREE.IUniform>;
+    const legacy = this.legacyBloom;
+    this.bloom.threshold = legacy ? 0.92 : BLOOM.threshold;
+    hu.smoothWidth.value = legacy ? 0.01 : BLOOM.knee;
+    hu.uCap.value = legacy ? 1e6 : BLOOM.cap;
+    BLOOM_MASK.uMaskOn.value = legacy ? 0 : 1;
+    try { this.composer.render(dt); } finally { BLOOM_MASK.uMaskOn.value = 0; }
   }
 
   dispose(): void {

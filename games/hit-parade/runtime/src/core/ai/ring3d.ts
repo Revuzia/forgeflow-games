@@ -126,6 +126,9 @@ export function traceCircle(m: Match, s: Seen, sd: number, frames: number): Circ
   const cf = s.me.cf;
   const rad = (cf.pushFS + cf.pushBS) >> 1;
   const sys = m.sys;
+  // CHANGED(fix_balance) (CONTRACT §35.20 item 1 request): the sim steps each fighter by its OWN arc (CFighter.stepCurve,
+  // 0.85-1.72 m from the measured body); the system curve is only the 0.85 m default (fixture kits without `step`)
+  const curve = cf.stepCurve && cf.stepCurve.length > sys.stepFrames ? cf.stepCurve : sys.stepCurve;
   const r0 = isqrt((x - px) * (x - px) + (z - pz) * (z - pz));
   const myBack: number[] = [];
   const opBack: number[] = [];
@@ -141,7 +144,7 @@ export function traceCircle(m: Match, s: Seen, sd: number, frames: number): Circ
   };
   meas();
   for (let k = 1; k <= frames; k++) {
-    const amount = k <= sys.stepFrames ? sys.stepCurve[k] - sys.stepCurve[k - 1] : sys.sidewalk;
+    const amount = k <= sys.stepFrames ? curve[k] - curve[k - 1] : sys.sidewalk;
     const ox = x - px;
     const oz = z - pz;
     const r = Math.max(1000, isqrt(ox * ox + oz * oz));

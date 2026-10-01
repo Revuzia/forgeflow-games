@@ -37,6 +37,9 @@
     "crouchFront": 0.37,
     "crouchBack": 0.088
   },
+  "step": {
+    "distM": 0.85
+  },
   "colors": [
     {"name": "Floor Manager", "tint": null},
     {"name": "Red Light", "tint": "#c8102e"},

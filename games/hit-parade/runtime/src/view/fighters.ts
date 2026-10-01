@@ -15,6 +15,14 @@
 // rotation (its scale stripped - the Mixamo armature carries 0.01 scale) composed with the prop's grip offset
 // (§17.1 `attach` metadata); the prop lives at the scene root with matrixAutoUpdate off; view/props.ts rules decide
 // when each prop shows (always / during named moves / until the projectile leaves the hand).
+// CHANGED(fix_view) (CONTRACT §35.23 fix_view):
+//   D2  the body yaw is PRESENTED through view/turn.ts: the sim's re-face snaps (35-180 deg in one sim frame) turn in 2-7
+//       frames, continuous tracking stays instant, the fighter's own active frames always show the sim yaw; the mirror
+//       (facing -1) flips half-way through such a turn instead of on its first frame. BoutView feeds `simFrame`.
+//   D6  a SIDESTEP samples its clip by the sim's step progress (view/stepanim.ts) at full weight from its entry frame, and
+//       the leg IK (view/legik.ts) scales the stride to the fighter's sim arc: the planted feet stay planted.
+//   D13 `camTop()` = the measured neutral silhouette top (view/bodytop.ts: head + a raised limb) for the camera.
+//   D5  `lightProbe` (BoutView: the stage light pool at the body) caps the light a toon body receives (toon setLight).
 
 import * as THREE from 'three';
 import type { Assets, FighterAsset, PropAttach } from './assets.ts';
@@ -22,6 +30,21 @@ import { PoseDriver } from './anim.ts';
 import { hueForTint, profileForBody, toonify, type ToonHandle } from './toon.ts';
 import { propVisible, type PropShow } from './props.ts';
 import { flagOn, type AnimRef, type ViewFighterDef, type ViewFighterSnap } from './types.ts';
+import { TurnSmoother } from './turn.ts';
+import { clipTimeAt, stepProgress, strideScale, type StepFacts } from './stepanim.ts';
+import { LegIK } from './legik.ts';
+import { BodyTop } from './bodytop.ts';
+
+/** CHANGED(fix_view) D6: the sidestep's blend-in from the previous clip runs this many times faster than the sim's 6 f
+ *  (6 = full weight from the step's entry frame: the root already moves 13 % of the arc there, and the clip's first frames
+ *  are the guard stance idle ends in) */
+const STEP_BLEND_GAIN = 6;
+/** CHANGED(fix_view) D2: a facing flip during a re-face of at least this many degrees waits for half the turn */
+const MIRROR_HOLD_DEG = 60;
+/** CHANGED(fix_view) D2: system moves (IMPACT / SHOVE / default throws) are not in the fighter file: land by move frame 5 */
+const SYS_FIRST_ACTIVE = 5;
+/** CHANGED(fix_view) D2: a root jump this big within 1-2 sim frames is a teleport / reset (dashes move <= ~0.15 m / frame) */
+const TELEPORT_M = 0.6;
 
 const DEG = Math.PI / 180;
 export const SHAKE_M = 0.02;
@@ -75,8 +98,30 @@ export class FighterView {
   private readonly entries: PoseItem[] = [];
   private readonly mixed: PoseItem[] = [];
   private readonly startupOf = new Map<string, number>();
-  /** read-back for the lab / harness */
-  readonly last = { shake: 0, facing: 1, x: 0, y: 0, z: 0, yawDeg: 0, mirror: false, clip: '', t: 0, w: 1, props: 0, propsShown: 0, override: '' };
+  /** read-back for the lab / harness (CHANGED(fix_view): + simYawDeg / turnErr / turnSnap, stride, top, lightK) */
+  readonly last = { shake: 0, facing: 1, x: 0, y: 0, z: 0, yawDeg: 0, mirror: false, clip: '', t: 0, w: 1, props: 0, propsShown: 0, override: '',
+    simYawDeg: 0, turnErr: 0, turnSnap: '', lockIn: -1, stride: 1, ikShift: 0, ikDrop: 0, stepP: 0, top: 0, lightK: 1 };
+  /** CHANGED(fix_view) D2: the sim frame of the snapshot the next update() presents (BoutView sets it; -1 = unknown: no smoothing) */
+  simFrame = -1;
+  /** CHANGED(fix_view) D2: smooth the sim's re-face snaps (the lab / lineups that pose by hand turn it off) */
+  smoothTurns = true;
+  readonly turn = new TurnSmoother();
+  private mirrorSide = 1;
+  private mirrorHold = 0;
+  private lastSimX = 0;
+  private lastSimZ = 0;
+  private lastSimF = -1;
+  /** CHANGED(fix_view) D6: sidestep facts (BoutView: system.json step + this fighter's step.distM + its clips' rootLat) */
+  stepFacts: StepFacts | null = null;
+  /** CHANGED(fix_view) D6: sample the sidestep by the sim's progress + scale the stride (a harness A/B switch; default on) */
+  stepSync = true;
+  private readonly legIK: LegIK;
+  /** CHANGED(fix_view) D13: the measured neutral silhouette top above the root (m), see view/bodytop.ts; 0 until measureTop() */
+  neutralTopM = 0;
+  private bodyTop: BodyTop | null = null;
+  /** CHANGED(fix_view) D5: light level at a world point -> the toon light scale (BoutView: the stage's light pool) */
+  lightProbe: ((x: number, y: number, z: number) => number) | null = null;
+  private readonly headTop: THREE.Object3D | null;
 
   constructor(assets: Assets, asset: FighterAsset, table: ReadonlyArray<AnimRef>, def: ViewFighterDef | undefined, color = 0, outline = true) {
     this.id = asset.id;
@@ -99,10 +144,29 @@ export class FighterView {
     this.head = this.bonesByName.get('mixamorigHead') ?? null;
     this.hands = ['mixamorigLeftHand', 'mixamorigRightHand'].map((n) => this.bonesByName.get(n)).filter((b): b is THREE.Object3D => !!b);
     this.chestBone = this.bonesByName.get('mixamorigSpine2') ?? this.bonesByName.get('mixamorigSpine1') ?? null;
+    this.headTop = this.bonesByName.get('mixamorigHeadTop_End') ?? null;
     this.pose = new PoseDriver(this.model, asset.clips);
     for (const [kk, m] of Object.entries(def?.moves ?? {})) if (typeof m.startup === 'number') this.startupOf.set(kk, m.startup);
     const swap = (c: string): string => (/^side(step|walk)_[lr]$/.test(c) ? c.slice(0, -1) + (c.endsWith('_l') ? 'r' : 'l') : c);
     this.tableMir = table.some((e) => /^side(step|walk)_[lr]$/.test(e.clip)) ? table.map((e) => ({ ...e, clip: swap(e.clip) })) : table;
+    // CHANGED(fix_view) D6
+    this.legIK = new LegIK((n) => this.bone(n));
+  }
+
+  /**
+   * CHANGED(fix_view) D13: measure the neutral silhouette top (view/bodytop.ts) - BoutView calls it for its fighters right
+   * after construction (portraits / the char-select showcase never need it). Poses clips by hand: call it outside a frame.
+   */
+  measureTop(): void {
+    if (this.bodyTop) return;
+    const keepPos = this.root.position.clone(), keepRot = this.root.rotation.y, keepScale = this.root.scale.x;
+    this.root.position.set(0, 0, 0); this.root.rotation.set(0, 0, 0); this.root.scale.set(1, 1, 1);
+    this.root.updateMatrixWorld(true);
+    this.bodyTop = new BodyTop(this.model);
+    this.neutralTopM = this.bodyTop.neutralTop(this.model, (c) => this.pose.has(c), (c) => this.pose.dur(c), (c, t) => this.pose.poseClip(c, t));
+    this.pose.poseClip(this.pose.has('idle') ? 'idle' : '', 0);
+    this.root.position.copy(keepPos); this.root.rotation.set(0, keepRot, 0); this.root.scale.set(keepScale, 1, 1);
+    this.root.updateMatrixWorld(true);
   }
 
   bone(name: string): THREE.Object3D | null { return this.bonesByName.get(name) ?? this.bonesByName.get('mixamorig' + name) ?? null; }
@@ -154,6 +218,7 @@ export class FighterView {
 
   /** Apply one snapshot (+ an optional presentation override). `dt` real seconds; `time` real seconds (the shake clock). */
   update(s: ViewFighterSnap, dt: number, time: number, ov?: FighterOverride | null): void {
+    this.legIK.restore();                                  // CHANGED(fix_view) D6: last frame's stride IK out before the pose
     const facing = (ov?.facing ?? s.facing) < 0 ? -1 : 1;
     this.zNow += (this.zTarget - this.zNow) * Math.min(1, dt * 10);
     if (Math.abs(this.zNow) < 1e-4) this.zNow = 0;
@@ -164,11 +229,31 @@ export class FighterView {
     // yaw: the snapshot's body yaw (SIM3D, radians = rotation.y) - else +-90 deg from facing (the 1D labs); facing -1 also
     // MIRRORS the model (local X scale -1, SF4-6 convention, §17.1) so both screen sides show the same silhouette to the
     // camera. The mirror is about the body's own forward axis, so it holds at any yaw.
-    const mirror = this.mirror && facing < 0;
-    const yaw = ov?.yaw ?? (typeof s.yaw === 'number' && Number.isFinite(s.yaw) ? s.yaw : facing * 90 * DEG);
+    // CHANGED(fix_view) D2: the PRESENTED yaw comes from the turn smoother (a cinematic yaw override is shown as given and
+    // the smoother follows it); the mirror flips with the sim facing, except that a flip arriving with a big re-face
+    // pending waits until the presented turn is half done (the body is edge-on to the camera then).
+    const simYaw = typeof s.yaw === 'number' && Number.isFinite(s.yaw) ? s.yaw : facing * 90 * DEG;
+    // a teleport / reset (the root jumped > TELEPORT_M since the last presented sim frame) re-presents the body: no turn
+    const jx = s.x - this.lastSimX, jz = (s.z ?? 0) - this.lastSimZ, df = this.simFrame - this.lastSimF;
+    if (this.lastSimF >= 0 && df >= 0 && df <= 2 && jx * jx + jz * jz > TELEPORT_M * TELEPORT_M) this.turn.reset();
+    this.lastSimX = s.x; this.lastSimZ = s.z ?? 0; this.lastSimF = this.simFrame;
+    let yaw: number;
+    let lockIn = -1;
+    if (ov?.yaw !== undefined) { yaw = ov.yaw; this.turn.hold(yaw, simYaw, this.simFrame); }
+    else if (this.smoothTurns && this.simFrame >= 0) { lockIn = this.lockIn(s); yaw = this.turn.step(simYaw, this.simFrame, lockIn); }
+    else { yaw = simYaw; this.turn.hold(yaw, simYaw, this.simFrame); }
+    if (ov?.facing !== undefined || !this.smoothTurns) { this.mirrorSide = facing; this.mirrorHold = 0; }
+    else if (facing !== this.mirrorSide) {
+      const err = Math.abs(this.turn.last.errDeg);
+      if (this.mirrorHold <= 0) this.mirrorHold = Math.max(err, 1e-3);
+      if (err < MIRROR_HOLD_DEG || err <= this.mirrorHold / 2) { this.mirrorSide = facing; this.mirrorHold = 0; }
+    } else this.mirrorHold = 0;
+    const mirror = this.mirror && this.mirrorSide < 0;
     this.root.rotation.set(0, yaw, 0);
     this.root.scale.set(mirror ? -1 : 1, 1, 1);
     const table = mirror ? this.tableMir : this.table;
+    let stride = 1;
+    this.last.stepP = 0;
     if (ov?.list && ov.list.length) {
       this.pose.poseWeighted(ov.list);
       this.last.override = 'list';
@@ -180,6 +265,28 @@ export class FighterView {
       for (const e of ov.blend.list) this.mixed.push({ clip: e.clip, t: e.t, w: e.w * k });
       this.pose.poseWeighted(this.mixed);
       this.last.override = 'blend';
+    } else if (this.stepSync && this.stepFacts && s.step && s.step.kind === 'sidestep' && (s.step.frame ?? 0) > 0 && this.isStepClip(table, s.animId)) {
+      // CHANGED(fix_view) D6: the sidestep clip at the time its OWN lateral travel matches the sim's arc progress
+      const F = this.stepFacts, k = s.step.frame ?? 0;
+      const clip = table[s.animId].clip;
+      this.pose.entriesFor(table, s, this.entries);
+      const p = stepProgress(F, k);
+      this.entries[0].t = clipTimeAt(F, clip, p, this.pose.dur(clip));
+      if (this.entries.length > 1) {
+        // the sim's blend counter is 0 on the step's entry frame (blendT 0: a pure previous pose while the root already
+        // moved 13 % of the arc): count that frame as one blend frame
+        const w = Math.min(1, (this.entries[0].w + 1 / 6) * STEP_BLEND_GAIN);
+        this.entries[0].w = w; this.entries[1].w = 1 - w;
+      }
+      this.pose.poseWeighted(this.entries);
+      // stride: full until 3 frames before the step ends, then eased out (the feet close together at its end); the sim's
+      // own arc (snapshot step.dist, fix_core §35.20) wins over the data value when the snapshot carries it
+      const fade = Math.max(0, Math.min(1, (F.frames - k) / 3));
+      const sd = s.step.dist;
+      const sc = typeof sd === 'number' && sd > 0.05 && F.lat[clip]?.len > 0.05 ? sd / F.lat[clip].len : strideScale(F, clip);
+      stride = 1 + (sc - 1) * fade;
+      this.last.stepP = Math.round(p * 1000) / 1000;
+      this.last.override = 'step';
     } else {
       this.pose.pose(table, s);
       this.last.override = '';
@@ -204,10 +311,17 @@ export class FighterView {
     const armored = flagOn(s.flags?.armor) || this.glowHold > 0;
     this.glowT = armored ? Math.min(1, this.glowT + dt * 10) : Math.max(0, this.glowT - dt * 4);
     this.toon.setGlow(this.glowT * (0.45 + 0.25 * Math.sin(time * 22)));
+    // CHANGED(fix_view) D5: the light this body receives, capped where a stage's pool is far brighter than the rest
+    const rp = this.root.position;
+    const lk = this.lightProbe ? this.lightProbe(rp.x, rp.y + this.heightM * 0.62, rp.z) : 1;
+    this.toon.setLight(lk);
+    // CHANGED(fix_view) D6: the stride scale (after the pose: the leg IK reads the posed bones)
+    const needMw = this.props.length > 0 || Math.abs(stride - 1) > 1e-3;
+    if (needMw) this.root.updateMatrixWorld(true);
+    if (Math.abs(stride - 1) > 1e-3) this.legIK.apply(this.root, stride); else { this.legIK.lastShift = 0; this.legIK.lastDrop = 0; }
     // props: visibility by rule, then the world-space full-basis solve
     let shown = 0;
     if (this.props.length) {
-      this.root.updateMatrixWorld(true);
       const mn = s.moveName ?? '';
       const mf = s.moveFrame ?? 0;
       for (const p of this.props) {
@@ -226,12 +340,64 @@ export class FighterView {
     L.yawDeg = Math.round(((yaw * 180 / Math.PI) % 360 + 360) % 360 * 10) / 10; L.mirror = mirror;
     L.clip = this.pose.last.clip; L.t = this.pose.last.t; L.w = this.pose.last.w;
     L.props = this.props.length; L.propsShown = shown;
+    L.simYawDeg = Math.round(((simYaw * 180 / Math.PI) % 360 + 360) % 360 * 10) / 10;
+    L.turnErr = this.turn.last.errDeg; L.turnSnap = this.turn.last.snap; L.lockIn = lockIn;
+    L.stride = Math.round(stride * 1000) / 1000; L.ikShift = Math.round(this.legIK.lastShift * 1000) / 1000; L.ikDrop = Math.round(this.legIK.lastDrop * 1000) / 1000;
+    L.top = Math.round(this.neutralTopM * 1000) / 1000; L.lightK = Math.round(lk * 1000) / 1000;
   }
 
-  /** world head-top height (m) for the camera's jump pan */
+  /** CHANGED(fix_view) D6 read-back (harness): world positions of the ankles + toes [lx, ly, lz, ltx, lty, ltz, rx, ...] */
+  feetInfo(): number[] {
+    const out: number[] = [];
+    for (const n of ['LeftFoot', 'LeftToeBase', 'RightFoot', 'RightToeBase']) {
+      if (this.bonePos(n, this.mp)) out.push(Math.round(this.mp.x * 1e4) / 1e4, Math.round(this.mp.y * 1e4) / 1e4, Math.round(this.mp.z * 1e4) / 1e4);
+      else out.push(0, 0, 0);
+    }
+    return out;
+  }
+
+  /** CHANGED(fix_view) D6: is table[id] one of the §35.5 sidestep clips the GLB carries? */
+  private isStepClip(table: ReadonlyArray<AnimRef>, id: number): boolean {
+    const e = id >= 0 && id < table.length ? table[id] : null;
+    return !!e && (e.clip === 'sidestep_l' || e.clip === 'sidestep_r') && this.pose.has(e.clip);
+  }
+
+  /**
+   * CHANGED(fix_view) D2: sim frames until this fighter's own first active frame (0 = an active frame now), -1 = no
+   * attack (or past the last active frame: the yaw is frozen there anyway). Move frames are 1-based; active frames are
+   * startup .. startup + active - 1 (compile.ts lastActive).
+   */
+  private lockIn(s: ViewFighterSnap): number {
+    const mn = s.moveName;
+    if (!mn || mn === 'parry' || mn === 'rush') return -1;
+    if (s.stateName !== undefined && s.stateName !== 'attack' && s.stateName !== 'grab' && s.stateName !== 'cinematic') return -1;
+    const f = s.moveFrame ?? 0;
+    if (f <= 0) return -1;
+    const m = this.def?.moves?.[mn];
+    if (!m || typeof m.startup !== 'number') return f <= SYS_FIRST_ACTIVE ? SYS_FIRST_ACTIVE - f : -1;
+    const last = m.startup + Math.max(1, m.active ?? 1) - 1;
+    if (f > last) return -1;
+    return Math.max(0, m.startup - f);
+  }
+
+  /** CHANGED(fix_view) D13 read-back: the POSED silhouette top this frame (world y; bone boxes, view/bodytop.ts) */
+  liveTop(): number { return this.bodyTop && this.bodyTop.ok ? this.bodyTop.top() : this.topY(); }
+
+  /**
+   * CHANGED(fix_view) D13: the silhouette top the camera frames (world m): the measured neutral top (head + a raised limb,
+   * view/bodytop.ts) above the root, or the live head / raised hands when higher (jumps, a crouch is lower: no bob).
+   */
+  camTop(airborne: boolean): number {
+    const base = this.root.position.y + this.neutralTopM;
+    return Math.max(base, airborne ? this.topY() : this.headY());
+  }
+
+  /** world head-top height (m) for the camera's jump pan (CHANGED(fix_view) D13: never below the HeadTop_End bone + hair) */
   headY(): number {
-    if (this.head) { this.head.getWorldPosition(this.mp); return this.mp.y + 0.24 * (this.heightM / 1.8); }   // head bone -> hair top
-    return this.root.position.y + this.heightM;
+    let y = -Infinity;
+    if (this.head) { this.head.getWorldPosition(this.mp); y = this.mp.y + 0.24 * (this.heightM / 1.8); }   // head bone -> hair top
+    if (this.headTop) { this.headTop.getWorldPosition(this.mp); y = Math.max(y, this.mp.y + 0.04 * (this.heightM / 1.8)); }   // skull top -> hair
+    return Number.isFinite(y) ? y : this.root.position.y + this.heightM;
   }
 
   /** CHANGED(fixer) D4: the silhouette top for the camera = head top, or a raised hand (jump clips throw the arms up) */
