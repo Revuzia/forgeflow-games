@@ -2430,10 +2430,14 @@ export function defineCreatures(K) {
    * ====================================================================== */
 
   const PF_INFLATE = 0.45, PF_HOLD = 4.2, PF_WARN = 0.8, PF_DEFLATE = 0.5, PF_COOL = 1.4, PF_BIG = 2.2, PF_R = 0.45;
-  /* Puffed, the ball SETTLES so its bottom kisses the ground: its top is then
-     groundY + 1.87 * R_big * 0.92... = ~1.7 m, under a single jump's 1.91 m apex,
-     so it is a platform you can get onto from the floor. */
-  const PF_SIT = PF_R * PF_BIG * 0.92;
+  /* Puffed, the big soft ball SAGS on the ground (PF_SQUASH tall) and settles so
+     its bottom kisses it. MEASURED in the arena (cr_arena.py, 2026-10-01): an
+     unsquashed ball put its collider top at 1.70 m, 0.21 m under a single jump's
+     1.91 m apex, and a real-key hop from 1.6-2.0 m never got onto it. Sagged, the
+     ball's top is ~1.52 m and the collider's ~1.44 m: a platform a single jump
+     clears by ~0.45 m. */
+  const PF_SQUASH = 0.8;
+  const PF_SIT = PF_R * PF_BIG * PF_SQUASH * 0.92;
 
   class Puffer extends Creature {
     constructor(def, ctx) {
@@ -2507,6 +2511,8 @@ export function defineCreatures(K) {
     }
 
     get radius() { return PF_R * (1 + (PF_BIG - 1) * this.puff); }
+    /** Vertical sag of the puffed ball (1 deflated -> PF_SQUASH fully puffed). */
+    get sagY() { return 1 - (1 - PF_SQUASH) * clamp(this.puff, 0, 1); }
 
     _resetKind() {
       this.s = 0; this.puff = 0; this.cool = 0; this.blink = 0; this.bubbleT = 1.5;
@@ -2638,7 +2644,7 @@ export function defineCreatures(K) {
       b.rotation.set(0.1 * Math.sin(t * 1.3), this.yaw, 0.08 * Math.sin(t * 1.1));
       const du = this.defeatU;
       const s = (1 + (PF_BIG - 1) * this.puff) * k * (1 + 0.6 * du);
-      b.scale.set(s, s * (1 - 0.1 * this.blink), s);
+      b.scale.set(s, s * this.sagY * (1 - 0.1 * this.blink), s);
       const flutter = Math.sin(t * (this.state === 'drift' ? 14 : 30));
       this.finL.rotation.set(0, 0.5 * flutter, 0.3);
       this.finR.rotation.set(0, -0.5 * flutter, -0.3);
@@ -2651,7 +2657,7 @@ export function defineCreatures(K) {
     _syncColliders() {
       const R = this.radius;
       const h = R * 0.8;
-      this.col.half.set(h, h, h);
+      this.col.half.set(h, Math.min(h, R * this.sagY * 0.9), h);
       this.col.setCenter(this.pos.x, this.pos.y, this.pos.z);
       this.col.active = !this.defeated && this.state !== 'gone';
     }

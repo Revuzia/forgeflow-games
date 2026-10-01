@@ -2208,7 +2208,11 @@ export function defineBosses(K) {
         this._burst('spark', _a.set(this._px, this._py, this._pz), 0x7fe8ff, 0.9);
         if (player && this.hitCd <= 0) { this.hitCd = 0.8; this._hurt(player, this._pdx || 1, this._pdz, 6, 0.3); }
       }
-      if (player) this._bump(player, this.pos.x, this.pos.y, this.pos.z, GY_R * 1.05, 6, 0.3, 1.0);
+      /* touching its SIDES shoves; a hero standing on (or pounding down onto) the
+         crown is above the body, not in it. Measured in the arena 2026-10-01: the
+         body sphere (r 1.26 + the capsule's 0.38) reached 0.2 m above the deck
+         top, so the shove fired on every landing and the core was unreachable. */
+      if (player && this._py < this.pos.y + GY_DECK - 0.45) this._bump(player, this.pos.x, this.pos.y, this.pos.z, GY_R * 1.05, 6, 0.3, 1.0);
     }
 
     _stepBolts(dt, player) {

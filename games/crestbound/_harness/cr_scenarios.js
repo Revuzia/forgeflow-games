@@ -396,27 +396,43 @@ export function makeScenarios(bot) {
     bot.step(6);
     rec.frames.push(capOn(c, 'puffer_2_puffed_platform'));
     // jump onto it: it is a bounce platform
-    closeTo(c, 2.0, 120);
-    const top = () => (c.col && c.col.aabb ? c.col.aabb.max.y : c.pos.y + 1.0);
-    const b1 = bot.frame;
-    let vyMax = 0, yMax = -1e9, pounded = false;
+    closeTo(c, 1.5, 120);
     bot.releaseAll();
+    bot.step(4);
+    const top = () => (c.col && c.col.aabb ? c.col.aabb.max.y : c.pos.y + 1.0);
+    rec.steps.platformTop = r2(top());
+    const b1 = bot.frame;
+    let vyMax = 0, yMax = -1e9, phase = 0, pounded = false, bounceF = -1, apexAfterBounce = -1e9, capd = false;
     bot.aim(c.pos.x, c.pos.z);
     bot.key('Space', true);
     bot.drive((i) => {
       const p = P();
-      if (i === 16) bot.key('Space', false);
+      if (i === 14) bot.key('Space', false);
       const dx = c.pos.x - p.pos.x, dz = c.pos.z - p.pos.z, d = Math.hypot(dx, dz);
       bot.aim(c.pos.x, c.pos.z);
-      bot.key('KeyW', d > 0.25 && !pounded);
       if (p.vel.y > vyMax) vyMax = p.vel.y;
       if (p.pos.y > yMax) yMax = p.pos.y;
-      // on the way down from the BOUNCE, over the ball: pound it
-      if (!pounded && i > 40 && p.vel.y < 0 && d < 0.5 && p.pos.y > top() + 0.6) { bot.key('KeyW', false); bot.key('KeyC', true); pounded = true; }
-      return c.defeated || (i > 30 && p.grounded && !pounded) || i > 240;
-    }, 260);
+      const bounced = bot.log.some((e) => e.f >= b1 && e.k === 'puffer' && e.e === 'bounced');
+      if (phase === 0) {
+        // over the top before the feet come down past it, then hold still above it
+        bot.key('KeyW', d > 0.35 && (p.vel.y > 0 || p.pos.y > top() + 0.1));
+        if (bounced || (i > 8 && p.vel.y > 9.5)) { phase = 1; bounceF = bot.frame; }
+      } else if (phase === 1) {
+        if (p.pos.y > apexAfterBounce) apexAfterBounce = p.pos.y;
+        if (!capd && p.vel.y < 1) { capd = true; rec.frames.push(capOn(c, 'puffer_3_bounce_apex')); }
+        bot.key('KeyW', d > 0.3);
+        // falling back onto the puffed ball: POUND it
+        if (p.vel.y < 0 && d < 0.6 && p.pos.y > top() + 0.6 && (c.state === 'puffed' || c.state === 'warn')) {
+          bot.key('KeyW', false); bot.key('KeyC', true); pounded = true; phase = 2;
+        }
+      } else if (phase === 2) {
+        if (c.defeated || p.grounded) return true;
+      }
+      return c.defeated || (phase === 0 && i > 30 && p.grounded) || i > 300;
+    }, 320);
     bot.releaseAll();
-    rec.steps.bounce = { heroVyMax: r2(vyMax), heroApex: r2(yMax), bouncedEv: bot.log.some((e) => e.f >= b1 && e.k === 'puffer' && e.e === 'bounced'), pounded, defeated: !!c.defeated, how: c.defeatHow };
+    rec.steps.bounce = { heroVyMax: r2(vyMax), heroApex: r2(yMax), apexAfterBounce: r2(apexAfterBounce), bounceF,
+      bouncedEv: bot.log.some((e) => e.f >= b1 && e.k === 'puffer' && e.e === 'bounced'), pounded, defeated: !!c.defeated, how: c.defeatHow };
     bot.step(6);
     rec.frames.push(capOn(c, 'puffer_3_popped'));
     if (!c.defeated) rec.steps.pound2 = poundBeside(c, 1.0, 3);
@@ -886,7 +902,7 @@ export function makeScenarios(bot) {
     const ac = c.arenaC, ar = c.arenaR - 0.8;
     bossIntro(o, [ac.x, ac.z + 8.5]);
     const pounder = makePounder(), jumper = makeJumper();
-    let mode = 'ground', gear = -1, leaps = 0, boards = 0, onGearF = 0;
+    let mode = 'ground', gear = -1, leaps = 0, boards = 0, onGearF = 0, leapFails = 0;
     const deckTop = () => c.pos.y + 1.05;
     const gearTop = (i) => c.platPos[i * 3 + 1] + 0.2;
     const gearU = (i) => (c.platPos[i * 3 + 1] - c.floorY - 0.35) / Math.max(0.1, c.hoverH - 0.55);
@@ -918,13 +934,16 @@ export function makeScenarios(bot) {
       }
       if (mode === 'leap') {
         leapT++;
-        // air control onto the crown, then pound once over the core
+        // a fresh press (a held Space is no press), rise clear of the body,
+        // then air control onto the crown and pound once over the core
         const d = Math.hypot(p.x - c.pos.x, p.z - c.pos.z);
         bot.aim(c.pos.x, c.pos.z);
-        bot.key('KeyW', d > 0.3);
-        if (leapT >= 12) bot.key('Space', false);
+        if (leapT === 1) { bot.key('Space', false); bot.key('KeyW', false); return false; }
+        if (leapT === 2) { bot.key('Space', true); return false; }
+        bot.key('KeyW', d > 0.3 && p.y > deckTop() - 0.1);
+        if (leapT >= 16) bot.key('Space', false);
         if (d < 0.75 && p.y > deckTop() + 0.15 && pl.vel.y < 3) { bot.key('Space', false); bot.key('KeyW', false); bot.key('KeyC', true); mode = 'pound'; leapT = 0; }
-        if (pl.grounded && leapT > 8) { bot.releaseAll(); mode = 'ground'; }
+        if (pl.grounded && leapT > 12) { if (p.y < deckTop() - 0.5) leapFails++; bot.releaseAll(); mode = 'ground'; }
         return false;
       }
       if (mode === 'pound') {
@@ -944,13 +963,17 @@ export function makeScenarios(bot) {
         const k = gear * 3;
         if (gearU(gear) > 0.6) capOnce(o, 'ridingGear_p' + ph);
         const dB = Math.hypot(p.x - c.pos.x, p.z - c.pos.z);
-        if (st === 'vent' && ventLeft() > 0.9 && gearTop(gear) > deckTop() - 1.35 && dB < 4.0) {
+        // ride the gear's inner edge, the side nearest the crown
+        const gx = c.platPos[k], gz = c.platPos[k + 2];
+        let ix = c.pos.x - gx, iz = c.pos.z - gz;
+        const il = Math.hypot(ix, iz) || 1;
+        const sx = gx + ix / il * 0.6, sz = gz + iz / il * 0.6;
+        const atEdge = Math.hypot(p.x - sx, p.z - sz) < 0.45;
+        if (st === 'vent' && ventLeft() > 0.9 && gearTop(gear) > deckTop() - 1.35 && dB < 3.6 && atEdge) {
           leaps++; mode = 'leap'; leapT = 0;
-          bot.aim(c.pos.x, c.pos.z);
-          bot.key('KeyW', true); bot.key('Space', true);
           return false;
         }
-        bot.steer(c.platPos[k], c.platPos[k + 2], 0.5);
+        bot.servo(sx, sz, 3.0, 2.5);
         return false;
       }
       mode = 'ground';
@@ -966,7 +989,7 @@ export function makeScenarios(bot) {
       return false;
     }, 60 * 200);
     rec.fightS = r2(n / 60);
-    rec.leaps = leaps; rec.boards = boards; rec.onGearS = r2(onGearF / 60);
+    rec.leaps = leaps; rec.leapFails = leapFails; rec.boards = boards; rec.onGearS = r2(onGearF / 60);
     if (c.state === 'defeat') bossAftermath(o, [0, 1, -9]);
     return bossRecord(o);
   }
