@@ -123,3 +123,15 @@ plus harness-only files under _harness/ (the test arena data + its driver).
   for the call); the five original critters keep the bundle, untouched. Node sim of the imp now hops 10 -> 19 m.
   Every enemy proof is being re-run on the fixed code; the three defeated bosses (bramblehide, slagmaw, hoarhorn)
   only probe the floor with a fallback equal to the flat arena floor, so their proofs are unaffected.
+- FINAL RE-PROOF on the fixed code (03:37-, `cr_arena.py ... --only <enemies, strikes, gyrarch>`, frames r0337_*/r0342_*/r0344_*):
+  * burrower: notice 8.94 m -> dive -> TUNNELED 7.97 m from home -> tele 0.37 m from Nim (ring under his feet) -> pop
+    TOSSED him (vy 7.5, bump) -> dazed -> dig -> tunnel -> tele (sidestepped) -> pop -> dazed -> STOMP -> coins +3.
+  * podspitter: notice 12.89 m -> aim/tele/spit x2 (both seeds missed the sidestepper) -> STOMP on the pod -> +3.
+  * strike:podspitter: PUNCH -> defeat 'punch' -> +3.
+  * slagcrab: hop from 3.3 m -> SHELL + CLONK -> tele/snap (backed off) -> recover -> POUND beside -> FLIPPED -> POUND
+    -> defeat -> +3.   * emberimp: cackle -> 4 crouch(flare)/hop cycles toward Nim -> POUND as it landed -> defeat
+    -> +2 (its drop).   * strike:slagcrab: PUNCH -> defeat 'punch' -> +3.
+  * skater: tele -> slide (sidestepped, no bump) -> spin -> dizzy -> STOMP -> +3.
+  * snowcub: clap -> windup -> shove: the ball ROLLS (frame r0344_09) -> sidestepped -> watch -> sulk -> scoop ->
+    POUND -> +3.   * strike:snowcub: its ball HIT Nim (ballHit) -> cheer -> PUNCH x3 -> defeat 'punch' -> +3.
+  * sentry: track -> tele (beam) -> fire -> cool -> POUND -> +3.

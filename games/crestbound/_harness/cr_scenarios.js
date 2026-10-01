@@ -403,48 +403,70 @@ export function makeScenarios(bot) {
     bot.releaseAll();
     bot.step(6);
     rec.frames.push(capOn(c, 'puffer_2_puffed_platform'));
-    // jump onto it: it is a bounce platform
+    // 1. jump onto it: it is a bounce platform (measure the launch)
     closeTo(c, 1.5, 120);
     bot.releaseAll();
     bot.step(4);
     const top = () => (c.col && c.col.aabb ? c.col.aabb.max.y : c.pos.y + 1.0);
     rec.steps.platformTop = r2(top());
     const b1 = bot.frame;
-    let vyMax = 0, yMax = -1e9, phase = 0, pounded = false, bounceF = -1, apexAfterBounce = -1e9, capd = false;
+    let vyMax = 0, yMax = -1e9, bounced = false, capd = false;
     bot.aim(c.pos.x, c.pos.z);
     bot.key('Space', true);
     bot.drive((i) => {
       const p = P();
       if (i === 14) bot.key('Space', false);
-      const dx = c.pos.x - p.pos.x, dz = c.pos.z - p.pos.z, d = Math.hypot(dx, dz);
+      const d = bot.hdist(c.pos.x, c.pos.z);
       bot.aim(c.pos.x, c.pos.z);
       if (p.vel.y > vyMax) vyMax = p.vel.y;
       if (p.pos.y > yMax) yMax = p.pos.y;
-      const bounced = bot.log.some((e) => e.f >= b1 && e.k === 'puffer' && e.e === 'bounced');
-      if (phase === 0) {
-        // over the top before the feet come down past it, then hold still above it
+      if (!bounced) {
         bot.key('KeyW', d > 0.35 && (p.vel.y > 0 || p.pos.y > top() + 0.1));
-        if (bounced || (i > 8 && p.vel.y > 9.5)) { phase = 1; bounceF = bot.frame; }
-      } else if (phase === 1) {
-        if (p.pos.y > apexAfterBounce) apexAfterBounce = p.pos.y;
+        if (i > 8 && p.vel.y > 9.5) bounced = true;
+      } else {
+        bot.key('KeyW', false);
         if (!capd && p.vel.y < 1) { capd = true; rec.frames.push(capOn(c, 'puffer_3_bounce_apex')); }
-        bot.key('KeyW', d > 0.3);
-        // at the top of the bounce, over the puffed ball: POUND it (a pound falls
-        // at 40 m/s, so it lands long before the ball's hold runs out)
-        if (p.vel.y < 1.0 && d < 0.8 && p.pos.y > top() + 0.6 && (c.state === 'puffed' || c.state === 'warn' || c.state === 'inflate')) {
-          bot.key('KeyW', false); bot.key('KeyC', true); pounded = true; phase = 2;
-        }
-      } else if (phase === 2) {
-        if (c.defeated || p.grounded) return true;
       }
-      return c.defeated || (phase === 0 && i > 30 && p.grounded) || i > 300;
-    }, 320);
+      return (i > 20 && p.grounded && p.pos.y < top() - 0.3) || i > 360;
+    }, 380);
     bot.releaseAll();
-    rec.steps.bounce = { heroVyMax: r2(vyMax), heroApex: r2(yMax), apexAfterBounce: r2(apexAfterBounce), bounceF,
-      bouncedEv: bot.log.some((e) => e.f >= b1 && e.k === 'puffer' && e.e === 'bounced'), pounded, defeated: !!c.defeated, how: c.defeatHow };
+    rec.steps.bounce = { heroVyMax: r2(vyMax), heroApex: r2(yMax), bounced, tripleJumpApex: 3.58 };
+    // 2. POP it: a plain jump over the puffed ball and a pound onto its top
+    const pops = [];
+    for (let t = 0; t < 5 && !c.defeated; t++) {
+      if (!waitState(c, ['puffed', 'inflate'], 600, () => { closeTo(c, 2.5, 1); })) break;
+      bot.releaseAll();
+      if (c.state === 'inflate') waitState(c, 'puffed', 60);
+      closeTo(c, 1.4, 120);
+      bot.releaseAll();
+      let pounded = false, landedOnF = -1;
+      const f0 = bot.frame;
+      bot.aim(c.pos.x, c.pos.z);
+      bot.key('Space', true);
+      bot.drive((i) => {
+        const p = P();
+        if (i === 14) bot.key('Space', false);
+        const d = bot.hdist(c.pos.x, c.pos.z);
+        bot.aim(c.pos.x, c.pos.z);
+        if (!pounded) {
+          bot.key('KeyW', d > 0.2 && (p.vel.y > -2 || p.pos.y > top() + 0.1));
+          if (d < 0.55 && p.pos.y > top() + 0.12 && p.vel.y < 2.5) { bot.key('KeyW', false); bot.key('KeyC', true); pounded = true; }
+        }
+        if (pounded && p.grounded) { landedOnF = bot.frame; return true; }
+        return c.defeated || (i > 20 && p.grounded && !pounded) || i > 400;
+      }, 420);
+      bot.releaseAll();
+      bot.step(4);
+      pops.push({ pounded, defeated: !!c.defeated, how: c.defeatHow, st: c.state, frames: bot.frame - f0 });
+    }
+    rec.steps.pops = pops;
     bot.step(6);
     rec.frames.push(capOn(c, 'puffer_3_popped'));
-    if (!c.defeated) rec.steps.pound2 = poundBeside(c, 1.0, 3);
+    if (!c.defeated) {
+      // fall-back: stomp it once it has deflated (it is prickly-safe only from above)
+      waitState(c, ['deflate', 'drift'], 600);
+      rec.steps.stompDeflated = stomp(c, () => c.pos.y + c.radius * 0.8, 3, 1.6);
+    }
     rec.steps.reward = collect(c);
     // it floats back after its respawn time: the platform is not lost for good
     const fR = bot.frame;
@@ -913,7 +935,7 @@ export function makeScenarios(bot) {
     const ac = c.arenaC, ar = c.arenaR - 0.8;
     bossIntro(o, [ac.x, ac.z + 8.5]);
     const pounder = makePounder(), jumper = makeJumper();
-    let mode = 'ground', gear = -1, leaps = 0, boards = 0, onGearF = 0, leapFails = 0;
+    let mode = 'ground', gear = -1, leaps = 0, boards = 0, onGearF = 0, leapFails = 0, dodgeBolts = 0;
     const deckTop = () => c.pos.y + 1.05;
     const gearTop = (i) => c.platPos[i * 3 + 1] + 0.2;
     const gearU = (i) => (c.platPos[i * 3 + 1] - c.floorY - 0.35) / Math.max(0.1, c.hoverH - 0.55);
@@ -951,7 +973,9 @@ export function makeScenarios(bot) {
         bot.aim(c.pos.x, c.pos.z);
         if (leapT === 1) { bot.key('Space', false); bot.key('KeyW', false); return false; }
         if (leapT === 2) { bot.key('Space', true); return false; }
-        bot.key('KeyW', d > 0.3 && p.y > deckTop() - 0.1);
+        // W from the take-off: the feet clear the body's shove band (deck - 0.45)
+        // within ~0.06 s and the box top long before the hero reaches its side
+        bot.key('KeyW', d > 0.3);
         if (leapT >= 16) bot.key('Space', false);
         if (d < 0.75 && p.y > deckTop() + 0.15 && pl.vel.y < 3) { bot.key('Space', false); bot.key('KeyW', false); bot.key('KeyC', true); mode = 'pound'; leapT = 0; }
         if (pl.grounded && leapT > 12) { if (p.y < deckTop() - 0.5) leapFails++; bot.releaseAll(); mode = 'ground'; }
@@ -978,7 +1002,14 @@ export function makeScenarios(bot) {
         const gx = c.platPos[k], gz = c.platPos[k + 2];
         let ix = c.pos.x - gx, iz = c.pos.z - gz;
         const il = Math.hypot(ix, iz) || 1;
-        const sx = gx + ix / il * 0.6, sz = gz + iz / il * 0.6;
+        let sx = gx + ix / il * 0.6, sz = gz + iz / il * 0.6;
+        // the aim beam locks 0.25 s before the bolt: step across its line, on the gear
+        if (st === 'aimTele' && c.stateT > [0.9, 0.8, 0.7][ph - 1] - 0.4) {
+          const ax = c.aim.x, az = c.aim.z, al = Math.hypot(ax, az) || 1;
+          const side = ((p.x - gx) * -az + (p.z - gz) * ax) >= 0 ? 1 : -1;
+          sx = gx - az / al * 0.8 * side; sz = gz + ax / al * 0.8 * side;
+          dodgeBolts++;
+        }
         // leap in the vent (or the instant before it: the jump lands ~0.8 s later)
         const opening = (st === 'vent' && ventLeft() > 0.9) || (st === 'fire' && c.stateT > 0.1);
         if (opening && gearTop(gear) > deckTop() - 1.5 && dB < 3.9 && Math.hypot(p.x - sx, p.z - sz) < 0.8) {
@@ -1001,7 +1032,7 @@ export function makeScenarios(bot) {
       return false;
     }, 60 * 200);
     rec.fightS = r2(n / 60);
-    rec.leaps = leaps; rec.leapFails = leapFails; rec.boards = boards; rec.onGearS = r2(onGearF / 60);
+    rec.leaps = leaps; rec.leapFails = leapFails; rec.boards = boards; rec.onGearS = r2(onGearF / 60); rec.boltDodgeFrames = dodgeBolts;
     if (c.state === 'defeat') bossAftermath(o, [0, 1, -9]);
     return bossRecord(o);
   }
