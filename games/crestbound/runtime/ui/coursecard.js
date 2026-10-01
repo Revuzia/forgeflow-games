@@ -110,6 +110,24 @@ function injectMissionCss() {
   (document.head || document.body).appendChild(st);
 }
 
+/* The pad direction right now, packed (dx+1)*3 + (dy+1); PAD_NEUTRAL = centred.
+   Same thresholds as ui/style.js padNav (d-pad buttons 12-15, stick 0.5). */
+const PAD_NEUTRAL = 4;
+function padDirNow() {
+  let pads = null;
+  try { pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : null; } catch (e) { pads = null; }
+  if (!pads) return PAD_NEUTRAL;
+  let gp = null;
+  for (let i = 0; i < pads.length; i++) { if (pads[i] && pads[i].connected) { gp = pads[i]; break; } }
+  if (!gp) return PAD_NEUTRAL;
+  const b = gp.buttons, ax = gp.axes;
+  const on = (i) => !!(b[i] && (b[i].pressed || b[i].value > 0.5));
+  let dx = 0, dy = 0;
+  if (on(14) || (ax[0] || 0) < -0.5) dx = -1; else if (on(15) || (ax[0] || 0) > 0.5) dx = 1;
+  if (on(12) || (ax[1] || 0) < -0.5) dy = -1; else if (on(13) || (ax[1] || 0) > 0.5) dy = 1;
+  return (dx + 1) * 3 + (dy + 1);
+}
+
 /** A crest's mission name: the authored `mission.name`, else the crest's name. */
 function missionName(cd) {
   if (!cd) return '';
@@ -160,6 +178,13 @@ export class CourseCard {
     this._resolve = null;
     this._keyHandler = null;
     this._padHandler = (n) => this._onPadNav(n);
+    /** True while a pad direction held since show() has not yet been released. */
+    this._padHeld = false;
+    this._padWatch = () => {
+      if (!this._open || !this._padHeld) return;
+      if (padDirNow() === PAD_NEUTRAL) { this._padHeld = false; return; }
+      requestAnimationFrame(this._padWatch);
+    };
     /** courseId -> painted canvas, so re-entering the Keep never repaints. */
     this._paintCache = new Map();
     this._def = null;
@@ -349,15 +374,21 @@ export class CourseCard {
     this._paint(id || themeId, themeId);
 
     /* --- save record --------------------------------------------------- */
-    let rec = save || null;
+    /* `save` is a course RECORD ({crests:[…], …}) — but game.js's gate hands the
+       Save MODULE itself (`card.show(def, this.save)`), whose `.crests` is not an
+       array, so every painting opened with NO crest marked and no best time even
+       after a crest was banked (measured, missions lane 2026-09-30: save held
+       crests ['open'], the card showed got []). A module is read through. */
+    let rec = save && Array.isArray(save.crests) ? save : null;
     if (!rec && id) {
       /* Never MINT a record just to look at a painting. Save.course() is a
          non-mutating read now (it returns a shared empty record for a course
          nobody has entered), but going through courseIds() keeps the intent
          explicit and survives a future writer being added here. */
+      const S = save && typeof save.course === 'function' ? save : Save;
       try {
-        const known = typeof Save.courseIds === 'function' ? Save.courseIds() : null;
-        if (known && known.indexOf(String(id)) !== -1) rec = Save.course(id);
+        const known = typeof S.courseIds === 'function' ? S.courseIds() : null;
+        if (known && known.indexOf(String(id)) !== -1) rec = S.course(id);
       } catch (e) { rec = null; }
     }
     const got = new Set(rec && Array.isArray(rec.crests) ? rec.crests.map(String) : []);
@@ -461,6 +492,16 @@ export class CourseCard {
     this.nav.refresh();
     this.nav.index = -1;
     this.nav.focusIndex(locked ? 1 : 0, true);
+
+    /* A STICK STILL HELD FROM THE WALK-IN is not a menu choice: the player walked
+       into the painting with it pushed, and the menu poller would read that as
+       'up' (then auto-repeat it every 0.12 s), flicking the focus between ENTER
+       and BACK — or a diagonal spinning the mission cursor — under a thumb that
+       never meant to steer. Directions are ignored until the pad reads neutral
+       once (watched only while something is held). The keyboard twin of this is
+       the `e.repeat` guard in _onKey. */
+    this._padHeld = padDirNow() !== PAD_NEUTRAL;
+    if (this._padHeld) requestAnimationFrame(this._padWatch);
 
     if (this._keyHandler) window.removeEventListener('keydown', this._keyHandler, true);
     this._keyHandler = (e) => this._onKey(e);
@@ -585,8 +626,14 @@ export class CourseCard {
       return;
     }
     /* MISSION CURSOR: left/right (and A/D, the WASD a player's hand is already on)
-       walk the missions; a digit jumps to one. */
+       walk the missions; a digit jumps to one. An AUTO-REPEAT is never a step: a
+       key still held from walking into the painting (W, or D on a diagonal) only
+       produces repeats here, and must not flick the focus or spin the cursor. */
     const code = e.code || '';
+    if (e.repeat && (/^Arrow|^(Up|Down|Left|Right)$/.test(e.key) || /^Key[WASD]$/.test(code) || /^(Digit|Numpad)\d$/.test(code))) {
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
     if (e.key === 'ArrowRight' || e.key === 'Right' || code === 'KeyD') { e.preventDefault(); e.stopPropagation(); this._step(1); return; }
     if (e.key === 'ArrowLeft' || e.key === 'Left' || code === 'KeyA') { e.preventDefault(); e.stopPropagation(); this._step(-1); return; }
     if (/^Digit[1-9]$/.test(code) || /^Numpad[1-9]$/.test(code)) {
@@ -608,6 +655,8 @@ export class CourseCard {
     if (!this._open) return;
     if (name === 'back') { this._choose('cancel'); return; }
     if (name === 'confirm') { this.nav.activate(); return; }
+    /* a direction held since the card opened (the walk-in) is ignored until released */
+    if (this._padHeld && (name === 'left' || name === 'right' || name === 'up' || name === 'down')) return;
     if (name === 'left') { this._step(-1); return; }
     if (name === 'right') { this._step(1); return; }
     if (name === 'up') { this.nav.move(-1); return; }

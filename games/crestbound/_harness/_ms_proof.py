@@ -187,6 +187,52 @@ WALK = r"""async (course) => {
   return { frames: i, state: G.state, pos: [+P.pos.x.toFixed(2), +P.pos.y.toFixed(2), +P.pos.z.toFixed(2)], near: G._gateNear, dwell: G._gateDwell };
 }"""
 
+# A deterministic station frame: the engine is stopped, the hero placed, the sim
+# hand-stepped (critters walk, the mill turns), then the lens is set by hand and ONE
+# frame rendered. Under a 100 %-CPU box a live frame took ~4 s, so a screenshot after a
+# wall-clock settle showed the PREVIOUS station; this cannot.
+STATION = r"""async ([place, camPos, camLook, steps]) => {
+  const A = CRESTBOUND, G = A.game, E = A.engine, P = G.player, T = A.THREE;
+  const wasRunning = !!E.running;
+  E.stop();
+  P.__test.teleport({ x: place[0], y: place[1], z: place[2] }); P.__test.setVel({ x: 0, y: 0, z: 0 });
+  if (place.length > 3) P.__test.setFacing(place[3]);
+  for (let i = 0; i < steps; i++) G.update(1 / 60);
+  E.camera.position.set(camPos[0], camPos[1], camPos[2]);
+  E.camera.lookAt(new T.Vector3(camLook[0], camLook[1], camLook[2]));
+  E.camera.updateMatrixWorld(true);
+  E.render(1 / 60);
+  return { wasRunning, pos: [+P.pos.x.toFixed(2), +P.pos.y.toFixed(2), +P.pos.z.toFixed(2)] };
+}"""
+
+# Walk ONTO the race start pad with a real held KeyW (the race starts on the step-on
+# edge, collectibles.js), hand-stepped; then run on and report the clock + run stats.
+RACE_WALK = r"""async ([from, yaw, maxFrames, after]) => {
+  const A = CRESTBOUND, G = A.game, E = A.engine, IN = G.input, P = G.player;
+  E.stop();
+  P.__test.teleport({ x: from[0], y: from[1], z: from[2] }); P.__test.setVel({ x: 0, y: 0, z: 0 });
+  P.__test.setFacing(yaw);
+  if (G.cam && G.cam.__test && G.cam.__test.setYaw) G.cam.__test.setYaw(yaw);
+  for (let i = 0; i < 20; i++) G.update(1 / 60);
+  const col = G.course.collectibles;
+  const before = col.raceMs;
+  IN.__test.press('KeyW');
+  let i = 0, startedAt = -1;
+  for (i = 0; i < maxFrames; i++) {
+    G.update(1 / 60);
+    if (startedAt < 0 && col.raceMs >= 0) startedAt = i;
+    if (startedAt >= 0 && i - startedAt >= after) break;
+  }
+  IN.__test.release('KeyW');
+  G.update(1 / 60);
+  E.render(1 / 60);
+  const tim = document.querySelector('.ch-timers'), dth = document.querySelector('.ch-deaths');
+  return { before, startedAtFrame: startedAt, frames: i, raceMs: col.raceMs,
+    runstatsOff: document.documentElement.classList.contains('cb-runstats-off'),
+    timersDisplay: tim ? getComputedStyle(tim).display : null, deathsDisplay: dth ? getComputedStyle(dth).display : null,
+    pos: [+P.pos.x.toFixed(2), +P.pos.y.toFixed(2), +P.pos.z.toFixed(2)] };
+}"""
+
 STEP = r"""async (n) => {
   const A = CRESTBOUND, G = A.game, E = A.engine;
   for (let i = 0; i < n; i++) G.update(1 / 60);
@@ -201,6 +247,9 @@ def main():
     ap.add_argument("--out", default=os.path.join(ROOT, "_spec", "audit_2026_09_29", "frames", "missions"))
     ap.add_argument("--headed", action="store_true")
     ap.add_argument("--boot", type=int, default=900)
+    ap.add_argument("--skip-run1", action="store_true",
+                    help="start at RUN 2 (a fresh profile: the card opens on mission 1 anyway)")
+    ap.add_argument("--name", default="proof", help="proof json basename (written after every run)")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     proof = {"url": args.url, "steps": {}}
@@ -208,11 +257,13 @@ def main():
 
     def shot(pg, name):
         path = os.path.join(args.out, name + ".png")
-        try:
-            pg.screenshot(path=path, timeout=60_000)
-            log("  frame", os.path.relpath(path, ROOT))
-        except Exception as e:
-            log("  frame FAILED", name, str(e)[:120])
+        for attempt in (1, 2):
+            try:
+                pg.screenshot(path=path, timeout=90_000, animations="disabled")
+                log("  frame", os.path.relpath(path, ROOT))
+                return
+            except Exception as e:
+                log("  frame FAILED (attempt %d)" % attempt, name, str(e)[:120])
 
     def settle(pg, ms):
         pg.wait_for_timeout(ms)
@@ -271,48 +322,69 @@ def main():
             return bool(ok)
 
         def stations(tag):
-            # V1 the courtyard from the gate checkpoint, looking north at the back door
-            pg.evaluate(PLACE, [0.0, 9.2, -15.2, 0.0]); settle(pg, 1600); shot(pg, tag + "_v1_courtyard")
+            # The SAME four lenses in every mission (engine stopped, one frame rendered each).
+            # V1 the courtyard, looking north at the fort's back door (wall z -35..-33, x 0)
+            pg.evaluate(STATION, [[0.0, 9.3, -18.0, 0.0], [0.0, 13.2, -14.0], [0.0, 10.6, -33.0], 90])
+            shot(pg, tag + "_v1_courtyard")
             live1 = pg.evaluate(LIVE)
-            # V2 the Warden's ring from its west entrance, looking east
-            pg.evaluate(PLACE, [-13.5, 17.5, -54.0, -math.pi / 2]); settle(pg, 1600); shot(pg, tag + "_v2_ring")
+            # V2 the Warden's ring from the west, over its entrance (centre -2, 16.4, -54)
+            pg.evaluate(STATION, [[-14.5, 17.6, -54.0, -math.pi / 2], [-19.0, 23.5, -54.0], [-2.0, 16.8, -54.0], 90])
+            shot(pg, tag + "_v2_ring")
             live2 = pg.evaluate(LIVE)
-            # V3 the crest tower from the rampart checkpoint, looking north
-            pg.evaluate(PLACE, [10.0, 14.6, -25.0, 0.0]); settle(pg, 1600); shot(pg, tag + "_v3_tower")
+            # V3 the crest tower from the rampart walk (crest home 9.2, 19.3, -32.8)
+            pg.evaluate(STATION, [[10.0, 14.6, -24.6, 0.0], [10.6, 17.8, -22.0], [9.2, 18.6, -32.8], 30])
+            shot(pg, tag + "_v3_tower")
+            # V4 the overview: over the gate, the fort, the door and the ridge beyond
+            pg.evaluate(STATION, [[0.0, 9.3, -18.0, 0.0], [6.0, 30.0, -2.0], [-1.0, 12.0, -44.0], 10])
+            shot(pg, tag + "_v4_overview")
+            pg.evaluate("() => { const E = CRESTBOUND.engine; E.start(E._loopFn); return true; }")
             return live1, live2
 
+        def dump():
+            with open(os.path.join(args.out, args.name + ".json"), "w", encoding="utf-8") as f:
+                json.dump(dict(proof, errors=errors[:40], log=LOG), f, indent=1)
+
         # ================= RUN 1: pick MISSION 5 with real arrows =================
-        if not walk_into_card("run1"):
-            proof["error"] = "card never opened"; json.dump(proof, open(os.path.join(args.out, "proof.json"), "w"), indent=1); return 3
-        c0 = pg.evaluate(CARD); proof["steps"]["card_open_default"] = c0
-        log("  card on open:", c0["k"], "|", c0["name"], "|", [t["name"] + ("*" if t["sel"] else "") for t in c0["tiles"]])
-        shot(pg, "01_card_default")
-        for _ in range(4):
-            pg.keyboard.press("ArrowRight"); settle(pg, 160)
-        c1 = pg.evaluate(CARD); proof["steps"]["card_after_4_right"] = c1
-        log("  after 4x ArrowRight:", c1["k"], "|", c1["name"], "| sel", [t["n"] for t in c1["tiles"] if t["sel"]])
-        shot(pg, "02_card_mission5")
-        enter_course("run1")
-        L = pg.evaluate(LIVE); proof["steps"]["boss_live"] = L
-        log("  RUN 1 mission:", json.dumps(L["mission"]))
-        log("  critters:", json.dumps(L["critters"]))
-        log("  crests built:", json.dumps(L["crests"]), "| def.crests", L["crestDefs"])
-        log("  mill period", L["millPeriod"], "| north door ray hit", L["northDoorHit"], "| runstatsOff", L["runstatsOff"], L["timersDisplay"], L["deathsDisplay"])
-        shot(pg, "03_boss_arrival")
-        b1, b2 = stations("04_boss")
-        proof["steps"]["boss_v1"] = b1; proof["steps"]["boss_v2"] = b2
-        # never uninvited: stand on the (absent) race start pad for 1.5 s
-        pg.evaluate(PLACE, [0.0, 9.3, -15.5, 0.0]); settle(pg, 1500)
-        proof["steps"]["boss_on_race_pad"] = pg.evaluate(LIVE)
-        log("  on the race start pad in mission 5: raceMs", proof["steps"]["boss_on_race_pad"]["raceMs"])
-        pg.evaluate("() => CRESTBOUND.game.returnToKeep()")
-        wait_for(pg, "() => CRESTBOUND.game.state === 'keep' && !CRESTBOUND.game._loading", 300, poll_ms=500)
-        settle(pg, 1500)
+        if args.skip_run1:
+            log("RUN 1 skipped (--skip-run1)")
+        else:
+            if not walk_into_card("run1"):
+                proof["error"] = "card never opened"; json.dump(proof, open(os.path.join(args.out, "proof.json"), "w"), indent=1); return 3
+            c0 = pg.evaluate(CARD); proof["steps"]["card_open_default"] = c0
+            log("  card on open:", c0["k"], "|", c0["name"], "|", [t["name"] + ("*" if t["sel"] else "") for t in c0["tiles"]])
+            settle(pg, 2500)
+            shot(pg, "01_card_default")
+            for _ in range(4):
+                pg.keyboard.press("ArrowRight"); settle(pg, 160)
+            c1 = pg.evaluate(CARD); proof["steps"]["card_after_4_right"] = c1
+            log("  after 4x ArrowRight:", c1["k"], "|", c1["name"], "| sel", [t["n"] for t in c1["tiles"] if t["sel"]])
+            settle(pg, 2500)
+            shot(pg, "02_card_mission5")
+            enter_course("run1")
+            L = pg.evaluate(LIVE); proof["steps"]["boss_live"] = L
+            log("  RUN 1 mission:", json.dumps(L["mission"]))
+            log("  critters:", json.dumps(L["critters"]))
+            log("  crests built:", json.dumps(L["crests"]), "| def.crests", L["crestDefs"])
+            log("  mill period", L["millPeriod"], "| north door ray hit", L["northDoorHit"], "| runstatsOff", L["runstatsOff"], L["timersDisplay"], L["deathsDisplay"])
+            shot(pg, "03_boss_arrival")
+            b1, b2 = stations("04_boss")
+            proof["steps"]["boss_v1"] = b1; proof["steps"]["boss_v2"] = b2
+            # never uninvited: WALK (real KeyW) across the race start pad's spot in mission 5
+            rw = pg.evaluate(RACE_WALK, [[0.0, 9.3, -17.6], math.pi, 150, 60])
+            proof["steps"]["boss_walk_over_race_pad"] = rw
+            log("  mission 5, walked over the race start spot:", json.dumps(rw))
+            shot(pg, "04_boss_v5_no_race")
+            pg.evaluate("() => { const E = CRESTBOUND.engine; E.start(E._loopFn); return true; }")
+            pg.evaluate("() => CRESTBOUND.game.returnToKeep()")
+            wait_for(pg, "() => CRESTBOUND.game.state === 'keep' && !CRESTBOUND.game._loading", 300, poll_ms=500)
+            settle(pg, 1500)
+            dump()
 
         # ================= RUN 2: the default cursor, MISSION 1 =================
         walk_into_card("run2")
         c2 = pg.evaluate(CARD); proof["steps"]["card_run2"] = c2
         log("  card run2:", c2["k"], "|", c2["name"])
+        settle(pg, 2500)
         shot(pg, "05_card_mission1")
         enter_course("run2")
         L = pg.evaluate(LIVE); proof["steps"]["open_live"] = L
@@ -358,22 +430,32 @@ def main():
         log("  SAVE verdant-1:", json.dumps(rec))
         log("  Save.crestTotal():", pg.evaluate("() => CRESTBOUND.Save ? CRESTBOUND.Save.crestTotal() : (CRESTBOUND.game.save.crestTotal())"))
         proof["steps"]["save_at_panel"] = (save_mid or {}).get("courses", {}).get("verdant-1")
+        dump()
 
         # ================= RUN 3: the race is invited only by its own mission =================
         walk_into_card("run3")
         c3 = pg.evaluate(CARD); proof["steps"]["card_run3"] = c3
         log("  card run3 (after the crest):", c3["k"], "|", c3["name"], "| got", [t["n"] for t in c3["tiles"] if t["got"]])
+        settle(pg, 2500)
         shot(pg, "12_card_after_crest")
+        # a HELD key is not a step: one real keydown('d') then two auto-repeats (Playwright
+        # sends repeat:true on a second down of the same key) must move the cursor ONCE
+        sel0 = [t["n"] for t in c3["tiles"] if t["sel"]]
+        pg.keyboard.down("d"); settle(pg, 120); pg.keyboard.down("d"); settle(pg, 120); pg.keyboard.down("d"); settle(pg, 120)
+        pg.keyboard.up("d"); settle(pg, 300)
+        c3b = pg.evaluate(CARD); proof["steps"]["card_held_d"] = c3b
+        log("  held D (1 press + 2 repeats): sel", sel0, "->", [t["n"] for t in c3b["tiles"] if t["sel"]])
         pg.keyboard.press("Digit6"); settle(pg, 300)
         c4 = pg.evaluate(CARD); proof["steps"]["card_digit6"] = c4
         log("  Digit6 ->", c4["k"], "|", c4["name"])
         enter_course("run3")
         L = pg.evaluate(LIVE)
         log("  RUN 3 mission:", L["mission"] and L["mission"]["id"], "| race crest built:", [c["id"] for c in L["crests"] if c["race"]], "| runstatsOff", L["runstatsOff"])
-        pg.evaluate(PLACE, [0.0, 9.3, -15.5, 0.0]); settle(pg, 1800)
-        R = pg.evaluate(LIVE); proof["steps"]["race_on_pad"] = R
-        log("  on the start pad in mission 6: raceMs", R["raceMs"], "| runstatsOff", R["runstatsOff"], "| timers", R["timersDisplay"], "| deaths", R["deathsDisplay"])
+        R = pg.evaluate(RACE_WALK, [[0.0, 9.3, -17.6], math.pi, 150, 90])
+        proof["steps"]["race_walk_onto_pad"] = R
+        log("  mission 6, walked onto the start pad:", json.dumps(R))
         shot(pg, "13_race_running")
+        pg.evaluate("() => { const E = CRESTBOUND.engine; E.start(E._loopFn); return true; }")
 
         proof["errors"] = errors[:40]
         log("page errors:", len(errors))
@@ -381,9 +463,9 @@ def main():
             log("   ", e)
         br.close()
     proof["log"] = LOG
-    with open(os.path.join(args.out, "proof.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(args.out, args.name + ".json"), "w", encoding="utf-8") as f:
         json.dump(proof, f, indent=1)
-    log("wrote", os.path.join(args.out, "proof.json"))
+    log("wrote", os.path.join(args.out, args.name + ".json"))
     return 0
 
 
