@@ -99,6 +99,17 @@ LOOP files only: the pack's START files are not sample-aligned with the LOOPs (m
 - network (ogg run): manifest.js, keep.ogg 1,063,866, fanfare.ogg 52,159, verdant.ogg 1,508,219, clear.ogg 53,554,
   boss.ogg 1,543,702 — all 200, all before the click (bytes only). ?music=synth fetches manifest.js only.
 
+## musiccheck keep --travel ember-1 (2026-09-30): 17/17 PASS
+- title path, real mouse click on NEW GAME: before it no AudioContext exists; keep plays 2.53 s after the click
+  (page clock; 0.51 s on an earlier run). RMS mean 0.0356; music 0 -> 0; restored.
+- game.loadCourse('ember-1') (the course-change path the paintings use) -> theme ember, ember track playing,
+  audible (RMS mean 0.0457); returnToKeep() -> keep track again, 0 procedural beds, 0 music errors.
+- network: keep.ogg + fanfare.ogg + clear.ogg before the click; ember.ogg + boss.ogg on the course change. 0 console errors.
+- the earlier "122 s to first play" was a harness artefact (a 120 s state wait sat before the music read), not the game.
+- OUT OF SCOPE, observed every run: the Keep's GLB requests (models/keep/*, props/keep/*, nim.glb, warden.glb) read
+  `net::ERR_ABORTED` in the Network log with 0 console errors and the meshes on screen. No AbortController in runtime/
+  (grep); cause not investigated (not this lane's files) — worth a look by whoever owns the asset loader.
+
 ## Download size (measured)
 Ogg set 8,282,782 B (7.9 MiB) for all 8 cues; AAC set 10,820,638 B — a browser takes ONE set, on demand: the title
 fetches keep (1.06 MB) + the two jingles (0.1 MB); each realm adds its track (1.2-1.5 MB) + boss (1.5 MB, once).

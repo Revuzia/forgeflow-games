@@ -120,6 +120,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--course", default=None)
     ap.add_argument("--moods", action="store_true")
+    ap.add_argument("--travel", default=None,
+                    help="after the checks, load this course through game.loadCourse (the course-change path the "
+                         "painting uses) and prove the realm track crossfades in, then returnToKeep()")
     ap.add_argument("--quality", default="low")
     ap.add_argument("--json", default=None)
     ap.add_argument("--wait", type=float, default=120.0)
@@ -296,6 +299,29 @@ def main():
                 fin = pg.evaluate(STATS_JS)
                 ok("no music errors after moods", not fin["errors"], str(fin["errors"]))
                 ok("decoded PCM bounded", fin["decodedMB"] < 120, "decodedMB %s" % fin["decodedMB"])
+
+            if args.travel:
+                start = pg.evaluate(STATS_JS)["playing"]
+                pg.evaluate("CRESTBOUND.game.loadCourse(%s).catch(e => { window.__travelErr = String(e); })" % json.dumps(args.travel))
+                t0 = time.time()
+                arrived = wait_for(pg, "CRESTBOUND.game.state === 'playing' && CRESTBOUND.game.courseId === %s" % json.dumps(args.travel),
+                                   args.wait, 250)
+                realm2 = pg.evaluate("CRESTBOUND.game.themeId")
+                want2 = REALM_CUE.get(realm2)
+                got2 = wait_for(pg, "(() => { const s = (%s)(); return s && s.playing === %s ? s : null; })()"
+                                % (STATS_JS, json.dumps(want2)), 60, 100)
+                rt = rms_series(pg, 20, 100)
+                ok("course change -> realm track", bool(arrived) and bool(got2) and want2 != start,
+                   "%s -> %s: theme %s, playing %s, %.1f s after loadCourse (course build included); travel err %s"
+                   % (start, args.travel, realm2, got2 and got2["playing"], time.time() - t0,
+                      pg.evaluate("window.__travelErr || null")))
+                ok("realm track audible after the change", sum(x or 0 for x in rt) / len(rt) > 0.01,
+                   "mean %.4f  min %.4f" % (sum(rt) / len(rt), min(rt)))
+                pg.evaluate("CRESTBOUND.game.returnToKeep().catch(e => { window.__travelErr = String(e); })")
+                back = wait_for(pg, "(() => { const s = (%s)(); return s && s.playing === 'keep' && CRESTBOUND.game.state === 'keep' ? s : null; })()"
+                                % STATS_JS, args.wait, 250)
+                ok("returnToKeep -> keep track", bool(back), "playing %s, beds %s, errors %s"
+                   % (back and back["playing"], back and back["bedsActive"], back and back["errors"]))
 
             final = pg.evaluate(STATS_JS)
         except RuntimeError as e:
