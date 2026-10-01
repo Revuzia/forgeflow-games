@@ -27,6 +27,7 @@ FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
          "--enable-gpu-rasterization", "--disable-features=CalculateNativeWinOcclusion",
          "--autoplay-policy=no-user-gesture-required"]
 URL = "http://localhost:8788/games/crestbound/index.html?dev=1&quality=low&autoscale=0"
+# --port: a private copy of serve_nocache.py when the shared :8788 refuses module loads under load
 BASE = "/games/crestbound/"
 HOST = {"verdant": "verdant-1", "ember": "ember-1", "rime": "rime-1", "azure": "azure-1"}
 ROSTER = {
@@ -247,7 +248,10 @@ def main():
     ap.add_argument("--only", default="", help="comma list of kinds")
     ap.add_argument("--no-boss", action="store_true")
     ap.add_argument("--screens", action="store_true", help="also a page screenshot (DOM HUD) after each proof")
+    ap.add_argument("--port", type=int, default=8788, help="serve_nocache.py port (default the shared 8788)")
     args = ap.parse_args()
+    global URL
+    URL = URL.replace(":8788/", ":%d/" % args.port)
     only = [k for k in args.only.split(",") if k]
     realms = ["verdant", "ember", "rime", "azure"] if args.realm == "all" else [r for r in args.realm.split(",") if r in HOST]
     with sync_playwright() as p:

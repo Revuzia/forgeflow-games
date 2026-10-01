@@ -135,3 +135,24 @@ plus harness-only files under _harness/ (the test arena data + its driver).
   * snowcub: clap -> windup -> shove: the ball ROLLS (frame r0344_09) -> sidestepped -> watch -> sulk -> scoop ->
     POUND -> +3.   * strike:snowcub: its ball HIT Nim (ballHit) -> cheer -> PUNCH x3 -> defeat 'punch' -> +3.
   * sentry: track -> tele (beam) -> fire -> cool -> POUND -> +3.
+- (record found at resume 3, not logged before) SLAGMAW DEFEATED in the 02:01 ember rerun (fixed bot policy, code before
+  the broadphase fix): intro -> 3 x (dark bomb -> POUND beside it -> bombKicked into the grate) hp 3->2 (f3724) ->2->1
+  (f4351) ->1->0 (f4871); said intro/hurt1/phase2/hurt2/phase3/defeat; defeat 3.42 s -> bossDown -> trigger 'boss' ->
+  crest present -> taken (crest counter +1, game 'clear'). Frames r0201_10..24.
+
+## RESUME 3 (2026-10-01 06:5x, one browser at a time)
+- The shared :8788 server (started 09-29, BEFORE the backlog-256 fix) refused module loads under load: the first boot
+  sat 675 s on ERR_CONNECTION_REFUSED. cr_arena.py gained `--port`; every run below uses a private serve_nocache.py on
+  :8817. Box: 77-94 % CPU, 34-43 chrome processes (other workflows); 56-502 ms per hand-stepped game frame.
+- PUFFER POP AT THE APEX (07:15, frames r0715_01..05): notice 4.97 m -> inflate -> puffed (collider top 1.44 m) ->
+  each try on a FRESH puffed cycle: jump on -> BOUNCE (hero vy 19.06, apex 6.94 m; a triple jump peaks at 3.58 m) ->
+  air control holds him over the ball -> at the top of the bounce POUND. Tries 1-3 bounced but drifted off the ball
+  (no pound: the air floor keeps ~half the launch speed, so a hero who lands on the ball moving keeps moving); try 4
+  bounced, came down on the ball again, and at the second apex (5.52 m over the top, vy 0.92, 0.02 m off centre,
+  ball 'puffed' at 1.63 s) POUNDED -> defeat 'pop' -> coins +3 -> respawned after 9.57 s.
+- GYRARCH run 3 (07:15, 300 s cap, 55.9 ms/frame): 45 boardings, 169 s on gears, 12 leaps -> 2 CROWN POUNDS
+  (hp 3->2 f6396, 2->1 f15962), not defeated. The leap log split it cleanly: the 3 leaps that ran up in the VENT took
+  off at 5.7-6.0 m/s from 3.06-3.71 m and 2 pounded the core (the miss left from 3.71 m); the 9 that started in
+  'fire' took off on frame 1-4 at 6 m/s SIDEWAYS (still sidestepping the bolt) and never came within 3.2 m.
+  Policy fixed (harness only): start a leap only from a settled stand, jump on the speed TOWARD the crown (>= 5 m/s)
+  from <= 3.35 m, abort a run-up that cannot get there. Rerun queued after the slagmaw rerun.
