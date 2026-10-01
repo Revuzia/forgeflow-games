@@ -25,6 +25,197 @@ let _lf = null, _lu = null;   // scratch forward/up vectors (THREE arrives with 
 let reloadTimers = [];    // outstanding reload-sequence timers, so a swap can kill them
 let _scoped = false;      // last scopeState — that event re-fires EVERY frame
 
+// ── voice pool: pure policy ─────────────────────────────────────────────────
+// Every one-shot built its own BufferSource/Oscillator + Gain (+ Biquad) + HRTF
+// panner with no ceiling at all — the only limits were the 35 ms impact and 60 ms
+// whiz throttles. In a final-circle firefight (ten SMGs at 720 rpm, 9-pellet
+// shotguns, their impacts and whizzes) nothing bounded the node count or the
+// sum hitting the limiter. BLOCKTOOTH / DYEFIELD bound it with a voice pool; this
+// is the same shape: at most VOICE_CAP live sources, at most VOICE_FRAME_BUDGET
+// starts per frame, and when either is full the lowest-scoring voice is stolen
+// — but only by a candidate that scores strictly higher.
+//
+// score = tier + audible gain (clamped below 1), so the TIER always decides and
+// loudness only orders voices inside a tier: own gun / hitmarker / kill (and
+// every head-relative cue) > enemy gun > footsteps (and other world foley) >
+// impacts. Pure and exported so audio_pool.selftest.cjs proves it in Node; the
+// Web Audio side (voiceOpen / voiceKill below) only executes what this decides.
+export const VOICE_CAP = 24;
+export const VOICE_FRAME_BUDGET = 4;
+export const VOICE_TIER = { impact: 0, step: 1, gun: 2, own: 3 };
+
+export function voiceScore(tier, gain) {
+  const g = +gain;
+  return tier + (g > 0 ? Math.min(0.99, g) : 0);   // NaN / <= 0 -> bare tier
+}
+
+function _lowerVoice(a, b) { return a.score < b.score || (a.score === b.score && a.start < b.start); }
+
+/**
+ * live: [{score, start, end, n, frame}] (n = source nodes in the voice)
+ * cand: {score, n, frame}. Voices with end <= now are treated as gone.
+ * Returns null (drop the candidate) or the indices into `live` to steal first
+ * (usually []). All-or-nothing: nothing is stolen unless the candidate gets in.
+ *   1. frame budget — `budget` voices already started in cand.frame: the
+ *      candidate must beat the lowest of THOSE and replaces it, so one frame
+ *      never nets more than `budget` starts and the most important ones win
+ *      whatever order the events arrived in.
+ *   2. cap — while live sources + cand.n > cap, steal the lowest score (oldest
+ *      on a tie) if the candidate scores strictly higher, else drop it.
+ */
+export function voicePlan(live, cand, now, cap, budget) {
+  cap = cap || VOICE_CAP; budget = budget || VOICE_FRAME_BUDGET;
+  const n = Math.max(1, cand.n | 0);
+  if (n > cap) return null;
+  const victims = [];
+  let used = 0, inFrame = 0;
+  for (let i = 0; i < live.length; i++) {
+    const v = live[i];
+    if (v.end <= now) continue;
+    used += v.n || 1;
+    if (v.frame === cand.frame) inFrame++;
+  }
+  if (inFrame >= budget) {
+    let vi = -1;
+    for (let i = 0; i < live.length; i++) {
+      const v = live[i];
+      if (v.end <= now || v.frame !== cand.frame) continue;
+      if (vi < 0 || _lowerVoice(v, live[vi])) vi = i;
+    }
+    if (vi < 0 || !(cand.score > live[vi].score)) return null;
+    victims.push(vi); used -= live[vi].n || 1;
+  }
+  while (used + n > cap) {
+    let vi = -1;
+    for (let i = 0; i < live.length; i++) {
+      const v = live[i];
+      if (v.end <= now || victims.indexOf(i) >= 0) continue;
+      if (vi < 0 || _lowerVoice(v, live[vi])) vi = i;
+    }
+    if (vi < 0 || !(cand.score > live[vi].score)) return null;
+    victims.push(vi); used -= live[vi].n || 1;
+  }
+  return victims;
+}
+
+/**
+ * Music duck, once per ENGAGEMENT (pure; audio_pool.selftest.cjs). Every own
+ * round used to call duckMusic() — 30 duck ramps in a 3.7 s SMG burst, the score
+ * pumping ~-4 dB eight times a second while the trigger was held. Now the first
+ * shot engages, later shots only extend the hold, and the release comes once the
+ * trigger has been quiet for `hold` seconds.
+ * st = {on, last}; returns "engage" | "hold" | "release" | null.
+ */
+export function fireDuckStep(st, now, shot, hold) {
+  if (shot) {
+    st.last = now;
+    if (st.on) return "hold";
+    st.on = true;
+    return "engage";
+  }
+  if (st.on && now - st.last >= hold) { st.on = false; return "release"; }
+  return null;
+}
+
+// ── voice pool: the Web Audio side ──────────────────────────────────────────
+// A "frame" is one audioMod.update() call. update() only runs while a match is
+// live and unpaused, so a wall-clock fallback also opens a new frame after 20 ms
+// with no update — the menu, the pause screen and fastForward() (which emits
+// every bot's shots inside ONE task) still get a budget, never a stuck one.
+const _pool = { live: [], frame: 1, frameWall: -1e9, peakVoices: 0, peakSources: 0,
+                admitted: 0, stolen: 0, rejected: 0, budgetSteals: 0 };
+const _aud = { duckRamps: 0, duckReleases: 0, duckBlasts: 0 };
+
+function poolNextFrame() { _pool.frame++; _pool.frameWall = performance.now(); }
+
+function poolPrune(now) {
+  const L = _pool.live;
+  let j = 0;
+  for (let i = 0; i < L.length; i++) if (L[i].end > now) L[j++] = L[i];
+  L.length = j;
+}
+
+/** Silence a stolen voice. Returns the audio time by which it is silent, which
+ *  is when the stealing voice starts, so the two never overlap. */
+function voiceKill(v, now) {
+  const srcs = v.srcs || [];
+  if (v.start >= now) {
+    // started in this same render quantum (a frame-budget steal): no sample has
+    // been rendered yet, so stopping it at its own start time is inaudible
+    for (let i = 0; i < srcs.length; i++) { try { srcs[i].stop(v.start); } catch (e) {} }
+    return now;
+  }
+  const tEnd = now + 0.006;   // 6 ms fade: a hard cut mid-waveform clicks
+  if (v.out) {
+    try { const g = v.out.gain; g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(0, tEnd); } catch (e) {}
+  }
+  for (let i = 0; i < srcs.length; i++) { try { srcs[i].stop(tEnd); } catch (e) {} }
+  return tEnd;
+}
+
+/** Ask the pool for a voice. Returns a handle whose .start is the audio time
+ *  the caller must start its sources at, or null (dropped by the policy). */
+function voiceOpen(tier, gain, n) {
+  const P = _pool, now = ctx.currentTime, wall = performance.now();
+  if (wall - P.frameWall > 20) { P.frame++; P.frameWall = wall; }
+  poolPrune(now);
+  const cand = { score: voiceScore(tier, gain), n: n || 1, frame: P.frame };
+  const victims = voicePlan(P.live, cand, now, VOICE_CAP, VOICE_FRAME_BUDGET);
+  if (!victims) { P.rejected++; return null; }
+  let t0 = now;
+  if (victims.length) {
+    victims.sort((a, b) => b - a);   // splice from the back so indices stay valid
+    for (let i = 0; i < victims.length; i++) {
+      const v = P.live[victims[i]];
+      if (v.frame === cand.frame) P.budgetSteals++;
+      P.live.splice(victims[i], 1);
+      P.stolen++;
+      t0 = Math.max(t0, voiceKill(v, now));
+    }
+  }
+  const h = { score: cand.score, start: t0, end: t0 + 0.05, n: cand.n, frame: P.frame, srcs: null, out: null };
+  P.live.push(h);
+  P.admitted++;
+  let src = 0; for (let i = 0; i < P.live.length; i++) src += P.live[i].n;
+  if (P.live.length > P.peakVoices) P.peakVoices = P.live.length;
+  if (src > P.peakSources) P.peakSources = src;
+  return h;
+}
+
+/** Record what the voice actually built, and when its last source stops. A
+ *  start time that has already slipped into the past (the audio clock ticked
+ *  while the nodes were being built) plays late, not short, so the end moves by
+ *  the slip; +12 ms covers the audio thread picking the start up one callback
+ *  later. Both err toward "still sounding", which is the side the cap needs. */
+function voiceArm(h, out, srcs, end) {
+  h.out = out; h.srcs = srcs;
+  h.end = end + Math.max(0, ctx.currentTime - h.start) + 0.012;
+}
+
+/** default tier: a head-relative cue is the player's own feedback; a placed
+ *  one is world foley unless the call site says otherwise */
+function tierOf(tier, pos) { return tier != null ? tier : (pos ? VOICE_TIER.step : VOICE_TIER.own); }
+
+/** Place + admit + build the output node for one voice: null when culled by
+ *  distance or dropped by the pool, else the pool handle with .out wired. */
+function openVoice(pos, maxD, tier, gain, n) {
+  const vol = place(pos, maxD);
+  if (vol < 0) return null;
+  const d = _pd;
+  const h = voiceOpen(tierOf(tier, pos), (gain == null ? 0.5 : gain) * vol, n || 1);
+  if (!h) return null;
+  h.out = spatialOut(pos, vol, d);
+  return h;
+}
+
+// ── music duck state (see fireDuckStep) ─────────────────────────────────────
+const DUCK_FIRE = 0.794;      // -2 dB while you are in a firefight
+const DUCK_FIRE_HOLD = 0.6;   // s of trigger silence before the band comes back
+const DUCK_BLAST = 0.62;      // -4 dB explosion duck, unchanged
+const _duckSt = { on: false, last: -1 };
+let _blastRelT = -1;          // audio time the current explosion duck starts releasing
+let _duckTimer = 0;
+
 let uwFilter = null;
 export function init(W) {
   W_ = W;
@@ -37,6 +228,45 @@ export function init(W) {
     uwFilter.frequency.setTargetAtTime(on ? 700 : 20000, ctx.currentTime, 0.08);
   };
   W.__audio.setVolumes = () => setVolumes(W);
+  // test surface until __LC__.feel() lands (C9): same object readback() returns
+  W.__audio.readback = () => readback(W);
+}
+
+/**
+ * Feel read-back (C9: __LC__.feel() merges this). Counters are cumulative for
+ * the page; a gate diffs two reads. duckRamps counts fire-duck ENGAGEMENTS (one
+ * downward ramp each), duckBlasts the explosion ducks.
+ */
+export function readback(W) {
+  const now = ctx ? ctx.currentTime : 0;
+  if (ctx) poolPrune(now);
+  let src = 0;
+  for (let i = 0; i < _pool.live.length; i++) src += _pool.live[i].n;
+  return {
+    ctx: ctx ? ctx.state : "none",
+    musicRouted: !!musicDuck,
+    duckRamps: _aud.duckRamps, duckReleases: _aud.duckReleases, duckBlasts: _aud.duckBlasts,
+    duckHeld: _duckSt.on,
+    duckGain: musicDuck ? Math.round(musicDuck.gain.value * 1000) / 1000 : null,
+    voices: _pool.live.length, voiceSources: src,
+    voiceCap: VOICE_CAP, frameBudget: VOICE_FRAME_BUDGET,
+    peakVoices: _pool.peakVoices, peakSources: _pool.peakSources,
+    admitted: _pool.admitted, stolen: _pool.stolen, rejected: _pool.rejected, budgetSteals: _pool.budgetSteals,
+    sfxDecoded: Object.keys(sfxBuf).length,
+  };
+}
+
+/**
+ * Match teardown (C8). Nothing here is a GPU resource; what must not outlive a
+ * match is behaviour: the reload foley timers of a gun the player no longer
+ * holds, a fire duck still holding the next track down, the scope latch.
+ * Voices in flight are left to finish — the victory/defeat sting is one of them.
+ */
+export function disposeMatch(W) {
+  cancelReload();
+  duckFireRelease(true);
+  _blastRelT = -1;
+  _scoped = false;
 }
 
 // ── recorded one-shots (Kenney, CC0) ────────────────────────────────────────
@@ -142,22 +372,24 @@ async function loadSfx(W) {
 }
 
 /** Play one variant of a logical cue. Returns false if unavailable, so the
- *  caller can run its synth line instead. Routes through the same spatial()
+ *  caller can run its synth line instead. Routes through the same voice pool,
  *  panner + sfxBus as everything else, so sliders and mute still apply. */
-function sample(key, pos, gain, maxD, rate) {
+function sample(key, pos, gain, maxD, rate, tier) {
   if (!ctx || !sfxBus) return false;
   const list = SFX[key];
   if (!list || !list.length) return false;
   const pick = list[(Math.random() * list.length) | 0];
   const buf = sfxBuf[pick];
   if (!buf) return false;
-  // spatial() hands back a GainNode already wired through the HRTF panner into
-  // sfxBus, with the distance stashed on __d — so connect straight to it and the
-  // clip inherits the same distance curve, panning, mute and slider behaviour as
-  // every synthesised voice. null means out of earshot: report handled, because
-  // the synth fallback would be inaudible too and must not double-fire.
-  const out = spatial(pos, maxD);
-  if (!out) return true;
+  // openVoice() hands back a pool handle whose .out is a GainNode already wired
+  // through the HRTF panner into sfxBus, with the distance stashed on __d — so
+  // connect straight to it and the clip inherits the same distance curve,
+  // panning, mute and slider behaviour as every synthesised voice. null means
+  // out of earshot OR dropped by the voice pool: report handled either way,
+  // because the synth fallback must not double-fire.
+  const h = openVoice(pos, maxD, tier, gain == null ? 0.5 : gain, 1);
+  if (!h) return true;
+  const out = h.out;
   const src = ctx.createBufferSource();
   src.buffer = buf;
   src.playbackRate.value = (rate || 1) * (0.94 + Math.random() * 0.12);
@@ -177,16 +409,22 @@ function sample(key, pos, gain, maxD, rate) {
   } else {
     src.connect(g); g.connect(out);
   }
+  // h.start is "now", or 6 ms later when this voice had to steal one (the
+  // victim fades out first — see voiceKill)
+  const t0 = h.start, pr = src.playbackRate.value;
   const sl = sfxSlice[pick];
   if (sl && sl.dur > 0.01) {
-    // Taper the last 6ms: the cut lands in the first shot's decay, not at a zero
-    // crossing, so an abrupt stop would add a click of its own.
-    const t0 = ctx.currentTime, end = t0 + sl.dur / src.playbackRate.value;
+    // ONE REPORT PER SHOT (c663ddf3): only the (off, dur) window oneShotSlice()
+    // found is played. Taper the last 6ms: the cut lands in the first shot's
+    // decay, not at a zero crossing, so an abrupt stop would add a click of its own.
+    const end = t0 + sl.dur / pr;
     g.gain.setValueAtTime(g.gain.value, Math.max(t0, end - 0.006));
     g.gain.linearRampToValueAtTime(0.0001, end);
     src.start(t0, sl.off, sl.dur);
+    voiceArm(h, out, [src], end);
   } else {
-    src.start();
+    src.start(t0);
+    voiceArm(h, out, [src], t0 + buf.duration / pr);
   }
   return true;
 }
@@ -276,6 +514,7 @@ function playTrack(W, name, vol) {
     // and routeMusic() below builds a fresh one.
     if (musicSrc) { try { musicSrc.disconnect(); } catch (e) {} }
     musicSrc = musicDuck = musicMix = musicFilt = null;
+    _blastRelT = -1;   // that schedule belonged to the old duck node
     musicBase = (vol != null ? vol : 1);
     musicEl = new Audio(W.assetBase + "assets/audio/" + name);
     musicEl.loop = true;
@@ -313,12 +552,64 @@ function routeMusic() {
     if (W_) musicEl.volume = musicLevel(W_);   // masterVol moves to the master gain — see musicLevel
   } catch (e) { musicSrc = musicDuck = musicMix = musicFilt = null; }
 }
-function duckMusic() {
-  if (!musicDuck) return;
+/** Move the duck to `v` from `t`, unless an explosion duck is still holding —
+ *  then `v` becomes where that duck releases to instead of cutting it short. */
+function duckTo(v, t, tc) {
+  const g = musicDuck.gain;
+  if (t < _blastRelT) { g.cancelScheduledValues(_blastRelT); g.setTargetAtTime(v, _blastRelT, 0.15); }
+  else { g.cancelScheduledValues(t); g.setTargetAtTime(v, t, tc); }
+}
+
+/** An own round. The first one of an engagement pulls the band down ~2 dB
+ *  (60 ms attack); the rest only extend the hold. BLOCKTOOTH's rule is that
+ *  ordinary combat voices never pump the music; one shallow step per firefight
+ *  keeps the gunfire on top without the sidechain wobble. */
+function duckFireShot() {
+  if (!ctx) return;
   const t = ctx.currentTime;
-  musicDuck.gain.cancelScheduledValues(t);
-  musicDuck.gain.setTargetAtTime(0.62, t, 0.02);        // ~-4 dB, 60 ms attack
-  musicDuck.gain.setTargetAtTime(1, t + 0.18, 0.15);    // ~400 ms release
+  if (fireDuckStep(_duckSt, t, true, DUCK_FIRE_HOLD) !== "engage") return;
+  _aud.duckRamps++;
+  if (musicDuck) duckTo(DUCK_FIRE, t, 0.02);
+  armDuckTimer();
+}
+
+/** Release once the trigger has been quiet for DUCK_FIRE_HOLD (force: now).
+ *  Checked from tick() every frame and from a timer, because update() does not
+ *  run while paused or on the menu. ~400 ms release, as before. */
+function duckFireRelease(force) {
+  if (!_duckSt.on) return;
+  if (!ctx) { _duckSt.on = false; return; }
+  const t = ctx.currentTime;
+  if (force) _duckSt.on = false;
+  else if (fireDuckStep(_duckSt, t, false, DUCK_FIRE_HOLD) !== "release") return;
+  _aud.duckReleases++;
+  if (_duckTimer) { clearTimeout(_duckTimer); _duckTimer = 0; }
+  if (musicDuck) duckTo(1, t, 0.15);
+}
+
+function armDuckTimer() {
+  if (_duckTimer) return;
+  const check = () => {
+    _duckTimer = 0;
+    duckFireRelease(false);
+    if (_duckSt.on && ctx) {
+      const left = DUCK_FIRE_HOLD - (ctx.currentTime - _duckSt.last);
+      _duckTimer = setTimeout(check, Math.max(100, left * 1000 + 20));
+    }
+  };
+  _duckTimer = setTimeout(check, DUCK_FIRE_HOLD * 1000 + 20);
+}
+
+/** Explosion duck: kept as it was (~-4 dB, 60 ms attack, ~400 ms release),
+ *  except it now releases to the fire-duck level if you are still shooting. */
+function duckBlast() {
+  if (!musicDuck) return;
+  const t = ctx.currentTime, g = musicDuck.gain;
+  _aud.duckBlasts++;
+  g.cancelScheduledValues(t);
+  g.setTargetAtTime(DUCK_BLAST, t, 0.02);
+  _blastRelT = t + 0.18;
+  g.setTargetAtTime(_duckSt.on ? DUCK_FIRE : 1, _blastRelT, 0.15);
 }
 
 export function startMenuMusic(W) {
@@ -353,7 +644,7 @@ function noiseBuf() {
 /** A PannerNode is meaningless until the listener is placed: the default
  *  listener sits at the origin facing -Z, so world-space source positions would
  *  resolve against a listener that never moves and never turns. Synced from
- *  spatial() rather than from a frame loop so a sound triggered between frames
+ *  spatialOut() rather than from a frame loop so a sound triggered between frames
  *  still resolves against the camera that triggered it; the currentTime guard
  *  keeps it to once per render quantum. */
 function syncListener(cam) {
@@ -376,26 +667,35 @@ function syncListener(cam) {
   }
 }
 
-/** panner+gain by world position relative to camera */
-function spatial(pos, maxD) {
+/** Distance gain for a world position relative to the camera: 1 for a
+ *  head-relative cue (pos null), -1 when out of earshot or unplaceable. Leaves
+ *  the distance in _pd (null when head-relative). Split from the node build so
+ *  the voice pool can score a cue BEFORE any node exists for it. */
+let _pd = null;
+function place(pos, maxD) {
+  _pd = null;
+  if (!pos) return 1;
   const cam = W_.camera;
-  let vol = 1, dist = null;
-  if (pos) {
-    const dx = pos.x - cam.position.x, dz = pos.z - cam.position.z;
-    const d = Math.hypot(dx, dz, (pos.y || 0) - cam.position.y);
-    maxD = maxD || 60;
-    // `d > maxD` FAILS OPEN on NaN — every comparison with NaN is false — so a
-    // single non-finite coordinate (an actor mid-teleport, a camera between
-    // handovers) sailed past this guard, made vol NaN via Math.pow, and then
-    // threw "AudioParam: non-finite value" out of g.gain.value. That exception
-    // escapes through the event emit and kills the whole frame update: one bad
-    // sound position stopped the entire game. A sound we cannot place is a sound
-    // we skip, never a crash.
-    if (!isFinite(d) || d > maxD) return null;
-    dist = d;
-    vol = Math.pow(Math.max(0, 1 - d / maxD), 1.4);
-    if (!isFinite(vol)) return null;
-  }
+  const dx = pos.x - cam.position.x, dz = pos.z - cam.position.z;
+  const d = Math.hypot(dx, dz, (pos.y || 0) - cam.position.y);
+  maxD = maxD || 60;
+  // `d > maxD` FAILS OPEN on NaN — every comparison with NaN is false — so a
+  // single non-finite coordinate (an actor mid-teleport, a camera between
+  // handovers) sailed past this guard, made vol NaN via Math.pow, and then
+  // threw "AudioParam: non-finite value" out of g.gain.value. That exception
+  // escapes through the event emit and kills the whole frame update: one bad
+  // sound position stopped the entire game. A sound we cannot place is a sound
+  // we skip, never a crash.
+  if (!isFinite(d) || d > maxD) return -1;
+  const vol = Math.pow(Math.max(0, 1 - d / maxD), 1.4);
+  if (!isFinite(vol)) return -1;
+  _pd = d;
+  return vol;
+}
+
+/** panner+gain for an already-placed cue (place() above decides vol / dist) */
+function spatialOut(pos, vol, dist) {
+  const cam = W_.camera;
   const g = ctx.createGain();
   g.gain.value = vol;
   if (pos) {
@@ -437,11 +737,27 @@ function spatial(pos, maxD) {
 // belong in a table netplay and the selftest both read.
 const AUDIBLE_M = { pistol: 220, smg: 200, ar: 320, shotgun: 120, sniper: 520, launcher: 260 };
 
-function shot(cls, pos) {
+// synth report per class: [lowpass Hz, decay s, gain]. Gains trimmed ~35%
+// (owner: shooting audio slightly lower). Hoisted out of shot() — it was a fresh
+// object literal on every round of every actor.
+const SHOT_P = {
+  pistol: [1400, 0.09, 0.32], smg: [1800, 0.06, 0.28], ar: [1100, 0.12, 0.4],
+  shotgun: [700, 0.2, 0.6], sniper: [500, 0.32, 0.66], launcher: [420, 0.24, 0.56],
+};
+const SHOT_P_DEF = [1200, 0.1, 0.34];
+
+function shot(cls, pos, tier) {
   if (!ctx) return;
   const maxD = AUDIBLE_M[cls] || 260;
-  const out = spatial(pos, maxD); if (!out) return;
-  const t = ctx.currentTime;
+  const P = SHOT_P[cls] || SHOT_P_DEF;
+  const vol = place(pos, maxD); if (vol < 0) return;
+  const dist = _pd;
+  // crack layer for rifles — near field only: the supersonic crack is a local
+  // event, and past ~80 m you should be hearing the muffled report, not the snap
+  const crack = (cls === "ar" || cls === "sniper") && (dist || 0) < 80;
+  const h = voiceOpen(tierOf(tier, pos), P[2] * vol, crack ? 2 : 1); if (!h) return;
+  const out = h.out = spatialOut(pos, vol, dist);
+  const t = h.start;
   const n = ctx.createBufferSource(); n.buffer = noiseBuf();
   const f = ctx.createBiquadFilter(); f.type = "lowpass";
   const g = ctx.createGain();
@@ -459,11 +775,6 @@ function shot(cls, pos) {
   // (pos null, so __d null) stay fully bright.
   const df = out.__d != null ? Math.max(0.12, 1 - out.__d / maxD) : 1;
   n.connect(f); f.connect(g); g.connect(out);
-  // gains trimmed ~35% (owner: shooting audio slightly lower)
-  const P = {
-    pistol: [1400, 0.09, 0.32], smg: [1800, 0.06, 0.28], ar: [1100, 0.12, 0.4],
-    shotgun: [700, 0.2, 0.6], sniper: [500, 0.32, 0.66], launcher: [420, 0.24, 0.56],
-  }[cls] || [1200, 0.1, 0.34];
   f.frequency.setValueAtTime(P[0] * (0.92 + Math.random() * 0.16) * (0.25 + 0.75 * df), t);
   f.frequency.exponentialRampToValueAtTime(Math.max(80, P[0] * 0.2 * df), t + P[1]);
   g.gain.setValueAtTime(P[2] * (0.9 + Math.random() * 0.2), t);
@@ -472,22 +783,22 @@ function shot(cls, pos) {
   // still fits inside the 1 s of samples — the sniper runs to stop() at t+0.768 s
   // and reads it up to 1.07x fast, so a flat 0..0.7 s offset would have run off
   // the end of the buffer and cut the tail dead mid-envelope on most shots.
-  n.start(t, Math.random() * Math.max(0, 1 - P[1] * 2.4 * rate)); n.stop(t + P[1] * 2.4);
-  // crack layer for rifles — near field only: the supersonic crack is a local
-  // event, and past ~80 m you should be hearing the muffled report, not the snap
-  if ((cls === "ar" || cls === "sniper") && (out.__d || 0) < 80) {
+  const tStop = t + P[1] * 2.4;
+  n.start(t, Math.random() * Math.max(0, 1 - P[1] * 2.4 * rate)); n.stop(tStop);
+  if (crack) {
     const o = ctx.createOscillator(), og = ctx.createGain();
     o.type = "square"; o.frequency.setValueAtTime(190, t);
     o.frequency.exponentialRampToValueAtTime(60, t + 0.05);
     og.gain.setValueAtTime(0.18, t); og.gain.linearRampToValueAtTime(0.0001, t + 0.07);
     o.connect(og); og.connect(out); o.start(t); o.stop(t + 0.08);
-  }
+    voiceArm(h, out, [n, o], Math.max(tStop, t + 0.08));
+  } else voiceArm(h, out, [n], tStop);
 }
 
-function blip(freq, dur, vol, type, pos, maxD) {
+function blip(freq, dur, vol, type, pos, maxD, tier) {
   if (!ctx) return;
-  const out = spatial(pos, maxD || 40); if (!out) return;
-  const t = ctx.currentTime;
+  const h = openVoice(pos, maxD || 40, tier, vol || 0.2, 1); if (!h) return;
+  const out = h.out, t = h.start;
   const o = ctx.createOscillator(), g = ctx.createGain();
   o.type = type || "sine";
   o.frequency.setValueAtTime(freq, t);
@@ -495,12 +806,13 @@ function blip(freq, dur, vol, type, pos, maxD) {
   g.gain.linearRampToValueAtTime(0.0001, t + (dur || 0.1));
   o.connect(g); g.connect(out);
   o.start(t); o.stop(t + (dur || 0.1) + 0.02);
+  voiceArm(h, out, [o], t + (dur || 0.1) + 0.02);
 }
 
-function thump(freq, dur, vol, pos, maxD) {
+function thump(freq, dur, vol, pos, maxD, tier) {
   if (!ctx) return;
-  const out = spatial(pos, maxD || 70); if (!out) return;
-  const t = ctx.currentTime;
+  const h = openVoice(pos, maxD || 70, tier, vol, 1); if (!h) return;
+  const out = h.out, t = h.start;
   const n = ctx.createBufferSource(); n.buffer = noiseBuf();
   const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = freq;
   const g = ctx.createGain();
@@ -508,6 +820,7 @@ function thump(freq, dur, vol, pos, maxD) {
   g.gain.linearRampToValueAtTime(0.0001, t + dur);
   n.connect(f); f.connect(g); g.connect(out);
   n.start(t); n.stop(t + dur + 0.02);
+  voiceArm(h, out, [n], t + dur + 0.02);
 }
 
 // Footsteps were one gain and one 24 m radius for every stance, so crouching —
@@ -533,17 +846,21 @@ function cancelReload() { for (let i = 0; i < reloadTimers.length; i++) clearTim
 
 function sting(victory) {
   if (!ctx) return;
-  const t = ctx.currentTime;
   const seq = victory ? [523, 659, 784, 1046] : [392, 330, 262];
+  // one pooled voice for the whole arpeggio (head-relative -> top tier)
+  const h = openVoice(null, 0, VOICE_TIER.own, 0.25, seq.length); if (!h) return;
+  const out = h.out, t = h.start, srcs = [];
   seq.forEach((f2, i) => {
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.type = "triangle"; o.frequency.value = f2;
     g.gain.setValueAtTime(0.0001, t + i * 0.16);
     g.gain.linearRampToValueAtTime(0.25, t + i * 0.16 + 0.03);
     g.gain.linearRampToValueAtTime(0.0001, t + i * 0.16 + 0.5);
-    o.connect(g); g.connect(sfxBus || master);
+    o.connect(g); g.connect(out);
     o.start(t + i * 0.16); o.stop(t + i * 0.16 + 0.55);
+    srcs.push(o);
   });
+  voiceArm(h, out, srcs, t + (seq.length - 1) * 0.16 + 0.55);
 }
 
 // ── event wiring ─────────────────────────────────────────────────────────────
@@ -568,6 +885,11 @@ function wire(W) {
   };
   window.addEventListener("pointerdown", unlock, { once: false });
   window.addEventListener("keydown", unlock, { once: false });
+  // iOS Safari only lets an AudioContext resume (and an <audio> element start)
+  // inside touchend or click; a touch's pointerdown is too early there, so a
+  // phone could tap PLAY and stay silent. Inferred from the WebKit policy, not
+  // yet tested on a real WebKit device (PLAN section 7).
+  window.addEventListener("touchend", unlock, { once: false, passive: true });
   // A backgrounded tab kept playing at full volume — you alt-tab away and the
   // match music follows you. Suspend on hide, restore on show.
   document.addEventListener("visibilitychange", () => {
@@ -585,13 +907,17 @@ function wire(W) {
     // (launcher) or the pack failed to decode. 260 m ceiling matches the synth
     // path's audible range so bot-fight ambience is unchanged.
     // per-class audible radius, NOT a flat 260: sample() reports "handled"
-    // when spatial() culls beyond maxD, so a flat ceiling silently re-created
+    // when place() culls beyond maxD, so a flat ceiling silently re-created
     // the exact "shot by a gun you never heard" bug AUDIBLE_M fixed for the
     // synth path (sniper reaches 520 m, shotgun only 120) — sweep finding.
-    if (!(SFX["shot_" + cls] && sample("shot_" + cls, own ? null : eye, own ? 0.5 : 0.4, AUDIBLE_M[cls] || 260))) {
-      shot(cls, own ? null : eye);
+    // Voice pool tier: your own report is top tier and never loses its slot to
+    // anything but another own-tier cue; an enemy's report outranks footsteps
+    // and impacts whatever its distance.
+    const tier = own ? VOICE_TIER.own : VOICE_TIER.gun;
+    if (!(SFX["shot_" + cls] && sample("shot_" + cls, own ? null : eye, own ? 0.5 : 0.4, AUDIBLE_M[cls] || 260, 0, tier))) {
+      shot(cls, own ? null : eye, tier);
     }
-    if (own) duckMusic();
+    if (own) duckFireShot();
   });
   // reload = mechanical sequence, not beeps: mag release click → mag drop →
   // mag seat clunk (timed to the weapon's reloadS) → slide rack near the end.
@@ -642,11 +968,11 @@ function wire(W) {
   //  destination with no limiter, which audibly clipped)
   on("actorHurt", (victim, info) => {
     if (victim === W.player) thump(600, 0.12, 0.3);
-    if (info.broke) blip(1800, 0.25, 0.2, "sawtooth", victim === W.player ? null : victim.pos, 50);
+    if (info.broke) blip(1800, 0.25, 0.2, "sawtooth", victim === W.player ? null : victim.pos, 50, VOICE_TIER.gun);
   });
   on("actorDied", (victim) => {
     if (victim === W.player) cancelReload();   // do not rack the slide of a corpse's gun
-    thump(300, 0.3, 0.3, victim === W.player ? null : victim.pos, 90);
+    thump(300, 0.3, 0.3, victim === W.player ? null : victim.pos, 90, victim === W.player ? VOICE_TIER.own : VOICE_TIER.gun);
   });
   on("swimState", (a, swimming) => { if (swimming) thump(900, 0.25, 0.25, a === W.player ? null : a.pos, 40); });
   on("swimStroke", (a) => thump(1100, 0.12, 0.15, a === W.player ? null : a.pos, 25));
@@ -661,8 +987,9 @@ function wire(W) {
     const surf = (W.map && W.map.surfaceAt) ? W.map.surfaceAt(a.pos.x, a.pos.z) : null;
     const keyed = surf === "wood" ? "step_wood" : surf === "snow" ? "step_snow"
                 : surf === "stone" || surf === "concrete" ? "step_concrete" : "step_grass";
-    if (sample(keyed, own ? null : a.pos, own ? s.own : s.g, s.d, s.f)) return;
-    thump((300 + Math.random() * 90) * s.f, 0.055, own ? s.own : s.g, own ? null : a.pos, s.d);
+    // footsteps (yours included) sit below every gunshot in the voice pool
+    if (sample(keyed, own ? null : a.pos, own ? s.own : s.g, s.d, s.f, VOICE_TIER.step)) return;
+    thump((300 + Math.random() * 90) * s.f, 0.055, own ? s.own : s.g, own ? null : a.pos, s.d, VOICE_TIER.step);
   });
   on("weaponEquipped", (a) => {
     const own = a === W.player;
@@ -680,10 +1007,13 @@ function wire(W) {
     setTimeout(() => blip(980, 0.3, own ? 0.18 : 0.1, "sine", own ? null : a.pos, 70), 260);
   });
   // hitmarker ping: a short click when YOU land a hit (higher pitch on a headshot)
-  on("hitMarker", (owner, target, dmg, isHead) => { if (W.player && owner === W.player) blip(isHead ? 1400 : 950, 0.045, 0.16, "square"); });
+  on("hitMarker", (owner, target, dmg, isHead) => { if (W.player && owner === W.player) blip(isHead ? 1400 : 950, 0.045, 0.16, "square", null, 0, VOICE_TIER.own); });
   // kill confirm: rising two-tone when YOUR target drops
   on("actorDied", (victim, killerId) => {
-    if (W.player && killerId === W.player.id) { blip(700, 0.09, 0.2, "triangle"); setTimeout(() => blip(1050, 0.14, 0.22, "triangle"), 90); }
+    if (W.player && killerId === W.player.id) {
+      blip(700, 0.09, 0.2, "triangle", null, 0, VOICE_TIER.own);
+      setTimeout(() => blip(1050, 0.14, 0.22, "triangle", null, 0, VOICE_TIER.own), 90);
+    }
   });
   // Bullet impacts were entirely silent: weapons.js emits four surfaces
   // (flesh / stone / wood / dirt) and only fx.js listened, for the visual. In a
@@ -706,10 +1036,12 @@ function wire(W) {
     const jf = 0.88 + Math.random() * 0.24;
     const impKey = surface === "stone" ? "imp_stone" : surface === "wood" ? "imp_wood"
                  : surface === "metal" ? "imp_metal" : surface === "glass" ? "imp_glass" : "imp_dirt";
-    if (sample(impKey, pos, 0.09, 55, jf)) return;
-    if (surface === "stone") blip(2100 * jf, 0.045, 0.07, "square", pos, 55);
-    else if (surface === "wood") blip(900 * jf, 0.06, 0.07, "triangle", pos, 55);
-    else thump(260 * jf, 0.07, 0.06, pos, 45);  // dirt
+    // lowest voice-pool tier: first to go when a firefight fills the pool
+    const TI = VOICE_TIER.impact;
+    if (sample(impKey, pos, 0.09, 55, jf, TI)) return;
+    if (surface === "stone") blip(2100 * jf, 0.045, 0.07, "square", pos, 55, TI);
+    else if (surface === "wood") blip(900 * jf, 0.06, 0.07, "triangle", pos, 55, TI);
+    else thump(260 * jf, 0.07, 0.06, pos, 45, TI);  // dirt
   });
   // Supersonic crack of a round passing you. weapons.js emits the point of
   // CLOSEST APPROACH, so the HRTF panner puts it beside the correct ear. Rate-
@@ -718,25 +1050,28 @@ function wire(W) {
   on("whizBy", (pos, missM) => {
     if (!ctx || ctx.currentTime - lastWhizT < 0.06) return;
     lastWhizT = ctx.currentTime;
-    const out = spatial(pos, 12); if (!out) return;
-    const t = ctx.currentTime;
+    // "you are being shot at" — ranked with enemy reports in the voice pool
+    const wg = 0.4 / (1 + (missM || 0) * 0.6);
+    const h = openVoice(pos, 12, VOICE_TIER.gun, wg, 1); if (!h) return;
+    const out = h.out, t = h.start;
     const n = ctx.createBufferSource(); n.buffer = noiseBuf();
     n.playbackRate.value = 0.9 + Math.random() * 0.3;
     const f = ctx.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 1.4;
     f.frequency.setValueAtTime(3200, t);
     f.frequency.exponentialRampToValueAtTime(1200, t + 0.05);
     const g = ctx.createGain();
-    g.gain.setValueAtTime(0.4 / (1 + (missM || 0) * 0.6), t);       // 0.4 at the ear, 0.13 at 3.5 m
+    g.gain.setValueAtTime(wg, t);       // 0.4 at the ear, 0.13 at 3.5 m
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
     n.connect(f); f.connect(g); g.connect(out);
     // random read window for the same reason shot() does it — a repeated
     // identical 40 ms noise burst combs
     n.start(t, Math.random() * 0.9); n.stop(t + 0.07);
+    voiceArm(h, out, [n], t + 0.07);
   });
   // these three were emitted into the void — no listener anywhere
   on("hardLand", (a, speed) => thump(180, 0.22, Math.min(0.4, 0.12 + speed * 0.008), a === W.player ? null : a.pos, 60));
   on("propBreak", (p2) => { blip(320, 0.16, 0.22, "square", p2, 60); setTimeout(() => blip(210, 0.2, 0.16, "square", p2, 60), 70); });
-  on("supplyDropLanded", (p2) => { thump(140, 0.5, 0.4, p2, 240); setTimeout(() => blip(880, 0.5, 0.18, "triangle", p2, 240), 160); });
+  on("supplyDropLanded", (p2) => { thump(140, 0.5, 0.4, p2, 240, VOICE_TIER.gun); setTimeout(() => blip(880, 0.5, 0.18, "triangle", p2, 240, VOICE_TIER.gun), 160); });
   on("chestOpened", (a, c) => { blip(660, 0.3, 0.14, "triangle", a === W.player ? null : c.pos, 40); setTimeout(() => blip(990, 0.4, 0.12, "triangle", a === W.player ? null : c.pos, 40), 120); });
   on("pickedUp", (a) => { const own = a === W.player; blip(840, 0.07, own ? 0.12 : 0.07, "sine", own ? null : a.pos, 16); });
   on("healStart", (a) => { const own = a === W.player; blip(520, 0.3, own ? 0.1 : 0.08, "sine", own ? null : a.pos, 20); });
@@ -747,7 +1082,14 @@ function wire(W) {
   // than on change — hud.js:2020 absorbs that because setting a display style is
   // idempotent, but a blip is not, so latch the edge here or it machine-guns.
   on("scopeState", (s) => { if (!!s === _scoped) return; _scoped = !!s; blip(_scoped ? 1500 : 1100, 0.035, 0.09, "square"); });
-  on("explosion", (pos) => { thump(180, 0.6, 0.7, pos, 200); if (W.camShake > 0.2) thump(90, 0.8, 0.5); duckMusic(); });
+  // The explosion duck stays, but only for a blast you can HEAR: it used to fire
+  // for every launcher round anywhere on the map, so a fight 1 km away dipped
+  // your music with no sound to explain it. Same 200 m radius as the thump.
+  on("explosion", (pos) => {
+    thump(180, 0.6, 0.7, pos, 200, VOICE_TIER.gun);
+    if (W.camShake > 0.2) thump(90, 0.8, 0.5);
+    if (ctx && place(pos, 200) >= 0) duckBlast();
+  });
   on("stormWarning", () => siren(W, 2));
   on("stormClosing", () => siren(W, 3));
   on("stormTick", () => blip(140, 0.3, 0.14, "sawtooth"));
@@ -785,7 +1127,8 @@ function wire(W) {
 
 function siren(W, n) {
   if (!ctx) return;
-  const t = ctx.currentTime;
+  const h = openVoice(null, 0, VOICE_TIER.own, 0.16, n); if (!h) return;
+  const out = h.out, t = h.start, srcs = [];
   for (let i = 0; i < n; i++) {
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.type = "sine";
@@ -794,9 +1137,11 @@ function siren(W, n) {
     g.gain.setValueAtTime(0.0001, t + i * 0.5);
     g.gain.linearRampToValueAtTime(0.16, t + i * 0.5 + 0.05);
     g.gain.linearRampToValueAtTime(0.0001, t + i * 0.5 + 0.45);
-    o.connect(g); g.connect(sfxBus || master);
+    o.connect(g); g.connect(out);
     o.start(t + i * 0.5); o.stop(t + i * 0.5 + 0.5);
+    srcs.push(o);
   }
+  voiceArm(h, out, srcs, t + (n - 1) * 0.5 + 0.5);
 }
 
 // ── continuous beds ──────────────────────────────────────────────────────────
@@ -813,6 +1158,7 @@ let stormBed = null, ambBed = null, ambWater = null;
 export function update(W, dt) {
   _extDriven = true;
   if (_rafH) { cancelAnimationFrame(_rafH); _rafH = 0; }
+  poolNextFrame();          // one voice-pool frame budget per game frame
   tick(W, dt);
 }
 
@@ -823,6 +1169,7 @@ function startTicker(W) {
     _rafH = requestAnimationFrame(step);
     const now = performance.now();
     const d = (now - _lastTickT) / 1000; _lastTickT = now;
+    poolNextFrame();
     tick(W, d);
   };
   _rafH = requestAnimationFrame(step);
@@ -830,12 +1177,13 @@ function startTicker(W) {
 
 function tick(W, dt) {
   if (!ctx || ctx.state !== "running" || !W) return;
-  // The one-shot path syncs the listener lazily from spatial(), and own-player
+  // The one-shot path syncs the listener lazily from spatialOut(), and own-player
   // sounds pass no position so they do not sync it at all. The beds below need
   // it right when NOTHING is firing — standing still in an empty field is
   // precisely when you read the storm wall off its bearing — so sync here too.
   // The ctx.currentTime guard inside makes the duplicate call free.
   if (W_ && W_.camera) syncListener(W_.camera);
+  duckFireRelease(false);   // the trigger has been quiet for the hold -> band back up
   stormAudio(W);
   ambience(W);
   musicIntensity(W);
