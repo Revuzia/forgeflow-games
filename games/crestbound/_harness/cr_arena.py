@@ -73,12 +73,12 @@ SETUP_JS = """async (base) => {
 }"""
 
 
-def save_frames(pg, outdir, start):
+def save_frames(pg, outdir, start, tag=""):
     fr = pg.evaluate("(s) => (globalThis.__crFrames || []).slice(s).map(f => ({name: f.name, f: f.f, url: f.url}))", start)
     names = []
     for i, f in enumerate(fr):
         n = start + i + 1
-        path = os.path.join(outdir, "%02d_%s.jpg" % (n, f["name"].replace(":", "_")))
+        path = os.path.join(outdir, "%s%02d_%s.jpg" % (tag, n, f["name"].replace(":", "_")))
         if f.get("url") and "," in f["url"]:
             with open(path, "wb") as fh:
                 fh.write(base64.b64decode(f["url"].split(",", 1)[1]))
@@ -110,11 +110,18 @@ def boot(p):
 
 def run_realm(pg, console, realm, only, args):
     id_ = HOST[realm]
+    todo = list(ROSTER[realm]) + [STRIKE[realm]] + ([BOSS[realm]] if not args.no_boss else [])
+    if only:
+        todo = [k for k in todo if k in only]
+    if not todo:
+        return None
     outdir = os.path.join(ROOT, "_shots", "cr_arena", realm)
     os.makedirs(outdir, exist_ok=True)
-    for f in os.listdir(outdir):
-        if f.endswith(".jpg") or f.endswith(".png"):
-            os.remove(os.path.join(outdir, f))
+    tag = ("r" + time.strftime("%H%M") + "_") if only else ""
+    if not only:
+        for f in os.listdir(outdir):
+            if f.endswith(".jpg") or f.endswith(".png"):
+                os.remove(os.path.join(outdir, f))
     result = {"realm": realm, "host": id_, "url": URL, "started": time.strftime("%Y-%m-%d %H:%M:%S"), "proofs": {}}
     c0 = len(console)
     t0 = time.time()
@@ -132,9 +139,6 @@ def run_realm(pg, console, realm, only, args):
     setup = pg.evaluate(SETUP_JS, BASE)
     print("[%s] bot ready: %s" % (realm, json.dumps(setup)), flush=True)
     fi = 0
-    todo = list(ROSTER[realm]) + [STRIKE[realm]] + ([BOSS[realm]] if not args.no_boss else [])
-    if only:
-        todo = [k for k in todo if k in only]
     for kind in todo:
         t1 = time.time()
         try:
@@ -143,7 +147,7 @@ def run_realm(pg, console, realm, only, args):
                   if (!S[k]) throw new Error('no scenario ' + k); return S[k](); }""", kind)
         except Exception as e:
             rec = {"kind": kind, "error": str(e)[:600]}
-        fi, names = save_frames(pg, outdir, fi)
+        fi, names = save_frames(pg, outdir, fi, tag)
         rec["frames"] = names
         rec["wallS"] = round(time.time() - t1, 1)
         result["proofs"][kind] = rec
@@ -157,6 +161,14 @@ def run_realm(pg, console, realm, only, args):
             pg.screenshot(path=os.path.join(outdir, "zz_%s_page.png" % kind))
     result["console"] = console[c0:c0 + 80]
     path = os.path.join(HERE, "cr_arena_%s.json" % realm)
+    if only and os.path.exists(path):
+        try:
+            prev = json.load(open(path, encoding="utf-8"))
+            prev.setdefault("proofs", {}).update(result["proofs"])
+            prev.setdefault("reruns", []).append({"at": result["started"], "kinds": list(result["proofs"].keys()), "console": result.get("console")})
+            result = prev
+        except Exception:
+            pass
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(result, fh, indent=1)
     print("[%s] wrote %s" % (realm, path), flush=True)
@@ -165,13 +177,13 @@ def run_realm(pg, console, realm, only, args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("realm", choices=["verdant", "ember", "rime", "azure", "all"])
+    ap.add_argument("realm", help="verdant | ember | rime | azure | all | a comma list")
     ap.add_argument("--only", default="", help="comma list of kinds")
     ap.add_argument("--no-boss", action="store_true")
     ap.add_argument("--screens", action="store_true", help="also a page screenshot (DOM HUD) after each proof")
     args = ap.parse_args()
     only = [k for k in args.only.split(",") if k]
-    realms = ["verdant", "ember", "rime", "azure"] if args.realm == "all" else [args.realm]
+    realms = ["verdant", "ember", "rime", "azure"] if args.realm == "all" else [r for r in args.realm.split(",") if r in HOST]
     with sync_playwright() as p:
         br, pg, console = boot(p)
         try:

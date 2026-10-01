@@ -80,8 +80,9 @@ export function arenaDef(realm) {
     objects.push(floor(realm, [0, -0.5, 0], [90, 1, 90]));
   }
   // the bays and the ring, marked out so the frames read
-  objects.push({ kind: 'text', p: [ARENA.bayA[0], 2.6, ARENA.bayA[2] + 5], rot: [0, 0, 0], text: 'BAY A', size: 0.4, color: 0x2a2a2a });
-  objects.push({ kind: 'text', p: [ARENA.bayB[0], 2.6, ARENA.bayB[2] + 5], rot: [0, 0, 0], text: 'BAY B', size: 0.4, color: 0x2a2a2a });
+  // (behind each bay, off the approach lane: a sign post in the lane stopped the burrower's tunnel)
+  objects.push({ kind: 'text', p: [ARENA.bayA[0], 2.6, ARENA.bayA[2] - 7], rot: [0, 0, 0], text: 'BAY A', size: 0.4, color: 0x2a2a2a });
+  objects.push({ kind: 'text', p: [ARENA.bayB[0], 2.6, ARENA.bayB[2] - 7], rot: [0, 0, 0], text: 'BAY B', size: 0.4, color: 0x2a2a2a });
   const def = {
     id, realm, theme: realm, name: 'CREATURE ARENA (' + realm.toUpperCase() + ')', subtitle: 'creatures lane test arena',
     order: 1, difficulty: 1,

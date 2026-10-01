@@ -182,6 +182,7 @@ export function makeScenarios(bot) {
     rec.frames.push(capOn(c, 'burrower_2_notice'));
     // stand still: it dives, tunnels to the hero, telegraphs under his feet
     rec.steps.tele1 = waitState(c, 'tele', 420);
+    rec.steps.tele1At = { dHero: r2(bot.hdist(c.pos.x, c.pos.z)), tunnelT: r2(c.tunnelT), fromHome: r2(Math.hypot(c.pos.x - c.home.x, c.pos.z - c.home.z)) };
     bot.step(18);
     rec.frames.push(capOn(c, 'burrower_3_tele_under_nim'));
     // cycle 1: let it pop up under Nim (the attack is real: a toss)
@@ -238,14 +239,16 @@ export function makeScenarios(bot) {
     rec.steps.notice = walkUntilNotice(c);
     bot.step(6);
     rec.frames.push(capOn(c, 'slagcrab_2_notice'));
-    // jump at it: it hunkers into its hot shell and the stomp clonks off
-    closeTo(c, 1.7, 200);
+    // jump at it from outside its snap reach (2.7 m): it hunkers into its hot
+    // shell under a falling hero and the stomp clonks off
+    closeTo(c, 3.3, 200);
+    bot.releaseAll(); bot.step(6);
     const fC = bot.frame;
     let shellCap = false;
     const hop = bot.hop(() => {
       if (!shellCap && c.state === 'shell' && c.hunker > 0.6) { shellCap = true; }
       return { x: c.pos.x, y: c.pos.y, z: c.pos.z, top: c.pos.y + 0.72 };
-    }, { vmax: 6 });
+    }, { vmax: 7.5 });
     rec.steps.clonk = { shelled: evs('slagcrab', fC).some((e) => e.e === 'state' && e.a === 'shell'),
       clonked: evs('slagcrab', fC).some((e) => e.e === 'clonk'), defeated: !!c.defeated, landed: hop.landed && hop.landed.p };
     if (c.state === 'shell') rec.frames.push(capOn(c, 'slagcrab_3_shell'));
@@ -281,13 +284,16 @@ export function makeScenarios(bot) {
     rec.frames.push(capOn(c, 'emberimp_3_tele_flare'));
     // stand: when a crouch will land it beside Nim, jump and pound onto it
     const att = [];
-    for (let k = 0; k < 6 && !c.defeated; k++) {
-      waitState(c, 'crouch', 200);
+    const pounder = makePounder();
+    let lastD = 0;
+    bot.releaseAll();
+    bot.drive(() => {
+      if (c.defeated) return true;
+      if (pounder.busy) { pounder.step(); if (!pounder.busy) att.push({ d: r2(lastD), st: c.state, defeated: !!c.defeated, how: c.defeatHow }); return false; }
       const d = bot.hdist(c.pos.x, c.pos.z);
-      if (d > 3.0) { bot.step(2); continue; }
-      const h = bot.poundHere();
-      att.push({ d: r2(d), st: c.state, defeated: !!c.defeated, how: c.defeatHow, hero: h.st });
-    }
+      if (c.state === 'crouch' && c.stateT < 0.12 && d < 3.0) { lastD = d; pounder.start(); }
+      return att.length >= 6;
+    }, 1800);
     rec.steps.pound = att;
     bot.step(2);
     rec.frames.push(capOn(c, 'emberimp_4_defeat'));
@@ -758,12 +764,14 @@ export function makeScenarios(bot) {
     const ac = c.arenaC, half = c.floeHalf;
     // the floe is a single jump off the north shore
     bot.tp(0, 0, -10);
+    let jumped = false;
     bot.drive((i) => {
       const p = P();
+      if (jumped && p.grounded && p.pos.z < ac.z + half - 0.6) return true;
       bot.steer(0, ac.z + half - 3.0, 0);
-      if (p.pos.z < ac.z + half + 3.4 && p.grounded && !bot.held('Space')) bot.key('Space', true);
+      if (!jumped && p.pos.z < ac.z + half + 3.4 && p.grounded) { bot.key('Space', true); jumped = true; }
       if (bot.held('Space') && !p.grounded && p.vel.y < 2) bot.key('Space', false);
-      return p.grounded && p.pos.z < ac.z + half - 0.6;
+      return false;
     }, 300);
     bot.releaseAll();
     rec.onFloe = bot.hero();
@@ -898,6 +906,11 @@ export function makeScenarios(bot) {
         if (pl.grounded || leapT > 120) { bot.key('KeyC', false); mode = 'ground'; }
         return false;
       }
+      // standing on the crown while it vents: pound the core where he stands
+      if (pl.grounded && Math.abs(p.y - deckTop()) < 0.4 && Math.hypot(p.x - c.pos.x, p.z - c.pos.z) < 1.3 && st === 'vent') {
+        pounder.start();
+        return false;
+      }
       // riding: stay at the gear's centre; leap for the crown while it vents
       if (gear >= 0 && onGear(gear)) {
         onGearF++;
@@ -905,7 +918,7 @@ export function makeScenarios(bot) {
         const k = gear * 3;
         if (gearU(gear) > 0.6) capOnce(o, 'ridingGear_p' + ph);
         const dB = Math.hypot(p.x - c.pos.x, p.z - c.pos.z);
-        if (st === 'vent' && ventLeft() > 0.9 && gearTop(gear) > deckTop() - 1.6 && dB < 4.2) {
+        if (st === 'vent' && ventLeft() > 0.9 && gearTop(gear) > deckTop() - 1.35 && dB < 4.0) {
           leaps++; mode = 'leap'; leapT = 0;
           bot.aim(c.pos.x, c.pos.z);
           bot.key('KeyW', true); bot.key('Space', true);

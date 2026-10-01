@@ -50,3 +50,18 @@ plus harness-only files under _harness/ (the test arena data + its driver).
   (one closed-loop proof per kind). Frames -> _shots/cr_arena/<realm>/, records -> _harness/cr_arena_<realm>.json.
 - loopcheck plan: frozen snapshots _bisect/s1cr2base (entities from c55df6df~1) vs _bisect/s1cr2new (current
   entities), both = the same 21:33 copy of every other lane's files, so any loopcheck difference is this lane's.
+
+## PROOFS (cr_arena.py, real keys, hand-stepped game.update(1/60), frames read)
+- VERDANT (run 2, 21:36-22:30, _harness/cr_arena_verdant.json, _shots/cr_arena/verdant/01-27):
+  * burrower: noticed Nim at 8.94 m (f79) -> dive, tunnel, tele (orange ring at the mound, frame 03), pop, dazed,
+    dig, tunnel, tele, pop, dazed -> STOMP (hop maxY 3.36) -> defeat, gone; coin counter 0 -> 3. 0 bumps.
+    (first tele fired at its 9 m range leash, 2 m short of Nim, so the "toss" did not land on him: toss unproven.)
+  * podspitter: noticed at 12.93 m -> aim, tele (ring at Nim's feet, frame 08), spit x2 (both seeds missed the
+    sidestepping hero) -> STOMP on the pod -> defeat; coins paid (counter 3 -> 6 during the stomp bounce).
+  * bramblehide: intro toast read from the DOM "BRAMBLEHIDE · THE ROOT TYRANT / WHO TRAMPLES MY MEADOW? ..."; fight
+    25.4 s game time: slamTele ring -> slam -> stuck -> POUND the bud (hp 3->2), phase2 line + thorn volley (5 rings,
+    frame 16), stuck -> pound (2->1), phase3 line, double slam (yank then stuck) -> pound (1->0) -> defeat line, defeat
+    anim 3.42 s -> bossDown -> course trigger 'boss' -> boss crest present -> walked to it -> crest counter +1, game
+    state 'clear'. Said: intro, hurt1, phase2, hurt2, phase3, defeat. Hero never bumped.
+- Cost: 0.31-0.77 s wall per game frame at 82-100 % CPU (97 chrome processes on the box).
+- Fixed after reading frame 01: lurking burrower showed only fur tufts (face under the mound) -> BR_LURK -0.28.
