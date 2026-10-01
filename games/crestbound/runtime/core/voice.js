@@ -416,8 +416,12 @@ export class Voice {
     this._lastAny = -1e9;
     this._busyUntil = -1e9;
     this._busyPri = -1;
-    this._recent = new Float64Array(BUDGET);
-    this._recentN = 0;
+    /** Start times of the last BUDGET non-priority lines — a true ring (`_recentI`
+        is the next slot). Measured before this was a ring: a 10 s mash fired 19
+        lines in one 2.5 s window, because every write after the fifth landed in
+        slot 0 and the other four aged out of the window. */
+    this._recent = new Float64Array(BUDGET).fill(-1e9);
+    this._recentI = 0;
     this._mutterT = MUTTER_MIN;
     this._idleT = 0;
     this._clock = 0;                        // fallback clock when no context yet
@@ -459,7 +463,7 @@ export class Voice {
         if (now < this._busyUntil && pri <= this._busyPri) return drop();
         /* rolling budget */
         let n = 0;
-        for (let i = 0; i < this._recentN; i++) if (now - this._recent[i] < BUDGET_WINDOW_S) n++;
+        for (let i = 0; i < BUDGET; i++) if (now - this._recent[i] < BUDGET_WINDOW_S) n++;
         if (n >= BUDGET) return drop();
         if (line.prob < 1 && this._rand() > line.prob) return drop();
       }
@@ -488,9 +492,8 @@ export class Voice {
     this._busyUntil = now + dur;
     this._busyPri = pri;
     if (pri < 2) {
-      this._recent[this._recentN % BUDGET] = now;
-      if (this._recentN < BUDGET) this._recentN++;
-      else this._recentN = BUDGET;
+      this._recent[this._recentI] = now;
+      this._recentI = (this._recentI + 1) % BUDGET;
     }
     st.fired++;
     st.byName[name] = (st.byName[name] || 0) + 1;
