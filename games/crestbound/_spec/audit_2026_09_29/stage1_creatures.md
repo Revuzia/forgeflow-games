@@ -35,3 +35,18 @@ plus harness-only files under _harness/ (the test arena data + its driver).
   `node _harness/_cr_smoke.mjs` -> SMOKE OK for all 12 kinds (construct, 20 s scripted drive, reset replays
   bit-identical, dispose).
 - Next: bootcheck --headless (keep) -> COMMIT; then write _harness/_cr_arena.py and prove every kind.
+- COMMITTED c55df6df (21:2x): entities + arena + bot (modulecheck 71/0, smoke 12/12; bootcheck --headless reached
+  state 'keep' with 0 console/page errors, but its verdict printed FAIL "never reached a live state (stuck at 'title')"
+  because leave_title() has a 45 s WALL-CLOCK budget and the box measured frameMs 10427 at 100 % CPU).
+- Integration added after the commit (hero lane's contracts, read from controller.js/carry.js, not edited):
+  * Creature.onAttack(player, pos, kind, dir) -> onStrike with normalised verbs (punch/kick/slidekick/dive/throw):
+    controller.strikeAt prefers onAttack over its onPound-at-the-fist fallback. Slag crab: a blow on the shell clonks.
+  * bosses: hitRadius (strikeAt pre-filter) bramblehide 6.6 (bud is ~5.6 m behind), slagmaw 2*(arenaR+1) (bombs
+    anywhere; onStrike checks each), hoarhorn 1.9, gyrarch 1.6.
+  * Slagmaw bombs = carry.js contract objects (carryable getter only while DARK, pos, onPickup/onCarry/onThrow/
+    onDrop/onStrike, course) registered via a DYNAMIC import of ../player/carry.js (never a link failure if absent);
+    a throw within ~40 deg of the boss is steered into the grate; a free throw bursts where it lands.
+- Driver: _harness/cr_arena.py (one browser for all realms; boot measured 324 s under load) + _harness/cr_scenarios.js
+  (one closed-loop proof per kind). Frames -> _shots/cr_arena/<realm>/, records -> _harness/cr_arena_<realm>.json.
+- loopcheck plan: frozen snapshots _bisect/s1cr2base (entities from c55df6df~1) vs _bisect/s1cr2new (current
+  entities), both = the same 21:33 copy of every other lane's files, so any loopcheck difference is this lane's.

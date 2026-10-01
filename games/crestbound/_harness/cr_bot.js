@@ -59,7 +59,7 @@ export function makeBot() {
       for (const c of cs) {
         if (c.__crWatched) continue;
         c.__crWatched = true;
-        for (const e of ['state', 'notice', 'defeated', 'coins', 'hit', 'say', 'bossDown', 'intro', 'stuck', 'teeter', 'vent', 'bombKicked', 'pushed', 'bump', 'clonk', 'spit', 'fire', 'ballHit', 'trigger', 'lost']) {
+        for (const e of ['state', 'notice', 'defeated', 'coins', 'hit', 'say', 'bossDown', 'intro', 'stuck', 'teeter', 'vent', 'bombKicked', 'pushed', 'bump', 'clonk', 'spit', 'fire', 'ballHit', 'trigger', 'lost', 'bounced', 'stagger']) {
           c.events.on(e, (...a) => {
             const arg = a.length && (typeof a[0] === 'string' || typeof a[0] === 'number') ? a[0] : (e === 'say' ? a[1] : null);
             log.push({ f: frame, k: c.kind, e, a: arg, a2: e === 'say' ? a[1] : (e === 'coins' ? a[0] : undefined) });
@@ -234,6 +234,38 @@ export function makeBot() {
     },
 
     step(n) { for (let i = 0; i < n; i++) tick(); return hero(); },
+
+    /* ---- per-frame driving (closed loops written by the scenarios) ---------- */
+
+    /** Hold or release one key (a real KeyboardEvent on change). */
+    key,
+    /** Turn the follow camera (the stick frame) toward a world point. */
+    aim,
+    /** Is a key held right now? */
+    held(code) { return held.has(code); },
+    /**
+     * Step frames, calling `each(i)` BEFORE every frame (it presses keys / aims);
+     * stop when it returns true or after `max` frames. Returns frames stepped.
+     */
+    drive(each, max) {
+      let i = 0;
+      for (; i < max; i++) {
+        if (each(i) === true) break;
+        tick();
+      }
+      return i;
+    },
+    /** Steer one frame toward (x, z) with W, feathered inside `slow` metres. */
+    steer(x, z, slow) {
+      const d = hdist(x, z);
+      aim(x, z);
+      const v = P().vel, hs = Math.hypot(v.x, v.z);
+      const s = slow === undefined ? 1.2 : slow;
+      const want = d < s ? 0.6 + d * 2.2 : 99;
+      key('KeyW', d > 0.12 && hs < want);
+      return d;
+    },
+    hdist,
   };
   return bot;
 }

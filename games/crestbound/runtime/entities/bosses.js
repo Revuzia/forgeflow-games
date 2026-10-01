@@ -99,6 +99,14 @@ const _m = new THREE.Matrix4();
 const UPV = new THREE.Vector3(0, 1, 0);
 const ZV = new THREE.Vector3(0, 0, 1);
 
+/* The hero lane's carry registry (player/carry.js). Loaded dynamically so this
+   module never fails to link if that file is absent; Slagmaw's bombs register
+   when it resolves. */
+let CARRY = null;
+const CARRY_READY = import('../player/carry.js')
+  .then((m) => { CARRY = (m && typeof m.registerCarryable === 'function') ? m : null; return CARRY; })
+  .catch(() => null);
+
 const SHOVE_KEEP = 2.5;      // rim band where a boss shove may not push outward (the Warden's rule)
 const SLEEP_SLACK = 4.0;
 const HURT_T = 1.3, ENRAGE_T = 1.5;
@@ -419,6 +427,8 @@ export function defineBosses(K) {
     constructor(def, ctx) {
       super(def, ctx, 'bramblehide');
       this.naturalHeight = 2.8;
+      /* strike reach (controller strikeAt pre-filter): the bud lies BH_REACH behind the hips */
+      this.hitRadius = 6.6;
       this.target = new THREE.Vector3();
       this.tailPose = 0;     // 0 rest, 1 raised, 2 slammed
       this.tailK = 0;        // blend
@@ -867,6 +877,8 @@ export function defineBosses(K) {
     constructor(def, ctx) {
       super(def, ctx, 'slagmaw');
       this.naturalHeight = 3.4;
+      /* strike reach: its dark bombs lie anywhere in the ring; onStrike checks each one */
+      this.hitRadius = 2 * (this.arenaR + 1);
       this.bs = new Uint8Array(SM_BOMBS);
       this.bp = new Float32Array(SM_BOMBS * 3);
       this.bv = new Float32Array(SM_BOMBS * 3);
@@ -896,6 +908,7 @@ export function defineBosses(K) {
       /* THE CARRY HOOK (hero lane): each dark bomb is a carryable. */
       this.carryables = [];
       for (let i = 0; i < SM_BOMBS; i++) this.carryables.push(this._carryHandle(i));
+      CARRY_READY.then((m) => { if (m && !this._disposedRoster) for (const h of this.carryables) m.registerCarryable(h); });
       this._resetKind();
       this._pose(0);
       this._syncColliders();
@@ -999,23 +1012,70 @@ export function defineBosses(K) {
       this.coolMesh = mk(skinMat(0x3a3230, 0.85, 0.1), 'bombsCool');
     }
 
+    /**
+     * THE CARRY HOOK — each bomb is a carryable under the hero lane's contract
+     * (player/carry.js): `carryable` (only while DARK), `pos`, `onPickup`,
+     * `onCarry`, `onThrow`, `onDrop`, `onStrike`. A throw roughly toward Slagmaw
+     * is steered into its grate (the same assist the pound-kick gets); any other
+     * throw flies free and bursts where it lands. A punch on a dark bomb kicks it
+     * back like a pound beside it. Registered with carry.js's registry when that
+     * module is present (see `CARRY` at the top of this file).
+     */
     _carryHandle(i) {
       const self = this;
+      const k = i * 3;
       return {
-        isCarryable: true, kind: 'slagbomb', index: i,
-        get pos() { return _a.set(self.bp[i * 3], self.bp[i * 3 + 1], self.bp[i * 3 + 2]); },
-        canCarry() { return self.bs[i] === B_COOL || self.bs[i] === B_FUSE; },
-        pickup() { if (!this.canCarry()) return false; self.bs[i] = B_HELD; self.bt[i] = 0; return true; },
-        /** while held: the carrier writes the bomb's position every frame */
-        hold(x, y, z) { if (self.bs[i] !== B_HELD) return; self.bp[i * 3] = x; self.bp[i * 3 + 1] = y; self.bp[i * 3 + 2] = z; },
-        throwIt(vx, vy, vz) {
-          if (self.bs[i] !== B_HELD) return false;
-          self.bs[i] = B_THROWN; self.bt[i] = 0;
-          self.bv[i * 3] = vx; self.bv[i * 3 + 1] = vy; self.bv[i * 3 + 2] = vz;
+        kind: 'slagbomb', index: i, boss: self, course: self.ctx ? self.ctx.course : undefined,
+        pos: new THREE.Vector3(),
+        held: false,
+        carryRadius: 0.42, carryHeavy: 0.35, carryHoldY: 1.95,
+        get carryable() { return !self.defeated && self.state !== 'gone' && (self.bs[i] === B_COOL || self.bs[i] === B_FUSE); },
+        onPickup() {
+          if (!this.carryable) return false;
+          self.bs[i] = B_HELD; self.bt[i] = 0; this.held = true;
+          self._sfx('step_stone', this.pos, 1.3, 0.6);
+          self.events.emit('bombHeld', i, self);
           return true;
         },
-        drop() { if (self.bs[i] === B_HELD) { self.bs[i] = B_COOL; self.bt[i] = 0; } },
+        onCarry(player, holdPos) {
+          this.pos.copy(holdPos);
+          if (self.bs[i] === B_HELD) { self.bp[k] = holdPos.x; self.bp[k + 1] = holdPos.y; self.bp[k + 2] = holdPos.z; }
+        },
+        onThrow(player, vel) {
+          this.held = false;
+          if (self.bs[i] !== B_HELD) return;
+          const px = this.pos.x, py = this.pos.y, pz = this.pos.z;
+          self.bp[k] = px; self.bp[k + 1] = py; self.bp[k + 2] = pz;
+          let vx = vel ? vel.x : 0, vy = vel ? vel.y : 0, vz = vel ? vel.z : 0;
+          const hs = Math.hypot(vx, vz);
+          if (hs < 0.5) { self.bs[i] = B_COOL; self.bt[i] = 0; self.bp[k + 1] = self.arenaC.y + 0.36; return; }
+          // aim assist: a throw within ~40 deg of the grate goes into it
+          const tx = self.pos.x - px, tz = self.pos.z - pz, td = Math.hypot(tx, tz);
+          if (td > 0.5 && td < 16 && (vx * tx + vz * tz) / (hs * td) > 0.76) {
+            const T = clamp(td / 10, 0.45, 1.1), ty = self.pos.y + SM_CHEST - py;
+            vx = tx / T; vz = tz / T; vy = (ty + 0.5 * SM_G * T * T) / T;
+          }
+          self.bv[k] = vx; self.bv[k + 1] = vy; self.bv[k + 2] = vz;
+          self.bs[i] = B_THROWN; self.bt[i] = 0;
+          self.events.emit('bombThrown', i, self);
+        },
+        onDrop(player, pos) {
+          this.held = false;
+          if (self.bs[i] !== B_HELD) return;
+          const p = pos || this.pos;
+          self.bp[k] = p.x; self.bp[k + 1] = self.arenaC.y + 0.36; self.bp[k + 2] = p.z;
+          self.bs[i] = B_COOL; self.bt[i] = 0;
+        },
+        onStrike(player) { return self._kickBomb(i, player); },
+        /** keep `pos` on the bomb while it is not in the hands */
+        sync() { if (self.bs[i] !== B_HELD) this.pos.set(self.bp[k], self.bp[k + 1], self.bp[k + 2]); },
       };
+    }
+
+    dispose() {
+      if (CARRY && this.carryables) for (const h of this.carryables) CARRY.unregisterCarryable(h);
+      this._disposedRoster = true;
+      super.dispose();
     }
 
     _bossReset() {
@@ -1028,6 +1088,7 @@ export function defineBosses(K) {
     _clearAttacks() {
       if (!this.bs) return;
       for (let i = 0; i < SM_BOMBS; i++) { this.bs[i] = B_OFF; if (this.bombCols) this.bombCols[i].active = false; }
+      if (this.carryables) for (let i = 0; i < SM_BOMBS; i++) this.carryables[i].held = false;
       if (this.marks) this.marks.clear();
       this.ringOn = false;
       if (this.fireRing) this.fireRing.visible = false;
@@ -1204,7 +1265,7 @@ export function defineBosses(K) {
             this.bs[i] = B_OFF;
             this._burst('lavaPop', _a, 0xff6a1a, 1.3);
             this._hitBoss(s === B_KICK ? 'pound' : 'throw');
-          } else if (this.bt[i] > 2.5 || _a.y < this.pos.y - 3) {
+          } else if (this.bt[i] > 2.5 || _a.y < this.pos.y - 3 || (s === B_THROWN && this.bv[k + 1] < 0 && _a.y <= this.arenaC.y + 0.36)) {
             this._blast(i, player);
           }
         }
@@ -1289,6 +1350,7 @@ export function defineBosses(K) {
         if (hot) { this.hotMesh.setMatrixAt(i, _m); anyH = true; } else { _c.set(0, 0, 0); this.hotMesh.setMatrixAt(i, _m2zero()); }
         if (cool) { this.coolMesh.setMatrixAt(i, _m); anyC = true; } else this.coolMesh.setMatrixAt(i, _m2zero());
       }
+      if (this.carryables) for (let i = 0; i < SM_BOMBS; i++) this.carryables[i].sync();
       this.hotMesh.visible = anyH; this.coolMesh.visible = anyC;
       this.hotMesh.instanceMatrix.needsUpdate = true;
       this.coolMesh.instanceMatrix.needsUpdate = true;
@@ -1377,6 +1439,7 @@ export function defineBosses(K) {
     constructor(def, ctx) {
       super(def, ctx, 'hoarhorn');
       this.naturalHeight = 2.8;
+      this.hitRadius = 1.9;
       const d = this.def;
       const fl = d.floe === false ? null : (d.floe || {});
       readV3(d.p, _a);
@@ -1822,6 +1885,7 @@ export function defineBosses(K) {
     constructor(def, ctx) {
       super(def, ctx, 'gyrarch');
       this.naturalHeight = 2.6;
+      this.hitRadius = 1.6;
       const d = this.def;
       this.floorY = this.groundY;
       this.hoverH = Math.max(4.5, fin(d.hover, 6.2));

@@ -616,6 +616,20 @@ export function defineCreatures(K) {
 
     onDive(player) { return this.onStrike(player, 'dive'); }
 
+    /**
+     * The hero lane's strike dispatch (controller.js `strikeAt`) calls this for
+     * every creature within reach of a punch / kick / slide kick / dive / thrown
+     * object, INSTEAD of its fallback (onPound at the fist). Kinds arrive as the
+     * controller names them ('punch1', 'kick', 'airKick', 'slideKick', 'dive',
+     * 'throw' ...); the roster's own verbs are normalised here. Returns truthy
+     * when the blow counted (the controller then plays its hit-stop).
+     */
+    onAttack(player, pos, kind, dir) {
+      const k = String(kind || 'strike');
+      const verb = k === 'slideKick' ? 'slidekick' : (k.indexOf('punch') === 0 ? 'punch' : (k.indexOf('ick') > 0 || k === 'kick' ? 'kick' : k));
+      return !!this.onStrike(player, verb, pos, dir);
+    }
+
     onStand(player) {
       /* the course's stand-transition hook: a hero who ends up standing on the
          creature's top is a stomp (the controller already bounced him off) */
@@ -655,6 +669,9 @@ export function defineCreatures(K) {
 
   const BR_TELE = 0.65, BR_POP = 0.32, BR_DAZE = 2.0, BR_FLUSH_DAZE = 2.8, BR_DIG = 0.45, BR_SPEED = 3.3;
   const BR_TOP = 0.95;
+  /* Lurking, the eyes (torso +0.72) and the star nose (torso +0.56, 0.36 forward)
+     clear the mound's crown (0.26 m, 0.21 m at the snout): the face reads, the body hides. */
+  const BR_LURK = -0.28;
 
   class Burrower extends Creature {
     constructor(def, ctx) {
@@ -662,7 +679,7 @@ export function defineCreatures(K) {
       this.naturalHeight = 1.0;
       this.startState = 'lurk';
       this.state = 'lurk';
-      this.rise = -0.62;          // torso height: -0.62 nose out, -1.1 buried, 0 standing
+      this.rise = BR_LURK;        // torso height: BR_LURK eyes + star nose over the mound, -1.15 buried, 0 standing
       this.moundK = 1;            // mound scale
       this.sniffT = 0;
       this.tunnelT = 0;
@@ -737,7 +754,7 @@ export function defineCreatures(K) {
     }
 
     _resetKind() {
-      this.rise = -0.62; this.moundK = 1; this.sniffT = 0; this.tunnelT = 0; this.trailT = 0;
+      this.rise = BR_LURK; this.moundK = 1; this.sniffT = 0; this.tunnelT = 0; this.trailT = 0;
       this.dazeFor = BR_DAZE; this.flushed = false;
       this.stars.show(false);
       this.marks.clear();
@@ -766,7 +783,7 @@ export function defineCreatures(K) {
       switch (this.state) {
         case 'lurk': {
           // nose out, sniffing; turns toward the hero when near
-          this.rise = damp(this.rise, -0.62, 6, dt);
+          this.rise = damp(this.rise, BR_LURK, 6, dt);
           this.moundK = damp(this.moundK, 1, 6, dt);
           if (this._pd < this.noticeR + 3) this._faceHero(2.5, dt);
           if (seen) this._enter('dive');
@@ -1265,6 +1282,12 @@ export function defineCreatures(K) {
     _stompable() { return this.state === 'recover' || this.state === 'snap' || this.state === 'flipped' || (this.state !== 'shell' && this.hunker < 0.5); }
 
     _strikeable() { return this.state !== 'shell'; }
+
+    /** A blow on the hot shell clonks off it, like a stomp does. */
+    onStrike(player, kind, pos, dir) {
+      if (!this.defeated && this.state === 'shell') { this._clonk(); return false; }
+      return super.onStrike(player, kind, pos, dir);
+    }
 
     _onStomp(player) {
       if (this.state === 'shell') { this._clonk(); return; }
