@@ -101,3 +101,16 @@ plus harness-only files under _harness/ (the test arena data + its driver).
 - HARNESS: a __dev.goto straight from the TITLE left the title menu open; a later key press reached it and sent the
   game to 'loading' mid-proof (rerun 1 puffer froze in 'puffed'; run 2 gyrarch ended in gs 'loading'). cr_arena.py
   now leaves the title with its own button first; the bot logs every game-state change into each record.
+- RERUN 2 (01:09-, title left first; game state stayed 'playing' through every proof):
+  * puffer: inflate -> puffed (collider top 1.64 m at the jump) -> real-key hop landed on it -> BOUNCE: hero vy 19.06,
+    apex 7.16 m (a triple jump peaks at 3.58 m) -> the pop-pound was too late (it had begun to deflate) -> pound
+    beside it while deflating -> defeat -> coins +3 -> respawned after 9.27 s. Pop-at-apex scenario fix pending rerun.
+  * gyrarch: 31 boardings, 116 s riding gears, 2 leaps -> ONE CROWN POUND LANDED (hit hp3->2 'pound' f5819, lines
+    hurt1 + phase2) -> no further leap: the leap gate was too strict (inner-edge 0.45 m). Relaxed (0.8 m, gear within
+    1.5 m of the deck, may leap in the last of 'fire'); rerun pending.
+  * HOARHORN DEFEATED: charge -> teeter -> POUND beside -> pushed -> fall (dunk) hp 3->2 (f474), phase2 + frost
+    breath cycles, teeter -> pound -> dunk 2->1 (f1153), phase3 double charges, teeter/pound/push x3 -> dunk 1->0
+    (f5150) -> defeat line, defeat 3.22 s -> bossDown -> trigger 'boss' -> crest present -> taken (crest counter +1).
+    Said intro, hurt1, phase2, hurt2, phase3, defeat. Hero in the sea 250 frames, climbed out by surface-jumps.
+    (On the walk to the crest the bot fell in the floe/shore channel once: game 'dead' -> respawn at cp-ring, which
+    is beside the crest.)

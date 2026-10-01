@@ -211,20 +211,34 @@ def run_realm(pg, console, realm, only, args):
         if args.screens:
             pg.evaluate("() => CRESTBOUND.engine.render(1/60)")
             pg.screenshot(path=os.path.join(outdir, "zz_%s_page.png" % kind))
-    result["console"] = console[c0:c0 + 80]
+        # written after EVERY proof: a usage limit or a hung boss cannot lose the others
+        result["console"] = console[c0:c0 + 80]
+        write_result(realm, result, only, kind)
+    print("[%s] wrote %s" % (realm, os.path.join(HERE, "cr_arena_%s.json" % realm)), flush=True)
+    return result
+
+
+def write_result(realm, result, only, kind):
     path = os.path.join(HERE, "cr_arena_%s.json" % realm)
-    if only and os.path.exists(path):
+    out = result
+    if os.path.exists(path) and (only or len(result["proofs"]) > 1):
         try:
             prev = json.load(open(path, encoding="utf-8"))
-            prev.setdefault("proofs", {}).update(result["proofs"])
-            prev.setdefault("reruns", []).append({"at": result["started"], "kinds": list(result["proofs"].keys()), "console": result.get("console")})
-            result = prev
+            if only or prev.get("started") == result["started"]:
+                prev.setdefault("proofs", {})[kind] = result["proofs"][kind]
+                if only:
+                    rr = prev.setdefault("reruns", [])
+                    if not rr or rr[-1].get("at") != result["started"]:
+                        rr.append({"at": result["started"], "kinds": []})
+                    rr[-1]["kinds"].append(kind)
+                    rr[-1]["console"] = result.get("console")
+                else:
+                    prev["console"] = result.get("console")
+                out = prev
         except Exception:
-            pass
+            out = result
     with open(path, "w", encoding="utf-8") as fh:
-        json.dump(result, fh, indent=1)
-    print("[%s] wrote %s" % (realm, path), flush=True)
-    return result
+        json.dump(out, fh, indent=1)
 
 
 def main():

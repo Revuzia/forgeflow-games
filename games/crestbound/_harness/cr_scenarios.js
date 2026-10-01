@@ -291,13 +291,20 @@ export function makeScenarios(bot) {
     const pounder = makePounder();
     let lastD = 0;
     bot.releaseAll();
+    const seen = [];
     bot.drive(() => {
       if (c.defeated) return true;
-      if (pounder.busy) { pounder.step(); if (!pounder.busy) att.push({ d: r2(lastD), st: c.state, defeated: !!c.defeated, how: c.defeatHow }); return false; }
-      const d = bot.hdist(c.pos.x, c.pos.z);
-      if (c.state === 'crouch' && c.stateT < 0.12 && d < 3.0) { lastD = d; pounder.start(); }
+      if (pounder.busy) { pounder.step(); if (!pounder.busy) att.push({ d: r2(lastD), st: c.state, defeated: !!c.defeated, how: c.defeatHow, hero: bot.hero().p }); return false; }
+      // the hop lands 0.3 m short of where Nim stood: when it LEAVES the ground
+      // for a spot beside him, jump; the pound comes down on it as it lands
+      if (c.state === 'hop' && c.stateT < 0.01) {
+        const dl = bot.hdist(c.hopTo.x, c.hopTo.z);
+        if (seen.length < 40) seen.push(r2(dl));
+        if (dl < 2.2) { lastD = dl; pounder.start(); }
+      }
       return att.length >= 6;
     }, 1800);
+    rec.steps.hopLandsFromNim = seen;
     rec.steps.pound = att;
     bot.step(2);
     rec.frames.push(capOn(c, 'emberimp_4_defeat'));
@@ -422,8 +429,9 @@ export function makeScenarios(bot) {
         if (p.pos.y > apexAfterBounce) apexAfterBounce = p.pos.y;
         if (!capd && p.vel.y < 1) { capd = true; rec.frames.push(capOn(c, 'puffer_3_bounce_apex')); }
         bot.key('KeyW', d > 0.3);
-        // falling back onto the puffed ball: POUND it
-        if (p.vel.y < 0 && d < 0.6 && p.pos.y > top() + 0.6 && (c.state === 'puffed' || c.state === 'warn')) {
+        // at the top of the bounce, over the puffed ball: POUND it (a pound falls
+        // at 40 m/s, so it lands long before the ball's hold runs out)
+        if (p.vel.y < 1.0 && d < 0.8 && p.pos.y > top() + 0.6 && (c.state === 'puffed' || c.state === 'warn' || c.state === 'inflate')) {
           bot.key('KeyW', false); bot.key('KeyC', true); pounded = true; phase = 2;
         }
       } else if (phase === 2) {
@@ -971,8 +979,9 @@ export function makeScenarios(bot) {
         let ix = c.pos.x - gx, iz = c.pos.z - gz;
         const il = Math.hypot(ix, iz) || 1;
         const sx = gx + ix / il * 0.6, sz = gz + iz / il * 0.6;
-        const atEdge = Math.hypot(p.x - sx, p.z - sz) < 0.45;
-        if (st === 'vent' && ventLeft() > 0.9 && gearTop(gear) > deckTop() - 1.35 && dB < 3.6 && atEdge) {
+        // leap in the vent (or the instant before it: the jump lands ~0.8 s later)
+        const opening = (st === 'vent' && ventLeft() > 0.9) || (st === 'fire' && c.stateT > 0.1);
+        if (opening && gearTop(gear) > deckTop() - 1.5 && dB < 3.9 && Math.hypot(p.x - sx, p.z - sz) < 0.8) {
           leaps++; mode = 'leap'; leapT = 0;
           return false;
         }
