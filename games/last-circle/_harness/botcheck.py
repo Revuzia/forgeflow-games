@@ -5,22 +5,38 @@ samples every bot twice a second. Reports the three complaints as NUMBERS so a
 fix can be shown to move them:
 
   STUCK   alive, in a moving state, and displaced < 0.4 m over 3 s
-  DRY     holding a gun with 0 in the mag AND 0 matching reserve — it cannot
+  DRY     holding a gun with 0 in the mag AND 0 matching reserve - it cannot
           shoot no matter how well it aims
   FIRING  share of samples with the fire input held
-"""
-import sys, json, argparse
-from playwright.sync_api import sync_playwright
+  HITREG  hurt events caused by bots per bot trigger pull ('shotFired'), per weapon (shotgun pellets hit separately) -
+          PLAN L6 "botcheck hit registration unchanged": compare before / after
 
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-FLAGS=["--ignore-gpu-blocklist","--use-angle=d3d11","--disable-gpu-sandbox",
-       "--disable-features=CalculateNativeWinOcclusion","--autoplay-policy=no-user-gesture-required"]
-URL="http://localhost:8788/games/last-circle/index.html"
+Retargeted 2026-09-30 (lane L1) onto common.py: --base (default the scoped :8790 server) / --disk / --rev, headless by
+default, and the lobby helper (startMatch -> a REAL Enter with the kernel loop frozen) so W.phase reaches the drop and
+the match with the storm ON (the old driver stayed in the lobby: storm off). Information only: exit 0 when the matches
+ran, 2 when the environment stopped them, 1 only on a page error.
+
+    python _harness/botcheck.py --seeds 1,2,3 --map isla_viva --disk
+"""
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import common as C  # noqa: E402
 
 RUN = r"""
-async ([seed, mapId, seconds, stepS]) => {
+async ([seed, mapId, seconds, stepS, skipStart]) => {
   const C = window.__LC__, W = C.W;
-  await C.startMatch({ mapId, mode: "solo", seed });
+  if (!skipStart) await C.startMatch({ mapId, mode: "standard", seed });
+  // hit registration (PLAN L6: "botcheck hit registration unchanged"): bot trigger pulls vs hurt events a bot caused.
+  // W.events has no off(): a generation token retires the listeners of an earlier run in the same page.
+  const gen = window.__bcGen = (window.__bcGen || 0) + 1;
+  const HR = { shots: 0, hits: 0, byW: {} };
+  W.events.on("shotFired", (a, wid) => { if (window.__bcGen !== gen || !a || !a.isBot) return; HR.shots++;
+    const r = HR.byW[wid] = HR.byW[wid] || { shots: 0, hits: 0 }; r.shots++; });
+  W.events.on("actorHurt", (v, info) => { if (window.__bcGen !== gen || !info) return; const k = W.actorById.get(info.attackerId);
+    if (!k || !k.isBot) return; HR.hits++; const r = HR.byW[info.weaponId] = HR.byW[info.weaponId] || { shots: 0, hits: 0 }; r.hits++; });
   // let the match settle (actors spawned, loot placed)
   C.fastForward(2, stepS);
 
@@ -42,7 +58,7 @@ async ([seed, mapId, seconds, stepS]) => {
     }
     samples.push({ t: +(W.t).toFixed(2), n: row.length, row });
   }
-  return { samples, alive: W.match ? W.match.aliveCount() : null,
+  return { samples, hitReg: HR, alive: W.match ? W.match.aliveCount() : null,
            over: !!(W.match && W.match.over), t: W.t };
 }
 """
@@ -70,36 +86,44 @@ def analyse(res):
             "dryPct": round(100*dry/max(1,total), 1),
             "firingPct": round(100*firing/max(1,total), 1),
             "botsEverDry": len(perbot_dry),
-            "aliveAtEnd": res["alive"], "simSeconds": round(res["t"],1)}
+            "aliveAtEnd": res["alive"], "simSeconds": round(res["t"],1),
+            "botShots": (res.get("hitReg") or {}).get("shots"), "botHits": (res.get("hitReg") or {}).get("hits"),
+            "hitsPerTriggerPull": round((res.get("hitReg") or {}).get("hits", 0) / max(1, (res.get("hitReg") or {}).get("shots", 0)), 3),
+            "byWeapon": (res.get("hitReg") or {}).get("byW")}
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    C.add_common_args(ap)
     ap.add_argument("--seeds", default="1,2,3")
     ap.add_argument("--map", default="")
+    ap.add_argument("--mode", default="standard", choices=["standard", "quick", "practice"])
     ap.add_argument("--seconds", type=int, default=150)
     a = ap.parse_args()
     seeds = [int(x) for x in a.seeds.split(",") if x.strip()]
-    with sync_playwright() as p:
-        br = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
-        pg = br.new_page(viewport={"width":1000,"height":640})
-        errs=[]; pg.on("pageerror", lambda e: errs.append(str(e)[:140]))
-        pg.goto(URL, wait_until="load", timeout=120000)
-        for _ in range(250):
-            if pg.evaluate("!!(window.__LC__ && window.__LC__.W)"): break
-            pg.wait_for_timeout(400)
-        agg=[]
-        for s in seeds:
-            res = pg.evaluate(RUN, [s, a.map or None, a.seconds, 1/30])
-            m = analyse(res); m["seed"]=s; agg.append(m)
-            print(f"  seed {s:>3}  bots-sampled {m['botSamples']:>6}  "
-                  f"STUCK {m['stuckPct']:>5}%   DRY {m['dryPct']:>5}%   "
-                  f"FIRING {m['firingPct']:>5}%   everDry {m['botsEverDry']:>3}  "
-                  f"alive@end {m['aliveAtEnd']}")
-        n=len(agg)
-        print("\n  MEAN      STUCK %.1f%%   DRY %.1f%%   FIRING %.1f%%" % (
-            sum(x["stuckPct"] for x in agg)/n, sum(x["dryPct"] for x in agg)/n,
-            sum(x["firingPct"] for x in agg)/n))
-        br.close()
-    if errs: print("  page errors:", errs[:3])
 
-main()
+    def body(v):
+        agg = []
+        with C.Session(a, "botcheck", viewport={"width": 1000, "height": 640}) as s:
+            s.boot()
+            s.freeze_loop()
+            for sd in seeds:
+                s.start_match(a.mode, sd, a.map or None, enter=True)
+                s.freeze_loop()
+                res = s.page.evaluate(RUN, [sd, a.map or None, a.seconds, 1 / 30, 1])
+                m = analyse(res); m["seed"] = sd; agg.append(m)
+                print(f"  seed {sd:>3}  bots-sampled {m['botSamples']:>6}  "
+                      f"STUCK {m['stuckPct']:>5}%   DRY {m['dryPct']:>5}%   "
+                      f"FIRING {m['firingPct']:>5}%   everDry {m['botsEverDry']:>3}  "
+                      f"alive@end {m['aliveAtEnd']}", flush=True)
+                v.info("seed %d" % sd, m)
+            d = s.diagnostics()
+        n = max(1, len(agg))
+        v.info("MEAN", {"stuckPct": round(sum(x["stuckPct"] for x in agg) / n, 1), "dryPct": round(sum(x["dryPct"] for x in agg) / n, 1),
+                        "firingPct": round(sum(x["firingPct"] for x in agg) / n, 1)})
+        v.check("the matches ran with 0 page / window errors", bool(agg) and not (d["pageErrors"] or d["windowErrors"]),
+                {"runs": len(agg), "pageErrors": d["pageErrors"][:3], "windowErrors": d["windowErrors"][:3]})
+    return C.run_gate("botcheck", body, a)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -3,16 +3,25 @@
 Standing still is not stuck: a camper, a bot channelling a 2 s chest and a bot
 healing are all motionless on purpose. So this tracks distance-to-destination
 per bot and flags only the ones whose distance fails to fall.
+
+Retargeted 2026-09-30 (lane L1) onto common.py: --base (default the scoped :8790 server) / --disk / --rev, headless by
+default, and the lobby helper (startMatch -> a REAL Enter with the kernel loop frozen) so the match runs with the storm
+ON (the old driver stayed in the lobby). Diagnostic: exit 0 when it ran, 2 on an environment failure, 1 on a page error.
+
+    python _harness/stuckdiag.py --seeds 1,2 --map isla_viva --disk
 """
-import sys, collections
-from playwright.sync_api import sync_playwright
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-FLAGS=["--ignore-gpu-blocklist","--use-angle=d3d11","--disable-gpu-sandbox",
-       "--disable-features=CalculateNativeWinOcclusion","--autoplay-policy=no-user-gesture-required"]
+import argparse
+import collections
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import common as C  # noqa: E402
+
 RUN = r"""
-async ([seed, seconds, stepS]) => {
+async ([seed, seconds, stepS, skipStart]) => {
   const C = window.__LC__, W = C.W;
-  await C.startMatch({ mode: "solo", seed });
+  if (!skipStart) await C.startMatch({ mode: "standard", seed });
   C.fastForward(2, stepS);
   const out = [];
   for (let t = 0; t < seconds; t += 0.5) {
@@ -32,38 +41,61 @@ async ([seed, seconds, stepS]) => {
   return out;
 }
 """
+
+
+def analyse(samples):
+    hist = collections.defaultdict(list)   # id -> [(d,x,z,state)]
+    stuck_samples = 0
+    total_with_goal = 0
+    by_state = collections.Counter()
+    spots = []
+    for smp in samples:
+        for r in smp["row"]:
+            if r["d"] is None:
+                continue
+            total_with_goal += 1
+            h = hist[r["id"]]
+            h.append((r["d"], r["x"], r["z"], r["st"]))
+            if len(h) > 8:
+                h.pop(0)
+            if len(h) == 8:
+                # 4 s: destination distance not falling AND barely moved
+                dd = h[0][0] - h[-1][0]
+                moved = max(abs(h[0][1] - h[-1][1]), abs(h[0][2] - h[-1][2]))
+                if dd < 0.5 and moved < 1.0 and h[-1][0] > 3.0:
+                    stuck_samples += 1
+                    by_state[r["st"]] += 1
+                    if len(spots) < 6:
+                        spots.append((round(r["x"]), round(r["z"]), r["st"], r["d"]))
+    return {"samplesWithGoal": total_with_goal, "genuinelyStuck": stuck_samples,
+            "pct": round(100 * stuck_samples / max(1, total_with_goal), 1), "byState": dict(by_state.most_common(6)), "spots": spots}
+
+
 def main():
-    seeds=[int(x) for x in (sys.argv[1] if len(sys.argv)>1 else "1,2").split(",")]
-    secs=int(sys.argv[2]) if len(sys.argv)>2 else 150
-    with sync_playwright() as p:
-        br=p.chromium.launch(channel="chrome",headless=False,args=FLAGS)
-        pg=br.new_page(viewport={"width":1000,"height":640})
-        pg.goto("http://localhost:8788/games/last-circle/index.html",wait_until="load",timeout=120000)
-        for _ in range(250):
-            if pg.evaluate("!!(window.__LC__ && window.__LC__.W)"): break
-            pg.wait_for_timeout(400)
-        for sd in seeds:
-            samples=pg.evaluate(RUN,[sd,secs,1/30])
-            hist=collections.defaultdict(list)   # id -> [(d,x,z,state)]
-            stuck_samples=0; total_with_goal=0
-            by_state=collections.Counter(); spots=[]
-            for s in samples:
-                for r in s["row"]:
-                    if r["d"] is None: continue
-                    total_with_goal+=1
-                    h=hist[r["id"]]; h.append((r["d"],r["x"],r["z"],r["st"]))
-                    if len(h)>8: h.pop(0)
-                    if len(h)==8:
-                        # 4 s: destination distance not falling AND barely moved
-                        dd = h[0][0]-h[-1][0]
-                        moved = max(abs(h[0][1]-h[-1][1]), abs(h[0][2]-h[-1][2]))
-                        if dd < 0.5 and moved < 1.0 and h[-1][0] > 3.0:
-                            stuck_samples+=1; by_state[r["st"]]+=1
-                            if len(spots)<6: spots.append((round(r['x']),round(r['z']),r['st'],r['d']))
-            pct = 100*stuck_samples/max(1,total_with_goal)
-            print(f"\nseed {sd}: samples with a destination {total_with_goal}")
-            print(f"   GENUINELY STUCK (goal not closing for 4 s): {stuck_samples}  = {pct:.1f}%")
-            print(f"   by state: {dict(by_state.most_common(6))}")
-            print(f"   example spots (x,z,state,distToGoal): {spots}")
-        br.close()
-main()
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    C.add_common_args(ap)
+    ap.add_argument("--seeds", default="1,2")
+    ap.add_argument("--seconds", type=int, default=150)
+    ap.add_argument("--map", default=None)
+    a = ap.parse_args()
+    seeds = [int(x) for x in a.seeds.split(",") if x.strip()]
+
+    def body(v):
+        n = 0
+        with C.Session(a, "stuckdiag", viewport={"width": 1000, "height": 640}) as s:
+            s.boot()
+            s.freeze_loop()
+            for sd in seeds:
+                s.start_match("standard", sd, a.map, enter=True)
+                s.freeze_loop()
+                row = analyse(s.page.evaluate(RUN, [sd, a.seconds, 1 / 30, 1]))
+                print("\nseed %d: %s" % (sd, row), flush=True)
+                v.info("seed %d" % sd, row)
+                n += 1
+            d = s.diagnostics()
+        v.check("ran with 0 page / window errors", n > 0 and not (d["pageErrors"] or d["windowErrors"]), (d["pageErrors"] + d["windowErrors"])[:3])
+    return C.run_gate("stuckdiag", body, a)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -6,17 +6,25 @@ machine already scores LOOT 78 and chests 82 when dry, so the question is not
 
 Per dry EPISODE: how long it lasts, whether it ends in a resupply or in death,
 and which states the bot cycled through while dry.
+
+Retargeted 2026-09-30 (lane L1) onto common.py: --base (default the scoped :8790 server) / --disk / --rev, headless by
+default, and the lobby helper (startMatch -> a REAL Enter with the kernel loop frozen) so the match runs with the storm
+ON (the old driver stayed in the lobby). Diagnostic: exit 0 when it ran, 2 on an environment failure, 1 on a page error.
+
+    python _harness/botdiag.py --seeds 1,2 --seconds 150 --disk
 """
-import sys, json, collections
-from playwright.sync_api import sync_playwright
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-FLAGS=["--ignore-gpu-blocklist","--use-angle=d3d11","--disable-gpu-sandbox",
-       "--disable-features=CalculateNativeWinOcclusion","--autoplay-policy=no-user-gesture-required"]
+import argparse
+import collections
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import common as C  # noqa: E402
 
 RUN = r"""
-async ([seed, seconds, stepS]) => {
+async ([seed, seconds, stepS, skipStart]) => {
   const C = window.__LC__, W = C.W;
-  await C.startMatch({ mode: "solo", seed });
+  if (!skipStart) await C.startMatch({ mode: "standard", seed });
   C.fastForward(2, stepS);
   const out = [];
   const SLICE = 0.5;
@@ -33,10 +41,7 @@ async ([seed, seconds, stepS]) => {
       const mag = (a.weapon && a.weapon.magAmmo != null) ? a.weapon.magAmmo : 0;
       let usable = 0;
       try {
-        for (const s of a.inventory.slots) if (s && s.kind === "weapon") {
-          const d = (window.__LC__.W.K ? null : null);
-          usable += (s.mag || 0);
-        }
+        for (const s of a.inventory.slots) if (s && s.kind === "weapon") usable += (s.mag || 0);
       } catch (e) {}
       row.push({ id: a.id, st: b.state, mag, reserve, slotMags: usable,
                  x: +a.pos.x.toFixed(1), z: +a.pos.z.toFixed(1),
@@ -50,41 +55,63 @@ async ([seed, seconds, stepS]) => {
 }
 """
 
+
+def episodes(res):
+    eps = collections.defaultdict(list)
+    cur = {}
+    states_while_dry = collections.Counter()
+    seen_last = {}
+    for smp in res["samples"]:
+        present = set()
+        for r in smp["row"]:
+            present.add(r["id"])
+            dry = r["mag"] == 0 and r["reserve"] == 0
+            if dry:
+                states_while_dry[r["st"]] += 1
+                cur.setdefault(r["id"], smp["t"])
+            elif r["id"] in cur:
+                eps[r["id"]].append((smp["t"] - cur.pop(r["id"]), "recovered"))
+            seen_last[r["id"]] = smp["t"]
+        for bid in list(cur):
+            if bid not in present:                      # died while dry
+                eps[bid].append((seen_last.get(bid, smp["t"]) - cur.pop(bid), "died"))
+    allep = [e for vv in eps.values() for e in vv]
+    rec = [d for d, k in allep if k == "recovered"]
+    died = [d for d, k in allep if k == "died"]
+    return {"dryEpisodes": len(allep), "recovered": len(rec), "diedWhileDry": len(died),
+            "recoveryMedianS": round(sorted(rec)[len(rec) // 2], 1) if rec else None,
+            "recoveryMaxS": round(max(rec), 1) if rec else None,
+            "dryBeforeDeathMedianS": round(sorted(died)[len(died) // 2], 1) if died else None,
+            "chests": [res.get("chestsOpened"), res.get("chestsTotal")], "aliveAtEnd": res.get("alive"),
+            "statesWhileDry": dict(states_while_dry.most_common(6))}
+
+
 def main():
-    seeds=[int(x) for x in (sys.argv[1] if len(sys.argv)>1 else "1,2").split(",")]
-    secs=int(sys.argv[2]) if len(sys.argv)>2 else 150
-    with sync_playwright() as p:
-        br=p.chromium.launch(channel="chrome",headless=False,args=FLAGS)
-        pg=br.new_page(viewport={"width":1000,"height":640})
-        pg.goto("http://localhost:8788/games/last-circle/index.html",wait_until="load",timeout=120000)
-        for _ in range(250):
-            if pg.evaluate("!!(window.__LC__ && window.__LC__.W)"): break
-            pg.wait_for_timeout(400)
-        for sd in seeds:
-            res=pg.evaluate(RUN,[sd,secs,1/30])
-            eps=collections.defaultdict(list); cur={}
-            states_while_dry=collections.Counter()
-            seen_last={}
-            for s in res["samples"]:
-                present=set()
-                for r in s["row"]:
-                    present.add(r["id"])
-                    dry = r["mag"]==0 and r["reserve"]==0
-                    if dry:
-                        states_while_dry[r["st"]]+=1
-                        cur.setdefault(r["id"], s["t"])
-                    elif r["id"] in cur:
-                        eps[r["id"]].append((s["t"]-cur.pop(r["id"]), "recovered"))
-                    seen_last[r["id"]]=s["t"]
-                for bid in list(cur):
-                    if bid not in present:                      # died while dry
-                        eps[bid].append((seen_last.get(bid,s["t"])-cur.pop(bid), "died"))
-            allep=[e for v in eps.values() for e in v]
-            rec=[d for d,k in allep if k=="recovered"]; died=[d for d,k in allep if k=="died"]
-            print(f"\nseed {sd}: dry episodes {len(allep)}   recovered {len(rec)}   DIED WHILE DRY {len(died)}")
-            if rec: print(f"   recovery time: median {sorted(rec)[len(rec)//2]:.1f}s  max {max(rec):.1f}s")
-            if died: print(f"   time spent dry before dying: median {sorted(died)[len(died)//2]:.1f}s  max {max(died):.1f}s")
-            print(f"   chests opened {res['chestsOpened']} / {res['chestsTotal']}   alive@end {res['alive']}")
-            print("   states while dry:", dict(states_while_dry.most_common(6)))
-        br.close()
-main()
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    C.add_common_args(ap)
+    ap.add_argument("--seeds", default="1,2")
+    ap.add_argument("--seconds", type=int, default=150)
+    ap.add_argument("--map", default=None)
+    a = ap.parse_args()
+    seeds = [int(x) for x in a.seeds.split(",") if x.strip()]
+
+    def body(v):
+        n = 0
+        with C.Session(a, "botdiag", viewport={"width": 1000, "height": 640}) as s:
+            s.boot()
+            s.freeze_loop()
+            for sd in seeds:
+                s.start_match("standard", sd, a.map, enter=True)
+                s.freeze_loop()
+                res = s.page.evaluate(RUN, [sd, a.seconds, 1 / 30, 1])
+                row = episodes(res)
+                print("\nseed %d: %s" % (sd, row), flush=True)
+                v.info("seed %d" % sd, row)
+                n += 1
+            d = s.diagnostics()
+        v.check("ran with 0 page / window errors", n > 0 and not (d["pageErrors"] or d["windowErrors"]), (d["pageErrors"] + d["windowErrors"])[:3])
+    return C.run_gate("botdiag", body, a)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
