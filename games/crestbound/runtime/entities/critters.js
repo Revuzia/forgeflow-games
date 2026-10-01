@@ -5,7 +5,11 @@
  * (waddling patroller), SKITTER (swooping flyer), WARDEN (3-hit mini-boss) and
  * OLD FEN (the Keep caretaker NPC).
  *
- *   export const CRITTERS = { gnasher, bumbler, skitter, warden, fen };
+ *   export const CRITTERS = { gnasher, bumbler, skitter, warden, fen,
+ *     // stage 1 roster (creatures.js): two signature enemies per realm
+ *     burrower, podspitter, slagcrab, emberimp, skater, snowcub, sentry, puffer,
+ *     // stage 1 realm bosses (bosses.js); the Warden above stays as the mini-boss
+ *     bramblehide, slagmaw, hoarhorn, gyrarch };
  *   export function makeCritter(def, ctx) -> Critter
  *   Critter = { mesh, colliders, kills, events, update(dt, player), reset(),
  *               onPound(player, pos), onDive(player), onStand(player), dispose() }
@@ -53,6 +57,8 @@ import {
   getMaterial, getEmissive, getGlow,
 } from '../world/builders.js';
 import { Collider, KillVolume } from '../world/collider.js';
+import { defineCreatures, CREATURE_INFO } from './creatures.js';
+import { defineBosses, BOSS_INFO } from './bosses.js';
 
 /* ===========================================================================
  * 0. Scratch — update paths never allocate
@@ -3617,6 +3623,46 @@ function repairActorMaterial(m, aniso) {
 }
 
 /* ===========================================================================
+ * 9c. THE SIGNATURE ROSTER + REALM BOSSES  (creatures.js, bosses.js)
+ * ======================================================================== */
+/**
+ * Stage 1 (creatures lane). The new classes extend `Critter`, so they are
+ * built HERE, after `Critter` exists, by factories that receive the base class
+ * and this file's private helpers — creatures.js / bosses.js never import this
+ * file, so there is no ESM cycle. Nothing above this line changed: the five
+ * original creatures are byte-for-byte the same code.
+ */
+const ROSTER_KIT = {
+  Critter, fin, readV3, capsuleOf, capsuleHitsSphere, skinMat, eyeWhiteMat, pupilMat, worldMat,
+  sphereGeo, capsuleGeo, coneGeo, bbox, place, mergeParts, makeEyes, polylineLengths, polylineAt,
+  tri, cached, normalizeAttrs,
+};
+const ROSTER = defineCreatures(ROSTER_KIT);
+const BOSSES = defineBosses(Object.assign({}, ROSTER_KIT, {
+  Creature: ROSTER.Creature, ShotSet: ROSTER.ShotSet, MarkerSet: ROSTER.MarkerSet,
+  StarRing: ROSTER.StarRing, helpers: ROSTER.helpers,
+}));
+
+/**
+ * What each kind IS, for course authors and the UI: realm, display name and
+ * role ('enemy' | 'boss' | 'miniboss' | 'npc'). Stage 2 places by `kind`.
+ */
+export const CRITTER_ROLES = Object.freeze(Object.assign(
+  {
+    gnasher: { realm: null, name: 'GNASHER', role: 'enemy' },
+    bumbler: { realm: null, name: 'BUMBLER', role: 'enemy' },
+    skitter: { realm: null, name: 'SKITTER', role: 'enemy' },
+    warden: { realm: null, name: 'WARDEN', role: 'miniboss' },
+    fen: { realm: 'keep', name: 'OLD FEN', role: 'npc' },
+  },
+  Object.fromEntries(Object.keys(CREATURE_INFO).map((k) => [k, { realm: CREATURE_INFO[k].realm, name: CREATURE_INFO[k].name, role: 'enemy' }])),
+  Object.fromEntries(Object.keys(BOSS_INFO).map((k) => [k, { realm: BOSS_INFO[k].realm, name: BOSS_INFO[k].name, title: BOSS_INFO[k].title, role: 'boss' }])),
+));
+
+export { CREATURE_INFO, BOSS_INFO };
+export const ROSTER_CLASSES = Object.freeze(Object.assign({}, ROSTER.classes, BOSSES.classes));
+
+/* ===========================================================================
  * 10. Registry — CONTRACT §23
  * ======================================================================== */
 
@@ -3626,6 +3672,8 @@ export const CRITTERS = {
   skitter: (def, ctx) => new Skitter(def, ctx),
   warden: (def, ctx) => new Warden(def, ctx),
   fen: (def, ctx) => new Fen(def, ctx),
+  ...ROSTER.factories,
+  ...BOSSES.factories,
 };
 
 /** Kinds by name — used by the course validator. */
