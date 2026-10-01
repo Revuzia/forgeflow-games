@@ -454,19 +454,21 @@ export class Voice {
     const pri = line.pri | 0;
     const force = !!(opts && opts.force);
     const st = this.stats;
-    const drop = () => { st.dropped++; return false; };
 
     if (!force) {
-      if ((this._cd[name] || -1e9) > now) return drop();
-      if (pri < 2) {
-        if (now - this._lastAny < GAP_S) return drop();
-        if (now < this._busyUntil && pri <= this._busyPri) return drop();
-        /* rolling budget */
-        let n = 0;
-        for (let i = 0; i < BUDGET; i++) if (now - this._recent[i] < BUDGET_WINDOW_S) n++;
-        if (n >= BUDGET) return drop();
-        if (line.prob < 1 && this._rand() > line.prob) return drop();
+      let ok = (this._cd[name] || -1e9) <= now;
+      if (ok && pri < 2) {
+        if (now - this._lastAny < GAP_S) ok = false;
+        else if (now < this._busyUntil && pri <= this._busyPri) ok = false;
+        else {
+          /* rolling budget */
+          let n = 0;
+          for (let i = 0; i < BUDGET; i++) if (now - this._recent[i] < BUDGET_WINDOW_S) n++;
+          if (n >= BUDGET) ok = false;
+          else if (line.prob < 1 && this._rand() > line.prob) ok = false;
+        }
       }
+      if (!ok) { st.dropped++; return false; }
     }
 
     const jitter = 0.97 + this._rand() * 0.06;
