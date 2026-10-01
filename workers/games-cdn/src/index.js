@@ -42,6 +42,8 @@ export default {
       webp: "image/webp",
       mp3: "audio/mpeg",
       ogg: "audio/ogg",
+      m4a: "audio/mp4",
+      webmanifest: "application/manifest+json",
       wav: "audio/wav",
       woff2: "font/woff2",
       woff: "font/woff",
@@ -65,11 +67,39 @@ export default {
     headers.set("access-control-allow-methods", "GET, HEAD, OPTIONS");
     headers.set("cross-origin-embedder-policy", "credentialless");
 
+    // 2026-09-29 (DYEFIELD mobile review A-A5): glTF binaries are served gzip-encoded
+    // when the client accepts it. model/gltf-binary is not on Cloudflare's
+    // auto-compress list, so a phone downloaded every map raw (Cinder 7.3 MB →
+    // 2.9 MB gzipped, the DYEFIELD lobby set 4.8 → 1.5 MB). Lossless: the browser
+    // decodes transparently, the bytes after decoding are identical. The Workers
+    // runtime compresses the body (encodeBody "automatic"). X-File-Size keeps the
+    // decoded size for load-progress bars (three.js FileLoader reads it first).
+    if (ext === "glb" && /\bgzip\b/i.test(request.headers.get("accept-encoding") || "")) {
+      headers.set("content-encoding", "gzip");
+      headers.set("vary", "accept-encoding");
+      headers.set("x-file-size", String(object.size));
+      headers.set("access-control-expose-headers", "x-file-size");
+    }
+    // Content-hashed build assets (Vite: assets/<name>-<8-char hash>.<ext>) never
+    // change under their name: cache them for a year, immutable, so a relaunch
+    // (a home-screen icon included) re-downloads nothing. Opt-in per game: an
+    // unhashed name that merely looks hashed must never be pinned.
+    const IMMUTABLE_HASHED_GAMES = new Set(["dyefield"]);
+    const hashed = IMMUTABLE_HASHED_GAMES.has(key.split("/")[0]) &&
+      /\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/.test(key);
+
     // HTML: no-store (Cloudflare's edge cache will not retain). Assets: 1 day.
     // 2026-05-05 — switched HTML from no-cache to no-store + private after
     // observing CF edge serving stale game HTML even with no-cache, breaking
-    // SDK rollout. js+css are versioned by content so 24h is fine.
-    if (ext === "html" || ext === "js") {
+    // SDK rollout. Unhashed JS (the SDK) stays no-store for the same reason;
+    // opted-in content-hashed assets are immutable (above).
+    if (ext === "html") {
+      headers.set("cache-control", "no-store, no-cache, must-revalidate, private");
+      headers.set("pragma", "no-cache");
+      headers.set("expires", "0");
+    } else if (hashed) {
+      headers.set("cache-control", "public, max-age=31536000, immutable");
+    } else if (ext === "js") {
       headers.set("cache-control", "no-store, no-cache, must-revalidate, private");
       headers.set("pragma", "no-cache");
       headers.set("expires", "0");
