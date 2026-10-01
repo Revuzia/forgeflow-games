@@ -113,6 +113,7 @@ function injectMissionCss() {
 /* The pad direction right now, packed (dx+1)*3 + (dy+1); PAD_NEUTRAL = centred.
    Same thresholds as ui/style.js padNav (d-pad buttons 12-15, stick 0.5). */
 const PAD_NEUTRAL = 4;
+function padOn(b, i) { return !!(b[i] && (b[i].pressed || b[i].value > 0.5)); }
 function padDirNow() {
   let pads = null;
   try { pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : null; } catch (e) { pads = null; }
@@ -121,10 +122,9 @@ function padDirNow() {
   for (let i = 0; i < pads.length; i++) { if (pads[i] && pads[i].connected) { gp = pads[i]; break; } }
   if (!gp) return PAD_NEUTRAL;
   const b = gp.buttons, ax = gp.axes;
-  const on = (i) => !!(b[i] && (b[i].pressed || b[i].value > 0.5));
   let dx = 0, dy = 0;
-  if (on(14) || (ax[0] || 0) < -0.5) dx = -1; else if (on(15) || (ax[0] || 0) > 0.5) dx = 1;
-  if (on(12) || (ax[1] || 0) < -0.5) dy = -1; else if (on(13) || (ax[1] || 0) > 0.5) dy = 1;
+  if (padOn(b, 14) || (ax[0] || 0) < -0.5) dx = -1; else if (padOn(b, 15) || (ax[0] || 0) > 0.5) dx = 1;
+  if (padOn(b, 12) || (ax[1] || 0) < -0.5) dy = -1; else if (padOn(b, 13) || (ax[1] || 0) > 0.5) dy = 1;
   return (dx + 1) * 3 + (dy + 1);
 }
 

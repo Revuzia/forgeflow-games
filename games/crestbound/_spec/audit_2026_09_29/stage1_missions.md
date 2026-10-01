@@ -129,3 +129,8 @@ edited only to author two missions - see below).
   'RETURN TO KEEP' (focused), the run timer + skull hidden in the HUD -> real Enter -> Keep. Save:
   missions {open:{runs 1, got ['open']}}. (The under-roof crest lens frame was inside the cone roof:
   the rampart crest sits inside the tower's roof volume — deleted, not evidence.)
+- loopcheck keep + verdant-1, run 3 (23:00): 130/132 — keep 45/46 (cp1 respawn 963 ms vs 950 ceiling: the
+  SAME keep row passed at 433 ms in run 1; the Keep has no mission features and resolves to the identical
+  def), verdant-1 79/80 (cp4 respawn 1258 ms; median 684 <= 700 now passes), gates 6/6. Only wall-stamped
+  respawn rows ever fail and they flip run to run on the same build => load. Log loopcheck_run3.log.
+- coursecard.js: padDirNow() made closure-free (padOn helper).
