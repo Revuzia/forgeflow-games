@@ -140,6 +140,8 @@ export class CamWorld {
     /** Collider.id -> 1 when demoted to the rays (a 'world' box that keeps moving) */
     this._demoted = new Uint8Array(0);
     this._hfSkipped = 0;
+    /** heightfields the build has taken from the broadphase (mirrored, skipped or unusable) */
+    this._hfSeen = 0;
 
     // build queue
     this._queue = [];
@@ -220,6 +222,7 @@ export class CamWorld {
     const hfs = this.bp.heightfields || [];
     for (let i = 0; i < hfs.length; i++) this._hfQueue.push(hfs[i]);
     this._hfSkipped = 0;
+    this._hfSeen = hfs.length;
     let maxId = 0;
     for (let i = 0; i < items.length; i++) if (items[i] && items[i].id > maxId) maxId = items[i].id;
     this._mirror = new Uint8Array(maxId + 1024);
@@ -335,7 +338,7 @@ export class CamWorld {
   }
 
   _addHeightfield(hf) {
-    if (!hf || !(hf.nx >= 2) || !(hf.nz >= 2) || !hf.heights) return;
+    if (!hf || !(hf.nx >= 2) || !(hf.nz >= 2) || !hf.heights) { this._hfSkipped++; return; }
     const nx = hf.nx, nz = hf.nz;
     if (nx * nz > HF_MAX_SAMPLES) { this._hfSkipped++; return; }
     const src = hf.heights;
@@ -369,6 +372,11 @@ export class CamWorld {
   }
 
   _watch() {
+    // 0. a heightfield added to (or dropped from) the broadphase after the build
+    //    is not something the incremental watch can patch: rebuild. Until the
+    //    rebuild completes the camera is on its rays, which read the live set.
+    const hfs = this.bp.heightfields;
+    if ((hfs ? hfs.length : 0) !== this._hfSeen) { this._reset(this.bp); return; }
     // 1. membership: new static boxes in, departed ones out
     if (this._signature()) {
       for (let slot = this._boxN - 1; slot >= 0; slot--) {

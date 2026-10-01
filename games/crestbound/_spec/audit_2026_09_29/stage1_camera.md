@@ -39,3 +39,30 @@ assets/vendor/rapier/ (new). Never game.js / course.js / index.html.
   * granary: ridge-stair foot, hero (-6.0, 13.92, -20.9) on the granary's NORTH wall (z -20.5..-20.0),
     camera south of him (yaw 0) -> lens inside the granary (verdant-3#26, still reproduces).
   * verdant-2 kick shaft: existing camcheck row `verdant-2/@kickshaft` (minDist 0.148 vs 1.60 before).
+
+## Evidence so far (resume run)
+- Commit edc69e5c: vendored Rapier + camworld.js + camera.js (bootcheck --headless keep CLEAN on :8797).
+- Vendored rapier.mjs is byte-identical to dyefield/node_modules/@dimforge/rapier3d-compat/dist/rapier.mjs (0.20.0).
+- Node unit test of CamWorld vs real Rapier: wall sweep 5.1500 (want 5.15), heightfield bump 2.6500 / transposed
+  5.6500 (row-major game layout transposed right), add/remove/toggle/move/demote all mirrored, 3000-box build in
+  23 budgeted frames (worst 6.1 ms), 5000 raw sweeps 125 ms.
+- In game (keep): 366-373 boxes + 1 heightfield mirrored, Rapier import+init 88-103 ms, build 5 frames.
+- Static A/B at the audit's fort-ramp point (11.38, 9, -23.85, yaw -1.8): NO collapse in either mode on today's
+  code (off 5.71-6.01 m, on 6.24-6.64 m, yaw slide -1.35, 0 off-screen frames). Driven A/B (real keys):
+  run in under the ramp to the wall: off min 3.42 m / on min 3.57 m, 0 off screen. From the wall, run at the
+  camera into the corner: one transient while the yaw slide flips sides through the wall heading: off 0.12 m
+  (fade 1.0, 2 frames), on 0.41 m (fade 0.78, 3 frames) -- the sweep halves the worst frame; both inside the
+  0.30 s ghost-line budget the kick rows use.
+- Granary (verdant-3 #26) static A/B at (-6, 13.92, -20.95) yaw 0: both 6.8 m, slid 1.9 rad east, lens outside,
+  0 off screen; frame read: hero on the stair beside the granary wall, terrain bank fills the right ~40 %.
+- camcheck (commit 2dc61495) new rows: rapier PASS (rig 7/7 mirrored, sweep 5.150 = want, 792 sweeps, 0
+  fallbacks), onscreen PASS (447 frames, 0 off screen); thinpost/volumes fixed after the first run (post sat ON
+  the 0.25 m whisker; the orbit walk curved out of the volume). Timing rows starved at ~2 fps (box 100 % CPU,
+  a runaway `find / -name ch35_1001_diffuse.png` pid 14732 not ours, 84 chrome processes).
+- camcheck rows now time off engine.elapsed (game time, wall-clock runaway guard): a starved box had made
+  shaft/framing/recenter/peek fail on 5-10 frames. Rows-only run (commit after 2dc61495): 12/12 PASS --
+  thinpost A/B: fan alone 6.80 m with the lens path 0.075 m from a post between whiskers; sweep 2.72 m,
+  path clearance 0.359 m. volumes: tight 3.00 m, fixed err 0.000, manual E push 0.767 then back 0.000,
+  orbit err 0.000, exit vol null 6.80 m. onscreen 1005 frames 0 off. rapier rig 7/7, 5.150 = 5.150, 1566 sweeps, 0 fallbacks.
+- camworld.js: a heightfield added after the build now triggers one rebuild (`_hfSeen`); unusable ones count
+  as skipped so terrain stays on the rays (Node: rebuilt in 1 frame, new hf sweep 9.6500 exact, no loop).
