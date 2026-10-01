@@ -225,6 +225,30 @@ function padOverflow(w: World, ids: string[]): void {
   }
 }
 
+/** OVERFLOW auto-file: the titan must be missing at least this share of its max HP for SICK DAY to be "the best". */
+export const OVF_AUTO_HURT = 0.05;
+/**
+ * OVERFLOW auto-file (critic 2026-09-30: drafts_molo drafts 49-50 / drafts_hearthback overflow40-41 — every slot-full
+ * level-up re-opened the same three perks, and SICK DAY picked at 140/140 HP healed nothing). An offer of ONLY
+ * OVERFLOW rewards has nothing new to file, so the draft screen does not open for it: the UI (ui/draft.ts DraftScreen
+ * .open) files this reward for the player through the normal pickUpgrade and stamps it on the HUD. Best = SICK DAY
+ * when hurt (missing >= OVF_AUTO_HURT of max HP: "heal if hurt"), else the next most-needed one — HOT TIP while UPROAR
+ * is not ready (overflowOrder's rank: 1 > HARD HAT's 0.5), then HARD HAT while the shield is under its cap, then
+ * SICK DAY for any scratch, else HOT TIP (banked). Pure function of the world; no rng. null = the offer holds a card
+ * (the screen opens as before). The sim rules are unchanged: rollOffer still pads, pickUpgrade still applies + consumes.
+ */
+export function overflowAutoPick(w: World, offer: readonly string[]): OverflowId | null {
+  if (offer.length === 0 || !offer.every((id) => isOverflowReward(id))) return null;
+  const has = (id: OverflowId): boolean => offer.includes(id);
+  const T = w.titan;
+  const hurt = T.maxHp > 0 ? Math.max(0, 1 - T.hp / T.maxHp) : 0;
+  if (hurt >= OVF_AUTO_HURT && has('ovf_sick_day')) return 'ovf_sick_day';
+  if (!(w.ult && w.ult.ready) && has('ovf_hot_tip')) return 'ovf_hot_tip';
+  if (w.upgrades.shield < OVERFLOW.hardHatCap * T.maxHp - 1e-6 && has('ovf_hard_hat')) return 'ovf_hard_hat';
+  if (hurt > 0 && has('ovf_sick_day')) return 'ovf_sick_day';
+  return has('ovf_hot_tip') ? 'ovf_hot_tip' : (offer[0] as OverflowId);
+}
+
 /** Apply an OVERFLOW reward (FEATURES_V2 §7.7 rule 5). */
 function applyOverflow(w: World, id: OverflowId): void {
   if (id === 'ovf_sick_day') healTitan(w, OVERFLOW.sickDayHeal * w.titan.maxHp);

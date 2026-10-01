@@ -963,22 +963,37 @@ function runVolleyGeometry(): void {
  * is FARTHEST from the rig wins (a small bonus keeps the current heading: no dithering). So it flees along open
  * streets and turns at corners / around blocks it cannot crush. A heading it is commanding but not moving on
  * (< 0.25 × walk for 0.5 s while facing it) is barred for 2 s. It DASHES along its heading when the rig closes to within band max +
- * 0.5 H + AVOID_DASH_H (a runner spends its dash to get away; dashing is movement, not an attack). Never attacks (the titan's damage is zeroed: auto-attacks are
+ * 0.5 H + AVOID_DASH_H (a runner spends its dash to get away; dashing is movement, not an attack) — never on a heading with
+ * a component TOWARD the rig. cmp/BOSS 2026-09-30 (fixture realism, case 7 volt/briar @ LOCKWATER: boxed at a block it could
+ * not crush, the runner turned back up its own street THROUGH the pursuing rig, 5.8 H -> 3.2 H, and spent its dash on it):
+ * a heading whose straight run passes the rig closer than that same engagement distance scores down by
+ * AVOID_PASS_K × the shortfall — a person running from something does not turn round and run past it.
+ * cmp/BOSS 2026-09-30 (fixture realism, case 7 SWITCHBOARD-5 x VOLT-KITE @ LOCKWATER: the runner went down a street that
+ * ended in a pocket, DASHED into the building at its end (the dash stopped after 4 m, a second dash was spent against
+ * the wall), kept pushing into it on the keep-heading bonus, then had only the way back past the rig): (1) it reads the
+ * street past the end of each run — AVOID_CONT_K × the best further gain in distance from the rig along one of
+ * AVOID_CONT_HEADINGS from that end point, so a dead-end pocket scores down (the whole block is on screen); (2) the
+ * keep-heading bonus needs ≥ 1 H of road left on that heading; (3) it dashes only where the heading is free for
+ * AVOID_DASH_FREE of the dash. Each is what a person does; none reads the rig's internals.
+ * Never attacks (the titan's damage is zeroed: auto-attacks are
  * kit-driven, not input-driven, so "never attacks" is enforced on the stats). No RNG: deterministic.
  */
 interface AvoidState { hx: number; hz: number; nextT: number; slowT: number; barX: number; barZ: number; barT: number; dashT: number }
 function newAvoid(): AvoidState { return { hx: 0, hz: 0, nextT: -1, slowT: 0, barX: 0, barZ: 0, barT: -1, dashT: -9 }; }
-const AVOID_REPLAN_S = 0.25, AVOID_LOOK_S = 3, AVOID_HEADINGS = 16, AVOID_ROOM_H = 8, AVOID_DASH_H = 1, AVOID_KEEP_H = 1;
+const AVOID_REPLAN_S = 0.25, AVOID_LOOK_S = 3, AVOID_HEADINGS = 16, AVOID_ROOM_H = 8, AVOID_DASH_H = 1, AVOID_KEEP_H = 1, AVOID_PASS_K = 2;
+/** A runner reads the street past the end of its run (the whole block is on screen): CONT_K × the best further gain in
+ *  distance from the rig along one of CONT_HEADINGS from that end point (a dead-end pocket scores down). */
+const AVOID_CONT_K = 0.5, AVOID_CONT_HEADINGS = 8, AVOID_DASH_FREE = 0.8;
 const avBuf: number[] = [];
 /** Free straight run (m) from the titan along (fx, fz) up to len, and the extra seconds lost plowing on it. */
-function titanRun(w: World, fx: number, fz: number, len: number, walk: number): [number, number] {
+function titanRun(w: World, fx: number, fz: number, len: number, walk: number, ox = w.titan.x, oz = w.titan.z): [number, number] {
   const T = w.titan, c = w.city, Bd = c.bounds;
   const R = 0.85 * Math.max(0.5, T.radius || 0.42 * T.height);
   const canFlat = RANKS[Math.max(0, Math.min(4, T.rank))].canFlatten;
   const step = Math.max(0.5, 0.5 * R);
   let plow = 0;
   for (let s = step; s <= len + 1e-9; s += step) {
-    const px = T.x + fx * s, pz = T.z + fz * s;
+    const px = ox + fx * s, pz = oz + fz * s;
     // the titan's centre is clamped to the bounds: a step that leaves them ends the run (sliding along an edge is fine)
     if (px < Bd.minX || px > Bd.maxX || pz < Bd.minZ || pz > Bd.maxZ) return [Math.max(0, s - step), plow];
     avBuf.length = 0;
@@ -1008,6 +1023,8 @@ function avoidInput(w: World, b: BossState, st: AvoidState): TitanInput {
     st.slowT = sp < 0.25 * walk && facing ? st.slowT + w.dt : 0;
     if (st.slowT >= 0.5) { st.barX = st.hx; st.barZ = st.hz; st.barT = w.t + 2; st.slowT = 0; st.nextT = -1; }
   }
+  // the engagement distance a runner keeps clear of (the same distance its dash trigger reads)
+  const Hb = M.bosses.bossH(w, b), keepD = (b.data.bandMaxH > 0 ? b.data.bandMaxH : 4) * Hb + (GATES.engageMarginH + AVOID_DASH_H) * Hb;
   if (w.t >= st.nextT) {
     st.nextT = w.t + AVOID_REPLAN_S;
     const d0 = Math.hypot(T.x - b.x, T.z - b.z);
@@ -1024,7 +1041,24 @@ function avoidInput(w: World, b: BossState, st: AvoidState): TitanInput {
       const Bd = w.city.bounds, C = AVOID_ROOM_H * T.height;
       const roomX = Math.min(ex - Bd.minX, Bd.maxX - ex), roomZ = Math.min(ez - Bd.minZ, Bd.maxZ - ez);
       let sc = Math.hypot(ex - b.x, ez - b.z) - d0 - 0.7 * (Math.max(0, C - roomX) + Math.max(0, C - roomZ));
-      if (fx * st.hx + fz * st.hz > 0.98) sc += AVOID_KEEP_H * T.height;
+      // closest approach of the run T -> (ex, ez) to the rig: a run that passes it inside the engagement distance scores down
+      const along = Math.max(0, Math.min(cover, (b.x - T.x) * fx + (b.z - T.z) * fz));
+      const pass = Math.hypot(T.x + fx * along - b.x, T.z + fz * along - b.z);
+      sc -= AVOID_PASS_K * Math.max(0, Math.min(keepD, d0) - pass);
+      // the street past the end point: a pocket (no way on that gains distance from the rig) scores down
+      if (cover > 0) {
+        const dE = Math.hypot(ex - b.x, ez - b.z);
+        let cont = 0;
+        for (let j = 0; j < AVOID_CONT_HEADINGS; j++) {
+          const aj = (j * 2 * Math.PI) / AVOID_CONT_HEADINGS, gx = Math.sin(aj), gz = Math.cos(aj);
+          const [r2, p2] = titanRun(w, gx, gz, AVOID_LOOK_S * walk, walk, ex, ez);
+          const c2 = Math.min(r2, Math.max(0, AVOID_LOOK_S - p2) * walk);
+          cont = Math.max(cont, Math.hypot(ex + gx * c2 - b.x, ez + gz * c2 - b.z) - dE);
+        }
+        sc += AVOID_CONT_K * cont;
+      }
+      // keeping the current heading is worth a little only while it still has road (a person does not keep walking into a wall)
+      if (fx * st.hx + fz * st.hz > 0.98 && cover >= T.height) sc += AVOID_KEEP_H * T.height;
       if (sc > best) { best = sc; bx = fx; bz = fz; }
     }
     if (best === -Infinity) { bx = T.x - b.x; bz = T.z - b.z; const m = Math.hypot(bx, bz) || 1; bx /= m; bz /= m; }
@@ -1033,7 +1067,11 @@ function avoidInput(w: World, b: BossState, st: AvoidState): TitanInput {
   // a runner DASHES when the rig closes to within band max + 0.5 H (engagement) + AVOID_DASH_H — movement, not an attack
   const H = M.bosses.bossH(w, b), bandMax = (b.data.bandMaxH > 0 ? b.data.bandMaxH : 4) * H;
   const dNow = Math.hypot(T.x - b.x, T.z - b.z);
-  const dash = T.dashCharges >= 1 && dNow < bandMax + (GATES.engageMarginH + AVOID_DASH_H) * H && w.t - st.dashT > 0.5 && (st.hx !== 0 || st.hz !== 0);
+  const toward = st.hx * (b.x - T.x) + st.hz * (b.z - T.z) > 0;   // never dash toward the rig
+  // …and never into a wall: the heading must be free for most of the dash (a dash that stops at a building is wasted)
+  const dashM = Math.max(0, T.stats.dashDistance || 2.2) * T.height;
+  const dash = T.dashCharges >= 1 && dNow < bandMax + (GATES.engageMarginH + AVOID_DASH_H) * H && w.t - st.dashT > 0.5 && (st.hx !== 0 || st.hz !== 0) && !toward
+    && titanRun(w, st.hx, st.hz, AVOID_DASH_FREE * dashM, walk)[0] >= AVOID_DASH_FREE * dashM - 1e-6;
   if (dash) st.dashT = w.t;
   return { mx: st.hx, mz: st.hz, ability: false, abilityHeld: false, dash };
 }

@@ -19,6 +19,12 @@
 // (upgrades/draft.ts cardSlot): NEW — TAKES A SLOT (n/8) · UPGRADE LV a → b · SHARES A SLOT · ONE-OFF — NO SLOT.
 // OVERFLOW rewards (slots full, nothing left to deepen) are OFF THE RECORD cards; they cannot be banished, locked
 // or rerolled, and an all-overflow draft swaps the header for NOTHING NEW TO FILE.
+// Critic 2026-09-30 (VIEW lane): an all-overflow offer never opens the screen — open() resolves at once with
+// upgrades/draft.ts overflowAutoPick (heal if hurt, else the next most-needed perk) and stamps the filing on the HUD
+// (toast OFF THE RECORD — <PERK>), so overflow never interrupts play; the `SLOTS FULL — UPGRADES ONLY` badge shows only
+// when an UPGRADE card is on the table (else `SLOTS 8/8`; hidden under the NOTHING NEW TO FILE title). The specimen photo
+// sits in a float notch of the description (text wraps round it), and fitEmblems() shrinks it (emb-mini) or drops it
+// (emb-off) when the text would still run under it (runs/molo_grideast/106_draft15.png: ARTERIAL BYPASS).
 // TITAN PASS (UX): BANISH is refused on a card you already own (upgrades/draft.ts banishOwned) — its ✕ corner is
 // greyed with the reason as its tooltip, and a press (X · hold pad Y · ✕) wiggles it and flashes the stamp
 // CAN'T BANISH — YOU OWN IT on the card for REFUSE_NOTE_MS.
@@ -31,7 +37,10 @@ import { UPGRADE_BY_ID } from '../data/upgrades.ts';
 import { TITANS } from '../data/titans.ts';
 import { STR } from '../data/strings.ts';
 import { SCREENS } from '../data/strings_screens.ts';
-import { OVERFLOW, SLOT_CAP, banishOwned, cardSlot, deliveredHold, isOverflowReward, recipeHint, slotsFull, slotsUsed } from '../upgrades/draft.ts';
+import {
+  OVERFLOW, SLOT_CAP, banishOwned, cardSlot, deliveredHold, isOverflowReward, overflowAutoPick, recipeHint, slotsFull, slotsUsed,
+} from '../upgrades/draft.ts';
+import { pushHudToast } from './toast.ts';
 import { familyColor, glyphSvg, iconFor } from './icons.ts';
 import {
   type ModalSession, type UiPress, clearEl, div, el, fmt, keyChip, onTap, pulse, runModal, wrapIndex, flashesReduced,
@@ -40,6 +49,8 @@ import {
 type Reopen = 'banish' | 'lock' | null;
 /** how long the CAN'T BANISH — YOU OWN IT stamp stays on a card after a refused press */
 const REFUSE_NOTE_MS = 1800;
+/** how long the HUD stamp of an auto-filed OVERFLOW perk stays up (s) */
+const AUTO_FILE_HOLD_S = 2.6;
 
 export class DraftScreen {
   private readonly input: Input;
@@ -117,6 +128,16 @@ export class DraftScreen {
     this.reopen = null;
     this.hold = null;
     const ids = offer.filter((id) => !!id).slice(0, 3);
+    // nothing new to file (every offered id is an OVERFLOW perk): no screen — the best perk is filed for the player
+    // (the app's normal pick path) and stamped on the HUD, so a slot-full level-up never interrupts play
+    const auto = overflowAutoPick(w, ids);
+    if (auto) {
+      this.lastIds = [];
+      const txt = overflowText(auto);
+      pushHudToast({ kicker: STR.draft.overflowTitle, title: STR.draft.overflowStamp + ' — ' + txt.name, sub: txt.desc, glyph: OVF_GLYPH[auto] },
+        AUTO_FILE_HOLD_S, { key: 'ovfAutoFile', front: true });
+      return Promise.resolve({ pick: auto });
+    }
     const prevIds = this.lastIds;
     this.ids = ids;
     this.owned = ids.map((id) => banishOwned(w, id));
@@ -138,8 +159,11 @@ export class DraftScreen {
     this.charges.textContent = fmt(SCREENS.draft.charges, { r: rerollsLeft, b: this.ctx.banishLeft, l: this.ctx.lockLeft });
     this.charges.classList.toggle('bt-hidden', allOvf);
     const used = Math.max(0, Math.round(slotsUsed(w)));
-    this.slots.textContent = full ? STR.draft.slotsFull : fmt(STR.draft.slotCount, { n: used, cap: SLOT_CAP });
+    // 'UPGRADES ONLY' only when an upgrade is actually offered; an all-OVERFLOW draft's title already says NOTHING NEW TO FILE
+    const upOffered = ids.some((id) => cardSlot(w, id) === 'upgrade');
+    this.slots.textContent = full && upOffered ? STR.draft.slotsFull : fmt(STR.draft.slotCount, { n: Math.min(used, SLOT_CAP), cap: SLOT_CAP });
     this.slots.classList.toggle('full', full);
+    this.slots.classList.toggle('bt-hidden', allOvf);
 
     const canReroll = rerollsLeft > 0 && ids.length > 0 && !allOvf;
     this.rerollBtn.disabled = !canReroll;
@@ -162,6 +186,7 @@ export class DraftScreen {
     this.select(this.sel);
 
     this.layer.classList.remove('bt-hidden');
+    this.fitEmblems();                              // before the deal-in transforms: measures the untransformed layout
     const reduced = flashesReduced();
     if (reopen === 'lock') {
       // same cards: only the hold badge changes
@@ -186,6 +211,21 @@ export class DraftScreen {
     });
     this.session = session;
     return promise;
+  }
+
+  /** Keep every card's specimen photo off its description: full size in the desc's float notch → emb-mini → emb-off,
+   *  the first state where no line of the text touches the photo (+ its paper clip) or runs out of the card body. */
+  private fitEmblems(): void {
+    for (const c of this.cards) {
+      const body = c.querySelector('.bt-dossier-body') as HTMLElement | null;
+      if (!body) continue;
+      body.classList.remove('emb-mini', 'emb-off');
+      if (embClear(body)) continue;
+      body.classList.add('emb-mini');
+      if (embClear(body)) continue;
+      body.classList.remove('emb-mini');
+      body.classList.add('emb-off');
+    }
   }
 
   /** The deal-in animation of the cards + header. The app's compositor pre-warm replays it on a
@@ -447,7 +487,7 @@ export class DraftScreen {
     div('bt-dossier-name', nameRow, def ? def.name.toUpperCase() : id.toUpperCase());
     div('bt-dossier-rule', paper);
     const body = div('bt-dossier-body', paper);
-    div('bt-dossier-desc', body, def ? def.desc : '');
+    descBox(body, def ? def.desc : '');
     // clipped "specimen photo": the mutation's monogram on a halftone swatch, tinted by its first tag
     const tag0 = def ? (evo ? def.tags[1] ?? def.tags[0] : def.tags[0]) : 'misc';
     const emb = div(`bt-dossier-emblem tag-${tag0 || 'misc'}`, body);
@@ -500,7 +540,7 @@ export class DraftScreen {
     div('bt-dossier-name', nameRow, txt.name);
     div('bt-dossier-rule', paper);
     const body = div('bt-dossier-body', paper);
-    div('bt-dossier-desc', body, txt.desc);
+    descBox(body, txt.desc);
     const emb = div('bt-dossier-emblem tag-misc', body);
     emb.appendChild(el('b', '', monogram(txt.name)));
     emb.appendChild(el('small', '', STR.draft.overflowStamp));
@@ -583,6 +623,45 @@ function padConnected(): boolean {
     for (const p of list) if (p && p.connected) return true;
   } catch { /* ignore */ }
   return false;
+}
+
+/** The card description with the photo's float notch (a zero-width spacer floats the notch to the desc's bottom-right,
+ *  where the absolutely placed emblem sits): the text wraps round the photo instead of running under it. */
+function descBox(body: HTMLElement, text: string): HTMLDivElement {
+  const d = div('bt-dossier-desc', body);
+  div('bt-emb-sp', d);
+  div('bt-emb-notch', d);
+  d.appendChild(document.createTextNode(text));
+  return d;
+}
+
+/** true when no line box of the description text overlaps the photo (+ clip) and none runs past the card body. */
+function embClear(body: HTMLElement): boolean {
+  const desc = body.querySelector('.bt-dossier-desc');
+  const emb = body.querySelector('.bt-dossier-emblem') as HTMLElement | null;
+  const txt = desc ? desc.lastChild : null;
+  if (!desc || !emb || !txt || txt.nodeType !== 3 || !(txt.textContent ?? '').trim()) return true;
+  const b = body.getBoundingClientRect();
+  if (b.width < 2 || b.height < 2) return true;                 // not laid out (hidden): nothing to judge
+  const e = emb.getBoundingClientRect();
+  const clip = emb.querySelector('.bt-dossier-clip') as HTMLElement | null;
+  let top = e.top, left = e.left, right = e.right;
+  const bottom = e.bottom;
+  if (clip && getComputedStyle(emb).display !== 'none') {
+    const k = clip.getBoundingClientRect();
+    top = Math.min(top, k.top); left = Math.min(left, k.left); right = Math.max(right, k.right);
+  }
+  const rg = document.createRange();
+  rg.setStart(txt, 0);
+  rg.setEnd(txt, (txt.textContent ?? '').length);
+  const rs = rg.getClientRects();
+  for (let i = 0; i < rs.length; i++) {
+    const r = rs[i];
+    if (r.width < 1 || r.height < 1) continue;
+    if (r.bottom > b.bottom + 1) return false;
+    if (e.width > 0 && r.right > left + 1 && r.left < right - 1 && r.bottom > top + 1 && r.top < bottom - 1) return false;
+  }
+  return true;
 }
 
 /** "Load-Bearing Gut" → "LG" (first letters of the first and last words). */

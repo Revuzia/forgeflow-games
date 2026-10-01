@@ -286,8 +286,14 @@ const BUCKET = { n: [0, 3, 4, 5] as const, rH: 0.45, min: 1.0, max: 1.8, stagger
 const DLINE = { lenH: 8, wH: 0.5, sepH: 2.0, min: 1.0, max: 1.8, dmg: 8, paintS: 4, recover: 0.5 };
 const DASH_ANSWER = { rH: 0.4, aheadR: 0.3, cd: [0, 7, 5, 4] as const, dmg: 4, min: 0.9, max: 1.8, yH: 1.8 };
 const TIPPED_POOL = { ozH: -1.6, rH: 0.8 };
-/** TITAN PASS D2 (GATEKEEPERS §3.6): which tells carry a SPLASH RING (bosses/index.ts denialRing). */
-const SPLASH = { buckets: true, dash: true, dashPhase: 3, dmgMul: 0.5 };
+/** TITAN PASS D2 (GATEKEEPERS §3.6): which tells carry a SPLASH RING (bosses/index.ts denialRing). `rings`: how many
+ *  buckets of a volley (the first n) carry one. cmp/BOSS 2026-09-30: 1 -> 2. The CFIX dry moat (>= 0.5 s of walk,
+ *  critic: at Size I a walk-out that stopped still slid into the 0.6 H ring) left one splash ring per volley as
+ *  the only STENCIL-1 tell a melee titan ever met, and MOLO at home fell to 2/98 tells landed (probe_gatekeepers
+ *  case 6, band 4-20 %). Two rings per volley give the blind dash out of the lead buckets a second band to land
+ *  in; a walker who steps out and stops is still never hit (the moat is untouched), and STENCIL-1 stays the
+ *  gentlest rig (0.5 x bucket damage per ring; case 6 home MOLO 15/148 = 10.1 %). */
+const SPLASH = { buckets: true, rings: 2, dash: true, dashPhase: 3, dmgMul: 0.5 };
 const PAINT_SLOW = 0.35;
 /** Nose offset (the front caster) in H: lanes start here. */
 const NOSE_H = 1.25;
@@ -581,8 +587,8 @@ function buckets(w: World, b: BossState): void {
       dmg: 0, lob: true, tx, tz, aoe: r, life: tg.windup, tg: tg.id,
     });
     end = Math.max(end, tg.windup);
-    // TITAN PASS D2 (GATEKEEPERS §3.6): the lead bucket's SPLASH RING — step out and stop; a blind dash lands in it
-    if (i === 0 && SPLASH.buckets) end = Math.max(end, denialRing(w, b, tx, tz, r, tg.windup, gateHit(w, BUCKET.dmg * SPLASH.dmgMul), 'plate', 'splash')?.windup ?? 0);
+    // TITAN PASS D2 (GATEKEEPERS §3.6): the lead buckets' SPLASH RINGS (SPLASH.rings) — step out and stop; a blind dash lands in one
+    if (i < SPLASH.rings && SPLASH.buckets) end = Math.max(end, denialRing(w, b, tx, tz, r, tg.windup, gateHit(w, BUCKET.dmg * SPLASH.dmgMul), 'plate', 'splash')?.windup ?? 0);
   }
   b.data.attackEnd = end + BUCKET.recover;
 }

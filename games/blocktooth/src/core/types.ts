@@ -565,6 +565,9 @@ export type SimEvent =
   /** a foe is TANGLED by a BRIARWICK pod burst / POP-UP PARK ring: emitted where the kit sets e.stun (id = enemy
    *  id, t = the stun seconds it got). View: root coils around the foe's legs for t s. */
   | { type: 'rooted'; id: number; x: number; z: number; t: number }
+  /** view only (CFIX 2026-09-30): a foe that stood inside a BRIARWICK burst / POP-UP PARK ring circle and died to it
+   *  (so it never got a `rooted`): the root coil springs shut where it stood. y = its feet, r / h = its body radius / height. */
+  | { type: 'rootSnap'; x: number; y: number; z: number; r: number; h: number }
   /** a BRIARWICK seed pod burst: r = burst radius (m); link = its chain link (0 = a lone / first pop, k = the k-th
    *  link of a chain or POP-UP PARK cascade); ripe = its ripeness at the burst (1 = ripe; < 1 = an unripe pod that
    *  burst at end of life / at the cap). View: petal burst, pitch +1 semitone per link; tally: cascadeBest. */

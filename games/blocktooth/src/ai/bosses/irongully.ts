@@ -19,7 +19,7 @@
 //                   (first on it, the rest ≥ 1 H apart inside 1.7 H), windup from r + R
 //       + ridgeCharge  PLOUGH RUN: lane w 0.7 H, long enough to pass the titan by 1.5 H (3–5.5 H), then it charges
 //                   down the lane at 1.25 H/s (contact dmg, side-swipe shove, flattens the city)
-//   P3  WHITEOUT, the blast→stamp combo (breathSlam: the slam rings are painted only after the breath ends);
+//   P3  WHITEOUT, the blast→stamp combo (breathSlam: the stamp rings are painted only after the blast ends);
 //       plate volley density ×2
 //   SCRAP FLICK (anti dash-spam, no attack id — it is a reflex, not a procedure): a dash is answered
 //                   by one plate flicked from the spinner to just past the dash end (r 0.5 H), windup a fair
@@ -31,17 +31,22 @@
 // No single hit takes more than HIT_CAP of the titan's max HP (a DOUBLE STAMP was 1 080 at Size V — more
 // than a whole VOLT-KITE — so once tells can land, a lapse must be a bruise, not a death).
 // Default subtitle "CRACK THE SPINNER - BUILD FRACTURE" (data/bosses.ts).
+// Naming: the attack ids (coneBreath / pawSlam / ridgeCharge / breathSlam), the telegraph tags, DamageKind 'breath'
+// and b.data.breath* are the pre-robot KEYS shared with data/bosses.ts, the views, bosses/index.ts and the probes —
+// kept as-is (renaming them is a save / probe / string-table change); every name local to this file and every comment
+// speaks machine: AUGER BLAST (blower), DOUBLE STAMP (stamp legs), PLOUGH RUN (V-plough), WHITEOUT (blast→stamp).
 
 import type { BossState, World } from '../../core/types.ts';
 import { TAU, clamp, dist, dist2 } from '../../core/math.ts';
 import {
   baseBoss, beginAttack, bossH, bossHostile, bossTelegraph, endAttack, entryPoint, fairWindup, introWalk,
   keepRange, leadPoint, localToWorld, makePart, moveBoss, pickWeighted, repeatMul, shoveTitan, turnBoss,
-  watchDash,
+  watchDash, DENIAL,
 } from './index.ts';
 import { spawnProjectile } from '../../combat/projectiles.ts';
 import { spawnHazard } from '../../combat/hazards.ts';
 import { damageTitanArea } from '../../combat/damage.ts';
+import { bossFrameMaxMul, bossFrameNeed, cameraDistance } from '../../core/config.ts';
 
 // ─────────────────────────────── tuning ───────────────────────────────
 const WALK = 9, INTRO_WALK = 20, TURN = 0.9, AIM_TURN = 1.4;
@@ -50,7 +55,7 @@ const GAP = [0, 2.8, 2.1, 2.0] as const;
 const P3_CADENCE = 0.75;
 
 // Geometry: every length ending in H is × bossH (titan heights); min/max clamp the fair windup (s).
-const BREATH = { half: (28 * Math.PI) / 180, rH: 3.0, active: 1.2, dps: 50, recover: 0.6, frostLife: 7, min: 1.2, max: 2.4 };
+const BLAST = { half: (28 * Math.PI) / 180, rH: 3.0, active: 1.2, dps: 50, recover: 0.6, frostLife: 7, min: 1.2, max: 2.4 };
 const SLAM = { r0H: 1.1, r1H: 2.0, gap: 0.5, dmgIn: 60, dmgOut: 45, recover: 0.7, min: 1.0, max: 2.2 };
 const PLATES = { min: 6, max: 10, rH: 0.4, stagger: 0.07, dmg: 30, spreadH: 1.7, spacingH: 1.0, recover: 0.6, wuMin: 1.0, wuMax: 2.0 };
 const CHARGE = { wH: 0.7, pastH: 1.5, minLenH: 3, maxLenH: 5.5, speedH: 1.25, hitRH: 0.4, dmg: 70, recover: 1.1, shovePerH: 1.1, min: 1.1, max: 2.2 };
@@ -58,15 +63,22 @@ const CHARGE = { wH: 0.7, pastH: 1.5, minLenH: 3, maxLenH: 5.5, speedH: 1.25, hi
 const FLICK = { rH: 0.5, aheadR: 0.3, cd: [0, 8, 6, 5] as const, dmg: 8, min: 0.9, max: 2.0 };
 /** No single IRON GULLY hit takes more than this share of the titan's max HP. */
 const HIT_CAP = 0.55;
+/** CHASE (Gate 2026-09-30, probe_gatekeepers case 10 "framing never saturates"; PARKADE-6's rule): while the fight
+ *  already needs >= frac of the per-rank framing cap (bossFrameMaxMul x the curve) the walker does not plant for an
+ *  attack -- it strides after the titan (keepRange's close-in) and re-decides every reS. Measured: VOLT-KITE / WHITE
+ *  STACKS / 7 dashed 9.6 H out, the walker planted an out-of-reach pawSlam at 0.745 of the cap (8.1 H), and the next
+ *  dash ran to 11.1 H = the cap (2.75x). frac 0.75 (PARKADE-6's) still let that slam start; 0.7 holds it (frame <= 2.36x,
+ *  whole matrix case 10 PASS). */
+const CHASE = { frac: 0.7, reS: 0.25 };
 function igHit(w: World, base: number): number {
   return Math.min(bossHostile(w, base), HIT_CAP * Math.max(1, w.titan.maxHp));
 }
-/** TITAN PASS 4.1 item 3: the breath is damage per second for BREATH.active s, so it is capped IN TOTAL — one whole
- *  breath takes at most HIT_CAP of max HP (a Size-IV breath was 594–891 vs VOLT-KITE's 495 max HP). bossTelegraph's
+/** TITAN PASS 4.1 item 3: the AUGER BLAST is damage per second for BLAST.active s, so it is capped IN TOTAL — one whole
+ *  blast takes at most HIT_CAP of max HP (a Size-IV blast was 594–891 vs VOLT-KITE's 495 max HP). bossTelegraph's
  *  generic DoT cap (bosses/index.ts, BOSS_HIT_CAP = HIT_CAP) enforces the same bound on the tick-rounded duration;
- *  this line states it where the breath is authored (same final dmg, bit for bit). */
-function breathDps(w: World): number {
-  return Math.min(bossHostile(w, BREATH.dps), HIT_CAP * Math.max(1, w.titan.maxHp) / BREATH.active);
+ *  this line states it where the blast is authored (same final dmg, bit for bit). */
+function blastDps(w: World): number {
+  return Math.min(bossHostile(w, BLAST.dps), HIT_CAP * Math.max(1, w.titan.maxHp) / BLAST.active);
 }
 
 const ATTACKS = ['coneBreath', 'pawSlam', 'plateVolley', 'ridgeCharge', 'breathSlam'] as const;
@@ -120,6 +132,8 @@ function gapFor(w: World, b: BossState): number {
 
 function decide(w: World, b: BossState): void {
   const T = w.titan, H = bossH(w, b);
+  // CHASE: far enough out that the framing is near its cap -- close in first (keepRange strides), no planted attack
+  if (bossFrameNeed(w).d >= CHASE.frac * bossFrameMaxMul(T.rank) * cameraDistance(T.height)) { b.cd = CHASE.reS; b.data.chases = (b.data.chases ?? 0) + 1; return; }
   const d = dist(b.x, b.z, T.x, T.z);
   const P = b.phase;
   const wts = [
@@ -141,18 +155,18 @@ function aim(w: World, b: BossState, jitter: number, windup: number): number {
   return Math.atan2(L.x - b.x, L.z - b.z) + (w.rng.boss() * 2 - 1) * jitter;
 }
 
-function castBreath(w: World, b: BossState): void {
+function castBlast(w: World, b: BossState): void {
   const T = w.titan, H = bossH(w, b);
   const o = nozzle(b);
   const ox = o.x, oz = o.z;
-  const r = BREATH.rH * H, d = dist(ox, oz, T.x, T.z);
+  const r = BLAST.rH * H, d = dist(ox, oz, T.x, T.z);
   // walk-out: the cheaper of sideways out of the sightline and outward past the reach
-  const wu = fairWindup(w, b, Math.min(d * Math.sin(BREATH.half) + T.radius, Math.max(0, r - d) + T.radius), BREATH.min, BREATH.max);
+  const wu = fairWindup(w, b, Math.min(d * Math.sin(BLAST.half) + T.radius, Math.max(0, r - d) + T.radius), BLAST.min, BLAST.max);
   const dir = aim(w, b, 0.04, wu);
   b.data.dir = dir;
   const tg = bossTelegraph(w, {
-    style: 'cone', shape: { k: 'cone', x: ox, z: oz, dir, half: BREATH.half, r },
-    windup: wu, active: BREATH.active, dmg: breathDps(w), kind: 'breath', tag: 'coneBreath',
+    style: 'cone', shape: { k: 'cone', x: ox, z: oz, dir, half: BLAST.half, r },
+    windup: wu, active: BLAST.active, dmg: blastDps(w), kind: 'breath', tag: 'coneBreath',
     onFire: (w2) => {
       if (!b.alive) return;
       b.data.breath = 1;
@@ -161,10 +175,10 @@ function castBreath(w: World, b: BossState): void {
       const Bd = w2.city.bounds;
       for (let k = 0; k < 4; k++) {
         const along = r * (0.2 + 0.2 * k);
-        const fr = Math.min(0.45 * H, Math.tan(BREATH.half) * along * 0.75 + 0.07 * H);
+        const fr = Math.min(0.45 * H, Math.tan(BLAST.half) * along * 0.75 + 0.07 * H);
         const x = ox + fx * along, z = oz + fz * along;
         if (x < Bd.minX - fr || x > Bd.maxX + fr || z < Bd.minZ - fr || z > Bd.maxZ + fr) continue;
-        spawnHazard(w2, { owner: 'boss', kind: 'frost', shape: { k: 'circle', x, z, r: fr }, life: BREATH.frostLife, data: { slow: 0.4 } });
+        spawnHazard(w2, { owner: 'boss', kind: 'frost', shape: { k: 'circle', x, z, r: fr }, life: BLAST.frostLife, data: { slow: 0.4 } });
       }
     },
   }, false);
@@ -235,7 +249,7 @@ function startAttack(w: World, b: BossState, id: string): void {
   switch (id) {
     case 'coneBreath':
       beginAttack(w, b, id, T.x, T.z);
-      castBreath(w, b);
+      castBlast(w, b);
       break;
     case 'pawSlam':
       beginAttack(w, b, id, b.x, b.z);
@@ -267,7 +281,7 @@ function startAttack(w: World, b: BossState, id: string): void {
     case 'breathSlam':
       beginAttack(w, b, id, T.x, T.z);
       b.data.combo = 0;
-      castBreath(w, b);
+      castBlast(w, b);
       break;
   }
 }
@@ -277,9 +291,9 @@ function runAttack(w: World, b: BossState): void {
   switch (b.attack) {
     case 'coneBreath': {
       turnBoss(b, b.data.dir, AIM_TURN, dt);
-      const end = (b.data.breathWu ?? 1.8) + BREATH.active;
+      const end = (b.data.breathWu ?? 1.8) + BLAST.active;
       if (t >= end) b.data.breath = 0;
-      if (t >= end + BREATH.recover) endAttack(b, gapFor(w, b));
+      if (t >= end + BLAST.recover) endAttack(b, gapFor(w, b));
       break;
     }
     case 'pawSlam':
@@ -306,7 +320,7 @@ function runAttack(w: World, b: BossState): void {
           const h = localToWorld(b, 0, 16, TMP);
           if (damageTitanArea(w, { k: 'circle', x: h.x, z: h.z, r: CHARGE.hitRH * H }, igHit(w, CHARGE.dmg), 'slam')) {
             b.data.rammed = 1;
-            // side-swipe: thrown clear of the lane, away from the ridge's line
+            // side-swipe: thrown clear of the lane, away from the plough's line
             const fx = Math.sin(dir), fz = Math.cos(dir);
             const side = (T.x - b.x) * fz - (T.z - b.z) * fx >= 0 ? 1 : -1;
             if (T.dashT <= 0) shoveTitan(b, fz * side + fx * 0.4, -fx * side + fz * 0.4, CHARGE.shovePerH * T.height);
@@ -323,10 +337,10 @@ function runAttack(w: World, b: BossState): void {
     }
     case 'breathSlam': {
       turnBoss(b, b.data.dir, AIM_TURN, dt);
-      const breathEnd = (b.data.breathWu ?? 1.8) + BREATH.active;
-      if (t >= breathEnd) b.data.breath = 0;
-      if (!(b.data.combo > 0) && t >= breathEnd) { b.data.combo = 1; castSlam(w, b); }
-      if (b.data.combo > 0 && t >= (b.data.slamAt ?? breathEnd) + (b.data.slamWu ?? 1.3) + SLAM.gap + SLAM.recover) endAttack(b, gapFor(w, b));
+      const blastEnd = (b.data.breathWu ?? 1.8) + BLAST.active;
+      if (t >= blastEnd) b.data.breath = 0;
+      if (!(b.data.combo > 0) && t >= blastEnd) { b.data.combo = 1; castSlam(w, b); }
+      if (b.data.combo > 0 && t >= (b.data.slamAt ?? blastEnd) + (b.data.slamWu ?? 1.3) + SLAM.gap + SLAM.recover) endAttack(b, gapFor(w, b));
       break;
     }
     default:
@@ -344,6 +358,10 @@ function scrapFlick(w: World, b: BossState): void {
   const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = Math.hypot(dx, dz) || 1;
   const ahead = FLICK.aheadR * reach;
   const x = clamp(e.x1 + (dx / dl) * ahead, B.minX, B.maxX), z = clamp(e.z1 + (dz / dl) * ahead, B.minZ, B.maxZ);
+  // every live tell stays on screen (denialRing's rule, PARKADE-6 dashAnswer's guard): a flick the framing could not
+  // hold is not thrown (Gate 2026-09-30: VOLT-KITE / WHITE STACKS / 7 dashed from 8.8 H out and the flick past the dash
+  // end pushed bossFrameNeed to the cap, 2.75x, for 4 ticks -- probe_gatekeepers case 10)
+  if (bossFrameNeed(w, { k: 'circle', x, z, r }).d >= DENIAL.frameFrac * bossFrameMaxMul(T.rank) * cameraDistance(T.height)) { bossFrameNeed(w); return; }
   // the paint appears at the dash START (the reaction overlaps the dash); exactly walkable in every
   // phase (k fixed at 1)
   const life = fairWindup(w, b, reach, FLICK.min, FLICK.max, 1);

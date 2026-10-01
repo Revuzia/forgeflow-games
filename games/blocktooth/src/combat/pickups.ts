@@ -20,7 +20,7 @@ import type { Pickup, PickupKind, World } from '../core/types.ts';
 import { CITY, RANKS } from '../core/config.ts';
 import { clamp } from '../core/math.ts';
 import { gainMass, gainXp, healTitan, titanMaxSpeed } from '../titans/titansim.ts';
-import { kitReach } from '../titans/kits/index.ts';
+import { kitLatchReach } from '../titans/kits/index.ts';
 import { stat } from '../upgrades/stats.ts';
 
 // ─────────────────────────────── tuning (lane-local) ───────────────────────────────
@@ -53,6 +53,14 @@ const DRIFT_SPEED_MUL = 0.35;
 interface PickBook { alive: number; }
 /** Pickups that latch `magnet` as soon as their burst lands (spawned inside the kit's reach). */
 const latchOnLand = new WeakSet<Pickup>();
+/** Payout pickups owed to the titan on the NEXT tick whatever it did in between (an OVERLOAD SITE's XP): a titan
+ *  mid-dash moves farther in one tick than the magnet's pull (Gate 2026-09-30: VOLT-KITE dashed through an OVERLOAD
+ *  SITE at Size IV, 19.9 m in one tick, and its payout landed a tick late — probe_map 'not collected the next tick'). */
+const collectNext = new WeakSet<Pickup>();
+
+/** Mark a live magnetised pickup as owed: the next stepPickups collects it wherever the titan is (once its collect
+ *  age is reached). Used by meta/objectives.ts for the OVERLOAD SITE payout. */
+export function owePickupNextTick(p: Pickup): void { collectNext.add(p); }
 const books = new WeakMap<World, PickBook>();
 function bookOf(w: World): PickBook {
   let b = books.get(w);
@@ -141,7 +149,7 @@ export function spawnPickup(w: World, kind: PickupKind, x: number, z: number, xp
   book.alive++;
   if (mergeable(kind) && T.alive) {
     const H = T.height;
-    const R = LATCH_REACH_MUL * Math.max(kitReach(w), Math.max(0, stat(w, 'pickupRadius')) * H + 2);
+    const R = LATCH_REACH_MUL * Math.max(kitLatchReach(w), Math.max(0, stat(w, 'pickupRadius')) * H + 2);
     if (td <= R) latchOnLand.add(p);
   }
 }
@@ -172,6 +180,7 @@ export function stepPickups(w: World): void {
       if (dx * dx + dz * dz <= magnetR2) p.magnet = true;
     }
     if (p.magnet && T.alive) {
+      if (collectNext.has(p) && p.t >= MIN_COLLECT_AGE) { collectNext.delete(p); collect(w, p); continue; }
       // homing: steer the whole velocity at the titan, speed ramps toward maxPull
       const dx = T.x - p.x, dz = T.z - p.z;
       const d = Math.hypot(dx, dz);

@@ -855,7 +855,7 @@ export const ENEMY_HP_RANK_MUL: readonly number[] = [1, 1, 1.4, 2.6, 4.5];
  *  both metas. Swept (lane BAL, _harness/scratch/fin/BAL): boss knobs, BOSS_SPAWN_MUL 0.7, aim lead IV .75/.9, RAMROD
  *  cadence 45 s × 5, spawn budget IV 2.6/3.2 and pre-boss-only pressure (this × up to 3.4 with BOSS_SPAWN_MUL .25–.35)
  *  gave 0 full-meta deaths; the bot only dies to add fire at Size IV (a VOLT-KITE rammed/shelled before the city
- *  boss; a MOLO shelled + breathed in IRON GULLY's fight). 2.2 → 0 deaths, 2.3 / 2.4 → 1 + 1. The player-like set
+ *  boss; a MOLO shelled + AUGER-BLASTED in IRON GULLY's fight). 2.2 → 0 deaths, 2.3 / 2.4 → 1 + 1. The player-like set
  *  sits at the B11 floor with it (P-human 82 / 96 at 2.4, 76 at 2.3 — the per-seed outcome is chaotic). */
 export const ENEMY_DMG_RANK_MUL: readonly number[] = [1, 1, 1, 2.4, 2.4];
 /** Engagement reach grows with the titan: effective range = EnemyDef.range + this × titan height (m).
@@ -895,7 +895,7 @@ export const BOSS_KIND_MUL: Readonly<Partial<Record<DamageKind, number>>> = {
 export const BOSS_DMG_MUL = 2.0;
 /** No single city-boss hit takes more than this share of the titan's max HP (the modules' HIT_CAP). fx2: a
  *  damage-over-time boss tell (active > 0, dmg per second) is capped on its TOTAL — dmg × active ≤ this × maxHp
- *  (gatekeepers: GATES.hitCap) — in bosses/index.ts bossTelegraph (IRON GULLY's breath was 20 % per 0.2 s tick
+ *  (gatekeepers: GATES.hitCap) — in bosses/index.ts bossTelegraph (IRON GULLY's AUGER BLAST was 20 % per 0.2 s tick
  *  for 1.2 s = 120 % of a Size IV VOLT-KITE, critic r2). */
 export const BOSS_HIT_CAP = 0.55;
 /** fx2 — the DASH is a resource the rigs read (bosses/index.ts, every boss and gatekeeper): a dash that starts inside

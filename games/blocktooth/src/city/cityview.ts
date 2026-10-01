@@ -56,7 +56,8 @@
 //   snout and tail reach of the titan's own silhouette) draw EVERY storey as a flat-coloured
 //   screen-door ghost (GHOST_KEEP 0.22, no ink) — the whole occluding piece ghosts, never a solid
 //   crown floating over a ghosted base. A building that lost a floor in the last PANCAKE_SOLID_S
-//   never ghosts (the pancake drop + squash is the payoff and must read).
+//   never ghosts (the pancake drop + squash is the payoff and must read) unless it cuts the titan's chest / head /
+//   crown sight line (CORE_SIGHT) — then it ghosts too.
 //   At Size I–II, vehicles/kiosks/vending/containers/trees that hide the titan ghost the same way.
 //
 // Draw budget at Size V (measured by _harness/scratch/city-view/probe_cityview.ts): ≈ 6/archetype
@@ -465,6 +466,9 @@ const _ks: number[] = [0, 0, 0, 0];
 /** sight points on the titan (9 × xyz): chest, head, two shoulders, crown, feet, snout, muzzle
  *  root, tail — see updateOccluders */
 const SIGHT_N = 27;
+/** the titan's CORE sight points (offsets into _sight: chest, head, crown): a building that just lost a floor
+ *  (pancake, PANCAKE_SOLID_S) still ghosts when it cuts one of these */
+const CORE_SIGHT: readonly number[] = [0, 3, 12];
 /** Silhouette reach along the titan's heading in body heights: [nose (+), tail (−)]. Mirrors
  *  titans/models.ts TitanModel.size.zMax / zMin (measured by _harness/scratch/titan_extent.ts:
  *  molo 1.11/−1.92, voltkite 0.75/−1.50, hearthback 0.80/−0.76, briarwick 0.91/−0.95). MOLO's snout
@@ -2086,7 +2090,17 @@ export class CityView implements ViewModule {
         const shown = this.vAlive[id];
         const chewed = this.breakT[id] > 0;
         if (chewed) this.breakT[id] = Math.max(0, this.breakT[id] - dt);
-        if (!chewed && shown > 0 && !b.collapsed) {
+        if (chewed && shown > 0 && !b.collapsed) {
+          // pancake: stays SOLID for PANCAKE_SOLID_S unless it hides the titan's core (chest / head / crown) — the
+          // exception PANCAKE_SOLID_S always documented but never ran (CFIX 2026-09-30: a silo VOLT-KITE was chewing
+          // covered its chest + face at Size V, a flat roof hid BRIARWICK in a POP-UP cascade that broke its floors)
+          const top = (shown + 0.3) * b.floorH;
+          const x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
+          for (let c = 0; c < CORE_SIGHT.length && !hit; c++) {
+            const k = CORE_SIGHT[c];
+            hit = segHitsBox(cam.x, cam.y, cam.z, px[k], px[k + 1], px[k + 2], x0, 0, z0, x1, top, z1);
+          }
+        } else if (shown > 0 && !b.collapsed) {
           const top = (shown + 0.3) * b.floorH;
           const x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
           for (let k = 0; k < SIGHT_N && !hit; k += 3) {

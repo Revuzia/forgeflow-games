@@ -85,12 +85,12 @@ export const TITANS: Record<TitanId, TitanDef> = {
     auto: {
       id: 'forkArc',
       name: 'FORK-ARC',
-      desc: 'Every 0.9 s: lightning leaps to a target within 3.8 body-heights, then forks to 3 more nearby (foes first, then buildings). 12 dmg, −15% per jump. Every 2nd strike GROUNDS: a short LIVE WIRE is left where it hit.',
+      desc: 'Every 0.9 s: lightning leaps to a target within 3.8 body-heights, then forks to 3 more nearby (foes first, then buildings). 12 dmg, −15% per jump. Every 2nd strike GROUNDS: a short LIVE WIRE is left where it hit and lasts 4 s, like a lunge wire.',
     },
     hook: {
       id: 'recastDetonate',
       name: 'RECAST: DETONATE',
-      desc: 'Blows every live wire at once: 40 dmg along each wire + 6 per second it had left. No wires out? A 15 dmg static burst instead. 1.5 s cooldown.',
+      desc: 'Blows every live wire at once: 40 dmg along each wire + 6 per second it had left, and each wire blown charges a STATIC SHIELD of 2.5% max HP (up to 7.5% per blow, 20% in all). No wires out? A 15 dmg static burst instead. 1.5 s cooldown.',
     },
     dash: {
       name: 'LIVE WIRE LUNGE',
@@ -147,7 +147,7 @@ export const TITANS: Record<TitanId, TitanDef> = {
     auto: {
       id: 'vineLash',
       name: 'BURR LASH',
-      desc: 'Every 1.0 s: a lash 3.2 body-heights long (5.8 at Size I), 14 dmg to everything in it, and it plants a seed pod where it lands. Pods ripen in 2 s and burst when anything touches them: 18 dmg, tangles foes, heals you a little, and sets off ripe pods nearby — each link hits 10% harder.',
+      desc: 'Every 1.0 s: a lash 3.2 body-heights long (5.8 at Size I), 14 dmg to everything in it (at Size I it always reaches 12.5 m, out to the shooters), and it plants a seed pod where it lands. Pods ripen in 2 s and burst when anything touches them: 18 dmg, tangles foes, heals you a little, and sets off ripe pods nearby — each link hits 10% harder.',
     },
     hook: {
       id: 'popUpPark',

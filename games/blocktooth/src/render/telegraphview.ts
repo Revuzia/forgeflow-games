@@ -7,7 +7,9 @@
 //   cone   = radial spokes (+ faint arcs travelling away from the apex)
 //   oval   = concentric rings contracting toward the centre
 //   lane   = chevrons marching toward the far end
-//   ring   = dashed concentric bands (alternating rotation)
+//   ring   = dashed concentric bands (alternating rotation); a DASH-THROUGH ring (data/bosses.ts DASH_RING_TAGS:
+//            IRON GULLY's DOUBLE STAMP) instead wears outward chevrons marching across the band and a cyan rim, so the
+//            pink banded ring keeps its one meaning ("a blind dash lands here", bosses/index.ts denialRing)
 //   circle = cross-hatch
 //   chain  = segmented links along the chain polyline
 // Layers (inside → out): translucent tint · hatch · windup FILL sweeping from the origin to the edge
@@ -42,6 +44,7 @@ import type { FrameInfo, ViewCtx, ViewModule } from './viewtypes.ts';
 import { CAMERA, SIM_DT } from '../core/config.ts';
 import { BIOMES } from '../data/biomes.ts';
 import { INK } from './materials.ts';
+import { DASH_RING_TAGS, IG_PLOUGH_FRONT_M } from '../data/bosses.ts';
 /** scratch for renderer.getSize (the canvas CSS size without a layout read) */
 const _cssSize = new THREE.Vector2();
 
@@ -213,6 +216,14 @@ float pattern(vec2 L, float q, float sp, float t) {
 float pattern(vec2 L, float q, float sp, float t) {
   float d = length(L);
   float a = atan(L.x, L.y);
+  if (vF.z > 0.5) {
+    // DASH-THROUGH ring: columns of outward-pointing chevrons marching out across the band ("cross it")
+    float s = max(sp * 1.7, uPx * 22.0);
+    float rm = max((vB.x + vB.y) * 0.5, s);
+    float n = max(6.0, floor(6.2831853 * rm / (s * 1.5)));
+    float u = (fract(a / 6.2831853 * n + 0.5) - 0.5) * 6.2831853 * d / n;   // metres across the column
+    return stripe((d + abs(u) * 0.95) / s - t * 1.3, 0.2);
+  }
   float bw = sp * 2.1;
   float k = floor(d / bw + 0.5);
   float body = stripe(d / bw, 0.27);
@@ -294,6 +305,13 @@ void main() {
   vec3 cFill = mix(uHFill, uWFill, warm);
   vec3 cRim = mix(uHRim, uWRim, warm);
   vec3 cFront = mix(uHFront, uWFront, warm);
+  // DASH-THROUGH ring (vF.z flag, rings only): cyan rim + front line — hostile paint still, but never the denial ring's pink
+  float dashR = (vShape > 0.5 && vShape < 1.5 && vF.z > 0.5) ? 1.0 : 0.0;
+  cRim = mix(cRim, vec3(0.03, 0.72, 1.0), dashR);
+  cFront = mix(cFront, vec3(0.55, 0.95, 1.0), dashR);
+  // and a cool tint + fill (Chrome at Size IV framing: with the pink body kept, only the thin rim told them apart)
+  cBase = mix(cBase, vec3(0.12, 0.5, 0.78), 0.5 * dashR);
+  cFill = mix(cFill, vec3(0.06, 0.58, 0.9), 0.55 * dashR);
 
   float pat = pattern(L, q, sp, t);
   float fq = max(fwidth(q), 1e-5);
@@ -499,13 +517,15 @@ interface TgRec {
   bornAt: number;              // real time first drawn
   seen: boolean;
   seed: number;
+  /** 1 = a DASH-THROUGH ring (data/bosses.ts DASH_RING_TAGS): chevron hatch + cyan rim */
+  dash: number;
 }
 
 function newRec(): TgRec {
   return {
     id: -1, style: 'circle', owner: 'enemy', ref: null, k: 'circle', x: 0, z: 0, rot: 0,
     p0: 0, p1: 0, p2: 0, p3: 0, chain: null, windup: 0, active: 0, prog: 0, fired: false,
-    firedAt: -1, goneAt: -1, bornAt: 0, seen: false, seed: 0,
+    firedAt: -1, goneAt: -1, bornAt: 0, seen: false, seed: 0, dash: 0,
   };
 }
 
@@ -827,6 +847,13 @@ export class TelegraphView implements ViewModule {
       r.windup = tg.windup;
       r.active = tg.active;
       copyShape(r, tg.shape);
+      r.dash = tg.owner === 'boss' && r.k === 'ring' && DASH_RING_TAGS.has(tg.tag) ? 1 : 0;
+      // IRON GULLY PLOUGH RUN: the lane decal starts just ahead of the V-plough, not under the chassis (view only; the
+      // sim lane is paint-only and unchanged; never more than 40 % of the lane is trimmed)
+      if (r.k === 'lane' && tg.owner === 'boss' && tg.tag === 'ridgeCharge' && w.boss && w.boss.id === 'irongully') {
+        const off = Math.min(IG_PLOUGH_FRONT_M, r.p0 * 0.4);
+        r.x += Math.sin(r.rot) * off; r.z += Math.cos(r.rot) * off; r.p0 -= off;
+      }
       if (tg.chain && tg.chain.length >= 4) {
         if (!r.chain || r.chain.length !== tg.chain.length) r.chain = tg.chain.slice();
         else for (let k = 0; k < tg.chain.length; k++) r.chain[k] = tg.chain[k];
@@ -996,7 +1023,7 @@ export class TelegraphView implements ViewModule {
     d[o + 8] = umin; d[o + 9] = umax; d[o + 10] = vmin; d[o + 11] = vmax;
     d[o + 12] = r.prog; d[o + 13] = flash; d[o + 14] = warm; d[o + 15] = fade;
     d[o + 16] = r.seed; d[o + 17] = active; d[o + 18] = scale; d[o + 19] = sp;
-    d[o + 20] = sizeRef; d[o + 21] = urg; d[o + 22] = r.style === 'chain' ? chainRadius(r) : 0;
+    d[o + 20] = sizeRef; d[o + 21] = urg; d[o + 22] = r.style === 'chain' ? chainRadius(r) : mode === enum_SHAPE.ring ? r.dash : 0;
     d[o + 23] = mode === enum_SHAPE.capsule ? 0 : this.cover(r, warm);   // chain links overwrite this with their flags
   }
 

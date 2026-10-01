@@ -148,3 +148,18 @@ export function bossSubtitle(id: BossId, attack: string | null): string {
   }
   return BOSS_DEFAULT_SUBTITLE[id];
 }
+
+/**
+ * VIEW (render/telegraphview.ts; critic 2026-09-30): boss ring tells the player is told to DASH THROUGH (IRON GULLY's
+ * DOUBLE STAMP, and the WHITEOUT combo that re-casts it) are drawn as DASH-THROUGH rings — a cyan rim and outward
+ * chevrons marching across the band — never as the pink concentric-band ring of a space-denial tell, which marks where a
+ * blind dash LANDS (ai/bosses/index.ts denialRing). One visual keeps one meaning. Keys = Telegraph.tag.
+ */
+export const DASH_RING_TAGS: ReadonlySet<string> = new Set(['pawSlamInner', 'pawSlamOuter']);
+
+/**
+ * VIEW: IRON GULLY's V-plough front edge, metres ahead of the boss centre (ai/bossview.ts: plough hinge z 25 + blade
+ * apex 23 + deflector lip ≈ 6; the rig is built 1:1 in metres). The PLOUGH RUN lane decal starts here — ahead of the
+ * blade — instead of at the boss centre under the chassis (the sim lane, a paint-only telegraph, is unchanged).
+ */
+export const IG_PLOUGH_FRONT_M = 54;

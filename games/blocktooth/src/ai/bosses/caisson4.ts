@@ -71,6 +71,13 @@ const RIG_CLEAR = 15;
 const WALL_CLEAR = 12;
 const GAP = [0, 2.6, 2.0, 1.9] as const;          // base seconds between attacks per phase (melee titans need a window to bite)
 const P3_CADENCE = 0.7;                            // "cycle 30 % faster"
+/** × every gap between attacks (all phases, and the re-decide gap after a stagger; bosses/index.ts endAttack reads it
+ *  from b.data.cadenceMul). cmp/BOSS 2026-09-30: 1 -> 0.9. CAISSON-4 was the softest city boss for
+ *  a player-like titan (probe_balance P-human B4 kill rates 8/8 for MOLO, HEARTHBACK and BRIARWICK; HEARTHBACK killed
+ *  it faster than the B6 floor) and the GATE 2 bot could not die to any city boss on its seed (v2 §0.6 deaths ≥ 1):
+ *  10 % more attacks, same tells, same windups, same damage. Measured (dashInH 0.15, STENCIL-1 2 splash rings):
+ *  GATE 2 bot deaths 4-seed 4/96 (was 2/96), P-human pooled 86/96 (80-92), B4 CAISSON-4 kill rates 7-8/8. */
+const CADENCE = 0.9;
 
 // Damage (PC-02): CAISSON-4's §10 numbers (hookLane 60 · hookDrop 50 · boom 55 · stomp 70) were set
 // for a rig that almost never landed a hit — one hit took 60–150 % of a Size V titan (hookLane 60 →
@@ -119,6 +126,7 @@ export function create(w: World): BossState {
     makePart('cab', 0, 14, 6, 50, 64, 1.5, 0.5),
   ];
   const b = baseBoss('caisson4', E.x, E.z, E.heading, parts);
+  b.data.cadenceMul = CADENCE;   // bosses/index.ts endAttack: × every gap after an attack (a stagger's too)
   b.data.hookX = b.x; b.data.hookZ = b.z;
   b.data.lanes = 0; b.data.dir = 0;
   return b;

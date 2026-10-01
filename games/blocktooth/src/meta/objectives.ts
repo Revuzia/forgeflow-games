@@ -51,7 +51,7 @@ import type { Building, MapState, Objective, ObjectiveKind, Prop, RankIndex, Wor
 import { CITY, OBJECTIVES, PERKS, RANKS, xpToNext } from '../core/config.ts';
 import { spawnRing } from '../ai/director.ts';
 import { spawnEnemy } from '../ai/enemies.ts';
-import { spawnPickup } from '../combat/pickups.ts';
+import { owePickupNextTick, spawnPickup } from '../combat/pickups.ts';
 import { propRadius } from '../city/citygen.ts';
 import { OBJECTIVE_BIOME, PROP_HEIGHT_M } from '../data/objectives.ts';
 import { addUproar } from './ultimate.ts';
@@ -307,7 +307,7 @@ function complete(w: World, o: Objective): void {
       // and latch the magnet; when the ground is at CITY.maxPickups the value merged into the pickup
       // nearest the titan instead (spawnPickup's own rule), which is already homing or resting nearby
       const p = w.pickups[w.pickups.length - 1];
-      if (p && p.id === id0 && w.nextId === id0 + 1) { p.t = Math.max(p.t, 0.1); p.magnet = true; p.vx = 0; p.vz = 0; }
+      if (p && p.id === id0 && w.nextId === id0 + 1) { p.t = Math.max(p.t, 0.1); p.magnet = true; p.vx = 0; p.vz = 0; owePickupNextTick(p); }
       m.overloadXp += xp;
     }
     m.nextOverloadT = Math.max(m.nextOverloadT, w.t + OBJECTIVE_BIOME[w.biomeId].overloadRespawnS);

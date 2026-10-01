@@ -1358,6 +1358,19 @@
   position: absolute; left: 50%; top: calc(var(--u) * -1.2); width: calc(var(--u) * 1.1); height: calc(var(--u) * 2.4); margin-left: calc(var(--u) * -.55);
   border: calc(var(--u) * .18) solid #8e96a3; border-radius: calc(var(--u) * .6); border-bottom-color: transparent;
 }
+/* the photo's float notch (ui/draft.ts descBox / fitEmblems; critic 2026-09-30, runs/molo_grideast/106_draft15.png: the
+   ARTERIAL BYPASS photo sat on its description). A zero-width spacer floats the notch to the desc's bottom-right, where the
+   emblem sits (+ its rotation, clip and a gap), so the text wraps round the photo. emb-mini = a smaller photo + notch;
+   emb-off = no photo (the name-row glyph still carries the icon) when even the small notch leaves no room for the text. */
+.bt-dossier-body { --nw: calc(var(--u) * 7.9); --nh: calc(var(--u) * 8.1); }
+.bt-dossier-body.emb-mini { --nw: calc(var(--u) * 5.7); --nh: calc(var(--u) * 6.1); }
+.bt-emb-sp { float: right; width: 0; height: calc(100% - var(--nh)); }
+.bt-emb-notch { float: right; clear: right; width: var(--nw); height: var(--nh); }
+.bt-dossier-body.emb-mini .bt-dossier-emblem { width: calc(var(--u) * 5); height: calc(var(--u) * 4.4); border-width: calc(var(--u) * .34); }
+.bt-dossier-body.emb-mini .bt-dossier-emblem b { font-size: calc(var(--u) * 1.9); }
+.bt-dossier-body.emb-mini .bt-dossier-emblem small { font-size: calc(var(--u) * .45); }
+.bt-dossier-body.emb-mini .bt-dossier-clip { top: calc(var(--u) * -.9); height: calc(var(--u) * 1.8); }
+.bt-dossier-body.emb-off .bt-dossier-emblem, .bt-dossier-body.emb-off .bt-emb-sp, .bt-dossier-body.emb-off .bt-emb-notch { display: none; }
 .bt-dossier-emblem.tag-survival, .bt-dossier-emblem.tag-defense { --ec: #3fae7f; }
 .bt-dossier-emblem.tag-offense { --ec: var(--coral); }
 .bt-dossier-emblem.tag-growth { --ec: var(--gold); }

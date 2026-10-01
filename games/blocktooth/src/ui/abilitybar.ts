@@ -48,6 +48,7 @@ const TP_CSS = `
   color: var(--cream, #f4ecd8); background: rgba(20, 33, 61, .82); border: calc(var(--u) * .1) solid var(--ink, #1b1426); white-space: nowrap; }
 .bt-abar-slots.off { display: none; }
 .bt-abar-slots.full { color: var(--navy, #14213d); background: var(--gold, #ffc63d); }
+.bt-abar.cap .bt-slot.empty { display: none; }
 .bt-act-kit[data-kit="pods"] .bt-act-kitbar > i { background: #5e8f3a; }
 .bt-act-kit[data-kit="pods"] .bt-act-kitbar > b { position: absolute; inset: 0; transform-origin: 0 50%; transform: scaleX(var(--r, 0)); background: #ff9ec7; }
 .bt-active.primed .bt-act-top .bt-key { color: #1b1426; background: #d8ff7a; box-shadow: 0 0 0 calc(var(--u) * .12) #ff9ec7, 0 0 calc(var(--u) * .9) calc(var(--u) * .2) rgba(216, 255, 122, .85);
@@ -133,6 +134,9 @@ export class AbilityBar implements AbilityBarApi {
   private readonly slotTxt: TextSlot;
   private readonly slotOff: ClassSlot;
   private readonly slotFull: ClassSlot;
+  /** D1: at SLOT_CAP the bar draws only its filled boxes (critic 2026-09-30, drafts_molo/hud_end.png: 9 icons + an
+   *  empty 10th frame beside 'SLOTS 8/8' read as a slot still to fill) */
+  private readonly barCap: ClassSlot;
   private kitKind = '';
   private hookMax = 1;
   private lastCd = 0;
@@ -181,6 +185,7 @@ export class AbilityBar implements AbilityBarApi {
     this.slotTxt = new TextSlot(this.slotTag);
     this.slotOff = new ClassSlot(this.slotTag, 'off');
     this.slotFull = new ClassSlot(this.slotTag, 'full');
+    this.barCap = new ClassSlot(this.bar, 'cap');
     for (let i = 0; i < BAR_SLOTS; i++) {
       const r = div('bt-slot empty', this.bar);
       div('bt-rv', r);
@@ -301,7 +306,7 @@ export class AbilityBar implements AbilityBarApi {
     this.pctShown = -1; this.drainT = 0;
     for (const s of [this.meterLbl, this.meterPct, this.meterKey, this.actCd, this.actKey, this.kitLbl, this.kitVal]) s.reset();
     for (const v of [this.meterFill, this.meterCool, this.actBar, this.swA, this.swB, this.kitBar, this.kitRipe]) v.reset();
-    for (const c of [this.meterReady, this.meterCooling, this.actReady, this.kitOn, this.primed, this.slotOff, this.slotFull]) c.reset();
+    for (const c of [this.meterReady, this.meterCooling, this.actReady, this.kitOn, this.primed, this.slotOff, this.slotFull, this.barCap]) c.reset();
     this.slotTxt.reset();
     this.lines.style.opacity = '0';
     this.burst.style.opacity = '0';
@@ -517,6 +522,7 @@ export class AbilityBar implements AbilityBarApi {
   private updateSlotCount(w: World): void {
     const n = Math.max(0, Math.round(slotsUsed(w)));
     this.slotOff.set(n <= 0);
+    this.barCap.set(n >= SLOT_CAP);
     if (n <= 0) return;
     this.slotTxt.set(STR.draft.slotCount.replace('{n}', String(n)).replace('{cap}', String(SLOT_CAP)));
     this.slotFull.set(n >= SLOT_CAP);

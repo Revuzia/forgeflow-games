@@ -1,8 +1,10 @@
 // BLOCKTOOTH — VOLT-KITE kit: CHAIN ASSASSIN (CONTRACT §8). Lane titan-sim. THREE-free, deterministic.
 //   Auto  FORK-ARC          — lightning to a target, then forks (enemies first, then boss/city), −15 %/jump.
-//                             GROUNDING: every 2nd arc that strikes a foe/boss earths a short LIVE WIRE there.
+//                             GROUNDING: every 2nd arc that strikes a foe/boss earths a short LIVE WIRE there
+//                             (full wireDuration life, like a dash wire).
 //   Pass  LIVE WIRE         — every dash lays a `wire` hazard (capsule) along its path. Cap 6.
-//   Hook  RECAST: DETONATE  — every live wire explodes along its length; no wires → static burst.
+//   Hook  RECAST: DETONATE  — every live wire explodes along its length and charges a STATIC SHIELD per wire blown;
+//                             no wires → static burst.
 // Kit state (titan.kit): wires (live wire count, view/HUD), arcHits (last arc's hits), arcN (arc counter).
 
 import type { DamageOpts, Enemy, Hazard, Shape, World } from '../../core/types.ts';
@@ -41,8 +43,18 @@ export const VOLT = {
   burstKnock: 0.8,
   groundEvery: 2,          // GROUNDING: every Nth arc that strikes a foe/boss lays a short live wire (titanpass)
   groundLenH: 1.4,         // × H, from the struck point back toward the titan
-  groundLife: 0.5,         // × wireDuration (0.75 let the bot kill IRON GULLY in 30 s: GATE 2 full clear @474 s < 480)
+  groundLife: 1.0,         // × wireDuration: a GROUNDING wire lives as long as a LIVE WIRE LUNGE wire (4 s), so ~2 are out
+                           // and a no-dash RECAST blows 2-3 (critic 2026-09-30: at 0.5 = 2 s only 1 was ever out; VOLT was the
+                           // one titan that died to its city boss). History: 0.75 once gave a GATE 2 full clear @474 s < 480.
   bossParts: 2,            // boss parts one arc may strike (was 1; titanpass)
+  // STATIC SHIELD (VOLT lane 2026-09-30): a RECAST that blows real wires charges an absorb shield — the survivability
+  // VOLT-KITE lacked (critic: the one titan that died to its city boss; weakest at 3 min). Own kit, no shared multiplier.
+  // P-human sweep, seeds 1-24 x 3 biomes (72 runs each; clears /72, same tree): HEAD knobs 47 · no shield 48 ·
+  // .02/.06/.15 62 (B3 fails one set) · .025/.075/.20 64, IRON GULLY 23/24 (MOLO 56, IG 18/22). Earlier tree: .03 69,
+  // .04 67 — overshoot (Size I HP loss 10-14 %/min vs B8 floor 8). .025 keeps Size I at 15 %/min.
+  shieldPerWire: 0.025,    // × max HP × abilityPower per wire blown
+  shieldPressCap: 0.075,   // × max HP × abilityPower: most one RECAST can add (3 wires)
+  shieldMax: 0.2,          // × max HP: RECAST never tops the pool past this (other shields may sit above it)
 };
 
 const hazBuf: Hazard[] = [];
@@ -226,6 +238,7 @@ function detonate(w: World): void {
       h.alive = false;
     }
     w.events.push({ type: 'wireDetonate', pts });
+    staticShield(w, pts.length / 4, power);
   } else {
     const r = VOLT.burstRH * H * area;
     BURST_OPTS.knock = knockFor(w, VOLT.burstKnock);
@@ -233,4 +246,14 @@ function detonate(w: World): void {
     w.events.push({ type: 'explosion', x: T.x, z: T.z, r, kind: 'arc' });
   }
   T.kit.wires = 0;
+}
+
+/** STATIC SHIELD: n wires blown -> absorb pool += min(pressCap, perWire * n) * power * maxHp, topped at shieldMax * maxHp. */
+function staticShield(w: World, n: number, power: number): void {
+  const T = w.titan, U = w.upgrades;
+  if (!(n > 0) || !(T.maxHp > 0)) return;
+  const add = Math.min(VOLT.shieldPressCap, VOLT.shieldPerWire * n) * power * T.maxHp;
+  const cap = VOLT.shieldMax * T.maxHp;
+  if (!(add > 0) || U.shield >= cap) return;
+  U.shield = Math.min(U.shield + add, cap);
 }

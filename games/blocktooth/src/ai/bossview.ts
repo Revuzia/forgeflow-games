@@ -946,6 +946,40 @@ function makeLeashXray(): { ink: THREE.Mesh; core: THREE.Mesh; u: { uLen: { valu
   return { ink, core, u };
 }
 
+/**
+ * IRON GULLY AUGER BLAST plume (VIEW only; critic 2026-09-30, model_ig/zz_005: the cone decal's apex sits on the road
+ * under the blower nozzle, 38 m below it, so the blast read as leaving the chassis base). A translucent spray cone is
+ * drawn from the auger intake (the `gu:auger` joint, world space) down to the road inside the live `coneBreath` tell:
+ * a thin priming spurt through the windup, the full blast once it fires, fading as the tell ends. The sim cone is
+ * unchanged (ai/bosses/irongully.ts nozzle(): apex at body z 40).
+ */
+const PLUME = {
+  /** where the plume axis meets the road: this share of the tell's reach from its apex (clamped, metres) */
+  hitK: 0.3, hitMin: 25, hitMax: 80,
+  /** plume radius at the road = the tell's half-width there × this */
+  widthK: 0.9,
+  /** opacity: priming (windup) · blasting (active) · fade after the tell (s) */
+  primeA: 0.3, blastA: 0.62, fadeS: 0.22,
+} as const;
+interface AugerPlume { root: THREE.Group; outer: THREE.Mesh; core: THREE.Mesh; mo: THREE.MeshBasicMaterial; mc: THREE.MeshBasicMaterial; k: number }
+function makeAugerPlume(): AugerPlume {
+  const geo = new THREE.ConeGeometry(1, 1, 20, 1, true);
+  geo.rotateX(-PI / 2);            // apex (+Y) → −Z, base → +Z
+  geo.translate(0, 0, 0.5);        // apex at the origin, base at z 1: scale (R, R, length)
+  const mo = new THREE.MeshBasicMaterial({ color: '#7fe7f5', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const mc = new THREE.MeshBasicMaterial({ color: '#f2feff', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const outer = new THREE.Mesh(geo, mo), core = new THREE.Mesh(geo, mc);
+  core.scale.set(0.45, 0.45, 1);
+  outer.name = 'gu:plume'; core.name = 'gu:plumeCore';
+  for (const m of [outer, core]) { m.castShadow = false; m.receiveShadow = false; m.frustumCulled = false; }
+  outer.renderOrder = 4; core.renderOrder = 5;
+  const root = new THREE.Group();
+  root.name = 'gu:augerPlume';
+  root.add(outer, core);
+  root.visible = false;
+  return { root, outer, core, mo, mc, k: 0 };
+}
+
 export class BossView implements ViewModule {
   private ctx: ViewCtx;
   private world = new THREE.Group();
@@ -981,6 +1015,8 @@ export class BossView implements ViewModule {
   private fa = 0.5;
   private fdt = 0.5;
   private xray = makeLeashXray();
+  /** IRON GULLY: the AUGER BLAST spray from the intake to the road (see PLUME) */
+  private plume = makeAugerPlume();
   /** seconds since the winch caught (thickness pop on the catch) */
   private leashT = -1;
   // PARKADE-6 (lane L7): the poser, its frame record, the TOW CHAIN polyline cache
@@ -998,6 +1034,7 @@ export class BossView implements ViewModule {
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
     this.world.name = 'bosses';
+    this.world.add(this.plume.root);
     this.world.add(this.xray.ink, this.xray.core);
   }
 
@@ -1112,6 +1149,7 @@ export class BossView implements ViewModule {
       for (const m of mats) m.dispose();
       delete this.rigs[id];
     }
+    this.plume.outer.geometry.dispose(); this.plume.mo.dispose(); this.plume.mc.dispose();
     this.xray.ink.geometry.dispose();
     (this.xray.ink.material as THREE.Material).dispose();
     (this.xray.core.material as THREE.Material).dispose();
@@ -1123,6 +1161,7 @@ export class BossView implements ViewModule {
     copyPose(this.tgt, REST);
     for (let i = 0; i < 4; i++) { this.curX[i].set(0, 0, 0); this.tgtX[i].set(0, 0, 0); }
     this.deadT = -1; this.roarT = 0; this.drumA = 0; this.spinA = 0; this.augerA = 0; this.attackKey = ''; this.tw.clear();
+    this.plume.k = 0; this.plume.root.visible = false;
     this.hookInit = false; this.hookVel.set(0, 0, 0);
     this.drops[0] = this.drops[1] = this.drops[2] = null;
     this.pkPose.reset(); this.pkChainN = 0; this.pkTowW = 1.5;
@@ -1134,6 +1173,7 @@ export class BossView implements ViewModule {
     const dt = Math.max(1e-4, Math.min(0.1, f.dt));
     this.time += dt;
     const b = w.boss;
+    if (!b || b.id !== 'irongully') this.plume.root.visible = false;
     if (!b) { if (this.active) this.show(null); return; }
     // GATEKEEPERS (lane K2a): the gate rigs have their own pose path (ai/foemodels_gate.ts) — never fall through
     // to another boss's rig (the v2 §2.7 lesson: a missing branch drew PARKADE-6 as IRON GULLY)
@@ -1198,6 +1238,7 @@ export class BossView implements ViewModule {
     for (let i = 0; i < 4; i++) this.curX[i].lerp(this.tgtX[i], k);
 
     this.applyPose(r);
+    if (b.id === 'irongully') this.updatePlume(w, b, r, dt); else this.plume.root.visible = false;
     if (b.id === 'caisson4') this.updateHook(w, b, r);
     else if (this.xray.core.visible) { this.xray.ink.visible = false; this.xray.core.visible = false; this.leashT = -1; }
   }
@@ -1592,6 +1633,44 @@ export class BossView implements ViewModule {
       const c = Math.exp(-q * 3);
       t.auger = 20 * c; t.glow = 1 + 2 * c; t.beacon = c;
     }
+  }
+
+  /** AUGER BLAST plume (see PLUME): intake (gu:auger joint) → the road inside the live coneBreath tell. */
+  private updatePlume(w: World, b: BossState, r: BossRig, dt: number): void {
+    const P0 = this.plume;
+    let tg = null as World['telegraphs'][number] | null;
+    if (b.alive && this.deadT < 0) {
+      for (let i = 0; i < w.telegraphs.length; i++) {
+        const g = w.telegraphs[i];
+        if (g.alive && g.owner === 'boss' && g.tag === 'coneBreath' && g.shape.k === 'cone') { tg = g; break; }
+      }
+    }
+    let want = 0, len = 0.25;
+    if (tg) {
+      const u = tg.windup > 1e-6 ? clamp(tg.t / tg.windup, 0, 1) : 1;
+      if (tg.fired) { want = PLUME.blastA; len = 1; }
+      else { want = PLUME.primeA * u * u; len = 0.18 + 0.3 * u * u; }
+    }
+    P0.k = want >= P0.k ? want : Math.max(want, P0.k - dt * PLUME.blastA / PLUME.fadeS);
+    if (P0.k <= 0.003) { P0.root.visible = false; return; }
+    if (tg && tg.shape.k === 'cone') {
+      const S = tg.shape;
+      const aug = r.joints.auger;
+      aug.updateWorldMatrix(true, false);
+      aug.getWorldPosition(_v0);
+      const hit = clamp(PLUME.hitK * S.r, PLUME.hitMin, PLUME.hitMax);
+      _v1.set(S.x + Math.sin(S.dir) * hit, 0, S.z + Math.cos(S.dir) * hit);
+      const full = _v0.distanceTo(_v1);
+      const R = Math.max(2, hit * Math.tan(S.half) * PLUME.widthK);
+      P0.root.position.copy(_v0);
+      P0.root.lookAt(_v1);
+      const jit = tg.fired ? 1 + 0.06 * (flick(this.time * 1.7) - 0.5) : 1;
+      P0.root.scale.set(R * len * jit, R * len * jit, full * len);
+    }
+    const fl = 0.85 + 0.15 * flick(this.time * 2.3);
+    P0.mo.opacity = P0.k * fl;
+    P0.mc.opacity = Math.min(1, P0.k * 1.25) * fl;
+    P0.root.visible = true;
   }
 
   /** DOUBLE STAMP: front rams lift and drive down (inner ring), then the hydraulics dump the chassis (outer ring). */

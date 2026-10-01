@@ -410,22 +410,29 @@ export function leadPoint(w: World, b: BossState, windup: number, out: { x: numb
 /**
  * A circle tell can carry a SPACE-DENIAL ring: an annulus around the same centre that fires `DENIAL.lagS` (0) after it.
  * Geometry (titan heights, R = titan radius, r = the circle's radius, dash = the titan's dashDistance stat × H):
- *   * the DRY MOAT — titan centres in [r + R, r + R + moatH] touch neither: the walk-out of the circle (r + R from
+ *   * the DRY MOAT — titan centres in [r + R, r + R + moat] touch neither: the walk-out of the circle (r + R from
  *     its centre, in ANY direction) ends in it, so a walker who steps out and stops is never in the ring;
- *   * the ring r0 = r + 2 R + moatH … r1 = r + dash + overH: a straight dash taken from anywhere inside the circle
+ *     moat = max(moatH H, min(moatWalkS × titanWalk, dash − r − R − dashInH H)) — half a second of walking where that
+ *     is wider than 0.6 H (Size I–III), capped so a straight dash from the centre still ends in the ring;
+ *   * the ring r0 = r + 2 R + moat … r1 = r + dash + overH: a straight dash taken from anywhere inside the circle
  *     (centre within r + R) ends between dash − (r + R) … r + R + dash from the centre — inside the ring for every
  *     dash that starts within about r + R − (dash − r0 + R) of the centre, i.e. the reflexive dash out of the tell.
  * Windup = max(the circle's own fire time + lagS, the fair walk-out of the ring from where the titan stands NOW)
  * (a titan already inside the band at cast walks to the nearer edge: never below walk-fair). Spawned with
  * bossTelegraph(…, false): its windup is final.
  */
-export const DENIAL = { moatH: 0.6, overH: 0, lagS: 0, frameFrac: 0.9 };
+export const DENIAL = { moatH: 0.6, moatWalkS: 0.5, dashInH: 0.15, overH: 0, lagS: 0, frameFrac: 0.9 };
 const DEN_OUT = { r0: 0, r1: 0 };
 export function denialRadii(w: World, b: BossState, r: number): { r0: number; r1: number } {
   const T = w.titan, H = bossH(w, b), R = T.radius > 0 ? T.radius : 0.42 * H;
   const dd = Math.max(0, stat(w, 'dashDistance'));
   const dash = (Number.isFinite(dd) ? dd : 2.2) * Math.max(1e-3, T.height > 0 ? T.height : H);
-  DEN_OUT.r0 = r + 2 * R + DENIAL.moatH * H;
+  // the moat is at least moatWalkS of the titan's walk (CFIX 2026-09-30: at Size I 0.6 H was ~3 m and a real walk-out that
+  // stopped still slid into the ring, 2/2), but never so wide that a straight dash from the centre (dash) stops short of
+  // the ring: r0 - R stays <= dash - dashInH H, so the reflexive dash still ends in the band. Only the no-damage band grows.
+  const walkM = DENIAL.moatWalkS * titanWalk(w);
+  const moat = Math.max(DENIAL.moatH * H, Math.min(walkM, dash - r - R - DENIAL.dashInH * H));
+  DEN_OUT.r0 = r + 2 * R + moat;
   DEN_OUT.r1 = Math.max(DEN_OUT.r0 + 0.5 * H, r + dash + DENIAL.overH * H);
   return DEN_OUT;
 }
@@ -516,7 +523,8 @@ export function beginAttack(w: World, b: BossState, id: string, x: number, z: nu
 export function endAttack(b: BossState, gap: number): void {
   b.attack = null;
   b.attackT = 0;
-  b.cd = Math.max(0.2, gap);
+  // a rig's own cadence (b.data.cadenceMul, CAISSON-4 0.9; absent = 1) scales every gap, a stagger's included
+  b.cd = Math.max(0.2, gap * (b.data.cadenceMul ?? 1));
   b.subtitle = bossSubtitle(b.id, null);
   b.data.charge = 0; b.data.breath = 0;
 }

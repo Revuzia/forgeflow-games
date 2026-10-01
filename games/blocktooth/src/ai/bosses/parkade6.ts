@@ -73,10 +73,10 @@ import { clamp, dist, wrapAngle } from '../../core/math.ts';
 import {
   addMeter, baseBoss, beginAttack, bossH, bossHostile, bossTelegraph, endAttack, entryPoint, fairWindup,
   keepRange, leadPoint, localToWorld, makePart, moveBoss, pickWeighted, releaseLeash, repeatMul, shoveTitan,
-  turnBoss, watchDash, denialRing,
+  turnBoss, watchDash, denialRing, DENIAL,
 } from './index.ts';
 import { spawnProjectile } from '../../combat/projectiles.ts';
-import { titanSpeed } from '../../core/config.ts';
+import { bossFrameMaxMul, bossFrameNeed, cameraDistance, titanSpeed } from '../../core/config.ts';
 
 // ─────────────────────────────── tuning ───────────────────────────────
 const WALK = 7, TURN = 0.8, AIM_TURN = 1.1;
@@ -104,6 +104,12 @@ const COLLAPSE = { aH: 0.6, bH: 1.3, cH: 2.0, dmg: 36, min: 0.9, max: 2.0, dtB: 
 const DASH_ANSWER = { rH: 0.45, aheadR: 0.3, cd: [0, 8, 6, 5] as const, dmg: 8, min: 0.9, max: 2.0, y: 60 };
 /** TITAN PASS D2 (GATEKEEPERS §3.6): which tells carry a SKID RING (bosses/index.ts denialRing). */
 const SKID = { dash: true, dashPhase: 1 };
+/** CHASE (cmp/BOSS 2026-09-30, probe_gatekeepers case 10 "framing never saturates"): while the fight already needs
+ *  ≥ chaseFrac of the per-rank framing cap (bossFrameMaxMul × the curve) the rig does not plant for an attack — it
+ *  strides after the titan (keepRange's close-in) and re-decides every reS. Measured: VOLT-KITE / GRID-EAST / 7 ran
+ *  8.3 H out while the rig stood in a towChain windup at frame 2.22×, then dashed twice to 11.9 H (2.75× = the cap;
+ *  HEAD's same run peaked at 2.73×). A boss that watches the titan run off comes after it instead of throwing. */
+const CHASE = { frac: 0.75, reS: 0.25 };
 
 /** Till part geometry: [ox, oz, r, y0, y1, hpMul, strainMul]. */
 const TILL_CLOSED = [0, 30, 4, 40, 46, 0.3, 0] as const;
@@ -280,6 +286,8 @@ function booth(b: BossState): { x: number; z: number } {
 
 function decide(w: World, b: BossState): void {
   const T = w.titan, H = bossH(w, b);
+  // CHASE: far enough out that the framing is near its cap — close in first (keepRange strides), no planted attack
+  if (bossFrameNeed(w).d >= CHASE.frac * bossFrameMaxMul(T.rank) * cameraDistance(T.height)) { b.cd = CHASE.reS; b.data.chases = (b.data.chases ?? 0) + 1; return; }
   const d = dist(b.x, b.z, T.x, T.z);
   const P = b.phase;
   const bo = booth(b);
@@ -497,6 +505,8 @@ function dashAnswer(w: World, b: BossState): void {
   const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = Math.hypot(dx, dz) || 1;
   const ahead = DASH_ANSWER.aheadR * reach;
   const x = clamp(e.x1 + (dx / dl) * ahead, B.minX, B.maxX), z = clamp(e.z1 + (dz / dl) * ahead, B.minZ, B.maxZ);
+  // every live tell stays on screen (denialRing's rule): a clamp the framing could not hold is not dropped
+  if (bossFrameNeed(w, { k: 'circle', x, z, r }).d >= DENIAL.frameFrac * bossFrameMaxMul(T.rank) * cameraDistance(T.height)) { bossFrameNeed(w); return; }
   const life = fairWindup(w, b, reach, DASH_ANSWER.min, DASH_ANSWER.max, 1);
   spawnProjectile(w, {
     owner: 'boss', kind: 'carLob', x, z, y: DASH_ANSWER.y, vx: 0, vz: 0,

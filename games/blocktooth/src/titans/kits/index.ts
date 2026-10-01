@@ -18,6 +18,8 @@ interface KitModule {
   massMul?(w: World): number;
   /** the auto attack's current reach (m) */
   reach?(w: World): number;
+  /** the drop-latch reach (m) when it differs from `reach` (BRIARWICK: the lash without its Size I floor) */
+  latchReach?(w: World): number;
 }
 
 const KITS: Record<TitanId, KitModule> = { molo, voltkite, hearthback, briarwick };
@@ -64,5 +66,13 @@ export function kitMassMul(w: World): number {
 export function kitReach(w: World): number {
   const k = KITS[w.titan.id];
   const r = k && k.reach ? k.reach(w) : 0;
+  return r > 0 && Number.isFinite(r) ? r : 0;
+}
+
+/** Drop-latch reach of the active kit (m; used by combat/pickups): the kit's latchReach if it has one, else kitReach. */
+export function kitLatchReach(w: World): number {
+  const k = KITS[w.titan.id];
+  if (!k || !k.latchReach) return kitReach(w);
+  const r = k.latchReach(w);
   return r > 0 && Number.isFinite(r) ? r : 0;
 }

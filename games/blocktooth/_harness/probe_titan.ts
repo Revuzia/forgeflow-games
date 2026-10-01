@@ -477,6 +477,42 @@ console.log('\n[unit] growth / damage API');
   if (!(wiresAfterDash >= 1)) fail('voltkite dash should leave a wire');
 }
 
+{
+  // VOLT-KITE STATIC SHIELD (VOLT lane 2026-09-30): a RECAST that blows n real wires adds
+  // min(shieldPressCap, shieldPerWire × n) × abilityPower × maxHp of absorb shield, never past shieldMax × maxHp;
+  // a RECAST with no wires (static burst) adds none.
+  const { VOLT } = await import('../src/titans/kits/voltkite.ts');
+  const w = WM.createWorld({ titan: 'voltkite', biome: 'grideast', seed: 5 });
+  w.cheats.noSpawns = true;
+  const T = w.titan;
+  const idle: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
+  const dash: TitanInput = { ...idle, dash: true };
+  const press: TitanInput = { ...idle, ability: true, abilityHeld: true };
+  WM.stepWorld(w, dash); for (let i = 0; i < 12; i++) WM.stepWorld(w, idle);
+  WM.stepWorld(w, dash); for (let i = 0; i < 12; i++) WM.stepWorld(w, idle);
+  const wires0 = T.kit.wires, sh0 = w.upgrades.shield;
+  WM.stepWorld(w, press);
+  const det = w.events.find((e) => e.type === 'wireDetonate');
+  const blown = det && det.type === 'wireDetonate' ? det.pts.length / 4 : 0;
+  const power = Math.max(0, T.stats.abilityPower ?? 1);
+  const want = Math.min(VOLT.shieldMax * T.maxHp, sh0 + Math.min(VOLT.shieldPressCap, VOLT.shieldPerWire * blown) * power * T.maxHp);
+  const sh1 = w.upgrades.shield;
+  for (let i = 0; i < 60; i++) WM.stepWorld(w, idle);            // cooldown back, no wires left
+  const sh2 = w.upgrades.shield;
+  WM.stepWorld(w, press);
+  const burst = w.events.some((e) => e.type === 'explosion'), sh3 = w.upgrades.shield;
+  w.upgrades.shield = VOLT.shieldMax * T.maxHp - 0.5;              // cap: a big RECAST tops the pool at shieldMax
+  for (let k = 0; k < 3; k++) { WM.stepWorld(w, dash); for (let i = 0; i < 12; i++) WM.stepWorld(w, idle); }
+  w.upgrades.shield = VOLT.shieldMax * T.maxHp - 0.5;
+  T.abilityCd = 0; WM.stepWorld(w, press);
+  const sh4 = w.upgrades.shield;
+  console.log(`  STATIC SHIELD: wires ${wires0} → blown ${blown}, shield ${sh0.toFixed(2)} → ${sh1.toFixed(2)} (want ${want.toFixed(2)} ± decay); burst press ${burst} shield ${sh2.toFixed(2)} → ${sh3.toFixed(2)}; near-cap press → ${sh4.toFixed(2)} (cap ${(VOLT.shieldMax * T.maxHp).toFixed(2)})`);
+  if (!(blown >= 2)) fail('STATIC SHIELD test: two dashes should give RECAST 2 wires to blow');
+  if (!(Math.abs(sh1 - want) <= 0.01 * T.maxHp)) fail(`STATIC SHIELD: RECAST blowing ${blown} wires gave shield ${sh1} (want ${want})`);
+  if (!burst || sh3 > sh2 + 1e-9) fail('STATIC SHIELD: a no-wire RECAST (static burst) must add no shield');
+  if (sh4 > VOLT.shieldMax * T.maxHp + 1e-6) fail(`STATIC SHIELD: pool ${sh4} past the cap ${VOLT.shieldMax * T.maxHp}`);
+}
+
 for (const [rank, strength] of [[0, 3], [2, 12], [4, 12]] as const) {
   // CAISSON-4 winch leash: pulled toward the anchor when idle; the player can resist by walking away.
   // (contract pull = 12 m/s; Size I uses a scaled-down pull so the test fits the open ground at spawn)
@@ -553,6 +589,7 @@ for (const [rank, strength] of [[0, 3], [2, 12], [4, 12]] as const) {
   const { HEARTH } = await import('../src/titans/kits/hearthback.ts');
   const { BRIAR } = await import('../src/titans/kits/briarwick.ts');
   const pct = (f: number) => `${Math.round(f * 100)}%`;
+  const pct1 = (f: number) => `${Math.round(f * 1000) / 10}%`;   // one decimal (VOLT STATIC SHIELD 2.5 %)
   const facts: [TitanId, 'auto' | 'hook' | 'dash', string][] = [
     ['molo', 'auto', `Every ${MOLO.biteEveryS} s`], ['molo', 'auto', `(${MOLO.biteHalfDeg}° each side), ${MOLO.biteDmg} dmg`],
     ['molo', 'auto', `within ${MOLO.biteAimDeg}°`], ['molo', 'auto', `${MOLO.pulseDmg} dmg foot-pulse`],
@@ -562,8 +599,10 @@ for (const [rank, strength] of [[0, 3], [2, 12], [4, 12]] as const) {
     ['voltkite', 'auto', `Every ${VOLT.arcEveryS} s`], ['voltkite', 'auto', `within ${VOLT.arcRangeH} body-heights`],
     ['voltkite', 'auto', `${VOLT.arcDmg} dmg, −${pct(1 - VOLT.arcFalloff)} per jump`],
     ['voltkite', 'auto', `Every ${VOLT.groundEvery === 2 ? '2nd' : VOLT.groundEvery + 'th'} strike GROUNDS`],
+    ['voltkite', 'auto', `lasts ${TD.voltkite.base.wireDuration * VOLT.groundLife} s, like a lunge wire`],   // VOLT lane 2026-09-30 (groundLife)
     ['voltkite', 'hook', `${VOLT.detDmg} dmg along each wire + ${VOLT.detPerSec} per second`],
     ['voltkite', 'hook', `${VOLT.burstDmg} dmg static burst`], ['voltkite', 'hook', `${VOLT.detCdS} s cooldown`],
+    ['voltkite', 'hook', `STATIC SHIELD of ${pct1(VOLT.shieldPerWire)} max HP (up to ${pct1(VOLT.shieldPressCap)} per blow, ${pct1(VOLT.shieldMax)} in all)`],   // VOLT lane 2026-09-30
     ['voltkite', 'dash', `${VOLT.wireDps} dmg/s over ${TD.voltkite.base.wireDuration} s (up to ${VOLT.wireCap} wires)`],
     ['hearthback', 'auto', `Every ${HEARTH.stompEveryS} s`], ['hearthback', 'auto', `up to ${HEARTH.stompRangeH} body-heights`],
     ['hearthback', 'auto', `${TD.hearthback.base.stompDelay} s later for ${HEARTH.stompDmg} dmg`],
@@ -572,6 +611,7 @@ for (const [rank, strength] of [[0, 3], [2, 12], [4, 12]] as const) {
     ['hearthback', 'hook', `heals ${pct(HEARTH.ventHealFrac)}`], ['hearthback', 'hook', `${HEARTH.ventCdS} s cooldown`],
     ['briarwick', 'auto', `Every ${BRIAR.lashEveryS.toFixed(1)} s`],
     ['briarwick', 'auto', `${BRIAR.lashLenH} body-heights long (${(BRIAR.lashLenH * BRIAR.size1LenMul).toFixed(1)} at Size I), ${BRIAR.lashDmg} dmg`],
+    ['briarwick', 'auto', `at Size I it always reaches ${BRIAR.size1ReachM} m`],   // CFIX 2026-09-30: Size I lash floor (added fact)
     ['briarwick', 'auto', `ripen in ${BRIAR.ripenS} s`], ['briarwick', 'auto', `${BRIAR.burstDmg} dmg, tangles`],
     ['briarwick', 'auto', `hits ${pct(BRIAR.linkBonus)} harder`],
     ['briarwick', 'hook', `(${BRIAR.ringDmg} dmg, tangles ${BRIAR.ringTangleS} s), ${BRIAR.volleyN} ripe seeds`],

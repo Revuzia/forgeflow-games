@@ -18,6 +18,8 @@
 //   * TITAN PASS root coils (CONTRACT §8 BRIARWICK TANGLE, graft G1): a `rooted {id, t}` event wraps 2–3 moss
 //     #5e8f3a vine loops round the foe's legs for t s (one instanced ring mesh + ink), so a tangled foe reads as
 //     held by the garden, not frozen by a bug. The stun wobble below is its struggle.
+//     A coil holds at least 0.8 s at full size (COIL_MIN_S, + its fade) whatever the stun; a foe a burst KILLS inside its circle gets
+//     a free-standing coil that snaps shut where it stood (`rootSnap`, CFIX 2026-09-30).
 //   * distance LOD: shadows off past ENEMY_SHADOW_MAX_D, ink hulls off below INK_MIN_RATIO, and
 //     below FAR_RATIO a kind swaps to its merged, decimated far mesh (one instance per enemy).
 // Zero per-frame allocation: scratch math objects + pooled per-enemy view records.
@@ -59,8 +61,26 @@ const FAR_RATIO = 0.0085, FAR_HYST = 1.15;
 const FAR_CELLS = 9;
 /** TITAN PASS root coils: loops per rooted foe, instance cap (foes × loops), grow-in / let-go times (s) */
 const COIL_LOOPS = 3;
-const COIL_CAP = 96 * COIL_LOOPS;
+const COIL_CAP = (96 + 96) * COIL_LOOPS;   // 96 rooted foes + SNAP_CAP snap coils
 const COIL_IN_S = 0.12, COIL_OUT_S = 0.18;
+/** CFIX 2026-09-30: a coil stays on screen at least this long whatever the stun (sim tangles are 0.18-0.6 s at Size I,
+ *  too short to read), and a foe KILLED inside a burst gets a free-standing coil that snaps shut where it stood
+ *  (`rootSnap`, SNAP_S long; SNAP_CAP live at once, the oldest is reused). */
+// VIEW lane 2026-09-30: measured in Chrome at 30 fps, 0.8 s INCLUDING the fade-out read as 0.71-0.78 s on screen, so the
+// 0.8 s is now the time a coil stands at full size; the fade (COIL_OUT_S / SNAP_OUT_S) comes on top of it.
+const COIL_MIN_S = 0.8 + COIL_OUT_S;
+const SNAP_OUT_S = 0.25;
+/** the death / POP-UP dust over a kill spot is gone by ~1 s (fx.ts: foe dust 0.5-0.65 s, the horn-stamp dust 0.8 s × ≤ 1.2);
+ *  a snap coil stands at full size SNAP_CLEAR_S + 0.8 s so at least 0.8 s of it is seen on open ground (Chrome A/B:
+ *  a small foe's coil stayed under the stamp dust for its whole 0.8 s life) */
+const SNAP_CLEAR_S = 1.0;
+// SNAP_CAP 32 → 96 (VIEW lane): one Size I POP-UP + its pod chain kills dozens inside ~1 s, and the ring buffer evicted
+// live snaps before their time (Chrome: snaps gone at 1.2 s wall age while newer ones drew)
+const SNAP_S = SNAP_CLEAR_S + 0.8 + SNAP_OUT_S, SNAP_CAP = 96, SNAP_F = 7;   // per snap: x, y, z, radius, height, start time, seed
+/** snap coil radius while the death puff is up: foe radius × rK + height × hK (outside fx.ts's dust / blast cloud) */
+const SNAP_WIDE = { rK: 1.9, hK: 0.45 } as const;
+/** the cinch: starts `at` s after the kill (a foe's own death puff is gone by ~0.5-0.65 s), lasts `dur` s, ends at endK × the foe's ring */
+const SNAP_CINCH = { at: 0.6, dur: 0.3, endK: 0.8 } as const;
 
 // ─────────────────────────────── per-enemy view record (pooled) ───────────────────────────────
 interface Vis {
@@ -171,6 +191,9 @@ export class EnemyView implements ViewModule {
   private readonly coilMat: THREE.Material;
   private readonly coilR: Range = { start: 0, count: 0 };
   private coilN = 0;
+  /** free-standing snap coils (rootSnap): SNAP_F floats each, ring buffer */
+  private readonly snaps = new Float32Array(SNAP_CAP * SNAP_F);
+  private snapHead = 0;
 
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
@@ -272,6 +295,7 @@ export class EnemyView implements ViewModule {
       b.far.mesh.count = 0; b.far.mesh.visible = false; b.useFar = false;
     }
     this.coils.count = 0; this.coils.visible = false;
+    this.snaps.fill(0); this.snapHead = 0;
     this.root.updateMatrixWorld(true);
   }
 
@@ -326,7 +350,15 @@ export class EnemyView implements ViewModule {
       if (ev.type === 'enemyFire') { const v = this.vis.get(ev.id); if (v) v.recoil = 1; }
       else if (ev.type === 'rooted') {
         const v = this.vis.get(ev.id);
-        if (v && ev.t > 0) { v.rootEnd = Math.max(v.rootEnd, this.time + ev.t); v.rootLen = Math.max(0.2, ev.t); }
+        if (v && ev.t > 0) {
+          const len = Math.max(COIL_MIN_S, ev.t);
+          if (this.time + len > v.rootEnd) { v.rootEnd = this.time + len; v.rootLen = len; }
+        }
+      } else if (ev.type === 'rootSnap') {
+        const o = this.snapHead * SNAP_F, S = this.snaps;
+        S[o] = ev.x; S[o + 1] = ev.y; S[o + 2] = ev.z; S[o + 3] = Math.max(0.1, ev.r); S[o + 4] = Math.max(0.3, ev.h);
+        S[o + 5] = this.time; S[o + 6] = ((ev.x * 12.9898 + ev.z * 78.233) % TAU + TAU) % TAU;
+        this.snapHead = (this.snapHead + 1) % SNAP_CAP;
       }
     }
     this.coilN = 0;
@@ -394,6 +426,7 @@ export class EnemyView implements ViewModule {
         markRange(F.color, F.rC, fn * 3);
       }
     }
+    this.drawSnaps();
     this.coils.count = this.coilN;
     this.coils.visible = this.coilN > 0;
     if (this.coilN > 0) markRange(this.coils.instanceMatrix, this.coilR, this.coilN * 16);
@@ -564,6 +597,47 @@ export class EnemyView implements ViewModule {
       _local.compose(_pos, _q, _scl);
       _local.toArray(this.coils.instanceMatrix.array as Float32Array, this.coilN * 16);
       this.coilN++;
+    }
+  }
+
+  /** CFIX: free-standing coils where a burst killed a foe: loops whip in round the spot, cinch shut and wither */
+  private drawSnaps(): void {
+    const S = this.snaps;
+    for (let n = 0; n < SNAP_CAP; n++) {
+      const o = n * SNAP_F;
+      const hgt = S[o + 4];
+      if (hgt <= 0) continue;
+      // the start time is stored as float32: on the frame it was written fround() can round it UP past this.time, so a
+      // tiny negative age is "just born" (VIEW lane 2026-09-30: killing the snap there hid ~1 in 3 of them in Chrome)
+      const age = Math.max(0, this.time - S[o + 5]);
+      if (age >= SNAP_S) { S[o + 4] = 0; continue; }
+      const kin = age < COIL_IN_S ? age / COIL_IN_S : 1;
+      const grow = kin < 1 ? 1 + 2.70158 * (kin - 1) ** 3 + 1.70158 * (kin - 1) ** 2 : 1;   // easeOutBack
+      const left = SNAP_S - age;
+      const out = left < SNAP_OUT_S ? left / SNAP_OUT_S : 1;
+      const k = Math.max(0, grow * out);
+      if (k <= 0.01) continue;
+      const x = S[o], y = S[o + 1], z = S[o + 2], seed = S[o + 6];
+      // VIEW lane 2026-09-30 (Chrome A/B, coil material on/off on a frozen frame): a coil sized to the foe sat INSIDE the
+      // death puff (fx.ts enemyKilled: dust r × 1.2 + puffs ~0.4 H, 0.5-0.65 s), so nothing of it could be seen. The snap
+      // coil now springs up round the OUTSIDE of the puff (SNAP_WIDE) and holds there while it clears, then cinches shut
+      // onto the empty spot (SNAP_CINCH) — readable for its whole life.
+      const r0 = Math.max(S[o + 3] * 0.95, hgt * 0.22);
+      const rWide = Math.max(r0, S[o + 3] * SNAP_WIDE.rK + hgt * SNAP_WIDE.hK);
+      const c = Math.min(1, Math.max(0, (age - SNAP_CINCH.at) / SNAP_CINCH.dur));
+      const rad = rWide + (r0 * SNAP_CINCH.endK - rWide) * c * c * (3 - 2 * c);
+      for (let i = 0; i < COIL_LOOPS; i++) {
+        if (this.coilN >= COIL_CAP) return;
+        const ly = y + hgt * (0.08 + 0.13 * i) * (0.6 + 0.4 * out);
+        const rr = rad * (1.08 - 0.13 * i);
+        const tilt = (i % 2 ? 0.3 : -0.25);
+        _q.setFromEuler(_e.set(tilt, seed + i * 1.9 + age * (i % 2 ? 2.4 : -2.0), tilt * 0.5, 'YXZ'));
+        _pos.set(x, ly, z);
+        _scl.set(rr * k, rr * k * 1.25, rr * k);
+        _local.compose(_pos, _q, _scl);
+        _local.toArray(this.coils.instanceMatrix.array as Float32Array, this.coilN * 16);
+        this.coilN++;
+      }
     }
   }
 

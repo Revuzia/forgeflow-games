@@ -12,7 +12,8 @@
 // those cards plant pods). Kit state (titan.kit): pods, ripe, turrets (= pods, legacy HUD), chain (last cascade
 // length, view), bloomT (hook anim), sowT (legacy view key = bloomT).
 // Events: `bloomSpawn` per pod planted, `bloomBurst {x, z, r, link, ripe}` per pod burst, `rooted {id, x, z, t}`
-// per foe a TANGLE stuns (bosses are never stunned), `explosion 'seed'` per burst and per horn stamp.
+// per foe a TANGLE stuns (bosses are never stunned), `rootSnap {x, y, z, r, h}` per foe a burst / horn stamp KILLED
+// inside its circle (view only), `explosion 'seed'` per burst and per horn stamp.
 // Tuning (CONTRACT §8 G3): every BRIARWICK change stays in `BRIAR` below — never through BOSS_KIND_MUL.
 
 import type { DamageOpts, Enemy, Hazard, World } from '../../core/types.ts';
@@ -36,7 +37,12 @@ export const BRIAR = {
   lashWH: 0.55,            // × H × area
   lashDmg: 14,
   lashKnock: 0.5,
-  size1LenMul: 1.8,        // Size I only (foes stand 5-8 m off a 1.2 m titan)
+  size1LenMul: 1.8,        // Size I only (× the lash length; the volley range uses it too)
+  // Size I lash floor (m from the titan's centre, before × vineLength × attackRange): the Size I shooters stand at their
+  // range off the titan's SURFACE (android 9, squad 12 + 0.2 H; ai/enemies.ts reach/surfDist), so the lash reaches
+  // size1ReachM + the titan's radius. Measured (critic 2026-09-30): at H 1.2 the 6.9 m lash reached 0 of 101 shooter
+  // shots fired from 7.97-12.27 m. From about H 2.3 the lash formula itself is longer and the floor stops mattering.
+  size1ReachM: 12.5,
   // ── pods ──
   podRH: 0.3,              // footprint (view / hazard shape) × H at plant time
   podLifeS: 9,
@@ -81,6 +87,7 @@ const SRC_PASSIVE = 0, SRC_HOOK = 1, SRC_DASH = 2, SRC_UPG = 3;
 const hazBuf: Hazard[] = [];
 const podBuf: Hazard[] = [];
 const enemyBuf: Enemy[] = [];
+const snapBuf: Enemy[] = [];
 const idBuf: number[] = [];
 const aim = { x: 0, z: 0 };
 const pt = { x: 0, z: 0 };
@@ -97,8 +104,19 @@ export function init(): Record<string, number> {
   return { pods: 0, ripe: 0, turrets: 0, chain: 0, bloomT: 0, sowT: 0, healWin: 0, healT: 0 };
 }
 
-/** Auto-attack reach (m) right now — pickups.ts latches drops inside ~1.2 × this (kits/index kitReach). */
+/** Auto-attack (BURR LASH) reach (m) right now, incl. the Size I floor (size1ReachM). */
 export function reach(w: World): number {
+  const T = w.titan;
+  let len = BRIAR.lashLenH * s1(w, BRIAR.size1LenMul) * T.height;
+  if (T.rank === 0) len = Math.max(len, BRIAR.size1ReachM + Math.max(0, T.radius));
+  return len * Math.max(0.1, S(w, 'vineLength')) * Math.max(0.1, S(w, 'attackRange'));
+}
+
+/** Drop-latch reach (m) — pickups.ts latches drops inside ~1.2 × this (kits/index kitLatchReach). The lash formula
+ *  WITHOUT the Size I floor (Gate 2026-09-30): the floor is a combat fix for the Size I shooters' standoff; feeding it
+ *  to the pickup latch too roughly doubled BRIARWICK's Size I vacuum radius and sped its growth (probe_meta perk band
+ *  'Size III at 189 s, outside 210-380 s'). */
+export function latchReach(w: World): number {
   return BRIAR.lashLenH * s1(w, BRIAR.size1LenMul) * w.titan.height
     * Math.max(0.1, S(w, 'vineLength')) * Math.max(0.1, S(w, 'attackRange'));
 }
@@ -239,7 +257,9 @@ function burst(w: World, h: Hazard, link: number, src: number): void {
   let mul = (ripe ? 1 : BRIAR.greenMul) * (1 + Math.min(BRIAR.linkCap, BRIAR.linkBonus * link));
   if (src === SRC_HOOK) mul *= BRIAR.hookBurstMul * Math.max(0.25, S(w, 'abilityPower'));
   BURST_OPTS.knock = knockFor(w, BRIAR.burstKnock);
+  snapBefore(w, x, z, r);
   damageArea(w, { k: 'circle', x, z, r }, titanDamage(w, BRIAR.burstDmg) * mul, BURST_OPTS);
+  snapAfter(w);
   tangle(w, x, z, r, BRIAR.tangleS);
   w.events.push({ type: 'explosion', x, z, r, kind: 'seed' });
   w.events.push({ type: 'bloomBurst', x, z, r, link, ripe: ripeness });
@@ -275,6 +295,18 @@ function tangle(w: World, x: number, z: number, r: number, s: number): void {
     e.stun = Math.max(e.stun, t);
   }
   enemyBuf.length = 0;
+}
+
+/** View only (CFIX 2026-09-30): at Size I most foes in a burst die to its damage before tangle() can root them, so the
+ *  coils were never seen. snapBefore lists the living foes in the circle; snapAfter emits a `rootSnap` for each one the
+ *  damage killed (the view springs a coil shut where it stood). Reads the world, writes only events: the sim is unchanged. */
+function snapBefore(w: World, x: number, z: number, r: number): void { enemiesInCircle(w, x, z, r, snapBuf); }
+function snapAfter(w: World): void {
+  for (let i = 0; i < snapBuf.length; i++) {
+    const e = snapBuf[i];
+    if (!e.alive) w.events.push({ type: 'rootSnap', x: e.x, y: e.y, z: e.z, r: e.radius, h: e.height });
+  }
+  snapBuf.length = 0;
 }
 
 // ─────────────────────────────── floor breaks sprout pods ───────────────────────────────
@@ -318,7 +350,9 @@ function popUpPark(w: World): void {
   // 1) horn stamp
   const rr = BRIAR.ringRH * s1(w, BRIAR.size1BurstRMul) * H * area;
   RING_OPTS.knock = knockFor(w, BRIAR.ringKnock);
+  snapBefore(w, T.x, T.z, rr);
   damageArea(w, { k: 'circle', x: T.x, z: T.z, r: rr }, titanDamage(w, BRIAR.ringDmg * power), RING_OPTS);
+  snapAfter(w);
   tangle(w, T.x, T.z, rr, BRIAR.ringTangleS);
   w.events.push({ type: 'explosion', x: T.x, z: T.z, r: rr, kind: 'seed' });
   // 2) seed volley at the nearest foes (then the nearest boss part, then a fan ahead)
