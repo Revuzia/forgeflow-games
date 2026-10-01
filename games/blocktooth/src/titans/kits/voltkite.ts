@@ -4,7 +4,8 @@
 //                             (full wireDuration life, like a dash wire).
 //   Pass  LIVE WIRE         — every dash lays a `wire` hazard (capsule) along its path. Cap 6.
 //   Hook  RECAST: DETONATE  — every live wire explodes along its length and charges a STATIC SHIELD per wire blown;
-//                             no wires → static burst.
+//                             no wires → static burst. An 8 s cooldown (fb3, owner playtest): a deliberate big moment
+//                             that pays out the wires laid since the last press, not a 1.5 s spam button.
 // Kit state (titan.kit): wires (live wire count, view/HUD), arcHits (last arc's hits), arcN (arc counter).
 
 import type { DamageOpts, Enemy, Hazard, Shape, World } from '../../core/types.ts';
@@ -30,31 +31,46 @@ export const VOLT = {
   arcKnock: 0.25,
   maxJumps: 24,            // hard safety cap on arcForks + chains
   wireRH: 0.25,            // × H × area
-  wireDps: 10,             // × wireDamage
+  wireDps: 7,              // × wireDamage (fb3: 10 → 7 — with RECAST no longer spammed, wires live out their full life, so
+                           // the passive hum is lighter and the press carries the payoff)
   wireCap: 6,
   wireMinLenH: 0.35,       // a blocked dash still lays a stub this long (along the dash direction)
-  detCdS: 1.5,
+  // RECAST: DETONATE (fb3, owner playtest 2026-09-30: "SPACE attack needs a longer cooldown as it allows me to melt away at
+  // everything"). 1.5 s → 8 s, in line with MOLO GULLET VACUUM 9 s / BRIARWICK POP-UP PARK 8 s / HEARTHBACK SHELL VENT 6 s.
+  // Spamming RECAST had also cut every wire short; at 8 s the wires live out their life, so the cooldown alone made VOLT
+  // STRONGER at bosses (bot trace GRID-EAST/1: PARKADE-6 95 → 66 s;
+  // P-human x24 with a bigger payoff: city TTK 114 → 86 s). The payoff below was retuned against that (fb3 sweep under STATIC SHIELD).
+  detCdS: 8,
   detRH: 0.8,              // × H × area, along each wire
-  detDmg: 40,              // × abilityPower
-  detPerSec: 6,            // + per remaining wire second
+  detDmg: 50,              // × abilityPower (fb3: 40 → 50, one press is the big hit; 55 put boss TTK at 0.86 × MOLO)
+  detPerSec: 8,            // + per remaining wire second (fb3: 6 → 8)
   detKnock: 1.0,
   burstRH: 1.2,            // × H × area (no wires out)
-  burstDmg: 15,            // × abilityPower
+  burstDmg: 40,            // × abilityPower (fb3: 15 → 40 — an 8 s press with no wires out is still a real hit)
   burstKnock: 0.8,
   groundEvery: 2,          // GROUNDING: every Nth arc that strikes a foe/boss lays a short live wire (titanpass)
   groundLenH: 1.4,         // × H, from the struck point back toward the titan
-  groundLife: 1.0,         // × wireDuration: a GROUNDING wire lives as long as a LIVE WIRE LUNGE wire (4 s), so ~2 are out
-                           // and a no-dash RECAST blows 2-3 (critic 2026-09-30: at 0.5 = 2 s only 1 was ever out; VOLT was the
-                           // one titan that died to its city boss). History: 0.75 once gave a GATE 2 full clear @474 s < 480.
+  groundLife: 0.625,       // × wireDuration: a GROUNDING wire lives 2.5 s. fb3: 1.0 → 0.625 — 1.0 was raised so a 1.5 s
+                           // RECAST spam always found 2-3 wires; with the 8 s cooldown wires are no longer cut short, and at
+                           // 1.0 the extra uptime kept VOLT's boss TTK under MOLO's. 0.5 measured fine on balance but failed
+                           // GATE 2 (lockwater/1337 banked +7 LV in a slow Size I gatekeeper fight: G2 @170 s, Size III
+                           // @203 s); 0.6 / 0.625 pass. History: 0.75 once gave a GATE 2 full clear @474 s < 480.
   bossParts: 2,            // boss parts one arc may strike (was 1; titanpass)
   // STATIC SHIELD (VOLT lane 2026-09-30): a RECAST that blows real wires charges an absorb shield — the survivability
   // VOLT-KITE lacked (critic: the one titan that died to its city boss; weakest at 3 min). Own kit, no shared multiplier.
   // P-human sweep, seeds 1-24 x 3 biomes (72 runs each; clears /72, same tree): HEAD knobs 47 · no shield 48 ·
   // .02/.06/.15 62 (B3 fails one set) · .025/.075/.20 64, IRON GULLY 23/24 (MOLO 56, IG 18/22). Earlier tree: .03 69,
   // .04 67 — overshoot (Size I HP loss 10-14 %/min vs B8 floor 8). .025 keeps Size I at 15 %/min.
-  shieldPerWire: 0.025,    // × max HP × abilityPower per wire blown
-  shieldPressCap: 0.075,   // × max HP × abilityPower: most one RECAST can add (3 wires)
-  shieldMax: 0.2,          // × max HP: RECAST never tops the pool past this (other shields may sit above it)
+  // fb3 (8 s cooldown, one press every 8 s instead of ~5 per 8 s): P-human seeds 1-16 x 3 biomes (48 runs; MOLO same tree
+  // 36/48 clears, city-boss median TTK 140 s). HEAD (1.5 s) 45/48, 114 s · 7.5 s + det 100+10 x24: 23/24, 86 s · det 40+6, wire 8,
+  // shield .04/.12/.20: 33/48, 128 s but 9 deaths before the city boss · det 55+8, wire 7, .04/.12/.20: 41/48, 126 s ·
+  // .035/.105/.20: 43/48, 124 s · .04/.12/.15 (ground .5): 36/48, 129 s, Size I 23 %/min, Size IV 46 %/min, 82 % real
+  // RECASTs, but GATE 2 failed (see groundLife) · ground .625: 40/48, 121 s · + bossParts 1: 37/48, 134 s but a Size I
+  // death · SHIPPED (ground .625, det 50+8): 40/48 (MOLO + 2.0 per 24), 126.05 s (0.90 x MOLO 139.7), Size I 23 %/min,
+  // Size IV 31 %/min, 84 % of RECASTs blow real wires, 3 deaths before the city boss (MOLO 2), GATE 2 PASS.
+  shieldPerWire: 0.04,     // × max HP × abilityPower per wire blown (fb3: .025 → .04, one press now carries the shield)
+  shieldPressCap: 0.12,    // × max HP × abilityPower: most one RECAST can add (3 wires) (fb3: .075 → .12)
+  shieldMax: 0.15,         // × max HP: RECAST never tops the pool past this (other shields may sit above it) (fb3: .2 → .15)
 };
 
 const hazBuf: Hazard[] = [];

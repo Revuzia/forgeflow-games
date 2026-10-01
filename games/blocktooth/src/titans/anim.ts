@@ -410,7 +410,7 @@ export class TitanAnimator {
     // ── per-kit idle extras ──
     if (this.id === 'voltkite') { c.mane = 1 + 0.035 * Math.sin(t * 13) * Math.sin(t * 3.1); c.wings = 0.06 * Math.sin(t * 1.7); }
     if (this.id === 'hearthback') { c.crater = 1 + 0.03 * Math.sin(t * 4.3); c.shellY += 0.004 * br; }
-    if (this.id === 'briarwick') { c.ruff = 1 + 0.02 * br; }
+    if (this.id === 'briarwick') { c.ruff = 1 + 0.02 * br; this.lashWindPose(kit); }
 
     // ── overlays: attack, dash, hurt, ability, grow, hero, death ──
     this.attackPose(a, kit);
@@ -556,17 +556,17 @@ export class TitanAnimator {
         }
         break;
       }
-      case 'vineLash': {             // BRIARWICK: horns wind up to one side, then sweep through
-        const wind = env(t, 0, 0.08, 0.1, 0.2);
-        const sweep = env(t, 0.08, 0.22, 0.26, 0.55);
-        const dir = t < 0.16 ? 1 : 1 - 2 * smooth((t - 0.1) / 0.14);
-        c.headYaw += 0.55 * dir * Math.max(wind, sweep);
-        c.neckYaw += 0.3 * dir * Math.max(wind, sweep);
-        c.neckPitch += 0.14 * sweep;
-        c.headRoll -= 0.2 * dir * sweep;
-        c.bodyRoll += 0.05 * dir * sweep;
-        c.jaw += 0.2 * sweep;
-        c.frontReach += 0.03 * sweep;
+      case 'vineLash': {             // BRIARWICK BURR LASH (fb3): the cocked horn snaps down and across — the vine
+        // whip cracks off its tip (fx.ts vine). The mouth stays shut: it is a horn whip, never a tongue.
+        const snap = env(t, 0, 0.05, 0.1, 0.38);
+        const side = fin(kit.lashSide, 1) < 0 ? -1 : 1;
+        c.headPitch += 0.34 * snap;
+        c.neckPitch += 0.12 * snap;
+        c.neckZ += 0.05 * snap;
+        c.headRoll -= 0.26 * side * snap;
+        c.bodyRoll += 0.04 * side * snap;
+        c.frontReach += 0.04 * snap;
+        c.sq *= 1 - 0.03 * snap;
         break;
       }
       default: {                     // generic swipe (upgrades / unknown attack ids)
@@ -574,6 +574,22 @@ export class TitanAnimator {
         c.headPitch += 0.12 * k; c.jaw += 0.35 * k; c.neckZ += 0.04 * k;
       }
     }
+  }
+
+  /** BRIARWICK BURR LASH wind-up (fb3): while kit.lashWind counts down the last 0.2 s before the crack, the head
+   *  rears back and rolls to cock the horn on the target's side (kit.lashSide; titanview turns the head toward kit.lashDir). */
+  private lashWindPose(kit: Record<string, number>): void {
+    const left = fin(kit.lashWind, -1);
+    if (left < 0) return;
+    const k = smooth(clamp(1 - left / 0.2, 0, 1));
+    const side = fin(kit.lashSide, 1) < 0 ? -1 : 1;
+    const c = this.ch;
+    c.headPitch -= 0.3 * k;
+    c.neckPitch -= 0.08 * k;
+    c.neckZ -= 0.03 * k;
+    c.headRoll += 0.24 * side * k;
+    c.bodyPitch -= 0.03 * k;
+    c.ruff *= 1 + 0.06 * k;
   }
 
   private dashPose(a: AnimState): void {

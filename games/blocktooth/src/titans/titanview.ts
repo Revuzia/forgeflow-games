@@ -234,6 +234,8 @@ export class TitanView implements ViewModule {
       s.moving = T.moving || T.dashT > 0;
     }
     s.aim = this.aimT >= 0 ? this.aimYaw * (1 - clamp((this.aimT - 0.35) / 0.25, 0, 1)) : 0;
+    // BRIARWICK BURR LASH wind-up (fb3): the head turns toward the committed lash heading before the crack
+    if (T.id === 'briarwick' && kitNum(T.kit, 'lashWind', -1) >= 0) s.aim = clamp(wrapAngle(kitNum(T.kit, 'lashDir') - T.heading), -1.1, 1.1);
     s.kit = T.kit;
     s.t = f.time;
     s.noFlash = this.ctx.quality.reduceFlashing;

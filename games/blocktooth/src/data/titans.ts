@@ -70,7 +70,7 @@ export const TITANS: Record<TitanId, TitanDef> = {
   voltkite: {
     id: 'voltkite',
     name: 'VOLT-KITE',
-    species: 'storm-hound drake under twin kite sails with a static mane',
+    species: 'charged raptor-cat under twin kite sails with a static crest',
     role: 'CHAIN ASSASSIN',
     tagline: 'Every streetlight it passes files a formal complaint.',
     lore: [
@@ -85,16 +85,16 @@ export const TITANS: Record<TitanId, TitanDef> = {
     auto: {
       id: 'forkArc',
       name: 'FORK-ARC',
-      desc: 'Every 0.9 s: lightning leaps to a target within 3.8 body-heights, then forks to 3 more nearby (foes first, then buildings). 12 dmg, −15% per jump. Every 2nd strike GROUNDS: a short LIVE WIRE is left where it hit and lasts 4 s, like a lunge wire.',
+      desc: 'Every 0.9 s: lightning leaps to a target within 3.8 body-heights, then forks to 3 more nearby (foes first, then buildings). 12 dmg, −15% per jump. Every 2nd strike GROUNDS: a short LIVE WIRE is left where it hit and lasts 2.5 s, like a lunge wire.',
     },
     hook: {
       id: 'recastDetonate',
       name: 'RECAST: DETONATE',
-      desc: 'Blows every live wire at once: 40 dmg along each wire + 6 per second it had left, and each wire blown charges a STATIC SHIELD of 2.5% max HP (up to 7.5% per blow, 20% in all). No wires out? A 15 dmg static burst instead. 1.5 s cooldown.',
+      desc: 'Blows every live wire at once: 50 dmg along each wire + 8 per second it had left, and each wire blown charges a STATIC SHIELD of 4% max HP (up to 12% per blow, 15% in all). No wires out? A 40 dmg static burst instead. 8 s cooldown.',
     },
     dash: {
       name: 'LIVE WIRE LUNGE',
-      desc: 'Two charges, quick recharge. Every lunge lays a LIVE WIRE on its path that shocks foes for 10 dmg/s over 4 s (up to 6 wires).',
+      desc: 'Two charges, quick recharge. Every lunge lays a LIVE WIRE on its path that shocks foes for 7 dmg/s over 4 s (up to 6 wires).',
     },
   },
 
@@ -147,7 +147,7 @@ export const TITANS: Record<TitanId, TitanDef> = {
     auto: {
       id: 'vineLash',
       name: 'BURR LASH',
-      desc: 'Every 1.0 s: a lash 3.2 body-heights long (5.8 at Size I), 14 dmg to everything in it (at Size I it always reaches 12.5 m, out to the shooters), and it plants a seed pod where it lands. Pods ripen in 2 s and burst when anything touches them: 18 dmg, tangles foes, heals you a little, and sets off ripe pods nearby — each link hits 10% harder.',
+      desc: 'Every 1.0 s: a vine whip off the horns, 3.2 body-heights long (5.8 at Size I), 14 dmg to everything in it (at Size I it always reaches 12.5 m, out to the shooters). On the move it cracks only ahead, within 45° of where you are heading, down a line through foes, and keeps working the same line while it still hits; stand still (or get hemmed in) and it whips whatever is around you. It plants a seed pod where it lands. Pods ripen in 2 s and burst when anything touches them: 18 dmg, tangles foes, heals you a little, and sets off ripe pods nearby — each link hits 10% harder.',
     },
     hook: {
       id: 'popUpPark',

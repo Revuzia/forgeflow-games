@@ -49,16 +49,18 @@ space-denial rings (see [Titan pass](#titan-pass-titans-build-slots-rings) below
 ## Titan pass: titans, build slots, rings
 
 * **BRIARWICK** (horned garden-beast with a seed ruff; kit `titans/kits/briarwick.ts`). **BURR LASH**
-  (every 1.0 s, 3.2 body-heights, 5.8 at Size I) plants a **SEED POD** where it lands. Pods ripen in 2 s
+  (every 1.0 s, 3.2 body-heights, 5.8 at Size I) is a vine whip off the horns: on the move it cracks only
+  within 45° of the heading, down a lane through foes, and stays on that lane while it still hits; standing
+  still or hemmed in it whips whatever is nearest. It plants a **SEED POD** where it lands. Pods ripen in 2 s
   and burst when anything touches them (18 dmg, tangles foes, heals a little) and set off ripe pods
   nearby, each link 10 % harder. The HOOK **POP-UP PARK** (Space, 8 s): a horn-stamp ring burst, 4 ripe
   seeds thrown at the nearest foes, then every pod within 12 body-heights goes off in one rolling
   chain. The DASH **BRAMBLE BOUND** drops 2 pods. The SEED POD cap is 10 (the GREENBELT DECREE replants
   the garden as 10 pods). The ACTIVE panel shows `PODS n · RIPE n`; a chain calls `×5 / ×8 / ×12 / ×16 /
   ×20 IN BLOOM!`. Goal **FULL BLOOM**: one pop chains 15 more pods in one run (`cascadeBest` ≥ 15).
-* **VOLT-KITE** remodel: a storm-hound drake under twin kite sails with a static mane. **FORK-ARC**
+* **VOLT-KITE** remodel (v4): a charged raptor-cat under twin kite sails with a static crest. **FORK-ARC**
   jumps 3.8 body-heights and forks to 3 more; every 2nd strike **GROUNDS** a short LIVE WIRE, which
-  RECAST: DETONATE (Space) blows with the dash wires. Its three palettes are the canonical indigo,
+  RECAST: DETONATE (Space, 8 s cooldown) blows with the dash wires. Its three palettes are the canonical indigo,
   SODIUM LAMP and SLEET (a steel hide under a slate saddle, so it reads on WHITE STACKS snow).
 * **Build slots** (`upgrades/draft.ts`, FEATURES_V2 §7.7). A run holds **8** distinct cards (`SLOTS n/8`
   in the draft header). Each card carries a tab: **NEW — TAKES A SLOT**, **UPGRADE LV a → b**, **SHARES

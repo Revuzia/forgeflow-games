@@ -73,7 +73,7 @@ wide with no neck, never the famous tall snow-walker silhouette.
 | Size-up sting | `MASS BREACH` | + sub-line per rank (§12) |
 | Run-end tabloid | `THE CITY GOT SMALLER.` | masthead: **THE WARD SEVEN WITNESS** |
 | Titan 1 | **MOLO** — squat jade monitor, sawtooth back-fin | SMASH TANK |
-| Titan 2 | **VOLT-KITE** — storm-hound drake under twin kite sails with a static mane (TITAN PASS remodel; the `data/titans.ts` species string; was a lean indigo jackal-drake) | CHAIN ASSASSIN |
+| Titan 2 | **VOLT-KITE** — charged raptor-cat under twin kite sails with a static crest (v4 model, owner feedback 3; the `data/titans.ts` species string; was the TITAN PASS storm-hound drake, before that a lean indigo jackal-drake) | CHAIN ASSASSIN |
 | Titan 3 | **HEARTHBACK** — walking caldera, obsidian dome shell | ERUPTION FORTRESS |
 | Titan 4 | **BRIARWICK** — horned garden-beast, seed ruff | AREA CONTROL |
 | Biome 1 | **GRID-EAST** — daytime commercial blocks, zebra crossings, toy traffic | boss CAISSON-4 |
@@ -470,23 +470,29 @@ shellCapacity 1, stompDelay 0.6, magmaDuration 0, turretCap 4, turretRate 1, spo
   (enemies first, then buildings/props), dmg 12 with ×0.85 falloff per jump. `arc` event. A single arc may strike
   at most **2 boss parts** (`VOLT.bossParts`; was 1): one follow-up jump into a second part, never the whole rig.
 * **GROUNDING** (TITAN PASS rider on FORK-ARC) — every **2nd** arc whose first target is a foe or a boss part lays a
-  LIVE WIRE from the struck point **1.4H** back toward VOLT-KITE (never longer than the gap), life **0.5 ×
-  wireDuration**. It shares the wire cap (6), the dps and the look with dash wires (one `layWire` helper), so RECAST
+  LIVE WIRE from the struck point **1.4H** back toward VOLT-KITE (never longer than the gap), life **0.625 ×
+  wireDuration** (2.5 s; owner feedback 3 — `VOLT.groundLife`). It shares the wire cap (6), the dps and the look with dash wires (one `layWire` helper), so RECAST
   has real wires to blow without dash-weaving. Kit state adds `arcN` (arc counter). Card text: "… 3.8 body-heights …
   Every 2nd strike GROUNDS: a short LIVE WIRE is left where it hit."
-* **Model (TITAN PASS remodel)** — "storm-hound drake under twin kite sails": broad chest, two diamond sail membranes on
-  glowing cross-spars in a shallow V from the shoulders (`wingL/R` bones), a flat diamond kite on the tail tip, a zigzag
-  bolt down the spine and 9 broad mane blades laid back along the neck. Same bone names, same canonical hexes (only
+* **Model (v4, owner feedback 3, 2026-10-01: "looks off/derpy … maybe the face")** — "charged raptor-cat under twin kite
+  sails": a deep keel chest and heavy haunches on short strong legs (digitigrade hind legs, a raptor sickle claw), a
+  short broad big-cat head with narrow forward-set slit-pupil eyes under a heavy V brow, a closed jaw with sabre fangs,
+  ears laid back. Ribbed insulator pauldrons on the shoulders carry the two kite sails as raked-back antenna fins (cyan
+  mast spar + tip beacon); cyan coil bands on the forearms and tail; a flat diamond kite on the tail tip, a cyan bolt
+  down the spine and a short swept static crest along the nape (no mane ring). (The TITAN PASS v3 "storm-hound drake"
+  it replaces read as a startled pup: eyes half the head width, bulging sideways.) Same bone names, same canonical hexes (only
   their placement moves: belly `#8f94d9` on upward faces, primary on flanks/legs, secondary on brows / ear tips / lower
   legs / paw pads, glow on mane, spars, bolt and panels). Originality guard (§1): not a winged horse / lion /
   wolf-with-cloud-mane; no star-tipped tail, no cheek pouches, no spike crest over the skull; the sails are flat
   diamonds on visible spars, never feathered or bat wings. Look bar at the game camera (turntable): screen area ≥ 0.09,
   body luminance ≥ 85, dark share (luminance < 60) ≤ 0.40, head visible from behind at Size V.
 * **LIVE WIRE** — every dash leaves a `wire` hazard (capsule r 0.25H × area along the dash
-  path) for `wireDuration` s dealing 10 × wireDamage dps to enemies (5 Hz). Cap 6 wires.
-* HOOK **RECAST: DETONATE** (cd 1.5 s): every live wire explodes along its capsule (r 0.8H × area,
-  dmg 40 × abilityPower + 6 per remaining second), wires removed, `wireDetonate` event. No wires →
-  a static burst around the titan (r 1.2H, dmg 15) so the button is never dead.
+  path) for `wireDuration` s dealing 7 × wireDamage dps to enemies (5 Hz; was 10 before owner feedback 3). Cap 6 wires.
+* HOOK **RECAST: DETONATE** (cd **8 s** — owner feedback 3, 2026-10-01: "SPACE attack needs a longer cooldown"; was
+  1.5 s; `VOLT.detCdS`, probe_titan asserts ≥ 6 s and that a press while cooling does nothing): every live wire explodes
+  along its capsule (r 0.8H × area, dmg 50 × abilityPower + 8 per remaining second), wires removed, `wireDetonate`
+  event; each wire blown charges a STATIC SHIELD of 4 % maxHp × abilityPower (≤ 12 % per press; RECAST never tops the
+  pool past 15 %). No wires → a static burst around the titan (r 1.2H, dmg 40) so the button is never dead.
 
 **HEARTHBACK — ERUPTION FORTRESS** (maxHp 170, armor 20, moveSpeed 0.85, dashCooldown 1.35)
 * Auto **MAGMA STOMP** — every 1.3 s ÷ attackRate: titan-owned `circle` telegraph r 1.1H × area
@@ -502,7 +508,15 @@ shellCapacity 1, stompDelay 0.6, magmaDuration 0, turretCap 4, turretRate 1, spo
 LASH / BLOOM TURRETS / SOW. Tuning = `titanpass/briarwick_C.ts` shipped unchanged, all of it inside `BRIAR.*` in
 `src/titans/kits/briarwick.ts`; never tuned through `BOSS_KIND_MUL` — its `seed` entry also scales every titan's
 upgrade seed damage. Size-I multipliers apply only while `titan.rank === 0`.)
-* Auto **BURR LASH** — every 1.0 s ÷ attackRate; target via `findTarget` (weak point → foes → boss parts → city);
+* Auto **BURR LASH** — every 1.0 s ÷ attackRate; a vine whip off the horns (never a tongue: the mouth stays shut). Aim
+  (owner feedback 3, 2026-10-01: "the tongue just goes out in all directions"; `BRIAR.aim*`): while the stick is held the
+  lash cracks only inside **±45°** of the move direction (`aimArcDeg`), down the lane through the most foes (edge lanes
+  score × (1 − 0.25 · off/arc)), staying on the last crack's lane or the nearest lane to it among those scoring ≥ 0.6 ×
+  the best (`goodFrac`, `keepS` 2 s); foes in reach but none ahead → it holds (no swing at the city, no whip back at a rig
+  being fled); a boss with no foe in reach is lashed in any direction (`bossArcDeg` 180). Stick idle, or held while
+  slower than 0.2 × the base walk (`blockedFrac`: stuck / hemmed in) → the arc is the full circle and the nearest target
+  wins (`findTarget` order: weak point → foes → boss parts → city). The lane is committed `windS` 0.2 s before the crack
+  (kit `lashWind` / `lashDir` / `lashSide`: the view cocks the horn toward it) and the crack goes exactly there;
   `lane` 3.2H × vineLength × attackRange long (**×1.8 at Size I**), 0.55H × area wide; **14** dmg to everything in it,
   knock 0.5, kind `vine`; **plants 1 seed pod** at the struck point (foe, boss part, building or prop). Emits `vine` +
   `titanAttack 'vineLash'`.

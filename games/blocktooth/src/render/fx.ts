@@ -70,6 +70,12 @@ const GATE_STAGGER_BAND: WordBand = { topMin: 0.22, centerMax: 1 / 3 };
 /** the LIMIT LIFTED kill stamp: below the nameplate AND the MASS BREACH strap that wipes in on the same tick */
 const GATE_KILL_BAND: WordBand = { topMin: 0.38 };
 const RIBBON_QUADS = 4096;
+/** BRIARWICK BURR LASH (fb3): horn tip in model units (height 1; +X = the titan's left, +Z = forward) the vine whip
+ *  cracks from (the front of the curl of models.ts buildBriarwick's ram horns), the whip's life and its crack moment */
+const LASH_HORN = [0.27, 0.63, 0.6] as const;
+const LASH_LIFE_S = 0.46;
+const LASH_CRACK_U = 0.15;            // fraction of LASH_LIFE_S at which the tip hits the end of the lane
+const LASH_FLASH_MAX = 12;            // lash hit flashes per crack (decal / shard budget)
 /** TITAN PASS BRIARWICK pods (CONTRACT §8 view row): once this many seed bursts land inside SEED_WINDOW_S, further
  *  bursts in the window draw only their spore ring decal (no petal spray / dust) — a 16-pod cascade stays cheap */
 const SEED_BUDGET = 6;
@@ -237,6 +243,11 @@ interface Bolt extends Timed {
   wPx: number;
   core: number[]; glow: number[];
   vine: boolean;                   // vine lash ribbon instead of lightning
+  // BRIARWICK BURR LASH (fb3): the whip cracks from a horn tip along the exact damage lane
+  flat: boolean;                   // a ground strip (the lash's crack along its damage lane), side vector horizontal
+  follow: boolean;                 // vine: the root re-anchors to the titan's horn tip every frame
+  side: number;                    // vine: +1 = the left horn (model +X), -1 = the right
+  lx0: number; lz0: number; lx1: number; lz1: number;   // vine: the damage lane (start, end) on the ground
 }
 
 // ─────────────────────────────── shaders ───────────────────────────────
@@ -621,6 +632,7 @@ export class FxView implements ViewModule {
   private spawnFxLeft = 0;
   /** TITAN PASS: view times of the recent seed bursts (the SEED_BUDGET window) and of the live spore motes */
   private readonly seedTimes: number[] = [];
+
   private readonly moteEnd: number[] = [];
   private readonly spawnV = new THREE.Vector3();
   private lastTime = 0;
@@ -670,7 +682,8 @@ export class FxView implements ViewModule {
     const mkPart = (): Part => ({ t: 1, life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s0: 0, s1: 1, peakAt: 0.3, drag: 0, grav: 0, rot: 0, vrot: 0, c0: [1, 1, 1], c1: [1, 1, 1], home: 0, stretch: 1 });
     const mkSP = (): SPart => ({ t: 1, life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 1, rot: 0, vrot: 0, grav: 0, drag: 0, icon: 0, fill: [1, 1, 1], back: [1, 1, 1], pop: 1 });
     const mkWord = (): Word => ({ t: 1, life: 0, x: 0, y: 0, z: 0, h: 1, cell: 0, fill: [1, 1, 1], back: [1, 1, 1], rot: 0, prio: 0, jx: 0, jy: 0, band: null });
-    const mkBolt = (): Bolt => ({ t: 1, life: 0, n: 0, base: new Float32Array(3 * 16), pts: new Float32Array(3 * 16 * 12), sub: 0, jitT: 0, amp: 0, wPx: 3, core: [1, 1, 1], glow: [1, 1, 1], vine: false });
+    const mkBolt = (): Bolt => ({ t: 1, life: 0, n: 0, base: new Float32Array(3 * 16), pts: new Float32Array(3 * 16 * 12), sub: 0, jitT: 0, amp: 0, wPx: 3, core: [1, 1, 1], glow: [1, 1, 1], vine: false,
+      flat: false, follow: false, side: 1, lx0: 0, lz0: 0, lx1: 0, lz1: 0 });
     this.decals = new Pool(CAP_DECAL[q], mkDecal);
     this.dust = new Pool(CAP_DUST[q], mkPart);
     this.fire = new Pool(CAP_FIRE[q], mkPart);
@@ -944,13 +957,18 @@ export class FxView implements ViewModule {
         break;
       }
       case 'vine': {
-        this.vine(e.x0, e.z0, e.x1, e.z1, H);
-        const n = Math.round(5 * qm) + 1;
+        // BURR LASH (fb3): a vine whip from the horn on the target's side cracks down the exact damage lane; the lane
+        // itself splits the ground for a beat; every foe inside the lane (= every foe the lash hit) gets a lash flash
+        const lw = Math.max(0.2, Number(T.kit.lashW) > 0 ? Number(T.kit.lashW) : 0.55 * H);
+        this.vine(w, e.x0, e.z0, e.x1, e.z1, H, lw);
+        this.lashHits(w, e.x0, e.z0, e.x1, e.z1, lw * 0.5);
+        const n = Math.round(4 * qm) + 1;
         for (let i = 0; i < n; i++) {
-          const u = rnd(0.2, 1);
-          this.spritePart(e.x0 + (e.x1 - e.x0) * u, H * 0.3, e.z0 + (e.z1 - e.z0) * u, rnd(-1, 1) * H, rnd(0.5, 1.5) * H, rnd(-1, 1) * H,
-            H * 0.16, IC_PETAL, i % 2 ? '#ff9ec7' : '#d8ff7a', '#fff3b0', rnd(0.6, 1.0), H * 2.2, 1);
+          const u = rnd(0.35, 1);
+          this.spritePart(e.x0 + (e.x1 - e.x0) * u, H * 0.12, e.z0 + (e.z1 - e.z0) * u, rnd(-0.5, 0.5) * H, rnd(0.6, 1.3) * H, rnd(-0.5, 0.5) * H,
+            H * 0.14, IC_PETAL, i % 2 ? '#ff9ec7' : '#d8ff7a', '#fff3b0', rnd(0.5, 0.8), H * 2.6, 1);
         }
+        this.dustBurst(e.x1, e.z1, lw * 0.6, Math.round(2 * qm) + 1, H * 0.1, 0.45, L('#9a7a52'));
         if (Math.random() < 0.3) this.word('vine', e.x1, H * 0.9, e.z1, f);
         break;
       }
@@ -1511,7 +1529,7 @@ export class FxView implements ViewModule {
     const n = Math.min(16, pts.length >> 1);
     if (n < 2) return;
     const b = this.bolts.alloc();
-    b.n = n; b.vine = false;
+    b.n = n; b.vine = false; b.flat = false; b.follow = false;
     for (let i = 0; i < n; i++) {
       b.base[i * 3] = pts[i * 2];
       b.base[i * 3 + 1] = i === 0 ? y0 : y1;
@@ -1522,14 +1540,50 @@ export class FxView implements ViewModule {
     lin(core, b.core, 0); lin(glow, b.glow, 0);
   }
 
-  private vine(x0: number, z0: number, x1: number, z1: number, H: number): void {
+  /** BURR LASH: the whip (rooted on the horn tip, re-anchored every frame) + the crack strip along the damage lane. */
+  private vine(w: World, x0: number, z0: number, x1: number, z1: number, H: number, laneW: number): void {
+    const T = w.titan;
     const b = this.bolts.alloc();
-    b.n = 2; b.vine = true;
-    b.base[0] = x0; b.base[1] = H * 0.35; b.base[2] = z0;
-    b.base[3] = x1; b.base[4] = H * 0.12; b.base[5] = z1;
-    b.amp = H * 0.4; b.wPx = H * 0.16;           // vines: world-space width
-    b.life = 0.5; b.t = 0; b.jitT = 0; b.sub = 11;
-    lin('#6fae45', b.core, 0); lin('#3d6b2a', b.glow, 0);
+    b.n = 3; b.vine = true; b.flat = false; b.follow = true;
+    b.side = Number(T.kit.lashSide) < 0 ? -1 : 1;
+    b.lx0 = x0; b.lz0 = z0; b.lx1 = x1; b.lz1 = z1;
+    this.hornTip(T.x, T.z, T.heading, H, b.side, b.base);
+    b.amp = H; b.wPx = Math.min(Math.max(H * 0.13, Math.hypot(x1 - x0, z1 - z0) * 0.02), laneW * 0.5);   // world width
+    b.life = LASH_LIFE_S; b.t = 0; b.jitT = 0; b.sub = 12;
+    lin('#8bc957', b.core, 0); lin('#3d6b2a', b.glow, 0);
+    // the crack: a flat strip exactly the lane's width, from the titan's centre to the lane's end, shown from the
+    // moment the tip lands
+    const c = this.bolts.alloc();
+    c.n = 2; c.vine = false; c.flat = true; c.follow = false;
+    c.base[0] = x0; c.base[1] = 0.06 + 0.004 * H; c.base[2] = z0;
+    c.base[3] = x1; c.base[4] = 0.06 + 0.004 * H; c.base[5] = z1;
+    c.amp = 0; c.wPx = laneW; c.sub = 1;
+    c.life = 0.42; c.t = -LASH_LIFE_S * LASH_CRACK_U; c.jitT = 0;
+    lin('#d8ff7a', c.core, 0); lin('#4a3520', c.glow, 0);
+  }
+
+  /** World position of BRIARWICK's horn tip (side +1 = its left horn) for a titan at (x, z) facing `h`. */
+  private hornTip(x: number, z: number, h: number, H: number, side: number, out: Float32Array): void {
+    const mx = LASH_HORN[0] * side, my = LASH_HORN[1], mz = LASH_HORN[2];
+    const c = Math.cos(h), s = Math.sin(h);
+    out[0] = x + (mx * c + mz * s) * H; out[1] = my * H; out[2] = z + (-mx * s + mz * c) * H;
+  }
+
+  /** The foes inside the BURR LASH lane (the kit's damage test: the foe's circle inside the lane rectangle — every one
+   *  of them took the hit): a lime crack-flash on each and a small ring at its feet (at most LASH_FLASH_MAX). */
+  private lashHits(w: World, x0: number, z0: number, x1: number, z1: number, half: number): void {
+    const dx = x1 - x0, dz = z1 - z0, len = Math.hypot(dx, dz) || 1, fx = dx / len, fz = dz / len;
+    let n = 0;
+    for (const e of w.enemies) {
+      if (n >= LASH_FLASH_MAX) break;
+      const ex = e.x - x0, ez = e.z - z0, r = e.radius;
+      const along = ex * fx + ez * fz, side = ex * fz - ez * fx;
+      if (along < -r || along > len + r || Math.abs(side) > half + r) continue;
+      const sz = Math.max(e.height, 0.6), y = e.y + e.height * 0.55;
+      this.sparks(e.x, y, e.z, 3, sz * 3, '#ffffff', '#d8ff7a', sz);
+      this.ring(e.x, e.z, Math.max(0.2, r * 0.6), Math.max(0.6, r * 2.2), 0.28, L('#d8ff7a'), 0.95, Math.max(0.12, r * 0.35), 0.35);
+      n++;
+    }
   }
 
   // ─────────────────────────────── burst-word layout ───────────────────────────────
@@ -1920,22 +1974,24 @@ export class FxView implements ViewModule {
     const vpH = Math.max(1, this.ctx.renderer.getSize(_cssSize).y || 720);
     let quads = 0;
     const maxQ = RIBBON_QUADS;
+    const T = w.titan;
     for (const b of this.bolts.items) {
       if (b.t >= b.life) continue;
       b.t += dt;
-      if (b.t >= b.life) continue;
+      if (b.t >= b.life || b.t < 0) continue;
       const u = b.t / b.life;
+      if (b.follow && b.vine) this.hornTip(T.x, T.z, T.heading, Math.max(0.01, T.height), b.side, b.base);
       // (re)jitter the polyline at ~30 Hz (lightning) — vines re-shape every frame
       b.jitT += dt;
       const segs = b.n - 1;
       const count = segs * b.sub + 1;
-      if (b.vine || b.jitT >= 1 / 30 || dt === 0 && b.t === 0) {
+      if (b.vine || b.flat || b.jitT >= 1 / 30 || dt === 0 && b.t === 0) {
         b.jitT = 0;
         this.buildPolyline(b, u);
       }
       // lightning flickers (visible 2 of every 3 re-jitters) unless reduceFlashing
-      if (!b.vine && !rf && ((b.t * 30) | 0) % 3 === 2) continue;
-      const fade = b.vine ? (u < 0.75 ? 1 : 1 - (u - 0.75) / 0.25) : (rf ? 1 - u : (u < 0.6 ? 1 : 1 - (u - 0.6) / 0.4));
+      if (!b.vine && !b.flat && !rf && ((b.t * 30) | 0) % 3 === 2) continue;
+      const fade = b.flat ? (u < 0.25 ? 1 : 1 - (u - 0.25) / 0.75) : b.vine ? (u < 0.8 ? 1 : 1 - (u - 0.8) / 0.2) : (rf ? 1 - u : (u < 0.6 ? 1 : 1 - (u - 0.6) / 0.4));
       // world width per pixel at the bolt's distance
       const mx = b.base[0], my = b.base[1], mz = b.base[2];
       const dist = Math.max(1, cam.position.distanceTo(this.p3.set(mx, my, mz)));
@@ -1943,7 +1999,13 @@ export class FxView implements ViewModule {
       const layers = b.vine ? 3 : 3;
       for (let L = 0; L < layers; L++) {
         let wdt: number; let cr: number, cg: number, cb: number, ca: number;
-        if (b.vine) {
+        if (b.flat) {
+          // the crack: a lime band the lane's full width, a dark split down its middle, a pale core in the split
+          const base = b.wPx;
+          if (L === 0) { wdt = base; cr = b.core[0]; cg = b.core[1]; cb = b.core[2]; ca = 0.42; }
+          else if (L === 1) { wdt = Math.max(base * 0.16, wpp * 3); cr = b.glow[0]; cg = b.glow[1]; cb = b.glow[2]; ca = 1; }
+          else { wdt = Math.max(base * 0.05, wpp * 1.2); cr = 1; cg = 0.95; cb = 0.69; ca = 1; }
+        } else if (b.vine) {
           const base = b.wPx;          // world units for vines
           if (L === 0) { wdt = base + wpp * 4; cr = this.ink[0]; cg = this.ink[1]; cb = this.ink[2]; ca = 1; }
           else if (L === 1) { wdt = base; cr = b.glow[0]; cg = b.glow[1]; cb = b.glow[2]; ca = 1; }
@@ -1955,7 +2017,8 @@ export class FxView implements ViewModule {
         }
         ca *= fade;
         // vines: taper toward the tip, and only the extended part is drawn
-        const shown = b.vine ? Math.max(2, Math.round((count - 1) * Math.min(1, u / 0.18) * (u > 0.7 ? 1 - (u - 0.7) / 0.3 * 0.6 : 1)) + 1) : count;
+        // (vines: buildWhip already cut the polyline to the extended part)
+        const shown = count;
         for (let i = 0; i + 1 < shown && quads < maxQ; i++) {
           const ax = b.pts[i * 3], ay = b.pts[i * 3 + 1], az = b.pts[i * 3 + 2];
           const bx = b.pts[i * 3 + 3], by = b.pts[i * 3 + 4], bz = b.pts[i * 3 + 5];
@@ -1963,8 +2026,9 @@ export class FxView implements ViewModule {
           let sx = (by - ay) * this.camDir.z - (bz - az) * this.camDir.y;
           let sy = (bz - az) * this.camDir.x - (bx - ax) * this.camDir.z;
           let sz = (bx - ax) * this.camDir.y - (by - ay) * this.camDir.x;
+          if (b.flat) { sx = -(bz - az); sy = 0; sz = bx - ax; }        // ground strip: exactly the lane's width
           const sl = Math.hypot(sx, sy, sz) || 1;
-          const taper0 = b.vine ? 1 - (i / shown) * 0.65 : 1, taper1 = b.vine ? 1 - ((i + 1) / shown) * 0.65 : 1;
+          const taper0 = b.vine ? 1 - (i / (shown - 1)) * 0.7 : 1, taper1 = b.vine ? 1 - ((i + 1) / (shown - 1)) * 0.7 : 1;
           const h0 = wdt * 0.5 * taper0 / sl, h1 = wdt * 0.5 * taper1 / sl;
           const o = quads * 18;
           const ax0 = ax - sx * h0, ay0 = ay - sy * h0, az0 = az - sz * h0, ax1 = ax + sx * h0, ay1 = ay + sy * h0, az1 = az + sz * h0;
@@ -1986,8 +2050,39 @@ export class FxView implements ViewModule {
     }
   }
 
+  /**
+   * BURR LASH whip: a quadratic curve from the horn tip (base[0..2]) over a lift point ON the damage lane to the
+   * lane's end. It shoots out along the curve until LASH_CRACK_U (the tip lands on the lane's end), the lift point
+   * settles so the vine lies along the lane, then it reels back from the tip. A small S-wave dies out by the crack.
+   * The polyline holds only the extended part (count = segs × sub + 1 points, resampled over [0, ext]).
+   */
+  private buildWhip(b: Bolt, u: number): void {
+    const H = b.amp;
+    const count = (b.n - 1) * b.sub + 1;
+    const x0 = b.base[0], y0 = b.base[1], z0 = b.base[2];
+    const dx = b.lx1 - b.lx0, dz = b.lz1 - b.lz0;
+    const len = Math.hypot(dx, dz) || 1;
+    const fx = dx / len, fz = dz / len;
+    const dm = Math.min(len * 0.7, Math.max(H * 0.9, len * 0.35));
+    const settle = u <= LASH_CRACK_U ? 0 : Math.min(1, (u - LASH_CRACK_U) / 0.25);
+    const k = settle * settle * (3 - 2 * settle);
+    const x1 = b.lx0 + fx * dm, z1 = b.lz0 + fz * dm, y1 = H * (1.05 - 0.85 * k);
+    const x2 = b.lx1, z2 = b.lz1, y2 = H * (u < LASH_CRACK_U ? 0.25 - 0.13 * (u / LASH_CRACK_U) : 0.12);
+    const ext = u < LASH_CRACK_U ? Math.max(0.06, u / LASH_CRACK_U) : u > 0.6 ? Math.max(0.08, 1 - ((u - 0.6) / 0.4) * 0.92) : 1;
+    const amp = H * 0.1 * Math.max(0, 1 - u / 0.3);
+    for (let i = 0; i < count; i++) {
+      const t = (i / (count - 1)) * ext;
+      const a = (1 - t) * (1 - t), m = 2 * (1 - t) * t, c = t * t;
+      const wave = Math.sin(t * Math.PI * 2 - u * 30) * amp * Math.sin(Math.PI * t);
+      b.pts[i * 3] = a * x0 + m * x1 + c * x2 - fz * wave;
+      b.pts[i * 3 + 1] = a * y0 + m * y1 + c * y2;
+      b.pts[i * 3 + 2] = a * z0 + m * z1 + c * z2 + fx * wave;
+    }
+  }
+
   /** subdivide + jitter a bolt's control polyline (lightning), or shape a lashing vine */
   private buildPolyline(b: Bolt, u: number): void {
+    if (b.vine) { this.buildWhip(b, u); return; }
     const segs = b.n - 1;
     let o = 0;
     for (let s = 0; s < segs; s++) {
@@ -1999,12 +2094,8 @@ export class FxView implements ViewModule {
       for (let k = 0; k < b.sub; k++) {
         const t = k / b.sub;
         let x = ax + dx * t, y = ay + (by - ay) * t, z = az + dz * t;
-        if (b.vine) {
-          // a whip: travelling sine that decays, lifted in an arc
-          const env = Math.sin(Math.PI * t) * (1 - u) * (1 - u);
-          const wave = Math.sin(t * 9 - u * 28) * b.amp * env;
-          x += px * wave; z += pz * wave;
-          y += Math.sin(Math.PI * t) * b.amp * 0.6 * (1 - u);
+        if (b.flat) {
+          // the crack strip: straight, exactly the lane
         } else if (k > 0) {
           const amp = Math.min(b.amp, len * 0.16) * Math.sin(Math.PI * t) + b.amp * 0.15;
           const j = (Math.random() - 0.5) * 2 * amp;

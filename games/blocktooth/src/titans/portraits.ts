@@ -29,7 +29,7 @@ interface Framing {
 
 const FRAMING: Record<TitanId, Framing> = {
   molo: { heading: -0.72, el: 16, fill: 0.9, rim: '#bfffe2' },
-  voltkite: { heading: -0.95, el: 24, fill: 0.86, rim: '#8ff6ff' },   // v3 remodel: higher + more side-on so the sails, saddle and tail kite show (was -0.62 / 11 / 0.88)
+  voltkite: { heading: -0.5, el: 19, fill: 0.82, rim: '#8ff6ff' },   // v4 raptor-cat: the face leads, both sails show as a V; fill 0.82 keeps the snout inside the select card's 112 %-wide crop (v3: -0.95 / 24 / 0.86, side-on)
   hearthback: { heading: -0.55, el: 27, fill: 0.86, rim: '#ffb46b' },
   briarwick: { heading: -0.6, el: 21, fill: 0.88, rim: '#f3ffb0' },
 };

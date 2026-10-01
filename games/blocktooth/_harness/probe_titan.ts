@@ -9,6 +9,8 @@
 // the CAISSON-4 winch leash (pull + resisting it), the HEARTHBACK shell store and acceleration feel.
 // TITAN PASS: BRIARWICK kit C (seed pods: planted, burst, chained, POP-UP PARK cascade >= 4 pods, `rooted`
 // events) replaces the old BLOOM TURRET asserts; VOLT-KITE GROUNDING lays wires with the dash never pressed.
+// fb3: BRIARWICK BURR LASH aim units (best lane ahead, wind-up honesty, last-lane preference, forward arc while steering, view lane =
+// damage lane, steady under a wobbling stick).
 //
 // Parallel-build fallback: if (and only if) a module another lane owns does not exist on disk yet, a
 // PROBE-LOCAL stub stands in for it (see STUBS) and the run is labelled STUBBED. The stub director spawns
@@ -338,6 +340,173 @@ for (const id of TITANS) {
   if (!(maxL >= 3)) fail(`POP-UP PARK: the cascade never reached link 3 (deepest ${maxL})`);
 }
 
+{
+  // fb3 (owner playtest 2026-09-30: BURR LASH "is sloppy -- the tongue just goes out in all directions"). Isolated
+  // BURR LASH aim + honesty units: no spawns, foes placed and held (stunned, unkillable) around the titan.
+  //  L1 the lash takes the lane through the most foes AHEAD, not the nearest foe off to the side;
+  //  L2 the crack goes where the wind-up cocked the horn (kit.lashDir committed windS before);
+  //  L3 consecutive lashes at two equal clusters stay on one cluster (the last lane is preferred), no flip-flop;
+  //  L4 while the stick is held the lash never whips outside the forward arc (foes only behind are not lashed);
+  //     with the stick released the titan swivels and lashes them;
+  //  L5 the view's lane = the damage lane: every `vine` runs from the titan's centre for exactly reach(w), and every
+  //     foe standing inside that lane after the tick took a hit in it (what you see is what you hit; fx flashes them);
+  //  L6 under a wobbling stick consecutive lashes keep to one lane (last-lane preference: goodFrac / trackN).
+  console.log('\n[unit] BRIARWICK BURR LASH aim');
+  const EN = await import('../src/ai/enemies.ts');
+  const BW = await import('../src/titans/kits/briarwick.ts');
+  const MA = await import('../src/core/math.ts');
+  const DEGR = Math.PI / 180;
+  const idle: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
+  const mk = (seed: number) => {
+    const w = WM.createWorld({ titan: 'briarwick', biome: 'grideast', seed });
+    w.cheats.noSpawns = true;
+    for (const e of w.enemies) e.alive = false;
+    return w;
+  };
+  // placed foes are PINNED (re-placed after every tick): the lash's knockback and pod bursts scatter them, which is the
+  // sim working, not the aim under test
+  const pins = new Map<number, [number, number]>();
+  const put = (w: World, a: number, dH: number) => {
+    const T = w.titan;
+    const e = EN.spawnEnemy(w, 'android', T.x + Math.sin(a) * dH * T.height, T.z + Math.cos(a) * dH * T.height);
+    e.hp = e.maxHp = 1e9; e.stun = 1e9;
+    pins.set(e.id, [e.x, e.z]);
+    return e;
+  };
+  const pin = (w: World) => { for (const e of w.enemies) { const p = pins.get(e.id); if (p) { e.x = e.px = p[0]; e.z = e.pz = p[1]; } } };
+  type Cast = { dir: number; hitIds: number[]; windDir: number | null; okLane: boolean; len: number };
+  const laneBad: string[] = [];
+  /** step until `n` vineLash casts (or maxT ticks); collects each cast's heading, the foes its lane hit, the committed wind-up */
+  const casts = (w: World, n: number, maxT: number, input: TitanInput = idle): Cast[] => {
+    const out: Cast[] = [];
+    let windDir: number | null = null;
+    for (let i = 0; i < maxT && out.length < n; i++) {
+      const T = w.titan;
+      pin(w);
+      const x0 = T.x, z0 = T.z;
+      WM.stepWorld(w, input);
+      if ((T.kit.lashWind ?? -1) >= 0 && windDir === null) windDir = T.kit.lashDir;
+      const evs = w.events as SimEvent[];
+      const vi = evs.findIndex((e) => e.type === 'vine');
+      if (vi < 0) continue;
+      const v = evs[vi] as Extract<SimEvent, { type: 'vine' }>;
+      const len = Math.hypot(v.x1 - v.x0, v.z1 - v.z0), dir = Math.atan2(v.x1 - v.x0, v.z1 - v.z0);
+      const half = 0.5 * BW.BRIAR.lashWH * T.height * Math.max(0.1, T.stats.area || 1);
+      const reachNow = BW.reach(w);
+      const fx = Math.sin(dir), fz = Math.cos(dir);
+      const inLane = (x: number, z: number, r: number) => {
+        const dx = x - v.x0, dz = z - v.z0, along = dx * fx + dz * fz, side = dx * fz - dz * fx;
+        return along >= -r - 1e-6 && along <= len + r + 1e-6 && Math.abs(side) <= half + r + 1e-6;
+      };
+      // the drawn lane starts at the titan, runs exactly reach(w), and every foe standing in it took a hit this tick
+      // (enemyHit events are merged per foe per tick, so a pod burst earlier in the tick carries the lash's damage too)
+      const hitSet = new Set<number>();
+      for (const e of evs) if (e.type === 'enemyHit') hitSet.add(e.id);
+      let okLane = Math.abs(len - reachNow) < 1e-6 && Math.hypot(v.x0 - x0, v.z0 - z0) < T.height * 0.5;
+      const ids: number[] = [];
+      for (const f of w.enemies) {
+        const p = pins.get(f.id);                       // pinned foes: where they stood during the tick
+        if (!f.alive || !inLane(p ? p[0] : f.x, p ? p[1] : f.z, f.radius)) continue;
+        ids.push(f.id);
+        if (!hitSet.has(f.id)) okLane = false;
+      }
+      if (!okLane) laneBad.push(`tick ${w.tick}: len ${len.toFixed(2)} vs reach ${reachNow.toFixed(2)}, foes in the lane ${ids.length}, not hit ${ids.filter((id) => !hitSet.has(id)).length}`);
+      out.push({ dir, hitIds: ids, windDir, okLane, len });
+      windDir = null;
+    }
+    return out;
+  };
+  const offDeg = (a: number, b: number) => Math.abs(MA.wrapAngle(a - b)) / DEGR;
+
+  // L1 + L2: a line of 4 foes straight ahead (1.3-2.6 H) vs one closer foe 45° to the left (0.9 H)
+  {
+    const w = mk(21); const T = w.titan; const h = T.heading;
+    const line = [1.3, 1.75, 2.2, 2.6].map((d) => put(w, h, d));
+    const lone = put(w, h + 45 * DEGR, 0.9);
+    const c = casts(w, 3, 150);
+    const lineIds = new Set(line.map((e) => e.id));
+    const inLine = c.map((k) => k.hitIds.filter((id) => lineIds.has(id)).length);
+    console.log(`  L1 line ahead vs a nearer foe 45° off: ${c.length} casts | off the line ${c.map((k) => offDeg(k.dir, h).toFixed(1) + '°').join(', ')} | line foes hit ${inLine.join(', ')} | lone foe hit ${c.map((k) => k.hitIds.includes(lone.id) ? 1 : 0).join(', ')}`);
+    if (c.length < 3) fail(`BURR LASH L1: ${c.length} casts in 5 s (want 3)`);
+    if (!c.every((k) => offDeg(k.dir, h) <= 8)) fail('BURR LASH L1: a lash left the 4-foe line ahead for the nearer lone foe');
+    if (!inLine.every((n) => n >= 4)) fail(`BURR LASH L1: a lash hit fewer than the 4 foes in the line (${inLine.join(', ')})`);
+    const wound = c.filter((k) => k.windDir !== null);
+    console.log(`  L2 wind-up honesty: ${wound.length} casts with a wind-up | crack − wind-up heading ${wound.map((k) => offDeg(k.dir, k.windDir as number).toFixed(2) + '°').join(', ')}`);
+    if (wound.length < 2) fail(`BURR LASH L2: only ${wound.length} casts had a wind-up (want >= 2)`);
+    if (!wound.every((k) => offDeg(k.dir, k.windDir as number) <= 3)) fail('BURR LASH L2: the crack left the heading the wind-up committed to');
+  }
+  // L3: two equal clusters (3 foes each) at ±30°, 1.6-2.4 H: 5 consecutive lashes stay on one side
+  {
+    const w = mk(22); const T = w.titan; const h = T.heading;
+    for (const s of [1, -1]) for (const d of [1.6, 2.0, 2.4]) put(w, h + s * 30 * DEGR, d);
+    const c = casts(w, 5, 220);
+    const sides = c.map((k) => Math.sign(MA.wrapAngle(k.dir - h)));
+    console.log(`  L3 two equal clusters at ±30°: sides ${sides.join(' ')} | foes hit ${c.map((k) => k.hitIds.length).join(', ')}`);
+    if (c.length < 5) fail(`BURR LASH L3: ${c.length} casts (want 5)`);
+    if (new Set(sides).size !== 1) fail('BURR LASH L3: consecutive lashes flip-flopped between two equal clusters');
+    if (!c.every((k) => k.hitIds.length >= 3)) fail('BURR LASH L3: a lash hit fewer than its cluster of 3');
+  }
+  // L4: foes only BEHIND; 3 s steering straight ahead → no lash leaves the forward arc, the foes behind are never hit;
+  // then the stick is released → the titan swivels and lashes them within 3 s
+  {
+    const w = mk(23); const T = w.titan; const h = T.heading;
+    const back = [put(w, h + Math.PI, 1.4), put(w, h + Math.PI + 0.2, 1.9), put(w, h + Math.PI - 0.2, 1.9)];
+    const line0 = new Set(back.map((e) => e.id));
+    const backIds = new Set(back.map((e) => e.id));
+    const fwd: TitanInput = { mx: Math.sin(h), mz: Math.cos(h), ability: false, abilityHeld: false, dash: false };
+    const c1 = casts(w, 99, 90, fwd);
+    const worst = c1.length ? Math.max(...c1.map((k) => offDeg(k.dir, h))) : 0;
+    const hitBack = c1.some((k) => k.hitIds.some((id) => backIds.has(id)));
+    for (const e of back) pins.delete(e.id);
+    for (const e of back) { const T2 = w.titan; put(w, T2.heading + Math.PI + (e.id % 3 - 1) * 0.2, 1.6); e.alive = false; }
+    backIds.clear();
+    for (const e of w.enemies) if (e.alive && pins.has(e.id) && !line0.has(e.id)) backIds.add(e.id);
+    const c2 = casts(w, 1, 90, idle);
+    const hit2 = c2.length > 0 && c2[0].hitIds.some((id) => backIds.has(id));
+    console.log(`  L4 steering ahead, foes behind: ${c1.length} casts (city ahead), worst ${worst.toFixed(1)}° off the move direction (arc ±${BW.BRIAR.aimArcDeg}°), behind foes hit ${hitBack} | stick released: ${c2.length} cast(s), behind foes hit ${hit2}`);
+    if (worst > BW.BRIAR.aimArcDeg + 0.5) fail(`BURR LASH L4: a lash whipped ${worst.toFixed(1)}° off the move direction while steering`);
+    if (hitBack) fail('BURR LASH L4: the lash whipped back at foes behind while the stick was held');
+    if (!hit2) fail('BURR LASH L4: with the stick released the titan did not turn and lash the foes behind it');
+  }
+  // L6 (fb3 v3): a steady whip under an imprecise stick — the titan walks in place (re-placed every tick) while the stick
+  // wobbles ±25° around one heading, re-rolled every 0.5 s (probe_balance's player-like steering); two equal clusters
+  // (3 foes each, 4-7 H: Size I reaches 12.5 m) at ±20°, both always inside the arc. Consecutive lashes keep to one lane (median swing ≤ 10°, ≤ 1 swing > 20°), every
+  // crack within the arc of the stick + 25° (a wind-up commits 0.2 s before a re-roll), each hits ≥ 2 foes. Control:
+  // goodFrac 0 / trackN 0 (always the single best lane) must swing > 20° at least 3 times on this field (else the field proves nothing).
+  {
+    const run = (goodFrac: number, trackN: number) => {
+      const keep = [BW.BRIAR.goodFrac, BW.BRIAR.trackN];
+      BW.BRIAR.goodFrac = goodFrac; BW.BRIAR.trackN = trackN;
+      const w = mk(24); const T = w.titan; const h = T.heading, x0 = T.x, z0 = T.z;
+      for (const sg of [1, -1]) for (const d of [4, 5.5, 7]) put(w, h + sg * 20 * DEGR, d);
+      let seed = 7, wob = 0;
+      const out: { dir: number; n: number; stick: number }[] = [];
+      for (let i = 0; i < 400 && out.length < 11; i++) {
+        if (i % 15 === 0) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; wob = ((seed / 0x7fffffff) * 2 - 1) * 25 * DEGR; }
+        const a = h + wob;
+        T.x = T.px = x0; T.z = T.pz = z0;
+        pin(w);
+        WM.stepWorld(w, { mx: Math.sin(a), mz: Math.cos(a), ability: false, abilityHeld: false, dash: false });
+        for (const e of w.events) if (e.type === 'titanAttack' && e.attack === 'vineLash') out.push({ dir: e.dir, n: e.hits, stick: a });
+      }
+      BW.BRIAR.goodFrac = keep[0]; BW.BRIAR.trackN = keep[1];
+      const sw = out.slice(1).map((k, i) => offDeg(k.dir, out[i].dir)).sort((p, q) => p - q);
+      return { out, med: sw.length ? sw[sw.length >> 1] : 0, big: sw.filter((x) => x > 20).length, worst: Math.max(0, ...out.map((k) => offDeg(k.dir, k.stick))) };
+    };
+    const r = run(BW.BRIAR.goodFrac, BW.BRIAR.trackN), c = run(0, 0);
+    console.log(`  L6 wobbling stick, two clusters at ±20°: ${r.out.length} casts | median swing ${r.med.toFixed(1)}°, ${r.big} swing(s) > 20° (control, always the single best lane: median ${c.med.toFixed(1)}°, ${c.big} swing(s) > 20°) | worst ${r.worst.toFixed(1)}° off the stick | foes hit ${r.out.map((k) => k.n).join(', ')}`);
+    if (r.out.length < 10) fail(`BURR LASH L6: ${r.out.length} casts (want >= 10)`);
+    if (!(r.med <= 10)) fail(`BURR LASH L6: consecutive lashes swung a median ${r.med.toFixed(1)}° under a wobbling stick (want <= 10°)`);
+    if (r.worst > BW.BRIAR.aimArcDeg + 25) fail(`BURR LASH L6: a lash cracked ${r.worst.toFixed(1)}° off the stick (arc ${BW.BRIAR.aimArcDeg}° + 25° re-roll)`);
+    if (!r.out.every((k) => k.n >= 2)) fail('BURR LASH L6: a lash hit fewer than 2 foes');
+    if (r.big > 1) fail(`BURR LASH L6: ${r.big} lashes swung more than 20° between the two clusters (want <= 1)`);
+    if (c.big < 3) fail(`BURR LASH L6: the control (always the best lane) swung > 20° only ${c.big} time(s) — the field does not test steadiness`);
+  }
+  console.log(`  L5 view lane = damage lane: ${laneBad.length} bad cast(s)`);
+  for (const b of laneBad.slice(0, 4)) console.log('    ' + b);
+  if (laneBad.length) fail(`BURR LASH L5: ${laneBad.length} cast(s) whose vine lane is not the damage lane`);
+}
+
 // ─────────────────────────────── unit block ───────────────────────────────
 console.log('\n[unit] growth / damage API');
 {
@@ -497,7 +666,23 @@ console.log('\n[unit] growth / damage API');
   const power = Math.max(0, T.stats.abilityPower ?? 1);
   const want = Math.min(VOLT.shieldMax * T.maxHp, sh0 + Math.min(VOLT.shieldPressCap, VOLT.shieldPerWire * blown) * power * T.maxHp);
   const sh1 = w.upgrades.shield;
-  for (let i = 0; i < 60; i++) WM.stepWorld(w, idle);            // cooldown back, no wires left
+  // RECAST is a deliberate moment, not spam (owner playtest fb3: "needs a longer cooldown as it allows me to melt
+  // away at everything"): the press arms the full detCdS (× abilityCooldown, 1 on a fresh run), the cooldown is in
+  // line with the other titans' hooks (>= 6 s; MOLO 9, BRIARWICK 8, HEARTHBACK 6), and a press while cooling does nothing.
+  const cdArmed = T.abilityCd, cdWant = VOLT.detCdS * Math.max(0.35, T.stats.abilityCooldown ?? 1);
+  for (let i = 0; i < 4 * HZ && T.dashCharges < 1; i++) WM.stepWorld(w, idle);    // a dash charge back (2.25 s each)
+  WM.stepWorld(w, dash); for (let i = 0; i < 12; i++) WM.stepWorld(w, idle);   // a fresh wire to tempt the early press
+  const wiresCool = T.kit.wires, shCool0 = w.upgrades.shield;
+  if (!(wiresCool >= 1) || !(T.abilityCd > 0)) fail(`RECAST cooldown test: needs a live wire (${wiresCool}) while still cooling (${T.abilityCd} s)`);
+  WM.stepWorld(w, press);
+  const coolFired = w.events.some((e) => e.type === 'wireDetonate' || e.type === 'explosion');
+  const wiresCoolAfter = T.kit.wires, shCool1 = w.upgrades.shield;
+  console.log(`  RECAST cooldown: armed ${cdArmed.toFixed(2)} s (want ${cdWant.toFixed(2)}, detCdS ${VOLT.detCdS}); press while cooling: fired ${coolFired}, wires ${wiresCool} → ${wiresCoolAfter}, shield ${shCool0.toFixed(2)} → ${shCool1.toFixed(2)}`);
+  if (!(VOLT.detCdS >= 6)) fail(`RECAST: detCdS ${VOLT.detCdS} s — must be >= 6 s, in line with the other titans' hooks (owner fb3)`);
+  if (!(Math.abs(cdArmed - cdWant) <= 1 / HZ + 1e-6)) fail(`RECAST: press armed ${cdArmed} s of cooldown (want ${cdWant})`);
+  if (coolFired || wiresCoolAfter < wiresCool || shCool1 > shCool0 + 1e-9) fail('RECAST: a press during the cooldown must not detonate, burst or shield');
+  for (let i = 0; i < Math.ceil(cdWant * HZ) + 5 * HZ; i++) WM.stepWorld(w, idle);   // cooldown back, no wires left
+  if (!(T.abilityCd <= 0)) fail(`RECAST: cooldown still ${T.abilityCd} s after ${cdWant + 5} s`);
   const sh2 = w.upgrades.shield;
   WM.stepWorld(w, press);
   const burst = w.events.some((e) => e.type === 'explosion'), sh3 = w.upgrades.shield;
@@ -612,6 +797,7 @@ for (const [rank, strength] of [[0, 3], [2, 12], [4, 12]] as const) {
     ['briarwick', 'auto', `Every ${BRIAR.lashEveryS.toFixed(1)} s`],
     ['briarwick', 'auto', `${BRIAR.lashLenH} body-heights long (${(BRIAR.lashLenH * BRIAR.size1LenMul).toFixed(1)} at Size I), ${BRIAR.lashDmg} dmg`],
     ['briarwick', 'auto', `at Size I it always reaches ${BRIAR.size1ReachM} m`],   // CFIX 2026-09-30: Size I lash floor (added fact)
+    ['briarwick', 'auto', `within ${BRIAR.aimArcDeg}° of where you are heading`],   // fb3 2026-09-30: forward-arc aim (added fact)
     ['briarwick', 'auto', `ripen in ${BRIAR.ripenS} s`], ['briarwick', 'auto', `${BRIAR.burstDmg} dmg, tangles`],
     ['briarwick', 'auto', `hits ${pct(BRIAR.linkBonus)} harder`],
     ['briarwick', 'hook', `(${BRIAR.ringDmg} dmg, tangles ${BRIAR.ringTangleS} s), ${BRIAR.volleyN} ripe seeds`],

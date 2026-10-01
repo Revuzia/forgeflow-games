@@ -17,13 +17,15 @@
 // Tuning (CONTRACT §8 G3): every BRIARWICK change stays in `BRIAR` below — never through BOSS_KIND_MUL.
 
 import type { DamageOpts, Enemy, Hazard, World } from '../../core/types.ts';
-import { headingOf } from '../../core/math.ts';
+import { circleInShape, headingOf, wrapAngle } from '../../core/math.ts';
 import { damageArea, titanDamage } from '../../combat/damage.ts';
 import { findTarget } from '../../combat/targeting.ts';
+import type { Target } from '../../combat/targeting.ts';
 import { enemiesInCircle, nearestEnemies } from '../../combat/spatial.ts';
 import { spawnHazard } from '../../combat/hazards.ts';
 import { buildingsInRect } from '../../city/citysim.ts';
 import { healTitan } from '../titansim.ts';
+import { titanSpeed } from '../../core/config.ts';
 import {
   S, aimPoint, autoInterval, closestOnBuilding, distToBuilding, emitAbility, emitAttack, faceToward, hookCooldown,
   idleAuto, knockFor, kv, rearmAuto, titanHazards,
@@ -38,6 +40,30 @@ export const BRIAR = {
   lashDmg: 14,
   lashKnock: 0.5,
   size1LenMul: 1.8,        // Size I only (× the lash length; the volley range uses it too)
+  // BURR LASH aim (fb3, owner playtest 2026-09-30: "the tongue just goes out in all directions"). The old pick was the
+  // nearest thing in reach every cast, in any direction: 52 % of lashes left more than 60° off the move direction
+  // (P-human, current pacing, 24 runs; _harness/scratch/fb3/BRIAR). Now, while the titan walks, the whip only cracks
+  // AHEAD — inside ±aimArcDeg of the move direction — down a lane that hits foes, staying with the last crack's lane (or
+  // the nearest lane to it: last ± trackDeg × 1..trackN, or any foe's) among the lanes scoring ≥ goodFrac × the best
+  // (score = hits × (1 − aimEdgeLoss × off / arc)); a foe at the titan's skin (closeH) inside the arc must be in the
+  // lane. The horn wind-up commits the lane windS before the crack and the crack goes exactly there. Foes in reach but
+  // none ahead: the whip HOLDS (no swing at the city, no whip back at a rig being fled). With no foe in reach it keeps
+  // cracking down the same block while something stands in that lane. Standing still (idleAnyDir) or stuck (slower than
+  // blockedFrac × the base walk) the arc is the full circle: it whips whatever is nearest / pressing on it
+  // and turns to face it. A boss with no foe in reach (findTarget's pick) is lashed in any direction (bossArcDeg 180).
+  aimCands: 24,            // candidate lanes: toward each of this many nearest foes in reach (+ the last lane, neighbours)
+  aimArcDeg: 45,           // the forward arc (± this of the move direction / facing) the lash whips inside
+  aimEdgeLoss: 0.25,       // a lane at the arc's edge scores (1 − this) × its hits (centred lanes win ties)
+  aimBossHit: 1,           // a lane through a boss part counts this many extra hits (one shape = one hit's worth)
+  goodFrac: 0.6,           // the lane nearest the last crack among those scoring ≥ this × the best (0 = always the best)
+  trackN: 2,               // extra candidate lanes beside the last crack: last ± k × trackDeg, k = 1..trackN
+  trackDeg: 8,
+  closeH: 0.8,             // a foe within this × H of the titan's surface (inside the arc) must be in the lane taken
+  bossArcDeg: 180,         // while steering a boss part is lashed only within this of the move direction (180 = anywhere)
+  blockedFrac: 0.2,        // stick held but slower than this × the base walk (stuck / hemmed in): the arc is the full circle
+  idleAnyDir: 1,           // 1: with the stick idle the whip cracks in any direction (the titan then turns to face it)
+  keepS: 2.0,              // the last crack's lane counts for this long (s)
+  windS: 0.2,              // the horn wind-up: the lane is committed this long before the crack (kit.lashWind; view)
   // Size I lash floor (m from the titan's centre, before × vineLength × attackRange): the Size I shooters stand at their
   // range off the titan's SURFACE (android 9, squad 12 + 0.2 H; ai/enemies.ts reach/surfDist), so the lash reaches
   // size1ReachM + the titan's radius. Measured (critic 2026-09-30): at H 1.2 the 6.9 m lash reached 0 of 101 shooter
@@ -83,6 +109,7 @@ export const BRIAR = {
 /** Size-I multiplier (1 from Size II on). */
 function s1(w: World, mul: number): number { return w.titan.rank === 0 ? mul : 1; }
 
+const DEG = Math.PI / 180;
 const SRC_PASSIVE = 0, SRC_HOOK = 1, SRC_DASH = 2, SRC_UPG = 3;
 const hazBuf: Hazard[] = [];
 const podBuf: Hazard[] = [];
@@ -101,7 +128,13 @@ interface BreakCache { alive: Map<number, number>; seen: Map<number, number>; }
 const caches = new WeakMap<World, BreakCache>();
 
 export function init(): Record<string, number> {
-  return { pods: 0, ripe: 0, turrets: 0, chain: 0, bloomT: 0, sowT: 0, healWin: 0, healT: 0 };
+  return {
+    pods: 0, ripe: 0, turrets: 0, chain: 0, bloomT: 0, sowT: 0, healWin: 0, healT: 0,
+    // BURR LASH aim: the last crack's heading + its age (s); the committed lash heading, its pod distance and kind (0 foe,
+    // 1 boss, 2 city); the wind-up time left (s, -1 = not winding), the horn it cracks from (+1 = the left horn, model +X;
+    // -1 = the right), the lane width (m) and how many things the last lash hit (view)
+    prevDir: 0, lashAge: 99, lashDir: 0, lashD: 0, lashKind: 0, lashWind: -1, lashSide: 1, lashW: 0, lashN: 0,
+  };
 }
 
 /** Auto-attack (BURR LASH) reach (m) right now, incl. the Size I floor (size1ReachM). */
@@ -136,8 +169,11 @@ export function step(w: World): void {
 
   if (w.input.ability && T.abilityCd <= 0) popUpPark(w);
 
-  // ── auto: BURR LASH ──
+  // ── auto: BURR LASH (the lane is committed windS before the crack: the view winds the horn up toward it) ──
+  K.lashAge = kv(w, 'lashAge', 99) + w.dt;
   if (T.autoCd <= 0) lash(w);
+  else if (T.autoCd <= BRIAR.windS && kv(w, 'lashWind', -1) < 0) windUp(w);
+  else if (kv(w, 'lashWind', -1) >= 0) K.lashWind = Math.max(0, T.autoCd);
 
   const pods = titanHazards(w, 'bloom', hazBuf);
   let ripe = 0;
@@ -145,21 +181,250 @@ export function step(w: World): void {
   K.pods = pods.length; K.turrets = pods.length; K.ripe = ripe;
 }
 
-function lash(w: World): void {
+/** Lane width (m) of the BURR LASH right now. */
+function lashWidth(w: World): number { return BRIAR.lashWH * w.titan.height * Math.max(0.1, S(w, 'area')); }
+
+const cand: Enemy[] = [];
+const pool: Enemy[] = [];
+const LANE = { k: 'lane' as const, x: 0, z: 0, dir: 0, len: 0, w: 0 };
+/** the chosen lash: heading, distance to the aim point (the pod lands there), what it is aimed at (KIND_*) */
+const pick = { dir: 0, d: 0, kind: 0 };
+const KIND_FOE = 0, KIND_BOSS = 1, KIND_CITY = 2;
+/** laneHits side output: distance along the lane of the nearest foe in it */
+let laneNear = 0;
+
+/** Foes (+ aimBossHit if a boss part is in it) inside the lash lane at heading `dir` (damageArea's own test). */
+function laneHits(w: World, dir: number): number {
+  LANE.dir = dir;
+  const fx = Math.sin(dir), fz = Math.cos(dir);
+  let n = 0;
+  laneNear = Infinity;
+  for (let i = 0; i < pool.length; i++) {
+    const e = pool[i];
+    if (!e.alive || !circleInShape(LANE, e.x, e.z, e.radius)) continue;
+    n++;
+    const along = (e.x - LANE.x) * fx + (e.z - LANE.z) * fz;
+    if (along < laneNear) laneNear = along;
+  }
+  const B = w.boss;
+  if (n > 0 && BRIAR.aimBossHit > 0 && B && B.alive && B.introT <= 0) {
+    for (let i = 0; i < B.parts.length; i++) if (circleInShape(LANE, B.parts[i].x, B.parts[i].z, B.parts[i].r)) { n += BRIAR.aimBossHit; break; }
+  }
+  return n;
+}
+
+/** True while the stick is held. */
+function steering(w: World): boolean {
+  const I = w.input;
+  return !!I && Math.hypot(I.mx, I.mz) > 0.25;
+}
+
+/** The forward arc (rad) right now: aimArcDeg, or the full circle with the stick idle (idleAnyDir) or while the stick is
+ *  held but the titan is stuck (slower than blockedFrac × its base walk: hemmed in, it whips at whatever holds it). */
+function arcNow(w: World): number {
   const T = w.titan;
-  const H = T.height;
-  const len = reach(w);
+  if (BRIAR.idleAnyDir > 0 && !steering(w)) return Math.PI;
+  if (BRIAR.blockedFrac > 0 && steering(w) && T.dashT <= 0 && T.speed < BRIAR.blockedFrac * titanSpeed(T.height)) return Math.PI;
+  return BRIAR.aimArcDeg * DEG;
+}
+
+/** The aim reference: the move direction while the stick is held, else the facing (which swivels to the target). */
+function aimRef(w: World): number {
+  const I = w.input;
+  return steering(w) ? headingOf(I.mx, I.mz) : w.titan.heading;
+}
+
+/** The last crack's heading while it is recent (keepS), else null. */
+function lastLane(w: World): number | null {
+  return kv(w, 'lashAge', 99) <= BRIAR.keepS ? kv(w, 'prevDir') : null;
+}
+
+const LC_MAX = 64;
+const lcDir = new Float64Array(LC_MAX), lcOff = new Float64Array(LC_MAX), lcD = new Float64Array(LC_MAX);
+const lcSc = new Float64Array(LC_MAX), lcTurn = new Float64Array(LC_MAX);
+
+/**
+ * The foe lane inside the forward arc (±aimArcDeg of the aim reference). Candidates: the lane toward each of the nearest
+ * foes in reach, the last crack's lane and its neighbours (last ± k × trackDeg). Every candidate that hits a foe scores
+ * hits × (1 − aimEdgeLoss × off / arc); the pick is the one nearest the last crack among those scoring ≥ goodFrac × the
+ * best (the whip tracks the crowd instead of jumping to the single best lane; no recent crack: the best). Ties: the
+ * higher score, then the smaller angle off the aim. Fills `pick`; false when no lane inside the arc hits a foe.
+ */
+function aimAtFoes(w: World, len: number, width: number): boolean {
+  const T = w.titan;
+  nearestEnemies(w, T.x, T.z, len, BRIAR.aimCands, cand);
+  if (!cand.length) return false;
+  enemiesInCircle(w, T.x, T.z, len + width, pool);
+  LANE.x = T.x; LANE.z = T.z; LANE.len = len; LANE.w = width;
+  const ref = aimRef(w), arc = arcNow(w);
+  const last = lastLane(w);
+  const nTrack = last !== null ? 1 + 2 * Math.max(0, Math.round(BRIAR.trackN)) : 0;
+  // a foe at the titan's skin (within closeH × H of its surface) inside the arc must be in the lane: it is what is biting
+  const n0 = cand[0];
+  const close = BRIAR.closeH > 0 && n0.alive && Math.hypot(n0.x - T.x, n0.z - T.z) - n0.radius - T.radius <= BRIAR.closeH * T.height
+    && Math.abs(wrapAngle(headingOf(n0.x - T.x, n0.z - T.z) - ref)) <= arc ? n0 : null;
+  let nc = 0, top = 0;
+  for (let i = 0; i < cand.length + nTrack && nc < LC_MAX; i++) {
+    let dir: number;
+    if (i < cand.length) { const e = cand[i]; if (!e.alive) continue; dir = headingOf(e.x - T.x, e.z - T.z); }
+    else { const k = i - cand.length; dir = (last as number) + (k === 0 ? 0 : (k % 2 ? 1 : -1) * Math.ceil(k / 2) * BRIAR.trackDeg * DEG); }
+    const off = Math.abs(wrapAngle(dir - ref));
+    if (off > arc) continue;
+    const hits = laneHits(w, dir);
+    if (hits <= 0) continue;
+    if (close && !circleInShape(LANE, close.x, close.z, close.radius)) continue;
+    lcDir[nc] = dir; lcOff[nc] = off; lcD[nc] = Math.min(len, Math.max(0, laneNear));
+    lcSc[nc] = hits * (1 - BRIAR.aimEdgeLoss * (off / arc));
+    lcTurn[nc] = last === null ? 0 : Math.abs(wrapAngle(dir - last));
+    if (lcSc[nc] > top) top = lcSc[nc];
+    nc++;
+  }
+  cand.length = 0; pool.length = 0;
+  if (nc === 0) return false;
+  const floor = (last !== null && BRIAR.goodFrac > 0 ? BRIAR.goodFrac : 1) * top - 1e-9;
+  let bi = -1, bt = Infinity, bv = -Infinity, bo = Infinity;
+  for (let i = 0; i < nc; i++) {
+    if (lcSc[i] < floor) continue;
+    if (lcTurn[i] < bt - 1e-9 || (Math.abs(lcTurn[i] - bt) <= 1e-9 && (lcSc[i] > bv + 1e-9 || (Math.abs(lcSc[i] - bv) <= 1e-9 && lcOff[i] < bo - 1e-9)))) {
+      bi = i; bt = lcTurn[i]; bv = lcSc[i]; bo = lcOff[i];
+    }
+  }
+  pick.dir = lcDir[bi]; pick.d = lcD[bi]; pick.kind = KIND_FOE;
+  return true;
+}
+
+/** Nearest boss part in reach inside the arc (arcNow) of the aim reference; fills `pick`. */
+function aimAtBoss(w: World, len: number): boolean {
+  const B = w.boss, T = w.titan;
+  if (!B || !B.alive || B.introT > 0) return false;
+  const ref = aimRef(w), arc = arcNow(w);
+  let best = -1, bd = Infinity;
+  for (let i = 0; i < B.parts.length; i++) {
+    const p = B.parts[i];
+    const dd = Math.max(0, Math.hypot(p.x - T.x, p.z - T.z) - p.r);
+    if (dd > len || dd >= bd) continue;
+    if (Math.abs(wrapAngle(headingOf(p.x - T.x, p.z - T.z) - ref)) > arc) continue;
+    bd = dd; best = i;
+  }
+  if (best < 0) return false;
+  const p = B.parts[best];
+  pick.dir = headingOf(p.x - T.x, p.z - T.z); pick.d = Math.hypot(p.x - T.x, p.z - T.z); pick.kind = KIND_BOSS;
+  return true;
+}
+
+const CITY_US = [0.3, 0.55, 0.8];
+/** A building / prop inside the forward arc: while something stands IN the last crack's lane (recent, inside the arc)
+ *  the whip cracks down that lane again (it keeps chewing the same block); else the one nearest a point 0.45 × reach
+ *  down the aim; else `t` itself when it is inside the arc. Fills `pick`. */
+function aimAtCity(w: World, t: Target | null, len: number): boolean {
+  const T = w.titan, ref = aimRef(w), arc = arcNow(w);
+  const last = lastLane(w);
+  if (last !== null && arc < Math.PI - 1e-9 && Math.abs(wrapAngle(last - ref)) <= arc) {
+    const half = 0.5 * lashWidth(w);
+    for (const u of CITY_US) {
+      const c = findTarget(w, T.x + Math.sin(last) * len * u, T.z + Math.cos(last) * len * u, half, true);
+      if (!c || (c.kind !== 'building' && c.kind !== 'prop')) continue;
+      pick.dir = last; pick.d = len * u; pick.kind = KIND_CITY;
+      return true;
+    }
+  }
+  // stuck or idle (the arc is the full circle): the nearest thing first — what the titan is pressed against
+  const free = arc >= Math.PI - 1e-9;
+  const t2 = free && t ? null : findTarget(w, T.x + Math.sin(ref) * len * 0.45, T.z + Math.cos(ref) * len * 0.45, len * 0.55, true);
+  for (const c of [t2, t]) {
+    if (!c || (c.kind !== 'building' && c.kind !== 'prop')) continue;
+    aimPoint(w, c, T.x, T.z, aim);
+    const dir = headingOf(aim.x - T.x, aim.z - T.z);
+    if (Math.abs(wrapAngle(dir - ref)) > arc) continue;
+    pick.dir = dir; pick.d = Math.hypot(aim.x - T.x, aim.z - T.z); pick.kind = KIND_CITY;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Choose the BURR LASH (fills `pick`; false = hold it). findTarget decides what the titan is fighting: an open
+ * gatekeeper weak point or a boss with no foe in reach → the boss (anywhere while bossArcDeg is 180; else, steering,
+ * the part findTarget names if it is within bossArcDeg, else the nearest part inside the arc); foes in reach → the foe
+ * lane inside the arc (arcNow), else a boss part inside it, else HOLD; only
+ * the city in reach → the city inside the arc. Holding with the stick idle swivels the titan toward the target (with
+ * idleAnyDir the arc is already the full circle).
+ */
+function selectLash(w: World, len: number, width: number): boolean {
+  const T = w.titan;
   const t = findTarget(w, T.x, T.z, len, true);
-  if (!t) { idleAuto(w); return; }
+  if (!t) return false;
+  if (t.kind === 'boss') {
+    aimPoint(w, t, T.x, T.z, aim);
+    const dir = headingOf(aim.x - T.x, aim.z - T.z);
+    if (BRIAR.bossArcDeg >= 180 || !steering(w) || Math.abs(wrapAngle(dir - aimRef(w))) <= Math.max(arcNow(w), BRIAR.bossArcDeg * DEG)) {
+      pick.dir = dir; pick.d = Math.hypot(aim.x - T.x, aim.z - T.z); pick.kind = KIND_BOSS;
+      return true;
+    }
+    if (aimAtBoss(w, len)) return true;
+  } else if (t.kind === 'enemy') {
+    if (aimAtFoes(w, len, width) || aimAtBoss(w, len)) return true;
+  } else if (aimAtCity(w, t, len)) return true;
   aimPoint(w, t, T.x, T.z, aim);
-  const dir = headingOf(aim.x - T.x, aim.z - T.z);
-  const width = BRIAR.lashWH * H * Math.max(0.1, S(w, 'area'));
+  faceToward(w, headingOf(aim.x - T.x, aim.z - T.z));       // nothing ahead: swivel toward it while the stick is idle
+  return false;
+}
+
+/** The committed lane still worth the crack? A foe lane must still hit a foe; a boss lane always is (0.2 s); a city lane
+ *  only while the stick is held or no foe is in reach (released over foes, the titan turns to them instead). */
+function committedOk(w: World, len: number, width: number): boolean {
+  if (kv(w, 'lashWind', -1) < 0) return false;
+  const T = w.titan, dir = kv(w, 'lashDir');
+  if (kv(w, 'lashKind') === KIND_CITY && !steering(w)) {
+    const t = findTarget(w, T.x, T.z, len, true);
+    if (t && t.kind === 'enemy') return false;
+  }
+  if (kv(w, 'lashKind') !== KIND_FOE) {
+    pick.dir = dir; pick.d = Math.min(len, kv(w, 'lashD', len)); pick.kind = kv(w, 'lashKind');
+    return true;
+  }
+  enemiesInCircle(w, T.x, T.z, len + width, pool);
+  LANE.x = T.x; LANE.z = T.z; LANE.len = len; LANE.w = width;
+  const hits = laneHits(w, dir);
+  pool.length = 0;
+  if (hits <= 0) return false;
+  pick.dir = dir; pick.d = Math.min(len, Math.max(0, laneNear)); pick.kind = KIND_FOE;
+  return true;
+}
+
+/** The horn the lash cracks from: the one on the target's side (alternating when it is dead ahead). */
+function hornSide(w: World, dir: number): number {
+  const off = wrapAngle(dir - w.titan.heading);
+  if (Math.abs(off) < 0.15) return kv(w, 'lashSide', 1) > 0 ? -1 : 1;
+  return off > 0 ? 1 : -1;
+}
+
+/** windS before the crack: commit the lane so the view can wind the horn up toward it (no damage, no events). */
+function windUp(w: World): void {
+  const T = w.titan, K = T.kit;
+  if (!selectLash(w, reach(w), lashWidth(w))) return;
+  K.lashDir = pick.dir; K.lashD = pick.d; K.lashKind = pick.kind;
+  K.lashSide = hornSide(w, pick.dir);
+  K.lashWind = Math.max(0, T.autoCd);
+}
+
+function lash(w: World): void {
+  const T = w.titan, K = T.kit;
+  const len = reach(w);
+  const width = lashWidth(w);
+  // the wind-up committed a lane: the crack goes exactly where the horn was cocked (what you see is what you hit)
+  const held = committedOk(w, len, width);
+  if (!held && !selectLash(w, len, width)) { idleAuto(w); K.lashWind = -1; return; }
+  const dir = pick.dir, d = Math.min(len, pick.d);
+  if (!held) K.lashSide = hornSide(w, dir);
+  K.lashDir = dir; K.lashWind = -1; K.lashW = width; K.prevDir = dir; K.lashAge = 0;
   LASH_OPTS.knock = knockFor(w, BRIAR.lashKnock);
   const hits = damageArea(w, { k: 'lane', x: T.x, z: T.z, dir, len, w: width }, titanDamage(w, BRIAR.lashDmg), LASH_OPTS);
+  K.lashN = hits;
+  // the view draws the whip + crack along exactly this lane (x0,z0 → x1,z1, width kit.lashW) and flashes the foes in it
   const x1 = T.x + Math.sin(dir) * len, z1 = T.z + Math.cos(dir) * len;
   w.events.push({ type: 'vine', x0: T.x, z0: T.z, x1, z1 });
-  // the burr: a pod where the lash struck (the target, clamped into the lane)
-  const d = Math.min(len, Math.hypot(aim.x - T.x, aim.z - T.z));
+  // the burr: a pod where the lash struck (the target / the first foe in the lane)
   plantPod(w, T.x + Math.sin(dir) * d, T.z + Math.cos(dir) * d, SRC_PASSIVE, 0);
   emitAttack(w, 'vineLash', T.x, T.z, dir, len, hits);
   faceToward(w, dir);

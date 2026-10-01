@@ -577,17 +577,22 @@ interface EyeStyle {
   slit?: boolean;
   /** vertical squash of the eyeball (1 = round) */
   squash?: number;
+  /** false = no white glint facet (a hard predator stare instead of a bright cartoon eye); default true */
+  glint?: boolean;
+  /** lathe resolution (default 12 sides x 7 rings); a slit pupil on a small almond eye needs more */
+  sides?: number; rings?: number;
 }
 /** Eyeball lathed along `look`, painted sclera → iris → pupil with a glint facet. Bound to `bone`. */
 function buildEye(ge: Geo, rig: Rig, bone: string, c: V3, look: V3, r: number, st: EyeStyle): void {
   const L = norm(look);
-  const sides = 12, rings = 7;
+  const sides = st.sides ?? 12, rings = st.rings ?? 7;
   const prof: [number, number][] = [];
   for (let k = 0; k <= rings; k++) {
     const ph = (k / rings) * Math.PI;
     prof.push([k === 0 || k === rings ? 0 : Math.sin(ph) * r, -Math.cos(ph) * r]);
   }
   const fr = frameAxis(c, L, [0, 1, 0]);
+  const glintOn = st.glint !== false;
   const worldUp = norm(sub([0, 1, 0], mul(L, dot([0, 1, 0], L))));
   const sideV = norm(cross(worldUp, L));
   const sc = C(st.sclera), ir = C(st.iris), pu = C(st.pupil), glint = C('#ffffff');
@@ -596,7 +601,7 @@ function buildEye(ge: Geo, rig: Rig, bone: string, c: V3, look: V3, r: number, s
   const paint = (f: Face): THREE.Color => {
     const d = sub(f.c, c);
     const yy = dot(d, L) / r, up = dot(d, worldUp) / (r * squash), sd = dot(d, sideV) / r;
-    if (yy > 0.35 && up > 0.3 && up < 0.72 && sd > -0.05 && sd < 0.42) return glint;
+    if (glintOn && yy > 0.35 && up > 0.3 && up < 0.72 && sd > -0.05 && sd < 0.42) return glint;
     if (st.slit) {
       if (yy > pupK - 0.25 && Math.abs(sd) < 0.2) return pu;
     } else if (yy > pupK) return pu;
@@ -616,6 +621,34 @@ function buildEye(ge: Geo, rig: Rig, bone: string, c: V3, look: V3, r: number, s
   for (let i = 0; i < g2.nor.length; i++) ge.nor.push(g2.nor[i]);
   for (let i = 0; i < g2.col.length; i++) ge.col.push(g2.col[i]);
   for (let i = 0; i < g2.si.length; i++) { ge.si.push(g2.si[i]); ge.sw.push(g2.sw[i]); }
+}
+
+/**
+ * A clean vertical SLIT pupil laid over an eyeball built by buildEye (same centre / look / radius / squash): a thin
+ * lens-shaped strip that hugs the eye's front curvature (painting a slit onto the eyeball's own facets leaves a
+ * jagged zigzag on a small almond eye). Eye geometry, bound to the eye joint, so it squints and blinks with it.
+ */
+function buildSlitPupil(ge: Geo, rig: Rig, bone: string, c: V3, look: V3, r: number, squash: number, color: string, halfW: number, reach = 0.86): void {
+  const L = norm(look);
+  const U = norm(sub([0, 1, 0], mul(L, dot([0, 1, 0], L))));
+  const X = norm(cross(U, L));
+  const col = C(color);
+  const sk = rig.s(bone);
+  const jit = ge.jitter;
+  ge.jitter = 0;
+  const n = 8;
+  const at = (t: number, sx: number): V3 => {
+    // a point on the (unsquashed) sphere at vertical t and horizontal sx, then squashed along U, lifted a hair
+    const vy = t * reach, vx = sx;
+    const zz = Math.sqrt(Math.max(0, 1 - vy * vy - vx * vx)) * 1.012 + 0.004;
+    return add(c, add(mul(L, zz * r), add(mul(U, vy * r * squash), mul(X, vx * r))));
+  };
+  for (let i = 0; i < n; i++) {
+    const t0 = -1 + (2 * i) / n, t1 = -1 + (2 * (i + 1)) / n;
+    const w0 = halfW * Math.sqrt(Math.max(0, 1 - t0 * t0)), w1 = halfW * Math.sqrt(Math.max(0, 1 - t1 * t1));
+    ge.quad(at(t0, -w0), at(t0, w0), at(t1, w1), at(t1, -w1), col, L, sk, sk, sk, sk);
+  }
+  ge.jitter = jit;
 }
 
 /**
@@ -1024,63 +1057,69 @@ function buildMolo(K: TitanColors = TITAN_COLORS.molo): Parts {
 }
 
 
-// ─────────────────────────────── VOLT-KITE — storm-hound drake under twin kite sails, swept static mane ───────────────────────────────
-// Remodel (titanpass/voltkite_design.md): every titan is normalised to the same height, so VOLT-KITE's
-// tallest point is now its two diamond KITE SAILS (not two thin ears) and the body under them is one
-// broad, low, deep-chested mass. The back — the surface the game camera sees most — carries the light
-// values: a lavender saddle (belly colour), a cyan zigzag bolt down the spine, cyan mane blades laid
-// back along the neck, and the sails' cyan cross-spars. Indigo lives on the flanks, legs and face.
+// ─────────────────────────────── VOLT-KITE — charged raptor-cat under twin antenna-fin kite sails ───────────────────────────────
+// v4 remodel (owner playtest 2026-09-30: "looks off next to the other three — maybe the face"). The v3 head read as a
+// startled cartoon pup: eyeballs 0.07 on a 0.27-wide skull (each eye ~half the head width, the others ~1/3), aimed
+// sideways and bulging past the skull line, arched brows, a long thin snout with a dangling lower jaw. v4 is a CHARGED
+// RAPTOR-CAT: a deep keel chest and heavy haunches on short, strong legs (digitigrade hind legs with a raptor sickle
+// claw), a short broad big-cat head with narrow forward-set slit eyes sunk under a heavy V brow, a closed jaw with
+// sabre fangs over the lip, ears laid back. Electric hardware is ARMOUR: ribbed insulator pauldrons on the shoulders
+// carry the two kite sails as raked-back antenna fins (cyan mast spar + tip beacon), cyan coil bands on the forearms
+// and the tail. The back (what the game camera sees) keeps the light values: lavender saddle, cyan bolt down the spine,
+// a short swept static crest, pale insulators. Same joints for anim.ts, same four meshes (body / eyes / mane / kite).
 function buildVoltkite(K: TitanColors = TITAN_COLORS.voltkite, custom = false): Parts {
   const S2 = C(K.secondary), B = C(K.belly), G = C(K.glow), A = C(K.accent);
   // TITAN PASS (UX): a LIGHT unlock colourway (colourway 2 SLEET: #dfe6ee hide, #ffffff belly) read white-on-white on
-  // WHITE STACKS snow (gamecam mean luminance 184 vs the canonical 108; HARN shot tp_volt_colour2_III). It keeps its
-  // white belly, pale sail edge, cyan bolt / mane / spars, and takes a STEEL hide (its own secondary pulled toward
-  // storm slate) under a darker slate saddle + teal-slate sails, so the back the game camera sees is mid-dark with
-  // the cyan glow on top. Dark colourways (SODIUM LAMP) and the canonical palette are untouched.
+  // WHITE STACKS snow. It keeps its white belly and cyan glow and takes a STEEL hide (its own secondary pulled toward
+  // storm slate) under a darker slate saddle + teal-slate sails, so the back the game camera sees is mid-dark with the
+  // cyan glow on top. Dark colourways (SODIUM LAMP) and the canonical palette are untouched.
   const light = custom && lumOf(C(K.primary)) > 0.4;
   const slate = C('#1d2838');
-  // an unlock colourway's hide is lifted 0.4 of the way to its belly: SODIUM LAMP's near-black primary
-  // (#2b2622) otherwise leaves 0.42 of the game-camera silhouette dark (bar <= 0.40, TITAN PASS §3.1)
+  // an unlock colourway's hide is lifted 0.4 of the way to its belly: SODIUM LAMP's near-black primary (#2b2622)
+  // otherwise leaves too much of the game-camera silhouette dark (bar <= 0.40, TITAN PASS §3.1)
   const P = light ? mix(S2, slate, 0.5) : custom ? mix(C(K.primary), B, 0.4) : C(K.primary);
-  const nose = C('#14152e'), mouth = C('#4a2352'), tooth = C('#f4f2ff'), claw = C('#dfe3ff');
+  const nose = C('#14152e'), mouth = C('#3a1c44'), tooth = C('#f4f2ff'), claw = C('#dfe3ff');
   const innerEar = custom ? mix(B, C('#ffffff'), 0.3) : C('#c9b8f2');
   const tipC = mix(G, C('#ffffff'), 0.6);
-  // canonical belly lavender, reused on the back; an unlock colourway (custom) lifts its saddle and sail membranes
-  // toward its glow so a dark palette (SODIUM LAMP) still reads at the game camera (TITAN PASS §3.1 bars)
   const saddle = light ? mix(P, slate, 0.35) : custom ? mix(B, G, 0.2) : B;
-  const membrane = light ? mix(G, P, 0.7) : custom ? mix(B, G, 0.38) : mix(B, P, 0.12);
+  // v4: the canonical sail membrane is tinted toward the glow so the fins separate from the lavender saddle
+  const membrane = light ? mix(G, P, 0.7) : custom ? mix(B, G, 0.38) : mix(B, G, 0.3);
   const flankLo = mix(P, B, 0.35);
+  // insulator ceramic: pale and slightly cool (a SLEET hide keeps it off pure white so it still separates from snow)
+  const insul = light ? mix(B, slate, 0.25) : mix(B, C('#ffffff'), 0.45);
+  const insulDk = shade(insul, 0.78);
+  const brow = mix(S2, P, 0.25);
   const rig = new Rig();
   const body = new Geo(), eyes = new Geo(), mane = new Geo(), kite = new Geo();
 
   rig.add('base', null, [0, 0, 0]);
-  rig.add('body', 'base', [0, 0.52, -0.08]);
-  rig.add('chest', 'body', [0, 0.55, 0.2]);
-  rig.add('hips', 'body', [0, 0.52, -0.4]);
-  rig.add('neck', 'chest', [0, 0.62, 0.36]);
-  rig.add('head', 'neck', [0, 0.75, 0.52]);
-  rig.add('jaw', 'head', [0, 0.705, 0.56]);
-  rig.add('eyeL', 'head', [0.1, 0.8, 0.655]);
-  rig.add('eyeR', 'head', [-0.1, 0.8, 0.655]);
-  rig.add('earL', 'head', [0.085, 0.84, 0.51]);
-  rig.add('earR', 'head', [-0.085, 0.84, 0.51]);
-  rig.add('maneN', 'neck', [0, 0.72, 0.42]);
-  rig.add('maneS', 'chest', [0, 0.67, 0.2]);
-  rig.add('wingL', 'chest', [0.13, 0.65, 0.1]);
-  rig.add('wingR', 'chest', [-0.13, 0.65, 0.1]);
+  rig.add('body', 'base', [0, 0.54, -0.06]);
+  rig.add('chest', 'body', [0, 0.58, 0.22]);
+  rig.add('hips', 'body', [0, 0.55, -0.34]);
+  rig.add('neck', 'chest', [0, 0.65, 0.38]);
+  rig.add('head', 'neck', [0, 0.765, 0.52]);
+  rig.add('jaw', 'head', [0, 0.72, 0.56]);
+  rig.add('eyeL', 'head', [0.071, 0.795, 0.698]);
+  rig.add('eyeR', 'head', [-0.071, 0.795, 0.698]);
+  rig.add('earL', 'head', [0.095, 0.845, 0.5]);
+  rig.add('earR', 'head', [-0.095, 0.845, 0.5]);
+  rig.add('maneN', 'neck', [0, 0.83, 0.45]);
+  rig.add('maneS', 'chest', [0, 0.76, 0.24]);
+  rig.add('wingL', 'chest', [0.17, 0.725, 0.16]);
+  rig.add('wingR', 'chest', [-0.17, 0.725, 0.16]);
   const tail = ['tail1', 'tail2', 'tail3', 'tail4', 'tail5'];
-  const tailP: V3[] = [[0, 0.56, -0.62], [0, 0.61, -0.74], [0, 0.645, -0.85], [0, 0.65, -0.95], [0, 0.635, -1.03]];
+  const tailP: V3[] = [[0, 0.57, -0.56], [0, 0.6, -0.68], [0, 0.625, -0.8], [0, 0.635, -0.91], [0, 0.63, -1.0]];
   let par = 'hips';
   for (let i = 0; i < tail.length; i++) { rig.add(tail[i], par, tailP[i]); par = tail[i]; }
 
   const spineN = ['tail1', 'hips', 'body', 'chest', 'neck'];
-  const spineZ = [-0.62, -0.4, -0.08, 0.2, 0.36];
+  const spineZ = [-0.56, -0.34, -0.06, 0.22, 0.38];
   const spineSkin = (p: V3) => rig.chain(spineN, spineZ, p[2]);
 
   // hide: light saddle on every upward face (what the game camera sees), indigo flanks, lavender belly + chest blaze
   const hide = (f: Face): THREE.Color => {
     if (f.n[1] < -0.35) return B;
-    if (f.n[2] > 0.5 && f.c[2] > 0.2 && f.c[1] < 0.62) return mix(B, P, 0.2);
+    if (f.n[2] > 0.45 && f.c[2] > 0.25 && f.c[1] < 0.64) return mix(B, P, 0.2);
     if (f.n[1] > 0.5) return saddle;
     if (f.n[1] > 0.2) return custom ? mix(P, saddle, 0.7) : mix(P, B, 0.55);
     return f.n[1] < -0.1 ? flankLo : P;
@@ -1088,156 +1127,209 @@ function buildVoltkite(K: TitanColors = TITAN_COLORS.voltkite, custom = false): 
   // squarish cross-section with a broad flat-ish top: more saddle faces toward the sky
   const chunky = (a: number): [number, number] => {
     const c = Math.cos(a), s = Math.sin(a);
-    const cx = Math.sign(c) * Math.pow(Math.abs(c), 0.75);
+    const cx = Math.sign(c) * Math.pow(Math.abs(c), 0.72);
     let cy = Math.sign(s) * Math.pow(Math.abs(s), 0.8);
-    if (cy < 0) cy *= 0.85;
+    if (cy < 0) cy *= 0.9;
     return [cx, cy];
   };
 
-  // torso: one broad, deep-chested mass (≈1.7× the old half-widths), hips low
-  const tz = [-0.62, -0.48, -0.26, -0.04, 0.16, 0.32, 0.4];
-  const ty = [0.535, 0.525, 0.52, 0.525, 0.55, 0.58, 0.6];
-  const trx = [0.1, 0.17, 0.175, 0.19, 0.215, 0.185, 0.14];
-  const tryy = [0.09, 0.12, 0.112, 0.125, 0.142, 0.13, 0.105];
-  sweep(body, tubeRings(tz.map((z, i) => [0, ty[i], z] as V3), trx.map((r, i) => [r, tryy[i]] as [number, number]), 14, (p) => spineSkin(p)),
+  // torso: a deep KEEL chest that narrows to a tucked waist and swells again into heavy haunches (feline-raptor)
+  const tz = [-0.58, -0.46, -0.31, -0.14, 0.04, 0.2, 0.34, 0.44];
+  const ty = [0.55, 0.555, 0.55, 0.54, 0.56, 0.585, 0.61, 0.635];
+  const trx = [0.11, 0.195, 0.205, 0.17, 0.21, 0.245, 0.228, 0.165];
+  const tryy = [0.09, 0.145, 0.15, 0.128, 0.17, 0.198, 0.18, 0.132];
+  sweep(body, tubeRings(tz.map((z, i) => [0, ty[i], z] as V3), trx.map((r, i) => [r, tryy[i]] as [number, number]), 16, (p) => spineSkin(p)),
     { sides: 12, cap0: 0.04, cap1: -1, paint: hide, shape: chunky, phase: Math.PI / 12 });
   const topAt = (z: number) => interpZ(tz, ty, z) + interpZ(tz, tryy, z) * 0.96;
 
-  // neck: thick, rising to the head
-  const neckSkin = (p: V3): Skin => (p[2] < 0.3 ? rig.mix('chest', 'neck', 0.35) : rig.chain(['chest', 'neck', 'head'], [0.3, 0.4, 0.53], p[2]));
-  sweep(body, tubeRings([[0, 0.575, 0.3], [0, 0.63, 0.4], [0, 0.695, 0.47], [0, 0.745, 0.52]], [[0.15, 0.13], [0.13, 0.12], [0.115, 0.105], [0.11, 0.1]], 8, neckSkin),
+  // neck: short and thick, carried forward (a hunter's low head)
+  const neckSkin = (p: V3): Skin => (p[2] < 0.3 ? rig.mix('chest', 'neck', 0.35) : rig.chain(['chest', 'neck', 'head'], [0.3, 0.4, 0.52], p[2]));
+  sweep(body, tubeRings([[0, 0.6, 0.3], [0, 0.66, 0.4], [0, 0.72, 0.47], [0, 0.765, 0.52]], [[0.16, 0.15], [0.145, 0.135], [0.13, 0.12], [0.12, 0.11]], 8, neckSkin),
     { sides: 10, cap0: -1, cap1: -1, paint: hide, phase: Math.PI / 10 });
 
-  // head: broad skull, blunt wedge snout (≈1.5× the old radii)
-  const hz = [0.44, 0.53, 0.63, 0.73, 0.82];
-  const hy = [0.76, 0.768, 0.752, 0.728, 0.708];
-  const hrx = [0.11, 0.135, 0.122, 0.082, 0.046];
-  const hry = [0.1, 0.1, 0.08, 0.058, 0.038];
-  const skull = (a: number): [number, number] => { const c = Math.cos(a), s = Math.sin(a); return [Math.sign(c) * Math.pow(Math.abs(c), 0.8), s < 0 ? s * 0.55 : s]; };
+  // head: SHORT broad big-cat skull, square muzzle; the cheeks are the widest point (a strong jaw line)
+  const hz = [0.44, 0.52, 0.6, 0.67, 0.735, 0.77];
+  const hy = [0.77, 0.785, 0.78, 0.765, 0.748, 0.738];
+  const hrx = [0.115, 0.15, 0.14, 0.108, 0.082, 0.06];
+  const hry = [0.1, 0.098, 0.084, 0.07, 0.056, 0.044];
+  const skull = (a: number): [number, number] => { const c = Math.cos(a), s = Math.sin(a); return [Math.sign(c) * Math.pow(Math.abs(c), 0.62), s < 0 ? s * 0.62 : Math.sign(s) * Math.pow(Math.abs(s), 0.85)]; };
   const headPaint = (f: Face): THREE.Color => {
     if (f.n[1] < -0.6) return mouth;
-    if (f.n[1] < 0.0 && f.c[1] < 0.74) return mix(B, P, 0.15);
-    if (f.n[1] > 0.55 && f.c[2] < 0.66) return saddle;      // pale brow cap: the face reads from above
-    if (f.n[1] > 0.55) return mix(P, B, 0.4);
+    // dark mask: a swept band from the eye back along the cheek (the keen "tear line" of a hunting cat)
+    if (Math.abs(f.c[0]) > 0.05 && f.c[1] > 0.758 && f.c[1] < 0.8 && f.c[2] > 0.52 && f.c[2] < 0.68 && Math.abs(f.n[0]) > 0.35) return mix(P, S2, 0.7);
+    if (f.n[1] < 0.0 && f.c[1] < 0.758) return mix(B, P, 0.18);          // pale muzzle / lower cheeks
+    if (f.n[1] > 0.55 && f.c[2] < 0.64) return saddle;                    // pale skull cap: the face reads from above
+    if (f.n[1] > 0.5) return mix(P, B, 0.35);
     return P;
   };
-  sweep(body, tubeRings(hz.map((z, i) => [0, hy[i], z] as V3), hrx.map((r, i) => [r, hry[i]] as [number, number]), 8,
+  sweep(body, tubeRings(hz.map((z, i) => [0, hy[i], z] as V3), hrx.map((r, i) => [r, hry[i]] as [number, number]), 9,
     (p) => (p[2] < 0.47 ? rig.mix('neck', 'head', 0.7) : rig.s('head'))),
-    { sides: 12, cap0: -1, cap1: 0.025, paint: headPaint, shape: skull, phase: Math.PI / 12 });
-  blob(body, [0, 0.728, 0.838], [0, 0.3, 1], 0.026, 0.034, 6, 3, nose, rig.s('head'));
-  // jaw
-  const jz = [0.54, 0.63, 0.72, 0.8];
-  sweep(body, tubeRings(jz.map((z, i) => [0, [0.7, 0.695, 0.692, 0.692][i], z] as V3), [[0.09, 0.04], [0.086, 0.037], [0.066, 0.03], [0.04, 0.02]], 6, () => rig.s('jaw')),
-    { sides: 10, cap0: 0, cap1: 0.016, paint: (f) => (f.n[1] > 0.5 ? mouth : f.n[1] < -0.3 ? B : mix(B, P, 0.3)), phase: Math.PI / 10 });
-  teeth(body, [[0.05, 0.712, 0.745], [-0.05, 0.712, 0.745]], [0, -1, 0.1], 0.042, 0.014, tooth, rig.s('head'));
-  // keen brows
+    { sides: 12, cap0: -1, cap1: 0.018, paint: headPaint, shape: skull, phase: Math.PI / 12 });
+  // broad flat nose pad
+  blob(body, [0, 0.752, 0.775], [0, 0.55, 1], 0.022, 0.038, 6, 3, nose, rig.s('head'), [0, 1, 0], 0, 0.7);
+  // muzzle pads (the whisker bulge either side of the nose) — squares the muzzle
+  for (const sd of [1, -1]) blob(body, [0.04 * sd, 0.728, 0.735], [0.3 * sd, 0.1, 1], 0.034, 0.036, 7, 3, mix(B, P, 0.18), rig.s('head'));
+  // jaw: a strong closed lower jaw (shut at rest); its top is the mouth line
+  const jz = [0.5, 0.58, 0.66, 0.73, 0.765];
+  sweep(body, tubeRings(jz.map((z, i) => [0, [0.712, 0.708, 0.704, 0.703, 0.705][i], z] as V3), [[0.11, 0.05], [0.104, 0.046], [0.085, 0.04], [0.06, 0.032], [0.042, 0.024]], 7, () => rig.s('jaw')),
+    { sides: 10, cap0: 0, cap1: 0.012, paint: (f) => (f.n[1] > 0.5 ? mouth : f.n[1] < -0.3 ? mix(B, P, 0.1) : mix(B, P, 0.3)), phase: Math.PI / 10 });
+  // sabre fangs: two long upper fangs over the closed lip + two short lower ones (read even with the mouth shut)
+  for (const sd of [1, -1]) teeth(body, [[0.058 * sd, 0.724, 0.738]], [0.12 * sd, -1, 0.05], 0.05, 0.012, tooth, rig.s('head'));
+  teeth(body, [[0.03, 0.716, 0.75], [-0.03, 0.716, 0.75]], [0, 1, 0.12], 0.022, 0.009, tooth, rig.s('jaw'));
+  // HEAVY V BROW: a thick wedge from low over the inner eye corner (by the nose) up and back over the outer corner —
+  // it overhangs the top of the eye, which is what makes the stare read fierce instead of startled
   for (const sd of [1, -1]) {
-    sweep(body, tubeRings([[0.04 * sd, 0.848, 0.7], [0.1 * sd, 0.866, 0.672], [0.145 * sd, 0.846, 0.618]], [[0.02, 0.02], [0.026, 0.02], [0.017, 0.017]], 5, () => rig.s('head')),
-      { sides: 5, cap0: 0.012, cap1: 0.012, paint: S2, up: [0, 1, 0] });
+    sweep(body, tubeRings([[0.026 * sd, 0.812, 0.732], [0.072 * sd, 0.83, 0.712], [0.112 * sd, 0.842, 0.664], [0.128 * sd, 0.842, 0.622]],
+      [[0.011, 0.008], [0.018, 0.013], [0.017, 0.013], [0.01, 0.01]], 6, () => rig.s('head')),
+      { sides: 6, cap0: 0.01, cap1: 0.016, paint: (f) => (f.n[1] > 0.4 ? mix(brow, P, 0.45) : brow), up: [0, 1, 0] });
   }
-  const eyeStyle: EyeStyle = { sclera: '#f6f7ff', iris: K.eye, pupil: '#1b1426', iris01: 0.92, pupil01: 0.5 };
-  const lookL: V3 = [0.6, 0.28, 0.75];
-  buildEye(eyes, rig, 'eyeL', rig.rest.eyeL, lookL, 0.07, eyeStyle);
-  buildEye(eyes, rig, 'eyeR', rig.rest.eyeR, mirX(lookL), 0.07, eyeStyle);
-  buildLid(body, rig, 'lidL', rig.rest.eyeL, lookL, 0.07, 1, P);
-  buildLid(body, rig, 'lidR', rig.rest.eyeR, mirX(lookL), 0.07, 1, P);
+  // eyes: NARROW almond slit eyes, set forward on the face (binocular, a predator's) and sunk into the skull
+  // iris fills the visible eye (no painted pupil, no glint: a hard stare); the slit is its own clean strip
+  const eyeStyle: EyeStyle = { sclera: '#f6f7ff', iris: K.eye, pupil: K.eye, iris01: 0.98, pupil01: 0, squash: 0.58, glint: false, sides: 16, rings: 8 };
+  const lookL: V3 = [0.38, 0.05, 0.92];
+  const eyeR = 0.042;
+  buildEye(eyes, rig, 'eyeL', rig.rest.eyeL, lookL, eyeR, eyeStyle);
+  buildEye(eyes, rig, 'eyeR', rig.rest.eyeR, mirX(lookL), eyeR, eyeStyle);
+  buildSlitPupil(eyes, rig, 'eyeL', rig.rest.eyeL, lookL, eyeR, 0.58, '#120d1c', 0.17);
+  buildSlitPupil(eyes, rig, 'eyeR', rig.rest.eyeR, mirX(lookL), eyeR, 0.58, '#120d1c', 0.17);
+  buildLid(body, rig, 'lidL', rig.rest.eyeL, lookL, eyeR, 0.58, mix(P, S2, 0.4));
+  buildLid(body, rig, 'lidR', rig.rest.eyeR, mirX(lookL), eyeR, 0.58, mix(P, S2, 0.4));
 
-  // short swept-back ears (pale inner ear) — no longer the tallest point
+  // ears: short pointed cat ears laid BACK (pale inner ear, dark tips)
   for (const sd of [1, -1] as const) {
     const bn = sd > 0 ? 'earL' : 'earR';
     const o = rig.rest[bn];
-    const fr = slabFrame(o, [sd, 0, 0.25], [0.45 * sd, 0.75, -0.65]);
-    slab(body, [[-0.05, -0.01], [0.05, -0.01], [0.04, 0.07], [0.008, 0.15], [-0.02, 0.14], [-0.045, 0.06]], 0.028, 0.009, fr,
-      (f) => (f.n[2] > 0.2 && f.l[1] < 0.1 && Math.abs(f.l[0]) < 0.03 ? innerEar : f.l[1] > 0.1 ? S2 : P), () => rig.s(bn));
+    const fr = slabFrame(o, [sd, 0, 0.35], [0.38 * sd, 0.6, -0.75]);
+    slab(body, [[-0.045, -0.01], [0.045, -0.01], [0.03, 0.06], [0.004, 0.125], [-0.022, 0.07]], 0.026, 0.008, fr,
+      (f) => (f.n[2] > 0.15 && f.l[1] < 0.07 && Math.abs(f.l[0]) < 0.026 ? innerEar : f.l[1] > 0.08 ? S2 : P), () => rig.s(bn));
   }
 
-  // TWIN KITE SAILS: a diamond membrane on each shoulder, raised in a V (the dihedral of a kite), lavender
-  // with a cyan leading band; glowing cyan cross-spars (glow 1). wingL/R (anim `wings`) spread them flat
-  // on the arc / detonate. Their tips are the model's tallest point.
-  const sailPoly: [number, number][] = [[0.03, 0.02], [0.3, -0.15], [0.66, 0.13], [0.26, 0.46]];
+  // INSULATOR PAULDRONS: a ribbed ceramic insulator stack on each shoulder (armour), the kite sail's mast socket
+  const insulator = (g: Geo, o: V3, axis: V3, r: number, hgt: number, sheds: number, skin: Skin, hint: V3 = [0, 0, 1]) => {
+    const prof: [number, number][] = [[0, 0], [r * 0.62, 0]];
+    const st = hgt / sheds;
+    for (let k = 0; k < sheds; k++) {
+      const y0 = k * st;
+      prof.push([r, y0 + st * 0.18], [r * 0.96, y0 + st * 0.42], [r * 0.6, y0 + st * 0.62], [r * 0.6, y0 + st]);
+    }
+    prof.push([r * 0.4, hgt + st * 0.12], [0, hgt + st * 0.16]);
+    lathe(g, prof, 9, frameAxis(o, axis, hint), (f) => (f.n[1] > 0.3 ? insul : f.t > 0.98 ? insulDk : shade(insul, 0.9)), () => skin, 0.2);
+  };
+
+  // TWIN KITE SAILS as raked-back ANTENNA FINS: a diamond membrane on a cyan mast spar that rises out of the insulator,
+  // swept back like a fin; a tip beacon (glow 1). wingL/R (anim `wings`) roll them out on the arc / detonate.
+  // Their tips are the model's tallest point — set low so the body under them stays big after normalisation.
+  const finPoly: [number, number][] = [[0, 0], [0.5, 0.04], [0.36, 0.45], [0.02, 0.33]];   // (along mast, back along the fin)
   for (const sd of [1, -1] as const) {
     const bn = sd > 0 ? 'wingL' : 'wingR';
     const o = rig.rest[bn];
-    const fr = slabFrame(o, [0.8 * sd, 0.6, -0.22], [0, 0.05, -1]);
-    const at = (u: number, v: number): V3 => add(o, add(mul(fr.u, u), mul(fr.v, v)));
-    slab2(body, sailPoly.map(([u, v]) => [v, u] as [number, number]), 0.48, 0.022, 0.008,
-      { o, u: fr.v, v: fr.u, w: mul(fr.w, -1) }, membrane, mix(B, A, 0.35), () => rig.s(bn));
-    // strut root sleeve (body colour) so the sail grows out of the shoulder
-    sweep(body, [{ p: add(o, [-0.05 * sd, -0.03, 0.02]), rx: 0.05, ry: 0.05, skin: rig.s('chest') }, { p: at(0.1, 0.02), rx: 0.035, ry: 0.035, skin: rig.s(bn) }],
-      { sides: 6, cap0: 0, cap1: 0, paint: P, up: [0, 0, 1] });
-    // cross-spars: root → tip and front → trailing point, lifted off the membrane on the sky side
-    const lift: V3 = [0, 0, 0];   // spar radius > half the membrane: reads on both faces
-    const spar = (a: V3, b: V3, r: number) => sweep(kite, [{ p: add(a, lift), rx: r, ry: r, skin: rig.s(bn) }, { p: add(b, lift), rx: r * 0.8, ry: r * 0.8, skin: rig.s(bn) }],
-      { sides: 5, cap0: 0.01, cap1: 0.012, paint: (f) => (f.t >= 1 ? tipC : G), up: [0, 1, 0] });
-    spar(at(0.05, 0.02), at(0.62, 0.125), 0.015);
-    spar(at(0.3, -0.125), at(0.265, 0.42), 0.013);
+    const M = norm([0.72 * sd, 0.48, -0.5]);                                 // mast: out, up and raked back
+    const back = norm(sub([0, -0.15, -1], mul(M, dot([0, -0.15, -1], M))));   // in the fin plane, perpendicular to the mast
+    const fr: SlabFrame = { o, u: M, v: back, w: norm(cross(M, back)) };
+    const at = (m: number, b: number): V3 => add(o, add(mul(M, m), mul(back, b)));
+    slab2(body, finPoly.map(([m, b]) => [b, m] as [number, number]), 0.36, 0.02, 0.007,
+      { o, u: back, v: M, w: mul(fr.w, -1) }, membrane, mix(B, A, 0.35), () => rig.s(bn));
+    // mast spar along the leading edge + a cross spar, glowing; a beacon bead on the tip
+    const spar = (a: V3, b: V3, r: number) => sweep(kite, [{ p: a, rx: r, ry: r, skin: rig.s(bn) }, { p: b, rx: r * 0.75, ry: r * 0.75, skin: rig.s(bn) }],
+      { sides: 5, cap0: 0.008, cap1: 0.01, paint: (f) => (f.t >= 1 ? tipC : G), up: [0, 1, 0] });
+    spar(at(0.08, 0.005), at(0.5, 0.04), 0.016);
+    spar(at(0.04, 0.32), at(0.44, 0.08), 0.011);
+    blob(kite, at(0.52, 0.04), M, 0.024, 0.024, 6, 3, tipC, rig.s(bn));
+    // the mast's ceramic insulator column, socketed in the shoulder (armour): three sheds, the spar rises out of it
+    insulator(body, at(-0.07, 0.0), M, 0.056, 0.14, 3, rig.s(bn), back);
   }
 
-  // tail: thicker and shorter, arching, ending in a big flat KITE FIN tilted to face the sky
-  const tailN = ['hips', ...tail], tailZs = [-0.4, ...tailP.map((p) => p[2])];
-  const tailCtrl: V3[] = [[0, 0.55, -0.52], ...tailP, [0, 0.615, -1.1]];
-  sweep(body, tubeRings(tailCtrl, [[0.11, 0.1], [0.098, 0.092], [0.084, 0.078], [0.07, 0.066], [0.058, 0.055], [0.048, 0.046], [0.042, 0.042]], 14,
+  // tail: strong at the root, tapering, carried level, ending in a flat KITE FIN tilted to face the sky
+  const tailN = ['hips', ...tail], tailZs = [-0.34, ...tailP.map((p) => p[2])];
+  const tailCtrl: V3[] = [[0, 0.555, -0.46], ...tailP, [0, 0.62, -1.06]];
+  sweep(body, tubeRings(tailCtrl, [[0.12, 0.11], [0.1, 0.094], [0.084, 0.078], [0.068, 0.064], [0.056, 0.053], [0.046, 0.044], [0.04, 0.04]], 14,
     (p) => rig.chain(tailN, tailZs, p[2])),
-    { sides: 8, cap0: -1, cap1: 0, paint: (f) => (f.n[1] > 0.45 ? saddle : Math.floor(f.t * 8) % 2 === 1 && f.t > 0.25 ? mix(P, S2, 0.5) : f.n[1] < -0.3 ? flankLo : P), phase: Math.PI / 8 });
+    { sides: 8, cap0: -1, cap1: 0, paint: (f) => (f.n[1] > 0.45 ? saddle : f.n[1] < -0.3 ? flankLo : P), phase: Math.PI / 8 });
+  // cyan coil bands around the tail (glow 1)
+  for (const z of [-0.76, -0.86, -0.96]) {
+    const i = tailCtrl.findIndex((p) => p[2] < z);
+    const a = tailCtrl[Math.max(0, i - 1)], b = tailCtrl[Math.max(1, i)];
+    const t = (z - a[2]) / (b[2] - a[2] || 1);
+    const c = lerp3(a, b, t);
+    const r = 0.084 - (0.084 - 0.044) * ((-0.68 - z) / 0.32) + 0.008;
+    lathe(kite, [[r * 0.94, -0.012], [r, -0.006], [r, 0.006], [r * 0.94, 0.012]], 8, frameAxis(c, sub(a, b), [0, 1, 0]), G,
+      () => rig.chain(tailN, tailZs, z));
+  }
   {
-    const o: V3 = [0, 0.615, -1.1];
+    const o: V3 = [0, 0.62, -1.06];
     const fr = slabFrame(o, norm([1, 0.45, 0]), [0, 0.18, -1]);
-    const kitePoly: [number, number][] = [[0, -0.05], [0.23, 0.14], [0, 0.46], [-0.23, 0.14]];
+    const kitePoly: [number, number][] = [[0, -0.05], [0.25, 0.14], [0, 0.45], [-0.25, 0.14]];
     slab(body, kitePoly, 0.026, 0.01, fr, P, () => rig.s('tail5'));
     slab(kite, kitePoly.map(([u, v]) => [u * 0.62, 0.07 + (v - 0.07) * 0.62] as [number, number]), 0.036, 0.008, fr,
-      (f) => (f.l[1] > 0.16 ? tipC : G), () => rig.s('tail5'));
+      (f) => (f.l[1] > 0.15 ? tipC : G), () => rig.s('tail5'));
   }
 
-  // BOLT STRIPE: a cyan zigzag down the spine, neck → tail root (glow 1, no ink) — the lightning read from above
+  // BOLT STRIPE: a cyan zigzag down the spine, shoulders → tail root (glow 1, no ink) — the lightning read from above
   {
     const pts: V3[] = [], ns: V3[] = [];
-    const zs = [0.3, 0.2, 0.1, 0.0, -0.1, -0.2, -0.3, -0.4, -0.5, -0.58];
+    const zs = [0.3, 0.2, 0.1, 0.0, -0.1, -0.2, -0.3, -0.4, -0.48, -0.54];
     for (let i = 0; i < zs.length; i++) {
       const z = zs[i];
-      const x = (i % 2 === 0 ? -1 : 1) * 0.055 * (i === 0 || i === zs.length - 1 ? 0.3 : 1);
+      const x = (i % 2 === 0 ? -1 : 1) * 0.06 * (i === 0 || i === zs.length - 1 ? 0.3 : 1);
       const hw = interpZ(tz, trx, z);
       pts.push([x, topAt(z) - 0.004, z]);
       ns.push(norm([x / Math.max(0.05, hw) * 0.35, 1, 0]));
     }
     for (let i = 0; i < pts.length - 1; i++) {
       const seg = [pts[i], pts[i + 1]], sn = [ns[i], ns[i + 1]];
-      ribbon(kite, seg, sn, 0.05, 0.012, G, spineSkin(lerp3(pts[i], pts[i + 1], 0.5)));
+      ribbon(kite, seg, sn, 0.055, 0.012, G, spineSkin(lerp3(pts[i], pts[i + 1], 0.5)));
     }
   }
 
-  // static mane: 9 broad cyan blades laid back along the neck crest (maneN) and over the shoulders (maneS)
+  // static crest (glow 0): swept blades along the NAPE behind the skull (maneN) + over the withers (maneS), laid low and
+  // back like a hunting cat's raised hackles. Originality guard (CONTRACT §8): nothing on the skull itself and nothing
+  // framing the face (no mane ring) — the head stays a clean big-cat skull.
   const blade = (bone: string, base: V3, back: V3, across: V3, L: number, w: number) => {
     const fr = slabFrame(base, across, back);
-    slab(mane, [[-w / 2, -0.01], [w / 2, -0.01], [w * 0.36, L * 0.55], [0, L]], 0.03, 0.009, fr,
-      (f) => (f.l[1] > L * 0.62 ? tipC : G), () => rig.s(bone));
+    slab(mane, [[-w / 2, -0.01], [w / 2, -0.01], [w * 0.34, L * 0.5], [0, L]], 0.028, 0.008, fr,
+      (f) => (f.l[1] > L * 0.6 ? tipC : G), () => rig.s(bone));
   };
-  const crest = spline([[0, 0.69, 0.14], [0, 0.72, 0.26], [0, 0.77, 0.37], [0, 0.83, 0.46]], 5);
-  const cL = [0.2, 0.22, 0.24, 0.22, 0.18], cW = [0.1, 0.11, 0.12, 0.11, 0.09];
-  for (let i = 0; i < crest.length; i++) {
-    const b = crest[i];
-    const bone = b[2] < 0.3 ? 'maneS' : 'maneN';
-    blade(bone, add(b, [0, 0.02, 0]), [0, 0.55, -1], [1, 0, 0], cL[i], cW[i]);
-  }
+  blade('maneN', [0, 0.82, 0.44], [0, 0.42, -1], [1, 0, 0], 0.2, 0.1);
+  blade('maneN', [0, 0.79, 0.38], [0, 0.42, -1], [1, 0, 0], 0.19, 0.1);
+  blade('maneS', [0, 0.765, 0.3], [0, 0.4, -1], [1, 0, 0], 0.17, 0.1);
   for (const sd of [1, -1]) {
-    blade('maneS', [0.1 * sd, 0.7, 0.24], [0.35 * sd, 0.45, -1], [1, -0.35 * sd, 0.15 * sd], 0.19, 0.1);
-    blade('maneN', [0.085 * sd, 0.75, 0.37], [0.3 * sd, 0.5, -1], [1, -0.4 * sd, 0.1 * sd], 0.17, 0.09);
+    blade('maneN', [0.075 * sd, 0.795, 0.41], [0.4 * sd, 0.4, -1], [1, -0.4 * sd, 0.15 * sd], 0.16, 0.085);
+    blade('maneS', [0.1 * sd, 0.755, 0.26], [0.45 * sd, 0.35, -1], [1, -0.45 * sd, 0.2 * sd], 0.15, 0.085);
   }
 
-  // legs: shorter and ~1.5× thicker; straight forelegs, digitigrade hocks, broad paws
+  // legs: short and POWERFUL — thick forearms on big paws; digitigrade hind legs with heavy thighs, high hocks and a
+  // raised raptor sickle claw
   const limb = (f: Face): THREE.Color => (f.t > 0.72 ? mix(P, S2, 0.35) : f.n[1] < -0.5 || f.n[2] > 0.5 ? flankLo : f.n[1] > 0.3 ? mix(P, B, 0.4) : P);
-  const paw = pawFoot(S2, claw, 1.15, 3);
+  const paw = pawFoot(S2, claw, 1.3, 3);
   const hindFoot = (g: Geo, rg: Rig, ankle: V3, side: 1 | -1, bone: string): void => {
     const s = rg.s(bone);
-    const toe: V3 = [ankle[0], 0.06, ankle[2] + 0.1];
-    sweep(g, [{ p: ankle, rx: 0.058, ry: 0.058, skin: s }, { p: lerp3(ankle, toe, 0.5), rx: 0.05, ry: 0.05, skin: s }, { p: toe, rx: 0.052, ry: 0.052, skin: s }],
+    const toe: V3 = [ankle[0], 0.06, ankle[2] + 0.12];
+    sweep(g, [{ p: ankle, rx: 0.066, ry: 0.066, skin: s }, { p: lerp3(ankle, toe, 0.5), rx: 0.056, ry: 0.058, skin: s }, { p: toe, rx: 0.058, ry: 0.058, skin: s }],
       { sides: 7, cap0: 0, cap1: 0, paint: mix(P, S2, 0.45), up: [0, 0, 1] });
     paw(g, rg, [toe[0], 0, toe[2] - 0.02], side, bone);
+    // sickle claw on the inner toe, held up off the ground
+    const sb: V3 = [toe[0] - side * 0.045, 0.06, toe[2] + 0.03];
+    cone(g, sb, [sb[0] - side * 0.012, 0.115, sb[2] + 0.07], 0.02, 5, claw, s);
   };
   const legs: LegDef[] = [];
-  const fore = { hip: [0.15, 0.56, 0.24] as V3, knee: [0.19, 0.33, 0.17] as V3, ankle: [0.2, 0.08, 0.28] as V3, root: [0.05, 0.57, 0.24] as V3 };
-  const hind = { hip: [0.15, 0.54, -0.42] as V3, knee: [0.2, 0.36, -0.28] as V3, ankle: [0.2, 0.15, -0.48] as V3, root: [0.05, 0.55, -0.42] as V3 };
-  for (const nm of ['legFL', 'legFR'] as const) legs.push(buildLeg(body, rig, { name: nm, parent: 'chest', ...fore, r: [0.11, 0.095, 0.078, 0.068, 0.06], paint: limb, sides: 8, foot: paw }));
-  for (const nm of ['legBL', 'legBR'] as const) legs.push(buildLeg(body, rig, { name: nm, parent: 'hips', ...hind, r: [0.13, 0.11, 0.08, 0.066, 0.058], paint: limb, sides: 8, foot: hindFoot }));
+  const fore = { hip: [0.16, 0.56, 0.26] as V3, knee: [0.2, 0.33, 0.19] as V3, ankle: [0.2, 0.085, 0.3] as V3, root: [0.05, 0.57, 0.26] as V3 };
+  const hind = { hip: [0.16, 0.55, -0.38] as V3, knee: [0.22, 0.37, -0.21] as V3, ankle: [0.21, 0.16, -0.44] as V3, root: [0.05, 0.56, -0.38] as V3 };
+  for (const nm of ['legFL', 'legFR'] as const) legs.push(buildLeg(body, rig, { name: nm, parent: 'chest', ...fore, r: [0.125, 0.112, 0.088, 0.08, 0.07], paint: limb, sides: 8, foot: paw }));
+  for (const nm of ['legBL', 'legBR'] as const) legs.push(buildLeg(body, rig, { name: nm, parent: 'hips', ...hind, r: [0.15, 0.13, 0.088, 0.072, 0.064], paint: limb, sides: 8, foot: hindFoot }));
+  // muscle masses: a shoulder/upper-arm bulge and a heavy haunch on each side (rigid on the upper leg joint)
+  for (const sd of [1, -1] as const) {
+    const fu = sd > 0 ? 'legFLUp' : 'legFRUp', bu = sd > 0 ? 'legBLUp' : 'legBRUp';
+    blob(body, [0.175 * sd, 0.5, 0.245], [0.1 * sd, 1, -0.15], 0.13, 0.085, 8, 4, (f) => (f.n[1] > 0.45 ? mix(P, saddle, 0.6) : f.n[1] < -0.4 ? flankLo : P), rig.mix('chest', fu, 0.7));
+    blob(body, [0.18 * sd, 0.49, -0.33], [0.15 * sd, 1, 0.35], 0.15, 0.1, 8, 4, (f) => (f.n[1] > 0.45 ? mix(P, saddle, 0.6) : f.n[1] < -0.4 ? flankLo : P), rig.mix('hips', bu, 0.7));
+    // cyan coil bands on the forearm (glow 1)
+    const lowB = sd > 0 ? 'legFLLow' : 'legFRLow';
+    const kn: V3 = [0.2 * sd, 0.33, 0.19], an: V3 = [0.2 * sd, 0.085, 0.3];
+    for (const t of [0.36, 0.52]) {
+      const c = lerp3(kn, an, t);
+      const r = 0.088 + (0.07 - 0.088) * t + 0.007;
+      lathe(kite, [[r * 0.94, -0.011], [r, -0.005], [r, 0.005], [r * 0.94, 0.011]], 8, frameAxis(c, sub(kn, an), [0, 0, 1]), G, () => rig.s(lowB));
+    }
+  }
 
   return { id: 'voltkite', rig, body, eyes, glow: [mane, kite], glowInk: [0.35, 0], legs, tail };
 }
