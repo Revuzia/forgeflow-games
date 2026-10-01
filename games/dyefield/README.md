@@ -1,4 +1,4 @@
-# DYEFIELD — Harbor Cup • 4 v 4 · Free-for-all
+# DYEFIELD — Harbor Cup • 4 v 4 · Free-for-all · Washout
 
 > Stain the arena. The floor is the scoreboard.
 
@@ -6,7 +6,8 @@
 and an eight-runner **FREE-FOR-ALL**. **Tide-runners** — kid-scale coastal athletes — fight for the
 **HARBOR CUP**: in teams, **SUNCREW** (amber-orange) against **GULF CREW** (violet-blue); in
 free-for-all, every runner is a crew of one. Your own dye is a highway and a refill pool, and
-everyone else's dye is glue. When the horn sounds, whoever covers more of the floor wins.
+everyone else's dye is glue. When the horn sounds, whoever covers more of the floor wins — or, under
+the **WASHOUT** rule, whoever washed the other side most.
 
 ## Run it (one command)
 
@@ -108,30 +109,58 @@ See `_spec/DESIGN.md` for the IP lock, the map thumbnails and the coverage + swi
 **Live (CDN, unpublished in the catalog):** https://forgeflow-games-cdn.isimcha85.workers.dev/dyefield/index.html
 
 **Two modes** (PLAY → MODE):
-- **TEAMS · 4 v 4** (the default): SUNCREW vs GULF CREW, and the crew with more turf wins.
+- **TEAMS · 4 v 4** (the default): SUNCREW vs GULF CREW.
 - **FREE-FOR-ALL**: 8 runners (you + 7 bots), each a crew of one in its own colour (amber, violet,
-  lime, magenta, sky, coral, sunflower or jade), each with a shape mark for colorblind play. Everyone
-  respawns on their own drop pad, and the most turf at the horn wins. The HUD shows your share, rank
-  and a live top 3; the victory slate shows a podium and the full standings.
+  lime, magenta, sky, coral, sunflower or jade), each with a shape mark for colorblind play. Every
+  respawn drops you at a random safe spot of the arena (never the same pad over and over; a crew-coloured
+  marker and a minimap ping show where), with a moment of spawn protection. The HUD shows your share
+  (or washes), rank and a live top 3; the victory slate shows a podium and the full standings.
 
-Title → **PLAY** (mode, map, time of day on Pier 18, bot skill BREEZE / SWELL / STORM) → **START**. **LOADOUT**
+## RULES
+
+Two rules (PLAY → RULE), each in both modes:
+
+| rule | what wins | notes |
+|---|---|---|
+| **TURF** (the default) — "Cover the most floor" | the most turf when the final horn sounds | floors count most, walls a little |
+| **WASHOUT** — "Most washes wins" | the most credited washes at the horn, or the first side to the score limit | paint still moves you, refills your tank and charges your special |
+
+- **WASHOUT scoring:** each wash credited to a runner scores one point for its crew (TEAMS: the crew's sum; FFA: the
+  runner's own). A runner who falls into the sea is credited to the last foe who hit them in the previous 5 s.
+- **The score limit** is set per map and mode (`data/maps.json → <map>.washout`); reaching it ends the match at once
+  (the slate says LIMIT REACHED, otherwise TIME).
+- **Ties at the horn:** TEAMS — more turf wins (equal turf is a draw); FFA — fewer times washed, then more turf.
+- **Spawn protection** (WASHOUT, and FFA in either rule): 2 s after a respawn, or until you fire, throw a sub or use a
+  special, you cannot be washed. The HUD reads PROTECTED.
+- **HUD:** TEAMS shows both crew scores round the timer ("n / limit") with the turf bar underneath as the tie-break;
+  FFA shows your washes, your rank and the live top 3. A "+1" pops by the reticle on each of your own washes.
+- **Victory slate:** the final scores, the ending (LIMIT REACHED / TIME), the tie-break note when turf decided it, and a
+  scoreboard of all 8 runners with W (washes) and D (times washed), your row highlighted.
+- Title mode line / page title: `Harbor Cup • 4 v 4 · Free-for-all · Washout`; a WASHOUT match's loading card reads
+  `Harbor Cup • Washout · 4 v 4` / `Harbor Cup • Washout · Free-for-all`. Bots only: online play is not in scope.
+
+Title → **PLAY** (mode, rule, map, time of day on Pier 18, bot skill BREEZE / SWELL / STORM) → **START**. **LOADOUT**
 picks the kit and crew and has a name field. **SETTINGS** has key remap (with conflict detection),
-sensitivity, invert Y, colorblind marks, master/music/SFX volume, render quality, reduce motion and
-show FPS. **HOW TO PLAY** and **CREDITS** are on the title menu.
+sensitivity, aim sensitivity, hold / toggle aim, invert Y, colorblind marks, master/music/SFX volume, render quality,
+reduce motion and show FPS. **HOW TO PLAY** and **CREDITS** are on the title menu.
 
 | action | default key |
 |---|---|
 | move / look | WASD / mouse (click to capture) |
 | fire (MIST-RASP stream · SHEET-DRUM roll, tap to flick · NEEDLE-GLINT hold to charge, release · POP-WELL burst) | LMB |
+| **AIM** (hold; SETTINGS → TOGGLE AIM): closer shoulder camera, narrower view, tighter reticle, slower look (AIM SENSITIVITY). View only — no accuracy or speed change | RMB |
 | slick into your own color (swim, hide, **drink** to refill the tank) | hold SHIFT |
 | jump | SPACE |
-| JELLY CHARGE (sub, ~70 % tank) | E or RMB |
-| special when the gauge is full (CLOUDBURST / WELLSPRING) | Q |
+| JELLY CHARGE (sub, ~70 % tank) | E |
+| special when the gauge is full (CLOUDBURST / WELLSPRING); it pops you out of a slick or off a wall, and a press up to 0.35 s early still counts. The chip shows its fill and %; a ready prompt names the key; an early press reads "Charging — n %" | Q |
 | pause (resume, settings, how to play, quit match, control legend) | ESC |
 | debug panel (coverage %, tank, map, fps, move state, atlas, render scale) | F1 |
 
-Dev query params (harness only): `?mode=teams|ffa`, `?map=`, `?kit=`, `?bots=breeze|swell|storm`, `?seed=`,
-`?matchSeconds=`, `?preset=noon|golden`, `?quality=auto|high|low`, `?autostart=1`, `?dev=1` (test
+Controls line: `WASD move · mouse look · LMB fire · RMB AIM · SHIFT slick · SPACE jump · E JELLY CHARGE · Q special · ESC pause`.
+Touch: the right side of the screen LOOKs; the AIM button (a scope, beside FIRE) toggles the zoom.
+
+Dev query params (harness only): `?mode=teams|ffa`, `?rule=turf|washout`, `?map=`, `?kit=`, `?bots=breeze|swell|storm`,
+`?seed=`, `?matchSeconds=`, `?preset=noon|golden`, `?quality=auto|high|low`, `?autostart=1`, `?dev=1` (test
 hooks on `window.__DF__`).
 
 ## Build status by phase
@@ -152,6 +181,7 @@ hooks on `window.__DF__`).
 | 11 | harden, pause, README | done: leak-flat across matches, adaptive resolution, focus-loss pause, context-loss card |
 | ship | CDN deploy | done: `dyefield-1.0.0` live and verified (files, marker, cover md5, live boot + live match) |
 | FFA | free-for-all mode (owner request 2026-09-28) | done: 8 crews, fair FFA spawns on all 3 maps, FFA HUD + standings; teams unchanged (all 12 teams determinism hashes identical until the shared bot fixes were enabled, then re-validated on 8 seeds); `dyefield-1.1.0` |
+| WASHOUT | kills-scored rule vs bots, FFA random safe spawns, AIM on RMB + a special that always answers (owner requests 2026-09-29) | `_spec/CONTRACT_WASHOUT.md`, `CONTRACT_FFA_SPAWNS.md`, `CONTRACT_CONTROLS.md`; target `dyefield-1.4.0` |
 
 **What is better BECAUSE of the chosen stack:**
 - **Phases 0–2:** the paint and movement sim runs under plain `node`, so the paint, move, swim,
@@ -171,14 +201,26 @@ hooks on `window.__DF__`).
 
 `npm run typecheck` · `node _harness/probe_{paint,move,swim,combat,match,kits,audio}.ts` ·
 `node _harness/probe_nav.ts --map {pier18,lockwell,cinder}` · `node _harness/probe_bots.ts [--map id] [--lineup mixed] [--seeds 1..8]` ·
+WASHOUT (`_spec/CONTRACT_WASHOUT.md` W8): `npm run probe:washout` (`probe_match --rule washout`: limit end, tie-breaks, sea
+credit, spawn protection, TURF hashes unchanged; `probe_bots --rule washout`: the W3 bot gates, TEAMS + FFA on 3 maps) ·
+`npm run probe:washout:tune` (the per-map score-limit tuning) · `python _harness/playtest.py --rule washout [--mode ffa]`
+(real input: the human's own shots wash a dev-placed foe, the chips / FFA panel and the '+1', a bot's wash counts, the
+W / D slate with LIMIT REACHED (FFA) or TIME (TEAMS), PLAY AGAIN) ·
+CONTROLS (`_spec/CONTRACT_CONTROLS.md` C4): `python _harness/playtest.py --controls` (real keys and mouse, no dev charge:
+the old-save migration, RMB hold + toggle AIM with the FOV / look-sensitivity read-backs and a measured mouse sweep, RMB
+throws no sub, E throws the JELLY CHARGE, a Q press at ~50 % denied with its feedback, the meter painted full, then Q from
+a SHIFT slick starts the special) · FFA spawns (`_spec/CONTRACT_FFA_SPAWNS.md` S5): `python _harness/playtest.py --mode ffa`
+also checks a respawn at a new site with its crew drop-in marker, the minimap ping and the fade, and no FFA pad ·
 `python art/build.py check` · `python _harness/bootcheck.py [--headless] [--base URL]` ·
-`python _harness/menus.py` · `python _harness/playtest.py --map id --kit id` ·
+`python _harness/menus.py` (incl. the RULE selector, the mode lines, the WASHOUT HOW TO PLAY text, AIM in the remap list
+and the old-bindings migration) · `python _harness/playtest.py --map id --kit id` ·
 `python _harness/perfcheck.py --map id` · `python _harness/abperf.py` (interleaved GPU A/B) ·
-`python _harness/bootguard.py` · `python _harness/padcheck.py --headless`.
+`python _harness/bootguard.py` · `python _harness/padcheck.py --headless` (the FFA drop-in marker check on 3 maps).
 Mobile (`_spec/CONTRACT_MOBILE.md`): `python _harness/mobile.py --headless` (M11: iPhone SE, iPhone 14, Pixel 7 and
-iPad emulation with real CDP multi-touch, both modes; the mobile review fixes of 2026-09-29 each have a check named
-after their finding, A-A… / B-F…) · `python _harness/layoutcheck.py --headless` (M6 layout on every screen, phones to
-desktop). Audio for WebKit before 18.4 (no Ogg): `python runtime/src/audio/build/build_audio.py --aac-twins` rewrites the
+iPad emulation with real CDP multi-touch, both modes; the START match is TURF and the deep-link match WASHOUT (its HUD,
+a touch score, the W / D slate); the AIM button and SPECIAL from a slick (C4); the mobile review fixes of 2026-09-29 each
+have a check named after their finding, A-A… / B-F…) · `python _harness/layoutcheck.py --headless` (M6 layout on every screen, phones to
+desktop; with the WASHOUT steps `play_washout`, `hud_washout`, `victory_washout`, `hud_washout_ffa`, `victory_washout_ffa`). Audio for WebKit before 18.4 (no Ogg): `python runtime/src/audio/build/build_audio.py --aac-twins` rewrites the
 AAC `.m4a` twin of every Ogg + their manifest fields; `node _harness/probe_audio.ts --files` checks them sample-exact.
 CDN (shared worker `../../workers/games-cdn/src/index.js`, deployed separately with the owner's OK): map GLBs gzip-encoded,
 DYEFIELD's content-hashed assets immutable.

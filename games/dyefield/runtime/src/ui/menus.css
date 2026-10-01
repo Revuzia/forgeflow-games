@@ -387,6 +387,9 @@ html.df-cb .dfm[data-crew="gulf"] .dfm-stat .bar i.on { background-image: repeat
 .dfm-howkeys .dfm-leg .lbl { text-align: left; }
 .dfm-set { align-items: start; }
 .dfm-set > .dfm-keys { max-height: 100%; }
+/* CONTRACT_CONTROLS C1: the MOUSE card's AIM rows make the right column taller than a 720 p window: it scrolls inside
+   itself like the key list, never over the hint pills */
+.dfm-set > .dfm-set-r { max-height: 100%; }
 .dfm-map .tag { margin: 4px 4px 0; font: 700 12.5px/1.38 var(--body); color: var(--ink2); }
 
 .dfm-set { grid-template-columns: minmax(360px, .92fr) minmax(0, 1.08fr); }
@@ -404,6 +407,29 @@ html.df-cb .dfm[data-crew="gulf"] .dfm-stat .bar i.on { background-image: repeat
 .dfm-modebox .dfm-cap { margin: 0; }
 .dfm-modeseg { display: flex; flex-wrap: nowrap; gap: 6px; }
 .dfm-modebtn { white-space: nowrap; }
+/* CONTRACT_WASHOUT W4: MODE + RULE side by side at the header's right end, the picked rule's line under the pair */
+.dfm-setup { margin-left: auto; flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.dfm-setup-row { display: flex; align-items: center; gap: 12px; }
+.dfm-setup .dfm-modebox { margin-left: 0; }
+.dfm-rulebox { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 18px; border-radius: 999px;
+  background: var(--cream); border: 4px solid var(--ink); box-shadow: 0 6px 0 var(--ink); }
+.dfm-rulebox .dfm-cap { margin: 0; }
+.dfm-ruleseg { display: flex; flex-wrap: nowrap; gap: 6px; }
+.dfm-rulebtn { white-space: nowrap; }
+.dfm-rulenote { margin: 0; padding-right: 12px; font: 900 clamp(13px, 1.05vw, 16px)/1.2 var(--body); letter-spacing: .02em; color: var(--cream); white-space: nowrap;
+  text-shadow: 0 2px 0 rgba(10,20,44,.9); }
+.dfm[data-rule="washout"] .dfm-rulenote { color: var(--warn); }
+/* the arena cards start clear of the setup block and its line (the selected card's ✓ badge overhangs its top by 10 px) */
+@media (min-height: 501px) {
+  .dfm-s-play .dfm-maps { top: calc(var(--top) + max(clamp(88px, 12.4vh, 110px), 92px)); }
+}
+/* a tablet / narrow desktop: the MODE / RULE captions give way and the pills hug their buttons, so both keep one row
+   beside PLAY and the block stays short above the arena cards */
+@media (max-width: 1100px) {
+  .dfm-setup { gap: 3px; }
+  .dfm-setup :is(.dfm-modebox, .dfm-rulebox) .dfm-cap { display: none; }
+  .dfm-setup :is(.dfm-modebox, .dfm-rulebox) { padding: 3px 4px; }
+}
 /* LOADOUT: the colour pick of the 8 FFA crews (a chip + its mark) */
 .dfm-colors { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 8px; }
 .dfm-color { position: relative; height: 44px; border-radius: 999px; border: 4px solid var(--ink); background: var(--cream); box-shadow: 0 5px 0 var(--ink);
@@ -466,6 +492,60 @@ html.df-cb .dfm[data-crew="gulf"] .dfm-stat .bar i.on { background-image: repeat
 /* the winner's %: the crew's UI colour as a pill, its ink as the text (crew-coloured text on cream was unreadable) */
 .df-standings .srow.win .pct { justify-self: end; padding: 3px 6px 2px; border-radius: 999px; font-size: 17px; color: var(--ci, var(--ink));
   background: var(--cu, var(--c)); border: 2px solid var(--ink); box-shadow: 0 2px 0 var(--ink); }
+/* ───────── WASHOUT victory (CONTRACT_WASHOUT W6, slates.ts): TEAMS scores + tag + note + the 8-runner board; FFA by score ───────── */
+.df-victory-card.wo { gap: 12px; }
+.df-wo { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(760px, 80vw); }
+.df-wo-scores { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.df-wo-chip { display: inline-flex; align-items: center; gap: 10px; padding: 6px 20px 6px 6px; border-radius: 999px; color: var(--cream);
+  border: 4px solid var(--ink); box-shadow: 0 5px 0 var(--ink); transition: transform .25s cubic-bezier(.2,1.6,.4,1), box-shadow .2s ease; }
+.df-wo-chip.sun { background: linear-gradient(180deg, #ffb35c, var(--sun-dye)); }
+.df-wo-chip.gulf { background: linear-gradient(180deg, #8f84ff, var(--gulf-dye)); flex-direction: row-reverse; padding: 6px 6px 6px 20px; }
+.df-wo-chip .mk { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font: 400 22px/1 var(--display);
+  background: var(--cream); border: 3px solid var(--ink); }
+.df-wo-chip.sun .mk { color: var(--sun-dye); }
+.df-wo-chip.gulf .mk { color: var(--gulf-dye); }
+.df-wo-chip .nm { font: 400 18px/1 var(--display); letter-spacing: .06em; text-shadow: 0 2px 0 var(--ink); white-space: nowrap; }
+.df-wo-chip .sc { display: inline-flex; align-items: baseline; gap: 4px; }
+.df-wo-chip .n { font: 400 44px/1 var(--display); font-variant-numeric: tabular-nums; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 0 3px 0 var(--ink); }
+.df-wo-chip .lim { font: 400 15px/1 var(--display); white-space: nowrap; text-shadow: 0 1px 0 var(--ink), 0 0 2px var(--ink); }
+.df-wo-chip .lim:empty { display: none; }
+.df-wo-chip.win { transform: scale(1.07); box-shadow: 0 5px 0 var(--ink), 0 0 0 4px var(--cream), 0 0 0 7px var(--ink); }
+html.df-cb .df-wo-chip.gulf { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.34) 0 3px, rgba(255,255,255,0) 3px 8px), linear-gradient(180deg, #7aa6ff, var(--gulf-dye)); }
+.df-wo-tag { flex: none; padding: 6px 12px 5px; border-radius: 999px; background: var(--ink); color: var(--cream); font: 400 15px/1 var(--display); letter-spacing: .12em; white-space: nowrap; }
+.df-wo-tag.limit { background: var(--warn); color: var(--ink); border: 2px solid var(--ink); padding: 4px 10px 3px; }
+.df-wo-note { margin: -4px 0 0; font: 800 14px/1.3 var(--body); color: var(--ink2); text-align: center; }
+.df-wo-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; width: 100%; }
+.df-wo-col { min-width: 0; padding: 8px 12px 10px; border-radius: 16px; border: 3px solid var(--ink); }
+.df-wo-col.sun { background: rgba(255,138,31,.13); }
+.df-wo-col.gulf { background: rgba(91,75,240,.1); }
+.df-wo-head, .df-wo-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 34px 34px; align-items: center; gap: 8px; }
+.df-wo-head { padding-bottom: 5px; margin-bottom: 4px; border-bottom: 2px dashed rgba(20,32,58,.25); }
+.df-wo-head .mk { justify-self: center; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font: 400 13px/1 var(--display);
+  color: var(--cream); border: 2px solid var(--ink); text-shadow: 0 1px 0 var(--ink); }
+.df-wo-col.sun .df-wo-head .mk { background: var(--sun-dye); }
+.df-wo-col.gulf .df-wo-head .mk { background: var(--gulf-dye); }
+.df-wo-head .nm { font: 400 16px/1 var(--display); letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.df-wo-head .h { font: 400 14px/1 var(--display); color: var(--ink2); text-align: center; }
+.df-wo-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.df-wo-row { margin: 0 -6px; padding: 2px 6px; border-radius: 999px; }
+.df-wo-row .kiticon { width: 30px; height: 21px; object-fit: contain; }
+.df-wo-col.gulf .kiticon { filter: hue-rotate(218deg) saturate(1.05); }
+.df-wo-row .nm { font: 400 16px/1.15 var(--display); letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.df-wo-row .w { font: 400 20px/1 var(--display); text-align: center; font-variant-numeric: tabular-nums; }
+.df-wo-row .d { font: 400 16px/1 var(--display); text-align: center; color: var(--ink2); font-variant-numeric: tabular-nums; }
+.df-wo-row.you { background: var(--ink); color: var(--cream); }
+.df-wo-row.you .d { color: #c9d4ee; }
+/* FFA: the tag + note under the winner line; each row W (the score) and D */
+.df-wo-meta { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 10px; }
+.df-wo-meta .df-wo-note { margin: 0; }
+.df-standings.wo .srow { grid-template-columns: 16px 24px minmax(0, 1fr) 56px 46px; }
+.df-standings .wd { display: inline-flex; align-items: baseline; justify-content: flex-end; gap: 3px; min-width: 0; }
+.df-standings .wd .u { font-style: normal; font: 400 12px/1 var(--display); color: var(--ink2); }
+.df-standings .wd .d { font: 400 16px/1 var(--display); color: var(--ink2); font-variant-numeric: tabular-nums; }
+.df-standings.wo .srow .pct { font-size: 20px; }
+.df-standings.wo .srow.win .pct { font-size: 17px; }
+@media (prefers-reduced-motion: reduce) { .df-wo-chip { transition: none; } }
+
 @media (max-height: 760px) {
   .df-victory-card.ffa { gap: 9px; padding: 18px 30px 20px; }
   .df-podium { height: 200px; --stepMax: 76px; }
@@ -624,6 +704,13 @@ html.df-touch .df-fps { left: 50%; top: auto; bottom: calc(env(safe-area-inset-b
   .dfm-s-play .dfm-hint { display: none; }
   .dfm-modebox { padding: 3px 4px 3px 12px; gap: 8px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
   .dfm-modebox .dfm-cap { font-size: 12px; }
+  /* W4 on a phone: MODE + RULE pills without their captions, the rule's line tucked under them */
+  .dfm-setup { gap: 2px; }
+  .dfm-setup-row { gap: 8px; }
+  .dfm-setup :is(.dfm-modebox, .dfm-rulebox) { padding: 3px 4px; gap: 8px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
+  .dfm-setup :is(.dfm-modebox, .dfm-rulebox) .dfm-cap { display: none; }
+  .dfm-ruleseg { gap: 5px; }
+  .dfm-rulenote { padding-right: 8px; font-size: 12px; line-height: 1.1; }
   .dfm-maps { flex: none; gap: 8px; }
   .dfm-map { gap: 3px; padding: 5px 5px 7px; border-width: 3px; border-radius: 16px; box-shadow: 0 5px 0 var(--ink); }
   :where(html:not(.df-touch)) .dfm-map:focus { transform: translateY(-3px) rotate(-.6deg); box-shadow: 0 8px 0 var(--ink), 0 0 0 3px var(--cream); }
@@ -773,11 +860,46 @@ html.df-touch .df-fps { left: 50%; top: auto; bottom: calc(env(safe-area-inset-b
   .df-standings .track { height: 12px; border-width: 2px; }
   .df-standings .pct { font-size: 14px; }
   .df-standings .srow.win .pct { font-size: 13px; padding: 2px 5px 1px; }
+
+  /* the WASHOUT slate (W6), compact */
+  .df-victory-card.wo { gap: 7px; }
+  .df-wo { gap: 6px; width: min(640px, calc(100vw - max(12px, env(safe-area-inset-left, 0px)) - max(12px, env(safe-area-inset-right, 0px)) - 52px)); }
+  .df-wo-scores { gap: 10px; }
+  .df-wo-chip { gap: 6px; padding: 3px 12px 3px 3px; border-width: 3px; box-shadow: 0 3px 0 var(--ink); }
+  .df-wo-chip.gulf { padding: 3px 3px 3px 12px; }
+  .df-wo-chip .mk { width: 26px; height: 26px; font-size: 14px; border-width: 2px; }
+  .df-wo-chip .nm { font-size: 13px; }
+  .df-wo-chip .n { font-size: 26px; -webkit-text-stroke-width: 1.5px; text-shadow: 0 2px 0 var(--ink); }
+  .df-wo-chip .lim { font-size: 12px; }
+  .df-wo-chip.win { box-shadow: 0 3px 0 var(--ink), 0 0 0 3px var(--cream), 0 0 0 5px var(--ink); }
+  .df-wo-tag { padding: 4px 9px 3px; font-size: 12px; }
+  .df-wo-tag.limit { padding: 3px 8px 2px; }
+  .df-wo-note { margin: -2px 0 0; font-size: 12px; }
+  .df-wo-board { gap: 10px; }
+  .df-wo-col { padding: 4px 8px 5px; border-width: 2px; border-radius: 12px; }
+  .df-wo-head, .df-wo-row { grid-template-columns: 26px minmax(0, 1fr) 24px 24px; gap: 5px; }
+  .df-wo-head { padding-bottom: 3px; margin-bottom: 2px; }
+  .df-wo-head .mk { width: 18px; height: 18px; font-size: 12px; border-width: 1.5px; }
+  .df-wo-head .nm { font-size: 13px; }
+  .df-wo-head .h { font-size: 12px; }
+  .df-wo-rows { gap: 1px; }
+  .df-wo-row { padding: 1px 6px; }
+  .df-wo-row .kiticon { width: 26px; height: 17px; }
+  .df-wo-row .nm { font-size: 13px; }
+  .df-wo-row .w { font-size: 15px; }
+  .df-wo-row .d { font-size: 13px; }
+  .df-wo-meta { gap: 4px 8px; }
+  .df-standings.wo .srow { grid-template-columns: 12px 20px minmax(0, 1fr) 38px 32px; gap: 5px; }
+  .df-standings .wd .d { font-size: 13px; }
+  .df-standings.wo .srow .pct { font-size: 15px; }
+  .df-standings.wo .srow.win .pct { font-size: 13px; }
 }
 @media (max-height: 500px) and (max-width: 700px) {
   .dfm-head h2 { font-size: 26px; }
   .dfm-modebox .dfm-cap { display: none; }
   .dfm-modebox { padding-left: 4px; }
+  .dfm-s-play .dfm-head { gap: 8px; }
+  .dfm-setup-row { gap: 6px; }
   .dfm-segbtn { padding: 0 10px; font-size: 14px !important; }
   .dfm-kitcard .chips { display: none; }
   .dfm-plate span { display: none; }

@@ -35,7 +35,8 @@ Exit codes: 0 clean · 1 not clean · 2 the page never got far enough to judge.
 --mode ffa (CONTRACT_FFA F4, lane UI): the same boot in FREE-FOR-ALL (?mode=ffa): state().matchMode 'ffa' with 8 crews in
 match(); every bot is a foe from the first second, so a timed step (W hold, LMB hold) during which the human is washed
 waits for the respawn and runs again (up to twice, NOTED; also when the human was not alive at the step's start or end);
-before the LMB hold a human standing on its drop pad (locked floor, review F2) walks off it first (NOTED); the LMB check wants the human's OWN crew under the feet (default amber = 1), its share in
+(CHANGED(SPAWNS), CONTRACT_FFA_SPAWNS S3: FFA has no permanent drop pads and no locked floor any more, so the old
+"walk off the drop pad first" step is gone); the LMB check wants the human's OWN crew under the feet (default amber = 1), its share in
 match().coverageByTeam > 0, and the minimap pixel in its own FFA colour. Shots _shots/ffa_ui_boot_*.png, report
 bootcheck_ffa. Teams mode (the default) is unchanged.
 """
@@ -302,37 +303,14 @@ def main() -> int:
                 return {"underBefore": before_under, "underAfter": under, "nudged": nudged, "coverage": cov, "flips": [flips0, flips1],
                         "minimap": px, "minimapLabel": label, "minimapDetail": px_detail, "underAtPixel": under_px, "player": st.get("player")}
 
-            PAD_GAP_JS = ("() => { const d = window.__DF__ && __DF__.dev; const p = d && d.world && d.world.crewPads && d.world.crewPads[0];"
-                          " const r = d && d.world && d.world.runners[0]; return p && r ? Math.hypot(r.x - p.x, r.z - p.z) - p.r : null; }")
-
-            def off_drop_pad(where):
-                # FFA (review F2): the drop-pad floor is LOCKED — never dyed, skipped by teamUnder's nearest-floor search,
-                # neutral on the minimap. After a respawn the human stands on its pad: an LMB at the feet paints nothing
-                # there, and on the disc's edge teamUnderFeet() (the nearest OPEN texel within 0.35 m, own dye just
-                # outside) and the minimap pixel (the locked texel) legitimately disagree (seen at 1.48 m of r 1.6).
-                # Walk off the disc with a real W hold (≤ 1.5 s) until the runner is > 0.8 m past its edge.
-                gap = sess.safe_js(PAD_GAP_JS)
-                if gap is None or gap > 0.8:
-                    return
-                sess.page.keyboard.down("KeyW")
-                t_end = time.time() + 1.5
-                g2 = gap
-                while time.time() < t_end:
-                    time.sleep(0.05)
-                    g2 = sess.safe_js(PAD_GAP_JS)
-                    if g2 is not None and g2 > 0.8:
-                        break
-                sess.page.keyboard.up("KeyW")
-                time.sleep(0.3)
-                notes.append("FFA: the human stood on its drop pad (locked floor, F2) before the %s → walked off it "
-                             "(edge gap %.2f → %s m)" % (where, gap, fmt(g2)))
-
+            # CHANGED(SPAWNS) (CONTRACT_FFA_SPAWNS S3): the FFA drop pads (a locked, never-dyed floor disc under a respawned
+            # human) are gone, so the "walk off the drop pad" step before the LMB hold went with them (it read the
+            # @deprecated, always-empty MatchWorld.crewPads and never fired any more)
             for attempt in range(4 if ffa else 2):
                 wait_warm(sess, notes, "before the LMB hold")
                 sess.lock_guard("before the LMB hold", notes, problems)
                 if ffa:
                     ffa_rearm("before the LMB hold")
-                    off_drop_pad("LMB hold")
                 w0 = washes() if ffa else 0
                 alive0 = ((sess.state() or {}).get("player") or {}).get("alive", True)
                 mouse_home(sess)

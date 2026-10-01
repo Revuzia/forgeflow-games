@@ -5,8 +5,9 @@
 //   start       CHANGED(CONTROLS) (CONTRACT_CONTROLS §C2) — "the special always answers":
 //               * a request = intent.special held this tick, or a press (its rising edge) at most
 //                 KITS.specialBufferSeconds ago that has not started anything yet. A key held through a wash + respawn
-//                 or through the countdown is no press (Runner.respawn sets specialHeld: a release comes first), so it
-//                 never draws a 'denied'; held with a full meter it still starts the special (the level request);
+//                 or through the countdown is no press (MatchWorld tracks Runner.specialHeld on the ticks this function
+//                 skips — a dead runner, the countdown — so a release comes first), so it never draws a 'denied'; held
+//                 with a full meter it still starts the special (the level request); a press on the respawn tick is one;
 //               * it starts when the meter is full (specialReady, special ≥ 1), no special runs, the runner is alive,
 //                 not leaping, and ON A SURFACE: grounded in any form (walking, slogging, slicked, surfacing) or on a
 //                 wall. Slicked / surfacing / on a wall / not tall → popOut() first (the slick form and surfacing end

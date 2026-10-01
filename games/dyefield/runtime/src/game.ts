@@ -48,11 +48,33 @@
 //     re-arms); leaving the match (QUIT / LOBBY / dispose) drops a leftover entry. Leaving full screen (the first Android
 //     back in full screen only exits it) pauses too. A-A10 — the loop renders at most ~60 frames a second on a 90 / 120
 //     / 144 Hz phone (the governor budgets 60 fps; the extra frames were heat and battery).
+//   * lane C (2026-09-30) — CONTRACT_CONTROLS C1–C3, CONTRACT_WASHOUT W4–W7, CONTRACT_FFA_SPAWNS S3 / S5 (view side only;
+//     the sim never sees AIM and every TURF hash is untouched):
+//       AIM (C1): aimFrame() → FollowCamera.aimTarget while Input.aiming() (RMB held / toggled, the touch toggle) and the
+//       human is alive, on foot and in play; the camera eases zoom (NEEDLE-GLINT the scope zoom) / shoulder / look ×
+//       aimSens (the touch look too); hud.setAiming on a change; a wash drops a toggled aim.
+//       SPECIAL (C2 / C3): 'special' end → the CLOUDBURST dissipate ONLY for phase 'end' (a 'denied' used to fire it);
+//       'denied' (the human) → hud.specialDenied + the touch SPECIAL shake (the audio router ticks); hud.setSpecial per
+//       change (fill %, ready, the name, the actual binding).
+//       WASHOUT (W): MatchConfig.rule → MatchWorld; hud.setRule(rule, limit) per match, setScores(world.scores()) every
+//       WASHOUT frame, scorePop on the human's own 'score', setProtected while its spawn protection runs; the victory
+//       slate gets rule + washoutVictory(result, runners).
+//       FFA SPAWNS (S3 / S5): 'spawn' → the site's drop-in marker (GameParts.drops, view/mapview.ts) in the runner's crew +
+//       a minimap ping; markers hold through the countdown, clear on PLAY AGAIN.
+//   * review fixes (2026-09-30, view / input only — core and every determinism hash untouched):
+//       A-A1 airSpecial(): a SPECIAL press (key tap or touch tap) made in the AIR with a FULL meter is held for the human as
+//       a level request until the sim can start it — the landing tick (C2 "mid-air = not yet") — or AIR_SPECIAL_TICKS
+//       pass, the meter stops being full, a special starts, the runner dies or leaps. The core's own wait (0.35 s) is
+//       shorter than every jump, so a tap before the last 21 air ticks used to lapse silently; bots keep the core rule.
+//       The HUD's ready prompt reads "Q  CLOUDBURST · on landing" while it waits.
+//       A-A3: a 'denied' press while the human's own special runs (meter 0, the special is active) gives no deny feedback
+//       (the core still emits it, per C2); A-A5: setScores also carries the per-crew washed counts (the FFA panel's
+//       tie-break); A-A6: HudFrame.endedBy (a limit ending freezes the timer).
 
 import * as THREE from 'three';
 import { TICK, MAX_STEPS_PER_FRAME, DEV_BRUSH, COMBAT, CAMERA } from './core/config.ts';
-import { CREW_SLOTS, DEG, emptyIntent, type MatchMode, type PlayerIntent, type TeamId } from './core/types.ts';
-import { WEAPONS, type MapDef } from './core/data.ts';
+import { CREW_SLOTS, DEG, emptyIntent, type MatchMode, type MatchRule, type PlayerIntent, type TeamId } from './core/types.ts';
+import { WEAPONS, crewDef, type MapDef } from './core/data.ts';
 import type { MapGeometry } from './core/mapgeo.ts';
 import type { PaintAtlas } from './core/paint/atlas.ts';
 import type { Painter } from './core/paint/painter.ts';
@@ -65,7 +87,8 @@ import { BotDirector } from './core/bots/director.ts';
 import type { NavGraph } from './core/bots/nav.ts';
 import type { Runner } from './core/runner.ts';
 import type { RendererRig, RenderQuality } from './view/renderer.ts';
-import type { FollowCamera } from './view/camera.ts';
+import { AIM, type FollowCamera } from './view/camera.ts';
+import type { DropMarkers } from './view/mapview.ts';
 import type { SkyRig } from './view/sky.ts';
 import type { WaterRig } from './view/water.ts';
 import type { PaintTexture } from './view/paintlayer.ts';
@@ -74,6 +97,7 @@ import type { MapView } from './view/mapview.ts';
 import { kitFireType, type KitFireType, type PlayerViews, type PlayersFrameOpts } from './view/players.ts';
 import type { Fx } from './view/fx.ts';
 import type { Hud, HudDebug, CrestInfo, DotInfo, HudFrame, FfaVictory } from './ui/hud.ts';
+import { washoutVictory, type VictoryInfo } from './ui/slates.ts';
 import type { BootUI } from './ui/boot.ts';
 import type { Juice, JuiceCtx } from './ui/juice.ts';
 import type { AudioFrame, GameAudio, ListenerPose } from './audio/index.ts';
@@ -112,6 +136,8 @@ export interface MatchConfig {
   devBrush: boolean;
   /** CONTRACT_FFA F3: 'teams' (default) or 'ffa' (8 crews of one; `crew` is then the human's FFA colour 1..8) */
   mode?: MatchMode;
+  /** CONTRACT_WASHOUT W4: 'turf' (default: the most floor wins) or 'washout' (the most credited washes wins) */
+  rule?: MatchRule;
 }
 
 export type GameMode = 'lobby' | 'match';
@@ -171,6 +197,8 @@ export interface GameParts {
   juice?: Juice | null;
   /** CONTRACT_MOBILE M2: the touch overlay (match sessions; main.ts constructs and disposes it) */
   touch?: TouchControls | null;
+  /** CONTRACT_FFA_SPAWNS S3: the drop-in markers of the FFA spawn sites (FFA match sessions; main.ts builds / disposes) */
+  drops?: DropMarkers | null;
 }
 
 /** player-facing settings the game applies itself */
@@ -183,6 +211,9 @@ export type LoggedEvent = SimEvent & { tick: number };
 
 const EVENT_LOG = 512;
 const HUMAN = 0;
+/** review fix A-A1: how long the human's mid-air SPECIAL press is held for the landing (1.5 s in whole ticks: longer than
+ *  any walk, slog or slick jump — a walk jump is ~0.83 s — and still bounded, so a long fall never fires a stale press) */
+export const AIR_SPECIAL_TICKS = Math.round(1.5 / TICK);
 /** lobby clock: a long 'match' that restarts itself (fresh paint) */
 export const LOBBY_SECONDS = 900;
 /** the lobby backdrop is fast-forwarded this far before it shows (runners spread out, some dye down) */
@@ -328,11 +359,32 @@ export class Game {
   private readonly assistRange: number;
   /** M7: the sun's authored shadow-map size (the touch cap never raises it) */
   private shadowBase = 0;
+  /** CONTRACT_WASHOUT W1: the match rule ('turf' for the lobby) */
+  readonly rule: MatchRule;
+  // CONTRACT_CONTROLS C1 / C3 + CONTRACT_WASHOUT W5: the last values handed to the HUD (a call only on a change)
+  private hudAiming = false;
+  private hudProtected = false;
+  private readonly hudSpecial = { pct: -1, ready: false, label: '', key: '', waiting: false };
+  /** review fix A-A1: ticks left of the human's mid-air SPECIAL request held for the landing (0 = none) */
+  private airHold = 0;
+  /** review fix A-A1: the human's raw SPECIAL intent of the previous tick (its rising edge = a press) */
+  private rawSpecialPrev = false;
+  /** review fix A-A1: read-back — presses held for a landing, and how each hold ended */
+  readonly airSpecialStats = { held: 0, started: 0, lapsed: 0, cancelled: 0 };
+  /** review fix A-A5: per-crew washed counts for the FFA WASHOUT panel (no per-frame allocation) */
+  private readonly washedBuf: number[] = [];
+  /** the human's special name (weapons.json), the HUD prompt "Q  CLOUDBURST" */
+  private readonly specialName: string;
+  /** read-backs: SPECIAL 'denied' events of the human, score pops, drop-in markers shown, minimap pings */
+  readonly c3 = { denied: 0, scorePops: 0, markers: 0, pings: 0 };
+  /** CONTRACT_FFA_SPAWNS S5: the live minimap pings (DOM) */
+  private readonly pingEls = new Set<HTMLElement>();
 
   constructor(parts: GameParts, settings: Partial<GameSettings> = {}) {
     this.p = parts;
     this.mode = parts.mode ?? 'match';
     this.matchMode = this.mode === 'match' && parts.config.mode === 'ffa' ? 'ffa' : 'teams';
+    this.rule = this.mode === 'match' && parts.config.rule === 'washout' ? 'washout' : 'turf';
     this.settings = { quality: settings.quality ?? parts.rig.adaptive().quality };
     this.physics = parts.physics;
     for (let i = 0; i < parts.roster.length; i++) {
@@ -347,6 +399,11 @@ export class Game {
       if (i !== HUMAN) this.foeBuf.push({ x: 0, y: 0, z: 0, visible: false });
     }
     this.assistRange = kitRange(parts.roster[HUMAN]?.kit ?? parts.config.kit);
+    {
+      const kitId = parts.roster[HUMAN]?.kit ?? parts.config.kit;
+      const spId = WEAPONS.kits.find((k) => k.id === kitId)?.special;
+      this.specialName = WEAPONS.specials.find((s) => s.id === spId)?.name ?? '';
+    }
     this.world = this.makeWorld();
     this.director = new BotDirector(this.world, parts.nav, parts.config.seed ^ 0x9e3779b9);
     this.juiceCtx = { me: HUMAN, runners: this.world.runners, cam: parts.cam };
@@ -373,6 +430,9 @@ export class Game {
     }
 
     const { input, hud, canvas } = parts;
+    // C1: NEEDLE-GLINT aims through a scope-like zoom, every other kit the regular one
+    parts.cam.aimZoom = this.fireType[HUMAN] === 'charge' ? AIM.scopeFovMul : AIM.fovMul;
+    this.hudMatch();
     this.offs.push(input.onUi((a) => {
       if (a === 'debug') hud.toggleDebug();
     }));
@@ -467,7 +527,22 @@ export class Game {
       seed: p.config.seed + (lobby ? this.lobbyRounds * 7919 : 0),
       ...(dur ? { durationS: dur } : {}), ...(lobby ? { countdownS: 0 } : {}),
       ...(this.matchMode === 'ffa' ? { mode: 'ffa' as const } : {}),
+      ...(this.rule === 'washout' ? { rule: 'washout' as const } : {}),     // CONTRACT_WASHOUT W1 (TURF: the option unset)
     });
+  }
+
+  /** a match (re)starts: the HUD learns the rule + the map's limit; the per-change HUD values are re-sent
+   *  (CONTRACT_WASHOUT W5 + CONTRACT_CONTROLS C1 / C3: ui/hud.ts setRule / setScores / setAiming / setProtected) */
+  private hudMatch(): void {
+    if (this.mode !== 'match') return;
+    const hud = this.p.hud;
+    hud.setRule(this.rule, this.world.limit);
+    if (this.rule === 'washout') hud.setScores(this.world.scores());
+    this.hudAiming = false;
+    hud.setAiming(false);
+    this.hudProtected = false;
+    hud.setProtected(false);
+    this.hudSpecial.pct = -1;
   }
 
   /** remove the runners' capsules of a world we are discarding from the kept PhysicsWorld */
@@ -550,6 +625,8 @@ export class Game {
       this.p.input.live = false;
       this.p.input.releaseAll();
       this.p.audio?.setPaused(false);             // QUIT MATCH from the pause card: the lobby must not stay muted
+      this.p.cam.clearAim();                      // C1: the next session's camera starts unzoomed
+      this.clearPings();
     }
   }
 
@@ -705,10 +782,15 @@ export class Game {
     for (const k of Object.keys(this.counts)) delete this.counts[k];
     this.launchSeen.fill(0);
     for (const it of this.intents) Object.assign(it, emptyIntent());
+    this.airHold = 0;
+    this.rawSpecialPrev = false;
     p.players.reset();
     p.fx.clear();
     p.hud.reset();
     if (this.mode === 'lobby') return;
+    p.drops?.clear();                               // S3: no marker survives into the next match
+    this.clearPings();
+    this.hudMatch();
     const h = this.human;
     p.cam.reset(h.yaw);
     this.feet.x = h.x; this.feet.y = h.y; this.feet.z = h.z;
@@ -731,6 +813,7 @@ export class Game {
       let brush = false;
       if (this.mode === 'match') {
         input.intent(cam.yaw, cam.pitch, me);
+        this.airSpecial(me);
         me.hasAim = this.aimOk;
         me.aimX = this.aim.x; me.aimY = this.aim.y; me.aimZ = this.aim.z;
         brush = config.devBrush && me.fire;
@@ -744,6 +827,33 @@ export class Game {
       this.stepping = false;
     }
     return true;
+  }
+
+  /**
+   * Review fix A-A1 (CONTRACT_CONTROLS C2 "mid-air is a not-yet state"): the human's SPECIAL press made in the air with a
+   * full meter is held as a level request (intent.special stays true) until the sim can answer it. The core starts a held
+   * request on the first tick the runner is on a surface — the landing tick — exactly as for a key held through the
+   * landing; its own 0.35 s press wait is shorter than a walk jump (~0.8 s), so a tap at or before the apex used to lapse
+   * with no start and no deny. The hold ends when a special starts, the meter is no longer full, the runner dies or
+   * leaps, the match leaves 'live', or AIR_SPECIAL_TICKS pass (a long fall never fires a stale press). Input layer only:
+   * the sim's rules, the bots and every determinism hash are unchanged. Call right after Input.intent() each tick.
+   */
+  private airSpecial(it: PlayerIntent): void {
+    const raw = !!it.special;
+    const pressed = raw && !this.rawSpecialPrev;
+    this.rawSpecialPrev = raw;
+    const h = this.human;
+    const full = h.specialReady && h.special >= 1;
+    const free = this.world.phase === 'live' && h.alive && !h.leaping && h.specialActive === '' && full;
+    if (pressed && free && !h.grounded && h.state !== 'wallslick') {
+      if (this.airHold === 0) this.airSpecialStats.held++;
+      this.airHold = AIR_SPECIAL_TICKS;
+    }
+    if (this.airHold <= 0) return;
+    if (h.specialActive !== '') { this.airHold = 0; this.airSpecialStats.started++; return; }
+    if (!free) { this.airHold = 0; this.airSpecialStats.cancelled++; return; }
+    it.special = true;
+    if (--this.airHold === 0) this.airSpecialStats.lapsed++;
   }
 
   /** ?dev=1&brush=1 — the phase-2 DEV_BRUSH (a splat under the feet at DEV_BRUSH.perSecond) */
@@ -833,6 +943,7 @@ export class Game {
     this.time += vdt;
     const alpha = playing || this.frozen ? Math.min(1, this.acc / TICK) : 1;
     this.matchFlow(vdt);
+    this.aimFrame();
     this.touchFrame();
     this.render(vdt, alpha);
     this.sound(vdt);
@@ -857,6 +968,62 @@ export class Game {
       specialReady: me.alive && me.specialReady && me.specialActive === '',
       subReady: me.alive && me.tank >= SUB_COST && me.subCooldown <= 0,
     });
+    tc.setAim(this.p.input.touch.aim);              // C1: the AIM toggle's light follows its real state
+  }
+
+  /**
+   * CONTRACT_CONTROLS C1: AIM → the camera (view only). Wanted (Input.aiming: RMB held / toggled, the touch toggle) AND
+   * allowed — in play, the human alive and on foot (a slick keeps its own tuck framing; a wash drops a toggle) — sets the
+   * camera's aimTarget (it eases zoom / shoulder / look over 0.15 s); hud.setAiming follows on a change.
+   */
+  private aimFrame(): void {
+    if (this.mode !== 'match') return;
+    const cam = this.p.cam;
+    const me = this.human;
+    const on = this.phase === 'play' && !this.matchOver && !this.frozen && me.alive && !me.slickForm && this.p.input.aiming();
+    cam.aimTarget = on ? 1 : 0;
+    if (on !== this.hudAiming) { this.hudAiming = on; this.p.hud.setAiming(on); }
+  }
+
+  // ───────────────────────────── CONTRACT_FFA_SPAWNS S5: the minimap ping ─────────────────────────────
+  /**
+   * A brief ping on the HUD minimap where a drop-in marker lands (every 'spawn' event, FFA). Drawn beside the HUD's own
+   * dots (a DOM ring in the crew colour, placed with the minimap raster's worldToPixel — the FFA minimap is north-up, never
+   * turned), ~0.9 s, then removed. Reduce motion: it fades without the grow.
+   */
+  private pingMinimap(x: number, z: number, crew: TeamId): void {
+    const canvas = document.getElementById('df-minimap') as HTMLCanvasElement | null;
+    const view = canvas?.parentElement;
+    if (!canvas || !view || !canvas.width || !canvas.height) return;
+    const [px, py] = this.p.minimap.worldToPixel(x, z);
+    const sx = (view.clientWidth || canvas.clientWidth) / canvas.width;
+    const sy = (view.clientHeight || canvas.clientHeight) / canvas.height;
+    let c = '#fff8ec';
+    try { c = crewDef('ffa', crew).ui; } catch { /* unknown crew: cream */ }
+    const e = document.createElement('i');
+    e.className = 'df-mini-ping';
+    e.setAttribute('aria-hidden', 'true');
+    const d = 12;
+    Object.assign(e.style, {
+      position: 'absolute', left: `${(px * sx - d / 2).toFixed(1)}px`, top: `${(py * sy - d / 2).toFixed(1)}px`,
+      width: `${d}px`, height: `${d}px`, borderRadius: '50%', boxSizing: 'border-box',
+      border: `2.5px solid ${c}`, boxShadow: `0 0 6px ${c}`, pointerEvents: 'none', zIndex: '3',
+    });
+    const host = view.querySelector<HTMLElement>('.df-mini-dots') ?? view;
+    host.append(e);
+    this.pingEls.add(e);
+    this.c3.pings++;
+    const still = this.p.cam.reduceMotion;
+    try {
+      e.animate(still ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 1, scale: '0.5' }, { opacity: 0.9, scale: '1.6', offset: 0.45 }, { opacity: 0, scale: '2.4' }],
+        { duration: 900, easing: 'ease-out', fill: 'forwards' });
+    } catch { /* no Web Animations: the element still goes away below */ }
+    window.setTimeout(() => { e.remove(); this.pingEls.delete(e); }, 950);
+  }
+
+  private clearPings(): void {
+    for (const e of this.pingEls) e.remove();
+    this.pingEls.clear();
   }
 
   /**
@@ -903,8 +1070,10 @@ export class Game {
       });
       a.slow = res.slow; a.dyaw = res.dyaw; a.dpitch = res.dpitch;
     }
-    const dyaw = t.dyaw * a.slow + a.dyaw;
-    const dpitch = t.dpitch * a.slow + a.dpitch;
+    // C1: the player's own look × the aim multiplier (the assist's pull is not scaled — it is already capped)
+    const ls = cam.lookScale;
+    const dyaw = t.dyaw * a.slow * ls + a.dyaw;
+    const dpitch = t.dpitch * a.slow * ls + a.dpitch;
     if (dyaw || dpitch) this.addLookRad(dyaw, dpitch);
   }
 
@@ -1012,7 +1181,18 @@ export class Game {
           else if (e.phase === 'start') {
             players.onSpecialStart(e.pid, e.id);
             if (e.id === 'wellspring') fx.leapBurst(e.x, e.y, e.z, team);
-          } else if (e.id === 'cloudburst') fx.cloudEnd(e.x, e.y, e.z, team);
+          } else if (e.phase === 'end') {
+            if (e.id === 'cloudburst') fx.cloudEnd(e.x, e.y, e.z, team);   // only a real end dissipates the cell
+          } else if (e.phase === 'denied' && e.pid === me && !rs[e.pid]?.specialActive) {
+            // CONTRACT_CONTROLS C3: the press the meter could not answer — the chip shakes + "Charging — n %", the touch
+            // SPECIAL button shakes; the soft deny tick is the audio router's (the same drained event). Review fix A-A3: a
+            // press while the human's OWN special runs (a double tap / mash; the core denies it, C2) is no failure — the
+            // special is active and the meter does not charge — so it gets no deny feedback (WELLSPRING keeps
+            // specialActive through the leap)
+            this.c3.denied++;
+            this.p.hud.specialDenied(rs[e.pid]?.special ?? 0);
+            this.p.touch?.specialDenied();
+          }
           break;
         }
         case 'dry': {
@@ -1041,7 +1221,22 @@ export class Game {
           if (e.victim === me) {
             hud.showDeath(e.cause === 'sea' || !by ? null : by.name, by ? by.team : null, WEAPONS.respawnSeconds);
             if (this.p.input.mode === 'touch') this.p.touch?.vibrate(60);   // CONTRACT_MOBILE M2 haptics
+            this.p.input.clearAim();                                         // C1: a toggled aim ends with the wash
           }
+          break;
+        }
+        case 'score':
+          // CONTRACT_WASHOUT W5: the human's own credited wash → the "+1" pop (the chips read scores() every frame)
+          if (!lobby && e.pid === me) { this.c3.scorePops++; this.p.hud.scorePop(); }
+          break;
+        case 'spawn': {
+          // CONTRACT_FFA_SPAWNS S3 / S5: a runner dropped in at a spawn site → the site's marker in its crew colour + a
+          // minimap ping (FFA only; the core pushes no 'spawn' in teams)
+          if (lobby || this.matchMode !== 'ffa') break;
+          const team = rs[e.pid]?.team ?? ((e.pid + 1) as TeamId);
+          this.p.drops?.show(e.site, team);
+          this.c3.markers++;
+          this.pingMinimap(e.x, e.z, team);
           break;
         }
         case 'respawn': {
@@ -1104,8 +1299,13 @@ export class Game {
       this.p.hud.hideDeath();
       const hooks = this.p.hooks;
       const ffa = this.matchMode === 'ffa' ? this.ffaVictory() : undefined;
-      this.p.hud.showVictory({ sun: res.sun, gulf: res.gulf, neutral: res.neutral, winner: res.winner, ...(ffa ? { ffa } : {}) }, () => this.playAgain(),
-        hooks?.lobby ? () => hooks.lobby?.() : undefined);
+      // CONTRACT_WASHOUT W6: a WASHOUT slate gets the rule and its scoreboard block (the result's scores / limit / endedBy
+      // + every runner's W / D, built by the slate module's washoutVictory); TURF passes neither (its slate is unchanged)
+      const vi: VictoryInfo = {
+        sun: res.sun, gulf: res.gulf, neutral: res.neutral, winner: res.winner, ...(ffa ? { ffa } : {}),
+        ...(this.rule === 'washout' ? { rule: 'washout' as const, washout: washoutVictory(this.world.result ?? {}, this.world.runners, HUMAN) } : {}),
+      };
+      this.p.hud.showVictory(vi, () => this.playAgain(), hooks?.lobby ? () => hooks.lobby?.() : undefined);
       hooks?.victory?.(this.p.hud.slates.victoryEl);
       // confetti in the winner's colours, kept off the slate's card (title + tally stay clean); the stinger
       if (ffa) this.p.juice?.victory(res.winner, this.p.hud.slates.victoryCardEl, ffa.winners);   // FFA draw: the tied crews' colours
@@ -1215,6 +1415,7 @@ export class Game {
     p.sky.update(dt, p.cam.camera, this.focus);
     p.water.update(this.time, p.cam.camera);
     p.map.update(dt, p.cam.camera);          // light_ pool re-assignment (0.5 s) + fades; stands the auto driver down
+    if (!lobby) p.drops?.update(dt, w.phase === 'countdown');   // S3: the drop-in markers (held through the countdown)
     const ut = p.dye.uTime;
     if (ut) ut.value = this.time;
     p.paint.upload(p.painter);
@@ -1234,6 +1435,7 @@ export class Game {
     const hf = this.hudFrame;
     hf.phase = w.phase;
     hf.timeLeft = w.timeLeft;
+    hf.endedBy = w.endedBy;                       // A-A6: a WASHOUT limit ending freezes the timer at the time left
     hf.countdown = w.countdown;
     hf.coverage = p.painter.coverage();
     hf.shares = this.matchMode === 'ffa' ? p.painter.coverageByTeam(this.shareBuf) : null;
@@ -1255,6 +1457,36 @@ export class Game {
       d.show = i !== HUMAN && r.alive && (r.team === me.team || this.seen[i] === true);
     }
     p.hud.update(dt, hf, () => this.debugInfo());
+    this.hudExtras(me);
+  }
+
+  /**
+   * The WASHOUT / CONTROLS HUD entry points, per frame (each call only on a change, except the WASHOUT scores): the live
+   * scores (world.scores(), the world's own array — never written here), PROTECTED while the human's spawn protection
+   * runs, and the C3 special chip (fill + %, the ready prompt with the ACTUAL binding: "Q  CLOUDBURST").
+   */
+  private hudExtras(me: Runner): void {
+    const hud = this.p.hud;
+    if (this.rule === 'washout') {
+      // A-A5: the per-crew washed counts (every cause, as MatchWorld.computeResult sums Runner.washedCount) ride along, so
+      // the FFA panel ranks ties on score exactly as the standings (fewer times washed, then turf)
+      const wd = this.washedBuf;
+      wd.length = CREW_SLOTS;
+      wd.fill(0);
+      for (const r of this.world.runners) if (r.team > 0 && r.team < CREW_SLOTS) wd[r.team] += r.washedCount;
+      hud.setScores(this.world.scores(), wd);
+    }
+    const prot = me.alive && me.protectedT > 0 && this.world.phase !== 'ended';
+    if (prot !== this.hudProtected) { this.hudProtected = prot; hud.setProtected(prot); }
+    const s = this.hudSpecial;
+    const pct = Math.round(Math.max(0, Math.min(1, me.special)) * 100);
+    const ready = me.alive && me.specialReady && me.specialActive === '' && me.special >= 1;
+    const key = this.p.input.keyLabel('special');
+    const waiting = ready && this.airHold > 0;      // A-A1: a mid-air press held for the landing
+    if (pct !== s.pct || ready !== s.ready || key !== s.key || this.specialName !== s.label || waiting !== s.waiting) {
+      s.pct = pct; s.ready = ready; s.key = key; s.label = this.specialName; s.waiting = waiting;
+      hud.setSpecial({ frac: pct / 100, ready, label: this.specialName, keyLabel: key, waiting });
+    }
   }
 
   /**
@@ -1310,15 +1542,33 @@ export class Game {
       // CONTRACT_FFA F3: the match mode, the crews in play (world.crews, ascending) and the weighted share per crew id
       // (index 0 = neutral; teams mode fills 1 / 2)
       matchMode: this.matchMode, crews: [...w.crews], coverageByTeam: Array.from(this.p.painter.coverageByTeam()),
+      // CONTRACT_WASHOUT W10: the rule, the live scores per crew id, the limit it plays to and how it ended
+      rule: w.rule, limit: w.limit, scores: [...w.scores()], endedBy: w.endedBy,
       runners: w.runners.map((r) => ({
         id: r.id, name: r.name, team: r.team, bot: r.bot, state: r.state, hp: r.hp, tank: r.tank, alive: r.alive,
         x: r.x, y: r.y, z: r.z, hidden: r.hidden, slickForm: r.slickForm, special: r.special, respawnT: r.respawnT,
         washes: r.washes, washedCount: r.washedCount, painted: r.painted, firing: r.firing, seen: this.seen[r.id] === true,
         kit: r.kit, charge: r.charge, rolling: r.rolling, flicking: r.flicking, leaping: r.leaping, specialActive: r.specialActive,
         specialReady: r.specialReady, subCooldown: r.subCooldown,
+        protectedT: r.protectedT, spawnSite: r.spawnSite,                       // W1 / S2
       })),
       events: { ...this.counts },
       projectiles: w.projectiles.count,
+      // CONTRACT_FFA_SPAWNS S5: the shown drop-in markers + counts; C3: the human's SPECIAL denials; W5: score pops
+      markers: this.p.drops ? this.p.drops.active() : null, markerSites: this.p.drops ? this.p.drops.count : 0,
+      shimmer: this.p.players.shimmer(), feedback: { ...this.c3 },
+      // review fix A-A1: the human's mid-air SPECIAL presses held for the landing (+ the ticks left on the current one)
+      airSpecial: { ...this.airSpecialStats, holding: this.airHold },
+    };
+  }
+
+  /** CONTRACT_CONTROLS C1 read-back: the aim state + the camera it drives */
+  aimInfo(): Record<string, unknown> {
+    const c = this.p.cam;
+    return {
+      wanted: this.p.input.aiming(), target: c.aimTarget, blend: Math.round(c.aimBlend * 1000) / 1000,
+      fov: Math.round(c.camera.fov * 1000) / 1000, baseFov: c.baseFov, zoom: c.aimZoom, lookScale: Math.round(c.lookScale * 1000) / 1000,
+      aimSens: c.aimSens, toggle: this.p.input.aimToggle, touch: this.p.input.touch.aim, hud: this.hudAiming, boom: Math.round(c.boom * 1000) / 1000,
     };
   }
 

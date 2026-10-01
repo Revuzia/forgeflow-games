@@ -118,6 +118,10 @@ FREE-FOR-ALL. It must work on desktop and on mobile (CONTRACT_MOBILE). `CONTRACT
   when the horn sounds — or the first to the limit — wins. Paint still moves you, refills you and charges your
   special."
 - The profile card shows the picked mode and rule, for example "TEAMS · WASHOUT".
+- `CHANGED(review fixes A-A9 / A-A8, 2026-09-30, UI only)`: HOW TO PLAY card 1 also swaps its PICTURE in WASHOUT (a
+  wash — dye stream, burst, "+1" — and the two crew score chips; `HOW_ART.washout`, data-art `washout`; TURF keeps the
+  court + tug bar, byte-identical). Opened from the pause card, HOW TO PLAY teaches the RUNNING match (its mode and
+  rule, `Menus.setMatchRule` from main.ts), not the saved profile's pick — a deep link plays `?rule=` / `?mode=`.
 
 ## W5 HUD (`ui/hud.ts`, `ui/styles.css`)
 
@@ -129,6 +133,15 @@ FREE-FOR-ALL. It must work on desktop and on mobile (CONTRACT_MOBILE). `CONTRACT
 - **Spawn protection** shows as a soft shimmer ring on the protected runner (view side) and "PROTECTED" on your own
   HUD while it lasts.
 - Everything fits the mobile layouts (CONTRACT_MOBILE M6) and stays clear of the touch zones.
+- `CHANGED(review fixes, 2026-09-30, view only — no core, every hash unchanged)`:
+  - A-A5: the FFA panel ranks exactly as the standings — score, then FEWER times washed, then turf, then crew id
+    (`setScores(scores, washed)`; it used to skip the washed key, so ties named a different #1–#3 than the slate).
+  - A-A6: a LIMIT ending freezes the timer at the time that was left (a horn ending still reads 0:00).
+  - A-A8: the WASHOUT countdown names the objective under the digits: "WASHOUT · Most washes wins · first crew to
+    52" (FFA: "first to 23"); TURF's countdown is unchanged.
+  - A-A2: on phones the TEAMS WASHOUT kill-feed cap follows the gap to the GULF chip
+    (`min(170px, 50vw − safe-right − 184px)`): 170 px wherever it fits, ~150 px on a 667 px phone; the verb stays
+    `washed`.
 
 ## W6 Victory slate (`ui/slates.ts`)
 

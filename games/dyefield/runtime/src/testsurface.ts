@@ -27,10 +27,13 @@
 //   CONTRACT_FFA F3: match() adds matchMode ('teams' | 'ffa'), crews (the crews in play) and coverageByTeam (the
 //   weighted share per crew id, [0] = neutral) — `mode` stays the session kind ('match' | 'lobby'); state() adds
 //   matchMode; minimapPixel() adds `own` (the human's crew dye, either mode) and `crews` (dye by crew id).
-//   FFA drop pads (lane PADS): ffaPads(n = 128) — per pad {i, crew, mark, x, z, r, maxHoverCm, maxSinkCm, …} measured
-//   at n points inside 0.95 R (a sunflower spread + a ring on 0.95 R): the RENDERED pad top (a downward ray onto the pad
-//   mesh itself, so whatever geometry the view built is what is measured) vs the ground (a downward ray onto the visible
-//   map meshes, the pads excluded; the first face with world normal y >= 0.7 below the pad top + 0.5 m). hover = top −
+//   FFA drop-in markers (CONTRACT_FFA_SPAWNS S5, lane C; replaces lane PADS' ffaPads() — FFA has no permanent pads):
+//   markers(n = 128, which = 'all' | 'active') — per spawn site {i (the site), crew (0 = not shown), mark, x, z, r,
+//   maxHoverCm, maxSinkCm, …} plus the shown markers (active: {site, crew, age, alpha}) and the draw's visibility. Each
+//   site's disc is measured at n points inside 0.95 R (a sunflower spread + a ring on 0.95 R): the RENDERED marker top (a
+//   downward ray onto the marker mesh itself, so whatever geometry the view built is what is measured) vs the ground (a
+//   downward ray onto the visible map meshes, the markers excluded; the first face with world normal y >= 0.7 below the
+//   top + 0.5 m). hover = top −
 //   ground > 0 (the pad stands above the sand there), sink = ground − top > 0 (the pad is buried there). Also the fitted
 //   ground slope, its downhill direction and the fitted ground height under the centre (groundY) per pad, the pads'
 //   draw objects / vertices and the view's build stats (root.userData: buildMs, gather {ms, meshes, scanned},
@@ -58,6 +61,10 @@ export interface AppHandles {
 }
 import type { Coverage, MatchMode, MoveState, TeamId } from './core/types.ts';
 import { teamById, hexToRgb01, crewDef, crewIds } from './core/data.ts';
+import { DROP_MARKER } from './view/mapview.ts';
+
+/** the drop-in marker radius the view builds (view/mapview.ts DROP_MARKER.radius) */
+const DROP_MARKER_R = DROP_MARKER.radius;
 
 export interface DFState {
   phase: AppStatus['phase'];
@@ -77,8 +84,8 @@ export interface DFState {
 
 const rgb255 = (hex: string): number[] => hexToRgb01(hex).map((v) => Math.round(v * 255));
 
-// ── FFA drop-pad read-back (lane PADS) ──
-interface PadSpecLike { x: number; y: number; z: number; r?: number; crew: TeamId; yaw?: number }
+// ── FFA drop-in marker read-back (lane C; the measuring is lane PADS' drop-pad one) ──
+interface PadSpecLike { x: number; y: number; z: number; r?: number; crew: TeamId; yaw?: number; site?: number }
 const fpRay = new THREE.Raycaster();
 const fpDown = new THREE.Vector3(0, -1, 0);
 const fpO = new THREE.Vector3();
@@ -168,10 +175,10 @@ function soups(meshes: THREE.Mesh[], squares: number[][]): THREE.Mesh[] {
   });
 }
 
-function measureFfaPads(mapRoot: THREE.Object3D, specs: ReadonlyArray<PadSpecLike>, n: number): Record<string, unknown> {
+function measureFfaPads(mapRoot: THREE.Object3D, specs: ReadonlyArray<PadSpecLike>, n: number, rootName = 'ffa_markers'): Record<string, unknown> {
   const t0 = performance.now();
-  const padsRoot = mapRoot.getObjectByName('ffa_pads');
-  if (!padsRoot) return { count: 0, specs: specs.length, pads: [], error: 'no ffa_pads group under the map root' };
+  const padsRoot = mapRoot.getObjectByName(rootName);
+  if (!padsRoot) return { count: 0, specs: specs.length, pads: [], error: `no ${rootName} group under the map root` };
   mapRoot.updateMatrixWorld(true);
   const padMeshes: THREE.Mesh[] = [];
   let vertices = 0;
@@ -254,10 +261,10 @@ function measureFfaPads(mapRoot: THREE.Object3D, specs: ReadonlyArray<PadSpecLik
       range = hi - lo;
     }
     let mark = '';
-    try { mark = crewDef('ffa', p.crew).mark; } catch { /* unknown crew */ }
+    try { if (p.crew) mark = crewDef('ffa', p.crew).mark; } catch { /* unknown crew */ }
     const r2 = (v: number): number => Math.round(v * 100) / 100;
     pads.push({
-      i, crew: p.crew, mark, x: r2(p.x), y: r2(p.y), z: r2(p.z), r: R, yaw: r2(p.yaw ?? 0),
+      i: p.site ?? i, crew: p.crew, mark, x: r2(p.x), y: r2(p.y), z: r2(p.z), r: R, yaw: r2(p.yaw ?? 0),
       groundY: Number.isFinite(groundY) ? Math.round(groundY * 1000) / 1000 : null,
       samples: cnt, topMiss, groundMiss,
       maxHoverCm: cnt ? Math.round(Math.max(0, maxHover) * 1000) / 10 : null,
@@ -470,13 +477,29 @@ export function installTestSurface(app: AppStatus, handles?: AppHandles): void {
       const game = g();
       if (!game) return null;
       const c = game.p.cam;
-      return { yaw: c.yaw, pitch: c.pitch, boom: c.boom, slickBlend: c.slickBlend };
+      // CONTRACT_CONTROLS C1: + the aim state (wanted, target, blend, fov, lookScale = the sensitivity read-back, …)
+      return { yaw: c.yaw, pitch: c.pitch, boom: c.boom, slickBlend: c.slickBlend, ...game.aimInfo() };
     },
-    /** FFA drop pads: rendered pad top vs the ground under it (see the header); null outside a game, count 0 in teams */
-    ffaPads(n = 128): Record<string, unknown> | null {
+    /**
+     * CONTRACT_FFA_SPAWNS S5: the FFA drop-in markers — which = 'all' measures the conformed disc of EVERY spawn site (the
+     * geometry exists for all of them; only the shown ones draw), 'active' only the shown ones. Per measured site the
+     * rendered marker top vs the ground under it (hover / sink, see the header); plus the shown markers {site, crew, age,
+     * alpha}, whether the draw is visible, and the build stats. null outside a game; count 0 in teams.
+     */
+    markers(n = 128, which: 'all' | 'active' = 'all'): Record<string, unknown> | null {
       const game = g();
       if (!game) return null;
-      return { matchMode: game.matchMode, map: app.mapId, ...measureFfaPads(game.p.map.root, game.world.crewPads, Math.max(16, n | 0)) };
+      const d = game.p.drops;
+      if (!d) return { matchMode: game.matchMode, map: app.mapId, count: 0, pads: [], active: [], visible: false };
+      const act = d.active();
+      const crewAt = new Map(act.map((a) => [a.site, a.crew]));
+      const specs = d.sites.map((s, i) => ({ x: s.x, y: s.y, z: s.z, yaw: s.yaw, r: DROP_MARKER_R, crew: (crewAt.get(i) ?? 0) as TeamId, site: i }))
+        .filter((s) => which === 'all' || crewAt.has(s.site));
+      const mesh = d.root.children[0] as THREE.Mesh | undefined;
+      return {
+        matchMode: game.matchMode, map: app.mapId, sites: d.count, active: act, visible: !!mesh?.visible,
+        ...measureFfaPads(game.p.map.root, specs, Math.max(16, n | 0)),
+      };
     },
     /** dev-only live handles for console debugging (renderer, scene, game parts) */
     get dev(): Record<string, unknown> | null {

@@ -12,6 +12,11 @@
 // The TouchState (touch/controls.ts writes it) is owned here: intent() takes the stick's analog vector when it is
 // non-zero (else the keys' digital one), ORs the touch buttons with the keys and consumes the touch latches with the
 // key latches; takeTouchLook() hands the Game the look radians accumulated since the last call.
+//
+// CONTRACT_CONTROLS C1: the 'aim' action (default RMB; SUB is E only now). It is VIEW input: never part of the
+// PlayerIntent (no sim effect, every determinism hash unchanged). aiming() answers "is AIM wanted": the key held (hold
+// mode, the default) or toggled (aimToggle = true: each press flips it), or the touch AIM button's toggle (TouchState.aim).
+// The Game turns it into the camera's zoom / shoulder / look sensitivity (view/camera.ts) and hud.setAiming.
 
 import { emptyIntent, type PlayerIntent } from './core/types.ts';
 import type { TouchState } from './touch/controls.ts';
@@ -32,10 +37,15 @@ export function detectInputMode(search: string = typeof location !== 'undefined'
 
 export type Action =
   | 'moveF' | 'moveB' | 'moveL' | 'moveR'
-  | 'jump' | 'fire' | 'slick' | 'sub' | 'special'
+  | 'jump' | 'fire' | 'aim' | 'slick' | 'sub' | 'special'
   | 'pause' | 'debug' | 'map';
 
-/** Codes are KeyboardEvent.code, or 'Mouse0' / 'Mouse1' / 'Mouse2' for mouse buttons. */
+/**
+ * Codes are KeyboardEvent.code, or 'Mouse0' / 'Mouse1' / 'Mouse2' for mouse buttons.
+ * CONTRACT_CONTROLS C1: AIM on RMB (a view action: camera zoom + shoulder, look sensitivity × aimSens — never in the
+ * PlayerIntent, so the sim and every hash are untouched); SUB is E only (RMB used to be a second SUB key). Old saves that
+ * still carry the old default SUB (E + RMB) are migrated in ui/settings.ts sanitizeBindings.
+ */
 export const DEFAULT_BINDINGS: Readonly<Record<Action, readonly string[]>> = {
   moveF: ['KeyW', 'ArrowUp'],
   moveB: ['KeyS', 'ArrowDown'],
@@ -43,13 +53,16 @@ export const DEFAULT_BINDINGS: Readonly<Record<Action, readonly string[]>> = {
   moveR: ['KeyD', 'ArrowRight'],
   jump: ['Space'],
   fire: ['Mouse0'],
+  aim: ['Mouse2'],
   slick: ['ShiftLeft', 'ShiftRight'],
-  sub: ['KeyE', 'Mouse2'],
+  sub: ['KeyE'],
   special: ['KeyQ'],
   pause: ['Escape', 'KeyP'],
   debug: ['F1', 'Backquote'],
   map: ['KeyM'],
 };
+/** the SUB default before CONTRACT_CONTROLS C1 (a save holding exactly this is migrated: SUB → E, AIM → RMB) */
+export const OLD_DEFAULT_SUB: readonly string[] = ['KeyE', 'Mouse2'];
 
 const ALL_ACTIONS = Object.keys(DEFAULT_BINDINGS) as Action[];
 
@@ -90,8 +103,13 @@ export class Input {
   private readonly uiHandlers: Array<(a: Action, e: Event) => void> = [];
   private readonly target: HTMLElement;
   private readonly off: Array<() => void> = [];
-  /** CONTRACT_MOBILE M2: written by touch/controls.ts, read by intent() / takeTouchLook() */
-  readonly touch: TouchState = { moveX: 0, moveZ: 0, lookYaw: 0, lookPitch: 0, held: new Set(), latched: new Set(), active: 0 };
+  /** CONTRACT_MOBILE M2: written by touch/controls.ts, read by intent() / takeTouchLook() (C1: + the AIM toggle) */
+  readonly touch: TouchState = { moveX: 0, moveZ: 0, lookYaw: 0, lookPitch: 0, held: new Set(), latched: new Set(), active: 0, aim: false };
+  /** CONTRACT_CONTROLS C1: the AIM mode — false = hold the AIM key (the default, the industry norm), true = each press
+   *  toggles it (SETTINGS "toggle aim"; main.ts writes it from Settings.aimToggle) */
+  private aimToggleMode = false;
+  /** C1 toggle mode: the current toggled state (cleared by releaseAll / clearAim / a mode switch) */
+  private aimOn = false;
   private curMode: InputMode;
   /** ?touch=1|0: the mode never switches by itself */
   readonly pinned: boolean;
@@ -148,6 +166,7 @@ export class Input {
     if (this.touch.active > 0) return;
     this.curMode = m;
     this.applyModeClass();
+    this.aimOn = false;
     if (m === 'touch') { this.held.clear(); this.latched.clear(); this.mdx = 0; this.mdy = 0; }
     else this.clearTouch();
     for (const fn of [...this.modeFns]) {
@@ -171,6 +190,30 @@ export class Input {
     return r;
   }
 
+  // ───────────────────────────── CONTRACT_CONTROLS C1: AIM (view only) ─────────────────────────────
+  get aimToggle(): boolean { return this.aimToggleMode; }
+  /** hold (false) / toggle (true); a change drops a toggled aim */
+  set aimToggle(on: boolean) {
+    const v = !!on;
+    if (v !== this.aimToggleMode) { this.aimToggleMode = v; this.aimOn = false; }
+  }
+
+  /**
+   * AIM is wanted right now: in play, the AIM key held (hold mode) or toggled on (toggle mode), or the touch AIM button
+   * toggled on. The Game decides what it does (no zoom while slicked / washed); the sim never sees it.
+   */
+  aiming(): boolean {
+    if (!this.live) return false;
+    if (this.touch.aim) return true;
+    return this.aimToggleMode ? this.aimOn : this.isHeld('aim');
+  }
+
+  /** drop a toggled aim (keyboard toggle + the touch button): a wash, the final horn */
+  clearAim(): void {
+    this.aimOn = false;
+    this.touch.aim = false;
+  }
+
   /** fire a UI action from a non-key source (the touch overlay's MAP tap) */
   emitUi(a: Action, e: Event): void {
     if (!UI_ACTIONS.has(a)) return;
@@ -182,6 +225,7 @@ export class Input {
     t.moveX = 0; t.moveZ = 0; t.lookYaw = 0; t.lookPitch = 0;
     t.held.clear();
     t.latched.clear();
+    t.aim = false;
   }
 
   setBindings(b: Readonly<Record<Action, readonly string[]>>): void {
@@ -256,6 +300,7 @@ export class Input {
     this.held.clear();
     this.latched.clear();
     this.mdx = 0; this.mdy = 0;
+    this.aimOn = false;
     this.clearTouch();
   }
 
@@ -270,6 +315,7 @@ export class Input {
     if (!repeat) this.held.add(code);
     for (const a of acts) {
       if (UI_ACTIONS.has(a)) { if (!repeat) for (const h of [...this.uiHandlers]) h(a, e); }
+      else if (a === 'aim') { if (this.live && !repeat && this.aimToggleMode) this.aimOn = !this.aimOn; }   // C1: view only
       else if (this.live && !repeat) this.latched.add(a);
     }
     return true;

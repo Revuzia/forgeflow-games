@@ -221,6 +221,10 @@ html.df-cb .df-tag.gulf { background: rgba(21,77,187,.94); }
 .df-count-keys .k { display: inline-flex; gap: 6px; align-items: center; padding: 5px 12px; border-radius: 999px; background: rgba(20,32,58,.82);
   color: var(--cream); font: 800 13px/1 var(--body); }
 .df-count-keys .k b { font: 400 13px/1 var(--display); letter-spacing: .06em; color: var(--sun); }
+/* review fix A-A8: WASHOUT's objective under the digits ("WASHOUT · Most washes wins · first to 52"); TURF shows none */
+.df-count-rule { padding: 5px 14px 4px; border-radius: 999px; background: rgba(20,32,58,.82); color: var(--cream); white-space: nowrap;
+  font: 400 15px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; box-shadow: 0 3px 0 rgba(10,20,44,.6); }
+.df-count-rule b { font-weight: 400; color: var(--sun); }
 
 .df-death { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(12,18,34,.58); }
 .df-death.in { animation: dfFade .25s ease-out; }
@@ -532,6 +536,7 @@ html.df-touch .df-debug { left: calc(var(--sl) + 74px); top: calc(var(--st) + 16
   .df-count-row .dot { font-size: 28px; }
   .df-count-keys { gap: 6px; }
   .df-count-keys .k { padding: 4px 10px; font-size: 12px; }
+  .df-count-rule { padding: 4px 10px 3px; font-size: 12px; }
   .df-death-splat { width: min(70vw, 520px); height: min(38vw, 250px); }
   .df-death-card { gap: 12px; }
   .df-death-line { gap: 8px; font-size: 34px; -webkit-text-stroke-width: 2px; text-shadow: 0 4px 0 var(--ink); }
@@ -559,4 +564,155 @@ html.df-touch .df-debug { left: calc(var(--sl) + 74px); top: calc(var(--st) + 16
   #df-boot .df-btn.df-play { padding: 12px 36px 11px; font-size: 26px; }
   #df-boot .df-err h2 { font-size: 28px; }
   #df-boot .df-err pre { max-height: 28vh; }
+}
+
+/* ═══════════════ CONTRACT_WASHOUT W5 + CONTRACT_CONTROLS C1 / C3 (hud.ts) ═══════════════
+   .df-hud.wo = the WASHOUT rule (setRule); .df-hud.rm = REDUCE MOTION (setReduceMotion; the OS preference too). */
+
+/* TEAMS WASHOUT: the two score chips round the timer — under their crew's crest row (the top block keeps its TURF width,
+   clear of the special gauge at every width), or beside the timer in one row on a wide window (>= 1440 px); the tug bar
+   thins to the turf tie-break indicator + its label */
+.df-hud:not(.ffa) > .df-top.wo { display: grid; grid-template-columns: repeat(3, auto); grid-template-areas: 'sr mid gr' 'sc mid gc'; align-items: start;
+  justify-items: center; column-gap: 12px; row-gap: 6px; }
+@media (min-width: 1440px) and (min-height: 501px) {
+  .df-hud:not(.ffa) > .df-top.wo { grid-template-columns: repeat(5, auto); grid-template-areas: 'sr sc mid gc gr'; row-gap: 0; }
+}
+.df-hud:not(.ffa) > .df-top.wo > .df-crests.sun { grid-area: sr; }
+.df-hud:not(.ffa) > .df-top.wo > .df-score.sun { grid-area: sc; }
+.df-hud:not(.ffa) > .df-top.wo > .df-top-mid { grid-area: mid; }
+.df-hud:not(.ffa) > .df-top.wo > .df-score.gulf { grid-area: gc; }
+.df-hud:not(.ffa) > .df-top.wo > .df-crests.gulf { grid-area: gr; }
+.df-score { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px 0 6px; border-radius: 999px; color: var(--cream);
+  border: 4px solid var(--ink); box-shadow: 0 5px 0 var(--ink); transition: box-shadow .2s ease; }
+.df-score.sun { background: linear-gradient(180deg, #ffb35c, var(--sun-dye)); }
+.df-score.gulf { background: linear-gradient(180deg, #8f84ff, var(--gulf-dye)); }
+.df-score .mk { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font: 400 17px/1 var(--display);
+  background: var(--cream); border: 2.5px solid var(--ink); }
+.df-score.sun .mk { color: var(--sun-dye); }
+.df-score.gulf .mk { color: var(--gulf-dye); }
+.df-score .n { min-width: 1.1ch; font: 400 30px/1 var(--display); text-align: center; font-variant-numeric: tabular-nums;
+  -webkit-text-stroke: 1.5px var(--ink); paint-order: stroke fill; text-shadow: 0 3px 0 var(--ink); }
+.df-score .lim { align-self: flex-end; margin-bottom: 8px; font: 400 14px/1 var(--display); letter-spacing: .03em; white-space: nowrap; text-shadow: 0 1px 0 var(--ink), 0 0 2px var(--ink); }
+.df-score .lim:empty { display: none; }
+.df-score.lead { box-shadow: 0 5px 0 var(--ink), 0 0 0 3px var(--cream); }
+.df-score.bump .n { animation: dfScoreBump .45s cubic-bezier(.2,1.6,.4,1); }
+@keyframes dfScoreBump { 0% { transform: scale(1.45); } 100% { transform: scale(1); } }
+html.df-cb .df-score.gulf { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.34) 0 3px, rgba(255,255,255,0) 3px 8px), linear-gradient(180deg, #7aa6ff, var(--gulf-dye)); }
+.df-hud.wo:not(.ffa) .df-tug { height: 7px; border-width: 2px; }
+.df-hud.wo:not(.ffa) .df-tug .m { width: 16px; height: 16px; margin-top: -8px; font-size: 12px; line-height: 13px; border-width: 1.5px; }
+.df-tug-label { margin-top: -3px; font: 900 12px/1 var(--body); letter-spacing: .04em; color: var(--cream); white-space: nowrap;
+  text-shadow: 0 1px 0 var(--ink), 0 0 3px rgba(20,32,58,.9); }
+
+/* FFA WASHOUT: your washes "n / limit" + rank; the top 3 show scores */
+.df-me .pctrow { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; }
+.df-me .lim { font: 400 14px/1 var(--display); color: var(--ink2); white-space: nowrap; }
+.df-me .lim:empty { display: none; }
+
+/* spawn protection: PROTECTED above the reticle, a soft shimmer in the crew colour */
+.df-protect { position: absolute; left: 50%; top: calc(50% - 66px); transform: translateX(-50%); padding: 5px 14px 4px; border-radius: 999px; white-space: nowrap;
+  font: 400 14px/1 var(--display); letter-spacing: .16em; color: var(--cream); border: 2px solid var(--cream); box-shadow: 0 0 0 2px var(--ink), 0 3px 0 2px var(--ink);
+  background: linear-gradient(100deg, rgba(20,32,58,.86) 30%, rgba(255,248,236,.34) 50%, rgba(20,32,58,.86) 70%) 0 0 / 300% 100%; text-shadow: 0 1px 0 var(--ink);
+  animation: dfShimmer 1.2s linear infinite; }
+.df-protect.sun { border-color: var(--sun); }
+.df-protect.gulf { border-color: #a79dff; }
+.df-protect.me { border-color: var(--me); }
+.df-protect.in { animation: dfProtectIn .25s ease-out, dfShimmer 1.2s linear .25s infinite; }
+@keyframes dfShimmer { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+@keyframes dfProtectIn { from { opacity: 0; transform: translateX(-50%) scale(.85); } }
+
+/* "+1" by the reticle on your own credited wash */
+.df-pop { position: absolute; left: calc(50% + 70px); top: calc(50% - 54px); font: 400 30px/1 var(--display); letter-spacing: .02em; pointer-events: none; opacity: 0;
+  color: var(--sun); -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 0 3px 0 var(--ink); }
+.df-pop.gulf { color: #b7aeff; }
+.df-pop.me { color: var(--me); }
+.df-pop.go { animation: dfPopUp .9s cubic-bezier(.2,1.4,.4,1) forwards; }
+@keyframes dfPopUp { 0% { opacity: 0; transform: translateY(8px) scale(.6); } 15% { opacity: 1; transform: translateY(0) scale(1.18); }
+  70% { opacity: 1; transform: translateY(-14px) scale(1); } 100% { opacity: 0; transform: translateY(-22px) scale(1); } }
+@keyframes dfPopFade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
+/* C3: the special chip's % while charging (the key badge takes its place at 100 %) + the deny shake */
+.df-gauge .pct { position: absolute; right: 7px; top: 50%; margin-top: -7px; font: 400 14px/1 var(--display); color: var(--cream); font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 0 var(--ink); }
+.df-gauge.full .pct { display: none; }
+.df-gauge.deny { animation: dfShake .35s linear; }
+@keyframes dfDenyFlash { 0%, 60% { box-shadow: 0 5px 0 var(--ink), 0 0 0 4px var(--bad); } }
+
+/* C3: the prompt under the reticle — ready: key (or the touch glyph) + the special; denied: "Charging — n %" */
+.df-spprompt { position: absolute; left: 50%; top: calc(50% + 58px); transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 14px 4px 4px; border-radius: 999px; white-space: nowrap; background: rgba(20,32,58,.84); color: var(--cream); border: 2px solid var(--cream);
+  font: 400 16px/1 var(--display); letter-spacing: .08em; box-shadow: 0 3px 0 rgba(10,20,44,.6); }
+.df-spprompt.sun { border-color: var(--sun); }
+.df-spprompt.gulf { border-color: #a79dff; }
+.df-spprompt.me { border-color: var(--me); }
+.df-spprompt .key { flex: none; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 8px; background: var(--cream); color: var(--ink); border: 2px solid var(--ink);
+  box-shadow: 0 2px 0 var(--ink); font: 400 15px/22px var(--display); text-align: center; }
+.df-spprompt .key.touch { display: grid; place-items: center; width: 26px; min-width: 26px; padding: 2px; border-radius: 50%; background: var(--ink); border-color: var(--cream); color: var(--warn); }
+.df-spprompt.ready { animation: dfPrompt 1.1s ease-in-out infinite; }
+.df-spprompt.deny { padding: 6px 14px 5px; color: var(--warn); border-color: rgba(255,248,236,.6); animation: dfShakeC .35s linear; }
+/* review fix A-A1: a press made in the air is accepted and waits for the landing — "· on landing" after the name */
+.df-spprompt .wait { font: 800 .8em/1 var(--body); letter-spacing: .02em; color: var(--warn); text-transform: none; }
+@keyframes dfPrompt { 50% { box-shadow: 0 3px 0 rgba(10,20,44,.6), 0 0 0 4px rgba(255,248,236,.45); } }
+@keyframes dfShakeC { 20% { transform: translateX(calc(-50% - 5px)); } 40% { transform: translateX(calc(-50% + 5px)); } 60% { transform: translateX(calc(-50% - 3px)); }
+  80% { transform: translateX(calc(-50% + 2px)); } }
+
+/* C1 AIM: the reticle tightens, a soft edge vignette fades in (0.15 s; REDUCE MOTION: at once) */
+.df-ret svg { transition: transform .15s ease-out; }
+.df-ret.aim svg { transform: scale(.72); }
+.df-aimvig { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .15s ease-out;
+  background: radial-gradient(ellipse 72% 68% at 50% 50%, rgba(10,18,34,0) 55%, rgba(10,18,34,.26) 80%, rgba(10,18,34,.5) 100%); }
+.df-aimvig.on { opacity: 1; }
+
+/* REDUCE MOTION (SETTINGS or the OS): fades only — no pulses, shakes, bumps or rising pops */
+.df-hud.rm .df-pop.go { animation: dfPopFade .9s linear forwards; }
+.df-hud.rm :is(.df-spprompt.ready, .df-protect, .df-protect.in, .df-score.bump .n) { animation: none; }
+.df-hud.rm .df-spprompt.deny { animation: none; }
+.df-hud.rm .df-gauge.deny { animation: dfDenyFlash .5s linear; }
+.df-hud.rm :is(.df-aimvig, .df-ret svg) { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .df-pop.go { animation: dfPopFade .9s linear forwards; }
+  :is(.df-spprompt.ready, .df-spprompt.deny, .df-protect, .df-protect.in, .df-score.bump .n) { animation: none; }
+  .df-gauge.deny { animation: dfDenyFlash .5s linear; }
+  :is(.df-aimvig, .df-ret svg) { transition: none; }
+}
+
+/* touch: the prompt's glyph; phones + narrow windows: the score chips sit under their crest rows (the top block keeps the
+   width it has in TURF, clear of the gauge), everything compact */
+.df-spprompt .key.touch .tg { display: block; width: 100%; height: 100%; }
+.df-spprompt .key.touch .tg svg { display: block; width: 100%; height: 100%; }
+@media (max-width: 760px), (max-height: 500px) {
+  .df-hud:not(.ffa) > .df-top.wo { column-gap: 6px; row-gap: 4px; }
+  .df-score { height: 30px; gap: 4px; padding: 0 9px 0 3px; border-width: 2.5px; box-shadow: 0 3px 0 var(--ink); }
+  .df-score .mk { width: 20px; height: 20px; font-size: 12px; border-width: 1.5px; }
+  .df-score .n { font-size: 21px; -webkit-text-stroke-width: 1px; text-shadow: 0 2px 0 var(--ink); }
+  .df-score .lim { margin-bottom: 5px; font-size: 12px; }
+  .df-score.lead { box-shadow: 0 3px 0 var(--ink), 0 0 0 2px var(--cream); }
+}
+@media (max-height: 500px) {
+  .df-hud.wo:not(.ffa) .df-tug { height: 6px; }
+  .df-tug-label { margin-top: -2px; }
+  .df-me .lim { font-size: 12px; }
+  .df-protect { top: calc(50% - 62px); padding: 4px 10px 3px; font-size: 12px; letter-spacing: .12em; }
+  .df-pop { left: calc(50% + 58px); top: calc(50% - 48px); font-size: 24px; -webkit-text-stroke-width: 1.5px; }
+  .df-gauge .pct { right: 5px; margin-top: -6px; font-size: 12px; }
+  .df-spprompt { top: calc(50% + 56px); gap: 6px; padding: 3px 10px 3px 3px; font-size: 13px; }
+  .df-spprompt .key { min-width: 22px; height: 22px; font-size: 13px; line-height: 18px; }
+  .df-spprompt .key.touch { width: 22px; min-width: 22px; }
+  .df-spprompt.deny { padding: 4px 10px 3px; }
+  /* touch on a phone: the low-tank toast sits under the (taller) WASHOUT top block */
+  html.df-touch .df-hud.wo:not(.ffa) .df-toast { top: calc(env(safe-area-inset-top, 0px) + 78px); }
+  /* TEAMS WASHOUT: the kill-feed lines stay clear of the GULF chip under its crest row — a 170 px line with two long names
+     reached the chip on a 667 px phone (integ, mobile se: '▲8/ 59' x the feed). Review fix A-A2: the cap follows the real
+     gap instead of a flat 150 px (which cut every name to 1-2 letters on every phone): 50vw − the feed column's inset
+     (--sr + 14 px) − the GULF chip's right edge past the centre with a two-digit score (159 px, the same on every phone)
+     − ~11 px of air. se keeps ~150 px; wider phones get the usual 170 px. The verb stays 'washed' (CONTRACT.md feed). */
+  .df-hud.wo:not(.ffa) .df-feed-item { max-width: min(170px, calc(50vw - var(--sr, 0px) - 184px)); }
+  /* BUTTON SIZE >= 125 % (#df-touch.bigger): the bigger SPECIAL / SLICK buttons reach the reticle's column on a small
+     phone — the special prompt gives way (the SPECIAL button's own ring shows ready and shakes on a deny) and PROTECTED
+     moves beside the reticle, on the side away from the thumb cluster */
+  html.df-touch:has(#df-touch.bigger) .df-spprompt { display: none; }
+  html.df-touch:has(#df-touch.bigger) .df-protect { left: calc(50% - 100px); }
+  html.df-touch:has(#df-touch.lh.bigger) .df-protect { left: calc(50% + 100px); }
+  /* …and the "+1" rises above the reticle's pipette side, clear of the bigger SPECIAL button */
+  html.df-touch:has(#df-touch.bigger) .df-pop { left: calc(50% - 64px); top: calc(50% - 72px); }
+  html.df-touch:has(#df-touch.lh.bigger) .df-pop { left: calc(50% + 36px); }
 }

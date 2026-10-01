@@ -8,7 +8,9 @@
 // landing (≤ KITS.specialBufferSeconds; an earlier tap lapses, a held key fires on landing), 95 % + a wash inside the window
 // starts, 95 % unfilled → 'denied' at the window's end, 50 % → 'denied' at once, a press mid-leap → 'denied', and
 // MatchWorld.stats counts the outcomes. Skeptic fix (2026-09-30): SPECIAL held through a wash + respawn, and held through
-// the countdown, is no new press (no 'denied' without a release; held with a full meter it still starts).
+// the countdown, is no new press (no 'denied' without a release; held with a full meter it still starts). CONTROLS
+// leftover (2026-09-30): the key is tracked while washed / in the countdown instead of forced to held at the respawn, so a
+// real press ON the respawn tick (released while washed) is a press: 'denied' on that tick.
 //
 //   node _harness/probe_kits.ts            # G10 kits
 //   node _harness/probe_kits.ts --verbose
@@ -1034,7 +1036,7 @@ async function main(): Promise<number> {
       d('specialPops') === 4 && d('specialBuffered') === 2 && d('specialDenied') === 3 && d('specialRuleEarly') === 6 && d('specialRuleLate') >= 2,
       `specialPops +${d('specialPops')}, specialBuffered +${d('specialBuffered')}, specialDenied +${d('specialDenied')}, specialRuleEarly +${d('specialRuleEarly')}, specialRuleLate +${d('specialRuleLate')}`);
 
-    // skeptic fix (2026-09-30): SPECIAL HELD through a wash + respawn is no new press (Runner.respawn sets specialHeld) —
+    // skeptic fix (2026-09-30): SPECIAL HELD through a wash + respawn is no new press (MatchWorld tracks specialHeld) —
     // no 'denied' after the respawn without a release; held with a full meter it still starts; release + press → 'denied'
     {
       const me = MIST, it = intents[3];
@@ -1071,6 +1073,39 @@ async function main(): Promise<number> {
         deniedAtPress === 1 && !washedAlive && me.respawns === resp0 + 1 && deniedAfter === 0 && heldStart === 1
           && dn2.length === 1 && dn2[0].tick === pt2 && sp(3, 'start', evP).length === 0,
         `press at 50 %: denied ${deniedAtPress} on the press tick; washed (alive ${washedAlive}) → respawned +${respT - pt} ticks, held on through it and 1 s after: denied since the press ${deniedAfter} (meter ${f2(meterAfter)}); meter filled while held → start ${heldStart}× (tick +${heldTick - respT} after the respawn); released, pressed at 50 %: denied ${dn2.length}× ${dn2[0] ? `at +${dn2[0].tick - pt2}` : ''}`);
+      reset(it, 0);
+    }
+
+    // CONTROLS leftover (2026-09-30): the key is TRACKED while washed (MatchWorld writes specialHeld on the ticks it skips
+    // stepSpecialInput), no longer forced to held at the respawn — so SPECIAL released while washed and pressed ON the
+    // respawn tick is a real press: 'denied' on that tick (the meter a wash leaves is short). With the old forced
+    // specialHeld = true in Runner.respawn() this press was swallowed (no event at all).
+    {
+      const me = MIST, it = intents[3];
+      fresh();
+      waitAlive(...FOES);
+      park(...FOES);
+      place(me, -14, 0, -24, 0);
+      fill(me, 0.5);
+      aimAt(it, -14, 0, -16);
+      it.special = false; tick();
+      const resp0 = me.respawns;
+      world.devDamage(me.id, 200, FOES[0].id);                   // washed with SPECIAL released
+      const washedAlive = me.alive;
+      let g = 0;
+      while (!me.alive && me.respawnT > TICK + 1e-9 && g++ < S(6)) { it.special = false; tick(); }
+      const aliveBefore = me.alive, respBefore = me.respawns, meterBefore = me.special;
+      const ev0 = events.length;
+      it.special = true; tick();                                 // the respawn tick, with a real press
+      const rt = world.tick;
+      const respawnedNow = !aliveBefore && respBefore === resp0 && me.alive && me.respawns === resp0 + 1;
+      it.special = false; tick();
+      run(S(0.5));
+      const rsp = takeT('respawn', ev0).filter((x) => x.e.pid === me.id);
+      const dn = sp(3, 'denied', ev0), st = sp(3, 'start', ev0);
+      check('SPECIAL released while washed, pressed ON the respawn tick: a real press — \'denied\' on that tick (a wash leaves the meter short), no start',
+        !washedAlive && respawnedNow && rsp.length === 1 && rsp[0].tick === rt && dn.length === 1 && dn[0].tick === rt && st.length === 0,
+        `washed (alive ${washedAlive}); pressed on tick ${rt}: respawned on it ${respawnedNow} (respawn event ${rsp.length ? `at +${rsp[0].tick - rt}` : 'none'}); meter ${f2(meterBefore)}; denied ${dn.length}× ${dn[0] ? `at +${dn[0].tick - rt}` : ''}; starts ${st.length}`);
       reset(it, 0);
     }
 

@@ -6,13 +6,16 @@
 //                  render quality auto | high | low, show FPS.
 //   ProfileStore   the lobby selections: name, crew (1 SUNCREW | 2 GULF CREW), kit, map (or 'random'), the
 //                  time-of-day preset, bot skill; CONTRACT_FFA F3: the match mode ('teams' | 'ffa', default
-//                  'teams') and the FFA colour (1..8 = teams.json → ffa, default 1 = amber).
+//                  'teams') and the FFA colour (1..8 = teams.json → ffa, default 1 = amber); CONTRACT_WASHOUT W4: the
+//                  rule ('turf' | 'washout', default 'turf').
+//   CONTRACT_CONTROLS C1: Settings.aimSens (0.3–1.2, 0.65) and aimToggle (false = hold AIM); the 'aim' binding (RMB) and
+//                  the saved-bindings migration (the old default SUB [E, RMB] → [E] + AIM [RMB]; see sanitizeBindings).
 //
 // Both emit change events: `store.on((value, keys) => …)` → an unsubscribe function. `keys` lists the
 // top-level fields that changed. The integrator wires audio with one line:
 //   settings.on((s, k) => { if (k.includes('volume')) audio.setVolumes(s.volume); });
 
-import { DEFAULT_BINDINGS, type Action } from '../input.ts';
+import { DEFAULT_BINDINGS, OLD_DEFAULT_SUB, type Action } from '../input.ts';
 import { BOT_SKILL_IDS, DEFAULT_BOT_SKILL, parseBotSkill, type BotSkill } from '../core/match/roster.ts';
 import { isRenderQuality, type RenderQuality } from '../view/renderer.ts';
 import type { TeamId } from '../core/types.ts';
@@ -46,7 +49,17 @@ export interface Settings {
   aimAssist: boolean;
   /** navigator.vibrate feedback (a no-op where unsupported, e.g. iOS) */
   haptics: boolean;
+  // ── CONTRACT_CONTROLS C1: AIM (view only) ──
+  /** look sensitivity while aiming (× the normal mouse / touch look), 0.3 … 1.2 */
+  aimSens: number;
+  /** false = hold AIM (the default, the industry norm); true = each AIM press toggles it */
+  aimToggle: boolean;
 }
+
+/** CONTRACT_CONTROLS C1 range + default of the aim sensitivity */
+export const AIM_SENS_MIN = 0.3;
+export const AIM_SENS_MAX = 1.2;
+export const AIM_SENS_DEFAULT = 0.65;
 
 /** CONTRACT_MOBILE M8 ranges */
 export const TOUCH_SENS_MIN = 0.3;
@@ -59,6 +72,9 @@ export const TOUCH_OPACITY_MAX = 1;
 /** CONTRACT_FFA F1: the match mode (mirrors core/types.ts `MatchMode`) */
 export type ProfileMode = 'teams' | 'ffa';
 export const PROFILE_MODES: readonly ProfileMode[] = ['teams', 'ffa'];
+/** CONTRACT_WASHOUT W4: the match rule (mirrors core/types.ts `MatchRule`) — TURF (paint, the default) or WASHOUT */
+export type ProfileRule = 'turf' | 'washout';
+export const PROFILE_RULES: readonly ProfileRule[] = ['turf', 'washout'];
 /** FFA crews are 1..8 (teams.json → ffa) */
 export const FFA_COLORS = 8;
 
@@ -67,6 +83,8 @@ export interface Profile {
   crew: TeamId;
   /** CONTRACT_FFA F3: TEAMS · 4 v 4 (default) or FREE-FOR-ALL */
   mode: ProfileMode;
+  /** CONTRACT_WASHOUT W4: the RULE pick — 'turf' (default; an old save without it loads as turf) or 'washout' */
+  rule: ProfileRule;
   /** CONTRACT_FFA F3: the human's FFA colour, 1..8 (default 1 = amber); bots take the rest */
   ffaColor: number;
   kit: string;
@@ -102,11 +120,12 @@ export function defaultSettings(): Settings {
     bindings: defaultBindings(), sensitivity: 1, invertY: false, colorblind: false,
     volume: { ...DEFAULT_VOLUMES }, quality: 'auto', showFps: false, reduceMotion: osReducedMotion(),
     touchSens: 1, touchScale: 1, touchOpacity: 0.75, touchLeftHanded: false, aimAssist: true, haptics: true,
+    aimSens: AIM_SENS_DEFAULT, aimToggle: false,
   };
 }
 
 export function defaultProfile(): Profile {
-  return { name: '', crew: 1, mode: 'teams', ffaColor: 1, kit: 'mist-rasp', map: 'pier18', preset: 'noon', skill: DEFAULT_BOT_SKILL };
+  return { name: '', crew: 1, mode: 'teams', rule: 'turf', ffaColor: 1, kit: 'mist-rasp', map: 'pier18', preset: 'noon', skill: DEFAULT_BOT_SKILL };
 }
 
 /** a display name: letters, digits, space, - _ . ' ; trimmed; ≤ NAME_MAX */
@@ -122,21 +141,37 @@ const clamp = (v: unknown, lo: number, hi: number, d: number): number => {
 const bool = (v: unknown, d: boolean): boolean => (typeof v === 'boolean' ? v : d);
 const CODE_RE = /^(Key[A-Z]|Digit\d|Numpad[\w]+|F\d{1,2}|Mouse[0-4]|Arrow(Up|Down|Left|Right)|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|Space|Tab|Enter|Escape|Backquote|Minus|Equal|Bracket(Left|Right)|Backslash|Semicolon|Quote|Comma|Period|Slash|CapsLock|Backspace|Insert|Delete|Home|End|PageUp|PageDown|IntlBackslash)$/;
 
+const sameCodes = (v: unknown, want: readonly string[]): boolean =>
+  Array.isArray(v) && v.length === want.length && v.every((c, i) => c === want[i]);
+
+/**
+ * CONTRACT_CONTROLS C1 migration (a save from before AIM existed has no `aim` key):
+ *   * a saved `sub` that is EXACTLY the old default [E, RMB] becomes [E], and `aim` gets [RMB];
+ *   * a player-customised `sub` is kept as it is, and `aim` then defaults to [RMB] only when no other action holds RMB
+ *     (else AIM starts unbound — SETTINGS shows it, the player binds it).
+ * A save that has an `aim` key (this build on) is taken as saved, like every other action.
+ */
 function sanitizeBindings(raw: unknown): Bindings {
   const out = defaultBindings();
   if (!raw || typeof raw !== 'object') return out;
   const r = raw as Record<string, unknown>;
+  const hasAim = Array.isArray(r.aim);
   for (const a of Object.keys(out) as Action[]) {
     const v = r[a];
     if (!Array.isArray(v)) continue;
     const codes = v.filter((c): c is string => typeof c === 'string' && CODE_RE.test(c)).slice(0, 3);
     out[a] = [...new Set(codes)];
   }
+  if (!hasAim) {
+    if (sameCodes(r.sub, OLD_DEFAULT_SUB)) out.sub = ['KeyE'];
+    out.aim = [];                                   // decided below, once every other action has its codes
+  }
   // a code may belong to one action only (a saved conflict from an old build: the first action keeps it)
   const seen = new Set<string>();
   for (const a of Object.keys(out) as Action[]) {
     out[a] = out[a].filter((c) => { if (seen.has(c)) return false; seen.add(c); return true; });
   }
+  if (!hasAim) out.aim = seen.has('Mouse2') ? [] : ['Mouse2'];
   return out;
 }
 
@@ -165,6 +200,9 @@ export function sanitizeSettings(raw: unknown): Settings {
     touchLeftHanded: bool(r.touchLeftHanded, d.touchLeftHanded),
     aimAssist: bool(r.aimAssist, d.aimAssist),
     haptics: bool(r.haptics, d.haptics),
+    // CONTRACT_CONTROLS C1: an old save has neither → the defaults (0.65, hold)
+    aimSens: clamp(r.aimSens, AIM_SENS_MIN, AIM_SENS_MAX, d.aimSens),
+    aimToggle: bool(r.aimToggle, d.aimToggle),
   };
 }
 
@@ -178,6 +216,7 @@ export function sanitizeProfile(raw: unknown, kits: readonly string[], maps: rea
     name: cleanName(r.name),
     crew: r.crew === 2 ? 2 : 1,
     mode: r.mode === 'ffa' ? 'ffa' : 'teams',
+    rule: r.rule === 'washout' ? 'washout' : 'turf',      // CONTRACT_WASHOUT W4: anything else (an old save) → turf
     ffaColor: typeof r.ffaColor === 'number' && Number.isInteger(r.ffaColor) && r.ffaColor >= 1 && r.ffaColor <= FFA_COLORS ? r.ffaColor : d.ffaColor,
     kit, map,
     preset: r.preset === 'golden' ? 'golden' : 'noon',

@@ -15,11 +15,49 @@
 //   * `reduceMotion` (settings flag) zeroes the shake; `shakeScale` is an optional 0..1 strength knob.
 //   * `shake` is kept as a legacy alias of `trauma` (older call sites that write `cam.shake = …`).
 // Settings hooks for the frontend: `sensitivityScale` and `invertY` apply in addMouse().
+//
+// CONTRACT_CONTROLS C1 — AIM (view only; the sim, the bots and every hash never see it). The Game sets `aimTarget`
+// (1 while AIM is wanted and allowed: alive, on foot, in play) every frame; the camera eases `aimBlend` toward it over
+// AIM.easeS (0.15 s, smoothstep) both ways. At full aim:
+//   * FOV = base × `aimZoom` (AIM.fovMul 0.72; the Game sets AIM.scopeFovMul 0.5 for NEEDLE-GLINT — a scope-like zoom);
+//   * the camera moves in over the right shoulder: the boom closes by AIM.distCut (35 %) and the shoulder offset rises
+//     × AIM.shoulderMul; the same shoulder / boom sphere casts still apply (collision is unchanged);
+//   * mouse (and touch, through the Game) look × `aimSens` (Settings.aimSens, 0.3–1.2, default 0.65) × the zoom factor
+//     (aimZoomLookFactor: 1 for the regular aim, 0.6715 for the NEEDLE-GLINT scope — review fix A-A4) — `lookScale` is
+//     the multiplier in force (the harness read-back);
+// The aim ray is still the camera centre (game.ts updateAim), so the zoom is the precision.
 
 import * as THREE from 'three';
 import { CAMERA } from '../core/config.ts';
 import { DEG } from '../core/types.ts';
 import type { PhysicsWorld } from '../core/physics.ts';
+
+/** CONTRACT_CONTROLS C1 aim framing */
+export const AIM = {
+  /** s to ease in, and the same to ease out (smoothstep over a linear progress) */
+  easeS: 0.15,
+  /** FOV multiplier at full aim */
+  fovMul: 0.72,
+  /** NEEDLE-GLINT's stronger, scope-like zoom */
+  scopeFovMul: 0.5,
+  /** the boom closes by this share at full aim */
+  distCut: 0.35,
+  /** the right-shoulder offset × this at full aim (0.42 → 0.63 m) */
+  shoulderMul: 1.5,
+  /** default look multiplier while aiming (Settings.aimSens overrides) */
+  sens: 0.65,
+} as const;
+
+/**
+ * C1 (review fix A-A4): the look factor of an aim zoom relative to the regular aim — tan(h·zoom) / tan(h·AIM.fovMul),
+ * h = half the vertical base FOV — so every zoom turns the picture at the regular aim's screen-relative speed. 1 for the
+ * regular aim (AIM.fovMul), 0.6715 for NEEDLE-GLINT's scope (AIM.scopeFovMul) at the 68° base.
+ */
+export function aimZoomLookFactor(baseFovDeg: number, zoom: number): number {
+  const h = baseFovDeg * DEG / 2;
+  const k = Math.tan(h * zoom) / Math.tan(h * AIM.fovMul);
+  return Number.isFinite(k) && k > 0 ? k : 1;
+}
 
 /** trauma → shake mapping (tuned on 1600×900 shots: firing ≈ 2 px tremor, a slam ≈ 25 px) */
 export const SHAKE = {
@@ -61,6 +99,21 @@ export class FollowCamera {
   obstructed = false;
   /** shake applied on the last update (radians; harness read-back) */
   readonly lastShake = { yaw: 0, pitch: 0, roll: 0, amount: 0 };
+  // ── CONTRACT_CONTROLS C1: AIM ──
+  /** 1 while aiming (the Game writes it every frame), 0 otherwise */
+  aimTarget = 0;
+  /** the eased aim amount 0..1 actually applied (smoothstep of aimP) */
+  aimBlend = 0;
+  /** FOV multiplier at full aim (AIM.fovMul; NEEDLE-GLINT AIM.scopeFovMul) */
+  aimZoom: number = AIM.fovMul;
+  /** settings: look multiplier at full aim (Settings.aimSens) */
+  aimSens: number = AIM.sens;
+  /** the vertical FOV without aim */
+  readonly baseFov = CAMERA.fovDeg;
+  /** linear aim progress 0..1 (moves 1 / AIM.easeS per second toward aimTarget) */
+  private aimP = 0;
+  /** the aim boom factor of the last update (the ease-out lets the boom grow with it at once) */
+  private lastAimK = 1;
 
   private readonly pivot = new THREE.Vector3();
   private pivotYs = NaN;
@@ -96,11 +149,47 @@ export class FollowCamera {
     this.slickBlend = 0;
     this.slickTarget = 0;
     this.trauma = 0;
+    this.aimTarget = 0;
+    this.aimP = 0;
+    this.aimBlend = 0;
+    this.lastAimK = 1;
+    this.applyFov();
+  }
+
+  /**
+   * C1: the look multiplier in force (1 without aim; at full aim aimSens × the zoom factor; eased with the aim).
+   * Review fix A-A4: a stronger zoom than the regular aim (NEEDLE-GLINT's 0.5 scope) keeps the regular aim's
+   * screen-relative look speed — × tan(h·zoom) / tan(h·AIM.fovMul), h = half the base vertical FOV (1 for the regular
+   * aim, 0.6715 for the scope). With the shared 0.65 the scope turned the picture ~1.4× faster than hip-fire.
+   */
+  get lookScale(): number {
+    const z = this.aimZoom > 0 && this.aimZoom <= 1 ? this.aimZoom : AIM.fovMul;
+    const s = (this.aimSens > 0 ? this.aimSens : AIM.sens) * aimZoomLookFactor(this.baseFov, z);
+    return 1 + (s - 1) * this.aimBlend;
+  }
+
+  /** C1: drop the aim at once (a match session ends: the next user of this camera starts unzoomed) */
+  clearAim(): void {
+    this.aimTarget = 0;
+    this.aimP = 0;
+    this.aimBlend = 0;
+    this.lastAimK = 1;
+    this.applyFov();
+  }
+
+  /** C1: the FOV the aim blend asks for (written to the camera only when it changes) */
+  private applyFov(): void {
+    const z = this.aimZoom > 0 && this.aimZoom <= 1 ? this.aimZoom : AIM.fovMul;
+    const fov = this.baseFov * (1 - (1 - z) * this.aimBlend);
+    if (Math.abs(this.camera.fov - fov) > 1e-4) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   addMouse(dx: number, dy: number): void {
     if (!dx && !dy) return;
-    const s = CAMERA.sensitivity * (this.sensitivityScale > 0 ? this.sensitivityScale : 1);
+    const s = CAMERA.sensitivity * (this.sensitivityScale > 0 ? this.sensitivityScale : 1) * this.lookScale;
     this.yaw -= dx * s;
     this.pitch -= (this.invertY ? -dy : dy) * s;
     const TAU = Math.PI * 2;
@@ -127,7 +216,18 @@ export class FollowCamera {
     if (Math.abs(this.slickTarget - this.slickBlend) < 1e-3) this.slickBlend = this.slickTarget;
     const s = this.slickBlend;
     const pivotY = CAMERA.pivotY + (CAMERA.slickPivotY - CAMERA.pivotY) * s;
-    const dist = CAMERA.distance + (CAMERA.slickDistance - CAMERA.distance) * s;
+    const baseDist = CAMERA.distance + (CAMERA.slickDistance - CAMERA.distance) * s;
+    // C1 AIM: a linear progress eased with smoothstep, AIM.easeS each way; zoom, a shorter boom, a wider shoulder
+    const tgt = this.aimTarget > 0 ? 1 : 0;
+    const stepA = AIM.easeS > 0 ? sdt / AIM.easeS : 1;
+    this.aimP = tgt > this.aimP ? Math.min(tgt, this.aimP + stepA) : Math.max(tgt, this.aimP - stepA);
+    const a = this.aimP * this.aimP * (3 - 2 * this.aimP);
+    this.aimBlend = a;
+    this.applyFov();
+    const aimK = 1 - AIM.distCut * a;
+    const aimGrow = Math.max(0, aimK - this.lastAimK) * baseDist;   // the ease-out lengthens the boom this much this frame
+    this.lastAimK = aimK;
+    const dist = baseDist * aimK;
 
     // vertical smoothing of the pivot (snap on big jumps such as a respawn / teleport)
     const ty = feet.y + pivotY;
@@ -139,8 +239,8 @@ export class FollowCamera {
     const rx = -cy, rz = sy;                               // screen-right on the ground
     const dir = this.forward(this.tmp);
 
-    // shoulder point (pull the shoulder in first if a wall is right beside the runner)
-    let shoulder = CAMERA.shoulder;
+    // shoulder point (pull the shoulder in first if a wall is right beside the runner); C1: wider while aiming
+    let shoulder = CAMERA.shoulder * (1 + (AIM.shoulderMul - 1) * a);
     const r = CAMERA.collideRadius;
     if (physics && shoulder > 0) {
       const h = physics.sphereCast(this.pivot.x, this.pivot.y, this.pivot.z, rx, 0, rz, r, shoulder);
@@ -156,7 +256,7 @@ export class FollowCamera {
       if (h) { want = Math.max(0.35, h.toi - 0.05); this.obstructed = true; }
     }
     if (want < this.boom) this.boom = want;                 // pull in immediately: never see through a wall
-    else this.boom = Math.min(want, this.boom + CAMERA.easeOutSpeed * sdt);
+    else this.boom = Math.min(want, this.boom + CAMERA.easeOutSpeed * sdt + aimGrow);   // C1: an aim release eases out in AIM.easeS
 
     this.camera.position.set(sxp - dir.x * this.boom, syp - dir.y * this.boom, szp - dir.z * this.boom);
 

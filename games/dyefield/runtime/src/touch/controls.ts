@@ -17,7 +17,11 @@
 //   FIRE     Ø88 held = fire held; a drag that starts on FIRE also looks (fire-and-aim). Icon = the kit's cut-out.
 //   JUMP     Ø64 (right of / below FIRE) press latches jump.   SLICK Ø64 (left of FIRE) held = slick held.
 //   SUB      Ø56 (above FIRE) press latches sub; dimmed below the sub's tank cost.
-//   SPECIAL  Ø64 (above-left of FIRE) press latches special; a conic charge ring 0..1, a ready pulse; dimmed until ready.
+//   SPECIAL  Ø64 (above-left of FIRE) press latches special; a conic charge ring 0..1, a ready pulse; dimmed until ready;
+//            CONTRACT_CONTROLS C3: specialDenied() shakes it (a press the meter could not answer).
+//   AIM      Ø56 (right of FIRE, above JUMP — where mobile shooters put ADS) CONTRACT_CONTROLS C1: a TOGGLE — a tap flips
+//            TouchState.aim (view only: the camera zooms, look × aimSens); lit while on. The Game syncs it back every
+//            frame (setAim), so a wash / pause that drops the aim unlights it.
 //   PAUSE    Ø44 top-left → onPause handlers (main.ts routes them into the ESC pause path). Fires on release.
 //   MAP      a tap on the HUD minimap (#df-minimap) → onMap handlers (the Input's 'map' UI action).
 // Idle opacity = `opacity` (0.35–1); a pressed control is 1.0 and scaled 0.94. No text selection, no callout, no
@@ -30,6 +34,7 @@
 import './touch.css';
 import { WEAPONS } from '../core/data.ts';
 import { KIT_ICONS, SVG } from '../ui/icons.ts';
+import { touchGlyph } from '../ui/slates.ts';
 
 export interface TouchOptions { sens: number; scale: number; opacity: number; leftHanded: boolean; haptics: boolean }
 
@@ -40,13 +45,15 @@ export interface TouchState {
   held: Set<'fire' | 'slick'>;
   latched: Set<'jump' | 'sub' | 'special'>;
   active: number;                            // touches currently down (mode switching waits for 0)
+  /** CONTRACT_CONTROLS C1: the AIM button's toggle (view only — Input.aiming(); never in the PlayerIntent) */
+  aim: boolean;
 }
 
 export function createTouchState(): TouchState {
-  return { moveX: 0, moveZ: 0, lookYaw: 0, lookPitch: 0, held: new Set(), latched: new Set(), active: 0 };
+  return { moveX: 0, moveZ: 0, lookYaw: 0, lookPitch: 0, held: new Set(), latched: new Set(), active: 0, aim: false };
 }
 
-export type TouchButtonId = 'fire' | 'jump' | 'slick' | 'sub' | 'special' | 'pause';
+export type TouchButtonId = 'fire' | 'jump' | 'slick' | 'sub' | 'special' | 'aim' | 'pause';
 
 /** CONTRACT_MOBILE M2 numbers (CSS px at scale 1, radians per px) */
 export const TOUCH = {
@@ -73,14 +80,16 @@ export const TOUCH = {
 /**
  * The thumb cluster, right-handed: button centre as (distance from the right safe edge, distance from the bottom safe
  * edge) and diameter, all CSS px at scale 1. Checked for overlap at every scale: the closest pair (FIRE ↔ SPECIAL,
- * 104.7 px apart vs 76 px of radii) keeps a gap of ≥ 22 px × scale.
+ * 104.7 px apart vs 76 px of radii) keeps a gap of ≥ 22 px × scale. C1 AIM (46, 152) Ø56: 38 px clear of SUB, 41.6 of
+ * FIRE, 42 of JUMP (× scale); it stays inside the cluster's existing envelope (SUB's top edge is 230 px up, AIM's 180).
  */
-const CLUSTER: ReadonlyArray<{ id: Exclude<TouchButtonId, 'pause'>; dx: number; dy: number; d: number; label: string }> = [
+export const CLUSTER: ReadonlyArray<{ id: Exclude<TouchButtonId, 'pause'>; dx: number; dy: number; d: number; label: string }> = [
   { id: 'jump', dx: 52, dy: 50, d: 64, label: 'Jump' },
   { id: 'fire', dx: 146, dy: 96, d: 88, label: 'Fire (drag to aim)' },
   { id: 'slick', dx: 246, dy: 58, d: 64, label: 'Slick (hold to swim and drink)' },
   { id: 'sub', dx: 126, dy: 202, d: 56, label: 'Sub weapon' },
   { id: 'special', dx: 220, dy: 170, d: 64, label: 'Special' },
+  { id: 'aim', dx: 46, dy: 152, d: 56, label: 'Aim (tap to zoom in, tap again to zoom out)' },
 ];
 /** the stick's home spot: base centre this far (px at scale 1, plus the base radius) in from the bottom corner */
 const STICK_HOME_PAD = 34;
@@ -91,6 +100,8 @@ const ICON_JUMP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 14.5 
   + '<path d="M7 19.5h10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>';
 const ICON_SLICK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2c3 4 5.6 7.2 5.6 10.4a5.6 5.6 0 0 1-11.2 0C6.4 10.4 9 7.2 12 3.2z" fill="currentColor" stroke="#14203a" stroke-width="1.6" stroke-linejoin="round"/>'
   + '<path d="M3 20.4c1.5-1.2 3-1.2 4.5 0s3 1.2 4.5 0 3-1.2 4.5 0 3 1.2 4.5 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+/** C1: the AIM toggle's scope — the shared 'ads' touch glyph (ui/slates.ts; the HUD legends and HOW TO PLAY draw the same) */
+const ICON_AIM = touchGlyph('ads');
 const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4.2" height="14" rx="1.6" fill="currentColor"/><rect x="13.8" y="5" width="4.2" height="14" rx="1.6" fill="currentColor"/></svg>';
 
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
@@ -145,6 +156,8 @@ export class TouchControls {
   private totalYaw = 0;
   private totalPitch = 0;
   private kitId = '';
+  /** C3 read-back: SPECIAL deny shakes played */
+  private denies = 0;
 
   constructor(host: HTMLElement, state: TouchState, opts: TouchOptions) {
     this.state = state;
@@ -184,8 +197,10 @@ export class TouchControls {
       return b;
     };
     for (const c of CLUSTER) {
-      const icon = c.id === 'jump' ? ICON_JUMP : c.id === 'slick' ? ICON_SLICK : c.id === 'sub' ? (SVG['jelly-charge'] ?? '') : '';
-      mk(c.id, c.d, c.label, icon);
+      const icon = c.id === 'jump' ? ICON_JUMP : c.id === 'slick' ? ICON_SLICK : c.id === 'sub' ? (SVG['jelly-charge'] ?? '')
+        : c.id === 'aim' ? ICON_AIM : '';
+      const b = mk(c.id, c.d, c.label, icon);
+      if (c.id === 'aim') b.el.setAttribute('aria-pressed', 'false');
     }
     mk('pause', PAUSE_D, 'Pause', ICON_PAUSE);
     this.listen(this.pad, null);
@@ -285,6 +300,26 @@ export class TouchControls {
     }
   }
 
+  /** C1: show the AIM toggle's real state (the Game passes Input.aiming() every frame; a DOM write only on a change) */
+  setAim(on: boolean): void {
+    const b = this.btns.get('aim');
+    if (!b) return;
+    const was = b.el.classList.contains('on');
+    if (was === on) return;
+    b.el.classList.toggle('on', on);
+    b.el.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+
+  /** C3: a SPECIAL press the meter could not answer ('denied'): the button gives a short shake */
+  specialDenied(): void {
+    const b = this.btns.get('special');
+    if (!b || this.disposed) return;
+    b.el.classList.remove('deny');
+    void b.el.offsetWidth;                         // restart the animation on a quick second denial
+    b.el.classList.add('deny');
+    this.denies++;
+  }
+
   onPause(fn: () => void): () => void {
     this.pauseFns.push(fn);
     return () => { const i = this.pauseFns.indexOf(fn); if (i >= 0) this.pauseFns.splice(i, 1); };
@@ -321,6 +356,8 @@ export class TouchControls {
     visible: boolean; stick: { x: number; y: number; active: boolean }; lookRad: { yaw: number; pitch: number };
     held: string[]; latched: string[]; active: number; leftHanded: boolean; scale: number; opacity: number;
     buttons: Array<{ id: string; rect: { x: number; y: number; w: number; h: number }; dimmed: boolean }>;
+    /** C1: the AIM toggle; C3: SPECIAL deny shakes played */
+    aim: boolean; aimLit: boolean; denies: number;
   } {
     const r3 = (v: number): number => Math.round(v * 1000) / 1000;
     const buttons: Array<{ id: string; rect: { x: number; y: number; w: number; h: number }; dimmed: boolean }> = [];
@@ -336,6 +373,7 @@ export class TouchControls {
       lookRad: { yaw: r3(this.totalYaw), pitch: r3(this.totalPitch) },
       held: [...this.state.held], latched: [...this.state.latched], active: this.state.active,
       leftHanded: this.opts.leftHanded, scale: this.opts.scale, opacity: this.opts.opacity, buttons,
+      aim: this.state.aim, aimLit: !!this.btns.get('aim')?.el.classList.contains('on'), denies: this.denies,
     };
   }
 
@@ -602,6 +640,10 @@ export class TouchControls {
       case 'jump': this.state.latched.add('jump'); break;
       case 'sub': this.state.latched.add('sub'); break;
       case 'special': this.state.latched.add('special'); break;
+      case 'aim':                                  // C1: a toggle (view only); the Game's setAim keeps the light honest
+        this.state.aim = !this.state.aim;
+        this.setAim(this.state.aim);
+        break;
       default: break;
     }
     this.vibrate(TOUCH.hapticPress);
@@ -627,6 +669,8 @@ export class TouchControls {
     this.state.lookPitch = 0;
     this.state.held.clear();
     this.state.latched.clear();
+    this.state.aim = false;                          // C1: the overlay hides (the final horn, kbm) → no aim left on
+    this.setAim(false);
     for (const b of this.btns.values()) { b.down = 0; b.el.classList.remove('down'); }
     this.stickEl.classList.remove('on');
   }

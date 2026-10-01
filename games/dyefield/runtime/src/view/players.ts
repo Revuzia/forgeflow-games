@@ -45,6 +45,10 @@
 //     onHit(id, byTeam?, x?, y?, z?, dmg?) — the extra arguments place / size the stain (optional).
 //   * LANDING PUFFS: a landing after ≥ 0.3 s airborne kicks a ring of puffs (hard after ≥ 1.0 s).
 //   * SLICK CROWNS: diving into / surfacing from the dye throws a splash crown (fx.slickCrown).
+//
+// CONTRACT_WASHOUT W5 / CONTRACT_FFA_SPAWNS S5 (lane C): a spawn-protected runner (Runner.protectedT > 0 — WASHOUT and
+// FFA; never TEAMS TURF) shimmers: a soft ring in its crew's dye sweeps up and down the body (additive, one small band
+// mesh per runner on a shared geometry) and its rim light pulses, fading over the last 0.35 s of the protection.
 
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
@@ -68,7 +72,25 @@ export interface RunnerLike {
   slickForm?: boolean; wallNx?: number; wallNz?: number;
   /** CHANGED(KITSIM) §10.2 read-outs */
   charge?: number; rolling?: boolean; flicking?: boolean; leaping?: boolean; specialActive?: string;
+  /** CONTRACT_WASHOUT W5 / CONTRACT_FFA_SPAWNS S5: spawn protection left (s; 0 = none) — the shimmer ring */
+  protectedT?: number;
 }
+
+/** the spawn-protection shimmer (CONTRACT_WASHOUT W5 / CONTRACT_FFA_SPAWNS S5): a soft crew-coloured ring sweeping the
+ *  body + a pulsing rim light, fading out over its last `fadeS` of protection */
+export const SHIELD = {
+  radius: 0.52,
+  height: 0.14,
+  /** the ring sweeps between these heights over the feet (m), once per `period` s up and down */
+  lowY: 0.12,
+  highY: 1.42,
+  period: 1.6,
+  opacity: 0.55,
+  /** extra rim light at the pulse peak (the runner's base uRim is 0.22) */
+  rim: 0.55,
+  fadeS: 0.35,
+} as const;
+const RIM_BASE = 0.22;
 
 export type KitFireType = 'stream' | 'roll' | 'charge' | 'burst';
 
@@ -682,6 +704,10 @@ class RunnerView {
   readonly tag: HTMLElement;
   readonly u: RunnerUniforms;
   readonly kit: RunnerKit;
+  /** the spawn-protection shimmer ring (SHIELD; hidden unless protected) */
+  shield: THREE.Mesh | null = null;
+  /** the shimmer showed on the last frame (the rim light is restored once when it ends) */
+  shimmerOn = false;
   baseRole: Loco = 'idle';
   aimW = 0;
   /** layer weights (debug read-back) */
@@ -1095,6 +1121,7 @@ class RunnerView {
     this.root.removeFromParent();
     (this.body.material as THREE.Material).dispose();
     (this.fin.material as THREE.Material).dispose();
+    if (this.shield) (this.shield.material as THREE.Material).dispose();   // its geometry is PlayerViews' shared one
     for (const k of skeletons) k.dispose();
     this.tag.remove();
   }
@@ -1140,6 +1167,10 @@ export class PlayerViews {
   private readonly dyeLin: Record<number, THREE.Color> = {};
   /** juice counters (harness read-back) */
   readonly juice = { stains: 0, bodyDrips: 0, landPuffs: 0, crowns: 0 };
+  /** the shimmer rings' shared band (SHIELD) */
+  private readonly shieldGeo: THREE.CylinderGeometry;
+  /** runners shimmering on the last frame (harness read-back: shimmer()) */
+  private readonly shimmering: number[] = [];
 
   constructor(assets: HeroAssets, roster: ReadonlyArray<{ id: number; name: string; team: TeamId; kit?: string }>, fx: Fx | null,
     tagHost: HTMLElement | null, kits?: RunnerKit | Map<string, RunnerKit>, mode: MatchMode = 'teams') {
@@ -1166,13 +1197,36 @@ export class PlayerViews {
       tagHost.append(box);
       this.tagHost = box;
     } else this.tagHost = null;
+    this.shieldGeo = new THREE.CylinderGeometry(SHIELD.radius, SHIELD.radius, SHIELD.height, 36, 1, true);
     for (const e of roster) {
       const rv = new RunnerView(assets, kitFor(e.kit), e.id, e.team, e.name, this.tagHost, mode);
       this.views.push(rv);
       this.root.add(rv.root);
       this.frames.push({ x: 0, y: 0, z: 0, yaw: 0, speed: 0, vx: 0, vz: 0, vy: 0 });
+      // the spawn-protection shimmer ring: additive, the crew's dye, never in the shadow or depth passes
+      const sm = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(crewDef(mode, e.team).dye), transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        depthWrite: false, side: THREE.DoubleSide,
+      });
+      sm.name = `runner_shield_${e.id}`;
+      const shield = new THREE.Mesh(this.shieldGeo, sm);
+      shield.name = `runner_shield_${e.id}`;
+      shield.castShadow = false;
+      shield.receiveShadow = false;
+      shield.renderOrder = 3;
+      shield.visible = false;
+      rv.root.add(shield);
+      rv.shield = shield;
     }
   }
+
+  /** the shader pre-warm (main.ts): show the shimmer rings for compileAsync (it skips hidden objects), then hide them */
+  prewarmShields(on: boolean): void {
+    for (const rv of this.views) if (rv.shield) rv.shield.visible = on;
+  }
+
+  /** runner ids shimmering (spawn-protected and shown) on the last frame (harness read-back) */
+  shimmer(): number[] { return [...this.shimmering]; }
 
   get warnings(): string[] {
     const out = new Set<string>();
@@ -1305,6 +1359,8 @@ export class PlayerViews {
     for (const rv of this.views) {
       rv.alive = true; rv.washT = 99; rv.dropT = 99; rv.landedDrop = true; rv.victory = false;
       rv.u.uFlash.value = 0;
+      rv.shimmerOn = false; rv.u.uRim.value = RIM_BASE;
+      if (rv.shield) rv.shield.visible = false;
       rv.cancelActions();
       this.clearDrip(rv);
       rv.landedNow = false;
@@ -1313,6 +1369,7 @@ export class PlayerViews {
 
   update(dt: number, runners: ReadonlyArray<RunnerLike>, o: PlayersFrameOpts): void {
     this.time += dt;
+    this.shimmering.length = 0;
     const cam = o.camera;
     this.camPos.setFromMatrixPosition(cam.matrixWorld);
     const a = o.alpha;
@@ -1356,6 +1413,7 @@ export class PlayerViews {
       rv.fin.visible = slick && !ghost && rv.mistK > 0.02;
       rv.root.position.set(f.x, f.y + drop, f.z);
       rv.root.rotation.set(0, f.yaw, 0);
+      this.shimmerStep(rv, r, bodyOn && !popping);
       if (popping) {
         const k = rv.washT / 0.12;
         rv.model.scale.set(1 + 0.35 * k, 1 - 0.45 * k, 1 + 0.35 * k);
@@ -1429,6 +1487,35 @@ export class PlayerViews {
 
       // name tag
       this.placeTag(rv, r, f, o, drop, slick, ghost, dist);
+    }
+  }
+
+  /**
+   * CONTRACT_WASHOUT W5 / CONTRACT_FFA_SPAWNS S5: a spawn-protected runner (Runner.protectedT > 0; WASHOUT and FFA only —
+   * TEAMS TURF never sets it) shimmers: the SHIELD ring sweeps up and down the body in the crew's dye and the rim light
+   * pulses, both fading over the protection's last SHIELD.fadeS. Visible to everyone (a protected runner cannot be
+   * washed, so the foe sees why its shots do nothing). Hidden with the body (slick, washed).
+   */
+  private shimmerStep(rv: RunnerView, r: RunnerLike, show: boolean): void {
+    const left = r.alive ? (r.protectedT ?? 0) : 0;
+    const sh = rv.shield;
+    if (show && left > 0) {
+      const k = Math.min(1, left / SHIELD.fadeS);
+      const ph = (this.time / SHIELD.period + rv.id * 0.137) % 1;
+      const tri = ph < 0.5 ? ph * 2 : 2 - ph * 2;              // up, then down
+      const e = tri * tri * (3 - 2 * tri);
+      if (sh) {
+        sh.visible = true;
+        sh.position.set(0, SHIELD.lowY + (SHIELD.highY - SHIELD.lowY) * e, 0);
+        (sh.material as THREE.MeshBasicMaterial).opacity = SHIELD.opacity * k * (0.8 + 0.2 * Math.sin(this.time * 23 + rv.id));
+      }
+      rv.u.uRim.value = RIM_BASE + SHIELD.rim * k * (0.5 + 0.5 * Math.sin(this.time * 9 + rv.id));
+      rv.shimmerOn = true;
+      this.shimmering.push(rv.id);
+    } else if (rv.shimmerOn) {
+      rv.shimmerOn = false;
+      rv.u.uRim.value = RIM_BASE;
+      if (sh) sh.visible = false;
     }
   }
 
@@ -1508,12 +1595,16 @@ export class PlayerViews {
    *  has no swap — crewDyeHex returns each crew's own dye) */
   setColorblind(on: boolean): void {
     for (const t of crewIds(this.mode)) this.dyeLin[t]?.set(crewDyeHex(this.mode, t, on));
-    for (const rv of this.views) rv.u.uTeam.value.set(crewDyeHex(this.mode, rv.team, on));
+    for (const rv of this.views) {
+      rv.u.uTeam.value.set(crewDyeHex(this.mode, rv.team, on));
+      if (rv.shield) (rv.shield.material as THREE.MeshBasicMaterial).color.set(crewDyeHex(this.mode, rv.team, on));
+    }
   }
 
   dispose(): void {
     for (const rv of this.views) rv.dispose();
     this.views.length = 0;
+    this.shieldGeo.dispose();
     this.tagHost?.remove();
     this.root.removeFromParent();
   }

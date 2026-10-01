@@ -39,6 +39,11 @@ arena, A-A6 BACK / leaving full screen pause, A-A7 the left-handed minimap look,
 A-A11 audio after the map GLB, A-A13 no iPhone tip in an iframe, B-F1 context lost mid-load, B-F2 single-touch releases,
 B-F3 / B-F4 the shadow latch + snap, B-F5 the tip counted when shown.
 Modes: TEAMS and FFA both run on every device — the START match is one, the deep-link match the other (see PLAN).
+Rules (CONTRACT_WASHOUT W8, 1.4.0): the START match is TURF, the deep-link match is WASHOUT (?rule=washout) — its HUD
+(M6 step hud_<mode>_washout), a touch score (FIRE on a dev-placed foe: setup only) with the '+1' pop, and the WASHOUT
+victory slate with the 8-runner W / D board (M6 step victory_<mode>_washout). All four mode × rule pairs run across the
+devices. Controls (CONTRACT_CONTROLS C4, START match): a tap on the AIM button zooms in and a second tap out; SPECIAL
+tapped while SLICK is held on own dye starts the special (setup: own dye, a full meter, tank 60).
 Bots: the matches are live, so a bot can wash the human in the middle of an action check. FIRE / the stick / JUMP / SUB /
 SPECIAL / SLICK are retried ONCE after the respawn, and only when the read-back proves a wash during the attempt
 (washed_retry); the first attempt's result stays in the check detail and the report notes.
@@ -76,12 +81,12 @@ GATE_DEVICES = ("se", "iphone14", "pixel7", "ipad")
 # what each device plays. `mode`/`map`/`kit` = the START match (picked by taps in the menus); `deep` = the TAP TO PLAY
 # match (a deep link). Every device runs one TEAMS and one FFA match; every map and kit is used.
 PLAN = {
-    "se":       {"mode": "ffa",   "map": "cinder",   "kit": "mist-rasp",    "deep": {"mode": "teams", "map": "lockwell", "kit": "pop-well"}, "big": True,
+    "se":       {"mode": "ffa",   "map": "cinder",   "kit": "mist-rasp",    "deep": {"mode": "teams", "map": "lockwell", "kit": "pop-well", "rule": "washout"}, "big": True,
                  "webkit": "refuse", "ctxlost": "deep"},
-    "iphone14": {"mode": "teams", "map": "pier18",   "kit": "sheet-drum",   "deep": {"mode": "ffa",   "map": "pier18",   "kit": "needle-glint"}, "perf": True, "big": True,
+    "iphone14": {"mode": "teams", "map": "pier18",   "kit": "sheet-drum",   "deep": {"mode": "ffa",   "map": "pier18",   "kit": "needle-glint", "rule": "washout"}, "perf": True, "big": True,
                  "webkit": "canplay", "rotate_load": "lockwell"},
-    "pixel7":   {"mode": "ffa",   "map": "lockwell", "kit": "needle-glint", "deep": {"mode": "teams", "map": "cinder",   "kit": "mist-rasp"}, "lefty": True},
-    "ipad":     {"mode": "teams", "map": "cinder",   "kit": "pop-well",     "deep": {"mode": "ffa",   "map": "lockwell", "kit": "sheet-drum"}, "ctxlost": "lobby"},
+    "pixel7":   {"mode": "ffa",   "map": "lockwell", "kit": "needle-glint", "deep": {"mode": "teams", "map": "cinder",   "kit": "mist-rasp", "rule": "washout"}, "lefty": True},
+    "ipad":     {"mode": "teams", "map": "cinder",   "kit": "pop-well",     "deep": {"mode": "ffa",   "map": "lockwell", "kit": "sheet-drum", "rule": "washout"}, "ctxlost": "lobby"},
 }
 # the mobile review fixes (2026-09-29) each device also proves (see the checks named "A-A…" / "B-F…"):
 #   every device  A-A1 edge touch-downs read 0 · A-A4 one map-GLB fetch per arena · A-A11 audio after the map GLB ·
@@ -976,6 +981,96 @@ def washed_retry(dev, name, attempt):
     return dev.check(name, ok, detail)
 
 
+def own_dye_by_splat(dev, sx, sy):
+    """setup (dev hook, as the SLICK check): own dye under the feet — splat, read the colour under the runner, and if the
+    floor there takes no paint step off with the stick and splat again → the colour read"""
+    under = None
+    for attempt in range(4):
+        p = dev.player()
+        dev.js("([x, y, z, t]) => window.__DF__.splat(x, y, z, 3.2, t)", [p.get("x"), p.get("y"), p.get("z"), p.get("team")])
+        time.sleep(0.15)
+        under = dev.js("() => window.__DF__.teamUnderFeet()")
+        if under == p.get("team"):
+            return under
+        dev.T.down(1, sx, sy)
+        for i in range(1, 9):
+            dev.T.move(1, sx + 5 * i * (1 if attempt % 2 else -1), sy - 5 * i)
+            time.sleep(0.02)
+        time.sleep(0.6)
+        dev.T.up(1)
+        dev.wait("() => window.__DF__.state().player.grounded || null", 3)
+    return under
+
+
+def run_controls_touch(dev, sx, sy):
+    """CONTRACT_CONTROLS C4 on touch (REAL CDP touches; setup by dev hooks, M11):
+      C1 — a tap on the AIM button (Ø 56 beside FIRE) zooms in: FOV 0.72 × base (0.5 × NEEDLE-GLINT), the look multiplier
+           = aimSens, the button lit, the HUD aiming; a second tap zooms back out (the touch AIM is a toggle);
+      C2 — SPECIAL tapped while SLICK is held on own dye (setup: own dye + a full meter + tank 60) starts the special on the
+           tick it pops the runner out of the slick."""
+    ensure_alive(dev, "before AIM")
+    zoom = 0.5 if dev.human().get("kit") == "needle-glint" else 0.72
+
+    def aim_attempt():
+        ac = dev.btn_center("aim")
+        if not ac:
+            return False, "no AIM button in the overlay (buttons %s)" % sorted(b.get("id") for b in dev.touch_rb().get("buttons") or [])
+        a0 = dev.js("() => window.__DF__.aim()") or {}
+        base = a0.get("baseFov") or a0.get("fov") or 0
+        dev.T.tap(ac[0], ac[1])
+        a1 = dev.wait("() => { const a = window.__DF__.aim(); return a && a.blend >= 0.999 ? a : null; }", 4.0) or dev.js("() => window.__DF__.aim()") or {}
+        t1 = dev.touch_rb()
+        h1 = dev.js("() => window.__DF__.hud().aiming")
+        dev.shot("aim_on")
+        dev.T.tap(ac[0], ac[1])
+        a2 = dev.wait("() => { const a = window.__DF__.aim(); return a && a.blend <= 0.001 && !a.wanted ? a : null; }", 4.0) or dev.js("() => window.__DF__.aim()") or {}
+        t2 = dev.touch_rb()
+        # review fix A-A4: look × aimSens × the zoom factor tan(h·zoom) / tan(h·0.72) (1 for the regular aim, 0.6715 for the
+        # NEEDLE-GLINT scope), as view/camera.ts aimZoomLookFactor
+        h = (base or 68.0) * math.pi / 360.0
+        k_zoom = math.tan(h * zoom) / math.tan(h * 0.72)
+        ok = (abs((a1.get("fov") or 0) - base * zoom) < 0.3 and abs((a1.get("lookScale") or 0) - (a1.get("aimSens") or -1) * k_zoom) < 0.01
+              and a1.get("touch") is True and t1.get("aimLit") is True and h1 is True
+              and abs((a2.get("fov") or 0) - base) < 1e-3 and a2.get("lookScale") == 1 and not t2.get("aimLit") and not a2.get("touch"))
+        return ok, "AIM at (%.0f, %.0f) Ø %.0f; base fov %s; tap → fov %s lookScale %s (aimSens %s) touch-aim %s lit %s hud %s; tap again → fov %s lookScale %s lit %s" % (
+            ac[0], ac[1], ac[2]["rect"]["w"], base, a1.get("fov"), a1.get("lookScale"), a1.get("aimSens"), a1.get("touch"), t1.get("aimLit"), h1,
+            a2.get("fov"), a2.get("lookScale"), t2.get("aimLit"))
+    washed_retry(dev, "C1: a tap on the AIM button zooms in (FOV × %.2f, look × aimSens, button lit, HUD aiming); a second tap zooms out" % zoom, aim_attempt)
+    time.sleep(0.3)
+
+    ensure_alive(dev, "before SPECIAL from SLICK")
+
+    def slick_special_attempt():
+        under = own_dye_by_splat(dev, sx, sy)
+        dev.js("() => { window.__DF__.setTank(0, 60); window.__DF__.fillSpecial(0); }")
+        time.sleep(0.3)
+        kc, spc = dev.btn_center("slick"), dev.btn_center("special")
+        if not kc or not spc:
+            return False, "no SLICK / SPECIAL button"
+        dev.T.down(6, kc[0], kc[1])
+        slicked = dev.wait("() => window.__DF__.state().player.slickForm || null", 2.5)
+        t0 = dev.js("() => { const e = window.__DF__.events(1); return e.length ? e[0].tick : 0; }")
+        t0 = t0 if isinstance(t0, int) else 0
+        dev.T.down(7, spc[0], spc[1])
+        time.sleep(0.1)
+        dev.T.up(7)
+        start = dev.wait("() => window.__DF__.events(300).filter((e) => e.t === 'special' && e.pid === 0 && e.phase === 'start' && e.tick > %d).pop() || null" % t0, 3.0)
+        evs = dev.js("() => window.__DF__.events(400)")
+        dev.shot("special_from_slick")
+        dev.T.up(6)
+        evs = evs if isinstance(evs, list) else []
+        st_tick = start.get("tick") if isinstance(start, dict) else None
+        popped = [e for e in evs if e.get("t") == "slick" and e.get("pid") == 0 and e.get("on") is False and e.get("tick") == st_tick]
+        return (bool(slicked) and isinstance(start, dict) and bool(popped),
+                "own dye under the feet %s; slickForm while SLICK held %s; SPECIAL tap → start %s; slick off on the start tick %s" % (
+                    under, bool(slicked), json.dumps(start), json.dumps(popped[:1])))
+    washed_retry(dev, "C2 by touch: SPECIAL tapped while SLICK is held on own dye starts the special and pops out of the slick "
+                      "(setup: own dye, a full meter, tank 60 via dev hooks)", slick_special_attempt)
+    dev.wait("() => { const k = window.__DF__.kit(); return k && k.specialActive === '' ? true : null; }", 12)
+    dev.wait("() => window.__DF__.state().player.grounded || null", 3)
+    time.sleep(0.4)
+
+
 def run_match_checks(dev, label):
     """M11 step 3 / 4 / 5 inside a live match started by touch"""
     P = dev.plan
@@ -1169,6 +1264,9 @@ def run_match_checks(dev, label):
         return "slick" in states and t1 >= t0 + 10, "states %s; tank %.1f → %.1f; held %s" % (sorted(s for s in states if s), t0, t1, held)
     washed_retry(dev, "SLICK held on own dye → state slick + the tank refills (setup: own dye + tank 20 via dev hooks)", slick_attempt)
     time.sleep(0.4)
+
+    # CONTRACT_CONTROLS C4 on touch: the AIM button, and SPECIAL pressed while slicked (C2)
+    run_controls_touch(dev, sx, sy)
 
     # three touches together
     ensure_alive(dev, "before the three touches")
@@ -1469,14 +1567,23 @@ def run_washed(dev):
     hp = dev.js("() => window.__DF__.settings().haptics")
     # a bot may have washed the runner already (it then respawns in a few seconds): the damage must land on a live one
     alive = dev.wait("() => window.__DF__.state().player.alive || null", 10)
+    # FFA respawn protection (CONTRACT_FFA_SPAWNS S4, 1.4.0) blocks all damage for ~2 s: a fresh respawn waits it out
+    # (integ: pixel7 FFA read 'alive before True; washed False' when the dev damage landed inside the window)
+    prot = dev.wait("() => ((window.__DF__.match().runners[0].protectedT || 0) <= 0) || null", 6)
     n0 = dev.human().get("washedCount") or 0
     dev.js("() => { window.__H_VIB__ = []; window.__DF__.damage(0, 1000); }")
     dead = dev.wait("() => (window.__DF__.match().runners[0].washedCount > %d) || null" % n0, 3)
-    time.sleep(0.4)
+    # the sim's washedCount can lead the Game's event drain by a frame or more; on a loaded box (integ final run: iphone14
+    # at 9.6 fps, p90 120 ms) a fixed 0.4 s wall sleep read 'vibrate calls []' before the 'washed' event reached the
+    # haptics. Wait for 3 rendered frames past the wash, then (VIBRATION on) up to 4 s for the 60 ms call itself.
+    f0 = dev.js("() => window.__DF__.render().frames") or 0
+    dev.wait("() => (window.__DF__.render().frames >= %d) || null" % (int(f0) + 3), 6)
+    if hp:
+        dev.wait("() => ((window.__H_VIB__ || []).indexOf(60) >= 0) || null", 4)
     vib = dev.js("() => window.__H_VIB__") or []
     want = (60 in vib) if hp else (vib == [])
     dev.check("M2 haptics: WASHED → %s (setup: washed by the dev damage hook)" % ("60 ms" if hp else "silent, VIBRATION off"),
-              bool(alive) and bool(dead) and want, "alive before %s; washed %s; haptics %s; vibrate calls %s" % (bool(alive), bool(dead), hp, vib))
+              bool(alive) and bool(dead) and want, "alive before %s; protection over %s; washed %s; haptics %s; vibrate calls %s" % (bool(alive), bool(prot), bool(dead), hp, vib))
 
 
 def summ(a):
@@ -1763,7 +1870,10 @@ def run_deep_link(dev):
     ios = bool(dev.spec.get("ios"))
     if ios:
         dev.js("() => localStorage.removeItem('dyefield.homeTip.v1')")    # B-F5 setup: this device's one time not used yet
-    dev.goto(map=D["map"], mode=D["mode"], kit=D["kit"], seed=7, dev=1)
+    q = {"map": D["map"], "mode": D["mode"], "kit": D["kit"], "seed": 7, "dev": 1}
+    if D.get("rule"):
+        q["rule"] = D["rule"]
+    dev.goto(**q)
     ok = dev.wait("() => { const b = document.getElementById('df-play'); return b && b.getBoundingClientRect().width > 0 ? true : null; }", 180)
     txt = dev.js("() => { const b = document.getElementById('df-play'); return b ? b.textContent : null; }")
     dev.check("deep link (%s %s): the play card reads TAP TO PLAY" % (D["mode"], D["map"]), bool(ok) and txt == "TAP TO PLAY", "text %r phase %s" % (txt, dev.phase()))
@@ -1789,7 +1899,7 @@ def run_deep_link(dev):
     mm = dev.js("() => window.__DF__.match().matchMode")
     dev.check("deep-link match live with the overlay (%s)" % mm, bool(live) and tb.get("visible") is True and mm == D["mode"],
               "live %s visible %s mode %s" % (bool(live), tb.get("visible"), mm))
-    dev.layout_step("hud_%s" % D["mode"])
+    dev.layout_step("hud_%s%s" % (D["mode"], "_washout" if D.get("rule") == "washout" else ""))
     # the play card's own tap is a gesture: quick sanity that the match takes input (the stick)
     (sx, sy), _, _ = zones(dev)
     ensure_alive(dev, "before the deep-link stick")
@@ -1805,6 +1915,264 @@ def run_deep_link(dev):
         dev.check("B-F5: the pause card shows the tip and only then remembers it", tip.get("shown") is True and tip.get("flag") == "1", json.dumps(tip))
         dev.tap_sel("#df-resume", what="RESUME")
         dev.wait("() => (window.__DF__.state().phase === 'play') || null", 3)
+    if D.get("rule") == "washout":
+        run_deep_washout(dev, D, sx, sy)
+
+
+# the nav node nearest (x, z) on the level of y (±1 m): a walkable floor spot for the dev placement of a foe (setup)
+NAV_NEAR_JS = """
+([x, y, z]) => { const d = window.__DF__ && window.__DF__.dev; const n = d && d.parts && d.parts.nav; if (!n || !n.x) return null;
+  let best = -1, bd = 1e9; const N = n.x.length;
+  for (let i = 0; i < N; i++) { if (Math.abs(n.y[i] - y) > 1.0) continue; const q = Math.hypot(n.x[i] - x, n.z[i] - z); if (q < bd) { bd = q; best = i; } }
+  return best < 0 ? null : { x: n.x[best], y: n.y[best], z: n.z[best], d: bd }; }
+"""
+# diagnostics: the distance (m) from a runner's chest (feet + 0.6) to the human's latest 'beam' segment (NEEDLE-GLINT)
+BEAM_MISS_JS = """
+(pid) => { const ev = window.__DF__.events(200).filter((e) => e.t === 'beam' && e.pid === 0); if (!ev.length) return null;
+  const b = ev[ev.length - 1]; const r = window.__DF__.match().runners[pid]; if (!r) return null;
+  const px = r.x, py = r.y + 0.6, pz = r.z; const ux = b.x1 - b.x0, uy = b.y1 - b.y0, uz = b.z1 - b.z0;
+  const L2 = ux * ux + uy * uy + uz * uz || 1; let t = ((px - b.x0) * ux + (py - b.y0) * uy + (pz - b.z0) * uz) / L2; t = Math.max(0, Math.min(1, t));
+  return Math.hypot(b.x0 + ux * t - px, b.y0 + uy * t - py, b.z0 + uz * t - pz); }
+"""
+
+
+def run_deep_washout(dev, D, sx, sy):
+    """CONTRACT_WASHOUT W8 on a phone (the deep-link match is ?rule=washout): the HUD is WASHOUT's and fits (the M6 check
+    ran as hud_<mode>_washout); a touch player can score — FIRE held on a foe in range washes it (setup: the foe is
+    dev-placed ~5 m in front of the camera, at most 5 placements, a washed runner respawns first; the aim is a real touch
+    look drag toward the foe's chest (touch_aim), FIRE and the aim assist are the game's) → the
+    'score' event, the '+1' pop and the HUD's score; the WASHOUT victory slate (the clock cut to 0.5 s by the dev hook, as
+    layoutcheck does) shows the 8-runner W / D board and fits (M6: victory_<mode>_washout)."""
+    ffa = D["mode"] == "ffa"
+    m = dev.js("() => window.__DF__.match()") or {}
+    h = dev.js("() => window.__DF__.hud()") or {}
+    wo = h.get("washout") or {}
+    dev.check("W5: the deep-link match is WASHOUT with its HUD (%s)" % D["mode"],
+              m.get("rule") == "washout" and h.get("rule") == "washout" and h.get("limit") == m.get("limit") and list(wo.get("scores") or []) == list(m.get("scores") or [])
+              and ((wo.get("chips") or {}).get("sun") is not None if not ffa else (h.get("ffa") or {}).get("me") is not None),
+              "rule %s/%s limit %s/%s scores %s/%s chips %s ffa %s" % (m.get("rule"), h.get("rule"), m.get("limit"), h.get("limit"), m.get("scores"), wo.get("scores"),
+                                                                     json.dumps(wo.get("chips")), json.dumps({k: (h.get("ffa") or {}).get(k) for k in ("me", "rank")}) if ffa else "-"))
+    ensure_alive(dev, "before the WASHOUT touch fight")
+    _, (lx, ly), _lefty = zones(dev)
+    # the look drags start on a spot of the look side clear of every button (+14 px) and of the minimap: the big-button
+    # plans (se / iphone14) reach the deep link at BUTTON SIZE 130 % and LEFT-HANDED from the START match's steps, where
+    # zones()'s spot can sit on a grown button (integ: the iphone14 look drags never moved the pitch)
+    tb0 = dev.touch_rb()
+    rects = [b.get("rect") for b in tb0.get("buttons") or [] if b.get("rect")]
+    mm = dev.js("() => { const e = document.getElementById('df-minimap'); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; }")
+    if isinstance(mm, dict) and mm.get("w"):
+        rects.append(mm)
+
+    def clear_spot(x, y, pad=14.0):
+        return all(not (r["x"] - pad <= x <= r["x"] + r["w"] + pad and r["y"] - pad <= y <= r["y"] + r["h"] + pad) for r in rects)
+    if not clear_spot(lx, ly):
+        side = -1.0 if _lefty else 1.0
+        for fy in (0.34, 0.42, 0.26, 0.5):
+            hit = None
+            for fx in (0.58, 0.54, 0.66, 0.70, 0.62, 0.74):
+                x = dev.W / 2 + side * (fx - 0.5) * dev.W
+                if clear_spot(x, dev.H * fy):
+                    hit = (x, dev.H * fy)
+                    break
+            if hit:
+                lx, ly = hit
+                break
+    dev.rep.setdefault("notes", []).append("W8 touch fight: look drags from (%.0f, %.0f) (left-handed %s, button scale %s)" % (
+        lx, ly, _lefty, (tb0.get("options") or {}).get("scale")))
+    sens = ((tb0.get("options") or {}).get("sens")) or 1.0
+
+    def touch_aim(tgt_id, straight=False):
+        """one closed-loop step of REAL touch look (a slow drag on the look side, pointer 2, under the accel threshold)
+        toward the target — the way a player lines a shot up; the aim assist is the game's. The shot leaves the runner's
+        muzzle (COMBAT.muzzleHeight 0.9 m) along the camera yaw / pitch (Input: intent.pitch = the camera pitch), so a
+        straight shot (NEEDLE-GLINT's beam, `straight`) is lined up muzzle → chest (HITBOX height 1.2: chest 0.6 m) with
+        a tight tolerance; the arcing kits keep the desktop fight's pitch rule (playtest.aim_at). → aligned?"""
+        m_ = dev.js("() => window.__DF__.match()") or {}
+        rs = {r.get("id"): r for r in m_.get("runners") or [] if isinstance(r, dict)}
+        me_, tg = rs.get(0) or {}, rs.get(tgt_id) or {}
+        a = dev.js("() => window.__DF__.aim()") or {}
+        if not tg or not isinstance(a.get("yaw"), (int, float)):
+            return False
+        dist = math.hypot(tg["x"] - me_["x"], tg["z"] - me_["z"])
+        want_yaw = math.atan2(tg["x"] - me_["x"], tg["z"] - me_["z"])
+        if straight:
+            want_pitch = math.atan2((tg["y"] + 0.6) - (me_["y"] + 0.9), max(1.0, dist))
+            tol_y, tol_p = 0.03, 0.03
+        else:
+            want_pitch = max(-0.5, min(0.35, math.atan2((tg["y"] + 0.6) - (me_["y"] + 1.35), max(1.0, dist)) - 0.06))
+            tol_y, tol_p = 0.05, 0.06
+        ey, ep = ang(a["yaw"], want_yaw), want_pitch - (a.get("pitch") or 0.0)
+        if abs(ey) < tol_y and abs(ep) < tol_p:
+            return True
+        ls = a.get("lookScale") or 1.0
+        dx = max(-220.0, min(220.0, -ey / (0.0040 * sens * ls)))
+        dy = max(-160.0, min(160.0, -ep / (0.0032 * sens * ls)))
+        steps = max(4, int(math.ceil(math.hypot(dx, dy) / 6.0)))      # 6 px per ~16 ms: ~375 px/s, under the 600 px/s accel
+        dev.T.drag(2, lx, ly, lx + dx, ly + dy, steps=steps, dt=0.016)
+        time.sleep(0.08)
+        return False
+
+    def needle_shot(pick, fc, t0):
+        """NEEDLE-GLINT (a charged straight beam): a scripted look loop cannot track a bot that walks off during the ~1 s
+        charge while 7 FFA foes wash the standing runner (integ: iphone14 — the placed foe was 7 → 33 m away mid-loop,
+        the runner washed at the start). So: level the beam by touch (pitch muzzle → chest at 6.5 m, a real look drag),
+        hold FIRE to a full charge, THEN place the foe on the beam line 6.5 m ahead (setup), release two frames later.
+        → the placement record ({..., 'end', '_got'})"""
+        d = 6.5
+        want_p = math.atan2(-0.3, d)                 # muzzle 0.9 m → chest 0.6 m at d (HITBOX height 1.2)
+        pl = {"who": pick.get("name"), "m": d, "minHp": 999, "aimSteps": 0,
+              "pitch0": round((dev.js("() => window.__DF__.aim().pitch") or 0.0), 3), "wantPitch": round(want_p, 3)}
+        for _ in range(6):
+            a = dev.js("() => window.__DF__.aim()") or {}
+            ep = want_p - (a.get("pitch") or 0.0)
+            if abs(ep) < 0.03:
+                break
+            dy = max(-160.0, min(160.0, -ep / (0.0032 * sens * (a.get("lookScale") or 1.0))))
+            dev.T.drag(2, lx, ly, lx, ly + dy, steps=max(4, int(math.ceil(abs(dy) / 6.0))), dt=0.016)
+            pl["aimSteps"] += 1
+            time.sleep(0.08)
+        dev.T.down(3, fc[0], fc[1])
+        charged = dev.wait("() => { const k = window.__DF__.kit(); return k && k.charge >= 0.95 ? true : null; }", 8.0, poll=0.05)
+        me = dev.human()
+        a = dev.js("() => window.__DF__.aim()") or {}
+        pl["pitch"] = round(a.get("pitch") or 0.0, 3)
+        if not me.get("alive") or not charged:
+            dev.T.up(3)
+            pl["end"] = "the runner was washed" if not me.get("alive") else "no full charge"
+            return pl
+        yaw = a.get("yaw") or 0.0
+        px, pz = me["x"] + d * math.sin(yaw), me["z"] + d * math.cos(yaw)
+        node = dev.js(NAV_NEAR_JS, [px, me["y"], pz])
+        if not (isinstance(node, dict) and not node.get("__error") and node.get("d", 9) < 0.8 and abs(node["y"] - me["y"]) < 0.3):
+            dev.T.up(3)
+            dev.T.drag(2, lx, ly, lx + 150, ly, steps=25, dt=0.016)          # nothing walkable on the line: turn (0.6 rad)
+            pl["end"] = "no floor on the beam line (%s)" % (node,)
+            return pl
+        dev.js("([p, x, y, z, yaw]) => window.__DF__.dev.world.devTeleport(p, x, y, z, yaw)", [pick["id"], px, node["y"] + 0.05, pz, yaw + math.pi])
+        time.sleep(0.05)
+        dev.T.up(3)
+        time.sleep(0.4)
+        miss = dev.js(BEAM_MISS_JS, pick["id"])
+        if isinstance(miss, (int, float)):
+            pl["beamMiss"] = round(miss, 2)
+        r = dev.js("(id) => window.__DF__.match().runners[id]", pick["id"]) or {}
+        pl["minHp"] = round(r.get("hp") or 0, 1) if isinstance(r, dict) else None
+        got = dev.js("() => { const ev = window.__DF__.events(300).filter((e) => e.t === 'score' && e.pid === 0 && e.tick > %d); return ev.length ? ev.pop() : null; }" % t0)
+        if isinstance(got, dict) and not got.get("__error"):
+            pl["end"] = "scored"
+            pl["_got"] = got
+        else:
+            pl["end"] = "beam did not wash (foe hp %s, alive %s)" % (pl["minHp"], r.get("alive") if isinstance(r, dict) else None)
+        return pl
+
+    def score_attempt():
+        me = dev.human()
+        pops0 = (dev.js("() => window.__DF__.hud().pops") or 0)
+        t0 = dev.js("() => { const e = window.__DF__.events(1); return e.length ? e[0].tick : 0; }")
+        t0 = t0 if isinstance(t0, int) else 0
+        placed, got, info = 0, None, []
+        fc = dev.btn_center("fire")
+        kit = me.get("kit")
+        for placement in range(5):
+            me = dev.human()
+            if not me.get("alive"):
+                # a foe washed the runner (FFA: every bot is a foe): the respawn, then a fresh placement
+                if not ensure_alive(dev, "W8 touch score, placement %d" % (placement + 1)):
+                    break
+                me = dev.human()
+            dev.js("() => window.__DF__.setTank(0, 100)")
+            m_ = dev.js("() => window.__DF__.match()") or {}
+            cands = [r for r in m_.get("runners") or [] if r.get("id") != 0 and r.get("team") != me.get("team") and r.get("alive") and (r.get("protectedT") or 0) <= 0]
+            if not cands:
+                time.sleep(0.5)
+                continue
+            cands.sort(key=lambda r: math.hypot(r["x"] - me["x"], r["z"] - me["z"]))
+            if kit == "needle-glint":
+                pl = needle_shot(cands[0], fc, t0)
+                placed += 1
+                got = pl.pop("_got", None)
+                info.append(pl)
+                if got:
+                    break
+                continue
+            yaw = (dev.js("() => window.__DF__.aim().yaw") or 0.0)
+            node = None
+            near = {"sheet-drum": 3.0, "needle-glint": 6.5}.get(kit, 5.0)
+            for dd in (near, near - 1.0, near + 1.5):
+                node = dev.js(NAV_NEAR_JS, [me["x"] + dd * math.sin(yaw), me["y"], me["z"] + dd * math.cos(yaw)])
+                if isinstance(node, dict) and not node.get("__error") and node.get("d", 9) < 2.0:
+                    break
+                node = None
+            if not node:
+                break
+            pick = cands[0]
+            dev.js("([p, x, y, z, yaw]) => window.__DF__.dev.world.devTeleport(p, x, y, z, yaw)", [pick["id"], node["x"], node["y"] + 0.05, node["z"], yaw + math.pi])
+            placed += 1
+            pl = {"who": pick.get("name"), "m": round(math.hypot(node["x"] - me["x"], node["z"] - me["z"]), 1), "minHp": 999, "aimSteps": 0}
+            info.append(pl)
+            tick_p = (dev.js("() => window.__DF__.match().tick") or 0)
+            # FIRE the way the kit is played: MIST-RASP / POP-WELL hold; SHEET-DRUM taps (a flick from standing); the look
+            # side lines the shot up between (touch_aim); NEEDLE-GLINT took needle_shot above. Up to 10 s of
+            # SIM time per placement (the box runs the sim slowly)
+            SCORE_JS = ("() => { const m = window.__DF__.match(); const ev = window.__DF__.events(300).filter((e) => e.t === 'score' && e.pid === 0 && e.tick > %d);"
+                        " const t = m && m.runners[%d];"
+                        " return ev.length ? ev.pop() : (m && (m.tick - %d > 600 || !m.runners[0].alive || !t || !t.alive) ? { timeout: true, alive: m.runners[0].alive, foeAlive: !!(t && t.alive), hp: t ? t.hp : null } : { hp: t ? t.hp : null, pending: true }); }"
+                        % (t0, pick["id"], tick_p))
+            held = False
+            t_wall = time.time()
+            got = None
+            while time.time() - t_wall < 150:
+                if not touch_aim(pick["id"]):
+                    pl["aimSteps"] += 1
+                if kit == "sheet-drum":
+                    dev.T.tap(fc[0], fc[1], pid=3, hold=0.08)
+                    time.sleep(0.35)
+                elif not held:
+                    dev.T.down(3, fc[0], fc[1])
+                    held = True
+                    time.sleep(0.25)
+                else:
+                    time.sleep(0.25)
+                got = dev.js(SCORE_JS)
+                if isinstance(got, dict) and isinstance(got.get("hp"), (int, float)):
+                    pl["minHp"] = min(pl["minHp"], round(got["hp"], 1))
+                if isinstance(got, dict) and not got.get("__error") and not got.get("pending"):
+                    break
+                got = None
+            if held:
+                dev.T.up(3)
+            if isinstance(got, dict) and not got.get("timeout") and not got.get("__error"):
+                pl["end"] = "scored"
+                break
+            pl["end"] = ("the runner was washed" if isinstance(got, dict) and got.get("alive") is False else
+                         "the foe was washed by another" if isinstance(got, dict) and got.get("foeAlive") is False else "10 s sim over")
+            got = None
+        time.sleep(0.25)
+        pops1 = dev.js("() => window.__DF__.hud().pops") or 0
+        m1 = dev.js("() => window.__DF__.match()") or {}
+        h1 = dev.js("() => window.__DF__.hud()") or {}
+        dev.shot("washout_score")
+        ok = isinstance(got, dict) and got.get("crew") == me.get("team") and pops1 >= pops0 + 1 and list((h1.get("washout") or {}).get("scores") or []) == list(m1.get("scores") or [])
+        return ok, "placements %s; score event %s; '+1' pops %s → %s; HUD scores %s vs sim %s" % (
+            info, json.dumps(got), pops0, pops1, (h1.get("washout") or {}).get("scores"), m1.get("scores"))
+    washed_retry(dev, "W8: a touch player scores — FIRE held on a foe in range washes it (setup: the foe dev-placed ~5 m ahead, <= 5 times; the aim is a real look drag)", score_attempt)
+
+    # the WASHOUT victory slate fits (M6), with its board
+    dev.js("() => { try { window.__DF__.setTimeLeft(0.5); } catch (e) {} }")
+    shown = dev.wait("() => { const v = document.querySelector('.df-victory'); return v && !v.hidden ? true : null; }", 60)
+    if shown:
+        dev.wait("() => { const c = document.querySelector('.df-victory-card'); const m = document.querySelector('.df-victory-mark');"
+                 " return c && c.getAnimations().length === 0 && m && m.classList.contains('stamped') ? true : null; }", 40)
+        time.sleep(0.6)
+    t = dev.js("() => { const h = window.__DF__.hud(); return h && h.tally ? { rule: h.tally.rule, washout: h.tally.washout || null } : null; }") or {}
+    rs = (dev.js("() => window.__DF__.match().runners") or [])
+    sim = {r.get("name"): [r.get("washes"), r.get("washedCount")] for r in rs if isinstance(r, dict)}
+    rows = ((t.get("washout") or {}).get("rows")) or []
+    bad = [r.get("name") for r in rows if sim.get(r.get("name")) != [r.get("w"), r.get("d")]]
+    dev.check("W6: the WASHOUT victory slate shows the 8-runner W / D board equal to the sim, with its ending tag",
+              bool(shown) and t.get("rule") == "washout" and len(rows) == 8 and not bad and str((t.get("washout") or {}).get("tag") or "").strip() in ("TIME", "LIMIT REACHED"),
+              "shown %s rule %s rows %d tag %r mismatched %s" % (bool(shown), t.get("rule"), len(rows), (t.get("washout") or {}).get("tag"), bad))
+    dev.layout_step("victory_%s_washout" % D["mode"])
 
 
 def install_checks(ctx, base, page, out):

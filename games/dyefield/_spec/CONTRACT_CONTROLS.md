@@ -42,6 +42,10 @@ Both findings are verified on the shipped code, commit 8787c3e6.
   - **Camera:** it moves in over the right shoulder, closing the distance by 35 % and raising the shoulder offset.
     The existing camera collision still applies.
   - **Look sensitivity:** × `aimSens` (new setting, 0.3–1.2, default 0.65).
+    `CHANGED(review fix A-A4, 2026-09-30)`: a zoom stronger than the regular aim also scales the look by
+    tan(h·zoom) / tan(h·0.72) (h = half the base vertical FOV; `view/camera.ts aimZoomLookFactor`): 1 for the regular aim,
+    0.6715 for the NEEDLE-GLINT 0.5 scope (0.65 → 0.437 at the default), so the scope turns the picture at the regular
+    aim's screen-relative speed instead of ~1.4× faster. The AIM SENSITIVITY slider scales both. View only.
   - **Reticle:** tightens, with a subtle edge vignette that respects reduce-motion.
 - **No sim effect.** No accuracy or speed change. The aim ray already comes from the camera centre, so the zoom
   gives precision. Because of this every determinism hash stays identical, and bots are unaffected.
@@ -78,6 +82,16 @@ Both findings are verified on the shipped code, commit 8787c3e6.
   - **Mid-air** is a "not yet" state: a tap waits and starts on the landing tick when that is within 0.35 s. A tap
     earlier than that lapses **silently** (a full meter is never 'denied'); a key held through the landing starts it on
     the landing tick. This is a change for a tall runner in the air, which pre-§C2 started the special in the air.
+    `CHANGED(review fix A-A1, 2026-09-30, input layer only)`: a walk jump is airborne ~45 ticks, so the 21-tick wait
+    swallowed every tap in the first ~55 % of a jump (apex included) with no start and no deny — "i dont think the special
+    works" again. The human's input layer (`game.ts airSpecial`) now turns a SPECIAL press made in the air with a FULL meter
+    (key tap or touch tap) into a held request — exactly the "key held through the landing" path above — until the special
+    starts (the landing tick), the meter is no longer full, the runner dies or leaps, the match leaves `'live'`, or 1.5 s
+    pass (`AIR_SPECIAL_TICKS` 90; a long fall never fires a stale press). The ready prompt reads "Q  CLOUDBURST · on
+    landing" while it waits. The core rule above is unchanged (bots keep the 21-tick lapse; every determinism hash is
+    unchanged); gated in `playtest.py --controls` (a real Q tap ≥ 25 ticks before the landing starts on the landing tick).
+    A press while the human's own special runs is still `'denied'` by the core, but the view gives it no deny feedback
+    (review fix A-A3: the special is active, the meter does not charge — "Charging — 0 %" was wrong).
   - **"Filling within the buffer"** is decided with a reach: short by at most one wash + 5 points
     (`specialCharge.pointsPerWash` 20 + `KITS.specialReachPaint` 5 = 25 points: CLOUDBURST ≥ 86.8 %, WELLSPRING
     ≥ 84.8 %) → the press waits; if the meter is still short when the 0.35 s run out → `'denied'` then (21 ticks after

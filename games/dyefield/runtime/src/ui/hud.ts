@@ -30,14 +30,40 @@
 // countdown legend for the touch glyphs. The touch layout itself is CSS: the minimap moves right of the PAUSE button,
 // the FFA panel under it, the toast above the bottom edge (top centre on a phone); the phone breakpoint (max-height:
 // 500px) compacts every block and keeps at most 3 kill-feed lines, so the stick and the thumb arc stay clear.
+//
+// CONTRACT_WASHOUT W5 (the WASHOUT rule; the Game calls setRule('washout', limit) once, then setScores(world.scores())
+// every frame): TEAMS — two big score chips round the timer (crew colour + mark, "n / limit"; on a phone they sit under
+// their crest rows), the tug bar stays under the timer as a thin tie-break indicator labelled "TURF (tie-break)". FFA —
+// the panel shows your washes ("n / limit") and rank and a live top 3 by score. scorePop() = the "+1" by the reticle on
+// the human's own credited wash; setProtected(on) = "PROTECTED" above the reticle while spawn protection lasts.
+// CONTRACT_CONTROLS C3 (the special always answers): the special chip (the gauge) shows its fill + % while charging and
+// pulses when ready; a prompt under the reticle names the key (or the touch glyph) + the special ("Q  CLOUDBURST") while
+// it is ready; specialDenied(frac) shakes the chip and shows "Charging — 62 %" there for 0.8 s. setAiming(on) (C1 AIM)
+// tightens the reticle and fades in a soft edge vignette. setReduceMotion(on) (SETTINGS → REDUCE MOTION; the default is
+// the OS preference) drops the pulses, shakes and pops to plain fades. TURF without these calls is the HUD above.
 
 import type { Coverage, MoveState, TeamId } from '../core/types.ts';
 import { TEAMS, TEAMS_RAW, teamById } from '../core/data.ts';
 import type { MinimapRaster } from '../core/paint/minimap.ts';
-import { Slates, waveIcon, crewLook, touchGlyph, type CrewLook, type UiMode, type VictoryInfo } from './slates.ts';
+import { Slates, waveIcon, crewLook, touchGlyph, type CrewLook, type UiMode, type UiRule, type VictoryInfo } from './slates.ts';
 import { touchModeOn, watchTouchMode } from './boot.ts';
 
-export { crewLook, ffaCrews, type CrewLook, type UiMode, type FfaVictory, type FfaStanding } from './slates.ts';
+export { crewLook, ffaCrews, washoutVictory, type CrewLook, type UiMode, type UiRule, type FfaVictory, type FfaStanding, type WashoutVictory, type WashoutRow } from './slates.ts';
+
+/** W5: the thin tug bar's label in TEAMS WASHOUT */
+export const TURF_TIEBREAK = 'TURF (tie-break)';
+/** W5: the human's own HUD while spawn protection lasts */
+export const PROTECTED_TEXT = 'PROTECTED';
+/** C3: the deny line (the meter's percentage filled in) */
+export function chargingText(pct: number): string { return `Charging — ${Math.max(0, Math.min(99, Math.floor(pct)))} %`; }
+/** C3: how long the deny line stays (s) */
+export const DENY_SECONDS = 0.8;
+
+/** C3: the special chip's state (Hud.setSpecial): meter 0..1, ready, the special's name, the binding's keycap; `waiting` =
+ *  a SPECIAL press made in the air is held for the landing (game.ts airSpecial; the prompt adds SPECIAL_WAIT_TEXT) */
+export interface HudSpecial { frac: number; ready: boolean; label: string; keyLabel: string; waiting?: boolean }
+/** C3 (review fix A-A1): the ready prompt's suffix while a mid-air press waits for the landing ("Q  CLOUDBURST · on landing") */
+export const SPECIAL_WAIT_TEXT = '· on landing';
 
 export const LOW_TANK_TOAST = 'Tank low — hold SHIFT on your color to drink';
 /** CONTRACT_MOBILE M4: the low-tank toast in touch mode (the brief's SHIFT line above stays exactly as it is on keyboard) */
@@ -105,6 +131,8 @@ export interface HudFrame {
   subReady?: boolean;
   /** CONTRACT_FFA F3: the weighted coverage share per crew id (index 0 = neutral, 1..8 = crews); FFA only */
   shares?: ArrayLike<number> | null;
+  /** CONTRACT_WASHOUT: how the match ended (MatchWorld.endedBy) — a 'limit' ending freezes the timer at the time left */
+  endedBy?: 'horn' | 'limit' | null;
 }
 
 /** minimap dot shape per crew mark glyph (CONTRACT_FFA F3: the dot shape = the crew's mark) */
@@ -155,6 +183,10 @@ export function applyTeamCssVars(colorblind = false): void {
 
 const teamKey = (t: TeamId): 'sun' | 'gulf' => (t === 2 ? 'gulf' : 'sun');
 
+function prefersReducedMotion(): boolean {
+  try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+}
+
 interface CrestEl { box: HTMLElement; mark: HTMLElement; num: HTMLElement; alive: boolean; n: number; ready: boolean; glyph: string }
 interface DotEl { e: HTMLElement; on: boolean; tx: string }
 interface FeedEntry { e: HTMLElement; t: number }
@@ -198,6 +230,8 @@ export class Hud {
   private readonly subKey: HTMLElement;
   private debugClock = 0;
   private lastTimer = '';
+  /** the timer's last LIVE value in whole seconds (a WASHOUT limit ending keeps showing it) */
+  private liveShown = 0;
   private lastCov = '';
   private lastTank = -1;
   private lastGauge = -1;
@@ -220,6 +254,7 @@ export class Hud {
   private meBox: HTMLElement | null = null;
   private mePct: HTMLElement | null = null;
   private meRank: HTMLElement | null = null;
+  private meLim: HTMLElement | null = null;
   private readonly lead: LeadRow[] = [];
   private readonly shareFills: Array<{ e: HTMLElement; team: number }> = [];
   private readonly order: number[] = [];
@@ -228,10 +263,46 @@ export class Hud {
   /** CONTRACT_MOBILE M4: touch-mode prompts (M1 html.df-touch; main.ts also calls setTouchMode) */
   private touch = false;
   private touchOff: (() => void) | null = null;
+  // CONTRACT_WASHOUT W5
+  private readonly top: HTMLElement;
+  private readonly mid: HTMLElement;
+  rule: UiRule = 'turf';
+  limit = 0;
+  private woChips: Record<'sun' | 'gulf', { box: HTMLElement; n: HTMLElement; lim: HTMLElement; last: string }> | null = null;
+  private tugLabel: HTMLElement | null = null;
+  /** the live scores (setScores; index = crew id) and the key of the last applied set */
+  private readonly scoreBuf: number[] = [];
+  /** FFA WASHOUT: times washed per crew id (setScores' second argument) — the standings' first tie-break */
+  private readonly washedBuf: number[] = [];
+  private scoreKey = '';
+  private scoresDirty = false;
+  private readonly pops: HTMLElement[] = [];
+  private popN = 0;
+  private readonly protect: HTMLElement;
+  private protectedOn = false;
+  // CONTRACT_CONTROLS C3 + C1
+  private readonly gaugePct: HTMLElement;
+  private readonly spPrompt: HTMLElement;
+  private readonly spKey: HTMLElement;
+  private readonly spText: HTMLElement;
+  private readonly spWait: HTMLElement;
+  private spOverride: HudSpecial | null = null;
+  private spState = '';
+  private lastPct = '';
+  private denyT = 0;
+  private denyPct = 0;
+  private denies = 0;
+  private readonly vignette: HTMLElement;
+  private aiming = false;
+  private reduceMotion = false;
 
   constructor(host: HTMLElement, o: { team: TeamId; minimap: MinimapRaster | null; specialName?: string; roster?: ReadonlyArray<{ id: number; name: string; team: TeamId }>; youId?: number; kit?: HudKit;
     /** CONTRACT_FFA F3: 'ffa' = the FREE-FOR-ALL HUD (default 'teams') */
-    mode?: UiMode }) {
+    mode?: UiMode;
+    /** CONTRACT_WASHOUT W5: the match rule and its score limit (the same as setRule() right after construction) */
+    rule?: UiRule; limit?: number;
+    /** SETTINGS → REDUCE MOTION (default: the OS preference; setReduceMotion() follows a change) */
+    reduceMotion?: boolean }) {
     this.team = o.team;
     this.kit = o.kit ?? null;
     this.mini = o.minimap;
@@ -252,6 +323,7 @@ export class Hud {
 
     // ── top centre: crests · timer · crests, tug bar (FFA: 4 + 4 crews of one, an 8-colour share bar)
     const top = el('div', 'df-top');
+    this.top = top;
     const sunRow = el('div', 'df-crests sun');
     const gulfRow = el('div', 'df-crests gulf');
     const roster = o.roster ?? [];
@@ -290,6 +362,7 @@ export class Hud {
     this.timerText = el('span', '', '3:00');
     this.timer.append(this.timerText);
     const mid = el('div', 'df-top-mid');
+    this.mid = mid;
     const tug = el('div', 'df-tug');
     tug.setAttribute('aria-hidden', 'true');
     this.sunFill = el('div', 'fill sun');
@@ -319,7 +392,11 @@ export class Hud {
       const txt = el('div', 'txt');
       txt.append(el('span', 'nm', roster.find((r) => r.id === (o.youId ?? 0))?.name ?? ''));
       this.mePct = el('b', 'pct', pct1(0));
-      txt.append(this.mePct);
+      // W5 WASHOUT: "n / limit" (the limit part is empty in TURF)
+      this.meLim = el('span', 'lim', '');
+      const pr = el('span', 'pctrow');
+      pr.append(this.mePct, this.meLim);
+      txt.append(pr);
       this.meRank = el('span', 'rank', '');
       me.append(mk, txt, this.meRank);
       this.meBox = me;
@@ -349,7 +426,10 @@ export class Hud {
     const gLabel = el('span', 'label', this.kit?.specialName ?? o.specialName ?? '');
     this.gaugeKey = el('kbd', 'key', this.kit?.specialKey ?? '');
     this.gaugeKey.setAttribute('aria-label', `press ${this.kit?.specialKey ?? ''}`);
-    this.gauge.append(this.gaugeFill, gIcon, gLabel, this.gaugeKey);
+    // C3: the chip's percentage while it charges (the key badge takes its place when ready)
+    this.gaugePct = el('span', 'pct', '0%');
+    this.gaugePct.setAttribute('aria-hidden', 'true');
+    this.gauge.append(this.gaugeFill, gIcon, gLabel, this.gaugePct, this.gaugeKey);
     if (!this.kit?.specialKey) this.gaugeKey.hidden = true;
     this.feed = el('div', 'df-feed');
     this.feed.setAttribute('aria-live', 'polite');
@@ -413,6 +493,29 @@ export class Hud {
     this.toast.hidden = true;
     this.toast.setAttribute('role', 'status');
 
+    // ── C3: the special prompt under the reticle (ready: key + name; denied: "Charging — n %")
+    this.spPrompt = el('div', `df-spprompt ${meKey}`);
+    this.spPrompt.hidden = true;
+    this.spPrompt.setAttribute('role', 'status');
+    this.spKey = el('kbd', 'key', '');
+    this.spText = el('span', 'tx', '');
+    this.spWait = el('span', 'wait', '');            // empty while hidden: the prompt's textContent stays "Q CLOUDBURST"
+    this.spWait.hidden = true;
+    this.spPrompt.append(this.spKey, this.spText, this.spWait);
+    // ── W5: PROTECTED above the reticle; the "+1" pops beside it (a small pool, reused)
+    this.protect = el('div', `df-protect ${meKey}`, PROTECTED_TEXT);
+    this.protect.hidden = true;
+    for (let i = 0; i < 3; i++) {
+      const p = el('div', `df-pop ${meKey}`, '+1');
+      p.setAttribute('aria-hidden', 'true');
+      p.hidden = true;
+      p.addEventListener('animationend', () => { p.hidden = true; p.classList.remove('go'); });
+      this.pops.push(p);
+    }
+    // ── C1: the AIM edge vignette (behind every HUD block)
+    this.vignette = el('div', 'df-aimvig');
+    this.vignette.setAttribute('aria-hidden', 'true');
+
     // ── debug panel
     this.debug = el('div', 'df-debug');
     this.debug.hidden = true;
@@ -420,14 +523,142 @@ export class Hud {
     this.debugBody = el('table');
     this.debug.append(this.debugBody);
 
-    this.root.append(top, right, miniBox, this.ret, this.tankBox, tankLabel, this.sub, this.toast, this.debug);
+    this.root.append(this.vignette, top, right, miniBox, this.ret, this.tankBox, tankLabel, this.sub, this.protect, ...this.pops, this.spPrompt,
+      this.toast, this.debug);
     if (ffaPanel) this.root.insertBefore(ffaPanel, this.debug);
     host.append(this.root);
     this.slates = new Slates(host);
     this.slates.mode = this.mode;
     this.redrawMinimap(true);
+    this.setReduceMotion(o.reduceMotion ?? prefersReducedMotion());
     this.setTouchMode(touchModeOn());
     this.touchOff = watchTouchMode((on) => this.setTouchMode(on));
+    if (o.rule === 'washout') this.setRule('washout', o.limit ?? 0);
+  }
+
+  // ───────────────────────────── CONTRACT_WASHOUT W5 ─────────────────────────────
+  /**
+   * The match rule and its score limit (MatchWorld.rule / MatchWorld.limit), once per session after construction.
+   * 'washout' builds the TEAMS score chips + the "TURF (tie-break)" label (or switches the FFA panel to scores);
+   * 'turf' is the shipped HUD (nothing added).
+   */
+  setRule(rule: UiRule, limit: number): void {
+    const wo = rule === 'washout';
+    this.rule = wo ? 'washout' : 'turf';
+    this.limit = Math.max(0, Math.round(Number(limit) || 0));
+    this.root.classList.toggle('wo', wo);
+    this.root.dataset.rule = this.rule;
+    this.top.classList.toggle('wo', wo);
+    if (wo && !this.ffa && !this.woChips) {
+      const mk = (key: 'sun' | 'gulf'): { box: HTMLElement; n: HTMLElement; lim: HTMLElement; last: string } => {
+        const t = teamById(key === 'sun' ? 1 : 2);
+        const box = el('div', `df-score ${key}`);
+        box.setAttribute('role', 'status');
+        box.setAttribute('aria-label', `${t.name} score`);
+        const m = el('i', 'mk', t.markGlyph);
+        m.setAttribute('aria-hidden', 'true');
+        const n = el('b', 'n', '0');
+        const lim = el('span', 'lim', '');
+        box.append(m, n, lim);
+        return { box, n, lim, last: '0' };
+      };
+      this.woChips = { sun: mk('sun'), gulf: mk('gulf') };
+      this.top.insertBefore(this.woChips.sun.box, this.mid);
+      this.mid.after(this.woChips.gulf.box);
+      this.tugLabel = el('span', 'df-tug-label', TURF_TIEBREAK);
+      this.mid.append(this.tugLabel);
+    }
+    if (this.woChips) {
+      for (const c of Object.values(this.woChips)) { c.box.hidden = !wo; c.lim.textContent = this.limit > 0 ? `/ ${this.limit}` : ''; }
+      if (this.tugLabel) this.tugLabel.hidden = !wo;
+    }
+    if (this.ffa && this.mePct) {
+      this.lastShareKey = '';
+      this.meBox?.classList.toggle('wo', wo);
+      if (this.meLim) this.meLim.textContent = wo && this.limit > 0 ? `/ ${this.limit}` : '';
+    }
+    this.scoreKey = '';
+    this.scoresDirty = true;
+    // review fix A-A8: the countdown names the objective in WASHOUT (TURF: no line, the brief's countdown unchanged)
+    this.slates.setRule(this.rule, this.limit, this.ffa);
+  }
+
+  /**
+   * WASHOUT: the live score per crew id (MatchWorld.scores(): length CREW_SLOTS, [0] unused). The Game calls it every
+   * frame; it copies the numbers (no allocation) and the next update() writes only what changed. `washed` (FFA: times
+   * washed per crew id, summed from Runner.washedCount) feeds the panel's tie-break so it ranks exactly as the standings.
+   */
+  setScores(scores: ArrayLike<number>, washed?: ArrayLike<number>): void {
+    const n = scores.length;
+    let changed = this.scoreBuf.length !== n;
+    for (let i = 0; i < n; i++) {
+      const v = Math.max(0, Math.round(Number(scores[i]) || 0));
+      if (this.scoreBuf[i] !== v) { this.scoreBuf[i] = v; changed = true; }
+    }
+    this.scoreBuf.length = n;
+    if (washed) {
+      for (let i = 0; i < washed.length; i++) {
+        const v = Math.max(0, Math.round(Number(washed[i]) || 0));
+        if (this.washedBuf[i] !== v) { this.washedBuf[i] = v; changed = true; }
+      }
+    }
+    if (changed) this.scoresDirty = true;
+  }
+
+  /** W5: "+1" by the reticle on the human's OWN credited wash (the juice hit marker still plays) */
+  scorePop(): void {
+    const p = this.pops[this.popN % this.pops.length];
+    this.popN++;
+    p.classList.remove('go');
+    p.hidden = false;
+    void p.offsetWidth;
+    p.classList.add('go');
+  }
+
+  /** W5: "PROTECTED" on the human's HUD while their spawn protection lasts (Runner.protectedT > 0) */
+  setProtected(on: boolean): void {
+    if (on === this.protectedOn) return;
+    this.protectedOn = on;
+    this.protect.hidden = !on;
+    if (on) { this.protect.classList.remove('in'); void this.protect.offsetWidth; this.protect.classList.add('in'); }
+  }
+
+  // ───────────────────────────── CONTRACT_CONTROLS C3 / C1 ─────────────────────────────
+  /**
+   * C3: the special chip's state — meter 0..1, ready, the special's name and the binding's keycap. Optional: without it
+   * the HudFrame's special / specialReady and the HudKit drive the chip. Cheap to call every frame (diffed in update()).
+   */
+  setSpecial(s: HudSpecial): void {
+    const o = this.spOverride;
+    const w = !!s.waiting;
+    if (o && o.frac === s.frac && o.ready === s.ready && o.label === s.label && o.keyLabel === s.keyLabel && !!o.waiting === w) return;
+    this.spOverride = { frac: s.frac, ready: s.ready, label: s.label, keyLabel: s.keyLabel, waiting: w };
+    if (this.kit && s.keyLabel && s.keyLabel !== this.kit.specialKey) this.setKeys(s.keyLabel, this.kit.subKey);
+  }
+
+  /** C3: a SPECIAL press that will not start (the sim's 'special' 'denied' event): the chip shakes and the prompt reads
+   *  "Charging — n %" for 0.8 s. `frac` = the meter (0..1) at the press. */
+  specialDenied(frac: number): void {
+    this.denyT = DENY_SECONDS;
+    this.denyPct = Math.max(0, Math.min(1, Number(frac) || 0)) * 100;
+    this.denies++;
+    this.spState = '';
+    for (const e of [this.gauge, this.spPrompt]) { e.classList.remove('deny'); void e.offsetWidth; e.classList.add('deny'); }
+  }
+
+  /** C1: AIM held / toggled — the reticle tightens and a soft edge vignette fades in (reduce-motion: no easing) */
+  setAiming(on: boolean): void {
+    if (on === this.aiming) return;
+    this.aiming = on;
+    this.ret.classList.toggle('aim', on);
+    this.vignette.classList.toggle('on', on);
+    this.root.classList.toggle('aiming', on);
+  }
+
+  /** SETTINGS → REDUCE MOTION: no pulses, shakes or rising pops (fades only) */
+  setReduceMotion(on: boolean): void {
+    this.reduceMotion = !!on;
+    this.root.classList.toggle('rm', this.reduceMotion);
   }
 
   /**
@@ -566,20 +797,38 @@ export class Hud {
     this.hideDeath();
     this.hideVictory();
     this.lastPhase = '';
+    // W5 / C3: a restarted match starts at 0 – 0, unprotected, with no pop or deny line on screen
+    this.scoreBuf.fill(0);
+    this.scoreKey = '';
+    this.scoresDirty = true;
+    this.lastShareKey = '';
+    for (const p of this.pops) { p.hidden = true; p.classList.remove('go'); }
+    this.setProtected(false);
+    this.denyT = 0;
+    this.spState = '';
+    // review fix B-B1 / B-B2: no spent shake or ready pop carries into the next match
+    this.gauge.classList.remove('deny', 'pop');
+    this.washedBuf.fill(0);
+    this.liveShown = 0;
     this.redrawMinimap(true);
   }
 
   // ───────────────────────────── per frame ─────────────────────────────
   update(dt: number, f: HudFrame, dbg: () => HudDebug): void {
     this.clock += dt;
-    // timer pill
-    const shown = f.phase === 'ended' ? 0 : Math.max(0, Math.ceil(f.timeLeft - 1e-6));
+    // timer pill. A horn ending reads 0:00 (its last live frame reads 0:01: the world ends the match on the tick the clock
+    // reaches 0, so the last live value cannot simply be kept); a WASHOUT score-limit ending (review fix A-A6) freezes the
+    // clock at the time that was left, as score-limit shooters do, so it never reads as if time ran out
+    const left = Math.max(0, Math.ceil(f.timeLeft - 1e-6));
+    if (f.phase === 'live') this.liveShown = left;
+    const shown = f.phase !== 'ended' ? left : f.endedBy === 'limit' ? this.liveShown : 0;
     const txt = `${Math.floor(shown / 60)}:${String(shown % 60).padStart(2, '0')}`;
+    // the red final-10 state follows the phase every frame (a clock frozen by a limit ending never changes its text)
+    const fin = f.phase === 'live' && f.timeLeft <= 10;
+    if (fin !== this.final10) { this.final10 = fin; this.timer.classList.toggle('final', fin); }
     if (txt !== this.lastTimer) {
       this.lastTimer = txt;
       this.timerText.textContent = txt;
-      const fin = f.phase === 'live' && f.timeLeft <= 10;
-      if (fin !== this.final10) { this.final10 = fin; this.timer.classList.toggle('final', fin); }
       if (fin) { this.timer.classList.remove('tick'); void this.timer.offsetWidth; this.timer.classList.add('tick'); }
     }
     if (f.phase !== this.lastPhase) {
@@ -603,6 +852,27 @@ export class Hud {
       if (ready !== ce.ready) { ce.ready = ready; ce.box.classList.toggle('ready', ready); }
     }
 
+    // WASHOUT (W5): the TEAMS score chips (FFA: the panel below reads the same scores)
+    if (this.scoresDirty && this.woChips && this.rule === 'washout') {
+      this.scoresDirty = false;
+      const s1 = this.scoreBuf[1] ?? 0, s2 = this.scoreBuf[2] ?? 0;
+      const key = `${s1}|${s2}`;
+      if (key !== this.scoreKey) {
+        this.scoreKey = key;
+        for (const [k, v, o] of [['sun', s1, s2], ['gulf', s2, s1]] as const) {
+          const c = this.woChips[k];
+          const t = String(v);
+          if (c.last !== t) {
+            const up = Number(c.last) < v;
+            c.last = t;
+            c.n.textContent = t;
+            if (up) { c.box.classList.remove('bump'); void c.box.offsetWidth; c.box.classList.add('bump'); }
+          }
+          c.box.classList.toggle('lead', v > o);
+        }
+      }
+    }
+
     // tug bar (FFA: the share bar, own share and the top-3 leaderboard)
     if (this.ffa) this.updateFfa(f.shares ?? null);
     else {
@@ -616,17 +886,33 @@ export class Hud {
       }
     }
 
-    // special gauge: fill; at 100 % (ready) a pulse + the key badge
-    const g = Math.round(Math.max(0, Math.min(1, f.special)) * 100);
+    // special gauge: fill + % while charging (C3); at 100 % (ready) a pulse + the key badge, and the prompt under the
+    // reticle; a denied press shakes the chip and the prompt reads "Charging — n %" for 0.8 s
+    const spo = this.spOverride;
+    const frac = Math.max(0, Math.min(1, spo ? spo.frac : f.special));
+    const g = Math.round(frac * 100);
     if (g !== this.lastGauge) {
       this.lastGauge = g;
       this.gaugeFill.style.width = `${g}%`;
     }
-    const ready = (f.specialReady ?? g >= 100) && g >= 100;
+    const ready = (spo ? spo.ready : (f.specialReady ?? g >= 100)) && g >= 100;
     if (ready !== this.lastReady) {
       this.lastReady = ready;
       this.gauge.classList.toggle('full', ready);
+      // review fix B-B1 / B-B2: a full meter is never denied (core specials.ts), so the spent deny shake must not keep
+      // masking .full / .pop (same specificity, later in the file) once the chip is ready; and the ready pop (it carries the
+      // infinite dfGauge ring pulse) ends with the ready state, so a charging chip never pulses as if ready
+      this.gauge.classList.remove(ready ? 'deny' : 'pop');
     }
+    const pt = `${Math.min(99, Math.floor(frac * 100 + 1e-6))}%`;
+    if (pt !== this.lastPct) { this.lastPct = pt; this.gaugePct.textContent = pt; }
+    if (this.denyT > 0) this.denyT = Math.max(0, this.denyT - dt);
+    const live = f.phase === 'live' && f.alive;
+    const spLabel = (spo?.label || this.kit?.specialName) ?? '';
+    const spKeyLabel = (spo?.keyLabel || this.kit?.specialKey) ?? '';
+    const wait = ready && !!spo?.waiting;
+    const st = !live ? '' : this.denyT > 0 ? `deny|${chargingText(this.denyPct)}` : ready && spLabel ? `ready|${spLabel}|${spKeyLabel}|${this.touch ? 1 : 0}|${wait ? 1 : 0}` : '';
+    if (st !== this.spState) this.renderPrompt(st, spLabel, spKeyLabel);
 
     // sub chip: grey below the sub cost (or while the throw cools down / washed)
     const subOk = !!f.subReady && f.alive && f.phase !== 'ended';
@@ -716,6 +1002,39 @@ export class Hud {
     }
   }
 
+  /** C3: the prompt under the reticle — '' hidden · 'ready|…' key (or the touch glyph) + the special's name · 'deny|…' */
+  private renderPrompt(st: string, label: string, key: string): void {
+    this.spState = st;
+    const p = this.spPrompt;
+    if (!st) { p.hidden = true; p.classList.remove('ready', 'deny', 'wait'); this.spWait.hidden = true; this.spWait.textContent = ''; return; }
+    const deny = st.startsWith('deny|');
+    p.hidden = false;
+    p.classList.toggle('ready', !deny);
+    if (!deny) p.classList.remove('deny');
+    // review fix A-A1: a press made in the air is accepted and waits for the landing — the ready prompt says so
+    const wait = !deny && st.split('|')[4] === '1';
+    p.classList.toggle('wait', wait);
+    this.spWait.hidden = !wait;
+    this.spWait.textContent = wait ? SPECIAL_WAIT_TEXT : '';
+    if (deny) {
+      this.spKey.hidden = true;
+      this.spText.textContent = st.slice(5);
+      return;
+    }
+    if (this.touch) {
+      this.spKey.innerHTML = `<i class="tg">${ICONS[this.kit?.specialId ?? ''] ?? touchGlyph('special')}</i>`;
+      this.spKey.classList.add('touch');
+      this.spKey.hidden = false;
+      this.spKey.setAttribute('aria-label', 'tap SPECIAL');
+    } else {
+      this.spKey.classList.remove('touch');
+      this.spKey.textContent = key;
+      this.spKey.hidden = !key;
+      this.spKey.removeAttribute('aria-label');
+    }
+    this.spText.textContent = label;
+  }
+
   /** world (x, z) → minimap CSS px (SUNCREW orientation; rotated 180° for a GULF CREW viewer) → this.pxy */
   private place(x: number, z: number): void {
     const m = this.mini!;
@@ -752,7 +1071,27 @@ export class Hud {
       crests: this.crests.filter(Boolean).map((c) => ({ alive: c.alive, text: c.box.textContent })),
       gauge: this.lastGauge,
       special: { pct: this.lastGauge, ready: this.gauge.classList.contains('full'), name: this.kit?.specialName ?? null,
-        key: this.gaugeKey.hidden ? null : (this.touch ? 'SPECIAL' : this.gaugeKey.textContent), icon: this.kit?.specialId ?? null },
+        key: this.gaugeKey.hidden ? null : (this.touch ? 'SPECIAL' : this.gaugeKey.textContent), icon: this.kit?.specialId ?? null,
+        // C3: the chip's % while charging, the prompt under the reticle (ready: key + name; deny: "Charging — n %")
+        chipPct: this.lastReady ? null : this.gaugePct.textContent,
+        prompt: this.spPrompt.hidden ? null : { kind: this.spPrompt.classList.contains('ready') ? 'ready' : 'deny', text: this.spPrompt.textContent,
+          key: this.spKey.hidden ? null : (this.touch ? 'SPECIAL' : this.spKey.textContent),
+          // review fix A-A1: a mid-air press is held for the landing ("· on landing" shows)
+          wait: !this.spWait.hidden,
+          // false when the layout hides it (a phone at BUTTON SIZE >= 125 %: the SPECIAL button's ring shows ready)
+          shown: getComputedStyle(this.spPrompt).display !== 'none' },
+        denies: this.denies, denyLeft: Math.round(this.denyT * 100) / 100, override: !!this.spOverride,
+        // review fix B-B1 / B-B2: the chip's classes + running animation names (the ready pulse must survive a deny)
+        chipClass: this.gauge.className, chipAnim: getComputedStyle(this.gauge).animationName },
+      // CONTRACT_WASHOUT W5 + CONTRACT_CONTROLS C1
+      rule: this.rule, limit: this.limit,
+      ...(this.rule === 'washout' ? { washout: {
+        scores: [...this.scoreBuf],
+        chips: this.woChips ? { sun: this.woChips.sun.box.hidden ? null : this.woChips.sun.box.textContent, gulf: this.woChips.gulf.box.hidden ? null : this.woChips.gulf.box.textContent } : null,
+        tugLabel: this.tugLabel && !this.tugLabel.hidden ? this.tugLabel.textContent : null,
+        me: this.ffa ? this.meBox?.querySelector('.pctrow')?.textContent ?? null : null,
+      } } : {}),
+      protected: this.protectedOn, pops: this.popN, aiming: this.aiming, reduceMotion: this.reduceMotion,
       sub: { ready: this.lastSub === true, grey: this.sub.classList.contains('grey'), key: this.kit?.subKey ?? null, cost: this.kit?.subCost ?? null },
       touch: this.touch,
       charge: this.kit?.fire === 'charge' ? Math.max(0, this.lastCharge) : null,
@@ -775,12 +1114,21 @@ export class Hud {
    */
   private updateFfa(shares: ArrayLike<number> | null): void {
     if (!shares) return;
+    // CONTRACT_WASHOUT W5: in WASHOUT the panel ranks by score, then FEWER times washed, then share, then crew id — exactly
+    // MatchWorld.computeResult's standings key (review fix A-A5 / B-B3: it used to skip the washed key, so a tie on score
+    // could crown a different #1 / #2 / #3 than the slate at the horn) — and shows scores; the share bar under the timer
+    // stays the turf picture
+    const wo = this.rule === 'washout';
+    const sc = this.scoreBuf;
+    const wd = this.washedBuf;
     const ord = this.order;
-    let key = '';
-    for (const t of ord) key += `${Math.round((shares[t] ?? 0) * 1000)}|`;
+    let key = wo ? 'w' : '';
+    for (const t of ord) key += wo ? `${Math.round((shares[t] ?? 0) * 1000)}:${sc[t] ?? 0}:${wd[t] ?? 0}|` : `${Math.round((shares[t] ?? 0) * 1000)}|`;
     if (key === this.lastShareKey) return;
     this.lastShareKey = key;
-    ord.sort((a, b) => ((shares[b] ?? 0) - (shares[a] ?? 0)) || (a - b));
+    this.scoresDirty = false;
+    if (wo) ord.sort((a, b) => ((sc[b] ?? 0) - (sc[a] ?? 0)) || ((wd[a] ?? 0) - (wd[b] ?? 0)) || ((shares[b] ?? 0) - (shares[a] ?? 0)) || (a - b));
+    else ord.sort((a, b) => ((shares[b] ?? 0) - (shares[a] ?? 0)) || (a - b));
     let painted = 0;
     for (const t of ord) painted += Math.max(0, shares[t] ?? 0);
     const total = painted > 0 ? Math.min(1, Math.cbrt(Math.min(1, painted))) : 0;
@@ -788,25 +1136,25 @@ export class Hud {
       const s = Math.max(0, shares[f.team] ?? 0);
       f.e.style.width = painted > 0 ? `${((total * s / painted) * 100).toFixed(2)}%` : '0%';
     }
-    const mine = Math.max(0, shares[this.team] ?? 0);
-    const me = pct1(mine);
+    const mine = wo ? (sc[this.team] ?? 0) : Math.max(0, shares[this.team] ?? 0);
+    const me = wo ? String(mine) : pct1(mine);
     const rank = ord.indexOf(this.team) + 1;
     this.ffaInfo.me = me;
     this.ffaInfo.rank = rank;
     if (this.mePct && this.mePct.textContent !== me) this.mePct.textContent = me;
-    // no rank while the human has no turf yet (an all-zero board would tie-break the human to #1 in the countdown)
+    // no rank while the human has no turf (WASHOUT: no wash) yet (an all-zero board would tie-break the human to #1)
     if (this.meRank) { const r = rank > 0 && mine > 0 ? `#${rank}` : ''; if (this.meRank.textContent !== r) this.meRank.textContent = r; }
     this.meBox?.classList.toggle('lead', rank === 1 && mine > 0);
     this.ffaInfo.top3.length = 0;
     for (let i = 0; i < this.lead.length; i++) {
       const row = this.lead[i];
       const t = ord[i];
-      const s = t !== undefined ? Math.max(0, shares[t] ?? 0) : 0;
+      const s = t !== undefined ? (wo ? (sc[t] ?? 0) : Math.max(0, shares[t] ?? 0)) : 0;
       const on = t !== undefined && s > 0;
       if (row.li.hidden === on) row.li.hidden = !on;
       if (!on) continue;
       const name = this.names.get(t) ?? '';
-      const p = pct1(s);
+      const p = wo ? String(s) : pct1(s);
       this.ffaInfo.top3.push({ team: t, name, pct: p });
       if (row.team !== t) {
         row.team = t;

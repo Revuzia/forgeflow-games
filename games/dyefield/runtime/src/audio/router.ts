@@ -124,7 +124,7 @@ export const EVENT_SOUNDS: { readonly [K in SimEventType]: EventSoundSpec } = {
   jump: { ids: ['jump'], note: 'the human only' },
   land: { ids: ['land', 'land_hard'], note: 'the human; others only on hard landings' },
   tankLow: { ids: ['tank_low'], note: 'the human only (pairs with the HUD line)' },
-  special: { ids: ['special_ready', 'cloud_throw', 'leap'], note: "ready: the human only; start: CLOUDBURST throw / WELLSPRING leap; 'end' is deliberately silent (the rain loop / slam carry it)" },
+  special: { ids: ['special_ready', 'cloud_throw', 'leap', 'tick'], note: "ready: the human only; start: CLOUDBURST throw / WELLSPRING leap; 'end' is deliberately silent (the rain loop / slam carry it); CONTRACT_CONTROLS C3 'denied': the human only — a soft low tick (the clock tick, quiet and pitched down; no new asset)" },
   sub: { ids: ['sub_throw', 'sub_land', 'sub_pop'], note: 'JELLY CHARGE throw / land (squelch + fizz for the fuse) / pop' },
   horn: { ids: ['horn_start', 'beep_go', 'horn_minute', 'horn_final', 'horn_end'], note: 'the score horn (+ ducking); drives the music cues; final10 starts the 9…1 ticks' },
   phase: { ids: ['beep'], note: 'countdown: 3-2-1 beeps (from ctx.countdown); the lobby cue fades' },
@@ -197,6 +197,8 @@ export class AudioRouter {
   private lastSplat = -1e9;
   private lastHitDealt = -1e9;
   private lastHitTaken = -1e9;
+  /** CONTRACT_CONTROLS C3: the last SPECIAL deny tick (router clock) */
+  private lastDeny = -1e9;
   private readonly lastHorn: Record<string, number> = {};
   private lastTank = -1;
   private refillHold = 0;
@@ -371,6 +373,13 @@ export class AudioRouter {
               // no ctx.projectiles: rain where it was thrown from (the real cell position is unknown)
               this.cloudFallback.push({ key: `rainfb:${e.pid}:${this.t.toFixed(2)}`, x: e.x, y: e.y + 2.8, z: e.z, until: this.t + 7.2 });
             }
+          } else if (e.phase === 'denied') {
+            // CONTRACT_CONTROLS C3: the human's SPECIAL press the meter could not answer → a soft deny tick (≤ 1 per 0.15 s)
+            if (!mine) this.cull('special:denied-other');
+            // review fix A-A3: a press while the human's own special runs (double tap / mash) is no failure → silent
+            else if (this.runner(e.pid)?.specialActive) this.cull('special:denied-active');
+            else if (this.t - this.lastDeny < 0.15) this.cull('special:denied-gap');
+            else { this.lastDeny = this.t; this.play(sink, 'tick', null, 0.5, 0.72, 8, 'ui'); }
           } else this.cull('special:end');
           break;
         }

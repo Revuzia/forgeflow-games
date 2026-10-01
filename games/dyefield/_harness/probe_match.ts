@@ -14,8 +14,11 @@
 //                                            # pick within 2× of the best spread possible, seeded); spawn protection in FFA in
 //                                            # both rules (blocks damage and knockback, ends on fire); no permanent pads and
 //                                            # no lock (no push-out, no pad refill); the TEAMS TURF hash of this map unchanged.
-//                                            # The FFA performance gate is PROCESS CPU TIME per match (< 40 s, measured
-//                                            # numbers at the check), not wall time: the runners live now (the workload)
+//                                            # The FFA performance gate is PROCESS CPU TIME per match < 40 s: in effect a 2×
+//                                            # raise of the old 20 s budget, justified by the cinder workload (the runners
+//                                            # live now: ~2× the alive runner-seconds). CPU time is about as load-sensitive
+//                                            # as wall time on this shared box — it is not a load-proof measure (numbers at
+//                                            # the check)
 // Both modes also run padFloor: CHANGED(SPAWNS) — no FFA world locks any floor (the drop pads and their lock are gone), a
 // stream at a spawn site dyes it, and an old lock on a reused painter is cleared.
 // CHANGED(WASHOUT): the default (TURF) run also checks that TURF has no score events, all-zero scores, endedBy 'horn' and
@@ -450,20 +453,27 @@ async function main(): Promise<number> {
   check('determinism: same seed → identical world hash; another seed → a different one',
     a.hash === b.hash && a.hash !== c.hash && more.every((x) => x.hash !== a.hash && x.hash !== c.hash),
     `seed ${seedA}: ${a.hash} / ${b.hash}; seed ${seedC}: ${c.hash}${more.map((x, k) => `; seed ${seedsMore[k]}: ${x.hash}`).join('')}`);
-  // CHANGED(SPAWNS) (skeptic fix 2026-09-30): FFA gates PROCESS CPU TIME per match (process.cpuUsage, user + system), not
-  // wall time; TEAMS keeps the 20 s wall gate. Why: FFA's cost is the workload. Before CONTRACT_FFA_SPAWNS the scripted
-  // Cinder runners drowned (~275 sea washes a match) and spent half the match dead; with the spawn sites they live, and
-  // each living runner is a Rapier KCC step. Measured 2026-09-30 on the loaded box (~90 % CPU from other sessions), HEAD
-  // (8fd2006e + a cpuUsage copy) and this tree at the same minute, CPU s per match (alive runner-s):
+  // CHANGED(SPAWNS) (skeptic fix 2026-09-30): FFA gates PROCESS CPU TIME per match (process.cpuUsage, user + system) against
+  // 40 s; TEAMS keeps the 20 s wall gate. Stated plainly (CONTROLS lane review, 2026-09-30): CPU time is NOT a load-proof
+  // measure — on this shared box it is about as load-sensitive as wall time (contention for cores, caches and clock
+  // boost inflates the CPU seconds a process burns much as it inflates its wall seconds: in the numbers below the loaded
+  // CPU s run close to the same-minute wall s). What the change really is: a 2× budget raise (20 s → 40 s), and the
+  // justification is the cinder WORKLOAD, not the clock. Before CONTRACT_FFA_SPAWNS the scripted Cinder runners drowned
+  // (~275 sea washes a match) and spent half the match dead; with the spawn sites they live, and each living runner is a
+  // Rapier KCC step — cinder's alive runner-seconds doubled (601–721 → 1224–1235), so its cost doubled with them.
+  // Measured 2026-09-30 on the loaded box (~90 % CPU from other sessions), HEAD (8fd2006e + a cpuUsage copy) and this
+  // tree at the same minute, CPU s per match (alive runner-s):
   //   cinder   HEAD  9.31 /  6.59 /  9.91   (601 / 601 / 721)       tree 20.47 / 17.14 / 13.20 / 13.23  (1224–1235)
   //   lockwell HEAD 21.25 / 18.34 / 16.73   (1425 / 1425 / 1428)    tree 20.31 / 18.70 / 16.25 / 13.72  (1328–1332)
   //   pier18   HEAD 11.70 / 10.34 /  7.52   (1371 / 1371 / 1330)    tree  8.86 /  8.34 /  7.94 /  6.23  (1341–1386)
   // CPU per alive runner-second is the same on both (cinder HEAD 11.0–15.5 ms, tree 10.7–16.7 ms; lockwell 11.7–14.9 vs
   // 10.3–15.3; pier18 5.7–8.5 vs 4.5–6.6), so there is no per-runner regression. The same-minute wall times (cinder tree
-  // 13.2–20.6 s; lockwell HEAD 18.1–20.3 s, i.e. HEAD fails the old gate there too) show the 20 s wall gate measures the
-  // box's load. Budget FFA_CPU_S = 40 s: 1.9× the heaviest match measured (HEAD lockwell 21.25 s, loaded, first match with
-  // JIT warm-up), 3× the tree's lightest loaded full match (13.2 s) — room for the load, still well under the 3:00 the match
-  // simulates, and a 2× per-runner regression on the heaviest map (~40 s) trips it.
+  // 13.2–20.6 s; lockwell HEAD 18.1–20.3 s, i.e. HEAD fails the old gate there too) are in the same range as the CPU
+  // seconds: both clocks carry the box's load, and switching clocks did not remove it — the 2× budget is what makes room.
+  // Budget FFA_CPU_S = 40 s: 1.9× the heaviest match measured (HEAD lockwell 21.25 s, loaded, first match with JIT
+  // warm-up), 3× the tree's lightest loaded full match (13.2 s) — room for the doubled cinder workload plus the load, still
+  // well under the 3:00 the match simulates, and a 2× per-runner regression on the heaviest map (~40 s) trips it. A heavier
+  // box load can still push a healthy match over it: confirm a timing FAIL with a rerun before calling it a regression.
   const FFA_CPU_S = 40;
   const runsT = [a, b, c, ...more];
   check(ffaMode

@@ -47,9 +47,11 @@
 // created separately from non-paint ones, so the dye layer can never leak onto a mesh without an
 // atlas UV (uv1).
 //
-// FFA (CONTRACT_FFA §F7, lane VIEW): addFfaPads(map, world.crewPads) adds the runtime drop pads (one merged draw,
-// each pad conforming to the ground under it, the owner crew's ring + mark) and turns the A/B team pads' crew accent
-// neutral until its dispose().
+// FFA (CONTRACT_FFA_SPAWNS §S3 / §S5, replacing CONTRACT_FFA §F7's permanent drop pads): addDropMarkers(map,
+// world.spawnSites) builds one TRANSIENT drop-in marker per spawn site (one merged draw, each conforming to the ground
+// under it with the old pads' generator); DropMarkers.show(site, crew) plays one for ~2.5 s at a 'spawn' event (a
+// crew-coloured glowing ring + the crew's mark, translucent in the centre, fading out). While the markers exist the
+// A/B team pads' crew accent is neutral scenery (CONTRACT_FFA F1), restored by dispose().
 
 import * as THREE from 'three';
 import type { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -58,7 +60,7 @@ import { artUrl } from '../core/glb.ts';
 import { crewDef, type MapDef } from '../core/data.ts';
 import type { TeamId } from '../core/types.ts';
 import {
-  materialFor, applyDye, beltMaterial, springMaterial, grateMaterial, grateDepthMaterial, SURFACE_ENV, type DyeUniforms,
+  materialFor, applyDye, beltMaterial, springMaterial, grateMaterial, grateDepthMaterial, type DyeUniforms,
 } from './surfaces.ts';
 
 export type MapPrefix = 'paint' | 'solid' | 'deco' | 'col' | 'water' | 'grate' | 'conveyor' | 'spring' | 'oob' | 'light';
@@ -851,17 +853,22 @@ export async function loadMapView(loader: GLTFLoader, def: MapDef, dye: DyeUnifo
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
-// FFA drop pads (CONTRACT_FFA §F1 / §F7, lane VIEW; ground-conforming build: lane PADS)
+// FFA drop-in markers (CONTRACT_FFA_SPAWNS §S3 / §S5, lane C; the ground-conforming build is lane PADS' drop-pad one)
 // ════════════════════════════════════════════════════════════════════════════════════════════
 //
-// One runtime-rendered drop pad per FFA runner at its spawn (MatchWorld.crewPads: maps.json ffaSpawns under the
-// seeded shuffle, r = 1.6 m): a low navy slab like the team pads, a glowing ring and the crew's MARK as a shape
-// (colour-blind safe, like the team pads' sun-disc / wave-peak) in the owner's dye, gently pulsing. While the pads
-// are shown, the A/B team pads' crew accent turns neutral steel: in FFA they are scenery (CONTRACT_FFA §F1), and an
-// orange / violet pad would read as the amber / violet crew's.
+// FFA has no owned pads any more: a runner respawns at a random safe SITE of the map's pool (MatchWorld.spawnSites:
+// maps.json ffaSites, 22–24 per map). addDropMarkers() builds, once per session, a conforming marker disc
+// (DROP_MARKER.radius 1.25 m; the old pads were 1.6 m) at EVERY site, all in one merged geometry and ONE draw; nothing shows until DropMarkers.show(site,
+// crew) — the Game calls it on each 'spawn' event (every runner's match-start site, then each respawn). A shown marker
+// is the crew's glowing ring settling onto the ground, a one-shot shockwave and the crew's MARK (the colour-blind-safe
+// shape, as the old pads drew it), translucent in the centre so the floor paint stays visible; it holds while the
+// countdown runs and fades out ~2.5 s after the drop (the 0.6 s drop + the 2.0 s spawn protection), visible to every
+// runner (a fair warning). Inactive sites are collapsed in the vertex shader (no fragments). While the markers exist
+// the A/B team pads' crew accent turns neutral steel: in FFA they are scenery (CONTRACT_FFA §F1), and an orange /
+// violet pad would read as the amber / violet crew's.
 //
-// The pad CONFORMS to the ground it sits on (was: one flat, level slab whose top cleared the highest of 9 floor
-// samples, so on Cinder's curved sand the low side stood up to ~17 cm proud and read as a floating puck):
+// The conforming build (unchanged from the drop pads, which stood up to ~17 cm proud of Cinder's curved sand as one
+// level slab before it):
 //
 //   * the floor: ONE pass over the map's visible meshes (the pads' own excluded) collects every world-space triangle
 //     whose world normal y >= FFA_PAD.minNy and whose bounds touch a pad's square (R + 0.35 m) and height band
@@ -880,40 +887,87 @@ export async function loadMapView(loader: GLTFLoader, def: MapDef, dye: DyeUnifo
 //   * the lift (1.5 cm, a constant along the vertical) keeps the top clear of the ground's own depth (the dye is a
 //     layer of the paint_ material, there is no separate decal to fight) at every distance the camera reaches —
 //     24-bit depth at near 0.08 m resolves ~5 mm at 80 m — and the material adds polygonOffset(−1, −1) on top;
-//   * the skirt: a ring of quads from the top's rim down to FFA_PAD.skirtDepth below the rim's ground, flared
-//     outward by FFA_PAD.skirtFlare, so the edge reads as a slab (its top band glows in the crew dye like the old
-//     slab's side);
-//   * ONE draw for all pads: every pad's grid + skirt is merged into one BufferGeometry (world space) whose vertices
-//     carry the crew dye + mark (aPadCrew) and the pad-local metric coordinates, radius and skirt depth (aPadQ) the
-//     shader draws the grooves, ring and mark from. receiveShadow, no castShadow (as before).
-// root.userData.buildMs holds the build time (harness read-back: __DF__.ffaPads(), _harness/padcheck.py).
+//   * no skirt (the old slab's side): a marker is a translucent glow on the floor, not a slab;
+//   * ONE draw for all sites: every site's grid is merged into one BufferGeometry (world space) whose vertices carry the
+//     site index (aMkSite) and the site-local metric coordinates + radius (aMkQ); per-site uniforms (uMkA: the crew dye
+//     + the fade, uMkB: the mark + the age) say what each shows. Transparent, no depth write, no shadows.
+// root.userData.buildMs holds the build time (harness read-back: __DF__.markers(), _harness/padcheck.py).
 
-/** one FFA pad as MatchWorld.crewPads holds it (x, y, z = the spawn; yaw radians) */
-export interface FfaPadSpec { x: number; y: number; z: number; r?: number; crew: TeamId; yaw?: number }
+/** one spawn site (MatchWorld.spawnSites: feet x, y, z of the site; yaw radians) */
+export interface DropSite { x: number; y: number; z: number; yaw: number }
 
-export interface FfaPads {
+/** the drop-in marker's timing (CONTRACT_FFA_SPAWNS §S3: the drop + the protection window ≈ 2.5 s) */
+export const DROP_MARKER = {
+  /** m: the marker disc. Smaller than the old 1.6 m drop pad (MATCH_FFA.padRadius, the site rules' clear-floor disc):
+   *  a ring round a landing runner needs no pad's room, and at 1.6 m a few of the 22–24 pool sites' rims ran over a
+   *  paving / sand step (cinder sites 22 and 23: 3.7 cm over the sand, one sample over the step's steep side) */
+  radius: 1.25,
+  /** s a marker shows from its 'spawn' event (the clock holds after the intro while the countdown runs) */
+  life: 2.5,
+  /** s: the ring settles onto the ground and fades in */
+  intro: 0.35,
+  /** s: the fade-out at the end of its life */
+  fade: 0.7,
+  /** most sites one marker draw supports (the pools hold 22–24) */
+  maxSites: 32,
+  /** review fix A-A10: the light column over a shown marker — height (m), radius (m), peak opacity (additive) */
+  columnHeight: 3.0,
+  columnRadius: 0.5,
+  columnAlpha: 0.6,
+} as const;
+
+/** a shown marker (harness read-back); `column` = its light column's opacity (A-A10; 0 = none drawn) */
+export interface DropMarkerState { site: number; crew: TeamId; age: number; alpha: number; x: number; y: number; z: number; column?: number }
+
+/** A-A10: the light column's vertical alpha ramp (alphaMap reads green; v = 0 at the floor → 1 at the top) */
+function columnAlphaTexture(): THREE.DataTexture {
+  const H = 32;
+  const d = new Uint8Array(H * 4);
+  for (let j = 0; j < H; j++) {
+    const v = j / (H - 1);
+    const a = Math.round(255 * Math.pow(1 - v, 1.6) * Math.min(1, v * 8 + 0.35));   // soft at the very floor, gone at the top
+    d[j * 4] = a; d[j * 4 + 1] = a; d[j * 4 + 2] = a; d[j * 4 + 3] = 255;
+  }
+  const t = new THREE.DataTexture(d, 1, H, THREE.RGBAFormat);
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
+}
+
+export interface DropMarkers {
   root: THREE.Group;
+  /** sites with a marker built (= the pool size, ≤ DROP_MARKER.maxSites) */
   count: number;
-  /** the floor height found under each pad's centre (harness read-back) */
+  /** the sites as built (harness read-back) */
+  readonly sites: readonly DropSite[];
+  /** the floor height found under each site's centre (harness read-back) */
   floorY: number[];
-  /** remove the pads and restore the team pads' crew accent */
+  /** play the drop-in marker at `site` in `crew`'s colour + mark (restarts it when that site is already showing) */
+  show(site: number, crew: TeamId): void;
+  /** advance every shown marker (dt s); `hold` (the countdown) keeps them at full after the intro */
+  update(dt: number, hold: boolean): void;
+  /** hide every marker at once (PLAY AGAIN) */
+  clear(): void;
+  /** the shown markers (harness read-back) */
+  active(): DropMarkerState[];
+  /** force the draw visible for the shader pre-warm (compileAsync skips hidden objects) — then false */
+  prewarm(on: boolean): void;
+  /** remove the markers and restore the team pads' crew accent */
   dispose(): void;
 }
 
-/** teams.json crew `mark` → the shape index the pad shader draws (1..8; unknown → 1 = disc) */
+/** teams.json crew `mark` → the shape index the marker shader draws (1..8; unknown → 1 = disc) */
 const FFA_MARKS = ['sun-disc', 'wave-peak', 'block', 'diamond', 'star', 'cross', 'pentagon', 'hexagon'];
 /** the team pads' crew accent in FFA (neutral scenery) */
 const TEAM_PAD_NEUTRAL = '#606A7C';
-/** the conforming pad build (see the section header) */
+/** the conforming build (see the section header) */
 const FFA_PAD = {
   /** spokes and rings of the top's radial grid (≈ 16 cm between rings, ≤ 16 cm between spokes at the rim) */
   seg: 64,
   rings: 10,
   /** the top's constant lift above the ground (m) */
   lift: 0.015,
-  /** the skirt reaches this far below the rim's ground (m) and flares outward this much (m) */
-  skirtDepth: 0.05,
-  skirtFlare: 0.02,
   /** a map face is floor when its world normal y >= this */
   minNy: 0.7,
   /** the spoke walk: a ring's floor lies within rise·Δr + slack (m) of the height extrapolated from inside */
@@ -927,18 +981,28 @@ const FFA_PAD = {
   margin: 0.35,
 } as const;
 
-const FFA_PAD_VERT_PARS = /* glsl */ `
-attribute vec4 aPadCrew;
-attribute vec4 aPadQ;
-varying vec3 vPadCrew;
-varying vec4 vPadQ;
-varying float vPadMark;
+const MK_VERT_PARS = /* glsl */ `
+attribute float aMkSite;
+attribute vec3 aMkQ;
+uniform vec4 uMkA[ DF_MK_N ];
+uniform vec4 uMkB[ DF_MK_N ];
+varying vec3 vMkQ;
+varying vec4 vMkA;
+varying vec4 vMkB;
 `;
-const FFA_PAD_FRAG_PARS = /* glsl */ `
-uniform float uPadTime;
-varying vec3 vPadCrew;
-varying vec4 vPadQ;
-varying float vPadMark;
+// after project_vertex: a site that shows nothing collapses to one point outside the clip volume (no fragments)
+const MK_VERT_MAIN = /* glsl */ `
+	int dfMkI = int( aMkSite + 0.5 );
+	vMkA = uMkA[ dfMkI ];
+	vMkB = uMkB[ dfMkI ];
+	vMkQ = aMkQ;
+	if ( vMkA.a <= 0.001 ) gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
+`;
+const MK_FRAG_PARS = /* glsl */ `
+uniform float uMkTime;
+varying vec3 vMkQ;
+varying vec4 vMkA;
+varying vec4 vMkB;
 float fpBox( vec2 p, vec2 b ) { vec2 d = abs( p ) - b; return length( max( d, 0.0 ) ) + min( max( d.x, d.y ), 0.0 ); }
 float fpTri( vec2 p, float r ) {
 	const float k = 1.7320508;
@@ -987,33 +1051,41 @@ float fpMark( vec2 p, float m, float R ) {
 	return fpHex( p, 0.3 * R );                                                                  // hexagon
 }
 `;
-// vPadQ = (pad-local x, pad-local forward) in metres, the pad radius, and the skirt depth below the top's rim in
-// metres (−1 on the top surface)
-const FFA_PAD_COLOR = /* glsl */ `
-	vec2 fpQ = vPadQ.xy;                      // metres, +y = forward
-	float fpR = length( fpQ );
-	float fpRad = vPadQ.z;
-	float fpAa = fwidth( fpR ) * 0.8 + 1e-4;
-	float fpTopM = 1.0 - step( - 0.5, vPadQ.w );
-	float fpGrooveD = abs( fract( fpR / 0.3 ) - 0.5 ) * 0.3;
-	float fpGroove = ( 1.0 - smoothstep( 0.01 - fpAa, 0.01 + fpAa, fpGrooveD ) ) * ( 1.0 - step( 0.7 * fpRad, fpR ) );
-	float fpRing = smoothstep( 0.74 * fpRad - fpAa, 0.74 * fpRad + fpAa, fpR ) * ( 1.0 - smoothstep( 0.89 * fpRad - fpAa, 0.89 * fpRad + fpAa, fpR ) );
-	float fpD = fpMark( fpQ, vPadMark, fpRad );
-	float fpMk = 1.0 - smoothstep( - fpAa, fpAa, fpD );
-	float fpGlow = max( fpRing, fpMk ) * fpTopM;
-	vec3 fpBody = vec3( 0.0194, 0.0262, 0.0482 );   // PALETTE.padBody #262D3E (linear), as the team pads
-	vec3 fpC = mix( fpBody, fpBody * 0.7, fpGroove * fpTopM );
-	fpC = mix( fpC, vPadCrew * 0.55, fpGlow );
-	float fpSide = ( 1.0 - fpTopM ) * ( 1.0 - smoothstep( 0.007, 0.013, vPadQ.w ) );
-	fpC = mix( fpC, vPadCrew * 0.7, fpSide );
-	diffuseColor.rgb = fpC;
-	float fpPulse = 0.82 + 0.18 * sin( uPadTime * 2.2 );
-`;
-const FFA_PAD_EMISSIVE = /* glsl */ `
-	totalEmissiveRadiance += vPadCrew * ( ( fpRing * 1.9 * fpPulse + fpMk * 1.2 ) * fpTopM + fpSide * 1.3 * fpPulse );
+// vMkQ = (site-local x, site-local forward) in metres + the radius; vMkA = the crew dye (linear) + the fade; vMkB.x = the
+// mark index, vMkB.y = the age (s). Unlit (MeshBasicMaterial): the ring glows at any hour; the centre stays translucent
+// (≈ 10 % tint, the mark's fill ≈ 32 %) so the floor paint under a marker reads through it.
+const MK_COLOR = /* glsl */ `
+	vec2 mkQ = vMkQ.xy;
+	float mkR = vMkQ.z;
+	float mkr = length( mkQ );
+	float mkAa = fwidth( mkr ) * 0.9 + 1e-4;
+	float mkAge = vMkB.y;
+	float mkIn = clamp( mkAge / ${DROP_MARKER.intro.toFixed(3)}, 0.0, 1.0 );
+	float mkEase = 1.0 - ( 1.0 - mkIn ) * ( 1.0 - mkIn );
+	float mkRingC = mix( 0.97, 0.84, mkEase ) * mkR;                 // the ring settles inward as it lands
+	float mkW = mix( 0.1, 0.06, mkEase ) * mkR;
+	float mkRd = abs( mkr - mkRingC );
+	float mkRing = 1.0 - smoothstep( mkW - mkAa, mkW + mkAa, mkRd );
+	float mkHalo = ( 1.0 - smoothstep( 0.0, 0.12 * mkR, mkRd - mkW ) ) * 0.5 * step( mkW, mkRd );
+	float mkShT = clamp( mkAge / 0.55, 0.0, 1.0 );                   // a one-shot shockwave from the centre
+	float mkShock = ( 1.0 - smoothstep( 0.0, 0.05 * mkR + mkAa, abs( mkr - mkShT * 0.95 * mkR ) ) ) * ( 1.0 - mkShT );
+	float mkD = fpMark( mkQ, vMkB.x, mkR );
+	float mkFill = 1.0 - smoothstep( - mkAa, mkAa, mkD );
+	float mkEdge = 1.0 - smoothstep( 0.0, 0.035 * mkR + mkAa, abs( mkD ) );
+	float mkInside = 1.0 - smoothstep( mkRingC - mkW - mkAa, mkRingC - mkW + mkAa, mkr );
+	float mkPulse = 0.84 + 0.16 * sin( uMkTime * 7.0 );
+	// a thin ink line just outside the ring and round the mark: the crew's ring still reads on floor dyed its own colour
+	float mkOut = mkRd - mkW;
+	float mkInk = max( ( 1.0 - smoothstep( 0.0, 0.025 * mkR + mkAa, abs( mkOut - 0.03 * mkR ) ) ) * step( 0.0, mkOut ),
+		( 1.0 - smoothstep( 0.0, 0.02 * mkR + mkAa, abs( mkD - 0.045 * mkR ) ) ) * step( 0.0, mkD ) * 0.8 );
+	float mkA = max( max( max( mkRing * mkPulse, mkHalo ), mkInk * 0.55 ), max( mkShock * 0.7, max( mkEdge * 0.9, max( mkFill * 0.32, mkInside * 0.1 ) ) ) );
+	vec3 mkCol = vMkA.rgb * ( 1.0 + 0.9 * mkRing + 0.5 * mkEdge + 0.6 * mkShock );
+	mkCol = mix( mkCol, vec3( 0.0074, 0.0144, 0.0414 ), mkInk * ( 1.0 - max( mkRing, mkEdge ) ) );   // ink #14203a (linear)
+	diffuseColor = vec4( mkCol, mkA * vMkA.a );
+	if ( diffuseColor.a < 0.004 ) discard;
 `;
 
-let ffaPadSeq = 0;
+let dropMarkerSeq = 0;
 
 /** visible all the way up to (and including) `stop` */
 function shownUnder(o: THREE.Object3D, stop: THREE.Object3D): boolean {
@@ -1185,7 +1257,7 @@ function gatherPadFloors(mapRoot: THREE.Object3D, floors: PadFloor[], skip: THRE
  * that vertex (the spoke walk + the plane clamp of the section header). Grid vertex (ring j, spoke s) sits at
  * pad-local (sin θ, cos θ)·R·j/rings, θ = 2π s / seg, turned by the spawn yaw (+local z = the pad's forward).
  */
-function padGround(fl: PadFloor, p: FfaPadSpec, R: number): { h: Float64Array; centre: number; clamped: number } {
+function padGround(fl: PadFloor, p: DropSite, R: number): { h: Float64Array; centre: number; clamped: number } {
   const { seg, rings, rise, slack } = FFA_PAD;
   const yaw = p.yaw ?? 0;
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
@@ -1255,61 +1327,54 @@ function padGround(fl: PadFloor, p: FfaPadSpec, R: number): { h: Float64Array; c
 }
 
 /**
- * FFA only: add a drop pad per entry of `pads` (MatchWorld.crewPads — its crew is the roster's) under `map.root`, in
- * the owner crew's colour (core/data.ts crewDef('ffa', crew)), each conforming to the ground under it (see the
- * section header). Returns a handle whose dispose() removes them.
+ * FFA only (CONTRACT_FFA_SPAWNS §S3): build the drop-in markers of every spawn site (MatchWorld.spawnSites) under
+ * `map.root` — one conforming disc per site in one merged draw, all hidden until show(site, crew) — and turn the A/B
+ * team pads' crew accent neutral until dispose(). `radius` defaults to DROP_MARKER.radius (MATCH_FFA.padRadius).
  */
-export function addFfaPads(map: MapView, pads: ReadonlyArray<FfaPadSpec>): FfaPads {
+export function addDropMarkers(map: MapView, sitesIn: ReadonlyArray<DropSite>, radius: number = DROP_MARKER.radius): DropMarkers {
   const tBuild = performance.now();
   const root = new THREE.Group();
-  root.name = 'ffa_pads';
-  const n = pads.length;
-  const { seg, rings, lift, skirtDepth, skirtFlare } = FFA_PAD;
-  const radius = pads.map((p) => (p.r && p.r > 0 ? p.r : 1.6));
+  root.name = 'ffa_markers';
+  if (sitesIn.length > DROP_MARKER.maxSites) console.warn(`[dyefield] ${sitesIn.length} spawn sites: drop-in markers for the first ${DROP_MARKER.maxSites} only`);
+  const sites: DropSite[] = sitesIn.slice(0, DROP_MARKER.maxSites).map((s) => ({ x: s.x, y: s.y, z: s.z, yaw: s.yaw }));
+  const n = sites.length;
+  const R = radius > 0 ? radius : DROP_MARKER.radius;
+  const { seg, rings, lift } = FFA_PAD;
 
-  // the floor under every pad, gathered in one pass over the map
-  const floors = pads.map((p, i) => new PadFloor(p.x, p.z, radius[i] + FFA_PAD.margin, p.y - FFA_PAD.below, p.y + FFA_PAD.above, FFA_PAD.cell));
+  // the floor under every site, gathered in one pass over the map (the conforming generator of the old drop pads)
+  const floors = sites.map((p) => new PadFloor(p.x, p.z, R + FFA_PAD.margin, p.y - FFA_PAD.below, p.y + FFA_PAD.above, FFA_PAD.cell));
   const gather = gatherPadFloors(map.root, floors, null);
   const gatherMs = performance.now() - tBuild;
 
-  // the merged geometry: per pad the top grid (1 + seg·rings vertices) and the skirt (2·seg vertices)
-  const perPad = 1 + seg * rings + 2 * seg;
-  const vCount = Math.max(1, n * perPad);
+  const perSite = 1 + seg * rings;
+  const vCount = Math.max(1, n * perSite);
   const position = new Float32Array(vCount * 3);
-  const aCrew = new Float32Array(vCount * 4);
-  const aQ = new Float32Array(vCount * 4);
+  const aSite = new Float32Array(vCount);
+  const aQ = new Float32Array(vCount * 3);
   const index: number[] = [];
   const floorY: number[] = [];
   let clampedTotal = 0;
-  const col = new THREE.Color();
   for (let i = 0; i < n; i++) {
-    const p = pads[i];
-    const R = radius[i];
-    const yaw = p.yaw ?? 0;
-    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const p = sites[i];
+    const cy = Math.cos(p.yaw), sy = Math.sin(p.yaw);
     const g = padGround(floors[i], p, R);
     floorY.push(g.centre);
     clampedTotal += g.clamped;
-    let crew: { dye: string; mark: string };
-    try { crew = crewDef('ffa', p.crew); } catch { crew = { dye: '#DFE6EE', mark: 'sun-disc' }; }
-    col.set(crew.dye);
-    const mark = Math.max(1, FFA_MARKS.indexOf(crew.mark) + 1);
-    const base = i * perPad;
-    const put = (v: number, lx: number, lz: number, y: number, side: number): void => {
+    const base = i * perSite;
+    const put = (v: number, lx: number, lz: number, y: number): void => {
       position[v * 3] = p.x + lx * cy + lz * sy;
       position[v * 3 + 1] = y;
       position[v * 3 + 2] = p.z - lx * sy + lz * cy;
-      aCrew[v * 4] = col.r; aCrew[v * 4 + 1] = col.g; aCrew[v * 4 + 2] = col.b; aCrew[v * 4 + 3] = mark;
-      aQ[v * 4] = lx; aQ[v * 4 + 1] = lz; aQ[v * 4 + 2] = R; aQ[v * 4 + 3] = side;
+      aSite[v] = i;
+      aQ[v * 3] = lx; aQ[v * 3 + 1] = lz; aQ[v * 3 + 2] = R;
     };
-    // the top: centre + rings, every vertex at its ground + lift
-    put(base, 0, 0, g.h[0] + lift, -1);
+    put(base, 0, 0, g.h[0] + lift);
     const dr = R / rings;
     for (let s = 0; s < seg; s++) {
       const th = (s / seg) * Math.PI * 2;
       for (let j = 1; j <= rings; j++) {
         const k = 1 + s * rings + (j - 1);
-        put(base + k, Math.sin(th) * dr * j, Math.cos(th) * dr * j, g.h[k] + lift, -1);
+        put(base + k, Math.sin(th) * dr * j, Math.cos(th) * dr * j, g.h[k] + lift);
       }
     }
     const top = (s: number, j: number): number => (j === 0 ? base : base + 1 + (((s % seg) + seg) % seg) * rings + (j - 1));
@@ -1320,60 +1385,89 @@ export function addFfaPads(map: MapView, pads: ReadonlyArray<FfaPadSpec>): FfaPa
         index.push(i0, o0, o1, i0, o1, i1);
       }
     }
-    // the skirt: the rim (at its ground + lift) down to skirtDepth below the rim's ground, flared outward
-    const sk = base + 1 + seg * rings;
-    const flare = (R + skirtFlare) / R;
-    for (let s = 0; s < seg; s++) {
-      const th = (s / seg) * Math.PI * 2;
-      const lx = Math.sin(th) * R, lz = Math.cos(th) * R;
-      const gr = g.h[1 + s * rings + (rings - 1)];
-      put(sk + s * 2, lx, lz, gr + lift, 0);
-      put(sk + s * 2 + 1, lx * flare, lz * flare, gr - skirtDepth, lift + skirtDepth);
-    }
-    for (let s = 0; s < seg; s++) {
-      const t0 = sk + s * 2, b0 = t0 + 1, t1 = sk + ((s + 1) % seg) * 2, b1 = t1 + 1;
-      index.push(t0, b0, b1, t0, b1, t1);                              // faces outward
-    }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(position, 3));
-  geo.setAttribute('aPadCrew', new THREE.BufferAttribute(aCrew, 4));
-  geo.setAttribute('aPadQ', new THREE.BufferAttribute(aQ, 4));
+  geo.setAttribute('aMkSite', new THREE.BufferAttribute(aSite, 1));
+  geo.setAttribute('aMkQ', new THREE.BufferAttribute(aQ, 3));
   geo.setIndex(index);
-  geo.computeVertexNormals();                // the top and the skirt share no vertex: a crisp rim, smooth sand
   // the geometry is in world space: bring it into map.root's frame (identity on every shipped map)
   map.root.updateMatrixWorld(true);
   if (!map.root.matrixWorld.equals(new THREE.Matrix4())) geo.applyMatrix4(map.root.matrixWorld.clone().invert());
   geo.computeBoundingBox();
   geo.computeBoundingSphere();
 
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff, roughness: 0.42, metalness: 0.15, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+  // per-site state → uniforms: A = crew dye (linear) + fade, B = mark index + age
+  const N = Math.max(1, n);
+  const uA = Array.from({ length: N }, () => new THREE.Vector4(0, 0, 0, 0));
+  const uB = Array.from({ length: N }, () => new THREE.Vector4(1, 0, 0, 0));
+  const uTime = { value: 0 };
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xffffff, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   });
-  mat.name = 'M_ffa_pad';
-  const uTime = SURFACE_ENV.uDfTime;
+  mat.name = 'M_ffa_drop_marker';
   mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uPadTime = uTime;
+    sh.uniforms.uMkA = { value: uA };
+    sh.uniforms.uMkB = { value: uB };
+    sh.uniforms.uMkTime = uTime;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\n' + FFA_PAD_VERT_PARS)
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPadCrew = aPadCrew.rgb;\nvPadMark = aPadCrew.w;\nvPadQ = aPadQ;');
+      .replace('#include <common>', `#include <common>\n#define DF_MK_N ${N}\n` + MK_VERT_PARS)
+      .replace('#include <project_vertex>', '#include <project_vertex>\n' + MK_VERT_MAIN);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\n' + FFA_PAD_FRAG_PARS)
-      .replace('#include <color_fragment>', '#include <color_fragment>\n' + FFA_PAD_COLOR)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix( roughnessFactor, 0.3, fpGlow );')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n' + FFA_PAD_EMISSIVE);
+      .replace('#include <common>', '#include <common>\n' + MK_FRAG_PARS)
+      .replace('#include <color_fragment>', '#include <color_fragment>\n' + MK_COLOR);
   };
-  mat.customProgramCacheKey = () => 'df-ffa-pad-v2';
+  mat.customProgramCacheKey = () => `df-drop-marker-v1-${N}`;
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.name = 'ffa_pad_' + (++ffaPadSeq);
+  mesh.name = 'ffa_marker_' + (++dropMarkerSeq);
   mesh.castShadow = false;
-  mesh.receiveShadow = true;
-  mesh.visible = n > 0;
+  mesh.receiveShadow = false;
+  mesh.renderOrder = 2;                          // over the paint and the water, under the FX
+  mesh.frustumCulled = false;                    // one draw spanning the court: the vertex shader culls the idle sites
+  mesh.visible = false;
   root.add(mesh);
   map.root.add(root);
   root.updateMatrixWorld(true);
 
-  // the A/B team pads → neutral scenery while the FFA pads are shown (setPadColorblind skips them meanwhile)
+  // review fix A-A10 (S3 "visible to everyone: a fair warning"): the flat 1.25 m ring reads as a ~100 × 15 px sliver to a
+  // foe 12 m away (its mark unreadable, often under the reticle cluster), so a shown marker also raises a short vertical
+  // light column in the crew's dye — additive, translucent, brightest at the floor, fading with the marker's life (a
+  // super-jump landing marker's cue). The columns live in their OWN group beside 'ffa_markers' (the marker stays ONE
+  // draw; padcheck measures that group only) and have straight walls (normal y 0: a downward conformity ray never takes
+  // them for a floor or a marker top). One small mesh per site, built on its first show.
+  const colRoot = new THREE.Group();
+  colRoot.name = 'ffa_marker_columns';
+  map.root.add(colRoot);
+  colRoot.updateMatrixWorld(true);
+  const colGeo = new THREE.CylinderGeometry(DROP_MARKER.columnRadius, DROP_MARKER.columnRadius, DROP_MARKER.columnHeight, 24, 1, true);
+  colGeo.translate(0, DROP_MARKER.columnHeight / 2, 0);
+  const colAlpha = columnAlphaTexture();
+  const columns: Array<THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial> | null> = new Array(n).fill(null);
+  const colPos = new THREE.Vector3();
+  const column = (i: number): THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial> => {
+    let c = columns[i];
+    if (!c) {
+      const m = new THREE.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending, alphaMap: colAlpha,
+      });
+      m.name = 'M_ffa_drop_column';
+      c = new THREE.Mesh(colGeo, m);
+      c.name = 'ffa_marker_column_' + i;
+      c.castShadow = false;
+      c.receiveShadow = false;
+      c.renderOrder = 3;
+      c.visible = false;
+      const s = sites[i];
+      colRoot.worldToLocal(colPos.set(s.x, floorY[i] ?? s.y, s.z));
+      c.position.copy(colPos);
+      colRoot.add(c);
+      columns[i] = c;
+    }
+    return c;
+  };
+
+  // the A/B team pads → neutral scenery while the markers exist (setPadColorblind skips them meanwhile)
   const saved: Array<{ m: THREE.Material; key: unknown; u: THREE.IUniform<THREE.Color>; c: THREE.Color }> = [];
   map.root.traverse((o) => {
     const mm = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
@@ -1391,15 +1485,90 @@ export function addFfaPads(map: MapView, pads: ReadonlyArray<FfaPadSpec>): FfaPa
   root.userData.gather = { ms: Math.round(gatherMs * 10) / 10, meshes: gather.meshes, scanned: gather.scanned };
   root.userData.floorTris = floors.map((f) => f.tri.length / 9);
   root.userData.clamped = clampedTotal;
+
+  // the shown markers
+  const age = new Float64Array(N).fill(-1);          // < 0: not shown
+  const crewOf = new Int32Array(N);
+  const col = new THREE.Color();
+  let forced = false;
   let disposed = false;
+  const refresh = (): void => {
+    let any = false;
+    for (let i = 0; i < n; i++) if (age[i] >= 0) { any = true; break; }
+    mesh.visible = any || forced;
+  };
+  const alphaAt = (t: number): number => {
+    const fin = Math.min(1, t / 0.12);
+    const fout = Math.min(1, Math.max(0, (DROP_MARKER.life - t) / DROP_MARKER.fade));
+    return Math.max(0, Math.min(fin, fout));
+  };
   return {
     root,
     count: n,
+    sites,
     floorY,
+    show(site: number, crew: TeamId): void {
+      if (disposed || !(site >= 0 && site < n)) return;
+      let def: { dye: string; mark: string };
+      try { def = crewDef('ffa', crew); } catch { def = { dye: '#DFE6EE', mark: 'sun-disc' }; }
+      col.set(def.dye);
+      uA[site].set(col.r, col.g, col.b, alphaAt(0));
+      uB[site].set(Math.max(1, FFA_MARKS.indexOf(def.mark) + 1), 0, 0, 0);
+      age[site] = 0;
+      crewOf[site] = crew;
+      const c = column(site);                      // A-A10: the light column in the crew's dye
+      c.material.color.copy(col);
+      c.material.opacity = alphaAt(0) * DROP_MARKER.columnAlpha;
+      c.visible = true;
+      refresh();
+    },
+    update(dt: number, hold: boolean): void {
+      if (disposed) return;
+      const d = Math.max(0, dt);
+      uTime.value += d;
+      let changed = false;
+      for (let i = 0; i < n; i++) {
+        if (age[i] < 0) continue;
+        let t = age[i] + d;
+        if (hold) t = Math.min(t, Math.max(age[i], DROP_MARKER.intro));   // the countdown: full, after the intro
+        const c = columns[i];
+        if (t >= DROP_MARKER.life) { age[i] = -1; uA[i].w = 0; if (c) c.visible = false; changed = true; continue; }
+        age[i] = t;
+        uA[i].w = alphaAt(t);
+        uB[i].y = t;
+        if (c) c.material.opacity = uA[i].w * DROP_MARKER.columnAlpha;
+      }
+      if (changed) refresh();
+    },
+    clear(): void {
+      for (let i = 0; i < n; i++) { age[i] = -1; uA[i].w = 0; const c = columns[i]; if (c) c.visible = false; }
+      refresh();
+    },
+    active(): DropMarkerState[] {
+      const out: DropMarkerState[] = [];
+      for (let i = 0; i < n; i++) {
+        if (age[i] < 0) continue;
+        const s = sites[i];
+        const c = columns[i];
+        out.push({ site: i, crew: crewOf[i] as TeamId, age: Math.round(age[i] * 1000) / 1000, alpha: Math.round(uA[i].w * 1000) / 1000, x: s.x, y: s.y, z: s.z,
+          column: c && c.visible ? Math.round(c.material.opacity * 1000) / 1000 : 0 });
+      }
+      return out;
+    },
+    prewarm(on: boolean): void {
+      forced = on;
+      // A-A10: the column's program compiles with the marker's (an idle site's column, at opacity 0, shown only while forced)
+      if (n > 0) { const c = column(0); if (age[0] < 0) { c.material.opacity = 0; c.visible = on; } }
+      refresh();
+    },
     dispose(): void {
       if (disposed) return;
       disposed = true;
       root.removeFromParent();
+      colRoot.removeFromParent();
+      for (const c of columns) c?.material.dispose();
+      colGeo.dispose();
+      colAlpha.dispose();
       geo.dispose();
       mat.dispose();
       for (const s of saved) { s.u.value.copy(s.c); s.m.userData.dfPadTeam = s.key; }

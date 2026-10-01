@@ -42,6 +42,19 @@ FREE-FOR-ALL (CONTRACT_FFA F3, lane UI), all by real clicks / keys:
                       → QUIT → the lobby: the A/B team pads' accent (their dfPadTeam uniform) = the page's team dye
                       (--sun-dye / --gulf-dye); then COLORBLIND off from the title → they follow again.
 
+WASHOUT + CONTROLS (CONTRACT_WASHOUT W4 / W8, CONTRACT_CONTROLS C1 / C4), all by real clicks / keys:
+ 15. PLAY → RULE      — TURF (the default, "Cover the most floor") / WASHOUT ("Most washes wins"): aria-checked, the
+                      profile + localStorage, the line under the pair; the title mode line names every option
+                      ('Harbor Cup • 4 v 4 · Free-for-all · Washout', also the page title); the profile card reads
+                      'TEAMS · WASHOUT' / 'FREE-FOR-ALL · WASHOUT' (TURF: the crew name / FREE-FOR-ALL as before); HOW TO
+                      PLAY panel 1 carries the WASHOUT rule text; back to TURF restores every TURF line.
+ 16. a WASHOUT START  — PLAY → WASHOUT → START on LOCKWELL: the loading card reads 'Harbor Cup • Washout · 4 v 4', the HUD
+                      is the WASHOUT one; pause → QUIT → the lobby; RULE back to TURF.
+ 17. SETTINGS → AIM   — AIM is in the remap list (RMB), SUB is E only; AIM SENSITIVITY (0.65×) and TOGGLE AIM switch.
+ 18. old bindings     — a pre-1.4 save (SUB = E + RMB, no AIM) loads as SUB = E, AIM = RMB; a customised SUB keeps RMB and
+                      AIM stays unbound (RMB was not free).
+The TURF legs above are unchanged; their mode-line expectation is the both-modes line with Washout (W4).
+
 Verdict line: MENUS OK / MENUS FAIL (+ problems). Report: _harness/_reports/menus.json.
 
 Run:  python _harness/menus.py            (headless, dev server on :5186 — started with DF_FROZEN=1 if down)
@@ -70,8 +83,15 @@ STRINGS = {
     "credits": "An original 4 v 4 and free-for-all turf-paint shooter.", "victory": "THE HARBOR CHOSE A COLOR.",
     "modeFfa": "Harbor Cup • Free-for-all", "teams": "TEAMS · 4 v 4", "ffa": "FREE-FOR-ALL",
     # owner 2026-09-28: where no mode is committed (title, lobby card, bare-URL static card) the line names BOTH modes;
-    # a match's loading card names that match's mode ("mode" / "modeFfa" exactly)
-    "modeAll": "Harbor Cup • 4 v 4 · Free-for-all",
+    # a match's loading card names that match's mode ("mode" / "modeFfa" exactly). CHANGED(WASHOUT) W4: it names the
+    # WASHOUT rule too
+    "modeAll": "Harbor Cup • 4 v 4 · Free-for-all · Washout",
+    # CONTRACT_WASHOUT W4: the WASHOUT match lines, the RULE selector, the profile card, HOW TO PLAY
+    "modeWashout": "Harbor Cup • Washout · 4 v 4", "modeFfaWashout": "Harbor Cup • Washout · Free-for-all",
+    "turf": "TURF", "washout": "WASHOUT", "turfLine": "Cover the most floor", "washoutLine": "Most washes wins",
+    "cardWashout": "TEAMS · WASHOUT", "cardFfaWashout": "FREE-FOR-ALL · WASHOUT",
+    "howTurf": "Dye the court in your crew’s color. When the final horn sounds, the crew with more turf wins.",
+    "howWashout": "Washout: wash the other side. Most washes when the horn sounds — or the first to the limit — wins. Paint still moves you, refills you and charges your special.",
 }
 BOOT_MODE_JS = "() => { const c = document.querySelector('#df-boot'); const s = c && c.querySelector('.df-mode span'); return s && c.getBoundingClientRect().width > 0 && getComputedStyle(c).display !== 'none' ? s.textContent : null; }"
 
@@ -219,7 +239,8 @@ def title(run):
     mode = run.text("#df-menus .dfm-brand .df-mode span")
     run.ok(mode == STRINGS["modeAll"], "title mode line %r (want exactly %r: both modes)" % (mode, STRINGS["modeAll"]))
     boot_title = s.safe_js("() => document.title", default="")
-    run.ok("Free-for-all" in (boot_title or "") and "4 v 4" in (boot_title or ""), "the page title %r does not name both modes" % boot_title)
+    run.ok("Free-for-all" in (boot_title or "") and "4 v 4" in (boot_title or "") and "Washout" in (boot_title or ""),
+           "the page title %r does not name both modes and the WASHOUT rule" % boot_title)
     labels = s.safe_js("() => [...document.querySelectorAll('.dfm-stack .dfm-item .lbl')].map((e) => e.textContent)", default=[])
     run.ok(labels == ["PLAY", "LOADOUT", "SETTINGS", "HOW TO PLAY", "CREDITS"], "menu labels %s" % labels)
     hints = s.safe_js("() => document.querySelector('.dfm-hints').innerText", default="")
@@ -339,6 +360,22 @@ def settings(run):
     b2 = (run.df("settings") or {}).get("bindings") or {}
     run.ok(b2.get("special") == ["KeyQ"] and "KeyE" in (b2.get("sub") or []), "CANCEL changed the bindings (%s / %s)" % (b2.get("special"), b2.get("sub")))
     run.checks["bindings"] = {"jump": b2.get("jump"), "special": b2.get("special"), "sub": b2.get("sub")}
+    # CONTRACT_CONTROLS C1 / C4: AIM in the remap list on RMB, SUB on E only; AIM SENSITIVITY + TOGGLE AIM in the MOUSE card
+    remap = run.s.safe_js("() => [...document.querySelectorAll('.dfm-keys .dfm-bind .lbl')].map((e) => e.textContent)", default=[]) or []
+    aim_cap, sub_caps = run.text("#dfm-key-aim-0"), [run.text("#dfm-key-sub-0"), run.text("#dfm-key-sub-1")]
+    run.checks["aimRemap"] = {"rows": remap, "aim": aim_cap, "sub": sub_caps, "bindings": {"aim": b2.get("aim"), "sub": b2.get("sub")}}
+    run.ok("AIM" in remap and remap.index("AIM") == remap.index("FIRE") + 1, "AIM is not in the remap list after FIRE (%s)" % remap)
+    run.ok(aim_cap == "RMB" and b2.get("aim") == ["Mouse2"], "the AIM key cap / binding is %r / %s (want RMB / Mouse2)" % (aim_cap, b2.get("aim")))
+    run.ok(b2.get("sub") == ["KeyE"] and sub_caps[0] == "E", "SUB is %s / caps %s (want E only)" % (b2.get("sub"), sub_caps))
+    sens = run.text("#dfm-aim-sens + output") or run.s.safe_js("() => { const r = document.getElementById('dfm-aim-sens'); return r ? r.parentElement.querySelector('output').textContent : null; }")
+    run.ok(sens == "0.65×", "AIM SENSITIVITY reads %r (want 0.65×)" % sens)
+    t0 = (run.df("settings") or {}).get("aimToggle")
+    run.click("#dfm-aim-toggle", 0.3)
+    t1 = (run.df("settings") or {}).get("aimToggle")
+    run.click("#dfm-aim-toggle", 0.3)
+    t2 = (run.df("settings") or {}).get("aimToggle")
+    run.checks["aimSettings"] = {"sens": sens, "toggle": [t0, t1, t2]}
+    run.ok(t0 is False and t1 is True and t2 is False, "TOGGLE AIM did not switch hold → toggle → hold (%s)" % [t0, t1, t2])
     # SHOW FPS on
     run.click("#dfm-fps", 0.3)
     fps_on = run.s.safe_js("() => { const e = document.querySelector('.df-fps'); return !!e && !e.hidden; }", default=False)
@@ -377,6 +414,10 @@ def howto_credits(run):
     run.ok(n == 4, "HOW TO PLAY has %s panels (want 4)" % n)
     leg = run.s.safe_js("() => document.querySelector('.dfm-howkeys').innerText", default="") or ""
     run.ok("F" in leg.split() or "F\nJUMP" in leg or "FJUMP" in leg.replace("\n", ""), "the HOW TO PLAY legend does not show the rebound JUMP key F (%r)" % leg[:200])
+    # CONTRACT_CONTROLS C1: the controls legend reads RMB AIM · E JELLY CHARGE (and the mouse LOOKs)
+    flat = " ".join(leg.split())
+    run.checks["howLegend"] = flat
+    run.ok("RMB AIM" in flat and "E JELLY CHARGE" in flat and "MOUSE LOOK" in flat, "the HOW TO PLAY legend lacks RMB AIM / E JELLY CHARGE / MOUSE LOOK (%r)" % flat[:220])
     run.shot("howto")
     run.layout("howto")
     run.key("Escape", 0.5)
@@ -437,6 +478,11 @@ def match_lockwell(run):
         run.click("#df-play", 1.0)
     cd = run.wait(lambda: (run.df("match") or {}).get("phase") == "countdown" or None, 6)
     run.ok(cd or (run.df("match") or {}).get("phase") == "live", "no countdown after START")
+    # review fix A-A8: a TURF countdown is the brief's — no objective line under the digits
+    if cd:
+        h_cd = run.df("hud") or {}
+        run.checks["turfCountRule"] = {"countdown": h_cd.get("countdown"), "countRule": h_cd.get("countRule")}
+        run.ok(h_cd.get("countRule") is None, "the TURF countdown shows a rule line %r (TURF must stay unchanged)" % h_cd.get("countRule"))
     # 20 s, not 8: the sim runs at most MAX_STEPS_PER_FRAME (5) ticks a frame, so below 12 fps the 3 s countdown takes
     # longer than 3 s of wall time (QA 2026-09-28: 9 FPS on the contended iGPU, live came just after an 8 s wait)
     live = run.wait(lambda: (run.df("match") or {}).get("phase") == "live" or None, 20)
@@ -628,6 +674,201 @@ def ffa_menus(run):
     run.click("#dfm-play", 0.7)
 
 
+def rule_menus(run):
+    """CONTRACT_WASHOUT W4 / W8: the PLAY RULE selector (aria-checked, persisted, its line), the title mode line, the profile
+    card and HOW TO PLAY per rule. Starts and ends on the PLAY screen in TEAMS · TURF (the LOCKWELL match leg follows)."""
+    print("WASHOUT: PLAY rule selector + mode lines + profile card + HOW TO PLAY")
+    s = run.s
+    if run.menu().get("screen") != "play":
+        run.click("#dfm-play", 0.7)
+    rules = s.safe_js("() => [...document.querySelectorAll('.dfm-rulebtn')].map((b) => [b.id, b.textContent, b.getAttribute('aria-checked'), b.title])", default=[]) or []
+    note0 = run.text("#dfm-rule-note")
+    prof0 = run.menu().get("profile") or {}
+    run.checks["ruleSelector"] = {"buttons": rules, "note": note0, "profileRule": prof0.get("rule")}
+    run.ok([r[1] for r in rules] == [STRINGS["turf"], STRINGS["washout"]], "RULE selector labels %s" % [r[1] for r in rules])
+    run.ok([r[3] for r in rules] == [STRINGS["turfLine"], STRINGS["washoutLine"]], "RULE descriptions %s" % [r[3] for r in rules])
+    run.ok(prof0.get("rule") == "turf" and [r[2] for r in rules] == ["true", "false"], "the default rule is not TURF (profile %s, aria %s)" % (prof0.get("rule"), [r[2] for r in rules]))
+    run.ok(note0 == STRINGS["turfLine"], "the TURF line reads %r" % note0)
+    run.click("#dfm-rule-washout", 0.4)
+    prof = run.menu().get("profile") or {}
+    checked = s.safe_js("() => [document.querySelector('#dfm-rule-turf').getAttribute('aria-checked'), document.querySelector('#dfm-rule-washout').getAttribute('aria-checked')]", default=None)
+    saved = s.safe_js("() => { try { return JSON.parse(localStorage.getItem('dyefield.profile.v1') || '{}'); } catch (e) { return null; } }", default=None) or {}
+    note1 = run.text("#dfm-rule-note")
+    run.checks["ruleWashout"] = {"profile": prof.get("rule"), "aria": checked, "saved": saved.get("rule"), "note": note1}
+    run.ok(prof.get("rule") == "washout" and checked == ["false", "true"], "WASHOUT did not select (profile %s, aria %s)" % (prof.get("rule"), checked))
+    run.ok(saved.get("rule") == "washout", "the WASHOUT rule was not persisted (localStorage %s)" % saved.get("rule"))
+    run.ok(note1 == STRINGS["washoutLine"], "the WASHOUT line reads %r" % note1)
+    run.shot("play_washout")
+    run.layout("play washout")
+    run.key("Escape", 0.5)
+    line = run.text("#df-menus .dfm-brand .df-mode span")
+    card = run.text(".dfm-profile .txt span")
+    run.ok(line == STRINGS["modeAll"], "WASHOUT picked: the title mode line %r (want exactly %r)" % (line, STRINGS["modeAll"]))
+    run.ok(card == STRINGS["cardWashout"], "the TEAMS WASHOUT profile card reads %r" % card)
+    run.shot("title_washout")
+    run.click("#dfm-how-to-play", 0.6)
+    how = run.text(".dfm-s-howto .dfm-howp p")
+    run.ok(how == STRINGS["howWashout"], "HOW TO PLAY panel 1 in WASHOUT reads %r" % how)
+    # review fix A-A9: card 1's PICTURE follows the rule too (WASHOUT: washes + score chips, never the TURF court + tug bar)
+    art_w = s.safe_js("() => { const a = document.querySelector('.dfm-s-howto .dfm-howp .art'); return a ? [a.dataset.art, !!a.querySelector('#dfh-wcourt'), !!a.querySelector('#dfh-court')] : null; }", default=None)
+    run.ok(art_w == ["washout", True, False], "HOW TO PLAY card 1 in WASHOUT still shows the TURF picture (data-art, washout clip, turf clip: %s)" % art_w)
+    run.shot("howto_washout")
+    run.key("Escape", 0.5)
+    # FFA · WASHOUT: the card names both
+    run.click("#dfm-play", 0.7)
+    run.click("#dfm-mode-ffa", 0.3)
+    run.key("Escape", 0.5)
+    card_ffa = run.text(".dfm-profile .txt span")
+    run.ok(card_ffa == STRINGS["cardFfaWashout"], "the FFA WASHOUT profile card reads %r" % card_ffa)
+    # back to TEAMS · TURF: every TURF line as before
+    run.click("#dfm-play", 0.7)
+    run.click("#dfm-mode-teams", 0.3)
+    run.click("#dfm-rule-turf", 0.4)
+    run.key("Escape", 0.5)
+    prof2 = run.menu().get("profile") or {}
+    card2 = run.text(".dfm-profile .txt span")
+    run.click("#dfm-how-to-play", 0.6)
+    how2 = run.text(".dfm-s-howto .dfm-howp p")
+    art_t = s.safe_js("() => { const a = document.querySelector('.dfm-s-howto .dfm-howp .art'); return a ? [a.dataset.art, !!a.querySelector('#dfh-wcourt'), !!a.querySelector('#dfh-court')] : null; }", default=None)
+    run.ok(art_t == ["floor", False, True], "HOW TO PLAY card 1 back in TURF does not show the TURF picture (%s)" % art_t)
+    run.key("Escape", 0.5)
+    run.checks["ruleBackToTurf"] = {"profile": {k: prof2.get(k) for k in ("mode", "rule", "crew")}, "card": card2, "how": how2,
+                                   "cards": {"washout": card, "ffaWashout": card_ffa}, "modeLine": line, "howWashout": how,
+                                   "howArt": {"washout": art_w, "turf": art_t}}
+    run.ok(prof2.get("rule") == "turf" and prof2.get("mode") == "teams", "TURF / TEAMS did not restore (%s)" % prof2)
+    run.ok(card2 == ("GULF CREW" if prof2.get("crew") == 2 else "SUNCREW"), "the TURF profile card reads %r (want the crew name)" % card2)
+    run.ok(how2 == STRINGS["howTurf"], "HOW TO PLAY panel 1 back in TURF reads %r" % how2)
+    run.click("#dfm-play", 0.7)
+
+
+def match_washout(run):
+    """CONTRACT_WASHOUT W4 / W8: PLAY → WASHOUT → START on LOCKWELL: the loading card names the WASHOUT match, the HUD is the
+    WASHOUT one (score chips + the tie-break label); pause → QUIT → the lobby; RULE back to TURF."""
+    print("WASHOUT START (LOCKWELL) → loading line → WASHOUT HUD → QUIT")
+    s = run.s
+    if run.menu().get("screen") != "play":
+        run.click("#dfm-play", 0.7)
+    run.click("#dfm-mode-teams", 0.3)
+    run.click("#dfm-rule-washout", 0.3)
+    run.click("#dfm-map-lockwell", 0.3)
+    run.click("#dfm-start", 0.05)
+    loading_line(run, STRINGS["modeWashout"], "WASHOUT START (LOCKWELL)")
+    ph = run.wait(lambda: run.phase() if run.phase() in ("ready", "play", "error") else None, 60)
+    run.ok(ph in ("ready", "play"), "WASHOUT START did not reach the match (phase %s: %s)" % (ph, (s.state() or {}).get("error")))
+    if ph == "ready":
+        run.click("#df-play", 1.0)
+    # review fix A-A8: the WASHOUT countdown names the objective ("WASHOUT · Most washes wins · first crew to <limit>")
+    cr = run.wait(lambda: (run.df("hud") or {}).get("countRule") or None, 20)
+    lim_cd = (run.df("match") or {}).get("limit")
+    run.checks["washoutCountRule"] = {"countRule": cr, "limit": lim_cd}
+    run.ok(bool(cr) and "Most washes wins" in cr and ("first crew to %s" % lim_cd) in cr,
+           "the WASHOUT countdown does not name the objective (line %r, limit %s)" % (cr, lim_cd))
+    if cr:
+        run.shot("washout_countdown")
+    live = run.wait(lambda: (run.df("match") or {}).get("phase") == "live" or None, 20)
+    run.ok(live, "the WASHOUT match did not go live")
+    time.sleep(0.5)
+    h = run.df("hud") or {}
+    m = run.df("match") or {}
+    wo = h.get("washout") or {}
+    run.checks["washoutMatch"] = {"hudRule": h.get("rule"), "limit": h.get("limit"), "chips": wo.get("chips"), "tugLabel": wo.get("tugLabel"),
+                                  "matchRule": m.get("rule")}
+    run.ok(h.get("rule") == "washout" and (h.get("limit") or 0) > 0, "the HUD is not the WASHOUT HUD (rule %s, limit %s)" % (h.get("rule"), h.get("limit")))
+    chips = wo.get("chips") or {}
+    run.ok(bool(chips.get("sun")) and bool(chips.get("gulf")) and "/ %s" % h.get("limit") in (chips.get("sun") or ""),
+           "the WASHOUT score chips are missing (%s)" % chips)
+    run.ok(wo.get("tugLabel") == "TURF (tie-break)", "the tie-break label reads %r" % wo.get("tugLabel"))
+    run.shot("washout_match_live")
+    run.key("Escape", 0.6)
+    run.ok(run.phase() == "paused", "ESC did not pause the WASHOUT match (phase %s)" % run.phase())
+    run.click("#df-p-quit", 0.4)
+    run.click("#dfm-quit-yes", 0.2)
+    ph = run.wait(lambda: run.phase() if run.phase() in ("menu", "error") else None, 60)
+    run.ok(ph == "menu", "QUIT did not return to the lobby from the WASHOUT match (%s)" % ph)
+    time.sleep(0.8)
+    run.click("#dfm-play", 0.7)
+    run.click("#dfm-rule-turf", 0.3)
+    run.key("Escape", 0.5)
+    run.ok((run.menu().get("profile") or {}).get("rule") == "turf", "the rule did not go back to TURF")
+
+
+def aim_migration(args, all_problems, shots):
+    """CONTRACT_CONTROLS C1 / C4: a pre-1.4 save (SUB = E + RMB, no AIM) loads as SUB = E, AIM = RMB (the remap list shows it);
+    a customised SUB that holds RMB keeps it, and AIM then stays unbound (RMB was not free)."""
+    print("old saved bindings → the C1 migration")
+    checks = {}
+    with Session(args, "menus_aim") as s:
+        run = Run(s, "menu_aim")
+        url = build_url(args.base, lobby=1, dev=1)
+        for label, sub, want_sub, want_aim in (("default", ["KeyE", "Mouse2"], ["KeyE"], ["Mouse2"]),
+                                               ("custom", ["KeyF", "Mouse2"], ["KeyF", "Mouse2"], [])):
+            s.goto(url)
+            if not s.wait_df(90):
+                run.fail("aim migration (%s): __DF__ never appeared" % label)
+                continue
+            s.js("(sub) => { const raw = JSON.parse(localStorage.getItem('dyefield.settings.v1') || '{}'); const b = raw.bindings || {};"
+                 " b.sub = sub; delete b.aim; raw.bindings = b; delete raw.aimSens; delete raw.aimToggle;"
+                 " localStorage.setItem('dyefield.settings.v1', JSON.stringify(raw)); }", sub)
+            s.goto(url)
+            ok, ph = s.wait_phase(("menu",), 120)
+            if not ok:
+                run.fail("aim migration (%s): the lobby never came up (%s)" % (label, ph))
+                continue
+            b = (run.df("settings") or {}).get("bindings") or {}
+            run.click("#dfm-settings", 0.6)
+            caps = {"aim": run.text("#dfm-key-aim-0"), "sub0": run.text("#dfm-key-sub-0"), "sub1": run.text("#dfm-key-sub-1")}
+            run.key("Escape", 0.4)
+            checks[label] = {"saved": sub, "sub": b.get("sub"), "aim": b.get("aim"), "caps": caps}
+            run.ok(b.get("sub") == want_sub and (b.get("aim") or []) == want_aim,
+                   "aim migration (%s): SUB %s / AIM %s (want %s / %s)" % (label, b.get("sub"), b.get("aim"), want_sub, want_aim))
+        # leave a clean default save for whoever runs next
+        s.js("() => { const raw = JSON.parse(localStorage.getItem('dyefield.settings.v1') || '{}'); delete raw.bindings; localStorage.setItem('dyefield.settings.v1', JSON.stringify(raw)); }")
+        all_problems.extend(run.problems)
+        shots.extend(run.shots)
+    return checks
+
+
+def washout_deeplink(args, all_problems, shots):
+    """Review fix A-A8: a DEEP-LINKED WASHOUT match (?rule=washout[&mode=ffa], the saved profile still TURF) — the countdown
+    names the objective, and HOW TO PLAY opened from the pause card teaches the RUNNING match (title, rule line, picture),
+    not the profile's TURF. Real clicks (CLICK TO PLAY, the pause card's HOW TO PLAY); ESC pauses."""
+    print("deep-linked WASHOUT → countdown objective + pause → HOW TO PLAY follows the match")
+    checks = {}
+    with Session(args, "menus_wodeep") as s:
+        run = Run(s, "menu_wodeep")
+        for label, extra, want_rule in (("teams", {}, STRINGS["howWashout"]), ("ffa", {"mode": "ffa"}, STRINGS["howWashout"])):
+            url = build_url(args.base, map="pier18", rule="washout", dev=1, matchSeconds=300, **extra)
+            s.goto(url)
+            if not s.wait_df(90) or not s.wait_phase(("ready", "play"), 150)[0]:
+                run.fail("deep link %s: the match never loaded (%s)" % (label, (s.state() or {}).get("phase")))
+                continue
+            prof = (run.df("profile") or {})
+            if run.phase() == "ready":
+                s.page.mouse.click(args.width / 2, args.height / 2)
+                s.wait_phase(("play",), 20)
+            cr = run.wait(lambda: (run.df("hud") or {}).get("countRule") or None, 30)
+            lim = (run.df("match") or {}).get("limit")
+            live = run.wait(lambda: (run.df("match") or {}).get("phase") == "live" or None, 60)
+            run.key("Escape", 0.8)
+            paused = run.phase() == "paused"
+            run.click("#df-p-howto", 0.7)
+            title = run.text(".dfm-s-howto .dfm-howp h3 span:not(.n)")
+            rule_line = run.text(".dfm-s-howto .dfm-howp p")
+            art = s.safe_js("() => { const a = document.querySelector('.dfm-s-howto .dfm-howp .art'); return a ? a.dataset.art : null; }", default=None)
+            run.shot("wodeep_%s_howto" % label)
+            checks[label] = {"profileRule": prof.get("rule"), "countRule": cr, "limit": lim, "live": bool(live), "paused": paused,
+                             "howTitle": title, "howRule": rule_line, "art": art}
+            want_to = "first to %s" % lim if label == "ffa" else "first crew to %s" % lim
+            run.ok(bool(cr) and "Most washes wins" in cr and want_to in cr, "deep link %s: the countdown line %r does not name the objective (%s)" % (label, cr, want_to))
+            run.ok(paused, "deep link %s: ESC did not pause (phase %s)" % (label, run.phase()))
+            run.ok(title == "MOST WASHES WINS" and rule_line == want_rule and art == "washout",
+                   "deep link %s (profile rule %r): pause → HOW TO PLAY teaches %r / %r / art %r (want the running WASHOUT match)" % (
+                       label, prof.get("rule"), title, rule_line, art))
+        all_problems.extend(run.problems)
+        shots.extend(run.shots)
+    return checks
+
+
 def match_ffa(run):
     """CONTRACT_FFA F3: PLAY → FREE-FOR-ALL → CINDER REEF → START → the FFA HUD → the FFA victory slate → LOBBY."""
     print("FFA match: PLAY → FREE-FOR-ALL → CINDER → victory standings → LOBBY")
@@ -788,11 +1029,24 @@ def gamepad(run):
       window.__PADX__ = pad;
       Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [pad, null, null, null] });
     }""")
+    # qa lane 2026-10-01 harness fix: Menus.update() polls the pad once per rendered frame, so a fixed 120 ms wall hold
+    # is lost whenever no frame runs inside it (diag_pad: lobby warm-up / a loaded box gave 0 polls in 134-613 ms holds
+    # → 'd-pad down did not move focus'; every hold that a poll landed in moved PLAY → LOADOUT on that frame). Hold (and
+    # rest) for at least 2 rendered frames (window.__H_FRAMES__, the harness rAF counter) as well as the wall minimum;
+    # 2 frames stay well under the menus' 0.38 s d-pad repeat delay.
+    def frames_past(f0, n, min_s, cap_s=5.0):
+        t0 = time.time()
+        while time.time() - t0 < cap_s:
+            f = s.frames()
+            if time.time() - t0 >= min_s and isinstance(f, int) and isinstance(f0, int) and f >= f0 + n:
+                return
+            time.sleep(0.02)
+
     def press(i, hold=0.12):
-        s.js("(i) => { const b = window.__PADX__.buttons[i]; b.pressed = true; b.value = 1; }", i)
-        time.sleep(hold)
-        s.js("(i) => { const b = window.__PADX__.buttons[i]; b.pressed = false; b.value = 0; }", i)
-        time.sleep(0.15)
+        f0 = s.js("(i) => { const b = window.__PADX__.buttons[i]; b.pressed = true; b.value = 1; return window.__H_FRAMES__; }", i)
+        frames_past(f0, 2, hold)
+        f1 = s.js("(i) => { const b = window.__PADX__.buttons[i]; b.pressed = false; b.value = 0; return window.__H_FRAMES__; }", i)
+        frames_past(f1, 2, 0.15)
     # the checks below start from PLAY; the leg before this one (ffa_pier18_cb) returns from the title's SETTINGS, so
     # the focus comes back on SETTINGS — home it to PLAY with real ↑ key presses first (QA 2026-09-28 harness fix)
     for _ in range(6):
@@ -877,7 +1131,7 @@ def main():
     ap.add_argument("--headed", action="store_true", help="show the browser (default headless)")
     ap.add_argument("--match-seconds", type=int, default=25, help="dev match length for the victory leg")
     ap.add_argument("--skip-720", action="store_true")
-    ap.add_argument("--legs", default="", help="comma list of legs to run (title, loadout, settings, howto_credits, map_select, ffa_menus, lockwell, keyboard, ffa, ffa_pier18_cb, gamepad, 720); default: all")
+    ap.add_argument("--legs", default="", help="comma list of legs to run (title, loadout, settings, howto_credits, map_select, ffa_menus, rule_menus, lockwell, keyboard, ffa, ffa_pier18_cb, gamepad, washout, aim_migration, washout_deeplink, 720); default: all")
     args = ap.parse_args()
     args.headless = not args.headed
     legs = {x.strip() for x in (args.legs or "").split(",") if x.strip()}
@@ -901,7 +1155,7 @@ def main():
         else:
             time.sleep(1.2)
             steps = [("title", title), ("loadout", loadout), ("settings", settings), ("howto_credits", howto_credits),
-                     ("map_select", map_select), ("ffa_menus", ffa_menus)]
+                     ("map_select", map_select), ("ffa_menus", ffa_menus), ("rule_menus", rule_menus)]
             for name, fn in steps:
                 if not on(name):
                     continue
@@ -935,6 +1189,11 @@ def main():
                     gamepad(run)
             except Exception as e:
                 run.fail("gamepad: harness error %s" % str(e).splitlines()[0][:300])
+            try:
+                if on("washout"):
+                    match_washout(run)
+            except Exception as e:
+                run.fail("WASHOUT match: harness error %s" % str(e).splitlines()[0][:300])
         d = s.diagnostics()
         print_diagnostics(d)
         problems.extend(run.problems)
@@ -955,6 +1214,16 @@ def main():
         ha, hb = ga.get("heapMB"), gb.get("heapMB")
         if isinstance(ha, (int, float)) and isinstance(hb, (int, float)) and hb > ha * 1.15 + 5:
             problems.append("JS heap (after GC) grew in the lobby %s → %s: %s → %s MB" % (na, nb, ha, hb))
+    if on("aim_migration"):
+        try:
+            report["aimMigration"] = aim_migration(args, problems, shots)
+        except Exception as e:
+            problems.append("aim migration: harness error %s" % str(e).splitlines()[0][:300])
+    if on("washout_deeplink"):
+        try:
+            report["washoutDeeplink"] = washout_deeplink(args, problems, shots)
+        except Exception as e:
+            problems.append("WASHOUT deep link: harness error %s" % str(e).splitlines()[0][:300])
     if not args.skip_720 and on("720"):
         try:
             report["checks720"] = small_screens(args, problems, shots)

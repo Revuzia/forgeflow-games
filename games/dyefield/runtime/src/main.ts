@@ -58,7 +58,7 @@ import './ui/styles.css';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mapById, teamById, hexToRgb01, WEAPONS, playableMaps, FFA_CREWS, type LightingPreset, type MapDef } from './core/data.ts';
-import { parseMatchMode, type MatchMode, type TeamId } from './core/types.ts';
+import { parseMatchMode, parseMatchRule, type MatchMode, type MatchRule, type TeamId } from './core/types.ts';
 import { extractMapGeometry, type MapGeometry } from './core/mapgeo.ts';
 import { artUrl, parseGlb } from './core/glb.ts';
 import { buildAtlas, type PaintAtlas } from './core/paint/atlas.ts';
@@ -73,7 +73,7 @@ import { createSky, type SkyRig } from './view/sky.ts';
 import { createWater, type WaterRig } from './view/water.ts';
 import { PaintTexture } from './view/paintlayer.ts';
 import { createDyeUniforms, setDyeMode, setPadColorblind, type DyeUniforms } from './view/surfaces.ts';
-import { loadMapView, addFfaPads, type MapView, type FfaPads } from './view/mapview.ts';
+import { loadMapView, addDropMarkers, type MapView, type DropMarkers } from './view/mapview.ts';
 import { loadHeroAssets, type HeroAssets } from './view/heroview.ts';
 import { PlayerViews, prepareRunnerKit, loadKitArt, mixedBotKits, kitFireType, type RunnerKit, type KitArt } from './view/players.ts';
 import { Fx, bakeFxModels } from './view/fx.ts';
@@ -184,7 +184,7 @@ async function fetchMapBytes(def: MapDef, onProgress: (f: number) => void): Prom
   return out.buffer;
 }
 
-export const VERSION = 'dyefield-1.3.0';
+export const VERSION = 'dyefield-1.4.0';
 
 declare global {
   interface Window {
@@ -194,7 +194,8 @@ declare global {
 }
 
 const params = new URLSearchParams(location.search);
-const DEEP_KEYS = ['map', 'kit', 'bots', 'seed', 'matchSeconds', 'preset', 'autostart', 'brush', 'crew', 'mode'];
+// CONTRACT_WASHOUT W4: ?rule=washout|turf is a deep-link key too (index.html's static-card script mirrors this list)
+const DEEP_KEYS = ['map', 'kit', 'bots', 'seed', 'matchSeconds', 'preset', 'autostart', 'brush', 'crew', 'mode', 'rule'];
 /** a harness / share link straight into a match (no lobby) */
 const DEEP_LINK = params.get('lobby') !== '1' && DEEP_KEYS.some((k) => params.has(k));
 const LOBBY_MAP = 'pier18';
@@ -232,13 +233,20 @@ function paramConfig(): MatchConfig {
   const cq = (params.get('crew') || '').toLowerCase();
   // CONTRACT_FFA F3: ?mode=ffa|teams (default teams); in FFA ?crew= is the human's colour (1..8 or a colour key)
   const mode: MatchMode = parseMatchMode(params.get('mode'));
+  // CONTRACT_WASHOUT W4: ?rule=washout|turf (default turf)
+  const rule = paramRule();
+  const ruleOpt = rule === 'washout' ? { rule } : {};
   if (mode === 'ffa') {
     const byKey = FFA_CREWS.find((c) => c.key === cq);
     const crew = byKey ? byKey.id : ffaCrew(cq || 1);
-    return { kit, skill, seed, durationS: devSeconds(), crew, mode, devBrush: app.dev && params.get('brush') === '1' };
+    return { kit, skill, seed, durationS: devSeconds(), crew, mode, devBrush: app.dev && params.get('brush') === '1', ...ruleOpt };
   }
   const crew: TeamId = cq === '2' || cq === 'gulf' ? 2 : 1;
-  return { kit, skill, seed, durationS: devSeconds(), crew, devBrush: app.dev && params.get('brush') === '1' };
+  return { kit, skill, seed, durationS: devSeconds(), crew, devBrush: app.dev && params.get('brush') === '1', ...ruleOpt };
+}
+/** CONTRACT_WASHOUT W4: the deep link's rule (?rule=washout; anything else → turf) */
+function paramRule(): MatchRule {
+  return parseMatchRule(params.get('rule'), 'turf');
 }
 function devSeconds(): number | null {
   const ms = app.dev ? Number(params.get('matchSeconds')) : NaN;
@@ -426,8 +434,8 @@ interface Session {
   hud: Hud;
   /** match sessions only */
   juice: Juice | null;
-  /** CONTRACT_FFA F7: the FFA drop pads (FFA match sessions only) */
-  ffaPads: FfaPads | null;
+  /** CONTRACT_FFA_SPAWNS S3: the drop-in markers of the FFA spawn sites (FFA match sessions only; no permanent pads) */
+  drops: DropMarkers | null;
   /** CONTRACT_MOBILE M2: the touch overlay (match sessions only; shown by the Game in touch mode) */
   touch: TouchControls | null;
   dispose(): void;
@@ -469,9 +477,9 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
   if (arena.dye.uViewerTeam) arena.dye.uViewerTeam.value = mode === 'lobby' ? 0 : humanTeam;
   if (arena.dye.uColorblind) arena.dye.uColorblind.value = S.settings.get().colorblind ? 1 : 0;
   // the A/B team pads' crew accent follows the setting too (review F1): during an FFA session they are untagged neutral
-  // scenery, so a COLORBLIND MARKS toggle then misses them and the FFA pads' dispose restores the accent saved at FFA
+  // scenery, so a COLORBLIND MARKS toggle then misses them and the FFA markers' dispose restores the accent saved at FFA
   // start — the stale palette on a reused arena (Pier 18 noon = the lobby's) until the next toggle. The previous
-  // session is disposed before this runs; an FFA session's addFfaPads (below) then saves the current palette.
+  // session is disposed before this runs; an FFA session's addDropMarkers (below) then saves the current palette.
   setPadColorblind(arena.map.root, S.settings.get().colorblind);
   renderer.toneMappingExposure = arena.preset.exposure ?? 1;
 
@@ -497,7 +505,10 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
     specialId: spRow?.id ?? '', specialName, specialKey: input.keyLabel('special'),
     subName: subRow?.name ?? '', subCost: typeof subRow?.tankCost === 'number' ? subRow.tankCost : 70, subKey: input.keyLabel('sub'),
   };
-  const hud = new Hud(uiRoot, { team: humanTeam, minimap: arena.minimap, specialName, roster, youId: 0, kit: hudKit, mode: matchMode });
+  // CONTRACT_CONTROLS C3 / WASHOUT W5: the HUD's motion (special shake, "+1", PROTECTED shimmer, aim vignette) follows
+  // SETTINGS → REDUCE MOTION (live below, applySettings), not only the OS preference
+  const hud = new Hud(uiRoot, { team: humanTeam, minimap: arena.minimap, specialName, roster, youId: 0, kit: hudKit, mode: matchMode,
+    reduceMotion: st.reduceMotion });
   hud.slates.setLegend(S.menus.legend());
   hud.setTouchMode(input.mode === 'touch');     // CONTRACT_MOBILE M4 platform prompts
   // after the HUD: juice's over-layer (hit marker, confetti) sits above the HUD and the slates
@@ -528,18 +539,24 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
     cam.reset(me.yaw);
     cam.update(0, me, arena.physics);
   }
-  // CONTRACT_FFA F7: one drop pad per FFA runner (MatchWorld.crewPads). PLAY AGAIN rebuilds the world with the same
-  // seed, so the pads (a seeded shuffle of maps.json ffaSpawns) stay where they are for the whole session.
-  const ffaPads = matchMode === 'ffa' ? addFfaPads(arena.map, game.world.crewPads) : null;
+  // CONTRACT_FFA_SPAWNS S3: no permanent FFA pads — a transient drop-in marker per 'spawn' event, built once here for
+  // every site of the pool (MatchWorld.spawnSites; PLAY AGAIN keeps the pool). The Game gets the handle before its
+  // first tick (the match-start 'spawn' events drain with the first tick's events).
+  const drops = matchMode === 'ffa' ? addDropMarkers(arena.map, game.world.spawnSites) : null;
+  game.p.drops = drops;
 
   // shader pre-warm (doctrine §3): compile every program before frame 1 — including the ones that are hidden
-  // at spawn (the slick fins, the projectile droplets) — then one real frame (which also builds the
-  // shadow-depth programs) behind the loading card
+  // at spawn (the slick fins, the projectile droplets, the spawn-protection shimmer, the FFA drop-in markers) — then one
+  // real frame (which also builds the shadow-depth programs) behind the loading card
   report(NaN, 'Compiling shaders…');
   for (const v of players.views) v.fin.visible = true;
+  players.prewarmShields(true);
+  drops?.prewarm(true);
   fx.prewarm(true);
   try { await renderer.compileAsync(arena.scene, cam.camera); } catch (e) { console.warn('[dyefield] compileAsync:', e); }
   for (const v of players.views) v.fin.visible = false;
+  players.prewarmShields(false);
+  drops?.prewarm(false);
   fx.prewarm(false);
   const warmMs = mode === 'lobby' ? game.warm() : 0;
   game.render(0, 1);
@@ -552,19 +569,19 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
     + `physics ${arena.physics.triangles} tris; nav ${arena.nav.nodes} nodes in ${arena.navMs.toFixed(0)} ms; `
     + `runners ${ps.runners} (tris by kit ${Object.entries(ps.kits).map(([k, t]) => `${k} ${t}`).join(', ')}); `
     + `lineup ${roster.map((e) => `${e.id}:${e.kit}:${e.team}`).join(' ')}; `
-    + `seed ${config.seed} · bots ${roster[1]?.skill ?? config.skill} · kit ${config.kit}${config.durationS ? ` · ${config.durationS} s` : ''} · mode ${matchMode}; quality ${S.quality()}; `
+    + `seed ${config.seed} · bots ${roster[1]?.skill ?? config.skill} · kit ${config.kit}${config.durationS ? ` · ${config.durationS} s` : ''} · mode ${matchMode} · rule ${config.rule ?? 'turf'}; quality ${S.quality()}; `
     + `${mode === 'lobby' ? `backdrop warmed in ${warmMs.toFixed(0)} ms; ` : ''}gpu ${rig.gpu()}`);
   for (const w of [...arena.map.warnings, ...heroAssets.warnings, ...kitArt.warnings, ...players.warnings]) console.warn('[dyefield]', w);
 
   game.run();
   let disposed = false;
   return {
-    mode, arena, game, players, fx, hud, juice, ffaPads, touch,
+    mode, arena, game, players, fx, hud, juice, drops, touch,
     dispose(): void {
       if (disposed) return;
       disposed = true;
       game.dispose();
-      ffaPads?.dispose();                        // re-tags the A/B team pads; the next startSession re-applies the colorblind setting
+      drops?.dispose();                          // re-tags the A/B team pads; the next startSession re-applies the colorblind setting
       if (app.game === game) app.game = null;
       touch?.dispose();                          // releases every captured touch, removes #df-touch
       // the view modules free their own GPU objects (the runner skeletons' bone textures, the FX disk texture)
@@ -588,7 +605,7 @@ async function boot(): Promise<void> {
   const bootUi = new BootUI();
   // CONTRACT_FFA F3: a deep link loads a match of one mode — the loading card names it; a bare URL opens the lobby,
   // where the card keeps the both-modes line (boot.ts MODE_LINE_ALL)
-  bootUi.setMode(DEEP_LINK ? (parseMatchMode(params.get('mode')) === 'ffa' ? 'ffa' : 'teams') : 'all');
+  bootUi.setMode(DEEP_LINK ? (parseMatchMode(params.get('mode')) === 'ffa' ? 'ffa' : 'teams') : 'all', DEEP_LINK ? paramRule() : 'turf');
   window.__DF_BOOT__?.handoff();
   let arena: Arena | null = null;
   let session: Session | null = null;
@@ -625,6 +642,8 @@ async function boot(): Promise<void> {
         assist: g ? { slow: g.assist.slow, dyaw: g.assist.dyaw, dpitch: g.assist.dpitch, foes: g.assist.foes, visibleFoes: g.assist.visible }
           : { slow: 1, dyaw: 0, dpitch: 0, foes: 0, visibleFoes: 0 },
         options: rb ? { leftHanded: rb.leftHanded, scale: rb.scale, opacity: rb.opacity } : null,
+        // CONTRACT_CONTROLS C1 / C3: the AIM toggle (state + its light) and the SPECIAL deny shakes played
+        aim: rb ? rb.aim : false, aimLit: rb ? rb.aimLit : false, denies: rb ? rb.denies : 0,
         startedBy: app.startedBy,
         renderer: S.rig.mobile(),
         rotateOverlay: rotate ? rotate.shown : null,
@@ -737,6 +756,9 @@ async function boot(): Promise<void> {
     const hooks: GameHooks = {
       paused: (on, msg) => {
         const m = S!.menus;
+        // review fix A-A8: HOW TO PLAY from the pause card teaches the running match (a deep link plays ?rule= / ?mode=)
+        const g = app.game;
+        if (on) m.setMatchRule(g && !g.isLobby ? g.matchMode : null, g && !g.isLobby ? g.rule : null);
         if (on) { if (m.context === 'pause') m.setPauseMessage(msg); else m.showPause(msg); }
         else if (m.context === 'pause') m.hideAll();
       },
@@ -792,7 +814,7 @@ async function boot(): Promise<void> {
       try {
         const def = mapById(sel.map);
         S.menus.hideAll();
-        bootUi.setMode(sel.mode === 'ffa' ? 'ffa' : 'teams');   // CONTRACT_FFA F3: the card names the mode being loaded
+        bootUi.setMode(sel.mode === 'ffa' ? 'ffa' : 'teams', sel.rule === 'washout' ? 'washout' : 'turf');   // FFA F3 / WASHOUT W4: the card names the match being loaded
         bootUi.showLoading(sel.random ? `Random arena: ${def.name}` : `Loading ${def.name}…`, { name: def.name, thumb: MAP_THUMBS[def.id] ?? null });
         app.phase = 'loading';
         arenaF = 0;
@@ -811,6 +833,7 @@ async function boot(): Promise<void> {
         const cfg: MatchConfig = {
           kit: sel.kit, skill: sel.skill, seed: randomSeed(), durationS: devSeconds(), humanName: sel.name || undefined,
           crew: ffa ? ffaCrew(sel.ffaColor) : sel.crew, devBrush: false, ...(ffa ? { mode: 'ffa' as const } : {}),
+          ...(sel.rule === 'washout' ? { rule: 'washout' as const } : {}),   // CONTRACT_WASHOUT W4: the RULE pick
         };
         session = await startSession(S, arena, 'match', cfg, hooks, report);
         if (contextLost) return;                  // B-F1: the reset card stays
@@ -922,9 +945,13 @@ async function boot(): Promise<void> {
       const c = cam as FollowCamera & { sensitivityScale?: number; invertY?: boolean; reduceMotion?: boolean };
       if (has('sensitivity') && 'sensitivityScale' in c) c.sensitivityScale = s.sensitivity;
       if (has('invertY') && 'invertY' in c) c.invertY = s.invertY;
+      // CONTRACT_CONTROLS C1: the aim look multiplier (camera) and hold / toggle (input), live
+      if (has('aimSens')) cam.aimSens = s.aimSens;
+      if (has('aimToggle')) input.aimToggle = s.aimToggle;
       if (has('reduceMotion')) {
         if ('reduceMotion' in c) c.reduceMotion = s.reduceMotion;
         session?.juice?.setReduceMotion(s.reduceMotion);   // juice also pushes it to the camera every frame
+        session?.hud.setReduceMotion(s.reduceMotion);
       }
       if (has('volume')) audio.setVolumes(s.volume);
       // CONTRACT_MOBILE M8: the touch rows apply live (aimAssist is read by the Game every frame)

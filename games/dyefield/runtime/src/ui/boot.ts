@@ -1,5 +1,6 @@
 // DYEFIELD — boot cards (CONTRACT §5.1 ui/boot.ts): loading card (wordmark DYEFIELD, mode line —
-// "Harbor Cup • 4 v 4 · Free-for-all" until a mode is committed, then that match's line —, progress) → CLICK TO PLAY (pointer lock) → play. The error card shows the
+// "Harbor Cup • 4 v 4 · Free-for-all · Washout" until a mode is committed, then that match's line (mode × rule,
+// CONTRACT_WASHOUT W4) —, progress) → CLICK TO PLAY (pointer lock) → play. The error card shows the
 // message and never leaves a blank canvas. After 2+ pointerlockerrors with zero successful locks
 // ever, the play card swaps to the "mouse capture blocked" message (doctrine §6).
 // index.html paints the same loading card statically before the module graph runs; this class
@@ -13,10 +14,23 @@ export const MODE_LINE = 'Harbor Cup • 4 v 4';
 /** CONTRACT_FFA F3: the mode line in FREE-FOR-ALL (teams keeps MODE_LINE exactly). The loading / play cards show the
  *  line of the session being loaded: BootUI.setMode('ffa') / setMode('teams') before showLoading() of a match. */
 export const MODE_LINE_FFA = 'Harbor Cup • Free-for-all';
+/** CONTRACT_WASHOUT W4: the match lines of the WASHOUT rule (TURF keeps MODE_LINE / MODE_LINE_FFA exactly) */
+export const MODE_LINE_WASHOUT = 'Harbor Cup • Washout · 4 v 4';
+export const MODE_LINE_FFA_WASHOUT = 'Harbor Cup • Washout · Free-for-all';
 /** Owner 2026-09-28 ("shows 4v4 but … we had an option of free for all — this is misleading"): wherever no mode is
- *  committed yet — the static card of a bare URL, the lobby's loading card, the title screen — the line names BOTH
- *  modes. index.html paints this same text statically. */
-export const MODE_LINE_ALL = 'Harbor Cup • 4 v 4 · Free-for-all';
+ *  committed yet — the static card of a bare URL, the lobby's loading card, the title screen, the page title — the line
+ *  names EVERY option up front. CHANGED(WASHOUT) W4: it names the WASHOUT rule too. index.html paints this same text
+ *  statically. */
+export const MODE_LINE_ALL = 'Harbor Cup • 4 v 4 · Free-for-all · Washout';
+
+/** CONTRACT_WASHOUT W1: the match rule (mirrors core/types.ts MatchRule) */
+export type UiRule = 'turf' | 'washout';
+
+/** the mode line of one match: mode × rule (W4 table) */
+export function modeLineFor(mode: 'teams' | 'ffa', rule: UiRule = 'turf'): string {
+  if (rule === 'washout') return mode === 'ffa' ? MODE_LINE_FFA_WASHOUT : MODE_LINE_WASHOUT;
+  return mode === 'ffa' ? MODE_LINE_FFA : MODE_LINE;
+}
 
 /** the card's current mode line (module state: one boot card per page) */
 let modeText = MODE_LINE_ALL;
@@ -309,14 +323,18 @@ export class BootUI {
 
   /**
    * CONTRACT_FFA F3: the mode line of the session about to load ('ffa' → 'Harbor Cup • Free-for-all', 'teams' →
-   * exactly MODE_LINE, 'all' → MODE_LINE_ALL for the lobby, where no mode is picked yet). Updates the card on screen in
-   * place and every card built after it.
+   * exactly MODE_LINE, 'all' → MODE_LINE_ALL for the lobby, where no mode is picked yet). CHANGED(WASHOUT) W4: `rule`
+   * 'washout' → 'Harbor Cup • Washout · 4 v 4' / 'Harbor Cup • Washout · Free-for-all' (omitted / 'turf' → the TURF lines
+   * above, exactly; 'all' ignores it). Updates the card on screen in place and every card built after it.
    */
-  setMode(mode: 'teams' | 'ffa' | 'all'): void {
-    modeText = mode === 'ffa' ? MODE_LINE_FFA : mode === 'teams' ? MODE_LINE : MODE_LINE_ALL;
+  setMode(mode: 'teams' | 'ffa' | 'all', rule: UiRule = 'turf'): void {
+    modeText = mode === 'all' ? MODE_LINE_ALL : modeLineFor(mode, rule === 'washout' ? 'washout' : 'turf');
     const span = this.root.querySelector<HTMLElement>('.df-mode > span');
     if (span) fillModeLine(span, modeText);
   }
+
+  /** the card's current mode line (harness read-back) */
+  get modeLine(): string { return modeText; }
 
   /** f in 0..1 (monotonic: never moves backwards) */
   progress(f: number, status?: string): void {

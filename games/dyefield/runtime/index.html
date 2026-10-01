@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<title>DYEFIELD — Harbor Cup • 4 v 4 · Free-for-all</title>
-<meta name="description" content="DYEFIELD — an original turf-paint shooter: 4 v 4 crews or an eight-runner free-for-all. Stain the arena; the floor is the scoreboard.">
+<title>DYEFIELD — Harbor Cup • 4 v 4 · Free-for-all · Washout</title>
+<meta name="description" content="DYEFIELD — an original turf-paint shooter: 4 v 4 crews or an eight-runner free-for-all. Stain the arena; the floor is the scoreboard — or switch the rule to WASHOUT: most washes wins.">
 <meta name="theme-color" content="#2f86dc">
 <!-- CONTRACT_MOBILE M9: install to the home screen (no service worker, deliberately: deploys are no-store + hash-named) -->
 <link rel="manifest" href="/manifest.webmanifest">
@@ -238,17 +238,27 @@
       else if (vis >= VISIBLE && t - last >= QUIET && !probing) probe();
     }
 
-    // The static card names both modes (a bare URL opens the lobby: nothing is picked yet). A deep link (main.ts
-    // DEEP_KEYS, not ?lobby=1) loads ONE match, so the card names that match's mode, as boot.ts setMode() will.
+    // The static card names every option (a bare URL opens the lobby: nothing is picked yet). A deep link (main.ts
+    // DEEP_KEYS, not ?lobby=1) loads ONE match, so the card names that match's mode and rule (CONTRACT_WASHOUT W4:
+    // ?rule=washout), as boot.ts setMode() will. The line keeps its phrase chunks (.df-nw), so it wraps only between them.
     function mode() {
       try {
         if (!q || q.get('lobby') === '1') return;
-        var keys = ['map', 'kit', 'bots', 'seed', 'matchSeconds', 'preset', 'autostart', 'brush', 'crew', 'mode'], deep = false;
+        var keys = ['map', 'kit', 'bots', 'seed', 'matchSeconds', 'preset', 'autostart', 'brush', 'crew', 'mode', 'rule'], deep = false;
         for (var i = 0; i < keys.length; i++) if (q.has(keys[i])) deep = true;
         if (!deep) return;
         var mq = (q.get('mode') || '').trim().toLowerCase().replace(/[\s_]+/g, '-');
-        var ms = D.querySelector('#df-boot .df-mode span');
-        if (ms) ms.textContent = (mq === 'ffa' || mq === 'free-for-all' || mq === 'freeforall') ? 'Harbor Cup • Free-for-all' : 'Harbor Cup • 4 v 4';
+        var rq = (q.get('rule') || '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+        var ffa = mq === 'ffa' || mq === 'free-for-all' || mq === 'freeforall';
+        var wash = rq === 'washout' || rq === 'wash-out' || rq === 'wash' || rq === 'kills' || rq === 'deathmatch';   // core/types.ts parseMatchRule
+        var parts = wash ? ['Harbor Cup •', 'Washout ·', ffa ? 'Free-for-all' : '4 v 4'] : ['Harbor Cup •', ffa ? 'Free-for-all' : '4 v 4'];
+        var ms = D.querySelector('#df-boot .df-mode > span');
+        if (!ms) return;
+        while (ms.firstChild) ms.removeChild(ms.firstChild);
+        for (var j = 0; j < parts.length; j++) {
+          if (j) ms.appendChild(D.createTextNode(' '));
+          var s = D.createElement('span'); s.className = 'df-nw'; s.textContent = parts[j]; ms.appendChild(s);
+        }
       } catch (e) { /* the module takes over the card anyway */ }
     }
     function onReady() { if (D.readyState !== 'loading') { mode(); if (later) show(later[0], later[1], later[2]); } }
@@ -302,7 +312,7 @@
 <div id="df-boot" class="df-boot" role="status" aria-live="polite">
   <div class="df-card">
     <h1 class="df-wordmark" aria-label="DYEFIELD"><span class="dye">DYE</span><span class="field">FIELD</span></h1>
-    <p class="df-mode"><i aria-hidden="true">◉</i><span><span class="df-nw">Harbor Cup •</span> <span class="df-nw">4 v 4 ·</span> <span class="df-nw">Free-for-all</span></span><i class="g" aria-hidden="true">▲</i></p>
+    <p class="df-mode"><i aria-hidden="true">◉</i><span><span class="df-nw">Harbor Cup •</span> <span class="df-nw">4 v 4 ·</span> <span class="df-nw">Free-for-all ·</span> <span class="df-nw">Washout</span></span><i class="g" aria-hidden="true">▲</i></p>
     <div class="df-progress"><b></b></div>
     <div class="df-status">Loading…</div>
   </div>

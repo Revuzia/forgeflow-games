@@ -32,6 +32,8 @@ export interface AudioRunner {
   slickForm?: boolean;
   /** spring launches so far (a launch has no SimEvent) */
   launches?: number;
+  /** the special running ('' none): a SPECIAL 'denied' while one runs gets no deny tick (review fix A-A3) */
+  specialActive?: string;
 }
 
 /** the ProjectilePool fields audio reads (pass world.projectiles): CLOUDBURST cells are kind 4 in state HOVER */

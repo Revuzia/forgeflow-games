@@ -42,8 +42,9 @@
 // MatchWorld writes (FFA: the site of the latest spawn); protectedT also runs in FFA (both rules).
 // CHANGED(CONTROLS) (CONTRACT_CONTROLS §C2): popOut() — the SPECIAL press surfaces the runner at once (slick form and
 // surfacing end, a wall is let go) so the special starts on the press tick; specialHeld / specialBuf / specialBufShort are
-// the press edge + 0.35 s wait that combat/specials.ts keeps here (reset on respawn — specialHeld to TRUE, so a key held
-// through a wash or the countdown needs a release before it counts as a press; never hashed).
+// the press edge + 0.35 s wait that combat/specials.ts keeps here (the wait is reset on respawn; specialHeld tracks the key
+// on every tick — MatchWorld writes it on the ticks stepSpecialInput skips — so a key held through a wash or the countdown
+// needs a release before it counts as a press, and a press on the respawn tick is one; never hashed).
 
 import type { MatchMode, MoveState, PlayerIntent, Side, TeamId } from './types.ts';
 import type { CharacterBody, PhysicsWorld } from './physics.ts';
@@ -226,8 +227,11 @@ export class Runner {
   /** @internal gravity during the leap */
   leapG = 0;
   // ── CHANGED(CONTROLS) (CONTRACT_CONTROLS §C2): the SPECIAL press (combat/specials.ts stepSpecialInput) ──
-  /** @internal intent.special was held on the last kit tick (a press = its rising edge); respawn() sets it true */
-  specialHeld = true;
+  /** @internal intent.special was held on the last tick (a press = its rising edge). CHANGED(CONTROLS leftover,
+   *  2026-09-30): tracked EVERY tick — stepSpecialInput writes it on a kit tick, MatchWorld on the ticks it skips (a dead
+   *  runner, the countdown) — so a key held through a wash or the countdown is no new press, and a real press on the
+   *  respawn tick is one. Starts false; respawn() leaves it alone. */
+  specialHeld = false;
   /** @internal ticks the latest press still waits to start the special (0: none) */
   specialBuf = 0;
   /** @internal that press was made with the meter short: 'denied' if it is still short when the wait runs out */
@@ -349,11 +353,12 @@ export class Runner {
     this.pressFlicked = false; this.prevFireHeld = false;
     this.subCooldown = 0;
     this.leaping = false; this.slamPending = false; this.leapT = 0;
-    // CHANGED(CONTROLS): no press survives a wash. specialHeld starts TRUE (skeptic fix 2026-09-30): a SPECIAL key held
-    // through the wash + respawn, or through the countdown (the constructor calls respawn), is not a new press — a real
-    // press needs a release first, so no 'denied' fires without one; a held key still asks every tick (the level
-    // request), so holding it with a full meter starts the special as before
-    this.specialHeld = true; this.specialBuf = 0; this.specialBufShort = false;
+    // CHANGED(CONTROLS): no press survives a wash (the wait is cleared). specialHeld is NOT reset here (CONTROLS leftover,
+    // 2026-09-30; was a forced TRUE): MatchWorld tracks the key on every tick the runner skips stepSpecialInput (dead, the
+    // countdown), so a SPECIAL key held through the wash + respawn or through the countdown is no new press (no 'denied'
+    // without a release), a held key still asks every tick (the level request: a full meter starts), and a real press on
+    // the respawn tick counts as a press
+    this.specialBuf = 0; this.specialBufShort = false;
     this.ballistic = false; this.springLock = 0; this.onConveyor = -1; this.inOob = false;
     this.respawns++;
   }

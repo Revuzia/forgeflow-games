@@ -13,20 +13,35 @@
 // death slate takes the washer's FFA colour + mark. crewLook() is the one palette resolver the HUD, the slates and
 // the menus share: teams mode → teams.json `teams` (+ its colorblind block), FFA → teams.json `ffa`.
 
+//
+// CONTRACT_WASHOUT W6 (the WASHOUT rule, VictoryInfo.washout — build it with washoutVictory(result, runners, human)):
+//   TEAMS  the stamp "THE HARBOR CHOSE A COLOR." above the two final scores (crew chip + mark + score, "/ limit"), the
+//          ending tag between them (LIMIT REACHED / TIME), the tie-break note when turf decided it (or the draw note),
+//          then a scoreboard of all 8 runners grouped by crew: kit icon, name, W (washes), D (times washed); your row
+//          highlighted. The scores count up on the TALLY timeline, then the winner's mark stamps.
+//   FFA    the FFA body (winner line, podium, standings) by score: the podium and each row show the score (= W) and D, in
+//          the result's WASHOUT order; the ending tag + tie-break note under the winner line; a draw as in FFA TURF.
+// TURF (VictoryInfo.washout absent) is the slate above, unchanged.
+
 import { FFA_CREWS, TEAMS_RAW, teamById } from '../core/data.ts';
 import type { MatchMode, TeamId } from '../core/types.ts';
-import { SVG } from './icons.ts';
+import { KIT_ICONS, SVG } from './icons.ts';
 
 /**
  * CONTRACT_MOBILE M4 platform prompts: the touch buttons' glyphs (24 × 24, currentColor + ink), shared by the HUD's
  * badges, the countdown legend, the pause card's legend, HOW TO PLAY and the SETTINGS preview.
+ * CONTRACT_CONTROLS C1: 'aim' is the LOOK drag (the right side of the screen); 'ads' is the AIM toggle button beside FIRE
+ * (a scope) — touch/controls.ts may reuse it for the button's icon.
  */
-export type TouchGlyph = 'stick' | 'aim' | 'fire' | 'slick' | 'jump' | 'sub' | 'special' | 'pause';
+export type TouchGlyph = 'stick' | 'aim' | 'ads' | 'fire' | 'slick' | 'jump' | 'sub' | 'special' | 'pause';
 const GLYPHS: Record<TouchGlyph, string> = {
   stick: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="2.4"/>'
     + '<circle cx="12" cy="12" r="4.6" fill="currentColor" stroke="#14203a" stroke-width="1.4"/></svg>',
   aim: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.4" fill="none" stroke="currentColor" stroke-width="2.4"/>'
     + '<path d="M5.4 8.2 1.8 12l3.6 3.8M18.6 8.2l3.6 3.8-3.6 3.8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  ads: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.6" fill="none" stroke="currentColor" stroke-width="2.4"/>'
+    + '<path d="M12 1.8v5.4M12 16.8v5.4M1.8 12h5.4M16.8 12h5.4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'
+    + '<circle cx="12" cy="12" r="2.1" fill="currentColor" stroke="#14203a" stroke-width="1.2"/></svg>',
   fire: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l1.9 5 4.6-2.4-1.8 4.9 5.1 1.3-4.6 2.5 2.9 4.4-5.2-.9-.6 5.2L12 18.3l-2.3 4.3-.6-5.2-5.2.9 2.9-4.4-4.6-2.5 5.1-1.3-1.8-4.9 4.6 2.4z" fill="currentColor" stroke="#14203a" stroke-width="1.3" stroke-linejoin="round"/></svg>',
   slick: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2c3 4 5.6 7.2 5.6 10.4a5.6 5.6 0 0 1-11.2 0C6.4 10.4 9 7.2 12 3.2z" fill="currentColor" stroke="#14203a" stroke-width="1.6" stroke-linejoin="round"/>'
     + '<path d="M3 20.4c1.5-1.2 3-1.2 4.5 0s3 1.2 4.5 0 3-1.2 4.5 0 3 1.2 4.5 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
@@ -39,7 +54,7 @@ const GLYPHS: Record<TouchGlyph, string> = {
 };
 export function touchGlyph(g: TouchGlyph): string { return GLYPHS[g]; }
 /** the countdown legend in touch mode: [glyph, label] pills (the keyboard rows come from menus.legend()) */
-const TOUCH_COUNT_LEGEND: ReadonlyArray<readonly [TouchGlyph, string]> = [['stick', 'move'], ['aim', 'aim'], ['fire', 'fire'], ['slick', 'slick'], ['jump', 'jump']];
+const TOUCH_COUNT_LEGEND: ReadonlyArray<readonly [TouchGlyph, string]> = [['stick', 'move'], ['aim', 'look'], ['fire', 'fire'], ['slick', 'slick'], ['jump', 'jump']];
 
 /** CONTRACT_FFA F1: the match mode (core/types.ts MatchMode) */
 export type UiMode = MatchMode;
@@ -79,6 +94,65 @@ export interface FfaStanding { team: number; name: string; share: number; you: b
 /** the FFA result for the slate: standings sorted best first; `winners` = the crews tied for first (1 = a clear win) */
 export interface FfaVictory { standings: FfaStanding[]; winners: number[]; neutral: number }
 
+/** CONTRACT_WASHOUT W1: the match rule (core/types.ts MatchRule) */
+export type UiRule = 'turf' | 'washout';
+
+/** one runner on the WASHOUT scoreboard (W6) */
+export interface WashoutRow {
+  pid: number; name: string;
+  /** the runner's crew id (teams 1 | 2; FFA 1..8) */
+  team: number;
+  /** the kit id (weapons.json; the board shows its icon) */
+  kit: string;
+  /** W: credited washes (WASHOUT sea credits included) */
+  washes: number;
+  /** D: times washed, every cause */
+  washed: number;
+  you: boolean;
+}
+/** the WASHOUT result for the victory slate (VictoryInfo.washout) */
+export interface WashoutVictory {
+  /** score per crew id (MatchResult.scores: length CREW_SLOTS, [0] = 0) */
+  scores: readonly number[];
+  /** the score limit the match played to (MatchResult.limit; 0 = none) */
+  limit: number;
+  /** how it ended (MatchResult.endedBy) */
+  endedBy: 'horn' | 'limit';
+  /** every runner (any order: the slate groups TEAMS by crew, orders FFA by the FfaVictory standings) */
+  runners: readonly WashoutRow[];
+}
+
+/** the runner fields washoutVictory() reads (core Runner satisfies it) */
+export interface WashoutRunnerLike { id: number; name: string; team: number; kit: string; washes: number; washedCount: number }
+
+/**
+ * CONTRACT_WASHOUT W6: the slate's WASHOUT block from the sim's result (MatchResult: scores / limit / endedBy) and the
+ * world's runners (Runner: washes / washedCount). The Game passes it as VictoryInfo.washout when result.rule is 'washout'.
+ */
+export function washoutVictory(res: { scores?: readonly number[] | null; limit?: number | null; endedBy?: string | null },
+  runners: ReadonlyArray<WashoutRunnerLike>, humanPid: number): WashoutVictory {
+  const scores = Array.isArray(res.scores) ? res.scores.map((v) => Math.max(0, Math.round(Number(v) || 0))) : [];
+  // a result without scores (never the case for a finished WASHOUT match): the credited washes summed per crew
+  if (!scores.length) for (const r of runners) scores[r.team] = (scores[r.team] ?? 0) + Math.max(0, r.washes | 0);
+  for (let i = 0; i < scores.length; i++) scores[i] = scores[i] ?? 0;
+  return {
+    scores, limit: Math.max(0, Math.round(Number(res.limit) || 0)), endedBy: res.endedBy === 'limit' ? 'limit' : 'horn',
+    runners: runners.map((r) => ({ pid: r.id, name: r.name, team: r.team, kit: r.kit, washes: Math.max(0, r.washes | 0), washed: Math.max(0, r.washedCount | 0), you: r.id === humanPid })),
+  };
+}
+
+/** W6 strings: the ending tag and the tie-break notes */
+/** review fix A-A8: the WASHOUT countdown line's parts — the rule's name + the menu's rule line (menus.ts RULE_LABELS) */
+export const WASHOUT_COUNT_RULE = ['WASHOUT', 'Most washes wins'] as const;
+export const LIMIT_TAG = 'LIMIT REACHED';
+export const TIME_TAG = 'TIME';
+export const TIE_TURF_NOTE = 'Tied on washes — turf breaks the tie';
+export const TIE_WASHED_NOTE = 'Tied on washes — fewer times washed breaks the tie';
+export const DRAW_NOTE = 'Tied on washes and on turf — a draw';
+/** the W / D column heads (washes / times washed) */
+export const W_HEAD = 'W';
+export const D_HEAD = 'D';
+
 export const DEATH_PREFIX = 'WASHED BY';
 export const SEA_NAME = 'the sea';
 export const VICTORY_LINE = 'THE HARBOR CHOSE A COLOR.';
@@ -117,7 +191,33 @@ export function waveIcon(cls = 'df-wave'): SVGSVGElement {
   return svg;
 }
 
-export interface VictoryInfo { sun: number; gulf: number; neutral: number; winner: TeamId; /** CONTRACT_FFA F3: the FFA slate */ ffa?: FfaVictory }
+export interface VictoryInfo {
+  sun: number; gulf: number; neutral: number; winner: TeamId;
+  /** CONTRACT_FFA F3: the FFA slate */
+  ffa?: FfaVictory;
+  /** CONTRACT_WASHOUT W6: the match rule (MatchResult.rule; omitted = result.rule, else 'turf') */
+  rule?: UiRule;
+  /** CONTRACT_WASHOUT W6: the WASHOUT scoreboard (washoutVictory()). Or pass `result` + `board` below and the slate builds
+   *  it. Ignored in TURF. */
+  washout?: WashoutVictory;
+  /** W6, the alternative to `washout`: the sim's MatchResult (rule / scores / limit / endedBy are read) … */
+  result?: { rule?: string; scores?: readonly number[]; limit?: number; endedBy?: string } | null;
+  /** … and every runner's line (pid / name / team / kit / washes / washed / you) */
+  board?: readonly WashoutRow[];
+}
+
+/** the WASHOUT block of a VictoryInfo (null in TURF): `washout`, else built from `result` + `board` */
+export function washoutOf(v: VictoryInfo): WashoutVictory | null {
+  const rule = v.rule ?? (v.result?.rule === 'washout' ? 'washout' : 'turf');
+  if (rule !== 'washout') return null;
+  if (v.washout) return v.washout;
+  if (!v.board) return null;
+  const r = v.result ?? {};
+  const scores = Array.isArray(r.scores) ? r.scores.map((x) => Math.max(0, Math.round(Number(x) || 0))) : [];
+  if (!scores.length) for (const b of v.board) scores[b.team] = (scores[b.team] ?? 0) + Math.max(0, b.washes | 0);
+  for (let i = 0; i < scores.length; i++) scores[i] = scores[i] ?? 0;
+  return { scores, limit: Math.max(0, Math.round(Number(r.limit) || 0)), endedBy: r.endedBy === 'limit' ? 'limit' : 'horn', runners: v.board };
+}
 
 const pct = (f: number): string => `${(Math.max(0, f) * 100).toFixed(1)}%`;
 
@@ -139,6 +239,8 @@ export class Slates {
   private deathLastNum = -1;
   // countdown legend (keyboard rows from main.ts; touch rows built in)
   private readonly legend: HTMLElement;
+  /** review fix A-A8: WASHOUT's objective line under the digits (hidden + empty in TURF) */
+  private readonly countRule: HTMLElement;
   private keyRows: ReadonlyArray<readonly [string, string]> = [];
   private touch = false;
   // victory
@@ -169,9 +271,23 @@ export class Slates {
   private readonly ffaWinner: HTMLElement;
   private readonly podium: HTMLElement;
   private readonly standings: HTMLElement;
-  private ffaRows: Array<{ row: HTMLElement; fill: HTMLElement; pct: HTMLElement; share: number }> = [];
-  private ffaSteps: Array<{ step: HTMLElement; pct: HTMLElement; share: number; h: number }> = [];
+  /** FFA rows / podium steps: `val` = the share (TURF) or the score (WASHOUT, `wo`) the tally counts up to */
+  private ffaRows: Array<{ row: HTMLElement; fill: HTMLElement | null; pct: HTMLElement; share: number; val: number; wo: boolean }> = [];
+  private ffaSteps: Array<{ step: HTMLElement; pct: HTMLElement; share: number; h: number; val: number; wo: boolean }> = [];
   private ffaTally: FfaVictory | null = null;
+  // WASHOUT (CONTRACT_WASHOUT W6)
+  private readonly woBody: HTMLElement;
+  private readonly woChips: Record<'sun' | 'gulf', { box: HTMLElement; n: HTMLElement; lim: HTMLElement }>;
+  private readonly woTag: HTMLElement;
+  private readonly woNote: HTMLElement;
+  private readonly woBoard: HTMLElement;
+  private readonly ffaMeta: HTMLElement;
+  private readonly ffaTag: HTMLElement;
+  private readonly ffaNote: HTMLElement;
+  /** the WASHOUT block of the slate on screen (null: TURF) */
+  private wo: WashoutVictory | null = null;
+  /** the TEAMS WASHOUT slate is up (its tally counts the two crew scores) */
+  private woTeams = false;
 
   constructor(host: HTMLElement) {
     this.root = el('div', 'df-slates');
@@ -188,7 +304,9 @@ export class Slates {
     });
     this.legend = el('div', 'df-count-keys');
     this.setLegend([['WASD', 'move'], ['LMB', 'fire'], ['SHIFT', 'slick'], ['SPACE', 'jump']]);
-    this.count.append(row, this.legend);
+    this.countRule = el('div', 'df-count-rule', '');
+    this.countRule.hidden = true;
+    this.count.append(row, this.countRule, this.legend);
 
     // ── death slate
     this.death = el('div', 'df-death');
@@ -260,17 +378,59 @@ export class Slates {
     this.ffaBody = el('div', 'df-ffa');
     this.ffaBody.hidden = true;
     this.ffaWinner = el('div', 'df-ffa-winner');
+    // WASHOUT (FFA): the ending tag + the tie-break note under the winner line
+    this.ffaMeta = el('div', 'df-wo-meta');
+    this.ffaTag = el('span', 'df-wo-tag', '');
+    this.ffaNote = el('span', 'df-wo-note', '');
+    this.ffaMeta.append(this.ffaTag, this.ffaNote);
+    this.ffaMeta.hidden = true;
     const cols = el('div', 'df-ffa-cols');
     this.podium = el('div', 'df-podium');
     this.podium.setAttribute('aria-hidden', 'true');
     this.standings = el('ol', 'df-standings');
     cols.append(this.podium, this.standings);
-    this.ffaBody.append(this.ffaWinner, cols);
-    vc.append(this.vicMark, title, scores, this.ffaBody, this.vicFinal, this.vicBtns);
+    this.ffaBody.append(this.ffaWinner, this.ffaMeta, cols);
+    // WASHOUT (TEAMS): the two final scores round the ending tag, the tie-break note, the 8-runner scoreboard
+    this.woBody = el('div', 'df-wo');
+    this.woBody.hidden = true;
+    const woScores = el('div', 'df-wo-scores');
+    const chip = (key: 'sun' | 'gulf'): { box: HTMLElement; n: HTMLElement; lim: HTMLElement } => {
+      const t = teamById(key === 'sun' ? 1 : 2);
+      const box = el('div', `df-wo-chip ${key}`);
+      const mk = el('i', 'mk', t.markGlyph);
+      mk.setAttribute('aria-hidden', 'true');
+      const n = el('b', 'n', '0');
+      const lim = el('span', 'lim', '');
+      const sc = el('span', 'sc');
+      sc.append(n, lim);
+      box.append(mk, el('span', 'nm', t.name), sc);
+      return { box, n, lim };
+    };
+    this.woChips = { sun: chip('sun'), gulf: chip('gulf') };
+    this.woTag = el('span', 'df-wo-tag', '');
+    woScores.append(this.woChips.sun.box, this.woTag, this.woChips.gulf.box);
+    this.woNote = el('p', 'df-wo-note', '');
+    this.woBoard = el('div', 'df-wo-board');
+    this.woBody.append(woScores, this.woNote, this.woBoard);
+    vc.append(this.vicMark, title, scores, this.woBody, this.ffaBody, this.vicFinal, this.vicBtns);
     this.victory.append(vc);
 
     this.root.append(this.count, this.death, this.victory);
     host.append(this.root);
+  }
+
+  /**
+   * Review fix A-A8: the countdown names the match's objective in WASHOUT — "WASHOUT · Most washes wins · first to 52"
+   * (TEAMS: "first crew to 52") — so a deep link or a remembered rule never starts a kills match with only "0 / 52" on
+   * screen. TURF: hidden and empty (the brief's countdown is unchanged). Hud.setRule calls it.
+   */
+  setRule(rule: UiRule, limit: number, ffa: boolean): void {
+    const wo = rule === 'washout';
+    this.countRule.hidden = !wo;
+    if (!wo) { this.countRule.replaceChildren(); return; }
+    const n = Math.max(0, Math.round(Number(limit) || 0));
+    this.countRule.replaceChildren(el('b', '', WASHOUT_COUNT_RULE[0]), document.createTextNode(` · ${WASHOUT_COUNT_RULE[1]}`
+      + (n > 0 ? ` · ${ffa ? 'first to' : 'first crew to'} ${n}` : '')));
   }
 
   /** the countdown's control legend: [keycap, label] pills (main.ts passes the live bindings) */
@@ -376,18 +536,31 @@ export class Slates {
     this.victoryShown = true;
     this.tallyT = 0;
     const isFfa = !!v.ffa;
-    this.scores.hidden = isFfa;
+    // CONTRACT_WASHOUT W6: the WASHOUT body replaces the coverage tally (TEAMS) / re-labels the FFA body by score
+    const wo = washoutOf(v);
+    this.wo = wo;
+    this.woTeams = !!wo && !isFfa;
+    this.scores.hidden = isFfa || !!wo;
+    this.woBody.hidden = !this.woTeams;
     this.ffaBody.hidden = !isFfa;
+    this.ffaMeta.hidden = !(wo && isFfa);
     this.victoryCard.classList.toggle('ffa', isFfa);
     this.victory.classList.toggle('ffa', isFfa);
+    this.victoryCard.classList.toggle('wo', !!wo);
+    this.victory.classList.toggle('wo', !!wo);
+    this.victory.dataset.rule = wo ? 'washout' : 'turf';
     this.ffaTally = null;
-    if (v.ffa) { this.showFfa(v, v.ffa); return; }
-    this.tally = { sun: Math.max(0, v.sun), gulf: Math.max(0, v.gulf), winner: v.winner, stamped: false, ready: false };
-    this.vicSun.textContent = pct(0);
-    this.vicGulf.textContent = pct(0);
-    this.vicSunBar.style.width = '0%';
-    this.vicGulfBar.style.width = '0%';
-    this.vicFinal.textContent = `${teamById(1).name} ${pct(v.sun)} · ${teamById(2).name} ${pct(v.gulf)}`;
+    if (v.ffa) { this.showFfa(v, v.ffa, wo); return; }
+    if (wo) {
+      this.showWashoutTeams(v, wo);
+    } else {
+      this.tally = { sun: Math.max(0, v.sun), gulf: Math.max(0, v.gulf), winner: v.winner, stamped: false, ready: false };
+      this.vicSun.textContent = pct(0);
+      this.vicGulf.textContent = pct(0);
+      this.vicSunBar.style.width = '0%';
+      this.vicGulfBar.style.width = '0%';
+      this.vicFinal.textContent = `${teamById(1).name} ${pct(v.sun)} · ${teamById(2).name} ${pct(v.gulf)}`;
+    }
     this.vicSunBox.classList.remove('win');
     this.vicGulfBox.classList.remove('win');
     this.vicMark.classList.remove('stamped');
@@ -410,6 +583,7 @@ export class Slates {
     if (!t || !this.victoryShown) return;
     this.tallyT += Math.max(0, Math.min(0.1, dt));
     if (this.ffaTally) { this.updateFfa(t); return; }
+    if (this.woTeams) { this.updateWashoutTeams(t); return; }
     const u = Math.max(0, Math.min(1, (this.tallyT - TALLY.fillFrom) / (TALLY.fillTo - TALLY.fillFrom)));
     const k = 1 - Math.pow(1 - u, 3);
     // bars compare the crews: the bigger share fills the track, the other is in proportion (numbers are absolute)
@@ -432,14 +606,18 @@ export class Slates {
     this.victory.hidden = true;
     this.tally = null;
     this.ffaTally = null;
+    this.wo = null;
+    this.woTeams = false;
     this.podium.classList.remove('stamped');
     this.tallyT = -1;
   }
 
   /** text content of the visible slates (harness read-back) */
-  text(): { countdown: string | null; death: string | null; victory: string | null; tally: Record<string, unknown> | null } {
+  text(): { countdown: string | null; countRule: string | null; death: string | null; victory: string | null; tally: Record<string, unknown> | null } {
     return {
       countdown: this.count.hidden ? null : (this.count.querySelector('.df-count-row')?.textContent ?? null),
+      // review fix A-A8: the WASHOUT objective line under the digits (null: TURF, or no countdown on screen)
+      countRule: this.count.hidden || this.countRule.hidden ? null : this.countRule.textContent,
       death: this.death.hidden ? null : `${DEATH_PREFIX} ${this.deathName.textContent ?? ''}`,
       // the card's visible parts (the idle mode's body — FFA or teams tally — is hidden and not read back)
       victory: this.victory.hidden ? null : [...this.victoryCard.children].filter((e) => !(e as HTMLElement).hidden).map((e) => e.textContent ?? '').join(''),
@@ -449,17 +627,114 @@ export class Slates {
           mode: 'ffa', winner: this.ffaWinner.textContent,
           podium: this.ffaSteps.map((s) => s.pct.textContent),
           standings: this.ffaRows.map((r) => ({ text: r.row.textContent, pct: r.pct.textContent, win: r.row.classList.contains('win') })),
-        } : {}) },
+        } : {}),
+        ...(this.wo ? { rule: 'washout', washout: this.washoutText() } : { rule: 'turf' }) },
     };
   }
 
+  /** CONTRACT_WASHOUT W6 read-back: the shown scores, the ending tag, the note, every board row (name · W · D) */
+  private washoutText(): Record<string, unknown> {
+    const wo = this.wo!;
+    const rows = [...this.victoryCard.querySelectorAll<HTMLElement>('.df-wo-row, .df-standings .srow.wo')].map((r) => ({
+      name: r.querySelector('.nm')?.textContent ?? '', team: Number(r.dataset.team),
+      w: Number(r.querySelector('.w')?.textContent ?? NaN), d: Number(r.querySelector('.d')?.textContent ?? NaN),
+      you: r.classList.contains('you'), win: r.classList.contains('win'),
+    }));
+    return {
+      mode: this.woTeams ? 'teams' : 'ffa', limit: wo.limit, endedBy: wo.endedBy,
+      tag: (this.woTeams ? this.woTag : this.ffaTag).textContent, note: (this.woTeams ? this.woNote : this.ffaNote).textContent || null,
+      scores: this.woTeams ? { sun: this.woChips.sun.n.textContent, gulf: this.woChips.gulf.n.textContent } : null,
+      winners: this.woTeams ? ['sun', 'gulf'].filter((k) => this.woChips[k as 'sun' | 'gulf'].box.classList.contains('win')) : null,
+      rows,
+    };
+  }
+
+  // ───────────────────────────── WASHOUT victory, TEAMS (CONTRACT_WASHOUT W6) ─────────────────────────────
+  private showWashoutTeams(v: VictoryInfo, wo: WashoutVictory): void {
+    const s1 = wo.scores[1] ?? 0, s2 = wo.scores[2] ?? 0;
+    this.tally = { sun: s1, gulf: s2, winner: v.winner, stamped: false, ready: false };
+    for (const key of ['sun', 'gulf'] as const) {
+      const c = this.woChips[key];
+      c.n.textContent = '0';
+      c.lim.textContent = wo.limit > 0 ? `/ ${wo.limit}` : '';
+      c.box.classList.remove('win');
+    }
+    const tag = wo.endedBy === 'limit' ? LIMIT_TAG : TIME_TAG;
+    this.woTag.textContent = tag;
+    this.woTag.classList.toggle('limit', wo.endedBy === 'limit');
+    // the note: turf decided a tie on washes (a winner with equal scores), or a full draw
+    let note = '';
+    if (s1 === s2) note = v.winner === 0 ? DRAW_NOTE : `${TIE_TURF_NOTE}: ${teamById(1).name} ${pct(v.sun)} · ${teamById(2).name} ${pct(v.gulf)}`;
+    this.woNote.textContent = note;
+    this.woNote.hidden = !note;
+    // the board: both crews side by side, each sorted by W (then fewer D, then id), your row highlighted
+    this.woBoard.replaceChildren();
+    for (const team of [1, 2] as TeamId[]) {
+      const t = teamById(team);
+      const key = team === 1 ? 'sun' : 'gulf';
+      const col = el('div', `df-wo-col ${key}`);
+      const head = el('div', 'df-wo-head');
+      const mk = el('i', 'mk', t.markGlyph);
+      mk.setAttribute('aria-hidden', 'true');
+      head.append(mk, el('span', 'nm', t.name), el('span', 'h', W_HEAD), el('span', 'h', D_HEAD));
+      const list = el('ol', 'df-wo-rows');
+      const rows = wo.runners.filter((r) => r.team === team).sort((a, b) => (b.washes - a.washes) || (a.washed - b.washed) || (a.pid - b.pid));
+      for (const r of rows) {
+        const li = el('li', `df-wo-row${r.you ? ' you' : ''}`);
+        li.dataset.team = String(team);
+        li.dataset.pid = String(r.pid);
+        const img = el('img', 'kiticon');
+        img.src = KIT_ICONS[r.kit] ?? '';
+        img.alt = '';
+        img.draggable = false;
+        li.append(img, el('span', 'nm', r.name), el('b', 'w', String(r.washes)), el('span', 'd', String(r.washed)));
+        list.append(li);
+      }
+      col.append(head, list);
+      this.woBoard.append(col);
+    }
+    this.vicFinal.textContent = `${teamById(1).name} ${s1} · ${teamById(2).name} ${s2} · ${tag}${note ? ` · ${note}` : ''}`;
+  }
+
+  private updateWashoutTeams(t: { sun: number; gulf: number; winner: TeamId; stamped: boolean; ready: boolean }): void {
+    const u = Math.max(0, Math.min(1, (this.tallyT - TALLY.fillFrom) / (TALLY.fillTo - TALLY.fillFrom)));
+    const k = 1 - Math.pow(1 - u, 3);
+    const a = String(u >= 1 ? t.sun : Math.round(t.sun * k)), b = String(u >= 1 ? t.gulf : Math.round(t.gulf * k));
+    if (this.woChips.sun.n.textContent !== a) this.woChips.sun.n.textContent = a;
+    if (this.woChips.gulf.n.textContent !== b) this.woChips.gulf.n.textContent = b;
+    if (!t.ready && this.tallyT >= TALLY.buttons) { t.ready = true; this.vicBtns.classList.add('ready'); }
+    if (!t.stamped && this.tallyT >= TALLY.stamp) {
+      t.stamped = true;
+      this.woChips.sun.box.classList.toggle('win', t.winner === 1);
+      this.woChips.gulf.box.classList.toggle('win', t.winner === 2);
+      this.vicMark.classList.add('stamped');
+    }
+  }
+
   // ───────────────────────────── FFA victory (CONTRACT_FFA F3) ─────────────────────────────
-  private showFfa(v: VictoryInfo, f: FfaVictory): void {
+  private showFfa(v: VictoryInfo, f: FfaVictory, wo: WashoutVictory | null = null): void {
     const rows = f.standings;
     this.tally = { sun: 0, gulf: 0, winner: v.winner, stamped: false, ready: false };
     this.ffaTally = f;
     const winners = f.winners.length ? f.winners : rows.length ? [rows[0].team] : [];
     const draw = winners.length > 1;
+    // WASHOUT: each crew's score (= its runner's credited washes) and times washed
+    const score = (team: number): number => Math.max(0, wo?.scores[team] ?? 0);
+    const runnerOf = (team: number): WashoutRow | undefined => wo?.runners.find((r) => r.team === team);
+    const washed = (team: number): number => runnerOf(team)?.washed ?? 0;
+    if (wo) {
+      const tag = wo.endedBy === 'limit' ? LIMIT_TAG : TIME_TAG;
+      this.ffaTag.textContent = tag;
+      this.ffaTag.classList.toggle('limit', wo.endedBy === 'limit');
+      // the note: a tie on the top score that a later key broke (fewer washed, else turf), or a draw
+      let note = '';
+      if (rows.length > 1 && score(rows[0].team) === score(rows[1].team)) {
+        if (draw) note = DRAW_NOTE;
+        else note = washed(rows[0].team) !== washed(rows[1].team) ? TIE_WASHED_NOTE : TIE_TURF_NOTE;
+      }
+      this.ffaNote.textContent = note;
+      this.ffaNote.hidden = !note;
+    }
     // the winner line: name + colour chip + mark (every tied crew on a draw)
     this.ffaWinner.replaceChildren();
     winners.forEach((w, i) => {
@@ -488,21 +763,22 @@ export class Slates {
       const mk = el('i', 'mk', c.markGlyph);
       mk.style.background = c.dye;
       const nm = el('b', `nm${r.you ? ' you' : ''}`, r.name);
-      const pctE = el('span', 'pct', pct(0));
+      const pctE = el('span', 'pct', wo ? '0' : pct(0));
       const step = el('div', 'step');
       step.style.setProperty('--c', c.dye);
       step.style.setProperty('--cg', c.dyeGloss);
       step.append(el('span', 'rk', String(rank + 1)));
       col.append(mk, nm, pctE, step);
       this.podium.append(col);
-      this.ffaSteps.push({ step, pct: pctE, share: Math.max(0, r.share), h: rank === 0 ? 1 : rank === 1 ? 0.7 : 0.48 });
+      this.ffaSteps.push({ step, pct: pctE, share: Math.max(0, r.share), h: rank === 0 ? 1 : rank === 1 ? 0.7 : 0.48, val: wo ? score(r.team) : Math.max(0, r.share), wo: !!wo });
     }
-    // the full standings
+    // the full standings (WASHOUT: rank · mark · name · W (the score) · D, in the result's WASHOUT order)
     this.standings.replaceChildren();
+    this.standings.classList.toggle('wo', !!wo);
     this.ffaRows = [];
     rows.forEach((r, i) => {
       const c = crewLook(r.team, 'ffa');
-      const li = el('li', `srow${r.you ? ' you' : ''}`);
+      const li = el('li', `srow${r.you ? ' you' : ''}${wo ? ' wo' : ''}`);
       li.style.setProperty('--c', c.dye);
       li.style.setProperty('--cg', c.dyeGloss);
       // the winner's % sits on a pill of the crew's UI colour in its ink (≥ 5.8:1 for all 8 crews); crew-coloured text
@@ -512,15 +788,28 @@ export class Slates {
       li.dataset.team = String(r.team);
       const mk = el('i', 'mk', c.markGlyph);
       mk.setAttribute('aria-hidden', 'true');
+      if (wo) {
+        const wv = el('b', 'pct w', '0');
+        const wc = el('span', 'wd');
+        wc.append(wv, el('i', 'u', W_HEAD));
+        const dc = el('span', 'wd dd');
+        dc.append(el('span', 'd', String(washed(r.team))), el('i', 'u', D_HEAD));
+        li.append(el('span', 'rk', String(i + 1)), mk, el('span', 'nm', r.name), wc, dc);
+        this.standings.append(li);
+        this.ffaRows.push({ row: li, fill: null, pct: wv, share: Math.max(0, r.share), val: score(r.team), wo: true });
+        return;
+      }
       const track = el('div', 'track');
       const fill = el('b', 'fill');
       track.append(fill);
       const pctE = el('b', 'pct', pct(0));
       li.append(el('span', 'rk', String(i + 1)), mk, el('span', 'nm', r.name), track, pctE);
       this.standings.append(li);
-      this.ffaRows.push({ row: li, fill, pct: pctE, share: Math.max(0, r.share) });
+      this.ffaRows.push({ row: li, fill, pct: pctE, share: Math.max(0, r.share), val: Math.max(0, r.share), wo: false });
     });
-    this.vicFinal.textContent = rows.map((r, i) => `${i + 1}. ${r.name} ${pct(r.share)}`).join(' · ');
+    this.vicFinal.textContent = wo
+      ? `${rows.map((r, i) => `${i + 1}. ${r.name} ${score(r.team)} ${W_HEAD} ${washed(r.team)} ${D_HEAD}`).join(' · ')} · ${this.ffaTag.textContent}${this.ffaNote.textContent ? ` · ${this.ffaNote.textContent}` : ''}`
+      : rows.map((r, i) => `${i + 1}. ${r.name} ${pct(r.share)}`).join(' · ');
     this.vicMark.classList.remove('stamped');
     this.vicBtns.classList.remove('ready');
     this.vicMark.replaceChildren();
@@ -545,13 +834,17 @@ export class Slates {
     const k = 1 - Math.pow(1 - u, 3);
     let top = 1e-6;
     for (const r of this.ffaRows) top = Math.max(top, r.share);
+    // TURF: the share (%) with its bar; WASHOUT: the score (an integer) counts up
+    const show = (x: { val: number; wo: boolean }): string => (x.wo ? String(u >= 1 ? x.val : Math.round(x.val * k)) : pct(u >= 1 ? x.val : x.val * k));
     for (const r of this.ffaRows) {
-      r.fill.style.width = `${((r.share / top) * k * 100).toFixed(2)}%`;
-      r.pct.textContent = pct(u >= 1 ? r.share : r.share * k);
+      if (r.fill) r.fill.style.width = `${((r.share / top) * k * 100).toFixed(2)}%`;
+      const s = show(r);
+      if (r.pct.textContent !== s) r.pct.textContent = s;
     }
     for (const s of this.ffaSteps) {
       s.step.style.setProperty('--h', (s.h * k).toFixed(3));
-      s.pct.textContent = pct(u >= 1 ? s.share : s.share * k);
+      const x = show(s);
+      if (s.pct.textContent !== x) s.pct.textContent = x;
     }
     if (!t.ready && this.tallyT >= TALLY.buttons) { t.ready = true; this.vicBtns.classList.add('ready'); }
     if (!t.stamped && this.tallyT >= TALLY.stamp) {

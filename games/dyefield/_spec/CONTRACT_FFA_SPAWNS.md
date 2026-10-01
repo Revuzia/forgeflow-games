@@ -95,6 +95,10 @@ yaw}` event is pushed. The HUD, the view and the harness read these.
     generator from `view/mapview.ts` (`addFfaPads` geometry / its soup-gather + spoke walk).
   - It is translucent in the centre, so floor paint stays visible, and it fades out.
   - It is visible to everyone: a fair warning.
+  - `CHANGED(review fix A-A10, 2026-09-30, view only)`: the flat 1.25 m ring read as a ~100 × 15 px sliver to a foe 12 m
+    away (often under the reticle cluster), so a shown marker also raises a 3 m vertical light column (r 0.5 m) in the
+    crew's dye: additive, brightest at the floor, fading with the marker's life. It lives in its own group
+    (`ffa_marker_columns`), so the marker itself stays ONE draw and `padcheck.py` measures the same geometry.
 - **TEAMS:** the A/B team pads are unchanged.
 - **FFA scenery:** the A/B team pads stay as neutral scenery (their F1 behaviour).
 - `CHANGED(SPAWNS core, 2026-09-30)`: core part done. FFA runners get no own / enemy pad (`MatchWorld.padOf(r)` →

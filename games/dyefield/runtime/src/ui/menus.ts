@@ -28,6 +28,15 @@
 // FULLSCREEN toggle sits in the title corner and on the pause card (hidden without element fullscreen); iPhone Safari
 // gets the one-time Add-to-Home-Screen tip there instead. The title's brand + profile corner share one flex row, so the
 // corner can never cover the wordmark. The phone-landscape layout is CSS (menus.css @media (max-height: 500px)).
+//
+// CONTRACT_WASHOUT W4: PLAY carries a RULE selector beside MODE — TURF (the default, "Cover the most floor") / WASHOUT
+// ("Most washes wins"), the picked rule's line under the pair — persisted in the profile as `rule` (START's selection
+// carries it). The title's brand line names every option ('Harbor Cup • 4 v 4 · Free-for-all · Washout'); the profile
+// card shows the picked mode and rule in WASHOUT ('TEAMS · WASHOUT' / 'FREE-FOR-ALL · WASHOUT'; TURF keeps the crew name
+// / FREE-FOR-ALL); HOW TO PLAY's first panel explains WASHOUT when it is picked.
+// CONTRACT_CONTROLS C1: AIM (RMB by default) is a remappable action (SETTINGS lists it after FIRE); the MOUSE card adds AIM
+// SENSITIVITY (0.3–1.2 × while aiming) and TOGGLE AIM (off = hold, the default); the legends read LOOK (mouse) · AIM (RMB)
+// · JELLY CHARGE (E); in touch mode the right-side drag is LOOK and the AIM button (a scope) zooms.
 
 import { WEAPONS, playableMaps, teamById, TEAMS_RAW, type MapDef } from '../core/data.ts';
 import type { TeamId } from '../core/types.ts';
@@ -36,26 +45,38 @@ import { codeLabel, type Action, type Input } from '../input.ts';
 import { RENDER_QUALITIES, type RenderQuality } from '../view/renderer.ts';
 import {
   cleanName, NAME_MAX, SENS_MAX, SENS_MIN, BOT_SKILL_IDS, TOUCH_SENS_MIN, TOUCH_SENS_MAX, TOUCH_SCALE_MIN, TOUCH_SCALE_MAX,
-  TOUCH_OPACITY_MIN, TOUCH_OPACITY_MAX, type Bindings, type ProfileMode, type ProfileStore, type SettingsStore,
+  TOUCH_OPACITY_MIN, TOUCH_OPACITY_MAX, AIM_SENS_MIN, AIM_SENS_MAX, AIM_SENS_DEFAULT, type Bindings, type ProfileMode, type ProfileRule,
+  type ProfileStore, type SettingsStore,
 } from './settings.ts';
 import { crewLook, ffaCrews, touchGlyph, type TouchGlyph } from './slates.ts';
 import { KIT_ICONS, MAP_THUMBS, SVG, roleLabel } from './icons.ts';
 import {
-  MODE_LINE_ALL, MODE_LINE_FFA, fillModeLine, touchModeOn, watchTouchMode, Fullscreen, homeScreenTip, markHomeTipShown, dismissHomeTip, onHomeTip, HOME_TIP,
+  MODE_LINE_ALL, MODE_LINE_FFA, MODE_LINE_WASHOUT, MODE_LINE_FFA_WASHOUT, fillModeLine, touchModeOn, watchTouchMode, Fullscreen, homeScreenTip,
+  markHomeTipShown, dismissHomeTip, onHomeTip, HOME_TIP,
 } from './boot.ts';
 import type { Mannequin } from './mannequin.ts';
+import { CLUSTER } from '../touch/controls.ts';
 import './menus.css';
 
 export const LOADOUT_HINT = 'Pick your kit — crest sits on the right';
-/** the title's brand line (both modes) and the FFA match line; defined in boot.ts so the loading card shares them */
-export { MODE_LINE_ALL, MODE_LINE_FFA };
+/** the title's brand line (every option) and the match lines; defined in boot.ts so the loading card shares them */
+export { MODE_LINE_ALL, MODE_LINE_FFA, MODE_LINE_WASHOUT, MODE_LINE_FFA_WASHOUT };
 /** CONTRACT_FFA F3: the PLAY mode selector labels */
 export const MODE_LABELS: ReadonlyArray<readonly [ProfileMode, string]> = [['teams', 'TEAMS · 4 v 4'], ['ffa', 'FREE-FOR-ALL']];
+/** CONTRACT_WASHOUT W4: the PLAY rule selector — label + its one-line description */
+export const RULE_LABELS: ReadonlyArray<readonly [ProfileRule, string, string]> = [['turf', 'TURF', 'Cover the most floor'], ['washout', 'WASHOUT', 'Most washes wins']];
 /** the brief's credits line, widened for the FREE-FOR-ALL mode (owner 2026-09-28: 4 v 4-only copy was misleading) */
 export const CREDITS_LINE = 'An original 4 v 4 and free-for-all turf-paint shooter.';
 /** HOW TO PLAY panel 1's rule: teams (unchanged copy) / FREE-FOR-ALL (new copy, CONTRACT_FFA F3) */
 export const HOW_RULE = 'Dye the court in your crew’s color. When the final horn sounds, the crew with more turf wins.';
 export const HOW_RULE_FFA = 'Free-for-all: every runner is a crew of one. When the final horn sounds, the most turf wins.';
+/** CONTRACT_WASHOUT W4: panel 1's rule text when WASHOUT is picked (either mode), its title and its tie-break line */
+export const HOW_RULE_WASHOUT = 'Washout: wash the other side. Most washes when the horn sounds — or the first to the limit — wins. Paint still moves you, refills you and charges your special.';
+export const HOW_TITLE = 'THE FLOOR IS THE SCORE';
+export const HOW_TITLE_WASHOUT = 'MOST WASHES WINS';
+const HOW_NOTE = 'Floors count most; walls count a little.';
+const HOW_NOTE_WASHOUT = 'A tie on washes goes to the side with more turf.';
+const HOW_NOTE_WASHOUT_FFA = 'A tie on washes goes to whoever was washed less, then to more turf.';
 export const MENU_LABELS = ['PLAY', 'LOADOUT', 'SETTINGS', 'HOW TO PLAY', 'CREDITS'] as const;
 /** CONTRACT_MOBILE M8: the SETTINGS group (touch mode, or ?touch=1) and M4: the HOW TO PLAY panel */
 export const TOUCH_GROUP = 'TOUCH CONTROLS';
@@ -67,17 +88,19 @@ const TOUCH_PARAM = ((): boolean => { try { return new URLSearchParams(location.
 
 /** the touch button each remappable action maps to (M4 platform prompts: keycaps → the touch button's name) */
 const TOUCH_NAME: Partial<Record<Action, string>> = {
-  fire: 'FIRE', slick: 'SLICK', jump: 'JUMP', sub: 'SUB', special: 'SPECIAL', pause: 'PAUSE',
+  fire: 'FIRE', slick: 'SLICK', jump: 'JUMP', sub: 'SUB', special: 'SPECIAL', pause: 'PAUSE', aim: 'AIM',
   moveF: 'STICK', moveB: 'STICK', moveL: 'STICK', moveR: 'STICK',
 };
-/** the pause card's control legend in touch mode: [glyph, label] (the countdown legend lives in slates.ts) */
+/** the pause card's control legend in touch mode: [glyph, label] (the countdown legend lives in slates.ts); C1: the
+ *  right-side drag is LOOK, the AIM button (a scope) zooms */
 const TOUCH_LEGEND: ReadonlyArray<readonly [TouchGlyph, string]> = [
-  ['stick', 'MOVE'], ['aim', 'AIM'], ['fire', 'FIRE'], ['slick', 'SLICK · DRINK'], ['jump', 'JUMP'], ['sub', 'SUB'], ['special', 'SPECIAL'], ['pause', 'PAUSE'],
+  ['stick', 'MOVE'], ['aim', 'LOOK'], ['ads', 'AIM'], ['fire', 'FIRE'], ['slick', 'SLICK · DRINK'], ['jump', 'JUMP'], ['sub', 'SUB'], ['special', 'SPECIAL'], ['pause', 'PAUSE'],
 ];
 /** HOW TO PLAY's touch panel: [glyph, name, what it does] */
 const TOUCH_HOW: ReadonlyArray<readonly [TouchGlyph, string, string]> = [
   ['stick', 'MOVE', 'drag anywhere on the left side'],
-  ['aim', 'AIM', 'drag anywhere on the right side'],
+  ['aim', 'LOOK', 'drag anywhere on the right side'],
+  ['ads', 'AIM', 'tap to zoom in; tap again to zoom out'],
   ['fire', 'FIRE', 'hold it; drag from it to aim while you shoot'],
   ['slick', 'SLICK', 'hold on your own color to swim and refill'],
   ['jump', 'JUMP', 'tap to jump'],
@@ -88,13 +111,12 @@ const TOUCH_HOW: ReadonlyArray<readonly [TouchGlyph, string, string]> = [
 
 /**
  * The touch layout (CONTRACT_MOBILE M2, right-handed): button centre as (px from the right safe edge, px from the bottom
- * safe edge) and diameter at scale 1 — the same table touch/controls.ts places the live buttons from. Drawn on an
- * 852 × 393 phone for the HOW TO PLAY diagram and the SETTINGS live preview.
+ * safe edge) and diameter at scale 1 — read from touch/controls.ts CLUSTER, the table the live buttons are placed from,
+ * so the diagram cannot drift from the overlay (CONTRACT_CONTROLS C1: the AIM toggle beside FIRE draws the 'ads' scope).
+ * Drawn on an 852 × 393 phone for the HOW TO PLAY diagram and the SETTINGS live preview.
  */
-const TOUCH_CLUSTER: ReadonlyArray<{ g: TouchGlyph; dx: number; dy: number; d: number }> = [
-  { g: 'jump', dx: 52, dy: 50, d: 64 }, { g: 'fire', dx: 146, dy: 96, d: 88 }, { g: 'slick', dx: 246, dy: 58, d: 64 },
-  { g: 'sub', dx: 126, dy: 202, d: 56 }, { g: 'special', dx: 220, dy: 170, d: 64 },
-];
+const TOUCH_CLUSTER: ReadonlyArray<{ g: TouchGlyph; dx: number; dy: number; d: number }> =
+  CLUSTER.map((c) => ({ g: c.id === 'aim' ? 'ads' : c.id, dx: c.dx, dy: c.dy, d: c.d }));
 const PHONE_W = 852, PHONE_H = 393;
 
 /** an SVG of the touch controls on a landscape phone at `scale` / `opacity` (mirrored when left-handed) */
@@ -153,6 +175,8 @@ export interface StartSelection {
   mode: ProfileMode;
   /** CONTRACT_FFA F3: the human's FFA colour (1..8) */
   ffaColor: number;
+  /** CONTRACT_WASHOUT W4: the match rule picked on PLAY */
+  rule: ProfileRule;
 }
 
 export interface MenuHooks {
@@ -171,7 +195,7 @@ export interface MenuHooks {
 /** remappable actions, in the order the SETTINGS list shows them */
 export const REMAP: ReadonlyArray<readonly [Action, string]> = [
   ['moveF', 'MOVE FORWARD'], ['moveB', 'MOVE BACK'], ['moveL', 'MOVE LEFT'], ['moveR', 'MOVE RIGHT'],
-  ['jump', 'JUMP'], ['fire', 'FIRE'], ['slick', 'SLICK · DRINK'], ['sub', 'SUB'], ['special', 'SPECIAL'], ['pause', 'PAUSE'],
+  ['jump', 'JUMP'], ['fire', 'FIRE'], ['aim', 'AIM'], ['slick', 'SLICK · DRINK'], ['sub', 'SUB'], ['special', 'SPECIAL'], ['pause', 'PAUSE'],
 ];
 const ACTION_LABEL: Record<string, string> = Object.fromEntries([...REMAP, ['debug', 'DEBUG'], ['map', 'MAP']] as Array<[string, string]>);
 
@@ -259,8 +283,19 @@ export class Menus {
   private readonly profMark: HTMLElement;
   private readonly kitCard: HTMLElement;
   private readonly modeText: HTMLElement;
-  /** HOW TO PLAY panel 1's rule line: HOW_RULE (teams, unchanged) / HOW_RULE_FFA, by the profile's mode */
+  /** HOW TO PLAY panel 1's rule line: HOW_RULE (teams, unchanged) / HOW_RULE_FFA, by the profile's mode (WASHOUT:
+   *  HOW_RULE_WASHOUT), its title and its second line */
   private howRule: HTMLElement | null = null;
+  private howTitle: HTMLElement | null = null;
+  private howNote: HTMLElement | null = null;
+  /** review fix A-A9: HOW TO PLAY card 1's picture (data-art 'floor' | 'washout') */
+  private howArt: HTMLElement | null = null;
+  /** review fix A-A8: the RUNNING match's mode + rule (main.ts setMatchRule at the pause card): HOW TO PLAY opened from
+   *  the pause card teaches the match being played, not the saved profile's pick (a deep link plays ?rule= / ?mode=) */
+  private matchHow: { ffa: boolean; wash: boolean } | null = null;
+  // CONTRACT_WASHOUT W4: the PLAY rule selector + the picked rule's line
+  private readonly ruleBtns = new Map<ProfileRule, HTMLButtonElement>();
+  private readonly ruleNote: HTMLElement;
   // CONTRACT_FFA F3: the PLAY mode selector + the LOADOUT FFA colour pick
   private readonly modeBtns = new Map<ProfileMode, HTMLButtonElement>();
   private readonly crewCap: HTMLElement;
@@ -488,7 +523,33 @@ export class Menus {
       modeSeg.append(b);
     }
     modeBox.append(modeSeg);
-    playHead.append(modeBox);
+    // CONTRACT_WASHOUT W4: the RULE selector beside MODE (TURF / WASHOUT), persisted in the profile; the picked rule's
+    // one-line description under the pair (each button also carries its own as a tooltip)
+    const ruleBox = el('div', 'dfm-rulebox');
+    ruleBox.append(el('h3', 'dfm-cap', 'RULE'));
+    const ruleSeg = el('div', 'dfm-ruleseg');
+    ruleSeg.setAttribute('role', 'radiogroup');
+    ruleSeg.setAttribute('aria-label', 'Rule');
+    for (const [r, label, line] of RULE_LABELS) {
+      const b = btn('dfm-segbtn dfm-rulebtn', label);
+      b.id = `dfm-rule-${r}`;
+      b.dataset.rule = r;
+      b.setAttribute('role', 'radio');
+      b.title = line;
+      b.setAttribute('aria-description', line);
+      b.addEventListener('click', () => { this.sound('click'); this.profile.set({ rule: r }); });
+      this.ruleBtns.set(r, b);
+      ruleSeg.append(b);
+    }
+    ruleBox.append(ruleSeg);
+    this.ruleNote = el('p', 'dfm-rulenote', '');
+    this.ruleNote.id = 'dfm-rule-note';
+    this.ruleNote.setAttribute('aria-live', 'polite');
+    const setup = el('div', 'dfm-setup');
+    const pills = el('div', 'dfm-setup-row');
+    pills.append(modeBox, ruleBox);
+    setup.append(pills, this.ruleNote);
+    playHead.append(setup);
     play.append(el('div', 'dfm-scrim full'), playHead);
     const mapRow = el('div', 'dfm-maps');
     mapRow.setAttribute('role', 'radiogroup');
@@ -590,6 +651,10 @@ export class Menus {
     mouse.append(this.slider('sens', 'SENSITIVITY', SENS_MIN, SENS_MAX, 0.05, () => this.settings.get().sensitivity,
       (v) => this.settings.set({ sensitivity: v }), (v) => `${v.toFixed(2)}×`));
     mouse.append(this.toggle('invert', 'INVERT Y', () => this.settings.get().invertY, (v) => this.settings.set({ invertY: v })));
+    // CONTRACT_CONTROLS C1: look speed while aiming (× the sensitivity above) and hold / toggle AIM (off = hold, the default)
+    mouse.append(this.slider('aim-sens', 'AIM SENSITIVITY', AIM_SENS_MIN, AIM_SENS_MAX, 0.05,
+      () => this.settings.get().aimSens ?? AIM_SENS_DEFAULT, (v) => this.settings.set({ aimSens: v }), (v) => `${v.toFixed(2)}×`));
+    mouse.append(this.toggle('aim-toggle', 'TOGGLE AIM', () => this.settings.get().aimToggle === true, (v) => this.settings.set({ aimToggle: v })));
     const audio = el('section', 'dfm-card');
     audio.append(el('h3', 'dfm-cap', 'VOLUME'));
     for (const [k, label] of [['master', 'MASTER'], ['music', 'MUSIC'], ['sfx', 'EFFECTS']] as const) {
@@ -650,9 +715,9 @@ export class Menus {
     how.append(el('div', 'dfm-scrim full'), this.header('HOW TO PLAY', ''));
     const panels = el('div', 'dfm-how');
     panels.append(
-      this.howPanel(1, 'THE FLOOR IS THE SCORE', HOW_ART.floor, [
+      this.howPanel(1, HOW_TITLE, HOW_ART.floor, [
         HOW_RULE,
-        'Floors count most; walls count a little.']),
+        HOW_NOTE]),
       this.howPanel(2, 'SLICK & DRINK', HOW_ART.slick, [
         ['Hold ', ['slick'], ' on your own color to slick down: you sink, your crest cuts through like a fin, and your tank refills fast.'],
         'Enemy dye slows you to a slog.']),
@@ -661,9 +726,14 @@ export class Menus {
         'Pick yours in LOADOUT.']),
       this.howPanel(4, 'SUB & SPECIAL', HOW_ART.subsp, [
         ['', ['sub'], ' throws a JELLY CHARGE (most of a tank). Paint and washes fill your special; ', ['special'], ' unleashes CLOUDBURST or WELLSPRING.'],
-        ['Hit ', ['fire'], ' to shoot, ', ['jump'], ' to jump.']]),
+        ['Hit ', ['fire'], ' to shoot, ', ['aim'], ' to aim, ', ['jump'], ' to jump.']]),
     );
     this.howRule = panels.querySelector('.dfm-howp p');
+    this.howNote = panels.querySelector('.dfm-howp p:nth-of-type(2)');
+    this.howTitle = panels.querySelector('.dfm-howp h3 span:not(.n)');
+    // review fix A-A9: card 1's picture follows the rule (TURF 'floor' — pixel-identical as before; WASHOUT 'washout')
+    this.howArt = panels.querySelector<HTMLElement>('.dfm-howp .art');
+    if (this.howArt) this.howArt.dataset.art = 'floor';
     // CONTRACT_MOBILE M4: the touch-controls panel (touch mode; first, full width): the layout diagram + what each does
     // (its own class, not .dfm-howp: the four numbered panels stay exactly four)
     const tp = el('article', 'dfm-card dfm-howtouch');
@@ -1012,6 +1082,14 @@ export class Menus {
     if (homeScreenTip()) markHomeTipShown();       // M9 (B-F5)
   }
 
+  /** review fix A-A8: the running match's mode + rule (null: none) — HOW TO PLAY from the pause card follows it */
+  setMatchRule(mode: 'teams' | 'ffa' | null, rule: 'turf' | 'washout' | null): void {
+    const next = mode && rule ? { ffa: mode === 'ffa', wash: rule === 'washout' } : null;
+    const same = (next === null && this.matchHow === null) || (!!next && !!this.matchHow && next.ffa === this.matchHow.ffa && next.wash === this.matchHow.wash);
+    this.matchHow = next;
+    if (!same && this.visible) this.refresh();
+  }
+
   setPauseMessage(msg: string): void {
     this.pauseMsg.textContent = msg;
     this.pauseMsg.hidden = !msg;
@@ -1096,7 +1174,7 @@ export class Menus {
     this.sound('start');
     this.hooks.start({
       map, random, preset: map === 'pier18' ? p.preset : '', skill: p.skill, kit: p.kit, crew: p.crew, name: cleanName(this.profile.get().name),
-      mode: p.mode, ffaColor: p.ffaColor,
+      mode: p.mode, ffaColor: p.ffaColor, rule: p.rule === 'washout' ? 'washout' : 'turf',
     });
   }
 
@@ -1161,10 +1239,24 @@ export class Menus {
     // title: the brand line names BOTH modes whatever is picked (owner 2026-09-28: a 4 v 4-only line read as if FFA
     // did not exist); the picked mode shows on the profile card below (profCrew) and on PLAY's MODE selector
     fillModeLine(this.modeText, MODE_LINE_ALL);
-    if (this.howRule) this.howRule.textContent = ffa ? HOW_RULE_FFA : HOW_RULE;
+    // CONTRACT_WASHOUT W4: the rule (TURF: every line exactly as before)
+    const wash = p.rule === 'washout';
+    this.root.dataset.rule = wash ? 'washout' : 'turf';
+    // HOW TO PLAY: the profile's pick in the lobby; from the pause card, the running match (review fix A-A8)
+    const mh = this.context === 'pause' && this.matchHow ? this.matchHow : null;
+    const hWash = mh ? mh.wash : wash, hFfa = mh ? mh.ffa : ffa;
+    if (this.howRule) this.howRule.textContent = hWash ? HOW_RULE_WASHOUT : hFfa ? HOW_RULE_FFA : HOW_RULE;
+    if (this.howNote) this.howNote.textContent = hWash ? (hFfa ? HOW_NOTE_WASHOUT_FFA : HOW_NOTE_WASHOUT) : HOW_NOTE;
+    if (this.howTitle) this.howTitle.textContent = hWash ? HOW_TITLE_WASHOUT : HOW_TITLE;
+    const art = hWash ? 'washout' : 'floor';
+    if (this.howArt && this.howArt.dataset.art !== art) { this.howArt.innerHTML = HOW_ART[art]; this.howArt.dataset.art = art; }
+    for (const [r, b] of this.ruleBtns) { const on = r === (wash ? 'washout' : 'turf'); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
+    const rl = RULE_LABELS.find(([r]) => r === (wash ? 'washout' : 'turf'));
+    if (rl) this.ruleNote.textContent = rl[2];
     this.profMark.textContent = mark;
     this.profName.textContent = p.name || 'YOU';
-    this.profCrew.textContent = ffa ? MODE_LABELS[1][1] : team.name;
+    // the profile card: TURF keeps the crew name (teams) / FREE-FOR-ALL; WASHOUT names the mode and the rule
+    this.profCrew.textContent = wash ? `${ffa ? MODE_LABELS[1][1] : 'TEAMS'} · WASHOUT` : ffa ? MODE_LABELS[1][1] : team.name;
     const k = kitRow(p.kit);
     const sub = subRow(k.sub), sp = specialRow(k.special);
     this.kitCard.replaceChildren();
@@ -1398,13 +1490,15 @@ export class Menus {
   private renderLegend(): void {
     const b = this.settings.get().bindings;
     const k = (a: Action): string => (b[a]?.[0] ? codeLabel(b[a][0]) : '—');
+    // CONTRACT_CONTROLS C1: the mouse LOOKs, AIM is its own key (RMB by default), SUB reads JELLY CHARGE
     const rows: Array<[string[], string]> = [
       [[k('moveF'), k('moveL'), k('moveB'), k('moveR')], 'MOVE'],
-      [['MOUSE'], 'AIM'],
+      [['MOUSE'], 'LOOK'],
+      [[k('aim')], 'AIM'],
       [[k('fire')], 'FIRE'],
       [[k('slick')], 'SLICK · DRINK'],
       [[k('jump')], 'JUMP'],
-      [[k('sub')], 'SUB'],
+      [[k('sub')], 'JELLY CHARGE'],
       [[k('special')], 'SPECIAL'],
       [[k('pause')], 'PAUSE'],
     ];
@@ -1438,7 +1532,7 @@ export class Menus {
   legend(): Array<[string, string]> {
     const k = (a: Action): string => this.keyText(a);
     const move = ['moveF', 'moveL', 'moveB', 'moveR'].map((a) => k(a as Action)).join('');
-    return [[move.length <= 4 ? move : `${k('moveF')}/${k('moveB')}`, 'move'], [k('fire'), 'fire'], [k('slick'), 'slick'], [k('jump'), 'jump']];
+    return [[move.length <= 4 ? move : `${k('moveF')}/${k('moveB')}`, 'move'], [k('fire'), 'fire'], [k('aim'), 'aim'], [k('slick'), 'slick'], [k('jump'), 'jump']];
   }
 
   // ───────────────────────────── hints ─────────────────────────────
@@ -1642,6 +1736,9 @@ export class Menus {
       conflict: this.conflict ? { ...this.conflict } : null, note: this.bindNote.textContent || '',
       profile: { ...this.profile.get() }, mannequin: this.mannequin?.info() ?? null,
       modeLine: this.modeText.textContent,
+      // CONTRACT_WASHOUT W4: the RULE selector (the picked button, its line) + the profile card
+      rule: [...this.ruleBtns].find(([, b]) => b.getAttribute('aria-checked') === 'true')?.[0] ?? null, ruleNote: this.ruleNote.textContent,
+      profileCard: this.profCrew.textContent,
       gamepad: this.padSeen,
       // CONTRACT_MOBILE read-back: the input mode the menus show, the TOUCH CONTROLS group, the FULLSCREEN toggles, the tip
       touch: this.touch, touchGroup: !this.touchGroup.hidden, hints: !this.hints.hidden,
@@ -1674,6 +1771,33 @@ const HOW_ART = {
     <rect x="46" y="120" width="70" height="8" rx="4" fill="var(--sun-dye)"/><rect x="138" y="120" width="56" height="8" rx="4" fill="var(--gulf-dye)"/>
     <circle cx="36" cy="124" r="10" fill="#fff8ec" stroke="#14203a" stroke-width="3"/><text x="36" y="129" text-anchor="middle" font-size="13" fill="var(--sun-dye)">◉</text>
     <circle cx="204" cy="124" r="10" fill="#fff8ec" stroke="#14203a" stroke-width="3"/><text x="204" y="128.5" text-anchor="middle" font-size="12" fill="var(--gulf-dye)">▲</text>
+  </svg>`,
+  // review fix A-A9: WASHOUT's card 1 ("MOST WASHES WINS") — a shooter's dye stream washes a foe (burst + ✕, "+1") and the
+  // two crew score chips count washes; the court's dye is only a faint backdrop (turf is the tie-break). No '/ limit' figure
+  // (washoutLimitFor varies by map and mode). Own clipPath id (never dfh-court).
+  washout: `<svg viewBox="0 0 240 140" aria-hidden="true">
+    <defs><clipPath id="dfh-wcourt"><path d="M30 14h180l22 84H8z"/></clipPath></defs>
+    <path d="M30 14h180l22 84H8z" fill="#e9e2d2" stroke="#14203a" stroke-width="4" stroke-linejoin="round"/>
+    <g clip-path="url(#dfh-wcourt)">
+      <path d="M-4 66c22-8 40 2 52 14s4 24-8 30H-4z" fill="var(--sun-dye)" opacity=".45"/>
+      <path d="M244 36c-18 2-30 10-34 22s6 26 18 30h16z" fill="var(--gulf-dye)" opacity=".45"/>
+      <g stroke="rgba(20,32,58,.18)" stroke-width="1.5"><path d="M76 14l-10 84M120 14v84M164 14l10 84M19 56h202"/></g>
+      <ellipse cx="170" cy="88" rx="26" ry="7" fill="var(--sun-dye)"/>
+      <circle cx="144" cy="82" r="4" fill="var(--sun-dye)"/><circle cx="198" cy="91" r="3.5" fill="var(--sun-dye)"/>
+    </g>
+    <ellipse cx="62" cy="90" rx="14" ry="4" fill="rgba(20,32,58,.25)"/>
+    <rect x="53" y="58" width="18" height="30" rx="9" fill="var(--sun-dye)" stroke="#14203a" stroke-width="3"/>
+    <circle cx="62" cy="49" r="9" fill="var(--sun)" stroke="#14203a" stroke-width="3"/>
+    <path d="M70 68h14" stroke="#14203a" stroke-width="5" stroke-linecap="round"/>
+    <g fill="var(--sun-dye)" stroke="#14203a" stroke-width="1.5"><circle cx="98" cy="64" r="4"/><circle cx="117" cy="60" r="4.6"/><circle cx="136" cy="58" r="5.2"/></g>
+    <path d="M170.0 35.0L173.8 47.8L185.6 41.4L179.2 53.2L192.0 57.0L179.2 60.8L185.6 72.6L173.8 66.2L170.0 79.0L166.2 66.2L154.4 72.6L160.8 60.8L148.0 57.0L160.8 53.2L154.4 41.4L166.2 47.8z"
+      fill="#fff8ec" stroke="#14203a" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M164 51l12 12M176 51l-12 12" stroke="var(--gulf-dye)" stroke-width="4.5" stroke-linecap="round"/>
+    <text x="100" y="42" text-anchor="middle" font-family="Lilita One, sans-serif" font-size="19" fill="var(--sun-dye)" stroke="#14203a" stroke-width="1.2" paint-order="stroke">+1</text>
+    <rect x="30" y="110" width="80" height="24" rx="12" fill="var(--sun-dye)" stroke="#14203a" stroke-width="3"/>
+    <text x="70" y="128" text-anchor="middle" font-family="Lilita One, sans-serif" font-size="17" fill="#fff8ec">◉ 5</text>
+    <rect x="130" y="110" width="80" height="24" rx="12" fill="var(--gulf-dye)" stroke="#14203a" stroke-width="3"/>
+    <text x="170" y="128" text-anchor="middle" font-family="Lilita One, sans-serif" font-size="17" fill="#fff8ec">▲ 3</text>
   </svg>`,
   slick: `<svg viewBox="0 0 240 140" aria-hidden="true">
     <path d="M6 70c24-8 44 6 70 0s46-10 74 0 52 6 84-2v68H6z" fill="var(--sun-dye)" stroke="#14203a" stroke-width="4" stroke-linejoin="round"/>

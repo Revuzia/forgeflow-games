@@ -82,3 +82,23 @@
 }
 
 .dft-pause { background: rgba(20, 32, 58, .62); }
+
+/* CONTRACT_CONTROLS C1: AIM — a toggle beside FIRE; lit (cream fill, ink glyph) while the zoom is on */
+.dft-aim .dft-ico { width: 62%; height: 62%; }
+.dft-aim.on { opacity: 1; background: rgba(255, 248, 236, .92); color: var(--dft-ink); border-color: var(--dft-ring);
+  box-shadow: 0 4px 0 rgba(20, 32, 58, .6), 0 0 0 4px rgba(255, 210, 63, .45); }
+
+/* CONTRACT_CONTROLS C3: a SPECIAL press the meter could not answer — a short shake (reduce motion: a brief flash) */
+.dft-special.deny { animation: dft-deny .42s ease-in-out 1; }
+.dft-special.ready.deny { animation: dft-deny .42s ease-in-out 1, dft-ready 1.1s ease-in-out .42s infinite; }
+@keyframes dft-deny {
+  0%, 100% { translate: 0 0; }
+  15% { translate: -7px 0; }
+  35% { translate: 6px 0; }
+  55% { translate: -4px 0; }
+  75% { translate: 3px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dft-special.deny, .dft-special.ready.deny { animation: dft-deny-flash .42s ease-out 1; }
+  @keyframes dft-deny-flash { 0% { filter: brightness(1.6); } 100% { filter: none; } }
+}

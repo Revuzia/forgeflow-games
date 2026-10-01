@@ -22,8 +22,12 @@ taps (mouse clicks on the desktop sizes) and runs `LAYOUT_JS` on every screen:
              covers the touch controls (`__DF__.touch().buttons` when present, else the nominal left-bottom stick zone
              and right-bottom thumb arc). The touch controls are round: they are judged as circles, not bounding boxes.
 
-Steps per device (a subset with --steps): loading, title, play, play_ffa, loadout_ffa, loadout, settings,
-settings_end, howto, credits, hud_teams, pause, quit, victory, hud_ffa, victory_ffa, playcard, error, rotate.
+Steps per device (a subset with --steps): loading, title, play, play_washout, play_ffa, loadout_ffa, loadout, settings,
+settings_end, howto, credits, hud_teams, pause, quit, victory, hud_ffa, victory_ffa, hud_washout, victory_washout,
+hud_washout_ffa, victory_washout_ffa, playcard, error, rotate.
+CONTRACT_WASHOUT W8: play_washout = PLAY with the RULE selector on WASHOUT (its line under the MODE / RULE pills); the
+*_washout steps are ?rule=washout deep links (the HUD's score chips / FFA scores, the special's ready prompt under the
+reticle, the W6 scoreboard slate); a step whose HUD / slate is not in WASHOUT is a flow problem, never a silent TURF check.
 Screenshots: _shots/layout_<device>_<step>.png (CSS-pixel size). Report: _harness/_reports/layoutcheck.json.
 
 Touch mode comes from the game (M1: `html.df-touch`, `?touch=1`). With --force-touch, a page that did not turn it
@@ -75,8 +79,8 @@ DEVICES = {
     "d900": {"w": 1600, "h": 900, "dpr": 1, "mobile": False, "ua": None, "safe": (0, 0, 0, 0)},
 }
 IOS_INIT = "try { Object.defineProperty(Document.prototype, 'fullscreenEnabled', { configurable: true, get() { return false; } }); } catch (e) {}"
-MENU_STEPS = ["loading", "title", "play", "play_ffa", "loadout_ffa", "loadout", "settings", "settings_end", "howto", "credits"]
-MATCH_STEPS = ["hud_teams", "pause", "quit", "victory", "hud_ffa", "victory_ffa"]
+MENU_STEPS = ["loading", "title", "play", "play_washout", "play_ffa", "loadout_ffa", "loadout", "settings", "settings_end", "howto", "credits"]
+MATCH_STEPS = ["hud_teams", "pause", "quit", "victory", "hud_ffa", "victory_ffa", "hud_washout", "victory_washout", "hud_washout_ffa", "victory_washout_ffa"]
 EXTRA_STEPS = ["playcard", "error", "rotate"]
 ALL_STEPS = MENU_STEPS + MATCH_STEPS + EXTRA_STEPS
 
@@ -242,7 +246,8 @@ LAYOUT_JS = r"""
   const hud = rotating || confirmEl ? null : D.querySelector('.df-hud.on');
   if (hud && shown(hud)) {
     // the reticle cluster's TANK pipette, its label and the sub chip count too: they must clear the thumb cluster
-    const hb = [...hud.querySelectorAll(':scope > .df-top, :scope > .df-mini, :scope > .df-ffa-panel, :scope > .df-toast, .df-right > .df-gauge, .df-feed-item, :scope > .df-tank, :scope > .df-tank-label, :scope > .df-sub')].filter(shown);
+    // CONTRACT_WASHOUT W5 / CONTRACT_CONTROLS C3: PROTECTED above the reticle and the special's prompt under it count too
+    const hb = [...hud.querySelectorAll(':scope > .df-top, :scope > .df-mini, :scope > .df-ffa-panel, :scope > .df-toast, .df-right > .df-gauge, .df-feed-item, :scope > .df-tank, :scope > .df-tank-label, :scope > .df-sub, :scope > .df-protect, :scope > .df-spprompt')].filter(shown);
     blockSets.push(['hud', hb]);
   }
   const vic = D.querySelector('.df-victory:not([hidden])');
@@ -504,10 +509,19 @@ def run_device(browser, key, args, steps, out):
             if "title" in menu_steps:
                 record("title")
             flow = res.setdefault("flowErrors", [])
-            if "play" in menu_steps or "play_ffa" in menu_steps or "loadout_ffa" in menu_steps:
+            if "play" in menu_steps or "play_washout" in menu_steps or "play_ffa" in menu_steps or "loadout_ffa" in menu_steps:
                 if go(d, "#dfm-play", "play", flow):
                     if "play" in menu_steps:
                         record("play")
+                    if "play_washout" in menu_steps:
+                        # CONTRACT_WASHOUT W4: the RULE selector on WASHOUT (then back to TURF: the later steps are TURF's)
+                        d.tap("#dfm-rule-washout")
+                        rule = d.js("() => { const m = window.__DF__.menu(); return m ? { rule: m.rule, note: m.ruleNote, profile: (m.profile || {}).rule } : null; }")
+                        extra = {"rule": rule}
+                        if not (isinstance(rule, dict) and rule.get("rule") == "washout"):
+                            flow.append("play_washout: the RULE selector did not switch to WASHOUT (%s)" % rule)
+                        record("play_washout", extra)
+                        d.tap("#dfm-rule-turf")
                     if "play_ffa" in menu_steps or "loadout_ffa" in menu_steps:
                         d.tap("#dfm-mode-ffa")
                         if "play_ffa" in menu_steps:
@@ -536,26 +550,77 @@ def run_device(browser, key, args, steps, out):
 
     def matches():
         match_steps = [s for s in steps if s in MATCH_STEPS]
-        for mode, hud_step, vic_step in (("teams", "hud_teams", "victory"), ("ffa", "hud_ffa", "victory_ffa")):
-            want = [s for s in match_steps if s in ((hud_step, "pause", "quit", vic_step) if mode == "teams" else (hud_step, vic_step))]
+        for mode, rule, hud_step, vic_step in (("teams", "turf", "hud_teams", "victory"), ("ffa", "turf", "hud_ffa", "victory_ffa"),
+                                               ("teams", "washout", "hud_washout", "victory_washout"),
+                                               ("ffa", "washout", "hud_washout_ffa", "victory_washout_ffa")):
+            key = mode if rule == "turf" else "%s_washout" % mode
+            with_pause = mode == "teams" and rule == "turf"
+            want = [s for s in match_steps if s in ((hud_step, "pause", "quit", vic_step) if with_pause else (hud_step, vic_step))]
             if not want:
                 continue
             q = {"map": "pier18" if mode == "teams" else "cinder", "autostart": "1", "dev": "1", "seed": "7"}
             if mode == "ffa":
                 q["mode"] = "ffa"
+            if rule == "washout":
+                q["rule"] = "washout"
             d.goto(**q)
             ok = d.wait("() => (window.__DF__ && window.__DF__.state && window.__DF__.state().phase === 'play') || null", 120)
             if not ok:
-                res.setdefault("fatalMatch", {})[mode] = "no play phase (%s)" % d.js("() => window.__DF__ && window.__DF__.state && window.__DF__.state().phase")
-                print("  FATAL match", mode, res["fatalMatch"][mode])
+                res.setdefault("fatalMatch", {})[key] = "no play phase (%s)" % d.js("() => window.__DF__ && window.__DF__.state && window.__DF__.state().phase")
+                print("  FATAL match", key, res["fatalMatch"][key])
                 continue
-            res.setdefault("touchModeMatch", {})[mode] = d.ensure_touch()
+            res.setdefault("touchModeMatch", {})[key] = d.ensure_touch()
+            if hud_step in want:
+                # review fix A-A8: the WASHOUT countdown line must not push the key / touch legend onto a touch button — the
+                # legend's pills vs the touch buttons, per match (TURF is the reference; judged after the loop)
+                lg = d.wait("""() => { const c = document.querySelector('.df-count'); if (!c || c.hidden) return null;
+                    const R = (e) => { const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
+                    const ov = (a, b) => (Math.min(a.r, b.r) - Math.max(a.l, b.l)) > 1 && (Math.min(a.b, b.b) - Math.max(a.t, b.t)) > 1;
+                    let tb = []; try { const t = window.__DF__.touch && window.__DF__.touch(); tb = (t && t.buttons) || []; } catch (e) {}
+                    const hits = [];
+                    for (const p of document.querySelectorAll('.df-count-keys .k')) { const q = R(p);
+                      for (const b of tb) { const x = b.rect || {}; const w = x.w ?? x.width; if (!(w > 0)) continue;
+                        const z = { l: x.x ?? x.left, t: x.y ?? x.top, r: (x.x ?? x.left) + w, b: (x.y ?? x.top) + (x.h ?? x.height) };
+                        if (ov(q, z)) hits.push(p.textContent + ' x touch:' + b.id); } }
+                    const k = document.querySelector('.df-count-keys'); return { hits, legend: k ? R(k) : null }; }""", 60)
+                res.setdefault("countLegend", {})[key] = lg
+            if rule == "washout" and hud_step in want:
+                # review fix A-A8: the WASHOUT countdown names the objective under the digits — the line shows, stays inside the
+                # viewport and clears the digits, the key / touch legend and every touch button
+                cr = d.wait("""() => { const c = document.querySelector('.df-count'); const r = document.querySelector('.df-count-rule');
+                    if (!c || c.hidden || !r) return null;
+                    const R = (e) => { const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
+                    const ov = (a, b) => (Math.min(a.r, b.r) - Math.max(a.l, b.l)) > 1 && (Math.min(a.b, b.b) - Math.max(a.t, b.t)) > 1;
+                    const q = R(r); const hits = [];
+                    for (const s of ['.df-count-row', '.df-count-keys']) { const e = document.querySelector(s); if (e && ov(q, R(e))) hits.push(s); }
+                    let tb = []; try { const t = window.__DF__.touch && window.__DF__.touch(); tb = (t && t.buttons) || []; } catch (e) {}
+                    for (const b of tb) { const x = b.rect || {}; const z = { l: x.x ?? x.left, t: x.y ?? x.top, r: (x.x ?? x.left) + (x.w ?? x.width), b: (x.y ?? x.top) + (x.h ?? x.height) };
+                      if ((x.w ?? x.width) > 0 && ov(q, z)) hits.push('touch:' + b.id); }
+                    return { text: r.textContent, hidden: r.hidden, rect: q, hits, W: innerWidth, H: innerHeight }; }""", 60)
+                res.setdefault("countRule", {})[key] = cr
+                if not (isinstance(cr, dict) and not cr.get("hidden") and "Most washes wins" in (cr.get("text") or "")):
+                    res.setdefault("flowErrors", []).append("%s: the WASHOUT countdown shows no objective line (%s)" % (key, cr))
+                elif cr.get("hits") or cr["rect"]["l"] < -1 or cr["rect"]["r"] > cr["W"] + 1 or cr["rect"]["t"] < -1 or cr["rect"]["b"] > cr["H"] + 1:
+                    res.setdefault("flowErrors", []).append("%s: the WASHOUT countdown line overlaps %s or leaves the viewport (%s)" % (key, cr.get("hits"), cr.get("rect")))
+                else:
+                    d.shot("countdown_%s" % key)
             time.sleep(4.2)            # the countdown → live
+            # the boot card fades out (.df-boot.gone: 0.35 s, then visibility hidden) — on a starved page that fade can
+            # outlast the sleep above (integ: se hud_ffa measured '#df-play x touch:special' once under load)
+            d.wait("() => { const b = document.querySelector('.df-boot'); return (!b || getComputedStyle(b).visibility === 'hidden') ? true : null; }", 20)
             if hud_step in want:
                 # a kill-feed line and the low-tank toast so the HUD shows every block
                 d.js("() => { try { window.__DF__.setTank(0, 5); } catch (e) {} }")
+                extra = None
+                if rule == "washout":
+                    # W5 / C3: the special's ready prompt under the reticle shows too (a full meter); the HUD must be WASHOUT's
+                    d.js("() => { try { window.__DF__.fillSpecial(0); } catch (e) {} }")
+                    h = d.js("() => { const h = window.__DF__.hud(); return h ? { rule: h.rule, limit: h.limit, washout: h.washout || null, prompt: (h.special || {}).prompt || null } : null; }")
+                    extra = {"hud": h}
+                    if not (isinstance(h, dict) and h.get("rule") == "washout"):
+                        res.setdefault("flowErrors", []).append("%s: the HUD is not in WASHOUT (%s)" % (hud_step, h))
                 time.sleep(0.8)
-                record(hud_step)
+                record(hud_step, extra)
             if "pause" in want or "quit" in want:
                 t = d.js("() => { try { const t = window.__DF__.touch && window.__DF__.touch(); return t && t.buttons ? t.buttons.find((b) => b.id === 'pause') || null : null; } catch (e) { return null; } }")
                 if d.touch and isinstance(t, dict) and t.get("rect") and (t["rect"].get("w", t["rect"].get("width", 0)) or 0) > 0:
@@ -578,17 +643,31 @@ def run_device(browser, key, args, steps, out):
                 d.tap("#df-resume")
                 d.wait("() => (window.__DF__.state().phase === 'play') || null", 10)
             if vic_step in want:
+                # the countdown and the horn → slate delay are SIM time: right after an autostart the first seconds run at
+                # 2–40 ticks/s (shader warm-up) and a loaded box stretches the rest (integ 2026-09-30: 13 'never showed' in
+                # one full run at 88–94 % CPU; a traced d720 TEAMS match went live 10.7 s after the play phase and showed
+                # the slate at 13.3 s, vs 4.4 s warm) — so wait for live first; the slate follows 1.6 s of FRAME time after
+                # the horn (game.ts matchFlow), and at 100 % CPU a headless page drew 0.5–2 fps, so the cap is 150 s
+                d.wait("() => (window.__DF__.match() && window.__DF__.match().phase !== 'countdown') || null", 120)
                 d.js("() => { try { window.__DF__.setTimeLeft(0.5); } catch (e) {} }")
-                if d.wait("() => { const v = document.querySelector('.df-victory'); return v && !v.hidden ? true : null; }", 15):
+                if d.wait("() => { const v = document.querySelector('.df-victory'); return v && !v.hidden ? true : null; }", 150):
                     # the slam-in scales the card (1.4 → 1) and the tally runs on game frames: measure once both are
                     # done (a loaded GPU stretches them), never mid-animation
                     d.wait("() => { const c = document.querySelector('.df-victory-card'); const m = document.querySelector('.df-victory-mark');"
                            " return c && c.getAnimations().length === 0 && m && m.classList.contains('stamped') ? true : null; }", 20)
                     time.sleep(0.6)
-                    record(vic_step)
+                    extra = None
+                    if rule == "washout":
+                        t = d.js("() => { const h = window.__DF__.hud(); return h && h.tally ? { rule: h.tally.rule, washout: h.tally.washout || null } : null; }")
+                        extra = {"slate": t}
+                        if not (isinstance(t, dict) and t.get("rule") == "washout" and len(((t.get("washout") or {}).get("rows")) or []) == 8):
+                            res.setdefault("flowErrors", []).append("%s: the slate is not the WASHOUT scoreboard of 8 runners (%s)" % (vic_step, t))
+                    record(vic_step, extra)
                 else:
-                    res["steps"][vic_step] = {"problems": [{"kind": "flow", "msg": "the victory slate never showed"}]}
-                    print("  %-12s the victory slate never showed" % vic_step)
+                    st = d.js("() => { const m = window.__DF__.match(); const s = window.__DF__.state(); return m ? { phase: m.phase, tick: m.tick, timeLeft: m.timeLeft, victoryShown: m.victoryShown, app: s && s.phase } : null; }")
+                    msg = "the victory slate never showed (%s)" % json.dumps(st)
+                    res["steps"][vic_step] = {"problems": [{"kind": "flow", "msg": msg}]}
+                    print("  %-12s %s" % (vic_step, msg))
 
 
     def extras():
@@ -625,6 +704,14 @@ def run_device(browser, key, args, steps, out):
                 msg = "%s flow stopped: %s" % (label, str(e).splitlines()[0][:200])
                 res.setdefault("flowErrors", []).append(msg)
                 print("  FLOW", msg)
+        # A-A8: a WASHOUT countdown legend may not cover a touch button its TURF countdown leaves clear
+        cl = res.get("countLegend") or {}
+        for mode in ("teams", "ffa"):
+            ref, wo = cl.get(mode), cl.get("%s_washout" % mode)
+            if isinstance(ref, dict) and isinstance(wo, dict):
+                new = sorted(set(wo.get("hits") or []) - set(ref.get("hits") or []))
+                if new:
+                    res.setdefault("flowErrors", []).append("%s_washout: the countdown legend covers %s (the TURF countdown does not)" % (mode, new))
     finally:
         res["forcedTouch"] = d.forced
         res["errors"] = [e for e in d.errors if "favicon" not in e][:40]

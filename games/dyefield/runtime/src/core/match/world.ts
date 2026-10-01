@@ -57,6 +57,9 @@
 // start yet (mid-air, the meter about to fill), and pushes 'special' phase 'denied' for a press short of the meter. Same
 // rules for every runner (bots included). A started special ends spawn protection as before; a denied press does not.
 // stats.specialRuleEarly / specialRuleLate count the ticks where this decided differently from the pre-§C2 rule.
+// CONTROLS leftover (2026-09-30): the SPECIAL key is tracked (Runner.specialHeld) on the ticks that skip stepSpecialInput —
+// a dead runner in step 3 and every runner in the countdown — so a held key is never a new press after a respawn or at the
+// live start, and a real press on the respawn tick is one (Runner.respawn no longer forces specialHeld).
 
 import type { MapDef } from '../data.ts';
 import { teamById, WEAPONS } from '../data.ts';
@@ -528,8 +531,12 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
     const R = this.runners;
 
     if (this.phase === 'countdown') {
-      // inputs frozen: look around, nothing else
-      for (let i = 0; i < R.length; i++) R[i].step(dt, this.frozen(R[i], intents[i]), this.painter, this.events);
+      // inputs frozen: look around, nothing else. CHANGED(CONTROLS leftover): the SPECIAL key is still tracked (no
+      // stepSpecialInput runs here), so a key held through the countdown is no press on the first live tick
+      for (let i = 0; i < R.length; i++) {
+        R[i].specialHeld = !!(intents[i] ?? this.neutral).special;
+        R[i].step(dt, this.frozen(R[i], intents[i]), this.painter, this.events);
+      }
       if (this.countTicks > 0) this.countTicks--;
       this.countdown = this.countTicks * TICK;
       if (this.countTicks === 0) {
@@ -570,7 +577,9 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
     // 3. kits, subs, specials
     for (let i = 0; i < R.length; i++) {
       const r = R[i];
-      if (!r.alive) { r.firing = false; continue; }
+      // CHANGED(CONTROLS leftover): a dead runner skips stepSpecialInput, so its SPECIAL key is tracked here (held through
+      // the wash → no press at the respawn; released while dead, pressed on the respawn tick → a press)
+      if (!r.alive) { r.firing = false; r.specialHeld = !!(intents[i] ?? this.neutral).special; continue; }
       const it = intents[i] ?? this.neutral;
       const shots0 = r.shots, subs0 = r.subs;
       stepKit(r, it, dt, this.fire[i], this.fireVariant[i], this.rngs[i], this);
