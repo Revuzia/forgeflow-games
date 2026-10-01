@@ -86,3 +86,11 @@ assets/vendor/rapier/ (new). Never game.js / course.js / index.html.
   run's median frame).
 - RESIDUAL: verdant-2/@midwalk passes but one heading still commits to first person (camDist min 0.12, fade 1
   inside the near-plane commit, 0 off screen) -- not A/B'd, not one of the three audit stations.
+- feelcheck --headless (sweep on, one completed run): 4 FAIL -- stop_time 0.162 s (want <= 0.160),
+  jump_cut_ratio 0.605 (<= 0.600), coyote_late (pressed 54 ms after the ledge), surface_hop_dry (0 of 3).
+  None of these reads the camera (decel, vertical cut, ledge timing, water); controller.js is under concurrent
+  edit by the hero lane and the box sat at 90-100 % CPU. The control run with `&camrapier=0` never got past
+  feelcheck's 45 s title budget (three attempts, "never left the title screen (state=keep)") -- so the A/B is
+  NOT done; re-run both on a quiet box before trusting either.
+- The 23-station sweep ran on the commit before 2ec2c252; 2ec2c252 only resets the volume blend inside
+  `_snapToPlayer` (no course authors volumes yet), and the 12 MEASURE rows were re-run green on it.
