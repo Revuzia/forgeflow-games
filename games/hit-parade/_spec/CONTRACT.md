@@ -3203,3 +3203,16 @@ D2 D3 D4 D5 D8 D9 V4 V7 VO-D2 VO-D3 VO-D4 VO-D6 VO-D7 VO-D8.
    online_flow.ts sends once confirmedFrame() >= the end frame, but rollback.ts confirmedFrame() = min(rc + 1, frame) while checksumAt(f)
    exists only once state[f] is confirmed -> cs null -> "agreed false" (UNRATED, result-mismatch) in ~1 of 15 matches (online2 run:
    "B cs@3255=None (MATCH_END frame 3255)"). Suggested: send when checksumAt(csFrame) !== null (fallback 15 frames later).
+
+### §35.27 CHANGED(orchestrator): wf7 fixes + v0.4.0 SHIPPED to the CDN unpublished (2026-10-01)
+- Touch: character select completable by taps alone (swatches/scheme/LOCK IN/BACK as buttons), TAP TO CONTINUE screens respond to taps,
+  right touch cluster packed into the corner (arena centre band 0.30-0.70 W clear). mobile.py --game 95/95, layoutcheck 7x44 0 problems.
+- Online: RollbackSession guarantees checksumAt(f) for every checksum frame <= confirmedFrame() (core/net/result.ts readyResult);
+  probe_netsim forces MATCH_END on every residue mod 15: 150/150 agreed (old code 0/150). One shared Supabase auth client (no GoTrue
+  duplicate warnings). online2.py: any ports, STEP-circling bots, reaches all 13 slots. Open: the results 'tape' stats can differ
+  between peers (winner/rounds/checksum agree).
+- SeasonBot (playtest.py) attacks from compiled reach (probe_balance --geom); THE FREAK was a harness artefact, not a game wall:
+  real keys FREAK 18/18, RICKY 17/18 bouts; probe_balance --full 15/15 (cpu6 NORMAL FREAK 48 % / RICKY 34 %). No game data changed.
+- Ship: hit-parade-0.4.0, dist 100 files / 61,030,391 B, registry id 54 status 'unpublished',
+  https://forgeflow-games-cdn.isimcha85.workers.dev/hit-parade/index.html - live bootguard PASS, bootcheck BOOTS CLEAN (real Q/E step),
+  playtest 55/55, mobile --game p844 19/19 on production.

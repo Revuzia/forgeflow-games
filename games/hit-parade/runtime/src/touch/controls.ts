@@ -10,7 +10,8 @@
 //           30 / 60 / 30 deg; left / right 52.5 deg each; the down family 202.5..337.5 deg, 45 deg each). Output =
 //           screen-relative UP / DOWN / LEFT / RIGHT bits of the CONTRACT 4.4 input word; holding away = block, down-away =
 //           crouch block (the sim reads that from the word).
-//   L M H 72 and SP 84 in an arc round the thumb; PARRY 64 above; THROW 60 and IMPACT 60 (macro buttons);
+//   L M H 72 and SP 84 round the thumb; PARRY 64 above; THROW 60 and IMPACT 60 (macro buttons) - CHANGED(wf7 touch)
+//           VO-D5: all packed into the right 194 x 279 px corner (see CLUSTER) so the arena's centre band stays clear;
 //   SUPER   64, the S+H macro, shown only while SHOWTIME holds >= 1 bar (pulses at 3);
 //   ASSIST  a chip: a tap latches ASSIST for 1 s (holding a modifier while tapping is awkward on glass); held = held.
 //   PAUSE   44, top centre under the timer -> onPause handlers (game.ts routes them into the ESC pause path).
@@ -56,16 +57,28 @@ export const TOUCH = {
  * CHANGED(UI3D): `left: true` entries (the STEP pair) are measured from the LEFT safe edge instead - the stick's side, above
  * its home (stick home centre = 94 px in / 94 px up, base radius 60: the pair sits 14 px over the base's top edge, 16 px apart).
  */
+/*
+ * CHANGED(wf7 touch) VO-D5 (verifier: on phones the ASSIST chip sat right of centre and THROW / L over the middle of the
+ * arena, covering the opponent's feet at the opening range). The right cluster is now a staggered (hex) pack inside a
+ * 194 x 279 px corner box: on se / p844 / iphone14 / pixel7 every button's left edge is >= 0.70 W (was 0.48 / 0.54 / 0.53 /
+ * 0.62 W, ASSIST) and its top stays >= 7 px under the measured top-HUD limit (77 + 6 px); same disc sizes, >= 7.3 px between
+ * neighbours (fitPad still demands 4). Thumb reach: from a thumb resting 70 / 70 px in, SP 39 / M 49 / L 71 / H 94 px (was
+ * 8 / 104 / 169 / 84), farthest button 264 px from the corner (was 321: ASSIST). SP keeps the corner; M nests between SP
+ * and H; L sits over SP; PARRY / SUPER / THROW / ASSIST / IMPACT stack above. EDIT LAYOUT is unchanged (offsets are still
+ * relative to these homes; a layout saved against the old homes moves its buttons by the home change).
+ * Old homes (dx, dy): s 62,70  h 150,44  m 156,128  l 238,86  parry 84,160  impact 160,212  throw 240,172  super 50,244
+ * assist 318,40.
+ */
 const CLUSTER: ReadonlyArray<{ id: Exclude<TouchButtonId, 'pause'>; dx: number; dy: number; d: number; bits: number; label: string; left?: boolean }> = [
-  { id: 's', dx: 62, dy: 70, d: 84, bits: BIT.S, label: 'SP' },
-  { id: 'h', dx: 150, dy: 44, d: 72, bits: BIT.H, label: 'H' },
-  { id: 'm', dx: 156, dy: 128, d: 72, bits: BIT.M, label: 'M' },
-  { id: 'l', dx: 238, dy: 86, d: 72, bits: BIT.L, label: 'L' },
-  { id: 'parry', dx: 84, dy: 160, d: 64, bits: BIT.PARRY, label: 'PARRY' },
-  { id: 'impact', dx: 160, dy: 212, d: 60, bits: BIT.IMPACT, label: 'IMPACT' },
-  { id: 'throw', dx: 240, dy: 172, d: 60, bits: BIT.THROW, label: 'THROW' },
-  { id: 'super', dx: 50, dy: 244, d: 64, bits: BIT.S | BIT.H, label: 'SUPER' },
-  { id: 'assist', dx: 318, dy: 40, d: 52, bits: BIT.ASSIST, label: 'ASSIST' },
+  { id: 's', dx: 43, dy: 42, d: 84, bits: BIT.S, label: 'SP' },
+  { id: 'h', dx: 158, dy: 36, d: 72, bits: BIT.H, label: 'H' },
+  { id: 'm', dx: 109, dy: 99, d: 72, bits: BIT.M, label: 'M' },
+  { id: 'l', dx: 36, dy: 132, d: 72, bits: BIT.L, label: 'L' },
+  { id: 'parry', dx: 162, dy: 154, d: 64, bits: BIT.PARRY, label: 'PARRY' },
+  { id: 'impact', dx: 83, dy: 249, d: 60, bits: BIT.IMPACT, label: 'IMPACT' },
+  { id: 'throw', dx: 30, dy: 206, d: 60, bits: BIT.THROW, label: 'THROW' },
+  { id: 'super', dx: 95, dy: 180, d: 64, bits: BIT.S | BIT.H, label: 'SUPER' },
+  { id: 'assist', dx: 149, dy: 218, d: 52, bits: BIT.ASSIST, label: 'ASSIST' },
   { id: 'stepin', dx: 58, dy: 196, d: 56, bits: BIT.STEP_IN, label: 'IN', left: true },
   { id: 'stepout', dx: 130, dy: 196, d: 56, bits: BIT.STEP_OUT, label: 'OUT', left: true },
 ];

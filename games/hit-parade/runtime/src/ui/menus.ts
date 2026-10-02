@@ -324,7 +324,9 @@ export class Menus {
 
     // ── CHARACTER SELECT ──────────────────────────────
     const csS = this.mkScreen('charselect');
-    csS.append(this.header(t('cs.title'), ''));
+    // CHANGED(wf7 touch) VO-D1: the header BACK steps back one pick step like Esc / pad B (it popped the whole screen, so a
+    // touch player could not undo a colour or controls pick); on P1's FIGHTER step CharSelect calls hooks.back() -> leave
+    csS.append(this.header(t('cs.title'), '', true, () => this.cs.input('active', 'back')));
     this.cs = new CharSelect(csS, data, {
       done: (r) => this.onPicked(r),
       back: () => this.back(),
@@ -654,6 +656,16 @@ export class Menus {
     // the title screen: any tap / click anywhere starts
     // any click / tap on the title starts (on click, not pointerdown: the tap's own click must not land on the main menu)
     title.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('.hpm-corner') || this.screen !== 'title') return; this.sound('start'); this.show('main'); });
+    // CHANGED(wf7 touch): the VS / card (rival, boss, mini boss, BRAWL BREAK, HECKLER TOSS) / ending screens say TAP TO
+    // CONTINUE in touch mode but only a key / pad press finished them (measured: a CDP tap resolved none, Enter all) - a
+    // touch-only player was stuck at THE SEASON's first card. A tap / click anywhere on them continues (finishAny keeps
+    // its 450 ms arm, so the tap that ended the previous screen never skips this one).
+    for (const id of ['vs', 'card', 'ending'] as const) {
+      this.screens.get(id)?.addEventListener('click', (e) => {
+        if (this.screen !== id || (e.target as HTMLElement).closest('button, a, input, select, textarea')) return;
+        this.finishAny();
+      });
+    }
     const onFs = (): void => this.syncFullscreen();
     document.addEventListener('fullscreenchange', onFs);
     this.offs.push(() => document.removeEventListener('fullscreenchange', onFs));
@@ -1562,12 +1574,13 @@ export class Menus {
     return e;
   }
 
-  private header(title: string, hint: string, back = true): HTMLElement {
+  /** CHANGED(wf7 touch) VO-D1: `onBack` replaces the BACK button's pop (character select steps back one pick step) */
+  private header(title: string, hint: string, back = true, onBack?: () => void): HTMLElement {
     const h = el('header', 'hpm-head');
     if (back) {
       const b = btn('hpm-back', '');
       b.append(svg(ICON.back), el('span', '', t('misc.back')));
-      b.addEventListener('click', () => this.back());
+      b.addEventListener('click', () => { if (onBack) onBack(); else this.back(); });
       h.append(b);
     }
     const tt = div('hpm-head-t', h);

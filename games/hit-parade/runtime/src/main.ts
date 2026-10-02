@@ -37,7 +37,7 @@ import { installTestSurface } from './testsurface.ts';
 import { TouchControls } from './touch/controls.ts';
 import { PortraitQueue } from './app/portraits.ts';
 
-export const VERSION = 'hit-parade-0.3.0';   // CHANGED(integrator) 3D: the 360-degree ring (sidestep / circle-walk, orbit camera); P2: 12 fighters, 5 stages, bonus rounds, training, online
+export const VERSION = 'hit-parade-0.4.0';   // CHANGED(integrator) 3D: the 360-degree ring (sidestep / circle-walk, orbit camera); P2: 12 fighters, 5 stages, bonus rounds, training, online. CHANGED(wf7 ship) 0.4.0: wf6/wf7 fixes (wall splat, cutaway, touch char select + tap-to-continue, online result agreement) - first CDN deploy (unpublished)
 
 const params = new URLSearchParams(location.search);
 export const DEEP_KEYS = ['mode', 'p1', 'p2', 'stage', 'seed', 'cpu1', 'cpu2', 'scheme1', 'scheme2', 'autostart', 'room'] as const;

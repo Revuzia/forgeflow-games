@@ -989,19 +989,112 @@ STEP_JS = """async (n) => { const h = window.__HP__; if (n > 0) h.dev.step(n);
   return { f, m, st: h.state() }; }"""
 
 
+_GEOM_CACHE = {}
+
+
+def bot_geom(me_id, opp_id):
+    """CHANGED(wf7 season bot): the SeasonBot's range numbers from the COMPILED data - `node _harness/probe_balance.ts
+    --geom <me> <opp>` (botGeom): both push fronts (touch = the closest root distance the push bodies allow), the
+    opponent's standing hurt front, my strikes' reach = box front + travel exactly as the sim / CPU kit compute it (the
+    boxes are re-derived from the clips at load - the data/fighters JSON boxes are not the ones the sim uses), my throw
+    gap and the opponent's command-grab reach. One call per fighter pair (cached); a failure is a harness error."""
+    key = (me_id, opp_id)
+    if key in _GEOM_CACHE:
+        return _GEOM_CACHE[key]
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        raise HarnessError("SeasonBot geometry needs node (node _harness/probe_balance.ts --geom); node not on PATH")
+    env = dict(os.environ, NODE_NO_WARNINGS="1", FORCE_COLOR="0")
+    r = subprocess.run([node, os.path.join(SEASON_ROOT, "_harness", "probe_balance.ts"), "--geom", me_id, opp_id], cwd=SEASON_ROOT,
+                       capture_output=True, text=True, encoding="utf-8", timeout=180, env=env)
+    lines = [x for x in (r.stdout or "").splitlines() if x.strip().startswith("{")]
+    if r.returncode != 0 or not lines:
+        raise HarnessError("SeasonBot geometry: probe_balance.ts --geom %s %s rc=%s: %s" % (me_id, opp_id, r.returncode, ((r.stderr or "") + (r.stdout or ""))[-400:]))
+    g = json.loads(lines[-1])
+    _GEOM_CACHE[key] = g
+    return g
+
+
+def _dist(a, b):
+    """planar root distance; sqrt of products (correctly rounded in Python AND JS - probe_balance.ts mirrors this bot)"""
+    dx = a["x"] - b["x"]
+    dz = (a.get("z") or 0.0) - (b.get("z") or 0.0)
+    return math.sqrt(dx * dx + dz * dz)
+
+
+HIT_STATES = ("knockdown", "hitstun", "juggle", "blockstun", "wall_splat", "crumple", "dizzy")
+FREE_STATES = ("idle", "walk_f", "walk_b")
+
+
 class SeasonBot:
     """P1 persona: frame-exact guard vs visible attacks and projectiles, throw techs, punishes whiffs / recoveries with
-    the ASSIST auto-combo (hold U + tap J), supers into recoveries, SIMPLE 2S anti-airs, walks in and presses."""
+    the ASSIST auto-combo (hold U + tap J), supers into recoveries, SIMPLE 2S anti-airs, walks in and presses.
 
-    def __init__(self, me_id, opp_id):
+    CHANGED(wf7 season bot): every range is the REAL reach (bot_geom, from the compiled data), never an absolute root
+    distance. The old constants (walk in while d > 1.05 m, throw at d < 0.95, punish at d < 1.6) were tuned on regular
+    bodies: johnny 0.317 + THE FREAK 0.747 m push fronts = 1.064 m minimum gap, so vs THE FREAK it walked into the body
+    forever and never attacked (WF6: 0 / 22 season bouts, every round to the timer; CONTRACT §35.25 item 4). Now: walk in
+    until the ASSIST opener reaches with a margin (and the push gap is <= 0.45 m), throw inside its throw gap, punish /
+    super inside the move's reach, read the opponent's command-grab reach. Still a decent-but-not-optimal player: one fixed
+    ASSIST route, a fixed mix (no adaptation), sidestep reads on only ~55 % of the chances. 3D habits (the verifier's
+    Bot3D): a sidestep read of a straight (non-homing) strike seen by its move frame 4 with startup >= 10, a 5H side punish
+    of its recovery, circle-walks (STEP held 50-80 f) at mid range now and then and off the ring wall, the back key cancels
+    a circle-walk into the guard. probe_balance.ts `seasonbot` is the headless mirror of keys() - change both together."""
+
+    def __init__(self, me_id, opp_id, geom=None):
         self.me = _load_json("data", "fighters", "%s.json" % me_id)
         self.opp_id = opp_id
         self.opp = _load_json("data", "fighters", "%s.json" % opp_id) if opp_id else {"moves": {}}
         self.phase = 0          # alternating tap state of the combo / press keys
-        self.tech_armed = False
+        self.n = 0              # fight decisions so far (the 3D habits' clock)
+        self.circle = 0         # decisions left in the running circle-walk
+        self.circle_key = None
+        self.circle_cool = 0
+        self.step_cool = 0
+        self.punish = 0
+        self.stats = {"stepReads": 0, "sidePunish": 0, "circles": 0, "wallCircles": 0}
+        self.g = geom if geom is not None else (bot_geom(me_id, opp_id) if opp_id else None)
+        if self.g:
+            g = self.g
+            touch = g["touch"]
+            open_r = g["openReach"] + g["opHurt"]
+            self.touch = touch
+            self.close_d = max(touch + 0.10, min(open_r - 0.12, touch + 0.45))
+            self.throw_d = touch + g["throwGap"] - 0.08
+            self.punish_d = max(self.close_d, open_r - 0.05)
+            self.side_d = (g["sideReach"] + g["opHurt"] - 0.05) if g["sideReach"] > 0 else self.punish_d
+            self.sup1_d = (g["sup1Reach"] + g["opHurt"] - 0.05) if g["sup1Reach"] > 0 else self.punish_d
+            self.sup3_d = (g["sup3Reach"] + g["opHurt"] - 0.05) if g["sup3Reach"] > 0 else self.punish_d
+            self.aa_d = max(2.0, touch + 1.0)
+            self.mid_lo = touch + 0.6
+            self.mid_hi = touch + 1.8
 
     def omove(self, name):
         return (self.opp.get("moves") or {}).get(name) or {}
+
+    def ranges(self):
+        """the derived ranges (report)"""
+        return {k: round(getattr(self, k), 3) for k in ("touch", "close_d", "throw_d", "punish_d", "side_d", "sup1_d", "sup3_d", "aa_d", "mid_lo", "mid_hi")} if self.g else None
+
+    def grab_threat(self, name, okind):
+        """centre distance inside which the opponent's starting throw / command grab can still catch me (+ margin)"""
+        if okind == "cmdgrab":
+            return (self.g.get("opGrab") or {}).get(name, self.touch + 1.0) + 0.25
+        return self.touch + 0.9
+
+    def wall_behind(self, me, op, m):
+        """my root within 1.1 m of the ring wall with the opponent inward of me (MatchSnap.ring: circle radius / poly apothem)"""
+        rg = (m or {}).get("ring") or {}
+        c = rg.get("centre")
+        if not c or not rg.get("radius"):
+            return False
+        mx, mz = me["x"] - c[0], (me.get("z") or 0.0) - c[1]
+        ox, oz = op["x"] - c[0], (op.get("z") or 0.0) - c[1]
+        rme = math.sqrt(mx * mx + mz * mz)
+        rop = math.sqrt(ox * ox + oz * oz)
+        return rme > rg["radius"] - 1.1 and rop < rme - 0.3
 
     def keys(self, f, m):
         """the set of P1 keys to hold for the next step (K names -> Playwright codes)"""
@@ -1010,29 +1103,62 @@ class SeasonBot:
         if mode in ("brawl", "heckler"):
             return self.bonus_keys(f, m)
         if (m or {}).get("phase") != "fight":
+            self.circle = 0
             return set()
-        # CHANGED(AI3D): planar distance; forward / back from P1's facing sign (the sim's LEFT / RIGHT mapping)
-        d = planar(me, op)
-        fk, bk = fwd_back(f)
+        self.n += 1
         self.phase ^= 1
+        # CHANGED(AI3D): planar distance; forward / back from P1's facing sign (the sim's LEFT / RIGHT mapping)
+        d = _dist(me, op)
+        fk, bk = fwd_back(f)
         st, ost = me.get("stateName"), op.get("stateName")
+        if self.step_cool > 0:
+            self.step_cool -= 1
+        if self.circle_cool > 0:
+            self.circle_cool -= 1
+        act = bool(me.get("actionable"))
         # thrown: tech (a throw press while the tech window is open)
         if st == "thrown":
+            self.circle = 0
             return {K["throw"]} if self.phase else set()
-        if st in ("knockdown", "hitstun", "juggle", "blockstun", "wall_splat", "crumple", "dizzy"):
+        if st in HIT_STATES:
+            self.circle = 0
             return {bk, K["down"]}
         mv = self.omove(op.get("moveName") or "")
         okind = op.get("moveKind") or ""
         of = op.get("moveFrame") or 0
         su = int(mv.get("startup") or 0)
         ac = int(mv.get("active") or 0)
-        # an incoming throw / command grab: buffer a throw (techs a throw; a command grab: jump away)
-        if ost == "attack" and okind in ("throw", "cmdgrab") and of <= su and d < 1.6:
+        strike = ost == "attack" and okind not in ("throw", "cmdgrab", "system", "")
+        incoming = strike and of <= su + ac + 1 and d < 3.2
+        grabbing = ost == "attack" and okind in ("throw", "cmdgrab") and of <= su
+        # 3D: a circle-walk in progress keeps the STEP key held; an incoming strike / grab cancels it (back = guard)
+        if self.circle > 0:
+            self.circle -= 1
+            if incoming or grabbing:
+                self.circle = 0
+            else:
+                return {self.circle_key}
+        # an incoming throw / command grab within ITS reach: buffer a throw (techs a throw; a command grab: jump away)
+        if grabbing and d < self.grab_threat(op.get("moveName") or "", okind):
             if okind == "cmdgrab":
                 return {K["up"], bk}
             return {K["throw"]}
+        # 3D read: a straight (non-homing) strike seen early -> sidestep tap, about half the time
+        if (strike and act and self.step_cool == 0 and of <= 4 and su >= 10 and not mv.get("homing") and d < 3.0
+                and (self.n * 37) % 100 < 55):
+            self.step_cool = 20
+            self.punish = 30
+            self.stats["stepReads"] += 1
+            return {K["stepin"]} if (self.n // 7) % 2 else {K["stepout"]}
+        # after a read step: its recovery within 5H reach -> side punish
+        if self.punish > 0:
+            self.punish -= 1
+            if act and ost == "attack" and su > 0 and of > su + ac and d <= self.side_d:
+                self.punish = 0
+                self.stats["sidePunish"] += 1
+                return {K["h"]}
         # an incoming strike: guard low unless it is an overhead or airborne
-        if ost == "attack" and okind not in ("throw", "cmdgrab", "system", "") and of <= su + ac + 1 and d < 3.2:
+        if incoming:
             over = (mv.get("guard") == "H") or op.get("airborne")
             return {bk} if over else {bk, K["down"]}
         # projectiles flying at me
@@ -1041,33 +1167,43 @@ class SeasonBot:
                 # CHANGED(AI3D): approaching in the plane (closing velocity) and near
                 rx, rz = me["x"] - p["x"], (me.get("z") or 0.0) - (p.get("z") or 0.0)
                 toward = rx * (p.get("vx") or 0) + rz * (p.get("vz") or 0) > 0
-                if toward and math.hypot(rx, rz) < 2.6:
+                if toward and math.sqrt(rx * rx + rz * rz) < 2.6:
                     return {bk, K["down"]}
         # a jump coming in: SIMPLE 2S (down + S) anti-air
-        if op.get("airborne") and ost in ("air", "prejump") and d < 2.0:
+        if op.get("airborne") and ost in ("air", "prejump") and d < self.aa_d:
             return {K["down"], K["s"]} if self.phase else {K["down"]}
-        if not me.get("actionable"):
+        if not act:
             return set()
         # the opponent recovering / whiffed / landing within reach: super (1+ bar) or the ASSIST route
-        recovering = (ost == "attack" and su and of > su + ac - 1) or ost in ("land", "recover", "parry_rec", "dash_b")
-        if recovering and d < 1.6:
-            if (me.get("showtime") or 0) >= 30000 and d < 1.5:
+        recovering = (ost == "attack" and su > 0 and of > su + ac - 1) or ost in ("land", "recover", "parry_rec", "dash_b")
+        if recovering and d <= self.punish_d:
+            sh = me.get("showtime") or 0
+            if sh >= 30000 and d <= self.sup3_d:
                 return {K["down"], K["s"], K["h"]}
-            if (me.get("showtime") or 0) >= 10000 and d < 1.5:
+            if sh >= 10000 and d <= self.sup1_d:
                 return {K["s"], K["h"]}
             return {K["assist"], K["l"]} if self.phase else {K["assist"]}
         if ost == "knockdown":
-            return {fk} if d > 1.0 else {bk, K["down"]}
-        if d > 1.05:
+            return {fk} if d > self.touch + 0.35 else {bk, K["down"]}
+        # 3D: from neutral, a circle-walk off the wall behind me, or now and then at mid range
+        if st in FREE_STATES and self.circle_cool == 0:
+            wall = self.wall_behind(me, op, m)
+            if wall or (self.mid_lo < d < self.mid_hi and self.n % 120 == 60):
+                self.circle = 25 + self.n % 16
+                self.circle_key = K["stepout"] if (self.n // 3) % 2 else K["stepin"]
+                self.circle_cool = 90
+                self.stats["wallCircles" if wall else "circles"] += 1
+                return {self.circle_key}
+        if d > self.close_d:
             return {fk}
         # close and neutral: mostly the ASSIST route, some throws, some guarding
         t = int(me.get("x", 0) * 97 + (m or {}).get("frame", 0)) % 10
         # CHANGED(AI3D): now and then a sidestep tap from neutral (STEP_IN / STEP_OUT alternate)
-        if t == 9 and me.get("stateName") in ("idle", "walk_f", "walk_b") and d > 1.0:
-            return {K["stepin"]} if (m or {}).get("frame", 0) % 2 == 0 else {K["stepout"]}
+        if t == 9 and st in FREE_STATES and d > self.touch + 0.3:
+            return {K["stepin"]} if (self.n // 2) % 2 == 0 else {K["stepout"]}
         if t < 5:
             return {K["assist"], K["l"]} if self.phase else {K["assist"]}
-        if t < 7 and d < 0.95:
+        if t < 7 and d <= self.throw_d:
             return {K["throw"]} if self.phase else set()
         return {bk, K["down"]}
 
@@ -1154,7 +1290,178 @@ def season_bout(P, S, args, tag, report, slot_kind, help_pct=0):
     return {"tag": tag, "kind": slot_kind, "mode": snap.get("mode"), "p1": me_id, "p2": opp_id, "cpu": p[1].get("cpu"),
             "winner": snap.get("winner"), "wins": snap.get("wins"), "frames": frames, "seconds": round(time.time() - t0, 1),
             "decisions": n_dec, "score": br.get("score"), "phaseEvent": phase_seen, "matchEnd": snap.get("phase") == "matchEnd",
-            "devHelp": {"cpuHpPct": help_pct, "rounds": helped_rounds} if help_pct > 0 else None}
+            "devHelp": {"cpuHpPct": help_pct, "rounds": helped_rounds} if help_pct > 0 else None,
+            # CHANGED(wf7 season bot): the bot's 3D counters + the ranges it fought with
+            "bot": dict(bot.stats), "botRanges": bot.ranges()}
+
+
+# ─────────────────────────────── boss re-measure (CHANGED(wf7 season bot)) ───────────────────────────────
+# python _harness/playtest.py --bosses --fighter johnny --bouts freak:5:butcher_block,ricky:6:control_room --seeds 1,2,3
+#
+# The SeasonBot (real key events, P1 SIMPLE) vs a CPU in THE SEASON's staging - mode 'arcade' on the opponent's home stage,
+# the slot's CPU level, the game's own CPU seed (game.ts: cfg.seed ^ 0x9e3779b9 x (p + 1)) - set up through __HP__.dev.startMatch
+# (a dev hook for the STATION only: the bout itself is real keys sampled by the game's tick). The sim is frozen right after the
+# bout loads, stepped to the round's first FIGHT frame, then 2 frames per decision exactly like the season run. Each bout is
+# replayed headless by `node _harness/probe_balance.ts --botbouts` (the SeasonBot mirror) and the two results compared:
+# IDENTICAL means the headless tables (probe_balance --player seasonbot) ARE real-key numbers. Report playtest_bosses.json.
+STEP_TO_FIGHT_JS = """(max) => { const h = window.__HP__; let n = 0; let m = h.match();
+  while (n < max && (!m || m.phase !== 'fight')) { h.dev.step(1); n++; m = h.match(); }
+  let f = null; try { f = h.fighters(); } catch (e) {} return { n, f, m, st: h.state() }; }"""
+
+
+def boss_bout(sess, args, me, opp, level, stage, seed):
+    cfg = {"mode": "arcade", "stage": stage, "seed": seed,
+           "p": [{"fighter": me, "color": 0, "scheme": 0, "cpu": -1}, {"fighter": opp, "color": 1 if opp == me else 0, "scheme": 0, "cpu": level}]}
+    t0 = time.time()
+    ok, v = sess.hp("dev.startMatch", cfg)
+    if not ok:
+        return {"error": "dev.startMatch failed: %s" % v}
+    m0 = {}
+    while time.time() - t0 < 180:
+        stt = sess.state() or {}
+        m0 = sess.safe_js("() => { try { return __HP__.match(); } catch (e) { return null; } }") or {}
+        if stt.get("phase") == "bout" and m0.get("seed") == seed and m0.get("mode") == "arcade" and (m0.get("frame") or 0) < 2000:
+            break
+        time.sleep(0.05)
+    else:
+        return {"error": "the bout never loaded (phase %r, match seed %r)" % ((sess.state() or {}).get("phase"), m0.get("seed"))}
+    sess.hp("dev.freeze", True)
+    m0 = sess.safe_js("() => __HP__.match()") or {}
+    aligned = m0.get("phase") != "fight"
+    r = sess.safe_js(STEP_TO_FIGHT_JS, 1200) or {}
+    f, m = r.get("f"), r.get("m") or {}
+    bot = SeasonBot(me, opp)
+    held = set()
+    n_dec = 0
+    ends = []
+    last_ph = m.get("phase")
+    while f and m.get("phase") != "matchEnd" and time.time() - t0 < args.season_bout_budget:
+        want = bot.keys(f, m)
+        if want != held:
+            sess.hold(want)
+            held = want
+        n_dec += 1
+        r = sess.safe_js(STEP_JS, 2) or {}
+        f2, m2 = r.get("f"), r.get("m") or {}
+        if not f2:
+            time.sleep(0.05)
+            continue
+        f, m = f2, m2
+        if m.get("phase") != last_ph and m.get("phase") in ("ko", "timeover"):
+            ends.append(m.get("phase"))
+        last_ph = m.get("phase")
+    sess.hold(set())
+    return {"me": me, "opp": opp, "level": level, "stage": stage, "seed": seed, "winner": m.get("winner"), "wins": m.get("wins"),
+            "frames": m.get("frame"), "hp": [max(0, (f or [{}, {}])[k].get("hp") or 0) for k in (0, 1)], "roundEnds": ends,
+            "matchEnd": m.get("phase") == "matchEnd", "alignedToFight": aligned, "decisions": n_dec, "seconds": round(time.time() - t0, 1),
+            "bot": dict(bot.stats), "botRanges": bot.ranges()}
+
+
+def headless_botbouts(me, opp, level, stage, seeds):
+    """the same bouts through the headless SeasonBot mirror (probe_balance.ts --botbouts); {seed: result}"""
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        return {}
+    env = dict(os.environ, NODE_NO_WARNINGS="1", FORCE_COLOR="0")
+    r = subprocess.run([node, os.path.join(SEASON_ROOT, "_harness", "probe_balance.ts"), "--botbouts", me, opp, str(level), stage, ",".join(str(x) for x in seeds)],
+                       cwd=SEASON_ROOT, capture_output=True, text=True, encoding="utf-8", timeout=900, env=env)
+    out = {}
+    for ln in (r.stdout or "").splitlines():
+        if ln.startswith("{"):
+            j = json.loads(ln)
+            out[j["seed"]] = j
+    return out
+
+
+def run_bosses(args) -> int:
+    report = {"headless": args.headless, "mode": "bosses", "fighter": args.fighter, "bouts": [], "keys": "real key events (P1 SIMPLE), "
+              "sim frozen + stepped 2 frames per decision from the first FIGHT frame; station via __HP__.dev.startMatch"}
+    others, _ = preflight_chromes("pre-flight")
+    report["otherAutomatedChrome"] = others
+    seeds = [int(x) for x in args.seeds.split(",") if x.strip()]
+    specs = []
+    for b in args.bouts.split(","):
+        opp, lv, st = b.split(":")
+        specs.append((opp, int(lv), st))
+    sess = Session(args, "playtest_bosses")
+    try:
+        sess.start()
+    except Exception as e:
+        sess.close()
+        print("SETUP FAILED: %s" % (str(e) if isinstance(e, HarnessError) else repr(e)))
+        return 2
+    fatal = None
+    try:
+        sess.goto(build_url(args.base, dev=1))
+        if not sess.wait_hp(args.wait):
+            fatal = "window.__HP__ never appeared"
+        else:
+            sess.wait_phase("title", args.wait)
+        for opp, lv, st in ([] if fatal else specs):
+            for sd in seeds:
+                res = boss_bout(sess, args, args.fighter, opp, lv, st, sd)
+                report["bouts"].append(res)
+                print("bout         : %s" % json.dumps(res, default=str), flush=True)
+                save_report("playtest_bosses" + (("_" + args.tag) if args.tag else ""), report, args.base)
+    finally:
+        diag = sess.diagnostics() if sess.page else {}
+        try:
+            sess.release_all()
+        except Exception:
+            pass
+        sess.close()
+    # the headless mirror on the same bouts
+    same = 0
+    cmp_n = 0
+    for opp, lv, st in specs:
+        hb = headless_botbouts(args.fighter, opp, lv, st, seeds)
+        for res in report["bouts"]:
+            if res.get("opp") != opp or res.get("stage") != st or res.get("level") != lv:
+                continue
+            h = hb.get(res.get("seed"))
+            if not h:
+                continue
+            hh = [max(0, x) for x in h.get("hp") or [0, 0]]
+            # the real-key loop steps 2 frames per call, so its last read can land 1 frame past MATCH_END (the headless runner
+            # stops ON it): frames may differ by <= 1 - winner, rounds and both hp must be exactly equal
+            fd = (res.get("frames") or 0) - (h.get("frames") or 0)
+            ident = h.get("winner") == res.get("winner") and h.get("wins") == res.get("wins") and 0 <= fd <= 1 and hh == res.get("hp")
+            res["headless"] = {"winner": h.get("winner"), "wins": h.get("wins"), "frames": h.get("frames"), "hp": hh, "identical": ident, "frameDiff": fd}
+            if res.get("alignedToFight"):
+                cmp_n += 1
+                same += 1 if ident else 0
+    print("=" * 84)
+    for opp, lv, st in specs:
+        bs = [b for b in report["bouts"] if b.get("opp") == opp and b.get("level") == lv and b.get("stage") == st and "error" not in b]
+        w = sum(1 for b in bs if b.get("winner") == 0)
+        rw = sum((b.get("wins") or [0, 0])[0] for b in bs)
+        rl = sum((b.get("wins") or [0, 0])[1] for b in bs)
+        hpl = [b["hp"][0] for b in bs if b.get("winner") == 0]
+        print("%-8s vs %-8s L%d %-14s real keys: bouts won %d / %d, rounds %d - %d, P1 hp left when won %s" % (args.fighter, opp, lv, st, w, len(bs), rw, rl, hpl))
+        for b in bs:
+            h = b.get("headless") or {}
+            print("    seed %-5s winner %s wins %s frames %s hp %s | headless winner %s wins %s frames %s hp %s -> %s%s" % (
+                b.get("seed"), b.get("winner"), b.get("wins"), b.get("frames"), b.get("hp"), h.get("winner"), h.get("wins"), h.get("frames"), h.get("hp"),
+                ("IDENTICAL" + (" (end read +%d f)" % h.get("frameDiff") if h.get("frameDiff") else "")) if h.get("identical") else "DIFFERENT",
+                "" if b.get("alignedToFight") else " (not aligned: frozen after FIGHT began)"))
+    print("-" * 84)
+    print_diagnostics(diag)
+    dp = diag_problems(diag)
+    report.update({"diagnostics": diag, "fatal": fatal, "headlessIdentical": [same, cmp_n]})
+    print("headless mirror: %d / %d aligned bouts IDENTICAL (winner, rounds, both hp exact; end frame within the 2-frame step)" % (same, cmp_n))
+    errs = [b for b in report["bouts"] if "error" in b]
+    for e in errs:
+        print("   X %s" % e["error"])
+    for p in dp:
+        print("   X %s" % p)
+    if fatal:
+        print("FATAL        : %s" % fatal)
+    print("report       : %s" % save_report("playtest_bosses" + (("_" + args.tag) if args.tag else ""), report, args.base))
+    ok = not fatal and not errs and not dp
+    print("RESULT: %s" % ("OK" if ok else "FAIL"))
+    return 0 if ok else 1
 
 
 def run_season(args) -> int:
@@ -1178,7 +1485,7 @@ def run_season(args) -> int:
     P = Player(sess, args.out_dir)
 
     def shot(name):
-        return sess.screenshot(os.path.join(args.out_dir, "pts_%s.png" % name))
+        return sess.screenshot(os.path.join(args.out_dir, "pts_%s%s.png" % ((args.tag + "_") if args.tag else "", name)))
 
     bouts_played = 0
     bonus_played = []
@@ -1221,11 +1528,19 @@ def run_season(args) -> int:
                 fatal = "character select never opened"
         if not fatal:
             time.sleep(0.6)
-            for _ in range(24):
-                cur = ((P.menus().get("cs", {}).get("p") or [{}])[0]).get("cursor")
+            # CHANGED(wf7 season bot): LEFT / RIGHT wrap inside one ROW of the grid (ui/charselect.ts move()), so a fighter on
+            # another row was never reached - "--fighter boneyard" played zambini (wf7sb_season_boneyard.log): walk each row
+            # (ArrowRight x 10), then ArrowDown to the next
+            cur = None
+            for _row in range(6):
+                for _ in range(10):
+                    cur = ((P.menus().get("cs", {}).get("p") or [{}])[0]).get("cursor")
+                    if cur == args.fighter:
+                        break
+                    P.key("ArrowRight", gap=0.08)
                 if cur == args.fighter:
                     break
-                P.key("ArrowRight", gap=0.08)
+                P.key("ArrowDown", gap=0.08)
             cur0 = ((P.menus().get("cs", {}).get("p") or [{}])[0]).get("cursor")
             shot("charselect")
             P.key("Enter", 3, gap=0.25)     # fighter, colour, controls (SIMPLE is the first choice)
@@ -1416,7 +1731,7 @@ def run_season(args) -> int:
     if report.get("devAssist"):
         print("DEV ASSIST   : %s (CPU hp set by __HP__.dev.setHp after %d losses on a slot - NOT an unassisted clear)" % (json.dumps(report["devAssist"]), args.slot_help))
     print("time control : %s" % ("REAL-TIME (no stepping)" if args.realtime else "sim frozen + stepped %d frames per key decision (__HP__.dev.freeze / dev.step); keys = real key events" % args.step_frames))
-    print("report       : %s" % save_report("playtest_season", report, args.base))
+    print("report       : %s" % save_report("playtest_season" + (("_" + args.tag) if args.tag else ""), report, args.base))
     print("steps        : %d passed, %d failed%s" % (len(S.items) - len(problems), len(problems), " (SMOKE: first %d bout(s) only)" % args.max_bouts if args.max_bouts else ""))
     print("RESULT: %s" % ("OK" if ok else "FAIL"))
     if fatal:
@@ -1444,7 +1759,14 @@ def main() -> int:
     # CHANGED(integrator) 3D: an explicit, reported DEV ASSIST for a slot the scripted bot cannot clear (THE FREAK wall, §35.19)
     ap.add_argument("--slot-help", type=int, default=0, help="after this many losses on one slot, set the CPU's hp to --help-hp-pct at each round's FIGHT (0 = off)")
     ap.add_argument("--help-hp-pct", type=int, default=35, help="CPU hp %% for --slot-help (default 35)")
+    # CHANGED(wf7 season bot): boss re-measure - SeasonBot real-key bouts in SEASON staging + the headless mirror's replay
+    ap.add_argument("--bosses", action="store_true", help="SeasonBot vs --bouts in arcade staging (real keys), compared with probe_balance --botbouts")
+    ap.add_argument("--bouts", default="freak:5:butcher_block,ricky:6:control_room", help="opp:level:stage,... for --bosses")
+    ap.add_argument("--seeds", default="1,2,3", help="match seeds for --bosses")
+    ap.add_argument("--tag", default="", help="suffix for the --season / --bosses report name and the season shots (parallel runs)")
     args = ap.parse_args()
+    if args.bosses:
+        return run_bosses(args)
     if args.season:
         return run_season(args)
     return run(args)

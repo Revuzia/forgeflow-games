@@ -13,15 +13,25 @@ interface AuthClient {
   rpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }>;
 }
 
-let client: AuthClient | null = null;
-async function sb(): Promise<AuthClient> {
+/**
+ * CHANGED(wf7 online) VO-D7: the PROMISE is memoised (was the client, assigned only after the esm.sh import resolved): two
+ * lookups racing that import - a second QUICK MATCH / CREATE ROOM within the first one's load (each session calls
+ * currentPlayer under a 3 s race) - each created a client under the default `sb-<project>-auth-token` key -> supabase-js
+ * "Multiple GoTrueClient instances detected in the same browser context". One client per page now, on the portal's key;
+ * net/netplay.ts keeps its own single client on the key 'hit-parade-netplay' (instances are counted per storage key).
+ */
+let client: Promise<AuthClient> | null = null;
+function sb(): Promise<AuthClient> {
   if (client) return client;
-  const url = SUPABASE_JS;
-  const mod = (await import(/* @vite-ignore */ url)) as { createClient?: (u: string, k: string) => unknown; default?: { createClient?: (u: string, k: string) => unknown } };
-  const createClient = mod.createClient ?? mod.default?.createClient;
-  if (!createClient) throw new Error('supabase-js: createClient missing');
-  // default auth options = the portal's localStorage session on the same origin
-  client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY) as AuthClient;
+  client = (async () => {
+    const url = SUPABASE_JS;
+    const mod = (await import(/* @vite-ignore */ url)) as { createClient?: (u: string, k: string) => unknown; default?: { createClient?: (u: string, k: string) => unknown } };
+    const createClient = mod.createClient ?? mod.default?.createClient;
+    if (!createClient) throw new Error('supabase-js: createClient missing');
+    // default auth options = the portal's localStorage session on the same origin
+    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY) as AuthClient;
+  })();
+  client.catch(() => { client = null; });                 // a failed load (offline) may be retried later
   return client;
 }
 

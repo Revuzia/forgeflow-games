@@ -251,6 +251,7 @@ export class RollbackSession {
     this.receive(now);
     if (!this.started) {
       if (!(now >= this.startAt)) {
+        this.finalizeChecksums();       // CHANGED(wf7 online): state[0] is final before the start too (see confirmedFrame)
         if (this.tr0) this.traceTick(now, 3);
         return { advanced: 0, stalled: false };
       }
@@ -288,6 +289,10 @@ export class RollbackSession {
       advanced = 1;
     }
     this.stalledNow = stalled;
+    // CHANGED(wf7 online): finalize again after the advance, so between two ticks (where the online flow asks for its
+    // RESULT) every checksum frame <= confirmedFrame() is final - the start-of-tick pass alone left state[frame-1] and
+    // state[frame] without one for a tick (P1-WF6: MATCH_END on a checksum frame -> RESULT cs null -> "agreed false").
+    this.finalizeChecksums();
     if (this.tr0) this.traceTick(now, advanced ? 0 : skipped ? 2 : 1);
     if (this.remoteMax >= this.delay) this.sync.addLocal(this.localAdvantage());
     if (this.st.ticks % this.sendEvery === 0) this.sendInputs(now);
@@ -338,13 +343,15 @@ export class RollbackSession {
     this.sendInputs(this.now());
   }
 
-  /** Final (confirmed) checksum of state[f] if f is a checksum frame still in the log, else null. */
+  /** Final (confirmed) checksum of state[f] if f is a checksum frame still in the log, else null.
+   *  CHANGED(wf7 online): between ticks it answers for EVERY checksum frame f <= confirmedFrame() that this peer simulated
+   *  (the last 64 periods; frames a desync snapshot jumped over excepted) - core/net/result.ts relies on it. */
   checksumAt(f: number): number | null {
     const ti = Math.floor(f / this.csEvery) & (CS_RING - 1);
     return f % this.csEvery === 0 && this.csLocalTag[ti] === f ? this.csLocal[ti] : null;
   }
 
-  /** Every state <= this frame is final on this peer. */
+  /** Every state <= this frame is final on this peer (and, between ticks, so is every checksum up to it: checksumAt). */
   confirmedFrame(): number { return Math.min(this.rc + 1, this.frame); }
 
   currentFrame(): number { return this.frame; }
@@ -591,12 +598,24 @@ export class RollbackSession {
 
   // ---- checksums / desync -------------------------------------------------------------------------------
 
+  /**
+   * Moves every checksum of a state that is now final (f <= confirmedFrame() = min(rc + 1, frame)) into the final log and
+   * compares it with the peer's. CHANGED(wf7 online): the limit was min(rc + 1, frame - 1) - state[frame], the LIVE state,
+   * only got its checksum when simFrame(frame) ran a tick later, so a checksum frame could be "confirmed" without a final
+   * checksum. Now the live state's checksum is taken here when it is final (rc + 1 >= frame: no rollback can reach it; the
+   * sim holds state[frame] at both call sites - start of tick after the rollback, end of tick after the advance), and
+   * simFrame(frame) later recomputes the same value. Called at the start AND the end of every tick.
+   */
   private finalizeChecksums(): void {
-    const limit = Math.min(this.rc + 1, this.frame - 1);
+    const limit = Math.min(this.rc + 1, this.frame);
     const ce = this.csEvery;
     let f = this.lastCsFinal < 0 ? Math.ceil(this.floorFrame / ce) * ce : this.lastCsFinal + ce;
     for (; f <= limit; f += ce) {
       const ti = Math.floor(f / ce) & (CS_RING - 1);
+      if (f === this.frame && this.csTentTag[ti] !== f) {
+        this.csTent[ti] = this.sim.checksum();
+        this.csTentTag[ti] = f;
+      }
       this.lastCsFinal = f;
       if (this.csTentTag[ti] !== f) continue;               // never simulated here (snapshot jump)
       this.csLocal[ti] = this.csTent[ti];

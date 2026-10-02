@@ -16,6 +16,12 @@
 // burst 2, net/transport_relay.ts). `--pacing interval` models P1's pacing (one packet per 100 ms since the last flush):
 // with jitter it holds packets 0..100 ms - the cause of P1's 91% live relay speed (progress_p2_net.md).
 //
+// CHANGED(wf7 online): RESULT@MATCH_END - both peers must report the same {winner, frame, csFrame, cs} through the shipped
+// rule (core/net/result.ts readyResult, asked after every tick) on the FIRST ask once confirmedFrame() >= E, with MATCH_END
+// forced at E = 300..314 (every residue mod 15; the P1-WF6 defect failed E % 15 == 0 / 1) on 3 traces x {p2p, p2p+jitter,
+// relay+jitter}, plus 15 real MATCH_ENDs (real sim, 1 round of 8 s, intro + 0..14 frames); and the session invariant
+// "checksumAt(f) answers for every checksum frame f <= confirmedFrame()" after every tick.
+//
 // Usage: node _harness/probe_netsim.ts [--toy] [--frames 3600] [--verbose] [--hide N] [--pacing bucket|interval] [--sweep]
 //   --hide N  tuning only: P2P D = clamp(ceil(RTT/2/16.67) - N, 1, 4) instead of sync.ts DELAY_HIDE
 //   --sweep   tuning only: DELAY_HIDE 1..4 x every trace x 4 start phases (p2p, jitter on): speed / delay / rollback table
@@ -28,7 +34,8 @@ import { RollbackSession, type SimPort, type NetEvent } from '../runtime/src/cor
 import { SimLink, traceDelay } from '../runtime/src/core/net/loopback.ts';
 import { ToySim } from '../runtime/src/core/net/toysim.ts';
 import { IN, InputGen } from '../runtime/src/core/net/testinputs.ts';
-import { RELAY_DELAY, RELAY_SEND_EVERY, RELAY_WINDOW, P2P_WINDOW, inputDelayFor } from '../runtime/src/core/net/sync.ts';
+import { CHECKSUM_EVERY, RELAY_DELAY, RELAY_SEND_EVERY, RELAY_WINDOW, P2P_WINDOW, inputDelayFor } from '../runtime/src/core/net/sync.ts';
+import { readyResult } from '../runtime/src/core/net/result.ts';
 import {
   FLAG, PKT, decodeFrameMsg, decodeInput, decodeSnapshot, decodeSync, encodeFrameMsg, encodeInput, encodeSnapshot,
   encodeSync, newInputPacket,
@@ -74,7 +81,10 @@ function loadTraces(): Trace[] {
 
 // ---- sims ---------------------------------------------------------------------------------------------
 type Make = (seed: number) => SimPort;
-async function simFactory(): Promise<{ kind: 'real' | 'toy'; make: Make; note: string; error?: string }> {
+/** CHANGED(wf7 online): a real match whose MATCH_END the game's own event reader finds (intro shifted by `introShift` frames) */
+interface EndMatch { port: SimPort; matchEnd(): { frame: number; winner: number } | null }
+type MakeEnd = (seed: number, introShift: number) => EndMatch;
+async function simFactory(): Promise<{ kind: 'real' | 'toy'; make: Make; note: string; error?: string; makeEnd?: MakeEnd }> {
   const toy = { kind: 'toy' as const, make: (seed: number) => new ToySim(seed), note: 'toy sim (core/sim/match.ts absent)' };
   if (flag('--toy')) return { ...toy, note: 'toy sim (--toy)' };
   const matchPath = resolve(ROOT, 'runtime/src/core/sim/match.ts');
@@ -98,8 +108,31 @@ async function simFactory(): Promise<{ kind: 'real' | 'toy'; make: Make; note: s
     const p2 = ids.includes('bruno') ? 'bruno' : ids[ids.length - 1];
     const st = data.stages;
     const stage = Array.isArray(st) ? (st[0]?.id ?? st[0]) : st && Array.isArray(st.stages) ? st.stages[0].id : Object.keys(st ?? {})[0] ?? 'rust_theater';
+    // CHANGED(wf7 online): real MATCH_END for the RESULT-agreement runs: one round of `timer` s, the intro lengthened by
+    // `introShift` frames (shifts the end frame through every residue mod 15); MATCH_END read the way game.ts reads it
+    // (eventsSince over the match's event ring - re-simulated frames re-emit, the first sighting counts)
+    const Ev = await import(pathToFileURL(resolve(ROOT, 'runtime/src/core/sim/events.ts')).href);
+    const makeEnd: MakeEnd = (seed: number, introShift: number) => {
+      const r0 = data.system.round;
+      const d2 = { ...data, system: { ...data.system, round: { ...r0, introFrames: (r0.introFrames ?? 90) + introShift } } };
+      const m = Mm.createMatch({ mode: 'online', stage, seed, rounds: 1, timer: 8, p: [{ fighter: p1, color: 0, scheme: 0, cpu: -1 }, { fighter: p2, color: 1, scheme: 1, cpu: -1 }] }, d2);
+      const buf: { frame: number; type: number; a: number }[] = [];
+      let found: { frame: number; winner: number } | null = null;
+      let last = 0;
+      return {
+        port: Pm.matchPort(m) as SimPort,
+        matchEnd(): { frame: number; winner: number } | null {
+          if (found) return found;
+          buf.length = 0;
+          Ev.eventsSince(m.events, Math.max(0, last - 64), buf);
+          for (const e of buf) if (e.type === Ev.EV.MATCH_END) { found = { frame: e.frame, winner: e.a }; break; }
+          last = Math.max(last, m.frame());
+          return found;
+        },
+      };
+    };
     // CHANGED(integrator) 3D: the port also answers which fighters are in a STEP state (SIDESTEP / SIDEWALK, §35.13 item 2)
-    return { kind: 'real', note: `real sim ${p1} vs ${p2} @ ${stage}, data=${src}`, make: (seed: number) => {
+    return { kind: 'real', note: `real sim ${p1} vs ${p2} @ ${stage}, data=${src}`, makeEnd, make: (seed: number) => {
       const m = Mm.createMatch({ mode: 'online', stage, seed, p: [{ fighter: p1, color: 0, scheme: 0, cpu: -1 }, { fighter: p2, color: 1, scheme: 1, cpu: -1 }] }, data);
       const port = Pm.matchPort(m) as SimPort & { stepStates?: () => [boolean, boolean] };
       const isStep = (i: 0 | 1): boolean => { const n = Mm.readFighter(m, i).stateName; return n === 'sidestep' || n === 'sidewalk'; };
@@ -308,6 +341,111 @@ function run(s: Scn, make: Make): Row {
 
 function round4(x: number): number { return Math.round(x * 10000) / 10000; }
 
+// ---- RESULT agreement at MATCH_END (CHANGED(wf7 online), progress_wf7_online.md) -----------------------------------------
+// The browser reports RESULT {winner, frame, csFrame, cs} through core/net/result.ts readyResult(), polled after the
+// tick that put MATCH_END in the sim (game.ts drains events at render time) and every 250 ms (online_flow.ts watch()). Both
+// run BETWEEN two session ticks, so the probe asks after EVERY tick of each peer (it covers every moment either can ask).
+// P1-WF6 defect: confirmedFrame() reached the end frame E one tick before rollback.ts finalized the checksum of state[E]
+// (or of state[E-1] when E % 15 == 1), so a peer that asked at that moment reported cs null -> "agreed false" (UNRATED,
+// "result mismatch"). Gates per run: both peers report on the FIRST ask once confirmedFrame() >= E (no waiting), cs not null,
+// identical {winner, frame, csFrame, cs}; and after every tick of every peer, checksumAt(f) answers for every checksum frame
+// f <= confirmedFrame() of the last 4 periods (the session invariant the rule rests on).
+interface EndRes { winner: number; frame: number; csFrame: number; cs: number | null; waited: number; confirmedAt: number; frameAt: number }
+interface EndRow {
+  name: string; trace: string; tier: string; jitter: boolean; real: boolean; endFrame: number; residue: number;
+  a: EndRes | null; b: EndRes | null; agreed: boolean; invariantChecks: number; invariantMisses: number; firstMiss: string; pass: boolean; why: string[];
+}
+
+function runEnd(o: { name: string; trace: Trace; tier: 'p2p' | 'relay'; jitter: boolean; seed: number; endFrame?: number; introShift?: number },
+  make: Make, makeEnd?: MakeEnd): EndRow {
+  let t = 0;
+  const relay = o.tier === 'relay';
+  const D = relay ? RELAY_DELAY : inputDelayFor(o.trace.rttMedian);
+  const W = relay ? RELAY_WINDOW : P2P_WINDOW;
+  const ab = traceDelay(o.trace.ab), ba = traceDelay(o.trace.ba);
+  const link = new SimLink({ now: () => t, delayAB: ab, delayBA: ba, seed: o.seed * 31 + 7, minIntervalMs: relay ? 100 : 0,
+    pacing: relay ? 'bucket' : 'interval', rate: 10, burst: 2, kind: relay ? 'relay' : 'loop' });
+  const real = o.endFrame === undefined && !!makeEnd;
+  const mA = real ? (makeEnd as MakeEnd)(2000 + o.seed, o.introShift ?? 0) : null;
+  const mB = real ? (makeEnd as MakeEnd)(2000 + o.seed, o.introShift ?? 0) : null;
+  const simA = mA ? mA.port : make(2000 + o.seed), simB = mB ? mB.port : make(2000 + o.seed);
+  const A = new RollbackSession(simA, 0, link.a, { now: () => t, delay: D, window: W, sendEvery: relay ? RELAY_SEND_EVERY : 1, startAt: 0 });
+  const B = new RollbackSession(simB, 1, link.b, { now: () => t, delay: D, window: W, sendEvery: relay ? RELAY_SEND_EVERY : 1, startAt: 12 });
+  const gA = new InputGen(o.seed * 7 + 1, IN.R, true), gB = new InputGen(o.seed * 13 + 2, IN.L, true);
+  const cA = tickClock(o.seed * 97 + 3, 0, FRAME_MS, o.jitter), cB = tickClock(o.seed * 89 + 5, 12, FRAME_MS, o.jitter);
+  // per peer: the MATCH_END it saw (frame + winner), asks since confirmedFrame() >= E, its result
+  const side = [
+    { s: A, m: mA, end: null as { frame: number; winner: number } | null, asks: 0, res: null as EndRes | null },
+    { s: B, m: mB, end: null as { frame: number; winner: number } | null, asks: 0, res: null as EndRes | null },
+  ];
+  let invChecks = 0, invMiss = 0, firstMiss = '';
+  const after = (k: 0 | 1): void => {
+    const x = side[k], s = x.s;
+    const conf = s.confirmedFrame();
+    if (s.currentFrame() > 0) {
+      for (let f = conf - (conf % CHECKSUM_EVERY); f >= 0 && f > conf - CHECKSUM_EVERY * 4; f -= CHECKSUM_EVERY) {
+        invChecks++;
+        if (s.checksumAt(f) === null) { invMiss++; if (!firstMiss) firstMiss = `${k ? 'B' : 'A'} checksumAt(${f}) null with confirmed ${conf} frame ${s.currentFrame()}`; }
+      }
+    }
+    if (!x.end) {
+      if (x.m) x.end = x.m.matchEnd();
+      else if (s.currentFrame() >= (o.endFrame as number)) x.end = { frame: o.endFrame as number, winner: 0 };
+    }
+    if (x.end && !x.res && conf >= x.end.frame) {
+      const r = readyResult(s, x.end.frame, x.end.winner);
+      if (r) x.res = { ...r, waited: x.asks, confirmedAt: conf, frameAt: s.currentFrame() };
+      else x.asks++;
+    }
+  };
+  let guard = 0;
+  const cap = (o.endFrame ?? 4000) + 900;
+  while (guard++ < cap * 6) {
+    if (side[0].res && side[1].res) break;
+    const fa = A.currentFrame(), fb = B.currentFrame();
+    if (fa > cap && fb > cap) break;
+    const ta = cA.peek(), tb = cB.peek();
+    if (ta <= tb) { t = ta; A.tick(gA.next()); cA.advance(); after(0); }
+    else { t = tb; B.tick(gB.next()); cB.advance(); after(1); }
+  }
+  const ra = side[0].res, rb = side[1].res;
+  const E = side[0].end ? side[0].end.frame : side[1].end ? side[1].end.frame : (o.endFrame ?? -1);
+  const agreed = !!ra && !!rb && ra.cs !== null && ra.cs === rb.cs && ra.winner === rb.winner && ra.frame === rb.frame && ra.csFrame === rb.csFrame;
+  const why: string[] = [];
+  if (!ra || !rb) why.push(`no result A ${!!ra} / B ${!!rb} (end A ${JSON.stringify(side[0].end)} B ${JSON.stringify(side[1].end)})`);
+  else {
+    if (ra.cs === null || rb.cs === null) why.push(`cs null: A cs@${ra.csFrame}=${ra.cs} (confirmed ${ra.confirmedAt}, frame ${ra.frameAt}) / B cs@${rb.csFrame}=${rb.cs} (confirmed ${rb.confirmedAt}, frame ${rb.frameAt})`);
+    if (!agreed) why.push(`results differ A ${JSON.stringify(ra)} / B ${JSON.stringify(rb)}`);
+    if (ra.waited || rb.waited) why.push(`result waited A ${ra.waited} / B ${rb.waited} asks after confirmedFrame >= E`);
+  }
+  if (invMiss) why.push(`invariant: ${invMiss} / ${invChecks} checksum frames <= confirmedFrame unanswered (first: ${firstMiss})`);
+  return { name: o.name, trace: o.trace.tag, tier: o.tier, jitter: o.jitter, real, endFrame: E, residue: E >= 0 ? E % CHECKSUM_EVERY : -1,
+    a: ra, b: rb, agreed, invariantChecks: invChecks, invariantMisses: invMiss, firstMiss, pass: why.length === 0, why };
+}
+
+/** 15 residues x 3 traces x {p2p, p2p+jitter, relay+jitter} with MATCH_END forced at 300 + r, + 15 real MATCH_ENDs */
+function resultChecks(traces: Trace[], make: Make, makeEnd?: MakeEnd): EndRow[] {
+  const byRtt = traces.slice().sort((a, b) => a.rttMedian - b.rttMedian);
+  const worst = traces.slice().sort((a, b) => (b.abP99 + b.baP99) - (a.abP99 + a.baP99))[0];
+  const pick = [byRtt[0], byRtt[Math.floor(byRtt.length / 2)], worst].filter((x, i, arr) => arr.indexOf(x) === i);
+  const rows: EndRow[] = [];
+  let seed = 700;
+  for (const tr of pick) {
+    for (const [tier, jitter] of [['p2p', false], ['p2p', true], ['relay', true]] as ['p2p' | 'relay', boolean][]) {
+      for (let r = 0; r < CHECKSUM_EVERY; r++) {
+        rows.push(runEnd({ name: `end@${300 + r}`, trace: tr, tier, jitter, seed: seed++, endFrame: 300 + r }, make));
+      }
+    }
+  }
+  if (makeEnd) {
+    const mid = byRtt[Math.floor(byRtt.length / 2)];
+    for (let k = 0; k < CHECKSUM_EVERY; k++) {
+      rows.push(runEnd({ name: `real end intro+${k}`, trace: k % 2 ? worst : mid, tier: k % 3 === 2 ? 'relay' : 'p2p', jitter: true, seed: 900 + k, introShift: k }, make, makeEnd));
+    }
+  }
+  return rows;
+}
+
 // ---- packet codec checks (NETCODE 6 N1, folded in) ----------------------------------------------------
 function codecChecks(): string[] {
   const errs: string[] = [];
@@ -376,9 +514,23 @@ async function main(): Promise<number> {
   rows.push(run({ name: 'relay desync@1500', trace: worst, tier: 'relay', corruptAt: 1500, seed: seed++ }, sim.make));
   const rollbacksTotal = rows.reduce((a, r) => a + r.rollbacks, 0);
   const failed = rows.filter((r) => !r.pass);
-  const pass = failed.length === 0 && codec.length === 0 && rollbacksTotal > 0;
-  Object.assign(report, { traces: traces.map((t) => ({ tag: t.tag, rttMedian: t.rttMedian, abMed: t.abMed, abP99: t.abP99, baMed: t.baMed, baP99: t.baP99 })), codec, rows });
+  // CHANGED(wf7 online): RESULT agreement with MATCH_END on and off checksum frames (+ real MATCH_ENDs)
+  const ends = resultChecks(traces, sim.make, sim.makeEnd);
+  const endFailed = ends.filter((r) => !r.pass);
+  const realEnds = ends.filter((r) => r.real);
+  const realResidues = [...new Set(realEnds.map((r) => r.residue))].sort((a, b) => a - b);
+  const endCover = ends.filter((r) => !r.real).map((r) => r.residue);
+  const endOk = endFailed.length === 0 && new Set(endCover).size === CHECKSUM_EVERY && (sim.kind !== 'real' || (realEnds.length > 0 && realResidues.includes(0)));
+  const pass = failed.length === 0 && codec.length === 0 && rollbacksTotal > 0 && endOk;
+  Object.assign(report, { traces: traces.map((t) => ({ tag: t.tag, rttMedian: t.rttMedian, abMed: t.abMed, abP99: t.abP99, baMed: t.baMed, baP99: t.baP99 })), codec, rows,
+    resultAgreement: { runs: ends.length, failed: endFailed.length, realResidues, rows: ends } });
   write(report);
+  if (VERBOSE || endFailed.length) {
+    const byRes = new Map<number, number>();
+    for (const r of endFailed) byRes.set(r.residue, (byRes.get(r.residue) ?? 0) + 1);
+    console.log(`result agreement: ${ends.length - endFailed.length}/${ends.length} runs ok; failures by end-frame residue mod 15: ${JSON.stringify([...byRes.entries()].sort((a, b) => a[0] - b[0]))}`);
+    for (const r of endFailed.slice(0, VERBOSE ? 400 : 12)) console.log(`FAIL ${r.name.padEnd(18)} ${r.trace.padEnd(40)} ${r.tier}${r.jitter ? '+jitter' : ''} E=${r.endFrame} (mod 15 = ${r.residue}) <- ${r.why.join('; ')}`);
+  }
   if (VERBOSE || !pass) {
     for (const r of rows) {
       console.log(`${r.pass ? 'ok  ' : 'FAIL'} ${r.name.padEnd(18)} ${r.trace.padEnd(40)} D=${r.D} W=${r.W} speed=${(r.speed * 100).toFixed(2)}% wall=${(r.wallSpeed * 100).toFixed(2)}% held=${r.heldPct}% hold~${r.holdMsAvg}ms ` +
@@ -398,6 +550,7 @@ async function main(): Promise<number> {
     `min speed p2p=${(minP2P * 100).toFixed(2)}% relay=${(minRelay * 100).toFixed(2)}% relay+jitter=${(minRelayJ * 100).toFixed(2)}% (gate 96%; pacing=${PACING}, held<=${heldJ}%) rollbacks=${rollbacksTotal} ` +
     `desync-recovery=${rows.filter((r) => r.name.includes('desync')).every((r) => r.pass) ? 'ok' : 'FAIL'} codec=${codec.length ? 'FAIL' : 'ok'} ` +
     `STEP over rollback: remote step words ${rows.reduce((a, r) => a + r.stepWords[0] + r.stepWords[1], 0)}, remote step-state frames ${rows.reduce((a, r) => a + r.stepFrames[0] + r.stepFrames[1], 0)} (every scenario both peers)` +
+    ` RESULT@MATCH_END ${ends.length - endFailed.length}/${ends.length} agreed on the first ask (forced E = 300..314: every residue mod 15${realEnds.length ? `; ${realEnds.length} real MATCH_ENDs, residues ${realResidues.join(',')}` : ''}; invariant checks ${ends.reduce((a, r) => a + r.invariantChecks, 0)}, misses ${ends.reduce((a, r) => a + r.invariantMisses, 0)})` +
     (failed.length ? ` failed=[${failed.map((r) => r.name + '@' + r.trace + ': ' + r.why.join(', ')).join(' | ')}]` : ''));
   return pass ? 0 : 1;
 }

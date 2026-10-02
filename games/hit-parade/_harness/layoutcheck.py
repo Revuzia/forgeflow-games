@@ -249,7 +249,10 @@ def run(args) -> int:
     steps = [s.strip() for s in args.steps.split(",") if s.strip()] if args.steps else ALL_STEPS
     report: dict = {"devices": {}, "verdict": "PASS"}
     t0 = time.time()
-    srv = LabServer() if not args.base else None
+    # CHANGED(wf7 touch): --port = the dev server to use / start for the lab deep links (default :5324)
+    import menus as _menus
+    _menus.LAB_PORT = args.port
+    srv = LabServer(args.port) if not args.base else None
     try:
         if srv:
             srv.__enter__()
@@ -319,6 +322,7 @@ def main() -> int:
     ap.add_argument("--base", default=None)
     ap.add_argument("--headless", action="store_true", help="(always headless; accepted for the gate table)")
     ap.add_argument("--lab", action="store_true")
+    ap.add_argument("--port", type=int, default=5324, help="dev server port (default 5324)")
     return run(ap.parse_args())
 
 

@@ -3,7 +3,8 @@
 //   online.on('matchStart', (cfg, local) => { const m = createMatch(cfg, data); session = online.attach(m); });
 //   loop: session.tick(localInputWord) at 60 Hz (keep ticking through results until 'matchEnd');
 //   on the sim's MATCH_END: online.finish({ winner, frame, checksum }) (only once its frame is confirmed:
-//   session.confirmedFrame() >= frame; online waits for that itself before sending RESULT).
+//   session.confirmedFrame() >= frame; online waits for that itself before sending RESULT - CHANGED(wf7 online): through
+//   core/net/result.ts readyResult, which also needs the final checksum of the result's checksum frame).
 // The flow itself lives in online_flow.ts (SimPort-based, testable with the toy sim on the lab page).
 //
 // CHANGED(NET) P2: `info()` (flow facts; also inside session.stats().online), `lastMatch`, `netStats()` returns the

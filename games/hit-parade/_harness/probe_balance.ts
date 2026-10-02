@@ -6,7 +6,8 @@
 //   node _harness/probe_balance.ts --full     the full tables + the fix_balance targets as gates (exit 1 on a miss)
 //   --only bosses,ladder,novice,ring,ringflat   sections (default: full all, smoke bosses,novice,ring); --all-diffs (smoke)
 //   --seeds N        seeds per cell (bosses; smoke 4, full 24)
-//   --player cpu6|optimal|both                the strong-player persona(s) for the boss / ladder tables (default both)
+//   --player cpu6|optimal|seasonbot|both|all   the player(s) for the boss / ladder tables, comma list ok (default: full all, smoke cpu6;
+//                    both = cpu6,optimal; all = + seasonbot, CHANGED(wf7 season bot))
 //   --json FILE      dump the measured tables
 //   -v               per-cell lines
 //
@@ -29,24 +30,35 @@
 //   B2  THE FREAK clearly harder than the regular slots 1-6 (>= 8 points under the hardest slot level, >= 20 under their mean)
 //   B3  THE FREAK clearly easier than RICKY at EASY and NORMAL (>= 8 points); HARD is a NOTE (both saturate)
 //   B4  the novice beats NORMAL slot 1 > 50 %
+//   B5  CHANGED(wf7 season bot): the SeasonBot (playtest.py's G11 persona, headless mirror) beats THE FREAK at NORMAL >= 25 %
+//       with every contestant (THE SEASON completable; the WF6 0 / 22 was the bot's range bug) and RICKY is not easier than
+//       THE FREAK for it (B5b); its slot table is a NOTE (the bot's guard is frame-exact: its rates overstate a human's)
 //   R1  ring L4: >= 6 sidestep taps + >= 2 circle-walks per CPU per bout, every fighter >= 3 taps
 //   R2  L6 / L8 step and circle at least as much as L4, camN travel >= 180 deg per bout
 //   R3  L1 / L2 occasional (>= 0.3 steps per bout, no more taps than L4)
 //   R4  ringflat L6 / L8: the CPU alone (vs a line player) turns camN >= 180 deg per bout
 // Smoke (run_probes, no args, ~1 min): bosses at NORMAL x 4 seeds (FREAK 25-80 %, RICKY not easier by > 10), the novice vs
-// slot 1, ring L4 on 2 arenas (taps >= 4.5, circle-walks >= 1.5).
+// slot 1, ring L4 on 2 arenas (taps >= 4.5, circle-walks >= 1.5), the SeasonBot johnny vs THE FREAK x 4 seeds >= 25 % (B5 smoke).
+
+//
+// CHANGED(wf7 season bot): `seasonbot` player kind = a headless mirror of the real-key G11 persona (playtest.py SeasonBot,
+// ranges from the compiled reach / push fronts), its geometry helper (`--geom <me> <opp>`, read by playtest.py), and
+// `--botbouts <me> <opp> <level> <stage> <seeds,...>` (the same bouts playtest.py --bosses plays with real keys).
 
 import { pathToFileURL } from 'node:url';
 import { writeFileSync } from 'node:fs';
 import { loadGameData } from '../runtime/src/core/data.ts';
-import type { GameData } from '../runtime/src/core/types.ts';
-import { createMatch, readMatch, step } from '../runtime/src/core/sim/match.ts';
-import type { MatchCfg, Scheme } from '../runtime/src/core/sim/match.ts';
+import type { FighterSnap, GameData, MatchSnap } from '../runtime/src/core/types.ts';
+import { createMatch, readFighter, readMatch, step } from '../runtime/src/core/sim/match.ts';
+import type { Match, MatchCfg, Scheme } from '../runtime/src/core/sim/match.ts';
 import { F, PH, ST, W, fighterBase } from '../runtime/src/core/sim/layout.ts';
 import { createCpu, createBrainCpu, levelProfile } from '../runtime/src/core/ai/cpu.ts';
 import type { Cpu } from '../runtime/src/core/ai/cpu.ts';
 import { createPersona } from '../runtime/src/core/ai/personas.ts';
-import type { BrainStats } from '../runtime/src/core/ai/brain.ts';
+import type { Brain, BrainStats } from '../runtime/src/core/ai/brain.ts';
+import { buildKit } from '../runtime/src/core/ai/kit.ts';
+import { INPUT } from '../runtime/src/core/config.ts';
+import { M } from '../runtime/src/core/sim/units.ts';
 
 // ------------------------------------------------------------------ the bout runner (exported for scratch tools)
 export interface BoutOut {
@@ -68,11 +80,13 @@ export interface BoutOut {
   camSweep: number;
   hp: [number, number];
   stats: [BrainStats | null, BrainStats | null];
+  /** CHANGED(wf7 season bot): the SeasonBot side's counters, when one played */
+  bot?: SeasonBotTs['stats'];
 }
 
 const DEG = 180 / Math.PI;
 
-export function runBout(data: GameData, cfg: MatchCfg, cpus: [Cpu, Cpu], maxF = 40000): BoutOut {
+export function runBout(data: GameData, cfg: MatchCfg, cpus: [BoutPlayer, BoutPlayer], maxF = 40000): BoutOut {
   const m = createMatch(cfg, data);
   const s = m.s;
   const out: BoutOut = {
@@ -130,6 +144,11 @@ export function runBout(data: GameData, cfg: MatchCfg, cpus: [Cpu, Cpu], maxF = 
   out.frames = ms.frame;
   out.hp = [s[fighterBase(0) + F.hp], s[fighterBase(1) + F.hp]];
   out.stats = [cpus[0].brain ? cpus[0].brain.stats : null, cpus[1].brain ? cpus[1].brain.stats : null];
+  // CHANGED(wf7 season bot): the SeasonBot's own counters (read steps, side punishes, circle-walks)
+  for (let k = 0; k < 2; k++) {
+    const c = cpus[k];
+    if (c instanceof SeasonBotPlayer) out.bot = { ...c.bot.stats };
+  }
   return out;
 }
 
@@ -162,10 +181,17 @@ export function cpuSeed(seed: number, p: number): number {
   return (seed ^ (0x9e3779b9 * (p + 1))) >>> 0;
 }
 
-export type PlayerKind = 'cpu6' | 'optimal' | 'novice';
+export type PlayerKind = 'cpu6' | 'optimal' | 'novice' | 'seasonbot';
 export function playerCpu(kind: PlayerKind, fighter: string, seed: number): Cpu {
   if (kind === 'cpu6') return createCpu(6, fighter, seed);
+  if (kind === 'seasonbot') throw new Error('playerCpu: the seasonbot is not a Cpu - use playerFor()');
   return createPersona(kind, fighter, seed);
+}
+
+/** CHANGED(wf7 season bot): any player kind as a bout player ('seasonbot' = the playtest.py SeasonBot mirror vs `opp`) */
+export function playerFor(data: GameData, kind: PlayerKind, fighter: string, opp: string, seed: number): BoutPlayer {
+  if (kind === 'seasonbot') return new SeasonBotPlayer(data, fighter, opp);
+  return playerCpu(kind, fighter, seed);
 }
 
 /** one SEASON-style bout: the player (P1) vs the CPU at `level` (P2) on the opponent's home stage, arcade rules */
@@ -174,7 +200,7 @@ export function seasonBout(data: GameData, player: PlayerKind, fighter: string, 
     mode: 'arcade', stage: stage ?? homeStage(data, opp), seed,
     p: [{ fighter, color: 0, scheme: 0 as Scheme, cpu: -1 }, { fighter: opp, color: opp === fighter ? 1 : 0, scheme: 0 as Scheme, cpu: level }],
   };
-  return runBout(data, cfg, [playerCpu(player, fighter, cpuSeed(seed, 0)), createCpu(level, opp, cpuSeed(seed, 1))]);
+  return runBout(data, cfg, [playerFor(data, player, fighter, opp, cpuSeed(seed, 0)), createCpu(level, opp, cpuSeed(seed, 1))]);
 }
 
 /** a CPU Ln with the 3D ring levers off (fights on the line: never steps / circles) - the 'ringflat' opponent */
@@ -198,6 +224,260 @@ export function flatCpu(level: number, fighter: string, seed: number): Cpu {
   };
 }
 
+// ------------------------------------------------------------------ the SeasonBot mirror (CHANGED(wf7 season bot))
+/** the SeasonBot's range numbers (metres, rounded to 0.1 mm - playtest.py reads exactly these through `--geom`) */
+export interface BotGeom {
+  me: string;
+  opp: string;
+  /** both push fronts: the closest root distance the push bodies allow */
+  touch: number;
+  /** the opponent's standing hurt front (a strike connects from reach + this) */
+  opHurt: number;
+  /** my throw: push-front gap it catches from */
+  throwGap: number;
+  /** the ASSIST route's opener (SIMPLE assist[0]) and its reach = box front + travel (kit.ts strikeGeometry) */
+  open: string;
+  openReach: number;
+  /** the side-punish button (5H) */
+  side: string;
+  sideReach: number;
+  /** SIMPLE S+H (Lv1) / S+H+2 (Lv3); reach 0 = not a strike (grab / projectile: the bot uses its punish range) */
+  sup1: string;
+  sup1Reach: number;
+  sup3: string;
+  sup3Reach: number;
+  /** each opponent command grab -> the root distance it catches from (push fronts + its gap, or its centre reach) */
+  opGrab: Record<string, number>;
+}
+
+const r4 = (v: number): number => Math.round(v * 10000) / 10000;
+
+export function botGeom(data: GameData, me: string, opp: string): BotGeom {
+  const m = createMatch({
+    mode: 'training', stage: 'rust_theater', seed: 1,
+    p: [{ fighter: me, color: 0, scheme: 0 as Scheme, cpu: -1 }, { fighter: opp, color: opp === me ? 1 : 0, scheme: 0 as Scheme, cpu: -1 }],
+  }, data);
+  const a = m.cf[0];
+  const o = m.cf[1];
+  const kit = buildKit(data, a, 0);
+  const reachOf = (id: string): number => {
+    const mi = kit.moves.find((x) => x.id === id);
+    return mi ? r4(mi.reach / M) : 0;
+  };
+  const simple = (data.fighters[me] as unknown as { simple?: Record<string, unknown> }).simple ?? {};
+  const assist = Array.isArray(simple.assist) ? (simple.assist as string[]) : [];
+  const open = assist[0] ?? '5L';
+  const sup1 = typeof simple['S+H'] === 'string' ? (simple['S+H'] as string) : '';
+  const sup3 = typeof simple['S+H+2'] === 'string' ? (simple['S+H+2'] as string) : '';
+  const touch = r4((a.pushFS + o.pushFS) / M);
+  const thr = a.moves.find((x) => x.id === 'throw_f');
+  const throwGap = thr && thr.grabGap >= 0 ? r4(thr.grabGap / M) : r4(Number((data.fighters[me] as unknown as { throwRangeM?: number }).throwRangeM ?? 0.6));
+  const opGrab: Record<string, number> = {};
+  for (const mv of o.moves) {
+    if (mv.kindStr !== 'cmdgrab') continue;
+    opGrab[mv.id] = mv.grabGap >= 0 ? r4(touch + mv.grabGap / M) : r4((mv.grabReach + a.pushFS) / M);
+  }
+  return {
+    me, opp, touch, opHurt: r4(o.hurtFS / M), throwGap, open, openReach: reachOf(open), side: '5H', sideReach: reachOf('5H'),
+    sup1, sup1Reach: sup1 ? reachOf(sup1) : 0, sup3, sup3Reach: sup3 ? reachOf(sup3) : 0, opGrab,
+  };
+}
+
+interface OppMove { startup?: number; active?: number; guard?: string; homing?: boolean }
+const HIT_STATES = ['knockdown', 'hitstun', 'juggle', 'blockstun', 'wall_splat', 'crumple', 'dizzy'];
+const FREE_STATES = ['idle', 'walk_f', 'walk_b'];
+const sqrtDist = (a: { x: number; z?: number }, b: { x: number; z?: number }): number => {
+  const dx = a.x - b.x;
+  const dz = (a.z ?? 0) - (b.z ?? 0);
+  return Math.sqrt(dx * dx + dz * dz);
+};
+
+/**
+ * The headless mirror of playtest.py SeasonBot.keys (the real-key G11 persona, CONTRACT §35.25 item 4 fixed): the same
+ * rules in the same order on the same snapshots (readFighter / readMatch = __HP__.fighters() / match()), keys -> the
+ * input bits the keyboard produces (P1 SIMPLE). Keep the two in step: playtest.py --bosses vs `--botbouts` replays it.
+ */
+export class SeasonBotTs {
+  readonly stats = { stepReads: 0, sidePunish: 0, circles: 0, wallCircles: 0 };
+  private phase = 0;
+  private n = 0;
+  private circle = 0;
+  private circleKey = 0;
+  private circleCool = 0;
+  private stepCool = 0;
+  private punish = 0;
+  private readonly moves: Record<string, OppMove>;
+  readonly touch: number;
+  readonly closeD: number;
+  readonly throwD: number;
+  readonly punishD: number;
+  readonly sideD: number;
+  readonly sup1D: number;
+  readonly sup3D: number;
+  readonly aaD: number;
+  readonly midLo: number;
+  readonly midHi: number;
+  readonly me: string;
+  readonly opp: string;
+  readonly g: BotGeom;
+  constructor(data: GameData, me: string, opp: string, geom?: BotGeom) {
+    this.me = me;
+    this.opp = opp;
+    const g = geom ?? botGeom(data, me, opp);
+    this.g = g;
+    this.moves = ((data.fighters[opp] as unknown as { moves?: Record<string, OppMove> }).moves) ?? {};
+    const touch = g.touch;
+    const openR = g.openReach + g.opHurt;
+    this.touch = touch;
+    this.closeD = Math.max(touch + 0.10, Math.min(openR - 0.12, touch + 0.45));
+    this.throwD = touch + g.throwGap - 0.08;
+    this.punishD = Math.max(this.closeD, openR - 0.05);
+    this.sideD = g.sideReach > 0 ? g.sideReach + g.opHurt - 0.05 : this.punishD;
+    this.sup1D = g.sup1Reach > 0 ? g.sup1Reach + g.opHurt - 0.05 : this.punishD;
+    this.sup3D = g.sup3Reach > 0 ? g.sup3Reach + g.opHurt - 0.05 : this.punishD;
+    this.aaD = Math.max(2.0, touch + 1.0);
+    this.midLo = touch + 0.6;
+    this.midHi = touch + 1.8;
+  }
+
+  private grabThreat(name: string, okind: string): number {
+    if (okind === 'cmdgrab') return (this.g.opGrab[name] ?? this.touch + 1.0) + 0.25;
+    return this.touch + 0.9;
+  }
+
+  private wallBehind(me: FighterSnap, op: FighterSnap, m: MatchSnap): boolean {
+    const rg = m.ring;
+    if (!rg || !rg.centre || !rg.radius) return false;
+    const c = rg.centre;
+    const mx = me.x - c[0], mz = (me.z ?? 0) - c[1];
+    const ox = op.x - c[0], oz = (op.z ?? 0) - c[1];
+    const rme = Math.sqrt(mx * mx + mz * mz);
+    const rop = Math.sqrt(ox * ox + oz * oz);
+    return rme > rg.radius - 1.1 && rop < rme - 0.3;
+  }
+
+  keys(f: [FighterSnap, FighterSnap], m: MatchSnap): number {
+    const I = INPUT;
+    const me = f[0], op = f[1];
+    if (m.phase !== 'fight') {
+      this.circle = 0;
+      return 0;
+    }
+    this.n += 1;
+    this.phase ^= 1;
+    const d = sqrtDist(me, op);
+    const fk = (me.facing ?? 1) >= 0 ? I.RIGHT : I.LEFT;
+    const bk = (me.facing ?? 1) >= 0 ? I.LEFT : I.RIGHT;
+    const st = me.stateName, ost = op.stateName;
+    if (this.stepCool > 0) this.stepCool -= 1;
+    if (this.circleCool > 0) this.circleCool -= 1;
+    const act = !!me.actionable;
+    if (st === 'thrown') {
+      this.circle = 0;
+      return this.phase ? I.THROW : 0;
+    }
+    if (HIT_STATES.includes(st)) {
+      this.circle = 0;
+      return bk | I.DOWN;
+    }
+    const mv = this.moves[op.moveName || ''] ?? {};
+    const okind = op.moveKind || '';
+    const of = op.moveFrame || 0;
+    const su = Math.trunc(mv.startup || 0);
+    const ac = Math.trunc(mv.active || 0);
+    const strike = ost === 'attack' && !['throw', 'cmdgrab', 'system', ''].includes(okind);
+    const incoming = strike && of <= su + ac + 1 && d < 3.2;
+    const grabbing = ost === 'attack' && (okind === 'throw' || okind === 'cmdgrab') && of <= su;
+    if (this.circle > 0) {
+      this.circle -= 1;
+      if (incoming || grabbing) this.circle = 0;
+      else return this.circleKey;
+    }
+    if (grabbing && d < this.grabThreat(op.moveName || '', okind)) return okind === 'cmdgrab' ? I.UP | bk : I.THROW;
+    if (strike && act && this.stepCool === 0 && of <= 4 && su >= 10 && !mv.homing && d < 3.0 && (this.n * 37) % 100 < 55) {
+      this.stepCool = 20;
+      this.punish = 30;
+      this.stats.stepReads++;
+      return Math.floor(this.n / 7) % 2 ? I.STEP_IN : I.STEP_OUT;
+    }
+    if (this.punish > 0) {
+      this.punish -= 1;
+      if (act && ost === 'attack' && su > 0 && of > su + ac && d <= this.sideD) {
+        this.punish = 0;
+        this.stats.sidePunish++;
+        return I.H;
+      }
+    }
+    if (incoming) {
+      const over = mv.guard === 'H' || op.airborne;
+      return over ? bk : bk | I.DOWN;
+    }
+    for (const p of m.proj ?? []) {
+      if (p.owner === 1 && (p.kind === 0 || p.kind === 1)) {
+        const rx = me.x - p.x, rz = (me.z ?? 0) - (p.z ?? 0);
+        const toward = rx * (p.vx || 0) + rz * (p.vz || 0) > 0;
+        if (toward && Math.sqrt(rx * rx + rz * rz) < 2.6) return bk | I.DOWN;
+      }
+    }
+    if (op.airborne && (ost === 'air' || ost === 'prejump') && d < this.aaD) return this.phase ? I.DOWN | I.S : I.DOWN;
+    if (!act) return 0;
+    const recovering = (ost === 'attack' && su > 0 && of > su + ac - 1) || ['land', 'recover', 'parry_rec', 'dash_b'].includes(ost);
+    if (recovering && d <= this.punishD) {
+      const sh = me.showtime || 0;
+      if (sh >= 30000 && d <= this.sup3D) return I.DOWN | I.S | I.H;
+      if (sh >= 10000 && d <= this.sup1D) return I.S | I.H;
+      return this.phase ? I.ASSIST | I.L : I.ASSIST;
+    }
+    if (ost === 'knockdown') return d > this.touch + 0.35 ? fk : bk | I.DOWN;
+    if (FREE_STATES.includes(st) && this.circleCool === 0) {
+      const wall = this.wallBehind(me, op, m);
+      if (wall || (this.midLo < d && d < this.midHi && this.n % 120 === 60)) {
+        this.circle = 25 + (this.n % 16);
+        this.circleKey = Math.floor(this.n / 3) % 2 ? I.STEP_OUT : I.STEP_IN;
+        this.circleCool = 90;
+        if (wall) this.stats.wallCircles++;
+        else this.stats.circles++;
+        return this.circleKey;
+      }
+    }
+    if (d > this.closeD) return fk;
+    const t = ((Math.trunc((me.x || 0) * 97 + (m.frame || 0)) % 10) + 10) % 10;
+    if (t === 9 && FREE_STATES.includes(st) && d > this.touch + 0.3) return Math.floor(this.n / 2) % 2 === 0 ? I.STEP_IN : I.STEP_OUT;
+    if (t < 5) return this.phase ? I.ASSIST | I.L : I.ASSIST;
+    if (t < 7 && d <= this.throwD) return this.phase ? I.THROW : 0;
+    return bk | I.DOWN;
+  }
+}
+
+/** anything runBout can drive (a Cpu, or the SeasonBot) */
+export interface BoutPlayer {
+  input(m: Match, playerIndex: number): number;
+  readonly brain?: Brain | null;
+}
+
+/**
+ * The SeasonBot as a bout player: a decision every 2 frames from the first FIGHT frame (playtest.py steps the frozen sim 2
+ * frames per decision; playtest.py --bosses steps to that first FIGHT frame before its first decision), held between.
+ */
+export class SeasonBotPlayer implements BoutPlayer {
+  readonly bot: SeasonBotTs;
+  readonly brain = null;
+  private f0 = -1;
+  private held = 0;
+  constructor(data: GameData, me: string, opp: string) {
+    this.bot = new SeasonBotTs(data, me, opp);
+  }
+  input(m: Match, i: number): number {
+    const ms = readMatch(m);
+    if (this.f0 < 0) {
+      if (ms.phase !== 'fight') return 0;
+      this.f0 = ms.frame;
+    }
+    if ((ms.frame - this.f0) % 2 === 0) this.held = this.bot.keys([readFighter(m, i), readFighter(m, 1 - i)], ms);
+    return this.held;
+  }
+}
+
 // ------------------------------------------------------------------ main
 const isMain = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) main();
@@ -210,11 +490,35 @@ function main(): void {
     const i = args.indexOf(k);
     return i >= 0 ? args[i + 1] : undefined;
   };
+  // CHANGED(wf7 season bot): `--geom <me> <opp>` = the SeasonBot's range numbers as one JSON line (playtest.py reads it)
+  const gi = args.indexOf('--geom');
+  if (gi >= 0) {
+    console.log(JSON.stringify(botGeom(loadGameData(), args[gi + 1] ?? 'johnny', args[gi + 2] ?? 'freak')));
+    process.exit(0);
+  }
+  // `--botbouts <me> <opp> <level> <stage> <seed,seed,...>` = the SeasonBot mirror vs CPU <level>, arcade staging (the
+  // bouts playtest.py --bosses plays with real keys: same cfg, same CPU seed, a decision every 2 frames from FIGHT)
+  const bi = args.indexOf('--botbouts');
+  if (bi >= 0) {
+    const data = loadGameData();
+    const [me, opp, lvS, stage, seedsS] = args.slice(bi + 1, bi + 6);
+    const lv = Number(lvS);
+    let w = 0;
+    const seeds = (seedsS ?? '1').split(',').map(Number);
+    for (const sd of seeds) {
+      const r = seasonBout(data, 'seasonbot', me, opp, lv, sd, stage);
+      if (r.winner === 0) w++;
+      console.log(JSON.stringify({ me, opp, level: lv, stage, seed: sd, winner: r.winner, wins: r.wins, frames: r.frames, hp: r.hp, bot: r.bot }));
+    }
+    console.log(`seasonbot ${me} vs ${opp} L${lv} on ${stage}: won ${w} / ${seeds.length}`);
+    process.exit(0);
+  }
   // smoke (run_probes, no args): THE FREAK / RICKY at NORMAL, the novice vs slot 1, ring L4 - about a minute
   const only = (arg('--only') ?? (FULL ? 'bosses,ladder,novice,ring,ringflat' : 'bosses,novice,ring')).split(',');
   const NSEED = Number(arg('--seeds') ?? (FULL ? 24 : 4));
-  const playersArg = arg('--player') ?? (FULL ? 'both' : 'cpu6');
-  const players: PlayerKind[] = playersArg === 'both' ? ['cpu6', 'optimal'] : [playersArg as PlayerKind];
+  const playersArg = arg('--player') ?? (FULL ? 'all' : 'cpu6');
+  const players: PlayerKind[] = playersArg === 'both' ? ['cpu6', 'optimal'] : playersArg === 'all' ? ['cpu6', 'optimal', 'seasonbot']
+    : (playersArg.split(',') as PlayerKind[]);
   const jsonOut = arg('--json');
   const data = loadGameData();
   const fails: string[] = [];
@@ -417,6 +721,26 @@ function main(): void {
     }
   }
   if (novRate[-1] !== undefined) ok(novRate[novRate[-1]] > 50, `B4 the novice beats NORMAL slot 1 (CPU L${novRate[-1]}) most of the time: ${novRate[novRate[-1]]}% (vs L1 ${novRate[1]}%)`);
+  // CHANGED(wf7 season bot): B5 - the G11 persona (playtest.py SeasonBot, its headless mirror) can clear THE SEASON
+  const sb = bossRate.seasonbot;
+  if (sb && sb['freak@normal'] && sb['ricky@normal']) {
+    const fr = sb['freak@normal'];
+    const ri = sb['ricky@normal'];
+    ok(ROSTER10.every((f) => fr[f] >= 25), `B5a the SeasonBot beats THE FREAK at NORMAL >= 25% with every contestant (min ${Math.min(...ROSTER10.map((f) => fr[f]))}%: ${ROSTER10.map((f) => `${f} ${fr[f]}`).join(' ')}; average ${fr.ALL}%)`);
+    ok(ri.ALL <= fr.ALL, `B5b RICKY (${ri.ALL}%) not easier than THE FREAK (${fr.ALL}%) for the SeasonBot at NORMAL (per contestant RICKY: ${ROSTER10.map((f) => `${f} ${ri[f]}`).join(' ')})`);
+    if (slotRate.seasonbot) note(`SeasonBot slots ${Object.keys(slotRate.seasonbot).map((lv) => `L${lv} ${slotRate.seasonbot[Number(lv)]}%`).join(', ')} vs THE FREAK ${fr.ALL}% / RICKY ${ri.ALL}% at NORMAL (frame-exact guard: rates overstate a human's; the ORDER is the signal)`);
+  }
+  if (!FULL && only.includes('bosses') && !sb) {
+    // the smoke: the V1 regression guard (WF6: the bot never attacked a big body - 0 / 22 vs THE FREAK)
+    const SL = seasonLevels(data);
+    const res: Record<string, number> = {};
+    for (const [boss, lv] of [['freak', SL.miniboss], ['ricky', SL.boss]] as [string, number][]) {
+      let w = 0;
+      for (let k = 1; k <= 4; k++) if (seasonBout(data, 'seasonbot', 'johnny', boss, lv, 700 + 13 * k).winner === 0) w++;
+      res[boss] = w;
+    }
+    ok(res.freak >= 1, `B5 smoke: the SeasonBot johnny beats THE FREAK (L${SL.miniboss}) ${res.freak}/4 (>= 1; RICKY L${SL.boss} ${res.ricky}/4)`);
+  }
   const rr = ringRows.ring;
   if (rr) {
     const at = (lv: number): RingRow | undefined => rr.find((r) => r.level === lv);

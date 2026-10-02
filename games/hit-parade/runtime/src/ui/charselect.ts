@@ -9,6 +9,18 @@
 // on the first step it leaves the screen. Picking is sequential (P1, then P2 / the CPU pick / the dummy pick) with the
 // keyboard or one pad; with two pads in a 2P versus both pick at once (pad 0 = P1, pad 1 = P2). Mirror matches bump the
 // second pick's colour. Online is blind: the opponent's side shows nothing until the net layer reports both locked.
+//
+// CHANGED(wf7 touch) VO-D1 (verifier: a touch-only player was stuck at PICK A COLOR - the swatches were spans with no
+// handler, a tap on the picked slot re-opened the fighter pick, and COLOR -> CONTROLS -> READY advanced only on a key /
+// pad 'confirm'): the whole flow is completable by taps / clicks alone, every target >= 44 px in touch mode.
+//   * slot: FIGHTER step -> pick it; COLOR / CONTROLS step -> a tap on the PICKED fighter's slot confirms the step, a tap on
+//     another unlocked slot re-picks (a locked slot only flashes its note and keeps the pick);
+//   * colour swatches are buttons: a tap selects that colour, a tap on the selected one confirms it;
+//   * SIMPLE / CLASSIC: a tap selects, a tap on the selected one locks in;
+//   * the active card's action row: BACK (one step back for that player - from the CPU / P2 FIGHTER step back into P1's
+//     last step) + NEXT / LOCK IN (= the 'confirm' act of the step); hidden once every pick is in (and online once locked);
+//   * the header BACK steps back like Esc / pad B (Menus passes it to back()); on P1's FIGHTER step it leaves the screen.
+// done() fires only if every pick is still in after the 380 ms sting (a BACK inside it cancels the start).
 
 import type { Rect, Scheme, UiGameData, UiSave } from './types.ts';
 import { btn, div, el, svg, ICON, setText, pulse } from './dom.ts';
@@ -32,6 +44,9 @@ interface SideEl {
   root: HTMLElement; tag: HTMLElement; step: HTMLElement; name: HTMLElement; persona: HTMLElement; arch: HTMLElement;
   stars: HTMLElement; hp: HTMLElement; colors: HTMLElement; schemeBox: HTMLElement; schemeBtns: [HTMLButtonElement, HTMLButtonElement];
   portrait: HTMLElement; ready: HTMLElement;
+  /** CHANGED(wf7 touch) VO-D1: swatch buttons (rebuilt only when the fighter / colour count changes), the name chip, the action row */
+  swatches: HTMLButtonElement[]; swKey: string; swName: HTMLElement;
+  acts: HTMLElement; undo: HTMLButtonElement; ok: HTMLButtonElement;
 }
 
 export interface CsHooks {
@@ -102,17 +117,70 @@ export class CharSelect {
     const hp = el('span', 'hp', '');
     facts.append(arch, stars, hp);
     const colors = div('hpm-cs-colors', root);
+    const swName = el('span', 'swname', '');
     const schemeBox = div('hpm-cs-scheme', root);
     const mk = (s: Scheme): HTMLButtonElement => {
       const b = btn('hpm-segbtn', '', false);
+      b.id = `hpm-cs-scheme-p${i + 1}-${s}`;
       b.append(el('b', '', s === 0 ? t('cs.simple') : t('cs.classic')), el('small', '', s === 0 ? t('cs.simple.sub') : t('cs.classic.sub')));
-      b.addEventListener('click', () => { const st = this.p[i]; if (st.step === 'scheme' || st.step === 'ready') { st.scheme = s; this.hooks.sound('move'); this.render(); } });
+      // CHANGED(wf7 touch) VO-D1: a tap selects; a tap on the selected scheme locks in (READY was key / pad only)
+      b.addEventListener('click', () => this.tapScheme(i, s));
       schemeBox.append(b);
       return b;
     };
     const schemeBtns: [HTMLButtonElement, HTMLButtonElement] = [mk(0), mk(1)];
+    // CHANGED(wf7 touch) VO-D1: the card's action row - BACK one step / NEXT or LOCK IN (= the step's confirm)
+    const acts = div('hpm-cs-acts', root);
+    const undo = btn('hpm-small hpm-cs-undo', '', false);
+    undo.id = `hpm-cs-back-p${i + 1}`;
+    undo.append(svg(ICON.back), el('span', '', t('cs.stepBack')));
+    // the tapped button keeps :focus (the yellow focus look) after its label changes - drop it (no keyboard nav here)
+    undo.addEventListener('click', () => { undo.blur(); this.tapAct(i, 'back'); });
+    const ok = btn('hpm-small hot hpm-cs-ok', '', false);
+    ok.id = `hpm-cs-ok-p${i + 1}`;
+    ok.addEventListener('click', () => { ok.blur(); this.tapAct(i, 'confirm'); });
+    acts.append(undo, ok);
     const ready = div('hpm-cs-ready', root, t('cs.ready'));
-    return { root, tag, step, name, persona, arch, stars, hp, colors, schemeBox, schemeBtns, portrait, ready };
+    return { root, tag, step, name, persona, arch, stars, hp, colors, schemeBox, schemeBtns, portrait, ready, swatches: [], swKey: '', swName, acts, undo, ok };
+  }
+
+  /** CHANGED(wf7 touch) VO-D1: may player i be driven by its card's buttons right now? (the active picker; both with two pads) */
+  private canDrive(i: 0 | 1): boolean {
+    const st = this.p[i];
+    if (st.kind === 'none' || st.step === 'wait') return false;
+    if (this.mode === 'online' && i === 1) return false;
+    return this.simultaneous || this.activePlayer() === i;
+  }
+
+  private allIn(): boolean { return this.p.every((p) => p.kind === 'none' || p.step === 'ready'); }
+
+  /** CHANGED(wf7 touch) VO-D1: the action row (BACK / NEXT / LOCK IN) of player i's card */
+  private tapAct(i: 0 | 1, act: 'back' | 'confirm'): void {
+    if (!this.canDrive(i) || this.allIn()) return;
+    if (act === 'confirm' && this.p[i].step === 'fighter') return;          // a fighter is picked by tapping its slot
+    this.input(i, act);
+  }
+
+  /** CHANGED(wf7 touch) VO-D1: a colour swatch on player i's card: select it; the selected one again = confirm the colour */
+  private tapSwatch(i: 0 | 1, k: number): void {
+    const st = this.p[i];
+    if (!this.canDrive(i) || (st.step !== 'color' && st.step !== 'scheme')) return;
+    if (st.step === 'color' && k === st.color) { this.input(i, 'confirm'); return; }
+    if (k === st.color) return;
+    st.color = k;
+    this.hooks.sound('move');
+    this.render();
+    this.showActive();
+  }
+
+  /** CHANGED(wf7 touch) VO-D1: SIMPLE / CLASSIC on player i's card: select it; the selected one again = lock in */
+  private tapScheme(i: 0 | 1, s: Scheme): void {
+    const st = this.p[i];
+    if (!this.canDrive(i) || st.step !== 'scheme') return;
+    if (s === st.scheme) { this.input(i, 'confirm'); return; }
+    st.scheme = s;
+    this.hooks.sound('move');
+    this.render();
   }
 
   // ─────────────────────────── setup ───────────────────────────
@@ -293,21 +361,38 @@ export class CharSelect {
       if (this.p[1].kind === 'cpu') this.flashNote(t('cs.pickCpu'));
       else if (this.p[1].kind === 'dummy') this.flashNote(t('cs.pickDummy'));
     }
-    const allReady = this.p.every((p) => p.kind === 'none' || p.step === 'ready');
+    const allReady = this.allIn();
     if (allReady) {
       this.hooks.sound('start');
       const pick = (p: PState): CsPick => ({ fighter: p.fighter ?? 'johnny', color: p.color, scheme: p.scheme });
       const r: CsResult = { p1: pick(this.p[0]), p2: this.p[1].kind === 'none' ? null : pick(this.p[1]) };
-      window.setTimeout(() => this.hooks.done(r), 380);
+      const gen = this.p;
+      // CHANGED(wf7 touch) VO-D1: only if every pick is still in (a BACK tap inside the sting, or a re-open, cancels it)
+      window.setTimeout(() => { if (this.p === gen && this.allIn()) this.hooks.done(r); }, 380);
     }
   }
 
   private onClick(idx: number): void {
     const i = this.activePlayer();
     const st = this.p[i];
+    if (st.kind === 'none' || st.step === 'wait' || this.allIn()) return;
+    const slot = this.slots[idx];
+    if (!slot) return;
     if (st.step !== 'fighter') {
-      // a tap on another slot while picking colour / controls re-opens the fighter pick
-      if (st.step === 'color' || st.step === 'scheme') { st.step = 'fighter'; st.fighter = null; } else return;
+      if (st.step !== 'color' && st.step !== 'scheme') return;
+      // CHANGED(wf7 touch) VO-D1: a tap on the PICKED fighter's slot confirms the colour / controls step (it re-opened the
+      // fighter pick -> 'color' again, a loop a touch player could never leave); another slot re-picks (RANDOM re-rolls),
+      // a locked one only flashes its note and keeps the pick
+      if (slot.id === st.fighter) { this.input(i, 'confirm'); return; }
+      if (slot.locked) {
+        const keep = st.cursor;
+        st.cursor = idx;
+        this.pickFighter(i);
+        st.cursor = keep;
+        return;
+      }
+      st.step = 'fighter';
+      st.fighter = null;
     }
     st.cursor = idx;
     this.pickFighter(i);
@@ -369,7 +454,7 @@ export class CharSelect {
     S.root.classList.remove('blind', 'locked');
     setText(S.ready, t('cs.ready'));
     S.root.hidden = st.kind === 'none';
-    if (st.kind === 'none') return;
+    if (st.kind === 'none') { S.acts.hidden = true; return; }
     S.root.classList.toggle('active', active && st.step !== 'ready');
     const hidden = this.mode === 'online' && i === 1 && !this.blindReveal;
     setText(S.tag, st.kind === 'cpu' ? t('cs.cpu') : st.kind === 'dummy' ? t('cs.dummy') : i === 0 ? t('cs.p1') : this.mode === 'online' && this.online.opponent ? this.online.opponent : t('cs.p2'));
@@ -391,20 +476,41 @@ export class CharSelect {
     }
     setText(S.hp, f?.hp ? `${t('cs.hp')} ${f.hp.toLocaleString('en-US')}` : '');
     // colour swatches (visible from the COLOR step on)
-    S.colors.replaceChildren();
+    // CHANGED(wf7 touch) VO-D1: buttons (tap = select, the selected one again = confirm), kept across renders while the
+    // fighter is the same (an online clock tick re-renders every second: a rebuilt swatch would swallow a tap in flight)
     S.colors.hidden = !f || st.step === 'fighter' || st.step === 'wait';
-    if (f) colors.forEach((c, k) => {
-      const sw = el('span', `sw${k === st.color ? ' on' : ''}`);
-      sw.style.setProperty('--c', c.tint ?? '#ffd21a');
-      sw.title = c.name;
-      if (!c.tint) sw.classList.add('orig');
-      S.colors.append(sw);
-    });
-    if (f && !S.colors.hidden) S.colors.append(el('span', 'swname', col?.name ?? ''));
+    const swKey = f ? `${id}|${colors.map((c) => c.tint ?? '').join(',')}` : '';
+    if (swKey !== S.swKey) {
+      S.swKey = swKey;
+      S.swatches = colors.map((c, k) => {
+        const sw = btn('sw', '', false);
+        sw.id = `hpm-cs-sw-p${i + 1}-${k}`;
+        sw.dataset.color = String(k);
+        sw.style.setProperty('--c', c.tint ?? '#ffd21a');
+        sw.title = c.name;
+        sw.setAttribute('aria-label', c.name);
+        if (!c.tint) sw.classList.add('orig');
+        sw.append(el('i', 'dot'));
+        sw.addEventListener('click', () => this.tapSwatch(i, k));
+        return sw;
+      });
+      S.colors.replaceChildren(...S.swatches, S.swName);
+    }
+    const swLive = st.step === 'color' || st.step === 'scheme';
+    S.swatches.forEach((sw, k) => { const on = k === st.color; sw.classList.toggle('on', on); sw.setAttribute('aria-pressed', String(on)); sw.disabled = !swLive; });
+    setText(S.swName, col?.name ?? '');
     S.schemeBox.hidden = st.kind !== 'human' || (st.step !== 'scheme' && st.step !== 'ready');
-    S.schemeBtns.forEach((b, k) => { const on = k === st.scheme; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    S.schemeBtns.forEach((b, k) => { const on = k === st.scheme; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.disabled = st.step !== 'scheme'; });
     S.ready.hidden = st.step !== 'ready';
     S.root.dataset.step = st.step;
+    // CHANGED(wf7 touch) VO-D1: the action row on the card being picked (BACK from P2 / CPU / dummy FIGHTER = into P1's last step)
+    const drive = this.canDrive(i) && !this.allIn();
+    const canBack = st.step === 'color' || st.step === 'scheme' || (st.step === 'ready' && this.simultaneous) || (st.step === 'fighter' && i === 1 && !this.simultaneous);
+    const canOk = st.step === 'color' || st.step === 'scheme';
+    S.acts.hidden = !drive || (!canBack && !canOk);
+    S.undo.hidden = !canBack;
+    S.ok.hidden = !canOk;
+    setText(S.ok, st.step === 'color' && st.kind === 'human' ? t('cs.next') : t('cs.lockIn'));
   }
 
   /**
@@ -426,6 +532,7 @@ export class CharSelect {
     setText(S.hp, '');
     S.colors.hidden = true;
     S.schemeBox.hidden = true;
+    S.acts.hidden = true;                                                    // CHANGED(wf7 touch) VO-D1
     S.ready.hidden = !this.online.locked;
     setText(S.ready, t('cs.locked'));
     S.root.dataset.step = this.online.locked ? 'locked' : 'picking';

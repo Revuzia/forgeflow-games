@@ -328,56 +328,185 @@ def lab_menus_by_tap(page, cdp, dev: str, results: list) -> None:
     R.ok("tap_back", scr() == "main", f"screen={scr()}")
 
 
-def game_menus_by_tap(page, cdp, dev: str, results: list, base: str) -> None:
+def lab_continue_by_tap(page, cdp, dev: str, results: list) -> None:
+    """CHANGED(wf7 touch): the TAP TO CONTINUE screens (VS splash, rival / boss / BRAWL BREAK cards, the ending) must take a
+    tap - before the fix only a key / pad press finished them (THE SEASON stuck at its first card for a touch player). The
+    lab deep link awaits the screen's promise; a resolved one plays the 'select' cue (Menus.finishAny), so the cue log
+    (cleared before the tap) is the signal."""
+    R = Run(page, dev, results)
+    T = Touch(cdp)
+    d = DEVICES[dev]
+    got = {}
+    for step in ("vs", "card_rival", "card_brawl", "ending"):
+        page.goto(lab_url(None, f"screen={step}&touch=1"), wait_until="load")
+        wait_ready(page)
+        time.sleep(0.9)
+        page.evaluate("(() => { const L = window.__UILAB__; if (L && L.cues) L.cues.length = 0; })()")
+        T.tap(d["w"] * 0.5, d["h"] * 0.55)
+        time.sleep(0.5)
+        got[step] = "ui:select" in (page.evaluate("(() => { const L = window.__UILAB__; return L && L.cues ? L.cues.slice() : []; })()") or [])
+    R.ok("tap_to_continue", all(got.values()), f"resolved by a tap: {got}")
+
+
+def game_menus_by_tap(page, cdp, dev: str, results: list, base: str, full_path: bool = True) -> None:
     """CHANGED(wf6 fixer) VO-D8: the REAL game's menus by CDP taps only, THROUGH character select (the lab tap walk stopped at
-    VERSUS -> BACK, so a touch player stuck at PICK A COLOR - verifier VO-D1 - went unnoticed): plain URL in touch mode,
-    title -> main -> VERSUS -> GO -> tap P1's slot, then up to 6 more taps on whatever confirms (the same slot again, a
-    colour swatch, a READY / CONFIRM / LOCK control) must take P1 past the colour / controls steps or leave the screen."""
+    VERSUS -> BACK, so a touch player stuck at PICK A COLOR - verifier VO-D1 - went unnoticed).
+    CHANGED(wf7 touch) VO-D1: the old pass test accepted any step outside ('fighter', 'color', 'controls') - 'controls' is no
+    step name, so reaching 'scheme' passed. Now every tap is asserted: plain URL in touch mode, title -> main -> VERSUS (CPU,
+    level 1, 1 round, 60 s - set by taps) -> GO -> character select by taps alone, each transition checked on the read-back:
+      P1  slot -> COLOR; swatch 2 -> colour 2; swatch 2 again -> CONTROLS; card BACK -> COLOR (colour kept); NEXT ->
+          CONTROLS; CLASSIC -> 1; SIMPLE -> 0; header BACK -> COLOR; the picked slot again -> CONTROLS; LOCK IN -> READY
+      CPU card active (FIGHTER); its BACK -> P1 back at CONTROLS, CPU waiting; the selected SIMPLE again -> READY
+      CPU slot bruno -> COLOR; swatch 1; LOCK IN -> the screen leaves (stage select), picks = johnny 2 SIMPLE / bruno 1
+    and every control tapped is >= 44 x 44 CSS px. full_path: stage card -> VS -> a bout fought by touch only (stick + L / M
+    / H / SP / THROW taps) -> results -> REMATCH tap -> a fresh bout of the same pair."""
     R = Run(page, dev, results)
     T = Touch(cdp)
     page.goto(base.rstrip("/") + "/?touch=1&quality=low", wait_until="load")
-    scr = lambda: (page.evaluate(READ_MENUS) or {}).get("screen")  # noqa: E731
-    cs = lambda: (((page.evaluate(READ_MENUS) or {}).get("cs") or {}).get("p") or [{}])[0]  # noqa: E731
+    M = lambda: page.evaluate(READ_MENUS) or {}  # noqa: E731
+    scr = lambda: M().get("screen")  # noqa: E731
+    csp = lambda: ((M().get("cs") or {}).get("p") or [{}, {}])  # noqa: E731
     t0 = time.time()
     while time.time() - t0 < 120 and scr() != "title":
         time.sleep(0.25)
+    small: list = []
 
-    def tap_sel(sel: str) -> bool:
-        c = page.evaluate("(s) => { const e = document.querySelector(s); if (!e || !e.offsetParent) return null; const r = e.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; }", sel)
+    def tap_sel(sel: str, settle: float = 0.45) -> bool:
+        c = page.evaluate("(s) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); const cs = getComputedStyle(e);"
+                          " if (r.width < 1 || r.height < 1 || cs.visibility === 'hidden' || e.closest('[hidden]')) return null;"
+                          " return {x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height}; }", sel)
         if not c:
             return False
+        if c["w"] < 43.5 or c["h"] < 43.5:
+            small.append(f"{sel} {c['w']:.0f}x{c['h']:.0f}")
         T.tap(c["x"], c["y"])
-        time.sleep(0.45)
+        time.sleep(settle)
         return True
 
     T.tap(DEVICES[dev]["w"] * 0.5, DEVICES[dev]["h"] * 0.62)
     time.sleep(0.6)
     tap_sel("#hpm-main-versus")
+    for sel in ("#hpm-versus-opp-cpu", "#hpm-versus-cpuLevel-1", "#hpm-versus-rounds-1", "#hpm-versus-timer-60"):
+        tap_sel(sel, 0.25)
     tap_sel("#hpm-versus-go")
     t1 = time.time()
     while time.time() - t1 < 10 and scr() != "charselect":
         time.sleep(0.2)
     R.ok("game_tap_to_charselect", scr() == "charselect", f"screen={scr()}")
-    tap_sel("#hpm-slot-johnny")
-    trail = [("slot", cs().get("step"))]
-    confirm_js = """() => { const root = document.querySelector('#hp-menus .hpm-s-charselect'); if (!root) return [];
-      const out = []; const add = (e, why) => { if (!e || !e.offsetParent) return; const r = e.getBoundingClientRect(); if (r.width < 4) return; out.push({x: r.left + r.width / 2, y: r.top + r.height / 2, why}); };
-      add(root.querySelector('#hpm-slot-johnny'), 'slot');
-      root.querySelectorAll('.sw, [data-color], .hpm-cs-colors > *').forEach((e) => add(e, 'swatch'));
-      root.querySelectorAll('button, [role=button]').forEach((e) => { if (/READY|CONFIRM|LOCK|OK|FIGHT|SELECT|CHOOSE|GO/i.test(e.textContent || '')) add(e, 'confirm:' + (e.textContent || '').trim().slice(0, 16)); });
-      return out; }"""
-    done = lambda: scr() != "charselect" or (cs().get("step") or "") not in ("fighter", "color", "controls", "")  # noqa: E731
-    for k in range(6):
-        if done():
-            break
-        cands = page.evaluate(confirm_js) or []
-        if not cands:
-            break
-        c = cands[k % len(cands)]
-        T.tap(c["x"], c["y"])
+    trail: list = []
+    fails: list = []
+    lay: dict = {}
+
+    def layout(where: str) -> None:
+        # CHANGED(wf7 touch): the layoutcheck rules (clip / overlap / 44 px / font / textclip) on the REAL character select
+        # with the new swatch buttons + action row up (the lab's layoutcheck step only shows the FIGHTER step)
+        res = check_page(page, f"{dev}:charselect_{where}")
+        shot(page, f"mobile_{dev}_game_charselect_{where}")
+        lay[where] = [f"{x['kind']}: {x['msg']}" for x in res["problems"]]
+
+    def step(label: str, sel: str, want) -> None:
+        hit = tap_sel(sel)
+        p = csp()
+        a, b = (p + [{}, {}])[:2]
+        rec = f"{label}: P1 {a.get('step')}/{a.get('fighter')}/c{a.get('color')}/s{a.get('scheme')} CPU {b.get('step')}/{b.get('fighter')}/c{b.get('color')}"
+        trail.append(rec)
+        if not hit:
+            fails.append(f"{label}: {sel} not on screen")
+        elif not want(a, b):
+            fails.append(rec)
+
+    step("slot johnny", "#hpm-slot-johnny", lambda a, b: a.get("step") == "color" and a.get("fighter") == "johnny")
+    step("swatch 2", "#hpm-cs-sw-p1-2", lambda a, b: a.get("step") == "color" and a.get("color") == 2)
+    layout("p1_color")
+    step("swatch 2 again", "#hpm-cs-sw-p1-2", lambda a, b: a.get("step") == "scheme" and a.get("color") == 2)
+    step("card BACK", "#hpm-cs-back-p1", lambda a, b: a.get("step") == "color" and a.get("color") == 2)
+    step("NEXT", "#hpm-cs-ok-p1", lambda a, b: a.get("step") == "scheme")
+    layout("p1_scheme")
+    step("CLASSIC", "#hpm-cs-scheme-p1-1", lambda a, b: a.get("step") == "scheme" and a.get("scheme") == 1)
+    step("SIMPLE", "#hpm-cs-scheme-p1-0", lambda a, b: a.get("step") == "scheme" and a.get("scheme") == 0)
+    step("header BACK", "#hp-menus .hpm-s-charselect .hpm-back", lambda a, b: a.get("step") == "color" and scr() == "charselect")
+    step("picked slot again", "#hpm-slot-johnny", lambda a, b: a.get("step") == "scheme" and a.get("color") == 2)
+    step("LOCK IN", "#hpm-cs-ok-p1", lambda a, b: a.get("step") == "ready" and b.get("step") == "fighter")
+    step("CPU card BACK", "#hpm-cs-back-p2", lambda a, b: a.get("step") == "scheme" and b.get("step") == "wait")
+    step("SIMPLE again", "#hpm-cs-scheme-p1-0", lambda a, b: a.get("step") == "ready" and b.get("step") == "fighter")
+    step("CPU slot bruno", "#hpm-slot-bruno", lambda a, b: b.get("step") == "color" and b.get("fighter") == "bruno")
+    step("CPU swatch 1", "#hpm-cs-sw-p2-1", lambda a, b: b.get("step") == "color" and b.get("color") == 1)
+    layout("cpu_color")
+    R.ok("game_charselect_targets_44", not small, f"tapped controls under 44 px: {small}")
+    R.ok("game_charselect_layout", not any(lay.values()), f"LAYOUT_JS problems per step: {lay}")
+    shot(page, f"mobile_{dev}_game_charselect_cpu_color")
+    step("CPU LOCK IN", "#hpm-cs-ok-p2", lambda a, b: b.get("step") == "ready")
+    t2 = time.time()
+    while time.time() - t2 < 5 and scr() == "charselect":
+        time.sleep(0.2)
+    picks = (M().get("flow") or {}).get("picks") or {}
+    p1, p2 = picks.get("p1") or {}, picks.get("p2") or {}
+    picked = (p1.get("fighter"), p1.get("color"), p1.get("scheme"), p2.get("fighter"), p2.get("color"))
+    R.ok("game_charselect_by_taps", not fails and scr() == "stage" and picked == ("johnny", 2, 0, "bruno", 1),
+         f"screen {scr()} picks {picked} fails {fails} trail {trail}", snap=True)
+    if not full_path or scr() != "stage":
+        return
+    # -- the rest of the touch-only path: stage -> VS -> bout -> results -> REMATCH --
+    phase = lambda: page.evaluate("(() => { try { return __HP__.state().phase; } catch (e) { return null; } })()")  # noqa: E731
+    mt = lambda: page.evaluate("(() => { try { const m = __HP__.match(); return m ? {phase: m.phase, round: m.round, timer: m.timer, frame: m.frame} : null; } catch (e) { return null; } })()")  # noqa: E731
+    sid = page.evaluate("(() => { const b = [...document.querySelectorAll('#hp-menus .hpm-stagecard')].find((e) => !e.classList.contains('soon') && !e.id.endsWith('-random')); return b ? b.id : null; })()")
+    hit = bool(sid) and tap_sel("#" + sid, 0.6)
+    t3 = time.time()
+    while time.time() - t3 < 60 and not (phase() == "bout" and (mt() or {}).get("phase") == "fight"):
+        if scr() == "vs":
+            T.tap(DEVICES[dev]["w"] * 0.5, DEVICES[dev]["h"] * 0.5)
         time.sleep(0.5)
-        trail.append((c["why"], cs().get("step"), scr()))
-    R.ok("game_charselect_by_taps", done(), f"P1 step trail {trail}; screen {scr()}", snap=True)
+    m0 = mt() or {}
+    R.ok("game_path_stage_to_bout", hit and phase() == "bout" and m0.get("phase") == "fight", f"stage {sid} phase={phase()} match={m0}")
+    if phase() != "bout":
+        return
+    # fight by touch only: stick toward P2 in bursts, L / M / H / SP / THROW taps (P2 = CPU level 1, 1 round, 60 s)
+    sb = (R.btn("stick") or {}).get("rect")
+    acts = [b for b in ("l", "m", "h", "l", "s", "throw") if R.btn(b)]
+    n_taps = 0
+    shot_mid = False
+    t4 = time.time()
+    while time.time() - t4 < 240 and phase() == "bout":
+        if sb:
+            sx, sy = sb["x"] + sb["w"] / 2, sb["y"] + sb["h"] / 2
+            T.down(1, sx, sy)
+            T.move(1, sx + sb["w"] * 0.42, sy, steps=2)
+        for b in acts:
+            if phase() != "bout":
+                break
+            try:
+                x, y = R.centre(b)
+            except HarnessError:
+                continue
+            T.down(2, x, y)
+            time.sleep(0.06)
+            T.up(2)
+            n_taps += 1
+            time.sleep(0.12)
+        if sb:
+            T.up(1)
+        if not shot_mid and time.time() - t4 > 8:
+            shot(page, f"mobile_{dev}_game_path_bout")
+            shot_mid = True
+        time.sleep(0.1)
+    T.pts.clear()
+    t5 = time.time()
+    while time.time() - t5 < 60 and scr() != "results":
+        time.sleep(0.4)
+    R.ok("game_path_bout_to_results", scr() == "results", f"screen={scr()} phase={phase()} touch taps={n_taps} fight wall {time.time() - t4:.0f}s", snap=True)
+    if scr() != "results":
+        return
+    time.sleep(0.8)
+    hit = tap_sel("#hpm-res-rematch", 0.8)
+    t6 = time.time()
+    while time.time() - t6 < 60 and not (phase() == "bout" and (mt() or {}).get("phase") == "fight"):
+        if scr() == "vs":
+            T.tap(DEVICES[dev]["w"] * 0.5, DEVICES[dev]["h"] * 0.5)
+        time.sleep(0.5)
+    m1 = mt() or {}
+    f2 = page.evaluate("(() => { try { return __HP__.fighters().map((f) => f.id || f.fighter || null); } catch (e) { return null; } })()")
+    R.ok("game_path_rematch", hit and phase() == "bout" and m1.get("phase") == "fight" and m1.get("round") == 1, f"rematch tap={hit} phase={phase()} match={m1} fighters={f2}", snap=True)
+    R.ok("game_path_targets_44", not small, f"tapped controls under 44 px: {small}")
 
 
 def game_device(page, cdp, dev: str, results: list, base: str) -> None:
@@ -503,7 +632,10 @@ def run(args) -> int:
     results: list = []
     errors: list = []
     t0 = time.time()
-    srv = LabServer() if not args.base else None
+    # CHANGED(wf7 touch): --port = the dev server to use / start (lab deep links + the --game base), default :5324
+    import menus as _menus
+    _menus.LAB_PORT = args.port
+    srv = LabServer(args.port) if not args.base else None
     try:
         if srv:
             srv.__enter__()
@@ -527,8 +659,8 @@ def run(args) -> int:
                         errors.append(f"{dev} safe-area override unsupported: {e}")
                 if args.game:
                     # CHANGED(wf6 fixer) VO-D8: the menus by taps through character select first, then the bout checks
-                    game_menus_by_tap(page, cdp, dev, results, args.base or f"http://localhost:{LAB_PORT}/")
-                    game_device(page, cdp, dev, results, args.base or f"http://localhost:{LAB_PORT}/")
+                    game_menus_by_tap(page, cdp, dev, results, args.base or f"http://localhost:{args.port}/", full_path=not args.no_path)
+                    game_device(page, cdp, dev, results, args.base or f"http://localhost:{args.port}/")
                     ctx.close()
                     continue
                 page.goto(args.base or lab_url(None, "hud=mid&touch=1"), wait_until="load")
@@ -539,6 +671,7 @@ def run(args) -> int:
                 wait_ready(page)
                 time.sleep(0.6)
                 lab_menus_by_tap(page, cdp, dev, results)
+                lab_continue_by_tap(page, cdp, dev, results)
                 ctx.close()
             browser.close()
     except HarnessError as e:
@@ -561,6 +694,8 @@ def main() -> int:
     ap.add_argument("--base", default=None)
     ap.add_argument("--game", action="store_true")
     ap.add_argument("--lab", action="store_true")
+    ap.add_argument("--port", type=int, default=LAB_PORT, help="dev server port (default 5324)")
+    ap.add_argument("--no-path", action="store_true", help="--game: skip the touch-only bout -> results -> REMATCH path")
     ap.add_argument("--headless", action="store_true", help="(always headless; accepted for the gate table)")
     return run(ap.parse_args())
 

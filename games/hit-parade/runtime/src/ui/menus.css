@@ -263,17 +263,34 @@ html.hp-noflash .hpm-press { animation: none; }
 .hpm-cs-facts .star.on { color: var(--hp-yellow); }
 .hpm-cs-colors { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--u) * .45); }
 .hpm-cs-colors[hidden] { display: none; }
-.hpm-cs-colors .sw { width: calc(var(--u) * 2.2); height: calc(var(--u) * 2.2); border-radius: 50%; background: var(--c); border: max(2px, calc(var(--u) * .18)) solid var(--hp-ink); box-shadow: 0 0 0 max(1px, calc(var(--u) * .1)) rgba(255, 245, 220, .4); }
-.hpm-cs-colors .sw.orig { background: conic-gradient(var(--hp-yellow) 0 25%, var(--hp-red) 0 50%, var(--hp-yellow) 0 75%, var(--hp-red) 0); }
-.hpm-cs-colors .sw.on { box-shadow: 0 0 0 max(2px, calc(var(--u) * .25)) var(--hp-yellow); transform: scale(1.18); }
+/* CHANGED(wf7 touch) VO-D1: a swatch is a button (tap = pick that colour, the picked one again = confirm) around its dot */
+.hpm-cs-colors .sw { display: inline-grid; place-items: center; width: calc(var(--u) * 2.9); height: calc(var(--u) * 2.9); padding: 0; margin: 0; background: none; border: 0; border-radius: 50%; }
+.hpm-cs-colors .sw:disabled { cursor: default; }
+.hpm-cs-colors .sw .dot { display: block; width: calc(var(--u) * 2.2); height: calc(var(--u) * 2.2); border-radius: 50%; background: var(--c); border: max(2px, calc(var(--u) * .18)) solid var(--hp-ink); box-shadow: 0 0 0 max(1px, calc(var(--u) * .1)) rgba(255, 245, 220, .4); transition: transform .08s ease; }
+.hpm-cs-colors .sw.orig .dot { background: conic-gradient(var(--hp-yellow) 0 25%, var(--hp-red) 0 50%, var(--hp-yellow) 0 75%, var(--hp-red) 0); }
+.hpm-cs-colors .sw.on .dot { box-shadow: 0 0 0 max(2px, calc(var(--u) * .25)) var(--hp-yellow); transform: scale(1.18); }
+.hpm-cs-colors .sw:not(:disabled):hover .dot, .hpm-cs-colors .sw:focus-visible .dot { box-shadow: 0 0 0 max(2px, calc(var(--u) * .25)) var(--hp-paper); }
+html.hp-touch .hpm-cs-colors .sw { width: 44px; height: 44px; min-width: 44px; }
 .hpm-cs-colors .swname { font: 400 max(12px, calc(var(--u) * 1)) / 1 var(--f-cond); letter-spacing: .1em; }
 .hpm-cs-scheme { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * .5); }
 .hpm-cs-scheme[hidden] { display: none; }
-.hpm-cs-scheme .hpm-segbtn { display: grid; gap: .15em; padding: calc(var(--u) * .4) calc(var(--u) * .5); transform: none; text-align: center; }
+.hpm-cs-scheme .hpm-segbtn { display: grid; align-content: center; gap: .15em; padding: calc(var(--u) * .4) calc(var(--u) * .5); transform: none; text-align: center; }
 .hpm-cs-scheme .hpm-segbtn b { font: 400 max(14px, calc(var(--u) * 1.1)) / 1 var(--f-display); }
 .hpm-cs-scheme .hpm-segbtn small { font: 400 max(12px, calc(var(--u) * .9)) / 1.1 var(--f-body); opacity: .85; }
 .hpm-cs-ready { position: absolute; right: calc(var(--u) * .6); top: 38%; padding: .1em .5em; transform: rotate(-10deg); background: var(--hp-red); color: #fff; border: var(--line) solid var(--hp-ink); box-shadow: var(--shadow); font: 400 max(16px, calc(var(--u) * 2.2)) / 1.1 var(--f-display); }
 .hpm-cs-ready[hidden] { display: none; }
+/* CHANGED(wf7 touch) VO-D1: the picking card's action row - BACK one step / NEXT or LOCK IN */
+.hpm-cs-acts { display: flex; align-items: stretch; gap: calc(var(--u) * .5); margin-top: auto; }
+.hpm-cs-acts[hidden], .hpm-cs-acts > [hidden] { display: none; }
+.hpm-cs-acts .hpm-small { min-height: calc(var(--u) * 3); padding: 0 calc(var(--u) * .9); }
+.hpm-cs-acts .hpm-cs-undo { flex: 0 0 auto; display: inline-flex; align-items: center; gap: .3em; }
+.hpm-cs-acts .hpm-cs-undo .hp-ico { width: 1.1em; height: 1.1em; }
+.hpm-cs-acts .hpm-cs-ok { flex: 1 1 auto; }
+@media (hover: none) {
+  /* a finger leaves :hover on the last button it tapped: keep the row's own look (NEXT / LOCK IN red, BACK ink) */
+  .hpm-cs-acts .hpm-small:hover:not(:focus) { background: var(--hp-ink-2); color: var(--hp-paper); border-color: var(--hp-paper); transform: skewX(-10deg); box-shadow: var(--shadow); }
+  .hpm-cs-acts .hpm-small.hot:hover:not(:focus) { background: var(--hp-red); color: #fff; border-color: var(--hp-ink); }
+}
 .hpm-cs-grid { grid-row: 3; justify-self: center; display: grid; grid-template-columns: repeat(var(--cols, 7), calc(var(--u) * 7.4)); grid-auto-rows: calc(var(--u) * 6.4); gap: calc(var(--u) * .5); }
 .hpm-slot {
   position: relative; padding: 0; overflow: visible; background: var(--hp-ink); border: max(2px, calc(var(--u) * .2)) solid var(--hp-ink);
@@ -560,13 +577,23 @@ html.hp-touch .hpm-item:hover, html.hp-touch .hpm-btn:hover { transform: skewX(-
   .hpm-segcard .hpm-segbtn { min-height: 44px; font-size: 14px; }
   .hpm-go { min-height: 44px; }
   .hpm-cs { gap: 4px; }
-  .hpm-cs-mid { grid-template-columns: minmax(0, 30%) minmax(0, 1fr) minmax(0, 30%); gap: 8px; }
+  /* CHANGED(wf7 touch) VO-D1: 33 % cards hold 4 x 44 px swatches + the action row (the showcase keeps >= 200 px) */
+  .hpm-cs-mid { grid-template-columns: minmax(0, 33%) minmax(0, 1fr) minmax(0, 33%); gap: 8px; }
+  .hpm-cs-side:is([data-step="color"], [data-step="scheme"]) .hpm-cs-persona { display: none; }
+  /* CONTROLS step: SIMPLE / CLASSIC + the action row need the swatch row's height (the colour is one BACK away) - all three
+     rows overflowed the card on se / p844 / iphone14 (LAYOUT_JS clip: the action row cut by .hpm-cs-side) */
+  .hpm-cs-side[data-step="scheme"] .hpm-cs-colors { display: none; }
+  .hpm-cs-colors { gap: 4px; }
+  .hpm-cs-colors .swname { display: none; }
+  html.hp-touch .hpm-cs-colors .sw .dot { width: 26px; height: 26px; }
+  .hpm-cs-acts { gap: 6px; }
+  .hpm-cs-acts .hpm-small { min-height: 44px; padding: 0 10px; font-size: 14px; }
   .hpm-cs-side { padding: 6px 8px; gap: 3px; }
   .hpm-cs-portrait { display: none; }
   .hpm-cs-name { font-size: 15px; }
   .hpm-cs-persona { font-size: 14px; }
   .hpm-cs-facts { font-size: 12px; }
-  .hpm-cs-colors .sw { width: 18px; height: 18px; }
+  .hpm-cs-colors .sw .dot { width: 18px; height: 18px; }
   .hpm-cs-scheme .hpm-segbtn small { display: none; }
   .hpm-cs-ready { font-size: 16px; top: 8px; }
   .hpm-cs-grid { grid-template-columns: repeat(var(--cols, 7), 58px); grid-auto-rows: 46px; gap: 4px; }

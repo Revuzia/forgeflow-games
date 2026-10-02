@@ -635,6 +635,7 @@ const pct = (a: number, n: number): string => `${a}/${n} (${n ? Math.round((100 
   const missing: string[] = [];
   const lines2: string[] = [];
   let tmExtra = 0;
+  let spExtra = 0; // CHANGED(wf7 season bot): natural bouts added until every special family is seen
   for (const hero of U_ROSTER) {
     const t: Tally = { use: {}, ev: {}, stance: 0 };
     for (const lv of [6, 8]) for (const sd of useSeeds) {
@@ -649,10 +650,29 @@ const pct = (a: number, n: number): string => `${a}/${n} (${n ? Math.round((100 
     const kit1 = buildKit(data, cf, 0);
     const miss: string[] = [];
     // every special family with a neutral / chain / stance recipe (sim-started follow-ups and phase-2 moves aside)
-    const fams = new Map<string, number>();
-    for (const mi of kit1.moves) {
-      if (mi.cm.snapId < 0 || !mi.special || mi.super > 0 || mi.tool === 'auto' || mi.phase2 || !mi.recipe) continue;
-      fams.set(base(mi.id), (fams.get(base(mi.id)) ?? 0) + (t.use[mi.id] ?? 0));
+    // CHANGED(wf7 season bot): specials are sampled until seen, like the supers below: a family still unseen after the 8
+    // natural bouts gets up to 8 more natural bouts (G3 only; same hero levels L6 / L8 vs CPU L6, opponents rotating, own
+    // seeds) in a SEPARATE tally that only the family count reads - the supers / unique checks keep their samples, the
+    // check itself is unchanged (a family must be used >= 1x). Measured: patch's CUE 3 LOW ender is ~1 in 7 enders and came
+    // out 0x in its 8 bouts on the wf6 tree ("MISSING patch [cue3_lo]", cue3_oh 6 / cue3_lo 0).
+    const ts: Tally = { use: {}, ev: {}, stance: 0 };
+    const famCount = (): Map<string, number> => {
+      const fm = new Map<string, number>();
+      for (const mi of kit1.moves) {
+        if (mi.cm.snapId < 0 || !mi.special || mi.super > 0 || mi.tool === 'auto' || mi.phase2 || !mi.recipe) continue;
+        fm.set(base(mi.id), (fm.get(base(mi.id)) ?? 0) + (t.use[mi.id] ?? 0) + (ts.use[mi.id] ?? 0));
+      }
+      return fm;
+    };
+    let fams = famCount();
+    for (let extra = 0; GATE && extra < 8 && [...fams.values()].some((v) => v === 0); extra++) {
+      const lv = extra % 2 === 0 ? 6 : 8;
+      const sd = 80 + extra;
+      let opp = UOPP[(sd + lv + hero.length) % UOPP.length];
+      if (opp === hero) opp = UOPP[(sd + lv + hero.length + 1) % UOPP.length];
+      tallyBout(hero, lv, opp, 6, sd, sd % 2, false, data, ts);
+      spExtra++;
+      fams = famCount();
     }
     for (const [k, v] of fams) if (v === 0) miss.push(k);
     // both supers (full-meter bouts; a `phases` kit's Lv3 may be its phase-2 one)
@@ -699,7 +719,7 @@ const pct = (a: number, n: number): string => `${a}/${n} (${n ? Math.round((100 
   const ti: Tally = { use: {}, ev: {}, stance: 0 };
   for (const sd of [1, 2]) tallyBout('johnny', 6, 'zambini', 4, sd + 70, sd % 2, false, gdI, ti);
   const inst = ti.ev.INSTALL ?? 0;
-  const uText = `every kit's special families + Lv1 + Lv3 + unique in ${U_ROSTER.length * 2 * useSeeds.length} natural + ${U_ROSTER.length * (GATE ? 4 : 1) + tmExtra} full-meter CPU bouts (${tmExtra} extra until seen): ${missing.length === 0 ? 'all used' : 'MISSING ' + missing.join('; ')}; injected install started ${ti.use.weave_l ?? 0}x, INSTALL events ${inst}`;
+  const uText = `every kit's special families + Lv1 + Lv3 + unique in ${U_ROSTER.length * 2 * useSeeds.length + spExtra} natural (${spExtra} extra until a special family is seen) + ${U_ROSTER.length * (GATE ? 4 : 1) + tmExtra} full-meter CPU bouts (${tmExtra} extra until a super is seen): ${missing.length === 0 ? 'all used' : 'MISSING ' + missing.join('; ')}; injected install started ${ti.use.weave_l ?? 0}x, INSTALL events ${inst}`;
   if (GATE) ok(missing.length === 0 && inst > 0, `U1 ${uText}`);
   say(`${GATE ? '' : '(report) '}uniques: ${uText}`);
 }

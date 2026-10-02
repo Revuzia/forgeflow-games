@@ -11,6 +11,7 @@
 import { RollbackSession, type NetEvent, type NetStats, type SimPort, type Transport } from '../core/net/rollback.ts';
 import { PKT, decodeSync, encodeSync } from '../core/net/packet.ts';
 import { P2P_WINDOW, RELAY_DELAY, RELAY_SEND_EVERY, RELAY_WINDOW, hash32, inputDelayFor } from '../core/net/sync.ts';
+import { readyResult, type MatchResultMsg } from '../core/net/result.ts';
 import { NET_PROTO, NetPlay, TurnClock, type RealtimeClient } from './netplay.ts';
 import { RtcTransport, type RtcSignal } from './transport_rtc.ts';
 import { RelaySlot, RelayTransport } from './transport_relay.ts';
@@ -700,7 +701,12 @@ export class OnlineFlow {
       if (this.pathKind === 'rtc' && !this.switchingRelay && this.local === 0) void this.midMatchRelay();
       if (st.silenceMs >= 20000) this.matchOver({ agreed: false, winner: -1, reason: 'nocontest' }, 'net.nocontest');
     }
-    if (this.finishReq && !this.myResult && s.confirmedFrame() >= this.finishReq.frame) this.sendResult();
+    // CHANGED(wf7 online) (progress_wf7_online.md): the rule lives in core/net/result.ts (probe_netsim runs the same code); it is
+    // ready once state[E] is final AND its checksum frame has a final checksum (rollback.ts keeps both in step between ticks)
+    if (this.finishReq && !this.myResult) {
+      const r = readyResult(s, this.finishReq.frame, this.finishReq.winner);
+      if (r) this.sendResult(r);
+    }
   }
 
   /** Host: P2P went silent for 5 s mid-match while presence stays -> move both to the relay tier. */
@@ -763,11 +769,12 @@ export class OnlineFlow {
     return 'hp:' + this.room + ':' + ((c ? c.seed : 0) >>> 0).toString(16).padStart(8, '0') + ':' + this.matchIndex;
   }
 
-  private sendResult(): void {
+  private sendResult(r: MatchResultMsg): void {
     const s = this.session;
     if (!s || !this.finishReq) return;
-    const csFrame = Math.floor(this.finishReq.frame / 15) * 15;
-    this.myResult = { matchId: this.matchId(), winner: this.finishReq.winner, frame: this.finishReq.frame, csFrame, cs: s.checksumAt(csFrame) };
+    // CHANGED(wf7 online): was cs = checksumAt(floor(E / 15) * 15) at the moment confirmedFrame() reached E - null for
+    // E % 15 == 0 / 1 on the peer that asked one tick before the checksum was finalized (P1-WF6: "B cs@3255=None")
+    this.myResult = { matchId: this.matchId(), winner: r.winner, frame: r.frame, csFrame: r.csFrame, cs: r.cs };
     this.ctl('result', { ...this.myResult });
     this.resultTimer = setTimeout(() => {
       if (this.phase === 'match') this.matchOver({ agreed: false, winner: this.finishReq ? this.finishReq.winner : -1, reason: 'noresult' }, 'net.result_mismatch');

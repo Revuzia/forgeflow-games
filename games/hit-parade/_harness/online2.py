@@ -9,17 +9,29 @@ Modes
                    commit-reveal, then N seconds of rollback netplay on the toy sim with human-like random inputs,
                    and exchange RESULT {final confirmed checksum}. PASS = both done + ok, same final checksum,
                    0 desyncs, 0 page errors.
-  --game           (P2) the REAL game on both sides: two Chrome processes on two dev-server origins (A = 5325, B = 5330,
-                   so each has its own localStorage), driven ONLY by real key presses (menus, character select, the
-                   bout, pause, results). Scenarios (--scenarios quick,code,link):
-                     quick: QUICK MATCH on both -> blind select -> a full best-of-3 played by two key bots -> RESULT
-                            agreement (both agreed, same winner, identical confirmed checksum at the MATCH_END frame) ->
-                            REMATCH on both -> second select (new seed) -> A pauses (the peer keeps advancing) and
-                            FORFEITS -> B wins by forfeit -> REMATCH with nobody to rematch -> both on the ONLINE lobby
+  --game           (P2) the REAL game on both sides: two Chrome processes on two dev-server origins (--ports A,B; default
+                   5325,5330 - any free pair works, a port without a dev server gets its own HP_FROZEN vite for the run;
+                   two origins = two localStorages), driven ONLY by real key presses (menus, character select, the
+                   bout, pause, results). Scenarios (--scenarios quick,code,link; also forfeit, relay):
+                     quick: QUICK MATCH on both -> blind select (picks by real arrows: --fa / --fb, any grid row) -> a
+                            full best-of-3 played by two key bots that circle-walk (STEP held) and sidestep (STEP tapped)
+                            -> RESULT agreement (both agreed, same winner, identical final checksum, same MATCH_END frame)
+                            -> REMATCH on both -> second select (new seed) -> A's pause card (the peer keeps advancing) ->
+                            RESUME -> A's TAB CLOSES mid-round -> B wins by disconnect after the presence grace -> B's
+                            REMATCH (nobody to rematch) -> B on the ONLINE lobby; A's tab is reopened
                      code:  A CREATE ROOM (4-letter code on the status line) -> B types it into JOIN -> full best-of-3 ->
-                            agreement -> B MAIN MENU, A REMATCH -> A on the ONLINE lobby "opponent left"
+                            agreement -> REMATCH on both -> B's TAB CLOSES mid-round -> A wins after the grace -> A's
+                            REMATCH -> A on the ONLINE lobby "opponent left"; B's tab is reopened
                      link:  A CREATE ROOM -> B opens /?room=CODE (deep link auto-join) -> both in the select -> B's tab
                             goes away -> A back on the ONLINE lobby "opponent left" (5 s presence grace)
+                     forfeit: QUICK MATCH -> select -> a short bout -> A pauses and FORFEITS -> B wins by forfeit ->
+                            REMATCH with nobody to rematch -> both on the ONLINE lobby (the pre-wf7 quick tail)
+                   CHANGED(wf7 online) VO-D8: --ports, a picker that walks the real grid (RANDOM spans both rows and always
+                   exits to row 0; ArrowDown does nothing on it) and refuses nothing silently (the pick check fails when
+                   the cursor is not the wanted fighter), bots that circle-walk / sidestep on a sim-frame cadence, a
+                   mid-round LEAVE (tab closed) in quick + code, and a per-page supabase-js GoTrueClient warning check.
+  --pick-test      CHANGED(wf7 online): one Chrome on port A: VERSUS -> character select -> the picker walks P1's cursor to
+                   EVERY slot (both rows, RANDOM, the bosses' column) by real arrow keys; PASS = every slot reached
                    Measures per bout: transport + ICE pair, sync / session RTT, D, frames, gameSpeed (session ticks),
                    wallSpeed (vs real time), stall ticks, rollbacks, local loop drops + fps (two 3D Chromes share one
                    GPU here: --quality low by default), Supabase sends per side. --relay forces the relay tier (keep it
@@ -325,9 +337,12 @@ def g_step_check(checks, label, rep, bots):
                     "remoteWalkSamples": [getattr(b, "remote_walk_samples", 0) for b in bots]}
     checks.append((label + ": STEP over rollback (each peer saw the remote fighter sidestep / circle)",
                    all(x > 0 for x in rep["steps"]["taps"]) and all(x > 0 for x in rep["steps"]["remoteStepSamples"]), json.dumps(rep["steps"])))
-    checks.append((label + ": circle-walk over rollback (a held STEP: some peer saw the remote fighter SIDEWALK)",
-                   sum(rep["steps"]["circles"]) > 0 and sum(rep["steps"]["remoteWalkSamples"]) > 0,
-                   "circles %s, remote sidewalk samples %s" % (rep["steps"]["circles"], rep["steps"]["remoteWalkSamples"])))
+    # CHANGED(wf7 online) VO-D8: per peer now - BOTH players circle-walked (>= 2 held STEPs each) and BOTH peers saw the
+    # other's fighter SIDEWALK (was: the sums over both peers > 0)
+    checks.append((label + ": circle-walk over rollback (both players held STEP >= 2x; each peer saw the remote fighter SIDEWALK)",
+                   all(x >= 2 for x in rep["steps"]["circles"]) and all(x > 0 for x in rep["steps"]["remoteWalkSamples"]),
+                   "circles %s, local sidewalk samples %s, remote sidewalk samples %s" % (rep["steps"]["circles"], rep["steps"]["localWalkSamples"],
+                                                                                       rep["steps"]["remoteWalkSamples"])))
 GAME_PORTS = (5325, 5330)   # CHANGED(wf6 fixer) VO-D8: --ports A,B overrides (a verifier's / fixer's own dev servers)
 
 READ_TICK = """() => { try { const h = window.__HP__; if (!h) return null; const st = h.state(); const n = h.net();
@@ -348,13 +363,44 @@ class GSide:
     def __init__(self, tag, browser, base, query, out_dir, C):
         self.tag, self.base, self.query, self.out, self.C = tag, base.rstrip("/"), query, out_dir, C
         self.ctx = browser.new_context(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
+        self.ctx.add_init_script(C.INIT_JS)
+        self.console, self.page_errors, self.held, self.notes = [], [], set(), []
+        self.shots = []
+        self.page = None
+        self.pages_opened = 0
+        self._new_page()
+
+    def _new_page(self):
+        """CHANGED(wf7 online): a page of this side's context (same origin + localStorage); console / errors keep accumulating"""
         self.page = self.ctx.new_page()
         self.page.set_default_timeout(30000)
-        self.page.add_init_script(C.INIT_JS)
-        self.console, self.page_errors, self.held, self.notes = [], [], set(), []
         self.page.on("console", lambda m: self.console.append((m.type, m.text)))
         self.page.on("pageerror", lambda e: self.page_errors.append(str(e)))
-        self.shots = []
+        self.held = set()
+        self.pages_opened += 1
+
+    def close_tab(self):
+        """CHANGED(wf7 online): the player closes the game's tab (no BYE: the flow's disconnect rule applies); returns the close time"""
+        t = time.time()
+        try:
+            self.page.close(run_before_unload=False)
+        except Exception as e:
+            self.notes.append("close_tab: %s" % str(e).splitlines()[0])
+        self.held = set()
+        return t
+
+    def reopen(self):
+        """CHANGED(wf7 online): a fresh tab for the next scenario after close_tab()"""
+        try:
+            if self.page and not self.page.is_closed():
+                self.page.close()
+        except Exception:
+            pass
+        self._new_page()
+
+    def gotrue_warnings(self):
+        """CHANGED(wf7 online) VO-D7: supabase-js 'Multiple GoTrueClient instances detected' console lines seen on this side"""
+        return [t for (k, t) in self.console if "GoTrueClient" in t and "Multiple" in t]
 
     def goto(self, extra=""):
         self.page.goto("%s/?%s%s" % (self.base, self.query, extra), wait_until="load", timeout=120000)
@@ -521,28 +567,121 @@ def g_guard_direct(A, B, checks, label, opts):
     return False
 
 
-def g_pick(s, fighter):
-    """move P1's cursor to `fighter` by real arrow presses (each press waits until the cursor moved: a starved page handles
-    keys late) then Enter x3. CHANGED(wf6 fixer) VO-D8: ArrowRight wraps INSIDE a grid row, so a fighter on row 1 (lotus,
-    boneyard, spin, gazza, rerun) was never reached and another fighter was picked silently: once a row has cycled without
-    the target, ArrowDown moves to the next row (the caller compares the returned cursor with the wanted fighter)."""
-    time.sleep(0.6)
-    cur_of = lambda: (((s.menus().get("cs") or {}).get("p") or [{}])[0]).get("cursor")
-    seen = set()
-    for _ in range(48):
-        cur = cur_of()
-        if cur == fighter:
+def g_cursor(s):
+    """P1's character-select cursor (slot id) from the menus readback"""
+    return (((s.menus().get("cs") or {}).get("p") or [{}])[0]).get("cursor")
+
+
+def g_press_cursor(s, key, cur, trail):
+    """one real arrow press; waits (<= 2 s: a starved page handles keys late) until the cursor left `cur`"""
+    s.key(key, gap=0.05)
+    s.wait(lambda: g_cursor(s) != cur, 2.0, 0.05)
+    nxt = g_cursor(s)
+    trail.append("%s>%s" % (key.replace("Arrow", "")[0], nxt))
+    return nxt
+
+
+NAV_DIRECT = True     # CHANGED(wf7 online): g_nav tries the layout path first (--pick-test also runs the scan alone)
+
+
+def g_grid_pos(slots):
+    """(col, row) per slot id as ui/charselect.ts buildGrid lays them out from the readback's slot order: 'random' (col 0,
+    both rows - its own row 0), the regulars 1 + k % perRow / k // perRow (perRow = ceil(n / 2)), then <= 2 bosses in the
+    last column (rows 0, 1). Bosses = the slots after the regulars (readback order: random, regulars, bosses)."""
+    ids = [x for x in slots if x != "random"]
+    bosses = [x for x in ids if x in ("freak", "ricky")]
+    regular = [x for x in ids if x not in bosses]
+    per = max(1, -(-len(regular) // 2))
+    pos = {"random": (0, 0)}
+    for k, fid in enumerate(regular):
+        pos[fid] = (1 + k % per, k // per)
+    for k, fid in enumerate(bosses[:2]):
+        pos[fid] = (1 + per, k)
+    return pos
+
+
+def g_nav_direct(s, fighter, cur, trail):
+    """CHANGED(wf7 online): the short path from the grid layout - RANDOM: Left to column 0; else off RANDOM with one Right,
+    DOWN / UP to the target row (never on RANDOM), then Left / Right along that row without crossing column 0 (RANDOM would
+    reset the row). Each press is checked against the readback; the caller falls back to the scan when it does not land."""
+    slots = (s.menus().get("cs") or {}).get("slots") or []
+    pos = g_grid_pos(slots)
+    if fighter not in pos or cur not in pos:
+        return cur
+    if fighter == "random":
+        for _ in range(8):
+            if cur in ("random", None):
+                break
+            cur = g_press_cursor(s, "ArrowLeft", cur, trail)
+        return cur
+    if cur == "random":
+        cur = g_press_cursor(s, "ArrowRight", cur, trail)
+        if cur not in pos:
+            return cur
+    tc, tr = pos[fighter]
+    cc, cr = pos[cur]
+    if tr != cr:
+        cur = g_press_cursor(s, "ArrowDown" if tr > cr else "ArrowUp", cur, trail)
+        if cur not in pos:
+            return cur
+        cc, cr = pos[cur]
+    for _ in range(8):
+        if cur == fighter or cur not in pos:
             break
-        if cur in seen:                    # this row cycled: next row
-            seen = set()
-            s.key("ArrowDown", gap=0.05)
-            s.wait(lambda: cur_of() != cur, 2.0, 0.05)
-            continue
-        seen.add(cur)
-        s.key("ArrowRight", gap=0.05)
-        s.wait(lambda: cur_of() != cur, 2.0, 0.05)
-    cur = cur_of()
-    s.key("Enter", 3, gap=0.25)            # fighter, colour, controls (SIMPLE)
+        cc, cr = pos[cur]
+        if cc == tc:
+            break
+        cur = g_press_cursor(s, "ArrowRight" if tc > cc else "ArrowLeft", cur, trail)
+    return cur
+
+
+def g_nav(s, fighter, trail=None):
+    """CHANGED(wf7 online) VO-D8: walk P1's cursor to `fighter` by real arrow presses over the real grid (ui/charselect.ts
+    buildGrid / moveCursor): RANDOM in column 0 spans BOTH rows (its own row is 0), the regulars fill the next columns 5 per
+    row, the bosses sit in the last column; ArrowRight wraps inside a row, RANDOM always exits to row 0, ArrowDown on RANDOM
+    does nothing. The wf6 picker pressed ArrowDown once a row had cycled - from RANDOM that press is lost and it could loop on
+    row 0. Now: first the layout path (g_nav_direct, <= 7 presses); if the cursor did not land, the scan - the current row
+    rightwards until the fighter or RANDOM; from RANDOM row 0; from RANDOM again right once (row 0, first column) and DOWN
+    (row 1) and row 1 - which reaches every slot in <= 25 presses whatever the layout. Returns the cursor (the caller checks
+    it is `fighter`)."""
+    trail = [] if trail is None else trail
+    cur = g_cursor(s)
+    trail.append("start %s" % cur)
+    if cur == fighter:
+        return cur
+    if NAV_DIRECT:
+        cur = g_nav_direct(s, fighter, cur, trail)       # <= 7 presses when the grid is the one buildGrid lays out
+        if cur == fighter:
+            return cur
+    trail.append("| scan")
+    for _ in range(9):                                   # pass 1: the current row, rightwards, until RANDOM
+        if cur in (fighter, "random") or cur is None:
+            break
+        cur = g_press_cursor(s, "ArrowRight", cur, trail)
+    for row in (0, 1):                                   # pass 2: row 0; pass 3: row 1
+        if cur == fighter or cur is None:
+            break
+        cur = g_press_cursor(s, "ArrowRight", cur, trail)    # RANDOM -> row 0, first regular column
+        if row == 1:
+            cur = g_press_cursor(s, "ArrowDown", cur, trail)
+        for _ in range(9):
+            if cur in (fighter, "random") or cur is None:
+                break
+            cur = g_press_cursor(s, "ArrowRight", cur, trail)
+    return cur
+
+
+def g_pick(s, fighter):
+    """move P1's cursor to `fighter` (g_nav) then Enter x3 (fighter, colour, controls = SIMPLE). The returned cursor is what
+    the caller's pick check compares - a fighter the picker could not reach FAILS that check (and is still confirmed so the
+    blind select's 30 s timer does not decide the scenario)."""
+    time.sleep(0.6)
+    trail = []
+    cur = g_nav(s, fighter, trail)
+    s.notes.append("pick %s: %s" % (fighter, " ".join(trail)))
+    if cur != fighter:
+        glog("PICKER %s: wanted %s, cursor %s (%s)" % (s.tag, fighter, cur, " ".join(trail)))
+    s.key("Enter", 3, gap=0.25)
     return cur
 
 
@@ -576,6 +715,8 @@ class Bot:
         self.circle_until = -1
         self.circle_key = None
         self.circles = 0
+        self.last_circle_end = -10 ** 9
+        self.circle_gap = 150
         self.local_walk_samples = 0
         self.remote_walk_samples = 0
 
@@ -619,9 +760,15 @@ class Bot:
             self.circle_until = -1
             s.hold(set())
             return
-        if fr is not None and 1.0 < gap < 2.8 and self.r.random() < 0.03 and (me.get("stateName") or "") in ("idle", "walk_f", "walk_b"):
+        # CHANGED(wf7 online) VO-D8: + a sim-frame cadence - a neutral bot that has not circled for 150-260 sim frames starts
+        # one (a 3 % per-poll chance alone gave 3-5 circles per bout on a starved machine)
+        neutral = (me.get("stateName") or "") in ("idle", "walk_f", "walk_b")
+        due = fr is not None and fr - self.last_circle_end >= self.circle_gap
+        if fr is not None and neutral and 0.8 < gap < 3.2 and (due or self.r.random() < 0.03):
             self.circle_key = GK["stepin"] if self.circles % 2 == 0 else GK["stepout"]
             self.circle_until = fr + self.r.randint(45, 120)
+            self.last_circle_end = self.circle_until
+            self.circle_gap = self.r.randint(150, 260)
             self.circles += 1
             s.hold({self.circle_key})
             return
@@ -743,7 +890,8 @@ def g_results_ui(s):
 
 def scen_quick(A, B, opts, out):
     """QUICK MATCH -> blind select -> full best-of-3 by real keys -> agreement -> REMATCH (both) -> second select -> bout ->
-    A forfeits from the pause card -> B wins by forfeit -> both REMATCH -> both land on the ONLINE lobby"""
+    A's pause card (peer keeps advancing) -> RESUME -> A's tab closes mid-round -> B wins by disconnect after the grace ->
+    B's REMATCH -> B on the ONLINE lobby (CHANGED(wf7 online): the forfeit tail moved to scen_forfeit)"""
     checks, rep = Checks(), {"name": "quick"}
     for s in (A, B):
         s.goto()
@@ -826,12 +974,130 @@ def scen_quick(A, B, opts, out):
     g_play([A, B], [Bot("rush", 5), Bot("mixed", 7)], 60, stop_after=4.0)
     A.key(GK["pause"])
     okp = A.wait(lambda: A.screen() == "pause", 6)
-    fr0 = (B.net() or {}).get("frame")
-    time.sleep(1.0)
-    fr1 = (B.net() or {}).get("frame")
-    checks.append(("quick: online pause card does not stop the match (peer keeps advancing)", bool(okp) and isinstance(fr0, int) and isinstance(fr1, int) and fr1 > fr0 + 30,
-                   "A screen %s; B session frame %s -> %s in 1 s" % (A.screen(), fr0, fr1)))
+    g_pause_check(A, B, okp, checks, "quick", rep)
     A.shot("quick_pause")
+    # CHANGED(wf7 online): RESUME, a few more seconds of the round, then A's tab closes mid-round -> B wins after the grace
+    A.focus_to("hpm-p-resume")
+    A.key("Enter")
+    okr = A.wait(lambda: A.state().get("phase") == "bout" and not A.menus().get("visible"), 6)
+    checks.append(("quick: RESUME from the online pause card", bool(okr), "A phase %s screen %s" % (A.state().get("phase"), A.screen())))
+    g_play([A, B], [Bot("rush", 9), Bot("mixed", 13)], 40, stop_after=3.0)
+    g_leave_mid_round(A, B, checks, "quick", rep)
+    rep["supabase"] = {"a": rep.get("supabase_leaver") or {}, "b": (B.online().get("supabase") or {})}
+    return checks, rep
+
+
+def g_pause_check(A, B, okp, checks, label, rep):
+    """CHANGED(wf7 online): A's pause card is up; an online bout keeps running. Over 2 s: both sessions advance and B gets
+    MORE than 2 x W frames ahead of where it was - a pausing A that stopped ticking would hold B to <= W (8) frames (the
+    rollback window), so the gate is the semantic one. The rate is reported, not gated: it is the machine's speed (the wf7
+    run measured 27 frames/s on this starved machine against a > 30 per second gate, a false FAIL)."""
+    na0, nb0, t0 = A.net() or {}, B.net() or {}, time.time()
+    time.sleep(2.0)
+    na1, nb1, t1 = A.net() or {}, B.net() or {}, time.time()
+    fa = [na0.get("frame"), na1.get("frame")]
+    fb = [nb0.get("frame"), nb1.get("frame")]
+    ints = all(isinstance(x, int) for x in fa + fb)
+    win = nb1.get("window") or 8
+    db = fb[1] - fb[0] if ints else None
+    da = fa[1] - fa[0] if ints else None
+    rep["pause"] = {"aFrames": fa, "bFrames": fb, "secs": round(t1 - t0, 2), "bStalls": [nb0.get("stallTicks"), nb1.get("stallTicks")],
+                    "bWallSpeed": nb1.get("wallSpeed"), "window": win}
+    checks.append((label + ": online pause card does not stop the match (both sessions keep advancing past the rollback window)",
+                   bool(okp) and ints and da > 0 and db > 2 * win,
+                   "A screen %s; over %.1f s A session frame %s -> %s, B %s -> %s (%.0f frames/s; W %s); B stall ticks %s -> %s" % (
+                       A.screen(), t1 - t0, fa[0], fa[1], fb[0], fb[1], (db or 0) / max(0.01, t1 - t0), win, nb0.get("stallTicks"), nb1.get("stallTicks"))))
+
+
+def g_leave_mid_round(leaver, stayer, checks, label, rep):
+    """CHANGED(wf7 online): `leaver` closes its tab during a round (no BYE is sent: closing a tab is a disconnect, CONTRACT
+    §10). The stayer's session runs out of remote inputs (stalls), its flow sees the peer's presence leave, and after the 5 s
+    grace (presence gone AND inputs silent >= 1 s) the stayer wins by disconnect; its REMATCH has nobody to rematch -> the
+    ONLINE lobby 'opponent left'. The leaver's tab is reopened for the next scenario."""
+    pre = stayer.js(READ_TICK) or {}
+    m = pre.get("m") or {}
+    ns = stayer.net() or {}
+    rep["supabase_leaver"] = leaver.online().get("supabase") or {}
+    rep["leave"] = {"leaver": leaver.tag, "round": m.get("round"), "matchPhase": m.get("phase"), "timer": m.get("timer"),
+                    "stayerFrame": ns.get("frame"), "stayerLocal": stayer.online().get("local")}
+    t0 = leaver.close_tab()
+    fr = []
+    ok = None
+    while time.time() - t0 < 40:
+        st = stayer.state().get("phase")
+        if st == "results":
+            ok = True
+            break
+        n = stayer.net() or {}
+        fr.append((round(time.time() - t0, 1), n.get("frame")))
+        time.sleep(0.25)
+    dt = round(time.time() - t0, 2)
+    o = stayer.online()
+    lm = o.get("lastMatch") or {}
+    t_gone = t_res = None
+    for ln in o.get("recent") or []:
+        parts = str(ln).split(" ", 1)
+        if len(parts) < 2:
+            continue
+        try:
+            t = float(parts[0])
+        except ValueError:
+            continue
+        if parts[1].startswith("peer presence gone") and t_gone is None:
+            t_gone = t
+        if parts[1].startswith("phase result") and t_gone is not None and t_res is None:
+            t_res = t
+    grace = round((t_res - t_gone) / 1000.0, 2) if t_gone is not None and t_res is not None else None
+    frozen = [f for (_, f) in fr if isinstance(f, int)]
+    time.sleep(0.8)
+    ui = g_results_ui(stayer)
+    rep["leave"].update({"resultsAfterS": dt, "presenceGoneToResultS": grace, "lastMatch": {k: lm.get(k) for k in ("reason", "winner", "agreed", "rated", "rematch")},
+                         "stayerFramesAfterClose": [frozen[0], frozen[-1]] if frozen else None, "ui": ui})
+    checks.append(("%s: %s's tab closes mid-round -> %s wins by disconnect after the grace" % (label, leaver.tag.upper(), stayer.tag.upper()),
+                   bool(ok) and lm.get("reason") == "disconnect" and lm.get("winner") == o.get("local") and m.get("phase") == "fight"
+                   and grace is not None and 4.9 <= grace <= 8.0 and dt <= 25,
+                   "left in round %s (%s, timer %s); %s results after %.1f s, presence gone -> result %s s (grace 5 s); lastMatch %s; stayer session frame %s -> %s; "
+                   "card how %r name %r note %r" % (m.get("round"), m.get("phase"), m.get("timer"), stayer.tag.upper(), dt, grace, rep["leave"]["lastMatch"],
+                                                    frozen[0] if frozen else None, frozen[-1] if frozen else None, ui.get("how"), ui.get("name"), ui.get("note"))))
+    stayer.shot("%s_disconnect_win" % label)
+    stayer.key("Enter")
+    okl = stayer.wait(lambda: stayer.screen() == "online", 12)
+    time.sleep(0.5)
+    st = stayer.text("#hpm-on-status")
+    rep["leave"]["lobby"] = {"screen": stayer.screen(), "status": st}
+    checks.append(("%s: %s's REMATCH (nobody to rematch) -> the ONLINE lobby 'opponent left'" % (label, stayer.tag.upper()),
+                   bool(okl) and "LEFT" in (st or "").upper(), "screen %s status %r" % (stayer.screen(), st)))
+    leaver.reopen()
+
+
+def scen_forfeit(A, B, opts, out):
+    """CHANGED(wf7 online): the pre-wf7 quick tail on its own - QUICK MATCH -> select -> a short bout -> A pauses (the peer
+    keeps advancing) and FORFEITS -> B wins by forfeit -> REMATCH with nobody to rematch -> both on the ONLINE lobby"""
+    checks, rep = Checks(), {"name": "forfeit"}
+    for s in (A, B):
+        s.goto()
+    if not (g_boot_to_online(A, checks, "forfeit") and g_boot_to_online(B, checks, "forfeit")):
+        return checks, rep
+    g_wait_idle([A, B], "forfeit")
+    A.focus_to("hpm-on-quick")
+    A.key("Enter")
+    time.sleep(0.3)
+    B.focus_to("hpm-on-quick")
+    B.key("Enter")
+    ok = A.wait(lambda: g_in_select(A) and g_in_select(B), 120, 0.25)
+    checks.append(("forfeit: both reach the blind select", bool(ok), "A %s / B %s" % (A.screen(), B.screen())))
+    if not ok or not g_guard_direct(A, B, checks, "forfeit", opts):
+        return checks, rep
+    g_pick(A, opts.fa)
+    g_pick(B, opts.fb)
+    ok = g_wait_fight([A, B], 150)
+    checks.append(("forfeit: bout starts on both", ok, ""))
+    if not ok:
+        return checks, rep
+    g_play([A, B], [Bot("rush", 5), Bot("mixed", 7)], 60, stop_after=4.0)
+    A.key(GK["pause"])
+    okp = A.wait(lambda: A.screen() == "pause", 6)
+    g_pause_check(A, B, okp, checks, "forfeit", rep)
     A.focus_to("hpm-p-forfeit")
     A.key("Enter")
     time.sleep(0.3)
@@ -844,24 +1110,24 @@ def scen_quick(A, B, opts, out):
     ua, ub = g_results_ui(A), g_results_ui(B)
     rep["forfeit_ui"] = {"a": ua, "b": ub}
     lb = B.online().get("lastMatch") or {}
-    checks.append(("quick: A forfeits -> B wins by forfeit", bool(okA and okB) and lb.get("reason") == "forfeit" and lb.get("winner") == B.online().get("local"),
+    checks.append(("forfeit: A forfeits -> B wins by forfeit", bool(okA and okB) and lb.get("reason") == "forfeit" and lb.get("winner") == B.online().get("local"),
                    "A phase %s how %r / B phase %s how %r lastMatch %s" % (A.state().get("phase"), ua.get("how"), B.state().get("phase"), ub.get("how"),
                                                                         {k: lb.get(k) for k in ("reason", "winner", "rematch")})))
-    B.shot("quick_forfeit_win")
+    B.shot("forfeit_win")
     # ---- nobody to rematch: REMATCH on both -> the ONLINE lobby
     A.key("Enter")
     B.key("Enter")
     okl = A.wait(lambda: A.screen() == "online" and B.screen() == "online", 10)
     rep["lobby_status"] = {"a": A.text("#hpm-on-status"), "b": B.text("#hpm-on-status")}
-    checks.append(("quick: REMATCH with nobody to rematch -> both on the ONLINE lobby", bool(okl),
+    checks.append(("forfeit: REMATCH with nobody to rematch -> both on the ONLINE lobby", bool(okl),
                    "A %s %r / B %s %r" % (A.screen(), rep["lobby_status"]["a"], B.screen(), rep["lobby_status"]["b"])))
     rep["supabase"] = {"a": (A.online().get("supabase") or {}), "b": (B.online().get("supabase") or {})}
     return checks, rep
 
 
 def scen_code(A, B, opts, out):
-    """CREATE ROOM (A) -> JOIN by typing the code (B) -> blind select -> full best-of-3 -> agreement -> B MAIN MENU, A REMATCH
-    -> A lands on the ONLINE lobby told the opponent left"""
+    """CREATE ROOM (A) -> JOIN by typing the code (B) -> blind select -> full best-of-3 -> agreement -> REMATCH (both) ->
+    B's tab closes mid-round -> A wins after the grace -> A's REMATCH -> A lands on the ONLINE lobby told the opponent left"""
     checks, rep = Checks(), {"name": "code"}
     for s in (A, B):
         s.goto()
@@ -922,19 +1188,25 @@ def scen_code(A, B, opts, out):
     B.shot("code_results")
     if not fin:
         return checks, rep
-    # B declines (MAIN MENU), then A asks for a rematch
-    B.focus_to("hpm-res-menu", "ArrowRight")
-    B.key("Enter")
-    okb = B.wait(lambda: B.screen() == "main", 8)
-    time.sleep(1.2)
+    # CHANGED(wf7 online): REMATCH (both) -> second blind select -> a few seconds of round 1 -> B's tab closes mid-round ->
+    # A wins by disconnect after the grace -> A's REMATCH -> the ONLINE lobby 'opponent left' (was: B declined via MAIN MENU)
     A.key("Enter")
-    oka = A.wait(lambda: A.screen() == "online", 12)
-    time.sleep(0.5)
-    rep["decline"] = {"a_screen": A.screen(), "a_status": A.text("#hpm-on-status"), "b_screen": B.screen()}
-    checks.append(("code: B declines (MAIN MENU) -> A's REMATCH lands on the ONLINE lobby 'opponent left'", bool(oka and okb) and "LEFT" in (rep["decline"]["a_status"] or "").upper(),
-                   json.dumps(rep["decline"])))
-    A.shot("code_declined")
-    rep["supabase"] = {"a": (A.online().get("supabase") or {}), "b": (B.online().get("supabase") or {})}
+    time.sleep(0.4)
+    B.key("Enter")
+    ok = A.wait(lambda: g_in_select(A) and g_in_select(B), 40, 0.25)
+    checks.append(("code: REMATCH (both) opens a second blind select", bool(ok), "A %s / B %s; A matchIndex %s" % (A.screen(), B.screen(), A.online().get("matchIndex"))))
+    if not ok:
+        return checks, rep
+    g_pick(A, opts.fa2)
+    g_pick(B, opts.fb2)
+    ok = g_wait_fight([A, B], 120)
+    checks.append(("code: rematch bout starts, new seed", bool(ok) and A.match().get("seed") != mA.get("seed") and A.match().get("seed") == B.match().get("seed"),
+                   "first %s -> rematch %s/%s" % (mA.get("seed"), A.match().get("seed"), B.match().get("seed"))))
+    if not ok:
+        return checks, rep
+    g_play([A, B], [Bot("mixed", 17), Bot("rush", 19)], 60, stop_after=6.0)
+    g_leave_mid_round(B, A, checks, "code", rep)
+    rep["supabase"] = {"a": (A.online().get("supabase") or {}), "b": rep.get("supabase_leaver") or {}}
     return checks, rep
 
 
@@ -1064,7 +1336,7 @@ def run_game(opts):
             A = GSide("a", ba, "http://localhost:%d" % GAME_PORTS[0], q, shots, C)
             B = GSide("b", bb, "http://localhost:%d" % GAME_PORTS[1], q, shots, C)
             for name in [x.strip() for x in opts.scenarios.split(",") if x.strip()]:
-                fn = {"quick": scen_quick, "code": scen_code, "link": scen_link, "relay": scen_relay}.get(name)
+                fn = {"quick": scen_quick, "code": scen_code, "link": scen_link, "relay": scen_relay, "forfeit": scen_forfeit}.get(name)
                 if not fn:
                     continue
                 t0 = time.time()
@@ -1092,6 +1364,8 @@ def run_game(opts):
                 out["diag_" + s.tag] = s.diag()
                 out["notes_" + s.tag] = s.notes
                 out["shots_" + s.tag] = s.shots
+                out["gotrue_" + s.tag] = s.gotrue_warnings()
+                out["pages_" + s.tag] = s.pages_opened
             ba.close()
             bb.close()
     finally:
@@ -1099,6 +1373,14 @@ def run_game(opts):
             C.stop_server(h)
     errs = [e for k in ("diag_a", "diag_b") for e in ((out.get(k) or {}).get("pageErrors") or []) + ((out.get(k) or {}).get("windowErrors") or [])]
     all_checks.append(("no page errors / unhandled rejections in either Chrome", not errs, "; ".join(errs[:4])))
+    # CHANGED(wf7 online) VO-D7: supabase-js warns "Multiple GoTrueClient instances detected in the same browser context" when a
+    # page creates a 2nd client under the same auth storage key (netplay.ts: one memoised client, own key; ratings.ts: one
+    # memoised client, the portal's key) - counted over every page each side opened in this run
+    if "gotrue_a" in out:
+        ga, gb = out.get("gotrue_a") or [], out.get("gotrue_b") or []
+        all_checks.append(("no supabase-js 'Multiple GoTrueClient instances' warning on either side (VO-D7)", not (ga or gb),
+                           "A %d / B %d warnings over %s / %s pages%s" % (len(ga), len(gb), out.get("pages_a"), out.get("pages_b"),
+                                                                       (": " + (ga or gb)[0][:160]) if (ga or gb) else "")))
     out["checks"] = [{"name": n, "ok": ok, "detail": d} for (n, ok, d) in all_checks]
     failed = [c for c in out["checks"] if not c["ok"]]
     out["pass"] = not failed and bool(all_checks)
@@ -1110,6 +1392,82 @@ def run_game(opts):
         print("console errors (%d): %s" % (len(cerr), " | ".join(x[:200] for x in cerr[:6])))
     print("%s online2 --game: %d/%d checks%s -> _harness/_reports/%s" % ("PASS" if out["pass"] else "FAIL", len(all_checks) - len(failed), len(all_checks),
                                                                     "" if not failed else " FAILED: " + " | ".join(c["name"] for c in failed[:8]), name))
+    return 0 if out["pass"] else 1
+
+
+def run_pick_test(opts):
+    """CHANGED(wf7 online) VO-D8: one Chrome on port A (the first of --ports): title -> main -> VERSUS -> GO -> character select;
+    g_nav walks P1's cursor to EVERY slot of the grid (both rows, RANDOM, the bosses' column; a locked boss can be hovered)
+    by real arrow keys, each from wherever the previous walk ended. PASS = every slot reached. Then a row-1 fighter is
+    confirmed by Enter and the select's readback must show it picked (no other fighter silently)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import common as C
+    from playwright.sync_api import sync_playwright
+    ports = tuple(int(x) for x in opts.ports.split(",")[:2]) if opts.ports else GAME_PORTS
+    base = "http://localhost:%d" % ports[0]
+    shots = os.path.join(ROOT, "_shots", "online2")
+    os.makedirs(shots, exist_ok=True)
+    out = {"mode": "pick-test", "started": time.strftime("%Y-%m-%dT%H:%M:%S"), "base": base}
+    checks = Checks()
+    srv = C.ensure_server(base + "/", wait_s=300)
+    try:
+        with sync_playwright() as p:
+            br = p.chromium.launch(channel="chrome", headless=not opts.headed, args=C.FLAGS)
+            s = GSide("a", br, base, "online2=1&quality=low", shots, C)
+            s.goto()
+            s.wait(lambda: s.state().get("phase") == "title" and s.screen() == "title", 120)
+            s.key("Enter")
+            s.wait(lambda: s.screen() == "main", 10)
+            s.focus_to("hpm-main-versus")
+            s.key("Enter")
+            s.wait(lambda: s.screen() == "versus", 10)
+            s.focus_to("hpm-versus-go")
+            s.key("Enter")
+            ok = s.wait(lambda: s.screen() == "charselect" and g_cursor(s), 15)
+            cs = s.menus().get("cs") or {}
+            slots = cs.get("slots") or []
+            checks.append(("pick-test: VERSUS character select open", bool(ok) and len(slots) >= 11, "slots %s locked %s" % (slots, cs.get("locked"))))
+            global NAV_DIRECT
+            for mode in ("scan", "direct"):                 # the scan alone (the fallback), then the layout path + fallback
+                NAV_DIRECT = mode == "direct"
+                order = [x for x in slots if x != "random"][::-1] + ["random"]     # reversed: every walk starts somewhere new
+                if mode == "direct":
+                    order = order[::2] + order[1::2]           # jumps across rows / columns
+                reached, walks = [], []
+                for fid in order:
+                    trail = []
+                    cur = g_nav(s, fid, trail)
+                    presses = sum(1 for x in trail if ">" in x)
+                    walks.append({"want": fid, "got": cur, "presses": presses, "trail": trail})
+                    if cur == fid:
+                        reached.append(fid)
+                    glog("%s walk %-9s -> %-9s %2d presses  %s" % (mode, fid, cur, presses, " ".join(trail)))
+                out["walks_" + mode] = walks
+                missed = [x for x in order if x not in reached]
+                checks.append(("pick-test (%s): the picker reaches every slot by real arrows (%d)" % (mode, len(order)), not missed and bool(order),
+                               "reached %d/%d; missed %s; max presses %s" % (len(reached), len(order), missed, max([w["presses"] for w in walks] or [0]))))
+            NAV_DIRECT = True
+            row1 = [x for x in ("lotus", "boneyard", "spin", "gazza", "rerun") if x in slots and x not in (cs.get("locked") or [])]
+            if row1:
+                want = row1[len(row1) // 2]
+                g_nav(s, "random")
+                cur = g_nav(s, want)
+                s.key("Enter")
+                time.sleep(0.4)
+                p0 = ((s.menus().get("cs") or {}).get("p") or [{}])[0]
+                s.shot("picktest_%s" % want)
+                checks.append(("pick-test: Enter on row-1 fighter %s picks it (no other fighter)" % want, cur == want and p0.get("fighter") == want,
+                               "cursor %s, picked %s, step %s" % (cur, p0.get("fighter"), p0.get("step"))))
+            out["diag"] = s.diag()
+            br.close()
+    finally:
+        C.stop_server(srv)
+    out["checks"] = [{"name": n, "ok": ok, "detail": d} for (n, ok, d) in checks]
+    out["pass"] = all(c["ok"] for c in out["checks"]) and bool(checks)
+    with open(os.path.join(REPORTS, "online2_picktest.json"), "w", encoding="utf-8") as fh:
+        json.dump(out, fh, indent=2, default=str)
+    print("%s online2 --pick-test: %d/%d checks -> _harness/_reports/online2_picktest.json" % ("PASS" if out["pass"] else "FAIL",
+                                                                                         sum(1 for c in out["checks"] if c["ok"]), len(out["checks"])))
     return 0 if out["pass"] else 1
 
 
@@ -1135,14 +1493,18 @@ def main():
     ap.add_argument("--quality", default="low", help="game: ?quality= for both pages (low|med|high; '' = the saved setting)")
     ap.add_argument("--bout-timeout", dest="bout_timeout", type=float, default=420, help="game: seconds a full bout may take")
     ap.add_argument("--ports", default="", help="game: the two dev-server ports A,B (default 5325,5330)")
-    ap.add_argument("--fa", default="johnny", help="game quick: A's fighter")
-    ap.add_argument("--fb", default="bruno", help="game quick: B's fighter")
-    ap.add_argument("--fa2", default="patch", help="game code: A's fighter")
-    ap.add_argument("--fb2", default="zambini", help="game code: B's fighter")
+    # CHANGED(wf7 online) VO-D8: the defaults pick from BOTH grid rows (row 1 = lotus boneyard spin gazza rerun)
+    ap.add_argument("--fa", default="boneyard", help="game quick / forfeit: A's fighter")
+    ap.add_argument("--fb", default="spin", help="game quick / forfeit: B's fighter")
+    ap.add_argument("--fa2", default="gazza", help="game code: A's fighter")
+    ap.add_argument("--fb2", default="johnny", help="game code: B's fighter")
+    ap.add_argument("--pick-test", dest="pick_test", action="store_true", help="game: walk P1's cursor to every character-select slot (VERSUS) on port A")
     opts = ap.parse_args()
     os.makedirs(REPORTS, exist_ok=True)
     proc = None
     try:
+        if opts.pick_test:
+            return run_pick_test(opts)
         if opts.game:
             return run_game(opts)
         if opts.url.startswith("http://localhost:%d" % PORT):
