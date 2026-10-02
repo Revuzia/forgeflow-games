@@ -3,7 +3,7 @@
 // Deterministic: the viewer steps the sim with a fixed dt, no wall clock.
 //   node _harness/browser_physics.mjs                       all scenarios
 //   node _harness/browser_physics.mjs hold_squash pinch     some
-//   node _harness/browser_physics.mjs --p '{"smOmega":40}'  physics param override (SoftParams) for tuning
+//   node _harness/browser_physics.mjs --p '{"smOmega":40}'  physics param override (SoftParams) for tuning; --f '{"friction":0.5}' overrides FINGER constants
 //   node _harness/browser_physics.mjs --g 7 --detail 4      another genome / mesh detail
 //   node _harness/browser_physics.mjs hold_squash --gf 1 --gb 1 --gs 0 --gz 1 --tag firm   genome extremes, files get a _<tag> suffix
 // Each strip prints the worst mesh FOLD (largest dihedral between adjacent triangles; the rest shape's own maximum is ~50 deg) and the fold
@@ -20,7 +20,7 @@ const args = process.argv.slice(2);
 const opt = {};
 const names = [];
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--p' || args[i] === '--g' || args[i] === '--detail' || args[i] === '--out' || args[i] === '--px' || args[i] === '--tag' || args[i] === '--gf' || args[i] === '--gb' || args[i] === '--gs' || args[i] === '--gz') opt[args[i].slice(2)] = args[++i];
+  if (args[i] === '--p' || args[i] === '--f' || args[i] === '--g' || args[i] === '--detail' || args[i] === '--out' || args[i] === '--px' || args[i] === '--tag' || args[i] === '--gf' || args[i] === '--gb' || args[i] === '--gs' || args[i] === '--gz') opt[args[i].slice(2)] = args[++i];
   else names.push(args[i]);
 }
 const scenarios = names.length ? names : ALL;
@@ -39,6 +39,7 @@ try {
     page.on('requestfailed', (r) => problems.push(`requestfailed: ${r.url()}`));
     const qs = new URLSearchParams({ scn: name });
     if (opt.p) qs.set('p', opt.p);
+    if (opt.f) qs.set('f', opt.f);
     if (opt.g) qs.set('g', opt.g);
     if (opt.detail) qs.set('detail', opt.detail);
     if (opt.px) qs.set('px', opt.px);

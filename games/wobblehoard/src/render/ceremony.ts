@@ -325,7 +325,7 @@ export class CapsuleRun extends Run {
     if (t >= this.tb.revealAt) this.beat('reveal');
     this.camera(burstAt, 0.5 * this.ks + 0.2, this.duration, 0.3 * this.tb.b3);
     // close in on the capsule while it is being squeezed open, then ease back out as it bursts
-    if (!this.calm) host.cameraFx.dist *= 1 - 0.2 * smooth(0, 0.35 * this.ks, t) * (1 - smooth(burstAt, burstAt + 0.6 * this.ks + 0.2, t));
+    if (!this.calm) host.cameraFx.dist *= 1 - 0.11 * smooth(0, 0.35 * this.ks, t) * (1 - smooth(burstAt, burstAt + 0.3 * this.ks + 0.1, t));
     void revealAt;
     return ts;
   }
@@ -340,7 +340,7 @@ export class CapsuleRun extends Run {
     // the result view appears at the capsule and drops out
     const v = this.resultView as BodyView;
     v.setVisible(true);
-    this.drop = { y: 0.5, vy: 0.7, bounces: 0, landed: false, age: 0 };
+    this.drop = { y: 0.3, vy: 0.6, bounces: 0, landed: false, age: 0 };
     v.proxy.setOffset(this.cx, this.drop.y, this.cz);
     v.proxy.scale = 0.55;
     this.burstParticles(this.cx, 0.4, this.cz, v.scale, v);

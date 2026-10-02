@@ -102,10 +102,10 @@ const LOAD_CONC = 10;              // friction normal load per touching particle
 const smooth01 = (t: number): number => { const x = t < 0 ? 0 : t > 1 ? 1 : t; return x * x * (3 - 2 * x); };
 
 /** Squared distance from (x, y, z) to the axis of a finger's capsule: the tip centre, extended backward along -dir (the shaft). */
-function capsuleD2(f: Finger, x: number, y: number, z: number): number {
+function capsuleD2(f: Finger, x: number, y: number, z: number, len: number): number {
   let dx = x - f.cx, dy = y - f.cy, dz = z - f.cz;
-  const along = dx * f.dx + dy * f.dy + dz * f.dz;
-  if (along < 0) { dx -= along * f.dx; dy -= along * f.dy; dz -= along * f.dz; }
+  let along = dx * f.dx + dy * f.dy + dz * f.dz;
+  if (along < 0) { if (along < -len) along = -len; dx -= along * f.dx; dy -= along * f.dy; dz -= along * f.dz; }
   return dx * dx + dy * dy + dz * dz;
 }
 
@@ -788,15 +788,15 @@ export class SoftBody implements SoftBodyLike {
       // Blocked particles (inside a fingertip's reach or touching the table) cannot absorb pressure: zero inverse mass.
       const WV = this.WV;
       const a0 = f0.down || f0.retracting, a1 = f1.down || f1.retracting;
-      const r0 = f0.tipR + BLOCK_MARGIN, r1 = f1.tipR + BLOCK_MARGIN;
+      const r0 = f0.tipR + BLOCK_MARGIN, r1 = f1.tipR + BLOCK_MARGIN, shaftL = FINGER.shaftLen * this.restRadius;
       let S = 0;
       for (let i = 0; i < n; i++) {
         const i3 = i * 3;
         let w = invM[i];
         if (XP[i3 + 1] < NEAR) w = 0;
         else {
-          if (a0 && capsuleD2(f0, XP[i3], XP[i3 + 1], XP[i3 + 2]) < r0 * r0) w = 0;
-          if (a1 && capsuleD2(f1, XP[i3], XP[i3 + 1], XP[i3 + 2]) < r1 * r1) w = 0;
+          if (a0 && capsuleD2(f0, XP[i3], XP[i3 + 1], XP[i3 + 2], shaftL) < r0 * r0) w = 0;
+          if (a1 && capsuleD2(f1, XP[i3], XP[i3 + 1], XP[i3 + 2], shaftL) < r1 * r1) w = 0;
         }
         WV[i] = w;
         S += w * (GRAD[i3] * GRAD[i3] + GRAD[i3 + 1] * GRAD[i3 + 1] + GRAD[i3 + 2] * GRAD[i3 + 2]);
@@ -851,13 +851,37 @@ export class SoftBody implements SoftBodyLike {
       const f = this.fingers[k];
       if (!f.down && !f.retracting) continue;
       const r = f.tipR, r2 = r * r, cx = f.cx, cy = f.cy, cz = f.cz;
-      const dirx = f.dx, diry = f.dy, dirz = f.dz;
+      const dirx = f.dx, diry = f.dy, dirz = f.dz, shaftL = FINGER.shaftLen * this.restRadius;
       const fdx = cx - f.ocx, fdy = cy - f.ocy, fdz = cz - f.ocz;   // how far the tip itself moved this substep
       const muF = FINGER.friction;
       let hit = false;
       for (let i = 0; i < n * 3; i += 3) {
         let dx = XP[i] - cx, dy = XP[i + 1] - cy, dz = XP[i + 2] - cz;
-        const along = dx * dirx + dy * diry + dz * dirz;      // < 0: behind the tip centre (shaft side)
+        if (FINGER.plunge > 0) {
+          // PLUNGER contact: skin inside the finger's capsule is pushed straight along the travel direction onto the front cap
+          const sx = dx * dirx + dy * diry + dz * dirz;
+          const lx = dx - sx * dirx, ly = dy - sx * diry, lz = dz - sx * dirz;
+          const rho2 = lx * lx + ly * ly + lz * lz;
+          if (rho2 >= r2 || sx < -shaftL) continue;
+          const scap = Math.sqrt(r2 - rho2);
+          if (sx >= scap) continue;
+          hit = true;
+          const y0 = XP[i + 1], px0 = XP[i], pz0 = XP[i + 2];
+          const pen = scap - sx;
+          XP[i] = cx + lx + dirx * scap; XP[i + 1] = cy + ly + diry * scap; XP[i + 2] = cz + lz + dirz * scap;
+          const ux = (px0 - X[i]) - fdx, uy = (y0 - X[i + 1]) - fdy, uz = (pz0 - X[i + 2]) - fdz;
+          const un = ux * dirx + uy * diry + uz * dirz;
+          const tx = ux - un * dirx, ty = uy - un * diry, tz = uz - un * dirz;
+          const tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
+          if (tl > 1e-12) {
+            const k2 = Math.min(1, muF * Math.min(pen, r) / tl);
+            XP[i] -= tx * k2; XP[i + 1] -= ty * k2; XP[i + 2] -= tz * k2;
+          }
+          if (XP[i + 1] < y0) fingerDown += M[i / 3] * (y0 - XP[i + 1]);
+          continue;
+        }
+        let along = dx * dirx + dy * diry + dz * dirz;        // < 0: behind the tip centre (shaft side)
+        if (along < -shaftL) along = -shaftL;                 // the shaft has an end (a hemispherical cap), 0 = a bare sphere
         let ax = cx, ay = cy, az = cz;                        // nearest point of the capsule axis
         if (along < 0) { ax += along * dirx; ay += along * diry; az += along * dirz; dx -= along * dirx; dy -= along * diry; dz -= along * dirz; }
         const d2 = dx * dx + dy * dy + dz * dz;

@@ -113,8 +113,13 @@ const FELT_COLOR = /* glsl */`
   diffuseColor.rgb *= 0.64 + 0.72 * mix(0.5, fib, uFibre);
   diffuseColor.rgb *= 0.86 + 0.28 * whNoise2(fp * 2.1 + 3.0);
   diffuseColor.rgb *= mix(1.0, 0.3, smoothstep(uVigIn, uVigOut, r));
-  float dashes = step(0.5, fract(atan(fp.y, fp.x) * 64.0 / 6.2832));
-  float ring = 1.0 - smoothstep(0.004, 0.011, abs(r - (uMatR - 0.16)));
+  // stitched ring, anti-aliased against its own pixel footprint (at grazing angles near the far edge it used to alias into a
+  // dotted line along the horizon): the ring widens to >= ~1.5 px and loses coverage, the dash pattern relaxes to its mean
+  float fr = max(fwidth(r), 1e-5);
+  float arc = atan(fp.y, fp.x) * 64.0 / 6.2832;
+  float dashes = mix(0.5, step(0.5, fract(arc)), 1.0 - smoothstep(0.25, 0.6, fwidth(arc)));
+  float ring = 1.0 - smoothstep(max(0.004, fr * 0.5), max(0.011, fr * 1.5), abs(r - (uMatR - 0.16)));
+  ring *= min(1.0, 0.012 / (fr * 1.5));
   diffuseColor.rgb = mix(diffuseColor.rgb, uStitchCol, ring * dashes * uStitch);
 }
 `;
@@ -157,7 +162,7 @@ function makeFelt(o: FeltOpts, hub: EnvHub): THREE.MeshPhysicalMaterial {
       .replace('#include <normal_fragment_maps>', FELT_NORMAL)
       .replace('#include <fog_fragment>', FELT_FOG);
   };
-  mat.customProgramCacheKey = () => 'wh-felt-v1';
+  mat.customProgramCacheKey = () => 'wh-felt-v2';
   feltUniforms.set(mat, u);
   return mat;
 }

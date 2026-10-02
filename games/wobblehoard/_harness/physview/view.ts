@@ -2,13 +2,14 @@
 // (cyan = compressed, red = stretched), a dim wireframe ghost of the rest shape, the table, and the finger-tip spheres.
 // It is driven by a scripted scenario from the URL (?scn=side_poke|hold_squash|pull_lobe|peak_flop|float_shove|pinch)
 // and steps the sim with a FIXED dt of 1/60 s (no wall clock), so the filmstrips are reproducible.
-// Extra URL params: ?p=<json SoftParams override> ?g=<genome seed or g1.code> ?gf= ?gb= ?gs= ?gz= (firmness, bounce,
+// Extra URL params: ?p=<json SoftParams override> ?f=<json FINGER override> ?g=<genome seed or g1.code> ?gf= ?gb= ?gs= ?gz= (firmness, bounce,
 // stretch, size overrides) ?detail=<3|4> ?px=<press x offset for hold_squash / peak_rest_close> ?fps=<sim frame rate, default 60>.
 // Every step also logs the worst mesh FOLD (largest dihedral between adjacent triangles, edges over 90 degrees, inward-facing
 // triangles): the rest shape's own maximum is ~50 degrees, so anything near 180 is a crease or a tucked-under flap.
 // window.__PV__ is the harness hook (see bottom).
 import * as THREE from 'three';
 import { SoftBody } from '../../src/physics/softbody.ts';
+import { FINGER } from '../../src/physics/params.ts';
 import { genomeFromParam, quantizeGenome } from '../../src/core/genome.ts';
 import type { V3 } from '../../src/contracts.ts';
 
@@ -195,6 +196,8 @@ let genome = genomeFromParam(q.get('g'));
 let params: Record<string, number> | undefined;
 try { const raw = q.get('p'); if (raw) params = JSON.parse(raw); } catch { params = undefined; }
 const detail = Number(q.get('detail') ?? 3);
+// ?f=<json> overrides FINGER constants (tuning only), e.g. ?f={"friction":0.5}
+try { const raw = q.get('f'); if (raw) Object.assign(FINGER, JSON.parse(raw)); } catch { /* ignore */ }
 
 const body = new SoftBody(genome, { detail, params });
 if (sc.float) body.gravity = false;

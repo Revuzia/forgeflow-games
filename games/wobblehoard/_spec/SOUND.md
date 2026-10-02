@@ -15,11 +15,12 @@ downloaded or copied waveforms; the designs are ours and are not modelled on any
 |---|---|
 | `src/audio/voices.ts` | the six voices, `(ctx, out, t0, params)`, identical live and offline |
 | `src/audio/dsp.ts` | helpers: seeded noise buffer, `Bag` (owns a voice's nodes, frees them on `ended`), Minnaert `bubble()`, soft-clip curve, node bookkeeping |
-| `src/audio/chain.ts` | master chain, shared by the engine and the offline probe |
+| `src/audio/chain.ts` | master chain (now with a smooth `duck`), shared by the engine and the offline probe |
+| `src/audio/ceremony.ts` | round 2: meter-full, capsule beats, six tier reveals, merge charge + burst (DESIGN 6.1-6.7) |
 | `src/audio/engine.ts` | `createAudio(opts?)`: lazy context, polyphony cap, stealing, settings, stats, pause |
-| `_harness/probe_audio.mjs` | gate G2 + sanity + engine stress (Chromium). `node _harness/probe_audio.mjs` (add `--voices=poke,pop` to iterate, `--no-engine` to skip the ~50 s live part) |
-| `_harness/audioview/` | `index.html` sound lab (live engine, buttons/sliders), `view.js` offline render API, `engine_tests.js`, `analysis.mjs` (FFT, metrics, pitch tracker, PNG/WAV writers) |
-| `_harness/_renders/` (gitignored) | per voice: `<v>.wav`, `<v>.png` spectrogram, `<v>_min/_max.wav`, `<v>_pitch0.80/1.25.wav`; `all_voices.wav` (every voice in order, 0.5 s apart); `report.json`, `engine_report.json` |
+| `_harness/probe_audio.mjs` | gate G2 + sanity + engine stress (Chromium). `node _harness/probe_audio.mjs` (add `--voices=poke,pop` to iterate; `--no-engine` skips the ~2 min live part, `--no-ceremony` skips the round-2 gates, `--skip-voices` skips round 1; a full run takes ~5 min) |
+| `_harness/audioview/` | `index.html` sound lab (live engine, buttons/sliders, ceremony controls), `view.js` offline render API (voices, full ceremonies, duck), `engine_tests.js`, `ceremony_checks.mjs` (round-2 gates), `analysis.mjs` (FFT, metrics, pitch tracker, spectral peaks/spread, PNG/WAV writers) |
+| `_harness/_renders/` (gitignored) | per voice: `<v>.wav`, `<v>.png` spectrogram, `<v>_min/_max.wav`, `<v>_pitch0.80/1.25.wav`; `all_voices.wav` (every voice in order, 0.5 s apart); `report.json`, `engine_report.json`; round 2: `reveal_<tier>.png/.wav`, `reveal_mythic_v0..2`, `ceremony_capsule_<tier>`, `ceremony_merge_<tier>`, `merge_charge_*`, `meterFull`, `capsule_*` |
 
 ## Master chain
 
@@ -27,7 +28,7 @@ downloaded or copied waveforms; the designs are ours and are not modelled on any
 voices -> [boost gain (poke/squish/release) | plain gain (land/pop/blend)] -> bus gain -> 20 Hz high-pass
        -> DynamicsCompressor (threshold -6 dB, knee 6, ratio 12, attack 2 ms, release 12 ms)
        -> WaveShaper soft clip (transparent below 0.55, tanh knee, hard ceiling 0.89 = -1 dBFS, 2x oversampled)
-       -> master gain -> AnalyserNode (fftSize 32768, for stats().peak) -> destination
+       -> duck gain (1.0 unless a duck() is running) -> master gain -> AnalyserNode (fftSize 32768, for stats().peak) -> destination
 ```
 
 * `master` (0..1) is a squared taper: 0.5 = -12 dB. `muted` is exact silence. Both sit after the limiter, so they never
@@ -64,6 +65,11 @@ voices -> [boost gain (poke/squish/release) | plain gain (land/pop/blend)] -> bu
   before unlock. `peak` is linear (0..1), the maximum |sample| at the destination since the previous `stats()` call
   (reads only the newest `elapsed` samples of the analyser's 0.68 s ring; returns `NaN` if any NaN reaches the output).
   `started[kind]` counts accepted triggers, including ones swallowed by mute.
+* Round 2 additions: voices have a stealing `priority` (one-shots 0 < held squish 1 < reveal/merge 2), so a flurry of pokes
+  never steals a ceremony voice; a live `mergeStart` schedules only ~0.5 s of its squelch/tick layers and an 80 ms timer
+  (running only while a merge charges) schedules the rest; `capsuleBeat('grab')` is throttled to one squeak per 70 ms so a
+  per-frame caller cannot stack them; a Mythic `reveal()` ducks the master by itself (`mythicDuck`); `stats()` also returns
+  `liveKinds` (live groups by kind). `started` gained `meterFull`, `capsule`, `reveal`, `merge`, `mergeBurst`, `duck`.
 * All numbers are sanitised at the engine boundary (NaN/Infinity/strings/negatives/huge) and again inside each voice;
   `update/end` `atTime` is ignored/clamped live (a far-future time would strand a voice).
 
@@ -154,7 +160,7 @@ and inside the level window.
 
 ## What was measured (gate G2 and extras)
 
-`node _harness/probe_audio.mjs` last run: **218/218 checks pass, exit 0**. Gate G2 as worded in CONTRACT.md section 6, per voice:
+`node _harness/probe_audio.mjs` last run (rounds 1 and 2 together): **372/372 checks pass, exit 0** (the 218 round-1 checks, listed here, plus 154 ceremony and engine checks, listed in the round-2 section). Gate G2 as worded in CONTRACT.md section 6, per voice:
 peak -20..-1 dBFS; |DC| < 0.01 (worst 2.9e-5); no sample step > 0.25 at start/end (worst 0.073, also at min/max parameters:
 0.129); tail < -60 dBFS at the end of the voice's declared life + 50 ms (worst -118 dBFS); non-silent >= minimum duration
 (poke 80 ms, release 200, land 60, blend 2.5 s; pop 30 ms and squish 1.5 s are my own minima); different pitch/seed differ
@@ -181,6 +187,102 @@ Live engine (headless Chromium 141, real `AudioContext` at 44.1 kHz, `--mute-aud
 * Hostile parameters on every voice (NaN, +/-Infinity, -1, 5, null, strings, objects, 1e9): 0 exceptions, finite output.
 * Mute, pause/resume, external suspension and recovery, dispose: all behave (see `engine_report.json`).
 
+## Round 2: reveal and merge ceremony (DESIGN 6.1-6.7)
+
+**Still unheard by any human**, like everything else here. Everything below is measured from rendered samples and
+spectrogram PNGs I looked at; "the escalation feels like a reward" is a design intent, not a finding.
+
+New API (optional members of `SquishAudio`, exactly the signatures in `src/contracts.ts`; two additive extras are marked **+**):
+`meterFull({quiet, pitch})`, `capsuleBeat({beat: 'grab'|'crack'|'burst', progress, tier, pitch})`,
+`reveal({tier, tierUp, isNew, mythicVariant, durationS, calm, pitch})`, `mergeStart({tier, chargeS, calm, pitch}) -> {burst({tier, tierUp,
+mythicVariant, durationS **+**}), stop()}`, `duck({db, ms})`. Unknown tiers fall back to Common; every number is sanitised.
+`calm` multiplies every duration by 0.65 INSIDE the voice (pass the normal-mode `durationS`/`chargeS`), removes the
+whoosh/shimmer/crack, slows attacks, softens the pop (low-passed, -5 dB) and lowers the level by 2.5 dB.
+
+### Time map the shell should follow (these are the DESIGN 6.1/6.3 numbers)
+
+| | Common / Uncommon | Rare / Epic / Legendary / Mythic |
+|---|---|---|
+| 0 | `capsuleBeat grab` (call again at 0.18 s with a higher `progress` if it likes) | same |
+| 0.35 s | `capsuleBeat crack` (takes no tier, never) | same |
+| 0.65 s | `capsuleBeat burst {tier}` | `reveal({tier})`: its first 0.3/0.5/0.8/1.0 s are the pre-roll swell (Mythic: 250 ms hush, engine ducks the master) |
+| burst | n/a | `capsuleBeat burst {tier}` at 0.65 s + pre-roll |
+| B3 | `reveal({tier})` at 1.0 s (D = 0.6 / 1.0 s) | the motif lands 0.35 s after the burst; `reveal` ends at 0.65 s + D |
+| merge | `mergeStart({tier})` at 0, `burst({tier, tierUp})` at `chargeS` (T3); the burst carries the motif, no separate `reveal()` | same |
+
+Default `durationS` of `reveal` is what is left of the DESIGN 6.1 capsule budget: 0.6 / 1.0 / 1.95 / 2.55 / 3.25 / 3.85 s
+(Rare+: measured from the call at 0.65 s, so every capsule open ends exactly at 1.6 / 2.0 / 2.6 / 3.2 / 3.9 / 4.5 s). Any
+other `durationS` stretches the timeline (pre-roll and gap keep their absolute lengths, notes and ring-outs scale; a
+very long `durationS` on a short cue is just a longer soft afterglow). Default merge: `chargeS` 1.3 / 1.5 / 1.8 / 2.1 / 2.4 / 2.8 s and burst
+0.9 / 1.1 / 1.4 / 1.7 / 2.1 / 2.4 s = the DESIGN 6.1 merge budgets 2.2 / 2.6 / 3.2 / 3.8 / 4.5 / 5.2 s.
+
+### meterFull (about 180 ms)
+Two sine plucks, D5 (587.3 Hz x pitch) then A5 (880 Hz, a fifth up, 72 ms later), each with a 2nd partial and (not when `quiet`) a 3 ms band-passed noise
+pluck tick at 3.2 kHz. `quiet` is 6 dB lower, no tick, slower attack. Measured: active 175 ms, peak -10.0 dBFS (quiet -16.6), notes 587.3 -> 880.0 Hz (x1.498).
+
+### capsuleBeat
+* `grab`: a squeak, odd-harmonic wave `[1, 0, .22, 0, .08]` starting at `420 + 400 progress` Hz and rising x1.4 (tc 70 ms) with a 9-12 Hz vibrato, plus a narrow
+  band of noise (the rub). 215 ms, peak -13.1 dBFS. progress 0.1 -> 0.9: 539 -> 891 Hz (x1.65); rises x1.22 within the call.
+* `crack`: a dry shell tick, a 3 ms band-passed noise burst at ~3.3 kHz + a 1.35 kHz tock and a quieter echo tick 26 ms later; 45 ms active, peak about -13 dBFS,
+  7.5% above 6 kHz (the brightest thing in the lane; limit 15%). **The function has no tier parameter**; renders with and
+  without a tier argument are identical for all six tiers (probe check), so the tier is not audible before the burst.
+* `burst`: the existing `pop` voice + a short tier stinger (<= 0.4 s): Common mini-bloop, Uncommon chime, Rare bell + fifth, Epic saw stab + note, Legendary choir
+  stab + chord, Mythic sub-bass hit + bell. Peaks -10.2 .. -8.2 dBFS and RMS -25.4 .. -23.2 (all within 3 dB), pairwise different (norm. difference >= 0.85),
+  first 6 ms always carry the pop click (>= 0.235 peak).
+
+### reveal (the six signatures; numbers at default durations, pitch 1, post-chain, master 1)
+
+| Tier | recipe | end (s) | spectral peaks | spread (oct) | peak dBFS | RMS dBFS | > 6 kHz |
+|---|---|---|---|---|---|---|---|
+| Common | sine pair 180 -> 262 Hz (x pitch) + octave partner, 180 ms bloop, then a soft 262/393 Hz glow to the end | 0.595 | 7 | 1.41 | -7.6 | -23.5 | 0.00% |
+| Uncommon | the bloop + a two-note chime C5 (523.3 Hz) and E5 (659.3 Hz), a major third, 4-partial glockenspiel tone | 1.00 | 10 | 2.68 | -7.8 | -22.1 | 0.00% |
+| Rare | 0.3 s hum swell (185 Hz + octave) under a 0.35 s gap, then a bell cluster: C5 and G5 (a fifth), each with 3 inharmonic partials (x1, x2.76, x5.4), + a 5-sine shimmer (3.1-4.7 kHz, 8 Hz tremble) | 1.95 | 13 | 3.55 | -7.0 | -22.6 | 0.00% |
+| Epic | 0.5 s low saw swell (98 -> 131 Hz through a low-pass sweeping to 800 Hz), soft whoosh (noise band-pass 450 -> 4800 Hz), 4-note rising arpeggio C5 E5 G5 C6 (an octave), 5-partial notes | 2.555 | 23 | 4.02 | -7.9 | -22.3 | 0.05% |
+| Legendary | 0.8 s formant "choir" (3 chord voices x 2 detuned saws through "ah" formants 730/1090/2440 Hz + a chest low-pass, 5 Hz vibrato), a rising sine sweep 260 -> 3000 Hz, then a rolled bell chord C5 E5 G5 D6 (C5 to D6 = a major ninth) + whoosh | 3.255 | 25 | 4.46 | -6.4 | -22.8 | 0.08% |
+| Mythic | 250 ms hush, sub-bass swell (A1, 55 Hz + 110 + 165) and a 4-voice choir pad, then a unique 3-note motif (A4 + [0,7,14] / [12,5,8] / [5,12,3] semitones for variants 0/1/2) in 6-partial bells, two drone bells (A3, E4), a shimmer on the last note | 3.855 | 32 | 5.15 | -5.6 | -21.4 | 0.01% |
+
+* "spectral peaks" = local maxima standing >= 8 dB above their neighbourhood and within 38 dB of the strongest in the averaged spectrum (60 Hz - 9 kHz);
+  "spread" = octaves between the 2% and 98% points of cumulative energy. Both are my own definitions, chosen before I saw
+  the final numbers, and the design was changed until they rose tier by tier.
+* Escalation measured: duration, peak count and spread all strictly increase; peaks within 2.3 dB (-7.9 .. -5.6), RMS within 2.1 dB (-23.5 .. -21.4), Mythic
+  not quieter than Common. Nothing clips (highest tier peak -5.6 dBFS; with tierUp + isNew -4.6).
+* Measured from FFT peaks (pitch 1, jitter 1): Uncommon third x1.260 (523.3 / 659.2 Hz), Rare fifth x1.498 (523.3 / 784.0), Legendary ninth x2.245 (523.3 / 1174.6),
+  Epic arpeggio 523.3 -> 659.3 -> 784.0 -> 1046.6 Hz (x2.000), Rare inharmonic partials at 1444 / 2826 Hz, Mythic motifs 440-659-988 Hz, 880-588-698 Hz, 586-880-523 Hz
+  (pairwise 19-21 semitones apart in total, different contours, matching the documented semitones to +/-0.5), same length and loudness for all three.
+* Durations: requested `durationS` = 1.6 / 2.0 / 2.6 / 3.2 / 3.9 / 4.5 s gives audible ends 1.59 / 2.00 / 2.60 / 3.20 / 3.90 / 4.50 s (never beyond +5 ms);
+  0.4 .. 6.5 s all within +/-1% of the request; default durations within +/-1% too.
+* `tierUp` adds a 9-note rising ladder (C4 -> C6, ~0.4 s): pitch at 0.3-0.5 s / at 0.1-0.16 s is x2.41 with it and x1.02 without. `isNew` adds a three-sine sparkle after the last
+  note (+13.7 dB at 2.3-4.2 kHz). Both raise the peak count on every tier (e.g. 7,10,13,23,25,32 -> 15,19,25,29,29,41).
+* `calm`: every tier x0.65 in length, 1.2 - 3.6 dB lower peak, smaller or equal largest sample step (0.014..0.063 vs 0.015..0.090), no extra brightness.
+
+### mergeStart / burst
+* Charge (T0-T2, `chargeS`): hum = 80 Hz sine + 2nd partial (fading in) + faint 3rd (so phone speakers hear something) gliding x1.5 (a perfect fifth) over `chargeS`;
+  the existing `squish` voice driven by a scripted press (compression 0 -> 0.9, rate about 1/s with a 1.6 Hz wobble and a T0 squash spike); a noise-tick stream (3 ms band-passed
+  noise ticks, Poisson, 5 -> 70 per second exponentially). **The charge does not depend on the tier** (it only picks the default `chargeS`): the tier tell in DESIGN 6.4
+  is visual here; audio stays neutral until the burst. If nobody calls `burst()` or `stop()` the hum fades by itself 0.25-0.45 s after the charge.
+* Measured: hum 80.0 Hz start, x1.495 over 1.3 s; 2nd partial relative level -16.1 -> -6.1 dB; squelch spectral centroid 1222 -> 2403 Hz (x1.97); ticks 3.1/s -> 43.1/s;
+  charge peak -10.6 .. -7.8 dBFS, RMS -22.0 .. -21.7.
+* `burst`: a "foomp" of band-passed noise (1.1 kHz) + a high-passed "crack" (2.5-5.5 kHz, 20 ms) + the tier motif of `reveal()` without pre-roll (-2 dB), + the ladder on tier-up.
+  Lengths 0.90 / 1.10 / 1.40 / 1.71 / 2.11 / 2.41 s (budget remainder); noise transient adds >= 10 dB at 2.5-8 kHz in the first 30 ms on every tier.
+* `stop()`: 150 ms fade, silent after (< -70 dBFS), no click.
+* Full ceremonies rendered end to end offline: capsule (grab, crack, burst, reveal) ends at 1.60 / 2.00 / 2.60 / 3.21 / 3.91 / 4.51 s (budgets 1.6 / 2.0 / 2.6 / 3.2 / 3.9 / 4.5);
+  merge ends at 2.20 / 2.60 / 3.20 / 3.81 / 4.50 / 5.21 s (budgets 2.2 / 2.6 / 3.2 / 3.8 / 4.5 / 5.2). Peaks: capsule -6.5 .. -5.7 dBFS, merge -7.9 .. -3.8 (Rare, at the
+  burst), largest sample step 0.20. Calm Mythic: 2.93 s and 3.38 s (x0.65), peaks 3.5 / 2.5 dB lower.
+
+### duck
+`duck({db, ms})` is a gain node between the soft-clip and the master gain, driven only by exponential ramps (attack time constant 18 ms, release 70 ms): -12 dB held
+measured -12.0 dB, recovers to 0.0 dB, at most 0.57 dB of level change per millisecond (limit 1.2), no sample discontinuity; NaN/Infinity arguments are clamped
+(-36..0 dB, 20 ms..4 s). Live, on a steady blend: -19.5 dB while ducked, back afterwards. The Mythic reveal ducks -14 dB for 250 ms (calm: -7 dB, 163 ms) by itself.
+
+### Round-2 checks (154 new, all pass)
+Per class: peak -20..-1 dBFS, |DC| < 0.01 (worst 6.4e-5), no jump > 0.25 at start/end (worst 0.182, the crack), tail < -60 dBFS (worst -78 dBFS: the Mythic burst stinger),
+energy above 6 kHz < 15% (worst 7.5%: the crack; every reveal <= 0.08%, so the 20% shimmer allowance was not needed), active RMS -34..-14, no NaN, largest step < 0.25
+(worst 0.201, the Legendary merge); durations, intervals, escalation, calm, tier-agnostic grab/crack, noise transient, ticks, hum, squelch, stop(), dead-man, duck smoothness,
+26 hostile offline renders. Live engine: hostile arguments on every new method (0 exceptions, output <= 0.45), `started` counters, 80 pokes in one tick leave a live reveal and merge
+untouched, 5000 ceremony triggers (4758 accepted, the rest throttled grabs; max 40 live groups, max 2488 live nodes, 190981 nodes created = 190981 disconnected counted at the WebAudio
+surface, 0 live afterwards, heap +0.4 MB), `mergeStart` costs 1.9 ms on the main thread (85 of 221 nodes up front), a live Mythic capsule + Mythic merge with pokes at 8/s: 0 playout
+fallback events over 10 s and the slowest trigger 2.8 ms.
+
 ## What a human should listen for (first listen)
 
 Play `_harness/_renders/all_voices.wav` (poke, squish, release, land, pop, blend, 0.5 s apart) and the `_min` / `_max` /
@@ -205,6 +307,21 @@ Check:
       and the oldest is stolen.
 - [ ] On a phone speaker: poke/land/release have audible mid harmonics (body fundamentals are below 260 Hz and would vanish).
 
+Round 2 (play `reveal_<tier>.wav` in order, then `ceremony_capsule_<tier>.wav` and `ceremony_merge_<tier>.wav`, `reveal_mythic_v0..2.wav`, `meterFull.wav`, or use the ceremony row of the sound lab):
+
+- [ ] **Escalation**: is each tier clearly "more" than the one before without being louder (Common soft bloop -> Uncommon chime -> Rare bells -> Epic swell/arpeggio ->
+      Legendary choir/chord -> Mythic)? Can you name the tier blind, from the sound alone? (DESIGN 6.6: sound is one of the three non-colour cues.)
+- [ ] **Intervals**: do the Uncommon third, Rare fifth and Legendary ninth sound like what they are, or like a detuned toy? Do the three Mythic motifs read as three different tunes, each one
+      "belonging" to a species?
+- [ ] **Pre-roll**: do Rare/Epic/Legendary/Mythic build tension before the burst, and does the Mythic 250 ms hush read as "something big is about to happen" rather than as a dropout?
+- [ ] **Burst vs motif**: does the pop + short stinger at the burst feel like the shell breaking, and the motif 0.35 s later like the reveal, without doubling?
+- [ ] **No spoilers**: do grab and crack sound identical for every tier (they should)?
+- [ ] **Merge**: hum rising a fifth, squelch brightening, ticks getting denser: does it read as "pressure building"? Is the burst a satisfying release? Is the 80 Hz hum audible at all on your speakers (the 160/240 Hz partials carry it)?
+- [ ] **Tier-up ladder and NEW sparkle**: a rising flourish on top of the motif, not a second melody fighting it? Is the sparkle charming or shrill?
+- [ ] **Calm**: shorter, softer, no sudden edges, still clearly the right tier?
+- [ ] **Duck**: does the Mythic duck feel smooth (no pumping, no click)? Is -14 dB for 250 ms the right depth?
+- [ ] **Meter full**: a pleasant two-note "plink-plonk", not alarm-like, and quiet enough while squeezing?
+
 ## Known issues and caveats
 
 * Unverified by ear (above). All tuning was done from spectrograms and numbers.
@@ -216,5 +333,14 @@ Check:
 * A held squish at high rate creates up to ~95 two-node bubbles per second; each lives 10-260 ms.
 * `blend` ignores the physics: it is a pre-scheduled one-shot (`stop()` cuts it).
 * Same-seed repeatability is bit-exact for the voice code only up to Chromium's own float noise (~1e-5); not tested elsewhere.
+* Round 2: the reveal `durationS` semantics (time from the call; Rare+ include the pre-roll) are mine, derived from DESIGN 6.1/6.3, because the contract only says "fits the budget".
+  The shell must follow the time map above for the sounds to land on the visuals.
+* Round 2: the merge charge audio is tier-neutral (the visual tell in DESIGN 6.4 has no audio twin); say so if you want a subtle audible tell.
+* Round 2: the Mythic sub-bass (55 Hz) is inaudible on phone and laptop speakers; its 110/165 Hz partials and the choir carry the swell there. On headphones it is the loudest energy in that tier.
+* Round 2: the Rare merge ceremony peaks at -3.8 dBFS at the burst (tier-up ladder + bells + noise transient); still 2.8 dB under the ceiling, but it is the hottest thing in the lane.
+* Round 2: under a storm of 500 ceremony triggers per second (the leak test, about 17x anything a player can do) the playout stats reported 737 fallback events over 16 s; realistic
+  ceremonies measured 0. The same caveat as before: the null audio sink of headless Chromium says nothing about phones.
+* Round 2: `mergeStart` still schedules the first ~0.5 s of squelch (85 nodes) in the call; the rest comes from an 80 ms timer, so a main thread stalled for more than ~0.4 s would leave a gap in the squelch (hum and ticks continue).
+* Round 2 spectral "peak count" and "spread" are definitions I made up to quantify "richer" and "wider"; they are monotone by construction of the design, not evidence that listeners will hear richness.
 * In-flight bubbles on a context that is closed or suspended keep their (already disconnected) nodes until the page releases
   them; the bookkeeping counter shows 2 nodes after the dispose test. They are not connected to anything.

@@ -72,7 +72,7 @@ export const TIER_STYLES: Record<TierName, TierStyle> = {
   },
   legendary: {
     ...base('legendary', 4, hexLin(0xffb347), 'other'), translucencyAdd: 0.18, attenuation: 0.75, rim: 1.3, blush: 1.3, aurora: 1,
-    coreMul: 1.65, coreSize: 1.25, haloMul: 2.0, haloSize: 1.35, poolMul: 1.0, ring: 0.8, ringPulseHz: 0.25, rimHalo: 0.7, pillar: 0.5,
+    coreMul: 1.65, coreSize: 1.25, haloMul: 2.0, haloSize: 1.35, poolMul: 1.0, ring: 0.8, ringPulseHz: 0.25, rimHalo: 0.58, pillar: 0.5,
     sparkleBase: 0.85, sparkleMul: 0.6, drift: true, sparkTrail: true,
   },
   mythic: {
@@ -141,7 +141,7 @@ uniform vec3 uColor;
 uniform float uStrength;
 void main() {
   float ndv = abs(dot(normalize(vN), normalize(vV)));
-  float a = pow(ndv, 1.6) * pow(max(0.0, 1.0 - vH), 1.7) * smoothstep(0.0, 0.08, vH) * uStrength;
+  float a = pow(ndv, 2.4) * pow(max(0.0, 1.0 - vH), 2.1) * smoothstep(0.0, 0.08, vH) * uStrength;
   gl_FragColor = vec4(uColor * a, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -304,7 +304,7 @@ export class RarityFx {
     }
     // pillar (Legendary): a faint light pillar on idle
     if (this.pillar && st.pillar > 0) {
-      this.pillar.set(c.x, c.z, R * 0.62, 3.2 * sc, st.tell, 0.28 * st.pillar * k * (calm ? 0.7 : 0.85 + 0.15 * Math.sin(time * Math.PI * 2 * 0.25)));
+      this.pillar.set(c.x, c.z, R * 0.55, 2.6 * sc, st.tell, 0.4 * st.pillar * k * (calm ? 0.7 : 0.85 + 0.15 * Math.sin(time * Math.PI * 2 * 0.25)));
     }
     // orbiting motes (Epic, they trail when the body moves) and satellites (Mythic)
     if (this.orbit) {
