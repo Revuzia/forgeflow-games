@@ -80,6 +80,8 @@ export interface VoiceGroup {
   /** Context time at which this group will have fallen silent by itself (Infinity while a held voice is open). */
   readonly endTime: number;
   readonly alive: boolean;
+  /** True once kill() has been called: the voice is fading out and no longer counts against the polyphony cap. */
+  readonly dying: boolean;
   /** True for the held squish: never the first choice when stealing. */
   readonly held: boolean;
   /** Fade out quickly (default 20 ms) and free the nodes. Safe to call twice. */
@@ -103,6 +105,7 @@ export class Bag implements VoiceGroup {
   private sources: AudioScheduledSourceNode[] = [];
   private pending = 0;
   private killed = false;
+  get dying(): boolean { return this.killed; }
 
   constructor(ctx: Ctx, out: AudioNode, kind: string, pan: number, held = false) {
     this.ctx = ctx;
@@ -236,8 +239,8 @@ export function bubble(
 }
 
 /** Soft-clip safety curve: transparent below ~0.55, smooth knee, hard ceiling at `ceil` (default -1 dBFS). */
-export function softClipCurve(n = 4097, ceil = 0.89, knee = 0.55): Float32Array {
-  const c = new Float32Array(n);
+export function softClipCurve(n = 4097, ceil = 0.89, knee = 0.55): Float32Array<ArrayBuffer> {
+  const c = new Float32Array(new ArrayBuffer(n * 4));
   const span = ceil - knee;
   for (let i = 0; i < n; i++) {
     const x = (i / (n - 1)) * 2 - 1;
