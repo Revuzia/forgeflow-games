@@ -201,6 +201,88 @@ const RV = {
     const m = s2.memory();
     return { after, endAfterDispose: { geometries: m.geometries, textures: m.textures, programs: m.programs }, err };
   },
+  /** Round 2 leak test on a SECOND stage: 3 bodies at three rarity tiers + a 3-parent merge and a capsule reveal (skipped) per cycle, then dispose. */
+  async lifecycle3(cycles = 12): Promise<{ after: { geometries: number; textures: number; programs: number }[]; endAfterDispose: { geometries: number; textures: number; programs: number }; err: string | null }> {
+    const c2 = document.createElement('canvas');
+    c2.width = 160; c2.height = 120;
+    const s2 = createStageDev(c2);
+    s2.resize(160, 120, 1);
+    const after: { geometries: number; textures: number; programs: number }[] = [];
+    let err: string | null = null;
+    const TI: TierName[] = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+    let t2 = 0;
+    const tick = (n: number): void => { for (let k = 0; k < n; k++) { t2 += 1 / 30; s2.update(1 / 30, { time: t2, pointerNdc: null }); s2.render(); } };
+    try {
+      for (let i = 0; i < cycles; i++) {
+        const gs = [0, 1, 2].map((k) => genomeFromParam(String(300 + ((i + k) % 6))));
+        s2.clearBodies();
+        const ids = gs.map((g, k) => s2.addBody(makeBody(g), g, { tier: TI[(i + k * 2) % 6], position: { x: (k - 1) * 1.1, y: 0, z: 0 } }));
+        tick(2);
+        s2.setBodyTier(ids[0], TI[(i + 3) % 6]);
+        s2.removeBody(ids[1]);
+        tick(2);
+        if (i % 2 === 0) {
+          const h = s2.playMergeCeremony({ parents: gs.map((g) => ({ genome: g, tier: 'common' as TierName })), result: { genome: gs[0], tier: TI[i % 6], tierUp: i % 3 === 0, isNew: true }, createBody: makeBody });
+          tick(Math.round(h.duration * 0.3 * 30));
+          h.skip();
+          tick(12);
+        } else {
+          const h = s2.playCapsuleReveal({ result: { genome: gs[1], tier: TI[i % 6], isNew: true }, createBody: makeBody });
+          tick(Math.round(h.duration * 0.5 * 30));
+          h.skip();
+          tick(12);
+        }
+        const m = s2.memory();
+        after.push({ geometries: m.geometries, textures: m.textures, programs: m.programs });
+      }
+    } catch (e) { err = e instanceof Error ? e.message : String(e); }
+    s2.dispose();
+    const m = s2.memory();
+    return { after, endAfterDispose: { geometries: m.geometries, textures: m.textures, programs: m.programs }, err };
+  },
+  /** Run one WHOLE ceremony deterministically (fixed dt), sampling mean luminance and the screen-light alpha every frame. */
+  async runCeremony(o: { kind: 'capsule' | 'merge'; tier: TierName; dt?: number; tierUp?: boolean; calm?: boolean; quick?: boolean; parents?: number; skipAt?: number; settle?: number }): Promise<{
+    duration: number; budget: number; frames: number; seconds: number; skippedAtFrame: number; activeAfterSkip: number; lumas: number[]; maxLight: number; maxParticles: number;
+    beats: BeatRec[]; doneResolved: boolean; resultVisibleAtEnd: boolean; fingerprint: number[]; bodiesAtEnd: number; ramps: number; camRange: number;
+    finalState: { ceremony: boolean; capsule: boolean; screenLight: number; cameraFx: { dist: number; yaw: number; pitch: number }; primaryIsResult: boolean };
+  }> {
+    const dt = o.dt ?? 1 / 30;
+    stage.clearBodies();
+    setupBody(genomeFromParam(''));
+    stage.setCalmEffects(!!o.calm);
+    for (let i = 0; i < 20; i++) frame(dt);
+    const duration = o.kind === 'capsule' ? RV.capsuleReveal(o.tier, { quick: !!o.quick }) : RV.merge(o.tier, o.parents ?? 2, !!o.tierUp);
+    const budget = o.kind === 'capsule' ? capsuleDuration(o.tier, { quick: !!o.quick, calm: false }) : mergeDuration(o.tier, { tierUp: !!o.tierUp, calm: false });
+    const h = cer.handle as CeremonyHandle;
+    const lumas: number[] = [];
+    let maxLight = 0, maxParticles = 0, frames = 0, skippedAt = -1, activeAfterSkip = -1, activeFrames = 0, ramps = 0, prevLight = 0, camMove = 0;
+    while (h.active && frames < 3000) {
+      if (o.skipAt !== undefined && skippedAt < 0 && frames * dt >= o.skipAt) {
+        h.skip(); skippedAt = frames;
+        let k = 0; while (h.active && k < 60) { frame(dt); lumas.push(meanLuma()); k++; frames++; maxLight = Math.max(maxLight, stage.info.screenLight); }
+        activeAfterSkip = k;
+        break;
+      }
+      frame(dt);
+      lumas.push(meanLuma());
+      const L = stage.info.screenLight;
+      maxLight = Math.max(maxLight, L); maxParticles = Math.max(maxParticles, stage.info.particles);
+      if (L > 0.01 && prevLight <= 0.01) ramps++;
+      prevLight = L;
+      const cf = stage.info.cameraFx; camMove = Math.max(camMove, Math.abs(cf.dist - 1), Math.abs(cf.yaw), Math.abs(cf.pitch));
+      frames++; activeFrames = frames;
+    }
+    const natural = skippedAt < 0;
+    const doneResolved = await Promise.race([h.done.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 500))]);
+    for (let i = 0; i < (o.settle ?? 30); i++) { frame(dt); lumas.push(meanLuma()); }
+    const fp = RV.fingerprint();
+    return {
+      duration, budget, frames: natural ? activeFrames : skippedAt, seconds: (natural ? activeFrames : skippedAt) * dt, skippedAtFrame: skippedAt, activeAfterSkip, lumas, maxLight, maxParticles,
+      beats: cer.beats.slice(), doneResolved, resultVisibleAtEnd: !!stage.primaryBodyId() && stage.info.bodies === 1, fingerprint: fp, bodiesAtEnd: stage.info.bodies, ramps, camRange: camMove,
+      finalState: { ceremony: stage.info.ceremony, capsule: stage.info.capsule, screenLight: stage.info.screenLight, cameraFx: { ...stage.info.cameraFx }, primaryIsResult: stage.primaryBodyId() === h.resultBodyId },
+    };
+  },
+  async awaitDone(): Promise<boolean> { if (!cer.handle) return false; await cer.handle.done; return true; },
   /** Lose and restore the WebGL context on a SECOND stage; none of it may throw, and it must render again afterwards. */
   async contextLossTest(): Promise<{ ok: boolean; log: string[] }> {
     const log: string[] = [];
@@ -392,8 +474,8 @@ const RV = {
     f.reset(); const r1 = f.ring(30), r2 = f.ring(30.2), r3 = f.ring(30.55), r4 = f.ring(30.7);
     out.rings = [r1, r2, r3, r4];
     // tints
-    f.reset(); const t1 = f.tint(40, 'coral'), t2 = f.tint(40.1, 'cyan'), t3 = f.tint(40.3, 'coral'), t4 = f.tint(40.7, 'cyan');
-    out.tints = [t1, t2, t3, t4];
+    f.reset(); const t1 = f.tint(40, 'coral'), t2 = f.tint(40.1, 'cyan'), t3 = f.tint(40.3, 'coral'), t4 = f.tint(40.7, 'cyan'), t5 = f.tint(41.0, 'cyan');
+    out.tints = [t1, t2, t3, t4, t5];
     // calm
     f.reset(); f.calm = true; out.calmFlash = f.flash(50, 0.2); out.calmRing = f.ring(50); f.calm = false; f.reset();
     return out;

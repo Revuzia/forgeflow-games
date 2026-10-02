@@ -8,6 +8,13 @@
 //   * prints per-tier draw calls, triangles, fine-mesh vertices, synchronous ms/frame and the frame-time EMA;
 //   * checks: 20x setBody leak test, dispose() releasing everything, context loss/restore, per-frame JS allocation,
 //     auto-quality drop and explicit tier switching mid-session, DPR caps.
+// Round 2 (DESIGN 5.3 / 6.x) adds, before the perf block:
+//   * FlashGovernor driven with adversarial sequences (<= 2 flashes / s, alpha <= 0.25, rings >= 500 ms apart, coral/cyan never alternating < 500 ms, calm = none);
+//   * multi-body API (addBody / removeBody / clearBodies / setBody sugar / setBodyTier), a 3-body + ceremony leak test and dispose, the meter-full capsule drop (lands, tappable);
+//   * EVERY tier's capsule reveal and merge ceremony (plus tier-up, 3 parents, quick pop) stepped deterministically at 30 fps: duration within 10% of the
+//     DESIGN 6.1 budget, beats once in order, per-frame mean luminance -> luminance-transition count per rolling second (FAIL if > 3), skip() lands on the same final
+//     frame as the natural end, and the Calm variant (x0.65, no camera move, no screen light, particles x0.3);
+//   * rarity contact sheets (one body per tier, desktop + 390x844) and 6-tier x beats filmstrips of both ceremonies (desktop + phone).
 // SwiftShader is a CPU rasteriser: only the RELATIVE cost between tiers means anything here.
 import { startVite, launch, ROOT } from './pw.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -121,7 +128,10 @@ try {
   check(tiers.high.fineVertices >= 10000 && tiers.med.fineVertices >= 5000 && tiers.low.fineVertices < tiers.med.fineVertices && tiers.low.fineVertices >= 2000,
     'fine mesh >= ~5k verts on med/high, fewer on low', `high ${tiers.high.fineVertices} / med ${tiers.med.fineVertices} / low ${tiers.low.fineVertices}`);
   check(tiers.low.triangles < tiers.med.triangles && tiers.med.triangles < tiers.high.triangles, 'triangle count rises with tier', `${tiers.low.triangles} / ${tiers.med.triangles} / ${tiers.high.triangles}`);
-  await page.evaluate(() => { window.__RV__.setQuality('med'); window.__RV__.frames(2); });
+  // the LOW tier pressed hard (round-2 fix: the table horizon / mat edge used to show through the alpha-blended body as a straight seam)
+  await shot(page, 'press_held_low', "R.setQuality('low'); R.frames(2); R.press(0.0, 0.15, 0.9, 0.9); R.frames(60)");
+  await shot(page, 'press_held_med_same_pose', "R.release(); R.frames(60); R.setQuality('med'); R.press(0.0, 0.15, 0.9, 0.9); R.frames(60)");
+  await page.evaluate(() => { const R = window.__RV__; R.release(); R.frames(90); R.setQuality('med'); R.frames(2); });
 
   // DPR caps per tier
   const dpr = await page.evaluate(() => {
@@ -259,6 +269,248 @@ try {
     await actx.close();
   }
 
+  /* ───────────────────────── round 2: multi-body, rarity, ceremonies, flash safety (DESIGN 5.3, 6.x) ───────────────────────── */
+  {
+    const TIERS6 = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+    const CAP_BUDGET = { common: 1.6, uncommon: 2.0, rare: 2.6, epic: 3.2, legendary: 3.9, mythic: 4.5 };
+    const MER_BUDGET = { common: 2.2, uncommon: 2.6, rare: 3.2, epic: 3.8, legendary: 4.5, mythic: 5.2 };
+    const bodyQ = BODY === 'auto' ? '' : BODY;
+    const R2 = (report.round2 = { flash: {}, durations: {}, skip: {}, calm: {}, rarity: {}, multi: {}, cost3: {} });
+    const sheetCtx = await browser.newContext({ viewport: { width: 800, height: 600 } });
+    const ctx_for_sheets = () => sheetCtx;
+    const rctx = await browser.newContext({ viewport: { width: 320, height: 240 }, deviceScaleFactor: 1 });
+    const { page: rp, bad: rbad } = await openView(rctx, `quality=low&body=${bodyQ}`, 'round2', [/GPU stall due to ReadPixels/i]);
+
+    // ---- A. FlashGovernor, driven directly with adversarial sequences ----
+    const fp = await rp.evaluate(() => window.__RV__.flashProbe());
+    R2.flash = fp;
+    check(fp.flashesIn1s <= 2 && fp.maxAlpha <= 0.25 + 1e-9, 'FlashGovernor: 12 flash requests inside 1 s grant <= 2, alpha capped at 0.25', `granted ${fp.flashesIn1s}, max alpha ${fp.maxAlpha}`);
+    check(fp.stack[0] === true && fp.stack[1] === false && fp.stack[3] === false, 'FlashGovernor: a flash is never stacked inside the 480 ms ramp, never 3 in a window', JSON.stringify(fp.stack));
+    check(fp.rings[0] === true && fp.rings[1] === false && fp.rings[2] === true && fp.rings[3] === false, 'FlashGovernor: shock rings are >= 500 ms apart', JSON.stringify(fp.rings));
+    check(fp.tints[0] === 'coral' && fp.tints[1] !== 'cyan' && fp.tints[3] !== 'cyan' && fp.tints[4] === 'cyan', 'FlashGovernor: ember-coral and lagoon-cyan never alternate faster than 2 Hz', JSON.stringify(fp.tints));
+    check(fp.calmFlash === 0 && fp.calmRing === false, 'FlashGovernor: calm mode grants no flash and no ring', `${fp.calmFlash} ${fp.calmRing}`);
+
+    // ---- B. multi-body API sanity ----
+    const api = await rp.evaluate(() => {
+      const R = window.__RV__, S = R.stage;
+      const out = {};
+      R.setGenome(''); R.frames(3);
+      out.afterSetBody = R.info().bodies;
+      const a = R.addBody('2', 'rare', -1.2, 0), b = R.addBody('3', 'epic', 1.2, 0);
+      R.frames(3);
+      out.three = R.info().bodies;
+      out.ids = [S.primaryBodyId(), a, b];
+      S.removeBody(99999); S.setBodyTier(99999, 'mythic');           // unknown ids must be harmless
+      S.removeBody(a); R.frames(2);
+      out.afterRemove = R.info().bodies;
+      S.clearBodies(); R.frames(2);
+      out.afterClear = R.info().bodies;
+      let threw = false; try { R.stage.render(); } catch { threw = true; }
+      out.renderEmptyThrew = threw;
+      R.setGenome(''); R.frames(3);
+      out.afterSetBodyAgain = R.info().bodies;
+      return out;
+    });
+    R2.multi.api = api;
+    check(api.afterSetBody === 1 && api.three === 3 && api.afterRemove === 2 && api.afterClear === 0 && !api.renderEmptyThrew && api.afterSetBodyAgain === 1 && new Set(api.ids).size === 3,
+      'addBody / removeBody / clearBodies / setBody-as-sugar behave (unique ids, unknown ids harmless, empty stage renders)', JSON.stringify(api));
+
+    // ---- C. 3-body leak test (+ ceremonies skipped mid-way each cycle) ----
+    const m3 = await rp.evaluate(() => window.__RV__.lifecycle3(18));
+    const pk = (a, k) => a.map((x) => x[k]);
+    // the content cycles with period 6 (tier x genome x ceremony), so a leak shows as lap 3 differing from lap 2
+    const lapsSame = (k, slack) => [6, 7, 8, 9, 10, 11].every((i) => Math.abs(m3.after[i + 6][k] - m3.after[i][k]) <= slack);
+    R2.multi.leak3 = m3;
+    check(!m3.err && lapsSame('textures', 0) && lapsSame('programs', 0) && lapsSame('geometries', 1),
+      '3 bodies x 18 cycles with merge + capsule ceremonies (skipped): lap 3 == lap 2 for geometries / textures / programs (no growth)', `geometries ${pk(m3.after, 'geometries').join(',')} | textures ${pk(m3.after, 'textures').join(',')} | programs ${pk(m3.after, 'programs').join(',')}${m3.err ? ' ERR ' + m3.err : ''}`);
+    check(!m3.err && m3.endAfterDispose.geometries === 0 && m3.endAfterDispose.textures <= 2 && m3.endAfterDispose.programs === 0,
+      'dispose() after the 3-body / ceremony cycles releases every geometry, program and our textures', `geometries ${m3.endAfterDispose.geometries}, textures ${m3.endAfterDispose.textures} (<= 2 = three-owned), programs ${m3.endAfterDispose.programs}`);
+
+    // ---- D. meter-full capsule drop: lands, stays tappable, exposes a screen point ----
+    const cap = await rp.evaluate(() => {
+      const R = window.__RV__;
+      R.setGenome(''); R.frames(30); R.dropCapsule();
+      let f = 0; while (!R.capsuleInfo().landed && f < 150) { R.frames(1); f++; }
+      const landedAfter = f;
+      R.frames(40);
+      const c = R.capsuleInfo();
+      const ok = c.landed && c.point && c.hit;
+      const miss = R.capsule && !R.capsule.hitTest(c.point.x + 400, c.point.y + 300);
+      R.setSqueeze(0.5); R.frames(5);
+      const sq = R.capsuleInfo();
+      const vw = window.innerWidth, vh = window.innerHeight;
+      return { landedAfter, info: c, miss, ok, inView: !!c.point && c.point.x - c.point.r >= 0 && c.point.x + c.point.r <= vw && c.point.y - c.point.r >= 0 && c.point.y + c.point.r <= vh, squeezePoint: sq.point };
+    });
+    R2.multi.capsule = cap;
+    check(cap.ok && cap.miss && cap.inView && cap.landedAfter < 100, 'dropCapsule() on the desktop frame: lands (<3.3 s), stays tappable, fully inside the viewport, hitTest rejects far taps', JSON.stringify({ landedFrames: cap.landedAfter, point: cap.info.point, hit: cap.info.hit, miss: cap.miss }));
+    await rp.evaluate(() => { const R = window.__RV__; R.stage.clearBodies(); R.setGenome(''); R.frames(2); });
+
+    // ---- E. ceremonies: durations vs budget, beats, flash windows, skip, calm ----
+    // A luminance transition = a direction flip of the per-frame mean RELATIVE luminance (linear light, 0..1) after a swing of at least FLASH_THR.
+    // WCAG 2.3.1's general-flash swing is 0.10 of max luminance; the gate here is 0.04 (2.5x stricter, ~60% of this dusk scene's own mean luminance).
+    // Smaller swings (0.02 and 0.01) are reported for information: at 0.01 plain body movement over the dark table already registers.
+    const FLASH_THR = 0.04;
+    const zigzagT = (L, FLASH_THR) => {            // direction flips after a swing >= FLASH_THR
+      const idx = []; let dir = 0, pivot = L[0];
+      for (let k = 1; k < L.length; k++) {
+        const v = L[k];
+        if (dir === 0) { if (v - pivot >= FLASH_THR) { dir = 1; pivot = v; idx.push(k); } else if (pivot - v >= FLASH_THR) { dir = -1; pivot = v; idx.push(k); } }
+        else if (dir === 1) { if (v > pivot) pivot = v; else if (pivot - v >= FLASH_THR) { dir = -1; pivot = v; idx.push(k); } }
+        else { if (v < pivot) pivot = v; else if (v - pivot >= FLASH_THR) { dir = 1; pivot = v; idx.push(k); } }
+      }
+      return idx;
+    };
+    const zigzag = (L) => zigzagT(L, FLASH_THR);
+    const worstWindow = (idx, dt) => { let w = 0; for (let i = 0; i < idx.length; i++) { let n = 0; for (let j = i; j < idx.length && idx[j] - idx[i] < 1 / dt; j++) n++; w = Math.max(w, n); } return w; };
+    const swing = (L) => { let lo = Infinity, hi = 0; for (const v of L) { lo = Math.min(lo, v); hi = Math.max(hi, v); } return { min: lo, max: hi }; };
+    const run = (o) => rp.evaluate((o) => window.__RV__.runCeremony(o), o);
+    const DT = 1 / 30;
+    const tiersToRun = QUICK ? ['common', 'mythic'] : TIERS6;
+    const REQ = { capsule: ['grab', 'crack', 'burst', 'reveal', 'settle'], merge: ['press', 'fold', 'charge', 'burst', 'reveal', 'settle'] };
+    let worstTransitions = 0, worstWhere = '';
+    const natural = {};
+    for (const kind of ['capsule', 'merge']) {
+      for (const tier of tiersToRun) {
+        const r = await run({ kind, tier, dt: DT });
+        natural[`${kind}:${tier}`] = r;
+        const budget = (kind === 'capsule' ? CAP_BUDGET : MER_BUDGET)[tier];
+        const flashes = zigzag(r.lumas), win = worstWindow(flashes, DT), sw = swing(r.lumas);
+        if (win > worstTransitions) { worstTransitions = win; worstWhere = `${kind}:${tier}`; }
+        const order = r.beats.map((b) => b.beat);
+        const beatsOk = JSON.stringify(order) === JSON.stringify(REQ[kind]);
+        const ts = r.beats.map((b) => b.t);
+        const monotone = ts.every((t, i) => i === 0 || t >= ts[i - 1] - 1e-6);
+        R2.durations[`${kind}:${tier}`] = { budget, measured: r.seconds, reported: r.duration, frames: r.frames, beats: r.beats.map((b) => `${b.beat}@${b.t.toFixed(2)}`), maxScreenLight: r.maxLight, maxParticles: r.maxParticles, lumaMin: sw.min, lumaMax: sw.max, transitions1s: win, transitions1s_at_0_02: worstWindow(zigzagT(r.lumas, 0.02), DT), transitions1s_at_0_01: worstWindow(zigzagT(r.lumas, 0.01), DT) };
+        check(Math.abs(r.seconds - budget) <= 0.1 * budget && Math.abs(r.duration - budget) <= 0.01 * budget + 1e-9, `${kind} ${tier}: duration ${r.seconds.toFixed(2)} s within 10% of the ${budget.toFixed(1)} s budget`, `reported ${r.duration.toFixed(2)} s`);
+        check(beatsOk && monotone && r.doneResolved && r.bodiesAtEnd === 1 && r.resultVisibleAtEnd, `${kind} ${tier}: beats fire once in order ${REQ[kind].join('>')}, done resolves, result is the one visible body`, `${order.join('>')} done=${r.doneResolved} bodies=${r.bodiesAtEnd}`);
+        check(r.maxLight <= 0.25 + 1e-6 && win <= 3, `${kind} ${tier}: flash-safe (screen alpha <= 0.25; <= 3 luminance transitions in any 1 s)`, `max alpha ${r.maxLight.toFixed(3)}, worst 1 s window ${win} transitions, luma ${sw.min.toFixed(3)}..${sw.max.toFixed(3)}, particles <= ${r.maxParticles}`);
+      }
+    }
+    check(worstTransitions <= 3, 'FLASH PROBE: no 1 s window of any capsule / merge ceremony has more than 3 luminance transitions', `worst ${worstTransitions} (${worstWhere}), threshold ${FLASH_THR} mean linear luminance`);
+
+    // tier-up accent (+0.4 s), 3-parent merge, quick pop
+    for (const tier of QUICK ? ['mythic'] : ['rare', 'epic', 'mythic']) {
+      const r = await run({ kind: 'merge', tier, dt: DT, tierUp: true });
+      const budget = MER_BUDGET[tier] + 0.4, win = worstWindow(zigzag(r.lumas), DT);
+      R2.durations[`merge+tierUp:${tier}`] = { budget, measured: r.seconds, transitions1s: win, maxScreenLight: r.maxLight };
+      check(Math.abs(r.seconds - budget) <= 0.1 * budget && r.maxLight <= 0.25 + 1e-6 && win <= 3, `merge ${tier} + TIER UP: ${r.seconds.toFixed(2)} s vs ${budget.toFixed(1)} s budget, still flash-safe`, `transitions ${win}, alpha ${r.maxLight.toFixed(3)}`);
+    }
+    {
+      const r = await run({ kind: 'merge', tier: 'epic', dt: DT, parents: 3 });
+      check(Math.abs(r.seconds - MER_BUDGET.epic) <= 0.1 * MER_BUDGET.epic && r.bodiesAtEnd === 1 && r.beats.length === 6, 'merge with 3 parents completes on budget with every beat', `${r.seconds.toFixed(2)} s, bodies ${r.bodiesAtEnd}, beats ${r.beats.length}`);
+      const q = await run({ kind: 'capsule', tier: 'common', dt: DT, quick: true });
+      check(Math.abs(q.seconds - 0.8) <= 0.08 && q.bodiesAtEnd === 1, 'quick pop (common, fast open): 0.8 s', `${q.seconds.toFixed(2)} s`);
+    }
+
+    // skip(): jumps to the final reveal frame (120 ms crossfade), result never hidden, same final frame as the natural end
+    // "same final frame": luminance of the 48x36 fingerprint box-filtered to 24x18 (time-phased idle effects such as Mythic's slowly cycling aura hue differ by phase, not by state)
+    const lumaGrid = (fp) => { const o = new Float32Array(24 * 18); for (let y = 0; y < 36; y++) for (let x = 0; x < 48; x++) { const i = (y * 48 + x) * 4; o[(y >> 1) * 24 + (x >> 1)] += (0.2126 * fp[i] + 0.7152 * fp[i + 1] + 0.0722 * fp[i + 2]) / 4; } return o; };
+    const fpDiff = (a, b) => { const A = lumaGrid(a), B = lumaGrid(b); let d = 0; for (let i = 0; i < A.length; i++) d += Math.abs(A[i] - B[i]); return d / A.length; };
+    for (const kind of ['capsule', 'merge']) {
+      for (const tier of QUICK ? ['mythic'] : ['common', 'rare', 'mythic']) {
+        const budget = (kind === 'capsule' ? CAP_BUDGET : MER_BUDGET)[tier];
+        // 3 s of settle frames after each: the natural ending lands with a wobble that is still ringing out at the last ceremony frame
+        const nat = await run({ kind, tier, dt: DT, settle: 90 });
+        const sk = await run({ kind, tier, dt: DT, skipAt: budget * 0.42, settle: 90 });
+        const d = fpDiff(nat.fingerprint, sk.fingerprint);
+        const order = sk.beats.map((b) => b.beat);
+        const win = worstWindow(zigzag(sk.lumas), DT);
+        R2.skip[`${kind}:${tier}`] = { fingerprintMeanAbsDiff: d, activeFramesAfterSkip: sk.activeAfterSkip, beats: order, transitions1s: win, maxScreenLight: sk.maxLight };
+        const same = (x) => !x.ceremony && !x.capsule && x.screenLight === 0 && x.cameraFx.dist === 1 && x.cameraFx.yaw === 0 && x.cameraFx.pitch === 0 && x.primaryIsResult;
+        check(same(sk.finalState) && same(nat.finalState), `${kind} ${tier}: after skip() AND after the natural end the stage state is identical (no ceremony, capsule gone, no screen light, camera at rest, the result is the primary body)`, JSON.stringify(sk.finalState));
+        check(d <= 6 && sk.activeAfterSkip >= 1 && sk.activeAfterSkip * DT <= 0.12 + 2 * DT && sk.doneResolved && sk.bodiesAtEnd === 1 && sk.resultVisibleAtEnd && order.includes('reveal') && order.includes('settle'),
+          `${kind} ${tier}: skip() ends on the same final frame (mean luminance |diff| ${d.toFixed(2)}/255; idle effects such as Mythic's hue cycle are phase-shifted), 120 ms crossfade, result visible, done resolves`, `crossfade ${sk.activeAfterSkip} frames, beats ${order.join('>')}`);
+        check(win <= 3 && sk.maxLight <= 0.25 + 1e-6, `${kind} ${tier}: skip() is flash-safe too`, `transitions ${win}`);
+      }
+    }
+
+    // Calm: no camera moves, no slow-mo, particles x0.3, rings -> fades, durations x0.65, no flash
+    for (const kind of ['capsule', 'merge']) {
+      const tier = 'mythic';
+      const norm = natural[`${kind}:${tier}`] ?? (await run({ kind, tier, dt: DT, calm: false }));
+      const calm = await run({ kind, tier, dt: DT, calm: true });
+      const budget = (kind === 'capsule' ? CAP_BUDGET : MER_BUDGET)[tier] * 0.65;
+      R2.calm[`${kind}:${tier}`] = { measured: calm.seconds, budget, maxScreenLight: calm.maxLight, particles: calm.maxParticles, normalParticles: norm.maxParticles, camRange: calm.camRange, normalCamRange: norm.camRange };
+      check(Math.abs(calm.seconds - budget) <= 0.1 * budget && calm.maxLight === 0 && calm.camRange < 1e-6 && calm.maxParticles <= 0.45 * norm.maxParticles + 4 && norm.camRange > 0.02,
+        `Calm ${kind} ${tier}: duration x0.65 (${calm.seconds.toFixed(2)} s), no screen light, camera effects ${calm.camRange.toExponential(0)} vs ${norm.camRange.toFixed(2)} in the normal run, particles ${calm.maxParticles} vs ${norm.maxParticles}`);
+    }
+    await rp.evaluate(() => { const R = window.__RV__; R.setCalm(false); R.stage.clearBodies(); R.setGenome(''); R.frames(2); });
+    report.problems.push(...rbad);
+    await rctx.close();
+
+    // ---- F. rarity ladder reads from the object: one body per tier, desktop + phone ----
+    {
+      const sctx = await browser.newContext({ viewport: { width: 480, height: 360 }, deviceScaleFactor: 1 });
+      const { page: sp, bad: sbad } = await openView(sctx, `quality=med&body=${bodyQ}`, 'rarity', [/GPU stall due to ReadPixels/i]);
+      const cells = [], fps = [];
+      for (const tier of TIERS6) {
+        const r = await sp.evaluate((tier) => { const R = window.__RV__; R.showTier(tier); R.frames(110); const png = R.snapshot(); return { png, fp: R.fingerprint(), info: R.info() }; }, tier);
+        cells.push([tier, r.png]); fps.push(r.fp);
+        R2.rarity[tier] = { rarityFx: r.info.rarity ?? null };
+      }
+      await sheet(ctx_for_sheets(), 'rarity_sheet', cells, 3, 480, 360);
+      const dmin = Math.min(...fps.slice(1).map((f, i) => fpDiff(fps[i], f)));
+      check(dmin > 1.2, 'rarity sheet: every tier differs visibly from the previous one', `min adjacent mean |diff| ${dmin.toFixed(2)}/255`);
+      console.log('wrote rarity_sheet.png');
+      await sctx.close();
+      report.problems.push(...sbad);
+
+      const pctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+      const { page: pp2, bad: pbad2 } = await openView(pctx2, `quality=low&body=${bodyQ}`, 'rarity-phone', [/GPU stall due to ReadPixels/i]);
+      const cellsP = [];
+      for (const tier of TIERS6) cellsP.push([tier, await pp2.evaluate((tier) => { const R = window.__RV__; R.showTier(tier); R.frames(100); return R.snapshot(); }, tier)]);
+      // the same cue on a 390x844 portrait frame: the capsule must be whole on screen and tappable (it lands in FRONT of the body there)
+      const capP = await pp2.evaluate(() => {
+        const R = window.__RV__;
+        R.showTier('common'); R.frames(30); R.dropCapsule();
+        let f = 0; while (!R.capsuleInfo().landed && f < 200) { R.frames(1); f++; }
+        R.frames(60);
+        const c = R.capsuleInfo(), vw = window.innerWidth, vh = window.innerHeight;
+        return { landedFrames: f, info: c, whole: !!c.point && c.point.x - c.point.r >= 0 && c.point.x + c.point.r <= vw && c.point.y - c.point.r >= 0 && c.point.y + c.point.r <= vh, png: R.snapshot() };
+      });
+      R2.multi.capsulePhone = { landedFrames: capP.landedFrames, info: capP.info, whole: capP.whole };
+      check(capP.info.landed && capP.info.hit && capP.whole, 'dropCapsule() on a 390x844 portrait frame: lands, whole on screen, tappable', JSON.stringify({ point: capP.info.point, hit: capP.info.hit }));
+      writeFileSync(resolve(OUT, 'capsule_cue_phone.png'), b64(capP.png));
+      await sheet(ctx_for_sheets(), 'rarity_sheet_phone', cellsP, 6, 260, 563);
+      console.log('wrote rarity_sheet_phone.png');
+      await pctx2.close();
+      report.problems.push(...pbad2);
+    }
+
+    // ---- G. filmstrips: 6 tiers x beats for both ceremonies (desktop med + phone low) ----
+    if (!QUICK) {
+      const PRE = { common: 0, uncommon: 0, rare: 0.3, epic: 0.5, legendary: 0.8, mythic: 1.0 };
+      const timesFor = (kind, t) => {
+        if (kind === 'capsule') { const burst = 0.65 + PRE[t], D = CAP_BUDGET[t]; return [0.2, burst - 0.15, burst + 0.1, burst + 0.45, burst + 1.0, D - 0.03]; }
+        const T1 = 0.4, T2 = 0.5, T3 = 0.4 + 1.5 * PRE[t], T4 = 0.2, D = MER_BUDGET[t];
+        return [T1 * 0.8, T1 + 0.3 * T2 + 0.1, T1 + T2 + 0.05, T1 + T2 + T3 * 0.75, T1 + T2 + T3 + T4 + 0.12, D - 0.03];
+      };
+      for (const [label, vp, query, cols, cw, ch, tiersSel] of [
+        ['desktop', { width: 260, height: 208 }, 'quality=med', 6, 260, 208, TIERS6],
+        ['phone', { width: 390, height: 844 }, 'quality=low', 6, 130, 281, ['rare', 'mythic']],
+      ]) {
+        const fctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
+        const { page: fpg, bad: fbad } = await openView(fctx, `${query}&body=${bodyQ}`, `filmstrip-${label}`, [/GPU stall due to ReadPixels/i]);
+        for (const kind of ['capsule', 'merge']) {
+          const cells = [];
+          for (const tier of tiersSel) {
+            const ts = timesFor(kind, tier);
+            for (let i = 0; i < ts.length; i++) {
+              const png = await fpg.evaluate(([kind, tier, t, first]) => { const R = window.__RV__; if (first) { if (kind === 'capsule') R.capsuleReveal(tier); else R.merge(tier, 2, false); } R.cerSeek(t, 1 / 30); return R.snapshot(); }, [kind, tier, ts[i], i === 0]);
+              cells.push([`${tier} ${ts[i].toFixed(2)}s`, png]);
+            }
+            await fpg.evaluate(() => { const R = window.__RV__; if (R.cerState().active) R.skipCer(); R.frames(12); });
+          }
+          await sheet(ctx_for_sheets(), `ceremony_${kind}_${label}`, cells, cols, cw, ch);
+          console.log(`wrote ceremony_${kind}_${label}.png`);
+        }
+        report.problems.push(...fbad);
+        await fctx.close();
+      }
+    }
+    await sheetCtx.close();
+  }
+
   /* ───────────────────────── perf (relative cost only) ───────────────────────── */
   if (!NO_PERF) {
     const pctx = await browser.newContext({ viewport: { width: 480, height: 360 }, deviceScaleFactor: 1 });
@@ -285,6 +537,25 @@ try {
       perf[q] = { ...e, syncBestMs: sorted[0], syncMedianMs: sorted[1], syncRoundsMs: rounds[q] };
     }
     report.perf.byTier = perf;
+    // round 2: the same measurement with THREE bodies on the table (common + rare + mythic), best/median of 3 interleaved rounds
+    {
+      const r3 = { low: [], med: [], high: [] }, stats3 = {};
+      await pp.evaluate(() => { const R = window.__RV__; R.setGenome(''); R.addBody('2', 'rare', -1.15, 0.1); R.addBody('3', 'mythic', 1.15, 0.1); R.frames(3); });
+      for (let r = 0; r < 3; r++) {
+        for (const q of ['low', 'med', 'high']) {
+          const o = await pp.evaluate((q) => { const R = window.__RV__; R.setQuality(q); R.frames(3); const ms = R.timeRender(3); const st = R.stage.stats(); return { ms, drawCalls: st.drawCalls, triangles: st.triangles, bodies: R.info().bodies }; }, q);
+          r3[q].push(o.ms); stats3[q] = { drawCalls: o.drawCalls, triangles: o.triangles, bodies: o.bodies };
+        }
+      }
+      const cost3 = {};
+      for (const q of ['low', 'med', 'high']) { const sorted = [...r3[q]].sort((a, b) => a - b); cost3[q] = { syncBestMs: sorted[0], syncMedianMs: sorted[1], ...stats3[q], oneBodyBestMs: perf[q].syncBestMs, ratio: sorted[0] / perf[q].syncBestMs }; }
+      report.perf.threeBodies = cost3;
+      if (report.round2) report.round2.cost3 = cost3;
+      console.log('\nthree bodies on the table (common + rare + mythic) vs one, SwiftShader 480x360:');
+      for (const q of ['low', 'med', 'high']) console.log(`  ${q.padEnd(4)} best ${cost3[q].syncBestMs.toFixed(0).padStart(5)} ms (1 body ${cost3[q].oneBodyBestMs.toFixed(0)} ms, x${cost3[q].ratio.toFixed(2)}) | draw calls ${cost3[q].drawCalls} | triangles ${cost3[q].triangles}`);
+      check(cost3.low.ratio < 3.6 && cost3.med.ratio < 3.6, 'three bodies cost < 3.6x one body (shared env / programs; per-body jelly + FX only)', `low x${cost3.low.ratio.toFixed(2)}, med x${cost3.med.ratio.toFixed(2)}, high x${cost3.high.ratio.toFixed(2)}`);
+      await pp.evaluate(() => { const R = window.__RV__; R.stage.clearBodies(); R.setGenome(''); R.setQuality('med'); R.frames(2); });
+    }
     console.log('\nper-tier cost under SwiftShader at 480x360 (CPU rasteriser, shared machine: relative numbers only):');
     for (const q of ['low', 'med', 'high']) {
       const p = perf[q];

@@ -58,7 +58,7 @@ export class BodyView {
     this.face = new Face(this.proxy, genome, this.jelly, hub);
     this.fx = new Fx(genome, this.palette, this.jelly.mapper, spec, this.scale, this.style);
     this.decals = new Decals(quad);
-    this.decals.setColor(this.palette.pool);
+    this.applyPoolColour();
     this.rarity = new RarityFx(this.style, { scale: this.scale, seed: genome.seed, mapper: this.jelly.mapper, palette: this.palette });
     this.group.add(this.jelly.mesh, this.core.group, this.face.group, this.fx.group, this.decals.shadow, this.decals.pool, this.rarity.group);
     this.group.frustumCulled = false;
@@ -71,6 +71,12 @@ export class BodyView {
 
   setCalm(on: boolean): void { this.calm = on; this.core.calm = on; this.fx.calm = on; this.rarity.calm = on; }
 
+  /** The floor light pool: the body's own pool colour, tinted toward the tier colour from Uncommon up ("faint tinted light pool"). */
+  private applyPoolColour(): void {
+    const p = this.palette.pool, t = this.style.tell, k = this.style.poolTint;
+    this.decals.setColor([p[0] + (t[0] - p[0]) * k, p[1] + (t[1] - p[1]) * k, p[2] + (t[2] - p[2]) * k]);
+  }
+
   /** Rarity tier styling (DESIGN 5.3). Cheap: re-styles the material and the FX in place. */
   setTier(tier: TierName): void {
     if (tier === this.tier) return;
@@ -80,6 +86,7 @@ export class BodyView {
     this.core.setStyle(this.style);
     this.fx.setStyle(this.style);
     this.rarity.setStyle(this.style);
+    this.applyPoolColour();
   }
 
   applyQuality(spec: TierSpec): void {

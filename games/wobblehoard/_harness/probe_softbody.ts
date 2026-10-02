@@ -12,6 +12,13 @@
 // G1p  mean step() <= 2.0 ms and p99 <= 5 ms at detail 3 (best of several batches: this container is shared and loud).
 // Plus the behavioural contract of section 4 that the gates rest on (events, metrics, raycast, hostile input).
 //
+// Mesh quality (added after independent verification found that the volume-only "no inversion" gate missed LOCAL folds: a press on
+// the swirl-peak or the dome top used to fold the skin into a star-shaped pucker with tucked-under triangles, and a tap near the peak
+// left a folded flap for good). Local folds are measured as the dihedral angle between the normals of adjacent triangles: the rest
+// shape's own maximum is 50.4 degrees (detail 3), 180 means a flap folded flat onto itself. Gated: fold at rest after every press of
+// the matrix, fold peak during it, the peak coming back to its rest height, the fuzz's settled bodies, and the fingertip kinematics
+// (a tip must move continuously when a pinch starts or ends, and never go below the table).
+//
 // Definitions the contract leaves open (all printed in the table):
 //   * "hard release": a finger presses the dome shoulder (and, separately, the swirl-peak) at pressure 1 for 1.0 s, then
 //     lifts. A third scenario pinches the dome between two fingers.
@@ -39,6 +46,8 @@ const QUICK = process.argv.includes('--quick');
 const FUZZ_RUNS = QUICK ? 20 : 200;
 const FUZZ_EVENTS = QUICK ? 400 : 1500;
 const DT = 1 / 60;
+/** A settled body may keep this much dihedral (rest shape 50.4 degrees at detail 3 + 10 degrees of slack). */
+const FOLD_REST_MAX = 60;
 
 const v3 = (x: number, y: number, z: number): V3 => ({ x, y, z });
 
@@ -124,6 +133,92 @@ function run(b: SoftBody, seconds: number, each?: (t: number) => void): void {
 }
 function settle(b: SoftBody, seconds = 2): void { run(b, seconds); }
 
+// ------------------------------------------------------------------------------------------------ mesh fold meter
+
+/** The interior edges of the closed sim mesh as pairs of triangles sharing an edge (t1, t2, t1, t2, ...). */
+function trianglePairs(tris: Uint32Array): Int32Array {
+  const first = new Map<number, number>();
+  const out: number[] = [];
+  for (let t = 0; t < tris.length / 3; t++) {
+    for (let k = 0; k < 3; k++) {
+      const a = tris[t * 3 + k], c = tris[t * 3 + ((k + 1) % 3)];
+      const key = a < c ? a * 65536 + c : c * 65536 + a;
+      const o = first.get(key);
+      if (o === undefined) first.set(key, t); else out.push(o, t);
+    }
+  }
+  return Int32Array.from(out);
+}
+interface FoldMeter { pairs: Int32Array; N: Float64Array }
+const makeFoldMeter = (b: SoftBody): FoldMeter => ({ pairs: trianglePairs(b.indices), N: new Float64Array(b.indices.length) });
+interface Fold { worst: number; n90: number; inward: number }
+/** Worst dihedral (degrees) between adjacent triangle normals, number of edges over 90 degrees, number of triangles facing the body centre. */
+function foldOf(b: SoftBody, m: FoldMeter): Fold {
+  const P = b.positions, I = b.indices, N = m.N, nt = I.length / 3, cx = b.center.x, cy = b.center.y, cz = b.center.z;
+  let inward = 0;
+  for (let t = 0; t < nt; t++) {
+    const a = I[t * 3] * 3, c = I[t * 3 + 1] * 3, d = I[t * 3 + 2] * 3;
+    const ux = P[c] - P[a], uy = P[c + 1] - P[a + 1], uz = P[c + 2] - P[a + 2], vx = P[d] - P[a], vy = P[d + 1] - P[a + 1], vz = P[d + 2] - P[a + 2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const l = Math.hypot(nx, ny, nz) || 1e-12;
+    nx /= l; ny /= l; nz /= l;
+    N[t * 3] = nx; N[t * 3 + 1] = ny; N[t * 3 + 2] = nz;
+    if (nx * ((P[a] + P[c] + P[d]) / 3 - cx) + ny * ((P[a + 1] + P[c + 1] + P[d + 1]) / 3 - cy) + nz * ((P[a + 2] + P[c + 2] + P[d + 2]) / 3 - cz) < 0) inward++;
+  }
+  let minDot = 1, n90 = 0;
+  for (let k = 0; k < m.pairs.length; k += 2) {
+    const t1 = m.pairs[k] * 3, t2 = m.pairs[k + 1] * 3;
+    const dot = N[t1] * N[t2] + N[t1 + 1] * N[t2 + 1] + N[t1 + 2] * N[t2 + 2];
+    if (dot < minDot) minDot = dot;
+    if (dot < 0) n90++;
+  }
+  return { worst: (Math.acos(Math.max(-1, Math.min(1, minDot))) * 180) / Math.PI, n90, inward };
+}
+
+/** Contact points of the fold matrix: [label, ray origin, ray direction]. The swirl-peak sits at x ~ 0.04, y ~ 1.02. */
+const FOLD_SPOTS: Array<[string, V3, V3]> = [
+  ['top x=0', v3(0, 3, 0), v3(0, -1, 0)], ['top x=.04', v3(0.04, 3, 0), v3(0, -1, 0)], ['top x=.1', v3(0.1, 3, 0), v3(0, -1, 0)],
+  ['top x=.15', v3(0.15, 3, 0), v3(0, -1, 0)], ['top x=.2', v3(0.2, 3, 0), v3(0, -1, 0)], ['top x=.3', v3(0.3, 3, 0), v3(0, -1, 0)],
+  ['top x=.4', v3(0.4, 3, 0), v3(0, -1, 0)], ['top z=.2', v3(0, 3, 0.2), v3(0, -1, 0)], ['camera tilt', v3(-1.2, 3, 0), v3(0.38, -0.92, 0)],
+  ['peak flank y=.9', v3(3, 0.9, 0), v3(-1, 0, 0)], ['side y=.7', v3(3, 0.7, 0), v3(-1, 0, 0)], ['side y=.5', v3(3, 0.5, 0), v3(-1, 0, 0)],
+  ['side y=.25', v3(3, 0.25, 0), v3(-1, 0, 0)], ['oblique', v3(3, 2.2, 0), v3(-0.8, -0.6, 0)],
+];
+interface FoldSpec { label: string; genome: Genome; detail: number; spot: number; mode: 'tap' | 'hold' }
+interface FoldResult {
+  label: string; missed: boolean;
+  worst: number; f90: number; f120: number;                  // worst dihedral during the press and after, frames over 90 / 120 degrees
+  restWorst: number; restN90: number; restInward: number;    // the same at the end, long after the finger left
+  topErr: number;                                            // |highest vertex now - highest vertex before the press|, metres
+}
+/** One press (tap: pressure 0.6 for 0.12 s; hold: pressure ramped over 0.9 s, released at 1.4 s) and the long recovery. */
+function foldPress(spec: FoldSpec): FoldResult {
+  const b = new SoftBody(spec.genome, { detail: spec.detail });
+  const m = makeFoldMeter(b);
+  settle(b, 0.5);
+  const top0 = topY(b);
+  const [label, o, d] = FOLD_SPOTS[spec.spot];
+  const dl = Math.hypot(d.x, d.y, d.z), dir = v3(d.x / dl, d.y / dl, d.z / dl);
+  const hit = b.raycast(o, dir);
+  const res: FoldResult = { label: spec.label, missed: !hit, worst: 0, f90: 0, f120: 0, restWorst: 0, restN90: 0, restInward: 0, topErr: 0 };
+  if (!hit) return res;
+  b.fingerDown(0, { point: hit.point, normal: hit.normal, dir });
+  const T = spec.mode === 'tap' ? 3.5 : 4.5, tUp = spec.mode === 'tap' ? 0.12 : 1.1;
+  let up = false;
+  for (let s = 0, t = 0; t < T; s++) {
+    if (!up) b.fingerPressure(0, spec.mode === 'tap' ? 0.6 : Math.min(1, t / 0.9));
+    if (!up && t >= tUp) { up = true; b.fingerUp(0); }
+    b.step(DT); t = (s + 1) * DT;
+    const f = foldOf(b, m);
+    if (f.worst > res.worst) res.worst = f.worst;
+    if (f.worst > 90) res.f90++;
+    if (f.worst > 120) res.f120++;
+  }
+  const f = foldOf(b, m);
+  res.restWorst = f.worst; res.restN90 = f.n90; res.restInward = f.inward; res.topErr = Math.abs(topY(b) - top0);
+  void label;
+  return res;
+}
+
 interface Extremum { t: number; v: number }
 /** Alternating extrema of a signal with |v| >= thr (same-sign neighbours merged to the larger). */
 function alternatingExtrema(ts: number[], hs: number[], thr: number): Extremum[] {
@@ -208,13 +303,14 @@ function hardRelease(spec: SqueezeSpec): SqueezeResult {
 
 // ------------------------------------------------------------------------------------------------ fuzz
 
-interface FuzzStats { runs: number; steps: number; nan: number; inverted: number; penetrations: number; maxPen: number; minVolRatio: number; maxVolRatio: number; safetyResets: number; maxCenter: number; failures: string[]; unsettled: number }
-const emptyStats = (): FuzzStats => ({ runs: 0, steps: 0, nan: 0, inverted: 0, penetrations: 0, maxPen: 0, minVolRatio: 9, maxVolRatio: 0, safetyResets: 0, maxCenter: 0, failures: [], unsettled: 0 });
+interface FuzzStats { runs: number; steps: number; nan: number; inverted: number; penetrations: number; maxPen: number; minVolRatio: number; maxVolRatio: number; safetyResets: number; maxCenter: number; failures: string[]; unsettled: number; restFold: number; restFoldRuns: number }
+const emptyStats = (): FuzzStats => ({ runs: 0, steps: 0, nan: 0, inverted: 0, penetrations: 0, maxPen: 0, minVolRatio: 9, maxVolRatio: 0, safetyResets: 0, maxCenter: 0, failures: [], unsettled: 0, restFold: 0, restFoldRuns: 0 });
 function mergeStats(a: FuzzStats, b: FuzzStats): FuzzStats {
   return {
     runs: a.runs + b.runs, steps: a.steps + b.steps, nan: a.nan + b.nan, inverted: a.inverted + b.inverted, penetrations: a.penetrations + b.penetrations,
     maxPen: Math.max(a.maxPen, b.maxPen), minVolRatio: Math.min(a.minVolRatio, b.minVolRatio), maxVolRatio: Math.max(a.maxVolRatio, b.maxVolRatio),
     safetyResets: a.safetyResets + b.safetyResets, maxCenter: Math.max(a.maxCenter, b.maxCenter), failures: [...a.failures, ...b.failures].slice(0, 8), unsettled: a.unsettled + b.unsettled,
+    restFold: Math.max(a.restFold, b.restFold), restFoldRuns: a.restFoldRuns + b.restFoldRuns,
   };
 }
 
@@ -301,18 +397,86 @@ function fuzzRun(runIndex: number, nEvents: number): { stats: FuzzStats; hash: n
   b.fingerUp(0); b.fingerUp(1); b.grabRelease(0); b.grabRelease(1); b.gravity = true;
   for (let i = 0; i < 60 * 5; i++) b.step(DT);
   checkInvariants('settle');
+  {
+    // a settled body must have no crease left (the rest shape's own maximum dihedral is 50.4 degrees)
+    const f = foldOf(b, makeFoldMeter(b));
+    stats.restFold = f.worst;
+    if (f.worst > FOLD_REST_MAX) { stats.restFoldRuns++; if (stats.failures.length < 5) stats.failures.push(`run ${runIndex}: fold left after settling: ${f.worst.toFixed(0)} deg, ${f.n90} edges over 90`); }
+  }
   if (!(b.metrics.kinetic < 0.02)) { stats.unsettled++; if (stats.failures.length < 5) stats.failures.push(`run ${runIndex}: not settled after 5 s (kinetic ${b.metrics.kinetic.toFixed(3)})`); }
   return { stats, hash: b.stateHash() };
 }
 
+// ------------------------------------------------------------------------------------------------ fingertip kinematics
+
+interface TipChecks {
+  jumpLift: number; jumpStay: number; jumpLand: number;      // largest single-substep move of a tip (m): the lifting tip, the tip that stays down, the tip that was already down when a second finger lands
+  widthDrop: number; compRise: number;                       // pinch released: how much the width along the pinch axis shrinks / the compression grows in the first 60 ms
+  tipBelowTable: number;                                     // lowest (tip centre height - tip radius) over a low side press (m): negative = the fingertip went into the table
+  restRadius: number;
+}
+/** The kinematic fingertip must move continuously (a pinch starting or ending used to teleport a tip by ~0.3 R in one substep and shove the body). */
+function tipChecks(starter: Genome): TipChecks {
+  const sub = 1 / 360;   // exactly one solver substep per step() call
+  const tipMove = (a: { x: number; y: number; z: number } | null, c: { x: number; y: number; z: number } | null): number => (a && c ? Math.hypot(a.x - c.x, a.y - c.y, a.z - c.z) : 0);
+  const width = (b: SoftBody): number => { let lo = 1e9, hi = -1e9; for (let i = 0; i < b.vertexCount; i++) { const x = b.positions[i * 3]; if (x < lo) lo = x; if (x > hi) hi = x; } return hi - lo; };
+  const pinch = (): SoftBody => {
+    const b = new SoftBody(starter);
+    settle(b, 1.2);
+    touch(b, 0, v3(-4, 0.34, 0), v3(1, 0, 0)); touch(b, 1, v3(4, 0.34, 0), v3(-1, 0, 0));
+    b.fingerPressure(0, 1); b.fingerPressure(1, 1);
+    run(b, 1.5);
+    return b;
+  };
+  // (a) one jaw lifts
+  let jumpLift = 0, jumpStay = 0;
+  {
+    const b = pinch();
+    let p0 = b.tip!(0), p1 = b.tip!(1);
+    b.fingerUp(0);
+    for (let i = 0; i < 24; i++) { b.step(sub); const c0 = b.tip!(0), c1 = b.tip!(1); jumpLift = Math.max(jumpLift, tipMove(p0, c0)); jumpStay = Math.max(jumpStay, tipMove(p1, c1)); p0 = c0; p1 = c1; }
+  }
+  // (b) a second finger lands on the other side of a finger that is already pressing
+  let jumpLand = 0;
+  {
+    const b = new SoftBody(starter);
+    settle(b, 1.2);
+    touch(b, 0, v3(-4, 0.34, 0), v3(1, 0, 0)); b.fingerPressure(0, 1);
+    run(b, 1.5);
+    let p0 = b.tip!(0);
+    touch(b, 1, v3(4, 0.34, 0), v3(-1, 0, 0)); b.fingerPressure(1, 1);
+    for (let i = 0; i < 24; i++) { b.step(sub); const c0 = b.tip!(0); jumpLand = Math.max(jumpLand, tipMove(p0, c0)); p0 = c0; }
+  }
+  // (c) both jaws lift: the body springs back, it is not squeezed harder first
+  let widthDrop = 0, compRise = 0;
+  {
+    const b = pinch();
+    const w0 = width(b), c0 = b.metrics.compression;
+    b.fingerUp(0); b.fingerUp(1);
+    let minW = w0, maxC = c0;
+    for (let i = 0; i < 22; i++) { b.step(sub); minW = Math.min(minW, width(b)); maxC = Math.max(maxC, b.metrics.compression); }
+    widthDrop = (w0 - minW) / w0; compRise = maxC - c0;
+  }
+  // (d) a low side press must not push the tip sphere into the table (the foot rim would be squeezed between the two)
+  let tipBelowTable = 1;
+  const big = quantizeGenome({ ...starter, size: 1 });
+  {
+    const b = new SoftBody(big);
+    settle(b, 1.2);
+    touch(b, 0, v3(4, 0.08, 0), v3(-1, 0, 0));
+    for (let i = 0; i < 90; i++) { b.fingerPressure(0, Math.min(1, i / 54)); b.step(DT); const t = b.tip!(0); if (t) tipBelowTable = Math.min(tipBelowTable, t.y - t.r); }
+  }
+  return { jumpLift, jumpStay, jumpLand, widthDrop, compRise, tipBelowTable, restRadius: new SoftBody(starter).restRadius };
+}
+
 // ------------------------------------------------------------------------------------------------ worker pool
 
-type Job = { type: 'squeeze'; spec: SqueezeSpec } | { type: 'fuzz'; index: number; nEvents: number };
-type JobResult = { type: 'squeeze'; res: SqueezeResult } | { type: 'fuzz'; res: { stats: FuzzStats; hash: number } };
+type Job = { type: 'squeeze'; spec: SqueezeSpec } | { type: 'fuzz'; index: number; nEvents: number } | { type: 'fold'; spec: FoldSpec };
+type JobResult = { type: 'squeeze'; res: SqueezeResult } | { type: 'fuzz'; res: { stats: FuzzStats; hash: number } } | { type: 'fold'; res: FoldResult };
 
 if (!isMainThread) {
   const { jobs } = workerData as { jobs: Job[] };
-  const out: JobResult[] = jobs.map((j) => (j.type === 'squeeze' ? { type: 'squeeze', res: hardRelease(j.spec) } : { type: 'fuzz', res: fuzzRun(j.index, j.nEvents) }));
+  const out: JobResult[] = jobs.map((j): JobResult => (j.type === 'squeeze' ? { type: 'squeeze', res: hardRelease(j.spec) } : j.type === 'fold' ? { type: 'fold', res: foldPress(j.spec) } : { type: 'fuzz', res: fuzzRun(j.index, j.nEvents) }));
   parentPort!.postMessage(out);
 } else {
   await main();
@@ -320,7 +484,8 @@ if (!isMainThread) {
 
 function runPool(jobs: Job[], nWorkers: number): Promise<JobResult[]> {
   // heaviest first, round robin, so the workers finish together
-  const order = jobs.map((j, i) => ({ j, i })).sort((a, b) => (b.j.type === 'fuzz' ? 3 : 1) - (a.j.type === 'fuzz' ? 3 : 1));
+  const weight = (j: Job): number => (j.type === 'fuzz' ? 3 : j.type === 'fold' ? (j.spec.detail >= 4 ? 4 : 1.5) : 1);
+  const order = jobs.map((j, i) => ({ j, i })).sort((a, b) => weight(b.j) - weight(a.j));
   const buckets: Array<Array<{ j: Job; i: number }>> = Array.from({ length: nWorkers }, () => []);
   order.forEach((o, k) => buckets[k % nWorkers].push(o));
   const results: JobResult[] = new Array(jobs.length);
@@ -560,6 +725,15 @@ async function main(): Promise<void> {
     add('G1', 'determinism sanity: a different script gives a different hash', `${a[a.length - 1] !== d[d.length - 1]}`, 'true', a[a.length - 1] !== d[d.length - 1]);
   }
 
+  // fingertip kinematics (pinch continuity, table)
+  {
+    const tc = tipChecks(starter);
+    add('G1', 'fingertip: a pinch jaw lifts, then ends: largest single-substep move of the lifting tip / of the jaw that stays down (normal retraction ~7 mm; was 140 / 156 mm)', `${f2(tc.jumpLift * 1000, 1)} mm / ${f2(tc.jumpStay * 1000, 1)} mm`, '<= 12 mm / <= 5 mm', tc.jumpLift <= 0.012 && tc.jumpStay <= 0.005);
+    add('G1', 'fingertip: a second finger lands: largest single-substep move of the tip already pressing (was 156 mm)', `${f2(tc.jumpLand * 1000, 1)} mm`, '<= 5 mm', tc.jumpLand <= 0.005);
+    add('G1', 'fingertip: releasing a pinch springs back: width along the pinch axis shrinks / compression grows in the first 60 ms (was 7.8 % / +0.08)', `${f2(tc.widthDrop * 100, 2)} % / ${tc.compRise >= 0 ? '+' : ''}${f2(tc.compRise, 3)}`, '<= 1.5 % / <= +0.03', tc.widthDrop <= 0.015 && tc.compRise <= 0.03);
+    add('G1', 'fingertip: a low side press on a large body keeps the tip sphere above the table (lowest centre height - radius)', `${f2(tc.tipBelowTable * 1000, 2)} mm`, '>= -0.01 mm', tc.tipBelowTable >= -1e-5);
+  }
+
   // ---- G1p: performance (nothing else of ours is running; the machine is shared with other lanes, so best-of-N)
   {
     const batches: Array<{ mean: number; p99: number }> = [];
@@ -593,12 +767,20 @@ async function main(): Promise<void> {
     const specs: SqueezeSpec[] = [];
     for (const { name, g } of genomes) for (const kind of ['shoulder', 'peak', 'pinch'] as const) specs.push({ label: `${name}/${kind}`, genome: g, kind });
     const jobs: Job[] = specs.map((spec) => ({ type: 'squeeze', spec }));
+    // fold matrix: the starter on every contact point (tap and hold), four genome corners on the six hardest points, the starter at detail 4
+    const foldSpecs: FoldSpec[] = [];
+    const hard = [0, 2, 5, 9, 12, 8];
+    for (let sp = 0; sp < FOLD_SPOTS.length; sp++) for (const mode of ['tap', 'hold'] as const) foldSpecs.push({ label: `starter/${FOLD_SPOTS[sp][0]}/${mode}`, genome: starter, detail: 3, spot: sp, mode });
+    for (const gn of ['f0b1s1', 'f1b0s0', 'small', 'large']) for (const sp of hard) for (const mode of ['tap', 'hold'] as const) foldSpecs.push({ label: `${gn}/${FOLD_SPOTS[sp][0]}/${mode}`, genome: genomes.find((g) => g.name === gn)!.g, detail: 3, spot: sp, mode });
+    for (const sp of [0, 2, 5, 9, 12]) for (const mode of ['tap', 'hold'] as const) foldSpecs.push({ label: `starter@d4/${FOLD_SPOTS[sp][0]}/${mode}`, genome: starter, detail: 4, spot: sp, mode });
+    for (const spec of foldSpecs) jobs.push({ type: 'fold', spec });
     for (let i = 0; i < FUZZ_RUNS; i++) jobs.push({ type: 'fuzz', index: i, nEvents: FUZZ_EVENTS });
     const t1 = performance.now();
     const results = await runPool(jobs, nWorkers);
     const secs = (performance.now() - t1) / 1000;
     const squeezes = results.filter((r): r is Extract<JobResult, { type: 'squeeze' }> => r.type === 'squeeze').map((r) => r.res);
     const fuzzRes = results.filter((r): r is Extract<JobResult, { type: 'fuzz' }> => r.type === 'fuzz').map((r) => r.res);
+    const folds = results.filter((r): r is Extract<JobResult, { type: 'fold' }> => r.type === 'fold').map((r) => r.res);
 
     const worst = (f: (r: SqueezeResult) => number, dir: 'max' | 'min'): SqueezeResult => squeezes.reduce((a, c) => (dir === 'max' ? (f(c) > f(a) ? c : a) : (f(c) < f(a) ? c : a)));
     const minV = worst((r) => r.minVol, 'min'), maxV = worst((r) => r.maxVol, 'max');
@@ -633,6 +815,26 @@ async function main(): Promise<void> {
       add('info', `low-bounce ${name}/shoulder: oscillations, tau, settle`, `n=${s.nOsc} tau=${f2(s.tau, 2)} settle ${f2(s.settleT, 2)} s`, '(not gated)', true);
     }
 
+    // ---- mesh folds (local creases and flaps; the volume gate cannot see them)
+    {
+      const fmax = (xs: FoldResult[], f: (r: FoldResult) => number): FoldResult => xs.reduce((a, c) => (f(c) > f(a) ? c : a));
+      const d3 = folds.filter((r) => !r.label.includes('@d4')), d4 = folds.filter((r) => r.label.includes('@d4')), st0 = d3.filter((r) => r.label.startsWith('starter/'));
+      const nMiss = folds.filter((r) => r.missed).length;
+      add('G1', 'mesh folds: every scripted press of the fold matrix touched the body', `${folds.length - nMiss}/${folds.length}`, 'all', nMiss === 0);
+      const wr = fmax(folds, (r) => r.restWorst);
+      add('G1', `mesh folds: dihedral left at rest 3 s after the finger lifted, worst of ${folds.length} presses (${wr.label}); rest shape 50.4 deg, edges over 90 deg`, `${f2(wr.restWorst, 0)} deg, ${folds.reduce((a, c) => a + c.restN90, 0)} edges over 90, ${folds.reduce((a, c) => a + c.restInward, 0)} inward triangles`, `<= ${FOLD_REST_MAX} deg, 0, 0`, wr.restWorst <= FOLD_REST_MAX && folds.every((r) => r.restN90 === 0 && r.restInward === 0));
+      const wp = fmax(st0, (r) => r.worst);
+      add('G1', `mesh folds: starter, sharpest crease during any of ${st0.length} presses (${wp.label}), frames over 120 deg`, `${f2(wp.worst, 0)} deg, ${st0.reduce((a, c) => a + c.f120, 0)} frames`, '<= 115 deg, 0 frames', wp.worst <= 115 && st0.every((r) => r.f120 === 0));
+      const wa = fmax(d3, (r) => r.worst);
+      add('G1', `mesh folds: all genomes, sharpest crease during any of ${d3.length} presses (${wa.label}); nothing folds back on itself`, `${f2(wa.worst, 0)} deg`, '<= 140 deg', wa.worst <= 140);
+      const wl = fmax(d3, (r) => r.f120);
+      add('G1', `mesh folds: most frames over 120 deg in one press (${wl.label})`, `${wl.f120} frames (${f2(wl.f120 * DT, 2)} s)`, '<= 20 frames', wl.f120 <= 20);
+      const w4 = fmax(d4, (r) => r.worst);
+      add('G1', `mesh folds: detail 4 (2562 vertices), sharpest crease during ${d4.length} presses (${w4.label}), left at rest (rest shape 35 deg)`, `${f2(w4.worst, 0)} deg, rest ${f2(Math.max(...d4.map((r) => r.restWorst)), 0)} deg`, '<= 140 deg, rest <= 45 deg', w4.worst <= 140 && d4.every((r) => r.restWorst <= 45 && r.restN90 === 0));
+      const wt = fmax(d3, (r) => r.topErr);
+      add('G1', `peak recovers: highest vertex vs before the press, 3 s after a tap or 3.4 s after a hold, worst of ${d3.length} (${wt.label})`, `${f2(wt.topErr * 1000, 1)} mm`, '<= 30 mm', wt.topErr <= 0.03);
+    }
+
     let st = emptyStats();
     for (const r of fuzzRes) st = mergeStats(st, r.stats);
     const label = `${FUZZ_RUNS} runs x ${FUZZ_EVENTS} events, dt in [1/240, 1/10] log-uniform, random + extreme genomes, ${st.steps} checked states; pool of ${nWorkers} workers ran squeezes + fuzz in ${secs.toFixed(0)} s`;
@@ -642,6 +844,7 @@ async function main(): Promise<void> {
     add('G1', 'fuzz: signed volume ratio seen (min .. max) under random abuse', `${f2(st.minVolRatio, 2)} .. ${f2(st.maxVolRatio, 2)}`, '> 0 (information)', st.minVolRatio > 0);
     add('G1', 'fuzz: bodies still settled (kinetic < 0.02) 5 s after everything is released', `${FUZZ_RUNS - st.unsettled}/${FUZZ_RUNS}`, 'all', st.unsettled === 0);
     add('G1', 'fuzz: emergency non-finite recoveries (debug.safetyResets) used', String(st.safetyResets), '0', st.safetyResets === 0);
+    add('G1', `fuzz: mesh fold left in a body 5 s after everything is released, worst (rest shape 50.4 deg)`, `${f2(st.restFold, 0)} deg, ${st.restFoldRuns} runs over ${FOLD_REST_MAX} deg`, `<= ${FOLD_REST_MAX} deg`, st.restFoldRuns === 0);
     add('info', 'fuzz: farthest horizontal centre excursion (a nudge or a float shove may carry it)', `${f2(st.maxCenter, 2)} m`, '(information)', true);
     // determinism of the fuzz itself: replay one run twice in this thread and against the pool result
     const again = fuzzRun(0, FUZZ_EVENTS), again2 = fuzzRun(0, FUZZ_EVENTS);

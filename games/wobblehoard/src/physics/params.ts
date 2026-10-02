@@ -26,6 +26,9 @@ export interface SoftParams {
   edgeSoftStrain: number;
   /** Edge compliance multiplier once an edge is past its soft strain (smaller = harder skin). */
   edgeHarden: number;
+  /** Hinge barrier: the vertices opposite an interior edge are kept at least `hingeLimit` x their rest distance apart (0 disables), with
+   *  compliance `hingeAlphaT`: a one-sided bending constraint that resists a flap folding onto itself. */
+  hingeLimit: number; hingeAlphaT: number;
   /** Seconds the glued feet are held after a lobe is let go. */
   pinHold: number;
   /** Volume-constraint compliance relative to the constraint's own scale (alpha_tilde = kappa * S0). Lower = more incompressible. */
@@ -51,6 +54,9 @@ export interface SoftParams {
    *  lengths is being creased or folded over; the shape-memory gain there ramps up to `creaseGain` x the body gain at `creaseHi`
    *  edge lengths, ignoring the peak's softness (a smooth bend of the peak is a small residual and stays floppy, a crease is not). */
   creaseLo: number; creaseHi: number; creaseGain: number;
+  /** Lower bound of the swirl-peak's Laplacian (local shape memory) weight, 0..1: the peak's POSITION stays floppy (peakSoft) but its
+   *  own cone shape is held, so a press bends it over as a unit instead of crushing it into creases. 0 = as soft as the shape matching. */
+  bendFloor: number;
   /** Max pull distance of a grab, in rest radii. From stretch. */
   maxPull: number;
 }
@@ -71,6 +77,7 @@ export function deriveParams(g: Genome): SoftParams {
     // "how far it pulls before it resists": strain at which the skin hardens (35% .. 160%)
     edgeSoftStrain: lerp(0.35, 1.6, s),
     edgeHarden: 0.12,
+    hingeLimit: 0.9, hingeAlphaT: 0.1,
     // tuned: without a hold the body, sheared over its pinned foot, was released and slid 0.5 m with the snap
     pinHold: 0.5,
     volKappa: 0.5,
@@ -88,7 +95,7 @@ export function deriveParams(g: Genome): SoftParams {
     squashDepth: lerp(0.66, 0.34, f) * lerp(1, 0.78, b),
     // tuned: below ~0.15 the tip no longer bends further (the finger reach, not the stiffness, limits the flop)
     peakSoft: 0.12,
-    creaseLo: 0.3, creaseHi: 0.9, creaseGain: 1.5,
+    creaseLo: 0.6, creaseHi: 1.2, creaseGain: 1.2, bendFloor: 1,
     maxPull: 1.0 + 1.4 * s,
   };
 }
@@ -117,10 +124,9 @@ export const FINGER = {
   shareIn: 7, shareOut: 2,
   /** The two tips of a pinch keep this clearance (in rest radii) between their surfaces. */
   pinchGap: 0.3,
-  /** Length (rest radii) of the shaft behind the tip sphere that also pushes skin aside (0 = a bare sphere): see the capsule note in softbody.ts. */
-  shaftLen: 1.5,
-  plunge: 0,
-  lift: 1, maxLift: 0.35,
+  maxLift: 0.35,
+  /** Max speed (rest radii per second) at which the tip sphere grows with pressure (it shrinks at once). */
+  growRate: 0.6,
   /** Held >= this long (s) and in contact -> 'press' event. */
   pressAfterS: 0.18,
   /** Pointer slide low-pass (1/s) so a jumpy pointer never teleports the kinematic tip. */

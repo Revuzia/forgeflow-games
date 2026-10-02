@@ -1,6 +1,6 @@
 # WOBBLEHOARD: design decisions (collection, merge, trade, reveal)
 
-Working title. This is the decision document that `COLLECTION.md`, `BLEND.md`, `TRADE.md` and every implementer follow.
+Working title. This is the decision document that [`COLLECTION.md`](COLLECTION.md), [`MERGE.md`](MERGE.md), [`TRADE.md`](TRADE.md) and every implementer follow.
 Slice 1 (poke, squish, pull, release one squishy) is built elsewhere; everything here is what comes after it.
 Numbers marked **[sim]** are quoted from `_harness/sim_economy.ts` (run `node _harness/sim_economy.ts`, about 6 minutes for 5000 players; `--quick` for a fast check;
 deterministic). Since the catalog lane landed, that sim **imports the real game logic** (`src/data/catalog.ts`, `src/core/meter.ts`, `drops.ts`, `merge.ts`, `rarity.ts`) instead of its own copies,
@@ -514,10 +514,10 @@ the **lineage colours** of the two parents remain visible in the new body's hue 
 | Order | Module | Contents | Depends on |
 |---|---|---|---|
 | 0 | Slice 1 (now) | Soft body, audio, render, shell for one squishy | none |
-| 1 | **COLLECTION** (`COLLECTION.md`) | `src/core/catalog.ts` (50 species: id, name, tier, family, signature touch), `economy.ts` (odds, costs), `meter.ts` (rules in 5.4), capsule open + reveal (6.3), Hoard UI with stacks, restock, tasks. Local-only items flagged non-tradeable. | slice 1, `materials.ts` |
+| 1 | **COLLECTION** ([`COLLECTION.md`](COLLECTION.md)) | `src/data/catalog.ts` (50 species: built), `src/core/rarity.ts` (odds, tiers: built), `src/core/meter.ts` and `drops.ts` (rules in 5.4: built), capsule open + reveal (6.3), Hoard UI with stacks, restock, tasks. Local-only items flagged non-tradeable. | slice 1, `materials.ts` |
 | 1b | **SERVER MINT** | Supabase tables + RPCs: `wh_report_play`, `wh_open_capsule`, `wh_claim_restock`, `wh_complete_task`. Server owns the meter caps, the RNG and ids. **A local save is never promoted to tradeable.** | 1, portal bridge |
-| 2 | **MERGE** (`BLEND.md`) | `src/core/merge.ts` (`MERGE_COST`, roll, preview), `wh_merge` RPC, ceremony (6.4), Tidy-up | 1b |
-| 3 | **TRADE** (`TRADE.md`) | friend codes, board, `wh_propose_trade` / `wh_confirm_trade` / `wh_cancel`, escrow, locks, ledger, reports, kill-switch | 1b (parallel with 2) |
+| 2 | **MERGE** ([`MERGE.md`](MERGE.md)) | `src/core/merge.ts` (`MERGE_COST`, roll, preview), `wh_merge` RPC, ceremony (6.4), Tidy-up | 1b |
+| 3 | **TRADE** ([`TRADE.md`](TRADE.md)) | friend codes, board, `wh_propose_trade` / `wh_confirm_trade` / `wh_cancel`, escrow, locks, ledger, reports, kill-switch | 1b (parallel with 2) |
 
 Why server mint comes before trade: a forgeable local inventory makes every Mythic suspect. Why trade can start without merge: they share only the lock.
 

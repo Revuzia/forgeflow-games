@@ -42,11 +42,11 @@ export interface TierStyle {
   // core
   coreMul: number; coreSize: number; coreWarm: number; corePrism: number; corePulseHz: number; corePulseAmp: number; haloMul: number; haloSize: number;
   // floor light
-  poolMul: number; ring: number; ringPulseHz: number;
+  poolMul: number; poolTint: number; ring: number; ringPulseHz: number;
   // aura / dome / pillar
   rimHalo: number; dome: number; pillar: number;
   // sparkle
-  sparkleBase: number; sparkleMul: number; drift: boolean; sparkTrail: boolean; constellation: number;
+  sparkleBase: number; drift: boolean; sparkTrail: boolean; constellation: number;
   // orbiters
   motes: number; satellites: number;
 }
@@ -55,30 +55,30 @@ const base = (name: TierName, index: number, tell: Rgb, family: TintFamily): Tie
   name, index, tell, tellFamily: family, prism: false,
   translucencyAdd: 0, attenuation: 1, rim: 1, blush: 1, twoTone: 0, aurora: 0, iri: 0, swirlFloor: 0,
   coreMul: 1, coreSize: 1, coreWarm: 0, corePrism: 0, corePulseHz: 0, corePulseAmp: 0, haloMul: 1, haloSize: 1,
-  poolMul: 1, ring: 0, ringPulseHz: 0, rimHalo: 0, dome: 0, pillar: 0,
-  sparkleBase: 0, sparkleMul: 1, drift: false, sparkTrail: false, constellation: 0, motes: 0, satellites: 0,
+  poolMul: 1, poolTint: 0, ring: 0, ringPulseHz: 0, rimHalo: 0, dome: 0, pillar: 0,
+  sparkleBase: 0, drift: false, sparkTrail: false, constellation: 0, motes: 0, satellites: 0,
 });
 
 export const TIER_STYLES: Record<TierName, TierStyle> = {
-  common: { ...base('common', 0, hexLin(0xfff1d6), 'other'), rim: 0.8, coreMul: 0.7, haloMul: 0.8, poolMul: 0.62, sparkleMul: 0.4 },
-  uncommon: { ...base('uncommon', 1, hexLin(0x59d6e6), 'cyan'), translucencyAdd: 0.1, rim: 1.0, coreMul: 1.05, coreWarm: 0.5, poolMul: 1.0, sparkleBase: 0.3, sparkleMul: 0.6 },
+  common: { ...base('common', 0, hexLin(0xfff1d6), 'other'), rim: 0.8, coreMul: 0.7, haloMul: 0.8, poolMul: 0.62 },
+  uncommon: { ...base('uncommon', 1, hexLin(0x59d6e6), 'cyan'), translucencyAdd: 0.1, rim: 1.0, coreMul: 1.05, coreWarm: 0.5, poolMul: 1.05, poolTint: 0.2, sparkleBase: 0.2 },
   rare: {
     ...base('rare', 2, hexLin(0x8a5cf0), 'other'), translucencyAdd: 0.15, attenuation: 0.8, rim: 1.35, swirlFloor: 0.8,
-    coreMul: 1.15, coreSize: 1.18, corePulseHz: 0.36, corePulseAmp: 0.16, haloMul: 1.1, poolMul: 0.95, rimHalo: 0.5, sparkleBase: 0.34, sparkleMul: 0.5,
+    coreMul: 1.15, coreSize: 1.18, corePulseHz: 0.36, corePulseAmp: 0.16, haloMul: 1.1, poolMul: 0.95, poolTint: 0.3, rimHalo: 0.5, sparkleBase: 0.45,
   },
   epic: {
     ...base('epic', 3, hexLin(0xff5a4d), 'coral'), translucencyAdd: 0.15, attenuation: 0.8, rim: 1.2, blush: 1.5, twoTone: 0.85,
-    coreMul: 1.3, coreSize: 1.2, haloMul: 1.9, haloSize: 1.3, poolMul: 0.9, ring: 0.7, rimHalo: 0.6, sparkleBase: 0.5, sparkleMul: 0.6, drift: true, motes: 4,
+    coreMul: 1.3, coreSize: 1.2, haloMul: 1.9, haloSize: 1.3, poolMul: 0.9, poolTint: 0.25, ring: 0.7, rimHalo: 0.6, sparkleBase: 0.55, drift: true, motes: 4,
   },
   legendary: {
     ...base('legendary', 4, hexLin(0xffb347), 'other'), translucencyAdd: 0.18, attenuation: 0.75, rim: 1.3, blush: 1.3, aurora: 1,
-    coreMul: 1.65, coreSize: 1.25, haloMul: 2.0, haloSize: 1.35, poolMul: 1.0, ring: 0.8, ringPulseHz: 0.25, rimHalo: 0.58, pillar: 0.5,
-    sparkleBase: 0.85, sparkleMul: 0.6, drift: true, sparkTrail: true,
+    coreMul: 1.65, coreSize: 1.25, haloMul: 2.0, haloSize: 1.35, poolMul: 1.0, poolTint: 0.2, ring: 0.8, ringPulseHz: 0.25, rimHalo: 0.58, pillar: 0.5,
+    sparkleBase: 0.85, drift: true, sparkTrail: true,
   },
   mythic: {
     ...base('mythic', 5, [1, 1, 1], 'other'), prism: true, translucencyAdd: 0.2, attenuation: 0.7, rim: 1.4, blush: 1.2, iri: 1,
     coreMul: 1.6, coreSize: 1.25, corePrism: 1, corePulseHz: 0.2, corePulseAmp: 0.12, haloMul: 2.0, haloSize: 1.4, poolMul: 1.15, ring: 0.6, rimHalo: 0.6, dome: 1,
-    sparkleBase: 0.3, sparkleMul: 0.5, drift: true, constellation: 12, satellites: 2,
+    sparkleBase: 0.3, drift: true, constellation: 12, satellites: 2,
   },
 };
 
@@ -88,6 +88,10 @@ export function spectrum(h: number, out: Rgb): Rgb {
   out[0] = 0.5 + 0.5 * Math.cos(6.2832 * (t + 0.0));
   out[1] = 0.5 + 0.5 * Math.cos(6.2832 * (t + 0.33));
   out[2] = 0.5 + 0.5 * Math.cos(6.2832 * (t + 0.67));
+  // roughly equal luminance around the wheel: the hue cycle must not breathe (green is ~5x brighter than blue otherwise)
+  const y = 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2];
+  const k = Math.min(1.6, Math.max(0.75, 0.5 / Math.max(0.05, y)));
+  out[0] = Math.min(1, out[0] * k); out[1] = Math.min(1, out[1] * k); out[2] = Math.min(1, out[2] * k);
   return out;
 }
 

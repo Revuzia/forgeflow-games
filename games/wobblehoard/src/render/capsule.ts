@@ -67,7 +67,9 @@ export interface CapsuleUniforms {
 }
 
 export class Capsule {
+  /** Root (world origin, holds the floor decals); `rig` is the part that drops, rocks and squashes. */
   readonly group = new THREE.Group();
+  private readonly rig = new THREE.Group();
   readonly pos = new THREE.Vector3();
   /** World radius of the capsule (for hit testing / framing). */
   readonly radius = R;
@@ -135,7 +137,8 @@ export class Capsule {
     this.wad.renderOrder = -20; this.wad.frustumCulled = false;
     this.decals = new Decals(quad);
     this.decals.setColor([0.6, 0.55, 0.9]);
-    this.group.add(this.top, this.bottom, this.wad, this.decals.shadow, this.decals.pool);
+    this.rig.add(this.top, this.bottom, this.wad);
+    this.group.add(this.rig, this.decals.shadow, this.decals.pool);
     this.group.frustumCulled = false;
     this.group.visible = false;
   }
@@ -228,9 +231,9 @@ export class Capsule {
     const sy = 1 - 0.14 * sq, sxz = 1 + 0.07 * sq;
     this.u.uStress.value = this.burstT < 0 ? Math.min(1, sq * 1.4) * (this.u.uCrack.value < 0.05 ? 1 : 0.3) : 0;
     if (this.burstT < 0) {
-      this.group.position.set(this.pos.x, this.y - REST_Y * (1 - sy), this.pos.z);
-      this.group.rotation.set(rattle, 0, this.rock + rattle * 0.5);
-      this.group.scale.set(sxz, sy, sxz);
+      this.rig.position.set(this.pos.x, this.y - REST_Y * (1 - sy), this.pos.z);
+      this.rig.rotation.set(rattle, 0, this.rock + rattle * 0.5);
+      this.rig.scale.set(sxz, sy, sxz);
       this.top.position.set(0, 0, 0); this.bottom.position.set(0, 0, 0);
       this.top.rotation.set(0, 0, 0); this.bottom.rotation.set(0, 0, 0);
       this.top.scale.setScalar(1); this.bottom.scale.setScalar(1);
@@ -239,8 +242,8 @@ export class Capsule {
     } else {
       // halves fly with gravity and spin, shrink away after ~1 s
       this.burstT += dt;
-      this.group.rotation.set(0, 0, 0); this.group.scale.set(1, 1, 1);
-      this.group.position.set(this.pos.x, REST_Y, this.pos.z);
+      this.rig.rotation.set(0, 0, 0); this.rig.scale.set(1, 1, 1);
+      this.rig.position.set(this.pos.x, REST_Y, this.pos.z);
       this.tv.y -= 9.8 * dt; this.bv.y -= 9.8 * dt;
       this.tp.addScaledVector(this.tv, dt); this.bp.addScaledVector(this.bv, dt);
       this.top.position.copy(this.tp); this.bottom.position.copy(this.bp);

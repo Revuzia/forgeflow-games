@@ -501,7 +501,8 @@ export class Fx {
   setTier(tier: TierSpec): void {
     this.tierSpec = tier;
     this.bubbles.limit = tier.bubbleMax;
-    const g = Math.min(1, this.style.sparkleBase + this.genome.glitter * this.style.sparkleMul);
+    const gb = this.style.sparkleBase;
+    const g = Math.min(1, gb + (1 - gb) * Math.pow(this.genome.glitter, 1.6));   // DESIGN 5.3: Common none ... Legendary dense; a strongly glittery genome (1) stays dense on any tier
     const count = g <= 0.02 ? 0 : Math.max(10, Math.round(tier.glitterMax * g));
     this.glitter.layout(count, this.mapper, this.genome.seed, this.scale);
   }

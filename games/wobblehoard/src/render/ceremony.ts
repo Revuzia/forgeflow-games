@@ -44,10 +44,12 @@ const SPIRAL = [0, 0, 0, 24, 0, 0];
 const RIBBONS = [0, 0, 0, 0, 3, 0];              // x 14 segments
 const STARS = [0, 0, 0, 0, 0, 24];
 const RINGS = [0, 0, 1, 2, 3, 3];
+/** Each later ring is dimmer than the one before (a decaying ripple, not a second flash). */
+const RING_GAIN = [1, 0.5, 0.3];
 const PUSH = [0, 0.02, 0.04, 0.06, -0.07, 0.05];  // distance factor change (negative = the Legendary pull-back reveal)
 const ARC_DEG = [0, 0, 6, 10, 15, 25];
 const DIP: [number, number][] = [[1, 0], [1, 0], [1, 0], [0.6, 0.25], [0.5, 0.35], [0.4, 0.5]];  // [time scale, seconds]
-const FLASH_AMP = [0.1, 0.12, 0.15, 0.18, 0.22, 0.25];
+const FLASH_AMP = [0.1, 0.12, 0.15, 0.18, 0.2, 0.23];
 const KICK = [0, 0.08, 0.16, 0.28, 0.42, 0.55];   // merge burst camera kick (stage.shake units)
 const LEAK = [0.45, 0.6, 0.8, 1.0, 1.15, 1.2];    // crack light strength
 
@@ -74,12 +76,14 @@ export interface CeremonyHost {
   /** Render the current state to the screen and start a crossfade snapshot of it. */
   crossfade(seconds: number): void;
   shake(a: number): void;
+  /** World half-width of the frame at the table centre at the rest framing (so a ceremony can start its bodies inside the picture). */
+  viewHalfWidth(): number;
 }
 
 /** Display-space colour for the screen light ramp: the tier colour, lifted toward white so it reads as light, not paint. */
 function lightColour(style: TierStyle, time: number, out: Rgb): Rgb {
   const t = style.prism ? spectrum(time * 0.2, out) : style.tell;
-  out[0] = linearToSrgb(t[0]) * 0.7 + 0.3; out[1] = linearToSrgb(t[1]) * 0.7 + 0.3; out[2] = linearToSrgb(t[2]) * 0.7 + 0.3;
+  out[0] = linearToSrgb(t[0]) * 0.82 + 0.18; out[1] = linearToSrgb(t[1]) * 0.82 + 0.18; out[2] = linearToSrgb(t[2]) * 0.82 + 0.18;
   return out;
 }
 
@@ -210,7 +214,7 @@ abstract class Run implements CeremonyHandle {
   /** Rings: staggered >= 500 ms apart through the governor (fades in calm mode: same count and spacing). */
   protected ringSchedule(t0: number): number[] {
     const n = RINGS[this.style.index], out: number[] = [];
-    for (let i = 0; i < n; i++) out.push(t0 + i * 0.52);
+    for (let i = 0; i < n; i++) out.push(t0 + i * 0.6);
     return out;
   }
 }
@@ -317,9 +321,9 @@ export class CapsuleRun extends Run {
       while (this.ringIdx < this.rings.length && t >= this.rings[this.ringIdx]) {
         this.ringIdx++;
         const v = this.resultView;
-        if (v && (this.calm || host.flash.ring(host.now()))) v.fx.spawn('ring', { x: this.cx, y: 0, z: this.cz }, 1);
+        if (v && (this.calm || host.flash.ring(host.now()))) v.fx.spawn('ring', { x: this.cx, y: 0, z: this.cz }, RING_GAIN[this.ringIdx - 1] ?? 0.3);
       }
-      if (this.pillar) this.pillar.set(this.cx, this.cz, 0.22 + 0.5 * (t - burstAt), 3.2, st.tell, 0.3 * Math.max(0, 1 - (t - burstAt) * 1.3));
+      if (this.pillar) this.pillar.set(this.cx, this.cz, 0.22 + 0.5 * (t - burstAt), 3.2, st.tell, 0.2 * Math.max(0, 1 - (t - burstAt) * 1.3));
       if (this.dome) this.dome.set(this.cx, this.cz, 0.62 + 0.7 * smooth(0, 0.6, t - burstAt), 0.8 + 0.8 * smooth(0, 0.6, t - burstAt), 0.85 * (1 - smooth(0.4, 1.4, t - burstAt)), t);
     }
     if (t >= this.tb.revealAt) this.beat('reveal');
@@ -372,7 +376,7 @@ export class CapsuleRun extends Run {
     this.fadeIn = Math.min(1, this.fadeIn + dt / 0.7);
     v.rarity.strength = smooth(0, 1, this.fadeIn);
     const u = v.mats.uniforms;
-    u.uTierAmt.value = Math.max(0, (0.3 + 0.03 * this.style.index) * (1 - d.age / 0.9));
+    u.uTierAmt.value = Math.max(0, (0.26 + 0.02 * this.style.index) * (1 - d.age / 0.9));
     u.uTierCol.value.setRGB(this.style.tell[0], this.style.tell[1], this.style.tell[2], THREE.LinearSRGBColorSpace);
     v.extraPool = Math.max(0, 0.5 * (1 - d.age / 1.2));
   }
@@ -435,7 +439,8 @@ export class MergeRun extends Run {
     for (let k = 0; k < n; k++) {
       const p = spec.parents[k] ?? spec.parents[0];
       const ang = n === 2 ? (k === 0 ? Math.PI : 0) : Math.PI / 2 + (k * 2 * Math.PI) / 3;
-      this.start.push({ x: Math.cos(ang) * (n === 2 ? 1.55 : 1.5), z: Math.sin(ang) * (n === 2 ? 0 : 1.2) });
+      const reach = Math.max(0.95, Math.min(1.55, host.viewHalfWidth() * 0.9));   // portrait phones are narrow: start inside the picture
+      this.start.push({ x: Math.cos(ang) * (n === 2 ? reach : reach * 0.97), z: Math.sin(ang) * (n === 2 ? 0 : 1.2) });
       const v = host.createOwned(p.genome, spec.createBody, p.tier ?? 'common');
       v.proxy.setOffset(this.start[k].x, 0, this.start[k].z);
       this.parents.push(v);
@@ -443,7 +448,8 @@ export class MergeRun extends Run {
     this.bodyScale = this.parents[0].scale;
     // the parents' lineage colour: the average of the others' body colours swirls through the ball
     const avg: Rgb = [0, 0, 0];
-    for (const p of spec.parents) { const pal = genomePalette(p.genome); avg[0] += pal.body[0] / spec.parents.length; avg[1] += pal.body[1] / spec.parents.length; avg[2] += pal.body[2] / spec.parents.length; }
+    const mixFrom = spec.parents.length > 1 ? spec.parents.slice(1) : spec.parents;   // the ball itself is the first parent
+    for (const p of mixFrom) { const pal = genomePalette(p.genome); avg[0] += pal.body[0] / mixFrom.length; avg[1] += pal.body[1] / mixFrom.length; avg[2] += pal.body[2] / mixFrom.length; }
     this.mixCol = avg;
     this.pillar = i === 4 ? new LightPillar() : null;
     this.dome = i === 5 ? new PrismDome() : null;
@@ -469,9 +475,9 @@ export class MergeRun extends Run {
     if (t < b.t3) {
       // ---- T0 press together / T1 fold ----
       const slide = smooth(0, b.a1, t);
-      const gap = 0.31 * sc;                                    // each body's centre distance from the pad: touching, squashed
+      const gap = 0.33 * sc;                                    // each body's centre distance from the pad: touching, squashed
       const foldP = smooth(b.t1, b.t2, t);
-      const squash = 0.4 * smooth(b.a1 * 0.3, b.a1, t) * (1 - smooth(b.t1 + b.a2 * 0.2, b.t2, t));
+      const squash = 0.55 * smooth(b.a1 * 0.3, b.a1, t) * (1 - smooth(b.t1 + b.a2 * 0.2, b.t2, t));
       for (let k = 0; k < n; k++) {
         const v = this.parents[k], s = this.start[k], d = this.dirOf(k);
         const px = (s.x + (d.x * gap - s.x) * slide) * (1 - foldP), pz = (s.z + (d.z * gap - s.z) * slide) * (1 - foldP);
@@ -531,9 +537,9 @@ export class MergeRun extends Run {
       while (this.ringIdx < this.rings.length && t >= this.rings[this.ringIdx]) {
         this.ringIdx++;
         const v = this.resultView;
-        if (v && (this.calm || host.flash.ring(host.now()))) v.fx.spawn('ring', { x: 0, y: 0, z: 0 }, 1);
+        if (v && (this.calm || host.flash.ring(host.now()))) v.fx.spawn('ring', { x: 0, y: 0, z: 0 }, RING_GAIN[this.ringIdx - 1] ?? 0.3);
       }
-      if (this.pillar) this.pillar.set(0, 0, 0.25 + 0.5 * (t - b.t3), 3.2, st.tell, 0.3 * Math.max(0, 1 - (t - b.t3) * 1.2));
+      if (this.pillar) this.pillar.set(0, 0, 0.25 + 0.5 * (t - b.t3), 3.2, st.tell, 0.2 * Math.max(0, 1 - (t - b.t3) * 1.2));
       if (this.dome) this.dome.set(0, 0, 0.7 + 0.6 * smooth(0, 0.6, t - b.t3), 0.9 + 0.7 * smooth(0, 0.6, t - b.t3), 0.8 * (1 - smooth(0.4, 1.4, t - b.t3)), t);
       // tier-up accent: a rising ladder of star sparkles in the new colour over the last 0.4 s
       if (this.spec.result.tierUp && !this.sparkled && t >= this.duration - 0.4 * this.ks) {
@@ -594,10 +600,10 @@ export class MergeRun extends Run {
     }
     this.fadeIn = Math.min(1, this.fadeIn + dt / 0.8);
     v.rarity.strength = smooth(0, 1, this.fadeIn);
-    u.uTierAmt.value = Math.max(0, 0.95 * (1 - d.age / 0.9));
+    u.uTierAmt.value = Math.max(0, (0.32 + 0.025 * this.style.index) * (1 - d.age / 0.9));
     u.uMixAmt.value = Math.max(0, 0.45 * (1 - d.age / 1.5));
     v.extraPool = Math.max(0, 1.0 * (1 - d.age / 1.2));
-    v.core.boost = Math.max(0, 1.2 * (1 - d.age / 0.7));
+    v.core.boost = Math.max(0, 0.5 * (1 - d.age / 0.7));
   }
 
   protected finalize(skipped: boolean): void {

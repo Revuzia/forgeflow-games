@@ -2,7 +2,7 @@
 
 Working title. The slice: **one original squishy, DOLLOP, that you can poke, squish, pull and release, in real-time 3D
 soft-body physics, with original procedural sound.** Everything else (collection, blend, trade) is a later module and
-is outlined in `COLLECTION.md`, `BLEND.md`, `TRADE.md`; the slice only has to leave the right seams for them.
+is outlined in `COLLECTION.md`, `MERGE.md`, `TRADE.md`; the slice only has to leave the right seams for them.
 
 The typed seams are in `src/contracts.ts` (and `src/core/genome.ts`). This file is the prose that goes with them.
 If the two disagree, `src/contracts.ts` wins; fix the prose.
@@ -24,7 +24,7 @@ If the two disagree, `src/contracts.ts` wins; fix the prose.
 | AUDIO | `src/audio/**`, `_harness/probe_audio.mjs`, `_spec/SOUND.md` | everything else |
 | RENDER | `src/render/**`, `_harness/browser_render.mjs` | everything else |
 | SHELL | `src/main.ts`, `src/input/**`, `src/ui/**`, `src/core/settings.ts`, `src/core/save.ts`, `index.html`, `_harness/browser_*.mjs` (except render) | physics, audio, render internals |
-| DOCS | `_spec/DESIGN.md`, `COLLECTION.md`, `BLEND.md`, `TRADE.md`, `README.md`, `public/game_meta.json` | `src/**` |
+| DOCS | `_spec/DESIGN.md`, `COLLECTION.md`, `MERGE.md`, `TRADE.md`, `README.md`, `public/game_meta.json` | `src/**` |
 
 Shared and frozen unless a lane adds an optional field and reports it: `src/contracts.ts`, `src/core/genome.ts`, `src/core/rng.ts`.
 

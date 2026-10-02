@@ -120,6 +120,8 @@ const FELT_COLOR = /* glsl */`
   float dashes = mix(0.5, step(0.5, fract(arc)), 1.0 - smoothstep(0.25, 0.6, fwidth(arc)));
   float ring = 1.0 - smoothstep(max(0.004, fr * 0.5), max(0.011, fr * 1.5), abs(r - (uMatR - 0.16)));
   ring *= min(1.0, 0.012 / (fr * 1.5));
+  vec3 toCam = cameraPosition - vWP;
+  ring *= smoothstep(0.17, 0.3, abs(toCam.y) / max(length(toCam), 1e-3));   // gone at grazing angles: the far rim must not read as a dotted line
   diffuseColor.rgb = mix(diffuseColor.rgb, uStitchCol, ring * dashes * uStitch);
 }
 `;
@@ -162,7 +164,7 @@ function makeFelt(o: FeltOpts, hub: EnvHub): THREE.MeshPhysicalMaterial {
       .replace('#include <normal_fragment_maps>', FELT_NORMAL)
       .replace('#include <fog_fragment>', FELT_FOG);
   };
-  mat.customProgramCacheKey = () => 'wh-felt-v2';
+  mat.customProgramCacheKey = () => 'wh-felt-v3';
   feltUniforms.set(mat, u);
   return mat;
 }

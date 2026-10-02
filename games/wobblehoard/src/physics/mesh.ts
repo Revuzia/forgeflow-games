@@ -11,6 +11,8 @@ export interface IcoMesh {
   tris: Uint32Array;
   /** Unique undirected edges as (a, b) pairs with a < b. */
   edges: Uint32Array;
+  /** Hinges: one per interior edge, as (a, b, c, d) = the shared edge and the two vertices opposite it (one in each adjacent triangle). */
+  hinges: Uint32Array;
 }
 
 const T = (1 + Math.sqrt(5)) / 2;
@@ -72,17 +74,21 @@ export function buildIcosphere(detail: number): IcoMesh {
   const vertexCount = verts.length / 3;
   const tris = Uint32Array.from(faces);
 
-  const seen = new Set<number>();
+  const seen = new Map<number, number>();   // edge key -> index of its first triangle's opposite vertex (+ edge slot in edgeList)
   const edgeList: number[] = [];
+  const hingeList: number[] = [];
+  const firstOpp = new Map<number, number>();
   for (let f = 0; f < tris.length; f += 3) {
     for (let k = 0; k < 3; k++) {
-      const a = tris[f + k], b = tris[f + ((k + 1) % 3)];
+      const a = tris[f + k], b = tris[f + ((k + 1) % 3)], opp = tris[f + ((k + 2) % 3)];
       const lo = a < b ? a : b, hi = a < b ? b : a;
       const key = lo * 1048576 + hi;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const o = firstOpp.get(key);
+      if (o !== undefined) { hingeList.push(lo, hi, o, opp); continue; }
+      firstOpp.set(key, opp);
+      seen.set(key, edgeList.length);
       edgeList.push(lo, hi);
     }
   }
-  return { vertexCount, dirs: Float64Array.from(verts), tris, edges: Uint32Array.from(edgeList) };
+  return { vertexCount, dirs: Float64Array.from(verts), tris, edges: Uint32Array.from(edgeList), hinges: Uint32Array.from(hingeList) };
 }

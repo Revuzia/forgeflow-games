@@ -37,7 +37,7 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo>, RoundTwo {
   readonly info: {
     fineVertices: number; tier: QualityTier; mode: QualityTier | 'auto'; fx: { bubbles: number; glitter: number; puffs: number } | null;
     contextLost: boolean; pixelRatio: number; drawingBuffer: [number, number]; eyeLook: number[] | null;
-    bodies: number; primary: number | null; ceremony: boolean; particles: number; calm: boolean; screenLight: number; capsule: boolean;
+    bodies: number; primary: number | null; ceremony: boolean; particles: number; calm: boolean; screenLight: number; capsule: boolean; cameraFx: { dist: number; yaw: number; pitch: number };
   };
   readonly views: readonly BodyView[];
   readonly flash: FlashGovernor;
@@ -104,6 +104,19 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
 
   const primary = (): BodyView | null => views.find((v) => v.id === primaryId) ?? null;
   const fitDistance = (): number => bodyScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
+
+  /** Where the meter-full capsule lands: beside the primary body when the frame is wide enough to show it whole, else in front of it. */
+  function capsuleSpot(p: BodyView | null): { x: number; z: number } {
+    const sc = p ? p.scale : 1, cx = p ? p.proxy.center.x : 0;
+    const R = 0.24, D = fitDistance(), hw = D * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect;
+    for (const zf of [0.15, 0, -0.2]) {
+      const z = zf * sc, hwz = hw * Math.max(0.3, (D - z) / D);          // half-width of the frame at that depth
+      const x = Math.min(0.95 * sc, hwz * 0.86 - R * 1.3);
+      if (x >= 0.7 * sc) return { x: cx + x, z };
+    }
+    const zf = 1.85 * sc, hwf = hw * Math.max(0.3, (D - zf) / D);
+    return { x: cx + Math.max(0, hwf * 0.9 - R * 1.25), z: zf };                         // narrow portrait frame: in front of it, lower in the picture
+  }
 
   function applySize(): void {
     renderer.setPixelRatio(Math.min(dpr, TIERS[tier].dprCap));
@@ -197,6 +210,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       screen.beginCrossfade(renderer, seconds);
     },
     shake(a) { if (!calm) stage.shake(a); },
+    viewHalfWidth: () => fitDistance() * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect,
   };
   const director = new CeremonyDirector(host);
 
@@ -253,7 +267,8 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       const c = capsule;
       const id = ++capsuleId;
       const p = primary();
-      const x = opts?.at?.x ?? (p ? p.proxy.center.x + 0.82 * p.scale : 0.82), z = opts?.at?.z ?? 0.62;
+      const spot = capsuleSpot(p);
+      const x = opts?.at?.x ?? spot.x, z = opts?.at?.z ?? spot.z;
       c.drop(x, z, opts?.onLand);
       scene.add(c.group);
       const sp = { x: 0, y: 0, r: 0 };
@@ -385,7 +400,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
         fineVertices: p?.jelly.fineCount ?? 0, tier: governor.tier, mode: governor.mode, fx: p?.fx.counts ?? null, contextLost: lost,
         pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number],
         eyeLook: p ? Array.from(p.face.lookOut) : null,
-        bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule,
+        bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule, cameraFx,
       };
     },
   };
