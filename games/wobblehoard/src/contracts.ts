@@ -103,8 +103,8 @@ export interface AudioSettings {
 export interface SquishVoiceHandle {
   /** Per-frame control of the held squelch. `atTime` (AudioContext time) lets offline renders script it; live use omits it. */
   update(p: { compression: number; rate: number; pan?: number }, atTime?: number): void;
-  /** Fade out and free the nodes. */
-  end(fadeS?: number): void;
+  /** Fade out and free the nodes. `atTime` (AudioContext time) lets offline renders script the end; live use omits it. */
+  end(fadeS?: number, atTime?: number): void;
 }
 
 export interface SquishAudio {
@@ -121,7 +121,16 @@ export interface SquishAudio {
   /** Blender: whirr + slosh for `durationS`, then a finishing flourish. Returns a handle to cut it short. */
   blend(p?: { count?: number; durationS?: number }): { stop(): void };
   /** Harness readout: how many voices of each kind were started, context state, sample rate, output peak since last call. */
-  stats(): { started: Record<string, number>; state: string; sampleRate: number; peak: number };
+  /**
+   * Harness readout: how many voices of each kind were started, context state, sample rate, output peak (linear, 0..1)
+   * since the last call. `live` / `liveNodes` / `dropped` are optional extras (voice groups and audio nodes currently
+   * alive, voices refused because the context was not running or the call was invalid).
+   */
+  stats(): { started: Record<string, number>; state: string; sampleRate: number; peak: number; live?: number; liveNodes?: number; dropped?: number };
+  /** Optional: tab hidden / visible. `true` suspends the context and frees every live voice; `false` resumes it. */
+  setPaused?(paused: boolean): void;
+  /** Optional: stop the housekeeping timer and close the context. The instance is unusable afterwards. */
+  dispose?(): void;
 }
 
 /* ───────────────────────────── render (src/render) ───────────────────────────── */
