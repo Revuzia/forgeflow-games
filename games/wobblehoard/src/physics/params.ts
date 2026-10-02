@@ -3,6 +3,7 @@
 // _harness/probe_softbody.ts; the "tuned:" notes record what moved them.
 import type { Genome } from '../core/genome.ts';
 import { clamp, lerp } from '../core/rng.ts';
+import { restRadiusOf } from './shape.ts';
 
 /** Fixed internal time step. 6 substeps per 60 Hz frame, 1 XPBD iteration each (small-step XPBD: stiffness from step size, not iteration count). */
 export const SUBSTEPS_PER_FRAME = 6;
@@ -52,8 +53,9 @@ export interface SoftParams {
 
 export function deriveParams(g: Genome): SoftParams {
   const f = clamp(g.firmness, 0, 1), b = clamp(g.bounce, 0, 1), s = clamp(g.stretch, 0, 1);
+  const sizeScale = 0.5 / restRadiusOf(g);   // bigger toys wobble slower (and carry the same energy at the same squash fraction)
   return {
-    smOmega: lerp(12, 40, f),
+    smOmega: lerp(12, 40, f) * sizeScale,
     bendK: lerp(0.08, 0.2, f),
     edgeAlphaT: lerp(3, 5.5, s),
     edgeSoftStrain: lerp(0.35, 1.6, s),
@@ -66,7 +68,7 @@ export function deriveParams(g: Genome): SoftParams {
     drag: lerp(2.0, 1.0, b),
     tableMu: 1.5,
     glue: 0.02,
-    squashDepth: lerp(0.66, 0.34, f),
+    squashDepth: lerp(0.66, 0.34, f) * lerp(1, 0.78, b),
     peakSoft: 0.12,
     maxPull: 1.0 + 1.4 * s,
   };

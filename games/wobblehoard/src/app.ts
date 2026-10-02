@@ -47,6 +47,12 @@ export const TUNING = {
    */
   bubbleAt: 0.3,
   bubbleFull: 0.6,
+  /**
+   * The contract scales stretch 0..1 up to 2.2x the rest extent, but the real body tops out near 0.3 even on a hard pull
+   * (measured: drag 0.4 -> 0.11, 1.0 -> 0.29, 1.5 -> 0.31). Stretch-driven sound, shake and FX divide by this so a full pull
+   * reads as ~1.
+   */
+  stretchFull: 0.35,
   consecutiveFrameErrorsFatal: 5,
   recentEvents: 32,
 } as const;
@@ -174,7 +180,6 @@ export function createApp(deps: AppDeps): App {
   // ---- settings: `persisted` is what the player chose; `settings` adds the session-only URL overrides ----
   let persisted: Settings = loadSettings(storage, env);
   let settings: Settings = sanitizeSettings({ ...persisted, ...(deps.overrides ?? {}) }, persisted);
-  const overridden = new Set<string>(Object.keys(deps.overrides ?? {}));
   let muted = !!deps.muted;
   let hiddenFlag = false;
 
@@ -253,7 +258,6 @@ export function createApp(deps: AppDeps): App {
     const v = sanitizeSetting(key, value, settings);
     settings = { ...settings, [key]: v };
     persisted = { ...persisted, [key]: v };
-    overridden.delete(key);
     saveSettings(storage, persisted);
     applySettings();
     fire(L.settings, { ...settings });
@@ -292,7 +296,7 @@ export function createApp(deps: AppDeps): App {
         const raw = (m.stretch - v.prevStretch) / Math.max(dt, 1e-3);
         v.stretchRate += (clamp(raw, -12, 12) - v.stretchRate) * 0.35;
         v.prevStretch = m.stretch;
-        comp = m.stretch; r = v.stretchRate;
+        comp = m.stretch / TUNING.stretchFull; r = v.stretchRate / TUNING.stretchFull;
       }
       if (Math.abs(r) > Math.abs(rate)) rate = r;
       try { v.handle.update({ compression: clamp01(comp), rate: Number.isFinite(r) ? r : 0, pan: fingerPan[f] }); } catch (e) { console.error(e); }
@@ -368,12 +372,13 @@ export function createApp(deps: AppDeps): App {
       case 'snap': {
         endVoice(f);
         profile.bump('releases');
-        audio.release({ compression: I, pitch: pitch(), pan: panOfPoint(ev.at) });
+        const S = clamp01(I / TUNING.stretchFull); // how hard the pull was, 0..1 (see stretchFull)
+        audio.release({ compression: S, pitch: pitch(), pan: panOfPoint(ev.at) });
         haptics.release();
-        stage.shake(0.1 + 0.4 * I);
-        if (I > 0.3) stage.spawnFx('bubbles', ev.at, I);
-        if (I > 0.5) stage.spawnFx('glitter', ev.at, I);
-        pops(1 + Math.min(2, Math.floor(I * 2.999)), ev.at, Math.max(0.4, I));
+        stage.shake(0.1 + 0.4 * S);
+        if (S > 0.25) stage.spawnFx('bubbles', ev.at, S);
+        if (S > 0.55) stage.spawnFx('glitter', ev.at, S);
+        pops(1 + Math.min(2, Math.floor(S * 2.999)), ev.at, Math.max(0.4, S));
         break;
       }
     }

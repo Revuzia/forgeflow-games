@@ -339,6 +339,28 @@ function press(r: Rig, x: number, y: number, ms: number): number {
   check('release FX: the hardest squeeze the physics produces (>= 0.6) earns three pops', hi.bubbles === 1 && hi.pops === 3, JSON.stringify(hi));
 }
 
+// ============================================================ snap FX gate (real pulls report stretch <= ~0.3)
+{
+  const snap = (intensity: number): { bubbles: number; glitter: number; pops: number; rel: number } => {
+    const r = rig({ auto: false });
+    const c = centre(r);
+    const id = r.id++;
+    r.app.input.pointerDown({ id, x: c.x, y: c.y, t: clk(r) });
+    r.w.run(r.app, 60);
+    r.w.body.queue({ kind: 'grab', finger: 0 });
+    r.w.run(r.app, 30);
+    r.w.body.queue({ kind: 'snap', finger: 0, intensity });
+    r.w.run(r.app, 600);
+    const fx = r.w.stage.rec.of('spawnFx').map((x) => x.args[0]);
+    return { bubbles: fx.filter((k) => k === 'bubbles').length, glitter: fx.filter((k) => k === 'glitter').length, pops: r.w.audio.rec.count('pop'), rel: (r.w.audio.rec.of('release')[0]?.args[0] as { compression: number } | undefined)?.compression ?? -1 };
+  };
+  const soft = snap(0.05), mid = snap(0.2), hard = snap(0.3);
+  check('snap FX: a tiny pull (0.05) gives one pop, no bubbles', soft.pops === 1 && soft.bubbles === 0 && soft.glitter === 0, JSON.stringify(soft));
+  check('snap FX: a real pull (0.2) gives bubbles + glitter + 2 pops', mid.bubbles === 1 && mid.glitter === 1 && mid.pops === 2, JSON.stringify(mid));
+  check('snap FX: the hardest pull the physics produces (0.3) earns three pops', hard.pops === 3 && hard.glitter === 1, JSON.stringify(hard));
+  check('snap sound: stretch is rescaled so a real full pull plays a deep release (compression arg ~0.57 at 0.2, ~0.86 at 0.3)', Math.abs(mid.rel - 0.2 / 0.35) < 1e-9 && Math.abs(hard.rel - 0.3 / 0.35) < 1e-9, `${mid.rel.toFixed(2)} / ${hard.rel.toFixed(2)}`);
+}
+
 // ============================================================ manual events: land, leaks without a release event, two fingers
 {
   const r = rig({ auto: false });
@@ -405,7 +427,7 @@ function press(r: Rig, x: number, y: number, ms: number): number {
   r.app.input.pointerMove({ id, x: sx + 90, y: sy - 20, t: clk(r) });
   r.w.run(r.app, 300);
   const gv = r.w.audio.allVoices[1];
-  check('pull: the stretch voice is driven by body stretch (compression arg = metrics.stretch)', gv.updates.length > 5 && gv.updates.at(-1)!.compression > 0.3 && r.w.body.rec.count('grabMove') >= 1);
+  check('pull: the stretch voice is driven by body stretch (rescaled by stretchFull, clamped 0..1)', gv.updates.length > 5 && gv.updates.at(-1)!.compression > 0.3 && r.w.body.rec.count('grabMove') >= 1);
   check('pull: stats.pulls counted', r.app.profile.profile.stats.pulls === 1);
   r.app.input.pointerUp({ id, x: sx + 90, y: sy - 20, t: clk(r) });
   r.w.run(r.app, 60);

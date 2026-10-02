@@ -126,7 +126,7 @@ const EMISSIVE_STAGE = /* glsl */`
   vec3 jV = normalize(cameraPosition - vWPos);
   vec3 jN = transformNormalByInverseViewMatrix(normal, viewMatrix);
   float jNdv = clamp(dot(jN, jV), 0.0, 1.0);
-  float jFres = pow(1.0 - jNdv, 3.0);
+  float jFres = pow(1.0 - jNdv, 3.4);
   float jRimSide = clamp(dot(jN, uRimDir) * 0.6 + 0.5, 0.0, 1.0);
   vec3 jRim = (uRimCol * (0.08 + 2.2 * jRimSide * jRimSide) + uGlowCol * 0.4) * jFres * uRimAmt;
   float jWrap = clamp((dot(jN, uKeyDir) + 0.55) / 1.55, 0.0, 1.0);
@@ -170,7 +170,7 @@ export class JellyMaterials {
       uTime: { value: 0 }, uCompress: { value: 0 }, uStretch: { value: 0 },
       uBlushAmt: { value: 1 }, uPatStrength: { value: patStrength },
       uCoreAmt: { value: 0.5 + genome.coreGlow * 0.9 }, uCoreRadius: { value: 0.3 * scale },
-      uRimAmt: { value: 0.95 }, uScatter: { value: 0.2 + 0.2 * genome.translucency }, uAlphaBase: { value: 0.86 - 0.14 * genome.translucency },
+      uRimAmt: { value: 0.8 }, uScatter: { value: 0.2 + 0.2 * genome.translucency }, uAlphaBase: { value: 0.86 - 0.14 * genome.translucency },
       uBlushCol: { value: lin(palette.blush) }, uPaleCol: { value: lin(palette.pale) },
       uPatA: { value: lin(palette.patA) }, uPatB: { value: lin(palette.patB) },
       uRimCol: { value: new THREE.Color(0x59d6e6) }, uGlowCol: { value: lin(palette.glow) },

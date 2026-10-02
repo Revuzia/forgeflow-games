@@ -21,9 +21,9 @@
 //   * "bounce high" = genome.bounce >= 0.7: the starter and the genomes with bounce = 1 (all firmness / stretch corners,
 //     both size extremes).
 //   * shape error: independent Procrustes (polar decomposition by Higham iteration), RMS over all vertices / restRadius.
-//   * the fuzz picks one of: step (25%), fingerDown, fingerPressure, fingerMove, fingerUp, grab, grabMove, grabRelease,
+//   * the fuzz picks one of: step (18%), fingerDown, fingerPressure, fingerMove, fingerUp, grab, grabMove, grabRelease,
 //     nudge, gravity toggle, step(0), reset. Every 4th run uses an extreme genome (firmness / bounce / stretch / size in
-//     {0, 1}); the others use randomGenome. After the events everything is released and the body gets 6 s to settle.
+//     {0, 1}); the others use randomGenome. After the events everything is released and the body gets 5 s to settle.
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -257,7 +257,8 @@ function fuzzRun(runIndex: number, nEvents: number): { stats: FuzzStats; hash: n
   };
 
   for (let e = 0; e < nEvents; e++) {
-    const pick = r();
+    const u = r();
+    const pick = u < 0.18 ? 0 : 0.25 + (u - 0.18) * (0.75 / 0.82);   // 18% step events, the rest spread over the other kinds
     const id = (r() < 0.5 ? 0 : 1) as 0 | 1;
     let tag = 'step';
     if (pick < 0.25) {
@@ -298,9 +299,9 @@ function fuzzRun(runIndex: number, nEvents: number): { stats: FuzzStats; hash: n
   }
   // the body must settle once everything is let go (gravity back on): 6 s of fixed frames
   b.fingerUp(0); b.fingerUp(1); b.grabRelease(0); b.grabRelease(1); b.gravity = true;
-  for (let i = 0; i < 60 * 6; i++) b.step(DT);
+  for (let i = 0; i < 60 * 5; i++) b.step(DT);
   checkInvariants('settle');
-  if (!(b.metrics.kinetic < 0.02)) { stats.unsettled++; if (stats.failures.length < 5) stats.failures.push(`run ${runIndex}: not settled after 6 s (kinetic ${b.metrics.kinetic.toFixed(3)})`); }
+  if (!(b.metrics.kinetic < 0.02)) { stats.unsettled++; if (stats.failures.length < 5) stats.failures.push(`run ${runIndex}: not settled after 5 s (kinetic ${b.metrics.kinetic.toFixed(3)})`); }
   return { stats, hash: b.stateHash() };
 }
 
@@ -502,6 +503,18 @@ async function main(): Promise<void> {
     add('G1', 'raycast: zero-length dir and NaN origin return null', `${ray0 === null && rayNaN === null}`, 'true', ray0 === null && rayNaN === null);
   }
 
+  // the fine mesh (detail 4, offline / quality only) obeys the same contract
+  {
+    const b = new SoftBody(starter, { detail: 4 });
+    run(b, 1);
+    const rest0 = Float32Array.from(b.positions);
+    touch(b, 0, v3(0.22, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 1); run(b, 0.6);
+    const vMid = b.metrics.volume, cMid = b.metrics.compression;
+    b.fingerUp(0); run(b, 4);
+    let mv = 0; for (let i = 0; i < rest0.length; i++) mv = Math.max(mv, Math.abs(rest0[i] - b.positions[i]));
+    add('G1', `detail 4 (${b.vertexCount} vertices): squeeze and release, volume while squeezed, compression, shape error 4 s later`, `${f2(vMid, 3)}, ${f2(cMid, 2)}, ${f2(shapeFit(b) * 100, 2)} % R`, 'vol 0.85..1.15, comp > 0.1, <= 3 %', b.vertexCount === 2562 && vMid > 0.85 && vMid < 1.15 && cMid > 0.1 && shapeFit(b) <= 0.03 && Number.isFinite(mv) && b.debug.safetyResets === 0);
+  }
+
   // determinism of scripted input
   {
     const script = (seed: number): number[] => {
@@ -606,7 +619,7 @@ async function main(): Promise<void> {
     add('G1', 'fuzz mesh inversions (signed volume <= 0)', String(st.inverted), '0', st.inverted === 0);
     add('G1', `fuzz table penetrations > 1% R (worst ${f2(st.maxPen * 100, 2)}% R)`, String(st.penetrations), '0', st.penetrations === 0);
     add('G1', 'fuzz: signed volume ratio seen (min .. max) under random abuse', `${f2(st.minVolRatio, 2)} .. ${f2(st.maxVolRatio, 2)}`, '> 0 (information)', st.minVolRatio > 0);
-    add('G1', 'fuzz: bodies still settled (kinetic < 0.02) 6 s after everything is released', `${FUZZ_RUNS - st.unsettled}/${FUZZ_RUNS}`, 'all', st.unsettled === 0);
+    add('G1', 'fuzz: bodies still settled (kinetic < 0.02) 5 s after everything is released', `${FUZZ_RUNS - st.unsettled}/${FUZZ_RUNS}`, 'all', st.unsettled === 0);
     add('G1', 'fuzz: emergency non-finite recoveries (debug.safetyResets) used', String(st.safetyResets), '0', st.safetyResets === 0);
     add('info', 'fuzz: farthest horizontal centre excursion (a nudge or a float shove may carry it)', `${f2(st.maxCenter, 2)} m`, '(information)', true);
     // determinism of the fuzz itself: replay one run twice in this thread and against the pool result
