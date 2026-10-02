@@ -278,6 +278,7 @@ export class SoftBody implements SoftBodyLike {
     if (on === this.gravityOn) return;
     this.gravityOn = on;
     this.airSub = 0;
+    if (!on) { this.pinned.fill(0); this.pinCount = 0; }   // a floating body has no table to be glued to
   }
 
   // ------------------------------------------------------------------------------------------------ public API

@@ -6,6 +6,9 @@ import type { Genome } from './core/genome.ts';
 
 export interface V3 { x: number; y: number; z: number }
 
+/** Rarity tier names, lowest to highest (src/core/rarity.ts is the data source; this literal union keeps contracts import-free). */
+export type TierName = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic';
+
 /* ───────────────────────────── physics (src/physics) — pure TypeScript, NO three.js import, deterministic ───────────────────────────── */
 
 /** Discrete things that happened this step. Audio, haptics, FX and screen shake all key off these. */
@@ -36,6 +39,9 @@ export interface SoftMetrics {
   grounded: boolean;        // resting on the table (always false in float mode unless it touches it)
   fingers: number;          // number of fingers currently down (0..2)
   grabbed: boolean;
+  /** Round 2 (PHYS fills these in; consumers must treat undefined as 0). */
+  press?: number;           // 0..1 deepest current finger indentation (fraction of restRadius * max safe depth). Unlike `compression` this is non-zero for a single-finger dent, so audio/haptics/FX should drive from max(compression, press)
+  reaction?: number;        // 0..1 normalised summed finger-projection correction: how hard the body pushes back (a firmness signal for audio and haptics)
 }
 
 export interface RayHit { point: V3; normal: V3; vertex: number; t: number }
@@ -77,6 +83,19 @@ export interface SoftBodyLike {
   grab(id: 0 | 1, vertex: number, target: V3): void;
   grabMove(id: 0 | 1, target: V3): void;
   grabRelease(id: 0 | 1): void;
+
+  /**
+   * Ceremony drivers (round 2, OPTIONAL: PHYS implements them; the renderer feature-detects and falls back to a procedural
+   * puppet when absent). Used by the merge ceremony (DESIGN.md section 6.4) and the capsule reveal.
+   */
+  /** 0..1: morph the shape-matching goal toward an equal-volume sphere ("fold into a glowing ball"); 0 = own rest shape. Eased, never snaps. */
+  setFold?(t: number): void;
+  /** Kinematic spring of the centre of mass toward a world point (slide to the merge pad); null releases it. stiffness ~1 = default. */
+  moveTo?(p: V3 | null, stiffness?: number): void;
+  /** 0..1: high-frequency goal jitter (the charge-up tremble). 0 = off. */
+  tremble?(amp: number): void;
+  /** Spring open: radial impulse + goal overshoot (~1.25x) that settles by itself (the T3 burst). strength 0..1. */
+  burstOpen?(strength: number): void;
 
   /** External shove (screen-bump, drop-in). World-space velocity change applied to every particle. */
   nudge(impulse: V3): void;
@@ -136,6 +155,18 @@ export interface SquishAudio {
   setPaused?(paused: boolean): void;
   /** Optional: stop the housekeeping timer and close the context. The instance is unusable afterwards. */
   dispose?(): void;
+
+  /* Round 2 (OPTIONAL members so existing mocks keep compiling; AUDIO implements them, see DESIGN.md sections 6.2-6.5). */
+  /** Meter full: two-note rising "plink-plonk" (~180 ms), quieter when `quiet` (player mid-squeeze). */
+  meterFull?(p?: { quiet?: boolean; pitch?: number }): void;
+  /** Capsule beats: 'grab' = soft rising squeak while squeezing (progress 0..1), 'crack' = shell tick, 'burst' = pop + short tier cue. */
+  capsuleBeat?(p: { beat: 'grab' | 'crack' | 'burst'; progress?: number; tier?: TierName; pitch?: number }): void;
+  /** The tier motif of the reveal (DESIGN 6.5). `mythicVariant` (0..2) selects the unique 3-note motif of each Mythic. `tierUp` adds the rising ladder. durationS fits the budget in DESIGN 6.1; `calm` shortens and softens. */
+  reveal?(p: { tier: TierName; tierUp?: boolean; isNew?: boolean; mythicVariant?: number; durationS?: number; calm?: boolean; pitch?: number }): void;
+  /** Merge ceremony T0..T2: hum + squelch + noise-tick density rising for `chargeS`; call burst() at T3 with the result, stop() to abort. */
+  mergeStart?(p: { tier: TierName; chargeS?: number; calm?: boolean; pitch?: number }): { burst(p: { tier: TierName; tierUp?: boolean; mythicVariant?: number }): void; stop(): void };
+  /** Duck the master by `db` (negative) for `ms` (the 250 ms Mythic pre-roll duck). */
+  duck?(p: { db: number; ms: number }): void;
 }
 
 /* ───────────────────────────── render (src/render) ───────────────────────────── */

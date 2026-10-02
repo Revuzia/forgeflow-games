@@ -425,6 +425,27 @@ async function main(): Promise<void> {
     add('G1', 'events: never two of a kind from the same finger within 50 ms (whole log above)', dirty.length ? `spam: ${dirty.join(',')}` : `ok (${log.length} events)`, 'ok', dirty.length === 0);
   }
 
+  // rubbing: the fingertip follows the pointer across the surface (fingerMove) and rises over the swirl-peak
+  {
+    const b = new SoftBody(starter);
+    settle(b, 1);
+    const h0 = b.raycast(v3(-0.25, 4, 0), v3(0, -1, 0))!;
+    b.fingerDown(0, { point: h0.point, normal: h0.normal, dir: v3(0, -1, 0) }); b.fingerPressure(0, 0.4);
+    let worstLag = 0, tipTop = -1, finite = true;
+    for (let i = 0; i < 120; i++) {
+      const x = -0.25 + 0.5 * Math.min(1, i / 90);
+      const hit = b.raycast(v3(x, 4, 0), v3(0, -1, 0));
+      if (hit) b.fingerMove(0, hit.point);
+      b.step(DT);
+      const t = b.tip(0);
+      if (!t || !Number.isFinite(t.x + t.y + t.z)) { finite = false; continue; }
+      if (i >= 30) worstLag = Math.max(worstLag, Math.abs(t.x - x));
+      tipTop = Math.max(tipTop, t.y);
+    }
+    const lowestRef = h0.point.y;
+    add('G1', 'rub: a fingertip dragged 0.5 m across the dome follows the pointer (worst x lag) and rises over the swirl-peak', `lag ${f2(worstLag, 3)} m, tip height ${f2(lowestRef, 2)} -> ${f2(tipTop, 2)} m, finite ${finite}`, 'lag < 0.05 m, rise > 0.1 m', finite && worstLag < 0.05 && tipTop - lowestRef > 0.1);
+  }
+
   // peak flop under a side poke
   {
     const b = new SoftBody(starter);

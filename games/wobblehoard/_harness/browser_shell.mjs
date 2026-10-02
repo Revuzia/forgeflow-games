@@ -10,8 +10,10 @@
 // Screenshots go to _shots/shell/ (gitignored); the JSON report to _harness/_reports/shell.json.
 // Usage: node _harness/browser_shell.mjs [--quick] [--port=5365] [--only=name,name]
 // (--quick skips the 20 s hint-comes-back wait)
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
+import { extname, resolve } from 'node:path';
 import { ROOT, launch, startVite } from './pw.mjs';
 
 process.env.WH_FROZEN = '1'; // no HMR / file watching while the harness runs
@@ -377,7 +379,7 @@ async function main() {
         wh.pointerUp();
         wh.step(1 / 60, 20);
         const rel = wh.state();
-        log.release = { releases: rel.audio.started.release - s0.audio.started.release, pops: rel.audio.started.pop - s0.audio.started.pop, kinds: rel.events.map((e) => e.kind), maxIntensity: Math.max(...rel.events.filter((e) => e.kind === 'release').map((e) => e.intensity)) };
+        log.release = { releases: rel.audio.started.release - s0.audio.started.release, pops: rel.audio.started.pop - s0.audio.started.pop, kinds: rel.events.map((e) => e.kind), maxIntensity: rel.events.filter((e) => e.kind === 'release').at(-1)?.intensity ?? 0 };
         wh.step(1 / 60, 240);
         const rest = wh.state();
         log.rest = { volume: rest.metrics.volume, compression: rest.metrics.compression, fingers: rest.metrics.fingers };
@@ -737,9 +739,10 @@ async function main() {
       await page.mouse.move(B.x * vp.width, B.y * vp.height - 20);
       await page.mouse.down();
       await sleep(500);
+      await waitUntil(page, () => window.__WH__.state().metrics.fingers === 1, null, 20000);
       await page.evaluate(() => window.dispatchEvent(new Event('blur')));
-      await sleep(600);
-      check('window blur mid-press releases the finger', (await state(page)).metrics.fingers === 0);
+      const blurFreed = await waitUntil(page, () => window.__WH__.state().metrics.fingers === 0, null, 30000);
+      check('window blur mid-press releases the finger', blurFreed, `fingers ${(await state(page)).metrics.fingers}`);
       await page.mouse.up();
       await context.close();
     });
@@ -906,6 +909,43 @@ async function main() {
       const x = await page.evaluate(() => ({ hook: typeof window.__WH__, dev: !!document.querySelector('.dev'), lab: !!document.querySelector('.lab') }));
       check('without ?dev=1: window.__WH__ is NOT exposed, no stats overlay', x.hook === 'undefined' && !x.dev && !x.lab, JSON.stringify(x));
       await context.close();
+    });
+
+    // ------------------------------------------------------------------------------------------------
+    // the PRODUCTION build (vite build -> static files, relative base './'): chunks load, boots, plays, no dev hook
+    // ------------------------------------------------------------------------------------------------
+    await section('prod-build', async () => {
+      const out = resolve(SHOTS, 'dist_check');
+      const b = spawnSync('npx', ['vite', 'build', '--outDir', out, '--emptyOutDir'], { cwd: ROOT, encoding: 'utf8' });
+      check('vite build succeeds', b.status === 0, (b.stderr || '').split('\n')[0]);
+      if (b.status !== 0) return;
+      const size = (dir) => readdirSync(dir, { withFileTypes: true }).reduce((n, e) => n + (e.isDirectory() ? size(resolve(dir, e.name)) : statSync(resolve(dir, e.name)).size), 0);
+      const total = size(out);
+      check('dist stays under the 1.2 MB budget (G0)', total < 1.2 * 1024 * 1024, `${(total / 1024).toFixed(0)} KB`);
+      const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' };
+      const server = createServer((req, res) => {
+        const path = resolve(out, '.' + decodeURIComponent((req.url ?? '/').split('?')[0]).replace(/\/$/, '/index.html'));
+        if (!path.startsWith(out) || !existsSync(path) || statSync(path).isDirectory()) { res.statusCode = 404; res.end('nope'); return; }
+        res.setHeader('Content-Type', MIME[extname(path)] ?? 'application/octet-stream');
+        res.end(readFileSync(path));
+      });
+      await new Promise((ok) => server.listen(PORT + 1, ok));
+      try {
+        const context = await browser.newContext(DESKTOP);
+        const page = await context.newPage();
+        const w = watch(page);
+        await page.goto(`http://localhost:${PORT + 1}/index.html`, { waitUntil: 'load' });
+        await page.waitForSelector('.cta:not([disabled])', { timeout: 120000 });
+        const c = await ctaCentre(page);
+        await page.mouse.click(c.x, c.y);
+        await page.waitForFunction(() => document.body.dataset.phase === 'play', null, { timeout: 30000 });
+        await sleep(1500);
+        const info = await page.evaluate(() => ({ hook: typeof window.__WH__, dev: !!document.querySelector('.dev'), hud: getComputedStyle(document.querySelector('.hud')).visibility, scripts: [...document.scripts].map((s) => s.src).filter(Boolean) }));
+        check('production build: boots from static files, title -> play, no dev hook / overlay', info.hook === 'undefined' && !info.dev && info.hud === 'visible', JSON.stringify(info));
+        check('production build: 0 console errors / warnings, 0 failed requests', w.errors.length === 0 && w.failed.length === 0 && w.bad.length === 0, [...w.errors, ...w.failed, ...w.bad].slice(0, 3).join(' | '));
+        await shot(page, 'prod_build_play');
+        await context.close();
+      } finally { server.close(); }
     });
 
     // ------------------------------------------------------------------------------------------------

@@ -1,0 +1,12 @@
+import { SoftBody } from '../src/physics/softbody.ts';
+import { makeStarterGenome } from '../src/core/genome.ts';
+const v = (x: number, y: number, z: number) => ({ x, y, z });
+const b = new SoftBody(makeStarterGenome());
+for (let i = 0; i < 120; i++) b.step(1 / 60);
+const mk = (sx: number) => { const o = v(sx * 3, 0.35, 0), d = v(-sx, 0, 0); const h = b.raycast(o, d)!; return { point: h.point, normal: h.normal, dir: d }; };
+b.fingerDown(0, mk(-1)); b.fingerPressure(0, 1);
+for (let i = 0; i < 90; i++) b.step(1 / 60);
+const t0 = b.tip!(0)!; console.log('finger0 alone tip x', t0.x.toFixed(4), 'depth', t0.depth.toFixed(2));
+b.fingerDown(1, mk(1));
+b.step(1 / 360);
+const t1 = b.tip!(0)!; console.log('after 2nd fingerDown, 1 substep later finger0 tip x', t1.x.toFixed(4), ' jump', Math.abs(t1.x - t0.x).toFixed(4), 'm =', (Math.abs(t1.x - t0.x) / b.restRadius).toFixed(3), 'R');

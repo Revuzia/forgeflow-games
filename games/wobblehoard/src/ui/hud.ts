@@ -62,12 +62,17 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
     const cs = getComputedStyle(hintEl);
     let size = parseFloat(cs.fontSize) || 14;
     const max = parseFloat(cs.maxWidth);
-    const avail = Number.isFinite(max) ? max : document.documentElement.clientWidth - 32;
+    const border = hintEl.offsetWidth - hintEl.clientWidth; // box-sizing: border-box, scrollWidth excludes the border
+    const avail = (Number.isFinite(max) ? max : document.documentElement.clientWidth - 32) - border;
     while (hintEl.scrollWidth > avail + 0.5 && size > MIN_FONT) { size -= 0.5; hintEl.style.fontSize = `${size}px`; }
     if (hintEl.scrollWidth > avail + 0.5) hintEl.style.whiteSpace = ''; // still too long at the minimum: let it wrap
   };
   fitHint();
-  window.addEventListener('resize', fitHint);
+  // The HUD root is fixed full-screen, so a ResizeObserver on it fires after every viewport / orientation change, once layout
+  // and the media queries are up to date (a window 'resize' listener can run too early). It never resizes itself, so no loop.
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => fitHint()) : null;
+  if (ro) ro.observe(el); else window.addEventListener('resize', fitHint);
+  void document.fonts?.ready.then(fitHint);
 
   let active = false;
   const refreshHint = (): void => { hintEl.dataset.show = String(active && hint.visible(now())); };
@@ -82,6 +87,6 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
     setGearOpen(open) { gear.setAttribute('aria-expanded', String(open)); },
     interact() { hint.interact(now()); refreshHint(); },
     hintVisible: () => hintEl.dataset.show === 'true',
-    destroy() { clearInterval(timer); window.removeEventListener('resize', fitHint); el.remove(); },
+    destroy() { clearInterval(timer); ro?.disconnect(); window.removeEventListener('resize', fitHint); el.remove(); },
   };
 }

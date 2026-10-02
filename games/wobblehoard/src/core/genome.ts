@@ -5,11 +5,14 @@
 // Every number is stored QUANTISED to 1/255 (hue to whole degrees) so encode/decode is lossless and a genome can be
 // compared, hashed and stored server-side without float drift.
 import { mulberry32, clamp, hashString } from './rng.ts';
+// The species list now lives in the catalog (src/data/catalog.ts): append-only, position = idx = the byte stored in share strings.
+// genome.ts only READS it inside functions (never at module load), so the catalog <-> genome import cycle is safe in either order.
+import { SPECIES } from '../data/catalog.ts';
+import type { SpeciesId } from '../data/catalog.ts';
+export { SPECIES };
+export type { SpeciesId };
 
 export const GENOME_VERSION = 1 as const;
-
-export const SPECIES = ['dollop'] as const;
-export type SpeciesId = (typeof SPECIES)[number];
 export const PATTERNS = ['plain', 'speckle', 'swirl', 'bands'] as const;
 export type PatternId = (typeof PATTERNS)[number];
 export const EYE_STYLES = ['dot', 'oval', 'sleepy', 'wide'] as const;
