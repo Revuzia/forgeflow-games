@@ -20,6 +20,6 @@ export function createHintController(idleMs: number = HINT_IDLE_MS): HintControl
 
 /** Wording per input style. One line, plain words. */
 export const HINT_TEXT = {
-  touch: 'Tap to poke · hold to squish · pull from the edge',
+  touch: 'Tap to poke · hold to squish · pull the edge',
   pointer: 'Click to poke · hold to squish · drag off the edge to pull',
 } as const;

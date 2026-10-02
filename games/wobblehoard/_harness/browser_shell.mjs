@@ -65,6 +65,8 @@ async function open({ query = '?dev=1', ctx = DESKTOP, init = null, waitTitle = 
   return { context, page, w };
 }
 const state = (page) => page.evaluate(() => window.__WH__.state());
+async function fpsNote(page, label) { const f = (await state(page)).fps; fpsLog.push([label, f]); console.log(`   fps ${f} (${label})`); return f; }
+const fpsLog = [];
 const started = (page) => page.evaluate(() => window.__WH__.state().audio.started);
 const body = (page) => page.evaluate(() => window.__WH__.bodyScreen());
 async function ctaCentre(page) { const b = await page.locator('.cta').boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }
@@ -132,7 +134,7 @@ async function layoutOf(page) {
       sw: d.scrollWidth, sh: d.scrollHeight, iw: innerWidth, ih: innerHeight, bsw: document.body.scrollWidth, bsh: document.body.scrollHeight,
       gear: r(q('.hud-actions button[aria-label="Settings"]')), mute: r(q('.hud-actions button[aria-pressed]')), hint: r(hint), name: r(q('.nametag')), wordmark: r(q('.wordmark')), panel: r(q('.panel')),
       hintFont: hint ? parseFloat(getComputedStyle(hint).fontSize) : 0, hintClipped: hint ? hint.scrollWidth > hint.clientWidth + 1 : false,
-      hintLines: hint ? Math.round(hint.getBoundingClientRect().height / parseFloat(getComputedStyle(hint).lineHeight)) : 0,
+      hintLines: hint ? (() => { const rg = document.createRange(); rg.selectNodeContents(hint); return new Set([...rg.getClientRects()].map((q) => Math.round(q.top))).size; })() : 0,
     };
   });
 }
@@ -194,6 +196,7 @@ async function main() {
       const B = await body(page);
       const cx = B.x * vp.width, cy = B.y * vp.height, r = B.rPx;
       const px = (dx, dy) => [cx + dx * r, cy + dy * r];
+      await fpsNote(page, 'desktop, mouse section start');
 
       // tap -> poke
       let seen = await evKeys(page), a0 = await started(page);
@@ -212,21 +215,21 @@ async function main() {
       const press = await waitEvent(page, seen, 'press', { finger: 0, timeout: 20000 });
       const a2 = await started(page);
       check('mouse hold -> a press SoftEvent (after >= 0.18 s) and exactly one audio squish voice', !!press && a2.squish === a0.squish + 1, `squish voices ${a0.squish}->${a2.squish}`);
-      await sleep(1100);
+      const deep = await waitUntil(page, () => window.__WH__.state().metrics.compression > 0.2, null, 60000);
       const mid = await state(page);
-      check('held squish: the pressure ramp deepens the squeeze (compression > 0.25) and volume stays 0.85..1.15', mid.metrics.compression > 0.25 && mid.metrics.volume > 0.85 && mid.metrics.volume < 1.15 && mid.metrics.fingers === 1, `compression ${mid.metrics.compression.toFixed(2)}, volume ${mid.metrics.volume.toFixed(3)}`);
+      check('held squish: the pressure ramp deepens the squeeze (compression > 0.2 while held) and volume stays 0.85..1.15', deep && mid.metrics.volume > 0.85 && mid.metrics.volume < 1.15 && mid.metrics.fingers === 1, `compression ${mid.metrics.compression.toFixed(2)}, volume ${mid.metrics.volume.toFixed(3)}, fps ${mid.fps}`);
       check('held squish: still exactly one squish voice after 1.3 s (no re-triggering)', (await started(page)).squish === a0.squish + 1);
       await shot(page, 'squish_held_desktop');
       const seenRel = await evKeys(page);
       const a3 = await started(page);
       await page.mouse.up();
-      const rel = await waitEvent(page, seenRel, 'release', { finger: 0 });
+      const rel = await waitEvent(page, seenRel, 'release', { finger: 0, timeout: 40000 });
       const a4 = await started(page);
       check('mouse release -> a release SoftEvent and an audio release voice', !!rel && a4.release === a3.release + 1, `release intensity ${rel?.intensity?.toFixed(2)}, audio.release ${a3.release}->${a4.release}`);
-      check('a hard release spawns pops (bubble fx)', await waitUntil(page, (n) => window.__WH__.state().audio.started.pop > n, a3.pop, 6000), `pops ${a3.pop}->${(await started(page)).pop}`);
+      check('a hard release spawns pops (bubble fx)', await waitUntil(page, (n) => window.__WH__.state().audio.started.pop > n, a3.pop, 30000), `pops ${a3.pop}->${(await started(page)).pop}`);
       await sleep(80);
       await shot(page, 'release_t80_desktop');
-      await sleep(1500);
+      await waitUntil(page, () => { const m = window.__WH__.state().metrics; return m.compression < 0.06 && m.fingers === 0; }, null, 60000);
       const rest = await state(page);
       check('after release the body recovers (volume 1 +- 0.03, compression ~0)', Math.abs(rest.metrics.volume - 1) < 0.03 && rest.metrics.compression < 0.1 && rest.metrics.fingers === 0, `volume ${rest.metrics.volume.toFixed(3)}, compression ${rest.metrics.compression.toFixed(2)}`);
 
@@ -236,32 +239,33 @@ async function main() {
       await page.mouse.down();
       await sleep(120);
       for (let i = 1; i <= 8; i++) { await page.mouse.move(...px(-0.45 + i * 0.07, 0.1 + i * 0.03)); await sleep(60); }
+      await waitUntil(page, () => window.__WH__.state().metrics.fingers === 1, null, 30000);
       const rubS = await state(page);
       check('rub: press-then-move keeps ONE finger on the body, no pull', rubS.metrics.fingers === 1 && !rubS.metrics.grabbed, `fingers ${rubS.metrics.fingers}, grabbed ${rubS.metrics.grabbed}`);
       await page.mouse.up();
-      check('rub: no grab event was produced', !(await waitEvent(page, seen, 'grab', { timeout: 1200 })));
-      await sleep(900);
+      check('rub: no grab event was produced', !(await waitEvent(page, seen, 'grab', { timeout: 1500 })));
+      await waitUntil(page, () => { const m = window.__WH__.state().metrics; return m.fingers === 0 && m.compression < 0.06; }, null, 60000);
 
       // pull: press on the right shoulder, drag outward -> grab, stretch, snap
       seen = await evKeys(page); a0 = await started(page);
       await page.mouse.move(...px(0.62, -0.05));
       await page.mouse.down();
       await sleep(150);
-      for (let i = 1; i <= 10; i++) { await page.mouse.move(cx + 0.62 * r + i * 14, cy - 0.05 * r - i * 3); await sleep(50); }
-      const grab = await waitEvent(page, seen, 'grab', { timeout: 15000 });
-      await sleep(900);
+      for (let i = 1; i <= 12; i++) { await page.mouse.move(cx + 0.62 * r + i * 22, cy - 0.05 * r - i * 5); await sleep(50); }
+      const grab = await waitEvent(page, seen, 'grab', { timeout: 40000 });
+      await waitUntil(page, () => { const m = window.__WH__.state().metrics; return m.grabbed && m.stretch > 0.1; }, null, 60000);
       const pullS = await state(page);
-      check('pull: outward drag from the body -> a grab SoftEvent, metrics.grabbed, real stretch', !!grab && pullS.metrics.grabbed === true && pullS.metrics.stretch > 0.08, `stretch ${pullS.metrics.stretch.toFixed(2)}`);
+      check('pull: outward drag from the body -> a grab SoftEvent, metrics.grabbed, real stretch (> 0.1)', !!grab && pullS.metrics.grabbed === true && pullS.metrics.stretch > 0.1, `stretch ${pullS.metrics.stretch.toFixed(2)}`);
       const a5 = await started(page);
       check('pull: the stretch drives an audio squish voice', a5.squish > a0.squish, `squish voices ${a0.squish}->${a5.squish}`);
       await shot(page, 'pull_desktop');
       const seenSnap = await evKeys(page);
       const a6 = await started(page);
       await page.mouse.up();
-      const snap = await waitEvent(page, seenSnap, 'snap', { timeout: 15000 });
+      const snap = await waitEvent(page, seenSnap, 'snap', { timeout: 40000 });
       const a7 = await started(page);
       check('pull release -> a snap SoftEvent, audio release + pops', !!snap && a7.release > a6.release, `snap intensity ${snap?.intensity?.toFixed(2)}, release ${a6.release}->${a7.release}`);
-      await sleep(1500);
+      await waitUntil(page, () => { const m = window.__WH__.state().metrics; return !m.grabbed && m.stretch < 0.05; }, null, 60000);
       const afterPull = await state(page);
       check('after the snap the body is back (volume 1 +- 0.03, not grabbed)', !afterPull.metrics.grabbed && Math.abs(afterPull.metrics.volume - 1) < 0.03, `volume ${afterPull.metrics.volume.toFixed(3)}`);
 
@@ -272,7 +276,7 @@ async function main() {
       await page.mouse.down();
       for (let i = 1; i <= 12; i++) { await page.mouse.move(90 + i * 22, 140 + i * 3); await sleep(35); }
       await page.mouse.up();
-      await sleep(1200);
+      await sleep(2500);
       const s1 = await canvasSig(page);
       const a8 = await started(page);
       check('orbit: dragging empty space turns the view (image changes) without poking the body', sigDiff(s0, s1) > 1.2 && a8.poke === a0.poke, `mean abs diff ${sigDiff(s0, s1).toFixed(2)}`);
@@ -282,15 +286,17 @@ async function main() {
       const r0 = (await body(page)).rPx;
       await page.mouse.move(90, 140);
       await page.mouse.wheel(0, -700);
-      await sleep(1600);
+      await waitUntil(page, (v) => window.__WH__.bodyScreen().rPx > v * 1.05, r0, 60000);
+      await sleep(1500);
       const r1 = (await body(page)).rPx;
       check('wheel up zooms in (the squishy gets bigger on screen)', r1 > r0 * 1.05, `rPx ${r0.toFixed(0)} -> ${r1.toFixed(0)}`);
       await page.mouse.wheel(0, 1400);
-      await sleep(1600);
+      await waitUntil(page, (v) => window.__WH__.bodyScreen().rPx < v * 0.95, r1, 60000);
+      await sleep(1500);
       const r2 = (await body(page)).rPx;
       check('wheel down zooms out', r2 < r1 * 0.95, `rPx ${r1.toFixed(0)} -> ${r2.toFixed(0)}`);
       await page.mouse.wheel(0, -700);
-      await sleep(1200);
+      await sleep(2500);
 
       // right button on the body = orbit, never a finger
       const B2 = await body(page);
@@ -303,16 +309,16 @@ async function main() {
       const dur = await state(page);
       for (let i = 1; i <= 8; i++) { await page.mouse.move(bx + i * 14, by + 2 * i); await sleep(40); }
       await page.mouse.up({ button: 'right' });
-      await sleep(900);
+      await sleep(2500);
       const sR1 = await canvasSig(page);
       check('right button on the body orbits: no finger down, no poke, view changes', dur.metrics.fingers === 0 && (await started(page)).poke === a0.poke && sigDiff(sR0, sR1) > 0.8, `fingers ${dur.metrics.fingers}, diff ${sigDiff(sR0, sR1).toFixed(2)}`);
 
       // keyboard
       seen = await evKeys(page); a0 = await started(page);
       await page.keyboard.down('Space'); await sleep(60); await page.keyboard.up('Space');
-      const kp = await waitEvent(page, seen, 'poke', { finger: 0 });
+      const kp = await waitEvent(page, seen, 'poke', { finger: 0, timeout: 40000 });
       check('keyboard: Space pokes the centre of the squishy (poke SoftEvent + audio poke)', !!kp && (await started(page)).poke === a0.poke + 1);
-      await sleep(900);
+      await waitUntil(page, () => window.__WH__.state().metrics.fingers === 0, null, 30000);
       await page.keyboard.press('g');
       await sleep(400);
       let ks = await state(page);
@@ -329,11 +335,88 @@ async function main() {
       check('keyboard: M again unmutes', await page.evaluate(() => document.querySelector('.hud-actions button[aria-pressed]').getAttribute('aria-pressed') === 'false'));
       const keyHold = await started(page);
       await page.keyboard.down('Space');
-      await sleep(1500);
+      const kd = await waitUntil(page, () => window.__WH__.state().metrics.compression > 0.12, null, 60000);
       const kh = await state(page);
       await page.keyboard.up('Space');
-      check('keyboard: holding Space squishes (fingers 1, a squish voice, compression rises)', kh.metrics.fingers === 1 && (await started(page)).squish > keyHold.squish && kh.metrics.compression > 0.15, `compression ${kh.metrics.compression.toFixed(2)}`);
-      await sleep(1200);
+      check('keyboard: holding Space squishes (fingers 1, a squish voice, compression rises)', kd && kh.metrics.fingers === 1 && (await started(page)).squish > keyHold.squish, `compression ${kh.metrics.compression.toFixed(2)}`);
+      await waitUntil(page, () => window.__WH__.state().metrics.fingers === 0, null, 60000);
+    });
+
+    // ------------------------------------------------------------------------------------------------
+    // G4 via the debug hook: paused + step() makes squeezing, pulling and releasing machine-speed independent.
+    // The synthetic pointer goes through the SAME gesture code path as a real pointer (contracts.ts DebugHook).
+    // ------------------------------------------------------------------------------------------------
+    await section('hook-deterministic', async () => {
+      const { page } = D;
+      const out = await page.evaluate(() => {
+        const wh = window.__WH__;
+        const log = {};
+        const B = wh.bodyScreen();
+        wh.pause();
+        wh.step(1 / 60, 30);
+        // --- tap: 50 ms down, then up
+        let s0 = wh.state();
+        wh.pointerDown(B.x, B.y - 0.05);
+        wh.step(1 / 60, 3);
+        wh.pointerUp();
+        wh.step(1 / 60, 40);
+        let s1 = wh.state();
+        log.tap = { pokes: s1.audio.started.poke - s0.audio.started.poke, squish: s1.audio.started.squish - s0.audio.started.squish, kinds: s1.events.map((e) => e.kind).slice(-4) };
+        // --- hold 1.6 s (pressure ramp 0.55 -> 1 over 0.9 s after 0.18 s), sample compression on the way
+        s0 = wh.state();
+        wh.pointerDown(B.x, B.y - 0.05);
+        const comp = [];
+        for (let i = 0; i < 8; i++) { wh.step(1 / 60, 12); comp.push(+wh.state().metrics.compression.toFixed(3)); }
+        const held = wh.state();
+        log.hold = { comp, voices: held.audio.started.squish - s0.audio.started.squish, fingers: held.metrics.fingers, volume: held.metrics.volume };
+        wh.pointerUp();
+        wh.step(1 / 60, 20);
+        const rel = wh.state();
+        log.release = { releases: rel.audio.started.release - s0.audio.started.release, pops: rel.audio.started.pop - s0.audio.started.pop, kinds: rel.events.map((e) => e.kind), maxIntensity: Math.max(...rel.events.filter((e) => e.kind === 'release').map((e) => e.intensity)) };
+        wh.step(1 / 60, 240);
+        const rest = wh.state();
+        log.rest = { volume: rest.metrics.volume, compression: rest.metrics.compression, fingers: rest.metrics.fingers };
+        log.afterRelease = { pops: rest.audio.started.pop - s0.audio.started.pop };
+        // --- pull: press the right shoulder, drag outward, hold, let go
+        s0 = wh.state();
+        const rr = B.rPx / window.innerWidth;
+        wh.pointerDown(B.x + 0.62 * rr, B.y - 0.04);
+        wh.step(1 / 60, 8);
+        for (let i = 1; i <= 12; i++) { wh.pointerMove(B.x + 0.62 * rr + i * 0.022, B.y - 0.04 - i * 0.006); wh.step(1 / 60, 3); }
+        wh.step(1 / 60, 40);
+        const pulled = wh.state();
+        log.pull = { grabbed: pulled.metrics.grabbed, stretch: pulled.metrics.stretch, volume: pulled.metrics.volume, voices: pulled.audio.started.squish - s0.audio.started.squish, kinds: pulled.events.map((e) => e.kind) };
+        wh.pointerUp();
+        wh.step(1 / 60, 20);
+        const snapped = wh.state();
+        log.snap = { releases: snapped.audio.started.release - s0.audio.started.release, kinds: snapped.events.map((e) => e.kind), live: snapped.audio.live ?? 0 };
+        wh.step(1 / 60, 300);
+        const after = wh.state();
+        log.afterPull = { grabbed: after.metrics.grabbed, stretch: after.metrics.stretch, volume: after.metrics.volume, live: after.audio.live ?? 0 };
+        // --- two fingers on the body
+        s0 = wh.state();
+        wh.pointerDown(B.x - 0.4 * rr, B.y, 0);
+        wh.pointerDown(B.x + 0.4 * rr, B.y, 1);
+        wh.step(1 / 60, 60);
+        const two = wh.state();
+        log.two = { fingers: two.metrics.fingers, voices: two.audio.started.squish - s0.audio.started.squish, pokeFingers: [...new Set(two.events.filter((e) => e.kind === 'poke').map((e) => e.finger))].sort(), volume: two.metrics.volume };
+        wh.pointerUp(0); wh.pointerUp(1);
+        wh.step(1 / 60, 240);
+        log.twoAfter = { fingers: wh.state().metrics.fingers, live: wh.state().audio.live ?? 0, volume: wh.state().metrics.volume };
+        wh.resume();
+        return log;
+      });
+      check('hook tap: a short synthetic press is exactly one poke and no squish voice', out.tap.pokes === 1 && out.tap.squish === 0, JSON.stringify(out.tap));
+      check('hook hold: the pressure ramp deepens the squeeze monotonically to > 0.3 and exactly one squish voice', out.hold.voices === 1 && out.hold.fingers === 1 && out.hold.comp[7] > 0.3 && out.hold.comp[7] >= out.hold.comp[3] && out.hold.comp[3] >= out.hold.comp[0], JSON.stringify(out.hold));
+      check('hook hold: volume stays within 0.85..1.15 under the full squeeze', out.hold.volume > 0.85 && out.hold.volume < 1.15, out.hold.volume.toFixed(3));
+      check('hook release: a release SoftEvent, one audio release, bubbles pop, and the voice is gone', out.release.kinds.includes('release') && out.release.releases === 1 && out.release.maxIntensity > 0.3, JSON.stringify(out.release));
+      check('hook release: 1..3 pops follow a hard release', out.afterRelease.pops >= 1 && out.afterRelease.pops <= 3, String(out.afterRelease.pops));
+      check('hook release: the body recovers (volume 1 +- 0.015, compression ~ 0)', Math.abs(out.rest.volume - 1) < 0.015 && out.rest.compression < 0.05 && out.rest.fingers === 0, JSON.stringify(out.rest));
+      check('hook pull: outward drag grabs and stretches (stretch > 0.15), stretch voice started, no stray release bloop', out.pull.grabbed && out.pull.stretch > 0.15 && out.pull.voices >= 1 && out.pull.kinds.includes('grab') && out.pull.volume > 0.85 && out.pull.volume < 1.15, JSON.stringify(out.pull));
+      check('hook snap: letting go emits snap + exactly one audio release and ends every voice', out.snap.kinds.includes('snap') && out.snap.releases === 1 && out.snap.live === 0, JSON.stringify(out.snap));
+      check('hook pull: afterwards nothing is grabbed, stretch 0, volume 1 +- 0.03', !out.afterPull.grabbed && out.afterPull.stretch < 0.05 && Math.abs(out.afterPull.volume - 1) < 0.03 && out.afterPull.live === 0, JSON.stringify(out.afterPull));
+      check('hook two fingers: fingers 2, pokes for finger 0 and 1, two squish voices, volume sane', out.two.fingers === 2 && out.two.pokeFingers.join() === '0,1' && out.two.voices === 2 && out.two.volume > 0.85 && out.two.volume < 1.15, JSON.stringify(out.two));
+      check('hook two fingers: released cleanly (0 fingers, 0 voices)', out.twoAfter.fingers === 0 && out.twoAfter.live === 0 && Math.abs(out.twoAfter.volume - 1) < 0.03, JSON.stringify(out.twoAfter));
     });
 
     // ------------------------------------------------------------------------------------------------
@@ -372,7 +455,7 @@ async function main() {
       await page.click('.row-switch');
       check('settings: the Haptics switch toggles', (await state(page)).settings.haptics === !hap);
       await page.keyboard.press('Escape');
-      await sleep(400);
+      await waitUntil(page, () => getComputedStyle(document.querySelector('.panel')).visibility === 'hidden', null, 20000);
       const closed = await page.evaluate(() => ({ open: document.querySelector('.panel').dataset.open, focus: document.activeElement?.getAttribute('aria-label'), inert: document.querySelector('.panel').hasAttribute('inert'), vis: getComputedStyle(document.querySelector('.panel')).visibility }));
       check('settings: Escape closes it, focus returns to the gear, closed panel is inert + not focusable', closed.open === 'false' && closed.focus === 'Settings' && closed.inert && closed.vis === 'hidden', JSON.stringify(closed));
       // persistence across reload
@@ -395,8 +478,9 @@ async function main() {
       const ring = await page.evaluate(() => { const a = document.activeElement; const cs = getComputedStyle(a); return { vis: a.matches(':focus-visible'), outline: cs.outlineStyle + ' ' + cs.outlineWidth, tag: a.tagName }; });
       check('settings: keyboard focus shows a visible focus ring', ring.vis && ring.outline !== 'none 0px', JSON.stringify(ring));
       await page.keyboard.press('Escape');
-      // restore defaults for later sections
+      // restore defaults, then close this page: later sections each run ONE WebGL page at a time (SwiftShader is slow)
       await page.evaluate(() => localStorage.removeItem('wobblehoard:v1:settings'));
+      await D.context.close();
     });
 
     // ------------------------------------------------------------------------------------------------
@@ -453,59 +537,61 @@ async function main() {
       // tap
       let seen = await evKeys(page), a0 = await started(page);
       await touchStart(cdp, [{ x: cx, y: cy - 0.1 * r }]); await sleep(50); await touchEnd(cdp);
-      const poke = await waitEvent(page, seen, 'poke', { finger: 0 });
+      const poke = await waitEvent(page, seen, 'poke', { finger: 0, timeout: 40000 });
       check('touch tap on the body -> poke SoftEvent + audio poke', !!poke && (await started(page)).poke === a0.poke + 1, `poke ${poke?.intensity?.toFixed(2)}`);
-      await sleep(900);
+      await waitUntil(page, () => window.__WH__.state().metrics.fingers === 0, null, 40000);
+      await fpsNote(page, 'phone, after first tap');
       // hold
       seen = await evKeys(page); a0 = await started(page);
       await touchStart(cdp, [{ x: cx, y: cy - 0.05 * r }]);
-      const press = await waitEvent(page, seen, 'press', { finger: 0 });
-      await sleep(900);
+      const press = await waitEvent(page, seen, 'press', { finger: 0, timeout: 40000 });
+      const deepT = await waitUntil(page, () => window.__WH__.state().metrics.compression > 0.2, null, 60000);
       const hs = await state(page);
-      check('touch hold -> press SoftEvent, one squish voice, real compression', !!press && (await started(page)).squish === a0.squish + 1 && hs.metrics.compression > 0.2 && hs.metrics.fingers === 1, `compression ${hs.metrics.compression.toFixed(2)}`);
+      check('touch hold -> press SoftEvent, one squish voice, real compression (> 0.2)', !!press && (await started(page)).squish === a0.squish + 1 && deepT && hs.metrics.fingers === 1, `compression ${hs.metrics.compression.toFixed(2)}`);
       await shot(page, 'squish_held_phone');
       const seenR = await evKeys(page);
       await touchEnd(cdp);
-      const rel = await waitEvent(page, seenR, 'release', { finger: 0 });
+      const rel = await waitEvent(page, seenR, 'release', { finger: 0, timeout: 40000 });
       check('touch release -> release SoftEvent', !!rel, `intensity ${rel?.intensity?.toFixed(2)}`);
-      await sleep(1600);
+      await waitUntil(page, () => { const m = window.__WH__.state().metrics; return m.fingers === 0 && m.compression < 0.06; }, null, 60000);
       // two fingers on the body
       seen = await evKeys(page); a0 = await started(page);
       const p0 = { x: cx - 0.4 * r, y: cy, id: 0 }, p1 = { x: cx + 0.4 * r, y: cy, id: 1 };
       await touchStart(cdp, [p0]); await sleep(30); await touchStart(cdp, [p0, p1]);
-      const pk0 = await waitEvent(page, seen, 'poke', { finger: 0 });
-      const pk1 = await waitEvent(page, seen, 'poke', { finger: 1 });
+      const pk0 = await waitEvent(page, seen, 'poke', { finger: 0, timeout: 40000 });
+      const pk1 = await waitEvent(page, seen, 'poke', { finger: 1, timeout: 40000 });
       check('two touches on the body -> two fingers (poke events for finger 0 AND finger 1)', !!pk0 && !!pk1);
-      await sleep(900);
+      await waitUntil(page, (n) => window.__WH__.state().audio.started.squish >= n + 2, a0.squish, 60000);
       const two = await state(page);
       check('two fingers: metrics.fingers = 2 and two squish voices after the hold', two.metrics.fingers === 2 && (await started(page)).squish >= a0.squish + 2, `fingers ${two.metrics.fingers}, squish voices +${(await started(page)).squish - a0.squish}`);
       // pinch the two fingers together (squeeze)
       for (let i = 1; i <= 8; i++) { await touchMove(cdp, [{ ...p0, x: p0.x + i * 0.03 * r }, { ...p1, x: p1.x - i * 0.03 * r }]); await sleep(40); }
-      await sleep(400);
+      await sleep(1500);
       const sq = await state(page);
       check('two fingers: the pinch stays stable (no NaN, volume 0.85..1.15, 2 fingers)', sq.metrics.fingers === 2 && Number.isFinite(sq.metrics.compression) && sq.metrics.volume > 0.85 && sq.metrics.volume < 1.15, `volume ${sq.metrics.volume.toFixed(3)}`);
       await shot(page, 'two_fingers_phone');
       await touchEnd(cdp, [p1]); await sleep(200); await touchEnd(cdp);
-      await sleep(1800);
-      check('two fingers: both lifted, nothing left pressed', (await state(page)).metrics.fingers === 0);
+      const lifted = await waitUntil(page, () => window.__WH__.state().metrics.fingers === 0, null, 60000);
+      check('two fingers: both lifted, nothing left pressed', lifted, `fingers ${(await state(page)).metrics.fingers}`);
+      await waitUntil(page, () => { const m = window.__WH__.state().metrics; return m.compression < 0.06; }, null, 60000);
       // touch pull
       seen = await evKeys(page);
       const sx = cx + 0.62 * r, sy = cy - 0.05 * r;
       await touchStart(cdp, [{ x: sx, y: sy }]); await sleep(120);
-      for (let i = 1; i <= 10; i++) { await touchMove(cdp, [{ x: sx + i * 10, y: sy - i * 3 }]); await sleep(50); }
-      const grab = await waitEvent(page, seen, 'grab', { timeout: 15000 });
-      await sleep(600);
+      for (let i = 1; i <= 12; i++) { await touchMove(cdp, [{ x: sx - 0 + i * 9, y: sy - i * 4 }]); await sleep(50); }
+      const grab = await waitEvent(page, seen, 'grab', { timeout: 40000 });
+      await waitUntil(page, () => window.__WH__.state().metrics.stretch > 0.08, null, 60000);
       const ps = await state(page);
-      check('touch pull from the edge -> grab SoftEvent, stretch > 0', !!grab && ps.metrics.grabbed && ps.metrics.stretch > 0.05, `stretch ${ps.metrics.stretch.toFixed(2)}`);
+      check('touch pull from the edge -> grab SoftEvent, stretch > 0.08', !!grab && ps.metrics.grabbed && ps.metrics.stretch > 0.08, `stretch ${ps.metrics.stretch.toFixed(2)}`);
       await shot(page, 'pull_phone');
       await touchEnd(cdp);
-      await sleep(1800);
+      await waitUntil(page, () => { const m = window.__WH__.state().metrics; return !m.grabbed && m.stretch < 0.05; }, null, 60000);
       // orbit
       const s0 = await canvasSig(page); a0 = await started(page);
       await touchStart(cdp, [{ x: 60, y: 160 }]);
       for (let i = 1; i <= 12; i++) { await touchMove(cdp, [{ x: 60 + i * 18, y: 160 + i * 3 }]); await sleep(35); }
       await touchEnd(cdp);
-      await sleep(1100);
+      await sleep(2500);
       const s1 = await canvasSig(page);
       check('touch drag on empty space orbits (image changes), no poke', sigDiff(s0, s1) > 1.0 && (await started(page)).poke === a0.poke, `diff ${sigDiff(s0, s1).toFixed(2)}`);
       // pinch zoom on empty space
@@ -514,7 +600,8 @@ async function main() {
       await touchStart(cdp, [q0]); await sleep(30); await touchStart(cdp, [q0, q1]);
       for (let i = 1; i <= 10; i++) { await touchMove(cdp, [{ ...q0, x: q0.x - i * 9 }, { ...q1, x: q1.x + i * 9 }]); await sleep(40); }
       await touchEnd(cdp, [q1]); await touchEnd(cdp);
-      await sleep(1600);
+      await waitUntil(page, (v) => window.__WH__.bodyScreen().rPx > v * 1.05, r0, 60000);
+      await sleep(1000);
       const r1 = (await body(page)).rPx;
       check('two-finger pinch on empty space zooms (spread = closer)', r1 > r0 * 1.05, `rPx ${r0.toFixed(0)} -> ${r1.toFixed(0)}`);
       const st2 = await state(page);

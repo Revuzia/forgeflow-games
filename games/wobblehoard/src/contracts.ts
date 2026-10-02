@@ -152,7 +152,9 @@ export interface StageLike {
   update(dt: number, input: StageFrameInput): void;
   render(): void;
   resize(width: number, height: number, dpr: number): void;
+  /** Radians, OrbitControls feel: pass (dx * k, dy * k) of a pointer drag and the scene turns with the finger (drag right = scene turns right, drag down = look more from above). Pitch is clamped (never under the table). */
   orbit(dYaw: number, dPitch: number): void;
+  /** Positive = camera away. Wheel deltaY pixels (|delta| > 4, x0.0016) or notches (|delta| <= 4, x0.12); for a pinch pass the pixel-like spread change (spread shrinking = positive). Clamped to 0.55x..1.9x of the framing distance. */
   zoom(delta: number): void;
   /** Camera shake impulse 0..1 (scaled by setShakeScale; 0 disables). */
   shake(amount: number): void;

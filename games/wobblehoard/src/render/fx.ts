@@ -10,7 +10,7 @@ import type { FxKind, SoftBodyLike, V3 } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { mulberry32 } from '../core/rng.ts';
 import type { JellyPalette } from './oklch.ts';
-import type { TierSpec } from './quality.ts';
+import { TIERS, type TierSpec } from './quality.ts';
 import type { RestMapper, SurfaceHit } from './jelly.ts';
 import { NOISE_GLSL } from './shaderlib.ts';
 
@@ -66,6 +66,8 @@ class Bubbles {
   private readonly geo: THREE.InstancedBufferGeometry;
   private readonly mat: THREE.ShaderMaterial;
   private readonly cap: number;
+  /** Live-bubble limit of the current tier (<= cap, the allocated size). */
+  limit: number;
   private count = 0;
   private readonly px: Float32Array; private readonly py: Float32Array; private readonly pz: Float32Array;
   private readonly vx: Float32Array; private readonly vy: Float32Array; private readonly vz: Float32Array;
@@ -75,7 +77,7 @@ class Bubbles {
   private readonly aPosA: THREE.InstancedBufferAttribute; private readonly aStateA: THREE.InstancedBufferAttribute;
 
   constructor(cap: number, tint: THREE.Color) {
-    this.cap = cap;
+    this.cap = cap; this.limit = cap;
     const mk = (): Float32Array => new Float32Array(cap);
     this.px = mk(); this.py = mk(); this.pz = mk(); this.vx = mk(); this.vy = mk(); this.vz = mk();
     this.age = mk(); this.life = mk(); this.size = mk(); this.seed = mk(); this.pop = mk();
@@ -97,7 +99,7 @@ class Bubbles {
 
   spawn(at: V3, intensity: number, rng: () => number, scale: number): void {
     const n = Math.round(4 + 12 * Math.min(1, Math.max(0, intensity)));
-    for (let k = 0; k < n && this.count < this.cap; k++) {
+    for (let k = 0; k < n && this.count < this.limit; k++) {
       const i = this.count++;
       const a = rng() * Math.PI * 2, rad = (0.05 + 0.3 * rng()) * scale;
       this.px[i] = at.x + Math.cos(a) * rad; this.py[i] = Math.max(0.02, at.y) + rng() * 0.12 * scale; this.pz[i] = at.z + Math.sin(a) * rad;
@@ -443,8 +445,9 @@ export class Fx {
   constructor(genome: Genome, palette: JellyPalette, mapper: RestMapper, tier: TierSpec, scale: number) {
     this.genome = genome; this.mapper = mapper; this.scale = scale;
     this.rng = mulberry32(genome.seed ^ 0xf0f0f0);
-    this.bubbles = new Bubbles(tier.bubbleMax, lin(palette.glow));
-    this.glitter = new Glitter(tier.glitterMax, lin(palette.glitter).multiplyScalar(1.0));
+    // buffers are sized for the biggest tier so a mid-session switch up never truncates; setTier() applies the tier's counts
+    this.bubbles = new Bubbles(TIERS.high.bubbleMax, lin(palette.glow));
+    this.glitter = new Glitter(TIERS.high.glitterMax, lin(palette.glitter));
     this.puffs = new Puffs(lin(palette.dust));
     this.group.add(this.puffs.mesh, this.glitter.mesh, this.bubbles.mesh);
     this.setTier(tier);
@@ -452,6 +455,7 @@ export class Fx {
 
   /** Re-lay the suspended glitter for a tier (count = genome.glitter x the tier's cap). */
   setTier(tier: TierSpec): void {
+    this.bubbles.limit = tier.bubbleMax;
     const g = this.genome.glitter;
     const count = g <= 0.02 ? 0 : Math.max(10, Math.round(tier.glitterMax * g));
     this.glitter.layout(count, this.mapper, this.genome.seed, this.scale);

@@ -16,7 +16,7 @@ const args = process.argv.slice(2);
 const opt = {};
 const names = [];
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--p' || args[i] === '--g' || args[i] === '--detail' || args[i] === '--out') opt[args[i].slice(2)] = args[++i];
+  if (args[i] === '--p' || args[i] === '--g' || args[i] === '--detail' || args[i] === '--out' || args[i] === '--px') opt[args[i].slice(2)] = args[++i];
   else names.push(args[i]);
 }
 const scenarios = names.length ? names : ALL;
@@ -37,6 +37,7 @@ try {
     if (opt.p) qs.set('p', opt.p);
     if (opt.g) qs.set('g', opt.g);
     if (opt.detail) qs.set('detail', opt.detail);
+    if (opt.px) qs.set('px', opt.px);
     await page.goto(`${vite.url}_harness/physview/index.html?${qs}`, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__PV__ && window.__PV__.ready, null, { timeout: 90000 });
     const info = await page.evaluate(() => {

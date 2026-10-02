@@ -57,6 +57,7 @@ class Finger {
   retractRate = 0;     // depth units per second while retracting
   tipR = 0.1;          // current tip radius
   cx = 0; cy = 0; cz = 0;   // tip centre (world)
+  ocx = 0; ocy = 0; ocz = 0; // tip centre at the previous substep (for the contact friction)
 }
 
 /** Soft attachment of a Gaussian vertex patch to a world target. */
@@ -84,7 +85,8 @@ const POKE_NORM = 3.2;             // m/s predicted closing speed that maps to i
 const MAX_SPEED = 14;              // safety clamp on particle speed (m/s)
 const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.35;
 const BOB_AMP = 0.03, BOB_HZ = 0.33;
-const NEAR = 0.004;                // a particle this close to the table counts as touching it (m)
+const NEAR = 0.006;
+const FOOT_H = 0.012;               // height below which the foot's upward speed is damped (viscous tack)                // a particle this close to the table counts as touching it (m)
 const BLOCK_MARGIN = 0.03;         // particles this close to a fingertip are 'blocked' for the volume constraint (m)
 const LOAD_CONC = 10;              // friction normal load per touching particle is capped at this many particle-weights
 const PIN_HOLD_S = 0.5;            // glued feet are held this long after a lobe is let go, so the body springs back in place
@@ -192,7 +194,8 @@ export class SoftBody implements SoftBodyLike {
     this.restVolume = rest.restVolume;
     this.restCenterY = rest.restCenterY;
     this.Q = rest.restLocal;
-    this.softW = rest.soft;
+    this.softW = new Float64Array(n);
+    for (let i = 0; i < n; i++) this.softW[i] = 1 - (1 - this.p.peakSoft) * rest.floppy[i];
     this.M = rest.mass;
     this.invM = new Float64Array(n);
     let mt = 0;
@@ -270,7 +273,7 @@ export class SoftBody implements SoftBodyLike {
 
   reset(): void {
     const n = this.n, X = this.X, Q = this.Q;
-    const oy = this.gravityOn ? this.restCenterY + 1e-4 : this.hoverY(0);
+    const oy = this.gravityOn ? this.restCenterY : this.hoverY(0);
     for (let i = 0; i < n; i++) {
       X[i * 3] = Q[i * 3]; X[i * 3 + 1] = Q[i * 3 + 1] + oy; X[i * 3 + 2] = Q[i * 3 + 2];
       this.GOAL[i * 3] = X[i * 3]; this.GOAL[i * 3 + 1] = X[i * 3 + 1]; this.GOAL[i * 3 + 2] = X[i * 3 + 2];
@@ -385,8 +388,9 @@ export class SoftBody implements SoftBodyLike {
     f.px = hx; f.py = hy; f.pz = hz; f.tx = hx; f.ty = hy; f.tz = hz;
     f.dx = dx; f.dy = dy; f.dz = dz; f.nx = nx; f.ny = ny; f.nz = nz;
     f.depth = 0; f.depthV = 0; f.target = 0; f.holdT = 0;
-    f.depthMax = Math.max(0.2 * R, (supported ? FINGER.maxThickness : FINGER.maxFlank) * T);
+    f.depthMax = Math.max(0.2 * R, this.p.squashDepth * (supported ? 1 : FINGER.flankShare) * T);
     this.placeTip(f, 1);
+    f.ocx = f.cx; f.ocy = f.cy; f.ocz = f.cz;
   }
 
   fingerPressure(id: 0 | 1, target: number): void {
@@ -580,6 +584,7 @@ export class SoftBody implements SoftBodyLike {
     const share = a.down && b.down ? FINGER.pinchShare : 1;
     for (let k = 0; k < 2; k++) {
       const f = this.fingers[k];
+      f.ocx = f.cx; f.ocy = f.cy; f.ocz = f.cz;
       if (f.down) {
         const acc = w * w * (f.target - f.depth) - 2 * w * f.depthV;
         f.depthV += acc * H;
@@ -793,22 +798,39 @@ export class SoftBody implements SoftBodyLike {
     }
 
     // ---- collisions: finger spheres, then the table (the table always wins)
+    let fingerDown = 0;   // mass-weighted downward push of the fingertips this substep: extra normal load on the table
     for (let k = 0; k < 2; k++) {
       const f = this.fingers[k];
       if (!f.down && !f.retracting) continue;
       const r = f.tipR, r2 = r * r, cx = f.cx, cy = f.cy, cz = f.cz;
+      const fdx = cx - f.ocx, fdy = cy - f.ocy, fdz = cz - f.ocz;   // how far the tip itself moved this substep
+      const muF = FINGER.friction;
       let hit = false;
       for (let i = 0; i < n * 3; i += 3) {
         const dx = XP[i] - cx, dy = XP[i + 1] - cy, dz = XP[i + 2] - cz;
         const d2 = dx * dx + dy * dy + dz * dz;
         if (d2 >= r2) continue;
         hit = true;
+        const y0 = XP[i + 1];
+        let nx: number, ny: number, nz: number, pen: number;
         if (d2 > 1e-14) {
-          const s = r / Math.sqrt(d2);
-          XP[i] = cx + dx * s; XP[i + 1] = cy + dy * s; XP[i + 2] = cz + dz * s;
-        } else {
-          XP[i] = cx + f.dx * r; XP[i + 1] = cy + f.dy * r; XP[i + 2] = cz + f.dz * r;
+          const d = Math.sqrt(d2);
+          nx = dx / d; ny = dy / d; nz = dz / d; pen = r - d;
+        } else { nx = f.dx; ny = f.dy; nz = f.dz; pen = r; }
+        const px0 = XP[i], pz0 = XP[i + 2];
+        XP[i] = cx + nx * r; XP[i + 1] = cy + ny * r; XP[i + 2] = cz + nz * r;
+        // contact friction: the skin sticks to the fingertip. Undo (up to mu x penetration) the tangential slide of the
+        // particle relative to the tip during this substep, so a finger drags the surface with it instead of letting a
+        // sloped press squirt the body out sideways.
+        const ux = (px0 - X[i]) - fdx, uy = (y0 - X[i + 1]) - fdy, uz = (pz0 - X[i + 2]) - fdz;
+        const un = ux * nx + uy * ny + uz * nz;
+        const tx = ux - un * nx, ty = uy - un * ny, tz = uz - un * nz;
+        const tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
+        if (tl > 1e-12) {
+          const k2 = Math.min(1, muF * pen / tl);
+          XP[i] -= tx * k2; XP[i + 1] -= ty * k2; XP[i + 2] -= tz * k2;
         }
+        if (XP[i + 1] < y0) fingerDown += M[i / 3] * (y0 - XP[i + 1]);
       }
       if (hit && !f.contacted && f.down) {
         f.contacted = true;
@@ -820,17 +842,18 @@ export class SoftBody implements SoftBodyLike {
       }
     }
     {
-      const mu = this.p.tableMu;
+      const mu = this.p.tableMu, glue = this.p.glue;
       // normal-load proxy for Coulomb friction: this substep's penetration plus the supported weight (g h^2 per
       // particle, concentrated on the particles that are actually touching)
       const load = this.supp * GRAVITY * H * H * Math.min(LOAD_CONC, this.Mtot / Math.max(1, this.nearMass));
+      const fload = fingerDown / Math.max(1, this.nearMass);   // a finger pressing down adds its force to the normal load
       let contacts = 0, near = 0, nearM = 0;
       for (let i = 0; i < n * 3; i += 3) {
         const y = XP[i + 1];
         if (y >= NEAR) continue;
         near++; nearM += M[i / 3];
-        let pen = load;
-        if (y < 0) { contacts++; pen -= y; XP[i + 1] = 0; }
+        let pen = load + fload;
+        if (y < 0) { contacts++; pen -= y; XP[i + 1] = 0; } else if (y < glue) { const k = y / glue; XP[i + 1] = y * k * k; }
         const tx = XP[i] - X[i], tz = XP[i + 2] - X[i + 2];
         const tl = Math.sqrt(tx * tx + tz * tz);
         if (tl > 1e-12) {
@@ -857,6 +880,7 @@ export class SoftBody implements SoftBodyLike {
     // ---- velocity from positions, with the sums the damping pass needs
     {
       const invH = 1 / H, S = this.sums;
+      const fv = 1 - this.p.footVisc;
       let sm = 0, sx = 0, sy = 0, sz = 0, svx = 0, svy = 0, svz = 0, lx = 0, ly = 0, lz = 0;
       let ixx = 0, iyy = 0, izz = 0, ixy = 0, ixz = 0, iyz = 0;
       let b00 = 0, b01 = 0, b02 = 0, b10 = 0, b11 = 0, b12 = 0, b20 = 0, b21 = 0, b22 = 0;
@@ -865,8 +889,11 @@ export class SoftBody implements SoftBodyLike {
         const x = XP[i3], y = XP[i3 + 1], z = XP[i3 + 2];
         const vx = (x - X[i3]) * invH, vy = (y - X[i3 + 1]) * invH, vz = (z - X[i3 + 2]) * invH;
         X[i3] = x; X[i3 + 1] = y; X[i3 + 2] = z;
-        V[i3] = vx; V[i3 + 1] = vy; V[i3 + 2] = vz;
-        const mvx = m * vx, mvy = m * vy, mvz = m * vz;
+        // viscous tack of the foot: a particle just above the table loses part of its upward speed each substep, so the
+        // foot peels slowly (no hop) while the rest of the body is free to overshoot and wobble
+        const vy2 = vy > 0 && y < FOOT_H ? vy * fv : vy;
+        V[i3] = vx; V[i3 + 1] = vy2; V[i3 + 2] = vz;
+        const mvx = m * vx, mvy = m * vy2, mvz = m * vz;
         sm += m; sx += m * x; sy += m * y; sz += m * z;
         svx += mvx; svy += mvy; svz += mvz;
         lx += y * mvz - z * mvy; ly += z * mvx - x * mvz; lz += x * mvy - y * mvx;

@@ -30,6 +30,7 @@ function touch(b: SoftBody, id: 0 | 1, from: V3, dir: V3): V3 | null {
 }
 
 const REL = 1.4;
+const PX = Number(new URLSearchParams(location.search).get('px') ?? 0);
 const SCENARIOS: Record<string, Scenario> = {
   // (a) a quick side poke at dome height, then let go
   side_poke: {
@@ -45,7 +46,7 @@ const SCENARIOS: Record<string, Scenario> = {
     title: 'hold-squash from the top onto the table (ramp 0.9 s) then release at 1.40 s',
     frames: [REL - 0.01, REL + 0.03, REL + 0.06, REL + 0.1, REL + 0.15, REL + 0.2, REL + 0.28, REL + 0.38, REL + 0.5, REL + 0.65, REL + 0.8, REL + 1.0],
     tick(t, b, c) {
-      if (t >= 0.4 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(0, 3, 0), v3(0, -1, 0)); }
+      if (t >= 0.4 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(PX, 3, 0), v3(0, -1, 0)); }
       if (c.n.down && !c.n.up) b.fingerPressure(0, clamp01((t - 0.4) / 0.9));
       if (t >= REL && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
     },

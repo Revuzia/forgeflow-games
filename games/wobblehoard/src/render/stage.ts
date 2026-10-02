@@ -28,7 +28,7 @@ export interface StageDev extends StageLike {
   /** Simulate WebGL context loss / restore (WEBGL_lose_context). Returns false when the extension is missing. */
   loseContext(): boolean;
   restoreContext(): boolean;
-  readonly info: { fineVertices: number; tier: QualityTier; mode: QualityTier | 'auto'; fx: { bubbles: number; glitter: number; puffs: number } | null; contextLost: boolean };
+  readonly info: { fineVertices: number; tier: QualityTier; mode: QualityTier | 'auto'; fx: { bubbles: number; glitter: number; puffs: number } | null; contextLost: boolean; pixelRatio: number; drawingBuffer: [number, number]; eyeLook: number[] | null };
 }
 
 const TARGET_Y = 0.42;
@@ -53,7 +53,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   scene.add(key, key.target, rim, fill);
 
   const hub = new EnvHub(renderer, 128);
-  const table = new Table(hub);
+  let table = new Table(hub);
   scene.add(table.group);
 
   const governor = new QualityGovernor();
@@ -69,6 +69,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   let bodyScale = 1;
   let floatMode = false;
   let disposed = false, lost = false;
+  let loseExt: WEBGL_lose_context | null = null;
   let lastRenderMs = 0;
   let lastCalls = 0, lastTris = 0;
   const eyeLook = new THREE.Vector3();
@@ -77,7 +78,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   interface View { body: SoftBodyLike; genome: Genome; mats: JellyMaterials; jelly: JellyView; core: Core; face: Face; fx: Fx }
   let view: View | null = null;
   const fp: Footprint = { cx: 0, cz: 0, rx: 0.5, rz: 0.5, lowY: 0, compression: 0, stretch: 0 };
-  let smComp = 0, smStretch = 0;
+  let smComp = 0, smStretch = 0, prevSq = 0, sqRate = 0, touchGate = 0, grabGate = 0;
 
   const fitDistance = (): number => bodyScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
 
@@ -113,9 +114,16 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     if (!v) return;
     const body = v.body, m = body.metrics;
     v.jelly.update();
-    smComp += (m.compression - smComp) * (1 - Math.exp(-dt * 14));
-    smStretch += (m.stretch - smStretch) * (1 - Math.exp(-dt * 10));
-    v.core.update(body, dt, time);
+    // "squeeze": the body's global compression, or the deepest local dent (a poke barely changes the global metric)
+    // (the local dent only counts while a finger is down or just lifted: a jiggling body also moves off its rigid goal)
+    touchGate += ((m.fingers > 0 ? 1 : 0) - touchGate) * (1 - Math.exp(-dt * (m.fingers > 0 ? 30 : 7)));
+    grabGate += ((m.grabbed || m.fingers > 0 ? 1 : 0) - grabGate) * (1 - Math.exp(-dt * (m.grabbed || m.fingers > 0 ? 30 : 7)));
+    const rawSq = Math.max(m.compression, v.jelly.press * 0.9 * touchGate);
+    if (dt > 1e-4) sqRate += ((rawSq - prevSq) / dt - sqRate) * (1 - Math.exp(-dt / 0.06));
+    prevSq = rawSq;
+    smComp += (rawSq - smComp) * (1 - Math.exp(-dt * 14));
+    smStretch += (Math.max(m.stretch, v.jelly.pull * 0.6 * grabGate) - smStretch) * (1 - Math.exp(-dt * 10));
+    v.core.update(body, dt, time, smComp);
     const u = v.mats.uniforms;
     u.uTime.value = time;
     u.uCompress.value = smComp;
@@ -164,7 +172,21 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   const onLost = (e: Event): void => { e.preventDefault(); lost = true; };
   const onRestored = (): void => {
     lost = false;
-    try { hub.rebuild(renderer); } catch { /* a second loss mid-restore: the next restore rebuilds it */ }
+    try {
+      // Everything GPU-backed died with the context. Re-create it instead of disposing the dead objects (disposing them
+      // would only make the driver warn about deleting objects of another context).
+      hub.rebuild(renderer);
+      scene.remove(table.group);
+      table = new Table(hub);
+      table.setFloatImmediate(floatMode);
+      scene.add(table.group);
+      if (view) {
+        const old = view;
+        scene.remove(old.jelly.mesh, old.core.group, old.face.group, old.fx.group);
+        view = null;
+        stage.setBody(old.body, old.genome);
+      }
+    } catch { /* a second loss mid-restore: the next restore rebuilds it */ }
     governor.resetWindow(30);
   };
   canvas.addEventListener('webglcontextlost', onLost, false);
@@ -193,10 +215,10 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       table.setPoolColor(palette.pool);
       scene.add(jelly.mesh, core.group, face.group, fx.group);
       view = { body, genome, mats, jelly, core, face, fx };
-      smComp = body.metrics.compression; smStretch = body.metrics.stretch;
+      smComp = prevSq = 0; smStretch = sqRate = 0; touchGate = grabGate = 0;
       tgt.set(body.center.x * 0.6, TARGET_Y * bodyScale, body.center.z * 0.6);
       syncView(0, 0);
-      face.update(0, 0, null, camera);
+      face.update(0, 0, null, camera, 0, 0);
       fx.update(0, 0, body);
       governor.resetWindow(24);
     },
@@ -208,7 +230,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       updateCamera(d, time);
       syncView(d, time);
       if (view) {
-        view.face.update(d, time, input.pointerNdc, camera);
+        view.face.update(d, time, input.pointerNdc, camera, smComp, Math.min(sqRate, view.body.metrics.compressionRate));
         view.fx.update(d, time, view.body);
       }
       table.update(d, time, camera, view ? fp : null);
@@ -282,19 +304,18 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     },
 
     loseContext() {
-      const ext = renderer.getContext().getExtension('WEBGL_lose_context');
-      if (!ext) return false;
-      ext.loseContext();
+      loseExt ??= renderer.getContext().getExtension('WEBGL_lose_context');   // must be fetched BEFORE the loss: a lost context returns null
+      if (!loseExt) return false;
+      loseExt.loseContext();
       return true;
     },
     restoreContext() {
-      const ext = renderer.getContext().getExtension('WEBGL_lose_context');
-      if (!ext) return false;
-      ext.restoreContext();
+      if (!loseExt) return false;
+      loseExt.restoreContext();
       return true;
     },
     get info() {
-      return { fineVertices: view?.jelly.fineCount ?? 0, tier: governor.tier, mode: governor.mode, fx: view?.fx.counts ?? null, contextLost: lost };
+      return { fineVertices: view?.jelly.fineCount ?? 0, tier: governor.tier, mode: governor.mode, fx: view?.fx.counts ?? null, contextLost: lost, pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number], eyeLook: view ? Array.from(view.face.lookOut) : null };
     },
   };
   return stage;

@@ -103,10 +103,11 @@ export class Core {
     this.group.add(this.blob, this.halo);
   }
 
-  update(body: SoftBodyLike, dt: number, time: number): void {
-    const c = body.center, q = body.frame, m = body.metrics;
+  /** `squeeze` is the renderer's 0..1 compression (global metric or deepest local dent). */
+  update(body: SoftBodyLike, dt: number, time: number, squeeze: number): void {
+    const c = body.center, q = body.frame;
     this.center.set(c.x, c.y, c.z);
-    this.comp += (m.compression - this.comp) * (1 - Math.exp(-dt * 12));
+    this.comp += (squeeze - this.comp) * (1 - Math.exp(-dt * 12));
     const k = this.comp;
     const sy = 1 - 0.42 * k, sxz = 1 + 0.2 * k;
     this.blob.position.set(c.x, c.y, c.z);
@@ -116,8 +117,8 @@ export class Core {
     this.amount = (1.2 + 0.9 * this.glow) * (1 + 1.5 * k) * pulse;
     this.blobMat.uniforms.uIntensity.value = (1.0 + 1.2 * this.glow) * (1 + 1.4 * k) * pulse;
     this.blobMat.uniforms.uTime.value = time;
-    this.haloMat.uniforms.uStrength.value = (0.28 + 0.4 * this.glow) * (1 + 1.1 * k);
-    this.haloMat.uniforms.uSize.value = this.radius * (3.6 + 1.0 * k);
+    this.haloMat.uniforms.uStrength.value = (0.28 + 0.4 * this.glow) * (1 + 0.7 * k);
+    this.haloMat.uniforms.uSize.value = this.radius * (3.4 + 0.3 * k);
   }
 
   dispose(): void {

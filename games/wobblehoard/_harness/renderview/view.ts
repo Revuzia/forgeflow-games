@@ -91,6 +91,25 @@ function frame(dt: number, render = true): void {
 const cstat = document.createElement('canvas');
 const cctx = cstat.getContext('2d', { willReadFrequently: true });
 
+/** Blank-canvas numbers from whatever the canvas holds right now (call in the same task as render()). */
+function frameStats(): { w: number; h: number; mean: number; std: number; nonBg: number; distinct: number } {
+  const W = 160, H = Math.max(1, Math.round((160 * canvas.height) / canvas.width));
+  cstat.width = W; cstat.height = H;
+  if (!cctx) return { w: canvas.width, h: canvas.height, mean: 0, std: 0, nonBg: 0, distinct: 0 };
+  cctx.drawImage(canvas, 0, 0, W, H);
+  const d = cctx.getImageData(0, 0, W, H).data;
+  let s = 0, s2 = 0, n = 0, nonBg = 0;
+  const seenCols = new Set<number>();
+  for (let i = 0; i < d.length; i += 4) {
+    const l = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+    s += l; s2 += l * l; n++;
+    if (Math.abs(d[i] - 0x14) > 8 || Math.abs(d[i + 1] - 0x10) > 8 || Math.abs(d[i + 2] - 0x2a) > 8) nonBg++;
+    seenCols.add(((d[i] >> 2) << 12) | ((d[i + 1] >> 2) << 6) | (d[i + 2] >> 2));
+  }
+  const mean = s / n;
+  return { w: canvas.width, h: canvas.height, mean, std: Math.sqrt(Math.max(0, s2 / n - mean * mean)), nonBg: nonBg / n, distinct: seenCols.size };
+}
+
 const RV = {
   get bodyKind() { return bodyKind; },
   get bodyError() { return bodyError; },
@@ -115,7 +134,95 @@ const RV = {
   },
   /** Render now and return the canvas as a PNG data URL (same task as the render, so it is never blank). */
   snapshot(): string { stage.render(); return canvas.toDataURL('image/png'); },
+  /** snapshot() plus blank-canvas statistics computed from the very same frame. */
+  snapshotStats(): { png: string; stats: ReturnType<typeof frameStats> } {
+    stage.render();
+    const png = canvas.toDataURL('image/png');
+    return { png, stats: frameStats() };
+  },
+  /** N frames paced by requestAnimationFrame with the real dt (so stats().frameMsEma is a real frame time). */
+  async rafFrames(n: number): Promise<{ wallMsPerFrame: number; ema: number }> {
+    const t0 = performance.now();
+    let last = t0;
+    for (let i = 0; i < n; i++) {
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      const now = performance.now();
+      frame(Math.min(0.05, (now - last) / 1000)); last = now;
+    }
+    return { wallMsPerFrame: (performance.now() - t0) / n, ema: stage.stats().frameMsEma };
+  },
+  /** Build + tear down a SECOND stage on a throw-away canvas `cycles` times; report renderer.info.memory at each step. */
+  lifecycle(cycles = 20): { after: { geometries: number; textures: number; programs: number }[]; endAfterDispose: { geometries: number; textures: number; programs: number }; err: string | null } {
+    const c2 = document.createElement('canvas');
+    c2.width = 160; c2.height = 120;
+    const s2 = createStageDev(c2);
+    s2.resize(160, 120, 1);
+    const after: { geometries: number; textures: number; programs: number }[] = [];
+    let err: string | null = null;
+    try {
+      for (let i = 0; i < cycles; i++) {
+        const g = genomeFromParam(String(200 + (i % 5)));
+        const b = makeBody(g);
+        s2.setBody(b, g);
+        s2.update(1 / 60, { time: i / 60, pointerNdc: null });
+        s2.render();
+        const m = s2.memory();
+        after.push({ geometries: m.geometries, textures: m.textures, programs: m.programs });
+      }
+    } catch (e) { err = e instanceof Error ? e.message : String(e); }
+    s2.dispose();
+    const m = s2.memory();
+    return { after, endAfterDispose: { geometries: m.geometries, textures: m.textures, programs: m.programs }, err };
+  },
+  /** Lose and restore the WebGL context on a SECOND stage; none of it may throw, and it must render again afterwards. */
+  async contextLossTest(): Promise<{ ok: boolean; log: string[] }> {
+    const log: string[] = [];
+    const c2 = document.createElement('canvas');
+    c2.width = 160; c2.height = 120;
+    document.body.appendChild(c2);
+    c2.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    const s2 = createStageDev(c2);
+    s2.resize(160, 120, 1);
+    try {
+      const g = genomeFromParam('');
+      const b = makeBody(g);
+      s2.setBody(b, g);
+      for (let i = 0; i < 3; i++) { b.step(1 / 60); s2.update(1 / 60, { time: i / 60, pointerNdc: null }); s2.render(); }
+      log.push('before loss: ok');
+      if (!s2.loseContext()) { log.push('WEBGL_lose_context missing'); return { ok: false, log }; }
+      await new Promise((r) => setTimeout(r, 120));
+      for (let i = 0; i < 3; i++) { b.step(1 / 60); s2.update(1 / 60, { time: 1 + i / 60, pointerNdc: { x: 0.2, y: 0.1 } }); s2.render(); }
+      s2.setBody(b, g); // even a setBody while lost must not throw
+      s2.resize(180, 130, 1);
+      log.push('while lost: update/render/setBody/resize did not throw; contextLost=' + s2.info.contextLost);
+      s2.restoreContext();
+      for (let i = 0; i < 100 && s2.info.contextLost; i++) await new Promise((r) => setTimeout(r, 50)); // wait for webglcontextrestored
+      log.push('restored event after ~' + 0 + 'ms poll; contextLost=' + s2.info.contextLost);
+      for (let i = 0; i < 3; i++) { b.step(1 / 60); s2.update(1 / 60, { time: 2 + i / 60, pointerNdc: null }); s2.render(); }
+      const ctx2 = document.createElement('canvas'); ctx2.width = 64; ctx2.height = 48;
+      const x2 = ctx2.getContext('2d', { willReadFrequently: true });
+      let nonBg = 0;
+      if (x2) { s2.render(); x2.drawImage(c2, 0, 0, 64, 48); const d = x2.getImageData(0, 0, 64, 48).data; for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - 0x14) > 8 || Math.abs(d[i + 1] - 0x10) > 8 || Math.abs(d[i + 2] - 0x2a) > 8) nonBg++; }
+      log.push(`after restore: contextLost=${s2.info.contextLost}, non-background pixels ${(nonBg / (64 * 48) * 100).toFixed(0)}%`);
+      return { ok: !s2.info.contextLost && nonBg > 64 * 48 * 0.2, log };
+    } catch (e) {
+      log.push('THREW: ' + (e instanceof Error ? e.message : String(e)));
+      return { ok: false, log };
+    } finally { s2.dispose(); c2.remove(); }
+  },
   setAutoFx(on: boolean): void { autoFx = on; },
+  /** Step (rendering only the last frame) until the body emits an event of `kind`; returns the frames used, or -1. */
+  framesUntilEvent(kind: string, max = 240, dt = 1 / 60): number {
+    const before = seen.length ? seen[seen.length - 1] : null;
+    let n = 0;
+    for (; n < max; n++) {
+      const count = events.length;
+      frame(dt, false);
+      if (events.some((e) => e.kind === kind) && (events.length > 0 || count >= 0)) { n++; break; }
+    }
+    void before;
+    return n < max ? n : -1;
+  },
   setGenome(seedOrCode: string | number): void { setupBody(genomeFromParam(String(seedOrCode))); },
   setGenomeObject(g: Genome): void { setupBody(g); },
   setQuality(q: QualityTier | 'auto'): void { stage.setQuality(q); },
@@ -159,24 +266,7 @@ const RV = {
   zoom(d: number): void { stage.zoom(d); },
 
   /** Canvas sanity numbers from the CURRENT frame (render() then read in the same task). */
-  canvasStats(): { w: number; h: number; mean: number; std: number; nonBg: number; distinct: number } {
-    stage.render();
-    const W = 160, H = Math.max(1, Math.round((160 * canvas.height) / canvas.width));
-    cstat.width = W; cstat.height = H;
-    if (!cctx) return { w: canvas.width, h: canvas.height, mean: 0, std: 0, nonBg: 0, distinct: 0 };
-    cctx.drawImage(canvas, 0, 0, W, H);
-    const d = cctx.getImageData(0, 0, W, H).data;
-    let s = 0, s2 = 0, n = 0, nonBg = 0;
-    const seenCols = new Set<number>();
-    for (let i = 0; i < d.length; i += 4) {
-      const l = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
-      s += l; s2 += l * l; n++;
-      if (Math.abs(d[i] - 0x14) > 8 || Math.abs(d[i + 1] - 0x10) > 8 || Math.abs(d[i + 2] - 0x2a) > 8) nonBg++;
-      seenCols.add(((d[i] >> 2) << 12) | ((d[i + 1] >> 2) << 6) | (d[i + 2] >> 2));
-    }
-    const mean = s / n;
-    return { w: canvas.width, h: canvas.height, mean, std: Math.sqrt(Math.max(0, s2 / n - mean * mean)), nonBg: nonBg / n, distinct: seenCols.size };
-  },
+  canvasStats(): ReturnType<typeof frameStats> { stage.render(); return frameStats(); },
 
   /** RGB of the current frame at canvas pixel coordinates (renders first). For look-dev numbers. */
   samplePixels(pts: [number, number][]): number[][] {
@@ -197,7 +287,7 @@ const RV = {
     const out: { geometries: number; textures: number; programs: number }[] = [];
     const g0 = genome;
     for (let i = 0; i < n; i++) {
-      const g = variants ? genomeFromParam(String(100 + i)) : g0;
+      const g = variants ? genomeFromParam(String(100 + (i % 5))) : g0;
       const b = makeBody(g);
       stage.setBody(b, g);
       stage.update(1 / 60, { time: i, pointerNdc: null });
@@ -209,25 +299,62 @@ const RV = {
     return out;
   },
 
-  /** JS heap growth over `n` update (and optionally render) frames. Needs --enable-precise-memory-info --js-flags=--expose-gc. */
-  heapProbe(n: number, withRender: boolean): { before: number; after: number; deltaKB: number } | null {
-    const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
-    const gc = (globalThis as unknown as { gc?: () => void }).gc;
-    if (!mem || !gc) return null;
-    for (let i = 0; i < 60; i++) frame(1 / 60); // warm up (shader compiles, JIT)
+  /** Camera rig numbers: pitch clamp (never under the table), zoom clamp, damped orbit, shake decay and setShakeScale(0). */
+  cameraProbe(): Record<string, number> {
+    const cam = stage.camera, out: Record<string, number> = {};
+    const tgt = new THREE.Vector3(0, 0.42, 0);
+    const settle = (n = 90): void => { for (let i = 0; i < n; i++) { time += 1 / 60; stage.update(1 / 60, { time, pointerNdc: null }); } };
+    settle();
+    const p0 = cam.position.clone(), d0 = p0.distanceTo(tgt);
+    out.baseDistance = d0; out.baseHeight = p0.y;
+    stage.orbit(0.5, 0.0); settle(2);
+    out.orbitMovesCameraAfter2Frames = cam.position.distanceTo(p0);          // damped: moves, but not all at once
+    settle(120);
+    out.orbitMovedAfterSettle = cam.position.distanceTo(p0);
+    stage.orbit(-0.5, 0.0); settle(120);
+    stage.orbit(0, -50); settle(150); out.lowestCameraY = cam.position.y; out.lowestPitchDeg = Math.asin((cam.position.y - 0.42) / cam.position.distanceTo(tgt)) * 57.2958;
+    stage.orbit(0, 50); settle(150); out.highestPitchDeg = Math.asin((cam.position.y - 0.42) / cam.position.distanceTo(tgt)) * 57.2958;
+    stage.orbit(0, -50); settle(150);
+    stage.zoom(1e5); settle(150); out.farthest = cam.position.distanceTo(tgt) / d0;
+    stage.zoom(-1e5); settle(150); out.nearest = cam.position.distanceTo(tgt) / d0;
+    stage.zoom(1e5); stage.zoom(-1e5); stage.zoom(NaN); stage.orbit(NaN, 0); settle(30);
+    out.finite = Number.isFinite(cam.position.x + cam.position.y + cam.position.z) ? 1 : 0;
+    stage.zoom(0); stage.orbit(0, 0.4); settle(150);
+    // shake
+    const base = cam.position.clone();
+    stage.setShakeScale(1);
+    stage.shake(1); time += 1 / 60; stage.update(1 / 60, { time, pointerNdc: null });
+    out.shakeOffsetFrame1 = cam.position.distanceTo(base);
+    settle(8); out.shakeOffsetFrame9 = cam.position.distanceTo(base);
+    settle(120); out.shakeOffsetAfter2s = cam.position.distanceTo(base);
+    stage.setShakeScale(0); stage.shake(1); time += 1 / 60; stage.update(1 / 60, { time, pointerNdc: null });
+    out.shakeOffsetWhenScale0 = cam.position.distanceTo(base);
+    stage.setShakeScale(1);
+    return out;
+  },
+
+  /** Self-test helper for the heap probe: retain n small objects until releaseObjects(). */
+  retainObjects(n: number): void {
+    const keep: { a: number; b: number }[] = [];
+    for (let i = 0; i < n; i++) keep.push({ a: i, b: i * 2 });
+    (globalThis as unknown as { __keep?: unknown }).__keep = keep;
+  },
+  releaseObjects(): void { (globalThis as unknown as { __keep?: unknown }).__keep = undefined; },
+
+  /**
+   * Warm up, then run `n` frames of body.step + stage.update (+ render when asked) with some poking, for the harness to
+   * measure JS heap growth around it with CDP (HeapProfiler.collectGarbage + Runtime.getHeapUsage).
+   */
+  churn(n: number, withRender: boolean, warm = true, stepBody = true): void {
+    if (warm) for (let i = 0; i < 40; i++) frame(1 / 60, false);
     press.on = false;
-    gc(); gc();
-    const before = mem.usedJSHeapSize;
     for (let i = 0; i < n; i++) {
-      body.step(1 / 60);
+      if (stepBody) body.step(1 / 60);
       time += 1 / 60;
-      if (i % 90 === 0) { body.nudge({ x: 0.4, y: 0.6, z: 0.1 }); }
+      if (stepBody && i % 90 === 0) body.nudge({ x: 0.4, y: 0.6, z: 0.1 });
       stage.update(1 / 60, { time, pointerNdc: { x: Math.sin(time), y: Math.cos(time * 0.7) } });
       if (withRender) stage.render();
     }
-    gc(); gc();
-    const after = mem.usedJSHeapSize;
-    return { before, after, deltaKB: (after - before) / 1024 };
   },
 };
 

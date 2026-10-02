@@ -50,6 +50,8 @@ const lin = (c: Rgb): THREE.Color => new THREE.Color().setRGB(c[0], c[1], c[2], 
 const VERT_PARS = /* glsl */`
 attribute float aStrain;
 attribute vec3 aRest;
+attribute vec2 aDisp;
+varying vec2 vDisp;
 varying float vStrain;
 varying vec3 vRest;
 varying vec3 vWPos;
@@ -57,12 +59,14 @@ varying vec3 vWPos;
 const VERT_MAIN = /* glsl */`
 #include <begin_vertex>
 vStrain = aStrain;
+vDisp = aDisp;
 vRest = aRest;
 vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
 `;
 
 const FRAG_PARS = /* glsl */`
 varying float vStrain;
+varying vec2 vDisp;
 varying vec3 vRest;
 varying vec3 vWPos;
 uniform float uTime, uCompress, uStretch, uBlushAmt, uPatStrength, uCoreAmt, uCoreRadius, uRimAmt, uScatter, uAlphaBase;
@@ -96,8 +100,9 @@ const COLOR_STAGE = /* glsl */`
   diffuseColor.rgb = mix(diffuseColor.rgb, uPatA, smoothstep(0.15, 0.55, jBd) * uPatStrength);
 #endif
 {
-  float jComp = clamp((1.0 - vStrain) * 5.0, 0.0, 1.0);
-  float jStr = clamp((vStrain - 1.0) * 4.0, 0.0, 1.0);
+  // strain < 1 = compressed edges; the dent depth term catches local presses (edge lengths barely change in a dent)
+  float jComp = max(clamp((1.0 - vStrain) * 5.0, 0.0, 1.0), smoothstep(0.0, 0.8, vDisp.x));
+  float jStr = max(clamp((vStrain - 1.0) * 4.0, 0.0, 1.0), 0.8 * smoothstep(0.1, 0.9, vDisp.y));
   jBlush = clamp(jComp + uCompress * 0.55, 0.0, 1.0) * uBlushAmt;
   jPale = clamp(jStr + uStretch * 0.5, 0.0, 1.0) * uBlushAmt;
   diffuseColor.rgb = mix(diffuseColor.rgb, uBlushCol, jBlush * 0.75);
@@ -133,8 +138,10 @@ const EMISSIVE_STAGE = /* glsl */`
   vec3 jCore = uCoreCol * jHalo * uCoreAmt * (0.55 + 0.45 * jNdv);
   totalEmissiveRadiance += jRim + jScat + jCore;
   #ifdef WH_LOW
+    // low tier: no transmission target, so the body carries its own colour (a base glow) and is only lightly see-through
+    totalEmissiveRadiance += diffuseColor.rgb * (0.2 + 0.2 * jWrap);
     float jSpec = dot(totalSpecular, vec3(0.3333));
-    diffuseColor.a = clamp(mix(uAlphaBase, 1.0, jFres) + jSpec * 1.6 + dot(jCore, vec3(0.3)) * 0.4, 0.0, 1.0);
+    diffuseColor.a = clamp(mix(uAlphaBase, 1.0, jFres) + jSpec * 0.7, 0.0, 1.0);
   #endif
 }
 vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
@@ -161,7 +168,7 @@ export class JellyMaterials {
       uTime: { value: 0 }, uCompress: { value: 0 }, uStretch: { value: 0 },
       uBlushAmt: { value: 1 }, uPatStrength: { value: patStrength },
       uCoreAmt: { value: 0.5 + genome.coreGlow * 0.9 }, uCoreRadius: { value: 0.3 * scale },
-      uRimAmt: { value: 0.95 }, uScatter: { value: 0.2 + 0.2 * genome.translucency }, uAlphaBase: { value: 0.5 + 0.3 * (1 - genome.translucency) },
+      uRimAmt: { value: 0.95 }, uScatter: { value: 0.2 + 0.2 * genome.translucency }, uAlphaBase: { value: 0.86 - 0.14 * genome.translucency },
       uBlushCol: { value: lin(palette.blush) }, uPaleCol: { value: lin(palette.pale) },
       uPatA: { value: lin(palette.patA) }, uPatB: { value: lin(palette.patB) },
       uRimCol: { value: new THREE.Color(0x59d6e6) }, uGlowCol: { value: lin(palette.glow) },
@@ -190,6 +197,7 @@ export class JellyMaterials {
     });
     this.hub.apply(m, 1.25);
     if (low) {
+      m.color = lin(p.attenuation);   // no absorption pass: bake the deep, saturated look into the base colour
       m.transparent = true;
       m.depthWrite = false;
       m.transmission = 0;

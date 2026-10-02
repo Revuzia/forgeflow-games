@@ -62,7 +62,7 @@ const PANELS: PanelDef[] = [
   // rim: tall cold lagoon strip, behind-right
   { dir: RIM_DIR, dist: 4.5, w: 0.8, h: 3.6, color: [0.28, 0.82, 0.95], k: 12, soft: 0.16, radius: 0.35, roll: -0.18 },
   // fill: dim violet card, front-right
-  { dir: FILL_DIR, dist: 4.5, w: 2.4, h: 2.4, color: [0.5, 0.36, 0.92], k: 1.0, soft: 1.1, radius: 1.0 },
+  { dir: FILL_DIR, dist: 4.5, w: 2.4, h: 2.4, color: [0.5, 0.36, 0.92], k: 0.55, soft: 1.1, radius: 1.0 },
   // small low kicker, cool, behind-left: a little pinprick of reflection low on the body
   { dir: new THREE.Vector3(-0.8, -0.05, -0.55).normalize(), dist: 4.5, w: 1.6, h: 0.5, color: [0.3, 0.7, 0.9], k: 2.2, soft: 0.2, radius: 0.2 },
 ];
@@ -128,13 +128,15 @@ export class EnvHub {
     this.users.add(mat);
   }
   release(mat: THREE.Material): void { this.users.delete(mat as THREE.MeshStandardMaterial); }
-  /** After a WebGL context restore the baked cube is gone: bake again and re-point every material. */
+  /**
+   * After a WebGL context restore the baked cube died with the context. Bake again. The dead texture is NOT disposed (that
+   * would only make the driver warn about deleting objects of another context) and the registered materials are forgotten:
+   * the stage re-creates everything GPU-backed and registers the new materials.
+   */
   rebuild(renderer: THREE.WebGLRenderer): void {
-    const old = this.env;
+    this.users.clear();
     this.env = createEnvironment(renderer, this.size);
     this.texture = this.env.texture;
-    for (const m of this.users) m.envMap = this.texture;
-    old.dispose();
   }
   dispose(): void { this.env.dispose(); this.users.clear(); }
 }

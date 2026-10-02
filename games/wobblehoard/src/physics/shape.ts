@@ -4,8 +4,8 @@
 //
 // DOLLOP = a whipped-cream dollop: a squat dome (radius R0, flattened to 0.8 in Y) with a flat-ish foot so it sits
 // stably, a faint spiral piping ridge on the flanks, and a narrow raised, slightly leaning swirl-peak at +Y.
-// The peak is the secondary-motion showpiece, so `soft` (the shape-matching stiffness multiplier) drops to 0.35 there:
-// it lags behind the body when shoved and flops back with its own, slower wobble.
+// The peak is the secondary-motion showpiece, so the shape-matching stiffness drops there (SoftParams.peakSoft):
+// it lags behind the body when shoved and flops back with its own, slower wobble (the solver reads `floppy`).
 import type { Genome } from '../core/genome.ts';
 import { clamp, lerp, smoothstep } from '../core/rng.ts';
 import type { IcoMesh } from './mesh.ts';
@@ -13,8 +13,8 @@ import type { IcoMesh } from './mesh.ts';
 export interface RestShape {
   /** Rest positions relative to the mass-weighted rest centre (3 per vertex). */
   restLocal: Float64Array;
-  /** Per-vertex shape-matching stiffness multiplier (1 = body, < 1 = floppy part). */
-  soft: Float64Array;
+  /** Per-vertex weight of the floppy part (the swirl-peak): 0 = body, 1 = tip. The solver maps it to a stiffness multiplier. */
+  floppy: Float64Array;
   /** Per-vertex mass from tributary rest area, normalised to mean 1. */
   mass: Float64Array;
   /** Nominal radius R0 (0.5 x lerp(0.8, 1.25, size)). */
@@ -39,7 +39,7 @@ const PEAK_PINCH = 0.50;          // how much the peak narrows toward the axis
 const FOOT = 0.90;                // foot plane height as a fraction of the dome's bottom (flat base so it sits)
 
 /**
- * Rest point for a unit direction. Writes xyz into out[o..o+2] and returns the softness weight (0..1).
+ * Rest point for a unit direction. Writes xyz into out[o..o+2] and returns the floppy-part weight (0..1: 1 at the swirl tip).
  * No state, no randomness: the same (species, direction, R0) always gives the same point.
  */
 export function restPoint(species: Genome['species'], dx: number, dy: number, dz: number, R0: number, out: Float64Array | number[], o: number): number {
@@ -63,8 +63,9 @@ export function restPoint(species: Genome['species'], dx: number, dy: number, dz
       // flat foot: smooth max with the foot plane so the body sits on a patch, not on a point
       const floor = -R0 * FLATTEN * FOOT, k = 0.035 * R0;
       y = 0.5 * (y + floor + Math.sqrt((y - floor) * (y - floor) + k * k));
+      if (y - floor < 0.004 * R0) y = floor;          // the foot is an exactly flat disc, so rest on the table is exact
       out[o] = x; out[o + 1] = y; out[o + 2] = z;
-      return 1 - 0.65 * w;
+      return w;
     }
   }
 }
@@ -86,9 +87,9 @@ export function buildRest(genome: Genome, mesh: IcoMesh): RestShape {
   const n = mesh.vertexCount;
   const R0 = restRadiusOf(genome);
   const p = new Float64Array(n * 3);
-  const soft = new Float64Array(n);
+  const floppy = new Float64Array(n);
   for (let i = 0; i < n; i++) {
-    soft[i] = restPoint(genome.species, mesh.dirs[i * 3], mesh.dirs[i * 3 + 1], mesh.dirs[i * 3 + 2], R0, p, i * 3);
+    floppy[i] = restPoint(genome.species, mesh.dirs[i * 3], mesh.dirs[i * 3 + 1], mesh.dirs[i * 3 + 2], R0, p, i * 3);
   }
   // tributary-area masses (a third of each incident triangle), mean 1
   const mass = new Float64Array(n);
@@ -114,7 +115,7 @@ export function buildRest(genome: Genome, mesh: IcoMesh): RestShape {
     if (p[i * 3 + 1] > maxY) { maxY = p[i * 3 + 1]; peak = i; }
   }
   return {
-    restLocal: p, soft, mass, restRadius: R0, restCenterY: -minY, peakVertex: peak,
+    restLocal: p, floppy, mass, restRadius: R0, restCenterY: -minY, peakVertex: peak,
     restVolume: meshVolume(p, tris), height: maxY - minY,
   };
 }

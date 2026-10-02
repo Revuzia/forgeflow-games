@@ -37,6 +37,15 @@ export interface SoftParams {
   tableMu: number;
   /** Fraction of the upward centre-of-mass velocity removed per substep while the foot is down (tacky table: no hop). */
   groundDamp: number;
+  /** Viscous tack: fraction of its upward speed a foot particle (within ~1 cm of the table) loses per substep. */
+  footVisc: number;
+  /** Tack layer (m): a foot particle that would lift off the table by less than this in one substep stays glued to it, so
+   *  small springs-back never peel the foot (no hop); a real launch (a nudge, a hard rebound) still leaves. */
+  glue: number;
+  /** How deep a finger may press, as a fraction of the body thickness (firmer = shallower: a firm toy cannot be squashed as far). */
+  squashDepth: number;
+  /** Stiffness multiplier (shape matching + Laplacian) at the very tip of the swirl-peak: lower = floppier. */
+  peakSoft: number;
   /** Max pull distance of a grab, in rest radii. From stretch. */
   maxPull: number;
 }
@@ -44,17 +53,21 @@ export interface SoftParams {
 export function deriveParams(g: Genome): SoftParams {
   const f = clamp(g.firmness, 0, 1), b = clamp(g.bounce, 0, 1), s = clamp(g.stretch, 0, 1);
   return {
-    smOmega: lerp(26, 62, f),
-    bendK: lerp(0.05, 0.2, f),
-    edgeAlphaT: lerp(1, 5, s),
+    smOmega: lerp(12, 40, f),
+    bendK: lerp(0.02, 0.1, f),
+    edgeAlphaT: lerp(3, 5.5, s),
     edgeSoftStrain: lerp(0.35, 1.6, s),
     volKappa: 0.5,
-    intDamp: lerp(11, 1.6, Math.pow(b, 0.9)),
-    affDamp: lerp(30, 12, b),
-    intDamp2: lerp(9, 2.5, b),
+    intDamp: lerp(8, 1, Math.pow(b, 0.9)),
+    affDamp: lerp(6, 1, b) + 4 * f,
+    intDamp2: lerp(8, 0, b),
     drag: 0.18,
-    tableMu: 1.0,
-    groundDamp: 0.15,
+    tableMu: 1.5,
+    groundDamp: 0,
+    glue: 0.008,
+    squashDepth: lerp(0.66, 0.34, f),
+    peakSoft: 0.35,
+    footVisc: 0,
     maxPull: 1.0 + 1.4 * s,
   };
 }
@@ -67,10 +80,10 @@ export const FINGER = {
   retractS: 0.05,
   /** Tip radius as a fraction of restRadius: fingertip -> palm. */
   rMin: 0.2, rMax: 0.45,
-  /** Pressing toward the table (the table is the other jaw) may push this fraction of the body thickness: flattens to 28%. */
-  maxThickness: 0.72,
-  /** ...pressing a free flank (no table behind it) goes at most this fraction of the thickness. */
-  maxFlank: 0.5,
+  /** Coulomb friction between the fingertip and the skin (tacky: the surface follows the finger). */
+  friction: 0.9,
+  /** ...pressing a free flank (no table behind it) goes at most this fraction of squashDepth (see SoftParams). */
+  flankShare: 0.75,
   /** Each jaw of a two-finger pinch keeps this fraction of its depth range. */
   pinchShare: 0.62,
   /** The two tips of a pinch keep this clearance (in rest radii) between their surfaces. */

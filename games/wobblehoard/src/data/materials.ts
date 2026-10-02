@@ -41,7 +41,7 @@ export interface MaterialParams {
   airReturnTau: number;
   /** damping ratio of the volume spring, 0..1.5. Air-flow resistance: a fast squeeze meets a firmer cushion than a slow one. */
   airDamp: number;
-  /** ratio k2/k1, 0..8. Stiffness of the viscoelastic memory arm relative to smOmega^2. Instantaneous stiffness = (1+memStiff) x relaxed: rate stiffening. */
+  /** ratio k2/k1, 0..8. Stiffness of the viscoelastic memory arm relative to smOmega^2: the share of the shape stiffness that relaxes (slow recovery, held dents). */
   memStiff: number;
   /** s, 0.05..4. Relaxation time of the memory arm (Zener/standard-linear-solid tau). Retardation (recovery) time = memTau x (1+memStiff). */
   memTau: number;
@@ -53,6 +53,8 @@ export interface MaterialParams {
   intDamp: number;
   /** 1/s, 4..60 (log). GLOBAL (affine squash/stretch/shear) damping: whether the whole body rebounds like a ball. Same meaning as SoftParams.affDamp. */
   affDamp: number;
+  /** 1/m, 1..40 (log). Extra damping per m/s of internal speed (SoftParams.intDamp2). THE strain-rate-stiffening lever: a fast poke meets far more resistance than a slow press (measured, SQUISHY_SCIENCE.md 3.6). */
+  speedDamp: number;
   /** XPBD alpha-tilde at the nominal step, 0.03..0.9. Skin compliance (higher = stretchier, softer skin). Same as SoftParams.edgeAlphaT. */
   edgeAlphaT: number;
   /** strain, 0.05..0.7. Edge strain beyond which the skin hardens. Same as SoftParams.edgeSoftStrain. */
@@ -94,6 +96,7 @@ export const PHYSICS_AXES: readonly AxisSpec[] = [
   { key: 'healTau', unit: 's', min: 0.3, max: 60, log: true },
   { key: 'intDamp', unit: '1/s', min: 1, max: 32, log: true },
   { key: 'affDamp', unit: '1/s', min: 4, max: 60, log: true },
+  { key: 'speedDamp', unit: '1/m', min: 1, max: 40, log: true },
   { key: 'edgeAlphaT', unit: 'alpha~', min: 0.03, max: 0.9, log: false },
   { key: 'edgeSoftStrain', unit: 'strain', min: 0.05, max: 0.7, log: false },
   { key: 'maxPull', unit: 'R0', min: 0.6, max: 3.2, log: false },
@@ -201,11 +204,11 @@ export interface MaterialFamily {
 
 const P = (
   smOmega: number, volOmega: number, volBleedMax: number, airReturnTau: number, airDamp: number,
-  memStiff: number, memTau: number, yieldStrain: number, healTau: number, intDamp: number, affDamp: number,
+  memStiff: number, memTau: number, yieldStrain: number, healTau: number, intDamp: number, affDamp: number, speedDamp: number,
   edgeAlphaT: number, edgeSoftStrain: number, maxPull: number, tableMu: number,
   tack: number, stringiness: number, sloshMass: number, sloshHz: number, sloshZeta: number, jam: number, snap: number,
 ): MaterialParams => ({
-  smOmega, volOmega, volBleedMax, airReturnTau, airDamp, memStiff, memTau, yieldStrain, healTau, intDamp, affDamp,
+  smOmega, volOmega, volBleedMax, airReturnTau, airDamp, memStiff, memTau, yieldStrain, healTau, intDamp, affDamp, speedDamp,
   edgeAlphaT, edgeSoftStrain, maxPull, tableMu, tack, stringiness, sloshMass, sloshHz, sloshZeta, jam, snap,
 });
 
@@ -223,90 +226,90 @@ const S = (
   bubbleRate, bubbleRadiusMinMm, bubbleRadiusMaxMm, noiseHz, noiseColor, wet, airPuff, stickyStrings, bodyPitch, ring, levelDb,
 });
 
-// Argument order of P(): smOmega volOmega bleed airTau airDamp | memStiff memTau yield heal intDamp affDamp | edgeA edgeSoft maxPull mu |
+// Argument order of P(): smOmega volOmega bleed airTau airDamp | memStiff memTau yield heal intDamp affDamp speedDamp | edgeA edgeSoft maxPull mu |
 //                        tack string sloshM sloshHz sloshZ jam snap
 export const MATERIAL_FAMILIES: Record<MaterialFamilyId, MaterialFamily> = {
   slowrise: {
     id: 'slowrise', name: 'Slow-Rise Foam',
     blurb: 'Sinks in like a sponge, then creeps back up over several seconds; light, dry, no bounce, a little crunch of air.',
-    physics: P(20, 38, 0.55, 1.45, 0.9, 2.0, 0.5, 0, 60, 18, 40, 0.22, 0.20, 1.0, 0.70, 0.10, 0, 0, 3, 0.4, 0.35, 0),
+    physics: P(20, 38, 0.55, 1.45, 0.9, 2.0, 0.5, 0, 60, 18, 40, 16, 0.22, 0.20, 1.0, 0.70, 0.10, 0, 0, 3, 0.4, 0.35, 0),
     look: L(0.04, 0.04, 0.35, 0.15, 0.7, 0.15, 0.35, 0.55, 0.3, 0.1, 0.1, 0.15, 0),
     sound: S(0.25, 0.3, 1.0, 3800, 0.8, 0.1, 0.95, 0.1, 0.95, 0.05, -3),
   },
   marshmallow: {
     id: 'marshmallow', name: 'Marshmallow Puff',
     blurb: 'Featherlight and powdery; squashes flat with almost no push-back and puffs up again in a second.',
-    physics: P(13, 28, 0.35, 0.28, 0.35, 0.5, 0.25, 0, 60, 12, 34, 0.35, 0.28, 1.3, 0.75, 0.20, 0.1, 0, 3, 0.4, 0.10, 0),
+    physics: P(13, 28, 0.35, 0.28, 0.35, 0.5, 0.25, 0, 60, 12, 34, 8, 0.35, 0.28, 1.3, 0.75, 0.20, 0.1, 0, 3, 0.4, 0.10, 0),
     look: L(0.05, 0.05, 0.08, 0.06, 0.95, 0.35, 0.8, 0.3, 0.3, 0.15, 0.1, 0.1, 0),
     sound: S(0.2, 0.3, 0.9, 4800, 0.9, 0.05, 0.55, 0.15, 1.0, 0, -4.5),
   },
   mochidough: {
     id: 'mochidough', name: 'Mochi Dough',
     blurb: 'Soft, heavy dough: it stretches, keeps a thumb-print for a few seconds, then slowly smooths itself out.',
-    physics: P(14, 150, 0.05, 0.3, 0.1, 3.0, 0.45, 0.045, 2.5, 16, 40, 0.55, 0.50, 2.1, 0.80, 0.30, 0.15, 0, 3, 0.4, 0.10, 0),
+    physics: P(14, 150, 0.05, 0.3, 0.1, 3.0, 0.45, 0.045, 2.5, 16, 40, 14, 0.55, 0.50, 2.1, 0.80, 0.30, 0.15, 0, 3, 0.4, 0.10, 0),
     look: L(0.18, 0.12, 0.2, 0.15, 0.85, 0.55, 0.55, 0.5, 0.8, 0.35, 0.45, 0.4, 0.1),
     sound: S(0.5, 0.8, 2.5, 1500, 0.35, 0.35, 0.1, 0.35, 0.85, 0, -2),
   },
   jellygel: {
     id: 'jellygel', name: 'Jelly Gel',
     blurb: 'Glossy, translucent and bouncy: squashes without losing volume, bulges around your finger, wobbles for a while.',
-    physics: P(23, 480, 0, 0.1, 0.02, 0.1, 0.2, 0, 60, 4.6, 21, 0.41, 0.36, 1.73, 0.60, 0.15, 0, 0, 3, 0.4, 0, 0),
+    physics: P(23, 480, 0, 0.1, 0.02, 0.1, 0.2, 0, 60, 4.6, 21, 5.5, 0.41, 0.36, 1.73, 0.60, 0.15, 0, 0, 3, 0.4, 0, 0),
     look: L(0.82, 0.18, 0.88, 0.12, 0.08, 0.7, 0, 0, 1.0, 0.85, 0.75, 1.0, 1.0),
     sound: S(1.0, 0.6, 4.0, 2200, 0.5, 0.8, 0, 0.15, 1.0, 0.55, 0),
   },
   waterfill: {
     id: 'waterfill', name: 'Liquid Core',
     blurb: 'A thin skin around a sloshing liquid: it bulges where you do not press and keeps swaying after you let go.',
-    physics: P(11, 650, 0, 0.1, 0.05, 0.1, 0.3, 0, 60, 3.2, 14, 0.30, 0.22, 1.5, 0.55, 0.05, 0, 0.45, 2.6, 0.10, 0, 0),
+    physics: P(11, 650, 0, 0.1, 0.05, 0.1, 0.3, 0, 60, 3.2, 14, 4, 0.30, 0.22, 1.5, 0.55, 0.05, 0, 0.45, 2.6, 0.10, 0, 0),
     look: L(0.93, 0.07, 0.95, 0.05, 0.04, 0.35, 0, 0, 1.4, 0.45, 0.3, 0.9, 1.4),
     sound: S(1.6, 1.0, 6.0, 1200, 0.3, 1.0, 0, 0.05, 0.8, 0.35, 1.5),
   },
   putty: {
     id: 'putty', name: 'Bounce Putty',
     blurb: 'Firm and dead when you poke it fast, flows like taffy when you lean on it, and keeps the dent you leave.',
-    physics: P(12, 300, 0, 0.1, 0.05, 5.0, 0.5, 0.07, 40, 12, 30, 0.60, 0.45, 2.3, 0.70, 0.20, 0.3, 0, 3, 0.4, 0, 0),
+    physics: P(12, 300, 0, 0.1, 0.05, 5.0, 0.5, 0.07, 40, 12, 30, 28, 0.60, 0.45, 2.3, 0.70, 0.20, 0.3, 0, 3, 0.4, 0, 0),
     look: L(0.08, 0.08, 0.55, 0.15, 0.45, 0.2, 0.1, 0.1, 0.5, 0.2, 0.25, 0.25, 0.2),
     sound: S(0.45, 1.2, 3.5, 700, 0.2, 0.3, 0, 0.25, 0.75, 0.1, -1.5),
   },
   stickystretch: {
     id: 'stickystretch', name: 'Sticky Stretch',
     blurb: 'Clingy and stretchy: it grabs your fingertip, pulls into long thin strings, then snaps back with a tack.',
-    physics: P(16, 400, 0, 0.1, 0.05, 0.8, 0.35, 0, 60, 3.4, 18, 0.75, 0.65, 2.9, 1.10, 0.90, 0.85, 0, 3, 0.4, 0, 0),
+    physics: P(16, 400, 0, 0.1, 0.05, 0.8, 0.35, 0, 60, 3.4, 18, 6, 0.75, 0.65, 2.9, 1.10, 0.90, 0.85, 0, 3, 0.4, 0, 0),
     look: L(0.6, 0.25, 0.78, 0.15, 0.12, 0.6, 0.05, 0, 0.9, 0.6, 0.9, 0.8, 0.7),
     sound: S(0.9, 0.5, 2.5, 2800, 0.6, 0.55, 0, 0.9, 1.05, 0.2, -0.5),
   },
   slimegoo: {
     id: 'slimegoo', name: 'Slime Goo',
     blurb: 'A wet, sticky glob: it oozes after every squeeze, drips into strings and takes ages to pull itself together.',
-    physics: P(9.5, 350, 0, 0.1, 0.05, 3.0, 0.8, 0, 60, 16, 40, 0.70, 0.50, 2.7, 0.95, 0.75, 1.0, 0, 3, 0.4, 0, 0),
+    physics: P(9.5, 350, 0, 0.1, 0.05, 3.0, 0.8, 0, 60, 16, 40, 24, 0.70, 0.50, 2.7, 0.95, 0.75, 1.0, 0, 3, 0.4, 0, 0),
     look: L(0.7, 0.25, 0.96, 0.04, 0.03, 0.8, 0, 0, 1.1, 0.5, 0.8, 0.8, 1.3),
     sound: S(1.9, 1.5, 6.0, 900, 0.25, 1.0, 0, 0.85, 0.7, 0, 1),
   },
   firmsilicone: {
     id: 'firmsilicone', name: 'Firm Silicone',
     blurb: 'Dense, grippy rubber: pushes back hard, snaps back instantly and keeps rebounding.',
-    physics: P(38, 600, 0.02, 0.06, 0.02, 0.05, 0.1, 0, 60, 2.0, 8, 0.12, 0.12, 1.15, 0.90, 0.10, 0, 0, 3, 0.4, 0.15, 0),
+    physics: P(38, 600, 0.02, 0.06, 0.02, 0.05, 0.1, 0, 60, 2.0, 8, 2.5, 0.12, 0.12, 1.15, 0.90, 0.10, 0, 0, 3, 0.4, 0.15, 0),
     look: L(0.25, 0.2, 0.45, 0.2, 0.35, 0.4, 0.05, 0.1, 0.6, 0.3, 0.3, 0.5, 0.3),
     sound: S(0.35, 0.4, 1.5, 3200, 0.6, 0.2, 0.05, 0.1, 1.3, 0.85, -1),
   },
   popdome: {
     id: 'popdome', name: 'Pop Dome',
     blurb: 'A stiff silicone dome that resists, then suddenly gives with a pop and flips inside out.',
-    physics: P(44, 70, 0.30, 0.06, 0.1, 0, 0.1, 0, 60, 2.4, 8, 0.08, 0.08, 0.8, 0.80, 0, 0, 0, 3, 0.4, 0.5, 1),
+    physics: P(44, 70, 0.30, 0.06, 0.1, 0, 0.1, 0, 60, 2.4, 8, 3, 0.08, 0.08, 0.8, 0.80, 0, 0, 0, 3, 0.4, 0.5, 1),
     look: L(0.35, 0.2, 0.7, 0.2, 0.2, 0.25, 0, 0, 0.4, 0.15, 0.1, 0.6, 0.2),
     sound: S(0.1, 0.3, 0.8, 5200, 1.0, 0, 0.2, 0, 1.5, 1.0, 0),
   },
   gummy: {
     id: 'gummy', name: 'Gummy Jelly',
     blurb: 'Firm and chewy: a quick, slightly sticky spring-back with very little wobble, like candy.',
-    physics: P(30, 520, 0, 0.1, 0.02, 0.35, 0.3, 0, 60, 8, 22, 0.20, 0.16, 1.25, 0.70, 0.30, 0.1, 0, 3, 0.4, 0.10, 0),
+    physics: P(30, 520, 0, 0.1, 0.02, 0.35, 0.3, 0, 60, 8, 22, 8, 0.20, 0.16, 1.25, 0.70, 0.30, 0.1, 0, 3, 0.4, 0.10, 0),
     look: L(0.9, 0.1, 0.8, 0.15, 0.15, 0.85, 0, 0, 1.2, 0.8, 0.6, 0.9, 0.5),
     sound: S(0.55, 0.6, 2.0, 2600, 0.55, 0.35, 0, 0.3, 1.1, 0.4, -1.5),
   },
   beadsqueeze: {
     id: 'beadsqueeze', name: 'Bead Squeeze',
     blurb: 'A bag of tiny beads: it yields, rearranges with a crunch, firms up as it jams, and stays a little lumpy.',
-    physics: P(15, 36, 0.18, 0.5, 0.3, 2.0, 0.25, 0.05, 2.5, 14, 36, 0.40, 0.35, 1.4, 0.65, 0, 0, 0.2, 3.5, 0.35, 0.85, 0),
+    physics: P(15, 36, 0.18, 0.5, 0.3, 2.0, 0.25, 0.05, 2.5, 14, 36, 16, 0.40, 0.35, 1.4, 0.65, 0, 0, 0.2, 3.5, 0.35, 0.85, 0),
     look: L(0.5, 0.3, 0.5, 0.3, 0.3, 0.3, 0, 0.9, 1.0, 0.25, 0.2, 0.5, 1.2),
     sound: S(2.4, 0.3, 0.7, 5400, 1.0, 0, 0, 0, 0.9, 0, -2),
   },
@@ -376,10 +379,10 @@ export function recoverySeconds95(p: MaterialParams): number {
   return Math.min(60, Math.max(air, visco, heal, ring));
 }
 
-/** Nine 0..1 scores for UI bars and design reviews ("touch feel"). */
+/** Ten 0..1 scores for UI bars and design reviews ("touch feel"). */
 export interface FeelVector {
   firm: number; squashy: number; slowRise: number; holdsDent: number; bouncy: number;
-  stretchy: number; tacky: number; sloshy: number; snappy: number;
+  stretchy: number; tacky: number; sloshy: number; snappy: number; rateStiff: number;
 }
 export function feelOf(p: MaterialParams): FeelVector {
   const ax = (k: PhysicsKey): AxisSpec => PHYSICS_AXES.find((a) => a.key === k) as AxisSpec;
@@ -393,16 +396,33 @@ export function feelOf(p: MaterialParams): FeelVector {
     tacky: p.tack,
     sloshy: clamp(p.sloshMass / 0.45, 0, 1) * (1 - 0.5 * normalizeAxis(ax('sloshZeta'), p.sloshZeta)),
     snappy: p.snap,
+    rateStiff: normalizeAxis(ax('speedDamp'), p.speedDamp),
   };
 }
 
 /* ─────────────────────────────────── resolve: family x genome -> numbers ─────────────────────────────────── */
 
-/** Everything the physics lane needs, in the units of src/physics/params.ts plus the new features. All no-ops at neutral values. */
+/**
+ * Multipliers on the physics lane's own tuned parameters. The gel family at a neutral genome is 1 everywhere, so the character of
+ * every other family is expressed RELATIVE to the gel/DOLLOP the physics lane tuned. Raw numbers would rot every time params.ts is
+ * retuned (they already have: smOmega 13..36 -> 26..62, edgeAlphaT 0.05..0.7 -> 1..5), ratios do not.
+ */
+export interface SolverScale {
+  smOmega: number; bendK: number; edgeAlphaT: number; edgeSoftStrain: number; volKappa: number;
+  intDamp: number; affDamp: number; intDamp2: number; tableMu: number; maxPull: number;
+  /** FINGER.friction (skin sticks to the fingertip) and SoftParams.groundDamp (no hop off the table): the cheap, always-on face of tack. */
+  fingerFriction: number; groundDamp: number;
+  /**
+   * SoftParams.glue (feet within `glue` of the table stay on it). Scaled by the RELAXED share 1/(1+memStiff): with the full glue a
+   * slow-recovering family keeps a ~0.03 R dent forever (measured: slow-rise foam 0.033 -> 0.007 rms after the fix).
+   */
+  glue: number;
+}
+export type ScaleKey = keyof SolverScale;
+
+/** Everything the physics lane needs: `scale` for the parameters it already has, absolute values for the new features (all no-ops at neutral). */
 export interface SolverMaterial {
-  // same names and units as SoftParams
-  smOmega: number; edgeAlphaT: number; edgeSoftStrain: number; volKappa: number; intDamp: number; affDamp: number; intDamp2: number;
-  drag: number; tableMu: number; maxPull: number;
+  scale: SolverScale;
   // volume target (air bleed): V* in [volFloor, 1]; falls toward the current volume with volOutTau, returns with volInTau
   volFloor: number; volOutTau: number; volInTau: number; volDampZeta: number;
   // memory arm (viscoelastic + plastic)
@@ -428,7 +448,7 @@ export interface ResolvedMaterial {
   look: ResolvedLook;
   sound: MaterialSound;
   solver: SolverMaterial;
-  derived: { effectivePoisson: number; dentHoldDepth: number; recoverySeconds95: number; rateStiffening: number; feel: FeelVector };
+  derived: { effectivePoisson: number; dentHoldDepth: number; recoverySeconds95: number; feel: FeelVector };
 }
 
 /** Genome field in 0..1, 0.5 when missing or not finite (hostile share strings never reach here, but a half-built genome might). */
@@ -439,7 +459,7 @@ const band = (s: number): number => Math.pow(1.25, s);
 /**
  * The bounded per-instance modulation. Neutral genome (all 0.5) returns the family base unchanged.
  *   firmness  -> smOmega x1.25^+, volOmega x1.5^+, volBleedMax x(1 -/+ 15%), edgeAlphaT x1.2^-   (firmer => never softer)
- *   bounce    -> intDamp, affDamp x1.6^-                                                                (bouncier => less damping)
+ *   bounce    -> intDamp, affDamp, speedDamp x1.6^-                                                                (bouncier => less damping)
  *   stretch   -> maxPull x1.25^+, edgeAlphaT x1.3^+, edgeSoftStrain x1.25^+
  *   size      -> airReturnTau x1.25^+ (longer air path), sloshHz x1.25^-/2 (slower in a bigger body)
  */
@@ -453,6 +473,7 @@ function modulate(b: MaterialParams, f: number, bo: number, s: number, z: number
     airReturnTau: b.airReturnTau * band(zs),
     intDamp: b.intDamp * Math.pow(1.6, -bs),
     affDamp: b.affDamp * Math.pow(1.6, -bs),
+    speedDamp: b.speedDamp * Math.pow(1.6, -bs),
     edgeAlphaT: b.edgeAlphaT * Math.pow(1.2, -fs) * Math.pow(1.3, ss),
     edgeSoftStrain: b.edgeSoftStrain * band(ss),
     maxPull: b.maxPull * band(ss),
@@ -488,13 +509,18 @@ export function resolveMaterial(familyId: string, genome: Genome): ResolvedMater
   };
   const sound: MaterialSound = { ...fam.sound, ring: clamp(fam.sound.ring * (1 + 0.25 * (2 * bo - 1)), 0, 1) };
 
-  const kappa = clamp(1 / ((physics.volOmega * NOMINAL_SUBSTEP_S) ** 2), 0.05, 1e4);
+  const gel = MATERIAL_FAMILIES[DEFAULT_FAMILY_ID].physics;
+  const scale: SolverScale = {
+    smOmega: physics.smOmega / gel.smOmega, bendK: physics.smOmega / gel.smOmega,
+    edgeAlphaT: physics.edgeAlphaT / gel.edgeAlphaT, edgeSoftStrain: physics.edgeSoftStrain / gel.edgeSoftStrain,
+    volKappa: (gel.volOmega / physics.volOmega) ** 2,
+    intDamp: physics.intDamp / gel.intDamp, affDamp: physics.affDamp / gel.affDamp, intDamp2: physics.speedDamp / gel.speedDamp,
+    tableMu: physics.tableMu / gel.tableMu, maxPull: physics.maxPull / gel.maxPull,
+    fingerFriction: (0.6 + physics.tack) / (0.6 + gel.tack), groundDamp: (0.5 + 1.5 * physics.tack) / (0.5 + 1.5 * gel.tack),
+    glue: (1 + gel.memStiff) / (1 + physics.memStiff),
+  };
   const solver: SolverMaterial = {
-    smOmega: physics.smOmega, edgeAlphaT: physics.edgeAlphaT, edgeSoftStrain: physics.edgeSoftStrain, volKappa: kappa,
-    intDamp: physics.intDamp, affDamp: physics.affDamp,
-    // velocity-proportional damping of the release spike: PHYS maps bounce 0..1 -> intDamp 11..1.6 and intDamp2 9..2.5, i.e. intDamp2 ~ 9 (intDamp/11)^0.66
-    intDamp2: clamp(9 * Math.pow(physics.intDamp / 11, 0.66), 1, 30),
-    drag: 0.18, tableMu: physics.tableMu, maxPull: physics.maxPull,
+    scale,
     volFloor: 1 - physics.volBleedMax, volOutTau: Math.max(0.04, 0.12 * physics.airReturnTau), volInTau: physics.airReturnTau,
     volDampZeta: physics.airDamp,
     memStiff: physics.memStiff, memTau: physics.memTau, memYield: physics.yieldStrain, memHealTau: physics.healTau, memMax: MEM_MAX_R0,
@@ -506,7 +532,24 @@ export function resolveMaterial(familyId: string, genome: Genome): ResolvedMater
     physics, look, sound, solver,
     derived: {
       effectivePoisson: effectivePoisson(physics), dentHoldDepth: dentHoldDepth(physics),
-      recoverySeconds95: recoverySeconds95(physics), rateStiffening: 1 + physics.memStiff, feel: feelOf(physics),
+      recoverySeconds95: recoverySeconds95(physics), feel: feelOf(physics),
     },
   };
+}
+
+/**
+ * Adopt a resolved material into the physics lane's parameter object: every key present in `base` that has a scale is multiplied by it.
+ * Pass the parameters of a NEUTRAL genome (firmness = bounce = stretch = 0.5) so the genome is not applied twice:
+ *   const neutral = { ...genome, firmness: 0.5, bounce: 0.5, stretch: 0.5 };
+ *   new SoftBody(genome, { params: applyMaterial(deriveParams(neutral), resolveMaterial(familyId, genome)) });
+ * The gel family at a neutral genome returns `base` unchanged. Keys without a scale (drag, bendK when absent, ...) pass through.
+ */
+export function applyMaterial<T extends Partial<Record<ScaleKey, number>>>(base: T, r: ResolvedMaterial): T {
+  const out = { ...base } as Record<string, number>;
+  const sc = r.solver.scale as unknown as Record<string, number>;
+  for (const k of Object.keys(sc)) {
+    const v = out[k];
+    if (typeof v === 'number' && Number.isFinite(v)) out[k] = v * sc[k];
+  }
+  return out as T;
 }

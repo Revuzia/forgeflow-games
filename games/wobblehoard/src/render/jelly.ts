@@ -163,6 +163,10 @@ export class JellyView {
   readonly mapper: RestMapper;
   /** Sim vertex normals, refreshed by update(). Shared with the face / glitter code. */
   readonly simN: Float32Array;
+  /** Per sim vertex (inward, outward) displacement from where the rigid frame wants it, in 0..1 units of 0.45 x restRadius. */
+  readonly simD: Float32Array;
+  /** Deepest dent 0..1 and biggest outward bulge/pull 0..1 this frame (local deformation the global metrics can miss). */
+  press = 0; pull = 0;
   // body extents refreshed by update()
   minX = 0; maxX = 0; minY = 0; maxY = 0; minZ = 0; maxZ = 0;
   fineCount = 0;
@@ -171,13 +175,14 @@ export class JellyView {
   private geo: THREE.BufferGeometry;
   private vA = new Uint32Array(0); private vB = new Uint32Array(0); private vC = new Uint32Array(0);
   private bw = new Float32Array(0);
-  private pos = new Float32Array(0); private nrm = new Float32Array(0); private strain = new Float32Array(0);
-  private posAttr!: THREE.BufferAttribute; private nrmAttr!: THREE.BufferAttribute; private strAttr!: THREE.BufferAttribute;
+  private pos = new Float32Array(0); private nrm = new Float32Array(0); private strain = new Float32Array(0); private disp = new Float32Array(0);
+  private posAttr!: THREE.BufferAttribute; private nrmAttr!: THREE.BufferAttribute; private strAttr!: THREE.BufferAttribute; private dispAttr!: THREE.BufferAttribute;
 
   constructor(body: SoftBodyLike, material: THREE.Material, freq: number) {
     this.body = body;
     this.mapper = new RestMapper(body);
     this.simN = new Float32Array(body.vertexCount * 3);
+    this.simD = new Float32Array(body.vertexCount * 2);
     this.geo = new THREE.BufferGeometry();
     this.mesh = new THREE.Mesh(this.geo, material);
     this.mesh.frustumCulled = false;
@@ -197,7 +202,7 @@ export class JellyView {
       this.vA[k] = idx[hit.tri * 3] * 3; this.vB[k] = idx[hit.tri * 3 + 1] * 3; this.vC[k] = idx[hit.tri * 3 + 2] * 3;
       this.bw[k * 3] = hit.u; this.bw[k * 3 + 1] = hit.v; this.bw[k * 3 + 2] = hit.w;
     }
-    this.pos = new Float32Array(N * 3); this.nrm = new Float32Array(N * 3); this.strain = new Float32Array(N);
+    this.pos = new Float32Array(N * 3); this.nrm = new Float32Array(N * 3); this.strain = new Float32Array(N); this.disp = new Float32Array(N * 2);
     const old = this.geo;
     const geo = new THREE.BufferGeometry();
     this.posAttr = new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage);
@@ -205,7 +210,9 @@ export class JellyView {
     this.strAttr = new THREE.BufferAttribute(this.strain, 1).setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('position', this.posAttr);
     geo.setAttribute('normal', this.nrmAttr);
+    this.dispAttr = new THREE.BufferAttribute(this.disp, 2).setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('aStrain', this.strAttr);
+    geo.setAttribute('aDisp', this.dispAttr);
     geo.setAttribute('aRest', new THREE.BufferAttribute(g.dirs, 3));
     geo.setIndex(new THREE.BufferAttribute(g.indices, 1));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e4); // never culled, never recomputed
@@ -229,17 +236,44 @@ export class JellyView {
       if (z < z0) z0 = z; if (z > z1) z1 = z;
     }
     this.minX = x0; this.maxX = x1; this.minY = y0; this.maxY = y1; this.minZ = z0; this.maxZ = z1;
-    const pos = this.pos, nrm = this.nrm, str = this.strain, vA = this.vA, vB = this.vB, vC = this.vC, bw = this.bw;
+    // displacement from the rigid goal (centre + frame x rest): inward = a dent, outward = a bulge or a pull
+    {
+      const q = body.frame, c = body.center, R = body.restLocal;
+      const qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+      const r00 = 1 - 2 * (qy * qy + qz * qz), r01 = 2 * (qx * qy - qz * qw), r02 = 2 * (qx * qz + qy * qw);
+      const r10 = 2 * (qx * qy + qz * qw), r11 = 1 - 2 * (qx * qx + qz * qz), r12 = 2 * (qy * qz - qx * qw);
+      const r20 = 2 * (qx * qz - qy * qw), r21 = 2 * (qy * qz + qx * qw), r22 = 1 - 2 * (qx * qx + qy * qy);
+      const k = 1 / (0.45 * body.restRadius), sD = this.simD;
+      let pm = 0, um = 0;
+      for (let i = 0, n = body.vertexCount; i < n; i++) {
+        const i3 = i * 3;
+        const rx = R[i3], ry = R[i3 + 1], rz = R[i3 + 2];
+        const dx = P[i3] - (c.x + r00 * rx + r01 * ry + r02 * rz);
+        const dy = P[i3 + 1] - (c.y + r10 * rx + r11 * ry + r12 * rz);
+        const dz = P[i3 + 2] - (c.z + r20 * rx + r21 * ry + r22 * rz);
+        const along = (dx * sn[i3] + dy * sn[i3 + 1] + dz * sn[i3 + 2]) * k;
+        const inw = along < 0 ? Math.min(1, -along) : 0, out = along > 0 ? Math.min(1, along) : 0;
+        sD[i * 2] = inw; sD[i * 2 + 1] = out;
+        if (inw > pm) pm = inw;
+        if (out > um) um = out;
+      }
+      this.press = pm; this.pull = um;
+    }
+    const pos = this.pos, nrm = this.nrm, str = this.strain, dsp = this.disp, sDsp = this.simD, vA = this.vA, vB = this.vB, vC = this.vC, bw = this.bw;
     const alpha = PHONG_ALPHA;
     for (let k = 0, n = this.fineCount; k < n; k++) {
       const a = vA[k], b = vB[k], c = vC[k];
       const u = bw[k * 3], v = bw[k * 3 + 1], w = bw[k * 3 + 2];
       evalSurface(P, sn, a, b, c, u, v, w, alpha, pos, k * 3, nrm, k * 3);
-      str[k] = u * S[a / 3] + v * S[b / 3] + w * S[c / 3];
+      const ia = (a / 3) | 0, ib = (b / 3) | 0, ic = (c / 3) | 0;
+      str[k] = u * S[ia] + v * S[ib] + w * S[ic];
+      dsp[k * 2] = u * sDsp[ia * 2] + v * sDsp[ib * 2] + w * sDsp[ic * 2];
+      dsp[k * 2 + 1] = u * sDsp[ia * 2 + 1] + v * sDsp[ib * 2 + 1] + w * sDsp[ic * 2 + 1];
     }
     this.posAttr.needsUpdate = true;
     this.nrmAttr.needsUpdate = true;
     this.strAttr.needsUpdate = true;
+    this.dispAttr.needsUpdate = true;
   }
 
   dispose(): void { this.geo.dispose(); }

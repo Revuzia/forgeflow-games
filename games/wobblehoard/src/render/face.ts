@@ -49,6 +49,11 @@ class Eye {
   readonly arc: THREE.Mesh;
   readonly uLook: { value: THREE.Vector2 };
   readonly hit: SurfaceHit = { tri: 0, u: 0, v: 0, w: 0 };
+  /** Footprint samples east / west / north / south of the eye centre (rest-space tangent offsets). */
+  readonly foot: SurfaceHit[] = [0, 1, 2, 3].map(() => ({ tri: 0, u: 0, v: 0, w: 0 }));
+  /** Rest-space footprint lengths (east-west, north-south) and the rest outward normal. */
+  restLx = 1; restLy = 1;
+  readonly restN = new THREE.Vector3(0, 0, 1);
   readonly look = { x: 0, y: 0 };
   readonly nSmooth = new THREE.Vector3(0, 0, 1);
   hasN = false;
@@ -60,6 +65,8 @@ export class Face {
   private readonly eyes: Eye[] = [];
   private readonly geos: THREE.BufferGeometry[] = [];
   private readonly mats: THREE.Material[] = [];
+  /** Iris/glint look vectors in each eye's own frame (x0, y0, x1, y1), -1..1. For the harness. */
+  readonly lookOut = new Float32Array(4);
   private readonly body: SoftBodyLike;
   private readonly view: JellyView;
   private readonly style: StyleDef;
@@ -77,6 +84,10 @@ export class Face {
   // scratch (no per-frame allocation)
   private readonly sp = new Float32Array(3);
   private readonly sn = new Float32Array(3);
+  private readonly fp = new Float32Array(12);
+  private readonly fn = new Float32Array(12);
+  private readonly qs = new THREE.Quaternion();
+  private readonly vR = new THREE.Vector3();
   private readonly vA = new THREE.Vector3();
   private readonly vX = new THREE.Vector3();
   private readonly vY = new THREE.Vector3();
@@ -148,22 +159,49 @@ export class Face {
       const eye = new Eye(domeMesh, arcMesh, uLook);
       const dir = new THREE.Vector3(Math.sin(az * side) * Math.cos(el), Math.sin(el), Math.cos(az * side) * Math.cos(el));
       view.mapper.locate(dir.x, dir.y, dir.z, eye.hit);
+      this.anchorFootprint(eye, dir);
       this.eyes.push(eye);
       this.group.add(domeMesh, arcMesh);
     }
   }
 
-  update(dt: number, time: number, pointer: { x: number; y: number } | null, camera: THREE.PerspectiveCamera): void {
-    const body = this.body, m = body.metrics, P = body.positions, N = this.view.simN, idx = body.indices;
+  /**
+   * Footprint samples: four rest-space tangent offsets (about one eye radius) around the eye direction, each mapped to a sim
+   * triangle + barycentric weights. Every frame the eye bead is fitted to these four points, so it sits on the surface like a
+   * real glued-on bead (position = centre sample, orientation = best-fit plane over its footprint, a little skin stretch).
+   */
+  private anchorFootprint(eye: Eye, d: THREE.Vector3): void {
+    const body = this.body, R = body.restLocal, idx = body.indices;
+    const east = new THREE.Vector3(d.z, 0, -d.x).normalize();
+    const north = new THREE.Vector3().crossVectors(d, east).normalize();
+    const delta = (this.radius * Math.max(this.style.sx, 0.9) * 0.9) / body.restRadius;
+    const cs = Math.cos(delta), sn = Math.sin(delta);
+    const offs: [THREE.Vector3, number][] = [[east, 1], [east, -1], [north, 1], [north, -1]];
+    const rp = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    offs.forEach(([t, sgn], i) => {
+      const x = d.x * cs + t.x * sn * sgn, y = d.y * cs + t.y * sn * sgn, z = d.z * cs + t.z * sn * sgn;
+      this.view.mapper.locate(x, y, z, eye.foot[i]);
+      const h = eye.foot[i];
+      const a = idx[h.tri * 3] * 3, b = idx[h.tri * 3 + 1] * 3, c = idx[h.tri * 3 + 2] * 3;
+      rp[i].set(h.u * R[a] + h.v * R[b] + h.w * R[c], h.u * R[a + 1] + h.v * R[b + 1] + h.w * R[c + 1], h.u * R[a + 2] + h.v * R[b + 2] + h.w * R[c + 2]);
+    });
+    const tx = new THREE.Vector3().subVectors(rp[0], rp[1]), ty = new THREE.Vector3().subVectors(rp[2], rp[3]);
+    eye.restLx = Math.max(1e-4, tx.length()); eye.restLy = Math.max(1e-4, ty.length());
+    eye.restN.crossVectors(tx, ty).normalize();
+    if (eye.restN.dot(d) < 0) eye.restN.negate();
+  }
+
+  /** `comp` / `rate`: the renderer's squeeze (0..1) and its rate of change (1/s, negative = springing back). */
+  update(dt: number, time: number, pointer: { x: number; y: number } | null, camera: THREE.PerspectiveCamera, comp: number, rate: number): void {
+    const body = this.body, P = body.positions, N = this.view.simN, idx = body.indices;
     const r0 = this.radius, st = this.style;
-    const comp = m.compression, rate = m.compressionRate;
 
     // --- expression state ---
     this.wide += (smoothstep(0.3, 0.8, comp) - this.wide) * (1 - Math.exp(-dt * 16));
     if (rate < -0.5 && this.prevComp > 0.07) this.squintHold = 0.5;
     this.prevComp = comp;
     this.squintHold = Math.max(0, this.squintHold - dt);
-    const sqTarget = this.squintHold > 0 || (rate < -0.3 && comp > 0.05) ? 1 : 0;
+    const sqTarget = this.squintHold > 0 || (rate < -0.3 && comp > 0.15) ? 1 : 0;
     this.squint += (sqTarget - this.squint) * (1 - Math.exp(-dt * (sqTarget > this.squint ? 26 : 8)));
     // blink
     if (time >= this.blinkAt && this.squint < 0.2) {
@@ -183,22 +221,33 @@ export class Face {
       const eye = this.eyes[e], h = eye.hit;
       const a = idx[h.tri * 3] * 3, b = idx[h.tri * 3 + 1] * 3, c = idx[h.tri * 3 + 2] * 3;
       evalSurface(P, N, a, b, c, h.u, h.v, h.w, 0.7, this.sp, 0, this.sn, 0);
-      const s = h.u * body.strain[a / 3] + h.v * body.strain[b / 3] + h.w * body.strain[c / 3];
-      // smoothed normal
-      this.vZ.set(this.sn[0], this.sn[1], this.sn[2]);
+      // footprint samples E, W, N, S
+      for (let f = 0; f < 4; f++) {
+        const hf = eye.foot[f];
+        evalSurface(P, N, idx[hf.tri * 3] * 3, idx[hf.tri * 3 + 1] * 3, idx[hf.tri * 3 + 2] * 3, hf.u, hf.v, hf.w, 0.7, this.fp, f * 3, this.fn, f * 3);
+      }
+      const fp = this.fp;
+      this.vX.set(fp[0] - fp[3], fp[1] - fp[4], fp[2] - fp[5]);
+      this.vY.set(fp[6] - fp[9], fp[7] - fp[10], fp[8] - fp[11]);
+      const lenX = this.vX.length(), lenY = this.vY.length();
+      // best-fit plane normal over the footprint (outward), tempered toward the rigid normal so a deep dent cannot turn an eye into a slit
+      this.vZ.crossVectors(this.vX, this.vY).normalize();
+      if (this.vZ.x * this.sn[0] + this.vZ.y * this.sn[1] + this.vZ.z * this.sn[2] < 0) this.vZ.negate();
+      const q = body.frame;
+      this.qs.set(q.x, q.y, q.z, q.w);
+      this.vR.copy(eye.restN).applyQuaternion(this.qs);
+      const dotN = this.vZ.dot(this.vR);
+      if (dotN < 0.72) this.vZ.lerp(this.vR, 0.8 * clamp((0.72 - dotN) / 0.5, 0, 1)).normalize();
       if (!eye.hasN) { eye.nSmooth.copy(this.vZ); eye.hasN = true; } else eye.nSmooth.lerp(this.vZ, 1 - Math.exp(-dt * 40)).normalize();
       this.vZ.copy(eye.nSmooth);
-      // up from the body frame
-      const q = body.frame;
-      this.vY.set(2 * (q.x * q.y - q.z * q.w), 1 - 2 * (q.x * q.x + q.z * q.z), 2 * (q.y * q.z + q.x * q.w));
-      this.vX.crossVectors(this.vY, this.vZ);
-      if (this.vX.lengthSq() < 1e-6) this.vX.set(1, 0, 0);
+      // orthonormal frame: x along the surface (east), y = z cross x
+      this.vX.addScaledVector(this.vZ, -this.vX.dot(this.vZ));
+      if (this.vX.lengthSq() < 1e-8) this.vX.set(1, 0, 0);
       this.vX.normalize();
       this.vY.crossVectors(this.vZ, this.vX);
-
-      const k = (0.4 + 0.6 * clamp(s, 0.85, 1.22)) * (1 + 0.24 * this.wide);
-      const rr = r0 * k;
-      const sx = rr * st.sx, sy = rr * st.sy, sz = rr * st.sz;
+      const kx = 1 + (clamp(lenX / eye.restLx, 0.8, 1.35) - 1) * 0.55, ky = 1 + (clamp(lenY / eye.restLy, 0.8, 1.35) - 1) * 0.55;
+      const rr = r0 * (1 + 0.24 * this.wide);
+      const sx = rr * st.sx * kx, sy = rr * st.sy * ky, sz = rr * st.sz;
       const lift = sz * 0.12;
       this.vA.set(this.sp[0] + this.vZ.x * lift, this.sp[1] + this.vZ.y * lift, this.sp[2] + this.vZ.z * lift);
       // droop: sleepy eyes sit a little lower in their socket
@@ -228,6 +277,7 @@ export class Face {
       const lm = Math.hypot(eye.look.x, eye.look.y);
       const lk = lm > 1 ? 1 / lm : 1;
       eye.uLook.value.set(eye.look.x * lk, eye.look.y * lk);
+      this.lookOut[e * 2] = eye.look.x * lk; this.lookOut[e * 2 + 1] = eye.look.y * lk;
 
       // --- dome (open eye) ---
       const dome = eye.dome;

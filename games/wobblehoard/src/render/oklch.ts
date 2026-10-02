@@ -58,10 +58,13 @@ const mix3 = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1]
 /** Everything colour-related that depends on the genome. Called once per setBody. */
 export function genomePalette(g: Genome): JellyPalette {
   const h = g.hue + HUE_OFFSET;
-  const L = 0.5 + 0.43 * g.lightness;              // starter 0.64 -> 0.78 (light apricot)
+  // starter 0.64 -> 0.78 (light apricot). Yellow-greens turn olive-drab when dark, so they get a little extra lightness.
+  const hk = ((h % 360) + 360) % 360;
+  const yg = Math.max(0, 1 - Math.abs(hk - 115) / 55);
+  const L = 0.5 + 0.43 * g.lightness + 0.05 * yg;
   const C = 0.03 + 0.2 * g.chroma;                 // starter 0.82 -> 0.194 (gamut clipped at this L/h)
   const body = oklchToLinear(L, C, h);
-  const attenuation = oklchToLinear(Math.max(0.3, L - 0.16), Math.min(0.32, C * 1.25 + 0.03), h - 4);
+  const attenuation = oklchToLinear(Math.max(0.3, L - 0.16 + 0.06 * yg), Math.min(0.32, C * 1.25 + 0.03), h - 4);
   const blush = oklchToLinear(Math.max(0.3, L - 0.07), Math.min(0.33, C * 1.45 + 0.03), h - 14);
   const pale = oklchToLinear(Math.min(0.97, L + 0.1), C * 0.35, h + 6);
   const patA = oklchToLinear(Math.min(0.95, L + 0.06), Math.min(0.3, C * 1.1), h + 42);

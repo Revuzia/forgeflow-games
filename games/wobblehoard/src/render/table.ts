@@ -76,17 +76,23 @@ const FELT_COLOR = /* glsl */`
 {
   vec2 fp = vWP.xz;
   float r = length(fp);
-  float fw = length(fwidth(fp));
-  float kA = 1.0 - smoothstep(0.006, 0.014, fw);
-  float kB = 1.0 - smoothstep(0.0022, 0.005, fw);
-  float a = whNoise2(fp * 70.0);
-  float b = whNoise2(fp * 210.0 + 9.0);
+  float fw = max(length(fwidth(fp)), 1e-5);
+  // band-limited grain: each octave only contributes while its cells are ~1.5..9 px wide (no aliasing far away,
+  // no visible lattice blocks up close), so the felt always reads as fine fibre
+  float fib = 0.0, wsum = 0.0;
   float ang = whHash21(floor(fp * 5.0)) * 6.2832;
   vec2 rp = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * fp;
-  float s = whNoise2(rp * vec2(34.0, 260.0));
-  float fib = mix(0.5, a, kA) * 0.55 + mix(0.5, b, kB) * 0.25 + mix(0.5, s, kB) * 0.3;
+  for (int o = 0; o < 4; o++) {
+    float fq = o == 0 ? 40.0 : o == 1 ? 110.0 : o == 2 ? 300.0 : 800.0;
+    float px = 1.0 / (fq * fw);
+    float wgt = smoothstep(1.2, 2.4, px) * (1.0 - smoothstep(6.0, 12.0, px));
+    float n = o == 3 ? whNoise2(rp * vec2(fq * 0.5, fq * 4.0)) : whNoise2(fp * fq + float(o) * 7.3);
+    fib += wgt * (n - 0.5);
+    wsum += wgt;
+  }
+  fib = 0.5 + fib / max(0.6, wsum) * 0.55;
   jFibre = fib;
-  diffuseColor.rgb *= 0.45 + 1.1 * mix(0.5, fib, uFibre);
+  diffuseColor.rgb *= 0.64 + 0.72 * mix(0.5, fib, uFibre);
   diffuseColor.rgb *= 0.86 + 0.28 * whNoise2(fp * 2.1 + 3.0);
   diffuseColor.rgb *= mix(1.0, 0.3, smoothstep(uVigIn, uVigOut, r));
   float dashes = step(0.5, fract(atan(fp.y, fp.x) * 64.0 / 6.2832));
@@ -97,7 +103,7 @@ const FELT_COLOR = /* glsl */`
 const FELT_NORMAL = /* glsl */`
 #include <normal_fragment_maps>
 {
-  vec2 dH = vec2(dFdx(jFibre), dFdy(jFibre)) * uFibre * 0.6;
+  vec2 dH = vec2(dFdx(jFibre), dFdy(jFibre)) * uFibre * 0.5;
   normal = jBump(-vViewPosition, normal, dH, faceDirection);
 }
 `;
@@ -190,7 +196,7 @@ void main() {
   float fringe = exp(-pow((r - 0.62) * 4.2, 2.0)) * uRing;       // caustic fringe just outside the shadow edge
   float cau = 0.8 + 0.4 * whNoise2(p * 7.0 + vec2(uTime * 0.25, -uTime * 0.18));
   float edge = 1.0 - smoothstep(0.78, 1.0, r);
-  float a = (body * 0.75 + fringe * 0.55) * cau * edge * uStrength;
+  float a = (body * 0.8 + fringe * 0.28) * cau * edge * uStrength;
   gl_FragColor = vec4(uColor * a, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -316,8 +322,8 @@ export class Table {
     this.shadowMat.uniforms.uSoft.value = Math.max(0, 1 - 0.75 * fl - 0.5 * Math.min(1, h * 1.5));
     // light pool: widens and brightens with the squash; softer and smaller while floating
     const squash = Math.min(1, f.compression * 1.2 + f.stretch * 0.15);
-    const pS = (1.22 + 0.8 * squash + 0.2 * h) * (1 - 0.1 * fl);
-    this.poolK += ((0.3 + 0.7 * squash) - this.poolK) * (1 - Math.exp(-dt * 10));
+    const pS = (1.2 + 0.4 * squash + 0.2 * h) * (1 - 0.1 * fl);
+    this.poolK += ((0.3 + 0.55 * squash) - this.poolK) * (1 - Math.exp(-dt * 10));
     this.pool.position.set(f.cx, 0.003, f.cz);
     this.pool.scale.set(f.rx * pS + 0.1, 1, f.rz * pS + 0.1);
     this.poolMat.uniforms.uStrength.value = this.poolK * (1 - 0.5 * fl) * (0.85 / (1 + h * 0.9));

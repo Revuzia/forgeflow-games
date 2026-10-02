@@ -275,7 +275,7 @@ select option { background: var(--wh-panel); color: var(--wh-cream); }
   .row-value { font-size: 13px; }
   /* keep the squishy visible above the sheet: slide the stage up by roughly half the sheet's height */
   body[data-settings="open"] #stage { transform: translateY(-21dvh); }
-  .hint { bottom: calc(var(--safe-b) + 76px); max-width: calc(100vw - 2 * var(--gutter)); font-size: 14px; padding: 8px 14px; }
+  .hint { bottom: calc(var(--safe-b) + 76px); max-width: calc(100vw - 2 * var(--gutter)); font-size: 14px; padding: 8px 12px; }
 }
 @media (pointer: coarse) { .keys { display: none; } }
 
