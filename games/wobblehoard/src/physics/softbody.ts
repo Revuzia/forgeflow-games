@@ -23,7 +23,7 @@
 //     poke shoves a floating body). Pull: Gaussian patch soft-attached to a moving world target.
 // Units: metres-ish; mass per particle ~1 (tributary area, mean 1).
 import type { Genome } from '../core/genome.ts';
-import { clamp, lerp, mulberry32 } from '../core/rng.ts';
+import { clamp, mulberry32 } from '../core/rng.ts';
 import type {
   FingerDownArgs, RayHit, SoftBodyLike, SoftEvent, SoftEventKind, SoftMetrics, V3,
 } from '../contracts.ts';
@@ -93,6 +93,8 @@ export class SoftBody implements SoftBodyLike {
   readonly restRadius: number;
   /** Harness-only counters (not part of SoftBodyLike). `safetyResets` must stay 0: it counts emergency non-finite recoveries. */
   readonly debug = { substeps: 0, safetyResets: 0, contacts: 0, maxSpeed: 0, minVolume: 1 };
+  /** TEMP experiment switches. */
+  readonly dbg = { sm: 1, vol: 1, edge: 1, damp: 1, edgeIters: 1, edgeAlpha: -1 };
 
   // ---- configuration
   private readonly n: number;
@@ -599,7 +601,7 @@ export class SoftBody implements SoftBodyLike {
       const r00 = 1 - 2 * (yy + zz), r01 = 2 * (xy - wz), r02 = 2 * (xz + wy);
       const r10 = 2 * (xy + wz), r11 = 1 - 2 * (xx + zz), r12 = 2 * (yz - wx);
       const r20 = 2 * (xz - wy), r21 = 2 * (yz + wx), r22 = 1 - 2 * (xx + yy);
-      const K = this.smK, soft = this.softW;
+      const K = this.smK * this.dbg.sm, soft = this.softW;
       for (let i = 0; i < n; i++) {
         const i3 = i * 3;
         const qx_ = Q[i3], qy_ = Q[i3 + 1], qz_ = Q[i3 + 2];
@@ -639,7 +641,7 @@ export class SoftBody implements SoftBodyLike {
       }
       S /= v6 * v6;
       const lambda = -C / (S + this.volAlphaT);
-      const sc = lambda / v6;
+      const sc = lambda / v6 * this.dbg.vol;
       for (let i = 0; i < n; i++) {
         const i3 = i * 3, s = sc * invM[i];
         XP[i3] += GRAD[i3] * s; XP[i3 + 1] += GRAD[i3 + 1] * s; XP[i3 + 2] += GRAD[i3 + 2] * s;
@@ -649,8 +651,9 @@ export class SoftBody implements SoftBodyLike {
     // ---- edge distance constraints (Gauss-Seidel, direction alternates each substep)
     {
       const E = this.edges, L0 = this.restLen, ne = this.ne;
-      const aT = this.edgeA, softS = this.p.edgeSoftStrain;
-      const forward = this.parity === 0;
+      const aT = this.dbg.edgeAlpha >= 0 ? this.dbg.edgeAlpha : this.edgeA, softS = this.p.edgeSoftStrain;
+      for (let it = 0; it < this.dbg.edgeIters; it++) {
+      const forward = ((this.parity + it) & 1) === 0;
       for (let k = 0; k < ne; k++) {
         const e = forward ? k : ne - 1 - k;
         const a = E[e * 2] * 3, b = E[e * 2 + 1] * 3;
@@ -661,10 +664,11 @@ export class SoftBody implements SoftBodyLike {
         const C = len - l0;
         const alpha = C > l0 * softS ? aT * 0.12 : aT;
         const wa = invM[a / 3], wb = invM[b / 3];
-        const s = -C / ((wa + wb + alpha) * len);
+        const s = -C / ((wa + wb + alpha) * len) * this.dbg.edge;
         const sa = s * wa, sb = s * wb;
         XP[a] += dx * sa; XP[a + 1] += dy * sa; XP[a + 2] += dz * sa;
         XP[b] -= dx * sb; XP[b + 1] -= dy * sb; XP[b + 2] -= dz * sb;
+      }
       }
     }
 
@@ -785,7 +789,7 @@ export class SoftBody implements SoftBodyLike {
     const kUp = float ? 30 : 12, cAng = float ? 4 : 1.2;
     const awx = (-upz * scale * kUp - cAng * wx) * H, awy = -cAng * wy * H, awz = (upx * scale * kUp - cAng * wz) * H;
 
-    const dI = this.dampInt, dr = this.dragF;
+    const dI = this.dampInt * this.dbg.damp, dr = this.dragF;
     let ke = 0;
     const vmax2 = MAX_SPEED * MAX_SPEED;
     for (let i = 0; i < n; i++) {
@@ -935,5 +939,3 @@ export class SoftBody implements SoftBodyLike {
   }
 }
 
-// keep lerp referenced for tooling that tree-shakes imports (no runtime effect)
-void lerp;

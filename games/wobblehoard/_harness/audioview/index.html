@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WOBBLEHOARD sound lab</title>
+<style>
+  :root { color-scheme: dark; --ink:#14102a; --plum:#2a1744; --amber:#ffb347; --lagoon:#59d6e6; --coral:#ff5a4d; --cream:#fff1d6; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--ink); color:var(--cream); font:15px/1.45 system-ui, sans-serif; max-width:760px; }
+  h1 { margin:0 0 4px; font-size:20px; letter-spacing:.04em; }
+  p.note { margin:0 0 14px; color:#c9b9e8; font-size:13px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; align-items:center; }
+  button { background:var(--plum); color:var(--cream); border:1px solid #5b3a86; border-radius:10px; padding:10px 14px; font:inherit; cursor:pointer; touch-action:none; user-select:none; }
+  button:hover { border-color:var(--amber); }
+  button.hold { background:#3a1f5c; }
+  label { display:flex; flex-direction:column; font-size:12px; color:#c9b9e8; min-width:140px; }
+  input[type=range] { width:160px; }
+  pre { background:#0d0a1e; border:1px solid #2f2350; border-radius:8px; padding:10px; font-size:12px; overflow:auto; }
+  canvas { width:100%; height:120px; background:#0d0a1e; border:1px solid #2f2350; border-radius:8px; display:block; }
+</style>
+</head>
+<body>
+<h1>WOBBLEHOARD sound lab</h1>
+<p class="note">Live engine (the same <code>createAudio()</code> the game uses). The offline probe drives the same voice code:
+<code>node _harness/probe_audio.mjs</code> writes WAVs and spectrograms to <code>_harness/_renders/</code>.</p>
+<div class="row"><button id="unlock">Unlock audio</button><span id="state">locked</span></div>
+<div class="row">
+  <button data-v="poke">Poke</button>
+  <button id="squish" class="hold">Squish (hold, drag up/down)</button>
+  <button data-v="release">Release</button>
+  <button data-v="land">Land</button>
+  <button data-v="pop">Pop</button>
+  <button data-v="blend">Blend</button>
+</div>
+<div class="row">
+  <label>pitch ratio <span id="pitchV">1.00</span><input id="pitch" type="range" min="0.6" max="1.6" step="0.01" value="1"></label>
+  <label>intensity / compression / size <span id="amtV">0.70</span><input id="amt" type="range" min="0" max="1" step="0.01" value="0.7"></label>
+  <label>master <span id="masterV">0.80</span><input id="master" type="range" min="0" max="1" step="0.01" value="0.8"></label>
+  <label>louder squish <span id="boostV">0.00</span><input id="boost" type="range" min="0" max="1" step="0.01" value="0"></label>
+  <label><span>muted</span><input id="mute" type="checkbox"></label>
+</div>
+<canvas id="scope" width="1400" height="240"></canvas>
+<pre id="out">no stats yet</pre>
+<script type="module" src="./view.js"></script>
+</body>
+</html>

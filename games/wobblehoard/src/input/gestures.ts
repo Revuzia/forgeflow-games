@@ -96,6 +96,7 @@ interface Ptr {
   x: number; y: number;      // latest position
   sx: number; sy: number;    // press position
   t0: number;
+  tLast: number;             // latest time seen for this pointer (time never runs backwards for a press)
   hit: BodyHit | null;
   squish: boolean;
   pressure: number;
@@ -120,6 +121,7 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
   /** hold detection + pressure ramp for one body pointer at time t */
   function tickBody(p: Ptr, t: number): void {
     if (p.kind !== 'body' || p.mode === 'pull') return;
+    if (t < p.tLast) t = p.tLast; else p.tLast = t;
     if (!p.squish && t - p.t0 > cfg.tapMs) {
       p.squish = true;
       if (p.mode === 'press') emit({ type: 'gesture', kind: 'squish', pointer: p.id, slot: p.slot });
@@ -196,12 +198,12 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
       if (!finite(s)) return;
       const dup = ptrs.get(s.id);
       if (dup) releasePtr(dup, true); // a missed pointerup: clean up, then start over
-      const base = { id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y, t0: s.t, squish: false, pressure: 0, orbitAnnounced: false };
+      const base = { id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y, t0: s.t, tLast: s.t, squish: false, pressure: 0, orbitAnnounced: false };
       const button = s.button ?? 0;
       const hit = button === 0 ? host.hitTest(s.x, s.y) : null;
       if (hit) {
-        const slot: Slot | -1 = slotFree(0) ? 0 : slotFree(1) ? 1 : -1;
-        if (slot < 0) { ptrs.set(s.id, { ...base, kind: 'ignored', mode: 'ignored', slot: 0, hit: null }); return; }
+        const slot: Slot | null = slotFree(0) ? 0 : slotFree(1) ? 1 : null;
+        if (slot === null) { ptrs.set(s.id, { ...base, kind: 'ignored', mode: 'ignored', slot: 0, hit: null }); return; }
         const p: Ptr = { ...base, kind: 'body', mode: 'press', slot, hit, pressure: cfg.tapPressure };
         ptrs.set(s.id, p);
         emit({ type: 'fingerDown', slot, hit });
