@@ -22,6 +22,9 @@
 //    un-collapses (alive 1, full floor HP), topped-out buildings stand full; blocksLeveled never decreases;
 //    deterministic (identical runs -> identical event sequence); a rebuilt building drops normal rubble XP; the crew
 //    downs tools near the titan and next to a live boss; a hit abandons the construction; a heal pickup holds a lot.
+//    SLOW construction (owner 2026-10-01): no storey faster than rebuildFloorS, no first storey before site prep +
+//    one storey, no site topping out before prep + floors x storey time or under 24 s, no building popping in
+//    (several storeys in a tick / topped out without every storey), >= 3 sites mid-construction after 120 s.
 //    Uses the REAL combat/pickups.ts when its import chain loads; otherwise a recording stub is
 //    swapped in through node:module registerHooks and the output says so.
 // Exit code: 0 all assertions passed, 1 any failure.
@@ -577,6 +580,10 @@ if (CS) {
 // construction that takes a hit is abandoned; nothing is ever added under the titan / a live boss / a heal pickup;
 // blocksLeveled never goes down; a healthy city gets no crews.
 console.log('== 4. REPAIR CREWS');
+/** SLOW construction floor: no rebuilt building tops out faster than this from groundbreak (b3005a22 did in 4.6 s). */
+const SLOW_MIN_SITE_S = 24;
+/** Timing tolerance for the storey-pace checks: one sim tick (progress accumulates dt in a Float32Array). */
+const SLOW_TOL = 1.5 / 30;
 if (CS) {
   const RB = CS;
   type RbEv = Extract<SimEvent, { type: 'rebuild' }>;
@@ -618,6 +625,12 @@ if (CS) {
     const lv0 = w.run.blocksLeveled;
     const startR = RB.rebuildStartR(w), nearR = RB.rebuildNearR(w);
     let starts = 0, floors = 0, dones = 0, badStart = 0, badFloor = 0, badFirst = 0, badDone = 0, early = 0, overCap = 0, lvDown = 0, badTarget = 0;
+    // SLOW construction (owner 2026-10-01: rebuilding is never instant): per site the groundbreak time, the last storey
+    // time and the storeys raised; a storey never comes faster than rebuildFloorS, the first never before site prep +
+    // one storey, a site never tops out before prep + floors x storey time nor under SLOW_MIN_SITE_S, never two storeys
+    // of one building in a tick, and every topped-out site raised all of its storeys one by one
+    const t0 = new Map<number, number>(), tl = new Map<number, number>(), nFl = new Map<number, number>();
+    let fastFloor = 0, fastFirst = 0, fastSite = 0, shortSite = 0, popped = 0, minSite = Infinity;
     let lvPrev = lv0;
     const seq: number[] = [];
     for (let k = 0; k < 30 * secs; k++) {
@@ -635,13 +648,31 @@ if (CS) {
           starts++;
           if (foot(b, w.titan.x, w.titan.z) < startR) badStart++;
           if (w.t - bk.downT[b.id] < RB.REBUILD_MIN_DOWN_S - 1e-9) early++;
+          t0.set(b.id, w.t); tl.set(b.id, -1); nFl.set(b.id, 0);
         } else if (ev.stage === 'floor') {
           floors++; fl++;
           if (foot(b, w.titan.x, w.titan.z) < nearR) badFloor++;
           if (ev.alive === 1 && (b.collapsed || b.alive !== 1 || b.floorHp !== b.floorHpMax)) badFirst++;
+          const s0 = t0.get(b.id);
+          if (s0 !== undefined) {
+            const last = tl.get(b.id) ?? -1;
+            if (last === w.t) popped++;                                                   // two storeys in one tick
+            else if (last < 0) { if (w.t - s0 < RB.rebuildScaffoldS(b) + RB.rebuildFloorS(b) - SLOW_TOL) fastFirst++; }
+            else if (w.t - last < RB.rebuildFloorS(b) - SLOW_TOL) fastFloor++;
+            tl.set(b.id, w.t); nFl.set(b.id, (nFl.get(b.id) ?? 0) + 1);
+          }
         } else {
           dones++;
           if (b.collapsed || b.alive !== b.floors || bk.stage[b.id] !== RB.RB_NONE) badDone++;
+          const s0 = t0.get(b.id);
+          if (s0 !== undefined) {
+            const d = w.t - s0;
+            minSite = Math.min(minSite, d);
+            if (d < RB.rebuildScaffoldS(b) + b.floors * RB.rebuildFloorS(b) - SLOW_TOL * (b.floors + 1)) fastSite++;
+            if (d < SLOW_MIN_SITE_S) shortSite++;
+            if ((nFl.get(b.id) ?? 0) !== b.floors) popped++;
+            t0.delete(b.id);
+          }
         }
       }
       // a crew is only dispatched while standing (after this tick's finished storeys) is below the target
@@ -650,13 +681,17 @@ if (CS) {
       lvPrev = w.run.blocksLeveled;
     }
     const st = RB.rebuildStats(w);
-    return { w, frac0, frac1: standing(w) / total, starts, floors, dones, badStart, badFloor, badFirst, badDone, early, overCap, lvDown, badTarget, st, seq, lv0, startR, nearR };
+    // sites visibly mid-construction at the end: storeys going up, neither rubble nor topped out
+    const bk = RB.rebuildBook(c);
+    const mid = bk.crews.filter((id) => bk.stage[id] === RB.RB_RISING && !c.buildings[id].collapsed && c.buildings[id].alive < c.buildings[id].floors).length;
+    return { w, frac0, frac1: standing(w) / total, starts, floors, dones, badStart, badFloor, badFirst, badDone, early, overCap, lvDown, badTarget, st, seq, lv0, startR, nearR,
+      fastFloor, fastFirst, fastSite, shortSite, popped, minSite, mid };
   };
   for (const bid of BIOME_LIST) {
     const a = runDepleted(bid, 7, 120);
     const b2 = runDepleted(bid, 7, 120);
     console.log(`   ${bid} depleted (${(a.frac0 * 100).toFixed(0)} % standing, Size IV titan at the centre, startR ${a.startR.toFixed(0)} m nearR ${a.nearR.toFixed(0)} m), 120 s: `
-      + `crews ${a.starts} · storeys ${a.floors} · topped out ${a.dones} · standing → ${(a.frac1 * 100).toFixed(1)} % · active ${a.st.active}`);
+      + `crews ${a.starts} · storeys ${a.floors} · topped out ${a.dones} · standing → ${(a.frac1 * 100).toFixed(1)} % · active ${a.st.active} · mid-construction ${a.mid} · fastest site ${a.minSite.toFixed(1)} s`);
     check(a.starts > 0 && a.floors > 0 && a.dones > 0, `${bid}: a depleted city must get crews that raise storeys and top out buildings`);
     check(a.st.started === a.starts && a.st.floors === a.floors && a.st.done === a.dones, `${bid}: rebuildStats disagree with the rebuild events`);
     check(a.frac1 > a.frac0, `${bid}: standing floors must grow (${a.frac0} → ${a.frac1})`);
@@ -668,6 +703,12 @@ if (CS) {
     check(a.overCap === 0, `${bid}: crews above REBUILD_MAX_CREWS on ${a.overCap} ticks`);
     check(a.lvDown === 0 && a.w.run.blocksLeveled >= a.lv0, `${bid}: run.blocksLeveled went down (${a.lv0} → ${a.w.run.blocksLeveled})`);
     check(a.badTarget === 0, `${bid}: ${a.badTarget} crews dispatched with standing floors at/above REBUILD_TARGET`);
+    check(a.fastFirst === 0, `${bid}: ${a.fastFirst} first storeys went up before site prep + one storey (rebuildScaffoldS + rebuildFloorS)`);
+    check(a.fastFloor === 0, `${bid}: ${a.fastFloor} storeys went up faster than rebuildFloorS after the previous one`);
+    check(a.fastSite === 0, `${bid}: ${a.fastSite} sites topped out before site prep + floors x rebuildFloorS`);
+    check(a.shortSite === 0, `${bid}: ${a.shortSite} sites topped out under ${SLOW_MIN_SITE_S} s from groundbreak (fastest ${a.minSite.toFixed(1)} s) -- rebuilding must never look instant`);
+    check(a.popped === 0, `${bid}: ${a.popped} buildings popped in (several storeys in one tick, or topped out without raising every storey)`);
+    check(a.mid >= 3, `${bid}: only ${a.mid} sites mid-construction after 120 s (a depleted city must show buildings going up)`);
     // nothing rebuilt overlaps the titan
     const T = a.w.titan;
     const under = a.w.city.buildings.filter((bd) => !bd.collapsed && bd.id % 7 !== 0 && foot(bd, T.x, T.z) < T.radius).length;
@@ -768,7 +809,7 @@ if (CS) {
     if (lot >= 0) {
       const b = c.buildings[lot];
       w.pickups.push({ id: w.nextId++, alive: true, kind: 'heal', x: b.x, z: b.z, y: 0, px: b.x, pz: b.z, py: 0, vx: 0, vz: 0, vy: 0, xp: 0, mass: 0, t: 0, magnet: false } as unknown as World['pickups'][number]);
-      for (let k = 0; k < 30 * (RB.REBUILD_SCAFFOLD_S + 4); k++) { tickPrev(w); CS.stepCity(w); }
+      for (let k = 0; k < 30 * (RB.rebuildScaffoldS(b) + RB.rebuildFloorS(b) + 4); k++) { tickPrev(w); CS.stepCity(w); }
       check(b.collapsed && bk.stage[lot] === RB.RB_RISING, `a heal pickup on the lot must hold the first storey (collapsed ${b.collapsed}, stage ${bk.stage[lot]})`);
       w.pickups.length = 0;
       for (let k = 0; k < 30 * 2; k++) { tickPrev(w); CS.stepCity(w); }

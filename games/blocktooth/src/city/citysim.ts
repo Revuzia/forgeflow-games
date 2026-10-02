@@ -115,19 +115,31 @@ export function stepCity(w: World): void {
 // (seeds 25–48: 245 vs 236) · .90/.15/64/10 s/10 + city-fight work 251 (ADOPTED) · 1.0 239. XP_STRETCH.late .05
 // cost clears (239 / 238) and did not move LV 35 (the city boss sits on GATES.mainEarliestS 995 s either way).
 /** Standing-floor fraction the works department defends. */
-export const REBUILD_TARGET = 0.9;
+export const REBUILD_TARGET = 0.95;
 /** Deficit (target − standing) at which the department fields every crew. */
-export const REBUILD_DEFICIT_FULL = 0.15;
-/** Crew cap. */
-export const REBUILD_MAX_CREWS = 64;
+export const REBUILD_DEFICIT_FULL = 0.1;
+// SLOW construction (owner 2026-10-01: "make sure when building rebuild that its not INSTANT, that it slowly builds
+// up ... if we leave an area, when we come back we should see some buildings being erected"). Before (b3005a22) a site
+// went from groundbreak to topping out in 4.6 s (1-storey shop) / 13.6 s (median tower) / 28 s (skyscraper): it read
+// as regrowth. Now a site takes ~25-35 s (small) / ~45-60 s (mid-rise) / ~75-90 s (median tower) / ~90-125 s
+// (skyscraper) -- owner priority on slow, visible building (a faster 'dmix' timing let a depleted city regrow
+// 14 % -> 86 % in 120 s with nothing left mid-construction, so it was rejected; P-human 227/288 here vs 251 at b3005a22): a long site-preparation stage (heap cleared, foundation poured, crane erected), then storeys at a
+// builder's pace. Each site is ~6x longer, so the department fields ~6x the crews (REBUILD_MAX_CREWS) to keep the
+// same floors restored per minute -- the city is now dotted with sites mid-construction instead of popping back.
+/** Crew cap (b3005a22: 64 crews on ~6x faster sites -- it bound at the minute-14..16 peak). */
+export const REBUILD_MAX_CREWS = 384;
 /** A lot must have been rubble this long before a crew takes it (the collapse + rubble read first). */
 export const REBUILD_MIN_DOWN_S = 10;
-/** Scaffold phase (s): cage + crane go up before the first storey. */
-export const REBUILD_SCAFFOLD_S = 4;
-/** Seconds per rebuilt storey by tier (a tower goes up storey by storey). */
-export const REBUILD_FLOOR_S: readonly number[] = [0.55, 0.6, 0.7, 0.8, 0.9];
-/** New crews per dispatch (1 s). */
-const REBUILD_DISPATCH_PER_S = 10;
+/** Site-preparation stage by tier (s): the heap is cleared, the foundation poured, cage + crane go up -- the lot
+ *  stays rubble (no collision, no XP) until the first storey. */
+export const REBUILD_SCAFFOLD_S: readonly number[] = [10, 12, 12, 14, 16];
+/** Seconds per rebuilt storey by tier (a tower goes up storey by storey; skyscraper storeys are repetitive, so a
+ *  shorter beat keeps a 35-storey tower near two minutes). */
+export const REBUILD_FLOOR_S: readonly number[] = [14, 13, 7.5, 5, 3];
+/** New crews per second, handed out as a steady trickle (REBUILD_DISPATCH_HZ slices a second) so sites break ground
+ *  at staggered times and a district shows buildings at different stages. */
+const REBUILD_DISPATCH_PER_S = 15;
+const REBUILD_DISPATCH_HZ = 5;
 
 export const RB_NONE = 0, RB_SCAFFOLD = 1, RB_RISING = 2, RB_ABANDONED = 3;
 export interface RebuildBook {
@@ -169,7 +181,11 @@ export function rebuildStats(w: World): { started: number; floors: number; done:
 }
 /** Seconds per rebuilt storey of a building. */
 export function rebuildFloorS(b: Building): number {
-  return REBUILD_FLOOR_S[b.tier] ?? 1;
+  return REBUILD_FLOOR_S[b.tier] ?? 6;
+}
+/** Site-preparation seconds of a building (stage SCAFFOLD). */
+export function rebuildScaffoldS(b: Building): number {
+  return REBUILD_SCAFFOLD_S[b.tier] ?? 20;
 }
 /** Distance from (x,z) to a building footprint (0 inside). */
 function footDist(b: Building, x: number, z: number): number {
@@ -238,7 +254,7 @@ function stepRebuild(w: World): void {
     if (pause) continue;
     bk.prog[id] += dt;
     if (st === RB_SCAFFOLD) {
-      if (bk.prog[id] < REBUILD_SCAFFOLD_S) continue;
+      if (bk.prog[id] < rebuildScaffoldS(b)) continue;
       bk.stage[id] = RB_RISING;
       bk.prog[id] = 0;
       continue;
@@ -268,15 +284,16 @@ function stepRebuild(w: World): void {
     }
   }
   bk.crews.length = k;
-  // ── dispatch (once a second) ──
-  if (fight || w.tick % 30 !== 15) return;
+  // ── dispatch (REBUILD_DISPATCH_HZ slices a second, REBUILD_DISPATCH_PER_S / HZ crews each) ──
+  const slice = Math.round(30 / REBUILD_DISPATCH_HZ);
+  if (fight || w.tick % slice !== slice >> 1) return;
   let standing = 0;
   for (const b of city.buildings) standing += b.collapsed ? 0 : b.alive;
   const frac = bk.totalFloors > 0 ? standing / bk.totalFloors : 1;
   const deficit = REBUILD_TARGET - frac;
   if (deficit <= 0) return;
   const want = Math.min(REBUILD_MAX_CREWS, Math.ceil(REBUILD_MAX_CREWS * Math.min(1, deficit / REBUILD_DEFICIT_FULL)));
-  let room = Math.min(REBUILD_DISPATCH_PER_S, want - bk.crews.length);
+  let room = Math.min(Math.round(REBUILD_DISPATCH_PER_S / REBUILD_DISPATCH_HZ), want - bk.crews.length);
   if (room <= 0) return;
   RB_CAND.length = 0;
   let wsum = 0;

@@ -15,7 +15,12 @@
 // below REBUILD_TARGET, never during a live gatekeeper fight (no storey either; during the city-boss fight neither
 // a crew nor a storey inside its keep-out rebuildStartR), never within rebuildStartR
 // of the titan, never on a lot younger than
-// REBUILD_MIN_DOWN_S; a storey is never added within rebuildNearR of the titan. Any violation -> exit code 1.
+// REBUILD_MIN_DOWN_S; a storey is never added within rebuildNearR of the titan. SLOW construction (owner 2026-10-01:
+// rebuilding never looks instant): a storey never follows the previous one faster than rebuildFloorS, the first never
+// comes before site prep + one storey (rebuildScaffoldS + rebuildFloorS), no site tops out under SLOW_MIN_SITE_S from
+// groundbreak, and no building pops in (two storeys of one building in a tick, or topped out without raising every
+// storey). Per run it also prints the site build-time spread and the peak of sites mid-construction. Any violation ->
+// exit code 1.
 
 import type { BiomeId, EnemyKind, TitanId, World } from '../src/core/types.ts';
 import { RANKS, TIERS, xpToNext } from '../src/core/config.ts';
@@ -24,8 +29,13 @@ import { hasPendingDraft, pickUpgrade, rollOffer } from '../src/upgrades/draft.t
 import { botInput, botPickUpgrade } from './bot.ts';
 import { ENEMIES } from '../src/data/enemies.ts';
 import {
-  REBUILD_MIN_DOWN_S, REBUILD_TARGET, rebuildBook, rebuildNearR, rebuildStartR,
+  REBUILD_MIN_DOWN_S, REBUILD_TARGET, RB_RISING, rebuildBook, rebuildFloorS, rebuildNearR, rebuildScaffoldS, rebuildStartR,
 } from '../src/city/citysim.ts';
+
+/** SLOW construction floor: no rebuilt building tops out faster than this from groundbreak (b3005a22: 4.6 s). */
+const SLOW_MIN_SITE_S = 24;
+/** One sim tick and a half of tolerance on the storey pace (progress accumulates dt in a Float32Array). */
+const SLOW_TOL = 1.5 / 30;
 
 /** REPAIR CREWS assert failures across every runEcon call (main exits 1 when > 0). */
 export const rebuildFails: string[] = [];
@@ -63,6 +73,10 @@ export function runEcon(titan: TitanId, biome: BiomeId, seed: number, minutes: n
   const bk = rebuildBook(w.city);
   const tag = `${titan}/${biome}/${seed}`;
   let standAtCity = NaN;
+  // SLOW construction bookkeeping: per site groundbreak time, last storey time, storeys raised
+  const siteT0 = new Map<number, number>(), siteTl = new Map<number, number>(), siteN = new Map<number, number>();
+  const siteDur: number[] = [];
+  let midPeak = 0;
   const fail = (m: string): void => { if (rebuildFails.length < 40) rebuildFails.push(`${tag} @${w.t.toFixed(1)} s: ${m}`); else rebuildFails.length++; };
   let cur = mk(0); accs.push(cur);
   let rank = 0;
@@ -90,6 +104,14 @@ export function runEcon(titan: TitanId, biome: BiomeId, seed: number, minutes: n
       const b = w.city.buildings[ev.id];
       if (ev.stage === 'floor') {
         rbFl++; cur.rbFloors++;
+        const s0 = siteT0.get(b.id);
+        if (s0 !== undefined) {
+          const last = siteTl.get(b.id) ?? -1;
+          if (last === w.t) fail(`building ${b.id} raised two storeys in one tick (popped in)`);
+          else if (last < 0) { if (w.t - s0 < rebuildScaffoldS(b) + rebuildFloorS(b) - SLOW_TOL) fail(`building ${b.id} first storey ${(w.t - s0).toFixed(2)} s after groundbreak (< ${(rebuildScaffoldS(b) + rebuildFloorS(b)).toFixed(1)} s)`); }
+          else if (w.t - last < rebuildFloorS(b) - SLOW_TOL) fail(`building ${b.id} storey ${(w.t - last).toFixed(2)} s after the previous (< rebuildFloorS ${rebuildFloorS(b)})`);
+          siteTl.set(b.id, w.t); siteN.set(b.id, (siteN.get(b.id) ?? 0) + 1);
+        }
         if (boss && !boss.main) fail(`storey on building ${b.id} during a live gatekeeper fight`);
         if (boss && boss.main && footD(b, boss.x, boss.z) < sR - 1e-6) fail(`storey on building ${b.id} inside the live city boss's keep-out`);
         if (footD(b, preX, preZ) < nR - 1e-6) fail(`storey on building ${b.id} ${footD(b, preX, preZ).toFixed(1)} m from the titan (< rebuildNearR ${nR.toFixed(1)})`);
@@ -99,7 +121,18 @@ export function runEcon(titan: TitanId, biome: BiomeId, seed: number, minutes: n
         if (footD(b, preX, preZ) < sR - 1e-6) fail(`crew on building ${b.id} ${footD(b, preX, preZ).toFixed(1)} m from the titan (< rebuildStartR ${sR.toFixed(1)})`);
         if (boss && footD(b, boss.x, boss.z) < sR - 1e-6) fail(`crew on building ${b.id} inside a live boss's keep-out`);
         if (downT[b.id] >= 0 && w.t - downT[b.id] < REBUILD_MIN_DOWN_S - 1e-6) fail(`crew on building ${b.id} only ${(w.t - downT[b.id]).toFixed(1)} s after its collapse`);
-      } else cur.rbDone++;
+        siteT0.set(b.id, w.t); siteTl.set(b.id, -1); siteN.set(b.id, 0);
+      } else {
+        cur.rbDone++;
+        const s0 = siteT0.get(b.id);
+        if (s0 !== undefined) {
+          const d = w.t - s0;
+          siteDur.push(d);
+          if (d < SLOW_MIN_SITE_S) fail(`building ${b.id} (tier ${b.tier}, ${b.floors} fl) topped out ${d.toFixed(1)} s after groundbreak (< ${SLOW_MIN_SITE_S} s)`);
+          if ((siteN.get(b.id) ?? 0) !== b.floors) fail(`building ${b.id} topped out after ${siteN.get(b.id)} of ${b.floors} storeys (popped in)`);
+          siteT0.delete(b.id);
+        }
+      }
     }
     if (rbStarted && preStand + rbFl / Math.max(1, totalFloors) >= REBUILD_TARGET) fail(`crew dispatched at ${(preStand * 100).toFixed(1)} % standing (target ${REBUILD_TARGET * 100} %)`);
     for (const ev of w.events) {
@@ -136,6 +169,11 @@ export function runEcon(titan: TitanId, biome: BiomeId, seed: number, minutes: n
     cur.peakE = Math.max(cur.peakE, alive);
     cur.t1 = w.t; cur.lv1 = T.level;
     if (i % 30 === 0 || T.rank !== rank || w.run.result) cur.standEnd = standing();
+    if (i % 30 === 0) {
+      let mid = 0;
+      for (const id of bk.crews) { const b = w.city.buildings[id]; if (bk.stage[id] === RB_RISING && !b.collapsed && b.alive < b.floors) mid++; }
+      midPeak = Math.max(midPeak, mid);
+    }
     if (T.rank !== rank) {
       rank = T.rank;
       cur = mk(w.t); accs.push(cur);
@@ -151,6 +189,8 @@ export function runEcon(titan: TitanId, biome: BiomeId, seed: number, minutes: n
       console.log('      ' + keys.map((k) => `${k}: n${a.src[k].n} m${a.src[k].mass.toFixed(0)} x${a.src[k].xp.toFixed(0)}`).join(' · '));
       console.log(`      repair crews: dispatched ${a.rbStart} · storeys rebuilt ${a.rbFloors} · topped out ${a.rbDone} · standing floors at rank end ${(a.standEnd * 100).toFixed(0)} %`);
     });
+    const sd = siteDur.slice().sort((p, q) => p - q), q = (f: number): string => (sd.length ? sd[Math.min(sd.length - 1, Math.floor(f * sd.length))].toFixed(0) : '—');
+    console.log(`  construction: ${sd.length} sites topped out · groundbreak->top-out p10/p50/p90/max ${q(0.1)}/${q(0.5)}/${q(0.9)}/${sd.length ? sd[sd.length - 1].toFixed(0) : '—'} s · peak sites mid-construction ${midPeak}`);
     console.log(`  city boss spawn: standing floors ${Number.isNaN(standAtCity) ? '—' : (standAtCity * 100).toFixed(0) + ' %'} · repair-crew asserts ${rebuildFails.length ? rebuildFails.length + ' FAILED' : 'ok'}`);
   }
   return { accs, w };
@@ -194,5 +234,5 @@ if (isMain) {
     for (const m of rebuildFails.slice(0, 40)) console.log('  ' + m);
     process.exit(1);
   }
-  console.log('\nREPAIR CREWS: PASS (every rebuild event of the run(s) obeyed target / start / near / boss / min-down rules)');
+  console.log('\nREPAIR CREWS: PASS (every rebuild event of the run(s) obeyed target / start / near / boss / min-down / slow-construction rules)');
 }

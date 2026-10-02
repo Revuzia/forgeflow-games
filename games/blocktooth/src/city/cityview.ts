@@ -71,7 +71,7 @@ import { BIOMES } from '../data/biomes.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from '../render/viewtypes.ts';
 import { addOutline, makeToon } from '../render/materials.ts';
 import { buildCityKit } from './meshkit.ts';
-import { RB_ABANDONED, RB_RISING, RB_SCAFFOLD, REBUILD_SCAFFOLD_S, rebuildBook } from './citysim.ts';
+import { RB_ABANDONED, RB_RISING, RB_SCAFFOLD, rebuildBook, rebuildFloorS, rebuildScaffoldS } from './citysim.ts';
 import type { RebuildBook } from './citysim.ts';
 import type { ArchMeshes, CityKit } from './meshkit.ts';
 
@@ -1277,6 +1277,12 @@ const RB_BAY = 6.5;                    // standard spacing along a face (m) — 
 const RB_OFF = 1.1;                    // cage stands this far off the facade (m)
 const RB_GROW_T = 0.42;                // a finished storey slides up into place (s), easeOutBack
 const RB_DONE_T = 0.9;                 // completion: the cage drops away (s)
+const RB_CONC = lin('#a9a49b');        // poured concrete: foundation pad, slab + columns of the storey being built
+const RB_CLEAR_U = 0.45;               // site prep: the heap is cleared over this fraction of the stage
+const RB_PAD_U0 = 0.4;                 // ... the foundation pad is poured from here to the end of the stage
+const RB_PAD_H = 0.45;                 // foundation pad height (m)
+const RB_CRANE_U = 0.7;                // ... the crane is erected (mast climbs to full) by this fraction
+const RB_CRANE_REACH = 34;             // crane horizontal scale cap (m): jib ~27 m, mast ~2.4 m wide at the cap
 
 /** Sidewalk ring of one block: raised top with rounded outer corners + its curb faces. */
 function sidewalkRing(g: GB, cx: number, cz: number, top: number, bot: number): void {
@@ -1374,6 +1380,8 @@ export class CityView implements ViewModule {
   private rbBook: RebuildBook | null = null;
   private rbBox: InstBatch | null = null;       // scaffold standards / ledgers / boards (unit box, tinted)
   private rbCrane: InstBatch | null = null;
+  private rbCraneG: InstBatch | null = null;    // dithered twin: a crane whose sweep cuts the camera -> titan sight line
+  private readonly rbSight = new Float32Array(12);   // camera, titan feet / chest / head (this frame)
   private growT = new Float32Array(0);          // ≥ 0 while the newest storey slides into place (s)
   private rbDone = new Map<number, number>();   // building → seconds since its rebuild finished (cage strike)
   private rbTime = 0;
@@ -1489,8 +1497,13 @@ export class CityView implements ViewModule {
       const boxGeo = unitBoxGeo(), crGeo = craneGeo();
       const mat = makeToon({ vertexColors: true });
       mat.name = 'city:rebuild';
-      this.rbBox = new InstBatch(root, 'city:rebuild:scaffold', boxGeo, mat, 64, 1 << 16, true);
-      this.rbCrane = new InstBatch(root, 'city:rebuild:crane', crGeo, mat, 8, Math.max(8, nB), true);
+      // SLOW rebuild: up to REBUILD_MAX_CREWS sites at once (~100 boxes for a 35-storey cage); cages are drawn for live
+      // blocks only, so 1 << 17 never truncates a site
+      this.rbBox = new InstBatch(root, 'city:rebuild:scaffold', boxGeo, mat, 1024, 1 << 17, true);
+      this.rbCrane = new InstBatch(root, 'city:rebuild:crane', crGeo, mat, 64, Math.max(64, nB), true);   // one crane per site, every site
+      const gmat = makeGhostMaterial(mat);
+      this.ghostMats.push(gmat);
+      this.rbCraneG = new InstBatch(root, 'city:rebuild:crane:ghost', crGeo, gmat, 8, Math.max(64, nB), true, false);
       this.owned.push(boxGeo, crGeo, mat);
     }
 
@@ -1569,8 +1582,8 @@ export class CityView implements ViewModule {
     // 4. destruction animation
     this.animate(Math.min(0.1, Math.max(0, f.dt)));
 
-    // 4b. repair crews: scaffold cages + cranes (every site, live or impostor block — cranes on the skyline)
-    this.updateRebuild(Math.min(0.1, Math.max(0, f.dt)));
+    // 4b. repair crews: construction sites (cages / pads / frames on live blocks, a crane at every site)
+    this.updateRebuild(world, tx, tz, Math.min(0.1, Math.max(0, f.dt)));
 
     // 5. rebuild dirty instance batches
     this.rebuildDirty();
@@ -1622,6 +1635,8 @@ export class CityView implements ViewModule {
     this.rbBox = null;
     this.rbCrane?.dispose();
     this.rbCrane = null;
+    this.rbCraneG?.dispose();
+    this.rbCraneG = null;
     this.rbBook = null;
     this.rbDone.clear();
     for (const pb of this.propBatch.values()) pb.dispose();
@@ -2124,9 +2139,11 @@ export class CityView implements ViewModule {
           const bk = this.rbBook;
           if (bk) {
             const st = bk.stage[id];
-            if (st === RB_SCAFFOLD) clear = 1 - 0.75 * clamp(bk.prog[id] / REBUILD_SCAFFOLD_S, 0, 1);
-            else if (st === RB_RISING) clear = 0.25;
+            // site prep clears the heap over the first RB_CLEAR_U of the stage; the foundation pad then stands there
+            if (st === RB_SCAFFOLD) clear = 1 - clamp(bk.prog[id] / (rebuildScaffoldS(b) * RB_CLEAR_U), 0, 1);
+            else if (st === RB_RISING) clear = 0;
           }
+          if (clear <= 0.02) continue;
           const h = pileHeight(b) * rise * clear;
           const flip = (id & 1) === 1;
           rb.push(b.x, 0, b.z, flip ? 0 : 0, flip ? -1 : 1, b.w * 1.12, h, b.d * 1.12,
@@ -2178,13 +2195,25 @@ export class CityView implements ViewModule {
   }
 
   // ─────────────────────────────── repair crews ───────────────────────────────
-  /** Scaffold cage + tower crane for every crew site (live blocks and impostor blocks alike: a crane on the
-   *  skyline says "they are rebuilding over there"), plus the cage of a just-finished / abandoned site being
-   *  struck (sinks into the lot over RB_DONE_T). Rewritten every frame (a few dozen sites at most). */
-  private updateRebuild(dt: number): void {
-    const bk = this.rbBook, box = this.rbBox, cr = this.rbCrane, city = this.city;
-    if (!bk || !box || !cr || !city) return;
+  /** Construction sites (SLOW rebuild: a site takes ~25 s to ~2 min, so a district the titan left a minute ago shows
+   *  buildings at every stage). Per crew site:
+   *    site prep (stage SCAFFOLD) -- the heap is cleared (rubble batch), the first lift of the cage goes up around the
+   *      lot, the tower crane is erected (mast climbs), the foundation pad is poured;
+   *    rising (stage RISING) -- the finished storeys stand base-up (pushBuilding), the storey being built frames in on
+   *      top (concrete slab + columns growing with the crew's progress), the timber deck at the work level and the cage
+   *      lifted one storey ahead of it; each finished storey slides into place (growT).
+   *  A just-finished / abandoned site strikes its cage (sinks into the lot over RB_DONE_T). Cages, pads and frames are
+   *  drawn for LIVE blocks only (an impostor block is beyond the view; its crane still marks the skyline -- every site
+   *  gets one). Rewritten every frame. */
+  private updateRebuild(world: World, tx: number, tz: number, dt: number): void {
+    const bk = this.rbBook, box = this.rbBox, cr = this.rbCrane, crG = this.rbCraneG, city = this.city;
+    if (!bk || !box || !cr || !crG || !city) return;
     this.rbTime += dt;
+    const cam = this.ctx.camera.position, H = Math.max(0.5, world.titan.height), sg = this.rbSight;
+    sg[0] = cam.x; sg[1] = cam.y; sg[2] = cam.z;
+    sg[3] = tx; sg[4] = 0.15 * H; sg[5] = tz;
+    sg[6] = tx; sg[7] = 0.6 * H; sg[8] = tz;
+    sg[9] = tx; sg[10] = 0.95 * H; sg[11] = tz;
     // sites whose crew left without topping out (the titan hit the building) strike their cage too
     for (const id of this.rbOn) if (bk.stage[id] !== RB_SCAFFOLD && bk.stage[id] !== RB_RISING && !this.rbDone.has(id)) this.rbDone.set(id, 0);
     this.rbOn.clear();
@@ -2192,7 +2221,7 @@ export class CityView implements ViewModule {
       const nt = t + dt;
       if (nt >= RB_DONE_T) this.rbDone.delete(id); else this.rbDone.set(id, nt);
     }
-    box.begin(); cr.begin();
+    box.begin(); cr.begin(); crG.begin();
     let rubble = false;
     for (let i = 0; i < bk.crews.length; i++) {
       const id = bk.crews[i];
@@ -2200,69 +2229,110 @@ export class CityView implements ViewModule {
       const st = bk.stage[id];
       this.rbOn.add(id);
       if (!bk.paused[id]) this.rbPhase[id] += dt;
-      const full = b.floors * b.floorH + 1.2;
-      let cage = full;
+      const live = this.live[b.block] === 1;
+      const fh = b.floorH, full = b.floors * fh + 1.2;
       if (st === RB_SCAFFOLD) {
-        const u = clamp(bk.prog[id] / REBUILD_SCAFFOLD_S, 0, 1);
-        cage = full * (1 - (1 - u) * (1 - u) * (1 - u));      // the cage climbs fast, then eases in
-        if (this.live[b.block]) rubble = true;
-      } else if (b.collapsed && this.live[b.block]) rubble = true;
-      const deck = st === RB_RISING && !b.collapsed ? b.alive * b.floorH : -1;
-      this.drawSite(b, cage, full, 0, deck);
+        const u = clamp(bk.prog[id] / rebuildScaffoldS(b), 0, 1);
+        const cage = Math.min(full, (fh + 1.2) * easeOutBack(clamp(u / RB_PAD_U0, 0, 1)));
+        const pad = RB_PAD_H * clamp((u - RB_PAD_U0) / (1 - RB_PAD_U0), 0, 1);
+        if (live && u <= RB_CLEAR_U + 0.05) rubble = true;
+        this.drawSite(b, live, cage, full, clamp(u / RB_CRANE_U, 0, 1), pad, -1, 0, 0);
+      } else {
+        const n = b.collapsed ? 0 : b.alive;
+        const work = clamp(bk.prog[id] / rebuildFloorS(b), 0, 1);
+        const built = n * fh;
+        const cage = Math.min(full, built + fh * (1 + work) + 1.2);
+        this.drawSite(b, live, cage, full, 1, b.collapsed ? RB_PAD_H : 0, built, this.growT[id] >= 0 ? 0 : work, 0);
+      }
     }
     for (const [id, t] of this.rbDone) {
       const b = city.buildings[id];
       const full = b.floors * b.floorH + 1.2;
-      this.drawSite(b, full, full, easeInCubic(clamp(t / RB_DONE_T, 0, 1)), -1);
+      const cage = b.collapsed ? 0 : Math.min(full, b.alive * b.floorH + 1.2);
+      this.drawSite(b, this.live[b.block] === 1, cage, full, 1, 0, -1, 0, easeInCubic(clamp(t / RB_DONE_T, 0, 1)));
     }
-    box.end(); cr.end();
+    box.end(); cr.end(); crG.end();
     if (rubble) this.rubbleDirty = true;
   }
 
-  /** One site: standards every RB_BAY m around the footprint (RB_OFF off the facade), ledgers at every storey up
-   *  to `cage` m, a timber working deck at `deck` m (the storey being built; -1 none), and the crane at a corner
-   *  (jib slewing while the crew works). `sink` 0..1 lowers the whole rig into the lot (struck). */
-  private drawSite(b: Building, cage: number, full: number, sink: number, deck: number): void {
-    const box = this.rbBox!, cr = this.rbCrane!;
+  /** One site: standards every RB_BAY m around the footprint (RB_OFF off the facade) up to `cage` m, ledgers on every
+   *  2nd storey, the foundation pad (`pad` m, a plinth just proud of the footprint), the timber working deck at `built`
+   *  m (-1: none) with the storey being built framing in above it (`work` 0..1: slab + columns), and the crane at a
+   *  footprint corner (`craneU` 0..1 erected; jib slewing while the crew works). `sink` 0..1 lowers the whole rig into
+   *  the lot (struck). Only the crane is drawn for a site outside the live blocks. */
+  private drawSite(b: Building, live: boolean, cage: number, full: number, craneU: number, pad: number, built: number,
+    work: number, sink: number): void {
+    const box = this.rbBox!;
     const W = RB_POLE_W;
     const y0 = -sink * (full + 2);
-    const x0 = b.x - b.w / 2 - RB_OFF, x1 = b.x + b.w / 2 + RB_OFF, z0 = b.z - b.d / 2 - RB_OFF, z1 = b.z + b.d / 2 + RB_OFF;
-    if (cage > 0.05) {
-      const nx = Math.max(1, Math.round((x1 - x0) / RB_BAY)), nz = Math.max(1, Math.round((z1 - z0) / RB_BAY));
-      for (let k = 0; k <= nx; k++) {
-        const x = x0 + ((x1 - x0) * k) / nx;
-        box.push(x, y0, z0, 0, 1, W, cage, W, RB_POLE[0], RB_POLE[1], RB_POLE[2]);
-        box.push(x, y0, z1, 0, 1, W, cage, W, RB_POLE[0], RB_POLE[1], RB_POLE[2]);
+    if (live) {
+      const x0 = b.x - b.w / 2 - RB_OFF, x1 = b.x + b.w / 2 + RB_OFF, z0 = b.z - b.d / 2 - RB_OFF, z1 = b.z + b.d / 2 + RB_OFF;
+      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, lx = x1 - x0 + W, lz = z1 - z0 + W;
+      const fh = b.floorH;
+      if (pad > 0.02) box.push(b.x, y0, b.z, 0, 1, b.w + 0.6, pad, b.d + 0.6, RB_CONC[0], RB_CONC[1], RB_CONC[2]);
+      if (cage > 0.05) {
+        const nx = Math.max(1, Math.round((x1 - x0) / RB_BAY)), nz = Math.max(1, Math.round((z1 - z0) / RB_BAY));
+        for (let k = 0; k <= nx; k++) {
+          const x = x0 + ((x1 - x0) * k) / nx;
+          box.push(x, y0, z0, 0, 1, W, cage, W, RB_POLE[0], RB_POLE[1], RB_POLE[2]);
+          box.push(x, y0, z1, 0, 1, W, cage, W, RB_POLE[0], RB_POLE[1], RB_POLE[2]);
+        }
+        for (let k = 1; k < nz; k++) {
+          const z = z0 + ((z1 - z0) * k) / nz;
+          box.push(x0, y0, z, 0, 1, W, cage, W, RB_POLE[0], RB_POLE[1], RB_POLE[2]);
+          box.push(x1, y0, z, 0, 1, W, cage, W, RB_POLE[0], RB_POLE[1], RB_POLE[2]);
+        }
+        // ledgers on every 2nd storey (and the cage top): an every-storey lattice hid the rising building (Chrome check)
+        for (let y = Math.min(2 * fh, cage); y <= cage + 0.01; y += 2 * fh) {
+          box.push(cx, y0 + y - W, z0, 0, 1, lx, W, W, RB_LEDGER[0], RB_LEDGER[1], RB_LEDGER[2]);
+          box.push(cx, y0 + y - W, z1, 0, 1, lx, W, W, RB_LEDGER[0], RB_LEDGER[1], RB_LEDGER[2]);
+          box.push(x0, y0 + y - W, cz, 0, 1, W, W, lz, RB_LEDGER[0], RB_LEDGER[1], RB_LEDGER[2]);
+          box.push(x1, y0 + y - W, cz, 0, 1, W, W, lz, RB_LEDGER[0], RB_LEDGER[1], RB_LEDGER[2]);
+        }
       }
-      for (let k = 1; k < nz; k++) {
-        const z = z0 + ((z1 - z0) * k) / nz;
-        box.push(x0, y0, z, 0, 1, W, cage, W, RB_POLE[0], RB_POLE[1], RB_POLE[2]);
-        box.push(x1, y0, z, 0, 1, W, cage, W, RB_POLE[0], RB_POLE[1], RB_POLE[2]);
-      }
-      const fh = b.floorH, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, lx = x1 - x0 + W, lz = z1 - z0 + W;
-      // ledgers on every 2nd storey (and the cage top): an every-storey lattice hid the rising building (Chrome check)
-      for (let y = 2 * fh; y <= cage + 0.01; y += 2 * fh) {
-        box.push(cx, y0 + y - W, z0, 0, 1, lx, W, W, RB_LEDGER[0], RB_LEDGER[1], RB_LEDGER[2]);
-        box.push(cx, y0 + y - W, z1, 0, 1, lx, W, W, RB_LEDGER[0], RB_LEDGER[1], RB_LEDGER[2]);
-        box.push(x0, y0 + y - W, cz, 0, 1, W, W, lz, RB_LEDGER[0], RB_LEDGER[1], RB_LEDGER[2]);
-        box.push(x1, y0 + y - W, cz, 0, 1, W, W, lz, RB_LEDGER[0], RB_LEDGER[1], RB_LEDGER[2]);
-      }
-      if (deck >= 0 && deck < cage) {
-        const dw = RB_OFF + 0.2, t = 0.18;
+      if (built >= 0) {
+        const dw = RB_OFF + 0.2, t = 0.18, deck = Math.max(built, 0.05);
         box.push(cx, y0 + deck, b.z - b.d / 2 - dw / 2, 0, 1, lx, t, dw, RB_BOARD[0], RB_BOARD[1], RB_BOARD[2]);
         box.push(cx, y0 + deck, b.z + b.d / 2 + dw / 2, 0, 1, lx, t, dw, RB_BOARD[0], RB_BOARD[1], RB_BOARD[2]);
         box.push(b.x - b.w / 2 - dw / 2, y0 + deck, cz, 0, 1, dw, t, lz, RB_BOARD[0], RB_BOARD[1], RB_BOARD[2]);
         box.push(b.x + b.w / 2 + dw / 2, y0 + deck, cz, 0, 1, dw, t, lz, RB_BOARD[0], RB_BOARD[1], RB_BOARD[2]);
+        if (work > 0) {
+          // the storey being built: its floor slab on the last finished storey (on the pad for the first one), columns
+          // at the corners (+ mid-face on a wide face) climbing with the crew's progress
+          const sl = 0.24, base = y0 + (built > 0 ? built : pad);
+          box.push(b.x, base, b.z, 0, 1, b.w - 0.2, sl, b.d - 0.2, RB_CONC[0], RB_CONC[1], RB_CONC[2]);
+          const ch = work * (fh - sl), cw = Math.min(0.7, 0.08 * Math.min(b.w, b.d) + 0.25);
+          if (ch > 0.05) {
+            const hx = b.w / 2 - cw / 2 - 0.1, hz = b.d / 2 - cw / 2 - 0.1;
+            const wideX = b.w > 10, wideZ = b.d > 10;
+            for (let ix = -1; ix <= 1; ix++) for (let iz = -1; iz <= 1; iz++) {
+              if (ix === 0 && iz === 0) continue;
+              if ((ix === 0 && !wideX) || (iz === 0 && !wideZ)) continue;
+              box.push(b.x + ix * hx, base + sl, b.z + iz * hz, 0, 1, cw, ch, cw, RB_CONC[0], RB_CONC[1], RB_CONC[2]);
+            }
+          }
+        }
       }
     }
-    // the crane: mast inside a footprint corner, jib over the building, ~35 % taller than the finished roof
+    // the crane: mast inside a footprint corner, jib over the building, a few storeys above the finished roof; erected
+    // during site prep (craneU) and standing at full height while the storeys go up. Height and reach scale apart (a
+    // skyscraper's crane is tall, not fat: uniform scaling gave a 35-storey site a 10 m mast and a 115 m jib), and a
+    // crane whose sweep cuts the camera -> titan sight line draws dithered, like the buildings (a site stands for up to
+    // two minutes now, often right beside the titan).
     const hs = hash01(b.id, 5);
     const sx = hs < 0.5 ? -1 : 1, sz = hash01(b.id, 9) < 0.5 ? -1 : 1;
     const inset = Math.min(1.6, 0.25 * Math.min(b.w, b.d));
     const mx = b.x + sx * (b.w / 2 - inset), mz = b.z + sz * (b.d / 2 - inset);
-    const s = (full + Math.max(6, 0.35 * full)) * Math.min(1, 0.25 + cage / full);
+    const er = 0.3 + 0.7 * craneU;
+    const sy = (full + clamp(0.2 * full, 6, 14)) * er;
+    const sh = Math.min(sy, Math.max(12, 0.9 * Math.hypot(b.w, b.d)), RB_CRANE_REACH);
     const ang = Math.atan2(b.x - mx, b.z - mz) + 0.8 * Math.sin(this.rbPhase[b.id] * 0.45 + hs * 6.283);
-    cr.push(mx, y0, mz, Math.sin(ang), Math.cos(ang), s, s, s, 1, 1, 1);
+    const reach = 0.8 * sh, sg = this.rbSight;
+    let ghost = false;
+    for (let k = 3; k < 12 && !ghost; k += 3) {
+      ghost = segHitsBox(sg[0], sg[1], sg[2], sg[k], sg[k + 1], sg[k + 2], mx - reach, y0, mz - reach, mx + reach, y0 + 1.32 * sy, mz + reach);
+    }
+    (ghost ? this.rbCraneG! : this.rbCrane!).push(mx, y0, mz, Math.sin(ang), Math.cos(ang), sh, sy, sh, 1, 1, 1);
   }
 
   // ─────────────────────────────── occluders ───────────────────────────────
