@@ -27,7 +27,9 @@ export interface SoftParams {
   /** Edge compliance multiplier once an edge is past its soft strain (smaller = harder skin). */
   edgeHarden: number;
   /** Hinge barrier: the vertices opposite an interior edge are kept at least `hingeLimit` x their rest distance apart (0 disables), with
-   *  compliance `hingeAlphaT`: a one-sided bending constraint that resists a flap folding onto itself. */
+   *  compliance `hingeAlphaT`: a one-sided bending constraint that resists a flap folding onto itself. The mesh resolution scales both
+   *  (softbody.ts: limit - 0.05 log2(n / 642), alpha x 2^(-log2(n / 642) / 2), limit never below 0.8). tuned: 1.0 (barrier at rest
+   *  length) folded MORE; below ~0.75 at detail 4 the fold came back; extra passes of this or of the edge constraints made it worse. */
   hingeLimit: number; hingeAlphaT: number;
   /** Seconds the glued feet are held after a lobe is let go. */
   pinHold: number;
@@ -44,7 +46,8 @@ export interface SoftParams {
   /** Table Coulomb friction coefficient. */
   tableMu: number;
   /** Tack layer (m, for a body of radius 0.5; scales with size): a foot particle that lifts off its REST height by less than this
-   *  in one substep is mostly pulled back, so small springs-back never peel the foot (no hop); a real launch still leaves. */
+   *  is mostly pulled back, so small springs-back never peel the foot (no hop); a real launch still leaves. It acts over the FULL
+   *  thickness since the tack pass was fixed (it used to stop at the 1 cm NEAR band, so 0.02 meant 0.01). */
   glue: number;
   /** How deep a finger may press, as a fraction of the body thickness (firmer and bouncier = shallower). */
   squashDepth: number;
@@ -77,7 +80,9 @@ export function deriveParams(g: Genome): SoftParams {
     // "how far it pulls before it resists": strain at which the skin hardens (35% .. 160%)
     edgeSoftStrain: lerp(0.35, 1.6, s),
     edgeHarden: 0.12,
-    hingeLimit: 0.9, hingeAlphaT: 0.1,
+    // tuned: 0.9 holds the skin spread under a deep press best, but on a FIRM body (which presses less deep and has less crowding to fight)
+    // it also took the release overshoot of a hard peak press from 50 mm to 12 mm; 0.8 keeps the wobble and folds no worse there
+    hingeLimit: lerp(0.9, 0.8, f), hingeAlphaT: 0.1,
     // tuned: without a hold the body, sheared over its pinned foot, was released and slid 0.5 m with the snap
     pinHold: 0.5,
     volKappa: 0.5,
@@ -95,6 +100,9 @@ export function deriveParams(g: Genome): SoftParams {
     squashDepth: lerp(0.66, 0.34, f) * lerp(1, 0.78, b),
     // tuned: below ~0.15 the tip no longer bends further (the finger reach, not the stiffness, limits the flop)
     peakSoft: 0.12,
+    // tuned: bendFloor 1 (the peak's cone shape as stiff as the body's) took the worst crease of the 272-press sweep from 178 to 105 degrees;
+    // 0.5 still left 110 and hopped. The crease boost is only a safety net now: 0.15..0.5 / gain 2 fixed nothing more and made the starter
+    // hop; 0.6..1.2 / 1.2 never triggers in the normal presses and heals what a hostile fuzz leaves.
     creaseLo: 0.6, creaseHi: 1.2, creaseGain: 1.2, bendFloor: 1,
     maxPull: 1.0 + 1.4 * s,
   };
@@ -114,8 +122,12 @@ export const FINGER = {
   /** A free flank (no table behind it) is pressed at most this fraction of squashDepth x thickness... */
   flankShare: 0.75,
   /** ...but never less than this many rest radii (a thin peak is shoved aside, not pierced). tuned: 0.42 flopped the tip only
-   *  18% R under the gate's poke, 0.8 gives ~30%. */
+   *  18% R under the gate's poke, 0.8 gave ~27%; once the peak held its cone shape (bendFloor) and the tip swelled at a limited
+   *  speed (growRate) 0.8 gave 23.5%; the peak (floppy weight ~0.8 at the gate's poke) now reaches 0.8 + 0.2 x 0.8 = 0.96 R: ~30%. */
   minFlankDepth: 0.8,
+  /** ...plus this many rest radii x the floppy weight (0..1) of the touched part: a thin swirl-peak is shoved further aside than a low
+   *  flank is squeezed (a deeper low press squeezed the foot rim against the table into a crease). */
+  peakReach: 0.12,
   /** Each jaw of a two-finger pinch keeps this fraction of its depth range (tuned: 1.0 squirted the body out upward). */
   pinchShare: 0.62,
   /** Rates (1/s) at which a tip eases its depth share toward the pinch value (a partner landed: quick, the tip backs off) and back
@@ -124,7 +136,16 @@ export const FINGER = {
   shareIn: 7, shareOut: 2,
   /** The two tips of a pinch keep this clearance (in rest radii) between their surfaces. */
   pinchGap: 0.3,
+  /** Touch-down seats the tip sphere on the whole local surface: the anchor is lifted back along the finger direction (at most this many
+   *  rest radii) until no vertex under the footprint is inside the tip. A tip wider than the swirl-peak otherwise starts with the apex
+   *  already inside it and pushes it out sideways. */
   maxLift: 0.35,
+  /** Floppy skin (weight x this) is pushed out of the tip along a blend of the radial and the finger-travel direction instead of purely
+   *  radially: it is carried along as the peak is shoved over, instead of being slid round the sphere (wrapped, then folded). */
+  peakAxial: 0.8,
+  /** Cap (m/s) on how fast the tip may move into the body: the critically damped ease reaches ~6 m/s on a full-pressure tap. tuned: 3.5 left
+   *  the peak unfolded under a hard shove but flopped only 17% R (the gate wants 25%: the flop IS partly that violence); 5.5 keeps ~29%. */
+  maxSpeed: 5.5,
   /** Max speed (rest radii per second) at which the tip sphere grows with pressure (it shrinks at once). */
   growRate: 0.6,
   /** Held >= this long (s) and in contact -> 'press' event. */

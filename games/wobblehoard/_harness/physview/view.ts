@@ -160,6 +160,16 @@ const SCENARIOS: Record<string, Scenario> = {
       if (t >= 1.25 && !c.n.up2) { c.n.up2 = 1; b.fingerUp(1); }
     },
   },
+  // a hard side shove right at the swirl-peak (pressure 1 at once, 0.25 s): the peak is whipped over and must not fold or invert
+  peak_shove: {
+    title: 'hard side shove at the peak (y=0.96, pressure 1 from 0.30 s, lifted at 0.55 s)',
+    frames: [0.3, 0.33, 0.36, 0.4, 0.45, 0.55, 0.6, 0.65, 0.72, 0.85, 1.05, 1.5],
+    camDist: 2.8, camTarget: [0.1, 0.7, 0], yawDeg: 24, pitchDeg: 12,
+    tick(t, b, c) {
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(-3, 0.96, 0), v3(1, 0, 0)); b.fingerPressure(0, 1); }
+      if (t >= 0.55 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
   // press on the dome shoulder next to the peak, ramp and hold (the peak must not crumple while the body squashes)
   hold_shoulder: {
     title: 'hold-squash on the dome shoulder (x=0.3), close-up of the peak, release 1.4',

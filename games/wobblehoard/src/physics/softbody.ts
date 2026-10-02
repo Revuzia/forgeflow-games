@@ -8,8 +8,9 @@
 //   solver pass per substep, six substeps per 60 Hz frame; a time accumulator makes the result independent of the
 //   frame dt jitter beyond the clamp. Inside a substep, in this order:
 //     fingers/grabs advance -> predict (gravity, or the float-mode hover spring) -> global shape matching ->
-//     local Laplacian shape memory -> enclosed-volume constraint -> edge distance constraints -> grab attachments ->
-//     collisions (fingertip spheres, then the table) -> v = dx/H -> internal-velocity damping, drag, self-righting.
+//     local Laplacian shape memory -> enclosed-volume constraint -> edge distance constraints -> hinge barrier ->
+//     grab attachments -> collisions (fingertip spheres, then the table) -> v = dx/H -> internal-velocity damping, drag,
+//     self-righting.
 //   * edge distance (compliance from genome.stretch, hardening past a strain limit): the skin.
 //   * ONE global enclosed-volume constraint V = 1/6 sum p_a.(p_b x p_c) = V0 with an XPBD multiplier. Blocked particles
 //     (inside a fingertip's reach, touching the table) get zero inverse mass in it, so the pressure is absorbed by the
@@ -19,7 +20,15 @@
 //     toward g_i = c + R q_i. Firmness sets the stiffness; the swirl-peak is softer so it lags and flops.
 //   * Laplacian shape memory (a local, bending-like term, applied every other substep at twice the gain): each particle
 //     is pulled toward the mean of its neighbours plus its rotated rest offset. Dents become smooth bowls instead of
-//     pits with creased rims, and the surface recovers locally.
+//     pits with creased rims, and the surface recovers locally. Its gain does NOT soften with the swirl-peak (params.bendFloor):
+//     the peak's position is floppy but its cone shape is held, so a press bends it over as a unit instead of crushing it
+//     into creases, and a crease or flap left by a hard poke is pulled out again (residual-triggered boost, params.creaseLo).
+//     It scales with the vertex count (a finer mesh needs a larger per-application gain for the same physical smoothing).
+//   * HINGE BARRIER (anti-fold, one sided): for every interior edge the two vertices OPPOSITE it (one in each adjacent
+//     triangle) are kept at least `hingeLimit` x their rest distance apart. A flap folding flat onto itself brings exactly
+//     those two vertices together, so this is the cheapest bending term that makes a fold expensive, and being one sided it
+//     stores no energy at rest. Without it a press on the swirl-peak or the dome top crumpled the skin into a star-shaped
+//     pucker with tucked-under triangles (dihedral 171-180 degrees between neighbours; the rest shape's own maximum is 50).
 //   * damping acts on the INTERNAL velocity only (velocity minus the best-fit rigid motion v_cm + w x r): the global
 //     affine part (squash / stretch / shear) and the local part (peak flop, ripples) have separate rates, plus a
 //     speed-proportional term that kills fast spikes (a lobe snapping back) but leaves small jiggle alone, plus a global
@@ -28,15 +37,21 @@
 //     the load is the weight, the penetration and the downward push of a fingertip).
 //   * fingers: kinematic spheres with Coulomb contact friction (the skin follows the tip, so a sloped press does not
 //     squirt the body out sideways). Penetrating particles are projected out and the correction becomes velocity (a
-//     poke shoves a floating body). Pull: a Gaussian patch soft-attached to a moving world target; the feet stay glued
-//     to the table while the lobe is pulled (and for a moment after, so it springs back in place).
-//   * DEVIATIONS from the recommended recipe, and why (both are what makes the body REST exactly and not hop):
+//     poke shoves a floating body). The tip moves CONTINUOUSLY: it starts seated on the whole local surface (not inside a
+//     thin apex), swells with pressure at a limited speed (growRate), never goes below the table, and its depth share in a
+//     two-finger pinch is eased, never switched (a switch used to teleport a tip by ~0.3 R in one substep). Pull: a
+//     Gaussian patch soft-attached to a moving world target; the feet stay glued to the table while the lobe is pulled
+//     (and for a moment after, so it springs back in place).
+//   * DEVIATIONS from the recommended recipe, and why (the first two are what makes the body REST exactly and not hop):
 //     (1) SUPPORTED-BODY GRAVITY. With one solver pass a soft network cannot carry the weight of 640 particles down to a
 //         small foot (the load path is longer than the solver reaches in a frame), so a resting body sagged and crept.
 //         While the foot is on the table gravity is faded out by `supp`; every deformation, finger load and impact is
 //         still solved by the constraints, and friction still sees the true normal load.
-//     (2) TACK. Squishies are sticky: a foot particle that lifts off its REST height by less than a thin layer in one
-//         substep is mostly pulled back, so the springing-back body wobbles on its foot instead of hopping like a ball.
+//     (2) TACK. Squishies are sticky: a foot particle that lifts off its REST height by less than a thin layer (the whole
+//         `glue` thickness, ~2.5 cm) is mostly pulled back, so the springing-back body wobbles on its foot instead of hopping
+//         like a ball. (The layer used to be cut off at 1 cm, so a 7 mm kick from the shape memory carried a rim particle out of
+//         it, the foot peeled off the table like a zip and a hard release of a large or firm body hopped 10 cm.)
+//     (3) The hinge barrier above is a bending-like term the recipe lists only as optional ("weak local bending if needed").
 // Units: metres-ish; mass per particle ~1 (tributary area, mean 1).
 import type { Genome } from '../core/genome.ts';
 import { clamp, mulberry32 } from '../core/rng.ts';
@@ -130,6 +145,7 @@ export class SoftBody implements SoftBodyLike {
   private readonly Mtot: number;
   private readonly Q: Float64Array;         // rest local positions
   private readonly softW: Float64Array;     // per-vertex shape-matching stiffness multiplier
+  private readonly floppyW: Float64Array;   // per-vertex weight of the floppy part (the swirl-peak): 0 body .. 1 tip
   private readonly tris: Uint32Array;
   private readonly E3: Int32Array;          // edge endpoints, pre-multiplied by 3
   private readonly EWA: Float64Array;       // edge inverse masses (a, b) and their sum
@@ -213,6 +229,7 @@ export class SoftBody implements SoftBodyLike {
     this.restCenterY = rest.restCenterY;
     this.Q = rest.restLocal;
     this.softW = new Float64Array(n);
+    this.floppyW = Float64Array.from(rest.floppy);
     for (let i = 0; i < n; i++) this.softW[i] = 1 - (1 - this.p.peakSoft) * rest.floppy[i];
     this.M = rest.mass;
     this.invM = new Float64Array(n);
@@ -299,7 +316,7 @@ export class SoftBody implements SoftBodyLike {
     // The hinge barrier likewise wants to be tighter on a finer mesh (more skin under the same fingertip piles up before it can slide
     // out): 0.9 / 0.1 at detail 3 -> 0.8 / 0.05 at detail 4 (log2 of the vertex ratio: +2 at detail 4).
     const lg = Math.log2(n / 642);
-    this.hingeLim = clamp(this.p.hingeLimit - 0.05 * lg, 0.6, 0.97);
+    this.hingeLim = clamp(this.p.hingeLimit - 0.05 * lg, 0.8, 0.97);
     this.hingeAlpha = this.p.hingeAlphaT * Math.pow(2, -lg / 2);
     this.dampInt = 1 - Math.exp(-this.p.intDamp * H);
     this.dampAff = 1 - Math.exp(-this.p.affDamp * H);
@@ -462,7 +479,11 @@ export class SoftBody implements SoftBodyLike {
     f.tipR = R * FINGER.rMin;
     // a thin free part (the swirl-peak) can be shoved aside by far more than its own thickness, so a flank press may
     // always go FINGER.minFlankDepth rest radii deep
-    f.depthMax = lift + Math.max(supported ? 0.2 * R : FINGER.minFlankDepth * R, this.p.squashDepth * (supported ? 1 : FINGER.flankShare) * T);
+    // the reach of a flank press grows with how floppy the touched part is (the swirl-peak is shoved aside, a low flank is squeezed)
+    let wf = 0;
+    if (hitTri >= 0) for (let k = 0; k < 3; k++) wf = Math.max(wf, this.floppyW[this.tris[hitTri * 3 + k]]);
+    const flank = FINGER.minFlankDepth + FINGER.peakReach * wf;
+    f.depthMax = lift + Math.max(supported ? 0.2 * R : flank * R, this.p.squashDepth * (supported ? 1 : FINGER.flankShare) * T);
     this.placeTip(f, 1);
     f.ocx = f.cx; f.ocy = f.cy; f.ocz = f.cz;
   }
@@ -675,6 +696,9 @@ export class SoftBody implements SoftBodyLike {
         f.share += (want - f.share) * (1 - Math.exp(-(want < f.share ? FINGER.shareIn : FINGER.shareOut) * H));
         const acc = w * w * (f.target - f.depth) - 2 * w * f.depthV;
         f.depthV += acc * H;
+        // the tip never moves faster than FINGER.maxSpeed into the body (a full-pressure tap would ram the skin at ~6 m/s, 17 mm per substep)
+        const vcap = FINGER.maxSpeed / Math.max(1e-6, f.depthMax);
+        if (f.depthV > vcap) f.depthV = vcap; else if (f.depthV < -vcap) f.depthV = -vcap;
         f.depth += f.depthV * H;
         if (f.depth < 0) { f.depth = 0; f.depthV = 0; } else if (f.depth > 1) { f.depth = 1; f.depthV = 0; }
         f.holdT += H;
@@ -925,12 +949,24 @@ export class SoftBody implements SoftBodyLike {
         hit = true;
         const y0 = XP[i + 1];
         let nx: number, ny: number, nz: number, pen: number;
+        const px0 = XP[i], pz0 = XP[i + 2];
+        const wa = FINGER.peakAxial * this.floppyW[i / 3];
         if (d2 > 1e-14) {
           const d = Math.sqrt(d2);
           nx = dx / d; ny = dy / d; nz = dz / d; pen = r - d;
-        } else { nx = f.dx; ny = f.dy; nz = f.dz; pen = r; }
-        const px0 = XP[i], pz0 = XP[i + 2];
-        XP[i] = cx + nx * r; XP[i + 1] = cy + ny * r; XP[i + 2] = cz + nz * r;
+          if (wa > 0) {
+            // thin floppy skin is carried along the finger's travel instead of slid around the sphere (it would wrap round it and fold):
+            // exit along a blend of the radial and the travel direction, to the sphere surface
+            let ex = nx * (1 - wa) + f.dx * wa, ey = ny * (1 - wa) + f.dy * wa, ez = nz * (1 - wa) + f.dz * wa;
+            const el = Math.sqrt(ex * ex + ey * ey + ez * ez) || 1;
+            ex /= el; ey /= el; ez /= el;
+            const bq = ex * dx + ey * dy + ez * dz, disc = bq * bq - (d2 - r2);
+            const tt = -bq + Math.sqrt(disc > 0 ? disc : 0);
+            XP[i] = px0 + ex * tt; XP[i + 1] = y0 + ey * tt; XP[i + 2] = pz0 + ez * tt;
+            const qx = XP[i] - cx, qy = XP[i + 1] - cy, qz = XP[i + 2] - cz, ql = Math.sqrt(qx * qx + qy * qy + qz * qz) || 1;
+            nx = qx / ql; ny = qy / ql; nz = qz / ql; pen = Math.max(pen, tt);
+          } else { XP[i] = cx + nx * r; XP[i + 1] = cy + ny * r; XP[i + 2] = cz + nz * r; }
+        } else { nx = f.dx; ny = f.dy; nz = f.dz; pen = r; XP[i] = cx + nx * r; XP[i + 1] = cy + ny * r; XP[i + 2] = cz + nz * r; }
         // contact friction: the skin sticks to the fingertip. Undo (up to mu x penetration) the tangential slide of the
         // particle relative to the tip during this substep, so a finger drags the surface with it instead of letting a
         // sloped press squirt the body out sideways.
@@ -947,7 +983,7 @@ export class SoftBody implements SoftBodyLike {
       if (hit && !f.contacted && f.down) {
         f.contacted = true;
         // predicted peak closing speed of the critically damped approach, plus what it already has
-        const closing = Math.max(0, f.target - f.depth) * f.depthMax * FINGER.omega / Math.E + Math.max(0, f.depthV) * f.depthMax;
+        const closing = Math.min(FINGER.maxSpeed, Math.max(0, f.target - f.depth) * f.depthMax * FINGER.omega / Math.E + Math.max(0, f.depthV) * f.depthMax);
         const front = f.depth * f.depthMax;
         this.emit('poke', f.px + f.dx * front, f.py + f.dy * front, f.pz + f.dz * front, f.nx, f.ny, f.nz,
           clamp(closing / POKE_NORM, 0.05, 1), 0, k);

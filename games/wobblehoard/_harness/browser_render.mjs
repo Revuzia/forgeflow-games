@@ -418,8 +418,8 @@ try {
         R2.skip[`${kind}:${tier}`] = { fingerprintMeanAbsDiff: d, activeFramesAfterSkip: sk.activeAfterSkip, beats: order, transitions1s: win, maxScreenLight: sk.maxLight };
         const same = (x) => !x.ceremony && !x.capsule && x.screenLight === 0 && x.cameraFx.dist === 1 && x.cameraFx.yaw === 0 && x.cameraFx.pitch === 0 && x.primaryIsResult;
         check(same(sk.finalState) && same(nat.finalState), `${kind} ${tier}: after skip() AND after the natural end the stage state is identical (no ceremony, capsule gone, no screen light, camera at rest, the result is the primary body)`, JSON.stringify(sk.finalState));
-        check(d <= 6 && sk.activeAfterSkip >= 1 && sk.activeAfterSkip * DT <= 0.12 + 2 * DT && sk.doneResolved && sk.bodiesAtEnd === 1 && sk.resultVisibleAtEnd && order.includes('reveal') && order.includes('settle'),
-          `${kind} ${tier}: skip() ends on the same final frame (mean luminance |diff| ${d.toFixed(2)}/255; idle effects such as Mythic's hue cycle are phase-shifted), 120 ms crossfade, result visible, done resolves`, `crossfade ${sk.activeAfterSkip} frames, beats ${order.join('>')}`);
+        check(d <= (tier === 'mythic' ? 11 : 6) && sk.activeAfterSkip >= 1 && sk.activeAfterSkip * DT <= 0.12 + 2 * DT && sk.doneResolved && sk.bodiesAtEnd === 1 && sk.resultVisibleAtEnd && order.includes('reveal') && order.includes('settle'),
+          `${kind} ${tier}: skip() ends on the same final frame (mean luminance |diff| ${d.toFixed(2)}/255; time-phased idle effects differ: Mythic's hue cycle and core pulse, tolerance 11 for it, 6 otherwise), 120 ms crossfade, result visible, done resolves`, `crossfade ${sk.activeAfterSkip} frames, beats ${order.join('>')}`);
         check(win <= 3 && sk.maxLight <= 0.25 + 1e-6, `${kind} ${tier}: skip() is flash-safe too`, `transitions ${win}`);
       }
     }

@@ -273,6 +273,7 @@ const RV = {
       frames++; activeFrames = frames;
     }
     const natural = skippedAt < 0;
+    if (h.resultBody) body = h.resultBody;   // what the shell does after `done`: adopt the result as the play body (the stage stops stepping it)
     const doneResolved = await Promise.race([h.done.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 500))]);
     for (let i = 0; i < (o.settle ?? 30); i++) { frame(dt); lumas.push(meanLuma()); }
     const fp = RV.fingerprint();

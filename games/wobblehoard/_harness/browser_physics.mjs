@@ -15,7 +15,7 @@ import { ROOT, startVite, launch } from './pw.mjs';
 
 const PORT = 5362;
 const FOLD_END_MAX = 90;   // degrees: a settled-ish last frame may not hold a crease sharper than this (rest shape max ~50)
-const ALL = ['side_poke', 'hold_squash', 'pull_lobe', 'peak_flop', 'float_shove', 'pinch', 'top_peak_poke', 'top_peak_hold', 'hold_close', 'hold_shoulder', 'peak_rest_close', 'pinch_stagger'];
+const ALL = ['side_poke', 'hold_squash', 'pull_lobe', 'peak_flop', 'float_shove', 'pinch', 'top_peak_poke', 'top_peak_hold', 'hold_close', 'hold_shoulder', 'peak_shove', 'peak_rest_close', 'pinch_stagger'];
 const args = process.argv.slice(2);
 const opt = {};
 const names = [];
