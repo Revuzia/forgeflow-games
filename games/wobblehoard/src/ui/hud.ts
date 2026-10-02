@@ -53,6 +53,22 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
   };
   setMuted(o.muted);
 
+  // One line, always: shrink the hint a little (down to 12 px) when the screen is too narrow for it at full size, and only
+  // wrap as a last resort. System fonts differ a lot in width, so this is measured, not guessed.
+  const MIN_FONT = 12;
+  const fitHint = (): void => {
+    hintEl.style.fontSize = '';
+    hintEl.style.whiteSpace = 'nowrap';
+    const cs = getComputedStyle(hintEl);
+    let size = parseFloat(cs.fontSize) || 14;
+    const max = parseFloat(cs.maxWidth);
+    const avail = Number.isFinite(max) ? max : document.documentElement.clientWidth - 32;
+    while (hintEl.scrollWidth > avail + 0.5 && size > MIN_FONT) { size -= 0.5; hintEl.style.fontSize = `${size}px`; }
+    if (hintEl.scrollWidth > avail + 0.5) hintEl.style.whiteSpace = ''; // still too long at the minimum: let it wrap
+  };
+  fitHint();
+  window.addEventListener('resize', fitHint);
+
   let active = false;
   const refreshHint = (): void => { hintEl.dataset.show = String(active && hint.visible(now())); };
   const timer = setInterval(refreshHint, 400);
@@ -66,6 +82,6 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
     setGearOpen(open) { gear.setAttribute('aria-expanded', String(open)); },
     interact() { hint.interact(now()); refreshHint(); },
     hintVisible: () => hintEl.dataset.show === 'true',
-    destroy() { clearInterval(timer); el.remove(); },
+    destroy() { clearInterval(timer); window.removeEventListener('resize', fitHint); el.remove(); },
   };
 }

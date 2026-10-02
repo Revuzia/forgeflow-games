@@ -54,7 +54,7 @@ interface PanelDef { dir: THREE.Vector3; dist: number; w: number; h: number; col
 
 const PANELS: PanelDef[] = [
   // key: big amber-white softbox, front-left-up
-  { dir: KEY_DIR, dist: 4.5, w: 2.4, h: 1.7, color: [1.0, 0.74, 0.42], k: 8, soft: 0.2, radius: 0.25, roll: 0.25 },
+  { dir: KEY_DIR, dist: 4.5, w: 2.4, h: 1.7, color: [1.0, 0.74, 0.42], k: 6.5, soft: 0.6, radius: 0.75, roll: 0.25 },
   // left strip softbox: the long vertical highlight on the shoulder
   { dir: new THREE.Vector3(-0.93, 0.28, 0.1).normalize(), dist: 4.5, w: 0.75, h: 3.0, color: [1.0, 0.8, 0.58], k: 6, soft: 0.14, radius: 0.3, roll: 0.12 },
   // overhead long strip: gives the long highlight across the dome

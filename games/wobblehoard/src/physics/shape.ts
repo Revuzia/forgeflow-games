@@ -33,7 +33,8 @@ export interface RestShape {
 export const restRadiusOf = (g: Genome): number => 0.5 * lerp(0.8, 1.25, clamp(g.size, 0, 1));
 
 export const FLATTEN = 0.8;       // Y squash of the dome
-const PEAK_SIGMA = 0.40;          // angular half-width of the swirl-peak, radians
+const PEAK_SIGMA = 0.40;
+const FLOPPY_SIGMA = 0.7;         // angular half-width of the softened zone around the peak, radians          // angular half-width of the swirl-peak, radians
 const PEAK_LIFT = 0.46;           // peak height above the dome, in R0
 const PEAK_PINCH = 0.50;          // how much the peak narrows toward the axis
 const FOOT = 0.90;                // foot plane height as a fraction of the dome's bottom (flat base so it sits)
@@ -65,7 +66,7 @@ export function restPoint(species: Genome['species'], dx: number, dy: number, dz
       y = 0.5 * (y + floor + Math.sqrt((y - floor) * (y - floor) + k * k));
       if (y - floor < 0.004 * R0) y = floor;          // the foot is an exactly flat disc, so rest on the table is exact
       out[o] = x; out[o + 1] = y; out[o + 2] = z;
-      return w;
+      return Math.exp(-(theta / FLOPPY_SIGMA) * (theta / FLOPPY_SIGMA));   // the floppy zone is wider than the peak itself, so its BASE can bend
     }
   }
 }

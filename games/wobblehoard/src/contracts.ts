@@ -86,6 +86,11 @@ export interface SoftBodyLike {
   drainEvents(out: SoftEvent[]): void;
   /** A cheap 32-bit hash of the particle state (determinism probe). */
   stateHash(): number;
+  /**
+   * Optional (PHYS addition): the fingertip sphere of finger `id` in world space (centre, radius, eased depth 0..1), or null
+   * when that finger has no tip. For a finger ghost / contact FX. Allocates, so call it once per frame at most.
+   */
+  tip?(id: 0 | 1): { x: number; y: number; z: number; r: number; depth: number } | null;
 }
 
 export interface SoftBodyCtor {
@@ -140,7 +145,7 @@ export type FxKind = 'bubbles' | 'glitter' | 'dust' | 'ring';
 
 export interface StageFrameInput {
   time: number;                              // seconds since boot (monotonic)
-  pointerNdc: { x: number; y: number } | null; // eyes follow the pointer when present
+  pointerNdc: { x: number; y: number } | null; // eyes follow the pointer when present. Standard NDC: x -1..1 left to right, y -1..1 BOTTOM to TOP
 }
 
 export interface StageLike {

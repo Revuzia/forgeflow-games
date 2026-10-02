@@ -5,6 +5,7 @@
 //   node _harness/browser_physics.mjs hold_squash pinch     some
 //   node _harness/browser_physics.mjs --p '{"smOmega":40}'  physics param override (SoftParams) for tuning
 //   node _harness/browser_physics.mjs --g 7 --detail 4      another genome / mesh detail
+//   node _harness/browser_physics.mjs hold_squash --gf 1 --gb 1 --gs 0 --gz 1 --tag firm   genome extremes, files get a _<tag> suffix
 // Exits 1 on a console error, a failed request, a blank canvas, a non-finite sim or a safety-net reset.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -16,7 +17,7 @@ const args = process.argv.slice(2);
 const opt = {};
 const names = [];
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--p' || args[i] === '--g' || args[i] === '--detail' || args[i] === '--out' || args[i] === '--px') opt[args[i].slice(2)] = args[++i];
+  if (args[i] === '--p' || args[i] === '--g' || args[i] === '--detail' || args[i] === '--out' || args[i] === '--px' || args[i] === '--tag' || args[i] === '--gf' || args[i] === '--gb' || args[i] === '--gs' || args[i] === '--gz') opt[args[i].slice(2)] = args[++i];
   else names.push(args[i]);
 }
 const scenarios = names.length ? names : ALL;
@@ -38,6 +39,7 @@ try {
     if (opt.g) qs.set('g', opt.g);
     if (opt.detail) qs.set('detail', opt.detail);
     if (opt.px) qs.set('px', opt.px);
+    for (const k of ['gf', 'gb', 'gs', 'gz']) if (opt[k] !== undefined) qs.set(k, opt[k]);
     await page.goto(`${vite.url}_harness/physview/index.html?${qs}`, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__PV__ && window.__PV__.ready, null, { timeout: 90000 });
     const info = await page.evaluate(() => {
@@ -45,7 +47,8 @@ try {
       return { frames: pv.frames, log: pv.log, events: pv.events, simMs: pv.simMs, hash: pv.stateHash, safety: pv.safetyResets, restTop: pv.restTop };
     });
     // blank-canvas check: the montage must contain many distinct bright pixels
-    const png = resolve(outDir, `${name}.png`);
+    const stem = opt.tag ? `${name}_${opt.tag}` : name;
+    const png = resolve(outDir, `${stem}.png`);
     await page.locator('#wrap').screenshot({ path: png });
     const lit = await page.evaluate(() => {
       const c = document.getElementById('c');
@@ -56,7 +59,7 @@ try {
       return n;
     });
     const finite = info.log.every((r) => Number.isFinite(r.vol) && Number.isFinite(r.top) && Number.isFinite(r.cy));
-    writeFileSync(resolve(outDir, `${name}.json`), JSON.stringify({ name, opt, ...info }, null, 1));
+    writeFileSync(resolve(outDir, `${stem}.json`), JSON.stringify({ name, opt, ...info }, null, 1));
     const maxComp = Math.max(...info.log.map((r) => r.comp)), minVol = Math.min(...info.log.map((r) => r.vol)), maxVol = Math.max(...info.log.map((r) => r.vol));
     const maxStretch = Math.max(...info.log.map((r) => r.stretch)), maxFoot = Math.max(...info.log.map((r) => r.foot));
     const maxTop = Math.max(...info.log.map((r) => r.top)), maxCx = Math.max(...info.log.map((r) => Math.hypot(r.cx, r.cz)));

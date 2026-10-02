@@ -21,6 +21,10 @@ export interface SoftParams {
   bendK: number;
   /** Edge compliance in XPBD units at the nominal step: alpha_tilde = alpha / h^2. From stretch. */
   edgeAlphaT: number;
+  /** Edge compliance multiplier once an edge is past its soft strain (smaller = harder skin). */
+  edgeHarden: number;
+  /** Seconds the glued feet are held after a lobe is let go. */
+  pinHold: number;
   /** Strain beyond which the edge skin hardens (the "resists" part of stretch). From stretch. */
   edgeSoftStrain: number;
   /** Volume-constraint compliance relative to the constraint's own scale (alpha_tilde = kappa * S0). Lower = more incompressible. */
@@ -31,15 +35,11 @@ export interface SoftParams {
   affDamp: number;
   /** Extra internal damping per m/s of internal speed (1/m): kills the fast release spike but leaves the small jiggle alone. From bounce. */
   intDamp2: number;
-  /** Tiny global drag, 1/s. */
+  /** Global drag on the whole velocity, 1/s: damps the body bobbing on its glued foot (the slow part of the wobble). From bounce. */
   drag: number;
   /** Table Coulomb friction coefficient. */
   tableMu: number;
-  /** Fraction of the upward centre-of-mass velocity removed per substep while the foot is down (tacky table: no hop). */
-  groundDamp: number;
-  /** Viscous tack: fraction of its upward speed a foot particle (within ~1 cm of the table) loses per substep. */
-  footVisc: number;
-  /** Tack layer (m): a foot particle that would lift off the table by less than this in one substep stays glued to it, so
+  /** Tack layer (m, for a body of radius 0.5; scales with size): a foot particle that would lift off the table by less than this in one substep stays glued to it, so
    *  small springs-back never peel the foot (no hop); a real launch (a nudge, a hard rebound) still leaves. */
   glue: number;
   /** How deep a finger may press, as a fraction of the body thickness (firmer = shallower: a firm toy cannot be squashed as far). */
@@ -54,20 +54,20 @@ export function deriveParams(g: Genome): SoftParams {
   const f = clamp(g.firmness, 0, 1), b = clamp(g.bounce, 0, 1), s = clamp(g.stretch, 0, 1);
   return {
     smOmega: lerp(12, 40, f),
-    bendK: lerp(0.02, 0.1, f),
+    bendK: lerp(0.08, 0.2, f),
     edgeAlphaT: lerp(3, 5.5, s),
     edgeSoftStrain: lerp(0.35, 1.6, s),
+    edgeHarden: 0.12,
+    pinHold: 0.5,
     volKappa: 0.5,
     intDamp: lerp(8, 1, Math.pow(b, 0.9)),
     affDamp: lerp(6, 1, b) + 4 * f,
-    intDamp2: lerp(8, 0, b),
-    drag: 0.18,
+    intDamp2: lerp(16, 9, b),
+    drag: lerp(2.0, 1.0, b),
     tableMu: 1.5,
-    groundDamp: 0,
-    glue: 0.008,
+    glue: 0.02,
     squashDepth: lerp(0.66, 0.34, f),
-    peakSoft: 0.35,
-    footVisc: 0,
+    peakSoft: 0.12,
     maxPull: 1.0 + 1.4 * s,
   };
 }
@@ -84,6 +84,8 @@ export const FINGER = {
   friction: 0.9,
   /** ...pressing a free flank (no table behind it) goes at most this fraction of squashDepth (see SoftParams). */
   flankShare: 0.75,
+  /** ...but never less than this many rest radii (a thin peak is shoved aside, not pierced). */
+  minFlankDepth: 0.8,
   /** Each jaw of a two-finger pinch keeps this fraction of its depth range. */
   pinchShare: 0.62,
   /** The two tips of a pinch keep this clearance (in rest radii) between their surfaces. */

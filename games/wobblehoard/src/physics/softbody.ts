@@ -17,16 +17,26 @@
 //     a pulled lobe thins its neck. No scale hacks anywhere.
 //   * global shape matching (Mueller 2016 rotation extraction, warm started, 2 iterations): every particle is pulled
 //     toward g_i = c + R q_i. Firmness sets the stiffness; the swirl-peak is softer so it lags and flops.
-//   * Laplacian shape memory (a local, bending-like term): each particle is pulled toward the mean of its neighbours
-//     plus its rotated rest offset. It makes dents smooth bowls instead of pits and gives the surface local recovery.
+//   * Laplacian shape memory (a local, bending-like term, applied every other substep at twice the gain): each particle
+//     is pulled toward the mean of its neighbours plus its rotated rest offset. Dents become smooth bowls instead of
+//     pits with creased rims, and the surface recovers locally.
 //   * damping acts on the INTERNAL velocity only (velocity minus the best-fit rigid motion v_cm + w x r): the global
-//     affine part (squash / stretch / shear) is damped hard so the body never bounces like a ball, the local part
-//     (peak flop, ripples) lightly so those wobble for 2-3 visible cycles, both rates from genome.bounce.
-//   * table y = 0: position projection + Coulomb friction (a tangential displacement bounded by mu x normal load).
-//   * SUPPORTED-BODY GRAVITY (the one deviation, see substep()): with one solver pass a soft network cannot carry the
-//     weight of 640 particles down to a small foot, so while the foot is on the table gravity is faded out by `supp`.
-//   * fingers: kinematic spheres; penetrating particles are projected out and the correction becomes velocity (a poke
-//     shoves a floating body). Pull: a Gaussian patch soft-attached to a moving world target; the feet stay glued.
+//     affine part (squash / stretch / shear) and the local part (peak flop, ripples) have separate rates, plus a
+//     speed-proportional term that kills fast spikes (a lobe snapping back) but leaves small jiggle alone, plus a global
+//     drag that damps the body bobbing on its foot. All rates come from genome.bounce (and firmness).
+//   * table y = 0: position projection + Coulomb friction (a tangential displacement bounded by mu x normal load, where
+//     the load is the weight, the penetration and the downward push of a fingertip).
+//   * fingers: kinematic spheres with Coulomb contact friction (the skin follows the tip, so a sloped press does not
+//     squirt the body out sideways). Penetrating particles are projected out and the correction becomes velocity (a
+//     poke shoves a floating body). Pull: a Gaussian patch soft-attached to a moving world target; the feet stay glued
+//     to the table while the lobe is pulled (and for a moment after, so it springs back in place).
+//   * DEVIATIONS from the recommended recipe, and why (both are what makes the body REST exactly and not hop):
+//     (1) SUPPORTED-BODY GRAVITY. With one solver pass a soft network cannot carry the weight of 640 particles down to a
+//         small foot (the load path is longer than the solver reaches in a frame), so a resting body sagged and crept.
+//         While the foot is on the table gravity is faded out by `supp`; every deformation, finger load and impact is
+//         still solved by the constraints, and friction still sees the true normal load.
+//     (2) TACK. Squishies are sticky: a foot particle that lifts off its REST height by less than a thin layer in one
+//         substep is mostly pulled back, so the springing-back body wobbles on its foot instead of hopping like a ball.
 // Units: metres-ish; mass per particle ~1 (tributary area, mean 1).
 import type { Genome } from '../core/genome.ts';
 import { clamp, mulberry32 } from '../core/rng.ts';
@@ -85,11 +95,9 @@ const POKE_NORM = 3.2;             // m/s predicted closing speed that maps to i
 const MAX_SPEED = 14;              // safety clamp on particle speed (m/s)
 const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.35;
 const BOB_AMP = 0.03, BOB_HZ = 0.33;
-const NEAR = 0.006;
-const FOOT_H = 0.012;               // height below which the foot's upward speed is damped (viscous tack)                // a particle this close to the table counts as touching it (m)
+const NEAR = 0.01;                // a particle this close to the table counts as touching it (m)
 const BLOCK_MARGIN = 0.03;         // particles this close to a fingertip are 'blocked' for the volume constraint (m)
 const LOAD_CONC = 10;              // friction normal load per touching particle is capped at this many particle-weights
-const PIN_HOLD_S = 0.5;            // glued feet are held this long after a lobe is let go, so the body springs back in place
 const smooth01 = (t: number): number => { const x = t < 0 ? 0 : t > 1 ? 1 : t; return x * x * (3 - 2 * x); };
 
 export class SoftBody implements SoftBodyLike {
@@ -148,6 +156,7 @@ export class SoftBody implements SoftBodyLike {
   private readonly V: Float64Array;         // velocities
   private readonly GOAL: Float64Array;      // shape-matching goal positions of the last substep
   private readonly GRAD: Float64Array;      // volume gradients (scratch)
+  private readonly H0: Float64Array;        // rest height of each particle above the table (the tack acts on lift beyond it)
   private readonly WV: Float64Array;        // per-substep inverse masses of the volume constraint (blocked particles = 0)
   private readonly pinned: Uint8Array;      // foot particles glued to the table while a lobe is pulled
   private pinCount = 0;
@@ -211,6 +220,8 @@ export class SoftBody implements SoftBodyLike {
     this.GRAD = new Float64Array(n * 3);
     this.pinned = new Uint8Array(n);
     this.WV = new Float64Array(n);
+    this.H0 = new Float64Array(n);
+    for (let i = 0; i < n; i++) this.H0[i] = rest.restLocal[i * 3 + 1] + rest.restCenterY;
     this.grabs = [new Grab(n), new Grab(n)];
 
     // edges, adjacency, rest Laplacian offsets
@@ -388,7 +399,9 @@ export class SoftBody implements SoftBodyLike {
     f.px = hx; f.py = hy; f.pz = hz; f.tx = hx; f.ty = hy; f.tz = hz;
     f.dx = dx; f.dy = dy; f.dz = dz; f.nx = nx; f.ny = ny; f.nz = nz;
     f.depth = 0; f.depthV = 0; f.target = 0; f.holdT = 0;
-    f.depthMax = Math.max(0.2 * R, this.p.squashDepth * (supported ? 1 : FINGER.flankShare) * T);
+    // a thin free part (the swirl-peak) can be shoved aside by far more than its own thickness, so a flank press may
+    // always go FINGER.minFlankDepth rest radii deep
+    f.depthMax = Math.max(supported ? 0.2 * R : FINGER.minFlankDepth * R, this.p.squashDepth * (supported ? 1 : FINGER.flankShare) * T);
     this.placeTip(f, 1);
     f.ocx = f.cx; f.ocy = f.cy; f.ocz = f.cz;
   }
@@ -464,7 +477,7 @@ export class SoftBody implements SoftBodyLike {
     if (this.gravityOn && this.pinCount === 0) {
       for (let i = 0; i < this.n; i++) if (X[i * 3 + 1] < NEAR) { this.pinned[i] = 1; this.pinCount++; }
     }
-    this.pinHold = PIN_HOLD_S;
+    this.pinHold = this.p.pinHold;
     g.t0x = tx; g.t0y = ty; g.t0z = tz; g.rx = tx; g.ry = ty; g.rz = tz; g.ex = tx; g.ey = ty; g.ez = tz;
     const nrm = this.vertexNormal(v);
     this.emit('grab', X[v * 3], X[v * 3 + 1], X[v * 3 + 2], nrm[0], nrm[1], nrm[2], 0.5, 0, id);
@@ -482,7 +495,7 @@ export class SoftBody implements SoftBodyLike {
     if (!g || !g.active) return;
     g.active = false;
     const s = this.metrics.stretch;
-    if (!this.grabs[0].active && !this.grabs[1].active) this.pinHold = PIN_HOLD_S;
+    if (!this.grabs[0].active && !this.grabs[1].active) this.pinHold = this.p.pinHold;
     if (s > 0.05) {
       const v = g.anchor, X = this.X;
       const nrm = this.vertexNormal(v);
@@ -706,8 +719,9 @@ export class SoftBody implements SoftBodyLike {
     }
 
     // ---- Laplacian shape memory (local): pull each particle toward mean(neighbours) + R (q_i - mean(q_neighbours))
-    {
-      const bk = this.bendK, soft = this.softW, st = this.nbrStart, nb = this.nbrIdx, ni = this.nbrInv, LQ = this.LQ;
+    // (every other substep with twice the gain: it is a soft smoothing term and this saves ~8% of the step)
+    if ((this.debug.substeps & 1) === 0) {
+      const bk = this.bendK * 2, soft = this.softW, st = this.nbrStart, nb = this.nbrIdx, ni = this.nbrInv, LQ = this.LQ;
       for (let i = 0; i < n; i++) {
         const i3 = i * 3;
         let mx = 0, my = 0, mz = 0;
@@ -769,7 +783,7 @@ export class SoftBody implements SoftBodyLike {
     // ---- edge distance constraints (Gauss-Seidel, 1 pass)
     {
       const E3 = this.E3, EL = this.EL, ES = this.ESOFT, EWA = this.EWA, EWB = this.EWB, EWS = this.EWS, ne = this.ne;
-      const aT = this.p.edgeAlphaT, aH = aT * 0.12;
+      const aT = this.p.edgeAlphaT, aH = aT * this.p.edgeHarden;
       for (let e = 0; e < ne; e++) {
         const a = E3[e * 2], b = E3[e * 2 + 1];
         const dx = XP[a] - XP[b], dy = XP[a + 1] - XP[b + 1], dz = XP[a + 2] - XP[b + 2];
@@ -842,7 +856,7 @@ export class SoftBody implements SoftBodyLike {
       }
     }
     {
-      const mu = this.p.tableMu, glue = this.p.glue;
+      const mu = this.p.tableMu, glue = this.p.glue * (this.restRadius / 0.5), H0 = this.H0;   // the tack layer scales with the body
       // normal-load proxy for Coulomb friction: this substep's penetration plus the supported weight (g h^2 per
       // particle, concentrated on the particles that are actually touching)
       const load = this.supp * GRAVITY * H * H * Math.min(LOAD_CONC, this.Mtot / Math.max(1, this.nearMass));
@@ -853,7 +867,11 @@ export class SoftBody implements SoftBodyLike {
         if (y >= NEAR) continue;
         near++; nearM += M[i / 3];
         let pen = load + fload;
-        if (y < 0) { contacts++; pen -= y; XP[i + 1] = 0; } else if (y < glue) { const k = y / glue; XP[i + 1] = y * k * k; }
+        if (y < 0) { contacts++; pen -= y; XP[i + 1] = 0; } else {
+          // tack: lifting off its REST height by less than `glue` is mostly undone (the rest pose is the equilibrium)
+          const lift = y - H0[i / 3];
+          if (lift > 0 && lift < glue) { const k = lift / glue; XP[i + 1] = H0[i / 3] + lift * k * k; }
+        }
         const tx = XP[i] - X[i], tz = XP[i + 2] - X[i + 2];
         const tl = Math.sqrt(tx * tx + tz * tz);
         if (tl > 1e-12) {
@@ -880,7 +898,6 @@ export class SoftBody implements SoftBodyLike {
     // ---- velocity from positions, with the sums the damping pass needs
     {
       const invH = 1 / H, S = this.sums;
-      const fv = 1 - this.p.footVisc;
       let sm = 0, sx = 0, sy = 0, sz = 0, svx = 0, svy = 0, svz = 0, lx = 0, ly = 0, lz = 0;
       let ixx = 0, iyy = 0, izz = 0, ixy = 0, ixz = 0, iyz = 0;
       let b00 = 0, b01 = 0, b02 = 0, b10 = 0, b11 = 0, b12 = 0, b20 = 0, b21 = 0, b22 = 0;
@@ -889,11 +906,8 @@ export class SoftBody implements SoftBodyLike {
         const x = XP[i3], y = XP[i3 + 1], z = XP[i3 + 2];
         const vx = (x - X[i3]) * invH, vy = (y - X[i3 + 1]) * invH, vz = (z - X[i3 + 2]) * invH;
         X[i3] = x; X[i3 + 1] = y; X[i3 + 2] = z;
-        // viscous tack of the foot: a particle just above the table loses part of its upward speed each substep, so the
-        // foot peels slowly (no hop) while the rest of the body is free to overshoot and wobble
-        const vy2 = vy > 0 && y < FOOT_H ? vy * fv : vy;
-        V[i3] = vx; V[i3 + 1] = vy2; V[i3 + 2] = vz;
-        const mvx = m * vx, mvy = m * vy2, mvz = m * vz;
+        V[i3] = vx; V[i3 + 1] = vy; V[i3 + 2] = vz;
+        const mvx = m * vx, mvy = m * vy, mvz = m * vz;
         sm += m; sx += m * x; sy += m * y; sz += m * z;
         svx += mvx; svy += mvy; svz += mvz;
         lx += y * mvz - z * mvy; ly += z * mvx - x * mvz; lz += x * mvy - y * mvx;
@@ -969,9 +983,6 @@ export class SoftBody implements SoftBodyLike {
     const dRes = this.dampInt, dAff = this.dampAff, dr = this.dragF, dQ = this.dampQ;
     let ke = 0;
     const vmax2 = MAX_SPEED * MAX_SPEED;
-    // tacky table: while the foot is down, the body's upward centre-of-mass velocity is bled off (squishies stick to a
-    // surface, so a springing-back body does not hop like a ball)
-    const gdamp = this.gravityOn && vcy > 0 ? -this.p.groundDamp * this.supp * vcy : 0;
     for (let i = 0; i < n; i++) {
       const i3 = i * 3;
       const rx = X[i3] - cx, ry = X[i3 + 1] - cy, rz = X[i3 + 2] - cz;
@@ -985,7 +996,7 @@ export class SoftBody implements SoftBodyLike {
       const nl = dQ * Math.sqrt(sp2);
       const ga = Math.min(0.9, dAff + nl), gr = Math.min(0.9, dRes + nl);
       vx += -ga * avx - gr * (ivx - avx) - dr * vx + (awy * rz - awz * ry);
-      vy += -ga * avy - gr * (ivy - avy) - dr * vy + (awz * rx - awx * rz) + gdamp;
+      vy += -ga * avy - gr * (ivy - avy) - dr * vy + (awz * rx - awx * rz);
       vz += -ga * avz - gr * (ivz - avz) - dr * vz + (awx * ry - awy * rx);
       const s2 = vx * vx + vy * vy + vz * vz;
       if (s2 > vmax2) { const s = MAX_SPEED / Math.sqrt(s2); vx *= s; vy *= s; vz *= s; }

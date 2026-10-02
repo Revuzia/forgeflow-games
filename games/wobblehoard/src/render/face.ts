@@ -98,7 +98,7 @@ export class Face {
 
   private readonly hub: EnvHub;
 
-  constructor(body: SoftBodyLike, genome: Genome, view: JellyView, scale: number, hub: EnvHub) {
+  constructor(body: SoftBodyLike, genome: Genome, view: JellyView, hub: EnvHub) {
     this.hub = hub;
     this.body = body; this.view = view;
     this.style = STYLES[genome.eyeStyle] ?? STYLES.dot;
@@ -106,7 +106,6 @@ export class Face {
     this.seed = genome.seed;
     this.rng = mulberry32(genome.seed ^ 0xeee1e5);
     this.blinkAt = 1.4 + this.rng() * 2.4;
-    void scale;
 
     // dome: unit hemisphere with its pole on +Z, optional flat lid cut
     const dome = new THREE.SphereGeometry(1, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -120,8 +119,10 @@ export class Face {
     const arcGeo = new THREE.TorusGeometry(1, 0.2, 8, 24, Math.PI);
     this.geos.push(arcGeo);
 
-    const az = (9 + 17 * genome.eyeSpacing) * Math.PI / 180;
     const el = (3 + 26 * genome.eyeHeight) * Math.PI / 180;
+    // spacing 0..1 -> 9..26 degrees off the centre line, but never so close that big eyes touch
+    const azMin = Math.asin(clamp((this.radius * Math.max(this.style.sx, 1) * 1.3) / (body.restRadius * Math.cos(el)), 0, 0.9));
+    const az = Math.max((9 + 17 * genome.eyeSpacing) * Math.PI / 180, azMin);
     for (const side of [-1, 1]) {
       const mat = new THREE.MeshPhysicalMaterial({
         color: 0x0b0818, roughness: 0.1, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04, ior: 1.5, fog: false,

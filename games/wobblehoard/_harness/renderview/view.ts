@@ -211,17 +211,13 @@ const RV = {
     } finally { s2.dispose(); c2.remove(); }
   },
   setAutoFx(on: boolean): void { autoFx = on; },
-  /** Step (rendering only the last frame) until the body emits an event of `kind`; returns the frames used, or -1. */
+  /** Step (no rendering) until the body emits an event of `kind`; returns the number of frames used, or -1 if none came. */
   framesUntilEvent(kind: string, max = 240, dt = 1 / 60): number {
-    const before = seen.length ? seen[seen.length - 1] : null;
-    let n = 0;
-    for (; n < max; n++) {
-      const count = events.length;
+    for (let n = 1; n <= max; n++) {
       frame(dt, false);
-      if (events.some((e) => e.kind === kind) && (events.length > 0 || count >= 0)) { n++; break; }
+      if (events.some((e) => e.kind === kind)) return n;
     }
-    void before;
-    return n < max ? n : -1;
+    return -1;
   },
   setGenome(seedOrCode: string | number): void { setupBody(genomeFromParam(String(seedOrCode))); },
   setGenomeObject(g: Genome): void { setupBody(g); },
@@ -330,6 +326,11 @@ const RV = {
     stage.setShakeScale(0); stage.shake(1); time += 1 / 60; stage.update(1 / 60, { time, pointerNdc: null });
     out.shakeOffsetWhenScale0 = cam.position.distanceTo(base);
     stage.setShakeScale(1);
+    // restore the default framing (pitch 0.27 rad, zoom 1.0) so later screenshots are not affected by this probe
+    stage.orbit(0, -50); stage.orbit(0, 0.21);
+    stage.zoom(1e5); stage.zoom(Math.log(1 / 1.9) / 0.0016);
+    settle(200);
+    out.restoredDistance = cam.position.distanceTo(tgt) / d0;
     return out;
   },
 

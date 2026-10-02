@@ -329,16 +329,17 @@ void main() {
   float r = length(vUv);
   if (r > 1.0) discard;
   float a;
+  vec3 col = uColor;
   if (vState.y > 0.5) {
     float w = mix(0.2, 0.07, vState.x);
     a = smoothstep(1.0 - w * 2.0, 1.0 - w, r) * (1.0 - smoothstep(1.0 - w, 1.0, r));
-    a *= 0.85;
+    col = mix(uColor, vec3(1.0, 0.93, 0.82), 0.5) * 1.4;   // a bright cream ring reads against the orange light pool
   } else {
-    float n = whNoise2(vUv * 2.6 + vState.z * 31.0);
-    a = (1.0 - smoothstep(0.15, 1.0, r)) * (0.55 + 0.7 * n);
-    a = a * a;
+    float n = whNoise2(vUv * 1.5 + vState.z * 31.0);
+    float fall = 1.0 - smoothstep(0.0, 1.0, r);
+    a = fall * fall * (0.65 + 0.5 * n);
   }
-  gl_FragColor = vec4(uColor, a * vState.w);
+  gl_FragColor = vec4(col, a * vState.w);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
@@ -366,6 +367,7 @@ class Puffs {
     this.mat = new THREE.ShaderMaterial({
       vertexShader: PUFF_VERT, fragmentShader: PUFF_FRAG, uniforms: { uColor: { value: color } },
       transparent: true, depthWrite: false, depthTest: true, blending: THREE.NormalBlending, fog: false,
+      side: THREE.DoubleSide, // the table ring maps the quad onto the xz plane, which flips its winding
     });
     this.mesh = new THREE.Mesh(this.geo, this.mat);
     this.mesh.frustumCulled = false;
@@ -380,20 +382,23 @@ class Puffs {
     this.age[i] = 0; this.life[i] = life; this.size[i] = size; this.kind[i] = kind; this.seed[i] = seed; this.str[i] = str;
   }
 
+  /** Footprint radius of the body on the table (set every frame): puffs and the ring start at its edge, not under the jelly. */
+  footprint = 0.5;
+
   dust(at: V3, intensity: number, rng: () => number, scale: number): void {
-    const n = 4 + Math.round(5 * intensity);
+    const n = 5 + Math.round(5 * intensity);
     const k = Math.min(1, Math.max(0.15, intensity));
     for (let j = 0; j < n; j++) {
-      const a = (j / n) * Math.PI * 2 + rng() * 0.8, rad = (0.32 + 0.2 * rng()) * scale;
+      const a = (j / n) * Math.PI * 2 + rng() * 0.8, rad = this.footprint * (0.95 + 0.3 * rng());
       this.add(at.x + Math.cos(a) * rad, 0.04 * scale + rng() * 0.03, at.z + Math.sin(a) * rad,
         Math.cos(a) * (0.25 + 0.3 * rng()) * scale, Math.sin(a) * (0.25 + 0.3 * rng()) * scale,
-        0.55 + 0.4 * rng(), (0.07 + 0.06 * rng()) * scale * (0.7 + 0.5 * k), 0, rng(), 0.22 + 0.28 * k);
+        0.6 + 0.45 * rng(), (0.12 + 0.08 * rng()) * scale * (0.7 + 0.6 * k), 0, rng(), 0.45 + 0.4 * k);
     }
   }
 
   ring(at: V3, intensity: number, _rng: () => number, scale: number): void {
     const k = Math.min(1, Math.max(0.2, intensity));
-    this.add(at.x, 0.012, at.z, 0, 0, 0.55 + 0.2 * k, (0.75 + 0.6 * k) * scale, 1, 0, 0.5 + 0.4 * k);
+    this.add(at.x, 0.012, at.z, 0, 0, 0.65 + 0.25 * k, this.footprint * (1.0 + 0.5 * k), 1, 0, 0.7 + 0.2 * k);
   }
 
   update(dt: number): void {
@@ -415,7 +420,7 @@ class Puffs {
     for (let k = 0; k < this.count; k++) {
       const t = this.age[k] / this.life[k];
       const isRing = this.kind[k] > 0.5;
-      const grow = isRing ? 0.25 + 1.75 * (1 - (1 - t) * (1 - t)) : 0.55 + 0.9 * t;
+      const grow = isRing ? 1.0 + 1.1 * (1 - (1 - t) * (1 - t)) : 0.55 + 0.9 * t;
       const fade = isRing ? (1 - t) * (1 - t) : Math.min(1, t * 8) * (1 - t) * (1 - t);
       this.aPos[k * 4] = this.px[k]; this.aPos[k * 4 + 1] = this.py[k]; this.aPos[k * 4 + 2] = this.pz[k]; this.aPos[k * 4 + 3] = this.size[k] * grow;
       this.aState[k * 4] = t; this.aState[k * 4 + 1] = this.kind[k]; this.aState[k * 4 + 2] = this.seed[k]; this.aState[k * 4 + 3] = fade * this.str[k];
@@ -470,6 +475,9 @@ export class Fx {
       case 'ring': this.puffs.ring(at, k, this.rng, this.scale); break;
     }
   }
+
+  /** Called by the stage every frame with the body's footprint radius on the table. */
+  setFootprint(r: number): void { this.puffs.footprint = Math.max(0.15, r); }
 
   update(dt: number, time: number, body: SoftBodyLike | null): void {
     // glitter flashes harder while the body jiggles

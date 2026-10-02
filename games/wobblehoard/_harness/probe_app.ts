@@ -264,6 +264,30 @@ function press(r: Rig, x: number, y: number, ms: number): number {
   check('pan comes from the event screen x: left poke pans left (< 0), right poke pans right (> 0), centre ~ 0', lp < -0.1 && pans[0].pan > 0.1 && Math.abs(((): number => { const m = rig(); const cm = centre(m); press(m, cm.x, cm.y, 60); m.w.run(m.app, 300); return (m.w.audio.rec.of('poke')[0].args[0] as { pan: number }).pan; })()) < 0.15, `L ${lp.toFixed(2)} R ${pans[0].pan.toFixed(2)}`);
 }
 
+// ============================================================ press direction: bent toward straight down on up-facing surfaces
+{
+  const r = rig();
+  const c = centre(r);
+  const disc = r.app.host.bodyScreen()!;
+  const dirOf = (x: number, y: number): { x: number; y: number; z: number; ny: number; ry: number } | null => {
+    const w = r.w.body.rec.count('fingerDown');
+    const id = r.id++;
+    r.app.input.pointerDown({ id, x, y, t: clk(r) });
+    const calls = r.w.body.rec.of('fingerDown');
+    r.app.input.pointerCancel(id);
+    if (calls.length === w) return null;
+    const a = calls.at(-1)!.args[1] as { dir: { x: number; y: number; z: number }; normal: { y: number } };
+    const hit = r.app.host.hitTest(x, y)!;
+    return { ...a.dir, ny: a.normal.y, ry: hit.dir.y };
+  };
+  const top = dirOf(c.x, c.y - disc.r * 0.8);        // the dome facing up
+  const mid = dirOf(c.x, c.y);                          // the front face
+  const low = dirOf(c.x, c.y + disc.r * 0.85);        // a steep lower flank
+  check('press dir: an upward-facing hit is bent (almost) straight down so the body can squash against the table', !!top && top.ny > 0.45 && top.y < -0.99, JSON.stringify(top));
+  check('press dir: a steep flank keeps the camera ray (the finger dents it from the viewer side)', !!low && low.ny < 0.2 && Math.abs(low.y - low.ry) < 1e-9, JSON.stringify(low));
+  check('press dir: the bend is gradual in between (never flips past straight down) and always unit length', !!mid && mid.y <= mid.ry + 1e-9 && mid.y >= -1 && Math.abs(Math.hypot(mid.x, mid.y, mid.z) - 1) < 1e-9, JSON.stringify(mid));
+}
+
 // ============================================================ hold -> press voice, release
 {
   const r = rig();
@@ -294,6 +318,25 @@ function press(r: Rig, x: number, y: number, ms: number): number {
   check('release with intensity > 0.5: one to three pops, each 40-120 ms after the last', total >= 1 && total <= 3 && gaps.slice(1).every((g) => g >= 38 && g <= 124), `${total} pops, gaps ${gaps.join('/')} ms`);
   check('release: one haptic pop per audio pop', r.w.haptics.rec.count('pop') === total);
   check('release: stats counted (1 squish, 1 release)', r.app.profile.profile.stats.squishes === 1 && r.app.profile.profile.stats.releases === 1);
+}
+
+// ============================================================ release FX gate (bubbles + pops follow a proper squeeze only)
+{
+  const fx = (intensity: number): { bubbles: number; pops: number } => {
+    const r = rig({ auto: false });
+    const c = centre(r);
+    const id = r.id++;
+    r.app.input.pointerDown({ id, x: c.x, y: c.y, t: clk(r) });
+    r.w.run(r.app, 60);
+    r.w.body.queue({ kind: 'release', finger: 0, intensity });
+    r.w.run(r.app, 600);
+    r.app.input.pointerUp({ id, x: c.x, y: c.y, t: clk(r) });
+    return { bubbles: r.w.stage.rec.of('spawnFx').filter((x) => x.args[0] === 'bubbles').length, pops: r.w.audio.rec.count('pop') };
+  };
+  const lo = fx(0.2), mid = fx(0.35), hi = fx(0.62);
+  check('release FX: below 0.3 no bubbles and no pops (a gentle squeeze stays quiet)', lo.bubbles === 0 && lo.pops === 0, JSON.stringify(lo));
+  check('release FX: a proper squeeze (0.35, what the real body reports) spawns bubbles and 1 pop', mid.bubbles === 1 && mid.pops === 1, JSON.stringify(mid));
+  check('release FX: the hardest squeeze the physics produces (>= 0.6) earns three pops', hi.bubbles === 1 && hi.pops === 3, JSON.stringify(hi));
 }
 
 // ============================================================ manual events: land, leaks without a release event, two fingers

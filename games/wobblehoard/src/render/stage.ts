@@ -72,7 +72,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   let loseExt: WEBGL_lose_context | null = null;
   let lastRenderMs = 0;
   let lastCalls = 0, lastTris = 0;
-  const eyeLook = new THREE.Vector3();
+  const shakeVec = new THREE.Vector3();
 
   // ---- per-body view ----
   interface View { body: SoftBodyLike; genome: Genome; mats: JellyMaterials; jelly: JellyView; core: Core; face: Face; fx: Fx }
@@ -100,11 +100,13 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     tier = t;
     const spec = TIERS[t];
     renderer.transmissionResolutionScale = spec.transmissionScale;
+    table.setLite(t === 'low');
     applySize();
     if (view) {
       view.jelly.mesh.material = view.mats.get(t);
       if (view.jelly.freq !== spec.fineFreq) view.jelly.rebuild(spec.fineFreq);
       view.fx.setTier(spec);
+      view.core.setLite(!spec.transmission);
     }
     governor.resetWindow(24);
   }
@@ -134,6 +136,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     fp.cx = (j.minX + j.maxX) * 0.5; fp.cz = (j.minZ + j.maxZ) * 0.5;
     fp.rx = (j.maxX - j.minX) * 0.5; fp.rz = (j.maxZ - j.minZ) * 0.5;
     fp.lowY = j.minY; fp.compression = smComp; fp.stretch = smStretch;
+    v.fx.setFootprint(Math.max(fp.rx, fp.rz));
   }
 
   function updateCamera(dt: number, time: number): void {
@@ -157,13 +160,13 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     trauma = Math.max(0, trauma - dt * 1.7);
     const amt = trauma * trauma * shakeScale;
     if (amt > 1e-4) {
-      const s = amt * 0.045 * d / 3;
-      eyeLook.set(
+      const s = amt * 0.08 * d / 3;
+      shakeVec.set(
         Math.sin(time * 47.1) + 0.6 * Math.sin(time * 71.3 + 1.3),
         Math.sin(time * 53.7 + 2.1) + 0.6 * Math.sin(time * 83.9 + 0.4),
         Math.sin(time * 41.3 + 4.2),
       ).multiplyScalar(s);
-      camera.position.add(eyeLook);
+      camera.position.add(shakeVec);
     }
     camera.lookAt(tgt);
     camera.updateMatrixWorld();
@@ -179,6 +182,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       scene.remove(table.group);
       table = new Table(hub);
       table.setFloatImmediate(floatMode);
+      table.setLite(tier === 'low');
       scene.add(table.group);
       if (view) {
         const old = view;
@@ -210,7 +214,8 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       const jelly = new JellyView(body, mats.get(tier), spec.fineFreq);
       jelly.mesh.renderOrder = 10;
       const core = new Core(genome, palette, bodyScale);
-      const face = new Face(body, genome, jelly, bodyScale, hub);
+      core.setLite(!spec.transmission);
+      const face = new Face(body, genome, jelly, hub);
       const fx = new Fx(genome, palette, jelly.mapper, spec, bodyScale);
       table.setPoolColor(palette.pool);
       scene.add(jelly.mesh, core.group, face.group, fx.group);

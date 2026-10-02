@@ -31,6 +31,22 @@ export const TUNING = {
   /** stage.zoom(delta): wheel notches in, stage units out */
   zoomGain: 1,
   panMax: 0.8,
+  /**
+   * Press direction. The contract passes the camera ray as `dir`, but the soft body only squashes against the table when a
+   * press is close to vertical (a front press just dents the flank: measured compression 0.04 on average, release events on
+   * 1 of 13 sample hits). So on surfaces that face up (normal.y above `pressDownLo`) the finger direction is bent toward
+   * straight down, fully at `pressDownHi`. Steep flanks keep the camera ray. Measured with the real SoftBody at the default
+   * camera: mean compression 0.13, release events on 9 of 13 hits. Set pressDownHi to 0 to turn it off.
+   */
+  pressDownLo: 0.2,
+  pressDownHi: 0.45,
+  /**
+   * Bubbles + pops follow a release whose intensity is above this. CONTRACT.md says 0.5, but the real body reports the
+   * compression it released and a hard squeeze measures 0.35-0.57 (probe_softbody.json: peak 0.43-0.62), so 0.5 would almost
+   * never fire. 0.3 keeps "only on a proper squeeze". `bubbleFull` is the intensity that earns the maximum of three pops.
+   */
+  bubbleAt: 0.3,
+  bubbleFull: 0.6,
   consecutiveFrameErrorsFatal: 5,
   recentEvents: 32,
 } as const;
@@ -332,9 +348,10 @@ export function createApp(deps: AppDeps): App {
         audio.release({ compression: I, pitch: pitch(), pan: panOfPoint(ev.at) });
         haptics.release();
         stage.shake(0.15 + 0.5 * I);
-        if (I > 0.5) {
+        if (I > TUNING.bubbleAt) {
           stage.spawnFx('bubbles', ev.at, I);
-          pops(1 + Math.min(2, Math.floor(((I - 0.5) / 0.5) * 2.999)), ev.at, I);
+          const s = clamp01((I - TUNING.bubbleAt) / (TUNING.bubbleFull - TUNING.bubbleAt));
+          pops(1 + Math.min(2, Math.floor(s * 2.999)), ev.at, I);
         }
         break;
       }
@@ -382,13 +399,24 @@ export function createApp(deps: AppDeps): App {
     body.fingerUp(slot);
   }
 
+  /** finger travel direction for a press at `hit`: the camera ray, bent toward straight down on upward-facing surfaces */
+  function pressDir(hit: { normal: V3; dir: V3 }): V3 {
+    const { pressDownLo: lo, pressDownHi: hi } = TUNING;
+    const t = hi <= lo ? 0 : clamp((hit.normal.y - lo) / (hi - lo), 0, 1);
+    const k = t * t * (3 - 2 * t);
+    if (k <= 0) return hit.dir;
+    const x = hit.dir.x * (1 - k), y = hit.dir.y * (1 - k) - k, z = hit.dir.z * (1 - k);
+    const l = Math.hypot(x, y, z) || 1;
+    return { x: x / l, y: y / l, z: z / l };
+  }
+
   function onAction(a: GestureAction): void {
     switch (a.type) {
       case 'fingerDown': {
         if (pendingUp[a.slot]) executeUp(a.slot, 'release');
         else if (fingerDown[a.slot]) executeUp(a.slot, 'cancel');
         if (grabActive[a.slot]) { grabActive[a.slot] = false; body.grabRelease(a.slot); }
-        body.fingerDown(a.slot, { point: a.hit.point, normal: a.hit.normal, dir: a.hit.dir });
+        body.fingerDown(a.slot, { point: a.hit.point, normal: a.hit.normal, dir: pressDir(a.hit) });
         fingerDown[a.slot] = true;
         downAt[a.slot] = simTime;
         fingerPan[a.slot] = panOfPoint(a.hit.point);

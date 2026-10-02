@@ -33,7 +33,8 @@ void main() {
   float ndv = clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0);
   float hot = pow(ndv, 2.4);
   float mott = 0.84 + 0.3 * whNoise3(vL * 2.6 + vec3(0.0, uTime * 0.35, uTime * 0.2));
-  vec3 c = mix(uColor, uHot, 0.3 * hot * hot) * (0.5 + 0.7 * hot) * mott * uIntensity;
+  float soft = 0.25 + 0.75 * smoothstep(0.0, 0.6, ndv);   // no hard silhouette: matters most where nothing blurs it (low tier)
+  vec3 c = mix(uColor, uHot, 0.3 * hot * hot) * (0.5 + 0.7 * hot) * mott * uIntensity * soft;
   gl_FragColor = vec4(c, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -76,6 +77,7 @@ export class Core {
   private readonly radius: number;
   private readonly glow: number;
   private comp = 0;
+  private lite = false;
 
   constructor(genome: Genome, palette: JellyPalette, scale: number) {
     this.radius = 0.17 * scale;
@@ -103,6 +105,9 @@ export class Core {
     this.group.add(this.blob, this.halo);
   }
 
+  /** Low tier: no opaque blob (nothing refracts it, so it would read as a flat coin); the soft halo + the jelly's own glow carry it. */
+  setLite(on: boolean): void { this.lite = on; this.blob.visible = !on; }
+
   /** `squeeze` is the renderer's 0..1 compression (global metric or deepest local dent). */
   update(body: SoftBodyLike, dt: number, time: number, squeeze: number): void {
     const c = body.center, q = body.frame;
@@ -117,7 +122,7 @@ export class Core {
     this.amount = (1.2 + 0.9 * this.glow) * (1 + 1.5 * k) * pulse;
     this.blobMat.uniforms.uIntensity.value = (1.0 + 1.2 * this.glow) * (1 + 1.4 * k) * pulse;
     this.blobMat.uniforms.uTime.value = time;
-    this.haloMat.uniforms.uStrength.value = (0.28 + 0.4 * this.glow) * (1 + 0.7 * k);
+    this.haloMat.uniforms.uStrength.value = (0.28 + 0.4 * this.glow) * (1 + 0.7 * k) * (this.lite ? 1.5 : 1);
     this.haloMat.uniforms.uSize.value = this.radius * (3.4 + 0.3 * k);
   }
 

@@ -17,6 +17,7 @@ import type { QualityTier } from '../contracts.ts';
 import type { JellyPalette, Rgb } from './oklch.ts';
 import { NOISE_GLSL } from './shaderlib.ts';
 import { KEY_DIR, RIM_DIR, type EnvHub } from './env.ts';
+import { TIERS } from './quality.ts';
 
 const PATTERN_ID: Record<Genome['pattern'], number> = { plain: 0, speckle: 1, swirl: 2, bands: 3 };
 
@@ -139,9 +140,10 @@ const EMISSIVE_STAGE = /* glsl */`
   totalEmissiveRadiance += jRim + jScat + jCore;
   #ifdef WH_LOW
     // low tier: no transmission target, so the body carries its own colour (a base glow) and is only lightly see-through
+    totalDiffuse *= 0.6;
     totalEmissiveRadiance += diffuseColor.rgb * (0.2 + 0.2 * jWrap);
     float jSpec = dot(totalSpecular, vec3(0.3333));
-    diffuseColor.a = clamp(mix(uAlphaBase, 1.0, jFres) + jSpec * 0.7, 0.0, 1.0);
+    diffuseColor.a = clamp(mix(uAlphaBase, 1.0, jFres) + jSpec * 0.45, 0.0, 1.0);
   #endif
 }
 vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
@@ -186,10 +188,10 @@ export class JellyMaterials {
     const g = this.genome, p = this.palette, t = g.translucency, gl = g.gloss;
     const m = new THREE.MeshPhysicalMaterial({
       color: lin(p.body),
-      roughness: lerp(0.42, 0.14, gl),
+      roughness: lerp(0.58, 0.32, gl),   // frosted body (blurs what refracts through it); the clearcoat carries the gloss
       metalness: 0,
       clearcoat: 0.45 + 0.55 * gl,
-      clearcoatRoughness: lerp(0.3, 0.03, gl),
+      clearcoatRoughness: lerp(0.3, 0.07, gl),
       ior: 1.42,
       specularIntensity: 1,
       side: THREE.FrontSide,
@@ -201,6 +203,7 @@ export class JellyMaterials {
       m.transparent = true;
       m.depthWrite = false;
       m.transmission = 0;
+      m.clearcoatRoughness = Math.max(m.clearcoatRoughness, 0.16);   // soften the softbox reflection: it is the only thing that shows through here
     } else {
       m.transmission = lerp(0.62, 1, t);
       m.thickness = (0.45 + 0.35 * t) * this.scale;
@@ -229,7 +232,7 @@ export class JellyMaterials {
 
   /** The material for a tier (built lazily; both variants share one set of uniforms). */
   get(tier: QualityTier): THREE.MeshPhysicalMaterial {
-    if (tier === 'low') return (this.low ??= this.make(true));
+    if (!TIERS[tier].transmission) return (this.low ??= this.make(true));
     return (this.full ??= this.make(false));
   }
 

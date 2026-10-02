@@ -791,7 +791,8 @@ function secAffinity(onS: Result, offS: Result, longs: Array<[string, Result, Re
 
 function secLong(solo: Result, trade: Result): void {
   header(`K. DAYS TO COMPLETE (no churn, ${LONG} days). "WILLING TRADERS" = players who would use trading; the same people are compared solo vs with trade`);
-  const keys: Array<[string, (p: Player) => number]> = [['Common row (16)', (p) => p.rowDay[0]], ['Uncommon row (12)', (p) => p.rowDay[1]], ['Rare row (10)', (p) => p.rowDay[2]], ['Epic row (6)', (p) => p.rowDay[3]], ['Legendary row (4)', (p) => p.rowDay[4]], ['Mythic row (2)', (p) => p.rowDay[5]], ['ALL 50', (p) => p.fullDay]];
+  const keys: Array<[string, (p: Player) => number]> = TIER_NAMES.map((n, t) => [`${n} row (${solo.P.tierCount[t]})`, (p: Player): number => p.rowDay[t]] as [string, (p: Player) => number]);
+  keys.push([`ALL ${solo.cat.n}`, (p: Player): number => p.fullDay]);
   const nm = (t: number): string => (t < 0 ? 'ALL PLAYERS' : PLAYER_TYPES[t].toUpperCase());
   for (const [tier, tr] of [[1, true], [1, false], [0, true], [2, true], [-1, true]] as Array<[number, boolean]>) {
     const sel = (r: Result): Player[] => r.players.filter((p) => (tier < 0 || p.tier === tier) && p.trader === tr);
@@ -841,14 +842,13 @@ function secExact(Ms: number[]): void {
   header('M. COST OF ONE SPECIFIC SPECIES: by drop, by merge only, by trade');
   const cat = buildCatalog(BASE.tierCount);
   const trials = QUICK ? 100 : 250;
-  console.log(lpad('target tier', 12) + '| by DROP (capsules) | ' + Ms.map((m) => `MERGE-ONLY M=${m}: capsules med (mean)  merges med  x-drop`).join(' | ') + ' | M=2 + "guaranteed-new" pity (rejected): capsules med  x-drop');
+  console.log(lpad('target tier', 12) + '| by DROP (capsules) | ' + Ms.map((m) => `MERGE-ONLY M=${m}: capsules med (mean)  merges med  x-drop`).join(' | '));
   for (let t = 0; t < NT; t++) {
     const per = BASE.tierOdds[t] / BASE.tierCount[t];
     const cap = t >= 4 ? 60000 : 25000;
     const tr = t >= 4 ? Math.round(trials / 2) : trials;
     const cells = Ms.map((m) => { const a = farmer({ ...BASE, mergeInputs: m }, cat, t, tr, cap); return `${pad(f1(a.capsulesMed) + ' (' + f1(a.capsulesMean) + ')', 22)}  ${pad(f1(a.mergesMed), 9)}  ${pad(f1(a.capsulesMean * per) + 'x', 7)}${a.finished < 0.9 ? ' [' + pc0(a.finished) + ' done]' : ''}`; });
-    const pn = farmer({ ...BASE, pityNew: 3 }, cat, t, tr, cap);
-    console.log(`${lpad(TIER_NAMES[t], 12)}| ${pad(f1(1 / per), 18)} | ${cells.join(' | ')} | ${pad(f1(pn.capsulesMed), 8)}  ${f1(pn.capsulesMean * per)}x`);
+    console.log(`${lpad(TIER_NAMES[t], 12)}| ${pad(f1(1 / per), 18)} | ${cells.join(' | ')}`);
   }
   console.log('by TRADE: one swap, paid with a spare of the same tier the player already holds (0 extra capsules) if a partner with the right spare exists (section L: how often that is how Epic+ species arrived).');
 }
@@ -896,10 +896,10 @@ if (want('merge')) {
     rules('A. floor only (never below the inputs, no tier-up)', { pUp: [0, 0, 0, 0, 0, 0], unownedW: 1, pityUp: 0, pityNew: 0, rowDoneBoost: 1 }),
     rules('B. + tier-up chance 30/25/20/15/10', { unownedW: 1, pityUp: 0, pityNew: 0, rowDoneBoost: 1 }),
     rules('C. + unowned species weighted x1.5', { pityUp: 0, pityNew: 0, rowDoneBoost: 1 }),
-    rules('D. + tier-up pity (every 4th dud merge moves up)', { pityNew: 0, rowDoneBoost: 1 }),
+    rules('D. + tier-up pity (after 4 dud merges in a row from a tier, the next tiers up)', { pityNew: 0, rowDoneBoost: 1 }),
     rules('E. + completed-row boost x2 on tier-up (capped at 60%)', { pityNew: 0, rowDoneBoost: 2, rowDoneCap: 0.6 }),
     rules('F. a COMPLETED row always tiers up  [CHOSEN]', { pityNew: 0 }),
-    rules('G. F + guaranteed-NEW pity after 3 duds (rejected: makes merge exact)', { pityNew: 3 }),
+    rules('G. F + guaranteed-NEW pity after 3 duds (adds nothing once F is on: not adopted)', { pityNew: 3 }),
   ]);
 }
 if (want('supply')) secSupply(mTrade, mNoMerge, S({ trade: true, bulkMerge: true }, 'm bulk'));
@@ -995,21 +995,21 @@ if (want('catalog')) {
   const sensN = Math.min(BASE.nPlayers, 2000);
   const pp = makePop({ ...BASE, nPlayers: sensN });
   const cands: Array<[string, number[], number[]]> = [
-    ['16/12/10/6/4/2  odds 50/25/14/7/3/1', [16, 12, 10, 6, 4, 2], [0.50, 0.25, 0.14, 0.07, 0.03, 0.01]],
-    ['14/11/10/7/5/3  odds 74/15/6/2.8/1.4/.6', [14, 11, 10, 7, 5, 3], [0.74, 0.15, 0.06, 0.028, 0.014, 0.008]],
-    ['14/11/10/7/5/3  odds 68/18/8/3.5/1.7/.8', [14, 11, 10, 7, 5, 3], [0.68, 0.18, 0.08, 0.035, 0.017, 0.008]],
-    ['14/11/10/7/5/3  odds 80/11/5/2.4/1.2/.4', [14, 11, 10, 7, 5, 3], [0.80, 0.11, 0.05, 0.024, 0.012, 0.004]],
-    ['12/10/10/8/6/4  odds 76/13/6/2.8/1.5/.7', [12, 10, 10, 8, 6, 4], [0.76, 0.13, 0.06, 0.028, 0.015, 0.007]],
+    ['CHOSEN 14/11/10/7/5/3 odds 76.3/13/6/2.8/1.4/.5', [14, 11, 10, 7, 5, 3], [0.763, 0.13, 0.06, 0.028, 0.014, 0.005]],
+    ['16/12/10/6/4/2  odds 50/25/14/7/3/1 (first guess)', [16, 12, 10, 6, 4, 2], [0.50, 0.25, 0.14, 0.07, 0.03, 0.01]],
+    ['14/11/10/7/5/3  odds 68/18/8/3.5/1.7/.8 (richer top)', [14, 11, 10, 7, 5, 3], [0.68, 0.18, 0.08, 0.035, 0.017, 0.008]],
+    ['14/11/10/7/5/3  odds 80/11/5/2.4/1.2/.4 (poorer top)', [14, 11, 10, 7, 5, 3], [0.80, 0.11, 0.05, 0.024, 0.012, 0.004]],
     ['13/11/10/8/5/3  odds 78/12/5.5/2.5/1.4/.6', [13, 11, 10, 8, 5, 3], [0.78, 0.12, 0.055, 0.025, 0.014, 0.006]],
+    ['12/10/10/8/6/4  odds 76/13/6/2.8/1.5/.7', [12, 10, 10, 8, 6, 4], [0.76, 0.13, 0.06, 0.028, 0.015, 0.007]],
   ];
-  console.log(lpad('catalog', 44) + '| all-50 done solo -> trade | p50 day solo / trade | Epic row p50 solo / trade | Mythic row p50 solo/trade | 1st Rare/Epic/Leg/Mythic median day');
+  console.log(lpad('catalog', 54) + '| all-50 done solo -> trade | p50 day solo / trade | Epic row p50 solo / trade | Mythic row p50 solo/trade | 1st Rare/Epic/Leg/Mythic median day');
   for (const [name, counts, odds] of cands) {
     const common = { nPlayers: sensN, days: LONG, churn: [0, 0, 0], snapshotDays: [] as number[], tierCount: counts, tierOdds: odds };
     const s = runScenario({ ...BASE, ...common, trade: false }, pp, name), t = runScenario({ ...BASE, ...common, trade: true }, pp, name);
     const reg = (r: Result): Player[] => r.players.filter((p) => p.tier === 1 && p.trader);
     const two = (k: (p: Player) => number): string => `${medDay(reg(s), k, LONG)} / ${medDay(reg(t), k, LONG)}`;
     const ft = [2, 3, 4, 5].map((q) => f1(median(s.players.filter((p) => p.tier === 1 && p.firstTier[q] > 0).map((p) => p.firstTier[q])))).join('/');
-    console.log(`${lpad(name, 44)}| ${pad(pc0(doneBy(reg(s), LONG, (p) => p.fullDay)) + ' -> ' + pc0(doneBy(reg(t), LONG, (p) => p.fullDay)), 25)} | ${pad(two((p) => p.fullDay), 20)} | ${pad(two((p) => p.rowDay[3]), 25)} | ${pad(two((p) => p.rowDay[5]), 25)} | ${ft}`);
+    console.log(`${lpad(name, 54)}| ${pad(pc0(doneBy(reg(s), LONG, (p) => p.fullDay)) + ' -> ' + pc0(doneBy(reg(t), LONG, (p) => p.fullDay)), 25)} | ${pad(two((p) => p.fullDay), 20)} | ${pad(two((p) => p.rowDay[3]), 25)} | ${pad(two((p) => p.rowDay[5]), 25)} | ${ft}`);
   }
 }
 

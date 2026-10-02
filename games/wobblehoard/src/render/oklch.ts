@@ -67,7 +67,7 @@ export function genomePalette(g: Genome): JellyPalette {
   const attenuation = oklchToLinear(Math.max(0.3, L - 0.16 + 0.06 * yg), Math.min(0.32, C * 1.25 + 0.03), h - 4);
   const blush = oklchToLinear(Math.max(0.3, L - 0.07), Math.min(0.33, C * 1.45 + 0.03), h - 14);
   const pale = oklchToLinear(Math.min(0.97, L + 0.1), C * 0.35, h + 6);
-  const patA = oklchToLinear(Math.min(0.95, L + 0.06), Math.min(0.3, C * 1.1), h + 42);
+  const patA = oklchToLinear(Math.min(0.95, L + 0.09), Math.min(0.3, C * 1.15), h + 52);
   const patB = oklchToLinear(0.97, 0.035, h + 20);
   const glow = oklchToLinear(Math.min(0.92, L + 0.05), Math.min(0.28, C * 1.2), h - 6);
   // Render hue of the core: keep it within +-110 degrees of the body hue. A near-complementary core would be absorbed by

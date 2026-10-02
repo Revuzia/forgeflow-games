@@ -2,11 +2,12 @@
 // (cyan = compressed, red = stretched), a dim wireframe ghost of the rest shape, the table, and the finger-tip spheres.
 // It is driven by a scripted scenario from the URL (?scn=side_poke|hold_squash|pull_lobe|peak_flop|float_shove|pinch)
 // and steps the sim with a FIXED dt of 1/60 s (no wall clock), so the filmstrips are reproducible.
-// Extra URL params: ?p=<json SoftParams override> ?g=<genome seed or g1.code> ?detail=<3|4>.
+// Extra URL params: ?p=<json SoftParams override> ?g=<genome seed or g1.code> ?gf= ?gb= ?gs= ?gz= (firmness, bounce,
+// stretch, size overrides) ?detail=<3|4> ?px=<press x offset for hold_squash>.
 // window.__PV__ is the harness hook (see bottom).
 import * as THREE from 'three';
 import { SoftBody } from '../../src/physics/softbody.ts';
-import { genomeFromParam } from '../../src/core/genome.ts';
+import { genomeFromParam, quantizeGenome } from '../../src/core/genome.ts';
 import type { V3 } from '../../src/contracts.ts';
 
 type Ctx = { n: Record<string, number>; hit: Record<string, V3 | null>; vtx: number; R: number };
@@ -75,7 +76,7 @@ const SCENARIOS: Record<string, Scenario> = {
     title: 'peak flop: side shove of the swirl-peak (0.30-0.42 s)',
     frames: [0.28, 0.36, 0.42, 0.46, 0.5, 0.56, 0.62, 0.7, 0.8, 0.95, 1.15, 1.5],
     tick(t, b, c) {
-      if (t >= 0.3 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(-3, 0.86, 0), v3(1, 0, 0)); b.fingerPressure(0, 0.7); }
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(-3, 0.86, 0), v3(1, 0, 0)); b.fingerPressure(0, 1); }
       if (t >= 0.42 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
     },
   },
@@ -114,7 +115,14 @@ interface LogRow { t: number; comp: number; rate: number; stretch: number; vol: 
 const q = new URLSearchParams(location.search);
 const scnName = q.get('scn') ?? 'side_poke';
 const sc = SCENARIOS[scnName] ?? SCENARIOS.side_poke;
-const genome = genomeFromParam(q.get('g'));
+let genome = genomeFromParam(q.get('g'));
+// ?gf= ?gb= ?gs= ?gz= override firmness / bounce / stretch / size (0..1) for the genome-extremes filmstrips
+{
+  const ov = { ...genome };
+  const take = (k: string, key: 'firmness' | 'bounce' | 'stretch' | 'size'): void => { const v = q.get(k); if (v !== null && Number.isFinite(Number(v))) ov[key] = Number(v); };
+  take('gf', 'firmness'); take('gb', 'bounce'); take('gs', 'stretch'); take('gz', 'size');
+  genome = quantizeGenome(ov);
+}
 let params: Record<string, number> | undefined;
 try { const raw = q.get('p'); if (raw) params = JSON.parse(raw); } catch { params = undefined; }
 const detail = Number(q.get('detail') ?? 3);

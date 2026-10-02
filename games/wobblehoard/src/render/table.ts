@@ -51,6 +51,7 @@ const FELT_PARS = /* glsl */`
 varying vec3 vWP;
 uniform float uMatR;
 uniform float uFibre;
+uniform float uOctaves;
 uniform float uStitch;
 uniform float uVigIn;
 uniform float uVigOut;
@@ -83,6 +84,7 @@ const FELT_COLOR = /* glsl */`
   float ang = whHash21(floor(fp * 5.0)) * 6.2832;
   vec2 rp = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * fp;
   for (int o = 0; o < 4; o++) {
+    if (float(o) >= uOctaves) break;
     float fq = o == 0 ? 40.0 : o == 1 ? 110.0 : o == 2 ? 300.0 : 800.0;
     float px = 1.0 / (fq * fw);
     float wgt = smoothstep(1.2, 2.4, px) * (1.0 - smoothstep(6.0, 12.0, px));
@@ -116,12 +118,14 @@ const FELT_FOG = /* glsl */`
 
 interface FeltOpts { env: number; color: number; roughness: number; fibre: number; stitch: number; vigIn: number; vigOut: number; matR: number; fogCol: THREE.Color }
 
+const feltUniforms = new WeakMap<THREE.Material, { uOctaves: { value: number }; uFibre: { value: number } }>();
+
 function makeFelt(o: FeltOpts, hub: EnvHub): THREE.MeshPhysicalMaterial {
   // physical, only for specularIntensity: felt scatters, it must not mirror the cyan rim at grazing angles
   const mat = new THREE.MeshPhysicalMaterial({ color: o.color, roughness: o.roughness, metalness: 0, specularIntensity: 0.1 });
   hub.apply(mat, o.env);
   const u = {
-    uMatR: { value: o.matR }, uFibre: { value: o.fibre }, uStitch: { value: o.stitch },
+    uMatR: { value: o.matR }, uFibre: { value: o.fibre }, uOctaves: { value: 4 }, uStitch: { value: o.stitch },
     uVigIn: { value: o.vigIn }, uVigOut: { value: o.vigOut },
     uStitchCol: { value: new THREE.Color(PALETTE.dusk).multiplyScalar(1.1) },
     uFogCol: { value: o.fogCol }, uFogNear: { value: 5 }, uFogFar: { value: 22 },
@@ -138,6 +142,7 @@ function makeFelt(o: FeltOpts, hub: EnvHub): THREE.MeshPhysicalMaterial {
       .replace('#include <fog_fragment>', FELT_FOG);
   };
   mat.customProgramCacheKey = () => 'wh-felt-v1';
+  feltUniforms.set(mat, u);
   return mat;
 }
 
@@ -175,8 +180,9 @@ uniform float uSoft;   // 1 = tight contact shadow, 0 = very soft
 void main() {
   vec2 p = vUv * 2.0 - 1.0;
   float r2 = dot(p, p);
-  float tight = exp(-r2 * mix(3.0, 11.0, uSoft)) * 0.62;
-  float wide = exp(-r2 * mix(1.6, 3.2, uSoft)) * 0.42;
+  float rr = sqrt(r2);
+  float tight = exp(-pow(rr / mix(0.55, 0.8, uSoft), 4.0)) * 0.85;     // dense contact shadow that ends just outside the body
+  float wide = exp(-r2 * mix(1.6, 3.2, uSoft)) * 0.3;
   float edge = 1.0 - smoothstep(0.7, 1.0, sqrt(r2));
   float a = clamp((tight + wide) * uStrength * edge, 0.0, 0.92);
   gl_FragColor = vec4(0.012, 0.004, 0.035, a);
@@ -239,11 +245,11 @@ export class Table {
       uHorizon: { value: new THREE.Color(PALETTE.dusk).multiplyScalar(0.62) },
       uGlowWarm: { value: new THREE.Color(PALETTE.amber).multiplyScalar(0.14) }, uGlowCool: { value: new THREE.Color(PALETTE.lagoon).multiplyScalar(0.03) },
     };
-    this.skyMat = new THREE.ShaderMaterial({ vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms: skyU, side: THREE.BackSide, depthTest: false, depthWrite: false, toneMapped: false, fog: false });
+    this.skyMat = new THREE.ShaderMaterial({ vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms: skyU, side: THREE.BackSide, depthTest: true, depthWrite: false, toneMapped: false, fog: false });
     const skyGeo = new THREE.SphereGeometry(1, 32, 20);
     this.geos.push(skyGeo);
     this.sky = new THREE.Mesh(skyGeo, this.skyMat);
-    this.sky.renderOrder = -100;
+    this.sky.renderOrder = 100;   // last of the opaque list, z = far: it only fills the pixels nothing else covered
     this.sky.frustumCulled = false;
     this.sky.scale.setScalar(90);
 
@@ -301,6 +307,8 @@ export class Table {
   }
 
   setPoolColor(c: Rgb): void { this.poolMat.uniforms.uColor.value.setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace); }
+  /** Low tier: two grain octaves instead of four (the felt covers half the screen). */
+  setLite(on: boolean): void { const u = feltUniforms.get(this.feltMat); if (u) u.uOctaves.value = on ? 2 : 4; }
   setFloat(on: boolean): void { this.floatTarget = on ? 1 : 0; }
   setFloatImmediate(on: boolean): void { this.floatTarget = on ? 1 : 0; this.floatT = this.floatTarget; }
 
@@ -313,9 +321,8 @@ export class Table {
     const h = Math.max(0, f.lowY);
     const lift = 1 / (1 + h * 1.6);                                  // body above the table: shadow thins out
     const fl = this.floatT;
-    const rad = Math.max(f.rx, f.rz);
     // contact shadow: a little larger than the footprint, much softer and smaller-contrast in float mode
-    const sS = 1.18 + 0.55 * fl + 0.45 * h;
+    const sS = 1.3 + 0.5 * fl + 0.45 * h;
     this.shadow.position.set(f.cx, 0.002, f.cz);
     this.shadow.scale.set(f.rx * sS + 0.05, 1, f.rz * sS + 0.05);
     this.shadowMat.uniforms.uStrength.value = (0.95 - 0.38 * fl) * lift;
@@ -328,7 +335,6 @@ export class Table {
     this.pool.scale.set(f.rx * pS + 0.1, 1, f.rz * pS + 0.1);
     this.poolMat.uniforms.uStrength.value = this.poolK * (1 - 0.5 * fl) * (0.85 / (1 + h * 0.9));
     this.poolMat.uniforms.uRing.value = 1 - 0.55 * fl;
-    void rad;
   }
 
   dispose(): void {
