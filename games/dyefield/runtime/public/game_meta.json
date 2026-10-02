@@ -5,6 +5,7 @@
   "genre": "action",
   "sub_genre": "turf-paint arena shooter",
   "difficulty": "medium",
+  "mobile_support": "full",
   "controls_keyboard": "WASD move · mouse look (click to capture) · LMB fire / roll / charge · RMB AIM · SHIFT slick & drink on your color · SPACE jump · E JELLY CHARGE · Q special · ESC pause · F1 debug · all keys remappable in SETTINGS",
   "tags": [
     "3d",

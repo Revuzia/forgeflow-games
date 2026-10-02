@@ -603,6 +603,15 @@ def insert_game_metadata(slug: str, metadata: dict):
     # unlike the thumbnail above, which hashes its own bytes because a cover
     # image usually does NOT change between deploys.
     # It also repairs updated_at as real data for "recently updated" ordering.
+    # 2026-10-01 MOBILE LABEL: the portal's "Desktop only" / touch chips read games.mobile_support
+    # (src/lib/mobile.ts, fail-closed: NULL = desktop only), but nothing in the pipeline ever wrote it,
+    # so a game that gained real touch controls (DYEFIELD 1.3.0) still showed "Desktop only". A game
+    # declares it in game_meta.json ("full" | "partial" | "none"); sent ONLY when declared and valid,
+    # so a deploy never clears a value set by hand for games that do not declare it.
+    _ms = metadata.get("mobile_support")
+    if _ms in ("full", "partial", "none"):
+        row["mobile_support"] = _ms
+
     import datetime as _dt
     _now = _dt.datetime.now(_dt.timezone.utc)
     row["build_version"] = metadata.get("build_version") or _now.strftime("%Y%m%dT%H%M%SZ")
