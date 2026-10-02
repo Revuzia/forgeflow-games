@@ -1,0 +1,114 @@
+<!doctype html><meta charset="utf-8"><title>BLOCKTOOTH bridge host</title>
+<style>
+html,body{margin:0;background:#111;color:#cfc;font:12px/1.35 Consolas,monospace}
+iframe{width:100%;height:86vh;border:0;display:block;background:#000}
+#bar{padding:4px 8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+#bar button{font:inherit}
+#log{height:calc(14vh - 30px);overflow:auto;padding:0 8px;white-space:pre;color:#9c9}
+</style>
+<body>
+<div id="bar">
+  <b>BLOCKTOOTH portal stand-in</b>
+  <span>mode: <b id="mode"></b></span>
+  <button id="bIn">sign in (push identity)</button>
+  <button id="bOut">sign out (push identity)</button>
+  <span id="count"></span>
+</div>
+<script>
+/* Stands in for forgeflowgames.com (src/lib/gameBridge.ts) for BLOCKTOOTH, Phase A.
+   Models the portal bridge as ONLINE_PLAN.md A.1.3 / platform.md 10.1 specify it, NOT the live portal of today.
+
+   Query params (all optional):
+     mode=signed|guest|silent|noload signed: whoami -> identity{signedIn:true}; guest: identity{signedIn:false};
+                                silent: never answers whoami / load / run_result (the pre-Phase-A live portal)
+                                noload: signed, but forgeflow:load is never answered (write-lock negative control)
+     game=<url>                 the iframe src (default ../../index.html?dev=1&cine=0, i.e. the vite dev server)
+     sandbox=<tokens>           iframe sandbox (default = the portal's GamePlayer.tsx string; "none" = no sandbox attr)
+     allow=<features>           iframe allow   (default = the portal's GamePlayer.tsx string)
+     cloud=<json>               what forgeflow:load returns in signed mode (default null = no cloud save yet)
+
+   window.__BRIDGE (read by portalcheck.py):
+     log[]      every message: {i, t, dir:'in'|'out', type, fromGame, origin, msg}
+     setMode(m) switch mode; signed/guest also PUSH forgeflow:identity (no _reqId) like onAuthStateChange
+     cloud      the stored cloud save (forgeflow:save replaces it, as the portal's merge would for one game)
+   No network, no keys: every reply is canned.                                                              */
+const Q = new URLSearchParams(location.search);
+const PORTAL_SANDBOX = 'allow-scripts allow-same-origin allow-pointer-lock allow-popups allow-modals allow-forms';
+const PORTAL_ALLOW = 'autoplay; fullscreen; gamepad; pointer-lock';
+const USER = { id: '00000000-0000-4000-8000-00000000b7b7', username: 'bt_tester', avatar_url: null, level: 3 };
+const B = window.__BRIDGE = {
+  mode: Q.get('mode') || 'signed',
+  log: [], t0: performance.now(),
+  cloud: (() => { try { return JSON.parse(Q.get('cloud') || 'null'); } catch (_) { return null; } })(),
+  loadsAnswered: 0,
+  ackData: { new_bests: ['tonnage', 'kills'], board_rank: { clear: 7, tonnage: 7 } },
+  setMode(m) { B.mode = m; paint(); if (m === 'signed' || m === 'guest') send(identity(null)); },
+};
+const frame = document.createElement('iframe');
+function identity(reqId) {
+  const signed = B.mode === 'signed' || B.mode === 'noload';
+  const o = { type: 'forgeflow:identity', signedIn: signed, id: signed ? USER.id : null,
+              username: signed ? USER.username : null, avatar_url: signed ? USER.avatar_url : null, level: signed ? USER.level : 0 };
+  if (reqId !== null && reqId !== undefined) o._reqId = reqId;
+  return o;
+}
+function clone(v) { try { return JSON.parse(JSON.stringify(v)); } catch (_) { return String(v); } }
+function rec(dir, msg, e) {
+  B.log.push({ i: B.log.length, t: Math.round(performance.now() - B.t0), dir, type: msg && msg.type,
+               fromGame: e ? e.source === frame.contentWindow : true, origin: e ? e.origin : null, msg: clone(msg) });
+  paint();
+  const line = (dir === 'in' ? '<- ' : '-> ') + (msg && msg.type) + ' ' + JSON.stringify(clone(msg)).slice(0, 220);
+  const L = document.getElementById('log'); if (L) { L.textContent += line + '\n'; L.scrollTop = 1e9; }
+}
+function send(msg, target) {
+  const w = target || frame.contentWindow; if (!w) return;
+  rec('out', msg, null);
+  w.postMessage(msg, '*');
+}
+function paint() {
+  const m = document.getElementById('mode'); if (m) m.textContent = B.mode;
+  const c = document.getElementById('count'); if (c) c.textContent = B.log.filter((x) => x.dir === 'in').length + ' messages in';
+}
+addEventListener('message', (e) => {
+  const m = e.data;
+  if (!m || typeof m !== 'object' || typeof m.type !== 'string' || !m.type.startsWith('forgeflow:')) return;
+  rec('in', m, e);
+  if (e.source !== frame.contentWindow) return;          // the portal only serves its own embedded game frame
+  if (B.mode === 'silent') return;
+  const reply = (o) => send(o, e.source);
+  switch (m.type) {
+    case 'forgeflow:whoami':
+      reply(identity(m._reqId === undefined ? null : m._reqId));   // noload answers as signed
+      break;
+    case 'forgeflow:load':
+      // gameBridge.ts: a guest's load answers null (no session); signed answers the stored row
+      if (B.mode === 'noload') break;                     // the cloud read never answers: the game must never save
+      B.loadsAnswered++;
+      reply({ type: 'forgeflow:save_loaded', data: B.mode === 'signed' ? clone(B.cloud) : null, _reqId: m._reqId });
+      break;
+    case 'forgeflow:save':
+      if (B.mode === 'signed' || B.mode === 'noload') B.cloud = clone(m.data);
+      break;
+    case 'forgeflow:run_result':     // A-PORTAL contract (NOTES.md): {_reqId, ok, data} | {_reqId, ok:false, error, data:{error}}
+      if (B.mode === 'signed' || B.mode === 'noload') reply({ type: 'forgeflow:run_result_ack', _reqId: m._reqId, ok: true, data: clone(B.ackData) });
+      else reply({ type: 'forgeflow:run_result_ack', _reqId: m._reqId, ok: false, error: 'not_signed_in', data: { error: 'not_signed_in' } });
+      break;
+    case 'forgeflow:vs_result':
+      if (B.mode === 'signed') reply({ type: 'forgeflow:vs_result_ack', _reqId: m._reqId, ok: true, data: { confirmed: false } });
+      else reply({ type: 'forgeflow:vs_result_ack', _reqId: m._reqId, ok: false, error: 'not_signed_in', data: { error: 'not_signed_in' } });
+      break;
+    default: break;                                       // score / achievement / game_over: recorded only
+  }
+});
+document.getElementById('bIn').onclick = () => B.setMode('signed');
+document.getElementById('bOut').onclick = () => B.setMode('guest');
+const sb = Q.has('sandbox') ? Q.get('sandbox') : PORTAL_SANDBOX;
+if (sb !== 'none') frame.setAttribute('sandbox', sb);
+frame.setAttribute('allow', Q.has('allow') ? Q.get('allow') : PORTAL_ALLOW);
+frame.title = 'BLOCKTOOTH';
+frame.src = Q.get('game') || '../../index.html?dev=1&cine=0';
+document.body.appendChild(frame);
+const L = document.createElement('div'); L.id = 'log'; document.body.appendChild(L);
+window.__frame = frame;
+paint();
+</script>

@@ -123,6 +123,8 @@ export class Broadcast {
   private readonly tabActs: HTMLDivElement;
   private readonly keepBtn: HTMLButtonElement;
   private readonly recordClip: HTMLDivElement;
+  /** ONLINE_PLAN A.1.5: forgeflowgames.com account line under the buttons */
+  private readonly accountLine: HTMLDivElement;
   /** the buttons shown this time, in row order (KEEP GOING first when offered) */
   private tabItems: TabloidChoice[] = TABLOID_BASE.slice();
   private tabSel = 0;
@@ -236,6 +238,17 @@ export class Broadcast {
     // v2 NEW ON THE RECORD clipping (TabloidExtra.newGoals), pinned under the buttons
     this.recordClip = div('bt2-onrecord bt-hidden', acts);
     this.recordClip.dataset.v2 = 'on-record';
+    // ONLINE_PLAN A.1.5: forgeflowgames.com account line (signed in / guest / board rank); hidden standalone
+    this.accountLine = div('bt-tab-account bt-hidden', acts);
+    this.accountLine.dataset.portal = 'account';
+  }
+
+  /** ONLINE_PLAN A.1.5: the end screen's account line (null hides it). Text is set with textContent only. */
+  setAccountLine(line: { tone: 'guest' | 'signed' | 'filed'; text: string } | null): void {
+    const L = this.accountLine;
+    L.classList.toggle('bt-hidden', !line);
+    L.dataset.tone = line ? line.tone : '';
+    L.textContent = line ? line.text : '';
   }
 
   // ─────────────────────────────── slate ───────────────────────────────

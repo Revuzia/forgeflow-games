@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../src/lib/supabase";
 import { getProfile, getXPProgress, type UserProfile } from "../../src/lib/auth";
 import type { User } from "@supabase/supabase-js";
+import { GAME_PROFILE_CARDS } from "../../src/components/game/StatsPanel";
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -148,6 +149,10 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+
+        {/* 2026-10-01 — per-game stat cards (BLOCKTOOTH first). Each card
+            renders nothing until the player has filed a run for that game. */}
+        {user && GAME_PROFILE_CARDS.map(({ slug, Card }) => <Card key={slug} userId={user.id} />)}
       </div>
     </div>
   );

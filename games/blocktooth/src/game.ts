@@ -60,7 +60,8 @@ import { MarkerView } from './render/markerview.ts';
 import { CineCam } from './render/cinecam.ts';
 
 import { Hud } from './ui/hud.ts';
-import { Broadcast, runFigures } from './ui/broadcast.ts';
+import { Broadcast, onAirSeconds, runFigures } from './ui/broadcast.ts';
+import { PortalClient, buildVersionFromUrl, mergeBests, newRunNonce, type RunFiling, type RunResultPayload } from './net/portal.ts';   // ONLINE_PLAN A.1.5 (lane A-GAME)
 import { BossBar } from './ui/bossbar.ts';
 import { SelectScreen } from './ui/select.ts';
 import { DraftScreen } from './ui/draft.ts';
@@ -532,6 +533,9 @@ export class App {
   private goalsAcc = 0;
   /** v2 test surface (cheat.endless): the next clear tabloid picks KEEP GOING by itself, once */
   autoEndlessOnce = false;
+  /** ONLINE_PLAN A.1.5: the forgeflowgames.com bridge client (no-op standalone / guest) + this run's filing */
+  readonly portal: PortalClient;
+  private runReport: { w: World; nonce: string; clearS: number | null; filing: RunFiling | null } | null = null;
 
   // error accounting
   private frameErrStreak = 0;
@@ -632,6 +636,15 @@ export class App {
     }
     this.applySettings(this.settings, false);
     this.installDomHooks();
+
+    // ONLINE_PLAN A.1.5: portal bridge. `?meta=` harness runs keep an in-memory profile -> no cloud profile.
+    this.portal = new PortalClient({
+      cloudProfile: !(params.dev && params.meta),
+      getProfile: () => this._profile,
+      getBests: () => loadBest(),
+      adopt: (p, b) => this.adoptCloudProfile(p, b),
+      onChange: () => this.refreshAccountLine(),
+    });
   }
 
   // ─────────────────────────────── public surface (main.ts, testsurface.ts) ───────────────────────────────
@@ -653,6 +666,7 @@ export class App {
 
   /** Boot: start the frame loop, then the title (or ?autostart straight into a run). */
   async boot(): Promise<void> {
+    this.portal.start();                                   // ONLINE_PLAN A.1.5: whoami (no-op outside the portal)
     this.splash.show(LOADING.boot, 0.1);
     this.loop.start();
     this.splash.set(LOADING.desk, 0.6);
@@ -1368,7 +1382,9 @@ export class App {
       for (const id of out.newly) {
         if (!this.runNewGoals.includes(id)) this.runNewGoals.push(id);
         this.toastGoal(id);
+        this.portal.achievement(id);                    // ONLINE_PLAN A.1.5 (no-op unless signed in)
       }
+      this.portal.saveCloud();                          // cloud profile (write-locked until the account answered)
     } catch (e) {
       console.error('[blocktooth] profile update failed', e);
     }
@@ -1401,6 +1417,7 @@ export class App {
       changed = true;
       if (!this.runNewGoals.includes(id)) this.runNewGoals.push(id);
       this.toastGoal(id);
+      this.portal.achievement(id);                      // ONLINE_PLAN A.1.5 (no-op unless signed in)
     }
     if (changed) this.persistProfile();
   }
@@ -1432,6 +1449,7 @@ export class App {
     this.music.play('tabloid');
     this.sfx.ui('print');
     this.modal = 'end';
+    this.refreshAccountLine();                          // ONLINE_PLAN A.1.5: signed-in / guest line
     const canContinue = w.run.result === 'clear' && !w.endless;
     const newGoals = this.runNewGoals.map((id) => {
       const g = GOALS.find((x) => x.id === id);
@@ -1504,6 +1522,106 @@ export class App {
         });
       }
     } catch { /* storage blocked — bests are a nicety */ }
+    this.reportRun(w, result);                          // ONLINE_PLAN A.1.5: the portal's run_result
+  }
+
+  /**
+   * ONLINE_PLAN A.1.5: file this run with forgeflowgames.com (bt_submit_run through the portal bridge).
+   * Once per run (World): the run's end; an EXTENDED COVERAGE continuation sends ONE follow-up with the SAME
+   * run_nonce and phase 'endless' (result + clear_s stay the clear's). Read-only on the World; the portal
+   * client drops it standalone / for guests / when the parent never answered.
+   */
+  private reportRun(w: World, result: 'clear' | 'dead'): void {
+    try {
+      let rep = this.runReport;
+      let phase: 'run' | 'endless' = 'run';
+      if (rep && rep.w === w) {
+        if (!w.endless) return;                         // this World is already filed
+        phase = 'endless';
+      } else {
+        rep = this.runReport = { w, nonce: newRunNonce(), clearS: null, filing: null };
+      }
+      const fig = runFigures(w, phase === 'endless' ? 'clear' : result);
+      if (phase === 'run') rep.clearS = fig.clearS ?? null;
+      // whole seconds on air (floored, what the tabloid prints) — but never below the clear time in tenths, so
+      // bt_submit_run's `clear_s <= duration_s` holds for every clear (A-QA finding: 8.9 s clear vs 8 s floored)
+      const durationS = Math.max(onAirSeconds(w), rep.clearS !== null ? Math.ceil(rep.clearS) : 0);
+      if (durationS < 5) return;                       // bt_runs.duration_s >= 5 (a mis-click run is not a run)
+      const E = w.endless;
+      const t = w.tally;
+      const payload: RunResultPayload = {
+        run_nonce: rep.nonce,
+        mode: 'solo',
+        titan: w.titanId,
+        biome: w.biomeId,
+        result: phase === 'endless' ? 'clear' : result,
+        duration_s: durationS,
+        clear_s: rep.clearS,
+        level: fig.level,
+        peak_rank: fig.peakRank,
+        kills: fig.kills,
+        crushed: Math.max(0, Math.floor(t.crushed || 0)),
+        tonnage: fig.tonnage,
+        blocks: fig.blocks,
+        bosses: Math.max(0, Math.floor(t.bossesDefeated || 0)),
+        gate_kills: Math.max(0, Math.floor(t.gateKills || 0)),
+        endless_s: E ? Math.max(0, Math.floor(w.t - E.startT)) : 0,
+        endless_score: E ? Math.max(0, Math.floor(E.score)) : 0,
+        rematches: E ? E.rematches : 0,
+        titans_eaten: 0,
+        vs_match_id: null,
+        build_version: buildVersionFromUrl(location.search),
+        phase,
+      };
+      const mine = rep;
+      mine.filing = this.portal.signedIn ? { kind: 'sent' } : null;
+      void this.portal.submitRun(payload).then((f) => {
+        if (this.runReport !== mine) return;
+        mine.filing = f;
+        this.refreshAccountLine();
+      });
+    } catch (e) {
+      console.error('[blocktooth] run report failed', e);
+    }
+  }
+
+  /** ONLINE_PLAN A.1.5: the cloud profile merged with this device's — adopt it (and save it locally). */
+  private adoptCloudProfile(p: Profile, bests: Record<string, number>): void {
+    if (this.params.dev && this.params.meta) return;
+    this._profile = p;
+    this.perkChoice = p.perk;
+    this.persistProfile();
+    try {
+      const cur = loadBest();
+      const merged = mergeBests(cur, bests);
+      const higher: Record<string, number> = {};
+      for (const k in merged) {
+        if (k.endsWith('.clearS')) { if (cur[k] === undefined || merged[k] < cur[k]) saveBest(k, merged[k], true); }
+        else if (cur[k] === undefined || merged[k] > cur[k]) higher[k] = merged[k];
+      }
+      if (Object.keys(higher).length) saveBest(higher);
+    } catch { /* storage blocked — bests are a nicety */ }
+  }
+
+  /** ONLINE_PLAN A.1.5: the end screen's signed-in / guest line (re-rendered when the identity or the ack changes). */
+  private refreshAccountLine(): void {
+    if (this.modal !== 'end') return;
+    const st = this.portal.state;
+    if (st === 'standalone' || st === 'silent' || st === 'waiting') { this.broadcast.setAccountLine(null); return; }
+    if (st === 'guest') { this.broadcast.setAccountLine({ tone: 'guest', text: 'GUEST \u00b7 SIGN IN TO SAVE YOUR STATS' }); return; }
+    const who = (this.portal.identity.username || 'YOUR ACCOUNT').toUpperCase();
+    const rep = this.runReport;
+    const f = rep && rep.w === this._world ? rep.filing : null;
+    let sub = 'SIGNED IN';
+    if (f && f.kind === 'sent') sub = 'FILING THIS RUN\u2026';
+    else if (f && f.kind === 'noack') sub = 'THE SITE DID NOT CONFIRM THIS RUN';
+    else if (f && f.kind === 'ack') {
+      const city = rep ? (BIOMES[rep.w.biomeId]?.name ?? rep.w.biomeId).toUpperCase() : '';
+      if (f.error) sub = 'RUN NOT FILED: ' + f.error.toUpperCase().slice(0, 60);
+      else if (f.rank !== null) sub = `#${f.rank} ON THE ${city} BOARD`;
+      else sub = f.already ? 'ALREADY ON FILE' : 'RUN FILED';
+    }
+    this.broadcast.setAccountLine({ tone: f && f.kind === 'ack' && !f.error ? 'filed' : 'signed', text: `${who} \u00b7 ${sub}` });
   }
 
   private getPortraits(): Promise<Record<TitanId, string>> {

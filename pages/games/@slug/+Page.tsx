@@ -2,6 +2,7 @@ import { usePageContext } from "vike-react/usePageContext";
 import { useGame, useRelatedGames } from "../../../src/hooks/useGames";
 import GamePlayer from "../../../src/components/game/GamePlayer";
 import GameCarousel from "../../../src/components/game/GameCarousel";
+import { GAME_STATS_PANELS } from "../../../src/components/game/StatsPanel";
 
 const DIFFICULTY_LABELS: Record<string, { label: string; color: string }> = {
   easy: { label: "Easy", color: "#00ff88" },
@@ -116,6 +117,14 @@ export default function GamePage() {
                 ))}
               </div>
             )}
+
+            {/* 2026-10-01 — per-game RECORDS & LEADERBOARDS, only for slugs
+                in GAME_STATS_PANELS (BLOCKTOOTH first); every other game
+                renders nothing here. */}
+            {(() => {
+              const StatsPanel = GAME_STATS_PANELS[game.slug];
+              return StatsPanel ? <StatsPanel game={game} /> : null;
+            })()}
           </div>
 
           {/* 2026-05-11 — Removed fake bottom-banner Advertisement placeholder.

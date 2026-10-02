@@ -412,3 +412,12 @@
 .bt2-onrecord-row b::before { content: '▸ '; color: var(--teal); }
 .bt2-onrecord-row span { font-family: var(--f-mono); font-weight: 700; font-size: calc(var(--u) * .6); color: var(--teal); text-transform: uppercase; padding-left: calc(var(--u) * .9); }
 .bt2-onrecord-more { font-family: var(--f-mono); font-weight: 700; font-size: calc(var(--u) * .7); text-align: right; }
+
+/* ONLINE_PLAN A.1.5 (lane A-GAME): forgeflowgames.com account line under the tabloid buttons (hidden standalone) */
+.bt-tab-account {
+  font-family: var(--f-mono); font-weight: 700; font-size: calc(var(--u) * .62); letter-spacing: .05em; text-transform: uppercase;
+  color: var(--cream); background: rgba(20, 33, 61, .82); border-left: calc(var(--u) * .3) solid var(--teal2);
+  padding: calc(var(--u) * .35) calc(var(--u) * .6); line-height: 1.25; overflow-wrap: anywhere;
+}
+.bt-tab-account[data-tone="guest"] { border-left-color: var(--coral); }
+.bt-tab-account[data-tone="filed"] { border-left-color: var(--gold); color: var(--gold); }
