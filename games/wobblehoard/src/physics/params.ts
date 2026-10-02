@@ -119,7 +119,8 @@ export const FINGER = {
   pinchGap: 0.3,
   /** Length (rest radii) of the shaft behind the tip sphere that also pushes skin aside (0 = a bare sphere): see the capsule note in softbody.ts. */
   shaftLen: 1.5,
-  plunge: 1,
+  plunge: 0,
+  lift: 1, maxLift: 0.35,
   /** Held >= this long (s) and in contact -> 'press' event. */
   pressAfterS: 0.18,
   /** Pointer slide low-pass (1/s) so a jumpy pointer never teleports the kinematic tip. */

@@ -372,7 +372,7 @@ export class CapsuleRun extends Run {
     this.fadeIn = Math.min(1, this.fadeIn + dt / 0.7);
     v.rarity.strength = smooth(0, 1, this.fadeIn);
     const u = v.mats.uniforms;
-    u.uTierAmt.value = Math.max(0, 0.7 * (1 - d.age / 0.9));
+    u.uTierAmt.value = Math.max(0, (0.3 + 0.03 * this.style.index) * (1 - d.age / 0.9));
     u.uTierCol.value.setRGB(this.style.tell[0], this.style.tell[1], this.style.tell[2], THREE.LinearSRGBColorSpace);
     v.extraPool = Math.max(0, 0.5 * (1 - d.age / 1.2));
   }

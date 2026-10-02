@@ -410,6 +410,25 @@ export class SoftBody implements SoftBodyLike {
     // pressing toward the table can flatten the body to 25% (the table is the other jaw); pressing a free flank goes
     // less deep so the body is squeezed, not pierced
     const supported = hitTri >= 0 && hy + dy * T < 0.03 * R && dy < -0.5;
+    // START TANGENT: the sphere is seated on the whole local surface, not just on the hit point. A tip wider than a thin feature (the
+    // swirl-peak) would otherwise start with the apex already inside it, and the radial push-out of a vertex that deep ejects it
+    // sideways past its own neighbours (a flipped triangle that never comes back). Lift the anchor back along -dir until no
+    // vertex under the footprint is inside the tip.
+    let lift = 0;
+    if (hitTri >= 0) {
+      const r0 = R * FINGER.rMin;
+      let sc = -r0;                        // centre position along dir relative to the hit (default: sphere bottom on the hit)
+      for (let i = 0; i < this.n; i++) {
+        const rx = this.X[i * 3] - hx, ry = this.X[i * 3 + 1] - hy, rz = this.X[i * 3 + 2] - hz;
+        const sv = rx * dx + ry * dy + rz * dz;
+        const l2 = rx * rx + ry * ry + rz * rz - sv * sv;
+        if (l2 >= r0 * r0 || sv < -2 * r0) continue;
+        const need = sv - Math.sqrt(r0 * r0 - l2);     // centre must stay at or behind this
+        if (need < sc) sc = need;
+      }
+      lift = Math.min(FINGER.maxLift * R, -r0 - sc) * FINGER.lift;
+    }
+    hx -= dx * lift; hy -= dy * lift; hz -= dz * lift;
     f.down = true; f.retracting = false; f.contacted = false; f.pressed = false;
     f.px = hx; f.py = hy; f.pz = hz; f.tx = hx; f.ty = hy; f.tz = hz;
     f.dx = dx; f.dy = dy; f.dz = dz; f.nx = nx; f.ny = ny; f.nz = nz;
@@ -417,7 +436,7 @@ export class SoftBody implements SoftBodyLike {
     f.share = this.fingers[id ^ 1].down ? FINGER.pinchShare : 1;
     // a thin free part (the swirl-peak) can be shoved aside by far more than its own thickness, so a flank press may
     // always go FINGER.minFlankDepth rest radii deep
-    f.depthMax = Math.max(supported ? 0.2 * R : FINGER.minFlankDepth * R, this.p.squashDepth * (supported ? 1 : FINGER.flankShare) * T);
+    f.depthMax = lift + Math.max(supported ? 0.2 * R : FINGER.minFlankDepth * R, this.p.squashDepth * (supported ? 1 : FINGER.flankShare) * T);
     this.placeTip(f, 1);
     f.ocx = f.cx; f.ocy = f.cy; f.ocz = f.cz;
   }
