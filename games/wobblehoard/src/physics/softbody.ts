@@ -66,6 +66,7 @@ class Finger {
   holdT = 0;           // seconds since fingerDown
   retractRate = 0;     // depth units per second while retracting
   tipR = 0.1;          // current tip radius
+  share = 1;           // eased fraction of the depth range this tip uses (1 alone, FINGER.pinchShare as one jaw of a pinch)
   cx = 0; cy = 0; cz = 0;   // tip centre (world)
   ocx = 0; ocy = 0; ocz = 0; // tip centre at the previous substep (for the contact friction)
 }
@@ -99,6 +100,14 @@ const NEAR = 0.01;                // a particle this close to the table counts a
 const BLOCK_MARGIN = 0.03;         // particles this close to a fingertip are 'blocked' for the volume constraint (m)
 const LOAD_CONC = 10;              // friction normal load per touching particle is capped at this many particle-weights
 const smooth01 = (t: number): number => { const x = t < 0 ? 0 : t > 1 ? 1 : t; return x * x * (3 - 2 * x); };
+
+/** Squared distance from (x, y, z) to the axis of a finger's capsule: the tip centre, extended backward along -dir (the shaft). */
+function capsuleD2(f: Finger, x: number, y: number, z: number): number {
+  let dx = x - f.cx, dy = y - f.cy, dz = z - f.cz;
+  const along = dx * f.dx + dy * f.dy + dz * f.dz;
+  if (along < 0) { dx -= along * f.dx; dy -= along * f.dy; dz -= along * f.dz; }
+  return dx * dx + dy * dy + dz * dz;
+}
 
 export class SoftBody implements SoftBodyLike {
   readonly vertexCount: number;
@@ -141,6 +150,7 @@ export class SoftBody implements SoftBodyLike {
   private readonly nbrIdx: Int32Array;
   private readonly nbrInv: Float64Array;
   private readonly LQ: Float64Array;        // rest Laplacian offsets q_i - mean(q_nbrs)
+  private readonly invH: Float64Array;      // 1 / mean rest edge length around each vertex (crease detection scale)
   private readonly volAlphaT: number;       // volume compliance (alpha tilde)
   private readonly smK: number;             // shape-matching position gain per substep
   private readonly bendK: number;           // Laplacian gain per substep
@@ -249,12 +259,16 @@ export class SoftBody implements SoftBodyLike {
     }
     this.nbrInv = new Float64Array(n);
     this.LQ = new Float64Array(n * 3);
+    this.invH = new Float64Array(n);
     for (let i = 0; i < n; i++) {
       const s = this.nbrStart[i], e = this.nbrStart[i + 1];
       let mx = 0, my = 0, mz = 0;
       for (let j = s; j < e; j++) { const k = this.nbrIdx[j] * 3; mx += Q[k]; my += Q[k + 1]; mz += Q[k + 2]; }
       const inv = 1 / (e - s);
       this.nbrInv[i] = inv;
+      let sl = 0;
+      for (let j = s; j < e; j++) { const k = this.nbrIdx[j] * 3; sl += Math.sqrt((Q[k] - Q[i * 3]) ** 2 + (Q[k + 1] - Q[i * 3 + 1]) ** 2 + (Q[k + 2] - Q[i * 3 + 2]) ** 2); }
+      this.invH[i] = 1 / (sl * inv);
       this.LQ[i * 3] = Q[i * 3] - mx * inv; this.LQ[i * 3 + 1] = Q[i * 3 + 1] - my * inv; this.LQ[i * 3 + 2] = Q[i * 3 + 2] - mz * inv;
     }
 
@@ -304,7 +318,7 @@ export class SoftBody implements SoftBodyLike {
     }
     this.keAcc = 0; this.keSubs = 0; this.prevCompression = 0;
     this.lastAxisX = 0; this.lastAxisY = 1; this.lastAxisZ = 0; this.lastAxisT = -10;
-    for (const f of this.fingers) { f.down = false; f.retracting = false; f.contacted = false; f.pressed = false; f.depth = 0; f.depthV = 0; f.target = 0; f.holdT = 0; }
+    for (const f of this.fingers) { f.down = false; f.retracting = false; f.contacted = false; f.pressed = false; f.depth = 0; f.depthV = 0; f.target = 0; f.holdT = 0; f.share = 1; }
     for (const g of this.grabs) { g.active = false; g.count = 0; }
     this.pinned.fill(0); this.pinCount = 0; this.pinHold = 0;
     this.events.length = 0;
@@ -400,6 +414,7 @@ export class SoftBody implements SoftBodyLike {
     f.px = hx; f.py = hy; f.pz = hz; f.tx = hx; f.ty = hy; f.tz = hz;
     f.dx = dx; f.dy = dy; f.dz = dz; f.nx = nx; f.ny = ny; f.nz = nz;
     f.depth = 0; f.depthV = 0; f.target = 0; f.holdT = 0;
+    f.share = this.fingers[id ^ 1].down ? FINGER.pinchShare : 1;
     // a thin free part (the swirl-peak) can be shoved aside by far more than its own thickness, so a flank press may
     // always go FINGER.minFlankDepth rest radii deep
     f.depthMax = Math.max(supported ? 0.2 * R : FINGER.minFlankDepth * R, this.p.squashDepth * (supported ? 1 : FINGER.flankShare) * T);
@@ -590,28 +605,35 @@ export class SoftBody implements SoftBodyLike {
     f.cx = f.px + f.dx * s; f.cy = f.py + f.dy * s; f.cz = f.pz + f.dz * s;
   }
 
-  /** Advance finger depth (critically damped), slide and retract by one substep, then place the tips (pinch-safe). */
+  /**
+   * Advance finger depth (critically damped), slide and retract by one substep, then place the tips (pinch-safe).
+   * The depth share of a tip (1 alone, FINGER.pinchShare as one jaw of a pinch) is EASED, never switched: a kinematic tip
+   * must move continuously, or a finger landing / lifting would teleport the other tip by ~0.3 R in one substep and shove
+   * the body (a normal two-finger release used to squeeze MORE for ~30 ms instead of springing back). A retracting tip
+   * keeps the share it had, so lifting a finger is a pure depth retraction.
+   */
   private updateFingers(): void {
     const w = FINGER.omega;
     const slide = 1 - Math.exp(-FINGER.slideRate * H);
     const a = this.fingers[0], b = this.fingers[1];
-    const share = a.down && b.down ? FINGER.pinchShare : 1;
     for (let k = 0; k < 2; k++) {
       const f = this.fingers[k];
       f.ocx = f.cx; f.ocy = f.cy; f.ocz = f.cz;
       if (f.down) {
+        const want = this.fingers[k ^ 1].down ? FINGER.pinchShare : 1;
+        f.share += (want - f.share) * (1 - Math.exp(-(want < f.share ? FINGER.shareIn : FINGER.shareOut) * H));
         const acc = w * w * (f.target - f.depth) - 2 * w * f.depthV;
         f.depthV += acc * H;
         f.depth += f.depthV * H;
         if (f.depth < 0) { f.depth = 0; f.depthV = 0; } else if (f.depth > 1) { f.depth = 1; f.depthV = 0; }
         f.holdT += H;
         f.px += (f.tx - f.px) * slide; f.py += (f.ty - f.py) * slide; f.pz += (f.tz - f.pz) * slide;
-        this.placeTip(f, share);
+        this.placeTip(f, f.share);
       } else if (f.retracting) {
         f.depth -= f.retractRate * H;
         if (f.depth <= 0) { f.depth = 0; f.retracting = false; }
         f.px += (f.tx - f.px) * slide; f.py += (f.ty - f.py) * slide; f.pz += (f.tz - f.pz) * slide;
-        this.placeTip(f, 1);
+        this.placeTip(f, f.share);
       }
     }
     // pinch: the two tips never overlap or pass through each other
@@ -722,18 +744,24 @@ export class SoftBody implements SoftBodyLike {
     // ---- Laplacian shape memory (local): pull each particle toward mean(neighbours) + R (q_i - mean(q_neighbours))
     // (every other substep with twice the gain: it is a soft smoothing term and this saves ~8% of the step)
     if ((this.debug.substeps & 1) === 0) {
-      const bk = this.bendK * 2, soft = this.softW, st = this.nbrStart, nb = this.nbrIdx, ni = this.nbrInv, LQ = this.LQ;
+      const bk = this.bendK * 2, soft = this.softW, st = this.nbrStart, nb = this.nbrIdx, ni = this.nbrInv, LQ = this.LQ, ih = this.invH;
+      const lo = this.p.creaseLo, hi = this.p.creaseHi, boost = this.p.creaseGain, span = 1 / Math.max(1e-6, hi - lo);
       for (let i = 0; i < n; i++) {
         const i3 = i * 3;
         let mx = 0, my = 0, mz = 0;
         for (let j = st[i], e = st[i + 1]; j < e; j++) { const k = nb[j] * 3; mx += XP[k]; my += XP[k + 1]; mz += XP[k + 2]; }
         const inv = ni[i];
         const lx = LQ[i3], ly = LQ[i3 + 1], lz = LQ[i3 + 2];
-        const tx = mx * inv + r00 * lx + r01 * ly + r02 * lz;
-        const ty = my * inv + r10 * lx + r11 * ly + r12 * lz;
-        const tz = mz * inv + r20 * lx + r21 * ly + r22 * lz;
-        const k = bk * soft[i];
-        XP[i3] += (tx - XP[i3]) * k; XP[i3 + 1] += (ty - XP[i3 + 1]) * k; XP[i3 + 2] += (tz - XP[i3 + 2]) * k;
+        const rx = mx * inv + r00 * lx + r01 * ly + r02 * lz - XP[i3];
+        const ry = my * inv + r10 * lx + r11 * ly + r12 * lz - XP[i3 + 1];
+        const rz = mz * inv + r20 * lx + r21 * ly + r22 * lz - XP[i3 + 2];
+        // crease / fold detector: a residual of a good fraction of an edge length is not a smooth bend. There the gain ramps up
+        // to the unsoftened body gain (x boost), so a flap is pulled back out even in the floppy peak.
+        const res = Math.sqrt(rx * rx + ry * ry + rz * rz) * ih[i];
+        let a = (res - lo) * span;
+        a = a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a);
+        const k = Math.min(0.9, bk * (soft[i] + (boost - soft[i]) * a));
+        XP[i3] += rx * k; XP[i3 + 1] += ry * k; XP[i3 + 2] += rz * k;
       }
     }
 
@@ -767,8 +795,8 @@ export class SoftBody implements SoftBodyLike {
         let w = invM[i];
         if (XP[i3 + 1] < NEAR) w = 0;
         else {
-          if (a0) { const dx = XP[i3] - f0.cx, dy = XP[i3 + 1] - f0.cy, dz = XP[i3 + 2] - f0.cz; if (dx * dx + dy * dy + dz * dz < r0 * r0) w = 0; }
-          if (a1) { const dx = XP[i3] - f1.cx, dy = XP[i3 + 1] - f1.cy, dz = XP[i3 + 2] - f1.cz; if (dx * dx + dy * dy + dz * dz < r1 * r1) w = 0; }
+          if (a0 && capsuleD2(f0, XP[i3], XP[i3 + 1], XP[i3 + 2]) < r0 * r0) w = 0;
+          if (a1 && capsuleD2(f1, XP[i3], XP[i3 + 1], XP[i3 + 2]) < r1 * r1) w = 0;
         }
         WV[i] = w;
         S += w * (GRAD[i3] * GRAD[i3] + GRAD[i3 + 1] * GRAD[i3 + 1] + GRAD[i3 + 2] * GRAD[i3 + 2]);
@@ -812,17 +840,26 @@ export class SoftBody implements SoftBodyLike {
       }
     }
 
-    // ---- collisions: finger spheres, then the table (the table always wins)
+    // ---- collisions: fingers, then the table (the table always wins)
+    // A finger is a CAPSULE: the tip sphere plus a shaft of the same radius running back along -dir (to the camera). With a bare
+    // sphere, once the press went deeper than the tip radius the part of the skin ABOVE the sphere centre was pushed up and out
+    // (radially from the centre): the skin overhung the finger like a mushroom cap and folded over itself (a thin swirl-peak
+    // or a squashed dome top turned into a star-shaped pucker with tucked-under triangles). With the shaft that skin is pushed
+    // sideways only, so it wraps down around the finger and the dent has a wall, as a real fingertip makes in jelly.
     let fingerDown = 0;   // mass-weighted downward push of the fingertips this substep: extra normal load on the table
     for (let k = 0; k < 2; k++) {
       const f = this.fingers[k];
       if (!f.down && !f.retracting) continue;
       const r = f.tipR, r2 = r * r, cx = f.cx, cy = f.cy, cz = f.cz;
+      const dirx = f.dx, diry = f.dy, dirz = f.dz;
       const fdx = cx - f.ocx, fdy = cy - f.ocy, fdz = cz - f.ocz;   // how far the tip itself moved this substep
       const muF = FINGER.friction;
       let hit = false;
       for (let i = 0; i < n * 3; i += 3) {
-        const dx = XP[i] - cx, dy = XP[i + 1] - cy, dz = XP[i + 2] - cz;
+        let dx = XP[i] - cx, dy = XP[i + 1] - cy, dz = XP[i + 2] - cz;
+        const along = dx * dirx + dy * diry + dz * dirz;      // < 0: behind the tip centre (shaft side)
+        let ax = cx, ay = cy, az = cz;                        // nearest point of the capsule axis
+        if (along < 0) { ax += along * dirx; ay += along * diry; az += along * dirz; dx -= along * dirx; dy -= along * diry; dz -= along * dirz; }
         const d2 = dx * dx + dy * dy + dz * dz;
         if (d2 >= r2) continue;
         hit = true;
@@ -831,9 +868,16 @@ export class SoftBody implements SoftBodyLike {
         if (d2 > 1e-14) {
           const d = Math.sqrt(d2);
           nx = dx / d; ny = dy / d; nz = dz / d; pen = r - d;
-        } else { nx = f.dx; ny = f.dy; nz = f.dz; pen = r; }
+        } else if (along < 0) {
+          // exactly on the shaft axis: any sideways direction will do (the surface normal's perpendicular part)
+          const nd = f.nx * dirx + f.ny * diry + f.nz * dirz;
+          nx = f.nx - nd * dirx; ny = f.ny - nd * diry; nz = f.nz - nd * dirz;
+          let nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+          if (nl < 1e-6) { nx = diry; ny = -dirx; nz = 0; nl = Math.sqrt(nx * nx + ny * ny); if (nl < 1e-6) { nx = 1; ny = 0; nl = 1; } }
+          nx /= nl; ny /= nl; nz /= nl; pen = r;
+        } else { nx = dirx; ny = diry; nz = dirz; pen = r; }
         const px0 = XP[i], pz0 = XP[i + 2];
-        XP[i] = cx + nx * r; XP[i + 1] = cy + ny * r; XP[i + 2] = cz + nz * r;
+        XP[i] = ax + nx * r; XP[i + 1] = ay + ny * r; XP[i + 2] = az + nz * r;
         // contact friction: the skin sticks to the fingertip. Undo (up to mu x penetration) the tangential slide of the
         // particle relative to the tip during this substep, so a finger drags the surface with it instead of letting a
         // sloped press squirt the body out sideways.

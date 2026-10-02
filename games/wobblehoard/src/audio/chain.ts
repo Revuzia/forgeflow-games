@@ -4,7 +4,7 @@
 // `boost` is the input for poke/squish/release voices (the "louder squish" setting adds up to +9 dB there); `plain` is the
 // input for land/pop/blend. Both feed the bus.
 import { clamp } from '../core/rng.ts';
-import { c01, dbToGain, softClipCurve } from './dsp.ts';
+import { c01, dbToGain, fin, softClipCurve } from './dsp.ts';
 
 export interface ChainSettings { master: number; squishBoost: number; muted: boolean }
 
@@ -21,6 +21,11 @@ export interface MasterChain {
   readonly nodes: AudioNode[];
   /** `immediate`: set the values with no smoothing (offline renders, first setup). */
   apply(s: ChainSettings, immediate?: boolean): void;
+  /**
+   * Smoothly duck the output by `db` (negative) for `ms`, then recover. Exponential ramps only (attack tc 18 ms, release
+   * tc 70 ms), so there is no zipper noise. A new duck replaces a running one. `atTime` scripts it for offline renders.
+   */
+  duck(db: number, ms: number, atTime?: number): void;
   /** Peak (linear) of the output over roughly the last `seconds` seconds, from the analyser's ring buffer. */
   peakSince(seconds: number): number;
   disconnect(): void;
@@ -42,13 +47,14 @@ export function createMasterChain(ctx: BaseAudioContext): MasterChain {
   const shaper = add(ctx.createWaveShaper());
   shaper.curve = softClipCurve();
   shaper.oversample = '2x';
+  const duckG = add(ctx.createGain());
   const master = add(ctx.createGain());
   const analyser = add(ctx.createAnalyser());
   analyser.fftSize = 32768;
   analyser.smoothingTimeConstant = 0;
 
   boost.connect(bus); plain.connect(bus);
-  bus.connect(hp); hp.connect(comp); comp.connect(shaper); shaper.connect(master);
+  bus.connect(hp); hp.connect(comp); comp.connect(shaper); shaper.connect(duckG); duckG.connect(master);
   master.connect(analyser); analyser.connect(ctx.destination);
 
   const buf = new Float32Array(analyser.fftSize);
@@ -66,6 +72,16 @@ export function createMasterChain(ctx: BaseAudioContext): MasterChain {
         master.gain.setTargetAtTime(m, now, 0.015);
         boost.gain.setTargetAtTime(b, now, 0.03);
       }
+    },
+    duck(db, ms, atTime) {
+      const at = typeof atTime === 'number' && Number.isFinite(atTime) ? Math.max(0, atTime) : ctx.currentTime;
+      const g = dbToGain(clamp(fin(db, -12), -36, 0));
+      const hold = clamp(fin(ms, 250), 20, 4000) / 1000;
+      const p = duckG.gain;
+      p.cancelScheduledValues(at);
+      p.setValueAtTime(p.value, at);
+      p.setTargetAtTime(g, at, 0.018);
+      p.setTargetAtTime(1, at + hold, 0.07);
     },
     peakSince(seconds) {
       analyser.getFloatTimeDomainData(buf);

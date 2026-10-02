@@ -6,13 +6,16 @@
 //   node _harness/browser_physics.mjs --p '{"smOmega":40}'  physics param override (SoftParams) for tuning
 //   node _harness/browser_physics.mjs --g 7 --detail 4      another genome / mesh detail
 //   node _harness/browser_physics.mjs hold_squash --gf 1 --gb 1 --gs 0 --gz 1 --tag firm   genome extremes, files get a _<tag> suffix
-// Exits 1 on a console error, a failed request, a blank canvas, a non-finite sim or a safety-net reset.
+// Each strip prints the worst mesh FOLD (largest dihedral between adjacent triangles; the rest shape's own maximum is ~50 deg) and the fold
+// left in the last frame (a folded flap that is still there at the end is a FAIL: > 90 deg means a tucked-under triangle).
+// Exits 1 on a console error, a failed request, a blank canvas, a non-finite sim, a safety-net reset or a fold left in the last frame.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ROOT, startVite, launch } from './pw.mjs';
 
 const PORT = 5362;
-const ALL = ['side_poke', 'hold_squash', 'pull_lobe', 'peak_flop', 'float_shove', 'pinch'];
+const FOLD_END_MAX = 90;   // degrees: a settled-ish last frame may not hold a crease sharper than this (rest shape max ~50)
+const ALL = ['side_poke', 'hold_squash', 'pull_lobe', 'peak_flop', 'float_shove', 'pinch', 'top_peak_poke', 'top_peak_hold', 'hold_close', 'hold_shoulder', 'peak_rest_close', 'pinch_stagger'];
 const args = process.argv.slice(2);
 const opt = {};
 const names = [];
@@ -63,9 +66,10 @@ try {
     const maxComp = Math.max(...info.log.map((r) => r.comp)), minVol = Math.min(...info.log.map((r) => r.vol)), maxVol = Math.max(...info.log.map((r) => r.vol));
     const maxStretch = Math.max(...info.log.map((r) => r.stretch)), maxFoot = Math.max(...info.log.map((r) => r.foot));
     const maxTop = Math.max(...info.log.map((r) => r.top)), maxCx = Math.max(...info.log.map((r) => Math.hypot(r.cx, r.cz)));
-    const ok = problems.length === 0 && lit > 100 && finite && info.safety === 0;
+    const foldMax = Math.max(...info.log.map((r) => r.fold)), foldEnd = info.log[info.log.length - 1].fold, inwardMax = Math.max(...info.log.map((r) => r.inward));
+    const ok = problems.length === 0 && lit > 100 && finite && info.safety === 0 && foldEnd <= FOLD_END_MAX;
     if (!ok) bad++;
-    console.log(`${ok ? 'ok  ' : 'FAIL'} ${name.padEnd(12)} sim ${info.simMs.toFixed(0)} ms  maxComp ${maxComp.toFixed(2)}  vol ${minVol.toFixed(3)}..${maxVol.toFixed(3)}  stretch ${maxStretch.toFixed(2)}  top ${maxTop.toFixed(3)} (rest ${info.restTop.toFixed(3)})  footLift ${maxFoot.toFixed(3)}  drift ${maxCx.toFixed(3)}  events ${info.events.map((e) => e.kind).join(',') || '-'}  lit ${lit}${problems.length ? '\n   ' + problems.join('\n   ') : ''}${info.safety ? '\n   safetyResets ' + info.safety : ''}`);
+    console.log(`${ok ? 'ok  ' : 'FAIL'} ${name.padEnd(12)} sim ${info.simMs.toFixed(0)} ms  maxComp ${maxComp.toFixed(2)}  vol ${minVol.toFixed(3)}..${maxVol.toFixed(3)}  stretch ${maxStretch.toFixed(2)}  top ${maxTop.toFixed(3)} (rest ${info.restTop.toFixed(3)})  footLift ${maxFoot.toFixed(3)}  drift ${maxCx.toFixed(3)}  fold max ${foldMax.toFixed(0)} end ${foldEnd.toFixed(0)} inward ${inwardMax}  events ${info.events.map((e) => e.kind).join(',') || '-'}  lit ${lit}${problems.length ? '\n   ' + problems.join('\n   ') : ''}${info.safety ? '\n   safetyResets ' + info.safety : ''}`);
     await page.close();
   }
 } finally {

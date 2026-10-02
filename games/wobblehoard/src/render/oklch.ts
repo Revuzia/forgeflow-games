@@ -44,6 +44,7 @@ export interface JellyPalette {
   blush: Rgb;         // compressed regions: saturated and warmed up
   pale: Rgb;          // stretched regions: paler, less chroma
   patA: Rgb;          // pattern colour A (swirl / bands: a hue-shifted lighter tone)
+  tone2: Rgb;         // Epic's second body tone (saturated, a gentle hue shift)
   patB: Rgb;          // pattern colour B (speckle flecks: cream)
   glow: Rgb;          // inner scatter tint (body colour pushed lighter/warmer)
   core: Rgb;          // core blob colour (HDR-ready: multiply by intensity)
@@ -67,8 +68,9 @@ export function genomePalette(g: Genome): JellyPalette {
   const attenuation = oklchToLinear(Math.max(0.3, L - 0.16 + 0.06 * yg), Math.min(0.32, C * 1.25 + 0.03), h - 4);
   const blush = oklchToLinear(Math.max(0.3, L - 0.07), Math.min(0.33, C * 1.45 + 0.03), h - 14);
   const pale = oklchToLinear(Math.min(0.97, L + 0.1), C * 0.35, h + 6);
-  const patA = oklchToLinear(Math.min(0.95, L + 0.09), Math.min(0.3, C * 1.15), h + 52);
+  const patA = oklchToLinear(Math.min(0.95, L + 0.1), Math.min(0.32, C * 1.3), h + 44);
   const patB = oklchToLinear(0.97, 0.035, h + 20);
+  const tone2 = oklchToLinear(Math.min(0.93, L + 0.03), Math.min(0.3, C * 1.2), h + 36);
   const glow = oklchToLinear(Math.min(0.92, L + 0.05), Math.min(0.28, C * 1.2), h - 6);
   // Render hue of the core: keep it within +-110 degrees of the body hue. A near-complementary core would be absorbed by
   // the jelly and cancel the body tint toward grey; this keeps every genome's colours pleasant.
@@ -80,5 +82,5 @@ export function genomePalette(g: Genome): JellyPalette {
   const pool = oklchToLinear(0.74, Math.min(0.26, C * 1.5), h - 4);
   const glitter = mix3(oklchToLinear(0.97, 0.05, h + 12), [1, 0.93, 0.78], 0.55);
   const dust = mix3(oklchToLinear(0.86, 0.06, h + 10), [0.95, 0.85, 0.75], 0.5);
-  return { body, attenuation, blush, pale, patA, patB, glow, core, coreHot, pool, glitter, dust };
+  return { body, attenuation, blush, pale, patA, tone2, patB, glow, core, coreHot, pool, glitter, dust };
 }

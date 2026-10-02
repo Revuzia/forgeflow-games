@@ -9,6 +9,7 @@ import { ROOT, launch, startVite } from './pw.mjs';
 import {
   metrics, dominant, centroidTrack, pitchTrack, trackAt, median, wavBuffer, spectrogramPng,
 } from './audioview/analysis.mjs';
+import { ceremonyChecks } from './audioview/ceremony_checks.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => { const [k, v] = a.slice(2).split('='); return [k, v ?? true]; }));
 const PORT = Number(args.port ?? 5363);
@@ -342,12 +343,19 @@ async function main() {
     await page.waitForFunction(() => window.AV && window.AV.ready, null, { timeout: 60000 });
 
     for (const name of Object.keys(SPEC)) {
-      if (only && !only.includes(name)) continue;
+      if ((only && !only.includes(name)) || args['skip-voices']) continue;
       try { await probeVoice(name); } catch (e) { check(`G2 ${name}`, 'probe ran', false, String(e && e.stack || e), 'no exception'); }
+    }
+
+    if (!only && !args['no-ceremony']) {
+      try { extra.ceremony = await ceremonyChecks({ page, check, OUT }); } catch (e) { check('ceremony', 'ceremony gates ran', false, String(e && e.stack || e), 'no exception'); }
     }
 
     if (!args['no-engine'] && !only) {
       try {
+        // fresh page: the offline renders above leave never-ended sources in the page-wide node counters
+        await page.goto(`${vite.url}_harness/audioview/index.html`);
+        await page.waitForFunction(() => window.AV && window.AV.ready, null, { timeout: 60000 });
         const res = await page.evaluate(() => window.AV.runEngineTests());
         engineChecks(res);
         writeFileSync(resolve(OUT, 'engine_report.json'), JSON.stringify(res, null, 2));
@@ -366,8 +374,15 @@ async function main() {
         for (let k = 0; k < 20; k++) { await page.mouse.move(sq.x + 20, sq.y + 10 + k * 6); await page.waitForTimeout(25); }
         await page.mouse.up();
         await page.waitForTimeout(500);
+        // the ceremony controls: pick Mythic, variant 1, tier-up, then every button once
+        await page.selectOption('#tier', 'mythic'); await page.selectOption('#variant', '1');
+        await page.check('#tierUp'); await page.check('#isNew');
+        for (const c of ['meter', 'grab', 'crack', 'burst', 'reveal', 'duck']) { await page.click(`button[data-c="${c}"]`); await page.waitForTimeout(90); }
+        await page.click('button[data-c="merge"]');
+        await page.waitForTimeout(500);
         const out = JSON.parse(await page.textContent('#out'));
         const started = out.started;
+        check('lab page', 'ceremony buttons start their voices (meterFull, capsule grab/crack/burst, reveal, merge, duck)', started.meterFull >= 1 && started.capsule >= 3 && started.reveal >= 1 && started.merge >= 1 && started.duck >= 1, JSON.stringify({ meterFull: started.meterFull, capsule: started.capsule, reveal: started.reveal, merge: started.merge, duck: started.duck }), 'all >= 1, capsule >= 3');
         check('lab page', 'every button starts its voice (poke 2, release 2, land, pop, blend, squish)', started.poke >= 2 && started.release >= 1 && started.land >= 1 && started.pop >= 1 && started.blend >= 1 && started.squish >= 1, JSON.stringify(started), 'all >= 1');
         check('lab page', 'engine is running and the readout is finite', out.state === 'running' && Number.isFinite(out.peak), `${out.state}, peak ${Number(out.peak).toFixed(3)}`, 'running');
       } catch (e) { check('lab page', 'lab page ran', false, String(e && e.stack || e), 'no exception'); }

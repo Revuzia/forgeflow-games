@@ -47,6 +47,10 @@ export interface SoftParams {
   squashDepth: number;
   /** Stiffness multiplier (shape matching + Laplacian) at the very tip of the swirl-peak: lower = floppier. */
   peakSoft: number;
+  /** Crease healing. A vertex whose Laplacian residual (distance from mean(neighbours) + rotated rest offset) exceeds `creaseLo` edge
+   *  lengths is being creased or folded over; the shape-memory gain there ramps up to `creaseGain` x the body gain at `creaseHi`
+   *  edge lengths, ignoring the peak's softness (a smooth bend of the peak is a small residual and stays floppy, a crease is not). */
+  creaseLo: number; creaseHi: number; creaseGain: number;
   /** Max pull distance of a grab, in rest radii. From stretch. */
   maxPull: number;
 }
@@ -84,6 +88,7 @@ export function deriveParams(g: Genome): SoftParams {
     squashDepth: lerp(0.66, 0.34, f) * lerp(1, 0.78, b),
     // tuned: below ~0.15 the tip no longer bends further (the finger reach, not the stiffness, limits the flop)
     peakSoft: 0.12,
+    creaseLo: 0.3, creaseHi: 0.9, creaseGain: 1.5,
     maxPull: 1.0 + 1.4 * s,
   };
 }
@@ -106,6 +111,10 @@ export const FINGER = {
   minFlankDepth: 0.8,
   /** Each jaw of a two-finger pinch keeps this fraction of its depth range (tuned: 1.0 squirted the body out upward). */
   pinchShare: 0.62,
+  /** Rates (1/s) at which a tip eases its depth share toward the pinch value (a partner landed: quick, the tip backs off) and back
+   *  toward 1 (the partner left: slow, so the remaining finger never lunges deeper while the body is springing back). A switch
+   *  instead of an ease teleported the tip ~0.3 R in one substep. */
+  shareIn: 7, shareOut: 2,
   /** The two tips of a pinch keep this clearance (in rest radii) between their surfaces. */
   pinchGap: 0.3,
   /** Held >= this long (s) and in contact -> 'press' event. */

@@ -84,6 +84,8 @@ export interface VoiceGroup {
   readonly dying: boolean;
   /** True for the held squish: never the first choice when stealing. */
   readonly held: boolean;
+  /** Stealing order: the lowest priority goes first (default 0; the ceremony voices use 2 so a poke flurry cannot steal a reveal). */
+  readonly priority?: number;
   /** Fade out quickly (default 20 ms) and free the nodes. Safe to call twice. `atTime` scripts it for offline renders. */
   kill(fadeS?: number, atTime?: number): void;
   /** Disconnect everything NOW (no fade). Used when the context is suspended and 'ended' events will not arrive. */
@@ -97,6 +99,7 @@ export class Bag implements VoiceGroup {
   /** Every voice routes through this gain: it is the group's fade handle. */
   readonly head: GainNode;
   endTime = Infinity;
+  priority = 0;
   alive = true;
   /** Present when the group is panned (always for held voices, whose pan is live-updatable). */
   panner: StereoPannerNode | null = null;
@@ -150,7 +153,7 @@ export class Bag implements VoiceGroup {
   osc(type: OscillatorType, f: number, t: number, tEnd?: number): OscillatorNode {
     const o = this.src(this.ctx.createOscillator());
     o.type = type; o.frequency.value = f;
-    o.start(t);
+    o.start(Math.max(0, t));
     if (tEnd !== undefined) o.stop(tEnd);
     return o;
   }
@@ -159,7 +162,7 @@ export class Bag implements VoiceGroup {
     const s = this.src(this.ctx.createBufferSource());
     s.buffer = noiseBuffer(this.ctx);
     s.loop = true;
-    s.start(t, r() * (s.buffer.duration - 0.05));
+    s.start(Math.max(0, t), r() * (s.buffer.duration - 0.05));
     if (tEnd !== undefined) s.stop(tEnd);
     return s;
   }

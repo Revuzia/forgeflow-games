@@ -42,7 +42,9 @@ void main() {
   vec3 floorC = vec3(0.012, 0.008, 0.03);
   vec3 hor = vec3(0.07, 0.035, 0.12);
   vec3 top = vec3(0.03, 0.02, 0.07);
-  vec3 c = e < 0.0 ? mix(hor, floorC, smoothstep(0.0, -0.5, e)) : mix(hor, top, smoothstep(0.0, 0.8, e));
+  // one smooth gradient with a soft horizon glow (no kink at e = 0: a kink reflects as a hard straight line in flat glossy areas)
+  vec3 g = mix(floorC, top, smoothstep(-0.6, 0.9, e));
+  vec3 c = g + (hor - g) * exp(-e * e * 14.0);
   // faint warm wash behind the key side, faint cool wash on the rim side
   c += vec3(0.16, 0.08, 0.03) * pow(max(dot(vDir, normalize(vec3(-0.5, 0.35, 0.8))), 0.0), 6.0);
   c += vec3(0.02, 0.09, 0.11) * pow(max(dot(vDir, normalize(vec3(0.6, 0.2, -0.75))), 0.0), 5.0);
@@ -129,14 +131,14 @@ export class EnvHub {
   }
   release(mat: THREE.Material): void { this.users.delete(mat as THREE.MeshStandardMaterial); }
   /**
-   * After a WebGL context restore the baked cube died with the context. Bake again. The dead texture is NOT disposed (that
-   * would only make the driver warn about deleting objects of another context) and the registered materials are forgotten:
-   * the stage re-creates everything GPU-backed and registers the new materials.
+   * After a WebGL context restore the baked cube died with the context (three re-uploads every CPU-backed buffer and texture
+   * by itself, but a render target's CONTENTS are gone). Bake again and re-point every registered material. The dead cube is
+   * NOT disposed: that would only make the driver warn about deleting objects of another context.
    */
   rebuild(renderer: THREE.WebGLRenderer): void {
-    this.users.clear();
     this.env = createEnvironment(renderer, this.size);
     this.texture = this.env.texture;
+    for (const m of this.users) m.envMap = this.texture;
   }
-  dispose(): void { this.env.dispose(); this.users.clear(); }
+    dispose(): void { this.env.dispose(); this.users.clear(); }
 }

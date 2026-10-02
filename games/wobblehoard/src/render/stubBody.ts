@@ -46,6 +46,11 @@ export class StubBody implements SoftBodyLike {
   private t = 0;
   private prevComp = 0;
   private acc = 0;
+  // ceremony drivers (DESIGN 6.4): fold into a ball, slide to a point, tremble, spring open
+  private foldGoal = 0; private foldT = 0;
+  private trembleAmp = 0;
+  private burstX = 0; private burstV = 0;
+  private moveGoal: V3 | null = null; private moveK = 1;
 
   constructor(genome: Genome, opts?: { detail?: number; seed?: number }) {
     const detail = opts?.detail ?? 3;
@@ -119,6 +124,7 @@ export class StubBody implements SoftBodyLike {
     this.sq = this.sqv = 0; this.peakX = this.peakZ = this.peakVX = this.peakVZ = 0;
     this.tiltX = this.tiltZ = this.tiltVX = this.tiltVZ = 0;
     this.grabOn = false; this.grabAmt = 0;
+    this.foldGoal = this.foldT = 0; this.trembleAmp = 0; this.burstX = this.burstV = 0; this.moveGoal = null;
     for (const f of this.fingers) { f.down = false; f.depth = 0; f.target = 0; }
     this.events.length = 0;
     this.build();
@@ -156,6 +162,11 @@ export class StubBody implements SoftBodyLike {
     if (this.grabOn) { this.emit('snap', this.gx, this.gy, this.gz, this.metrics.stretch, 0, 0); this.sqv -= 2; }
     this.grabOn = false;
   }
+  setFold(t: number): void { this.foldGoal = clamp(t, 0, 1); }
+  moveTo(p: V3 | null, stiffness = 1): void { this.moveGoal = p ? { x: p.x, y: 0, z: p.z } : null; this.moveK = Math.max(0.1, stiffness); }
+  tremble(amp: number): void { this.trembleAmp = clamp(amp, 0, 1); }
+  burstOpen(strength: number): void { this.burstV += 5.6 * clamp(strength, 0, 1); }
+
   nudge(i: V3): void { this.vx += i.x; this.vy += i.y; this.vz += i.z; this.peakVX -= i.x * 3; this.peakVZ -= i.z * 3; }
   drainEvents(out: SoftEvent[]): void { for (const e of this.events) out.push(e); this.events.length = 0; }
   stateHash(): number {
@@ -179,6 +190,13 @@ export class StubBody implements SoftBodyLike {
 
   private sub(h: number): void {
     this.t += h;
+    this.foldT += (this.foldGoal - this.foldT) * (1 - Math.exp(-h * 7));
+    this.burstV += (-260 * this.burstX - 7 * this.burstV) * h;
+    this.burstX = clamp(this.burstX + this.burstV * h, -0.8, 0.6);
+    if (this.moveGoal) {
+      const k = 120 * this.moveK, c = 2 * Math.sqrt(k);
+      this.vx += (k * (this.moveGoal.x - this.cx) - c * this.vx) * h; this.vz += (k * (this.moveGoal.z - this.cz) - c * this.vz) * h;
+    }
     // fingers ease toward their pressure target (critically damped-ish), release retracts fast
     let dMax = 0;
     for (const f of this.fingers) {
@@ -212,7 +230,8 @@ export class StubBody implements SoftBodyLike {
       this.vy -= 9.8 * h;
       this.cy += this.vy * h;
       // lowest point (cheap estimate: rest floor, squashed along the axis)
-      const low = this.cy - this.restFloorY * (1 - this.sq * Math.abs(this.ay) + 0.5 * this.sq * (1 - Math.abs(this.ay)));
+      const floorY = this.restFloorY * (1 - this.foldT) + this.R * 0.8 * this.foldT;
+      const low = this.cy - floorY * (1 + this.burstX) * (1 - this.sq * Math.abs(this.ay) + 0.5 * this.sq * (1 - Math.abs(this.ay)));
       if (low < 0) {
         this.cy -= low;
         if (this.vy < -0.5) { this.sqv += -this.vy * 2.2; this.ax = 0; this.ay = 1; this.az = 0; this.emit('land', this.cx, 0, this.cz, clamp(-this.vy / 4.5, 0, 1), 0, -1); }
@@ -246,12 +265,15 @@ export class StubBody implements SoftBodyLike {
     const sigma = 0.23 * R, inv2s2 = 1 / (2 * sigma * sigma);
     const dd0 = f0.depth * 0.75 * R, dd1 = f1.depth * 0.75 * R;
     const ga = this.grabAmt;
+    const fo = this.foldT, Rf = R * 0.8, bsc = 1 + this.burstX, tr = this.trembleAmp * R * 0.012;
     const gdx = this.gtx - this.gx, gdy = this.gty - this.gy, gdz = this.gtz - this.gz;
     const gsig = 0.3 * R, ginv = 1 / (2 * gsig * gsig);
     let minY = 1e9;
     for (let i = 0; i < n; i++) {
       let x = rest[i * 3], y = rest[i * 3 + 1], z = rest[i * 3 + 2];
       const rdx = this.restDir[i * 3], rdy = this.restDir[i * 3 + 1], rdz = this.restDir[i * 3 + 2];
+      if (fo > 1e-3) { x += (rdx * Rf - x) * fo; y += (rdy * Rf - y) * fo; z += (rdz * Rf - z) * fo; }   // fold into an equal-volume ball
+      if (bsc !== 1) { x *= bsc; y *= bsc; z *= bsc; }
       // 1. squash along the axis, widen across it (volume ~ conserved)
       const along = x * ax + y * ay + z * az;
       x += -ax * along * sq + (x - ax * along) * 0.5 * sq;
@@ -283,6 +305,7 @@ export class StubBody implements SoftBodyLike {
         const g = Math.exp(-(ex * ex + ey * ey + ez * ez) * ginv) * ga;
         X += gdx * g; Y += gdy * g; Z += gdz * g;
       }
+      if (tr > 0) { X += Math.sin(this.t * 61 + i * 1.7) * tr; Y += Math.sin(this.t * 53 + i * 2.3) * tr; Z += Math.sin(this.t * 47 + i * 0.9) * tr; }
       if (Y < 0.0005) Y = 0.0005;
       if (Y < minY) minY = Y;
       P[i * 3] = X; P[i * 3 + 1] = Y; P[i * 3 + 2] = Z;

@@ -193,7 +193,7 @@ export class Face {
   }
 
   /** `comp` / `rate`: the renderer's squeeze (0..1) and its rate of change (1/s, negative = springing back). */
-  update(dt: number, time: number, pointer: { x: number; y: number } | null, camera: THREE.PerspectiveCamera, comp: number, rate: number): void {
+  update(dt: number, time: number, pointer: { x: number; y: number } | null, camera: THREE.PerspectiveCamera | null, comp: number, rate: number): void {
     const body = this.body, P = body.positions, N = this.view.simN, idx = body.indices;
     const r0 = this.radius, st = this.style;
 
@@ -256,7 +256,7 @@ export class Face {
 
       // --- look: pointer relative to this eye on screen, expressed in the eye's own axes ---
       let lx = 0, ly = 0;
-      if (pointer) {
+      if (pointer && camera) {
         this.ndc.copy(this.vA).project(camera);
         const dx = (pointer.x - this.ndc.x) * camera.aspect, dy = pointer.y - this.ndc.y;
         const len = Math.hypot(dx, dy);

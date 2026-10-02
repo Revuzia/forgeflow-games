@@ -156,6 +156,26 @@ export function simNormals(P: Float32Array, idx: Uint32Array, out: Float32Array)
   }
 }
 
+/**
+ * One relaxation pass of the sim vertex normals over their triangle neighbours: the physics mesh has creases where a finger
+ * sphere pushes particles out (coarse straight edges), which the glossy low tier shows as a hard seam. `acc` is scratch.
+ */
+export function relaxNormals(N: Float32Array, idx: Uint32Array, acc: Float32Array, w: number): void {
+  acc.fill(0);
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
+    acc[a] += N[b] + N[c]; acc[a + 1] += N[b + 1] + N[c + 1]; acc[a + 2] += N[b + 2] + N[c + 2];
+    acc[b] += N[a] + N[c]; acc[b + 1] += N[a + 1] + N[c + 1]; acc[b + 2] += N[a + 2] + N[c + 2];
+    acc[c] += N[a] + N[b]; acc[c + 1] += N[a + 1] + N[b + 1]; acc[c + 2] += N[a + 2] + N[b + 2];
+  }
+  for (let i = 0; i < N.length; i += 3) {
+    const al = Math.hypot(acc[i], acc[i + 1], acc[i + 2]) || 1;
+    const x = N[i] * (1 - w) + (acc[i] / al) * w, y = N[i + 1] * (1 - w) + (acc[i + 1] / al) * w, z = N[i + 2] * (1 - w) + (acc[i + 2] / al) * w;
+    const l = Math.hypot(x, y, z) || 1;
+    N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l;
+  }
+}
+
 export const PHONG_ALPHA = 0.7;
 
 export class JellyView {
@@ -163,6 +183,7 @@ export class JellyView {
   readonly mapper: RestMapper;
   /** Sim vertex normals, refreshed by update(). Shared with the face / glitter code. */
   readonly simN: Float32Array;
+  private readonly nAcc: Float32Array;
   /** Per sim vertex (inward, outward) displacement from where the rigid frame wants it, in 0..1 units of 0.45 x restRadius. */
   readonly simD: Float32Array;
   /** Deepest dent 0..1 and biggest outward bulge/pull 0..1 this frame (local deformation the global metrics can miss). */
@@ -182,6 +203,7 @@ export class JellyView {
     this.body = body;
     this.mapper = new RestMapper(body);
     this.simN = new Float32Array(body.vertexCount * 3);
+    this.nAcc = new Float32Array(body.vertexCount * 3);
     this.simD = new Float32Array(body.vertexCount * 2);
     this.geo = new THREE.BufferGeometry();
     this.mesh = new THREE.Mesh(this.geo, material);
@@ -228,6 +250,8 @@ export class JellyView {
   update(): void {
     const body = this.body, P = body.positions, S = body.strain, sn = this.simN;
     simNormals(P, body.indices, sn);
+    relaxNormals(sn, body.indices, this.nAcc, 0.7);
+    relaxNormals(sn, body.indices, this.nAcc, 0.5);
     let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9;
     for (let i = 0, n = body.vertexCount * 3; i < n; i += 3) {
       const x = P[i], y = P[i + 1], z = P[i + 2];

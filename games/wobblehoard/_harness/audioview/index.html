@@ -40,6 +40,24 @@
   <label>louder squish <span id="boostV">0.00</span><input id="boost" type="range" min="0" max="1" step="0.01" value="0"></label>
   <label><span>muted</span><input id="mute" type="checkbox"></label>
 </div>
+<h1 style="font-size:16px;margin-top:18px">Reveal and merge ceremony</h1>
+<div class="row">
+  <label>tier<select id="tier"><option>common</option><option>uncommon</option><option>rare</option><option>epic</option><option>legendary</option><option>mythic</option></select></label>
+  <label>mythic variant<select id="variant"><option>0</option><option>1</option><option>2</option></select></label>
+  <label><span>calm</span><input id="calm" type="checkbox"></label>
+  <label><span>tier up</span><input id="tierUp" type="checkbox"></label>
+  <label><span>new</span><input id="isNew" type="checkbox"></label>
+</div>
+<div class="row">
+  <button data-c="meter">Meter full</button>
+  <button data-c="grab">Grab</button>
+  <button data-c="crack">Crack</button>
+  <button data-c="burst">Burst</button>
+  <button data-c="reveal">Reveal</button>
+  <button data-c="capsule">Full capsule open</button>
+  <button data-c="merge">Full merge</button>
+  <button data-c="duck">Duck -12 dB / 400 ms</button>
+</div>
 <canvas id="scope" width="1400" height="240"></canvas>
 <pre id="out">no stats yet</pre>
 <script type="module" src="./view.js"></script>

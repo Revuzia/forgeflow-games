@@ -22,6 +22,7 @@ const STEPS = Number(argVal('--steps', '20000'));
 const DETAIL = Number(argVal('--detail', '3'));
 const ONLY = argVal('--only', '').split(',').filter(Boolean).map(Number);
 const SETTLE_MAX_S = 8;
+const SEED_OFFSET = Number(argVal('--seed', '0')) * 104729;
 // (thread CPU time was tried first: this kernel only accounts it in 4 ms ticks, useless for 1 ms calls. Wall clock + medians instead.)
 const tcpu = (): number => performance.now();
 
@@ -120,7 +121,7 @@ function runScript(idx: number, steps: number, measure: boolean): RunResult {
   const g = genomeFor(idx);
   const b = new SoftBody(g, { detail: DETAIL, seed: 0xc0ffee + idx });
   const R = b.restRadius;
-  const rng = mulberry32(0x5eed0000 + idx * 7919);
+  const rng = mulberry32(0x5eed0000 + idx * 7919 + SEED_OFFSET);
   const fails: string[] = [];
   const notes: Record<string, number> = {
     minVol: 9, maxVol: 0, minY_R: 9, maxSpeedCm: 0, resets: 0, events: 0, eventSpam: 0, maxCenterDist: 0,

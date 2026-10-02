@@ -11,6 +11,7 @@ import type { Genome } from '../core/genome.ts';
 import { mulberry32 } from '../core/rng.ts';
 import type { JellyPalette } from './oklch.ts';
 import { TIERS, type TierSpec } from './quality.ts';
+import type { TierStyle } from './rarity.ts';
 import type { RestMapper, SurfaceHit } from './jelly.ts';
 import { NOISE_GLSL } from './shaderlib.ts';
 
@@ -226,6 +227,7 @@ class Glitter {
   /** Lay out `count` suspended specks: uniform random rest directions -> sim triangle + barycentric + radius fraction. */
   layout(count: number, mapper: RestMapper, seed: number, scale: number): void {
     this.n = Math.min(this.cap, count);
+    this.scaleHint = scale;
     const rng = mulberry32(seed ^ 0x6117e7);
     const hit: SurfaceHit = { tri: 0, u: 0, v: 0, w: 0 };
     for (let i = 0; i < this.n; i++) {
@@ -249,8 +251,23 @@ class Glitter {
     }
   }
 
-  update(dt: number, time: number, body: SoftBodyLike | null, glow: number): void {
+  /** One upward spark born at a random suspended speck (Legendary spark trail). */
+  trail(rng: () => number, scale: number): void {
+    if (this.n === 0 || this.bn >= this.burstCap || !this.lastPos) return;
+    const i = Math.floor(rng() * this.n);
+    const p = this.lastPos;
+    const k = this.bn++;
+    this.bx[k] = p[i * 3]; this.by[k] = p[i * 3 + 1]; this.bz[k] = p[i * 3 + 2];
+    this.bvx[k] = (rng() - 0.5) * 0.12 * scale; this.bvy[k] = (0.35 + 0.35 * rng()) * scale; this.bvz[k] = (rng() - 0.5) * 0.12 * scale;
+    this.bage[k] = 0; this.blife[k] = 0.45 + 0.4 * rng(); this.bph[k] = rng();
+  }
+
+  private lastPos: Float32Array | null = null;
+  scaleHint = 1;
+
+  update(dt: number, time: number, body: SoftBodyLike | null, glow: number, drift = false): void {
     let o = 0;
+    if (!this.lastPos) this.lastPos = new Float32Array(this.cap * 3);
     if (body) {
       const P = body.positions, idx = body.indices, c = body.center;
       const cx = c.x, cy = c.y, cz = c.z;
@@ -259,11 +276,17 @@ class Glitter {
         const a = idx[t] * 3, b = idx[t + 1] * 3, d = idx[t + 2] * 3;
         const u = this.bw[i * 3], v = this.bw[i * 3 + 1], w = this.bw[i * 3 + 2];
         const f = this.rf[i];
-        this.aPos[o * 4] = cx + (u * P[a] + v * P[b] + w * P[d] - cx) * f;
-        this.aPos[o * 4 + 1] = cy + (u * P[a + 1] + v * P[b + 1] + w * P[d + 1] - cy) * f;
-        this.aPos[o * 4 + 2] = cz + (u * P[a + 2] + v * P[b + 2] + w * P[d + 2] - cz) * f;
+        // Epic and up: each speck slowly rises through a short band and fades in / out at its ends (glitter drifts upward)
+        const dr = drift ? (time * 0.05 + this.ph[i]) % 1 : 0.5;
+        const lift = drift ? (dr - 0.5) * 0.16 * this.scaleHint : 0;
+        const env = drift ? 0.15 + 0.85 * Math.sin(dr * Math.PI) : 1;
+        const px = cx + (u * P[a] + v * P[b] + w * P[d] - cx) * f;
+        const py = cy + (u * P[a + 1] + v * P[b + 1] + w * P[d + 1] - cy) * f + lift;
+        const pz = cz + (u * P[a + 2] + v * P[b + 2] + w * P[d + 2] - cz) * f;
+        this.aPos[o * 4] = px; this.aPos[o * 4 + 1] = py; this.aPos[o * 4 + 2] = pz;
         this.aPos[o * 4 + 3] = this.sz[i];
-        this.aTw[o * 4] = this.ph[i]; this.aTw[o * 4 + 1] = this.sp[i]; this.aTw[o * 4 + 2] = glow * (0.3 + 0.9 * f * f); this.aTw[o * 4 + 3] = 0;
+        this.lastPos[i * 3] = px; this.lastPos[i * 3 + 1] = py; this.lastPos[i * 3 + 2] = pz;
+        this.aTw[o * 4] = this.ph[i]; this.aTw[o * 4 + 1] = this.sp[i]; this.aTw[o * 4 + 2] = glow * (0.3 + 0.9 * f * f) * env; this.aTw[o * 4 + 3] = 0;
         o++;
       }
     }
@@ -330,10 +353,14 @@ void main() {
   if (r > 1.0) discard;
   float a;
   vec3 col = uColor;
-  if (vState.y > 0.5) {
+  if (vState.y > 1.5) {                    // calm mode: the ring becomes a soft fading disc
+    float fall = 1.0 - smoothstep(0.0, 1.0, r);
+    a = fall * fall * 0.7;
+    col = mix(uColor, vec3(1.0, 0.93, 0.82), 0.5);
+  } else if (vState.y > 0.5) {
     float w = mix(0.2, 0.07, vState.x);
     a = smoothstep(1.0 - w * 2.0, 1.0 - w, r) * (1.0 - smoothstep(1.0 - w, 1.0, r));
-    col = mix(uColor, vec3(1.0, 0.93, 0.82), 0.5) * 1.4;   // a bright cream ring reads against the orange light pool
+    col = mix(uColor, vec3(1.0, 0.93, 0.82), 0.5);   // a cream ring reads against the orange light pool
   } else {
     float n = whNoise2(vUv * 1.5 + vState.z * 31.0);
     float fall = 1.0 - smoothstep(0.0, 1.0, r);
@@ -396,6 +423,12 @@ class Puffs {
     }
   }
 
+  /** Calm mode: no expanding edge, just a soft disc that fades in place. */
+  fadeDisc(at: V3, intensity: number): void {
+    const k = Math.min(1, Math.max(0.2, intensity));
+    this.add(at.x, 0.012, at.z, 0, 0, 0.8, this.footprint * (1.15 + 0.25 * k), 2, 0, 0.45 * (0.6 + 0.4 * k));
+  }
+
   ring(at: V3, intensity: number, _rng: () => number, scale: number): void {
     const k = Math.min(1, Math.max(0.2, intensity));
     this.add(at.x, 0.012, at.z, 0, 0, 0.65 + 0.25 * k, this.footprint * (1.0 + 0.5 * k), 1, 0, 0.7 + 0.2 * k);
@@ -420,8 +453,9 @@ class Puffs {
     for (let k = 0; k < this.count; k++) {
       const t = this.age[k] / this.life[k];
       const isRing = this.kind[k] > 0.5;
-      const grow = isRing ? 1.0 + 1.1 * (1 - (1 - t) * (1 - t)) : 0.55 + 0.9 * t;
-      const fade = isRing ? (1 - t) * (1 - t) : Math.min(1, t * 8) * (1 - t) * (1 - t);
+      const isDisc = this.kind[k] > 1.5;
+      const grow = isDisc ? 1 + 0.2 * t : isRing ? 1.0 + 1.1 * (1 - (1 - t) * (1 - t)) : 0.55 + 0.9 * t;
+      const fade = isDisc ? Math.sin(Math.min(1, t * 1.15) * Math.PI) : isRing ? (1 - t) * (1 - t) : Math.min(1, t * 8) * (1 - t) * (1 - t);
       this.aPos[k * 4] = this.px[k]; this.aPos[k * 4 + 1] = this.py[k]; this.aPos[k * 4 + 2] = this.pz[k]; this.aPos[k * 4 + 3] = this.size[k] * grow;
       this.aState[k * 4] = t; this.aState[k * 4 + 1] = this.kind[k]; this.aState[k * 4 + 2] = this.seed[k]; this.aState[k * 4 + 3] = fade * this.str[k];
     }
@@ -446,9 +480,14 @@ export class Fx {
   private readonly mapper: RestMapper;
   private readonly scale: number;
   private glow = 1;
+  private style: TierStyle;
+  private tierSpec: TierSpec;
+  private trailT = 0;
+  /** Calm effects: rings become fades, no drift or spark trails. */
+  calm = false;
 
-  constructor(genome: Genome, palette: JellyPalette, mapper: RestMapper, tier: TierSpec, scale: number) {
-    this.genome = genome; this.mapper = mapper; this.scale = scale;
+  constructor(genome: Genome, palette: JellyPalette, mapper: RestMapper, tier: TierSpec, scale: number, style: TierStyle) {
+    this.genome = genome; this.mapper = mapper; this.scale = scale; this.style = style; this.tierSpec = tier;
     this.rng = mulberry32(genome.seed ^ 0xf0f0f0);
     // buffers are sized for the biggest tier so a mid-session switch up never truncates; setTier() applies the tier's counts
     this.bubbles = new Bubbles(TIERS.high.bubbleMax, lin(palette.glow));
@@ -460,11 +499,15 @@ export class Fx {
 
   /** Re-lay the suspended glitter for a tier (count = genome.glitter x the tier's cap). */
   setTier(tier: TierSpec): void {
+    this.tierSpec = tier;
     this.bubbles.limit = tier.bubbleMax;
-    const g = this.genome.glitter;
+    const g = Math.min(1, this.style.sparkleBase + this.genome.glitter * this.style.sparkleMul);
     const count = g <= 0.02 ? 0 : Math.max(10, Math.round(tier.glitterMax * g));
     this.glitter.layout(count, this.mapper, this.genome.seed, this.scale);
   }
+
+  /** Rarity tier changed: re-lay the glitter. */
+  setStyle(style: TierStyle): void { this.style = style; this.setTier(this.tierSpec); }
 
   spawn(kind: FxKind, at: V3, intensity: number): void {
     const k = Number.isFinite(intensity) ? intensity : 0.5;
@@ -472,7 +515,7 @@ export class Fx {
       case 'bubbles': this.bubbles.spawn(at, k, this.rng, this.scale); break;
       case 'glitter': this.glitter.burst(at, k, this.rng, this.scale); break;
       case 'dust': this.puffs.dust(at, k, this.rng, this.scale); break;
-      case 'ring': this.puffs.ring(at, k, this.rng, this.scale); break;
+      case 'ring': if (this.calm) this.puffs.fadeDisc(at, k); else this.puffs.ring(at, k, this.rng, this.scale); break;
     }
   }
 
@@ -483,7 +526,12 @@ export class Fx {
     // glitter flashes harder while the body jiggles
     this.glow = 0.85 + 0.9 * (body ? body.metrics.kinetic : 0);
     this.bubbles.update(dt, time);
-    this.glitter.update(dt, time, body, this.glow);
+    const drift = this.style.drift && !this.calm;
+    this.glitter.update(dt, time, body, this.glow, drift);
+    if (this.style.sparkTrail && !this.calm && dt > 0) {   // Legendary: a short spark trail rising off the body
+      this.trailT += dt;
+      while (this.trailT > 0.14) { this.trailT -= 0.14; this.glitter.trail(this.rng, this.scale); }
+    }
     this.puffs.update(dt);
   }
 

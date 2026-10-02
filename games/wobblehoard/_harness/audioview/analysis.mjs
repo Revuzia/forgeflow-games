@@ -341,3 +341,57 @@ export function spectrogramPng(x, sr, { title = '', win = 1024, fMin = 40, fMax 
   drawText(img, W, H, margL, 8, `${title}   (${dur.toFixed(2)} S, WINDOW ${win} = ${(win / sr * 1000).toFixed(1)} MS, ${rangeDb} DB RANGE, TOP = ${maxDb.toFixed(0)} DB)`, [255, 241, 214]);
   return pngEncode(W, H, img);
 }
+
+/* ───────────── spectral descriptors used by the ceremony gates ───────────── */
+
+/** Welch-averaged power spectrum (Hann, hop win/4) of x[from..to). */
+export function avgSpectrum(x, sr, { win = 16384, from = 0, to = x.length } = {}) {
+  const hop = win / 4;
+  const acc = new Float64Array(win / 2 + 1);
+  let frames = 0;
+  for (let s = from - win / 2; s < to - win / 2; s += hop) {
+    const p = frameSpectrum(x, s, win, win);
+    let e = 0; for (let k = 0; k < p.length; k++) e += p[k];
+    if (e < 1e-9) continue;
+    for (let k = 0; k < p.length; k++) acc[k] += p[k];
+    frames++;
+  }
+  return { P: acc, df: sr / win, frames };
+}
+
+/** Local maxima that stand >= promDb above the local median and within relDb of the strongest peak; peaks closer than 3 bins merge. */
+export function spectralPeaks(P, df, { fLo = 60, fHi = 9000, relDb = -38, promDb = 8 } = {}) {
+  const kLo = Math.max(4, Math.floor(fLo / df)), kHi = Math.min(P.length - 5, Math.floor(fHi / df));
+  let mx = 0; for (let k = kLo; k <= kHi; k++) if (P[k] > mx) mx = P[k];
+  const thr = mx * Math.pow(10, relDb / 10), prom = Math.pow(10, promDb / 10);
+  const peaks = [];
+  const med = (k) => {
+    const a = Math.max(2, k - 60), b = Math.min(P.length - 1, k + 60);
+    const v = Array.from(P.subarray(a, b + 1)).sort((p, q) => p - q);
+    return v[v.length >> 1];
+  };
+  for (let k = kLo; k <= kHi; k++) {
+    if (P[k] < thr) continue;
+    if (!(P[k] >= P[k - 1] && P[k] > P[k + 1] && P[k] >= P[k - 2] && P[k] > P[k + 2])) continue;
+    if (P[k] < prom * med(k)) continue;
+    const a = Math.log(P[k - 1] + 1e-30), b = Math.log(P[k] + 1e-30), c = Math.log(P[k + 1] + 1e-30);
+    const d = 0.5 * (a - c) / (a - 2 * b + c);
+    const last = peaks[peaks.length - 1];
+    if (last && k - last.k < 3) { if (P[k] > last.p) { last.k = k; last.p = P[k]; last.f = (k + (Number.isFinite(d) ? d : 0)) * df; } continue; }
+    peaks.push({ k, p: P[k], f: (k + (Number.isFinite(d) ? d : 0)) * df, db: 10 * Math.log10(P[k] / mx) });
+  }
+  return peaks;
+}
+
+/** Low/high cumulative-energy percentiles (default 2% and 98%) in [fLo, fHi] and the width between them in octaves. */
+export function spectralSpread(P, df, { fLo = 30, fHi = 12000, lo = 0.02, hi = 0.98 } = {}) {
+  const kLo = Math.floor(fLo / df), kHi = Math.min(P.length - 1, Math.floor(fHi / df));
+  let tot = 0; for (let k = kLo; k <= kHi; k++) tot += P[k];
+  let acc = 0, fa = fLo, fb = fHi, gotLo = false;
+  for (let k = kLo; k <= kHi; k++) {
+    acc += P[k];
+    if (!gotLo && acc >= lo * tot) { fa = k * df; gotLo = true; }
+    if (acc >= hi * tot) { fb = k * df; break; }
+  }
+  return { f05: fa, f95: fb, octaves: Math.log2(fb / Math.max(fa, 1)) };
+}

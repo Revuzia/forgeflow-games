@@ -18,6 +18,7 @@ import type { JellyPalette, Rgb } from './oklch.ts';
 import { NOISE_GLSL } from './shaderlib.ts';
 import { KEY_DIR, RIM_DIR, type EnvHub } from './env.ts';
 import { TIERS } from './quality.ts';
+import type { TierStyle } from './rarity.ts';
 
 const PATTERN_ID: Record<Genome['pattern'], number> = { plain: 0, speckle: 1, swirl: 2, bands: 3 };
 
@@ -44,6 +45,15 @@ export interface JellyUniforms {
   uRimDir: { value: THREE.Vector3 };
   uKeyDir: { value: THREE.Vector3 };
   uCoreWorld: { value: THREE.Vector3 };
+  // rarity (DESIGN 5.3) and ceremonies
+  uAurora: { value: number };
+  uIri: { value: number };
+  uTwoTone: { value: number };
+  uTone2Col: { value: THREE.Color };
+  uTierCol: { value: THREE.Color };
+  uTierAmt: { value: number };
+  uMixCol: { value: THREE.Color };
+  uMixAmt: { value: number };
 }
 
 const lin = (c: Rgb): THREE.Color => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace);
@@ -72,6 +82,8 @@ varying vec3 vRest;
 varying vec3 vWPos;
 uniform float uTime, uCompress, uStretch, uBlushAmt, uPatStrength, uCoreAmt, uCoreRadius, uRimAmt, uScatter, uAlphaBase;
 uniform vec3 uBlushCol, uPaleCol, uPatA, uPatB, uRimCol, uGlowCol, uKeyCol, uCoreCol, uSeed, uRimDir, uKeyDir, uCoreWorld;
+uniform float uAurora, uIri, uTwoTone, uTierAmt, uMixAmt;
+uniform vec3 uTone2Col, uTierCol, uMixCol;
 float jBlush = 0.0;
 float jPale = 0.0;
 ${NOISE_GLSL}
@@ -100,12 +112,17 @@ const COLOR_STAGE = /* glsl */`
   float jBd = sin(vRest.y * 10.0 + 1.4 * whNoise3(vRest * 2.5 + uSeed * 9.0) + uSeed.y * 6.2832);
   diffuseColor.rgb = mix(diffuseColor.rgb, uPatA, smoothstep(0.15, 0.55, jBd) * uPatStrength);
 #endif
+  // rarity: Epic's two-tone gradient body (a second hue blooms toward the top)
+  diffuseColor.rgb = mix(diffuseColor.rgb, uTone2Col, 0.7 * uTwoTone * smoothstep(-0.15, 0.85, vRest.y + 0.3 * whNoise3(vRest * 2.0 + uSeed * 5.0)));
+  // merge ceremony: the parents' colours swirl together (lineage)
+  float jMixSw = smoothstep(-0.2, 0.6, sin(atan(vRest.z, vRest.x) * 2.0 + vRest.y * 6.0 + uTime * 0.9 + 1.3 * whNoise3(vRest * 2.5)));
+  diffuseColor.rgb = mix(diffuseColor.rgb, uMixCol, uMixAmt * jMixSw);
 {
   // strain < 1 = compressed edges; the dent depth term catches local presses (edge lengths barely change in a dent)
   float jComp = max(clamp((1.0 - vStrain) * 5.0, 0.0, 1.0), smoothstep(0.0, 0.8, vDisp.x));
   float jStr = max(clamp((vStrain - 1.0) * 4.0, 0.0, 1.0), 0.8 * smoothstep(0.1, 0.9, vDisp.y));
-  jBlush = clamp(jComp + uCompress * 0.55, 0.0, 1.0) * uBlushAmt;
-  jPale = clamp(jStr + uStretch * 0.5, 0.0, 1.0) * uBlushAmt;
+  jBlush = clamp((jComp + uCompress * 0.55) * uBlushAmt, 0.0, 1.0);
+  jPale = clamp((jStr + uStretch * 0.5) * uBlushAmt, 0.0, 1.0);
   diffuseColor.rgb = mix(diffuseColor.rgb, uBlushCol, jBlush * 0.75);
   diffuseColor.rgb = mix(diffuseColor.rgb, uPaleCol, jPale * 0.6);
 }
@@ -131,17 +148,37 @@ const EMISSIVE_STAGE = /* glsl */`
   vec3 jRim = (uRimCol * (0.08 + 2.2 * jRimSide * jRimSide) + uGlowCol * 0.4) * jFres * uRimAmt;
   float jWrap = clamp((dot(jN, uKeyDir) + 0.55) / 1.55, 0.0, 1.0);
   vec3 jScat = diffuseColor.rgb * uKeyCol * (0.18 + 0.82 * jWrap * jWrap) * uScatter * (1.0 - 0.5 * jFres);
+  #ifdef WH_LOW
+    jScat *= 0.35;
+  #endif
   vec3 jRd = -jV;
   vec3 jToC = uCoreWorld - vWPos;
   float jAlong = dot(jToC, jRd);
   vec3 jPerp = jToC - jRd * jAlong;
   float jHalo = exp(-dot(jPerp, jPerp) / (uCoreRadius * uCoreRadius)) * smoothstep(-0.1, 0.25, jAlong);
   vec3 jCore = uCoreCol * jHalo * uCoreAmt * (0.55 + 0.45 * jNdv);
-  totalEmissiveRadiance += jRim + jScat + jCore;
+  vec3 jExtra = vec3(0.0);
+  if (uAurora > 0.001) {          // Legendary: a slow sodium-amber aurora drifting inside the body
+    float jy = vRest.y * 2.2 + 0.7 * whNoise3(vRest * 1.6 + vec3(0.0, uTime * 0.05, 0.0)) + uTime * 0.07;
+    float jband = smoothstep(0.45, 1.0, sin(jy * 4.712));
+    vec3 jaur = mix(vec3(1.0, 0.6, 0.16), vec3(0.25, 0.8, 0.85), 0.5 + 0.5 * sin(jy * 2.0 + uTime * 0.1));
+    jExtra += jaur * jband * (0.16 + 0.34 * (1.0 - jFres)) * uAurora;
+  }
+  if (uIri > 0.001) {             // Mythic: thin-film iridescence, the hue slides with the view angle
+    vec3 jfilm = 0.5 + 0.5 * cos(6.2832 * (vec3(0.0, 0.33, 0.67) + jNdv * 1.35 + vRest.y * 0.25 + uTime * 0.03));
+    jExtra += jfilm * (0.08 + 0.9 * jFres) * 0.55 * uIri;
+    totalSpecular *= mix(vec3(1.0), 0.55 + jfilm, 0.6 * uIri);
+  }
+  jExtra += uTierCol * uTierAmt * (0.25 + 0.9 * jFres + 0.5 * jHalo);   // the tier "tell": light drifting toward the result colour
+  totalEmissiveRadiance += jRim + jScat + jCore + jExtra;
   #ifdef WH_LOW
     // low tier: no transmission target, so the body carries its own colour (a base glow) and is only lightly see-through
-    totalDiffuse *= 0.6;
-    totalEmissiveRadiance += diffuseColor.rgb * (0.2 + 0.2 * jWrap);
+    totalDiffuse *= 0.16;   // the transmissive tiers keep only ~10% of the direct diffuse; the glow below stands in for the rest
+    // fake depth for the transmission-less tier: a thick centre is deeper and more saturated, and the core glows through it
+    totalEmissiveRadiance += diffuseColor.rgb * (0.2 + 0.16 * jWrap) + uBlushCol * (0.34 * pow(jNdv, 1.4)) * (1.0 - 0.35 * jWrap);
+    float jLow = smoothstep(0.45, -0.7, vRest.y) * (1.0 - 0.5 * jFres);   // the lower body is where the core glow sits behind thick jelly
+    vec3 jDeep = uBlushCol / max(max(uBlushCol.r, uBlushCol.g), max(uBlushCol.b, 1e-3));
+    totalEmissiveRadiance = mix(totalEmissiveRadiance, totalEmissiveRadiance * jDeep * 1.15, 0.85 * jLow);
     float jSpec = dot(totalSpecular, vec3(0.3333));
     diffuseColor.a = clamp(mix(uAlphaBase, 1.0, jFres) + jSpec * 0.45, 0.0, 1.0);
   #endif
@@ -151,7 +188,6 @@ vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
 
 export class JellyMaterials {
   readonly uniforms: JellyUniforms;
-  private readonly pattern: number;
   private readonly genome: Genome;
   private readonly palette: JellyPalette;
   private readonly scale: number;
@@ -159,18 +195,22 @@ export class JellyMaterials {
   private low: THREE.MeshPhysicalMaterial | null = null;
 
   private readonly hub: EnvHub;
+  private style: TierStyle;
+  private pattern: number;
 
-  constructor(genome: Genome, palette: JellyPalette, scale: number, hub: EnvHub) {
+  constructor(genome: Genome, palette: JellyPalette, scale: number, hub: EnvHub, style: TierStyle) {
     this.hub = hub;
     this.genome = genome;
+    this.style = style;
     this.pattern = PATTERN_ID[genome.pattern] ?? 0;
+    if (this.pattern === 0 && style.swirlFloor > 0) this.pattern = 2;       // Rare and up: a plain body gets a swirl layer
     const r = mulberry32(genome.seed ^ 0x5f3759df);
-    const patStrength = this.pattern === 0 ? 0 : this.pattern === 1 ? 0.6 + 0.4 * genome.speckle : 0.4 + 0.6 * genome.speckle;
+    const patStrength = this.patternStrength();
     this.uniforms = {
       uTime: { value: 0 }, uCompress: { value: 0 }, uStretch: { value: 0 },
       uBlushAmt: { value: 1 }, uPatStrength: { value: patStrength },
       uCoreAmt: { value: 0.5 + genome.coreGlow * 0.9 }, uCoreRadius: { value: 0.3 * scale },
-      uRimAmt: { value: 0.8 }, uScatter: { value: 0.2 + 0.2 * genome.translucency }, uAlphaBase: { value: 0.86 - 0.14 * genome.translucency },
+      uRimAmt: { value: 0.8 }, uScatter: { value: 0.2 + 0.2 * genome.translucency }, uAlphaBase: { value: 0.94 - 0.07 * genome.translucency },
       uBlushCol: { value: lin(palette.blush) }, uPaleCol: { value: lin(palette.pale) },
       uPatA: { value: lin(palette.patA) }, uPatB: { value: lin(palette.patB) },
       uRimCol: { value: new THREE.Color(0x59d6e6) }, uGlowCol: { value: lin(palette.glow) },
@@ -179,13 +219,43 @@ export class JellyMaterials {
       uSeed: { value: new THREE.Vector3(r(), r(), r()) },
       uRimDir: { value: RIM_DIR.clone() }, uKeyDir: { value: KEY_DIR.clone() },
       uCoreWorld: { value: new THREE.Vector3() },
+      uAurora: { value: 0 }, uIri: { value: 0 }, uTwoTone: { value: 0 }, uTone2Col: { value: lin(palette.tone2) },
+      uTierCol: { value: lin(style.tell) }, uTierAmt: { value: 0 }, uMixCol: { value: lin(palette.body) }, uMixAmt: { value: 0 },
     };
     this.palette = palette;
     this.scale = scale;
+    this.applyStyleUniforms();
+  }
+
+  private patternStrength(): number {
+    const g = this.genome;
+    const pat = PATTERN_ID[g.pattern] ?? 0;
+    if (pat === 0) return this.style.swirlFloor;
+    const own = pat === 1 ? 0.6 + 0.4 * g.speckle : 0.4 + 0.6 * g.speckle;
+    return Math.max(own, this.style.swirlFloor * 0.8);
+  }
+
+  private applyStyleUniforms(): void {
+    const u = this.uniforms, s = this.style, g = this.genome;
+    u.uRimAmt.value = 0.8 * s.rim;
+    u.uBlushAmt.value = s.blush;
+    u.uAurora.value = s.aurora; u.uIri.value = s.iri; u.uTwoTone.value = s.twoTone;
+    u.uTierCol.value.setRGB(s.tell[0], s.tell[1], s.tell[2], THREE.LinearSRGBColorSpace);
+    u.uPatStrength.value = this.patternStrength();
+    u.uScatter.value = 0.2 + 0.2 * Math.min(1, g.translucency + s.translucencyAdd);
+  }
+
+  /** Re-style for another rarity tier (rebuilds the GPU materials: a pattern define may change). */
+  setStyle(style: TierStyle): void {
+    this.style = style;
+    this.pattern = PATTERN_ID[this.genome.pattern] ?? 0;
+    if (this.pattern === 0 && style.swirlFloor > 0) this.pattern = 2;
+    this.applyStyleUniforms();
+    this.dispose();
   }
 
   private make(low: boolean): THREE.MeshPhysicalMaterial {
-    const g = this.genome, p = this.palette, t = g.translucency, gl = g.gloss;
+    const g = this.genome, p = this.palette, t = Math.min(1, g.translucency + this.style.translucencyAdd), gl = g.gloss;
     const m = new THREE.MeshPhysicalMaterial({
       color: lin(p.body),
       roughness: lerp(0.58, 0.32, gl),   // frosted body (blurs what refracts through it); the clearcoat carries the gloss
@@ -199,7 +269,7 @@ export class JellyMaterials {
     });
     this.hub.apply(m, 1.25);
     if (low) {
-      m.color = lin(p.attenuation);   // no absorption pass: bake the deep, saturated look into the base colour
+      m.color = lin(p.attenuation).lerp(lin(p.blush), 0.65);   // no absorption pass: bake the deep, saturated look into the base colour
       m.transparent = true;
       m.depthWrite = false;
       m.transmission = 0;
@@ -208,7 +278,7 @@ export class JellyMaterials {
       m.transmission = lerp(0.62, 1, t);
       m.thickness = (0.45 + 0.35 * t) * this.scale;
       m.attenuationColor = lin(p.attenuation);
-      m.attenuationDistance = lerp(0.3, 1.0, t) * this.scale;
+      m.attenuationDistance = lerp(0.3, 1.0, t) * this.scale * this.style.attenuation;
       m.depthWrite = false; // glitter / bubbles / eyes inside or in front of the body are depth-tested against the table only
     }
     const defs: Record<string, unknown> = { ...(m.defines ?? {}), WH_PATTERN: this.pattern };

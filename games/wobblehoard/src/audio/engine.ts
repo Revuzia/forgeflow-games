@@ -3,18 +3,19 @@
 //  - Master chain lives in chain.ts (shared with the offline probe).
 //  - Polyphony is capped (MAX_VOICES live groups; the oldest one-shot is stolen with a 20 ms fade), every node is
 //    disconnected on 'ended', and a 0.5 s housekeeping timer reaps anything whose 'ended' never arrived.
-import type { SquishAudio, AudioSettings, SquishVoiceHandle } from '../contracts.ts';
+import type { SquishAudio, AudioSettings, SquishVoiceHandle, TierName } from '../contracts.ts';
 import { clamp } from '../core/rng.ts';
 import { c01, fin, liveNodeCount, makeRng, type VoiceGroup } from './dsp.ts';
 import { createMasterChain, type MasterChain } from './chain.ts';
 import { blend, land, poke, pop, release, squish, type SquishVoice } from './voices.ts';
+import { TIERS, capsuleBurst, crack, grab, meterFull, mergeStart, mythicDuck, reveal, tierIdx, type MergeVoice } from './ceremony.ts';
 
 export const MAX_VOICES = 24;
 /** Hard ceiling including voices that are fading out after being stolen. */
 const MAX_ALIVE = MAX_VOICES + 16;
 const LOOKAHEAD = 0.004;
 const GOLDEN = 0.6180339887498949;
-const KINDS = ['poke', 'squish', 'release', 'land', 'pop', 'blend'] as const;
+const KINDS = ['poke', 'squish', 'release', 'land', 'pop', 'blend', 'meterFull', 'capsule', 'reveal', 'merge', 'mergeBurst', 'duck'] as const;
 type Kind = (typeof KINDS)[number];
 
 export interface CreateAudioOptions {
@@ -25,6 +26,9 @@ export interface CreateAudioOptions {
 interface Held extends VoiceGroup { lastUpdateT?: number; update?: unknown }
 
 const NOOP_HANDLE: SquishVoiceHandle = Object.freeze({ update() { /* not unlocked */ }, end() { /* not unlocked */ } });
+const NOOP_MERGE = Object.freeze({ burst() { /* nothing charging */ }, stop() { /* nothing charging */ } });
+const asTier = (t: unknown): TierName => TIERS[tierIdx(t)];
+const prio = (g: VoiceGroup): number => (g.priority ?? 0) + (g.held ? 1 : 0);
 
 export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   let ctx: AudioContext | null = null;
@@ -34,6 +38,10 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   let timer: ReturnType<typeof setInterval> | null = null;
   let unlockP: Promise<void> | null = null;
   let lastResumeTry = -1e9;
+  let lastGrab = -1e9;
+  // merge charges that still have squelch/tick events to schedule (pumped ~0.5 s ahead every 80 ms)
+  const pumped: MergeVoice[] = [];
+  let pumpTimer: ReturnType<typeof setInterval> | null = null;
   let lastStatsT = 0;
   let dropped = 0;
   const settings: AudioSettings = { master: 0.8, squishBoost: 0, muted: false };
@@ -84,12 +92,12 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     prune();
     const active = groups.filter((g) => !g.dying);
     if (active.length >= MAX_VOICES) {
-      let victim: VoiceGroup | null = null;
-      for (const g of active) {
-        if (g.held) continue;
-        if (!victim || (order.get(g) ?? 0) < (order.get(victim) ?? 0)) victim = g;
-      }
-      if (!victim) victim = active.reduce((a, b) => ((order.get(a) ?? 0) <= (order.get(b) ?? 0) ? a : b));
+      // lowest priority first (one-shots < held squish < ceremony voices), oldest first within a priority
+      const victim = active.reduce((a, b) => {
+        const pa = prio(a), pb = prio(b);
+        if (pa !== pb) return pa < pb ? a : b;
+        return (order.get(a) ?? 0) <= (order.get(b) ?? 0) ? a : b;
+      });
       victim.kill(0.02);
     }
     if (groups.length >= MAX_ALIVE) {
@@ -98,6 +106,17 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       for (const g of dying.slice(0, groups.length - MAX_ALIVE + 1)) g.free();
       prune();
     }
+  }
+
+  function pump(): void {
+    if (!ctx) return;
+    const until = ctx.currentTime + 0.5;
+    for (let i = pumped.length - 1; i >= 0; i--) {
+      let done = true;
+      try { done = pumped[i].advance(until); } catch { /* ended */ }
+      if (done || !pumped[i].alive) pumped.splice(i, 1);
+    }
+    if (!pumped.length && pumpTimer) { clearInterval(pumpTimer); pumpTimer = null; }
   }
 
   function tryResume(): void {
@@ -259,6 +278,95 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       } catch { dropped++; return { stop() { /* failed to start */ } }; }
     },
 
+    meterFull(p) {
+      const a = accept('meterFull');
+      if (!a) return;
+      try {
+        register(meterFull(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
+          rng: makeRng(a.seed), jitter: a.jitter, quiet: p?.quiet === true, pitch: clamp(fin(p?.pitch, 1), 0.5, 2),
+        }));
+      } catch { dropped++; }
+    },
+
+    capsuleBeat(p) {
+      const beat = p?.beat;
+      if (beat !== 'grab' && beat !== 'crack' && beat !== 'burst') { dropped++; return; }
+      if (beat === 'grab') {
+        // a caller driving this from a per-frame loop must not stack a squeak per frame
+        const t = typeof performance !== 'undefined' ? performance.now() : 0;
+        if (t - lastGrab < 70) return;
+        lastGrab = t;
+      }
+      const a = accept('capsule');
+      if (!a) return;
+      const base = { rng: makeRng(a.seed), jitter: a.jitter, pitch: clamp(fin(p.pitch, 1), 0.5, 2) };
+      const t0 = a.c.currentTime + LOOKAHEAD;
+      try {
+        // grab and crack take NO tier: the shell must not spoil the result before the burst
+        if (beat === 'grab') register(grab(a.c, chain!.plain, t0, { ...base, progress: c01(p.progress, 0) }));
+        else if (beat === 'crack') register(crack(a.c, chain!.plain, t0, base));
+        else register(capsuleBurst(a.c, chain!.plain, t0, { ...base, tier: asTier(p.tier) }));
+      } catch { dropped++; }
+    },
+
+    reveal(p) {
+      const a = accept('reveal');
+      if (!a) return;
+      const tier = asTier(p?.tier);
+      const calm = p?.calm === true;
+      try {
+        if (tier === 'mythic') { const d = mythicDuck(calm); chain!.duck(d.db, d.ms); }
+        register(reveal(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
+          rng: makeRng(a.seed), jitter: a.jitter, tier, tierUp: p?.tierUp === true, isNew: p?.isNew === true,
+          mythicVariant: fin(p?.mythicVariant, 0), durationS: p?.durationS === undefined ? undefined : fin(p.durationS, NaN),
+          calm, pitch: clamp(fin(p?.pitch, 1), 0.5, 2),
+        }));
+      } catch { dropped++; }
+    },
+
+    mergeStart(p) {
+      const a = accept('merge');
+      if (!a) return NOOP_MERGE;
+      let v: MergeVoice;
+      try {
+        v = mergeStart(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
+          rng: makeRng(a.seed), jitter: a.jitter, tier: asTier(p?.tier), calm: p?.calm === true,
+          chargeS: p?.chargeS === undefined ? undefined : fin(p.chargeS, NaN), pitch: clamp(fin(p?.pitch, 1), 0.5, 2),
+          lookaheadS: 0.5,
+        });
+      } catch { dropped++; return NOOP_MERGE; }
+      register(v);
+      pumped.push(v);
+      if (!pumpTimer) pumpTimer = setInterval(pump, 80);
+      let done = false;
+      return {
+        burst(q) {
+          if (done || disposed) return;
+          done = true;
+          try {
+            const b = accept('mergeBurst');
+            if (!b) { v.stop(0.1); return; }
+            const g = v.burst({
+              tier: asTier(q?.tier), tierUp: q?.tierUp === true, mythicVariant: fin(q?.mythicVariant, 0),
+              durationS: q?.durationS === undefined ? undefined : fin(q.durationS, NaN),
+            });
+            if (g) register(g);
+          } catch { dropped++; }
+        },
+        stop() {
+          if (done) return;
+          done = true;
+          try { v.stop(0.15); } catch { /* ignore */ }
+        },
+      };
+    },
+
+    duck(p) {
+      if (!chain || !ready()) { dropped++; return; }
+      started.duck++;
+      try { chain.duck(fin(p?.db, -12), fin(p?.ms, 250)); } catch { dropped++; }
+    },
+
     stats() {
       prune();
       const t = now();
@@ -267,6 +375,8 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
         try { peak = chain.peakSince(Math.max(0, t - lastStatsT)); } catch { peak = 0; }
       }
       lastStatsT = t;
+      const liveKinds: Record<string, number> = {};
+      for (const g of groups) if (!g.dying) liveKinds[g.kind] = (liveKinds[g.kind] ?? 0) + 1;
       return {
         started: { ...started },
         state: ctx ? ctx.state : 'locked',
@@ -275,6 +385,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
         live: groups.length,
         liveNodes: liveNodeCount(),
         dropped,
+        liveKinds,
       };
     },
 
@@ -282,6 +393,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       paused = !!p;
       if (!ctx || disposed) return;
       if (paused) {
+        pumped.length = 0;
         freeAll();                      // 'ended' events do not arrive while suspended: disconnect now
         ctx.suspend().catch(() => { /* already suspended or closed */ });
       } else {
@@ -293,6 +405,8 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       if (disposed) return;
       disposed = true;
       if (timer) { clearInterval(timer); timer = null; }
+      if (pumpTimer) { clearInterval(pumpTimer); pumpTimer = null; }
+      pumped.length = 0;
       freeAll();
       if (chain) chain.disconnect();
       if (ctx) { ctx.close().catch(() => { /* already closed */ }); }

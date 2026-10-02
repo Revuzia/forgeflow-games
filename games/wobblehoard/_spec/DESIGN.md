@@ -2,8 +2,9 @@
 
 Working title. This is the decision document that `COLLECTION.md`, `BLEND.md`, `TRADE.md` and every implementer follow.
 Slice 1 (poke, squish, pull, release one squishy) is built elsewhere; everything here is what comes after it.
-Numbers marked **[sim]** are quoted from `_harness/sim_economy.ts` (run `node _harness/sim_economy.ts`, about 7 minutes for 5000 players; `--quick` for a fast check;
-deterministic). Player behaviour in that sim is **assumed**, not measured (section 5.9).
+Numbers marked **[sim]** are quoted from `_harness/sim_economy.ts` (run `node _harness/sim_economy.ts`, about 6 minutes for 5000 players; `--quick` for a fast check;
+deterministic). Since the catalog lane landed, that sim **imports the real game logic** (`src/data/catalog.ts`, `src/core/meter.ts`, `drops.ts`, `merge.ts`, `rarity.ts`) instead of its own copies,
+and every number below was re-quoted from that run (seed 0x5eed1234); `_harness/probe_economy.ts` checks the same rules independently. Player behaviour in that sim is **assumed**, not measured (section 5.12).
 
 **Evidence grades used in this file.** **[O]** = I opened the page. **[S]** = the URL was returned by a web search whose result
 summary states the claim; the page itself was NOT opened. **[G]** = general knowledge, unverified. Why so few [O]: the sandbox
@@ -115,7 +116,7 @@ price (build cost 1). The paid-gacha row is shown only to explain what we refuse
 6. Rarity is **visible in the object** (section 5.3) and **felt** (material families, 5.2).
 7. Merge is random, trade is exact, so they do not compete (5.8).
 8. Everything is free. There is no real-money path (section 8).
-9. Targets: a regular player owns all 50 in about **131 days (33 active hours) with trading vs 216 days (54 hours) solo [sim]**.
+9. Targets: a regular player owns all 50 in about **131 days (33 active hours) with trading vs 205 days (50 hours) solo [sim]**.
 
 ### 5.2 The catalog: 50 species, 6 tiers, material families
 
@@ -134,7 +135,7 @@ agent builds species 0..49 from this table. **Species 0 is Dollop** (the slice s
 
 **Why these counts and odds [sim, section Q]:** the first guess (16/12/10/6/4/2 at 50/25/14/7/3/1) finished all 50 in **45 days with trade** (too easy).
 Steeper odds with more Epic-and-above species stretch the tail; the chosen set gives first Rare around day 3, first Epic day 7, first Legendary day 15, first Mythic day 38
-(medians over all players; for regular players day 2 / 5 / 10 / 30) and 131 days to finish for a regular trader.
+(medians over all players; for regular players day 2 / 5 / 11 / 28) and 131 days to finish for a regular trader.
 
 **Material families (rule reserved; the families themselves come from `_spec/SQUISHY_SCIENCE.md` and `src/data/materials.ts`, owned by another agent):**
 
@@ -201,14 +202,14 @@ The valve, freshness and caps are **server-side** (the client only reports touch
 | Puller | 2.7 / 3.0 / 13.5 | 26.2 | 10 / 19 / 71% | **3.8** |
 | Mixed (varied) | 8.8 / 6.7 / 6.7 | 31.3 | 26 / 37 / 37% | **3.2** |
 
-Every style earns within about 15% of each other, and **variety pays about 15% more** (medley). Bots: mashing 8 pokes a second earns **11.6 SP/min (43% of a human)**;
-a scripted poke-squeeze-pull cycler reaches the valve (about 40 to 44 SP/min). Either is stopped by the daily cap at **12 capsules a day from play, versus about 10 for devoted human players** (9.8 per active day including tasks).
+Every style earns within about 15% of each other, and **variety pays about 15% more** (medley). Bots: mashing 8 pokes a second earns **0.1 SP/min** (the 0.25 s double-tap rule and freshness leave almost nothing);
+a scripted poke-squeeze-pull cycler at the physical limit is held to the valve (**40.0 SP/min**, about 1.5 times a human). Either is stopped by the daily cap at **12 capsules a day from play, versus about 10 for devoted human players** (9.8 per active day including tasks).
 Capsules have no cash value (no currency, same-tier swaps only), which removes most of the reason to farm. Sessions modelled: casual 1 to 2 x 3 to 5 min; regular about 2 x 10 to 15 min;
 devoted 2 to 3 x 12 to 22 min.
 
 **Result [sim C, 5000 players]:** measured **3.1 active minutes per capsule** for regular players (steady touch time per capsule 3.2 to 3.8; tasks lower it a little).
-Capsules per active day: casual 2.6, regular 7.1, devoted 9.8 (plus 1 restock pick). **First capsule 64 s** for regular players (poker 66, squeezer 65, puller 69, mixed 59 s). A regular player's first pair of any species arrives after **5 capsules (10.7 active minutes)**;
-first triple after 14 capsules (36.7 minutes). Pure capsule birthday maths with these odds gives about 6.7 capsules to the first repeat (sqrt(pi / (2 x sum of squared odds)) + 2/3, my calculation);
+Capsules per active day: casual 2.6, regular 7.1, devoted 9.8 (plus 1 restock pick). **First capsule 64 s** for regular players (poker 66, squeezer 65, puller 69, mixed 59 s). A regular player's first pair of any species arrives after **5 capsules (10.5 active minutes)**;
+first triple after 14 capsules (36.5 minutes). Pure capsule birthday maths with these odds gives about 6.7 capsules to the first repeat (sqrt(pi / (2 x sum of squared odds)) + 2/3, my calculation);
 the sim's 5 is lower because the starter Dollop, restock picks and task capsules also create repeats. This is within the owner's band (2 to 5 minutes per capsule, not under 1.5, not over 6).
 
 **Restock and tasks.** *Restock:* once per day, 3 random Common or Uncommon species are offered (25 species pool); pick one, new ones shown first. Misses do not accumulate or punish.
@@ -232,7 +233,7 @@ Revisit only after a real playtest shows trading is too weak (the knob exists in
 
 ### 5.6 Merge: the rules (MERGE_COST = 2)
 
-**One constant, `MERGE_COST = 2`, exported from `_harness/sim_economy.ts` (the catalog agent moves it to `src/core/merge.ts`).**
+**One constant, `MERGE_COST = 2`, in `src/core/merge.ts`; the preview, the roll, the probes and the economy sim all read it from there.**
 
 | Rule | Value |
 |---|---|
@@ -249,26 +250,26 @@ Revisit only after a real playtest shows trading is too weak (the knob exists in
 
 **Why M = 2 and not 3 (applying the owner's rule).** The rule: if actually earning a squishy takes decent effort (3 minutes or more), merge cost is 2; if it is easy (about 1.5 minutes or less), 3; in between, break the tie with the sim.
 At 100 SP per capsule a regular player spends **3.1 to 3.8 active minutes per capsule**, which is the decent-effort band, so **M = 2**. The sim agrees: a pair arrives in the
-first one or two sessions for regular players (**91% by 25 minutes, 55% by the first 12**), whereas a triple would take **36 minutes, 27% by 25 minutes**, i.e. three or more sessions.
+first one or two sessions for regular players (**91% by 25 minutes, 57% by the first 12**), whereas a triple would take **37 minutes, 27% by 25 minutes**, i.e. three or more sessions.
 Trade still wins for the last species at M = 2 (5.8). Side by side [sim O, 3000 players, 450 days, regular players willing to trade]:
 
 | Metric | **100 SP, M=2 (chosen)** | 100 SP, M=3 | 40 SP (about 1.3 to 1.5 min), M=2 | 40 SP, M=3 |
 |---|---|---|---|---|
 | Active minutes per capsule (measured) | **3.1** | 3.1 | 2.0 | 2.0 |
 | First capsule | 64 s | 64 s | 26 s | 26 s |
-| Minutes to first mergeable set | **10.6** | 36.0 | 4.7 | 19.3 |
-| Have a mergeable set by 12 / 25 active minutes | **56% / 92%** | 8% / 28% | 92% / 100% | 32% / 61% |
-| Days to all 50, p50: solo / with trade | 214 / 131 | 226 / 132 | 139 / 88 | 149 / 87 |
-| Solo-to-trade time ratio: Epic row / all 50 | 1.79x / 1.63x | 1.93x / 1.71x | 1.86x / 1.58x | 1.89x / 1.71x |
-| Epic+ first copies that came by trade / by merge | 34% / 2% | 34% / 1% | 33% / 1% | 33% / 1% |
-| Merges per player per 100 days | 8.5 | 8.3 | 8.1 | 7.9 |
-| Live merges returning a NEW species / feel-bad | 34% / 12% | 30% / 10% | 33% / 12% | 30% / 10% |
+| Minutes to first mergeable set | **10.4** | 36.6 | 4.7 | 19.7 |
+| Have a mergeable set by 12 / 25 active minutes | **57% / 91%** | 8% / 27% | 92% / 99% | 32% / 59% |
+| Days to all 50, p50: solo / with trade | 206 / 130 | 216 / 134 | 135 / 90 | 148 / 89 |
+| Solo-to-trade time ratio: Epic row / all 50 | 1.77x / 1.58x | 1.95x / 1.61x | 1.77x / 1.50x | 1.92x / 1.66x |
+| Epic+ first copies that came by trade / by merge | 32% / 1% | 33% / 1% | 32% / 1% | 33% / 1% |
+| Merges per player per 100 days | 8.5 | 8.3 | 8.3 | 8.0 |
+| Live merges returning a NEW species / feel-bad | 34% / 12% | 30% / 11% | 33% / 11% | 30% / 10% |
 | Capsule repeat rate, first 60 days / whole run | 90% / 98% | 90% / 98% | 92% / 99% | 92% / 99% |
 
 M = 3 has a slightly better trade ratio but fails the "mergeable set in the first one or two sessions" target at the chosen meter, and a faster meter that would fix that (40 SP) is
-the "too easy" band (all 50 in about 88 days with trade). **The meter rate and M are a pair: 100 SP and M = 2.**
-**Sensitivity** (2000 players, regular traders, days to all 50 solo / trade): as modelled 3.1 min/capsule **214 / 130**; players **2x slower** (5.4 min/capsule, the edge of grindy) **351 / 228**
-(71% -> 92% finished by day 450); **2x faster** (2.2 min) **152 / 95**; **half the play time** **405 / 262**. The design holds at both extremes.
+the "too easy" band (all 50 in about 90 days with trade). **The meter rate and M are a pair: 100 SP and M = 2.**
+**Sensitivity** (2000 players, regular traders, days to all 50 solo / trade): as modelled 3.1 min/capsule **201 / 129**; players **2x slower** (5.4 min/capsule, the edge of grindy) **365 / 221**
+(73% -> 94% finished by day 450); **2x faster** (2.2 min) **150 / 90**; **half the play time** **394 / 255**. The design holds at both extremes.
 
 ### 5.7 Trade: the v1 rules
 
@@ -276,7 +277,7 @@ the "too easy" band (all 50 in about 88 days with trade). **The meter rate and M
 |---|---|
 | What moves | Squishy instances, item-for-item. **No currency, no free text.** |
 | Parity | **Same tier, same count**: 1 to 3 squishies per side. A Rare can only ever be swapped for a Rare. No lopsided deal is possible by construction. |
-| Any spare for any spare | A side may take one of your spares even if it already owns that species (a "favour swap"); the server only checks tier and count. (Sim: both sides must gain a new species -> 145 days to finish; favour swaps allowed -> 130.) |
+| Any spare for any spare | A side may take one of your spares even if it already owns that species (a "favour swap"); the server only checks tier and count. (Sim: both sides must gain a new species -> 150 days to finish; favour swaps allowed -> 129.) |
 | Finding a partner | **Friend code** (mutual accept) or the public **wants/offers board**: a grid of species icons, searchable by species and tier, 3 offers and 3 wants per listing. Anonymous alias, no profile. |
 | Locks and caps | **24 h receive lock** on traded-in and merge-made squishies (cannot trade or merge); **max 3 completed trades a day** (sim value; raise to 5 as headroom), **1 per partner per day**; new accounts need 2 days and 10 capsules opened before trading. |
 | Atomic | Server holds both offers in escrow, both confirm within 60 s, then one transaction swaps owners, bumps `tradeCount`, writes the ledger. Anything fails: nothing moves. |
@@ -288,50 +289,50 @@ the "too easy" band (all 50 in about 88 days with trade). **The meter rate and M
 
 | Target tier | By drop (capsules) | By merge only, M=2: capsules median (mean) / merges median | By merge only, M=3: capsules median (mean) / merges median | By trade |
 |---|---|---|---|---|
-| Common | 18 | 35 (45) / 14 | 54 (68) / 11 | 0 capsules, 1 swap |
-| Uncommon | 85 | 32 (38) / 15 | 64 (76) / 17 | 0, 1 swap |
-| Rare | 167 | **126 (158) / 14** | 260 (304) / 14 | 0, 1 swap |
-| Epic | 250 | **202 (236) / 8** | 419 (486) / 10 | 0, 1 swap |
-| Legendary | 357 | **304 (361) / 6** | 664 (720) / 7 | 0, 1 swap |
-| Mythic | 600 | **837 (1057) / 7** | 1402 (1543) / 6 | 0, 1 swap |
+| Common | 18 | 34 (42) / 13 | 57 (68) / 11 | 0 capsules, 1 swap |
+| Uncommon | 85 | 35 (39) / 17 | 66 (76) / 17 | 0, 1 swap |
+| Rare | 167 | **131 (160) / 12** | 258 (304) / 13 | 0, 1 swap |
+| Epic | 250 | **201 (237) / 8** | 379 (459) / 8 | 0, 1 swap |
+| Legendary | 357 | **293 (337) / 5** | 574 (651) / 5 | 0, 1 swap |
+| Mythic | 600 | **790 (928) / 7** | 1137 (1406) / 5 | 0, 1 swap |
 
-  At M=2 merge is no better than waiting for the drop (0.9 to 1.0x of the drop cost for Rare to Legendary, 1.8x for Mythic; at M=3 it is 1.8 to 2.6x), and **trade costs zero capsules** when a partner has the spare.
+  At M=2 merge is no better than waiting for the drop (0.9 to 1.0x of the drop cost for Rare to Legendary, 1.5x for Mythic; at M=3 it is 1.8x to 2.3x), and **trade costs zero capsules** when a partner has the spare.
   Merge roughly matches a drop for Rare to Legendary because re-rolling spares of the target's tier turns "any copy" into "that copy" at about the odds a drop would; it is cheaper only for Uncommon
   (it recycles the flood of Common spares), a row that is cheap anyway. So it stays a recycler and a lottery ticket, not a route to a specific Epic or above.
 * **Where the last species came from** [sim L, all willing traders who finished, no churn]: of the **last 5 species** a finisher completed, **52% arrived by trade, 44% by capsule, 4% by merge**.
   For the last 5 Epic-and-above: **51% trade, 45% capsule, 4% merge**. Over all Epic+ first copies: capsule 66%, **trade 33%**, merge 2% (solo world: merge 7%).
-* **Trade speeds completion** (regular traders, same players solo vs trade) [sim K]: Rare row **66 -> 34 days (1.9x)**, Epic row **101 -> 57 (1.8x)**, Legendary **135 -> 78 (1.7x)**, Mythic **184 -> 121 (1.5x)**, all 50 **216 -> 131 (1.65x at p50; 1.63x at p25, 1.58x at p75, 1.60x at p90)**.
-  Finished all 50 by day 120: **7% solo vs 43% with trade**. Casual traders: all 50 by day 450, **2% solo vs 27% with trade**; Epic row **47% vs 94%**.
-* **Honest limit: the owner's "at least about 2x" is not reached for the whole shelf (about 1.6 to 1.7x).** Trading moves copies around; it cannot create them, so the rarest species bound both routes. Even a
-  frictionless oracle (everyone willing, no friction, cap 20) only reaches **1.78x** [sim P: 215 / 121]. The knobs, if the owner wants more: more species in the top tiers, or steeper odds (both tried in section Q, all within 1.65x to 1.76x). We chose pacing over a bigger ratio.
-* Merge does **not** make trade pointless: switching merge off entirely moves "all 50 with trade" from 130 to 130 days and solo from 214 to 226 (merge helps solo by about 5%, trade-world by nothing).
+* **Trade speeds completion** (regular traders, same players solo vs trade) [sim K]: Rare row **68 -> 34 days (2.0x)**, Epic row **102 -> 56 (1.8x)**, Legendary **136 -> 76 (1.8x)**, Mythic **180 -> 118 (1.5x)**, all 50 **205 -> 131 (1.56x at p50; 1.69x at p25, 1.52x at p75, 1.57x at p90)**.
+  Finished all 50 by day 120: **8% solo vs 43% with trade**. Casual traders: all 50 by day 450, **1% solo vs 25% with trade**; Epic row **45% vs 92%**.
+* **Honest limit: the owner's "at least about 2x" is not reached for the whole shelf (about 1.5 to 1.7x).** Trading moves copies around; it cannot create them, so the rarest species bound both routes. Even a
+  frictionless oracle (everyone willing, no friction, cap 20) only reaches **1.76x** [sim P: 210 / 119]. The knobs, if the owner wants more: more species in the top tiers, or steeper odds (both tried in section Q: the six catalogs tested land between 1.53x and 1.76x, none at 2x). We chose pacing over a bigger ratio.
+* Merge does **not** make trade pointless: switching merge off entirely moves "all 50 with trade" from 129 to 132 days and solo from 201 to 240 (merge helps solo by about 16%, trade-world by about 2%).
 
 ### 5.9 Duplicates and supply [sim D, G, F; 60-day cohort with churn, trade on]
 
 | Week | Capsule repeat rate | Repeat rate of Rare-and-above capsules | Species owned (of 50), mean |
 |---|---|---|---|
-| 1 | 56% | 10% | 20.3 |
-| 2 | 87% | 30% | 27.2 |
-| 3 | 92% | 47% | 31.8 |
-| 4 | 95% | **60%** | 34.8 |
+| 1 | 57% | 10% | 20.1 |
+| 2 | 87% | 30% | 27.1 |
+| 3 | 92% | 47% | 31.6 |
+| 4 | 95% | **61%** | 34.7 |
 | 8 | 98% | 84% | 41.3 |
 
 * **Repeat band.** Commons repeat over 90% from week 3 (they are merge fodder and same-tier swap currency), so the useful band is the **Rare+ repeat rate: crossing 50% in week 4**, which is when
   trade fuel (spare Rare, Epic copies) becomes plentiful. Capsule reveals must therefore celebrate **"new"** and compress **"repeat Common"** (section 6).
-* **Does merge keep supply from inflating? No, not by itself.** Sources are about 36 items per player per week; the merge sink (each merge destroys 2, mints 1: net minus 1) removes **2 to 3%**; mean items held grows to **328 per
-  player by week 9** (335 with merging off). With the capped **Tidy-up** it removes **about 17% of sources** (items held 283 at week 9). Item *count* inflation is harmless to progression value because
+* **Does merge keep supply from inflating? No, not by itself.** Sources are about 36 items per player per week; the merge sink (each merge destroys 2, mints 1: net minus 1) removes **2 to 3%**; mean items held grows to **331 per
+  player by week 9** (338 with merging off). With the capped **Tidy-up** it removes **about 17% of sources** (items held 281 at week 9). Item *count* inflation is harmless to progression value because
   trade parity is by tier, not by price, and Epic+ is only about 4.7% of capsules; but the UI must **stack by species** and offer Tidy-up, and an optional soft cap (for example 150 spare slots)
   is a later knob. Daily caps, not merge, are what bound production.
-* **Merge outcomes** [sim F, 60 days]: 6.6 merges per player (casual 3.3, regular 8.2, devoted 10.3); 68% of players ever merge. Because finished rows always tier up, outcomes shift up: Common 12.5%,
-  Uncommon 56%, Rare 26%, Epic 4.5%, Legendary 1.2%, Mythic 0.2% (capsules: 76 / 13 / 6 / 2.8 / 1.4 / 0.5). Of all merges over 120 days: **95% tier up, 79% return a species the player already owns** (so an owned
+* **Merge outcomes** [sim F, 60 days]: 6.7 merges per player (casual 3.4, regular 8.1, devoted 10.7); 69% of players ever merge. Because finished rows always tier up, outcomes shift up: Common 12.3%,
+  Uncommon 56%, Rare 25.5%, Epic 4.7%, Legendary 1.2%, Mythic 0.2% (capsules: 76 / 13 / 6 / 2.8 / 1.4 / 0.5). Of all merges over 120 days: **95% tier up, 79% return a species the player already owns** (so an owned
   species at a *higher* tier is the usual result, which is still a better trade-currency tier), only about 5% return the same tier. A merge never returns a lower tier.
 * **Feel-bad ladder** (120 days, "live" merge = something new was still reachable; feel-bad = returns an owned species AND no tier-up):
 
 | Merge rules (each row adds one) | Live merges: new species | Live: tier-up | **Live feel-bad** | Longest dud streak (p95 / max) |
 |---|---|---|---|---|
-| A. Floor only | 4% | 0% | 96% | 71 / 135 |
-| B. + tier-up chances | 11% | 27% | 71% | 11 / 25 |
-| C. + unowned x1.5 | 15% | 27% | 70% | 12 / 29 |
+| A. Floor only | 4% | 0% | 96% | 70 / 120 |
+| B. + tier-up chances | 11% | 27% | 71% | 11 / 26 |
+| C. + unowned x1.5 | 14% | 27% | 71% | 12 / 25 |
 | D. + pity after 4 duds in a row | 16% | 33% | 65% | 4 / 4 |
 | E. + finished-row boost x2 (cap 60%) | 22% | 52% | 49% | 4 / 4 |
 | **F. finished row always tiers up (chosen)** | **36%** | **89%** | **13%** | **3 / 4** |
@@ -342,16 +343,16 @@ the "too easy" band (all 50 in about 88 days with trade). **The meter rate and M
 
 | Tier | At least 2 | At least 3 | At least 4 (two spares while keeping one) |
 |---|---|---|---|
-| Common | 97 / 100 / 100% | 78 / 99 / 100% | 64 / 95 / 100% |
-| Uncommon | 68 / 98 / 100% | 26 / 81 / 98% | 6 / 68 / 89% |
-| Rare | 20 / 68 / 84% | 2 / 43 / 71% | 0 / 20 / 57% |
-| Epic | 8 / 48 / 73% | 0 / 19 / 52% | 0 / 5 / 28% |
-| Legendary | 3 / 29 / 57% | 0 / 6 / 28% | 0 / 1 / 10% |
-| Mythic | 1 / 8 / 26% | 0 / 1 / 7% | 0 / 0 / 1% |
+| Common | 97 / 100 / 100% | 78 / 100 / 100% | 64 / 95 / 100% |
+| Uncommon | 68 / 98 / 100% | 26 / 81 / 99% | 6 / 68 / 90% |
+| Rare | 19 / 68 / 84% | 2 / 41 / 71% | 0 / 18 / 56% |
+| Epic | 8 / 49 / 74% | 1 / 19 / 54% | 0 / 5 / 30% |
+| Legendary | 3 / 27 / 58% | 0 / 7 / 29% | 0 / 1 / 10% |
+| Mythic | 0 / 8 / 26% | 0 / 1 / 6% | 0 / 0 / 1% |
 
   At **M = 2** a reckless merge needs the "at least 2" column and a careful one (keeping a copy on the shelf) the "at least 3" column: Common is mergeable in week 1, Uncommon in weeks 2 to 4,
   Rare in weeks 4 to 8, Epic after week 8, and a Mythic pair is the multi-month event it should be. At M = 3 the same columns shift one to the right (careful = "at least 4"), which is why a first triple takes 36 minutes.
-* **A 24 h lock costs honest players nothing** (60 days): trades per 1000 players a day 36.1 (no lock) / 35.9 (1 day) / 35.2 (3 days); species owned 44.91 / 44.77 / 44.70.
+* **A 24 h lock costs honest players nothing** (60 days): trades per 1000 players a day 36.1 (no lock) / 36.0 (1 day) / 35.4 (3 days); species owned 44.77 / 44.88 / 44.71.
 * **Does the lock stop merge-then-trade laundering?** Toy ring model (6 bot mules, 30 trades/hour each, 25% of hops cash out to innocents; "x/y/z" = extra copies / merge outputs / innocent holders at detection):
 
 | Policy | Dupe bug, detected at 24 h | Stolen 20 items, at 24 h |
@@ -371,20 +372,20 @@ the "too easy" band (all 50 in about 88 days with trade). **The meter rate and M
 |---|---|---|
 | Common row (14) | 9 | 6 |
 | Uncommon row (11) | 19 | 12 |
-| Rare row (10) | 66 | 34 |
-| Epic row (7) | 101 | 57 |
-| Legendary row (5) | 135 | 78 |
-| Mythic row (3) | 184 | 121 |
-| **All 50** | **216 (about 54 active hours)** | **131 (about 33 active hours)** |
+| Rare row (10) | 68 | 34 |
+| Epic row (7) | 102 | 56 |
+| Legendary row (5) | 136 | 76 |
+| Mythic row (3) | 180 | 118 |
+| **All 50** | **205 (about 50 active hours)** | **131 (about 33 active hours)** |
 
-A tier row finished is a **fixed cosmetic reward** (shelf light, frame), never an extra random item (the Japanese kompu-gacha lesson). First Rare day 3, Epic day 7, Legendary day 15, Mythic day 38 (medians, all players; regular players 2 / 5 / 10 / 30).
+A tier row finished is a **fixed cosmetic reward** (shelf light, frame), never an extra random item (the Japanese kompu-gacha lesson). First Rare day 3, Epic day 7, Legendary day 15, Mythic day 38 (medians, all players; regular players 2 / 5 / 11 / 28).
 
 ### 5.12 Limits of the sim (read before trusting a number)
 
 * **Behaviour is assumed:** touch speed, session lengths, active days (0.4 / 0.7 / 0.9), churn, willingness to trade (30 / 55 / 75%), friends (35% have none), when people merge (30% merge even finished rows). **The 3.1 minutes per capsule is a model of human touching, not a measurement**; the first real playtest must
   re-measure it and the capsule cost (100 SP) is the one dial to retune.
 * Trading is modelled as same-tier swaps matched daily over friends plus a species-searchable board; real timing, notifications and UI friction are not modelled. The "favour swap" acceptance (50%) is a guess; with
-  mutual-need only, trade finishes in 145 days instead of 130.
+  mutual-need only, trade finishes in 150 days instead of 129.
 * The population is one cohort in one catalog; no new species arrive, no seasons, no players joining later (veterans would hold spares newcomers cannot afford; risk 3).
 * Active hours count only touching time. Bots, multi-accounting and real-money trading are not modelled beyond the toy ring.
 * Sim cost of the tier FX, art and server are out of scope. Everything is deterministic (seeded `mulberry32`), so changing one rule shows its effect exactly.
@@ -575,7 +576,7 @@ Why server mint comes before trade: a forgeable local inventory makes every Myth
 | 1 | **Age and consent.** Who is the audience, and does the portal account (email sign-up, `find_users` by email) allow children? | COPPA, UK Children's Code, Apple Kids rules. Trading needs sign-in. | Decide the age bar; trading only for parent-approved or old-enough accounts; guests play locally with no trading. |
 | 2 | **Server dependency.** Trade, merge and capsule opening need the Supabase ledger. | A forgeable local save would ruin the economy; offline play cannot be tradeable. | Build 1b before 2 and 3; keep a local "demo shelf" that is never promoted. |
 | 3 | **The economy ends.** A regular finishes all 50 in about 131 days with trade. | After that, no new species means no trade, and veterans' spares cannot help newcomers. | Plan **seasons**: about 4 to 6 new species every 8 weeks, appended to tiers; cosmetics for finished rows. |
-| 4 | **Solo-to-trade is 1.6 to 1.7x, not 2x.** | Trade cannot mint copies; even a frictionless oracle reaches 1.78x. | Accept, or add more Epic+ species. We chose pacing. |
+| 4 | **Solo-to-trade is about 1.5 to 1.7x (1.56x at p50), not 2x.** | Trade cannot mint copies; even a frictionless oracle reaches 1.76x. | Accept, or add more Epic+ species. We chose pacing. |
 | 5 | **Every number rests on assumed behaviour.** | 3.1 min per capsule is a model of human touching. | Playtest early; instrument aggregate (not personal) timing; retune `capsuleCost`. Sensitivity: 2x slower is 5.4 min per capsule (edge of grind). |
 | 6 | **Dozens of repeat Commons.** 90% of capsules are repeats by week 3. | Could feel flat. | Reveal compresses repeats; Tidy-up; Rare+ repeats are the trade fuel. If it feels flat, raise Uncommon odds before touching the meter. |
 | 7 | **Bots and macros.** | A cycler hits 40 SP/min. | Daily cap of 12 capsules, server-side plausibility checks on touches, no cash value. Cannot be zero. |

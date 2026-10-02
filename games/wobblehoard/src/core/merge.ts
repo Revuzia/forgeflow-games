@@ -25,7 +25,7 @@ import { quantizeGenome } from './genome.ts';
 import { mulberry32 } from './rng.ts';
 import { TIERS, TIER_COUNT, TOP_TIER_INDEX, tierIndex } from './rarity.ts';
 import type { TierId } from './rarity.ts';
-import { SPECIES_BY_TIER, getSpecies, speciesBaseGenome } from '../data/catalog.ts';
+import { CATALOG, SPECIES_BY_TIER, getSpecies, speciesBaseGenome } from '../data/catalog.ts';
 import type { SpeciesDef, SpeciesId } from '../data/catalog.ts';
 import { draw, makeRng, pickWeighted } from './drops.ts';
 import type { RngSource } from './drops.ts';
@@ -81,14 +81,101 @@ export const createMergePity = (): number[] => new Array(TIER_COUNT).fill(0);
 export type MergeError = 'wrong-count' | 'mixed-species' | 'unknown-species' | 'mythic-cannot-merge' | 'not-enough-copies';
 
 function copiesOf(owned: MergeOwned, id: SpeciesId): number {
+  if (!owned) return 0;
   if (typeof owned === 'function') { const n = owned(id); return typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; }
   if (owned instanceof Set) return owned.has(id) ? 1 : 0;
   const n = (owned as Readonly<Record<string, number>>)[id];
   return typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
-const countsKnown = (owned: MergeOwned): boolean => !(owned instanceof Set);
+const countsKnown = (owned: MergeOwned): boolean => !!owned && !(owned instanceof Set);
 
-/* ───────────────────────────────────────────────── odds analysis (shared by preview and roll) ───────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────── the generic core (shared by the game, the preview and the economy sim) ───────────────────────────────────────────────── */
+// The rules live HERE, once, over integer species HANDLES (catalog positions for the game; anything for a what-if roster in a simulation).
+// previewMerge / rollMerge below adapt the real catalog to it; _harness/sim_economy.ts calls it directly (also for hypothetical catalogs).
+
+export interface MergeCoreInput {
+  /** Input tier index 0..TOP_TIER_INDEX-1 (a Mythic cannot merge). */
+  tier: number;
+  /** Handle of the input species: it is never a possible result and never counts as "lacking". */
+  self: number;
+  /** Handles of the species of each tier, by tier index. */
+  roster: ReadonlyArray<ReadonlyArray<number>>;
+  /** Copies owned of a handle; 0 = the player does not own it. */
+  copies: (handle: number) => number;
+  /** Merges in a row from this tier without a tier-up. */
+  pity: number;
+  rules: MergeRules;
+}
+
+export interface MergeCoreOdds {
+  tier: number;
+  baseP: number;
+  /** The tier-up chance this merge has: 1 when a finished row or pity makes it certain. */
+  pEff: number;
+  basis: 'table' | 'finished-row' | 'pity';
+  finished: boolean;
+  pityDue: boolean;
+  pityCount: number;
+  pityLen: number;
+  /** Candidates (handles) in the input tier and in the next tier, with their weights. */
+  stay: number[]; stayW: number[]; stayTotal: number; stayNew: boolean[];
+  up: number[]; upW: number[]; upTotal: number; upNew: boolean[];
+  /** Candidates the player does not own, in each list. */
+  lackStay: number; lackUp: number;
+}
+
+/** The exact odds of one merge (no randomness). */
+export function mergeOddsCore(i: MergeCoreInput): MergeCoreOdds {
+  const { tier: t, rules } = i;
+  const cand = (tt: number): { list: number[]; w: number[]; isNew: boolean[]; total: number; lacking: number } => {
+    const list: number[] = [], w: number[] = [], isNew: boolean[] = [];
+    let total = 0, lacking = 0;
+    for (const h of i.roster[tt]) {
+      if (h === i.self) continue; // never the input species
+      const nw = i.copies(h) === 0;
+      if (nw) lacking++;
+      const wt = nw ? rules.unownedWeight : 1;
+      list.push(h); w.push(wt); isNew.push(nw); total += wt;
+    }
+    return { list, w, isNew, total, lacking };
+  };
+  const stay = cand(t);
+  const up = t < TOP_TIER_INDEX ? cand(t + 1) : { list: [] as number[], w: [] as number[], isNew: [] as boolean[], total: 0, lacking: 0 };
+  const baseP = rules.tierUp[t] ?? 0;
+  const finished = t < TOP_TIER_INDEX && stay.lacking === 0;
+  let pEff = baseP, basis: MergeCoreOdds['basis'] = 'table';
+  if (rules.rowDoneBoost > 1 && finished) { pEff = Math.min(rules.rowDoneCap, baseP * rules.rowDoneBoost); basis = 'finished-row'; }
+  const pityCount = Number.isFinite(i.pity) && i.pity > 0 ? Math.floor(i.pity) : 0;
+  const pityDue = t < TOP_TIER_INDEX && rules.pityAfter > 0 && pityCount >= rules.pityAfter;
+  if (pityDue) { if (!(basis === 'finished-row' && pEff >= 1)) basis = 'pity'; pEff = 1; }
+  return { tier: t, baseP, pEff, basis, finished, pityDue, pityCount, pityLen: rules.pityAfter, stay: stay.list, stayW: stay.w, stayTotal: stay.total, stayNew: stay.isNew, up: up.list, upW: up.w, upTotal: up.total, upNew: up.isNew, lackStay: stay.lacking, lackUp: up.lacking };
+}
+
+/** Resolve a merge from two uniform draws: u1 decides the tier-up, u2 picks the species by weight inside the output tier. */
+export function mergeDrawCore(o: MergeCoreOdds, u1: number, u2: number): { tierUp: boolean; out: number } {
+  const tierUp = u1 < o.pEff;
+  const list = tierUp ? o.up : o.stay, w = tierUp ? o.upW : o.stayW, total = tierUp ? o.upTotal : o.stayTotal;
+  return { tierUp, out: list[pickWeighted(w, total, u2)] };
+}
+
+/** Pity counter after a merge: reset by a tier-up, else one more dud (capped at 255). */
+export const pityAfterCore = (pity: number, tierUp: boolean): number => (tierUp ? 0 : Math.min(255, (Number.isFinite(pity) && pity > 0 ? Math.floor(pity) : 0) + 1));
+
+/* ───────────────────────────────────────────────── the real catalog behind the core ───────────────────────────────────────────────── */
+
+/** Handles of the real roster: a species' handle is its catalog position (= idx). */
+const ROSTER: ReadonlyArray<ReadonlyArray<number>> = SPECIES_BY_TIER.map((l) => l.map((d) => d.idx));
+
+interface Analysis { def: SpeciesDef; core: MergeCoreOdds; copies: number | null }
+
+function analyse(def: SpeciesDef, state: MergeState | undefined, rules: MergeRules): Analysis {
+  state = state ?? { owned: {} };
+  const owned = state.owned;
+  const t = tierIndex(def.tier);
+  const pc = state.pity ? state.pity[t] : 0;
+  const core = mergeOddsCore({ tier: t, self: def.idx, roster: ROSTER, copies: (h) => copiesOf(owned, CATALOG[h].id), pity: typeof pc === 'number' ? pc : 0, rules });
+  return { def, core, copies: countsKnown(owned) ? copiesOf(owned, def.id) : null };
+}
 
 export interface MergeOutcomeRow {
   species: SpeciesId;
@@ -106,7 +193,7 @@ export interface MergePreviewOk {
   inputSpecies: SpeciesId;
   inputTier: TierId;
   cost: number;
-  /** The tier a result lands in if it does not tier up (the input tier) and if it does (null for Mythic, which cannot merge). */
+  /** The tier a result lands in if it does not tier up (the input tier) and if it does. */
   stayTier: TierId;
   upTier: TierId;
   /** The table chance for this input tier (30/25/20/15/10 percent). */
@@ -133,55 +220,11 @@ export interface MergePreviewOk {
 export interface MergePreviewErr { ok: false; error: MergeError }
 export type MergePreview = MergePreviewOk | MergePreviewErr;
 
-interface Analysis {
-  def: SpeciesDef;
-  t: number;
-  baseP: number;
-  pEff: number;
-  basis: 'table' | 'finished-row' | 'pity';
-  finished: boolean;
-  pityCount: number;
-  pityDue: boolean;
-  pityLen: number;
-  stay: SpeciesDef[]; stayW: number[]; stayTotal: number;
-  up: SpeciesDef[]; upW: number[]; upTotal: number;
-  lackStay: number; lackUp: number;
-  copies: number | null;
-}
-
-function analyse(def: SpeciesDef, state: MergeState, rules: MergeRules): Analysis {
-  const t = tierIndex(def.tier);
-  const owned = state.owned;
-  const isNew = (d: SpeciesDef): boolean => copiesOf(owned, d.id) === 0;
-  const candidates = (tt: number): { list: SpeciesDef[]; w: number[]; total: number; lacking: number } => {
-    const list: SpeciesDef[] = [], w: number[] = [];
-    let total = 0, lacking = 0;
-    for (const d of SPECIES_BY_TIER[tt]) {
-      if (d.id === def.id) continue; // never the input species
-      const nw = isNew(d);
-      if (nw) lacking++;
-      list.push(d); w.push(nw ? rules.unownedWeight : 1); total += nw ? rules.unownedWeight : 1;
-    }
-    return { list, w, total, lacking };
-  };
-  const stay = candidates(t);
-  const up = t < TOP_TIER_INDEX ? candidates(t + 1) : { list: [] as SpeciesDef[], w: [] as number[], total: 0, lacking: 0 };
-  const baseP = rules.tierUp[t] ?? 0;
-  const finished = t < TOP_TIER_INDEX && stay.lacking === 0;
-  let pEff = baseP, basis: Analysis['basis'] = 'table';
-  if (rules.rowDoneBoost > 1 && finished) { pEff = Math.min(rules.rowDoneCap, baseP * rules.rowDoneBoost); basis = 'finished-row'; }
-  const pc = state.pity ? state.pity[t] : 0;
-  const pityCount = typeof pc === 'number' && Number.isFinite(pc) && pc > 0 ? Math.floor(pc) : 0;
-  const pityDue = t < TOP_TIER_INDEX && rules.pityAfter > 0 && pityCount >= rules.pityAfter;
-  if (pityDue) { if (!(basis === 'finished-row' && pEff >= 1)) basis = 'pity'; pEff = 1; }
-  const copies = countsKnown(owned) ? copiesOf(owned, def.id) : null;
-  return { def, t, baseP, pEff, basis, finished, pityCount, pityDue, pityLen: rules.pityAfter, stay: stay.list, stayW: stay.w, stayTotal: stay.total, up: up.list, upW: up.w, upTotal: up.total, lackStay: stay.lacking, lackUp: up.lacking, copies };
-}
-
 interface Resolved { def: SpeciesDef; inputs: SpeciesId[]; genomes: Genome[] }
 
-/** Validate the inputs (count, same species, known, not Mythic) and normalise them. */
-function resolveInputs(inputs: readonly MergeInput[], state: MergeState, cost: number): Resolved | MergeError {
+/** Validate the inputs (count, same species, known, not Mythic, enough copies) and normalise them. */
+function resolveInputs(inputs: readonly MergeInput[], state: MergeState | undefined, cost: number): Resolved | MergeError {
+  state = state ?? { owned: {} };
   if (!Array.isArray(inputs) || inputs.length !== cost) return 'wrong-count';
   const ids: SpeciesId[] = [], genomes: Genome[] = [];
   for (const x of inputs) {
@@ -205,17 +248,18 @@ function resolveInputs(inputs: readonly MergeInput[], state: MergeState, cost: n
 }
 
 function formatPreview(a: Analysis, cost: number): MergePreviewOk {
+  const c = a.core;
   const outcomes: MergeOutcomeRow[] = [];
-  const pUp = a.pEff, pStay = 1 - a.pEff;
-  a.stay.forEach((d, i) => outcomes.push({ species: d.id, tier: d.tier, weight: a.stayW[i], probability: pStay * (a.stayW[i] / a.stayTotal), isNew: a.stayW[i] > 1 }));
-  a.up.forEach((d, i) => outcomes.push({ species: d.id, tier: d.tier, weight: a.upW[i], probability: pUp * (a.upW[i] / a.upTotal), isNew: a.upW[i] > 1 }));
+  const pUp = c.pEff, pStay = 1 - c.pEff;
+  c.stay.forEach((h, i) => outcomes.push({ species: CATALOG[h].id, tier: CATALOG[h].tier, weight: c.stayW[i], probability: pStay * (c.stayW[i] / c.stayTotal), isNew: c.stayNew[i] }));
+  c.up.forEach((h, i) => outcomes.push({ species: CATALOG[h].id, tier: CATALOG[h].tier, weight: c.upW[i], probability: pUp * (c.upW[i] / c.upTotal), isNew: c.upNew[i] }));
   return {
     ok: true, inputSpecies: a.def.id, inputTier: a.def.tier, cost,
-    stayTier: a.def.tier, upTier: TIERS[Math.min(TOP_TIER_INDEX, a.t + 1)],
-    baseTierUpChance: a.baseP, tierUpChance: a.pEff, basis: a.basis, finishedRow: a.finished,
-    pityCount: a.pityCount, pityDue: a.pityDue,
-    dudsUntilPity: a.pityDue || a.pityLen <= 0 ? 0 : Math.max(0, a.pityLen - a.pityCount),
-    lackingInTier: a.lackStay, lackingInNextTier: a.lackUp,
+    stayTier: a.def.tier, upTier: TIERS[Math.min(TOP_TIER_INDEX, c.tier + 1)],
+    baseTierUpChance: c.baseP, tierUpChance: c.pEff, basis: c.basis, finishedRow: c.finished,
+    pityCount: c.pityCount, pityDue: c.pityDue,
+    dudsUntilPity: c.pityDue || c.pityLen <= 0 ? 0 : Math.max(0, c.pityLen - c.pityCount),
+    lackingInTier: c.lackStay, lackingInNextTier: c.lackUp,
     copiesOwned: a.copies, usesLastCopy: a.copies !== null && a.copies <= cost,
     outcomes,
   };
@@ -305,20 +349,19 @@ export function rollMerge(inputs: readonly MergeInput[], src: RngSource, state: 
   const odds = formatPreview(a, cost);
   const u1 = draw(rng), u2 = draw(rng), u3 = draw(rng);
   // tier-up: the (effective) chance decides; pity and finished row are folded into it (chance 1)
-  const tierUp = u1 < a.pEff;
-  const list = tierUp ? a.up : a.stay, w = tierUp ? a.upW : a.stayW, total = tierUp ? a.upTotal : a.stayTotal;
-  const chosen = list[pickWeighted(w, total, u2)];
+  const { tierUp, out } = mergeDrawCore(a.core, u1, u2);
+  const chosen = CATALOG[out];
   const genomeSeed = Math.floor(u3 * 4294967296) >>> 0;
   const base = speciesBaseGenome(chosen.id, genomeSeed);
   const genome = r.genomes.length ? lineageGenome(base, r.genomes, genomeSeed) : base;
   const pityAfter = createMergePity();
   for (let i = 0; i < TIER_COUNT; i++) { const p = state.pity ? state.pity[i] : 0; pityAfter[i] = typeof p === 'number' && Number.isFinite(p) && p > 0 ? Math.min(255, Math.floor(p)) : 0; }
-  pityAfter[a.t] = tierUp ? 0 : Math.min(255, pityAfter[a.t] + 1);
+  pityAfter[a.core.tier] = pityAfterCore(pityAfter[a.core.tier], tierUp);
   const isNew = copiesOf(state.owned, chosen.id) === 0;
-  const reason: MergeRollOk['reason'] = !tierUp ? 'stay' : a.basis === 'pity' ? 'pity' : a.basis === 'finished-row' ? 'finished-row' : 'roll';
+  const reason: MergeRollOk['reason'] = !tierUp ? 'stay' : a.core.basis === 'pity' ? 'pity' : a.core.basis === 'finished-row' ? 'finished-row' : 'roll';
   return {
     ok: true, inputs: r.inputs, inputTier: r.def.tier,
     outcome: { species: chosen.id, tier: chosen.tier, tierUp, isNew, genomeSeed, genome },
-    reason, odds, draws: [u1, u2, u3], pityAfter, pityCounterAfter: pityAfter[a.t],
+    reason, odds, draws: [u1, u2, u3], pityAfter, pityCounterAfter: pityAfter[a.core.tier],
   };
 }

@@ -6,7 +6,8 @@ import * as THREE from 'three';
 import { createStageDev, type StageDev } from '../../src/render/stage.ts';
 import { StubBody } from '../../src/render/stubBody.ts';
 import { genomeFromParam, type Genome } from '../../src/core/genome.ts';
-import type { FxKind, QualityTier, SoftBodyCtor, SoftBodyLike, SoftEvent, V3 } from '../../src/contracts.ts';
+import type { CapsuleHandle, CeremonyHandle, FxKind, QualityTier, SoftBodyCtor, SoftBodyLike, SoftEvent, TierName, V3 } from '../../src/contracts.ts';
+import { capsuleDuration, mergeDuration } from '../../src/render/ceremony.ts';
 
 type BodyKind = 'real' | 'stub';
 const params = new URLSearchParams(location.search);
@@ -108,6 +109,32 @@ function frameStats(): { w: number; h: number; mean: number; std: number; nonBg:
   }
   const mean = s / n;
   return { w: canvas.width, h: canvas.height, mean, std: Math.sqrt(Math.max(0, s2 / n - mean * mean)), nonBg: nonBg / n, distinct: seenCols.size };
+}
+
+
+// ---- ceremony / multi-body scripting (round 2) ----
+const LUMA_LUT = new Float32Array(256).map((_, i) => { const c = i / 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); });
+const lumaCanvas = document.createElement('canvas');
+lumaCanvas.width = 64; lumaCanvas.height = 48;
+const lumaCtx = lumaCanvas.getContext('2d', { willReadFrequently: true });
+/** Mean RELATIVE luminance (linear light, 0..1) of the canvas as it is right now (call right after a render). */
+function meanLuma(): number {
+  if (!lumaCtx) return 0;
+  lumaCtx.drawImage(canvas, 0, 0, 64, 48);
+  const d = lumaCtx.getImageData(0, 0, 64, 48).data;
+  let s = 0;
+  for (let i = 0; i < d.length; i += 4) s += 0.2126 * LUMA_LUT[d[i]] + 0.7152 * LUMA_LUT[d[i + 1]] + 0.0722 * LUMA_LUT[d[i + 2]];
+  return s / (d.length / 4);
+}
+interface BeatRec { beat: string; t: number; tier: string; frame: number }
+const cer = { handle: null as CeremonyHandle | null, kind: '', tier: '' as TierName | '', beats: [] as BeatRec[], lumas: [] as number[], frames: 0, duration: 0, dt: 1 / 30, startFrame: 0, tierUp: false, quick: false };
+let capsuleHandle: CapsuleHandle | null = null;
+let capsuleLanded = 0;
+const PARENT_SEEDS = ['', '3', '8'];
+function resultGenome(tier: TierName): Genome { return genomeFromParam(String(['', '2', '5', '19', '16', '8'][['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'].indexOf(tier)] ?? '')); }
+const hooksFor = { onBeat(beat: string, info: { t: number; tier: TierName }): void { cer.beats.push({ beat, t: info.t, tier: info.tier, frame: frameNo }); } };
+function resetCer(kind: string, tier: TierName, duration: number): void {
+  cer.kind = kind; cer.tier = tier; cer.beats = []; cer.lumas = []; cer.frames = 0; cer.duration = duration; cer.startFrame = frameNo;
 }
 
 const RV = {
@@ -274,6 +301,104 @@ const RV = {
     x2.drawImage(canvas, 0, 0);
     return pts.map(([x, y]) => Array.from(x2.getImageData(x, y, 1, 1).data.slice(0, 3)));
   },
+
+  // ---- multi-body, rarity, ceremonies ----
+  addBody(seedOrGenome: string | number | Genome, tier: TierName = 'common', x = 0, z = 0): number {
+    const g = typeof seedOrGenome === 'object' ? seedOrGenome : genomeFromParam(String(seedOrGenome));
+    return stage.addBody(makeBody(g), g, { tier, position: { x, y: 0, z } });
+  },
+  /** Replace everything with one fresh body of this genome at this rarity tier (for the rarity sheet). */
+  showTier(tier: TierName, seedOrGenome: string | number | Genome = ''): number {
+    const g = typeof seedOrGenome === 'object' ? seedOrGenome : genomeFromParam(String(seedOrGenome));
+    genome = g;
+    body = makeBody(g);
+    stage.setBody(body, g);
+    const id = stage.primaryBodyId() ?? -1;
+    stage.setBodyTier(id, tier);
+    return id;
+  },
+  setTier(id: number, tier: TierName): void { stage.setBodyTier(id, tier); },
+  clearBodies(): void { stage.clearBodies(); },
+  setCalm(on: boolean): void { stage.setCalmEffects(on); },
+  dropCapsule(): void { capsuleLanded = 0; capsuleHandle = stage.dropCapsule({ onLand: () => { capsuleLanded = frameNo; } }); },
+  get capsule() { return capsuleHandle; },
+  get capsuleLandedFrame() { return capsuleLanded; },
+  capsuleInfo(): { landed: boolean; point: { x: number; y: number; r: number } | null; hit: boolean } {
+    const h = capsuleHandle;
+    const p = h ? h.screenPoint() : null;
+    return { landed: !!h && h.landed, point: p ? { ...p } : null, hit: !!h && !!p && h.hitTest(p.x + p.r * 0.5, p.y) };
+  },
+  setSqueeze(p: number): void { capsuleHandle?.setSqueeze(p); },
+  capsuleReveal(tier: TierName, o: { quick?: boolean; keepCurrent?: boolean } = {}): number {
+    const g = resultGenome(tier);
+    const D = capsuleDuration(tier, { quick: o.quick, calm: stage.info.calm });
+    resetCer('capsule', tier, D);
+    cer.quick = !!o.quick; cer.tierUp = false;
+    cer.handle = stage.playCapsuleReveal({ result: { genome: g, tier, isNew: true }, createBody: makeBody, capsule: capsuleHandle ?? undefined, quick: o.quick, keepCurrent: o.keepCurrent }, hooksFor);
+    return cer.handle.duration;
+  },
+  merge(tier: TierName, parents = 2, tierUp = false): number {
+    const g = resultGenome(tier);
+    const D = mergeDuration(tier, { tierUp, calm: stage.info.calm });
+    resetCer('merge', tier, D);
+    cer.tierUp = tierUp; cer.quick = false;
+    const ps = PARENT_SEEDS.slice(0, parents).map((sd) => ({ genome: genomeFromParam(sd), tier: 'common' as TierName }));
+    cer.handle = stage.playMergeCeremony({ parents: ps, result: { genome: g, tier, tierUp, isNew: true }, createBody: makeBody }, hooksFor);
+    return cer.handle.duration;
+  },
+  /** Advance the running ceremony by up to n frames of dt (stops when it ends); records luminance per frame if asked. Returns frames done. */
+  cerFrames(n: number, dt = 1 / 30, withLuma = false): number {
+    let i = 0;
+    for (; i < n && cer.handle && cer.handle.active; i++) {
+      frame(dt, withLuma || i === n - 1);
+      cer.frames++;
+      if (withLuma) cer.lumas.push(meanLuma());
+    }
+    cer.dt = dt;
+    return i;
+  },
+  /** Drive frames until the ceremony's time reaches `seconds` (ceremony clock = frames x dt). */
+  cerSeek(seconds: number, dt = 1 / 30, withLuma = false): void {
+    const target = Math.round(seconds / dt);
+    while (cer.handle && cer.handle.active && cer.frames < target) RV.cerFrames(1, dt, withLuma);
+    stage.render();
+  },
+  skipCer(): void { cer.handle?.skip(); },
+  cerState() { return { active: !!cer.handle && cer.handle.active, frames: cer.frames, seconds: cer.frames * cer.dt, duration: cer.duration, beats: cer.beats, lumas: cer.lumas, kind: cer.kind, tier: cer.tier, info: stage.info, resultId: cer.handle?.resultBodyId ?? null }; },
+  /** After the ceremony: the result becomes the viewer's play body. */
+  adoptResult(): boolean { const b = cer.handle?.resultBody; if (!b) return false; body = b; return true; },
+  lumaNow(): number { stage.render(); return meanLuma(); },
+  /** Final-frame fingerprint: downscaled canvas pixels (for the skip-equals-natural-end comparison). */
+  fingerprint(): number[] {
+    stage.render();
+    const c = document.createElement('canvas'); c.width = 48; c.height = 36;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    if (!x) return [];
+    x.drawImage(canvas, 0, 0, 48, 36);
+    return Array.from(x.getImageData(0, 0, 48, 36).data);
+  },
+  flashProbe() {
+    const f = stage.flash;
+    f.reset();
+    const out: Record<string, unknown> = {};
+    // adversarial: 12 flash requests in one second
+    let granted = 0, a = 0;
+    for (let i = 0; i < 12; i++) { const r = f.flash(10 + i * 0.08, 0.6); if (r > 0) { granted++; a = Math.max(a, r); } }
+    out.flashesIn1s = granted; out.maxAlpha = a;
+    // stacked within the 480 ms ramp must be refused
+    f.reset(); const first = f.flash(20, 0.2), second = f.flash(20.2, 0.2), third = f.flash(20.6, 0.2), fourth = f.flash(20.9, 0.2);
+    out.stack = [first > 0, second > 0, third > 0, fourth > 0];
+    // rings
+    f.reset(); const r1 = f.ring(30), r2 = f.ring(30.2), r3 = f.ring(30.55), r4 = f.ring(30.7);
+    out.rings = [r1, r2, r3, r4];
+    // tints
+    f.reset(); const t1 = f.tint(40, 'coral'), t2 = f.tint(40.1, 'cyan'), t3 = f.tint(40.3, 'coral'), t4 = f.tint(40.7, 'cyan');
+    out.tints = [t1, t2, t3, t4];
+    // calm
+    f.reset(); f.calm = true; out.calmFlash = f.flash(50, 0.2); out.calmRing = f.ring(50); f.calm = false; f.reset();
+    return out;
+  },
+
   stats() { return stage.stats(); },
   memory() { return stage.memory(); },
   info() { return stage.info; },

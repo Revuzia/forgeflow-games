@@ -147,10 +147,10 @@ export interface SquishAudio {
   /** Harness readout: how many voices of each kind were started, context state, sample rate, output peak since last call. */
   /**
    * Harness readout: how many voices of each kind were started, context state, sample rate, output peak (linear, 0..1)
-   * since the last call. `live` / `liveNodes` / `dropped` are optional extras (voice groups and audio nodes currently
+   * since the last call. `live` / `liveNodes` / `dropped` / `liveKinds` (live voice groups by kind, fading ones excluded) are optional extras (voice groups and audio nodes currently
    * alive, voices refused because the context was not running or the call was invalid).
    */
-  stats(): { started: Record<string, number>; state: string; sampleRate: number; peak: number; live?: number; liveNodes?: number; dropped?: number };
+  stats(): { started: Record<string, number>; state: string; sampleRate: number; peak: number; live?: number; liveNodes?: number; dropped?: number; liveKinds?: Record<string, number> };
   /** Optional: tab hidden / visible. `true` suspends the context and frees every live voice; `false` resumes it. */
   setPaused?(paused: boolean): void;
   /** Optional: stop the housekeeping timer and close the context. The instance is unusable afterwards. */
@@ -164,7 +164,7 @@ export interface SquishAudio {
   /** The tier motif of the reveal (DESIGN 6.5). `mythicVariant` (0..2) selects the unique 3-note motif of each Mythic. `tierUp` adds the rising ladder. durationS fits the budget in DESIGN 6.1; `calm` shortens and softens. */
   reveal?(p: { tier: TierName; tierUp?: boolean; isNew?: boolean; mythicVariant?: number; durationS?: number; calm?: boolean; pitch?: number }): void;
   /** Merge ceremony T0..T2: hum + squelch + noise-tick density rising for `chargeS`; call burst() at T3 with the result, stop() to abort. */
-  mergeStart?(p: { tier: TierName; chargeS?: number; calm?: boolean; pitch?: number }): { burst(p: { tier: TierName; tierUp?: boolean; mythicVariant?: number }): void; stop(): void };
+  mergeStart?(p: { tier: TierName; chargeS?: number; calm?: boolean; pitch?: number }): { burst(p: { tier: TierName; tierUp?: boolean; mythicVariant?: number; durationS?: number }): void; stop(): void };
   /** Duck the master by `db` (negative) for `ms` (the 250 ms Mythic pre-roll duck). */
   duck?(p: { db: number; ms: number }): void;
 }
@@ -177,6 +177,64 @@ export type FxKind = 'bubbles' | 'glitter' | 'dust' | 'ring';
 export interface StageFrameInput {
   time: number;                              // seconds since boot (monotonic)
   pointerNdc: { x: number; y: number } | null; // eyes follow the pointer when present. Standard NDC: x -1..1 left to right, y -1..1 BOTTOM to TOP
+}
+
+/* ── round 2: multi-body stage, rarity look, capsule reveal and merge ceremony (implemented by src/render/stage.ts) ── */
+
+export interface AddBodyOpts {
+  /** Rarity tier styling (DESIGN 5.3). Default 'common'. */
+  tier?: TierName;
+  /** Render-space offset of the body (the simulated body itself keeps its own origin; the stage draws it here). */
+  position?: V3;
+}
+
+/** Beats the ceremonies report, in time order, so the shell can fire audio / haptics in sync. `t` = seconds since the ceremony started. */
+export type CeremonyBeat = 'grab' | 'crack' | 'burst' | 'reveal' | 'press' | 'fold' | 'charge' | 'settle';
+export interface CeremonyHooks {
+  onBeat?(beat: CeremonyBeat, info: { t: number; tier: TierName }): void;
+}
+export interface CeremonyHandle {
+  /** Resolves when the ceremony ended (or its skip crossfade finished). Never rejects. */
+  readonly done: Promise<void>;
+  /** Jump to the final reveal frame with a 120 ms crossfade. The result is never hidden. Fires 'reveal' + 'settle' if not yet fired. */
+  skip(): void;
+  readonly active: boolean;
+  /** Planned duration in seconds (DESIGN 6.1 budget, x0.65 in calm mode, +0.4 s for a tier-up merge). */
+  readonly duration: number;
+  /** The result squishy's body, stage-created through spec.createBody. After `done` it is the primary body: the shell adopts it as its play body (steps it, raycasts it). */
+  readonly resultBody: SoftBodyLike | null;
+  readonly resultBodyId: number | null;
+}
+export interface CapsuleHandle {
+  readonly id: number;
+  /** true once it has touched down (the wobble may still be settling). */
+  readonly landed: boolean;
+  /** Centre of the capsule in CSS pixels over the canvas, and its on-screen radius; null while it is falling, gone or opening. */
+  screenPoint(): { x: number; y: number; r: number } | null;
+  /** Is the CSS-pixel point on the capsule (radius + slop)? Use it for the tap / hold test. */
+  hitTest(x: number, y: number, slopPx?: number): boolean;
+  /** Squeeze progress 0..1: it squashes, rattles and shows stress lines. Reaching 1 (or a tap) is the cue for playCapsuleReveal. */
+  setSqueeze(progress: number): void;
+  wobble(strength?: number): void;
+  remove(): void;
+}
+export interface CapsuleRevealSpec {
+  /** The pulled squishy (decided by the server before the animation starts). */
+  result: { genome: Genome; tier: TierName; isNew?: boolean };
+  /** Builds the body that drops out (the stage steps and renders it). */
+  createBody(genome: Genome): SoftBodyLike;
+  /** The capsule from dropCapsule(); omitted = the current one, or a new one standing at the centre. */
+  capsule?: CapsuleHandle;
+  /** Repeat Common / Uncommon "quick pop" (DESIGN 6.1: 0.8 s). */
+  quick?: boolean;
+  /** Keep the player's current squishy on the table (default: it slides off and is removed). */
+  keepCurrent?: boolean;
+}
+export interface MergeCeremonySpec {
+  /** MERGE_COST parents (2 or 3), each with its own genome and (for the styling) tier. */
+  parents: { genome: Genome; tier?: TierName }[];
+  result: { genome: Genome; tier: TierName; tierUp?: boolean; isNew?: boolean };
+  createBody(genome: Genome): SoftBodyLike;
 }
 
 export interface StageLike {
@@ -202,6 +260,22 @@ export interface StageLike {
   spawnFx(kind: FxKind, at: V3, intensity: number): void;
   dispose(): void;
   stats(): { drawCalls: number; triangles: number; tier: QualityTier; frameMsEma: number };
+
+  /* ── round 2 (all optional in the type so mocks keep compiling; src/render/stage.ts implements every one) ── */
+  /** Add another body (own jelly view, core, face, FX, light pool; shared environment and shader programs). Returns its id. setBody = clearBodies + addBody. */
+  addBody?(body: SoftBodyLike, genome: Genome, opts?: AddBodyOpts): number;
+  removeBody?(id: number): void;
+  clearBodies?(): void;
+  /** Id of the body setBody / the last ceremony made primary (the one the camera follows), or null. */
+  primaryBodyId?(): number | null;
+  /** Restyle a body for another rarity tier. */
+  setBodyTier?(id: number, tier: TierName): void;
+  /** Calm effects (DESIGN 6.6): no camera moves, no slow-motion, particles x0.3, rings become fades, durations x0.65, no pulses, no screen flash. */
+  setCalmEffects?(on: boolean): void;
+  /** The meter-full cue: a neutral translucent capsule drops from above next to the squishy, lands with a wobble and stays tappable. */
+  dropCapsule?(opts?: { onLand?: () => void; at?: V3 }): CapsuleHandle;
+  playCapsuleReveal?(spec: CapsuleRevealSpec, hooks?: CeremonyHooks): CeremonyHandle;
+  playMergeCeremony?(spec: MergeCeremonySpec, hooks?: CeremonyHooks): CeremonyHandle;
 }
 
 /* ───────────────────────────── shell (src/main.ts, input, ui) ───────────────────────────── */

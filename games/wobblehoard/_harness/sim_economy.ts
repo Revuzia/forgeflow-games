@@ -1,28 +1,48 @@
-// WOBBLEHOARD economy Monte-Carlo (v3).
+// WOBBLEHOARD economy Monte-Carlo (v4: runs the REAL game logic).
 //   50-species catalog, 6 rarity tiers, an explicit ACTIVE-PLAY model (touch-by-touch micro-sim -> minutes per capsule),
 //   MERGE = MERGE_COST of the same species -> 1 random squishy, trading between players with different play styles.
 // Plain node (type stripping):   node _harness/sim_economy.ts [--quick] [--n 5000] [--long 450]
 //
+// SINGLE SOURCE OF TRUTH. The game rules are IMPORTED, not copied:
+//   * the roster (tiers, order, counts) is src/data/catalog.ts; the public odds and tier counts are src/core/rarity.ts;
+//   * every touch of the micro-sim goes through src/core/meter.ts addInteraction (pay, freshness, double-tap gate, medley, valve, daily cap);
+//     the macro model reads the capsule ramp and the daily-cap numbers from the same module;
+//   * capsule rolls and the Daily Restock are src/core/drops.ts rollCapsule / restockOffer, task limits from the same file;
+//   * every merge is src/core/merge.ts mergeOddsCore + mergeDrawCore (the very functions previewMerge / rollMerge call), MERGE_COST included.
+// What stays local is only what is NOT game logic: player behaviour, trading and the toy exploit ring. Hypothetical catalogs (section Q) and the
+// merge-rule ablation ladder (section F) feed the same core with other rosters / rules.
+//
 // Everything about player BEHAVIOUR (how fast people touch, how long they play, churn, friends, willingness to trade, when
 // they merge) is a guess. The ECONOMY rules (meter, odds, merge rule, caps, lock) are the proposals under test.
-// Deterministic: same args => same output. No Math.random(), no Date.now(). Only repo import: src/core/rng.ts.
+// Deterministic: same args => same output. No Math.random(), no Date.now(). Importable without side effects (main runs only when executed directly).
 import { mulberry32 } from '../src/core/rng.ts';
+import { CATALOG } from '../src/data/catalog.ts';
+import { TIER_ODDS, TIER_SPECIES_COUNTS, TIER_NAMES as TIER_DISPLAY, TIERS, tierIndex } from '../src/core/rarity.ts';
+import {
+  addInteraction, createMeter, PAY as METER_PAY, FRESHNESS_TAU_SECONDS, VALVE_SP_PER_MINUTE, CAPSULE_RAMP, CAPSULE_COST,
+  DAILY_FULL_RATE_CAPSULES, DAILY_REDUCED_RATE, DAILY_HARD_STOP_CAPSULES, MEDLEY_WINDOW_MS, MEDLEY_COOLDOWN_MS,
+} from '../src/core/meter.ts';
+import type { TouchKind } from '../src/core/meter.ts';
+import { rollCapsule, restockOffer, TASKS_OFFERED_PER_DAY, TASKS_MAX_PER_WEEK, RESTOCK_MAX_TIER_INDEX, RESTOCK_OFFER_COUNT } from '../src/core/drops.ts';
+import { MERGE_COST, MERGE_RULES, mergeOddsCore, mergeDrawCore, pityAfterCore } from '../src/core/merge.ts';
+import type { MergeRules } from '../src/core/merge.ts';
 
-/** The one merge constant: how many squishies of the SAME species one merge consumes. The catalog agent moves this to src/core/merge.ts. */
-export const MERGE_COST = 2;
+/** The one merge constant lives in src/core/merge.ts (re-exported here for the old import path). */
+export { MERGE_COST };
 
 /* ───────────────────────────── catalog ───────────────────────────── */
 
-const NT = 6;
-const TIER_NAMES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'];
+const NT = TIERS.length;
+const TIER_NAMES: string[] = TIERS.map((t) => TIER_DISPLAY[t]);
 const PLAYER_TYPES = ['casual', 'regular', 'devoted'];
 const ARCHE_NAMES = ['poker', 'squeezer', 'puller', 'mixed'];
 const MAX_AFFINITY_TIER = 3; // tiers 0..3 can be tilted by playstyle; Legendary and Mythic ignore your hands
 
-interface Catalog { n: number; tierOf: Uint8Array; groupOf: Uint8Array; byTier: number[][]; maskLo: Int32Array; maskHi: Int32Array; }
+/** `real` = built from src/data/catalog.ts (handles are catalog positions = idx). Otherwise a hypothetical roster for what-if sweeps. */
+interface Catalog { n: number; tierOf: Uint8Array; groupOf: Uint8Array; byTier: number[][]; maskLo: Int32Array; maskHi: Int32Array; real: boolean; }
 function buildCatalog(counts: number[]): Catalog {
   const n = counts.reduce((a, b) => a + b, 0);
-  const cat: Catalog = { n, tierOf: new Uint8Array(n), groupOf: new Uint8Array(n), byTier: [], maskLo: new Int32Array(NT), maskHi: new Int32Array(NT) };
+  const cat: Catalog = { n, tierOf: new Uint8Array(n), groupOf: new Uint8Array(n), byTier: [], maskLo: new Int32Array(NT), maskHi: new Int32Array(NT), real: false };
   let idx = 0;
   for (let t = 0; t < NT; t++) {
     const list: number[] = [];
@@ -34,6 +54,23 @@ function buildCatalog(counts: number[]): Catalog {
   }
   return cat;
 }
+/** The real roster: handle = catalog position (= idx), tier lists in idx order. The affinity group (only used by the beta experiment) is the position inside the tier mod 3. */
+function realCatalog(): Catalog {
+  const cat = buildCatalog(TIER_SPECIES_COUNTS.slice());
+  // rebuild the tier tables from the real catalog (idx order may interleave tiers in the future; today it is tier-sorted)
+  cat.byTier = TIERS.map(() => [] as number[]);
+  cat.maskLo.fill(0); cat.maskHi.fill(0);
+  CATALOG.forEach((d, h) => {
+    const t = tierIndex(d.tier);
+    cat.tierOf[h] = t; cat.groupOf[h] = t <= MAX_AFFINITY_TIER ? cat.byTier[t].length % 3 : 3; cat.byTier[t].push(h);
+    if (h < 32) cat.maskLo[t] |= 1 << h; else cat.maskHi[t] |= 1 << (h - 32);
+  });
+  cat.real = true;
+  return cat;
+}
+const REAL = realCatalog();
+const REAL_POS = new Map<string, number>(CATALOG.map((d, h) => [d.id, h]));
+const rollCapsule_real = rollCapsule;
 
 /* ───────────────────────────── helpers ───────────────────────────── */
 
@@ -54,29 +91,27 @@ const lpad = (s: string | number, n: number): string => String(s).padEnd(n);
 const pop32 = (v: number): number => { v = v - ((v >>> 1) & 0x55555555); v = (v & 0x33333333) + ((v >>> 2) & 0x33333333); return Math.imul((v + (v >>> 4)) & 0x0f0f0f0f, 0x01010101) >>> 24; };
 
 /* ───────────────────────────── ACTIVE-PLAY MICRO-SIM: touches -> squish points ───────────────────────────── */
-// The Squish meter rule being tested (this is the spec the shell/physics lanes implement):
-//   see PAY below (poke / squeeze-and-release / pull-and-let-go, MEDLEY bonus for three kinds in a short window, soft pop on a long squeeze)
-//   FRESHNESS (anti-mash): pay x clamp((seconds since your last SAME-kind touch / tau)^2, 0.03, 1), tau = poke 0.9 s, squeeze 2.4 s, pull 3.0 s
-//   VALVE: at most 40 SP in any rolling minute.   DAILY CAP lives in the macro model (soft cap in capsules per day).
-const TAU = [0.9, 2.4, 3.0];
-const VALVE_PER_MIN = 40;
-const PAY = { poke: 0.8, squeezeBase: 0.7, squeezePerSec: 0.45, squeezeHoldCap: 3, softPop: 0.5, pull: 1.8, pullFail: 0.5, medley: 2, medleyCooldown: 25, medleyWindow: 12 };
+// Every simulated touch is fed to the REAL meter (src/core/meter.ts addInteraction). The rules it applies (DESIGN 5.4): pay per poke / squeeze /
+// pull, soft pop, MEDLEY bonus, FRESHNESS (anti-mash), the 250 ms double-tap gate, the per-minute VALVE and the daily cap. Nothing is copied here.
+const KIND_NAMES: readonly TouchKind[] = ['poke', 'squeeze', 'pull'];
+const TAU = FRESHNESS_TAU_SECONDS;
+const VALVE_PER_MIN = VALVE_SP_PER_MINUTE;
+const PAY = { poke: METER_PAY.poke, squeezeBase: METER_PAY.squeezeBase, squeezePerSec: METER_PAY.squeezePerSecond, squeezeHoldCap: METER_PAY.squeezeHoldCapSeconds, softPop: METER_PAY.softPop, pull: METER_PAY.pull, pullFail: METER_PAY.pullFail, medley: METER_PAY.medley, medleyCooldown: MEDLEY_COOLDOWN_MS / 1000, medleyWindow: MEDLEY_WINDOW_MS / 1000 };
 
-interface Behaviour { name: string; kindP: number[]; stick: number; }
-const BEHAV: Behaviour[] = [
+export interface Behaviour { name: string; kindP: number[]; stick: number; }
+export const BEHAV: Behaviour[] = [
   { name: 'poker', kindP: [0.74, 0.16, 0.10], stick: 0.50 },
   { name: 'squeezer', kindP: [0.14, 0.72, 0.14], stick: 0.50 },
   { name: 'puller', kindP: [0.14, 0.16, 0.70], stick: 0.45 },
   { name: 'mixed', kindP: [0.40, 0.30, 0.30], stick: 0.0 },
 ];
 
-interface Stream { sp: number; byKind: number[]; n: number[]; seconds: number; }
-/** Plays `seconds` of touching (or until `stopAtSp` SP). bot='mash' = 8 pokes/s; bot='cycle' = poke,squeeze,pull at the physical limit. */
-function playStream(beh: Behaviour, rng: Rng, seconds: number, bot: '' | 'mash' | 'cycle', stopAtSp = Infinity, pace = 1): Stream {
+export interface Stream { sp: number; byKind: number[]; n: number[]; seconds: number; }
+/** Plays `seconds` of touching (or until `stopAtSp` SP). bot='mash' = 8 pokes/s; bot='cycle' = poke,squeeze,pull at the physical limit. Pays through the real meter. */
+export function playStream(beh: Behaviour, rng: Rng, seconds: number, bot: '' | 'mash' | 'cycle', stopAtSp = Infinity, pace = 1): Stream {
   const out: Stream = { sp: 0, byKind: [0, 0, 0], n: [0, 0, 0], seconds: 0 };
-  const lastPaid = [-99, -99, -99];
-  let t = 0, last = -1, valve = VALVE_PER_MIN, medleyReady = 0, cyc = 0;
-  const recent: Array<[number, number]> = [];
+  let meter = createMeter();
+  let t = 0, last = -1, cyc = 0;
   while (t < seconds && out.sp < stopAtSp) {
     let kind: number, dur: number, hold = 0, success = true;
     if (bot === 'mash') { kind = 0; dur = 0.125; }
@@ -90,24 +125,16 @@ function playStream(beh: Behaviour, rng: Rng, seconds: number, bot: '' | 'mash' 
       dur /= pace;
     }
     t += dur; last = kind;
-    valve = Math.min(VALVE_PER_MIN, valve + dur * (VALVE_PER_MIN / 60));
-    const base = kind === 0 ? PAY.poke : kind === 1 ? PAY.squeezeBase + PAY.squeezePerSec * Math.min(PAY.squeezeHoldCap, hold) : success ? PAY.pull : PAY.pullFail;
-    const fresh = Math.min(1, Math.max(0.03, Math.pow((t - lastPaid[kind]) / TAU[kind], 2)));
-    lastPaid[kind] = t;
-    let pay = base * fresh;
-    if (kind === 1 && hold >= 1.8) pay += PAY.softPop * fresh; // soft pop
-    recent.push([t, kind]);
-    while (recent.length && recent[0][0] < t - PAY.medleyWindow) recent.shift();
-    if (t >= medleyReady && new Set(recent.map((r) => r[1])).size >= 3) { pay += PAY.medley; medleyReady = t + PAY.medleyCooldown; }
-    pay = Math.min(pay, valve); valve -= pay;
-    out.sp += pay; out.byKind[kind] += pay; out.n[kind]++;
+    const r = addInteraction(meter, { kind: KIND_NAMES[kind], amount: kind === 0 ? 0 : kind === 1 ? hold : success ? 0.8 : 0.1, tMs: Math.round(t * 1000), dayKey: 0 });
+    meter = r.state;
+    out.sp += r.spGained; out.byKind[kind] += r.spGained; out.n[kind]++;
   }
   out.seconds = t;
   return out;
 }
 
-interface Micro { spPerMin: number[]; share: number[][]; perMin: number[][]; botMash: number; botCycle: number; firstSec: number[]; spreadP: number[][]; }
-function runMicro(): Micro {
+export interface Micro { spPerMin: number[]; share: number[][]; perMin: number[][]; botMash: number; botCycle: number; firstSec: number[]; spreadP: number[][]; }
+export function runMicro(): Micro {
   const m: Micro = { spPerMin: [], share: [], perMin: [], botMash: 0, botCycle: 0, firstSec: [], spreadP: [] };
   BEHAV.forEach((b, i) => {
     const rng = mulberry32(0x1234 + i * 77);
@@ -137,7 +164,7 @@ interface Params {
   // restock + tasks
   restock: boolean; restockOffered: number; restockMaxTier: number; tasksOffered: number; taskWeeklyMax: number;
   // merge
-  merge: boolean; mergeInputs: number; pUp: number[]; unownedW: number; pityUp: number; pityNew: number; rowDoneBoost: number; rowDoneCap: number; mergeLockDays: number; keepOneShare: number; playfulShare: number; bulkMerge: boolean; maxMergesPerDay: number; bulkMax: number;
+  merge: boolean; mergeInputs: number; pUp: number[]; unownedW: number; pityUp: number; rowDoneBoost: number; rowDoneCap: number; mergeLockDays: number; keepOneShare: number; playfulShare: number; bulkMerge: boolean; maxMergesPerDay: number; bulkMax: number;
   // trade
   trade: boolean; tryProb: number; favorProb: number; lockDays: number; dailyTradeCap: number; maxSwapsPerTrade: number; boardSample: number; acceptProb: number;
   // population (BEHAVIOUR ASSUMPTIONS)
@@ -147,13 +174,13 @@ interface Params {
 
 const DEFAULTS: Params = {
   nPlayers: 5000, days: 60, seed: 0x5eed1234,
-  tierCount: [14, 11, 10, 7, 5, 3],
-  tierOdds: [0.763, 0.13, 0.06, 0.028, 0.014, 0.005],
+  tierCount: TIER_SPECIES_COUNTS.slice(),
+  tierOdds: TIER_ODDS.slice(),
   spPerMin: [22, 22, 22, 22], spShare: [[0.5, 0.3, 0.2], [0.2, 0.55, 0.25], [0.2, 0.25, 0.55], [0.33, 0.33, 0.34]], speedScale: 1,
-  capsuleCost: 100, onboardRamp: [0.3, 0.5, 0.75], dailyCapsCap: 8, overRate: 0.25, hardExtraCaps: 4,
+  capsuleCost: CAPSULE_COST, onboardRamp: CAPSULE_RAMP.map((x) => x / CAPSULE_COST), dailyCapsCap: DAILY_FULL_RATE_CAPSULES, overRate: DAILY_REDUCED_RATE, hardExtraCaps: DAILY_HARD_STOP_CAPSULES - DAILY_FULL_RATE_CAPSULES,
   beta: 0, lambda: 0.12, balance: true,
-  restock: true, restockOffered: 3, restockMaxTier: 1, tasksOffered: 2, taskWeeklyMax: 5,
-  merge: true, mergeInputs: MERGE_COST, pUp: [0.30, 0.25, 0.20, 0.15, 0.10, 0], unownedW: 1.5, pityUp: 4, pityNew: 0, rowDoneBoost: 100, rowDoneCap: 1, mergeLockDays: 1, keepOneShare: 0.8, playfulShare: 0.3, bulkMerge: false, maxMergesPerDay: 3, bulkMax: 10,
+  restock: true, restockOffered: RESTOCK_OFFER_COUNT, restockMaxTier: RESTOCK_MAX_TIER_INDEX, tasksOffered: TASKS_OFFERED_PER_DAY, taskWeeklyMax: TASKS_MAX_PER_WEEK,
+  merge: true, mergeInputs: MERGE_COST, pUp: MERGE_RULES.tierUp.slice(), unownedW: MERGE_RULES.unownedWeight, pityUp: MERGE_RULES.pityAfter, rowDoneBoost: MERGE_RULES.rowDoneBoost, rowDoneCap: MERGE_RULES.rowDoneCap, mergeLockDays: 1, keepOneShare: 0.8, playfulShare: 0.3, bulkMerge: false, maxMergesPerDay: 3, bulkMax: 10,
   trade: false, tryProb: 0.7, favorProb: 0.5, lockDays: 1, dailyTradeCap: 3, maxSwapsPerTrade: 3, boardSample: 40, acceptProb: 0.85,
   archeShare: [0.38, 0.27, 0.15, 0.20], tierShare: [0.40, 0.40, 0.20], pActive: [0.40, 0.70, 0.90],
   churn: [0.015, 0.007, 0.003], traderProb: [0.30, 0.55, 0.75], boardProb: 0.7, friendHomophily: 0.5, adaptiveShare: 0, mergeLoveMix: [0.2, 0.5, 0.3],
@@ -252,37 +279,29 @@ const lockedNow = (p: Player, s: number, day: number): number => (day < p.lockUn
 const spareOf = (p: Player, s: number, day: number): number => Math.max(0, p.count[s] - lockedNow(p, s, day) - 1);
 function addLock(p: Player, s: number, day: number, L: number): void { if (L <= 0) return; if (day >= p.lockUntil[s]) p.lockedCopies[s] = 0; p.lockedCopies[s]++; p.lockUntil[s] = Math.max(p.lockUntil[s], day + L); }
 
-/* ───────────────────────────── merge rule (shared by players and the farmer) ───────────────────────────── */
+/* ───────────────────────────── merge rule (shared by players and the farmer): the REAL core ───────────────────────────── */
 
 interface MergeOut { out: number; up: boolean; repeat: boolean; }
-/** Rolls the result of one merge of species sIn. Mutates the pity counters; does not touch counts. */
+const rulesCache = new WeakMap<object, MergeRules>();
+/** The merge rules of a parameter set, as the real module's MergeRules (the ablation ladder overrides fields; the default IS MERGE_RULES). */
+function rulesOf(P: Params): MergeRules {
+  let r = rulesCache.get(P);
+  if (!r) { r = { tierUp: P.pUp, unownedWeight: P.unownedW, pityAfter: P.pityUp, rowDoneBoost: P.rowDoneBoost, rowDoneCap: P.rowDoneCap }; rulesCache.set(P, r); }
+  return r;
+}
+/**
+ * Rolls the result of one merge of species handle sIn through src/core/merge.ts (mergeOddsCore + mergeDrawCore, the functions previewMerge and
+ * rollMerge use). Mutates the pity counters (`noUp` = merges in a row without a tier-up, per tier) and the feel-bad streak `bad`; does not touch counts.
+ * `count` is ownership BEFORE the inputs are consumed (only species other than sIn matter). Two uniform draws, like the real roll's first two.
+ */
 function mergeRoll(P: Params, cat: Catalog, rng: Rng, sIn: number, count: Uint16Array, noUp: Uint8Array, bad: Uint8Array, alwaysUnowned: number): MergeOut {
   const t = cat.tierOf[sIn];
-  const isNew = (s: number): boolean => count[s] === 0 || s === alwaysUnowned;
-  const unownedIn = (tt: number): number => { let c = 0; for (const s of cat.byTier[tt]) if (s !== sIn && isNew(s)) c++; return c; };
-  let pUp = P.pUp[t];
-  if (P.rowDoneBoost > 1 && t < NT - 1 && unownedIn(t) === 0) pUp = Math.min(P.rowDoneCap, pUp * P.rowDoneBoost);
-  let up = t < NT - 1 && rng() < pUp;
-  if (!up && t < NT - 1 && P.pityUp > 0 && noUp[t] >= P.pityUp) up = true;
-  const forceNew = P.pityNew > 0 && bad[t] >= P.pityNew;
-  if (forceNew && !up && t < NT - 1 && unownedIn(t) === 0) up = true;
-  const outTier = up ? t + 1 : t;
-  const list = cat.byTier[outTier];
-  const anyNew = unownedIn(outTier) > 0 || (outTier !== t && list.some(isNew));
-  const w = new Float64Array(list.length);
-  let tot = 0;
-  for (let i = 0; i < list.length; i++) {
-    const s = list[i];
-    if (s === sIn) continue;
-    const nw = isNew(s);
-    w[i] = forceNew && anyNew ? (nw ? 1 : 0) : (nw ? P.unownedW : 1);
-    tot += w[i];
-  }
-  const out = list[pickIdx(w, tot, rng)];
-  const repeat = !isNew(out);
-  if (up) noUp[t] = 0; else if (noUp[t] < 255) noUp[t]++;
-  if (!up && repeat) { if (bad[t] < 255) bad[t]++; } else bad[t] = 0;
-  return { out, up, repeat };
+  const odds = mergeOddsCore({ tier: t, self: sIn, roster: cat.byTier, copies: (h) => (h === alwaysUnowned ? 0 : count[h]), pity: noUp[t], rules: rulesOf(P) });
+  const r = mergeDrawCore(odds, rng(), rng());
+  const repeat = !(count[r.out] === 0 || r.out === alwaysUnowned);
+  noUp[t] = pityAfterCore(noUp[t], r.tierUp);
+  if (!r.tierUp && repeat) { if (bad[t] < 255) bad[t]++; } else bad[t] = 0;
+  return { out: r.out, up: r.tierUp, repeat };
 }
 
 /* ───────────────────────────── scenario ───────────────────────────── */
@@ -292,7 +311,9 @@ const mkWeekly = (weeks: number): Weekly => { const z = (): number[] => new Arra
 interface Snap { day: number; pairs: Record<string, [number, number]>; ge2: number[]; ge3: number[]; ge4: number[]; n: number; }
 interface Result { P: Params; cat: Catalog; players: Player[]; wk: Weekly; snaps: Snap[]; label: string; }
 
-function runScenario(P: Params, pop: Pop, label: string, cat: Catalog = buildCatalog(P.tierCount)): Result {
+const sameCounts = (a: number[], b: readonly number[]): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
+const realOdds = (P: Params): boolean => P.tierOdds.length === TIER_ODDS.length && P.tierOdds.every((x, i) => x === TIER_ODDS[i]);
+function runScenario(P: Params, pop: Pop, label: string, cat: Catalog = sameCounts(P.tierCount, TIER_SPECIES_COUNTS) ? REAL : buildCatalog(P.tierCount)): Result {
   const players = makePlayers(P, pop, cat);
   const weeks = Math.ceil(P.days / 7);
   const wk = mkWeekly(weeks);
@@ -325,6 +346,14 @@ function runScenario(P: Params, pop: Pop, label: string, cat: Catalog = buildCat
     if (cat.tierOf[s] >= 2) { wk.capRP[w]++; if (dup) wk.dupRP[w]++; }
   };
   const rollCapsule = (p: Player, a: number[], w: number): number => {
+    // the real roll (src/core/drops.ts rollCapsule: tier by the public odds, species uniform inside the tier, genome seed) whenever the roster is the real one
+    // and affinity is off, which is the shipped design; the affinity experiment (beta > 0) and what-if catalogs use the local tilted version below
+    if (cat.real && P.beta === 0 && realOdds(P)) {
+      const c = rollCapsule_real(p.rng);
+      const s2 = REAL_POS.get(c.species) as number;
+      wk.capsules[w]++; wk.capTier[c.tierIndex][w]++; wk.capGroup[cat.groupOf[s2]][w]++; p.capsules++; p.capsByTier[c.tierIndex]++;
+      return s2;
+    }
     let x = p.rng(), t = 0;
     for (; t < NT - 1; t++) { x -= P.tierOdds[t]; if (x < 0) break; }
     const list = cat.byTier[t];
@@ -357,9 +386,9 @@ function runScenario(P: Params, pop: Pop, label: string, cat: Catalog = buildCat
     if (best < 0) return false;
     const t = cat.tierOf[best];
     const live = p.tierOwned[t] < P.tierCount[t] || p.tierOwned[t + 1] < P.tierCount[t + 1];
+    const m = mergeRoll(P, cat, p.rng, best, p.count, p.noUp, p.bad, -1);
     p.count[best] -= M;
     if (p.count[best] === 0) { p.owned--; p.tierOwned[t]--; }
-    const m = mergeRoll(P, cat, p.rng, best, p.count, p.noUp, p.bad, -1);
     addCopy(p, m.out, day, 3, p.minutes);
     addLock(p, m.out, day, P.mergeLockDays);
     const ot = cat.tierOf[m.out];
@@ -432,10 +461,13 @@ function runScenario(P: Params, pop: Pop, label: string, cat: Catalog = buildCat
       const spToday = Math.min(raw, capSp) + Math.min(Math.max(0, raw - capSp) * P.overRate, P.hardExtraCaps * P.capsuleCost);
       // restock first (claimed when you open the game)
       if (P.restock) {
-        const pool: number[] = [];
-        for (let t = 0; t <= P.restockMaxTier; t++) for (const s of cat.byTier[t]) pool.push(s);
-        const offered: number[] = [];
-        for (let k = 0; k < P.restockOffered && pool.length; k++) offered.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+        let offered: number[] = [];
+        if (cat.real && P.restockOffered === RESTOCK_OFFER_COUNT && P.restockMaxTier === RESTOCK_MAX_TIER_INDEX) offered = restockOffer(rng).map((id) => REAL_POS.get(id) as number); // the real Daily Restock
+        else {
+          const pool: number[] = [];
+          for (let t = 0; t <= P.restockMaxTier; t++) for (const s of cat.byTier[t]) pool.push(s);
+          for (let k = 0; k < P.restockOffered && pool.length; k++) offered.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+        }
         const fresh = offered.filter((s) => p.count[s] === 0).sort((a, b) => cat.tierOf[b] - cat.tierOf[a]);
         addCopy(p, fresh.length ? fresh[0] : offered[Math.floor(rng() * offered.length)], day, 2, m0);
         wk.restock[w]++;
@@ -564,10 +596,14 @@ function farmer(P: Params, cat: Catalog, targetTier: number, trials: number, cap
     const lo = Math.max(0, targetTier - 1);
     while (!hit && c < cap) {
       c++;
-      let x = rng(), t = 0;
-      for (; t < NT - 1; t++) { x -= P.tierOdds[t]; if (x < 0) break; }
-      const list = cat.byTier[t];
-      const s = list[Math.floor(rng() * list.length)];
+      let s: number;
+      if (cat.real && realOdds(P)) s = REAL_POS.get(rollCapsule_real(rng).species) as number;
+      else {
+        let x = rng(), t = 0;
+        for (; t < NT - 1; t++) { x -= P.tierOdds[t]; if (x < 0) break; }
+        const list = cat.byTier[t];
+        s = list[Math.floor(rng() * list.length)];
+      }
       if (s !== X) count[s]++;
       for (let again = true; again && !hit;) {
         again = false;
@@ -645,12 +681,16 @@ function ring(P: Params, policy: Policy, bug: 'dupe' | 'steal', detectH: number)
 
 const argv = process.argv.slice(2);
 const argNum = (name: string, dflt: number): number => { const i = argv.indexOf(name); return i >= 0 ? Number(argv[i + 1]) : dflt; };
-const QUICK = argv.includes('--quick');
-const ONLY = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : '';
+// set by init() when the sim is executed directly (importing this file from a probe runs nothing)
+let QUICK = false, ONLY = '', MICRO!: Micro, BASE!: Params, LONG = 450;
 const want = (k: string): boolean => !ONLY || ONLY.split(',').includes(k);
-const MICRO = runMicro();
-const BASE: Params = { ...DEFAULTS, nPlayers: argNum('--n', QUICK ? 1500 : DEFAULTS.nPlayers), days: argNum('--days', DEFAULTS.days), spPerMin: MICRO.spPerMin, spShare: MICRO.share, capsuleCost: argNum('--cost', DEFAULTS.capsuleCost), mergeInputs: argNum('--M', MERGE_COST) };
-const LONG = argNum('--long', QUICK ? 300 : 450);
+function init(): void {
+  QUICK = argv.includes('--quick');
+  ONLY = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : '';
+  MICRO = runMicro();
+  BASE = { ...DEFAULTS, nPlayers: argNum('--n', QUICK ? 1500 : DEFAULTS.nPlayers), days: argNum('--days', DEFAULTS.days), spPerMin: MICRO.spPerMin, spShare: MICRO.share, capsuleCost: argNum('--cost', DEFAULTS.capsuleCost), mergeInputs: argNum('--M', MERGE_COST) };
+  LONG = argNum('--long', QUICK ? 300 : 450);
+}
 const header = (t: string): void => { console.log('\n' + '='.repeat(124) + '\n' + t + '\n' + '='.repeat(124)); };
 const dupRate = (r: Result): number => sum(r.wk.dupCapsules) / sum(r.wk.capsules);
 const doneBy = (sel: Player[], day: number, key: (p: Player) => number): number => (sel.length ? sel.filter((p) => key(p) > 0 && key(p) <= day).length / sel.length : NaN);
@@ -678,7 +718,7 @@ function secCatalog(cat: Catalog): void {
     const n = BASE.tierCount[t], o = BASE.tierOdds[t], per = o / n;
     console.log(`${lpad(TIER_NAMES[t], 10)}| ${pad(n, 7)} | ${pad(pc(o), 12)} | ${pad(pc(per), 16)} | ${pad(f1(1 / per), 37)} | ${pad(f1(1 / o), 30)} | ${t < NT - 1 ? pc0(BASE.pUp[t]) : 'top: cannot merge'}`);
   }
-  console.log(`total species ${cat.n};  MERGE_COST ${BASE.mergeInputs};  tier-up ${BASE.pUp.slice(0, 5).map(pc0).join('/')}, unowned weight x${BASE.unownedW}, tier-up pity ${BASE.pityUp} (per tier), no-repeat pity ${BASE.pityNew}, completed-row rule: tier-up chance x${BASE.rowDoneBoost} capped at ${pc0(BASE.rowDoneCap)}, merge output locked ${BASE.mergeLockDays} d`);
+  console.log(`total species ${cat.n};  MERGE_COST ${BASE.mergeInputs};  tier-up ${BASE.pUp.slice(0, 5).map(pc0).join('/')}, unowned weight x${BASE.unownedW}, tier-up pity ${BASE.pityUp} (per tier), completed-row rule: tier-up chance x${BASE.rowDoneBoost} capped at ${pc0(BASE.rowDoneCap)}, merge output locked ${BASE.mergeLockDays} d`);
   console.log(`affinity beta ${BASE.beta} (0 = OFF: tested in section J and rejected for species odds);  trade: same-tier 1:1, <= ${BASE.maxSwapsPerTrade}/trade, <= ${BASE.dailyTradeCap} trades/day, receive-lock ${BASE.lockDays} d`);
 }
 
@@ -840,7 +880,7 @@ function secRoutes(trade: Result, solo: Result): void {
 
 function secExact(Ms: number[]): void {
   header('M. COST OF ONE SPECIFIC SPECIES: by drop, by merge only, by trade');
-  const cat = buildCatalog(BASE.tierCount);
+  const cat = REAL;
   const trials = QUICK ? 100 : 250;
   console.log(lpad('target tier', 12) + '| by DROP (capsules) | ' + Ms.map((m) => `MERGE-ONLY M=${m}: capsules med (mean)  merges med  x-drop`).join(' | '));
   for (let t = 0; t < NT; t++) {
@@ -870,11 +910,13 @@ function secRing(): void {
 
 /* ───────────────────────────── main ───────────────────────────── */
 
+function main(): void {
+init();
 const t0 = process.hrtime.bigint();
-console.log(`WOBBLEHOARD economy sim v3  players=${BASE.nPlayers} short=${BASE.days}d long=${LONG}d seed=0x${BASE.seed.toString(16)} MERGE_COST=${BASE.mergeInputs}${QUICK ? '  (--quick)' : ''}`);
+console.log(`WOBBLEHOARD economy sim v4 (real game logic)  players=${BASE.nPlayers} short=${BASE.days}d long=${LONG}d seed=0x${BASE.seed.toString(16)} MERGE_COST=${BASE.mergeInputs}${QUICK ? '  (--quick)' : ''}`);
 console.log(`population (ASSUMED): archetypes poker/squeezer/puller/mixed ${BASE.archeShare.join('/')}; player types casual/regular/devoted ${BASE.tierShare.join('/')}; active-day chance ${BASE.pActive.join('/')}; daily churn ${BASE.churn.join('/')};`);
 console.log(`  willing traders ${BASE.traderProb.join('/')}; use public board ${BASE.boardProb}; friend homophily ${BASE.friendHomophily}; merge appetite 0/0.15/0.5 per day for ${BASE.mergeLoveMix.join('/')}; ${pc0(BASE.keepOneShare)} always keep one copy; ${pc0(BASE.playfulShare)} merge even complete rows`);
-const cat0 = buildCatalog(BASE.tierCount);
+const cat0 = REAL;
 secMicro();
 secCatalog(cat0);
 if (argv.includes('--micro')) process.exit(0);
@@ -893,13 +935,12 @@ const L = (o: Partial<Params>, label: string): Result => runScenario({ ...BASE, 
 if (want('merge')) {
   const rules = (name: string, o: Partial<Params>): [string, Result] => [name, L(o, name)];
   secMerge(mTrade, [
-    rules('A. floor only (never below the inputs, no tier-up)', { pUp: [0, 0, 0, 0, 0, 0], unownedW: 1, pityUp: 0, pityNew: 0, rowDoneBoost: 1 }),
-    rules('B. + tier-up chance 30/25/20/15/10', { unownedW: 1, pityUp: 0, pityNew: 0, rowDoneBoost: 1 }),
-    rules('C. + unowned species weighted x1.5', { pityUp: 0, pityNew: 0, rowDoneBoost: 1 }),
-    rules('D. + tier-up pity (after 4 dud merges in a row from a tier, the next tiers up)', { pityNew: 0, rowDoneBoost: 1 }),
-    rules('E. + completed-row boost x2 on tier-up (capped at 60%)', { pityNew: 0, rowDoneBoost: 2, rowDoneCap: 0.6 }),
-    rules('F. a COMPLETED row always tiers up  [CHOSEN]', { pityNew: 0 }),
-    rules('G. F + guaranteed-NEW pity after 3 duds (adds nothing once F is on: not adopted)', { pityNew: 3 }),
+    rules('A. floor only (never below the inputs, no tier-up)', { pUp: [0, 0, 0, 0, 0, 0], unownedW: 1, pityUp: 0, rowDoneBoost: 1 }),
+    rules('B. + tier-up chance 30/25/20/15/10', { unownedW: 1, pityUp: 0, rowDoneBoost: 1 }),
+    rules('C. + unowned species weighted x1.5', { pityUp: 0, rowDoneBoost: 1 }),
+    rules('D. + tier-up pity (after 4 dud merges in a row from a tier, the next tiers up)', { rowDoneBoost: 1 }),
+    rules('E. + completed-row boost x2 on tier-up (capped at 60%)', { rowDoneBoost: 2, rowDoneCap: 0.6 }),
+    rules('F. a COMPLETED row always tiers up  [CHOSEN = the real rules in src/core/merge.ts]', {}),
   ]);
 }
 if (want('supply')) secSupply(mTrade, mNoMerge, S({ trade: true, bulkMerge: true }, 'm bulk'));
@@ -1014,3 +1055,6 @@ if (want('catalog')) {
 }
 
 console.log(`\n(elapsed ${(Number(process.hrtime.bigint() - t0) / 1e9).toFixed(1)} s)`);
+}
+
+if (import.meta.main) main();

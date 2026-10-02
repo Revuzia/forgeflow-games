@@ -4,10 +4,11 @@ import { poke, release, land, pop, squish, blend } from '/src/audio/voices.ts';
 import { createMasterChain } from '/src/audio/chain.ts';
 import { createAudio } from '/src/audio/engine.ts';
 import * as D from '/src/audio/dsp.ts';
+import * as C from '/src/audio/ceremony.ts';
 import { runEngineTests } from './engine_tests.js';
 
 export const SR = 48000;
-const BOOSTED = new Set(['poke', 'squish', 'release']);
+const BOOSTED = new Set(['poke', 'squish', 'release']);   // everything else (incl. all ceremony voices) goes to the plain bus
 
 const revive = (v) => (v === 'NaN' ? NaN : v === 'Infinity' ? Infinity : v === '-Infinity' ? -Infinity : v);
 const reviveAll = (o) => { const r = {}; for (const k of Object.keys(o || {})) r[k] = typeof o[k] === 'string' ? revive(o[k]) : o[k]; return r; };
@@ -81,7 +82,7 @@ async function renderVoice(spec) {
     out = BOOSTED.has(spec.voice) ? chain.boost : chain.plain;
   }
   const base = { rng: D.makeRng(spec.seed ?? 1), pitch: revive(spec.pitch ?? 1), pan: revive(spec.pan ?? 0), jitter: spec.jitter, ...reviveAll(spec.params) };
-  let voice;
+  let voice, endOverride;
   switch (spec.voice) {
     case 'poke': voice = poke(ctx, out, t0, base); break;
     case 'release': voice = release(ctx, out, t0, base); break;
@@ -94,16 +95,86 @@ async function renderVoice(spec) {
       if (spec.killAt === undefined) voice.end(0.08, t0 + script.endAt);
       break;
     }
+    case 'meterFull': voice = C.meterFull(ctx, out, t0, base); break;
+    case 'grab': voice = C.grab(ctx, out, t0, base); break;
+    case 'crack': voice = C.crack(ctx, out, t0, base); break;
+    case 'capBurst': voice = C.capsuleBurst(ctx, out, t0, base); break;
+    case 'reveal': voice = C.reveal(ctx, out, t0, base); break;
+    case 'mergeBurst': voice = C.mergeBurst(ctx, out, t0, base); break;
+    case 'merge': {
+      const mv = C.mergeStart(ctx, out, t0, base);
+      voice = mv;
+      if (spec.burstAt !== undefined) {
+        const b = mv.burst({ tier: 'common', ...reviveAll(spec.burst) }, t0 + spec.burstAt);
+        endOverride = Math.max(b.endTime, t0 + spec.burstAt + 0.1);
+      }
+      if (spec.stopAt !== undefined) mv.stop(0.15, t0 + spec.stopAt);
+      break;
+    }
     default: throw new Error('unknown voice ' + spec.voice);
   }
+  if (spec.duck && chain) chain.duck(revive(spec.duck.db), revive(spec.duck.ms), t0 + (spec.duck.at ?? 0));
   if (spec.killAt !== undefined) voice.kill(0.02, t0 + spec.killAt);
   const buf = await ctx.startRendering();
   const chans = [];
   for (let c = 0; c < buf.numberOfChannels; c++) chans.push(b64(buf.getChannelData(c)));
-  return { sr, n: buf.length, channels: chans, t0, endTime: voice.endTime, script: script && { events: script.events, endAt: script.endAt, marks: script.marks }, counters: { ...D.nodeCounters } };
+  return { sr, n: buf.length, channels: chans, t0, endTime: endOverride ?? voice.endTime, script: script && { events: script.events, endAt: script.endAt, marks: script.marks }, counters: { ...D.nodeCounters } };
 }
 
-window.AV = { ready: true, SR, renderVoice, runEngineTests };
+/** Full ceremonies, scheduled exactly as the time map at the top of ceremony.ts says. spec: { kind: 'capsule'|'merge', tier, calm, tierUp, isNew, mythicVariant, seed, secs } */
+async function renderCeremony(spec) {
+  const sr = SR, t0 = 0.01;
+  const ctx = new OfflineAudioContext(1, Math.ceil((spec.secs ?? 8) * sr), sr);
+  const chain = createMasterChain(ctx);
+  chain.apply({ master: 1, squishBoost: 0, muted: false }, true);
+  const ti = C.tierIdx(spec.tier), calm = !!spec.calm, k = calm ? C.CALM_SCALE : 1;
+  const rng = D.makeRng(spec.seed ?? 1);
+  const sub = () => D.makeRng((rng() * 4294967296) >>> 0);
+  const ends = [], events = [];
+  const add = (name, at, v) => { events.push({ name, at }); ends.push(v.endTime ?? 0); return v; };
+  if (spec.kind === 'capsule') {
+    add('grab', 0, C.grab(ctx, chain.plain, t0, { rng: sub(), progress: 0.1 }));
+    add('grab', 0.18 * k, C.grab(ctx, chain.plain, t0 + 0.18 * k, { rng: sub(), progress: 0.7 }));
+    add('crack', 0.35 * k, C.crack(ctx, chain.plain, t0 + 0.35 * k, { rng: sub() }));
+    const P = C.PRE_ROLL_S[ti] * k;
+    const revealAt = ti < 2 ? 1.0 * k : 0.65 * k;
+    const burstAt = ti < 2 ? 0.65 * k : (0.65 + C.PRE_ROLL_S[ti]) * k;
+    add('burst', burstAt, C.capsuleBurst(ctx, chain.plain, t0 + burstAt, { rng: sub(), tier: spec.tier, calm }));
+    if (ti === 5) { const d = C.mythicDuck(calm); chain.duck(d.db, d.ms, t0 + revealAt); events.push({ name: 'duck', at: revealAt }); }
+    add('reveal', revealAt, C.reveal(ctx, chain.plain, t0 + revealAt, { rng: sub(), tier: spec.tier, tierUp: !!spec.tierUp, isNew: !!spec.isNew, mythicVariant: spec.mythicVariant ?? 0, durationS: spec.durationS, calm }));
+    if (spec.extraMeter) add('meterFull', 0, C.meterFull(ctx, chain.plain, t0, { rng: sub() }));
+    return pack(await ctx.startRendering(), t0, Math.max(...ends), events, { P, revealAt, burstAt, budget: C.CAPSULE_BUDGET_S[ti] * k });
+  }
+  const mv = C.mergeStart(ctx, chain.plain, t0, { rng: sub(), tier: spec.tier, calm, chargeS: spec.chargeS });
+  events.push({ name: 'mergeStart', at: 0 });
+  const b = mv.burst({ tier: spec.tier, tierUp: !!spec.tierUp, mythicVariant: spec.mythicVariant ?? 0, durationS: spec.durationS }, t0 + mv.chargeS);
+  events.push({ name: 'burst', at: mv.chargeS });
+  ends.push(b.endTime, t0 + mv.chargeS + 0.1);
+  return pack(await ctx.startRendering(), t0, Math.max(...ends), events, { chargeS: mv.chargeS, budget: C.MERGE_BUDGET_S[ti] * k });
+}
+
+function pack(buf, t0, endTime, events, extra) {
+  return { sr: buf.sampleRate, n: buf.length, channels: [b64(buf.getChannelData(0))], t0, endTime, events, ...extra, counters: { ...D.nodeCounters } };
+}
+
+/** A steady 220 Hz sine through the chain with a scripted duck: proves the master duck is smooth. */
+async function renderDuck(spec) {
+  const sr = SR;
+  const ctx = new OfflineAudioContext(1, Math.ceil((spec.secs ?? 2) * sr), sr);
+  const chain = createMasterChain(ctx);
+  chain.apply({ master: 1, squishBoost: 0, muted: false }, true);
+  const o = ctx.createOscillator(); o.frequency.value = 220; const g = ctx.createGain(); g.gain.value = 0.2;
+  o.connect(g); g.connect(chain.plain); o.start(0);
+  chain.duck(revive(spec.db), revive(spec.ms), spec.at ?? 0.5);
+  const buf = await ctx.startRendering();
+  return { sr, n: buf.length, channels: [b64(buf.getChannelData(0))], t0: 0, endTime: spec.secs ?? 2 };
+}
+
+window.AV = { ready: true, SR, renderVoice, renderCeremony, renderDuck, runEngineTests, consts: {
+  TIERS: C.TIERS, CAPSULE_BUDGET_S: C.CAPSULE_BUDGET_S, MERGE_BUDGET_S: C.MERGE_BUDGET_S, PRE_ROLL_S: C.PRE_ROLL_S, REVEAL_DEFAULT_S: C.REVEAL_DEFAULT_S,
+  MERGE_CHARGE_S: C.MERGE_CHARGE_S, MERGE_BURST_S: C.MERGE_BURST_S, BURST_GAP_S: C.BURST_GAP_S, CALM_SCALE: C.CALM_SCALE, MYTHIC_MOTIFS: C.MYTHIC_MOTIFS,
+} };
+window.AV.noteOnsets = (tier, durationS, calm, burst) => { const ti = C.tierIdx(tier); const lay = C.layout(ti, durationS, !!calm, !!burst); return { lay, onsets: C.noteOnsets(ti, lay) }; };
 
 /* ───────────── human-facing sound lab (live engine) ───────────── */
 const $ = (id) => document.getElementById(id);
@@ -130,6 +201,33 @@ for (const b of document.querySelectorAll('button[data-v]')) {
     else if (v === 'pop') audio.pop({ size: state.amt, pitch: state.pitch });
     else if (v === 'blend') audio.blend({ count: 3, durationS: 2.2 });
   });
+}
+{
+  const tier = () => $('tier').value, variant = () => +$('variant').value, calm = () => $('calm').checked, up = () => $('tierUp').checked, nw = () => $('isNew').checked;
+  let gp = 0;
+  const later = (ms, fn) => setTimeout(fn, ms * (calm() ? C.CALM_SCALE : 1));
+  const act = {
+    meter: () => audio.meterFull({ quiet: calm() }),
+    grab: () => audio.capsuleBeat({ beat: 'grab', progress: (gp = (gp + 0.17) % 1) }),
+    crack: () => audio.capsuleBeat({ beat: 'crack' }),
+    burst: () => audio.capsuleBeat({ beat: 'burst', tier: tier() }),
+    reveal: () => audio.reveal({ tier: tier(), tierUp: up(), isNew: nw(), mythicVariant: variant(), calm: calm() }),
+    duck: () => audio.duck({ db: -12, ms: 400 }),
+    capsule: () => {
+      const t = tier(), ti = C.tierIdx(t), pre = C.PRE_ROLL_S[ti] * 1000;
+      audio.capsuleBeat({ beat: 'grab', progress: 0.1 });
+      later(180, () => audio.capsuleBeat({ beat: 'grab', progress: 0.7 }));
+      later(350, () => audio.capsuleBeat({ beat: 'crack' }));
+      if (ti < 2) { later(650, () => audio.capsuleBeat({ beat: 'burst', tier: t })); later(1000, act.reveal); }
+      else { later(650, act.reveal); later(650 + pre, () => audio.capsuleBeat({ beat: 'burst', tier: t })); }
+    },
+    merge: () => {
+      const t = tier(), ti = C.tierIdx(t);
+      const h = audio.mergeStart({ tier: t, calm: calm() });
+      later(C.MERGE_CHARGE_S[ti] * 1000, () => h.burst({ tier: t, tierUp: up(), mythicVariant: variant() }));
+    },
+  };
+  for (const b of document.querySelectorAll('button[data-c]')) b.addEventListener('pointerdown', async () => { await unlock(); act[b.dataset.c](); });
 }
 {
   let h = null, y0 = 0, lastY = 0, lastT = 0, comp = 0, rate = 0, raf = 0;

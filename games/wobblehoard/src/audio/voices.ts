@@ -25,16 +25,16 @@ export interface VoiceBase {
 }
 
 /** Pitch ratio including the +/-3% per-call variation. Always consumes exactly one rng draw. */
-function pitchOf(p: VoiceBase): number {
+export function pitchOf(p: VoiceBase): number {
   const u = p.rng();
   const j = p.jitter !== undefined ? clamp(fin(p.jitter, 1), 0.95, 1.05) : 1 + 0.03 * (2 * u - 1);
   return clamp(fin(p.pitch, 1), 0.5, 2) * j;
 }
 
-function startTime(t0: number): number { return Math.max(0, fin(t0, 0)); }
+export function startTime(t0: number): number { return Math.max(0, fin(t0, 0)); }
 
 /** 0 -> peak over `att`, then exponential decay with time constant `tau`. Returns the time it is ~ -65 dB down. */
-function pluck(g: AudioParam, t: number, peak: number, att: number, tau: number): number {
+export function pluck(g: AudioParam, t: number, peak: number, att: number, tau: number): number {
   g.setValueAtTime(0, t);
   g.linearRampToValueAtTime(peak, t + att);
   g.setTargetAtTime(0, t + att, tau);

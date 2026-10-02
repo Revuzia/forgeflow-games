@@ -13,7 +13,7 @@ import type { Genome } from './genome.ts';
 import { mulberry32, hashString } from './rng.ts';
 import { TIER_ODDS, TIERS, TIER_COUNT, tierIndex } from './rarity.ts';
 import type { TierId } from './rarity.ts';
-import { CATALOG, SPECIES_BY_TIER, speciesBaseGenome } from '../data/catalog.ts';
+import { CATALOG, SPECIES_BY_TIER, getSpecies, speciesBaseGenome } from '../data/catalog.ts';
 import type { SpeciesDef, SpeciesId } from '../data/catalog.ts';
 
 /* ───────────────────────────────────────────────── random sources ───────────────────────────────────────────────── */
@@ -101,7 +101,7 @@ export function restockOffer(src: RngSource): SpeciesId[] {
  * ("new ones shown first"). Does not change WHICH three are offered.
  */
 export function restockDisplayOrder(offer: readonly SpeciesId[], copies: (id: SpeciesId) => number): SpeciesId[] {
-  const tierOf = (id: SpeciesId): number => tierIndex((CATALOG.find((d) => d.id === id) as SpeciesDef).tier);
+  const tierOf = (id: SpeciesId): number => { const d = getSpecies(id); return d ? tierIndex(d.tier) : 0; };
   const fresh = offer.filter((id) => copies(id) === 0).sort((a, b) => tierOf(b) - tierOf(a));
   return fresh.concat(offer.filter((id) => copies(id) !== 0));
 }

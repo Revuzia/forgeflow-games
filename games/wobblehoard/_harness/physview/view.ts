@@ -3,7 +3,9 @@
 // It is driven by a scripted scenario from the URL (?scn=side_poke|hold_squash|pull_lobe|peak_flop|float_shove|pinch)
 // and steps the sim with a FIXED dt of 1/60 s (no wall clock), so the filmstrips are reproducible.
 // Extra URL params: ?p=<json SoftParams override> ?g=<genome seed or g1.code> ?gf= ?gb= ?gs= ?gz= (firmness, bounce,
-// stretch, size overrides) ?detail=<3|4> ?px=<press x offset for hold_squash>.
+// stretch, size overrides) ?detail=<3|4> ?px=<press x offset for hold_squash / peak_rest_close> ?fps=<sim frame rate, default 60>.
+// Every step also logs the worst mesh FOLD (largest dihedral between adjacent triangles, edges over 90 degrees, inward-facing
+// triangles): the rest shape's own maximum is ~50 degrees, so anything near 180 is a crease or a tucked-under flap.
 // window.__PV__ is the harness hook (see bottom).
 import * as THREE from 'three';
 import { SoftBody } from '../../src/physics/softbody.ts';
@@ -16,6 +18,7 @@ interface Scenario {
   frames: number[];
   tick: (t: number, b: SoftBody, c: Ctx) => void;
   camTarget?: [number, number, number];
+  yawDeg?: number; pitchDeg?: number;
   camDist?: number;
   float?: boolean;
 }
@@ -102,6 +105,71 @@ const SCENARIOS: Record<string, Scenario> = {
       if (t >= 1.1 && !c.n.up) { c.n.up = 1; b.fingerUp(0); b.fingerUp(1); }
     },
   },
+  // ---- regression strips for the mesh-fold bug (pressing the swirl-peak / dome top used to crumple it) ----
+  // straight-down tap on the swirl-peak tip
+  top_peak_poke: {
+    title: 'tap straight down on the peak tip (0.30-0.42 s, pressure 0.6)',
+    frames: [0.3, 0.34, 0.38, 0.42, 0.45, 0.5, 0.55, 0.62, 0.72, 0.85, 1.0, 1.4],
+    camDist: 3.0, yawDeg: 24, pitchDeg: 12,
+    tick(t, b, c) {
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(PX, 3, 0), v3(0, -1, 0)); b.fingerPressure(0, 0.6); }
+      if (t >= 0.42 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // straight-down HOLD on the peak, full ramp, then release
+  top_peak_hold: {
+    title: 'press straight down on the peak tip, ramp 0.5 s to 1.0, hold, release 1.2 s',
+    frames: [0.5, 0.65, 0.8, 0.95, 1.15, 1.22, 1.26, 1.3, 1.36, 1.46, 1.7, 2.1],
+    camDist: 3.0, yawDeg: 24, pitchDeg: 12,
+    tick(t, b, c) {
+      if (t >= 0.4 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(PX, 3, 0), v3(0, -1, 0)); }
+      if (c.n.down && !c.n.up) b.fingerPressure(0, clamp01((t - 0.4) / 0.5));
+      if (t >= 1.2 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // close-up of the dome top while it is squashed from above (the old dark notch / star-shaped pucker)
+  hold_close: {
+    title: 'hold-squash from the top, close-up from above (ramp 0.9 s), release 1.4',
+    frames: [0.9, 1.1, 1.3, 1.4, 1.42, 1.44, 1.46, 1.48, 1.5, 1.54, 1.6, 1.7],
+    camDist: 2.4, camTarget: [0, 0.6, 0], yawDeg: 24, pitchDeg: 32,
+    tick(t, b, c) {
+      if (t >= 0.4 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(PX, 3, 0), v3(0, -1, 0)); }
+      if (c.n.down && !c.n.up) b.fingerPressure(0, clamp01((t - 0.4) / 0.9));
+      if (t >= 1.4 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // close-up of the peak tip long after a tap (the old permanent folded flap); ?px= = hit offset x
+  peak_rest_close: {
+    title: 'tap on the peak (x=PX) 0.30-0.42 s then close-up of the tip at rest (t=0.3 ... 9 s)',
+    frames: [0.3, 0.36, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+    camDist: 1.5, camTarget: [0, 0.85, 0], yawDeg: 24, pitchDeg: 18,
+    tick(t, b, c) {
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(PX, 3, 0), v3(0, -1, 0)); b.fingerPressure(0, 0.6); }
+      if (t >= 0.42 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // a two-finger pinch released one finger at a time (the old tip teleport when the pinch state changed)
+  pinch_stagger: {
+    title: 'pinch (0.30 s), finger 0 lifts at 1.10 s, finger 1 at 1.25 s: tips must move continuously',
+    frames: [0.9, 1.08, 1.12, 1.16, 1.2, 1.26, 1.3, 1.36, 1.44, 1.55, 1.75, 2.2],
+    tick(t, b, c) {
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(-3, 0.34, 0), v3(1, 0, 0)); touch(b, 1, v3(3, 0.34, 0), v3(-1, 0, 0)); }
+      if (c.n.down && !c.n.up) { const p = clamp01((t - 0.3) / 0.6) * 0.95; b.fingerPressure(0, p); b.fingerPressure(1, p); }
+      if (t >= 1.1 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+      if (t >= 1.25 && !c.n.up2) { c.n.up2 = 1; b.fingerUp(1); }
+    },
+  },
+  // press on the dome shoulder next to the peak, ramp and hold (the peak must not crumple while the body squashes)
+  hold_shoulder: {
+    title: 'hold-squash on the dome shoulder (x=0.3), close-up of the peak, release 1.4',
+    frames: [0.5, 0.7, 0.9, 1.1, 1.3, 1.4, 1.44, 1.48, 1.54, 1.62, 1.8, 2.2],
+    camDist: 2.4, camTarget: [0, 0.6, 0], yawDeg: 24, pitchDeg: 20,
+    tick(t, b, c) {
+      if (t >= 0.4 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(0.3 + PX, 3, 0), v3(0, -1, 0)); }
+      if (c.n.down && !c.n.up) b.fingerPressure(0, clamp01((t - 0.4) / 0.9));
+      if (t >= 1.4 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
 };
 
 interface Snap {
@@ -109,8 +177,9 @@ interface Snap {
   tips: Array<{ x: number; y: number; z: number; r: number } | null>;
   top: number; foot: number; cy: number; cx: number; cz: number;
   comp: number; rate: number; stretch: number; vol: number; kin: number; grounded: boolean; fingers: number; grabbed: boolean;
+  fold: number; folds90: number; inward: number;
 }
-interface LogRow { t: number; comp: number; rate: number; stretch: number; vol: number; kin: number; grounded: boolean; top: number; foot: number; cx: number; cy: number; cz: number }
+interface LogRow { t: number; comp: number; rate: number; stretch: number; vol: number; kin: number; grounded: boolean; top: number; foot: number; cx: number; cy: number; cz: number; fold: number; folds90: number; inward: number }
 
 const q = new URLSearchParams(location.search);
 const scnName = q.get('scn') ?? 'side_poke';
@@ -131,8 +200,42 @@ const body = new SoftBody(genome, { detail, params });
 if (sc.float) body.gravity = false;
 if (sc.float) body.reset();
 
+// ---- mesh fold meter: worst dihedral between adjacent triangle normals (rest shape: ~50 deg), edges over 90 deg, inward triangles
+const triEdges: Array<[number, number]> = (() => {
+  const m = new Map<number, number>(), out: Array<[number, number]> = [];
+  const I = body.indices, nT = I.length / 3;
+  for (let t = 0; t < nT; t++) for (let k = 0; k < 3; k++) {
+    const a = I[t * 3 + k], c = I[t * 3 + ((k + 1) % 3)];
+    const key = a < c ? a * 65536 + c : c * 65536 + a;
+    const o = m.get(key);
+    if (o === undefined) m.set(key, t); else out.push([o, t]);
+  }
+  return out;
+})();
+const triN = new Float64Array((body.indices.length / 3) * 3);
+function foldStats(): { fold: number; folds90: number; inward: number } {
+  const P = body.positions, I = body.indices, nT = I.length / 3;
+  let inward = 0;
+  for (let t = 0; t < nT; t++) {
+    const a = I[t * 3] * 3, c = I[t * 3 + 1] * 3, d = I[t * 3 + 2] * 3;
+    const ux = P[c] - P[a], uy = P[c + 1] - P[a + 1], uz = P[c + 2] - P[a + 2], vx = P[d] - P[a], vy = P[d + 1] - P[a + 1], vz = P[d + 2] - P[a + 2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const l = Math.hypot(nx, ny, nz) || 1e-12; nx /= l; ny /= l; nz /= l;
+    triN[t * 3] = nx; triN[t * 3 + 1] = ny; triN[t * 3 + 2] = nz;
+    const cx = (P[a] + P[c] + P[d]) / 3 - body.center.x, cy = (P[a + 1] + P[c + 1] + P[d + 1]) / 3 - body.center.y, cz = (P[a + 2] + P[c + 2] + P[d + 2]) / 3 - body.center.z;
+    if (nx * cx + ny * cy + nz * cz < 0) inward++;
+  }
+  let worst = 1, n90 = 0;   // worst = smallest cosine
+  for (const [t1, t2] of triEdges) {
+    const dot = triN[t1 * 3] * triN[t2 * 3] + triN[t1 * 3 + 1] * triN[t2 * 3 + 1] + triN[t1 * 3 + 2] * triN[t2 * 3 + 2];
+    if (dot < worst) worst = dot;
+    if (dot < 0) n90++;
+  }
+  return { fold: (Math.acos(Math.max(-1, Math.min(1, worst))) * 180) / Math.PI, folds90: n90, inward };
+}
+
 // ---- run the scenario with a fixed dt, capture snapshots at the requested times
-const DT = 1 / 60;
+const DT = 1 / Number(q.get('fps') ?? 60);
 const snaps: Snap[] = [];
 const log: LogRow[] = [];
 const events: Array<{ t: number; kind: string; intensity: number; finger: number; heldFor: number }> = [];
@@ -143,7 +246,9 @@ function snapshot(t: number): Snap {
   let top = -1e9, foot = 1e9;
   for (let i = 0; i < body.vertexCount; i++) { const y = P[i * 3 + 1]; if (y > top) top = y; if (y < foot) foot = y; }
   const m = body.metrics;
+  const fs = foldStats();
   return {
+    fold: fs.fold, folds90: fs.folds90, inward: fs.inward,
     t, pos: Float32Array.from(P), strain: Float32Array.from(body.strain),
     tips: [body.tip(0), body.tip(1)].map((k) => (k ? { x: k.x, y: k.y, z: k.z, r: k.r } : null)),
     top, foot, cy: body.center.y, cx: body.center.x, cz: body.center.z,
@@ -162,7 +267,8 @@ for (let step = 0, t = 0; t < tEnd + DT; step++) {
   {
     let top = -1e9, foot = 1e9;
     for (let i = 0; i < body.vertexCount; i++) { const y = body.positions[i * 3 + 1]; if (y > top) top = y; if (y < foot) foot = y; }
-    log.push({ t, comp: m.compression, rate: m.compressionRate, stretch: m.stretch, vol: m.volume, kin: m.kinetic, grounded: m.grounded, top, foot, cx: body.center.x, cy: body.center.y, cz: body.center.z });
+    const fs = foldStats();
+    log.push({ t, comp: m.compression, rate: m.compressionRate, stretch: m.stretch, vol: m.volume, kin: m.kinetic, grounded: m.grounded, top, foot, cx: body.center.x, cy: body.center.y, cz: body.center.z, fold: fs.fold, folds90: fs.folds90, inward: fs.inward });
   }
   const out: Array<{ kind: string; intensity: number; finger: number; heldFor: number }> = [];
   body.drainEvents(out as never);
@@ -220,7 +326,7 @@ const tipMeshes = [0, 1].map(() => {
 const cam = new THREE.PerspectiveCamera(28, TW / TH, 0.1, 50);
 const dist = sc.camDist ?? 3.5;
 const tgt = sc.camTarget ?? [0, 0.5, 0];
-const yaw = (24 * Math.PI) / 180, pitch = (9 * Math.PI) / 180;
+const yaw = ((sc.yawDeg ?? 24) * Math.PI) / 180, pitch = ((sc.pitchDeg ?? 9) * Math.PI) / 180;
 cam.position.set(tgt[0] + dist * Math.sin(yaw) * Math.cos(pitch), tgt[1] + dist * Math.sin(pitch), tgt[2] + dist * Math.cos(yaw) * Math.cos(pitch));
 cam.lookAt(tgt[0], tgt[1], tgt[2]);
 
@@ -259,7 +365,7 @@ snaps.forEach((s, i) => {
   drawSnap(s, i);
   const d = document.createElement('div');
   d.style.left = `${(i % 4) * TW}px`; d.style.top = `${Math.floor(i / 4) * TH + 22}px`;
-  d.textContent = `t=${s.t.toFixed(2)}s  comp ${s.comp.toFixed(2)}  rate ${s.rate.toFixed(1)}\nvol ${s.vol.toFixed(3)}  kin ${s.kin.toFixed(2)}  str ${s.stretch.toFixed(2)}\ntop ${s.top.toFixed(3)}  foot ${s.foot.toFixed(3)}  fing ${s.fingers}${s.grabbed ? ' G' : ''}${s.grounded ? '' : ' AIR'}`;
+  d.textContent = `t=${s.t.toFixed(2)}s  comp ${s.comp.toFixed(2)}  rate ${s.rate.toFixed(1)}\nvol ${s.vol.toFixed(3)}  kin ${s.kin.toFixed(2)}  str ${s.stretch.toFixed(2)}\ntop ${s.top.toFixed(3)}  foot ${s.foot.toFixed(3)}  fing ${s.fingers}${s.grabbed ? ' G' : ''}${s.grounded ? '' : ' AIR'}\nfold ${s.fold.toFixed(0)} deg  >90: ${s.folds90}  inward ${s.inward}`;
   labels.appendChild(d);
 });
 // tile borders
@@ -274,7 +380,7 @@ window.__PV__ = {
   ready: true,
   scenario: scnName,
   names: Object.keys(SCENARIOS),
-  frames: snaps.map((s) => ({ t: s.t, comp: s.comp, rate: s.rate, stretch: s.stretch, vol: s.vol, kin: s.kin, top: s.top, foot: s.foot, cx: s.cx, cy: s.cy, cz: s.cz, grounded: s.grounded, fingers: s.fingers })),
+  frames: snaps.map((s) => ({ t: s.t, comp: s.comp, rate: s.rate, stretch: s.stretch, vol: s.vol, kin: s.kin, top: s.top, foot: s.foot, cx: s.cx, cy: s.cy, cz: s.cz, grounded: s.grounded, fingers: s.fingers, fold: s.fold, inward: s.inward })),
   log, events, simMs,
   stateHash: body.stateHash(),
   safetyResets: body.debug.safetyResets,

@@ -1,26 +1,32 @@
-// WOBBLEHOARD stage: owns the WebGLRenderer, the camera rig, the set, and the per-body view (jelly + core + face + fx).
-// `createStage(canvas)` implements StageLike (src/contracts.ts). `createStageDev` returns the same object with a few
-// extra dev-only members (renderer access, memory counters, context-loss helpers) for the render harness.
+// WOBBLEHOARD stage: owns the WebGLRenderer, the camera rig, the set, and a LIST of body views (multi-body: the play squishy, or
+// two parents plus the result during a ceremony), the capsule, the shared particle system, and the ceremony director.
+// `createStage(canvas)` implements StageLike (src/contracts.ts). `createStageDev` returns the same object with a few extra dev-only
+// members (renderer access, memory counters, context-loss helpers, the ceremony internals) for the render harness.
 //
 // Camera conventions (the SHELL lane reads these):
-//   orbit(dYaw, dPitch): radians, OrbitControls feel: pass (dx * k, dy * k) of a pointer drag and the scene turns with the
-//     finger (dragging right turns the scene right, dragging down looks more from above).
+//   orbit(dYaw, dPitch): radians, OrbitControls feel: pass (dx * k, dy * k) of a pointer drag and the scene turns with the finger.
 //   zoom(delta): positive = camera away. Wheel deltaY in pixels (|delta| > 4, x0.0016) or notches (|delta| <= 4, x0.12).
 import * as THREE from 'three';
-import type { FxKind, QualityTier, SoftBodyLike, StageFrameInput, StageLike, V3 } from '../contracts.ts';
+import type {
+  AddBodyOpts, CapsuleHandle, CapsuleRevealSpec, CeremonyHandle, CeremonyHooks, FxKind, MergeCeremonySpec, QualityTier, SoftBodyLike,
+  StageFrameInput, StageLike, TierName, V3,
+} from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { clamp } from '../core/rng.ts';
+import { BodyView } from './bodyview.ts';
+import { Capsule } from './capsule.ts';
+import { CeremonyDirector, type CeremonyHost } from './ceremony.ts';
+import { createDecalGeometry } from './decals.ts';
 import { EnvHub, KEY_DIR, RIM_DIR } from './env.ts';
-import { genomePalette } from './oklch.ts';
-import { JellyMaterials } from './material.ts';
-import { JellyView } from './jelly.ts';
-import { Core } from './core.ts';
-import { Face } from './face.ts';
-import { Fx } from './fx.ts';
-import { Table, PALETTE, type Footprint } from './table.ts';
+import { FlashGovernor } from './flash.ts';
+import { Particles } from './particles.ts';
 import { QualityGovernor, TIERS } from './quality.ts';
+import { ScreenFx } from './screenfx.ts';
+import { Table, PALETTE } from './table.ts';
 
-export interface StageDev extends StageLike {
+type RoundTwo = Required<Pick<StageLike, 'addBody' | 'removeBody' | 'clearBodies' | 'primaryBodyId' | 'setBodyTier' | 'setCalmEffects' | 'dropCapsule' | 'playCapsuleReveal' | 'playMergeCeremony'>>;
+
+export interface StageDev extends Omit<StageLike, keyof RoundTwo>, RoundTwo {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
   /** renderer.info snapshot: live geometries / textures / programs and the last frame's calls / triangles. */
@@ -28,7 +34,13 @@ export interface StageDev extends StageLike {
   /** Simulate WebGL context loss / restore (WEBGL_lose_context). Returns false when the extension is missing. */
   loseContext(): boolean;
   restoreContext(): boolean;
-  readonly info: { fineVertices: number; tier: QualityTier; mode: QualityTier | 'auto'; fx: { bubbles: number; glitter: number; puffs: number } | null; contextLost: boolean; pixelRatio: number; drawingBuffer: [number, number]; eyeLook: number[] | null };
+  readonly info: {
+    fineVertices: number; tier: QualityTier; mode: QualityTier | 'auto'; fx: { bubbles: number; glitter: number; puffs: number } | null;
+    contextLost: boolean; pixelRatio: number; drawingBuffer: [number, number]; eyeLook: number[] | null;
+    bodies: number; primary: number | null; ceremony: boolean; particles: number; calm: boolean; screenLight: number; capsule: boolean;
+  };
+  readonly views: readonly BodyView[];
+  readonly flash: FlashGovernor;
 }
 
 const TARGET_Y = 0.42;
@@ -53,8 +65,14 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   scene.add(key, key.target, rim, fill);
 
   const hub = new EnvHub(renderer, 128);
-  let table = new Table(hub);
+  const table = new Table(hub);
   scene.add(table.group);
+  const quad = createDecalGeometry();
+  const screen = new ScreenFx();
+  scene.add(screen.light, screen.fade);
+  const particles = new Particles(360, 33);
+  scene.add(particles.mesh);
+  const flash = new FlashGovernor();
 
   const governor = new QualityGovernor();
   let tier = governor.tier;
@@ -64,22 +82,27 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   let yaw = 0, pitch = 0.27, zoomF = 1;
   let tYaw = yaw, tPitch = pitch, tZoom = zoomF;
   const tgt = new THREE.Vector3(0, TARGET_Y, 0);
+  const cameraFx = { dist: 1, yaw: 0, pitch: 0 };   // ceremony push / pull-back / arc, layered on top of the user's orbit (never touches the targets)
   let trauma = 0, shakeScale = 1;
   let cssW = 1, cssH = 1, dpr = 1;
   let bodyScale = 1;
-  let floatMode = false;
+  let floatMode = false, floatT = 0;
+  let calm = false;
   let disposed = false, lost = false;
   let loseExt: WEBGL_lose_context | null = null;
   let lastRenderMs = 0;
   let lastCalls = 0, lastTris = 0;
+  let stageTime = 0;
   const shakeVec = new THREE.Vector3();
 
-  // ---- per-body view ----
-  interface View { body: SoftBodyLike; genome: Genome; mats: JellyMaterials; jelly: JellyView; core: Core; face: Face; fx: Fx }
-  let view: View | null = null;
-  const fp: Footprint = { cx: 0, cz: 0, rx: 0.5, rz: 0.5, lowY: 0, compression: 0, stretch: 0 };
-  let smComp = 0, smStretch = 0, prevSq = 0, sqRate = 0, touchGate = 0, grabGate = 0;
+  // ---- bodies ----
+  const views: BodyView[] = [];
+  let primaryId: number | null = null;
+  let nextId = 1;
+  let capsule: Capsule | null = null;
+  let capsuleId = 0;
 
+  const primary = (): BodyView | null => views.find((v) => v.id === primaryId) ?? null;
   const fitDistance = (): number => bodyScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
 
   function applySize(): void {
@@ -89,12 +112,22 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     camera.updateProjectionMatrix();
   }
 
-  function disposeView(): void {
-    if (!view) return;
-    scene.remove(view.jelly.mesh, view.core.group, view.face.group, view.fx.group);
-    view.jelly.dispose(); view.core.dispose(); view.face.dispose(); view.fx.dispose(); view.mats.dispose();
-    view = null;
+  function addView(body: SoftBodyLike, genome: Genome, t: TierName, owned: boolean, pos?: V3): BodyView {
+    const v = new BodyView(nextId++, body, genome, t, TIERS[tier], hub, quad, owned);
+    v.setCalm(calm);
+    if (pos) v.proxy.setOffset(pos.x, pos.y, pos.z);
+    scene.add(v.group);
+    views.push(v);
+    if (primaryId === null) { primaryId = v.id; bodyScale = v.scale; }
+    return v;
   }
+  function removeView(v: BodyView): void {
+    const i = views.indexOf(v);
+    if (i >= 0) views.splice(i, 1);
+    v.dispose();
+    if (primaryId === v.id) { primaryId = views.length ? views[0].id : null; }
+  }
+  function discardCapsule(): void { if (capsule) { capsule.dispose(); capsule = null; } }
 
   function applyTier(t: QualityTier): void {
     tier = t;
@@ -102,41 +135,9 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     renderer.transmissionResolutionScale = spec.transmissionScale;
     table.setLite(t === 'low');
     applySize();
-    if (view) {
-      view.jelly.mesh.material = view.mats.get(t);
-      if (view.jelly.freq !== spec.fineFreq) view.jelly.rebuild(spec.fineFreq);
-      view.fx.setTier(spec);
-      view.core.setLite(!spec.transmission);
-    }
+    for (const v of views) v.applyQuality(spec);
+    capsule?.applyTier(!spec.transmission);
     governor.resetWindow(24);
-  }
-
-  function syncView(dt: number, time: number): void {
-    const v = view;
-    if (!v) return;
-    const body = v.body, m = body.metrics;
-    v.jelly.update();
-    // "squeeze": the body's global compression, or the deepest local dent (a poke barely changes the global metric)
-    // (the local dent only counts while a finger is down or just lifted: a jiggling body also moves off its rigid goal)
-    touchGate += ((m.fingers > 0 ? 1 : 0) - touchGate) * (1 - Math.exp(-dt * (m.fingers > 0 ? 30 : 7)));
-    grabGate += ((m.grabbed || m.fingers > 0 ? 1 : 0) - grabGate) * (1 - Math.exp(-dt * (m.grabbed || m.fingers > 0 ? 30 : 7)));
-    const rawSq = Math.max(m.compression, v.jelly.press * 0.9 * touchGate);
-    if (dt > 1e-4) sqRate += ((rawSq - prevSq) / dt - sqRate) * (1 - Math.exp(-dt / 0.06));
-    prevSq = rawSq;
-    smComp += (rawSq - smComp) * (1 - Math.exp(-dt * 14));
-    smStretch += (Math.max(m.stretch, v.jelly.pull * 0.6 * grabGate) - smStretch) * (1 - Math.exp(-dt * 10));
-    v.core.update(body, dt, time, smComp);
-    const u = v.mats.uniforms;
-    u.uTime.value = time;
-    u.uCompress.value = smComp;
-    u.uStretch.value = smStretch;
-    u.uCoreWorld.value.copy(v.core.center);
-    u.uCoreAmt.value = 0.3 * v.core.amount;
-    const j = v.jelly;
-    fp.cx = (j.minX + j.maxX) * 0.5; fp.cz = (j.minZ + j.maxZ) * 0.5;
-    fp.rx = (j.maxX - j.minX) * 0.5; fp.rz = (j.maxZ - j.minZ) * 0.5;
-    fp.lowY = j.minY; fp.compression = smComp; fp.stretch = smStretch;
-    v.fx.setFootprint(Math.max(fp.rx, fp.rz));
   }
 
   function updateCamera(dt: number, time: number): void {
@@ -144,18 +145,20 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     yaw += (tYaw - yaw) * k;
     pitch += (tPitch - pitch) * k;
     zoomF += (tZoom - zoomF) * k;
-    // follow the body gently (it can drift when shoved or floating)
+    // follow the primary body gently (it can drift when shoved or floating); a ceremony keeps the pad centred
     let wx = 0, wy = TARGET_Y * bodyScale, wz = 0;
-    if (view) {
-      const c = view.body.center;
+    const p = primary();
+    if (p && !director.active) {
+      const c = p.proxy.center;
       wx = c.x * 0.6; wz = c.z * 0.6;
       wy = TARGET_Y * bodyScale + Math.max(0, c.y - TARGET_Y * bodyScale) * 0.7;
     }
     const kt = 1 - Math.exp(-dt * 6);
     tgt.x += (wx - tgt.x) * kt; tgt.y += (wy - tgt.y) * kt; tgt.z += (wz - tgt.z) * kt;
-    const d = fitDistance() * zoomF;
-    const cp = Math.cos(pitch);
-    camera.position.set(tgt.x + d * Math.sin(yaw) * cp, tgt.y + d * Math.sin(pitch), tgt.z + d * Math.cos(yaw) * cp);
+    const d = fitDistance() * zoomF * cameraFx.dist;
+    const yw = yaw + cameraFx.yaw, pt = clamp(pitch + cameraFx.pitch, 0.06, 1.38);
+    const cp = Math.cos(pt);
+    camera.position.set(tgt.x + d * Math.sin(yw) * cp, tgt.y + d * Math.sin(pt), tgt.z + d * Math.cos(yw) * cp);
     // shake impulse: decaying trauma, smooth multi-sine noise (deterministic, no Math.random)
     trauma = Math.max(0, trauma - dt * 1.7);
     const amt = trauma * trauma * shakeScale;
@@ -172,25 +175,36 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     camera.updateMatrixWorld();
   }
 
+  // ---- ceremony host ----
+  const host: CeremonyHost = {
+    flash, screen, particles, cameraFx,
+    calm: () => calm,
+    now: () => stageTime,
+    createOwned(genome, createBody, t) { return addView(createBody(genome), genome, t, true); },
+    allViews: () => views,
+    removeView,
+    makePrimary(v) { primaryId = v.id; v.owned = false; bodyScale = v.scale; },
+    capsule: () => capsule,
+    ensureCapsule() {
+      if (!capsule) { capsule = new Capsule(hub, quad, !TIERS[tier].transmission); capsule.placeStanding(0, 0.25); scene.add(capsule.group); capsuleId++; }
+      return capsule;
+    },
+    discardCapsule,
+    addToScene: (o) => { scene.add(o); },
+    removeFromScene: (o) => { scene.remove(o); },
+    crossfade(seconds) {
+      renderer.render(scene, camera);          // the current state, into the framebuffer we are about to snapshot
+      screen.beginCrossfade(renderer, seconds);
+    },
+    shake(a) { if (!calm) stage.shake(a); },
+  };
+  const director = new CeremonyDirector(host);
+
   const onLost = (e: Event): void => { e.preventDefault(); lost = true; };
   const onRestored = (): void => {
     lost = false;
-    try {
-      // Everything GPU-backed died with the context. Re-create it instead of disposing the dead objects (disposing them
-      // would only make the driver warn about deleting objects of another context).
-      hub.rebuild(renderer);
-      scene.remove(table.group);
-      table = new Table(hub);
-      table.setFloatImmediate(floatMode);
-      table.setLite(tier === 'low');
-      scene.add(table.group);
-      if (view) {
-        const old = view;
-        scene.remove(old.jelly.mesh, old.core.group, old.face.group, old.fx.group);
-        view = null;
-        stage.setBody(old.body, old.genome);
-      }
-    } catch { /* a second loss mid-restore: the next restore rebuilds it */ }
+    // three re-uploads geometry, textures and programs by itself; the baked environment cube is a render target, so bake it again
+    try { hub.rebuild(renderer); } catch { /* a second loss mid-restore: the next restore rebuilds it */ }
     governor.resetWindow(30);
   };
   canvas.addEventListener('webglcontextlost', onLost, false);
@@ -203,42 +217,86 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     camera,
     renderer,
     scene,
+    get views() { return views; },
+    flash,
 
     setBody(body, genome) {
       if (disposed) return;
-      disposeView();
-      const palette = genomePalette(genome);
-      bodyScale = body.restRadius / 0.5;
-      const mats = new JellyMaterials(genome, palette, bodyScale, hub);
-      const spec = TIERS[tier];
-      const jelly = new JellyView(body, mats.get(tier), spec.fineFreq);
-      jelly.mesh.renderOrder = 10;
-      const core = new Core(genome, palette, bodyScale);
-      core.setLite(!spec.transmission);
-      const face = new Face(body, genome, jelly, hub);
-      const fx = new Fx(genome, palette, jelly.mapper, spec, bodyScale);
-      table.setPoolColor(palette.pool);
-      scene.add(jelly.mesh, core.group, face.group, fx.group);
-      view = { body, genome, mats, jelly, core, face, fx };
-      smComp = prevSq = 0; smStretch = sqRate = 0; touchGate = grabGate = 0;
+      director.abort();
+      stage.clearBodies();
+      const v = addView(body, genome, 'common', false);
+      primaryId = v.id; bodyScale = v.scale;
       tgt.set(body.center.x * 0.6, TARGET_Y * bodyScale, body.center.z * 0.6);
-      syncView(0, 0);
-      face.update(0, 0, null, camera, 0, 0);
-      fx.update(0, 0, body);
       governor.resetWindow(24);
+    },
+
+    addBody(body, genome, opts?: AddBodyOpts) {
+      if (disposed) return -1;
+      const v = addView(body, genome, opts?.tier ?? 'common', false, opts?.position);
+      governor.resetWindow(24);
+      return v.id;
+    },
+    removeBody(id) { const v = views.find((x) => x.id === id); if (v) removeView(v); },
+    clearBodies() { while (views.length) removeView(views[views.length - 1]); primaryId = null; },
+    primaryBodyId() { return primaryId; },
+    setBodyTier(id, t) { views.find((x) => x.id === id)?.setTier(t); },
+    setCalmEffects(on) {
+      calm = !!on; flash.calm = calm;
+      for (const v of views) v.setCalm(calm);
+      if (calm) { cameraFx.dist = 1; cameraFx.yaw = 0; cameraFx.pitch = 0; screen.setLight(0, 0, 0, 0); }
+    },
+
+    dropCapsule(opts) {
+      if (disposed) throw new Error('stage disposed');
+      discardCapsule();
+      capsule = new Capsule(hub, quad, !TIERS[tier].transmission);
+      const c = capsule;
+      const id = ++capsuleId;
+      const p = primary();
+      const x = opts?.at?.x ?? (p ? p.proxy.center.x + 0.82 * p.scale : 0.82), z = opts?.at?.z ?? 0.62;
+      c.drop(x, z, opts?.onLand);
+      scene.add(c.group);
+      const sp = { x: 0, y: 0, r: 0 };
+      const handle: CapsuleHandle = {
+        id,
+        get landed() { return capsule === c && c.landed; },
+        screenPoint() { return capsule === c ? c.screenPoint(camera, cssW, cssH, sp) : null; },
+        hitTest(x2, y2, slop = 14) {
+          const s = capsule === c ? c.screenPoint(camera, cssW, cssH, sp) : null;
+          return !!s && Math.hypot(x2 - s.x, y2 - s.y) <= s.r + slop;
+        },
+        setSqueeze(pr) { if (capsule === c) c.setSqueeze(pr); },
+        wobble(s = 1) { if (capsule === c) c.wobble(3.5 * s); },
+        remove() { if (capsule === c) discardCapsule(); },
+      };
+      return handle;
+    },
+    playCapsuleReveal(spec: CapsuleRevealSpec, hooks?: CeremonyHooks): CeremonyHandle {
+      if (disposed) throw new Error('stage disposed');
+      return director.startCapsule(spec, hooks);
+    },
+    playMergeCeremony(spec: MergeCeremonySpec, hooks?: CeremonyHooks): CeremonyHandle {
+      if (disposed) throw new Error('stage disposed');
+      return director.startMerge(spec, hooks);
     },
 
     update(dt, input: StageFrameInput) {
       if (disposed) return;
       const d = clamp(Number.isFinite(dt) ? dt : 0, 0, 0.1);
       const time = Number.isFinite(input.time) ? input.time : 0;
+      stageTime = time;
+      // the ceremony runs first: it moves the puppets and returns the time scale (slow-mo dips slow physics and particles only)
+      const ts = director.update(d);
+      floatT += ((floatMode ? 1 : 0) - floatT) * (1 - Math.exp(-d * 5));
       updateCamera(d, time);
-      syncView(d, time);
-      if (view) {
-        view.face.update(d, time, input.pointerNdc, camera, smComp, Math.min(sqRate, view.body.metrics.compressionRate));
-        view.fx.update(d, time, view.body);
+      table.update(camera);
+      for (const v of views) {
+        if (!v.visible) continue;
+        v.update(d, time, input.pointerNdc, camera, floatT, v.owned ? d * ts : 0);
       }
-      table.update(d, time, camera, view ? fp : null);
+      capsule?.update(d * ts, time);
+      particles.update(d * ts, time);
+      screen.update(d);
     },
 
     render() {
@@ -284,17 +342,19 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       if (next) applyTier(next);
     },
 
-    setFloatMode(on) { floatMode = !!on; table.setFloat(floatMode); },
+    setFloatMode(on) { floatMode = !!on; },
 
-    spawnFx(kind: FxKind, at: V3, intensity: number) { view?.fx.spawn(kind, at, intensity); },
+    spawnFx(kind: FxKind, at: V3, intensity: number) { primary()?.spawnFx(kind, at, intensity); },
 
     dispose() {
       if (disposed) return;
       disposed = true;
+      director.abort();
       canvas.removeEventListener('webglcontextlost', onLost, false);
       canvas.removeEventListener('webglcontextrestored', onRestored, false);
-      disposeView();
-      table.dispose();
+      while (views.length) removeView(views[views.length - 1]);
+      discardCapsule();
+      table.dispose(); quad.dispose(); screen.dispose(); particles.dispose();
       hub.dispose();
       renderer.dispose();
     },
@@ -320,7 +380,13 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       return true;
     },
     get info() {
-      return { fineVertices: view?.jelly.fineCount ?? 0, tier: governor.tier, mode: governor.mode, fx: view?.fx.counts ?? null, contextLost: lost, pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number], eyeLook: view ? Array.from(view.face.lookOut) : null };
+      const p = primary();
+      return {
+        fineVertices: p?.jelly.fineCount ?? 0, tier: governor.tier, mode: governor.mode, fx: p?.fx.counts ?? null, contextLost: lost,
+        pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number],
+        eyeLook: p ? Array.from(p.face.lookOut) : null,
+        bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule,
+      };
     },
   };
   return stage;
