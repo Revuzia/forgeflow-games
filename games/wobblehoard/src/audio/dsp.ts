@@ -1,4 +1,4 @@
-// WOBBLEHOARD audio: shared DSP helpers. Nothing here touches the DOM or Math.random(): the same code runs in a live
+// WOBBLEHOARD audio: shared DSP helpers. Nothing here touches the DOM or an unseeded RNG: the same code runs in a live
 // AudioContext and in an OfflineAudioContext, and every random draw comes from a seeded mulberry32 stream.
 import { mulberry32, clamp } from '../core/rng.ts';
 
@@ -84,8 +84,8 @@ export interface VoiceGroup {
   readonly dying: boolean;
   /** True for the held squish: never the first choice when stealing. */
   readonly held: boolean;
-  /** Fade out quickly (default 20 ms) and free the nodes. Safe to call twice. */
-  kill(fadeS?: number): void;
+  /** Fade out quickly (default 20 ms) and free the nodes. Safe to call twice. `atTime` scripts it for offline renders. */
+  kill(fadeS?: number, atTime?: number): void;
   /** Disconnect everything NOW (no fade). Used when the context is suspended and 'ended' events will not arrive. */
   free(): void;
 }
@@ -204,32 +204,35 @@ export class Bag implements VoiceGroup {
 /* ───────────── bubbles ───────────── */
 
 /**
- * One Minnaert bubble: an exponentially damped sine at f0 = 3.26 / r (r in metres) with a small upward chirp as the
- * bubble settles. Damping follows the usual thermal + viscous + radiation fit d = 0.13/r + 0.0072 r^-1.5 (1/s). The idea
- * is from the liquid-sound literature (a stream of such bubbles IS the sound of water); this code is our own.
- * Freed through its own 'ended' handler. `soft` > 1 lengthens the ring, `chirp` is the settle chirp (0.1 = textbook).
+ * One Minnaert bubble: an exponentially damped sine at f0 = 3.26 / r (r in metres) that chirps as the bubble settles.
+ * Damping follows the usual thermal + viscous + radiation fit d = 0.13 / r + 0.0072 r^-1.5 (1/s). The idea is from the
+ * liquid-sound literature (a stream of such bubbles IS the sound of water); this code is our own. `rise` is the total
+ * fractional pitch change (0.3 = ends 30% higher; negative = settles downward), approached with the damping time
+ * constant. `soft` > 1 lengthens the ring. Frees its own two nodes from its 'ended' handler.
  * Returns the context time at which it is silent.
  */
 export function bubble(
   ctx: Ctx, dest: AudioNode, t: number, radiusM: number, amp: number,
-  chirp = 0.12, soft = 1,
+  rise = 0.3, soft = 1,
 ): number {
   const r = clamp(fin(radiusM, 0.002), 0.0003, 0.03);
   const f0 = 3.26 / r;
   const d = (0.13 / r + 0.0072 / Math.pow(r, 1.5)) / Math.max(soft, 0.1);
-  const T = clamp(7 / d, 0.006, 0.32);
-  if (f0 > ctx.sampleRate * 0.45) return t;
+  const T = clamp(6.5 / d, 0.006, 0.26);
+  if (f0 > ctx.sampleRate * 0.4 || !(t < ctx.currentTime + 120)) return t;   // far-future or NaN start: would never end
   const o = ctx.createOscillator();
   const g = ctx.createGain();
   nodeCounters.created += 2;
   o.type = 'sine';
   o.frequency.setValueAtTime(f0, t);
-  // f(t) = f0 (1 + chirp * d * t): the textbook linear settle chirp, capped below Nyquist.
-  o.frequency.linearRampToValueAtTime(Math.min(f0 * (1 + chirp * d * T), ctx.sampleRate * 0.45), t + T);
+  o.frequency.setTargetAtTime(Math.min(f0 * (1 + clamp(fin(rise, 0.3), -0.4, 1.5)), ctx.sampleRate * 0.45), t, 0.9 / d);
   const a = clamp(fin(amp, 0), 0, 4);
+  // soft onset (two ramps ~ a raised cosine): keeps the low-frequency "tock" of a hard step out of every bubble
+  const att = Math.min(0.0017, 0.9 / d);
   g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(a, t + 0.0007);
-  g.gain.setTargetAtTime(0, t + 0.0007, 1 / d);
+  g.gain.linearRampToValueAtTime(a * 0.22, t + att * 0.45);
+  g.gain.linearRampToValueAtTime(a, t + att);
+  g.gain.setTargetAtTime(0, t + att, 1 / d);
   o.connect(g);
   g.connect(dest);
   o.onended = () => { try { o.disconnect(); g.disconnect(); } catch { /* gone */ } o.onended = null; nodeCounters.freed += 2; };

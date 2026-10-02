@@ -200,12 +200,17 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       } catch { dropped++; return NOOP_HANDLE; }
       register(v);
       return {
+        // `atTime` exists for offline scripting; live callers get "now" (a far-future time would strand the voice)
         update(q, atTime) {
           if (disposed || !q) return;
-          try { v.update(q, atTime); } catch { /* never throw into the render loop */ }
+          try {
+            const now = a.c.currentTime;
+            const at = typeof atTime === 'number' && Number.isFinite(atTime) ? clamp(atTime, now, now + 0.25) : undefined;
+            v.update(q, at);
+          } catch { /* never throw into the render loop */ }
         },
-        end(fadeS, atTime) {
-          try { v.end(fadeS, atTime); } catch { /* ignore */ }
+        end(fadeS) {
+          try { v.end(fadeS); } catch { /* ignore */ }
         },
       };
     },

@@ -67,10 +67,14 @@ export function genomePalette(g: Genome): JellyPalette {
   const patA = oklchToLinear(Math.min(0.95, L + 0.06), Math.min(0.3, C * 1.1), h + 42);
   const patB = oklchToLinear(0.97, 0.035, h + 20);
   const glow = oklchToLinear(Math.min(0.92, L + 0.05), Math.min(0.28, C * 1.2), h - 6);
-  const ch = g.coreHue + HUE_OFFSET;
+  // Render hue of the core: keep it within +-110 degrees of the body hue. A near-complementary core would be absorbed by
+  // the jelly and cancel the body tint toward grey; this keeps every genome's colours pleasant.
+  let dh = (((g.coreHue - g.hue) % 360) + 540) % 360 - 180;
+  dh = Math.max(-110, Math.min(110, dh));
+  const ch = g.hue + dh + HUE_OFFSET;
   const core = oklchToLinear(0.7, 0.22, ch);
   const coreHot = oklchToLinear(0.95, 0.08, ch + 8);
-  const pool = mix3(oklchToLinear(0.82, Math.min(0.24, C * 1.3), h), oklchToLinear(0.9, 0.16, 70), 0.25);
+  const pool = oklchToLinear(0.74, Math.min(0.26, C * 1.5), h - 4);
   const glitter = mix3(oklchToLinear(0.97, 0.05, h + 12), [1, 0.93, 0.78], 0.55);
   const dust = mix3(oklchToLinear(0.86, 0.06, h + 10), [0.95, 0.85, 0.75], 0.5);
   return { body, attenuation, blush, pale, patA, patB, glow, core, coreHot, pool, glitter, dust };

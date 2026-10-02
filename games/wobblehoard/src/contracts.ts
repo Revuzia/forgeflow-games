@@ -207,6 +207,8 @@ export interface DebugHook {
   shot(name: string): Promise<{ ok: boolean; path?: string }>;
   /** Play a named audio voice directly (sound lab). */
   playSound(kind: 'poke' | 'squish' | 'release' | 'land' | 'pop' | 'blend'): void;
+  /** Optional (SHELL, additive): where the squishy is on screen right now. x,y are 0..1 over the canvas (the same space as pointerDown); rPx is its projected rest radius in CSS px. null before the first frame. */
+  bodyScreen?(): { x: number; y: number; rPx: number } | null;
 }
 
 declare global {

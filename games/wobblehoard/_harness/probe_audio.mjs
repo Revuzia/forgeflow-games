@@ -62,6 +62,7 @@ function normDiff(a, b) {
 /* ───────────────────────── per-voice analysis ───────────────────────── */
 const table = [];
 const extra = {};
+const demo = [];
 
 async function probeVoice(name) {
   const S = SPEC[name];
@@ -98,8 +99,18 @@ async function probeVoice(name) {
     const hi = metrics(judged(await render({ ...S.render, params: S.hi })), sr);
     const lo = metrics(judged(await render({ ...S.render, params: S.lo })), sr);
     hiPk = hi.peakDb; loPk = lo.peakDb;
+    writeFileSync(resolve(OUT, `${name}_max.wav`), wavBuffer(judged(await render({ ...S.render, params: S.hi })), sr));
+    writeFileSync(resolve(OUT, `${name}_min.wav`), wavBuffer(judged(await render({ ...S.render, params: S.lo })), sr));
     check(x2, 'max-parameter peak <= -1 dBFS', hi.peakDb <= -1, `${f1(hi.peakDb)} dBFS`, '<= -1');
     check(x2, 'min-parameter peak >= -20 dBFS (whole range inside G2)', lo.peakDb >= -20, `${f1(lo.peakDb)} dBFS`, '>= -20');
+    // onset/end steps at the extremes of the range (dry voice at t0 = 0 and through the chain)
+    let jx = 0;
+    for (const pp of [S.hi, S.lo]) {
+      const dr = await render({ ...S.render, params: pp, chain: false, t0: 0 });
+      const dm = metrics(cut(dr.x, sr, 0, Math.min(dr.n / sr, dr.endTime + 0.05)), sr);
+      jx = Math.max(jx, dm.startSample, dm.endSample, dm.jumpStart, dm.jumpEnd);
+    }
+    check(g, 'no sample jump > 0.25 at start/end (min and max parameters)', jx <= 0.25, f3(jx), '<= 0.25');
   }
 
   // louder squish: +9 dB headroom, still limited
@@ -114,6 +125,8 @@ async function probeVoice(name) {
   // two pitch ratios (same seed): dominant frequency differs by about the ratio
   const lowR = await render({ ...S.render, pitch: 0.8 });
   const highR = await render({ ...S.render, pitch: 1.25 });
+  writeFileSync(resolve(OUT, `${name}_pitch0.80.wav`), wavBuffer(judged(lowR), sr));
+  writeFileSync(resolve(OUT, `${name}_pitch1.25.wav`), wavBuffer(judged(highR), sr));
   const dLow = dominant(judged(lowR), sr, { fLo: 60, fHi: 8000 });
   const dHigh = dominant(judged(highR), sr, { fLo: 60, fHi: 8000 });
   const ratio = dHigh.hz / dLow.hz;
@@ -121,6 +134,61 @@ async function probeVoice(name) {
   check(x2, 'pitch 0.8 vs 1.25: dominant ratio ~ 1.5625 (+/-25%)', ratio > 1.5625 * 0.75 && ratio < 1.5625 * 1.25, `x${ratio.toFixed(3)}`, '1.17..1.95');
   const cLow = dLow.centroidHz, cHigh = dHigh.centroidHz;
   check(x2, 'pitch 0.8 vs 1.25: spectral centroid rises', cHigh > cLow * 1.15, `${f1(cLow)} -> ${f1(cHigh)} Hz`, '> +15%');
+
+  // the G2 level window must hold for every seed (bubble sizes and timings are random), at min, canonical and max parameters
+  {
+    const sets = [['canonical', S.render.params], ...(S.hi ? [['max', S.hi], ['min', S.lo]] : [])];
+    let lo = Infinity, hi = -Infinity, rmsLo = Infinity, rmsHi = -Infinity, maxJ = 0;
+    for (const [, pp] of sets) {
+      for (let sd = 1; sd <= 12; sd++) {
+        const mm = metrics(judged(await render({ ...S.render, params: pp, seed: 1000 + sd })), sr);
+        lo = Math.min(lo, mm.peakDb); hi = Math.max(hi, mm.peakDb);
+        if (pp === S.render.params) { rmsLo = Math.min(rmsLo, mm.activeRmsDb); rmsHi = Math.max(rmsHi, mm.activeRmsDb); maxJ = Math.max(maxJ, mm.maxJump); }
+      }
+    }
+    check(g, `12 seeds x ${sets.length} parameter sets: peak stays in -20..-1 dBFS`, lo >= -20 && hi <= -1, `${f1(lo)}..${f1(hi)} dBFS`, '-20..-1');
+    check(x2, '12 seeds (canonical): active RMS stays in -34..-14 dBFS', rmsLo >= -34 && rmsHi <= -14, `${f1(rmsLo)}..${f1(rmsHi)} dBFS`, '-34..-14');
+    check(x2, '12 seeds (canonical): max sample step < 0.25', maxJ < 0.25, f3(maxJ), '< 0.25');
+  }
+
+  // determinism: the same seed renders the same audio (no unseeded RNG anywhere in the voice code). The dry voice is
+  // to Chromium's own float noise (~1e-5 = -100 dBFS, also seen in the master chain's compressor); a stray Math.random would
+  // differ by ~0.1.
+  {
+    const dryA = await render({ ...S.render, seed: 77, chain: false }), dryB = await render({ ...S.render, seed: 77, chain: false });
+    const wetA = await render({ ...S.render, seed: 77 }), wetB = await render({ ...S.render, seed: 77 });
+    const mx = (a, b) => { let d = 0; for (let i = 0; i < a.x.length; i++) d = Math.max(d, Math.abs(a.x[i] - b.x[i])); return d; };
+    const dd = mx(dryA, dryB), dw = mx(wetA, wetB);
+    check(x2, 'same seed twice: renders agree to -80 dBFS (max diff <= 1e-4; Chromium float noise is ~1e-5)', dd <= 1e-4 && dw <= 1e-4, `dry ${dd.toExponential(1)}, chain ${dw.toExponential(1)}`, '<= 1e-4');
+  }
+  // master curve and mute (applied after the limiter, so they are exact)
+  {
+    const half = metrics(judged(await render({ ...S.render, master: 0.5 })), sr);
+    check(x2, 'master 0.5 = -12 dB (squared taper)', Math.abs((half.peakDb - m.peakDb) + 12.04) < 0.5, `${f1(half.peakDb - m.peakDb)} dB`, '-12.04 +/- 0.5');
+    const mu = metrics(judged(await render({ ...S.render, muted: true })), sr);
+    check(x2, 'muted: exact silence (< -120 dBFS)', mu.peakDb < -120, `${f1(mu.peakDb)} dBFS`, '< -120');
+  }
+
+  // voice stealing: killed mid-note, the voice fades in 20 ms with no click and is silent right after
+  {
+    const killAt = name === 'blend' ? 1.0 : name === 'squish' ? 0.5 : 0.04;
+    const kr = await render({ ...S.render, killAt });
+    const t = base.t0 + killAt;
+    const pre = cut(kr.x, sr, t - 0.03, t), post = cut(kr.x, sr, t + 0.045, Math.min(kr.n / sr, t + 0.3));
+    const km = metrics(kr.x, sr);
+    const pk = (a) => a.reduce((q, v) => Math.max(q, Math.abs(v)), 0);
+    check(x2, 'stolen mid-note (20 ms fade): no click (max step < 0.25) and silent 45 ms later (< -70 dBFS)', km.maxJump < 0.25 && 20 * Math.log10(pk(post) + 1e-12) < -70, `step ${f3(km.maxJump)}, after ${f1(20 * Math.log10(pk(post) + 1e-12))} dBFS (before ${f1(20 * Math.log10(pk(pre) + 1e-12))})`, 'step < 0.25, < -70');
+  }
+  // the whole genome pitch range (pitchRatio spans ~0.70 .. 1.43): still soft and in the level window
+  {
+    let hfMax = 0, pLo = Infinity, pHi = -Infinity, rLo = Infinity, rHi = -Infinity;
+    for (const pr of [0.7, 1.43]) {
+      const mm = metrics(judged(await render({ ...S.render, pitch: pr })), sr);
+      hfMax = Math.max(hfMax, mm.hfFrac); pLo = Math.min(pLo, mm.peakDb); pHi = Math.max(pHi, mm.peakDb); rLo = Math.min(rLo, mm.activeRmsDb); rHi = Math.max(rHi, mm.activeRmsDb);
+    }
+    check(x2, 'pitch 0.70 and 1.43 (genome extremes): energy > 6 kHz < 15%', hfMax < 0.15, `${(hfMax * 100).toFixed(2)}%`, '< 15%');
+    check(g, 'pitch 0.70 and 1.43: peak -20..-1 dBFS, active RMS -34..-14', pLo >= -20 && pHi <= -1 && rLo >= -34 && rHi <= -14, `peak ${f1(pLo)}..${f1(pHi)}, RMS ${f1(rLo)}..${f1(rHi)}`, 'in window');
+  }
 
   // two seeds differ
   const sA = await render({ ...S.render, seed: 101 });
@@ -195,6 +263,7 @@ async function probeVoice(name) {
 
   // ---- artefacts ----
   writeFileSync(resolve(OUT, `${name}.wav`), wavBuffer(x, sr));
+  demo.push(x);
   const marks = base.script ? base.script.marks : null;
   const png = spectrogramPng(x, sr, { title: name.toUpperCase(), win: S.win, track: traj.track ?? null, marks: marks ? marks.map((k) => ({ t: k.t, label: k.label })) : null });
   writeFileSync(resolve(OUT, `${name}.png`), png);
@@ -263,7 +332,7 @@ function blendChecks(base, x, m, traj) {
 async function main() {
   process.env.WH_FROZEN = '1';
   const vite = await startVite(PORT);
-  const browser = await launch({ args: ['--enable-precise-memory-info', '--js-flags=--expose-gc'] });
+  const browser = await launch({ args: ['--enable-precise-memory-info', '--js-flags=--expose-gc', '--enable-experimental-web-platform-features'] });
   let exit = 1;
   try {
     page = await browser.newPage();
@@ -284,10 +353,39 @@ async function main() {
         writeFileSync(resolve(OUT, 'engine_report.json'), JSON.stringify(res, null, 2));
       } catch (e) { check('engine', 'engine tests ran', false, String(e && e.stack || e), 'no exception'); }
     }
+    if (!args['no-engine'] && !only) {
+      // the human-facing sound lab page: click through every control and read its own stats readout
+      try {
+        await page.goto(`${vite.url}_harness/audioview/index.html`);
+        await page.waitForFunction(() => window.AV && window.AV.ready, null, { timeout: 60000 });
+        await page.click('#unlock');
+        for (const v of ['poke', 'release', 'land', 'pop', 'blend']) await page.click(`button[data-v="${v}"]`);
+        const sq = await page.locator('#squish').boundingBox();
+        await page.mouse.move(sq.x + 20, sq.y + 10);
+        await page.mouse.down();
+        for (let k = 0; k < 20; k++) { await page.mouse.move(sq.x + 20, sq.y + 10 + k * 6); await page.waitForTimeout(25); }
+        await page.mouse.up();
+        await page.waitForTimeout(500);
+        const out = JSON.parse(await page.textContent('#out'));
+        const started = out.started;
+        check('lab page', 'every button starts its voice (poke 2, release 2, land, pop, blend, squish)', started.poke >= 2 && started.release >= 1 && started.land >= 1 && started.pop >= 1 && started.blend >= 1 && started.squish >= 1, JSON.stringify(started), 'all >= 1');
+        check('lab page', 'engine is running and the readout is finite', out.state === 'running' && Number.isFinite(out.peak), `${out.state}, peak ${Number(out.peak).toFixed(3)}`, 'running');
+      } catch (e) { check('lab page', 'lab page ran', false, String(e && e.stack || e), 'no exception'); }
+    }
     check('page', 'no console errors/warnings/page errors', pageErrors.length === 0, pageErrors.length ? pageErrors.slice(0, 3).join(' | ') : '0', '0');
   } finally {
     await browser.close().catch(() => {});
     vite.stop();
+  }
+  if (demo.length) {
+    // one file with every voice in order (poke, squish, release, land, pop, blend), 0.5 s apart, for the owner to listen to
+    const gap = new Float32Array(24000);
+    const parts = [];
+    for (const d of demo) { parts.push(d, gap); }
+    const total = parts.reduce((a, p) => a + p.length, 0);
+    const all = new Float32Array(total); let o = 0;
+    for (const p of parts) { all.set(p, o); o += p.length; }
+    writeFileSync(resolve(OUT, 'all_voices.wav'), wavBuffer(all, 48000));
   }
   report();
   exit = checks.every((c) => c.pass) ? 0 : 1;

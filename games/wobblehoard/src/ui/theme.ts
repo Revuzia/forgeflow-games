@@ -21,6 +21,7 @@ export const DERIVED = {
   track: '#3b2a5f',      // slider track / control fill
   amberDeep: '#e8862a',  // pressed amber
   danger: '#ff8a80',     // error text on ink (lighter coral for contrast)
+  edge: '#8a67b8',       // control outlines: >= 3:1 on the panel
 } as const;
 
 /** Foreground / background pairs the UI actually uses. probe_app.ts asserts every one is >= its minimum ratio. */
@@ -38,7 +39,8 @@ export const CONTRAST_PAIRS: ReadonlyArray<{ name: string; fg: string; bg: strin
   { name: 'focus ring (lagoon) on ink', fg: PALETTE.lagoon, bg: PALETTE.ink, min: 3 },
   { name: 'focus ring (lagoon) on panel', fg: PALETTE.lagoon, bg: DERIVED.panel, min: 3 },
   { name: 'error text on ink', fg: DERIVED.danger, bg: PALETTE.ink, min: 4.5 },
-  { name: 'control edge (dusk-light) on panel', fg: '#8a67b8', bg: DERIVED.panel, min: 3 },
+  { name: 'control edge on panel', fg: DERIVED.edge, bg: DERIVED.panel, min: 3 },
+  { name: 'control edge on track', fg: DERIVED.edge, bg: DERIVED.track, min: 1.5 },
 ];
 
 /** CSS custom properties, kebab-cased: ink -> --wh-ink, creamDim -> --wh-cream-dim. */

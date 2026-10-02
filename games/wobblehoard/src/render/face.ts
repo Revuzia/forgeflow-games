@@ -13,6 +13,7 @@ import type { SoftBodyLike } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { mulberry32, clamp, smoothstep } from '../core/rng.ts';
 import { evalSurface, type JellyView, type SurfaceHit } from './jelly.ts';
+import type { EnvHub } from './env.ts';
 
 interface StyleDef { sx: number; sy: number; sz: number; iris: number; glint: number; lid: number; droop: number }
 const STYLES: Record<Genome['eyeStyle'], StyleDef> = {
@@ -34,7 +35,7 @@ const EYE_FRAG_COLOR = /* glsl */`
   vec2 lp = vLocal.xy;
   float irisD = length(lp - uLook * 0.3 - vec2(0.0, -0.04));
   float iris = 1.0 - smoothstep(uIris - 0.09, uIris, irisD);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.09, 0.05, 0.24), iris * 0.85);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.035, 0.02, 0.09), iris * 0.85);
   float pup = 1.0 - smoothstep(uIris * 0.4, uIris * 0.52, length(lp - uLook * 0.38 - vec2(0.0, -0.04)));
   diffuseColor.rgb *= 1.0 - pup * 0.85;
   float g1 = 1.0 - smoothstep(uGlint * 0.62, uGlint, length(lp - (vec2(-0.3, 0.34) + uLook * 0.3)));
@@ -84,7 +85,10 @@ export class Face {
   private readonly ndc = new THREE.Vector3();
   private readonly vS = new THREE.Vector3();
 
-  constructor(body: SoftBodyLike, genome: Genome, view: JellyView, scale: number) {
+  private readonly hub: EnvHub;
+
+  constructor(body: SoftBodyLike, genome: Genome, view: JellyView, scale: number, hub: EnvHub) {
+    this.hub = hub;
     this.body = body; this.view = view;
     this.style = STYLES[genome.eyeStyle] ?? STYLES.dot;
     this.radius = body.restRadius * (0.095 + 0.07 * genome.eyeSize);
@@ -109,9 +113,10 @@ export class Face {
     const el = (3 + 26 * genome.eyeHeight) * Math.PI / 180;
     for (const side of [-1, 1]) {
       const mat = new THREE.MeshPhysicalMaterial({
-        color: 0x0b0818, roughness: 0.1, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 2.2, ior: 1.5, fog: false,
+        color: 0x0b0818, roughness: 0.1, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04, ior: 1.5, fog: false,
         transparent: true, opacity: 1,
       });
+      hub.apply(mat, 2.2);
       const uLook = { value: new THREE.Vector2() };
       const iris = this.style.iris, glint = this.style.glint;
       mat.onBeforeCompile = (shader) => {
@@ -127,9 +132,10 @@ export class Face {
       };
       mat.customProgramCacheKey = () => 'wh-eye-v1';
       const arcMat = new THREE.MeshPhysicalMaterial({
-        color: 0x0b0818, roughness: 0.14, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 2, fog: false,
+        color: 0x0b0818, roughness: 0.14, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, fog: false,
         transparent: true, opacity: 1,
       });
+      hub.apply(arcMat, 2);
       this.mats.push(mat, arcMat);
       const domeMesh = new THREE.Mesh(dome, mat);
       const arcMesh = new THREE.Mesh(arcGeo, arcMat);
@@ -250,6 +256,6 @@ export class Face {
 
   dispose(): void {
     for (const g of this.geos) g.dispose();
-    for (const m of this.mats) m.dispose();
+    for (const m of this.mats) { this.hub.release(m); m.dispose(); }
   }
 }

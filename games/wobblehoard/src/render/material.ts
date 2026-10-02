@@ -16,7 +16,7 @@ import { mulberry32, lerp } from '../core/rng.ts';
 import type { QualityTier } from '../contracts.ts';
 import type { JellyPalette, Rgb } from './oklch.ts';
 import { NOISE_GLSL } from './shaderlib.ts';
-import { KEY_DIR, RIM_DIR } from './env.ts';
+import { KEY_DIR, RIM_DIR, type EnvHub } from './env.ts';
 
 const PATTERN_ID: Record<Genome['pattern'], number> = { plain: 0, speckle: 1, swirl: 2, bands: 3 };
 
@@ -122,7 +122,7 @@ const EMISSIVE_STAGE = /* glsl */`
   float jNdv = clamp(dot(jN, jV), 0.0, 1.0);
   float jFres = pow(1.0 - jNdv, 3.0);
   float jRimSide = clamp(dot(jN, uRimDir) * 0.6 + 0.5, 0.0, 1.0);
-  vec3 jRim = (uRimCol * (0.2 + 1.7 * jRimSide) + uGlowCol * 0.45) * jFres * uRimAmt;
+  vec3 jRim = (uRimCol * (0.08 + 2.2 * jRimSide * jRimSide) + uGlowCol * 0.4) * jFres * uRimAmt;
   float jWrap = clamp((dot(jN, uKeyDir) + 0.55) / 1.55, 0.0, 1.0);
   vec3 jScat = diffuseColor.rgb * uKeyCol * (0.18 + 0.82 * jWrap * jWrap) * uScatter * (1.0 - 0.5 * jFres);
   vec3 jRd = -jV;
@@ -149,16 +149,19 @@ export class JellyMaterials {
   private full: THREE.MeshPhysicalMaterial | null = null;
   private low: THREE.MeshPhysicalMaterial | null = null;
 
-  constructor(genome: Genome, palette: JellyPalette, scale: number) {
+  private readonly hub: EnvHub;
+
+  constructor(genome: Genome, palette: JellyPalette, scale: number, hub: EnvHub) {
+    this.hub = hub;
     this.genome = genome;
     this.pattern = PATTERN_ID[genome.pattern] ?? 0;
     const r = mulberry32(genome.seed ^ 0x5f3759df);
-    const patStrength = this.pattern === 0 ? 0 : 0.35 + 0.65 * genome.speckle;
+    const patStrength = this.pattern === 0 ? 0 : this.pattern === 1 ? 0.6 + 0.4 * genome.speckle : 0.4 + 0.6 * genome.speckle;
     this.uniforms = {
       uTime: { value: 0 }, uCompress: { value: 0 }, uStretch: { value: 0 },
       uBlushAmt: { value: 1 }, uPatStrength: { value: patStrength },
       uCoreAmt: { value: 0.5 + genome.coreGlow * 0.9 }, uCoreRadius: { value: 0.3 * scale },
-      uRimAmt: { value: 0.55 }, uScatter: { value: 0.5 + 0.4 * genome.translucency }, uAlphaBase: { value: 0.5 + 0.3 * (1 - genome.translucency) },
+      uRimAmt: { value: 0.95 }, uScatter: { value: 0.2 + 0.2 * genome.translucency }, uAlphaBase: { value: 0.5 + 0.3 * (1 - genome.translucency) },
       uBlushCol: { value: lin(palette.blush) }, uPaleCol: { value: lin(palette.pale) },
       uPatA: { value: lin(palette.patA) }, uPatB: { value: lin(palette.patB) },
       uRimCol: { value: new THREE.Color(0x59d6e6) }, uGlowCol: { value: lin(palette.glow) },
@@ -182,10 +185,10 @@ export class JellyMaterials {
       clearcoatRoughness: lerp(0.3, 0.03, gl),
       ior: 1.42,
       specularIntensity: 1,
-      envMapIntensity: 1.25,
       side: THREE.FrontSide,
       fog: false,
     });
+    this.hub.apply(m, 1.25);
     if (low) {
       m.transparent = true;
       m.depthWrite = false;
@@ -194,7 +197,7 @@ export class JellyMaterials {
       m.transmission = lerp(0.62, 1, t);
       m.thickness = (0.45 + 0.35 * t) * this.scale;
       m.attenuationColor = lin(p.attenuation);
-      m.attenuationDistance = lerp(0.3, 1.15, t) * this.scale;
+      m.attenuationDistance = lerp(0.3, 1.0, t) * this.scale;
       m.depthWrite = false; // glitter / bubbles / eyes inside or in front of the body are depth-tested against the table only
     }
     const defs: Record<string, unknown> = { ...(m.defines ?? {}), WH_PATTERN: this.pattern };
@@ -223,6 +226,8 @@ export class JellyMaterials {
   }
 
   dispose(): void {
+    if (this.full) this.hub.release(this.full);
+    if (this.low) this.hub.release(this.low);
     this.full?.dispose(); this.low?.dispose();
     this.full = this.low = null;
   }

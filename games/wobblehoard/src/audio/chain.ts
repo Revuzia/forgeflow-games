@@ -35,7 +35,10 @@ export function createMasterChain(ctx: BaseAudioContext): MasterChain {
   const hp = add(ctx.createBiquadFilter());
   hp.type = 'highpass'; hp.frequency.value = 20; hp.Q.value = 0.707;
   const comp = add(ctx.createDynamicsCompressor());
-  comp.threshold.value = -9; comp.knee.value = 8; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.12;
+  // A safety limiter, not a sound-shaper. Chromium's DynamicsCompressor starts each event after silence from a reduced
+  // gain that recovers at the `release` rate, so a long release eats the front of every short transient (measured:
+  // a 5 ms burst loses 7-11 dB at release 0.12-1 s, none at <= 12 ms). Hence the short release.
+  comp.threshold.value = -6; comp.knee.value = 6; comp.ratio.value = 12; comp.attack.value = 0.002; comp.release.value = 0.012;
   const shaper = add(ctx.createWaveShaper());
   shaper.curve = softClipCurve();
   shaper.oversample = '2x';
@@ -68,7 +71,11 @@ export function createMasterChain(ctx: BaseAudioContext): MasterChain {
       analyser.getFloatTimeDomainData(buf);
       const n = clamp(Math.ceil(seconds * ctx.sampleRate) + 256, 256, buf.length);
       let pk = 0;
-      for (let i = buf.length - n; i < buf.length; i++) { const v = Math.abs(buf[i]); if (v > pk) pk = v; }
+      for (let i = buf.length - n; i < buf.length; i++) {
+        const v = Math.abs(buf[i]);
+        if (v !== v) return NaN;   // a NaN in the output must show up in the readout, not hide behind `>`
+        if (v > pk) pk = v;
+      }
       return pk;
     },
     disconnect() { for (const n of nodes) { try { n.disconnect(); } catch { /* gone */ } } },

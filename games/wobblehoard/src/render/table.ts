@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { NOISE_GLSL } from './shaderlib.ts';
 import type { Rgb } from './oklch.ts';
+import type { EnvHub } from './env.ts';
 
 export const PALETTE = {
   ink: 0x14102a, plum: 0x2a1744, dusk: 0x5b3a86, felt: 0x2a2150, amber: 0xffb347, lagoon: 0x59d6e6, ember: 0xff5a4d, cream: 0xfff1d6,
@@ -20,20 +21,27 @@ void main() {
   gl_Position = p.xyww;
 }
 `;
-const SKY_FRAG = /* glsl */`
-varying vec3 vDir;
+const SKY_FN = /* glsl */`
 uniform vec3 uZenith; uniform vec3 uInk; uniform vec3 uPlum; uniform vec3 uHorizon;
 uniform vec3 uGlowWarm; uniform vec3 uGlowCool;
-${NOISE_GLSL}
-void main() {
-  float e = vDir.y;
+vec3 whSkyLinear(vec3 d) {
+  float e = d.y;
   vec3 c = mix(uHorizon, uPlum, smoothstep(0.0, 0.2, e));
   c = mix(c, uInk, smoothstep(0.12, 0.6, e));
   c = mix(c, uZenith, smoothstep(0.55, 1.0, e));
-  float up = smoothstep(0.0, 0.1, e) * (1.0 - smoothstep(0.1, 0.55, e));
-  c += uGlowWarm * pow(max(dot(vDir, normalize(vec3(0.3, 0.0, -0.95))), 0.0), 9.0) * up;
-  c += uGlowCool * pow(max(dot(vDir, normalize(vec3(-0.75, 0.0, -0.6))), 0.0), 7.0) * up;
-  gl_FragColor = vec4(c, 1.0);
+  float up = smoothstep(-0.02, 0.05, e) * (1.0 - smoothstep(0.08, 0.5, e)) + 0.55 * (1.0 - smoothstep(-0.12, 0.0, e));
+  c += uGlowWarm * pow(max(dot(normalize(vec3(d.x, 0.0, d.z)), normalize(vec3(0.3, 0.0, -0.95))), 0.0), 7.0) * up;
+  c += uGlowCool * pow(max(dot(normalize(vec3(d.x, 0.0, d.z)), normalize(vec3(-0.75, 0.0, -0.6))), 0.0), 6.0) * up;
+  return c;
+}
+vec3 whToSrgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
+`;
+const SKY_FRAG = /* glsl */`
+varying vec3 vDir;
+${SKY_FN}
+${NOISE_GLSL}
+void main() {
+  gl_FragColor = vec4(whSkyLinear(normalize(vDir)), 1.0);
   #include <colorspace_fragment>
   gl_FragColor.rgb += (whHash21(gl_FragCoord.xy) - 0.5) / 255.0;
 }
@@ -78,7 +86,7 @@ const FELT_COLOR = /* glsl */`
   float s = whNoise2(rp * vec2(34.0, 260.0));
   float fib = mix(0.5, a, kA) * 0.55 + mix(0.5, b, kB) * 0.25 + mix(0.5, s, kB) * 0.3;
   jFibre = fib;
-  diffuseColor.rgb *= 0.62 + 0.8 * mix(0.5, fib, uFibre);
+  diffuseColor.rgb *= 0.45 + 1.1 * mix(0.5, fib, uFibre);
   diffuseColor.rgb *= 0.86 + 0.28 * whNoise2(fp * 2.1 + 3.0);
   diffuseColor.rgb *= mix(1.0, 0.3, smoothstep(uVigIn, uVigOut, r));
   float dashes = step(0.5, fract(atan(fp.y, fp.x) * 64.0 / 6.2832));
@@ -89,7 +97,7 @@ const FELT_COLOR = /* glsl */`
 const FELT_NORMAL = /* glsl */`
 #include <normal_fragment_maps>
 {
-  vec2 dH = vec2(dFdx(jFibre), dFdy(jFibre)) * uFibre * 0.35;
+  vec2 dH = vec2(dFdx(jFibre), dFdy(jFibre)) * uFibre * 0.6;
   normal = jBump(-vViewPosition, normal, dH, faceDirection);
 }
 `;
@@ -100,15 +108,17 @@ const FELT_FOG = /* glsl */`
 }
 `;
 
-interface FeltOpts { color: number; roughness: number; fibre: number; stitch: number; vigIn: number; vigOut: number; matR: number; fogCol: THREE.Color }
+interface FeltOpts { env: number; color: number; roughness: number; fibre: number; stitch: number; vigIn: number; vigOut: number; matR: number; fogCol: THREE.Color }
 
-function makeFelt(o: FeltOpts): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({ color: o.color, roughness: o.roughness, metalness: 0, envMapIntensity: 0.55 });
+function makeFelt(o: FeltOpts, hub: EnvHub): THREE.MeshPhysicalMaterial {
+  // physical, only for specularIntensity: felt scatters, it must not mirror the cyan rim at grazing angles
+  const mat = new THREE.MeshPhysicalMaterial({ color: o.color, roughness: o.roughness, metalness: 0, specularIntensity: 0.1 });
+  hub.apply(mat, o.env);
   const u = {
     uMatR: { value: o.matR }, uFibre: { value: o.fibre }, uStitch: { value: o.stitch },
     uVigIn: { value: o.vigIn }, uVigOut: { value: o.vigOut },
     uStitchCol: { value: new THREE.Color(PALETTE.dusk).multiplyScalar(1.1) },
-    uFogCol: { value: o.fogCol }, uFogNear: { value: 9 }, uFogFar: { value: 34 },
+    uFogCol: { value: o.fogCol }, uFogNear: { value: 5 }, uFogFar: { value: 22 },
   };
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, u);
@@ -124,6 +134,29 @@ function makeFelt(o: FeltOpts): THREE.MeshStandardMaterial {
   mat.customProgramCacheKey = () => 'wh-felt-v1';
   return mat;
 }
+
+const GROUND_VERT = /* glsl */`
+varying vec3 vWP;
+void main() { vec4 w = modelMatrix * vec4(position, 1.0); vWP = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }
+`;
+const GROUND_FRAG = /* glsl */`
+varying vec3 vWP;
+uniform vec3 uBase;
+uniform vec3 uWarm;
+uniform float uFogNear;
+uniform float uFogFar;
+${SKY_FN}
+${NOISE_GLSL}
+void main() {
+  float r = length(vWP.xz);
+  vec3 c = uBase * (0.8 + 0.4 * whNoise2(vWP.xz * 1.7)) + uWarm * exp(-r * 0.42);
+  gl_FragColor = vec4(c, 1.0);
+  #include <colorspace_fragment>
+  vec3 rd = normalize(vWP - cameraPosition);
+  float fogT = smoothstep(uFogNear, uFogFar, length(vWP - cameraPosition));
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, whToSrgb(whSkyLinear(vec3(rd.x, 0.0, rd.z))), fogT);
+}
+`;
 
 const DECAL_VERT = /* glsl */`
 varying vec2 vUv;
@@ -153,7 +186,7 @@ ${NOISE_GLSL}
 void main() {
   vec2 p = vUv * 2.0 - 1.0;
   float r = length(p);
-  float body = exp(-r * r * 3.4);
+  float body = exp(-r * r * 5.0);
   float fringe = exp(-pow((r - 0.62) * 4.2, 2.0)) * uRing;       // caustic fringe just outside the shadow edge
   float cau = 0.8 + 0.4 * whNoise2(p * 7.0 + vec2(uTime * 0.25, -uTime * 0.18));
   float edge = 1.0 - smoothstep(0.78, 1.0, r);
@@ -178,8 +211,8 @@ export class Table {
   private readonly skyMat: THREE.ShaderMaterial;
   private readonly matTop: THREE.Mesh;
   private readonly ground: THREE.Mesh;
-  private readonly feltMat: THREE.MeshStandardMaterial;
-  private readonly groundMat: THREE.MeshStandardMaterial;
+  private readonly feltMat: THREE.MeshPhysicalMaterial;
+  private readonly groundMat: THREE.ShaderMaterial;
   private readonly shadow: THREE.Mesh;
   private readonly shadowMat: THREE.ShaderMaterial;
   private readonly pool: THREE.Mesh;
@@ -189,13 +222,16 @@ export class Table {
   private floatTarget = 0;
   private poolK = 1;
 
-  constructor() {
+  private readonly hub: EnvHub;
+
+  constructor(hub: EnvHub) {
+    this.hub = hub;
     const fogCol = new THREE.Color(PALETTE.dusk).multiplyScalar(0.62).convertLinearToSRGB(); // sky horizon colour, display-encoded
     // sky dome
     const skyU = {
       uZenith: { value: new THREE.Color(0x0a0818) }, uInk: { value: new THREE.Color(PALETTE.ink) }, uPlum: { value: new THREE.Color(PALETTE.plum) },
       uHorizon: { value: new THREE.Color(PALETTE.dusk).multiplyScalar(0.62) },
-      uGlowWarm: { value: new THREE.Color(PALETTE.amber).multiplyScalar(0.2) }, uGlowCool: { value: new THREE.Color(PALETTE.lagoon).multiplyScalar(0.09) },
+      uGlowWarm: { value: new THREE.Color(PALETTE.amber).multiplyScalar(0.14) }, uGlowCool: { value: new THREE.Color(PALETTE.lagoon).multiplyScalar(0.03) },
     };
     this.skyMat = new THREE.ShaderMaterial({ vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms: skyU, side: THREE.BackSide, depthTest: false, depthWrite: false, toneMapped: false, fog: false });
     const skyGeo = new THREE.SphereGeometry(1, 32, 20);
@@ -206,15 +242,22 @@ export class Table {
     this.sky.scale.setScalar(90);
 
     // felt mat (cylinder: top at y = 0, a visible lip) and the dark table that fades into the horizon
-    const MAT_R = 3.1;
-    this.feltMat = makeFelt({ color: PALETTE.felt, roughness: 0.92, fibre: 1, stitch: 1, vigIn: 0.9, vigOut: MAT_R * 0.98, matR: MAT_R, fogCol });
+    const MAT_R = 3.5;
+    this.feltMat = makeFelt({ env: 0.2, color: PALETTE.felt, roughness: 0.92, fibre: 1, stitch: 1, vigIn: 0.9, vigOut: MAT_R * 0.98, matR: MAT_R, fogCol }, hub);
     const matGeo = new THREE.CylinderGeometry(MAT_R, MAT_R, 0.06, 128, 1);
     matGeo.translate(0, -0.03, 0);
     this.geos.push(matGeo);
     this.matTop = new THREE.Mesh(matGeo, this.feltMat);
     this.matTop.renderOrder = -50;
 
-    this.groundMat = makeFelt({ color: 0x120d26, roughness: 0.7, fibre: 0.0, stitch: 0, vigIn: 5, vigOut: 30, matR: 60, fogCol });
+    this.groundMat = new THREE.ShaderMaterial({
+      vertexShader: GROUND_VERT, fragmentShader: GROUND_FRAG, fog: false,
+      uniforms: {
+        ...skyU,
+        uBase: { value: new THREE.Color(0x140e2a) }, uWarm: { value: new THREE.Color(PALETTE.amber).multiplyScalar(0.012) },
+        uFogNear: { value: 4 }, uFogFar: { value: 20 },
+      },
+    });
     const groundGeo = new THREE.CircleGeometry(80, 64);
     groundGeo.rotateX(-Math.PI / 2);
     this.geos.push(groundGeo);
@@ -273,8 +316,8 @@ export class Table {
     this.shadowMat.uniforms.uSoft.value = Math.max(0, 1 - 0.75 * fl - 0.5 * Math.min(1, h * 1.5));
     // light pool: widens and brightens with the squash; softer and smaller while floating
     const squash = Math.min(1, f.compression * 1.2 + f.stretch * 0.15);
-    const pS = (1.7 + 1.0 * squash + 0.2 * h) * (1 - 0.1 * fl);
-    this.poolK += ((0.82 + 1.15 * squash) - this.poolK) * (1 - Math.exp(-dt * 10));
+    const pS = (1.22 + 0.8 * squash + 0.2 * h) * (1 - 0.1 * fl);
+    this.poolK += ((0.3 + 0.7 * squash) - this.poolK) * (1 - Math.exp(-dt * 10));
     this.pool.position.set(f.cx, 0.003, f.cz);
     this.pool.scale.set(f.rx * pS + 0.1, 1, f.rz * pS + 0.1);
     this.poolMat.uniforms.uStrength.value = this.poolK * (1 - 0.5 * fl) * (0.85 / (1 + h * 0.9));
@@ -284,6 +327,7 @@ export class Table {
 
   dispose(): void {
     for (const g of this.geos) g.dispose();
+    this.hub.release(this.feltMat);
     this.skyMat.dispose(); this.feltMat.dispose(); this.groundMat.dispose(); this.shadowMat.dispose(); this.poolMat.dispose();
   }
 }

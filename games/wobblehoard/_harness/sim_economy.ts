@@ -1,149 +1,191 @@
-// WOBBLEHOARD economy Monte-Carlo. Plain node (type stripping):  node _harness/sim_economy.ts [--quick] [--n 5000] [--days 60]
+// WOBBLEHOARD economy Monte-Carlo (v3).
+//   50-species catalog, 6 rarity tiers, an explicit ACTIVE-PLAY model (touch-by-touch micro-sim -> minutes per capsule),
+//   MERGE = MERGE_COST of the same species -> 1 random squishy, trading between players with different play styles.
+// Plain node (type stripping):   node _harness/sim_economy.ts [--quick] [--n 5000] [--long 450]
 //
-// It answers the questions _spec/DESIGN.md section 5 makes claims about:
-//   * how many days a player needs to fill a 12-species shelf alone vs with trading
-//   * what fraction of capsule drops are duplicates (the trade fuel), week by week
-//   * whether the blend sink (plus the hoard cap) keeps item supply from inflating
-//   * whether playstyle affinity really creates complementary gaps between players of different styles
-//   * what a trade lock costs honest players, and what it does and does not stop in an exploit ring
-//
-// EVERYTHING here is a model with guessed behaviour (how long people play, how many friends they have, how willing they are to
-// trade). The economy rules (earn rates, odds, caps) are the proposals under test; the behaviour is an assumption and is
-// flagged as such in DESIGN.md section 5.8. Deterministic: same args => same output. No Math.random(), no Date.now().
-// Only repo import: the seeded PRNG from src/core/rng.ts.
+// Everything about player BEHAVIOUR (how fast people touch, how long they play, churn, friends, willingness to trade, when
+// they merge) is a guess. The ECONOMY rules (meter, odds, merge rule, caps, lock) are the proposals under test.
+// Deterministic: same args => same output. No Math.random(), no Date.now(). Only repo import: src/core/rng.ts.
 import { mulberry32 } from '../src/core/rng.ts';
 
-/* ───────────────────────────── world constants (the proposed shelf) ───────────────────────────── */
+/** The one merge constant: how many squishies of the SAME species one merge consumes. The catalog agent moves this to src/core/merge.ts. */
+export const MERGE_COST = 2;
 
-const NS = 12;                                   // species on the launch shelf
-const groupOf = (s: number): number => s >> 2;   // 0 = bounce (poke), 1 = plush (squeeze), 2 = stretch (pull); 4 species each
-const slotOf = (s: number): number => s & 3;     // 0,1 = common, 2 = uncommon, 3 = heirloom (rare)
-const tierOf = (s: number): number => (slotOf(s) === 3 ? 2 : slotOf(s) === 2 ? 1 : 0);
-const BASE_W = [1.0, 1.0, 0.6, 0.15];            // base capsule weight by slot (before affinity)
-const TIER_NAMES = ['casual', 'regular', 'devoted'];
+/* ───────────────────────────── catalog ───────────────────────────── */
+
+const NT = 6;
+const TIER_NAMES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'];
+const PLAYER_TYPES = ['casual', 'regular', 'devoted'];
 const ARCHE_NAMES = ['poker', 'squeezer', 'puller', 'mixed'];
-const JOURNAL_PAIRS = NS + (NS * (NS - 1)) / 2;  // 78 distinct (primary, secondary) blend lineages
+const MAX_AFFINITY_TIER = 3; // tiers 0..3 can be tilted by playstyle; Legendary and Mythic ignore your hands
+
+interface Catalog { n: number; tierOf: Uint8Array; groupOf: Uint8Array; byTier: number[][]; maskLo: Int32Array; maskHi: Int32Array; }
+function buildCatalog(counts: number[]): Catalog {
+  const n = counts.reduce((a, b) => a + b, 0);
+  const cat: Catalog = { n, tierOf: new Uint8Array(n), groupOf: new Uint8Array(n), byTier: [], maskLo: new Int32Array(NT), maskHi: new Int32Array(NT) };
+  let idx = 0;
+  for (let t = 0; t < NT; t++) {
+    const list: number[] = [];
+    for (let i = 0; i < counts[t]; i++, idx++) {
+      cat.tierOf[idx] = t; cat.groupOf[idx] = t <= MAX_AFFINITY_TIER ? i % 3 : 3; list.push(idx);
+      if (idx < 32) cat.maskLo[t] |= 1 << idx; else cat.maskHi[t] |= 1 << (idx - 32);
+    }
+    cat.byTier.push(list);
+  }
+  return cat;
+}
+
+/* ───────────────────────────── helpers ───────────────────────────── */
+
+type Rng = () => number;
+const gauss = (r: Rng): number => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+const pickIdx = (w: ArrayLike<number>, tot: number, r: Rng): number => { let x = r() * tot; for (let i = 0; i < w.length; i++) { x -= w[i]; if (x < 0) return i; } return w.length - 1; };
+const sortedCopy = (a: number[]): number[] => [...a].sort((x, y) => x - y);
+const median = (a: number[]): number => { if (!a.length) return NaN; const s = sortedCopy(a); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const quantile = (a: number[], q: number): number => { if (!a.length) return NaN; const s = sortedCopy(a); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
+const mean = (a: number[]): number => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
+const sum = (a: ArrayLike<number>): number => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i]; return s; };
+const f1 = (x: number): string => (Number.isFinite(x) ? x.toFixed(1) : '-');
+const f2 = (x: number): string => (Number.isFinite(x) ? x.toFixed(2) : '-');
+const pc = (x: number): string => (Number.isFinite(x) ? (x * 100).toFixed(1) + '%' : '-');
+const pc0 = (x: number): string => (Number.isFinite(x) ? Math.round(x * 100) + '%' : '-');
+const pad = (s: string | number, n: number): string => String(s).padStart(n);
+const lpad = (s: string | number, n: number): string => String(s).padEnd(n);
+const pop32 = (v: number): number => { v = v - ((v >>> 1) & 0x55555555); v = (v & 0x33333333) + ((v >>> 2) & 0x33333333); return Math.imul((v + (v >>> 4)) & 0x0f0f0f0f, 0x01010101) >>> 24; };
+
+/* ───────────────────────────── ACTIVE-PLAY MICRO-SIM: touches -> squish points ───────────────────────────── */
+// The Squish meter rule being tested (this is the spec the shell/physics lanes implement):
+//   see PAY below (poke / squeeze-and-release / pull-and-let-go, MEDLEY bonus for three kinds in a short window, soft pop on a long squeeze)
+//   FRESHNESS (anti-mash): pay x clamp((seconds since your last SAME-kind touch / tau)^2, 0.03, 1), tau = poke 0.9 s, squeeze 2.4 s, pull 3.0 s
+//   VALVE: at most 40 SP in any rolling minute.   DAILY CAP lives in the macro model (soft cap in capsules per day).
+const TAU = [0.9, 2.4, 3.0];
+const VALVE_PER_MIN = 40;
+const PAY = { poke: 0.8, squeezeBase: 0.7, squeezePerSec: 0.45, squeezeHoldCap: 3, softPop: 0.5, pull: 1.8, pullFail: 0.5, medley: 2, medleyCooldown: 25, medleyWindow: 12 };
+
+interface Behaviour { name: string; kindP: number[]; stick: number; }
+const BEHAV: Behaviour[] = [
+  { name: 'poker', kindP: [0.74, 0.16, 0.10], stick: 0.50 },
+  { name: 'squeezer', kindP: [0.14, 0.72, 0.14], stick: 0.50 },
+  { name: 'puller', kindP: [0.14, 0.16, 0.70], stick: 0.45 },
+  { name: 'mixed', kindP: [0.40, 0.30, 0.30], stick: 0.0 },
+];
+
+interface Stream { sp: number; byKind: number[]; n: number[]; seconds: number; }
+/** Plays `seconds` of touching (or until `stopAtSp` SP). bot='mash' = 8 pokes/s; bot='cycle' = poke,squeeze,pull at the physical limit. */
+function playStream(beh: Behaviour, rng: Rng, seconds: number, bot: '' | 'mash' | 'cycle', stopAtSp = Infinity, pace = 1): Stream {
+  const out: Stream = { sp: 0, byKind: [0, 0, 0], n: [0, 0, 0], seconds: 0 };
+  const lastPaid = [-99, -99, -99];
+  let t = 0, last = -1, valve = VALVE_PER_MIN, medleyReady = 0, cyc = 0;
+  const recent: Array<[number, number]> = [];
+  while (t < seconds && out.sp < stopAtSp) {
+    let kind: number, dur: number, hold = 0, success = true;
+    if (bot === 'mash') { kind = 0; dur = 0.125; }
+    else if (bot === 'cycle') { kind = cyc++ % 3; dur = kind === 0 ? 0.25 : kind === 1 ? 0.7 : 1.3; hold = kind === 1 ? 0.45 : 0; }
+    else {
+      kind = last >= 0 && rng() < beh.stick ? last : pickIdx(beh.kindP, 1, rng);
+      if (kind === 0) dur = 0.7 + 0.8 * rng();
+      else if (kind === 1) { hold = 0.5 + 2.1 * rng(); dur = hold + 0.9; }
+      else { dur = 0.8 + 1.6 * rng() + 1.0; success = rng() < 0.85; }
+      if (rng() < 0.3) dur += 1 + 3 * rng(); // looking around, orbiting the camera
+      dur /= pace;
+    }
+    t += dur; last = kind;
+    valve = Math.min(VALVE_PER_MIN, valve + dur * (VALVE_PER_MIN / 60));
+    const base = kind === 0 ? PAY.poke : kind === 1 ? PAY.squeezeBase + PAY.squeezePerSec * Math.min(PAY.squeezeHoldCap, hold) : success ? PAY.pull : PAY.pullFail;
+    const fresh = Math.min(1, Math.max(0.03, Math.pow((t - lastPaid[kind]) / TAU[kind], 2)));
+    lastPaid[kind] = t;
+    let pay = base * fresh;
+    if (kind === 1 && hold >= 1.8) pay += PAY.softPop * fresh; // soft pop
+    recent.push([t, kind]);
+    while (recent.length && recent[0][0] < t - PAY.medleyWindow) recent.shift();
+    if (t >= medleyReady && new Set(recent.map((r) => r[1])).size >= 3) { pay += PAY.medley; medleyReady = t + PAY.medleyCooldown; }
+    pay = Math.min(pay, valve); valve -= pay;
+    out.sp += pay; out.byKind[kind] += pay; out.n[kind]++;
+  }
+  out.seconds = t;
+  return out;
+}
+
+interface Micro { spPerMin: number[]; share: number[][]; perMin: number[][]; botMash: number; botCycle: number; firstSec: number[]; spreadP: number[][]; }
+function runMicro(): Micro {
+  const m: Micro = { spPerMin: [], share: [], perMin: [], botMash: 0, botCycle: 0, firstSec: [], spreadP: [] };
+  BEHAV.forEach((b, i) => {
+    const rng = mulberry32(0x1234 + i * 77);
+    const per: number[] = [];
+    const tot = { sp: 0, byKind: [0, 0, 0], n: [0, 0, 0], seconds: 0 };
+    for (let k = 0; k < 400; k++) { const s = playStream(b, rng, 300, '', Infinity); per.push(s.sp / (s.seconds / 60)); tot.sp += s.sp; tot.seconds += s.seconds; for (let q = 0; q < 3; q++) { tot.byKind[q] += s.byKind[q]; tot.n[q] += s.n[q]; } }
+    m.spPerMin.push(tot.sp / (tot.seconds / 60));
+    m.share.push(tot.byKind.map((x) => x / tot.sp));
+    m.perMin.push(tot.n.map((x) => x / (tot.seconds / 60)));
+    m.spreadP.push([quantile(per, 0.1), quantile(per, 0.5), quantile(per, 0.9)]);
+  });
+  const rb = mulberry32(99);
+  m.botMash = playStream(BEHAV[0], rb, 600, 'mash').sp / 10;
+  m.botCycle = playStream(BEHAV[0], rb, 600, 'cycle').sp / 10;
+  return m;
+}
+
+/* ───────────────────────────── parameters ───────────────────────────── */
 
 interface Params {
-  nPlayers: number;
-  days: number;
-  seed: number;
-  // earning (the Squish meter)
-  spPerMin: number;        // squish points per minute of play, deliberately equal for every style
-  capsuleCost: number;     // SP per capsule
-  softCap: number;         // SP/day paid at full rate
-  overRate: number;        // rate above the soft cap
-  welcomeCapsules: number; // day-0 onboarding capsules (neutral odds)
-  // odds + affinity
-  beta: number;            // affinity sharpness: style factor = exp(beta * recent share of that style). 0 = affinity off
-  lambda: number;          // EMA step per active day for the style profile (0.12 ~ 5-day half-life)
-  shieldAt: number;        // dupe shield: if the roll is a species you hold >= shieldAt copies of, roll once more (0 = off)
-  // daily restock
-  restock: boolean;
-  restockOffered: number;
-  restockUncommonW: number;
-  // tasks
-  tasksOffered: number;
-  taskFocus: number;       // how far a task capsule is bent towards the task's style (0..1)
-  taskWeeklyMax: number;
-  // hoard + blend
-  hoardCap: number;
-  blendEnabled: boolean;
+  nPlayers: number; days: number; seed: number;
+  tierCount: number[]; tierOdds: number[];
+  // Squish meter (macro)
+  spPerMin: number[]; spShare: number[][]; speedScale: number; capsuleCost: number; onboardRamp: number[]; dailyCapsCap: number; overRate: number; hardExtraCaps: number;
+  // affinity (tilts WHICH species inside a tier; never the tier odds)
+  beta: number; lambda: number; balance: boolean;
+  // restock + tasks
+  restock: boolean; restockOffered: number; restockMaxTier: number; tasksOffered: number; taskWeeklyMax: number;
+  // merge
+  merge: boolean; mergeInputs: number; pUp: number[]; unownedW: number; pityUp: number; pityNew: number; rowDoneBoost: number; mergeLockDays: number; keepOneShare: number; playfulShare: number;
   // trade
-  trade: boolean;
-  lockDays: number;        // received items cannot be traded or blended for this many days
-  dailyTradeCap: number;
-  maxSwapsPerTrade: number;
-  boardSample: number;     // how many board listings a player looks at per day
-  acceptProb: number;      // friction: chance a feasible swap actually happens that day
+  trade: boolean; tryProb: number; lockDays: number; dailyTradeCap: number; maxSwapsPerTrade: number; boardSample: number; acceptProb: number;
   // population (BEHAVIOUR ASSUMPTIONS)
-  archeShare: [number, number, number, number]; // poker, squeezer, puller, mixed
-  tierShare: [number, number, number];          // casual, regular, devoted
-  pActive: [number, number, number];            // chance of playing on a given day
-  minutes: [number, number, number];            // median minutes on an active day
-  churn: [number, number, number];              // daily hazard of leaving for good
-  traderProb: [number, number, number];         // share willing to trade at all
-  boardProb: number;                            // of traders: share who use the public board (rest = friends only)
-  friendHomophily: number;                      // chance a friend has the same archetype
-  adaptiveShare: number;                        // share of players who deliberately rotate styles to fill gaps
+  archeShare: number[]; tierShare: number[]; pActive: number[]; churn: number[]; traderProb: number[]; boardProb: number; friendHomophily: number; adaptiveShare: number; mergeLoveMix: number[];
   snapshotDays: number[];
 }
 
 const DEFAULTS: Params = {
   nPlayers: 5000, days: 60, seed: 0x5eed1234,
-  spPerMin: 20, capsuleCost: 100, softCap: 400, overRate: 0.25, welcomeCapsules: 2,
-  beta: 3.2, lambda: 0.12, shieldAt: 0,
-  restock: true, restockOffered: 3, restockUncommonW: 0.5,
-  tasksOffered: 2, taskFocus: 0.35, taskWeeklyMax: 5,
-  hoardCap: 60, blendEnabled: true,
-  trade: false, lockDays: 1, dailyTradeCap: 3, maxSwapsPerTrade: 3, boardSample: 25, acceptProb: 0.85,
-  archeShare: [0.38, 0.27, 0.15, 0.20],
-  tierShare: [0.40, 0.40, 0.20],
-  pActive: [0.35, 0.65, 0.90],
-  minutes: [3, 6, 11],
-  churn: [0.015, 0.007, 0.003],
-  traderProb: [0.30, 0.55, 0.75], boardProb: 0.7, friendHomophily: 0.5,
-  adaptiveShare: 0,
-  snapshotDays: [14, 30],
+  tierCount: [14, 11, 10, 7, 5, 3],
+  tierOdds: [0.763, 0.13, 0.06, 0.028, 0.014, 0.005],
+  spPerMin: [22, 22, 22, 22], spShare: [[0.5, 0.3, 0.2], [0.2, 0.55, 0.25], [0.2, 0.25, 0.55], [0.33, 0.33, 0.34]], speedScale: 1,
+  capsuleCost: 100, onboardRamp: [0.3, 0.5, 0.75], dailyCapsCap: 8, overRate: 0.25, hardExtraCaps: 4,
+  beta: 0, lambda: 0.12, balance: true,
+  restock: true, restockOffered: 3, restockMaxTier: 1, tasksOffered: 2, taskWeeklyMax: 5,
+  merge: true, mergeInputs: MERGE_COST, pUp: [0.30, 0.25, 0.20, 0.15, 0.10, 0], unownedW: 2, pityUp: 5, pityNew: 3, rowDoneBoost: 2, mergeLockDays: 1, keepOneShare: 0.8, playfulShare: 0.3,
+  trade: false, tryProb: 0.7, lockDays: 1, dailyTradeCap: 3, maxSwapsPerTrade: 3, boardSample: 40, acceptProb: 0.85,
+  archeShare: [0.38, 0.27, 0.15, 0.20], tierShare: [0.40, 0.40, 0.20], pActive: [0.40, 0.70, 0.90],
+  churn: [0.015, 0.007, 0.003], traderProb: [0.30, 0.55, 0.75], boardProb: 0.7, friendHomophily: 0.5, adaptiveShare: 0, mergeLoveMix: [0.2, 0.5, 0.3],
+  snapshotDays: [7, 14, 30, 60],
 };
 
-/* ───────────────────────────── small helpers ───────────────────────────── */
-
-type Rng = () => number;
-const gauss = (r: Rng): number => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
-const pickIdx = (w: ArrayLike<number>, tot: number, r: Rng): number => {
-  let x = r() * tot;
-  for (let i = 0; i < w.length; i++) { x -= w[i]; if (x < 0) return i; }
-  return w.length - 1;
-};
-const median = (a: number[]): number => {
-  if (!a.length) return NaN;
-  const s = [...a].sort((x, y) => x - y);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
-const quantile = (a: number[], q: number): number => {
-  if (!a.length) return NaN;
-  const s = [...a].sort((x, y) => x - y);
-  return s[Math.min(s.length - 1, Math.floor(q * s.length))];
-};
-const mean = (a: number[]): number => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
-const f1 = (x: number): string => (Number.isFinite(x) ? x.toFixed(1) : '  -');
-const f2 = (x: number): string => (Number.isFinite(x) ? x.toFixed(2) : '  -');
-const pc = (x: number): string => (Number.isFinite(x) ? (x * 100).toFixed(1) + '%' : '  -');
-const pc0 = (x: number): string => (Number.isFinite(x) ? Math.round(x * 100) + '%' : '-');
-const pad = (s: string | number, n: number): string => String(s).padStart(n);
-const lpad = (s: string | number, n: number): string => String(s).padEnd(n);
+/** Minutes of real touching on one active day. casual 1-2 sessions x 3-5 min; regular ~2 x 10-15; devoted 2-3 x 12-22. */
+function sampleMinutes(tier: number, rng: Rng): number {
+  if (tier === 0) { const n = rng() < 0.55 ? 1 : 2; let m = 0; for (let i = 0; i < n; i++) m += 3 + 2 * rng(); return m; }
+  if (tier === 1) { const n = rng() < 0.25 ? 1 : 2; let m = 0; for (let i = 0; i < n; i++) m += 10 + 5 * rng(); return m; }
+  const n = rng() < 0.5 ? 2 : 3; let m = 0; for (let i = 0; i < n; i++) m += 12 + 10 * rng(); return m;
+}
 
 /* ───────────────────────────── population ───────────────────────────── */
 
-interface Pop {
-  n: number;
-  arche: Uint8Array;       // 0 poker 1 squeezer 2 puller 3 mixed
-  tier: Uint8Array;        // 0 casual 1 regular 2 devoted
-  trader: Uint8Array;
-  usesBoard: Uint8Array;
-  adaptive: Uint8Array;
-  blendLove: Float32Array; // chance per active day of blending on purpose
-  friends: number[][];
-}
-
+interface Pop { n: number; arche: Uint8Array; tier: Uint8Array; trader: Uint8Array; usesBoard: Uint8Array; adaptive: Uint8Array; playful: Uint8Array; pace: Float32Array; mergeLove: Float32Array; keepOne: Uint8Array; friends: number[][]; }
 function makePop(P: Params): Pop {
   const r = mulberry32(P.seed ^ 0x9e3779b9);
   const n = P.nPlayers;
-  const pop: Pop = {
-    n, arche: new Uint8Array(n), tier: new Uint8Array(n), trader: new Uint8Array(n), usesBoard: new Uint8Array(n),
-    adaptive: new Uint8Array(n), blendLove: new Float32Array(n), friends: Array.from({ length: n }, () => []),
-  };
+  const pop: Pop = { n, arche: new Uint8Array(n), tier: new Uint8Array(n), trader: new Uint8Array(n), usesBoard: new Uint8Array(n), adaptive: new Uint8Array(n), playful: new Uint8Array(n),
+    pace: new Float32Array(n), mergeLove: new Float32Array(n), keepOne: new Uint8Array(n), friends: Array.from({ length: n }, () => []) };
   const byArche: number[][] = [[], [], [], []];
+  const loves = [0, 0.15, 0.5];
   for (let i = 0; i < n; i++) {
-    pop.arche[i] = pickIdx(P.archeShare, 1, r);
-    pop.tier[i] = pickIdx(P.tierShare, 1, r);
+    pop.arche[i] = pickIdx(P.archeShare, 1, r); pop.tier[i] = pickIdx(P.tierShare, 1, r);
     pop.trader[i] = r() < P.traderProb[pop.tier[i]] ? 1 : 0;
     pop.usesBoard[i] = pop.trader[i] && r() < P.boardProb ? 1 : 0;
     pop.adaptive[i] = r() < P.adaptiveShare ? 1 : 0;
-    const u = r();
-    pop.blendLove[i] = u < 0.2 ? 0 : u < 0.7 ? 0.08 : 0.3;
+    pop.playful[i] = r() < P.playfulShare ? 1 : 0;
+    pop.pace[i] = Math.exp(0.2 * gauss(r));
+    pop.mergeLove[i] = loves[pickIdx(P.mergeLoveMix, 1, r)];
+    pop.keepOne[i] = r() < P.keepOneShare ? 1 : 0;
     byArche[pop.arche[i]].push(i);
   }
   for (let i = 0; i < n; i++) {
@@ -151,8 +193,7 @@ function makePop(P: Params): Pop {
     const f = u < 0.35 ? 0 : u < 0.65 ? 1 + Math.floor(r() * 2) : u < 0.9 ? 3 + Math.floor(r() * 3) : 6 + Math.floor(r() * 5);
     for (let k = 0; k < f; k++) {
       let j: number;
-      if (r() < P.friendHomophily) { const pool = byArche[pop.arche[i]]; j = pool[Math.floor(r() * pool.length)]; }
-      else j = Math.floor(r() * n);
+      if (r() < P.friendHomophily) { const pool = byArche[pop.arche[i]]; j = pool[Math.floor(r() * pool.length)]; } else j = Math.floor(r() * n);
       if (j === i || pop.friends[i].includes(j)) continue;
       pop.friends[i].push(j); pop.friends[j].push(i);
     }
@@ -160,364 +201,423 @@ function makePop(P: Params): Pop {
   return pop;
 }
 
-/* ───────────────────────────── players ───────────────────────────── */
-
-const ARCHE_MIX: number[][] = [
-  [0.70, 0.18, 0.12],   // poker
-  [0.14, 0.72, 0.14],   // squeezer
-  [0.12, 0.18, 0.70],   // puller
-  [1 / 3, 1 / 3, 1 / 3] // mixed
-];
-
-interface Player {
-  id: number; rng: Rng; arche: number; tier: number; alive: boolean; trader: boolean; usesBoard: boolean; adaptive: boolean;
-  blendLove: number;
-  aff: number[];                 // recent share of SP by style (EMA)
-  meter: number;
-  count: Uint16Array;            // copies held per species
-  lockedCopies: Uint16Array;     // of those, how many were received recently
-  lockUntil: Int16Array;         // day the received copies unlock (conservative: extended by each new receipt)
-  firstDay: Int16Array;          // day each species was first obtained (-1 = never)
-  viaTrade: Uint8Array;          // species first obtained by trade
-  hybrids: number; pairsSeen: Set<number>;
-  owned: number; ownedCore: number;
-  fullDay: number; coreDay: number; finalViaTrade: boolean;
-  activeDays: number; lastDayAlive: number;
-  trades: number; tradesToday: number; tradeDay: number;
-  blends: number; blendParents: number;
-  capsules: number; dupCapsules: number;
-  taskWeek: number; taskDone: number;
-  weekItems: number;
+/** Supply balancing: scale group weights so every style group gets about the same GLOBAL supply despite a skewed player mix. */
+function balanceCorrection(P: Params): number[] {
+  const c = [1, 1, 1];
+  if (!P.balance || P.beta === 0) return c;
+  for (let it = 0; it < 60; it++) {
+    const S = [0, 0, 0];
+    for (let k = 0; k < 4; k++) {
+      let z = 0; const e = [0, 0, 0];
+      for (let g = 0; g < 3; g++) { e[g] = Math.exp(P.beta * P.spShare[k][g]) * c[g]; z += e[g]; }
+      for (let g = 0; g < 3; g++) S[g] += P.archeShare[k] * (e[g] / z);
+    }
+    const tot = S[0] + S[1] + S[2];
+    for (let g = 0; g < 3; g++) c[g] *= (tot / 3) / S[g];
+  }
+  return c;
 }
 
-function makePlayers(P: Params, pop: Pop): Player[] {
+/* ───────────────────────────── players ───────────────────────────── */
+
+interface Player {
+  id: number; rng: Rng; arche: number; tier: number; alive: boolean; trader: boolean; usesBoard: boolean; adaptive: boolean; playful: boolean; pace: number; mergeLove: number; keepOne: boolean;
+  aff: number[]; meter: number; capsEarned: number; minutes: number; firstCapMin: number; pairMin: number; tripMin: number; pairCaps: number; tripCaps: number;
+  count: Uint16Array; lockedCopies: Uint16Array; lockUntil: Int16Array; firstDay: Int16Array; via: Uint8Array;
+  tierOwned: Uint8Array; rowDay: Int16Array; firstTier: Int16Array; owned: number; fullDay: number; fullMin: number;
+  noUp: Uint8Array; bad: Uint8Array; maxBad: number;
+  merges: number; mergeUps: number; mergeRepeats: number; mergeBad: number; mergeAnyBad: number; outByTier: Uint16Array; inByTier: Uint16Array;
+  capsules: number; dupCapsules: number; capsByTier: Uint16Array;
+  trades: number; tradesToday: number; tradeDay: number; activeDays: number; taskWeek: number; taskDone: number;
+  needLo: number; needHi: number; spLo: number; spHi: number;
+}
+function makePlayers(P: Params, pop: Pop, cat: Catalog): Player[] {
   const out: Player[] = [];
   for (let i = 0; i < pop.n; i++) {
-    const p: Player = {
-      id: i, rng: mulberry32((P.seed ^ Math.imul(i + 1, 0x85ebca6b)) >>> 0), arche: pop.arche[i], tier: pop.tier[i], alive: true,
-      trader: pop.trader[i] === 1, usesBoard: pop.usesBoard[i] === 1, adaptive: pop.adaptive[i] === 1, blendLove: pop.blendLove[i],
-      aff: [1 / 3, 1 / 3, 1 / 3], meter: 0,
-      count: new Uint16Array(NS), lockedCopies: new Uint16Array(NS), lockUntil: new Int16Array(NS), firstDay: new Int16Array(NS).fill(-1),
-      viaTrade: new Uint8Array(NS), hybrids: 0, pairsSeen: new Set<number>(), owned: 0, ownedCore: 0,
-      fullDay: -1, coreDay: -1, finalViaTrade: false, activeDays: 0, lastDayAlive: -1,
-      trades: 0, tradesToday: 0, tradeDay: -1, blends: 0, blendParents: 0, capsules: 0, dupCapsules: 0, taskWeek: -1, taskDone: 0, weekItems: 0,
-    };
-    out.push(p);
+    out.push({
+      id: i, rng: mulberry32((P.seed ^ Math.imul(i + 1, 0x85ebca6b)) >>> 0), arche: pop.arche[i], tier: pop.tier[i], alive: true, trader: pop.trader[i] === 1, usesBoard: pop.usesBoard[i] === 1,
+      adaptive: pop.adaptive[i] === 1, playful: pop.playful[i] === 1, pace: pop.pace[i], mergeLove: pop.mergeLove[i], keepOne: pop.keepOne[i] === 1,
+      aff: [1 / 3, 1 / 3, 1 / 3], meter: 0, capsEarned: 0, minutes: 0, firstCapMin: -1, pairMin: -1, tripMin: -1, pairCaps: -1, tripCaps: -1,
+      count: new Uint16Array(cat.n), lockedCopies: new Uint16Array(cat.n), lockUntil: new Int16Array(cat.n), firstDay: new Int16Array(cat.n).fill(-1), via: new Uint8Array(cat.n),
+      tierOwned: new Uint8Array(NT), rowDay: new Int16Array(NT).fill(-1), firstTier: new Int16Array(NT).fill(-1), owned: 0, fullDay: -1, fullMin: -1,
+      noUp: new Uint8Array(NT), bad: new Uint8Array(NT), maxBad: 0,
+      merges: 0, mergeUps: 0, mergeRepeats: 0, mergeBad: 0, mergeAnyBad: 0, outByTier: new Uint16Array(NT), inByTier: new Uint16Array(NT),
+      capsules: 0, dupCapsules: 0, capsByTier: new Uint16Array(NT),
+      trades: 0, tradesToday: 0, tradeDay: -1, activeDays: 0, taskWeek: -1, taskDone: 0, needLo: 0, needHi: 0, spLo: 0, spHi: 0,
+    });
   }
   return out;
 }
-
-const total = (p: Player): number => { let t = p.hybrids; for (let s = 0; s < NS; s++) t += p.count[s]; return t; };
-const lockedNow = (p: Player, s: number, day: number): number => (p.lockedCopies[s] > 0 && day < p.lockUntil[s] ? p.lockedCopies[s] : 0);
-/** spare copies you may trade or blend today: keep one unlocked copy on the shelf, locked copies cannot move. */
+const lockedNow = (p: Player, s: number, day: number): number => (day < p.lockUntil[s] ? p.lockedCopies[s] : 0);
 const spareOf = (p: Player, s: number, day: number): number => Math.max(0, p.count[s] - lockedNow(p, s, day) - 1);
+function addLock(p: Player, s: number, day: number, L: number): void { if (L <= 0) return; if (day >= p.lockUntil[s]) p.lockedCopies[s] = 0; p.lockedCopies[s]++; p.lockUntil[s] = Math.max(p.lockUntil[s], day + L); }
 
-interface Weekly {
-  src: number[]; sinkBlend: number[]; sinkRelease: number[]; capsules: number[]; dupCapsules: number[];
-  acq: number[]; dupAcq: number[]; hoardSum: number[]; hoardN: number[]; atCap: number[]; ownedSum: number[];
-  blends: number[]; trades: number[];
-}
-const mkWeekly = (weeks: number): Weekly => {
-  const z = (): number[] => new Array(weeks).fill(0);
-  return { src: z(), sinkBlend: z(), sinkRelease: z(), capsules: z(), dupCapsules: z(), acq: z(), dupAcq: z(), hoardSum: z(), hoardN: z(), atCap: z(), ownedSum: z(), blends: z(), trades: z() };
-};
+/* ───────────────────────────── merge rule (shared by players and the farmer) ───────────────────────────── */
 
-interface Snapshot { day: number; pairs: Record<string, [number, number]>; } // class -> [feasible, sampled]
-
-interface Result { P: Params; players: Player[]; weekly: Weekly; snaps: Snapshot[]; label: string; }
-
-/* ───────────────────────────── the loop ───────────────────────────── */
-
-const W = new Float64Array(NS);
-
-function rollSpecies(p: Player, a: number[], P: Params): number {
-  const f0 = Math.exp(P.beta * a[0]), f1_ = Math.exp(P.beta * a[1]), f2_ = Math.exp(P.beta * a[2]);
+interface MergeOut { out: number; up: boolean; repeat: boolean; }
+/** Rolls the result of one merge of species sIn. Mutates the pity counters; does not touch counts. */
+function mergeRoll(P: Params, cat: Catalog, rng: Rng, sIn: number, count: Uint16Array, noUp: Uint8Array, bad: Uint8Array, alwaysUnowned: number): MergeOut {
+  const t = cat.tierOf[sIn];
+  const isNew = (s: number): boolean => count[s] === 0 || s === alwaysUnowned;
+  const unownedIn = (tt: number): number => { let c = 0; for (const s of cat.byTier[tt]) if (s !== sIn && isNew(s)) c++; return c; };
+  let pUp = P.pUp[t];
+  if (P.rowDoneBoost > 1 && t < NT - 1 && unownedIn(t) === 0) pUp = Math.min(0.6, pUp * P.rowDoneBoost);
+  let up = t < NT - 1 && rng() < pUp;
+  if (!up && t < NT - 1 && P.pityUp > 0 && noUp[t] >= P.pityUp) up = true;
+  const forceNew = P.pityNew > 0 && bad[t] >= P.pityNew;
+  if (forceNew && !up && t < NT - 1 && unownedIn(t) === 0) up = true;
+  const outTier = up ? t + 1 : t;
+  const list = cat.byTier[outTier];
+  const anyNew = unownedIn(outTier) > 0 || (outTier !== t && list.some(isNew));
+  const w = new Float64Array(list.length);
   let tot = 0;
-  for (let s = 0; s < NS; s++) { const g = groupOf(s); W[s] = BASE_W[slotOf(s)] * (g === 0 ? f0 : g === 1 ? f1_ : f2_); tot += W[s]; }
-  let s = pickIdx(W, tot, p.rng);
-  if (P.shieldAt > 0 && p.count[s] >= P.shieldAt) s = pickIdx(W, tot, p.rng);
-  return s;
+  for (let i = 0; i < list.length; i++) {
+    const s = list[i];
+    if (s === sIn) continue;
+    const nw = isNew(s);
+    w[i] = forceNew && anyNew ? (nw ? 1 : 0) : (nw ? P.unownedW : 1);
+    tot += w[i];
+  }
+  const out = list[pickIdx(w, tot, rng)];
+  const repeat = !isNew(out);
+  if (up) noUp[t] = 0; else if (noUp[t] < 255) noUp[t]++;
+  if (!up && repeat) { if (bad[t] < 255) bad[t]++; } else bad[t] = 0;
+  return { out, up, repeat };
 }
 
-function runScenario(P: Params, pop: Pop, label: string): Result {
-  const players = makePlayers(P, pop);
+/* ───────────────────────────── scenario ───────────────────────────── */
+
+interface Weekly { capsules: number[]; dupCapsules: number[]; restock: number[]; merges: number[]; mergeIn: number[]; trades: number[]; alive: number[]; hoard: number[]; owned: number[]; capTier: number[][]; capGroup: number[][]; }
+const mkWeekly = (weeks: number): Weekly => { const z = (): number[] => new Array(weeks).fill(0); return { capsules: z(), dupCapsules: z(), restock: z(), merges: z(), mergeIn: z(), trades: z(), alive: z(), hoard: z(), owned: z(), capTier: Array.from({ length: NT }, z), capGroup: Array.from({ length: 4 }, z) }; };
+interface Snap { day: number; pairs: Record<string, [number, number]>; ge2: number[]; ge3: number[]; ge4: number[]; n: number; }
+interface Result { P: Params; cat: Catalog; players: Player[]; wk: Weekly; snaps: Snap[]; label: string; }
+
+function runScenario(P: Params, pop: Pop, label: string, cat: Catalog = buildCatalog(P.tierCount)): Result {
+  const players = makePlayers(P, pop, cat);
   const weeks = Math.ceil(P.days / 7);
   const wk = mkWeekly(weeks);
-  const snaps: Snapshot[] = [];
+  const snaps: Snap[] = [];
   const sys = mulberry32(P.seed ^ 0xabcdef01);
+  const corr = balanceCorrection(P);
+  const stamp = new Int32Array(pop.n).fill(-1);
+  const wts = new Float64Array(64);
+  const M = P.mergeInputs;
 
-  const onOwnedChange = (p: Player, s: number, day: number, viaTrade: boolean): void => {
-    p.owned++; p.firstDay[s] = day; p.viaTrade[s] = viaTrade ? 1 : 0;
-    if (tierOf(s) < 2) p.ownedCore++;
-    if (p.ownedCore === 9 && p.coreDay < 0) p.coreDay = day + 1;
-    if (p.owned === NS && p.fullDay < 0) { p.fullDay = day + 1; p.finalViaTrade = viaTrade; }
+  const onNew = (p: Player, s: number, day: number, via: number): void => {
+    const t = cat.tierOf[s];
+    p.owned++; p.tierOwned[t]++;
+    if (p.firstDay[s] < 0) { p.firstDay[s] = day; p.via[s] = via; }
+    if (p.firstTier[t] < 0) p.firstTier[t] = day + 1;
+    if (p.tierOwned[t] === P.tierCount[t] && p.rowDay[t] < 0) p.rowDay[t] = day + 1;
+    if (p.owned === cat.n && p.fullDay < 0) { p.fullDay = day + 1; p.fullMin = p.minutes; }
   };
-
-  const release = (p: Player, w: number): boolean => {
-    let best = -1, bestSp = 0;
-    for (let s = 0; s < NS; s++) { const sp = p.count[s] - 1; if (sp > bestSp && tierOf(s) < 2) { best = s; bestSp = sp; } }
+  const addCopy = (p: Player, s: number, day: number, via: number, minuteStamp: number): boolean => {
+    const dup = p.count[s] > 0; p.count[s]++;
+    if (!dup) onNew(p, s, day, via);
+    const c = p.count[s];
+    if (c >= 2 && p.pairMin < 0) { p.pairMin = minuteStamp; p.pairCaps = p.capsules; }
+    if (c >= 3 && p.tripMin < 0) { p.tripMin = minuteStamp; p.tripCaps = p.capsules; }
+    return dup;
+  };
+  const rollCapsule = (p: Player, a: number[], w: number): number => {
+    let x = p.rng(), t = 0;
+    for (; t < NT - 1; t++) { x -= P.tierOdds[t]; if (x < 0) break; }
+    const list = cat.byTier[t];
+    let s: number;
+    if (P.beta === 0 || t > MAX_AFFINITY_TIER) s = list[Math.floor(p.rng() * list.length)];
+    else {
+      const f = [Math.exp(P.beta * a[0]) * corr[0], Math.exp(P.beta * a[1]) * corr[1], Math.exp(P.beta * a[2]) * corr[2]];
+      let tot = 0;
+      for (let i = 0; i < list.length; i++) { wts[i] = f[cat.groupOf[list[i]]]; tot += wts[i]; }
+      let y = p.rng() * tot, k = 0;
+      for (; k < list.length - 1; k++) { y -= wts[k]; if (y < 0) break; }
+      s = list[k];
+    }
+    wk.capsules[w]++; wk.capTier[t][w]++; wk.capGroup[cat.groupOf[s]][w]++; p.capsules++; p.capsByTier[t]++;
+    return s;
+  };
+  const tryMerge = (p: Player, day: number, w: number): boolean => {
+    let best = -1, bestAvail = -1;
+    const need = p.keepOne ? M + 1 : M;
+    for (let s = 0; s < cat.n; s++) {
+      const t = cat.tierOf[s];
+      if (t >= NT - 1) continue;
+      const avail = p.count[s] - lockedNow(p, s, day);
+      if (avail < need) continue;
+      if (p.trader && t >= 2 && avail < M + 3) continue; // traders keep Rare+ spares as trade stock
+      const useful = p.tierOwned[t] < P.tierCount[t] || p.tierOwned[t + 1] < P.tierCount[t + 1];
+      if (!useful && !p.playful) continue; // a sensible player stops merging rows that are complete
+      if (avail > bestAvail || (avail === bestAvail && t < cat.tierOf[best])) { best = s; bestAvail = avail; }
+    }
     if (best < 0) return false;
-    p.count[best]--; wk.sinkRelease[w]++; return true;
-  };
-
-  const tryBlend = (p: Player, day: number, forced: boolean): boolean => {
-    const w = Math.min(weeks - 1, Math.floor(day / 7));
-    const cand: number[] = [];
-    for (let t = 0; t <= 2; t++) {
-      if (t === 2 && !forced && p.trader) continue; // keep heirloom spares as trade stock
-      for (let s = 0; s < NS; s++) if (tierOf(s) === t) for (let k = spareOf(p, s, day); k > 0; k--) cand.push(s);
-    }
-    if (cand.length < 2) return false;
-    const u = p.rng();
-    let n = u < 0.45 ? 2 : u < 0.70 ? 3 : u < 0.85 ? 4 : u < 0.93 ? 5 : 6;
-    if (forced) n = Math.max(n, 3);
-    n = Math.min(n, cand.length);
-    // prefer a lineage the journal has not seen yet
-    let parents: number[] | null = null;
-    const distinct = [...new Set(cand)];
-    outer: for (let i = 0; i < distinct.length; i++) for (let j = i + 1; j < distinct.length; j++) {
-      const a = distinct[i], b = distinct[j];
-      if (!p.pairsSeen.has(Math.min(a, b) * NS + Math.max(a, b))) { parents = [a, b]; break outer; }
-    }
-    if (!parents) parents = cand.slice(0, 2);
-    const used = parents.slice();
-    const pool = cand.slice();
-    for (const s of parents) pool.splice(pool.indexOf(s), 1);
-    while (used.length < n && pool.length) used.push(pool.shift() as number);
-    for (const s of used) p.count[s]--;
-    const a = used[0], b = used.length > 1 ? used[1] : used[0];
-    p.pairsSeen.add(Math.min(a, b) * NS + Math.max(a, b));
-    p.hybrids++; p.blends++; p.blendParents += used.length;
-    // lock the fresh hybrid? hybrids are not modelled as trade stock, so the lock only matters for the parents' removal
-    wk.sinkBlend[w] += used.length - 1; wk.blends[w]++;
+    const t = cat.tierOf[best];
+    p.count[best] -= M;
+    if (p.count[best] === 0) { p.owned--; p.tierOwned[t]--; }
+    const m = mergeRoll(P, cat, p.rng, best, p.count, p.noUp, p.bad, -1);
+    addCopy(p, m.out, day, 3, p.minutes);
+    addLock(p, m.out, day, P.mergeLockDays);
+    const ot = cat.tierOf[m.out];
+    p.merges++; p.inByTier[t]++; p.outByTier[ot]++;
+    if (m.up) p.mergeUps++;
+    if (m.repeat) p.mergeRepeats++;
+    if (!m.up && m.repeat) p.mergeBad++;
+    if (m.repeat || !m.up) p.mergeAnyBad++;
+    if (p.bad[t] > p.maxBad) p.maxBad = p.bad[t];
+    wk.merges[w]++; wk.mergeIn[w] += M;
     return true;
   };
-
-  const makeRoom = (p: Player, day: number, w: number): void => {
-    if (total(p) < P.hoardCap) return;
-    if (P.blendEnabled && tryBlend(p, day, true)) return;
-    release(p, w);
-  };
-
-  const acquire = (p: Player, s: number, day: number, kind: 'capsule' | 'restock', viaTrade = false): void => {
-    const w = Math.min(weeks - 1, Math.floor(day / 7));
-    makeRoom(p, day, w);
-    const dup = p.count[s] > 0;
-    p.count[s]++;
-    wk.src[w]++; wk.acq[w]++; if (dup) wk.dupAcq[w]++;
-    if (kind === 'capsule') { wk.capsules[w]++; p.capsules++; if (dup) { wk.dupCapsules[w]++; p.dupCapsules++; } }
-    if (!dup) onOwnedChange(p, s, day, viaTrade);
-  };
-
-  const feasibleSwaps = (A: Player, B: Player, day: number, ignoreLocks: boolean, maxSwaps: number, out: number[] | null): number => {
-    let swaps = 0;
-    for (let t = 0; t <= 2 && swaps < maxSwaps; t++) {
-      let xs = 0, ys = 0;
-      const xl: number[] = [], yl: number[] = [];
-      for (let s = 0; s < NS; s++) {
-        if (tierOf(s) !== t) continue;
-        const sa = ignoreLocks ? Math.max(0, A.count[s] - 1) : spareOf(A, s, day);
-        const sb = ignoreLocks ? Math.max(0, B.count[s] - 1) : spareOf(B, s, day);
-        if (sa > 0 && B.count[s] === 0) { xs++; xl.push(s); }
-        if (sb > 0 && A.count[s] === 0) { ys++; yl.push(s); }
-      }
-      const k = Math.min(xs, ys, maxSwaps - swaps);
-      for (let i = 0; i < k; i++) { swaps++; if (out) { out.push(xl[i], yl[i]); } }
+  const masks = (p: Player, day: number): void => {
+    let nl = 0, nh = 0, sl = 0, sh = 0;
+    for (let s = 0; s < cat.n; s++) {
+      const bit = s < 32 ? 1 << s : 1 << (s - 32);
+      if (p.count[s] === 0) { if (s < 32) nl |= bit; else nh |= bit; } else if (spareOf(p, s, day) > 0) { if (s < 32) sl |= bit; else sh |= bit; }
     }
-    return swaps;
+    p.needLo = nl; p.needHi = nh; p.spLo = sl; p.spHi = sh;
   };
-
-  const needsAny = (p: Player): boolean => p.owned < NS;
-  const hasStock = (p: Player, day: number): boolean => { for (let s = 0; s < NS; s++) if (spareOf(p, s, day) > 0) return true; return false; };
+  const swapCount = (A: Player, B: Player, cap: number): number => {
+    let tot = 0;
+    for (let t = NT - 1; t >= 0; t--) {
+      const ml = cat.maskLo[t], mh = cat.maskHi[t];
+      const x = pop32(A.spLo & B.needLo & ml) + pop32(A.spHi & B.needHi & mh);
+      if (x === 0) continue;
+      const y = pop32(B.spLo & A.needLo & ml) + pop32(B.spHi & A.needHi & mh);
+      tot += Math.min(x, y);
+      if (tot >= cap) return cap;
+    }
+    return tot;
+  };
 
   for (let day = 0; day < P.days; day++) {
     const w = Math.min(weeks - 1, Math.floor(day / 7));
     const active: Player[] = [];
-    // ── pass 1: earn ──
+    // ── pass 1: play, earn, open ──
     for (const p of players) {
       if (!p.alive) continue;
       if (day > 0 && p.rng() < P.churn[p.tier]) { p.alive = false; continue; }
       if (day > 0 && p.rng() >= P.pActive[p.tier]) continue;
-      active.push(p); p.activeDays++; p.lastDayAlive = day;
+      active.push(p); p.activeDays++; stamp[p.id] = day;
       const rng = p.rng;
-      if (day === 0) { p.count[0]++; p.owned++; p.firstDay[0] = 0; p.ownedCore++; wk.src[w]++; }
+      if (day === 0) { p.count[0]++; onNew(p, 0, 0, 5); }
       const wkIdx = Math.floor(day / 7);
       if (p.taskWeek !== wkIdx) { p.taskWeek = wkIdx; p.taskDone = 0; }
-      // today's style mix: archetype with day-to-day wobble; adaptive players chase the group they are weakest in
-      const base = ARCHE_MIX[p.arche];
-      const mix = [0, 0, 0];
-      let ms = 0;
+      const minutesToday = sampleMinutes(p.tier, rng);
+      const m0 = p.minutes;
+      // daily style of play = the archetype's SP share by kind, with day-to-day wobble
+      const base = P.spShare[p.arche];
+      const mix = [0, 0, 0]; let ms = 0;
       for (let g = 0; g < 3; g++) { mix[g] = base[g] * Math.exp(0.35 * gauss(rng)); ms += mix[g]; }
       for (let g = 0; g < 3; g++) mix[g] /= ms;
-      if (p.adaptive && p.owned >= 4 && rng() < 0.7) {
-        let worst = 0, worstCov = 9;
-        for (let g = 0; g < 3; g++) {
-          let c = 0; for (let k = 0; k < 4; k++) if (p.count[g * 4 + k] > 0) c++;
-          c += rng() * 0.1;
-          if (c < worstCov) { worstCov = c; worst = g; }
-        }
+      if (p.adaptive && p.owned >= 8 && rng() < 0.7) {
+        let worst = 0, worstCov = 99;
+        for (let g = 0; g < 3; g++) { let c = 0; for (let s = 0; s < cat.n; s++) if (cat.groupOf[s] === g && p.count[s] > 0) c++; c += rng() * 0.1; if (c < worstCov) { worstCov = c; worst = g; } }
         for (let g = 0; g < 3; g++) mix[g] = g === worst ? 0.8 : 0.1;
       }
       for (let g = 0; g < 3; g++) p.aff[g] = (1 - P.lambda) * p.aff[g] + P.lambda * mix[g];
-      // the Squish meter
-      const minutes = P.minutes[p.tier] * Math.exp(0.5 * gauss(rng) - 0.125);
-      const raw = minutes * P.spPerMin;
-      const sp = Math.min(raw, P.softCap) + Math.max(0, raw - P.softCap) * P.overRate;
-      p.meter += sp;
-      let nCaps = Math.floor(p.meter / P.capsuleCost);
-      p.meter -= nCaps * P.capsuleCost;
-      if (day === 0) nCaps += P.welcomeCapsules;
-      for (let k = 0; k < nCaps; k++) acquire(p, rollSpecies(p, day === 0 ? [1 / 3, 1 / 3, 1 / 3] : p.aff, P), day, 'capsule');
-      // daily restock: pick one of N neutral offers (commons and uncommons only)
+      // the Squish meter: SP = minutes x SP/min (archetype, personal pace, speed scale, daily wobble), soft-capped per day
+      const spPerMin = P.spPerMin[p.arche] * p.pace * P.speedScale * Math.exp(0.15 * gauss(rng));
+      const raw = minutesToday * spPerMin;
+      const capSp = P.dailyCapsCap * P.capsuleCost;
+      const spToday = Math.min(raw, capSp) + Math.min(Math.max(0, raw - capSp) * P.overRate, P.hardExtraCaps * P.capsuleCost);
+      // restock first (claimed when you open the game)
       if (P.restock) {
-        const rw = new Float64Array(NS);
-        let rt = 0;
-        for (let s = 0; s < NS; s++) { rw[s] = tierOf(s) === 0 ? 1 : tierOf(s) === 1 ? P.restockUncommonW : 0; rt += rw[s]; }
+        const pool: number[] = [];
+        for (let t = 0; t <= P.restockMaxTier; t++) for (const s of cat.byTier[t]) pool.push(s);
         const offered: number[] = [];
-        for (let k = 0; k < P.restockOffered; k++) {
-          const s = pickIdx(rw, rt, rng);
-          offered.push(s); rt -= rw[s]; rw[s] = 0;
-        }
-        const fresh = offered.filter((s) => p.count[s] === 0).sort((a, b) => tierOf(b) - tierOf(a));
-        acquire(p, fresh.length ? fresh[0] : offered[Math.floor(rng() * offered.length)], day, 'restock');
+        for (let k = 0; k < P.restockOffered && pool.length; k++) offered.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+        const fresh = offered.filter((s) => p.count[s] === 0).sort((a, b) => cat.tierOf[b] - cat.tierOf[a]);
+        addCopy(p, fresh.length ? fresh[0] : offered[Math.floor(rng() * offered.length)], day, 2, m0);
+        wk.restock[w]++;
       }
-      // tasks
+      // capsules as the meter crosses each (ramped) threshold
+      let have = p.meter, used = 0;
+      const aff = p.aff;
+      for (;;) {
+        const cost = P.capsuleCost * (p.capsEarned < P.onboardRamp.length ? P.onboardRamp[p.capsEarned] : 1);
+        const need = cost - have;
+        if (used + need > spToday + 1e-9) { p.meter = have + (spToday - used); break; }
+        used += need; have = 0; p.capsEarned++;
+        const stampMin = m0 + minutesToday * Math.min(1, raw > 0 ? used / raw : 1);
+        if (p.firstCapMin < 0) p.firstCapMin = stampMin;
+        const s = rollCapsule(p, day === 0 ? [1 / 3, 1 / 3, 1 / 3] : aff, w);
+        if (addCopy(p, s, day, 1, stampMin)) { wk.dupCapsules[w]++; p.dupCapsules++; }
+        if (used >= spToday - 1e-9) { p.meter = 0; break; }
+      }
       const taskP = [0.4, 0.6, 0.8][p.tier];
-      let main = 0; for (let g = 1; g < 3; g++) if (p.aff[g] > p.aff[main]) main = g;
       for (let k = 0; k < P.tasksOffered; k++) {
-        const t = Math.floor(rng() * 3);
         if (p.taskDone >= P.taskWeeklyMax) break;
-        if (rng() < taskP * (t === main ? 1 : 0.55)) {
-          p.taskDone++;
-          const a2 = [0, 0, 0];
-          for (let g = 0; g < 3; g++) a2[g] = (g === t ? P.taskFocus : 0) + (1 - P.taskFocus) * p.aff[g];
-          acquire(p, rollSpecies(p, a2, P), day, 'capsule');
-        }
+        if (rng() < taskP) { p.taskDone++; const s = rollCapsule(p, aff, w); if (addCopy(p, s, day, 1, m0 + minutesToday * rng())) { wk.dupCapsules[w]++; p.dupCapsules++; } }
       }
+      p.minutes += minutesToday;
     }
-    // ── snapshot of complementary gaps (before any trading this day) ──
+    // ── snapshots (before trading) ──
     if (P.snapshotDays.includes(day + 1)) {
       const pairs: Record<string, [number, number]> = {};
       const bump = (k: string, ok: boolean): void => { const e = (pairs[k] ??= [0, 0]); e[1]++; if (ok) e[0]++; };
-      const live = players.filter((p) => p.alive && p.activeDays >= 5);
+      const live = players.filter((p) => p.alive && p.activeDays >= 3);
+      for (const p of live) masks(p, day + 1000);
       for (let i = 0; i < 20000 && live.length > 2; i++) {
         const A = live[Math.floor(sys() * live.length)], B = live[Math.floor(sys() * live.length)];
         if (A === B) continue;
-        const ok = feasibleSwaps(A, B, day, true, 1, null) > 0;
+        const ok = swapCount(A, B, 1) > 0;
         const pure = A.arche < 3 && B.arche < 3;
         bump('all pairs', ok);
-        if (pure && A.arche === B.arche) bump('same style', ok);
-        else if (pure) bump('different style', ok);
-        else bump('involves mixed', ok);
+        if (pure && A.arche === B.arche) bump('same style', ok); else if (pure) bump('different style', ok); else bump('involves mixed', ok);
       }
-      snaps.push({ day: day + 1, pairs });
+      const g2 = new Array(NT).fill(0), g3 = new Array(NT).fill(0), g4 = new Array(NT).fill(0);
+      for (const p of live) {
+        const h2 = new Uint8Array(NT), h3 = new Uint8Array(NT), h4 = new Uint8Array(NT);
+        for (let s = 0; s < cat.n; s++) { const t = cat.tierOf[s]; if (p.count[s] >= 2) h2[t] = 1; if (p.count[s] >= 3) h3[t] = 1; if (p.count[s] >= 4) h4[t] = 1; }
+        for (let t = 0; t < NT; t++) { g2[t] += h2[t]; g3[t] += h3[t]; g4[t] += h4[t]; }
+      }
+      const nl = Math.max(1, live.length);
+      snaps.push({ day: day + 1, pairs, ge2: g2.map((x) => x / nl), ge3: g3.map((x) => x / nl), ge4: g4.map((x) => x / nl), n: live.length });
     }
-    // ── pass 2: trading (each trader looks at friends + a sample of the public board) ──
+    // ── pass 2: trading ──
     if (P.trade) {
-      const board = active.filter((p) => p.trader && p.usesBoard);
-      const order = active.filter((p) => p.trader);
+      const traders = active.filter((p) => p.trader);
+      for (const p of traders) masks(p, day);
+      const board = traders.filter((p) => p.usesBoard);
+      // the public board is SEARCHABLE BY SPECIES (a grid of species icons, never free text): offers[s] = board users holding a spare of s
+      const offers: Player[][] = Array.from({ length: cat.n }, () => []);
+      for (const b of board) for (let s = 0; s < cat.n; s++) { const bit = s < 32 ? 1 << s : 1 << (s - 32); if (((s < 32 ? b.spLo : b.spHi) & bit) !== 0) offers[s].push(b); }
+      const order = traders.slice();
       for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(sys() * (i + 1)); const t = order[i]; order[i] = order[j]; order[j] = t; }
-      const todayActive = new Set<number>(active.map((p) => p.id));
-      const out: number[] = [];
       for (const A of order) {
         if (A.tradeDay !== day) { A.tradeDay = day; A.tradesToday = 0; }
-        if (A.tradesToday >= P.dailyTradeCap || !needsAny(A) || !hasStock(A, day)) continue;
-        if (A.rng() > 0.7) continue; // does not open the trade screen every session
+        if (A.tradesToday >= P.dailyTradeCap || A.owned >= cat.n) continue;
+        if (A.rng() > P.tryProb) continue;
         let bestB: Player | null = null, bestN = 0;
         const consider = (B: Player): void => {
           if (B === A || !B.trader) return;
           if (B.tradeDay !== day) { B.tradeDay = day; B.tradesToday = 0; }
           if (B.tradesToday >= P.dailyTradeCap) return;
-          const n = feasibleSwaps(A, B, day, false, P.maxSwapsPerTrade, null);
+          const n = swapCount(A, B, P.maxSwapsPerTrade);
           if (n > bestN) { bestN = n; bestB = B; }
         };
-        for (const fid of pop.friends[A.id]) if (todayActive.has(fid)) consider(players[fid]);
-        if (A.usesBoard && board.length > 1) for (let k = 0; k < P.boardSample; k++) consider(board[Math.floor(sys() * board.length)]);
+        for (const fid of pop.friends[A.id]) if (stamp[fid] === day && players[fid].trader) consider(players[fid]);
+        if (A.usesBoard && board.length > 1) {
+          let looked = 0;
+          for (let t = NT - 1; t >= 0 && looked < P.boardSample; t--) for (const s of cat.byTier[t]) {
+            if (A.count[s] !== 0) continue;
+            const list = offers[s];
+            for (let k = 0; k < Math.min(6, list.length) && looked < P.boardSample; k++, looked++) consider(list[Math.floor(sys() * list.length)]);
+          }
+        }
         if (!bestB || A.rng() > P.acceptProb) continue;
         const B: Player = bestB;
-        out.length = 0;
-        const n = feasibleSwaps(A, B, day, false, P.maxSwapsPerTrade, out);
-        for (let k = 0; k < n; k++) {
-          const x = out[2 * k], y = out[2 * k + 1]; // A gives x, receives y
-          A.count[x]--; B.count[x]++; B.lockedCopies[x] += 1; B.lockUntil[x] = Math.max(B.lockUntil[x], day + P.lockDays);
-          B.count[y]--; A.count[y]++; A.lockedCopies[y] += 1; A.lockUntil[y] = Math.max(A.lockUntil[y], day + P.lockDays);
-          if (B.firstDay[x] < 0) onOwnedChange(B, x, day, true);
-          if (A.firstDay[y] < 0) onOwnedChange(A, y, day, true);
+        let left = P.maxSwapsPerTrade;
+        for (let t = NT - 1; t >= 0 && left > 0; t--) {
+          const xs: number[] = [], ys: number[] = [];
+          for (const s of cat.byTier[t]) { if (spareOf(A, s, day) > 0 && B.count[s] === 0) xs.push(s); if (spareOf(B, s, day) > 0 && A.count[s] === 0) ys.push(s); }
+          xs.sort((a, b) => A.count[b] - A.count[a]); ys.sort((a, b) => B.count[b] - B.count[a]);
+          const k = Math.min(xs.length, ys.length, left);
+          for (let i = 0; i < k; i++) {
+            const x = xs[i], y = ys[i];
+            A.count[x]--; B.count[x]++; addLock(B, x, day, P.lockDays); onNew(B, x, day, 4);
+            B.count[y]--; A.count[y]++; addLock(A, y, day, P.lockDays); onNew(A, y, day, 4);
+          }
+          left -= k;
         }
-        A.trades++; B.trades++; A.tradesToday++; B.tradesToday++;
-        wk.trades[w]++;
+        A.trades++; B.trades++; A.tradesToday++; B.tradesToday++; wk.trades[w]++;
+        masks(A, day); masks(B, day);
       }
     }
-    // ── pass 3: blend on purpose ──
-    if (P.blendEnabled) for (const p of active) if (p.rng() < p.blendLove) tryBlend(p, day, false);
-    // ── end of day bookkeeping (lock expiry housekeeping) ──
-    for (const p of active) for (let s = 0; s < NS; s++) if (p.lockedCopies[s] > 0 && day + 1 >= p.lockUntil[s]) p.lockedCopies[s] = 0;
-    if ((day + 1) % 7 === 0 || day === P.days - 1) {
-      for (const p of players) if (p.alive) {
-        const t = total(p);
-        wk.hoardSum[w] += t; wk.hoardN[w]++; wk.ownedSum[w] += p.owned; if (t >= P.hoardCap - 2) wk.atCap[w]++;
-      }
-    }
+    // ── pass 3: merge on purpose ──
+    if (P.merge) for (const p of active) { for (let k = 0; k < 3 && p.rng() < p.mergeLove; k++) if (!tryMerge(p, day, w)) break; }
+    if ((day + 1) % 7 === 0 || day === P.days - 1) for (const p of players) if (p.alive) { wk.alive[w]++; wk.hoard[w] += sum(p.count); wk.owned[w] += p.owned; }
   }
-  return { P, players, weekly: wk, snaps, label };
+  return { P, cat, players, wk, snaps, label };
 }
 
-/* ───────────────────────────── exploit ring (does a trade lock stop dupe-laundering?) ───────────────────────────── */
+/* ───────────────────────────── merge-only farmer (exact-need cost) ───────────────────────────── */
+
+interface FarmOut { capsulesMed: number; capsulesMean: number; mergesMed: number; finished: number; }
+/** One collector who wants ONE specific species and may only get it as the OUTPUT of a merge (drops of it do not count). Feeds merges from the target's tier and the one below. */
+function farmer(P: Params, cat: Catalog, targetTier: number, trials: number, cap: number): FarmOut {
+  const X = cat.byTier[targetTier][cat.byTier[targetTier].length - 1];
+  const caps: number[] = [], mrg: number[] = [];
+  for (let tr = 0; tr < trials; tr++) {
+    const rng = mulberry32(0xfa12 + tr * 7919 + targetTier * 104729);
+    const count = new Uint16Array(cat.n), noUp = new Uint8Array(NT), bad = new Uint8Array(NT);
+    let c = 0, m = 0, hit = false;
+    const lo = Math.max(0, targetTier - 1);
+    while (!hit && c < cap) {
+      c++;
+      let x = rng(), t = 0;
+      for (; t < NT - 1; t++) { x -= P.tierOdds[t]; if (x < 0) break; }
+      const list = cat.byTier[t];
+      const s = list[Math.floor(rng() * list.length)];
+      if (s !== X) count[s]++;
+      for (let again = true; again && !hit;) {
+        again = false;
+        for (let q = Math.min(targetTier, NT - 2); q >= lo && !again; q--) for (const sp of cat.byTier[q]) {
+          if (sp === X || count[sp] < P.mergeInputs) continue;
+          count[sp] -= P.mergeInputs; m++;
+          const r = mergeRoll(P, cat, rng, sp, count, noUp, bad, X);
+          if (r.out === X) { hit = true; break; }
+          count[r.out]++; again = true; break;
+        }
+      }
+    }
+    if (hit) { caps.push(c); mrg.push(m); }
+  }
+  return { capsulesMed: median(caps), capsulesMean: mean(caps), mergesMed: median(mrg), finished: caps.length / trials };
+}
+
+/* ───────────────────────────── exploit ring (merge-then-trade laundering) ───────────────────────────── */
 
 interface Policy { name: string; lockH: number; capPerDay: number; pairPerDay: number; }
-interface RingOut { copies: number; innocents: number; maxHop: number; accounts: number; }
-
-/**
- * Hourly toy model of a hostile ring. R mule accounts bot-trade a tainted item among themselves and "cash out" 25% of hops
- * to random innocent accounts. 'dupe' = a hypothetical server bug where the GIVER KEEPS the item and the receiver also gets
- * a copy. 'steal' = no bug: the ring moves 20 items stolen from hacked hoards. Detection (supply reconciliation / a report)
- * happens at hour D. Reports what had spread by then.
- */
-function ring(policy: Policy, bug: 'dupe' | 'steal', detectH: number): RingOut {
-  const r = mulberry32(0xbad0 + policy.lockH * 7 + policy.capPerDay * 13 + policy.pairPerDay * 31 + (bug === 'dupe' ? 1 : 2));
-  const R = 6, HONEST = 4000, BOT_TRADES_PER_H = 30, CASHOUT = 0.25, ONWARD_H = 0.01;
-  interface It { holder: number; unlock: number; hop: number; }
-  const items: It[] = [];
-  const start = bug === 'dupe' ? 1 : 20;
-  for (let i = 0; i < start; i++) items.push({ holder: i % R, unlock: 0, hop: 0 });
+interface RingOut { copies: number; launder: number; innocents: number; maxHop: number; }
+/** Hourly toy model of a hostile ring: 6 bot mules trade tainted items among themselves, cash 25% of hops out to random innocents, and MERGE any M unlocked copies of one species into a fresh-looking item.
+ *  'dupe' = hypothetical server bug where the GIVER KEEPS the item and the receiver also gets a copy (starts with 1 item); 'steal' = no bug, the ring moves 20 stolen items (5 species x 4). Detection at hour D. */
+function ring(P: Params, policy: Policy, bug: 'dupe' | 'steal', detectH: number): RingOut {
+  const r = mulberry32(0xbad0 + policy.lockH * 7 + (policy.capPerDay % 1000) * 13 + (policy.pairPerDay % 1000) * 31 + (bug === 'dupe' ? 1 : 2));
+  const R = 6, HONEST = 4000, BOT = 30, CASHOUT = 0.25, ONWARD = 0.01, MERGES_PER_H = 10, ITEM_CAP = 300000;
+  interface It { holder: number; unlock: number; hop: number; sp: number; gen: number; }
+  let items: It[] = [];
+  if (bug === 'dupe') items.push({ holder: 0, unlock: 0, hop: 0, sp: 0, gen: 0 });
+  else for (let i = 0; i < 20; i++) items.push({ holder: i % R, unlock: 0, hop: 0, sp: Math.floor(i / 4), gen: 0 });
+  const start = items.length;
   const dayTrades = new Map<string, number>();
-  const key = (d: number, a: string): string => d + ':' + a;
-  let guard = 0;
-  for (let h = 0; h < detectH; h++) {
+  let launder = 0;
+  for (let h = 0; h < detectH && items.length < ITEM_CAP; h++) {
     const d = Math.floor(h / 24);
-    const budget = new Array(R).fill(BOT_TRADES_PER_H);
-    const snapshot = items.length;
-    for (let idx = 0; idx < snapshot; idx++) {
-      const it = items[idx];
-      if (it.unlock > h) continue;
-      if (it.holder >= R) { // innocent holder: slow, honest onward trades
-        if (r() < ONWARD_H) { it.holder = R + Math.floor(r() * HONEST); it.unlock = h + policy.lockH; it.hop++; }
-        continue;
+    for (let mule = 0; mule < R; mule++) {
+      let budget = MERGES_PER_H;
+      const bySp = new Map<number, number[]>();
+      for (let i = 0; i < items.length; i++) { const it = items[i]; if (it.holder === mule && it.unlock <= h && it.gen === 0) { let a = bySp.get(it.sp); if (!a) { a = []; bySp.set(it.sp, a); } a.push(i); } }
+      const dead = new Set<number>();
+      for (const [, idxs] of bySp) while (idxs.length >= P.mergeInputs && budget > 0) {
+        for (const u of idxs.splice(0, P.mergeInputs)) dead.add(u);
+        items.push({ holder: mule, unlock: h + policy.lockH, hop: 0, sp: 1000 + Math.floor(r() * 50), gen: 1 });
+        launder++; budget--;
       }
-      while (budget[it.holder] > 0 && ++guard < 5e6) {
-        budget[it.holder]--;
+      if (dead.size) items = items.filter((_, i) => !dead.has(i));
+    }
+    const budgets = new Array(R).fill(BOT);
+    const n0 = items.length;
+    for (let idx = 0; idx < n0; idx++) {
+      const it = items[idx];
+      if (!it || it.unlock > h) continue;
+      if (it.holder >= R) { if (r() < ONWARD) { it.holder = R + Math.floor(r() * HONEST); it.unlock = h + policy.lockH; it.hop++; } continue; }
+      while (budgets[it.holder] > 0 && items.length < ITEM_CAP) {
+        budgets[it.holder]--;
         const toInnocent = r() < CASHOUT;
         const to = toInnocent ? R + Math.floor(r() * HONEST) : (it.holder + 1 + Math.floor(r() * (R - 1))) % R;
-        const gk = key(d, 'a' + it.holder);
-        if ((dayTrades.get(gk) ?? 0) >= policy.capPerDay) { budget[it.holder] = 0; break; }
-        const pk = key(d, 'p' + Math.min(it.holder, to) + '-' + Math.max(it.holder, to));
+        const gk = d + ':a' + it.holder;
+        if ((dayTrades.get(gk) ?? 0) >= policy.capPerDay) { budgets[it.holder] = 0; break; }
+        const pk = d + ':p' + Math.min(it.holder, to) + '-' + Math.max(it.holder, to);
         if (!toInnocent && (dayTrades.get(pk) ?? 0) >= policy.pairPerDay) continue;
         dayTrades.set(gk, (dayTrades.get(gk) ?? 0) + 1);
         if (!toInnocent) dayTrades.set(pk, (dayTrades.get(pk) ?? 0) + 1);
-        if (bug === 'dupe') { items.push({ holder: to, unlock: h + policy.lockH, hop: it.hop + 1 }); }
+        if (bug === 'dupe') items.push({ holder: to, unlock: h + policy.lockH, hop: it.hop + 1, sp: it.sp, gen: it.gen });
         else { it.holder = to; it.unlock = h + policy.lockH; it.hop++; break; }
-        if (items.length > 400000) break;
       }
-      if (items.length > 400000) break;
     }
-    if (items.length > 400000) break;
   }
-  const holders = new Set<number>(items.map((i) => i.holder));
-  let innocents = 0, maxHop = 0;
-  const inn = new Set<number>();
+  const inn = new Set<number>(); let maxHop = 0;
   for (const it of items) { if (it.holder >= R) inn.add(it.holder); if (it.hop > maxHop) maxHop = it.hop; }
-  innocents = inn.size;
-  return { copies: items.length - start, innocents, maxHop, accounts: holders.size };
+  return { copies: Math.max(0, items.length - start + launder * P.mergeInputs), launder, innocents: inn.size, maxHop };
 }
 
 /* ───────────────────────────── reporting ───────────────────────────── */
@@ -525,219 +625,358 @@ function ring(policy: Policy, bug: 'dupe' | 'steal', detectH: number): RingOut {
 const argv = process.argv.slice(2);
 const argNum = (name: string, dflt: number): number => { const i = argv.indexOf(name); return i >= 0 ? Number(argv[i + 1]) : dflt; };
 const QUICK = argv.includes('--quick');
-const BASE: Params = { ...DEFAULTS, nPlayers: argNum('--n', QUICK ? 1500 : DEFAULTS.nPlayers), days: argNum('--days', DEFAULTS.days) };
+const ONLY = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : '';
+const want = (k: string): boolean => !ONLY || ONLY.split(',').includes(k);
+const MICRO = runMicro();
+const BASE: Params = { ...DEFAULTS, nPlayers: argNum('--n', QUICK ? 1500 : DEFAULTS.nPlayers), days: argNum('--days', DEFAULTS.days), spPerMin: MICRO.spPerMin, spShare: MICRO.share, capsuleCost: argNum('--cost', DEFAULTS.capsuleCost), mergeInputs: argNum('--M', MERGE_COST) };
+const LONG = argNum('--long', QUICK ? 300 : 450);
+const header = (t: string): void => { console.log('\n' + '='.repeat(124) + '\n' + t + '\n' + '='.repeat(124)); };
+const dupRate = (r: Result): number => sum(r.wk.dupCapsules) / sum(r.wk.capsules);
+const doneBy = (sel: Player[], day: number, key: (p: Player) => number): number => (sel.length ? sel.filter((p) => key(p) > 0 && key(p) <= day).length / sel.length : NaN);
+const dayQ = (sel: Player[], key: (p: Player) => number, q: number, horizon: number): string => { const v = quantile(sel.map((p) => (key(p) > 0 ? key(p) : 1e9)), q); return v >= 1e9 ? '>' + horizon : String(Math.round(v)); };
+const dayQn = (sel: Player[], key: (p: Player) => number, q: number): number => quantile(sel.map((p) => (key(p) > 0 ? key(p) : 1e9)), q);
+const medDay = (sel: Player[], key: (p: Player) => number, horizon: number): string => dayQ(sel, key, 0.5, horizon);
+const epicPlus = (p: Player): number => p.tierOwned[3] + p.tierOwned[4] + p.tierOwned[5];
 
-const compl = (res: Result, pred: (p: Player) => boolean, byDay: number): number => {
-  const sel = res.players.filter(pred);
-  return sel.length ? sel.filter((p) => p.fullDay > 0 && p.fullDay <= byDay).length / sel.length : NaN;
-};
-const days12 = (res: Result, pred: (p: Player) => boolean): number[] => res.players.filter((p) => pred(p) && p.fullDay > 0).map((p) => p.fullDay);
-const days9 = (res: Result, pred: (p: Player) => boolean): number[] => res.players.filter((p) => pred(p) && p.coreDay > 0).map((p) => p.coreDay);
-
-function header(t: string): void { console.log('\n' + '='.repeat(100) + '\n' + t + '\n' + '='.repeat(100)); }
-
-function section_time(solo: Result, trade: Result): void {
-  header('A. TIME TO A FULL 12-SPECIES SHELF  (day 60, churn on; "stayers" = still playing at day 60)');
-  const groups: Array<[string, (p: Player) => boolean]> = [
-    ['all players', () => true],
-    ['stayers (all tiers)', (p) => p.alive],
-    ['stayers casual', (p) => p.alive && p.tier === 0],
-    ['stayers regular', (p) => p.alive && p.tier === 1],
-    ['stayers devoted', (p) => p.alive && p.tier === 2],
-    ['stayers poker', (p) => p.alive && p.arche === 0],
-    ['stayers squeezer', (p) => p.alive && p.arche === 1],
-    ['stayers puller', (p) => p.alive && p.arche === 2],
-    ['stayers mixed', (p) => p.alive && p.arche === 3],
-  ];
-  console.log(lpad('group', 22) + '| ' + pad('n', 5) + ' | SOLO: done@D30 D45 D60   med-day | TRADE: done@D30 D45 D60   med-day | 9/12 med-day solo -> trade');
-  for (const [name, f] of groups) {
-    const n = solo.players.filter(f).length;
-    const row = (r: Result): string => `${pad(pc0(compl(r, f, 30)), 5)} ${pad(pc0(compl(r, f, 45)), 4)} ${pad(pc0(compl(r, f, 60)), 4)}   ${pad(f1(median(days12(r, f))), 6)}`;
-    console.log(`${lpad(name, 22)}| ${pad(n, 5)} | ${row(solo)}            | ${row(trade)}            | ${pad(f1(median(days9(solo, f))), 5)} -> ${f1(median(days9(trade, f)))}`);
-  }
-  console.log('("med-day" = median over players who finished by day 60 only; a bigger gap in done@D60 is the honest signal when most do not finish.)');
+function secMicro(): void {
+  header('A. ACTIVE PLAY: what touching pays (micro-sim of human touch streams; every archetype, 400 x 5-minute streams)');
+  console.log(`Meter rule: poke ${PAY.poke} SP | squeeze+release ${PAY.squeezeBase} +${PAY.squeezePerSec}/s held (hold counted up to ${PAY.squeezeHoldCap} s), soft-pop +${PAY.softPop} if held >= 1.8 s | pull-and-let-go ${PAY.pull} (${PAY.pullFail} if it never stretched) | MEDLEY +${PAY.medley} (3 kinds within ${PAY.medleyWindow} s, cooldown ${PAY.medleyCooldown} s) | anti-mash freshness (tau ${TAU.join('/')} s, squared, floor 0.03) | valve ${VALVE_PER_MIN} SP/min`);
+  console.log(lpad('archetype', 10) + '| touches/min: poke squeeze pull | SP/min  (p10 / p50 / p90 of 5-min streams) | SP share poke/squeeze/pull | min per capsule @ cost ' + BASE.capsuleCost);
+  BEHAV.forEach((b, i) => {
+    console.log(`${lpad(b.name, 10)}| ${pad(f1(MICRO.perMin[i][0]), 21)} ${pad(f1(MICRO.perMin[i][1]), 6)} ${pad(f1(MICRO.perMin[i][2]), 4)} | ${pad(f1(MICRO.spPerMin[i]), 6)}  (${f1(MICRO.spreadP[i][0])} / ${f1(MICRO.spreadP[i][1])} / ${f1(MICRO.spreadP[i][2])}) | ${MICRO.share[i].map((x) => pc0(x)).join(' / ')} | ${f1(BASE.capsuleCost / MICRO.spPerMin[i])}`);
+  });
+  const avg = mean(MICRO.spPerMin.slice(0, 3));
+  console.log(`bots: 8 pokes/s mash earns ${f1(MICRO.botMash)} SP/min, a poke-squeeze-pull cycler at the physical limit earns ${f1(MICRO.botCycle)} SP/min (valve ${VALVE_PER_MIN}); humans ${f1(avg)} SP/min. Daily cap: ${BASE.dailyCapsCap} capsules at full rate, then ${BASE.overRate * 100}% rate up to ${BASE.dailyCapsCap + BASE.hardExtraCaps} total per day => a bot running 24 h gets at most ${BASE.dailyCapsCap + BASE.hardExtraCaps} capsules/day, about what a very devoted human gets.`);
+  console.log(`onboarding ramp: capsule 1/2/3 cost ${BASE.onboardRamp.map((x) => Math.round(x * BASE.capsuleCost)).join('/')} SP (then ${BASE.capsuleCost}); session model: casual 1-2 x 3-5 min, regular ~2 x 10-15, devoted 2-3 x 12-22`);
 }
 
-function section_long(solo: Result, trade: Result): void {
-  header(`B. UNCENSORED TIME TO FULL SHELF  (no churn, ${solo.P.days} days; median over ALL players of that tier, never-finishers count as "> ${solo.P.days}")`);
-  console.log(lpad('tier', 10) + '| SOLO  done%  median  p25 p75 | TRADE done%  median  p25 p75');
-  for (let t = 0; t < 3; t++) {
-    const f = (p: Player): boolean => p.tier === t;
-    const cell = (r: Result): string => {
-      const sel = r.players.filter(f);
-      const ds = sel.map((p) => (p.fullDay > 0 ? p.fullDay : 9999));
-      const done = sel.filter((p) => p.fullDay > 0).length / sel.length;
-      const m = median(ds), a = quantile(ds, 0.25), b = quantile(ds, 0.75);
-      const sh = (x: number): string => (x >= 9999 ? '>' + r.P.days : String(Math.round(x)));
-      return `${pad(pc0(done), 5)} ${pad(sh(m), 7)} ${pad(sh(a), 5)} ${pad(sh(b), 4)}`;
-    };
-    console.log(`${lpad(TIER_NAMES[t], 10)}| ${cell(solo)} | ${cell(trade)}`);
+function secCatalog(cat: Catalog): void {
+  header('B. THE CATALOG AND CAPSULE ODDS UNDER TEST');
+  console.log(lpad('tier', 10) + '| species | odds/capsule | odds per species | capsules to 1st of a SPECIFIC species | capsules to 1st of ANY of tier | merge tier-up');
+  for (let t = 0; t < NT; t++) {
+    const n = BASE.tierCount[t], o = BASE.tierOdds[t], per = o / n;
+    console.log(`${lpad(TIER_NAMES[t], 10)}| ${pad(n, 7)} | ${pad(pc(o), 12)} | ${pad(pc(per), 16)} | ${pad(f1(1 / per), 37)} | ${pad(f1(1 / o), 30)} | ${t < NT - 1 ? pc0(BASE.pUp[t]) : 'top: cannot merge'}`);
   }
+  console.log(`total species ${cat.n};  MERGE_COST ${BASE.mergeInputs};  tier-up ${BASE.pUp.slice(0, 5).map(pc0).join('/')}, unowned weight x${BASE.unownedW}, tier-up pity ${BASE.pityUp} (per tier), no-repeat pity ${BASE.pityNew}, completed-row boost x${BASE.rowDoneBoost}, merge output locked ${BASE.mergeLockDays} d`);
+  console.log(`affinity beta ${BASE.beta} (0 = OFF: tested in section J and rejected for species odds);  trade: same-tier 1:1, <= ${BASE.maxSwapsPerTrade}/trade, <= ${BASE.dailyTradeCap} trades/day, receive-lock ${BASE.lockDays} d`);
 }
 
-function section_dupes(solo: Result, trade: Result): void {
-  header('C. DUPLICATES: share of CAPSULE drops that repeat a species the player already holds (60-day main scenario)');
-  const weeks = solo.weekly.src.length;
-  console.log(lpad('week', 6) + '| capsule dup SOLO   TRADE | all-acquisition dup SOLO   TRADE | mean species owned (of 12) SOLO  TRADE');
-  for (let w = 0; w < weeks; w++) {
-    const a = solo.weekly, b = trade.weekly;
-    console.log(`${lpad(w + 1, 6)}| ${pad(pc(a.dupCapsules[w] / a.capsules[w]), 18)} ${pad(pc(b.dupCapsules[w] / b.capsules[w]), 7)} | ${pad(pc(a.dupAcq[w] / a.acq[w]), 25)} ${pad(pc(b.dupAcq[w] / b.acq[w]), 7)} | ${pad(f1(a.ownedSum[w] / a.hoardN[w]), 31)} ${pad(f1(b.ownedSum[w] / b.hoardN[w]), 6)}`);
-  }
-  const tot = (r: Result): string => pc(r.weekly.dupCapsules.reduce((x, y) => x + y, 0) / r.weekly.capsules.reduce((x, y) => x + y, 0));
-  console.log(`whole 60 days: capsule dup rate SOLO ${tot(solo)}   TRADE ${tot(trade)}`);
-}
-
-function section_supply(main: Result, noCap: Result, noBlend: Result): void {
-  header('D. SUPPLY: items minted (sources) vs destroyed (sinks), per ALIVE player per week, and hoard size');
-  const wk = (r: Result, w: number): [number, number, number, number, number] => {
-    const alive = r.weekly.hoardN[w] || 1;
-    const sm = r.weekly.src[w] / alive, sb = r.weekly.sinkBlend[w] / alive, sr = r.weekly.sinkRelease[w] / alive;
-    return [sm, sb, sr, r.weekly.hoardSum[w] / alive, r.weekly.atCap[w] / alive];
+function secFirstHour(r: Result): void {
+  header(`C. FIRST MINUTES (onboarding and first mergeable set), cohort of ${r.players.length}, M = ${r.P.mergeInputs}`);
+  const grp = (f: (p: Player) => boolean): Player[] => r.players.filter(f);
+  console.log(lpad('group', 16) + '| 1st capsule (s) | 1st pair: min  capsules | 1st triple: min  capsules | pair by 12 min / 25 min | triple by 12 / 25 / 60 min');
+  const row = (name: string, sel: Player[]): void => {
+    const sec = median(sel.map((p) => p.firstCapMin * 60));
+    const pm = median(sel.filter((p) => p.pairMin >= 0).map((p) => p.pairMin)), pcps = median(sel.filter((p) => p.pairMin >= 0).map((p) => p.pairCaps));
+    const tm = median(sel.filter((p) => p.tripMin >= 0).map((p) => p.tripMin)), tcps = median(sel.filter((p) => p.tripMin >= 0).map((p) => p.tripCaps));
+    const by = (k: 'pairMin' | 'tripMin', m: number): string => pc0(sel.filter((p) => p[k] >= 0 && p[k] <= m).length / sel.length);
+    console.log(`${lpad(name, 16)}| ${pad(f1(sec), 15)} | ${pad(f1(pm), 17)} ${pad(f1(pcps), 8)} | ${pad(f1(tm), 19)} ${pad(f1(tcps), 8)} | ${pad(by('pairMin', 12), 10)} / ${pad(by('pairMin', 25), 5)} | ${by('tripMin', 12)} / ${by('tripMin', 25)} / ${by('tripMin', 60)}`);
   };
-  for (const [name, r] of [['MAIN (cap 60, blend on)', main], ['NO CAP, blend on', noCap], ['NO CAP, NO BLEND (control)', noBlend]] as Array<[string, Result]>) {
-    console.log(name);
-    console.log(lpad('  week', 8) + '| minted/pl  blend-sink  release-sink  sink/minted | mean hoard  at-cap');
-    for (let w = 0; w < r.weekly.src.length; w++) {
-      const [s, b, rl, h, c] = wk(r, w);
-      console.log(`${lpad('  ' + (w + 1), 8)}| ${pad(f1(s), 9)} ${pad(f1(b), 11)} ${pad(f1(rl), 13)} ${pad(pc0((b + rl) / s), 12)} | ${pad(f1(h), 10)} ${pad(pc0(c), 7)}`);
+  for (let t = 0; t < 3; t++) row(PLAYER_TYPES[t], grp((p) => p.tier === t));
+  for (let a = 0; a < 4; a++) row('regular ' + ARCHE_NAMES[a], grp((p) => p.tier === 1 && p.arche === a));
+  const per = r.P.capsuleCost;
+  console.log(`steady-state ACTIVE minutes per capsule at ${per} SP:  ` + ARCHE_NAMES.map((n, a) => `${n} ${f1(per / (r.P.spPerMin[a] * r.P.speedScale))}`).join('   ') + `   (the player-pace spread: p10/p90 of per-player pace = x${f2(Math.exp(-0.2 * 1.28))}/x${f2(Math.exp(0.2 * 1.28))})`);
+  const reg = r.players.filter((p) => p.tier === 1);
+  const mpc = reg.map((p) => (p.capsules > 0 ? p.minutes / p.capsules : NaN)).filter((x) => Number.isFinite(x));
+  console.log(`measured over the whole run for regular players: active minutes per capsule median ${f1(median(mpc))} (p10 ${f1(quantile(mpc, 0.1))}, p90 ${f1(quantile(mpc, 0.9))});  capsules per active day: casual ${f2(mean(r.players.filter((p) => p.tier === 0).map((p) => p.capsules / Math.max(1, p.activeDays))))}  regular ${f2(mean(reg.map((p) => p.capsules / Math.max(1, p.activeDays))))}  devoted ${f2(mean(r.players.filter((p) => p.tier === 2).map((p) => p.capsules / Math.max(1, p.activeDays))))}`);
+}
+
+function secIncome(r: Result): void {
+  header('D. CAPSULE INCOME AND DUPLICATES  (60 days, churn on, trade on)');
+  console.log('capsules by tier (share of all capsules opened):  ' + TIER_NAMES.map((n, t) => `${n} ${pc(sum(r.wk.capTier[t]) / sum(r.wk.capsules))}`).join('   '));
+  const g = [0, 1, 2, 3].map((k) => sum(r.wk.capGroup[k])), g3 = g[0] + g[1] + g[2];
+  console.log(`global capsule supply by style group (Common..Epic):  bounce ${pc(g[0] / g3)}  plush ${pc(g[1] / g3)}  stretch ${pc(g[2] / g3)}`);
+  console.log(lpad('week', 5) + '| capsule dup rate | mean species owned (of 50) | capsules per alive player per week');
+  for (let w = 0; w < r.wk.capsules.length; w++) console.log(`${lpad(w + 1, 5)}| ${pad(pc(r.wk.dupCapsules[w] / r.wk.capsules[w]), 16)} | ${pad(f1(r.wk.owned[w] / r.wk.alive[w]), 26)} | ${pad(f1(r.wk.capsules[w] / r.wk.alive[w]), 12)}`);
+  console.log(`whole 60 days: capsule dup rate ${pc(dupRate(r))}  ("dup" = the capsule gave a species the player already held; capsules have NO dupe protection)`);
+}
+
+function secTriples(nm: Result): void {
+  header(`E. HOW OFTEN DOES A PLAYER OWN 2 / 3 / 4 OF THE SAME SPECIES?  (control run, merging OFF so copies accumulate; alive players with >= 3 active days)`);
+  console.log(lpad('tier', 10) + '| ' + nm.snaps.map((s) => `day ${pad(s.day, 2)}: >=2 >=3 >=4`).join(' | '));
+  for (let t = 0; t < NT; t++) console.log(`${lpad(TIER_NAMES[t], 10)}| ${nm.snaps.map((s) => `${pad(pc0(s.ge2[t]), 11)} ${pad(pc0(s.ge3[t]), 3)} ${pad(pc0(s.ge4[t]), 3)}`).join(' | ')}`);
+  console.log('(>=M+1 copies = M spares while keeping one on the shelf, what a careful player needs to merge; >=M is a reckless merge that gives up the last copy.)');
+}
+
+function secMerge(r: Result, ladder: Array<[string, Result]>): void {
+  header(`F. MERGE (${r.P.mergeInputs} same -> 1 random): volume, outcome mix, feel-bad`);
+  const all = r.players, mt = sum(all.map((p) => p.merges));
+  console.log(`60-day run: merges per player mean ${f1(mean(all.map((p) => p.merges)))} median ${f1(median(all.map((p) => p.merges)))} p90 ${f1(quantile(all.map((p) => p.merges), 0.9))};  share who ever merge ${pc0(all.filter((p) => p.merges > 0).length / all.length)};  by type: ` + PLAYER_TYPES.map((n, t) => `${n} ${f1(mean(all.filter((p) => p.tier === t).map((p) => p.merges)))}`).join(' '));
+  const mi = new Array(NT).fill(0), mo = new Array(NT).fill(0);
+  for (const p of all) for (let t = 0; t < NT; t++) { mi[t] += p.inByTier[t]; mo[t] += p.outByTier[t]; }
+  console.log(lpad('tier', 10) + '| merges fed with this tier | outcomes landing in this tier');
+  for (let t = 0; t < NT; t++) console.log(`${lpad(TIER_NAMES[t], 10)}| ${pad(pc(mi[t] / mt), 25)} | ${pad(pc(mo[t] / mt), 20)}`);
+  console.log('');
+  console.log('Mitigation ladder (120 days, no churn, trade on; every row adds one rule to the row above):');
+  console.log(lpad('merge rules', 58) + '| merges/pl | tier-up | repeat | no-better | FEEL-BAD (repeat & no up) | worst streak p95 | mergers with >=3 bad in a row');
+  for (const [name, v] of ladder) {
+    const a = v.players, m = sum(a.map((p) => p.merges)), mergers = a.filter((p) => p.merges > 0);
+    console.log(`${lpad(name, 58)}| ${pad(f1(m / a.length), 9)} | ${pad(pc0(sum(a.map((p) => p.mergeUps)) / m), 7)} | ${pad(pc0(sum(a.map((p) => p.mergeRepeats)) / m), 6)} | ${pad(pc0(1 - sum(a.map((p) => p.mergeUps)) / m), 9)} | ${pad(pc0(sum(a.map((p) => p.mergeBad)) / m), 25)} | ${pad(quantile(mergers.map((p) => p.maxBad), 0.95), 16)} | ${pc0(mergers.filter((p) => p.maxBad >= 3).length / Math.max(1, mergers.length))}`);
+  }
+}
+
+function secSupply(main: Result, nm: Result): void {
+  header('G. NET ITEM SUPPLY  (per alive player; 60 days, churn on). sources = capsules + restock; sink = merges (each destroys M, makes 1)');
+  const M = main.P.mergeInputs;
+  console.log(lpad('week', 5) + '| sources/pl | merge sink/pl (net) | sink/sources | mean items held: MERGE ON | merging OFF');
+  for (let w = 0; w < main.wk.capsules.length; w++) {
+    const al = main.wk.alive[w] || 1, an = nm.wk.alive[w] || 1;
+    const src = (main.wk.capsules[w] + main.wk.restock[w]) / al, sink = (main.wk.mergeIn[w] - main.wk.merges[w]) / al;
+    console.log(`${lpad(w + 1, 5)}| ${pad(f1(src), 10)} | ${pad(f1(sink), 19)} | ${pad(pc0(sink / src), 12)} | ${pad(f1(main.wk.hoard[w] / al), 24)} | ${f1(nm.wk.hoard[w] / an)}`);
+  }
+  console.log(`(net sink per merge = ${M - 1}; cohort includes players who left)`);
+}
+
+function secTrade(trade: Result, solo: Result): void {
+  header('H. TRADING BEHAVIOUR  (60 days, churn on, receive-lock 1 day)');
+  const all = trade.players, everT = all.filter((p) => p.trades > 0), a14 = all.filter((p) => p.activeDays >= 14);
+  console.log(`players who completed >= 1 trade: ${pc0(everT.length / all.length)} of all, ${pc0(a14.filter((p) => p.trades > 0).length / a14.length)} of those with >= 14 active days (willing-to-trade flag: ${pc0(all.filter((p) => p.trader).length / all.length)} of all)`);
+  console.log(`trades per trader: mean ${f1(mean(everT.map((p) => p.trades)))} median ${f1(median(everT.map((p) => p.trades)))};  completed trades per 1000 players per day: ${f1(sum(trade.wk.trades) / trade.P.days / (all.length / 1000))}`);
+  const wt = (r: Result): Player[] => r.players.filter((p) => p.trader && p.alive);
+  console.log(`willing traders still playing at day 60: species owned solo ${f1(mean(wt(solo).map((p) => p.owned)))} -> with trade ${f1(mean(wt(trade).map((p) => p.owned)))};  Epic+ held (of ${sum(trade.P.tierCount.slice(3))}): ${f1(mean(wt(solo).map(epicPlus)))} -> ${f1(mean(wt(trade).map(epicPlus)))}`);
+  console.log('trades by week: ' + trade.wk.trades.join(' '));
+}
+
+function secLock(rows: Array<[string, Result]>): void {
+  header('I. WHAT A RECEIVE-LOCK COSTS HONEST PLAYERS  (60 days, churn on, trade on; "1 day" = a received copy cannot be re-traded or merged until the next day)');
+  console.log(lpad('lock', 18) + '| trades/1000pl/day | players who trade | species owned (willing traders alive d60) | Epic+ held');
+  for (const [name, r] of rows) {
+    const s = r.players.filter((p) => p.alive && p.trader);
+    console.log(`${lpad(name, 18)}| ${pad(f1(sum(r.wk.trades) / r.P.days / (r.players.length / 1000)), 17)} | ${pad(pc0(r.players.filter((p) => p.trades > 0).length / r.players.length), 17)} | ${pad(f2(mean(s.map((p) => p.owned))), 41)} | ${f2(mean(s.map(epicPlus)))}`);
+  }
+}
+
+function secAffinity(onS: Result, offS: Result, longs: Array<[string, Result, Result]>): void {
+  header('J. AFFINITY A/B: tilting WHICH species drop inside a tier by how you play. Does it help trading, and is it fair?');
+  console.log('J1. P(two random players have a feasible same-tier 1:1 swap), solo inventories (locks and willingness ignored)');
+  console.log(lpad('pair class', 18) + '| ' + onS.snaps.map((s) => `day ${pad(s.day, 2)}: ON  OFF`).join(' | '));
+  for (const k of ['all pairs', 'same style', 'different style', 'involves mixed']) {
+    console.log(`${lpad(k, 18)}| ${onS.snaps.map((s, i) => { const a = s.pairs[k], b = offS.snaps[i].pairs[k]; return `${pad(pc0(a ? a[0] / a[1] : NaN), 9)} ${pad(pc0(b ? b[0] / b[1] : NaN), 4)}`; }).join(' | ')}`);
+  }
+  console.log('J2. outcomes, no churn, willing traders only (the players for whom trading is an option)');
+  console.log(lpad('beta', 8) + '| ALL-50 by day ' + LONG + ': solo -> trade | Epic row: solo -> trade | slowest/fastest archetype, Epic row (trade world) | slowest/fastest, all-50 | trade speed-up (p50 day, solo/trade)');
+  for (const [name, s, t] of longs) {
+    const ws = s.players.filter((p) => p.trader), wt = t.players.filter((p) => p.trader);
+    const spread = (r: Player[], key: (p: Player) => number): string => { const v = [0, 1, 2, 3].map((a) => quantile(r.filter((p) => p.arche === a).map((p) => (key(p) > 0 ? key(p) : 1e6)), 0.5)); return v.every((x) => x < 1e6) ? f2(Math.max(...v) / Math.min(...v)) + 'x' : 'n/a'; };
+    const q = (r: Player[], k: (p: Player) => number): number => dayQn(r, k, 0.5);
+    const ratio = q(ws, (p) => p.fullDay) >= 1e9 ? '>' + f2(q(ws, (p) => p.fullDay) / q(wt, (p) => p.fullDay)) : f2(q(ws, (p) => p.fullDay) / q(wt, (p) => p.fullDay));
+    console.log(`${lpad(name, 8)}| ${pad(pc0(doneBy(ws, LONG, (p) => p.fullDay)), 19)} -> ${pad(pc0(doneBy(wt, LONG, (p) => p.fullDay)), 4)} | ${pad(pc0(doneBy(ws, LONG, (p) => p.rowDay[3])), 12)} -> ${pad(pc0(doneBy(wt, LONG, (p) => p.rowDay[3])), 4)} | ${pad(spread(wt, (p) => p.rowDay[3]), 48)} | ${pad(spread(wt, (p) => p.fullDay), 22)} | ${ratio}`);
+  }
+}
+
+function secLong(solo: Result, trade: Result): void {
+  header(`K. DAYS TO COMPLETE (no churn, ${LONG} days). "WILLING TRADERS" = players who would use trading; the same people are compared solo vs with trade`);
+  const keys: Array<[string, (p: Player) => number]> = [['Common row (16)', (p) => p.rowDay[0]], ['Uncommon row (12)', (p) => p.rowDay[1]], ['Rare row (10)', (p) => p.rowDay[2]], ['Epic row (6)', (p) => p.rowDay[3]], ['Legendary row (4)', (p) => p.rowDay[4]], ['Mythic row (2)', (p) => p.rowDay[5]], ['ALL 50', (p) => p.fullDay]];
+  const nm = (t: number): string => (t < 0 ? 'ALL PLAYERS' : PLAYER_TYPES[t].toUpperCase());
+  for (const [tier, tr] of [[1, true], [1, false], [0, true], [2, true], [-1, true]] as Array<[number, boolean]>) {
+    const sel = (r: Result): Player[] => r.players.filter((p) => (tier < 0 || p.tier === tier) && p.trader === tr);
+    if (tier === -1) { /* all players regardless of willingness */ }
+    const get = (r: Result): Player[] => (tier === -1 ? r.players : sel(r));
+    console.log(`-- ${nm(tier)} players, ${tier === -1 ? 'everyone' : tr ? 'willing to trade' : 'never trade'}${tier === 1 && tr ? '   <- the median player who trades' : ''}   (n=${get(solo).length})`);
+    console.log(lpad('milestone', 20) + '| SOLO: p50 day  [p25 - p75]  done@D60 D120 D240 D' + LONG + ' | TRADE: p50 day  [p25 - p75]  done@D60 D120 D240 D' + LONG);
+    for (const [name, key] of keys) {
+      const c = (r: Result): string => { const s = get(r); return `${pad(medDay(s, key, LONG), 8)}  [${pad(dayQ(s, key, 0.25, LONG), 4)} - ${pad(dayQ(s, key, 0.75, LONG), 4)}]  ${pad(pc0(doneBy(s, 60, key)), 5)} ${pad(pc0(doneBy(s, 120, key)), 4)} ${pad(pc0(doneBy(s, 240, key)), 4)} ${pad(pc0(doneBy(s, LONG, key)), 4)}`; };
+      console.log(`${lpad(name, 20)}| ${c(solo)} | ${c(trade)}`);
     }
   }
+  console.log('first copy of ANY species of a tier, median day (all players), solo / trade: ' + TIER_NAMES.map((n, t) => `${n} ${f1(median(solo.players.filter((p) => p.firstTier[t] > 0).map((p) => p.firstTier[t])))}/${f1(median(trade.players.filter((p) => p.firstTier[t] > 0).map((p) => p.firstTier[t])))}`).join('   '));
+  const reg = trade.players.filter((p) => p.tier === 1 && p.trader);
+  const regS = solo.players.filter((p) => p.tier === 1 && p.trader);
+  console.log('speed-up from trading, regular willing traders, all 50: ' + [0.25, 0.5, 0.75, 0.9].map((q) => { const a = dayQn(regS, (p) => p.fullDay, q), b = dayQn(reg, (p) => p.fullDay, q); return `p${q * 100}: ${a >= 1e9 ? '>' + LONG : Math.round(a)} -> ${Math.round(b)} days (x${f2(Math.min(a, LONG * 2) / b)})`; }).join('   '));
+  const regMin = reg.filter((p) => p.fullDay > 0).map((p) => p.fullDay);
+  console.log(`regular willing traders: median calendar day to all 50 with trade = ${medDay(reg, (p) => p.fullDay, LONG)}; active hours to get there ~ ${f1(median(reg.filter((p) => p.fullDay > 0).map((p) => p.fullMin / 60)))}  [finishers ${pc0(regMin.length / Math.max(1, reg.length))}]`);
 }
 
-function section_blend(main: Result): void {
-  header('E. BLENDING (main scenario, trade on)');
-  const all = main.players;
-  const per = all.map((p) => p.blends);
-  const stay = all.filter((p) => p.alive).map((p) => p.blends);
-  const ever = all.filter((p) => p.blends > 0).length / all.length;
-  const parents = all.reduce((a, p) => a + p.blendParents, 0) / Math.max(1, all.reduce((a, p) => a + p.blends, 0));
-  console.log(`blends per player over 60 days: mean ${f1(mean(per))}  median ${f1(median(per))}  p90 ${f1(quantile(per, 0.9))}   (stayers: mean ${f1(mean(stay))} median ${f1(median(stay))})`);
-  console.log(`share who ever blend ${pc0(ever)}   mean parents per blend ${f2(parents)}   journal entries found: mean ${f1(mean(all.map((p) => p.pairsSeen.size)))} of ${JOURNAL_PAIRS} (stayers ${f1(mean(all.filter((p) => p.alive).map((p) => p.pairsSeen.size)))})`);
-  const hy = all.map((p) => p.hybrids);
-  console.log(`hybrids held per player at day 60: mean ${f1(mean(hy))} median ${f1(median(hy))}`);
-}
-
-function section_trade(trade: Result, solo: Result): void {
-  header('F. TRADING BEHAVIOUR (main scenario, lock 1 day)');
-  const all = trade.players;
-  const everT = all.filter((p) => p.trades > 0);
-  const active14 = all.filter((p) => p.activeDays >= 14);
-  console.log(`players who ever completed a trade: ${pc0(everT.length / all.length)} of all   ${pc0(active14.filter((p) => p.trades > 0).length / active14.length)} of players with >= 14 active days   (willing-to-trade flag: ${pc0(all.filter((p) => p.trader).length / all.length)})`);
-  console.log(`trades per trader who traded: mean ${f1(mean(everT.map((p) => p.trades)))}  median ${f1(median(everT.map((p) => p.trades)))}   total trades/day (avg over 60d, per 1000 players): ${f1((trade.weekly.trades.reduce((a, b) => a + b, 0) / trade.P.days) / (all.length / 1000))}`);
-  const comp = all.filter((p) => p.fullDay > 0);
-  const viaT = comp.map((p) => { let c = 0; for (let s = 0; s < NS; s++) if (p.viaTrade[s]) c++; return c; });
-  console.log(`completed shelves: ${comp.length}   of those: needed >= 1 traded-in species ${pc0(viaT.filter((v) => v > 0).length / Math.max(1, comp.length))}, final species arrived by trade ${pc0(comp.filter((p) => p.finalViaTrade).length / Math.max(1, comp.length))}, mean traded-in species ${f2(mean(viaT))}`);
-  const rareDone = (r: Result, pr: (p: Player) => boolean): number => { const sel = r.players.filter(pr); return sel.filter((p) => p.count[3] + p.count[7] + p.count[11] > 0 && p.owned >= 0).length / sel.length; };
-  void rareDone;
-  const heir = (r: Result, pr: (p: Player) => boolean): number => {
-    const sel = r.players.filter(pr);
-    return mean(sel.map((p) => (p.count[3] > 0 ? 1 : 0) + (p.count[7] > 0 ? 1 : 0) + (p.count[11] > 0 ? 1 : 0)));
+function secRoutes(trade: Result, solo: Result): void {
+  header('L. HOW DID EACH SPECIES FIRST ARRIVE?  Route of the FIRST copy, share by tier (no churn; willing traders; solo in brackets)');
+  console.log(lpad('tier', 10) + '| capsule      restock      merge        trade        starter');
+  const sh = (r: Result, t: number): number[] => { const c = [0, 0, 0, 0, 0, 0]; for (const p of r.players) if (p.trader) for (const s of r.cat.byTier[t]) if (p.firstDay[s] >= 0) c[p.via[s]]++; const z = sum(c) || 1; return c.map((x) => x / z); };
+  for (let t = 0; t < NT; t++) { const a = sh(trade, t), b = sh(solo, t); console.log(`${lpad(TIER_NAMES[t], 10)}| ${[1, 2, 3, 4, 5].map((k) => pad(pc0(a[k]) + ' (' + pc0(b[k]) + ')', 12)).join(' ')}`); }
+  const ep = (r: Result, via: number): number => { let c = 0, tt = 0; for (const p of r.players) if (p.trader) for (let s = 0; s < r.cat.n; s++) if (r.cat.tierOf[s] >= 3 && p.firstDay[s] >= 0) { tt++; if (p.via[s] === via) c++; } return c / Math.max(1, tt); };
+  console.log(`Epic+ first copies, willing traders, with trading: via trade ${pc0(ep(trade, 4))}, via merge ${pc0(ep(trade, 3))}, via capsule ${pc0(ep(trade, 1))};  (solo world: via merge ${pc0(ep(solo, 3))}, via capsule ${pc0(ep(solo, 1))})`);
+  const late = (r: Result): string => { let c = 0, tt = 0; for (const p of r.players) if (p.trader && p.fullDay > 0) for (let s = 0; s < r.cat.n; s++) if (r.cat.tierOf[s] >= 3 && p.firstDay[s] >= p.fullDay - 60) { tt++; if (p.via[s] === 4) c++; } return pc0(c / Math.max(1, tt)); };
+  console.log(`...of the Epic+ species a finisher got in the last 60 days before finishing, share that came by trade: ${late(trade)}`);
+  const last5 = (r: Result, tierMin: number): number[] => {
+    const c = [0, 0, 0, 0, 0, 0]; let tt = 0;
+    for (const p of r.players) if (p.trader && p.fullDay > 0) {
+      const sp: Array<[number, number]> = [];
+      for (let s = 0; s < r.cat.n; s++) if (r.cat.tierOf[s] >= tierMin && p.firstDay[s] >= 0) sp.push([p.firstDay[s], s]);
+      sp.sort((a, b) => b[0] - a[0]);
+      for (const [, s] of sp.slice(0, 5)) { c[p.via[s]]++; tt++; }
+    }
+    return c.map((x) => x / Math.max(1, tt));
   };
-  console.log('heirlooms held (of 3) at day 60, stayers:   ' + ARCHE_NAMES.map((n, a) => `${n} ${f2(heir(solo, (p) => p.alive && p.arche === a))} -> ${f2(heir(trade, (p) => p.alive && p.arche === a))}`).join('   ') + '   (solo -> trade)');
-  console.log('trades by week: ' + trade.weekly.trades.join(' '));
-}
-
-function section_affinity(on: Result, off: Result): void {
-  header('G. DOES AFFINITY CREATE COMPLEMENTARY GAPS?  P(two random players have >= 1 feasible same-tier 1:1 swap), solo inventories, ignoring locks and willingness');
-  console.log(lpad('pair class', 18) + '| ' + on.snaps.map((s) => `day ${s.day}: affinity ON   OFF `).join(' | '));
-  for (const k of ['all pairs', 'same style', 'different style', 'involves mixed']) {
-    const cells = on.snaps.map((s, i) => {
-      const a = s.pairs[k], b = off.snaps[i].pairs[k];
-      return `${pad(pc0(a ? a[0] / a[1] : NaN), 18)} ${pad(pc0(b ? b[0] / b[1] : NaN), 5)}`;
-    });
-    console.log(`${lpad(k, 18)}| ${cells.join(' | ')}`);
+  for (const [nm, tm] of [['the LAST 5 species a finisher completed (any tier)', 0], ['the LAST 5 Epic+ species a finisher completed', 3]] as Array<[string, number]>) {
+    const a = last5(trade, tm), b = last5(solo, tm);
+    console.log(`${nm}: by capsule ${pc0(a[1])}, restock ${pc0(a[2])}, merge ${pc0(a[3])}, TRADE ${pc0(a[4])}   (solo world: capsule ${pc0(b[1])}, restock ${pc0(b[2])}, merge ${pc0(b[3])})`);
   }
 }
 
-function section_lock(rows: Array<[string, Result]>): void {
-  header('H. WHAT A RECEIVE-LOCK COSTS HONEST PLAYERS  (trade on, 60 days, churn on)');
-  console.log(lpad('lock', 16) + '| trades/1000pl/day | players who trade | stayers done@D60 | stayers regular med-day | heirlooms held (stayers)');
-  for (const [name, r] of rows) {
-    const all = r.players;
-    const t = (r.weekly.trades.reduce((a, b) => a + b, 0) / r.P.days) / (all.length / 1000);
-    const heirM = mean(all.filter((p) => p.alive).map((p) => (p.count[3] > 0 ? 1 : 0) + (p.count[7] > 0 ? 1 : 0) + (p.count[11] > 0 ? 1 : 0)));
-    console.log(`${lpad(name, 16)}| ${pad(f1(t), 17)} | ${pad(pc0(all.filter((p) => p.trades > 0).length / all.length), 17)} | ${pad(pc0(compl(r, (p) => p.alive, 60)), 16)} | ${pad(f1(median(days12(r, (p) => p.alive && p.tier === 1))), 23)} | ${f2(heirM)}`);
+function secExact(Ms: number[]): void {
+  header('M. COST OF ONE SPECIFIC SPECIES: by drop, by merge only, by trade');
+  const cat = buildCatalog(BASE.tierCount);
+  const trials = QUICK ? 100 : 250;
+  console.log(lpad('target tier', 12) + '| by DROP (capsules) | ' + Ms.map((m) => `MERGE-ONLY M=${m}: capsules med (mean)  merges med  x-drop`).join(' | '));
+  for (let t = 0; t < NT; t++) {
+    const per = BASE.tierOdds[t] / BASE.tierCount[t];
+    const cap = t >= 4 ? 60000 : 25000;
+    const cells = Ms.map((m) => { const a = farmer({ ...BASE, mergeInputs: m }, cat, t, t >= 4 ? Math.round(trials / 2) : trials, cap); return `${pad(f1(a.capsulesMed) + ' (' + f1(a.capsulesMean) + ')', 22)}  ${pad(f1(a.mergesMed), 9)}  ${pad(f1(a.capsulesMean * per) + 'x', 7)}${a.finished < 0.9 ? ' [' + pc0(a.finished) + ' done]' : ''}`; });
+    console.log(`${lpad(TIER_NAMES[t], 12)}| ${pad(f1(1 / per), 18)} | ${cells.join(' | ')}`);
   }
+  console.log('by TRADE: one swap, paid with a spare of the same tier the player already holds (0 extra capsules) if a partner with the right spare exists (section L: how often that is how Epic+ species arrived).');
 }
 
-function section_ring(): void {
-  header('I. EXPLOIT RING TOY MODEL: what had spread when it was detected?  (6 bot mules, 30 trades/hour each, 25% of hops cash out to innocents)');
-  const policies: Policy[] = [
+function secRing(): void {
+  header(`N. MERGE-THEN-TRADE LAUNDERING TOY MODEL (M=${BASE.mergeInputs}): extra copies minted / merge outputs ("laundered") / innocent accounts holding tainted items at detection`);
+  const pols: Policy[] = [
     { name: 'no limits', lockH: 0, capPerDay: 1e9, pairPerDay: 1e9 },
-    { name: 'lock 24h only', lockH: 24, capPerDay: 1e9, pairPerDay: 1e9 },
-    { name: 'daily cap 5 only', lockH: 0, capPerDay: 5, pairPerDay: 1e9 },
-    { name: 'cap 5 + pair 1/day', lockH: 0, capPerDay: 5, pairPerDay: 1 },
-    { name: 'lock24+cap5+pair1', lockH: 24, capPerDay: 5, pairPerDay: 1 },
+    { name: 'receive/merge lock 24h only', lockH: 24, capPerDay: 1e9, pairPerDay: 1e9 },
+    { name: 'daily cap 5 + pair 1/day', lockH: 0, capPerDay: 5, pairPerDay: 1 },
+    { name: 'lock 24h + cap 5 + pair 1', lockH: 24, capPerDay: 5, pairPerDay: 1 },
   ];
-  console.log(lpad('policy', 20) + '| DUPE BUG (giver keeps item): extra copies / innocents / max hop   | STOLEN 20 ITEMS (no bug): innocents holding / max hop');
-  console.log(lpad('', 20) + '|   detected at 6h        detected at 24h                              |   at 6h            at 24h');
-  for (const pol of policies) {
-    const d6 = ring(pol, 'dupe', 6), d24 = ring(pol, 'dupe', 24), s6 = ring(pol, 'steal', 6), s24 = ring(pol, 'steal', 24);
-    const c = (o: RingOut): string => `${o.copies >= 400000 ? '>400k' : o.copies}/${o.innocents}/${o.maxHop}`;
-    console.log(`${lpad(pol.name, 20)}| ${pad(c(d6), 12)}   ${pad(c(d24), 18)}                          | ${pad(s6.innocents + '/' + s6.maxHop, 9)}        ${pad(s24.innocents + '/' + s24.maxHop, 9)}`);
-  }
-}
-
-function section_sens(rows: Array<[string, Result, Result]>): void {
-  header('J. SENSITIVITY: do the headline results survive different behaviour assumptions?  (stayers, day 60)');
-  console.log(lpad('variant', 38) + '| SOLO done@D60 | TRADE done@D60 | capsule dup (60d) | players who trade | heirlooms held solo -> trade');
-  for (const [name, s, t] of rows) {
-    const dup = (r: Result): number => r.weekly.dupCapsules.reduce((a, b) => a + b, 0) / r.weekly.capsules.reduce((a, b) => a + b, 0);
-    const heir = (r: Result): number => mean(r.players.filter((p) => p.alive).map((p) => (p.count[3] > 0 ? 1 : 0) + (p.count[7] > 0 ? 1 : 0) + (p.count[11] > 0 ? 1 : 0)));
-    console.log(`${lpad(name, 38)}| ${pad(pc0(compl(s, (p) => p.alive, 60)), 13)} | ${pad(pc0(compl(t, (p) => p.alive, 60)), 14)} | ${pad(pc0(dup(t)), 17)} | ${pad(pc0(t.players.filter((p) => p.trades > 0).length / t.players.length), 17)} | ${f2(heir(s))} -> ${f2(heir(t))}`);
+  console.log(lpad('policy', 30) + '| DUPE BUG, detected at 6h | DUPE BUG, at 24h        | STOLEN 20 items, at 6h   | STOLEN, at 24h');
+  for (const pol of pols) {
+    const c = (o: RingOut): string => `${o.copies >= 299990 ? '>300k' : o.copies}/${o.launder}/${o.innocents}`;
+    console.log(`${lpad(pol.name, 30)}| ${pad(c(ring(BASE, pol, 'dupe', 6)), 24)} | ${pad(c(ring(BASE, pol, 'dupe', 24)), 23)} | ${pad(c(ring(BASE, pol, 'steal', 6)), 24)} | ${c(ring(BASE, pol, 'steal', 24))}`);
   }
 }
 
 /* ───────────────────────────── main ───────────────────────────── */
 
 const t0 = process.hrtime.bigint();
-const popMain = makePop(BASE);
-console.log(`WOBBLEHOARD economy sim  players=${BASE.nPlayers} days=${BASE.days} seed=0x${BASE.seed.toString(16)}${QUICK ? '  (--quick)' : ''}`);
-console.log(`shelf: ${NS} species = 3 style groups x (2 common, 1 uncommon, 1 heirloom); base weights ${BASE_W.join('/')}; affinity beta=${BASE.beta} lambda=${BASE.lambda}`);
-console.log(`economy: ${BASE.capsuleCost} SP/capsule, ${BASE.spPerMin} SP/min (all styles), soft cap ${BASE.softCap} SP/day, restock pick 1 of ${BASE.restockOffered}, ${BASE.tasksOffered} tasks/day (max ${BASE.taskWeeklyMax}/wk), hoard cap ${BASE.hoardCap}`);
-console.log(`population (ASSUMED): archetypes poker/squeezer/puller/mixed ${BASE.archeShare.join('/')}; tiers casual/regular/devoted ${BASE.tierShare.join('/')}; active-day chance ${BASE.pActive.join('/')}; daily churn ${BASE.churn.join('/')}; willing traders ${BASE.traderProb.join('/')}; friends-homophily ${BASE.friendHomophily}`);
+console.log(`WOBBLEHOARD economy sim v3  players=${BASE.nPlayers} short=${BASE.days}d long=${LONG}d seed=0x${BASE.seed.toString(16)} MERGE_COST=${BASE.mergeInputs}${QUICK ? '  (--quick)' : ''}`);
+console.log(`population (ASSUMED): archetypes poker/squeezer/puller/mixed ${BASE.archeShare.join('/')}; player types casual/regular/devoted ${BASE.tierShare.join('/')}; active-day chance ${BASE.pActive.join('/')}; daily churn ${BASE.churn.join('/')};`);
+console.log(`  willing traders ${BASE.traderProb.join('/')}; use public board ${BASE.boardProb}; friend homophily ${BASE.friendHomophily}; merge appetite 0/0.15/0.5 per day for ${BASE.mergeLoveMix.join('/')}; ${pc0(BASE.keepOneShare)} always keep one copy; ${pc0(BASE.playfulShare)} merge even complete rows`);
+const cat0 = buildCatalog(BASE.tierCount);
+secMicro();
+secCatalog(cat0);
+if (argv.includes('--micro')) process.exit(0);
+const pop = makePop(BASE);
+const S = (o: Partial<Params>, label: string, p: Pop = pop): Result => runScenario({ ...BASE, ...o }, p, label);
 
-const solo = runScenario({ ...BASE, trade: false }, popMain, 'solo');
-const trade = runScenario({ ...BASE, trade: true, lockDays: 1 }, popMain, 'trade L1');
-section_time(solo, trade);
-section_dupes(solo, trade);
+// 60-day cohort (churn on)
+const mTrade = S({ trade: true }, 'm trade');
+if (want('first')) secFirstHour(mTrade);
+if (want('income')) secIncome(mTrade);
+const mNoMerge = S({ trade: false, merge: false }, 'm nomerge');
+if (want('income')) secTriples(mNoMerge);
+const mSolo = S({ trade: false }, 'm solo');
+const popL = makePop({ ...BASE, nPlayers: Math.min(BASE.nPlayers, 3000) });
+const L = (o: Partial<Params>, label: string): Result => runScenario({ ...BASE, nPlayers: Math.min(BASE.nPlayers, 3000), days: 120, churn: [0, 0, 0], trade: true, snapshotDays: [], ...o }, popL, label);
+if (want('merge')) {
+  const rules = (name: string, o: Partial<Params>): [string, Result] => [name, L(o, name)];
+  secMerge(mTrade, [
+    rules('A. floor only (never below inputs, no tier-up)', { pUp: [0, 0, 0, 0, 0, 0], unownedW: 1, pityUp: 0, pityNew: 0, rowDoneBoost: 1 }),
+    rules('B. + tier-up chance 30/25/20/15/10', { unownedW: 1, pityUp: 0, pityNew: 0, rowDoneBoost: 1 }),
+    rules('C. + unowned species weighted x2', { pityUp: 0, pityNew: 0, rowDoneBoost: 1 }),
+    rules('D. + pity (5 non-ups -> up, 3 bad -> new or up)', { rowDoneBoost: 1 }),
+    rules('E. + completed-row boost x2 on tier-up  [CHOSEN]', {}),
+  ]);
+}
+if (want('supply')) secSupply(mTrade, mNoMerge);
+if (want('trade')) secTrade(mTrade, mSolo);
+if (want('lock')) secLock([['no lock (0 days)', S({ trade: true, lockDays: 0, mergeLockDays: 0 }, 'L0')], ['1 day (chosen)', mTrade], ['3 days', S({ trade: true, lockDays: 3, mergeLockDays: 3 }, 'L3')]]);
 
-const noCap = runScenario({ ...BASE, trade: true, hoardCap: 99999 }, popMain, 'nocap');
-const noBlend = runScenario({ ...BASE, trade: true, hoardCap: 99999, blendEnabled: false }, popMain, 'noblend');
-section_supply(trade, noCap, noBlend);
-section_blend(trade);
-section_trade(trade, solo);
+// long no-churn runs
+const LS = (o: Partial<Params>, label: string, trade: boolean): Result => S({ trade, days: LONG, churn: [0, 0, 0], snapshotDays: [], ...o }, label);
+const needLong = want('affinity') || want('long');
+const lSolo = needLong ? LS({}, 'long solo', false) : (null as unknown as Result), lTrade = needLong ? LS({}, 'long trade', true) : (null as unknown as Result);
+if (want('affinity')) {
+  const longs: Array<[string, Result, Result]> = [];
+  for (const b of [0, 2, 4]) { if (b === BASE.beta && longs.some((x) => x[0] === String(b))) continue; longs.push([String(b), b === BASE.beta ? lSolo : LS({ beta: b }, 'b' + b + ' solo', false), b === BASE.beta ? lTrade : LS({ beta: b }, 'b' + b + ' trade', true)]); }
+  secAffinity(mSolo, S({ trade: false, beta: 0 }, 'm solo b0'), longs);
+}
+if (want('long')) { secLong(lSolo, lTrade); secRoutes(lTrade, lSolo); }
+if (want('exact')) secExact([2, 3]);
+if (want('ring')) secRing();
 
-const affOff = runScenario({ ...BASE, trade: false, beta: 0 }, popMain, 'solo beta0');
-section_affinity(solo, affOff);
+// the (meter, M) pair: side by side
+if (want('pair')) {
+  header(`O. THE PAIR (meter speed, merge cost): ${Math.min(BASE.nPlayers, 3000)} players, ${LONG} days, no churn. Metrics for the REGULAR player who is willing to trade unless noted`);
+  const popP = makePop({ ...BASE, nPlayers: Math.min(BASE.nPlayers, 3000) });
+  const combos: Array<[string, Partial<Params>]> = [];
+  for (const cost of [BASE.capsuleCost, Math.round(BASE.capsuleCost * 0.4)]) for (const m of [2, 3]) combos.push([`cost ${cost} SP (~${f1(cost / mean(MICRO.spPerMin.slice(0, 3)))} min/capsule) M=${m}`, { capsuleCost: cost, mergeInputs: m }]);
+  const rowsP: string[][] = [];
+  const res = combos.map(([name, o]) => { const s = runScenario({ ...BASE, nPlayers: popP.n, days: LONG, churn: [0, 0, 0], snapshotDays: [], trade: false, ...o }, popP, name + ' solo'); const t = runScenario({ ...BASE, nPlayers: popP.n, days: LONG, churn: [0, 0, 0], snapshotDays: [], trade: true, ...o }, popP, name + ' trade'); return { name, o, s, t }; });
+  const regT = (r: Result): Player[] => r.players.filter((p) => p.tier === 1 && p.trader);
+  const regAll = (r: Result): Player[] => r.players.filter((p) => p.tier === 1);
+  const metrics: Array<[string, (c: typeof res[number]) => string]> = [
+    ['active min per capsule (regular, measured)', (c) => f1(median(regAll(c.t).map((p) => (p.capsules > 0 ? p.minutes / p.capsules : NaN)).filter((x) => Number.isFinite(x))))],
+    ['1st capsule (s)', (c) => f1(median(regAll(c.t).map((p) => p.firstCapMin * 60)))],
+    ['min to 1st MERGEABLE set (M of a kind), median', (c) => f1(median(regAll(c.t).filter((p) => (c.o.mergeInputs === 2 ? p.pairMin : p.tripMin) >= 0).map((p) => (c.o.mergeInputs === 2 ? p.pairMin : p.tripMin))))],
+    ['  share with a mergeable set by 25 active min', (c) => pc0(regAll(c.t).filter((p) => { const x = c.o.mergeInputs === 2 ? p.pairMin : p.tripMin; return x >= 0 && x <= 25; }).length / regAll(c.t).length)],
+    ['  share with it by 12 active min (1st session)', (c) => pc0(regAll(c.t).filter((p) => { const x = c.o.mergeInputs === 2 ? p.pairMin : p.tripMin; return x >= 0 && x <= 12; }).length / regAll(c.t).length)],
+    ['all-50 p50 day: solo', (c) => medDay(regT(c.s), (p) => p.fullDay, LONG)],
+    ['all-50 p50 day: with trade', (c) => medDay(regT(c.t), (p) => p.fullDay, LONG)],
+    ['all-50 done by end: solo -> trade', (c) => `${pc0(doneBy(regT(c.s), LONG, (p) => p.fullDay))} -> ${pc0(doneBy(regT(c.t), LONG, (p) => p.fullDay))}`],
+    ['Epic row p50 day: solo / trade', (c) => `${medDay(regT(c.s), (p) => p.rowDay[3], LONG)} / ${medDay(regT(c.t), (p) => p.rowDay[3], LONG)}`],
+    ['solo/trade time ratio at p50 (Epic row)', (c) => { const a = dayQn(regT(c.s), (p) => p.rowDay[3], 0.5), b = dayQn(regT(c.t), (p) => p.rowDay[3], 0.5); return (a >= 1e9 ? '>' : '') + f2(Math.min(a, LONG * 3) / b) + 'x'; }],
+    ['solo/trade time ratio at p50 (all 50)', (c) => { const a = dayQn(regT(c.s), (p) => p.fullDay, 0.5), b = dayQn(regT(c.t), (p) => p.fullDay, 0.5); return b >= 1e9 ? 'n/a' : (a >= 1e9 ? '>' : '') + f2(Math.min(a, LONG * 3) / b) + 'x'; }],
+    ['Epic+ first copies that came by trade', (c) => { let n = 0, tt = 0; for (const p of c.t.players) if (p.trader) for (let s = 0; s < c.t.cat.n; s++) if (c.t.cat.tierOf[s] >= 3 && p.firstDay[s] >= 0) { tt++; if (p.via[s] === 4) n++; } return pc0(n / Math.max(1, tt)); }],
+    ['Epic+ first copies that came by merge', (c) => { let n = 0, tt = 0; for (const p of c.t.players) if (p.trader) for (let s = 0; s < c.t.cat.n; s++) if (c.t.cat.tierOf[s] >= 3 && p.firstDay[s] >= 0) { tt++; if (p.via[s] === 3) n++; } return pc0(n / Math.max(1, tt)); }],
+    ['merges per player per 100 days (regular)', (c) => f1(mean(regAll(c.t).map((p) => (p.merges / LONG) * 100)))],
+    ['merge FEEL-BAD (repeat & no tier-up)', (c) => pc0(sum(c.t.players.map((p) => p.mergeBad)) / Math.max(1, sum(c.t.players.map((p) => p.merges))))],
+    ['merge any-bad (repeat OR no tier-up)', (c) => pc0(sum(c.t.players.map((p) => p.mergeAnyBad)) / Math.max(1, sum(c.t.players.map((p) => p.merges))))],
+    ['capsule dup rate (first 60d / whole run)', (c) => { const a = c.t.wk.dupCapsules.slice(0, 9), b = c.t.wk.capsules.slice(0, 9); return `${pc0(sum(a) / sum(b))} / ${pc0(dupRate(c.t))}`; }],
+  ];
+  console.log(lpad('metric', 52) + '| ' + res.map((c) => pad(c.name.replace(' SP', '').replace('~', ''), 34)).join(' | '));
+  for (const [name, f] of metrics) console.log(`${lpad(name, 52)}| ${res.map((c) => pad(f(c), 34)).join(' | ')}`);
+  void rowsP;
+}
 
-const L0 = runScenario({ ...BASE, trade: true, lockDays: 0 }, popMain, 'L0');
-const L3 = runScenario({ ...BASE, trade: true, lockDays: 3 }, popMain, 'L3');
-section_lock([['none (0 days)', L0], ['1 day (proposed)', trade], ['3 days', L3]]);
-section_ring();
+// sensitivity: speed 0.5x / 2x, behaviours, catalog
+if (want('sens')) {
+  header(`P. SENSITIVITY (${Math.min(BASE.nPlayers, 2000)} players, ${LONG} days, no churn; regular willing traders; M=${BASE.mergeInputs}, cost ${BASE.capsuleCost})`);
+  const sensN = Math.min(BASE.nPlayers, 2000);
+  const rows: Array<[string, Partial<Params>, Partial<Params> | undefined]> = [
+    ['BASE', {}, undefined],
+    ['players 2x SLOWER at earning (SP/min x0.5)', { speedScale: 0.5 }, undefined],
+    ['players 2x FASTER at earning (SP/min x2)', { speedScale: 2 }, undefined],
+    ['half the play time (pActive x0.5)', {}, { pActive: BASE.pActive.map((x) => x * 0.5) }],
+    ['balanced styles 25/25/25/25', {}, { archeShare: [0.25, 0.25, 0.25, 0.25] }],
+    ['25% of players rotate styles on purpose', {}, { adaptiveShare: 0.25 }],
+    ['affinity off (beta 0)', { beta: 0 }, undefined],
+    ['no daily restock', { restock: false }, undefined],
+    ['half as many willing traders', {}, { traderProb: BASE.traderProb.map((x) => x / 2) }],
+    ['no friends, public board only', {}, { friendHomophily: 0, boardProb: 1 }],
+    ['ORACLE trade: everyone willing, no friction, cap 20', { tryProb: 1, acceptProb: 1, dailyTradeCap: 20, boardSample: 200 }, { traderProb: [1, 1, 1], boardProb: 1 }],
+    ['merging switched off entirely', { merge: false }, undefined],
+    ['merge: no unowned weight, no row boost', { unownedW: 1, rowDoneBoost: 1 }, undefined],
+    ['merge cost 3 instead of 2', { mergeInputs: 3 }, undefined],
+    ['merge tier-up x2', { pUp: BASE.pUp.map((x) => x * 2) }, undefined],
+  ];
+  console.log(lpad('variant', 46) + '| min/capsule | all-50 done solo -> trade | all-50 p50 day solo / trade | Epic row done solo -> trade | capsule dup | players who trade');
+  for (const [name, o, popO] of rows) {
+    const pp = makePop({ ...BASE, nPlayers: sensN, ...(popO ?? {}) });
+    const common = { nPlayers: sensN, days: LONG, churn: [0, 0, 0], snapshotDays: [] as number[], ...(popO ?? {}), ...o };
+    const s = runScenario({ ...BASE, ...common, trade: false }, pp, name), t = runScenario({ ...BASE, ...common, trade: true }, pp, name);
+    const reg = (r: Result): Player[] => r.players.filter((p) => p.tier === 1 && p.trader);
+    const mpc = median(t.players.filter((p) => p.tier === 1 && p.capsules > 0).map((p) => p.minutes / p.capsules));
+    console.log(`${lpad(name, 46)}| ${pad(f1(mpc), 11)} | ${pad(pc0(doneBy(reg(s), LONG, (p) => p.fullDay)) + ' -> ' + pc0(doneBy(reg(t), LONG, (p) => p.fullDay)), 25)} | ${pad(medDay(reg(s), (p) => p.fullDay, LONG) + ' / ' + medDay(reg(t), (p) => p.fullDay, LONG), 27)} | ${pad(pc0(doneBy(reg(s), LONG, (p) => p.rowDay[3])) + ' -> ' + pc0(doneBy(reg(t), LONG, (p) => p.rowDay[3])), 27)} | ${pad(pc0(dupRate(t)), 11)} | ${pc0(t.players.filter((p) => p.trades > 0).length / t.players.length)}`);
+  }
+}
 
-// uncensored: nobody leaves, run long
-const longDays = argNum('--long', QUICK ? 150 : 240);
-const longSolo = runScenario({ ...BASE, trade: false, days: longDays, churn: [0, 0, 0], snapshotDays: [] }, popMain, 'long solo');
-const longTrade = runScenario({ ...BASE, trade: true, days: longDays, churn: [0, 0, 0], snapshotDays: [] }, popMain, 'long trade');
-section_long(longSolo, longTrade);
-
-// sensitivity
-const sens: Array<[string, Result, Result]> = [['BASE (skewed styles, as above)', solo, trade]];
-const variant = (name: string, o: Partial<Params>, popOverride?: Partial<Params>): void => {
-  const pop = popOverride ? makePop({ ...BASE, ...popOverride }) : popMain;
-  const s = runScenario({ ...BASE, ...o, ...popOverride, trade: false }, pop, name + ' solo');
-  const t = runScenario({ ...BASE, ...o, ...popOverride, trade: true }, pop, name + ' trade');
-  sens.push([name, s, t]);
-};
-variant('balanced style mix 25/25/25/25', {}, { archeShare: [0.25, 0.25, 0.25, 0.25] });
-variant('25% of players rotate styles on purpose', {}, { adaptiveShare: 0.25 });
-variant('no daily restock', { restock: false });
-variant('task capsules not style-bent (focus 0)', { taskFocus: 0 });
-variant('affinity off (beta 0)', { beta: 0 });
-variant('fewer willing traders (half)', {}, { traderProb: [0.15, 0.275, 0.375] });
-variant('no friends (board only)', {}, { friendHomophily: 0, boardProb: 1 });
-variant('dupe shield (reroll if holding >= 3)', { shieldAt: 3 });
-section_sens(sens);
+if (want('catalog')) {
+  header(`Q. CATALOG SWEEP: how tier counts and odds shape time-to-complete (${Math.min(BASE.nPlayers, 2000)} players, ${LONG} days, no churn, regular willing traders)`);
+  const sensN = Math.min(BASE.nPlayers, 2000);
+  const pp = makePop({ ...BASE, nPlayers: sensN });
+  const cands: Array<[string, number[], number[]]> = [
+    ['16/12/10/6/4/2  odds 50/25/14/7/3/1', [16, 12, 10, 6, 4, 2], [0.50, 0.25, 0.14, 0.07, 0.03, 0.01]],
+    ['14/11/10/7/5/3  odds 74/15/6/2.8/1.4/.6', [14, 11, 10, 7, 5, 3], [0.74, 0.15, 0.06, 0.028, 0.014, 0.008]],
+    ['14/11/10/7/5/3  odds 68/18/8/3.5/1.7/.8', [14, 11, 10, 7, 5, 3], [0.68, 0.18, 0.08, 0.035, 0.017, 0.008]],
+    ['14/11/10/7/5/3  odds 80/11/5/2.4/1.2/.4', [14, 11, 10, 7, 5, 3], [0.80, 0.11, 0.05, 0.024, 0.012, 0.004]],
+    ['12/10/10/8/6/4  odds 76/13/6/2.8/1.5/.7', [12, 10, 10, 8, 6, 4], [0.76, 0.13, 0.06, 0.028, 0.015, 0.007]],
+    ['13/11/10/8/5/3  odds 78/12/5.5/2.5/1.4/.6', [13, 11, 10, 8, 5, 3], [0.78, 0.12, 0.055, 0.025, 0.014, 0.006]],
+  ];
+  console.log(lpad('catalog', 44) + '| all-50 done solo -> trade | p50 day solo / trade | Epic row p50 solo / trade | Mythic row p50 solo/trade | 1st Rare/Epic/Leg/Mythic median day');
+  for (const [name, counts, odds] of cands) {
+    const common = { nPlayers: sensN, days: LONG, churn: [0, 0, 0], snapshotDays: [] as number[], tierCount: counts, tierOdds: odds };
+    const s = runScenario({ ...BASE, ...common, trade: false }, pp, name), t = runScenario({ ...BASE, ...common, trade: true }, pp, name);
+    const reg = (r: Result): Player[] => r.players.filter((p) => p.tier === 1 && p.trader);
+    const two = (k: (p: Player) => number): string => `${medDay(reg(s), k, LONG)} / ${medDay(reg(t), k, LONG)}`;
+    const ft = [2, 3, 4, 5].map((q) => f1(median(s.players.filter((p) => p.tier === 1 && p.firstTier[q] > 0).map((p) => p.firstTier[q])))).join('/');
+    console.log(`${lpad(name, 44)}| ${pad(pc0(doneBy(reg(s), LONG, (p) => p.fullDay)) + ' -> ' + pc0(doneBy(reg(t), LONG, (p) => p.fullDay)), 25)} | ${pad(two((p) => p.fullDay), 20)} | ${pad(two((p) => p.rowDay[3]), 25)} | ${pad(two((p) => p.rowDay[5]), 25)} | ${ft}`);
+  }
+}
 
 console.log(`\n(elapsed ${(Number(process.hrtime.bigint() - t0) / 1e9).toFixed(1)} s)`);

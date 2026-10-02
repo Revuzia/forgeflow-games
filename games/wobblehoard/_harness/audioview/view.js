@@ -36,6 +36,11 @@ function squishScript(name) {
     };
     endAt = 3.15; secs = 3.7;
     marks = [{ t: 0.1, label: 'PRESS' }, { t: 1.0, label: 'HOLD' }, { t: 1.5, label: 'RUB' }, { t: 2.3, label: 'HOLD' }, { t: 2.8, label: 'RELEASE' }];
+  } else if (name === 'sweep') {
+    // formant-motion test: squeeze 0 -> 1 over 1.2 s, then spring back 1 -> 0 over 1.2 s (rate = +/- 0.83 /s)
+    c = (t) => (t < 1.2 ? t / 1.2 : Math.max(0, 1 - (t - 1.2) / 1.2));
+    endAt = 2.4; secs = 2.8;
+    marks = [{ t: 0, label: 'SQUEEZE' }, { t: 1.2, label: 'SPRING BACK' }];
   } else if (name === 'still') {
     c = () => 0.6; endAt = 2.0; secs = 2.4;
   } else if (name === 'steps') {
@@ -72,7 +77,7 @@ async function renderVoice(spec) {
   let out = ctx.destination;
   if (useChain) {
     chain = createMasterChain(ctx);
-    chain.apply({ master: spec.master ?? 1, squishBoost: spec.boost ?? 0, muted: false }, true);
+    chain.apply({ master: spec.master ?? 1, squishBoost: spec.boost ?? 0, muted: !!spec.muted }, true);
     out = BOOSTED.has(spec.voice) ? chain.boost : chain.plain;
   }
   const base = { rng: D.makeRng(spec.seed ?? 1), pitch: revive(spec.pitch ?? 1), pan: revive(spec.pan ?? 0), jitter: spec.jitter, ...reviveAll(spec.params) };
@@ -85,12 +90,13 @@ async function renderVoice(spec) {
     case 'blend': voice = blend(ctx, out, t0, base); break;
     case 'squish': {
       voice = squish(ctx, out, t0, base);
-      for (const e of script.events) voice.update({ compression: revive(e.compression), rate: revive(e.rate), pan: spec.panUpdate }, t0 + e.t);
-      voice.end(0.08, t0 + script.endAt);
+      for (const e of script.events) if (spec.killAt === undefined || e.t < spec.killAt) voice.update({ compression: revive(e.compression), rate: revive(e.rate), pan: spec.panUpdate }, t0 + e.t);
+      if (spec.killAt === undefined) voice.end(0.08, t0 + script.endAt);
       break;
     }
     default: throw new Error('unknown voice ' + spec.voice);
   }
+  if (spec.killAt !== undefined) voice.kill(0.02, t0 + spec.killAt);
   const buf = await ctx.startRendering();
   const chans = [];
   for (let c = 0; c < buf.numberOfChannels; c++) chans.push(b64(buf.getChannelData(c)));

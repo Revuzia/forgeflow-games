@@ -166,6 +166,7 @@ export class JellyView {
   // body extents refreshed by update()
   minX = 0; maxX = 0; minY = 0; maxY = 0; minZ = 0; maxZ = 0;
   fineCount = 0;
+  freq = 0;
   private readonly body: SoftBodyLike;
   private geo: THREE.BufferGeometry;
   private vA = new Uint32Array(0); private vB = new Uint32Array(0); private vC = new Uint32Array(0);
@@ -212,6 +213,7 @@ export class JellyView {
     this.mesh.geometry = geo;
     old.dispose();
     this.fineCount = N;
+    this.freq = Math.floor(freq);
     this.update();
   }
 

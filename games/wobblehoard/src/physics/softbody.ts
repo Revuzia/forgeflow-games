@@ -1,26 +1,32 @@
 // WOBBLEHOARD soft body: a volume-preserving jelly on ~600 particles, XPBD + shape matching, pure TypeScript.
 //
-// No three.js, no DOM, no Math.random, no Date.now, nothing allocated per step (typed-array scratch only; events
-// allocate a small object each, only when one is emitted). Same genome + seed + input script => identical stateHash().
+// No three.js, no DOM, no Math.random, no Date.now, nothing allocated per step (typed-array scratch only; an event
+// allocates one small object, and only when one is emitted). Same genome + seed + input script => identical stateHash().
 //
-// TECHNIQUE (as recommended in _spec/CONTRACT.md section 4; no deviation in kind, tuned constants are in params.ts)
+// TECHNIQUE (as recommended in _spec/CONTRACT.md section 4; tuned constants and the reasons are in params.ts)
 //   Particles = vertices of a welded icosphere (detail 3 = 642). Small-step XPBD: a fixed substep H = 1/360 s, ONE
-//   solver pass per substep, six substeps per 60 Hz frame (a time accumulator makes the result independent of the
-//   frame dt jitter beyond the clamp). Within a substep, in this order:
-//     predict (gravity, or the float-mode hover spring) -> grab attachments -> shape matching -> enclosed-volume
-//     constraint -> edge distance constraints -> collisions (finger spheres, then the table) -> v = dx/H ->
-//     internal-velocity damping + drag + self-righting torque.
-//   * edge distance (compliance from genome.stretch, hardening beyond a strain limit): the skin.
-//   * ONE global enclosed-volume constraint V = 1/6 sum p_a.(p_b x p_c) = V0 with an XPBD multiplier: this is what
-//     makes a squash bulge and a pulled lobe thin its neck. No scale hacks anywhere.
-//   * global shape matching (Mueller 2016 quaternion rotation extraction, warm started, 2 iterations): every particle
-//     is pulled toward g_i = c + R q_i. Stiffness from genome.firmness; the swirl-peak is 3x softer so it lags and flops.
-//   * damping acts on the INTERNAL velocity only (velocity minus the best-fit rigid motion v_cm + w x r), rate from
-//     genome.bounce, plus a tiny global drag: it jiggles 2-3 visible cycles but the whole body is never drag-limited.
-//   * table y = 0: position projection + Coulomb friction expressed as a tangential displacement bounded by mu x
-//     penetration (the normal impulse proxy), so it sits dead still, never creeps, and can still be pushed.
-//   * fingers: kinematic spheres. Penetrating particles are projected out and the correction becomes velocity (a
-//     poke shoves a floating body). Pull: Gaussian patch soft-attached to a moving world target.
+//   solver pass per substep, six substeps per 60 Hz frame; a time accumulator makes the result independent of the
+//   frame dt jitter beyond the clamp. Inside a substep, in this order:
+//     fingers/grabs advance -> predict (gravity, or the float-mode hover spring) -> global shape matching ->
+//     local Laplacian shape memory -> enclosed-volume constraint -> edge distance constraints -> grab attachments ->
+//     collisions (fingertip spheres, then the table) -> v = dx/H -> internal-velocity damping, drag, self-righting.
+//   * edge distance (compliance from genome.stretch, hardening past a strain limit): the skin.
+//   * ONE global enclosed-volume constraint V = 1/6 sum p_a.(p_b x p_c) = V0 with an XPBD multiplier. Blocked particles
+//     (inside a fingertip's reach, touching the table) get zero inverse mass in it, so the pressure is absorbed by the
+//     free particles around the contact: a dent pushes up a bulge ring beside it, a table squash bulges at the flanks,
+//     a pulled lobe thins its neck. No scale hacks anywhere.
+//   * global shape matching (Mueller 2016 rotation extraction, warm started, 2 iterations): every particle is pulled
+//     toward g_i = c + R q_i. Firmness sets the stiffness; the swirl-peak is softer so it lags and flops.
+//   * Laplacian shape memory (a local, bending-like term): each particle is pulled toward the mean of its neighbours
+//     plus its rotated rest offset. It makes dents smooth bowls instead of pits and gives the surface local recovery.
+//   * damping acts on the INTERNAL velocity only (velocity minus the best-fit rigid motion v_cm + w x r): the global
+//     affine part (squash / stretch / shear) is damped hard so the body never bounces like a ball, the local part
+//     (peak flop, ripples) lightly so those wobble for 2-3 visible cycles, both rates from genome.bounce.
+//   * table y = 0: position projection + Coulomb friction (a tangential displacement bounded by mu x normal load).
+//   * SUPPORTED-BODY GRAVITY (the one deviation, see substep()): with one solver pass a soft network cannot carry the
+//     weight of 640 particles down to a small foot, so while the foot is on the table gravity is faded out by `supp`.
+//   * fingers: kinematic spheres; penetrating particles are projected out and the correction becomes velocity (a poke
+//     shoves a floating body). Pull: a Gaussian patch soft-attached to a moving world target; the feet stay glued.
 // Units: metres-ish; mass per particle ~1 (tributary area, mean 1).
 import type { Genome } from '../core/genome.ts';
 import { clamp, mulberry32 } from '../core/rng.ts';
@@ -51,7 +57,6 @@ class Finger {
   retractRate = 0;     // depth units per second while retracting
   tipR = 0.1;          // current tip radius
   cx = 0; cy = 0; cz = 0;   // tip centre (world)
-  pokeSpeed = 0;       // predicted closing speed (m/s) at first contact
 }
 
 /** Soft attachment of a Gaussian vertex patch to a world target. */
@@ -60,13 +65,14 @@ class Grab {
   count = 0;
   verts: Int32Array;
   weights: Float64Array;
-  anchor = 0;            // grabbed vertex
+  p0: Float64Array;            // world positions of the patch at grab time (the patch translates with the hand)
+  anchor = 0;                  // grabbed vertex
   t0x = 0; t0y = 0; t0z = 0;   // target at grab time (the pull is measured from here)
   rx = 0; ry = 0; rz = 0;      // raw target (grabMove)
   ex = 0; ey = 0; ez = 0;      // eased target
   ramp = 0;
   holdT = 0;
-  constructor(n: number) { this.verts = new Int32Array(n); this.weights = new Float64Array(n); }
+  constructor(n: number) { this.verts = new Int32Array(n); this.weights = new Float64Array(n); this.p0 = new Float64Array(n * 3); }
 }
 
 const KIND_INDEX: Record<SoftEventKind, number> = { poke: 0, press: 1, release: 2, land: 3, grab: 4, snap: 5 };
@@ -75,9 +81,14 @@ const SM_ITERS = 2;                // rotation extraction iterations per substep
 const LAND_MIN_SPEED = 0.9;        // m/s of centre-of-mass fall speed for a 'land' event
 const LAND_NORM = 4.5;             // m/s that maps to intensity 1
 const POKE_NORM = 3.2;             // m/s predicted closing speed that maps to intensity 1
-const MAX_SPEED = 40;              // safety clamp on particle speed (m/s)
+const MAX_SPEED = 14;              // safety clamp on particle speed (m/s)
 const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.35;
 const BOB_AMP = 0.03, BOB_HZ = 0.33;
+const NEAR = 0.004;                // a particle this close to the table counts as touching it (m)
+const BLOCK_MARGIN = 0.03;         // particles this close to a fingertip are 'blocked' for the volume constraint (m)
+const LOAD_CONC = 10;              // friction normal load per touching particle is capped at this many particle-weights
+const PIN_HOLD_S = 0.5;            // glued feet are held this long after a lobe is let go, so the body springs back in place
+const smooth01 = (t: number): number => { const x = t < 0 ? 0 : t > 1 ? 1 : t; return x * x * (3 - 2 * x); };
 
 export class SoftBody implements SoftBodyLike {
   readonly vertexCount: number;
@@ -93,32 +104,39 @@ export class SoftBody implements SoftBodyLike {
   readonly restRadius: number;
   /** Harness-only counters (not part of SoftBodyLike). `safetyResets` must stay 0: it counts emergency non-finite recoveries. */
   readonly debug = { substeps: 0, safetyResets: 0, contacts: 0, maxSpeed: 0, minVolume: 1 };
-  /** TEMP experiment switches. */
-  readonly dbg = { sm: 1, vol: 1, edge: 1, damp: 1, edgeIters: 1, edgeAlpha: -1 };
+  /** Resolved solver parameters (genome-derived plus any `opts.params` override). */
+  readonly params: SoftParams;
 
   // ---- configuration
   private readonly n: number;
   private readonly ne: number;
   private readonly nt: number;
   private readonly p: SoftParams;
-  private readonly genome: Genome;
   private readonly restVolume: number;
   private readonly restCenterY: number;
-  private readonly peakVertex: number;
   private readonly invM: Float64Array;      // 1 / mass
   private readonly M: Float64Array;         // mass
   private readonly Mtot: number;
   private readonly Q: Float64Array;         // rest local positions
   private readonly softW: Float64Array;     // per-vertex shape-matching stiffness multiplier
   private readonly tris: Uint32Array;
-  private readonly edges: Uint32Array;
-  private readonly restLen: Float64Array;
+  private readonly E3: Int32Array;          // edge endpoints, pre-multiplied by 3
+  private readonly EWA: Float64Array;       // edge inverse masses (a, b) and their sum
+  private readonly EWB: Float64Array;
+  private readonly EWS: Float64Array;
+  private readonly EL: Float64Array;        // edge rest lengths
+  private readonly ESOFT: Float64Array;     // strain limit (in length) beyond which the edge hardens
   private readonly valence: Float32Array;
-  private readonly volS0: number;           // S0 = sum w |grad C|^2 of the rest shape (scale of the volume constraint)
-  private readonly volAlphaT: number;
+  private readonly nbrStart: Int32Array;    // CSR adjacency (vertex -> neighbours) for the Laplacian term
+  private readonly nbrIdx: Int32Array;
+  private readonly nbrInv: Float64Array;
+  private readonly LQ: Float64Array;        // rest Laplacian offsets q_i - mean(q_nbrs)
+  private readonly volAlphaT: number;       // volume compliance (alpha tilde)
   private readonly smK: number;             // shape-matching position gain per substep
-  private readonly edgeA: number;           // edge alpha tilde
-  private readonly dampInt: number;         // internal velocity damping fraction per substep
+  private readonly bendK: number;           // Laplacian gain per substep
+  private readonly dampInt: number;         // local (non-affine) internal velocity damping fraction per substep
+  private readonly dampAff: number;         // global (affine squash / stretch / shear) damping fraction per substep
+  private readonly dampQ: number;           // nonlinear internal damping, per unit internal speed per substep
   private readonly dragF: number;
   private readonly seedPhase: number;
 
@@ -128,6 +146,11 @@ export class SoftBody implements SoftBodyLike {
   private readonly V: Float64Array;         // velocities
   private readonly GOAL: Float64Array;      // shape-matching goal positions of the last substep
   private readonly GRAD: Float64Array;      // volume gradients (scratch)
+  private readonly WV: Float64Array;        // per-substep inverse masses of the volume constraint (blocked particles = 0)
+  private readonly pinned: Uint8Array;      // foot particles glued to the table while a lobe is pulled
+  private pinCount = 0;
+  private pinHold = 0;
+  private readonly sums = new Float64Array(25);
   private readonly A9 = new Float64Array(9);
   private readonly qr = new Float64Array([0, 0, 0, 1]);
   private cx = 0; private cy = 0; private cz = 0;       // centre of mass (shape matching, predicted)
@@ -135,9 +158,11 @@ export class SoftBody implements SoftBodyLike {
   private gravityOn = true;
   private simTime = 0;
   private acc = 0;
-  private parity = 0;
   private airSub = 0;                       // substeps since the last table contact
-  private contactCount = 0;                 // table contacts in the last substep
+  private contactCount = 0;                 // particles that touched (y < 0) the table in the last substep
+  private nearCount = 0;                    // particles within NEAR of the table at the end of the last substep
+  private nearMass = 1;                     // their mass (friction normal-load proxy)
+  private supp = 0;                         // 0..1 how much of its weight the table carries (see substep)
   private keAcc = 0;
   private keSubs = 0;
   private prevCompression = 0;
@@ -151,23 +176,21 @@ export class SoftBody implements SoftBodyLike {
   private readonly rayOut2 = new Float64Array(4);
   private pendingLand = -1;                 // land impact speed waiting to be emitted this step
 
-  constructor(genome: Genome, opts: { detail?: number; seed?: number } = {}) {
+  constructor(genome: Genome, opts: { detail?: number; seed?: number; params?: Partial<SoftParams> } = {}) {
     const mesh = buildIcosphere(opts.detail ?? 3);
     const rest = buildRest(genome, mesh);
     const n = mesh.vertexCount;
-    this.genome = genome;
     this.n = n;
     this.nt = mesh.tris.length / 3;
     this.ne = mesh.edges.length / 2;
-    this.p = deriveParams(genome);
+    this.p = { ...deriveParams(genome), ...(opts.params ?? {}) };
+    this.params = this.p;
     this.vertexCount = n;
     this.tris = mesh.tris;
     this.indices = mesh.tris;
-    this.edges = mesh.edges;
     this.restRadius = rest.restRadius;
     this.restVolume = rest.restVolume;
     this.restCenterY = rest.restCenterY;
-    this.peakVertex = rest.peakVertex;
     this.Q = rest.restLocal;
     this.softW = rest.soft;
     this.M = rest.mass;
@@ -183,25 +206,53 @@ export class SoftBody implements SoftBodyLike {
     this.V = new Float64Array(n * 3);
     this.GOAL = new Float64Array(n * 3);
     this.GRAD = new Float64Array(n * 3);
+    this.pinned = new Uint8Array(n);
+    this.WV = new Float64Array(n);
     this.grabs = [new Grab(n), new Grab(n)];
 
-    // edges
-    this.restLen = new Float64Array(this.ne);
+    // edges, adjacency, rest Laplacian offsets
+    const ne = this.ne, Q = rest.restLocal;
+    this.E3 = new Int32Array(ne * 2);
+    this.EWA = new Float64Array(ne); this.EWB = new Float64Array(ne); this.EWS = new Float64Array(ne);
+    this.EL = new Float64Array(ne); this.ESOFT = new Float64Array(ne);
     this.valence = new Float32Array(n);
-    for (let e = 0; e < this.ne; e++) {
+    for (let e = 0; e < ne; e++) {
       const a = mesh.edges[e * 2], b = mesh.edges[e * 2 + 1];
-      this.restLen[e] = Math.hypot(rest.restLocal[a * 3] - rest.restLocal[b * 3], rest.restLocal[a * 3 + 1] - rest.restLocal[b * 3 + 1], rest.restLocal[a * 3 + 2] - rest.restLocal[b * 3 + 2]);
+      this.E3[e * 2] = a * 3; this.E3[e * 2 + 1] = b * 3;
+      this.EWA[e] = this.invM[a]; this.EWB[e] = this.invM[b]; this.EWS[e] = this.invM[a] + this.invM[b];
+      const l = Math.sqrt((Q[a * 3] - Q[b * 3]) ** 2 + (Q[a * 3 + 1] - Q[b * 3 + 1]) ** 2 + (Q[a * 3 + 2] - Q[b * 3 + 2]) ** 2);
+      this.EL[e] = l; this.ESOFT[e] = l * this.p.edgeSoftStrain;
       this.valence[a] += 1; this.valence[b] += 1;
+    }
+    this.nbrStart = new Int32Array(n + 1);
+    for (let i = 0; i < n; i++) this.nbrStart[i + 1] = this.nbrStart[i] + this.valence[i];
+    this.nbrIdx = new Int32Array(this.nbrStart[n]);
+    const fill = new Int32Array(n);
+    for (let e = 0; e < ne; e++) {
+      const a = mesh.edges[e * 2], b = mesh.edges[e * 2 + 1];
+      this.nbrIdx[this.nbrStart[a] + fill[a]++] = b;
+      this.nbrIdx[this.nbrStart[b] + fill[b]++] = a;
+    }
+    this.nbrInv = new Float64Array(n);
+    this.LQ = new Float64Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const s = this.nbrStart[i], e = this.nbrStart[i + 1];
+      let mx = 0, my = 0, mz = 0;
+      for (let j = s; j < e; j++) { const k = this.nbrIdx[j] * 3; mx += Q[k]; my += Q[k + 1]; mz += Q[k + 2]; }
+      const inv = 1 / (e - s);
+      this.nbrInv[i] = inv;
+      this.LQ[i * 3] = Q[i * 3] - mx * inv; this.LQ[i * 3 + 1] = Q[i * 3 + 1] - my * inv; this.LQ[i * 3 + 2] = Q[i * 3 + 2] - mz * inv;
     }
 
     // constants derived from params at the fixed substep
     const wh = this.p.smOmega * H;
     this.smK = (wh * wh) / (1 + wh * wh);
-    this.edgeA = this.p.edgeAlphaT;
+    this.bendK = this.p.bendK;
     this.dampInt = 1 - Math.exp(-this.p.intDamp * H);
+    this.dampAff = 1 - Math.exp(-this.p.affDamp * H);
+    this.dampQ = this.p.intDamp2 * H;
     this.dragF = 1 - Math.exp(-this.p.drag * H);
-    this.volS0 = this.volumeScale(rest.restLocal);
-    this.volAlphaT = this.p.volKappa * this.volS0;
+    this.volAlphaT = this.p.volKappa * this.volumeScale(rest.restLocal);
     this.seedPhase = mulberry32((opts.seed ?? genome.seed) >>> 0)() * Math.PI * 2;
 
     this.reset();
@@ -230,10 +281,17 @@ export class SoftBody implements SoftBodyLike {
     this.cx = 0; this.cy = oy; this.cz = 0;
     this.vcx = 0; this.vcy = 0; this.vcz = 0;
     this.acc = 0; this.airSub = this.gravityOn ? 0 : 1000; this.contactCount = 0;
+    {
+      let near = 0, nearM = 0;
+      for (let i = 0; i < n; i++) if (X[i * 3 + 1] < NEAR) { near++; nearM += this.M[i]; }
+      this.nearCount = near; this.nearMass = Math.max(1, nearM);
+      this.supp = this.gravityOn ? smooth01((near - 1) / 4) : 0;
+    }
     this.keAcc = 0; this.keSubs = 0; this.prevCompression = 0;
     this.lastAxisX = 0; this.lastAxisY = 1; this.lastAxisZ = 0; this.lastAxisT = -10;
     for (const f of this.fingers) { f.down = false; f.retracting = false; f.contacted = false; f.pressed = false; f.depth = 0; f.depthV = 0; f.target = 0; f.holdT = 0; }
     for (const g of this.grabs) { g.active = false; g.count = 0; }
+    this.pinned.fill(0); this.pinCount = 0; this.pinHold = 0;
     this.events.length = 0;
     this.lastEvent.fill(-10);
     this.pendingLand = -1;
@@ -262,6 +320,7 @@ export class SoftBody implements SoftBodyLike {
     this.finalize(nsub * H);
   }
 
+  /** Ray vs the current surface, front faces only. `t` is in units of `dir` (point = origin + dir * t). */
   raycast(origin: V3, dir: V3): RayHit | null {
     if (!origin || !dir) return null;
     const ox = origin.x, oy = origin.y, oz = origin.z, dx = dir.x, dy = dir.y, dz = dir.z;
@@ -287,15 +346,15 @@ export class SoftBody implements SoftBodyLike {
     let dx = a.dir.x, dy = a.dir.y, dz = a.dir.z;
     let nx = a.normal.x, ny = a.normal.y, nz = a.normal.z;
     if (!Number.isFinite(px + py + pz + dx + dy + dz + nx + ny + nz)) return;
-    let dl = Math.hypot(dx, dy, dz);
-    const nl = Math.hypot(nx, ny, nz);
+    let dl = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
     if (dl < 1e-6) {
       if (nl < 1e-6) { dx = 0; dy = -1; dz = 0; } else { dx = -nx / nl; dy = -ny / nl; dz = -nz / nl; }
       dl = 1;
     }
     dx /= dl; dy /= dl; dz /= dl;
     // a grab on this id is cancelled by a new touch
-    if (this.grabs[id].active) this.grabs[id].active = false;
+    if (this.grabs[id].active) this.grabRelease(id);
 
     const R = this.restRadius;
     // re-seat the contact on the CURRENT surface along the ray (the hit point may be a frame old)
@@ -319,13 +378,15 @@ export class SoftBody implements SoftBodyLike {
     if (hitTri >= 0 && rayMesh(this.X, this.tris, hx + dx * L, hy + dy * L, hz + dz * L, -dx, -dy, -dz, this.rayOut2)) {
       T = Math.max(0.3 * R, L - this.rayOut2[0]);
     }
+    // pressing toward the table can flatten the body to 25% (the table is the other jaw); pressing a free flank goes
+    // less deep so the body is squeezed, not pierced
+    const supported = hitTri >= 0 && hy + dy * T < 0.03 * R && dy < -0.5;
     f.down = true; f.retracting = false; f.contacted = false; f.pressed = false;
     f.px = hx; f.py = hy; f.pz = hz; f.tx = hx; f.ty = hy; f.tz = hz;
     f.dx = dx; f.dy = dy; f.dz = dz; f.nx = nx; f.ny = ny; f.nz = nz;
     f.depth = 0; f.depthV = 0; f.target = 0; f.holdT = 0;
-    f.depthMax = Math.max(0.2 * R, FINGER.maxThickness * T);
-    f.tipR = R * FINGER.rMin;
-    this.placeTip(f);
+    f.depthMax = Math.max(0.2 * R, (supported ? FINGER.maxThickness : FINGER.maxFlank) * T);
+    this.placeTip(f, 1);
   }
 
   fingerPressure(id: 0 | 1, target: number): void {
@@ -353,7 +414,7 @@ export class SoftBody implements SoftBodyLike {
       ox = lx + f.dx * dt; oy = ly + f.dy * dt; oz = lz + f.dz * dt;
     }
     // keep the slide inside a sane distance of the body
-    const dc = Math.hypot(ox - this.cx, oy - this.cy, oz - this.cz);
+    const dc = Math.sqrt((ox - this.cx) ** 2 + (oy - this.cy) ** 2 + (oz - this.cz) ** 2);
     if (dc > 3 * this.restRadius) return;
     f.tx = ox; f.ty = oy; f.tz = oz;
   }
@@ -381,19 +442,28 @@ export class SoftBody implements SoftBodyLike {
     if (g.active) this.grabRelease(id);
     const f = this.fingers[id];
     if (f.down || f.retracting) { f.down = false; f.retracting = false; f.depth = 0; f.depthV = 0; }
-    const Q = this.Q, r0 = 0.3 * this.restRadius;
+    const Q = this.Q, X = this.X;
+    const sigma = 0.3 * this.restRadius / 2.2;       // patch radius 0.3 R = where the Gaussian weight has fallen to ~2%
+    const inv2s2 = 1 / (2 * sigma * sigma);
     const qx = Q[v * 3], qy = Q[v * 3 + 1], qz = Q[v * 3 + 2];
     let c = 0;
     for (let i = 0; i < this.n; i++) {
       const dx = Q[i * 3] - qx, dy = Q[i * 3 + 1] - qy, dz = Q[i * 3 + 2] - qz;
-      const w = Math.exp(-(dx * dx + dy * dy + dz * dz) / (r0 * r0));
+      const w = Math.exp(-(dx * dx + dy * dy + dz * dz) * inv2s2);
       if (w < 0.03) continue;
-      g.verts[c] = i; g.weights[c] = w; c++;
+      g.verts[c] = i; g.weights[c] = w;
+      g.p0[c * 3] = X[i * 3]; g.p0[c * 3 + 1] = X[i * 3 + 1]; g.p0[c * 3 + 2] = X[i * 3 + 2];
+      c++;
     }
     g.count = c; g.anchor = v; g.active = true; g.ramp = 0; g.holdT = 0;
+    // squishies are tacky: the particles touching the table now stay glued to it until the lobe is let go
+    if (this.gravityOn && this.pinCount === 0) {
+      for (let i = 0; i < this.n; i++) if (X[i * 3 + 1] < NEAR) { this.pinned[i] = 1; this.pinCount++; }
+    }
+    this.pinHold = PIN_HOLD_S;
     g.t0x = tx; g.t0y = ty; g.t0z = tz; g.rx = tx; g.ry = ty; g.rz = tz; g.ex = tx; g.ey = ty; g.ez = tz;
-    const X = this.X;
-    this.emit('grab', X[v * 3], X[v * 3 + 1], X[v * 3 + 2], ...this.vertexNormal(v), 0.5, 0, id);
+    const nrm = this.vertexNormal(v);
+    this.emit('grab', X[v * 3], X[v * 3 + 1], X[v * 3 + 2], nrm[0], nrm[1], nrm[2], 0.5, 0, id);
   }
 
   grabMove(id: 0 | 1, target: V3): void {
@@ -408,17 +478,26 @@ export class SoftBody implements SoftBodyLike {
     if (!g || !g.active) return;
     g.active = false;
     const s = this.metrics.stretch;
+    if (!this.grabs[0].active && !this.grabs[1].active) this.pinHold = PIN_HOLD_S;
     if (s > 0.05) {
       const v = g.anchor, X = this.X;
-      this.emit('snap', X[v * 3], X[v * 3 + 1], X[v * 3 + 2], ...this.vertexNormal(v), clamp(s, 0, 1), g.holdT, id);
+      const nrm = this.vertexNormal(v);
+      this.emit('snap', X[v * 3], X[v * 3 + 1], X[v * 3 + 2], nrm[0], nrm[1], nrm[2], clamp(s, 0, 1), g.holdT, id);
     }
+  }
+
+  /** Visual aid (finger ghost, debug viewer): the current fingertip sphere of finger `id`, or null when it has no tip. Allocates; not for the hot path. */
+  tip(id: 0 | 1): { x: number; y: number; z: number; r: number; depth: number } | null {
+    const f = this.fingers[id];
+    if (!f || (!f.down && !f.retracting)) return null;
+    return { x: f.cx, y: f.cy, z: f.cz, r: f.tipR, depth: f.depth };
   }
 
   nudge(impulse: V3): void {
     if (!impulse) return;
     let ix = impulse.x, iy = impulse.y, iz = impulse.z;
     if (!Number.isFinite(ix + iy + iz)) return;
-    const l = Math.hypot(ix, iy, iz);
+    const l = Math.sqrt(ix * ix + iy * iy + iz * iz);
     if (l > 12) { const k = 12 / l; ix *= k; iy *= k; iz *= k; }
     const V = this.V;
     for (let i = 0; i < this.n; i++) { V[i * 3] += ix; V[i * 3 + 1] += iy; V[i * 3 + 2] += iz; }
@@ -450,7 +529,7 @@ export class SoftBody implements SoftBodyLike {
     const ux = X[b * 3] - X[a * 3], uy = X[b * 3 + 1] - X[a * 3 + 1], uz = X[b * 3 + 2] - X[a * 3 + 2];
     const vx = X[c * 3] - X[a * 3], vy = X[c * 3 + 1] - X[a * 3 + 1], vz = X[c * 3 + 2] - X[a * 3 + 2];
     let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-    const l = Math.hypot(nx, ny, nz) || 1;
+    const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
     nx /= l; ny /= l; nz /= l;
     return [nx, ny, nz];
   }
@@ -459,7 +538,7 @@ export class SoftBody implements SoftBodyLike {
     // outward direction of the rest shape rotated by the frame (cheap, always finite)
     const Q = this.Q;
     let x = Q[v * 3], y = Q[v * 3 + 1], z = Q[v * 3 + 2];
-    const l = Math.hypot(x, y, z) || 1;
+    const l = Math.sqrt(x * x + y * y + z * z) || 1;
     x /= l; y /= l; z /= l;
     const q = this.qr, qx = q[0], qy = q[1], qz = q[2], qw = q[3];
     const tx = 2 * (qy * z - qz * y), ty = 2 * (qz * x - qx * z), tz = 2 * (qx * y - qy * x);
@@ -467,7 +546,7 @@ export class SoftBody implements SoftBodyLike {
   }
 
   private volumeScale(q: Float64Array): number {
-    // S0 = sum_i w_i |grad_i V|^2 / V0^2 at the rest shape (translation-invariant, so rest-local coordinates are fine)
+    // S0 = sum_i w_i |grad_i V|^2 / (6 V0)^2 at the rest shape (translation-invariant, so rest-local coordinates are fine)
     const n = this.n, g = new Float64Array(n * 3), tris = this.tris;
     for (let t = 0; t < tris.length; t += 3) {
       const a = tris[t] * 3, b = tris[t + 1] * 3, c = tris[t + 2] * 3;
@@ -484,11 +563,12 @@ export class SoftBody implements SoftBodyLike {
     return s / (v6 * v6);
   }
 
-  private placeTip(f: Finger): void {
+  /** Tip radius and centre from the eased depth. `share` < 1 limits a pinch jaw to part of its depth range. */
+  private placeTip(f: Finger, share: number): void {
     const R = this.restRadius;
     const dv = clamp(f.depth, 0, 1);
     f.tipR = R * (FINGER.rMin + (FINGER.rMax - FINGER.rMin) * dv);
-    const s = dv * f.depthMax - f.tipR;
+    const s = dv * f.depthMax * share - f.tipR;
     f.cx = f.px + f.dx * s; f.cy = f.py + f.dy * s; f.cz = f.pz + f.dz * s;
   }
 
@@ -496,28 +576,29 @@ export class SoftBody implements SoftBodyLike {
   private updateFingers(): void {
     const w = FINGER.omega;
     const slide = 1 - Math.exp(-FINGER.slideRate * H);
+    const a = this.fingers[0], b = this.fingers[1];
+    const share = a.down && b.down ? FINGER.pinchShare : 1;
     for (let k = 0; k < 2; k++) {
       const f = this.fingers[k];
       if (f.down) {
-        const a = w * w * (f.target - f.depth) - 2 * w * f.depthV;
-        f.depthV += a * H;
+        const acc = w * w * (f.target - f.depth) - 2 * w * f.depthV;
+        f.depthV += acc * H;
         f.depth += f.depthV * H;
         if (f.depth < 0) { f.depth = 0; f.depthV = 0; } else if (f.depth > 1) { f.depth = 1; f.depthV = 0; }
         f.holdT += H;
         f.px += (f.tx - f.px) * slide; f.py += (f.ty - f.py) * slide; f.pz += (f.tz - f.pz) * slide;
-        this.placeTip(f);
+        this.placeTip(f, share);
       } else if (f.retracting) {
         f.depth -= f.retractRate * H;
         if (f.depth <= 0) { f.depth = 0; f.retracting = false; }
         f.px += (f.tx - f.px) * slide; f.py += (f.ty - f.py) * slide; f.pz += (f.tz - f.pz) * slide;
-        this.placeTip(f);
+        this.placeTip(f, 1);
       }
     }
     // pinch: the two tips never overlap or pass through each other
-    const a = this.fingers[0], b = this.fingers[1];
     if ((a.down || a.retracting) && (b.down || b.retracting)) {
       let dx = b.cx - a.cx, dy = b.cy - a.cy, dz = b.cz - a.cz;
-      let d = Math.hypot(dx, dy, dz);
+      let d = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const minD = a.tipR + b.tipR + FINGER.pinchGap * this.restRadius;
       if (d < minD) {
         if (d < 1e-9) { dx = 1; dy = 0; dz = 0; d = 1; }
@@ -538,8 +619,8 @@ export class SoftBody implements SoftBodyLike {
       g.holdT += H;
       g.ex += (g.rx - g.ex) * ease; g.ey += (g.ry - g.ey) * ease; g.ez += (g.rz - g.ez) * ease;
       // clamp the pull distance
-      let dx = g.ex - g.t0x, dy = g.ey - g.t0y, dz = g.ez - g.t0z;
-      const dl = Math.hypot(dx, dy, dz);
+      const dx = g.ex - g.t0x, dy = g.ey - g.t0y, dz = g.ez - g.t0z;
+      const dl = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (dl > maxD) { const s = maxD / dl; g.ex = g.t0x + dx * s; g.ey = g.t0y + dy * s; g.ez = g.t0z + dz * s; }
     }
   }
@@ -547,22 +628,27 @@ export class SoftBody implements SoftBodyLike {
   private substep(): void {
     const n = this.n, X = this.X, XP = this.XP, V = this.V, M = this.M, invM = this.invM, Q = this.Q;
     const GOAL = this.GOAL, GRAD = this.GRAD;
-    this.parity ^= 1;
     this.debug.substeps++;
 
     this.updateFingers();
     this.updateGrabs();
-    let nFingers = 0;
-    if (this.fingers[0].down) nFingers++;
-    if (this.fingers[1].down) nFingers++;
+    const f0 = this.fingers[0], f1 = this.fingers[1];
+    const nFingers = (f0.down ? 1 : 0) + (f1.down ? 1 : 0);
+    const grabbing = this.grabs[0].active || this.grabs[1].active;
 
     // ---- external acceleration + predict
+    // SUPPORTED-BODY GRAVITY. With one XPBD pass per substep a soft network cannot carry the weight of 640 particles
+    // down to a small contact patch (the load path is longer than the solver reaches in a frame), so a body at rest
+    // would sag and creep. Real squishies barely sag under their own weight, so while the foot is on the table the
+    // table is treated as carrying the weight of the body as a whole: gravity is faded out by `supp` (0 airborne,
+    // 1 resting). That leaves every deformation, finger load and impact to the constraints but makes rest exact.
+    // Friction still sees the true normal load (see the table pass).
     let ax = 0, ay = 0, az = 0;
     if (this.gravityOn) {
-      ay = -GRAVITY;
+      ay = -GRAVITY * (1 - this.supp);
     } else {
-      // float mode: weak hover spring on the centre of mass (stiffer while a finger holds it) + slow bob
-      const boost = 1 + 2.5 * nFingers;
+      // float mode: weak hover spring on the centre of mass (stiffer while a finger or a lobe holds it) + slow bob
+      const boost = 1 + 2.5 * nFingers + (grabbing ? 3 : 0);
       const w2 = HOVER_OMEGA * HOVER_OMEGA * boost, c = 2 * HOVER_ZETA * HOVER_OMEGA * Math.sqrt(boost);
       const hy = this.hoverY(this.simTime);
       ax = -w2 * this.cx - c * this.vcx;
@@ -577,14 +663,14 @@ export class SoftBody implements SoftBodyLike {
     }
 
     // ---- shape matching (global): c, A = sum m p q^T, R, goals, soft pull
+    let r00 = 1, r01 = 0, r02 = 0, r10 = 0, r11 = 1, r12 = 0, r20 = 0, r21 = 0, r22 = 1;
     {
       let sx = 0, sy = 0, sz = 0;
       let a00 = 0, a01 = 0, a02 = 0, a10 = 0, a11 = 0, a12 = 0, a20 = 0, a21 = 0, a22 = 0;
       for (let i = 0; i < n; i++) {
         const i3 = i * 3, m = M[i];
-        const px = XP[i3], py = XP[i3 + 1], pz = XP[i3 + 2];
+        const mx = m * XP[i3], my = m * XP[i3 + 1], mz = m * XP[i3 + 2];
         const qx = Q[i3], qy = Q[i3 + 1], qz = Q[i3 + 2];
-        const mx = m * px, my = m * py, mz = m * pz;
         sx += mx; sy += my; sz += mz;
         a00 += mx * qx; a01 += mx * qy; a02 += mx * qz;
         a10 += my * qx; a11 += my * qy; a12 += my * qz;
@@ -598,10 +684,10 @@ export class SoftBody implements SoftBodyLike {
       extractRotation(A, q, SM_ITERS);
       const qx = q[0], qy = q[1], qz = q[2], qw = q[3];
       const xx = qx * qx, yy = qy * qy, zz = qz * qz, xy = qx * qy, xz = qx * qz, yz = qy * qz, wx = qw * qx, wy = qw * qy, wz = qw * qz;
-      const r00 = 1 - 2 * (yy + zz), r01 = 2 * (xy - wz), r02 = 2 * (xz + wy);
-      const r10 = 2 * (xy + wz), r11 = 1 - 2 * (xx + zz), r12 = 2 * (yz - wx);
-      const r20 = 2 * (xz - wy), r21 = 2 * (yz + wx), r22 = 1 - 2 * (xx + yy);
-      const K = this.smK * this.dbg.sm, soft = this.softW;
+      r00 = 1 - 2 * (yy + zz); r01 = 2 * (xy - wz); r02 = 2 * (xz + wy);
+      r10 = 2 * (xy + wz); r11 = 1 - 2 * (xx + zz); r12 = 2 * (yz - wx);
+      r20 = 2 * (xz - wy); r21 = 2 * (yz + wx); r22 = 1 - 2 * (xx + yy);
+      const K = this.smK, soft = this.softW;
       for (let i = 0; i < n; i++) {
         const i3 = i * 3;
         const qx_ = Q[i3], qy_ = Q[i3 + 1], qz_ = Q[i3 + 2];
@@ -614,11 +700,28 @@ export class SoftBody implements SoftBodyLike {
       }
     }
 
+    // ---- Laplacian shape memory (local): pull each particle toward mean(neighbours) + R (q_i - mean(q_neighbours))
+    {
+      const bk = this.bendK, soft = this.softW, st = this.nbrStart, nb = this.nbrIdx, ni = this.nbrInv, LQ = this.LQ;
+      for (let i = 0; i < n; i++) {
+        const i3 = i * 3;
+        let mx = 0, my = 0, mz = 0;
+        for (let j = st[i], e = st[i + 1]; j < e; j++) { const k = nb[j] * 3; mx += XP[k]; my += XP[k + 1]; mz += XP[k + 2]; }
+        const inv = ni[i];
+        const lx = LQ[i3], ly = LQ[i3 + 1], lz = LQ[i3 + 2];
+        const tx = mx * inv + r00 * lx + r01 * ly + r02 * lz;
+        const ty = my * inv + r10 * lx + r11 * ly + r12 * lz;
+        const tz = mz * inv + r20 * lx + r21 * ly + r22 * lz;
+        const k = bk * soft[i];
+        XP[i3] += (tx - XP[i3]) * k; XP[i3 + 1] += (ty - XP[i3 + 1]) * k; XP[i3 + 2] += (tz - XP[i3 + 2]) * k;
+      }
+    }
+
     // ---- enclosed-volume constraint (one global XPBD multiplier)
     {
       const tris = this.tris, nt = this.nt;
       const ox = this.cx, oy = this.cy, oz = this.cz;
-      for (let i = 0; i < n * 3; i++) GRAD[i] = 0;
+      GRAD.fill(0);
       let vol6 = 0;
       for (let t = 0; t < nt; t++) {
         const t3 = t * 3;
@@ -634,41 +737,44 @@ export class SoftBody implements SoftBodyLike {
       }
       const v6 = 6 * this.restVolume;
       const C = (vol6 - v6) / v6;
+      // Blocked particles (inside a fingertip's reach or touching the table) cannot absorb pressure: zero inverse mass.
+      const WV = this.WV;
+      const a0 = f0.down || f0.retracting, a1 = f1.down || f1.retracting;
+      const r0 = f0.tipR + BLOCK_MARGIN, r1 = f1.tipR + BLOCK_MARGIN;
       let S = 0;
       for (let i = 0; i < n; i++) {
         const i3 = i * 3;
-        S += invM[i] * (GRAD[i3] * GRAD[i3] + GRAD[i3 + 1] * GRAD[i3 + 1] + GRAD[i3 + 2] * GRAD[i3 + 2]);
+        let w = invM[i];
+        if (XP[i3 + 1] < NEAR) w = 0;
+        else {
+          if (a0) { const dx = XP[i3] - f0.cx, dy = XP[i3 + 1] - f0.cy, dz = XP[i3 + 2] - f0.cz; if (dx * dx + dy * dy + dz * dz < r0 * r0) w = 0; }
+          if (a1) { const dx = XP[i3] - f1.cx, dy = XP[i3 + 1] - f1.cy, dz = XP[i3 + 2] - f1.cz; if (dx * dx + dy * dy + dz * dz < r1 * r1) w = 0; }
+        }
+        WV[i] = w;
+        S += w * (GRAD[i3] * GRAD[i3] + GRAD[i3 + 1] * GRAD[i3 + 1] + GRAD[i3 + 2] * GRAD[i3 + 2]);
       }
       S /= v6 * v6;
-      const lambda = -C / (S + this.volAlphaT);
-      const sc = lambda / v6 * this.dbg.vol;
+      const sc = (-C / (S + this.volAlphaT)) / v6;
       for (let i = 0; i < n; i++) {
-        const i3 = i * 3, s = sc * invM[i];
+        const i3 = i * 3, s = sc * WV[i];
         XP[i3] += GRAD[i3] * s; XP[i3 + 1] += GRAD[i3 + 1] * s; XP[i3 + 2] += GRAD[i3 + 2] * s;
       }
     }
 
-    // ---- edge distance constraints (Gauss-Seidel, direction alternates each substep)
+    // ---- edge distance constraints (Gauss-Seidel, 1 pass)
     {
-      const E = this.edges, L0 = this.restLen, ne = this.ne;
-      const aT = this.dbg.edgeAlpha >= 0 ? this.dbg.edgeAlpha : this.edgeA, softS = this.p.edgeSoftStrain;
-      for (let it = 0; it < this.dbg.edgeIters; it++) {
-      const forward = ((this.parity + it) & 1) === 0;
-      for (let k = 0; k < ne; k++) {
-        const e = forward ? k : ne - 1 - k;
-        const a = E[e * 2] * 3, b = E[e * 2 + 1] * 3;
+      const E3 = this.E3, EL = this.EL, ES = this.ESOFT, EWA = this.EWA, EWB = this.EWB, EWS = this.EWS, ne = this.ne;
+      const aT = this.p.edgeAlphaT, aH = aT * 0.12;
+      for (let e = 0; e < ne; e++) {
+        const a = E3[e * 2], b = E3[e * 2 + 1];
         const dx = XP[a] - XP[b], dy = XP[a + 1] - XP[b + 1], dz = XP[a + 2] - XP[b + 2];
         const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (len < 1e-12) continue;
-        const l0 = L0[e];
-        const C = len - l0;
-        const alpha = C > l0 * softS ? aT * 0.12 : aT;
-        const wa = invM[a / 3], wb = invM[b / 3];
-        const s = -C / ((wa + wb + alpha) * len) * this.dbg.edge;
-        const sa = s * wa, sb = s * wb;
+        const C = len - EL[e];
+        const s = -C / ((EWS[e] + (C > ES[e] ? aH : aT)) * len);
+        const sa = s * EWA[e], sb = s * EWB[e];
         XP[a] += dx * sa; XP[a + 1] += dy * sa; XP[a + 2] += dz * sa;
         XP[b] -= dx * sb; XP[b + 1] -= dy * sb; XP[b + 2] -= dz * sb;
-      }
       }
     }
 
@@ -680,9 +786,9 @@ export class SoftBody implements SoftBodyLike {
       const kg = 0.45 * g.ramp;
       for (let j = 0; j < g.count; j++) {
         const i3 = g.verts[j] * 3, w = g.weights[j] * kg;
-        XP[i3] += (GOAL[i3] + px - XP[i3]) * w;
-        XP[i3 + 1] += (GOAL[i3 + 1] + py - XP[i3 + 1]) * w;
-        XP[i3 + 2] += (GOAL[i3 + 2] + pz - XP[i3 + 2]) * w;
+        XP[i3] += (g.p0[j * 3] + px - XP[i3]) * w;
+        XP[i3 + 1] += (g.p0[j * 3 + 1] + py - XP[i3 + 1]) * w;
+        XP[i3 + 2] += (g.p0[j * 3 + 2] + pz - XP[i3 + 2]) * w;
       }
     }
 
@@ -706,8 +812,8 @@ export class SoftBody implements SoftBodyLike {
       }
       if (hit && !f.contacted && f.down) {
         f.contacted = true;
-        const closing = Math.max(0, (f.target - f.depth)) * f.depthMax * FINGER.omega / Math.E + Math.max(0, f.depthV) * f.depthMax;
-        f.pokeSpeed = closing;
+        // predicted peak closing speed of the critically damped approach, plus what it already has
+        const closing = Math.max(0, f.target - f.depth) * f.depthMax * FINGER.omega / Math.E + Math.max(0, f.depthV) * f.depthMax;
         const front = f.depth * f.depthMax;
         this.emit('poke', f.px + f.dx * front, f.py + f.dy * front, f.pz + f.dz * front, f.nx, f.ny, f.nz,
           clamp(closing / POKE_NORM, 0.05, 1), 0, k);
@@ -715,13 +821,16 @@ export class SoftBody implements SoftBodyLike {
     }
     {
       const mu = this.p.tableMu;
-      let contacts = 0;
+      // normal-load proxy for Coulomb friction: this substep's penetration plus the supported weight (g h^2 per
+      // particle, concentrated on the particles that are actually touching)
+      const load = this.supp * GRAVITY * H * H * Math.min(LOAD_CONC, this.Mtot / Math.max(1, this.nearMass));
+      let contacts = 0, near = 0, nearM = 0;
       for (let i = 0; i < n * 3; i += 3) {
         const y = XP[i + 1];
-        if (y >= 0) continue;
-        contacts++;
-        const pen = -y;
-        XP[i + 1] = 0;
+        if (y >= NEAR) continue;
+        near++; nearM += M[i / 3];
+        let pen = load;
+        if (y < 0) { contacts++; pen -= y; XP[i + 1] = 0; }
         const tx = XP[i] - X[i], tz = XP[i + 2] - X[i + 2];
         const tl = Math.sqrt(tx * tx + tz * tz);
         if (tl > 1e-12) {
@@ -729,53 +838,94 @@ export class SoftBody implements SoftBodyLike {
           if (tl <= cap) { XP[i] = X[i]; XP[i + 2] = X[i + 2]; } else { const s = cap / tl; XP[i] -= tx * s; XP[i + 2] -= tz * s; }
         }
       }
+      // glued feet (a lobe is being pulled, or was just let go): hold them exactly where they were
+      if (this.pinCount > 0) {
+        if (!grabbing) { this.pinHold -= H; if (this.pinHold <= 0) { this.pinned.fill(0); this.pinCount = 0; } }
+        const pn = this.pinned;
+        if (this.pinCount > 0) for (let i = 0; i < n; i++) if (pn[i]) { XP[i * 3] = X[i * 3]; XP[i * 3 + 1] = 0; XP[i * 3 + 2] = X[i * 3 + 2]; }
+      }
       // land detection: first contact after being airborne, speed = centre-of-mass fall speed
-      if (contacts > 0) {
+      if (near > 0) {
         if (this.airSub >= 8 && -this.vcy > LAND_MIN_SPEED) this.pendingLand = Math.max(this.pendingLand, -this.vcy);
         this.airSub = 0;
       } else if (this.airSub < 100000) this.airSub++;
       this.contactCount = contacts;
+      this.nearCount = near; this.nearMass = nearM;
+      this.supp = smooth01((near - 1) / 4);
     }
 
-    // ---- velocity from positions
-    const invH = 1 / H;
-    for (let i = 0; i < n * 3; i++) { V[i] = (XP[i] - X[i]) * invH; X[i] = XP[i]; }
-
-    // ---- rigid-motion extraction, internal damping, drag, self-righting
+    // ---- velocity from positions, with the sums the damping pass needs
+    {
+      const invH = 1 / H, S = this.sums;
+      let sm = 0, sx = 0, sy = 0, sz = 0, svx = 0, svy = 0, svz = 0, lx = 0, ly = 0, lz = 0;
+      let ixx = 0, iyy = 0, izz = 0, ixy = 0, ixz = 0, iyz = 0;
+      let b00 = 0, b01 = 0, b02 = 0, b10 = 0, b11 = 0, b12 = 0, b20 = 0, b21 = 0, b22 = 0;
+      for (let i = 0; i < n; i++) {
+        const i3 = i * 3, m = M[i];
+        const x = XP[i3], y = XP[i3 + 1], z = XP[i3 + 2];
+        const vx = (x - X[i3]) * invH, vy = (y - X[i3 + 1]) * invH, vz = (z - X[i3 + 2]) * invH;
+        X[i3] = x; X[i3 + 1] = y; X[i3 + 2] = z;
+        V[i3] = vx; V[i3 + 1] = vy; V[i3 + 2] = vz;
+        const mvx = m * vx, mvy = m * vy, mvz = m * vz;
+        sm += m; sx += m * x; sy += m * y; sz += m * z;
+        svx += mvx; svy += mvy; svz += mvz;
+        lx += y * mvz - z * mvy; ly += z * mvx - x * mvz; lz += x * mvy - y * mvx;
+        ixx += m * (y * y + z * z); iyy += m * (x * x + z * z); izz += m * (x * x + y * y);
+        ixy -= m * x * y; ixz -= m * x * z; iyz -= m * y * z;
+        b00 += mvx * x; b01 += mvx * y; b02 += mvx * z;
+        b10 += mvy * x; b11 += mvy * y; b12 += mvy * z;
+        b20 += mvz * x; b21 += mvz * y; b22 += mvz * z;
+      }
+      S[0] = sm; S[1] = sx; S[2] = sy; S[3] = sz; S[4] = svx; S[5] = svy; S[6] = svz; S[7] = lx; S[8] = ly; S[9] = lz;
+      S[10] = ixx; S[11] = iyy; S[12] = izz; S[13] = ixy; S[14] = ixz; S[15] = iyz;
+      S[16] = b00; S[17] = b01; S[18] = b02; S[19] = b10; S[20] = b11; S[21] = b12; S[22] = b20; S[23] = b21; S[24] = b22;
+    }
     this.dampPass();
   }
 
   private dampPass(): void {
-    const n = this.n, X = this.X, V = this.V, M = this.M;
-    let sm = 0, sx = 0, sy = 0, sz = 0, svx = 0, svy = 0, svz = 0, lx = 0, ly = 0, lz = 0;
-    let ixx = 0, iyy = 0, izz = 0, ixy = 0, ixz = 0, iyz = 0;
-    for (let i = 0; i < n; i++) {
-      const i3 = i * 3, m = M[i];
-      const x = X[i3], y = X[i3 + 1], z = X[i3 + 2];
-      const vx = V[i3], vy = V[i3 + 1], vz = V[i3 + 2];
-      sm += m; sx += m * x; sy += m * y; sz += m * z;
-      svx += m * vx; svy += m * vy; svz += m * vz;
-      lx += m * (y * vz - z * vy); ly += m * (z * vx - x * vz); lz += m * (x * vy - y * vx);
-      ixx += m * (y * y + z * z); iyy += m * (x * x + z * z); izz += m * (x * x + y * y);
-      ixy -= m * x * y; ixz -= m * x * z; iyz -= m * y * z;
-    }
+    const n = this.n, X = this.X, V = this.V, M = this.M, S = this.sums;
+    const sm = S[0];
+    let lx = S[7], ly = S[8], lz = S[9];
+    let ixx = S[10], iyy = S[11], izz = S[12], ixy = S[13], ixz = S[14], iyz = S[15];
+    let b00 = S[16], b01 = S[17], b02 = S[18], b10 = S[19], b11 = S[20], b12 = S[21], b20 = S[22], b21 = S[23], b22 = S[24];
     const inv = 1 / sm;
-    const cx = sx * inv, cy = sy * inv, cz = sz * inv;
+    const cx = S[1] * inv, cy = S[2] * inv, cz = S[3] * inv;
+    const svx = S[4], svy = S[5], svz = S[6];
     const vcx = svx * inv, vcy = svy * inv, vcz = svz * inv;
     // about the centre of mass
     lx -= sm * (cy * vcz - cz * vcy); ly -= sm * (cz * vcx - cx * vcz); lz -= sm * (cx * vcy - cy * vcx);
     ixx -= sm * (cy * cy + cz * cz); iyy -= sm * (cx * cx + cz * cz); izz -= sm * (cx * cx + cy * cy);
     ixy += sm * cx * cy; ixz += sm * cx * cz; iyz += sm * cy * cz;
+    b00 -= svx * cx; b01 -= svx * cy; b02 -= svx * cz;
+    b10 -= svy * cx; b11 -= svy * cy; b12 -= svy * cz;
+    b20 -= svz * cx; b21 -= svz * cy; b22 -= svz * cz;
     // omega = I^-1 L (symmetric 3x3 inverse by cofactors)
     const c00 = iyy * izz - iyz * iyz, c01 = ixz * iyz - ixy * izz, c02 = ixy * iyz - ixz * iyy;
     const c11 = ixx * izz - ixz * ixz, c12 = ixy * ixz - ixx * iyz, c22 = ixx * iyy - ixy * ixy;
     const det = ixx * c00 + ixy * c01 + ixz * c02;
     let wx = 0, wy = 0, wz = 0;
+    // second-moment matrix S2 = sum m r r^T = (tr(I)/2) Id - I, and the best affine velocity gradient L = B S2^-1;
+    // its symmetric part D is the global squash / stretch / shear rate (damped hard), the rest is local wobble
+    let d00 = 0, d01 = 0, d02 = 0, d11 = 0, d12 = 0, d22 = 0;
     if (det > 1e-9) {
       const id = 1 / det;
       wx = (c00 * lx + c01 * ly + c02 * lz) * id;
       wy = (c01 * lx + c11 * ly + c12 * lz) * id;
       wz = (c02 * lx + c12 * ly + c22 * lz) * id;
+      const sxx = 0.5 * (iyy + izz - ixx), syy = 0.5 * (ixx + izz - iyy), szz = 0.5 * (ixx + iyy - izz);
+      const sxy = -ixy, sxz = -ixz, syz = -iyz;
+      const k00 = syy * szz - syz * syz, k01 = sxz * syz - sxy * szz, k02 = sxy * syz - sxz * syy;
+      const k11 = sxx * szz - sxz * sxz, k12 = sxy * sxz - sxx * syz, k22 = sxx * syy - sxy * sxy;
+      const sdet = sxx * k00 + sxy * k01 + sxz * k02;
+      if (sdet > 1e-12) {
+        const is = 1 / sdet;
+        const l00 = (b00 * k00 + b01 * k01 + b02 * k02) * is, l01 = (b00 * k01 + b01 * k11 + b02 * k12) * is, l02 = (b00 * k02 + b01 * k12 + b02 * k22) * is;
+        const l10 = (b10 * k00 + b11 * k01 + b12 * k02) * is, l11 = (b10 * k01 + b11 * k11 + b12 * k12) * is, l12 = (b10 * k02 + b11 * k12 + b12 * k22) * is;
+        const l20 = (b20 * k00 + b21 * k01 + b22 * k02) * is, l21 = (b20 * k01 + b21 * k11 + b22 * k12) * is, l22 = (b20 * k02 + b21 * k12 + b22 * k22) * is;
+        d00 = l00; d11 = l11; d22 = l22;
+        d01 = 0.5 * (l01 + l10); d02 = 0.5 * (l02 + l20); d12 = 0.5 * (l12 + l21);
+      }
     }
     this.vcx = vcx; this.vcy = vcy; this.vcz = vcz;
 
@@ -786,22 +936,30 @@ export class SoftBody implements SoftBodyLike {
     const theta = Math.acos(clamp(upy, -1, 1));
     const scale = sinT > 1e-6 ? theta / sinT : 0;
     const float = !this.gravityOn;
-    const kUp = float ? 30 : 12, cAng = float ? 4 : 1.2;
+    const kUp = float ? 30 : 40, cAng = float ? 4 : 8;
     const awx = (-upz * scale * kUp - cAng * wx) * H, awy = -cAng * wy * H, awz = (upx * scale * kUp - cAng * wz) * H;
 
-    const dI = this.dampInt * this.dbg.damp, dr = this.dragF;
+    const dRes = this.dampInt, dAff = this.dampAff, dr = this.dragF, dQ = this.dampQ;
     let ke = 0;
     const vmax2 = MAX_SPEED * MAX_SPEED;
+    // tacky table: while the foot is down, the body's upward centre-of-mass velocity is bled off (squishies stick to a
+    // surface, so a springing-back body does not hop like a ball)
+    const gdamp = this.gravityOn && vcy > 0 ? -this.p.groundDamp * this.supp * vcy : 0;
     for (let i = 0; i < n; i++) {
       const i3 = i * 3;
       const rx = X[i3] - cx, ry = X[i3 + 1] - cy, rz = X[i3 + 2] - cz;
       let vx = V[i3], vy = V[i3 + 1], vz = V[i3 + 2];
       // internal velocity = v - v_cm - w x r
       const ivx = vx - vcx - (wy * rz - wz * ry), ivy = vy - vcy - (wz * rx - wx * rz), ivz = vz - vcz - (wx * ry - wy * rx);
-      ke += M[i] * (ivx * ivx + ivy * ivy + ivz * ivz);
-      vx += -dI * ivx - dr * vx + (awy * rz - awz * ry);
-      vy += -dI * ivy - dr * vy + (awz * rx - awx * rz);
-      vz += -dI * ivz - dr * vz + (awx * ry - awy * rx);
+      const sp2 = ivx * ivx + ivy * ivy + ivz * ivz;
+      ke += M[i] * sp2;
+      // global (affine, symmetric) part and the local remainder
+      const avx = d00 * rx + d01 * ry + d02 * rz, avy = d01 * rx + d11 * ry + d12 * rz, avz = d02 * rx + d12 * ry + d22 * rz;
+      const nl = dQ * Math.sqrt(sp2);
+      const ga = Math.min(0.9, dAff + nl), gr = Math.min(0.9, dRes + nl);
+      vx += -ga * avx - gr * (ivx - avx) - dr * vx + (awy * rz - awz * ry);
+      vy += -ga * avy - gr * (ivy - avy) - dr * vy + (awz * rx - awx * rz) + gdamp;
+      vz += -ga * avz - gr * (ivz - avz) - dr * vz + (awx * ry - awy * rx);
       const s2 = vx * vx + vy * vy + vz * vz;
       if (s2 > vmax2) { const s = MAX_SPEED / Math.sqrt(s2); vx *= s; vy *= s; vz *= s; }
       V[i3] = vx; V[i3 + 1] = vy; V[i3 + 2] = vz;
@@ -835,7 +993,7 @@ export class SoftBody implements SoftBodyLike {
     if (this.simTime - this.lastEvent[li] < EVENT_MIN_GAP_S) return;
     if (this.events.length >= 128) return;
     this.lastEvent[li] = this.simTime;
-    const nl = Math.hypot(nx, ny, nz) || 1;
+    const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
     this.events.push({
       kind, at: { x, y, z }, normal: { x: nx / nl, y: ny / nl, z: nz / nl },
       intensity: clamp(Number.isFinite(intensity) ? intensity : 0, 0, 1), heldFor, finger,
@@ -866,12 +1024,13 @@ export class SoftBody implements SoftBodyLike {
     const m = this.metrics;
 
     // strain per vertex = mean(edge / rest edge)
-    const st = this.strain, E = this.edges, L0 = this.restLen;
+    const st = this.strain, E3 = this.E3, EL = this.EL;
     st.fill(0);
     for (let e = 0; e < this.ne; e++) {
-      const a = E[e * 2], b = E[e * 2 + 1];
-      const r = Math.hypot(X[a * 3] - X[b * 3], X[a * 3 + 1] - X[b * 3 + 1], X[a * 3 + 2] - X[b * 3 + 2]) / L0[e];
-      st[a] += r; st[b] += r;
+      const a = E3[e * 2], b = E3[e * 2 + 1];
+      const dx = X[a] - X[b], dy = X[a + 1] - X[b + 1], dz = X[a + 2] - X[b + 2];
+      const r = Math.sqrt(dx * dx + dy * dy + dz * dz) / EL[e];
+      st[a / 3] += r; st[b / 3] += r;
     }
     for (let i = 0; i < n; i++) st[i] /= this.valence[i];
 
@@ -886,7 +1045,7 @@ export class SoftBody implements SoftBodyLike {
     const nf = (f0.down ? 1 : 0) + (f1.down ? 1 : 0);
     if (nf === 2) {
       ax = f1.cx - f0.cx; ay = f1.cy - f0.cy; az = f1.cz - f0.cz;
-      const l = Math.hypot(ax, ay, az);
+      const l = Math.sqrt(ax * ax + ay * ay + az * az);
       if (l > 1e-6) { ax /= l; ay /= l; az /= l; } else { ax = 0; ay = 1; az = 0; }
       this.lastAxisX = ax; this.lastAxisY = ay; this.lastAxisZ = az; this.lastAxisT = this.simTime;
     } else if (nf === 1) {
@@ -906,9 +1065,11 @@ export class SoftBody implements SoftBodyLike {
     for (let i = 0; i < n; i++) {
       const i3 = i * 3;
       const d = X[i3] * ax + X[i3 + 1] * ay + X[i3 + 2] * az;
-      if (d < mn) mn = d; if (d > mx) mx = d;
+      if (d < mn) mn = d;
+      if (d > mx) mx = d;
       const r = Q[i3] * lx + Q[i3 + 1] * ly + Q[i3 + 2] * lz;
-      if (r < rmn) rmn = r; if (r > rmx) rmx = r;
+      if (r < rmn) rmn = r;
+      if (r > rmx) rmx = r;
     }
     const comp = clamp((1 - (mx - mn) / Math.max(1e-6, rmx - rmn)) / 0.75, 0, 1);
     const rate = (comp - this.prevCompression) / dt;
@@ -930,12 +1091,11 @@ export class SoftBody implements SoftBodyLike {
     m.stretch = clamp((best - 0.1 * this.restRadius) / (2.3 * this.restRadius), 0, 1);
 
     m.kinetic = clamp((this.keAcc / Math.max(1, this.keSubs)) / 0.08, 0, 1);
-    m.grounded = this.contactCount >= 3;
+    m.grounded = this.nearCount >= 3;
     m.fingers = nf;
     m.grabbed = this.grabs[0].active || this.grabs[1].active;
-    const sp = Math.hypot(this.vcx, this.vcy, this.vcz);
+    const sp = Math.sqrt(this.vcx * this.vcx + this.vcy * this.vcy + this.vcz * this.vcz);
     if (sp > this.debug.maxSpeed) this.debug.maxSpeed = sp;
     this.debug.contacts = this.contactCount;
   }
 }
-

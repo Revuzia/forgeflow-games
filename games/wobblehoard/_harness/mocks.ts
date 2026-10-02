@@ -37,6 +37,8 @@ export interface MockBody extends SoftBodyLike {
   auto: boolean;
   fingerIsDown(id: 0 | 1): boolean;
   grabIsActive(id: 0 | 1): boolean;
+  /** how many events of each kind the body has handed to drainEvents */
+  readonly emitted: Record<string, number>;
 }
 
 export function createMockBody(genome?: Genome, o: { auto?: boolean } = {}): MockBody {
@@ -68,6 +70,7 @@ export function createMockBody(genome?: Genome, o: { auto?: boolean } = {}): Moc
     simTime: 0,
     stepCalls: 0,
     auto: o.auto !== false,
+    emitted: {},
     fingerIsDown: (id) => fing[id].down,
     grabIsActive: (id) => grabs[id].active,
     queue(ev) {
@@ -141,7 +144,7 @@ export function createMockBody(genome?: Genome, o: { auto?: boolean } = {}): Moc
     grabRelease(id) { rec.rec('grabRelease', id); const g = grabs[id]; if (g.active) { g.active = false; g.release = true; g.relStretch = metrics.stretch; } },
     nudge(imp) { rec.rec('nudge', imp); },
     reset() { rec.rec('reset'); },
-    drainEvents(out) { for (const e of events) out.push(e); events.length = 0; },
+    drainEvents(out) { for (const e of events) { out.push(e); body.emitted[e.kind] = (body.emitted[e.kind] ?? 0) + 1; } events.length = 0; },
     stateHash() { return (body.stepCalls * 2654435761) >>> 0; },
   };
   void genome;

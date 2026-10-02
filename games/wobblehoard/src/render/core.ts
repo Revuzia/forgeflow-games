@@ -33,7 +33,7 @@ void main() {
   float ndv = clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0);
   float hot = pow(ndv, 2.4);
   float mott = 0.84 + 0.3 * whNoise3(vL * 2.6 + vec3(0.0, uTime * 0.35, uTime * 0.2));
-  vec3 c = mix(uColor, uHot, hot) * (0.7 + 1.5 * hot) * mott * uIntensity;
+  vec3 c = mix(uColor, uHot, 0.3 * hot * hot) * (0.5 + 0.7 * hot) * mott * uIntensity;
   gl_FragColor = vec4(c, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -113,10 +113,10 @@ export class Core {
     this.blob.quaternion.set(q.x, q.y, q.z, q.w);
     this.blob.scale.set(this.radius * sxz, this.radius * sy, this.radius * sxz);
     const pulse = 1 + 0.06 * this.glow * Math.sin(time * 2.3);
-    this.amount = (0.85 + 0.55 * this.glow) * (1 + 1.5 * k) * pulse;
-    this.blobMat.uniforms.uIntensity.value = (1.2 + 1.6 * this.glow) * (1 + 1.4 * k) * pulse;
+    this.amount = (1.2 + 0.9 * this.glow) * (1 + 1.5 * k) * pulse;
+    this.blobMat.uniforms.uIntensity.value = (1.0 + 1.2 * this.glow) * (1 + 1.4 * k) * pulse;
     this.blobMat.uniforms.uTime.value = time;
-    this.haloMat.uniforms.uStrength.value = (0.35 + 0.5 * this.glow) * (1 + 1.1 * k);
+    this.haloMat.uniforms.uStrength.value = (0.28 + 0.4 * this.glow) * (1 + 1.1 * k);
     this.haloMat.uniforms.uSize.value = this.radius * (3.6 + 1.0 * k);
   }
 

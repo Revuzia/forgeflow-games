@@ -25,9 +25,9 @@ export const TUNING = {
   /** a finger stays down at least this long in SIM time, so a sub-frame tap still reaches the body as a poke */
   minContactS: 0.09,
   orbitRadPerPx: 0.0075,
-  /** sign of stage.orbit(dYaw, dPitch) for a drag right / drag down. Verified against src/render/stage.ts. */
-  orbitSignYaw: -1,
-  orbitSignPitch: -1,
+  /** sign of stage.orbit(dYaw, dPitch) for a drag right / drag down. stage.ts: "pass (dx * k, dy * k) of a pointer drag and the scene turns with the finger". */
+  orbitSignYaw: 1,
+  orbitSignPitch: 1,
   /** stage.zoom(delta): wheel notches in, stage units out */
   zoomGain: 1,
   panMax: 0.8,
@@ -114,6 +114,8 @@ export interface App {
   readonly muted: boolean;
   readonly paused: boolean;
   readonly hidden: boolean;
+  /** smoothed frames per second (dev overlay) */
+  readonly fps: number;
   readonly viewport: { w: number; h: number };
   setPhase(p: Phase): void;
   start(): void;
@@ -218,7 +220,7 @@ export function createApp(deps: AppDeps): App {
   // ---------------------------------------------------------------- settings application
   function applySettings(force = false): void {
     const a = applied;
-    const mutedNow = muted || hiddenFlag;
+    const mutedNow = muted || (hiddenFlag && !audio.setPaused); // setPaused (suspend) is better; mute is the fallback
     if (force || a.volume !== settings.volume || a.squishBoost !== settings.squishBoost || a.muted !== mutedNow) {
       audio.setSettings({ master: settings.volume, squishBoost: settings.squishBoost, muted: mutedNow });
     }
@@ -508,6 +510,7 @@ export function createApp(deps: AppDeps): App {
     hiddenFlag = h;
     if (h) releaseEverything();
     else lastTs = null;
+    try { audio.setPaused?.(h); } catch { /* ignore */ }
     applySettings();
   }
 
@@ -559,9 +562,14 @@ export function createApp(deps: AppDeps): App {
     fire(L.mute, muted);
   }
 
+  let audioRunningAt = -1e9;
   function unlockAudio(): void {
     try {
-      if (audio.ready && audio.stats().state === 'running') return;
+      const t = now();
+      // stats() reads (and resets) the analyser peak, so only re-check a context we believe is running about once a second
+      if (audio.ready && t - audioRunningAt < 1000) return;
+      if (audio.ready && audio.stats().state === 'running') { audioRunningAt = t; return; }
+      audioRunningAt = -1e9;
       const p = audio.unlock();
       if (p && typeof p.catch === 'function') p.catch(() => { /* blocked until a real gesture: retried on the next one */ });
     } catch { /* ignore */ }
@@ -654,6 +662,10 @@ export function createApp(deps: AppDeps): App {
       } catch { return { ok: false }; }
     },
     playSound(kind) { lab.play(kind); },
+    bodyScreen() {
+      const d = host.bodyScreen();
+      return d ? { x: d.x / viewport.w, y: d.y / viewport.h, rPx: d.r } : null;
+    },
   };
 
   // ---------------------------------------------------------------- the app object
@@ -672,6 +684,7 @@ export function createApp(deps: AppDeps): App {
     get muted() { return muted; },
     get paused() { return paused; },
     get hidden() { return hiddenFlag; },
+    get fps() { return fpsEma; },
     get viewport() { return viewport; },
     setPhase(p) {
       if (p === phase) return;
@@ -704,6 +717,7 @@ export function createApp(deps: AppDeps): App {
       profile.dispose();
       L.interaction.clear(); L.settings.clear(); L.genome.clear(); L.mute.clear(); L.phase.clear();
       try { stage.dispose(); } catch { /* ignore */ }
+      try { audio.dispose?.(); } catch { /* ignore */ }
     },
   };
 

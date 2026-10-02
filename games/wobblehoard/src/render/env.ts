@@ -4,8 +4,8 @@
 import * as THREE from 'three';
 
 /** World-space directions TOWARD the lights (unit vectors). The camera starts at +Z looking at the origin. */
-export const KEY_DIR = new THREE.Vector3(-0.52, 0.74, 0.58).normalize();      // sodium amber softbox, front-left-up
-export const RIM_DIR = new THREE.Vector3(0.6, 0.42, -0.74).normalize();       // cold lagoon strip, behind-right
+export const KEY_DIR = new THREE.Vector3(-0.68, 0.62, 0.4).normalize();      // sodium amber softbox, front-left-up
+export const RIM_DIR = new THREE.Vector3(0.62, 0.26, -0.74).normalize();       // cold lagoon strip, behind-right
 export const FILL_DIR = new THREE.Vector3(0.78, 0.18, 0.6).normalize();       // dim violet fill, front-right
 
 export interface Environment {
@@ -54,13 +54,15 @@ interface PanelDef { dir: THREE.Vector3; dist: number; w: number; h: number; col
 
 const PANELS: PanelDef[] = [
   // key: big amber-white softbox, front-left-up
-  { dir: KEY_DIR, dist: 4.5, w: 3.0, h: 2.2, color: [1.0, 0.74, 0.42], k: 10, soft: 0.22, radius: 0.25, roll: 0.25 },
+  { dir: KEY_DIR, dist: 4.5, w: 2.4, h: 1.7, color: [1.0, 0.74, 0.42], k: 8, soft: 0.2, radius: 0.25, roll: 0.25 },
+  // left strip softbox: the long vertical highlight on the shoulder
+  { dir: new THREE.Vector3(-0.93, 0.28, 0.1).normalize(), dist: 4.5, w: 0.75, h: 3.0, color: [1.0, 0.8, 0.58], k: 6, soft: 0.14, radius: 0.3, roll: 0.12 },
   // overhead long strip: gives the long highlight across the dome
   { dir: new THREE.Vector3(0.12, 1, 0.2).normalize(), dist: 4.5, w: 4.2, h: 0.7, color: [1.0, 0.86, 0.66], k: 5.5, soft: 0.2, radius: 0.3 },
   // rim: tall cold lagoon strip, behind-right
   { dir: RIM_DIR, dist: 4.5, w: 0.8, h: 3.6, color: [0.28, 0.82, 0.95], k: 12, soft: 0.16, radius: 0.35, roll: -0.18 },
   // fill: dim violet card, front-right
-  { dir: FILL_DIR, dist: 4.5, w: 2.4, h: 2.4, color: [0.5, 0.36, 0.92], k: 1.6, soft: 0.5, radius: 0.6 },
+  { dir: FILL_DIR, dist: 4.5, w: 2.4, h: 2.4, color: [0.5, 0.36, 0.92], k: 1.0, soft: 1.1, radius: 1.0 },
   // small low kicker, cool, behind-left: a little pinprick of reflection low on the body
   { dir: new THREE.Vector3(-0.8, -0.05, -0.55).normalize(), dist: 4.5, w: 1.6, h: 0.5, color: [0.3, 0.7, 0.9], k: 2.2, soft: 0.2, radius: 0.2 },
 ];
@@ -103,4 +105,36 @@ export function createEnvironment(renderer: THREE.WebGLRenderer, size = 256): En
   for (const g of geos) g.dispose();
   for (const m of mats) m.dispose();
   return { texture: rt.texture, dispose: () => rt.dispose() };
+}
+
+/**
+ * Owns the baked environment and hands it to materials one by one. (scene.environment would ignore
+ * material.envMapIntensity in three 0.186, and we want a different reflection strength for the jelly, the eyes and the felt.)
+ */
+export class EnvHub {
+  texture: THREE.Texture;
+  private env: Environment;
+  private readonly size: number;
+  private readonly users = new Set<THREE.MeshStandardMaterial>();
+
+  constructor(renderer: THREE.WebGLRenderer, size = 128) {
+    this.size = size;
+    this.env = createEnvironment(renderer, size);
+    this.texture = this.env.texture;
+  }
+  apply(mat: THREE.MeshStandardMaterial, intensity: number): void {
+    mat.envMap = this.texture;
+    mat.envMapIntensity = intensity;
+    this.users.add(mat);
+  }
+  release(mat: THREE.Material): void { this.users.delete(mat as THREE.MeshStandardMaterial); }
+  /** After a WebGL context restore the baked cube is gone: bake again and re-point every material. */
+  rebuild(renderer: THREE.WebGLRenderer): void {
+    const old = this.env;
+    this.env = createEnvironment(renderer, this.size);
+    this.texture = this.env.texture;
+    for (const m of this.users) m.envMap = this.texture;
+    old.dispose();
+  }
+  dispose(): void { this.env.dispose(); this.users.clear(); }
 }

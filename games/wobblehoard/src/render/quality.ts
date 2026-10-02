@@ -14,13 +14,12 @@ export interface TierSpec {
   transmissionScale: number;
   glitterMax: number;        // suspended specks (cap, genome.glitter picks the actual count)
   bubbleMax: number;
-  envSize: number;           // PMREM cube face size
 }
 
 export const TIERS: Record<QualityTier, TierSpec> = {
-  high: { tier: 'high', fineFreq: 32, dprCap: 2, transmission: true, transmissionScale: 1, glitterMax: 150, bubbleMax: 40, envSize: 256 },
-  med: { tier: 'med', fineFreq: 24, dprCap: 1.5, transmission: true, transmissionScale: 0.5, glitterMax: 100, bubbleMax: 32, envSize: 128 },
-  low: { tier: 'low', fineFreq: 16, dprCap: 1, transmission: false, transmissionScale: 0.5, glitterMax: 48, bubbleMax: 20, envSize: 64 },
+  high: { tier: 'high', fineFreq: 32, dprCap: 2, transmission: true, transmissionScale: 1, glitterMax: 150, bubbleMax: 40 },
+  med: { tier: 'med', fineFreq: 24, dprCap: 1.5, transmission: true, transmissionScale: 0.5, glitterMax: 100, bubbleMax: 32 },
+  low: { tier: 'low', fineFreq: 16, dprCap: 1, transmission: false, transmissionScale: 0.5, glitterMax: 48, bubbleMax: 20 },
 };
 
 const ORDER: QualityTier[] = ['high', 'med', 'low'];

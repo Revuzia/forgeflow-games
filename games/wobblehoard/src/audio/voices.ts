@@ -7,7 +7,7 @@
 // ratio, so a bigger (lower-pitch) squishy has bigger bubbles. Designs below are our own.
 import { clamp } from '../core/rng.ts';
 import {
-  Bag, bubble, c01, dbToGain, fin, glerp, harmonicWave, lerp, rexp, rlog, rr,
+  Bag, bubble, c01, dbToGain, fin, harmonicWave, lerp, rexp, rlog, rr,
   type Rng, type VoiceGroup,
 } from './dsp.ts';
 
@@ -31,8 +31,7 @@ function pitchOf(p: VoiceBase): number {
   return clamp(fin(p.pitch, 1), 0.5, 2) * j;
 }
 
-const T_MIN = 0;
-function startTime(t0: number): number { return Math.max(T_MIN, fin(t0, 0)); }
+function startTime(t0: number): number { return Math.max(0, fin(t0, 0)); }
 
 /** 0 -> peak over `att`, then exponential decay with time constant `tau`. Returns the time it is ~ -65 dB down. */
 function pluck(g: AudioParam, t: number, peak: number, att: number, tau: number): number {
@@ -42,13 +41,17 @@ function pluck(g: AudioParam, t: number, peak: number, att: number, tau: number)
   return t + att + 7.5 * tau;
 }
 
-/* Output level of each voice in dB relative to full scale BEFORE the master chain (calibrated with the audio probe). */
+/*
+ * Voice levels in dB (the gain of the loudest layer, pre-chain). Calibrated with the probe so the DRY peak of each voice
+ * (before the master chain) sits around -17 dBFS at its softest and -4..-5 dBFS at its hardest, i.e. the limiter is a
+ * safety net and not part of the sound. The master chain adds about +2.9 dB to sustained tones and -1 dB to short hits.
+ */
 const LV = {
-  poke: [-23, -9.5],
-  release: [-25, -10],
-  land: [-22, -9],
-  pop: -14,
-  squish: -14,
+  poke: [-19.5, -9.5],
+  release: [-20.5, -8],
+  land: [-19.5, -8.5],
+  pop: -15.5,
+  squish: -8.5,
   blendMotor: -19,
   blendBell: -17,
 };
@@ -67,7 +70,7 @@ export function poke(ctx: Ctx, out: AudioNode, t0: number, p: PokeParams): Voice
   const pr = pitchOf(p);
   const r = p.rng;
   const bag = new Bag(ctx, out, 'poke', p.pan ?? 0);
-  const A = dbToGain(lerp(LV.poke[0], LV.poke[1], Math.pow(i, 0.75)));
+  const A = dbToGain(lerp(LV.poke[0], LV.poke[1], Math.pow(i, 0.9)));
 
   // body
   const f1 = (168 + 92 * i) * pr, f2 = (112 + 30 * i) * pr;
@@ -85,15 +88,15 @@ export function poke(ctx: Ctx, out: AudioNode, t0: number, p: PokeParams): Voice
 
   // skin transient
   const n = bag.noise(r, t, t + 0.12);
-  const bp = bag.biquad('bandpass', (1100 + 1700 * i) * pr, 1.0);
+  const bp = bag.biquad('bandpass', (950 + 1250 * i) * pr, 1.0);
   const ng = bag.gain(0);
   n.connect(bp); bp.connect(ng); ng.connect(bag.head);
-  pluck(ng.gain, t, A * (1.5 + 2.2 * i), 0.0009, 0.0095);
+  pluck(ng.gain, t, A * (1.2 + 0.9 * i), 0.002, 0.0095);
 
   // one small wet bubble on most pokes
   if (r() < 0.45 + 0.4 * i) {
     const rad = rr(r, 0.0022, 0.0046) / pr;
-    endT = Math.max(endT, bubble(ctx, bag.head, t + rr(r, 0.007, 0.028), rad, A * rr(r, 0.35, 0.7), 0.16));
+    endT = Math.max(endT, bubble(ctx, bag.head, t + rr(r, 0.007, 0.028), rad, A * rr(r, 0.35, 0.7), 0.35));
   }
   body.stop(endT);
   bag.endTime = endT + 0.02;
@@ -114,7 +117,7 @@ export function release(ctx: Ctx, out: AudioNode, t0: number, p: ReleaseParams):
   const pr = pitchOf(p);
   const r = p.rng;
   const bag = new Bag(ctx, out, 'release', p.pan ?? 0);
-  const A = dbToGain(lerp(LV.release[0], LV.release[1], Math.pow(c, 0.7)));
+  const A = dbToGain(lerp(LV.release[0], LV.release[1], Math.pow(c, 1.35)));
   const dur = 0.2 + 0.25 * c;
   const fa = (178 - 66 * c) * pr;
   const fb = fa * (1.75 + 1.05 * c);
@@ -137,8 +140,9 @@ export function release(ctx: Ctx, out: AudioNode, t0: number, p: ReleaseParams):
     const o = bag.osc('sine', fa * (k ? 2 : 1), t);
     const f0 = fa * (k ? 2.012 : 1), f1 = fb * (k ? 2.012 : 1);
     o.frequency.setValueAtTime(f0, t);
-    o.frequency.exponentialRampToValueAtTime(f1, t + glideT);
-    o.frequency.setTargetAtTime(f1 * 0.97, t + glideT, 0.08);
+    // asymptotic glide (no corner where it arrives), then a slow droop as the surface settles
+    o.frequency.setTargetAtTime(f1 * 1.04, t, glideT / 2.4);
+    o.frequency.setTargetAtTime(f1 * 0.96, t + glideT * 1.5, 0.12);
     const g = bag.gain(k ? 0.34 : 1);
     o.connect(g); g.connect(wob);
     pair.push(o);
@@ -155,7 +159,7 @@ export function release(ctx: Ctx, out: AudioNode, t0: number, p: ReleaseParams):
   const nb = Math.round(1 + 4 * c + r());
   for (let k = 0; k < nb; k++) {
     const rad = rlog(r, 0.0012, 0.0055) / pr;
-    endT = Math.max(endT, bubble(ctx, bag.head, t + rr(r, 0.004, 0.02 + 0.2 * dur) , rad, A * rr(r, 0.18, 0.4), 0.2));
+    endT = Math.max(endT, bubble(ctx, bag.head, t + rr(r, 0.004, 0.02 + 0.2 * dur) , rad, A * rr(r, 0.18, 0.4), 0.4));
   }
   const stopT = endT;
   lfo.stop(stopT);
@@ -175,7 +179,7 @@ export function land(ctx: Ctx, out: AudioNode, t0: number, p: LandParams): Voice
   const pr = pitchOf(p);
   const r = p.rng;
   const bag = new Bag(ctx, out, 'land', p.pan ?? 0);
-  const A = dbToGain(lerp(LV.land[0], LV.land[1], Math.pow(i, 0.7)));
+  const A = dbToGain(lerp(LV.land[0], LV.land[1], Math.pow(i, 0.85)));
 
   const f1 = (150 + 50 * i) * pr, f2 = (60 + 12 * i) * pr;
   const body = bag.osc('sine', f1, t);
@@ -192,7 +196,7 @@ export function land(ctx: Ctx, out: AudioNode, t0: number, p: LandParams): Voice
   n.connect(lp); lp.connect(ng); ng.connect(bag.head);
   pluck(ng.gain, t, A * (1.4 + 0.8 * i), 0.002, 0.013);
 
-  endT = Math.max(endT, bubble(ctx, bag.head, t + rr(r, 0.003, 0.012), rr(r, 0.0062, 0.0088) / pr, A * 0.55, 0.32, 1.1));
+  endT = Math.max(endT, bubble(ctx, bag.head, t + rr(r, 0.003, 0.012), rr(r, 0.0062, 0.0088) / pr, A * 0.3, 0.55, 0.6));
   body.stop(endT);
   bag.endTime = endT + 0.02;
   return bag;
@@ -214,12 +218,12 @@ export function pop(ctx: Ctx, out: AudioNode, t0: number, p: PopParams): VoiceGr
   // click
   const clickDur = rr(r, 0.002, 0.005);
   const cn = bag.noise(r, t, t + clickDur + 0.01);
-  const cbp = bag.biquad('bandpass', lerp(3300, 2300, s) * pr, 0.9);
+  const cbp = bag.biquad('bandpass', lerp(2700, 1900, s) * pr, 0.9);
   const cg = bag.gain(0);
   cn.connect(cbp); cbp.connect(cg); cg.connect(bag.head);
   cg.gain.setValueAtTime(0, t);
-  cg.gain.linearRampToValueAtTime(A * 2.6, t + 0.0004);
-  cg.gain.linearRampToValueAtTime(A * 1.3, t + clickDur * 0.5);
+  cg.gain.linearRampToValueAtTime(A * 2.2, t + 0.0004);
+  cg.gain.linearRampToValueAtTime(A * 1.1, t + clickDur * 0.5);
   cg.gain.linearRampToValueAtTime(0, t + clickDur);
 
   // chirped blip
@@ -230,15 +234,15 @@ export function pop(ctx: Ctx, out: AudioNode, t0: number, p: PopParams): VoiceGr
   blip.frequency.setTargetAtTime(fb0 * 2.1, t + 0.017, 0.02);
   const bg = bag.gain(0);
   blip.connect(bg); bg.connect(bag.head);
-  const endT = pluck(bg.gain, t + 0.0006, A * 1.5, 0.0009, lerp(0.009, 0.016, s));
+  const endT = pluck(bg.gain, t + 0.0006, A * 1.5, 0.0009, lerp(0.0075, 0.013, s));
   blip.stop(endT);
 
   // air
   const an = bag.noise(r, t, t + 0.14);
-  const abp = bag.biquad('bandpass', 3600 * pr, 0.6);
+  const abp = bag.biquad('bandpass', 2800 * pr, 0.7);
   const ag = bag.gain(0);
   an.connect(abp); abp.connect(ag); ag.connect(bag.head);
-  pluck(ag.gain, t + 0.001, A * 0.9, 0.003, 0.022);
+  pluck(ag.gain, t + 0.001, A * 0.55, 0.003, 0.016);
 
   bag.endTime = Math.max(endT, t + 0.14) + 0.02;
   return bag;
@@ -257,10 +261,12 @@ export interface SquishVoice extends VoiceGroup {
 
 /**
  * Continuous squelch while pressed. Silent when `rate` is 0. Layers:
- *  - noise through three moving band-pass resonances (bubbly formants) whose centres rise with compression, rise
- *    further while squeezing and fall while springing back;
- *  - a wider "wet skin" band whose centre follows compression;
- *  - a Poisson stream of Minnaert bubbles whose rate follows |rate| (radii shrink as compression grows).
+ *  - the "gurgle": noise through three band-pass resonances (bubbly formants) whose centres rise with compression, rise
+ *    further while squeezing and fall while springing back, and are wobbled by slow independent LFOs; an irregular
+ *    amplitude flutter (two incommensurate LFOs) makes it granular instead of a steady hiss;
+ *  - a narrower "wet skin" band whose centre follows compression;
+ *  - a Poisson stream of Minnaert bubbles whose rate follows |rate| (radii shrink as compression grows). This is the
+ *    main layer; the noise bed sits underneath it.
  */
 export function squish(ctx: Ctx, out: AudioNode, t0: number, p: SquishParams): SquishVoice {
   const t = startTime(t0);
@@ -270,35 +276,47 @@ export function squish(ctx: Ctx, out: AudioNode, t0: number, p: SquishParams): S
   const A = dbToGain(LV.squish);
 
   const env = bag.gain(0);       // follows |rate|
+  const flutter = bag.gain(0.8); // irregular granular amplitude modulation
   const skinEnv = bag.gain(0);
   const mix = bag.gain(1);
-  const tone = bag.biquad('lowpass', 5200, 0.6);
-  mix.connect(tone); tone.connect(bag.head);
+  const mixHp = bag.biquad('highpass', 130, 0.7);   // no rumble under the formants
+  const tone = bag.biquad('lowpass', 4600, 0.6);
+  mix.connect(mixHp); mixHp.connect(tone); tone.connect(bag.head);
   const noise = bag.noise(r, t);
   noise.connect(env);
   noise.connect(skinEnv);
+  env.connect(flutter);
+  for (const [f, depth] of [[17 + 4 * r(), 0.24], [29 + 6 * r(), 0.16]]) {
+    const l = bag.osc('sine', f, t);
+    const d = bag.gain(depth);
+    l.connect(d); d.connect(flutter.gain);
+  }
 
-  const base = [430, 1050, 2150];
-  const qs = [7, 8.5, 7.5];
-  const gs = [1, 0.8, 0.5];
+  const base = [430, 980, 2050];
+  const qs = [5.5, 6.5, 5.5];
+  const gs = [1, 0.75, 0.45];
   const bands: BiquadFilterNode[] = [];
   for (let k = 0; k < 3; k++) {
     const bp = bag.biquad('bandpass', base[k] * pr, qs[k]);
-    const g = bag.gain(gs[k] * 1.9);
-    env.connect(bp); bp.connect(g); g.connect(mix);
+    const g = bag.gain(gs[k] * 1.5);
+    flutter.connect(bp); bp.connect(g); g.connect(mix);
     bands.push(bp);
-    // slow independent wobble of each formant keeps it alive even at constant rate
-    const lfo = bag.osc('sine', 2.6 + 1.9 * k + 0.7 * r(), t);
-    const d = bag.gain(110 + 40 * k);
-    lfo.connect(d); d.connect(bp.detune);
+    // each formant wanders on two slow LFOs of its own: the "bubbly" movement that survives a constant rate
+    for (const [f, cents] of [[3.1 + 2.3 * k + r(), 150 + 40 * k], [7.5 + 3 * r() + 2 * k, 90]]) {
+      const lfo = bag.osc('sine', f, t);
+      const d = bag.gain(cents);
+      lfo.connect(d); d.connect(bp.detune);
+    }
   }
-  const skin = bag.biquad('bandpass', 900 * pr, 1.3);
-  const skinG = bag.gain(0.9);
+  const skin = bag.biquad('bandpass', 900 * pr, 2.2);
+  const skinG = bag.gain(0.5);
   skinEnv.connect(skin); skin.connect(skinG); skinG.connect(mix);
 
   const bubBus = bag.gain(1);
-  const bubLp = bag.biquad('lowpass', 5200, 0.6);
-  bubBus.connect(bubLp); bubLp.connect(bag.head);
+  const bubHp = bag.biquad('highpass', 170, 0.7);
+  const bubHp2 = bag.biquad('highpass', 170, 0.7);
+  const bubLp = bag.biquad('lowpass', 5000, 0.6);
+  bubBus.connect(bubHp); bubHp.connect(bubHp2); bubHp2.connect(bubLp); bubLp.connect(bag.head);
 
   let lastT = t, lastEnv = 0, dirS = 0, ended = false;
   let lastUpdateT = t;
@@ -310,10 +328,10 @@ export function squish(ctx: Ctx, out: AudioNode, t0: number, p: SquishParams): S
     get alive() { return bag.alive; },
     get dying() { return bag.dying; },
     get lastUpdateT() { return lastUpdateT; },
-    kill: (f) => bag.kill(f),
+    kill: (f, at) => bag.kill(f, at),
     free: () => bag.free(),
     update(q, atTime) {
-      if (ended || !bag.alive) return;
+      if (ended || !bag.alive || bag.dying) return;   // stolen or ended: later updates are ignored
       const tt = Math.max(t, fin(atTime, ctx.currentTime));
       const c = c01(q.compression, 0);
       const rate = fin(q.rate, 0);
@@ -321,19 +339,25 @@ export function squish(ctx: Ctx, out: AudioNode, t0: number, p: SquishParams): S
       const dir = rate >= 0 ? 1 : -1;
       const hop = clamp(tt - lastT, 0.008, 0.06);
       lastT = tt;
-      lastUpdateT = tt;
+      lastUpdateT = Math.min(tt, ctx.currentTime + 0.5);
       dirS += (dir - dirS) * 0.35;
       // formant scale: rises with compression, rises while squeezing, falls while springing back
-      const scale = (0.68 + 1.05 * c) * (1 + 0.17 * dirS) * pr;
-      for (let k = 0; k < 3; k++) bands[k].frequency.setTargetAtTime(base[k] * scale, tt, 0.035);
-      skin.frequency.setTargetAtTime(lerp(620, 3100, c) * pr * (1 + 0.1 * dirS), tt, 0.04);
+      const scale = (0.62 + 1.25 * c) * (1 + 0.2 * dirS) * pr;
+      for (let k = 0; k < 3; k++) bands[k].frequency.setTargetAtTime(base[k] * scale, tt, 0.03);
+      skin.frequency.setTargetAtTime(lerp(620, 3000, c) * pr * (1 + 0.12 * dirS), tt, 0.04);
       const target = A * Math.pow(a, 0.85);
-      const tc = target > lastEnv ? 0.012 : 0.05;
-      env.gain.setTargetAtTime(target * 0.9, tt, tc);
-      skinEnv.gain.setTargetAtTime(target * 0.55, tt, tc);
+      const tc = target > lastEnv ? 0.012 : 0.04;
+      // Dead-man's switch: every update replaces the previous one (cancelScheduledValues drops it), so if the caller stops
+      // updating (finger lifted, tab hidden, a bug) the squelch falls silent by itself ~0.5 s later instead of droning on.
+      env.gain.cancelScheduledValues(tt);
+      skinEnv.gain.cancelScheduledValues(tt);
+      env.gain.setTargetAtTime(target * 1.25, tt, tc);
+      skinEnv.gain.setTargetAtTime(target * 0.5, tt, tc);
+      env.gain.setTargetAtTime(0, tt + 0.4, 0.06);
+      skinEnv.gain.setTargetAtTime(0, tt + 0.4, 0.06);
       if (target < 1e-4) {
-        env.gain.setTargetAtTime(0, tt + 0.3, 0.02);
-        skinEnv.gain.setTargetAtTime(0, tt + 0.3, 0.02);
+        env.gain.setTargetAtTime(0, tt + 0.15, 0.012);
+        skinEnv.gain.setTargetAtTime(0, tt + 0.15, 0.012);
       }
       lastEnv = target;
       if (typeof q.pan === 'number' && Number.isFinite(q.pan)) {
@@ -342,15 +366,15 @@ export function squish(ctx: Ctx, out: AudioNode, t0: number, p: SquishParams): S
       }
       // bubbles: Poisson, rate follows |rate|; memoryless so each hop restarts the clock
       if (a > 0.015) {
-        const lam = 70 * Math.pow(a, 1.15) * lerp(0.6, 1.15, c);
+        const lam = 95 * Math.pow(a, 1.05) * lerp(0.7, 1.2, c);
         let u = tt + 0.003;
         const end = tt + 0.003 + hop;
         for (let guard = 0; guard < 8; guard++) {
           u += rexp(r, lam);
           if (u >= end) break;
           const rad = rlog(r, 0.0004, 0.006) * lerp(1.15, 0.62, c) / pr;
-          const amp = A * 0.5 * clamp(Math.pow(rad * pr / 0.002, 1.1), 0.12, 2) * (0.35 + 0.65 * a) * rr(r, 0.6, 1);
-          bubble(ctx, bubBus, u, rad, amp, 0.16);
+          const amp = A * 0.5 * clamp(Math.pow(rad * pr / 0.002, 1.3), 0.05, 1.5) * (0.4 + 0.6 * a) * rr(r, 0.6, 1);
+          bubble(ctx, bubBus, u, rad, amp, 0.3 * (0.6 + 0.4 * dirS));
         }
       }
     },
@@ -461,7 +485,7 @@ export function blend(ctx: Ctx, out: AudioNode, t0: number, p: BlendParams): Ble
       u += rexp(r, lam);
       if (u >= stop) break;
       const rad = rlog(r, 0.0016, 0.0062) / pr;
-      bubble(ctx, bag.head, u, rad, M * 0.5 * clamp(rad * pr / 0.003, 0.3, 1.6) * rr(r, 0.5, 1), 0.14, 1.2);
+      bubble(ctx, bag.head, u, rad, M * 0.5 * clamp(rad * pr / 0.003, 0.3, 1.6) * rr(r, 0.5, 1), 0.25, 1.2);
     }
   }
 
@@ -518,7 +542,7 @@ export function blend(ctx: Ctx, out: AudioNode, t0: number, p: BlendParams): Ble
     get endTime() { return bag.endTime; },
     get alive() { return bag.alive; },
     get dying() { return bag.dying; },
-    kill: (f) => bag.kill(f),
+    kill: (f, at) => bag.kill(f, at),
     free: () => bag.free(),
     stop: () => bag.kill(0.15),
   };
