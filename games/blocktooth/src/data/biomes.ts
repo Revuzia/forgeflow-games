@@ -4,6 +4,11 @@
 //
 // Tier-band arrays are [lot/plaza, tier1, tier2, tier3, tier4]: index 0 is the weight of a
 // parcel becoming an open lot (plaza / yard / container apron) instead of a building.
+//
+// Block grids were grown for the 20-minute run (2026-10-01, owner: "slightly bigger cities"):
+// GRID-EAST 14x14 -> 15x16 (+22 % blocks), WHITE STACKS 12x12 -> 14x13 (+26 %, the smallest city
+// grows most), LOCKWATER 12x14 -> 13x16 (+24 %). Archetypes, tier bands, props and palettes are
+// unchanged, so each city keeps its look; citygen scales downtown/arterials/parks with the grid.
 
 import type { BiomeDef, BiomeId, BuildingArchetype } from '../core/types.ts';
 
@@ -59,14 +64,14 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
     name: 'GRID-EAST',
     subtitle: 'daytime commercial blocks',
     lore: [
-      'Fourteen blocks by fourteen of cafés, walk-ups and glass towers, zoned for commerce and light foot traffic.',
+      'Fifteen blocks by sixteen of cafés, walk-ups and glass towers, zoned for commerce and light foot traffic.',
       'Blossom season. Parking enforcement at full strength.',
       'The Planning Office rates local structures "adequate for ordinary weather". Nobody defined ordinary.',
     ],
     slate: 'UNIDENTIFIED MASS — DOWNTOWN GRID',
     time: 'day',
     weather: 'none',
-    blocks: [14, 14],
+    blocks: [15, 16],
     flooded: false,
     palette: {
       sky: '#9fd8f0', skyHorizon: '#fbe9d2', fog: '#f4e6d4',
@@ -107,14 +112,14 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
     name: 'WHITE STACKS',
     subtitle: 'snowed industrial park',
     lore: [
-      'Twelve blocks by twelve of tanks, dishes and cooling towers under a permanent grey lid.',
+      'Fourteen blocks by thirteen of tanks, dishes and cooling towers under a permanent grey lid.',
       'Snow clearance is scheduled for spring. Spring is under review.',
       'Residents are reminded that the chimneys are load-bearing for morale.',
     ],
     slate: 'UNIDENTIFIED MASS — WHITE STACKS',
     time: 'overcast',
     weather: 'snow',
-    blocks: [12, 12],
+    blocks: [14, 13],
     flooded: false,
     palette: {
       sky: '#c9d3dc', skyHorizon: '#eef2f5', fog: '#e2e8ee',
@@ -155,14 +160,14 @@ export const BIOMES: Record<BiomeId, BiomeDef> = {
     name: 'LOCKWATER',
     subtitle: 'flooded container port at night',
     lore: [
-      'Twelve blocks by fourteen of stacked freight, most of it now standing in the tide.',
+      'Thirteen blocks by sixteen of stacked freight, most of it now standing in the tide.',
       'The harbour authority has closed the streets to cars and reopened them to boats.',
       'Night shift reported a large shape moving between the containers. Night shift has been sent home.',
     ],
     slate: 'UNIDENTIFIED MASS — LOCKWATER',
     time: 'night',
     weather: 'rain',
-    blocks: [12, 14],
+    blocks: [13, 16],
     flooded: true,
     palette: {
       sky: '#0b1022', skyHorizon: '#1c2140', fog: '#151b34',

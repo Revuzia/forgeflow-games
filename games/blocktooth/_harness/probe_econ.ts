@@ -7,6 +7,15 @@
 // bonus by tier, enemy kills; mass only sizes pickup meshes since SIZE became level-driven), XP GAINED, levels, floors/props per second,
 // damage taken, min HP fraction and the peak enemy count. This is how the economy table at
 // the top of src/core/config.ts was derived. performance.now() is not used.
+//
+// REPAIR CREWS (city/citysim.ts rebuild): per rank also crews dispatched / storeys rebuilt / buildings topped out,
+// the standing-floor fraction at each rank end and at the city-boss spawn, and live ASSERTS on every rebuild event of
+// the real run (stepCity runs first in the tick, so the pre-tick titan / boss / standing state is exactly what the
+// works department saw): a crew is only dispatched while standing floors (+ the storeys finished that tick) are
+// below REBUILD_TARGET, never during a live gatekeeper fight (no storey either; during the city-boss fight neither
+// a crew nor a storey inside its keep-out rebuildStartR), never within rebuildStartR
+// of the titan, never on a lot younger than
+// REBUILD_MIN_DOWN_S; a storey is never added within rebuildNearR of the titan. Any violation -> exit code 1.
 
 import type { BiomeId, EnemyKind, TitanId, World } from '../src/core/types.ts';
 import { RANKS, TIERS, xpToNext } from '../src/core/config.ts';
@@ -14,6 +23,12 @@ import { createWorld, stepWorld } from '../src/core/world.ts';
 import { hasPendingDraft, pickUpgrade, rollOffer } from '../src/upgrades/draft.ts';
 import { botInput, botPickUpgrade } from './bot.ts';
 import { ENEMIES } from '../src/data/enemies.ts';
+import {
+  REBUILD_MIN_DOWN_S, REBUILD_TARGET, rebuildBook, rebuildNearR, rebuildStartR,
+} from '../src/city/citysim.ts';
+
+/** REPAIR CREWS assert failures across every runEcon call (main exits 1 when > 0). */
+export const rebuildFails: string[] = [];
 
 interface Acc {
   t0: number; t1: number;
@@ -21,6 +36,7 @@ interface Acc {
   massGain: number; xpGain: number; lv0: number; lv1: number;
   dmgTaken: number; minHp: number; peakE: number; kills: number; drafts: number;
   hurt: Record<string, number>; boss: Record<string, number>; paint: { fired: number; hit: number };
+  rbStart: number; rbFloors: number; rbDone: number; standEnd: number;
 }
 
 function add(a: Acc, key: string, xp: number, mass: number): void {
@@ -37,7 +53,17 @@ function totalXp(w: World): number {
 export function runEcon(titan: TitanId, biome: BiomeId, seed: number, minutes: number, print = true): { accs: Acc[]; w: World } {
   const w = createWorld({ titan, biome, seed });
   const accs: Acc[] = [];
-  const mk = (t: number): Acc => ({ t0: t, t1: t, src: {}, massGain: 0, xpGain: 0, lv0: w.titan.level, lv1: w.titan.level, dmgTaken: 0, minHp: 1, peakE: 0, kills: 0, drafts: 0, hurt: {}, boss: {}, paint: { fired: 0, hit: 0 } });
+  const mk = (t: number): Acc => ({ t0: t, t1: t, src: {}, massGain: 0, xpGain: 0, lv0: w.titan.level, lv1: w.titan.level, dmgTaken: 0, minHp: 1, peakE: 0, kills: 0, drafts: 0, hurt: {}, boss: {}, paint: { fired: 0, hit: 0 }, rbStart: 0, rbFloors: 0, rbDone: 0, standEnd: 1 });
+  // REPAIR CREWS bookkeeping
+  let totalFloors = 0;
+  for (const b of w.city.buildings) totalFloors += b.floors;
+  const standing = (): number => { let s2 = 0; for (const b of w.city.buildings) s2 += b.collapsed ? 0 : b.alive; return s2 / Math.max(1, totalFloors); };
+  const footD = (b: { x: number; z: number; w: number; d: number }, x: number, z: number): number =>
+    Math.hypot(x - Math.min(Math.max(x, b.x - b.w / 2), b.x + b.w / 2), z - Math.min(Math.max(z, b.z - b.d / 2), b.z + b.d / 2));
+  const bk = rebuildBook(w.city);
+  const tag = `${titan}/${biome}/${seed}`;
+  let standAtCity = NaN;
+  const fail = (m: string): void => { if (rebuildFails.length < 40) rebuildFails.push(`${tag} @${w.t.toFixed(1)} s: ${m}`); else rebuildFails.length++; };
   let cur = mk(0); accs.push(cur);
   let rank = 0;
   const maxTicks = Math.round(minutes * 60 * 30);
@@ -51,9 +77,33 @@ export function runEcon(titan: TitanId, biome: BiomeId, seed: number, minutes: n
       pickUpgrade(w, botPickUpgrade(w, offer));
       cur.drafts++;
     }
+    // pre-tick state = what stepCity (first system of the tick) sees
+    const preX = w.titan.x, preZ = w.titan.z, preStand = standing();
+    const sR = rebuildStartR(w), nR = rebuildNearR(w);
+    const boss = w.boss && w.boss.alive ? { x: w.boss.x, z: w.boss.z, main: w.boss.role === 'main' } : null;
+    const downT = bk.downT.slice();
     stepWorld(w, botInput(w));
     const T = w.titan;
+    let rbFl = 0, rbStarted = false;
     for (const ev of w.events) {
+      if (ev.type !== 'rebuild') continue;
+      const b = w.city.buildings[ev.id];
+      if (ev.stage === 'floor') {
+        rbFl++; cur.rbFloors++;
+        if (boss && !boss.main) fail(`storey on building ${b.id} during a live gatekeeper fight`);
+        if (boss && boss.main && footD(b, boss.x, boss.z) < sR - 1e-6) fail(`storey on building ${b.id} inside the live city boss's keep-out`);
+        if (footD(b, preX, preZ) < nR - 1e-6) fail(`storey on building ${b.id} ${footD(b, preX, preZ).toFixed(1)} m from the titan (< rebuildNearR ${nR.toFixed(1)})`);
+      } else if (ev.stage === 'start') {
+        rbStarted = true; cur.rbStart++;
+        if (boss && !boss.main) fail(`crew dispatched to building ${b.id} during a live gatekeeper fight`);
+        if (footD(b, preX, preZ) < sR - 1e-6) fail(`crew on building ${b.id} ${footD(b, preX, preZ).toFixed(1)} m from the titan (< rebuildStartR ${sR.toFixed(1)})`);
+        if (boss && footD(b, boss.x, boss.z) < sR - 1e-6) fail(`crew on building ${b.id} inside a live boss's keep-out`);
+        if (downT[b.id] >= 0 && w.t - downT[b.id] < REBUILD_MIN_DOWN_S - 1e-6) fail(`crew on building ${b.id} only ${(w.t - downT[b.id]).toFixed(1)} s after its collapse`);
+      } else cur.rbDone++;
+    }
+    if (rbStarted && preStand + rbFl / Math.max(1, totalFloors) >= REBUILD_TARGET) fail(`crew dispatched at ${(preStand * 100).toFixed(1)} % standing (target ${REBUILD_TARGET * 100} %)`);
+    for (const ev of w.events) {
+      if (ev.type === 'bossSpawn' && w.boss && w.boss.role === 'main' && Number.isNaN(standAtCity)) standAtCity = standing();
       if (ev.type === 'propDestroyed') {
         const p = w.city.props[ev.id];
         const td = TIERS[p.tier];
@@ -85,6 +135,7 @@ export function runEcon(titan: TitanId, biome: BiomeId, seed: number, minutes: n
     let alive = 0; for (const e of w.enemies) if (e.alive) alive++;
     cur.peakE = Math.max(cur.peakE, alive);
     cur.t1 = w.t; cur.lv1 = T.level;
+    if (i % 30 === 0 || T.rank !== rank || w.run.result) cur.standEnd = standing();
     if (T.rank !== rank) {
       rank = T.rank;
       cur = mk(w.t); accs.push(cur);
@@ -98,7 +149,9 @@ export function runEcon(titan: TitanId, biome: BiomeId, seed: number, minutes: n
       const keys = Object.keys(a.src).sort((p, q) => a.src[q].xp - a.src[p].xp);
       console.log(`      hurt by: ${Object.entries(a.hurt).map(([k, v]) => `${k} ${v.toFixed(0)}`).join(' · ') || '—'}  | hostile paint hit ${a.paint.hit}/${a.paint.fired}  | boss attacks: ${Object.entries(a.boss).map(([k, v]) => `${k}×${v}`).join(' ') || '—'}`);
       console.log('      ' + keys.map((k) => `${k}: n${a.src[k].n} m${a.src[k].mass.toFixed(0)} x${a.src[k].xp.toFixed(0)}`).join(' · '));
+      console.log(`      repair crews: dispatched ${a.rbStart} · storeys rebuilt ${a.rbFloors} · topped out ${a.rbDone} · standing floors at rank end ${(a.standEnd * 100).toFixed(0)} %`);
     });
+    console.log(`  city boss spawn: standing floors ${Number.isNaN(standAtCity) ? '—' : (standAtCity * 100).toFixed(0) + ' %'} · repair-crew asserts ${rebuildFails.length ? rebuildFails.length + ' FAILED' : 'ok'}`);
   }
   return { accs, w };
 }
@@ -136,4 +189,10 @@ if (isMain) {
       }
     }
   } else for (const t of titans) for (const b of biomes) runEcon(t, b, seed, minutes);
+  if (rebuildFails.length) {
+    console.log(`\nREPAIR CREWS: FAIL — ${rebuildFails.length} violation(s)`);
+    for (const m of rebuildFails.slice(0, 40)) console.log('  ' + m);
+    process.exit(1);
+  }
+  console.log('\nREPAIR CREWS: PASS (every rebuild event of the run(s) obeyed target / start / near / boss / min-down rules)');
 }

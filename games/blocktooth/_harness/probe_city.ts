@@ -16,6 +16,12 @@
 //    counters + tonnage + blocksLeveled), damageProp (crushed flag, 1–3 pickups, propsEaten),
 //    resolveCircleVsCity (push-out, bumpTier, flatten pass-through, collapsed never blocks, tier-0
 //    props never block, tier-1 props block enemies), nearestRubble, stepCity re-derivation.
+// 4. REPAIR CREWS — healthy city gets none; a depleted city (Size IV titan parked at the centre) gets crews only
+//    beyond rebuildStartR, storeys only beyond rebuildNearR, never under the titan, never above REBUILD_MAX_CREWS,
+//    never on a lot younger than REBUILD_MIN_DOWN_S, never dispatched at/above REBUILD_TARGET; first storey
+//    un-collapses (alive 1, full floor HP), topped-out buildings stand full; blocksLeveled never decreases;
+//    deterministic (identical runs -> identical event sequence); a rebuilt building drops normal rubble XP; the crew
+//    downs tools near the titan and next to a live boss; a hit abandons the construction; a heal pickup holds a lot.
 //    Uses the REAL combat/pickups.ts when its import chain loads; otherwise a recording stub is
 //    swapped in through node:module registerHooks and the output says so.
 // Exit code: 0 all assertions passed, 1 any failure.
@@ -27,7 +33,7 @@ import { BIOMES } from '../src/data/biomes.ts';
 import { generateCity, PROP_INFO, laneCum, cellOf } from '../src/city/citygen.ts';
 import { stepTraffic } from '../src/city/traffic.ts';
 import { hashStr, makeStreams, mulberry32 } from '../src/core/rng.ts';
-import { CITY, PARCEL_HALF, SIM_DT, TIERS } from '../src/core/config.ts';
+import { CITY, PARCEL_HALF, SIM_DT, TIERS, lootXp } from '../src/core/config.ts';
 import { segDist } from '../src/core/math.ts';
 import { createMapState } from '../src/meta/objectives.ts';
 import { createTally } from '../src/meta/tally.ts';
@@ -563,6 +569,212 @@ if (CS) {
   if (stubCalls.length) console.log(`   stub spawnPickup calls: ${stubCalls.length}`);
 } else {
   fail('city sim not exercised (citysim.ts could not be loaded)');
+}
+
+// ═════════════════════════════ 4. repair crews (rebuild) ═════════════════════════════
+// city/citysim.ts REPAIR CREWS: a depleted city is rebuilt AWAY from the titan, gradually (scaffold → storeys),
+// deterministically (world.rng.city); rebuilt storeys are ordinary floors (normal smash XP); a building under
+// construction that takes a hit is abandoned; nothing is ever added under the titan / a live boss / a heal pickup;
+// blocksLeveled never goes down; a healthy city gets no crews.
+console.log('== 4. REPAIR CREWS');
+if (CS) {
+  const RB = CS;
+  type RbEv = Extract<SimEvent, { type: 'rebuild' }>;
+  const foot = (b: { x: number; z: number; w: number; d: number }, x: number, z: number) =>
+    Math.hypot(x - Math.min(Math.max(x, b.x - b.w / 2), b.x + b.w / 2), z - Math.min(Math.max(z, b.z - b.d / 2), b.z + b.d / 2));
+  const standing = (w: World) => { let s = 0; for (const b of w.city.buildings) s += b.collapsed ? 0 : b.alive; return s; };
+  /** Size IV titan parked at the city centre; every building but id % 7 === 0 levelled at t = 100 s. */
+  const depleted = (bid: BiomeId, seed: number): World => {
+    const w = miniWorld(bid, seed);
+    const T = w.titan;
+    T.x = 0; T.z = 0; T.px = 0; T.pz = 0; T.rank = 3; T.height = 32; T.radius = 32 * 0.42;
+    w.tick = 3000; w.t = 100;
+    for (const b of w.city.buildings) {
+      if (b.id % 7 === 0) continue;
+      for (let g = 0; g < 80 && !b.collapsed; g++) CS!.damageBuilding(w, b.id, 1e9, { src: 'titan', kind: 'stomp' });
+    }
+    w.pickups.length = 0;          // the scenario's rubble is not the subject (heal pickups would hold lots)
+    w.events.length = 0;
+    return w;
+  };
+
+  // 4a. a healthy city: no crews, no rebuild events
+  {
+    const w = miniWorld('grideast', 7);
+    w.titan.x = 0; w.titan.z = 0;
+    let evs = 0;
+    for (let k = 0; k < 30 * 20; k++) { tickPrev(w); CS.stepCity(w); evs += w.events.filter((e) => e.type === 'rebuild').length; }
+    const st = RB.rebuildStats(w);
+    console.log(`   healthy city (100 % standing, 20 s): crews ${st.started} · rebuild events ${evs}`);
+    check(st.started === 0 && evs === 0, `a healthy city must get no repair crews (started ${st.started}, events ${evs})`);
+  }
+
+  // 4b. a depleted city over 120 s with the titan parked at the centre
+  const runDepleted = (bid: BiomeId, seed: number, secs: number) => {
+    const w = depleted(bid, seed);
+    const c = w.city;
+    const total = c.buildings.reduce((s, b) => s + b.floors, 0);
+    const frac0 = standing(w) / total;
+    const lv0 = w.run.blocksLeveled;
+    const startR = RB.rebuildStartR(w), nearR = RB.rebuildNearR(w);
+    let starts = 0, floors = 0, dones = 0, badStart = 0, badFloor = 0, badFirst = 0, badDone = 0, early = 0, overCap = 0, lvDown = 0, badTarget = 0;
+    let lvPrev = lv0;
+    const seq: number[] = [];
+    for (let k = 0; k < 30 * secs; k++) {
+      const pre = standing(w) / total;
+      tickPrev(w); CS!.stepCity(w);
+      const bk = RB.rebuildBook(c);
+      if (bk.crews.length > RB.REBUILD_MAX_CREWS) overCap++;
+      let fl = 0;
+      for (const e of w.events) {
+        if (e.type !== 'rebuild') continue;
+        const ev = e as RbEv;
+        const b = c.buildings[ev.id];
+        seq.push(ev.id * 4 + (ev.stage === 'start' ? 0 : ev.stage === 'floor' ? 1 : 2), ev.alive);
+        if (ev.stage === 'start') {
+          starts++;
+          if (foot(b, w.titan.x, w.titan.z) < startR) badStart++;
+          if (w.t - bk.downT[b.id] < RB.REBUILD_MIN_DOWN_S - 1e-9) early++;
+        } else if (ev.stage === 'floor') {
+          floors++; fl++;
+          if (foot(b, w.titan.x, w.titan.z) < nearR) badFloor++;
+          if (ev.alive === 1 && (b.collapsed || b.alive !== 1 || b.floorHp !== b.floorHpMax)) badFirst++;
+        } else {
+          dones++;
+          if (b.collapsed || b.alive !== b.floors || bk.stage[b.id] !== RB.RB_NONE) badDone++;
+        }
+      }
+      // a crew is only dispatched while standing (after this tick's finished storeys) is below the target
+      if (w.events.some((e) => e.type === 'rebuild' && (e as RbEv).stage === 'start') && pre + fl / total >= RB.REBUILD_TARGET) badTarget++;
+      if (w.run.blocksLeveled < lvPrev) lvDown++;
+      lvPrev = w.run.blocksLeveled;
+    }
+    const st = RB.rebuildStats(w);
+    return { w, frac0, frac1: standing(w) / total, starts, floors, dones, badStart, badFloor, badFirst, badDone, early, overCap, lvDown, badTarget, st, seq, lv0, startR, nearR };
+  };
+  for (const bid of BIOME_LIST) {
+    const a = runDepleted(bid, 7, 120);
+    const b2 = runDepleted(bid, 7, 120);
+    console.log(`   ${bid} depleted (${(a.frac0 * 100).toFixed(0)} % standing, Size IV titan at the centre, startR ${a.startR.toFixed(0)} m nearR ${a.nearR.toFixed(0)} m), 120 s: `
+      + `crews ${a.starts} · storeys ${a.floors} · topped out ${a.dones} · standing → ${(a.frac1 * 100).toFixed(1)} % · active ${a.st.active}`);
+    check(a.starts > 0 && a.floors > 0 && a.dones > 0, `${bid}: a depleted city must get crews that raise storeys and top out buildings`);
+    check(a.st.started === a.starts && a.st.floors === a.floors && a.st.done === a.dones, `${bid}: rebuildStats disagree with the rebuild events`);
+    check(a.frac1 > a.frac0, `${bid}: standing floors must grow (${a.frac0} → ${a.frac1})`);
+    check(a.badStart === 0, `${bid}: ${a.badStart} crews set up inside rebuildStartR of the titan`);
+    check(a.badFloor === 0, `${bid}: ${a.badFloor} storeys added inside rebuildNearR of the titan`);
+    check(a.badFirst === 0, `${bid}: ${a.badFirst} first storeys did not un-collapse the building with alive 1 at full floor HP`);
+    check(a.badDone === 0, `${bid}: ${a.badDone} 'done' buildings not standing at full height with the crew released`);
+    check(a.early === 0, `${bid}: ${a.early} crews took a lot younger than REBUILD_MIN_DOWN_S`);
+    check(a.overCap === 0, `${bid}: crews above REBUILD_MAX_CREWS on ${a.overCap} ticks`);
+    check(a.lvDown === 0 && a.w.run.blocksLeveled >= a.lv0, `${bid}: run.blocksLeveled went down (${a.lv0} → ${a.w.run.blocksLeveled})`);
+    check(a.badTarget === 0, `${bid}: ${a.badTarget} crews dispatched with standing floors at/above REBUILD_TARGET`);
+    // nothing rebuilt overlaps the titan
+    const T = a.w.titan;
+    const under = a.w.city.buildings.filter((bd) => !bd.collapsed && bd.id % 7 !== 0 && foot(bd, T.x, T.z) < T.radius).length;
+    check(under === 0, `${bid}: ${under} rebuilt buildings stand under the titan`);
+    // determinism: an identical scenario gives the identical event sequence and building state
+    const sa = hashStr(a.seq.join(',') + '|' + a.w.city.buildings.map((bd) => `${bd.alive}${bd.collapsed ? 'c' : ''}`).join(','));
+    const sb = hashStr(b2.seq.join(',') + '|' + b2.w.city.buildings.map((bd) => `${bd.alive}${bd.collapsed ? 'c' : ''}`).join(','));
+    check(sa === sb, `${bid}: repair crews not deterministic (${sa} vs ${sb})`);
+  }
+
+  // 4c. mechanics on one depleted city: XP of a rebuilt building, abandonment, titan pause, boss keep-out, heal-pickup lot
+  {
+    const a = runDepleted('grideast', 7, 60);
+    const w = a.w, c = w.city, bk = RB.rebuildBook(c);
+    const done = c.buildings.find((bd) => bd.id % 7 !== 0 && !bd.collapsed && bd.alive === bd.floors && bk.stage[bd.id] === RB.RB_NONE);
+    check(!!done, 'a fully rebuilt building exists after 60 s');
+    if (done) {
+      // rebuilt storeys are ordinary floors: a huge smash breaks min(4, floors) with rubble worth floors × lootXp
+      w.titan.x = done.x + done.w / 2 + 3; w.titan.z = done.z;
+      w.events.length = 0;
+      const pk0 = w.pickups.length;
+      const broke = CS.damageBuilding(w, done.id, 1e9, { src: 'titan', kind: 'smash' });
+      const fbs = w.events.filter((e) => e.type === 'floorBreak').length;
+      const xp = w.pickups.slice(pk0).filter((p) => p.kind === 'rubble').reduce((s, p) => s + p.xp, 0);
+      const exp = Math.min(4, done.floors) * lootXp(done.tier, w.titan.rank)
+        + (done.floors <= 4 ? TIERS[done.tier].collapseBonus * done.floors * lootXp(done.tier, w.titan.rank) : 0);
+      console.log(`   rebuilt ${done.arch} (${done.floors} fl, tier ${done.tier}): smash broke ${broke} · floorBreak ${fbs} · rubble XP ${xp.toFixed(2)} (expected ${exp.toFixed(2)})`);
+      check(broke === Math.min(4, done.floors) && fbs === broke, 'a rebuilt building must break like any other');
+      check(Math.abs(xp - exp) < 1e-6, `a rebuilt building must drop normal rubble XP (${xp} vs ${exp})`);
+    }
+    // find / make a site that is RISING with storeys up, far from the titan
+    w.titan.x = c.bounds.maxX + 2000; w.titan.z = c.bounds.maxZ + 2000;   // off the map: crews work freely
+    let rising = -1;
+    for (let k = 0; k < 30 * 60 && rising < 0; k++) {
+      tickPrev(w); CS.stepCity(w);
+      rising = bk.crews.find((id) => bk.stage[id] === RB.RB_RISING && !c.buildings[id].collapsed && c.buildings[id].alive >= 1 && c.buildings[id].alive < c.buildings[id].floors - 1) ?? -1;
+    }
+    check(rising >= 0, 'a site with storeys going up exists');
+    if (rising >= 0) {
+      const b = c.buildings[rising];
+      // titan walks up to it: the crew downs tools (no storey, no progress) while it is within rebuildNearR
+      w.titan.x = b.x + b.w / 2 + 2; w.titan.z = b.z;
+      const al = b.alive, pg = bk.prog[rising];
+      for (let k = 0; k < 30 * 5; k++) { tickPrev(w); CS.stepCity(w); }
+      check(b.alive === al && bk.prog[rising] === pg && bk.paused[rising] === 1, `crews must down tools with the titan close (alive ${al}→${b.alive}, prog ${pg}→${bk.prog[rising]}, paused ${bk.paused[rising]})`);
+      // a live boss next to the site keeps it frozen even with the titan gone (the CITY boss: the works keep
+      // going during its fight, so only its keep-out freezes this site)
+      w.titan.x = c.bounds.maxX + 2000; w.titan.z = c.bounds.maxZ + 2000;
+      w.boss = { alive: true, role: 'main', x: b.x, z: b.z, parts: [] } as unknown as World['boss'];
+      const st0 = RB.rebuildStats(w).started;
+      const near0: number[] = [];
+      for (let k = 0; k < 30 * 5; k++) {
+        tickPrev(w); CS.stepCity(w);
+        for (const e of w.events) if (e.type === 'rebuild' && (e as RbEv).stage === 'start') near0.push((e as RbEv).id);
+      }
+      const bossR = RB.rebuildStartR(w);
+      check(b.alive === al && bk.prog[rising] === pg, 'no storey goes up next to a live boss / gatekeeper');
+      check(near0.every((id) => foot(c.buildings[id], b.x, b.z) >= bossR), `crews set up inside the keep-out of a live boss (${near0.length} starts since ${st0})`);
+      // ...and a live GATEKEEPER ANYWHERE (far corner of the map) stops the whole works department: no dispatch, no
+      // storey on any site, every crew paused (a gatekeeper fight roams — the arena is wherever it goes)
+      w.boss = { alive: true, role: 'gate', x: c.bounds.minX - 3000, z: c.bounds.minZ - 3000, parts: [] } as unknown as World['boss'];
+      let fightEv = 0;
+      for (let k = 0; k < 30 * 5; k++) {
+        tickPrev(w); CS.stepCity(w);
+        fightEv += w.events.filter((e) => e.type === 'rebuild').length;
+      }
+      const allPaused = bk.crews.every((id) => bk.paused[id] === 1);
+      console.log(`   boss fight anywhere (5 s): rebuild events ${fightEv} · crews ${bk.crews.length} all paused ${allPaused}`);
+      check(fightEv === 0 && allPaused, `a live gatekeeper fight must stop every crew (events ${fightEv}, all paused ${allPaused})`);
+      // the CITY boss far away: the works department keeps working (storeys go up on sites outside its keep-out).
+      // The titan stands at the test site meanwhile, so that site stays paused for the abandonment check below.
+      w.titan.x = b.x + b.w / 2 + 2; w.titan.z = b.z;
+      w.boss = { alive: true, role: 'main', x: c.bounds.minX - 3000, z: c.bounds.minZ - 3000, parts: [] } as unknown as World['boss'];
+      let cityEv = 0;
+      for (let k = 0; k < 30 * 5; k++) {
+        tickPrev(w); CS.stepCity(w);
+        cityEv += w.events.filter((e) => e.type === 'rebuild' && (e as RbEv).stage === 'floor').length;
+      }
+      console.log(`   city-boss fight far away (5 s): storeys ${cityEv} · crews ${bk.crews.length}`);
+      check(cityEv > 0, `crews keep working during the city-boss fight outside its keep-out (storeys ${cityEv})`);
+      w.boss = null;
+      // a hit on a building under construction sends the crew home: no more storeys
+      w.titan.x = b.x + b.w / 2 + 2; w.titan.z = b.z;
+      CS.damageBuilding(w, rising, b.floorHpMax * 0.3, { src: 'titan', kind: 'bite' });
+      check(bk.stage[rising] === RB.RB_ABANDONED, `a hit must abandon the construction (stage ${bk.stage[rising]})`);
+      w.titan.x = c.bounds.maxX + 2000; w.titan.z = c.bounds.maxZ + 2000;
+      const al2 = b.alive;
+      for (let k = 0; k < 30 * 10; k++) { tickPrev(w); CS.stepCity(w); }
+      check(b.alive === al2 && bk.crews.indexOf(rising) < 0, 'an abandoned building never grows again');
+    }
+    // a heal pickup lying on a rubble lot holds the first storey until it is gone
+    let lot = -1;
+    for (let k = 0; k < 30 * 30 && lot < 0; k++) {
+      tickPrev(w); CS.stepCity(w);
+      lot = bk.crews.find((id) => bk.stage[id] === RB.RB_SCAFFOLD) ?? -1;
+    }
+    check(lot >= 0, 'a scaffold-stage site exists');
+    if (lot >= 0) {
+      const b = c.buildings[lot];
+      w.pickups.push({ id: w.nextId++, alive: true, kind: 'heal', x: b.x, z: b.z, y: 0, px: b.x, pz: b.z, py: 0, vx: 0, vz: 0, vy: 0, xp: 0, mass: 0, t: 0, magnet: false } as unknown as World['pickups'][number]);
+      for (let k = 0; k < 30 * (RB.REBUILD_SCAFFOLD_S + 4); k++) { tickPrev(w); CS.stepCity(w); }
+      check(b.collapsed && bk.stage[lot] === RB.RB_RISING, `a heal pickup on the lot must hold the first storey (collapsed ${b.collapsed}, stage ${bk.stage[lot]})`);
+      w.pickups.length = 0;
+      for (let k = 0; k < 30 * 2; k++) { tickPrev(w); CS.stepCity(w); }
+      check(!b.collapsed && b.alive >= 1, 'the storey goes up once the lot is clear');
+    }
+  }
 }
 
 console.log(`\n${checks} checks, ${failures} failures`);

@@ -71,6 +71,8 @@ import { BIOMES } from '../data/biomes.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from '../render/viewtypes.ts';
 import { addOutline, makeToon } from '../render/materials.ts';
 import { buildCityKit } from './meshkit.ts';
+import { RB_ABANDONED, RB_RISING, RB_SCAFFOLD, REBUILD_SCAFFOLD_S, rebuildBook } from './citysim.ts';
+import type { RebuildBook } from './citysim.ts';
 import type { ArchMeshes, CityKit } from './meshkit.ts';
 
 // ─────────────────────────────── constants ───────────────────────────────
@@ -1214,6 +1216,68 @@ class GB {
   }
 }
 
+// ─────────────────────────────── repair-crew props (scaffold + crane) ───────────────────────────────
+/** Vertex-coloured box soup (faceted: one normal per face). */
+class CB {
+  p: number[] = [];
+  n: number[] = [];
+  c: number[] = [];
+  box(x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, col: RGB): void {
+    const P = this.p, N = this.n, C = this.c;
+    const quad = (a: number[], b: number[], cc: number[], d: number[], nx: number, ny: number, nz: number) => {
+      P.push(...a, ...b, ...cc, ...a, ...cc, ...d);
+      for (let k = 0; k < 6; k++) { N.push(nx, ny, nz); C.push(col[0], col[1], col[2]); }
+    };
+    quad([x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1], 1, 0, 0);
+    quad([x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [x0, y0, z0], -1, 0, 0);
+    quad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], 0, 1, 0);
+    quad([x0, y0, z1], [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], 0, -1, 0);
+    quad([x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [x0, y0, z1], 0, 0, 1);
+    quad([x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0], 0, 0, -1);
+  }
+  build(name: string): THREE.BufferGeometry {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.n, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
+    g.name = name;
+    g.computeBoundingBox();
+    g.computeBoundingSphere();
+    return g;
+  }
+}
+/** Unit box (−0.5..0.5 in X/Z, 0..1 in Y), white: scaffold poles / ledgers / boards, tinted per instance. */
+function unitBoxGeo(): THREE.BufferGeometry {
+  const g = new CB();
+  g.box(-0.5, 0.5, 0, 1, -0.5, 0.5, WHITE);
+  return g.build('city:rebuild:box');
+}
+/** Tower crane, 1 m tall at the jib (mast at the origin, jib along +Z), uniform-scaled per site. Safety yellow
+ *  lattice-look mast (alternating bands), jib + counter-jib, concrete counterweight, cab, cable + hook block. */
+function craneGeo(): THREE.BufferGeometry {
+  const g = new CB();
+  const Y = lin('#f4c41f'), Yd = lin('#c98f12'), K = lin('#3a3f47'), C = lin('#9aa1a8'), R = lin('#e8462e');
+  const m = 0.035;                                   // mast half-width
+  for (let k = 0; k < 10; k++) g.box(-m, m, k * 0.1, k * 0.1 + 0.1, -m, m, k % 2 ? Yd : Y);
+  g.box(-m * 1.3, m * 1.3, 1.0, 1.05, -m * 1.3, m * 1.3, K);                 // slewing ring
+  g.box(-m * 1.2, m * 1.2, 1.05, 1.16, -m * 0.4, m * 1.6, R);                // cab
+  g.box(-m * 0.6, m * 0.6, 1.16, 1.32, -m * 0.6, m * 0.6, Y);                // apex
+  g.box(-0.022, 0.022, 1.06, 1.12, 0, 0.78, Y);                              // jib
+  g.box(-0.022, 0.022, 1.06, 1.12, -0.26, 0, Yd);                            // counter-jib
+  g.box(-0.04, 0.04, 0.98, 1.1, -0.26, -0.17, C);                            // counterweight
+  g.box(-0.004, 0.004, 0.62, 1.06, 0.58, 0.588, K);                          // cable
+  g.box(-0.02, 0.02, 0.56, 0.63, 0.555, 0.613, R);                           // hook block
+  return g.build('city:rebuild:crane');
+}
+const RB_POLE = lin('#f2b632');        // scaffold standards (safety yellow)
+const RB_LEDGER = lin('#ff7a2a');      // ledgers / guard rails (safety orange)
+const RB_BOARD = lin('#c8a26a');       // timber walkboards
+const RB_POLE_W = 0.32;                // standard / ledger thickness (m) — the 1.6 px ink makes them read at range
+const RB_BAY = 6.5;                    // standard spacing along a face (m) — open enough to watch the storeys rise inside
+const RB_OFF = 1.1;                    // cage stands this far off the facade (m)
+const RB_GROW_T = 0.42;                // a finished storey slides up into place (s), easeOutBack
+const RB_DONE_T = 0.9;                 // completion: the cage drops away (s)
+
 /** Sidewalk ring of one block: raised top with rounded outer corners + its curb faces. */
 function sidewalkRing(g: GB, cx: number, cz: number, top: number, bot: number): void {
   const o = CURB, i = PH, r = CURB_R, oc = o - r;
@@ -1306,6 +1370,16 @@ export class CityView implements ViewModule {
   private impostors: Impostors | null = null;
   private readonly _tintRGB: RGB = [1, 1, 1];
 
+  // repair crews (citysim rebuild): scaffold cage + tower crane per site, storey slide-in, cage strike
+  private rbBook: RebuildBook | null = null;
+  private rbBox: InstBatch | null = null;       // scaffold standards / ledgers / boards (unit box, tinted)
+  private rbCrane: InstBatch | null = null;
+  private growT = new Float32Array(0);          // ≥ 0 while the newest storey slides into place (s)
+  private rbDone = new Map<number, number>();   // building → seconds since its rebuild finished (cage strike)
+  private rbTime = 0;
+  private rbPhase = new Float32Array(0);        // crane slew phase per site (advances only while the crew works)
+  private rbOn = new Set<number>();             // sites drawn last frame (to strike the cage of an abandoned one)
+
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
   }
@@ -1359,6 +1433,12 @@ export class CityView implements ViewModule {
     this.propGList = [];
     this.propY = new Float32Array(nP);
     this.traffic = [];
+    this.growT = new Float32Array(nB).fill(-1);
+    this.rbPhase = new Float32Array(nB);
+    this.rbOn.clear();
+    this.rbDone.clear();
+    this.rbTime = 0;
+    this.rbBook = rebuildBook(city);
 
     // ── archetype batches (sized for the live set; grown on demand up to the city total) ──
     const archIndex = new Map<string, number>();
@@ -1405,6 +1485,14 @@ export class CityView implements ViewModule {
     });
     this.rubble = new InstBatch(root, 'city:rubble', kit.rubble, kit.facade, 16, Math.max(1, nB), true);
     this.rubbleDirty = true;
+    {
+      const boxGeo = unitBoxGeo(), crGeo = craneGeo();
+      const mat = makeToon({ vertexColors: true });
+      mat.name = 'city:rebuild';
+      this.rbBox = new InstBatch(root, 'city:rebuild:scaffold', boxGeo, mat, 64, 1 << 16, true);
+      this.rbCrane = new InstBatch(root, 'city:rebuild:crane', crGeo, mat, 8, Math.max(8, nB), true);
+      this.owned.push(boxGeo, crGeo, mat);
+    }
 
     // ── props ──
     const kindCount = new Map<PropKind, number>();
@@ -1481,6 +1569,9 @@ export class CityView implements ViewModule {
     // 4. destruction animation
     this.animate(Math.min(0.1, Math.max(0, f.dt)));
 
+    // 4b. repair crews: scaffold cages + cranes (every site, live or impostor block — cranes on the skyline)
+    this.updateRebuild(Math.min(0.1, Math.max(0, f.dt)));
+
     // 5. rebuild dirty instance batches
     this.rebuildDirty();
 
@@ -1527,6 +1618,12 @@ export class CityView implements ViewModule {
     this.ghostMats = [];
     this.rubble?.dispose();
     this.rubble = null;
+    this.rbBox?.dispose();
+    this.rbBox = null;
+    this.rbCrane?.dispose();
+    this.rbCrane = null;
+    this.rbBook = null;
+    this.rbDone.clear();
     for (const pb of this.propBatch.values()) pb.dispose();
     this.propBatch.clear();
     for (const pb of this.propGhost.values()) pb.dispose();
@@ -1753,6 +1850,7 @@ export class CityView implements ViewModule {
     this.vAlive[id] = b.collapsed ? 0 : b.alive;
     this.drop[id] = 0; this.vel[id] = 0; this.acc[id] = 0;
     this.sqT[id] = -1; this.sinkT[id] = -1; this.sinkN[id] = 0; this.rubT[id] = -1;
+    this.growT[id] = -1;
   }
 
   private writeBlockImpostor(bi: number): void {
@@ -1783,6 +1881,7 @@ export class CityView implements ViewModule {
       case 'floorBreak': this.onFloorBreak(e.id, e.remaining); break;
       case 'buildingCollapse': this.onCollapse(e.id); break;
       case 'propDestroyed': this.hideProp(e.id); break;
+      case 'rebuild': this.onRebuild(e.stage, e.id, e.alive); break;
       default: break;
     }
   }
@@ -1796,6 +1895,7 @@ export class CityView implements ViewModule {
     const k = old - remaining;
     if (k <= 0) return;
     this.breakT[id] = PANCAKE_SOLID_S;
+    this.growT[id] = -1;
     const ab = this.arches[this.archOf[id]];
     if (remaining > 0) {
       this.vAlive[id] = remaining;
@@ -1819,6 +1919,29 @@ export class CityView implements ViewModule {
       this.sinkN[id] = old;
       this.sinkT[id] = 0;
       this.sqT[id] = -1;
+    }
+    this.startAnim(id);
+    if (ab) ab.dirty = true;
+  }
+
+  /** Repair crews: a storey finished (slides up into place) / the building is done (cage struck, landing squash). */
+  private onRebuild(stage: 'start' | 'floor' | 'done', id: number, alive: number): void {
+    const city = this.city!;
+    const b = city.buildings[id];
+    if (!b) return;
+    if (stage === 'start') { this.rbDone.delete(id); this.rubbleDirty = true; return; }
+    if (stage === 'done') this.rbDone.set(id, 0);
+    if (!this.live[b.block]) { this.queueImpostor(b.block); return; }
+    const ab = this.arches[this.archOf[id]];
+    if (stage === 'floor') {
+      if (alive <= this.vAlive[id]) return;
+      this.vAlive[id] = alive;
+      this.drop[id] = 0; this.vel[id] = 0; this.acc[id] = 0;
+      this.sinkT[id] = -1; this.sinkN[id] = 0; this.rubT[id] = -1;
+      this.growT[id] = 0;
+      if (alive === 1) this.rubbleDirty = true;                 // the heap is gone: the first storey stands
+    } else {
+      this.sqT[id] = 0;                                          // topping out: the finished tower settles
     }
     this.startAnim(id);
     if (ab) ab.dirty = true;
@@ -1948,6 +2071,10 @@ export class CityView implements ViewModule {
         }
         active = true;
       }
+      if (this.growT[id] >= 0) {
+        this.growT[id] += dt;
+        if (this.growT[id] >= RB_GROW_T) this.growT[id] = -1; else active = true;
+      }
       if (this.sqT[id] >= 0) {
         this.sqT[id] += dt;
         if (this.sqT[id] >= SQUASH_T) this.sqT[id] = -1; else active = true;
@@ -1992,7 +2119,15 @@ export class CityView implements ViewModule {
           if (!b.collapsed) continue;
           const u = this.rubT[id] >= 0 ? clamp(this.rubT[id] / RISE_T, 0, 1) : 1;
           const rise = 0.15 + 0.85 * easeOutBack(u);
-          const h = pileHeight(b) * rise;
+          // repair crews clear the heap while the scaffold goes up (a flat, swept lot by the first storey)
+          let clear = 1;
+          const bk = this.rbBook;
+          if (bk) {
+            const st = bk.stage[id];
+            if (st === RB_SCAFFOLD) clear = 1 - 0.75 * clamp(bk.prog[id] / REBUILD_SCAFFOLD_S, 0, 1);
+            else if (st === RB_RISING) clear = 0.25;
+          }
+          const h = pileHeight(b) * rise * clear;
           const flip = (id & 1) === 1;
           rb.push(b.x, 0, b.z, flip ? 0 : 0, flip ? -1 : 1, b.w * 1.12, h, b.d * 1.12,
             this.tint[id * 3], this.tint[id * 3 + 1], this.tint[id * 3 + 2]);
@@ -2020,18 +2155,114 @@ export class CityView implements ViewModule {
       sy = 1 - s; sxz = 1 + s * 0.5;
     }
     const r = this.tint[id * 3], g = this.tint[id * 3 + 1], bl = this.tint[id * 3 + 2];
-    const i0 = F - shown;
+    // a building the repair crews are raising (or abandoned half-built) is drawn BASE-UP: the base storey on the
+    // ground, storeys stacked on it, the roof only once it tops out -- it reads as a building going up, not as a
+    // chewed stack (whose ORIGINAL top storeys ride on whatever is left)
+    const bk = this.rbBook;
+    const baseUp = bk !== null && bk.stage[id] >= RB_RISING;
+    const i0 = baseUp ? 0 : F - shown;
     const sx = b.w * sxz, sz = b.d * sxz, h = fh * sy;
     const ghost = this.ghostT[id] > 0;
-    for (let i = i0; i < F; i++) {
+    const gu = this.growT[id] >= 0 ? clamp(this.growT[id] / RB_GROW_T, 0, 1) : 1;
+    for (let i = i0; i < i0 + shown && i < F; i++) {
       const j = i - i0;
       const y = (j * fh + Math.max(0, yOff)) * sy + Math.min(0, yOff);
       const pc = pieceOf(i, F);
       const batch = ghost
         ? (pc === 0 ? ab.gBase : pc === 1 ? ab.gFloor : ab.gRoof)
         : (pc === 0 ? ab.base : pc === 1 ? ab.floor : ab.roof);
-      batch.push(b.x, y, b.z, 0, 1, sx, h, sz, r, g, bl);
+      // the newest storey slides up out of the one below (easeOutBack: a small overshoot, then it sits)
+      const hh = j === shown - 1 && gu < 1 ? h * Math.max(0.03, easeOutBack(gu)) : h;
+      batch.push(b.x, y, b.z, 0, 1, sx, hh, sz, r, g, bl);
     }
+  }
+
+  // ─────────────────────────────── repair crews ───────────────────────────────
+  /** Scaffold cage + tower crane for every crew site (live blocks and impostor blocks alike: a crane on the
+   *  skyline says "they are rebuilding over there"), plus the cage of a just-finished / abandoned site being
+   *  struck (sinks into the lot over RB_DONE_T). Rewritten every frame (a few dozen sites at most). */
+  private updateRebuild(dt: number): void {
+    const bk = this.rbBook, box = this.rbBox, cr = this.rbCrane, city = this.city;
+    if (!bk || !box || !cr || !city) return;
+    this.rbTime += dt;
+    // sites whose crew left without topping out (the titan hit the building) strike their cage too
+    for (const id of this.rbOn) if (bk.stage[id] !== RB_SCAFFOLD && bk.stage[id] !== RB_RISING && !this.rbDone.has(id)) this.rbDone.set(id, 0);
+    this.rbOn.clear();
+    for (const [id, t] of this.rbDone) {
+      const nt = t + dt;
+      if (nt >= RB_DONE_T) this.rbDone.delete(id); else this.rbDone.set(id, nt);
+    }
+    box.begin(); cr.begin();
+    let rubble = false;
+    for (let i = 0; i < bk.crews.length; i++) {
+      const id = bk.crews[i];
+      const b = city.buildings[id];
+      const st = bk.stage[id];
+      this.rbOn.add(id);
+      if (!bk.paused[id]) this.rbPhase[id] += dt;
+      const full = b.floors * b.floorH + 1.2;
+      let cage = full;
+      if (st === RB_SCAFFOLD) {
+        const u = clamp(bk.prog[id] / REBUILD_SCAFFOLD_S, 0, 1);
+        cage = full * (1 - (1 - u) * (1 - u) * (1 - u));      // the cage climbs fast, then eases in
+        if (this.live[b.block]) rubble = true;
+      } else if (b.collapsed && this.live[b.block]) rubble = true;
+      const deck = st === RB_RISING && !b.collapsed ? b.alive * b.floorH : -1;
+      this.drawSite(b, cage, full, 0, deck);
+    }
+    for (const [id, t] of this.rbDone) {
+      const b = city.buildings[id];
+      const full = b.floors * b.floorH + 1.2;
+      this.drawSite(b, full, full, easeInCubic(clamp(t / RB_DONE_T, 0, 1)), -1);
+    }
+    box.end(); cr.end();
+    if (rubble) this.rubbleDirty = true;
+  }
+
+  /** One site: standards every RB_BAY m around the footprint (RB_OFF off the facade), ledgers at every storey up
+   *  to `cage` m, a timber working deck at `deck` m (the storey being built; -1 none), and the crane at a corner
+   *  (jib slewing while the crew works). `sink` 0..1 lowers the whole rig into the lot (struck). */
+  private drawSite(b: Building, cage: number, full: number, sink: number, deck: number): void {
+    const box = this.rbBox!, cr = this.rbCrane!;
+    const W = RB_POLE_W;
+    const y0 = -sink * (full + 2);
+    const x0 = b.x - b.w / 2 - RB_OFF, x1 = b.x + b.w / 2 + RB_OFF, z0 = b.z - b.d / 2 - RB_OFF, z1 = b.z + b.d / 2 + RB_OFF;
+    if (cage > 0.05) {
+      const nx = Math.max(1, Math.round((x1 - x0) / RB_BAY)), nz = Math.max(1, Math.round((z1 - z0) / RB_BAY));
+      for (let k = 0; k <= nx; k++) {
+        const x = x0 + ((x1 - x0) * k) / nx;
+        box.push(x, y0, z0, 0, 1, W, cage, W, RB_POLE[0], RB_POLE[1], RB_POLE[2]);
+        box.push(x, y0, z1, 0, 1, W, cage, W, RB_POLE[0], RB_POLE[1], RB_POLE[2]);
+      }
+      for (let k = 1; k < nz; k++) {
+        const z = z0 + ((z1 - z0) * k) / nz;
+        box.push(x0, y0, z, 0, 1, W, cage, W, RB_POLE[0], RB_POLE[1], RB_POLE[2]);
+        box.push(x1, y0, z, 0, 1, W, cage, W, RB_POLE[0], RB_POLE[1], RB_POLE[2]);
+      }
+      const fh = b.floorH, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, lx = x1 - x0 + W, lz = z1 - z0 + W;
+      // ledgers on every 2nd storey (and the cage top): an every-storey lattice hid the rising building (Chrome check)
+      for (let y = 2 * fh; y <= cage + 0.01; y += 2 * fh) {
+        box.push(cx, y0 + y - W, z0, 0, 1, lx, W, W, RB_LEDGER[0], RB_LEDGER[1], RB_LEDGER[2]);
+        box.push(cx, y0 + y - W, z1, 0, 1, lx, W, W, RB_LEDGER[0], RB_LEDGER[1], RB_LEDGER[2]);
+        box.push(x0, y0 + y - W, cz, 0, 1, W, W, lz, RB_LEDGER[0], RB_LEDGER[1], RB_LEDGER[2]);
+        box.push(x1, y0 + y - W, cz, 0, 1, W, W, lz, RB_LEDGER[0], RB_LEDGER[1], RB_LEDGER[2]);
+      }
+      if (deck >= 0 && deck < cage) {
+        const dw = RB_OFF + 0.2, t = 0.18;
+        box.push(cx, y0 + deck, b.z - b.d / 2 - dw / 2, 0, 1, lx, t, dw, RB_BOARD[0], RB_BOARD[1], RB_BOARD[2]);
+        box.push(cx, y0 + deck, b.z + b.d / 2 + dw / 2, 0, 1, lx, t, dw, RB_BOARD[0], RB_BOARD[1], RB_BOARD[2]);
+        box.push(b.x - b.w / 2 - dw / 2, y0 + deck, cz, 0, 1, dw, t, lz, RB_BOARD[0], RB_BOARD[1], RB_BOARD[2]);
+        box.push(b.x + b.w / 2 + dw / 2, y0 + deck, cz, 0, 1, dw, t, lz, RB_BOARD[0], RB_BOARD[1], RB_BOARD[2]);
+      }
+    }
+    // the crane: mast inside a footprint corner, jib over the building, ~35 % taller than the finished roof
+    const hs = hash01(b.id, 5);
+    const sx = hs < 0.5 ? -1 : 1, sz = hash01(b.id, 9) < 0.5 ? -1 : 1;
+    const inset = Math.min(1.6, 0.25 * Math.min(b.w, b.d));
+    const mx = b.x + sx * (b.w / 2 - inset), mz = b.z + sz * (b.d / 2 - inset);
+    const s = (full + Math.max(6, 0.35 * full)) * Math.min(1, 0.25 + cage / full);
+    const ang = Math.atan2(b.x - mx, b.z - mz) + 0.8 * Math.sin(this.rbPhase[b.id] * 0.45 + hs * 6.283);
+    cr.push(mx, y0, mz, Math.sin(ang), Math.cos(ang), s, s, s, 1, 1, 1);
   }
 
   // ─────────────────────────────── occluders ───────────────────────────────

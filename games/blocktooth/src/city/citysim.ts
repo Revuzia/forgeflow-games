@@ -13,7 +13,7 @@
 //     position when nothing blocks) and out.bumpTier = highest blocking tier touched (−1 none).
 
 import type { Building, CityLayout, DamageOpts, PickupKind, SimEvent, Tier, World } from '../core/types.ts';
-import { TIERS, lootMass, lootXp } from '../core/config.ts';
+import { TIERS, cameraDistance, lootMass, lootXp } from '../core/config.ts';
 import { clamp } from '../core/math.ts';
 import { rInt } from '../core/rng.ts';
 import { spawnPickup } from '../combat/pickups.ts';
@@ -29,18 +29,22 @@ const COLLAPSE_HEAL_CHANCE = 0.2;
 interface CityIndex {
   blockTotal: Int32Array;   // buildings per block
   blockLive: Int32Array;    // non-collapsed buildings per block
-  leveled: Uint8Array;      // 1 once every building in the block has collapsed
+  leveled: Uint8Array;      // 1 once every building in the block has collapsed (STICKY: a block the repair crews
+                            // rebuild stays counted, so run.blocksLeveled never goes down and a re-leveled block
+                            // is not reported twice)
 }
 const INDEX = new WeakMap<CityLayout, CityIndex>();
 
-function buildIndex(city: CityLayout): CityIndex {
+function buildIndex(city: CityLayout, prev?: CityIndex): CityIndex {
   const n = city.blocksX * city.blocksZ;
   const blockTotal = new Int32Array(n), blockLive = new Int32Array(n), leveled = new Uint8Array(n);
   for (const b of city.buildings) {
     blockTotal[b.block]++;
     if (!b.collapsed) blockLive[b.block]++;
   }
-  for (let i = 0; i < n; i++) leveled[i] = blockTotal[i] > 0 && blockLive[i] === 0 ? 1 : 0;
+  for (let i = 0; i < n; i++) {
+    leveled[i] = (blockTotal[i] > 0 && blockLive[i] === 0) || (prev !== undefined && prev.leveled[i] === 1) ? 1 : 0;
+  }
   return { blockTotal, blockLive, leveled };
 }
 
@@ -59,12 +63,246 @@ function countLeveled(idx: CityIndex): number {
 // ─────────────────────────────── tick ───────────────────────────────
 export function stepCity(w: World): void {
   stepTraffic(w);
+  stepRebuild(w);
   // blocks-leveled: incremented immediately by damageBuilding; every second re-derive it from
   // building state (authoritative + self-healing if anything collapsed a building directly).
+  // Sticky per block (see CityIndex.leveled): a rebuilt block keeps its count.
   if (w.tick % 30 === 0) {
-    const idx = buildIndex(w.city);
+    const idx = buildIndex(w.city, INDEX.get(w.city));
     INDEX.set(w.city, idx);
     w.run.blocksLeveled = countLeveled(idx);
+  }
+}
+
+// ─────────────────────────────── REPAIR CREWS (rebuild) ───────────────────────────────
+// WARD-7 Public Works rebuilds smashed buildings so a 20-minute run never runs out of city (owner
+// 2026-10-01: "slightly bigger cities but also rebuilding"). Measured before this (bot, 24 runs): the
+// titan ate the city down to ~13 % of its floors by the city-boss spawn and rubble XP/min fell
+// 851 → 672 → 312 → 171 over minutes 15–18.
+//
+// The model — a DEMAND-DRIVEN works department:
+//   * every second the department compares the city's standing floors with REBUILD_TARGET; below it,
+//     it keeps up to REBUILD_MAX_CREWS × deficit/REBUILD_DEFICIT_FULL crews working (more crews the
+//     emptier the city). A healthy city (the first ~10 minutes) gets none.
+//   * a crew is dispatched to a rubble lot (a building collapsed ≥ REBUILD_MIN_DOWN_S ago) only AWAY
+//     from the titan — its footprint farther than rebuildStartR (≈ the edge of the titan's default view,
+//     so crews set up off-screen) — and away from any live boss / gatekeeper (bossClear, same radius). The pick is
+//     weighted toward taller tiers (they are the meal at Size IV–V) and drawn from world.rng.city
+//     (deterministic; the stream is otherwise idle after generation).
+//   * SCAFFOLD (REBUILD_SCAFFOLD_S): the lot stays rubble (collapsed: no collision, no XP), the
+//     scaffold cage + crane go up. Then RISING: one storey every floorS(tier) seconds; the first one
+//     un-collapses the building (alive 1), each one is an ordinary floor (normal smash XP, normal
+//     collision — the footprint is the generator's own, so it never blocks more than the city did).
+//   * crews only work while the titan is out of rebuildNearR (they down tools when it comes close; the
+//     half-built tower just stands there) and NO GATEKEEPER fight is on: while a gatekeeper is alive every
+//     crew downs tools and nobody is dispatched (a gatekeeper fight roams; a storey going up on the road the
+//     titan is being chased down rammed CORDON-2 into it — probe_gatekeepers 7c). During the CITY-BOSS fight
+//     the department keeps working, but only outside the boss's keep-out (bossClear, rebuildStartR from its
+//     centre and parts) and the titan's near radius: the fight happens in a city that is still standing
+//     around it (Gate 2026-10-01: standing buildings are what lowers city-fight deaths — their collapses drop
+//     the street-food heals). A storey is never added under the titan, a boss part or a heal / chest pickup
+//     lying on the footprint.
+//   * any damage to a building under construction sends its crew home (stage ABANDONED: a normal
+//     partial building that keeps its base-up look until it falls).
+// All state lives in a per-city side table (like the block index); views read it via rebuildBook().
+// Tuning (REBUILD lane 2026-10-01, bot, 4 titans × 3 cities × seeds 1337/7 = 24 runs, HEAD city sizes): floors
+// standing at the city-boss spawn median 14 % → 44 % (min 2 → 18 %); rubble XP/min (median) minutes 13–16
+// 1019/887/788/676 → 963/1399/1391/1269; rubble XP in the 3 minutes before the city boss 2369 → 4000. The extra
+// XP moves LV 35 / the city boss ~50 s earlier (1053 → 1001 s); XP_STRETCH.late 0.05 (was 0.03) puts it back
+// (1056 s) — a config.ts / common.py call for the pacing owner, not made here.
+// Gate tuning (2026-10-01, bigger cities, P-human player-like policy seeds 1–24 = 288 runs, pooled clears):
+// lanes' .65/.3/32 crews/20 s/5 per s 234 · .80/48/8 + city-fight work 243 · .90/64/10 + city-fight work 246
+// (seeds 25–48: 245 vs 236) · .90/.15/64/10 s/10 + city-fight work 251 (ADOPTED) · 1.0 239. XP_STRETCH.late .05
+// cost clears (239 / 238) and did not move LV 35 (the city boss sits on GATES.mainEarliestS 995 s either way).
+/** Standing-floor fraction the works department defends. */
+export const REBUILD_TARGET = 0.9;
+/** Deficit (target − standing) at which the department fields every crew. */
+export const REBUILD_DEFICIT_FULL = 0.15;
+/** Crew cap. */
+export const REBUILD_MAX_CREWS = 64;
+/** A lot must have been rubble this long before a crew takes it (the collapse + rubble read first). */
+export const REBUILD_MIN_DOWN_S = 10;
+/** Scaffold phase (s): cage + crane go up before the first storey. */
+export const REBUILD_SCAFFOLD_S = 4;
+/** Seconds per rebuilt storey by tier (a tower goes up storey by storey). */
+export const REBUILD_FLOOR_S: readonly number[] = [0.55, 0.6, 0.7, 0.8, 0.9];
+/** New crews per dispatch (1 s). */
+const REBUILD_DISPATCH_PER_S = 10;
+
+export const RB_NONE = 0, RB_SCAFFOLD = 1, RB_RISING = 2, RB_ABANDONED = 3;
+export interface RebuildBook {
+  /** per building: RB_NONE / RB_SCAFFOLD / RB_RISING / RB_ABANDONED */
+  stage: Uint8Array;
+  /** per building: seconds of work in the current stage (scaffold time, or time toward the next storey) */
+  prog: Float32Array;
+  /** per building: world.t of its last collapse (−1 never) */
+  downT: Float32Array;
+  /** per building: 1 while its crew is downing tools (titan / boss too close) — cosmetic for views */
+  paused: Uint8Array;
+  /** building ids with a crew (stage SCAFFOLD or RISING), dispatch order */
+  crews: number[];
+  started: number;          // crews dispatched this run
+  floors: number;           // storeys rebuilt this run
+  done: number;             // buildings fully rebuilt this run
+  totalFloors: number;      // Σ building.floors (constant)
+}
+const BOOKS = new WeakMap<CityLayout, RebuildBook>();
+/** The city's rebuild side table (created on first use). Views and probes read it; never write it. */
+export function rebuildBook(city: CityLayout): RebuildBook {
+  let bk = BOOKS.get(city);
+  if (!bk) {
+    const n = city.buildings.length;
+    let tf = 0;
+    for (const b of city.buildings) tf += b.floors;
+    bk = {
+      stage: new Uint8Array(n), prog: new Float32Array(n), downT: new Float32Array(n).fill(-1), paused: new Uint8Array(n),
+      crews: [], started: 0, floors: 0, done: 0, totalFloors: tf,
+    };
+    BOOKS.set(city, bk);
+  }
+  return bk;
+}
+/** Run counters for probes / HUD: crews dispatched, storeys + buildings rebuilt, crews working now. */
+export function rebuildStats(w: World): { started: number; floors: number; done: number; active: number } {
+  const bk = rebuildBook(w.city);
+  return { started: bk.started, floors: bk.floors, done: bk.done, active: bk.crews.length };
+}
+/** Seconds per rebuilt storey of a building. */
+export function rebuildFloorS(b: Building): number {
+  return REBUILD_FLOOR_S[b.tier] ?? 1;
+}
+/** Distance from (x,z) to a building footprint (0 inside). */
+function footDist(b: Building, x: number, z: number): number {
+  const qx = clamp(x, b.x - b.w / 2, b.x + b.w / 2), qz = clamp(z, b.z - b.d / 2, b.z + b.d / 2);
+  return Math.hypot(x - qx, z - qz);
+}
+/** Crews only SET UP beyond this footprint distance from the titan: ≈ the edge of its default view. */
+export function rebuildStartR(w: World): number {
+  const T = w.titan;
+  return Math.max(70, 0.55 * cameraDistance(T.height) + 2 * T.radius);
+}
+/** Crews down tools while the titan is within this footprint distance (the near view): nothing ever
+ *  grows under it or in its face. */
+export function rebuildNearR(w: World): number {
+  const T = w.titan;
+  return Math.max(30, 0.3 * cameraDistance(T.height) + 3 * T.radius);
+}
+/** Keep-out around a live boss / gatekeeper (centre + parts): no set-up, no storey, while it is alive. */
+function bossClear(w: World, b: Building, r: number): boolean {
+  const boss = w.boss;
+  if (!boss || !boss.alive) return true;
+  if (footDist(b, boss.x, boss.z) < r) return false;
+  for (let i = 0; i < boss.parts.length; i++) {
+    const p = boss.parts[i];
+    if (footDist(b, p.x, p.z) < r * 0.5 + p.r) return false;
+  }
+  return true;
+}
+/** No non-drifting pickup (heal / chest / power-up …) lies on the footprint (+1 m): rubble/scrap drift
+ *  to the titan on their own, everything else would be walled in. */
+function lotClear(w: World, b: Building): boolean {
+  const hw = b.w / 2 + 1, hd = b.d / 2 + 1;
+  for (let i = 0; i < w.pickups.length; i++) {
+    const p = w.pickups[i];
+    if (!p.alive || p.kind === 'rubble' || p.kind === 'scrap') continue;
+    if (Math.abs(p.x - b.x) < hw && Math.abs(p.z - b.z) < hd) return false;
+  }
+  return true;
+}
+function rebuildEvent(w: World, stage: 'start' | 'floor' | 'done', b: Building, n: number): void {
+  w.events.push({ type: 'rebuild', stage, id: b.id, alive: b.collapsed ? 0 : b.alive, x: b.x, z: b.z, n });
+}
+const RB_CAND: number[] = [];
+function stepRebuild(w: World): void {
+  const ph = w.run.phase;
+  if (ph === 'intro' || ph === 'clear' || ph === 'dead') return;
+  const city = w.city;
+  const bk = rebuildBook(city);
+  const T = w.titan;
+  const nearR = rebuildNearR(w);
+  const startR = rebuildStartR(w);
+  const dt = w.dt;
+  // a GATEKEEPER fight: everyone downs tools, nobody is dispatched (the arena is wherever the fight goes). The
+  // city-boss fight keeps the works going outside the boss keep-out (bossClear) and the titan's near radius.
+  const fight = !!(w.boss && w.boss.alive && w.boss.role !== 'main');
+  // ── work ──
+  let k = 0;
+  for (let i = 0; i < bk.crews.length; i++) {
+    const id = bk.crews[i];
+    const b = city.buildings[id];
+    const st = bk.stage[id];
+    if (st !== RB_SCAFFOLD && st !== RB_RISING) continue;           // crew went home (damage / collapse)
+    bk.crews[k++] = id;
+    const pause = fight || footDist(b, T.x, T.z) < nearR || !bossClear(w, b, startR);
+    bk.paused[id] = pause ? 1 : 0;
+    if (pause) continue;
+    bk.prog[id] += dt;
+    if (st === RB_SCAFFOLD) {
+      if (bk.prog[id] < REBUILD_SCAFFOLD_S) continue;
+      bk.stage[id] = RB_RISING;
+      bk.prog[id] = 0;
+      continue;
+    }
+    const fs = rebuildFloorS(b);
+    if (bk.prog[id] < fs) continue;
+    if (b.collapsed && !lotClear(w, b)) { bk.prog[id] = fs; continue; }   // wait for the lot to clear
+    bk.prog[id] -= fs;
+    if (b.collapsed) {
+      const idx = cityIndex(city);
+      b.collapsed = false;
+      b.alive = 1;
+      idx.blockLive[b.block]++;
+    } else {
+      b.alive = Math.min(b.floors, b.alive + 1);
+    }
+    b.floorHp = b.floorHpMax;
+    bk.floors++;
+    rebuildEvent(w, 'floor', b, bk.done);
+    if (b.alive >= b.floors) {
+      bk.stage[id] = RB_NONE;
+      bk.prog[id] = 0;
+      bk.paused[id] = 0;
+      bk.done++;
+      rebuildEvent(w, 'done', b, bk.done);
+      k--;                                                          // crew released
+    }
+  }
+  bk.crews.length = k;
+  // ── dispatch (once a second) ──
+  if (fight || w.tick % 30 !== 15) return;
+  let standing = 0;
+  for (const b of city.buildings) standing += b.collapsed ? 0 : b.alive;
+  const frac = bk.totalFloors > 0 ? standing / bk.totalFloors : 1;
+  const deficit = REBUILD_TARGET - frac;
+  if (deficit <= 0) return;
+  const want = Math.min(REBUILD_MAX_CREWS, Math.ceil(REBUILD_MAX_CREWS * Math.min(1, deficit / REBUILD_DEFICIT_FULL)));
+  let room = Math.min(REBUILD_DISPATCH_PER_S, want - bk.crews.length);
+  if (room <= 0) return;
+  RB_CAND.length = 0;
+  let wsum = 0;
+  for (const b of city.buildings) {
+    if (!b.collapsed || bk.stage[b.id] !== RB_NONE) continue;
+    if (bk.downT[b.id] >= 0 && w.t - bk.downT[b.id] < REBUILD_MIN_DOWN_S) continue;
+    if (footDist(b, T.x, T.z) < startR) continue;
+    if (!bossClear(w, b, startR)) continue;
+    RB_CAND.push(b.id);
+    wsum += 1 + b.tier;
+  }
+  const rng = w.rng.city;
+  while (room > 0 && RB_CAND.length > 0) {
+    let x = rng() * wsum, at = RB_CAND.length - 1;
+    for (let i = 0; i < RB_CAND.length; i++) { x -= 1 + city.buildings[RB_CAND[i]].tier; if (x <= 0) { at = i; break; } }
+    const id = RB_CAND[at];
+    const b = city.buildings[id];
+    wsum -= 1 + b.tier;
+    RB_CAND.splice(at, 1);
+    bk.stage[id] = RB_SCAFFOLD;
+    bk.prog[id] = 0;
+    bk.paused[id] = 0;
+    bk.crews.push(id);
+    bk.started++;
+    rebuildEvent(w, 'start', b, bk.started);
+    room--;
   }
 }
 
@@ -209,6 +447,12 @@ function collapseBuilding(w: World, b: Building, credit: boolean): void {
   // fetch (or lazily build) the block index BEFORE flagging the collapse, so a lazily built
   // index never counts this building as already gone (that would double-decrement below)
   const idx = cityIndex(w.city);
+  // repair crews: the lot is rubble again (any crew on it went home); the down-time clock restarts
+  const bk = rebuildBook(w.city);
+  bk.stage[b.id] = RB_NONE;
+  bk.prog[b.id] = 0;
+  bk.paused[b.id] = 0;
+  bk.downT[b.id] = w.t;
   b.collapsed = true;
   b.alive = 0;
   b.floorHp = 0;
@@ -247,6 +491,9 @@ export function damageBuilding(w: World, id: number, amount: number, opts: Damag
   if (!b || b.collapsed || b.alive <= 0 || !(amount > 0)) return 0;
   const T = w.titan;
   const credit = creditsTitan(opts);
+  // a building under construction that takes a hit: the crew goes home (it stays a partial building)
+  const bk = BOOKS.get(w.city);
+  if (bk && bk.stage[id] === RB_RISING) { bk.stage[id] = RB_ABANDONED; bk.paused[id] = 0; }
   // footprint edge point nearest the titan (where the chewing happens)
   const ex = clamp(T.x, b.x - b.w / 2, b.x + b.w / 2);
   const ez = clamp(T.z, b.z - b.d / 2, b.z + b.d / 2);

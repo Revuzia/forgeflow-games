@@ -571,7 +571,11 @@ export type SimEvent =
   /** a BRIARWICK seed pod burst: r = burst radius (m); link = its chain link (0 = a lone / first pop, k = the k-th
    *  link of a chain or POP-UP PARK cascade); ripe = its ripeness at the burst (1 = ripe; < 1 = an unripe pod that
    *  burst at end of life / at the cap). View: petal burst, pitch +1 semitone per link; tally: cascadeBest. */
-  | { type: 'bloomBurst'; x: number; z: number; r: number; link: number; ripe: number };
+  | { type: 'bloomBurst'; x: number; z: number; r: number; link: number; ripe: number }
+  // ── REPAIR CREWS (city/citysim.ts rebuild): WARD-7 Public Works rebuilds smashed buildings away from the titan ──
+  /** stage 'start' = a crew sets up on a rubble lot (scaffold goes up); 'floor' = a storey is finished (alive = floors
+   *  standing now; the first one un-collapses the building); 'done' = fully rebuilt (n = buildings rebuilt this run). */
+  | { type: 'rebuild'; stage: 'start' | 'floor' | 'done'; id: number; alive: number; x: number; z: number; n: number };
 
 /** Keys into data/strings.ts ALERTS (full-width broadcast banners). */
 export type AlertKey =

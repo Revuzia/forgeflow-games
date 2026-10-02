@@ -24,6 +24,8 @@
 //     spawn 995-1265 s; clears 1020-1440 s (17-24 min) [clearWindowS]; early draft gap 16-40 s (hard 13-48) to 360 s
 //   measured (final tree incl. owner feedback 3 kits, gate bot, seeds 1337+7, fresh+full, 4 titans × 3 cities, 48 runs;
 //     medians): LV 7 191 s · LV 16 473 · LV 27 768 · LV 35 1052 · city spawn 1054 (17:34) · clear 1180 (19:40); 46/48 clears
+//   after the bigger cities + repair crews (2026-10-01, same harness, 48 runs): LV 7 192 · LV 16 459 · LV 27 757 · LV 35 977
+//     · city spawn 995 (16:35, the mainEarliestS floor) · clear 1121 (18:41); 48/48 clears
 //
 // ECONOMY (per Size rank)                      I        II        III        IV         V
 //   reached at LV [RANK_LEVELS]                 1        7         16         27         35

@@ -879,6 +879,18 @@ Gate commit message. Still open: the player-like policy dies more often than in
 the 10-minute run (seeds 1–24, 288 runs: 253 clears then, 233–239 now; the extra deaths are in the city fights,
 mostly IRON GULLY and PARKADE-6), and the static city is mostly eaten by the city boss's arrival (§9 decision 11).
 
+**Bigger cities + repair crews (Gate, 2026-10-01; owner: "slightly bigger cities but also rebuilding").** Grids
+GRID-EAST 15×16, WHITE STACKS 14×13, LOCKWATER 13×16 (+22–26 % blocks); WARD-7 Public Works repair crews
+(city/citysim.ts: target 90 % standing floors, up to 64 crews, lots down ≥ 10 s, set up beyond rebuildStartR of the
+titan, down tools within rebuildNearR and during gatekeeper fights; during the city-boss fight they keep working
+outside its keep-out). Player-like policy, seeds 1–24 (P + Q + R, 288 runs): **251 clears** (HEAD 00ef1a1c 225 on the
+same harness; 10-minute build 253); seeds 25–48: 248. IRON GULLY / PARKADE-6 / CAISSON-4 city-fight deaths 19 / 18 / 6
+→ 10 / 5 / 6. Floors standing at the city-boss spawn 14 % → 72 % (gate bot). Gate bot (48 runs): LV 7 192 s · LV 16
+459 · LV 27 757 · LV 35 977 (16:17) · city boss 995 (16:35, `mainEarliestS`) · clear 1 121 (18:41); 48/48 clears.
+The run is ~60 s shorter for the gate bot: the extra rubble XP brings LV 35 before the 995 s floor.
+`XP_STRETCH.late` 0.05 did not move it (LV 35 989 s) and cost clears (238 / 288), so it was not taken; moving the
+city boss back to ~17:30 would be a `GATES.mainEarliestS` call for the pacing owner.
+
 ### 5.2 The rubber band with gates (decided)
 * `RANK_SCHEDULE_S` means **when the gate LEVEL for Size r is due**: LV 7 at 190 s, LV 16 at 480, LV 27 at
   780, LV 35 at 1 080 (owner decision 11, the 20-minute run; the 10-minute run had 90 / 210 / 360 / 480).
@@ -1106,7 +1118,7 @@ LIMIT 135 s) do not move: fights are not stretched (gate-bot `gateTotalFightS` m
 run-scope goals whose supply is per minute (kills, UPROAR charges, power-ups, objectives, OVERLOAD SITES)
 roughly double in a 20-minute run, so their targets move with it (`data/goals.ts`, FEATURES_V2 §8.2 "Current
 targets"); goals capped by what a city physically holds are capped by that supply, per `probe_meta` G(a): URBAN
-RENEWAL stays 130 (WHITE STACKS holds 135 blocks on seed 1337) and SHIPPING DELAYS moves only to 540
+RENEWAL stays 130 (WHITE STACKS held 135 blocks on seed 1337; 171 since the 2026-10-01 bigger cities) and SHIPPING DELAYS moves only to 540
 (LOCKWATER holds 551 boats). Old profiles keep their 10-minute bests: a met goal stays met.
 
 New unlock cards (`data/upgrades_gate.ts`, new file, appended to `UPGRADES` by one line in
@@ -1613,7 +1625,8 @@ shots + critic; README updated.
    curve's × 2.45 at LV 35 ≈ 0.86, the same levels per second). Alternative: bank those drafts until the
    kill (the finale holds drafts, so they would only matter in KEEP GOING).
 11. **The 20-minute run** (owner, 2026-09-30: *"go with 20 minutes"*; §5.1b). The city boss arrives at
-   about 17:35 and the clear comes at about 19:40 for the gate bot, about 21:00 for the player-like policy. LV 7
+   about 16:35 (since the bigger cities + repair crews of 2026-10-01; 17:35 before) and the clear comes at about
+   18:40 for the gate bot, about 20:25 for the player-like policy. LV 7
    (STENCIL-1) comes at about 3:15, LV 16 at about 7:50, LV 27 at about 13:00. Early levels stay at the old
    pace (LV 2 at ~14 s); from Size II every level costs × 1.85–2.45 of the old XP (`xpStretch`), rising
    with the level. Time-keyed pressure (director budget, enemy HP per minute) is stretched by

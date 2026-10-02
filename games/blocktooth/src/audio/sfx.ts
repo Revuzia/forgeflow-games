@@ -298,6 +298,8 @@ const GAP: Record<string, number> = {
   // v2 (L6): UPROAR, objectives, power-ups, revive, endless rematch
   ultReady: 1.5, ultFire: 0.5, ultPulse: 0.12, objSpawn: 1.2, objDone: 0.4, puSpawn: 0.6, puGet: 0.25, puEnd: 0.5,
   revive: 2, endlessBoss: 6,
+  // REPAIR CREWS (city/citysim.ts rebuild): a storey bolted on (rivet clank), a building topped out (works chime)
+  rbFloor: 0.3, rbDone: 2.5,
   // GATEKEEPERS (§6.8, lane K2a)
   gateArrive: 3, gateLock: 0.8, gateEsc: 2, gateDown: 3, gateRam: 0.5, gatePhase: 1.2, gateStag: 1.5, finale: 6,
   gateRoll: 0.3, gateSpray: 0.28, gateTread: 0.18, gateCrawl: 0.4, gateServo: 1.4,
@@ -599,6 +601,10 @@ export class Sfx {
       case 'powerupEnd': if (this.gate('puEnd', now)) this.powerupEnd(e.kind); break;
       case 'revive': if (this.gate('revive', now)) this.reviveSting(); break;
       case 'endlessBoss': if (this.gate('endlessBoss', now) && this.gate('siren', now)) this.bossSiren(); break;
+      case 'rebuild':
+        if (e.stage === 'floor') { if (this.gate('rbFloor', now)) this.rebuildClank(e.x, e.z); }
+        else if (e.stage === 'done') { if (this.gate('rbDone', now)) this.rebuildChime(e.x, e.z); }
+        break;
     }
   }
 
@@ -2112,6 +2118,28 @@ export class Sfx {
   }
 
   /** objectiveSpawn: a municipal 3-note chime (the PA before an announcement). */
+  /** REPAIR CREWS: a storey goes on -- a rivet-gun rattle + a girder clank, far away and small (positional only:
+   *  crews work away from the titan, so this is texture from the edge of the screen, never a wall of noise). */
+  private rebuildClank(x: number, z: number): void {
+    const s = this.spatial(x, z);
+    if (s.g < 0.05) return;
+    const b = this.voice('rbFloor', 1, 0.6, 0.22 * s.g, s.pan, 0.3); if (!b) return;
+    const t = b.t, o = b.o;
+    for (let i = 0; i < 4; i++) burst(b, o, t + i * 0.045, 'white', 'bandpass', 3200, 3, 0.001, 0.025, 0.35);
+    clang(b, o, t + 0.2, 610, 1.41, 2.2, 0.32, 0.4);
+  }
+
+  /** REPAIR CREWS: a building tops out -- the WARD-7 Public Works two-tone chime (civic, a little smug) over a
+   *  ratchet. Soft floor gain so a site at the edge of the frame still registers. */
+  private rebuildChime(x: number, z: number): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('rbDone', 2, 1.6, 0.3 * Math.max(0.35, s.g), s.pan * 0.6, 0.4); if (!b) return;
+    const t = b.t, o = b.o;
+    tinkle(b, o, t, 5, 0.22, 1400, 2600, 0.18, 0.05);
+    bell(b, o, t + 0.25, mtof(79), 0.9, 0.4, 2.0, 0.7);
+    bell(b, o, t + 0.55, mtof(74), 1.1, 0.42, 2.0, 0.7);
+  }
+
   private objectiveChime(x: number, z: number): void {
     const s = this.spatial(x, z);
     const b = this.voice('objSpawn', 3, 1.4, 0.3 * Math.max(0.7, s.g), s.pan * 0.3, 0.35); if (!b) return;

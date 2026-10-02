@@ -1355,12 +1355,13 @@ function runInteractions(): void {
     const body = 0;
     if (check(drum >= 0, 'STENCIL-1 has a drum part')) {
       b!.data.weakMask = 1 << drum;
+      for (let i = 0; i < 2 * SIM_HZ; i++) M.world.stepWorld(w, NO);
+      b!.data.weakMask = 1 << drum; b!.staggerT = 0;
+      // the AoE is aimed AFTER the 2 s step (the rig walks meanwhile; aiming before it fired at a stale centre)
       const pd = b!.parts[drum], pb = b!.parts[body];
       const cx = (pd.x + pb.x) / 2, cz = (pd.z + pb.z) / 2;
       const r = Math.hypot(pd.x - pb.x, pd.z - pb.z) / 2 + Math.max(pd.r, pb.r) + 0.2 * M.bosses.bossH(w, b!);
       let overl = 0; for (const p of b!.parts) if (Math.hypot(p.x - cx, p.z - cz) <= r + p.r) overl++;
-      for (let i = 0; i < 2 * SIM_HZ; i++) M.world.stepWorld(w, NO);
-      b!.data.weakMask = 1 << drum; b!.staggerT = 0;
       const n0 = w.events.length;
       M.damage.damageArea(w, { k: 'circle', x: cx, z: cz, r } as Shape, 5, { src: 'titan', kind: 'melee' } as unknown as Parameters<typeof M.damage.damageArea>[3]);
       const hits = w.events.slice(n0).filter((e) => e.type === 'bossHit') as { part: string; dmg: number }[];

@@ -35,7 +35,8 @@
 // median 16, ≥ 17 placed), CURB APPEAL 6 500 → 7 300 (GRID-EAST holds 7 661 props), SHIPPING DELAYS 520 → 540
 // (LOCKWATER holds 551 boats on seed 1337; the bot sank 507 median, 551 max), EARLY CLOSING 10:00 → 20:00 (LOCKWATER
 // clears 1 117–1 277 s, 8 of 11 under 1 200). URBAN RENEWAL stays 130: blocks are city-capped, and WHITE STACKS
-// holds only 135 blocks on seed 1337 (129 on seed 7), so probe_meta G(a) forbids more. The timed gate goals do not
+// held only 135 blocks on seed 1337 (129 on seed 7); since the bigger cities (2026-10-01, 14x13 grid) it holds 171
+// (164), so 130 now has headroom (raising it is a goals call, not made with the city change). The timed gate goals do not
 // move (fights are not stretched). A goal with `titan` / `biome` only counts runs that match; a
 // `boss` filter narrows boss metrics (bossKillsLife, staggersBestFight). How each metric is measured is
 // in meta/goals.ts (metricValue).

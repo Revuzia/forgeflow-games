@@ -25,6 +25,7 @@ import type {
 import { CITY, PARCEL_HALF, TIERS } from '../core/config.ts';
 import { clamp, headingOf, lerp } from '../core/math.ts';
 import { rInt, rPick, rRange, rWeighted } from '../core/rng.ts';
+import { OBJECTIVE_BIOME } from '../data/objectives.ts';
 
 // ─────────────────────────────── layout constants ───────────────────────────────
 const P = CITY.pitch;                         // 72  road centreline spacing
@@ -401,7 +402,7 @@ export function generateCity(biome: BiomeDef, seed: number, rng: () => number): 
   };
   const reserved: Circ[] = [];
   const isReserved = (x: number, z: number, r: number): boolean => {
-    for (const c of reserved) if (Math.hypot(x - c.x, z - c.z) < c.r + r) return true;
+    for (const c of reserved) { const dx = x - c.x, dz = z - c.z, rr = c.r + r; if (dx * dx + dz * dz < rr * rr) return true; }
     return false;
   };
 
@@ -526,11 +527,15 @@ export function generateCity(biome: BiomeDef, seed: number, rng: () => number): 
   // ── 8. sidewalk props + parked vehicles (per block) ──
   const SIDE_OUT = [Math.PI / 2, 0, -Math.PI / 2, Math.PI];      // outward normal heading: E, S(+Z), W, N(−Z)
   const SIDE_FLOW = [0, -Math.PI / 2, Math.PI, Math.PI / 2];      // curb-lane travel heading (block on the right)
-  const sidePos = (cx: number, cz: number, side: number, along: number, lat: number) =>
-    side === 0 ? { x: cx + lat, z: cz + along }
-      : side === 1 ? { x: cx + along, z: cz + lat }
-        : side === 2 ? { x: cx - lat, z: cz + along }
-          : { x: cx + along, z: cz - lat };
+  /** Sidewalk/curb position on a block side, written into one reused point (no per-try allocation). */
+  const SP = { x: 0, z: 0 };
+  const sidePos = (cx: number, cz: number, side: number, along: number, lat: number): { x: number; z: number } => {
+    if (side === 0) { SP.x = cx + lat; SP.z = cz + along; }
+    else if (side === 1) { SP.x = cx + along; SP.z = cz + lat; }
+    else if (side === 2) { SP.x = cx - lat; SP.z = cz + along; }
+    else { SP.x = cx + along; SP.z = cz - lat; }
+    return SP;
+  };
   const sideIsArterial = (bx: number, bz: number, side: number) =>
     side === 0 ? isArtZ(bx + 1) : side === 2 ? isArtZ(bx) : side === 1 ? isArtX(bz + 1) : isArtX(bz);
 
@@ -542,7 +547,7 @@ export function generateCity(biome: BiomeDef, seed: number, rng: () => number): 
       placedLocal.length = 0;
       const free = (x: number, z: number, r: number): boolean => {
         if (isReserved(x, z, r)) return false;
-        for (const c of placedLocal) if (Math.hypot(x - c.x, z - c.z) < c.r + r + 0.6) return false;
+        for (const c of placedLocal) { const dx = x - c.x, dz = z - c.z, rr = c.r + r + 0.6; if (dx * dx + dz * dz < rr * rr) return false; }
         return true;
       };
       // sidewalk furniture
@@ -685,6 +690,42 @@ export function generateCity(biome: BiomeDef, seed: number, rng: () => number): 
     }
   }
 
+  // ── 10b. a Size I OVERLOAD SITE target within reach of the spawn ──
+  // The first OVERLOAD SITE binds one of the biome's static `overloadPropsS1` props 0.8–1.8 spawn rings from the
+  // titan (≈ 15–33 m at Size I). About 1 GRID-EAST seed in 11 had none there (seed luck: probe_map's Size I
+  // check passed or failed with the layout). When none stands 18–28 m from the spawn, one is set on the spawn
+  // road's sidewalk at the building line. Draws no rng, so every other city is unchanged.
+  {
+    const olKinds = OBJECTIVE_BIOME[biome.id].overloadPropsS1;
+    const OL_LO = 18, OL_HI = 28;
+    const inReach = (x: number, z: number) => { const d = Math.hypot(x - spawn.x, z - spawn.z); return d >= OL_LO && d <= OL_HI; };
+    if (!props.some((p) => p.lane === -1 && olKinds.includes(p.kind) && inReach(p.x, p.z))) {
+      const kind = olKinds.find((k) => SIDEWALK_INNER_KINDS.has(k)) ?? olKinds[olKinds.length - 1];
+      const info = PROP_INFO[kind];
+      const rad = Math.max(info.len, info.wid) / 2;
+      const lat = HALF - (PH + 0.25 + Math.min(info.len, info.wid) / 2);   // the building line of the sidewalk
+      const clear = (x: number, z: number): boolean => {
+        if (isReserved(x, z, rad)) return false;
+        for (const p of props) {
+          const dx = p.x - x, dz = p.z - z, rr = propRadius(p.kind) + rad + 0.6;
+          if (dx * dx + dz * dz < rr * rr) return false;
+        }
+        return true;
+      };
+      place: for (const along of [22, 19, 25, 16, 28]) {
+        for (const side of [sideK, -sideK]) {
+          const q = at(along, side * lat);
+          if (!inReach(q.x, q.z) || !clear(q.x, q.z)) continue;
+          // long kinds lie along the kerb, the rest face the street (like the spawn kiosk)
+          const h = kind === 'container' || kind === 'forklift' || kind === 'truck' || kind === 'bus'
+            ? headingOf(aX, aZ) : headingOf(-cX * side, -cZ * side);
+          mkProp(kind, q.x, q.z, h);
+          break place;
+        }
+      }
+    }
+  }
+
   // ── 11. bounds + block index ──
   const bounds = {
     minX: originX - 8, maxX: originX + W + 8,
@@ -698,8 +739,14 @@ export function generateCity(biome: BiomeDef, seed: number, rng: () => number): 
     blockBuildings: [], blockProps: [],
     crosswalks, lanes, spawn, flooded: biome.flooded,
   };
-  for (let b = 0; b < nBlocks; b++) { city.blockBuildings.push([]); city.blockProps.push([]); }
-  for (const bd of buildings) city.blockBuildings[bd.block].push(bd.id);
-  for (const pr of props) city.blockProps[cellOf(city, pr.x, pr.z)].push(pr.id);
+  indexBlocks(city, nBlocks);
   return city;
+}
+
+/** Fill the per-block building/prop index (a small function of its own, so this hot loop optimises
+ *  without an on-stack replacement of the whole of generateCity). */
+function indexBlocks(city: CityLayout, nBlocks: number): void {
+  for (let b = 0; b < nBlocks; b++) { city.blockBuildings.push([]); city.blockProps.push([]); }
+  for (const bd of city.buildings) city.blockBuildings[bd.block].push(bd.id);
+  for (const pr of city.props) city.blockProps[cellOf(city, pr.x, pr.z)].push(pr.id);
 }

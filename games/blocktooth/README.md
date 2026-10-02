@@ -17,8 +17,11 @@ WITNESS*: **THE CITY GOT SMALLER.** A clear can be pushed on into **EXTENDED COV
 
 **A run takes about 20 minutes** (owner decision, 2026-09-30: "go with 20 minutes"). Measured with the gate
 bot (medians): STENCIL-1 at LV 7 comes at about 3:15, CORDON-2 at LV 16 at about 7:55, SWITCHBOARD-5 at
-LV 27 at about 12:50, and LV 35 and the city boss at about 17:35. The kill comes at about 19:40, then the
-10 s finale; a player-like bot clears at about 21:00. Early levels come as fast as before (LV 2 at about
+LV 27 at about 12:40, and the city boss at about 16:35 (its earliest allowed time; the bot reaches LV 35 at about
+16:15 now that the city is bigger and rebuilt). The kill comes at about 18:40, then the 10 s finale; a player-like
+bot meets the city boss at about 18:25 and clears at about 20:25. WARD-7 Public Works repair crews rebuild smashed
+buildings (off screen, never near the titan, never during a gatekeeper fight), so about 70 % of the city is still
+standing when the city boss arrives. Early levels come as fast as before (LV 2 at about
 14 s). From Size II each level costs 1.85–2.45 × the XP of the 10-minute run, rising with the level.
 Enemy pressure per Size is unchanged and ramps over the longer run. OVERLOAD SITES, power-ups and RELIEF
 DEPOTS keep their per-minute cadence, so a run sees about twice as many. Size IV gets one RAMROD, and its pressure

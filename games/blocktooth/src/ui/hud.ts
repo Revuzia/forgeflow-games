@@ -464,6 +464,14 @@ export class Hud {
         case 'gateEscalate':
           this.pushWire(STR_GATE.wire.escalate);
           break;
+        // REPAIR CREWS (city/citysim.ts rebuild): the first crew of the run, then every 8th building topped out
+        case 'rebuild':
+          if (e.stage === 'start' && e.n === 1) this.pushWire(STR.hud.wire.crews);
+          else if (e.stage === 'done' && e.n > 0 && e.n % 8 === 0) {
+            const L = STR.hud.wire.rebuilt;
+            this.pushWire(fmt(L[Math.floor(e.n / 8 - 1) % L.length], { n: e.n }));
+          }
+          break;
         default:
           break;
       }

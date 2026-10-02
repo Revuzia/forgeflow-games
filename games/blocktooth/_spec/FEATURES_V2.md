@@ -1116,7 +1116,7 @@ twice the per-minute supply (foes, UPROAR charges, power-ups, objectives, OVERLO
 | RATE HIKE (GRID-EAST OVERLOAD SITES) | 8 | **16** | destroyed median 16; ≥ 17 placed |
 | CURB APPEAL (GRID-EAST props) | 6 500 | **7 300** | the city holds 7 661; best run 7 577 |
 | SHIPPING DELAYS (LOCKWATER boats) | 520 | **540** | the city holds 551 (seed 1337); sunk median 507, best 551 |
-| URBAN RENEWAL (blocks) | 130 | **130 (unchanged)** | city-capped: WHITE STACKS holds only 135 blocks (seed 1337) |
+| URBAN RENEWAL (blocks) | 130 | **130 (unchanged)** | city-capped: WHITE STACKS held only 135 blocks (seed 1337); 171 since the 2026-10-01 bigger cities (14x13 grid) |
 | EARLY CLOSING (LOCKWATER clear) | 10:00 | **20:00** | gate-bot LOCKWATER clears 1 117–1 277 s, 8 of 11 under 1 200 |
 | TIPPED OFF / HANG UP / OVER THE LIMIT | 20 / 40 / 135 s | unchanged | fights are not stretched |
 | the other run-scope goals | — | unchanged | best-instance or structural, not run length |
