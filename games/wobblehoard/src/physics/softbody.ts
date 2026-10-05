@@ -70,6 +70,10 @@
 //         degrees between neighbouring triangles as it whipped over). One-sided chords through the inside of the peak stand in for the
 //         jelly there: they only resist being shortened, so the peak still bends, stretches and flops freely.
 //     (6) The fingertip's speed cap scales with the mesh resolution (tipSpeed): the same travel per edge length on every mesh.
+//     (7) SLIDING CONTACT (fix round: shell-faithful rubs and slides creased the skin): the fingertip friction is static / kinetic
+//         (FINGER.friction 0.9 while the tip only presses, FINGER.frictionKinetic 0.3 for skin slipping under a tip that slides
+//         sideways), a tip stays FINGER.tableGap rest radii above the table so it never pinches the foot rim against it, and of two
+//         tips that would overlap the one that moved gives way (a rubbing finger no longer shoves a holding one aside).
 // Units: metres-ish; mass per particle ~1 (tributary area, mean 1).
 import type { Genome } from '../core/genome.ts';
 import { clamp, mulberry32 } from '../core/rng.ts';
@@ -886,9 +890,12 @@ export class SoftBody implements SoftBodyLike {
     f.tipR = rT <= f.tipR ? rT : Math.min(rT, f.tipR + FINGER.growRate * R * H);
     const s = dv * f.depthMax * share - f.tipR;
     f.cx = f.px + f.dx * s; f.cy = f.py + f.dy * s; f.cz = f.pz + f.dz * s;
-    // A fingertip cannot go through the table: a low side press would otherwise push its sphere below y = 0, squeezing the foot rim
-    // between the sphere and the table (the table always wins, so the rim buckled into a fold).
-    if (f.cy < f.tipR) f.cy = f.tipR;
+    // A fingertip cannot go through the table, nor pinch the skin against it: a low side press, or a rub sliding down toward the table,
+    // would otherwise squeeze the foot rim between the sphere and the table (the table always wins, so the rim buckled into a fold, held
+    // at the fold limit while the tip stayed, and snapped past 150 degrees when it lifted). So the sphere's bottom stays
+    // FINGER.tableGap rest radii up (about the rim's thickness).
+    const floor = f.tipR + FINGER.tableGap * R;
+    if (f.cy < floor) f.cy = floor;
   }
 
   /**
@@ -926,16 +933,26 @@ export class SoftBody implements SoftBodyLike {
         this.placeTip(f, f.share);
       }
     }
-    // pinch: the two tips never overlap or pass through each other
+    // pinch: the two tips never overlap or pass through each other. The tip that moved gives way: each yields in proportion to how far
+    // it moved this substep (a still tip next to a sliding one keeps its place; a symmetric pinch splits it evenly, as before). Splitting
+    // it evenly always let a finger rubbing up to a HOLDING one shove that tip aside by up to ~0.4 R in one frame (over 15 m/s, far past
+    // the speed cap), dragging its dent through the skin: in 120 000 frames of the sane-gesture fuzz (5 genomes x 4 seeds), episodes over
+    // 120 deg with a finger down went from 8 to 1 with this.
     if ((a.down || a.retracting) && (b.down || b.retracting)) {
       let dx = b.cx - a.cx, dy = b.cy - a.cy, dz = b.cz - a.cz;
       let d = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const minD = a.tipR + b.tipR + FINGER.pinchGap * this.restRadius;
       if (d < minD) {
         if (d < 1e-9) { dx = 1; dy = 0; dz = 0; d = 1; }
-        const push = 0.5 * (minD - d) / d;
-        a.cx -= dx * push; a.cy -= dy * push; a.cz -= dz * push;
-        b.cx += dx * push; b.cy += dy * push; b.cz += dz * push;
+        const ma = Math.sqrt((a.cx - a.ocx) ** 2 + (a.cy - a.ocy) ** 2 + (a.cz - a.ocz) ** 2);
+        const mb = Math.sqrt((b.cx - b.ocx) ** 2 + (b.cy - b.ocy) ** 2 + (b.cz - b.ocz) ** 2);
+        const wa = ma + mb > 1e-12 ? ma / (ma + mb) : 0.5, push = (minD - d) / d, pa = push * wa, pb = push - pa;
+        a.cx -= dx * pa; a.cy -= dy * pa; a.cz -= dz * pa;
+        b.cx += dx * pb; b.cy += dy * pb; b.cz += dz * pb;
+        // ...and neither is pushed into the table gap (see placeTip)
+        const fa = a.tipR + FINGER.tableGap * this.restRadius, fb = b.tipR + FINGER.tableGap * this.restRadius;
+        if (a.cy < fa) a.cy = fa;
+        if (b.cy < fb) b.cy = fb;
       }
     }
   }
@@ -1030,6 +1047,7 @@ export class SoftBody implements SoftBodyLike {
     const half = (Math.PI - (FINGER.foldMaxDeg * Math.PI) / 180) / 2;   // half the smallest allowed interior angle at an edge
     const ch = Math.cos(half), sh = Math.sin(half), cosMin = Math.cos(2 * half);
     for (let it = 0; it < FINGER.foldIters; it++) {
+      let opened = false;
       for (let q = 0; q < hc; q++) {
         const h = hl[q], c = H3[h * 2], d = H3[h * 2 + 1], a = HE[h * 2], b = HE[h * 2 + 1];
         // edge direction e, and the parts of (c - a), (d - a) perpendicular to it: the two half-planes of the hinge
@@ -1057,6 +1075,7 @@ export class SoftBody implements SoftBodyLike {
         let wl = Math.sqrt(wx * wx + wy * wy + wz * wz);
         if (wl < 1e-9) { wx = ey * mz - ez * my; wy = ez * mx - ex * mz; wz = ex * my - ey * mx; wl = Math.sqrt(wx * wx + wy * wy + wz * wz); if (wl < 1e-9) continue; }
         wx /= wl; wy /= wl; wz /= wl;
+        opened = true;
         // c and d at the same distances from the edge, at +-half the minimum angle from the bisector
         if (!pn[c / 3]) {
           XP[c] = XP[a] + tc * ex + lc * (mx * ch + wx * sh); XP[c + 1] = XP[a + 1] + tc * ey + lc * (my * ch + wy * sh); XP[c + 2] = XP[a + 2] + tc * ez + lc * (mz * ch + wz * sh);
@@ -1082,6 +1101,8 @@ export class SoftBody implements SoftBodyLike {
           if (XP[i3 + 1] < 0) XP[i3 + 1] = 0;
         }
       }
+      // nothing was folded this pass: the re-seat above was the last thing to do (most substeps of a press end here, after one pass)
+      if (!opened) break;
     }
   }
 
@@ -1300,7 +1321,17 @@ export class SoftBody implements SoftBodyLike {
       if (!f.down && !f.retracting) continue;
       const r = f.tipR, r2 = r * r, cx = f.cx, cy = f.cy, cz = f.cz;
       const fdx = cx - f.ocx, fdy = cy - f.ocy, fdz = cz - f.ocz;   // how far the tip itself moved this substep
+      // static / kinetic friction: skin that would slip under the tip by more than friction x penetration this substep is sliding, and
+      // is only held back by the kinetic coefficient, which takes over as the tip itself slides sideways (across its travel direction:
+      // a press moves the tip only along it). See FINGER.frictionKinetic.
       const muF = FINGER.friction;
+      let muK = muF;
+      {
+        const al = fdx * f.dx + fdy * f.dy + fdz * f.dz;
+        const lx = fdx - al * f.dx, ly = fdy - al * f.dy, lz = fdz - al * f.dz;
+        const slide = Math.sqrt(lx * lx + ly * ly + lz * lz) / (H * FINGER.frictionSlide * this.restRadius);
+        if (slide > 0) { const s = slide >= 1 ? 1 : slide * slide * (3 - 2 * slide); muK = muF + (FINGER.frictionKinetic - muF) * s; }
+      }
       let hit = false;
       const rn2 = r2 * FINGER.foldNear * FINGER.foldNear, stamp = this.touchStamp, now = this.subIdx, near = this.nearList;
       for (let i = 0; i < n * 3; i += 3) {
@@ -1331,7 +1362,7 @@ export class SoftBody implements SoftBodyLike {
         const tx = ux - un * nx, ty = uy - un * ny, tz = uz - un * nz;
         const tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
         if (tl > 1e-12) {
-          const k2 = Math.min(1, muF * pen / tl);
+          const k2 = tl <= muF * pen ? 1 : muK * pen / tl;
           XP[i] -= tx * k2; XP[i + 1] -= ty * k2; XP[i + 2] -= tz * k2;
         }
         if (XP[i + 1] < y0) fingerDown += M[i / 3] * (y0 - XP[i + 1]);

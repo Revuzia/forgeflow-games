@@ -118,7 +118,7 @@ export const HELD_ROOM_HOLD_S = 0.25;
 const HELD_ROOM_GRID_S = 0.25;
 /** The held squish dips fully from this |rate| (1/s) on, not at all below SQUISH_ROOM_MIN_RATE (the squelch is then 40 dB
  *  under its max: inaudible), in proportion (dB) between, with the melody's fast attack (its in-band margin on isolated
- *  squeezes is the thinnest of all, ~10 dB: a later dip would cost it). */
+ *  squeezes is the thinnest of all, 10-19 dB depending on the placement set: a later dip would cost it). */
 export const SQUISH_ROOM_RATE = 0.7;
 export const SQUISH_ROOM_MIN_RATE = 0.15;
 /** The held strand dips fully from STRAND_ROOM_T on, not at all below STRAND_ROOM_MIN_T, in proportion (dB) between, going

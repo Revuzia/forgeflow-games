@@ -148,8 +148,22 @@ export const FINGER = {
   /** Tip radius as a fraction of restRadius: fingertip -> palm. */
   rMin: 0.2, rMax: 0.45,
   /** Coulomb friction between the fingertip and the skin (tacky: the surface follows the finger). tuned: 0 let a press on the
-   *  dome shoulder squirt the whole body out sideways; 0.9 holds it. */
+   *  dome shoulder squirt the whole body out sideways; 0.9 holds it. This is the STATIC coefficient: skin that has not slipped
+   *  under the tip this substep is held exactly. */
   friction: 0.9,
+  /** Kinetic coefficient of the fingertip contact, reached while the tip itself slides sideways (a rub): skin that slips under a
+   *  sliding tip is only dragged with this much friction. Why: with 0.9 everywhere a rubbing tip (the shell drags at 1.5-3 m/s) bulldozed
+   *  the skin ahead of it into a ridge that the contact crushed to ~160 degrees every substep, faster than the fold limit could open it.
+   *  Measured on the verifier's 180 camera-plane rubs (peak base -> front flank, 1.5-3 m/s, pressure capped at 0.7; starter, f0b0s0z0,
+   *  f0b0s1z1), frames over 120 degrees: 0.9 everywhere with foldIters 4 (before) 192 in 22 rubs, worst 180; kinetic 0.3 alone 43 in 8;
+   *  foldIters 8 alone 20 in 5; both 1 (124 deg); with tableGap as well none (worst 110). A plain static / kinetic switch on every contact
+   *  (no tip-slide gate, below) let a still press slip too: the gate's squeeze lost compression (0.204 -> 0.188, under its 0.2 bar) and a
+   *  high-bounce peak release damped out (f1b1s0 tau 0.96 -> 2.23 s); with the gate both are bit-identical to before. Taking it out of
+   *  the final set (0.9 everywhere, all else kept) fails the probe's slide-toward-the-table row again: 6 frames over 120, 172 deg. */
+  frictionKinetic: 0.3,
+  /** ...blended in (smoothstep) as the tip's sideways speed (across its own travel direction) rises from 0 to this many rest radii per
+   *  second. A press, a hold or a tap moves the tip only along its travel: full static friction, exactly as before. */
+  frictionSlide: 1.0,
   /** A free flank (no table behind it) is pressed at most this fraction of squashDepth x thickness... */
   flankShare: 0.75,
   /** ...but never less than this many rest radii (a thin peak is shoved aside, not pierced). tuned: 0.42 flopped the tip only
@@ -175,6 +189,9 @@ export const FINGER = {
    *  the peak unfolded under a hard shove but flopped only 17% R (the gate wants 25%: the flop IS partly that violence); 5.5 keeps ~29% (28% since the
    *  fingertip projects every particle radially: the removed 'peakAxial' exit, see softbody.ts, collisions). */
   maxSpeed: 5.5,
+  // (softbody.ts uses maxSpeed x min(1, sqrt(642 / particles)) as `tipSpeed`: the same travel per edge length on every mesh, so a
+  //  detail-4 body (2562 particles) gets 2.75 m/s. It is read ONCE, in the constructor: changing maxSpeed later changes nothing for
+  //  bodies that already exist.)
   /** Contact fold limit (softbody.ts foldLimit): near a fingertip no two neighbouring triangles may fold past this normal dihedral (degrees;
    *  the rest shape's own maximum is 50). tuned: 110 took the detail-4 peak-flank tap from 161 to 111 and a low side press at the table rim
    *  from 132 to 113, and changed nothing that did not fold (flop, wobble, presses); side presses at the peak: see foldIters. */
@@ -188,8 +205,19 @@ export const FINGER = {
    *  4: 115 / 0. (One pass WITHOUT re-seating left the skin up to 4.7% R inside the tip.) An instant pressure-1 shove (a stress case the
    *  shell never sends): 180 / 252 -> 138 / 4 over 16 presses, NOT under 115 / 0; tried without success: 5, 6, 8 passes, ending on the fold
    *  pass instead of the re-seat, foldNear 1.6 / 2.0 (worst 136-178, erratic), and sharing the opening with the edge's own two vertices
-   *  (much worse, 156-180). The remaining folds are a thin cone crushed under a wider sphere (detail 4) and the rebound at the lift. */
-  foldIters: 4,
+   *  (much worse, 156-180). The remaining folds are a thin cone crushed under a wider sphere (detail 4) and the rebound at the lift.
+   *  Raised to 8 (fix round, shell-faithful rubs and slides; see frictionKinetic for the numbers): under a SLIDING tip the crushed ridge
+   *  moves every substep; with HEAD's friction 4 passes left 192 frames over 120 in the 180 rubs, 8 passes 20. With the rest of the fix in place
+   *  4 also passes the probe's round-5 rows (worst 111-112 deg instead of 110): 8 is kept as margin. The passes stop early once one finds
+   *  nothing folded (a plain press: one pass), so it costs nothing where nothing folds (step() / the probe's reference kernel: HEAD
+   *  0.79-0.84, now 0.80-0.84). */
+  foldIters: 8,
+  /** A fingertip sphere's lowest point stays at least this many rest radii above the table (was 0: only out of the table). A low press or
+   *  a slide toward the table otherwise pinched the foot rim between the sphere and the table: the table always wins and the rim was
+   *  held folded at the fold limit (110) for the whole slide, then snapped past 150 degrees at the lift. 0.12 R keeps a pinch-free gap
+   *  of about the foot rim's thickness. Taking it out of the final set (0, all else kept) fails the probe's camera-plane rub row (4 frames
+   *  over 120, 147 deg) and slide row (5 frames, 138 deg) again. */
+  tableGap: 0.12,
   /** Max speed (rest radii per second) at which the tip sphere grows with pressure (it shrinks at once). */
   growRate: 0.6,
   /** Held >= this long (s) and in contact -> 'press' event. */

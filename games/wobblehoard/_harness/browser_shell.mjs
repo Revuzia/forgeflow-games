@@ -88,7 +88,10 @@ async function wake(page, { touch = false } = {}) {
   await page.waitForFunction(() => window.__WH__.state().phase === 'play', null, { timeout: 30000 });
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.hud')).opacity === '1' && !document.querySelector('.title'), null, { timeout: 30000 });
 }
-async function shot(page, name) { await page.screenshot({ path: resolve(SHOTS, name + '.png'), timeout: 240000, caret: 'hide' }); }
+// animations 'disabled': CSS transitions are fast-forwarded to their end state. While the rAF loop is paused (DebugHook.step) Chromium
+// produces no frames of its own, so a transition that started during stepping would otherwise be captured at its first frame (the
+// reveal plate at opacity 0).
+async function shot(page, name) { await page.screenshot({ path: resolve(SHOTS, name + '.png'), timeout: 240000, caret: 'hide', animations: 'disabled' }); }
 /** deterministic: pause the rAF loop and advance the sim (and the stage) by `seconds` in 1/60 steps, rendering once at the end */
 const stepSim = (page, seconds) => page.evaluate((s) => { window.__WH__.step(1 / 60, Math.round(s * 60)); }, seconds);
 /** step in slices until fn(state) holds (or `max` seconds pass); returns the sim seconds it took, or -1. Each slice yields a task, so the
@@ -307,6 +310,12 @@ async function main() {
       // hold -> press -> squish voice; release -> release event + sound
       seen = await evKeys(page); a0 = await started(page);
       await page.mouse.move(...px(0.05, -0.45));
+      // sample the deepest metrics.press of this touch every frame (the release FX rule reads it; see the bubble check below)
+      await page.evaluate(() => {
+        window.__pk = { has: false, peak: 0 };
+        const f = () => { const m = window.__WH__.state().metrics; if (typeof m.press === 'number') { window.__pk.has = true; if (m.fingers > 0) window.__pk.peak = Math.max(window.__pk.peak, m.press); } window.__pkRaf = requestAnimationFrame(f); };
+        f();
+      });
       await page.mouse.down();
       const press = await waitEvent(page, seen, 'press', { finger: 0, timeout: 40000 });
       const a2 = await started(page);
@@ -318,13 +327,21 @@ async function main() {
       await shot(page, 'squish_held_desktop');
       const seenRel = await evKeys(page);
       const a3 = await started(page);
+      const peak = await page.evaluate(() => window.__pk);
       await page.mouse.up();
       const rel = await waitEvent(page, seenRel, 'release', { finger: 0, timeout: 40000 });
       const a4 = await started(page);
       check('mouse release -> a release SoftEvent and an audio release voice', !!rel && a4.release === a3.release + 1, `release intensity ${rel?.intensity?.toFixed(2)}, audio.release ${a3.release}->${a4.release}`);
       const relI = rel?.intensity ?? 0;
-      const popped = await waitUntil(page, (n) => window.__WH__.state().audio.started.pop > n, a3.pop, relI > 0.3 ? 30000 : 3000);
-      check('a squeeze release above 0.3 spawns bubble pops (and a gentler one stays quiet)', relI > 0.3 ? popped : !popped, `release intensity ${relI.toFixed(2)}, pops ${a3.pop}->${(await started(page)).pop}`);
+      const pk = await page.evaluate(() => { cancelAnimationFrame(window.__pkRaf); return window.__pk; });
+      // feel.ts releaseFxLevel: with metrics.press the deepest press of the touch (>= 0.7) gates the bubbles, else release intensity > 0.3.
+      // Sampled per frame here (the shell reads every sim step), so a peak within 0.03 of the line is reported but not judged.
+      const lvl = pk.has ? Math.max(pk.peak, peak?.peak ?? 0, relI) : relI;
+      const line = pk.has ? 0.7 : 0.3;
+      const wantPops = lvl >= line;
+      const popped = await waitUntil(page, (n) => window.__WH__.state().audio.started.pop > n, a3.pop, wantPops ? 30000 : 3000);
+      const borderline = pk.has && Math.abs(lvl - line) < 0.03;
+      check('a deep squeeze release spawns bubble pops and a gentler one stays quiet (press >= 0.7 with metrics.press, else intensity > 0.3)', borderline || (wantPops ? popped : !popped), `press ${pk.has ? lvl.toFixed(2) : 'n/a'}, release intensity ${relI.toFixed(2)}, expected ${wantPops ? 'pops' : 'none'}${borderline ? ' (borderline, not judged)' : ''}, pops ${a3.pop}->${(await started(page)).pop}`);
       await sleep(80);
       await shot(page, 'release_t80_desktop');
       await waitUntil(page, () => { const m = window.__WH__.state().metrics; return m.compression < 0.06 && m.fingers === 0; }, null, 60000);
@@ -433,11 +450,15 @@ async function main() {
         const capY = B.y - 0.45 * B.rPx / window.innerHeight;
         wh.pointerDown(B.x, capY);
         const comp = [];
-        for (let i = 0; i < 8; i++) { wh.step(1 / 60, 12); comp.push(+wh.state().metrics.compression.toFixed(3)); }
+        // the deepest metrics.press of the touch, sampled every sim step while the finger is down (the shell's release FX rule reads it)
+        let peakPress = 0, hasPress = false;
+        const notePress = () => { const m = wh.state().metrics; if (typeof m.press === 'number') { hasPress = true; if (m.fingers > 0) peakPress = Math.max(peakPress, m.press); } };
+        for (let i = 0; i < 96; i++) { wh.step(1 / 60, 1); notePress(); if (i % 12 === 11) comp.push(+wh.state().metrics.compression.toFixed(3)); }
         const held = wh.state();
         log.hold = { comp, voices: held.audio.started.squish - s0.audio.started.squish, fingers: held.metrics.fingers, volume: held.metrics.volume };
         wh.pointerUp();
-        wh.step(1 / 60, 20);
+        for (let i = 0; i < 20; i++) { wh.step(1 / 60, 1); notePress(); }
+        log.press = { hasPress, peakPress };
         const rel = wh.state();
         log.release = { releases: rel.audio.started.release - s0.audio.started.release, pops: rel.audio.started.pop - s0.audio.started.pop, kinds: rel.events.map((e) => e.kind), maxIntensity: rel.events.filter((e) => e.kind === 'release').at(-1)?.intensity ?? 0 };
         wh.step(1 / 60, 240);
@@ -477,7 +498,13 @@ async function main() {
       check('hook hold: pressing the dome holds a real squeeze (> 0.1 after the poke transient) with exactly one squish voice', out.hold.voices === 1 && out.hold.fingers === 1 && out.hold.comp[7] > 0.1 && out.hold.comp[7] >= out.hold.comp[2] * 0.9 && out.hold.comp.slice(2).every((v) => v > 0.05), JSON.stringify(out.hold));
       check('hook hold: volume stays within 0.85..1.15 under the full squeeze', out.hold.volume > 0.85 && out.hold.volume < 1.15, out.hold.volume.toFixed(3));
       check('hook release: a release SoftEvent, one audio release, bubbles pop, and the voice is gone', out.release.kinds.includes('release') && out.release.releases === 1 && out.release.maxIntensity > 0.1, JSON.stringify(out.release));
-      check('hook release: pops follow a release only above 0.3 intensity, never more than 3', out.afterRelease.pops <= 3 && (out.release.maxIntensity > 0.3 ? out.afterRelease.pops >= 1 : out.afterRelease.pops === 0), `intensity ${out.release.maxIntensity.toFixed(2)}, pops ${out.afterRelease.pops}`);
+      {
+        // src/shell/feel.ts releaseFxLevel: a body that reports `press` pops bubbles when max(peak press of the touch, intensity) >= 0.7
+        // (CALIBRATION.bubblePressAt); a body without it, above release intensity 0.3 (the slice compensation, CALIBRATION.bubbleAt)
+        const I = out.release.maxIntensity, P = out.press;
+        const want = P.hasPress ? Math.max(P.peakPress, I) >= 0.7 : I > 0.3;
+        check('hook release: bubbles pop only after a deep squeeze (press >= 0.7 with metrics.press, else intensity > 0.3), never more than 3', out.afterRelease.pops <= 3 && (want ? out.afterRelease.pops >= 1 : out.afterRelease.pops === 0), `press ${P.hasPress ? P.peakPress.toFixed(2) : 'n/a'}, intensity ${I.toFixed(2)}, expected ${want ? 'pops' : 'none'}, pops ${out.afterRelease.pops}`);
+      }
       check('hook release: the body recovers (volume 1 +- 0.015, compression ~ 0)', Math.abs(out.rest.volume - 1) < 0.015 && out.rest.compression < 0.05 && out.rest.fingers === 0, JSON.stringify(out.rest));
       check('hook pull: outward drag grabs and stretches (stretch > 0.08), stretch voice started, no stray release bloop', out.pull.grabbed && out.pull.stretch > 0.08 && out.pull.voices >= 1 && out.pull.kinds.includes('grab') && out.pull.volume > 0.85 && out.pull.volume < 1.15, JSON.stringify(out.pull));
       check('hook snap: letting go emits snap + exactly one audio release', out.snap.kinds.includes('snap') && out.snap.releases === 1, JSON.stringify(out.snap));
