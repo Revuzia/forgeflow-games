@@ -199,7 +199,7 @@ and inside the level window.
 
 ## What was measured (gate G2 and extras)
 
-`node _harness/probe_audio.mjs` (rounds 1 and 2 together, before round 3): **372/372 checks pass, exit 0** (the 218 round-1 checks, listed here, plus 154 ceremony and engine checks, listed in the round-2 section). Round 3 adds 154 checks (section "Round 3"); the round-1/2 checks are unchanged and still pass. Gate G2 as worded in CONTRACT.md section 6, per voice:
+`node _harness/probe_audio.mjs` (rounds 1 and 2 together, before round 3): **372/372 checks pass, exit 0** (the 218 round-1 checks, listed here, plus 154 ceremony and engine checks, listed in the round-2 section). Round 3 adds 183 checks (154 in its first version, 29 more with the round-3 fix; section "Round 3"); the round-1/2 checks are unchanged and still pass. Gate G2 as worded in CONTRACT.md section 6, per voice:
 peak -20..-1 dBFS; |DC| < 0.01 (worst 2.9e-5); no sample step > 0.25 at start/end (worst 0.073, also at min/max parameters:
 0.129); tail < -60 dBFS at the end of the voice's declared life + 50 ms (worst -118 dBFS); non-silent >= minimum duration
 (poke 80 ms, release 200, land 60, blend 2.5 s; pop 30 ms and squish 1.5 s are my own minima); different pitch/seed differ
@@ -240,7 +240,7 @@ whoosh/shimmer/crack, slows attacks, softens the pop (low-passed, -5 dB) and low
 Round-3 audit fix: `capsuleBeat` gained an optional `calm` too (additive, `src/contracts.ts`). Before, the calm burst
 existed in `ceremony.ts` but no `SquishAudio` call could reach it. Now `calm` gives the low-passed, softer burst pop and
 quieter stinger, and grab and crack 2.5 dB softer with slower edges (live check: three calm Rare bursts peak 0.151-0.159
-against 0.283-0.316 for normal ones).
+against 0.218-0.316 for normal ones).
 
 ### Time map the shell should follow (these are the DESIGN 6.1/6.3 numbers)
 
@@ -336,7 +336,7 @@ own rules, and the reference clip was never used as an audio source (REFERENCES.
 **What the round-3 fix changed and why** (independent verifiers measured these on the first version):
 
 1. *The ">= 8 dB effects over music" claim did not hold in general.* It had been measured on one fixed 20 s sequence at pitch
-   1. Over 330 placements at other pitches, timings and seeds, 25 fell under 8 dB (a soft toss 5 dB UNDER the pads, a poke
+   ratio 1; over 330 placements at other pitches, timings and seeds, 25 fell under 8 dB (a soft toss 5 dB UNDER the pads, a poke
    3.4 dB and a pop 0.6 dB over a coinciding mallet). Root cause: the music and the effects share 0.3-3 kHz, so no register
    can be carved out for the music, and a fixed level cannot stay under every effect at every moment. Fix: the music now
    **makes room for every effect** (a fast, sidechain-style dip keyed by each effect voice, see "Room for the effects"), and
@@ -345,7 +345,8 @@ own rules, and the reference clip was never used as an audio source (REFERENCES.
 2. *Perceptually the music did not sit below the effects.* The continuous pad was the strongest component, in the ear's
    sensitive region. Over each effect's loudest frames the music came within 0-7 dB (A-weighted: soft bumps and lands
    were UNDER it). Fix: the pad is darker (sines, no triangles), breathes tone by tone and answers the melody (it swells in
-   rests); the sparse mallet carries more of the level; under any effect the melody dips 24 dB and the pad 17 dB. Added: a
+   rests) and now carries about the same energy as the sparse mallet instead of 3-5 dB more; under any effect the melody
+   dips 24 dB and the pad 17 dB. Added: a
    loudness check, **K-weighted (ITU-R BS.1770) over each effect's own loudest 20 ms frames, >= 10 LU for every
    placement**, with A-weighted figures reported next to it.
 3. *The "tuned" bubbles were sharp* (+33..+38 cents energy-weighted, +59..+80 at the spectral peak), because the bubble
@@ -525,15 +526,15 @@ strand: the scripted 1.45 s stretch + snap; the strand alone: the realistic stre
 ### What was measured (round 3)
 
 `node _harness/probe_audio.mjs --only3` runs just this round (offline gates + live engine, ~16 min on a loaded container);
-`--no-round3` skips it; a full run does rounds 1-3. Last full run: **@@FULL@@**. Numbers below are from that run unless
+`--no-round3` skips it; a full run does rounds 1-3. Last full run: **554 of 555 checks pass (372 round-1/2 + 183 round-3). The one failure is the load-sensitive live playout check of the 9 s realistic session (1 audio fallback event over 9.0 s played, with the container at a load average of ~18 from other lanes); it passed (0 events) in the full run before (which failed only on two of my own new checks, corrected since: see known issues) and in a round-3-only run of the same final code right after (`--only3`: **183/183**, 0 fallback events)**. Numbers below are from that run unless
 marked.
 
-**Music, 90 s offline renders, seeds 1 and 2** (through the master chain, master 1, music 0.45): long-term RMS @@RMS@@ dBFS
-(band -30..-24), peak @@PEAK@@ dBFS (the limiter never acts), crest @@CREST@@ dB, 99.9% of the energy below 2.5 kHz, 0.000%
-above 6 kHz, every 10 s window within @@W10@@ dB of the long-term RMS (+/-3 allowed). Pitch set: every scored note in its
+**Music, 90 s offline renders, seeds 1 and 2** (through the master chain, master 1, music 0.45): long-term RMS -28.7 / -28.9 dBFS
+(band -30..-24), peak -11.7 / -13.1 dBFS (the limiter never acts), crest 17.0 / 15.8 dB, 99.9% of the energy below 2.5 kHz, 0.000%
+above 6 kHz, every 10 s window within 2.4 dB of the long-term RMS (+/-3 allowed). Pitch set: every scored note in its
 field's set and sounding over its own field; from the AUDIO, every isolated mallet note's strongest peak is the scored note
-(worst @@CENTS@@ cents), and the three strongest pad peaks mid-field are the pad's pitch classes in every field. **Bubbles:**
-energy-weighted pitch @@BEW@@ cents, spectral peak @@BPK@@ cents for every grace/trail note A5..D7 at score pitch 0.9 / 1 /
+(worst 3.1 cents), and the three strongest pad peaks mid-field are the pad's pitch classes in every field. **Bubbles:**
+energy-weighted pitch -3.7..-2.4 cents, spectral peak +3.8..+5.8 cents for every grace/trail note A5..D7 at score pitch 0.9 / 1 /
 1.12 (gate +/-10).
 
 **No repetition, determinism, behaviour** (unchanged rules, re-measured): onset autocorrelation < 0.7 and pitch-aware < 0.5 at
@@ -552,27 +553,29 @@ those frames), K-weighted (BS.1770) and A-weighted.
 
 | | worst placement | median | gate |
 |---|---|---|---|
-| in-band | @@SEP@@ | @@SEPMED@@ | >= 8 dB, every placement |
-| K-weighted | @@K@@ | @@KMED@@ | >= 10 LU, every placement |
-| A-weighted | @@A@@ | @@AMED@@ | reported (see known issues) |
-| music volume 1 (+6 dB), 2 seeds x 60 s | in-band @@V1SEP@@; K @@V1K@@ | | in-band >= 8 dB |
+| in-band | 12.4 dB (a 0.15 toss, seed 2, pitch 0.75) | 54.3 dB | >= 8 dB, every placement |
+| K-weighted | 11.7 LU (a 0.2 poke, seed 17, pitch 0.81) | 27.7 LU | >= 10 LU, every placement |
+| A-weighted | 3.8 dB (a 0.2 poke, the engine's seed, pitch 0.80); 8 of 190 under 10 dB | 26.1 dB | reported (see known issues) |
+| music volume 1 (+6 dB), 2 seeds x 60 s | in-band 11.8 dB; K worst 9.2 LU, 1 of 67 under 10 LU | | in-band >= 8 dB |
 
 A separate scratch sweep (5 seeds x 120 s, 354 placements, the same rule) gave in-band >= 11.8 dB, K >= 11.6 LU, A-weighted
-under 10 dB in 8 placements (worst 3.6 dB). Before the fix, on the same kind of sweep: 9 of 295 placements under 8 dB in-band
-(worst -2.5 dB), 179 under 10 LU (worst -2.5 LU), 204 under 10 dB A-weighted (worst -9.1 dB).
+under 10 dB in 8 placements (worst 3.6 dB). Before the room dips, on the same kind of sweep (4 seeds x 90 s, effects 0.15-1.15 s apart, measured on the code as an
+interrupted earlier fix attempt had left it: no dips, the pad already 5 dB under the verified first version, the music at
+-31 dBFS): 9 of 295 placements under 8 dB in-band (worst -2.5 dB), 179 under 10 LU (worst -2.5 LU), 204 under 10 dB
+A-weighted (worst -9.1 dB).
 
-**The room dip itself** (section "music room dip"): melody -24.00 dB and pad -@@PADD@@ dB while held; the pad within 1 dB of
-its depth @@ATT@@ after the call; back within 1 dB @@REC@@ after the hold ends, at most @@SM@@ dB per 20 ms, untouched outside
+**The room dip itself** (section "music room dip"): melody -24.00 dB and pad -17.28 dB while held; the pad within 1 dB of
+its depth 33 ms after the call; back within 1 dB 1.88 s after the hold ends, at most 1.04 dB per 20 ms, untouched outside
 (< 0.01 dB); no click (steps and 2nd differences in and around the dip below the undipped music's); overlapping holds stack
-as a staircase (-17.3 / -4.3 / 0 dB measured on the pad for a deep hold inside a shallow one, then none); the rule (`roomDb`,
+as a staircase (pad -17.3 dB under a deep hold, then -4.7 dB under the shallow one it sat in (-4.3 expected), then -0.01 dB); the rule (`roomDb`,
 `squishRoomDb`, `strandRoomDb`) checked value by value.
 
-**The original 20 s mix sequence** (3 seeds x 13 effects, pitch 1): worst @@MIXW@@ dB in-band (first version: 9.0 dB), the
+**The original 20 s mix sequence** (3 seeds x 13 effects, pitch 1): worst 20.4 dB in-band (a poke, seed 6; first version: 9.0 dB), the
 mix equals the stems' sum to below -75 dB.
 
 **Long run.** 3000 composed bars: every drift on a declared edge, every length 8/12/16 bars, every note in its field's set
-and inside its own bar. 600 s scheduled like the live engine: scheduler cost per tick mean @@TICK@@ ms, live notes <= 6
-throughout (@@DROP@@ dropped by the cap), live audio nodes max @@NODES@@, 0 after stop + free.
+and inside its own bar. 600 s scheduled like the live engine: scheduler cost per tick mean 0.031 ms, live notes <= 6
+throughout (8 of 346 dropped by the cap), live audio nodes max 116, 0 after stop + free.
 
 **Live engine** (headless Chromium 141, real `AudioContext`, `--mute-audio`): everything listed for the first version still
 holds (no-ops before `unlock()`, one session at unlock, fade-in, scheduler cost, <= 6 live notes, ceremony duck, mute / volume
@@ -580,9 +583,9 @@ holds (no-ops before `unlock()`, one session at unlock, fade-in, scheduler cost,
 master-chain nodes, dispose). New: a poke makes the music dip at once and it comes back ~2 s later; a session started
 mid-reveal is ducked; `setPaused(true)` twice keeps the fade; the strand at ~30 Hz jittered calls peaks at -13.2 dBFS; every
 source started around a pause cycle with a held squish and a charging merge reaches `ended` (47/47); calm capsule bursts peak
-0.15 against 0.28-0.32; the silent buffer starts inside `unlock()` on a context that starts suspended; a 1.2 s main-thread
+0.15-0.16 against 0.22-0.32; the silent buffer starts inside `unlock()` on a context that starts suspended; a 1.2 s main-thread
 stall mid-merge schedules nothing into the past; one squeak `PeriodicWave` per context; blend 8 s x 8 / Mythic reveal /
-Legendary merge build 34 / 36 / @@MERGEN@@ nodes in the call (the old merge first slice: @@MERGEOLD@@) and a stopped blend
+Legendary merge build 34 / 36 / 65 nodes in the call (the old merge first slice: 85) and a stopped blend
 builds nothing more; a held squish updated four times per audio step makes exactly as many bubbles as once (103 = 103; was
 +56%); the iOS audio session goes playback / ambient / playback with sound on / muted / on.
 
@@ -722,26 +725,35 @@ snap), or use the round-3 row of the sound lab (music toggle and slider, Bump, L
   measured requirements (at -12/-12 dB with 0.3 s release: K-weighted worst 1.0 LU, the strand aside; at -14/-18 with no
   tail: 7.9 LU for a soft toss under a mallet).
 * Round 3: **A-weighted, a few soft low effects are still within 10 dB of the music** over their loudest 20 ms frames (in the
-  last full run @@ABELOW@@ placements, worst @@A@@; the scratch sweep: 8 of 354, worst 3.6 dB): a 0.2 poke or a 0.15 bump landing
+  last full run 8 of 190 placements, worst 3.8 dB (a 0.2 poke, the engine's seed, pitch 0.80); 8 of 190 under 10 dB; the scratch sweep: 8 of 354, worst 3.6 dB): a 0.2 poke or a 0.15 bump landing
   within a few ms of a mallet attack that had already started before the effect was called. Over the rest of the effect the
   same placements are 10-15 dB clear. No causal dip can remove a note that began before the effect; A-weighting also
   discounts their 60-300 Hz bodies by 10-20 dB. K-weighting (the gate) passes everywhere.
 * Round 3: at music volume 1 (+6 dB, the slider's top) the dips deepen by 6 dB and in-band separation holds (>= 8 dB), but
-  K-weighted 2 of 67 placements fall under 10 LU (worst ~9.5 LU, the same onset collisions with a louder pre-onset note).
+  K-weighted 1 of 67 placements falls under 10 LU (worst 9.2 LU: a 0.3 land, the same kind of onset collision with a 6 dB louder pre-onset note).
 * Round 3: the loudness check is my own definition (K- and A-weighted level of the effect over the music, summed over the
   effect's own loudest 20 ms frames, within 10 dB of its loudest). EBU short-term loudness (3 s) would dilute a 45 ms pop to
   nothing; a 100 ms window caps short effects because it includes undipped music before the onset. Gating every placement
   of soft, medium and hard variants (not a median) was decided before the final numbers were known.
 * Round 3: thresholds of my NEW round-3-fix checks were set with these measurements in view: the room-dip recovery bound
   (<= 1.5 dB per 20 ms: an exponential return from -17 dB starts at ~1-1.2 dB per 20 ms), the merge first-slice node count
-  (fewer than the old 0.5 s slice measured with the same counter, instead of an absolute bound I had guessed and that failed:
-  87 nodes at a 0.25 s slice), the strand-hold audibility (>= -32 dBFS RMS, set between the old -47 and the new -25.8). No
+  (fewer than the old 0.5 s slice measured with the same counter, instead of an absolute bound I had guessed), the
+  strand-hold audibility (>= -32 dBFS RMS, set between the old -47 and the new -25.8). The full run before the last one
+  failed two of these new checks, and both were looked into rather than loosened: the merge's first slice was not smaller
+  (87 nodes vs 85) because the engine handed the voice to the pump AND advanced it to +0.5 s in the same call (a real bug,
+  fixed: the pump now takes over from its first tick; 65 nodes); and the room-dip check's "untouched outside" window began
+  4 s after the hold, where the pad's 0.9 s recovery time constant still leaves 0.09 dB by arithmetic (the window now begins
+  at 6 s, 6.7 time constants: 0.01 dB measured). No
   round-1/2 check and no round-3 check of the first version was changed, except: the round-3 engine check "music ducks under
   a loud held squish" now reads `ducked`, which covers the room dip (the squish no longer uses the slow duck), and the mix
   render it shares (`renderMix`) applies the engine's room rule, so the original 20 s mix check now measures the music the
   engine would actually play.
 * Round 3: the live playout-glitch checks are load-sensitive on this shared container (the load average reached 16-21 during
-  the final runs from other lanes' probes); earlier rounds saw 1-4 fallback events in 1 of 4-6 runs.
+  the final runs from other lanes' probes). The last full run failed exactly that check once (1 fallback event over 9.0 s of
+  the realistic session); it passed in the run before; the first version's builder saw 2 events in 1 of 4 runs. Per-pad node
+  count went down (19 instead of 26: no triangles, one filter, fewer LFOs), mallets live ~30% longer, and the room dips add
+  two automated gains per session, so I do not expect a real change in audio-thread cost, but this was not measured on the
+  audio thread itself.
 * Round 3: the physics for bump / lift / toss / strand does not exist yet (stage B): the call map below proposes the metrics,
   and these voices have only been driven by scripts and the sound lab, never by the simulation.
 * Round 3: one strand voice per engine: two strands at once share it (the latest call's tension and pan win). Its pitch is
