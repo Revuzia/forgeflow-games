@@ -3,6 +3,54 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-10-01 — Built to the DYEFIELD / BLOCKTOOTH bar (?v=1790866476)
+
+Owner: "Improve this game based on how well you have been building games — ie DYEFIELD and
+BLOCKTOOTH." An 8-lane audit (`_spec/improve_2026-09/*.md`, plan in `PLAN.md`) measured Last Circle
+against those two builds, then three build waves landed it, each re-checked by an independent
+verifier in a real browser. Before numbers: `_spec/improve_2026-09/baseline/`.
+
+| measured | before | after |
+|---|---|---|
+| drop frame 1 triangles / character-shadow triangles | 9.91 M / 8.57 M | ~0.87 M / 0 |
+| drop-cluster draw calls | 482 | 175 |
+| shader programs compiled on the first drop frame | 27 | 0 |
+| lobby -> drop after pressing Enter | 4.3-9.2 s | ~0.04 s |
+| forced layouts per frame | 1.00 | 0.00 |
+| KB allocated per match frame | 554.5 | 77 |
+| lobby textures over 3 matches (PLAY AGAIN leak) | 44 / 86 / 177 | 132 / 132 / 132 |
+| SMG fire rate | 600 rpm at 60 Hz | 720 at 20-165 Hz |
+| jump height at 20 vs 144 fps | 1.19 vs 1.356 m | identical |
+| pistol share of gun kills / bot lives ending on pistol | 60.2 % / 74.8 % | ~17 % / ~33 % |
+| bots holding a pistol while carrying better | 24.4 % (Wave 1) | 2 % |
+| isla_viva bot stuck time | 12-27 % | < 1 % |
+| same seed replays identically | no (diverged ~25 s) | yes |
+| [rig] + animation-binding warnings per load | ~235 | 0 |
+| cdn.jsdelivr.net blocked | game never starts | boots (three r172 vendored) |
+| phone: look / move / fire / loot | none (camera could not turn) | 48/48 on Pixel 7, iPhone 14, SE, iPad |
+
+- **Characters**: bodies were 245k-632k triangles (DYEFIELD's budget is 12k). `_tools/char_lod.py`
+  regenerates ~15k LOD0 + ~2.5k far LOD1 with attribute-aware decimation; the stock simplifier
+  garbled faces, so faces/hands were checked by eye on all five bodies.
+- **Frame pipeline** (the owner-approved BLOCKTOOTH approach): fixed 1/60 tick with an interpolated
+  view, ResizeObserver-cached size, DPR cap 1.5, shader warm-up under the loading screen,
+  `?prof=1` frame profiler, mixer LOD, near-only shadows, one instanced draw for parachutes and one
+  atlas billboard for name tags. Online squad play runs the same tick (two-client sync measured
+  equivalent to the old stepping; it also stops a 144 Hz player out-jumping a 30 Hz one).
+- **Death animations**: two of the three death clips carried an FBX Armature root, so 13 of 21
+  corpses were placed ~94 m away (they "vanished"). Rebased; those two clips also turned out to be
+  fall-and-recover, so every corpse uses the true death clip for now. Real variety needs new clips.
+- **Boot**: a head guard that never overwrites a failure, named failures with one auto-retry,
+  WebGL2/sitelock checks before the engine import, a failed match load returns to the menu.
+- **Phones**: native touch layer (stick, look, FIRE/JUMP/RELOAD/USE/ADS/PAUSE, aim assist only
+  while firing), touch HUD mode, rotate overlay; the "desktop only" cards are gone.
+- **Feel**: one accumulating damage number per victim, kill-latched hit marker, readable reticle,
+  HUD collisions fixed, music ducks once per engagement, voice cap 24.
+- "VICTORY ROYALE" (Epic Games' trademarked phrase) now reads "LAST ONE STANDING".
+- **Gates**: `_harness/gate.py --disk` runs every browser gate (bootcheck, bootguard, rigcheck,
+  playtest, portalcheck, framecheck, leaktest, feelcheck, layoutcheck, mobile, probe_match,
+  lifecycle) — Node selftests never execute runtime/3d, which is how view crashes used to ship.
+
 ## 2026-07-21 — Firing a gun moved nothing on screen, and frame order ate the first kick (?v=102)
 
 Game-feel pass from the Final Drop benchmark. The INFORMATIONAL feedback layer
