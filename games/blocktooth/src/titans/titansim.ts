@@ -19,6 +19,7 @@
 // reads on the next tick:  kit.sim_moveMul (own-speed multiplier, default 1) and
 // kit.sim_faceH / kit.sim_faceT (heading to swivel toward while idle, and for how long).
 
+import { cos, exp, hypot, sin } from '../core/detmath.ts';
 import type { DamageKind, DamageOpts, Enemy, RankIndex, TitanDef, TitanState, Tier, World } from '../core/types.ts';
 import {
   AHEAD_FROM_RANK, AHEAD_GRACE_S, AHEAD_MIN, AHEAD_PER_MIN, CITY_PACE, CATCHUP_MAX, CATCHUP_PER_MIN, CRUSH_RATIO, GROW_TWEEN_S, LEVEL_GROW_S,
@@ -126,7 +127,7 @@ export function createTitan(def: TitanDef, spawn: { x: number; z: number; headin
     radius: h * TITAN_RADIUS_PER_H,
     growT: 0,
     dashCharges: Math.max(0, Math.round(def.base.dashCharges)), dashRecharge: 0, dashT: 0,
-    dashDirX: Math.sin(spawn.heading), dashDirZ: Math.cos(spawn.heading),
+    dashDirX: sin(spawn.heading), dashDirZ: cos(spawn.heading),
     iframeT: 0,
     abilityCd: 0,
     autoCd: 0,
@@ -220,7 +221,7 @@ export function stepTitan(w: World): void {
   // ── input ──
   let mx = Number.isFinite(w.input.mx) ? w.input.mx : 0;
   let mz = Number.isFinite(w.input.mz) ? w.input.mz : 0;
-  let m = Math.hypot(mx, mz);
+  let m = hypot(mx, mz);
   if (m > 1) { mx /= m; mz /= m; m = 1; }
   T.moving = m > INPUT_DEADZONE;
   if (!T.moving) { mx = 0; mz = 0; m = 0; }
@@ -228,8 +229,8 @@ export function stepTitan(w: World): void {
   // ── dash start ──
   if (w.input.dash && T.dashT <= 0 && T.dashCharges >= 1) {
     let ddx = mx, ddz = mz;
-    if (m <= INPUT_DEADZONE) { ddx = Math.sin(T.heading); ddz = Math.cos(T.heading); }
-    const dl = Math.hypot(ddx, ddz) || 1;
+    if (m <= INPUT_DEADZONE) { ddx = sin(T.heading); ddz = cos(T.heading); }
+    const dl = hypot(ddx, ddz) || 1;
     ddx /= dl; ddz /= dl;
     const distM = Math.max(0, stat(w, 'dashDistance')) * H;
     T.dashCharges -= 1;
@@ -269,16 +270,16 @@ export function stepTitan(w: World): void {
 
     let tx = 0, tz = 0;
     if (T.moving) {
-      const face = Math.cos(wrapAngle(headingOf(mx, mz) - T.heading));
+      const face = cos(wrapAngle(headingOf(mx, mz) - T.heading));
       const f = FACING_MIN + (1 - FACING_MIN) * Math.max(0, face);
       const s = maxSp * spMul * f;              // mx/mz already carry the stick magnitude
       tx = mx * s; tz = mz * s;
     }
     const accel = maxSp / ACCEL_REACH_S[rank];
-    const cur = Math.hypot(vx, vz), tgt = Math.hypot(tx, tz);
+    const cur = hypot(vx, vz), tgt = hypot(tx, tz);
     const rate = tgt < cur - 1e-6 ? accel * DECEL_MUL : accel;
     const dvx = tx - vx, dvz = tz - vz;
-    const dv = Math.hypot(dvx, dvz), stepV = rate * dt;
+    const dv = hypot(dvx, dvz), stepV = rate * dt;
     if (dv <= stepV) { vx = tx; vz = tz; }
     else { vx += (dvx / dv) * stepV; vz += (dvz / dv) * stepV; }
   }
@@ -293,7 +294,7 @@ export function stepTitan(w: World): void {
       T.leash = null;
       w.events.push({ type: 'leash', on: false, x: L.lx, z: L.lz });
     } else {
-      const ddx = L.lx - T.x, ddz = L.lz - T.z, d = Math.hypot(ddx, ddz);
+      const ddx = L.lx - T.x, ddz = L.lz - T.z, d = hypot(ddx, ddz);
       if (d > T.radius) { const s = Math.max(0, num(L.strength, 0)); lpx = (ddx / d) * s; lpz = (ddz / d) * s; }
     }
   }
@@ -303,7 +304,7 @@ export function stepTitan(w: World): void {
   const squeezing = num(K.sim_squeezeT, 0) > 0;
   const colR = squeezing ? T.radius * PIN_SQUEEZE : T.radius;
   const dx = (vx + lpx) * dt, dz = (vz + lpz) * dt;
-  const len = Math.hypot(dx, dz);
+  const len = hypot(dx, dz);
   const n = Math.max(1, Math.min(MAX_SUBSTEPS, Math.ceil(len / Math.max(0.05, T.radius * 0.5))));
   let pushX = 0, pushZ = 0, bumpTier = -1;
   for (let i = 0; i < n; i++) {
@@ -322,7 +323,7 @@ export function stepTitan(w: World): void {
   T.z = clamp(T.z, B.minZ, B.maxZ);
 
   // wall slide: drop the own-velocity component driving into whatever pushed us
-  const pl = Math.hypot(pushX, pushZ);
+  const pl = hypot(pushX, pushZ);
   if (pl > 1e-6) {
     const nx = pushX / pl, nz = pushZ / pl, vn = vx * nx + vz * nz;
     if (vn < 0 && !dashing) { vx -= nx * vn; vz -= nz * vn; }
@@ -331,14 +332,14 @@ export function stepTitan(w: World): void {
   // wedge detector (see PIN_S)
   if (squeezing) {
     K.sim_squeezeT = num(K.sim_squeezeT, 0) - dt;
-    if (Math.hypot(T.x - num(K.sim_pinX, T.x), T.z - num(K.sim_pinZ, T.z)) >= T.radius) K.sim_squeezeT = 0;
+    if (hypot(T.x - num(K.sim_pinX, T.x), T.z - num(K.sim_pinZ, T.z)) >= T.radius) K.sim_squeezeT = 0;
     K.sim_pinT = 0;
-  } else if (T.moving && !dashing && pl > 1e-6 && Math.hypot(T.x - x0, T.z - z0) < PIN_MOVE_FRAC * maxSp * dt) {
+  } else if (T.moving && !dashing && pl > 1e-6 && hypot(T.x - x0, T.z - z0) < PIN_MOVE_FRAC * maxSp * dt) {
     K.sim_pinT = num(K.sim_pinT, 0) + dt;
     if (K.sim_pinT >= PIN_S) { K.sim_squeezeT = SQUEEZE_S; K.sim_pinX = T.x; K.sim_pinZ = T.z; K.sim_pinT = 0; }
   } else K.sim_pinT = 0;
   T.vx = (T.x - x0) / dt; T.vz = (T.z - z0) / dt;
-  T.speed = Math.hypot(T.vx, T.vz);
+  T.speed = hypot(T.vx, T.vz);
 
   // ── bump: first contact with a building/prop too big to flatten ──
   if (bumpTier > canFlatten) {
@@ -357,7 +358,7 @@ export function stepTitan(w: World): void {
   if (dashing || T.speed >= CRUSH_MIN_SPEED_FRAC * maxSp) crush(w);
 
   // ── footsteps ──
-  const moved = Math.hypot(T.x - x0, T.z - z0);
+  const moved = hypot(T.x - x0, T.z - z0);
   T.stepAcc += moved;
   const stride = STRIDE_PER_H * H;
   let guard = 0;
@@ -401,7 +402,7 @@ function updateHeight(w: World, dt: number): void {
     const from = num(K.sim_growFrom, target);
     T.height = from + (target - from) * easeOutBack(u);
   } else {
-    T.height += (target - T.height) * (1 - Math.exp(-HEIGHT_EASE_RATE * dt));
+    T.height += (target - T.height) * (1 - exp(-HEIGHT_EASE_RATE * dt));
     if (Math.abs(target - T.height) < 1e-5) T.height = target;
   }
   if (!(T.height > 0.05)) T.height = target;

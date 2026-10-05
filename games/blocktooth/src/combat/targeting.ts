@@ -10,6 +10,7 @@
 // GATEKEEPERS §2.4 (lane K0): with preferEnemies, an OPEN weak point of a live gatekeeper (a part whose bit
 // is set in boss.data.weakMask) within range is returned BEFORE any enemy. City bosses are unchanged.
 
+import { hypot } from '../core/detmath.ts';
 import type { DamageOpts, Enemy, World } from '../core/types.ts';
 import { RANKS } from '../core/config.ts';
 import { clamp } from '../core/math.ts';
@@ -46,7 +47,7 @@ function nearestWeakPart(w: World, x: number, z: number, range: number): number 
   for (let i = 0; i < B.parts.length && i < 31; i++) {
     if (!((mask >>> i) & 1)) continue;
     const p = B.parts[i];
-    const d = Math.max(0, Math.hypot(p.x - x, p.z - z) - p.r);
+    const d = Math.max(0, hypot(p.x - x, p.z - z) - p.r);
     if (d > range) continue;
     if (d < bestD) { best = i; bestD = d; }
   }
@@ -60,7 +61,7 @@ function nearestBossPart(w: World, x: number, z: number, range: number, out: Bes
   let best = -1;
   for (let i = 0; i < B.parts.length; i++) {
     const p = B.parts[i];
-    const d = Math.max(0, Math.hypot(p.x - x, p.z - z) - p.r);
+    const d = Math.max(0, hypot(p.x - x, p.z - z) - p.r);
     if (d > range) continue;
     if (best < 0 || d < out.d || (d === out.d && i < best)) { best = i; out.d = d; }
   }
@@ -87,7 +88,7 @@ function scanCity(w: World, x: number, z: number, range: number): void {
     if (!b || b.collapsed || b.alive <= 0) continue;
     const dx = Math.max(Math.abs(x - b.x) - b.w / 2, 0);
     const dz = Math.max(Math.abs(z - b.z) - b.d / 2, 0);
-    const d = Math.hypot(dx, dz);
+    const d = hypot(dx, dz);
     if (d > range) continue;
     const slot = b.tier <= can ? bestFlat : bestOver;
     if (better(d, 2, b.id, slot)) { slot.d = d; slot.cat = 2; slot.id = b.id; }
@@ -97,7 +98,7 @@ function scanCity(w: World, x: number, z: number, range: number): void {
   for (let i = 0; i < ps.length; i++) {
     const p = city.props[ps[i]];
     if (!p || !p.alive) continue;
-    const d = Math.max(0, Math.hypot(p.x - x, p.z - z) - propRadius(p));
+    const d = Math.max(0, hypot(p.x - x, p.z - z) - propRadius(p));
     if (d > range) continue;
     const slot = p.tier <= can ? bestFlat : bestOver;
     if (better(d, 3, p.id, slot)) { slot.d = d; slot.cat = 3; slot.id = p.id; }
@@ -130,7 +131,7 @@ export function findTarget(w: World, x: number, z: number, range: number, prefer
   const best = bestAny; best.d = Infinity; best.cat = 9; best.id = -1;
   let pick: Target | null = null;
   if (e) {
-    best.d = Math.max(0, Math.hypot(e.x - x, e.z - z) - e.radius); best.cat = 0; best.id = e.id;
+    best.d = Math.max(0, hypot(e.x - x, e.z - z) - e.radius); best.cat = 0; best.id = e.id;
     pick = { kind: 'enemy', e };
   }
   const part = nearestBossPart(w, x, z, range, bp);

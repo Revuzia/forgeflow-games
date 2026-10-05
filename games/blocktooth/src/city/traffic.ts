@@ -9,6 +9,7 @@
 // smoothly). Destroyed cars leave the lane (dropped from the lane lists, never block).
 // Moving cars keep city.blockProps current (re-listed when they cross a block cell).
 
+import { cos, hypot, sin } from '../core/detmath.ts';
 import type { CityLayout, World } from '../core/types.ts';
 import { cellOf, cruiseSpeed, laneCum, laneEval, laneHeading, PROP_INFO } from './citygen.ts';
 
@@ -91,9 +92,9 @@ export function stepTraffic(w: World): void {
       let target = cruise;
       if (titanLive) {
         const dx = T.x - p.x, dz = T.z - p.z;
-        const d = Math.hypot(dx, dz);
+        const d = hypot(dx, dz);
         if (d < scareR) {
-          const along = dx * Math.sin(p.heading) + dz * Math.cos(p.heading);
+          const along = dx * sin(p.heading) + dz * cos(p.heading);
           if (along > -T.radius) {
             // titan ahead (or alongside): brake; very close → reverse-flee
             if (d < fleeR && along > 0) target = -REVERSE_SPEED;

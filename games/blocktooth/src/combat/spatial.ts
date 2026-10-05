@@ -11,6 +11,7 @@
 // circle (centre + e.radius). "Nearest" ranks by SURFACE distance
 // max(0, |p − e| − e.radius), ties broken by the lower enemy id.
 
+import { hypot } from '../core/detmath.ts';
 import type { Enemy, Shape, World } from '../core/types.ts';
 import { circleInShape, shapeBounds } from '../core/math.ts';
 
@@ -200,7 +201,7 @@ export function nearestEnemy(w: World, x: number, z: number, r: number, filter?:
     for (let k = 0; k < n; k++) {
       const e = g.items[buf[k]];
       if (!e.alive) continue;
-      const d = Math.max(0, Math.hypot(e.x - x, e.z - z) - e.radius);
+      const d = Math.max(0, hypot(e.x - x, e.z - z) - e.radius);
       if (d > r) continue;
       if (d < bestD || (d === bestD && best !== null && e.id < best.id)) {
         if (filter && !filter(e)) continue;
@@ -229,7 +230,7 @@ export function nearestEnemies(w: World, x: number, z: number, r: number, n: num
     for (let k = 0; k < m; k++) {
       const e = g.items[buf[k]];
       if (!e.alive) continue;
-      const d = Math.max(0, Math.hypot(e.x - x, e.z - z) - e.radius);
+      const d = Math.max(0, hypot(e.x - x, e.z - z) - e.radius);
       if (d > r) continue;
       // insertion into the sorted top-n window
       if (len === n) {

@@ -19,6 +19,7 @@
 //     z < originZ − roadW/2 (= harbourWaterZ(city)), boats moor/cruise there, and the
 //     playable bounds extend 85 m into the water on that side so the titan can wade.
 
+import { atan2, hypot, pow } from '../core/detmath.ts';
 import type {
   BiomeDef, Building, BuildingArchetype, CityLayout, Crosswalk, Lane, PickupKind, Prop, PropKind,
 } from '../core/types.ts';
@@ -83,7 +84,7 @@ export const PROP_INFO: Record<PropKind, PropInfo> = {
 /** Bounding radius of a prop (for rect/circle queries). */
 export function propRadius(kind: PropKind): number {
   const i = PROP_INFO[kind];
-  return 0.5 * Math.hypot(i.len, i.wid);
+  return 0.5 * hypot(i.len, i.wid);
 }
 
 // ─────────────────────────────── shared helpers (citysim / traffic use these) ───────────────────────────────
@@ -108,7 +109,7 @@ export function laneCum(lane: Lane): Float64Array {
   const cum = new Float64Array(segs + 1);
   for (let i = 0; i < segs; i++) {
     const a = i, b = (i + 1) % n;
-    cum[i + 1] = cum[i] + Math.hypot(lane.pts[b * 2] - lane.pts[a * 2], lane.pts[b * 2 + 1] - lane.pts[a * 2 + 1]);
+    cum[i + 1] = cum[i] + hypot(lane.pts[b * 2] - lane.pts[a * 2], lane.pts[b * 2 + 1] - lane.pts[a * 2 + 1]);
   }
   return cum;
 }
@@ -141,7 +142,7 @@ export function laneHeading(lane: Lane, cum: Float64Array, s: number, fallback: 
   laneEval(lane, cum, s - LANE_TANGENT_WIN, TA);
   laneEval(lane, cum, s + LANE_TANGENT_WIN, TB);
   const hx = TB.x - TA.x, hz = TB.z - TA.z;
-  return hx * hx + hz * hz > 1e-8 ? Math.atan2(hx, hz) : fallback;
+  return hx * hx + hz * hz > 1e-8 ? atan2(hx, hz) : fallback;
 }
 
 /** Deterministic per-vehicle cruise speed 8–12 m/s (no rng stream consumed). */
@@ -237,9 +238,9 @@ export function generateCity(biome: BiomeDef, seed: number, rng: () => number): 
   // ── 1. downtown centre (the skyline) ──
   const dcx = originX + W * rRange(rng, 0.36, 0.64);
   const dcz = originZ + D * (harbour ? rRange(rng, 0.54, 0.68) : rRange(rng, 0.36, 0.64));
-  const maxDist = 0.5 * Math.hypot(W, D);
+  const maxDist = 0.5 * hypot(W, D);
   /** 0 downtown … 1 suburb edge (shaped so the outer third reads as pure low-rise) */
-  const uAt = (x: number, z: number) => clamp((Math.hypot(x - dcx, z - dcz) / maxDist) * 1.3, 0, 1);
+  const uAt = (x: number, z: number) => clamp((hypot(x - dcx, z - dcz) / maxDist) * 1.3, 0, 1);
 
   // ── 2. arterial roads (interior only; X-roads clear of the quay) ──
   const pickRoads = (lo: number, hi: number, count: number): number[] => {
@@ -298,7 +299,7 @@ export function generateCity(biome: BiomeDef, seed: number, rng: () => number): 
     const tN = p.z0 <= cz - PH + 0.01, tS = p.z1 >= cz + PH - 0.01;
     if (tW && !tE) x -= slackX; else if (tE && !tW) x += slackX;
     if (tN && !tS) z -= slackZ; else if (tS && !tN) z += slackZ;
-    const tf = Math.pow(rng(), 0.55 + u);                 // downtown skews to the tall end
+    const tf = pow(rng(), 0.55 + u);                 // downtown skews to the tall end
     const floors = a.floors[0] + Math.round(tf * (a.floors[1] - a.floors[0]));
     bd.arch = a.id; bd.shape = a.shape; bd.tier = a.tier; bd.block = block;
     bd.x = x; bd.z = z; bd.w = w; bd.d = d;
@@ -374,7 +375,7 @@ export function generateCity(biome: BiomeDef, seed: number, rng: () => number): 
       .map((bd) => bd.id)
       .sort((ia, ib) => {
         const A = buildings[ia], B = buildings[ib];
-        const da = Math.hypot(A.x - dcx, A.z - dcz), db = Math.hypot(B.x - dcx, B.z - dcz);
+        const da = hypot(A.x - dcx, A.z - dcz), db = hypot(B.x - dcx, B.z - dcz);
         return (t >= 3 ? da - db : db - da) || ia - ib;
       });
     for (const id of order) {
@@ -481,7 +482,7 @@ export function generateCity(biome: BiomeDef, seed: number, rng: () => number): 
     if (m.road <= 0 || m.road >= n) return false;                         // interior roads only
     if (m.roadAxis === 'x' ? isArtX(m.road) : isArtZ(m.road)) return false; // arterial curb lanes are live
     if (harbour && c.z < originZ + P + 12) return false;                  // not on the quay
-    const d = Math.hypot(c.x - dcx, c.z - dcz);
+    const d = hypot(c.x - dcx, c.z - dcz);
     return d >= lo && d <= hi;
   };
   let cand: number[] = [];
@@ -682,7 +683,7 @@ export function generateCity(biome: BiomeDef, seed: number, rng: () => number): 
         const x = rRange(rng, originX + 10, originX + W - 10);
         const z = rRange(rng, wz - 76, wz - 7);
         if (laneZ.some((lz) => Math.abs(z - lz) < 5)) continue;
-        if (moored.some((c) => Math.hypot(x - c.x, z - c.z) < 10)) continue;
+        if (moored.some((c) => hypot(x - c.x, z - c.z) < 10)) continue;
         moored.push({ x, z, r: 4 });
         mkProp('boat', x, z, (rng() < 0.5 ? Math.PI / 2 : -Math.PI / 2) + (rng() - 0.5) * 0.5);
         break;
@@ -698,7 +699,7 @@ export function generateCity(biome: BiomeDef, seed: number, rng: () => number): 
   {
     const olKinds = OBJECTIVE_BIOME[biome.id].overloadPropsS1;
     const OL_LO = 18, OL_HI = 28;
-    const inReach = (x: number, z: number) => { const d = Math.hypot(x - spawn.x, z - spawn.z); return d >= OL_LO && d <= OL_HI; };
+    const inReach = (x: number, z: number) => { const d = hypot(x - spawn.x, z - spawn.z); return d >= OL_LO && d <= OL_HI; };
     if (!props.some((p) => p.lane === -1 && olKinds.includes(p.kind) && inReach(p.x, p.z))) {
       const kind = olKinds.find((k) => SIDEWALK_INNER_KINDS.has(k)) ?? olKinds[olKinds.length - 1];
       const info = PROP_INFO[kind];

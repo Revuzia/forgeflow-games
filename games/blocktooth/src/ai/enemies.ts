@@ -18,9 +18,10 @@
 // Ground units never tunnel through buildings: they route along the street grid and are pushed
 // out of every standing building (resolveCircleVsCity with canFlatten −1).
 
+import { atan2, cos, hypot, sin, tan } from '../core/detmath.ts';
 import type { CityLayout, Enemy, EnemyDef, EnemyKind, Telegraph, Tier, World } from '../core/types.ts';
 import { CAMERA, CITY, ENEMY_AIM_LEAD, ENEMY_DMG_RANK_MUL, ENEMY_HP_PER_MIN, ENEMY_HP_RANK_MUL, ENEMY_REACH_H, RANKS, spawnView, titanSpeed } from '../core/config.ts';
-import { TAU, clamp, dist, easeInCubic, headingOf, lerp, turnToward, wrapAngle } from '../core/math.ts';
+import { TAU, clamp, dist, dist2, easeInCubic, headingOf, lerp, turnToward, wrapAngle } from '../core/math.ts';
 import { newId } from '../core/world.ts';
 import { ENEMIES } from '../data/enemies.ts';
 import { buildingById, buildingsInRect, damageProp, propsInRect, resolveCircleVsCity } from '../city/citysim.ts';
@@ -109,7 +110,7 @@ const LEADP = { x: 0, z: 0 };
 function leadPt(w: World, windup: number): { x: number; z: number } {
   const T = w.titan, B = w.city.bounds;
   let vx = Number.isFinite(T.vx) ? T.vx : 0, vz = Number.isFinite(T.vz) ? T.vz : 0;
-  const sp = Math.hypot(vx, vz), cap = 1.1 * titanSpeed(T.height);
+  const sp = hypot(vx, vz), cap = 1.1 * titanSpeed(T.height);
   if (sp > cap) { vx *= cap / sp; vz *= cap / sp; }
   const s = (ENEMY_AIM_LEAD[T.rank] ?? 0) * Math.max(0, windup);
   LEADP.x = clamp(T.x + vx * s, B.minX, B.maxX);
@@ -126,7 +127,7 @@ export function ringRadius(w: World): number {
   const r = RING_VIEW_MUL * spawnView(w).d * CAM_K;
   return Number.isFinite(r) ? Math.max(14, r) : 14;
 }
-const CAM_K = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
+const CAM_K = 2 * tan((CAMERA.fovDeg * Math.PI) / 360);
 const RING_VIEW_MUL = 1.0;
 /** margin (× D·k) added past the screen edge before the street snap. Small on purpose (was 0.12 with a
  *  ×1.02–1.2 radius): ringPoint now CHECKS each snapped candidate through the default-zoom camera
@@ -140,17 +141,17 @@ const FP = { rank: -1, n: 0, f: 0, hn: 0, hf: 0, s: 0 };
 function footprintEdge(rank: number, a: number): number {
   if (FP.rank !== rank) {
     const al = (CAMERA.fovDeg * Math.PI) / 360, p = (RANKS[rank].pitchDeg * Math.PI) / 180, A = 16 / 9;
-    const h = Math.sin(p), b = Math.cos(p), tw = A * Math.tan(al) * Math.cos(al);
-    FP.n = (b - h / Math.tan(p + al)) / CAM_K;
-    FP.f = (p - al > 0.05 ? h / Math.tan(p - al) - b : 4) / CAM_K;
-    FP.hn = (h / Math.sin(p + al)) * tw / CAM_K;
-    FP.hf = (p - al > 0.05 ? (h / Math.sin(p - al)) * tw : 4) / CAM_K;
+    const h = sin(p), b = cos(p), tw = A * tan(al) * cos(al);
+    FP.n = (b - h / tan(p + al)) / CAM_K;
+    FP.f = (p - al > 0.05 ? h / tan(p - al) - b : 4) / CAM_K;
+    FP.hn = (h / sin(p + al)) * tw / CAM_K;
+    FP.hf = (p - al > 0.05 ? (h / sin(p - al)) * tw : 4) / CAM_K;
     FP.s = (FP.hf - FP.hn) / (FP.n + FP.f);
     FP.rank = rank;
   }
-  const yaw = (CAMERA.yawDeg * Math.PI) / 180, sa = Math.sin(a), ca = Math.cos(a);
-  const v = -(sa * Math.sin(yaw) + ca * Math.cos(yaw));        // + = toward the top of the screen
-  const u = Math.abs(sa * Math.cos(yaw) - ca * Math.sin(yaw));  // across the screen
+  const yaw = (CAMERA.yawDeg * Math.PI) / 180, sa = sin(a), ca = cos(a);
+  const v = -(sa * sin(yaw) + ca * cos(yaw));        // + = toward the top of the screen
+  const u = Math.abs(sa * cos(yaw) - ca * sin(yaw));  // across the screen
   let t = v > 1e-6 ? FP.f / v : v < -1e-6 ? FP.n / -v : Infinity;
   const den = u - FP.s * v;
   if (den > 1e-6) t = Math.min(t, (FP.hn + FP.s * FP.n) / den);
@@ -161,21 +162,21 @@ function footprintEdge(rank: number, a: number): number {
  *  fixed yaw, 16:9, the look target at CAMERA.targetYFrac·H plus the velocity lead the rig adds):
  *  max(|ndc x|, |ndc y|) of its projection — > 1 = off-screen (Infinity behind the camera). */
 const SO = { rank: -1, ox: 0, oy: 0, oz: 0, ux: 0, uy: 0, uz: 0 };
-const RIGHT_X = Math.cos((CAMERA.yawDeg * Math.PI) / 180), RIGHT_Z = -Math.sin((CAMERA.yawDeg * Math.PI) / 180);
-const TAN_HALF_FOV = Math.tan((CAMERA.fovDeg * Math.PI) / 360);
+const RIGHT_X = cos((CAMERA.yawDeg * Math.PI) / 180), RIGHT_Z = -sin((CAMERA.yawDeg * Math.PI) / 180);
+const TAN_HALF_FOV = tan((CAMERA.fovDeg * Math.PI) / 360);
 const SCREEN_ASPECT = 16 / 9;
 const LEAD_MAX_FRAC = 0.22;
 function screenOut(w: World, D: number, x: number, z: number): number {
   const T = w.titan;
   if (SO.rank !== T.rank) {
     const p = (RANKS[T.rank].pitchDeg * Math.PI) / 180, yaw = (CAMERA.yawDeg * Math.PI) / 180;
-    const cp = Math.cos(p), sp = Math.sin(p);
-    SO.ox = cp * Math.sin(yaw); SO.oy = sp; SO.oz = cp * Math.cos(yaw);   // target → camera (unit)
-    SO.ux = -sp * Math.sin(yaw); SO.uy = cp; SO.uz = -sp * Math.cos(yaw); // camera up
+    const cp = cos(p), sp = sin(p);
+    SO.ox = cp * sin(yaw); SO.oy = sp; SO.oz = cp * cos(yaw);   // target → camera (unit)
+    SO.ux = -sp * sin(yaw); SO.uy = cp; SO.uz = -sp * cos(yaw); // camera up
     SO.rank = T.rank;
   }
   let lx = (Number.isFinite(T.vx) ? T.vx : 0) * CAMERA.leadS, lz = (Number.isFinite(T.vz) ? T.vz : 0) * CAMERA.leadS;
-  const lm = Math.hypot(lx, lz), lmax = LEAD_MAX_FRAC * D * CAM_K;
+  const lm = hypot(lx, lz), lmax = LEAD_MAX_FRAC * D * CAM_K;
   if (lm > lmax) { lx *= lmax / lm; lz *= lmax / lm; }
   const ty = T.height * CAMERA.targetYFrac;
   const off = spawnView(w);
@@ -240,7 +241,7 @@ export function ringPoint(w: World, kind: EnemyKind, out: { x: number; z: number
     // back by (else it never passes and falls back to a point on the frame edge)
     const edge = Math.max(14, (footprintEdge(T.rank, a) + RING_EDGE_MARGIN) * Dk + (def.flies ? OFFSCREEN_PAD : 0));
     const rr = edge * (1.0 + 0.08 * rs());
-    let x = fcx + Math.sin(a) * rr, z = fcz + Math.cos(a) * rr;
+    let x = fcx + sin(a) * rr, z = fcz + cos(a) * rr;
     const r01 = def.flies ? 0.5 : rs();
     if (!def.flies) { snapToStreet(c, x, z, vehicle, r01, out); x = out.x; z = out.z; }
     if (x < B.minX + m || x > B.maxX - m || z < B.minZ + m || z > B.maxZ - m) {
@@ -260,7 +261,7 @@ export function ringPoint(w: World, kind: EnemyKind, out: { x: number; z: number
   else if (bestD > 0 && Number.isFinite(bestX)) {
     // no candidate cleared the frame (the snap pulled them all back on-screen): walk the least-visible
     // one outward from the view centre, re-snapping onto the same street lane, until it does (no RNG)
-    const ux = bestX - fcx, uz = bestZ - fcz, ul = Math.hypot(ux, uz) || 1;
+    const ux = bestX - fcx, uz = bestZ - fcz, ul = hypot(ux, uz) || 1;
     for (let step = 1; step <= 8; step++) {
       const rr = ul + step * 0.12 * Dk;
       let x = fcx + (ux / ul) * rr, z = fcz + (uz / ul) * rr;
@@ -282,7 +283,7 @@ function pushOutOfCity(c: CityLayout, p: { x: number; z: number }, r: number): n
   RES.x = p.x; RES.z = p.z; RES.bumpTier = -1;
   if (!resolveCircleVsCity(c, p.x, p.z, r, NO_FLATTEN, RES)) return 0;
   if (!Number.isFinite(RES.x) || !Number.isFinite(RES.z)) return 0;
-  const d = Math.hypot(RES.x - p.x, RES.z - p.z);
+  const d = hypot(RES.x - p.x, RES.z - p.z);
   p.x = RES.x; p.z = RES.z;
   return d;
 }
@@ -382,31 +383,31 @@ function nav(w: World, e: AiEnemy, gx: number, gz: number): void {
 function halt(e: Enemy): void { e.vx = 0; e.vz = 0; }
 function face(e: Enemy, x: number, z: number, turn: number, dt: number): void {
   const dx = x - e.x, dz = z - e.z;
-  if (dx * dx + dz * dz > 1e-6) e.heading = turnToward(e.heading, Math.atan2(dx, dz), turn * dt);
+  if (dx * dx + dz * dz > 1e-6) e.heading = turnToward(e.heading, atan2(dx, dz), turn * dt);
 }
 /** Legged / hover: velocity straight at the waypoint, heading follows. */
 function walk(e: Enemy, wx: number, wz: number, speed: number, dt: number, turn = 9): void {
-  const dx = wx - e.x, dz = wz - e.z, d = Math.hypot(dx, dz);
+  const dx = wx - e.x, dz = wz - e.z, d = hypot(dx, dz);
   if (d < 1e-3) { halt(e); return; }
   const v = speed * Math.min(1, d / 1.5);
   e.vx = (dx / d) * v; e.vz = (dz / d) * v;
-  e.heading = turnToward(e.heading, Math.atan2(dx, dz), turn * dt);
+  e.heading = turnToward(e.heading, atan2(dx, dz), turn * dt);
 }
 /** Wheeled / tracked: turn-rate-limited heading, slows to turn, moves along its nose. */
 function drive(e: Enemy, wx: number, wz: number, speed: number, turn: number, dt: number): void {
-  const dx = wx - e.x, dz = wz - e.z, d = Math.hypot(dx, dz);
+  const dx = wx - e.x, dz = wz - e.z, d = hypot(dx, dz);
   if (d < 0.6) { halt(e); return; }
-  const want = Math.atan2(dx, dz);
+  const want = atan2(dx, dz);
   e.heading = turnToward(e.heading, want, turn * dt);
   const off = Math.abs(wrapAngle(want - e.heading));
-  const f = off > 1.3 ? 0.15 : Math.max(0.2, Math.cos(off));
+  const f = off > 1.3 ? 0.15 : Math.max(0.2, cos(off));
   const v = speed * f * Math.min(1, d / 4);
-  e.vx = Math.sin(e.heading) * v; e.vz = Math.cos(e.heading) * v;
+  e.vx = sin(e.heading) * v; e.vz = cos(e.heading) * v;
 }
 /** Strafe around the titan at a preferred surface distance (infantry). */
 function holdRing(w: World, e: AiEnemy, sp: number, range: number, dt: number): void {
   const T = w.titan, ai = e.ai;
-  const dx = e.x - T.x, dz = e.z - T.z, d = Math.hypot(dx, dz) || 1;
+  const dx = e.x - T.x, dz = e.z - T.z, d = hypot(dx, dz) || 1;
   const nx = dx / d, nz = dz / d;
   const sd = d - T.radius - e.radius;
   let radial = 0;
@@ -463,10 +464,10 @@ function separate(e: AiEnemy): void {
       const d = Math.sqrt(d2), ov = rr - d;
       const share = (o.radius * o.radius) / (e.radius * e.radius + o.radius * o.radius);
       if (d > 1e-5) { sx += (dx / d) * ov * share; sz += (dz / d) * ov * share; }
-      else { const a = (e.id - o.id) * 2.399; sx += Math.sin(a) * ov * 0.5; sz += Math.cos(a) * ov * 0.5; }
+      else { const a = (e.id - o.id) * 2.399; sx += sin(a) * ov * 0.5; sz += cos(a) * ov * 0.5; }
     }
   }
-  const m = Math.hypot(sx, sz);
+  const m = hypot(sx, sz);
   if (m < 1e-6) return;
   const cap = e.radius * 0.6 + 0.2;
   const k = 0.5 * (m > cap ? cap / m : 1);
@@ -499,7 +500,7 @@ function startReact(w: World, e: AiEnemy): void {
 
 function firePellet(w: World, e: Enemy, kind: 'pellet' | 'volley', speed: number, dmgBase: number, tx: number, tz: number): void {
   const T = w.titan;
-  const dx = tx - e.x, dz = tz - e.z, d = Math.hypot(dx, dz) || 1;
+  const dx = tx - e.x, dz = tz - e.z, d = hypot(dx, dz) || 1;
   const ux = dx / d, uz = dz / d;
   const x = e.x + ux * (e.radius + 0.25), z = e.z + uz * (e.radius + 0.25);
   spawnProjectile(w, {
@@ -658,7 +659,7 @@ function stepSquad(w: World, e: AiEnemy, sp: number, dt: number): void {
     }
   } else if (L) {
     const lh = L.heading;
-    const rxv = -Math.cos(lh), rzv = Math.sin(lh), fx = Math.sin(lh), fz = Math.cos(lh);
+    const rxv = -cos(lh), rzv = sin(lh), fx = sin(lh), fz = cos(lh);
     const a = WEDGE[e.slot % WEDGE.length], b = WEDGE[L.slot % WEDGE.length];
     const orx = a[0] - b[0], ofz = a[1] - b[1];
     const gx = L.x + rxv * orx + fx * ofz, gz = L.z + rzv * orx + fz * ofz;
@@ -689,8 +690,8 @@ function stepDrone(w: World, e: AiEnemy, sp: number, dt: number): void {
   const R = T.radius + 5 + 0.35 * T.height;
   const d = dist(e.x, e.z, T.x, T.z);
   const orbit = (spd: number) => {
-    const ang = Math.atan2(e.x - T.x, e.z - T.z) + ai.side * Math.min(1.2, (spd * 0.6) / R);
-    walk(e, T.x + Math.sin(ang) * R, T.z + Math.cos(ang) * R, d > R * 1.8 ? spd * 1.8 : spd, dt, 6);
+    const ang = atan2(e.x - T.x, e.z - T.z) + ai.side * Math.min(1.2, (spd * 0.6) / R);
+    walk(e, T.x + sin(ang) * R, T.z + cos(ang) * R, d > R * 1.8 ? spd * 1.8 : spd, dt, 6);
   };
   switch (e.state) {
     case 'enter':
@@ -730,7 +731,7 @@ function stepDrone(w: World, e: AiEnemy, sp: number, dt: number): void {
       break;
     }
     case 'climb': {
-      const dx = e.x - T.x, dz = e.z - T.z, dd = Math.hypot(dx, dz) || 1;
+      const dx = e.x - T.x, dz = e.z - T.z, dd = hypot(dx, dz) || 1;
       walk(e, e.x + (dx / dd) * 10, e.z + (dz / dd) * 10, sp, dt, 6);
       e.y = Math.min(alt, e.y + climb * 1.2);
       if (e.y >= alt * 0.9 || e.t > 2) setState(e, 'orbit');
@@ -767,11 +768,11 @@ function stepBuggy(w: World, e: AiEnemy, sp: number, dt: number): void {
       break;
     case 'strafe': {
       const want = T.radius + reach(w, def) * 0.75;
-      const ang = Math.atan2(e.x - T.x, e.z - T.z) + ai.side * 1.2;
-      nav(w, e, T.x + Math.sin(ang) * want, T.z + Math.cos(ang) * want);
+      const ang = atan2(e.x - T.x, e.z - T.z) + ai.side * 1.2;
+      nav(w, e, T.x + sin(ang) * want, T.z + cos(ang) * want);
       drive(e, WP.x, WP.z, sp, 3.2, dt);
-      const m = Math.hypot(e.vx, e.vz), minV = sp * 0.35;
-      if (m < minV) { e.vx = Math.sin(e.heading) * minV; e.vz = Math.cos(e.heading) * minV; }
+      const m = hypot(e.vx, e.vz), minV = sp * 0.35;
+      if (m < minV) { e.vx = sin(e.heading) * minV; e.vz = cos(e.heading) * minV; }
       ai.sideT -= dt;
       if (ai.sideT <= 0) { ai.side = -ai.side; ai.sideT = 5 + 3 * w.rng.ai(); }
       if (sd > reach(w, def) * 1.7) setState(e, 'drive');
@@ -804,7 +805,7 @@ function stepApc(w: World, e: AiEnemy, sp: number, dt: number): void {
       halt(e);
       if (sd > reach(w, def) * 1.35) { setState(e, 'drive'); break; }
       if (sd < def.range * 0.35) {               // minimum standoff is the §9 range's, not the reach's
-        const dx = e.x - T.x, dz = e.z - T.z, d = Math.hypot(dx, dz) || 1;
+        const dx = e.x - T.x, dz = e.z - T.z, d = hypot(dx, dz) || 1;
         ai.tx = e.x + (dx / d) * 45; ai.tz = e.z + (dz / d) * 45;
         setState(e, 'evade'); break;
       }
@@ -842,7 +843,7 @@ function stepApc(w: World, e: AiEnemy, sp: number, dt: number): void {
 function deploySquad(w: World, apc: AiEnemy): void {
   const ai = apc.ai;
   const sid = w.director.squadSeq++;
-  const fx = Math.sin(apc.heading), fz = Math.cos(apc.heading);
+  const fx = sin(apc.heading), fz = cos(apc.heading);
   const rx = -fz, rz = fx;
   const bx = apc.x - fx * (apc.radius + 2), bz = apc.z - fz * (apc.radius + 2);
   for (let k = 0; k < SQUAD_SIZE; k++) {
@@ -880,7 +881,7 @@ function stepTank(w: World, e: AiEnemy, sp: number, dt: number): void {
       if (e.t >= ai.react) {
         const L = leadPt(w, TANK_TELL_S);
         const dir = headingOf(L.x + ai.jx - e.x, L.z + ai.jz - e.z);
-        const mx = e.x + Math.sin(dir) * e.radius, mz = e.z + Math.cos(dir) * e.radius;
+        const mx = e.x + sin(dir) * e.radius, mz = e.z + cos(dir) * e.radius;
         ai.dir = dir;
         const tank = e;
         const tg = spawnTelegraph(w, {
@@ -889,11 +890,11 @@ function stepTank(w: World, e: AiEnemy, sp: number, dt: number): void {
           onFire: (w2, t2) => {
             if (!tank.alive) return;
             const s = t2.shape;
-            if (s.k === 'lane') w2.events.push({ type: 'enemyFire', id: tank.id, kind: tank.kind, x: tank.x, z: tank.z, tx: s.x + Math.sin(s.dir) * s.len, tz: s.z + Math.cos(s.dir) * s.len });
+            if (s.k === 'lane') w2.events.push({ type: 'enemyFire', id: tank.id, kind: tank.kind, x: tank.x, z: tank.z, tx: s.x + sin(s.dir) * s.len, tz: s.z + cos(s.dir) * s.len });
           },
         });
         holdTelegraph(w, e, tg);
-        e.aimX = mx + Math.sin(dir) * (reach(w, def) + 2 * T.radius); e.aimZ = mz + Math.cos(dir) * (reach(w, def) + 2 * T.radius);
+        e.aimX = mx + sin(dir) * (reach(w, def) + 2 * T.radius); e.aimZ = mz + cos(dir) * (reach(w, def) + 2 * T.radius);
         setState(e, 'tell');
       }
       break;
@@ -941,7 +942,7 @@ function stepWalker(w: World, e: AiEnemy, sp: number, dt: number): void {
         // creeping barrage: a moving titan gets its shells walked along the predicted path
         const L = leadPt(w, MORTAR_TELL_S);
         ai.sx = L.x - T.x; ai.sz = L.z - T.z;
-        ai.sy = Math.hypot(ai.sx, ai.sz) > Math.max(4, 0.5 * T.radius) ? 1 : 0;
+        ai.sy = hypot(ai.sx, ai.sz) > Math.max(4, 0.5 * T.radius) ? 1 : 0;
         setState(e, 'barrage');
       }
       break;
@@ -957,7 +958,7 @@ function stepWalker(w: World, e: AiEnemy, sp: number, dt: number): void {
         } else {
           const spread = Math.max(7, 0.5 * T.radius);
           const a = ai.dir + (k * TAU) / MORTAR_SHOTS;
-          fireLob(w, e, 'mortar', def.dmg, ai.tx + Math.sin(a) * spread, ai.tz + Math.cos(a) * spread, mr, MORTAR_TELL_S);
+          fireLob(w, e, 'mortar', def.dmg, ai.tx + sin(a) * spread, ai.tz + cos(a) * spread, mr, MORTAR_TELL_S);
         }
         ai.shots--; ai.shotT = MORTAR_GAP_S;
       }
@@ -968,7 +969,7 @@ function stepWalker(w: World, e: AiEnemy, sp: number, dt: number): void {
       halt(e);
       if (e.t >= WALKER_UNPLANT_S) {
         if (ai.sub > 0) {
-          const dx = e.x - T.x, dz = e.z - T.z, d = Math.hypot(dx, dz) || 1;
+          const dx = e.x - T.x, dz = e.z - T.z, d = hypot(dx, dz) || 1;
           ai.tx = e.x + (dx / d) * 60; ai.tz = e.z + (dz / d) * 60;
           setState(e, 'retreat');
         } else setState(e, 'walk');
@@ -1009,7 +1010,7 @@ function stepElite(w: World, e: AiEnemy, sp: number, spMul: number, dt: number):
           windup: RAM_TELL_S, dmg: 0, kind: 'ram', tag: 'ramrodLane',
         });
         holdTelegraph(w, e, tg);
-        e.aimX = e.x + Math.sin(dir) * ai.tx; e.aimZ = e.z + Math.cos(dir) * ai.tx;
+        e.aimX = e.x + sin(dir) * ai.tx; e.aimZ = e.z + cos(dir) * ai.tx;
         e.cd = def.fireCd;
         setState(e, 'tell');
       }
@@ -1025,11 +1026,11 @@ function stepElite(w: World, e: AiEnemy, sp: number, spMul: number, dt: number):
     case 'charge': {
       e.heading = ai.dir;
       const v = RAM_SPEED * spMul;
-      e.vx = Math.sin(ai.dir) * v; e.vz = Math.cos(ai.dir) * v;
+      e.vx = sin(ai.dir) * v; e.vz = cos(ai.dir) * v;
       ai.travel += v * dt;
       // contact: the dozer blade (front half of the body circle)
       if (!ai.hit && T.alive) {
-        const cx = e.x + Math.sin(ai.dir) * e.radius * 0.4, cz = e.z + Math.cos(ai.dir) * e.radius * 0.4;
+        const cx = e.x + sin(ai.dir) * e.radius * 0.4, cz = e.z + cos(ai.dir) * e.radius * 0.4;
         if (damageTitanArea(w, { k: 'circle', x: cx, z: cz, r: e.radius * 0.9 }, hostile(w, def.dmg), 'ram')) ai.hit = 1;
       }
       // smash every prop in its path
@@ -1069,7 +1070,7 @@ function integrate(w: World, e: AiEnemy, dt: number): number {
       if (d2 < rr * rr) {
         const d = Math.sqrt(d2);
         if (d > 1e-4) { e.x = T.x + (dx / d) * rr; e.z = T.z + (dz / d) * rr; }
-        else { e.x = T.x + Math.sin(e.heading + Math.PI) * rr; e.z = T.z + Math.cos(e.heading + Math.PI) * rr; }
+        else { e.x = T.x + sin(e.heading + Math.PI) * rr; e.z = T.z + cos(e.heading + Math.PI) * rr; }
       }
     }
     // boss body
@@ -1138,7 +1139,7 @@ export function stepEnemies(w: World): void {
     const spMul = e.slowT > 0 ? clamp(e.slowMul, 0, 1) : 1;
     const sp = ENEMIES[e.kind].speed * spMul;
 
-    if (T.alive && e.state !== 'charge' && e.state !== 'dive' && (e.x - T.x) ** 2 + (e.z - T.z) ** 2 > recycleD2) {
+    if (T.alive && e.state !== 'charge' && e.state !== 'dive' && dist2(e.x, e.z, T.x, T.z) > recycleD2) {
       recycle(w, e);
       continue;
     }

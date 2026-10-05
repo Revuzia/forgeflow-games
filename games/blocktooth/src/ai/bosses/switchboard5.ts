@@ -57,6 +57,7 @@
 // Telemetry: callIns, relocates, caught, putThroughs, addsSummoned, linesDown, serving, part_dish / part_other,
 //   open_dish / open_all.
 
+import { atan2, cos, hypot, sin } from '../../core/detmath.ts';
 import type { BossState, EnemyKind, World } from '../../core/types.ts';
 import { CITY, RANKS, SMASH_SLOW } from '../../core/config.ts';
 import { clamp, dist, wrapAngle } from '../../core/math.ts';
@@ -115,7 +116,7 @@ export function create(w: World): BossState {
   const parts = [makePart('base', 0, 0, 0.8 * H, 0, 0.6 * H, 1, 0.15)];
   for (let i = 0; i < 3; i++) {
     const a = (DISH_DEG[i] * Math.PI) / 180;
-    parts.push(makePart(['dishA', 'dishB', 'dishC'][i], DISH_OUT[0] * H * Math.sin(a), DISH_OUT[0] * H * Math.cos(a), DISH_OUT[1] * H, DISH_OUT[2] * H, DISH_OUT[3] * H, DISH_OUT[4], DISH_OUT[5]));
+    parts.push(makePart(['dishA', 'dishB', 'dishC'][i], DISH_OUT[0] * H * sin(a), DISH_OUT[0] * H * cos(a), DISH_OUT[1] * H, DISH_OUT[2] * H, DISH_OUT[3] * H, DISH_OUT[4], DISH_OUT[5]));
   }
   for (const o of OUTRIGGERS) parts.push(makePart(o[0], o[1] * H, o[2] * H, 0.2 * H, 0, 0.3 * H, 1, 0.3));
   const b = baseBoss('switchboard5', w.titan.x, w.titan.z, 0, parts);
@@ -149,7 +150,7 @@ export function step(w: World, b: BossState): void {
     // drives in folded, plants as the intro ends (a rematch chasing a runner keeps driving: no plant at its back)
     if (chasing && dd <= (BAND_MAX_H - 1.0) * H) { setMode(b, 2); chaseStep(w, b, dd, (BAND_MIN_H + 0.5) * H, HUNT_TURN); }
     else if (dd > (BAND_MAX_H - 1.0) * H) { setMode(b, 2); gateHunt(w, b, INTRO_WALK * titanWalk(w), HUNT_TURN); }
-    else { if (d.mode === 2) setMode(b, 3); b.data.speed = 0; turnBoss(b, Math.atan2(T.x - b.x, T.z - b.z), BASE_TURN, w.dt); }
+    else { if (d.mode === 2) setMode(b, 3); b.data.speed = 0; turnBoss(b, atan2(T.x - b.x, T.z - b.z), BASE_TURN, w.dt); }
     if (d.mode === 3 && d.modeT >= HUNT.plantS) setMode(b, 0);
     sync(w, b);
     return;
@@ -192,7 +193,7 @@ function moveModes(w: World, b: BossState, dd: number, chasing: boolean): void {
   switch (d.mode) {
     case 0: {   // PLANTED
       b.data.speed = 0;
-      turnBoss(b, Math.atan2(T.x - b.x, T.z - b.z), BASE_TURN, w.dt);
+      turnBoss(b, atan2(T.x - b.x, T.z - b.z), BASE_TURN, w.dt);
       d.crown = wrapAngle((d.crown ?? 0) + (CROWN[b.phase] ?? 0.35) * w.dt);
       if (b.attack) break;   // a move beat (cutOff / ramming) while planted: nothing else
       // a rematch chasing a runner packs up at once (no 1.5 s far clock, no attack at its back)
@@ -224,7 +225,7 @@ function moveModes(w: World, b: BossState, dd: number, chasing: boolean): void {
       break;
     case 3:     // PLANTING
       b.data.speed = 0;
-      turnBoss(b, Math.atan2(T.x - b.x, T.z - b.z), BASE_TURN, w.dt);
+      turnBoss(b, atan2(T.x - b.x, T.z - b.z), BASE_TURN, w.dt);
       if (d.modeT >= HUNT.plantS) { if (b.attack === 'planting') endAttack(b, Math.max(b.cd, 0.4)); setMode(b, 0); }
       break;
     default:    // a relocate mode without its attack (interrupted by a stagger): plant again
@@ -247,7 +248,7 @@ function yieldWall(w: World, b: BossState): void {
   const T = w.titan;
   if (!T.alive) return;
   const keep = KEEP_H * bossH(w, b) + T.radius;
-  const dx = b.x - T.x, dz = b.z - T.z, d = Math.hypot(dx, dz);
+  const dx = b.x - T.x, dz = b.z - T.z, d = hypot(dx, dz);
   if (d >= keep - 1e-3 || d < 1e-4) return;
   const wx = b.x - (dx / d) * keep, wz = b.z - (dz / d) * keep;
   const flat = RANKS[clamp(Math.floor(T.rank), 0, RANKS.length - 1)].canFlatten;
@@ -292,7 +293,7 @@ function sync(w: World, b: BossState): void {
     const p = b.parts[DISH_IX[i]];
     if (!p) continue;
     const a = th + (DISH_DEG[i] * Math.PI) / 180;
-    p.ox = g[0] * H * Math.sin(a); p.oz = g[0] * H * Math.cos(a); p.r = g[1] * H; p.y0 = g[2] * H; p.y1 = g[3] * H;
+    p.ox = g[0] * H * sin(a); p.oz = g[0] * H * cos(a); p.r = g[1] * H; p.y0 = g[2] * H; p.y1 = g[3] * H;
     p.hpMul = g[4]; p.strainMul = g[5];
   }
   for (let i = 0; i < OUTRIGGERS.length; i++) {
@@ -324,7 +325,7 @@ function callIn(w: World, b: BossState): void {
   const wu = gateWindup(w, b, CALLIN.rH + R / H, CALLIN.min, CALLIN.max);
   const L = leadPoint(w, b, wu, LEAD);
   beginAttack(w, b, 'callIn', L.x, L.z);
-  b.data.dir = Math.atan2(L.x - b.x, L.z - b.z);
+  b.data.dir = atan2(L.x - b.x, L.z - b.z);
   b.data.callIns += 1;
   const n = volleyPoints(w, b, L.x, L.z, CALLIN.n[b.phase] ?? 3, r, VOLLEY);
   let end = 0;
@@ -362,7 +363,7 @@ function walled(w: World, x: number, z: number, ux: number, uz: number, len: num
       if (!bd || bd.collapsed || bd.tier <= flat) continue;
       const qx = clamp(px, bd.x - bd.w / 2, bd.x + bd.w / 2), qz = clamp(pz, bd.z - bd.d / 2, bd.z + bd.d / 2);
       // 5 % skin: a titan resting against a wall (resolved to exactly R) that walks PARALLEL to it is not walled
-      if (Math.hypot(px - qx, pz - qz) < 0.95 * R) { HM_BUF.length = 0; return true; }
+      if (hypot(px - qx, pz - qz) < 0.95 * R) { HM_BUF.length = 0; return true; }
     }
   }
   HM_BUF.length = 0;
@@ -386,7 +387,7 @@ function holdEscape(w: World, b: BossState, dd: number): boolean {
   let best = Infinity;
   for (let k = -8; k <= 8; k++) {
     const th = (k / 8) * (80 * Math.PI / 180);
-    const c = Math.cos(th), sn = Math.sin(th);
+    const c = cos(th), sn = sin(th);
     const ux = rx * c - rz * sn, uz = rx * sn + rz * c;
     // ray from the titan (at dd from the base's centre) to the circle rOut: s = −dd·cosθ + √(rOut² − dd²·sin²θ)
     const L = Math.sqrt(Math.max(0, rOut * rOut - dd * dd * sn * sn)) - dd * c;
@@ -425,7 +426,7 @@ function holdWindup(w: World, b: BossState): number {
 function plowsInReach(w: World, ux: number, uz: number, len: number): boolean {
   const T = w.titan, c = w.city;
   if (!c || !c.buildings) return false;
-  const m = Math.hypot(ux, uz);
+  const m = hypot(ux, uz);
   if (!(m > 1e-9)) return false;
   const fx = ux / m, fz = uz / m, R = T.radius;
   const reach = R * Math.max(0.2, stat(w, 'smashRadius')) + 0.06 * T.height;
@@ -439,7 +440,7 @@ function plowsInReach(w: World, ux: number, uz: number, len: number): boolean {
       const bd = c.buildings[HM_BUF[i]];
       if (!bd || bd.collapsed || !(bd.alive > 0) || bd.tier > flat) continue;
       const qx = clamp(px, bd.x - bd.w / 2, bd.x + bd.w / 2), qz = clamp(pz, bd.z - bd.d / 2, bd.z + bd.d / 2);
-      if (Math.hypot(px - qx, pz - qz) <= reach) { HM_BUF.length = 0; return true; }
+      if (hypot(px - qx, pz - qz) <= reach) { HM_BUF.length = 0; return true; }
     }
   }
   HM_BUF.length = 0;
@@ -519,7 +520,7 @@ function putThrough(w: World, b: BossState): void {
   room = Math.min(room, Math.max(0, CITY.maxEnemies - all));
   // the crew arrives at the spawn ring on the titan's far side from the tower
   const ring = gateRing(w);
-  const away = Math.atan2(T.x - b.x, T.z - b.z);
+  const away = atan2(T.x - b.x, T.z - b.z);
   let spawned = 0;
   if (room > 0) {
     const crew = CREW[b.phase] ?? CREW[1];
@@ -527,10 +528,10 @@ function putThrough(w: World, b: BossState): void {
       const kind = crew[c];
       const a = away + (rs() - 0.5) * 1.4;
       const rr = ring * (1.0 + 0.15 * rs());
-      const px = clamp(T.x + Math.sin(a) * rr, Bd.minX, Bd.maxX), pz = clamp(T.z + Math.cos(a) * rr, Bd.minZ, Bd.maxZ);
+      const px = clamp(T.x + sin(a) * rr, Bd.minX, Bd.maxX), pz = clamp(T.z + cos(a) * rr, Bd.minZ, Bd.maxZ);
       if (kind === 'squad') {
         const sid = w.director.squadSeq++;
-        const h = Math.atan2(T.x - px, T.z - pz), fx = Math.sin(h), fz = Math.cos(h), qx = -fz, qz = fx;
+        const h = atan2(T.x - px, T.z - pz), fx = sin(h), fz = cos(h), qx = -fz, qz = fx;
         for (let s = 0; s < SQUAD_SIZE && spawned < room; s++) {
           const side = s === 0 ? 0 : (s % 2 === 1 ? -1 : 1) * Math.ceil(s / 2);
           const back = Math.ceil(s / 2) * 2.2;
@@ -568,14 +569,14 @@ function startRelocate(w: World, b: BossState): void {
 function pickDestination(w: World, b: BossState): boolean {
   const T = w.titan, H = bossH(w, b), Bd = w.city.bounds, pad = RELOC.boundsPadH * H;
   const r = b.parts[0] ? b.parts[0].r : 0.8 * H;
-  const ax = b.x - T.x, az = b.z - T.z, am = Math.hypot(ax, az) || 1;
+  const ax = b.x - T.x, az = b.z - T.z, am = hypot(ax, az) || 1;
   const a0 = w.rng.boss() * Math.PI * 2;
   let best = -Infinity, bx = NaN, bz = NaN;
   for (let i = 0; i < 8; i++) {
     const a = a0 + (i * Math.PI) / 4;
-    const px = T.x + Math.sin(a) * RELOC.ringH * H, pz = T.z + Math.cos(a) * RELOC.ringH * H;
+    const px = T.x + sin(a) * RELOC.ringH * H, pz = T.z + cos(a) * RELOC.ringH * H;
     if (px < Bd.minX + pad || px > Bd.maxX - pad || pz < Bd.minZ + pad || pz > Bd.maxZ - pad) continue;
-    const dx = px - b.x, dz = pz - b.z, L = Math.hypot(dx, dz);
+    const dx = px - b.x, dz = pz - b.z, L = hypot(dx, dz);
     if (!(L > 1e-6)) continue;
     const clear = laneClearLen(w, b.x, b.z, dx / L, dz / L, L, r) >= L - 0.25 * H ? 1 : 0;
     // away from the titan, and not through it
@@ -599,20 +600,20 @@ function runRelocate(w: World, b: BossState): void {
       }
       break;
     case 5: { // drive (the chase)
-      const dx = d.destX - b.x, dz = d.destZ - b.z, L = Math.hypot(dx, dz);
+      const dx = d.destX - b.x, dz = d.destZ - b.z, L = hypot(dx, dz);
       const keep = KEEP_H * H + T.radius;
       const caught = d.modeT >= 0.3 && dist(b.x, b.z, T.x, T.z) <= keep + CATCH_H * H;
       if (caught) { d.caught += 1; setMode(b, 6); d.plantS = RELOC.caughtPlantS; b.data.speed = 0; startBeat(b, 'caught', RELOC.caughtPlantS); break; }
       if (L <= RELOC.arriveH * H || d.modeT >= RELOC.maxS) { setMode(b, 6); d.plantS = RELOC.plantS; b.data.speed = 0; break; }
       const sp = Math.min((RELOC.speed[b.phase] ?? 0.8) * titanWalk(w), L / w.dt);
-      turnBoss(b, Math.atan2(dx, dz), HUNT_TURN, w.dt);
+      turnBoss(b, atan2(dx, dz), HUNT_TURN, w.dt);
       moveBoss(w, b, (dx / L) * sp, (dz / L) * sp);
       trailFlare(w, b, dx / L, dz / L);
       break;
     }
     case 6:   // planting (arrival, the limit, or CAUGHT)
       b.data.speed = 0;
-      turnBoss(b, Math.atan2(T.x - b.x, T.z - b.z), BASE_TURN, w.dt);
+      turnBoss(b, atan2(T.x - b.x, T.z - b.z), BASE_TURN, w.dt);
       if (d.modeT >= (d.plantS ?? RELOC.plantS)) {
         setMode(b, 0);
         d.lastRelocT = w.t;
@@ -660,7 +661,7 @@ function dashAnswer(w: World, b: BossState): void {
   if (!e) return;
   const T = w.titan, H = bossH(w, b), Bd = w.city.bounds;
   const r = DASH_ANSWER.rH * H, reach = r + T.radius;
-  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = Math.hypot(dx, dz) || 1;
+  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = hypot(dx, dz) || 1;
   const ahead = DASH_ANSWER.aheadR * reach;
   const x = clamp(e.x1 + (dx / dl) * ahead, Bd.minX, Bd.maxX), z = clamp(e.z1 + (dz / dl) * ahead, Bd.minZ, Bd.maxZ);
   const wu = gateWindupK1(w, b, DASH_ANSWER.rH + T.radius / H, DASH_ANSWER.min, DASH_ANSWER.max);

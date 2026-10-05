@@ -6,6 +6,7 @@
 //   Hook  SHELL VENT   — ring burst sized by the store; heals 15 % of the store; resets it.
 // Kit state (titan.kit): stored, cap, floorMark, stompT (windup of the stomp in flight, view: raised foot).
 
+import { cos, hypot, sin } from '../../core/detmath.ts';
 import type { DamageOpts, Enemy, Telegraph, World } from '../../core/types.ts';
 import { RANKS } from '../../core/config.ts';
 import { headingOf } from '../../core/math.ts';
@@ -104,8 +105,8 @@ export function step(w: World): void {
     aimPoint(w, t, T.x, T.z, aim);
     x = aim.x; z = aim.z;
   } else if (isPlowing(w)) {
-    x = T.x + Math.sin(T.heading) * HEARTH.stompAheadH * H;
-    z = T.z + Math.cos(T.heading) * HEARTH.stompAheadH * H;
+    x = T.x + sin(T.heading) * HEARTH.stompAheadH * H;
+    z = T.z + cos(T.heading) * HEARTH.stompAheadH * H;
   } else { idleAuto(w); return; }
 
   const r = HEARTH.stompRH * s1(w, HEARTH.size1RMul) * H * Math.max(0.1, S(w, 'area'));
@@ -138,8 +139,8 @@ function stompFire(w: World, tg: Telegraph): void {
       const e = enemyBuf[i];
       if (!e.alive) continue;
       const dx = e.x - s.x, dz = e.z - s.z;
-      const d = Math.hypot(dx, dz);
-      const nx = d > 1e-4 ? dx / d : Math.sin(w.titan.heading), nz = d > 1e-4 ? dz / d : Math.cos(w.titan.heading);
+      const d = hypot(dx, dz);
+      const nx = d > 1e-4 ? dx / d : sin(w.titan.heading), nz = d > 1e-4 ? dz / d : cos(w.titan.heading);
       e.kx += nx * knock; e.kz += nz * knock;
     }
     enemyBuf.length = 0;

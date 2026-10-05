@@ -12,6 +12,7 @@
 //
 // Every number the titan deals is a BASE number passed through titanDamage() by the caller.
 
+import { cos, hypot, sin } from '../core/detmath.ts';
 import type { DamageKind, DamageOpts, Enemy, Prop, Shape, SimEvent, World } from '../core/types.ts';
 import { KILL_MASS_RANK_MUL, OVERSIZE_DAMAGE_MUL, RANKS } from '../core/config.ts';
 import { circleInShape, clamp, rectInShape, shapeBounds } from '../core/math.ts';
@@ -117,7 +118,7 @@ function shapeOrigin(s: Shape, px: number, pz: number, out: { x: number; z: numb
     out.x = s.x0 + vx * t; out.z = s.z0 + vz * t;
   } else if (s.k === 'lane') {
     // knock sideways out of the lane AND forward along it: origin = closest centreline point, pulled back
-    const fx = Math.sin(s.dir), fz = Math.cos(s.dir);
+    const fx = sin(s.dir), fz = cos(s.dir);
     const along = clamp((px - s.x) * fx + (pz - s.z) * fz, 0, s.len);
     out.x = s.x + fx * (along - Math.max(1, s.w * 0.5)); out.z = s.z + fz * (along - Math.max(1, s.w * 0.5));
   } else {
@@ -143,12 +144,12 @@ function applyKnock(w: World, e: Enemy, knock: number, ox: number, oz: number): 
   const k = knock * knockScale(e);
   if (!(k > 0)) return;
   let dx = e.x - ox, dz = e.z - oz;
-  let d = Math.hypot(dx, dz);
-  if (d < 1e-4) { dx = Math.sin(w.titan.heading); dz = Math.cos(w.titan.heading); d = 1; }
+  let d = hypot(dx, dz);
+  if (d < 1e-4) { dx = sin(w.titan.heading); dz = cos(w.titan.heading); d = 1; }
   e.kx += (dx / d) * k;
   e.kz += (dz / d) * k;
   const cap = Math.max(KNOCK_CAP_MIN, knock * 1.5);
-  const m = Math.hypot(e.kx, e.kz);
+  const m = hypot(e.kx, e.kz);
   if (m > cap) { e.kx *= cap / m; e.kz *= cap / m; }
   // a short stagger so a knocked foe does not fire mid-flight
   if (k >= 2) e.stun = Math.max(e.stun, Math.min(0.45, 0.1 + 0.02 * k));
@@ -424,7 +425,7 @@ export function reflectThorns(w: World, attacker: Attacker, dmg: number): void {
   let best = 0, bestD = Infinity;
   for (let i = 0; i < B.parts.length; i++) {
     const p = B.parts[i];
-    const d = Math.hypot(p.x - T.x, p.z - T.z) - p.r;
+    const d = hypot(p.x - T.x, p.z - T.z) - p.r;
     if (d < bestD) { bestD = d; best = i; }
   }
   damageBoss(w, best, amt, opts);

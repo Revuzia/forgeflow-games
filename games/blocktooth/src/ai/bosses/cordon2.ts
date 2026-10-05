@@ -50,6 +50,7 @@
 //   stencil1.ts gateBeats). REMATCH (slot 0) chasing a running titan (rematchChasing): no decision, chaseStep.
 // Telemetry: shoves, overheats, stalls, squads, part_pack / part_other, open_pack / open_all.
 
+import { atan2, cos, hypot, sin } from '../../core/detmath.ts';
 import type { BossState, World } from '../../core/types.ts';
 import { CITY, RANKS } from '../../core/config.ts';
 import { circleInShape, clamp, dist, wrapAngle } from '../../core/math.ts';
@@ -146,7 +147,7 @@ export function step(w: World, b: BossState): void {
   const chasing = rematchChasing(w, b);
   if (b.introT > 0) {
     if (dd > (BAND_MAX_H - 0.3) * H) gateHunt(w, b, INTRO_WALK * titanWalk(w), HUNT_TURN);
-    else { turnBoss(b, Math.atan2(T.x - b.x, T.z - b.z), TURN[1], w.dt); b.data.speed = 0; }
+    else { turnBoss(b, atan2(T.x - b.x, T.z - b.z), TURN[1], w.dt); b.data.speed = 0; }
     sync(w, b);
     return;
   }
@@ -195,7 +196,7 @@ function yieldWall(w: World, b: BossState): void {
   const T = w.titan;
   if (!T.alive) return;
   const keep = KEEP_H * bossH(w, b) + T.radius;
-  const dx = b.x - T.x, dz = b.z - T.z, d = Math.hypot(dx, dz);
+  const dx = b.x - T.x, dz = b.z - T.z, d = hypot(dx, dz);
   if (d >= keep - 1e-3 || d < 1e-4) return;
   const wx = b.x - (dx / d) * keep, wz = b.z - (dz / d) * keep;
   const flat = RANKS[clamp(Math.floor(T.rank), 0, RANKS.length - 1)].canFlatten;
@@ -219,7 +220,7 @@ function sync(w: World, b: BossState): void {
   if (b.attack !== 'overheated') d.overheated = 0;
   if (b.attack !== 'shieldShove') d.lurchT = 0;
   // rear arc: the titan more than REAR_ARC off the facing
-  const a = Math.abs(wrapAngle(Math.atan2(T.x - b.x, T.z - b.z) - b.heading));
+  const a = Math.abs(wrapAngle(atan2(T.x - b.x, T.z - b.z) - b.heading));
   d.rear = a > REAR_ARC ? 1 : 0;
   for (let i = 0; i < b.parts.length && i < PARTS_H.length; i++) {
     const p = b.parts[i], g = PARTS_H[i];
@@ -235,7 +236,7 @@ function sync(w: World, b: BossState): void {
 // ─────────────────────────────── decision ───────────────────────────────
 function decide(w: World, b: BossState): void {
   const T = w.titan;
-  const off = Math.abs(wrapAngle(Math.atan2(T.x - b.x, T.z - b.z) - b.heading));
+  const off = Math.abs(wrapAngle(atan2(T.x - b.x, T.z - b.z) - b.heading));
   const wts = [
     off <= FRONT_ARC ? 2.4 : 0,   // shieldShove: only at what the wall faces — the OVERHEATED window opener
     1.0,                          // sawhorseToss
@@ -249,7 +250,7 @@ function decide(w: World, b: BossState): void {
 // ─────────────────────────────── SHIELD SHOVE ───────────────────────────────
 function shieldShove(w: World, b: BossState): boolean {
   const T = w.titan, H = bossH(w, b), R = T.radius;
-  const fx = Math.sin(b.heading), fz = Math.cos(b.heading);
+  const fx = sin(b.heading), fz = cos(b.heading);
   const face = localToWorld(b, 0, SHOVE.faceH * H, TMP);
   const fxW = face.x, fzW = face.z;
   let len = laneClearLen(w, fxW, fzW, fx, fz, SHOVE.lenH * H, 0.5 * SHOVE.wH * H);
@@ -267,10 +268,10 @@ function shieldShove(w: World, b: BossState): boolean {
       if (!b.alive || b.staggerT > 0 || b.attack !== 'shieldShove') return;
       const Hh = bossH(w2, b);
       const Tt = w2.titan;
-      if (tgf.hitTitan && Tt.alive && Tt.dashT <= 0) shoveTitan(b, Math.sin(dir), Math.cos(dir), SHOVE.knockH * Hh);
+      if (tgf.hitTitan && Tt.alive && Tt.dashT <= 0) shoveTitan(b, sin(dir), cos(dir), SHOVE.knockH * Hh);
       // the lurch: 2.4 H forward in 0.35 s, as far as the street lets it
-      const ahead = laneClearLen(w2, b.x, b.z, Math.sin(dir), Math.cos(dir), SHOVE.lurchH * Hh, b.parts[0] ? b.parts[0].r : 0.7 * Hh);
-      const L = Math.min(ahead, boundsLen(w2, b.x, b.z, Math.sin(dir), Math.cos(dir), ahead, 0));
+      const ahead = laneClearLen(w2, b.x, b.z, sin(dir), cos(dir), SHOVE.lurchH * Hh, b.parts[0] ? b.parts[0].r : 0.7 * Hh);
+      const L = Math.min(ahead, boundsLen(w2, b.x, b.z, sin(dir), cos(dir), ahead, 0));
       b.data.lurchT = SHOVE.lurchS;
       b.data.lurchV = L / SHOVE.lurchS;
     },
@@ -285,10 +286,10 @@ function stepLurch(w: World, b: BossState): void {
   b.heading = dir;
   const dtL = Math.min(w.dt, d.lurchT);
   const v = d.lurchV * (dtL / w.dt);
-  moveBoss(w, b, Math.sin(dir) * v, Math.cos(dir) * v);
+  moveBoss(w, b, sin(dir) * v, cos(dir) * v);
   d.lurchT = Math.max(0, d.lurchT - w.dt);
   refreshParts(b);
-  sweepCrush(w, b, b.x + Math.sin(dir) * 0.7 * H, b.z + Math.cos(dir) * 0.7 * H, 1.3 * H);
+  sweepCrush(w, b, b.x + sin(dir) * 0.7 * H, b.z + cos(dir) * 0.7 * H, 1.3 * H);
   if (d.lurchT <= 1e-6) {
     d.lurchT = 0;
     b.data.speed = 0;
@@ -304,13 +305,13 @@ function stepLurch(w: World, b: BossState): void {
 function volleyAxis(w: World, b: BossState, lx: number, lz: number, r: number, out: { x: number; z: number }): void {
   const T = w.titan, H = bossH(w, b);
   let ax = lx - b.x, az = lz - b.z;
-  const dl = Math.hypot(ax, az);
-  if (dl > 1e-6) { ax /= dl; az /= dl; } else { ax = Math.sin(b.heading); az = Math.cos(b.heading); }
+  const dl = hypot(ax, az);
+  if (dl > 1e-6) { ax /= dl; az /= dl; } else { ax = sin(b.heading); az = cos(b.heading); }
   const keep = KEEP_H * H + T.radius;
   if (dl < keep + (r + T.radius) + 0.2 * H) {
     const n1x = az, n1z = -ax;
     const vx = Number.isFinite(T.vx) ? T.vx : 0, vz = Number.isFinite(T.vz) ? T.vz : 0;
-    const still = Math.hypot(vx, vz) < 0.1 * titanWalk(w);
+    const still = hypot(vx, vz) < 0.1 * titanWalk(w);
     const sgn = still ? (w.rng.boss() < 0.5 ? 1 : -1) : (n1x * vx + n1z * vz > 0 ? -1 : 1);
     ax = n1x * sgn; az = n1z * sgn;
   }
@@ -327,7 +328,7 @@ function sawhorseToss(w: World, b: BossState): void {
   volleyAxis(w, b, lx, lz, r, AXIS);
   const ax = AXIS.x, az = AXIS.z, px = az, pz = -ax, half = 0.5 * TOSS.lenH * H;
   beginAttack(w, b, 'sawhorseToss', lx, lz);
-  b.data.dir = Math.atan2(lx - b.x, lz - b.z);
+  b.data.dir = atan2(lx - b.x, lz - b.z);
   const n = TOSS.n[b.phase] ?? 2;
   const src = localToWorld(b, 0, -0.3 * H, TMP);
   const sx = src.x, sz = src.z;
@@ -366,7 +367,7 @@ function walkOut(w: World, b: BossState, cone: typeof CONE, ux: number, uz: numb
   while (circleInShape(cone, x, z, R)) {
     if (s >= maxL) return Infinity;
     x += ux * step; z += uz * step; s += step;
-    const dx = x - b.x, dz = z - b.z, dd = Math.hypot(dx, dz);
+    const dx = x - b.x, dz = z - b.z, dd = hypot(dx, dz);
     if (dd < keep && dd > 1e-6) { x = b.x + (dx / dd) * keep; z = b.z + (dz / dd) * keep; }
     if (c && c.buildings) {
       WALK_BUF.length = 0;
@@ -375,7 +376,7 @@ function walkOut(w: World, b: BossState, cone: typeof CONE, ux: number, uz: numb
         const bd = c.buildings[WALK_BUF[i]];
         if (!bd || bd.collapsed || !(bd.alive > 0) || bd.tier <= flat) continue;
         const qx = clamp(x, bd.x - bd.w / 2, bd.x + bd.w / 2), qz = clamp(z, bd.z - bd.d / 2, bd.z + bd.d / 2);
-        if (Math.hypot(x - qx, z - qz) < rc) { WALK_BUF.length = 0; return Infinity; }
+        if (hypot(x - qx, z - qz) < rc) { WALK_BUF.length = 0; return Infinity; }
       }
       WALK_BUF.length = 0;
     }
@@ -392,7 +393,7 @@ function walkOut(w: World, b: BossState, cone: typeof CONE, ux: number, uz: numb
 function backfireEscape(w: World, b: BossState, cone: typeof CONE): number {
   const T = w.titan, H = bossH(w, b), R = T.radius;
   const maxL = cone.r + 2 * R + 2 * H;
-  const ax = Math.sin(cone.dir), az = Math.cos(cone.dir), px = az, pz = -ax;
+  const ax = sin(cone.dir), az = cos(cone.dir), px = az, pz = -ax;
   const side = (T.x - cone.x) * px + (T.z - cone.z) * pz;
   let best = Infinity, bx = px, bz = pz;
   // the titan's own side first; the other side only when that one is walled off (or from dead centre)
@@ -404,7 +405,7 @@ function backfireEscape(w: World, b: BossState, cone: typeof CONE): number {
   }
   if (!Number.isFinite(best)) {
     for (let k = 0; k < 32; k++) {
-      const a = (k / 32) * Math.PI * 2, ux = Math.sin(a), uz = Math.cos(a);
+      const a = (k / 32) * Math.PI * 2, ux = sin(a), uz = cos(a);
       const L = walkOut(w, b, cone, ux, uz, Math.min(best, maxL));
       if (L < best) { best = L; bx = ux; bz = uz; }
     }
@@ -458,11 +459,11 @@ function squads(w: World, b: BossState): void {
   d.squadCyc = 1;
   const H = bossH(w, b);
   const sid = w.director.squadSeq++;
-  const bx = Math.sin(b.heading), bz = Math.cos(b.heading), rx = bz, rz = -bx;
+  const bx = sin(b.heading), bz = cos(b.heading), rx = bz, rz = -bx;
   const lat = (w.rng.boss() * 2 - 1) * SQUAD.jitterH * H;
   const ox = b.x - bx * SQUAD.backH * H + rx * lat, oz = b.z - bz * SQUAD.backH * H + rz * lat;
   // wedge facing away from the rig (toward whatever is behind the line)
-  const h = wrapAngle(b.heading + Math.PI), fx = Math.sin(h), fz = Math.cos(h), qx = -fz, qz = fx;
+  const h = wrapAngle(b.heading + Math.PI), fx = sin(h), fz = cos(h), qx = -fz, qz = fx;
   for (let s = 0; s < SQUAD.size; s++) {
     const side = s === 0 ? 0 : (s % 2 === 1 ? -1 : 1) * Math.ceil(s / 2);
     const back = Math.ceil(s / 2) * 2.2;
@@ -488,7 +489,7 @@ function squadCycle(b: BossState): void {
 // ─────────────────────────────── attack runner ───────────────────────────────
 function runAttack(w: World, b: BossState): void {
   const T = w.titan, t = b.attackT, d = b.data;
-  const faceT = Math.atan2(T.x - b.x, T.z - b.z);
+  const faceT = atan2(T.x - b.x, T.z - b.z);
   const turn = TURN[b.phase] ?? 0.9;
   b.data.speed = 0;
   switch (b.attack) {
@@ -521,7 +522,7 @@ function dashAnswer(w: World, b: BossState): void {
   if (!e) return;
   const T = w.titan, H = bossH(w, b), Bd = w.city.bounds;
   const r = DASH_ANSWER.rH * H, reach = r + T.radius;
-  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = Math.hypot(dx, dz) || 1;
+  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = hypot(dx, dz) || 1;
   const ux = dx / dl, uz = dz / dl, ahead = DASH_ANSWER.aheadR * reach;
   const cx = clamp(e.x1 + ux * ahead, Bd.minX, Bd.maxX), cz = clamp(e.z1 + uz * ahead, Bd.minZ, Bd.maxZ);
   const half = 0.5 * DASH_ANSWER.lenH * H, px = uz, pz = -ux;
@@ -537,6 +538,6 @@ function dashAnswer(w: World, b: BossState): void {
   // TITAN PASS D2 (GATEKEEPERS §3.6): the answer's CORDON RING (P2+) — a second blind dash out of the answer lands in it. Its moat is
   // sized for the sawhorse's walk-out: stepping off it sideways (r + R, the sawhorse lies across the dash) ends within
   // hypot(half, r + R) of its centre = a circle of radius hypot(half, r + R) − R for denialRing
-  if (CORDON_RING.dash && b.phase >= CORDON_RING.dashPhase) denialRing(w, b, cx, cz, Math.hypot(half, reach) - T.radius, tg.windup, gateHit(w, DASH_ANSWER.dmg), 'plate', 'cordon:dash');
+  if (CORDON_RING.dash && b.phase >= CORDON_RING.dashPhase) denialRing(w, b, cx, cz, hypot(half, reach) - T.radius, tg.windup, gateHit(w, DASH_ANSWER.dmg), 'plate', 'cordon:dash');
   b.data.followX = cx; b.data.followZ = cz;
 }

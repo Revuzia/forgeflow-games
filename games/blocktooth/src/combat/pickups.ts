@@ -16,6 +16,7 @@
 //   * rubble/scrap resting longer than DRIFT_AFTER_S crawls toward the titan (ramping to
 //     DRIFT_SPEED_MUL × its max speed), so nothing is stranded and the cap drains.
 
+import { cos, hypot, sin } from '../core/detmath.ts';
 import type { Pickup, PickupKind, World } from '../core/types.ts';
 import { CITY, RANKS } from '../core/config.ts';
 import { clamp } from '../core/math.ts';
@@ -132,10 +133,10 @@ export function spawnPickup(w: World, kind: PickupKind, x: number, z: number, xp
   // outward burst, biased away from the spawn point toward the titan so building rubble lands on the street
   const T = w.titan;
   const a = hash01(id, w.seed) * Math.PI * 2;
-  let dx = Math.sin(a), dz = Math.cos(a);
-  const tx = T.x - x, tz = T.z - z, td = Math.hypot(tx, tz);
+  let dx = sin(a), dz = cos(a);
+  const tx = T.x - x, tz = T.z - z, td = hypot(tx, tz);
   if (td > 1e-3) { dx += (tx / td) * 0.6; dz += (tz / td) * 0.6; }
-  const dl = Math.hypot(dx, dz) || 1;
+  const dl = hypot(dx, dz) || 1;
   const spd = (1.5 + 2.5 * hash01(id, w.seed ^ 0x51ed27)) * s;
   const vy = (G0 * s * AIR_S) / 2;
   const p: Pickup = {
@@ -183,8 +184,8 @@ export function stepPickups(w: World): void {
       if (collectNext.has(p) && p.t >= MIN_COLLECT_AGE) { collectNext.delete(p); collect(w, p); continue; }
       // homing: steer the whole velocity at the titan, speed ramps toward maxPull
       const dx = T.x - p.x, dz = T.z - p.z;
-      const d = Math.hypot(dx, dz);
-      const cur = Math.hypot(p.vx, p.vz);
+      const d = hypot(dx, dz);
+      const cur = hypot(p.vx, p.vz);
       const sp = Math.min(maxPull, Math.max(cur, maxPull * 0.25) + maxPull * PULL_ACCEL_RATE * dt);
       if (d <= collectR || d <= sp * dt) {
         if (p.t >= MIN_COLLECT_AGE) { collect(w, p); continue; }
@@ -215,7 +216,7 @@ export function stepPickups(w: World): void {
       }
     } else if (T.alive && p.t > DRIFT_AFTER_S && mergeable(p.kind)) {
       // stale heap: crawl toward the titan (never outruns it; the magnet takes over inside magnetR)
-      const dx = T.x - p.x, dz = T.z - p.z, d = Math.hypot(dx, dz);
+      const dx = T.x - p.x, dz = T.z - p.z, d = hypot(dx, dz);
       const sp = driftMax * clamp((p.t - DRIFT_AFTER_S) / DRIFT_RAMP_S, 0, 1);
       if (d > 1e-6 && sp > 0) {
         const step = Math.min(d, sp * dt);

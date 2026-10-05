@@ -26,6 +26,7 @@
 // per-second damage cap, stagger length / phase alert / fatigue by role, and defeat() handing the breach
 // to meta/gates.ts flushGateBreach (gates.breachDue) so it runs at the END of the kill tick.
 
+import { atan2, cos, hypot, sin, tan } from '../../core/detmath.ts';
 import type { BossId, BossPart, BossState, DamageOpts, GateId, GateSlot, MainBossId, Shape, Telegraph, Tier, World } from '../../core/types.ts';
 import { GATE_IDS } from '../../core/types.ts';
 import {
@@ -130,7 +131,7 @@ const ESC_BUF: number[] = [];
  *  (tier ≤ canFlatten, standing)? Ray-marched at ½ R steps with buildingsInRect, like laneClearLen. */
 function escapePlows(w: World, dx: number, dz: number, len: number): boolean {
   const T = w.titan, c = w.city;
-  const m = Math.hypot(dx, dz);
+  const m = hypot(dx, dz);
   if (!(m > 1e-9) || !(len > 0)) return false;
   const fx = dx / m, fz = dz / m;
   // the body plows (titansim plowCheck: SMASH_SLOW) inside its CONTACT radius (R × smashRadius + skin), not just R
@@ -144,7 +145,7 @@ function escapePlows(w: World, dx: number, dz: number, len: number): boolean {
       const bd = c.buildings[ESC_BUF[i]];
       if (!bd || bd.collapsed || !(bd.alive > 0) || bd.tier > flat) continue;
       const qx = clamp(px, bd.x - bd.w / 2, bd.x + bd.w / 2), qz = clamp(pz, bd.z - bd.d / 2, bd.z + bd.d / 2);
-      if (Math.hypot(px - qx, pz - qz) <= R) { ESC_BUF.length = 0; return true; }
+      if (hypot(px - qx, pz - qz) <= R) { ESC_BUF.length = 0; return true; }
     }
     ESC_BUF.length = 0;
   }
@@ -168,7 +169,7 @@ function escapeTimeS(w: World, e: number, plow: boolean, ux: number, uz: number,
     leashT = L.t - t0;
     const pull = Math.max(0, Number.isFinite(L.strength) ? L.strength : 0);
     own = Math.max(LEASH_OWN_SPEED_MUL, Math.min(1, (pull * LEASH_RESIST_MIN) / Math.max(1e-3, titanWalk(w))));
-    const ax = L.lx - T.x, az = L.lz - T.z, am = Math.hypot(ax, az);
+    const ax = L.lx - T.x, az = L.lz - T.z, am = hypot(ax, az);
     along = am > T.radius ? pull * ((ux * ax + uz * az) / am) : 0;
   }
   // the slowing hazards still alive when the walk starts (other owners' paint only)
@@ -206,10 +207,10 @@ function escapeTimeS(w: World, e: number, plow: boolean, ux: number, uz: number,
 function escapePlowsAny(w: World, b: BossState | null, e: number, dirX: number, dirZ: number): boolean {
   const T = w.titan;
   if (!(e > 0) || !w.city || !w.city.buildings) return false;
-  if (Number.isFinite(dirX) && Number.isFinite(dirZ) && Math.hypot(dirX, dirZ) > 1e-9) return escapePlows(w, dirX, dirZ, e);
-  let ax = b ? T.x - b.x : Math.sin(T.heading), az = b ? T.z - b.z : Math.cos(T.heading);
-  const am = Math.hypot(ax, az);
-  if (am > 1e-9) { ax /= am; az /= am; } else { ax = Math.sin(T.heading); az = Math.cos(T.heading); }
+  if (Number.isFinite(dirX) && Number.isFinite(dirZ) && hypot(dirX, dirZ) > 1e-9) return escapePlows(w, dirX, dirZ, e);
+  let ax = b ? T.x - b.x : sin(T.heading), az = b ? T.z - b.z : cos(T.heading);
+  const am = hypot(ax, az);
+  if (am > 1e-9) { ax /= am; az /= am; } else { ax = sin(T.heading); az = cos(T.heading); }
   const n = (escapePlows(w, ax, az, e) ? 1 : 0) + (escapePlows(w, az, -ax, e) ? 1 : 0) + (escapePlows(w, -az, ax, e) ? 1 : 0);
   return n >= 2;
 }
@@ -228,11 +229,11 @@ export function escapeMomentum(w: World, b: BossState | null, dirX = NaN, dirZ =
   const T = w.titan;
   if (T.dashT > 0 || !T.alive) return MOM;
   let ux = dirX, uz = dirZ;
-  if (!(Number.isFinite(ux) && Number.isFinite(uz) && Math.hypot(ux, uz) > 1e-9)) {
+  if (!(Number.isFinite(ux) && Number.isFinite(uz) && hypot(ux, uz) > 1e-9)) {
     if (!b) return MOM;
     ux = T.x - b.x; uz = T.z - b.z;
   }
-  const um = Math.hypot(ux, uz);
+  const um = hypot(ux, uz);
   if (!(um > 1e-9)) return MOM;
   const vx = Number.isFinite(T.vx) ? T.vx : 0, vz = Number.isFinite(T.vz) ? T.vz : 0;
   const vIn = Math.min(Math.max(0, -(vx * ux + vz * uz) / um), 1.5 * titanWalk(w));
@@ -260,11 +261,11 @@ export function escapeWalk(w: World, b: BossState | null, escapeM: number, dirX 
   }
   // the heading walked: the one given, else straight away from the rig (from a winch anchor when none), else facing
   let ux = dirX, uz = dirZ;
-  if (!(Number.isFinite(ux) && Number.isFinite(uz) && Math.hypot(ux, uz) > 1e-9)) {
+  if (!(Number.isFinite(ux) && Number.isFinite(uz) && hypot(ux, uz) > 1e-9)) {
     if (b) { ux = T.x - b.x; uz = T.z - b.z; } else if (T.leash) { ux = T.x - T.leash.lx; uz = T.z - T.leash.lz; } else { ux = 0; uz = 0; }
-    if (!(Math.hypot(ux, uz) > 1e-9)) { ux = Math.sin(T.heading); uz = Math.cos(T.heading); }
+    if (!(hypot(ux, uz) > 1e-9)) { ux = sin(T.heading); uz = cos(T.heading); }
   }
-  const um = Math.hypot(ux, uz);
+  const um = hypot(ux, uz);
   const tS = escapeTimeS(w, e, plow, ux / um, uz / um, REACT_S + fairLossS(w));
   return Math.max(1e-3, tS > 0 ? e / tS : titanWalk(w));
 }
@@ -357,10 +358,10 @@ export function watchDash(w: World, b: BossState, cd: readonly number[]): { x0: 
     b.data.follow2At = 0;
     const T = w.titan;
     if (b.phase >= 2 && dashRecharging(w)) {
-      const sp = Math.hypot(T.vx, T.vz);
+      const sp = hypot(T.vx, T.vz);
       let fx = b.data.follow2X ?? 0, fz = b.data.follow2Z ?? 0;
       if (sp > 0.3 * titanWalk(w)) { fx = T.vx / sp; fz = T.vz / sp; }
-      const fm = Math.hypot(fx, fz);
+      const fm = hypot(fx, fz);
       if (fm > 1e-6) {
         fx /= fm; fz /= fm;
         FOLLOW_EV.x0 = T.x - fx * T.radius; FOLLOW_EV.z0 = T.z - fz * T.radius; FOLLOW_EV.x1 = T.x; FOLLOW_EV.z1 = T.z;
@@ -383,7 +384,7 @@ export function watchDash(w: World, b: BossState, cd: readonly number[]): { x0: 
     b.data.followAt = w.t + (cd[b.phase] ?? 5) / clamp(heat, 1, DASH_HEAT_DIV_MAX);
     b.data.followLast = w.t;
     if (escape && dashRecharging(w)) {
-      const m = Math.hypot(e.x1 - e.x0, e.z1 - e.z0);
+      const m = hypot(e.x1 - e.x0, e.z1 - e.z0);
       b.data.follow2At = w.t + BOSS_DASH_READ.followS;
       b.data.follow2X = m > 1e-6 ? (e.x1 - e.x0) / m : 0; b.data.follow2Z = m > 1e-6 ? (e.z1 - e.z0) / m : 0;
     }
@@ -398,7 +399,7 @@ const LEAD_SPEED_CAP = 1.2;
 export function leadPoint(w: World, b: BossState, windup: number, out: { x: number; z: number }, frac = 1): { x: number; z: number } {
   const T = w.titan, B = w.city.bounds;
   let vx = Number.isFinite(T.vx) ? T.vx : 0, vz = Number.isFinite(T.vz) ? T.vz : 0;
-  const sp = Math.hypot(vx, vz), cap = LEAD_SPEED_CAP * titanSpeed(T.height);
+  const sp = hypot(vx, vz), cap = LEAD_SPEED_CAP * titanSpeed(T.height);
   if (sp > cap) { vx *= cap / sp; vz *= cap / sp; }
   const s = Math.max(0, windup) * (LEAD_FRAC[b.phase] ?? 0) * frac;
   out.x = clamp(T.x + vx * s, B.minX, B.maxX);
@@ -447,11 +448,11 @@ export function denialRing(w: World, b: BossState, x: number, z: number, r: numb
   if (bossFrameNeed(w, shape).d >= DENIAL.frameFrac * bossFrameMaxMul(T.rank) * cameraDistance(T.height)) { bossFrameNeed(w); return null; }
   let wu = Math.max(0, fireS) + DENIAL.lagS;
   // walk-fair from where the titan stands at the cast: a body overlapping the band walks to its nearer edge
-  const dT = Math.hypot(T.x - x, T.z - z);
+  const dT = hypot(T.x - x, T.z - z);
   if (dT + R > r0 && dT - R < r1) {
     const esc = Math.min(dT + R - r0, r1 + R - dT);
     let ex = T.x - x, ez = T.z - z;
-    const em = Math.hypot(ex, ez);
+    const em = hypot(ex, ez);
     if (em > 1e-6) { ex /= em; ez /= em; if (dT + R - r0 < r1 + R - dT) { ex = -ex; ez = -ez; } } else { ex = NaN; ez = NaN; }
     const fair = b.role === 'gate' ? gateWindup(w, b, esc / Math.max(1e-6, H), 0, 1e3, ex, ez) : fairWindup(w, b, esc, 0, 1e3, 0, ex, ez);
     wu = Math.max(wu, fair);
@@ -493,7 +494,7 @@ export function baseBoss(id: BossId, x: number, z: number, heading: number, part
 
 /** Local (ox,oz) → world, exactly as THREE applies rotation.y = heading to a +Z-facing model. */
 export function refreshParts(b: BossState): void {
-  const c = Math.cos(b.heading), s = Math.sin(b.heading);
+  const c = cos(b.heading), s = sin(b.heading);
   for (let i = 0; i < b.parts.length; i++) {
     const p = b.parts[i];
     p.x = b.x + p.ox * c + p.oz * s;
@@ -503,7 +504,7 @@ export function refreshParts(b: BossState): void {
 
 /** World position of a boss-local point (same rotation as refreshParts). */
 export function localToWorld(b: BossState, ox: number, oz: number, out: { x: number; z: number }): { x: number; z: number } {
-  const c = Math.cos(b.heading), s = Math.sin(b.heading);
+  const c = cos(b.heading), s = sin(b.heading);
   out.x = b.x + ox * c + oz * s;
   out.z = b.z - ox * s + oz * c;
   return out;
@@ -626,7 +627,7 @@ export function releaseLeash(w: World, b: BossState): void {
 
 /** Shove the titan (hook knock / charge side-swipe): velocity (m/s) that decays over ~0.4 s. */
 export function shoveTitan(b: BossState, dx: number, dz: number, speed: number): void {
-  const m = Math.hypot(dx, dz);
+  const m = hypot(dx, dz);
   if (!(m > 1e-6) || !(speed > 0)) return;
   b.data.kvx = (dx / m) * speed;
   b.data.kvz = (dz / m) * speed;
@@ -657,7 +658,7 @@ export function turnBoss(b: BossState, want: number, rate: number, dt: number): 
 export function moveBoss(w: World, b: BossState, vx: number, vz: number): void {
   const dt = w.dt;
   b.x += vx * dt; b.z += vz * dt;
-  const sp = Math.hypot(vx, vz);
+  const sp = hypot(vx, vz);
   b.data.speed = sp;
   b.data.walk += sp * dt;
 }
@@ -668,9 +669,9 @@ export function moveBoss(w: World, b: BossState, vx: number, vz: number): void {
  */
 export function keepRange(w: World, b: BossState, minD: number, maxD: number, speed: number, turn: number): void {
   const T = w.titan, dt = w.dt;
-  const dx = T.x - b.x, dz = T.z - b.z, d = Math.hypot(dx, dz) || 1;
+  const dx = T.x - b.x, dz = T.z - b.z, d = hypot(dx, dz) || 1;
   const nx = dx / d, nz = dz / d;
-  turnBoss(b, Math.atan2(dx, dz), turn, dt);
+  turnBoss(b, atan2(dx, dz), turn, dt);
   let vx = 0, vz = 0;
   if (d > maxD) {
     // a Size V titan runs 50+ m/s: past the band the rig strides to close (ramping with the gap)
@@ -693,8 +694,8 @@ export function keepRange(w: World, b: BossState, minD: number, maxD: number, sp
 /** Entrance walk: head for the titan at `speed` until inside `stopD`. */
 export function introWalk(w: World, b: BossState, speed: number, stopD: number): void {
   const T = w.titan;
-  const dx = T.x - b.x, dz = T.z - b.z, d = Math.hypot(dx, dz) || 1;
-  turnBoss(b, Math.atan2(dx, dz), 1.5, w.dt);
+  const dx = T.x - b.x, dz = T.z - b.z, d = hypot(dx, dz) || 1;
+  turnBoss(b, atan2(dx, dz), 1.5, w.dt);
   if (d > stopD) moveBoss(w, b, (dx / d) * speed, (dz / d) * speed);
   else b.data.speed = 0;
 }
@@ -721,7 +722,7 @@ export function entryPoint(w: World, harbour: boolean, out: { x: number; z: numb
   const [ax, az] = dirs[best];
   out.x = clamp(T.x + ax * d - az * skew, B.minX, B.maxX);
   out.z = clamp(T.z + az * d + ax * skew, B.minZ, B.maxZ);
-  out.heading = Math.atan2(T.x - out.x, T.z - out.z);
+  out.heading = atan2(T.x - out.x, T.z - out.z);
 }
 
 // ─────────────────────────────── internal per-tick helpers ───────────────────────────────
@@ -761,22 +762,22 @@ function pushTitanOut(w: World, b: BossState, keep: number, nose: { reach: numbe
   if (b.data.raceT > 0) return;   // GATEKEEPERS §7.3: STENCIL-1's STRIPE RUN drives past / through the titan
   if (keep > 0) {
     let moved = false;
-    const dx = T.x - b.x, dz = T.z - b.z, d = Math.hypot(dx, dz);
+    const dx = T.x - b.x, dz = T.z - b.z, d = hypot(dx, dz);
     if (d < keep) {
       if (d > 1e-4) { T.x = b.x + (dx / d) * keep; T.z = b.z + (dz / d) * keep; }
-      else { T.x = b.x + Math.sin(b.heading) * keep; T.z = b.z + Math.cos(b.heading) * keep; }
+      else { T.x = b.x + sin(b.heading) * keep; T.z = b.z + cos(b.heading) * keep; }
       moved = true;
     }
     // the snout: a long-bodied titan facing the rig still reaches far past its collision circle
     // (MOLO's nose is 1.11 H ahead of its centre vs a 0.42 H radius) — translate the whole titan so
     // its nose point stays outside `min` as well
     if (nose && nose.reach > 0 && nose.min > 0) {
-      const nx = T.x + Math.sin(T.heading) * nose.reach - b.x, nz = T.z + Math.cos(T.heading) * nose.reach - b.z;
-      const nd = Math.hypot(nx, nz);
+      const nx = T.x + sin(T.heading) * nose.reach - b.x, nz = T.z + cos(T.heading) * nose.reach - b.z;
+      const nd = hypot(nx, nz);
       if (nd < nose.min) {
         const push = nose.min - nd;
         if (nd > 1e-4) { T.x += (nx / nd) * push; T.z += (nz / nd) * push; }
-        else { T.x -= Math.sin(T.heading) * push; T.z -= Math.cos(T.heading) * push; }
+        else { T.x -= sin(T.heading) * push; T.z -= cos(T.heading) * push; }
         moved = true;
       }
     }
@@ -784,12 +785,12 @@ function pushTitanOut(w: World, b: BossState, keep: number, nose: { reach: numbe
     return;
   }
   const rr = p.r + T.radius * 0.7;
-  const dx = T.x - p.x, dz = T.z - p.z, d = Math.hypot(dx, dz);
+  const dx = T.x - p.x, dz = T.z - p.z, d = hypot(dx, dz);
   if (d >= rr) return;
   const need = rr - d;
   const step = Math.min(need, Math.max(2, need * 0.5));
   if (d > 1e-4) { T.x += (dx / d) * step; T.z += (dz / d) * step; }
-  else { T.x -= Math.sin(b.heading) * step; T.z -= Math.cos(b.heading) * step; }
+  else { T.x -= sin(b.heading) * step; T.z -= cos(b.heading) * step; }
   settleTitan(w);
 }
 
@@ -811,7 +812,7 @@ function crushUnder(w: World, b: BossState): void {
       const bd = c.buildings[idBuf[k]];
       if (!bd || bd.collapsed || bd.tier > tier) continue;
       const qx = clamp(p.x, bd.x - bd.w / 2, bd.x + bd.w / 2), qz = clamp(p.z, bd.z - bd.d / 2, bd.z + bd.d / 2);
-      if (Math.hypot(p.x - qx, p.z - qz) > r) continue;
+      if (hypot(p.x - qx, p.z - qz) > r) continue;
       damageBuilding(w, bd.id, bd.floorHpMax * CRUSH_FLOORS * (charging ? 2 : 1), crushOpts);
     }
     idBuf.length = 0;
@@ -1025,7 +1026,7 @@ export function bossUltHit(w: World, frac: number, meter: number): number {
 // ═══════════════════════════════ GATEKEEPERS toolkit (§3.0, §7.2 ModBossesAddV3 — lane K0) ═══════════════════════════════
 const PUSH_GATE = { x: 0, z: 0, bumpTier: -1 };
 const gateBuf: number[] = [];
-const CAM_K = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
+const CAM_K = 2 * tan((CAMERA.fovDeg * Math.PI) / 360);
 
 /** The spawn ring radius (m) — the same formula as ai/enemies.ts ringRadius (max(14, spawnView d × k)),
  *  inlined so the boss toolkit does not import the enemy module. ≈ the edge of the default-zoom view. */
@@ -1096,15 +1097,15 @@ export function volleyPoints(w: World, b: BossState, leadX: number, leadZ: numbe
   const H = bossH(w, b), R = T.radius > 0 ? T.radius : 0.42 * H;
   out[0] = leadX; out[1] = leadZ;
   let ax = leadX - b.x, az = leadZ - b.z;
-  const dl = Math.hypot(ax, az);
-  if (dl > 1e-6) { ax /= dl; az /= dl; } else { ax = Math.sin(b.heading); az = Math.cos(b.heading); }
+  const dl = hypot(ax, az);
+  if (dl > 1e-6) { ax /= dl; az /= dl; } else { ax = sin(b.heading); az = cos(b.heading); }
   const mod = MODS[b.id];
   const keep = mod && mod.keepOut ? mod.keepOut(w, b) : (b.parts[0] ? b.parts[0].r : 0);
   if (dl < keep + (r + R) + 0.2 * H) {
     // tangential axis, toward the side the titan is not moving
     const n1x = az, n1z = -ax;
     const vx = Number.isFinite(T.vx) ? T.vx : 0, vz = Number.isFinite(T.vz) ? T.vz : 0;
-    const still = Math.hypot(vx, vz) < 0.1 * titanWalk(w);
+    const still = hypot(vx, vz) < 0.1 * titanWalk(w);
     const sgn = still ? (w.rng.boss() < 0.5 ? 1 : -1) : (n1x * vx + n1z * vz > 0 ? -1 : 1);
     ax = n1x * sgn; az = n1z * sgn;
   }
@@ -1112,7 +1113,7 @@ export function volleyPoints(w: World, b: BossState, leadX: number, leadZ: numbe
   let k = 1;
   for (let i = 0; i < VOLLEY_SLOTS.length && k < n; i++) {
     const [ring, deg] = VOLLEY_SLOTS[i];
-    const a = (deg * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
+    const a = (deg * Math.PI) / 180, ca = cos(a), sa = sin(a);
     const dx = ax * ca - az * sa, dz = ax * sa + az * ca;
     const x = leadX + dx * sp * ring, z = leadZ + dz * sp * ring;
     if (x < Bd.minX || x > Bd.maxX || z < Bd.minZ || z > Bd.maxZ) continue;
@@ -1132,7 +1133,7 @@ export function laneClearLen(w: World, x: number, z: number, dirX: number, dirZ:
   const tier = b ? gateCrushTier(b) : 4;
   const L = Math.max(0, Number.isFinite(len) ? len : 0);
   if (tier >= 4 || L <= 0) return L;
-  const m = Math.hypot(dirX, dirZ);
+  const m = hypot(dirX, dirZ);
   if (!(m > 1e-9)) return 0;
   const fx = dirX / m, fz = dirZ / m, rr = Math.max(0, r);
   const step = Math.max(0.5, 0.5 * H);
@@ -1145,7 +1146,7 @@ export function laneClearLen(w: World, x: number, z: number, dirX: number, dirZ:
       const bd = c.buildings[gateBuf[i]];
       if (!bd || bd.collapsed || bd.tier <= tier) continue;
       const qx = clamp(px, bd.x - bd.w / 2, bd.x + bd.w / 2), qz = clamp(pz, bd.z - bd.d / 2, bd.z + bd.d / 2);
-      if (Math.hypot(px - qx, pz - qz) <= rr) { gateBuf.length = 0; return Math.max(0, d - step); }
+      if (hypot(px - qx, pz - qz) <= rr) { gateBuf.length = 0; return Math.max(0, d - step); }
     }
     gateBuf.length = 0;
     if (d >= L) break;
@@ -1162,22 +1163,22 @@ export function gateEntry(w: World, out: { x: number; z: number; heading: number
   // fx2: "ahead" is where the titan is GOING — its velocity while it moves (a titan sliding along the map edge
   // faces into the edge), its facing at rest; when that point is out of bounds, the nearest in-bounds rotation
   // (±45°, ±90°, ±135°) before the far side (the flip used to drop the cut-off BEHIND a runner on the edge)
-  const sp = Math.hypot(T.vx, T.vz);
-  const base = sp > 0.25 * titanWalk(w) ? Math.atan2(T.vx, T.vz) : T.heading;
+  const sp = hypot(T.vx, T.vz);
+  const base = sp > 0.25 * titanWalk(w) ? atan2(T.vx, T.vz) : T.heading;
   const a0 = base + (w.rng.boss() - 0.5) * (Math.PI / 3);
-  let x = T.x + Math.sin(a0) * d, z = T.z + Math.cos(a0) * d;
+  let x = T.x + sin(a0) * d, z = T.z + cos(a0) * d;
   const inB = (px: number, pz: number) => px >= Bd.minX && px <= Bd.maxX && pz >= Bd.minZ && pz <= Bd.maxZ;
   if (!inB(x, z)) {
     for (const k of ENTRY_TURNS) {
       const a = a0 + k;
-      const px = T.x + Math.sin(a) * d, pz = T.z + Math.cos(a) * d;
+      const px = T.x + sin(a) * d, pz = T.z + cos(a) * d;
       x = px; z = pz;
       if (inB(px, pz)) break;
     }
   }
   out.x = clamp(x, Bd.minX, Bd.maxX);
   out.z = clamp(z, Bd.minZ, Bd.maxZ);
-  out.heading = Math.atan2(T.x - out.x, T.z - out.z);
+  out.heading = atan2(T.x - out.x, T.z - out.z);
 }
 
 /** CUTTING YOU OFF (§2.4): the live gatekeeper re-enters off-screen ahead of the titan (no intro, no
@@ -1190,9 +1191,9 @@ export function gateReenter(w: World, b: BossState): void {
   b.heading = b.pheading = ENTRY.heading;
   b.data.detourT = 0; b.data.ramT = 0; b.data.stuckN = 0; b.data.stuckT = 0;
   b.data.outrunS = 0; b.data.stuckX = b.x; b.data.stuckZ = b.z; b.data.stuckCmd = 0; b.data.stuckSteer = 0;
-  const rd = Math.hypot(w.titan.x - b.x, w.titan.z - b.z);
+  const rd = hypot(w.titan.x - b.x, w.titan.z - b.z);
   b.data.stuckUX = rd > 1e-6 ? (w.titan.x - b.x) / rd : 0; b.data.stuckUZ = rd > 1e-6 ? (w.titan.z - b.z) / rd : 0;
-  b.data.stuckD = Math.hypot(w.titan.x - b.x, w.titan.z - b.z);
+  b.data.stuckD = hypot(w.titan.x - b.x, w.titan.z - b.z);
   refreshParts(b);
   // the module's gateBeats reads this stamp (not w.events): gateUnstick re-enters from the move step, AFTER that
   // tick's gateBeats, and the next tick clears w.events — the cutOff beat (CUTTING YOU OFF) never started (critic)
@@ -1211,7 +1212,7 @@ export function gateReenter(w: World, b: BossState): void {
 export function gateUnstick(w: World, b: BossState): void {
   const T = w.titan, d = b.data, dt = w.dt, S = GATES.stuck;
   const H = bossH(w, b);
-  const dist = Math.hypot(T.x - b.x, T.z - b.z);
+  const dist = hypot(T.x - b.x, T.z - b.z);
   const steering = d.ramT > 0 || d.detourT > 0;
   if (d.ramT > 0) d.ramT = Math.max(0, d.ramT - dt);
   if (d.detourT > 0) d.detourT = Math.max(0, d.detourT - dt);
@@ -1252,10 +1253,10 @@ export function gateUnstick(w: World, b: BossState): void {
   d.stuckN = (d.stuckN ?? 0) + 1;
   if (d.stuckN === 1) {
     const r = b.parts[0] ? b.parts[0].r : 0.5 * H;
-    const tx = T.x - b.x, tz = T.z - b.z, tm = Math.hypot(tx, tz) || 1;
+    const tx = T.x - b.x, tz = T.z - b.z, tm = hypot(tx, tz) || 1;
     let bestS = -Infinity, bx = tx / tm, bz = tz / tm;
     for (let i = 0; i < 8; i++) {
-      const a = (i * Math.PI) / 4, hx = Math.sin(a), hz = Math.cos(a);
+      const a = (i * Math.PI) / 4, hx = sin(a), hz = cos(a);
       const clear = laneClearLen(w, b.x, b.z, hx, hz, 2 * H, r) >= 1.5 * H ? 1 : 0;
       const sc = clear * 10 + (hx * tx + hz * tz) / tm;
       if (sc > bestS) { bestS = sc; bx = hx; bz = hz; }

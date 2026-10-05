@@ -49,6 +49,7 @@
 // gateWindupK1, startBeat, isMoveBeat, gateHunt, huntSpeed, gateBeats, gateAfterMove, sweepCrush, boundsLen) — lane-internal helpers
 // that sit on top of the bosses/index.ts toolkit (K1b owns only the three gatekeeper modules).
 
+import { atan2, cos, hypot, sin } from '../../core/detmath.ts';
 import type { BossState, DamageOpts, World } from '../../core/types.ts';
 import { GATES } from '../../core/config.ts';
 import { clamp, dist } from '../../core/math.ts';
@@ -120,10 +121,10 @@ export function gateHunt(w: World, b: BossState, speed: number, turn: number): v
   d.huntTick = w.tick;
   let hx = T.x - b.x, hz = T.z - b.z;
   if (!(d.ramT > 0) && d.detourT > 0 && Number.isFinite(d.detourX) && Number.isFinite(d.detourZ)) { hx = d.detourX; hz = d.detourZ; }
-  const m = Math.hypot(hx, hz);
+  const m = hypot(hx, hz);
   if (!(m > 1e-6)) { b.data.speed = 0; return; }
   hx /= m; hz /= m;
-  turnBoss(b, Math.atan2(hx, hz), turn, w.dt);
+  turnBoss(b, atan2(hx, hz), turn, w.dt);
   moveBoss(w, b, hx * speed, hz * speed);
 }
 
@@ -188,7 +189,7 @@ export function rematchChasing(w: World, b: BossState): boolean {
   if (d.fleeTick !== w.tick) {
     d.fleeTick = w.tick;
     const T = w.titan;
-    const dx = T.x - b.x, dz = T.z - b.z, m = Math.hypot(dx, dz);
+    const dx = T.x - b.x, dz = T.z - b.z, m = hypot(dx, dz);
     const vx = Number.isFinite(T.vx) ? T.vx : 0, vz = Number.isFinite(T.vz) ? T.vz : 0;
     const vr = m > 1e-6 ? (vx * dx + vz * dz) / m : 0;
     const walk = titanWalk(w);
@@ -210,7 +211,7 @@ export function rematchChasing(w: World, b: BossState): boolean {
  */
 export function chaseStep(w: World, b: BossState, dd: number, stopD: number, turn: number): void {
   const T = w.titan;
-  const dx = T.x - b.x, dz = T.z - b.z, m = Math.hypot(dx, dz);
+  const dx = T.x - b.x, dz = T.z - b.z, m = hypot(dx, dz);
   if (!(m > 1e-6)) { b.data.speed = 0; return; }
   const ux = dx / m, uz = dz / m;
   const cap = GATES.huntClose * titanWalk(w);
@@ -219,10 +220,10 @@ export function chaseStep(w: World, b: BossState, dd: number, stopD: number, tur
     const tvx = Number.isFinite(T.vx) ? T.vx : 0, tvz = Number.isFinite(T.vz) ? T.vz : 0;
     const pull = clamp((dd - stopD) * CHASE.pullPerS, -0.25 * cap, 0.25 * cap);
     vx = tvx + ux * pull; vz = tvz + uz * pull;
-    const sp = Math.hypot(vx, vz);
+    const sp = hypot(vx, vz);
     if (sp > cap) { vx *= cap / sp; vz *= cap / sp; }
   }
-  turnBoss(b, Math.atan2(ux, uz), turn, w.dt);
+  turnBoss(b, atan2(ux, uz), turn, w.dt);
   moveBoss(w, b, vx, vz);
 }
 
@@ -247,7 +248,7 @@ export function sweepCrush(w: World, b: BossState, x: number, z: number, r: numb
     const bd = c.buildings[crushBuf[k]];
     if (!bd || bd.collapsed || bd.tier > tier) continue;
     const qx = clamp(x, bd.x - bd.w / 2, bd.x + bd.w / 2), qz = clamp(z, bd.z - bd.d / 2, bd.z + bd.d / 2);
-    if (Math.hypot(x - qx, z - qz) > r) continue;
+    if (hypot(x - qx, z - qz) > r) continue;
     damageBuilding(w, bd.id, bd.floorHpMax * 2.5, crushOpts);
   }
   crushBuf.length = 0;
@@ -348,7 +349,7 @@ export function step(w: World, b: BossState): void {
   if (b.introT > 0) {
     const dd = dist(b.x, b.z, T.x, T.z);
     if (dd > (BAND_MAX_H - 0.5) * H) gateHunt(w, b, INTRO_WALK * titanWalk(w), TURN);
-    else { turnBoss(b, Math.atan2(T.x - b.x, T.z - b.z), TURN, w.dt); b.data.speed = 0; }
+    else { turnBoss(b, atan2(T.x - b.x, T.z - b.z), TURN, w.dt); b.data.speed = 0; }
     sync(w, b);
     return;
   }
@@ -396,7 +397,7 @@ function sync(w: World, b: BossState): void {
       d.tipped += 1;
       if (b.phase >= 3) d.sigDue = 1;   // a TIPPED OVER ends a cycle: the next P3 decision is a U-TURN
       // the drum gushes: a WET PAINT pool behind the cart for the stagger
-      const c = Math.cos(b.heading), s = Math.sin(b.heading), oz = TIPPED_POOL.ozH * H;
+      const c = cos(b.heading), s = sin(b.heading), oz = TIPPED_POOL.ozH * H;
       spawnHazard(w, { owner: 'boss', kind: 'paint', shape: { k: 'circle', x: b.x + oz * s, z: b.z + oz * c, r: TIPPED_POOL.rH * H }, life: Math.max(0.5, b.staggerT), data: { slow: PAINT_SLOW } });
     } else if (!stag) d.wasStag = 0;
     // a race only runs inside its own attack (a stagger or a kill ends the attack mid-race)
@@ -477,15 +478,15 @@ function planStripe(w: World, b: BossState, cx: number, cz: number): StripePlan 
   const wu = gateWindup(w, b, STRIPE.escH + R / H, STRIPE.min, STRIPE.max);
   const L = leadPoint(w, b, wu, LEAD);
   let fx = L.x - cx, fz = L.z - cz;
-  const fl = Math.hypot(fx, fz);
-  if (fl > 1e-6) { fx /= fl; fz /= fl; } else { fx = Math.sin(b.heading); fz = Math.cos(b.heading); }
+  const fl = hypot(fx, fz);
+  if (fl > 1e-6) { fx /= fl; fz /= fl; } else { fx = sin(b.heading); fz = cos(b.heading); }
   const nx = cx + fx * NOSE_H * H, nz = cz + fz * NOSE_H * H;
   const dN = Math.max(0, fl - NOSE_H * H);
   let len = clamp(dN + STRIPE.lenPastH * H, STRIPE.minLenH * H, STRIPE.maxLenH * H);
   len = laneClearLen(w, nx, nz, fx, fz, len, 0.5 * STRIPE.wH * H);
   len = Math.min(len, boundsLen(w, nx, nz, fx, fz, len, 0.5 * STRIPE.wH * H));
   if (len < STRIPE.minClearH * H) return null;
-  PLAN.x = nx; PLAN.z = nz; PLAN.dir = Math.atan2(fx, fz); PLAN.len = len; PLAN.wu = wu;
+  PLAN.x = nx; PLAN.z = nz; PLAN.dir = atan2(fx, fz); PLAN.len = len; PLAN.wu = wu;
   PLAN.ex = nx + fx * len; PLAN.ez = nz + fz * len;
   PLAN.cx = cx + fx * len; PLAN.cz = cz + fz * len;   // the cart centre at the end of the race
   return PLAN;
@@ -505,7 +506,7 @@ function paintStripe(w: World, b: BossState, lane: StripePlan, tag: string): voi
       const Tt = w2.titan;
       if (tgf.hitTitan && Tt.alive && Tt.dashT <= 0) {
         // knock sideways, away from the lane's centre line
-        const fx = Math.sin(dir), fz = Math.cos(dir);
+        const fx = sin(dir), fz = cos(dir);
         const side = (Tt.x - x0) * fz - (Tt.z - z0) * fx;
         const sg = side >= 0 ? 1 : -1;
         shoveTitan(b, fz * sg, -fx * sg, STRIPE.knockH * bossH(w2, b));
@@ -514,12 +515,12 @@ function paintStripe(w: World, b: BossState, lane: StripePlan, tag: string): voi
       b.heading = dir;
       b.data.raceT = STRIPE.raceS;
       b.data.raceX = ex; b.data.raceZ = ez;
-      b.data.raceV = Math.hypot(ex - b.x, ez - b.z) / STRIPE.raceS;
+      b.data.raceV = hypot(ex - b.x, ez - b.z) / STRIPE.raceS;
       // the wet stripe along the centre line (narrower than the damage lane: the tyre track)
       const Hh = bossH(w2, b);
       spawnHazard(w2, {
         owner: 'boss', kind: 'paint', life: STRIPE.paintS,
-        shape: { k: 'capsule', x0, z0, x1: x0 + Math.sin(dir) * len, z1: z0 + Math.cos(dir) * len, r: STRIPE.paintRH * Hh },
+        shape: { k: 'capsule', x0, z0, x1: x0 + sin(dir) * len, z1: z0 + cos(dir) * len, r: STRIPE.paintRH * Hh },
         data: { slow: PAINT_SLOW, reveal: STRIPE.raceS },
       });
       // U-TURN: the second run is painted as the first fires, re-aimed from the first lane's end
@@ -536,7 +537,7 @@ function paintStripe(w: World, b: BossState, lane: StripePlan, tag: string): voi
 /** The race: move along the centre line to the end point; on arrival, the next run or the REFILL. */
 function stepRace(w: World, b: BossState): void {
   const d = b.data, H = bossH(w, b);
-  const dx = d.raceX - b.x, dz = d.raceZ - b.z, m = Math.hypot(dx, dz);
+  const dx = d.raceX - b.x, dz = d.raceZ - b.z, m = hypot(dx, dz);
   const stepL = d.raceV * w.dt;
   d.raceT = Math.max(0, d.raceT - w.dt);
   if (m <= stepL + 1e-6 || d.raceT <= 1e-6) {
@@ -567,10 +568,10 @@ function buckets(w: World, b: BossState): void {
   const wu = gateWindup(w, b, BUCKET.rH + R / H, BUCKET.min, BUCKET.max);
   const L = leadPoint(w, b, wu, LEAD);
   beginAttack(w, b, 'paintBuckets', L.x, L.z);
-  b.data.dir = Math.atan2(L.x - b.x, L.z - b.z);
+  b.data.dir = atan2(L.x - b.x, L.z - b.z);
   const n = volleyPoints(w, b, L.x, L.z, BUCKET.n[b.phase] ?? 3, r, VOLLEY);
   // the rack sits on the cart's back, beside the drum
-  const c = Math.cos(b.heading), s = Math.sin(b.heading);
+  const c = cos(b.heading), s = sin(b.heading);
   const sx = b.x + 0.45 * H * c - 0.4 * H * s, sz = b.z - 0.45 * H * s - 0.4 * H * c;
   let end = 0;
   for (let i = 0; i < n; i++) {
@@ -598,13 +599,13 @@ function doubleLine(w: World, b: BossState): void {
   const wu = gateWindup(w, b, 0.5 * DLINE.wH + R / H, DLINE.min, DLINE.max);
   const L = leadPoint(w, b, wu, LEAD);
   let ax = L.x - b.x, az = L.z - b.z;
-  const am = Math.hypot(ax, az);
-  if (am > 1e-6) { ax /= am; az /= am; } else { ax = Math.sin(b.heading); az = Math.cos(b.heading); }
+  const am = hypot(ax, az);
+  if (am > 1e-6) { ax /= am; az /= am; } else { ax = sin(b.heading); az = cos(b.heading); }
   const px = az, pz = -ax;                               // along the lines
   const sg = w.rng.boss() < 0.5 ? -1 : 1;                // the second line toward or away from the cart
   beginAttack(w, b, 'doubleLine', L.x, L.z);
-  b.data.dir = Math.atan2(ax, az);
-  const dir = Math.atan2(px, pz), half = 0.5 * DLINE.lenH * H;
+  b.data.dir = atan2(ax, az);
+  const dir = atan2(px, pz), half = 0.5 * DLINE.lenH * H;
   let end = 0;
   for (let k = 0; k < 2; k++) {
     const cx = L.x + ax * sg * DLINE.sepH * H * k, cz = L.z + az * sg * DLINE.sepH * H * k;
@@ -624,7 +625,7 @@ function doubleLine(w: World, b: BossState): void {
 // ─────────────────────────────── attack runner ───────────────────────────────
 function runAttack(w: World, b: BossState): void {
   const T = w.titan, t = b.attackT, d = b.data;
-  const faceT = Math.atan2(T.x - b.x, T.z - b.z);
+  const faceT = atan2(T.x - b.x, T.z - b.z);
   b.data.speed = 0;
   switch (b.attack) {
     case 'stripeRun':
@@ -662,7 +663,7 @@ function dashAnswer(w: World, b: BossState): void {
   if (!e) return;
   const T = w.titan, H = bossH(w, b), Bd = w.city.bounds;
   const r = DASH_ANSWER.rH * H, reach = r + T.radius;
-  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = Math.hypot(dx, dz) || 1;
+  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = hypot(dx, dz) || 1;
   const ahead = DASH_ANSWER.aheadR * reach;
   const x = clamp(e.x1 + (dx / dl) * ahead, Bd.minX, Bd.maxX), z = clamp(e.z1 + (dz / dl) * ahead, Bd.minZ, Bd.maxZ);
   const wu = gateWindupK1(w, b, DASH_ANSWER.rH + T.radius / H, DASH_ANSWER.min, DASH_ANSWER.max);

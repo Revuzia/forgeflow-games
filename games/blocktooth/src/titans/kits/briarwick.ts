@@ -16,6 +16,7 @@
 // inside its circle (view only), `explosion 'seed'` per burst and per horn stamp.
 // Tuning (CONTRACT §8 G3): every BRIARWICK change stays in `BRIAR` below — never through BOSS_KIND_MUL.
 
+import { cos, hypot, sin } from '../../core/detmath.ts';
 import type { DamageOpts, Enemy, Hazard, World } from '../../core/types.ts';
 import { circleInShape, headingOf, wrapAngle } from '../../core/math.ts';
 import { damageArea, titanDamage } from '../../combat/damage.ts';
@@ -196,7 +197,7 @@ let laneNear = 0;
 /** Foes (+ aimBossHit if a boss part is in it) inside the lash lane at heading `dir` (damageArea's own test). */
 function laneHits(w: World, dir: number): number {
   LANE.dir = dir;
-  const fx = Math.sin(dir), fz = Math.cos(dir);
+  const fx = sin(dir), fz = cos(dir);
   let n = 0;
   laneNear = Infinity;
   for (let i = 0; i < pool.length; i++) {
@@ -216,7 +217,7 @@ function laneHits(w: World, dir: number): number {
 /** True while the stick is held. */
 function steering(w: World): boolean {
   const I = w.input;
-  return !!I && Math.hypot(I.mx, I.mz) > 0.25;
+  return !!I && hypot(I.mx, I.mz) > 0.25;
 }
 
 /** The forward arc (rad) right now: aimArcDeg, or the full circle with the stick idle (idleAnyDir) or while the stick is
@@ -261,7 +262,7 @@ function aimAtFoes(w: World, len: number, width: number): boolean {
   const nTrack = last !== null ? 1 + 2 * Math.max(0, Math.round(BRIAR.trackN)) : 0;
   // a foe at the titan's skin (within closeH × H of its surface) inside the arc must be in the lane: it is what is biting
   const n0 = cand[0];
-  const close = BRIAR.closeH > 0 && n0.alive && Math.hypot(n0.x - T.x, n0.z - T.z) - n0.radius - T.radius <= BRIAR.closeH * T.height
+  const close = BRIAR.closeH > 0 && n0.alive && hypot(n0.x - T.x, n0.z - T.z) - n0.radius - T.radius <= BRIAR.closeH * T.height
     && Math.abs(wrapAngle(headingOf(n0.x - T.x, n0.z - T.z) - ref)) <= arc ? n0 : null;
   let nc = 0, top = 0;
   for (let i = 0; i < cand.length + nTrack && nc < LC_MAX; i++) {
@@ -301,14 +302,14 @@ function aimAtBoss(w: World, len: number): boolean {
   let best = -1, bd = Infinity;
   for (let i = 0; i < B.parts.length; i++) {
     const p = B.parts[i];
-    const dd = Math.max(0, Math.hypot(p.x - T.x, p.z - T.z) - p.r);
+    const dd = Math.max(0, hypot(p.x - T.x, p.z - T.z) - p.r);
     if (dd > len || dd >= bd) continue;
     if (Math.abs(wrapAngle(headingOf(p.x - T.x, p.z - T.z) - ref)) > arc) continue;
     bd = dd; best = i;
   }
   if (best < 0) return false;
   const p = B.parts[best];
-  pick.dir = headingOf(p.x - T.x, p.z - T.z); pick.d = Math.hypot(p.x - T.x, p.z - T.z); pick.kind = KIND_BOSS;
+  pick.dir = headingOf(p.x - T.x, p.z - T.z); pick.d = hypot(p.x - T.x, p.z - T.z); pick.kind = KIND_BOSS;
   return true;
 }
 
@@ -322,7 +323,7 @@ function aimAtCity(w: World, t: Target | null, len: number): boolean {
   if (last !== null && arc < Math.PI - 1e-9 && Math.abs(wrapAngle(last - ref)) <= arc) {
     const half = 0.5 * lashWidth(w);
     for (const u of CITY_US) {
-      const c = findTarget(w, T.x + Math.sin(last) * len * u, T.z + Math.cos(last) * len * u, half, true);
+      const c = findTarget(w, T.x + sin(last) * len * u, T.z + cos(last) * len * u, half, true);
       if (!c || (c.kind !== 'building' && c.kind !== 'prop')) continue;
       pick.dir = last; pick.d = len * u; pick.kind = KIND_CITY;
       return true;
@@ -330,13 +331,13 @@ function aimAtCity(w: World, t: Target | null, len: number): boolean {
   }
   // stuck or idle (the arc is the full circle): the nearest thing first — what the titan is pressed against
   const free = arc >= Math.PI - 1e-9;
-  const t2 = free && t ? null : findTarget(w, T.x + Math.sin(ref) * len * 0.45, T.z + Math.cos(ref) * len * 0.45, len * 0.55, true);
+  const t2 = free && t ? null : findTarget(w, T.x + sin(ref) * len * 0.45, T.z + cos(ref) * len * 0.45, len * 0.55, true);
   for (const c of [t2, t]) {
     if (!c || (c.kind !== 'building' && c.kind !== 'prop')) continue;
     aimPoint(w, c, T.x, T.z, aim);
     const dir = headingOf(aim.x - T.x, aim.z - T.z);
     if (Math.abs(wrapAngle(dir - ref)) > arc) continue;
-    pick.dir = dir; pick.d = Math.hypot(aim.x - T.x, aim.z - T.z); pick.kind = KIND_CITY;
+    pick.dir = dir; pick.d = hypot(aim.x - T.x, aim.z - T.z); pick.kind = KIND_CITY;
     return true;
   }
   return false;
@@ -358,7 +359,7 @@ function selectLash(w: World, len: number, width: number): boolean {
     aimPoint(w, t, T.x, T.z, aim);
     const dir = headingOf(aim.x - T.x, aim.z - T.z);
     if (BRIAR.bossArcDeg >= 180 || !steering(w) || Math.abs(wrapAngle(dir - aimRef(w))) <= Math.max(arcNow(w), BRIAR.bossArcDeg * DEG)) {
-      pick.dir = dir; pick.d = Math.hypot(aim.x - T.x, aim.z - T.z); pick.kind = KIND_BOSS;
+      pick.dir = dir; pick.d = hypot(aim.x - T.x, aim.z - T.z); pick.kind = KIND_BOSS;
       return true;
     }
     if (aimAtBoss(w, len)) return true;
@@ -422,10 +423,10 @@ function lash(w: World): void {
   const hits = damageArea(w, { k: 'lane', x: T.x, z: T.z, dir, len, w: width }, titanDamage(w, BRIAR.lashDmg), LASH_OPTS);
   K.lashN = hits;
   // the view draws the whip + crack along exactly this lane (x0,z0 → x1,z1, width kit.lashW) and flashes the foes in it
-  const x1 = T.x + Math.sin(dir) * len, z1 = T.z + Math.cos(dir) * len;
+  const x1 = T.x + sin(dir) * len, z1 = T.z + cos(dir) * len;
   w.events.push({ type: 'vine', x0: T.x, z0: T.z, x1, z1 });
   // the burr: a pod where the lash struck (the target / the first foe in the lane)
-  plantPod(w, T.x + Math.sin(dir) * d, T.z + Math.cos(dir) * d, SRC_PASSIVE, 0);
+  plantPod(w, T.x + sin(dir) * d, T.z + cos(dir) * d, SRC_PASSIVE, 0);
   emitAttack(w, 'vineLash', T.x, T.z, dir, len, hits);
   faceToward(w, dir);
   rearmAuto(w, autoInterval(w, BRIAR.lashEveryS));
@@ -501,7 +502,7 @@ function foeNear(w: World, p: { x: number; z: number }, r: number): boolean {
   for (let i = 0; i < enemyBuf.length; i++) if (enemyBuf[i].alive && enemyBuf[i].hp > 0) return true;
   const B = w.boss;
   if (B && B.alive && B.introT <= 0) {
-    for (const part of B.parts) if (Math.hypot(part.x - px, part.z - pz) - part.r <= r) return true;
+    for (const part of B.parts) if (hypot(part.x - px, part.z - pz) - part.r <= r) return true;
   }
   return false;
 }
@@ -541,7 +542,7 @@ function burst(w: World, h: Hazard, link: number, src: number): void {
     const od = o.data;
     if (od.pod !== 1) adopt(o);
     if (od.fuse >= 0) continue;
-    if (Math.hypot(o.shape.x - x, o.shape.z - z) > cr) continue;
+    if (hypot(o.shape.x - x, o.shape.z - z) > cr) continue;
     if (od.ripe >= 1) { od.fuse = BRIAR.chainDelayS; od.link = link + 1; od.src = src === SRC_HOOK ? SRC_HOOK : od.src; }
     else od.ripe = Math.min(1, od.ripe + BRIAR.greenRipenOnChain);
   }
@@ -636,7 +637,7 @@ function popUpPark(w: World): void {
     let best = -1, bd = Infinity;
     for (let i = 0; i < B.parts.length; i++) {
       const p = B.parts[i];
-      const dd = Math.hypot(p.x - T.x, p.z - T.z) - p.r;
+      const dd = hypot(p.x - T.x, p.z - T.z) - p.r;
       if (dd <= vr && dd < bd) { bd = dd; best = i; }
     }
     if (best >= 0) {
@@ -646,7 +647,7 @@ function popUpPark(w: World): void {
   }
   for (let i = 0; planted < n; i++, planted++) {
     const a = T.heading + (i - (n - planted - 1) / 2) * 0.5;
-    plantPod(w, T.x + Math.sin(a) * 2.5 * H, T.z + Math.cos(a) * 2.5 * H, SRC_HOOK, 1, true);
+    plantPod(w, T.x + sin(a) * 2.5 * H, T.z + cos(a) * 2.5 * H, SRC_HOOK, 1, true);
   }
   // 3) every pod within reach ripens and detonates, outward
   const hr = BRIAR.hookRH * H;
@@ -654,7 +655,7 @@ function popUpPark(w: World): void {
   order.length = 0;
   for (const h of pods) {
     if (h.shape.k !== 'circle') continue;
-    const dd = Math.hypot(h.shape.x - T.x, h.shape.z - T.z);
+    const dd = hypot(h.shape.x - T.x, h.shape.z - T.z);
     if (dd <= hr) order.push({ h, d: dd });
   }
   order.sort((a, b) => a.d - b.d || a.h.id - b.h.id);

@@ -22,6 +22,7 @@
 //
 // THREE-free, DOM-free: runs under plain node (type stripping) in probe_sim.ts.
 
+import { atan2, cos, hypot, sin } from '../src/core/detmath.ts';
 import type { Enemy, Shape, StatKey, TitanInput, TitanState, UpgradeDef, World } from '../src/core/types.ts';
 import { CRUSH_RATIO, RANKS, TITAN, lootMass, lootXp, titanSpeed } from '../src/core/config.ts';
 import { circleInShape, clamp, wrapAngle } from '../src/core/math.ts';
@@ -110,7 +111,7 @@ const ESC = { x: 0, z: 0, need: 0 };
 
 // ─────────────────────────────── helpers ───────────────────────────────
 function norm(x: number, z: number, out: { x: number; z: number }): number {
-  const m = Math.hypot(x, z);
+  const m = hypot(x, z);
   if (m < 1e-9) { out.x = 0; out.z = 0; return 0; }
   out.x = x / m; out.z = z / m;
   return m;
@@ -161,24 +162,24 @@ function escapeFrom(s: Shape, x: number, z: number, R: number): void {
     }
     case 'cone': {
       const dx = x - s.x, dz = z - s.z;
-      const d = Math.hypot(dx, dz);
+      const d = hypot(dx, dz);
       if (d < R) {                       // at the apex: get behind the emitter
-        ESC.x = -Math.sin(s.dir); ESC.z = -Math.cos(s.dir); ESC.need = R - d + s.r * 0.05;
+        ESC.x = -sin(s.dir); ESC.z = -cos(s.dir); ESC.need = R - d + s.r * 0.05;
         return;
       }
-      const th = Math.atan2(dx, dz);
+      const th = atan2(dx, dz);
       const ang = wrapAngle(th - s.dir);
       const radialNeed = s.r + R - d;
-      const sideNeed = d * Math.sin(Math.max(0, s.half - Math.abs(ang))) + R;
-      if (radialNeed <= sideNeed) { ESC.x = Math.sin(th); ESC.z = Math.cos(th); ESC.need = radialNeed; }
+      const sideNeed = d * sin(Math.max(0, s.half - Math.abs(ang))) + R;
+      if (radialNeed <= sideNeed) { ESC.x = sin(th); ESC.z = cos(th); ESC.need = radialNeed; }
       else {
         const sg = ang >= 0 ? 1 : -1;       // leave on the side we are already on
-        ESC.x = Math.cos(th) * sg; ESC.z = -Math.sin(th) * sg; ESC.need = sideNeed;
+        ESC.x = cos(th) * sg; ESC.z = -sin(th) * sg; ESC.need = sideNeed;
       }
       return;
     }
     case 'lane': {
-      const fx = Math.sin(s.dir), fz = Math.cos(s.dir);
+      const fx = sin(s.dir), fz = cos(s.dir);
       const nx = fz, nz = -fx;               // lane-local "side" axis (matches circleInShape)
       const dx = x - s.x, dz = z - s.z;
       const along = dx * fx + dz * fz;
@@ -191,7 +192,7 @@ function escapeFrom(s: Shape, x: number, z: number, R: number): void {
       return;
     }
     case 'oval': {
-      const fx = Math.sin(s.rot), fz = Math.cos(s.rot);
+      const fx = sin(s.rot), fz = cos(s.rot);
       const nx = fz, nz = -fx;
       const dx = x - s.x, dz = z - s.z;
       const lz = dx * fx + dz * fz, lx = dx * nx + dz * nz;
@@ -252,7 +253,7 @@ function assessThreat(w: World): Threat | null {
   }
   if (count === 0) return null;
   const o = { x: 0, z: 0 };
-  if (norm(sx, sz, o) < 1e-9) { o.x = Math.sin(T.heading + Math.PI / 2); o.z = Math.cos(T.heading + Math.PI / 2); }
+  if (norm(sx, sz, o) < 1e-9) { o.x = sin(T.heading + Math.PI / 2); o.z = cos(T.heading + Math.PI / 2); }
   return { dx: o.x, dz: o.z, tLeft: tMin, need: needAtMin, count };
 }
 
@@ -313,7 +314,7 @@ function planFood(w: World, m: BotMemory, enemyPenalty: boolean): void {
           if (s.until > w.tick && Math.abs(s.x - cx) < C && Math.abs(s.z - cz) < C) { blocked = true; break; }
         }
         if (blocked) continue;
-        const d = Math.hypot(cx - T.x, cz - T.z);
+        const d = hypot(cx - T.x, cz - T.z);
         let score = v / (1 + d / D0);
         if (enemyPenalty) {
           let crowd = 0;
@@ -335,8 +336,8 @@ function planFood(w: World, m: BotMemory, enemyPenalty: boolean): void {
   // but the far side of the city is always unexplored food for a starving bot).
   const b = city.bounds;
   m.hasTarget = true;
-  m.tx = (b.minX + b.maxX) / 2 + Math.sin(w.tick * 0.001) * (b.maxX - b.minX) * 0.3;
-  m.tz = (b.minZ + b.maxZ) / 2 + Math.cos(w.tick * 0.001) * (b.maxZ - b.minZ) * 0.3;
+  m.tx = (b.minX + b.maxX) / 2 + sin(w.tick * 0.001) * (b.maxX - b.minX) * 0.3;
+  m.tz = (b.minZ + b.maxZ) / 2 + cos(w.tick * 0.001) * (b.maxZ - b.minZ) * 0.3;
 }
 
 // ─────────────────────────────── hook / dash ───────────────────────────────
@@ -377,7 +378,7 @@ function bossNear(w: World, r: number): boolean {
   if (!b || !b.alive) return false;
   for (let i = 0; i < b.parts.length; i++) {
     const p = b.parts[i];
-    if (Math.hypot(p.x - T.x, p.z - T.z) - p.r <= r) return true;
+    if (hypot(p.x - T.x, p.z - T.z) - p.r <= r) return true;
   }
   return false;
 }
@@ -478,10 +479,10 @@ export function botInput(w: World): TitanInput {
     let best = Infinity, px = b.x, pz = b.z;
     for (let i = 0; i < b.parts.length; i++) {
       const p = b.parts[i];
-      const d = Math.hypot(p.x - T.x, p.z - T.z) - p.r;
+      const d = hypot(p.x - T.x, p.z - T.z) - p.r;
       if (d < best) { best = d; px = p.x; pz = p.z; }
     }
-    if (!isFinite(best)) best = Math.hypot(b.x - T.x, b.z - T.z);
+    if (!isFinite(best)) best = hypot(b.x - T.x, b.z - T.z);
     // VOLT-KITE's boss damage is the detonation (r 0.8 H around each wire): wires must be laid
     // close to the parts, so it holds inside that radius instead of at arc reach.
     const reach = T.id === 'voltkite' ? Math.min(reachOf(w), 0.9 * H) : reachOf(w);
@@ -511,26 +512,26 @@ export function botInput(w: World): TitanInput {
     if (w.tick < m.detourUntil) {
       dir.x = m.detourX; dir.z = m.detourZ;
     } else {
-      const reached = m.hasTarget && Math.hypot(m.tx - T.x, m.tz - T.z) < Math.max(1.5, T.radius * 0.8);
+      const reached = m.hasTarget && hypot(m.tx - T.x, m.tz - T.z) < Math.max(1.5, T.radius * 0.8);
       if (!m.hasTarget || reached || w.tick - m.planTick >= PLAN_EVERY_TICKS) {
         planFood(w, m, hpFrac < LOW_HP);
         m.planTick = w.tick;
       }
       norm(m.tx - T.x, m.tz - T.z, dir);
-      if (dir.x === 0 && dir.z === 0) { dir.x = Math.sin(T.heading); dir.z = Math.cos(T.heading); }
+      if (dir.x === 0 && dir.z === 0) { dir.x = sin(T.heading); dir.z = cos(T.heading); }
     }
   }
 
   // stuck detector (only while freely walking)
   if (w.tick - m.checkTick >= STUCK_CHECK_TICKS) {
-    const moved = Math.hypot(T.x - m.lastX, T.z - m.lastZ);
+    const moved = hypot(T.x - m.lastX, T.z - m.lastZ);
     const expected = speed * ((w.tick - m.checkTick) / 30);
     if (m.wasMoving && !threatened && T.dashT <= 0 && !T.leash && T.slowT <= 0 && moved < STUCK_FRAC * expected) {
       m.detourSign = -m.detourSign;
-      const fx = m.hasTarget ? m.tx - T.x : Math.sin(T.heading);
-      const fz = m.hasTarget ? m.tz - T.z : Math.cos(T.heading);
+      const fx = m.hasTarget ? m.tx - T.x : sin(T.heading);
+      const fz = m.hasTarget ? m.tz - T.z : cos(T.heading);
       const f = { x: 0, z: 0 };
-      if (norm(fx, fz, f) < 1e-9) { f.x = Math.sin(T.heading); f.z = Math.cos(T.heading); }
+      if (norm(fx, fz, f) < 1e-9) { f.x = sin(T.heading); f.z = cos(T.heading); }
       m.detourX = f.z * m.detourSign; m.detourZ = -f.x * m.detourSign;
       m.detourUntil = w.tick + DETOUR_TICKS;
       if (m.hasTarget) m.avoid.push({ x: m.tx, z: m.tz, until: w.tick + AVOID_TICKS });
@@ -558,7 +559,7 @@ export function botInput(w: World): TitanInput {
   if (T.z > bd.maxZ - edge && dir.z > 0) dir.z = -Math.abs(dir.z) * 0.5;
 
   const u = { x: 0, z: 0 };
-  if (norm(dir.x, dir.z, u) < 1e-9) { u.x = Math.sin(T.heading); u.z = Math.cos(T.heading); }
+  if (norm(dir.x, dir.z, u) < 1e-9) { u.x = sin(T.heading); u.z = cos(T.heading); }
   out.mx = u.x; out.mz = u.z;
 
   // ── hook ──
@@ -590,7 +591,7 @@ export function botInput(w: World): TitanInput {
       }
     }
     if (!out.dash && T.dashCharges >= maxCharges && !paintAround && !(b && b.alive) && m.hasTarget) {
-      const dT = Math.hypot(m.tx - T.x, m.tz - T.z);
+      const dT = hypot(m.tx - T.x, m.tz - T.z);
       if (dT > (T.stats.dashDistance || 2.2) * H * 1.2) out.dash = true;   // 2× smash while travelling
     }
   }

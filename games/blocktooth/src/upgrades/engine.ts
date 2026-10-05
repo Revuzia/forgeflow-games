@@ -45,6 +45,7 @@
 //     (seed at the nearest enemy within 3.5·H every 1.2 s ÷ turretRate, 8 dmg, crit-rolled; every 4 s
 //     spores heal 1 % maxHp × sporeHeal when the titan is within 2·H).
 
+import { atan2, cos, hypot, sin } from '../core/detmath.ts';
 import type {
   Enemy, Hazard, HazardKind, Shape, SimEvent, StatKey, Tier, TriggerOn, UpgradeDef, UpgradeEffect, World,
 } from '../core/types.ts';
@@ -290,7 +291,7 @@ function driveUpgradeBlooms(w: World): void {
       const e = nearestEnemy(w, hx, hz, range, liveEnemy);
       if (e) {
         const dx = e.x - hx, dz = e.z - hz;
-        const d = Math.max(0.01, Math.hypot(dx, dz));
+        const d = Math.max(0.01, hypot(dx, dz));
         const speed = Math.max(10, 7 * H);
         const c = rollCrit(w, titanDamage(w, 8));
         spawnProjectile(w, {
@@ -696,14 +697,14 @@ function doRubbleShot(w: World, count: number, dmgBase: number, id: string): boo
     for (let c = 0; c < count; c++) {
       const e = SCR_E2[c % live];
       const dx = e.x - T.x, dz = e.z - T.z;
-      const d = Math.max(0.01, Math.hypot(dx, dz));
+      const d = Math.max(0.01, hypot(dx, dz));
       // small fan when several chunks share one target
       const fan = live < count ? ((c / Math.max(1, count - 1)) - 0.5) * 0.18 : 0;
-      const ang = Math.atan2(dx, dz) + fan;
+      const ang = atan2(dx, dz) + fan;
       const life = d / speed + 0.35;
       spawnProjectile(w, {
         owner: 'titan', kind: 'rubbleShot', x: T.x, z: T.z, y,
-        vx: Math.sin(ang) * speed, vz: Math.cos(ang) * speed, dmg, r: pr, life, pierce: 0,
+        vx: sin(ang) * speed, vz: cos(ang) * speed, dmg, r: pr, life, pierce: 0,
         fromUpgrade: id,
       });
       if (life + w.dt > LINGER) LINGER = life + w.dt;
@@ -736,8 +737,8 @@ function doMeteor(w: World, x: number, z: number, R: number, dmgBase: number, ao
   let tx: number, tz: number;
   if (live > 0) {
     const e = SCR_E[Math.min(live - 1, Math.floor(w.rng.combat() * live))];
-    const lead = Math.min(aoe * 2, Math.hypot(e.vx, e.vz) * life);
-    const sp = Math.hypot(e.vx, e.vz);
+    const lead = Math.min(aoe * 2, hypot(e.vx, e.vz) * life);
+    const sp = hypot(e.vx, e.vz);
     tx = e.x + (sp > 1e-6 ? (e.vx / sp) * lead : 0);
     tz = e.z + (sp > 1e-6 ? (e.vz / sp) * lead : 0);
   } else {

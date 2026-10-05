@@ -8,6 +8,7 @@
 //                             that pays out the wires laid since the last press, not a 1.5 s spam button.
 // Kit state (titan.kit): wires (live wire count, view/HUD), arcHits (last arc's hits), arcN (arc counter).
 
+import { hypot } from '../../core/detmath.ts';
 import type { DamageOpts, Enemy, Hazard, Shape, World } from '../../core/types.ts';
 import { dist, headingOf } from '../../core/math.ts';
 import { damageArea, titanDamage } from '../../combat/damage.ts';
@@ -149,7 +150,7 @@ function forkArc(w: World, first: Target, range: number): void {
     // GROUNDING: the bolt earths through the first thing it struck: a short LIVE WIRE from that point back toward VOLT-KITE,
     // so RECAST has real wires to blow without dash-weaving (titanpass T9: 31 % -> ~79 % real detonations, player-like)
     aimPoint(w, first, T.x, T.z, pt);
-    const dx = T.x - pt.x, dz = T.z - pt.z, d = Math.hypot(dx, dz) || 1;
+    const dx = T.x - pt.x, dz = T.z - pt.z, d = hypot(dx, dz) || 1;
     const L = Math.min(d, VOLT.groundLenH * T.height);
     layWire(w, pt.x, pt.z, pt.x + (dx / d) * L, pt.z + (dz / d) * L, Math.max(0.1, S(w, 'wireDuration')) * VOLT.groundLife);
   }
@@ -206,7 +207,7 @@ export function onDash(w: World, x0: number, z0: number, x1: number, z1: number)
   const H = T.height;
   let ex = x1, ez = z1;
   const minLen = VOLT.wireMinLenH * H;
-  if (Math.hypot(x1 - x0, z1 - z0) < minLen) { ex = x0 + T.dashDirX * minLen; ez = z0 + T.dashDirZ * minLen; }
+  if (hypot(x1 - x0, z1 - z0) < minLen) { ex = x0 + T.dashDirX * minLen; ez = z0 + T.dashDirZ * minLen; }
   layWire(w, x0, z0, ex, ez, Math.max(0.1, S(w, 'wireDuration')));
 }
 

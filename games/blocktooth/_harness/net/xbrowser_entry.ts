@@ -1,0 +1,108 @@
+// BLOCKTOOTH — cross-engine determinism probe, bundle entry (ONLINE_PLAN gate H1, lane B-DET; port of
+// _spec/online/netcode_lab/xengine_entry.ts). probe_xbrowser.py bundles this with rolldown (iife) and runs the SAME
+// bot-driven runs in Node, Chromium, Firefox and WebKit; every engine must produce identical checkpoint hashes.
+//
+// Unlike the lab prototype there is no installDetMath(): the production sim imports src/core/detmath.ts directly
+// (and _harness/detban.ts keeps it that way), so this measures exactly what ships.
+//
+// Harness code: reads the world, never writes gameplay state. Date.now() only times the run.
+
+import type { BiomeId, RunMeta, TitanId, World } from '../../src/core/types.ts';
+import { EMPTY_RUN_META } from '../../src/core/types.ts';
+import { createWorld, stepWorld } from '../../src/core/world.ts';
+import { hasPendingDraft, rollOffer, pickUpgrade } from '../../src/upgrades/draft.ts';
+import { UPGRADES } from '../../src/data/upgrades.ts';
+import * as D from '../../src/core/detmath.ts';
+import { botInput, botPickUpgrade } from '../bot.ts';
+
+const F64 = new Float64Array(1), U32 = new Uint32Array(F64.buffer);
+class Hasher {
+  h = 0x811c9dc5 >>> 0;
+  u(x: number): void { for (let s = 0; s < 32; s += 8) { this.h ^= (x >>> s) & 0xff; this.h = Math.imul(this.h, 0x01000193) >>> 0; } }
+  n(x: number): void { F64[0] = x; this.u(U32[0]); this.u(U32[1]); }
+  s(x: string): void { for (let i = 0; i < x.length; i++) { this.h ^= x.charCodeAt(i) & 0xff; this.h = Math.imul(this.h, 0x01000193) >>> 0; } }
+  hex(): string { return (this.h >>> 0).toString(16).padStart(8, '0'); }
+}
+
+/** Wide state hash: titan, every live enemy / pickup / projectile, every prop, every building's floors + HP, the boss,
+ *  owned upgrades and run counters (wider than probe_sim's GATE 2 hash, so a divergence shows at the first checkpoint). */
+export function hashWorld(w: World): string {
+  const hs = new Hasher();
+  const T = w.titan;
+  hs.n(w.tick); hs.n(w.t); hs.n(w.nextId);
+  for (const v of [T.x, T.z, T.heading, T.vx, T.vz, T.hp, T.maxHp, T.mass, T.xp, T.level, T.rank, T.height, T.radius,
+    T.kills, T.crushed, T.floorsEaten, T.propsEaten, T.damageTaken, T.abilityCd, T.dashCharges]) hs.n(v);
+  let n = 0;
+  for (const e of w.enemies) if (e.alive) { n++; hs.s(e.kind); hs.n(e.x); hs.n(e.z); hs.n(e.y); hs.n(e.hp); hs.n(e.heading); }
+  hs.n(n); n = 0;
+  for (const p of w.pickups) if (p.alive) { n++; hs.n(p.x); hs.n(p.z); }
+  hs.n(n); n = 0;
+  for (const p of w.projectiles) if (p.alive) { n++; hs.n(p.x); hs.n(p.z); hs.n(p.y); }
+  hs.n(n);
+  for (const p of w.city.props) { hs.n(p.x); hs.n(p.z); hs.n(p.heading); hs.n(p.alive ? 1 : 0); }
+  for (const b of w.city.buildings) { hs.n(b.alive); hs.n(b.floorHp); }
+  if (w.boss) { hs.s(w.boss.id); hs.n(w.boss.x); hs.n(w.boss.z); hs.n(w.boss.hp); hs.n(w.boss.phase); hs.n(w.boss.meter); }
+  for (const k of Object.keys(w.upgrades.owned).sort()) { hs.s(k); hs.n(w.upgrades.owned[k]); }
+  hs.n(w.run.tonnage); hs.n(w.run.blocksLeveled);
+  return hs.hex();
+}
+
+/** Bit-level hashes of the detmath functions over 200k deterministic inputs (must match in every engine) and of the
+ *  engine's native Math for the same inputs (information: shows which built-ins differ from Node in that engine). */
+function mathHashes(): { det: Record<string, string>; native: Record<string, string> } {
+  let s = 12345 >>> 0;
+  const r = () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const N = 200000;
+  const xs = new Float64Array(N), ys = new Float64Array(N);
+  for (let i = 0; i < N; i++) { xs[i] = (r() - 0.5) * 2000; ys[i] = (r() - 0.5) * 2000; }
+  const M = Math as unknown as Record<string, (...a: number[]) => number>;
+  const pairs: Record<string, [(i: number) => number, (i: number) => number]> = {
+    sin: [(i) => D.sin(xs[i] * 0.01), (i) => M.sin(xs[i] * 0.01)],
+    cos: [(i) => D.cos(xs[i] * 0.01), (i) => M.cos(xs[i] * 0.01)],
+    tan: [(i) => D.tan(xs[i] * 0.001), (i) => M.tan(xs[i] * 0.001)],
+    atan2: [(i) => D.atan2(ys[i], xs[i]), (i) => M.atan2(ys[i], xs[i])],
+    asin: [(i) => D.asin(ys[i] / 1000.0001), (i) => M.asin(ys[i] / 1000.0001)],
+    exp: [(i) => D.exp(xs[i] * 0.005), (i) => M.exp(xs[i] * 0.005)],
+    log: [(i) => D.log(Math.abs(xs[i]) + 1e-3), (i) => M.log(Math.abs(xs[i]) + 1e-3)],
+    pow: [(i) => D.pow(Math.abs(xs[i]) * 0.01 + 0.5, 1.37), (i) => M.pow(Math.abs(xs[i]) * 0.01 + 0.5, 1.37)],
+    hypot: [(i) => D.hypot(xs[i], ys[i]), (i) => M.hypot(xs[i], ys[i])],
+    sinBig: [(i) => D.sin(xs[i] * 1000), (i) => M.sin(xs[i] * 1000)],
+  };
+  const det: Record<string, string> = {}, native: Record<string, string> = {};
+  for (const k of Object.keys(pairs)) {
+    const [fd, fn] = pairs[k];
+    const a = new Hasher(), b = new Hasher();
+    for (let i = 0; i < N; i++) { a.n(fd(i)); b.n(fn(i)); }
+    det[k] = a.hex(); native[k] = b.hex();
+  }
+  return { det, native };
+}
+
+export interface ProbeRun {
+  titan: string; biome: string; seed: number; meta: string; ticks: number; checkpointEvery: number;
+  checkpoints: string[]; final: string; result: string | null; endT: number; level: number; ms: number;
+}
+
+export function runProbe(titan: string, biome: string, seed: number, ticks: number, metaKind = 'fresh', every = 300): ProbeRun {
+  const t0 = Date.now();
+  const meta: RunMeta = metaKind === 'full'
+    ? { ...EMPTY_RUN_META, unlocked: UPGRADES.filter((u) => u.locked).map((u) => u.id).sort() }
+    : { ...EMPTY_RUN_META, unlocked: [] };
+  const w = createWorld({ titan: titan as TitanId, biome: biome as BiomeId, seed, meta });
+  const cps: string[] = [];
+  let i = 0;
+  for (; i < ticks && !w.run.result; i++) {
+    let g = 0;
+    while (hasPendingDraft(w) && g++ < 200) {
+      const offer = w.upgrades.offer && w.upgrades.offer.length ? w.upgrades.offer : rollOffer(w, w.upgrades.chestDrafts > 0);
+      if (!offer || !offer.length) break;
+      pickUpgrade(w, botPickUpgrade(w, offer));
+    }
+    stepWorld(w, botInput(w));
+    if ((i + 1) % every === 0) cps.push(hashWorld(w));
+  }
+  return { titan, biome, seed, meta: metaKind, ticks: i, checkpointEvery: every, checkpoints: cps, final: hashWorld(w),
+    result: w.run.result ?? null, endT: w.t, level: w.titan.level, ms: Date.now() - t0 };
+}
+
+(globalThis as Record<string, unknown>).btProbe = { runProbe, mathHashes };

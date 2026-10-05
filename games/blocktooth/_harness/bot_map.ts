@@ -9,6 +9,7 @@
 //      is how the bot flattens it — contact smash + the auto-attack on the nearest city target);
 //   5. a RECORDS ANNEX only when it is nearly on the way (within ANNEX_NEAR × spawnRing).
 
+import { hypot } from '../src/core/detmath.ts';
 import type { World } from '../src/core/types.ts';
 import { spawnRing } from '../src/ai/director.ts';
 
@@ -41,7 +42,7 @@ export function botDetour(w: World, out: { x: number; z: number }): { x: number;
   const lim = BOT_MAP_TUNE.puNear * ring;
   for (const p of m.powerups) {
     if (!p.alive) continue;
-    const d = Math.hypot(p.x - T.x, p.z - T.z);
+    const d = hypot(p.x - T.x, p.z - T.z);
     if (d <= lim && d < best) { best = d; bx = p.x; bz = p.z; }
   }
   if (best < Infinity) { out.x = bx; out.z = bz; return out; }
@@ -59,7 +60,7 @@ function nearestObjective(w: World, kind: 'overloadSite' | 'reliefDepot' | 'reco
   let best = Infinity, pick: { x: number; z: number } | null = null;
   for (const o of w.map.objectives) {
     if (!o.alive || o.kind !== kind) continue;
-    const d = Math.hypot(o.x - T.x, o.z - T.z);
+    const d = hypot(o.x - T.x, o.z - T.z);
     if (d <= lim && d < best) { best = d; pick = o; }
   }
   return pick;

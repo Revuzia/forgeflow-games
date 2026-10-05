@@ -115,6 +115,7 @@
 //     HEARTHBACK 0/9 (BRIARWICK died 2–4/9 in neighbouring tunings — single-seed outcomes are noisy).
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════════
 
+import { atan, cos, exp, hypot, log, pow, sin, tan } from './detmath.ts';
 import type { DamageKind, EnemyKind, GateId, PowerUpKind, RankIndex, Shape, Tier, World } from './types.ts';
 
 // ─────────────────────────────── time ───────────────────────────────
@@ -201,12 +202,12 @@ export function titanHeightAt(rank: RankIndex, level: number): number {
   const H0 = RANKS[rank].height;
   if (rank >= 4) {
     const u = Math.min(1, Math.max(0, (level - RANK_LEVELS[4]) / RANK_V_GROWTH_LEVELS));
-    return H0 * Math.pow(1 + RANK_V_GROWTH, u);
+    return H0 * pow(1 + RANK_V_GROWTH, u);
   }
   const H1 = RANKS[rank + 1].height / BREACH_JUMP[rank + 1];
   const L0 = RANK_LEVELS[rank], L1 = RANK_LEVELS[rank + 1];
   const u = Math.min(1, Math.max(0, (level - L0) / (L1 - L0)));
-  return H0 * Math.pow(H1 / H0, u);
+  return H0 * pow(H1 / H0, u);
 }
 
 /** @deprecated (scratch view harnesses) body height for a rank + 0..1 progress through its levels. */
@@ -219,13 +220,13 @@ export function titanHeight(rank: RankIndex, progress01: number): number {
 /** Base move speed (m/s) for a body height: heavier = slower on screen, faster in metres.
  *  speed(H) = 3.2 + 1.9 * H^0.8   →  I 5.4 · II 10.1 · III 18.9 · IV 33.6 · V 53.5 m/s (× moveSpeed stat) */
 export function titanSpeed(height: number): number {
-  return 3.2 + 1.9 * Math.pow(height, 0.8);
+  return 3.2 + 1.9 * pow(height, 0.8);
 }
 
 /** XP curve: xpToNext(level) — level starts at 1. p20: × xpStretch(level) → LV 7 ≈ 3:15, LV 16 ≈ 7:50, LV 27 ≈ 13:00,
  *  LV 35 + the city boss ≈ 17:45 (gate bot; _harness/scratch/p20/PACING_20.md §3.2). */
 export function xpToNext(level: number): number {
-  return Math.round((8 + 6 * Math.pow(level, 1.35)) * xpStretch(level));
+  return Math.round((8 + 6 * pow(level, 1.35)) * xpStretch(level));
 }
 /** p20 (owner 2026-09-30 "go with 20 minutes"): × the 10-minute curve by level. Size I ramps from × 1 (LV 1) toward
  *  × (1 + early); from Size II on: × sizeII flat, + late per level past lateFrom (later levels need clearly more XP).
@@ -235,7 +236,7 @@ export function xpToNext(level: number): number {
 export const XP_STRETCH = { early: 1.3, earlyK: 1.8, sizeII: 1.85, late: 0.03, lateFrom: 15 };
 export function xpStretch(level: number): number {
   const L = Math.max(1, level);
-  if (L < RANK_LEVELS[1]) return 1 + XP_STRETCH.early * (1 - Math.exp(-(L - 1) / XP_STRETCH.earlyK));
+  if (L < RANK_LEVELS[1]) return 1 + XP_STRETCH.early * (1 - exp(-(L - 1) / XP_STRETCH.earlyK));
   return XP_STRETCH.sizeII + XP_STRETCH.late * Math.max(0, L - XP_STRETCH.lateFrom);
 }
 /** p20: every time-keyed curve reads world time / PACE_STRETCH (the 10-minute tables stretched to ~20 min). */
@@ -317,14 +318,14 @@ export const SNACK_FALLOFF = 0.35;
  *  × the snack rule × RANKS[rank].xpScale). Used by citysim, the upgrade engine and the bot. */
 export function lootXp(tier: Tier, rank: RankIndex): number {
   const below = RANKS[rank].canFlatten - tier;
-  return TIERS[tier].floorXp * RANKS[rank].xpScale * (below > 0 ? Math.pow(SNACK_FALLOFF, below) : 1);
+  return TIERS[tier].floorXp * RANKS[rank].xpScale * (below > 0 ? pow(SNACK_FALLOFF, below) : 1);
 }
 
 /** Mass one floor / prop of `tier` drops for a titan at `rank` (table value × the snack rule). Since
  *  2026-09-24 it grows nothing (titansim gainMass is retired); the pickup view sizes chunks by it. */
 export function lootMass(tier: Tier, rank: RankIndex): number {
   const below = RANKS[rank].canFlatten - tier;
-  return TIERS[tier].floorMass * (below > 0 ? Math.pow(SNACK_FALLOFF, below) : 1);
+  return TIERS[tier].floorMass * (below > 0 ? pow(SNACK_FALLOFF, below) : 1);
 }
 
 /** Attacks against a building/prop whose tier > the rank's canFlatten deal this fraction. */
@@ -430,15 +431,15 @@ export const CAMERA_ZOOM = {
   omega: 11,
 } as const;
 
-const CAM_K = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
+const CAM_K = 2 * tan((CAMERA.fovDeg * Math.PI) / 360);
 /** the run-long framing curve's constants, derived from FRAMING: LV 1 distance, the slope at LV 1 and
  *  the slope's growth (see FRAMING) */
 const FRAME_D1 = FRAMING.h1 / (FRAMING.frac1 * CAM_K);
-const FRAME_XV = Math.log(FRAMING.hV / FRAMING.h1);
-const FRAME_C = (Math.log(FRAMING.hV / (FRAMING.fracV * CAM_K) / FRAME_D1) - FRAMING.k1 * FRAME_XV) / (FRAME_XV * FRAME_XV);
+const FRAME_XV = log(FRAMING.hV / FRAMING.h1);
+const FRAME_C = (log(FRAMING.hV / (FRAMING.fracV * CAM_K) / FRAME_D1) - FRAMING.k1 * FRAME_XV) / (FRAME_XV * FRAME_XV);
 /** local log-log slope of the curve at body height H (0 < k < 1 keeps the share rising) */
 function frameSlope(H: number): number {
-  return FRAMING.k1 + 2 * FRAME_C * Math.max(0, Math.log(Math.max(1e-6, H) / FRAMING.h1));
+  return FRAMING.k1 + 2 * FRAME_C * Math.max(0, log(Math.max(1e-6, H) / FRAMING.h1));
 }
 // the whole growth range (≤ Size V's cap, with room for rank-V growth tuning) must keep 0 < k < 1
 {
@@ -454,9 +455,9 @@ function frameSlope(H: number): number {
  *  (ai/enemies.ts frameDistance), so foes walk in from off-screen at the default zoom. */
 export function cameraDistance(height: number, _rank?: RankIndex): number {
   const H = Math.max(0.05, Number.isFinite(height) ? height : FRAMING.h1);
-  const x = Math.log(H / FRAMING.h1);
+  const x = log(H / FRAMING.h1);
   const xp = x > 0 ? x : 0;
-  return FRAME_D1 * Math.exp(FRAMING.k1 * x + FRAME_C * xp * xp);
+  return FRAME_D1 * exp(FRAMING.k1 * x + FRAME_C * xp * xp);
 }
 
 /** Analytic share of the view height a body height H occupies at the AUTO distance (H / (D*·K)). */
@@ -479,11 +480,11 @@ export function framingTable(): readonly { H0: number; k: number }[] {
  *  s = (hf − hn) / (n + f). Aspect = width / height of the view. */
 export function viewFootprint(pitchDeg: number, aspect = 16 / 9): { n: number; f: number; hn: number; hf: number; s: number } {
   const al = (CAMERA.fovDeg * Math.PI) / 360, p = (pitchDeg * Math.PI) / 180;
-  const h = Math.sin(p), b = Math.cos(p), tw = Math.max(0.3, aspect) * Math.tan(al) * Math.cos(al);
-  const n = (b - h / Math.tan(p + al)) / CAM_K;
-  const f = (p - al > 0.05 ? h / Math.tan(p - al) - b : 4) / CAM_K;
-  const hn = (h / Math.sin(p + al)) * tw / CAM_K;
-  const hf = (p - al > 0.05 ? (h / Math.sin(p - al)) * tw : 4) / CAM_K;
+  const h = sin(p), b = cos(p), tw = Math.max(0.3, aspect) * tan(al) * cos(al);
+  const n = (b - h / tan(p + al)) / CAM_K;
+  const f = (p - al > 0.05 ? h / tan(p - al) - b : 4) / CAM_K;
+  const hn = (h / sin(p + al)) * tw / CAM_K;
+  const hf = (p - al > 0.05 ? (h / sin(p - al)) * tw : 4) / CAM_K;
   return { n, f, hn, hf, s: (hf - hn) / (n + f) };
 }
 
@@ -586,7 +587,7 @@ const BF_X: number[] = [], BF_Z: number[] = [], BF_Y: number[] = [];
 const BF_U: number[] = [], BF_V: number[] = [];
 const BF_OUT = { d: 0, ox: 0, oz: 0 };
 const BF = { n: 0, dLo: 0, dHi: 0, ty: 0, ox: 0, oy: 0, oz: 0, ux: 0, uy: 0, uz: 0, rx: 0, rz: 0 };
-const BF_TAN = Math.tan((CAMERA.fovDeg * Math.PI) / 360), BF_ASPECT = 16 / 9;
+const BF_TAN = tan((CAMERA.fovDeg * Math.PI) / 360), BF_ASPECT = 16 / 9;
 /** Tightest framing need (in units of D·K) of the scratch points around the screen-space centre (u0, v0)
  *  from the ground-footprint trapezoid (an estimate — picks the offset; the distance is fitted exactly). */
 function bfNeed(n: number, u0: number, v0: number, FP: { n: number; f: number; hn: number; s: number }): number {
@@ -666,9 +667,9 @@ export function bossFrameNeed(w: World, extra: Shape | null = null): { d: number
   const T = w.titan;
   const pitch = RANKS[T.rank]?.pitchDeg ?? 54;
   const FP = viewFootprint(pitch);
-  const pr = (pitch * Math.PI) / 180, cot = 1 / Math.tan(pr);
-  const yaw = (CAMERA.yawDeg * Math.PI) / 180, sy = Math.sin(yaw), cy = Math.cos(yaw);
-  const cp = Math.cos(pr), sp = Math.sin(pr);
+  const pr = (pitch * Math.PI) / 180, cot = 1 / tan(pr);
+  const yaw = (CAMERA.yawDeg * Math.PI) / 180, sy = sin(yaw), cy = cos(yaw);
+  const cp = cos(pr), sp = sin(pr);
   BF.ox = cp * sy; BF.oy = sp; BF.oz = cp * cy;          // target → camera (unit)
   BF.ux = -sp * sy; BF.uy = cp; BF.uz = -sp * cy;        // camera up
   BF.rx = cy; BF.rz = -sy;                                // camera right
@@ -711,9 +712,9 @@ export function bossFrameNeed(w: World, extra: Shape | null = null): { d: number
       if (BF_V[i] < vmin) vmin = BF_V[i]; if (BF_V[i] > vmax) vmax = BF_V[i];
     }
     // usable frame: the bottom at 1 / margin, the top at topNdc (the nameplate) — as ground reach
-    const ta = Math.tan((CAMERA.fovDeg * Math.PI) / 360);
-    const bTop = Math.atan(BOSS_FRAME.topNdc * ta), bBot = Math.atan(ta / BOSS_FRAME.margin);
-    const fU = pr - bTop > 0.05 ? sp / Math.tan(pr - bTop) - cp : 4, nU = cp - sp / Math.tan(pr + bBot);
+    const ta = tan((CAMERA.fovDeg * Math.PI) / 360);
+    const bTop = atan(BOSS_FRAME.topNdc * ta), bBot = atan(ta / BOSS_FRAME.margin);
+    const fU = pr - bTop > 0.05 ? sp / tan(pr - bTop) - cp : 4, nU = cp - sp / tan(pr + bBot);
     const uc = (umin + umax) / 2, vc0 = (fU * vmin + nU * vmax) / (nU + fU);
     // screen (u, v) → world: u along (cos yaw, −sin yaw), v along (−sin yaw, −cos yaw)
     let oxc = 0, ozc = 0, d1 = Infinity;
@@ -820,32 +821,32 @@ function shapePoints(s: Shape, pt: (x: number, z: number, y: number) => void): v
   switch (s.k) {
     case 'circle': case 'ring': {
       const r = s.k === 'circle' ? s.r : s.r1;
-      for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4; pt(s.x + Math.sin(a) * r, s.z + Math.cos(a) * r, 0); }
+      for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4; pt(s.x + sin(a) * r, s.z + cos(a) * r, 0); }
       break;
     }
     case 'cone': {
       pt(s.x, s.z, 0);
-      for (let i = 0; i <= 6; i++) { const a = s.dir - s.half + (2 * s.half * i) / 6; pt(s.x + Math.sin(a) * s.r, s.z + Math.cos(a) * s.r, 0); }
+      for (let i = 0; i <= 6; i++) { const a = s.dir - s.half + (2 * s.half * i) / 6; pt(s.x + sin(a) * s.r, s.z + cos(a) * s.r, 0); }
       break;
     }
     case 'lane': {
-      const fx = Math.sin(s.dir), fz = Math.cos(s.dir), h = s.w / 2;
+      const fx = sin(s.dir), fz = cos(s.dir), h = s.w / 2;
       const ex = s.x + fx * s.len, ez = s.z + fz * s.len;
       pt(s.x + fz * h, s.z - fx * h, 0); pt(s.x - fz * h, s.z + fx * h, 0);
       pt(ex + fz * h, ez - fx * h, 0); pt(ex - fz * h, ez + fx * h, 0);
       break;
     }
     case 'oval': {
-      const fx = Math.sin(s.rot), fz = Math.cos(s.rot);
+      const fx = sin(s.rot), fz = cos(s.rot);
       for (let i = 0; i < 8; i++) {
-        const a = (i * Math.PI) / 4, lx = Math.sin(a) * s.rx, lz = Math.cos(a) * s.rz;
+        const a = (i * Math.PI) / 4, lx = sin(a) * s.rx, lz = cos(a) * s.rz;
         pt(s.x + lx * fz + lz * fx, s.z - lx * fx + lz * fz, 0);
       }
       break;
     }
     case 'capsule': {
       for (let i = 0; i < 8; i++) {
-        const a = (i * Math.PI) / 4, ox = Math.sin(a) * s.r, oz = Math.cos(a) * s.r;
+        const a = (i * Math.PI) / 4, ox = sin(a) * s.r, oz = cos(a) * s.r;
         pt(s.x0 + ox, s.z0 + oz, 0); pt(s.x1 + ox, s.z1 + oz, 0);
       }
       break;
@@ -863,10 +864,10 @@ export function cameraClip(distance: number): { near: number; far: number } {
  *  fwd = (−sin ψ, −cos ψ), right = (cos ψ, −sin ψ). Deterministic: uses the constant yaw. */
 export function screenToWorld(ix: number, iy: number): { mx: number; mz: number } {
   const psi = (CAMERA.yawDeg * Math.PI) / 180;
-  const s = Math.sin(psi), c = Math.cos(psi);
+  const s = sin(psi), c = cos(psi);
   let mx = c * ix - s * iy;
   let mz = -s * ix - c * iy;
-  const m = Math.hypot(mx, mz);
+  const m = hypot(mx, mz);
   if (m > 1) { mx /= m; mz /= m; }
   return { mx, mz };
 }

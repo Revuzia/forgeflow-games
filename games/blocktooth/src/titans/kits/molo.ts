@@ -5,6 +5,7 @@
 //                          dragged to the jaws and chewed; on release a shield scaled by the haul.
 // Kit state (titan.kit): vacuumT (view: inhale anim), vacAfterT, vacCount, vacTick, pulseMark, headTurn.
 
+import { cos, hypot, sin } from '../../core/detmath.ts';
 import type { DamageOpts, Enemy, Shape, World } from '../../core/types.ts';
 import { circleInShape, headingOf, rectInShape, wrapAngle } from '../../core/math.ts';
 import { damageArea, damageEnemy, titanDamage } from '../../combat/damage.ts';
@@ -183,8 +184,8 @@ function channel(w: World): void {
   const dt = w.dt;
   const R = vacRadius(w);
   const power = Math.max(0, S(w, 'abilityPower'));
-  const mouthX = T.x + Math.sin(T.heading) * T.radius;
-  const mouthZ = T.z + Math.cos(T.heading) * T.radius;
+  const mouthX = T.x + sin(T.heading) * T.radius;
+  const mouthZ = T.z + cos(T.heading) * T.radius;
   setMoveMul(w, MOLO.vacMoveMul);
 
   // pickups: flag them magnetized (pickups lane pulls + collects), then add the extra 2× pull here
@@ -222,7 +223,7 @@ function channel(w: World): void {
     const def = ENEMIES[e.kind];
     if (!def || !def.crushable) continue;
     const dx = mouthX - e.x, dz = mouthZ - e.z;
-    const d = Math.hypot(dx, dz);
+    const d = hypot(dx, dz);
     const room = d - (T.radius * 0.5 + e.radius);
     if (room > 0) { const s = Math.min(drag, room) / d; e.x += dx * s; e.z += dz * s; }
     if (chew && chewDmg > 0) damageEnemy(w, e, chewDmg, CHEW_OPTS);

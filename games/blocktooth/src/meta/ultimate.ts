@@ -42,6 +42,7 @@
 // 0.04 → 11/12 · 1 · 498 s. 0.05 has the widest margin on BOTH legs; the constant is config.ts (L0), so the
 // change is recommended to the orchestrator, not made here (probe_ult reads ULT.bossCapFrac, so it follows).
 
+import { cos, hypot, sin, tan } from '../core/detmath.ts';
 import type { DamageKind, DamageOpts, Enemy, Hazard, Shape, Telegraph, UltPulse, UltState, World } from '../core/types.ts';
 import { CAMERA, RANKS, ULT, spawnView } from '../core/config.ts';
 import { spawnRing } from '../ai/director.ts';
@@ -142,11 +143,11 @@ export function framedViewReach(w: World): number {
   const D = V.d;
   if (!(D > 0) || !Number.isFinite(D)) return 0;
   const pitch = ((RANKS[T.rank]?.pitchDeg ?? 54) * Math.PI) / 180, yaw = (CAMERA.yawDeg * Math.PI) / 180;
-  const cp = Math.cos(pitch), sp = Math.sin(pitch), sy = Math.sin(yaw), cy = Math.cos(yaw);
+  const cp = cos(pitch), sp = sin(pitch), sy = sin(yaw), cy = cos(yaw);
   const ox = cp * sy, oy = sp, oz = cp * cy;                 // target → camera (unit)
   const ux = -sp * sy, uy = cp, uz = -sp * cy;               // camera up
   const rx = cy, rz = -sy;                                   // camera right (ry = 0)
-  const tanV = Math.tan((CAMERA.fovDeg * Math.PI) / 360), tanH = tanV * VIEW_ASPECT;
+  const tanV = tan((CAMERA.fovDeg * Math.PI) / 360), tanH = tanV * VIEW_ASPECT;
   const tx = V.ox, tz = V.oz, ty = T.height * CAMERA.targetYFrac;   // look target, relative to the titan
   const cx = tx + D * ox, cyy = ty + D * oy, cz = tz + D * oz;       // camera position
   let reach = 0;
@@ -159,15 +160,15 @@ export function framedViewReach(w: World): number {
     const t = dy < -1e-6 ? cyy / -dy : Infinity;
     let gx: number, gz: number;
     if (Number.isFinite(t)) { gx = cx + dx * t; gz = cz + dz * t; }
-    else { const m = Math.hypot(dx, dz) || 1; gx = tx + (dx / m) * 4 * D * CAM_K; gz = tz + (dz / m) * 4 * D * CAM_K; }
-    const r = Math.hypot(gx, gz);
+    else { const m = hypot(dx, dz) || 1; gx = tx + (dx / m) * 4 * D * CAM_K; gz = tz + (dz / m) * 4 * D * CAM_K; }
+    const r = hypot(gx, gz);
     if (r > reach) reach = r;
   }
-  const lead = Math.min(Math.hypot(Number.isFinite(T.vx) ? T.vx : 0, Number.isFinite(T.vz) ? T.vz : 0) * CAMERA.leadS, LEAD_MAX_FRAC * D * CAM_K);
+  const lead = Math.min(hypot(Number.isFinite(T.vx) ? T.vx : 0, Number.isFinite(T.vz) ? T.vz : 0) * CAMERA.leadS, LEAD_MAX_FRAC * D * CAM_K);
   return reach + lead;
 }
 const VIEW_ASPECT = 16 / 9;                                  // the framing's aspect (config bossFrameNeed, ai/enemies.ts)
-const CAM_K = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
+const CAM_K = 2 * tan((CAMERA.fovDeg * Math.PI) / 360);
 const LEAD_MAX_FRAC = 0.22;                                  // = ai/enemies.ts LEAD_MAX_FRAC (the rig's lead cap)
 
 /** titansim stepTitan: max speed × this (ULT.roarMove while phase === 'roar', else 1). */
@@ -463,7 +464,7 @@ function blastStart(w: World): void {
         makeRoom(titanHazards(w, 'wire', hazBuf), VOLT.wireCap);   // the oldest wires go first (cap 6)
         spawnHazard(w, {
           owner: 'titan', kind: 'wire',
-          shape: { k: 'capsule', x0: T.x, z0: T.z, x1: T.x + Math.sin(a) * len, z1: T.z + Math.cos(a) * len, r },
+          shape: { k: 'capsule', x0: T.x, z0: T.z, x1: T.x + sin(a) * len, z1: T.z + cos(a) * len, r },
           life, dps, data: { life0: life, h: H, ult: 1 },
         });
       }
@@ -478,7 +479,7 @@ function blastStart(w: World): void {
         const a = T.heading + (k * Math.PI * 2) / ULT_X.magmaN;
         spawnHazard(w, {
           owner: 'titan', kind: 'magma',
-          shape: { k: 'circle', x: u.x + Math.sin(a) * pr, z: u.z + Math.cos(a) * pr, r: ULT_X.magmaRH * H },
+          shape: { k: 'circle', x: u.x + sin(a) * pr, z: u.z + cos(a) * pr, r: ULT_X.magmaRH * H },
           life: ULT_X.magmaS, dps, data: { ult: 1 },
         });
       }
@@ -489,7 +490,7 @@ function blastStart(w: World): void {
       const br = ULT_X.bloomRingFrac * R;
       for (let k = 0; k < cap; k++) {
         const a = T.heading + (k * Math.PI * 2) / cap;
-        const x = u.x + Math.sin(a) * br, z = u.z + Math.cos(a) * br;
+        const x = u.x + sin(a) * br, z = u.z + cos(a) * br;
         makeRoom(titanHazards(w, 'bloom', hazBuf), cap);          // the decree REPLANTS: oldest replaced
         const h = spawnHazard(w, {
           owner: 'titan', kind: 'bloom',
@@ -538,7 +539,7 @@ function moloPull(w: World): void {
     const d = ENEMIES[e.kind];
     if (!d || !d.crushable) continue;
     const dx = T.x - e.x, dz = T.z - e.z;
-    const dist = Math.hypot(dx, dz);
+    const dist = hypot(dx, dz);
     const stop = T.radius + e.radius;
     if (dist > stop) {
       const mv = Math.min(step, dist - stop);

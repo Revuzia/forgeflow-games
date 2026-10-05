@@ -36,6 +36,7 @@
 // kept as-is (renaming them is a save / probe / string-table change); every name local to this file and every comment
 // speaks machine: AUGER BLAST (blower), DOUBLE STAMP (stamp legs), PLOUGH RUN (V-plough), WHITEOUT (blast→stamp).
 
+import { atan2, cos, hypot, sin, tan } from '../../core/detmath.ts';
 import type { BossState, World } from '../../core/types.ts';
 import { TAU, clamp, dist, dist2 } from '../../core/math.ts';
 import {
@@ -152,7 +153,7 @@ const LEAD = { x: 0, z: 0 };
 /** Heading from the body to where the titan is heading (leadPoint), with a latched jitter. */
 function aim(w: World, b: BossState, jitter: number, windup: number): number {
   const L = leadPoint(w, b, windup, LEAD);
-  return Math.atan2(L.x - b.x, L.z - b.z) + (w.rng.boss() * 2 - 1) * jitter;
+  return atan2(L.x - b.x, L.z - b.z) + (w.rng.boss() * 2 - 1) * jitter;
 }
 
 function castBlast(w: World, b: BossState): void {
@@ -161,7 +162,7 @@ function castBlast(w: World, b: BossState): void {
   const ox = o.x, oz = o.z;
   const r = BLAST.rH * H, d = dist(ox, oz, T.x, T.z);
   // walk-out: the cheaper of sideways out of the sightline and outward past the reach
-  const wu = fairWindup(w, b, Math.min(d * Math.sin(BLAST.half) + T.radius, Math.max(0, r - d) + T.radius), BLAST.min, BLAST.max);
+  const wu = fairWindup(w, b, Math.min(d * sin(BLAST.half) + T.radius, Math.max(0, r - d) + T.radius), BLAST.min, BLAST.max);
   const dir = aim(w, b, 0.04, wu);
   b.data.dir = dir;
   const tg = bossTelegraph(w, {
@@ -171,11 +172,11 @@ function castBlast(w: World, b: BossState): void {
       if (!b.alive) return;
       b.data.breath = 1;
       // brine-slush patches settle along the sightline (slow only — they mark where the blast went)
-      const fx = Math.sin(dir), fz = Math.cos(dir);
+      const fx = sin(dir), fz = cos(dir);
       const Bd = w2.city.bounds;
       for (let k = 0; k < 4; k++) {
         const along = r * (0.2 + 0.2 * k);
-        const fr = Math.min(0.45 * H, Math.tan(BLAST.half) * along * 0.75 + 0.07 * H);
+        const fr = Math.min(0.45 * H, tan(BLAST.half) * along * 0.75 + 0.07 * H);
         const x = ox + fx * along, z = oz + fz * along;
         if (x < Bd.minX - fr || x > Bd.maxX + fr || z < Bd.minZ - fr || z > Bd.maxZ + fr) continue;
         spawnHazard(w2, { owner: 'boss', kind: 'frost', shape: { k: 'circle', x, z, r: fr }, life: BLAST.frostLife, data: { slow: 0.4 } });
@@ -219,11 +220,11 @@ function castPlates(w: World, b: BossState): void {
   // first plate on the titan's lead (latched jitter), the rest scattered around it with spacing
   const j = 0.08 * H * Math.sqrt(r()), ja = r() * TAU;
   const L = leadPoint(w, b, wu, LEAD);
-  SPOTS.push(L.x + Math.sin(ja) * j, L.z + Math.cos(ja) * j);
+  SPOTS.push(L.x + sin(ja) * j, L.z + cos(ja) * j);
   const sp2 = spacing * spacing;
   for (let tries = 0; tries < n * 30 && SPOTS.length < n * 2; tries++) {
     const a = r() * TAU, d = spacing + (spread - spacing) * Math.sqrt(r());
-    const x = L.x + Math.sin(a) * d, z = L.z + Math.cos(a) * d;
+    const x = L.x + sin(a) * d, z = L.z + cos(a) * d;
     if (x < Bd.minX || x > Bd.maxX || z < Bd.minZ || z > Bd.maxZ) continue;
     let ok = true;
     for (let k = 0; k < SPOTS.length; k += 2) if (dist2(x, z, SPOTS[k], SPOTS[k + 1]) < sp2) { ok = false; break; }
@@ -313,7 +314,7 @@ function runAttack(w: World, b: BossState): void {
       if (left > 0 && !(blocked && b.data.travel > 5)) {
         b.heading = dir;
         const v = Math.min(CHARGE.speedH * H, left / dt);
-        moveBoss(w, b, Math.sin(dir) * v, Math.cos(dir) * v);
+        moveBoss(w, b, sin(dir) * v, cos(dir) * v);
         b.data.travel += v * dt;
         b.data.charge = 1;
         if (!(b.data.rammed > 0) && T.alive) {
@@ -321,7 +322,7 @@ function runAttack(w: World, b: BossState): void {
           if (damageTitanArea(w, { k: 'circle', x: h.x, z: h.z, r: CHARGE.hitRH * H }, igHit(w, CHARGE.dmg), 'slam')) {
             b.data.rammed = 1;
             // side-swipe: thrown clear of the lane, away from the plough's line
-            const fx = Math.sin(dir), fz = Math.cos(dir);
+            const fx = sin(dir), fz = cos(dir);
             const side = (T.x - b.x) * fz - (T.z - b.z) * fx >= 0 ? 1 : -1;
             if (T.dashT <= 0) shoveTitan(b, fz * side + fx * 0.4, -fx * side + fz * 0.4, CHARGE.shovePerH * T.height);
           }
@@ -355,7 +356,7 @@ function scrapFlick(w: World, b: BossState): void {
   if (!e) return;
   const T = w.titan, H = bossH(w, b), B = w.city.bounds;
   const r = FLICK.rH * H, reach = r + T.radius;
-  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = Math.hypot(dx, dz) || 1;
+  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = hypot(dx, dz) || 1;
   const ahead = FLICK.aheadR * reach;
   const x = clamp(e.x1 + (dx / dl) * ahead, B.minX, B.maxX), z = clamp(e.z1 + (dz / dl) * ahead, B.minZ, B.maxZ);
   // every live tell stays on screen (denialRing's rule, PARKADE-6 dashAnswer's guard): a flick the framing could not

@@ -68,6 +68,7 @@
 // synced from keepOut() too — the one module callback stepBoss makes on EVERY tick (after refreshParts, before
 // the wall). syncTill is idempotent per tick (b.data.tillTick), so the extra call is harmless.
 
+import { atan2, cos, hypot, sin } from '../../core/detmath.ts';
 import type { BossState, World } from '../../core/types.ts';
 import { clamp, dist, wrapAngle } from '../../core/math.ts';
 import {
@@ -175,10 +176,10 @@ export function step(w: World, b: BossState): void {
   if (!b.attack) {
     const minD = Math.max(MIN_D, keepOutM(w) + 4);
     const maxD = Math.max(MAX_D, minD + 60);
-    const d = Math.hypot(T.x - b.x, T.z - b.z);
+    const d = hypot(T.x - b.x, T.z - b.z);
     // BAL: while the till is out the rig PARKS inside its band (no side-strafe carrying the drawer off the
     // titan's line) and keeps the booth squared to the titan -- the open till is the obvious target
-    if (open && d >= minD && d <= maxD) turnBoss(b, Math.atan2(T.x - b.x, T.z - b.z), TURN, w.dt);
+    if (open && d >= minD && d <= maxD) turnBoss(b, atan2(T.x - b.x, T.z - b.z), TURN, w.dt);
     else keepRange(w, b, minD, maxD, WALK, TURN * (open ? 0.5 : 1));
     if (b.cd <= 0) decide(w, b);
   } else {
@@ -257,7 +258,7 @@ function yieldWall(w: World, b: BossState): void {
   const T = w.titan;
   if (!T.alive) return;
   const keep = keepOutM(w) + 1;
-  const dx = b.x - T.x, dz = b.z - T.z, d = Math.hypot(dx, dz);
+  const dx = b.x - T.x, dz = b.z - T.z, d = hypot(dx, dz);
   if (d >= keep || d < 1e-4) return;
   const sp = clamp((keep - d) / Math.max(1e-3, w.dt), WALK, Math.max(WALK, titanSpeed(T.height)));
   moveBoss(w, b, (dx / d) * sp, (dz / d) * sp);
@@ -266,9 +267,9 @@ function yieldWall(w: World, b: BossState): void {
 // ─────────────────────────────── intro ───────────────────────────────
 function intro(w: World, b: BossState): void {
   const T = w.titan;
-  const dx = T.x - b.x, dz = T.z - b.z, d = Math.hypot(dx, dz) || 1;
+  const dx = T.x - b.x, dz = T.z - b.z, d = hypot(dx, dz) || 1;
   const reverse = b.introT > INTRO_TURN_S;
-  const face = Math.atan2(dx, dz);
+  const face = atan2(dx, dz);
   turnBoss(b, reverse ? wrapAngle(face + Math.PI) : face, reverse ? 1.5 : INTRO_TURN_RATE, w.dt);
   if (reverse && d > INTRO_STOP) { moveBoss(w, b, (dx / d) * INTRO_WALK, (dz / d) * INTRO_WALK); b.data.reversing = 1; }
   else { b.data.speed = 0; b.data.reversing = 0; }
@@ -325,14 +326,14 @@ function startAttack(w: World, b: BossState, id: string): void {
       const L = leadPoint(w, b, wu, LEAD);
       const cx = L.x, cz = L.z;
       beginAttack(w, b, id, cx, cz);
-      b.data.dir = Math.atan2(cx - b.x, cz - b.z);
+      b.data.dir = atan2(cx - b.x, cz - b.z);
       const src = localToWorld(b, 0, RAMP.fromZ, { x: 0, z: 0 });
       const a0 = w.rng.boss() * Math.PI * 2;
       for (let i = 0; i < n; i++) {
         let tx = cx, tz = cz;
         if (i > 0) {
           const a = a0 + ((i - 1) / (n - 1)) * Math.PI * 2 + (w.rng.boss() - 0.5) * 0.5;
-          tx = cx + Math.sin(a) * RAMP.ringH * H; tz = cz + Math.cos(a) * RAMP.ringH * H;
+          tx = cx + sin(a) * RAMP.ringH * H; tz = cz + cos(a) * RAMP.ringH * H;
         }
         tx = clamp(tx, Bd.minX, Bd.maxX); tz = clamp(tz, Bd.minZ, Bd.maxZ);
         spawnProjectile(w, {
@@ -349,10 +350,10 @@ function startAttack(w: World, b: BossState, id: string): void {
       const bo = booth(b);
       const bx = bo.x, bz = bo.z;
       const r = BARRIER.rH * H, d = dist(bx, bz, T.x, T.z);
-      const esc = Math.min(d * Math.sin(BARRIER.half) + T.radius, Math.max(0, r - d) + T.radius);
+      const esc = Math.min(d * sin(BARRIER.half) + T.radius, Math.max(0, r - d) + T.radius);
       const wu = fairWindup(w, b, esc, BARRIER.min, BARRIER.max);
       const L = leadPoint(w, b, wu, LEAD);
-      const dir = Math.atan2(L.x - bx, L.z - bz) + (w.rng.boss() * 2 - 1) * 0.05;
+      const dir = atan2(L.x - bx, L.z - bz) + (w.rng.boss() * 2 - 1) * 0.05;
       beginAttack(w, b, id, T.x, T.z);
       b.data.dir = dir;
       const tg = bossTelegraph(w, {
@@ -362,8 +363,8 @@ function startAttack(w: World, b: BossState, id: string): void {
           const Tt = w2.titan;
           if (!tgf.hitTitan || !Tt.alive || Tt.dashT > 0) return;
           // knock along the sweep (the boom swings from dir − half to dir + half): the tangent at the titan
-          const a = Math.atan2(Tt.x - bx, Tt.z - bz);
-          shoveTitan(b, Math.cos(a), -Math.sin(a), BARRIER.knockH * Tt.height);
+          const a = atan2(Tt.x - bx, Tt.z - bz);
+          shoveTitan(b, cos(a), -sin(a), BARRIER.knockH * Tt.height);
         },
       }, false);
       b.data.swingWu = tg.windup;
@@ -376,16 +377,16 @@ function startAttack(w: World, b: BossState, id: string): void {
       const wu = fairWindup(w, b, lr + T.radius, TOW.min, TOW.max);
       const L = leadPoint(w, b, wu, LEAD);
       let fx = L.x - bx, fz = L.z - bz;
-      const fl = Math.hypot(fx, fz) || 1;
+      const fl = hypot(fx, fz) || 1;
       fx /= fl; fz /= fl;
       const len = fl + TOW.pastH * H;
       const x1 = clamp(bx + fx * len, Bd.minX, Bd.maxX), z1 = clamp(bz + fz * len, Bd.minZ, Bd.maxZ);
-      const segL = Math.hypot(x1 - bx, z1 - bz);
+      const segL = hypot(x1 - bx, z1 - bz);
       const links = clamp(Math.round(segL / (TOW.linkH * H)), TOW.minLinks, TOW.maxLinks);
       const chain: number[] = [];
       for (let i = 0; i <= links; i++) { const k = i / links; chain.push(bx + (x1 - bx) * k, bz + (z1 - bz) * k); }
       beginAttack(w, b, id, x1, z1);
-      b.data.dir = Math.atan2(fx, fz);
+      b.data.dir = atan2(fx, fz);
       b.data.towHooked = 0;
       const tg = bossTelegraph(w, {
         style: 'chain', shape: { k: 'capsule', x0: bx, z0: bz, x1, z1, r: lr }, chain,
@@ -441,7 +442,7 @@ function startAttack(w: World, b: BossState, id: string): void {
 function runAttack(w: World, b: BossState): void {
   const t = b.attackT, T = w.titan;
   const open = (b.data.tillOpen ?? 0) > 0;
-  const faceT = Math.atan2(T.x - b.x, T.z - b.z);
+  const faceT = atan2(T.x - b.x, T.z - b.z);
   switch (b.attack) {
     case 'rampLaunch':
       turnBoss(b, faceT, AIM_TURN * (open ? 0.5 : 1), w.dt);
@@ -490,8 +491,8 @@ function tow(w: World, b: BossState, T: World['titan']): void {
   if (dist(T.x, T.z, b.x, b.z) <= keepOutM(w) + TOW_CLEAR) { releaseTow(w, b); return; }
   const a = booth(b);
   T.leash.lx = a.x; T.leash.lz = a.z;
-  const dx = T.x - a.x, dz = T.z - a.z, d = Math.hypot(dx, dz) || 1;
-  const mx = w.input.mx, mz = w.input.mz, m = Math.hypot(mx, mz);
+  const dx = T.x - a.x, dz = T.z - a.z, d = hypot(dx, dz) || 1;
+  const mx = w.input.mx, mz = w.input.mz, m = hypot(mx, mz);
   if (T.moving && m > 0.1 && (mx * dx + mz * dz) / (m * d) > 0.3) addMeter(w, b, TOW.jamPerS * w.dt);
 }
 
@@ -502,7 +503,7 @@ function dashAnswer(w: World, b: BossState): void {
   if (!e) return;
   const T = w.titan, H = bossH(w, b), B = w.city.bounds;
   const r = DASH_ANSWER.rH * H, reach = r + T.radius;
-  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = Math.hypot(dx, dz) || 1;
+  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = hypot(dx, dz) || 1;
   const ahead = DASH_ANSWER.aheadR * reach;
   const x = clamp(e.x1 + (dx / dl) * ahead, B.minX, B.maxX), z = clamp(e.z1 + (dz / dl) * ahead, B.minZ, B.maxZ);
   // every live tell stays on screen (denialRing's rule): a clamp the framing could not hold is not dropped

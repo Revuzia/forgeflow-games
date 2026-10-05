@@ -12,6 +12,7 @@
 // CITY.maxProjectiles: at the cap the oldest hostile pellet/volley is dropped first, then the oldest
 // hostile straight shot, then the oldest titan straight shot, then the oldest of anything.
 
+import { hypot } from '../core/detmath.ts';
 import type { DamageKind, DamageOpts, Enemy, Owner, Projectile, ProjectileKind, World } from '../core/types.ts';
 import { CITY } from '../core/config.ts';
 import { circleInShape, clamp } from '../core/math.ts';
@@ -89,7 +90,7 @@ function extraOf(p: Projectile): ProjExtra {
 }
 
 function lobApex(x0: number, z0: number, tx: number, tz: number, y0: number): number {
-  return Math.max(y0 + 2, clamp(0.3 * Math.hypot(tx - x0, tz - z0), 3, 60));
+  return Math.max(y0 + 2, clamp(0.3 * hypot(tx - x0, tz - z0), 3, 60));
 }
 
 const isPelletKind = (k: ProjectileKind) => k === 'pellet' || k === 'volley';

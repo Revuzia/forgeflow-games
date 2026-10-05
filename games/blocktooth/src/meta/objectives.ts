@@ -47,6 +47,7 @@
 // the same tree (stubs): 8/12 clears · 4 deaths; the map systems make the run easier (heals, chest drafts, screen
 // clears), which is why the deaths ≥ 1 leg — not the rank bands — bound this lane's tuning.
 
+import { atan2, cos, hypot, sin } from '../core/detmath.ts';
 import type { Building, MapState, Objective, ObjectiveKind, Prop, RankIndex, World } from '../core/types.ts';
 import { CITY, OBJECTIVES, PERKS, RANKS, xpToNext } from '../core/config.ts';
 import { spawnRing } from '../ai/director.ts';
@@ -146,7 +147,7 @@ export function stepObjectives(w: World): void {
       if (dx * dx + dz * dz <= rr * rr) { complete(w, o); continue; }
     }
     if (o.t >= o.life - MIN_T) { expire(w, o); continue; }
-    if (T.alive && Math.hypot(T.x - o.x, T.z - o.z) > strand) { expire(w, o); continue; }
+    if (T.alive && hypot(T.x - o.x, T.z - o.z) > strand) { expire(w, o); continue; }
   }
 
   // ── 5. scheduler ──
@@ -210,7 +211,7 @@ export function placeObjectiveNear(w: World, kind: ObjectiveKind, x: number, z: 
     let best = -1, bd = Infinity;
     for (const p of w.city.props) {
       if (!p.alive || p.lane !== -1 || !kinds.includes(p.kind)) continue;
-      const d = Math.hypot(p.x - x, p.z - z);
+      const d = hypot(p.x - x, p.z - z);
       if (d < bd) { bd = d; best = p.id; }
     }
     if (best >= 0) {
@@ -224,13 +225,13 @@ export function placeObjectiveNear(w: World, kind: ObjectiveKind, x: number, z: 
     let best = -1, bd = Infinity;
     for (const b of w.city.buildings) {
       if (b.collapsed || b.alive < 1 || (b.tier !== can && b.tier !== can - 1)) continue;
-      const d = Math.hypot(b.x - x, b.z - z);
+      const d = hypot(b.x - x, b.z - z);
       if (d < bd) { bd = d; best = b.id; }
     }
     if (best >= 0) {
       const b = w.city.buildings[best];
       o = newObjective(w, kind);
-      o.x = b.x; o.z = b.z; o.target = 'building'; o.targetId = b.id; o.r = 0.5 * Math.hypot(b.w, b.d); o.h = b.alive * b.floorH;
+      o.x = b.x; o.z = b.z; o.target = 'building'; o.targetId = b.id; o.r = 0.5 * hypot(b.w, b.d); o.h = b.alive * b.floorH;
       o.life = kind === 'recordsAnnex' ? OBJECTIVES.annex.lifeS : OBJECTIVES.overload.lifeS;
       if (kind === 'recordsAnnex') guard(w, o);
     }
@@ -349,7 +350,7 @@ function newObjective(w: World, kind: ObjectiveKind): Objective {
 
 function aheadMul(w: World, x: number, z: number): number {
   const T = w.titan;
-  const dot = Math.sin(T.heading) * (x - T.x) + Math.cos(T.heading) * (z - T.z);
+  const dot = sin(T.heading) * (x - T.x) + cos(T.heading) * (z - T.z);
   return dot > 0 ? MAP_TUNE.aheadMul : 1;
 }
 
@@ -365,7 +366,7 @@ function isCorner(w: World, b: Building): boolean {
   const lx = c.originX + Math.round((b.x - c.originX) / c.pitch) * c.pitch;
   const lz = c.originZ + Math.round((b.z - c.originZ) / c.pitch) * c.pitch;
   const dx = Math.max(0, Math.abs(b.x - lx) - off), dz = Math.max(0, Math.abs(b.z - lz) - off);
-  return Math.hypot(dx, dz) <= MAP_TUNE.cornerFrac * c.pitch;
+  return hypot(dx, dz) <= MAP_TUNE.cornerFrac * c.pitch;
 }
 
 function tooCloseToLive(w: World, x: number, z: number, minD: number): boolean {
@@ -412,7 +413,7 @@ function placeBuilding(w: World, kind: ObjectiveKind, lo: number, hi: number): O
     for (let i = 0; i < bs.length; i++) {
       const b = bs[i];
       if (b.collapsed || b.alive < 1 || b.tier !== tier) continue;
-      const d = Math.hypot(b.x - T.x, b.z - T.z);
+      const d = hypot(b.x - T.x, b.z - T.z);
       if (d < lo || d > hi) continue;
       if (blockHasLive(w, b.block)) continue;
       const s = aheadMul(w, b.x, b.z) * (isCorner(w, b) ? MAP_TUNE.cornerMul : 1) * bandMul(d, lo, hi);
@@ -423,7 +424,7 @@ function placeBuilding(w: World, kind: ObjectiveKind, lo: number, hi: number): O
     const b = bs[id];
     const o = newObjective(w, kind);
     o.x = b.x; o.z = b.z; o.target = 'building'; o.targetId = b.id;
-    o.r = 0.5 * Math.hypot(b.w, b.d);
+    o.r = 0.5 * hypot(b.w, b.d);
     o.h = b.alive * b.floorH;
     CANDS.length = 0;
     return o;
@@ -441,7 +442,7 @@ function placeProp(w: World, kind: ObjectiveKind, kinds: readonly string[], lo: 
   for (let i = 0; i < ps.length; i++) {
     const p: Prop = ps[i];
     if (!p.alive || p.lane !== -1 || !kinds.includes(p.kind)) continue;
-    const d = Math.hypot(p.x - T.x, p.z - T.z);
+    const d = hypot(p.x - T.x, p.z - T.z);
     if (d < lo || d > hi) continue;
     if (tooCloseToLive(w, p.x, p.z, minD)) continue;
     const s = aheadMul(w, p.x, p.z) * (preferTier1 && p.tier === 1 ? MAP_TUNE.tier1Mul : 1) * bandMul(d, lo, hi);
@@ -465,14 +466,14 @@ function guard(w: World, o: Objective): void {
   const T = w.titan;
   const b = w.city.buildings[o.targetId];
   const half = b ? 0.5 * Math.max(b.w, b.d) : 4;
-  const base = Math.atan2(T.x - o.x, T.z - o.z);
+  const base = atan2(T.x - o.x, T.z - o.z);
   const a = base + (w.rng.meta() - 0.5) * 1.2;
   const d = half + 6;
-  const gx = o.x + Math.sin(a) * d, gz = o.z + Math.cos(a) * d;
+  const gx = o.x + sin(a) * d, gz = o.z + cos(a) * d;
   if (T.rank <= 1) {
     const sid = w.director.squadSeq++;
-    const h = Math.atan2(T.x - gx, T.z - gz);
-    const fx = Math.sin(h), fz = Math.cos(h), rx = -fz, rz = fx;
+    const h = atan2(T.x - gx, T.z - gz);
+    const fx = sin(h), fz = cos(h), rx = -fz, rz = fx;
     for (let s = 0; s < MAP_TUNE.squadSize; s++) {
       const side = s === 0 ? 0 : (s % 2 === 1 ? -1 : 1) * Math.ceil(s / 2);
       const back = Math.ceil(s / 2) * 2.2;

@@ -28,6 +28,7 @@
 //     for a rank IV reached without that kill: the open-gate skeleton and dev cheats); nothing spawned or
 //     banked during the finale; the boss framing keeps a post-kill floor over a gate breach's tween.
 
+import { atan2, cos, exp, sin } from '../core/detmath.ts';
 import type { DirectorState, EnemyKind, World } from '../core/types.ts';
 import {
   BOSS_AT_S, BOSS_FRAME, PACE_STRETCH, RANK_LEVELS, SIZE_IV_RAMP_FROM, CAMERA, CITY, DIRECTOR_BUDGET_RANK_MUL, ELITE_AT_S, GROW_TWEEN_S, bossFrameFitAt, bossFrameFloorAt,
@@ -188,8 +189,8 @@ function spawnGroup(w: World, kind: EnemyKind, n: number): number {
   if (kind === 'squad') {
     const sid = w.director.squadSeq++;
     // wedge facing the titan: the leader (slot 0) nearest, the rest fanned out behind it
-    const h = Math.atan2(T.x - P.x, T.z - P.z);
-    const fx = Math.sin(h), fz = Math.cos(h), rx = -fz, rz = fx;
+    const h = atan2(T.x - P.x, T.z - P.z);
+    const fx = sin(h), fz = cos(h), rx = -fz, rz = fx;
     for (let s = 0; s < n; s++) {
       const side = s === 0 ? 0 : (s % 2 === 1 ? -1 : 1) * Math.ceil(s / 2);
       const back = Math.ceil(s / 2) * 2.2;
@@ -203,7 +204,7 @@ function spawnGroup(w: World, kind: EnemyKind, n: number): number {
   const spread = kind === 'drone' ? 5 : 3;
   for (let i = 0; i < n; i++) {
     const a = rs() * TAU, r = spread * Math.sqrt(rs());
-    Q.x = P.x + Math.sin(a) * r; Q.z = P.z + Math.cos(a) * r;
+    Q.x = P.x + sin(a) * r; Q.z = P.z + cos(a) * r;
     spawnEnemy(w, kind, Q.x, Q.z);
   }
   return n;
@@ -300,14 +301,14 @@ function stepBossFrame(w: World): void {
   const needed = !((dat.bossFrameHoldT ?? 0) > 0);
   const released = (dat.bossFrameHoldT ?? 0) >= (dat.bossFrameHoldS || BOSS_FRAME.holdS);
   const om = needed ? BOSS_FRAME.offsetOmega : released ? BOSS_FRAME.offsetReleaseOmega : 0;
-  const ko = 1 - Math.exp(-om * dt);
+  const ko = 1 - exp(-om * dt);
   const ox0 = dat.bossFrameOx ?? 0, oz0 = dat.bossFrameOz ?? 0;
   const ox = ox0 + (need.ox - ox0) * ko, oz = oz0 + (need.oz - oz0) * ko;
   dat.bossFrameOx = ox; dat.bossFrameOz = oz;
   // replica of the camera rig (render/camera.ts) offset smoothing: the rig's look target lags the
   // eased offset, so what the paint needs around THAT centre is part of the need (held like the rest),
   // and the spawn ring (config spawnView) reads the same centre
-  const kc = 1 - Math.exp(-CAMERA.frameOffOmega * dt);
+  const kc = 1 - exp(-CAMERA.frameOffOmega * dt);
   dat.camOx = (dat.camOx ?? 0) + (ox - (dat.camOx ?? 0)) * kc;
   dat.camOz = (dat.camOz ?? 0) + (oz - (dat.camOz ?? 0)) * kc;
   const needD = Math.max(need.d, bossFrameFitAt(dat.camOx, dat.camOz));
@@ -327,7 +328,7 @@ function stepBossFrame(w: World): void {
   if (!(dat.camD > 0)) { dat.camD = dStar; dat.camDv = 0; }
   else {
     const omz = dStar > dat.camD ? CAMERA.widenOmega : CAMERA.zoomOmega;
-    const x0 = dat.camD - dStar, e = Math.exp(-omz * dt), c = (dat.camDv ?? 0) + omz * x0;
+    const x0 = dat.camD - dStar, e = exp(-omz * dt), c = (dat.camDv ?? 0) + omz * x0;
     dat.camD = dStar + (x0 + c * dt) * e;
     dat.camDv = (c - omz * (x0 + c * dt)) * e;
   }
@@ -343,7 +344,7 @@ function stepPostFrame(w: World): void {
   if (pf === undefined || !(pf > 0)) return;
   if (dat.postFrameT > 0) { dat.postFrameT = Math.max(0, dat.postFrameT - w.dt); return; }
   const curve = cameraDistance(w.titan.height);
-  const next = pf + (curve - pf) * (1 - Math.exp(-BOSS_FRAME.releaseOmega * w.dt));
+  const next = pf + (curve - pf) * (1 - exp(-BOSS_FRAME.releaseOmega * w.dt));
   dat.postFrameD = next <= curve * 1.002 ? 0 : next;
 }
 

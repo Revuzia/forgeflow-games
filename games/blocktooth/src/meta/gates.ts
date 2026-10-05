@@ -27,6 +27,7 @@
 // Tick order (core/world.ts): … stepTitan → stepDirector → stepGates → stepEndless → stepEnemies →
 // stepBoss … → stepTally → flushGateBreach → peakRank → checkRunEnd.
 
+import { hypot } from '../core/detmath.ts';
 import type { BossState, GateId, GatesState, GateSlot, RankIndex, World } from '../core/types.ts';
 import { GATE_IDS, GATE_OF_SLOT } from '../core/types.ts';
 import { ENDLESS, GATES, GATE_HP_AT_RANK, GATE_HP_MUL } from '../core/config.ts';
@@ -250,7 +251,7 @@ function stepGateFight(w: World, b: BossState): void {
   G.liveFightS += dt;
 
   const H = Bosses.bossH(w, b);
-  const dist = Math.hypot(T.x - b.x, T.z - b.z);
+  const dist = hypot(T.x - b.x, T.z - b.z);
   // the module publishes its band (b.data.bandMaxH, lane K1b); the §2.4 table is the fallback
   const bandMax = Number.isFinite(b.data.bandMaxH) && b.data.bandMaxH > 0 ? b.data.bandMaxH : (GATE_BAND_MAX[b.id as GateId] ?? 4);
   const lastHit = Number.isFinite(b.data.lastHitT) ? b.data.lastHitT : -Infinity;

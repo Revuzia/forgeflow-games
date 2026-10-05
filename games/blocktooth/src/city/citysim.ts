@@ -12,6 +12,7 @@
 //   * resolveCircleVsCity writes the RESOLVED circle centre into out.x/out.z (unchanged
 //     position when nothing blocks) and out.bumpTier = highest blocking tier touched (−1 none).
 
+import { cos, hypot, sin } from '../core/detmath.ts';
 import type { Building, CityLayout, DamageOpts, PickupKind, SimEvent, Tier, World } from '../core/types.ts';
 import { TIERS, cameraDistance, lootMass, lootXp } from '../core/config.ts';
 import { clamp } from '../core/math.ts';
@@ -190,7 +191,7 @@ export function rebuildScaffoldS(b: Building): number {
 /** Distance from (x,z) to a building footprint (0 inside). */
 function footDist(b: Building, x: number, z: number): number {
   const qx = clamp(x, b.x - b.w / 2, b.x + b.w / 2), qz = clamp(z, b.z - b.d / 2, b.z + b.d / 2);
-  return Math.hypot(x - qx, z - qz);
+  return hypot(x - qx, z - qz);
 }
 /** Crews only SET UP beyond this footprint distance from the titan: ≈ the edge of its default view. */
 export function rebuildStartR(w: World): number {
@@ -411,7 +412,7 @@ export function nearestRubble(city: CityLayout, x: number, z: number, r: number,
         const b = city.buildings[list[i]];
         if (!b.collapsed) continue;
         const qx = clamp(x, b.x - b.w / 2, b.x + b.w / 2), qz = clamp(z, b.z - b.d / 2, b.z + b.d / 2);
-        const d = Math.hypot(x - qx, z - qz);
+        const d = hypot(x - qx, z - qz);
         if (d > r) continue;
         // insertion into the sorted top-k (ties → lower id first, deterministic)
         let at = out.length;
@@ -447,8 +448,8 @@ function dropFloorRubble(w: World, b: Building, ex: number, ez: number): void {
   const xp = lootXp(b.tier, w.titan.rank), mass = lootMass(b.tier, w.titan.rank);
   const n = b.tier <= 1 ? rInt(loot, 1, 2) : b.tier === 2 ? 2 : 3;
   let nx = ex - b.x, nz = ez - b.z;
-  const nl = Math.hypot(nx, nz);
-  if (nl > 1e-6) { nx /= nl; nz /= nl; } else { const a = loot() * Math.PI * 2; nx = Math.sin(a); nz = Math.cos(a); }
+  const nl = hypot(nx, nz);
+  if (nl > 1e-6) { nx /= nl; nz /= nl; } else { const a = loot() * Math.PI * 2; nx = sin(a); nz = cos(a); }
   const spread = 1 + 0.12 * Math.max(b.w, b.d);
   for (let i = 0; i < n; i++) {
     const t = (loot() - 0.5) * spread;
@@ -602,7 +603,7 @@ export function resolveCircleVsCity(
           if (px + r <= b.x - hw || px - r >= b.x + hw || pz + r <= b.z - hd || pz - r >= b.z + hd) continue;
           if (b.shape === 'cylinder' || b.shape === 'dish' || b.shape === 'chimney') {
             const dx = px - b.x, dz = pz - b.z;
-            const d = Math.hypot(dx, dz), R = hw + r;
+            const d = hypot(dx, dz), R = hw + r;
             if (d >= R) continue;
             if (d > 1e-6) { px = b.x + (dx / d) * R; pz = b.z + (dz / d) * R; } else { pz = b.z + R; }
           } else {
@@ -631,7 +632,7 @@ export function resolveCircleVsCity(
           if (!p.alive || p.tier < 1 || p.tier <= canFlatten) continue;
           const info = PROP_INFO[p.kind];
           const hl = info.len / 2, hw = info.wid / 2;
-          const fx = Math.sin(p.heading), fz = Math.cos(p.heading);   // local +Z (len axis)
+          const fx = sin(p.heading), fz = cos(p.heading);   // local +Z (len axis)
           const rx = fz, rz = -fx;                                      // local +X (wid axis)
           const dx0 = px - p.x, dz0 = pz - p.z;
           const lx = dx0 * rx + dz0 * rz, lz = dx0 * fx + dz0 * fz;

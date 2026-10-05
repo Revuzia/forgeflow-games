@@ -1,14 +1,15 @@
 // Small THREE-free math + shape tests shared by every sim system (CONTRACT.md §2).
 // Heading θ ⇒ direction (sin θ, cos θ) in XZ.
+import { asin, atan2, cos, hypot, pow, sin } from './detmath.ts';
 import type { Shape } from './types.ts';
 
 export const TAU = Math.PI * 2;
 export const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const smoothstep = (a: number, b: number, v: number) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-export const headingOf = (dx: number, dz: number) => Math.atan2(dx, dz);
-export const dirX = (h: number) => Math.sin(h);
-export const dirZ = (h: number) => Math.cos(h);
+export const headingOf = (dx: number, dz: number) => atan2(dx, dz);
+export const dirX = (h: number) => sin(h);
+export const dirZ = (h: number) => cos(h);
 /** wrap to (−π, π] */
 export function wrapAngle(a: number): number { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; }
 /** shortest-path interpolation between headings */
@@ -22,7 +23,7 @@ export const dist2 = (ax: number, az: number, bx: number, bz: number) => { const
 export const dist = (ax: number, az: number, bx: number, bz: number) => Math.sqrt(dist2(ax, az, bx, bz));
 
 // Easing (view + sim tweens)
-export const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+export const easeOutCubic = (t: number) => 1 - pow(1 - t, 3);
 export const easeInCubic = (t: number) => t * t * t;
 export function easeOutBack(t: number, s = 1.70158): number { const u = t - 1; return 1 + (s + 1) * u * u * u + s * u * u; }
 
@@ -32,7 +33,7 @@ export function segDist(px: number, pz: number, x0: number, z0: number, x1: numb
   const L2 = vx * vx + vz * vz;
   let t = L2 > 1e-9 ? ((px - x0) * vx + (pz - z0) * vz) / L2 : 0;
   t = clamp(t, 0, 1);
-  return Math.hypot(px - (x0 + vx * t), pz - (z0 + vz * t));
+  return hypot(px - (x0 + vx * t), pz - (z0 + vz * t));
 }
 
 /**
@@ -48,16 +49,16 @@ export function circleInShape(s: Shape, cx: number, cz: number, cr: number): boo
     }
     case 'cone': {
       const dx = cx - s.x, dz = cz - s.z;
-      const d = Math.hypot(dx, dz);
+      const d = hypot(dx, dz);
       if (d - cr > s.r) return false;
       if (d <= cr) return true;
-      const ang = Math.abs(wrapAngle(Math.atan2(dx, dz) - s.dir));
+      const ang = Math.abs(wrapAngle(atan2(dx, dz) - s.dir));
       // widen the half-angle by the circle's angular radius at that distance
-      const slack = Math.asin(clamp(cr / d, 0, 1));
+      const slack = asin(clamp(cr / d, 0, 1));
       return ang <= s.half + slack;
     }
     case 'lane': {
-      const fx = Math.sin(s.dir), fz = Math.cos(s.dir);
+      const fx = sin(s.dir), fz = cos(s.dir);
       const dx = cx - s.x, dz = cz - s.z;
       const along = dx * fx + dz * fz;
       const side = dx * fz - dz * fx;
@@ -65,7 +66,7 @@ export function circleInShape(s: Shape, cx: number, cz: number, cr: number): boo
     }
     case 'oval': {
       // rotate into local frame (local +Z = heading rot), then normalized ellipse test with radius slack
-      const fx = Math.sin(s.rot), fz = Math.cos(s.rot);
+      const fx = sin(s.rot), fz = cos(s.rot);
       const dx = cx - s.x, dz = cz - s.z;
       const lz = dx * fx + dz * fz;          // along heading
       const lx = dx * fz - dz * fx;          // across
@@ -86,7 +87,7 @@ export function rectInShape(s: Shape, x: number, z: number, w: number, d: number
   const qx = clamp(ax, x - hw, x + hw), qz = clamp(az, z - hd, z + hd);
   if (circleInShape(s, qx, qz, 0)) return true;
   if (s.k === 'circle') return false;                    // closest point is exact for circles
-  return circleInShape(s, x, z, Math.hypot(hw, hd) * 0.85);
+  return circleInShape(s, x, z, hypot(hw, hd) * 0.85);
 }
 
 /** Loose XZ bounds of a shape (for broadphase grid queries). */
@@ -97,7 +98,7 @@ export function shapeBounds(s: Shape): { minX: number; minZ: number; maxX: numbe
     case 'cone': return { minX: s.x - s.r, minZ: s.z - s.r, maxX: s.x + s.r, maxZ: s.z + s.r };
     case 'oval': { const m = Math.max(s.rx, s.rz); return { minX: s.x - m, minZ: s.z - m, maxX: s.x + m, maxZ: s.z + m }; }
     case 'lane': {
-      const ex = s.x + Math.sin(s.dir) * s.len, ez = s.z + Math.cos(s.dir) * s.len, h = s.w / 2;
+      const ex = s.x + sin(s.dir) * s.len, ez = s.z + cos(s.dir) * s.len, h = s.w / 2;
       return { minX: Math.min(s.x, ex) - h, minZ: Math.min(s.z, ez) - h, maxX: Math.max(s.x, ex) + h, maxZ: Math.max(s.z, ez) + h };
     }
     case 'capsule': return {
@@ -111,7 +112,7 @@ export function shapeBounds(s: Shape): { minX: number; minZ: number; maxX: numbe
 export function shapeCenter(s: Shape): { x: number; z: number } {
   switch (s.k) {
     case 'capsule': return { x: (s.x0 + s.x1) / 2, z: (s.z0 + s.z1) / 2 };
-    case 'lane': return { x: s.x + Math.sin(s.dir) * s.len / 2, z: s.z + Math.cos(s.dir) * s.len / 2 };
+    case 'lane': return { x: s.x + sin(s.dir) * s.len / 2, z: s.z + cos(s.dir) * s.len / 2 };
     default: return { x: s.x, z: s.z };
   }
 }

@@ -2,6 +2,7 @@
 // THREE-FREE, DOM-free, deterministic. Lane-internal module: nothing outside
 // src/titans/ should import it.
 
+import { hypot } from '../../core/detmath.ts';
 import type { Building, Enemy, Hazard, HazardKind, Prop, StatKey, TitanId, World } from '../../core/types.ts';
 import { clamp } from '../../core/math.ts';
 import { stat } from '../../upgrades/stats.ts';
@@ -67,7 +68,7 @@ export function distToBuilding(b: Building, x: number, z: number): number {
   const hx = b.w / 2, hz = b.d / 2;
   const dx = Math.max(Math.abs(x - b.x) - hx, 0);
   const dz = Math.max(Math.abs(z - b.z) - hz, 0);
-  return Math.hypot(dx, dz);
+  return hypot(dx, dz);
 }
 
 /** Closest point of a building footprint to (x,z). */

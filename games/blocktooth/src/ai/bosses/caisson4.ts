@@ -46,6 +46,7 @@
 //                  cadence 30 % faster; hookLane fires twice back-to-back (the second re-aims)
 // Default subtitle "BREAK THE LEGS — BUILD STRAIN" (data/bosses.ts).
 
+import { atan2, cos, hypot, sin } from '../../core/detmath.ts';
 import type { BossState, Telegraph, World } from '../../core/types.ts';
 import { circleInShape, clamp, dist, wrapAngle } from '../../core/math.ts';
 import {
@@ -200,8 +201,8 @@ export function step(w: World, b: BossState): void {
     else {
       const a = anchor(b);
       T.leash.lx = a.x; T.leash.lz = a.z;
-      const dx = T.x - a.x, dz = T.z - a.z, d = Math.hypot(dx, dz) || 1;
-      const mx = w.input.mx, mz = w.input.mz, m = Math.hypot(mx, mz);
+      const dx = T.x - a.x, dz = T.z - a.z, d = hypot(dx, dz) || 1;
+      const mx = w.input.mx, mz = w.input.mz, m = hypot(mx, mz);
       if (T.moving && m > 0.1 && (mx * dx + mz * dz) / (m * d) > 0.3) addMeter(w, b, WINCH.strainPerS * w.dt);
     }
   }
@@ -247,7 +248,7 @@ function aimAtTitan(w: World, b: BossState, jitter: number, windup: number): num
   // (leadPoint: a phase-scaled fraction of the windup ahead) with a small latched jitter; the
   // paint is on the ground for the whole windup, so the tell stays honest
   const L = leadPoint(w, b, windup, LEAD);
-  return Math.atan2(L.x - b.x, L.z - b.z) + (w.rng.boss() * 2 - 1) * jitter;
+  return atan2(L.x - b.x, L.z - b.z) + (w.rng.boss() * 2 - 1) * jitter;
 }
 
 function castHookLane(w: World, b: BossState): void {
@@ -265,7 +266,7 @@ function castHookLane(w: World, b: BossState): void {
     windup, dmg: c4Hit(w, HOOK_LANE.dmg), kind: 'hook', tag: 'hookLane',
     onFire: (w2, tgf) => {
       const Tt = w2.titan;
-      if (tgf.hitTitan && Tt.alive && Tt.dashT <= 0) shoveTitan(b, Math.sin(dir), Math.cos(dir), KNOCK_PER_H * Tt.height);
+      if (tgf.hitTitan && Tt.alive && Tt.dashT <= 0) shoveTitan(b, sin(dir), cos(dir), KNOCK_PER_H * Tt.height);
     },
   }, false);
   b.data.lanes = (b.data.lanes ?? 0) + 1;
@@ -291,10 +292,10 @@ function startAttack(w: World, b: BossState, id: string): void {
       const L = leadPoint(w, b, wu, LEAD);
       // track direction: the titan's velocity; standing still → the line runs toward the boss
       let fx = T.vx || 0, fz = T.vz || 0;
-      let fl = Math.hypot(fx, fz);
+      let fl = hypot(fx, fz);
       const moving = fl > 0.25 * Math.max(1, titanSpeed(T.height));
-      if (!moving) { fx = b.x - T.x; fz = b.z - T.z; fl = Math.hypot(fx, fz); }
-      if (fl > 1e-3) { fx /= fl; fz /= fl; } else { fx = Math.sin(a); fz = Math.cos(a); }
+      if (!moving) { fx = b.x - T.x; fz = b.z - T.z; fl = hypot(fx, fz); }
+      if (fl > 1e-3) { fx /= fl; fz /= fl; } else { fx = sin(a); fz = cos(a); }
       // P1: one hook on the lead point. P2+: the run is centred between the titan and its lead
       // point, so it covers where it is AND where it is going (a stop or a U-turn is still inside).
       let cx = drops > 1 ? (T.x + L.x) / 2 : L.x, cz = drops > 1 ? (T.z + L.z) / 2 : L.z;
@@ -309,10 +310,10 @@ function startAttack(w: World, b: BossState, id: string): void {
         if (px * (b.x - T.x) + pz * (b.z - T.z) < 0) { px = -px; pz = -pz; }
         cx += px * TROLLEY.inR * r; cz += pz * TROLLEY.inR * r;
       }
-      const tx = cx + Math.sin(a) * j, tz = cz + Math.cos(a) * j;
+      const tx = cx + sin(a) * j, tz = cz + cos(a) * j;
       beginAttack(w, b, id, tx, tz);
       b.data.tx = tx; b.data.tz = tz;
-      b.data.dir = Math.atan2(tx - b.x, tz - b.z);
+      b.data.dir = atan2(tx - b.x, tz - b.z);
       const sp = r * TROLLEY.spacingR;
       const Bd = w.city.bounds;
       for (let k = 0; k < drops; k++) {
@@ -332,7 +333,7 @@ function startAttack(w: World, b: BossState, id: string): void {
     case 'winchLeash': {
       const L = leadPoint(w, b, WINCH.windup, LEAD, 0.5);   // half lead: the oval is big and slow
       const ox = L.x, oz = L.z;
-      const rot = Math.atan2(b.x - ox, b.z - oz);   // oval's local +Z points at the boss
+      const rot = atan2(b.x - ox, b.z - oz);   // oval's local +Z points at the boss
       beginAttack(w, b, id, ox, oz);
       b.data.dir = wrapAngle(rot + Math.PI);
       b.data.hooked = 0;
@@ -356,7 +357,7 @@ function startAttack(w: World, b: BossState, id: string): void {
     case 'boomSweep': {
       const r = BOOM.rH * H, d = dist(b.x, b.z, T.x, T.z);
       // walk-out: the cheaper of sideways out of the cone and outward past its reach (from the cone's axis)
-      const esc = Math.min(d * Math.sin(BOOM.half) + T.radius, Math.max(0, r - d) + T.radius);
+      const esc = Math.min(d * sin(BOOM.half) + T.radius, Math.max(0, r - d) + T.radius);
       const wu0 = fairWindup(w, b, esc, BOOM.min, BOOM.max);
       const dir = aimAtTitan(w, b, 0.05, wu0);
       // fx2 (critic: a walk-only VOLT-KITE needed 61 / 66 m of a 68.6 / 67.2 m budget): the cone is aimed at the LEAD
@@ -393,19 +394,19 @@ function startAttack(w: World, b: BossState, id: string): void {
  *  titan stands: tangentially to the near edge, tangentially through the far edge, or radially out past the reach. */
 function boomExitWindup(w: World, b: BossState, dir: number, r: number): number {
   const T = w.titan;
-  const dx = T.x - b.x, dz = T.z - b.z, d = Math.hypot(dx, dz);
+  const dx = T.x - b.x, dz = T.z - b.z, d = hypot(dx, dz);
   if (!(d > 1e-6)) return BOOM.min;
-  const th = Math.atan2(dx, dz);
+  const th = atan2(dx, dz);
   const a = wrapAngle(th - dir), g = a >= 0 ? 1 : -1, off = Math.abs(a);
   // tangential unit toward +a (the side the titan is on) = (cos th, -sin th) × g
-  const tx = Math.cos(th) * g, tz = -Math.sin(th) * g;
-  const near = d * Math.sin(Math.max(0, BOOM.half - off)) + T.radius;
-  const far = d * Math.sin(Math.min(Math.PI / 2, BOOM.half + off)) + T.radius;
+  const tx = cos(th) * g, tz = -sin(th) * g;
+  const near = d * sin(Math.max(0, BOOM.half - off)) + T.radius;
+  const far = d * sin(Math.min(Math.PI / 2, BOOM.half + off)) + T.radius;
   const out = Math.max(0, r - d) + T.radius;
   // fairWindup charges a 90° pivot (fairLossS); a body FACING away from an exit turns further first (HOLD MUSIC's rule)
   const r3 = clamp(Math.floor(Number.isFinite(T.rank) ? T.rank : 0), 0, 4);
   const turn = TURN_RATE_I + (TURN_RATE_V - TURN_RATE_I) * (r3 / 4);
-  const pivot = (ux: number, uz: number): number => Math.max(0, Math.abs(wrapAngle(Math.atan2(ux, uz) - T.heading)) - Math.PI / 2) / turn;
+  const pivot = (ux: number, uz: number): number => Math.max(0, Math.abs(wrapAngle(atan2(ux, uz) - T.heading)) - Math.PI / 2) / turn;
   const wNear = fairWindup(w, b, near, BOOM.min, BOOM.max, 0, tx, tz) + pivot(tx, tz);
   const wFar = fairWindup(w, b, far, BOOM.min, BOOM.max, 0, -tx, -tz) + pivot(-tx, -tz);
   const wOut = fairWindup(w, b, out, BOOM.min, BOOM.max, 0, dx / d, dz / d) + pivot(dx / d, dz / d);
@@ -433,7 +434,7 @@ function runAttack(w: World, b: BossState): void {
       trackWinch(w, b);
       if (t >= WINCH.windup && b.data.leash > 0) {
         // reel phase: face the catch, hold until the cable runs out
-        b.data.dir = Math.atan2(T.x - b.x, T.z - b.z);
+        b.data.dir = atan2(T.x - b.x, T.z - b.z);
         if (!T.leash) { b.data.leash = 0; endAttack(b, gapFor(w, b)); }
         else if (t >= WINCH.windup + WINCH.leashS + 0.2) { releaseLeash(w, b); endAttack(b, gapFor(w, b)); }
       } else if (t >= WINCH.windup && b.data.hooked > 0) endAttack(b, gapFor(w, b));   // reel already let go (reached reelStop)
@@ -463,7 +464,7 @@ function dashFollow(w: World, b: BossState): void {
   if (!e) return;
   const T = w.titan, H = bossH(w, b), B = w.city.bounds;
   const r = DASH_FOLLOW.rH * H, reach = r + T.radius;
-  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = Math.hypot(dx, dz) || 1;
+  const dx = e.x1 - e.x0, dz = e.z1 - e.z0, dl = hypot(dx, dz) || 1;
   const ahead = DASH_FOLLOW.aheadR * reach;
   const x = clamp(e.x1 + (dx / dl) * ahead, B.minX, B.maxX), z = clamp(e.z1 + (dz / dl) * ahead, B.minZ, B.maxZ);
   // the paint appears at the dash START, so the reaction overlaps the dash (0.22 s) and the dash carry
@@ -487,10 +488,10 @@ function trackWinch(w: World, b: BossState): void {
   const lock = WINCH.lock[b.phase] ?? 0.9;
   if (tg.t >= tg.windup - lock) return;
   const L = leadPoint(w, b, tg.windup - tg.t, LEAD, 0.5);
-  const dx = L.x - s.x, dz = L.z - s.z, d = Math.hypot(dx, dz);
+  const dx = L.x - s.x, dz = L.z - s.z, d = hypot(dx, dz);
   const step = WINCH.trackMul * titanSpeed(w.titan.height) * w.dt;
   if (d > 1e-6) { const k = Math.min(1, step / d); s.x += dx * k; s.z += dz * k; }
-  s.rot = Math.atan2(b.x - s.x, b.z - s.z);
+  s.rot = atan2(b.x - s.x, b.z - s.z);
   b.data.dir = wrapAngle(s.rot + Math.PI);
 }
 
