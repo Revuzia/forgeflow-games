@@ -14,7 +14,7 @@ Nothing here is deployed. The LIVE site still serves the 2026-10-05 06:24Z build
 | the plan | `../PLAN.md` |
 | the workflow that was running | script `...\workflows\scripts\lc-wave4-wf_a8a240a8-b32.js`, run id `wf_a8a240a8-b32` (stopped) |
 
-To restore the tree from this snapshot onto a clean checkout: `git apply tracked_changes.patch` then unzip `new_files.zip` at the repo root.
+To restore the tree from this snapshot onto a clean checkout: `git apply --ignore-whitespace tracked_changes.patch` (git may have turned its line endings into CRLF on checkout) then unzip `new_files.zip` at the repo root.
 
 ## Owner decisions in force (do not re-ask)
 Third-person ONLY (no first-person, no viewmodel, no ADS-view toggle). Camera may pull in when a wall blocks it. Colour: ship step A only
