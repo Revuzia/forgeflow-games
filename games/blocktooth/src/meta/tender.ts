@@ -241,6 +241,43 @@ function finish(w: World, t: TenderState, b: BossState | null): void {
   emitAs(w, -1, { type: 'tenderPaid', gate: t.gate, shares, top: -1 });
 }
 
+/**
+ * XP shares of a payout (index = slot): the damage shares, except that a seat AT or ABOVE the top level of the other seats in the match
+ * (the leader / a co-leader) banks at most VS.tender.leaderShareCap of the lump; the excess goes to the live seats below the leader,
+ * weighted 1 + (leader level - their level). Without it the top bidder of tenders 1 and 2 is the leader by 5:30 and takes tender 3
+ * (FIXHIGH: the 7:00 leader won 69-100 % of the matches). Pure + deterministic (slot order); the sum never exceeds the damage-share sum.
+ */
+export function xpSharesOf(w: World, shares: readonly number[]): number[] {
+  const n = w.players.length;
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) out.push(shares[i] ?? 0);
+  const cap = VS.tender.leaderShareCap;
+  if (!(cap < 1)) return out;
+  let excess = 0, leadL = 0;
+  for (let i = 0; i < n; i++) {
+    const p = w.players[i];
+    if (p.vs.eliminated || out[i] <= cap) continue;
+    let top = 0;
+    for (let j = 0; j < n; j++) if (j !== i && !w.players[j].vs.eliminated && w.players[j].titan.level > top) top = w.players[j].titan.level;
+    if (p.titan.level < top) continue;                       // a trailing / mid-pack top bidder keeps what it earned
+    excess += out[i] - cap;
+    out[i] = cap;
+    if (p.titan.level > leadL) leadL = p.titan.level;
+  }
+  if (!(excess > 0)) return out;
+  let wsum = 0;
+  const wt: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const p = w.players[i];
+    const ok = !p.vs.eliminated && seatLive(p) && p.titan.level < leadL;
+    const x = ok ? 1 + (leadL - p.titan.level) : 0;
+    wt.push(x); wsum += x;
+  }
+  if (!(wsum > 0)) return out;
+  for (let i = 0; i < n; i++) out[i] += excess * wt[i] / wsum;
+  return out;
+}
+
 /** The rig is dead: split the rewards by damage share (see the header). */
 function payout(w: World, t: TenderState, b: BossState): void {
   const n = w.players.length;
@@ -259,6 +296,7 @@ function payout(w: World, t: TenderState, b: BossState): void {
       if (basisXp === 0 || q.titan.xpToNext < basisXp) basisXp = q.titan.xpToNext;
     }
   }
+  const xpShares = xpSharesOf(w, shares);
   for (let i = 0; i < n; i++) {
     const p = w.players[i];
     const sh = shares[i];
@@ -268,11 +306,11 @@ function payout(w: World, t: TenderState, b: BossState): void {
     if (p.vs.eliminated) continue;                   // an eliminated seat is out of the match: nothing to pay
     const live = seatLive(p);                        // a KO'd (respawning) titan cannot grow now, but its wreck chest still waits for it
     withPlayer(w, i, () => {
-      if (live && sh > 0) {
-        const eff = sh >= VS.tender.minShareDmgFrac ? Math.max(sh, VS.tender.minShareFrac) : sh;
+      if (live && xpShares[i] > 0) {
+        const eff = sh >= VS.tender.minShareDmgFrac ? Math.max(xpShares[i], VS.tender.minShareFrac) : xpShares[i];
         gainGrowth(w, basisXp > 0 && w.titan.xpToNext > 0 ? lump * eff * basisXp / w.titan.xpToNext : lump * eff);
-        addUproar(w, VS.tender.rewardUproar * sh);
       }
+      if (live && sh > 0) addUproar(w, VS.tender.rewardUproar * sh);
       if (i === top) {
         w.upgrades.chestDrafts++;                    // the wreck's chest: the CARD RAIL rolls it as a rare+ offer
         w.events.push({ type: 'chest', x: b.x, z: b.z });

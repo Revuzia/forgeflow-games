@@ -44,9 +44,15 @@ export function pvpOnIn(phase: VsPhase): boolean {
   return phase === 'takeover' || phase === 'final' || phase === 'last';
 }
 
-/** phaseMul of the PvP formula (vs_design.md §6.1): 0 in OPEN HOUSE (knockback only), 1 after 4:00. */
-export function phaseMul(phase: VsPhase): number {
-  if (phase === 'final') return VS.pvp.finalMul;
+/** phaseMul of the PvP formula (vs_design.md §6.1): 0 in OPEN HOUSE (knockback only), 1 after 4:00. FINAL NOTICE reads VS.pvp.finalMul
+ *  (its START value) without a clock, and ramps linearly to VS.pvp.finalMulEnd across the phase when a match `clock` is given. */
+export function phaseMul(phase: VsPhase, clock?: number): number {
+  if (phase === 'final') {
+    if (clock === undefined) return VS.pvp.finalMul;
+    const P = VS.phase;
+    const u = Math.min(1, Math.max(0, (clock - P.takeoverEndS) / Math.max(1e-6, P.finalEndS - P.takeoverEndS)));
+    return VS.pvp.finalMul + (VS.pvp.finalMulEnd - VS.pvp.finalMul) * u;
+  }
   return pvpOnIn(phase) ? 1 : VS.pvp.openHouseMul;
 }
 

@@ -29,7 +29,7 @@ import { knockTitan } from '../src/titans/titanfx.ts';
 import { stat } from '../src/upgrades/stats.ts';
 import { recomputeStats } from '../src/upgrades/stats.ts';
 import { queuePvp } from '../src/combat/pvp.ts';
-import { betterFirst, catchUpMul, koXp, mortarFrac, pvpDamage, pvpPower, ringRadiusAt, sizeEdge, vsScoreOf } from '../src/vs/formula.ts';
+import { betterFirst, catchUpMul, koXp, levelGapMul, mortarFrac, pvpDamage, pvpPower, ringRadiusAt, sizeEdge, vsScoreOf } from '../src/vs/formula.ts';
 import { matchClock, phaseForClock, phaseMul } from '../src/vs/clock.ts';
 import { drainQueuedPvp, pvpCc, pvpHit } from '../src/vs/pvp.ts';
 import type { PvpHit } from '../src/vs/pvp.ts';
@@ -114,6 +114,32 @@ section('A. formula (vs_design.md §6.1)');
   near(pvpPower(NaN), 0, 1e-12, 'power(NaN) = 0 (no NaN damage)');
   ok(phaseMul('open') === 0 && phaseMul('countdown') === 0 && phaseMul('over') === 0, 'phaseMul 0 in OPEN HOUSE / countdown / over');
   ok(phaseMul('takeover') === 1 && phaseMul('final') === VS.pvp.finalMul && phaseMul('last') === 1, 'phaseMul 1 from HOSTILE TAKEOVER (FINAL NOTICE = VS.pvp.finalMul, the VP-tuned elimination ramp)');
+  // FIXHIGH: FINAL NOTICE rival damage ramps from VS.pvp.finalMul (7:00) to VS.pvp.finalMulEnd (10:00); LAST CALL / takeover stay x 1
+  {
+    const P = VS.phase;
+    near(phaseMul('final', P.takeoverEndS), VS.pvp.finalMul, 1e-12, 'final ramp: the start of FINAL NOTICE = finalMul');
+    near(phaseMul('final', P.finalEndS), VS.pvp.finalMulEnd, 1e-12, 'final ramp: the end of FINAL NOTICE = finalMulEnd');
+    near(phaseMul('final', (P.takeoverEndS + P.finalEndS) / 2), (VS.pvp.finalMul + VS.pvp.finalMulEnd) / 2, 1e-12, 'final ramp: linear in between');
+    near(phaseMul('final', P.takeoverEndS - 50), VS.pvp.finalMul, 1e-12, 'final ramp: clamped before its start');
+    ok(phaseMul('takeover', 300) === 1 && phaseMul('last', 620) === 1 && phaseMul('open', 100) === 0, 'the clock only ramps FINAL NOTICE (takeover / last x 1, open x 0)');
+    ok(VS.pvp.finalMulEnd >= VS.pvp.finalMul && VS.pvp.finalMul > 0, 'the ramp rises (deadlier as the ring closes) and never reaches 0');
+  }
+  // FIXHIGH: the level-gap governor
+  {
+    const G = VS.pvp.lvGap;
+    near(levelGapMul(20, 20), 1, 1e-12, 'level gap: equal level = x 1 (the TTK gate is untouched)');
+    near(levelGapMul(20 + G.free, 20), 1, 1e-12, 'level gap: inside the free band = x 1 (ahead)');
+    near(levelGapMul(20 - G.free, 20), 1, 1e-12, 'level gap: inside the free band = x 1 (behind)');
+    near(levelGapMul(20 + G.free + 4, 20), Math.max(G.floor, 1 - G.perLevel * 4), 1e-12, 'level gap: 4 levels past the band, ahead = 1 - perLevel x 4');
+    near(levelGapMul(20 + 200, 20), G.floor, 1e-12, 'level gap: the attacker penalty floors at G.floor');
+    near(levelGapMul(20, 20 + G.free + 4), Math.min(G.boostMax, 1 + G.boostPerLevel * 4), 1e-12, 'level gap: 4 levels past the band, behind = 1 + boostPerLevel x 4');
+    near(levelGapMul(1, 1 + 200), G.boostMax, 1e-12, 'level gap: the underdog boost caps at G.boostMax');
+    ok(levelGapMul(40, 15) < 1 && levelGapMul(15, 40) > 1 && levelGapMul(40, 15) >= G.floor && levelGapMul(15, 40) <= G.boostMax, 'a leader 25 levels up hits for less, the trailing titan hits it for more, inside the bounds');
+    const bs = { victimMaxHp: 200, kitPct: 0.04, attackerDamageStat: 1, attackerRank: 2, victimRank: 2, phase: 'takeover' as const };
+    near(pvpDamage({ ...bs, attackerLevel: 30, victimLevel: 10 }), 8 * levelGapMul(30, 10), 1e-9, 'pvpDamage multiplies the level-gap governor in');
+    near(pvpDamage({ ...bs }), 8, 1e-9, 'pvpDamage without levels = no governor (back-compat)');
+    near(pvpDamage({ ...bs, phase: 'final', clock: VS.phase.finalEndS, attackerLevel: 10, victimLevel: 10 }), 8 * VS.pvp.finalMulEnd, 1e-9, 'pvpDamage reads the FINAL NOTICE ramp from the clock');
+  }
   const base = { victimMaxHp: 200, kitPct: 0.04, attackerDamageStat: 1, attackerRank: 2, victimRank: 2 } as const;
   near(pvpDamage({ ...base, phase: 'takeover' }), 8, 1e-9, '4 % of 200 HP at power 1, equal size = 8');
   near(pvpDamage({ ...base, phase: 'open' }), 0, 1e-12, 'OPEN HOUSE damage is 0');
@@ -429,11 +455,12 @@ section('D. KO -> EVICTED, respawn, credit, XP');
   w3.players[1].vs.hits.push({ from: 0, t: w3.t - 1, pct: 0.5 });
   const kk = w3.players[0].titan;
   const before = cumXpAtFor('vs', kk.level) + kk.xp;
-  const lostC = (cumXpAtFor('vs', 22)) - (cumXpAtFor('vs', 22 - VS.ko.levelsLost));
+  const lostC = (cumXpAtFor('vs', 22)) - (cumXpAtFor('vs', 22 - VS.crown.levelsLost));   // the crown holder loses VS.crown.levelsLost
   w3.players[1].titan.hp = 0; w3.players[1].titan.alive = false;
   step(w3);
   const gain = cumXpAtFor('vs', kk.level) + kk.xp - before;
-  near(gain, koXp(lostC, kk.rank, 2) + xpToNextFor('vs', 18), 0.5, 'crown bounty: KO XP + one level of XP (HEADLINE STOLEN)', String(gain));
+  near(gain, koXp(lostC, kk.rank, 2) + xpToNextFor('vs', 18) * VS.crown.bountyLevels, 0.5, 'crown bounty: KO XP + VS.crown.bountyLevels bars of XP (HEADLINE STOLEN)', String(gain));
+  ok(w3.players[1].titan.level === Math.max(RANK_LEVELS[w3.players[1].titan.rank], 22 - VS.crown.levelsLost), 'the crown holder loses VS.crown.levelsLost levels (never a Size)', String(w3.players[1].titan.level));
 
   // tiny victim: 2+ ranks smaller pays 0 KO XP
   const w4 = mk();

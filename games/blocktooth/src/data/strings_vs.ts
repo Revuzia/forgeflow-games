@@ -3,6 +3,7 @@
 // formatters: THREE-free, DOM-free. Every string here is user-visible; nothing in the sim reads this file.
 
 import type { GateId, TitanId } from '../core/types.ts';
+import { VS as VSCFG } from '../core/config.ts';
 import type { VsPhase } from '../vs/types.ts';
 
 /** phase banners (vs_design.md §3 table): `title` is the stamp, `sub` the one-line rule that just changed */
@@ -19,7 +20,7 @@ export const VS_BANNER: Record<VsPhase, { title: string; sub: string }> = {
 export const VS_RULE: Record<VsPhase, string> = {
   countdown: 'TITANS ON THEIR MARKS',
   open: 'NO RIVAL DAMAGE · HITS SHOVE ONLY',
-  takeover: 'KO = EVICTED · BACK IN 5 S · −2 LV',
+  takeover: `KO = EVICTED · BACK IN ${VSCFG.ko.respawnS} S · −${VSCFG.ko.levelsLost} LV · THE CROWN −${VSCFG.crown.levelsLost}`,   // read from the rules (it said −2 LV while the rule was −1)
   final: 'NO RESPAWNS · THE CORDON CLOSES',
   last: 'THE CORDON IS AT ITS LAST CIRCLE',
   over: 'MATCH DECIDED',

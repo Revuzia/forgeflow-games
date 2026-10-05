@@ -70,12 +70,12 @@ const KNOBS: Record<string, string> = {
 interface Args {
   seeds: number[]; biomes: BiomeId[]; lineup: TitanId[] | null; jobs: number; driver: 'auto' | Driver; level: BotLevel;
   maxS: number; det: number; ttk: boolean; solo: boolean; soloFull: boolean; ttkOnly: boolean; wide: boolean; asserts: boolean;
-  json: string | null; outDir: string; worker: boolean; selftest: boolean; job: string | null; out: string | null; quiet: boolean;
+  json: string | null; humanSeat: number | null; humanDriver: 'solo' | 'idle'; outDir: string; worker: boolean; selftest: boolean; job: string | null; out: string | null; quiet: boolean;
 }
 function parseArgs(argv: string[]): Args {
   const a: Args = {
     seeds: [1337, 7, 99], biomes: [...BIOMES3], lineup: null, jobs: 5, driver: 'auto', level: 'regular', maxS: 660, det: 3,
-    ttk: true, solo: true, soloFull: false, ttkOnly: false, wide: false, asserts: true, json: null,
+    ttk: true, solo: true, soloFull: false, ttkOnly: false, wide: false, asserts: true, json: null, humanSeat: null, humanDriver: 'solo',
     outDir: join(ROOT, '_harness/scratch/partb/B-QA/runs'), worker: false, selftest: false, job: null, out: null, quiet: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -98,6 +98,8 @@ function parseArgs(argv: string[]): Args {
     else if (k === '--wide') a.wide = true;
     else if (k === '--no-asserts') a.asserts = false;
     else if (k === '--json') a.json = v();
+    else if (k === '--human') a.humanSeat = Number(v()) | 0;
+    else if (k === '--human-driver') a.humanDriver = v() === 'idle' ? 'idle' : 'solo';
     else if (k === '--out-dir') a.outDir = resolve(v());
     else if (k === '--quiet') a.quiet = true;
     else if (k === '--worker') a.worker = true;
@@ -383,7 +385,7 @@ async function main(): Promise<number> {
         const base = a.lineup ?? [...TITANS4];
         const rot = si % base.length;                                    // rotate seat <-> titan per seed (spawn bias cancels out)
         const lineup = base.map((_, i) => base[(i + rot) % base.length]);
-        cells.push({ seed, biome, lineup, level: a.level, driver, maxS: a.maxS, perturb: false, asserts: a.asserts });
+        cells.push({ seed, biome, lineup, level: a.level, driver, maxS: a.maxS, perturb: false, asserts: a.asserts, ...(a.humanSeat !== null ? { humanSeat: a.humanSeat, humanDriver: a.humanDriver } : {}) });
       }
     });
     const jobs: { name: string; job: Job }[] = cells.map((c) => ({ name: `m_${c.biome}_${c.seed}`, job: { kind: 'match', cfg: c } }));

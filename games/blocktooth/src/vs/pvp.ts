@@ -23,7 +23,7 @@ import { addUproar } from '../meta/ultimate.ts';
 import { takePvp } from '../combat/pvp.ts';
 import type { PvpHit as QueuedHit } from '../combat/pvp.ts';
 import { pvpDamage, uproarChargeMul } from './formula.ts';
-import { pvpOnIn } from './clock.ts';
+import { matchClock, pvpOnIn } from './clock.ts';
 import { VSX } from './tune.ts';
 
 /** What a kit reports for one hit on a rival (see NOTES.md). `knock` is the TOTAL SHOVE DISTANCE IN METRES
@@ -106,6 +106,7 @@ export function pvpHit(w: World, from: number, to: number, pct: number, hit: Pvp
     attackerDamageStat: statOf(w, from, 'damage'),
     attackerRank: A.titan.rank, victimRank: T.rank,
     phase: vs.phase, noPower: hit.tag === 'uproar',
+    clock: matchClock(w), attackerLevel: A.titan.level, victimLevel: T.level,
   });
   if (hit.knock > 0) knockTitan(w, to, kx, kz, hit.knock);
   if (!(dmg > 0)) return 0;

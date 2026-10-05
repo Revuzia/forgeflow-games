@@ -409,6 +409,35 @@ async function main(): Promise<number> {
       return paid[0].shares[i] > 0 ? gain > 0 : Math.abs(gain) < 1e-9;
     }), `cum XP gain ${w.players.map((p, i) => (cumOf(p) - lvl[i]).toFixed(1)).join('/')} shares ${paid[0].shares.map((v: number) => v.toFixed(2)).join('/')}`);
     check('S7.17 bookkeeping: tenderBids / tenderTop / tenderShare', w.players[0].vs.tenderBids >= 1 && w.players[top].vs.tenderTop === 1 && (w.players[0].vs.data.tenderShare ?? 0) > 0);
+    // FIXHIGH: the leader's cap on the XP lump (VS.tender.leaderShareCap): a seat at / above the top level of the others banks at most
+    // the cap; the excess goes to the live seats below it, weighted 1 + level deficit; a trailing top bidder is not capped
+    {
+      const wc = mk(4, { noSpawns: true });
+      [9, 8, 3, 7].forEach((lv, i) => { const T = wc.players[i].titan; T.level = lv; T.xp = 0; T.xpToNext = M.cfg.xpToNextFor('vs', lv); });
+      const cap = VS.tender.leaderShareCap;
+      const sum = (a: number[]): number => a.reduce((x, y) => x + y, 0);
+      const x1 = M.tender.xpSharesOf(wc, [0.9, 0.1, 0, 0]);
+      const ex = 0.9 - cap;
+      check('S7.19 leader cap: a leader that bid 90 % banks the cap, the sum is conserved', Math.abs(x1[0] - cap) < 1e-12 && Math.abs(sum(x1) - 1) < 1e-12, x1.map((v: number) => v.toFixed(3)).join('/'));
+      check('S7.20 leader cap: the excess goes to the seats below, weighted 1 + level deficit (8 / 3 / 7 -> 2 / 7 / 3)', Math.abs(x1[1] - (0.1 + ex * 2 / 12)) < 1e-12 && Math.abs(x1[2] - ex * 7 / 12) < 1e-12 && Math.abs(x1[3] - ex * 3 / 12) < 1e-12, x1.map((v: number) => v.toFixed(3)).join('/'));
+      const x2 = M.tender.xpSharesOf(wc, [0.05, 0.05, 0.9, 0]);
+      check('S7.21 leader cap: a trailing top bidder is NOT capped (the tender is the catch-up)', x2[0] === 0.05 && x2[1] === 0.05 && x2[2] === 0.9 && x2[3] === 0, x2.join('/'));
+      const x3 = M.tender.xpSharesOf(wc, [0.4, 0.3, 0.2, 0.1]);
+      check('S7.22 leader cap: a leader under the cap changes nothing', x3.join('/') === '0.4/0.3/0.2/0.1', x3.join('/'));
+      wc.players[2].vs.eliminated = true;
+      const x4 = M.tender.xpSharesOf(wc, [0.9, 0.1, 0, 0]);
+      check('S7.23 leader cap: an eliminated seat gets none of the excess', x4[2] === 0 && Math.abs(x4[1] - (0.1 + ex * 2 / 5)) < 1e-12 && Math.abs(x4[3] - ex * 3 / 5) < 1e-12, x4.map((v: number) => v.toFixed(3)).join('/'));
+      wc.players[2].vs.eliminated = false;
+      wc.players[1].titan.level = 9;
+      const x5 = M.tender.xpSharesOf(wc, [0.8, 0.2, 0, 0]);
+      check('S7.24 leader cap: a co-leader (equal top level) is capped too', Math.abs(x5[0] - cap) < 1e-12 && Math.abs(sum(x5) - 1) < 1e-12 && x5[2] > 0 && x5[3] > 0, x5.map((v: number) => v.toFixed(3)).join('/'));
+      const tv = VS.tender as unknown as { leaderShareCap: number };
+      const was = tv.leaderShareCap;
+      tv.leaderShareCap = 1;
+      const x6 = M.tender.xpSharesOf(wc, [0.9, 0.1, 0, 0]);
+      tv.leaderShareCap = was;
+      check('S7.25 leader cap: leaderShareCap 1 = off (the shares come back unchanged)', x6.join('/') === '0.9/0.1/0/0', x6.join('/'));
+    }
     // BID WITHDRAWN: the second tender with every titan far away
     const t2 = w.vs!.tenders[1];
     jumpClock(w, VS.tender.gates[1].atS - VS.tender.markerLeadS + 0.1);
@@ -424,9 +453,9 @@ async function main(): Promise<number> {
       let seen = false;
       for (let s = 0; s < 62 * 30 && !seen; s++) { step(w, 1); if ((t2.state as string) === 'withdrawn') seen = true; }
       const wd = evOf(evs, 'tenderPaid');
-      check('S7.18 an unattended rig leaves after ignoredWithdrawS (BID WITHDRAWN, nobody paid)', seen && !b1.alive && w.players.every((p) => p.vs.tenderTop <= 1), `state ${t2.state}`);
+      check('S7.26 an unattended rig leaves after ignoredWithdrawS (BID WITHDRAWN, nobody paid)', seen && !b1.alive && w.players.every((p) => p.vs.tenderTop <= 1), `state ${t2.state}`);
       void wd;
-    } else check('S7.18 an unattended rig leaves after ignoredWithdrawS', false, `second tender state ${t2.state}`);
+    } else check('S7.26 an unattended rig leaves after ignoredWithdrawS', false, `second tender state ${t2.state}`);
   }
 
   // ───────────── S8 ─────────────

@@ -19,6 +19,18 @@ export function sizeEdge(attRank: number, vicRank: number): number {
   return e < VS.pvp.edgeMin ? VS.pvp.edgeMin : e > VS.pvp.edgeMax ? VS.pvp.edgeMax : e;
 }
 
+/**
+ * Level-gap governor (VS.pvp.lvGap): x (1 - perLevel x (gap - free)) down to `floor` for an attacker more than `free` levels above
+ * its victim; x (1 + boostPerLevel x (-gap - free)) up to `boostMax` for one more than `free` levels below. 1 inside the free band.
+ */
+export function levelGapMul(attLevel: number, vicLevel: number): number {
+  const G = VS.pvp.lvGap;
+  const gap = attLevel - vicLevel;
+  if (gap > G.free) return G.perLevel > 0 ? Math.max(G.floor, 1 - G.perLevel * (gap - G.free)) : 1;
+  if (-gap > G.free) return G.boostPerLevel > 0 ? Math.min(G.boostMax, 1 + G.boostPerLevel * (-gap - G.free)) : 1;
+  return 1;
+}
+
 export interface PvpDamageIn {
   victimMaxHp: number;
   /** the kit's % of the victim's max HP for this hit as a fraction (4 % = 0.04) — a number from VS.kitPct */
@@ -29,18 +41,24 @@ export interface PvpDamageIn {
   phase: VsPhase;
   /** true = skip power(): UPROAR is a flat 22 % x sizeEdge (vs_design.md §6.4) */
   noPower?: boolean;
+  /** match clock (s): FINAL NOTICE's phaseMul ramps with it (absent = the phase's start value) */
+  clock?: number;
+  /** the two titans' levels for the level-gap governor (absent = 1) */
+  attackerLevel?: number;
+  victimLevel?: number;
 }
 
 /**
- * pvpDamage = victim.maxHp x kitPct x power(attacker) x sizeEdge(attacker, victim) x phaseMul   (vs_design.md §6.1).
+ * pvpDamage = victim.maxHp x kitPct x power(attacker) x sizeEdge(attacker, victim) x phaseMul x levelGapMul   (vs_design.md §6.1 + FIXHIGH).
  * This is the damage BEFORE the victim's armor / shield / i-frames / kit onHurt, which hurtTitan applies exactly as
  * it does for hostile damage today.
  */
 export function pvpDamage(i: PvpDamageIn): number {
-  const pm = phaseMul(i.phase);
+  const pm = phaseMul(i.phase, i.clock);
   if (!(pm > 0) || !(i.kitPct > 0) || !(i.victimMaxHp > 0)) return 0;
   const power = i.noPower ? 1 : pvpPower(i.attackerDamageStat);
-  return i.victimMaxHp * i.kitPct * power * sizeEdge(i.attackerRank, i.victimRank) * pm;
+  const lg = i.attackerLevel !== undefined && i.victimLevel !== undefined ? levelGapMul(i.attackerLevel, i.victimLevel) : 1;
+  return i.victimMaxHp * i.kitPct * power * sizeEdge(i.attackerRank, i.victimRank) * pm * lg;
 }
 
 /**

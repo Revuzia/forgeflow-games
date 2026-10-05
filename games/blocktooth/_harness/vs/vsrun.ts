@@ -202,6 +202,9 @@ export interface MatchCfg {
   maxS: number;                 // sim seconds of MATCH CLOCK to allow (the gate wants an end by 645)
   perturb: boolean;             // determinism negative control: nudge seat 1's XP by 0.25 at tick 600
   asserts: boolean;             // setBindAsserts(true)
+  /** FIXHIGH: seat driven like a HUMAN seat (no bot brain: no rival / ring / tender logic) while the other seats keep their native bots.
+   *  'solo' = the solo bot (_harness/bot.ts) steers it (a weak human stand-in); 'idle' = no input at all (worst case). Info only. */
+  humanSeat?: number; humanDriver?: 'solo' | 'idle';
 }
 export interface Snap {
   t: number; phase: string; lv: number[]; rank: number[]; hpf: number[]; alive: boolean[]; elim: boolean[];
@@ -230,7 +233,7 @@ export interface MatchResult {
 
 export function runMatch(cfg: MatchCfg): MatchResult {
   const n = cfg.lineup.length;
-  const seats: PlayerSeat[] = cfg.lineup.map((t) => ({ titan: t, bot: cfg.driver === 'native' ? cfg.level : null }));
+  const seats: PlayerSeat[] = cfg.lineup.map((t, i) => ({ titan: t, bot: cfg.driver === 'native' && i !== cfg.humanSeat ? cfg.level : null }));
   M_players.setBindAsserts(cfg.asserts);
   const w = M_world.createWorld({ mode: 'vs', players: seats, biome: cfg.biome, seed: cfg.seed, view: 0 });
   const vs = w.vs!;
@@ -275,6 +278,9 @@ export function runMatch(cfg: MatchCfg): MatchResult {
     while (!w.run.result && w.t < limit) {
       if (cfg.driver === 'standin') {
         for (let i = 0; i < n; i++) inputs[i] = w.players[i].titan.alive && !w.players[i].vs.eliminated ? M_bot.botInput(seatView(w, i)) : null;
+      } else if (cfg.humanSeat !== undefined && cfg.humanDriver === 'solo') {
+        const h = cfg.humanSeat;
+        inputs[h] = w.players[h].titan.alive && !w.players[h].vs.eliminated ? M_bot.botInput(seatView(w, h)) : null;
       }
       const t0 = performance.now();
       M_world.stepWorldN(w, inputs);

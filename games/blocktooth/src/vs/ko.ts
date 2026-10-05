@@ -116,7 +116,7 @@ function evictSeat(w: World, victim: number, credit: KoCredit): void {
   const lvBefore = T.level;
   const victimRank = T.rank;
   const hadCrown = vs.crown === victim;
-  const xpLost = loseLevels(w, victim, VS.ko.levelsLost);
+  const xpLost = loseLevels(w, victim, hadCrown ? VS.crown.levelsLost : VS.ko.levelsLost);
   const levelsLost = lvBefore - T.level;
   V.vs.koCount++;
   V.vs.lastKillerSlot = credit.killer;
@@ -125,6 +125,7 @@ function evictSeat(w: World, victim: number, credit: KoCredit): void {
   if (credit.killer >= 0) {
     const K = w.players[credit.killer];
     K.vs.evictions++;
+    const bountyXp = hadCrown ? xpToNextFor('vs', K.titan.level) * VS.crown.bountyLevels : 0;   // bars of the killer's level AT THE KILL (before the KO XP levels it)
     const kxp = koXp(xpLost, K.titan.rank, victimRank, K.titan.level, lvBefore);
     if (kxp > 0) grantRawXp(w, credit.killer, kxp);
     for (let a = 0; a < credit.assists.length; a++) {
@@ -132,7 +133,7 @@ function evictSeat(w: World, victim: number, credit: KoCredit): void {
       A.vs.assists++;
       if (kxp > 0) grantRawXp(w, credit.assists[a], assistXp(kxp));
     }
-    if (hadCrown) grantRawXp(w, credit.killer, xpToNextFor('vs', K.titan.level) * VS.crown.bountyLevels);   // HEADLINE STOLEN
+    if (hadCrown) grantRawXp(w, credit.killer, bountyXp);   // HEADLINE STOLEN
   }
   emitAs(w, victim, { type: 'evicted', victim, killer: credit.killer, assists: credit.assists.slice(), levelsLost, x: T.x, z: T.z });
 }

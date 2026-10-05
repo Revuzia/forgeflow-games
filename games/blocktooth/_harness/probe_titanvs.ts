@@ -94,7 +94,7 @@ function statOf(w: World, slot: number, k: Parameters<typeof stat>[1]): number {
  *  through B-VS's TTK knob (VSX.pvpMul); an UPROAR hit skips both the knob and power(); a body STOMP skips the knob (src/vs/pvp.ts). */
 function expectLoss(w: World, from: number, to: number, pct: number, kind: 'kit' | 'uproar' | 'stomp' = 'kit'): number {
   const A = w.players[from].titan, V = w.players[to].titan;
-  const dmg = pvpDamage({ victimMaxHp: V.maxHp, kitPct: pct * (kind === 'kit' ? VSX.pvpMul : 1), attackerDamageStat: statOf(w, from, 'damage'), attackerRank: A.rank, victimRank: V.rank, phase: 'takeover', noPower: kind === 'uproar' });
+  const dmg = pvpDamage({ victimMaxHp: V.maxHp, kitPct: pct * (kind === 'kit' ? VSX.pvpMul : 1), attackerDamageStat: statOf(w, from, 'damage'), attackerRank: A.rank, victimRank: V.rank, phase: 'takeover', noPower: kind === 'uproar', attackerLevel: A.level, victimLevel: V.level });   // + the FIXHIGH level-gap governor (src/vs/pvp.ts passes both levels)
   const armor = Math.max(-50, statOf(w, to, 'armor'));
   return dmg * (100 / (100 + armor));
 }

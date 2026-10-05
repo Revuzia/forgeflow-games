@@ -1168,6 +1168,7 @@ export const UI_BIND = {
 // Times are MATCH-CLOCK seconds (= world.t - World.vs.startT; the 5 s COUNTDOWN is world.t 0..VS.countdownS).
 // VP-tuned (gate VP, GATE lane 2026-10-05, 36 matches = 12 seeds x 3 cities, REGULAR bots, all 7 VP rules PASS): cityScale 1.3, pacing.surgeMul 1.8,
 // catchUp 0.15/3/0.1/0.3, ko.levelsLost 1, pvp.finalMul 0.5, tender.lumpBasis 'trailing', director.rebuildPace 2 / rebuildCrewsMul 2 / rebuildRadiusMul 0.6.
+// FIXHIGH (2026-10-05, after the real-key critic saw FINAL NOTICE last 35 s and the 7:00 leader never lose): pvp.finalMul 0.2 -> finalMulEnd 0.8 ramp, pvp.lvGap level-gap governor, crown.levelsLost 3 / bountyLevels 3, tender.leaderShareCap 0.5.
 export const VS = {
   maxPlayers: 4,
   /** VS city size: the biome's block grid x this (1 = the solo city). Four titans eat four times as much, so the VS arena is bigger (GATE knob: floors standing at 7:00) */
@@ -1182,12 +1183,14 @@ export const VS = {
   seatColors: ['#ff5a6e', '#4dabff', '#ffc93c', '#b57bff'] as readonly string[],
   /** pacing overrides the VS world reads INSTEAD of config XP_STRETCH / PACE_STRETCH / the RANK_SCHEDULE_S band (§3).
    *  Sim code calls xpToNextFor / cumXpAtFor / paceStretchFor (below); solo returns the shipped values. */
-  pacing: { xpStretch: 1, paceStretch: 1, scheduleBand: false, surgeFromS: 240, surgeMul: 1.8, buildingDmgMul: 1 },
+  pacing: { xpStretch: 1, paceStretch: 1, scheduleBand: false, surgeFromS: 240, surgeMul: 1.7, buildingDmgMul: 1 },   // surgeMul 1.8 -> 1.7 (FIXHIGH): the tender / crown / level-gap changes put more titans at Size V by 7:00 and the 7:00 floors gate (>= 35 %) fell to 33 %; at 1.7 the min is 40 % over 36 matches, LV@7:00 median 31
   /** leader-relative catch-up XP (§6.2 rule 2): growth XP x min(max, 1 + perLevel x (leaderLevel - myLevel)); the LEADER's
    *  growth XP x max(aheadMin, 1 - aheadPerLevel x (its levels above 2nd place)) (0 = off). GATE tuning knobs (VP gate). */
   catchUp: { perLevel: 0.15, max: 3, aheadPerLevel: 0.1, aheadMin: 0.3 },
   /** FRONT PAGE crown (§6.2 rule 3): live from the start of HOSTILE TAKEOVER */
-  crown: { fromS: 240, heatMul: 1.3, uproarMul: 1.5, bountyLevels: 1 },
+  crown: { fromS: 240, heatMul: 1.3, uproarMul: 1.5, bountyLevels: 3, levelsLost: 3 },
+  // (crown.bountyLevels = HEADLINE STOLEN: the killer of the crown holder banks this many XP bars of ITS OWN level; crown.levelsLost = the levels the
+  //  crown holder loses when evicted, instead of ko.levelsLost. FIXHIGH raises both so the 7:00 leader can actually be beaten.)
   /** KO / EVICTED rules (§6.2, §6.3) */
   ko: {
     respawnS: 5, levelsLost: 1, spawnProtS: 3,
@@ -1201,7 +1204,13 @@ export const VS = {
     powerCap: 1.6,                                  // power = min(powerCap, sqrt(attacker.stats.damage))
     edgePerRank: 0.12, edgeMin: 0.64, edgeMax: 1.36,
     openHouseMul: 0,                                // OPEN HOUSE: rival hits SHOVE only
-    finalMul: 0.5,                                  // FINAL NOTICE rival damage multiplier (the elimination ramp; GATE tuning knob)
+    finalMul: 0.2,                                  // FINAL NOTICE rival damage multiplier AT ITS START (7:00); ramps to finalMulEnd by the end of FINAL NOTICE (the elimination ramp; GATE + FIXHIGH tuning knob; was a flat 0.5)
+    finalMulEnd: 0.8,                               // ... and this at 10:00 (LAST CALL = x 1): the fights get deadlier as the ring closes, so the first elimination lands ~9:00 instead of ~7:30 (FIXHIGH, 3 x 36 matches)
+    /** LEVEL-GAP governor on rival damage (HOSTILE TAKEOVER onward): an attacker more than `free` levels above its victim loses
+     *  `perLevel` of its damage per extra level (never below `floor`): a leader 20 levels up does not one-cycle the field; an
+     *  attacker more than `free` levels BELOW its victim gains `boostPerLevel` per extra level (up to x `boostMax`): the mid-pack can
+     *  hurt the leader. Equal-level fights (the TTK gate) are untouched. perLevel 0 and boostPerLevel 0 = off. */
+    lvGap: { free: 2, perLevel: 0.05, floor: 0.35, boostPerLevel: 0.03, boostMax: 1.6 },
     thornsEff: 0.5, lifestealEff: 0.5,              // reflect / steal at 50 % on rival hits
     uproarPctMaxHp: 0.22,                           // UPROAR vs a rival: 22 % maxHp x sizeEdge (once per ultimate)
     uproarChargePts: 120,                           // UPROAR charge = 120 x the fraction of the rival's maxHp dealt
@@ -1231,6 +1240,7 @@ export const VS = {
     dpsCapBaseFrac: 0.06, dpsCapPerAttacker: 0.5, dpsCapMaxFrac: 0.12,   // global tumbling-1 s window (solo: 6 % per titan)
     hitCapFrac: 0.4,                                // per victim, unchanged from GATES.hitCap
     minShareFrac: 0.15, minShareDmgFrac: 0.05,      // any titan that dealt >= 5 % gets >= 15 % of the XP lump
+    leaderShareCap: 0.5,                            // the XP lump a titan AT / ABOVE the top level of the others may bank is capped at this share (1 = off); the excess goes to the seats below it, weighted 1 + their level deficit (the tender is a catch-up event, not a snowball)
     lump: { stencil1: 2, cordon2: 2.5, switchboard5: 3 } as Record<string, number>,   // XP lump, in levels of the xp bar (see lumpBasis)
     lumpBasis: 'trailing' as 'recipient' | 'trailing',   // 'recipient': a bar of the seat's OWN level; 'trailing': the lowest live seat's bar (the same XP for everyone x share)
     ignoredWithdrawS: 60,                           // BID WITHDRAWN
